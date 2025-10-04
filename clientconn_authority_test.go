@@ -109,9 +109,9 @@ func (s) TestClientConnAuthority(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			cc, err := Dial(test.target, test.opts...)
+			cc, err := NewClient(test.target, test.opts...)
 			if err != nil {
-				t.Fatalf("Dial(%q) failed: %v", test.target, err)
+				t.Fatalf("grpc.NewClient(%q) failed: %v", test.target, err)
 			}
 			defer cc.Close()
 			if cc.authority != test.wantAuthority {

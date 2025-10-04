@@ -63,9 +63,9 @@ func (s) TestResolverCaseSensitivity(t *testing.T) {
 		return nil, fmt.Errorf("not dialing with custom dialer")
 	}
 
-	cc, err := Dial(target, WithContextDialer(customDialer), WithTransportCredentials(insecure.NewCredentials()))
+	cc, err := NewClient(target, WithContextDialer(customDialer), WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("Unexpected Dial(%q) error: %v", target, err)
+		t.Fatalf("Unexpected grpc.NewClient(%q) error: %v", target, err)
 	}
 	cc.Connect()
 	if got, want := <-addrCh, "localhost:1234"; got != want {
@@ -85,12 +85,12 @@ func (s) TestResolverCaseSensitivity(t *testing.T) {
 	// This results in "passthrough" being used with the address as the whole
 	// target.
 	target = "caseTest2:///localhost:1234"
-	cc, err = Dial(target, WithContextDialer(customDialer), WithResolvers(res), WithTransportCredentials(insecure.NewCredentials()))
+	cc, err = NewClient(target, WithContextDialer(customDialer), withDefaultScheme("passthrough"), WithResolvers(res), WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("Unexpected Dial(%q) error: %v", target, err)
+		t.Fatalf("Unexpected grpc.NewClient(%q) error: %v", target, err)
 	}
 	cc.Connect()
-	if got, want := <-addrCh, target; got != want {
+	if got, want := <-addrCh, "caseTest2:///localhost:1234"; got != want {
 		cc.Close()
 		t.Fatalf("Dialer got address %q; wanted %q", got, want)
 	}
