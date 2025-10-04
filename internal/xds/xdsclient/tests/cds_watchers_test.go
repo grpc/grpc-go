@@ -34,6 +34,7 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/internal/xds/bootstrap"
+	clientimpl "google.golang.org/grpc/internal/xds/clients/xdsclient"
 	"google.golang.org/grpc/internal/xds/xdsclient"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 
@@ -44,7 +45,7 @@ import (
 
 type noopClusterWatcher struct{}
 
-func (noopClusterWatcher) ResourceChanged(_ *xdsresource.ClusterResourceData, onDone func()) {
+func (noopClusterWatcher) ResourceChanged(_ clientimpl.ResourceData, onDone func()) {
 	onDone()
 }
 func (noopClusterWatcher) ResourceError(_ error, onDone func()) {
@@ -67,8 +68,9 @@ func newClusterWatcher() *clusterWatcher {
 	return &clusterWatcher{updateCh: testutils.NewChannel()}
 }
 
-func (cw *clusterWatcher) ResourceChanged(update *xdsresource.ClusterResourceData, onDone func()) {
-	cw.updateCh.Send(clusterUpdateErrTuple{update: update.Resource})
+func (cw *clusterWatcher) ResourceChanged(rd clientimpl.ResourceData, onDone func()) {
+	clusterData := rd.(*xdsresource.ClusterResourceData)
+	cw.updateCh.Send(clusterUpdateErrTuple{update: clusterData.Resource})
 	onDone()
 }
 

@@ -30,6 +30,7 @@ import (
 	"google.golang.org/grpc/internal/testutils/stats"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/internal/xds/bootstrap"
+	"google.golang.org/grpc/internal/xds/clients/xdsclient"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
@@ -40,7 +41,7 @@ import (
 
 type noopListenerWatcher struct{}
 
-func (noopListenerWatcher) ResourceChanged(_ *xdsresource.ListenerResourceData, onDone func()) {
+func (noopListenerWatcher) ResourceChanged(_ xdsclient.ResourceData, onDone func()) {
 	onDone()
 }
 
