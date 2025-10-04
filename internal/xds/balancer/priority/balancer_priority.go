@@ -186,6 +186,7 @@ func (b *priorityBalancer) handleChildStateUpdate(childName string, s balancer.S
 		b.logger.Warningf("Ignoring update from child policy %q which is not in started state: %+v", childName, s)
 		return
 	}
+	originalState := child.state
 	child.state = s
 
 	// We start/stop the init timer of this child based on the new connectivity
@@ -199,7 +200,7 @@ func (b *priorityBalancer) handleChildStateUpdate(childName string, s balancer.S
 		child.reportedTF = true
 		child.stopInitTimer()
 	case connectivity.Connecting:
-		if !child.reportedTF {
+		if !child.reportedTF && originalState.ConnectivityState != connectivity.Connecting {
 			child.startInitTimer()
 		}
 	default:
