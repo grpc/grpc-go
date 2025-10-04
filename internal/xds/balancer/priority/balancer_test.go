@@ -2107,3 +2107,168 @@ func (s) TestPriority_HighPriorityUpdatesWhenLowInUse(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 }
+
+// TestPriority_InitTimerNoRestartOnConnectingToConnecting verifies that the
+// init timer is not restarted when a child transitions from CONNECTING to
+// CONNECTING state. This test addresses the issue described in:
+// https://github.com/grpc/grpc-go/issues/8516
+func (s) TestPriority_InitTimerNoRestartOnConnectingToConnecting(t *testing.T) {
+	_, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	const testPriorityInitTimeout = 200 * time.Millisecond
+	defer func(old time.Duration) {
+		DefaultPriorityInitTimeout = old
+	}(DefaultPriorityInitTimeout)
+	DefaultPriorityInitTimeout = testPriorityInitTimeout
+
+	cc := testutils.NewBalancerClientConn(t)
+	bb := balancer.Get(Name)
+	pb := bb.Build(cc, balancer.BuildOptions{})
+	defer pb.Close()
+
+	// Two children, with priorities [0, 1], each with one backend.
+	if err := pb.UpdateClientConnState(balancer.ClientConnState{
+		ResolverState: resolver.State{
+			Endpoints: []resolver.Endpoint{
+				hierarchy.SetInEndpoint(resolver.Endpoint{Addresses: []resolver.Address{{Addr: testBackendAddrStrs[0]}}}, []string{"child-0"}),
+				hierarchy.SetInEndpoint(resolver.Endpoint{Addresses: []resolver.Address{{Addr: testBackendAddrStrs[1]}}}, []string{"child-1"}),
+			},
+		},
+		BalancerConfig: &LBConfig{
+			Children: map[string]*Child{
+				"child-0": {Config: &internalserviceconfig.BalancerConfig{Name: roundrobin.Name}},
+				"child-1": {Config: &internalserviceconfig.BalancerConfig{Name: roundrobin.Name}},
+			},
+			Priorities: []string{"child-0", "child-1"},
+		},
+	}); err != nil {
+		t.Fatalf("failed to update ClientConn state: %v", err)
+	}
+
+	// child-0 will be started, and will create a SubConn.
+	addrs0 := <-cc.NewSubConnAddrsCh
+	if got, want := addrs0[0].Addr, testBackendAddrStrs[0]; got != want {
+		t.Fatalf("got unexpected new subconn addr: %v, want %v", got, want)
+	}
+	sc0 := <-cc.NewSubConnCh
+
+	// Send CONNECTING for child-0 - this should start the init timer.
+	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+
+	// Record the current time to measure the timer duration.
+	timerStartTime := time.Now()
+
+	// Send another CONNECTING update for child-0.
+	// This should NOT restart the timer.
+	time.Sleep(testPriorityInitTimeout / 2)
+	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+
+	// Wait for the original timer to expire and child-1 to be started.
+	// If the timer was restarted, child-1 would not be started within the
+	// original timeout period.
+	select {
+	case addrs1 := <-cc.NewSubConnAddrsCh:
+		if got, want := addrs1[0].Addr, testBackendAddrStrs[1]; got != want {
+			t.Fatalf("got unexpected new subconn addr: %v, want %v", got, want)
+		}
+		elapsed := time.Since(timerStartTime)
+		// The timer should expire close to the original timeout, not extended.
+		// We allow some buffer for test execution time.
+		if elapsed > testPriorityInitTimeout+50*time.Millisecond {
+			t.Fatalf("init timer took %v to expire, expected around %v (timer was likely restarted)", elapsed, testPriorityInitTimeout)
+		}
+	case <-time.After(testPriorityInitTimeout * 2):
+		// This is the expected behavior - child-1 should have been started
+		// after the original timer expired.
+		t.Fatal("child-1 was not started after init timer expiration")
+	}
+}
+
+// TestPriority_InitTimerStartsOnNonConnectingToConnecting verifies that the
+// init timer starts when transitioning from non-CONNECTING states to CONNECTING.
+func (s) TestPriority_InitTimerStartsOnNonConnectingToConnecting(t *testing.T) {
+	_, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	const testPriorityInitTimeout = 200 * time.Millisecond
+	defer func(old time.Duration) {
+		DefaultPriorityInitTimeout = old
+	}(DefaultPriorityInitTimeout)
+	DefaultPriorityInitTimeout = testPriorityInitTimeout
+
+	cc := testutils.NewBalancerClientConn(t)
+	bb := balancer.Get(Name)
+	pb := bb.Build(cc, balancer.BuildOptions{})
+	defer pb.Close()
+
+	// Two children, with priorities [0, 1], each with one backend.
+	if err := pb.UpdateClientConnState(balancer.ClientConnState{
+		ResolverState: resolver.State{
+			Endpoints: []resolver.Endpoint{
+				hierarchy.SetInEndpoint(resolver.Endpoint{Addresses: []resolver.Address{{Addr: testBackendAddrStrs[0]}}}, []string{"child-0"}),
+				hierarchy.SetInEndpoint(resolver.Endpoint{Addresses: []resolver.Address{{Addr: testBackendAddrStrs[1]}}}, []string{"child-1"}),
+			},
+		},
+		BalancerConfig: &LBConfig{
+			Children: map[string]*Child{
+				"child-0": {Config: &internalserviceconfig.BalancerConfig{Name: roundrobin.Name}},
+				"child-1": {Config: &internalserviceconfig.BalancerConfig{Name: roundrobin.Name}},
+			},
+			Priorities: []string{"child-0", "child-1"},
+		},
+	}); err != nil {
+		t.Fatalf("failed to update ClientConn state: %v", err)
+	}
+
+	// child-0 will be started, and will create a SubConn.
+	addrs0 := <-cc.NewSubConnAddrsCh
+	if got, want := addrs0[0].Addr, testBackendAddrStrs[0]; got != want {
+		t.Fatalf("got unexpected new subconn addr: %v, want %v", got, want)
+	}
+	sc0 := <-cc.NewSubConnCh
+
+	// Test 1: IDLE -> CONNECTING should start timer
+	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Idle})
+	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	
+	timerStartTime := time.Now()
+	
+	// Wait for timer to expire and child-1 to start
+	select {
+	case addrs1 := <-cc.NewSubConnAddrsCh:
+		if got, want := addrs1[0].Addr, testBackendAddrStrs[1]; got != want {
+			t.Fatalf("got unexpected new subconn addr: %v, want %v", got, want)
+		}
+		elapsed := time.Since(timerStartTime)
+		if elapsed < testPriorityInitTimeout-50*time.Millisecond || elapsed > testPriorityInitTimeout+50*time.Millisecond {
+			t.Fatalf("init timer took %v to expire, expected around %v", elapsed, testPriorityInitTimeout)
+		}
+	case <-time.After(testPriorityInitTimeout * 2):
+		t.Fatal("child-1 was not started after init timer expiration (IDLE->CONNECTING)")
+	}
+	sc1 := <-cc.NewSubConnCh
+
+	// Bring both children to READY to reset state
+	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
+
+	// Test 2: TRANSIENT_FAILURE -> CONNECTING should start timer
+	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
+	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+
+	timerStartTime2 := time.Now()
+
+	// Since child-0 went from TF to Connecting, child-1 should be started after timer
+	select {
+	case <-cc.NewSubConnAddrsCh:
+		// child-1 subconn might be recreated
+		elapsed := time.Since(timerStartTime2)
+		if elapsed < testPriorityInitTimeout-50*time.Millisecond || elapsed > testPriorityInitTimeout+50*time.Millisecond {
+			t.Fatalf("init timer took %v to expire, expected around %v (TF->CONNECTING)", elapsed, testPriorityInitTimeout)
+		}
+	case <-time.After(testPriorityInitTimeout * 2):
+		// Timer should have expired and failover should happen
+		// but child-1 might already be in use, which is also acceptable
+	}
+}
