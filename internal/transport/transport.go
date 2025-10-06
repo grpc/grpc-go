@@ -295,9 +295,7 @@ type Stream struct {
 	fc           *inFlow
 	wq           *writeQuota
 
-	// Callback to state application's intentions to read data. This
-	// is used to adjust flow control, if needed.
-	requestRead func(int)
+	readRequester readRequester
 
 	state streamState
 
@@ -306,6 +304,12 @@ type Stream struct {
 	contentSubtype string
 
 	trailer metadata.MD // the key-value map of trailer metadata.
+}
+
+// readRequester is used to state application's intentions to read data. This
+// is used to adjust flow control, if needed.
+type readRequester interface {
+	requestRead(int)
 }
 
 func (s *Stream) swapState(st streamState) streamState {
@@ -355,7 +359,7 @@ func (s *Stream) ReadMessageHeader(header []byte) (err error) {
 	if er := s.trReader.er; er != nil {
 		return er
 	}
-	s.requestRead(len(header))
+	s.readRequester.requestRead(len(header))
 	for len(header) != 0 {
 		n, err := s.trReader.ReadMessageHeader(header)
 		header = header[n:]
@@ -378,7 +382,7 @@ func (s *Stream) read(n int) (data mem.BufferSlice, err error) {
 	if er := s.trReader.er; er != nil {
 		return nil, er
 	}
-	s.requestRead(n)
+	s.readRequester.requestRead(n)
 	for n != 0 {
 		buf, err := s.trReader.Read(n)
 		var bufLen int
@@ -406,11 +410,15 @@ func (s *Stream) read(n int) (data mem.BufferSlice, err error) {
 // The error is io.EOF when the stream is done or another non-nil error if
 // the stream broke.
 type transportReader struct {
-	reader *recvBufferReader
-	// The handler to control the window update procedure for both this
-	// particular stream and the associated transport.
-	windowHandler func(int)
+	reader        *recvBufferReader
+	windowHandler windowHandler
 	er            error
+}
+
+// The handler to control the window update procedure for both this
+// particular stream and the associated transport.
+type windowHandler interface {
+	updateWindow(int)
 }
 
 func (t *transportReader) ReadMessageHeader(header []byte) (int, error) {
@@ -419,7 +427,7 @@ func (t *transportReader) ReadMessageHeader(header []byte) (int, error) {
 		t.er = err
 		return 0, err
 	}
-	t.windowHandler(n)
+	t.windowHandler.updateWindow(n)
 	return n, nil
 }
 
@@ -429,7 +437,7 @@ func (t *transportReader) Read(n int) (mem.Buffer, error) {
 		t.er = err
 		return buf, err
 	}
-	t.windowHandler(buf.Len())
+	t.windowHandler.updateWindow(buf.Len())
 	return buf, nil
 }
 
@@ -615,6 +623,8 @@ type internalServerTransport interface {
 	write(s *ServerStream, hdr []byte, data mem.BufferSlice, opts *WriteOptions) error
 	writeStatus(s *ServerStream, st *status.Status) error
 	incrMsgRecv()
+	adjustWindow(s *ServerStream, n uint32)
+	updateWindow(s *ServerStream, n uint32)
 }
 
 // connectionErrorf creates an ConnectionError with the specified error description.

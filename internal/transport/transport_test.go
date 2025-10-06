@@ -1858,9 +1858,9 @@ func (s) TestReadGivesSameErrorAfterAnyErrorOccurs(t *testing.T) {
 	defer cancel()
 	testRecvBuffer := newRecvBuffer()
 	s := &Stream{
-		ctx:         ctx,
-		buf:         testRecvBuffer,
-		requestRead: func(int) {},
+		ctx:           ctx,
+		buf:           testRecvBuffer,
+		readRequester: &fakeReadRequester{},
 	}
 	s.trReader = &transportReader{
 		reader: &recvBufferReader{
@@ -1868,7 +1868,9 @@ func (s) TestReadGivesSameErrorAfterAnyErrorOccurs(t *testing.T) {
 			ctxDone: s.ctx.Done(),
 			recv:    s.buf,
 		},
-		windowHandler: func(int) {},
+		windowHandler: &mockWindowUpdater{
+			f: func(int) {},
+		},
 	}
 	testData := make([]byte, 1)
 	testData[0] = 5
@@ -3076,13 +3078,15 @@ func (s) TestReadMessageHeaderMultipleBuffers(t *testing.T) {
 	recvBuffer.put(recvMsg{buffer: make(mem.SliceBuffer, headerLen-3)})
 	bytesRead := 0
 	s := Stream{
-		requestRead: func(int) {},
+		readRequester: &fakeReadRequester{},
 		trReader: &transportReader{
 			reader: &recvBufferReader{
 				recv: recvBuffer,
 			},
-			windowHandler: func(i int) {
-				bytesRead += i
+			windowHandler: &mockWindowUpdater{
+				f: func(i int) {
+					bytesRead += i
+				},
 			},
 		},
 	}
@@ -3261,4 +3265,17 @@ func (s) TestClientTransport_Handle1xxHeaders(t *testing.T) {
 			}
 		})
 	}
+}
+
+type fakeReadRequester struct {
+}
+
+func (f *fakeReadRequester) requestRead(int) {}
+
+type mockWindowUpdater struct {
+	f func(int)
+}
+
+func (m *mockWindowUpdater) updateWindow(n int) {
+	m.f(n)
 }
