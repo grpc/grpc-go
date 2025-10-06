@@ -87,6 +87,7 @@ type picker struct {
 	counter         *xdsclient.ClusterRequestsCounter
 	countMax        uint32
 	telemetryLabels map[string]string
+	clusterName     string
 }
 
 func telemetryLabels(ctx context.Context) map[string]string {
@@ -136,6 +137,7 @@ func (d *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 	}
 
 	var lID clients.Locality
+
 	pr, err := d.s.Picker.Pick(info)
 	if scw, ok := pr.SubConn.(*scWrapper); ok {
 		// This OK check also covers the case err!=nil, because SubConn will be
@@ -156,6 +158,7 @@ func (d *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 
 	if labels := telemetryLabels(info.Ctx); labels != nil {
 		labels["grpc.lb.locality"] = xdsinternal.LocalityString(lID)
+		labels["grpc.lb.backend_service"] = d.clusterName
 	}
 
 	if d.loadStore != nil {
