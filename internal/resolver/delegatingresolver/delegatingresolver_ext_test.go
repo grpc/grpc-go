@@ -248,9 +248,9 @@ func (s) TestDelegatingResolverwithDNSAndProxyWithTargetResolution(t *testing.T)
 	}
 }
 
-// TestDelegatingResolverWithProxy tests the creation of a delegating resolver
-// when a proxy is configured. It verifies both successful creation for valid
-// targets and correct error handling for invalid ones.
+// Tests the creation of a delegating resolver when a proxy is configured. It
+// verifies both successful creation for valid targets and correct error
+// handling for invalid ones.
 //
 // For successful cases, it ensures the final address is from the proxy resolver
 // and contains the original, correctly-formatted target address as an
@@ -300,9 +300,8 @@ func (s) TestDelegatingResolverwithDNSAndProxyWithNoTargetResolution(t *testing.
 					t.Fatalf("Delegating resolver created, want error containing %q", test.wantErrorSubstring)
 				}
 				if !strings.Contains(err.Error(), test.wantErrorSubstring) {
-					t.Fatalf("Delegating resolver failed with error %q, want error containing %q", err.Error(), test.wantErrorSubstring)
+					t.Fatalf("Delegating resolver failed with error %v, want error containing %v", err.Error(), test.wantErrorSubstring)
 				}
-				// Expected error was found, so the test case for this part is done.
 				return
 			}
 
@@ -352,7 +351,7 @@ func (s) TestDelegatingResolverEnvVarForDefaultPortDisabled(t *testing.T) {
 		resolvedProxyTestAddr1 = "11.11.11.11:7687"
 	)
 
-	testutils.SetEnvConfig(t, &envconfig.AddDefaultPort, false)
+	testutils.SetEnvConfig(t, &envconfig.EnableDefaultPortForProxyTarget, false)
 	overrideTestHTTPSProxy(t, envProxyAddr)
 
 	targetResolver := manual.NewBuilderWithScheme("dns")

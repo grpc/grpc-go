@@ -138,9 +138,8 @@ func New(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOpti
 	// resolution should be handled by the proxy, not the client. Therefore, we
 	// bypass the target resolver and store the unresolved target address.
 	if target.URL.Scheme == "dns" && !targetResolutionEnabled {
-		addr := target.Endpoint()
-		if envconfig.AddDefaultPort {
-			addr = maybeAddDefaultPort(target.Endpoint(), defaultPort)
+		if envconfig.EnableDefaultPortForProxyTarget {
+			addr = maybeAddDefaultPort(addr, defaultPort)
 		}
 		r.targetResolverState = &resolver.State{
 			Addresses: []resolver.Address{{Addr: addr}},

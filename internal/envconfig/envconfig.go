@@ -76,10 +76,13 @@ var (
 	// KeepaliveParams when dial the ALTS handshaker service.
 	ALTSHandshakerKeepaliveParams = boolFromEnv("GRPC_EXPERIMENTAL_ALTS_HANDSHAKER_KEEPALIVE_PARAMS", false)
 
-	// AddDefaultPort is set if the resolver should add the default port when
-	// the target address doesn't contain a port. We will add the default port
-	// 443 for default scheme.
-	AddDefaultPort = boolFromEnv("GRPC_EXPERIMENTAL_RESOLVER_ADD_DEFAULT_PORT", true)
+	// EnableDefaultPortForProxyTarget controls whether the resolver adds a default port 443
+	// to a target address that lacks one. This flag only has an effect when all of
+	// the following conditions are met:
+	//   - A connect proxy is being used.
+	//   - Target resolution is disabled.
+	//   - The DNS resolver is being used.
+	EnableDefaultPortForProxyTarget = boolFromEnv("GRPC_EXPERIMENTAL_ENABLE_DEFAULT_PORT_FOR_PROXY_TARGET", true)
 )
 
 func boolFromEnv(envVar string, def bool) bool {
