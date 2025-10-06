@@ -27,7 +27,7 @@ import (
 	"net"
 	"strconv"
 	"strings"
-	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -1146,55 +1146,19 @@ func (s) TestChildPolicyChangeOnConfigUpdate(t *testing.T) {
 	server := stubserver.StartTestService(t, nil)
 	defer server.Stop()
 
-	const (
-		serviceName   = "test-child-policy"
-		routeName     = "route-" + serviceName
-		clusterName   = "cluster-" + serviceName
-		endpointsName = "endpoints-" + serviceName
-	)
-
-	resources := e2e.UpdateOptions{
-		NodeID:    nodeID,
-		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(serviceName, routeName)},
-		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeName, serviceName, clusterName)},
-		Clusters:  []*v3clusterpb.Cluster{e2e.DefaultCluster(clusterName, endpointsName, e2e.SecurityLevelNone)},
-		Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(endpointsName, "localhost", []uint32{testutils.ParsePort(t, server.Address)})},
-	}
+	const serviceName = "test-child-policy"
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		DialTarget: serviceName,
+		NodeID:     nodeID,
+		Host:       "localhost",
+		Port:       testutils.ParsePort(t, server.Address),
+	})
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatalf("Failed to update xDS resources: %v", err)
 	}
-
-	// Register stub pickfirst LB policy so that we can catch config changes.
-	pfBuilder := balancer.Get(pickfirst.Name)
-	internal.BalancerUnregister(pfBuilder.Name())
-	lbCfgCh := make(chan serviceconfig.LoadBalancingConfig, 1)
-	updatedChildPolicy := ""
-	var mu sync.Mutex
-	stub.Register(pfBuilder.Name(), stub.BalancerFuncs{
-		ParseConfig: func(lbCfg json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
-			return pfBuilder.(balancer.ConfigParser).ParseConfig(lbCfg)
-		},
-		Init: func(bd *stub.BalancerData) {
-			bd.ChildBalancer = pfBuilder.Build(bd.ClientConn, bd.BuildOptions)
-		},
-		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
-			select {
-			case lbCfgCh <- ccs.BalancerConfig:
-			default:
-			}
-			mu.Lock()
-			updatedChildPolicy = pfBuilder.Name()
-			mu.Unlock()
-			return bd.ChildBalancer.UpdateClientConnState(ccs)
-		},
-		Close: func(bd *stub.BalancerData) {
-			bd.ChildBalancer.Close()
-		},
-	})
-	defer balancer.Register(pfBuilder)
 
 	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithResolvers(resolverBuilder), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
@@ -1206,6 +1170,34 @@ func (s) TestChildPolicyChangeOnConfigUpdate(t *testing.T) {
 	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("client.EmptyCall() failed: %v", err)
 	}
+
+	// Register stub pickfirst LB policy so that we can catch config changes.
+	pfBuilder := balancer.Get(pickfirst.Name)
+	internal.BalancerUnregister(pfBuilder.Name())
+	lbCfgCh := make(chan serviceconfig.LoadBalancingConfig, 1)
+	updatedChildPolicy := atomic.Pointer[string]{}
+	stub.Register(pfBuilder.Name(), stub.BalancerFuncs{
+		ParseConfig: func(lbCfg json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
+			return pfBuilder.(balancer.ConfigParser).ParseConfig(lbCfg)
+		},
+		Init: func(bd *stub.BalancerData) {
+			bd.ChildBalancer = pfBuilder.Build(bd.ClientConn, bd.BuildOptions)
+		},
+		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
+			name := pfBuilder.Name()
+			updatedChildPolicy.Store(&name)
+			select {
+			case lbCfgCh <- ccs.BalancerConfig:
+			case <-ctx.Done():
+				t.Fatalf("Timeout while waiting for BalancerConfig")
+			}
+			return bd.ChildBalancer.UpdateClientConnState(ccs)
+		},
+		Close: func(bd *stub.BalancerData) {
+			bd.ChildBalancer.Close()
+		},
+	})
+	defer balancer.Register(pfBuilder)
 
 	// Now update the cluster to use "pick_first" as the endpoint picking policy.
 	resources.Clusters[0].LoadBalancingPolicy = &v3clusterpb.LoadBalancingPolicy{
@@ -1225,11 +1217,13 @@ func (s) TestChildPolicyChangeOnConfigUpdate(t *testing.T) {
 	case <-lbCfgCh:
 	}
 
-	mu.Lock()
-	if updatedChildPolicy != pfBuilder.Name() {
-		t.Fatalf("Unexpected child policy after config update, got %q, wat %q", updatedChildPolicy, pfBuilder.Name())
+	if p := updatedChildPolicy.Load(); p == nil || *p != pfBuilder.Name() {
+		var got string
+		if p != nil {
+			got = *p
+		}
+		t.Fatalf("Unexpected child policy after config update, got %q, want %q", got, pfBuilder.Name())
 	}
-	mu.Unlock()
 
 	// New RPC should still be routed successfully
 	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
@@ -1262,22 +1256,13 @@ func (s) TestFailedToParseChildPolicyConfig(t *testing.T) {
 	server := stubserver.StartTestService(t, nil)
 	defer server.Stop()
 
-	const (
-		serviceName   = "test-child-policy"
-		routeName     = "route-" + serviceName
-		clusterName   = "cluster-" + serviceName
-		endpointsName = "endpoints-" + serviceName
-	)
-
-	// Configure the xDS management server with default resources. Override the
-	// default cluster to include pickfirst as an LbPolicy.
-	resources := e2e.UpdateOptions{
-		NodeID:    nodeID,
-		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(serviceName, routeName)},
-		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeName, serviceName, clusterName)},
-		Clusters:  []*v3clusterpb.Cluster{e2e.DefaultCluster(clusterName, endpointsName, e2e.SecurityLevelNone)},
-		Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(endpointsName, "localhost", []uint32{testutils.ParsePort(t, server.Address)})},
-	}
+	const serviceName = "test-child-policy"
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		DialTarget: serviceName,
+		NodeID:     nodeID,
+		Host:       "localhost",
+		Port:       testutils.ParsePort(t, server.Address),
+	})
 	resources.Clusters[0].LoadBalancingPolicy = &v3clusterpb.LoadBalancingPolicy{
 		Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{{
 			TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
@@ -1311,6 +1296,6 @@ func (s) TestFailedToParseChildPolicyConfig(t *testing.T) {
 
 	client := testgrpc.NewTestServiceClient(cc)
 	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err == nil {
-		t.Fatalf("Unexpected error, got <nil> want %v", err)
+		t.Fatal("EmptyCall RPC succeeded when expected to fail")
 	}
 }

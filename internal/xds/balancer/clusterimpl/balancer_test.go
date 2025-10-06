@@ -21,7 +21,6 @@ package clusterimpl
 import (
 	"context"
 	"errors"
-	"strings"
 	"testing"
 	"time"
 
