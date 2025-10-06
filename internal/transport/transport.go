@@ -68,6 +68,9 @@ type recvBuffer struct {
 	err     error
 }
 
+// init allows a recvBuffer to be initialized in-place, which is useful
+// for resetting a buffer or for avoiding a heap allocation when the buffer
+// is embedded in another struct.
 func (b *recvBuffer) init() {
 	b.c = make(chan recvMsg, 1)
 }

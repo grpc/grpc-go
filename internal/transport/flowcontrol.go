@@ -41,6 +41,9 @@ type writeQuota struct {
 	quota     int32
 }
 
+// init allows a writeQuota to be initialized in-place, which is useful for
+// resetting a buffer or for avoiding a heap allocation when the buffer is
+// embedded in another struct.
 func (w *writeQuota) init(sz int32, done <-chan struct{}) {
 	w.quota = sz
 	w.ch = make(chan struct{}, 1)
