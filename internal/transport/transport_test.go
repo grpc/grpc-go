@@ -3234,9 +3234,12 @@ func (s) TestDeleteStreamMetricsIncrementedOnlyOnce(t *testing.T) {
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+
 			// Setup server configuration with channelz support
 			serverConfig := &ServerConfig{
-				ChannelzParent: channelz.RegisterServer("test server"),
+				ChannelzParent: channelz.RegisterServer(t.Name()),
 			}
 			defer channelz.RemoveEntry(serverConfig.ChannelzParent.ID)
 
@@ -3270,10 +3273,6 @@ func (s) TestDeleteStreamMetricsIncrementedOnlyOnce(t *testing.T) {
 			if serverTransport == nil {
 				t.Fatal("Server transport not found")
 			}
-
-			// Always create a real stream through the client
-			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-			defer cancel()
 
 			clientStream, err := client.NewStream(ctx, &CallHdr{})
 			if err != nil {
