@@ -491,9 +491,9 @@ func (t *http2Client) newStream(ctx context.Context, callHdr *CallHdr) *ClientSt
 		headerChan: make(chan struct{}),
 		doneFunc:   callHdr.DoneFunc,
 	}
-	s.readRequester = s
 	s.Stream.buf.init()
 	s.Stream.wq.init(defaultWriteQuota, s.done)
+	s.readRequester = s
 	// The client side stream context should have exactly the same life cycle with the user provided context.
 	// That means, s.ctx should be read-only. And s.ctx is done iff ctx is done.
 	// So we use the original context here instead of creating a copy.
