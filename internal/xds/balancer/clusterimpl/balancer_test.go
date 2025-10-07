@@ -67,9 +67,6 @@ func init() {
 // are handled in the run() goroutine, which exits before Close() returns, we
 // expect the above picker update to be dropped.
 func (s) TestPickerUpdateAfterClose(t *testing.T) {
-	defer xdsclient.ClearCounterForTesting(testClusterName, testServiceName)
-	xdsC := fakeclient.NewClient()
-
 	builder := balancer.Get(Name)
 	cc := testutils.NewBalancerClientConn(t)
 	b := builder.Build(cc, balancer.BuildOptions{})
@@ -104,6 +101,7 @@ func (s) TestPickerUpdateAfterClose(t *testing.T) {
 	})
 
 	var maxRequest uint32 = 50
+	xdsC := fakeclient.NewClient()
 	if err := b.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: xdsclient.SetClient(resolver.State{Endpoints: testBackendEndpoints}, xdsC),
 		BalancerConfig: &LBConfig{
@@ -140,14 +138,12 @@ func (s) TestClusterNameInAddressAttributes(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	defer xdsclient.ClearCounterForTesting(testClusterName, testServiceName)
-	xdsC := fakeclient.NewClient()
-
 	builder := balancer.Get(Name)
 	cc := testutils.NewBalancerClientConn(t)
 	b := builder.Build(cc, balancer.BuildOptions{})
 	defer b.Close()
 
+	xdsC := fakeclient.NewClient()
 	if err := b.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: xdsclient.SetClient(resolver.State{Endpoints: testBackendEndpoints}, xdsC),
 		BalancerConfig: &LBConfig{
@@ -237,9 +233,6 @@ func (s) TestPickerUpdatedSynchronouslyOnConfigUpdate(t *testing.T) {
 	}
 	defer func() { clientConnUpdateHook = origClientConnUpdateHook }()
 
-	defer xdsclient.ClearCounterForTesting(testClusterName, testServiceName)
-	xdsC := fakeclient.NewClient()
-
 	builder := balancer.Get(Name)
 	cc := testutils.NewBalancerClientConn(t)
 	b := builder.Build(cc, balancer.BuildOptions{})
@@ -257,6 +250,7 @@ func (s) TestPickerUpdatedSynchronouslyOnConfigUpdate(t *testing.T) {
 		},
 	})
 
+	xdsC := fakeclient.NewClient()
 	if err := b.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: xdsclient.SetClient(resolver.State{Endpoints: testBackendEndpoints}, xdsC),
 		BalancerConfig: &LBConfig{
