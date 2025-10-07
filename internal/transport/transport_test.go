@@ -39,9 +39,11 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
+
 	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/leakcheck"
@@ -3256,6 +3258,128 @@ func (s) TestClientTransport_Handle1xxHeaders(t *testing.T) {
 
 			if got.Code() != want.Code() || got.Message() != want.Message() {
 				t.Fatalf("operateHeaders(%v); status = %v, want %v", test.metaHeaderFrame, got, want)
+			}
+		})
+	}
+}
+
+func (s) TestDeleteStreamMetricsIncrementedOnlyOnce(t *testing.T) {
+	// Enable channelz for metrics collection
+	defer internal.ChannelzTurnOffForTesting()
+	if !channelz.IsOn() {
+		channelz.TurnOn()
+	}
+
+	for _, test := range []struct {
+		name                string
+		eosReceived         bool
+		wantStreamSucceeded int64
+		wantStreamFailed    int64
+	}{
+		{
+			name:                "StreamsSucceeded",
+			eosReceived:         true,
+			wantStreamSucceeded: 1,
+			wantStreamFailed:    0,
+		},
+		{
+			name:                "StreamsFailed",
+			eosReceived:         false,
+			wantStreamSucceeded: 0,
+			wantStreamFailed:    1,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+
+			// Setup server configuration with channelz support
+			serverConfig := &ServerConfig{
+				ChannelzParent: channelz.RegisterServer(t.Name()),
+			}
+			defer channelz.RemoveEntry(serverConfig.ChannelzParent.ID)
+
+			// Create server and client with normal handler (not notifyCall)
+			server, client, cancel := setUpWithOptions(t, 0, serverConfig, normal, ConnectOptions{})
+			defer func() {
+				client.Close(fmt.Errorf("test cleanup"))
+				server.stop()
+				cancel()
+			}()
+
+			// Wait for connection to be established
+			waitWhileTrue(t, func() (bool, error) {
+				server.mu.Lock()
+				defer server.mu.Unlock()
+				if len(server.conns) == 0 {
+					return true, fmt.Errorf("timed-out while waiting for connection")
+				}
+				return false, nil
+			})
+
+			// Get the server transport
+			server.mu.Lock()
+			var serverTransport *http2Server
+			for st := range server.conns {
+				serverTransport = st.(*http2Server)
+				break
+			}
+			server.mu.Unlock()
+
+			if serverTransport == nil {
+				t.Fatal("Server transport not found")
+			}
+
+			clientStream, err := client.NewStream(ctx, &CallHdr{})
+			if err != nil {
+				t.Fatalf("Failed to create stream: %v", err)
+			}
+
+			// Wait for the stream to be created on the server side
+			var serverStream *ServerStream
+			waitWhileTrue(t, func() (bool, error) {
+				serverTransport.mu.Lock()
+				defer serverTransport.mu.Unlock()
+				for _, v := range serverTransport.activeStreams {
+					if v.id == clientStream.id {
+						serverStream = v
+						return false, nil
+					}
+				}
+				return true, nil
+			})
+
+			if serverStream == nil {
+				t.Fatalf("Server stream not found for client stream ID %d", clientStream.id)
+			}
+
+			// First call to deleteStream should remove the stream from activeStreams and update metrics
+			serverTransport.deleteStream(serverStream, test.eosReceived)
+
+			// Check metrics after first deleteStream call
+			streamsSucceeded := serverTransport.channelz.SocketMetrics.StreamsSucceeded.Load()
+			streamsFailed := serverTransport.channelz.SocketMetrics.StreamsFailed.Load()
+
+			if streamsSucceeded != test.wantStreamSucceeded {
+				t.Errorf("After first deleteStream - StreamsSucceeded: got %d, want %d", streamsSucceeded, test.wantStreamSucceeded)
+			}
+			if streamsFailed != test.wantStreamFailed {
+				t.Errorf("After first deleteStream - StreamsFailed: got %d, want %d", streamsFailed, test.wantStreamFailed)
+			}
+
+			// Additional calls to deleteStream should not change metrics (stream already deleted)
+			serverTransport.deleteStream(serverStream, test.eosReceived)
+			serverTransport.deleteStream(serverStream, test.eosReceived)
+
+			// Verify metrics haven't changed after subsequent calls
+			additionalStreamsSucceeded := serverTransport.channelz.SocketMetrics.StreamsSucceeded.Load()
+			additionalStreamsFailed := serverTransport.channelz.SocketMetrics.StreamsFailed.Load()
+
+			if additionalStreamsSucceeded != test.wantStreamSucceeded {
+				t.Errorf("After multiple deleteStream calls - StreamsSucceeded changed: got %d, want %d", additionalStreamsSucceeded, test.wantStreamSucceeded)
+			}
+			if additionalStreamsFailed != test.wantStreamFailed {
+				t.Errorf("After multiple deleteStream calls - StreamsFailed changed: got %d, want %d", additionalStreamsFailed, test.wantStreamFailed)
 			}
 		})
 	}
