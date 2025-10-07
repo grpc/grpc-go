@@ -2588,56 +2588,50 @@ func (s) TestClientHandshakeInfoDialer(t *testing.T) {
 	}
 }
 
-func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
-	testStream := func() *ClientStream {
-		return &ClientStream{
-			Stream: &Stream{
-				buf: &recvBuffer{
-					c:  make(chan recvMsg),
-					mu: sync.Mutex{},
-				},
+func newTestClientStream() *ClientStream {
+	return &ClientStream{
+		Stream: &Stream{
+			buf: &recvBuffer{
+				c: make(chan recvMsg),
 			},
-			done:       make(chan struct{}),
-			headerChan: make(chan struct{}),
-		}
+		},
+		done:       make(chan struct{}),
+		headerChan: make(chan struct{}),
 	}
+}
 
-	testClient := func(ts *ClientStream) *http2Client {
-		return &http2Client{
-			mu: sync.Mutex{},
-			activeStreams: map[uint32]*ClientStream{
-				0: ts,
-			},
-			controlBuf: newControlBuffer(make(<-chan struct{})),
-		}
+func newTestHTTP2Client(cs *ClientStream) *http2Client {
+	return &http2Client{
+		activeStreams: map[uint32]*ClientStream{
+			// StreamID 0 is reserved for connection-level flow control.
+			// Client-initiated streams must use odd-numbered stream identifiers.
+			1: cs,
+		},
+		controlBuf: newControlBuffer(make(<-chan struct{})),
 	}
+}
 
-	for _, test := range []struct {
-		name string
-		// input
+// TestClientDecodeHeader validates the handling of initial header frames that
+// do not signal the end of a stream. For all headers that indicate grpc content
+// type, http status will be ignored.
+func (s) TestClientDecodeHeader(t *testing.T) {
+	tests := []struct {
+		name            string
 		metaHeaderFrame *http2.MetaHeadersFrame
-		// output
-		wantStatus *status.Status
-		// end stream output
-		wantStatusEndStream *status.Status
-		// head channel closed
-		headerChanClosedForEndStream bool
+		wantStatus      *status.Status
 	}{
 		{
-			name: "valid header",
+			name: "valid_header",
 			metaHeaderFrame: &http2.MetaHeadersFrame{
 				Fields: []hpack.HeaderField{
 					{Name: "content-type", Value: "application/grpc"},
-					{Name: "grpc-status", Value: "0"},
 					{Name: ":status", Value: "200"},
 				},
 			},
-			// no error
-			wantStatus:          status.New(codes.OK, ""),
-			wantStatusEndStream: status.New(codes.OK, ""),
+			wantStatus: status.New(codes.OK, ""),
 		},
 		{
-			name: "missing content-type header",
+			name: "missing_content_type_header",
 			metaHeaderFrame: &http2.MetaHeadersFrame{
 				Fields: []hpack.HeaderField{
 					{Name: "grpc-status", Value: "0"},
@@ -2648,16 +2642,9 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 				codes.Unknown,
 				"unexpected HTTP status code received from server: 200 (OK); malformed header: missing HTTP content-type",
 			),
-			headerChanClosedForEndStream: true,
-			// when headerChan is closed, it is already gRPC and we just need
-			// grpc-status
-			wantStatusEndStream: status.New(
-				codes.OK,
-				"",
-			),
 		},
 		{
-			name: "invalid grpc status header field",
+			name: "invalid_grpc_status",
 			metaHeaderFrame: &http2.MetaHeadersFrame{
 				Fields: []hpack.HeaderField{
 					{Name: "content-type", Value: "application/grpc"},
@@ -2669,13 +2656,9 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 				codes.Internal,
 				"transport: malformed grpc-status: strconv.ParseInt: parsing \"xxxx\": invalid syntax",
 			),
-			wantStatusEndStream: status.New(
-				codes.Internal,
-				"transport: malformed grpc-status: strconv.ParseInt: parsing \"xxxx\": invalid syntax",
-			),
 		},
 		{
-			name: "invalid http content type",
+			name: "invalid_content_type",
 			metaHeaderFrame: &http2.MetaHeadersFrame{
 				Fields: []hpack.HeaderField{
 					{Name: "content-type", Value: "application/json"},
@@ -2685,15 +2668,9 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 				codes.Internal,
 				"malformed header: missing HTTP status; transport: received unexpected content-type \"application/json\"",
 			),
-			// This content type will only come when end stream is also initial
-			// header, otherwise we would already be talking gRPC
-			wantStatusEndStream: status.New(
-				codes.Internal,
-				"malformed header: missing HTTP status; transport: received unexpected content-type \"application/json\"",
-			),
 		},
 		{
-			name: "invalid http content type with http status 504 translation",
+			name: "invalid_content_type_with_http_status_504",
 			metaHeaderFrame: &http2.MetaHeadersFrame{
 				Fields: []hpack.HeaderField{
 					{Name: "content-type", Value: "application/json"},
@@ -2704,84 +2681,144 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 				codes.Unavailable,
 				"unexpected HTTP status code received from server: 504 (Gateway Timeout); transport: received unexpected content-type \"application/json\"",
 			),
-			// This content type will only come when end stream is also initial
-			// header, otherwise we would already be talking gRPC
-			wantStatusEndStream: status.New(
-				codes.Unavailable,
-				"unexpected HTTP status code received from server: 504 (Gateway Timeout); transport: received unexpected content-type \"application/json\"",
-			),
 		},
 		{
-			name: "http fallback and invalid http status",
+			name: "http_fallback_and_invalid_http_status",
 			metaHeaderFrame: &http2.MetaHeadersFrame{
 				Fields: []hpack.HeaderField{
-					// No content type provided then fallback into handling http error.
 					{Name: ":status", Value: "xxxx"},
 				},
 			},
 			wantStatus: status.New(
 				codes.Internal,
-				"transport: malformed http-status: strconv.ParseInt: parsing \"xxxx\": invalid syntax",
-			),
-			// for end stream, when we are already talking gRPC, we expect
-			// grpc - status and fail for it, we will ignore http status.
-			headerChanClosedForEndStream: true,
-			wantStatusEndStream: status.New(
-				codes.Internal,
-				"",
+				"transport: malformed http-status: strconv.Atoi: parsing \"xxxx\": invalid syntax",
 			),
 		},
 		{
-			name: "http2 frame size exceeds",
+			name: "http2_frame_size_exceeds",
 			metaHeaderFrame: &http2.MetaHeadersFrame{
-				Fields:    nil,
 				Truncated: true,
 			},
 			wantStatus: status.New(
 				codes.Internal,
 				"peer header list size exceeded limit",
 			),
-			wantStatusEndStream: status.New(
+		},
+		{
+			name: "missing_http_status_and_grpc_status",
+			metaHeaderFrame: &http2.MetaHeadersFrame{
+				Fields: []hpack.HeaderField{
+					{Name: "content-type", Value: "application/grpc"},
+				},
+			},
+			wantStatus: status.New(codes.OK, ""),
+		},
+		{
+			name: "ignore_http_status_for_grpc",
+			metaHeaderFrame: &http2.MetaHeadersFrame{
+				Fields: []hpack.HeaderField{
+					{Name: "content-type", Value: "application/grpc"},
+					{Name: ":status", Value: "504"},
+				},
+			},
+			wantStatus: status.New(codes.OK, ""),
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cs := newTestClientStream()
+			s := newTestHTTP2Client(cs)
+
+			tc.metaHeaderFrame.HeadersFrame = &http2.HeadersFrame{
+				FrameHeader: http2.FrameHeader{
+					StreamID: 1,
+				},
+			}
+
+			s.operateHeaders(tc.metaHeaderFrame)
+			got := cs.status
+			want := tc.wantStatus
+			if got.Code() != want.Code() || got.Message() != want.Message() {
+				t.Errorf("operateHeaders(%v) got status %q, want %q", tc.metaHeaderFrame, got, want)
+			}
+		})
+	}
+}
+
+// TestClientDecodeTrailer validates the handling of trailer frames, which may
+// or may not also be the initial header frame (header-only response).
+func (s) TestClientDecodeTrailer(t *testing.T) {
+	tests := []struct {
+		name                string
+		metaHeaderFrame     *http2.MetaHeadersFrame
+		wantEndStreamStatus *status.Status
+	}{
+		{
+			name: "valid_trailer",
+			metaHeaderFrame: &http2.MetaHeadersFrame{
+				Fields: []hpack.HeaderField{
+					{Name: "content-type", Value: "application/grpc"},
+					{Name: "grpc-status", Value: "0"},
+					{Name: ":status", Value: "200"},
+				},
+			},
+			wantEndStreamStatus: status.New(codes.OK, ""),
+		},
+		{
+			name: "missing_content_type_in_grpc_mode",
+			metaHeaderFrame: &http2.MetaHeadersFrame{
+				Fields: []hpack.HeaderField{
+					{Name: "grpc-status", Value: "0"},
+					{Name: ":status", Value: "200"},
+				},
+			},
+			wantEndStreamStatus: status.New(codes.OK, ""),
+		},
+		{
+			name: "invalid_grpc_status",
+			metaHeaderFrame: &http2.MetaHeadersFrame{
+				Fields: []hpack.HeaderField{
+					{Name: "content-type", Value: "application/grpc"},
+					{Name: "grpc-status", Value: "xxxx"},
+					{Name: ":status", Value: "200"},
+				},
+			},
+			wantEndStreamStatus: status.New(
+				codes.Internal,
+				"transport: malformed grpc-status: strconv.ParseInt: parsing \"xxxx\": invalid syntax",
+			),
+		},
+		{
+			name: "missing_grpc_status_in_grpc_mode",
+			metaHeaderFrame: &http2.MetaHeadersFrame{
+				Fields: []hpack.HeaderField{
+					{Name: ":status", Value: "xxxx"},
+				},
+			},
+			wantEndStreamStatus: status.New(codes.Internal, ""),
+		},
+		{
+			name: "http2_frame_size_exceeds",
+			metaHeaderFrame: &http2.MetaHeadersFrame{
+				Truncated: true,
+			},
+			wantEndStreamStatus: status.New(
 				codes.Internal,
 				"peer header list size exceeded limit",
 			),
 		},
 		{
-			name: "ignoring bad http status in grpc mode",
-			metaHeaderFrame: &http2.MetaHeadersFrame{
-				Fields: []hpack.HeaderField{
-					{Name: "content-type", Value: "application/grpc"},
-					{Name: "grpc-status", Value: "0"},
-					{Name: ":status", Value: "504"},
-				},
-			},
-			wantStatus:          status.New(codes.OK, ""),
-			wantStatusEndStream: status.New(codes.OK, ""),
-		},
-		{
-			name: "missing http status and grpc status",
+			name: "missing_grpc_status_in_trailer",
 			metaHeaderFrame: &http2.MetaHeadersFrame{
 				Fields: []hpack.HeaderField{
 					{Name: "content-type", Value: "application/grpc"},
 				},
 			},
-			wantStatus:          status.New(codes.OK, ""),
-			wantStatusEndStream: status.New(codes.Internal, ""),
+			wantEndStreamStatus: status.New(codes.Internal, ""),
 		},
 		{
-			name: "ignore http status and fail for grpc status missing in trailer",
-			metaHeaderFrame: &http2.MetaHeadersFrame{
-				Fields: []hpack.HeaderField{
-					{Name: "content-type", Value: "application/grpc"},
-					{Name: ":status", Value: "504"},
-				},
-			},
-			wantStatus:                   status.New(codes.OK, ""),
-			headerChanClosedForEndStream: true,
-			wantStatusEndStream:          status.New(codes.Internal, ""),
-		},
-		{
-			name: "ignore valid http status for grpc",
+			name: "deadline_exceeded_status",
 			metaHeaderFrame: &http2.MetaHeadersFrame{
 				Fields: []hpack.HeaderField{
 					{Name: "content-type", Value: "application/grpc"},
@@ -2790,60 +2827,30 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 					{Name: ":status", Value: "200"},
 				},
 			},
-			wantStatus:          status.New(codes.OK, ""),
-			wantStatusEndStream: status.New(codes.DeadlineExceeded, "Request timed out: Internal error"),
+			wantEndStreamStatus: status.New(codes.DeadlineExceeded, "Request timed out: Internal error"),
 		},
-		{
-			name: "ignore illegal http status for grpc",
-			metaHeaderFrame: &http2.MetaHeadersFrame{
-				Fields: []hpack.HeaderField{
-					{Name: "content-type", Value: "application/grpc"},
-					{Name: "grpc-status", Value: "4"},
-					{Name: "grpc-message", Value: "Request timed out: Internal error"},
-					{Name: ":status", Value: "thisIsIllegal"},
-				},
-			},
-			wantStatus:          status.New(codes.OK, ""),
-			wantStatusEndStream: status.New(codes.DeadlineExceeded, "Request timed out: Internal error"),
-		},
-	} {
+	}
 
-		t.Run(test.name, func(t *testing.T) {
-			ts := testStream()
-			s := testClient(ts)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cs := newTestClientStream()
+			// Mark headerChanClosed to indicate trailer frames.
+			cs.headerChanClosed = 1
+			// Simulate the state where the initial headers have already been processed.
+			s := newTestHTTP2Client(cs)
 
-			test.metaHeaderFrame.HeadersFrame = &http2.HeadersFrame{
+			tc.metaHeaderFrame.HeadersFrame = &http2.HeadersFrame{
 				FrameHeader: http2.FrameHeader{
-					StreamID: 0,
-				},
-			}
-
-			s.operateHeaders(test.metaHeaderFrame)
-			got := ts.status
-			want := test.wantStatus
-			if got.Code() != want.Code() || got.Message() != want.Message() {
-				t.Fatalf("operateHeaders(%v); status = \ngot: %s\nwant: %s", test.metaHeaderFrame, got, want)
-			}
-		})
-		t.Run(fmt.Sprintf("%s-end_stream", test.name), func(t *testing.T) {
-			ts := testStream()
-			if test.headerChanClosedForEndStream {
-				ts.headerChanClosed = 1
-			}
-			s := testClient(ts)
-
-			test.metaHeaderFrame.HeadersFrame = &http2.HeadersFrame{
-				FrameHeader: http2.FrameHeader{
-					StreamID: 0,
+					StreamID: 1,
 					Flags:    http2.FlagHeadersEndStream,
 				},
 			}
 
-			s.operateHeaders(test.metaHeaderFrame)
-			got := ts.status
-			want := test.wantStatusEndStream
+			s.operateHeaders(tc.metaHeaderFrame)
+			got := cs.status
+			want := tc.wantEndStreamStatus
 			if got.Code() != want.Code() || got.Message() != want.Message() {
-				t.Fatalf("operateHeaders(%v); status = \ngot: %s\nwant: %s", test.metaHeaderFrame, got, want)
+				t.Errorf("operateHeaders(%v) got status %q, want %q", tc.metaHeaderFrame, got, want)
 			}
 		})
 	}

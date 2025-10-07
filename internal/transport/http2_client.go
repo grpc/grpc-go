@@ -1511,31 +1511,29 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 		}
 	}
 
-	// If a non gRPC response is received, then evaluate entire http status and
-	//  process close stream / response.
+	// If a non-gRPC response is received, then evaluate the HTTP status to
+	// process the response and close the stream.
 	// In case http status doesn't provide any error information (status : 200),
-	//  evalute response code to be Unknown.
+	// then evalute response code to be Unknown.
 	if !isGRPC {
 		var grpcErrorCode = codes.Internal
-		switch httpStatus {
-		case "":
+		if httpStatus == "" {
 			httpStatusErr = "malformed header: missing HTTP status"
-		default:
-			// Any other status code (e.g., "404", "503"). We must parse it.
-			c, err := strconv.ParseInt(httpStatus, 10, 32)
+		} else {
+			// Parse the status codes (e.g. "200", 404").
+			statusCode, err := strconv.Atoi(httpStatus)
 			if err != nil {
 				se := status.New(grpcErrorCode, fmt.Sprintf("transport: malformed http-status: %v", err))
 				t.closeStream(s, se.Err(), true, http2.ErrCodeProtocol, se, nil, endStream)
 				return
 			}
-			statusCode := int(c)
 			if statusCode >= 100 && statusCode < 200 {
 				if endStream {
 					se := status.New(codes.Internal, fmt.Sprintf(
 						"protocol error: informational header with status code %d must not have END_STREAM set", statusCode))
 					t.closeStream(s, se.Err(), true, http2.ErrCodeProtocol, se, nil, endStream)
 				}
-				// In case of informational headers return
+				// In case of informational headers, return.
 				return
 			}
 			httpStatusErr = fmt.Sprintf(
