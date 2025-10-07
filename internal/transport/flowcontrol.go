@@ -28,7 +28,7 @@ import (
 // writeQuota is a soft limit on the amount of data a stream can
 // schedule before some of it is written out.
 type writeQuota struct {
-	quota int32
+	_ noCopy
 	// get waits on read from when quota goes less than or equal to zero.
 	// replenish writes on it when quota goes positive again.
 	ch chan struct{}
@@ -38,16 +38,17 @@ type writeQuota struct {
 	// It is implemented as a field so that it can be updated
 	// by tests.
 	replenish func(n int)
+	quota     int32
 }
 
-func newWriteQuota(sz int32, done <-chan struct{}) *writeQuota {
-	w := &writeQuota{
-		quota: sz,
-		ch:    make(chan struct{}, 1),
-		done:  done,
-	}
+// init allows a writeQuota to be initialized in-place, which is useful for
+// resetting a buffer or for avoiding a heap allocation when the buffer is
+// embedded in another struct.
+func (w *writeQuota) init(sz int32, done <-chan struct{}) {
+	w.quota = sz
+	w.ch = make(chan struct{}, 1)
+	w.done = done
 	w.replenish = w.realReplenish
-	return w
 }
 
 func (w *writeQuota) get(sz int32) error {

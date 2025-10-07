@@ -529,7 +529,7 @@ func (a *csAttempt) newStream() error {
 	}
 	a.transportStream = s
 	a.ctx = s.Context()
-	a.parser = &parser{r: s, bufferPool: a.cs.cc.dopts.copts.BufferPool}
+	a.parser = parser{r: s, bufferPool: a.cs.cc.dopts.copts.BufferPool}
 	return nil
 }
 
@@ -601,7 +601,7 @@ type csAttempt struct {
 	cs              *clientStream
 	transport       transport.ClientTransport
 	transportStream *transport.ClientStream
-	parser          *parser
+	parser          parser
 	pickResult      balancer.PickResult
 
 	finished        bool
@@ -1141,7 +1141,7 @@ func (a *csAttempt) recvMsg(m any, payInfo *payloadInfo) (err error) {
 		// Only initialize this state once per stream.
 		a.decompressorSet = true
 	}
-	if err := recv(a.parser, cs.codec, a.transportStream, a.decompressorV0, m, *cs.callInfo.maxReceiveMessageSize, payInfo, a.decompressorV1, false); err != nil {
+	if err := recv(&a.parser, cs.codec, a.transportStream, a.decompressorV0, m, *cs.callInfo.maxReceiveMessageSize, payInfo, a.decompressorV1, false); err != nil {
 		if err == io.EOF {
 			if statusErr := a.transportStream.Status().Err(); statusErr != nil {
 				return statusErr
@@ -1179,7 +1179,7 @@ func (a *csAttempt) recvMsg(m any, payInfo *payloadInfo) (err error) {
 	}
 	// Special handling for non-server-stream rpcs.
 	// This recv expects EOF or errors, so we don't collect inPayload.
-	if err := recv(a.parser, cs.codec, a.transportStream, a.decompressorV0, m, *cs.callInfo.maxReceiveMessageSize, nil, a.decompressorV1, false); err == io.EOF {
+	if err := recv(&a.parser, cs.codec, a.transportStream, a.decompressorV0, m, *cs.callInfo.maxReceiveMessageSize, nil, a.decompressorV1, false); err == io.EOF {
 		return a.transportStream.Status().Err() // non-server streaming Recv returns nil on success
 	} else if err != nil {
 		return toRPCErr(err)
@@ -1331,7 +1331,7 @@ func newNonRetryClientStream(ctx context.Context, desc *StreamDesc, method strin
 		return nil, err
 	}
 	as.transportStream = s
-	as.parser = &parser{r: s, bufferPool: ac.dopts.copts.BufferPool}
+	as.parser = parser{r: s, bufferPool: ac.dopts.copts.BufferPool}
 	ac.incrCallsStarted()
 	if desc != unaryStreamDesc {
 		// Listen on stream context to cleanup when the stream context is
@@ -1374,7 +1374,7 @@ type addrConnStream struct {
 	decompressorSet  bool
 	decompressorV0   Decompressor
 	decompressorV1   encoding.Compressor
-	parser           *parser
+	parser           parser
 
 	// mu guards finished and is held for the entire finish method.
 	mu       sync.Mutex
@@ -1487,7 +1487,7 @@ func (as *addrConnStream) RecvMsg(m any) (err error) {
 		// Only initialize this state once per stream.
 		as.decompressorSet = true
 	}
-	if err := recv(as.parser, as.codec, as.transportStream, as.decompressorV0, m, *as.callInfo.maxReceiveMessageSize, nil, as.decompressorV1, false); err != nil {
+	if err := recv(&as.parser, as.codec, as.transportStream, as.decompressorV0, m, *as.callInfo.maxReceiveMessageSize, nil, as.decompressorV1, false); err != nil {
 		if err == io.EOF {
 			if statusErr := as.transportStream.Status().Err(); statusErr != nil {
 				return statusErr
@@ -1509,7 +1509,7 @@ func (as *addrConnStream) RecvMsg(m any) (err error) {
 
 	// Special handling for non-server-stream rpcs.
 	// This recv expects EOF or errors, so we don't collect inPayload.
-	if err := recv(as.parser, as.codec, as.transportStream, as.decompressorV0, m, *as.callInfo.maxReceiveMessageSize, nil, as.decompressorV1, false); err == io.EOF {
+	if err := recv(&as.parser, as.codec, as.transportStream, as.decompressorV0, m, *as.callInfo.maxReceiveMessageSize, nil, as.decompressorV1, false); err == io.EOF {
 		return as.transportStream.Status().Err() // non-server streaming Recv returns nil on success
 	} else if err != nil {
 		return toRPCErr(err)
@@ -1597,7 +1597,7 @@ type ServerStream interface {
 type serverStream struct {
 	ctx   context.Context
 	s     *transport.ServerStream
-	p     *parser
+	p     parser
 	codec baseCodec
 	desc  *StreamDesc
 
@@ -1788,7 +1788,7 @@ func (ss *serverStream) RecvMsg(m any) (err error) {
 		payInfo = &payloadInfo{}
 		defer payInfo.free()
 	}
-	if err := recv(ss.p, ss.codec, ss.s, ss.decompressorV0, m, ss.maxReceiveMessageSize, payInfo, ss.decompressorV1, true); err != nil {
+	if err := recv(&ss.p, ss.codec, ss.s, ss.decompressorV0, m, ss.maxReceiveMessageSize, payInfo, ss.decompressorV1, true); err != nil {
 		if err == io.EOF {
 			if len(ss.binlogs) != 0 {
 				chc := &binarylog.ClientHalfClose{}
@@ -1834,7 +1834,7 @@ func (ss *serverStream) RecvMsg(m any) (err error) {
 	}
 	// Special handling for non-client-stream rpcs.
 	// This recv expects EOF or errors, so we don't collect inPayload.
-	if err := recv(ss.p, ss.codec, ss.s, ss.decompressorV0, m, ss.maxReceiveMessageSize, nil, ss.decompressorV1, true); err == io.EOF {
+	if err := recv(&ss.p, ss.codec, ss.s, ss.decompressorV0, m, ss.maxReceiveMessageSize, nil, ss.decompressorV1, true); err == io.EOF {
 		return nil
 	} else if err != nil {
 		return err

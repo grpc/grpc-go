@@ -417,10 +417,9 @@ func (ht *serverHandlerTransport) HandleStreams(ctx context.Context, startStream
 	ctx = metadata.NewIncomingContext(ctx, ht.headerMD)
 	req := ht.req
 	s := &ServerStream{
-		Stream: &Stream{
+		Stream: Stream{
 			id:             0, // irrelevant
 			ctx:            ctx,
-			buf:            newRecvBuffer(),
 			method:         req.URL.Path,
 			recvCompress:   req.Header.Get("grpc-encoding"),
 			contentSubtype: ht.contentSubtype,
@@ -430,10 +429,11 @@ func (ht *serverHandlerTransport) HandleStreams(ctx context.Context, startStream
 		headerWireLength: 0, // won't have access to header wire length until golang/go#18997.
 	}
 	s.readRequester = s
-	s.trReader = &transportReader{
-		reader:        &recvBufferReader{ctx: s.ctx, ctxDone: s.ctx.Done(), recv: s.buf},
+	s.trReader = transportReader{
+		reader:        recvBufferReader{ctx: s.ctx, ctxDone: s.ctx.Done(), recv: &s.buf},
 		windowHandler: s,
 	}
+	s.Stream.buf.init()
 
 	// readerDone is closed when the Body.Read-ing goroutine exits.
 	readerDone := make(chan struct{})
