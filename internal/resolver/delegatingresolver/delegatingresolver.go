@@ -111,10 +111,15 @@ func New(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOpti
 		targetResolver: nopResolver{},
 	}
 
-	addr, err := parseTarget(target.Endpoint())
-	if err != nil {
-		return nil, fmt.Errorf("delegating_resolver: invalid target address %q: %v", target.Endpoint(), err)
+	addr := target.Endpoint()
+	var err error
+	if target.URL.Scheme == "dns" && !targetResolutionEnabled && envconfig.EnableDefaultPortForProxyTarget {
+		addr, err = parseTarget(addr)
+		if err != nil {
+			return nil, fmt.Errorf("delegating_resolver: invalid target address %q: %v", target.Endpoint(), err)
+		}
 	}
+
 	r.proxyURL, err = proxyURLForTarget(addr)
 	if err != nil {
 		return nil, fmt.Errorf("delegating_resolver: failed to determine proxy URL for target %q: %v", target, err)
@@ -138,9 +143,6 @@ func New(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOpti
 	// resolution should be handled by the proxy, not the client. Therefore, we
 	// bypass the target resolver and store the unresolved target address.
 	if target.URL.Scheme == "dns" && !targetResolutionEnabled {
-		if envconfig.EnableDefaultPortForProxyTarget {
-			addr = maybeAddDefaultPort(addr, defaultPort)
-		}
 		r.targetResolverState = &resolver.State{
 			Addresses: []resolver.Address{{Addr: addr}},
 			Endpoints: []resolver.Endpoint{{Addresses: []resolver.Address{{Addr: addr}}}},
@@ -213,31 +215,28 @@ func needsProxyResolver(state *resolver.State) bool {
 }
 
 func parseTarget(target string) (string, error) {
-	host, port, err := net.SplitHostPort(target)
-	if err != nil {
-		return target, nil
+	if target == "" {
+		return "", fmt.Errorf("missing address")
 	}
-	if port == "" {
-		// If the port field is empty (target ends with colon), e.g. "[::1]:",
-		// this is an error.
-		return "", fmt.Errorf("missing port after port-separator colon")
+	if host, port, err := net.SplitHostPort(target); err == nil {
+		if port == "" {
+			// If the port field is empty (target ends with colon), e.g. "[::1]:",
+			// this is an error.
+			return "", fmt.Errorf("missing port after port-separator colon")
+		}
+		// target has port, i.e ipv4-host:port, [ipv6-host]:port, host-name:port
+		if host == "" {
+			// Keep consistent with net.Dial(): If the host is empty, as in ":80",
+			// the local system is assumed.
+			host = "localhost"
+		}
+		return net.JoinHostPort(host, port), nil
 	}
-	// target has port, i.e ipv4-host:port, [ipv6-host]:port, host-name:port
-	if host == "" {
-		// Keep consistent with net.Dial(): If the host is empty, as in ":80",
-		// the local system is assumed.
-		host = "localhost"
+	if host, port, err := net.SplitHostPort(target + ":" + defaultPort); err == nil {
+		// target doesn't have port
+		return net.JoinHostPort(host, port), nil
 	}
-	return net.JoinHostPort(host, port), nil
-}
-
-func maybeAddDefaultPort(target, defaultPort string) string {
-	if _, _, err := net.SplitHostPort(target); err == nil {
-		// target already has port
-		return target
-	}
-	return net.JoinHostPort(target, defaultPort)
-
+	return net.JoinHostPort(target, defaultPort), nil
 }
 
 func skipProxy(address resolver.Address) bool {
