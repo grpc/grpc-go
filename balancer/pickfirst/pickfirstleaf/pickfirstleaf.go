@@ -351,6 +351,13 @@ func (b *pickfirstBalancer) ExitIdle() {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.state == connectivity.Idle {
+		// Move the balancer into CONNECTING state immediately. This is done to
+		// avoid staying in IDLE if a resolver update arrives before the first
+		// SubConn reports CONNECTING.
+		b.updateBalancerState(balancer.State{
+			ConnectivityState: connectivity.Connecting,
+			Picker:            &picker{err: balancer.ErrNoSubConnAvailable},
+		})
 		b.startFirstPassLocked()
 	}
 }
@@ -374,13 +381,14 @@ func (b *pickfirstBalancer) closeSubConnsLocked() {
 
 // deDupAddresses ensures that each address appears only once in the slice.
 func deDupAddresses(addrs []resolver.Address) []resolver.Address {
-	seenAddrs := resolver.NewAddressMapV2[*scData]()
+	seenAddrs := resolver.NewAddressMapV2[bool]()
 	retAddrs := []resolver.Address{}
 
 	for _, addr := range addrs {
 		if _, ok := seenAddrs.Get(addr); ok {
 			continue
 		}
+		seenAddrs.Set(addr, true)
 		retAddrs = append(retAddrs, addr)
 	}
 	return retAddrs
@@ -604,7 +612,7 @@ func (b *pickfirstBalancer) updateSubConnState(sd *scData, newState balancer.Sub
 		if !b.addressList.seekTo(sd.addr) {
 			// This should not fail as we should have only one SubConn after
 			// entering READY. The SubConn should be present in the addressList.
-			b.logger.Errorf("Address %q not found address list in  %v", sd.addr, b.addressList.addresses)
+			b.logger.Errorf("Address %q not found address list in %v", sd.addr, b.addressList.addresses)
 			return
 		}
 		if !b.healthCheckingEnabled {

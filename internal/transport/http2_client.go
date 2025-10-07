@@ -481,10 +481,9 @@ func NewHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 func (t *http2Client) newStream(ctx context.Context, callHdr *CallHdr) *ClientStream {
 	// TODO(zhaoq): Handle uint32 overflow of Stream.id.
 	s := &ClientStream{
-		Stream: &Stream{
+		Stream: Stream{
 			method:         callHdr.Method,
 			sendCompress:   callHdr.SendCompress,
-			buf:            newRecvBuffer(),
 			contentSubtype: callHdr.ContentSubtype,
 		},
 		ct:         t,
@@ -492,7 +491,8 @@ func (t *http2Client) newStream(ctx context.Context, callHdr *CallHdr) *ClientSt
 		headerChan: make(chan struct{}),
 		doneFunc:   callHdr.DoneFunc,
 	}
-	s.wq = newWriteQuota(defaultWriteQuota, s.done)
+	s.Stream.buf.init()
+	s.Stream.wq.init(defaultWriteQuota, s.done)
 	s.requestRead = func(n int) {
 		t.adjustWindow(s, uint32(n))
 	}
@@ -500,11 +500,11 @@ func (t *http2Client) newStream(ctx context.Context, callHdr *CallHdr) *ClientSt
 	// That means, s.ctx should be read-only. And s.ctx is done iff ctx is done.
 	// So we use the original context here instead of creating a copy.
 	s.ctx = ctx
-	s.trReader = &transportReader{
-		reader: &recvBufferReader{
+	s.trReader = transportReader{
+		reader: recvBufferReader{
 			ctx:     s.ctx,
 			ctxDone: s.ctx.Done(),
-			recv:    s.buf,
+			recv:    &s.buf,
 			closeStream: func(err error) {
 				s.Close(err)
 			},
@@ -823,7 +823,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (*ClientS
 			return nil
 		},
 		onOrphaned: cleanup,
-		wq:         s.wq,
+		wq:         &s.wq,
 	}
 	firstTry := true
 	var ch chan struct{}
@@ -854,7 +854,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (*ClientS
 		transportDrainRequired = t.nextID > MaxStreamID
 
 		s.id = hdr.streamID
-		s.fc = &inFlow{limit: uint32(t.initialWindowSize)}
+		s.fc = inFlow{limit: uint32(t.initialWindowSize)}
 		t.activeStreams[s.id] = s
 		t.mu.Unlock()
 
@@ -1002,6 +1002,9 @@ func (t *http2Client) closeStream(s *ClientStream, err error, rst bool, rstCode 
 // accessed anymore.
 func (t *http2Client) Close(err error) {
 	t.conn.SetWriteDeadline(time.Now().Add(time.Second * 10))
+	// For background on the deadline value chosen here, see
+	// https://github.com/grpc/grpc-go/issues/8425#issuecomment-3057938248 .
+	t.conn.SetReadDeadline(time.Now().Add(time.Second))
 	t.mu.Lock()
 	// Make sure we only close once.
 	if t.state == closing {

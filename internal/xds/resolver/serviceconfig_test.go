@@ -29,7 +29,6 @@ import (
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/grpcutil"
 	iresolver "google.golang.org/grpc/internal/resolver"
-	"google.golang.org/grpc/internal/testutils"
 	_ "google.golang.org/grpc/internal/xds/balancer/cdsbalancer" // To parse LB config
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 	"google.golang.org/grpc/metadata"
@@ -64,12 +63,8 @@ func (s) TestPruneActiveClusters(t *testing.T) {
 
 func (s) TestGenerateRequestHash(t *testing.T) {
 	const channelID = 12378921
-	cs := &configSelector{
-		r: &xdsResolver{
-			cc:        &testutils.ResolverClientConn{Logger: t},
-			channelID: channelID,
-		},
-	}
+	cs := &configSelector{channelID: channelID}
+
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	tests := []struct {

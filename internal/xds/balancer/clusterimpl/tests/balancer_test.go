@@ -21,12 +21,14 @@ package clusterimpl_test
 import (
 	"context"
 	"fmt"
+	"math"
 	"net"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -40,7 +42,9 @@ import (
 	"google.golang.org/grpc/internal/testutils/xds/fakeserver"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
@@ -85,13 +89,12 @@ func (s) TestConfigUpdateWithSameLoadReportingServerConfig(t *testing.T) {
 	testutils.CreateBootstrapFileForTesting(t, bc)
 
 	// Create an xDS resolver with the above bootstrap configuration.
-	var resolverBuilder resolver.Builder
-	var err error
-	if newResolver := internal.NewXDSResolverWithConfigForTesting; newResolver != nil {
-		resolverBuilder, err = newResolver.(func([]byte) (resolver.Builder, error))(bc)
-		if err != nil {
-			t.Fatalf("Failed to create xDS resolver for testing: %v", err)
-		}
+	if internal.NewXDSResolverWithConfigForTesting == nil {
+		t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
+	}
+	resolverBuilder, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
+	if err != nil {
+		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
 	}
 
 	// Start a server backend exposing the test service.
@@ -194,13 +197,12 @@ func (s) TestLoadReportingPickFirstMultiLocality(t *testing.T) {
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 
 	// Create an xDS resolver with the above bootstrap configuration.
-	var resolverBuilder resolver.Builder
-	var err error
-	if newResolver := internal.NewXDSResolverWithConfigForTesting; newResolver != nil {
-		resolverBuilder, err = newResolver.(func([]byte) (resolver.Builder, error))(bc)
-		if err != nil {
-			t.Fatalf("Failed to create xDS resolver for testing: %v", err)
-		}
+	if internal.NewXDSResolverWithConfigForTesting == nil {
+		t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
+	}
+	resolverBuilder, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
+	if err != nil {
+		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
 	}
 
 	// Start two server backends exposing the test service.
@@ -360,8 +362,8 @@ func waitForSuccessfulLoadReport(ctx context.Context, lrsServer *fakeserver.Serv
 
 // Tests that circuit breaking limits RPCs E2E.
 func (s) TestCircuitBreaking(t *testing.T) {
-	// Create an xDS management server that serves ADS requests.
-	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
+	// Create an xDS management server that serves ADS and LRS requests.
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{SupportLoadReportingService: true})
 
 	// Create bootstrap configuration pointing to the above management server.
 	nodeID := uuid.New().String()
@@ -369,20 +371,16 @@ func (s) TestCircuitBreaking(t *testing.T) {
 	testutils.CreateBootstrapFileForTesting(t, bc)
 
 	// Create an xDS resolver with the above bootstrap configuration.
-	var resolverBuilder resolver.Builder
-	var err error
-	if newResolver := internal.NewXDSResolverWithConfigForTesting; newResolver != nil {
-		resolverBuilder, err = newResolver.(func([]byte) (resolver.Builder, error))(bc)
-		if err != nil {
-			t.Fatalf("Failed to create xDS resolver for testing: %v", err)
-		}
+	if internal.NewXDSResolverWithConfigForTesting == nil {
+		t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
+	}
+	resolverBuilder, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
+	if err != nil {
+		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
 	}
 
 	// Start a server backend exposing the test service.
 	f := &stubserver.StubServer{
-		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
-			return &testpb.Empty{}, nil
-		},
 		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
 			for {
 				if _, err := stream.Recv(); err != nil {
@@ -394,7 +392,8 @@ func (s) TestCircuitBreaking(t *testing.T) {
 	server := stubserver.StartTestService(t, f)
 	defer server.Stop()
 
-	// Configure the xDS management server with default resources.
+	// Configure xDS resources on the management server with a circuit breaking
+	// policy that limits the maximum number of concurrent requests to 3.
 	const serviceName = "my-test-xds-service"
 	const maxRequests = 3
 	resources := e2e.DefaultClientResources(e2e.ResourceParams{
@@ -409,6 +408,11 @@ func (s) TestCircuitBreaking(t *testing.T) {
 				Priority:    v3corepb.RoutingPriority_DEFAULT,
 				MaxRequests: wrapperspb.UInt32(maxRequests),
 			},
+		},
+	}
+	resources.Clusters[0].LrsServer = &v3corepb.ConfigSource{
+		ConfigSourceSpecifier: &v3corepb.ConfigSource_Self{
+			Self: &v3corepb.SelfConfigSource{},
 		},
 	}
 
@@ -436,21 +440,264 @@ func (s) TestCircuitBreaking(t *testing.T) {
 
 	// Since we are at the max, new streams should fail.  It's possible some are
 	// allowed due to inherent raciness in the tracking, however.
-	for i := 0; i < 100; i++ {
-		stream, err := client.FullDuplexCall(ctx)
-		if status.Code(err) == codes.Unavailable {
-			return
+	const droppedRPCCount = 100
+	for i := 0; i < droppedRPCCount; i++ {
+		if ctx.Err() != nil {
+			t.Fatalf("Context error: %v", ctx.Err())
 		}
-		if err == nil {
-			// Terminate the stream (the server immediately exits upon a client
-			// CloseSend) to ensure we never go over the limit.
-			stream.CloseSend()
-			stream.Recv()
+		if _, err := client.FullDuplexCall(ctx); status.Code(err) != codes.Unavailable {
+			t.Fatalf("client.FullDuplexCall() returned status %q, want %q", status.Code(err), codes.Unavailable)
 		}
-		time.Sleep(10 * time.Millisecond)
 	}
 
-	t.Fatalf("RPCs unexpectedly allowed beyond circuit breaking maximum")
+	if _, err = mgmtServer.LRSServer.LRSStreamOpenChan.Receive(ctx); err != nil {
+		t.Fatalf("Failure when waiting for an LRS stream to be opened: %v", err)
+	}
+
+	if _, err = mgmtServer.LRSServer.LRSRequestChan.Receive(ctx); err != nil {
+		t.Fatalf("Failure waiting for initial LRS request: %v", err)
+	}
+
+	mgmtServer.LRSServer.LRSResponseChan <- &fakeserver.Response{
+		Resp: &v3lrspb.LoadStatsResponse{
+			SendAllClusters:       true,
+			LoadReportingInterval: durationpb.New(10 * time.Millisecond),
+		},
+	}
+
+	select {
+	case req := <-mgmtServer.LRSServer.LRSRequestChan.C:
+		clusterStats := req.(*fakeserver.Request).Req.(*v3lrspb.LoadStatsRequest).ClusterStats
+		if l := len(clusterStats); l != 1 {
+			t.Fatalf("Received load for %d clusters, want 1", l)
+		}
+		clusterStats[0].LoadReportInterval = nil
+		wantLoad := &v3endpointpb.ClusterStats{
+			ClusterName:        "cluster-my-test-xds-service",
+			ClusterServiceName: "endpoints-my-test-xds-service",
+			UpstreamLocalityStats: []*v3endpointpb.UpstreamLocalityStats{
+				{
+					Locality:                &v3corepb.Locality{Region: "region-1", Zone: "zone-1", SubZone: "subzone-1"},
+					TotalIssuedRequests:     maxRequests,
+					TotalRequestsInProgress: maxRequests,
+				},
+			},
+			TotalDroppedRequests: droppedRPCCount,
+		}
+		if diff := cmp.Diff(wantLoad, clusterStats[0], protocmp.Transform()); diff != "" {
+			t.Errorf("Failed with unexpected diff (-want +got):\n%s", diff)
+		}
+	case <-ctx.Done():
+		t.Fatalf("Timeout while waiting for load report on LRS stream: %v", ctx.Err())
+	}
+}
+
+// ComputeIdealNumRpcs calculates the ideal number of RPCs to send to test
+// probabilistic behaviors.
+//
+// It's based on the idea of a binomial distribution approximated by a normal
+// distribution. The function aims to find a number of RPCs such that
+// the observed probability is within a certain error_tolerance of the expected
+// probability (p).
+func computeIdealNumRpcs(p, errorTolerance float64) uint64 {
+	return uint64(math.Ceil(p * (1 - p) * 5.00 * 5.00 / errorTolerance / errorTolerance))
+}
+
+func verifyDropRateByCategory(ctx context.Context, client testgrpc.TestServiceClient, rpcCount int, lrsServer *fakeserver.Server, wantCluster, wantDropCategory string, wantDropRate, errorTolerance float64) error {
+	for i := 0; i < rpcCount; i++ {
+		if ctx.Err() != nil {
+			return fmt.Errorf("context error: %v", ctx.Err())
+		}
+		stream, err := client.FullDuplexCall(ctx)
+		switch {
+		case err == nil:
+			// Close stream to avoid exceeding limits.
+			stream.CloseSend()
+		case status.Code(err) == codes.Unavailable && strings.Contains(err.Error(), "RPC is dropped"):
+			continue
+		default:
+			return fmt.Errorf("client.FullDuplexCall(_) failed with unexpected error = %v", err)
+		}
+	}
+
+	for {
+		if ctx.Err() != nil {
+			return fmt.Errorf("timeout when waiting for load stats")
+		}
+		req, err := lrsServer.LRSRequestChan.Receive(ctx)
+		if err != nil {
+			continue
+		}
+		loadStats := req.(*fakeserver.Request).Req.(*v3lrspb.LoadStatsRequest).ClusterStats
+		if len(loadStats) != 1 || loadStats[0].ClusterName != wantCluster {
+			continue
+		}
+		if loadStats[0].ClusterName != wantCluster {
+			return fmt.Errorf("Received stats for unexpected cluster got: %q, want: %q", loadStats[0].ClusterName, wantCluster)
+		}
+
+		for _, cs := range loadStats {
+			found := false
+			for _, dr := range cs.DroppedRequests {
+				if dr.Category == wantDropCategory {
+					found = true
+					gotRPCDropRate := float64(dr.DroppedCount) / float64(rpcCount)
+					if (math.Trunc(math.Abs(gotRPCDropRate-wantDropRate)*100) / 100) > errorTolerance {
+						return fmt.Errorf("Drop rate goes out of errortolerance got: %v, want: %v, totalDroppedRequest: %v, totalIssuesRequest: %v", (math.Trunc(math.Abs(gotRPCDropRate-wantDropRate)*100) / 100), errorTolerance, cs.TotalDroppedRequests, cs.UpstreamLocalityStats[0].TotalIssuedRequests)
+					}
+				}
+			}
+			if !found {
+				continue
+			}
+		}
+		break
+	}
+	return nil
+}
+
+// TestDropByCategory verifies that the balancer correctly drops the picks, and
+// that the drops are reported.
+func (s) TestDropByCategory(t *testing.T) {
+	// Create an xDS management server that serves ADS and LRS requests.
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{SupportLoadReportingService: true})
+
+	// Create bootstrap configuration pointing to the above management server.
+	nodeID := uuid.New().String()
+	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
+	testutils.CreateBootstrapFileForTesting(t, bc)
+
+	// Create an xDS resolver with the above bootstrap configuration.
+	if internal.NewXDSResolverWithConfigForTesting == nil {
+		t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
+	}
+	resolverBuilder, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
+	if err != nil {
+		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
+	}
+
+	// Start a server backend exposing the test service.
+	f := &stubserver.StubServer{
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
+			for {
+				if _, err := stream.Recv(); err != nil {
+					return err
+				}
+			}
+		},
+	}
+	server := stubserver.StartTestService(t, f)
+	defer server.Stop()
+
+	// Configure xDS resources on the management server with drops
+	// configuration that drops one RPC for every 50 RPCs made.
+	const (
+		dropReason      = "test-dropping-category"
+		dropNumerator   = 1
+		dropDenominator = 50
+		serviceName     = "my-test-xds-service"
+		errorTolerance  = 0.05
+	)
+	wantRPCDropRate := float64(dropNumerator) / float64(dropDenominator)
+	rpcCount := computeIdealNumRpcs(wantRPCDropRate, errorTolerance)
+	t.Logf("About to send %d RPCs to test drop rate of %v", rpcCount, wantRPCDropRate)
+
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		DialTarget: serviceName,
+		NodeID:     nodeID,
+		Host:       "localhost",
+		Port:       testutils.ParsePort(t, server.Address),
+	})
+	resources.Clusters[0].LrsServer = &v3corepb.ConfigSource{
+		ConfigSourceSpecifier: &v3corepb.ConfigSource_Self{
+			Self: &v3corepb.SelfConfigSource{},
+		},
+	}
+	resources.Endpoints = []*v3endpointpb.ClusterLoadAssignment{
+		e2e.EndpointResourceWithOptions(e2e.EndpointOptions{
+			ClusterName: "endpoints-" + serviceName,
+			Host:        "localhost",
+			Localities: []e2e.LocalityOptions{
+				{
+					Backends: []e2e.BackendOptions{{Ports: []uint32{testutils.ParsePort(t, server.Address)}}},
+					Weight:   1,
+				},
+			},
+			DropPercents: map[string]int{
+				dropReason: dropNumerator * 100 / dropDenominator,
+			},
+		})}
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a ClientConn and make a successful RPC.
+	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(resolverBuilder))
+	if err != nil {
+		t.Fatalf("failed to dial local test server: %v", err)
+	}
+	defer cc.Close()
+
+	// Ensure the gRPC channel is READY before issuing RPCs to get accurate
+	// drop count.
+	cc.Connect()
+	client := testgrpc.NewTestServiceClient(cc)
+	testutils.AwaitState(ctx, t, cc, connectivity.Ready)
+
+	if _, err = mgmtServer.LRSServer.LRSStreamOpenChan.Receive(ctx); err != nil {
+		t.Fatalf("Failure when waiting for an LRS stream to be opened: %v", err)
+	}
+
+	resp := fakeserver.Response{
+		Resp: &v3lrspb.LoadStatsResponse{
+			Clusters:              []string{resources.Clusters[0].Name},
+			LoadReportingInterval: durationpb.New(50 * time.Millisecond),
+		},
+	}
+	mgmtServer.LRSServer.LRSResponseChan <- &resp
+
+	if err := verifyDropRateByCategory(ctx, client, int(rpcCount), mgmtServer.LRSServer, resources.Clusters[0].Name, dropReason, wantRPCDropRate, errorTolerance); err != nil {
+		t.Fatal(err)
+	}
+
+	// Update the drop configuration to drop 1 out of every 40 RPCs,
+	// and verify that the observed drop rate matches this new config.
+	const (
+		dropReason2      = "test-dropping-category-2"
+		dropNumerator2   = 1
+		dropDenominator2 = 40
+	)
+
+	resources.Endpoints = []*v3endpointpb.ClusterLoadAssignment{
+		e2e.EndpointResourceWithOptions(e2e.EndpointOptions{
+			ClusterName: "endpoints-" + serviceName,
+			Host:        "localhost",
+			Localities: []e2e.LocalityOptions{
+				{
+					Backends: []e2e.BackendOptions{{Ports: []uint32{testutils.ParsePort(t, server.Address)}}},
+					Weight:   1,
+				},
+			},
+			DropPercents: map[string]int{
+				dropReason2: dropNumerator2 * 100 / dropDenominator2, // drops one RPC for every 40 RPCs made
+			},
+		}),
+	}
+
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	wantRPCDropRate = float64(dropNumerator2) / float64(dropDenominator2)
+	rpcCount = computeIdealNumRpcs(wantRPCDropRate, errorTolerance)
+	t.Logf("About to send %d RPCs to test drop rate of %v", rpcCount, wantRPCDropRate)
+
+	if err := verifyDropRateByCategory(ctx, client, int(rpcCount), mgmtServer.LRSServer, resources.Clusters[0].Name, dropReason2, wantRPCDropRate, errorTolerance); err != nil {
+		t.Fatal(err)
+	}
 }
 
 // Tests that circuit breaking limits RPCs in LOGICAL_DNS clusters E2E.
@@ -464,13 +711,12 @@ func (s) TestCircuitBreakingLogicalDNS(t *testing.T) {
 	testutils.CreateBootstrapFileForTesting(t, bc)
 
 	// Create an xDS resolver with the above bootstrap configuration.
-	var resolverBuilder resolver.Builder
-	var err error
-	if newResolver := internal.NewXDSResolverWithConfigForTesting; newResolver != nil {
-		resolverBuilder, err = newResolver.(func([]byte) (resolver.Builder, error))(bc)
-		if err != nil {
-			t.Fatalf("Failed to create xDS resolver for testing: %v", err)
-		}
+	if internal.NewXDSResolverWithConfigForTesting == nil {
+		t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
+	}
+	resolverBuilder, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
+	if err != nil {
+		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
 	}
 
 	// Start a server backend exposing the test service.
@@ -540,7 +786,7 @@ func (s) TestCircuitBreakingLogicalDNS(t *testing.T) {
 		}
 	}
 
-	// Since we are at the max, new streams should fail.  It's possible some are
+	// Since we are at the max, new streams should fail. It's possible some are
 	// allowed due to inherent raciness in the tracking, however.
 	for i := 0; i < 100; i++ {
 		stream, err := client.FullDuplexCall(ctx)
@@ -584,13 +830,12 @@ func (s) TestLRSLogicalDNS(t *testing.T) {
 	testutils.CreateBootstrapFileForTesting(t, bc)
 
 	// Create an xDS resolver with the above bootstrap configuration.
-	var resolverBuilder resolver.Builder
-	var err error
-	if newResolver := internal.NewXDSResolverWithConfigForTesting; newResolver != nil {
-		resolverBuilder, err = newResolver.(func([]byte) (resolver.Builder, error))(bc)
-		if err != nil {
-			t.Fatalf("Failed to create xDS resolver for testing: %v", err)
-		}
+	if internal.NewXDSResolverWithConfigForTesting == nil {
+		t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
+	}
+	resolverBuilder, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
+	if err != nil {
+		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
 	}
 
 	// Start a server backend exposing the test service.
@@ -661,5 +906,210 @@ func (s) TestLRSLogicalDNS(t *testing.T) {
 	// Wait for load to be reported for locality of server 1.
 	if err := waitForSuccessfulLoadReport(ctx, mgmtServer.LRSServer, ""); err != nil {
 		t.Fatalf("Server did not receive load due to error: %v", err)
+	}
+}
+
+// TestReResolution verifies that when a SubConn turns transient failure,
+// re-resolution is triggered.
+func (s) TestReResolutionAfterTransientFailure(t *testing.T) {
+	// Create an xDS management server.
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
+	defer mgmtServer.Stop()
+
+	// Create bootstrap configuration pointing to the above management server.
+	nodeID := uuid.New().String()
+	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
+	testutils.CreateBootstrapFileForTesting(t, bc)
+
+	// Create an xDS resolver with the above bootstrap configuration.
+	if internal.NewXDSResolverWithConfigForTesting == nil {
+		t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
+	}
+	resolverBuilder, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
+	if err != nil {
+		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
+	}
+
+	// Create a restartable listener to simulate server being down.
+	l, err := testutils.LocalTCPListener()
+	if err != nil {
+		t.Fatalf("testutils.LocalTCPListener() failed: %v", err)
+	}
+	lis := testutils.NewRestartableListener(l)
+	server := stubserver.StartTestService(t, &stubserver.StubServer{
+		Listener:   lis,
+		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) { return &testpb.Empty{}, nil },
+	})
+	defer server.Stop()
+	host, port := hostAndPortFromAddress(t, server.Address)
+
+	const (
+		listenerName = "test-listener"
+		routeName    = "test-route"
+		clusterName  = "test-aggregate-cluster"
+		dnsCluster   = "logical-dns-cluster"
+	)
+
+	// Configure xDS resources.
+	ldnsCluster := e2e.ClusterResourceWithOptions(e2e.ClusterOptions{
+		Type:        e2e.ClusterTypeLogicalDNS,
+		ClusterName: dnsCluster,
+		DNSHostName: host,
+		DNSPort:     port,
+	})
+	cluster := e2e.ClusterResourceWithOptions(e2e.ClusterOptions{
+		ClusterName: clusterName,
+		Type:        e2e.ClusterTypeAggregate,
+		ChildNames:  []string{dnsCluster},
+	})
+	updateOpts := e2e.UpdateOptions{
+		NodeID:    nodeID,
+		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(listenerName, routeName)},
+		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeName, listenerName, clusterName)},
+		Clusters:  []*v3clusterpb.Cluster{cluster, ldnsCluster},
+		Endpoints: nil,
+	}
+
+	// Replace DNS resolver with a wrapped resolver to capture ResolveNow calls.
+	resolveNowCh := make(chan struct{}, 1)
+	dnsR := manual.NewBuilderWithScheme("dns")
+	dnsResolverBuilder := resolver.Get("dns")
+	resolver.Register(dnsR)
+	defer resolver.Register(dnsResolverBuilder)
+	dnsR.ResolveNowCallback = func(resolver.ResolveNowOptions) {
+		close(resolveNowCh)
+	}
+	dnsR.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: fmt.Sprintf("%s:%d", host, port)}}})
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := mgmtServer.Update(ctx, updateOpts); err != nil {
+		t.Fatalf("Failed to update xDS resources: %v", err)
+	}
+
+	conn, err := grpc.NewClient(fmt.Sprintf("xds:///%s", listenerName), grpc.WithResolvers(resolverBuilder), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("Failed to create client: %v", err)
+	}
+	defer conn.Close()
+
+	client := testgrpc.NewTestServiceClient(conn)
+
+	// Verify initial RPC routes correctly to backend.
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+		t.Fatalf("client.EmptyCall() failed: %v", err)
+	}
+
+	// Stopping the server listener will close the transport on the client,
+	// which will lead to the channel eventually moving to IDLE.
+	lis.Stop()
+	testutils.AwaitState(ctx, t, conn, connectivity.Idle)
+
+	// An RPC at this point is expected to fail with TRANSIENT_FAILURE.
+	if _, err = client.EmptyCall(ctx, &testpb.Empty{}); status.Code(err) != codes.Unavailable {
+		t.Fatalf("EmptyCall RPC succeeded when the channel is in TRANSIENT_FAILURE, got %v want %v", err, codes.Unavailable)
+	}
+
+	// Expect resolver's ResolveNow to be called due to TF state.
+	select {
+	case <-resolveNowCh:
+	case <-ctx.Done():
+		t.Fatalf("Timed out waiting for ResolveNow call after TransientFailure")
+	}
+
+	// Restart the listener and expected to reconnect on its own and come out
+	// of TRANSIENT_FAILURE, even without an RPC attempt.
+	lis.Restart()
+	testutils.AwaitState(ctx, t, conn, connectivity.Ready)
+
+	// An RPC at this point is expected to succeed.
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+		t.Fatalf("client.EmptyCall() failed: %v", err)
+	}
+}
+
+// TestUpdateLRSServerToNil verifies that updating the cluster's LRS server
+// config from 'Self' to nil correctly closes the LRS stream and ensures no
+// more LRS reports are sent.
+func (s) TestUpdateLRSServerToNil(t *testing.T) {
+	// Create an xDS management server that serves ADS and LRS requests.
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{SupportLoadReportingService: true})
+	defer mgmtServer.Stop()
+
+	// Create bootstrap configuration pointing to the above management server.
+	nodeID := uuid.New().String()
+	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
+	testutils.CreateBootstrapFileForTesting(t, bc)
+
+	// Create an xDS resolver with the above bootstrap configuration.
+	if internal.NewXDSResolverWithConfigForTesting == nil {
+		t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
+	}
+	resolverBuilder, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
+	if err != nil {
+		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
+	}
+
+	// Start a server backend exposing the test service.
+	server := stubserver.StartTestService(t, nil)
+	defer server.Stop()
+
+	// Configure the xDS management server with default resources.
+	const serviceName = "my-test-xds-service"
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		DialTarget: serviceName,
+		NodeID:     nodeID,
+		Host:       "localhost",
+		Port:       testutils.ParsePort(t, server.Address),
+		SecLevel:   e2e.SecurityLevelNone,
+	})
+	resources.Clusters[0].LrsServer = &v3corepb.ConfigSource{
+		ConfigSourceSpecifier: &v3corepb.ConfigSource_Self{
+			Self: &v3corepb.SelfConfigSource{},
+		},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a ClientConn and make a successful RPC.
+	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(resolverBuilder))
+	if err != nil {
+		t.Fatalf("Failed to dial local test server: %v", err)
+	}
+	defer cc.Close()
+
+	client := testgrpc.NewTestServiceClient(cc)
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+		t.Fatalf("client.EmptyCall() failed: %v", err)
+	}
+
+	// Ensure that an LRS stream is created.
+	if _, err := mgmtServer.LRSServer.LRSStreamOpenChan.Receive(ctx); err != nil {
+		t.Fatalf("Error waiting for initial LRS stream open: %v", err)
+	}
+	if _, err := mgmtServer.LRSServer.LRSRequestChan.Receive(ctx); err != nil {
+		t.Fatalf("Error waiting for initial LRS report: %v", err)
+	}
+
+	// Update LRS Server to nil
+	resources.Clusters[0].LrsServer = nil
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Ensure that the old LRS stream is closed.
+	if _, err := mgmtServer.LRSServer.LRSStreamCloseChan.Receive(ctx); err != nil {
+		t.Fatalf("Error waiting for initial LRS stream close : %v", err)
+	}
+
+	// Also ensure that a new LRS stream is not created.
+	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
+	defer sCancel()
+	if _, err := mgmtServer.LRSServer.LRSRequestChan.Receive(sCtx); err != context.DeadlineExceeded {
+		t.Fatalf("Expected no LRS reports after disable, got %v want %v", err, context.DeadlineExceeded)
 	}
 }
