@@ -1147,6 +1147,10 @@ func (s) TestChildPolicyChangeOnConfigUpdate(t *testing.T) {
 	defer server.Stop()
 
 	const serviceName = "test-child-policy"
+
+	// Configure the xDS management server with default resources. Cluster
+	// corresponding to this resource will be configured with "round_robin"
+	// as the endpoint picking policy
 	resources := e2e.DefaultClientResources(e2e.ResourceParams{
 		DialTarget: serviceName,
 		NodeID:     nodeID,
@@ -1175,7 +1179,7 @@ func (s) TestChildPolicyChangeOnConfigUpdate(t *testing.T) {
 	pfBuilder := balancer.Get(pickfirst.Name)
 	internal.BalancerUnregister(pfBuilder.Name())
 	lbCfgCh := make(chan serviceconfig.LoadBalancingConfig, 1)
-	updatedChildPolicy := atomic.Pointer[string]{}
+	var updatedChildPolicy atomic.Pointer[string]
 	stub.Register(pfBuilder.Name(), stub.BalancerFuncs{
 		ParseConfig: func(lbCfg json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
 			return pfBuilder.(balancer.ConfigParser).ParseConfig(lbCfg)
@@ -1189,7 +1193,7 @@ func (s) TestChildPolicyChangeOnConfigUpdate(t *testing.T) {
 			select {
 			case lbCfgCh <- ccs.BalancerConfig:
 			case <-ctx.Done():
-				t.Fatalf("Timeout while waiting for BalancerConfig")
+				t.Error("Timed out while waiting for BalancerConfig, context deadline exceeded")
 			}
 			return bd.ChildBalancer.UpdateClientConnState(ccs)
 		},
@@ -1295,7 +1299,7 @@ func (s) TestFailedToParseChildPolicyConfig(t *testing.T) {
 	defer cc.Close()
 
 	client := testgrpc.NewTestServiceClient(cc)
-	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err == nil {
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err == nil || !strings.Contains(err.Error(), parseConfigError) {
 		t.Fatal("EmptyCall RPC succeeded when expected to fail")
 	}
 }
