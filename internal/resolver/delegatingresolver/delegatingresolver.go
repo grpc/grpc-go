@@ -214,6 +214,18 @@ func needsProxyResolver(state *resolver.State) bool {
 	return false
 }
 
+// parseTarget takes a target string and ensures it is a valid "host:port" target.
+//
+// It does the following:
+//  1. If the target already has a port (e.g., "host:port", "[ipv6]:port"),
+//     it is returned as is.
+//  2. If the host part is empty (e.g., ":80"), it defaults to "localhost",
+//     returning "localhost:80".
+//  3. If the target is missing a port (e.g., "host", "ipv6"), the defaultPort
+//     is added.
+//
+// An error is returned for empty targets or targets with a trailing colon
+// but no port (e.g., "host:").
 func parseTarget(target string) (string, error) {
 	if target == "" {
 		return "", fmt.Errorf("missing address")
@@ -224,10 +236,8 @@ func parseTarget(target string) (string, error) {
 			// this is an error.
 			return "", fmt.Errorf("missing port after port-separator colon")
 		}
-		// target has port, i.e ipv4-host:port, [ipv6-host]:port, host-name:port
+		// target has port
 		if host == "" {
-			// Keep consistent with net.Dial(): If the host is empty, as in ":80",
-			// the local system is assumed.
 			host = "localhost"
 		}
 		return net.JoinHostPort(host, port), nil

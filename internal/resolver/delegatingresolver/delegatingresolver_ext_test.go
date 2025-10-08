@@ -249,52 +249,43 @@ func (s) TestDelegatingResolverwithDNSAndProxyWithTargetResolution(t *testing.T)
 }
 
 // Tests the creation of a delegating resolver when a proxy is configured. It
-// verifies both successful creation for valid targets and correct error
-// handling for invalid ones.
-//
-// For successful cases, it ensures the final address is from the proxy resolver
-// and contains the original, correctly-formatted target address as an
-// attribute.
-func (s) TestDelegatingResolverwithDNSAndProxyWithNoTargetResolution(t *testing.T) {
+// verifies successful creation for valid targets and ensures the final address
+// is from the proxy resolver and contains the original, correctly-formatted
+// target address as an attribute.
+func (s) TestDelegatingResolverwithDNSAndProxyWithNoTargetResolutionHappyPaths(t *testing.T) {
 	const (
 		envProxyAddr           = "proxytest.com"
 		resolvedProxyTestAddr1 = "11.11.11.11:7687"
 	)
 	tests := []struct {
-		name                     string
-		target                   string
-		wantConnectAddress       string
-		wantErrorSubstring       string
-		disableDefaultPortEnvVar bool
+		name               string
+		target             string
+		wantConnectAddress string
+		defaultPortEnvVar  bool
 	}{
 		{
-			name:               "no port in target",
+			name:               "no port ",
 			target:             "test.com",
 			wantConnectAddress: "test.com:443",
+			defaultPortEnvVar:  true,
 		},
 		{
-			name:               "port specified in target",
+			name:               "complete target",
 			target:             "test.com:8080",
 			wantConnectAddress: "test.com:8080",
+			defaultPortEnvVar:  true,
 		},
 		{
-			name:               "colon after host in target but no post",
-			target:             "test.com:",
-			wantErrorSubstring: "missing port after port-separator colon",
-		},
-		{
-			name:                     "add default port env variable diabled, no port in target",
-			target:                   "test.com",
-			wantConnectAddress:       "test.com",
-			disableDefaultPortEnvVar: true,
+			name:               "no port with default port env variable diabled",
+			target:             "test.com",
+			wantConnectAddress: "test.com",
+			defaultPortEnvVar:  false,
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if test.disableDefaultPortEnvVar {
-				testutils.SetEnvConfig(t, &envconfig.EnableDefaultPortForProxyTarget, false)
-			}
+			testutils.SetEnvConfig(t, &envconfig.EnableDefaultPortForProxyTarget, test.defaultPortEnvVar)
 			overrideTestHTTPSProxy(t, envProxyAddr)
 
 			targetResolver := manual.NewBuilderWithScheme("dns")
@@ -303,20 +294,7 @@ func (s) TestDelegatingResolverwithDNSAndProxyWithNoTargetResolution(t *testing.
 			proxyResolver, proxyResolverBuilt := setupDNS(t)
 
 			tcc, stateCh, _ := createTestResolverClientConn(t)
-			_, err := delegatingresolver.New(resolver.Target{URL: *testutils.MustParseURL(target)}, tcc, resolver.BuildOptions{}, targetResolver, false)
-			if test.wantErrorSubstring != "" {
-				// Case 1: We expected an error.
-				if err == nil {
-					t.Fatalf("Delegating resolver created, want error containing %q", test.wantErrorSubstring)
-				}
-				if !strings.Contains(err.Error(), test.wantErrorSubstring) {
-					t.Fatalf("Delegating resolver failed with error %v, want error containing %v", err.Error(), test.wantErrorSubstring)
-				}
-				return
-			}
-
-			// Case 2: We did NOT expect an error.
-			if err != nil {
+			if _, err := delegatingresolver.New(resolver.Target{URL: *testutils.MustParseURL(target)}, tcc, resolver.BuildOptions{}, targetResolver, false); err != nil {
 				t.Fatalf("Delegating resolver creation failed unexpectedly with error: %v", err)
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -344,6 +322,54 @@ func (s) TestDelegatingResolverwithDNSAndProxyWithNoTargetResolution(t *testing.
 
 			if diff := cmp.Diff(gotState, wantState); diff != "" {
 				t.Fatalf("Unexpected state from delegating resolver. Diff (-got +want):\n%v", diff)
+			}
+		})
+	}
+}
+
+// Tests the creation of a delegating resolver when a proxy is configured. It
+// verifies correct error handling for invalid targets.
+func (s) TestDelegatingResolverwithDNSAndProxyWithNoTargetResolutionWithErrorTargets(t *testing.T) {
+	const (
+		envProxyAddr           = "proxytest.com"
+		resolvedProxyTestAddr1 = "11.11.11.11:7687"
+	)
+	tests := []struct {
+		name               string
+		target             string
+		wantErrorSubstring string
+		defaultPortEnvVar  bool
+	}{
+
+		{
+			name:               "colon after host but no port",
+			target:             "test.com:",
+			wantErrorSubstring: "missing port after port-separator colon",
+			defaultPortEnvVar:  true,
+		},
+		{
+			name:               "empty target",
+			target:             "",
+			wantErrorSubstring: "missing address",
+			defaultPortEnvVar:  true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			testutils.SetEnvConfig(t, &envconfig.EnableDefaultPortForProxyTarget, test.defaultPortEnvVar)
+			overrideTestHTTPSProxy(t, envProxyAddr)
+
+			targetResolver := manual.NewBuilderWithScheme("dns")
+			target := targetResolver.Scheme() + ":///" + test.target
+
+			tcc, _, _ := createTestResolverClientConn(t)
+			_, err := delegatingresolver.New(resolver.Target{URL: *testutils.MustParseURL(target)}, tcc, resolver.BuildOptions{}, targetResolver, false)
+			if err == nil {
+				t.Fatalf("Delegating resolver created, want error containing %q", test.wantErrorSubstring)
+			}
+			if !strings.Contains(err.Error(), test.wantErrorSubstring) {
+				t.Fatalf("Delegating resolver failed with error %v, want error containing %v", err.Error(), test.wantErrorSubstring)
 			}
 		})
 	}
