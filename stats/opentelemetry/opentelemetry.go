@@ -286,7 +286,7 @@ func createInt64UpDownCounter(setOfMetrics map[string]bool, metricName string, m
 	}
 	ret, err := meter.Int64UpDownCounter(string(metricName), options...)
 	if err != nil {
-		logger.Errorf("failed to register metric \"%v\", will not record: %v", metricName, err)
+		logger.Errorf("Failed to register metric \"%v\", will not record: %v", metricName, err)
 		return noop.Int64UpDownCounter{}
 	}
 	return ret
