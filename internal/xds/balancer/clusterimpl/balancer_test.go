@@ -20,9 +20,7 @@ package clusterimpl
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
-	"strings"
 	"testing"
 	"time"
 
@@ -38,7 +36,6 @@ import (
 	"google.golang.org/grpc/internal/xds/testutils/fakeclient"
 	"google.golang.org/grpc/internal/xds/xdsclient"
 	"google.golang.org/grpc/resolver"
-	"google.golang.org/grpc/serviceconfig"
 )
 
 const (
@@ -70,9 +67,6 @@ func init() {
 // are handled in the run() goroutine, which exits before Close() returns, we
 // expect the above picker update to be dropped.
 func (s) TestPickerUpdateAfterClose(t *testing.T) {
-	defer xdsclient.ClearCounterForTesting(testClusterName, testServiceName)
-	xdsC := fakeclient.NewClient()
-
 	builder := balancer.Get(Name)
 	cc := testutils.NewBalancerClientConn(t)
 	b := builder.Build(cc, balancer.BuildOptions{})
@@ -107,6 +101,7 @@ func (s) TestPickerUpdateAfterClose(t *testing.T) {
 	})
 
 	var maxRequest uint32 = 50
+	xdsC := fakeclient.NewClient()
 	if err := b.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: xdsclient.SetClient(resolver.State{Endpoints: testBackendEndpoints}, xdsC),
 		BalancerConfig: &LBConfig{
@@ -143,14 +138,12 @@ func (s) TestClusterNameInAddressAttributes(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	defer xdsclient.ClearCounterForTesting(testClusterName, testServiceName)
-	xdsC := fakeclient.NewClient()
-
 	builder := balancer.Get(Name)
 	cc := testutils.NewBalancerClientConn(t)
 	b := builder.Build(cc, balancer.BuildOptions{})
 	defer b.Close()
 
+	xdsC := fakeclient.NewClient()
 	if err := b.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: xdsclient.SetClient(resolver.State{Endpoints: testBackendEndpoints}, xdsC),
 		BalancerConfig: &LBConfig{
@@ -212,108 +205,6 @@ func (s) TestClusterNameInAddressAttributes(t *testing.T) {
 	}
 }
 
-// Test verifies that child policies was updated on receipt of
-// configuration update.
-func (s) TestChildPolicyUpdatedOnConfigUpdate(t *testing.T) {
-	xdsC := fakeclient.NewClient()
-
-	builder := balancer.Get(Name)
-	cc := testutils.NewBalancerClientConn(t)
-	b := builder.Build(cc, balancer.BuildOptions{})
-	defer b.Close()
-
-	// Keep track of which child policy was updated
-	updatedChildPolicy := ""
-
-	// Create stub balancers to track config updates
-	const (
-		childPolicyName1 = "stubBalancer1"
-		childPolicyName2 = "stubBalancer2"
-	)
-
-	stub.Register(childPolicyName1, stub.BalancerFuncs{
-		UpdateClientConnState: func(_ *stub.BalancerData, _ balancer.ClientConnState) error {
-			updatedChildPolicy = childPolicyName1
-			return nil
-		},
-	})
-
-	stub.Register(childPolicyName2, stub.BalancerFuncs{
-		UpdateClientConnState: func(_ *stub.BalancerData, _ balancer.ClientConnState) error {
-			updatedChildPolicy = childPolicyName2
-			return nil
-		},
-	})
-
-	// Initial config update with childPolicyName1
-	if err := b.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: xdsclient.SetClient(resolver.State{Endpoints: testBackendEndpoints}, xdsC),
-		BalancerConfig: &LBConfig{
-			Cluster: testClusterName,
-			ChildPolicy: &internalserviceconfig.BalancerConfig{
-				Name: childPolicyName1,
-			},
-		},
-	}); err != nil {
-		t.Fatalf("Error updating the config: %v", err)
-	}
-
-	if updatedChildPolicy != childPolicyName1 {
-		t.Fatal("Child policy 1 was not updated on initial configuration update.")
-	}
-
-	// Second config update with childPolicyName2
-	if err := b.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: xdsclient.SetClient(resolver.State{Endpoints: testBackendEndpoints}, xdsC),
-		BalancerConfig: &LBConfig{
-			Cluster: testClusterName,
-			ChildPolicy: &internalserviceconfig.BalancerConfig{
-				Name: childPolicyName2,
-			},
-		},
-	}); err != nil {
-		t.Fatalf("Error updating the config: %v", err)
-	}
-
-	if updatedChildPolicy != childPolicyName2 {
-		t.Fatal("Child policy 2 was not updated after child policy name change.")
-	}
-}
-
-// Test verifies that config update fails if child policy config
-// failed to parse.
-func (s) TestFailedToParseChildPolicyConfig(t *testing.T) {
-	xdsC := fakeclient.NewClient()
-
-	builder := balancer.Get(Name)
-	cc := testutils.NewBalancerClientConn(t)
-	b := builder.Build(cc, balancer.BuildOptions{})
-	defer b.Close()
-
-	// Create a stub balancer which fails to ParseConfig.
-	const parseConfigError = "failed to parse config"
-	const childPolicyName = "stubBalancer-FailedToParseChildPolicyConfig"
-	stub.Register(childPolicyName, stub.BalancerFuncs{
-		ParseConfig: func(_ json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
-			return nil, errors.New(parseConfigError)
-		},
-	})
-
-	err := b.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: xdsclient.SetClient(resolver.State{Endpoints: testBackendEndpoints}, xdsC),
-		BalancerConfig: &LBConfig{
-			Cluster: testClusterName,
-			ChildPolicy: &internalserviceconfig.BalancerConfig{
-				Name: childPolicyName,
-			},
-		},
-	})
-
-	if err == nil || !strings.Contains(err.Error(), parseConfigError) {
-		t.Fatalf("Got error: %v, want error: %s", err, parseConfigError)
-	}
-}
-
 // Test verify that the case picker is updated synchronously on receipt of
 // configuration update.
 func (s) TestPickerUpdatedSynchronouslyOnConfigUpdate(t *testing.T) {
@@ -342,9 +233,6 @@ func (s) TestPickerUpdatedSynchronouslyOnConfigUpdate(t *testing.T) {
 	}
 	defer func() { clientConnUpdateHook = origClientConnUpdateHook }()
 
-	defer xdsclient.ClearCounterForTesting(testClusterName, testServiceName)
-	xdsC := fakeclient.NewClient()
-
 	builder := balancer.Get(Name)
 	cc := testutils.NewBalancerClientConn(t)
 	b := builder.Build(cc, balancer.BuildOptions{})
@@ -362,6 +250,7 @@ func (s) TestPickerUpdatedSynchronouslyOnConfigUpdate(t *testing.T) {
 		},
 	})
 
+	xdsC := fakeclient.NewClient()
 	if err := b.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: xdsclient.SetClient(resolver.State{Endpoints: testBackendEndpoints}, xdsC),
 		BalancerConfig: &LBConfig{

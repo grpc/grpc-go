@@ -35,6 +35,8 @@ import (
 
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
+	"google.golang.org/protobuf/proto"
+
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcutil"
@@ -42,7 +44,6 @@ import (
 	istatus "google.golang.org/grpc/internal/status"
 	"google.golang.org/grpc/internal/syscall"
 	"google.golang.org/grpc/mem"
-	"google.golang.org/protobuf/proto"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
@@ -1304,7 +1305,8 @@ func (t *http2Server) Close(err error) {
 // deleteStream deletes the stream s from transport's active streams.
 func (t *http2Server) deleteStream(s *ServerStream, eosReceived bool) {
 	t.mu.Lock()
-	if _, ok := t.activeStreams[s.id]; ok {
+	_, isActive := t.activeStreams[s.id]
+	if isActive {
 		delete(t.activeStreams, s.id)
 		if len(t.activeStreams) == 0 {
 			t.idle = time.Now()
@@ -1312,7 +1314,7 @@ func (t *http2Server) deleteStream(s *ServerStream, eosReceived bool) {
 	}
 	t.mu.Unlock()
 
-	if channelz.IsOn() {
+	if isActive && channelz.IsOn() {
 		if eosReceived {
 			t.channelz.SocketMetrics.StreamsSucceeded.Add(1)
 		} else {
