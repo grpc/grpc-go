@@ -182,7 +182,7 @@ func (s) TestFederation_RouteConfigResourceContextParamOrder(t *testing.T) {
 						{
 							Prefix:           newStringP("/"),
 							ActionType:       xdsresource.RouteActionRoute,
-							WeightedClusters: map[string]xdsresource.WeightedCluster{"cluster-resource": {Weight: 100}},
+							WeightedClusters: []xdsresource.WeightedCluster{{Name: "cluster-resource", Weight: 100}},
 						},
 					},
 				},

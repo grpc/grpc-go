@@ -510,7 +510,7 @@ func (s) TestHandleRouteConfigResponseFromManagementServer(t *testing.T) {
 					{
 						Domains: []string{"lds-target-name"},
 						Routes: []*xdsresource.Route{{Prefix: newStringP(""),
-							WeightedClusters: map[string]xdsresource.WeightedCluster{"cluster-name": {Weight: 1}},
+							WeightedClusters: []xdsresource.WeightedCluster{{Name: "cluster-name", Weight: 1}},
 							ActionType:       xdsresource.RouteActionRoute}},
 					},
 				},
@@ -538,7 +538,7 @@ func (s) TestHandleRouteConfigResponseFromManagementServer(t *testing.T) {
 					{
 						Domains: []string{"lds-target-name"},
 						Routes: []*xdsresource.Route{{Prefix: newStringP(""),
-							WeightedClusters: map[string]xdsresource.WeightedCluster{"cluster-name": {Weight: 1}},
+							WeightedClusters: []xdsresource.WeightedCluster{{Name: "cluster-name", Weight: 1}},
 							ActionType:       xdsresource.RouteActionRoute}},
 					},
 				},
