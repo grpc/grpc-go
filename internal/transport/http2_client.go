@@ -1480,16 +1480,13 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 		contentTypeErr = "malformed header: missing HTTP content-type"
 		grpcMessage    string
 		recvCompress   string
-		httpStatusCode *int
 		httpStatusErr  string
-		rawStatusCode  = codes.Unknown
+		// the code from the grpc-status header, if present
+		grpcStatusCode = codes.Internal
 		// headerError is set if an error is encountered while parsing the headers
 		headerError string
+		httpStatus  string
 	)
-
-	if initialHeader {
-		httpStatusErr = "malformed header: missing HTTP status"
-	}
 
 	for _, hf := range frame.Fields {
 		switch hf.Name {
@@ -1510,36 +1507,11 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 				t.closeStream(s, se.Err(), true, http2.ErrCodeProtocol, se, nil, endStream)
 				return
 			}
-			rawStatusCode = codes.Code(uint32(code))
+			grpcStatusCode = codes.Code(uint32(code))
 		case "grpc-message":
 			grpcMessage = decodeGrpcMessage(hf.Value)
 		case ":status":
-			c, err := strconv.ParseInt(hf.Value, 10, 32)
-			if err != nil {
-				se := status.New(codes.Internal, fmt.Sprintf("transport: malformed http-status: %v", err))
-				t.closeStream(s, se.Err(), true, http2.ErrCodeProtocol, se, nil, endStream)
-				return
-			}
-			statusCode := int(c)
-			if statusCode >= 100 && statusCode < 200 {
-				if endStream {
-					se := status.New(codes.Internal, fmt.Sprintf(
-						"protocol error: informational header with status code %d must not have END_STREAM set", statusCode))
-					t.closeStream(s, se.Err(), true, http2.ErrCodeProtocol, se, nil, endStream)
-				}
-				return
-			}
-			httpStatusCode = &statusCode
-			if statusCode == 200 {
-				httpStatusErr = ""
-				break
-			}
-
-			httpStatusErr = fmt.Sprintf(
-				"unexpected HTTP status code received from server: %d (%s)",
-				statusCode,
-				http.StatusText(statusCode),
-			)
+			httpStatus = hf.Value
 		default:
 			if isReservedHeader(hf.Name) && !isWhitelistedHeader(hf.Name) {
 				break
@@ -1554,25 +1526,52 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 		}
 	}
 
-	if !isGRPC || httpStatusErr != "" {
-		var code = codes.Internal // when header does not include HTTP status, return INTERNAL
-
-		if httpStatusCode != nil {
+	// If a non-gRPC response is received, then evaluate the HTTP status to
+	// process the response and close the stream.
+	// In case http status doesn't provide any error information (status : 200),
+	// then evalute response code to be Unknown.
+	if !isGRPC {
+		var grpcErrorCode = codes.Internal
+		if httpStatus == "" {
+			httpStatusErr = "malformed header: missing HTTP status"
+		} else {
+			// Parse the status codes (e.g. "200", 404").
+			statusCode, err := strconv.Atoi(httpStatus)
+			if err != nil {
+				se := status.New(grpcErrorCode, fmt.Sprintf("transport: malformed http-status: %v", err))
+				t.closeStream(s, se.Err(), true, http2.ErrCodeProtocol, se, nil, endStream)
+				return
+			}
+			if statusCode >= 100 && statusCode < 200 {
+				if endStream {
+					se := status.New(codes.Internal, fmt.Sprintf(
+						"protocol error: informational header with status code %d must not have END_STREAM set", statusCode))
+					t.closeStream(s, se.Err(), true, http2.ErrCodeProtocol, se, nil, endStream)
+				}
+				// In case of informational headers, return.
+				return
+			}
+			httpStatusErr = fmt.Sprintf(
+				"unexpected HTTP status code received from server: %d (%s)",
+				statusCode,
+				http.StatusText(statusCode),
+			)
 			var ok bool
-			code, ok = HTTPStatusConvTab[*httpStatusCode]
+			grpcErrorCode, ok = HTTPStatusConvTab[statusCode]
 			if !ok {
-				code = codes.Unknown
+				grpcErrorCode = codes.Unknown
 			}
 		}
 		var errs []string
 		if httpStatusErr != "" {
 			errs = append(errs, httpStatusErr)
 		}
+
 		if contentTypeErr != "" {
 			errs = append(errs, contentTypeErr)
 		}
-		// Verify the HTTP response is a 200.
-		se := status.New(code, strings.Join(errs, "; "))
+
+		se := status.New(grpcErrorCode, strings.Join(errs, "; "))
 		t.closeStream(s, se.Err(), true, http2.ErrCodeProtocol, se, nil, endStream)
 		return
 	}
@@ -1626,7 +1625,7 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 		return
 	}
 
-	status := istatus.NewWithProto(rawStatusCode, grpcMessage, mdata[grpcStatusDetailsBinHeader])
+	status := istatus.NewWithProto(grpcStatusCode, grpcMessage, mdata[grpcStatusDetailsBinHeader])
 
 	// If client received END_STREAM from server while stream was still active,
 	// send RST_STREAM.
