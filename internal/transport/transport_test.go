@@ -39,9 +39,11 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
+
 	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/leakcheck"
@@ -88,9 +90,6 @@ func (s *Stream) readTo(p []byte) (int, error) {
 	}
 
 	if data.Len() != len(p) {
-		if err == nil {
-			err = io.ErrUnexpectedEOF
-		}
 		return 0, err
 	}
 
@@ -1856,17 +1855,16 @@ func waitWhileTrue(t *testing.T, condition func() (bool, error)) {
 func (s) TestReadGivesSameErrorAfterAnyErrorOccurs(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	testRecvBuffer := newRecvBuffer()
 	s := &Stream{
 		ctx:         ctx,
-		buf:         testRecvBuffer,
 		requestRead: func(int) {},
 	}
-	s.trReader = &transportReader{
-		reader: &recvBufferReader{
+	s.buf.init()
+	s.trReader = transportReader{
+		reader: recvBufferReader{
 			ctx:     s.ctx,
 			ctxDone: s.ctx.Done(),
-			recv:    s.buf,
+			recv:    &s.buf,
 		},
 		windowHandler: func(int) {},
 	}
@@ -2590,8 +2588,8 @@ func (s) TestClientHandshakeInfoDialer(t *testing.T) {
 
 func newTestClientStream() *ClientStream {
 	return &ClientStream{
-		Stream: &Stream{
-			buf: &recvBuffer{
+		Stream: Stream{
+			buf: recvBuffer{
 				c: make(chan recvMsg),
 			},
 		},
@@ -2603,8 +2601,6 @@ func newTestClientStream() *ClientStream {
 func newTestHTTP2Client(cs *ClientStream) *http2Client {
 	return &http2Client{
 		activeStreams: map[uint32]*ClientStream{
-			// StreamID 0 is reserved for connection-level flow control.
-			// Client-initiated streams must use odd-numbered stream identifiers.
 			1: cs,
 		},
 		controlBuf: newControlBuffer(make(<-chan struct{})),
@@ -3102,26 +3098,86 @@ func (s) TestClientCloseReturnsEarlyWhenGoAwayWriteHangs(t *testing.T) {
 	ct.Close(errors.New("manually closed by client"))
 }
 
+// deadlineTestConn is a net.Conn wrapper used to assert that deadlines are set
+// during http2Client.Close().
+type deadlineTestConn struct {
+	net.Conn
+	// We use atomic.Bool here since there may be more than one call to
+	// http2Client.Close -- which sets these deadlines -- and not all of them
+	// from the same goroutine as our test. In fact we only care about the first
+	// such invocation, which *does* come from the main goroutine of our test,
+	// but the race detector can't know that and complains (understandably)
+	// about writes from those successive calls when these variables are not
+	// atomic.Bool.
+	//
+	// For more detailed background, see
+	// https://github.com/grpc/grpc-go/pull/8534#discussion_r2297717445 .
+	observedReadDeadline  atomic.Bool
+	observedWriteDeadline atomic.Bool
+}
+
+func (c *deadlineTestConn) SetReadDeadline(t time.Time) error {
+	c.observedReadDeadline.Store(true)
+	return c.Conn.SetReadDeadline(t)
+}
+
+func (c *deadlineTestConn) SetWriteDeadline(t time.Time) error {
+	c.observedWriteDeadline.Store(true)
+	return c.Conn.SetWriteDeadline(t)
+}
+
+// Tests that connection read and write deadlines are set as expected during
+// Close().
+func (s) TestCloseSetsConnectionDeadlines(t *testing.T) {
+	dialer := func(_ context.Context, addr string) (net.Conn, error) {
+		conn, err := net.Dial("tcp", addr)
+		if err != nil {
+			return nil, err
+		}
+		return &deadlineTestConn{Conn: conn}, nil
+	}
+	co := ConnectOptions{
+		Dialer: dialer,
+	}
+	server, client, cancel := setUpWithOptions(t, 0, &ServerConfig{}, normal, co)
+	defer cancel()
+	defer server.stop()
+	dConn := client.conn.(*deadlineTestConn)
+	// Set both to false before invoking Close() in case some other code set a
+	// deadline above.
+	dConn.observedReadDeadline.Store(false)
+	dConn.observedWriteDeadline.Store(false)
+	client.Close(fmt.Errorf("closed manually by test"))
+	if !dConn.observedReadDeadline.Load() {
+		t.Errorf("Connection read deadline was never set")
+	}
+	if !dConn.observedWriteDeadline.Load() {
+		t.Errorf("Connection write deadline was never set")
+	}
+}
+
 // TestReadHeaderMultipleBuffers tests the stream when the gRPC headers are
 // split across multiple buffers. It verifies that the reporting of the
 // number of bytes read for flow control is correct.
 func (s) TestReadMessageHeaderMultipleBuffers(t *testing.T) {
 	headerLen := 5
-	recvBuffer := newRecvBuffer()
-	recvBuffer.put(recvMsg{buffer: make(mem.SliceBuffer, 3)})
-	recvBuffer.put(recvMsg{buffer: make(mem.SliceBuffer, headerLen-3)})
 	bytesRead := 0
 	s := Stream{
 		requestRead: func(int) {},
-		trReader: &transportReader{
-			reader: &recvBufferReader{
-				recv: recvBuffer,
-			},
-			windowHandler: func(i int) {
-				bytesRead += i
-			},
+	}
+	s.buf.init()
+	recvBuffer := &s.buf
+	s.trReader = transportReader{
+		reader: recvBufferReader{
+			recv: recvBuffer,
+		},
+		windowHandler: func(i int) {
+			bytesRead += i
 		},
 	}
+
+	recvBuffer.put(recvMsg{buffer: make(mem.SliceBuffer, 3)})
+	recvBuffer.put(recvMsg{buffer: make(mem.SliceBuffer, headerLen-3)})
 
 	header := make([]byte, headerLen)
 	err := s.ReadMessageHeader(header)
@@ -3225,8 +3281,8 @@ func (s) TestServerSendsRSTAfterDeadlineToMisbehavedClient(t *testing.T) {
 func (s) TestClientTransport_Handle1xxHeaders(t *testing.T) {
 	testStream := func() *ClientStream {
 		return &ClientStream{
-			Stream: &Stream{
-				buf: &recvBuffer{
+			Stream: Stream{
+				buf: recvBuffer{
 					c:  make(chan recvMsg),
 					mu: sync.Mutex{},
 				},
@@ -3294,6 +3350,128 @@ func (s) TestClientTransport_Handle1xxHeaders(t *testing.T) {
 
 			if got.Code() != want.Code() || got.Message() != want.Message() {
 				t.Fatalf("operateHeaders(%v); status = %v, want %v", test.metaHeaderFrame, got, want)
+			}
+		})
+	}
+}
+
+func (s) TestDeleteStreamMetricsIncrementedOnlyOnce(t *testing.T) {
+	// Enable channelz for metrics collection
+	defer internal.ChannelzTurnOffForTesting()
+	if !channelz.IsOn() {
+		channelz.TurnOn()
+	}
+
+	for _, test := range []struct {
+		name                string
+		eosReceived         bool
+		wantStreamSucceeded int64
+		wantStreamFailed    int64
+	}{
+		{
+			name:                "StreamsSucceeded",
+			eosReceived:         true,
+			wantStreamSucceeded: 1,
+			wantStreamFailed:    0,
+		},
+		{
+			name:                "StreamsFailed",
+			eosReceived:         false,
+			wantStreamSucceeded: 0,
+			wantStreamFailed:    1,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+
+			// Setup server configuration with channelz support
+			serverConfig := &ServerConfig{
+				ChannelzParent: channelz.RegisterServer(t.Name()),
+			}
+			defer channelz.RemoveEntry(serverConfig.ChannelzParent.ID)
+
+			// Create server and client with normal handler (not notifyCall)
+			server, client, cancel := setUpWithOptions(t, 0, serverConfig, normal, ConnectOptions{})
+			defer func() {
+				client.Close(fmt.Errorf("test cleanup"))
+				server.stop()
+				cancel()
+			}()
+
+			// Wait for connection to be established
+			waitWhileTrue(t, func() (bool, error) {
+				server.mu.Lock()
+				defer server.mu.Unlock()
+				if len(server.conns) == 0 {
+					return true, fmt.Errorf("timed-out while waiting for connection")
+				}
+				return false, nil
+			})
+
+			// Get the server transport
+			server.mu.Lock()
+			var serverTransport *http2Server
+			for st := range server.conns {
+				serverTransport = st.(*http2Server)
+				break
+			}
+			server.mu.Unlock()
+
+			if serverTransport == nil {
+				t.Fatal("Server transport not found")
+			}
+
+			clientStream, err := client.NewStream(ctx, &CallHdr{})
+			if err != nil {
+				t.Fatalf("Failed to create stream: %v", err)
+			}
+
+			// Wait for the stream to be created on the server side
+			var serverStream *ServerStream
+			waitWhileTrue(t, func() (bool, error) {
+				serverTransport.mu.Lock()
+				defer serverTransport.mu.Unlock()
+				for _, v := range serverTransport.activeStreams {
+					if v.id == clientStream.id {
+						serverStream = v
+						return false, nil
+					}
+				}
+				return true, nil
+			})
+
+			if serverStream == nil {
+				t.Fatalf("Server stream not found for client stream ID %d", clientStream.id)
+			}
+
+			// First call to deleteStream should remove the stream from activeStreams and update metrics
+			serverTransport.deleteStream(serverStream, test.eosReceived)
+
+			// Check metrics after first deleteStream call
+			streamsSucceeded := serverTransport.channelz.SocketMetrics.StreamsSucceeded.Load()
+			streamsFailed := serverTransport.channelz.SocketMetrics.StreamsFailed.Load()
+
+			if streamsSucceeded != test.wantStreamSucceeded {
+				t.Errorf("After first deleteStream - StreamsSucceeded: got %d, want %d", streamsSucceeded, test.wantStreamSucceeded)
+			}
+			if streamsFailed != test.wantStreamFailed {
+				t.Errorf("After first deleteStream - StreamsFailed: got %d, want %d", streamsFailed, test.wantStreamFailed)
+			}
+
+			// Additional calls to deleteStream should not change metrics (stream already deleted)
+			serverTransport.deleteStream(serverStream, test.eosReceived)
+			serverTransport.deleteStream(serverStream, test.eosReceived)
+
+			// Verify metrics haven't changed after subsequent calls
+			additionalStreamsSucceeded := serverTransport.channelz.SocketMetrics.StreamsSucceeded.Load()
+			additionalStreamsFailed := serverTransport.channelz.SocketMetrics.StreamsFailed.Load()
+
+			if additionalStreamsSucceeded != test.wantStreamSucceeded {
+				t.Errorf("After multiple deleteStream calls - StreamsSucceeded changed: got %d, want %d", additionalStreamsSucceeded, test.wantStreamSucceeded)
+			}
+			if additionalStreamsFailed != test.wantStreamFailed {
+				t.Errorf("After multiple deleteStream calls - StreamsFailed changed: got %d, want %d", additionalStreamsFailed, test.wantStreamFailed)
 			}
 		})
 	}

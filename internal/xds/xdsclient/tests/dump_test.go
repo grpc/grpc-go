@@ -63,7 +63,7 @@ func makeGenericXdsConfig(typeURL, name, version string, status v3adminpb.Client
 }
 
 func checkResourceDump(ctx context.Context, want *v3statuspb.ClientStatusResponse, pool *xdsclient.Pool) error {
-	var cmpOpts = cmp.Options{
+	cmpOpts := cmp.Options{
 		protocmp.Transform(),
 		protocmp.IgnoreFields((*v3statuspb.ClientConfig_GenericXdsConfig)(nil), "last_updated"),
 		protocmp.IgnoreFields((*v3adminpb.UpdateFailureState)(nil), "last_update_attempt", "details"),
@@ -89,7 +89,7 @@ func checkResourceDump(ctx context.Context, want *v3statuspb.ClientStatusRespons
 		if diff == "" {
 			return nil
 		}
-		lastErr = fmt.Errorf("received unexpected resource dump, diff (-got, +want):\n%s, got: %s\n want:%s", diff, pretty.ToJSON(got), pretty.ToJSON(want))
+		lastErr = fmt.Errorf("received unexpected resource dump, diff (-want, +got):\n%s, got: %s\n want:%s", diff, pretty.ToJSON(got), pretty.ToJSON(want))
 	}
 	return fmt.Errorf("timeout when waiting for resource dump to reach expected state: %v", lastErr)
 }

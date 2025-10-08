@@ -448,11 +448,10 @@ func (s) TestReportLoad_StreamCreation(t *testing.T) {
 
 // TestConcurrentReportLoad verifies that the client can safely handle concurrent
 // requests to initiate load reporting streams. It launches multiple goroutines
-// that all call client.ReportLoad simultaneously.
+// that all call client.ReportLoad simultaneously. We don't verify anything on
+// the server here, since that is done in other tests. This is just to ensure
+// that concurrent ReportLoad() calls work.
 func (s) TestConcurrentReportLoad(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{SupportLoadReportingService: true})
 	nodeID := uuid.New().String()
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
@@ -464,17 +463,29 @@ func (s) TestConcurrentReportLoad(t *testing.T) {
 	}
 
 	// Call ReportLoad() concurrently from multiple go routines.
-	var wg sync.WaitGroup
 	const numGoroutines = 10
+	cancelStores := make([]func(context.Context), numGoroutines)
+	var wg sync.WaitGroup
 	wg.Add(numGoroutines)
-	for range numGoroutines {
-		go func() {
+	for i := range numGoroutines {
+		go func(idx int) {
 			defer wg.Done()
-			_, cancelStore := client.ReportLoad(serverConfig)
-			defer cancelStore(ctx)
-		}()
+			_, cancelStores[idx] = client.ReportLoad(serverConfig)
+		}(i)
 	}
 	wg.Wait()
+
+	// Cancel all the load reporting streams. The last call to cancel is
+	// expected to block until a final load report with pending loads is sent.
+	// But the stream is currently blocked on a recv() call waiting for the LRS
+	// server to send the initial laod reporting response, which it never does.
+	// Hence we use a context with short timeout here.
+	for i, cancel := range cancelStores {
+		sCtx, sCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
+		defer sCancel()
+		cancel(sCtx)
+		t.Logf("Cancelled LRS stream %d", i)
+	}
 }
 
 // TestConcurrentChannels verifies that we can create multiple gRPC channels

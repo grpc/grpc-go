@@ -1152,6 +1152,7 @@ func (s) TestPickFirstLeaf_InterleavingIPv6Preffered(t *testing.T) {
 		ResolverState: resolver.State{
 			Endpoints: []resolver.Endpoint{
 				{Addresses: []resolver.Address{{Addr: "[0001:0001:0001:0001:0001:0001:0001:0001]:8080"}}},
+				{Addresses: []resolver.Address{{Addr: "[0001:0001:0001:0001:0001:0001:0001:0001]:8080"}}}, // duplicate, should be ignored.
 				{Addresses: []resolver.Address{{Addr: "1.1.1.1:1111"}}},
 				{Addresses: []resolver.Address{{Addr: "2.2.2.2:2"}}},
 				{Addresses: []resolver.Address{{Addr: "3.3.3.3:3"}}},
@@ -1501,6 +1502,102 @@ func (s) TestPickFirstLeaf_AddressUpdateWithMetadata(t *testing.T) {
 	}
 	if err := pickfirst.CheckRPCsToBackend(ctx, cc, addrs[1]); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// Tests the scenario where a connection is established and then breaks, leading
+// to a reconnection attempt. While the reconnection is in progress, a resolver
+// update with a new address is received. The test verifies that the balancer
+// creates a new SubConn for the new address and that the ClientConn eventually
+// becomes READY.
+func (s) TestPickFirstLeaf_Reconnection(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	cc := testutils.NewBalancerClientConn(t)
+	bal := balancer.Get(pickfirstleaf.Name).Build(cc, balancer.BuildOptions{})
+	defer bal.Close()
+	ccState := balancer.ClientConnState{
+		ResolverState: resolver.State{
+			Endpoints: []resolver.Endpoint{
+				{Addresses: []resolver.Address{{Addr: "1.1.1.1:1"}}},
+			},
+		},
+	}
+	if err := bal.UpdateClientConnState(ccState); err != nil {
+		t.Fatalf("UpdateClientConnState(%v) returned error: %v", ccState, err)
+	}
+
+	select {
+	case state := <-cc.NewStateCh:
+		if got, want := state, connectivity.Connecting; got != want {
+			t.Fatalf("Received unexpected ClientConn sate: got %v, want %v", got, want)
+		}
+	case <-ctx.Done():
+		t.Fatal("Context timed out waiting for ClientConn state update.")
+	}
+
+	sc1 := <-cc.NewSubConnCh
+	select {
+	case <-sc1.ConnectCh:
+	case <-ctx.Done():
+		t.Fatal("Context timed out waiting for Connect() to be called on sc1.")
+	}
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
+
+	if err := cc.WaitForConnectivityState(ctx, connectivity.Ready); err != nil {
+		t.Fatalf("Context timed out waiting for ClientConn to become READY.")
+	}
+
+	// Simulate a connection breakage, this should result the channel
+	// transitioning to IDLE.
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Idle})
+	if err := cc.WaitForConnectivityState(ctx, connectivity.Idle); err != nil {
+		t.Fatalf("Context timed out waiting for ClientConn to enter IDLE.")
+	}
+
+	// Calling the idle picker should result in the SubConn being re-connected.
+	picker := <-cc.NewPickerCh
+	if _, err := picker.Pick(balancer.PickInfo{}); err != balancer.ErrNoSubConnAvailable {
+		t.Fatalf("picker.Pick() returned error: %v, want %v", err, balancer.ErrNoSubConnAvailable)
+	}
+
+	select {
+	case <-sc1.ConnectCh:
+	case <-ctx.Done():
+		t.Fatal("Context timed out waiting for Connect() to be called on sc1.")
+	}
+
+	// Send a resolver update, removing the existing SubConn. Since the balancer
+	// is connecting, it should create a new SubConn for the new backend
+	// address.
+	ccState = balancer.ClientConnState{
+		ResolverState: resolver.State{
+			Endpoints: []resolver.Endpoint{
+				{Addresses: []resolver.Address{{Addr: "2.2.2.2:2"}}},
+			},
+		},
+	}
+	if err := bal.UpdateClientConnState(ccState); err != nil {
+		t.Fatalf("UpdateClientConnState(%v) returned error: %v", ccState, err)
+	}
+
+	var sc2 *testutils.TestSubConn
+	select {
+	case sc2 = <-cc.NewSubConnCh:
+	case <-ctx.Done():
+		t.Fatal("Context timed out waiting for new SubConn to be created.")
+	}
+
+	select {
+	case <-sc2.ConnectCh:
+	case <-ctx.Done():
+		t.Fatal("Context timed out waiting for Connect() to be called on sc2.")
+	}
+	sc2.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc2.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	if err := cc.WaitForConnectivityState(ctx, connectivity.Ready); err != nil {
+		t.Fatalf("Context timed out waiting for ClientConn to become READY.")
 	}
 }
 

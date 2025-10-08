@@ -411,11 +411,10 @@ func (ht *serverHandlerTransport) HandleStreams(ctx context.Context, startStream
 	ctx = metadata.NewIncomingContext(ctx, ht.headerMD)
 	req := ht.req
 	s := &ServerStream{
-		Stream: &Stream{
+		Stream: Stream{
 			id:             0, // irrelevant
 			ctx:            ctx,
 			requestRead:    func(int) {},
-			buf:            newRecvBuffer(),
 			method:         req.URL.Path,
 			recvCompress:   req.Header.Get("grpc-encoding"),
 			contentSubtype: ht.contentSubtype,
@@ -424,8 +423,9 @@ func (ht *serverHandlerTransport) HandleStreams(ctx context.Context, startStream
 		st:               ht,
 		headerWireLength: 0, // won't have access to header wire length until golang/go#18997.
 	}
-	s.trReader = &transportReader{
-		reader:        &recvBufferReader{ctx: s.ctx, ctxDone: s.ctx.Done(), recv: s.buf},
+	s.Stream.buf.init()
+	s.trReader = transportReader{
+		reader:        recvBufferReader{ctx: s.ctx, ctxDone: s.ctx.Done(), recv: &s.buf},
 		windowHandler: func(int) {},
 	}
 

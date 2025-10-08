@@ -44,10 +44,11 @@ var (
 )
 
 type benchmarkServer struct {
-	port            int
-	cores           int
-	closeFunc       func()
-	mu              sync.RWMutex
+	port      int
+	cores     int
+	closeFunc func()
+
+	mu              sync.Mutex
 	lastResetTime   time.Time
 	rusageLastReset *syscall.Rusage
 }
@@ -168,8 +169,8 @@ func startBenchmarkServer(config *testpb.ServerConfig, serverPort int) (*benchma
 // getStats returns the stats for benchmark server.
 // It resets lastResetTime if argument reset is true.
 func (bs *benchmarkServer) getStats(reset bool) *testpb.ServerStats {
-	bs.mu.RLock()
-	defer bs.mu.RUnlock()
+	bs.mu.Lock()
+	defer bs.mu.Unlock()
 	wallTimeElapsed := time.Since(bs.lastResetTime).Seconds()
 	rusageLatest := syscall.GetRusage()
 	uTimeElapsed, sTimeElapsed := syscall.CPUTimeDiff(bs.rusageLastReset, rusageLatest)

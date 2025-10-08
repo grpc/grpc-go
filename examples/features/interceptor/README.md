@@ -30,11 +30,14 @@ types of interceptors in total.
 
 The type for client-side unary interceptors is
 [`UnaryClientInterceptor`](https://godoc.org/google.golang.org/grpc#UnaryClientInterceptor).
-It is essentially a function type with signature: `func(ctx context.Context,
-method string, req, reply interface{}, cc *ClientConn, invoker UnaryInvoker,
-opts ...CallOption) error`. Unary interceptor implementations can usually be
-divided into three parts: pre-processing, invoking the RPC method, and
-post-processing.
+It is a function type with signature:
+
+```golang
+func(ctx context.Context, method string, req, reply interface{}, cc *ClientConn, invoker UnaryInvoker, opts ...CallOption) error
+```
+
+Unary interceptor implementations can usually be divided into three parts:
+pre-processing, invoking the RPC method, and post-processing.
 
 For pre-processing, users can get info about the current RPC call by examining
 the args passed in. The args include the RPC context, method string, request to
@@ -59,22 +62,26 @@ To install a unary interceptor on a ClientConn, configure `Dial` with the
 
 The type for client-side stream interceptors is
 [`StreamClientInterceptor`](https://godoc.org/google.golang.org/grpc#StreamClientInterceptor).
-It is a function type with signature: `func(ctx context.Context, desc
-*StreamDesc, cc *ClientConn, method string, streamer Streamer, opts
-...CallOption) (ClientStream, error)`. An implementation of a stream interceptor
-usually includes pre-processing, and stream operation interception.
+It is a function type with signature:
+
+```golang
+func(ctx context.Context, desc *StreamDesc, cc *ClientConn, method string, streamer Streamer, opts ...CallOption) (ClientStream, error)
+```
+
+An implementation of a stream interceptor usually includes pre-processing, and
+stream operation interception.
 
 The pre-processing is similar to unary interceptors.
 
 However, rather than invoking the RPC method followed by post-processing, stream
 interceptors intercept the users' operations on the stream. The interceptor
 first calls the passed-in `streamer` to get a `ClientStream`, and then wraps the
-`ClientStream` while overloading its methods with the interception logic.
+`ClientStream` while overriding its methods with the interception logic.
 Finally, the interceptor returns the wrapped `ClientStream` to user to operate
 on.
 
 In the example, we define a new struct `wrappedStream`, which embeds a
-`ClientStream`. We then implement (overload) the `SendMsg` and `RecvMsg` methods
+`ClientStream`. We then implement (override) the `SendMsg` and `RecvMsg` methods
 on `wrappedStream` to intercept these two operations on the embedded
 `ClientStream`. In the example, we log the message type info and time info for
 interception purpose.
@@ -92,9 +99,11 @@ different information provided as args.
 
 The type for server-side unary interceptors is
 [`UnaryServerInterceptor`](https://godoc.org/google.golang.org/grpc#UnaryServerInterceptor).
-It is a function type with signature: `func(ctx context.Context, req
-interface{}, info *UnaryServerInfo, handler UnaryHandler) (resp interface{}, err
-error)`.
+It is a function type with signature:
+
+```golang
+func(ctx context.Context, req interface{}, info *UnaryServerInfo, handler UnaryHandler) (resp interface{}, err error)
+```
 
 Refer to the client-side unary interceptor section for a detailed implementation
 and explanation.
@@ -107,8 +116,11 @@ To install a unary interceptor on a Server, configure `NewServer` with the
 
 The type for server-side stream interceptors is
 [`StreamServerInterceptor`](https://godoc.org/google.golang.org/grpc#StreamServerInterceptor).
-It is a function type with the signature: `func(srv interface{}, ss
-ServerStream, info *StreamServerInfo, handler StreamHandler) error`.
+It is a function type with the signature:
+
+```golang
+func(srv interface{}, ss ServerStream, info *StreamServerInfo, handler StreamHandler) error
+```
 
 Refer to the client-side stream interceptor section for a detailed
 implementation and explanation.
@@ -116,4 +128,3 @@ implementation and explanation.
 To install a stream interceptor on a Server, configure `NewServer` with the
 [`StreamInterceptor`](https://godoc.org/google.golang.org/grpc#StreamInterceptor)
 `ServerOption`.
-

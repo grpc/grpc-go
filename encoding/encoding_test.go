@@ -77,7 +77,7 @@ func (s) TestDuplicateCompressorRegister(t *testing.T) {
 		t.Fatalf("Unexpected compressor, got: %+v, want:%+v", got, mc)
 	}
 
-	wantNames := []string{"mock-compressor"}
+	wantNames := []string{"gzip", "mock-compressor"}
 	if !cmp.Equal(wantNames, grpcutil.RegisteredCompressorNames) {
 		t.Fatalf("Unexpected compressor names, got: %+v, want:%+v", grpcutil.RegisteredCompressorNames, wantNames)
 	}
