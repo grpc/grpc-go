@@ -125,10 +125,11 @@ func (fsh *fakeStatsHandler) TagRPC(ctx context.Context, _ *stats.RPCTagInfo) co
 
 func (fsh *fakeStatsHandler) HandleRPC(_ context.Context, rs stats.RPCStats) {
 	switch rs.(type) {
-	// stats.Begin won't get Telemetry Labels because happens after picker picks
-	// These three stats callouts trigger all metrics for OpenTelemetry that
-	// aren't started. All of these should have access to the desired telemetry
+	// stats.Begin is called before the picker runs, so it won't have telemetry
 	// labels.
+	// The following three stats callouts trigger OpenTelemetry metrics and are
+	// guaranteed to run after the picker has selected a subchannel. Therefore,
+	// they should have access to the desired telemetry labels.
 	case *stats.OutPayload, *stats.InPayload, *stats.End:
 		want := map[string]string{
 			serviceNameKeyCSM:      serviceNameValue,
