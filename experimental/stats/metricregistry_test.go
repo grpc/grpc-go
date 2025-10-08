@@ -109,6 +109,14 @@ func (s) TestMetricRegistry(t *testing.T) {
 		OptionalLabels: []string{"int gauge optional label"},
 		Default:        false,
 	})
+	intUpDownCountHandle1 := RegisterInt64UpDownCount(MetricDescriptor{
+		Name:           "simple up down counter",
+		Description:    "current number of emissions from tests",
+		Unit:           "int",
+		Labels:         []string{"int up down counter label"},
+		OptionalLabels: []string{"int up down counter optional label"},
+		Default:        false,
+	})
 
 	fmr := newFakeMetricsRecorder(t)
 
@@ -118,6 +126,14 @@ func (s) TestMetricRegistry(t *testing.T) {
 	// metric.
 	if got := fmr.intValues[intCountHandle1.Descriptor()]; got != 1 {
 		t.Fatalf("fmr.intValues[intCountHandle1.MetricDescriptor] got %v, want: %v", got, 1)
+	}
+
+	intUpDownCountHandle1.Record(fmr, 2, []string{"some label value", "some optional label value"}...)
+	// The Metric Descriptor in the handle should be able to identify the metric
+	// information. This is the key passed to metrics recorder to identify
+	// metric.
+	if got := fmr.intValues[intUpDownCountHandle1.Descriptor()]; got != 2 {
+		t.Fatalf("fmr.intValues[intUpDownCountHandle1.MetricDescriptor] got %v, want: %v", got, 2)
 	}
 
 	floatCountHandle1.Record(fmr, 1.2, []string{"some label value", "some optional label value"}...)
@@ -138,6 +154,28 @@ func (s) TestMetricRegistry(t *testing.T) {
 	intGaugeHandle1.Record(fmr, 7, []string{"some label value", "some optional label value"}...)
 	if got := fmr.intValues[intGaugeHandle1.Descriptor()]; got != 7 {
 		t.Fatalf("fmr.intValues[intGaugeHandle1.MetricDescriptor] got %v, want: %v", got, 7)
+	}
+}
+
+func TestUpDownCounts(t *testing.T) {
+	cleanup := snapshotMetricsRegistryForTesting()
+	defer cleanup()
+
+	intUpDownCountHandle1 := RegisterInt64UpDownCount(MetricDescriptor{
+		Name:           "simple up down counter",
+		Description:    "current number of emissions from tests",
+		Unit:           "int",
+		Labels:         []string{"int up down counter label"},
+		OptionalLabels: []string{"int up down counter optional label"},
+		Default:        false,
+	})
+
+	fmr := newFakeMetricsRecorder(t)
+	intUpDownCountHandle1.Record(fmr, 2, []string{"up down value", "some optional label value"}...)
+	intUpDownCountHandle1.Record(fmr, -1, []string{"up down value", "some optional label value"}...)
+
+	if got := fmr.intValues[intUpDownCountHandle1.Descriptor()]; got != 1 {
+		t.Fatalf("fmr.intValues[intUpDownCountHandle1.MetricDescriptor] got %v, want: %v", got, 1)
 	}
 }
 
@@ -262,6 +300,11 @@ func (r *fakeMetricsRecorder) RecordFloat64Histo(handle *Float64HistoHandle, inc
 }
 
 func (r *fakeMetricsRecorder) RecordInt64Gauge(handle *Int64GaugeHandle, incr int64, labels ...string) {
+	verifyLabels(r.t, handle.Descriptor().Labels, handle.Descriptor().OptionalLabels, labels)
+	r.intValues[handle.Descriptor()] += incr
+}
+
+func (r *fakeMetricsRecorder) RecordInt64UpDownCount(handle *Int64UpDownCountHandle, incr int64, labels ...string) {
 	verifyLabels(r.t, handle.Descriptor().Labels, handle.Descriptor().OptionalLabels, labels)
 	r.intValues[handle.Descriptor()] += incr
 }
