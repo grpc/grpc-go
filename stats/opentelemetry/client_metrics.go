@@ -174,7 +174,8 @@ func (h *clientMetricsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInf
 			// executes on the callpath that this OpenTelemetry component
 			// currently supports.
 			TelemetryLabels: map[string]string{
-				"grpc.lb.locality": "",
+				"grpc.lb.locality":        "",
+				"grpc.lb.backend_service": "",
 			},
 		}
 		ctx = istats.SetLabels(ctx, labels)
