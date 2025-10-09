@@ -183,7 +183,7 @@ func (s) TestRDSWatch(t *testing.T) {
 								{
 									Prefix:           newStringP("/"),
 									ActionType:       xdsresource.RouteActionRoute,
-									WeightedClusters: map[string]xdsresource.WeightedCluster{cdsName: {Weight: 100}},
+									WeightedClusters: []xdsresource.WeightedCluster{{Name: cdsName, Weight: 100}},
 								},
 							},
 						},
@@ -206,7 +206,7 @@ func (s) TestRDSWatch(t *testing.T) {
 								{
 									Prefix:           newStringP("/"),
 									ActionType:       xdsresource.RouteActionRoute,
-									WeightedClusters: map[string]xdsresource.WeightedCluster{cdsNameNewStyle: {Weight: 100}},
+									WeightedClusters: []xdsresource.WeightedCluster{{Name: cdsNameNewStyle, Weight: 100}},
 								},
 							},
 						},
@@ -345,7 +345,7 @@ func (s) TestRDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 								{
 									Prefix:           newStringP("/"),
 									ActionType:       xdsresource.RouteActionRoute,
-									WeightedClusters: map[string]xdsresource.WeightedCluster{cdsName: {Weight: 100}},
+									WeightedClusters: []xdsresource.WeightedCluster{{Name: cdsName, Weight: 100}},
 								},
 							},
 						},
@@ -361,7 +361,7 @@ func (s) TestRDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 								{
 									Prefix:           newStringP("/"),
 									ActionType:       xdsresource.RouteActionRoute,
-									WeightedClusters: map[string]xdsresource.WeightedCluster{"new-cds-resource": {Weight: 100}},
+									WeightedClusters: []xdsresource.WeightedCluster{{Name: "new-cds-resource", Weight: 100}},
 								},
 							},
 						},
@@ -383,7 +383,7 @@ func (s) TestRDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 								{
 									Prefix:           newStringP("/"),
 									ActionType:       xdsresource.RouteActionRoute,
-									WeightedClusters: map[string]xdsresource.WeightedCluster{cdsNameNewStyle: {Weight: 100}},
+									WeightedClusters: []xdsresource.WeightedCluster{{Name: cdsNameNewStyle, Weight: 100}},
 								},
 							},
 						},
@@ -399,7 +399,7 @@ func (s) TestRDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 								{
 									Prefix:           newStringP("/"),
 									ActionType:       xdsresource.RouteActionRoute,
-									WeightedClusters: map[string]xdsresource.WeightedCluster{"new-cds-resource": {Weight: 100}},
+									WeightedClusters: []xdsresource.WeightedCluster{{Name: "new-cds-resource", Weight: 100}},
 								},
 							},
 						},
@@ -597,7 +597,7 @@ func (s) TestRDSWatch_ThreeWatchesForDifferentResourceNames(t *testing.T) {
 						{
 							Prefix:           newStringP("/"),
 							ActionType:       xdsresource.RouteActionRoute,
-							WeightedClusters: map[string]xdsresource.WeightedCluster{cdsName: {Weight: 100}},
+							WeightedClusters: []xdsresource.WeightedCluster{{Name: cdsName, Weight: 100}},
 						},
 					},
 				},
@@ -688,7 +688,7 @@ func (s) TestRDSWatch_ResourceCaching(t *testing.T) {
 						{
 							Prefix:           newStringP("/"),
 							ActionType:       xdsresource.RouteActionRoute,
-							WeightedClusters: map[string]xdsresource.WeightedCluster{cdsName: {Weight: 100}},
+							WeightedClusters: []xdsresource.WeightedCluster{{Name: cdsName, Weight: 100}},
 						},
 					},
 				},
@@ -819,7 +819,7 @@ func (s) TestRDSWatch_ValidResponseCancelsExpiryTimerBehavior(t *testing.T) {
 						{
 							Prefix:           newStringP("/"),
 							ActionType:       xdsresource.RouteActionRoute,
-							WeightedClusters: map[string]xdsresource.WeightedCluster{cdsName: {Weight: 100}},
+							WeightedClusters: []xdsresource.WeightedCluster{{Name: cdsName, Weight: 100}},
 						},
 					},
 				},
@@ -983,7 +983,7 @@ func (s) TestRDSWatch_PartialValid(t *testing.T) {
 						{
 							Prefix:           newStringP("/"),
 							ActionType:       xdsresource.RouteActionRoute,
-							WeightedClusters: map[string]xdsresource.WeightedCluster{cdsName: {Weight: 100}},
+							WeightedClusters: []xdsresource.WeightedCluster{{Name: cdsName, Weight: 100}},
 						},
 					},
 				},

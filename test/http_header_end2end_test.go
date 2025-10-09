@@ -103,10 +103,9 @@ func (s) TestHTTPHeaderFrameErrorHandlingInitialHeader(t *testing.T) {
 		errCode codes.Code
 	}{
 		{
-			name: "missing gRPC status",
+			name: "missing gRPC content type",
 			header: []string{
 				":status", "403",
-				"content-type", "application/grpc",
 			},
 			errCode: codes.PermissionDenied,
 		},
@@ -120,23 +119,23 @@ func (s) TestHTTPHeaderFrameErrorHandlingInitialHeader(t *testing.T) {
 			errCode: codes.Internal,
 		},
 		{
-			name: "Malformed grpc-tags-bin field",
+			name: "Malformed grpc-tags-bin field ignores http status",
 			header: []string{
 				":status", "502",
 				"content-type", "application/grpc",
 				"grpc-status", "0",
 				"grpc-tags-bin", "???",
 			},
-			errCode: codes.Unavailable,
+			errCode: codes.Internal,
 		},
 		{
-			name: "gRPC status error",
+			name: "gRPC status error ignoring http status",
 			header: []string{
 				":status", "502",
 				"content-type", "application/grpc",
 				"grpc-status", "3",
 			},
-			errCode: codes.Unavailable,
+			errCode: codes.InvalidArgument,
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -161,7 +160,7 @@ func (s) TestHTTPHeaderFrameErrorHandlingNormalTrailer(t *testing.T) {
 		errCode        codes.Code
 	}{
 		{
-			name: "trailer missing grpc-status",
+			name: "trailer missing grpc-status to ignore http status",
 			responseHeader: []string{
 				":status", "200",
 				"content-type", "application/grpc",
@@ -170,10 +169,10 @@ func (s) TestHTTPHeaderFrameErrorHandlingNormalTrailer(t *testing.T) {
 				// trailer missing grpc-status
 				":status", "502",
 			},
-			errCode: codes.Unavailable,
+			errCode: codes.Internal,
 		},
 		{
-			name: "malformed grpc-status-details-bin field with status 404",
+			name: "malformed grpc-status-details-bin field with status 404 to be ignored due to content type",
 			responseHeader: []string{
 				":status", "404",
 				"content-type", "application/grpc",
@@ -183,20 +182,19 @@ func (s) TestHTTPHeaderFrameErrorHandlingNormalTrailer(t *testing.T) {
 				"grpc-status", "0",
 				"grpc-status-details-bin", "????",
 			},
-			errCode: codes.Unimplemented,
+			errCode: codes.Internal,
 		},
 		{
-			name: "malformed grpc-status-details-bin field with status 200",
+			name: "malformed grpc-status-details-bin field with status 404 and no content type",
 			responseHeader: []string{
-				":status", "200",
-				"content-type", "application/grpc",
+				":status", "404",
 			},
 			trailer: []string{
 				// malformed grpc-status-details-bin field
 				"grpc-status", "0",
 				"grpc-status-details-bin", "????",
 			},
-			errCode: codes.Internal,
+			errCode: codes.Unimplemented,
 		},
 	}
 	for _, test := range tests {

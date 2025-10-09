@@ -116,7 +116,7 @@ var (
 	serverWriteBufferSize = flags.IntSlice("serverWriteBufferSize", []int{-1}, "Configures the server write buffer size in bytes. If negative, use the default - may be a comma-separated list")
 	sleepBetweenRPCs      = flags.DurationSlice("sleepBetweenRPCs", []time.Duration{0}, "Configures the maximum amount of time the client should sleep between consecutive RPCs - may be a comma-separated list")
 	connections           = flag.Int("connections", 1, "The number of connections. Each connection will handle maxConcurrentCalls RPC streams")
-	recvBufferPool        = flags.StringWithAllowedValues("recvBufferPool", recvBufferPoolNil, "Configures the shared receive buffer pool. One of: nil, simple, all", allRecvBufferPools)
+	recvBufferPool        = flags.StringWithAllowedValues("recvBufferPool", recvBufferPoolSimple, "Configures the shared receive buffer pool. One of: nil, simple, all", allRecvBufferPools)
 	sharedWriteBuffer     = flags.StringWithAllowedValues("sharedWriteBuffer", toggleModeOff,
 		fmt.Sprintf("Configures both client and server to share write buffer - One of: %v", strings.Join(allToggleModes, ", ")), allToggleModes)
 
