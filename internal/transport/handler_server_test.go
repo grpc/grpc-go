@@ -266,7 +266,7 @@ func (h *mockStatsHandler) TagConn(ctx context.Context, _ *stats.ConnTagInfo) co
 func (h *mockStatsHandler) HandleConn(context.Context, stats.ConnStats) {
 }
 
-func newHandleStreamTest(t *testing.T, statsHandlers []stats.Handler) *handleStreamTest {
+func newHandleStreamTest(t *testing.T, statsHandler stats.Handler) *handleStreamTest {
 	bodyr, bodyw := io.Pipe()
 	req := &http.Request{
 		ProtoMajor: 2,
@@ -280,7 +280,7 @@ func newHandleStreamTest(t *testing.T, statsHandlers []stats.Handler) *handleStr
 		Body: bodyr,
 	}
 	rw := newTestHandlerResponseWriter().(testHandlerResponseWriter)
-	ht, err := NewServerHandlerTransport(rw, req, statsHandlers, mem.DefaultBufferPool())
+	ht, err := NewServerHandlerTransport(rw, req, statsHandler, mem.DefaultBufferPool())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -555,7 +555,7 @@ func (s) TestHandlerTransport_HandleStreams_StatsHandlers(t *testing.T) {
 	statsHandler := &mockStatsHandler{
 		rpcStatsCh: make(chan stats.RPCStats, 2),
 	}
-	hst := newHandleStreamTest(t, []stats.Handler{statsHandler})
+	hst := newHandleStreamTest(t, statsHandler)
 	handleStream := func(s *ServerStream) {
 		if err := s.SendHeader(metadata.New(map[string]string{})); err != nil {
 			t.Error(err)

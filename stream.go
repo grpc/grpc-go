@@ -418,19 +418,21 @@ func (cs *clientStream) newAttemptLocked(isTransparent bool) (*csAttempt, error)
 	ctx := newContextWithRPCInfo(cs.ctx, cs.callInfo.failFast, cs.callInfo.codec, cs.compressorV0, cs.compressorV1)
 	method := cs.callHdr.Method
 	var beginTime time.Time
-	shs := cs.cc.dopts.copts.StatsHandlers
-	for _, sh := range shs {
-		ctx = sh.TagRPC(ctx, &stats.RPCTagInfo{FullMethodName: method, FailFast: cs.callInfo.failFast, NameResolutionDelay: cs.nameResolutionDelay})
+	sh := cs.cc.statsHandler
+	if sh != nil {
 		beginTime = time.Now()
-		begin := &stats.Begin{
+		ctx = sh.TagRPC(ctx, &stats.RPCTagInfo{
+			FullMethodName: method, FailFast: cs.callInfo.failFast,
+			NameResolutionDelay: cs.nameResolutionDelay,
+		})
+		sh.HandleRPC(ctx, &stats.Begin{
 			Client:                    true,
 			BeginTime:                 beginTime,
 			FailFast:                  cs.callInfo.failFast,
 			IsClientStream:            cs.desc.ClientStreams,
 			IsServerStream:            cs.desc.ServerStreams,
 			IsTransparentRetryAttempt: isTransparent,
-		}
-		sh.HandleRPC(ctx, begin)
+		})
 	}
 
 	var trInfo *traceInfo
@@ -461,7 +463,7 @@ func (cs *clientStream) newAttemptLocked(isTransparent bool) (*csAttempt, error)
 		beginTime:      beginTime,
 		cs:             cs,
 		decompressorV0: cs.cc.dopts.dc,
-		statsHandlers:  shs,
+		statsHandler:   sh,
 		trInfo:         trInfo,
 	}, nil
 }
@@ -482,10 +484,8 @@ func (a *csAttempt) getTransport() error {
 	if a.trInfo != nil {
 		a.trInfo.firstLine.SetRemoteAddr(a.transport.RemoteAddr())
 	}
-	if pick.blocked {
-		for _, sh := range a.statsHandlers {
-			sh.HandleRPC(a.ctx, &stats.DelayedPickComplete{})
-		}
+	if pick.blocked && a.statsHandler != nil {
+		a.statsHandler.HandleRPC(a.ctx, &stats.DelayedPickComplete{})
 	}
 	return nil
 }
@@ -615,8 +615,8 @@ type csAttempt struct {
 	// and cleared when the finish method is called.
 	trInfo *traceInfo
 
-	statsHandlers []stats.Handler
-	beginTime     time.Time
+	statsHandler stats.Handler
+	beginTime    time.Time
 
 	// set for newStream errors that may be transparently retried
 	allowTransparentRetry bool
@@ -1110,17 +1110,15 @@ func (a *csAttempt) sendMsg(m any, hdr []byte, payld mem.BufferSlice, dataLength
 		}
 		return io.EOF
 	}
-	if len(a.statsHandlers) != 0 {
-		for _, sh := range a.statsHandlers {
-			sh.HandleRPC(a.ctx, outPayload(true, m, dataLength, payloadLength, time.Now()))
-		}
+	if a.statsHandler != nil {
+		a.statsHandler.HandleRPC(a.ctx, outPayload(true, m, dataLength, payloadLength, time.Now()))
 	}
 	return nil
 }
 
 func (a *csAttempt) recvMsg(m any, payInfo *payloadInfo) (err error) {
 	cs := a.cs
-	if len(a.statsHandlers) != 0 && payInfo == nil {
+	if a.statsHandler != nil && payInfo == nil {
 		payInfo = &payloadInfo{}
 		defer payInfo.free()
 	}
@@ -1163,8 +1161,8 @@ func (a *csAttempt) recvMsg(m any, payInfo *payloadInfo) (err error) {
 		}
 		a.mu.Unlock()
 	}
-	for _, sh := range a.statsHandlers {
-		sh.HandleRPC(a.ctx, &stats.InPayload{
+	if a.statsHandler != nil {
+		a.statsHandler.HandleRPC(a.ctx, &stats.InPayload{
 			Client:           true,
 			RecvTime:         time.Now(),
 			Payload:          m,
@@ -1217,15 +1215,14 @@ func (a *csAttempt) finish(err error) {
 			ServerLoad:    balancerload.Parse(tr),
 		})
 	}
-	for _, sh := range a.statsHandlers {
-		end := &stats.End{
+	if a.statsHandler != nil {
+		a.statsHandler.HandleRPC(a.ctx, &stats.End{
 			Client:    true,
 			BeginTime: a.beginTime,
 			EndTime:   time.Now(),
 			Trailer:   tr,
 			Error:     err,
-		}
-		sh.HandleRPC(a.ctx, end)
+		})
 	}
 	if a.trInfo != nil && a.trInfo.tr != nil {
 		if err == nil {
@@ -1614,7 +1611,7 @@ type serverStream struct {
 	maxSendMessageSize    int
 	trInfo                *traceInfo
 
-	statsHandler []stats.Handler
+	statsHandler stats.Handler
 
 	binlogs []binarylog.MethodLogger
 	// serverHeaderBinlogged indicates whether server header has been logged. It
@@ -1750,10 +1747,8 @@ func (ss *serverStream) SendMsg(m any) (err error) {
 			binlog.Log(ss.ctx, sm)
 		}
 	}
-	if len(ss.statsHandler) != 0 {
-		for _, sh := range ss.statsHandler {
-			sh.HandleRPC(ss.s.Context(), outPayload(false, m, dataLen, payloadLen, time.Now()))
-		}
+	if ss.statsHandler != nil {
+		ss.statsHandler.HandleRPC(ss.s.Context(), outPayload(false, m, dataLen, payloadLen, time.Now()))
 	}
 	return nil
 }
@@ -1784,7 +1779,7 @@ func (ss *serverStream) RecvMsg(m any) (err error) {
 		}
 	}()
 	var payInfo *payloadInfo
-	if len(ss.statsHandler) != 0 || len(ss.binlogs) != 0 {
+	if ss.statsHandler != nil || len(ss.binlogs) != 0 {
 		payInfo = &payloadInfo{}
 		defer payInfo.free()
 	}
@@ -1808,16 +1803,14 @@ func (ss *serverStream) RecvMsg(m any) (err error) {
 		return toRPCErr(err)
 	}
 	ss.recvFirstMsg = true
-	if len(ss.statsHandler) != 0 {
-		for _, sh := range ss.statsHandler {
-			sh.HandleRPC(ss.s.Context(), &stats.InPayload{
-				RecvTime:         time.Now(),
-				Payload:          m,
-				Length:           payInfo.uncompressedBytes.Len(),
-				WireLength:       payInfo.compressedLength + headerLen,
-				CompressedLength: payInfo.compressedLength,
-			})
-		}
+	if ss.statsHandler != nil {
+		ss.statsHandler.HandleRPC(ss.s.Context(), &stats.InPayload{
+			RecvTime:         time.Now(),
+			Payload:          m,
+			Length:           payInfo.uncompressedBytes.Len(),
+			WireLength:       payInfo.compressedLength + headerLen,
+			CompressedLength: payInfo.compressedLength,
+		})
 	}
 	if len(ss.binlogs) != 0 {
 		cm := &binarylog.ClientMessage{

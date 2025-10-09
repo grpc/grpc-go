@@ -50,7 +50,7 @@ import (
 // NewServerHandlerTransport returns a ServerTransport handling gRPC from
 // inside an http.Handler, or writes an HTTP error to w and returns an error.
 // It requires that the http Server supports HTTP/2.
-func NewServerHandlerTransport(w http.ResponseWriter, r *http.Request, stats []stats.Handler, bufferPool mem.BufferPool) (ServerTransport, error) {
+func NewServerHandlerTransport(w http.ResponseWriter, r *http.Request, stats stats.Handler, bufferPool mem.BufferPool) (ServerTransport, error) {
 	if r.Method != http.MethodPost {
 		w.Header().Set("Allow", http.MethodPost)
 		msg := fmt.Sprintf("invalid gRPC request method %q", r.Method)
@@ -170,7 +170,7 @@ type serverHandlerTransport struct {
 	// TODO make sure this is consistent across handler_server and http2_server
 	contentSubtype string
 
-	stats  []stats.Handler
+	stats  stats.Handler
 	logger *grpclog.PrefixLogger
 
 	bufferPool mem.BufferPool
@@ -274,15 +274,13 @@ func (ht *serverHandlerTransport) writeStatus(s *ServerStream, st *status.Status
 		}
 	})
 
-	if err == nil { // transport has not been closed
+	if err == nil && ht.stats != nil { // transport has not been closed
 		// Note: The trailer fields are compressed with hpack after this call returns.
 		// No WireLength field is set here.
 		s.hdrMu.Lock()
-		for _, sh := range ht.stats {
-			sh.HandleRPC(s.Context(), &stats.OutTrailer{
-				Trailer: s.trailer.Copy(),
-			})
-		}
+		ht.stats.HandleRPC(s.Context(), &stats.OutTrailer{
+			Trailer: s.trailer.Copy(),
+		})
 		s.hdrMu.Unlock()
 	}
 	ht.Close(errors.New("finished writing status"))
@@ -374,15 +372,13 @@ func (ht *serverHandlerTransport) writeHeader(s *ServerStream, md metadata.MD) e
 		ht.rw.(http.Flusher).Flush()
 	})
 
-	if err == nil {
-		for _, sh := range ht.stats {
-			// Note: The header fields are compressed with hpack after this call returns.
-			// No WireLength field is set here.
-			sh.HandleRPC(s.Context(), &stats.OutHeader{
-				Header:      md.Copy(),
-				Compression: s.sendCompress,
-			})
-		}
+	if err == nil && ht.stats != nil {
+		// Note: The header fields are compressed with hpack after this call returns.
+		// No WireLength field is set here.
+		ht.stats.HandleRPC(s.Context(), &stats.OutHeader{
+			Header:      md.Copy(),
+			Compression: s.sendCompress,
+		})
 	}
 	return err
 }
