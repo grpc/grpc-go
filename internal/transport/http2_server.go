@@ -640,9 +640,7 @@ func (t *http2Server) operateHeaders(ctx context.Context, frame *http2.MetaHeade
 		t.channelz.SocketMetrics.StreamsStarted.Add(1)
 		t.channelz.SocketMetrics.LastRemoteStreamCreatedTimestamp.Store(time.Now().UnixNano())
 	}
-	s.requestRead = func(n int) {
-		t.adjustWindow(s, uint32(n))
-	}
+	s.readRequester = s
 	s.ctxDone = s.ctx.Done()
 	s.Stream.wq.init(defaultWriteQuota, s.ctxDone)
 	s.trReader = transportReader{
@@ -651,9 +649,7 @@ func (t *http2Server) operateHeaders(ctx context.Context, frame *http2.MetaHeade
 			ctxDone: s.ctxDone,
 			recv:    &s.buf,
 		},
-		windowHandler: func(n int) {
-			t.updateWindow(s, uint32(n))
-		},
+		windowHandler: s,
 	}
 	// Register the stream with loopy.
 	t.controlBuf.put(&registerStream{
