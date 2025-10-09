@@ -45,6 +45,7 @@ import (
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
+	extstats "google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
 
 	_ "google.golang.org/grpc/balancer/roundrobin"           // To register roundrobin.
@@ -211,6 +212,7 @@ func NewClient(target string, opts ...DialOption) (conn *ClientConn, err error) 
 	cc.pickerWrapper = newPickerWrapper()
 
 	cc.metricsRecorderList = stats.NewMetricsRecorderList(cc.dopts.copts.StatsHandlers)
+	cc.statsHandler = stats.NewCombinedHandler(cc.dopts.copts.StatsHandlers...)
 
 	cc.initIdleStateLocked() // Safe to call without the lock, since nothing else has a reference to cc.
 	cc.idlenessMgr = idle.NewManager((*idler)(cc), cc.dopts.idleTimeout)
@@ -622,6 +624,7 @@ type ClientConn struct {
 	resolverBuilder     resolver.Builder  // See initParsedTargetAndResolverBuilder().
 	idlenessMgr         *idle.Manager
 	metricsRecorderList *stats.MetricsRecorderList
+	statsHandler        extstats.Handler
 
 	// The following provide their own synchronization, and therefore don't
 	// require cc.mu to be held to access them.
