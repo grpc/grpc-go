@@ -81,10 +81,10 @@ func (s) TestBuildXDSClientConfig_Success(t *testing.T) {
 					Node:        clients.Node{ID: node.GetId(), Cluster: node.GetCluster(), Metadata: node.Metadata, Locality: clients.Locality{Region: node.Locality.Region, Zone: node.Locality.Zone, SubZone: node.Locality.SubZone}, UserAgentName: node.UserAgentName, UserAgentVersion: node.GetUserAgentVersion()},
 					Authorities: map[string]xdsclient.Authority{},
 					ResourceTypes: map[string]xdsclient.ResourceType{
-						version.V3ListenerURL:    {TypeURL: version.V3ListenerURL, TypeName: xdsresource.ListenerResourceTypeName, AllResourcesRequiredInSotW: true, Decoder: xdsresource.NewGenericListenerResourceTypeDecoder(c)},
-						version.V3RouteConfigURL: {TypeURL: version.V3RouteConfigURL, TypeName: xdsresource.RouteConfigTypeName, AllResourcesRequiredInSotW: false, Decoder: xdsresource.NewGenericRouteConfigResourceTypeDecoder()},
-						version.V3ClusterURL:     {TypeURL: version.V3ClusterURL, TypeName: xdsresource.ClusterResourceTypeName, AllResourcesRequiredInSotW: true, Decoder: xdsresource.NewGenericClusterResourceTypeDecoder(c, gServerCfgMap)},
-						version.V3EndpointsURL:   {TypeURL: version.V3EndpointsURL, TypeName: xdsresource.EndpointsResourceTypeName, AllResourcesRequiredInSotW: false, Decoder: xdsresource.NewGenericEndpointsResourceTypeDecoder()},
+						version.V3ListenerURL:    {TypeURL: version.V3ListenerURL, TypeName: xdsresource.ListenerResourceTypeName, AllResourcesRequiredInSotW: true, Decoder: xdsresource.NewListenerResourceTypeDecoder(c, gServerCfgMap)},
+						version.V3RouteConfigURL: {TypeURL: version.V3RouteConfigURL, TypeName: xdsresource.RouteConfigTypeName, AllResourcesRequiredInSotW: false, Decoder: xdsresource.NewRouteConfigResourceTypeDecoder()},
+						version.V3ClusterURL:     {TypeURL: version.V3ClusterURL, TypeName: xdsresource.ClusterResourceTypeName, AllResourcesRequiredInSotW: true, Decoder: xdsresource.NewClusterResourceTypeDecoder(c, gServerCfgMap)},
+						version.V3EndpointsURL:   {TypeURL: version.V3EndpointsURL, TypeName: xdsresource.EndpointsResourceTypeName, AllResourcesRequiredInSotW: false, Decoder: xdsresource.NewEndpointsResourceTypeDecoder()},
 					},
 					MetricsReporter: &metricsReporter{recorder: stats.NewTestMetricsRecorder(), target: testTargetName},
 					TransportBuilder: grpctransport.NewBuilder(map[string]grpctransport.Config{
@@ -119,10 +119,10 @@ func (s) TestBuildXDSClientConfig_Success(t *testing.T) {
 					Node:        clients.Node{ID: node.GetId(), Cluster: node.GetCluster(), Metadata: node.Metadata, UserAgentName: node.UserAgentName, UserAgentVersion: node.GetUserAgentVersion()},
 					Authorities: map[string]xdsclient.Authority{"auth1": {XDSServers: []xdsclient.ServerConfig{expTopLevelS}}, "auth2": {XDSServers: []xdsclient.ServerConfig{expAuth2S}}},
 					ResourceTypes: map[string]xdsclient.ResourceType{
-						version.V3ListenerURL:    {TypeURL: version.V3ListenerURL, TypeName: xdsresource.ListenerResourceTypeName, AllResourcesRequiredInSotW: true, Decoder: xdsresource.NewGenericListenerResourceTypeDecoder(c)},
-						version.V3RouteConfigURL: {TypeURL: version.V3RouteConfigURL, TypeName: xdsresource.RouteConfigTypeName, AllResourcesRequiredInSotW: false, Decoder: xdsresource.NewGenericRouteConfigResourceTypeDecoder()},
-						version.V3ClusterURL:     {TypeURL: version.V3ClusterURL, TypeName: xdsresource.ClusterResourceTypeName, AllResourcesRequiredInSotW: true, Decoder: xdsresource.NewGenericClusterResourceTypeDecoder(c, gSCfgMap)},
-						version.V3EndpointsURL:   {TypeURL: version.V3EndpointsURL, TypeName: xdsresource.EndpointsResourceTypeName, AllResourcesRequiredInSotW: false, Decoder: xdsresource.NewGenericEndpointsResourceTypeDecoder()},
+						version.V3ListenerURL:    {TypeURL: version.V3ListenerURL, TypeName: xdsresource.ListenerResourceTypeName, AllResourcesRequiredInSotW: true, Decoder: xdsresource.NewListenerResourceTypeDecoder(c, gSCfgMap)},
+						version.V3RouteConfigURL: {TypeURL: version.V3RouteConfigURL, TypeName: xdsresource.RouteConfigTypeName, AllResourcesRequiredInSotW: false, Decoder: xdsresource.NewRouteConfigResourceTypeDecoder()},
+						version.V3ClusterURL:     {TypeURL: version.V3ClusterURL, TypeName: xdsresource.ClusterResourceTypeName, AllResourcesRequiredInSotW: true, Decoder: xdsresource.NewClusterResourceTypeDecoder(c, gSCfgMap)},
+						version.V3EndpointsURL:   {TypeURL: version.V3EndpointsURL, TypeName: xdsresource.EndpointsResourceTypeName, AllResourcesRequiredInSotW: false, Decoder: xdsresource.NewEndpointsResourceTypeDecoder()},
 					},
 					MetricsReporter: &metricsReporter{recorder: stats.NewTestMetricsRecorder(), target: testTargetName},
 					TransportBuilder: grpctransport.NewBuilder(map[string]grpctransport.Config{
@@ -151,10 +151,10 @@ func (s) TestBuildXDSClientConfig_Success(t *testing.T) {
 					Node:        clients.Node{ID: node.GetId(), Cluster: node.GetCluster(), Metadata: node.Metadata, UserAgentName: node.UserAgentName, UserAgentVersion: node.GetUserAgentVersion()},
 					Authorities: map[string]xdsclient.Authority{},
 					ResourceTypes: map[string]xdsclient.ResourceType{
-						version.V3ListenerURL:    {TypeURL: version.V3ListenerURL, TypeName: xdsresource.ListenerResourceTypeName, AllResourcesRequiredInSotW: true, Decoder: xdsresource.NewGenericListenerResourceTypeDecoder(c)},
-						version.V3RouteConfigURL: {TypeURL: version.V3RouteConfigURL, TypeName: xdsresource.RouteConfigTypeName, AllResourcesRequiredInSotW: false, Decoder: xdsresource.NewGenericRouteConfigResourceTypeDecoder()},
-						version.V3ClusterURL:     {TypeURL: version.V3ClusterURL, TypeName: xdsresource.ClusterResourceTypeName, AllResourcesRequiredInSotW: true, Decoder: xdsresource.NewGenericClusterResourceTypeDecoder(c, gServerCfgMap)},
-						version.V3EndpointsURL:   {TypeURL: version.V3EndpointsURL, TypeName: xdsresource.EndpointsResourceTypeName, AllResourcesRequiredInSotW: false, Decoder: xdsresource.NewGenericEndpointsResourceTypeDecoder()},
+						version.V3ListenerURL:    {TypeURL: version.V3ListenerURL, TypeName: xdsresource.ListenerResourceTypeName, AllResourcesRequiredInSotW: true, Decoder: xdsresource.NewListenerResourceTypeDecoder(c, gServerCfgMap)},
+						version.V3RouteConfigURL: {TypeURL: version.V3RouteConfigURL, TypeName: xdsresource.RouteConfigTypeName, AllResourcesRequiredInSotW: false, Decoder: xdsresource.NewRouteConfigResourceTypeDecoder()},
+						version.V3ClusterURL:     {TypeURL: version.V3ClusterURL, TypeName: xdsresource.ClusterResourceTypeName, AllResourcesRequiredInSotW: true, Decoder: xdsresource.NewClusterResourceTypeDecoder(c, gServerCfgMap)},
+						version.V3EndpointsURL:   {TypeURL: version.V3EndpointsURL, TypeName: xdsresource.EndpointsResourceTypeName, AllResourcesRequiredInSotW: false, Decoder: xdsresource.NewEndpointsResourceTypeDecoder()},
 					},
 					MetricsReporter: &metricsReporter{recorder: stats.NewTestMetricsRecorder(), target: testTargetName},
 					TransportBuilder: grpctransport.NewBuilder(map[string]grpctransport.Config{
@@ -183,10 +183,10 @@ func (s) TestBuildXDSClientConfig_Success(t *testing.T) {
 					Node:        clients.Node{ID: node.GetId(), Cluster: node.GetCluster(), Metadata: node.Metadata, UserAgentName: node.UserAgentName, UserAgentVersion: node.GetUserAgentVersion()},
 					Authorities: map[string]xdsclient.Authority{},
 					ResourceTypes: map[string]xdsclient.ResourceType{
-						version.V3ListenerURL:    {TypeURL: version.V3ListenerURL, TypeName: xdsresource.ListenerResourceTypeName, AllResourcesRequiredInSotW: true, Decoder: xdsresource.NewGenericListenerResourceTypeDecoder(c)},
-						version.V3RouteConfigURL: {TypeURL: version.V3RouteConfigURL, TypeName: xdsresource.RouteConfigTypeName, AllResourcesRequiredInSotW: false, Decoder: xdsresource.NewGenericRouteConfigResourceTypeDecoder()},
-						version.V3ClusterURL:     {TypeURL: version.V3ClusterURL, TypeName: xdsresource.ClusterResourceTypeName, AllResourcesRequiredInSotW: true, Decoder: xdsresource.NewGenericClusterResourceTypeDecoder(c, gServerCfgMap)},
-						version.V3EndpointsURL:   {TypeURL: version.V3EndpointsURL, TypeName: xdsresource.EndpointsResourceTypeName, AllResourcesRequiredInSotW: false, Decoder: xdsresource.NewGenericEndpointsResourceTypeDecoder()},
+						version.V3ListenerURL:    {TypeURL: version.V3ListenerURL, TypeName: xdsresource.ListenerResourceTypeName, AllResourcesRequiredInSotW: true, Decoder: xdsresource.NewListenerResourceTypeDecoder(c, gServerCfgMap)},
+						version.V3RouteConfigURL: {TypeURL: version.V3RouteConfigURL, TypeName: xdsresource.RouteConfigTypeName, AllResourcesRequiredInSotW: false, Decoder: xdsresource.NewRouteConfigResourceTypeDecoder()},
+						version.V3ClusterURL:     {TypeURL: version.V3ClusterURL, TypeName: xdsresource.ClusterResourceTypeName, AllResourcesRequiredInSotW: true, Decoder: xdsresource.NewClusterResourceTypeDecoder(c, gServerCfgMap)},
+						version.V3EndpointsURL:   {TypeURL: version.V3EndpointsURL, TypeName: xdsresource.EndpointsResourceTypeName, AllResourcesRequiredInSotW: false, Decoder: xdsresource.NewEndpointsResourceTypeDecoder()},
 					},
 					MetricsReporter: &metricsReporter{recorder: stats.NewTestMetricsRecorder(), target: testTargetName},
 					TransportBuilder: grpctransport.NewBuilder(map[string]grpctransport.Config{

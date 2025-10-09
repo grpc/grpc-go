@@ -172,7 +172,7 @@ func (p *Pool) DumpResources() *v3statuspb.ClientStatusResponse {
 
 	resp := &v3statuspb.ClientStatusResponse{}
 	for key, client := range p.clients {
-		b, err := client.DumpResources()
+		b, err := client.xdsClient.DumpResources()
 		if err != nil {
 			return nil
 		}
@@ -243,7 +243,7 @@ func (p *Pool) clientRefCountedClose(name string) {
 	// This attempts to close the transport to the management server and could
 	// theoretically call back into the xdsclient package again and deadlock.
 	// Hence, this needs to be called without holding the lock.
-	client.Close()
+	client.xdsClient.Close()
 
 	xdsClientImplCloseHook(name)
 }
