@@ -37,11 +37,11 @@ type listenerResourceDecoder struct {
 
 func (d *listenerResourceDecoder) Decode(resource xdsclient.AnyProto, _ xdsclient.DecodeOptions) (*xdsclient.DecodeResult, error) {
 	name, listener, err := unmarshalListenerResource(resource.ToAny())
-	switch {
-	case name == "":
+	if name == "" {
 		// Name is unset only when protobuf deserialization fails.
 		return nil, err
-	case err != nil:
+	}
+	if err != nil {
 		// Protobuf deserialization succeeded, but resource validation failed.
 		return &xdsclient.DecodeResult{
 			Name:     name,
