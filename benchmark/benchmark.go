@@ -23,7 +23,6 @@ package benchmark
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -277,22 +276,8 @@ func StartServer(info ServerInfo, opts ...grpc.ServerOption) func() {
 	}
 }
 
-// DoUnaryCall performs a unary RPC with given stub and request and response sizes.
-func DoUnaryCall(tc testgrpc.BenchmarkServiceClient, reqSize, respSize int) error {
-	pl := NewPayload(testpb.PayloadType_COMPRESSABLE, reqSize)
-	req := &testpb.SimpleRequest{
-		ResponseType: pl.Type,
-		ResponseSize: int32(respSize),
-		Payload:      pl,
-	}
-	if _, err := tc.UnaryCall(context.Background(), req); err != nil {
-		return fmt.Errorf("/BenchmarkService/UnaryCall(_, _) = _, %v, want _, <nil>", err)
-	}
-	return nil
-}
-
-// DoUnaryCallWithContext performs a unary RPC with propagated context and given stub and request and response sizes.
-func DoUnaryCallWithContext(ctx context.Context, tc testgrpc.BenchmarkServiceClient, reqSize, respSize int) error {
+// DoUnaryCall performs a unary RPC with given context, stub and request and response sizes.
+func DoUnaryCall(ctx context.Context, tc testgrpc.BenchmarkServiceClient, reqSize, respSize int) error {
 	pl := NewPayload(testpb.PayloadType_COMPRESSABLE, reqSize)
 	req := &testpb.SimpleRequest{
 		ResponseType: pl.Type,
@@ -300,9 +285,6 @@ func DoUnaryCallWithContext(ctx context.Context, tc testgrpc.BenchmarkServiceCli
 		Payload:      pl,
 	}
 	if _, err := tc.UnaryCall(ctx, req); err != nil {
-		if status.Code(err) == codes.Canceled || errors.Is(err, context.Canceled) {
-			return err
-		}
 		return fmt.Errorf("/BenchmarkService/UnaryCall(_, _) = _, %v, want _, <nil>", err)
 	}
 	return nil

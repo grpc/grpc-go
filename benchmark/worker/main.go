@@ -163,7 +163,10 @@ func (s *workerServer) RunClient(stream testgrpc.WorkerService_RunClientServer) 
 				logger.Infof("client setup received when client already exists, shutting down the existing client")
 				bc.shutdown()
 			}
-			bc, err = startBenchmarkClient(t.Setup)
+
+			ctx, cancel := context.WithCancel(stream.Context())
+			defer cancel()
+			bc, err = startBenchmarkClient(ctx, t.Setup)
 			if err != nil {
 				return err
 			}
