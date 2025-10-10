@@ -160,7 +160,7 @@ func (s) TestADS_ResourcesAreRequestedAfterStreamRestart(t *testing.T) {
 
 	// Verify the update received by the watcher.
 	wantListenerUpdate := listenerUpdateErrTuple{
-		update: xdsresource.ListenerUpdate{
+		update: &xdsresource.ListenerUpdate{
 			RouteConfigName: routeConfigName,
 			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
 		},

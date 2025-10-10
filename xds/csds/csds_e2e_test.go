@@ -71,7 +71,7 @@ func Test(t *testing.T) {
 
 type nopListenerWatcher struct{}
 
-func (nopListenerWatcher) ResourceChanged(_ *xdsresource.ListenerResourceData, onDone func()) {
+func (nopListenerWatcher) ResourceChanged(_ *xdsresource.ListenerUpdate, onDone func()) {
 	onDone()
 }
 func (nopListenerWatcher) ResourceError(_ error, onDone func()) {
@@ -138,7 +138,7 @@ func newBlockingListenerWatcher(testCtxDone <-chan struct{}) *blockingListenerWa
 	}
 }
 
-func (w *blockingListenerWatcher) ResourceChanged(_ *xdsresource.ListenerResourceData, onDone func()) {
+func (w *blockingListenerWatcher) ResourceChanged(_ *xdsresource.ListenerUpdate, onDone func()) {
 	writeOnDone(w.testCtxDone, w.onDoneCh, onDone)
 }
 func (w *blockingListenerWatcher) ResourceError(_ error, onDone func()) {

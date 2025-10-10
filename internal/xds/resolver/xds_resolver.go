@@ -237,7 +237,7 @@ type xdsResolver struct {
 	ldsResourceName     string
 	listenerWatcher     *listenerWatcher
 	listenerUpdateRecvd bool
-	currentListener     xdsresource.ListenerUpdate
+	currentListener     *xdsresource.ListenerUpdate
 
 	rdsResourceName        string
 	routeConfigWatcher     *routeConfigWatcher
@@ -510,7 +510,7 @@ func (r *xdsResolver) onResourceError(err error) {
 }
 
 // Only executed in the context of a serializer callback.
-func (r *xdsResolver) onListenerResourceUpdate(update xdsresource.ListenerUpdate) {
+func (r *xdsResolver) onListenerResourceUpdate(update *xdsresource.ListenerUpdate) {
 	if r.logger.V(2) {
 		r.logger.Infof("Received update for Listener resource %q: %v", r.ldsResourceName, pretty.ToJSON(update))
 	}

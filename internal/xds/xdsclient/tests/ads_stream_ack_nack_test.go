@@ -154,7 +154,7 @@ func (s) TestADS_ACK_NACK_Simple(t *testing.T) {
 
 	// Verify the update received by the watcher.
 	wantUpdate := listenerUpdateErrTuple{
-		update: xdsresource.ListenerUpdate{
+		update: &xdsresource.ListenerUpdate{
 			RouteConfigName: routeConfigName,
 			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
 		},
@@ -459,7 +459,7 @@ func (s) TestADS_ACK_NACK_ResourceIsNotRequestedAnymore(t *testing.T) {
 
 	// Verify the update received by the watcher.
 	wantUpdate := listenerUpdateErrTuple{
-		update: xdsresource.ListenerUpdate{
+		update: &xdsresource.ListenerUpdate{
 			RouteConfigName: routeConfigName,
 			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
 		},
