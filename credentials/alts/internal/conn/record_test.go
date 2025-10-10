@@ -168,8 +168,8 @@ func (s) TestSmallReadBuffer(t *testing.T) {
 func testLargeMsg(t *testing.T, rp string) {
 	clientConn, serverConn := newConnPair(rp, nil, nil)
 	// msgLen is such that the length in the framing is larger than the
-	// default size of one frame.
-	msgLen := altsRecordDefaultLength - msgTypeFieldSize - clientConn.crypto.EncryptionOverhead() + 1
+	// max size of one frame.
+	msgLen := altsRecordLengthLimit - msgTypeFieldSize - clientConn.crypto.EncryptionOverhead() + 1
 	msg := make([]byte, msgLen)
 	if n, err := clientConn.Write(msg); n != len(msg) || err != nil {
 		t.Fatalf("Write() = %v, %v; want %v, <nil>", n, err, len(msg))
@@ -292,7 +292,7 @@ func testWriteLargeData(t *testing.T, rp string) {
 	clientConn, serverConn := newConnPair(rp, nil, nil)
 	// Message size is intentionally chosen to not be multiple of
 	// payloadLengthLimit.
-	msgSize := altsWriteBufferMaxSize + (100 * 1024)
+	msgSize := altsRecordLengthLimit + (100 * 1024)
 	clientMsg := make([]byte, msgSize)
 	for i := 0; i < msgSize; i++ {
 		clientMsg[i] = 0xAA
