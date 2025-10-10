@@ -36,7 +36,7 @@ func newListenerWatcher(resourceName string, parent *xdsResolver) *listenerWatch
 	return lw
 }
 
-func (l *listenerWatcher) ResourceChanged(update xdsresource.ListenerUpdate, onDone func()) {
+func (l *listenerWatcher) ResourceChanged(update *xdsresource.ListenerUpdate, onDone func()) {
 	handleUpdate := func(context.Context) { l.parent.onListenerResourceUpdate(update); onDone() }
 	l.parent.serializer.ScheduleOr(handleUpdate, onDone)
 }

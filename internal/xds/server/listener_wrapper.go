@@ -388,7 +388,7 @@ type ldsWatcher struct {
 	name   string
 }
 
-func (lw *ldsWatcher) ResourceChanged(update xdsresource.ListenerUpdate, onDone func()) {
+func (lw *ldsWatcher) ResourceChanged(update *xdsresource.ListenerUpdate, onDone func()) {
 	defer onDone()
 	if lw.parent.closed.HasFired() {
 		lw.logger.Warningf("Resource %q received update: %#v after listener was closed", lw.name, update)

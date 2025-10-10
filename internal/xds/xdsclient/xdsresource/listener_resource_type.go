@@ -116,7 +116,7 @@ func (l *ListenerResourceData) Bytes() []byte {
 // contains an exhaustive list of what method is invoked under what conditions.
 type ListenerWatcher interface {
 	// ResourceChanged indicates a new version of the resource is available.
-	ResourceChanged(resource ListenerUpdate, done func())
+	ResourceChanged(resource *ListenerUpdate, done func())
 
 	// ResourceError indicates an error occurred while trying to fetch or
 	// decode the associated resource. The previous version of the resource
@@ -137,7 +137,7 @@ type delegatingListenerWatcher struct {
 
 func (d *delegatingListenerWatcher) ResourceChanged(data xdsclient.ResourceData, onDone func()) {
 	l := data.(*ListenerResourceData)
-	d.watcher.ResourceChanged(l.Resource, onDone)
+	d.watcher.ResourceChanged(&l.Resource, onDone)
 }
 func (d *delegatingListenerWatcher) ResourceError(err error, onDone func()) {
 	d.watcher.ResourceError(err, onDone)
