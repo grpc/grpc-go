@@ -357,14 +357,14 @@ func (r *xdsResolver) newConfigSelector() *configSelector {
 			ci.cfg = xdsChildConfig{ChildPolicy: balancerConfig(r.currentRouteConfig.ClusterSpecifierPlugins[rt.ClusterSpecifierPlugin])}
 			cs.clusters[clusterName] = ci
 		} else {
-			for cluster, wc := range rt.WeightedClusters {
-				clusterName := clusterPrefix + cluster
+			for _, wc := range rt.WeightedClusters {
+				clusterName := clusterPrefix + wc.Name
 				clusters.Add(&routeCluster{
 					name:                     clusterName,
 					httpFilterConfigOverride: wc.HTTPFilterConfigOverride,
 				}, int64(wc.Weight))
 				ci := r.addOrGetActiveClusterInfo(clusterName)
-				ci.cfg = xdsChildConfig{ChildPolicy: newBalancerConfig(cdsName, cdsBalancerConfig{Cluster: cluster})}
+				ci.cfg = xdsChildConfig{ChildPolicy: newBalancerConfig(cdsName, cdsBalancerConfig{Cluster: wc.Name})}
 				cs.clusters[clusterName] = ci
 			}
 		}

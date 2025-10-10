@@ -179,3 +179,11 @@ func (s *ServerStream) SetTrailer(md metadata.MD) error {
 	s.hdrMu.Unlock()
 	return nil
 }
+
+func (s *ServerStream) requestRead(n int) {
+	s.st.adjustWindow(s, uint32(n))
+}
+
+func (s *ServerStream) updateWindow(n int) {
+	s.st.updateWindow(s, uint32(n))
+}

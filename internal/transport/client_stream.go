@@ -144,3 +144,11 @@ func (s *ClientStream) TrailersOnly() bool {
 func (s *ClientStream) Status() *status.Status {
 	return s.status
 }
+
+func (s *ClientStream) requestRead(n int) {
+	s.ct.adjustWindow(s, uint32(n))
+}
+
+func (s *ClientStream) updateWindow(n int) {
+	s.ct.updateWindow(s, uint32(n))
+}
