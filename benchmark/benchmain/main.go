@@ -537,7 +537,7 @@ func prepareMessages(streams [][]testgrpc.BenchmarkService_StreamingCallClient, 
 // Makes a UnaryCall gRPC request using the given BenchmarkServiceClient and
 // request and response sizes.
 func unaryCaller(client testgrpc.BenchmarkServiceClient, reqSize, respSize int) {
-	if err := benchmark.DoUnaryCall(context.TODO(), client, reqSize, respSize); err != nil {
+	if err := benchmark.DoUnaryCall(context.Background(), client, reqSize, respSize); err != nil {
 		logger.Fatalf("DoUnaryCall failed: %v", err)
 	}
 }
