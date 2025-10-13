@@ -589,7 +589,7 @@ func (s) TestGetConfiguration_Success(t *testing.T) {
 	}
 }
 
-// Tests Istio-style bootstrap configurations with JWT call credentials
+// Tests Istio-style bootstrap configurations with JWT call credentials.
 func (s) TestGetConfiguration_IstioStyleWithCallCreds(t *testing.T) {
 	original := envconfig.XDSBootstrapCallCredsEnabled
 	envconfig.XDSBootstrapCallCredsEnabled = true
@@ -1606,7 +1606,7 @@ func (s) TestBootstrap_SelectedChannelCredsAndCallCreds(t *testing.T) {
 				]
 			}`,
 			wantCallCreds:     2,
-			wantTransportType: "tls", // the first channel creds is selected
+			wantTransportType: "tls", // The first channel creds is selected.
 		},
 		{
 			name: "JWT_call_creds_with_insecure_channel_creds",

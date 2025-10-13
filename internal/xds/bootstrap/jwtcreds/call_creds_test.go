@@ -96,7 +96,7 @@ func (s) TestNewCallCredentialsWithValidConfig(t *testing.T) {
 		defer cleanup()
 	}
 
-	// Test that call credentials get used
+	// Test that call credentials get used.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultCtxTimeout)
 	defer cancel()
 	ctx = credentials.NewContextWithRequestInfo(ctx, credentials.RequestInfo{
@@ -135,7 +135,7 @@ func (s) TestCallCredentials_Cleanup(t *testing.T) {
 	cleanup()
 }
 
-// testAuthInfo implements credentials.AuthInfo for testing
+// testAuthInfo implements credentials.AuthInfo for testing.
 type testAuthInfo struct {
 	secLevel credentials.SecurityLevel
 }
@@ -148,7 +148,7 @@ func (t *testAuthInfo) GetCommonAuthInfo() credentials.CommonAuthInfo {
 	return credentials.CommonAuthInfo{SecurityLevel: t.secLevel}
 }
 
-// createTestJWT creates a test JWT token for testing
+// createTestJWT creates a test JWT token for testing.
 func createTestJWT(t *testing.T) string {
 	t.Helper()
 

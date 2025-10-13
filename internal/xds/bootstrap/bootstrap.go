@@ -84,8 +84,8 @@ func (cc ChannelCreds) String() string {
 	return cc.Type + "-" + string(b)
 }
 
-// CallCredsConfig contains the call credentials configuration for individual RPCs.
-// It implements gRFC A97 call credentials structure.
+// CallCredsConfig contains the call credentials configuration to be used on
+// RPCs to the management server.
 type CallCredsConfig struct {
 	// Type contains a name identifying the call credentials type.
 	Type string `json:"type,omitempty"`
@@ -102,7 +102,7 @@ func (cc CallCredsConfig) String() string {
 	if cc.Config == nil {
 		return cc.Type
 	}
-	// We do not expect the Marshal call to fail since we wrote to cc.Config
+	// We do not expect the Marshal call to fail since we wrote to cc.Config.
 	b, _ := json.Marshal(cc.Config)
 	return cc.Type + "-" + string(b)
 }
