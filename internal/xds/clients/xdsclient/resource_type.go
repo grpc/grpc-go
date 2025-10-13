@@ -61,29 +61,29 @@ type Decoder interface {
 	//
 	// If unmarshalling or validation fails, it returns a non-nil error.
 	// Otherwise, returns a fully populated DecodeResult.
-	Decode(resource AnyProto, options DecodeOptions) (*DecodeResult, error)
+	Decode(resource *AnyProto, options DecodeOptions) (*DecodeResult, error)
 }
 
 // AnyProto contains the type URL and serialized proto data of an xDS resource.
 type AnyProto struct {
-	TypeURL string
-	Value   []byte
+	typeURL string
+	value   []byte
 }
 
 // NewAnyProto creates an AnyProto from an anypb.Any. Must be called with a
 // non-nil argument.
 func NewAnyProto(a *anypb.Any) *AnyProto {
 	return &AnyProto{
-		TypeURL: a.TypeUrl,
-		Value:   a.Value,
+		typeURL: a.TypeUrl,
+		value:   a.Value,
 	}
 }
 
 // ToAny converts an AnyProto to an anypb.Any. Never returns nil.
 func (a *AnyProto) ToAny() *anypb.Any {
 	return &anypb.Any{
-		TypeUrl: a.TypeURL,
-		Value:   a.Value,
+		TypeUrl: a.typeURL,
+		Value:   a.value,
 	}
 }
 

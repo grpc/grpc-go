@@ -35,7 +35,7 @@ type listenerResourceDecoder struct {
 	bootstrapConfig *bootstrap.Config
 }
 
-func (d *listenerResourceDecoder) Decode(resource xdsclient.AnyProto, _ xdsclient.DecodeOptions) (*xdsclient.DecodeResult, error) {
+func (d *listenerResourceDecoder) Decode(resource *xdsclient.AnyProto, _ xdsclient.DecodeOptions) (*xdsclient.DecodeResult, error) {
 	name, listener, err := unmarshalListenerResource(resource.ToAny())
 	if name == "" {
 		// Name is unset only when protobuf deserialization fails.
