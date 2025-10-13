@@ -276,7 +276,7 @@ func (s) TestDelegatingResolverwithDNSAndProxyWithNoTargetResolutionHappyPaths(t
 			defaultPortEnvVar:  true,
 		},
 		{
-			name:               "no port with default port env variable diabled",
+			name:               "no port with default port env variable disabled",
 			target:             "test.com",
 			wantConnectAddress: "test.com",
 			defaultPortEnvVar:  false,

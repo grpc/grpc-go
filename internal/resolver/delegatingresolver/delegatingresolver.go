@@ -230,23 +230,26 @@ func parseTarget(target string) (string, error) {
 	if target == "" {
 		return "", fmt.Errorf("missing address")
 	}
-	if host, port, err := net.SplitHostPort(target); err == nil {
-		if port == "" {
-			// If the port field is empty (target ends with colon), e.g. "[::1]:",
-			// this is an error.
-			return "", fmt.Errorf("missing port after port-separator colon")
-		}
-		// target has port
-		if host == "" {
-			host = "localhost"
-		}
-		return net.JoinHostPort(host, port), nil
+
+	host, port, err := net.SplitHostPort(target)
+	if err != nil {
+		// If SplitHostPort fails, it's likely because the port is missing.
+		// We append the default port and return the result.
+		return net.JoinHostPort(target, defaultPort), nil
 	}
-	if host, port, err := net.SplitHostPort(target + ":" + defaultPort); err == nil {
-		// target doesn't have port
-		return net.JoinHostPort(host, port), nil
+
+	// If SplitHostPort succeeds, we check for edge cases.
+	if port == "" {
+		// A success with an empty port means the target had a trailing colon,
+		// e.g., "host:", which is an error.
+		return "", fmt.Errorf("missing port after port-separator colon")
 	}
-	return net.JoinHostPort(target, defaultPort), nil
+	if host == "" {
+		// A success with an empty host means the target was like ":80".
+		// We default the host to "localhost".
+		host = "localhost"
+	}
+	return net.JoinHostPort(host, port), nil
 }
 
 func skipProxy(address resolver.Address) bool {
