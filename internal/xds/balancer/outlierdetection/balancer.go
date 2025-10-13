@@ -64,7 +64,7 @@ var (
 
 	ejectionsUnenforcedMetric = estats.RegisterInt64Count(estats.MetricDescriptor{
 		Name:        "grpc.lb.outlier_detection.ejections_unenforced",
-		Description: "EXPERIMENTAL. Number of unenforced outlier ejections due to either max ejection percentage or enforcement_percentage",
+		Description: "EXPERIMENTAL. Number of unenforced outlier ejections due to either `max_ejection_percentage` or `enforcement_percentage`",
 		Unit:        "ejection",
 		Labels:      []string{"grpc.target", "grpc.lb.outlier_detection.detection_method", "grpc.lb.outlier_detection.unenforced_reason"},
 		Default:     false,
@@ -87,7 +87,7 @@ func (bb) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Ba
 		pickerUpdateCh:  buffer.NewUnbounded(),
 		channelzParent:  bOpts.ChannelzParent,
 		endpoints:       resolver.NewEndpointMap[*endpointInfo](),
-		metricsRecorder: cc.MetricsRecorder(),
+		metricsRecorder: cc.MetricsRecorder(), // we use an explicit field instead of using cc.MetricsRecorder() so we can override the metric recorder in tests.
 		target:          bOpts.Target.String(),
 	}
 	b.logger = prefixLogger(b)
@@ -811,9 +811,9 @@ func (b *outlierDetectionBalancer) successRateAlgorithm() {
 		return
 	}
 	mean, stddev := b.meanAndStdDev(endpointsToConsider)
+	ejectionCfg := b.cfg.SuccessRateEjection
 	for _, epInfo := range endpointsToConsider {
 		bucket := epInfo.callCounter.inactiveBucket
-		ejectionCfg := b.cfg.SuccessRateEjection
 		successRate := float64(bucket.numSuccesses) / float64(bucket.numSuccesses+bucket.numFailures)
 		requiredSuccessRate := mean - stddev*(float64(ejectionCfg.StdevFactor)/1000)
 		if successRate < requiredSuccessRate {
@@ -845,9 +845,9 @@ func (b *outlierDetectionBalancer) failurePercentageAlgorithm() {
 		return
 	}
 
+	ejectionCfg := b.cfg.FailurePercentageEjection
 	for _, epInfo := range endpointsToConsider {
 		bucket := epInfo.callCounter.inactiveBucket
-		ejectionCfg := b.cfg.FailurePercentageEjection
 		failurePercentage := (float64(bucket.numFailures) / float64(bucket.numSuccesses+bucket.numFailures)) * 100
 		if failurePercentage > float64(b.cfg.FailurePercentageEjection.Threshold) {
 			channelz.Infof(logger, b.channelzParent, "FailurePercentage algorithm detected outlier: %s, failurePercentage=%f", epInfo, failurePercentage)
