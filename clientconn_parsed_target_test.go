@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/testutils"
@@ -185,6 +186,8 @@ func (s) TestParsedTarget_Success_WithoutCustomDialer(t *testing.T) {
 }
 
 func (s) TestParsedTarget_Failure_WithoutCustomDialer(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	targets := []string{
 		"",
 		"unix://a/b/c",
@@ -195,10 +198,13 @@ func (s) TestParsedTarget_Failure_WithoutCustomDialer(t *testing.T) {
 
 	for _, target := range targets {
 		t.Run(target, func(t *testing.T) {
-			if cc, err := Dial(target, WithTransportCredentials(insecure.NewCredentials())); err == nil {
-				defer cc.Close()
-				t.Fatalf("Dial(%q) succeeded cc.parsedTarget = %+v, expected to fail", target, cc.parsedTarget)
+			cc, err := NewClient(target, WithTransportCredentials(insecure.NewCredentials()))
+			if err != nil {
+				t.Fatalf("NewClient(%q) failed: %v", target, err)
 			}
+			defer cc.Close()
+			cc.Connect()
+			testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
 		})
 	}
 }

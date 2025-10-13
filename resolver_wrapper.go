@@ -20,6 +20,7 @@ package grpc
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"sync"
 
@@ -62,11 +63,15 @@ func newCCResolverWrapper(cc *ClientConn) *ccResolverWrapper {
 	}
 }
 
-// start builds the name resolver using the resolver.Builder in cc and returns
-// any error encountered.  It must always be the first operation performed on
-// any newly created ccResolverWrapper, except that close may be called instead.
-func (ccr *ccResolverWrapper) start() error {
-	errCh := make(chan error)
+// start builds the name resolver using the resolver.Builder in cc.
+// If an error is encountered, it will report the error to the load balancing
+// policy via cc.ReportError(). This action allows the policy to set the channel
+// state to TransientFailure and ensures the error is propagated to new RPCs,
+// causing them to fail.
+// It must always be the first operation performed on any newly created
+// ccResolverWrapper, except that close may be called instead.
+func (ccr *ccResolverWrapper) start() {
+	doneCh := make(chan struct{})
 	ccr.serializer.TrySchedule(func(ctx context.Context) {
 		if ctx.Err() != nil {
 			return
@@ -90,10 +95,23 @@ func (ccr *ccResolverWrapper) start() error {
 		} else {
 			ccr.resolver, err = delegatingresolver.New(ccr.cc.parsedTarget, ccr, opts, ccr.cc.resolverBuilder, ccr.cc.dopts.enableLocalDNSResolution)
 		}
-		errCh <- err
+
+		if err != nil {
+			ccr.resolver = &nopResolver{}
+			ccr.ReportError(fmt.Errorf("resolver creation failed: %v", err))
+		}
+
+		doneCh <- struct{}{}
 	})
-	return <-errCh
+	<-doneCh
 }
+
+type nopResolver struct {
+}
+
+func (*nopResolver) ResolveNow(resolver.ResolveNowOptions) {}
+
+func (*nopResolver) Close() {}
 
 func (ccr *ccResolverWrapper) resolveNow(o resolver.ResolveNowOptions) {
 	ccr.serializer.TrySchedule(func(ctx context.Context) {

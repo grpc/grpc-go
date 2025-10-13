@@ -357,9 +357,7 @@ func (cc *ClientConn) exitIdleMode() (err error) {
 	// This needs to be called without cc.mu because this builds a new resolver
 	// which might update state or report error inline, which would then need to
 	// acquire cc.mu.
-	if err := cc.resolverWrapper.start(); err != nil {
-		return err
-	}
+	cc.resolverWrapper.start()
 
 	cc.addTraceEvent("exiting idle mode")
 	return nil
