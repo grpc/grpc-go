@@ -21,6 +21,7 @@ package googledirectpath
 import (
 	"context"
 	"encoding/json"
+	"net/url"
 	"strconv"
 	"strings"
 	"testing"
@@ -155,9 +156,9 @@ func (s) TestBuildWithBootstrapEnvSet(t *testing.T) {
 			}
 			defer r.Close()
 
-			// Build should return xDS, not DNS.
-			if r != testXDSResolver {
-				t.Fatalf("Build() returned %#v, want xds resolver", r)
+			// Build should return wrapped xDS resolver, not DNS.
+			if r, ok := r.(*c2pResolverWrapper); !ok || r.Resolver != testXDSResolver {
+				t.Fatalf("Build() returned %#v, want c2pResolverWrapper", r)
 			}
 		})
 	}
@@ -314,18 +315,26 @@ func (s) TestBuildXDS(t *testing.T) {
 			defer func() { getIPv6Capable = oldGetIPv6Capability }()
 
 			// Build the google-c2p resolver.
-			r, err := builder.Build(resolver.Target{}, nil, resolver.BuildOptions{})
+			target := resolver.Target{URL: url.URL{Scheme: c2pScheme, Path: "test-path"}}
+			r, err := builder.Build(target, nil, resolver.BuildOptions{})
 			if err != nil {
 				t.Fatalf("failed to build resolver: %v", err)
 			}
 			defer r.Close()
 
-			// Build should return xDS, not DNS.
-			if r != testXDSResolver {
-				t.Fatalf("Build() returned %#v, want xds resolver", r)
+			// Build should return wrapped xDS resolver, not DNS.
+			if r, ok := r.(*c2pResolverWrapper); !ok || r.Resolver != testXDSResolver {
+				t.Fatalf("Build() returned %#v, want c2pResolverWrapper", r)
 			}
 
-			gotConfig := xdsClientPool.BootstrapConfigForTesting()
+			xdsTarget := resolver.Target{URL: url.URL{Scheme: xdsName, Host: c2pAuthority, Path: target.URL.Path}}
+			client, close, err := xdsClientPool.GetClientForTesting(xdsTarget.String())
+			if err != nil {
+				t.Fatalf("Failed to get xds client: %v", err)
+			}
+			defer close()
+
+			gotConfig := client.BootstrapConfig()
 			if gotConfig == nil {
 				t.Fatalf("Failed to get bootstrap config: %v", err)
 			}
@@ -415,18 +424,26 @@ func (s) TestSetUniverseDomainNonDefault(t *testing.T) {
 	defer func() { xdsClientPool = oldXdsClientPool }()
 
 	// Build the google-c2p resolver.
-	r, err := builder.Build(resolver.Target{}, nil, resolver.BuildOptions{})
+	target := resolver.Target{URL: url.URL{Scheme: c2pScheme, Path: "test-path"}}
+	r, err := builder.Build(target, nil, resolver.BuildOptions{})
 	if err != nil {
 		t.Fatalf("failed to build resolver: %v", err)
 	}
 	defer r.Close()
 
-	// Build should return xDS, not DNS.
-	if r != testXDSResolver {
-		t.Fatalf("Build() returned %#v, want xds resolver", r)
+	// Build should return wrapped xDS resolver, not DNS.
+	if r, ok := r.(*c2pResolverWrapper); !ok || r.Resolver != testXDSResolver {
+		t.Fatalf("Build() returned %#v, want c2pResolverWrapper", r)
 	}
 
-	gotConfig := xdsClientPool.BootstrapConfigForTesting()
+	xdsTarget := resolver.Target{URL: url.URL{Scheme: xdsName, Host: c2pAuthority, Path: target.URL.Path}}
+	client, close, err := xdsClientPool.GetClientForTesting(xdsTarget.String())
+	if err != nil {
+		t.Fatalf("Failed to get xds client: %v", err)
+	}
+	defer close()
+
+	gotConfig := client.BootstrapConfig()
 	if gotConfig == nil {
 		t.Fatalf("Failed to get bootstrap config: %v", err)
 	}
@@ -484,18 +501,26 @@ func (s) TestDefaultUniverseDomain(t *testing.T) {
 	defer func() { xdsClientPool = oldXdsClientPool }()
 
 	// Build the google-c2p resolver.
-	r, err := builder.Build(resolver.Target{}, nil, resolver.BuildOptions{})
+	target := resolver.Target{URL: url.URL{Scheme: c2pScheme, Path: "test-path"}}
+	r, err := builder.Build(target, nil, resolver.BuildOptions{})
 	if err != nil {
 		t.Fatalf("failed to build resolver: %v", err)
 	}
 	defer r.Close()
 
 	// Build should return xDS, not DNS.
-	if r != testXDSResolver {
-		t.Fatalf("Build() returned %#v, want xds resolver", r)
+	if r, ok := r.(*c2pResolverWrapper); !ok || r.Resolver != testXDSResolver {
+		t.Fatalf("Build() returned %#v, want c2pResolverWrapper", r)
 	}
 
-	gotConfig := xdsClientPool.BootstrapConfigForTesting()
+	xdsTarget := resolver.Target{URL: url.URL{Scheme: xdsName, Host: c2pAuthority, Path: target.URL.Path}}
+	client, close, err := xdsClientPool.GetClientForTesting(xdsTarget.String())
+	if err != nil {
+		t.Fatalf("Failed to get xds client: %v", err)
+	}
+	defer close()
+
+	gotConfig := client.BootstrapConfig()
 	if gotConfig == nil {
 		t.Fatalf("Failed to get bootstrap config: %v", err)
 	}
