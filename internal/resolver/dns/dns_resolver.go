@@ -58,6 +58,11 @@ var (
 	// after initialization as it's not thread-safe for concurrent modification.
 	ResolvingTimeout = 30 * time.Second
 
+	// RefreshInterval is the interval at which re-resolution is automatically trigggered
+	//
+	// Default = 0 means disabled
+	RefreshInterval time.Duration
+
 	logger = grpclog.Component("dns")
 )
 
@@ -218,10 +223,21 @@ func (d *dnsResolver) watcher() {
 			// seconds at the very least to prevent constantly re-resolving.
 			backoffIndex = 1
 			nextResolutionTime = internal.TimeNowFunc().Add(MinResolutionInterval)
-			select {
-			case <-d.ctx.Done():
-				return
-			case <-d.rn:
+			if RefreshInterval != 0 {
+				// If RefreshInterval is enabled, adjust nextResolutionTime accordingly
+				nextResolutionTime = internal.TimeNowFunc().Add(RefreshInterval)
+				select {
+				case <-d.ctx.Done():
+					return
+				case <-d.rn:
+				case <-internal.TimeAfterFunc(internal.TimeUntilFunc(nextResolutionTime)):
+				}
+			} else {
+				select {
+				case <-d.ctx.Done():
+					return
+				case <-d.rn:
+				}
 			}
 		} else {
 			// Poll on an error found in DNS Resolver or an error received from

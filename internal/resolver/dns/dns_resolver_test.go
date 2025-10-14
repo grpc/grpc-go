@@ -75,6 +75,12 @@ func overrideResolutionInterval(t *testing.T, d time.Duration) {
 	t.Cleanup(func() { dnspublic.SetMinResolutionInterval(origMinResInterval) })
 }
 
+func overrideRefreshInterval(t *testing.T, d time.Duration) {
+	origAutoResInterval := dns.RefreshInterval
+	dnspublic.SetRefreshInterval(d)
+	t.Cleanup(func() { dnspublic.SetRefreshInterval(origAutoResInterval) })
+}
+
 // Override the timer used by the DNS resolver to fire after a duration of d.
 func overrideTimeAfterFunc(t *testing.T, d time.Duration) {
 	origTimeAfter := dnsinternal.TimeAfterFunc
@@ -1404,5 +1410,36 @@ func (s) TestMinResolutionInterval_NoExtraDelay(t *testing.T) {
 	case err := <-errorCh:
 		t.Fatalf("Unexpected error from resolver, %v", err)
 	case <-stateCh:
+	}
+}
+
+// Test verifies that settings RefreshInterval corrently trigger resolution periodically
+func (s) TestRefreshInterval(t *testing.T) {
+	const target = "foo.bar.com"
+
+	overrideResolutionInterval(t, 2*time.Millisecond)
+	overrideRefreshInterval(t, 1*time.Millisecond)
+	tr := &testNetResolver{
+		hostLookupTable: map[string][]string{
+			"foo.bar.com": {"1.2.3.4", "5.6.7.8"},
+		},
+		txtLookupTable: map[string][]string{
+			"_grpc_config.foo.bar.com": txtRecordServiceConfig(txtRecordGood),
+		},
+	}
+	overrideNetResolver(t, tr)
+
+	_, stateCh, _ := buildResolverWithTestClientConn(t, target)
+
+	wantAddrs := []resolver.Address{{Addr: "1.2.3.4" + colonDefaultPort}, {Addr: "5.6.7.8" + colonDefaultPort}}
+	wantSC := scJSON
+
+	for i := 0; i < 5; i++ {
+		// set context timeout slightly higher than the min resolution interval to make sure resolutions
+		// happen successfully
+		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+		defer cancel()
+
+		verifyUpdateFromResolver(ctx, t, stateCh, wantAddrs, nil, wantSC)
 	}
 }

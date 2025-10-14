@@ -58,3 +58,13 @@ func NewBuilder() resolver.Builder {
 func SetMinResolutionInterval(d time.Duration) {
 	dns.MinResolutionInterval = d
 }
+
+// SetAutoResolutionInterval sets the interval at which DNS
+// re-resolution is automatically triggered.
+// Default = 0 (disabled)
+//
+// It must be called only at application startup, before any gRPC calls are
+// made. Modifying this value after initialization is not thread-safe.
+func SetRefreshInterval(d time.Duration) {
+	dns.RefreshInterval = d
+}
