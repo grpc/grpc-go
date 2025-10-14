@@ -393,7 +393,7 @@ func (s) TestBasicAuthInNewClientWithProxy(t *testing.T) {
 	proxyCalled := false
 	reqCheck := func(req *http.Request) {
 		proxyCalled = true
-		if got, want := req.URL.Host, "example.test"; got != want {
+		if got, want := req.URL.Host, "example.test:443"; got != want {
 			t.Errorf(" Unexpected request host: %s, want = %s ", got, want)
 		}
 		wantProxyAuthStr := "Basic " + base64.StdEncoding.EncodeToString([]byte(user+":"+password))
