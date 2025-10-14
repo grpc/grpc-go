@@ -66,10 +66,11 @@ type tLogger struct {
 	v           int
 	initialized bool
 
-	mu     sync.Mutex // guards t, start, and errors
-	t      *testing.T
-	start  time.Time
-	errors map[*regexp.Regexp]int
+	mu       sync.Mutex // guards t, start, and errors
+	t        *testing.T
+	start    time.Time
+	errors   map[*regexp.Regexp]int
+	warnings map[*regexp.Regexp]int
 }
 
 func init() {
@@ -87,7 +88,7 @@ func init() {
 		}
 	}
 	// Initialize tLogr with the determined verbosity level.
-	tLogr = &tLogger{errors: make(map[*regexp.Regexp]int), v: vLevel}
+	tLogr = &tLogger{errors: make(map[*regexp.Regexp]int), warnings: make(map[*regexp.Regexp]int), v: vLevel}
 }
 
 // getCallingPrefix returns the <file:line> at the given depth from the stack.
@@ -120,6 +121,9 @@ func (tl *tLogger) log(ltype logType, depth int, format string, args ...any) {
 			} else {
 				tl.t.Error(args...)
 			}
+		case warningLog:
+			tl.expectedWarning(fmt.Sprintln(args...))
+			tl.t.Log(args...)
 		case fatalLog:
 			panic(fmt.Sprint(args...))
 		default:
@@ -155,6 +159,7 @@ func (tl *tLogger) update(t *testing.T) {
 	tl.t = t
 	tl.start = time.Now()
 	tl.errors = map[*regexp.Regexp]int{}
+	tl.warnings = map[*regexp.Regexp]int{}
 }
 
 // ExpectError declares an error to be expected. For the next test, the first
@@ -178,6 +183,18 @@ func ExpectErrorN(expr string, n int) {
 	tLogr.errors[re] += n
 }
 
+// ExpectWarning declares a warning to be expected.
+func ExpectWarning(expr string) {
+	tLogr.mu.Lock()
+	defer tLogr.mu.Unlock()
+	re, err := regexp.Compile(expr)
+	if err != nil {
+		tLogr.t.Error(err)
+		return
+	}
+	tLogr.warnings[re]++
+}
+
 // endTest checks if expected errors were not encountered.
 func (tl *tLogger) endTest(t *testing.T) {
 	tl.mu.Lock()
@@ -188,6 +205,12 @@ func (tl *tLogger) endTest(t *testing.T) {
 		}
 	}
 	tl.errors = map[*regexp.Regexp]int{}
+	for re, count := range tl.warnings {
+		if count > 0 {
+			t.Errorf("Expected warning '%v' not encountered", re.String())
+		}
+	}
+	tl.warnings = map[*regexp.Regexp]int{}
 }
 
 // expected determines if the error string is protected or not.
@@ -202,6 +225,18 @@ func (tl *tLogger) expected(s string) bool {
 		}
 	}
 	return false
+}
+
+// expectedWarning determines if the warning string is protected or not.
+func (tl *tLogger) expectedWarning(s string) {
+	for re, count := range tl.warnings {
+		if re.FindStringIndex(s) != nil {
+			tl.warnings[re]--
+			if count <= 1 {
+				delete(tl.warnings, re)
+			}
+		}
+	}
 }
 
 func (tl *tLogger) Info(args ...any) {
