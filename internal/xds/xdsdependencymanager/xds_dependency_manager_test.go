@@ -750,7 +750,7 @@ func (s) TestRouteResourceUpdate(t *testing.T) {
 	}
 
 	// Update route to point to a new cluster.
-	const newClusterName = "new-cluster-name"
+	newClusterName := "new-cluster-name"
 	route2 := e2e.DefaultRouteConfig(defaultTestRouteConfigName, defaultTestServiceName, newClusterName)
 	resources.Routes = []*v3routepb.RouteConfiguration{route2}
 	if err := mgmtServer.Update(ctx, resources); err != nil {
