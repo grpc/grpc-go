@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2019 gRPC authors.
+ * Copyright 2025 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -100,7 +100,7 @@ func setupClients(t *testing.T, clientsCount int, subsetSize int, addresses []re
 			  }
 			}
 		  ]
-		}`, i, subsetSize)
+		}`, subsetSize)
 
 		sc := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(string(jsonConfig))
 		mr.InitialState(resolver.State{
