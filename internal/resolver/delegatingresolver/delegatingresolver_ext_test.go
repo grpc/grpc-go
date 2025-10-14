@@ -264,19 +264,19 @@ func (s) TestDelegatingResolverwithDNSAndProxyWithNoTargetResolutionHappyPaths(t
 		defaultPortEnvVar  bool
 	}{
 		{
-			name:               "no port ",
+			name:               "no_port ",
 			target:             "test.com",
 			wantConnectAddress: "test.com:443",
 			defaultPortEnvVar:  true,
 		},
 		{
-			name:               "complete target",
+			name:               "complete_target",
 			target:             "test.com:8080",
 			wantConnectAddress: "test.com:8080",
 			defaultPortEnvVar:  true,
 		},
 		{
-			name:               "no port with default port env variable disabled",
+			name:               "no_port_with_default_port_env_variable_disabled",
 			target:             "test.com",
 			wantConnectAddress: "test.com",
 			defaultPortEnvVar:  false,
@@ -329,7 +329,7 @@ func (s) TestDelegatingResolverwithDNSAndProxyWithNoTargetResolutionHappyPaths(t
 
 // Tests the creation of a delegating resolver when a proxy is configured. It
 // verifies correct error handling for invalid targets.
-func (s) TestDelegatingResolverwithDNSAndProxyWithNoTargetResolutionWithErrorTargets(t *testing.T) {
+func (s) TestDelegatingResolverwithUnresolvedErrorTargetWithProxy(t *testing.T) {
 	const (
 		envProxyAddr           = "proxytest.com"
 		resolvedProxyTestAddr1 = "11.11.11.11:7687"
@@ -342,13 +342,13 @@ func (s) TestDelegatingResolverwithDNSAndProxyWithNoTargetResolutionWithErrorTar
 	}{
 
 		{
-			name:               "colon after host but no port",
+			name:               "colon_after_host_but_no_port",
 			target:             "test.com:",
 			wantErrorSubstring: "missing port after port-separator colon",
 			defaultPortEnvVar:  true,
 		},
 		{
-			name:               "empty target",
+			name:               "empty_target",
 			target:             "",
 			wantErrorSubstring: "missing address",
 			defaultPortEnvVar:  true,
