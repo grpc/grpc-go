@@ -163,6 +163,7 @@ func (b *clusterImplBalancer) newPickerLocked() *picker {
 		counter:         b.requestCounter,
 		countMax:        b.requestCountMax,
 		telemetryLabels: b.telemetryLabels,
+		clusterName:     b.clusterName,
 	}
 }
 
@@ -414,6 +415,7 @@ func (b *clusterImplBalancer) getClusterName() string {
 // SubConn to the wrapper for this purpose.
 type scWrapper struct {
 	balancer.SubConn
+
 	// locality needs to be atomic because it can be updated while being read by
 	// the picker.
 	locality atomic.Pointer[clients.Locality]
