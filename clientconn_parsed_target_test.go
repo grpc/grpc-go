@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"strings"
 	"testing"
 	"time"
 
@@ -195,9 +196,18 @@ func (s) TestParsedTarget_Failure_WithoutCustomDialer(t *testing.T) {
 
 	for _, target := range targets {
 		t.Run(target, func(t *testing.T) {
-			if cc, err := Dial(target, WithTransportCredentials(insecure.NewCredentials())); err == nil {
-				defer cc.Close()
-				t.Fatalf("Dial(%q) succeeded cc.parsedTarget = %+v, expected to fail", target, cc.parsedTarget)
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			cc, err := NewClient(target, WithTransportCredentials(insecure.NewCredentials()))
+			if err != nil {
+				t.Fatalf("NewClient(%q) failed: %v", target, err)
+			}
+			defer cc.Close()
+			wantErrSubstr := "failed to exit idle mode"
+			if _, err := cc.NewStream(ctx, &StreamDesc{}, "/my.service.v1.MyService/UnaryCall"); err == nil {
+				t.Fatalf("NewStream() succeeded with target = %q, cc.parsedTarget = %+v, expected to fail", target, cc.parsedTarget)
+			} else if !strings.Contains(err.Error(), wantErrSubstr) {
+				t.Fatalf("NewStream() with target = %q returned unexpected error: got %v, want substring %q", target, err, wantErrSubstr)
 			}
 		})
 	}
