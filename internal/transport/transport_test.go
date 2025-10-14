@@ -3448,7 +3448,9 @@ func (s) TestDeleteStreamMetricsIncrementedOnlyOnce(t *testing.T) {
 				t.Fatalf("Server stream not found for client stream ID %d", clientStream.id)
 			}
 
-			// First call to deleteStream should remove the stream from activeStreams and update metrics
+			// First call to closeStream should remove the stream from
+			// the activeStreams and update metrics. closeStream will also
+			// cancel the stream, stopping the deadline timer.
 			serverTransport.closeStream(serverStream, false, 0, test.eosReceived)
 
 			// Check metrics after first deleteStream call
