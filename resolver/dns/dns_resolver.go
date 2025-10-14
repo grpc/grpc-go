@@ -59,7 +59,7 @@ func SetMinResolutionInterval(d time.Duration) {
 	dns.MinResolutionInterval = d
 }
 
-// SetAutoResolutionInterval sets the interval at which DNS
+// SetRefreshInterval sets the interval at which DNS
 // re-resolution is automatically triggered.
 // Default = 0 (disabled)
 //
