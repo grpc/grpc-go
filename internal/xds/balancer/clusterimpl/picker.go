@@ -20,6 +20,7 @@ package clusterimpl
 
 import (
 	"context"
+	"maps"
 
 	v3orcapb "github.com/cncf/xds/go/xds/data/orca/v3"
 	"google.golang.org/grpc/balancer"
@@ -104,10 +105,9 @@ func telemetryLabels(ctx context.Context) map[string]string {
 func (d *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 	// Unconditionally set labels if present, even dropped or queued RPC's can
 	// use these labels.
-	if labels := telemetryLabels(info.Ctx); labels != nil {
-		for key, value := range d.telemetryLabels {
-			labels[key] = value
-		}
+	labels := telemetryLabels(info.Ctx)
+	if labels != nil {
+		maps.Copy(labels, d.telemetryLabels)
 	}
 
 	// Don't drop unless the inner picker is READY. Similar to
@@ -137,7 +137,6 @@ func (d *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 	}
 
 	var lID clients.Locality
-
 	pr, err := d.s.Picker.Pick(info)
 	if scw, ok := pr.SubConn.(*scWrapper); ok {
 		// This OK check also covers the case err!=nil, because SubConn will be
@@ -156,7 +155,7 @@ func (d *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 		return pr, err
 	}
 
-	if labels := telemetryLabels(info.Ctx); labels != nil {
+	if labels != nil {
 		labels["grpc.lb.locality"] = xdsinternal.LocalityString(lID)
 		labels["grpc.lb.backend_service"] = d.clusterName
 	}
