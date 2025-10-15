@@ -123,6 +123,19 @@ type clusterImplBalancer struct {
 	telemetryLabels       map[string]string                 // Telemetry labels to set on picks, from LB config.
 }
 
+type backendServiceKey struct{}
+
+func setBackendServiceOnState(state resolver.State, backendService string) resolver.State {
+	state.Attributes = state.Attributes.WithValue(backendServiceKey{}, backendService)
+	return state
+}
+
+func GetBackendServiceFromState(state resolver.State) (string, bool) {
+	v := state.Attributes.Value(backendServiceKey{})
+	name, ok := v.(string)
+	return name, ok
+}
+
 // handleDropAndRequestCountLocked compares drop and request counter in newConfig with
 // the one currently used by picker, and is protected by b.mu. It returns a boolean
 // indicating if a new picker needs to be generated.
@@ -295,9 +308,11 @@ func (b *clusterImplBalancer) UpdateClientConnState(s balancer.ClientConnState) 
 		return err
 	}
 
+	newState := setBackendServiceOnState(s.ResolverState, b.clusterName)
+
 	// Addresses and sub-balancer config are sent to sub-balancer.
 	err = b.child.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState:  s.ResolverState,
+		ResolverState:  newState,
 		BalancerConfig: parsedCfg,
 	})
 
@@ -434,6 +449,7 @@ func (scw *scWrapper) localityID() clients.Locality {
 }
 
 func (b *clusterImplBalancer) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
+	b.logger.Infof("New Subconn from clusterimpl being invoked")
 	clusterName := b.getClusterName()
 	newAddrs := make([]resolver.Address, len(addrs))
 	for i, addr := range addrs {
@@ -463,6 +479,7 @@ func (b *clusterImplBalancer) NewSubConn(addrs []resolver.Address, opts balancer
 		scw.updateLocalityID(lID)
 	}
 	sc, err := b.ClientConn.NewSubConn(newAddrs, opts)
+	b.logger.Infof("NewSubConn to client conn completed, returning")
 	if err != nil {
 		return nil, err
 	}
