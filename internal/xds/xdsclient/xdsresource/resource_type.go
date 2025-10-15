@@ -149,61 +149,6 @@ type DecodeResult struct {
 	Resource ResourceData
 }
 
-// resourceTypeState wraps the static state associated with concrete resource
-// type implementations, which can then embed this struct and get the methods
-// implemented here for free.
-type resourceTypeState struct {
-	typeURL                    string
-	typeName                   string
-	allResourcesRequiredInSotW bool
-}
-
-func (r resourceTypeState) TypeURL() string {
-	return r.typeURL
-}
-
-func (r resourceTypeState) TypeName() string {
-	return r.typeName
-}
-
-func (r resourceTypeState) AllResourcesRequiredInSotW() bool {
-	return r.allResourcesRequiredInSotW
-}
-
-// GenericResourceTypeDecoder wraps an xdsresource.Type and implements
-// xdsclient.Decoder.
-//
-// TODO: #8313 - Delete this once the internal xdsclient usages are updated
-// to use the generic xdsclient.ResourceType interface directly.
-type GenericResourceTypeDecoder struct {
-	ResourceType    Type
-	BootstrapConfig *bootstrap.Config
-	ServerConfigMap map[xdsclient.ServerConfig]*bootstrap.ServerConfig
-}
-
-// Decode deserialize and validate resource bytes of an xDS resource received
-// from the xDS management server.
-func (gd *GenericResourceTypeDecoder) Decode(resource *xdsclient.AnyProto, gOpts xdsclient.DecodeOptions) (*xdsclient.DecodeResult, error) {
-	opts := &DecodeOptions{BootstrapConfig: gd.BootstrapConfig}
-	if gOpts.ServerConfig != nil {
-		opts.ServerConfig = gd.ServerConfigMap[*gOpts.ServerConfig]
-	}
-
-	result, err := gd.ResourceType.Decode(opts, resource.ToAny())
-	if result == nil {
-		return nil, err
-	}
-	if err != nil {
-		return &xdsclient.DecodeResult{Name: result.Name}, err
-	}
-
-	return &xdsclient.DecodeResult{Name: result.Name, Resource: &genericResourceData{resourceData: result.Resource}}, nil
-}
-
-// genericResourceData embed an xdsresource.ResourceData and implements
-// xdsclient.ResourceData.
-//
-// TODO: #8313 - Delete this once the internal xdsclient usages are updated
 // to use the generic xdsclient.ResourceData interface directly.
 type genericResourceData struct {
 	resourceData ResourceData
