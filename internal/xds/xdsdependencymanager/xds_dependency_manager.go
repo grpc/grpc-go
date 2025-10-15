@@ -55,7 +55,7 @@ type DependencyManager struct {
 
 	ldsResourceName       string
 	listenerWatcher       *listenerWatcher
-	currentListenerUpdate xdsresource.ListenerUpdate
+	currentListenerUpdate *xdsresource.ListenerUpdate
 
 	rdsResourceName    string
 	currentRouteConfig xdsresource.RouteConfigUpdate
@@ -129,7 +129,7 @@ func (m *DependencyManager) maybeSendUpdate() {
 		m.logger.Infof("Sending update to watcher: Listener: %v, RouteConfig: %v", pretty.ToJSON(m.currentListenerUpdate), pretty.ToJSON(m.currentRouteConfig))
 	}
 	m.watcher.OnUpdate(xdsresource.XDSConfig{
-		Listener:    m.currentListenerUpdate,
+		Listener:    *m.currentListenerUpdate,
 		RouteConfig: m.currentRouteConfig,
 		VirtualHost: m.currentVirtualHost,
 	})
@@ -147,7 +147,7 @@ func (m *DependencyManager) applyRouteConfigUpdate(update xdsresource.RouteConfi
 }
 
 // Only executed in the context of a serializer callback.
-func (m *DependencyManager) onListenerResourceUpdate(update xdsresource.ListenerUpdate) {
+func (m *DependencyManager) onListenerResourceUpdate(update *xdsresource.ListenerUpdate) {
 	if m.logger.V(2) {
 		m.logger.Infof("Received update for Listener resource %q: %v", m.ldsResourceName, pretty.ToJSON(update))
 	}

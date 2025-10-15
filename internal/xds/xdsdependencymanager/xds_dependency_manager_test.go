@@ -73,7 +73,7 @@ var wantXdsConfig = xdsresource.XDSConfig{
 			{
 				Domains: []string{defaultTestServiceName},
 				Routes: []*xdsresource.Route{{Prefix: newStringP("/"),
-					WeightedClusters: map[string]xdsresource.WeightedCluster{defaultTestClusterName: {Weight: 100}},
+					WeightedClusters: []xdsresource.WeightedCluster{{Name: defaultTestClusterName, Weight: 100}},
 					ActionType:       xdsresource.RouteActionRoute}},
 			},
 		},
@@ -81,7 +81,7 @@ var wantXdsConfig = xdsresource.XDSConfig{
 	VirtualHost: &xdsresource.VirtualHost{
 		Domains: []string{defaultTestServiceName},
 		Routes: []*xdsresource.Route{{Prefix: newStringP("/"),
-			WeightedClusters: map[string]xdsresource.WeightedCluster{defaultTestClusterName: {Weight: 100}},
+			WeightedClusters: []xdsresource.WeightedCluster{{Name: defaultTestClusterName, Weight: 100}},
 			ActionType:       xdsresource.RouteActionRoute}},
 	},
 }
@@ -273,7 +273,7 @@ func (s) TestInlineRouteConfig(t *testing.T) {
 			{
 				Domains: []string{defaultTestServiceName},
 				Routes: []*xdsresource.Route{{Prefix: newStringP("/"),
-					WeightedClusters: map[string]xdsresource.WeightedCluster{defaultTestClusterName: {Weight: 100}},
+					WeightedClusters: []xdsresource.WeightedCluster{{Name: defaultTestClusterName, Weight: 100}},
 					ActionType:       xdsresource.RouteActionRoute}},
 			},
 		},
@@ -744,7 +744,7 @@ func (s) TestRouteResourceUpdate(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatal("Timeout waiting for initial update from dependency manager")
 	case update := <-updateCh:
-		if gotCluster := update.VirtualHost.Routes[0].WeightedClusters[defaultTestClusterName]; gotCluster.Weight != 100 {
+		if gotCluster := update.VirtualHost.Routes[0].WeightedClusters[0]; gotCluster.Name != defaultTestClusterName || gotCluster.Weight != 100 {
 			t.Fatalf("Update has wrong cluster, got: %v, want: %v", update.VirtualHost.Routes[0].WeightedClusters, defaultTestClusterName)
 		}
 	}
@@ -762,7 +762,7 @@ func (s) TestRouteResourceUpdate(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatal("Timeout waiting for route update from dependency manager")
 	case update := <-updateCh:
-		if gotCluster := update.VirtualHost.Routes[0].WeightedClusters[newClusterName]; gotCluster.Weight != 100 {
+		if gotCluster := update.VirtualHost.Routes[0].WeightedClusters[0]; gotCluster.Name != newClusterName || gotCluster.Weight != 100 {
 			t.Fatalf("Second update has wrong cluster, got: %v, want: %v", update.VirtualHost.Routes[0].WeightedClusters, newClusterName)
 		}
 	}
