@@ -222,7 +222,7 @@ func buildXDSClientConfig(config *bootstrap.Config, metricsRecorder estats.Metri
 		Servers:            gServerCfgs,
 		Node:               gNode,
 		TransportBuilder:   grpctransport.NewBuilder(grpcTransportConfigs),
-		ResourceTypes:      supportedResourceTypes(config, gServerCfgMap),
+		ResourceTypes:      supportedResourceTypes(config),
 		MetricsReporter:    &metricsReporter{recorder: metricsRecorder, target: target},
 		WatchExpiryTimeout: watchExpiryTimeout,
 	}, nil
