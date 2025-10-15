@@ -146,7 +146,7 @@ func (s) TestHandleListenerResponseFromManagementServer(t *testing.T) {
 		desc                     string
 		resourceName             string
 		managementServerResponse *v3discoverypb.DiscoveryResponse
-		wantUpdate               xdsresource.ListenerUpdate
+		wantUpdate               *xdsresource.ListenerUpdate
 		wantErr                  string
 		wantGenericXDSConfig     []*v3statuspb.ClientConfig_GenericXdsConfig
 	}{
@@ -236,7 +236,7 @@ func (s) TestHandleListenerResponseFromManagementServer(t *testing.T) {
 				VersionInfo: "1",
 				Resources:   []*anypb.Any{testutils.MarshalAny(t, resource1)},
 			},
-			wantUpdate: xdsresource.ListenerUpdate{
+			wantUpdate: &xdsresource.ListenerUpdate{
 				RouteConfigName: "route-configuration-name",
 				HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
 			},
@@ -258,7 +258,7 @@ func (s) TestHandleListenerResponseFromManagementServer(t *testing.T) {
 				VersionInfo: "1",
 				Resources:   []*anypb.Any{testutils.MarshalAny(t, resource1), testutils.MarshalAny(t, resource2)},
 			},
-			wantUpdate: xdsresource.ListenerUpdate{
+			wantUpdate: &xdsresource.ListenerUpdate{
 				RouteConfigName: "route-configuration-name",
 				HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
 			},
@@ -510,7 +510,7 @@ func (s) TestHandleRouteConfigResponseFromManagementServer(t *testing.T) {
 					{
 						Domains: []string{"lds-target-name"},
 						Routes: []*xdsresource.Route{{Prefix: newStringP(""),
-							WeightedClusters: map[string]xdsresource.WeightedCluster{"cluster-name": {Weight: 1}},
+							WeightedClusters: []xdsresource.WeightedCluster{{Name: "cluster-name", Weight: 1}},
 							ActionType:       xdsresource.RouteActionRoute}},
 					},
 				},
@@ -538,7 +538,7 @@ func (s) TestHandleRouteConfigResponseFromManagementServer(t *testing.T) {
 					{
 						Domains: []string{"lds-target-name"},
 						Routes: []*xdsresource.Route{{Prefix: newStringP(""),
-							WeightedClusters: map[string]xdsresource.WeightedCluster{"cluster-name": {Weight: 1}},
+							WeightedClusters: []xdsresource.WeightedCluster{{Name: "cluster-name", Weight: 1}},
 							ActionType:       xdsresource.RouteActionRoute}},
 					},
 				},

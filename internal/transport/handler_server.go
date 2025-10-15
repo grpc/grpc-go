@@ -387,6 +387,12 @@ func (ht *serverHandlerTransport) writeHeader(s *ServerStream, md metadata.MD) e
 	return err
 }
 
+func (ht *serverHandlerTransport) adjustWindow(*ServerStream, uint32) {
+}
+
+func (ht *serverHandlerTransport) updateWindow(*ServerStream, uint32) {
+}
+
 func (ht *serverHandlerTransport) HandleStreams(ctx context.Context, startStream func(*ServerStream)) {
 	// With this transport type there will be exactly 1 stream: this HTTP request.
 	var cancel context.CancelFunc
@@ -411,11 +417,9 @@ func (ht *serverHandlerTransport) HandleStreams(ctx context.Context, startStream
 	ctx = metadata.NewIncomingContext(ctx, ht.headerMD)
 	req := ht.req
 	s := &ServerStream{
-		Stream: &Stream{
+		Stream: Stream{
 			id:             0, // irrelevant
 			ctx:            ctx,
-			requestRead:    func(int) {},
-			buf:            newRecvBuffer(),
 			method:         req.URL.Path,
 			recvCompress:   req.Header.Get("grpc-encoding"),
 			contentSubtype: ht.contentSubtype,
@@ -424,9 +428,11 @@ func (ht *serverHandlerTransport) HandleStreams(ctx context.Context, startStream
 		st:               ht,
 		headerWireLength: 0, // won't have access to header wire length until golang/go#18997.
 	}
-	s.trReader = &transportReader{
-		reader:        &recvBufferReader{ctx: s.ctx, ctxDone: s.ctx.Done(), recv: s.buf},
-		windowHandler: func(int) {},
+	s.Stream.buf.init()
+	s.readRequester = s
+	s.trReader = transportReader{
+		reader:        recvBufferReader{ctx: s.ctx, ctxDone: s.ctx.Done(), recv: &s.buf},
+		windowHandler: s,
 	}
 
 	// readerDone is closed when the Body.Read-ing goroutine exits.
