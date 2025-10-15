@@ -696,7 +696,7 @@ func (s) TestRouteResourceAmbientError(t *testing.T) {
 	}
 	select {
 	case <-ctx.Done():
-		t.Fatal("Timeout waiting for initial update from dependency manager")
+		t.Fatal("Timeout waiting for update from dependency manager")
 	case update := <-updateCh:
 		if diff := cmp.Diff(wantXdsConfig, update, cmpOpts...); diff != "" {
 			t.Fatalf("Did not receive expected update from dependency manager,.  Diff (-got +want):\n%v", diff)
