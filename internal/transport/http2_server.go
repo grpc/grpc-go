@@ -709,6 +709,7 @@ func (t *http2Server) HandleStreams(ctx context.Context, handle func(*ServerStre
 			}
 		case *parsedDataFrame:
 			t.handleData(frame)
+			frame.data.Free()
 		case *http2.RSTStreamFrame:
 			t.handleRSTStream(frame)
 		case *http2.SettingsFrame:
@@ -789,11 +790,6 @@ func (t *http2Server) updateFlowControl(n uint32) {
 }
 
 func (t *http2Server) handleData(f *parsedDataFrame) {
-	defer func() {
-		if f.data != nil {
-			f.data.Free()
-		}
-	}()
 	size := f.Header().Length
 	var sendBDPPing bool
 	if t.bdpEst != nil {
@@ -845,8 +841,8 @@ func (t *http2Server) handleData(f *parsedDataFrame) {
 			}
 		}
 		if dataLen > 0 {
+			f.data.Ref()
 			s.write(recvMsg{buffer: f.data})
-			f.data = nil
 		}
 	}
 	if f.StreamEnded() {

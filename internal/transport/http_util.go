@@ -453,13 +453,13 @@ func (f *framer) readFrame() (any, error) {
 	// Read the data frame directly from the underlying io.Reader to avoid
 	// copies.
 	if fh.Type == http2.FrameData {
-		err = f.readDataFrame(fh, f.pool, &f.dataFrame)
+		err = f.readDataFrame(fh)
 		return &f.dataFrame, err
 	}
 	return f.fr.ReadFrameForHeader(fh)
 }
 
-func (f *framer) readDataFrame(fh http2.FrameHeader, pool mem.BufferPool, df *parsedDataFrame) (err error) {
+func (f *framer) readDataFrame(fh http2.FrameHeader) (err error) {
 	if fh.StreamID == 0 {
 		// DATA frames MUST be associated with a stream. If a
 		// DATA frame is received whose stream identifier
@@ -468,12 +468,25 @@ func (f *framer) readDataFrame(fh http2.FrameHeader, pool mem.BufferPool, df *pa
 		// PROTOCOL_ERROR.
 		return fmt.Errorf("DATA frame with stream ID 0")
 	}
-	payload := pool.Get(int(fh.Length))
-	defer func() {
-		if err != nil {
-			f.pool.Put(payload)
-		}
-	}()
+	// Converting a *[]byte to a mem.BufferSlice incurs a heap allocation. This
+	// conversion is performed by mem.NewBuffer. To avoid the extra allocation
+	// a []byte is allocated directly if required and casted to a
+	// mem.BufferSlice.
+	var buf []byte
+	// poolHandle is the pointer returned by the buffer pool (if it's used.).
+	var poolHandle *[]byte
+	useBufferPool := !mem.IsBelowBufferPoolingThreshold(int(fh.Length))
+	if useBufferPool {
+		poolHandle = f.pool.Get(int(fh.Length))
+		buf = *poolHandle
+		defer func() {
+			if err != nil {
+				f.pool.Put(poolHandle)
+			}
+		}()
+	} else {
+		buf = make([]byte, int(fh.Length))
+	}
 	if fh.Flags.Has(http2.FlagDataPadded) {
 		if fh.Length == 0 {
 			return io.ErrUnexpectedEOF
@@ -482,28 +495,34 @@ func (f *framer) readDataFrame(fh http2.FrameHeader, pool mem.BufferPool, df *pa
 		// but it allows the rest of the payload to be read directly to the
 		// start of the destination slice. This makes it easy to return the
 		// original slice back to the buffer pool.
-		if _, err := io.ReadFull(f.reader, (*payload)[:1]); err != nil {
+		if _, err := io.ReadFull(f.reader, buf[:1]); err != nil {
 			return err
 		}
-		padSize := (*payload)[0]
-		*payload = (*payload)[:len(*payload)-1]
-		if _, err := io.ReadFull(f.reader, *payload); err != nil {
+		padSize := buf[0]
+		buf = buf[:len(buf)-1]
+		if _, err := io.ReadFull(f.reader, buf); err != nil {
 			return err
 		}
-		if int(padSize) > len(*payload) {
+		if int(padSize) > len(buf) {
 			// If the length of the padding is greater than the
 			// length of the frame payload, the recipient MUST
 			// treat this as a connection error.
 			// Filed: https://github.com/http2/http2-spec/issues/610
 			return fmt.Errorf("pad size larger than data payload")
 		}
-		*payload = (*payload)[:len(*payload)-int(padSize)]
-	} else if _, err := io.ReadFull(f.reader, *payload); err != nil {
+		buf = buf[:len(buf)-int(padSize)]
+	} else if _, err := io.ReadFull(f.reader, buf); err != nil {
 		return err
 	}
 
-	df.FrameHeader = fh
-	df.data = mem.NewBuffer(payload, pool)
+	f.dataFrame.FrameHeader = fh
+	if useBufferPool {
+		// Update the handle to point to the (potentially re-sliced) buf.
+		*poolHandle = buf
+		f.dataFrame.data = mem.NewBuffer(poolHandle, f.pool)
+	} else {
+		f.dataFrame.data = mem.SliceBuffer(buf)
+	}
 	return nil
 }
 
