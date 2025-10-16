@@ -30,7 +30,7 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
-// Producer uses the external xdsclient API.
+// Producer watches resources via the external xdsclient API.
 type Producer interface {
 	WatchResource(typeURL, resourceName string, watcher xdsclient.ResourceWatcher) (cancel func())
 }
