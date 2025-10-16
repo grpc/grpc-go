@@ -818,16 +818,16 @@ func (b *outlierDetectionBalancer) successRateAlgorithm() {
 		requiredSuccessRate := mean - stddev*(float64(ejectionCfg.StdevFactor)/1000)
 		if successRate < requiredSuccessRate {
 			channelz.Infof(logger, b.channelzParent, "SuccessRate algorithm detected outlier: %s. Parameters: successRate=%f, mean=%f, stddev=%f, requiredSuccessRate=%f", epInfo, successRate, mean, stddev, requiredSuccessRate)
-			// Check if max ejection percentage would prevent ejection
+			// Check if max ejection percentage would prevent ejection.
 			if float64(b.numEndpointsEjected)/float64(b.endpoints.Len())*100 >= float64(b.cfg.MaxEjectionPercent) {
-				// Record unenforced ejection due to max ejection percentage
+				// Record unenforced ejection due to max ejection percentage.
 				ejectionsUnenforcedMetric.Record(b.metricsRecorder, 1, b.target, "success_rate", "max_ejection_overflow")
 				continue
 			}
 			if uint32(rand.Int32N(100)) < ejectionCfg.EnforcementPercentage {
 				b.ejectEndpoint(epInfo, "success_rate")
 			} else {
-				// Record unenforced ejection due to enforcement percentage
+				// Record unenforced ejection due to enforcement percentage.
 				ejectionsUnenforcedMetric.Record(b.metricsRecorder, 1, b.target, "success_rate", "enforcement_percentage")
 			}
 		}
@@ -851,16 +851,16 @@ func (b *outlierDetectionBalancer) failurePercentageAlgorithm() {
 		failurePercentage := (float64(bucket.numFailures) / float64(bucket.numSuccesses+bucket.numFailures)) * 100
 		if failurePercentage > float64(b.cfg.FailurePercentageEjection.Threshold) {
 			channelz.Infof(logger, b.channelzParent, "FailurePercentage algorithm detected outlier: %s, failurePercentage=%f", epInfo, failurePercentage)
-			// Check if max ejection percentage would prevent ejection
+			// Check if max ejection percentage would prevent ejection.
 			if float64(b.numEndpointsEjected)/float64(b.endpoints.Len())*100 >= float64(b.cfg.MaxEjectionPercent) {
-				// Record unenforced ejection due to max ejection percentage
+				// Record unenforced ejection due to max ejection percentage.
 				ejectionsUnenforcedMetric.Record(b.metricsRecorder, 1, b.target, "failure_percentage", "max_ejection_overflow")
 				continue
 			}
 			if uint32(rand.Int32N(100)) < ejectionCfg.EnforcementPercentage {
 				b.ejectEndpoint(epInfo, "failure_percentage")
 			} else {
-				// Record unenforced ejection due to enforcement percentage
+				// Record unenforced ejection due to enforcement percentage.
 				ejectionsUnenforcedMetric.Record(b.metricsRecorder, 1, b.target, "failure_percentage", "enforcement_percentage")
 			}
 		}
@@ -877,7 +877,7 @@ func (b *outlierDetectionBalancer) ejectEndpoint(epInfo *endpointInfo, detection
 		channelz.Infof(logger, b.channelzParent, "Subchannel ejected: %s", sbw)
 	}
 
-	// Record the enforced ejection metric
+	// Record the enforced ejection metric.
 	ejectionsEnforcedMetric.Record(b.metricsRecorder, 1, b.target, detectionMethod)
 }
 

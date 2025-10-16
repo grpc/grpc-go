@@ -1030,10 +1030,12 @@ func (s) TestDurationOfInterval(t *testing.T) {
 // algorithm when configured with SuccessRateEjection. The Outlier Detection
 // Balancer will be set up with N SubConns, each with a different address.
 // It tests the following scenarios, in a step by step fashion:
-// 1. The N addresses each have 5 successes. The interval timer algorithm should
-// not eject any of the addresses.
-// 2. N - `wantFailures`  of the addresses have 5 successes but the remaining address has 5 failures. The internal algorithm
-// should attempt to eject the address based on the outlier detection lb config. Only `wantEjections` addresses should be ejected.
+// 1. The N addresses each have 5 successes. The interval timer algorithm
+// should not eject any of the addresses.
+// 2. N - `wantFailures`  of the addresses have 5 successes but the remaining
+// address has 5 failures. The internal algorithm
+// should attempt to eject the address based on the outlier detection lb
+// config. Only `wantEjections` addresses should be ejected.
 // 3. The interval timer algorithm is run at a later time past max ejection
 // time. The interval timer algorithm should uneject all.
 func (s) TestEjectUnejectSuccessRate(t *testing.T) {
