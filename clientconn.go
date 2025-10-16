@@ -1348,6 +1348,13 @@ func (ac *addrConn) tryAllAddrs(ctx context.Context, addrs []resolver.Address, c
 		if err == nil {
 			return nil
 		}
+		// The connection might be closing.
+		// Don't emit a warning in this case and err out early.
+		if ctx.Err() != nil {
+			return errConnClosing
+		}
+		channelz.Warningf(logger, ac.channelz, "grpc: addrConn.createTransport failed to connect to %s. Err: %v", addr, err)
+
 		if firstConnErr == nil {
 			firstConnErr = err
 		}
@@ -1404,7 +1411,6 @@ func (ac *addrConn) createTransport(ctx context.Context, addr resolver.Address, 
 		}
 		// newTr is either nil, or closed.
 		hcancel()
-		channelz.Warningf(logger, ac.channelz, "grpc: addrConn.createTransport failed to connect to %s. Err: %v", addr, err)
 		return err
 	}
 
