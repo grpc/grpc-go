@@ -3360,6 +3360,8 @@ func (s) TestClientTransport_Handle1xxHeaders(t *testing.T) {
 }
 
 func (s) TestDeleteStreamMetricsIncrementedOnlyOnce(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	// Enable channelz for metrics collection
 	defer internal.ChannelzTurnOffForTesting()
 	if !channelz.IsOn() {
@@ -3386,9 +3388,6 @@ func (s) TestDeleteStreamMetricsIncrementedOnlyOnce(t *testing.T) {
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-			defer cancel()
-
 			// Setup server configuration with channelz support
 			serverConfig := &ServerConfig{
 				ChannelzParent: channelz.RegisterServer(t.Name()),
@@ -3449,8 +3448,10 @@ func (s) TestDeleteStreamMetricsIncrementedOnlyOnce(t *testing.T) {
 				t.Fatalf("Server stream not found for client stream ID %d", clientStream.id)
 			}
 
-			// First call to deleteStream should remove the stream from activeStreams and update metrics
-			serverTransport.deleteStream(serverStream, test.eosReceived)
+			// First call to closeStream should remove the stream from
+			// the activeStreams and update metrics. closeStream will also
+			// cancel the stream, stopping the deadline timer.
+			serverTransport.closeStream(serverStream, false, 0, test.eosReceived)
 
 			// Check metrics after first deleteStream call
 			streamsSucceeded := serverTransport.channelz.SocketMetrics.StreamsSucceeded.Load()

@@ -44,7 +44,8 @@ const serviceNamespaceKey = "service_namespace"
 const serviceNamespaceKeyCSM = "csm.service_namespace_name"
 const serviceNameValue = "grpc-service"
 const serviceNamespaceValue = "grpc-service-namespace"
-
+const backendServiceKey = "grpc.lb.backend_service"
+const backendServiceValue = "cluster-my-service-client-side-xds"
 const localityKey = "grpc.lb.locality"
 const localityValue = `{region="region-1", zone="zone-1", sub_zone="subzone-1"}`
 
@@ -124,23 +125,23 @@ func (fsh *fakeStatsHandler) TagRPC(ctx context.Context, _ *stats.RPCTagInfo) co
 
 func (fsh *fakeStatsHandler) HandleRPC(_ context.Context, rs stats.RPCStats) {
 	switch rs.(type) {
-	// stats.Begin won't get Telemetry Labels because happens after picker
-	// picks.
-
-	// These three stats callouts trigger all metrics for OpenTelemetry that
-	// aren't started. All of these should have access to the desired telemetry
+	// stats.Begin is called before the picker runs, so it won't have telemetry
 	// labels.
+	// The following three stats callouts trigger OpenTelemetry metrics and are
+	// guaranteed to run after the picker has selected a subchannel. Therefore,
+	// they should have access to the desired telemetry labels.
 	case *stats.OutPayload, *stats.InPayload, *stats.End:
 		want := map[string]string{
 			serviceNameKeyCSM:      serviceNameValue,
 			serviceNamespaceKeyCSM: serviceNamespaceValue,
 			localityKey:            localityValue,
+			backendServiceKey:      backendServiceValue,
 		}
 		if diff := cmp.Diff(fsh.labels.TelemetryLabels, want); diff != "" {
 			fsh.t.Fatalf("fsh.labels.TelemetryLabels (-got +want): %v", diff)
 		}
 	default:
 		// Nothing to assert for the other stats.Handler callouts.
-	}
 
+	}
 }
