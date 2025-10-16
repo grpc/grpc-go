@@ -115,8 +115,8 @@ func (d *delegatingEndpointsWatcher) AmbientError(err error, onDone func()) {
 
 // WatchEndpoints uses xDS to discover the configuration associated with the
 // provided endpoints resource name.
-func WatchEndpoints(p ProducerV2, name string, w EndpointsWatcher) (cancel func()) {
-	return p.WatchResourceV2(version.V3EndpointsURL, name, &delegatingEndpointsWatcher{watcher: w})
+func WatchEndpoints(p Producer, name string, w EndpointsWatcher) (cancel func()) {
+	return p.WatchResource(version.V3EndpointsURL, name, &delegatingEndpointsWatcher{watcher: w})
 }
 
 // NewEndpointsResourceTypeDecoder returns a xdsclient.Decoder that wraps

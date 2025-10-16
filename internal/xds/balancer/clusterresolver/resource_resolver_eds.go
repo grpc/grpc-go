@@ -64,7 +64,7 @@ func (er *edsDiscoveryMechanism) stop() {
 
 // newEDSResolver returns an implementation of the endpointsResolver interface
 // that uses EDS to resolve the given name to endpoints.
-func newEDSResolver(nameToWatch string, producer xdsresource.ProducerV2, topLevelResolver topLevelResolver, logger *grpclog.PrefixLogger) *edsDiscoveryMechanism {
+func newEDSResolver(nameToWatch string, producer xdsresource.Producer, topLevelResolver topLevelResolver, logger *grpclog.PrefixLogger) *edsDiscoveryMechanism {
 	ret := &edsDiscoveryMechanism{
 		nameToWatch:      nameToWatch,
 		topLevelResolver: topLevelResolver,

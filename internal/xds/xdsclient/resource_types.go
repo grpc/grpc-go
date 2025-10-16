@@ -24,7 +24,7 @@ import (
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource/version"
 )
 
-func supportedResourceTypes(config *bootstrap.Config) map[string]xdsclient.ResourceType {
+func supportedResourceTypes(config *bootstrap.Config, gServerCfgMap map[xdsclient.ServerConfig]*bootstrap.ServerConfig) map[string]xdsclient.ResourceType {
 	return map[string]xdsclient.ResourceType{
 		version.V3ListenerURL: {
 			TypeURL:                    version.V3ListenerURL,
@@ -42,7 +42,7 @@ func supportedResourceTypes(config *bootstrap.Config) map[string]xdsclient.Resou
 			TypeURL:                    version.V3ClusterURL,
 			TypeName:                   xdsresource.ClusterResourceTypeName,
 			AllResourcesRequiredInSotW: true,
-			Decoder:                    xdsresource.NewClusterResourceTypeDecoder(config),
+			Decoder:                    xdsresource.NewClusterResourceTypeDecoder(config, gServerCfgMap),
 		},
 		version.V3EndpointsURL: {
 			TypeURL:                    version.V3EndpointsURL,

@@ -36,14 +36,14 @@ const (
 // interface for listener resources.
 type clusterResourceDecoder struct {
 	bootstrapConfig *bootstrap.Config
+	serverConfigs   map[xdsclient.ServerConfig]*bootstrap.ServerConfig
 }
 
-func (d *clusterResourceDecoder) Decode(resource *xdsclient.AnyProto, _ xdsclient.DecodeOptions) (*xdsclient.DecodeResult, error) {
-	servers := d.bootstrapConfig.XDSServers()
-	if len(servers) == 0 {
-		return nil, fmt.Errorf("no xDS servers found in bootstrap config")
+func (d *clusterResourceDecoder) Decode(resource *xdsclient.AnyProto, opts xdsclient.DecodeOptions) (*xdsclient.DecodeResult, error) {
+	serverCfg, ok := d.serverConfigs[*opts.ServerConfig]
+	if !ok {
+		return nil, fmt.Errorf("no server config found for {%+v}", opts.ServerConfig)
 	}
-	serverCfg := servers[0]
 	name, cluster, err := unmarshalClusterResource(resource.ToAny(), serverCfg)
 	if name == "" {
 		// Name is unset only when protobuf deserialization fails.
@@ -129,12 +129,12 @@ func (d *delegatingClusterWatcher) AmbientError(err error, onDone func()) {
 
 // WatchCluster uses xDS to discover the configuration associated with the
 // provided cluster resource name.
-func WatchCluster(p ProducerV2, name string, w ClusterWatcher) (cancel func()) {
-	return p.WatchResourceV2(version.V3ClusterURL, name, &delegatingClusterWatcher{watcher: w})
+func WatchCluster(p Producer, name string, w ClusterWatcher) (cancel func()) {
+	return p.WatchResource(version.V3ClusterURL, name, &delegatingClusterWatcher{watcher: w})
 }
 
 // NewClusterResourceTypeDecoder returns a xdsclient.Decoder that wraps
 // the xdsresource.clusterType.
-func NewClusterResourceTypeDecoder(bc *bootstrap.Config) xdsclient.Decoder {
-	return &clusterResourceDecoder{bootstrapConfig: bc}
+func NewClusterResourceTypeDecoder(bc *bootstrap.Config, gServerCfgMap map[xdsclient.ServerConfig]*bootstrap.ServerConfig) xdsclient.Decoder {
+	return &clusterResourceDecoder{bootstrapConfig: bc, serverConfigs: gServerCfgMap}
 }

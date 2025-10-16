@@ -580,7 +580,7 @@ func (r *xdsResolver) onListenerResourceError(err error) {
 }
 
 // Only executed in the context of a serializer callback.
-func (r *xdsResolver) onRouteConfigResourceUpdate(name string, update xdsresource.RouteConfigUpdate) {
+func (r *xdsResolver) onRouteConfigResourceUpdate(name string, update *xdsresource.RouteConfigUpdate) {
 	if r.logger.V(2) {
 		r.logger.Infof("Received update for RouteConfiguration resource %q: %v", name, pretty.ToJSON(update))
 	}
@@ -590,7 +590,7 @@ func (r *xdsResolver) onRouteConfigResourceUpdate(name string, update xdsresourc
 		return
 	}
 
-	r.applyRouteConfigUpdate(update)
+	r.applyRouteConfigUpdate(*update)
 }
 
 // Only executed in the context of a serializer callback.

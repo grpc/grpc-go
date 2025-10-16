@@ -75,6 +75,7 @@ func (s) TestBuildXDSClientConfig_Success(t *testing.T) {
 			wantXDSClientConfig: func(c *bootstrap.Config) xdsclient.Config {
 				node, serverCfg := c.Node(), c.XDSServers()[0]
 				expectedServer := xdsclient.ServerConfig{ServerIdentifier: clients.ServerIdentifier{ServerURI: serverCfg.ServerURI(), Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"}}}
+				gServerCfgMap := map[xdsclient.ServerConfig]*bootstrap.ServerConfig{expectedServer: serverCfg}
 				return xdsclient.Config{
 					Servers:     []xdsclient.ServerConfig{expectedServer},
 					Node:        clients.Node{ID: node.GetId(), Cluster: node.GetCluster(), Metadata: node.Metadata, Locality: clients.Locality{Region: node.Locality.Region, Zone: node.Locality.Zone, SubZone: node.Locality.SubZone}, UserAgentName: node.UserAgentName, UserAgentVersion: node.GetUserAgentVersion()},
@@ -82,7 +83,7 @@ func (s) TestBuildXDSClientConfig_Success(t *testing.T) {
 					ResourceTypes: map[string]xdsclient.ResourceType{
 						version.V3ListenerURL:    {TypeURL: version.V3ListenerURL, TypeName: xdsresource.ListenerResourceTypeName, AllResourcesRequiredInSotW: true, Decoder: xdsresource.NewListenerResourceTypeDecoder(c)},
 						version.V3RouteConfigURL: {TypeURL: version.V3RouteConfigURL, TypeName: xdsresource.RouteConfigTypeName, AllResourcesRequiredInSotW: false, Decoder: xdsresource.NewRouteConfigResourceTypeDecoder(c)},
-						version.V3ClusterURL:     {TypeURL: version.V3ClusterURL, TypeName: xdsresource.ClusterResourceTypeName, AllResourcesRequiredInSotW: true, Decoder: xdsresource.NewClusterResourceTypeDecoder(c)},
+						version.V3ClusterURL:     {TypeURL: version.V3ClusterURL, TypeName: xdsresource.ClusterResourceTypeName, AllResourcesRequiredInSotW: true, Decoder: xdsresource.NewClusterResourceTypeDecoder(c, gServerCfgMap)},
 						version.V3EndpointsURL:   {TypeURL: version.V3EndpointsURL, TypeName: xdsresource.EndpointsResourceTypeName, AllResourcesRequiredInSotW: false, Decoder: xdsresource.NewEndpointsResourceTypeDecoder(c)},
 					},
 					MetricsReporter: &metricsReporter{recorder: stats.NewTestMetricsRecorder(), target: testTargetName},
@@ -112,6 +113,7 @@ func (s) TestBuildXDSClientConfig_Success(t *testing.T) {
 				topLevelSCfg, auth2SCfg := c.XDSServers()[0], c.Authorities()["auth2"].XDSServers[0]
 				expTopLevelS := xdsclient.ServerConfig{ServerIdentifier: clients.ServerIdentifier{ServerURI: topLevelSCfg.ServerURI(), Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"}}}
 				expAuth2S := xdsclient.ServerConfig{ServerIdentifier: clients.ServerIdentifier{ServerURI: auth2SCfg.ServerURI(), Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"}}}
+				gServerCfgMap := map[xdsclient.ServerConfig]*bootstrap.ServerConfig{expTopLevelS: topLevelSCfg, expAuth2S: auth2SCfg}
 				return xdsclient.Config{
 					Servers:     []xdsclient.ServerConfig{expTopLevelS},
 					Node:        clients.Node{ID: node.GetId(), Cluster: node.GetCluster(), Metadata: node.Metadata, UserAgentName: node.UserAgentName, UserAgentVersion: node.GetUserAgentVersion()},
@@ -119,7 +121,7 @@ func (s) TestBuildXDSClientConfig_Success(t *testing.T) {
 					ResourceTypes: map[string]xdsclient.ResourceType{
 						version.V3ListenerURL:    {TypeURL: version.V3ListenerURL, TypeName: xdsresource.ListenerResourceTypeName, AllResourcesRequiredInSotW: true, Decoder: xdsresource.NewListenerResourceTypeDecoder(c)},
 						version.V3RouteConfigURL: {TypeURL: version.V3RouteConfigURL, TypeName: xdsresource.RouteConfigTypeName, AllResourcesRequiredInSotW: false, Decoder: xdsresource.NewRouteConfigResourceTypeDecoder(c)},
-						version.V3ClusterURL:     {TypeURL: version.V3ClusterURL, TypeName: xdsresource.ClusterResourceTypeName, AllResourcesRequiredInSotW: true, Decoder: xdsresource.NewClusterResourceTypeDecoder(c)},
+						version.V3ClusterURL:     {TypeURL: version.V3ClusterURL, TypeName: xdsresource.ClusterResourceTypeName, AllResourcesRequiredInSotW: true, Decoder: xdsresource.NewClusterResourceTypeDecoder(c, gServerCfgMap)},
 						version.V3EndpointsURL:   {TypeURL: version.V3EndpointsURL, TypeName: xdsresource.EndpointsResourceTypeName, AllResourcesRequiredInSotW: false, Decoder: xdsresource.NewEndpointsResourceTypeDecoder(c)},
 					},
 					MetricsReporter: &metricsReporter{recorder: stats.NewTestMetricsRecorder(), target: testTargetName},
@@ -143,6 +145,7 @@ func (s) TestBuildXDSClientConfig_Success(t *testing.T) {
 			wantXDSClientConfig: func(c *bootstrap.Config) xdsclient.Config {
 				node, serverCfg := c.Node(), c.XDSServers()[0]
 				expectedServer := xdsclient.ServerConfig{ServerIdentifier: clients.ServerIdentifier{ServerURI: serverCfg.ServerURI(), Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"}}, IgnoreResourceDeletion: true}
+				gServerCfgMap := map[xdsclient.ServerConfig]*bootstrap.ServerConfig{expectedServer: serverCfg}
 				return xdsclient.Config{
 					Servers:     []xdsclient.ServerConfig{expectedServer},
 					Node:        clients.Node{ID: node.GetId(), Cluster: node.GetCluster(), Metadata: node.Metadata, UserAgentName: node.UserAgentName, UserAgentVersion: node.GetUserAgentVersion()},
@@ -150,7 +153,7 @@ func (s) TestBuildXDSClientConfig_Success(t *testing.T) {
 					ResourceTypes: map[string]xdsclient.ResourceType{
 						version.V3ListenerURL:    {TypeURL: version.V3ListenerURL, TypeName: xdsresource.ListenerResourceTypeName, AllResourcesRequiredInSotW: true, Decoder: xdsresource.NewListenerResourceTypeDecoder(c)},
 						version.V3RouteConfigURL: {TypeURL: version.V3RouteConfigURL, TypeName: xdsresource.RouteConfigTypeName, AllResourcesRequiredInSotW: false, Decoder: xdsresource.NewRouteConfigResourceTypeDecoder(c)},
-						version.V3ClusterURL:     {TypeURL: version.V3ClusterURL, TypeName: xdsresource.ClusterResourceTypeName, AllResourcesRequiredInSotW: true, Decoder: xdsresource.NewClusterResourceTypeDecoder(c)},
+						version.V3ClusterURL:     {TypeURL: version.V3ClusterURL, TypeName: xdsresource.ClusterResourceTypeName, AllResourcesRequiredInSotW: true, Decoder: xdsresource.NewClusterResourceTypeDecoder(c, gServerCfgMap)},
 						version.V3EndpointsURL:   {TypeURL: version.V3EndpointsURL, TypeName: xdsresource.EndpointsResourceTypeName, AllResourcesRequiredInSotW: false, Decoder: xdsresource.NewEndpointsResourceTypeDecoder(c)},
 					},
 					MetricsReporter: &metricsReporter{recorder: stats.NewTestMetricsRecorder(), target: testTargetName},
@@ -174,6 +177,7 @@ func (s) TestBuildXDSClientConfig_Success(t *testing.T) {
 			wantXDSClientConfig: func(c *bootstrap.Config) xdsclient.Config {
 				node, serverCfg := c.Node(), c.XDSServers()[0] // SelectedCreds will be "insecure"
 				expectedServer := xdsclient.ServerConfig{ServerIdentifier: clients.ServerIdentifier{ServerURI: serverCfg.ServerURI(), Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"}}}
+				gServerCfgMap := map[xdsclient.ServerConfig]*bootstrap.ServerConfig{expectedServer: serverCfg}
 				return xdsclient.Config{
 					Servers:     []xdsclient.ServerConfig{expectedServer},
 					Node:        clients.Node{ID: node.GetId(), Cluster: node.GetCluster(), Metadata: node.Metadata, UserAgentName: node.UserAgentName, UserAgentVersion: node.GetUserAgentVersion()},
@@ -181,7 +185,7 @@ func (s) TestBuildXDSClientConfig_Success(t *testing.T) {
 					ResourceTypes: map[string]xdsclient.ResourceType{
 						version.V3ListenerURL:    {TypeURL: version.V3ListenerURL, TypeName: xdsresource.ListenerResourceTypeName, AllResourcesRequiredInSotW: true, Decoder: xdsresource.NewListenerResourceTypeDecoder(c)},
 						version.V3RouteConfigURL: {TypeURL: version.V3RouteConfigURL, TypeName: xdsresource.RouteConfigTypeName, AllResourcesRequiredInSotW: false, Decoder: xdsresource.NewRouteConfigResourceTypeDecoder(c)},
-						version.V3ClusterURL:     {TypeURL: version.V3ClusterURL, TypeName: xdsresource.ClusterResourceTypeName, AllResourcesRequiredInSotW: true, Decoder: xdsresource.NewClusterResourceTypeDecoder(c)},
+						version.V3ClusterURL:     {TypeURL: version.V3ClusterURL, TypeName: xdsresource.ClusterResourceTypeName, AllResourcesRequiredInSotW: true, Decoder: xdsresource.NewClusterResourceTypeDecoder(c, gServerCfgMap)},
 						version.V3EndpointsURL:   {TypeURL: version.V3EndpointsURL, TypeName: xdsresource.EndpointsResourceTypeName, AllResourcesRequiredInSotW: false, Decoder: xdsresource.NewEndpointsResourceTypeDecoder(c)},
 					},
 					MetricsReporter: &metricsReporter{recorder: stats.NewTestMetricsRecorder(), target: testTargetName},

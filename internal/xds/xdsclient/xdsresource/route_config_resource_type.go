@@ -116,8 +116,8 @@ func (d *delegatingRouteConfigWatcher) AmbientError(err error, onDone func()) {
 
 // WatchRouteConfig uses xDS to discover the configuration associated with the
 // provided route configuration resource name.
-func WatchRouteConfig(p ProducerV2, name string, w RouteConfigWatcher) (cancel func()) {
-	return p.WatchResourceV2(version.V3RouteConfigURL, name, &delegatingRouteConfigWatcher{watcher: w})
+func WatchRouteConfig(p Producer, name string, w RouteConfigWatcher) (cancel func()) {
+	return p.WatchResource(version.V3RouteConfigURL, name, &delegatingRouteConfigWatcher{watcher: w})
 }
 
 // NewRouteConfigResourceTypeDecoder returns a xdsclient.Decoder that wraps
