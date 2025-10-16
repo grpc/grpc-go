@@ -72,7 +72,6 @@ import (
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/mem"
 	"google.golang.org/grpc/metadata"
-	gstats "google.golang.org/grpc/stats"
 	"google.golang.org/grpc/test/bufconn"
 
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
@@ -404,10 +403,6 @@ func makeClients(bf stats.Features) ([]testgrpc.BenchmarkServiceClient, func()) 
 	stopper := benchmark.StartServer(benchmark.ServerInfo{Type: "protobuf", Listener: lis}, sopts...)
 	conns := make([]*grpc.ClientConn, bf.Connections)
 	clients := make([]testgrpc.BenchmarkServiceClient, bf.Connections)
-	opts = append(opts, grpc.WithStatsHandler(&mockStatsHandler{}))
-	opts = append(opts, grpc.WithStatsHandler(&mockStatsHandler{}))
-	sopts = append(sopts, grpc.StatsHandler(&mockStatsHandler{}))
-	sopts = append(sopts, grpc.StatsHandler(&mockStatsHandler{}))
 	for cn := 0; cn < bf.Connections; cn++ {
 		conns[cn] = benchmark.NewClientConn("passthrough://" /* target not used */, opts...)
 		clients[cn] = testgrpc.NewBenchmarkServiceClient(conns[cn])
@@ -419,23 +414,6 @@ func makeClients(bf stats.Features) ([]testgrpc.BenchmarkServiceClient, func()) 
 		}
 		stopper()
 	}
-}
-
-type mockStatsHandler struct {
-}
-
-func (h *mockStatsHandler) TagRPC(ctx context.Context, _ *gstats.RPCTagInfo) context.Context {
-	return ctx
-}
-
-func (h *mockStatsHandler) HandleRPC(context.Context, gstats.RPCStats) {
-}
-
-func (h *mockStatsHandler) TagConn(ctx context.Context, _ *gstats.ConnTagInfo) context.Context {
-	return ctx
-}
-
-func (h *mockStatsHandler) HandleConn(context.Context, gstats.ConnStats) {
 }
 
 func makeFuncUnary(bf stats.Features) (rpcCallFunc, rpcCleanupFunc) {
