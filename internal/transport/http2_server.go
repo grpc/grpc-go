@@ -169,7 +169,8 @@ func NewServerTransport(conn net.Conn, config *ServerConfig) (_ ServerTransport,
 	if config.MaxHeaderListSize != nil {
 		maxHeaderListSize = *config.MaxHeaderListSize
 	}
-	framer := newFramer(conn, writeBufSize, readBufSize, config.SharedWriteBuffer, maxHeaderListSize)
+
+	framer := newFramer(conn, writeBufSize, readBufSize, config.SharedWriteBuffer, maxHeaderListSize, config.BufferPool)
 	// Send initial settings as connection preface to client.
 	isettings := []http2.Setting{{
 		ID:  http2.SettingMaxFrameSize,
@@ -668,10 +669,16 @@ func (t *http2Server) HandleStreams(ctx context.Context, handle func(*ServerStre
 		close(t.readerDone)
 		<-t.loopyWriterDone
 	}()
+	pool := t.bufferPool
+	if pool == nil {
+		// Note that this is only supposed to be nil in tests. Otherwise, stream
+		// is always initialized with a BufferPool.
+		pool = mem.DefaultBufferPool()
+	}
 	for {
 		t.controlBuf.throttle()
-		frame, err := t.framer.fr.ReadFrame()
 		atomic.StoreInt64(&t.lastRead, time.Now().UnixNano())
+		frame, err := t.framer.readFrame()
 		if err != nil {
 			if se, ok := err.(http2.StreamError); ok {
 				if t.logger.V(logLevel) {
@@ -707,7 +714,7 @@ func (t *http2Server) HandleStreams(ctx context.Context, handle func(*ServerStre
 				})
 				continue
 			}
-		case *http2.DataFrame:
+		case *parsedDataFrame:
 			t.handleData(frame)
 		case *http2.RSTStreamFrame:
 			t.handleRSTStream(frame)
@@ -788,7 +795,12 @@ func (t *http2Server) updateFlowControl(n uint32) {
 
 }
 
-func (t *http2Server) handleData(f *http2.DataFrame) {
+func (t *http2Server) handleData(f *parsedDataFrame) {
+	defer func() {
+		if f.data != nil {
+			f.data.Free()
+		}
+	}()
 	size := f.Header().Length
 	var sendBDPPing bool
 	if t.bdpEst != nil {
@@ -833,22 +845,15 @@ func (t *http2Server) handleData(f *http2.DataFrame) {
 			t.closeStream(s, true, http2.ErrCodeFlowControl, false)
 			return
 		}
+		dataLen := f.data.Len()
 		if f.Header().Flags.Has(http2.FlagDataPadded) {
-			if w := s.fc.onRead(size - uint32(len(f.Data()))); w > 0 {
+			if w := s.fc.onRead(size - uint32(dataLen)); w > 0 {
 				t.controlBuf.put(&outgoingWindowUpdate{s.id, w})
 			}
 		}
-		// TODO(bradfitz, zhaoq): A copy is required here because there is no
-		// guarantee f.Data() is consumed before the arrival of next frame.
-		// Can this copy be eliminated?
-		if len(f.Data()) > 0 {
-			pool := t.bufferPool
-			if pool == nil {
-				// Note that this is only supposed to be nil in tests. Otherwise, stream is
-				// always initialized with a BufferPool.
-				pool = mem.DefaultBufferPool()
-			}
-			s.write(recvMsg{buffer: mem.Copy(f.Data(), pool)})
+		if dataLen > 0 {
+			s.write(recvMsg{buffer: f.data})
+			f.data = nil
 		}
 	}
 	if f.StreamEnded() {

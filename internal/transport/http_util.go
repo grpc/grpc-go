@@ -37,6 +37,7 @@ import (
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/mem"
 )
 
 const (
@@ -388,15 +389,34 @@ func toIOError(err error) error {
 	return ioError{error: err}
 }
 
+type parsedDataFrame struct {
+	http2.FrameHeader
+	data mem.Buffer
+}
+
+func (df *parsedDataFrame) StreamEnded() bool {
+	return df.FrameHeader.Flags.Has(http2.FlagDataEndStream)
+}
+
 type framer struct {
 	writer *bufWriter
 	fr     *http2.Framer
+	reader io.Reader
+	// Cached data frame to avoid heap allocations.
+	dataFrame parsedDataFrame
+	pool      mem.BufferPool
 }
 
 var writeBufferPoolMap = make(map[int]*sync.Pool)
 var writeBufferMutex sync.Mutex
 
-func newFramer(conn net.Conn, writeBufferSize, readBufferSize int, sharedWriteBuffer bool, maxHeaderListSize uint32) *framer {
+func newFramer(conn net.Conn, writeBufferSize, readBufferSize int, sharedWriteBuffer bool, maxHeaderListSize uint32, memPool mem.BufferPool) *framer {
+	if memPool == nil {
+		// Note that this is only supposed to be nil in tests. Otherwise, stream
+		// is always initialized with a BufferPool.
+		memPool = mem.DefaultBufferPool()
+	}
+
 	if writeBufferSize < 0 {
 		writeBufferSize = 0
 	}
@@ -412,6 +432,8 @@ func newFramer(conn net.Conn, writeBufferSize, readBufferSize int, sharedWriteBu
 	f := &framer{
 		writer: w,
 		fr:     http2.NewFramer(w, r),
+		reader: r,
+		pool:   memPool,
 	}
 	f.fr.SetMaxReadFrameSize(http2MaxFrameLen)
 	// Opt-in to Frame reuse API on framer to reduce garbage.
@@ -420,6 +442,73 @@ func newFramer(conn net.Conn, writeBufferSize, readBufferSize int, sharedWriteBu
 	f.fr.MaxHeaderListSize = maxHeaderListSize
 	f.fr.ReadMetaHeaders = hpack.NewDecoder(http2InitHeaderTableSize, nil)
 	return f
+}
+
+func (f *framer) readFrame() (any, error) {
+	fh, err := f.fr.ReadFrameHeader()
+	if err != nil {
+		return nil, err
+	}
+	if fh.Type == http2.FrameData {
+		err = f.readDataFrame(fh, f.pool, &f.dataFrame)
+		return &f.dataFrame, err
+	} else {
+		return f.fr.ReadFrameForHeader(fh)
+	}
+}
+
+// readDataFrame reads and parses a data frame from the underlying io.Reader.
+// Frames aren't safe to read from after a subsequent call to ReadFrame.
+func (f *framer) readDataFrame(fh http2.FrameHeader, pool mem.BufferPool, df *parsedDataFrame) (err error) {
+	if fh.StreamID == 0 {
+		// DATA frames MUST be associated with a stream. If a
+		// DATA frame is received whose stream identifier
+		// field is 0x0, the recipient MUST respond with a
+		// connection error (Section 5.4.1) of type
+		// PROTOCOL_ERROR.
+		return fmt.Errorf("DATA frame with stream ID 0")
+	}
+	payload := pool.Get(int(fh.Length))
+	defer func() {
+		if err != nil {
+			f.pool.Put(payload)
+		}
+	}()
+	if fh.Flags.Has(http2.FlagDataPadded) {
+		if fh.Length == 0 {
+			return io.ErrUnexpectedEOF
+		}
+		// This initial 1-byte read can be inefficient for unbuffered readers,
+		// but it allows the rest of the payload to be read directly to the
+		// start of the destination slice. This makes it easy to return the
+		// original slice back to the buffer pool.
+		if _, err := io.ReadFull(f.reader, (*payload)[:1]); err != nil {
+			return err
+		}
+		padSize := (*payload)[0]
+		*payload = (*payload)[:len(*payload)-1]
+		if _, err := io.ReadFull(f.reader, *payload); err != nil {
+			return err
+		}
+		if int(padSize) > len(*payload) {
+			// If the length of the padding is greater than the
+			// length of the frame payload, the recipient MUST
+			// treat this as a connection error.
+			// Filed: https://github.com/http2/http2-spec/issues/610
+			return fmt.Errorf("pad size larger than data payload")
+		}
+		*payload = (*payload)[:len(*payload)-int(padSize)]
+	} else if _, err := io.ReadFull(f.reader, *payload); err != nil {
+		return err
+	}
+
+	df.FrameHeader = fh
+	df.data = mem.NewBuffer(payload, pool)
+	return nil
+}
+
+func (df *parsedDataFrame) Header() http2.FrameHeader {
+	return df.FrameHeader
 }
 
 func getWriteBufferPool(size int) *sync.Pool {
