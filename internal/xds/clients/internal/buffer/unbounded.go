@@ -129,7 +129,7 @@ func (b *Unbounded) Reset() {
 		return
 	}
 
-	b.backlog = nil
+	b.backlog = b.backlog[:0]
 	select {
 	case <-b.c:
 	default:

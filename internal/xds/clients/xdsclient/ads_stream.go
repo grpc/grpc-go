@@ -189,11 +189,11 @@ func (s *adsStreamImpl) subscribe(typ ResourceType, name string) {
 	s.requestCh.Put(request{typ: typ, resourceNames: resourceNames(state.subscribedResources)})
 }
 
-// Unsubscribe cancels the subscription to the given resource. It is a no-op if
+// unsubscribe cancels the subscription to the given resource. It is a no-op if
 // the given resource does not exist. The watch expiry timer associated with the
 // resource is stopped if one is active. A discovery request is sent out on the
 // stream for the resource type with the updated set of resource names.
-func (s *adsStreamImpl) Unsubscribe(typ ResourceType, name string) {
+func (s *adsStreamImpl) unsubscribe(typ ResourceType, name string) {
 	if s.logger.V(2) {
 		s.logger.Infof("Unsubscribing to resource %q of type %q", name, typ.TypeName)
 	}
