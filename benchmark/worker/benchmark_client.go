@@ -264,9 +264,6 @@ func (bc *benchmarkClient) unaryLoop(ctx context.Context, conns []*grpc.ClientCo
 			// Create histogram for each goroutine.
 			idx := ic*rpcCountPerConn + j
 			bc.lockingHistograms[idx].histogram = stats.NewHistogram(bc.histogramOptions)
-			if ctx.Err() != nil {
-				return
-			}
 			// Start goroutine on the created mutex and histogram.
 			go func(idx int) {
 				// TODO: do warm up if necessary.
@@ -277,7 +274,10 @@ func (bc *benchmarkClient) unaryLoop(ctx context.Context, conns []*grpc.ClientCo
 					for {
 						start := time.Now()
 						if err := benchmark.DoUnaryCall(ctx, client, reqSize, respSize); err != nil {
-							return
+							if status.Code(err) == codes.Canceled {
+								return
+							}
+							continue
 						}
 						elapse := time.Since(start)
 						bc.lockingHistograms[idx].add(int64(elapse))
@@ -311,9 +311,6 @@ func (bc *benchmarkClient) streamingLoop(ctx context.Context, conns []*grpc.Clie
 			idx := ic*rpcCountPerConn + j
 			bc.lockingHistograms[idx].histogram = stats.NewHistogram(bc.histogramOptions)
 			if poissonLambda == nil { // Closed loop.
-				if stream.Context().Err() != nil {
-					return
-				}
 				// Start goroutine on the created mutex and histogram.
 				go func(idx int) {
 					// TODO: do warm up if necessary.
@@ -342,7 +339,6 @@ func (bc *benchmarkClient) streamingLoop(ctx context.Context, conns []*grpc.Clie
 func (bc *benchmarkClient) poissonUnary(ctx context.Context, client testgrpc.BenchmarkServiceClient, idx int, reqSize int, respSize int, lambda float64) {
 	go func() {
 		start := time.Now()
-
 		if err := benchmark.DoUnaryCall(ctx, client, reqSize, respSize); err != nil {
 			return
 		}
