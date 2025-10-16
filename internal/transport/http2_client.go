@@ -1654,13 +1654,6 @@ func (t *http2Client) reader(errCh chan<- error) {
 		}
 	}()
 
-	pool := t.bufferPool
-	if pool == nil {
-		// Note that this is only supposed to be nil in tests. Otherwise, stream
-		// is always initialized with a BufferPool.
-		pool = mem.DefaultBufferPool()
-	}
-
 	if err := t.readServerPreface(); err != nil {
 		errCh <- err
 		return

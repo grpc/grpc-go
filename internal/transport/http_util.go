@@ -443,21 +443,22 @@ func newFramer(conn io.ReadWriter, writeBufferSize, readBufferSize int, sharedWr
 	return f
 }
 
+// readFrame reads a single frame. The returned Frame is only valid
+// until the next call to readFrame.
 func (f *framer) readFrame() (any, error) {
 	fh, err := f.fr.ReadFrameHeader()
 	if err != nil {
 		return nil, err
 	}
+	// Read the data frame directly from the underlying io.Reader to avoid
+	// copies.
 	if fh.Type == http2.FrameData {
 		err = f.readDataFrame(fh, f.pool, &f.dataFrame)
 		return &f.dataFrame, err
-	} else {
-		return f.fr.ReadFrameForHeader(fh)
 	}
+	return f.fr.ReadFrameForHeader(fh)
 }
 
-// readDataFrame reads and parses a data frame from the underlying io.Reader.
-// Frames aren't safe to read from after a subsequent call to ReadFrame.
 func (f *framer) readDataFrame(fh http2.FrameHeader, pool mem.BufferPool, df *parsedDataFrame) (err error) {
 	if fh.StreamID == 0 {
 		// DATA frames MUST be associated with a stream. If a

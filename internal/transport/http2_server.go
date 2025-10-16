@@ -169,7 +169,6 @@ func NewServerTransport(conn net.Conn, config *ServerConfig) (_ ServerTransport,
 	if config.MaxHeaderListSize != nil {
 		maxHeaderListSize = *config.MaxHeaderListSize
 	}
-
 	framer := newFramer(conn, writeBufSize, readBufSize, config.SharedWriteBuffer, maxHeaderListSize, config.BufferPool)
 	// Send initial settings as connection preface to client.
 	isettings := []http2.Setting{{
@@ -669,16 +668,10 @@ func (t *http2Server) HandleStreams(ctx context.Context, handle func(*ServerStre
 		close(t.readerDone)
 		<-t.loopyWriterDone
 	}()
-	pool := t.bufferPool
-	if pool == nil {
-		// Note that this is only supposed to be nil in tests. Otherwise, stream
-		// is always initialized with a BufferPool.
-		pool = mem.DefaultBufferPool()
-	}
 	for {
 		t.controlBuf.throttle()
-		atomic.StoreInt64(&t.lastRead, time.Now().UnixNano())
 		frame, err := t.framer.readFrame()
+		atomic.StoreInt64(&t.lastRead, time.Now().UnixNano())
 		if err != nil {
 			if se, ok := err.(http2.StreamError); ok {
 				if t.logger.V(logLevel) {
