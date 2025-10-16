@@ -19,6 +19,7 @@
 package transport
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -27,6 +28,8 @@ import (
 	"reflect"
 	"testing"
 	"time"
+
+	"google.golang.org/grpc/mem"
 )
 
 func (s) TestDecodeTimeout(t *testing.T) {
@@ -294,4 +297,78 @@ func BenchmarkEncodeGrpcMessage(b *testing.B) {
 			b.Fatalf("encodeGrpcMessage(%q) = %s, want %s", input, got, want)
 		}
 	}
+}
+
+func (s) TestFrame_ReadDataFrame(t *testing.T) {
+	tests := []struct {
+		name     string
+		w        func(fr *framer) error
+		wantData []byte
+		wantErr  bool
+	}{
+		{
+			name: "good_padded",
+			w: func(fr *framer) error {
+				return fr.fr.WriteDataPadded(1, false, []byte("foo"), []byte{0, 0})
+			},
+			wantData: []byte("foo"),
+		},
+		{
+			name: "good_unpadded",
+			w: func(fr *framer) error {
+				return fr.fr.WriteData(1, false, []byte("foo"))
+			},
+			wantData: []byte("foo"),
+		},
+		{
+			name: "padded_zero_data_some_padding",
+			w: func(fr *framer) error {
+				return fr.fr.WriteDataPadded(1, false, []byte{}, []byte{0, 0})
+			},
+			wantData: []byte{},
+		},
+		{
+			name: "stream_id_0",
+			w: func(fr *framer) error {
+				fr.fr.AllowIllegalWrites = true
+				return fr.fr.WriteData(0, false, []byte("foo"))
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fr, _ := testFramer()
+			// Write the frame using the provided function.
+			writeErr := tt.w(fr)
+			if writeErr != nil {
+				t.Fatalf("tt.w() returned unexpected error: %v", writeErr)
+			}
+			fr.writer.Flush()
+
+			// Read the frame back.
+			f, err := fr.readFrame()
+			if gotErr := err != nil; gotErr != tt.wantErr {
+				t.Fatalf("ReadFrame() err = %v; want %t", err, tt.wantErr)
+			}
+			if tt.wantErr {
+				return
+			}
+
+			df, ok := f.(*parsedDataFrame)
+			if !ok {
+				t.Fatalf("ReadFrame() returned %T, want *parsedDataFrame", f)
+			}
+			if gotData := df.data.ReadOnlyData(); !bytes.Equal(gotData, tt.wantData) {
+				t.Fatalf("parsedDataFrame.Data() = %q, want %q", gotData, tt.wantData)
+			}
+			df.data.Free()
+		})
+	}
+}
+
+func testFramer() (*framer, *bytes.Buffer) {
+	buf := new(bytes.Buffer)
+	return newFramer(buf, defaultWriteBufSize, defaultReadBufSize, false, defaultClientMaxHeaderListSize, mem.DefaultBufferPool()), buf
 }

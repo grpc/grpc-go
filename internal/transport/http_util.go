@@ -25,7 +25,6 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -301,11 +300,11 @@ type bufWriter struct {
 	buf       []byte
 	offset    int
 	batchSize int
-	conn      net.Conn
+	conn      io.ReadWriter
 	err       error
 }
 
-func newBufWriter(conn net.Conn, batchSize int, pool *sync.Pool) *bufWriter {
+func newBufWriter(conn io.ReadWriter, batchSize int, pool *sync.Pool) *bufWriter {
 	w := &bufWriter{
 		batchSize: batchSize,
 		conn:      conn,
@@ -410,7 +409,7 @@ type framer struct {
 var writeBufferPoolMap = make(map[int]*sync.Pool)
 var writeBufferMutex sync.Mutex
 
-func newFramer(conn net.Conn, writeBufferSize, readBufferSize int, sharedWriteBuffer bool, maxHeaderListSize uint32, memPool mem.BufferPool) *framer {
+func newFramer(conn io.ReadWriter, writeBufferSize, readBufferSize int, sharedWriteBuffer bool, maxHeaderListSize uint32, memPool mem.BufferPool) *framer {
 	if memPool == nil {
 		// Note that this is only supposed to be nil in tests. Otherwise, stream
 		// is always initialized with a BufferPool.
