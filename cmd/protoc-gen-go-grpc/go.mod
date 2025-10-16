@@ -4,11 +4,10 @@ go 1.24.0
 
 require (
 	google.golang.org/grpc v1.70.0
-	google.golang.org/protobuf v1.36.9
+	google.golang.org/protobuf v1.36.10
 )
 
 require (
-	github.com/google/go-cmp v0.7.0 // indirect
 	go.opentelemetry.io/otel v1.34.0 // indirect
 	go.opentelemetry.io/otel/sdk/metric v1.34.0 // indirect
 	golang.org/x/net v0.38.0 // indirect
