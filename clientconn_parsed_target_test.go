@@ -196,6 +196,25 @@ func (s) TestParsedTarget_Failure_WithoutCustomDialer(t *testing.T) {
 
 	for _, target := range targets {
 		t.Run(target, func(t *testing.T) {
+			if cc, err := Dial(target, WithTransportCredentials(insecure.NewCredentials())); err == nil {
+				defer cc.Close()
+				t.Fatalf("Dial(%q) succeeded cc.parsedTarget = %+v, expected to fail", target, cc.parsedTarget)
+			}
+		})
+	}
+}
+
+func (s) TestParsedTarget_Failure_WithoutCustomDialer_WithNewClient(t *testing.T) {
+	targets := []string{
+		"",
+		"unix://a/b/c",
+		"unix://authority",
+		"unix-abstract://authority/a/b/c",
+		"unix-abstract://authority",
+	}
+
+	for _, target := range targets {
+		t.Run(target, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 			cc, err := NewClient(target, WithTransportCredentials(insecure.NewCredentials()))

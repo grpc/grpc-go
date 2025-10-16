@@ -65,7 +65,7 @@ func (s) TestResolverCaseSensitivity(t *testing.T) {
 
 	cc, err := NewClient(target, WithContextDialer(customDialer), WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("Unexpected grpc.NewClient(%q) error: %v", target, err)
+		t.Fatalf("Unexpected NewClient(%q) error: %v", target, err)
 	}
 	cc.Connect()
 	if got, want := <-addrCh, "localhost:1234"; got != want {
@@ -87,7 +87,7 @@ func (s) TestResolverCaseSensitivity(t *testing.T) {
 	target = "caseTest2:///localhost:1234"
 	cc, err = NewClient(target, WithContextDialer(customDialer), withDefaultScheme("passthrough"), WithResolvers(res), WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("Unexpected grpc.NewClient(%q) error: %v", target, err)
+		t.Fatalf("Unexpected NewClient(%q) error: %v", target, err)
 	}
 	cc.Connect()
 	if got, want := <-addrCh, target; got != want {
@@ -125,7 +125,7 @@ func (s) TestResolverAddressesToEndpoints(t *testing.T) {
 		WithResolvers(r),
 		WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, balancerName)))
 	if err != nil {
-		t.Fatalf("grpc.NewClient() failed: %v", err)
+		t.Fatalf("NewClient() failed: %v", err)
 	}
 	cc.Connect()
 	defer cc.Close()
@@ -176,7 +176,7 @@ func (s) TestResolverAddressesToEndpointsUsingNewAddresses(t *testing.T) {
 		WithResolvers(r),
 		WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, balancerName)))
 	if err != nil {
-		t.Fatalf("grpc.NewClient() failed: %v", err)
+		t.Fatalf("NewClient() failed: %v", err)
 	}
 	cc.Connect()
 	defer cc.Close()
