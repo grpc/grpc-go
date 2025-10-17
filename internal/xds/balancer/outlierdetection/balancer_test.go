@@ -1141,9 +1141,9 @@ func (s) TestEjectUnejectSuccessRate(t *testing.T) {
 			connectivityCh := make(chan struct{})
 			var allSubConns = make([]balancer.SubConn, test.numberOfConns)
 			stub.Register(test.name, stub.BalancerFuncs{
-				UpdateClientConnState: func(bd *stub.BalancerData, _ balancer.ClientConnState) error {
+				UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
 					for i := range test.numberOfConns {
-						scw, err := bd.ClientConn.NewSubConn([]resolver.Address{{Addr: fmt.Sprintf("address%d", i+1)}}, balancer.NewSubConnOptions{
+						scw, err := bd.ClientConn.NewSubConn(ccs.ResolverState.Endpoints[i].Addresses, balancer.NewSubConnOptions{
 							StateListener: func(state balancer.SubConnState) {
 								if state.ConnectivityState == connectivity.Ready {
 									connectivityCh <- struct{}{}
@@ -1151,7 +1151,7 @@ func (s) TestEjectUnejectSuccessRate(t *testing.T) {
 							},
 						})
 						if err != nil {
-							t.Errorf("error in od.NewSubConn call: %v", err)
+							t.Errorf("NewSubConn(%v) failed: %v", ccs.ResolverState.Endpoints[i].Addresses, err)
 						}
 						scw.Connect()
 						allSubConns[i] = scw
@@ -1169,8 +1169,8 @@ func (s) TestEjectUnejectSuccessRate(t *testing.T) {
 
 			od, tcc, cleanup := setup(t)
 			defer cleanup()
-			endpoints := make([]resolver.Endpoint, len(allSubConns))
-			for i := range allSubConns {
+			endpoints := make([]resolver.Endpoint, test.numberOfConns)
+			for i := range test.numberOfConns {
 				endpoints[i] = resolver.Endpoint{Addresses: []resolver.Address{{Addr: fmt.Sprintf("address%d", i+1)}}}
 			}
 			od.UpdateClientConnState(balancer.ClientConnState{
@@ -1199,22 +1199,18 @@ func (s) TestEjectUnejectSuccessRate(t *testing.T) {
 			// processed to avoid data races while accessing the health listener within
 			// the TestClientConn.
 			connectionsReady := 0
-		OuterLoop:
-			for {
+			for connectionsReady < test.numberOfConns {
 				select {
 				case <-ctx.Done():
 					t.Fatal("Context timed out waiting for all SubConns to become READY.")
 				case <-connectivityCh:
 					connectionsReady++
-					if connectionsReady == len(allSubConns) {
-						break OuterLoop
-					}
 				}
 			}
 
-			for _, sc := range allSubConns {
-				sc.RegisterHealthListener(func(healthState balancer.SubConnState) {
-					scsCh.Send(subConnWithState{sc: sc, state: healthState})
+			for i := range test.numberOfConns {
+				allSubConns[i].RegisterHealthListener(func(healthState balancer.SubConnState) {
+					scsCh.Send(subConnWithState{sc: allSubConns[i], state: healthState})
 				})
 			}
 
@@ -1225,7 +1221,7 @@ func (s) TestEjectUnejectSuccessRate(t *testing.T) {
 				// Set each of the three upstream addresses to have five successes each.
 				// This should cause none of the addresses to be ejected as none of them
 				// are outliers according to the success rate algorithm.
-				for i := 0; i < len(allSubConns); i++ {
+				for i := 0; i < test.numberOfConns; i++ {
 					pi, err := picker.Pick(balancer.PickInfo{})
 					if err != nil {
 						t.Fatalf("picker.Pick failed with error: %v", err)
@@ -1275,9 +1271,9 @@ func (s) TestEjectUnejectSuccessRate(t *testing.T) {
 				}
 
 				// Set all the upstream but the failing one to have five successes
-				for i := 0; i < len(allSubConns); i++ {
+				for i := 0; i < test.numberOfConns; i++ {
 					pickerDone := balancer.DoneInfo{}
-					if i >= (len(allSubConns) - test.wantFailures) {
+					if i >= (test.numberOfConns - test.wantFailures) {
 						pickerDone = balancer.DoneInfo{Err: errors.New("some error")}
 					}
 					pi, err := picker.Pick(balancer.PickInfo{})
@@ -1517,7 +1513,7 @@ func (s) TestEjectFailureRate(t *testing.T) {
 		sCtx, cancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
 		defer cancel()
 		if _, err := scsCh.Receive(sCtx); err == nil {
-			t.Fatalf("no SubConn update should have been sent (no SubConn got ejected)")
+			t.Fatalf("Received unexpected subchannel state change when expecting none")
 		}
 		if got, _ := tmr.Metric("grpc.lb.outlier_detection.ejections_enforced"); got != 0 {
 			t.Errorf("Metric grpc.lb.outlier_detection.ejections_enforced: got %v, want 0", got)
@@ -1567,7 +1563,7 @@ func (s) TestEjectFailureRate(t *testing.T) {
 		sCtx, cancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
 		defer cancel()
 		if _, err := scsCh.Receive(sCtx); err == nil {
-			t.Fatalf("Only one SubConn update should have been sent (only one SubConn got ejected)")
+			t.Fatalf("Received unexpected subchannel state change when expecting none")
 		}
 		if got, _ := tmr.Metric("grpc.lb.outlier_detection.ejections_enforced"); got != 1 {
 			t.Errorf("Metric grpc.lb.outlier_detection.ejections_enforced: got %v, want 1", got)
