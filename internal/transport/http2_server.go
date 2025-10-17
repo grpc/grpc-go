@@ -87,7 +87,7 @@ type http2Server struct {
 	// updates, reset streams, and various settings) to the controller.
 	controlBuf *controlBuffer
 	fc         *trInFlow
-	stats      []stats.Handler
+	stats      stats.Handler
 	// Keepalive and max-age parameters for the server.
 	kp keepalive.ServerParameters
 	// Keepalive enforcement policy.
@@ -261,7 +261,7 @@ func NewServerTransport(conn net.Conn, config *ServerConfig) (_ ServerTransport,
 		fc:                &trInFlow{limit: uint32(icwz)},
 		state:             reachable,
 		activeStreams:     make(map[uint32]*ServerStream),
-		stats:             config.StatsHandlers,
+		stats:             config.StatsHandler,
 		kp:                kp,
 		idle:              time.Now(),
 		kep:               kep,
@@ -1055,14 +1055,13 @@ func (t *http2Server) writeHeaderLocked(s *ServerStream) error {
 		t.closeStream(s, true, http2.ErrCodeInternal, false)
 		return ErrHeaderListSizeLimitViolation
 	}
-	for _, sh := range t.stats {
+	if t.stats != nil {
 		// Note: Headers are compressed with hpack after this call returns.
 		// No WireLength field is set here.
-		outHeader := &stats.OutHeader{
+		t.stats.HandleRPC(s.Context(), &stats.OutHeader{
 			Header:      s.header.Copy(),
 			Compression: s.sendCompress,
-		}
-		sh.HandleRPC(s.Context(), outHeader)
+		})
 	}
 	return nil
 }
@@ -1130,10 +1129,10 @@ func (t *http2Server) writeStatus(s *ServerStream, st *status.Status) error {
 	// Send a RST_STREAM after the trailers if the client has not already half-closed.
 	rst := s.getState() == streamActive
 	t.finishStream(s, rst, http2.ErrCodeNo, trailingHeader, true)
-	for _, sh := range t.stats {
+	if t.stats != nil {
 		// Note: The trailer fields are compressed with hpack after this call returns.
 		// No WireLength field is set here.
-		sh.HandleRPC(s.Context(), &stats.OutTrailer{
+		t.stats.HandleRPC(s.Context(), &stats.OutTrailer{
 			Trailer: s.trailer.Copy(),
 		})
 	}

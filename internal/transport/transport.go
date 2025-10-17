@@ -478,7 +478,7 @@ type ServerConfig struct {
 	ConnectionTimeout     time.Duration
 	Credentials           credentials.TransportCredentials
 	InTapHandle           tap.ServerInHandle
-	StatsHandlers         []stats.Handler
+	StatsHandler          stats.Handler
 	KeepaliveParams       keepalive.ServerParameters
 	KeepalivePolicy       keepalive.EnforcementPolicy
 	InitialWindowSize     int32
