@@ -494,13 +494,13 @@ func (s) TestNoVirtualHost(t *testing.T) {
 	}
 }
 
-// Tests the case where we get a listener resource ambient error and verify that
-// we correctly log the warning for it. To make sure we get a listener ambient
+// Tests the case where we get an ambient error and verify that
+// we correctly log the warning for it. To make sure we get an ambient
 // error, we send a correct update first , then send an invalid one and then
 // send the valid resource again. We send the valid resource again so that we
 // can be sure the abmient error reaches the dependency manager since there is
 // no other way to wait for it .
-func (s) TestListenerResourceAmbientError(t *testing.T) {
+func (s) TestAmbientError(t *testing.T) {
 	grpctest.ExpectWarning("Listener resource ambient error")
 	nodeID := uuid.New().String()
 	mgmtServer, bc := setupManagementServerForTest(t, nodeID)
