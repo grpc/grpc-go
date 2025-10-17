@@ -121,12 +121,12 @@ func getXdsServerURI() string {
 
 type c2pResolverWrapper struct {
 	resolver.Resolver
-	cancel func()
+	cancel func() // Release the reference to the xDS client that was created in Build().
 }
 
 func (r *c2pResolverWrapper) Close() {
 	r.Resolver.Close()
-	r.cancel() // Release the reference to the xDS client that was created in Build().
+	r.cancel()
 }
 
 type c2pResolverBuilder struct{}

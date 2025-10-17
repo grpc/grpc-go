@@ -215,7 +215,6 @@ func (p *Pool) BootstrapConfigForTesting() *bootstrap.Config {
 	if cfg != nil {
 		return cfg
 	}
-	// TODO(i/8661)
 	return p.fallbackConfig
 }
 
@@ -226,7 +225,6 @@ func (p *Pool) BootstrapConfigForTesting() *bootstrap.Config {
 func (p *Pool) UnsetBootstrapConfigForTesting() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	// TODO(i/8661)
 	p.fallbackConfig = nil
 	p.getConfiguration = sync.OnceValues(bootstrap.GetConfiguration)
 }
@@ -287,7 +285,6 @@ func (p *Pool) newRefCounted(name string, metricsRecorder estats.MetricsRecorder
 			return nil, nil, fmt.Errorf("xds: failed to read xDS bootstrap config from env vars:  %v", err)
 		}
 		if config == nil {
-			// TODO(i/8661)
 			// If the environment variables are not set, then fallback bootstrap
 			// configuration should be set before attempting to create an xDS client,
 			// else xDS client creation will fail.

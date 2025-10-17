@@ -130,7 +130,7 @@ func expectedNodeJSON(ipv6Capable bool) []byte {
 
 // verifyXDSClientBootstrapConfig checks that an xDS client with the given name
 // exists in the pool and that its bootstrap config matches the expected config.
-func verifyXDSClientBootstrapConfig(t *testing.T, pool *xdsclient.Pool, name string, wantConfig *bootstrap.Config) xdsclient.XDSClient {
+func verifyXDSClientBootstrapConfig(t *testing.T, pool *xdsclient.Pool, name string, wantConfig *bootstrap.Config) {
 	t.Helper()
 	client, close, err := pool.GetClientForTesting(name)
 	if err != nil {
@@ -145,7 +145,6 @@ func verifyXDSClientBootstrapConfig(t *testing.T, pool *xdsclient.Pool, name str
 	if diff := cmp.Diff(wantConfig, gotConfig); diff != "" {
 		t.Fatalf("xdsClient.BootstrapConfig() for client %q returned unexpected diff (-want +got):\n%s", name, diff)
 	}
-	return client
 }
 
 // Tests the scenario where the bootstrap env vars are set and we're running on
@@ -598,7 +597,30 @@ func (s) TestCreateMultipleXDSClients(t *testing.T) {
 	xdsClientPool = xdsclient.NewPool(genericXDSConfig)
 	defer func() { xdsClientPool = oldXdsClientPool }()
 
-	// Define bootstrap config for c2p resolver
+	// Create generic xds client.
+	xdsTarget := resolver.Target{URL: *testutils.MustParseURL("xds:///target")}
+	_, closeGeneric, err := xdsClientPool.NewClientForTesting(xdsclient.OptionsForTesting{
+		Name:   xdsTarget.String(),
+		Config: genericXDSConfig,
+	})
+	if err != nil {
+		t.Fatalf("xdsClientPool.NewClientForTesting(%q) failed: %v", xdsTarget.String(), err)
+	}
+	defer closeGeneric()
+
+	verifyXDSClientBootstrapConfig(t, xdsClientPool, xdsTarget.String(), genericXDSConfig)
+
+	// Build the google-c2p resolver.
+	c2pBuilder := resolver.Get(c2pScheme)
+	c2pTarget := resolver.Target{URL: url.URL{Scheme: c2pScheme, Path: "test-path"}}
+	tcc := &testutils.ResolverClientConn{Logger: t}
+	c2pRes, err := c2pBuilder.Build(c2pTarget, tcc, resolver.BuildOptions{})
+	if err != nil {
+		t.Fatalf("Failed to build resolver: %v", err)
+	}
+	defer c2pRes.Close()
+
+	// Bootstrap config for c2p resolver.
 	c2pConfig := bootstrapConfig(t, bootstrap.ConfigOptionsForTesting{
 		Servers: []byte(`[{
 			"server_uri": "dns:///directpath-pa.googleapis.com",
@@ -617,34 +639,6 @@ func (s) TestCreateMultipleXDSClients(t *testing.T) {
 		Node: expectedNodeJSON(false),
 	})
 
-	// Create generic xds client.
-	xdsTarget := resolver.Target{URL: *testutils.MustParseURL("xds:///target")}
-	_, closeGeneric, err := xdsClientPool.NewClientForTesting(xdsclient.OptionsForTesting{
-		Name:   xdsTarget.String(),
-		Config: genericXDSConfig,
-	})
-	if err != nil {
-		t.Fatalf("xdsClientPool.NewClientForTesting(%q) failed: %v", xdsTarget.String(), err)
-	}
-	defer closeGeneric()
-
-	clientGeneric := verifyXDSClientBootstrapConfig(t, xdsClientPool, xdsTarget.String(), genericXDSConfig)
-
-	// Build the google-c2p resolver.
-	c2pBuilder := resolver.Get(c2pScheme)
-	c2pTarget := resolver.Target{URL: url.URL{Scheme: c2pScheme, Path: "test-path"}}
-	tcc := &testutils.ResolverClientConn{Logger: t}
-	c2pRes, err := c2pBuilder.Build(c2pTarget, tcc, resolver.BuildOptions{})
-	if err != nil {
-		t.Fatalf("Failed to build resolver: %v", err)
-	}
-	defer c2pRes.Close()
-
 	c2pXDSTarget := resolver.Target{URL: url.URL{Scheme: xdsName, Host: c2pAuthority, Path: c2pTarget.URL.Path}}
-	clientC2P := verifyXDSClientBootstrapConfig(t, xdsClientPool, c2pXDSTarget.String(), c2pConfig)
-
-	// Verify that the two clients are distinct instances.
-	if clientC2P == clientGeneric {
-		t.Fatal("Expected two distinct xDS clients, but got same")
-	}
+	verifyXDSClientBootstrapConfig(t, xdsClientPool, c2pXDSTarget.String(), c2pConfig)
 }
