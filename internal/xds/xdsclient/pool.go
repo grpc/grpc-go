@@ -276,14 +276,9 @@ func (p *Pool) newRefCounted(name string, metricsRecorder estats.MetricsRecorder
 		return c, sync.OnceFunc(func() { p.clientRefCountedClose(name) }), nil
 	}
 
-	var (
-		config *bootstrap.Config
-		err    error
-	)
-
-	if bConfig != nil {
-		config = bConfig
-	} else {
+	config := bConfig
+	if config == nil {
+		var err error
 		config, err = p.getConfiguration()
 		if err != nil {
 			return nil, nil, fmt.Errorf("xds: failed to read xDS bootstrap config from env vars:  %v", err)
