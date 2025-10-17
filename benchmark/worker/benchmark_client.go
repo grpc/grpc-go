@@ -272,11 +272,11 @@ func (bc *benchmarkClient) unaryLoop(ctx context.Context, conns []*grpc.ClientCo
 				// before starting benchmark.
 				if poissonLambda == nil { // Closed loop.
 					for {
+						if ctx.Err() != nil {
+							break
+						}
 						start := time.Now()
-						if err := benchmark.DoUnaryCall(ctx, client, reqSize, respSize); err != nil {
-							if status.Code(err) == codes.Canceled {
-								return
-							}
+						if err := benchmark.DoUnaryCall(client, reqSize, respSize); err != nil {
 							continue
 						}
 						elapse := time.Since(start)
@@ -285,7 +285,7 @@ func (bc *benchmarkClient) unaryLoop(ctx context.Context, conns []*grpc.ClientCo
 				} else { // Open loop.
 					timeBetweenRPCs := time.Duration((rand.ExpFloat64() / *poissonLambda) * float64(time.Second))
 					time.AfterFunc(timeBetweenRPCs, func() {
-						bc.poissonUnary(ctx, client, idx, reqSize, respSize, *poissonLambda)
+						bc.poissonUnary(client, idx, reqSize, respSize, *poissonLambda)
 					})
 				}
 			}(idx)
@@ -304,7 +304,7 @@ func (bc *benchmarkClient) streamingLoop(ctx context.Context, conns []*grpc.Clie
 		// For each connection, create rpcCountPerConn goroutines to do rpc.
 		for j := 0; j < rpcCountPerConn; j++ {
 			c := testgrpc.NewBenchmarkServiceClient(conn)
-			stream, err := c.StreamingCall(ctx)
+			stream, err := c.StreamingCall(context.Background())
 			if err != nil {
 				logger.Fatalf("%v.StreamingCall(_) = _, %v", c, err)
 			}
@@ -324,6 +324,9 @@ func (bc *benchmarkClient) streamingLoop(ctx context.Context, conns []*grpc.Clie
 						}
 						elapse := time.Since(start)
 						bc.lockingHistograms[idx].add(int64(elapse))
+						if ctx.Err() != nil {
+							return
+						}
 					}
 				}(idx)
 			} else { // Open loop.
@@ -336,10 +339,10 @@ func (bc *benchmarkClient) streamingLoop(ctx context.Context, conns []*grpc.Clie
 	}
 }
 
-func (bc *benchmarkClient) poissonUnary(ctx context.Context, client testgrpc.BenchmarkServiceClient, idx int, reqSize int, respSize int, lambda float64) {
+func (bc *benchmarkClient) poissonUnary(client testgrpc.BenchmarkServiceClient, idx int, reqSize int, respSize int, lambda float64) {
 	go func() {
 		start := time.Now()
-		if err := benchmark.DoUnaryCall(ctx, client, reqSize, respSize); err != nil {
+		if err := benchmark.DoUnaryCall(client, reqSize, respSize); err != nil {
 			return
 		}
 		elapse := time.Since(start)
@@ -347,7 +350,7 @@ func (bc *benchmarkClient) poissonUnary(ctx context.Context, client testgrpc.Ben
 	}()
 	timeBetweenRPCs := time.Duration((rand.ExpFloat64() / lambda) * float64(time.Second))
 	time.AfterFunc(timeBetweenRPCs, func() {
-		bc.poissonUnary(ctx, client, idx, reqSize, respSize, lambda)
+		bc.poissonUnary(client, idx, reqSize, respSize, lambda)
 	})
 }
 
