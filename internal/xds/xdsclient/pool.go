@@ -49,7 +49,7 @@ type Pool struct {
 	// config.
 	mu             sync.Mutex
 	clients        map[string]*clientImpl
-	fallbackConfig *bootstrap.Config
+	fallbackConfig *bootstrap.Config // TODO(i/8661): remove fallbackConfig.
 	// getConfiguration is a sync.OnceValues that attempts to read the bootstrap
 	// configuration from environment variables once.
 	getConfiguration func() (*bootstrap.Config, error)
@@ -175,6 +175,7 @@ func (p *Pool) GetClientForTesting(name string) (XDSClient, func(), error) {
 // SetFallbackBootstrapConfig is used to specify a bootstrap configuration
 // that will be used as a fallback when the bootstrap environment variables
 // are not defined.
+// TODO(i/8661): remove SetFallbackBootstrapConfig function.
 func (p *Pool) SetFallbackBootstrapConfig(config *bootstrap.Config) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -214,6 +215,7 @@ func (p *Pool) BootstrapConfigForTesting() *bootstrap.Config {
 	if cfg != nil {
 		return cfg
 	}
+	// TODO(i/8661)
 	return p.fallbackConfig
 }
 
@@ -224,6 +226,7 @@ func (p *Pool) BootstrapConfigForTesting() *bootstrap.Config {
 func (p *Pool) UnsetBootstrapConfigForTesting() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	// TODO(i/8661)
 	p.fallbackConfig = nil
 	p.getConfiguration = sync.OnceValues(bootstrap.GetConfiguration)
 }
@@ -284,6 +287,7 @@ func (p *Pool) newRefCounted(name string, metricsRecorder estats.MetricsRecorder
 			return nil, nil, fmt.Errorf("xds: failed to read xDS bootstrap config from env vars:  %v", err)
 		}
 		if config == nil {
+			// TODO(i/8661)
 			// If the environment variables are not set, then fallback bootstrap
 			// configuration should be set before attempting to create an xDS client,
 			// else xDS client creation will fail.

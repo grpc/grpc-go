@@ -560,8 +560,8 @@ func (s) TestSetUniverseDomainEmptyString(t *testing.T) {
 }
 
 // TestCreateMultipleXDSClients validates that multiple xds clients with
-// different bootstrap config coexist in the same pool. It confirms
-// that a client created by the google-c2p resolver does not interfere with an
+// different bootstrap config coexist in the same pool. It confirms that
+// a client created by the google-c2p resolver does not interfere with an
 // explicitly created client using a different bootstrap configuration.
 func (s) TestCreateMultipleXDSClients(t *testing.T) {
 	replaceResolvers(t)
@@ -627,6 +627,7 @@ func (s) TestCreateMultipleXDSClients(t *testing.T) {
 		t.Fatalf("xdsClientPool.NewClientForTesting(%q) failed: %v", xdsTarget.String(), err)
 	}
 	defer closeGeneric()
+
 	clientGeneric := verifyXDSClientBootstrapConfig(t, xdsClientPool, xdsTarget.String(), genericXDSConfig)
 
 	// Build the google-c2p resolver.
@@ -638,12 +639,12 @@ func (s) TestCreateMultipleXDSClients(t *testing.T) {
 		t.Fatalf("Failed to build resolver: %v", err)
 	}
 	defer c2pRes.Close()
+
 	c2pXDSTarget := resolver.Target{URL: url.URL{Scheme: xdsName, Host: c2pAuthority, Path: c2pTarget.URL.Path}}
 	clientC2P := verifyXDSClientBootstrapConfig(t, xdsClientPool, c2pXDSTarget.String(), c2pConfig)
 
 	// Verify that the two clients are distinct instances.
 	if clientC2P == clientGeneric {
-		t.Fatal("Expected two distinct xDS clients, but got the same one for both")
+		t.Fatal("Expected two distinct xDS clients, but got same")
 	}
 }
-
