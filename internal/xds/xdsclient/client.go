@@ -34,7 +34,20 @@ import (
 // (collectively termed as xDS) on a remote management server, to discover
 // various dynamic resources.
 type XDSClient interface {
-	// WatchResourceV2 matches the API of the external xdsclient interface.
+	// WatchResource uses xDS to discover the resource associated with the
+	// provided resource name. The resource type implementation determines how
+	// xDS responses are are deserialized and validated, as received from the
+	// xDS management server. Upon receipt of a response from the management
+	// server, an appropriate callback on the watcher is invoked.
+	//
+	// Most callers will not have a need to use this API directly. They will
+	// instead use a resource-type-specific wrapper API provided by the relevant
+	// resource type implementation.
+	//
+	//
+	// During a race (e.g. an xDS response is received while the user is calling
+	// cancel()), there's a small window where the callback can be called after
+	// the watcher is canceled. Callers need to handle this case.
 	WatchResource(typeURL, resourceName string, watcher xdsclient.ResourceWatcher) (cancel func())
 
 	ReportLoad(*bootstrap.ServerConfig) (*lrsclient.LoadStore, func(context.Context))

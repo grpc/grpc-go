@@ -30,8 +30,16 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
-// Producer watches resources via the external xdsclient API.
+// Producer contains a single method to discover resource configuration from a
+// remote management server using xDS APIs.
+//
+// The xdsclient package provides a concrete implementation of this interface.
 type Producer interface {
+	// WatchResource uses xDS to discover the resource associated with the
+	// provided resource name. The resource type implementation determines how
+	// xDS responses are are deserialized and validated, as received from the
+	// xDS management server. Upon receipt of a response from the management
+	// server, an appropriate callback on the watcher is invoked.
 	WatchResource(typeURL, resourceName string, watcher xdsclient.ResourceWatcher) (cancel func())
 }
 
