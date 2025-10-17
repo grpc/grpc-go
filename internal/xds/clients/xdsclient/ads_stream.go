@@ -310,11 +310,7 @@ func (s *adsStreamImpl) sendNew(stream clients.Stream, typ ResourceType, names [
 		return nil
 	}
 
-	state, ok := s.resourceTypeState[typ]
-	if !ok {
-		// State is created when the first subscription for this type is made.
-		panic(fmt.Sprintf("no state exists for resource type %v", typ))
-	}
+	state := s.resourceTypeState[typ]
 	if err := s.sendMessageLocked(stream, names, typ.TypeURL, state.version, state.nonce, nil); err != nil {
 		return err
 	}
