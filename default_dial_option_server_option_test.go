@@ -72,7 +72,7 @@ func (s) TestDisableGlobalOptions(t *testing.T) {
 	// to global options being disabled.
 	noTSecStr := "no transport security set"
 	if _, err := NewClient("fake", internal.DisableGlobalDialOptions.(func() DialOption)()); !strings.Contains(fmt.Sprint(err), noTSecStr) {
-		t.Fatalf("NewClient received unexpected error: %q, want error containing %q", err, noTSecStr)
+		t.Fatalf("NewClient received unexpected error: %v, want error containing %q", err, noTSecStr)
 	}
 }
 
@@ -95,7 +95,7 @@ func (s) TestGlobalPerTargetDialOption(t *testing.T) {
 	defer internal.ClearGlobalPerTargetDialOptions()
 	noTSecStr := "no transport security set"
 	if _, err := NewClient("dns:///fake"); !strings.Contains(fmt.Sprint(err), noTSecStr) {
-		t.Fatalf("NewClient received unexpected error: %q, want error containing %q", err, noTSecStr)
+		t.Fatalf("NewClient received unexpected error: %v, want error containing %q", err, noTSecStr)
 	}
 	cc, err := NewClient("passthrough:///nice")
 	if err != nil {
