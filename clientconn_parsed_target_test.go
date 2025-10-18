@@ -215,14 +215,14 @@ func (s) TestParsedTarget_Failure_WithoutCustomDialer_WithNewClient(t *testing.T
 
 	for _, target := range targets {
 		t.Run(target, func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
 			cc, err := NewClient(target, WithTransportCredentials(insecure.NewCredentials()))
 			if err != nil {
 				t.Fatalf("NewClient(%q) failed: %v", target, err)
 			}
 			defer cc.Close()
-			wantErrSubstr := "failed to exit idle mode"
+			const wantErrSubstr = "failed to exit idle mode"
 			if _, err := cc.NewStream(ctx, &StreamDesc{}, "/my.service.v1.MyService/UnaryCall"); err == nil {
 				t.Fatalf("NewStream() succeeded with target = %q, cc.parsedTarget = %+v, expected to fail", target, cc.parsedTarget)
 			} else if !strings.Contains(err.Error(), wantErrSubstr) {
