@@ -1244,9 +1244,8 @@ func (s) TestCallCreds_Equal(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			result := test.cc1.Equal(test.cc2)
-			if result != test.want {
-				t.Errorf("CallCreds.Equal() = %v, want %v", result, test.want)
+			if got := test.cc1.Equal(test.cc2); got != test.want {
+				t.Errorf("CallCreds.Equal() = %v, want %v", got, test.want)
 			}
 		})
 	}
@@ -1648,8 +1647,7 @@ func (s) TestBootstrap_SelectedChannelCredsAndCallCreds(t *testing.T) {
 			}
 			// Verify transport credentials are properly selected.
 			if sc.SelectedChannelCreds().Type != test.wantTransportType {
-				t.Errorf("Selected transport creds type = %q, want %q",
-					sc.SelectedChannelCreds().Type, test.wantTransportType)
+				t.Errorf("Selected transport creds type = %q, want %q", sc.SelectedChannelCreds().Type, test.wantTransportType)
 			}
 		})
 	}

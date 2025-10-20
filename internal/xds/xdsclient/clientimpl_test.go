@@ -283,10 +283,10 @@ func (s) TestServerConfigCallCredsIntegration(t *testing.T) {
 	// Verify call credentials are processed.
 	callCreds := sc.CallCredsConfigs()
 	if len(callCreds) != 1 {
-		t.Errorf("Expected 1 call credential, got %d", len(callCreds))
+		t.Errorf("Got %d call credential configs, want 1", len(callCreds))
 	}
 	dialOpts := sc.DialOptions()
 	if len(dialOpts) != 1 {
-		t.Errorf("Expected 1 dial option, got %d", len(dialOpts))
+		t.Errorf("Got %d dial options, want 1", len(dialOpts))
 	}
 }
