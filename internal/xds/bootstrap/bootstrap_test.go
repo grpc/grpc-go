@@ -1554,8 +1554,6 @@ func (s) TestNode_ToProto(t *testing.T) {
 
 func (s) TestBootstrap_SelectedChannelCredsAndCallCreds(t *testing.T) {
 	testutils.SetEnvConfig(t, &envconfig.XDSBootstrapCallCredsEnabled, true)
-
-	tokenFile := "/token.jwt"
 	tests := []struct {
 		name              string
 		bootstrapConfig   string
@@ -1570,7 +1568,7 @@ func (s) TestBootstrap_SelectedChannelCredsAndCallCreds(t *testing.T) {
 				"call_creds": [
 					{
 						"type": "jwt_token_file",
-						"config": {"jwt_token_file": "` + tokenFile + `"}
+						"config": {"jwt_token_file": "/token.jwt"}
 					}
 				]
 			}`,
@@ -1585,11 +1583,11 @@ func (s) TestBootstrap_SelectedChannelCredsAndCallCreds(t *testing.T) {
 				"call_creds": [
 					{
 						"type": "jwt_token_file",
-						"config": {"jwt_token_file": "` + tokenFile + `"}
+						"config": {"jwt_token_file": "/token.jwt"}
 					},
 					{
 						"type": "jwt_token_file",
-						"config": {"jwt_token_file": "` + tokenFile + `"}
+						"config": {"jwt_token_file": "/token2.jwt"}
 					}
 				]
 			}`,
@@ -1604,7 +1602,7 @@ func (s) TestBootstrap_SelectedChannelCredsAndCallCreds(t *testing.T) {
 				"call_creds": [
 					{
 						"type": "jwt_token_file",
-						"config": {"jwt_token_file": "` + tokenFile + `"}
+						"config": {"jwt_token_file": "/token.jwt"}
 					}
 				]
 			}`,

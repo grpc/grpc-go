@@ -264,7 +264,6 @@ func (s) TestBuildXDSClientConfig_Success(t *testing.T) {
 
 func (s) TestServerConfigCallCredsIntegration(t *testing.T) {
 	testutils.SetEnvConfig(t, &envconfig.XDSBootstrapCallCredsEnabled, true)
-	tokenFile := "/token.jwt"
 	// Test server config with both channel and call credentials.
 	serverConfigJSON := `{
 		"server_uri": "xds-server:443",
@@ -272,7 +271,7 @@ func (s) TestServerConfigCallCredsIntegration(t *testing.T) {
 		"call_creds": [
 			{
 				"type": "jwt_token_file",
-				"config": {"jwt_token_file": "` + tokenFile + `"}
+				"config": {"jwt_token_file": "/token.jwt"}
 			}
 		]
 	}`
