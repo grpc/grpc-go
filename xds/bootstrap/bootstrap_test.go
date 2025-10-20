@@ -66,13 +66,12 @@ func TestRegisterNew(t *testing.T) {
 
 func TestChannelCredsBuilders(t *testing.T) {
 	tests := []struct {
-		typename              string
-		builder               ChannelCredentials
-		minimumRequiredConfig json.RawMessage
+		typename string
+		builder  ChannelCredentials
 	}{
-		{"google_default", &googleDefaultCredsBuilder{}, nil},
-		{"insecure", &insecureCredsBuilder{}, nil},
-		{"tls", &tlsCredsBuilder{}, nil},
+		{"google_default", &googleDefaultCredsBuilder{}},
+		{"insecure", &insecureCredsBuilder{}},
+		{"tls", &tlsCredsBuilder{}},
 	}
 
 	for _, test := range tests {
@@ -81,7 +80,7 @@ func TestChannelCredsBuilders(t *testing.T) {
 				t.Errorf("%T.Name = %v, want %v", test.builder, got, want)
 			}
 
-			bundle, stop, err := test.builder.Build(test.minimumRequiredConfig)
+			bundle, stop, err := test.builder.Build(nil)
 			if err != nil {
 				t.Fatalf("%T.Build failed: %v", test.builder, err)
 			}
@@ -112,10 +111,10 @@ func TestCallCredsBuilders(t *testing.T) {
 			if err != nil {
 				t.Fatalf("%T.Build failed: %v", test.builder, err)
 			}
+			defer stop()
 			if bundle == nil {
 				t.Errorf("%T.Build returned nil bundle, expected non-nil", test.builder)
 			}
-			stop()
 		})
 	}
 }
@@ -126,11 +125,11 @@ func TestTlsCredsBuilder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("tls.Build() failed with error %s when expected to succeed", err)
 	}
-	stop()
+	defer stop()
 
 	if _, stop, err := tls.Build(json.RawMessage(`{"ca_certificate_file":"/ca_certificates.pem","refresh_interval": "asdf"}`)); err == nil {
+		defer stop()
 		t.Errorf("tls.Build() succeeded with an invalid refresh interval, when expected to fail")
-		stop()
 	}
 }
 
