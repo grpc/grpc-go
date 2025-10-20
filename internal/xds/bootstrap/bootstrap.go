@@ -238,13 +238,6 @@ func (sc *ServerConfig) CallCredsConfigs() CallCredsConfigs {
 	return sc.callCredsConfigs
 }
 
-// CallCreds returns the built call credentials that are ready to use.
-// These are the credentials that were successfully built from the call_creds
-// configuration.
-func (sc *ServerConfig) CallCreds() []credentials.PerRPCCredentials {
-	return sc.selectedCallCreds
-}
-
 // ServerFeaturesIgnoreResourceDeletion returns true if this server supports a
 // feature where the xDS client can ignore resource deletions from this server,
 // as described in gRFC A53.

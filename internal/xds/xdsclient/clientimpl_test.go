@@ -290,8 +290,8 @@ func (s) TestServerConfigCallCredsIntegration(t *testing.T) {
 	if len(callCreds) != 1 {
 		t.Errorf("Expected 1 call credential, got %d", len(callCreds))
 	}
-	selectedCallCreds := sc.CallCreds()
-	if len(selectedCallCreds) != 1 {
-		t.Errorf("Expected 1 selected call credential, got %d", len(selectedCallCreds))
+	dialOpts := sc.DialOptions()
+	if len(dialOpts) != 1 {
+		t.Errorf("Expected 1 dial option, got %d", len(dialOpts))
 	}
 }

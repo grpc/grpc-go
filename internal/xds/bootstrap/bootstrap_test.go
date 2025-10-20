@@ -1571,7 +1571,7 @@ func (s) TestBootstrap_SelectedChannelCredsAndCallCreds(t *testing.T) {
 	tests := []struct {
 		name              string
 		bootstrapConfig   string
-		wantCallCreds     int
+		wantDialOpts      int
 		wantTransportType string
 	}{
 		{
@@ -1586,7 +1586,7 @@ func (s) TestBootstrap_SelectedChannelCredsAndCallCreds(t *testing.T) {
 					}
 				]
 			}`,
-			wantCallCreds:     1,
+			wantDialOpts:      1,
 			wantTransportType: "tls",
 		},
 		{
@@ -1605,7 +1605,7 @@ func (s) TestBootstrap_SelectedChannelCredsAndCallCreds(t *testing.T) {
 					}
 				]
 			}`,
-			wantCallCreds:     2,
+			wantDialOpts:      2,
 			wantTransportType: "tls", // The first channel creds is selected.
 		},
 		{
@@ -1620,7 +1620,7 @@ func (s) TestBootstrap_SelectedChannelCredsAndCallCreds(t *testing.T) {
 					}
 				]
 			}`,
-			wantCallCreds:     1,
+			wantDialOpts:      1,
 			wantTransportType: "insecure",
 		},
 		{
@@ -1629,7 +1629,7 @@ func (s) TestBootstrap_SelectedChannelCredsAndCallCreds(t *testing.T) {
 				"server_uri": "xds-server:443",
 				"channel_creds": [{"type": "insecure"}]
 			}`,
-			wantCallCreds:     0,
+			wantDialOpts:      0,
 			wantTransportType: "insecure",
 		},
 		{
@@ -1638,7 +1638,7 @@ func (s) TestBootstrap_SelectedChannelCredsAndCallCreds(t *testing.T) {
 				"server_uri": "xds-server:443",
 				"channel_creds": [{"type": "insecure"}, {"type": "tls", "config": {}}]
 			}`,
-			wantCallCreds:     0,
+			wantDialOpts:      0,
 			wantTransportType: "insecure",
 		},
 	}
@@ -1653,12 +1653,12 @@ func (s) TestBootstrap_SelectedChannelCredsAndCallCreds(t *testing.T) {
 
 			// Verify call credentials processing.
 			callCredsConfig := sc.CallCredsConfigs()
-			callCreds := sc.CallCreds()
-			if len(callCredsConfig) != test.wantCallCreds {
-				t.Errorf("Call creds configs count = %d, want %d", len(callCredsConfig), test.wantCallCreds)
+			dialOpts := sc.DialOptions()
+			if len(callCredsConfig) != test.wantDialOpts {
+				t.Errorf("Call creds configs count = %d, want %d", len(callCredsConfig), test.wantDialOpts)
 			}
-			if len(callCreds) != test.wantCallCreds {
-				t.Errorf("Call creds count = %d, want %d", len(callCreds), test.wantCallCreds)
+			if len(dialOpts) != test.wantDialOpts {
+				t.Errorf("Call creds count = %d, want %d", len(dialOpts), test.wantDialOpts)
 			}
 			// Verify transport credentials are properly selected.
 			if sc.SelectedChannelCreds().Type != test.wantTransportType {
