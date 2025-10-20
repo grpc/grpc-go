@@ -39,7 +39,7 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
-func (s) TestNewCallCredentialsWithInValidConfig(t *testing.T) {
+func (s) TestNewCallCredentialsWithInvalidConfig(t *testing.T) {
 	tests := []struct {
 		name   string
 		config string
@@ -67,7 +67,7 @@ func (s) TestNewCallCredentialsWithInValidConfig(t *testing.T) {
 			if callCreds != nil {
 				t.Errorf("NewCallCredentials(%s): Expected nil call credentials to be returned", tt.config)
 			}
-			if cleanup != nil {
+			if cleanup == nil {
 				t.Errorf("NewCallCredentials(%s): Expected non-nil cleanup function to be returned", tt.config)
 			}
 		})

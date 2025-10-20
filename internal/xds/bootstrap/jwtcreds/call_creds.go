@@ -37,16 +37,17 @@ func NewCallCredentials(configJSON json.RawMessage) (credentials.PerRPCCredentia
 	var cfg struct {
 		JWTTokenFile string `json:"jwt_token_file"`
 	}
+	emptyFn := func() {}
 
 	if err := json.Unmarshal(configJSON, &cfg); err != nil {
-		return nil, nil, fmt.Errorf("failed to unmarshal JWT call credentials config: %v", err)
+		return nil, emptyFn, fmt.Errorf("failed to unmarshal JWT call credentials config: %v", err)
 	}
 	if cfg.JWTTokenFile == "" {
-		return nil, nil, fmt.Errorf("jwt_token_file is required in JWT call credentials config")
+		return nil, emptyFn, fmt.Errorf("jwt_token_file is required in JWT call credentials config")
 	}
 	callCreds, err := jwt.NewTokenFileCallCredentials(cfg.JWTTokenFile)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to create JWT call credentials: %v", err)
+		return nil, emptyFn, fmt.Errorf("failed to create JWT call credentials: %v", err)
 	}
-	return callCreds, func() {}, nil
+	return callCreds, emptyFn, nil
 }
