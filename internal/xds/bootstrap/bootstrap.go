@@ -198,7 +198,9 @@ func (a *Authority) Equal(other *Authority) bool {
 
 // ServerConfig contains the configuration to connect to a server.
 type ServerConfig struct {
-	serverURI        string
+	serverURI string
+	// TODO: rename ChannelCreds to ChannelCredsConfigs for consistency with
+	// CallCredsConfigs.
 	channelCreds     []ChannelCreds
 	callCredsConfigs []CallCredsConfig
 	serverFeatures   []string
