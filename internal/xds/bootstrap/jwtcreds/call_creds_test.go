@@ -61,7 +61,6 @@ func (s) TestNewCallCredentialsWithInValidConfig(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			callCreds, cleanup, err := NewCallCredentials(json.RawMessage(tt.config))
-
 			if err == nil {
 				t.Fatalf("NewCallCredentials(%s): got nil, want error", tt.config)
 			}
@@ -74,6 +73,7 @@ func (s) TestNewCallCredentialsWithInValidConfig(t *testing.T) {
 		})
 	}
 }
+
 func (s) TestNewCallCredentialsWithValidConfig(t *testing.T) {
 	token := createTestJWT(t)
 	tokenFile := writeTempFile(t, token)
@@ -84,7 +84,7 @@ func (s) TestNewCallCredentialsWithValidConfig(t *testing.T) {
 		t.Fatalf("NewCallCredentials(%s) failed: %v", config, err)
 	}
 	if callCreds == nil {
-		t.Fatalf("NewCallCredentials(%s): Expected non-nil bundle to be returned", config)
+		t.Fatalf("NewCallCredentials(%s): Expected non-nil credentials to be returned", config)
 	}
 	if cleanup == nil {
 		t.Errorf("NewCallCredentials(%s): Expected non-nil cleanup function to be returned", config)
