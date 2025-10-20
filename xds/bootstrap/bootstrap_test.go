@@ -23,6 +23,7 @@ import (
 
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal/envconfig"
+	"google.golang.org/grpc/internal/testutils"
 )
 
 const testCredsBuilderName = "test_creds"
@@ -139,11 +140,7 @@ func TestJwtCallCredentials_DisabledIfFeatureNotEnabled(t *testing.T) {
 		t.Fatal("Expected nil Credentials for jwt_call_creds when the feature is disabled.")
 	}
 
-	original := envconfig.XDSBootstrapCallCredsEnabled
-	envconfig.XDSBootstrapCallCredsEnabled = true
-	defer func() {
-		envconfig.XDSBootstrapCallCredsEnabled = original
-	}()
+	testutils.SetEnvConfig(t, &envconfig.XDSBootstrapCallCredsEnabled, true)
 
 	// Test that GetCredentials returns the JWT builder.
 	builder = GetCallCredentials("jwt_token_file")

@@ -30,6 +30,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/envconfig"
+	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/stats"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/internal/xds/clients"
@@ -262,12 +263,7 @@ func (s) TestBuildXDSClientConfig_Success(t *testing.T) {
 }
 
 func (s) TestServerConfigCallCredsIntegration(t *testing.T) {
-	originalJWTEnabled := envconfig.XDSBootstrapCallCredsEnabled
-	envconfig.XDSBootstrapCallCredsEnabled = true
-	defer func() {
-		envconfig.XDSBootstrapCallCredsEnabled = originalJWTEnabled
-	}()
-
+	testutils.SetEnvConfig(t, &envconfig.XDSBootstrapCallCredsEnabled, true)
 	tokenFile := "/token.jwt"
 	// Test server config with both channel and call credentials.
 	serverConfigJSON := `{

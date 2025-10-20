@@ -34,6 +34,7 @@ import (
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/xds/bootstrap"
 	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/structpb"
@@ -591,12 +592,7 @@ func (s) TestGetConfiguration_Success(t *testing.T) {
 
 // Tests Istio-style bootstrap configurations with JWT call credentials.
 func (s) TestGetConfiguration_IstioStyleWithCallCreds(t *testing.T) {
-	original := envconfig.XDSBootstrapCallCredsEnabled
-	envconfig.XDSBootstrapCallCredsEnabled = true
-	defer func() {
-		envconfig.XDSBootstrapCallCredsEnabled = original
-	}()
-
+	testutils.SetEnvConfig(t, &envconfig.XDSBootstrapCallCredsEnabled, true)
 	cancel := setupBootstrapOverride(v3BootstrapFileMap)
 	defer cancel()
 
@@ -1257,9 +1253,7 @@ func (s) TestCallCreds_Equal(t *testing.T) {
 }
 
 func (s) TestServerConfig_UnmarshalJSON_WithCallCreds(t *testing.T) {
-	original := envconfig.XDSBootstrapCallCredsEnabled
-	defer func() { envconfig.XDSBootstrapCallCredsEnabled = original }()
-	envconfig.XDSBootstrapCallCredsEnabled = true
+	testutils.SetEnvConfig(t, &envconfig.XDSBootstrapCallCredsEnabled, true)
 	tests := []struct {
 		name          string
 		json          string
@@ -1363,9 +1357,7 @@ func (s) TestServerConfig_Equal_WithCallCreds(t *testing.T) {
 }
 
 func (s) TestServerConfig_MarshalJSON_WithCallCreds(t *testing.T) {
-	original := envconfig.XDSBootstrapCallCredsEnabled
-	defer func() { envconfig.XDSBootstrapCallCredsEnabled = original }()
-	envconfig.XDSBootstrapCallCredsEnabled = true
+	testutils.SetEnvConfig(t, &envconfig.XDSBootstrapCallCredsEnabled, true)
 	sc := &ServerConfig{
 		serverURI:    "test-server:443",
 		channelCreds: []ChannelCreds{{Type: "insecure"}},
@@ -1561,11 +1553,7 @@ func (s) TestNode_ToProto(t *testing.T) {
 }
 
 func (s) TestBootstrap_SelectedChannelCredsAndCallCreds(t *testing.T) {
-	original := envconfig.XDSBootstrapCallCredsEnabled
-	envconfig.XDSBootstrapCallCredsEnabled = true
-	defer func() {
-		envconfig.XDSBootstrapCallCredsEnabled = original
-	}()
+	testutils.SetEnvConfig(t, &envconfig.XDSBootstrapCallCredsEnabled, true)
 
 	tokenFile := "/token.jwt"
 	tests := []struct {
