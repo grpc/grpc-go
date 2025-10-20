@@ -31,7 +31,7 @@ import (
 	"google.golang.org/grpc/internal/grpctest"
 )
 
-const defaultCtxTimeout = 5 * time.Second
+const defaultTestTimeout = 1 * time.Second
 
 type s struct {
 	grpctest.Tester
@@ -67,13 +67,13 @@ func (s) TestNewCallCredentialsWithInValidConfig(t *testing.T) {
 			callCreds, cleanup, err := NewCallCredentials(json.RawMessage(tt.config))
 
 			if err == nil {
-				t.Fatal("NewCallCredentials: expected error, got nil")
+				t.Fatalf("NewCallCredentials(%s): got nil, want error", tt.config)
 			}
 			if callCreds != nil {
-				t.Error("NewCallCredentials: Expected nil bundle to be returned")
+				t.Errorf("NewCallCredentials(%s): Expected nil call credentials to be returned", tt.config)
 			}
 			if cleanup != nil {
-				t.Error("NewCallCredentials: Expected nil cleanup function to be returned")
+				t.Errorf("NewCallCredentials(%s): Expected nil cleanup function to be returned", tt.config)
 			}
 		})
 	}
@@ -85,19 +85,19 @@ func (s) TestNewCallCredentialsWithValidConfig(t *testing.T) {
 
 	callCreds, cleanup, err := NewCallCredentials(json.RawMessage(config))
 	if err != nil {
-		t.Fatalf("NewCallCredentials failed: %v", err)
+		t.Fatalf("NewCallCredentials(%s) failed: %v", config, err)
 	}
 	if callCreds == nil {
-		t.Fatal("NewCallCredentials: Expected non-nil bundle to be returned")
+		t.Fatal("NewCallCredentials(%s): Expected non-nil bundle to be returned", config)
 	}
 	if cleanup == nil {
-		t.Error("NewCallCredentials: Expected non-nil cleanup function to be returned")
+		t.Error("NewCallCredentials(%s): Expected non-nil cleanup function to be returned", config)
 	} else {
 		defer cleanup()
 	}
 
 	// Test that call credentials get used.
-	ctx, cancel := context.WithTimeout(context.Background(), defaultCtxTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	ctx = credentials.NewContextWithRequestInfo(ctx, credentials.RequestInfo{
 		AuthInfo: &testAuthInfo{secLevel: credentials.PrivacyAndIntegrity},
