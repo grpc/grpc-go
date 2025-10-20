@@ -31,8 +31,6 @@ import (
 	"google.golang.org/grpc/internal/grpctest"
 )
 
-const defaultTestTimeout = 1 * time.Second
-
 type s struct {
 	grpctest.Tester
 }
@@ -55,10 +53,8 @@ func (s) TestNewCallCredentialsWithInValidConfig(t *testing.T) {
 			config: `{}`,
 		},
 		{
-			name: "empty_path",
-			config: `{
-				"jwt_token_file": ""
-			}`,
+			name:   "empty_path",
+			config: `{"jwt_token_file": ""}`,
 		},
 	}
 
@@ -73,7 +69,7 @@ func (s) TestNewCallCredentialsWithInValidConfig(t *testing.T) {
 				t.Errorf("NewCallCredentials(%s): Expected nil call credentials to be returned", tt.config)
 			}
 			if cleanup != nil {
-				t.Errorf("NewCallCredentials(%s): Expected nil cleanup function to be returned", tt.config)
+				t.Errorf("NewCallCredentials(%s): Expected non-nil cleanup function to be returned", tt.config)
 			}
 		})
 	}
@@ -88,16 +84,16 @@ func (s) TestNewCallCredentialsWithValidConfig(t *testing.T) {
 		t.Fatalf("NewCallCredentials(%s) failed: %v", config, err)
 	}
 	if callCreds == nil {
-		t.Fatal("NewCallCredentials(%s): Expected non-nil bundle to be returned", config)
+		t.Fatalf("NewCallCredentials(%s): Expected non-nil bundle to be returned", config)
 	}
 	if cleanup == nil {
-		t.Error("NewCallCredentials(%s): Expected non-nil cleanup function to be returned", config)
+		t.Errorf("NewCallCredentials(%s): Expected non-nil cleanup function to be returned", config)
 	} else {
 		defer cleanup()
 	}
 
 	// Test that call credentials get used.
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	ctx = credentials.NewContextWithRequestInfo(ctx, credentials.RequestInfo{
 		AuthInfo: &testAuthInfo{secLevel: credentials.PrivacyAndIntegrity},
@@ -164,7 +160,7 @@ func createTestJWT(t *testing.T) string {
 func writeTempFile(t *testing.T, content string) string {
 	t.Helper()
 	tempDir := t.TempDir()
-	filePath := filepath.Join(tempDir, "tempfile")
+	filePath := filepath.Join(tempDir, "jwt_token")
 	if err := os.WriteFile(filePath, []byte(content), 0600); err != nil {
 		t.Fatalf("Failed to write temp file: %v", err)
 	}
