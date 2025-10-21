@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"strings"
 	"testing"
 	"time"
 
@@ -203,6 +204,34 @@ func (s) TestParsedTarget_Failure_WithoutCustomDialer(t *testing.T) {
 	}
 }
 
+func (s) TestParsedTarget_Failure_WithoutCustomDialer_WithNewClient(t *testing.T) {
+	targets := []string{
+		"",
+		"unix://a/b/c",
+		"unix://authority",
+		"unix-abstract://authority/a/b/c",
+		"unix-abstract://authority",
+	}
+
+	for _, target := range targets {
+		t.Run(target, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+			cc, err := NewClient(target, WithTransportCredentials(insecure.NewCredentials()))
+			if err != nil {
+				t.Fatalf("NewClient(%q) failed: %v", target, err)
+			}
+			defer cc.Close()
+			const wantErrSubstr = "failed to exit idle mode"
+			if _, err := cc.NewStream(ctx, &StreamDesc{}, "/my.service.v1.MyService/UnaryCall"); err == nil {
+				t.Fatalf("NewStream() succeeded with target = %q, cc.parsedTarget = %+v, expected to fail", target, cc.parsedTarget)
+			} else if !strings.Contains(err.Error(), wantErrSubstr) {
+				t.Fatalf("NewStream() with target = %q returned unexpected error: got %v, want substring %q", target, err, wantErrSubstr)
+			}
+		})
+	}
+}
+
 func (s) TestParsedTarget_WithCustomDialer(t *testing.T) {
 	resetInitialResolverState()
 	defScheme := resolver.GetDefaultScheme()
@@ -273,11 +302,12 @@ func (s) TestParsedTarget_WithCustomDialer(t *testing.T) {
 				return nil, errors.New("dialer error")
 			}
 
-			cc, err := Dial(test.target, WithTransportCredentials(insecure.NewCredentials()), WithContextDialer(dialer))
+			cc, err := NewClient(test.target, WithTransportCredentials(insecure.NewCredentials()), withDefaultScheme(defScheme), WithContextDialer(dialer))
 			if err != nil {
-				t.Fatalf("Dial(%q) failed: %v", test.target, err)
+				t.Fatalf("grpc.NewClient(%q) failed: %v", test.target, err)
 			}
 			defer cc.Close()
+			cc.Connect()
 
 			select {
 			case addr := <-addrCh:
