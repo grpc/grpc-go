@@ -45,13 +45,6 @@ var (
 	// handshakes that can be performed.
 	ALTSMaxConcurrentHandshakes = uint64FromEnv("GRPC_ALTS_MAX_CONCURRENT_HANDSHAKES", 100, 1, 100)
 
-	// EnforceALPNEnabled is set if TLS connections to servers with ALPN disabled
-	// should be rejected. The HTTP/2 protocol requires ALPN to be enabled, this
-	// option is present for backward compatibility. This option may be overridden
-	// by setting the environment variable "GRPC_ENFORCE_ALPN_ENABLED" to "true"
-	// or "false".
-	EnforceALPNEnabled = boolFromEnv("GRPC_ENFORCE_ALPN_ENABLED", true)
-
 	// NewPickFirstEnabled is set if the new pickfirst leaf policy is to be used
 	// instead of the exiting pickfirst implementation. This can be disabled by
 	// setting the environment variable "GRPC_EXPERIMENTAL_ENABLE_NEW_PICK_FIRST"
