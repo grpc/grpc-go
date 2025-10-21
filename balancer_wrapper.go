@@ -281,6 +281,10 @@ type acBalancerWrapper struct {
 	// dropped or updated. This is required as closures can't be compared for
 	// equality.
 	healthData *healthData
+
+	shutdownMu    sync.Mutex
+	shutdownCh    chan struct{}
+	activeGofuncs sync.WaitGroup
 }
 
 // healthData holds data related to health state reporting.
@@ -343,16 +347,45 @@ func (acbw *acBalancerWrapper) String() string {
 }
 
 func (acbw *acBalancerWrapper) UpdateAddresses(addrs []resolver.Address) {
-	acbw.ac.updateAddrs(addrs)
+	acbw.goFunc(func(shutdown <-chan struct{}) {
+		acbw.ac.updateAddrs(shutdown, addrs)
+	})
 }
 
 func (acbw *acBalancerWrapper) Connect() {
-	go acbw.ac.connect()
+	acbw.goFunc(acbw.ac.connect)
+}
+
+func (acbw *acBalancerWrapper) goFunc(fn func(shutdown <-chan struct{})) {
+	acbw.shutdownMu.Lock()
+	defer acbw.shutdownMu.Unlock()
+
+	shutdown := acbw.shutdownCh
+	if shutdown == nil {
+		shutdown = make(chan struct{})
+		acbw.shutdownCh = shutdown
+	}
+
+	acbw.activeGofuncs.Add(1)
+	go func() {
+		defer acbw.activeGofuncs.Done()
+		fn(shutdown)
+	}()
 }
 
 func (acbw *acBalancerWrapper) Shutdown() {
 	acbw.closeProducers()
 	acbw.ccb.cc.removeAddrConn(acbw.ac, errConnDrain)
+
+	acbw.shutdownMu.Lock()
+	defer acbw.shutdownMu.Unlock()
+
+	shutdown := acbw.shutdownCh
+	acbw.shutdownCh = nil
+	if shutdown != nil {
+		close(shutdown)
+		acbw.activeGofuncs.Wait()
+	}
 }
 
 // NewStream begins a streaming RPC on the addrConn.  If the addrConn is not
