@@ -26,6 +26,7 @@ import (
 	"math"
 	"net"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -300,76 +301,115 @@ func BenchmarkEncodeGrpcMessage(b *testing.B) {
 	}
 }
 
-func (s) TestFrame_ReadDataFrame(t *testing.T) {
+func buildDataFrame(h http2.FrameHeader, payload []byte) []byte {
+	buf := new(bytes.Buffer)
+	buf.Write([]byte{
+		byte(h.Length >> 16),
+		byte(h.Length >> 8),
+		byte(h.Length),
+		byte(h.Type),
+		byte(h.Flags),
+		byte(h.StreamID >> 24),
+		byte(h.StreamID >> 16),
+		byte(h.StreamID >> 8),
+		byte(h.StreamID),
+	})
+	buf.Write(payload)
+	return buf.Bytes()
+}
+
+func (s) TestFramer_ParseDataFrame(t *testing.T) {
 	tests := []struct {
-		name        string
-		writeFrames func(fr *framer) error
-		wantData    []byte
-		wantErr     error
+		name                string
+		wire                []byte // from frame header onward
+		wantData            []byte
+		wantErr             error
+		wantErrDetailSubstr string
 	}{
 		{
 			name: "good_padded",
-			writeFrames: func(fr *framer) error {
-				return fr.fr.WriteDataPadded(1, false, []byte("foo"), []byte{0, 0})
-			},
+			wire: buildDataFrame(http2.FrameHeader{
+				Type: http2.FrameData, Length: 6, StreamID: 1, Flags: http2.FlagDataPadded,
+			}, []byte{
+				2,             // pad length
+				'f', 'o', 'o', // data
+				0, 0, // padding
+			}),
 			wantData: []byte("foo"),
 		},
 		{
 			name: "good_unpadded",
-			writeFrames: func(fr *framer) error {
-				return fr.fr.WriteData(1, false, []byte("foo"))
-			},
+			wire: buildDataFrame(http2.FrameHeader{
+				Type: http2.FrameData, Length: 3, StreamID: 1, Flags: 0,
+			}, []byte("foo")),
 			wantData: []byte("foo"),
 		},
 		{
+			name: "stream_id_0",
+			wire: buildDataFrame(http2.FrameHeader{
+				Type: http2.FrameData, Length: 1, StreamID: 0, Flags: 0,
+			}, []byte{0}),
+			wantErr:             http2.ConnectionError(http2.ErrCodeProtocol),
+			wantErrDetailSubstr: "DATA frame with stream ID 0",
+		},
+		{
+			name: "pad_size_bigger_than_payload",
+			wire: buildDataFrame(http2.FrameHeader{
+				Type: http2.FrameData, Length: 4, StreamID: 1, Flags: http2.FlagDataPadded,
+			}, []byte{
+				4,        // pad length of 4
+				'f', 'o', // data 'fo' is 2 bytes
+				0, // padding 0 is 1 byte.
+			}), // pad length 4 but only 3 bytes for data+padding available in payload after pad length byte
+			wantErr:             http2.ConnectionError(http2.ErrCodeProtocol),
+			wantErrDetailSubstr: "pad size larger than data payload",
+		},
+		{
 			name: "padded_zero_data_some_padding",
-			writeFrames: func(fr *framer) error {
-				return fr.fr.WriteDataPadded(1, false, []byte{}, []byte{0, 0})
-			},
+			wire: buildDataFrame(http2.FrameHeader{
+				Type: http2.FrameData, Length: 3, StreamID: 1, Flags: http2.FlagDataPadded,
+			}, []byte{
+				2,    // pad length 2
+				0, 0, // padding
+			}),
 			wantData: []byte{},
 		},
 		{
-			name: "stream_id_0",
-			writeFrames: func(fr *framer) error {
-				fr.fr.AllowIllegalWrites = true
-				return fr.fr.WriteData(0, false, []byte("foo"))
-			},
-			wantErr: http2.ConnectionError(http2.ErrCodeProtocol),
+			name: "padded_short_payload_reading_pad_flag",
+			wire: buildDataFrame(http2.FrameHeader{
+				Type: http2.FrameData, Length: 0, StreamID: 1, Flags: http2.FlagDataPadded,
+			}, []byte{}),
+			wantErr: io.ErrUnexpectedEOF,
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			fr, _ := testFramer()
-			// Write the frame using the provided function.
-			writeErr := tt.writeFrames(fr)
-			if writeErr != nil {
-				t.Fatalf("tt.w() returned unexpected error: %v", writeErr)
-			}
-			fr.writer.Flush()
-
-			// Read the frame back.
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			fr := newFramer(bytes.NewBuffer(tc.wire), defaultWriteBufSize, defaultReadBufSize, false, defaultClientMaxHeaderListSize, mem.DefaultBufferPool())
 			f, err := fr.readFrame()
-			if err != tt.wantErr {
-				t.Fatalf("ReadFrame() err = %v; want %v", err, tt.wantErr)
+
+			if err != tc.wantErr {
+				t.Fatalf("readFrame() returned unexpected error: %v, want %v", err, tc.wantErr)
 			}
-			if tt.wantErr != nil {
+			gotErrDetailStr := ""
+			if fr.errDetail != nil {
+				gotErrDetailStr = fr.errDetail.Error()
+			}
+			if !strings.Contains(gotErrDetailStr, tc.wantErrDetailSubstr) {
+				t.Fatalf("errorDetail() returned unexpected error string: %q, want substring %q", gotErrDetailStr, tc.wantErrDetailSubstr)
+			}
+
+			if tc.wantErr != nil {
 				return
 			}
-
 			df, ok := f.(*parsedDataFrame)
 			if !ok {
-				t.Fatalf("ReadFrame() returned %T, want *parsedDataFrame", f)
+				t.Fatalf("readFrame() returned %T, want *parsedDataFrame", f)
 			}
-			if gotData := df.data.ReadOnlyData(); !bytes.Equal(gotData, tt.wantData) {
-				t.Fatalf("parsedDataFrame.Data() = %q, want %q", gotData, tt.wantData)
+			if gotData := df.data.ReadOnlyData(); !bytes.Equal(gotData, tc.wantData) {
+				t.Fatalf("parsedDataFrame.Data() = %q, want %q", gotData, tc.wantData)
 			}
 			df.data.Free()
 		})
 	}
-}
-
-func testFramer() (*framer, *bytes.Buffer) {
-	buf := new(bytes.Buffer)
-	return newFramer(buf, defaultWriteBufSize, defaultReadBufSize, false, defaultClientMaxHeaderListSize, mem.DefaultBufferPool()), buf
 }

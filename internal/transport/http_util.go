@@ -404,6 +404,7 @@ type framer struct {
 	// Cached data frame to avoid heap allocations.
 	dataFrame parsedDataFrame
 	pool      mem.BufferPool
+	errDetail error
 }
 
 var writeBufferPoolMap = make(map[int]*sync.Pool)
@@ -446,8 +447,10 @@ func newFramer(conn io.ReadWriter, writeBufferSize, readBufferSize int, sharedWr
 // readFrame reads a single frame. The returned Frame is only valid
 // until the next call to readFrame.
 func (f *framer) readFrame() (any, error) {
+	f.errDetail = nil
 	fh, err := f.fr.ReadFrameHeader()
 	if err != nil {
+		f.errDetail = f.fr.ErrorDetail()
 		return nil, err
 	}
 	// Read the data frame directly from the underlying io.Reader to avoid
@@ -456,7 +459,22 @@ func (f *framer) readFrame() (any, error) {
 		err = f.readDataFrame(fh)
 		return &f.dataFrame, err
 	}
-	return f.fr.ReadFrameForHeader(fh)
+	fr, err := f.fr.ReadFrameForHeader(fh)
+	if err != nil {
+		f.errDetail = f.fr.ErrorDetail()
+		return nil, err
+	}
+	return fr, err
+}
+
+// errorDetail returns a more detailed error of the last error
+// returned by framer.readFrame. For instance, if readFrame
+// returns a StreamError with code PROTOCOL_ERROR, errorDetail
+// will say exactly what was invalid. errorDetail is not guaranteed
+// to return a non-nil value.
+// errorDetail is reset after the next call to readFrame.
+func (f *framer) errorDetail() error {
+	return f.errDetail
 }
 
 func (f *framer) readDataFrame(fh http2.FrameHeader) (err error) {
@@ -466,6 +484,7 @@ func (f *framer) readDataFrame(fh http2.FrameHeader) (err error) {
 		// field is 0x0, the recipient MUST respond with a
 		// connection error (Section 5.4.1) of type
 		// PROTOCOL_ERROR.
+		f.errDetail = errors.New("DATA frame with stream ID 0")
 		return http2.ConnectionError(http2.ErrCodeProtocol)
 	}
 	// Converting a *[]byte to a mem.BufferSlice incurs a heap allocation. This
@@ -505,6 +524,7 @@ func (f *framer) readDataFrame(fh http2.FrameHeader) (err error) {
 			// length of the frame payload, the recipient MUST
 			// treat this as a connection error.
 			// Filed: https://github.com/http2/http2-spec/issues/610
+			f.errDetail = errors.New("pad size larger than data payload")
 			return http2.ConnectionError(http2.ErrCodeProtocol)
 		}
 		if _, err := io.ReadFull(f.reader, buf); err != nil {

@@ -1676,7 +1676,7 @@ func (t *http2Client) reader(errCh chan<- error) {
 				if s != nil {
 					// use error detail to provide better err message
 					code := http2ErrConvTab[se.Code]
-					errorDetail := t.framer.fr.ErrorDetail()
+					errorDetail := t.framer.errorDetail()
 					var msg string
 					if errorDetail != nil {
 						msg = errorDetail.Error()
