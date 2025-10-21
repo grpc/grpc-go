@@ -977,7 +977,7 @@ func (cc *ClientConn) incrCallsFailed() {
 // connect starts creating a transport.
 // It does nothing if the ac is not IDLE.
 // TODO(bar) Move this to the addrConn section.
-func (ac *addrConn) connect() {
+func (ac *addrConn) connect(abort <-chan struct{}) {
 	ac.mu.Lock()
 	if ac.state == connectivity.Shutdown {
 		if logger.V(2) {
@@ -994,7 +994,7 @@ func (ac *addrConn) connect() {
 		return
 	}
 
-	ac.resetTransportAndUnlock()
+	ac.resetTransportAndUnlock(abort)
 }
 
 // equalAddressIgnoringBalAttributes returns true is a and b are considered equal.
@@ -1013,7 +1013,7 @@ func equalAddressesIgnoringBalAttributes(a, b []resolver.Address) bool {
 
 // updateAddrs updates ac.addrs with the new addresses list and handles active
 // connections or connection attempts.
-func (ac *addrConn) updateAddrs(addrs []resolver.Address) {
+func (ac *addrConn) updateAddrs(abort <-chan struct{}, addrs []resolver.Address) {
 	addrs = copyAddresses(addrs)
 	limit := len(addrs)
 	if limit > 5 {
@@ -1069,7 +1069,7 @@ func (ac *addrConn) updateAddrs(addrs []resolver.Address) {
 
 	// Since we were connecting/connected, we should start a new connection
 	// attempt.
-	go ac.resetTransportAndUnlock()
+	ac.resetTransportAndUnlock(abort)
 }
 
 // getServerName determines the serverName to be used in the connection
@@ -1315,9 +1315,17 @@ func (ac *addrConn) adjustParams(r transport.GoAwayReason) {
 // resetTransportAndUnlock unconditionally connects the addrConn.
 //
 // ac.mu must be held by the caller, and this function will guarantee it is released.
-func (ac *addrConn) resetTransportAndUnlock() {
-	acCtx := ac.ctx
-	if acCtx.Err() != nil {
+func (ac *addrConn) resetTransportAndUnlock(abort <-chan struct{}) {
+	ctx, cancel := context.WithCancel(ac.ctx)
+	go func() {
+		select {
+		case <-abort:
+			cancel()
+		case <-ctx.Done():
+		}
+	}()
+
+	if ctx.Err() != nil {
 		ac.mu.Unlock()
 		return
 	}
@@ -1345,7 +1353,7 @@ func (ac *addrConn) resetTransportAndUnlock() {
 	ac.updateConnectivityState(connectivity.Connecting, nil)
 	ac.mu.Unlock()
 
-	if err := ac.tryAllAddrs(acCtx, addrs, connectDeadline); err != nil {
+	if err := ac.tryAllAddrs(ctx, addrs, connectDeadline); err != nil {
 		if !errors.Is(err, context.Canceled) {
 			connectionAttemptsFailedMetric.Record(ac.cc.metricsRecorderList, 1, ac.cc.target, ac.backendServiceLabel, ac.localityLabel)
 		} else {
@@ -1359,7 +1367,7 @@ func (ac *addrConn) resetTransportAndUnlock() {
 		// to ensure one resolution request per pass instead of per subconn failure.
 		ac.cc.resolveNow(resolver.ResolveNowOptions{})
 		ac.mu.Lock()
-		if acCtx.Err() != nil {
+		if ctx.Err() != nil {
 			// addrConn was torn down.
 			ac.mu.Unlock()
 			return
@@ -1380,13 +1388,13 @@ func (ac *addrConn) resetTransportAndUnlock() {
 			ac.mu.Unlock()
 		case <-b:
 			timer.Stop()
-		case <-acCtx.Done():
+		case <-ctx.Done():
 			timer.Stop()
 			return
 		}
 
 		ac.mu.Lock()
-		if acCtx.Err() == nil {
+		if ctx.Err() == nil {
 			ac.updateConnectivityState(connectivity.Idle, err)
 		}
 		ac.mu.Unlock()
