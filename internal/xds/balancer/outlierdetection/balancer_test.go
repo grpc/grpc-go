@@ -1244,10 +1244,10 @@ func (s) TestEjectUnejectSuccessRate(t *testing.T) {
 					t.Fatalf("no SubConn update should have been sent (no SubConn got ejected)")
 				}
 				if got, _ := tmr.Metric("grpc.lb.outlier_detection.ejections_enforced"); got != 0 {
-					t.Errorf("Metric grpc.lb.outlier_detection.ejections_enforced: got %v, want 0", got)
+					t.Errorf("Metric grpc.lb.outlier_detection.ejections_enforced: got %f, want 0", got)
 				}
 				if got, _ := tmr.Metric("grpc.lb.outlier_detection.ejections_unenforced"); got != 0 {
-					t.Errorf("Metric grpc.lb.outlier_detection.ejections_unenforced: got %v, want 0", got)
+					t.Errorf("Metric grpc.lb.outlier_detection.ejections_unenforced: got %f, want 0", got)
 				}
 
 				// Since no addresses are ejected, a SubConn update should forward down
@@ -1270,10 +1270,12 @@ func (s) TestEjectUnejectSuccessRate(t *testing.T) {
 					t.Fatalf("Error in Sub Conn update: %v", err)
 				}
 
-				// Set all the upstream but the failing one to have five successes
+				// Set all the upstream before the offset to have five successes, but
+				// the remaining addresses to have failures.
+				offset := test.numberOfConns - test.wantFailures
 				for i := 0; i < test.numberOfConns; i++ {
 					pickerDone := balancer.DoneInfo{}
-					if i >= (test.numberOfConns - test.wantFailures) {
+					if i >= offset {
 						pickerDone = balancer.DoneInfo{Err: errors.New("some error")}
 					}
 					pi, err := picker.Pick(balancer.PickInfo{})
@@ -1293,9 +1295,7 @@ func (s) TestEjectUnejectSuccessRate(t *testing.T) {
 				// should be ejected, meaning a TRANSIENT_FAILURE connectivity state
 				// gets reported to the child.
 				for i := 0; i < test.wantEjections; i++ {
-					sCtx, cancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
-					defer cancel()
-					got, err := scsCh.Receive(sCtx)
+					got, err := scsCh.Receive(ctx)
 					if err != nil {
 						t.Fatalf("Error waiting for SubConn to be ejected: %v", err)
 					}
@@ -1314,10 +1314,10 @@ func (s) TestEjectUnejectSuccessRate(t *testing.T) {
 				}
 
 				if got, _ := tmr.Metric("grpc.lb.outlier_detection.ejections_enforced"); got != float64(test.wantEjections) {
-					t.Errorf("Metric grpc.lb.outlier_detection.ejections_enforced: got %v, want %v", got, float64(test.wantEjections))
+					t.Errorf("Metric grpc.lb.outlier_detection.ejections_enforced: got %f, want %f", got, float64(test.wantEjections))
 				}
 				if got, _ := tmr.Metric("grpc.lb.outlier_detection.ejections_unenforced"); got != float64(test.wantFailures-test.wantEjections) {
-					t.Errorf("Metric grpc.lb.outlier_detection.ejections_unenforced: got %v, want %v", got, float64(test.wantFailures-test.wantEjections))
+					t.Errorf("Metric grpc.lb.outlier_detection.ejections_unenforced: got %f, want %f", got, float64(test.wantFailures-test.wantEjections))
 				}
 
 				for i := 0; i < test.wantEjections; i++ {
