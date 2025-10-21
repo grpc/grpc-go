@@ -24,7 +24,7 @@ that are supported.
 ## Varying Payload Sizes (Weighted Random Distribution)
 
 The `benchmain` utility supports two flags, `-reqPayloadCurveFiles` and
-`-respPayloadCurveFiles`, that can be used to specify a histograms representing
+`-respPayloadCurveFiles`, that can be used to specify a histogram representing
 a weighted random distribution of request and response payload sizes,
 respectively. This is useful to simulate workloads with arbitrary payload
 sizes.
