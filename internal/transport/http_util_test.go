@@ -29,6 +29,7 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/net/http2"
 	"google.golang.org/grpc/mem"
 )
 
@@ -301,39 +302,39 @@ func BenchmarkEncodeGrpcMessage(b *testing.B) {
 
 func (s) TestFrame_ReadDataFrame(t *testing.T) {
 	tests := []struct {
-		name     string
-		w        func(fr *framer) error
-		wantData []byte
-		wantErr  bool
+		name        string
+		writeFrames func(fr *framer) error
+		wantData    []byte
+		wantErr     error
 	}{
 		{
 			name: "good_padded",
-			w: func(fr *framer) error {
+			writeFrames: func(fr *framer) error {
 				return fr.fr.WriteDataPadded(1, false, []byte("foo"), []byte{0, 0})
 			},
 			wantData: []byte("foo"),
 		},
 		{
 			name: "good_unpadded",
-			w: func(fr *framer) error {
+			writeFrames: func(fr *framer) error {
 				return fr.fr.WriteData(1, false, []byte("foo"))
 			},
 			wantData: []byte("foo"),
 		},
 		{
 			name: "padded_zero_data_some_padding",
-			w: func(fr *framer) error {
+			writeFrames: func(fr *framer) error {
 				return fr.fr.WriteDataPadded(1, false, []byte{}, []byte{0, 0})
 			},
 			wantData: []byte{},
 		},
 		{
 			name: "stream_id_0",
-			w: func(fr *framer) error {
+			writeFrames: func(fr *framer) error {
 				fr.fr.AllowIllegalWrites = true
 				return fr.fr.WriteData(0, false, []byte("foo"))
 			},
-			wantErr: true,
+			wantErr: http2.ConnectionError(http2.ErrCodeProtocol),
 		},
 	}
 
@@ -341,7 +342,7 @@ func (s) TestFrame_ReadDataFrame(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			fr, _ := testFramer()
 			// Write the frame using the provided function.
-			writeErr := tt.w(fr)
+			writeErr := tt.writeFrames(fr)
 			if writeErr != nil {
 				t.Fatalf("tt.w() returned unexpected error: %v", writeErr)
 			}
@@ -349,10 +350,10 @@ func (s) TestFrame_ReadDataFrame(t *testing.T) {
 
 			// Read the frame back.
 			f, err := fr.readFrame()
-			if gotErr := err != nil; gotErr != tt.wantErr {
-				t.Fatalf("ReadFrame() err = %v; want %t", err, tt.wantErr)
+			if err != tt.wantErr {
+				t.Fatalf("ReadFrame() err = %v; want %v", err, tt.wantErr)
 			}
-			if tt.wantErr {
+			if tt.wantErr != nil {
 				return
 			}
 

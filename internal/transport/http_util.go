@@ -300,11 +300,11 @@ type bufWriter struct {
 	buf       []byte
 	offset    int
 	batchSize int
-	conn      io.ReadWriter
+	conn      io.Writer
 	err       error
 }
 
-func newBufWriter(conn io.ReadWriter, batchSize int, pool *sync.Pool) *bufWriter {
+func newBufWriter(conn io.Writer, batchSize int, pool *sync.Pool) *bufWriter {
 	w := &bufWriter{
 		batchSize: batchSize,
 		conn:      conn,
@@ -466,7 +466,7 @@ func (f *framer) readDataFrame(fh http2.FrameHeader) (err error) {
 		// field is 0x0, the recipient MUST respond with a
 		// connection error (Section 5.4.1) of type
 		// PROTOCOL_ERROR.
-		return fmt.Errorf("DATA frame with stream ID 0")
+		return http2.ConnectionError(http2.ErrCodeProtocol)
 	}
 	// Converting a *[]byte to a mem.BufferSlice incurs a heap allocation. This
 	// conversion is performed by mem.NewBuffer. To avoid the extra allocation
@@ -500,15 +500,15 @@ func (f *framer) readDataFrame(fh http2.FrameHeader) (err error) {
 		}
 		padSize := buf[0]
 		buf = buf[:len(buf)-1]
-		if _, err := io.ReadFull(f.reader, buf); err != nil {
-			return err
-		}
 		if int(padSize) > len(buf) {
 			// If the length of the padding is greater than the
 			// length of the frame payload, the recipient MUST
 			// treat this as a connection error.
 			// Filed: https://github.com/http2/http2-spec/issues/610
-			return fmt.Errorf("pad size larger than data payload")
+			return http2.ConnectionError(http2.ErrCodeProtocol)
+		}
+		if _, err := io.ReadFull(f.reader, buf); err != nil {
+			return err
 		}
 		buf = buf[:len(buf)-int(padSize)]
 	} else if _, err := io.ReadFull(f.reader, buf); err != nil {
