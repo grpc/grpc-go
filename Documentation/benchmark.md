@@ -29,7 +29,7 @@ a weighted random distribution of request and response payload sizes,
 respectively. This is useful to simulate workloads with arbitrary payload
 sizes.
 
-The options takes a comma-separated list of file paths as value. Each file must
+The options take a comma-separated list of file paths as value. Each file must
 be a valid CSV file with three columns in each row. Each row represents a range
 of payload sizes (first two columns) and the weight associated with that range
 (third column). For example, consider the below file:
