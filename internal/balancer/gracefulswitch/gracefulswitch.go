@@ -67,6 +67,8 @@ type Balancer struct {
 	// balancerCurrent before the UpdateSubConnState is called on the
 	// balancerCurrent.
 	currentMu sync.Mutex
+
+	pendingSwaps sync.WaitGroup
 }
 
 // swap swaps out the current lb with the pending lb and updates the ClientConn.
@@ -76,7 +78,9 @@ func (gsb *Balancer) swap() {
 	cur := gsb.balancerCurrent
 	gsb.balancerCurrent = gsb.balancerPending
 	gsb.balancerPending = nil
+	gsb.pendingSwaps.Add(1)
 	go func() {
+		defer gsb.pendingSwaps.Done()
 		gsb.currentMu.Lock()
 		defer gsb.currentMu.Unlock()
 		cur.Close()
@@ -274,6 +278,7 @@ func (gsb *Balancer) Close() {
 
 	currentBalancerToClose.Close()
 	pendingBalancerToClose.Close()
+	gsb.pendingSwaps.Wait()
 }
 
 // balancerWrapper wraps a balancer.Balancer, and overrides some Balancer
