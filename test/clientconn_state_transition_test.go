@@ -167,7 +167,7 @@ func testStateTransitionSingleAddress(t *testing.T, want []connectivity.State, s
 	client, err := grpc.NewClient("passthrough:///",
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, stateRecordingBalancerName)),
-		grpc.WithDialer(pl.Dialer()),
+		grpc.WithContextDialer(pl.ContextDialer()),
 		grpc.WithConnectParams(grpc.ConnectParams{
 			Backoff:           backoff.Config{},
 			MinConnectTimeout: 100 * time.Millisecond,
