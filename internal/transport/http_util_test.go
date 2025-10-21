@@ -19,14 +19,19 @@
 package transport
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
 	"math"
 	"net"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
+
+	"golang.org/x/net/http2"
+	"google.golang.org/grpc/mem"
 )
 
 func (s) TestDecodeTimeout(t *testing.T) {
@@ -293,5 +298,118 @@ func BenchmarkEncodeGrpcMessage(b *testing.B) {
 		if got != want {
 			b.Fatalf("encodeGrpcMessage(%q) = %s, want %s", input, got, want)
 		}
+	}
+}
+
+func buildDataFrame(h http2.FrameHeader, payload []byte) []byte {
+	buf := new(bytes.Buffer)
+	buf.Write([]byte{
+		byte(h.Length >> 16),
+		byte(h.Length >> 8),
+		byte(h.Length),
+		byte(h.Type),
+		byte(h.Flags),
+		byte(h.StreamID >> 24),
+		byte(h.StreamID >> 16),
+		byte(h.StreamID >> 8),
+		byte(h.StreamID),
+	})
+	buf.Write(payload)
+	return buf.Bytes()
+}
+
+func (s) TestFramer_ParseDataFrame(t *testing.T) {
+	tests := []struct {
+		name                string
+		wire                []byte // from frame header onward
+		wantData            []byte
+		wantErr             error
+		wantErrDetailSubstr string
+	}{
+		{
+			name: "good_padded",
+			wire: buildDataFrame(http2.FrameHeader{
+				Type: http2.FrameData, Length: 6, StreamID: 1, Flags: http2.FlagDataPadded,
+			}, []byte{
+				2,             // pad length
+				'f', 'o', 'o', // data
+				0, 0, // padding
+			}),
+			wantData: []byte("foo"),
+		},
+		{
+			name: "good_unpadded",
+			wire: buildDataFrame(http2.FrameHeader{
+				Type: http2.FrameData, Length: 3, StreamID: 1, Flags: 0,
+			}, []byte("foo")),
+			wantData: []byte("foo"),
+		},
+		{
+			name: "stream_id_0",
+			wire: buildDataFrame(http2.FrameHeader{
+				Type: http2.FrameData, Length: 1, StreamID: 0, Flags: 0,
+			}, []byte{0}),
+			wantErr:             http2.ConnectionError(http2.ErrCodeProtocol),
+			wantErrDetailSubstr: "DATA frame with stream ID 0",
+		},
+		{
+			name: "pad_size_bigger_than_payload",
+			wire: buildDataFrame(http2.FrameHeader{
+				Type: http2.FrameData, Length: 4, StreamID: 1, Flags: http2.FlagDataPadded,
+			}, []byte{
+				4,        // pad length of 4
+				'f', 'o', // data 'fo' is 2 bytes
+				0, // padding 0 is 1 byte.
+			}), // pad length 4 but only 3 bytes for data+padding available in payload after pad length byte
+			wantErr:             http2.ConnectionError(http2.ErrCodeProtocol),
+			wantErrDetailSubstr: "pad size larger than data payload",
+		},
+		{
+			name: "padded_zero_data_some_padding",
+			wire: buildDataFrame(http2.FrameHeader{
+				Type: http2.FrameData, Length: 3, StreamID: 1, Flags: http2.FlagDataPadded,
+			}, []byte{
+				2,    // pad length 2
+				0, 0, // padding
+			}),
+			wantData: []byte{},
+		},
+		{
+			name: "padded_short_payload_reading_pad_flag",
+			wire: buildDataFrame(http2.FrameHeader{
+				Type: http2.FrameData, Length: 0, StreamID: 1, Flags: http2.FlagDataPadded,
+			}, []byte{}),
+			wantErr: io.ErrUnexpectedEOF,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			fr := newFramer(bytes.NewBuffer(tc.wire), defaultWriteBufSize, defaultReadBufSize, false, defaultClientMaxHeaderListSize, mem.DefaultBufferPool())
+			f, err := fr.readFrame()
+
+			if err != tc.wantErr {
+				t.Fatalf("readFrame() returned unexpected error: %v, want %v", err, tc.wantErr)
+			}
+			gotErrDetailStr := ""
+			if fr.errDetail != nil {
+				gotErrDetailStr = fr.errDetail.Error()
+			}
+			if !strings.Contains(gotErrDetailStr, tc.wantErrDetailSubstr) {
+				t.Fatalf("errorDetail() returned unexpected error string: %q, want substring %q", gotErrDetailStr, tc.wantErrDetailSubstr)
+			}
+
+			if tc.wantErr != nil {
+				return
+			}
+			df, ok := f.(*parsedDataFrame)
+			if !ok {
+				t.Fatalf("readFrame() returned %T, want *parsedDataFrame", f)
+			}
+			if gotData := df.data.ReadOnlyData(); !bytes.Equal(gotData, tc.wantData) {
+				t.Fatalf("parsedDataFrame.Data() = %q, want %q", gotData, tc.wantData)
+			}
+			df.data.Free()
+		})
 	}
 }
