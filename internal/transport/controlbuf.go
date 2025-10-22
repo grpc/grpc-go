@@ -246,7 +246,7 @@ type outStream struct {
 	itl              *itemList
 	bytesOutStanding int
 	wq               *writeQuota
-	reader           mem.Reader
+	cursor           mem.Cursor
 
 	next *outStream
 	prev *outStream
@@ -530,6 +530,7 @@ type loopyWriter struct {
 
 	// Side-specific handlers
 	ssGoAwayHandler func(*goAway) (bool, error)
+	writeBuf        [][]byte
 }
 
 func newLoopyWriter(s side, fr *framer, cbuf *controlBuffer, bdpEst *bdpEstimator, conn net.Conn, logger *grpclog.PrefixLogger, goAwayHandler func(*goAway) (bool, error), bufferPool mem.BufferPool) *loopyWriter {
@@ -665,11 +666,10 @@ func (l *loopyWriter) incomingSettingsHandler(s *incomingSettings) error {
 
 func (l *loopyWriter) registerStreamHandler(h *registerStream) {
 	str := &outStream{
-		id:     h.streamID,
-		state:  empty,
-		itl:    &itemList{},
-		wq:     h.wq,
-		reader: mem.BufferSlice{}.Reader(),
+		id:    h.streamID,
+		state: empty,
+		itl:   &itemList{},
+		wq:    h.wq,
 	}
 	l.estdStreams[h.streamID] = str
 }
@@ -701,11 +701,10 @@ func (l *loopyWriter) headerHandler(h *headerFrame) error {
 	}
 	// Case 2: Client wants to originate stream.
 	str := &outStream{
-		id:     h.streamID,
-		state:  empty,
-		itl:    &itemList{},
-		wq:     h.wq,
-		reader: mem.BufferSlice{}.Reader(),
+		id:    h.streamID,
+		state: empty,
+		itl:   &itemList{},
+		wq:    h.wq,
 	}
 	return l.originateStream(str, h)
 }
@@ -807,7 +806,7 @@ func (l *loopyWriter) cleanupStreamHandler(c *cleanupStream) error {
 		// a RST_STREAM before stream initialization thus the stream might
 		// not be established yet.
 		delete(l.estdStreams, c.streamID)
-		str.reader.Close()
+		str.cursor.Close()
 		str.deleteSelf()
 		for head := str.itl.dequeueAll(); head != nil; head = head.next {
 			if df, ok := head.it.(*dataFrame); ok {
@@ -948,11 +947,11 @@ func (l *loopyWriter) processData() (bool, error) {
 	if str == nil {
 		return true, nil
 	}
-	reader := str.reader
+	cursor := &str.cursor
 	dataItem := str.itl.peek().(*dataFrame) // Peek at the first data item this stream.
 	if !dataItem.processing {
 		dataItem.processing = true
-		str.reader.Reset(dataItem.data)
+		cursor.Reset(dataItem.data)
 		dataItem.data.Free()
 	}
 	// A data item is represented by a dataFrame, since it later translates into
@@ -962,13 +961,13 @@ func (l *loopyWriter) processData() (bool, error) {
 	// from data is copied to h to make as big as the maximum possible HTTP2 frame
 	// size.
 
-	if len(dataItem.h) == 0 && reader.Remaining() == 0 { // Empty data frame
+	if len(dataItem.h) == 0 && cursor.Remaining() == 0 { // Empty data frame
 		// Client sends out empty data frame with endStream = true
-		if err := l.framer.fr.WriteData(dataItem.streamID, dataItem.endStream, nil); err != nil {
+		if err := l.framer.writeData(dataItem.streamID, dataItem.endStream, nil); err != nil {
 			return false, err
 		}
 		str.itl.dequeue() // remove the empty data item from stream
-		_ = reader.Close()
+		cursor.Close()
 		if str.itl.isEmpty() {
 			str.state = empty
 		} else if trailer, ok := str.itl.peek().(*headerFrame); ok { // the next item is trailers.
@@ -997,29 +996,16 @@ func (l *loopyWriter) processData() (bool, error) {
 	}
 	// Compute how much of the header and data we can send within quota and max frame length
 	hSize := min(maxSize, len(dataItem.h))
-	dSize := min(maxSize-hSize, reader.Remaining())
-	remainingBytes := len(dataItem.h) + reader.Remaining() - hSize - dSize
+	dSize := min(maxSize-hSize, cursor.Remaining())
+	remainingBytes := len(dataItem.h) + cursor.Remaining() - hSize - dSize
 	size := hSize + dSize
 
-	var buf *[]byte
-
-	if hSize != 0 && dSize == 0 {
-		buf = &dataItem.h
-	} else {
-		// Note: this is only necessary because the http2.Framer does not support
-		// partially writing a frame, so the sequence must be materialized into a buffer.
-		// TODO: Revisit once https://github.com/golang/go/issues/66655 is addressed.
-		pool := l.bufferPool
-		if pool == nil {
-			// Note that this is only supposed to be nil in tests. Otherwise, stream is
-			// always initialized with a BufferPool.
-			pool = mem.DefaultBufferPool()
-		}
-		buf = pool.Get(size)
-		defer pool.Put(buf)
-
-		copy((*buf)[:hSize], dataItem.h)
-		_, _ = reader.Read((*buf)[hSize:])
+	l.writeBuf = l.writeBuf[:0]
+	if hSize > 0 {
+		l.writeBuf = append(l.writeBuf, dataItem.h[:hSize])
+	}
+	if dSize > 0 {
+		l.writeBuf = cursor.Next(dSize, l.writeBuf)
 	}
 
 	// Now that outgoing flow controls are checked we can replenish str's write quota
@@ -1032,7 +1018,9 @@ func (l *loopyWriter) processData() (bool, error) {
 	if dataItem.onEachWrite != nil {
 		dataItem.onEachWrite()
 	}
-	if err := l.framer.fr.WriteData(dataItem.streamID, endStream, (*buf)[:size]); err != nil {
+	err := l.framer.writeData(dataItem.streamID, endStream, l.writeBuf)
+	cursor.Advance(dSize)
+	if err != nil {
 		return false, err
 	}
 	str.bytesOutStanding += size
@@ -1040,7 +1028,7 @@ func (l *loopyWriter) processData() (bool, error) {
 	dataItem.h = dataItem.h[hSize:]
 
 	if remainingBytes == 0 { // All the data from that message was written out.
-		_ = reader.Close()
+		cursor.Close()
 		str.itl.dequeue()
 	}
 	if str.itl.isEmpty() {
