@@ -22,6 +22,8 @@ import (
 	"testing"
 
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/internal/envconfig"
+	"google.golang.org/grpc/internal/testutils"
 )
 
 const testCredsBuilderName = "test_creds"
@@ -29,7 +31,7 @@ const testCredsBuilderName = "test_creds"
 var builder = &testCredsBuilder{}
 
 func init() {
-	RegisterCredentials(builder)
+	RegisterChannelCredentials(builder)
 }
 
 type testCredsBuilder struct {
@@ -46,7 +48,7 @@ func (t *testCredsBuilder) Name() string {
 }
 
 func TestRegisterNew(t *testing.T) {
-	c := GetCredentials(testCredsBuilderName)
+	c := GetChannelCredentials(testCredsBuilderName)
 	if c == nil {
 		t.Fatalf("GetCredentials(%q) credential = nil", testCredsBuilderName)
 	}
@@ -62,10 +64,10 @@ func TestRegisterNew(t *testing.T) {
 	}
 }
 
-func TestCredsBuilders(t *testing.T) {
+func TestChannelCredsBuilders(t *testing.T) {
 	tests := []struct {
 		typename string
-		builder  Credentials
+		builder  ChannelCredentials
 	}{
 		{"google_default", &googleDefaultCredsBuilder{}},
 		{"insecure", &insecureCredsBuilder{}},
@@ -78,11 +80,41 @@ func TestCredsBuilders(t *testing.T) {
 				t.Errorf("%T.Name = %v, want %v", test.builder, got, want)
 			}
 
-			_, stop, err := test.builder.Build(nil)
+			bundle, stop, err := test.builder.Build(nil)
 			if err != nil {
 				t.Fatalf("%T.Build failed: %v", test.builder, err)
 			}
+			if bundle == nil {
+				t.Errorf("%T.Build returned nil bundle, expected non-nil", test.builder)
+			}
 			stop()
+		})
+	}
+}
+
+func TestCallCredsBuilders(t *testing.T) {
+	tests := []struct {
+		typename              string
+		builder               CallCredentials
+		minimumRequiredConfig json.RawMessage
+	}{
+		{"jwt_token_file", &jwtCallCredsBuilder{}, json.RawMessage(`{"jwt_token_file":"/path/to/token.jwt"}`)},
+	}
+
+	for _, test := range tests {
+		t.Run(test.typename, func(t *testing.T) {
+			if got, want := test.builder.Name(), test.typename; got != want {
+				t.Errorf("%T.Name = %v, want %v", test.builder, got, want)
+			}
+
+			bundle, stop, err := test.builder.Build(test.minimumRequiredConfig)
+			if err != nil {
+				t.Fatalf("%T.Build failed: %v", test.builder, err)
+			}
+			defer stop()
+			if bundle == nil {
+				t.Errorf("%T.Build returned nil bundle, expected non-nil", test.builder)
+			}
 		})
 	}
 }
@@ -93,10 +125,28 @@ func TestTlsCredsBuilder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("tls.Build() failed with error %s when expected to succeed", err)
 	}
-	stop()
+	defer stop()
 
 	if _, stop, err := tls.Build(json.RawMessage(`{"ca_certificate_file":"/ca_certificates.pem","refresh_interval": "asdf"}`)); err == nil {
+		defer stop()
 		t.Errorf("tls.Build() succeeded with an invalid refresh interval, when expected to fail")
-		stop()
+	}
+}
+
+func TestJwtCallCredentials_DisabledIfFeatureNotEnabled(t *testing.T) {
+	builder := GetCallCredentials("jwt_call_creds")
+	if builder != nil {
+		t.Fatal("Expected nil Credentials for jwt_call_creds when the feature is disabled.")
+	}
+
+	testutils.SetEnvConfig(t, &envconfig.XDSBootstrapCallCredsEnabled, true)
+
+	// Test that GetCredentials returns the JWT builder.
+	builder = GetCallCredentials("jwt_token_file")
+	if builder == nil {
+		t.Fatal("GetCallCredentials(\"jwt_token_file\") returned nil")
+	}
+	if got, want := builder.Name(), "jwt_token_file"; got != want {
+		t.Errorf("Retrieved builder name = %q, want %q", got, want)
 	}
 }
