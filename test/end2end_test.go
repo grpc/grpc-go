@@ -5387,10 +5387,10 @@ func (s) TestClientWriteFailsAfterServerClosesStream(t *testing.T) {
 type windowSizeConfig struct {
 	serverStaticWindowSize bool
 	clientStaticWindowSize bool
-	serverStream int32
-	serverConn   int32
-	clientStream int32
-	clientConn   int32
+	serverStream           int32
+	serverConn             int32
+	clientStream           int32
+	clientConn             int32
 }
 
 func (s) TestConfigurableWindowSizeWithLargeWindow(t *testing.T) {
@@ -5400,10 +5400,10 @@ func (s) TestConfigurableWindowSizeWithLargeWindow(t *testing.T) {
 	wc := windowSizeConfig{
 		serverStaticWindowSize: true,
 		clientStaticWindowSize: true,
-		serverStream: 8 * 1024 * 1024,
-		serverConn:   12 * 1024 * 1024,
-		clientStream: 6 * 1024 * 1024,
-		clientConn:   8 * 1024 * 1024,
+		serverStream:           8 * 1024 * 1024,
+		serverConn:             12 * 1024 * 1024,
+		clientStream:           6 * 1024 * 1024,
+		clientConn:             8 * 1024 * 1024,
 	}
 	for _, e := range listTestEnv() {
 		testConfigurableWindowSize(t, e, wc)
