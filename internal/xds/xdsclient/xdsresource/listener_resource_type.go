@@ -149,8 +149,8 @@ func (d *delegatingListenerWatcher) AmbientError(err error, onDone func()) {
 
 // WatchListener uses xDS to discover the configuration associated with the
 // provided listener resource name.
-func WatchListener(p ProducerV2, name string, w ListenerWatcher) (cancel func()) {
-	return p.WatchResourceV2(version.V3ListenerURL, name, &delegatingListenerWatcher{watcher: w})
+func WatchListener(p Producer, name string, w ListenerWatcher) (cancel func()) {
+	return p.WatchResource(version.V3ListenerURL, name, &delegatingListenerWatcher{watcher: w})
 }
 
 // NewListenerResourceTypeDecoder returns a xdsclient.Decoder that wraps

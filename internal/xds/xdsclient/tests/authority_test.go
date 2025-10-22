@@ -316,13 +316,13 @@ func (s) TestAuthority_Fallback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error when waiting for a resource update callback:  %v", err)
 	}
-	gotUpdate := v.(xdsresource.ClusterUpdate)
+	gotUpdate := v.(*xdsresource.ClusterUpdate)
 	wantUpdate := xdsresource.ClusterUpdate{
 		ClusterName:    clusterName,
 		EDSServiceName: edsSecondaryName,
 	}
 	cmpOpts := []cmp.Option{cmpopts.EquateEmpty(), cmpopts.IgnoreFields(xdsresource.ClusterUpdate{}, "Raw", "LBPolicy", "TelemetryLabels")}
-	if diff := cmp.Diff(wantUpdate, gotUpdate, cmpOpts...); diff != "" {
+	if diff := cmp.Diff(wantUpdate, *gotUpdate, cmpOpts...); diff != "" {
 		t.Fatalf("Diff in the cluster resource update: (-want, got):\n%s", diff)
 	}
 
@@ -351,8 +351,8 @@ func newClusterWatcherV2() *clusterWatcherV2 {
 	}
 }
 
-func (cw *clusterWatcherV2) ResourceChanged(update *xdsresource.ClusterResourceData, onDone func()) {
-	cw.updateCh.Send(update.Resource)
+func (cw *clusterWatcherV2) ResourceChanged(update *xdsresource.ClusterUpdate, onDone func()) {
+	cw.updateCh.Send(update)
 	onDone()
 }
 
