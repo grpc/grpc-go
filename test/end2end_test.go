@@ -490,6 +490,7 @@ type test struct {
 	unaryServerInt              grpc.UnaryServerInterceptor
 	streamServerInt             grpc.StreamServerInterceptor
 	serverInitialWindowSize     int32
+	serverStaticWindowSize      bool
 	serverInitialConnWindowSize int32
 	customServerOptions         []grpc.ServerOption
 
@@ -509,6 +510,7 @@ type test struct {
 	unaryClientInt              grpc.UnaryClientInterceptor
 	streamClientInt             grpc.StreamClientInterceptor
 	clientInitialWindowSize     int32
+	clientStaticWindowSize      bool
 	clientInitialConnWindowSize int32
 	perRPCCreds                 credentials.PerRPCCredentials
 	customDialOptions           []grpc.DialOption
@@ -605,10 +607,15 @@ func (te *test) listenAndServe(ts testgrpc.TestServiceServer, listen func(networ
 	if te.unknownHandler != nil {
 		sopts = append(sopts, grpc.UnknownServiceHandler(te.unknownHandler))
 	}
-	if te.serverInitialWindowSize > 0 {
-		sopts = append(sopts, grpc.InitialWindowSize(te.serverInitialWindowSize))
+	if te.serverStaticWindowSize && te.serverInitialWindowSize > 0 {
+		sopts = append(sopts, grpc.StaticStreamWindowSize(te.serverInitialWindowSize))
+	} else if te.serverInitialWindowSize > 0 {
+		sopts = append(sopts, grpc.InitialStreamWindowSize(te.serverInitialWindowSize))
 	}
-	if te.serverInitialConnWindowSize > 0 {
+
+	if te.serverStaticWindowSize && te.serverInitialConnWindowSize > 0 {
+		sopts = append(sopts, grpc.StaticConnWindowSize(te.serverInitialConnWindowSize))
+	} else if te.serverInitialConnWindowSize > 0 {
 		sopts = append(sopts, grpc.InitialConnWindowSize(te.serverInitialConnWindowSize))
 	}
 	la := ":0"
@@ -816,10 +823,14 @@ func (te *test) configDial(opts ...grpc.DialOption) ([]grpc.DialOption, string) 
 	if te.e.balancer != "" {
 		opts = append(opts, grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, te.e.balancer)))
 	}
-	if te.clientInitialWindowSize > 0 {
-		opts = append(opts, grpc.WithInitialWindowSize(te.clientInitialWindowSize))
+	if te.clientStaticWindowSize && te.clientInitialWindowSize > 0 {
+		opts = append(opts, grpc.WithStaticStreamWindowSize(te.clientInitialWindowSize))
+	} else if te.clientInitialWindowSize > 0 {
+		opts = append(opts, grpc.WithInitialStreamWindowSize(te.clientInitialWindowSize))
 	}
-	if te.clientInitialConnWindowSize > 0 {
+	if te.clientStaticWindowSize && te.clientInitialConnWindowSize > 0 {
+		opts = append(opts, grpc.WithStaticConnWindowSize(te.clientInitialConnWindowSize))
+	} else if te.clientInitialConnWindowSize > 0 {
 		opts = append(opts, grpc.WithInitialConnWindowSize(te.clientInitialConnWindowSize))
 	}
 	if te.perRPCCreds != nil {
@@ -5374,18 +5385,25 @@ func (s) TestClientWriteFailsAfterServerClosesStream(t *testing.T) {
 }
 
 type windowSizeConfig struct {
-	serverStream int32
-	serverConn   int32
-	clientStream int32
-	clientConn   int32
+	serverStaticWindowSize bool
+	clientStaticWindowSize bool
+	serverStream           int32
+	serverConn             int32
+	clientStream           int32
+	clientConn             int32
 }
 
 func (s) TestConfigurableWindowSizeWithLargeWindow(t *testing.T) {
+	// Before behavior change in PR #8665, large window sizes set
+	// using WithInitialWindowSize disabled BDP by default. Post the
+	// behavior change, we have to explicitly disable BDP.
 	wc := windowSizeConfig{
-		serverStream: 8 * 1024 * 1024,
-		serverConn:   12 * 1024 * 1024,
-		clientStream: 6 * 1024 * 1024,
-		clientConn:   8 * 1024 * 1024,
+		serverStaticWindowSize: true,
+		clientStaticWindowSize: true,
+		serverStream:           8 * 1024 * 1024,
+		serverConn:             12 * 1024 * 1024,
+		clientStream:           6 * 1024 * 1024,
+		clientConn:             8 * 1024 * 1024,
 	}
 	for _, e := range listTestEnv() {
 		testConfigurableWindowSize(t, e, wc)
@@ -5406,6 +5424,8 @@ func (s) TestConfigurableWindowSizeWithSmallWindow(t *testing.T) {
 
 func testConfigurableWindowSize(t *testing.T, e env, wc windowSizeConfig) {
 	te := newTest(t, e)
+	te.serverStaticWindowSize = wc.serverStaticWindowSize
+	te.clientStaticWindowSize = wc.clientStaticWindowSize
 	te.serverInitialWindowSize = wc.serverStream
 	te.serverInitialConnWindowSize = wc.serverConn
 	te.clientInitialWindowSize = wc.clientStream
