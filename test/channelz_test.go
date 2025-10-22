@@ -1145,7 +1145,9 @@ func (s) TestCZClientAndServerSocketMetricsStreamsCountFlowControlRSTStream(t *t
 func (s) TestCZClientAndServerSocketMetricsFlowControl(t *testing.T) {
 	e := tcpClearRREnv
 	te := newTest(t, e)
-	// disable BDP
+	// disable BDP explicitly.
+	te.serverStaticWindowSize = true
+	te.clientStaticWindowSize = true
 	te.serverInitialWindowSize = 65536
 	te.serverInitialConnWindowSize = 65536
 	te.clientInitialWindowSize = 65536
