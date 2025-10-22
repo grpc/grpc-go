@@ -37,7 +37,6 @@ import (
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/mem"
 )
 
 const (
@@ -451,16 +450,14 @@ func (f *framer) writeData(streamID uint32, endStream bool, data [][]byte) error
 	if _, err := f.writer.Write(f.headerBuf); err != nil {
 		return err
 	}
-	bufHandle := mem.DefaultBufferPool().Get(int(length))
-	buf := *bufHandle
 	for _, d := range data {
-		copied := copy(buf, d)
-		buf = buf[copied:]
-	}
-	_, err := f.writer.Write(*bufHandle)
-	mem.DefaultBufferPool().Put(bufHandle)
-	if err != nil {
-		return err
+		if len(d) == 0 {
+			continue
+		}
+		_, err := f.writer.Write(d)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
