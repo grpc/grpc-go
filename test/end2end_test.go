@@ -5385,6 +5385,8 @@ func (s) TestClientWriteFailsAfterServerClosesStream(t *testing.T) {
 }
 
 type windowSizeConfig struct {
+	serverStaticWindowSize bool
+	clientStaticWindowSize bool
 	serverStream int32
 	serverConn   int32
 	clientStream int32
@@ -5392,7 +5394,12 @@ type windowSizeConfig struct {
 }
 
 func (s) TestConfigurableWindowSizeWithLargeWindow(t *testing.T) {
+	// Before behavior change in PR #8665, large window sizes set
+	// using WithInitialWindowSize disabled BDP by default. Post the
+	// behavior change, we have to explicitly disable BDP.
 	wc := windowSizeConfig{
+		serverStaticWindowSize: true,
+		clientStaticWindowSize: true,
 		serverStream: 8 * 1024 * 1024,
 		serverConn:   12 * 1024 * 1024,
 		clientStream: 6 * 1024 * 1024,
@@ -5417,6 +5424,8 @@ func (s) TestConfigurableWindowSizeWithSmallWindow(t *testing.T) {
 
 func testConfigurableWindowSize(t *testing.T, e env, wc windowSizeConfig) {
 	te := newTest(t, e)
+	te.serverStaticWindowSize = wc.serverStaticWindowSize
+	te.clientStaticWindowSize = wc.clientStaticWindowSize
 	te.serverInitialWindowSize = wc.serverStream
 	te.serverInitialConnWindowSize = wc.serverConn
 	te.clientInitialWindowSize = wc.clientStream
