@@ -27,48 +27,68 @@ import (
 type listenerWatcher struct {
 	resourceName string
 	cancel       func()
+	isCancelled  bool
 	parent       *DependencyManager
 }
 
 func newListenerWatcher(resourceName string, parent *DependencyManager) *listenerWatcher {
 	lw := &listenerWatcher{resourceName: resourceName, parent: parent}
 	lw.cancel = xdsresource.WatchListener(parent.xdsClient, resourceName, lw)
+	lw.isCancelled = false
 	return lw
 }
 
 func (l *listenerWatcher) ResourceChanged(update *xdsresource.ListenerUpdate, onDone func()) {
+	if l.isCancelled {
+		return
+	}
 	handleUpdate := func(context.Context) { l.parent.onListenerResourceUpdate(update); onDone() }
 	l.parent.serializer.ScheduleOr(handleUpdate, onDone)
 }
 
 func (l *listenerWatcher) ResourceError(err error, onDone func()) {
+	if l.isCancelled {
+		return
+	}
 	handleError := func(context.Context) { l.parent.onListenerResourceError(err); onDone() }
 	l.parent.serializer.ScheduleOr(handleError, onDone)
 }
 
 func (l *listenerWatcher) AmbientError(err error, onDone func()) {
+	if l.isCancelled {
+		return
+	}
 	handleError := func(context.Context) { l.parent.onListenerResourceAmbientError(err); onDone() }
 	l.parent.serializer.ScheduleOr(handleError, onDone)
 }
 
 func (l *listenerWatcher) stop() {
+	l.isCancelled = true
 	l.cancel()
-	l.parent.logger.Infof("Canceling watch on Listener resource %q", l.resourceName)
+	if logger.V(2) {
+		l.parent.logger.Infof("Canceling watch on Listener resource %q", l.resourceName)
+	}
 }
 
 type routeConfigWatcher struct {
 	resourceName string
 	cancel       func()
 	parent       *DependencyManager
+	isCancelled  bool
 }
 
 func newRouteConfigWatcher(resourceName string, parent *DependencyManager) *routeConfigWatcher {
 	rw := &routeConfigWatcher{resourceName: resourceName, parent: parent}
 	rw.cancel = xdsresource.WatchRouteConfig(parent.xdsClient, resourceName, rw)
+	rw.isCancelled = false
 	return rw
 }
 
 func (r *routeConfigWatcher) ResourceChanged(u *xdsresource.RouteConfigResourceData, onDone func()) {
+	if r.isCancelled {
+		// Drop updates from canceled watchers.
+		return
+	}
 	handleUpdate := func(context.Context) {
 		r.parent.onRouteConfigResourceUpdate(r.resourceName, u.Resource)
 		onDone()
@@ -77,16 +97,25 @@ func (r *routeConfigWatcher) ResourceChanged(u *xdsresource.RouteConfigResourceD
 }
 
 func (r *routeConfigWatcher) ResourceError(err error, onDone func()) {
+	if r.isCancelled {
+		return
+	}
 	handleError := func(context.Context) { r.parent.onRouteConfigResourceError(r.resourceName, err); onDone() }
 	r.parent.serializer.ScheduleOr(handleError, onDone)
 }
 
 func (r *routeConfigWatcher) AmbientError(err error, onDone func()) {
+	if r.isCancelled {
+		return
+	}
 	handleError := func(context.Context) { r.parent.onRouteConfigResourceAmbientError(r.resourceName, err); onDone() }
 	r.parent.serializer.ScheduleOr(handleError, onDone)
 }
 
 func (r *routeConfigWatcher) stop() {
+	r.isCancelled = true
 	r.cancel()
-	r.parent.logger.Infof("Canceling watch on RouteConfiguration resource %q", r.resourceName)
+	if logger.V(2) {
+		r.parent.logger.Infof("Canceling watch on RouteConfiguration resource %q", r.resourceName)
+	}
 }

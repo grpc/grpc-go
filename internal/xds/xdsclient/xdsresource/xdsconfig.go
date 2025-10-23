@@ -19,27 +19,21 @@ package xdsresource
 
 import "google.golang.org/grpc/resolver"
 
-// XDSConfig holds the complete and resolved xDS resource configuration
-// including LDS, RDS, CDS and endpoints.
+// XDSConfig holds the complete gRPC client-side xDS configuration containing
+// all necessary resources.
 type XDSConfig struct {
-	// Listener is the listener resource update
-	Listener ListenerUpdate
+	// Listener holds the listener configuration.
+	Listener *ListenerUpdate
 
-	// RouteConfig is the route configuration resource update. It will be
-	// populated even if RouteConfig is inlined into the Listener resource.
+	// RouteConfig is the route configuration. It will be populated even if
+	// RouteConfig is inlined into the Listener resource.
 	RouteConfig RouteConfigUpdate
 
-	// VirtualHost is the virtual host from the route configuration matched with
-	// dataplane authority .
+	// VirtualHost selected from the route configuration whose domain field
+	// offers the best match against the provided dataplane authority.
 	VirtualHost *VirtualHost
 
-	// Clusters maps the cluster name with the ClusterResult which will have
-	// either the cluster configuration or error. It will have an error status
-	// if either
-	//
-	// (a) there was an error and we did not already have a valid resource or
-	//
-	// (b) the resource does not exist.
+	// Clusters is a map from cluster name to its configuration.
 	Clusters map[string]*ClusterResult
 }
 
@@ -49,10 +43,10 @@ type ClusterResult struct {
 	Err    error
 }
 
-// ClusterConfig contains cluster configuration for a single cluster.
+// ClusterConfig contains configuration for a single cluster.
 type ClusterConfig struct {
 	Cluster         ClusterUpdate   // Cluster configuration. Always present.
-	EndpointConfig  EndpointConfig  // Endpoint configuration for leaf clusters which will of type EDS or DNS.
+	EndpointConfig  EndpointConfig  // Endpoint configuration for leaf clusters.
 	AggregateConfig AggregateConfig // List of children for aggregate clusters.
 }
 
@@ -61,12 +55,13 @@ type AggregateConfig struct {
 	LeafClusters []string
 }
 
-// EndpointConfig contains resolved endpoints for a leaf cluster either from DNS
-// or EDS watchers and error.
+// EndpointConfig contains configuration corresponding to the endpoints in a
+// cluster. Only one of EDSUpdate or DNSEndpoints will be populated based on the
+// cluster type.
 type EndpointConfig struct {
-	EDSUpdate      EndpointsUpdate // Resolved endpoints for EDS clusters.
-	DNSEndpoints   DNSUpdate       // Resolved endpoints for LOGICAL_DNS clusters.
-	ResolutionNote error           // Error obtaining endpoints data
+	EDSUpdate      EndpointsUpdate // Configuration for EDS clusters.
+	DNSEndpoints   DNSUpdate       // Configuration for LOGICAL_DNS clusters.
+	ResolutionNote error           // Error obtaining endpoints data.
 }
 
 // DNSUpdate contains the update from DNS resolver.
@@ -85,7 +80,8 @@ func SetXDSConfig(state resolver.State, config *XDSConfig) resolver.State {
 	return state
 }
 
-// XDSConfigFromResolverState returns XDSConfig stored in attribute in resolver state.
+// XDSConfigFromResolverState returns XDßSConfig stored in attribute in resolver
+// state.
 func XDSConfigFromResolverState(state resolver.State) *XDSConfig {
 	state.Attributes.Value(xdsConfigkey{})
 	if v := state.Attributes.Value(xdsConfigkey{}); v != nil {

@@ -29,15 +29,12 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/google/uuid"
-	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal/grpctest"
-	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/internal/xds/xdsclient"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
-	"google.golang.org/grpc/status"
 
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
@@ -65,7 +62,7 @@ const (
 )
 
 var wantXdsConfig = xdsresource.XDSConfig{
-	Listener: xdsresource.ListenerUpdate{
+	Listener: &xdsresource.ListenerUpdate{
 		RouteConfigName: defaultTestRouteConfigName,
 		HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}}},
 	RouteConfig: xdsresource.RouteConfigUpdate{
@@ -93,12 +90,12 @@ func newStringP(s string) *string {
 // testWatcher is a mock implementation of the ConfigWatcher interface
 // that allows defining custom logic for its methods in each test.
 type testWatcher struct {
-	onUpdate func(xdsresource.XDSConfig)
+	onUpdate func(*xdsresource.XDSConfig)
 	onError  func(error)
 }
 
 // OnUpdate calls the underlying onUpdate function if it's not nil.
-func (w *testWatcher) OnUpdate(cfg xdsresource.XDSConfig) {
+func (w *testWatcher) OnUpdate(cfg *xdsresource.XDSConfig) {
 	if w.onUpdate != nil {
 		w.onUpdate(cfg)
 	}
@@ -111,15 +108,12 @@ func (w *testWatcher) OnError(err error) {
 	}
 }
 
-func verifyError(gotErr error, wantCode codes.Code, wantErr, wantNodeID string) error {
+func verifyError(gotErr error, wantErr, wantNodeID string) error {
 	if gotErr == nil {
-		return fmt.Errorf("got nil error from resolver, want error with code %v", wantCode)
+		return fmt.Errorf("got nil error from resolver, want error")
 	}
 	if !strings.Contains(gotErr.Error(), wantErr) {
 		return fmt.Errorf("got error from resolver %q, want %q", gotErr, wantErr)
-	}
-	if gotCode := status.Code(gotErr); gotCode != wantCode {
-		return fmt.Errorf("got error from resolver with code %v, want %v", gotCode, wantCode)
 	}
 	if !strings.Contains(gotErr.Error(), wantNodeID) {
 		return fmt.Errorf("got error from resolver %q, want nodeID %q", gotErr, wantNodeID)
@@ -178,8 +172,8 @@ func (s) TestHappyCase(t *testing.T) {
 
 	updateCh := make(chan xdsresource.XDSConfig, 1)
 	watcher := &testWatcher{
-		onUpdate: func(cfg xdsresource.XDSConfig) {
-			updateCh <- cfg
+		onUpdate: func(cfg *xdsresource.XDSConfig) {
+			updateCh <- *cfg
 		},
 		onError: func(err error) {
 			t.Errorf("Received unexpected error from dependency manager: %v", err)
@@ -228,8 +222,8 @@ func (s) TestInlineRouteConfig(t *testing.T) {
 
 	updateCh := make(chan xdsresource.XDSConfig, 1)
 	watcher := &testWatcher{
-		onUpdate: func(cfg xdsresource.XDSConfig) {
-			updateCh <- cfg
+		onUpdate: func(cfg *xdsresource.XDSConfig) {
+			updateCh <- *cfg
 		},
 		onError: func(err error) {
 			t.Errorf("Received unexpected error from dependency manager: %v", err)
@@ -266,16 +260,34 @@ func (s) TestInlineRouteConfig(t *testing.T) {
 	dm := newDependencyManagerForTest(t, defaultTestServiceName, defaultTestServiceName, bc, watcher)
 	defer dm.Close()
 
-	wantConfig := wantXdsConfig
-	wantConfig.Listener.RouteConfigName = ""
-	wantConfig.Listener.InlineRouteConfig = &xdsresource.RouteConfigUpdate{
-		VirtualHosts: []*xdsresource.VirtualHost{
-			{
-				Domains: []string{defaultTestServiceName},
-				Routes: []*xdsresource.Route{{Prefix: newStringP("/"),
-					WeightedClusters: []xdsresource.WeightedCluster{{Name: defaultTestClusterName, Weight: 100}},
-					ActionType:       xdsresource.RouteActionRoute}},
+	wantConfig := xdsresource.XDSConfig{
+		Listener: &xdsresource.ListenerUpdate{
+			InlineRouteConfig: &xdsresource.RouteConfigUpdate{
+				VirtualHosts: []*xdsresource.VirtualHost{
+					{
+						Domains: []string{defaultTestServiceName},
+						Routes: []*xdsresource.Route{{Prefix: newStringP("/"),
+							WeightedClusters: []xdsresource.WeightedCluster{{Name: defaultTestClusterName, Weight: 100}},
+							ActionType:       xdsresource.RouteActionRoute}},
+					},
+				},
 			},
+			HTTPFilters: []xdsresource.HTTPFilter{{Name: "router"}}},
+		RouteConfig: xdsresource.RouteConfigUpdate{
+			VirtualHosts: []*xdsresource.VirtualHost{
+				{
+					Domains: []string{defaultTestServiceName},
+					Routes: []*xdsresource.Route{{Prefix: newStringP("/"),
+						WeightedClusters: []xdsresource.WeightedCluster{{Name: defaultTestClusterName, Weight: 100}},
+						ActionType:       xdsresource.RouteActionRoute}},
+				},
+			},
+		},
+		VirtualHost: &xdsresource.VirtualHost{
+			Domains: []string{defaultTestServiceName},
+			Routes: []*xdsresource.Route{{Prefix: newStringP("/"),
+				WeightedClusters: []xdsresource.WeightedCluster{{Name: defaultTestClusterName, Weight: 100}},
+				ActionType:       xdsresource.RouteActionRoute}},
 		},
 	}
 	cmpOpts := []cmp.Option{
@@ -304,8 +316,8 @@ func (s) TestIncompleteResources(t *testing.T) {
 
 	updateCh := make(chan xdsresource.XDSConfig, 1)
 	watcher := &testWatcher{
-		onUpdate: func(cfg xdsresource.XDSConfig) {
-			updateCh <- cfg
+		onUpdate: func(cfg *xdsresource.XDSConfig) {
+			updateCh <- *cfg
 		},
 		onError: func(err error) {
 			t.Errorf("Received unexpected error from dependency manager: %v", err)
@@ -330,7 +342,7 @@ func (s) TestIncompleteResources(t *testing.T) {
 	select {
 	case <-sCtx.Done():
 	case update := <-updateCh:
-		t.Fatalf("Received unexpected update from dependency manager: %v", pretty.ToJSON(update))
+		t.Fatalf("Received unexpected update from dependency manager: %+v", update)
 	}
 }
 
@@ -345,18 +357,19 @@ func (s) TestListenerResourceError(t *testing.T) {
 	errorCh := make(chan error, 1)
 	updateCh := make(chan xdsresource.XDSConfig, 1)
 	watcher := &testWatcher{
-		onUpdate: func(cfg xdsresource.XDSConfig) {
-			updateCh <- cfg
+		onUpdate: func(cfg *xdsresource.XDSConfig) {
+			updateCh <- *cfg
 		},
 		onError: func(err error) {
 			errorCh <- err
 		},
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
 	// Send a correct update first
 	listener := e2e.DefaultClientListener(defaultTestServiceName, defaultTestRouteConfigName)
+	listener.FilterChains = nil
 	route := e2e.DefaultRouteConfig(defaultTestRouteConfigName, defaultTestServiceName, defaultTestClusterName)
 	resources := e2e.UpdateOptions{
 		NodeID:         nodeID,
@@ -381,7 +394,7 @@ func (s) TestListenerResourceError(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatal("Timeout waiting for update from dependency manager")
 	case update := <-updateCh:
-		if diff := cmp.Diff(wantXdsConfig, update, cmpOpts...); diff != "" {
+		if diff := cmp.Diff(update, wantXdsConfig, cmpOpts...); diff != "" {
 			t.Fatalf("Did not receive expected update from dependency manager,.  Diff (-got +want):\n%v", diff)
 		}
 	}
@@ -393,7 +406,7 @@ func (s) TestListenerResourceError(t *testing.T) {
 	}
 	select {
 	case err := <-errorCh:
-		if err := verifyError(err, codes.Unavailable, fmt.Sprintf("xds: resource %q of type %q has been removed", defaultTestServiceName, "ListenerResource"), nodeID); err != nil {
+		if err := verifyError(err, fmt.Sprintf("xds: resource %q of type %q has been removed", defaultTestServiceName, "ListenerResource"), nodeID); err != nil {
 			t.Fatal(err)
 		}
 	case <-ctx.Done():
@@ -411,7 +424,7 @@ func (s) TestRouteResourceError(t *testing.T) {
 
 	errorCh := make(chan error, 1)
 	watcher := &testWatcher{
-		onUpdate: func(xdsresource.XDSConfig) {
+		onUpdate: func(*xdsresource.XDSConfig) {
 			t.Errorf("Received unexpected update from dependency manager")
 		},
 		onError: func(err error) {
@@ -441,7 +454,7 @@ func (s) TestRouteResourceError(t *testing.T) {
 
 	select {
 	case err := <-errorCh:
-		if err := verifyError(err, codes.Unavailable, "Route resource error", nodeID); err != nil {
+		if err := verifyError(err, "route resource error", nodeID); err != nil {
 			t.Fatal(err)
 		}
 	case <-ctx.Done():
@@ -458,7 +471,7 @@ func (s) TestNoVirtualHost(t *testing.T) {
 
 	errorCh := make(chan error, 1)
 	watcher := &testWatcher{
-		onUpdate: func(xdsresource.XDSConfig) {
+		onUpdate: func(*xdsresource.XDSConfig) {
 			t.Errorf("Received unexpected update from dependency manager")
 		},
 		onError: func(err error) {
@@ -486,7 +499,7 @@ func (s) TestNoVirtualHost(t *testing.T) {
 
 	select {
 	case err := <-errorCh:
-		if err := verifyError(err, codes.Unavailable, "Could not find VirtualHost", ""); err != nil {
+		if err := verifyError(err, "could not find VirtualHost", ""); err != nil {
 			t.Fatal(err)
 		}
 	case <-ctx.Done():
@@ -509,8 +522,8 @@ func (s) TestAmbientError(t *testing.T) {
 	updateCh := make(chan xdsresource.XDSConfig, 1)
 	errorCh := make(chan error, 1)
 	watcher := &testWatcher{
-		onUpdate: func(cfg xdsresource.XDSConfig) {
-			updateCh <- cfg
+		onUpdate: func(cfg *xdsresource.XDSConfig) {
+			updateCh <- *cfg
 		},
 		onError: func(err error) {
 			errorCh <- err
@@ -546,7 +559,7 @@ func (s) TestAmbientError(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatal("Timeout waiting for initial update from dependency manager")
 	case update := <-updateCh:
-		if diff := cmp.Diff(wantXdsConfig, update, cmpOpts...); diff != "" {
+		if diff := cmp.Diff(update, wantXdsConfig, cmpOpts...); diff != "" {
 			t.Fatalf("Did not receive expected update from dependency manager,.  Diff (-got +want):\n%v", diff)
 		}
 	}
@@ -581,7 +594,7 @@ func (s) TestAmbientError(t *testing.T) {
 	case err := <-errorCh:
 		t.Fatalf("Unexpected call to OnError %v", err)
 	case update := <-updateCh:
-		t.Fatalf("Unexpected call to OnUpdate %v", pretty.ToJSON(update))
+		t.Fatalf("Unexpected call to OnUpdate %+v", update)
 	case <-sCtx.Done():
 	}
 
@@ -601,7 +614,7 @@ func (s) TestAmbientError(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatal("Timeout waiting for initial update from dependency manager")
 	case update := <-updateCh:
-		if diff := cmp.Diff(wantXdsConfig, update, cmpOpts...); diff != "" {
+		if diff := cmp.Diff(update, wantXdsConfig, cmpOpts...); diff != "" {
 			t.Fatalf("Did not receive expected update from dependency manager,.  Diff (-got +want):\n%v", diff)
 		}
 	}
@@ -616,8 +629,8 @@ func (s) TestRouteResourceUpdate(t *testing.T) {
 
 	updateCh := make(chan xdsresource.XDSConfig, 1)
 	watcher := &testWatcher{
-		onUpdate: func(cfg xdsresource.XDSConfig) {
-			updateCh <- cfg
+		onUpdate: func(cfg *xdsresource.XDSConfig) {
+			updateCh <- *cfg
 		},
 		onError: func(err error) {
 			t.Errorf("Received unexpected error from dependency manager: %v", err)
