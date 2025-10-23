@@ -158,6 +158,7 @@ type simpleBufferPool struct {
 func (p *simpleBufferPool) Get(size int) *[]byte {
 	bs, ok := p.pool.Get().(*[]byte)
 	if ok && cap(*bs) >= size {
+		clear((*bs)[:cap(*bs)])
 		*bs = (*bs)[:size]
 		return bs
 	}
