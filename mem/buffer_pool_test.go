@@ -49,26 +49,44 @@ func (s) TestBufferPool(t *testing.T) {
 }
 
 func (s) TestBufferPoolClears(t *testing.T) {
-	pool := mem.NewTieredBufferPool(4)
+	const poolSize = 4
+	pool := mem.NewTieredBufferPool(poolSize)
+	tests := []struct {
+		name       string
+		bufferSize int
+	}{
+		{
+			name:       "sized_buffer_pool",
+			bufferSize: poolSize,
+		},
+		{
+			name:       "simple_buffer_pool",
+			bufferSize: poolSize + 1,
+		},
+	}
 
-	for {
-		buf1 := pool.Get(4)
-		copy(*buf1, "1234")
-		pool.Put(buf1)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			for {
+				buf1 := pool.Get(tc.bufferSize)
+				copy(*buf1, "1234")
+				pool.Put(buf1)
 
-		buf2 := pool.Get(4)
-		if unsafe.SliceData(*buf1) != unsafe.SliceData(*buf2) {
-			pool.Put(buf2)
-			// This test is only relevant if a buffer is reused, otherwise try again. This
-			// can happen if a GC pause happens between putting the buffer back in the pool
-			// and getting a new one.
-			continue
-		}
+				buf2 := pool.Get(tc.bufferSize)
+				if unsafe.SliceData(*buf1) != unsafe.SliceData(*buf2) {
+					pool.Put(buf2)
+					// This test is only relevant if a buffer is reused, otherwise try again. This
+					// can happen if a GC pause happens between putting the buffer back in the pool
+					// and getting a new one.
+					continue
+				}
 
-		if !bytes.Equal(*buf1, make([]byte, 4)) {
-			t.Fatalf("buffer not cleared")
-		}
-		break
+				if !bytes.Equal(*buf1, make([]byte, tc.bufferSize)) {
+					t.Fatalf("buffer not cleared")
+				}
+				break
+			}
+		})
 	}
 }
 
