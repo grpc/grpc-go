@@ -16,7 +16,6 @@
  *
  */
 
-// Package stats provides internal stats related functionality.
 package stats
 
 import "context"

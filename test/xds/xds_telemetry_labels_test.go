@@ -24,7 +24,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	istats "google.golang.org/grpc/internal/stats"
+	estats "google.golang.org/grpc/experimental/stats"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
@@ -103,7 +103,7 @@ func (s) TestTelemetryLabels(t *testing.T) {
 }
 
 type fakeStatsHandler struct {
-	labels *istats.Labels
+	labels *estats.Labels
 
 	t *testing.T
 }
@@ -115,11 +115,11 @@ func (fsh *fakeStatsHandler) TagConn(ctx context.Context, _ *stats.ConnTagInfo) 
 func (fsh *fakeStatsHandler) HandleConn(context.Context, stats.ConnStats) {}
 
 func (fsh *fakeStatsHandler) TagRPC(ctx context.Context, _ *stats.RPCTagInfo) context.Context {
-	labels := &istats.Labels{
+	labels := &estats.Labels{
 		TelemetryLabels: make(map[string]string),
 	}
 	fsh.labels = labels
-	ctx = istats.SetLabels(ctx, labels) // ctx passed is immutable, however cluster_impl writes to the map of Telemetry Labels on the heap.
+	ctx = estats.SetLabels(ctx, labels) // ctx passed is immutable, however cluster_impl writes to the map of Telemetry Labels on the heap.
 	return ctx
 }
 

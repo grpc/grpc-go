@@ -25,7 +25,6 @@ import (
 	otelmetric "go.opentelemetry.io/otel/metric"
 	"google.golang.org/grpc"
 	estats "google.golang.org/grpc/experimental/stats"
-	istats "google.golang.org/grpc/internal/stats"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
@@ -167,9 +166,9 @@ func (h *clientMetricsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInf
 	// impl balancer which writes to this will only write once, thus have this
 	// stats handler's per attempt scoped context point to the same optional
 	// labels map if set.
-	var labels *istats.Labels
-	if labels = istats.GetLabels(ctx); labels == nil {
-		labels = &istats.Labels{
+	var labels *estats.Labels
+	if labels = estats.GetLabels(ctx); labels == nil {
+		labels = &estats.Labels{
 			// The defaults for all the per call labels from a plugin that
 			// executes on the callpath that this OpenTelemetry component
 			// currently supports.
@@ -178,7 +177,7 @@ func (h *clientMetricsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInf
 				"grpc.lb.backend_service": "",
 			},
 		}
-		ctx = istats.SetLabels(ctx, labels)
+		ctx = estats.SetLabels(ctx, labels)
 	}
 	ctx, ai := getOrCreateRPCAttemptInfo(ctx)
 	ai.startTime = time.Now()
