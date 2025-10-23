@@ -140,6 +140,17 @@ type Reader interface {
 	// Reset frees the currently held buffer slice and starts reading from the
 	// provided slice. This allows reusing the reader object.
 	Reset(s BufferSlice)
+	// Peek returns up to the next n bytes from the reader's current position as
+	// a slice of byte slices.
+	// The reader's position is not advanced.
+	// Next appends results to the provided res slice and returns the updated
+	// slice.
+	// The returned subslices are views into the underlying buffers and are only
+	// valid until the reader is advanced past the corresponding buffer.
+	Peek(n int, res [][]byte) [][]byte
+	// Discard moves the read index forward by n bytes.
+	// It frees buffers as they are fully consumed.
+	Discard(n int)
 }
 
 type sliceReader struct {
@@ -291,72 +302,29 @@ nextBuffer:
 	}
 }
 
-// Cursor provides a way to iterate over the bytes in a BufferSlice.
-// It keeps track of the current position and allows advancing through the slice.
-// A Cursor must be created with BufferSlice.Cursor and must be closed with
-// Close to prevent leaking resources.
-// It is not safe for concurrent use.
-type Cursor struct {
-	buf   BufferSlice
-	index int
-	len   int
-}
-
-// Close frees any remaining buffers held by the cursor.
-func (c *Cursor) Close() {
-	if c.buf == nil {
-		return
-	}
-	c.buf.Free()
-	c.buf = nil
-	c.index = 0
-	c.len = 0
-}
-
-// Reset frees the currently held buffer slice and starts reading from the
-// provided slice. This allows reusing the cursor object.
-func (c *Cursor) Reset(s BufferSlice) {
-	c.Close()
-	s.Ref()
-	c.buf = s
-	c.len = s.Len()
-	c.index = 0
-}
-
-// Remaining returns the number of bytes remaining in the cursor.
-func (c *Cursor) Remaining() int {
-	return c.len
-}
-
-// Advance moves the cursor forward by n bytes.
+// Discard moves the cursor forward by n bytes.
 // It frees buffers as they are fully consumed.
-func (c *Cursor) Advance(n int) {
-	for n > 0 && c.len > 0 {
-		curData := c.buf[0].ReadOnlyData()
-		cur := min(n, len(curData)-c.index)
-		n -= cur
-		c.len -= cur
-		c.index += cur
-		if c.index >= len(curData) {
-			c.buf[0].Free()
-			c.buf = c.buf[1:]
-			c.index = 0
+func (r *sliceReader) Discard(n int) {
+	for n > 0 && r.len > 0 {
+		curData := r.data[0].ReadOnlyData()
+		curSize := min(n, len(curData)-r.bufferIdx)
+		n -= curSize
+		r.len -= curSize
+		r.bufferIdx += curSize
+		if r.bufferIdx >= len(curData) {
+			r.data[0].Free()
+			r.data = r.data[1:]
+			r.bufferIdx = 0
 		}
 	}
 }
 
-// Next returns up to the next n bytes from the cursor's current position as a
-// slice of byte slices.
-// The cursor's position is not advanced.
-// Next appends results to the provided res slice and returns the updated slice.
-// The returned subslices are views into the underlying buffers and are only
-// valid until the cursor is advanced past the corresponding buffer.
-func (c *Cursor) Next(n int, res [][]byte) [][]byte {
-	for i := 0; n > 0 && i < len(c.buf); i++ {
-		curData := c.buf[i].ReadOnlyData()
+func (r *sliceReader) Peek(n int, res [][]byte) [][]byte {
+	for i := 0; n > 0 && i < len(r.data); i++ {
+		curData := r.data[i].ReadOnlyData()
 		start := 0
 		if i == 0 {
-			start = c.index
+			start = r.bufferIdx
 		}
 		curSize := min(n, len(curData)-start)
 		if curSize == 0 {
