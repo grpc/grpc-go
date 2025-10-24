@@ -128,14 +128,11 @@ func (m *DependencyManager) annotateErrorWithNodeID(err error) error {
 }
 
 func (m *DependencyManager) maybeSendUpdate() {
-	m.logger.Infof("eshita listener update : %+v \n route update %+v", m.currentListenerUpdate, m.currentRouteConfig)
-	u := &xdsresource.XDSConfig{
+	m.watcher.OnUpdate(&xdsresource.XDSConfig{
 		Listener:    m.currentListenerUpdate,
 		RouteConfig: m.currentRouteConfig,
 		VirtualHost: m.currentVirtualHost,
-	}
-	m.watcher.OnUpdate(u)
-	m.logger.Infof("Eshita Sent aggregated xDS config update to watcher %v", *u)
+	})
 }
 
 func (m *DependencyManager) applyRouteConfigUpdate(update xdsresource.RouteConfigUpdate) {
