@@ -37,7 +37,11 @@ type XDSConfig struct {
 	Clusters map[string]*ClusterResult
 }
 
-// ClusterResult contains either a cluster's configuration or an error.
+// ClusterResult contains a cluster's configuration when we receive a
+// valid resource from the management server. It contains an error when:
+//   - we receive an invalid resource from the management server and
+//     we did not already have a valid resource or
+//   - the cluster resource does not exist on the management server
 type ClusterResult struct {
 	Config ClusterConfig
 	Err    error
@@ -50,7 +54,7 @@ type ClusterConfig struct {
 	AggregateConfig AggregateConfig // List of children for aggregate clusters.
 }
 
-// AggregateConfig contains a list of leaf cluster names.
+// AggregateConfig contains a list of leaf cluster names for .
 type AggregateConfig struct {
 	LeafClusters []string
 }
@@ -80,7 +84,7 @@ func SetXDSConfig(state resolver.State, config *XDSConfig) resolver.State {
 	return state
 }
 
-// XDSConfigFromResolverState returns XDßSConfig stored in attribute in resolver
+// XDSConfigFromResolverState returns XDSConfig stored in attribute in resolver
 // state.
 func XDSConfigFromResolverState(state resolver.State) *XDSConfig {
 	state.Attributes.Value(xdsConfigkey{})

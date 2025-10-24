@@ -162,13 +162,11 @@ func (m *DependencyManager) onListenerResourceUpdate(update *xdsresource.Listene
 			m.routeConfigWatcher.stop()
 			m.routeConfigWatcher = nil
 		}
-
 		m.applyRouteConfigUpdate(*update.InlineRouteConfig)
 		return
 	}
 
 	// We get here only if there was no inline route configuration.
-
 	// If the route config name has not changed, send an update with existing
 	// route configuration and the newly received listener configuration.
 	if m.rdsResourceName == update.RouteConfigName {

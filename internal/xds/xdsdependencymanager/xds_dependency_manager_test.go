@@ -61,34 +61,44 @@ const (
 	defaultTestClusterName     = "cluster-name"
 )
 
-var wantXdsConfig = xdsresource.XDSConfig{
-	Listener: &xdsresource.ListenerUpdate{
-		RouteConfigName: defaultTestRouteConfigName,
-		HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}}},
-	RouteConfig: xdsresource.RouteConfigUpdate{
-		VirtualHosts: []*xdsresource.VirtualHost{
-			{
-				Domains: []string{defaultTestServiceName},
-				Routes: []*xdsresource.Route{{Prefix: newStringP("/"),
-					WeightedClusters: []xdsresource.WeightedCluster{{Name: defaultTestClusterName, Weight: 100}},
-					ActionType:       xdsresource.RouteActionRoute}},
+var (
+	cmpOpts = []cmp.Option{
+		cmpopts.EquateEmpty(),
+		cmpopts.IgnoreFields(xdsresource.HTTPFilter{}, "Filter", "Config"),
+		cmpopts.IgnoreFields(xdsresource.ListenerUpdate{}, "Raw"),
+		cmpopts.IgnoreFields(xdsresource.RouteConfigUpdate{}, "Raw"),
+	}
+
+	wantXdsConfig = xdsresource.XDSConfig{
+		Listener: &xdsresource.ListenerUpdate{
+			RouteConfigName: defaultTestRouteConfigName,
+			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}}},
+		RouteConfig: xdsresource.RouteConfigUpdate{
+			VirtualHosts: []*xdsresource.VirtualHost{
+				{
+					Domains: []string{defaultTestServiceName},
+					Routes: []*xdsresource.Route{{Prefix: newStringP("/"),
+						WeightedClusters: []xdsresource.WeightedCluster{{Name: defaultTestClusterName, Weight: 100}},
+						ActionType:       xdsresource.RouteActionRoute}},
+				},
 			},
 		},
-	},
-	VirtualHost: &xdsresource.VirtualHost{
-		Domains: []string{defaultTestServiceName},
-		Routes: []*xdsresource.Route{{Prefix: newStringP("/"),
-			WeightedClusters: []xdsresource.WeightedCluster{{Name: defaultTestClusterName, Weight: 100}},
-			ActionType:       xdsresource.RouteActionRoute}},
-	},
-}
+		VirtualHost: &xdsresource.VirtualHost{
+			Domains: []string{defaultTestServiceName},
+			Routes: []*xdsresource.Route{{Prefix: newStringP("/"),
+				WeightedClusters: []xdsresource.WeightedCluster{{Name: defaultTestClusterName, Weight: 100}},
+				ActionType:       xdsresource.RouteActionRoute}},
+		},
+	}
+)
 
 func newStringP(s string) *string {
 	return &s
 }
 
-// testWatcher is a mock implementation of the ConfigWatcher interface
-// that allows defining custom logic for its methods in each test.
+// testWatcher is a mock implementation of the ConfigWatcher interface that
+// allows defining custom logic for its  onUpdate and onError methods in each
+// test.
 type testWatcher struct {
 	onUpdate func(*xdsresource.XDSConfig)
 	onError  func(error)
@@ -164,7 +174,8 @@ func setupManagementServerForTest(t *testing.T, nodeID string) (*e2e.ManagementS
 }
 
 // Tests the happy case where the dependency manager receives all the required
-// resources and calls OnUpdate with the correct XDSConfig.
+// resources and verifies that OnUpdate is called with with the correct
+// XDSConfig.
 func (s) TestHappyCase(t *testing.T) {
 	nodeID := uuid.New().String()
 	mgmtServer, bc := setupManagementServerForTest(t, nodeID)
@@ -179,8 +190,10 @@ func (s) TestHappyCase(t *testing.T) {
 			t.Errorf("Received unexpected error from dependency manager: %v", err)
 		},
 	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
+
 	listener := e2e.DefaultClientListener(defaultTestServiceName, defaultTestRouteConfigName)
 	route := e2e.DefaultRouteConfig(defaultTestRouteConfigName, defaultTestServiceName, defaultTestClusterName)
 	resources := e2e.UpdateOptions{
@@ -195,19 +208,12 @@ func (s) TestHappyCase(t *testing.T) {
 	dm := newDependencyManagerForTest(t, defaultTestServiceName, defaultTestServiceName, bc, watcher)
 	defer dm.Close()
 
-	cmpOpts := []cmp.Option{
-		cmpopts.EquateEmpty(),
-		cmpopts.IgnoreFields(xdsresource.HTTPFilter{}, "Filter", "Config"),
-		cmpopts.IgnoreFields(xdsresource.ListenerUpdate{}, "Raw"),
-		cmpopts.IgnoreFields(xdsresource.RouteConfigUpdate{}, "Raw"),
-	}
-
 	select {
 	case <-ctx.Done():
 		t.Fatal("Timeout waiting for update from dependency manager")
 	case update := <-updateCh:
 		if diff := cmp.Diff(update, wantXdsConfig, cmpOpts...); diff != "" {
-			t.Fatalf("Did not receive expected update from dependency manager,.  Diff (-got +want):\n%v", diff)
+			t.Fatalf("Did not receive expected update from dependency manager.  Diff (-got +want):\n%v", diff)
 
 		}
 	}
@@ -290,12 +296,7 @@ func (s) TestInlineRouteConfig(t *testing.T) {
 				ActionType:       xdsresource.RouteActionRoute}},
 		},
 	}
-	cmpOpts := []cmp.Option{
-		cmpopts.EquateEmpty(),
-		cmpopts.IgnoreFields(xdsresource.HTTPFilter{}, "Filter", "Config"),
-		cmpopts.IgnoreFields(xdsresource.ListenerUpdate{}, "Raw"),
-		cmpopts.IgnoreFields(xdsresource.RouteConfigUpdate{}, "Raw"),
-	}
+
 	select {
 	case <-ctx.Done():
 		t.Fatal("Timeout waiting for update from dependency manager")
@@ -384,12 +385,6 @@ func (s) TestListenerResourceError(t *testing.T) {
 	dm := newDependencyManagerForTest(t, defaultTestServiceName, defaultTestServiceName, bc, watcher)
 	defer dm.Close()
 
-	cmpOpts := []cmp.Option{
-		cmpopts.EquateEmpty(),
-		cmpopts.IgnoreFields(xdsresource.HTTPFilter{}, "Filter", "Config"),
-		cmpopts.IgnoreFields(xdsresource.ListenerUpdate{}, "Raw"),
-		cmpopts.IgnoreFields(xdsresource.RouteConfigUpdate{}, "Raw"),
-	}
 	select {
 	case <-ctx.Done():
 		t.Fatal("Timeout waiting for update from dependency manager")
@@ -548,12 +543,6 @@ func (s) TestAmbientError(t *testing.T) {
 	dm := newDependencyManagerForTest(t, defaultTestServiceName, defaultTestServiceName, bc, watcher)
 	defer dm.Close()
 
-	cmpOpts := []cmp.Option{
-		cmpopts.EquateEmpty(),
-		cmpopts.IgnoreFields(xdsresource.HTTPFilter{}, "Filter", "Config"),
-		cmpopts.IgnoreFields(xdsresource.ListenerUpdate{}, "Raw"),
-		cmpopts.IgnoreFields(xdsresource.RouteConfigUpdate{}, "Raw"),
-	}
 	// Wait for the initial valid update.
 	select {
 	case <-ctx.Done():
@@ -598,7 +587,7 @@ func (s) TestAmbientError(t *testing.T) {
 	case <-sCtx.Done():
 	}
 
-	// Send valide resources again
+	// Send valid resources again.
 	listener = e2e.DefaultClientListener(defaultTestServiceName, defaultTestRouteConfigName)
 	route = e2e.DefaultRouteConfig(defaultTestRouteConfigName, defaultTestServiceName, defaultTestClusterName)
 	resources = e2e.UpdateOptions{
