@@ -30,7 +30,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/encoding/gzip"
-	istats "google.golang.org/grpc/internal/stats"
+	estats "google.golang.org/grpc/experimental/stats"
 	"google.golang.org/grpc/internal/stubserver"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
@@ -427,7 +427,7 @@ func (s) TestCSMPluginOptionStreaming(t *testing.T) {
 }
 
 func unaryInterceptorAttachXDSLabels(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
-	ctx = istats.SetLabels(ctx, &istats.Labels{
+	ctx = estats.SetLabels(ctx, &estats.Labels{
 		TelemetryLabels: map[string]string{
 			// mock what the cluster impl would write here ("csm." xDS Labels
 			// and locality label)

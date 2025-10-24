@@ -26,7 +26,7 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
-	"google.golang.org/grpc/internal/stats"
+	estats "google.golang.org/grpc/experimental/stats"
 	"google.golang.org/grpc/internal/wrr"
 	xdsinternal "google.golang.org/grpc/internal/xds"
 	"google.golang.org/grpc/internal/xds/clients"
@@ -95,7 +95,7 @@ func telemetryLabels(ctx context.Context) map[string]string {
 	if ctx == nil {
 		return nil
 	}
-	labels := stats.GetLabels(ctx)
+	labels := estats.GetLabels(ctx)
 	if labels == nil {
 		return nil
 	}
