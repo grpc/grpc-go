@@ -124,6 +124,11 @@ func (pickfirstBuilder) ParseConfig(js json.RawMessage) (serviceconfig.LoadBalan
 
 // EnableHealthListener updates the state to configure pickfirst for using a
 // generic health listener.
+//
+// # Experimental
+//
+// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+// release.
 func EnableHealthListener(state resolver.State) resolver.State {
 	state.Attributes = state.Attributes.WithValue(enableHealthListenerKeyType{}, true)
 	return state
