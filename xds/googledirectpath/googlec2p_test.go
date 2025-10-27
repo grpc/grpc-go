@@ -106,7 +106,7 @@ func useCleanUniverseDomain(t *testing.T) {
 // TODO(https://github.com/grpc/grpc-go/issues/8561): this content can be hardcoded directly
 // in wanted bootstraps again after old pick first is removed.
 func expectedNodeJSON(ipv6Capable bool) []byte {
-	if !envconfig.NewPickFirstEnabled && !ipv6Capable {
+	if !ipv6Capable {
 		return []byte(`{
 			"id": "C2P-666",
 			"locality": {

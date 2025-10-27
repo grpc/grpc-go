@@ -38,7 +38,6 @@ import (
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/balancer/stub"
 	"google.golang.org/grpc/internal/channelz"
-	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/pickfirst"
@@ -54,22 +53,10 @@ import (
 const (
 	pickFirstServiceConfig = `{"loadBalancingConfig": [{"pick_first":{}}]}`
 	// Default timeout for tests in this package.
-	defaultTestTimeout = 10 * time.Second
-	// Default short timeout, to be used when waiting for events which are not
-	// expected to happen.
-	defaultTestShortTimeout = 100 * time.Millisecond
 )
 
 func init() {
 	channelz.TurnOn()
-}
-
-type s struct {
-	grpctest.Tester
-}
-
-func Test(t *testing.T) {
-	grpctest.RunSubTests(t, s{})
 }
 
 // parseServiceConfig is a test helper which uses the manual resolver to parse

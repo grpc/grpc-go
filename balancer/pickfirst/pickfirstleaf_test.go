@@ -16,7 +16,7 @@
  *
  */
 
-package pickfirstleaf
+package pickfirst
 
 import (
 	"context"
@@ -27,26 +27,9 @@ import (
 	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
-	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/resolver"
 )
-
-const (
-	// Default timeout for tests in this package.
-	defaultTestTimeout = 10 * time.Second
-	// Default short timeout, to be used when waiting for events which are not
-	// expected to happen.
-	defaultTestShortTimeout = 100 * time.Millisecond
-)
-
-type s struct {
-	grpctest.Tester
-}
-
-func Test(t *testing.T) {
-	grpctest.RunSubTests(t, s{})
-}
 
 // TestAddressList_Iteration verifies the behaviour of the addressList while
 // iterating through the entries.

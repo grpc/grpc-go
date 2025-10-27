@@ -28,10 +28,8 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/balancer/weightedroundrobin"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
-	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/peer"
@@ -49,14 +47,6 @@ var (
 	defaultTestTimeout = 5 * time.Second
 	leafPolicyName     = "round_robin"
 )
-
-func init() {
-	// Test the health listener code path for ejection when the experimental
-	// pickfirst is enabled.
-	if envconfig.NewPickFirstEnabled {
-		leafPolicyName = weightedroundrobin.Name
-	}
-}
 
 type s struct {
 	grpctest.Tester

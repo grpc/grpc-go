@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package pickfirstleaf_test
+package pickfirst_test
 
 import (
 	"context"
@@ -28,8 +28,8 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
+	pfbalancer "google.golang.org/grpc/balancer/pickfirst"
 	pfinternal "google.golang.org/grpc/balancer/pickfirst/internal"
-	"google.golang.org/grpc/balancer/pickfirst/pickfirstleaf"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
@@ -889,7 +889,7 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TF_AfterEndOfList(t *testing.T) {
 	tmr := stats.NewTestMetricsRecorder()
 	dialer := testutils.NewBlockingDialer()
 	opts := []grpc.DialOption{
-		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, pickfirstleaf.Name)),
+		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, pfbalancer.Name)),
 		grpc.WithContextDialer(dialer.DialContext),
 		grpc.WithStatsHandler(tmr),
 	}
@@ -978,7 +978,7 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TriggerConnectionDelay(t *testing.T) {
 	tmr := stats.NewTestMetricsRecorder()
 	dialer := testutils.NewBlockingDialer()
 	opts := []grpc.DialOption{
-		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, pickfirstleaf.Name)),
+		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, pfbalancer.Name)),
 		grpc.WithContextDialer(dialer.DialContext),
 		grpc.WithStatsHandler(tmr),
 	}
@@ -1038,7 +1038,7 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TF_ThenTimerFires(t *testing.T) {
 	tmr := stats.NewTestMetricsRecorder()
 	dialer := testutils.NewBlockingDialer()
 	opts := []grpc.DialOption{
-		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, pickfirstleaf.Name)),
+		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, pfbalancer.Name)),
 		grpc.WithContextDialer(dialer.DialContext),
 		grpc.WithStatsHandler(tmr),
 	}
@@ -1100,7 +1100,7 @@ func (s) TestPickFirstLeaf_InterleavingIPV4Preffered(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	cc := testutils.NewBalancerClientConn(t)
-	bal := balancer.Get(pickfirstleaf.Name).Build(cc, balancer.BuildOptions{})
+	bal := balancer.Get(pfbalancer.Name).Build(cc, balancer.BuildOptions{})
 	defer bal.Close()
 	ccState := balancer.ClientConnState{
 		ResolverState: resolver.State{
@@ -1146,7 +1146,7 @@ func (s) TestPickFirstLeaf_InterleavingIPv6Preffered(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	cc := testutils.NewBalancerClientConn(t)
-	bal := balancer.Get(pickfirstleaf.Name).Build(cc, balancer.BuildOptions{})
+	bal := balancer.Get(pfbalancer.Name).Build(cc, balancer.BuildOptions{})
 	defer bal.Close()
 	ccState := balancer.ClientConnState{
 		ResolverState: resolver.State{
@@ -1191,7 +1191,7 @@ func (s) TestPickFirstLeaf_InterleavingUnknownPreffered(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	cc := testutils.NewBalancerClientConn(t)
-	bal := balancer.Get(pickfirstleaf.Name).Build(cc, balancer.BuildOptions{})
+	bal := balancer.Get(pfbalancer.Name).Build(cc, balancer.BuildOptions{})
 	defer bal.Close()
 	ccState := balancer.ClientConnState{
 		ResolverState: resolver.State{
@@ -1242,13 +1242,13 @@ func (s) TestPickFirstLeaf_HealthListenerEnabled(t *testing.T) {
 	defer cancel()
 	bf := stub.BalancerFuncs{
 		Init: func(bd *stub.BalancerData) {
-			bd.ChildBalancer = balancer.Get(pickfirstleaf.Name).Build(bd.ClientConn, bd.BuildOptions)
+			bd.ChildBalancer = balancer.Get(pfbalancer.Name).Build(bd.ClientConn, bd.BuildOptions)
 		},
 		Close: func(bd *stub.BalancerData) {
 			bd.ChildBalancer.Close()
 		},
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
-			ccs.ResolverState = pickfirstleaf.EnableHealthListener(ccs.ResolverState)
+			ccs.ResolverState = pfbalancer.EnableHealthListener(ccs.ResolverState)
 			return bd.ChildBalancer.UpdateClientConnState(ccs)
 		},
 	}
@@ -1290,7 +1290,7 @@ func (s) TestPickFirstLeaf_HealthListenerNotEnabled(t *testing.T) {
 				healthListenerCh: healthListenerCh,
 				subConnStateCh:   make(chan balancer.SubConnState, 5),
 			}
-			bd.ChildBalancer = balancer.Get(pickfirstleaf.Name).Build(ccw, bd.BuildOptions)
+			bd.ChildBalancer = balancer.Get(pfbalancer.Name).Build(ccw, bd.BuildOptions)
 		},
 		Close: func(bd *stub.BalancerData) {
 			bd.ChildBalancer.Close()
@@ -1346,13 +1346,13 @@ func (s) TestPickFirstLeaf_HealthUpdates(t *testing.T) {
 				healthListenerCh: healthListenerCh,
 				subConnStateCh:   scConnectivityStateCh,
 			}
-			bd.ChildBalancer = balancer.Get(pickfirstleaf.Name).Build(ccw, bd.BuildOptions)
+			bd.ChildBalancer = balancer.Get(pfbalancer.Name).Build(ccw, bd.BuildOptions)
 		},
 		Close: func(bd *stub.BalancerData) {
 			bd.ChildBalancer.Close()
 		},
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
-			ccs.ResolverState = pickfirstleaf.EnableHealthListener(ccs.ResolverState)
+			ccs.ResolverState = pfbalancer.EnableHealthListener(ccs.ResolverState)
 			return bd.ChildBalancer.UpdateClientConnState(ccs)
 		},
 	}
@@ -1433,7 +1433,7 @@ func (s) TestPickFirstLeaf_HealthUpdates(t *testing.T) {
 func (s) TestPickFirstLeaf_AddressUpdateWithMetadata(t *testing.T) {
 	dialer := testutils.NewBlockingDialer()
 	dopts := []grpc.DialOption{
-		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, pickfirstleaf.Name)),
+		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, pfbalancer.Name)),
 		grpc.WithContextDialer(dialer.DialContext),
 	}
 	cc, r, backends := setupPickFirstLeaf(t, 2, dopts...)
@@ -1514,7 +1514,7 @@ func (s) TestPickFirstLeaf_Reconnection(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	cc := testutils.NewBalancerClientConn(t)
-	bal := balancer.Get(pickfirstleaf.Name).Build(cc, balancer.BuildOptions{})
+	bal := balancer.Get(pfbalancer.Name).Build(cc, balancer.BuildOptions{})
 	defer bal.Close()
 	ccState := balancer.ClientConnState{
 		ResolverState: resolver.State{
@@ -1699,7 +1699,7 @@ func (b *stateStoringBalancerBuilder) Name() string {
 
 func (b *stateStoringBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
 	bal := &stateStoringBalancer{}
-	bal.Balancer = balancer.Get(pickfirstleaf.Name).Build(&stateStoringCCWrapper{cc, bal}, opts)
+	bal.Balancer = balancer.Get(pfbalancer.Name).Build(&stateStoringCCWrapper{cc, bal}, opts)
 	b.balancer <- bal
 	return bal
 }
