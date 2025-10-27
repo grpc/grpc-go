@@ -25,6 +25,19 @@
 // later release.
 package pickfirstleaf
 
+import (
+	"google.golang.org/grpc/balancer/pickfirst"
+	"google.golang.org/grpc/resolver"
+)
+
 // Name is the name of the pick_first_leaf balancer.
 // Deprecated: Use the balancer/pickfirst package's Name instead.
 const Name = "pick_first"
+
+// EnableHealthListener updates the state to configure pickfirst for using a
+// generic health listener.
+// Deprecated: Use the balancer/pickfirst package's EnableHealthListener
+// instead.
+func EnableHealthListener(state resolver.State) resolver.State {
+	return pickfirst.EnableHealthListener(state)
+}
