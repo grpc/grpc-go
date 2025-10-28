@@ -489,11 +489,11 @@ func (s) TestBufferSlice_Iteration(t *testing.T) {
 	tests := []struct {
 		name       string
 		buffers    [][]byte
-		operations func(t *testing.T, c mem.Reader)
+		operations func(t *testing.T, c *mem.Reader)
 	}{
 		{
 			name: "empty",
-			operations: func(t *testing.T, c mem.Reader) {
+			operations: func(t *testing.T, c *mem.Reader) {
 				if c.Remaining() != 0 {
 					t.Errorf("Remaining() = %v, want 0", c.Remaining())
 				}
@@ -510,7 +510,7 @@ func (s) TestBufferSlice_Iteration(t *testing.T) {
 		{
 			name:    "single_buffer",
 			buffers: [][]byte{[]byte("0123456789")},
-			operations: func(t *testing.T, c mem.Reader) {
+			operations: func(t *testing.T, c *mem.Reader) {
 				if c.Remaining() != 10 {
 					t.Errorf("Remaining() = %v, want 10", c.Remaining())
 				}
@@ -543,7 +543,7 @@ func (s) TestBufferSlice_Iteration(t *testing.T) {
 		{
 			name:    "multiple_buffers",
 			buffers: [][]byte{[]byte("012"), []byte("345"), []byte("6789")},
-			operations: func(t *testing.T, c mem.Reader) {
+			operations: func(t *testing.T, c *mem.Reader) {
 				if c.Remaining() != 10 {
 					t.Errorf("Remaining() = %v, want 10", c.Remaining())
 				}
@@ -567,7 +567,7 @@ func (s) TestBufferSlice_Iteration(t *testing.T) {
 		{
 			name:    "close",
 			buffers: [][]byte{[]byte("0123456789")},
-			operations: func(t *testing.T, c mem.Reader) {
+			operations: func(t *testing.T, c *mem.Reader) {
 				c.Close()
 				if c.Remaining() != 0 {
 					t.Errorf("Remaining() after Close = %v, want 0", c.Remaining())
@@ -577,7 +577,7 @@ func (s) TestBufferSlice_Iteration(t *testing.T) {
 		{
 			name:    "reset",
 			buffers: [][]byte{[]byte("0123")},
-			operations: func(t *testing.T, c mem.Reader) {
+			operations: func(t *testing.T, c *mem.Reader) {
 				newSlice := mem.BufferSlice{mem.SliceBuffer([]byte("56789"))}
 				c.Reset(newSlice)
 				if c.Remaining() != 5 {
@@ -592,7 +592,7 @@ func (s) TestBufferSlice_Iteration(t *testing.T) {
 		{
 			name:    "zero_ops",
 			buffers: [][]byte{[]byte("01234")},
-			operations: func(t *testing.T, c mem.Reader) {
+			operations: func(t *testing.T, c *mem.Reader) {
 				if c.Remaining() != 5 {
 					t.Errorf("Remaining() = %v, want 5", c.Remaining())
 				}
