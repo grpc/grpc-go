@@ -69,11 +69,6 @@ jobs:
           - type: tests
             goversion: '1.24'
 
-          - type: tests
-            goversion: '1.25'
-            testflags: -race
-            grpcenv: 'GRPC_EXPERIMENTAL_ENABLE_NEW_PICK_FIRST=false'
-
     steps:
       # Setup the environment.
       - name: Setup GOARCH
