@@ -398,11 +398,10 @@ func (df *parsedDataFrame) StreamEnded() bool {
 }
 
 type framer struct {
-	writer *bufWriter
-	fr     *http2.Framer
-	reader io.Reader
-	// Cached data frame to avoid heap allocations.
-	dataFrame parsedDataFrame
+	writer    *bufWriter
+	fr        *http2.Framer
+	reader    io.Reader
+	dataFrame parsedDataFrame // Cached data frame to avoid heap allocations.
 	pool      mem.BufferPool
 	errDetail error
 }
