@@ -19,10 +19,8 @@
 // Package pickfirstleaf contains the pick_first load balancing policy which
 // will be the universal leaf policy after dualstack changes are implemented.
 //
-// # Experimental
-//
-// Notice: This package is EXPERIMENTAL and may be changed or removed in a
-// later release.
+// Deprecated: This package is deprecated. Please use the balancer/pickfirst
+// package instead.
 package pickfirstleaf
 
 import (
