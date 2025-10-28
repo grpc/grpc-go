@@ -117,9 +117,9 @@ func (s BufferSlice) MaterializeToBuffer(pool BufferPool) Buffer {
 
 // Reader returns a new Reader for the input slice after taking references to
 // each underlying buffer.
-func (s BufferSlice) Reader() Reader {
+func (s BufferSlice) Reader() *Reader {
 	s.Ref()
-	return &sliceReader{
+	return &Reader{
 		data: s,
 		len:  s.Len(),
 	}
@@ -129,31 +129,23 @@ func (s BufferSlice) Reader() Reader {
 // with other parts systems. It also provides an additional convenience method
 // Remaining(), which returns the number of unread bytes remaining in the slice.
 // Buffers will be freed as they are read.
-type Reader interface {
-	io.Reader
-	io.ByteReader
-	// Close frees the underlying BufferSlice and never returns an error. Subsequent
-	// calls to Read will return (0, io.EOF).
-	Close() error
-	// Remaining returns the number of unread bytes remaining in the slice.
-	Remaining() int
-	// Reset frees the currently held buffer slice and starts reading from the
-	// provided slice. This allows reusing the reader object.
-	Reset(s BufferSlice)
-}
-
-type sliceReader struct {
+// A Reader can be constructed from a BufferSlice; alternatively the zero value
+// of a Reader may be used after calling Reset on it.
+type Reader struct {
 	data BufferSlice
 	len  int
 	// The index into data[0].ReadOnlyData().
 	bufferIdx int
 }
 
-func (r *sliceReader) Remaining() int {
+// Remaining returns the number of unread bytes remaining in the slice.
+func (r *Reader) Remaining() int {
 	return r.len
 }
 
-func (r *sliceReader) Reset(s BufferSlice) {
+// Reset frees the currently held buffer slice and starts reading from the
+// provided slice. This allows reusing the reader object.
+func (r *Reader) Reset(s BufferSlice) {
 	r.data.Free()
 	s.Ref()
 	r.data = s
@@ -161,14 +153,16 @@ func (r *sliceReader) Reset(s BufferSlice) {
 	r.bufferIdx = 0
 }
 
-func (r *sliceReader) Close() error {
+// Close frees the underlying BufferSlice and never returns an error. Subsequent
+// calls to Read will return (0, io.EOF).
+func (r *Reader) Close() error {
 	r.data.Free()
 	r.data = nil
 	r.len = 0
 	return nil
 }
 
-func (r *sliceReader) freeFirstBufferIfEmpty() bool {
+func (r *Reader) freeFirstBufferIfEmpty() bool {
 	if len(r.data) == 0 || r.bufferIdx != len(r.data[0].ReadOnlyData()) {
 		return false
 	}
@@ -179,7 +173,7 @@ func (r *sliceReader) freeFirstBufferIfEmpty() bool {
 	return true
 }
 
-func (r *sliceReader) Read(buf []byte) (n int, _ error) {
+func (r *Reader) Read(buf []byte) (n int, _ error) {
 	if r.len == 0 {
 		return 0, io.EOF
 	}
@@ -202,7 +196,8 @@ func (r *sliceReader) Read(buf []byte) (n int, _ error) {
 	return n, nil
 }
 
-func (r *sliceReader) ReadByte() (byte, error) {
+// ReadByte reads a single byte.
+func (r *Reader) ReadByte() (byte, error) {
 	if r.len == 0 {
 		return 0, io.EOF
 	}

@@ -665,11 +665,10 @@ func (l *loopyWriter) incomingSettingsHandler(s *incomingSettings) error {
 
 func (l *loopyWriter) registerStreamHandler(h *registerStream) {
 	str := &outStream{
-		id:     h.streamID,
-		state:  empty,
-		itl:    &itemList{},
-		wq:     h.wq,
-		reader: mem.BufferSlice{}.Reader(),
+		id:    h.streamID,
+		state: empty,
+		itl:   &itemList{},
+		wq:    h.wq,
 	}
 	l.estdStreams[h.streamID] = str
 }
@@ -701,11 +700,10 @@ func (l *loopyWriter) headerHandler(h *headerFrame) error {
 	}
 	// Case 2: Client wants to originate stream.
 	str := &outStream{
-		id:     h.streamID,
-		state:  empty,
-		itl:    &itemList{},
-		wq:     h.wq,
-		reader: mem.BufferSlice{}.Reader(),
+		id:    h.streamID,
+		state: empty,
+		itl:   &itemList{},
+		wq:    h.wq,
 	}
 	return l.originateStream(str, h)
 }
@@ -948,11 +946,11 @@ func (l *loopyWriter) processData() (bool, error) {
 	if str == nil {
 		return true, nil
 	}
-	reader := str.reader
+	reader := &str.reader
 	dataItem := str.itl.peek().(*dataFrame) // Peek at the first data item this stream.
 	if !dataItem.processing {
 		dataItem.processing = true
-		str.reader.Reset(dataItem.data)
+		reader.Reset(dataItem.data)
 		dataItem.data.Free()
 	}
 	// A data item is represented by a dataFrame, since it later translates into
