@@ -1,6 +1,6 @@
 # Authentication
 
-As outlined in the [gRPC authentication guide](https://grpc.io/docs/guides/auth.html) there are a number of different mechanisms for asserting identity between a client and server. We'll present some code-samples here demonstrating how to provide TLS support encryption and identity assertions as well as passing OAuth2 tokens to services that support it.
+As outlined in the [gRPC authentication guide](https://grpc.io/docs/guides/auth.html), there are a number of different mechanisms for asserting identity between a client and server. We'll present some code-samples here demonstrating how to provide TLS support encryption and identity assertions as well as passing OAuth2 tokens to services that support it.
 
 # Enabling TLS on a gRPC client
 
@@ -33,7 +33,7 @@ Clients may use
 to store tokens and other authentication-related data. To gain access to the
 `metadata.MD` object, a server may use
 [metadata.FromIncomingContext](https://godoc.org/google.golang.org/grpc/metadata#FromIncomingContext).
-With a reference to `metadata.MD` on the server, one needs to simply lookup the
+With a reference to `metadata.MD` on the server, one needs to simply look up the
 `authorization` key. Note, all keys stored within `metadata.MD` are normalized
 to lowercase. See [here](https://godoc.org/google.golang.org/grpc/metadata#New).
 
