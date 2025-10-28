@@ -1005,7 +1005,13 @@ func (l *loopyWriter) processData() (bool, error) {
 		l.writeBuf = append(l.writeBuf, dataItem.h[:hSize])
 	}
 	if dSize > 0 {
-		l.writeBuf = reader.Peek(dSize, l.writeBuf)
+		var err error
+		l.writeBuf, err = reader.Peek(dSize, l.writeBuf)
+		if err != nil {
+			// This must never happen since the reader must have at least dSize
+			// bytes.
+			return false, err
+		}
 	}
 
 	// Now that outgoing flow controls are checked we can replenish str's write quota

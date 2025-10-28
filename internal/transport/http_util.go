@@ -454,8 +454,7 @@ func (f *framer) writeData(streamID uint32, endStream bool, data [][]byte) error
 		if len(d) == 0 {
 			continue
 		}
-		_, err := f.writer.Write(d)
-		if err != nil {
+		if _, err := f.writer.Write(d); err != nil {
 			return err
 		}
 	}

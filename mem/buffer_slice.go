@@ -19,6 +19,7 @@
 package mem
 
 import (
+	"fmt"
 	"io"
 )
 
@@ -286,9 +287,13 @@ nextBuffer:
 	}
 }
 
-// Discard moves the cursor forward by n bytes.
+// Discard skips the next n bytes, returning the number of bytes discarded.
+//
 // It frees buffers as they are fully consumed.
-func (r *Reader) Discard(n int) {
+//
+// If Discard skips fewer than n bytes, it also returns an error.
+func (r *Reader) Discard(n int) (discarded int, err error) {
+	total := n
 	for n > 0 && r.len > 0 {
 		curData := r.data[0].ReadOnlyData()
 		curSize := min(n, len(curData)-r.bufferIdx)
@@ -301,14 +306,24 @@ func (r *Reader) Discard(n int) {
 			r.bufferIdx = 0
 		}
 	}
+	discarded = total - n
+	if n > 0 {
+		return discarded, fmt.Errorf("insufficient bytes in reader")
+	}
+	return discarded, nil
 }
 
-// Peek returns up to the next n bytes from the reader's current position as
-// a slice of byte slices. Peek appends results to the provided res slice and
-// returns the updated slice. The returned subslices are views into the
-// underlying buffers and are only valid until the reader is advanced past the
-// corresponding buffer.
-func (r *Reader) Peek(n int, res [][]byte) [][]byte {
+// Peek returns the next n bytes without advancing the reader.
+//
+// Peek appends results to the provided res slice and returns the updated slice.
+// This pattern allows re-using the storage of res if it has sufficient
+// capacity.
+//
+// The returned subslices are views into the underlying buffers and are only
+// valid until the reader is advanced past the corresponding buffer.
+//
+// If Peek returns fewer than n bytes, it also returns an error.
+func (r *Reader) Peek(n int, res [][]byte) ([][]byte, error) {
 	for i := 0; n > 0 && i < len(r.data); i++ {
 		curData := r.data[i].ReadOnlyData()
 		start := 0
@@ -322,5 +337,8 @@ func (r *Reader) Peek(n int, res [][]byte) [][]byte {
 		res = append(res, curData[start:start+curSize])
 		n -= curSize
 	}
-	return res
+	if n > 0 {
+		return nil, fmt.Errorf("insufficient bytes in reader")
+	}
+	return res, nil
 }
