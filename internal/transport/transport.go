@@ -124,7 +124,7 @@ func (b *recvBuffer) get() <-chan recvMsg {
 // recvBuffer.
 type recvBufferReader struct {
 	_            noCopy
-	clientStream *ClientStream // The client transport stream is closed with the given error and nil trailer metadata.
+	clientStream *ClientStream // The client transport stream is closed with a status representing ctx.Err() and nil trailer metadata.
 	ctx          context.Context
 	ctxDone      <-chan struct{} // cache of ctx.Done() (for performance).
 	recv         *recvBuffer
