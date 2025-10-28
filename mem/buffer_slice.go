@@ -129,6 +129,8 @@ func (s BufferSlice) Reader() *Reader {
 // with other parts systems. It also provides an additional convenience method
 // Remaining(), which returns the number of unread bytes remaining in the slice.
 // Buffers will be freed as they are read.
+// A Reader can be constructed from a BufferSlice; alternatively the zero value
+// of a Reader may be used after calling Reset on it.
 type Reader struct {
 	data BufferSlice
 	len  int
