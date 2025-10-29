@@ -293,8 +293,6 @@ func (sc *ServerConfig) Equal(other *ServerConfig) bool {
 		return false
 	case !slices.Equal(sc.serverFeatures, other.serverFeatures):
 		return false
-	case !sc.selectedChannelCreds.Equal(other.selectedChannelCreds):
-		return false
 	}
 	return true
 }
