@@ -97,13 +97,13 @@ func TestJWTCallCredsBuilder(t *testing.T) {
 	builder := &jwtCallCredsBuilder{}
 	config := json.RawMessage(`{"jwt_token_file":"/path/to/token.jwt"}`)
 
-	bundle, stop, err := builder.Build(config)
+	creds, stop, err := builder.Build(config)
 	if err != nil {
 		t.Fatalf("Build(%s) failed: %v", config, err)
 	}
 	defer stop()
-	if bundle == nil {
-		t.Errorf("Build(%s) returned nil bundle, expected non-nil", config)
+	if creds == nil {
+		t.Errorf("Build(%s) returned nil creds, expected non-nil", config)
 	}
 }
 
