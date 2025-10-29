@@ -65,10 +65,10 @@ func (s) TestNewCallCredentialsWithInvalidConfig(t *testing.T) {
 				t.Fatalf("NewCallCredentials(%s): got nil, want error", tt.config)
 			}
 			if callCreds != nil {
-				t.Errorf("NewCallCredentials(%s): Expected nil call credentials to be returned", tt.config)
+				t.Errorf("NewCallCredentials(%s): returned non-nil call credentials", tt.config)
 			}
 			if cleanup == nil {
-				t.Errorf("NewCallCredentials(%s): Expected non-nil cleanup function to be returned", tt.config)
+				t.Errorf("NewCallCredentials(%s): returned nil cleanup function", tt.config)
 			}
 		})
 	}
@@ -84,10 +84,10 @@ func (s) TestNewCallCredentialsWithValidConfig(t *testing.T) {
 		t.Fatalf("NewCallCredentials(%s) failed: %v", config, err)
 	}
 	if callCreds == nil {
-		t.Fatalf("NewCallCredentials(%s): Expected non-nil credentials to be returned", config)
+		t.Fatalf("NewCallCredentials(%s): returned nil credentials", config)
 	}
 	if cleanup == nil {
-		t.Errorf("NewCallCredentials(%s): Expected non-nil cleanup function to be returned", config)
+		t.Errorf("NewCallCredentials(%s): returned nil cleanup function", config)
 	} else {
 		defer cleanup()
 	}
@@ -103,11 +103,11 @@ func (s) TestNewCallCredentialsWithValidConfig(t *testing.T) {
 		t.Fatalf("GetRequestMetadata failed: %v", err)
 	}
 	if len(metadata) == 0 {
-		t.Fatal("GetRequestMetadata: Expected metadata to be returned")
+		t.Fatal("GetRequestMetadata: returned empty metadata")
 	}
 	authHeader, ok := metadata["authorization"]
 	if !ok {
-		t.Fatal("GetRequestMetadata: Expected authorization header in metadata")
+		t.Fatal("GetRequestMetadata: returned empty authorization header in metadata")
 	}
 	if !strings.HasPrefix(authHeader, "Bearer ") {
 		t.Errorf("GetRequestMetadata: Authorization header should start with 'Bearer ', got %q", authHeader)
@@ -120,14 +120,14 @@ func (s) TestCallCredentials_Cleanup(t *testing.T) {
 	config := `{"jwt_token_file": "` + tokenFile + `"}`
 	_, cleanup, err := NewCallCredentials(json.RawMessage(config))
 	if err != nil {
-		t.Fatalf("NewCallCredentials failed: %v", err)
+		t.Fatalf("NewCallCredentials(%s) failed: %v", config, err)
 	}
 	if cleanup == nil {
-		t.Fatal("NewCallCredentials: Expected non-nil cleanup function")
+		t.Errorf("NewCallCredentials(%s): returned nil cleanup function", config)
 	}
-	// Cleanup should not panic
+
+	// Cleanup should not panic. Multiple cleanup calls should be safe
 	cleanup()
-	// Multiple cleanup calls should be safe
 	cleanup()
 }
 

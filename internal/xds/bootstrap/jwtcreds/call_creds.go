@@ -30,10 +30,11 @@ import (
 )
 
 // NewCallCredentials returns a new JWT token based call credentials. The input
-// config must match the structure specified in gRFC A97. The caller is expected
-// to invoke the second return value when they are done using the returned call creds.
-// The cancel function is idempotent.
-func NewCallCredentials(configJSON json.RawMessage) (credentials.PerRPCCredentials, func(), error) {
+// config must match the structure specified in gRFC A97.
+//
+// The caller is expected to invoke the cancel function when they are done using
+// the returned call creds. This cancel function is idempotent.
+func NewCallCredentials(configJSON json.RawMessage) (c credentials.PerRPCCredentials, cancel func(), err error) {
 	var cfg struct {
 		JWTTokenFile string `json:"jwt_token_file"`
 	}
