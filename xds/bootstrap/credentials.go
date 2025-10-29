@@ -72,7 +72,7 @@ func (d *googleDefaultCredsBuilder) Name() string {
 	return "google_default"
 }
 
-// jwtCallCredsBuilder implements the `Credentials` interface defined in
+// jwtCallCredsBuilder implements the `CallCredentials` interface defined in
 // package `xds/bootstrap` and encapsulates JWT call credentials.
 type jwtCallCredsBuilder struct{}
 
