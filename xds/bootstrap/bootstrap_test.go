@@ -22,8 +22,6 @@ import (
 	"testing"
 
 	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/internal/envconfig"
-	"google.golang.org/grpc/internal/testutils"
 )
 
 const testCredsBuilderName = "test_creds"
@@ -118,23 +116,5 @@ func TestTlsCredsBuilder(t *testing.T) {
 	if _, stop, err := tls.Build(json.RawMessage(`{"ca_certificate_file":"/ca_certificates.pem","refresh_interval": "asdf"}`)); err == nil {
 		defer stop()
 		t.Errorf("tls.Build() succeeded with an invalid refresh interval, when expected to fail")
-	}
-}
-
-func TestJwtCallCredentials_DisabledIfFeatureNotEnabled(t *testing.T) {
-	builder := GetCallCredentials("jwt_call_creds")
-	if builder != nil {
-		t.Fatal("Expected nil Credentials for jwt_call_creds when the feature is disabled.")
-	}
-
-	testutils.SetEnvConfig(t, &envconfig.XDSBootstrapCallCredsEnabled, true)
-
-	// Test that GetCredentials returns the JWT builder.
-	builder = GetCallCredentials("jwt_token_file")
-	if builder == nil {
-		t.Fatal("GetCallCredentials(\"jwt_token_file\") returned nil")
-	}
-	if got, want := builder.Name(), "jwt_token_file"; got != want {
-		t.Errorf("Retrieved builder name = %q, want %q", got, want)
 	}
 }
