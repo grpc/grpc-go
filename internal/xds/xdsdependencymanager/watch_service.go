@@ -71,6 +71,11 @@ func (l *listenerWatcher) AmbientError(err error, onDone func()) {
 	l.parent.serializer.ScheduleOr(handleError, onDone)
 }
 
+// Stops the listenerWatcher.
+//
+// This method is not safe to be called concurrently. This method is guaranteed not to be called concurrently with
+// resource callbacks. The dependency manager's Close() ensures all callbacks
+// are drained before calling stop.
 func (l *listenerWatcher) stop() {
 	l.isCancelled = true
 	l.cancel()
@@ -125,6 +130,13 @@ func (r *routeConfigWatcher) AmbientError(err error, onDone func()) {
 	r.parent.serializer.ScheduleOr(handleError, onDone)
 }
 
+// Stops the routeWatcher.
+//
+// This method is not safe to be called concurrently.
+//
+// It is designed to be called serially, either from a serialized resource
+// callback or by the dependency manager's Close(), which drains all callbacks
+// before calling.
 func (r *routeConfigWatcher) stop() {
 	r.isCancelled = true
 	r.cancel()

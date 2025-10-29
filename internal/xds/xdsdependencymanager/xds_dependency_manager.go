@@ -59,6 +59,11 @@ type DependencyManager struct {
 	serializer       *grpcsync.CallbackSerializer
 	serializerCancel context.CancelFunc
 
+	logger *grpclog.PrefixLogger
+
+	// All the fields below are accessed only from within the context of
+	// serialized callbacks.
+
 	// dataplaneAuthority is the authority used for the data plane connections,
 	// which is also used to select the VirtualHost within the xDS
 	// RouteConfiguration.  This is %-encoded to match with VirtualHost Domain
@@ -70,11 +75,9 @@ type DependencyManager struct {
 	currentListenerUpdate *xdsresource.ListenerUpdate
 
 	rdsResourceName    string
-	currentRouteConfig xdsresource.RouteConfigUpdate
+	currentRouteConfig *xdsresource.RouteConfigUpdate
 	routeConfigWatcher *routeConfigWatcher
 	currentVirtualHost *xdsresource.VirtualHost
-
-	logger *grpclog.PrefixLogger
 }
 
 // New creates a new DependencyManager.
@@ -141,7 +144,7 @@ func (m *DependencyManager) applyRouteConfigUpdate(update xdsresource.RouteConfi
 		m.watcher.OnError(fmt.Errorf("could not find VirtualHost for %q", m.dataplaneAuthority))
 		return
 	}
-	m.currentRouteConfig = update
+	m.currentRouteConfig = &update
 	m.currentVirtualHost = matchVH
 	m.maybeSendUpdate()
 }

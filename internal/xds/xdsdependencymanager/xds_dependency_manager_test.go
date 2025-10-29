@@ -73,7 +73,7 @@ var (
 		Listener: &xdsresource.ListenerUpdate{
 			RouteConfigName: defaultTestRouteConfigName,
 			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}}},
-		RouteConfig: xdsresource.RouteConfigUpdate{
+		RouteConfig: &xdsresource.RouteConfigUpdate{
 			VirtualHosts: []*xdsresource.VirtualHost{
 				{
 					Domains: []string{defaultTestServiceName},
@@ -279,7 +279,7 @@ func (s) TestInlineRouteConfig(t *testing.T) {
 				},
 			},
 			HTTPFilters: []xdsresource.HTTPFilter{{Name: "router"}}},
-		RouteConfig: xdsresource.RouteConfigUpdate{
+		RouteConfig: &xdsresource.RouteConfigUpdate{
 			VirtualHosts: []*xdsresource.VirtualHost{
 				{
 					Domains: []string{defaultTestServiceName},

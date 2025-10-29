@@ -22,15 +22,18 @@ import "google.golang.org/grpc/resolver"
 // XDSConfig holds the complete gRPC client-side xDS configuration containing
 // all necessary resources.
 type XDSConfig struct {
-	// Listener holds the listener configuration.
+	// Listener holds the listener configuration. It is garunteed to be
+	// non-nil.
 	Listener *ListenerUpdate
 
 	// RouteConfig is the route configuration. It will be populated even if
-	// RouteConfig is inlined into the Listener resource.
-	RouteConfig RouteConfigUpdate
+	// RouteConfig is inlined into the Listener resource. It is garunteed to be
+	// non-nil.
+	RouteConfig *RouteConfigUpdate
 
 	// VirtualHost selected from the route configuration whose domain field
-	// offers the best match against the provided dataplane authority.
+	// offers the best match against the provided dataplane authority. It is
+	// garunteed to be non-nil.
 	VirtualHost *VirtualHost
 
 	// Clusters is a map from cluster name to its configuration.
@@ -49,13 +52,19 @@ type ClusterResult struct {
 
 // ClusterConfig contains configuration for a single cluster.
 type ClusterConfig struct {
-	Cluster         ClusterUpdate   // Cluster configuration. Always present.
-	EndpointConfig  EndpointConfig  // Endpoint configuration for leaf clusters.
-	AggregateConfig AggregateConfig // List of children for aggregate clusters.
+	// Cluster configuration for the cluster. This field is always set to a non-zero value
+	Cluster *ClusterUpdate
+	// Endpoint configuration for the cluster. This field is only set if the
+	// cluster is a leaf cluster.
+	EndpointConfig *EndpointConfig
+	// AggregateConfig is the set of leaf clusters for the cluster. This field
+	// is only set if the cluster is of type AGGREGATE.
+	AggregateConfig *AggregateConfig
 }
 
-// AggregateConfig contains a list of leaf cluster names for .
+// AggregateConfig holds the configuration for an aggregate cluster.
 type AggregateConfig struct {
+	// LeafClusters specifies the names of the leaf clusters for the cluster.
 	LeafClusters []string
 }
 
@@ -63,13 +72,20 @@ type AggregateConfig struct {
 // cluster. Only one of EDSUpdate or DNSEndpoints will be populated based on the
 // cluster type.
 type EndpointConfig struct {
-	EDSUpdate      EndpointsUpdate // Configuration for EDS clusters.
-	DNSEndpoints   DNSUpdate       // Configuration for LOGICAL_DNS clusters.
-	ResolutionNote error           // Error obtaining endpoints data.
+	// Endpoint configurartion for the EDS type cluster.
+	EDSUpdate *EndpointsUpdate
+	// Endpoint configuration for the LOGICAL_DNS type cluster.
+	DNSEndpoints DNSUpdate
+	// Stores error encountered while obtaining endpoints data for the cluster.
+	ResolutionNote error
 }
 
-// DNSUpdate contains the update from DNS resolver.
+// DNSUpdate represents the result of a DNS resolution, containing a
+// list of discovered endpoints. This is only populated for the
+// LOGICAL_DNS cluster type.
 type DNSUpdate struct {
+	// Endpoints is the complete list of endpoints returned by the
+	// DNS resolver.
 	Endpoints []resolver.Endpoint
 }
 
