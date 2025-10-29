@@ -22,18 +22,18 @@ import "google.golang.org/grpc/resolver"
 // XDSConfig holds the complete gRPC client-side xDS configuration containing
 // all necessary resources.
 type XDSConfig struct {
-	// Listener holds the listener configuration. It is garunteed to be
+	// Listener holds the listener configuration. It is guaranteed to be
 	// non-nil.
 	Listener *ListenerUpdate
 
 	// RouteConfig is the route configuration. It will be populated even if
-	// RouteConfig is inlined into the Listener resource. It is garunteed to be
+	// RouteConfig is inlined into the Listener resource. It is guaranteed to be
 	// non-nil.
 	RouteConfig *RouteConfigUpdate
 
 	// VirtualHost selected from the route configuration whose domain field
 	// offers the best match against the provided dataplane authority. It is
-	// garunteed to be non-nil.
+	// guaranteed to be non-nil.
 	VirtualHost *VirtualHost
 
 	// Clusters is a map from cluster name to its configuration.

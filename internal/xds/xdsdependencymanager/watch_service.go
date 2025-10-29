@@ -73,9 +73,9 @@ func (l *listenerWatcher) AmbientError(err error, onDone func()) {
 
 // Stops the listenerWatcher.
 //
-// This method is not safe to be called concurrently. This method is guaranteed not to be called concurrently with
-// resource callbacks. The dependency manager's Close() ensures all callbacks
-// are drained before calling stop.
+// This method is not safe to be called concurrently. It is currently designed
+// to only be called in the dependency manager's Close() that ensures all
+// callbacks are drained before calling stop.
 func (l *listenerWatcher) stop() {
 	l.isCancelled = true
 	l.cancel()

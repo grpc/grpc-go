@@ -82,8 +82,12 @@ type DependencyManager struct {
 
 // New creates a new DependencyManager.
 //
-// listenerName is the name of the Listener resource to request from the management server.
-// dataplaneAuthority is used to select the best matching virtual host from the route configuration received from the management server.
+//   - listenerName is the name of the Listener resource to request from the
+//     management server.
+//   - dataplaneAuthority is used to select the best matching virtual host from
+//     the route configuration received from the management server.
+//   - xdsClient is the xDS client to use to register resource watches.
+//   - watcher is the ConfigWatcher interface that will receive the aggregated XDSConfig.
 //
 // Configuration updates and/or errors are delivered to the watcher.
 func New(listenerName, dataplaneAuthority string, xdsClient xdsclient.XDSClient, watcher ConfigWatcher) *DependencyManager {
@@ -130,6 +134,9 @@ func (m *DependencyManager) annotateErrorWithNodeID(err error) error {
 	return fmt.Errorf("[xDS node id: %v]: %w", nodeID, err)
 }
 
+// maybeSendUpdate checks that all the resources have been received and sends
+// the current aggregated xDS configuration to the watcher if all the  updates
+// are available.
 func (m *DependencyManager) maybeSendUpdate() {
 	m.watcher.OnUpdate(&xdsresource.XDSConfig{
 		Listener:    m.currentListenerUpdate,
