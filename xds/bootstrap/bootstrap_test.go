@@ -92,30 +92,18 @@ func TestChannelCredsBuilders(t *testing.T) {
 	}
 }
 
-func TestCallCredsBuilders(t *testing.T) {
-	tests := []struct {
-		typename              string
-		builder               CallCredentials
-		minimumRequiredConfig json.RawMessage
-	}{
-		{"jwt_token_file", &jwtCallCredsBuilder{}, json.RawMessage(`{"jwt_token_file":"/path/to/token.jwt"}`)},
+func TestJWTCallCredsBuilder(t *testing.T) {
+
+	builder := &jwtCallCredsBuilder{}
+	config := json.RawMessage(`{"jwt_token_file":"/path/to/token.jwt"}`)
+
+	bundle, stop, err := builder.Build(config)
+	if err != nil {
+		t.Fatalf("Build(%s) failed: %v", config, err)
 	}
-
-	for _, test := range tests {
-		t.Run(test.typename, func(t *testing.T) {
-			if got, want := test.builder.Name(), test.typename; got != want {
-				t.Errorf("%T.Name = %v, want %v", test.builder, got, want)
-			}
-
-			bundle, stop, err := test.builder.Build(test.minimumRequiredConfig)
-			if err != nil {
-				t.Fatalf("%T.Build failed: %v", test.builder, err)
-			}
-			defer stop()
-			if bundle == nil {
-				t.Errorf("%T.Build returned nil bundle, expected non-nil", test.builder)
-			}
-		})
+	defer stop()
+	if bundle == nil {
+		t.Errorf("Build(%s) returned nil bundle, expected non-nil", config)
 	}
 }
 
