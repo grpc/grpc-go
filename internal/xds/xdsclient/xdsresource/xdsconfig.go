@@ -26,9 +26,9 @@ type XDSConfig struct {
 	// non-nil.
 	Listener *ListenerUpdate
 
-	// RouteConfig is the route configuration. It will be populated even if
-	// RouteConfig is inlined into the Listener resource. It is guaranteed to be
-	// non-nil.
+	// RouteConfig holds the route configuration. It will be populated even if
+	// the route configuration was inlined into the Listener resource. It is
+	// guaranteed to be non-nil.
 	RouteConfig *RouteConfigUpdate
 
 	// VirtualHost selected from the route configuration whose domain field
@@ -40,8 +40,8 @@ type XDSConfig struct {
 	Clusters map[string]*ClusterResult
 }
 
-// ClusterResult contains a cluster's configuration when we receive a
-// valid resource from the management server. It contains an error when:
+// ClusterResult contains a cluster's configuration when we receive a valid
+// resource from the management server. It contains an error when:
 //   - we receive an invalid resource from the management server and
 //     we did not already have a valid resource or
 //   - the cluster resource does not exist on the management server
@@ -52,10 +52,11 @@ type ClusterResult struct {
 
 // ClusterConfig contains configuration for a single cluster.
 type ClusterConfig struct {
-	// Cluster configuration for the cluster. This field is always set to a non-zero value
+	// Cluster configuration for the cluster. This field is always set to a
+	// non-zero value
 	Cluster *ClusterUpdate
-	// Endpoint configuration for the cluster. This field is only set if the
-	// cluster is a leaf cluster.
+	// Endpoint configuration for cluster. This field is only set if the cluster
+	// is a leaf cluster.
 	EndpointConfig *EndpointConfig
 	// AggregateConfig is the set of leaf clusters for the cluster. This field
 	// is only set if the cluster is of type AGGREGATE.
@@ -80,21 +81,20 @@ type EndpointConfig struct {
 	ResolutionNote error
 }
 
-// DNSUpdate represents the result of a DNS resolution, containing a
-// list of discovered endpoints. This is only populated for the
-// LOGICAL_DNS cluster type.
+// DNSUpdate represents the result of a DNS resolution, containing a list of
+// discovered endpoints. This is only populated for the LOGICAL_DNS cluster
+// type.
 type DNSUpdate struct {
-	// Endpoints is the complete list of endpoints returned by the
-	// DNS resolver.
+	// Endpoints is the complete list of endpoints returned by the DNS resolver.
 	Endpoints []resolver.Endpoint
 }
 
-// xdsConfigkey is the type used as the key to store XDSConfig in
-// the Attributes field of resolver.states.
+// xdsConfigkey is the type used as the key to store XDSConfig in the Attributes
+// field of resolver.states.
 type xdsConfigkey struct{}
 
-// SetXDSConfig returns a copy of state in which the Attributes field
-// is updated with the XDSConfig.
+// SetXDSConfig returns a copy of state in which the Attributes field is updated
+// with the XDSConfig.
 func SetXDSConfig(state resolver.State, config *XDSConfig) resolver.State {
 	state.Attributes = state.Attributes.WithValue(xdsConfigkey{}, config)
 	return state
