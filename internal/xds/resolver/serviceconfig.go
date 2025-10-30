@@ -324,22 +324,21 @@ func (cs *configSelector) stop() {
 	}
 }
 
-// newInterceptor builds a chain of client interceptors for the given filters.
-// The filter config override maps contain overrides from the route, cluster,
-// and virtual host respectively. The cluster override has the highest priority,
+// newInterceptor builds a chain of client interceptors for the given filters
+// and override configuration. The cluster override has the highest priority,
 // followed by the route override, and finally the virtual host override.
-func newInterceptor(filters []xdsresource.HTTPFilter, cluster, route, virtualHost map[string]httpfilter.FilterConfig) (iresolver.ClientInterceptor, error) {
+func newInterceptor(filters []xdsresource.HTTPFilter, clusterOverride, routeOverride, virtualHostOverride map[string]httpfilter.FilterConfig) (iresolver.ClientInterceptor, error) {
 	if len(filters) == 0 {
 		return nil, nil
 	}
 	interceptors := make([]iresolver.ClientInterceptor, 0, len(filters))
 	for _, filter := range filters {
-		override := cluster[filter.Name]
+		override := clusterOverride[filter.Name]
 		if override == nil {
-			override = route[filter.Name]
+			override = routeOverride[filter.Name]
 		}
 		if override == nil {
-			override = virtualHost[filter.Name]
+			override = virtualHostOverride[filter.Name]
 		}
 		ib, ok := filter.Filter.(httpfilter.ClientInterceptorBuilder)
 		if !ok {
