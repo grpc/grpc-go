@@ -145,13 +145,13 @@ func (m *DependencyManager) maybeSendUpdate() {
 	})
 }
 
-func (m *DependencyManager) applyRouteConfigUpdate(update xdsresource.RouteConfigUpdate) {
+func (m *DependencyManager) applyRouteConfigUpdate(update *xdsresource.RouteConfigUpdate) {
 	matchVH := xdsresource.FindBestMatchingVirtualHost(m.dataplaneAuthority, update.VirtualHosts)
 	if matchVH == nil {
 		m.watcher.OnError(fmt.Errorf("could not find VirtualHost for %q", m.dataplaneAuthority))
 		return
 	}
-	m.currentRouteConfig = &update
+	m.currentRouteConfig = update
 	m.currentVirtualHost = matchVH
 	m.maybeSendUpdate()
 }
@@ -172,7 +172,7 @@ func (m *DependencyManager) onListenerResourceUpdate(update *xdsresource.Listene
 			m.routeConfigWatcher.stop()
 			m.routeConfigWatcher = nil
 		}
-		m.applyRouteConfigUpdate(*update.InlineRouteConfig)
+		m.applyRouteConfigUpdate(update.InlineRouteConfig)
 		return
 	}
 
@@ -218,7 +218,7 @@ func (m *DependencyManager) onListenerResourceAmbientError(err error) {
 }
 
 // Only executed in the context of a serializer callback.
-func (m *DependencyManager) onRouteConfigResourceUpdate(resourceName string, update xdsresource.RouteConfigUpdate) {
+func (m *DependencyManager) onRouteConfigResourceUpdate(resourceName string, update *xdsresource.RouteConfigUpdate) {
 	if m.logger.V(2) {
 		m.logger.Infof("Received update for RouteConfiguration resource %q: %+v", resourceName, update)
 	}
