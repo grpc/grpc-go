@@ -2082,7 +2082,7 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TF_ThenTimerFires(t *testing.T) {
 	}
 }
 
-func (s) TestPickFirstLeaf_InterleavingIPV4Preffered(t *testing.T) {
+func (s) TestPickFirstLeaf_InterleavingIPV4Preferred(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	cc := testutils.NewBalancerClientConn(t)
@@ -2128,7 +2128,7 @@ func (s) TestPickFirstLeaf_InterleavingIPV4Preffered(t *testing.T) {
 	}
 }
 
-func (s) TestPickFirstLeaf_InterleavingIPv6Preffered(t *testing.T) {
+func (s) TestPickFirstLeaf_InterleavingIPv6Preferred(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	cc := testutils.NewBalancerClientConn(t)
@@ -2173,7 +2173,7 @@ func (s) TestPickFirstLeaf_InterleavingIPv6Preffered(t *testing.T) {
 	}
 }
 
-func (s) TestPickFirstLeaf_InterleavingUnknownPreffered(t *testing.T) {
+func (s) TestPickFirstLeaf_InterleavingUnknownPreferred(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	cc := testutils.NewBalancerClientConn(t)
