@@ -496,6 +496,16 @@ const (
 	serverSide
 )
 
+// maxWriteBufSize is the maximum length (number of elements) the cached
+// writeBuf can grow to. The length depends on the number of buffers
+// contained within the BufferSlice produced by the codec, which is
+// generally small.
+//
+// If a writeBuf larger than this limit is required, it will be allocated
+// and freed after use, rather than being cached. This avoids holding
+// on to large amounts of memory.
+const maxWriteBufSize = 64
+
 // Loopy receives frames from the control buffer.
 // Each frame is handled individually; most of the work done by loopy goes
 // into handling data frames. Loopy maintains a queue of active streams, and each
@@ -530,7 +540,8 @@ type loopyWriter struct {
 
 	// Side-specific handlers
 	ssGoAwayHandler func(*goAway) (bool, error)
-	writeBuf        [][]byte
+
+	writeBuf [][]byte // cached slice to avoid heap allocations for calls to mem.Reader.Peek.
 }
 
 func newLoopyWriter(s side, fr *framer, cbuf *controlBuffer, bdpEst *bdpEstimator, conn net.Conn, logger *grpclog.PrefixLogger, goAwayHandler func(*goAway) (bool, error), bufferPool mem.BufferPool) *loopyWriter {
@@ -1010,6 +1021,8 @@ func (l *loopyWriter) processData() (bool, error) {
 		if err != nil {
 			// This must never happen since the reader must have at least dSize
 			// bytes.
+			clear(l.writeBuf)
+			l.writeBuf = nil
 			return false, err
 		}
 	}
@@ -1026,6 +1039,11 @@ func (l *loopyWriter) processData() (bool, error) {
 	}
 	err := l.framer.writeData(dataItem.streamID, endStream, l.writeBuf)
 	reader.Discard(dSize)
+	if cap(l.writeBuf) > maxWriteBufSize {
+		l.writeBuf = nil
+	} else {
+		clear(l.writeBuf)
+	}
 	if err != nil {
 		return false, err
 	}

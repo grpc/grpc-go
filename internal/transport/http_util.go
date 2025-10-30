@@ -451,9 +451,6 @@ func (f *framer) writeData(streamID uint32, endStream bool, data [][]byte) error
 		return err
 	}
 	for _, d := range data {
-		if len(d) == 0 {
-			continue
-		}
 		if _, err := f.writer.Write(d); err != nil {
 			return err
 		}
