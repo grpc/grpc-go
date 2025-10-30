@@ -29,7 +29,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/lazy"
-	"google.golang.org/grpc/balancer/pickfirst/pickfirstleaf"
+	"google.golang.org/grpc/balancer/pickfirst"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/balancer/stub"
@@ -79,7 +79,7 @@ func (s) TestExitIdle(t *testing.T) {
 
 	bf := stub.BalancerFuncs{
 		Init: func(bd *stub.BalancerData) {
-			bd.ChildBalancer = lazy.NewBalancer(bd.ClientConn, bd.BuildOptions, balancer.Get(pickfirstleaf.Name).Build)
+			bd.ChildBalancer = lazy.NewBalancer(bd.ClientConn, bd.BuildOptions, balancer.Get(pickfirst.Name).Build)
 		},
 		ExitIdle: func(bd *stub.BalancerData) {
 			bd.ChildBalancer.ExitIdle()
@@ -144,7 +144,7 @@ func (s) TestPicker(t *testing.T) {
 
 	bf := stub.BalancerFuncs{
 		Init: func(bd *stub.BalancerData) {
-			bd.ChildBalancer = lazy.NewBalancer(bd.ClientConn, bd.BuildOptions, balancer.Get(pickfirstleaf.Name).Build)
+			bd.ChildBalancer = lazy.NewBalancer(bd.ClientConn, bd.BuildOptions, balancer.Get(pickfirst.Name).Build)
 		},
 		ExitIdle: func(*stub.BalancerData) {
 			t.Log("Ignoring call to ExitIdle, calling the picker should make the lazy balancer exit IDLE state.")
@@ -201,7 +201,7 @@ func (s) TestGoodUpdateThenResolverError(t *testing.T) {
 
 	childBF := stub.BalancerFuncs{
 		Init: func(bd *stub.BalancerData) {
-			bd.ChildBalancer = balancer.Get(pickfirstleaf.Name).Build(bd.ClientConn, bd.BuildOptions)
+			bd.ChildBalancer = balancer.Get(pickfirst.Name).Build(bd.ClientConn, bd.BuildOptions)
 		},
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
 			if resolverErrorReceived.HasFired() {
@@ -306,7 +306,7 @@ func (s) TestResolverErrorThenGoodUpdate(t *testing.T) {
 
 	childBF := stub.BalancerFuncs{
 		Init: func(bd *stub.BalancerData) {
-			bd.ChildBalancer = balancer.Get(pickfirstleaf.Name).Build(bd.ClientConn, bd.BuildOptions)
+			bd.ChildBalancer = balancer.Get(pickfirst.Name).Build(bd.ClientConn, bd.BuildOptions)
 		},
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
 			return bd.ChildBalancer.UpdateClientConnState(ccs)
@@ -407,7 +407,7 @@ func (s) TestExitIdlePassthrough(t *testing.T) {
 
 	bf := stub.BalancerFuncs{
 		Init: func(bd *stub.BalancerData) {
-			bd.ChildBalancer = lazy.NewBalancer(bd.ClientConn, bd.BuildOptions, balancer.Get(pickfirstleaf.Name).Build)
+			bd.ChildBalancer = lazy.NewBalancer(bd.ClientConn, bd.BuildOptions, balancer.Get(pickfirst.Name).Build)
 		},
 		ExitIdle: func(bd *stub.BalancerData) {
 			bd.ChildBalancer.ExitIdle()

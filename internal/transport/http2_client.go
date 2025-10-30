@@ -500,12 +500,10 @@ func (t *http2Client) newStream(ctx context.Context, callHdr *CallHdr) *ClientSt
 	s.ctx = ctx
 	s.trReader = transportReader{
 		reader: recvBufferReader{
-			ctx:     s.ctx,
-			ctxDone: s.ctx.Done(),
-			recv:    &s.buf,
-			closeStream: func(err error) {
-				s.Close(err)
-			},
+			ctx:          s.ctx,
+			ctxDone:      s.ctx.Done(),
+			recv:         &s.buf,
+			clientStream: s,
 		},
 		windowHandler: s,
 	}

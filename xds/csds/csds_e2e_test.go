@@ -83,7 +83,7 @@ func (nopListenerWatcher) AmbientError(_ error, onDone func()) {
 
 type nopRouteConfigWatcher struct{}
 
-func (nopRouteConfigWatcher) ResourceChanged(_ *xdsresource.RouteConfigResourceData, onDone func()) {
+func (nopRouteConfigWatcher) ResourceChanged(_ *xdsresource.RouteConfigUpdate, onDone func()) {
 	onDone()
 }
 func (nopRouteConfigWatcher) ResourceError(_ error, onDone func()) {
@@ -95,7 +95,7 @@ func (nopRouteConfigWatcher) AmbientError(_ error, onDone func()) {
 
 type nopClusterWatcher struct{}
 
-func (nopClusterWatcher) ResourceChanged(_ *xdsresource.ClusterResourceData, onDone func()) {
+func (nopClusterWatcher) ResourceChanged(_ *xdsresource.ClusterUpdate, onDone func()) {
 	onDone()
 }
 func (nopClusterWatcher) ResourceError(_ error, onDone func()) {
@@ -107,7 +107,7 @@ func (nopClusterWatcher) AmbientError(_ error, onDone func()) {
 
 type nopEndpointsWatcher struct{}
 
-func (nopEndpointsWatcher) ResourceChanged(_ *xdsresource.EndpointsResourceData, onDone func()) {
+func (nopEndpointsWatcher) ResourceChanged(_ *xdsresource.EndpointsUpdate, onDone func()) {
 	onDone()
 }
 func (nopEndpointsWatcher) ResourceError(_ error, onDone func()) {

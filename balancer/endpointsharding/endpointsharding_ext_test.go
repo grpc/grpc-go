@@ -31,7 +31,7 @@ import (
 	"google.golang.org/grpc/backoff"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/endpointsharding"
-	"google.golang.org/grpc/balancer/pickfirst/pickfirstleaf"
+	"google.golang.org/grpc/balancer/pickfirst"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
@@ -84,7 +84,7 @@ func (fakePetioleBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptio
 		ClientConn: cc,
 		bOpts:      opts,
 	}
-	fp.Balancer = endpointsharding.NewBalancer(fp, opts, balancer.Get(pickfirstleaf.Name).Build, endpointsharding.Options{})
+	fp.Balancer = endpointsharding.NewBalancer(fp, opts, balancer.Get(pickfirst.Name).Build, endpointsharding.Options{})
 	return fp
 }
 
@@ -222,7 +222,7 @@ func (s) TestEndpointShardingReconnectDisabled(t *testing.T) {
 	bf := stub.BalancerFuncs{
 		Init: func(bd *stub.BalancerData) {
 			epOpts := endpointsharding.Options{DisableAutoReconnect: true}
-			bd.ChildBalancer = endpointsharding.NewBalancer(bd.ClientConn, bd.BuildOptions, balancer.Get(pickfirstleaf.Name).Build, epOpts)
+			bd.ChildBalancer = endpointsharding.NewBalancer(bd.ClientConn, bd.BuildOptions, balancer.Get(pickfirst.Name).Build, epOpts)
 		},
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
 			return bd.ChildBalancer.UpdateClientConnState(ccs)
@@ -303,7 +303,7 @@ func (s) TestEndpointShardingExitIdle(t *testing.T) {
 	bf := stub.BalancerFuncs{
 		Init: func(bd *stub.BalancerData) {
 			epOpts := endpointsharding.Options{DisableAutoReconnect: true}
-			bd.ChildBalancer = endpointsharding.NewBalancer(bd.ClientConn, bd.BuildOptions, balancer.Get(pickfirstleaf.Name).Build, epOpts)
+			bd.ChildBalancer = endpointsharding.NewBalancer(bd.ClientConn, bd.BuildOptions, balancer.Get(pickfirst.Name).Build, epOpts)
 		},
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
 			return bd.ChildBalancer.UpdateClientConnState(ccs)
