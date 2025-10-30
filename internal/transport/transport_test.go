@@ -39,9 +39,11 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
+
 	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/leakcheck"
@@ -88,9 +90,6 @@ func (s *Stream) readTo(p []byte) (int, error) {
 	}
 
 	if data.Len() != len(p) {
-		if err == nil {
-			err = io.ErrUnexpectedEOF
-		}
 		return 0, err
 	}
 
@@ -1856,19 +1855,20 @@ func waitWhileTrue(t *testing.T, condition func() (bool, error)) {
 func (s) TestReadGivesSameErrorAfterAnyErrorOccurs(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	testRecvBuffer := newRecvBuffer()
 	s := &Stream{
-		ctx:         ctx,
-		buf:         testRecvBuffer,
-		requestRead: func(int) {},
+		ctx:           ctx,
+		readRequester: &fakeReadRequester{},
 	}
-	s.trReader = &transportReader{
-		reader: &recvBufferReader{
+	s.buf.init()
+	s.trReader = transportReader{
+		reader: recvBufferReader{
 			ctx:     s.ctx,
 			ctxDone: s.ctx.Done(),
-			recv:    s.buf,
+			recv:    &s.buf,
 		},
-		windowHandler: func(int) {},
+		windowHandler: &mockWindowUpdater{
+			f: func(int) {},
+		},
 	}
 	testData := make([]byte, 1)
 	testData[0] = 5
@@ -2588,51 +2588,48 @@ func (s) TestClientHandshakeInfoDialer(t *testing.T) {
 	}
 }
 
-func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
-	testStream := func() *ClientStream {
-		return &ClientStream{
-			Stream: &Stream{
-				buf: &recvBuffer{
-					c:  make(chan recvMsg),
-					mu: sync.Mutex{},
-				},
+func newTestClientStream() *ClientStream {
+	return &ClientStream{
+		Stream: Stream{
+			buf: recvBuffer{
+				c: make(chan recvMsg),
 			},
-			done:       make(chan struct{}),
-			headerChan: make(chan struct{}),
-		}
+		},
+		done:       make(chan struct{}),
+		headerChan: make(chan struct{}),
 	}
+}
 
-	testClient := func(ts *ClientStream) *http2Client {
-		return &http2Client{
-			mu: sync.Mutex{},
-			activeStreams: map[uint32]*ClientStream{
-				0: ts,
-			},
-			controlBuf: newControlBuffer(make(<-chan struct{})),
-		}
+func newTestHTTP2Client(cs *ClientStream) *http2Client {
+	return &http2Client{
+		activeStreams: map[uint32]*ClientStream{
+			1: cs,
+		},
+		controlBuf: newControlBuffer(make(<-chan struct{})),
 	}
+}
 
-	for _, test := range []struct {
-		name string
-		// input
+// TestClientDecodeHeader validates the handling of initial header frames that
+// do not signal the end of a stream. For all headers that indicate grpc content
+// type, http status will be ignored.
+func (s) TestClientDecodeHeader(t *testing.T) {
+	tests := []struct {
+		name            string
 		metaHeaderFrame *http2.MetaHeadersFrame
-		// output
-		wantStatus *status.Status
+		wantStatus      *status.Status
 	}{
 		{
-			name: "valid header",
+			name: "valid_header",
 			metaHeaderFrame: &http2.MetaHeadersFrame{
 				Fields: []hpack.HeaderField{
 					{Name: "content-type", Value: "application/grpc"},
-					{Name: "grpc-status", Value: "0"},
 					{Name: ":status", Value: "200"},
 				},
 			},
-			// no error
 			wantStatus: status.New(codes.OK, ""),
 		},
 		{
-			name: "missing content-type header",
+			name: "missing_content_type_header",
 			metaHeaderFrame: &http2.MetaHeadersFrame{
 				Fields: []hpack.HeaderField{
 					{Name: "grpc-status", Value: "0"},
@@ -2641,11 +2638,11 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 			},
 			wantStatus: status.New(
 				codes.Unknown,
-				"malformed header: missing HTTP content-type",
+				"unexpected HTTP status code received from server: 200 (OK); malformed header: missing HTTP content-type",
 			),
 		},
 		{
-			name: "invalid grpc status header field",
+			name: "invalid_grpc_status",
 			metaHeaderFrame: &http2.MetaHeadersFrame{
 				Fields: []hpack.HeaderField{
 					{Name: "content-type", Value: "application/grpc"},
@@ -2659,7 +2656,7 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 			),
 		},
 		{
-			name: "invalid http content type",
+			name: "invalid_content_type",
 			metaHeaderFrame: &http2.MetaHeadersFrame{
 				Fields: []hpack.HeaderField{
 					{Name: "content-type", Value: "application/json"},
@@ -2671,22 +2668,33 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 			),
 		},
 		{
-			name: "http fallback and invalid http status",
+			name: "invalid_content_type_with_http_status_504",
 			metaHeaderFrame: &http2.MetaHeadersFrame{
 				Fields: []hpack.HeaderField{
-					// No content type provided then fallback into handling http error.
+					{Name: "content-type", Value: "application/json"},
+					{Name: ":status", Value: "504"},
+				},
+			},
+			wantStatus: status.New(
+				codes.Unavailable,
+				"unexpected HTTP status code received from server: 504 (Gateway Timeout); transport: received unexpected content-type \"application/json\"",
+			),
+		},
+		{
+			name: "http_fallback_and_invalid_http_status",
+			metaHeaderFrame: &http2.MetaHeadersFrame{
+				Fields: []hpack.HeaderField{
 					{Name: ":status", Value: "xxxx"},
 				},
 			},
 			wantStatus: status.New(
 				codes.Internal,
-				"transport: malformed http-status: strconv.ParseInt: parsing \"xxxx\": invalid syntax",
+				"transport: malformed http-status: strconv.Atoi: parsing \"xxxx\": invalid syntax",
 			),
 		},
 		{
-			name: "http2 frame size exceeds",
+			name: "http2_frame_size_exceeds",
 			metaHeaderFrame: &http2.MetaHeadersFrame{
-				Fields:    nil,
 				Truncated: true,
 			},
 			wantStatus: status.New(
@@ -2695,68 +2703,152 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 			),
 		},
 		{
-			name: "bad status in grpc mode",
+			name: "missing_http_status_and_grpc_status",
+			metaHeaderFrame: &http2.MetaHeadersFrame{
+				Fields: []hpack.HeaderField{
+					{Name: "content-type", Value: "application/grpc"},
+				},
+			},
+			wantStatus: status.New(codes.OK, ""),
+		},
+		{
+			name: "ignore_http_status_for_grpc",
+			metaHeaderFrame: &http2.MetaHeadersFrame{
+				Fields: []hpack.HeaderField{
+					{Name: "content-type", Value: "application/grpc"},
+					{Name: ":status", Value: "504"},
+				},
+			},
+			wantStatus: status.New(codes.OK, ""),
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cs := newTestClientStream()
+			s := newTestHTTP2Client(cs)
+
+			tc.metaHeaderFrame.HeadersFrame = &http2.HeadersFrame{
+				FrameHeader: http2.FrameHeader{
+					StreamID: 1,
+				},
+			}
+
+			s.operateHeaders(tc.metaHeaderFrame)
+			got := cs.status
+			want := tc.wantStatus
+			if got.Code() != want.Code() || got.Message() != want.Message() {
+				t.Errorf("operateHeaders(%v) got status %q, want %q", tc.metaHeaderFrame, got, want)
+			}
+		})
+	}
+}
+
+// TestClientDecodeTrailer validates the handling of trailer frames, which may
+// or may not also be the initial header frame (header-only response).
+func (s) TestClientDecodeTrailer(t *testing.T) {
+	tests := []struct {
+		name                string
+		metaHeaderFrame     *http2.MetaHeadersFrame
+		wantEndStreamStatus *status.Status
+	}{
+		{
+			name: "valid_trailer",
 			metaHeaderFrame: &http2.MetaHeadersFrame{
 				Fields: []hpack.HeaderField{
 					{Name: "content-type", Value: "application/grpc"},
 					{Name: "grpc-status", Value: "0"},
-					{Name: ":status", Value: "504"},
+					{Name: ":status", Value: "200"},
 				},
 			},
-			wantStatus: status.New(
-				codes.Unavailable,
-				"unexpected HTTP status code received from server: 504 (Gateway Timeout)",
+			wantEndStreamStatus: status.New(codes.OK, ""),
+		},
+		{
+			name: "missing_content_type_in_grpc_mode",
+			metaHeaderFrame: &http2.MetaHeadersFrame{
+				Fields: []hpack.HeaderField{
+					{Name: "grpc-status", Value: "0"},
+					{Name: ":status", Value: "200"},
+				},
+			},
+			wantEndStreamStatus: status.New(codes.OK, ""),
+		},
+		{
+			name: "invalid_grpc_status",
+			metaHeaderFrame: &http2.MetaHeadersFrame{
+				Fields: []hpack.HeaderField{
+					{Name: "content-type", Value: "application/grpc"},
+					{Name: "grpc-status", Value: "xxxx"},
+					{Name: ":status", Value: "200"},
+				},
+			},
+			wantEndStreamStatus: status.New(
+				codes.Internal,
+				"transport: malformed grpc-status: strconv.ParseInt: parsing \"xxxx\": invalid syntax",
 			),
 		},
 		{
-			name: "missing http status",
+			name: "missing_grpc_status_in_grpc_mode",
+			metaHeaderFrame: &http2.MetaHeadersFrame{
+				Fields: []hpack.HeaderField{
+					{Name: ":status", Value: "xxxx"},
+				},
+			},
+			wantEndStreamStatus: status.New(codes.Internal, ""),
+		},
+		{
+			name: "http2_frame_size_exceeds",
+			metaHeaderFrame: &http2.MetaHeadersFrame{
+				Truncated: true,
+			},
+			wantEndStreamStatus: status.New(
+				codes.Internal,
+				"peer header list size exceeded limit",
+			),
+		},
+		{
+			name: "missing_grpc_status_in_trailer",
 			metaHeaderFrame: &http2.MetaHeadersFrame{
 				Fields: []hpack.HeaderField{
 					{Name: "content-type", Value: "application/grpc"},
 				},
 			},
-			wantStatus: status.New(
-				codes.Internal,
-				"malformed header: missing HTTP status",
-			),
+			wantEndStreamStatus: status.New(codes.Internal, ""),
 		},
-	} {
-
-		t.Run(test.name, func(t *testing.T) {
-			ts := testStream()
-			s := testClient(ts)
-
-			test.metaHeaderFrame.HeadersFrame = &http2.HeadersFrame{
-				FrameHeader: http2.FrameHeader{
-					StreamID: 0,
+		{
+			name: "deadline_exceeded_status",
+			metaHeaderFrame: &http2.MetaHeadersFrame{
+				Fields: []hpack.HeaderField{
+					{Name: "content-type", Value: "application/grpc"},
+					{Name: "grpc-status", Value: "4"},
+					{Name: "grpc-message", Value: "Request timed out: Internal error"},
+					{Name: ":status", Value: "200"},
 				},
-			}
+			},
+			wantEndStreamStatus: status.New(codes.DeadlineExceeded, "Request timed out: Internal error"),
+		},
+	}
 
-			s.operateHeaders(test.metaHeaderFrame)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cs := newTestClientStream()
+			// Mark headerChanClosed to indicate trailer frames.
+			cs.headerChanClosed = 1
+			// Simulate the state where the initial headers have already been processed.
+			s := newTestHTTP2Client(cs)
 
-			got := ts.status
-			want := test.wantStatus
-			if got.Code() != want.Code() || got.Message() != want.Message() {
-				t.Fatalf("operateHeaders(%v); status = \ngot: %s\nwant: %s", test.metaHeaderFrame, got, want)
-			}
-		})
-		t.Run(fmt.Sprintf("%s-end_stream", test.name), func(t *testing.T) {
-			ts := testStream()
-			s := testClient(ts)
-
-			test.metaHeaderFrame.HeadersFrame = &http2.HeadersFrame{
+			tc.metaHeaderFrame.HeadersFrame = &http2.HeadersFrame{
 				FrameHeader: http2.FrameHeader{
-					StreamID: 0,
+					StreamID: 1,
 					Flags:    http2.FlagHeadersEndStream,
 				},
 			}
 
-			s.operateHeaders(test.metaHeaderFrame)
-
-			got := ts.status
-			want := test.wantStatus
+			s.operateHeaders(tc.metaHeaderFrame)
+			got := cs.status
+			want := tc.wantEndStreamStatus
 			if got.Code() != want.Code() || got.Message() != want.Message() {
-				t.Fatalf("operateHeaders(%v); status = \ngot: %s\nwant: %s", test.metaHeaderFrame, got, want)
+				t.Errorf("operateHeaders(%v) got status %q, want %q", tc.metaHeaderFrame, got, want)
 			}
 		})
 	}
@@ -3071,21 +3163,25 @@ func (s) TestCloseSetsConnectionDeadlines(t *testing.T) {
 // number of bytes read for flow control is correct.
 func (s) TestReadMessageHeaderMultipleBuffers(t *testing.T) {
 	headerLen := 5
-	recvBuffer := newRecvBuffer()
-	recvBuffer.put(recvMsg{buffer: make(mem.SliceBuffer, 3)})
-	recvBuffer.put(recvMsg{buffer: make(mem.SliceBuffer, headerLen-3)})
 	bytesRead := 0
 	s := Stream{
-		requestRead: func(int) {},
-		trReader: &transportReader{
-			reader: &recvBufferReader{
-				recv: recvBuffer,
-			},
-			windowHandler: func(i int) {
+		readRequester: &fakeReadRequester{},
+	}
+	s.buf.init()
+	recvBuffer := &s.buf
+	s.trReader = transportReader{
+		reader: recvBufferReader{
+			recv: recvBuffer,
+		},
+		windowHandler: &mockWindowUpdater{
+			f: func(i int) {
 				bytesRead += i
 			},
 		},
 	}
+
+	recvBuffer.put(recvMsg{buffer: make(mem.SliceBuffer, 3)})
+	recvBuffer.put(recvMsg{buffer: make(mem.SliceBuffer, headerLen-3)})
 
 	header := make([]byte, headerLen)
 	err := s.ReadMessageHeader(header)
@@ -3189,8 +3285,8 @@ func (s) TestServerSendsRSTAfterDeadlineToMisbehavedClient(t *testing.T) {
 func (s) TestClientTransport_Handle1xxHeaders(t *testing.T) {
 	testStream := func() *ClientStream {
 		return &ClientStream{
-			Stream: &Stream{
-				buf: &recvBuffer{
+			Stream: Stream{
+				buf: recvBuffer{
 					c:  make(chan recvMsg),
 					mu: sync.Mutex{},
 				},
@@ -3261,4 +3357,140 @@ func (s) TestClientTransport_Handle1xxHeaders(t *testing.T) {
 			}
 		})
 	}
+}
+
+func (s) TestDeleteStreamMetricsIncrementedOnlyOnce(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	// Enable channelz for metrics collection
+	defer internal.ChannelzTurnOffForTesting()
+	if !channelz.IsOn() {
+		channelz.TurnOn()
+	}
+
+	for _, test := range []struct {
+		name                string
+		eosReceived         bool
+		wantStreamSucceeded int64
+		wantStreamFailed    int64
+	}{
+		{
+			name:                "StreamsSucceeded",
+			eosReceived:         true,
+			wantStreamSucceeded: 1,
+			wantStreamFailed:    0,
+		},
+		{
+			name:                "StreamsFailed",
+			eosReceived:         false,
+			wantStreamSucceeded: 0,
+			wantStreamFailed:    1,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			// Setup server configuration with channelz support
+			serverConfig := &ServerConfig{
+				ChannelzParent: channelz.RegisterServer(t.Name()),
+			}
+			defer channelz.RemoveEntry(serverConfig.ChannelzParent.ID)
+
+			// Create server and client with normal handler (not notifyCall)
+			server, client, cancel := setUpWithOptions(t, 0, serverConfig, normal, ConnectOptions{})
+			defer func() {
+				client.Close(fmt.Errorf("test cleanup"))
+				server.stop()
+				cancel()
+			}()
+
+			// Wait for connection to be established
+			waitWhileTrue(t, func() (bool, error) {
+				server.mu.Lock()
+				defer server.mu.Unlock()
+				if len(server.conns) == 0 {
+					return true, fmt.Errorf("timed-out while waiting for connection")
+				}
+				return false, nil
+			})
+
+			// Get the server transport
+			server.mu.Lock()
+			var serverTransport *http2Server
+			for st := range server.conns {
+				serverTransport = st.(*http2Server)
+				break
+			}
+			server.mu.Unlock()
+
+			if serverTransport == nil {
+				t.Fatal("Server transport not found")
+			}
+
+			clientStream, err := client.NewStream(ctx, &CallHdr{})
+			if err != nil {
+				t.Fatalf("Failed to create stream: %v", err)
+			}
+
+			// Wait for the stream to be created on the server side
+			var serverStream *ServerStream
+			waitWhileTrue(t, func() (bool, error) {
+				serverTransport.mu.Lock()
+				defer serverTransport.mu.Unlock()
+				for _, v := range serverTransport.activeStreams {
+					if v.id == clientStream.id {
+						serverStream = v
+						return false, nil
+					}
+				}
+				return true, nil
+			})
+
+			if serverStream == nil {
+				t.Fatalf("Server stream not found for client stream ID %d", clientStream.id)
+			}
+
+			// First call to closeStream should remove the stream from
+			// the activeStreams and update metrics. closeStream will also
+			// cancel the stream, stopping the deadline timer.
+			serverTransport.closeStream(serverStream, false, 0, test.eosReceived)
+
+			// Check metrics after first deleteStream call
+			streamsSucceeded := serverTransport.channelz.SocketMetrics.StreamsSucceeded.Load()
+			streamsFailed := serverTransport.channelz.SocketMetrics.StreamsFailed.Load()
+
+			if streamsSucceeded != test.wantStreamSucceeded {
+				t.Errorf("After first deleteStream - StreamsSucceeded: got %d, want %d", streamsSucceeded, test.wantStreamSucceeded)
+			}
+			if streamsFailed != test.wantStreamFailed {
+				t.Errorf("After first deleteStream - StreamsFailed: got %d, want %d", streamsFailed, test.wantStreamFailed)
+			}
+
+			// Additional calls to deleteStream should not change metrics (stream already deleted)
+			serverTransport.deleteStream(serverStream, test.eosReceived)
+			serverTransport.deleteStream(serverStream, test.eosReceived)
+
+			// Verify metrics haven't changed after subsequent calls
+			additionalStreamsSucceeded := serverTransport.channelz.SocketMetrics.StreamsSucceeded.Load()
+			additionalStreamsFailed := serverTransport.channelz.SocketMetrics.StreamsFailed.Load()
+
+			if additionalStreamsSucceeded != test.wantStreamSucceeded {
+				t.Errorf("After multiple deleteStream calls - StreamsSucceeded changed: got %d, want %d", additionalStreamsSucceeded, test.wantStreamSucceeded)
+			}
+			if additionalStreamsFailed != test.wantStreamFailed {
+				t.Errorf("After multiple deleteStream calls - StreamsFailed changed: got %d, want %d", additionalStreamsFailed, test.wantStreamFailed)
+			}
+		})
+	}
+}
+
+type fakeReadRequester struct {
+}
+
+func (f *fakeReadRequester) requestRead(int) {}
+
+type mockWindowUpdater struct {
+	f func(int)
+}
+
+func (m *mockWindowUpdater) updateWindow(n int) {
+	m.f(n)
 }

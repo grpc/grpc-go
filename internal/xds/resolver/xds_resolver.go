@@ -36,6 +36,7 @@ import (
 	rinternal "google.golang.org/grpc/internal/xds/resolver/internal"
 	"google.golang.org/grpc/internal/xds/xdsclient"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
+	xdsdepmgr "google.golang.org/grpc/internal/xds/xdsdependencymanager"
 	"google.golang.org/grpc/resolver"
 )
 
@@ -152,9 +153,8 @@ func (b *xdsResolverBuilder) Build(target resolver.Target, cc resolver.ClientCon
 	if err != nil {
 		return nil, err
 	}
-	r.dataplaneAuthority = opts.Authority
 	r.ldsResourceName = bootstrap.PopulateResourceTemplate(template, target.Endpoint())
-	r.listenerWatcher = newListenerWatcher(r.ldsResourceName, r)
+	r.dm = xdsdepmgr.New(r.ldsResourceName, opts.Authority, r.xdsClient, r)
 	return r, nil
 }
 
@@ -228,28 +228,16 @@ type xdsResolver struct {
 	serializer       *grpcsync.CallbackSerializer
 	serializerCancel context.CancelFunc
 
-	// dataplaneAuthority is the authority used for the data plane connections,
-	// which is also used to select the VirtualHost within the xDS
-	// RouteConfiguration.  This is %-encoded to match with VirtualHost Domain
-	// in xDS RouteConfiguration.
-	dataplaneAuthority string
-
-	ldsResourceName     string
-	listenerWatcher     *listenerWatcher
-	listenerUpdateRecvd bool
-	currentListener     xdsresource.ListenerUpdate
-
-	rdsResourceName        string
-	routeConfigWatcher     *routeConfigWatcher
-	routeConfigUpdateRecvd bool
-	currentRouteConfig     xdsresource.RouteConfigUpdate
-	currentVirtualHost     *xdsresource.VirtualHost // Matched virtual host for quick access.
+	ldsResourceName string
+	rdsResourceName string
 
 	// activeClusters is a map from cluster name to information about the
 	// cluster that includes a ref count and load balancing configuration.
 	activeClusters map[string]*clusterInfo
 
 	curConfigSelector stoppableConfigSelector
+
+	dm *xdsdepmgr.DependencyManager
 }
 
 // ResolveNow is a no-op at this point.
@@ -265,17 +253,46 @@ func (r *xdsResolver) Close() {
 	// Note that Close needs to check for nils even if some of them are always
 	// set in the constructor. This is because the constructor defers Close() in
 	// error cases, and the fields might not be set when the error happens.
-
-	if r.listenerWatcher != nil {
-		r.listenerWatcher.stop()
-	}
-	if r.routeConfigWatcher != nil {
-		r.routeConfigWatcher.stop()
+	if r.dm != nil {
+		r.dm.Close()
 	}
 	if r.xdsClientClose != nil {
 		r.xdsClientClose()
 	}
 	r.logger.Infof("Shutdown")
+}
+
+// OnUpdate is called when there is a new xDS config available from the dependency
+// manager and does the following:
+//   - creates a new config selector (this involves incrementing references to
+//     clusters owned by this config selector).
+//   - stops the old config selector (this involves decrementing references to
+//     clusters owned by this config selector).
+//   - prunes active clusters and pushes a new service config to the channel.
+//   - updates the current config selector used by the resolver.
+func (r *xdsResolver) OnUpdate(config *xdsresource.XDSConfig) {
+	r.serializer.TrySchedule(func(context.Context) {
+		r.rdsResourceName = config.Listener.RouteConfigName
+		cs := r.newConfigSelector(config)
+		if !r.sendNewServiceConfig(cs) {
+			// Channel didn't like the update we provided (unexpected); erase
+			// this config selector and ignore this update, continuing with
+			// the previous config selector.
+			cs.stop()
+			return
+		}
+
+		if r.curConfigSelector != nil {
+			r.curConfigSelector.stop()
+		}
+		r.curConfigSelector = cs
+	})
+
+}
+func (r *xdsResolver) OnError(err error) {
+	r.serializer.TrySchedule(func(context.Context) {
+		r.onResourceError(err)
+	})
 }
 
 // sendNewServiceConfig prunes active clusters, generates a new service config
@@ -328,7 +345,7 @@ func (r *xdsResolver) sendNewServiceConfig(cs stoppableConfigSelector) bool {
 // r.activeClusters for previously-unseen clusters.
 //
 // Only executed in the context of a serializer callback.
-func (r *xdsResolver) newConfigSelector() *configSelector {
+func (r *xdsResolver) newConfigSelector(config *xdsresource.XDSConfig) *configSelector {
 	cs := &configSelector{
 		channelID: r.channelID,
 		xdsNodeID: r.xdsClient.BootstrapConfig().Node().GetId(),
@@ -338,15 +355,15 @@ func (r *xdsResolver) newConfigSelector() *configSelector {
 			})
 		},
 		virtualHost: virtualHost{
-			httpFilterConfigOverride: r.currentVirtualHost.HTTPFilterConfigOverride,
-			retryConfig:              r.currentVirtualHost.RetryConfig,
+			httpFilterConfigOverride: config.VirtualHost.HTTPFilterConfigOverride,
+			retryConfig:              config.VirtualHost.RetryConfig,
 		},
-		routes:           make([]route, len(r.currentVirtualHost.Routes)),
+		routes:           make([]route, len(config.VirtualHost.Routes)),
 		clusters:         make(map[string]*clusterInfo),
-		httpFilterConfig: r.currentListener.HTTPFilters,
+		httpFilterConfig: config.Listener.HTTPFilters,
 	}
 
-	for i, rt := range r.currentVirtualHost.Routes {
+	for i, rt := range config.VirtualHost.Routes {
 		clusters := rinternal.NewWRR.(func() wrr.WRR)()
 		if rt.ClusterSpecifierPlugin != "" {
 			clusterName := clusterSpecifierPluginPrefix + rt.ClusterSpecifierPlugin
@@ -354,17 +371,17 @@ func (r *xdsResolver) newConfigSelector() *configSelector {
 				name: clusterName,
 			}, 1)
 			ci := r.addOrGetActiveClusterInfo(clusterName)
-			ci.cfg = xdsChildConfig{ChildPolicy: balancerConfig(r.currentRouteConfig.ClusterSpecifierPlugins[rt.ClusterSpecifierPlugin])}
+			ci.cfg = xdsChildConfig{ChildPolicy: balancerConfig(config.RouteConfig.ClusterSpecifierPlugins[rt.ClusterSpecifierPlugin])}
 			cs.clusters[clusterName] = ci
 		} else {
-			for cluster, wc := range rt.WeightedClusters {
-				clusterName := clusterPrefix + cluster
+			for _, wc := range rt.WeightedClusters {
+				clusterName := clusterPrefix + wc.Name
 				clusters.Add(&routeCluster{
 					name:                     clusterName,
 					httpFilterConfigOverride: wc.HTTPFilterConfigOverride,
 				}, int64(wc.Weight))
 				ci := r.addOrGetActiveClusterInfo(clusterName)
-				ci.cfg = xdsChildConfig{ChildPolicy: newBalancerConfig(cdsName, cdsBalancerConfig{Cluster: cluster})}
+				ci.cfg = xdsChildConfig{ChildPolicy: newBalancerConfig(cdsName, cdsBalancerConfig{Cluster: wc.Name})}
 				cs.clusters[clusterName] = ci
 			}
 		}
@@ -373,7 +390,7 @@ func (r *xdsResolver) newConfigSelector() *configSelector {
 		cs.routes[i].m = xdsresource.RouteToMatcher(rt)
 		cs.routes[i].actionType = rt.ActionType
 		if rt.MaxStreamDuration == nil {
-			cs.routes[i].maxStreamDuration = r.currentListener.MaxStreamDuration
+			cs.routes[i].maxStreamDuration = config.Listener.MaxStreamDuration
 		} else {
 			cs.routes[i].maxStreamDuration = *rt.MaxStreamDuration
 		}
@@ -422,70 +439,6 @@ type clusterInfo struct {
 	cfg xdsChildConfig
 }
 
-// Determines if the xdsResolver has received all required configuration, i.e
-// Listener and RouteConfiguration resources, from the management server, and
-// whether a matching virtual host was found in the RouteConfiguration resource.
-func (r *xdsResolver) resolutionComplete() bool {
-	return r.listenerUpdateRecvd && r.routeConfigUpdateRecvd && r.currentVirtualHost != nil
-}
-
-// onResolutionComplete performs the following actions when resolution is
-// complete, i.e Listener and RouteConfiguration resources have been received
-// from the management server and a matching virtual host is found in the
-// latter.
-//   - creates a new config selector (this involves incrementing references to
-//     clusters owned by this config selector).
-//   - stops the old config selector (this involves decrementing references to
-//     clusters owned by this config selector).
-//   - prunes active clusters and pushes a new service config to the channel.
-//   - updates the current config selector used by the resolver.
-//
-// Only executed in the context of a serializer callback.
-func (r *xdsResolver) onResolutionComplete() {
-	if !r.resolutionComplete() {
-		return
-	}
-
-	cs := r.newConfigSelector()
-	if !r.sendNewServiceConfig(cs) {
-		// Channel didn't like the update we provided (unexpected); erase
-		// this config selector and ignore this update, continuing with
-		// the previous config selector.
-		cs.stop()
-		return
-	}
-
-	if r.curConfigSelector != nil {
-		r.curConfigSelector.stop()
-	}
-	r.curConfigSelector = cs
-}
-
-func (r *xdsResolver) applyRouteConfigUpdate(update xdsresource.RouteConfigUpdate) {
-	matchVh := xdsresource.FindBestMatchingVirtualHost(r.dataplaneAuthority, update.VirtualHosts)
-	if matchVh == nil {
-		// TODO(purnesh42h): Should this be a resource or ambient error? Note
-		// that its being called only from resource update methods when we have
-		// finished removing the previous update.
-		r.onAmbientError(fmt.Errorf("no matching virtual host found for %q", r.dataplaneAuthority))
-		return
-	}
-	r.currentRouteConfig = update
-	r.currentVirtualHost = matchVh
-	r.routeConfigUpdateRecvd = true
-
-	r.onResolutionComplete()
-}
-
-// onAmbientError propagates the error up to the channel. And since this is
-// invoked only for non resource errors, we don't have to update resolver
-// state and we can keep using the old config.
-//
-// Only executed in the context of a serializer callback.
-func (r *xdsResolver) onAmbientError(err error) {
-	r.cc.ReportError(err)
-}
-
 // Contains common functionality to be executed when resources of either type
 // are removed.
 //
@@ -507,108 +460,4 @@ func (r *xdsResolver) onResourceError(err error) {
 		r.curConfigSelector.stop()
 	}
 	r.curConfigSelector = cs
-}
-
-// Only executed in the context of a serializer callback.
-func (r *xdsResolver) onListenerResourceUpdate(update xdsresource.ListenerUpdate) {
-	if r.logger.V(2) {
-		r.logger.Infof("Received update for Listener resource %q: %v", r.ldsResourceName, pretty.ToJSON(update))
-	}
-
-	r.currentListener = update
-	r.listenerUpdateRecvd = true
-
-	if update.InlineRouteConfig != nil {
-		// If there was a previous route config watcher because of a non-inline
-		// route configuration, cancel it.
-		r.rdsResourceName = ""
-		if r.routeConfigWatcher != nil {
-			r.routeConfigWatcher.stop()
-			r.routeConfigWatcher = nil
-		}
-
-		r.applyRouteConfigUpdate(*update.InlineRouteConfig)
-		return
-	}
-
-	// We get here only if there was no inline route configuration.
-
-	// If the route config name has not changed, send an update with existing
-	// route configuration and the newly received listener configuration.
-	if r.rdsResourceName == update.RouteConfigName {
-		r.onResolutionComplete()
-		return
-	}
-
-	// If the route config name has changed, cancel the old watcher and start a
-	// new one. At this point, since we have not yet resolved the new route
-	// config name, we don't send an update to the channel, and therefore
-	// continue using the old route configuration (if received) until the new
-	// one is received.
-	r.rdsResourceName = update.RouteConfigName
-	if r.routeConfigWatcher != nil {
-		r.routeConfigWatcher.stop()
-		r.currentVirtualHost = nil
-		r.routeConfigUpdateRecvd = false
-	}
-	r.routeConfigWatcher = newRouteConfigWatcher(r.rdsResourceName, r)
-}
-
-func (r *xdsResolver) onListenerResourceAmbientError(err error) {
-	if r.logger.V(2) {
-		r.logger.Infof("Received ambient error for Listener resource %q: %v", r.ldsResourceName, err)
-	}
-	r.onAmbientError(err)
-}
-
-// Only executed in the context of a serializer callback.
-func (r *xdsResolver) onListenerResourceError(err error) {
-	if r.logger.V(2) {
-		r.logger.Infof("Received resource error for Listener resource %q: %v", r.ldsResourceName, err)
-	}
-
-	r.listenerUpdateRecvd = false
-	if r.routeConfigWatcher != nil {
-		r.routeConfigWatcher.stop()
-	}
-	r.rdsResourceName = ""
-	r.currentVirtualHost = nil
-	r.routeConfigUpdateRecvd = false
-	r.routeConfigWatcher = nil
-
-	r.onResourceError(err)
-}
-
-// Only executed in the context of a serializer callback.
-func (r *xdsResolver) onRouteConfigResourceUpdate(name string, update xdsresource.RouteConfigUpdate) {
-	if r.logger.V(2) {
-		r.logger.Infof("Received update for RouteConfiguration resource %q: %v", name, pretty.ToJSON(update))
-	}
-
-	if r.rdsResourceName != name {
-		// Drop updates from canceled watchers.
-		return
-	}
-
-	r.applyRouteConfigUpdate(update)
-}
-
-// Only executed in the context of a serializer callback.
-func (r *xdsResolver) onRouteConfigResourceAmbientError(name string, err error) {
-	if r.logger.V(2) {
-		r.logger.Infof("Received ambient error for RouteConfiguration resource %q: %v", name, err)
-	}
-	r.onAmbientError(err)
-}
-
-// Only executed in the context of a serializer callback.
-func (r *xdsResolver) onRouteConfigResourceError(name string, err error) {
-	if r.logger.V(2) {
-		r.logger.Infof("Received resource error for RouteConfiguration resource %q: %v", name, err)
-	}
-
-	if r.rdsResourceName != name {
-		return
-	}
-	r.onResourceError(err)
 }

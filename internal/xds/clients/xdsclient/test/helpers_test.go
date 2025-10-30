@@ -173,12 +173,8 @@ type listenerDecoder struct{}
 
 // Decode deserializes and validates an xDS resource serialized inside the
 // provided `Any` proto, as received from the xDS management server.
-func (listenerDecoder) Decode(resource xdsclient.AnyProto, _ xdsclient.DecodeOptions) (*xdsclient.DecodeResult, error) {
-	rProto := &anypb.Any{
-		TypeUrl: resource.TypeURL,
-		Value:   resource.Value,
-	}
-	name, listener, err := unmarshalListenerResource(rProto)
+func (listenerDecoder) Decode(resource *xdsclient.AnyProto, _ xdsclient.DecodeOptions) (*xdsclient.DecodeResult, error) {
+	name, listener, err := unmarshalListenerResource(resource.ToAny())
 	switch {
 	case name == "":
 		// Name is unset only when protobuf deserialization fails.

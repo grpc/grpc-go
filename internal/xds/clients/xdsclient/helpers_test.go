@@ -45,9 +45,8 @@ func Test(t *testing.T) {
 }
 
 const (
-	defaultTestWatchExpiryTimeout = 100 * time.Millisecond
-	defaultTestTimeout            = 5 * time.Second
-	defaultTestShortTimeout       = 10 * time.Millisecond // For events expected to *not* happen.
+	defaultTestTimeout      = 5 * time.Second
+	defaultTestShortTimeout = 10 * time.Millisecond // For events expected to *not* happen.
 	// listenerResourceTypeName represents the transport agnostic name for the
 	// listener resource.
 	listenerResourceTypeName = "ListenerResource"
@@ -162,12 +161,8 @@ type listenerDecoder struct{}
 
 // Decode deserializes and validates an xDS resource serialized inside the
 // provided `Any` proto, as received from the xDS management server.
-func (listenerDecoder) Decode(resource AnyProto, _ DecodeOptions) (*DecodeResult, error) {
-	rProto := &anypb.Any{
-		TypeUrl: resource.TypeURL,
-		Value:   resource.Value,
-	}
-	name, listener, err := unmarshalListenerResource(rProto)
+func (listenerDecoder) Decode(resource *AnyProto, _ DecodeOptions) (*DecodeResult, error) {
+	name, listener, err := unmarshalListenerResource(resource.ToAny())
 	switch {
 	case name == "":
 		// Name is unset only when protobuf deserialization fails.

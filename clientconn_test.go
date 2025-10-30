@@ -37,7 +37,6 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	internalbackoff "google.golang.org/grpc/internal/backoff"
-	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/transport"
@@ -426,10 +425,7 @@ func (s) TestWithTransportCredentialsTLS(t *testing.T) {
 // per "round" of attempts) for old pickfirst and once per address for new pickfirst.
 func (s) TestNewClient_BackoffCountPerRetryGroup(t *testing.T) {
 	var attempts uint32
-	wantBackoffs := uint32(1)
-	if envconfig.NewPickFirstEnabled {
-		wantBackoffs = 2
-	}
+	wantBackoffs := uint32(2)
 	getMinConnectTimeout := func() time.Duration {
 		if atomic.AddUint32(&attempts, 1) <= wantBackoffs {
 			// Once all addresses are exhausted, hang around and wait for the

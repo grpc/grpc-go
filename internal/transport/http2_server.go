@@ -35,6 +35,8 @@ import (
 
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
+	"google.golang.org/protobuf/proto"
+
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcutil"
@@ -42,7 +44,6 @@ import (
 	istatus "google.golang.org/grpc/internal/status"
 	"google.golang.org/grpc/internal/syscall"
 	"google.golang.org/grpc/mem"
-	"google.golang.org/protobuf/proto"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
@@ -86,7 +87,7 @@ type http2Server struct {
 	// updates, reset streams, and various settings) to the controller.
 	controlBuf *controlBuffer
 	fc         *trInFlow
-	stats      []stats.Handler
+	stats      stats.Handler
 	// Keepalive and max-age parameters for the server.
 	kp keepalive.ServerParameters
 	// Keepalive enforcement policy.
@@ -260,7 +261,7 @@ func NewServerTransport(conn net.Conn, config *ServerConfig) (_ ServerTransport,
 		fc:                &trInFlow{limit: uint32(icwz)},
 		state:             reachable,
 		activeStreams:     make(map[uint32]*ServerStream),
-		stats:             config.StatsHandlers,
+		stats:             config.StatsHandler,
 		kp:                kp,
 		idle:              time.Now(),
 		kep:               kep,
@@ -390,16 +391,15 @@ func (t *http2Server) operateHeaders(ctx context.Context, frame *http2.MetaHeade
 	}
 	t.maxStreamID = streamID
 
-	buf := newRecvBuffer()
 	s := &ServerStream{
-		Stream: &Stream{
-			id:  streamID,
-			buf: buf,
-			fc:  &inFlow{limit: uint32(t.initialWindowSize)},
+		Stream: Stream{
+			id: streamID,
+			fc: inFlow{limit: uint32(t.initialWindowSize)},
 		},
 		st:               t,
 		headerWireLength: int(frame.Header().Length),
 	}
+	s.Stream.buf.init()
 	var (
 		// if false, content-type was missing or invalid
 		isGRPC      = false
@@ -640,25 +640,21 @@ func (t *http2Server) operateHeaders(ctx context.Context, frame *http2.MetaHeade
 		t.channelz.SocketMetrics.StreamsStarted.Add(1)
 		t.channelz.SocketMetrics.LastRemoteStreamCreatedTimestamp.Store(time.Now().UnixNano())
 	}
-	s.requestRead = func(n int) {
-		t.adjustWindow(s, uint32(n))
-	}
+	s.readRequester = s
 	s.ctxDone = s.ctx.Done()
-	s.wq = newWriteQuota(defaultWriteQuota, s.ctxDone)
-	s.trReader = &transportReader{
-		reader: &recvBufferReader{
+	s.Stream.wq.init(defaultWriteQuota, s.ctxDone)
+	s.trReader = transportReader{
+		reader: recvBufferReader{
 			ctx:     s.ctx,
 			ctxDone: s.ctxDone,
-			recv:    s.buf,
+			recv:    &s.buf,
 		},
-		windowHandler: func(n int) {
-			t.updateWindow(s, uint32(n))
-		},
+		windowHandler: s,
 	}
 	// Register the stream with loopy.
 	t.controlBuf.put(&registerStream{
 		streamID: s.id,
-		wq:       s.wq,
+		wq:       &s.wq,
 	})
 	handle(s)
 	return nil
@@ -1059,14 +1055,13 @@ func (t *http2Server) writeHeaderLocked(s *ServerStream) error {
 		t.closeStream(s, true, http2.ErrCodeInternal, false)
 		return ErrHeaderListSizeLimitViolation
 	}
-	for _, sh := range t.stats {
+	if t.stats != nil {
 		// Note: Headers are compressed with hpack after this call returns.
 		// No WireLength field is set here.
-		outHeader := &stats.OutHeader{
+		t.stats.HandleRPC(s.Context(), &stats.OutHeader{
 			Header:      s.header.Copy(),
 			Compression: s.sendCompress,
-		}
-		sh.HandleRPC(s.Context(), outHeader)
+		})
 	}
 	return nil
 }
@@ -1134,10 +1129,10 @@ func (t *http2Server) writeStatus(s *ServerStream, st *status.Status) error {
 	// Send a RST_STREAM after the trailers if the client has not already half-closed.
 	rst := s.getState() == streamActive
 	t.finishStream(s, rst, http2.ErrCodeNo, trailingHeader, true)
-	for _, sh := range t.stats {
+	if t.stats != nil {
 		// Note: The trailer fields are compressed with hpack after this call returns.
 		// No WireLength field is set here.
-		sh.HandleRPC(s.Context(), &stats.OutTrailer{
+		t.stats.HandleRPC(s.Context(), &stats.OutTrailer{
 			Trailer: s.trailer.Copy(),
 		})
 	}
@@ -1305,7 +1300,8 @@ func (t *http2Server) Close(err error) {
 // deleteStream deletes the stream s from transport's active streams.
 func (t *http2Server) deleteStream(s *ServerStream, eosReceived bool) {
 	t.mu.Lock()
-	if _, ok := t.activeStreams[s.id]; ok {
+	_, isActive := t.activeStreams[s.id]
+	if isActive {
 		delete(t.activeStreams, s.id)
 		if len(t.activeStreams) == 0 {
 			t.idle = time.Now()
@@ -1313,7 +1309,7 @@ func (t *http2Server) deleteStream(s *ServerStream, eosReceived bool) {
 	}
 	t.mu.Unlock()
 
-	if channelz.IsOn() {
+	if isActive && channelz.IsOn() {
 		if eosReceived {
 			t.channelz.SocketMetrics.StreamsSucceeded.Add(1)
 		} else {

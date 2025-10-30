@@ -36,10 +36,7 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
-const (
-	targetTestAddr = "test.com"
-	envProxyAddr   = "proxytest.com"
-)
+const targetTestAddr = "test.com"
 
 // overrideHTTPSProxyFromEnvironment function overwrites HTTPSProxyFromEnvironment and
 // returns a function to restore the default values.

@@ -1,16 +1,21 @@
 # Authentication
 
-As outlined in the [gRPC authentication guide](https://grpc.io/docs/guides/auth.html) there are a number of different mechanisms for asserting identity between a client and server. We'll present some code-samples here demonstrating how to provide TLS support encryption and identity assertions as well as passing OAuth2 tokens to services that support it.
+As outlined in the
+[gRPC authentication guide](https://grpc.io/docs/guides/auth.html), there are a
+number of different mechanisms for asserting identity between a client and
+server. We'll present some code-samples here demonstrating how to provide TLS
+support encryption and identity assertions as well as passing OAuth2 tokens to
+services that support it.
 
-# Enabling TLS on a gRPC client
+## Enabling TLS on a gRPC client
 
-```Go
+```go
 conn, err := grpc.NewClient(serverAddr, grpc.WithTransportCredentials(credentials.NewClientTLSFromCert(nil, "")))
 ```
 
-# Enabling TLS on a gRPC server
+## Enabling TLS on a gRPC server
 
-```Go
+```go
 creds, err := credentials.NewServerTLSFromFile(certFile, keyFile)
 if err != nil {
   log.Fatalf("Failed to generate credentials %v", err)
@@ -21,19 +26,19 @@ server := grpc.NewServer(grpc.Creds(creds))
 server.Serve(lis)
 ```
 
-# OAuth2
+## OAuth2
 
 For an example of how to configure client and server to use OAuth2 tokens, see
 [here](https://github.com/grpc/grpc-go/tree/master/examples/features/authentication).
 
-## Validating a token on the server
+### Validating a token on the server
 
 Clients may use
-[metadata.MD](https://godoc.org/google.golang.org/grpc/metadata#MD)
-to store tokens and other authentication-related data. To gain access to the
+[metadata.MD](https://godoc.org/google.golang.org/grpc/metadata#MD) to store
+tokens and other authentication-related data. To gain access to the
 `metadata.MD` object, a server may use
 [metadata.FromIncomingContext](https://godoc.org/google.golang.org/grpc/metadata#FromIncomingContext).
-With a reference to `metadata.MD` on the server, one needs to simply lookup the
+With a reference to `metadata.MD` on the server, one needs to simply look up the
 `authorization` key. Note, all keys stored within `metadata.MD` are normalized
 to lowercase. See [here](https://godoc.org/google.golang.org/grpc/metadata#New).
 
@@ -43,7 +48,7 @@ A server may configure either a
 or a
 [grpc.StreamInterceptor](https://godoc.org/google.golang.org/grpc#StreamInterceptor).
 
-## Adding a token to all outgoing client RPCs
+### Adding a token to all outgoing client RPCs
 
 To send an OAuth2 token with each RPC, a client may configure the
 `grpc.DialOption`
@@ -54,25 +59,25 @@ on each invocation of an RPC.
 
 To create a `credentials.PerRPCCredentials`, use
 [oauth.TokenSource](https://godoc.org/google.golang.org/grpc/credentials/oauth#TokenSource).
-Note, the OAuth2 implementation of `grpc.PerRPCCredentials` requires a client to use
+Note, the OAuth2 implementation of `grpc.PerRPCCredentials` requires a client to
+use
 [grpc.WithTransportCredentials](https://godoc.org/google.golang.org/grpc#WithTransportCredentials)
 to prevent any insecure transmission of tokens.
 
-# Authenticating with Google
+## Authenticating with Google
 
-## Google Compute Engine (GCE)
+### Google Compute Engine (GCE)
 
-```Go
+```go
 conn, err := grpc.NewClient(serverAddr, grpc.WithTransportCredentials(credentials.NewClientTLSFromCert(nil, "")), grpc.WithPerRPCCredentials(oauth.NewComputeEngine()))
 ```
 
-## JWT
+### JWT
 
-```Go
+```go
 jwtCreds, err := oauth.NewServiceAccountFromFile(*serviceAccountKeyFile, *oauthScope)
 if err != nil {
   log.Fatalf("Failed to create JWT credentials: %v", err)
 }
 conn, err := grpc.NewClient(serverAddr, grpc.WithTransportCredentials(credentials.NewClientTLSFromCert(nil, "")), grpc.WithPerRPCCredentials(jwtCreds))
 ```
-

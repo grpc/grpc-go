@@ -20,21 +20,27 @@ package clusterimpl_test
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"net"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/balancer/pickfirst"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/internal/balancer/stub"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
@@ -42,6 +48,8 @@ import (
 	"google.golang.org/grpc/internal/testutils/xds/fakeserver"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/resolver/manual"
+	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/durationpb"
@@ -905,5 +913,393 @@ func (s) TestLRSLogicalDNS(t *testing.T) {
 	// Wait for load to be reported for locality of server 1.
 	if err := waitForSuccessfulLoadReport(ctx, mgmtServer.LRSServer, ""); err != nil {
 		t.Fatalf("Server did not receive load due to error: %v", err)
+	}
+}
+
+// TestReResolution verifies that when a SubConn turns transient failure,
+// re-resolution is triggered.
+func (s) TestReResolutionAfterTransientFailure(t *testing.T) {
+	// Create an xDS management server.
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
+	defer mgmtServer.Stop()
+
+	// Create bootstrap configuration pointing to the above management server.
+	nodeID := uuid.New().String()
+	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
+	testutils.CreateBootstrapFileForTesting(t, bc)
+
+	// Create an xDS resolver with the above bootstrap configuration.
+	if internal.NewXDSResolverWithConfigForTesting == nil {
+		t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
+	}
+	resolverBuilder, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
+	if err != nil {
+		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
+	}
+
+	// Create a restartable listener to simulate server being down.
+	l, err := testutils.LocalTCPListener()
+	if err != nil {
+		t.Fatalf("testutils.LocalTCPListener() failed: %v", err)
+	}
+	lis := testutils.NewRestartableListener(l)
+	server := stubserver.StartTestService(t, &stubserver.StubServer{
+		Listener:   lis,
+		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) { return &testpb.Empty{}, nil },
+	})
+	defer server.Stop()
+	host, port := hostAndPortFromAddress(t, server.Address)
+
+	const (
+		listenerName = "test-listener"
+		routeName    = "test-route"
+		clusterName  = "test-aggregate-cluster"
+		dnsCluster   = "logical-dns-cluster"
+	)
+
+	// Configure xDS resources.
+	ldnsCluster := e2e.ClusterResourceWithOptions(e2e.ClusterOptions{
+		Type:        e2e.ClusterTypeLogicalDNS,
+		ClusterName: dnsCluster,
+		DNSHostName: host,
+		DNSPort:     port,
+	})
+	cluster := e2e.ClusterResourceWithOptions(e2e.ClusterOptions{
+		ClusterName: clusterName,
+		Type:        e2e.ClusterTypeAggregate,
+		ChildNames:  []string{dnsCluster},
+	})
+	updateOpts := e2e.UpdateOptions{
+		NodeID:    nodeID,
+		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(listenerName, routeName)},
+		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeName, listenerName, clusterName)},
+		Clusters:  []*v3clusterpb.Cluster{cluster, ldnsCluster},
+		Endpoints: nil,
+	}
+
+	// Replace DNS resolver with a wrapped resolver to capture ResolveNow calls.
+	resolveNowCh := make(chan struct{}, 1)
+	dnsR := manual.NewBuilderWithScheme("dns")
+	dnsResolverBuilder := resolver.Get("dns")
+	resolver.Register(dnsR)
+	defer resolver.Register(dnsResolverBuilder)
+	dnsR.ResolveNowCallback = func(resolver.ResolveNowOptions) {
+		close(resolveNowCh)
+	}
+	dnsR.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: fmt.Sprintf("%s:%d", host, port)}}})
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := mgmtServer.Update(ctx, updateOpts); err != nil {
+		t.Fatalf("Failed to update xDS resources: %v", err)
+	}
+
+	conn, err := grpc.NewClient(fmt.Sprintf("xds:///%s", listenerName), grpc.WithResolvers(resolverBuilder), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("Failed to create client: %v", err)
+	}
+	defer conn.Close()
+
+	client := testgrpc.NewTestServiceClient(conn)
+
+	// Verify initial RPC routes correctly to backend.
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+		t.Fatalf("client.EmptyCall() failed: %v", err)
+	}
+
+	// Stopping the server listener will close the transport on the client,
+	// which will lead to the channel eventually moving to IDLE.
+	lis.Stop()
+	testutils.AwaitState(ctx, t, conn, connectivity.Idle)
+
+	// An RPC at this point is expected to fail with TRANSIENT_FAILURE.
+	if _, err = client.EmptyCall(ctx, &testpb.Empty{}); status.Code(err) != codes.Unavailable {
+		t.Fatalf("EmptyCall RPC succeeded when the channel is in TRANSIENT_FAILURE, got %v want %v", err, codes.Unavailable)
+	}
+
+	// Expect resolver's ResolveNow to be called due to TF state.
+	select {
+	case <-resolveNowCh:
+	case <-ctx.Done():
+		t.Fatalf("Timed out waiting for ResolveNow call after TransientFailure")
+	}
+
+	// Restart the listener and expected to reconnect on its own and come out
+	// of TRANSIENT_FAILURE, even without an RPC attempt.
+	lis.Restart()
+	testutils.AwaitState(ctx, t, conn, connectivity.Ready)
+
+	// An RPC at this point is expected to succeed.
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+		t.Fatalf("client.EmptyCall() failed: %v", err)
+	}
+}
+
+// TestUpdateLRSServerToNil verifies that updating the cluster's LRS server
+// config from 'Self' to nil correctly closes the LRS stream and ensures no
+// more LRS reports are sent.
+func (s) TestUpdateLRSServerToNil(t *testing.T) {
+	// Create an xDS management server that serves ADS and LRS requests.
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{SupportLoadReportingService: true})
+	defer mgmtServer.Stop()
+
+	// Create bootstrap configuration pointing to the above management server.
+	nodeID := uuid.New().String()
+	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
+	testutils.CreateBootstrapFileForTesting(t, bc)
+
+	// Create an xDS resolver with the above bootstrap configuration.
+	if internal.NewXDSResolverWithConfigForTesting == nil {
+		t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
+	}
+	resolverBuilder, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
+	if err != nil {
+		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
+	}
+
+	// Start a server backend exposing the test service.
+	server := stubserver.StartTestService(t, nil)
+	defer server.Stop()
+
+	// Configure the xDS management server with default resources.
+	const serviceName = "my-test-xds-service"
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		DialTarget: serviceName,
+		NodeID:     nodeID,
+		Host:       "localhost",
+		Port:       testutils.ParsePort(t, server.Address),
+		SecLevel:   e2e.SecurityLevelNone,
+	})
+	resources.Clusters[0].LrsServer = &v3corepb.ConfigSource{
+		ConfigSourceSpecifier: &v3corepb.ConfigSource_Self{
+			Self: &v3corepb.SelfConfigSource{},
+		},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a ClientConn and make a successful RPC.
+	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(resolverBuilder))
+	if err != nil {
+		t.Fatalf("Failed to dial local test server: %v", err)
+	}
+	defer cc.Close()
+
+	client := testgrpc.NewTestServiceClient(cc)
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+		t.Fatalf("client.EmptyCall() failed: %v", err)
+	}
+
+	// Ensure that an LRS stream is created.
+	if _, err := mgmtServer.LRSServer.LRSStreamOpenChan.Receive(ctx); err != nil {
+		t.Fatalf("Error waiting for initial LRS stream open: %v", err)
+	}
+	if _, err := mgmtServer.LRSServer.LRSRequestChan.Receive(ctx); err != nil {
+		t.Fatalf("Error waiting for initial LRS report: %v", err)
+	}
+
+	// Update LRS Server to nil
+	resources.Clusters[0].LrsServer = nil
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Ensure that the old LRS stream is closed.
+	if _, err := mgmtServer.LRSServer.LRSStreamCloseChan.Receive(ctx); err != nil {
+		t.Fatalf("Error waiting for initial LRS stream close : %v", err)
+	}
+
+	// Also ensure that a new LRS stream is not created.
+	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
+	defer sCancel()
+	if _, err := mgmtServer.LRSServer.LRSRequestChan.Receive(sCtx); err != context.DeadlineExceeded {
+		t.Fatalf("Expected no LRS reports after disable, got %v want %v", err, context.DeadlineExceeded)
+	}
+}
+
+// Test verifies that child policy was updated on receipt of
+// configuration update.
+func (s) TestChildPolicyChangeOnConfigUpdate(t *testing.T) {
+	// Create an xDS management server.
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
+	defer mgmtServer.Stop()
+
+	// Create bootstrap configuration pointing to the above management server.
+	nodeID := uuid.New().String()
+	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
+	testutils.CreateBootstrapFileForTesting(t, bc)
+
+	// Create an xDS resolver with the above bootstrap configuration.
+	if internal.NewXDSResolverWithConfigForTesting == nil {
+		t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
+	}
+	resolverBuilder, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
+	if err != nil {
+		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
+	}
+
+	// Start a server backend exposing the test service.
+	server := stubserver.StartTestService(t, nil)
+	defer server.Stop()
+
+	const serviceName = "test-child-policy"
+
+	// Configure the xDS management server with default resources. Cluster
+	// corresponding to this resource will be configured with "round_robin"
+	// as the endpoint picking policy
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		DialTarget: serviceName,
+		NodeID:     nodeID,
+		Host:       "localhost",
+		Port:       testutils.ParsePort(t, server.Address),
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatalf("Failed to update xDS resources: %v", err)
+	}
+
+	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithResolvers(resolverBuilder), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("Failed to create client: %v", err)
+	}
+	defer cc.Close()
+
+	client := testgrpc.NewTestServiceClient(cc)
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+		t.Fatalf("client.EmptyCall() failed: %v", err)
+	}
+
+	// Register stub pickfirst LB policy so that we can catch config changes.
+	pfBuilder := balancer.Get(pickfirst.Name)
+	internal.BalancerUnregister(pfBuilder.Name())
+	lbCfgCh := make(chan serviceconfig.LoadBalancingConfig, 1)
+	var updatedChildPolicy atomic.Pointer[string]
+	stub.Register(pfBuilder.Name(), stub.BalancerFuncs{
+		ParseConfig: func(lbCfg json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
+			return pfBuilder.(balancer.ConfigParser).ParseConfig(lbCfg)
+		},
+		Init: func(bd *stub.BalancerData) {
+			bd.ChildBalancer = pfBuilder.Build(bd.ClientConn, bd.BuildOptions)
+		},
+		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
+			name := pfBuilder.Name()
+			updatedChildPolicy.Store(&name)
+			select {
+			case lbCfgCh <- ccs.BalancerConfig:
+			case <-ctx.Done():
+				t.Error("Timed out while waiting for BalancerConfig, context deadline exceeded")
+			}
+			return bd.ChildBalancer.UpdateClientConnState(ccs)
+		},
+		Close: func(bd *stub.BalancerData) {
+			bd.ChildBalancer.Close()
+		},
+	})
+	defer balancer.Register(pfBuilder)
+
+	// Now update the cluster to use "pick_first" as the endpoint picking policy.
+	resources.Clusters[0].LoadBalancingPolicy = &v3clusterpb.LoadBalancingPolicy{
+		Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{{
+			TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
+				TypedConfig: testutils.MarshalAny(t, &v3pickfirstpb.PickFirst{}),
+			},
+		}},
+	}
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	select {
+	case <-ctx.Done():
+		t.Fatalf("Timeout waiting for pickfirst child policy config")
+	case <-lbCfgCh:
+	}
+
+	if p := updatedChildPolicy.Load(); p == nil || *p != pfBuilder.Name() {
+		var got string
+		if p != nil {
+			got = *p
+		}
+		t.Fatalf("Unexpected child policy after config update, got %q, want %q", got, pfBuilder.Name())
+	}
+
+	// New RPC should still be routed successfully
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+		t.Errorf("EmptyCall() failed after policy update: %v", err)
+	}
+}
+
+// Test verifies that config update fails if child policy config
+// failed to parse.
+func (s) TestFailedToParseChildPolicyConfig(t *testing.T) {
+	// Create an xDS management server.
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
+	defer mgmtServer.Stop()
+
+	// Create bootstrap configuration pointing to the above management server.
+	nodeID := uuid.New().String()
+	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
+	testutils.CreateBootstrapFileForTesting(t, bc)
+
+	// Create an xDS resolver with the above bootstrap configuration.
+	if internal.NewXDSResolverWithConfigForTesting == nil {
+		t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
+	}
+	resolverBuilder, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
+	if err != nil {
+		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
+	}
+
+	// Start a server backend exposing the test service.
+	server := stubserver.StartTestService(t, nil)
+	defer server.Stop()
+
+	const serviceName = "test-child-policy"
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		DialTarget: serviceName,
+		NodeID:     nodeID,
+		Host:       "localhost",
+		Port:       testutils.ParsePort(t, server.Address),
+	})
+	resources.Clusters[0].LoadBalancingPolicy = &v3clusterpb.LoadBalancingPolicy{
+		Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{{
+			TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
+				TypedConfig: testutils.MarshalAny(t, &v3pickfirstpb.PickFirst{}),
+			},
+		}},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatalf("Failed to update xDS resources: %v", err)
+	}
+
+	// Register stub pickfirst LB policy so that we can catch parsing errors.
+	pfBuilder := balancer.Get(pickfirst.Name)
+	internal.BalancerUnregister(pfBuilder.Name())
+	const parseConfigError = "failed to parse config"
+	stub.Register(pfBuilder.Name(), stub.BalancerFuncs{
+		ParseConfig: func(_ json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
+			return nil, errors.New(parseConfigError)
+		},
+	})
+	defer balancer.Register(pfBuilder)
+
+	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithResolvers(resolverBuilder), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("Failed to create client: %v", err)
+	}
+	defer cc.Close()
+
+	client := testgrpc.NewTestServiceClient(cc)
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err == nil || !strings.Contains(err.Error(), parseConfigError) {
+		t.Fatal("EmptyCall RPC succeeded when expected to fail")
 	}
 }

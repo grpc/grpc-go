@@ -44,7 +44,7 @@ import (
 
 type noopClusterWatcher struct{}
 
-func (noopClusterWatcher) ResourceChanged(_ *xdsresource.ClusterResourceData, onDone func()) {
+func (noopClusterWatcher) ResourceChanged(_ *xdsresource.ClusterUpdate, onDone func()) {
 	onDone()
 }
 func (noopClusterWatcher) ResourceError(_ error, onDone func()) {
@@ -67,8 +67,8 @@ func newClusterWatcher() *clusterWatcher {
 	return &clusterWatcher{updateCh: testutils.NewChannel()}
 }
 
-func (cw *clusterWatcher) ResourceChanged(update *xdsresource.ClusterResourceData, onDone func()) {
-	cw.updateCh.Send(clusterUpdateErrTuple{update: update.Resource})
+func (cw *clusterWatcher) ResourceChanged(update *xdsresource.ClusterUpdate, onDone func()) {
+	cw.updateCh.Send(clusterUpdateErrTuple{update: *update})
 	onDone()
 }
 
