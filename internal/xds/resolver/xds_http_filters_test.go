@@ -68,7 +68,7 @@ const (
 type testFilterCfg struct {
 	httpfilter.FilterConfig
 	path         string
-	newStreamErr error
+	newStreamErr string
 }
 
 // filterConfigFromProto parses filter config specified as a v3.TypedStruct into
@@ -87,11 +87,7 @@ func filterConfigFromProto(cfg proto.Message) (httpfilter.FilterConfig, error) {
 		ret.path = v.GetStringValue()
 	}
 	if v := ts.GetValue().GetFields()[filterCfgErrorFieldName]; v != nil {
-		if v.GetStringValue() == "" {
-			ret.newStreamErr = nil
-		} else {
-			ret.newStreamErr = fmt.Errorf("%s", v.GetStringValue())
-		}
+		ret.newStreamErr = v.GetStringValue()
 	}
 	return ret, nil
 }
@@ -126,13 +122,15 @@ func (*testHTTPFilterWithRPCMetadata) ParseFilterConfigOverride(override proto.M
 
 func (*testHTTPFilterWithRPCMetadata) IsTerminal() bool { return false }
 
+// ClientInterceptorBuilder is an optional interface for filters to implement.
+// This compile time check ensures the test filter implements it.
 var _ httpfilter.ClientInterceptorBuilder = &testHTTPFilterWithRPCMetadata{}
 
 func (fb *testHTTPFilterWithRPCMetadata) BuildClientInterceptor(config, override httpfilter.FilterConfig) (iresolver.ClientInterceptor, error) {
 	fb.logger.Logf("BuildClientInterceptor called with config: %+v, override: %+v", config, override)
 
 	if config == nil {
-		panic("unexpected missing config")
+		return nil, fmt.Errorf("unexpected missing config")
 	}
 
 	baseCfg := config.(testFilterCfg)
@@ -143,13 +141,9 @@ func (fb *testHTTPFilterWithRPCMetadata) BuildClientInterceptor(config, override
 	if override != nil {
 		overrideCfg := override.(testFilterCfg)
 		overridePath = overrideCfg.path
-		if overrideCfg.newStreamErr != nil {
+		if overrideCfg.newStreamErr != "" {
 			newStreamErr = overrideCfg.newStreamErr
 		}
-	}
-	var errStr string
-	if newStreamErr != nil {
-		errStr = newStreamErr.Error()
 	}
 
 	return &testFilterInterceptor{
@@ -157,7 +151,7 @@ func (fb *testHTTPFilterWithRPCMetadata) BuildClientInterceptor(config, override
 		cfg: overallFilterConfig{
 			BasePath:     basePath,
 			OverridePath: overridePath,
-			Error:        errStr,
+			Error:        newStreamErr,
 		},
 		newStreamChan: fb.newStreamChan,
 	}, nil
@@ -200,20 +194,7 @@ func (fi *testFilterInterceptor) NewStream(ctx context.Context, _ iresolver.RPCI
 	cfg := string(bytes)
 	fi.logger.Logf("Injecting filter config metadata: %v", cfg)
 
-	cs, err := newStream(metadata.AppendToOutgoingContext(ctx, filterCfgMetadataKey, fmt.Sprintf("%v", cfg)), done)
-	if err != nil {
-		return nil, err
-	}
-	return &clientStream{ClientStream: cs, ctx: ctx}, nil
-}
-
-type clientStream struct {
-	iresolver.ClientStream
-	ctx context.Context
-}
-
-func (cs *clientStream) Context() context.Context {
-	return cs.ctx
+	return newStream(metadata.AppendToOutgoingContext(ctx, filterCfgMetadataKey, fmt.Sprintf("%v", cfg)), done)
 }
 
 func newHTTPFilter(t *testing.T, name, typeURL, path, err string) *v3httppb.HttpFilter {
