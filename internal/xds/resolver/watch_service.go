@@ -68,9 +68,9 @@ func newRouteConfigWatcher(resourceName string, parent *xdsResolver) *routeConfi
 	return rw
 }
 
-func (r *routeConfigWatcher) ResourceChanged(u *xdsresource.RouteConfigResourceData, onDone func()) {
+func (r *routeConfigWatcher) ResourceChanged(u *xdsresource.RouteConfigUpdate, onDone func()) {
 	handleUpdate := func(context.Context) {
-		r.parent.onRouteConfigResourceUpdate(r.resourceName, u.Resource)
+		r.parent.onRouteConfigResourceUpdate(r.resourceName, u)
 		onDone()
 	}
 	r.parent.serializer.ScheduleOr(handleUpdate, onDone)
