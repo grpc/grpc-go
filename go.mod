@@ -4,9 +4,9 @@ go 1.24.0
 
 require (
 	github.com/cespare/xxhash/v2 v2.3.0
-	github.com/cncf/xds/go v0.0.0-20250501225837-2ac532fd4443
+	github.com/cncf/xds/go v0.0.0-20251014123835-2ee22ca58382
 	github.com/envoyproxy/go-control-plane v0.13.4
-	github.com/envoyproxy/go-control-plane/envoy v1.32.4
+	github.com/envoyproxy/go-control-plane/envoy v1.35.0
 	github.com/golang/glog v1.2.5
 	github.com/golang/protobuf v1.5.4
 	github.com/google/go-cmp v0.7.0
@@ -18,29 +18,28 @@ require (
 	go.opentelemetry.io/otel/sdk v1.38.0
 	go.opentelemetry.io/otel/sdk/metric v1.38.0
 	go.opentelemetry.io/otel/trace v1.38.0
-	golang.org/x/net v0.44.0
-	golang.org/x/oauth2 v0.31.0
+	golang.org/x/net v0.46.0
+	golang.org/x/oauth2 v0.32.0
 	golang.org/x/sync v0.17.0
-	golang.org/x/sys v0.36.0
+	golang.org/x/sys v0.37.0
 	gonum.org/v1/gonum v0.16.0
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20250908214217-97024824d090
-	google.golang.org/protobuf v1.36.9
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20251014184007-4626949a642f
+	google.golang.org/protobuf v1.36.10
 )
 
 require (
 	cel.dev/expr v0.24.0 // indirect
-	cloud.google.com/go/compute/metadata v0.8.2 // indirect
-	github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.29.0 // indirect
+	cloud.google.com/go/compute/metadata v0.9.0 // indirect
+	github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.30.0 // indirect
 	github.com/envoyproxy/go-control-plane/ratelimit v0.1.0 // indirect
 	github.com/envoyproxy/protoc-gen-validate v1.2.1 // indirect
-	github.com/go-jose/go-jose/v4 v4.1.2 // indirect
+	github.com/go-jose/go-jose/v4 v4.1.3 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/planetscale/vtprotobuf v0.6.1-0.20240319094008-0393e58bdf10 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
-	golang.org/x/crypto v0.42.0 // indirect
-	golang.org/x/text v0.29.0 // indirect
-	google.golang.org/genproto/googleapis/api v0.0.0-20250908214217-97024824d090 // indirect
+	golang.org/x/text v0.30.0 // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20251014184007-4626949a642f // indirect
 )
 
 // v1.74.0 was published prematurely with known issues.

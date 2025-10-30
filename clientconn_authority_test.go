@@ -109,9 +109,9 @@ func (s) TestClientConnAuthority(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			cc, err := Dial(test.target, test.opts...)
+			cc, err := NewClient(test.target, test.opts...)
 			if err != nil {
-				t.Fatalf("Dial(%q) failed: %v", test.target, err)
+				t.Fatalf("NewClient(%q) failed: %v", test.target, err)
 			}
 			defer cc.Close()
 			if cc.authority != test.wantAuthority {
@@ -130,6 +130,6 @@ func (s) TestClientConnAuthority_CredsAndDialOptionMismatch(t *testing.T) {
 	opts := []DialOption{WithTransportCredentials(creds), WithAuthority("authority-override")}
 	if cc, err := NewClient("Non-Existent.Server:8000", opts...); err == nil {
 		cc.Close()
-		t.Fatal("grpc.NewClient() succeeded when expected to fail")
+		t.Fatal("NewClient() succeeded when expected to fail")
 	}
 }
