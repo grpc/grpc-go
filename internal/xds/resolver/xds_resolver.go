@@ -448,7 +448,9 @@ func (r *xdsResolver) onResolutionComplete() {
 
 	cs, err := r.newConfigSelector()
 	if err != nil {
+		// Send an erroring config selector in this case that fails RPCs.
 		r.onResourceError(fmt.Errorf("xds: failed to create config selector: %v", err))
+		return
 	}
 	if !r.sendNewServiceConfig(cs) {
 		// Channel didn't like the update we provided (unexpected); erase
