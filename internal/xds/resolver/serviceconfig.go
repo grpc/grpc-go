@@ -343,7 +343,7 @@ func newInterceptor(filters []xdsresource.HTTPFilter, clusterOverride, routeOver
 		ib, ok := filter.Filter.(httpfilter.ClientInterceptorBuilder)
 		if !ok {
 			// Should not happen if it passed xdsClient validation.
-			panic(fmt.Sprintf("filter %q does not support use in client", filter.Name))
+			return nil, fmt.Errorf("filter %q does not support use in client", filter.Name)
 		}
 		i, err := ib.BuildClientInterceptor(filter.Config, override)
 		if err != nil {
