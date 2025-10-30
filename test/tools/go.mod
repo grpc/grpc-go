@@ -24,7 +24,7 @@ require (
 	golang.org/x/mod v0.29.0 // indirect
 	golang.org/x/sync v0.17.0 // indirect
 	golang.org/x/sys v0.37.0 // indirect
-	golang.org/x/telemetry v0.0.0-20251022145735-5be28d707443 // indirect
+	golang.org/x/telemetry v0.0.0-20251028164327-d7a2859f34e8 // indirect
 	golang.org/x/text v0.30.0 // indirect
 	golang.org/x/tools/go/expect v0.1.1-deprecated // indirect
 )
