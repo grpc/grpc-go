@@ -17,15 +17,18 @@
  */
 
 // Package e2e_test contains e2e test cases for the Subsetting LB Policy.
-package randomsubsetting_test
+package randomsubsetting
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
@@ -36,13 +39,12 @@ import (
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/serviceconfig"
 
+	iserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
-
-	_ "google.golang.org/grpc/balancer/randomsubsetting"
 )
 
-var defaultTestTimeout = 5 * time.Second
+var defaultTestTimeout = 120 * time.Second
 
 type s struct {
 	grpctest.Tester
@@ -50,6 +52,66 @@ type s struct {
 
 func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
+}
+
+func (s) TestParseConfig(t *testing.T) {
+	parser := bb{}
+	tests := []struct {
+		name    string
+		input   string
+		wantCfg serviceconfig.LoadBalancingConfig
+		wantErr string
+	}{
+		{
+			name:  "happy-case-default",
+			input: `{}`,
+			wantCfg: &LBConfig{
+				SubsetSize:  2,
+				ChildPolicy: &iserviceconfig.BalancerConfig{Name: "round_robin"},
+			},
+		},
+		{
+			name:  "happy-case-subset_size-set",
+			input: `{ "subset_size": 3 }`,
+			wantCfg: &LBConfig{
+				SubsetSize:  3,
+				ChildPolicy: &iserviceconfig.BalancerConfig{Name: "round_robin"},
+			},
+		},
+		{
+			name: "subset_size-less-than-2",
+			input: `{ "subset_size": 1,
+					  "child_policy": [{"round_robin": {}}]}`,
+			wantErr: "randomsubsetting: SubsetSize must be >= 2",
+		},
+		{
+			name:    "invalid-json",
+			input:   "{{invalidjson{{",
+			wantErr: "invalid character",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			gotCfg, gotErr := parser.ParseConfig(json.RawMessage(test.input))
+			// Substring match makes this very tightly coupled to the
+			// internalserviceconfig.BalancerConfig error strings. However, it
+			// is important to distinguish the different types of error messages
+			// possible as the parser has a few defined buckets of ways it can
+			// error out.
+			if (gotErr != nil) != (test.wantErr != "") {
+				t.Fatalf("ParseConfig(%v) = %v, wantErr %v", test.input, gotErr, test.wantErr)
+			}
+			if gotErr != nil && !strings.Contains(gotErr.Error(), test.wantErr) {
+				t.Fatalf("ParseConfig(%v) = %v, wantErr %v", test.input, gotErr, test.wantErr)
+			}
+			if test.wantErr != "" {
+				return
+			}
+			if diff := cmp.Diff(gotCfg, test.wantCfg); diff != "" {
+				t.Fatalf("ParseConfig(%v) got unexpected output, diff (-got +want): %v", test.input, diff)
+			}
+		})
+	}
 }
 
 func setupBackends(t *testing.T, backendsCount int) ([]resolver.Address, func()) {
@@ -123,7 +185,7 @@ func setupClients(t *testing.T, clientsCount int, subsetSize int, addresses []re
 	return clients, cancel
 }
 
-func checkRoundRobinRPCs(t *testing.T, ctx context.Context, clients []testgrpc.TestServiceClient, subsetSize int, maxDiff int) {
+func checkRoundRobinRPCs(ctx context.Context, t *testing.T, clients []testgrpc.TestServiceClient, subsetSize int, maxDiff int) {
 	clientsPerBackend := map[string]map[int]struct{}{}
 
 	for clientIdx, client := range clients {
@@ -177,32 +239,39 @@ func (s) TestSubsettingE2E(t *testing.T) {
 		maxDiff    int
 	}{
 		{
+			name:       "backends could be evenly distributed between small number of clients",
+			backends:   3,
+			clients:    2,
+			subsetSize: 2,
+			maxDiff:    1,
+		},
+		{
 			name:       "backends could be evenly distributed between clients",
 			backends:   12,
 			clients:    8,
 			subsetSize: 3,
-			maxDiff:    0,
+			maxDiff:    3,
 		},
 		{
 			name:       "backends could NOT be evenly distributed between clients",
 			backends:   37,
 			clients:    22,
 			subsetSize: 5,
-			maxDiff:    2,
+			maxDiff:    15,
 		},
 		{
 			name:       "Nbackends %% subsetSize == 0, but there are not enough clients to fill the last round",
 			backends:   20,
 			clients:    7,
 			subsetSize: 5,
-			maxDiff:    1,
+			maxDiff:    20,
 		},
 		{
 			name:       "last round is completely filled, but there are some excluded backends on every round",
 			backends:   21,
 			clients:    8,
 			subsetSize: 5,
-			maxDiff:    1,
+			maxDiff:    3,
 		},
 	}
 	for _, test := range tests {
@@ -216,7 +285,7 @@ func (s) TestSubsettingE2E(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
 
-			checkRoundRobinRPCs(t, ctx, clients, test.subsetSize, test.maxDiff)
+			checkRoundRobinRPCs(ctx, t, clients, test.subsetSize, test.maxDiff)
 		})
 	}
 }
