@@ -33,7 +33,7 @@ type BufferPool interface {
 
 	// Put returns a buffer to the pool.
 	//
-	// The returned pointer must hold a prefix of the buffer obtained via [Get]
+	// The provided pointer must hold a prefix of the buffer obtained via [Get]
 	// to ensure the buffer's entire capacity can be re-used.
 	Put(*[]byte)
 }
