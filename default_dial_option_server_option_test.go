@@ -29,12 +29,12 @@ import (
 )
 
 func (s) TestAddGlobalDialOptions(t *testing.T) {
-	// Ensure the Dial fails without credentials
-	if _, err := Dial("fake"); err == nil {
-		t.Fatalf("Dialing without a credential did not fail")
+	// Ensure the NewClient fails without credentials
+	if _, err := NewClient("fake"); err == nil {
+		t.Fatalf("NewClient without a credential did not fail")
 	} else {
 		if !strings.Contains(err.Error(), "no transport security set") {
-			t.Fatalf("Dialing failed with unexpected error: %v", err)
+			t.Fatalf("NewClient failed with unexpected error: %v", err)
 		}
 	}
 
@@ -48,9 +48,9 @@ func (s) TestAddGlobalDialOptions(t *testing.T) {
 		}
 	}
 
-	// Ensure the Dial passes with the extra dial options
-	if cc, err := Dial("fake"); err != nil {
-		t.Fatalf("Dialing with insecure credential failed: %v", err)
+	// Ensure the NewClient passes with the extra dial options
+	if cc, err := NewClient("fake"); err != nil {
+		t.Fatalf("NewClient with insecure credential failed: %v", err)
 	} else {
 		cc.Close()
 	}
@@ -71,8 +71,8 @@ func (s) TestDisableGlobalOptions(t *testing.T) {
 	// due to the global dial options with credentials not being picked up due
 	// to global options being disabled.
 	noTSecStr := "no transport security set"
-	if _, err := Dial("fake", internal.DisableGlobalDialOptions.(func() DialOption)()); !strings.Contains(fmt.Sprint(err), noTSecStr) {
-		t.Fatalf("Dialing received unexpected error: %v, want error containing \"%v\"", err, noTSecStr)
+	if _, err := NewClient("fake", internal.DisableGlobalDialOptions.(func() DialOption)()); !strings.Contains(fmt.Sprint(err), noTSecStr) {
+		t.Fatalf("NewClient received unexpected error: %v, want error containing %q", err, noTSecStr)
 	}
 }
 
@@ -95,11 +95,11 @@ func (s) TestGlobalPerTargetDialOption(t *testing.T) {
 	defer internal.ClearGlobalPerTargetDialOptions()
 	noTSecStr := "no transport security set"
 	if _, err := NewClient("dns:///fake"); !strings.Contains(fmt.Sprint(err), noTSecStr) {
-		t.Fatalf("Dialing received unexpected error: %v, want error containing \"%v\"", err, noTSecStr)
+		t.Fatalf("NewClient received unexpected error: %v, want error containing %q", err, noTSecStr)
 	}
 	cc, err := NewClient("passthrough:///nice")
 	if err != nil {
-		t.Fatalf("Dialing with insecure credentials failed: %v", err)
+		t.Fatalf("NewClient with insecure credentials failed: %v", err)
 	}
 	cc.Close()
 }
@@ -135,9 +135,9 @@ func (s) TestJoinDialOption(t *testing.T) {
 	const maxRecvSize = 998765
 	const initialWindowSize = 100
 	jdo := newJoinDialOption(WithTransportCredentials(insecure.NewCredentials()), WithReadBufferSize(maxRecvSize), WithInitialWindowSize(initialWindowSize))
-	cc, err := Dial("fake", jdo)
+	cc, err := NewClient("fake", jdo)
 	if err != nil {
-		t.Fatalf("Dialing with insecure credentials failed: %v", err)
+		t.Fatalf("NewClient with insecure credentials failed: %v", err)
 	}
 	defer cc.Close()
 	if cc.dopts.copts.ReadBufferSize != maxRecvSize {

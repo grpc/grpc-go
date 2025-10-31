@@ -27,7 +27,7 @@ import (
 	_ "google.golang.org/grpc" // to register pick_first
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/endpointsharding"
-	"google.golang.org/grpc/balancer/pickfirst/pickfirstleaf"
+	"google.golang.org/grpc/balancer/pickfirst"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/serviceconfig"
 )
@@ -68,7 +68,7 @@ func (customRoundRobinBuilder) Build(cc balancer.ClientConn, bOpts balancer.Buil
 		ClientConn: cc,
 		bOpts:      bOpts,
 	}
-	crr.Balancer = endpointsharding.NewBalancer(crr, bOpts, balancer.Get(pickfirstleaf.Name).Build, endpointsharding.Options{})
+	crr.Balancer = endpointsharding.NewBalancer(crr, bOpts, balancer.Get(pickfirst.Name).Build, endpointsharding.Options{})
 	return crr
 }
 

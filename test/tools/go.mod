@@ -20,11 +20,11 @@ require (
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mgechev/dots v1.0.0 // indirect
 	github.com/spf13/afero v1.15.0 // indirect
-	golang.org/x/exp/typeparams v0.0.0-20251009144603-d2f985daa21b // indirect
+	golang.org/x/exp/typeparams v0.0.0-20251023183803-a4bb9ffd2546 // indirect
 	golang.org/x/mod v0.29.0 // indirect
 	golang.org/x/sync v0.17.0 // indirect
 	golang.org/x/sys v0.37.0 // indirect
-	golang.org/x/telemetry v0.0.0-20251014153721-24f779f6aaef // indirect
+	golang.org/x/telemetry v0.0.0-20251028164327-d7a2859f34e8 // indirect
 	golang.org/x/text v0.30.0 // indirect
 	golang.org/x/tools/go/expect v0.1.1-deprecated // indirect
 )

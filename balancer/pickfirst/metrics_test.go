@@ -16,7 +16,7 @@
  *
  */
 
-package pickfirstleaf_test
+package pickfirst_test
 
 import (
 	"context"
@@ -24,7 +24,7 @@ import (
 	"testing"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/balancer/pickfirst/pickfirstleaf"
+	"google.golang.org/grpc/balancer/pickfirst"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
@@ -54,7 +54,7 @@ func init() {
       		}
     	}
   	]
-	}`, pickfirstleaf.Name)
+	}`, pickfirst.Name)
 }
 
 // TestPickFirstMetrics tests pick first metrics. It configures a pick first

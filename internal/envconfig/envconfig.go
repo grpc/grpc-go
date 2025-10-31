@@ -52,12 +52,6 @@ var (
 	// or "false".
 	EnforceALPNEnabled = boolFromEnv("GRPC_ENFORCE_ALPN_ENABLED", true)
 
-	// NewPickFirstEnabled is set if the new pickfirst leaf policy is to be used
-	// instead of the exiting pickfirst implementation. This can be disabled by
-	// setting the environment variable "GRPC_EXPERIMENTAL_ENABLE_NEW_PICK_FIRST"
-	// to "false".
-	NewPickFirstEnabled = boolFromEnv("GRPC_EXPERIMENTAL_ENABLE_NEW_PICK_FIRST", true)
-
 	// XDSEndpointHashKeyBackwardCompat controls the parsing of the endpoint hash
 	// key from EDS LbEndpoint metadata. Endpoint hash keys can be disabled by
 	// setting "GRPC_XDS_ENDPOINT_HASH_KEY_BACKWARD_COMPAT" to "true". When the
