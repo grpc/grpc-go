@@ -486,10 +486,9 @@ func (f *framer) readDataFrame(fh http2.FrameHeader) (err error) {
 		f.errDetail = errors.New("DATA frame with stream ID 0")
 		return http2.ConnectionError(http2.ErrCodeProtocol)
 	}
-	// Converting a *[]byte to a mem.BufferSlice incurs a heap allocation. This
+	// Converting a *[]byte to a mem.SliceBuffer incurs a heap allocation. This
 	// conversion is performed by mem.NewBuffer. To avoid the extra allocation
-	// a []byte is allocated directly if required and casted to a
-	// mem.BufferSlice.
+	// a []byte is allocated directly if required and cast to a mem.SliceBuffer.
 	var buf []byte
 	// poolHandle is the pointer returned by the buffer pool (if it's used.).
 	var poolHandle *[]byte
