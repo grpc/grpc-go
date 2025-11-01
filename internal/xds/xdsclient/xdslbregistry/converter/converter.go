@@ -168,6 +168,16 @@ func convertWeightedRoundRobinProtoToServiceConfig(rawProto []byte, _ int) (json
 		wrrLBCfg.ErrorUtilizationPenalty = float64(errorUtilizationPenaltyCfg.GetValue())
 	}
 
+	if slowStartConfigCfg := cswrrProto.GetSlowStartConfig(); slowStartConfigCfg != nil {
+		wrrLBCfg.SlowStartConfig = &weightedroundrobin.SlowStartConfig{
+			SlowStartWindow: internalserviceconfig.Duration(slowStartConfigCfg.GetSlowStartWindow().AsDuration()),
+			// SlowStartConfig uses a runtime value in the proto definition so we need to get either the default value or the runtime value
+			// but since we dont have runtime support we always use the default value.
+			Aggression:       float64(slowStartConfigCfg.GetAggression().GetDefaultValue()),
+			MinWeightPercent: float64(slowStartConfigCfg.GetMinWeightPercent().GetValue()),
+		}
+	}
+
 	lbCfgJSON, err := json.Marshal(wrrLBCfg)
 	if err != nil {
 		return nil, fmt.Errorf("error marshaling JSON for type %T: %v", wrrLBCfg, err)
@@ -239,12 +249,13 @@ func convertCustomPolicy(typeURL string, s *structpb.Struct) (json.RawMessage, e
 }
 
 type wrrLBConfig struct {
-	EnableOOBLoadReport     bool                           `json:"enableOobLoadReport,omitempty"`
-	OOBReportingPeriod      internalserviceconfig.Duration `json:"oobReportingPeriod,omitempty"`
-	BlackoutPeriod          internalserviceconfig.Duration `json:"blackoutPeriod,omitempty"`
-	WeightExpirationPeriod  internalserviceconfig.Duration `json:"weightExpirationPeriod,omitempty"`
-	WeightUpdatePeriod      internalserviceconfig.Duration `json:"weightUpdatePeriod,omitempty"`
-	ErrorUtilizationPenalty float64                        `json:"errorUtilizationPenalty,omitempty"`
+	EnableOOBLoadReport     bool                                `json:"enableOobLoadReport,omitempty"`
+	OOBReportingPeriod      internalserviceconfig.Duration      `json:"oobReportingPeriod,omitempty"`
+	BlackoutPeriod          internalserviceconfig.Duration      `json:"blackoutPeriod,omitempty"`
+	WeightExpirationPeriod  internalserviceconfig.Duration      `json:"weightExpirationPeriod,omitempty"`
+	WeightUpdatePeriod      internalserviceconfig.Duration      `json:"weightUpdatePeriod,omitempty"`
+	ErrorUtilizationPenalty float64                             `json:"errorUtilizationPenalty,omitempty"`
+	SlowStartConfig         *weightedroundrobin.SlowStartConfig `json:"slowStartConfig,omitempty"`
 }
 
 func makeBalancerConfigJSON(name string, value json.RawMessage) []byte {

@@ -31,12 +31,19 @@ var AllowAnyWeightUpdatePeriod bool
 // LBConfig allows tests to produce a JSON form of the config from the struct
 // instead of using a string.
 type LBConfig struct {
-	EnableOOBLoadReport     *bool    `json:"enableOobLoadReport,omitempty"`
-	OOBReportingPeriod      *string  `json:"oobReportingPeriod,omitempty"`
-	BlackoutPeriod          *string  `json:"blackoutPeriod,omitempty"`
-	WeightExpirationPeriod  *string  `json:"weightExpirationPeriod,omitempty"`
-	WeightUpdatePeriod      *string  `json:"weightUpdatePeriod,omitempty"`
-	ErrorUtilizationPenalty *float64 `json:"errorUtilizationPenalty,omitempty"`
+	EnableOOBLoadReport     *bool            `json:"enableOobLoadReport,omitempty"`
+	OOBReportingPeriod      *string          `json:"oobReportingPeriod,omitempty"`
+	BlackoutPeriod          *string          `json:"blackoutPeriod,omitempty"`
+	WeightExpirationPeriod  *string          `json:"weightExpirationPeriod,omitempty"`
+	WeightUpdatePeriod      *string          `json:"weightUpdatePeriod,omitempty"`
+	ErrorUtilizationPenalty *float64         `json:"errorUtilizationPenalty,omitempty"`
+	SlowStartConfig         *SlowStartConfig `json:"slowStartConfig,omitempty"`
+}
+
+type SlowStartConfig struct {
+	SlowStartWindow  *string  `json:"slowStartWindow,omitempty"`
+	Aggression       *float64 `json:"aggression,omitempty"`
+	MinWeightPercent *float64 `json:"minWeightPercent,omitempty"`
 }
 
 // TimeNow can be overridden by tests to return a different value for the

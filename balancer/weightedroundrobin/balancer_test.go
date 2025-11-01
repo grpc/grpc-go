@@ -72,7 +72,20 @@ var (
 		BlackoutPeriod:          stringp("0s"),
 		WeightExpirationPeriod:  stringp("60s"),
 		WeightUpdatePeriod:      stringp(".050s"),
+		ErrorUtilizationPenalty: float64p(0.),
+	}
+	perCallConfigWithSlowStart = iwrr.LBConfig{
+		EnableOOBLoadReport:     boolp(false),
+		OOBReportingPeriod:      stringp("0.005s"),
+		BlackoutPeriod:          stringp("0s"),
+		WeightExpirationPeriod:  stringp("60s"),
+		WeightUpdatePeriod:      stringp(".050s"),
 		ErrorUtilizationPenalty: float64p(0),
+		SlowStartConfig: &iwrr.SlowStartConfig{
+			SlowStartWindow:  stringp("30s"),
+			Aggression:       float64p(1.0),
+			MinWeightPercent: float64p(10.0),
+		},
 	}
 	oobConfig = iwrr.LBConfig{
 		EnableOOBLoadReport:     boolp(true),
@@ -80,7 +93,20 @@ var (
 		BlackoutPeriod:          stringp("0s"),
 		WeightExpirationPeriod:  stringp("60s"),
 		WeightUpdatePeriod:      stringp(".050s"),
-		ErrorUtilizationPenalty: float64p(0),
+		ErrorUtilizationPenalty: float64p(0.),
+	}
+	oobConfigWithSlowStart = iwrr.LBConfig{
+		EnableOOBLoadReport:     boolp(true),
+		OOBReportingPeriod:      stringp("0.005s"),
+		BlackoutPeriod:          stringp("0s"),
+		WeightExpirationPeriod:  stringp("60s"),
+		WeightUpdatePeriod:      stringp(".050s"),
+		ErrorUtilizationPenalty: float64p(0.),
+		SlowStartConfig: &iwrr.SlowStartConfig{
+			SlowStartWindow:  stringp("30s"),
+			Aggression:       float64p(1.0),
+			MinWeightPercent: float64p(10.0),
+		},
 	}
 	testMetricsConfig = iwrr.LBConfig{
 		EnableOOBLoadReport:     boolp(false),
@@ -88,7 +114,7 @@ var (
 		BlackoutPeriod:          stringp("0s"),
 		WeightExpirationPeriod:  stringp("60s"),
 		WeightUpdatePeriod:      stringp("30s"),
-		ErrorUtilizationPenalty: float64p(0),
+		ErrorUtilizationPenalty: float64p(0.0),
 	}
 )
 
@@ -176,8 +202,11 @@ func (s) TestBalancer_OneAddress(t *testing.T) {
 		cfg iwrr.LBConfig
 	}{
 		{rt: reportNone, cfg: perCallConfig},
+		{rt: reportCall, cfg: perCallConfigWithSlowStart},
 		{rt: reportCall, cfg: perCallConfig},
+		{rt: reportCall, cfg: perCallConfigWithSlowStart},
 		{rt: reportOOB, cfg: oobConfig},
+		{rt: reportOOB, cfg: oobConfigWithSlowStart},
 	}
 
 	for _, tc := range testCases {
@@ -652,6 +681,66 @@ func (s) TestBalancer_TwoAddresses_BlackoutPeriod(t *testing.T) {
 	}
 }
 
+func (s) TestBalancer_SlowStart(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	srv1 := startServer(t, reportBoth)
+	srv2 := startServer(t, reportBoth)
+	srv3 := startServer(t, reportBoth)
+
+	// srv1, srv2, srv3 all start loaded equally.
+	srv1.oobMetrics.SetQPS(10.0)
+	srv1.oobMetrics.SetApplicationUtilization(1.0)
+
+	srv2.oobMetrics.SetQPS(10.0)
+	srv2.oobMetrics.SetApplicationUtilization(1.0)
+
+	srv3.oobMetrics.SetQPS(10.0)
+	srv3.oobMetrics.SetApplicationUtilization(1.0)
+
+	slowStartPeriod := 2 * time.Second
+	slowStartConfig := &iwrr.SlowStartConfig{
+		SlowStartWindow:  stringp("2s"),
+		Aggression:       float64p(1.0),
+		MinWeightPercent: float64p(10.0),
+	}
+	cfg := oobConfig
+	cfg.BlackoutPeriod = stringp("0.1s")
+	cfg.SlowStartConfig = slowStartConfig
+	sc := svcConfig(t, cfg)
+
+	if err := srv1.StartClient(grpc.WithDefaultServiceConfig(sc)); err != nil {
+		t.Fatalf("Error starting client: %v", err)
+	}
+
+	addrs := []resolver.Address{{Addr: srv1.Address}, {Addr: srv2.Address}}
+	srv1.R.UpdateState(resolver.State{Addresses: addrs})
+
+	// Call each backend once to ensure the weights have been received.
+	ensureReached(ctx, t, srv1.Client, 2)
+	time.Sleep(slowStartPeriod + weightUpdatePeriod)
+	checkWeights(ctx, t, srvWeight{srv1, 10}, srvWeight{srv2, 10})
+
+	// Add backend 3
+	addrs = append(addrs, resolver.Address{Addr: srv3.Address})
+	srv1.R.UpdateState(resolver.State{Addresses: addrs})
+	ensureReached(ctx, t, srv1.Client, 3)
+
+	// validate that srv3 is in slow start
+	time.Sleep(weightUpdatePeriod)
+	checkWeights(ctx, t, srvWeight{srv1, 10}, srvWeight{srv2, 10}, srvWeight{srv3, 5})
+
+	// validate that srv3 exits slow start
+	time.Sleep(slowStartPeriod + weightUpdatePeriod)
+	checkWeights(ctx, t, srvWeight{srv1, 10}, srvWeight{srv2, 10}, srvWeight{srv3, 10})
+	fmt.Printf("Test log ---------------------> End\n")
+	if srv1.CC != nil {
+		srv1.CC.Close()
+		time.Sleep(weightUpdatePeriod) // Wait for cleanup
+	}
+}
+
 // Tests that the weight expiration period causes backends to use 0 as their
 // weight (meaning to use the average weight) once the expiration period
 // elapses.
@@ -789,7 +878,9 @@ func (s) TestBalancer_AddressesChanging(t *testing.T) {
 func ensureReached(ctx context.Context, t *testing.T, c testgrpc.TestServiceClient, n int) {
 	t.Helper()
 	reached := make(map[string]struct{})
+	i := 0
 	for len(reached) != n {
+		i++
 		var peer peer.Peer
 		if _, err := c.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(&peer)); err != nil {
 			t.Fatalf("Error from EmptyCall: %v", err)

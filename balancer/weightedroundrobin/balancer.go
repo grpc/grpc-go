@@ -30,6 +30,7 @@ package weightedroundrobin
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	rand "math/rand/v2"
 	"sync"
 	"sync/atomic"
@@ -91,6 +92,15 @@ var (
 		OptionalLabels: []string{"grpc.lb.locality"},
 		Default:        false,
 	})
+
+	endpointsInSlowStartMetric = estats.RegisterInt64Count(estats.MetricDescriptor{
+		Name:           "grpc.lb.wrr.endpoints_in_slow_start",
+		Description:    "EXPERIMENTAL. Number of endpoints currently in the slow start period. This is incremented when a new scheduler is created.",
+		Unit:           "{endpoint}",
+		Labels:         []string{"grpc.target"},
+		OptionalLabels: []string{"grpc.lb.locality"},
+		Default:        false,
+	})
 )
 
 func init() {
@@ -130,6 +140,28 @@ func (bb) ParseConfig(js json.RawMessage) (serviceconfig.LoadBalancingConfig, er
 
 	if lbCfg.ErrorUtilizationPenalty < 0 {
 		return nil, fmt.Errorf("wrr: errorUtilizationPenalty must be non-negative")
+	}
+
+	// Validate slow start configuration if provided
+	if lbCfg.SlowStartConfig != nil {
+		ssc := lbCfg.SlowStartConfig
+		if ssc.Aggression != 0 && ssc.Aggression <= 0 {
+			return nil, fmt.Errorf("wrr: slowStartConfig.aggression must be greater than 0.0")
+		}
+		if ssc.MinWeightPercent != 0 && (ssc.MinWeightPercent < 0 || ssc.MinWeightPercent > 100) {
+			return nil, fmt.Errorf("wrr: slowStartConfig.minWeightPercent must be in range [0.0, 100.0]")
+		}
+		if ssc.SlowStartWindow != 0 && ssc.SlowStartWindow <= 0 {
+			return nil, fmt.Errorf("wrr: slowStartConfig.slowStartWindow must be greater than 0")
+		}
+
+		// Set defaults for slow start config
+		if ssc.Aggression == 0 {
+			ssc.Aggression = 1.0
+		}
+		if ssc.MinWeightPercent == 0 {
+			ssc.MinWeightPercent = 10.0
+		}
 	}
 
 	// For easier comparisons later, ensure the OOB reporting period is unset
@@ -361,6 +393,7 @@ func (b *wrrBalancer) updateSubConnState(sc balancer.SubConn, state balancer.Sub
 		ew.mu.Lock()
 		ew.nonEmptySince = time.Time{}
 		ew.lastUpdated = time.Time{}
+		ew.readySince = internal.TimeNow() // Set readySince for slow start period
 		cfg := ew.cfg
 		ew.mu.Unlock()
 		ew.updateORCAListener(cfg)
@@ -380,6 +413,9 @@ func (b *wrrBalancer) updateSubConnState(sc balancer.SubConn, state balancer.Sub
 		if ew.stopORCAListener != nil {
 			ew.stopORCAListener()
 		}
+		ew.mu.Lock()
+		ew.readySince = time.Time{} // Reset readySince when going non-READY
+		ew.mu.Unlock()
 		ew.pickedSC = nil
 	}
 }
@@ -427,7 +463,9 @@ func (p *picker) endpointWeights(recordMetrics bool) []float64 {
 	wp := make([]float64, len(p.weightedPickers))
 	now := internal.TimeNow()
 	for i, wpi := range p.weightedPickers {
-		wp[i] = wpi.weightedEndpoint.weight(now, time.Duration(p.cfg.WeightExpirationPeriod), time.Duration(p.cfg.BlackoutPeriod), recordMetrics)
+		baseWeight := wpi.weightedEndpoint.weight(now, time.Duration(p.cfg.WeightExpirationPeriod), time.Duration(p.cfg.BlackoutPeriod), recordMetrics)
+		slowStartScale := wpi.weightedEndpoint.slowStartScale(now, recordMetrics)
+		wp[i] = baseWeight * slowStartScale
 	}
 	return wp
 }
@@ -519,6 +557,7 @@ type endpointWeight struct {
 	weightVal     float64
 	nonEmptySince time.Time
 	lastUpdated   time.Time
+	readySince    time.Time // Time when endpoint transitioned to ready state (for slow start period)
 	cfg           *lbConfig
 }
 
@@ -633,4 +672,38 @@ func (w *endpointWeight) weight(now time.Time, weightExpirationPeriod, blackoutP
 	}
 
 	return w.weightVal
+}
+
+// slowStartScale returns the scaling factor for slow start.
+// Returns 1.0 if slow start is not configured or endpoint is outside slow start window.
+func (w *endpointWeight) slowStartScale(now time.Time, recordMetrics bool) float64 {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	// No config, slow start config, or readySince not set
+	if w.cfg == nil || w.cfg.SlowStartConfig == nil || w.readySince.Equal(time.Time{}) {
+		return 1.0
+	}
+
+	if recordMetrics {
+		defer func() {
+			endpointsInSlowStartMetric.Record(w.metricsRecorder, 1, w.target, w.locality)
+		}()
+	}
+
+	ssc := w.cfg.SlowStartConfig
+	slowStartWindow := time.Duration(ssc.SlowStartWindow)
+	timeSinceReady := now.Sub(w.readySince)
+	// Outside slow start window
+	if timeSinceReady >= slowStartWindow {
+		return 1.0
+	}
+
+	// Calculate scaling factor using the formula from gRFC A100:
+	// scaled_weight = weight * max(min_weight_percent/100, time_factor ^ (1/aggression))
+	// where time_factor = max(time_since_ready_seconds, 1) / slow_start_window_seconds
+	timeFactor := math.Max(timeSinceReady.Seconds(), 1.0) / slowStartWindow.Seconds()
+	minScale := ssc.MinWeightPercent / 100.0
+	scale := math.Pow(timeFactor, 1.0/ssc.Aggression)
+	return math.Max(minScale, scale)
 }

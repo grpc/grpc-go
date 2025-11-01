@@ -4,9 +4,9 @@ go 1.24.0
 
 require (
 	github.com/cespare/xxhash/v2 v2.3.0
-	github.com/cncf/xds/go v0.0.0-20251022180443-0feb69152e9f
-	github.com/envoyproxy/go-control-plane v0.13.5-0.20251024222203-75eaa193e329
-	github.com/envoyproxy/go-control-plane/envoy v1.35.0
+	github.com/cncf/xds/go v0.0.0-20251014123835-2ee22ca58382
+	github.com/envoyproxy/go-control-plane v0.13.4
+	github.com/envoyproxy/go-control-plane/envoy v1.35.1-0.20251015221300-4138018a492b
 	github.com/golang/glog v1.2.5
 	github.com/golang/protobuf v1.5.4
 	github.com/google/go-cmp v0.7.0
