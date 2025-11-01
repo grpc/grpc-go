@@ -142,7 +142,7 @@ func (bb) ParseConfig(js json.RawMessage) (serviceconfig.LoadBalancingConfig, er
 		return nil, fmt.Errorf("wrr: errorUtilizationPenalty must be non-negative")
 	}
 
-	// Validate slow start configuration if provided
+	// Validate slow start configuration if provided.
 	if lbCfg.SlowStartConfig != nil {
 		ssc := lbCfg.SlowStartConfig
 		if ssc.Aggression != 0 && ssc.Aggression <= 0 {
@@ -155,7 +155,7 @@ func (bb) ParseConfig(js json.RawMessage) (serviceconfig.LoadBalancingConfig, er
 			return nil, fmt.Errorf("wrr: slowStartConfig.slowStartWindow must be greater than 0")
 		}
 
-		// Set defaults for slow start config
+		// Set defaults for slow start config.
 		if ssc.Aggression == 0 {
 			ssc.Aggression = 1.0
 		}
@@ -393,7 +393,7 @@ func (b *wrrBalancer) updateSubConnState(sc balancer.SubConn, state balancer.Sub
 		ew.mu.Lock()
 		ew.nonEmptySince = time.Time{}
 		ew.lastUpdated = time.Time{}
-		ew.readySince = internal.TimeNow() // Set readySince for slow start period
+		ew.readySince = internal.TimeNow() // Set readySince for slow start period.
 		cfg := ew.cfg
 		ew.mu.Unlock()
 		ew.updateORCAListener(cfg)
@@ -414,7 +414,7 @@ func (b *wrrBalancer) updateSubConnState(sc balancer.SubConn, state balancer.Sub
 			ew.stopORCAListener()
 		}
 		ew.mu.Lock()
-		ew.readySince = time.Time{} // Reset readySince when going non-READY
+		ew.readySince = time.Time{} // Reset readySince when going non-READY.
 		ew.mu.Unlock()
 		ew.pickedSC = nil
 	}
@@ -557,7 +557,7 @@ type endpointWeight struct {
 	weightVal     float64
 	nonEmptySince time.Time
 	lastUpdated   time.Time
-	readySince    time.Time // Time when endpoint transitioned to ready state (for slow start period)
+	readySince    time.Time // Time when endpoint transitioned to ready state (for slow start period).
 	cfg           *lbConfig
 }
 
@@ -680,7 +680,7 @@ func (w *endpointWeight) slowStartScale(now time.Time, recordMetrics bool) float
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
-	// No config, slow start config, or readySince not set
+	// No config, slow start config, or readySince not set.
 	if w.cfg == nil || w.cfg.SlowStartConfig == nil || w.readySince.Equal(time.Time{}) {
 		return 1.0
 	}
@@ -694,7 +694,7 @@ func (w *endpointWeight) slowStartScale(now time.Time, recordMetrics bool) float
 	ssc := w.cfg.SlowStartConfig
 	slowStartWindow := time.Duration(ssc.SlowStartWindow)
 	timeSinceReady := now.Sub(w.readySince)
-	// Outside slow start window
+	// Outside slow start window.
 	if timeSinceReady >= slowStartWindow {
 		return 1.0
 	}

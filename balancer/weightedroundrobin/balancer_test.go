@@ -722,19 +722,18 @@ func (s) TestBalancer_SlowStart(t *testing.T) {
 	time.Sleep(slowStartPeriod + weightUpdatePeriod)
 	checkWeights(ctx, t, srvWeight{srv1, 10}, srvWeight{srv2, 10})
 
-	// Add backend 3
+	// Add backend 3.
 	addrs = append(addrs, resolver.Address{Addr: srv3.Address})
 	srv1.R.UpdateState(resolver.State{Addresses: addrs})
 	ensureReached(ctx, t, srv1.Client, 3)
 
-	// validate that srv3 is in slow start
+	// validate that srv3 is in slow start.
 	time.Sleep(weightUpdatePeriod)
 	checkWeights(ctx, t, srvWeight{srv1, 10}, srvWeight{srv2, 10}, srvWeight{srv3, 5})
 
-	// validate that srv3 exits slow start
+	// validate that srv3 exits slow start.
 	time.Sleep(slowStartPeriod + weightUpdatePeriod)
 	checkWeights(ctx, t, srvWeight{srv1, 10}, srvWeight{srv2, 10}, srvWeight{srv3, 10})
-	fmt.Printf("Test log ---------------------> End\n")
 	if srv1.CC != nil {
 		srv1.CC.Close()
 		time.Sleep(weightUpdatePeriod) // Wait for cleanup
