@@ -33,7 +33,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
-	"google.golang.org/grpc/balancer/pickfirst/pickfirstleaf"
+	"google.golang.org/grpc/balancer/pickfirst"
 	"google.golang.org/grpc/balancer/weightedroundrobin"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
@@ -1840,7 +1840,7 @@ func (s) TestPickFirstHealthListenerDisabled(t *testing.T) {
 		},
 		MaxEjectionPercent: 100,
 		ChildPolicy: &iserviceconfig.BalancerConfig{
-			Name: pickfirstleaf.Name,
+			Name: pickfirst.Name,
 		},
 	}
 

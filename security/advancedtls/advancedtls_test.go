@@ -354,6 +354,17 @@ func (s) TestServerOptionsConfigSuccessCases(t *testing.T) {
 				tls.TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,
 			},
 		},
+		{
+			desc:                   "MaxVersion default is applied when only MinVersion is set",
+			serverVerificationType: CertVerification,
+			IdentityOptions: IdentityCertificateOptions{
+				Certificates: []tls.Certificate{},
+			},
+			RootOptions: RootCertificateOptions{
+				RootProvider: fakeProvider{},
+			},
+			MinVersion: tls.VersionTLS12,
+		},
 	}
 	for _, test := range tests {
 		test := test

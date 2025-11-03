@@ -105,29 +105,6 @@ func useCleanUniverseDomain(t *testing.T) {
 	})
 }
 
-// TODO(https://github.com/grpc/grpc-go/issues/8561): this content can be hardcoded directly
-// in wanted bootstraps again after old pick first is removed.
-func expectedNodeJSON(ipv6Capable bool) []byte {
-	if !envconfig.NewPickFirstEnabled && !ipv6Capable {
-		return []byte(`{
-			"id": "C2P-666",
-			"locality": {
-				"zone": "test-zone"
-			}
-		}`)
-	}
-	// Otherwise, return the node metadata including the IPv6 capability flag.
-	return []byte(`{
-		"id": "C2P-666",
-		"locality": {
-			"zone": "test-zone"
-		},
-		"metadata": {
-			"TRAFFICDIRECTOR_DIRECTPATH_C2P_IPV6_CAPABLE": true
-		}
-	}`)
-}
-
 // verifyXDSClientBootstrapConfig checks that an xDS client with the given name
 // exists in the pool and that its bootstrap config matches the expected config.
 func verifyXDSClientBootstrapConfig(t *testing.T, pool *xdsclient.Pool, name string, wantConfig *bootstrap.Config) {
@@ -262,7 +239,12 @@ func (s) TestBuildXDS(t *testing.T) {
 							]
 						}`),
 				},
-				Node: expectedNodeJSON(false),
+				Node: []byte(`{
+					"id": "C2P-666",
+					"locality": {
+						"zone": "test-zone"
+					}
+				}`),
 			}),
 		},
 		{
@@ -285,7 +267,15 @@ func (s) TestBuildXDS(t *testing.T) {
 							]
 						}`),
 				},
-				Node: expectedNodeJSON(true),
+				Node: []byte(`{
+					"id": "C2P-666",
+					"locality": {
+						"zone": "test-zone"
+					},
+					"metadata": {
+						"TRAFFICDIRECTOR_DIRECTPATH_C2P_IPV6_CAPABLE": true
+					}
+				}`),
 			}),
 		},
 		{
@@ -309,7 +299,15 @@ func (s) TestBuildXDS(t *testing.T) {
 							]
 						}`),
 				},
-				Node: expectedNodeJSON(true),
+				Node: []byte(`{
+					"id": "C2P-666",
+					"locality": {
+						"zone": "test-zone"
+					},
+					"metadata": {
+						"TRAFFICDIRECTOR_DIRECTPATH_C2P_IPV6_CAPABLE": true
+					}
+				}`),
 			}),
 		},
 	} {
@@ -463,7 +461,12 @@ func (s) TestSetUniverseDomainNonDefault(t *testing.T) {
 							]
 						}`),
 		},
-		Node: expectedNodeJSON(false),
+		Node: []byte(`{
+			"id": "C2P-666",
+			"locality": {
+				"zone": "test-zone"
+			}
+		}`),
 	})
 
 	xdsTarget := resolver.Target{URL: url.URL{Scheme: xdsName, Host: c2pAuthority, Path: target.URL.Path}}
@@ -527,7 +530,12 @@ func (s) TestDefaultUniverseDomain(t *testing.T) {
 							]
 						}`),
 		},
-		Node: expectedNodeJSON(false),
+		Node: []byte(`{
+			"id": "C2P-666",
+			"locality": {
+				"zone": "test-zone"
+			}
+		}`),
 	})
 	xdsTarget := resolver.Target{URL: url.URL{Scheme: xdsName, Host: c2pAuthority, Path: target.URL.Path}}
 	verifyXDSClientBootstrapConfig(t, xdsClientPool, xdsTarget.String(), wantBootstrapConfig)
@@ -636,7 +644,12 @@ func (s) TestCreateMultipleXDSClients(t *testing.T) {
 				}]
 			}`),
 		},
-		Node: expectedNodeJSON(false),
+		Node: []byte(`{
+				"id": "C2P-666",
+				"locality": {
+					"zone": "test-zone"
+				}
+			}`),
 	})
 
 	c2pXDSTarget := resolver.Target{URL: url.URL{Scheme: xdsName, Host: c2pAuthority, Path: c2pTarget.URL.Path}}

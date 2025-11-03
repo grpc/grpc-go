@@ -123,13 +123,13 @@ func (b *recvBuffer) get() <-chan recvMsg {
 // recvBufferReader implements io.Reader interface to read the data from
 // recvBuffer.
 type recvBufferReader struct {
-	_           noCopy
-	closeStream func(error) // Closes the client transport stream with the given error and nil trailer metadata.
-	ctx         context.Context
-	ctxDone     <-chan struct{} // cache of ctx.Done() (for performance).
-	recv        *recvBuffer
-	last        mem.Buffer // Stores the remaining data in the previous calls.
-	err         error
+	_            noCopy
+	clientStream *ClientStream // The client transport stream is closed with a status representing ctx.Err() and nil trailer metadata.
+	ctx          context.Context
+	ctxDone      <-chan struct{} // cache of ctx.Done() (for performance).
+	recv         *recvBuffer
+	last         mem.Buffer // Stores the remaining data in the previous calls.
+	err          error
 }
 
 func (r *recvBufferReader) ReadMessageHeader(header []byte) (n int, err error) {
@@ -140,7 +140,7 @@ func (r *recvBufferReader) ReadMessageHeader(header []byte) (n int, err error) {
 		n, r.last = mem.ReadUnsafe(header, r.last)
 		return n, nil
 	}
-	if r.closeStream != nil {
+	if r.clientStream != nil {
 		n, r.err = r.readMessageHeaderClient(header)
 	} else {
 		n, r.err = r.readMessageHeader(header)
@@ -165,7 +165,7 @@ func (r *recvBufferReader) Read(n int) (buf mem.Buffer, err error) {
 		}
 		return buf, nil
 	}
-	if r.closeStream != nil {
+	if r.clientStream != nil {
 		buf, r.err = r.readClient(n)
 	} else {
 		buf, r.err = r.read(n)
@@ -210,7 +210,7 @@ func (r *recvBufferReader) readMessageHeaderClient(header []byte) (n int, err er
 		// TODO: delaying ctx error seems like a unnecessary side effect. What
 		// we really want is to mark the stream as done, and return ctx error
 		// faster.
-		r.closeStream(ContextErr(r.ctx.Err()))
+		r.clientStream.Close(ContextErr(r.ctx.Err()))
 		m := <-r.recv.get()
 		return r.readMessageHeaderAdditional(m, header)
 	case m := <-r.recv.get():
@@ -237,7 +237,7 @@ func (r *recvBufferReader) readClient(n int) (buf mem.Buffer, err error) {
 		// TODO: delaying ctx error seems like a unnecessary side effect. What
 		// we really want is to mark the stream as done, and return ctx error
 		// faster.
-		r.closeStream(ContextErr(r.ctx.Err()))
+		r.clientStream.Close(ContextErr(r.ctx.Err()))
 		m := <-r.recv.get()
 		return r.readAdditional(m, n)
 	case m := <-r.recv.get():

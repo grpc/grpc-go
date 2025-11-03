@@ -32,6 +32,9 @@ type BufferPool interface {
 	Get(length int) *[]byte
 
 	// Put returns a buffer to the pool.
+	//
+	// The provided pointer must hold a prefix of the buffer obtained via
+	// BufferPool.Get to ensure the buffer's entire capacity can be re-used.
 	Put(*[]byte)
 }
 

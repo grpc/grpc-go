@@ -242,7 +242,7 @@ type xdsResolver struct {
 	rdsResourceName        string
 	routeConfigWatcher     *routeConfigWatcher
 	routeConfigUpdateRecvd bool
-	currentRouteConfig     xdsresource.RouteConfigUpdate
+	currentRouteConfig     *xdsresource.RouteConfigUpdate
 	currentVirtualHost     *xdsresource.VirtualHost // Matched virtual host for quick access.
 
 	// activeClusters is a map from cluster name to information about the
@@ -461,7 +461,7 @@ func (r *xdsResolver) onResolutionComplete() {
 	r.curConfigSelector = cs
 }
 
-func (r *xdsResolver) applyRouteConfigUpdate(update xdsresource.RouteConfigUpdate) {
+func (r *xdsResolver) applyRouteConfigUpdate(update *xdsresource.RouteConfigUpdate) {
 	matchVh := xdsresource.FindBestMatchingVirtualHost(r.dataplaneAuthority, update.VirtualHosts)
 	if matchVh == nil {
 		// TODO(purnesh42h): Should this be a resource or ambient error? Note
@@ -527,7 +527,7 @@ func (r *xdsResolver) onListenerResourceUpdate(update *xdsresource.ListenerUpdat
 			r.routeConfigWatcher = nil
 		}
 
-		r.applyRouteConfigUpdate(*update.InlineRouteConfig)
+		r.applyRouteConfigUpdate(update.InlineRouteConfig)
 		return
 	}
 
@@ -580,7 +580,7 @@ func (r *xdsResolver) onListenerResourceError(err error) {
 }
 
 // Only executed in the context of a serializer callback.
-func (r *xdsResolver) onRouteConfigResourceUpdate(name string, update xdsresource.RouteConfigUpdate) {
+func (r *xdsResolver) onRouteConfigResourceUpdate(name string, update *xdsresource.RouteConfigUpdate) {
 	if r.logger.V(2) {
 		r.logger.Infof("Received update for RouteConfiguration resource %q: %v", name, pretty.ToJSON(update))
 	}
