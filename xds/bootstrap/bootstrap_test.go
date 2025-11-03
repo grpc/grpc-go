@@ -91,7 +91,6 @@ func TestChannelCredsBuilders(t *testing.T) {
 }
 
 func TestJWTCallCredsBuilder(t *testing.T) {
-
 	builder := &jwtCallCredsBuilder{}
 	config := json.RawMessage(`{"jwt_token_file":"/path/to/token.jwt"}`)
 

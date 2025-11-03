@@ -90,6 +90,7 @@ type CallCredsConfig struct {
 	// Type contains a name identifying the call credentials type.
 	Type string `json:"type,omitempty"`
 	// Config contains the JSON configuration for this call credentials.
+	// Optional as per gRFC A97.
 	Config json.RawMessage `json:"config,omitempty"`
 }
 
@@ -99,7 +100,7 @@ func (cc CallCredsConfig) Equal(other CallCredsConfig) bool {
 }
 
 func (cc CallCredsConfig) String() string {
-	if cc.Config == nil {
+	if len(cc.Config) == 0 {
 		return cc.Type
 	}
 	// We do not expect the Marshal call to fail since we wrote to cc.Config.
