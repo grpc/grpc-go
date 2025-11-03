@@ -400,6 +400,7 @@ func (df *parsedDataFrame) StreamEnded() bool {
 type framer struct {
 	writer    *bufWriter
 	fr        *http2.Framer
+	headerBuf []byte // cached slice for framer headers to reduce heap allocs.
 	reader    io.Reader
 	dataFrame parsedDataFrame // Cached data frame to avoid heap allocations.
 	pool      mem.BufferPool
@@ -441,6 +442,41 @@ func newFramer(conn io.ReadWriter, writeBufferSize, readBufferSize int, sharedWr
 	f.fr.MaxHeaderListSize = maxHeaderListSize
 	f.fr.ReadMetaHeaders = hpack.NewDecoder(http2InitHeaderTableSize, nil)
 	return f
+}
+
+// writeData writes a DATA frame.
+//
+// It is the caller's responsibility not to violate the maximum frame size.
+func (f *framer) writeData(streamID uint32, endStream bool, data [][]byte) error {
+	var flags http2.Flags
+	if endStream {
+		flags = http2.FlagDataEndStream
+	}
+	length := uint32(0)
+	for _, d := range data {
+		length += uint32(len(d))
+	}
+	// TODO: Replace the header write with the framer API being added in
+	// https://github.com/golang/go/issues/66655.
+	f.headerBuf = append(f.headerBuf[:0],
+		byte(length>>16),
+		byte(length>>8),
+		byte(length),
+		byte(http2.FrameData),
+		byte(flags),
+		byte(streamID>>24),
+		byte(streamID>>16),
+		byte(streamID>>8),
+		byte(streamID))
+	if _, err := f.writer.Write(f.headerBuf); err != nil {
+		return err
+	}
+	for _, d := range data {
+		if _, err := f.writer.Write(d); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // readFrame reads a single frame. The returned Frame is only valid
