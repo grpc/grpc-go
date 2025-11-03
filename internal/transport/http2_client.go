@@ -336,7 +336,7 @@ func NewHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 		writerDone:            make(chan struct{}),
 		goAway:                make(chan struct{}),
 		keepaliveDone:         make(chan struct{}),
-		framer:                newFramer(conn, writeBufSize, readBufSize, opts.SharedWriteBuffer, maxHeaderListSize),
+		framer:                newFramer(conn, writeBufSize, readBufSize, opts.SharedWriteBuffer, maxHeaderListSize, opts.BufferPool),
 		fc:                    &trInFlow{limit: uint32(icwz)},
 		scheme:                scheme,
 		activeStreams:         make(map[uint32]*ClientStream),
@@ -1170,7 +1170,7 @@ func (t *http2Client) updateFlowControl(n uint32) {
 	})
 }
 
-func (t *http2Client) handleData(f *http2.DataFrame) {
+func (t *http2Client) handleData(f *parsedDataFrame) {
 	size := f.Header().Length
 	var sendBDPPing bool
 	if t.bdpEst != nil {
@@ -1214,22 +1214,15 @@ func (t *http2Client) handleData(f *http2.DataFrame) {
 			t.closeStream(s, io.EOF, true, http2.ErrCodeFlowControl, status.New(codes.Internal, err.Error()), nil, false)
 			return
 		}
+		dataLen := f.data.Len()
 		if f.Header().Flags.Has(http2.FlagDataPadded) {
-			if w := s.fc.onRead(size - uint32(len(f.Data()))); w > 0 {
+			if w := s.fc.onRead(size - uint32(dataLen)); w > 0 {
 				t.controlBuf.put(&outgoingWindowUpdate{s.id, w})
 			}
 		}
-		// TODO(bradfitz, zhaoq): A copy is required here because there is no
-		// guarantee f.Data() is consumed before the arrival of next frame.
-		// Can this copy be eliminated?
-		if len(f.Data()) > 0 {
-			pool := t.bufferPool
-			if pool == nil {
-				// Note that this is only supposed to be nil in tests. Otherwise, stream is
-				// always initialized with a BufferPool.
-				pool = mem.DefaultBufferPool()
-			}
-			s.write(recvMsg{buffer: mem.Copy(f.Data(), pool)})
+		if dataLen > 0 {
+			f.data.Ref()
+			s.write(recvMsg{buffer: f.data})
 		}
 	}
 	// The server has closed the stream without sending trailers.  Record that
@@ -1659,7 +1652,7 @@ func (t *http2Client) reader(errCh chan<- error) {
 	// loop to keep reading incoming messages on this transport.
 	for {
 		t.controlBuf.throttle()
-		frame, err := t.framer.fr.ReadFrame()
+		frame, err := t.framer.readFrame()
 		if t.keepaliveEnabled {
 			atomic.StoreInt64(&t.lastRead, time.Now().UnixNano())
 		}
@@ -1674,7 +1667,7 @@ func (t *http2Client) reader(errCh chan<- error) {
 				if s != nil {
 					// use error detail to provide better err message
 					code := http2ErrConvTab[se.Code]
-					errorDetail := t.framer.fr.ErrorDetail()
+					errorDetail := t.framer.errorDetail()
 					var msg string
 					if errorDetail != nil {
 						msg = errorDetail.Error()
@@ -1692,8 +1685,9 @@ func (t *http2Client) reader(errCh chan<- error) {
 		switch frame := frame.(type) {
 		case *http2.MetaHeadersFrame:
 			t.operateHeaders(frame)
-		case *http2.DataFrame:
+		case *parsedDataFrame:
 			t.handleData(frame)
+			frame.data.Free()
 		case *http2.RSTStreamFrame:
 			t.handleRSTStream(frame)
 		case *http2.SettingsFrame:
