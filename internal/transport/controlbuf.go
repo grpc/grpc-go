@@ -1021,8 +1021,9 @@ func (l *loopyWriter) processData() (bool, error) {
 		if err != nil {
 			// This must never happen since the reader must have at least dSize
 			// bytes.
-			clear(l.writeBuf)
 			l.writeBuf = nil
+			// Log an error to fail tests.
+			l.logger.Errorf("unexpected error while reading Data frame payload: %v", err)
 			return false, err
 		}
 	}
