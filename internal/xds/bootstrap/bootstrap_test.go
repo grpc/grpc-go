@@ -1651,3 +1651,35 @@ func (s) TestBootstrap_SelectedChannelCredsAndCallCreds(t *testing.T) {
 		})
 	}
 }
+
+func (s) TestBootstrap_SelectedCallCreds_WhenNotCCNotEnabled(t *testing.T) {
+	testutils.SetEnvConfig(t, &envconfig.XDSBootstrapCallCredsEnabled, false)
+	config := `{
+					"server_uri": "xds-server:443",
+					"channel_creds": [{"type": "tls", "config": {}}],
+					"call_creds": [
+						{
+							"type": "jwt_token_file",
+							"config": {"jwt_token_file": "/token.jwt"}
+						}
+					]
+				}`
+
+	var sc ServerConfig
+	err := sc.UnmarshalJSON([]byte(config))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal bootstrap config: %v", err)
+	}
+
+	// Verify call credentials processing.
+	callCredsConfig := sc.CallCredsConfigs()
+	dialOpts := sc.DialOptions()
+	if len(callCredsConfig) != 1 {
+		t.Errorf("Call creds configs count = %d, want %d", len(callCredsConfig), 1)
+	}
+	// Even though we have parsed the call creds configs, we are not using them
+	// because the env variable is not enabled.
+	if len(dialOpts) != 0 {
+		t.Errorf("Call creds count = %d, want %d", len(dialOpts), 0)
+	}
+}
