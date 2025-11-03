@@ -200,7 +200,7 @@ var (
 			}]
 		}`,
 		// example data seeded from
-		// https://github.com/istio/istio/blob/master/pkg/istio-agent/testdata/grpc-bootstrap.json
+		// https://github.com/istio/istio/blob/877e8df49d7ead6040ae812ae03ce1bad9ea2bfb/pkg/istio-agent/testdata/grpc-bootstrap.json
 		"istioStyleInsecureWithJWTCallCreds": `
 		{
 			"node": {
@@ -364,54 +364,14 @@ var (
 			},
 		},
 	}
-	jwtCallCreds, _             = jwt.NewTokenFileCallCredentials("/var/run/secrets/tokens/istio-token")
-	selectedJWTCallCreds        = []credentials.PerRPCCredentials{jwtCallCreds}
-	configWithIstioJWTCallCreds = &Config{
-		xDSServers: []*ServerConfig{{
-			serverURI:            "unix:///etc/istio/XDS",
-			channelCreds:         []ChannelCreds{{Type: "insecure"}},
-			callCredsConfigs:     []CallCredsConfig{{Type: "jwt_token_file", Config: json.RawMessage("{\n\"jwt_token_file\": \"/var/run/secrets/tokens/istio-token\"\n}")}},
-			serverFeatures:       []string{"xds_v3"},
-			selectedChannelCreds: ChannelCreds{Type: "insecure"},
-			selectedCallCreds:    selectedJWTCallCreds,
-		}},
-		node: node{
-			ID:                   "sidecar~127.0.0.1~pod1.fake-namespace~fake-namespace.svc.cluster.local",
-			Metadata:             istioNodeMetadata,
-			userAgentName:        gRPCUserAgentName,
-			userAgentVersionType: userAgentVersion{UserAgentVersion: grpc.Version},
-			clientFeatures:       []string{clientFeatureNoOverprovisioning, clientFeatureResourceWrapper},
-		},
-		certProviderConfigs:                       map[string]*certprovider.BuildableConfig{},
-		clientDefaultListenerResourceNameTemplate: "%s",
-	}
-
+	jwtCallCreds, _                 = jwt.NewTokenFileCallCredentials("/var/run/secrets/tokens/istio-token")
+	selectedJWTCallCreds            = []credentials.PerRPCCredentials{jwtCallCreds}
 	configWithIstioStyleNoCallCreds = &Config{
 		xDSServers: []*ServerConfig{{
 			serverURI:            "unix:///etc/istio/XDS",
 			channelCreds:         []ChannelCreds{{Type: "insecure"}},
 			serverFeatures:       []string{"xds_v3"},
 			selectedChannelCreds: ChannelCreds{Type: "insecure"},
-		}},
-		node: node{
-			ID:                   "sidecar~127.0.0.1~pod1.fake-namespace~fake-namespace.svc.cluster.local",
-			Metadata:             istioNodeMetadata,
-			userAgentName:        gRPCUserAgentName,
-			userAgentVersionType: userAgentVersion{UserAgentVersion: grpc.Version},
-			clientFeatures:       []string{clientFeatureNoOverprovisioning, clientFeatureResourceWrapper},
-		},
-		certProviderConfigs:                       map[string]*certprovider.BuildableConfig{},
-		clientDefaultListenerResourceNameTemplate: "%s",
-	}
-
-	configWithIstioStyleWithTLSAndJWT = &Config{
-		xDSServers: []*ServerConfig{{
-			serverURI:            "unix:///etc/istio/XDS",
-			channelCreds:         []ChannelCreds{{Type: "tls", Config: json.RawMessage("{}")}},
-			callCredsConfigs:     []CallCredsConfig{{Type: "jwt_token_file", Config: json.RawMessage("{\n\"jwt_token_file\": \"/var/run/secrets/tokens/istio-token\"\n}")}},
-			serverFeatures:       []string{"xds_v3"},
-			selectedChannelCreds: ChannelCreds{Type: "tls", Config: json.RawMessage("{}")},
-			selectedCallCreds:    selectedJWTCallCreds,
 		}},
 		node: node{
 			ID:                   "sidecar~127.0.0.1~pod1.fake-namespace~fake-namespace.svc.cluster.local",
@@ -595,6 +555,45 @@ func (s) TestGetConfiguration_IstioStyleWithCallCreds(t *testing.T) {
 	testutils.SetEnvConfig(t, &envconfig.XDSBootstrapCallCredsEnabled, true)
 	cancel := setupBootstrapOverride(v3BootstrapFileMap)
 	defer cancel()
+
+	configWithIstioJWTCallCreds := &Config{
+		xDSServers: []*ServerConfig{{
+			serverURI:            "unix:///etc/istio/XDS",
+			channelCreds:         []ChannelCreds{{Type: "insecure"}},
+			callCredsConfigs:     []CallCredsConfig{{Type: "jwt_token_file", Config: json.RawMessage("{\n\"jwt_token_file\": \"/var/run/secrets/tokens/istio-token\"\n}")}},
+			serverFeatures:       []string{"xds_v3"},
+			selectedChannelCreds: ChannelCreds{Type: "insecure"},
+			selectedCallCreds:    selectedJWTCallCreds,
+		}},
+		node: node{
+			ID:                   "sidecar~127.0.0.1~pod1.fake-namespace~fake-namespace.svc.cluster.local",
+			Metadata:             istioNodeMetadata,
+			userAgentName:        gRPCUserAgentName,
+			userAgentVersionType: userAgentVersion{UserAgentVersion: grpc.Version},
+			clientFeatures:       []string{clientFeatureNoOverprovisioning, clientFeatureResourceWrapper},
+		},
+		certProviderConfigs:                       map[string]*certprovider.BuildableConfig{},
+		clientDefaultListenerResourceNameTemplate: "%s",
+	}
+	configWithIstioStyleWithTLSAndJWT := &Config{
+		xDSServers: []*ServerConfig{{
+			serverURI:            "unix:///etc/istio/XDS",
+			channelCreds:         []ChannelCreds{{Type: "tls", Config: json.RawMessage("{}")}},
+			callCredsConfigs:     []CallCredsConfig{{Type: "jwt_token_file", Config: json.RawMessage("{\n\"jwt_token_file\": \"/var/run/secrets/tokens/istio-token\"\n}")}},
+			serverFeatures:       []string{"xds_v3"},
+			selectedChannelCreds: ChannelCreds{Type: "tls", Config: json.RawMessage("{}")},
+			selectedCallCreds:    selectedJWTCallCreds,
+		}},
+		node: node{
+			ID:                   "sidecar~127.0.0.1~pod1.fake-namespace~fake-namespace.svc.cluster.local",
+			Metadata:             istioNodeMetadata,
+			userAgentName:        gRPCUserAgentName,
+			userAgentVersionType: userAgentVersion{UserAgentVersion: grpc.Version},
+			clientFeatures:       []string{clientFeatureNoOverprovisioning, clientFeatureResourceWrapper},
+		},
+		certProviderConfigs:                       map[string]*certprovider.BuildableConfig{},
+		clientDefaultListenerResourceNameTemplate: "%s",
+	}
 
 	tests := []struct {
 		name       string
