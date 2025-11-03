@@ -40,6 +40,8 @@ type LBConfig struct {
 	SlowStartConfig         *SlowStartConfig `json:"slowStartConfig,omitempty"`
 }
 
+// SlowStartConfig allows tests to produce a JSON form
+// of the nested slow start config.
 type SlowStartConfig struct {
 	SlowStartWindow  *string  `json:"slowStartWindow,omitempty"`
 	Aggression       *float64 `json:"aggression,omitempty"`
