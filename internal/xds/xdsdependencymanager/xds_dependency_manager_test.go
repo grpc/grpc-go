@@ -16,7 +16,7 @@
  *
  */
 
-package xdsdepmgr
+package xdsdepmgr_test
 
 import (
 	"context"
@@ -35,6 +35,7 @@ import (
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/internal/xds/xdsclient"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
+	xdsdepmgr "google.golang.org/grpc/internal/xds/xdsdependencymanager"
 
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
@@ -61,15 +62,136 @@ const (
 	defaultTestClusterName     = "cluster-name"
 )
 
-var (
-	cmpOpts = []cmp.Option{
-		cmpopts.EquateEmpty(),
-		cmpopts.IgnoreFields(xdsresource.HTTPFilter{}, "Filter", "Config"),
-		cmpopts.IgnoreFields(xdsresource.ListenerUpdate{}, "Raw"),
-		cmpopts.IgnoreFields(xdsresource.RouteConfigUpdate{}, "Raw"),
+func newStringP(s string) *string {
+	return &s
+}
+
+// testWatcher is an implementation of the ConfigWatcher interface that sends
+// the updates and errors to respoctive channels.
+type testWatcher struct {
+	updateCh chan xdsresource.XDSConfig
+	errorCh  chan error
+}
+
+// Update sends the received XDSConfig update to the update channel.
+func (w *testWatcher) Update(cfg *xdsresource.XDSConfig) {
+	w.updateCh <- *cfg
+}
+
+// Error sends the received error to the error channel.
+func (w *testWatcher) Error(err error) {
+	w.errorCh <- err
+}
+
+func verifyError(ctx context.Context, errCh chan error, wantErr, wantNodeID string) error {
+	select {
+	case gotErr := <-errCh:
+		if gotErr == nil {
+			return fmt.Errorf("got nil error from resolver, want error %q", wantErr)
+		}
+		if !strings.Contains(gotErr.Error(), wantErr) {
+			return fmt.Errorf("got error from resolver %q, want %q", gotErr, wantErr)
+		}
+		if !strings.Contains(gotErr.Error(), wantNodeID) {
+			return fmt.Errorf("got error from resolver %q, want nodeID %q", gotErr, wantNodeID)
+		}
+	case <-ctx.Done():
+		return fmt.Errorf("Timeout waiting for error from dependency manager")
+	}
+	return nil
+}
+
+func verifyXdsConfig(ctx context.Context, xdsCh chan xdsresource.XDSConfig, errCh chan error, want xdsresource.XDSConfig) error {
+	select {
+	case <-ctx.Done():
+		return fmt.Errorf("Timeout waiting for update from dependency manager")
+	case update := <-xdsCh:
+		cmpOpts := []cmp.Option{
+			cmpopts.EquateEmpty(),
+			cmpopts.IgnoreFields(xdsresource.HTTPFilter{}, "Filter", "Config"),
+			cmpopts.IgnoreFields(xdsresource.ListenerUpdate{}, "Raw"),
+			cmpopts.IgnoreFields(xdsresource.RouteConfigUpdate{}, "Raw"),
+		}
+		if diff := cmp.Diff(update, want, cmpOpts...); diff != "" {
+			return fmt.Errorf("Did not receive expected update from dependency manager,.  Diff (-got +want):\n%v", diff)
+		}
+	case err := <-errCh:
+		return fmt.Errorf("Received unexpected error from dependency manager: %v", err)
+	}
+	return nil
+}
+
+func createXDSClient(t *testing.T, bootstrapContents []byte) (xdsclient.XDSClient, func()) {
+	t.Helper()
+
+	// Setup the bootstrap file contents.
+	config, err := bootstrap.NewConfigFromContents(bootstrapContents)
+	if err != nil {
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
 	}
 
-	wantXdsConfig = xdsresource.XDSConfig{
+	pool := xdsclient.NewPool(config)
+	if err != nil {
+		t.Fatalf("Failed to create an xDS client pool: %v", err)
+	}
+	c, cancel, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
+		Name:               t.Name(),
+		WatchExpiryTimeout: defaultTestTimeout,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create an xDS client: %v", err)
+	}
+	return c, cancel
+}
+
+// Spins up an xDS management server and sets up an xDS bootstrap configuration
+// file that points to it.
+//
+// Returns the following:
+//   - A reference to the xDS management server
+//   - Contents of the bootstrap configuration pointing to xDS management
+//     server
+func setupManagementServerForTest(t *testing.T, nodeID string) (*e2e.ManagementServer, []byte) {
+	t.Helper()
+
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
+	bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
+	return mgmtServer, bootstrapContents
+
+}
+
+// Tests the happy case where the dependency manager receives all the required
+// resources and verifies that Update is called with with the correct XDSConfig.
+func (s) TestHappyCase(t *testing.T) {
+	nodeID := uuid.New().String()
+	mgmtServer, bc := setupManagementServerForTest(t, nodeID)
+	defer mgmtServer.Stop()
+	xdsClient, cancel := createXDSClient(t, bc)
+	defer cancel()
+
+	watcher := &testWatcher{
+		updateCh: make(chan xdsresource.XDSConfig),
+		errorCh:  make(chan error),
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	listener := e2e.DefaultClientListener(defaultTestServiceName, defaultTestRouteConfigName)
+	route := e2e.DefaultRouteConfig(defaultTestRouteConfigName, defaultTestServiceName, defaultTestClusterName)
+	resources := e2e.UpdateOptions{
+		NodeID:         nodeID,
+		Listeners:      []*v3listenerpb.Listener{listener},
+		Routes:         []*v3routepb.RouteConfiguration{route},
+		SkipValidation: true,
+	}
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	dm := xdsdepmgr.New(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
+	defer dm.Close()
+	wantXdsConfig := xdsresource.XDSConfig{
 		Listener: &xdsresource.ListenerUpdate{
 			RouteConfigName: defaultTestRouteConfigName,
 			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}}},
@@ -90,150 +212,23 @@ var (
 				ActionType:       xdsresource.RouteActionRoute}},
 		},
 	}
-)
-
-func newStringP(s string) *string {
-	return &s
-}
-
-// testWatcher is a mock implementation of the ConfigWatcher interface that
-// allows defining custom logic for its  onUpdate and onError methods in each
-// test.
-type testWatcher struct {
-	onUpdate func(*xdsresource.XDSConfig)
-	onError  func(error)
-}
-
-// OnUpdate calls the underlying onUpdate function if it's not nil.
-func (w *testWatcher) OnUpdate(cfg *xdsresource.XDSConfig) {
-	if w.onUpdate != nil {
-		w.onUpdate(cfg)
-	}
-}
-
-// OnError calls the underlying onError function if it's not nil.
-func (w *testWatcher) OnError(err error) {
-	if w.onError != nil {
-		w.onError(err)
-	}
-}
-
-func verifyError(gotErr error, wantErr, wantNodeID string) error {
-	if gotErr == nil {
-		return fmt.Errorf("got nil error from resolver, want error")
-	}
-	if !strings.Contains(gotErr.Error(), wantErr) {
-		return fmt.Errorf("got error from resolver %q, want %q", gotErr, wantErr)
-	}
-	if !strings.Contains(gotErr.Error(), wantNodeID) {
-		return fmt.Errorf("got error from resolver %q, want nodeID %q", gotErr, wantNodeID)
-	}
-	return nil
-}
-
-// newDependencyManagerForTest creates a new DependencyManager for testing purposes.
-func newDependencyManagerForTest(t *testing.T, listenerName string, target string, bootstrapContents []byte, watcher ConfigWatcher) *DependencyManager {
-	t.Helper()
-
-	// Setup the bootstrap file contents.
-	config, err := bootstrap.NewConfigFromContents(bootstrapContents)
-	if err != nil {
-		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
-	}
-
-	pool := xdsclient.NewPool(config)
-	if err != nil {
-		t.Fatalf("Failed to create an xDS client pool: %v", err)
-	}
-	c, cancel, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
-		Name:               t.Name(),
-		WatchExpiryTimeout: defaultTestTimeout,
-	})
-	if err != nil {
-		t.Fatalf("Failed to create an xDS client: %v", err)
-	}
-	t.Cleanup(cancel)
-
-	return New(listenerName, target, c, watcher)
-}
-
-// Spins up an xDS management server and sets up an xDS bootstrap configuration
-// file that points to it.
-//
-// Returns the following:
-//   - A reference to the xDS management server
-//   - Contents of the bootstrap configuration pointing to xDS management
-//     server
-func setupManagementServerForTest(t *testing.T, nodeID string) (*e2e.ManagementServer, []byte) {
-	t.Helper()
-
-	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
-	bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-	return mgmtServer, bootstrapContents
-
-}
-
-// Tests the happy case where the dependency manager receives all the required
-// resources and verifies that OnUpdate is called with with the correct
-// XDSConfig.
-func (s) TestHappyCase(t *testing.T) {
-	nodeID := uuid.New().String()
-	mgmtServer, bc := setupManagementServerForTest(t, nodeID)
-	defer mgmtServer.Stop()
-
-	updateCh := make(chan xdsresource.XDSConfig, 1)
-	watcher := &testWatcher{
-		onUpdate: func(cfg *xdsresource.XDSConfig) {
-			updateCh <- *cfg
-		},
-		onError: func(err error) {
-			t.Errorf("Received unexpected error from dependency manager: %v", err)
-		},
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-
-	listener := e2e.DefaultClientListener(defaultTestServiceName, defaultTestRouteConfigName)
-	route := e2e.DefaultRouteConfig(defaultTestRouteConfigName, defaultTestServiceName, defaultTestClusterName)
-	resources := e2e.UpdateOptions{
-		NodeID:         nodeID,
-		Listeners:      []*v3listenerpb.Listener{listener},
-		Routes:         []*v3routepb.RouteConfiguration{route},
-		SkipValidation: true,
-	}
-	if err := mgmtServer.Update(ctx, resources); err != nil {
+	if err := verifyXdsConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
 		t.Fatal(err)
-	}
-	dm := newDependencyManagerForTest(t, defaultTestServiceName, defaultTestServiceName, bc, watcher)
-	defer dm.Close()
-
-	select {
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for update from dependency manager")
-	case update := <-updateCh:
-		if diff := cmp.Diff(update, wantXdsConfig, cmpOpts...); diff != "" {
-			t.Fatalf("Did not receive expected update from dependency manager.  Diff (-got +want):\n%v", diff)
-
-		}
 	}
 }
 
 // Tests the case where the listener contains an inline route configuration and
-// verifies that OnUpdate is called with the correct XDSConfig.
+// verifies that Update is called with the correct XDSConfig.
 func (s) TestInlineRouteConfig(t *testing.T) {
 	nodeID := uuid.New().String()
 	mgmtServer, bc := setupManagementServerForTest(t, nodeID)
 	defer mgmtServer.Stop()
+	xdsClient, cancel := createXDSClient(t, bc)
+	defer cancel()
 
-	updateCh := make(chan xdsresource.XDSConfig, 1)
 	watcher := &testWatcher{
-		onUpdate: func(cfg *xdsresource.XDSConfig) {
-			updateCh <- *cfg
-		},
-		onError: func(err error) {
-			t.Errorf("Received unexpected error from dependency manager: %v", err)
-		},
+		updateCh: make(chan xdsresource.XDSConfig),
+		errorCh:  make(chan error),
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -263,7 +258,7 @@ func (s) TestInlineRouteConfig(t *testing.T) {
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
-	dm := newDependencyManagerForTest(t, defaultTestServiceName, defaultTestServiceName, bc, watcher)
+	dm := xdsdepmgr.New(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
 	defer dm.Close()
 
 	wantConfig := xdsresource.XDSConfig{
@@ -296,33 +291,24 @@ func (s) TestInlineRouteConfig(t *testing.T) {
 				ActionType:       xdsresource.RouteActionRoute}},
 		},
 	}
-
-	select {
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for update from dependency manager")
-	case update := <-updateCh:
-		if diff := cmp.Diff(update, wantConfig, cmpOpts...); diff != "" {
-			t.Fatalf("Did not receive expected update from dependency manager,.  Diff (-got +want):\n%v", diff)
-		}
+	if err := verifyXdsConfig(ctx, watcher.updateCh, watcher.errorCh, wantConfig); err != nil {
+		t.Fatal(err)
 	}
 }
 
 // Tests the case where dependency manager only receives listener resource but
-// does not receive route config resource. Verfies that OnUpdate is not called
+// does not receive route config resource. Verfies that Update is not called
 // since we do not have all resources.
 func (s) TestIncompleteResources(t *testing.T) {
 	nodeID := uuid.New().String()
 	mgmtServer, bc := setupManagementServerForTest(t, nodeID)
 	defer mgmtServer.Stop()
+	xdsClient, cancel := createXDSClient(t, bc)
+	defer cancel()
 
-	updateCh := make(chan xdsresource.XDSConfig, 1)
 	watcher := &testWatcher{
-		onUpdate: func(cfg *xdsresource.XDSConfig) {
-			updateCh <- *cfg
-		},
-		onError: func(err error) {
-			t.Errorf("Received unexpected error from dependency manager: %v", err)
-		},
+		updateCh: make(chan xdsresource.XDSConfig),
+		errorCh:  make(chan error),
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -335,37 +321,35 @@ func (s) TestIncompleteResources(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	dm := newDependencyManagerForTest(t, defaultTestServiceName, defaultTestServiceName, bc, watcher)
+	dm := xdsdepmgr.New(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
 	defer dm.Close()
 
 	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
 	select {
 	case <-sCtx.Done():
-	case update := <-updateCh:
+	case update := <-watcher.updateCh:
 		t.Fatalf("Received unexpected update from dependency manager: %+v", update)
+	case err := <-watcher.errorCh:
+		t.Fatalf("Received unexpected error from dependency manager: %v", err)
 	}
 }
 
 // Tests the case where dependency manager receives a listener resource error by
 // sending the correct update first and then removing the listener resource. It
-// verifies that OnError is called with the correct error.
+// verifies that Error is called with the correct error.
 func (s) TestListenerResourceError(t *testing.T) {
 	nodeID := uuid.New().String()
 	mgmtServer, bc := setupManagementServerForTest(t, nodeID)
 	defer mgmtServer.Stop()
+	xdsClient, cancel := createXDSClient(t, bc)
+	defer cancel()
 
-	errorCh := make(chan error, 1)
-	updateCh := make(chan xdsresource.XDSConfig, 1)
 	watcher := &testWatcher{
-		onUpdate: func(cfg *xdsresource.XDSConfig) {
-			updateCh <- *cfg
-		},
-		onError: func(err error) {
-			errorCh <- err
-		},
+		updateCh: make(chan xdsresource.XDSConfig),
+		errorCh:  make(chan error),
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
 	// Send a correct update first
@@ -382,16 +366,32 @@ func (s) TestListenerResourceError(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	dm := newDependencyManagerForTest(t, defaultTestServiceName, defaultTestServiceName, bc, watcher)
+	dm := xdsdepmgr.New(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
 	defer dm.Close()
 
-	select {
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for update from dependency manager")
-	case update := <-updateCh:
-		if diff := cmp.Diff(update, wantXdsConfig, cmpOpts...); diff != "" {
-			t.Fatalf("Did not receive expected update from dependency manager,.  Diff (-got +want):\n%v", diff)
-		}
+	wantXdsConfig := xdsresource.XDSConfig{
+		Listener: &xdsresource.ListenerUpdate{
+			RouteConfigName: defaultTestRouteConfigName,
+			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}}},
+		RouteConfig: &xdsresource.RouteConfigUpdate{
+			VirtualHosts: []*xdsresource.VirtualHost{
+				{
+					Domains: []string{defaultTestServiceName},
+					Routes: []*xdsresource.Route{{Prefix: newStringP("/"),
+						WeightedClusters: []xdsresource.WeightedCluster{{Name: defaultTestClusterName, Weight: 100}},
+						ActionType:       xdsresource.RouteActionRoute}},
+				},
+			},
+		},
+		VirtualHost: &xdsresource.VirtualHost{
+			Domains: []string{defaultTestServiceName},
+			Routes: []*xdsresource.Route{{Prefix: newStringP("/"),
+				WeightedClusters: []xdsresource.WeightedCluster{{Name: defaultTestClusterName, Weight: 100}},
+				ActionType:       xdsresource.RouteActionRoute}},
+		},
+	}
+	if err := verifyXdsConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
+		t.Fatal(err)
 	}
 
 	// Remove listener resource so that we get listener resource error.
@@ -399,32 +399,27 @@ func (s) TestListenerResourceError(t *testing.T) {
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
-	select {
-	case err := <-errorCh:
-		if err := verifyError(err, fmt.Sprintf("xds: resource %q of type %q has been removed", defaultTestServiceName, "ListenerResource"), nodeID); err != nil {
-			t.Fatal(err)
-		}
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for error from dependency manager")
+
+	if err := verifyError(ctx, watcher.errorCh, fmt.Sprintf("xds: resource %q of type %q has been removed", defaultTestServiceName, "ListenerResource"), nodeID); err != nil {
+		t.Fatal(err)
 	}
+
 }
 
 // Tests the case where dependency manager receives a route config resource
 // error by sending a route resource that is NACKed by the XDSClient. It
-// verifies that OnError is called with correct error.
+// verifies that Error is called with correct error.
 func (s) TestRouteResourceError(t *testing.T) {
 	nodeID := uuid.New().String()
 	mgmtServer, bc := setupManagementServerForTest(t, nodeID)
 	defer mgmtServer.Stop()
+	xdsClient, cancel := createXDSClient(t, bc)
+	defer cancel()
 
 	errorCh := make(chan error, 1)
 	watcher := &testWatcher{
-		onUpdate: func(*xdsresource.XDSConfig) {
-			t.Errorf("Received unexpected update from dependency manager")
-		},
-		onError: func(err error) {
-			errorCh <- err
-		},
+		updateCh: make(chan xdsresource.XDSConfig),
+		errorCh:  errorCh,
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -444,34 +439,26 @@ func (s) TestRouteResourceError(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	dm := newDependencyManagerForTest(t, defaultTestServiceName, defaultTestServiceName, bc, watcher)
+	dm := xdsdepmgr.New(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
 	defer dm.Close()
 
-	select {
-	case err := <-errorCh:
-		if err := verifyError(err, "route resource error", nodeID); err != nil {
-			t.Fatal(err)
-		}
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for error from dependency manager")
+	if err := verifyError(ctx, watcher.errorCh, "route resource error", nodeID); err != nil {
+		t.Fatal(err)
 	}
 }
 
 // Tests the case where route config updates receives does not have any virtual
-// host. Verifies that OnError is called with correct error.
+// host. Verifies that Error is called with correct error.
 func (s) TestNoVirtualHost(t *testing.T) {
 	nodeID := uuid.New().String()
 	mgmtServer, bc := setupManagementServerForTest(t, nodeID)
 	defer mgmtServer.Stop()
+	xdsClient, cancel := createXDSClient(t, bc)
+	defer cancel()
 
-	errorCh := make(chan error, 1)
 	watcher := &testWatcher{
-		onUpdate: func(*xdsresource.XDSConfig) {
-			t.Errorf("Received unexpected update from dependency manager")
-		},
-		onError: func(err error) {
-			errorCh <- err
-		},
+		updateCh: make(chan xdsresource.XDSConfig),
+		errorCh:  make(chan error),
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -489,40 +476,33 @@ func (s) TestNoVirtualHost(t *testing.T) {
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
-	dm := newDependencyManagerForTest(t, defaultTestServiceName, defaultTestServiceName, bc, watcher)
+	dm := xdsdepmgr.New(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
 	defer dm.Close()
 
-	select {
-	case err := <-errorCh:
-		if err := verifyError(err, "could not find VirtualHost", ""); err != nil {
-			t.Fatal(err)
-		}
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for error from dependency manager")
+	if err := verifyError(ctx, watcher.errorCh, "could not find VirtualHost", nodeID); err != nil {
+		t.Fatal(err)
 	}
 }
 
-// Tests the case where we get an ambient error and verify that
-// we correctly log the warning for it. To make sure we get an ambient
-// error, we send a correct update first , then send an invalid one and then
-// send the valid resource again. We send the valid resource again so that we
-// can be sure the abmient error reaches the dependency manager since there is
-// no other way to wait for it .
+// Tests the case where we get an ambient error and verify that we correctly log
+// the warning for it. To make sure we get an ambient error, we send a correct
+// update first , then send an invalid one and then send the valid resource
+// again. We send the valid resource again so that we can be sure the abmient
+// error reaches the dependency manager since there is no other way to wait for
+// it .
 func (s) TestAmbientError(t *testing.T) {
+	// Expect a warning log for the ambient error.
 	grpctest.ExpectWarning("Listener resource ambient error")
+
 	nodeID := uuid.New().String()
 	mgmtServer, bc := setupManagementServerForTest(t, nodeID)
 	defer mgmtServer.Stop()
+	xdsClient, cancel := createXDSClient(t, bc)
+	defer cancel()
 
-	updateCh := make(chan xdsresource.XDSConfig, 1)
-	errorCh := make(chan error, 1)
 	watcher := &testWatcher{
-		onUpdate: func(cfg *xdsresource.XDSConfig) {
-			updateCh <- *cfg
-		},
-		onError: func(err error) {
-			errorCh <- err
-		},
+		updateCh: make(chan xdsresource.XDSConfig),
+		errorCh:  make(chan error),
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -540,21 +520,39 @@ func (s) TestAmbientError(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	dm := newDependencyManagerForTest(t, defaultTestServiceName, defaultTestServiceName, bc, watcher)
+	dm := xdsdepmgr.New(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
 	defer dm.Close()
 
 	// Wait for the initial valid update.
-	select {
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for initial update from dependency manager")
-	case update := <-updateCh:
-		if diff := cmp.Diff(update, wantXdsConfig, cmpOpts...); diff != "" {
-			t.Fatalf("Did not receive expected update from dependency manager,.  Diff (-got +want):\n%v", diff)
-		}
+	wantXdsConfig := xdsresource.XDSConfig{
+		Listener: &xdsresource.ListenerUpdate{
+			RouteConfigName: defaultTestRouteConfigName,
+			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}}},
+		RouteConfig: &xdsresource.RouteConfigUpdate{
+			VirtualHosts: []*xdsresource.VirtualHost{
+				{
+					Domains: []string{defaultTestServiceName},
+					Routes: []*xdsresource.Route{{Prefix: newStringP("/"),
+						WeightedClusters: []xdsresource.WeightedCluster{{Name: defaultTestClusterName, Weight: 100}},
+						ActionType:       xdsresource.RouteActionRoute}},
+				},
+			},
+		},
+		VirtualHost: &xdsresource.VirtualHost{
+			Domains: []string{defaultTestServiceName},
+			Routes: []*xdsresource.Route{{Prefix: newStringP("/"),
+				WeightedClusters: []xdsresource.WeightedCluster{{Name: defaultTestClusterName, Weight: 100}},
+				ActionType:       xdsresource.RouteActionRoute}},
+		},
+	}
+	if err := verifyXdsConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
+		t.Fatal(err)
 	}
 
-	// Now, send an invalid listener resource. Since a valid one is already
-	// cached, this should result in an ambient error.
+	// Configure a listener resource that is expected to be NACKed because it
+	// does not contain the `RouteSpecifier` field in the HTTPConnectionManager.
+	// Since a valid one is already cached, this should result in an ambient
+	// error.
 	hcm := testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
 		HttpFilters: []*v3httppb.HttpFilter{e2e.HTTPFilter("router", &v3routerpb.Router{})},
 	})
@@ -570,20 +568,19 @@ func (s) TestAmbientError(t *testing.T) {
 		}},
 	}
 	resources.Listeners = []*v3listenerpb.Listener{lis}
-	resources.Routes = nil
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
 
-	// We expect no call to OnError or OnUpdate on our watcher. We just wait for
+	// We expect no call to Error or Update on our watcher. We just wait for
 	// a short duration to ensure that.
 	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
 	select {
-	case err := <-errorCh:
-		t.Fatalf("Unexpected call to OnError %v", err)
-	case update := <-updateCh:
-		t.Fatalf("Unexpected call to OnUpdate %+v", update)
+	case err := <-watcher.errorCh:
+		t.Fatalf("Unexpected call to Error %v", err)
+	case update := <-watcher.updateCh:
+		t.Fatalf("Unexpected call to Update %+v", update)
 	case <-sCtx.Done():
 	}
 
@@ -599,31 +596,23 @@ func (s) TestAmbientError(t *testing.T) {
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
-	select {
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for initial update from dependency manager")
-	case update := <-updateCh:
-		if diff := cmp.Diff(update, wantXdsConfig, cmpOpts...); diff != "" {
-			t.Fatalf("Did not receive expected update from dependency manager,.  Diff (-got +want):\n%v", diff)
-		}
+	if err := verifyXdsConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
+		t.Fatal(err)
 	}
 }
 
 // Tests the case where the cluster name changes in the route resource update
-// and verify that each time OnUpdate is called with correct cluster name.
+// and verify that each time Update is called with correct cluster name.
 func (s) TestRouteResourceUpdate(t *testing.T) {
 	nodeID := uuid.New().String()
 	mgmtServer, bc := setupManagementServerForTest(t, nodeID)
 	defer mgmtServer.Stop()
+	xdsClient, cancel := createXDSClient(t, bc)
+	defer cancel()
 
-	updateCh := make(chan xdsresource.XDSConfig, 1)
 	watcher := &testWatcher{
-		onUpdate: func(cfg *xdsresource.XDSConfig) {
-			updateCh <- *cfg
-		},
-		onError: func(err error) {
-			t.Errorf("Received unexpected error from dependency manager: %v", err)
-		},
+		updateCh: make(chan xdsresource.XDSConfig),
+		errorCh:  make(chan error),
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -641,17 +630,33 @@ func (s) TestRouteResourceUpdate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	dm := newDependencyManagerForTest(t, defaultTestServiceName, defaultTestServiceName, bc, watcher)
+	dm := xdsdepmgr.New(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
 	defer dm.Close()
 
 	// Wait for the first update.
-	select {
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for initial update from dependency manager")
-	case update := <-updateCh:
-		if gotCluster := update.VirtualHost.Routes[0].WeightedClusters[0]; gotCluster.Name != defaultTestClusterName || gotCluster.Weight != 100 {
-			t.Fatalf("Update has wrong cluster, got: %v, want: %v", update.VirtualHost.Routes[0].WeightedClusters, defaultTestClusterName)
-		}
+	wantXdsConfig := xdsresource.XDSConfig{
+		Listener: &xdsresource.ListenerUpdate{
+			RouteConfigName: defaultTestRouteConfigName,
+			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}}},
+		RouteConfig: &xdsresource.RouteConfigUpdate{
+			VirtualHosts: []*xdsresource.VirtualHost{
+				{
+					Domains: []string{defaultTestServiceName},
+					Routes: []*xdsresource.Route{{Prefix: newStringP("/"),
+						WeightedClusters: []xdsresource.WeightedCluster{{Name: defaultTestClusterName, Weight: 100}},
+						ActionType:       xdsresource.RouteActionRoute}},
+				},
+			},
+		},
+		VirtualHost: &xdsresource.VirtualHost{
+			Domains: []string{defaultTestServiceName},
+			Routes: []*xdsresource.Route{{Prefix: newStringP("/"),
+				WeightedClusters: []xdsresource.WeightedCluster{{Name: defaultTestClusterName, Weight: 100}},
+				ActionType:       xdsresource.RouteActionRoute}},
+		},
+	}
+	if err := verifyXdsConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
+		t.Fatal(err)
 	}
 
 	// Update route to point to a new cluster.
@@ -663,12 +668,124 @@ func (s) TestRouteResourceUpdate(t *testing.T) {
 	}
 
 	// Wait for the second update and verify it has the new cluster.
-	select {
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for route update from dependency manager")
-	case update := <-updateCh:
-		if gotCluster := update.VirtualHost.Routes[0].WeightedClusters[0]; gotCluster.Name != newClusterName || gotCluster.Weight != 100 {
-			t.Fatalf("Second update has wrong cluster, got: %v, want: %v", update.VirtualHost.Routes[0].WeightedClusters, newClusterName)
-		}
+	wantXdsConfig.RouteConfig.VirtualHosts[0].Routes[0].WeightedClusters[0].Name = newClusterName
+	wantXdsConfig.VirtualHost.Routes[0].WeightedClusters[0].Name = newClusterName
+	if err := verifyXdsConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Tests the case where the route resource is first sent from the management
+// server and the changed to be inline with the listener and then again changed
+// to be received from the management server. It verifies that each time Update
+// called with the correct XDSConfig.
+func (s) TestRouteResourceChangeToInline(t *testing.T) {
+	nodeID := uuid.New().String()
+	mgmtServer, bc := setupManagementServerForTest(t, nodeID)
+	defer mgmtServer.Stop()
+	xdsClient, cancel := createXDSClient(t, bc)
+	defer cancel()
+
+	watcher := &testWatcher{
+		updateCh: make(chan xdsresource.XDSConfig),
+		errorCh:  make(chan error),
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	// Initial resources with defaultTestClusterName
+	listener := e2e.DefaultClientListener(defaultTestServiceName, defaultTestRouteConfigName)
+	route := e2e.DefaultRouteConfig(defaultTestRouteConfigName, defaultTestServiceName, defaultTestClusterName)
+	resources := e2e.UpdateOptions{
+		NodeID:         nodeID,
+		Listeners:      []*v3listenerpb.Listener{listener},
+		Routes:         []*v3routepb.RouteConfiguration{route},
+		SkipValidation: true,
+	}
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	dm := xdsdepmgr.New(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
+	defer dm.Close()
+
+	// Wait for the first update.
+	wantXdsConfig := xdsresource.XDSConfig{
+		Listener: &xdsresource.ListenerUpdate{
+			RouteConfigName: defaultTestRouteConfigName,
+			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}}},
+		RouteConfig: &xdsresource.RouteConfigUpdate{
+			VirtualHosts: []*xdsresource.VirtualHost{
+				{
+					Domains: []string{defaultTestServiceName},
+					Routes: []*xdsresource.Route{{Prefix: newStringP("/"),
+						WeightedClusters: []xdsresource.WeightedCluster{{Name: defaultTestClusterName, Weight: 100}},
+						ActionType:       xdsresource.RouteActionRoute}},
+				},
+			},
+		},
+		VirtualHost: &xdsresource.VirtualHost{
+			Domains: []string{defaultTestServiceName},
+			Routes: []*xdsresource.Route{{Prefix: newStringP("/"),
+				WeightedClusters: []xdsresource.WeightedCluster{{Name: defaultTestClusterName, Weight: 100}},
+				ActionType:       xdsresource.RouteActionRoute}},
+		},
+	}
+	if err := verifyXdsConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
+		t.Fatal(err)
+	}
+
+	// Update route to point to a new cluster.
+	newClusterName := "new-cluster-name"
+	hcm := testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
+		RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
+			RouteConfig: e2e.DefaultRouteConfig(defaultTestRouteConfigName, defaultTestServiceName, newClusterName),
+		},
+		HttpFilters: []*v3httppb.HttpFilter{e2e.HTTPFilter("router", &v3routerpb.Router{})}, // router fields are unused by grpc
+	})
+	resources.Listeners[0].ApiListener.ApiListener = hcm
+	resources.Routes = nil
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Wait for the second update and verify it has the new cluster.
+	wantXdsConfig.Listener.InlineRouteConfig = &xdsresource.RouteConfigUpdate{
+		VirtualHosts: []*xdsresource.VirtualHost{
+			{
+				Domains: []string{defaultTestServiceName},
+				Routes: []*xdsresource.Route{{Prefix: newStringP("/"),
+					WeightedClusters: []xdsresource.WeightedCluster{{Name: newClusterName, Weight: 100}},
+					ActionType:       xdsresource.RouteActionRoute}},
+			},
+		},
+	}
+	wantXdsConfig.Listener.RouteConfigName = ""
+	wantXdsConfig.RouteConfig.VirtualHosts[0].Routes[0].WeightedClusters[0].Name = newClusterName
+	wantXdsConfig.VirtualHost.Routes[0].WeightedClusters[0].Name = newClusterName
+	if err := verifyXdsConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
+		t.Fatal(err)
+	}
+
+	// Change the route resource back to non-inline.
+	listener = e2e.DefaultClientListener(defaultTestServiceName, defaultTestRouteConfigName)
+	route = e2e.DefaultRouteConfig(defaultTestRouteConfigName, defaultTestServiceName, defaultTestClusterName)
+	resources = e2e.UpdateOptions{
+		NodeID:         nodeID,
+		Listeners:      []*v3listenerpb.Listener{listener},
+		Routes:         []*v3routepb.RouteConfiguration{route},
+		SkipValidation: true,
+	}
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Wait for the third update and verify it has the original cluster.
+	wantXdsConfig.Listener.InlineRouteConfig = nil
+	wantXdsConfig.Listener.RouteConfigName = defaultTestRouteConfigName
+	wantXdsConfig.RouteConfig.VirtualHosts[0].Routes[0].WeightedClusters[0].Name = defaultTestClusterName
+	wantXdsConfig.VirtualHost.Routes[0].WeightedClusters[0].Name = defaultTestClusterName
+	if err := verifyXdsConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
+		t.Fatal(err)
 	}
 }

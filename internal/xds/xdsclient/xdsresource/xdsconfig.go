@@ -40,10 +40,10 @@ type XDSConfig struct {
 	Clusters map[string]*ClusterResult
 }
 
-// ClusterResult contains a cluster's configuration when we receive a valid
-// resource from the management server. It contains an error when:
-//   - we receive an invalid resource from the management server and
-//     we did not already have a valid resource or
+// ClusterResult contains a cluster's configuration when a valid resource is
+// received from the management server. It contains an error when:
+//   - an invalid resource is received from the management server and
+//     a valid resource was not already present or
 //   - the cluster resource does not exist on the management server
 type ClusterResult struct {
 	Config ClusterConfig
@@ -53,19 +53,20 @@ type ClusterResult struct {
 // ClusterConfig contains configuration for a single cluster.
 type ClusterConfig struct {
 	// Cluster configuration for the cluster. This field is always set to a
-	// non-zero value
+	// non-nil value.
 	Cluster *ClusterUpdate
-	// Endpoint configuration for cluster. This field is only set if the cluster
-	// is a leaf cluster.
+	// EndpointConfig contains endpoint configuration for a leaf cluster. This
+	// field is only set for clusters of type EDS and LOGICAL_DNS.
 	EndpointConfig *EndpointConfig
-	// AggregateConfig is the set of leaf clusters for the cluster. This field
-	// is only set if the cluster is of type AGGREGATE.
+	// AggregateConfig contains configuration for an aggregate cluster. This
+	// field is only set for clusters of type AGGREGATE.
 	AggregateConfig *AggregateConfig
 }
 
 // AggregateConfig holds the configuration for an aggregate cluster.
 type AggregateConfig struct {
-	// LeafClusters specifies the names of the leaf clusters for the cluster.
+	// LeafClusters contains a prioritized list of names of the leaf clusters
+	// for the cluster.
 	LeafClusters []string
 }
 
@@ -73,10 +74,10 @@ type AggregateConfig struct {
 // cluster. Only one of EDSUpdate or DNSEndpoints will be populated based on the
 // cluster type.
 type EndpointConfig struct {
-	// Endpoint configurartion for the EDS type cluster.
+	// Endpoint configurartion for the EDS clusters.
 	EDSUpdate *EndpointsUpdate
-	// Endpoint configuration for the LOGICAL_DNS type cluster.
-	DNSEndpoints DNSUpdate
+	// Endpoint configuration for the LOGICAL_DNS clusters.
+	DNSEndpoints *DNSUpdate
 	// Stores error encountered while obtaining endpoints data for the cluster.
 	ResolutionNote error
 }
@@ -90,7 +91,7 @@ type DNSUpdate struct {
 }
 
 // xdsConfigkey is the type used as the key to store XDSConfig in the Attributes
-// field of resolver.states.
+// field of resolver.State.
 type xdsConfigkey struct{}
 
 // SetXDSConfig returns a copy of state in which the Attributes field is updated
@@ -100,8 +101,8 @@ func SetXDSConfig(state resolver.State, config *XDSConfig) resolver.State {
 	return state
 }
 
-// XDSConfigFromResolverState returns XDSConfig stored in attribute in resolver
-// state.
+// XDSConfigFromResolverState returns XDSConfig stored as an attribute in the
+// resolver state.
 func XDSConfigFromResolverState(state resolver.State) *XDSConfig {
 	state.Attributes.Value(xdsConfigkey{})
 	if v := state.Attributes.Value(xdsConfigkey{}); v != nil {

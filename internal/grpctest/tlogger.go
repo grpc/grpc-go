@@ -69,7 +69,7 @@ type tLogger struct {
 	mu    sync.Mutex
 	t     *testing.T
 	start time.Time
-	logs  []map[*regexp.Regexp]int
+	logs  map[logType]map[*regexp.Regexp]int
 }
 
 func init() {
@@ -87,7 +87,10 @@ func init() {
 		}
 	}
 	// Initialize tLogr with the determined verbosity level.
-	tLogr = &tLogger{logs: []map[*regexp.Regexp]int{{}, {}, {}, {}}, v: vLevel}
+	logsMap := map[logType]map[*regexp.Regexp]int{}
+	logsMap[errorLog] = map[*regexp.Regexp]int{}
+	logsMap[warningLog] = map[*regexp.Regexp]int{}
+	tLogr = &tLogger{logs: logsMap, v: vLevel}
 }
 
 // getCallingPrefix returns the <file:line> at the given depth from the stack.
@@ -115,13 +118,13 @@ func (tl *tLogger) log(ltype logType, depth int, format string, args ...any) {
 		switch ltype {
 		case errorLog:
 			// fmt.Sprintln is used rather than fmt.Sprint because tl.Log uses fmt.Sprintln behavior.
-			if tl.expected(fmt.Sprintln(args...), int(errorLog)) {
+			if tl.expected(fmt.Sprintln(args...), errorLog) {
 				tl.t.Log(args...)
 			} else {
 				tl.t.Error(args...)
 			}
 		case warningLog:
-			tl.expected(fmt.Sprintln(args...), int(warningLog))
+			tl.expected(fmt.Sprintln(args...), warningLog)
 			tl.t.Log(args...)
 		case fatalLog:
 			panic(fmt.Sprint(args...))
@@ -133,13 +136,13 @@ func (tl *tLogger) log(ltype logType, depth int, format string, args ...any) {
 		format = "%v " + format + "%s"
 		switch ltype {
 		case errorLog:
-			if tl.expected(fmt.Sprintf(format, args...), int(errorLog)) {
+			if tl.expected(fmt.Sprintf(format, args...), errorLog) {
 				tl.t.Logf(format, args...)
 			} else {
 				tl.t.Errorf(format, args...)
 			}
 		case warningLog:
-			tl.expected(fmt.Sprintln(args...), int(warningLog))
+			tl.expected(fmt.Sprintln(args...), warningLog)
 			tl.t.Log(args...)
 		case fatalLog:
 			panic(fmt.Sprintf(format, args...))
@@ -160,7 +163,8 @@ func (tl *tLogger) update(t *testing.T) {
 	}
 	tl.t = t
 	tl.start = time.Now()
-	tl.logs = []map[*regexp.Regexp]int{{}, {}, {}, {}}
+	tl.logs[errorLog] = map[*regexp.Regexp]int{}
+	tl.logs[warningLog] = map[*regexp.Regexp]int{}
 }
 
 // ExpectError declares an error to be expected. For the next test, the first
@@ -210,12 +214,13 @@ func (tl *tLogger) endTest(t *testing.T) {
 			t.Errorf("Expected warning '%v' not encountered", re.String())
 		}
 	}
-	tl.logs = []map[*regexp.Regexp]int{{}, {}, {}, {}}
+	tl.logs[errorLog] = map[*regexp.Regexp]int{}
+	tl.logs[warningLog] = map[*regexp.Regexp]int{}
 }
 
 // expected determines if the log string of the particular type is protected or
 // not.
-func (tl *tLogger) expected(s string, logType int) bool {
+func (tl *tLogger) expected(s string, logType logType) bool {
 	for re, count := range tl.logs[logType] {
 		if re.FindStringIndex(s) != nil {
 			tl.logs[logType][re]--
