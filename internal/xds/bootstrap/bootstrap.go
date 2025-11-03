@@ -377,9 +377,6 @@ func (sc *ServerConfig) UnmarshalJSON(data []byte) error {
 				// Call credential validation failed - this should fail bootstrap.
 				return fmt.Errorf("failed to build call credentials from bootstrap for %q: %v", cfg.Type, err)
 			}
-			if callCreds == nil {
-				continue
-			}
 			sc.selectedCallCreds = append(sc.selectedCallCreds, callCreds)
 			sc.extraDialOptions = append(sc.extraDialOptions, grpc.WithPerRPCCredentials(callCreds))
 			sc.cleanups = append(sc.cleanups, cancel)
