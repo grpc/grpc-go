@@ -29,6 +29,8 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/internal/envconfig"
+	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/stats"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/internal/xds/clients"
@@ -257,5 +259,34 @@ func (s) TestBuildXDSClientConfig_Success(t *testing.T) {
 				t.Errorf("buildXDSClientConfig() mismatch (-want +got):\n%s", diff)
 			}
 		})
+	}
+}
+
+func (s) TestServerConfigCallCredsIntegration(t *testing.T) {
+	testutils.SetEnvConfig(t, &envconfig.XDSBootstrapCallCredsEnabled, true)
+	// Test server config with both channel and call credentials.
+	serverConfigJSON := `{
+		"server_uri": "xds-server:443",
+		"channel_creds": [{"type": "tls", "config": {}}],
+		"call_creds": [
+			{
+				"type": "jwt_token_file",
+				"config": {"jwt_token_file": "/token.jwt"}
+			}
+		]
+	}`
+
+	var sc bootstrap.ServerConfig
+	if err := sc.UnmarshalJSON([]byte(serverConfigJSON)); err != nil {
+		t.Fatalf("Failed to unmarshal server config: %v", err)
+	}
+	// Verify call credentials are processed.
+	callCreds := sc.CallCredsConfigs()
+	if len(callCreds) != 1 {
+		t.Errorf("Got %d call credential configs, want 1", len(callCreds))
+	}
+	dialOpts := sc.DialOptions()
+	if len(dialOpts) != 1 {
+		t.Errorf("Got %d dial options, want 1", len(dialOpts))
 	}
 }

@@ -29,7 +29,7 @@ const testCredsBuilderName = "test_creds"
 var builder = &testCredsBuilder{}
 
 func init() {
-	RegisterCredentials(builder)
+	RegisterChannelCredentials(builder)
 }
 
 type testCredsBuilder struct {
@@ -46,7 +46,7 @@ func (t *testCredsBuilder) Name() string {
 }
 
 func TestRegisterNew(t *testing.T) {
-	c := GetCredentials(testCredsBuilderName)
+	c := GetChannelCredentials(testCredsBuilderName)
 	if c == nil {
 		t.Fatalf("GetCredentials(%q) credential = nil", testCredsBuilderName)
 	}
@@ -62,10 +62,10 @@ func TestRegisterNew(t *testing.T) {
 	}
 }
 
-func TestCredsBuilders(t *testing.T) {
+func TestChannelCredsBuilders(t *testing.T) {
 	tests := []struct {
 		typename string
-		builder  Credentials
+		builder  ChannelCredentials
 	}{
 		{"google_default", &googleDefaultCredsBuilder{}},
 		{"insecure", &insecureCredsBuilder{}},
@@ -78,12 +78,29 @@ func TestCredsBuilders(t *testing.T) {
 				t.Errorf("%T.Name = %v, want %v", test.builder, got, want)
 			}
 
-			_, stop, err := test.builder.Build(nil)
+			bundle, stop, err := test.builder.Build(nil)
 			if err != nil {
 				t.Fatalf("%T.Build failed: %v", test.builder, err)
 			}
+			if bundle == nil {
+				t.Errorf("%T.Build returned nil bundle, expected non-nil", test.builder)
+			}
 			stop()
 		})
+	}
+}
+
+func TestJWTCallCredsBuilder(t *testing.T) {
+	builder := &jwtCallCredsBuilder{}
+	config := json.RawMessage(`{"jwt_token_file":"/path/to/token.jwt"}`)
+
+	creds, stop, err := builder.Build(config)
+	if err != nil {
+		t.Fatalf("Build(%s) failed: %v", config, err)
+	}
+	defer stop()
+	if creds == nil {
+		t.Errorf("Build(%s) returned nil creds, expected non-nil", config)
 	}
 }
 
@@ -93,10 +110,10 @@ func TestTlsCredsBuilder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("tls.Build() failed with error %s when expected to succeed", err)
 	}
-	stop()
+	defer stop()
 
 	if _, stop, err := tls.Build(json.RawMessage(`{"ca_certificate_file":"/ca_certificates.pem","refresh_interval": "asdf"}`)); err == nil {
+		defer stop()
 		t.Errorf("tls.Build() succeeded with an invalid refresh interval, when expected to fail")
-		stop()
 	}
 }
