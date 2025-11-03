@@ -685,18 +685,20 @@ func (w *endpointWeight) slowStartScale(now time.Time, recordMetrics bool) float
 		return 1.0
 	}
 
-	if recordMetrics {
-		defer func() {
-			endpointsInSlowStartMetric.Record(w.metricsRecorder, 1, w.target, w.locality)
-		}()
-	}
-
 	ssc := w.cfg.SlowStartConfig
 	slowStartWindow := time.Duration(ssc.SlowStartWindow)
 	timeSinceReady := now.Sub(w.readySince)
 	// Outside slow start window.
 	if timeSinceReady >= slowStartWindow {
 		return 1.0
+	}
+
+	// We record metrics here to avoid incrementing the metrics
+	// when the slow start scale is 1.0.
+	if recordMetrics {
+		defer func() {
+			endpointsInSlowStartMetric.Record(w.metricsRecorder, 1, w.target, w.locality)
+		}()
 	}
 
 	// Calculate scaling factor using the formula from gRFC A100:
