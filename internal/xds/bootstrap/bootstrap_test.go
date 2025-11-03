@@ -356,9 +356,9 @@ var (
 	}
 	configWithGoogleDefaultCredsAndTrustedXDSServer = &Config{
 		xDSServers: []*ServerConfig{{
-			serverURI:      	  "trafficdirector.googleapis.com:443",
-			channelCreds:   	  []ChannelCreds{{Type: "google_default"}},
-			serverFeatures: 	  []string{"trusted_xds_server", "xds_v3"},
+			serverURI:            "trafficdirector.googleapis.com:443",
+			channelCreds:         []ChannelCreds{{Type: "google_default"}},
+			serverFeatures:       []string{"trusted_xds_server", "xds_v3"},
 			selectedChannelCreds: ChannelCreds{Type: "google_default"},
 		}},
 		node: v3Node,
