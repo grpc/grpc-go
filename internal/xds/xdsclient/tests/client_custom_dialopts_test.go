@@ -81,7 +81,7 @@ func (s) TestClientCustomDialOptsFromCredentialsBundle(t *testing.T) {
 	credsBuilder := &testCredsBuilder{
 		testDialOptNames: []string{"opt1", "opt2", "opt3"},
 	}
-	bootstrap.RegisterCredentials(credsBuilder)
+	bootstrap.RegisterChannelCredentials(credsBuilder)
 
 	// Start an xDS management server.
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
