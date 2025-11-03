@@ -19,6 +19,7 @@
 package mem
 
 import (
+	"fmt"
 	"io"
 )
 
@@ -126,9 +127,10 @@ func (s BufferSlice) Reader() *Reader {
 }
 
 // Reader exposes a BufferSlice's data as an io.Reader, allowing it to interface
-// with other parts systems. It also provides an additional convenience method
-// Remaining(), which returns the number of unread bytes remaining in the slice.
+// with other systems.
+//
 // Buffers will be freed as they are read.
+//
 // A Reader can be constructed from a BufferSlice; alternatively the zero value
 // of a Reader may be used after calling Reset on it.
 type Reader struct {
@@ -284,4 +286,60 @@ nextBuffer:
 			}
 		}
 	}
+}
+
+// Discard skips the next n bytes, returning the number of bytes discarded.
+//
+// It frees buffers as they are fully consumed.
+//
+// If Discard skips fewer than n bytes, it also returns an error.
+func (r *Reader) Discard(n int) (discarded int, err error) {
+	total := n
+	for n > 0 && r.len > 0 {
+		curData := r.data[0].ReadOnlyData()
+		curSize := min(n, len(curData)-r.bufferIdx)
+		n -= curSize
+		r.len -= curSize
+		r.bufferIdx += curSize
+		if r.bufferIdx >= len(curData) {
+			r.data[0].Free()
+			r.data = r.data[1:]
+			r.bufferIdx = 0
+		}
+	}
+	discarded = total - n
+	if n > 0 {
+		return discarded, fmt.Errorf("insufficient bytes in reader")
+	}
+	return discarded, nil
+}
+
+// Peek returns the next n bytes without advancing the reader.
+//
+// Peek appends results to the provided res slice and returns the updated slice.
+// This pattern allows re-using the storage of res if it has sufficient
+// capacity.
+//
+// The returned subslices are views into the underlying buffers and are only
+// valid until the reader is advanced past the corresponding buffer.
+//
+// If Peek returns fewer than n bytes, it also returns an error.
+func (r *Reader) Peek(n int, res [][]byte) ([][]byte, error) {
+	for i := 0; n > 0 && i < len(r.data); i++ {
+		curData := r.data[i].ReadOnlyData()
+		start := 0
+		if i == 0 {
+			start = r.bufferIdx
+		}
+		curSize := min(n, len(curData)-start)
+		if curSize == 0 {
+			continue
+		}
+		res = append(res, curData[start:start+curSize])
+		n -= curSize
+	}
+	if n > 0 {
+		return nil, fmt.Errorf("insufficient bytes in reader")
+	}
+	return res, nil
 }
