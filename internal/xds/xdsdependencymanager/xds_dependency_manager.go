@@ -139,7 +139,6 @@ func (m *DependencyManager) applyRouteConfigUpdate(update *xdsresource.RouteConf
 	m.maybeSendUpdate()
 }
 
-// Only executed in the context of a serializer callback.
 func (m *DependencyManager) onListenerResourceUpdate(update *xdsresource.ListenerUpdate) {
 	if m.logger.V(2) {
 		m.logger.Infof("Received update for Listener resource %q: %+v", m.ldsResourceName, update)
@@ -179,7 +178,6 @@ func (m *DependencyManager) onListenerResourceUpdate(update *xdsresource.Listene
 	m.routeConfigWatcher = newRouteConfigWatcher(m.rdsResourceName, m)
 }
 
-// Only executed in the context of a serializer callback.
 func (m *DependencyManager) onListenerResourceError(err error) {
 	m.logger.Warningf("Received resource error for Listener resource %q: %v", m.ldsResourceName, m.annotateErrorWithNodeID(err))
 
@@ -192,12 +190,10 @@ func (m *DependencyManager) onListenerResourceError(err error) {
 	m.watcher.Error(fmt.Errorf("listener resource error: %v", m.annotateErrorWithNodeID(err)))
 }
 
-// Only executed in the context of a serializer callback.
 func (m *DependencyManager) onListenerResourceAmbientError(err error) {
 	m.logger.Warningf("Listener resource ambient error: %v", m.annotateErrorWithNodeID(err))
 }
 
-// Only executed in the context of a serializer callback.
 func (m *DependencyManager) onRouteConfigResourceUpdate(resourceName string, update *xdsresource.RouteConfigUpdate) {
 	if m.logger.V(2) {
 		m.logger.Infof("Received update for RouteConfiguration resource %q: %+v", resourceName, update)
@@ -205,13 +201,11 @@ func (m *DependencyManager) onRouteConfigResourceUpdate(resourceName string, upd
 	m.applyRouteConfigUpdate(update)
 }
 
-// Only executed in the context of a serializer callback.
 func (m *DependencyManager) onRouteConfigResourceError(resourceName string, err error) {
 	m.logger.Warningf("Received resource error for RouteConfiguration resource %q: %v", resourceName, m.annotateErrorWithNodeID(err))
 	m.watcher.Error(fmt.Errorf("route resource error: %v", m.annotateErrorWithNodeID(err)))
 }
 
-// Only executed in the context of a serializer callback.
 func (m *DependencyManager) onRouteConfigResourceAmbientError(resourceName string, err error) {
 	m.logger.Warningf("Route resource ambient error %q: %v", resourceName, m.annotateErrorWithNodeID(err))
 }
