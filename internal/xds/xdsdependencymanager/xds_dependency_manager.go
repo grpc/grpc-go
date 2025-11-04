@@ -45,13 +45,13 @@ type ConfigWatcher interface {
 	// not modify it.
 	Update(*xdsresource.XDSConfig)
 
-	// Error is invoked when an error is received in listener or route resource.
-	// This includes cases where:
+	// Error is invoked when an error is received from the listener or route
+	// resource watcher. This includes cases where:
 	//  - The listener or route resource watcher reports a resource error.
 	//  - The received listener resource is a socket listener, not an API
-	//  listener - TODO :  This is not yet implemented, tracked here #8114
+	//    listener. TODO(i/8114): Implement this check.
 	//  - The received route configuration does not contain a virtual host
-	//  matching the channel's default authority.
+	//    matching the channel's default authority.
 	Error(error)
 }
 
@@ -59,29 +59,21 @@ type ConfigWatcher interface {
 // resources, resolves dependencies between them, and returns a complete
 // configuration to the xDS resolver.
 type DependencyManager struct {
-	xdsClient xdsclient.XDSClient
-
-	watcher ConfigWatcher
-
-	logger *internalgrpclog.PrefixLogger
-
-	// All the fields below are accessed only from within the context of
-	// serialized callbacks.
-
-	// dataplaneAuthority is the authority used for the data plane connections,
-	// which is also used to select the VirtualHost within the xDS
-	// RouteConfiguration.  This is %-encoded to match with VirtualHost Domain
-	// in xDS RouteConfiguration.
+	// The following fields are initialized at creation time and are read-only
+	// after that.
+	logger             *internalgrpclog.PrefixLogger
+	watcher            ConfigWatcher
+	xdsClient          xdsclient.XDSClient
+	ldsResourceName    string
 	dataplaneAuthority string
+	nodeID             string
 
-	ldsResourceName       string
 	listenerWatcher       *listenerWatcher
 	currentListenerUpdate *xdsresource.ListenerUpdate
-
-	rdsResourceName    string
-	currentRouteConfig *xdsresource.RouteConfigUpdate
-	routeConfigWatcher *routeConfigWatcher
-	currentVirtualHost *xdsresource.VirtualHost
+	routeConfigWatcher    *routeConfigWatcher
+	rdsResourceName       string
+	currentRouteConfig    *xdsresource.RouteConfigUpdate
+	currentVirtualHost    *xdsresource.VirtualHost
 }
 
 // New creates a new DependencyManager.
@@ -99,6 +91,7 @@ func New(listenerName, dataplaneAuthority string, xdsClient xdsclient.XDSClient,
 		dataplaneAuthority: dataplaneAuthority,
 		xdsClient:          xdsClient,
 		watcher:            watcher,
+		nodeID:             xdsClient.BootstrapConfig().Node().GetId(),
 	}
 	dm.logger = prefixLogger(dm)
 
@@ -108,9 +101,8 @@ func New(listenerName, dataplaneAuthority string, xdsClient xdsclient.XDSClient,
 	return dm
 }
 
-// Close closes the dependency manager and stops all the watchers registered.
+// Close cancels all registered resource watches.
 func (m *DependencyManager) Close() {
-
 	if m.listenerWatcher != nil {
 		m.listenerWatcher.stop()
 	}
@@ -122,8 +114,7 @@ func (m *DependencyManager) Close() {
 // annotateErrorWithNodeID annotates the given error with the provided xDS node
 // ID.
 func (m *DependencyManager) annotateErrorWithNodeID(err error) error {
-	nodeID := m.xdsClient.BootstrapConfig().Node().GetId()
-	return fmt.Errorf("[xDS node id: %v]: %w", nodeID, err)
+	return fmt.Errorf("[xDS node id: %v]: %w", m.nodeID, err)
 }
 
 // maybeSendUpdate checks that all the resources have been received and sends

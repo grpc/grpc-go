@@ -87,9 +87,10 @@ func init() {
 		}
 	}
 	// Initialize tLogr with the determined verbosity level.
-	logsMap := map[logType]map[*regexp.Regexp]int{}
-	logsMap[errorLog] = map[*regexp.Regexp]int{}
-	logsMap[warningLog] = map[*regexp.Regexp]int{}
+	logsMap := map[logType]map[*regexp.Regexp]int{
+		errorLog:   {},
+		warningLog: {},
+	}
 	tLogr = &tLogger{logs: logsMap, v: vLevel}
 }
 

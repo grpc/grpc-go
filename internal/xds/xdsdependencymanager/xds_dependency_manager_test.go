@@ -67,15 +67,16 @@ func newStringP(s string) *string {
 }
 
 // testWatcher is an implementation of the ConfigWatcher interface that sends
-// the updates and errors to respoctive channels.
+// the updates and errors received from the dependency manager to respective
+// channels, for the tests to verify.
 type testWatcher struct {
-	updateCh chan xdsresource.XDSConfig
+	updateCh chan *xdsresource.XDSConfig
 	errorCh  chan error
 }
 
 // Update sends the received XDSConfig update to the update channel.
 func (w *testWatcher) Update(cfg *xdsresource.XDSConfig) {
-	w.updateCh <- *cfg
+	w.updateCh <- cfg
 }
 
 // Error sends the received error to the error channel.
@@ -96,15 +97,15 @@ func verifyError(ctx context.Context, errCh chan error, wantErr, wantNodeID stri
 			return fmt.Errorf("got error from resolver %q, want nodeID %q", gotErr, wantNodeID)
 		}
 	case <-ctx.Done():
-		return fmt.Errorf("Timeout waiting for error from dependency manager")
+		return fmt.Errorf("timeout waiting for error from dependency manager")
 	}
 	return nil
 }
 
-func verifyXdsConfig(ctx context.Context, xdsCh chan xdsresource.XDSConfig, errCh chan error, want xdsresource.XDSConfig) error {
+func verifyXDSConfig(ctx context.Context, xdsCh chan *xdsresource.XDSConfig, errCh chan error, want *xdsresource.XDSConfig) error {
 	select {
 	case <-ctx.Done():
-		return fmt.Errorf("Timeout waiting for update from dependency manager")
+		return fmt.Errorf("timeout waiting for update from dependency manager")
 	case update := <-xdsCh:
 		cmpOpts := []cmp.Option{
 			cmpopts.EquateEmpty(),
@@ -113,15 +114,15 @@ func verifyXdsConfig(ctx context.Context, xdsCh chan xdsresource.XDSConfig, errC
 			cmpopts.IgnoreFields(xdsresource.RouteConfigUpdate{}, "Raw"),
 		}
 		if diff := cmp.Diff(update, want, cmpOpts...); diff != "" {
-			return fmt.Errorf("Did not receive expected update from dependency manager,.  Diff (-got +want):\n%v", diff)
+			return fmt.Errorf("received unexpected update from dependency manager. Diff (-got +want):\n%v", diff)
 		}
 	case err := <-errCh:
-		return fmt.Errorf("Received unexpected error from dependency manager: %v", err)
+		return fmt.Errorf("received unexpected error from dependency manager: %v", err)
 	}
 	return nil
 }
 
-func createXDSClient(t *testing.T, bootstrapContents []byte) (xdsclient.XDSClient, func()) {
+func createXDSClient(t *testing.T, bootstrapContents []byte) xdsclient.XDSClient {
 	t.Helper()
 
 	// Setup the bootstrap file contents.
@@ -141,7 +142,8 @@ func createXDSClient(t *testing.T, bootstrapContents []byte) (xdsclient.XDSClien
 	if err != nil {
 		t.Fatalf("Failed to create an xDS client: %v", err)
 	}
-	return c, cancel
+	t.Cleanup(cancel)
+	return c
 }
 
 // Spins up an xDS management server and sets up an xDS bootstrap configuration
@@ -155,9 +157,10 @@ func setupManagementServerForTest(t *testing.T, nodeID string) (*e2e.ManagementS
 	t.Helper()
 
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
+	t.Cleanup(mgmtServer.Stop)
+
 	bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 	return mgmtServer, bootstrapContents
-
 }
 
 // Tests the happy case where the dependency manager receives all the required
@@ -165,12 +168,10 @@ func setupManagementServerForTest(t *testing.T, nodeID string) (*e2e.ManagementS
 func (s) TestHappyCase(t *testing.T) {
 	nodeID := uuid.New().String()
 	mgmtServer, bc := setupManagementServerForTest(t, nodeID)
-	defer mgmtServer.Stop()
-	xdsClient, cancel := createXDSClient(t, bc)
-	defer cancel()
+	xdsClient := createXDSClient(t, bc)
 
 	watcher := &testWatcher{
-		updateCh: make(chan xdsresource.XDSConfig),
+		updateCh: make(chan *xdsresource.XDSConfig),
 		errorCh:  make(chan error),
 	}
 
@@ -191,28 +192,33 @@ func (s) TestHappyCase(t *testing.T) {
 
 	dm := xdsdepmgr.New(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
 	defer dm.Close()
-	wantXdsConfig := xdsresource.XDSConfig{
+	wantXdsConfig := &xdsresource.XDSConfig{
 		Listener: &xdsresource.ListenerUpdate{
 			RouteConfigName: defaultTestRouteConfigName,
-			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}}},
+			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+		},
 		RouteConfig: &xdsresource.RouteConfigUpdate{
 			VirtualHosts: []*xdsresource.VirtualHost{
 				{
 					Domains: []string{defaultTestServiceName},
-					Routes: []*xdsresource.Route{{Prefix: newStringP("/"),
+					Routes: []*xdsresource.Route{{
+						Prefix:           newStringP("/"),
 						WeightedClusters: []xdsresource.WeightedCluster{{Name: defaultTestClusterName, Weight: 100}},
-						ActionType:       xdsresource.RouteActionRoute}},
+						ActionType:       xdsresource.RouteActionRoute,
+					}},
 				},
 			},
 		},
 		VirtualHost: &xdsresource.VirtualHost{
 			Domains: []string{defaultTestServiceName},
-			Routes: []*xdsresource.Route{{Prefix: newStringP("/"),
+			Routes: []*xdsresource.Route{{
+				Prefix:           newStringP("/"),
 				WeightedClusters: []xdsresource.WeightedCluster{{Name: defaultTestClusterName, Weight: 100}},
-				ActionType:       xdsresource.RouteActionRoute}},
+				ActionType:       xdsresource.RouteActionRoute},
+			},
 		},
 	}
-	if err := verifyXdsConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
+	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -222,12 +228,10 @@ func (s) TestHappyCase(t *testing.T) {
 func (s) TestInlineRouteConfig(t *testing.T) {
 	nodeID := uuid.New().String()
 	mgmtServer, bc := setupManagementServerForTest(t, nodeID)
-	defer mgmtServer.Stop()
-	xdsClient, cancel := createXDSClient(t, bc)
-	defer cancel()
+	xdsClient := createXDSClient(t, bc)
 
 	watcher := &testWatcher{
-		updateCh: make(chan xdsresource.XDSConfig),
+		updateCh: make(chan *xdsresource.XDSConfig),
 		errorCh:  make(chan error),
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -261,37 +265,44 @@ func (s) TestInlineRouteConfig(t *testing.T) {
 	dm := xdsdepmgr.New(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
 	defer dm.Close()
 
-	wantConfig := xdsresource.XDSConfig{
+	wantConfig := &xdsresource.XDSConfig{
 		Listener: &xdsresource.ListenerUpdate{
 			InlineRouteConfig: &xdsresource.RouteConfigUpdate{
 				VirtualHosts: []*xdsresource.VirtualHost{
 					{
 						Domains: []string{defaultTestServiceName},
-						Routes: []*xdsresource.Route{{Prefix: newStringP("/"),
+						Routes: []*xdsresource.Route{{
+							Prefix:           newStringP("/"),
 							WeightedClusters: []xdsresource.WeightedCluster{{Name: defaultTestClusterName, Weight: 100}},
-							ActionType:       xdsresource.RouteActionRoute}},
+							ActionType:       xdsresource.RouteActionRoute},
+						},
 					},
 				},
 			},
-			HTTPFilters: []xdsresource.HTTPFilter{{Name: "router"}}},
+			HTTPFilters: []xdsresource.HTTPFilter{{Name: "router"}},
+		},
 		RouteConfig: &xdsresource.RouteConfigUpdate{
 			VirtualHosts: []*xdsresource.VirtualHost{
 				{
 					Domains: []string{defaultTestServiceName},
-					Routes: []*xdsresource.Route{{Prefix: newStringP("/"),
+					Routes: []*xdsresource.Route{{
+						Prefix:           newStringP("/"),
 						WeightedClusters: []xdsresource.WeightedCluster{{Name: defaultTestClusterName, Weight: 100}},
-						ActionType:       xdsresource.RouteActionRoute}},
+						ActionType:       xdsresource.RouteActionRoute},
+					},
 				},
 			},
 		},
 		VirtualHost: &xdsresource.VirtualHost{
 			Domains: []string{defaultTestServiceName},
-			Routes: []*xdsresource.Route{{Prefix: newStringP("/"),
+			Routes: []*xdsresource.Route{{
+				Prefix:           newStringP("/"),
 				WeightedClusters: []xdsresource.WeightedCluster{{Name: defaultTestClusterName, Weight: 100}},
-				ActionType:       xdsresource.RouteActionRoute}},
+				ActionType:       xdsresource.RouteActionRoute},
+			},
 		},
 	}
-	if err := verifyXdsConfig(ctx, watcher.updateCh, watcher.errorCh, wantConfig); err != nil {
+	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantConfig); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -302,12 +313,10 @@ func (s) TestInlineRouteConfig(t *testing.T) {
 func (s) TestIncompleteResources(t *testing.T) {
 	nodeID := uuid.New().String()
 	mgmtServer, bc := setupManagementServerForTest(t, nodeID)
-	defer mgmtServer.Stop()
-	xdsClient, cancel := createXDSClient(t, bc)
-	defer cancel()
+	xdsClient := createXDSClient(t, bc)
 
 	watcher := &testWatcher{
-		updateCh: make(chan xdsresource.XDSConfig),
+		updateCh: make(chan *xdsresource.XDSConfig),
 		errorCh:  make(chan error),
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -341,12 +350,10 @@ func (s) TestIncompleteResources(t *testing.T) {
 func (s) TestListenerResourceError(t *testing.T) {
 	nodeID := uuid.New().String()
 	mgmtServer, bc := setupManagementServerForTest(t, nodeID)
-	defer mgmtServer.Stop()
-	xdsClient, cancel := createXDSClient(t, bc)
-	defer cancel()
+	xdsClient := createXDSClient(t, bc)
 
 	watcher := &testWatcher{
-		updateCh: make(chan xdsresource.XDSConfig),
+		updateCh: make(chan *xdsresource.XDSConfig),
 		errorCh:  make(chan error),
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -369,28 +376,33 @@ func (s) TestListenerResourceError(t *testing.T) {
 	dm := xdsdepmgr.New(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
 	defer dm.Close()
 
-	wantXdsConfig := xdsresource.XDSConfig{
+	wantXdsConfig := &xdsresource.XDSConfig{
 		Listener: &xdsresource.ListenerUpdate{
 			RouteConfigName: defaultTestRouteConfigName,
-			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}}},
+			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+		},
 		RouteConfig: &xdsresource.RouteConfigUpdate{
 			VirtualHosts: []*xdsresource.VirtualHost{
 				{
 					Domains: []string{defaultTestServiceName},
-					Routes: []*xdsresource.Route{{Prefix: newStringP("/"),
+					Routes: []*xdsresource.Route{{
+						Prefix:           newStringP("/"),
 						WeightedClusters: []xdsresource.WeightedCluster{{Name: defaultTestClusterName, Weight: 100}},
-						ActionType:       xdsresource.RouteActionRoute}},
+						ActionType:       xdsresource.RouteActionRoute,
+					}},
 				},
 			},
 		},
 		VirtualHost: &xdsresource.VirtualHost{
 			Domains: []string{defaultTestServiceName},
-			Routes: []*xdsresource.Route{{Prefix: newStringP("/"),
+			Routes: []*xdsresource.Route{{
+				Prefix:           newStringP("/"),
 				WeightedClusters: []xdsresource.WeightedCluster{{Name: defaultTestClusterName, Weight: 100}},
-				ActionType:       xdsresource.RouteActionRoute}},
+				ActionType:       xdsresource.RouteActionRoute,
+			}},
 		},
 	}
-	if err := verifyXdsConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
+	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
 		t.Fatal(err)
 	}
 
@@ -403,7 +415,6 @@ func (s) TestListenerResourceError(t *testing.T) {
 	if err := verifyError(ctx, watcher.errorCh, fmt.Sprintf("xds: resource %q of type %q has been removed", defaultTestServiceName, "ListenerResource"), nodeID); err != nil {
 		t.Fatal(err)
 	}
-
 }
 
 // Tests the case where dependency manager receives a route config resource
@@ -412,13 +423,11 @@ func (s) TestListenerResourceError(t *testing.T) {
 func (s) TestRouteResourceError(t *testing.T) {
 	nodeID := uuid.New().String()
 	mgmtServer, bc := setupManagementServerForTest(t, nodeID)
-	defer mgmtServer.Stop()
-	xdsClient, cancel := createXDSClient(t, bc)
-	defer cancel()
+	xdsClient := createXDSClient(t, bc)
 
 	errorCh := make(chan error, 1)
 	watcher := &testWatcher{
-		updateCh: make(chan xdsresource.XDSConfig),
+		updateCh: make(chan *xdsresource.XDSConfig),
 		errorCh:  errorCh,
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -452,12 +461,10 @@ func (s) TestRouteResourceError(t *testing.T) {
 func (s) TestNoVirtualHost(t *testing.T) {
 	nodeID := uuid.New().String()
 	mgmtServer, bc := setupManagementServerForTest(t, nodeID)
-	defer mgmtServer.Stop()
-	xdsClient, cancel := createXDSClient(t, bc)
-	defer cancel()
+	xdsClient := createXDSClient(t, bc)
 
 	watcher := &testWatcher{
-		updateCh: make(chan xdsresource.XDSConfig),
+		updateCh: make(chan *xdsresource.XDSConfig),
 		errorCh:  make(chan error),
 	}
 
@@ -485,23 +492,21 @@ func (s) TestNoVirtualHost(t *testing.T) {
 }
 
 // Tests the case where we get an ambient error and verify that we correctly log
-// the warning for it. To make sure we get an ambient error, we send a correct
-// update first , then send an invalid one and then send the valid resource
-// again. We send the valid resource again so that we can be sure the abmient
+// a warning for it. To make sure we get an ambient error, we send a correct
+// update first, then send an invalid one and then send the valid resource
+// again. We send the valid resource again so that we can be sure the ambient
 // error reaches the dependency manager since there is no other way to wait for
-// it .
+// it.
 func (s) TestAmbientError(t *testing.T) {
 	// Expect a warning log for the ambient error.
 	grpctest.ExpectWarning("Listener resource ambient error")
 
 	nodeID := uuid.New().String()
 	mgmtServer, bc := setupManagementServerForTest(t, nodeID)
-	defer mgmtServer.Stop()
-	xdsClient, cancel := createXDSClient(t, bc)
-	defer cancel()
+	xdsClient := createXDSClient(t, bc)
 
 	watcher := &testWatcher{
-		updateCh: make(chan xdsresource.XDSConfig),
+		updateCh: make(chan *xdsresource.XDSConfig),
 		errorCh:  make(chan error),
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -524,28 +529,33 @@ func (s) TestAmbientError(t *testing.T) {
 	defer dm.Close()
 
 	// Wait for the initial valid update.
-	wantXdsConfig := xdsresource.XDSConfig{
+	wantXdsConfig := &xdsresource.XDSConfig{
 		Listener: &xdsresource.ListenerUpdate{
 			RouteConfigName: defaultTestRouteConfigName,
-			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}}},
+			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+		},
 		RouteConfig: &xdsresource.RouteConfigUpdate{
 			VirtualHosts: []*xdsresource.VirtualHost{
 				{
 					Domains: []string{defaultTestServiceName},
-					Routes: []*xdsresource.Route{{Prefix: newStringP("/"),
+					Routes: []*xdsresource.Route{{
+						Prefix:           newStringP("/"),
 						WeightedClusters: []xdsresource.WeightedCluster{{Name: defaultTestClusterName, Weight: 100}},
-						ActionType:       xdsresource.RouteActionRoute}},
+						ActionType:       xdsresource.RouteActionRoute,
+					}},
 				},
 			},
 		},
 		VirtualHost: &xdsresource.VirtualHost{
 			Domains: []string{defaultTestServiceName},
-			Routes: []*xdsresource.Route{{Prefix: newStringP("/"),
+			Routes: []*xdsresource.Route{{
+				Prefix:           newStringP("/"),
 				WeightedClusters: []xdsresource.WeightedCluster{{Name: defaultTestClusterName, Weight: 100}},
-				ActionType:       xdsresource.RouteActionRoute}},
+				ActionType:       xdsresource.RouteActionRoute,
+			}},
 		},
 	}
-	if err := verifyXdsConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
+	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
 		t.Fatal(err)
 	}
 
@@ -596,7 +606,7 @@ func (s) TestAmbientError(t *testing.T) {
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
-	if err := verifyXdsConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
+	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -606,12 +616,10 @@ func (s) TestAmbientError(t *testing.T) {
 func (s) TestRouteResourceUpdate(t *testing.T) {
 	nodeID := uuid.New().String()
 	mgmtServer, bc := setupManagementServerForTest(t, nodeID)
-	defer mgmtServer.Stop()
-	xdsClient, cancel := createXDSClient(t, bc)
-	defer cancel()
+	xdsClient := createXDSClient(t, bc)
 
 	watcher := &testWatcher{
-		updateCh: make(chan xdsresource.XDSConfig),
+		updateCh: make(chan *xdsresource.XDSConfig),
 		errorCh:  make(chan error),
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -634,28 +642,33 @@ func (s) TestRouteResourceUpdate(t *testing.T) {
 	defer dm.Close()
 
 	// Wait for the first update.
-	wantXdsConfig := xdsresource.XDSConfig{
+	wantXdsConfig := &xdsresource.XDSConfig{
 		Listener: &xdsresource.ListenerUpdate{
 			RouteConfigName: defaultTestRouteConfigName,
-			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}}},
+			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+		},
 		RouteConfig: &xdsresource.RouteConfigUpdate{
 			VirtualHosts: []*xdsresource.VirtualHost{
 				{
 					Domains: []string{defaultTestServiceName},
-					Routes: []*xdsresource.Route{{Prefix: newStringP("/"),
+					Routes: []*xdsresource.Route{{
+						Prefix:           newStringP("/"),
 						WeightedClusters: []xdsresource.WeightedCluster{{Name: defaultTestClusterName, Weight: 100}},
-						ActionType:       xdsresource.RouteActionRoute}},
+						ActionType:       xdsresource.RouteActionRoute,
+					}},
 				},
 			},
 		},
 		VirtualHost: &xdsresource.VirtualHost{
 			Domains: []string{defaultTestServiceName},
-			Routes: []*xdsresource.Route{{Prefix: newStringP("/"),
+			Routes: []*xdsresource.Route{{
+				Prefix:           newStringP("/"),
 				WeightedClusters: []xdsresource.WeightedCluster{{Name: defaultTestClusterName, Weight: 100}},
-				ActionType:       xdsresource.RouteActionRoute}},
+				ActionType:       xdsresource.RouteActionRoute,
+			}},
 		},
 	}
-	if err := verifyXdsConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
+	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
 		t.Fatal(err)
 	}
 
@@ -670,7 +683,7 @@ func (s) TestRouteResourceUpdate(t *testing.T) {
 	// Wait for the second update and verify it has the new cluster.
 	wantXdsConfig.RouteConfig.VirtualHosts[0].Routes[0].WeightedClusters[0].Name = newClusterName
 	wantXdsConfig.VirtualHost.Routes[0].WeightedClusters[0].Name = newClusterName
-	if err := verifyXdsConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
+	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -683,11 +696,10 @@ func (s) TestRouteResourceChangeToInline(t *testing.T) {
 	nodeID := uuid.New().String()
 	mgmtServer, bc := setupManagementServerForTest(t, nodeID)
 	defer mgmtServer.Stop()
-	xdsClient, cancel := createXDSClient(t, bc)
-	defer cancel()
+	xdsClient := createXDSClient(t, bc)
 
 	watcher := &testWatcher{
-		updateCh: make(chan xdsresource.XDSConfig),
+		updateCh: make(chan *xdsresource.XDSConfig),
 		errorCh:  make(chan error),
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -710,28 +722,33 @@ func (s) TestRouteResourceChangeToInline(t *testing.T) {
 	defer dm.Close()
 
 	// Wait for the first update.
-	wantXdsConfig := xdsresource.XDSConfig{
+	wantXdsConfig := &xdsresource.XDSConfig{
 		Listener: &xdsresource.ListenerUpdate{
 			RouteConfigName: defaultTestRouteConfigName,
-			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}}},
+			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+		},
 		RouteConfig: &xdsresource.RouteConfigUpdate{
 			VirtualHosts: []*xdsresource.VirtualHost{
 				{
 					Domains: []string{defaultTestServiceName},
-					Routes: []*xdsresource.Route{{Prefix: newStringP("/"),
+					Routes: []*xdsresource.Route{{
+						Prefix:           newStringP("/"),
 						WeightedClusters: []xdsresource.WeightedCluster{{Name: defaultTestClusterName, Weight: 100}},
-						ActionType:       xdsresource.RouteActionRoute}},
+						ActionType:       xdsresource.RouteActionRoute,
+					}},
 				},
 			},
 		},
 		VirtualHost: &xdsresource.VirtualHost{
 			Domains: []string{defaultTestServiceName},
-			Routes: []*xdsresource.Route{{Prefix: newStringP("/"),
+			Routes: []*xdsresource.Route{{
+				Prefix:           newStringP("/"),
 				WeightedClusters: []xdsresource.WeightedCluster{{Name: defaultTestClusterName, Weight: 100}},
-				ActionType:       xdsresource.RouteActionRoute}},
+				ActionType:       xdsresource.RouteActionRoute,
+			}},
 		},
 	}
-	if err := verifyXdsConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
+	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
 		t.Fatal(err)
 	}
 
@@ -756,14 +773,15 @@ func (s) TestRouteResourceChangeToInline(t *testing.T) {
 				Domains: []string{defaultTestServiceName},
 				Routes: []*xdsresource.Route{{Prefix: newStringP("/"),
 					WeightedClusters: []xdsresource.WeightedCluster{{Name: newClusterName, Weight: 100}},
-					ActionType:       xdsresource.RouteActionRoute}},
+					ActionType:       xdsresource.RouteActionRoute,
+				}},
 			},
 		},
 	}
 	wantXdsConfig.Listener.RouteConfigName = ""
 	wantXdsConfig.RouteConfig.VirtualHosts[0].Routes[0].WeightedClusters[0].Name = newClusterName
 	wantXdsConfig.VirtualHost.Routes[0].WeightedClusters[0].Name = newClusterName
-	if err := verifyXdsConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
+	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
 		t.Fatal(err)
 	}
 
@@ -785,7 +803,7 @@ func (s) TestRouteResourceChangeToInline(t *testing.T) {
 	wantXdsConfig.Listener.RouteConfigName = defaultTestRouteConfigName
 	wantXdsConfig.RouteConfig.VirtualHosts[0].Routes[0].WeightedClusters[0].Name = defaultTestClusterName
 	wantXdsConfig.VirtualHost.Routes[0].WeightedClusters[0].Name = defaultTestClusterName
-	if err := verifyXdsConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
+	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
 		t.Fatal(err)
 	}
 }
