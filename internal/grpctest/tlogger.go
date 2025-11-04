@@ -173,23 +173,20 @@ func (tl *tLogger) update(t *testing.T) {
 // Update(). Note that if an expected error is not encountered, this will cause
 // the test to fail.
 func ExpectError(expr string) {
-	ExpectErrorN(expr, 1)
+	expectLogsN(expr, 1, errorLog)
 }
 
 // ExpectErrorN declares an error to be expected n times.
 func ExpectErrorN(expr string, n int) {
-	tLogr.mu.Lock()
-	defer tLogr.mu.Unlock()
-	re, err := regexp.Compile(expr)
-	if err != nil {
-		tLogr.t.Error(err)
-		return
-	}
-	tLogr.logs[errorLog][re] += n
+	expectLogsN(expr, n, errorLog)
 }
 
 // ExpectWarning declares a warning to be expected.
 func ExpectWarning(expr string) {
+	expectLogsN(expr, 1, warningLog)
+}
+
+func expectLogsN(expr string, n int, logType logType) {
 	tLogr.mu.Lock()
 	defer tLogr.mu.Unlock()
 	re, err := regexp.Compile(expr)
@@ -197,7 +194,7 @@ func ExpectWarning(expr string) {
 		tLogr.t.Error(err)
 		return
 	}
-	tLogr.logs[warningLog][re]++
+	tLogr.logs[logType][re] += n
 }
 
 // endTest checks if expected errors were not encountered.
