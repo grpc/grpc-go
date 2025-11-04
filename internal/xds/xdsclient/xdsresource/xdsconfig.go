@@ -31,7 +31,7 @@ type XDSConfig struct {
 	// guaranteed to be non-nil.
 	RouteConfig *RouteConfigUpdate
 
-	// VirtualHost selected from the route configuration whose domain field
+	// VirtualHost is selected from the route configuration whose domain field
 	// offers the best match against the provided dataplane authority. It is
 	// guaranteed to be non-nil.
 	VirtualHost *VirtualHost
@@ -56,10 +56,10 @@ type ClusterConfig struct {
 	// non-nil value.
 	Cluster *ClusterUpdate
 	// EndpointConfig contains endpoint configuration for a leaf cluster. This
-	// field is only set for clusters of type EDS and LOGICAL_DNS.
+	// field is only set for EDS and LOGICAL_DNS clusters.
 	EndpointConfig *EndpointConfig
 	// AggregateConfig contains configuration for an aggregate cluster. This
-	// field is only set for clusters of type AGGREGATE.
+	// field is only set for AGGREGATE clusters.
 	AggregateConfig *AggregateConfig
 }
 
@@ -78,13 +78,14 @@ type EndpointConfig struct {
 	EDSUpdate *EndpointsUpdate
 	// Endpoint configuration for the LOGICAL_DNS clusters.
 	DNSEndpoints *DNSUpdate
-	// Stores error encountered while obtaining endpoints data for the cluster.
+	// ResolutionNote stores error encountered while obtaining endpoints data for the cluster. It may contain a nil value when a valid endpoint datais received. It contains an error when:
+	//   - an invalid resource is received from the management server or
+	//   - the endpoint resource does not exist on the management server
 	ResolutionNote error
 }
 
 // DNSUpdate represents the result of a DNS resolution, containing a list of
-// discovered endpoints. This is only populated for the LOGICAL_DNS cluster
-// type.
+// discovered endpoints. This is only populated for the LOGICAL_DNS clusters.
 type DNSUpdate struct {
 	// Endpoints is the complete list of endpoints returned by the DNS resolver.
 	Endpoints []resolver.Endpoint
