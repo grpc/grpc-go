@@ -19,10 +19,12 @@
 package xdsdepmgr
 
 import (
+	"context"
 	"fmt"
 
 	"google.golang.org/grpc/grpclog"
 	internalgrpclog "google.golang.org/grpc/internal/grpclog"
+	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/xds/xdsclient"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 )
@@ -68,6 +70,15 @@ type DependencyManager struct {
 	dataplaneAuthority string
 	nodeID             string
 
+	// Serializes watcher cancellations, resource updates, and error callbacks.
+	// While the xDS client guarantees that update and error callbacks are
+	// processed sequentially, it does not serialize watch cancellations. This
+	// serializer ensures all three event types run in sequence, preventing
+	// cancellations from running concurrently with other callbacks.
+	serializer       *grpcsync.CallbackSerializer
+	serializerCancel context.CancelFunc
+
+	// The following fields are only accessed from within the serializer.
 	listenerWatcher       *listenerWatcher
 	currentListenerUpdate *xdsresource.ListenerUpdate
 	routeConfigWatcher    *routeConfigWatcher
@@ -94,6 +105,9 @@ func New(listenerName, dataplaneAuthority string, xdsClient xdsclient.XDSClient,
 		nodeID:             xdsClient.BootstrapConfig().Node().GetId(),
 	}
 	dm.logger = prefixLogger(dm)
+	ctx, cancel := context.WithCancel(context.Background())
+	dm.serializer = grpcsync.NewCallbackSerializer(ctx)
+	dm.serializerCancel = cancel
 
 	// Start the listener watch. Listener watch will start the other resource
 	// watches as needed.
@@ -103,6 +117,9 @@ func New(listenerName, dataplaneAuthority string, xdsClient xdsclient.XDSClient,
 
 // Close cancels all registered resource watches.
 func (m *DependencyManager) Close() {
+	m.serializerCancel()
+	<-m.serializer.Done()
+
 	if m.listenerWatcher != nil {
 		m.listenerWatcher.stop()
 	}
@@ -139,73 +156,96 @@ func (m *DependencyManager) applyRouteConfigUpdate(update *xdsresource.RouteConf
 	m.maybeSendUpdate()
 }
 
-func (m *DependencyManager) onListenerResourceUpdate(update *xdsresource.ListenerUpdate) {
-	if m.logger.V(2) {
-		m.logger.Infof("Received update for Listener resource %q: %+v", m.ldsResourceName, update)
-	}
+func (m *DependencyManager) onListenerResourceUpdate(update *xdsresource.ListenerUpdate, onDone func()) {
+	handleUpdate := func(context.Context) {
+		defer onDone()
+		if m.logger.V(2) {
+			m.logger.Infof("Received update for Listener resource %q: %+v", m.ldsResourceName, update)
+		}
 
-	m.currentListenerUpdate = update
+		m.currentListenerUpdate = update
 
-	if update.InlineRouteConfig != nil {
-		// If there was a previous route config watcher because of a non-inline
-		// route configuration, cancel it.
-		m.rdsResourceName = ""
+		if update.InlineRouteConfig != nil {
+			// If there was a previous route config watcher because of a non-inline
+			// route configuration, cancel it.
+			m.rdsResourceName = ""
+			if m.routeConfigWatcher != nil {
+				m.routeConfigWatcher.stop()
+				m.routeConfigWatcher = nil
+			}
+			m.applyRouteConfigUpdate(update.InlineRouteConfig)
+			return
+		}
+
+		// We get here only if there was no inline route configuration. If the route
+		// config name has not changed, send an update with existing route
+		// configuration and the newly received listener configuration.
+		if m.rdsResourceName == update.RouteConfigName {
+			m.maybeSendUpdate()
+			return
+		}
+
+		// If the route config name has changed, cancel the old watcher and start a
+		// new one. At this point, since the new route config name has not yet been
+		// resolved, no update is sent to the channel, and therefore the old route
+		// configuration (if received) is used until the new one is received.
+		m.rdsResourceName = update.RouteConfigName
 		if m.routeConfigWatcher != nil {
 			m.routeConfigWatcher.stop()
-			m.routeConfigWatcher = nil
+			m.currentVirtualHost = nil
 		}
-		m.applyRouteConfigUpdate(update.InlineRouteConfig)
-		return
+		m.routeConfigWatcher = newRouteConfigWatcher(m.rdsResourceName, m)
 	}
+	m.serializer.ScheduleOr(handleUpdate, onDone)
+}
 
-	// We get here only if there was no inline route configuration. If the route
-	// config name has not changed, send an update with existing route
-	// configuration and the newly received listener configuration.
-	if m.rdsResourceName == update.RouteConfigName {
-		m.maybeSendUpdate()
-		return
-	}
+func (m *DependencyManager) onListenerResourceError(err error, onDone func()) {
+	handleError := func(context.Context) {
+		m.logger.Warningf("Received resource error for Listener resource %q: %v", m.ldsResourceName, m.annotateErrorWithNodeID(err))
 
-	// If the route config name has changed, cancel the old watcher and start a
-	// new one. At this point, since the new route config name has not yet been
-	// resolved, no update is sent to the channel, and therefore the old route
-	// configuration (if received) is used until the new one is received.
-	m.rdsResourceName = update.RouteConfigName
-	if m.routeConfigWatcher != nil {
-		m.routeConfigWatcher.stop()
+		if m.routeConfigWatcher != nil {
+			m.routeConfigWatcher.stop()
+		}
+		m.rdsResourceName = ""
 		m.currentVirtualHost = nil
+		m.routeConfigWatcher = nil
+		m.watcher.Error(fmt.Errorf("listener resource error: %v", m.annotateErrorWithNodeID(err)))
+		onDone()
 	}
-	m.routeConfigWatcher = newRouteConfigWatcher(m.rdsResourceName, m)
+	m.serializer.ScheduleOr(handleError, onDone)
 }
 
-func (m *DependencyManager) onListenerResourceError(err error) {
-	m.logger.Warningf("Received resource error for Listener resource %q: %v", m.ldsResourceName, m.annotateErrorWithNodeID(err))
+func (m *DependencyManager) onListenerResourceAmbientError(err error, onDone func()) {
+	m.serializer.ScheduleOr(func(context.Context) {
+		m.logger.Warningf("Listener resource ambient error: %v", m.annotateErrorWithNodeID(err))
+		onDone()
+	}, onDone)
+}
 
-	if m.routeConfigWatcher != nil {
-		m.routeConfigWatcher.stop()
+func (m *DependencyManager) onRouteConfigResourceUpdate(resourceName string, update *xdsresource.RouteConfigUpdate, onDone func()) {
+	handleUpdate := func(context.Context) {
+		if m.logger.V(2) {
+			m.logger.Infof("Received update for RouteConfiguration resource %q: %+v", resourceName, update)
+		}
+		m.applyRouteConfigUpdate(update)
+		onDone()
 	}
-	m.rdsResourceName = ""
-	m.currentVirtualHost = nil
-	m.routeConfigWatcher = nil
-	m.watcher.Error(fmt.Errorf("listener resource error: %v", m.annotateErrorWithNodeID(err)))
+	m.serializer.ScheduleOr(handleUpdate, onDone)
 }
 
-func (m *DependencyManager) onListenerResourceAmbientError(err error) {
-	m.logger.Warningf("Listener resource ambient error: %v", m.annotateErrorWithNodeID(err))
-}
-
-func (m *DependencyManager) onRouteConfigResourceUpdate(resourceName string, update *xdsresource.RouteConfigUpdate) {
-	if m.logger.V(2) {
-		m.logger.Infof("Received update for RouteConfiguration resource %q: %+v", resourceName, update)
+func (m *DependencyManager) onRouteConfigResourceError(resourceName string, err error, onDone func()) {
+	handleError := func(context.Context) {
+		m.logger.Warningf("Received resource error for RouteConfiguration resource %q: %v", resourceName, m.annotateErrorWithNodeID(err))
+		m.watcher.Error(fmt.Errorf("route resource error: %v", m.annotateErrorWithNodeID(err)))
+		onDone()
 	}
-	m.applyRouteConfigUpdate(update)
+	m.serializer.ScheduleOr(handleError, onDone)
 }
 
-func (m *DependencyManager) onRouteConfigResourceError(resourceName string, err error) {
-	m.logger.Warningf("Received resource error for RouteConfiguration resource %q: %v", resourceName, m.annotateErrorWithNodeID(err))
-	m.watcher.Error(fmt.Errorf("route resource error: %v", m.annotateErrorWithNodeID(err)))
-}
-
-func (m *DependencyManager) onRouteConfigResourceAmbientError(resourceName string, err error) {
-	m.logger.Warningf("Route resource ambient error %q: %v", resourceName, m.annotateErrorWithNodeID(err))
+func (m *DependencyManager) onRouteConfigResourceAmbientError(resourceName string, err error, onDone func()) {
+	handleError := func(context.Context) {
+		m.logger.Warningf("Route resource ambient error %q: %v", resourceName, m.annotateErrorWithNodeID(err))
+		onDone()
+	}
+	m.serializer.ScheduleOr(handleError, onDone)
 }

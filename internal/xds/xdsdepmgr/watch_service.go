@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2020 gRPC authors.
+ * Copyright 2025 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,27 +38,27 @@ func newListenerWatcher(resourceName string, depMgr *DependencyManager) *listene
 }
 
 func (l *listenerWatcher) ResourceChanged(update *xdsresource.ListenerUpdate, onDone func()) {
-	defer onDone()
 	if l.stopped.Load() {
+		onDone()
 		return
 	}
-	l.depMgr.onListenerResourceUpdate(update)
+	l.depMgr.onListenerResourceUpdate(update, onDone)
 }
 
 func (l *listenerWatcher) ResourceError(err error, onDone func()) {
-	defer onDone()
 	if l.stopped.Load() {
+		onDone()
 		return
 	}
-	l.depMgr.onListenerResourceError(err)
+	l.depMgr.onListenerResourceError(err, onDone)
 }
 
 func (l *listenerWatcher) AmbientError(err error, onDone func()) {
-	defer onDone()
 	if l.stopped.Load() {
+		onDone()
 		return
 	}
-	l.depMgr.onListenerResourceAmbientError(err)
+	l.depMgr.onListenerResourceAmbientError(err, onDone)
 }
 
 func (l *listenerWatcher) stop() {
@@ -83,27 +83,27 @@ func newRouteConfigWatcher(resourceName string, depMgr *DependencyManager) *rout
 }
 
 func (r *routeConfigWatcher) ResourceChanged(u *xdsresource.RouteConfigUpdate, onDone func()) {
-	defer onDone()
 	if r.stopped.Load() {
+		onDone()
 		return
 	}
-	r.depMgr.onRouteConfigResourceUpdate(r.resourceName, u)
+	r.depMgr.onRouteConfigResourceUpdate(r.resourceName, u, onDone)
 }
 
 func (r *routeConfigWatcher) ResourceError(err error, onDone func()) {
-	defer onDone()
 	if r.stopped.Load() {
+		onDone()
 		return
 	}
-	r.depMgr.onRouteConfigResourceError(r.resourceName, err)
+	r.depMgr.onRouteConfigResourceError(r.resourceName, err, onDone)
 }
 
 func (r *routeConfigWatcher) AmbientError(err error, onDone func()) {
-	defer onDone()
 	if r.stopped.Load() {
+		onDone()
 		return
 	}
-	r.depMgr.onRouteConfigResourceAmbientError(r.resourceName, err)
+	r.depMgr.onRouteConfigResourceAmbientError(r.resourceName, err, onDone)
 }
 
 func (r *routeConfigWatcher) stop() {

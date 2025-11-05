@@ -35,7 +35,7 @@ import (
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/internal/xds/xdsclient"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
-	xdsdepmgr "google.golang.org/grpc/internal/xds/xdsdependencymanager"
+	"google.golang.org/grpc/internal/xds/xdsdepmgr"
 
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
@@ -136,8 +136,7 @@ func createXDSClient(t *testing.T, bootstrapContents []byte) xdsclient.XDSClient
 		t.Fatalf("Failed to create an xDS client pool: %v", err)
 	}
 	c, cancel, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
-		Name:               t.Name(),
-		WatchExpiryTimeout: defaultTestTimeout,
+		Name: t.Name(),
 	})
 	if err != nil {
 		t.Fatalf("Failed to create an xDS client: %v", err)
