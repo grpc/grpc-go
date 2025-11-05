@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 
+	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/grpclog"
@@ -85,7 +86,7 @@ func (b *baseBalancer) ResolverError(err error) {
 		// report an error.
 		return
 	}
-	b.regeneratePicker()
+	b.regeneratePicker(nil)
 	b.cc.UpdateState(balancer.State{
 		ConnectivityState: b.state,
 		Picker:            b.picker,
@@ -108,7 +109,7 @@ func (b *baseBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
 			var sc balancer.SubConn
 			opts := balancer.NewSubConnOptions{
 				HealthCheckEnabled: b.config.HealthCheck,
-				StateListener:      func(scs balancer.SubConnState) { b.updateSubConnState(sc, scs) },
+				StateListener:      func(scs balancer.SubConnState) { b.updateSubConnState(sc, scs, s.ResolverState.Attributes) },
 			}
 			sc, err := b.cc.NewSubConn([]resolver.Address{a}, opts)
 			if err != nil {
@@ -140,7 +141,7 @@ func (b *baseBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
 		return balancer.ErrBadResolverState
 	}
 
-	b.regeneratePicker()
+	b.regeneratePicker(s.ResolverState.Attributes)
 	b.cc.UpdateState(balancer.State{ConnectivityState: b.state, Picker: b.picker})
 	return nil
 }
@@ -163,7 +164,7 @@ func (b *baseBalancer) mergeErrors() error {
 // from it. The picker is
 //   - errPicker if the balancer is in TransientFailure,
 //   - built by the pickerBuilder with all READY SubConns otherwise.
-func (b *baseBalancer) regeneratePicker() {
+func (b *baseBalancer) regeneratePicker(attributes *attributes.Attributes) {
 	if b.state == connectivity.TransientFailure {
 		b.picker = NewErrPicker(b.mergeErrors())
 		return
@@ -177,7 +178,10 @@ func (b *baseBalancer) regeneratePicker() {
 			readySCs[sc] = SubConnInfo{Address: addr}
 		}
 	}
-	b.picker = b.pickerBuilder.Build(PickerBuildInfo{ReadySCs: readySCs})
+	b.picker = b.pickerBuilder.Build(PickerBuildInfo{
+		ReadySCs:   readySCs,
+		Attributes: attributes,
+	})
 }
 
 // UpdateSubConnState is a nop because a StateListener is always set in NewSubConn.
@@ -185,7 +189,7 @@ func (b *baseBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.Su
 	logger.Errorf("base.baseBalancer: UpdateSubConnState(%v, %+v) called unexpectedly", sc, state)
 }
 
-func (b *baseBalancer) updateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
+func (b *baseBalancer) updateSubConnState(sc balancer.SubConn, state balancer.SubConnState, attributes *attributes.Attributes) {
 	s := state.ConnectivityState
 	if logger.V(2) {
 		logger.Infof("base.baseBalancer: handle SubConn state change: %p, %v", sc, s)
@@ -228,7 +232,7 @@ func (b *baseBalancer) updateSubConnState(sc balancer.SubConn, state balancer.Su
 	//    (may need to update error message)
 	if (s == connectivity.Ready) != (oldS == connectivity.Ready) ||
 		b.state == connectivity.TransientFailure {
-		b.regeneratePicker()
+		b.regeneratePicker(attributes)
 	}
 	b.cc.UpdateState(balancer.State{ConnectivityState: b.state, Picker: b.picker})
 }

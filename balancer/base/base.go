@@ -31,6 +31,7 @@
 package base
 
 import (
+	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/resolver"
 )
@@ -47,6 +48,10 @@ type PickerBuildInfo struct {
 	// ReadySCs is a map from all ready SubConns to the Addresses used to
 	// create them.
 	ReadySCs map[balancer.SubConn]SubConnInfo
+
+	// Attributes contains arbitrary data about the resolver intended for
+	// consumption by the load balancing policy. This is a pointer to resolver.State Attributes.
+	Attributes *attributes.Attributes
 }
 
 // SubConnInfo contains information about a SubConn created by the base
