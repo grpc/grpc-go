@@ -21,7 +21,6 @@ import (
 	"sort"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/internal/grpctest"
@@ -146,38 +145,4 @@ func (s) TestClose(t *testing.T) {
 		t.Fatalf("Unbounded.Put() = <nil>; want non-nil error")
 	}
 	ub.Close() // ignored
-}
-
-// TestReset resets the buffer and makes sure that the buffer can be used after
-// the reset.
-func (s) TestReset(t *testing.T) {
-	ub := NewUnbounded()
-	if err := ub.Put(1); err != nil {
-		t.Fatalf("Unbounded.Put() = %v; want nil", err)
-	}
-	if err := ub.Put(2); err != nil {
-		t.Fatalf("Unbounded.Put() = %v; want nil", err)
-	}
-	if v, ok := <-ub.Get(); !ok {
-		t.Errorf("Unbounded.Get() = %v, %v, want %v, %v", v, ok, 1, true)
-	}
-	ub.Load()
-	ub.Reset()
-
-	// Make sure the buffer is empty after the reset. Wait for a short duration
-	// to make sure that no value is received on the read channel.
-	select {
-	case v, ok := <-ub.Get():
-		t.Errorf("Unbounded.Get() = %v, %v; want no value", v, ok)
-	case <-time.After(10 * time.Millisecond):
-	}
-
-	// Make sure the buffer can be used after the reset.
-	if err := ub.Put(1); err != nil {
-		t.Fatalf("Unbounded.Put() = %v; want nil", err)
-	}
-	if v, ok := <-ub.Get(); !ok {
-		t.Errorf("Unbounded.Get() = %v, %v, want %v, %v", v, ok, 1, true)
-	}
-	ub.Load()
 }

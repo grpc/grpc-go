@@ -115,23 +115,3 @@ func (b *Unbounded) Close() {
 		close(b.c)
 	}
 }
-
-// Reset clears all buffered data in the unbounded buffer. This does not close
-// the buffer, and new data may be Put() into it after a call to this method.
-//
-// It's expected to be used in scenarios where the buffered data is no longer
-// relevant, and needs to be cleared.
-func (b *Unbounded) Reset() {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-
-	if b.closing {
-		return
-	}
-
-	b.backlog = b.backlog[:0]
-	select {
-	case <-b.c:
-	default:
-	}
-}
