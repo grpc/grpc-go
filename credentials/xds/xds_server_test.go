@@ -178,10 +178,12 @@ func (s) TestServerCredsHandshake_XDSHandshakeInfoError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewServerCredentials(%v) failed: %v", opts, err)
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 
 	// Create a test server which uses the xDS server credentials created above
 	// to perform TLS handshake on incoming connections.
-	ts := newTestServerWithHandshakeFunc(func(rawConn net.Conn) handshakeResult {
+	ts := newTestServerWithHandshakeFunc(ctx, func(rawConn net.Conn) handshakeResult {
 		// Create a wrapped conn which returns a nil HandshakeInfo and a non-nil error.
 		conn := newWrappedConn(rawConn, nil, time.Now().Add(defaultTestTimeout))
 		hiErr := errors.New("xdsHandshakeInfo error")
@@ -208,8 +210,6 @@ func (s) TestServerCredsHandshake_XDSHandshakeInfoError(t *testing.T) {
 
 	// Read handshake result from the testServer which will return an error if
 	// the handshake succeeded.
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	val, err := ts.hsResult.Receive(ctx)
 	if err != nil {
 		t.Fatalf("testServer failed to return handshake result: %v", err)
@@ -229,10 +229,12 @@ func (s) TestServerCredsHandshakeTimeout(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewServerCredentials(%v) failed: %v", opts, err)
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 
 	// Create a test server which uses the xDS server credentials created above
 	// to perform TLS handshake on incoming connections.
-	ts := newTestServerWithHandshakeFunc(func(rawConn net.Conn) handshakeResult {
+	ts := newTestServerWithHandshakeFunc(ctx, func(rawConn net.Conn) handshakeResult {
 		hi := xdsinternal.NewHandshakeInfo(makeRootProvider(t, "x509/client_ca_cert.pem"), makeIdentityProvider(t, "x509/server2_cert.pem", "x509/server2_key.pem"), nil, true)
 
 		// Create a wrapped conn which can return the HandshakeInfo created
@@ -258,8 +260,6 @@ func (s) TestServerCredsHandshakeTimeout(t *testing.T) {
 	defer rawConn.Close()
 
 	// Read handshake result from the testServer and expect a failure result.
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	val, err := ts.hsResult.Receive(ctx)
 	if err != nil {
 		t.Fatalf("testServer failed to return handshake result: %v", err)
@@ -279,10 +279,12 @@ func (s) TestServerCredsHandshakeFailure(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewServerCredentials(%v) failed: %v", opts, err)
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 
 	// Create a test server which uses the xDS server credentials created above
 	// to perform TLS handshake on incoming connections.
-	ts := newTestServerWithHandshakeFunc(func(rawConn net.Conn) handshakeResult {
+	ts := newTestServerWithHandshakeFunc(ctx, func(rawConn net.Conn) handshakeResult {
 		// Create a HandshakeInfo which has a root provider which does not match
 		// the certificate sent by the client.
 		hi := xdsinternal.NewHandshakeInfo(makeRootProvider(t, "x509/server_ca_cert.pem"), makeIdentityProvider(t, "x509/client2_cert.pem", "x509/client2_key.pem"), nil, true)
@@ -314,8 +316,6 @@ func (s) TestServerCredsHandshakeFailure(t *testing.T) {
 
 	// Read handshake result from the testServer which will return an error if
 	// the handshake succeeded.
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	val, err := ts.hsResult.Receive(ctx)
 	if err != nil {
 		t.Fatalf("testServer failed to return handshake result: %v", err)
@@ -361,10 +361,12 @@ func (s) TestServerCredsHandshakeSuccess(t *testing.T) {
 			if err != nil {
 				t.Fatalf("NewServerCredentials(%v) failed: %v", opts, err)
 			}
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
 
 			// Create a test server which uses the xDS server credentials
 			// created above to perform TLS handshake on incoming connections.
-			ts := newTestServerWithHandshakeFunc(func(rawConn net.Conn) handshakeResult {
+			ts := newTestServerWithHandshakeFunc(ctx, func(rawConn net.Conn) handshakeResult {
 				// Create a HandshakeInfo with information from the test table.
 				hi := xdsinternal.NewHandshakeInfo(test.rootProvider, test.identityProvider, nil, test.requireClientCert)
 
@@ -406,8 +408,6 @@ func (s) TestServerCredsHandshakeSuccess(t *testing.T) {
 			// Read the handshake result from the testServer which contains the
 			// TLS connection state on the server-side and compare it with the
 			// one received on the client-side.
-			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-			defer cancel()
 			val, err := ts.hsResult.Receive(ctx)
 			if err != nil {
 				t.Fatalf("testServer failed to return handshake result: %v", err)
@@ -433,6 +433,8 @@ func (s) TestServerCredsProviderSwitch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewServerCredentials(%v) failed: %v", opts, err)
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 
 	// The first time the handshake function is invoked, it returns a
 	// HandshakeInfo which is expected to fail. Further invocations return a
@@ -440,7 +442,7 @@ func (s) TestServerCredsProviderSwitch(t *testing.T) {
 	cnt := 0
 	// Create a test server which uses the xDS server credentials created above
 	// to perform TLS handshake on incoming connections.
-	ts := newTestServerWithHandshakeFunc(func(rawConn net.Conn) handshakeResult {
+	ts := newTestServerWithHandshakeFunc(ctx, func(rawConn net.Conn) handshakeResult {
 		cnt++
 		var hi *xdsinternal.HandshakeInfo
 		if cnt == 1 {
@@ -501,8 +503,6 @@ func (s) TestServerCredsProviderSwitch(t *testing.T) {
 		// Read the handshake result from the testServer which contains the
 		// TLS connection state on the server-side and compare it with the
 		// one received on the client-side.
-		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-		defer cancel()
 		val, err := ts.hsResult.Receive(ctx)
 		if err != nil {
 			t.Fatalf("testServer failed to return handshake result: %v", err)
