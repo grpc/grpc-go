@@ -95,32 +95,32 @@ type testHandshakeFunc func(net.Conn) handshakeResult
 // newTestServerWithHandshakeFunc starts a new testServer which listens for
 // connections on a local TCP port, and uses the provided custom handshake
 // function to perform TLS handshake.
-func newTestServerWithHandshakeFunc(f testHandshakeFunc) *testServer {
+func newTestServerWithHandshakeFunc(ctx context.Context, f testHandshakeFunc) *testServer {
 	ts := &testServer{
 		handshakeFunc: f,
 		hsResult:      testutils.NewChannel(),
 	}
-	ts.start()
+	ts.start(ctx)
 	return ts
 }
 
 // starts actually starts listening on a local TCP port, and spawns a goroutine
 // to handle new connections.
-func (ts *testServer) start() error {
+func (ts *testServer) start(ctx context.Context) error {
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		return err
 	}
 	ts.lis = lis
 	ts.address = lis.Addr().String()
-	go ts.handleConn()
+	go ts.handleConn(ctx)
 	return nil
 }
 
 // handleConn accepts a new raw connection, and invokes the test provided
 // handshake function to perform TLS handshake, and returns the result on the
 // `hsResult` channel.
-func (ts *testServer) handleConn() {
+func (ts *testServer) handleConn(ctx context.Context) {
 	for {
 		rawConn, err := ts.lis.Accept()
 		if err != nil {
@@ -128,7 +128,7 @@ func (ts *testServer) handleConn() {
 			return
 		}
 		hsr := ts.handshakeFunc(rawConn)
-		ts.hsResult.Send(hsr)
+		ts.hsResult.SendContext(ctx, hsr)
 	}
 }
 
@@ -388,7 +388,9 @@ func (s) TestClientCredsSuccess(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			ts := newTestServerWithHandshakeFunc(test.handshakeFunc)
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+			ts := newTestServerWithHandshakeFunc(ctx, test.handshakeFunc)
 			defer ts.stop()
 
 			opts := ClientOptions{FallbackCreds: makeFallbackClientCreds(t)}
@@ -403,8 +405,6 @@ func (s) TestClientCredsSuccess(t *testing.T) {
 			}
 			defer conn.Close()
 
-			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-			defer cancel()
 			_, ai, err := creds.ClientHandshake(test.handshakeInfoCtx(ctx), authority, conn)
 			if err != nil {
 				t.Fatalf("ClientHandshake() returned failed: %q", err)
@@ -418,11 +418,13 @@ func (s) TestClientCredsSuccess(t *testing.T) {
 
 func (s) TestClientCredsHandshakeTimeout(t *testing.T) {
 	clientDone := make(chan struct{})
+	ctx, sCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer sCancel()
 	// A handshake function which simulates a handshake timeout from the
 	// server-side by simply blocking on the client-side handshake to timeout
 	// and not writing any handshake data.
 	hErr := errors.New("server handshake error")
-	ts := newTestServerWithHandshakeFunc(func(net.Conn) handshakeResult {
+	ts := newTestServerWithHandshakeFunc(ctx, func(net.Conn) handshakeResult {
 		<-clientDone
 		return handshakeResult{err: hErr}
 	})
@@ -442,7 +444,7 @@ func (s) TestClientCredsHandshakeTimeout(t *testing.T) {
 
 	sCtx, sCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
 	defer sCancel()
-	ctx := newTestContextWithHandshakeInfo(sCtx, makeRootProvider(t, "x509/server_ca_cert.pem"), nil, defaultTestCertSAN)
+	ctx = newTestContextWithHandshakeInfo(sCtx, makeRootProvider(t, "x509/server_ca_cert.pem"), nil, defaultTestCertSAN)
 	if _, _, err := creds.ClientHandshake(ctx, authority, conn); err == nil {
 		t.Fatal("ClientHandshake() succeeded when expected to timeout")
 	}
@@ -489,7 +491,9 @@ func (s) TestClientCredsHandshakeFailure(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			ts := newTestServerWithHandshakeFunc(test.handshakeFunc)
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+			ts := newTestServerWithHandshakeFunc(ctx, test.handshakeFunc)
 			defer ts.stop()
 
 			opts := ClientOptions{FallbackCreds: makeFallbackClientCreds(t)}
@@ -504,8 +508,6 @@ func (s) TestClientCredsHandshakeFailure(t *testing.T) {
 			}
 			defer conn.Close()
 
-			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-			defer cancel()
 			ctx = newTestContextWithHandshakeInfo(ctx, test.rootProvider, nil, test.san)
 			if _, _, err := creds.ClientHandshake(ctx, authority, conn); err == nil || !strings.Contains(err.Error(), test.wantErr) {
 				t.Fatalf("ClientHandshake() returned %q, wantErr %q", err, test.wantErr)
@@ -520,7 +522,9 @@ func (s) TestClientCredsHandshakeFailure(t *testing.T) {
 // approximation of the flow of events when the control plane specifies new
 // security config which results in new certificate providers being used.
 func (s) TestClientCredsProviderSwitch(t *testing.T) {
-	ts := newTestServerWithHandshakeFunc(testServerTLSHandshake)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	ts := newTestServerWithHandshakeFunc(ctx, testServerTLSHandshake)
 	defer ts.stop()
 
 	opts := ClientOptions{FallbackCreds: makeFallbackClientCreds(t)}
@@ -535,8 +539,6 @@ func (s) TestClientCredsProviderSwitch(t *testing.T) {
 	}
 	defer conn.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	// Create a root provider which will fail the handshake because it does not
 	// use the correct trust roots.
 	root1 := makeRootProvider(t, "x509/client_ca_cert.pem")
