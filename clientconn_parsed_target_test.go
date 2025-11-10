@@ -297,9 +297,13 @@ func (s) TestParsedTarget_WithCustomDialer(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.target, func(t *testing.T) {
 			addrCh := make(chan string, 1)
-			dialer := func(_ context.Context, address string) (net.Conn, error) {
-				addrCh <- address
-				return nil, errors.New("dialer error")
+			dialer := func(ctx context.Context, address string) (net.Conn, error) {
+				select {
+				case addrCh <- address:
+					return nil, errors.New("dialer error")
+				case <-ctx.Done():
+					return nil, ctx.Err()
+				}
 			}
 
 			cc, err := NewClient(test.target, WithTransportCredentials(insecure.NewCredentials()), withDefaultScheme(defScheme), WithContextDialer(dialer))
