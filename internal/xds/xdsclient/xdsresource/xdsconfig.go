@@ -78,14 +78,16 @@ type EndpointConfig struct {
 	EDSUpdate *EndpointsUpdate
 	// Endpoint configuration for the LOGICAL_DNS clusters.
 	DNSEndpoints *DNSUpdate
-	// ResolutionNote stores error encountered while obtaining endpoints data for the cluster. It may contain a nil value when a valid endpoint datais received. It contains an error when:
+	// ResolutionNote stores error encountered while obtaining endpoints data
+	// for the cluster. It may contain a nil value when a valid endpoint datais
+	// received. It contains an error when:
 	//   - an invalid resource is received from the management server or
 	//   - the endpoint resource does not exist on the management server
 	ResolutionNote error
 }
 
 // DNSUpdate represents the result of a DNS resolution, containing a list of
-// discovered endpoints. This is only populated for the LOGICAL_DNS clusters.
+// discovered endpoints.
 type DNSUpdate struct {
 	// Endpoints is the complete list of endpoints returned by the DNS resolver.
 	Endpoints []resolver.Endpoint

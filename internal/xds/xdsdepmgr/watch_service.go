@@ -18,17 +18,12 @@
 
 package xdsdepmgr
 
-import (
-	"sync/atomic"
-
-	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
-)
+import "google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 
 type listenerWatcher struct {
 	resourceName string
 	cancel       func()
 	depMgr       *DependencyManager
-	stopped      atomic.Bool
 }
 
 func newListenerWatcher(resourceName string, depMgr *DependencyManager) *listenerWatcher {
@@ -38,31 +33,18 @@ func newListenerWatcher(resourceName string, depMgr *DependencyManager) *listene
 }
 
 func (l *listenerWatcher) ResourceChanged(update *xdsresource.ListenerUpdate, onDone func()) {
-	if l.stopped.Load() {
-		onDone()
-		return
-	}
 	l.depMgr.onListenerResourceUpdate(update, onDone)
 }
 
 func (l *listenerWatcher) ResourceError(err error, onDone func()) {
-	if l.stopped.Load() {
-		onDone()
-		return
-	}
 	l.depMgr.onListenerResourceError(err, onDone)
 }
 
 func (l *listenerWatcher) AmbientError(err error, onDone func()) {
-	if l.stopped.Load() {
-		onDone()
-		return
-	}
 	l.depMgr.onListenerResourceAmbientError(err, onDone)
 }
 
 func (l *listenerWatcher) stop() {
-	l.stopped.Store(true)
 	l.cancel()
 	if l.depMgr.logger.V(2) {
 		l.depMgr.logger.Infof("Canceling watch on Listener resource %q", l.resourceName)
@@ -73,7 +55,6 @@ type routeConfigWatcher struct {
 	resourceName string
 	cancel       func()
 	depMgr       *DependencyManager
-	stopped      atomic.Bool
 }
 
 func newRouteConfigWatcher(resourceName string, depMgr *DependencyManager) *routeConfigWatcher {
@@ -83,31 +64,18 @@ func newRouteConfigWatcher(resourceName string, depMgr *DependencyManager) *rout
 }
 
 func (r *routeConfigWatcher) ResourceChanged(u *xdsresource.RouteConfigUpdate, onDone func()) {
-	if r.stopped.Load() {
-		onDone()
-		return
-	}
 	r.depMgr.onRouteConfigResourceUpdate(r.resourceName, u, onDone)
 }
 
 func (r *routeConfigWatcher) ResourceError(err error, onDone func()) {
-	if r.stopped.Load() {
-		onDone()
-		return
-	}
 	r.depMgr.onRouteConfigResourceError(r.resourceName, err, onDone)
 }
 
 func (r *routeConfigWatcher) AmbientError(err error, onDone func()) {
-	if r.stopped.Load() {
-		onDone()
-		return
-	}
 	r.depMgr.onRouteConfigResourceAmbientError(r.resourceName, err, onDone)
 }
 
 func (r *routeConfigWatcher) stop() {
-	r.stopped.Store(true)
 	r.cancel()
 	if r.depMgr.logger.V(2) {
 		r.depMgr.logger.Infof("Canceling watch on RouteConfiguration resource %q", r.resourceName)
