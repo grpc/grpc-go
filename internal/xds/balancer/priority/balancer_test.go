@@ -74,6 +74,12 @@ func init() {
 	balancer.Register(&anotherRR{Builder: balancer.Get(roundrobin.Name)})
 }
 
+func overrideInitTimeout(t *testing.T, val time.Duration) {
+	orig := DefaultPriorityInitTimeout
+	DefaultPriorityInitTimeout = val
+	t.Cleanup(func() { DefaultPriorityInitTimeout = orig })
+}
+
 // When a high priority is ready, adding/removing lower locality doesn't cause
 // changes.
 //
@@ -674,13 +680,7 @@ func (s) TestPriority_InitTimeout(t *testing.T) {
 	defer cancel()
 
 	const testPriorityInitTimeout = 200 * time.Millisecond
-	defer func() func() {
-		old := DefaultPriorityInitTimeout
-		DefaultPriorityInitTimeout = testPriorityInitTimeout
-		return func() {
-			DefaultPriorityInitTimeout = old
-		}
-	}()()
+	overrideInitTimeout(t, testPriorityInitTimeout)
 
 	cc := testutils.NewBalancerClientConn(t)
 	bb := balancer.Get(Name)
@@ -745,13 +745,7 @@ func (s) TestPriority_RemovesAllPriorities(t *testing.T) {
 	defer cancel()
 
 	const testPriorityInitTimeout = 200 * time.Millisecond
-	defer func() func() {
-		old := DefaultPriorityInitTimeout
-		DefaultPriorityInitTimeout = testPriorityInitTimeout
-		return func() {
-			DefaultPriorityInitTimeout = old
-		}
-	}()()
+	overrideInitTimeout(t, testPriorityInitTimeout)
 
 	cc := testutils.NewBalancerClientConn(t)
 	bb := balancer.Get(Name)
@@ -1011,10 +1005,7 @@ func (s) TestPriority_HighPriorityNoEndpoints(t *testing.T) {
 // Test the case where the first and only priority is removed.
 func (s) TestPriority_FirstPriorityUnavailable(t *testing.T) {
 	const testPriorityInitTimeout = 200 * time.Millisecond
-	defer func(t time.Duration) {
-		DefaultPriorityInitTimeout = t
-	}(DefaultPriorityInitTimeout)
-	DefaultPriorityInitTimeout = testPriorityInitTimeout
+	overrideInitTimeout(t, testPriorityInitTimeout)
 
 	cc := testutils.NewBalancerClientConn(t)
 	bb := balancer.Get(Name)
