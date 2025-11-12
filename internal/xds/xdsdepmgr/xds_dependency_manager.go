@@ -72,7 +72,6 @@ type DependencyManager struct {
 	mu      sync.Mutex
 	stopped bool
 
-	// The following fields are only accessed from within the serializer.
 	listenerWatcher       *listenerWatcher
 	currentListenerUpdate *xdsresource.ListenerUpdate
 	routeConfigWatcher    *routeConfigWatcher
@@ -219,6 +218,10 @@ func (m *DependencyManager) onListenerResourceError(err error, onDone func()) {
 	m.watcher.Error(fmt.Errorf("listener resource error: %v", m.annotateErrorWithNodeID(err)))
 }
 
+// onListenerResourceAmbientError handles ambient errors received from the
+// listener resource watcher. Since ambient errors do not impact the current
+// state of the resource, no change is made to the current configuration and the
+// errors are only logged for visibility.
 func (m *DependencyManager) onListenerResourceAmbientError(err error, onDone func()) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -259,6 +262,10 @@ func (m *DependencyManager) onRouteConfigResourceError(resourceName string, err 
 	m.watcher.Error(fmt.Errorf("route resource error: %v", m.annotateErrorWithNodeID(err)))
 }
 
+// onRouteResourceAmbientError handles ambient errors received from the route
+// resource watcher. Since ambient errors do not impact the current state of the
+// resource, no change is made to the current configuration and the errors are
+// only logged for visibility.
 func (m *DependencyManager) onRouteConfigResourceAmbientError(resourceName string, err error, onDone func()) {
 	m.mu.Lock()
 	defer m.mu.Unlock()

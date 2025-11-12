@@ -125,7 +125,6 @@ func verifyXDSConfig(ctx context.Context, xdsCh chan *xdsresource.XDSConfig, err
 func createXDSClient(t *testing.T, bootstrapContents []byte) xdsclient.XDSClient {
 	t.Helper()
 
-	// Setup the bootstrap file contents.
 	config, err := bootstrap.NewConfigFromContents(bootstrapContents)
 	if err != nil {
 		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
@@ -135,9 +134,7 @@ func createXDSClient(t *testing.T, bootstrapContents []byte) xdsclient.XDSClient
 	if err != nil {
 		t.Fatalf("Failed to create an xDS client pool: %v", err)
 	}
-	c, cancel, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
-		Name: t.Name(),
-	})
+	c, cancel, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{Name: t.Name()})
 	if err != nil {
 		t.Fatalf("Failed to create an xDS client: %v", err)
 	}
@@ -145,8 +142,7 @@ func createXDSClient(t *testing.T, bootstrapContents []byte) xdsclient.XDSClient
 	return c
 }
 
-// Spins up an xDS management server and sets up an xDS bootstrap configuration
-// file that points to it.
+// Spins up an xDS management server and sets up the xDS bootstrap configuration.
 //
 // Returns the following:
 //   - A reference to the xDS management server

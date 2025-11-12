@@ -79,7 +79,7 @@ type EndpointConfig struct {
 	// Endpoint configuration for the LOGICAL_DNS clusters.
 	DNSEndpoints *DNSUpdate
 	// ResolutionNote stores error encountered while obtaining endpoints data
-	// for the cluster. It may contain a nil value when a valid endpoint datais
+	// for the cluster. It may contain a nil value when a valid endpoint data is
 	// received. It contains an error when:
 	//   - an invalid resource is received from the management server or
 	//   - the endpoint resource does not exist on the management server
@@ -107,7 +107,6 @@ func SetXDSConfig(state resolver.State, config *XDSConfig) resolver.State {
 // XDSConfigFromResolverState returns XDSConfig stored as an attribute in the
 // resolver state.
 func XDSConfigFromResolverState(state resolver.State) *XDSConfig {
-	state.Attributes.Value(xdsConfigkey{})
 	if v := state.Attributes.Value(xdsConfigkey{}); v != nil {
 		return v.(*XDSConfig)
 	}
