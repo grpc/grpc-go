@@ -38,7 +38,7 @@ type BufferPool interface {
 	Put(*[]byte)
 }
 
-const goPageSize = 4 << 10
+const goPageSize = 4 << 10 // 4KiB. N.B. this must be a power of 2.
 
 var defaultBufferPoolSizes = []int{
 	256,
@@ -177,14 +177,11 @@ func (p *simpleBufferPool) Get(size int) *[]byte {
 	// If we're going to allocate, round up to the nearest page. This way if
 	// requests frequently arrive with small variation we don't allocate
 	// repeatedly if we get unlucky and they increase over time. By default we
-	// only allocate here if size > 1MiB.
-	allocSize := size
-	if allocSize%goPageSize != 0 {
-		allocSize += goPageSize - (allocSize % goPageSize)
-	}
+	// only allocate here if size > 1MiB. Because goPageSize is a power of 2, we
+	// can round up efficiently.
+	allocSize := (size + goPageSize - 1) & ^(goPageSize - 1)
 
-	b := make([]byte, allocSize)
-	b = b[:size]
+	b := make([]byte, size, allocSize)
 	return &b
 }
 
