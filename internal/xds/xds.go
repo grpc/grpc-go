@@ -46,6 +46,17 @@ func GetXDSHandshakeClusterName(attr *attributes.Attributes) (string, bool) {
 	return name, ok
 }
 
+// AddressToTelemetryLabels prepares a telemetry label map from resolver
+// address atrributes.
+func AddressToTelemetryLabels(addr resolver.Address) map[string]string {
+	cluster, _ := GetXDSHandshakeClusterName(addr.Attributes)
+	locality := LocalityString(GetLocalityID(addr))
+	labels := make(map[string]string)
+	labels["grpc.lb.locality"] = locality
+	labels["grpc.lb.backend_service"] = cluster
+	return labels
+}
+
 // LocalityString generates a string representation of clients.Locality in the
 // format specified in gRFC A76.
 func LocalityString(l clients.Locality) string {
