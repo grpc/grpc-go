@@ -72,7 +72,7 @@ func (s) TestParseConfig(t *testing.T) {
 		},
 		{
 			name:  "happy-case-subset_size-set",
-			input: `{ "subset_size": 3 }`,
+			input: `{ "subsetSize": 3 }`,
 			wantCfg: &LBConfig{
 				SubsetSize:  3,
 				ChildPolicy: &iserviceconfig.BalancerConfig{Name: "round_robin"},
@@ -80,8 +80,8 @@ func (s) TestParseConfig(t *testing.T) {
 		},
 		{
 			name: "subset_size-less-than-2",
-			input: `{ "subset_size": 1,
-					  "child_policy": [{"round_robin": {}}]}`,
+			input: `{ "subsetSize": 1,
+					  "childPolicy": [{"round_robin": {}}]}`,
 			wantErr: "randomsubsetting: SubsetSize must be >= 2",
 		},
 		{

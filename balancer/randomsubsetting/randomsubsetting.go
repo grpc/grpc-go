@@ -75,8 +75,8 @@ func (bb) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Ba
 type LBConfig struct {
 	serviceconfig.LoadBalancingConfig `json:"-"`
 
-	SubsetSize  uint64                         `json:"subset_size,omitempty"`
-	ChildPolicy *iserviceconfig.BalancerConfig `json:"child_policy,omitempty"`
+	SubsetSize  uint64                         `json:"subsetSize,omitempty"`
+	ChildPolicy *iserviceconfig.BalancerConfig `json:"childPolicy,omitempty"`
 }
 
 func (bb) ParseConfig(s json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
