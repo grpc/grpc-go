@@ -123,7 +123,7 @@ type subsettingBalancer struct {
 func (b *subsettingBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
 	lbCfg, ok := s.BalancerConfig.(*LBConfig)
 	if !ok {
-		b.logger.Errorf("randomsubsetting: received config with unexpected type %T: %v", s.BalancerConfig, s.BalancerConfig)
+		b.logger.Errorf("Received config with unexpected type %T: %v", s.BalancerConfig, s.BalancerConfig)
 		return balancer.ErrBadResolverState
 	}
 
@@ -172,7 +172,7 @@ func (b *subsettingBalancer) prepareChildResolverState(s balancer.ClientConnStat
 	})
 
 	if b.logger.V(2) {
-		b.logger.Infof("randomsubsetting: resulting subset: %v", endpointSet[:subsetSize])
+		b.logger.Infof("Resulting subset: %v", endpointSet[:subsetSize])
 	}
 
 	// Convert back to resolver.Endpoints
