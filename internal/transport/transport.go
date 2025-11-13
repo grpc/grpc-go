@@ -610,6 +610,8 @@ type ClientTransport interface {
 
 	// RemoteAddr returns the remote network address.
 	RemoteAddr() net.Addr
+
+	AuthInfo() credentials.AuthInfo
 }
 
 // ServerTransport is the common interface for all gRPC server-side transport

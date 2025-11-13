@@ -1809,6 +1809,8 @@ func (t *http2Client) socketMetrics() *channelz.EphemeralSocketMetrics {
 
 func (t *http2Client) RemoteAddr() net.Addr { return t.remoteAddr }
 
+func (t *http2Client) AuthInfo() credentials.AuthInfo { return t.authInfo }
+
 func (t *http2Client) incrMsgSent() {
 	if channelz.IsOn() {
 		t.channelz.SocketMetrics.MessagesSent.Add(1)
