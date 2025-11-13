@@ -38,9 +38,11 @@ type BufferPool interface {
 	Put(*[]byte)
 }
 
+const goPageSize = 4 << 10
+
 var defaultBufferPoolSizes = []int{
 	256,
-	4 << 10,  // 4KB (go page size)
+	goPageSize,
 	16 << 10, // 16KB (max HTTP/2 frame size used by gRPC)
 	32 << 10, // 32KB (default buffer size for io.Copy)
 	1 << 20,  // 1MB
@@ -172,7 +174,17 @@ func (p *simpleBufferPool) Get(size int) *[]byte {
 		p.pool.Put(bs)
 	}
 
-	b := make([]byte, size)
+	// If we're going to allocate, round up to the nearest page. This way if
+	// requests frequently arrive with small variation we don't allocate
+	// repeatedly if we get unlucky and they increase over time. By default we
+	// only allocate here if size > 1MiB.
+	allocSize := size
+	if allocSize%goPageSize != 0 {
+		allocSize += goPageSize - (allocSize % goPageSize)
+	}
+
+	b := make([]byte, allocSize)
+	b = b[:size]
 	return &b
 }
 
