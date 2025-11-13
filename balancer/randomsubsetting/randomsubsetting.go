@@ -61,14 +61,13 @@ type bb struct{}
 
 func (bb) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Balancer {
 	b := &subsettingBalancer{
-		cc:    cc,
-		hashf: xxhash.NewWithSeed(uint64(time.Now().UnixNano())),
+		Balancer: gracefulswitch.NewBalancer(cc, bOpts),
+		hashf:    xxhash.NewWithSeed(uint64(time.Now().UnixNano())),
 	}
 	// Create a logger with a prefix specific to this balancer instance.
 	b.logger = prefixLogger(b)
 
 	b.logger.Infof("Created")
-	b.child = gracefulswitch.NewBalancer(cc, bOpts)
 	return b
 }
 
@@ -114,11 +113,11 @@ func (bb) Name() string {
 }
 
 type subsettingBalancer struct {
-	cc     balancer.ClientConn
+	*gracefulswitch.Balancer
+
 	logger *internalgrpclog.PrefixLogger
 	cfg    *LBConfig
 	hashf  *xxhash.Digest
-	child  *gracefulswitch.Balancer
 }
 
 func (b *subsettingBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
@@ -130,13 +129,13 @@ func (b *subsettingBalancer) UpdateClientConnState(s balancer.ClientConnState) e
 
 	if b.cfg == nil || b.cfg.ChildPolicy.Name != lbCfg.ChildPolicy.Name {
 
-		if err := b.child.SwitchTo(balancer.Get(lbCfg.ChildPolicy.Name)); err != nil {
+		if err := b.Balancer.SwitchTo(balancer.Get(lbCfg.ChildPolicy.Name)); err != nil {
 			return fmt.Errorf("randomsubsetting: error switching to child of type %q: %v", lbCfg.ChildPolicy.Name, err)
 		}
 	}
 	b.cfg = lbCfg
 
-	return b.child.UpdateClientConnState(balancer.ClientConnState{
+	return b.Balancer.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState:  b.prepareChildResolverState(s),
 		BalancerConfig: b.cfg.ChildPolicy.Config,
 	})
@@ -187,20 +186,4 @@ func (b *subsettingBalancer) prepareChildResolverState(s balancer.ClientConnStat
 		ServiceConfig: s.ResolverState.ServiceConfig,
 		Attributes:    s.ResolverState.Attributes,
 	}
-}
-
-func (b *subsettingBalancer) ResolverError(err error) {
-	b.child.ResolverError(err)
-}
-
-func (b *subsettingBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
-	b.child.UpdateSubConnState(sc, state)
-}
-
-func (b *subsettingBalancer) Close() {
-	b.child.Close()
-}
-
-func (b *subsettingBalancer) ExitIdle() {
-	b.child.ExitIdle()
 }
