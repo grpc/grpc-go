@@ -16,9 +16,10 @@
  *
  */
 
-// Package randomsubsetting defines a random subsetting balancer.
+// Package randomsubsetting implements the random_subsetting LB policy specified
+// here: https://github.com/grpc/proposal/blob/master/A68-random-subsetting.md
 //
-// To install random subsetting balancer, import this package as:
+// To install the LB policy, import this package as:
 //
 //	import _ "google.golang.org/grpc/balancer/randomsubsetting"
 package randomsubsetting
@@ -30,7 +31,7 @@ import (
 	"slices"
 	"time"
 
-	"github.com/cespare/xxhash/v2"
+	xxhash "github.com/cespare/xxhash/v2"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/balancer/gracefulswitch"
@@ -40,14 +41,10 @@ import (
 	"google.golang.org/grpc/serviceconfig"
 )
 
-const (
-	// Name is the name of the random subsetting load balancer.
-	Name = "random_subsetting"
-)
+// Name is the name of the random subsetting load balancer.
+const Name = "random_subsetting"
 
-var (
-	logger = grpclog.Component(Name)
-)
+var logger = grpclog.Component(Name)
 
 func prefixLogger(p *subsettingBalancer) *internalgrpclog.PrefixLogger {
 	return internalgrpclog.NewPrefixLogger(logger, fmt.Sprintf("[random-subsetting-lb %p] ", p))
@@ -64,15 +61,12 @@ func (bb) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Ba
 		Balancer: gracefulswitch.NewBalancer(cc, bOpts),
 		hashf:    xxhash.NewWithSeed(uint64(time.Now().UnixNano())),
 	}
-	// Create a logger with a prefix specific to this balancer instance.
 	b.logger = prefixLogger(b)
-
 	b.logger.Infof("Created")
 	return b
 }
 
-// LBConfig is the config for the random subsetting balancer.
-type LBConfig struct {
+type lbConfig struct {
 	serviceconfig.LoadBalancingConfig `json:"-"`
 
 	SubsetSize  uint64                         `json:"subsetSize,omitempty"`
@@ -80,29 +74,18 @@ type LBConfig struct {
 }
 
 func (bb) ParseConfig(s json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
-	lbCfg := &LBConfig{
-		SubsetSize:  2, // default value
-		ChildPolicy: &iserviceconfig.BalancerConfig{Name: "round_robin"},
-	}
+	lbCfg := &lbConfig{}
 
-	if err := json.Unmarshal(s, lbCfg); err != nil { // Validates child config if present as well.
-		return nil, fmt.Errorf("randomsubsetting: unable to unmarshal LBConfig: %s, error: %v", string(s), err)
+	// Ensure that the specified child policy is registered and validates its
+	// config, if present.
+	if err := json.Unmarshal(s, lbCfg); err != nil {
+		return nil, fmt.Errorf("randomsubsetting: unmarshaling configuration: %s, failed: %v", string(s), err)
 	}
-
-	// if someone needs SubsetSize == 1, he should use pick_first instead
-	if lbCfg.SubsetSize < 2 {
-		return nil, fmt.Errorf("randomsubsetting: SubsetSize must be >= 2")
+	if lbCfg.SubsetSize == 0 {
+		return nil, fmt.Errorf("randomsubsetting: SubsetSize must be greater than 0")
 	}
-
 	if lbCfg.ChildPolicy == nil {
-		return nil, fmt.Errorf("randomsubsetting: child policy field must be set")
-	}
-
-	// Reject whole config if child policy doesn't exist, don't persist it for
-	// later.
-	bb := balancer.Get(lbCfg.ChildPolicy.Name)
-	if bb == nil {
-		return nil, fmt.Errorf("randomsubsetting: child balancer %q not registered", lbCfg.ChildPolicy.Name)
+		return nil, fmt.Errorf("randomsubsetting: ChildPolicy must be specified")
 	}
 
 	return lbCfg, nil
@@ -116,12 +99,12 @@ type subsettingBalancer struct {
 	*gracefulswitch.Balancer
 
 	logger *internalgrpclog.PrefixLogger
-	cfg    *LBConfig
+	cfg    *lbConfig
 	hashf  *xxhash.Digest
 }
 
 func (b *subsettingBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
-	lbCfg, ok := s.BalancerConfig.(*LBConfig)
+	lbCfg, ok := s.BalancerConfig.(*lbConfig)
 	if !ok {
 		b.logger.Errorf("Received config with unexpected type %T: %v", s.BalancerConfig, s.BalancerConfig)
 		return balancer.ErrBadResolverState

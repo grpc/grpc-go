@@ -63,31 +63,37 @@ func (s) TestParseConfig(t *testing.T) {
 		wantErr string
 	}{
 		{
-			name:  "happy-case-default",
-			input: `{}`,
-			wantCfg: &LBConfig{
-				SubsetSize:  2,
-				ChildPolicy: &iserviceconfig.BalancerConfig{Name: "round_robin"},
-			},
-		},
-		{
-			name:  "happy-case-subset_size-set",
-			input: `{ "subsetSize": 3 }`,
-			wantCfg: &LBConfig{
-				SubsetSize:  3,
-				ChildPolicy: &iserviceconfig.BalancerConfig{Name: "round_robin"},
-			},
-		},
-		{
-			name: "subset_size-less-than-2",
-			input: `{ "subsetSize": 1,
-					  "childPolicy": [{"round_robin": {}}]}`,
-			wantErr: "randomsubsetting: SubsetSize must be >= 2",
-		},
-		{
 			name:    "invalid-json",
 			input:   "{{invalidjson{{",
 			wantErr: "invalid character",
+		},
+		{
+			name:    "empty_config",
+			input:   `{}`,
+			wantErr: "SubsetSize must be greater than 0",
+		},
+		{
+			name:    "subset_size_zero",
+			input:   `{ "subsetSize": 0 }`,
+			wantErr: "SubsetSize must be greater than 0",
+		},
+		{
+			name:    "child_policy_missing",
+			input:   `{ "subsetSize": 1 }`,
+			wantErr: "ChildPolicy must be specified",
+		},
+		{
+			name:    "child_policy_not_registered",
+			input:   `{ "subsetSize": 1 , "childPolicy": [{"unregistered_lb": {}}] }`,
+			wantErr: "no supported policies found",
+		},
+		{
+			name:  "success",
+			input: `{ "subsetSize": 3, "childPolicy": [{"round_robin": {}}]}`,
+			wantCfg: &lbConfig{
+				SubsetSize:  3,
+				ChildPolicy: &iserviceconfig.BalancerConfig{Name: "round_robin"},
+			},
 		},
 	}
 	for _, test := range tests {
