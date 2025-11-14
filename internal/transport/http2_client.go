@@ -1464,7 +1464,7 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 		recvCompress   string
 		httpStatusErr  string
 		// the code from the grpc-status header, if present
-		grpcStatusCode = codes.Internal
+		grpcStatusCode = codes.Unknown
 		// headerError is set if an error is encountered while parsing the headers
 		headerError string
 		httpStatus  string
