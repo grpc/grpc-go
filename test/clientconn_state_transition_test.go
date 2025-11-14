@@ -21,6 +21,7 @@ package test
 import (
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"sync"
 	"testing"
@@ -37,10 +38,11 @@ import (
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
-	testgrpc "google.golang.org/grpc/interop/grpc_testing"
-	testpb "google.golang.org/grpc/interop/grpc_testing"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
+
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
 // Keep reading until something causes the connection to die (EOF, server
@@ -48,9 +50,7 @@ import (
 // healthy, since the client will error if things like client prefaces are not
 // accepted in a timely fashion.
 func keepReading(conn net.Conn) {
-	buf := make([]byte, 1024)
-	for _, err := conn.Read(buf); err == nil; _, err = conn.Read(buf) {
-	}
+	io.Copy(io.Discard, conn)
 }
 
 type funcConnectivityStateSubscriber struct {
@@ -228,8 +228,6 @@ func testStateTransitionSingleAddress(t *testing.T, wantStates []connectivity.St
 		}
 	}
 }
-
-// When a READY connection is closed, the client enters IDLE then CONNECTING.
 
 // Tests for state transitions when the READY connection is closed.
 func (s) TestStateTransitions_ReadyToConnecting(t *testing.T) {
