@@ -21,6 +21,7 @@ package idle
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -44,13 +45,14 @@ func Test(t *testing.T) {
 }
 
 type testEnforcer struct {
+	exitIdleErr error
 	exitIdleCh  chan struct{}
 	enterIdleCh chan struct{}
 }
 
 func (ti *testEnforcer) ExitIdleMode() error {
 	ti.exitIdleCh <- struct{}{}
-	return nil
+	return ti.exitIdleErr
 
 }
 
@@ -379,5 +381,44 @@ func (s) TestManager_IdleTimeoutRacesWithOnCallBegin(t *testing.T) {
 			}
 			wg.Wait()
 		})
+	}
+}
+
+// TestManager_ExitIdleError tests the case where ExitIdleMode on the enforcer
+// returns an error. It verifies that the idle timer is started and the channel
+// eventually attempts to enter idle mode.
+func (s) TestManager_ExitIdleError(t *testing.T) {
+	callbackCh := overrideNewTimer(t)
+	exitIdleErr := fmt.Errorf("exit idle error")
+	enforcer := newTestEnforcer()
+	enforcer.exitIdleErr = exitIdleErr
+
+	mgr := NewManager(enforcer, defaultTestIdleTimeout)
+	defer mgr.Close()
+
+	// Call ExitIdleMode and expect it to fail.
+	if err := mgr.ExitIdleMode(); err == nil || !strings.Contains(err.Error(), "exit idle error") {
+		t.Fatalf("mgr.ExitIdleMode() returned: %v, want error: %v", err, exitIdleErr)
+	}
+
+	// Verify that ExitIdleMode was called on the enforcer.
+	select {
+	case <-enforcer.exitIdleCh:
+	case <-time.After(defaultTestShortTimeout):
+		t.Fatal("Timeout waiting for ExitIdleMode to be called on the enforcer")
+	}
+
+	// The timer should have been started. Wait for it to fire.
+	select {
+	case <-callbackCh:
+	case <-time.After(2 * defaultTestIdleTimeout):
+		t.Fatal("Timeout waiting for idle timer callback to fire")
+	}
+
+	// After the timer fires, the manager should attempt to enter idle mode.
+	select {
+	case <-enforcer.enterIdleCh:
+	case <-time.After(defaultTestShortTimeout):
+		t.Fatal("Timeout waiting for EnterIdleMode to be called on the enforcer")
 	}
 }

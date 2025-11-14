@@ -583,8 +583,6 @@ func (s) TestConnectivityStateSubscriber(t *testing.T) {
 // Test verifies that a channel starts off in IDLE and transitions to CONNECTING
 // when Connect() is called, and stays there when there are no resolver updates.
 func (s) TestStateTransitions_WithConnect_NoResolverUpdate(t *testing.T) {
-	t.Skip("The channel remains in IDLE until the LB policy updates the state to CONNECTING. This is a bug and the channel should transition to CONNECTING as soon as Connect() is called. See issue #7686.")
-
 	backend := stubserver.StartTestService(t, nil)
 	defer backend.Stop()
 
@@ -618,8 +616,6 @@ func (s) TestStateTransitions_WithConnect_NoResolverUpdate(t *testing.T) {
 // Test verifies that a channel starts off in IDLE and transitions to CONNECTING
 // when Connect() is called, and stays there when there are no resolver updates.
 func (s) TestStateTransitions_WithRPC_NoResolverUpdate(t *testing.T) {
-	t.Skip("The channel remains in IDLE until the LB policy updates the state to CONNECTING. This is a bug and the channel should transition to CONNECTING as soon as an RPC call is made. See issue #7686.")
-
 	backend := stubserver.StartTestService(t, nil)
 	defer backend.Stop()
 
@@ -641,8 +637,7 @@ func (s) TestStateTransitions_WithRPC_NoResolverUpdate(t *testing.T) {
 
 	// Make an RPC call to transition the channel to CONNECTING.
 	go func() {
-		_, err := testgrpc.NewTestServiceClient(cc).EmptyCall(ctx, &testpb.Empty{})
-		if err == nil {
+		if _, err := testgrpc.NewTestServiceClient(cc).EmptyCall(ctx, &testpb.Empty{}); err == nil {
 			t.Errorf("Expected RPC to fail, but it succeeded")
 		}
 	}()
@@ -655,4 +650,112 @@ func (s) TestStateTransitions_WithRPC_NoResolverUpdate(t *testing.T) {
 	shortCtx, shortCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer shortCancel()
 	testutils.AwaitNoStateChange(shortCtx, t, cc, connectivity.Connecting)
+}
+
+const testResolverBuildFailureScheme = "test-resolver-build-failure"
+
+// testResolverBuilder is a resolver builder that fails the first time its
+// Build method is called, and succeeds thereafter.
+type testResolverBuilder struct {
+	logger interface {
+		Logf(format string, args ...interface{})
+	}
+	buildCalled bool
+	manualR     *manual.Resolver
+}
+
+func (b *testResolverBuilder) Build(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOptions) (resolver.Resolver, error) {
+	b.logger.Logf("testResolverBuilder: Build called with target: %v", target)
+	if !b.buildCalled {
+		b.buildCalled = true
+		b.logger.Logf("testResolverBuilder: returning build failure")
+		return nil, fmt.Errorf("simulated resolver build failure")
+	}
+	return b.manualR.Build(target, cc, opts)
+}
+
+func (b *testResolverBuilder) Scheme() string {
+	return testResolverBuildFailureScheme
+}
+
+// Tests for state transitions when the resolver initially fails to build.
+func (s) TestStateTransitions_ResolverBuildFailure(t *testing.T) {
+	tests := []struct {
+		name         string
+		exitIdleFunc func(ctx context.Context, cc *grpc.ClientConn) error
+	}{
+		{
+			name: "exitIdleByConnecting",
+			exitIdleFunc: func(_ context.Context, cc *grpc.ClientConn) error {
+				cc.Connect()
+				return nil
+			},
+		},
+		{
+			name: "exitIdleByRPC",
+			exitIdleFunc: func(ctx context.Context, cc *grpc.ClientConn) error {
+				if _, err := testgrpc.NewTestServiceClient(cc).EmptyCall(ctx, &testpb.Empty{}); err != nil {
+					return fmt.Errorf("EmptyCall RPC failed: %v", err)
+				}
+				return nil
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mr := manual.NewBuilderWithScheme("whatever" + tt.name)
+			backend := stubserver.StartTestService(t, nil)
+			defer backend.Stop()
+			mr.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: backend.Address}}})
+
+			dopts := []grpc.DialOption{
+				grpc.WithTransportCredentials(insecure.NewCredentials()),
+				grpc.WithResolvers(&testResolverBuilder{logger: t, manualR: mr}),
+				grpc.WithIdleTimeout(time.Second),
+			}
+
+			cc, err := grpc.NewClient(testResolverBuildFailureScheme+":///", dopts...)
+			if err != nil {
+				t.Fatalf("Failed to create new client: %v", err)
+			}
+			defer cc.Close()
+
+			// Ensure that the client is in IDLE before connecting.
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+			testutils.AwaitState(ctx, t, cc, connectivity.Idle)
+
+			// Subscribe to state updates.
+			stateCh := make(chan connectivity.State, 1)
+			s := &funcConnectivityStateSubscriber{
+				onMsg: func(s connectivity.State) {
+					select {
+					case stateCh <- s:
+					case <-ctx.Done():
+					}
+				},
+			}
+			internal.SubscribeToConnectivityStateChanges.(func(cc *grpc.ClientConn, s grpcsync.Subscriber) func())(cc, s)
+
+			if state := cc.GetState(); state != connectivity.Idle {
+				t.Fatalf("Expected initial state to be IDLE, got %v", state)
+			}
+
+			cc.Connect()
+			wantStates := []connectivity.State{
+				connectivity.Connecting,       // When channel exits IDLE for the first time.
+				connectivity.TransientFailure, // Resolver build failure.
+				connectivity.Idle,             // After idle timeout.
+				connectivity.Connecting,       // When channel exits IDLE again.
+				connectivity.Ready,            // Successful resolver build and connection to backend.
+			}
+			for _, wantState := range wantStates {
+				waitForState(ctx, t, stateCh, wantState)
+				if wantState == connectivity.Idle {
+					tt.exitIdleFunc(ctx, cc)
+				}
+			}
+
+		})
+	}
 }

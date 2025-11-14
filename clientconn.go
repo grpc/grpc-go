@@ -332,7 +332,7 @@ func (cc *ClientConn) addTraceEvent(msg string) {
 			Severity: channelz.CtInfo,
 		}
 	}
-	channelz.AddTraceEvent(logger, cc.channelz, 0, ted)
+	channelz.AddTraceEvent(logger, cc.channelz, 1, ted)
 }
 
 type idler ClientConn

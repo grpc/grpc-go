@@ -234,9 +234,11 @@ func (m *Manager) ExitIdleMode() error {
 		return nil
 	}
 
-	if err := m.enforcer.ExitIdleMode(); err != nil {
-		return fmt.Errorf("failed to exit idle mode: %w", err)
-	}
+	// This can fail if resolver creation fails. In that case, we want to
+	// return the error to the caller so that the RPC can fail. But we still
+	// need to undo the idle entry process, and ensure that the idle timer is
+	// started again.
+	err := m.enforcer.ExitIdleMode()
 
 	// Undo the idle entry process. This also respects any new RPC attempts.
 	atomic.AddInt32(&m.activeCallsCount, math.MaxInt32)
@@ -244,6 +246,10 @@ func (m *Manager) ExitIdleMode() error {
 
 	// Start a new timer to fire after the configured idle timeout.
 	m.resetIdleTimerLocked(m.timeout)
+
+	if err != nil {
+		return fmt.Errorf("failed to exit idle mode: %v", err)
+	}
 	return nil
 }
 
