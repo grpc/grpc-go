@@ -658,7 +658,7 @@ const testResolverBuildFailureScheme = "test-resolver-build-failure"
 // Build method is called, and succeeds thereafter.
 type testResolverBuilder struct {
 	logger interface {
-		Logf(format string, args ...interface{})
+		Logf(format string, args ...any)
 	}
 	buildCalled bool
 	manualR     *manual.Resolver

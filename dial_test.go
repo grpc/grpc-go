@@ -322,7 +322,7 @@ type errResolverBuilder struct {
 	err error
 }
 
-func (b *errResolverBuilder) Build(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOptions) (resolver.Resolver, error) {
+func (b *errResolverBuilder) Build(resolver.Target, resolver.ClientConn, resolver.BuildOptions) (resolver.Resolver, error) {
 	return nil, b.err
 }
 
