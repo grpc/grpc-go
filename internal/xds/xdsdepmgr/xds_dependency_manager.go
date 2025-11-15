@@ -69,6 +69,7 @@ type DependencyManager struct {
 	dataplaneAuthority string
 	nodeID             string
 
+	// All the fields below are protected by mu.
 	mu      sync.Mutex
 	stopped bool
 
