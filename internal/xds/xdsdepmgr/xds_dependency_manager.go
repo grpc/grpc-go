@@ -129,7 +129,7 @@ func (m *DependencyManager) annotateErrorWithNodeID(err error) error {
 	return fmt.Errorf("[xDS node id: %v]: %v", m.nodeID, err)
 }
 
-// maybeSendUpdate checks that all the resources have been received and sends
+// maybeSendUpdateLocked checks that all the resources have been received and sends
 // the current aggregated xDS configuration to the watcher if all the updates
 // are available.
 func (m *DependencyManager) maybeSendUpdateLocked() {
@@ -250,7 +250,6 @@ func (m *DependencyManager) onRouteConfigResourceUpdate(resourceName string, upd
 }
 
 func (m *DependencyManager) onRouteConfigResourceError(resourceName string, err error, onDone func()) {
-	// handleErro
 	m.mu.Lock()
 	defer m.mu.Unlock()
 

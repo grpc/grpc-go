@@ -79,7 +79,7 @@ type EndpointConfig struct {
 	// Endpoint configuration for the LOGICAL_DNS clusters.
 	DNSEndpoints *DNSUpdate
 	// ResolutionNote stores error encountered while obtaining endpoints data
-	// for the cluster. It may contain a nil value when a valid endpoint data is
+	// for the cluster. It will contain a nil value when a valid endpoint data is
 	// received. It contains an error when:
 	//   - an invalid resource is received from the management server or
 	//   - the endpoint resource does not exist on the management server
