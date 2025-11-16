@@ -484,3 +484,193 @@ func (t *testPool) Put(buf *[]byte) {
 	}
 	delete(t.allocated, buf)
 }
+
+func (s) TestBufferSlice_Iteration(t *testing.T) {
+	tests := []struct {
+		name       string
+		buffers    [][]byte
+		operations func(t *testing.T, c *mem.Reader)
+	}{
+		{
+			name: "empty",
+			operations: func(t *testing.T, r *mem.Reader) {
+				if r.Remaining() != 0 {
+					t.Fatalf("Remaining() = %v, want 0", r.Remaining())
+				}
+				_, err := r.Peek(1, nil)
+				if err == nil {
+					t.Fatalf("Peek(1) returned error <nil>, want non-nil")
+				}
+				discarded, err := r.Discard(1)
+				if got, want := discarded, 0; got != want {
+					t.Fatalf("Discard(1) = %d, want %d", got, want)
+				}
+				if err == nil {
+					t.Fatalf("Discard(1) returned error <nil>, want non-nil")
+				}
+				if r.Remaining() != 0 {
+					t.Fatalf("Remaining() after Discard = %v, want 0", r.Remaining())
+				}
+			},
+		},
+		{
+			name:    "single_buffer",
+			buffers: [][]byte{[]byte("0123456789")},
+			operations: func(t *testing.T, r *mem.Reader) {
+				if r.Remaining() != 10 {
+					t.Fatalf("Remaining() = %v, want 10", r.Remaining())
+				}
+
+				res := make([][]byte, 0, 10)
+				res, err := r.Peek(5, res)
+				if err != nil {
+					t.Fatalf("Peek(5) return error %v, want <nil>", err)
+				}
+				if len(res) != 1 || !bytes.Equal(res[0], []byte("01234")) {
+					t.Fatalf("Peek(5) = %v, want [[01234]]", res)
+				}
+				if cap(res) != 10 {
+					t.Fatalf("Peek(5) did not use the provided slice.")
+				}
+
+				discarded, err := r.Discard(5)
+				if got, want := discarded, 5; got != want {
+					t.Fatalf("Discard(5) = %d, want %d", got, want)
+				}
+				if err != nil {
+					t.Fatalf("Discard(5) return error %v, want <nil>", err)
+				}
+				if r.Remaining() != 5 {
+					t.Fatalf("Remaining() after Discard(5) = %v, want 5", r.Remaining())
+				}
+				res, err = r.Peek(5, res[:0])
+				if err != nil {
+					t.Fatalf("Peek(5) return error %v, want <nil>", err)
+				}
+				if len(res) != 1 || !bytes.Equal(res[0], []byte("56789")) {
+					t.Fatalf("Peek(5) after Discard(5) = %v, want [[56789]]", res)
+				}
+
+				discarded, err = r.Discard(100)
+				if got, want := discarded, 5; got != want {
+					t.Fatalf("Discard(100) = %d, want %d", got, want)
+				}
+				if err == nil {
+					t.Fatalf("Discard(100) returned error <nil>, want non-nil")
+				}
+				if r.Remaining() != 0 {
+					t.Fatalf("Remaining() after Discard(100) = %v, want 0", r.Remaining())
+				}
+			},
+		},
+		{
+			name:    "multiple_buffers",
+			buffers: [][]byte{[]byte("012"), []byte("345"), []byte("6789")},
+			operations: func(t *testing.T, r *mem.Reader) {
+				if r.Remaining() != 10 {
+					t.Fatalf("Remaining() = %v, want 10", r.Remaining())
+				}
+
+				res, err := r.Peek(5, nil)
+				if err != nil {
+					t.Fatalf("Peek(5) return error %v, want <nil>", err)
+				}
+				if len(res) != 2 || !bytes.Equal(res[0], []byte("012")) || !bytes.Equal(res[1], []byte("34")) {
+					t.Fatalf("Peek(5) = %v, want [[012] [34]]", res)
+				}
+
+				discarded, err := r.Discard(5)
+				if got, want := discarded, 5; got != want {
+					t.Fatalf("Discard(5) = %d, want %d", got, want)
+				}
+				if err != nil {
+					t.Fatalf("Discard(5) return error %v, want <nil>", err)
+				}
+				if r.Remaining() != 5 {
+					t.Fatalf("Remaining() after Discard(5) = %v, want 5", r.Remaining())
+				}
+
+				res, err = r.Peek(5, res[:0])
+				if err != nil {
+					t.Fatalf("Peek(5) return error %v, want <nil>", err)
+				}
+				if len(res) != 2 || !bytes.Equal(res[0], []byte("5")) || !bytes.Equal(res[1], []byte("6789")) {
+					t.Fatalf("Peek(5) after advance = %v, want [[5] [6789]]", res)
+				}
+			},
+		},
+		{
+			name:    "close",
+			buffers: [][]byte{[]byte("0123456789")},
+			operations: func(t *testing.T, r *mem.Reader) {
+				r.Close()
+				if r.Remaining() != 0 {
+					t.Fatalf("Remaining() after Close = %v, want 0", r.Remaining())
+				}
+			},
+		},
+		{
+			name:    "reset",
+			buffers: [][]byte{[]byte("0123")},
+			operations: func(t *testing.T, r *mem.Reader) {
+				newSlice := mem.BufferSlice{mem.SliceBuffer([]byte("56789"))}
+				r.Reset(newSlice)
+				if r.Remaining() != 5 {
+					t.Fatalf("Remaining() after Reset = %v, want 5", r.Remaining())
+				}
+				res, err := r.Peek(5, nil)
+				if err != nil {
+					t.Fatalf("Peek(5) return error %v, want <nil>", err)
+				}
+				if len(res) != 1 || !bytes.Equal(res[0], []byte("56789")) {
+					t.Fatalf("Peek(5) after Reset = %v, want [[56789]]", res)
+				}
+			},
+		},
+		{
+			name:    "zero_ops",
+			buffers: [][]byte{[]byte("01234")},
+			operations: func(t *testing.T, c *mem.Reader) {
+				if c.Remaining() != 5 {
+					t.Fatalf("Remaining() = %v, want 5", c.Remaining())
+				}
+				res, err := c.Peek(0, nil)
+				if err != nil {
+					t.Fatalf("Peek(0) return error %v, want <nil>", err)
+				}
+				if len(res) != 0 {
+					t.Fatalf("Peek(0) got slices: %v, want empty", res)
+				}
+				discarded, err := c.Discard(0)
+				if err != nil {
+					t.Fatalf("Discard(0) return error %v, want <nil>", err)
+				}
+				if got, want := discarded, 0; got != want {
+					t.Fatalf("Discard(0) = %d, want %d", got, want)
+				}
+				if c.Remaining() != 5 {
+					t.Fatalf("Remaining() after Discard(0) = %v, want 5", c.Remaining())
+				}
+				res, err = c.Peek(2, res[:0])
+				if err != nil {
+					t.Fatalf("Peek(2) return error %v, want <nil>", err)
+				}
+				if len(res) != 1 || !bytes.Equal(res[0], []byte("01")) {
+					t.Fatalf("Peek(2) after zero ops = %v, want [[01]]", res)
+				}
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var slice mem.BufferSlice
+			for _, b := range tt.buffers {
+				slice = append(slice, mem.SliceBuffer(b))
+			}
+			c := slice.Reader()
+			slice.Free()
+			defer c.Close()
+			tt.operations(t, c)
+		})
+	}
+}

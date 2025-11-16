@@ -40,6 +40,7 @@ import (
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/syscall"
 	"google.golang.org/grpc/keepalive"
+	"google.golang.org/grpc/mem"
 	"google.golang.org/grpc/testdata"
 )
 
@@ -51,11 +52,15 @@ const defaultTestShortTimeout = 10 * time.Millisecond
 // of MaxConnectionIdle time.
 func (s) TestMaxConnectionIdle(t *testing.T) {
 	serverConfig := &ServerConfig{
+		BufferPool: mem.DefaultBufferPool(),
 		KeepaliveParams: keepalive.ServerParameters{
 			MaxConnectionIdle: 30 * time.Millisecond,
 		},
 	}
-	server, client, cancel := setUpWithOptions(t, 0, serverConfig, suspended, ConnectOptions{})
+	copts := ConnectOptions{
+		BufferPool: mem.DefaultBufferPool(),
+	}
+	server, client, cancel := setUpWithOptions(t, 0, serverConfig, suspended, copts)
 	defer func() {
 		client.Close(fmt.Errorf("closed manually by test"))
 		server.stop()
@@ -94,7 +99,10 @@ func (s) TestMaxConnectionIdleBusyClient(t *testing.T) {
 			MaxConnectionIdle: 100 * time.Millisecond,
 		},
 	}
-	server, client, cancel := setUpWithOptions(t, 0, serverConfig, suspended, ConnectOptions{})
+	copts := ConnectOptions{
+		BufferPool: mem.DefaultBufferPool(),
+	}
+	server, client, cancel := setUpWithOptions(t, 0, serverConfig, suspended, copts)
 	defer func() {
 		client.Close(fmt.Errorf("closed manually by test"))
 		server.stop()
@@ -124,12 +132,16 @@ func (s) TestMaxConnectionIdleBusyClient(t *testing.T) {
 func (s) TestMaxConnectionAge(t *testing.T) {
 	maxConnAge := 100 * time.Millisecond
 	serverConfig := &ServerConfig{
+		BufferPool: mem.DefaultBufferPool(),
 		KeepaliveParams: keepalive.ServerParameters{
 			MaxConnectionAge:      maxConnAge,
 			MaxConnectionAgeGrace: 10 * time.Millisecond,
 		},
 	}
-	server, client, cancel := setUpWithOptions(t, 0, serverConfig, suspended, ConnectOptions{})
+	copts := ConnectOptions{
+		BufferPool: mem.DefaultBufferPool(),
+	}
+	server, client, cancel := setUpWithOptions(t, 0, serverConfig, suspended, copts)
 	defer func() {
 		client.Close(fmt.Errorf("closed manually by test"))
 		server.stop()
@@ -170,12 +182,16 @@ const (
 // clientPreface and the initial Settings frame, and then remains unresponsive.
 func (s) TestKeepaliveServerClosesUnresponsiveClient(t *testing.T) {
 	serverConfig := &ServerConfig{
+		BufferPool: mem.DefaultBufferPool(),
 		KeepaliveParams: keepalive.ServerParameters{
 			Time:    100 * time.Millisecond,
 			Timeout: 10 * time.Millisecond,
 		},
 	}
-	server, client, cancel := setUpWithOptions(t, 0, serverConfig, suspended, ConnectOptions{})
+	copts := ConnectOptions{
+		BufferPool: mem.DefaultBufferPool(),
+	}
+	server, client, cancel := setUpWithOptions(t, 0, serverConfig, suspended, copts)
 	defer func() {
 		client.Close(fmt.Errorf("closed manually by test"))
 		server.stop()
@@ -192,7 +208,7 @@ func (s) TestKeepaliveServerClosesUnresponsiveClient(t *testing.T) {
 	if n, err := conn.Write(clientPreface); err != nil || n != len(clientPreface) {
 		t.Fatalf("conn.Write(clientPreface) failed: n=%v, err=%v", n, err)
 	}
-	framer := newFramer(conn, defaultWriteBufSize, defaultReadBufSize, false, 0)
+	framer := newFramer(conn, defaultWriteBufSize, defaultReadBufSize, false, 0, mem.DefaultBufferPool())
 	if err := framer.fr.WriteSettings(http2.Setting{}); err != nil {
 		t.Fatal("framer.WriteSettings(http2.Setting{}) failed:", err)
 	}
@@ -230,12 +246,16 @@ func (s) TestKeepaliveServerClosesUnresponsiveClient(t *testing.T) {
 // the connection with a client that responds to keepalive pings.
 func (s) TestKeepaliveServerWithResponsiveClient(t *testing.T) {
 	serverConfig := &ServerConfig{
+		BufferPool: mem.DefaultBufferPool(),
 		KeepaliveParams: keepalive.ServerParameters{
 			Time:    100 * time.Millisecond,
 			Timeout: 100 * time.Millisecond,
 		},
 	}
-	server, client, cancel := setUpWithOptions(t, 0, serverConfig, suspended, ConnectOptions{})
+	copts := ConnectOptions{
+		BufferPool: mem.DefaultBufferPool(),
+	}
+	server, client, cancel := setUpWithOptions(t, 0, serverConfig, suspended, copts)
 	defer func() {
 		client.Close(fmt.Errorf("closed manually by test"))
 		server.stop()
@@ -268,6 +288,7 @@ func channelzSubChannel(t *testing.T) *channelz.SubChannel {
 func (s) TestKeepaliveClientClosesUnresponsiveServer(t *testing.T) {
 	connCh := make(chan net.Conn, 1)
 	copts := ConnectOptions{
+		BufferPool:     mem.DefaultBufferPool(),
 		ChannelzParent: channelzSubChannel(t),
 		KeepaliveParams: keepalive.ClientParameters{
 			Time:                10 * time.Millisecond,
@@ -298,6 +319,7 @@ func (s) TestKeepaliveClientClosesUnresponsiveServer(t *testing.T) {
 func (s) TestKeepaliveClientOpenWithUnresponsiveServer(t *testing.T) {
 	connCh := make(chan net.Conn, 1)
 	copts := ConnectOptions{
+		BufferPool:     mem.DefaultBufferPool(),
 		ChannelzParent: channelzSubChannel(t),
 		KeepaliveParams: keepalive.ClientParameters{
 			Time:    10 * time.Millisecond,
@@ -328,6 +350,7 @@ func (s) TestKeepaliveClientOpenWithUnresponsiveServer(t *testing.T) {
 func (s) TestKeepaliveClientClosesWithActiveStreams(t *testing.T) {
 	connCh := make(chan net.Conn, 1)
 	copts := ConnectOptions{
+		BufferPool:     mem.DefaultBufferPool(),
 		ChannelzParent: channelzSubChannel(t),
 		KeepaliveParams: keepalive.ClientParameters{
 			Time:    500 * time.Millisecond,
@@ -364,6 +387,7 @@ func (s) TestKeepaliveClientClosesWithActiveStreams(t *testing.T) {
 func (s) TestKeepaliveClientStaysHealthyWithResponsiveServer(t *testing.T) {
 	server, client, cancel := setUpWithOptions(t, 0,
 		&ServerConfig{
+			BufferPool: mem.DefaultBufferPool(),
 			KeepalivePolicy: keepalive.EnforcementPolicy{
 				MinTime:             50 * time.Millisecond,
 				PermitWithoutStream: true,
@@ -371,6 +395,7 @@ func (s) TestKeepaliveClientStaysHealthyWithResponsiveServer(t *testing.T) {
 		},
 		normal,
 		ConnectOptions{
+			BufferPool: mem.DefaultBufferPool(),
 			KeepaliveParams: keepalive.ClientParameters{
 				Time:                55 * time.Millisecond,
 				Timeout:             time.Second,
@@ -401,12 +426,14 @@ func (s) TestKeepaliveClientFrequency(t *testing.T) {
 	grpctest.ExpectError("Client received GoAway with error code ENHANCE_YOUR_CALM and debug data equal to ASCII \"too_many_pings\"")
 
 	serverConfig := &ServerConfig{
+		BufferPool: mem.DefaultBufferPool(),
 		KeepalivePolicy: keepalive.EnforcementPolicy{
 			MinTime:             100 * time.Millisecond,
 			PermitWithoutStream: true,
 		},
 	}
 	clientOptions := ConnectOptions{
+		BufferPool: mem.DefaultBufferPool(),
 		KeepaliveParams: keepalive.ClientParameters{
 			Time:                50 * time.Millisecond,
 			Timeout:             time.Second,
@@ -433,11 +460,13 @@ func (s) TestKeepaliveServerEnforcementWithAbusiveClientNoRPC(t *testing.T) {
 	grpctest.ExpectError("Client received GoAway with error code ENHANCE_YOUR_CALM and debug data equal to ASCII \"too_many_pings\"")
 
 	serverConfig := &ServerConfig{
+		BufferPool: mem.DefaultBufferPool(),
 		KeepalivePolicy: keepalive.EnforcementPolicy{
 			MinTime: time.Second,
 		},
 	}
 	clientOptions := ConnectOptions{
+		BufferPool: mem.DefaultBufferPool(),
 		KeepaliveParams: keepalive.ClientParameters{
 			Time:                20 * time.Millisecond,
 			Timeout:             100 * time.Millisecond,
@@ -464,11 +493,13 @@ func (s) TestKeepaliveServerEnforcementWithAbusiveClientWithRPC(t *testing.T) {
 	grpctest.ExpectError("Client received GoAway with error code ENHANCE_YOUR_CALM and debug data equal to ASCII \"too_many_pings\"")
 
 	serverConfig := &ServerConfig{
+		BufferPool: mem.DefaultBufferPool(),
 		KeepalivePolicy: keepalive.EnforcementPolicy{
 			MinTime: time.Second,
 		},
 	}
 	clientOptions := ConnectOptions{
+		BufferPool: mem.DefaultBufferPool(),
 		KeepaliveParams: keepalive.ClientParameters{
 			Time:    50 * time.Millisecond,
 			Timeout: 100 * time.Millisecond,
@@ -498,12 +529,14 @@ func (s) TestKeepaliveServerEnforcementWithAbusiveClientWithRPC(t *testing.T) {
 // EnforcementPolicy.
 func (s) TestKeepaliveServerEnforcementWithObeyingClientNoRPC(t *testing.T) {
 	serverConfig := &ServerConfig{
+		BufferPool: mem.DefaultBufferPool(),
 		KeepalivePolicy: keepalive.EnforcementPolicy{
 			MinTime:             40 * time.Millisecond,
 			PermitWithoutStream: true,
 		},
 	}
 	clientOptions := ConnectOptions{
+		BufferPool: mem.DefaultBufferPool(),
 		KeepaliveParams: keepalive.ClientParameters{
 			Time:                50 * time.Millisecond,
 			Timeout:             time.Second,
@@ -532,11 +565,13 @@ func (s) TestKeepaliveServerEnforcementWithObeyingClientNoRPC(t *testing.T) {
 // EnforcementPolicy.
 func (s) TestKeepaliveServerEnforcementWithObeyingClientWithRPC(t *testing.T) {
 	serverConfig := &ServerConfig{
+		BufferPool: mem.DefaultBufferPool(),
 		KeepalivePolicy: keepalive.EnforcementPolicy{
 			MinTime: 40 * time.Millisecond,
 		},
 	}
 	clientOptions := ConnectOptions{
+		BufferPool: mem.DefaultBufferPool(),
 		KeepaliveParams: keepalive.ClientParameters{
 			Time: 50 * time.Millisecond,
 		},
@@ -568,11 +603,13 @@ func (s) TestKeepaliveServerEnforcementWithObeyingClientWithRPC(t *testing.T) {
 // side enters a dormant state.
 func (s) TestKeepaliveServerEnforcementWithDormantKeepaliveOnClient(t *testing.T) {
 	serverConfig := &ServerConfig{
+		BufferPool: mem.DefaultBufferPool(),
 		KeepalivePolicy: keepalive.EnforcementPolicy{
 			MinTime: 100 * time.Millisecond,
 		},
 	}
 	clientOptions := ConnectOptions{
+		BufferPool: mem.DefaultBufferPool(),
 		KeepaliveParams: keepalive.ClientParameters{
 			Time:    10 * time.Millisecond,
 			Timeout: 10 * time.Millisecond,
@@ -648,6 +685,7 @@ func (s) TestTCPUserTimeout(t *testing.T) {
 	}
 	for _, tt := range tests {
 		sopts := &ServerConfig{
+			BufferPool: mem.DefaultBufferPool(),
 			KeepaliveParams: keepalive.ServerParameters{
 				Time:    tt.time,
 				Timeout: tt.timeout,
@@ -655,6 +693,7 @@ func (s) TestTCPUserTimeout(t *testing.T) {
 		}
 
 		copts := ConnectOptions{
+			BufferPool: mem.DefaultBufferPool(),
 			KeepaliveParams: keepalive.ClientParameters{
 				Time:    tt.time,
 				Timeout: tt.timeout,

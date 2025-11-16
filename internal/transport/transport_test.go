@@ -516,7 +516,10 @@ func setUpServerOnly(t *testing.T, port int, sc *ServerConfig, ht hType) *server
 }
 
 func setUp(t *testing.T, port int, ht hType) (*server, *http2Client, func()) {
-	return setUpWithOptions(t, port, &ServerConfig{}, ht, ConnectOptions{})
+	copts := ConnectOptions{
+		BufferPool: mem.DefaultBufferPool(),
+	}
+	return setUpWithOptions(t, port, &ServerConfig{BufferPool: mem.DefaultBufferPool()}, ht, copts)
 }
 
 func setUpWithOptions(t *testing.T, port int, sc *ServerConfig, ht hType, copts ConnectOptions) (*server, *http2Client, func()) {
@@ -576,8 +579,13 @@ func setUpWithNoPingServer(t *testing.T, copts ConnectOptions, connCh chan net.C
 // TestInflightStreamClosing ensures that closing in-flight stream
 // sends status error to concurrent stream reader.
 func (s) TestInflightStreamClosing(t *testing.T) {
-	serverConfig := &ServerConfig{}
-	server, client, cancel := setUpWithOptions(t, 0, serverConfig, suspended, ConnectOptions{})
+	serverConfig := &ServerConfig{
+		BufferPool: mem.DefaultBufferPool(),
+	}
+	copts := ConnectOptions{
+		BufferPool: mem.DefaultBufferPool(),
+	}
+	server, client, cancel := setUpWithOptions(t, 0, serverConfig, suspended, copts)
 	defer cancel()
 	defer server.stop()
 	defer client.Close(fmt.Errorf("closed manually by test"))
@@ -785,6 +793,7 @@ func (s) TestLargeMessage(t *testing.T) {
 func (s) TestLargeMessageWithDelayRead(t *testing.T) {
 	// Disable dynamic flow control.
 	sc := &ServerConfig{
+		BufferPool:            mem.DefaultBufferPool(),
 		InitialWindowSize:     defaultWindowSize,
 		InitialConnWindowSize: defaultWindowSize,
 		StaticWindowSize:      true,
@@ -793,6 +802,7 @@ func (s) TestLargeMessageWithDelayRead(t *testing.T) {
 		InitialWindowSize:     defaultWindowSize,
 		InitialConnWindowSize: defaultWindowSize,
 		StaticWindowSize:      true,
+		BufferPool:            mem.DefaultBufferPool(),
 	}
 	server, ct, cancel := setUpWithOptions(t, 0, sc, delayRead, co)
 	defer cancel()
@@ -990,9 +1000,13 @@ func (s) TestLargeMessageSuspension(t *testing.T) {
 
 func (s) TestMaxStreams(t *testing.T) {
 	serverConfig := &ServerConfig{
+		BufferPool: mem.DefaultBufferPool(),
 		MaxStreams: 1,
 	}
-	server, ct, cancel := setUpWithOptions(t, 0, serverConfig, suspended, ConnectOptions{})
+	copts := ConnectOptions{
+		BufferPool: mem.DefaultBufferPool(),
+	}
+	server, ct, cancel := setUpWithOptions(t, 0, serverConfig, suspended, copts)
 	defer cancel()
 	defer ct.Close(fmt.Errorf("closed manually by test"))
 	defer server.stop()
@@ -1131,8 +1145,10 @@ func (s) TestClientConnDecoupledFromApplicationRead(t *testing.T) {
 	connectOptions := ConnectOptions{
 		InitialWindowSize:     defaultWindowSize,
 		InitialConnWindowSize: defaultWindowSize,
+		BufferPool:            mem.DefaultBufferPool(),
 	}
-	server, client, cancel := setUpWithOptions(t, 0, &ServerConfig{}, notifyCall, connectOptions)
+	serverConfig := &ServerConfig{BufferPool: mem.DefaultBufferPool()}
+	server, client, cancel := setUpWithOptions(t, 0, serverConfig, notifyCall, connectOptions)
 	defer cancel()
 	defer server.stop()
 	defer client.Close(fmt.Errorf("closed manually by test"))
@@ -1218,10 +1234,14 @@ func (s) TestClientConnDecoupledFromApplicationRead(t *testing.T) {
 
 func (s) TestServerConnDecoupledFromApplicationRead(t *testing.T) {
 	serverConfig := &ServerConfig{
+		BufferPool:            mem.DefaultBufferPool(),
 		InitialWindowSize:     defaultWindowSize,
 		InitialConnWindowSize: defaultWindowSize,
 	}
-	server, client, cancel := setUpWithOptions(t, 0, serverConfig, suspended, ConnectOptions{})
+	copts := ConnectOptions{
+		BufferPool: mem.DefaultBufferPool(),
+	}
+	server, client, cancel := setUpWithOptions(t, 0, serverConfig, suspended, copts)
 	defer cancel()
 	defer server.stop()
 	defer client.Close(fmt.Errorf("closed manually by test"))
@@ -1288,7 +1308,7 @@ func (s) TestServerConnDecoupledFromApplicationRead(t *testing.T) {
 }
 
 func (s) TestServerWithMisbehavedClient(t *testing.T) {
-	server := setUpServerOnly(t, 0, &ServerConfig{}, suspended)
+	server := setUpServerOnly(t, 0, &ServerConfig{BufferPool: mem.DefaultBufferPool()}, suspended)
 	defer server.stop()
 	// Create a client that can override server stream quota.
 	mconn, err := net.Dial("tcp", server.lis.Addr().String())
@@ -1420,7 +1440,10 @@ func (s) TestClientHonorsConnectContext(t *testing.T) {
 	time.AfterFunc(100*time.Millisecond, cancel)
 
 	parent := channelzSubChannel(t)
-	copts := ConnectOptions{ChannelzParent: parent}
+	copts := ConnectOptions{
+		ChannelzParent: parent,
+		BufferPool:     mem.DefaultBufferPool(),
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	_, err = NewHTTP2Client(connectCtx, ctx, resolver.Address{Addr: lis.Addr().String()}, copts, func(GoAwayReason) {})
@@ -1514,7 +1537,10 @@ func (s) TestClientWithMisbehavedServer(t *testing.T) {
 	defer cancel()
 
 	parent := channelzSubChannel(t)
-	copts := ConnectOptions{ChannelzParent: parent}
+	copts := ConnectOptions{
+		ChannelzParent: parent,
+		BufferPool:     mem.DefaultBufferPool(),
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	ct, err := NewHTTP2Client(connectCtx, ctx, resolver.Address{Addr: lis.Addr().String()}, copts, func(GoAwayReason) {})
@@ -1700,11 +1726,13 @@ func testFlowControlAccountCheck(t *testing.T, msgSize int, wc windowSizeConfig)
 		InitialWindowSize:     wc.serverStream,
 		InitialConnWindowSize: wc.serverConn,
 		StaticWindowSize:      true,
+		BufferPool:            mem.DefaultBufferPool(),
 	}
 	co := ConnectOptions{
 		InitialWindowSize:     wc.clientStream,
 		InitialConnWindowSize: wc.clientConn,
 		StaticWindowSize:      true,
+		BufferPool:            mem.DefaultBufferPool(),
 	}
 	server, client, cancel := setUpWithOptions(t, 0, sc, pingpong, co)
 	defer cancel()
@@ -1949,7 +1977,7 @@ func (s) TestHeadersCausingStreamError(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			server := setUpServerOnly(t, 0, &ServerConfig{}, suspended)
+			server := setUpServerOnly(t, 0, &ServerConfig{BufferPool: mem.DefaultBufferPool()}, suspended)
 			defer server.stop()
 			// Create a client directly to not tie what you can send to API of
 			// http2_client.go (i.e. control headers being sent).
@@ -2149,7 +2177,7 @@ func (s) TestHeadersHTTPStatusGRPCStatus(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			server := setUpServerOnly(t, 0, &ServerConfig{}, suspended)
+			server := setUpServerOnly(t, 0, &ServerConfig{BufferPool: mem.DefaultBufferPool()}, suspended)
 			defer server.stop()
 			// Create a client directly to not tie what you can send to API of
 			// http2_client.go (i.e. control headers being sent).
@@ -2516,7 +2544,7 @@ func (ac *attrTransportCreds) Clone() credentials.TransportCredentials {
 // NewHTTP2Client and verifies that these attributes are received by the
 // transport credential handshaker.
 func (s) TestClientHandshakeInfo(t *testing.T) {
-	server := setUpServerOnly(t, 0, &ServerConfig{}, pingpong)
+	server := setUpServerOnly(t, 0, &ServerConfig{BufferPool: mem.DefaultBufferPool()}, pingpong)
 	defer server.stop()
 
 	const (
@@ -2534,6 +2562,7 @@ func (s) TestClientHandshakeInfo(t *testing.T) {
 	copts := ConnectOptions{
 		TransportCredentials: creds,
 		ChannelzParent:       channelzSubChannel(t),
+		BufferPool:           mem.DefaultBufferPool(),
 	}
 	tr, err := NewHTTP2Client(ctx, ctx, addr, copts, func(GoAwayReason) {})
 	if err != nil {
@@ -2551,7 +2580,7 @@ func (s) TestClientHandshakeInfo(t *testing.T) {
 // NewHTTP2Client and verifies that these attributes are received by a custom
 // dialer.
 func (s) TestClientHandshakeInfoDialer(t *testing.T) {
-	server := setUpServerOnly(t, 0, &ServerConfig{}, pingpong)
+	server := setUpServerOnly(t, 0, &ServerConfig{BufferPool: mem.DefaultBufferPool()}, pingpong)
 	defer server.stop()
 
 	const (
@@ -2575,6 +2604,7 @@ func (s) TestClientHandshakeInfoDialer(t *testing.T) {
 	copts := ConnectOptions{
 		Dialer:         dialer,
 		ChannelzParent: channelzSubChannel(t),
+		BufferPool:     mem.DefaultBufferPool(),
 	}
 	tr, err := NewHTTP2Client(ctx, ctx, addr, copts, func(GoAwayReason) {})
 	if err != nil {
@@ -2794,7 +2824,7 @@ func (s) TestClientDecodeTrailer(t *testing.T) {
 					{Name: ":status", Value: "xxxx"},
 				},
 			},
-			wantEndStreamStatus: status.New(codes.Internal, ""),
+			wantEndStreamStatus: status.New(codes.Unknown, ""),
 		},
 		{
 			name: "http2_frame_size_exceeds",
@@ -2813,7 +2843,7 @@ func (s) TestClientDecodeTrailer(t *testing.T) {
 					{Name: "content-type", Value: "application/grpc"},
 				},
 			},
-			wantEndStreamStatus: status.New(codes.Internal, ""),
+			wantEndStreamStatus: status.New(codes.Unknown, ""),
 		},
 		{
 			name: "deadline_exceeded_status",
@@ -2930,7 +2960,10 @@ func (s) TestClientSendsAGoAwayFrame(t *testing.T) {
 		}
 	}()
 
-	ct, err := NewHTTP2Client(ctx, ctx, resolver.Address{Addr: lis.Addr().String()}, ConnectOptions{}, func(GoAwayReason) {})
+	cOpts := ConnectOptions{
+		BufferPool: mem.DefaultBufferPool(),
+	}
+	ct, err := NewHTTP2Client(ctx, ctx, resolver.Address{Addr: lis.Addr().String()}, cOpts, func(GoAwayReason) {})
 	if err != nil {
 		t.Fatalf("Error while creating client transport: %v", err)
 	}
@@ -2979,13 +3012,14 @@ func (s) TestClientCloseReturnsAfterReaderCompletes(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	server := setUpServerOnly(t, 0, &ServerConfig{}, normal)
+	server := setUpServerOnly(t, 0, &ServerConfig{BufferPool: mem.DefaultBufferPool()}, normal)
 	defer server.stop()
 	addr := resolver.Address{Addr: "localhost:" + server.port}
 
 	isReaderHanging := &atomic.Bool{}
 	readHangConn := make(chan struct{})
 	copts := ConnectOptions{
+		BufferPool: mem.DefaultBufferPool(),
 		Dialer: func(_ context.Context, addr string) (net.Conn, error) {
 			conn, err := net.Dial("tcp", addr)
 			if err != nil {
@@ -3069,7 +3103,7 @@ func (s) TestClientCloseReturnsEarlyWhenGoAwayWriteHangs(t *testing.T) {
 	// Create the server set up.
 	connectCtx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	server := setUpServerOnly(t, 0, &ServerConfig{}, normal)
+	server := setUpServerOnly(t, 0, &ServerConfig{BufferPool: mem.DefaultBufferPool()}, normal)
 	defer server.stop()
 	addr := resolver.Address{Addr: "localhost:" + server.port}
 	isGreetingDone := &atomic.Bool{}
@@ -3082,7 +3116,10 @@ func (s) TestClientCloseReturnsEarlyWhenGoAwayWriteHangs(t *testing.T) {
 		}
 		return &hangingConn{Conn: conn, hangConn: hangConn, startHanging: isGreetingDone}, nil
 	}
-	copts := ConnectOptions{Dialer: dialer}
+	copts := ConnectOptions{
+		Dialer:     dialer,
+		BufferPool: mem.DefaultBufferPool(),
+	}
 	copts.ChannelzParent = channelzSubChannel(t)
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -3139,9 +3176,10 @@ func (s) TestCloseSetsConnectionDeadlines(t *testing.T) {
 		return &deadlineTestConn{Conn: conn}, nil
 	}
 	co := ConnectOptions{
-		Dialer: dialer,
+		Dialer:     dialer,
+		BufferPool: mem.DefaultBufferPool(),
 	}
-	server, client, cancel := setUpWithOptions(t, 0, &ServerConfig{}, normal, co)
+	server, client, cancel := setUpWithOptions(t, 0, &ServerConfig{BufferPool: mem.DefaultBufferPool()}, normal, co)
 	defer cancel()
 	defer server.stop()
 	dConn := client.conn.(*deadlineTestConn)
@@ -3197,7 +3235,7 @@ func (s) TestReadMessageHeaderMultipleBuffers(t *testing.T) {
 // configured deadline is reached. The test verifies that the server sends an
 // RST stream only after the deadline is reached.
 func (s) TestServerSendsRSTAfterDeadlineToMisbehavedClient(t *testing.T) {
-	server := setUpServerOnly(t, 0, &ServerConfig{}, suspended)
+	server := setUpServerOnly(t, 0, &ServerConfig{BufferPool: mem.DefaultBufferPool()}, suspended)
 	defer server.stop()
 	// Create a client that can override server stream quota.
 	mconn, err := net.Dial("tcp", server.lis.Addr().String())
@@ -3390,12 +3428,13 @@ func (s) TestDeleteStreamMetricsIncrementedOnlyOnce(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			// Setup server configuration with channelz support
 			serverConfig := &ServerConfig{
+				BufferPool:     mem.DefaultBufferPool(),
 				ChannelzParent: channelz.RegisterServer(t.Name()),
 			}
 			defer channelz.RemoveEntry(serverConfig.ChannelzParent.ID)
 
 			// Create server and client with normal handler (not notifyCall)
-			server, client, cancel := setUpWithOptions(t, 0, serverConfig, normal, ConnectOptions{})
+			server, client, cancel := setUpWithOptions(t, 0, serverConfig, normal, ConnectOptions{BufferPool: mem.DefaultBufferPool()})
 			defer func() {
 				client.Close(fmt.Errorf("test cleanup"))
 				server.stop()

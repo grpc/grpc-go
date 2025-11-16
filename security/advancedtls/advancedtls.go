@@ -317,6 +317,14 @@ func (o *Options) serverConfig() (*tls.Config, error) {
 	if o.RequireClientCert && o.VerificationType == SkipVerification && o.AdditionalPeerVerification == nil {
 		return nil, fmt.Errorf("server needs to provide custom verification mechanism if choose to skip default verification, but require client certificate(s)")
 	}
+	// If the MinTLSVersion isn't set, default to 1.2
+	if o.MinTLSVersion == 0 {
+		o.MinTLSVersion = tls.VersionTLS12
+	}
+	// If the MaxTLSVersion isn't set, default to 1.3
+	if o.MaxTLSVersion == 0 {
+		o.MaxTLSVersion = tls.VersionTLS13
+	}
 	// Make sure users didn't specify more than one fields in
 	// RootCertificateOptions and IdentityCertificateOptions.
 	if num := o.RootOptions.nonNilFieldCount(); num > 1 {
@@ -337,14 +345,6 @@ func (o *Options) serverConfig() (*tls.Config, error) {
 		// TLS package to use the verification function we built from
 		// buildVerifyFunc.
 		clientAuth = tls.RequireAnyClientCert
-	}
-	// If the MinTLSVersion isn't set, default to 1.2
-	if o.MinTLSVersion == 0 {
-		o.MinTLSVersion = tls.VersionTLS12
-	}
-	// If the MaxTLSVersion isn't set, default to 1.3
-	if o.MaxTLSVersion == 0 {
-		o.MaxTLSVersion = tls.VersionTLS13
 	}
 	config := &tls.Config{
 		ClientAuth:   clientAuth,

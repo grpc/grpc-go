@@ -368,18 +368,20 @@ func (r *xdsResolver) newConfigSelector(config *xdsresource.XDSConfig) *configSe
 		clusters := rinternal.NewWRR.(func() wrr.WRR)()
 		if rt.ClusterSpecifierPlugin != "" {
 			clusterName := clusterSpecifierPluginPrefix + rt.ClusterSpecifierPlugin
-			clusters.Add(&routeCluster{
-				name: clusterName,
-			}, 1)
+			clusters.Add(&routeCluster{name: clusterName}, 1)
 			ci := r.addOrGetActiveClusterInfo(clusterName)
 			ci.cfg = xdsChildConfig{ChildPolicy: balancerConfig(config.RouteConfig.ClusterSpecifierPlugins[rt.ClusterSpecifierPlugin])}
 			cs.clusters[clusterName] = ci
 		} else {
 			for _, wc := range rt.WeightedClusters {
 				clusterName := clusterPrefix + wc.Name
+				interceptor, err := newInterceptor(r.currentListener.HTTPFilters, wc.HTTPFilterConfigOverride, rt.HTTPFilterConfigOverride, r.currentVirtualHost.HTTPFilterConfigOverride)
+				if err != nil {
+					return nil, err
+				}
 				clusters.Add(&routeCluster{
-					name:                     clusterName,
-					httpFilterConfigOverride: wc.HTTPFilterConfigOverride,
+					name:        clusterName,
+					interceptor: interceptor,
 				}, int64(wc.Weight))
 				ci := r.addOrGetActiveClusterInfo(clusterName)
 				ci.cfg = xdsChildConfig{ChildPolicy: newBalancerConfig(cdsName, cdsBalancerConfig{Cluster: wc.Name})}
@@ -396,7 +398,6 @@ func (r *xdsResolver) newConfigSelector(config *xdsresource.XDSConfig) *configSe
 			cs.routes[i].maxStreamDuration = *rt.MaxStreamDuration
 		}
 
-		cs.routes[i].httpFilterConfigOverride = rt.HTTPFilterConfigOverride
 		cs.routes[i].retryConfig = rt.RetryConfig
 		cs.routes[i].hashPolicies = rt.HashPolicies
 	}
@@ -408,7 +409,7 @@ func (r *xdsResolver) newConfigSelector(config *xdsresource.XDSConfig) *configSe
 		atomic.AddInt32(&ci.refCount, 1)
 	}
 
-	return cs
+	return cs, nil
 }
 
 // pruneActiveClusters deletes entries in r.activeClusters with zero

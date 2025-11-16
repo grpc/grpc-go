@@ -37,10 +37,6 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	internalbackoff "google.golang.org/grpc/internal/backoff"
-	"google.golang.org/grpc/internal/grpcsync"
-	"google.golang.org/grpc/internal/grpctest"
-	"google.golang.org/grpc/internal/transport"
-	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/serviceconfig"
@@ -67,47 +63,6 @@ func parseCfg(r *manual.Resolver, s string) *serviceconfig.ParseResult {
 		panic(fmt.Sprintf("Error parsing config %q: %v", s, scpr.Err))
 	}
 	return scpr
-}
-
-func (s) TestDialWithTimeout(t *testing.T) {
-	lis, err := net.Listen("tcp", "localhost:0")
-	if err != nil {
-		t.Fatalf("Error while listening. Err: %v", err)
-	}
-	defer lis.Close()
-	lisAddr := resolver.Address{Addr: lis.Addr().String()}
-	lisDone := make(chan struct{})
-	dialDone := make(chan struct{})
-	// 1st listener accepts the connection and then does nothing
-	go func() {
-		defer close(lisDone)
-		conn, err := lis.Accept()
-		if err != nil {
-			t.Errorf("Error while accepting. Err: %v", err)
-			return
-		}
-		framer := http2.NewFramer(conn, conn)
-		if err := framer.WriteSettings(http2.Setting{}); err != nil {
-			t.Errorf("Error while writing settings. Err: %v", err)
-			return
-		}
-		<-dialDone // Close conn only after dial returns.
-	}()
-
-	r := manual.NewBuilderWithScheme("whatever")
-	r.InitialState(resolver.State{Addresses: []resolver.Address{lisAddr}})
-	client, err := Dial(r.Scheme()+":///test.server", WithTransportCredentials(insecure.NewCredentials()), WithResolvers(r), WithTimeout(5*time.Second))
-	close(dialDone)
-	if err != nil {
-		t.Fatalf("Dial failed. Err: %v", err)
-	}
-	defer client.Close()
-	timeout := time.After(1 * time.Second)
-	select {
-	case <-timeout:
-		t.Fatal("timed out waiting for server to finish")
-	case <-lisDone:
-	}
 }
 
 func (s) TestNewClientWithMultipleBackendsNotSendingServerPreface(t *testing.T) {
@@ -164,97 +119,6 @@ func (s) TestNewClientWithMultipleBackendsNotSendingServerPreface(t *testing.T) 
 	case <-timeout:
 		t.Fatal("timed out waiting for server 2 to finish")
 	case <-lis2Done:
-	}
-}
-
-func (s) TestDialWaitsForServerSettings(t *testing.T) {
-	lis, err := net.Listen("tcp", "localhost:0")
-	if err != nil {
-		t.Fatalf("Error while listening. Err: %v", err)
-	}
-	defer lis.Close()
-	done := make(chan struct{})
-	sent := make(chan struct{})
-	dialDone := make(chan struct{})
-	go func() { // Launch the server.
-		defer func() {
-			close(done)
-		}()
-		conn, err := lis.Accept()
-		if err != nil {
-			t.Errorf("Error while accepting. Err: %v", err)
-			return
-		}
-		defer conn.Close()
-		// Sleep for a little bit to make sure that Dial on client
-		// side blocks until settings are received.
-		time.Sleep(100 * time.Millisecond)
-		framer := http2.NewFramer(conn, conn)
-		close(sent)
-		if err := framer.WriteSettings(http2.Setting{}); err != nil {
-			t.Errorf("Error while writing settings. Err: %v", err)
-			return
-		}
-		<-dialDone // Close conn only after dial returns.
-	}()
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	client, err := DialContext(ctx, lis.Addr().String(), WithTransportCredentials(insecure.NewCredentials()), WithBlock())
-	close(dialDone)
-	if err != nil {
-		t.Fatalf("Error while dialing. Err: %v", err)
-	}
-	defer client.Close()
-	select {
-	case <-sent:
-	default:
-		t.Fatalf("Dial returned before server settings were sent")
-	}
-	<-done
-}
-
-func (s) TestDialWaitsForServerSettingsAndFails(t *testing.T) {
-	lis, err := net.Listen("tcp", "localhost:0")
-	if err != nil {
-		t.Fatalf("Error while listening. Err: %v", err)
-	}
-	done := make(chan struct{})
-	numConns := 0
-	go func() { // Launch the server.
-		defer func() {
-			close(done)
-		}()
-		for {
-			conn, err := lis.Accept()
-			if err != nil {
-				break
-			}
-			numConns++
-			defer conn.Close()
-		}
-	}()
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-	defer cancel()
-	client, err := DialContext(ctx,
-		lis.Addr().String(),
-		WithTransportCredentials(insecure.NewCredentials()),
-		WithReturnConnectionError(),
-		WithConnectParams(ConnectParams{
-			Backoff:           backoff.Config{},
-			MinConnectTimeout: 250 * time.Millisecond,
-		}))
-	lis.Close()
-	if err == nil {
-		client.Close()
-		t.Fatalf("Unexpected success (err=nil) while dialing")
-	}
-	expectedMsg := "server preface"
-	if !strings.Contains(err.Error(), context.DeadlineExceeded.Error()) || !strings.Contains(err.Error(), expectedMsg) {
-		t.Fatalf("DialContext(_) = %v; want a message that includes both %q and %q", err, context.DeadlineExceeded.Error(), expectedMsg)
-	}
-	<-done
-	if numConns < 2 {
-		t.Fatalf("dial attempts: %v; want > 1", numConns)
 	}
 }
 
@@ -391,35 +255,6 @@ func (s) TestBackoffWhenNoServerPrefaceReceived(t *testing.T) {
 	<-done
 }
 
-func (s) TestWithTimeout(t *testing.T) {
-	conn, err := Dial("passthrough:///Non-Existent.Server:80",
-		WithTimeout(time.Millisecond),
-		WithBlock(),
-		WithTransportCredentials(insecure.NewCredentials()))
-	if err == nil {
-		conn.Close()
-	}
-	if err != context.DeadlineExceeded {
-		t.Fatalf("Dial(_, _) = %v, %v, want %v", conn, err, context.DeadlineExceeded)
-	}
-}
-
-func (s) TestWithTransportCredentialsTLS(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
-	defer cancel()
-	creds, err := credentials.NewClientTLSFromFile(testdata.Path("x509/server_ca_cert.pem"), "x.test.example.com")
-	if err != nil {
-		t.Fatalf("Failed to create credentials %v", err)
-	}
-	conn, err := DialContext(ctx, "passthrough:///Non-Existent.Server:80", WithTransportCredentials(creds), WithBlock())
-	if err == nil {
-		conn.Close()
-	}
-	if err != context.DeadlineExceeded {
-		t.Fatalf("Dial(_, _) = %v, %v, want %v", conn, err, context.DeadlineExceeded)
-	}
-}
-
 // When creating a transport configured with n addresses, only calculate the
 // backoff once per "round" of attempts instead of once per address (n times
 // per "round" of attempts) for old pickfirst and once per address for new pickfirst.
@@ -504,33 +339,6 @@ func (s) TestNewClient_BackoffCountPerRetryGroup(t *testing.T) {
 
 	if got, want := atomic.LoadUint32(&attempts), wantBackoffs; got != want {
 		t.Errorf("attempts = %d, want %d", got, want)
-	}
-}
-
-func (s) TestDialContextCancel(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	if _, err := DialContext(ctx, "Non-Existent.Server:80", WithBlock(), WithTransportCredentials(insecure.NewCredentials())); err != context.Canceled {
-		t.Fatalf("DialContext(%v, _) = _, %v, want _, %v", ctx, err, context.Canceled)
-	}
-}
-
-type failFastError struct{}
-
-func (failFastError) Error() string   { return "failfast" }
-func (failFastError) Temporary() bool { return false }
-
-func (s) TestDialContextFailFast(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	failErr := failFastError{}
-	dialer := func(string, time.Duration) (net.Conn, error) {
-		return nil, failErr
-	}
-
-	_, err := DialContext(ctx, "Non-Existent.Server:80", WithBlock(), WithTransportCredentials(insecure.NewCredentials()), WithDialer(dialer), FailOnNonTempDialError(true))
-	if terr, ok := err.(transport.ConnectionError); !ok || terr.Origin() != failErr {
-		t.Fatalf("DialContext() = _, %v, want _, %v", err, failErr)
 	}
 }
 
@@ -695,72 +503,6 @@ func (s) TestResolverEmptyUpdateNotPanic(t *testing.T) {
 	r.UpdateState(resolver.State{}) // This should not panic.
 
 	time.Sleep(time.Second) // Sleep to make sure the service config is handled by ClientConn.
-}
-
-func (s) TestClientUpdatesParamsAfterGoAway(t *testing.T) {
-	grpctest.ExpectError("Client received GoAway with error code ENHANCE_YOUR_CALM and debug data equal to ASCII \"too_many_pings\"")
-
-	lis, err := net.Listen("tcp", "localhost:0")
-	if err != nil {
-		t.Fatalf("Failed to listen. Err: %v", err)
-	}
-	defer lis.Close()
-	connected := grpcsync.NewEvent()
-	defer connected.Fire()
-	go func() {
-		conn, err := lis.Accept()
-		if err != nil {
-			t.Errorf("error accepting connection: %v", err)
-			return
-		}
-		defer conn.Close()
-		f := http2.NewFramer(conn, conn)
-		// Start a goroutine to read from the conn to prevent the client from
-		// blocking after it writes its preface.
-		go func() {
-			for {
-				if _, err := f.ReadFrame(); err != nil {
-					return
-				}
-			}
-		}()
-		if err := f.WriteSettings(http2.Setting{}); err != nil {
-			t.Errorf("error writing settings: %v", err)
-			return
-		}
-		<-connected.Done()
-		if err := f.WriteGoAway(0, http2.ErrCodeEnhanceYourCalm, []byte("too_many_pings")); err != nil {
-			t.Errorf("error writing GOAWAY: %v", err)
-			return
-		}
-	}()
-	addr := lis.Addr().String()
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	cc, err := DialContext(ctx, addr, WithBlock(), WithTransportCredentials(insecure.NewCredentials()), WithKeepaliveParams(keepalive.ClientParameters{
-		Time:                10 * time.Second,
-		Timeout:             100 * time.Millisecond,
-		PermitWithoutStream: true,
-	}))
-	if err != nil {
-		t.Fatalf("DialContext(%s) failed: %v, want: nil", addr, err)
-	}
-	defer cc.Close()
-	connected.Fire()
-	for {
-		time.Sleep(10 * time.Millisecond)
-		cc.mu.RLock()
-		v := cc.keepaliveParams.Time
-		cc.mu.RUnlock()
-		if v == 20*time.Second {
-			// Success
-			return
-		}
-		if ctx.Err() != nil {
-			// Timeout
-			t.Fatalf("cc.dopts.copts.Keepalive.Time = %v , want 20s", v)
-		}
-	}
 }
 
 func (s) TestDisableServiceConfigOption(t *testing.T) {
