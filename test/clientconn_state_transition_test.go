@@ -34,7 +34,6 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/balancer/stub"
-	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
@@ -345,18 +344,12 @@ func (s) TestStateTransitions_TriesAllAddrsBeforeTransientFailure(t *testing.T) 
 	client.Connect()
 	stateNotifications := testBalancerBuilder.nextStateNotifier()
 	want := []connectivity.State{
+		// The first subconn fails.
+		connectivity.Connecting,
+		connectivity.TransientFailure,
+		// The second subconn connects.
 		connectivity.Connecting,
 		connectivity.Ready,
-	}
-	if envconfig.NewPickFirstEnabled {
-		want = []connectivity.State{
-			// The first subconn fails.
-			connectivity.Connecting,
-			connectivity.TransientFailure,
-			// The second subconn connects.
-			connectivity.Connecting,
-			connectivity.Ready,
-		}
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()

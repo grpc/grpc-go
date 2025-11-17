@@ -33,7 +33,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
-	"google.golang.org/grpc/balancer/pickfirst/pickfirstleaf"
+	"google.golang.org/grpc/balancer/pickfirst"
 	"google.golang.org/grpc/balancer/weightedroundrobin"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
@@ -46,6 +46,7 @@ import (
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/roundrobin"
+	"google.golang.org/grpc/internal/testutils/stats"
 	"google.golang.org/grpc/internal/xds/balancer/clusterimpl"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/resolver"
@@ -1027,253 +1028,344 @@ func (s) TestDurationOfInterval(t *testing.T) {
 
 // TestEjectUnejectSuccessRate tests the functionality of the interval timer
 // algorithm when configured with SuccessRateEjection. The Outlier Detection
-// Balancer will be set up with 3 SubConns, each with a different address.
+// Balancer will be set up with N SubConns, each with a different address.
 // It tests the following scenarios, in a step by step fashion:
-// 1. The three addresses each have 5 successes. The interval timer algorithm should
-// not eject any of the addresses.
-// 2. Two of the addresses have 5 successes, the third has five failures. The
-// interval timer algorithm should eject the third address with five failures.
+// 1. The N addresses each have 5 successes. The interval timer algorithm
+// should not eject any of the addresses.
+// 2. N - `wantFailures`  of the addresses have 5 successes but the remaining
+// address has 5 failures. The internal algorithm
+// should attempt to eject the address based on the outlier detection lb
+// config. Only `wantEjections` addresses should be ejected.
 // 3. The interval timer algorithm is run at a later time past max ejection
-// time. The interval timer algorithm should uneject the third address.
+// time. The interval timer algorithm should uneject all.
 func (s) TestEjectUnejectSuccessRate(t *testing.T) {
-	scsCh := testutils.NewChannel()
-	var scw1, scw2, scw3 balancer.SubConn
-	var err error
-	connectivityCh := make(chan struct{})
-	stub.Register(t.Name(), stub.BalancerFuncs{
-		UpdateClientConnState: func(bd *stub.BalancerData, _ balancer.ClientConnState) error {
-			scw1, err = bd.ClientConn.NewSubConn([]resolver.Address{{Addr: "address1"}}, balancer.NewSubConnOptions{
-				StateListener: func(balancer.SubConnState) {},
-			})
-			if err != nil {
-				t.Errorf("error in od.NewSubConn call: %v", err)
-			}
-			scw1.Connect()
-			scw2, err = bd.ClientConn.NewSubConn([]resolver.Address{{Addr: "address2"}}, balancer.NewSubConnOptions{
-				StateListener: func(balancer.SubConnState) {},
-			})
-			if err != nil {
-				t.Errorf("error in od.NewSubConn call: %v", err)
-			}
-			scw2.Connect()
-			scw3, err = bd.ClientConn.NewSubConn([]resolver.Address{{Addr: "address3"}}, balancer.NewSubConnOptions{
-				StateListener: func(state balancer.SubConnState) {
-					if state.ConnectivityState == connectivity.Ready {
-						close(connectivityCh)
+	tests := []struct {
+		name          string
+		lbConfig      LBConfig
+		numberOfConns int
+		wantFailures  int
+		wantEjections int
+	}{
+		{
+			name: "three_upstreams_one_failure",
+			lbConfig: LBConfig{
+				Interval:           math.MaxInt64, // so the interval will never run unless called manually in test.
+				BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
+				MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
+				MaxEjectionPercent: 10,
+				FailurePercentageEjection: &FailurePercentageEjection{
+					Threshold:             50,
+					EnforcementPercentage: 100,
+					MinimumHosts:          3,
+					RequestVolume:         3,
+				},
+				ChildPolicy: &iserviceconfig.BalancerConfig{
+					Name:   "three_upstreams_one_failure",
+					Config: emptyChildConfig{},
+				},
+			},
+			numberOfConns: 3,
+			wantFailures:  1,
+			wantEjections: 1,
+		},
+		{
+			name: "three_upstreams_no_failure",
+			lbConfig: LBConfig{
+				Interval:           math.MaxInt64, // so the interval will never run unless called manually in test.
+				BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
+				MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
+				MaxEjectionPercent: 10,
+				FailurePercentageEjection: &FailurePercentageEjection{
+					Threshold:             50,
+					EnforcementPercentage: 100,
+					MinimumHosts:          3,
+					RequestVolume:         3,
+				},
+				ChildPolicy: &iserviceconfig.BalancerConfig{
+					Name:   "three_upstreams_no_failure",
+					Config: emptyChildConfig{},
+				},
+			},
+			numberOfConns: 3,
+			wantFailures:  0,
+			wantEjections: 0,
+		},
+		{
+			name: "three_upstreams_one_failure_no_ejection_enforcement_perc",
+			lbConfig: LBConfig{
+				Interval:           math.MaxInt64, // so the interval will never run unless called manually in test.
+				BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
+				MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
+				MaxEjectionPercent: 10,
+				FailurePercentageEjection: &FailurePercentageEjection{
+					Threshold:             50,
+					EnforcementPercentage: 0,
+					MinimumHosts:          3,
+					RequestVolume:         3,
+				},
+				ChildPolicy: &iserviceconfig.BalancerConfig{
+					Name:   "three_upstreams_one_failure_no_ejection_enforcement_perc",
+					Config: emptyChildConfig{},
+				},
+			},
+			numberOfConns: 3,
+			wantFailures:  1,
+			wantEjections: 0,
+		},
+		{
+			name: "three_upstreams_one_failure_no_ejection_max_ejection_perc",
+			lbConfig: LBConfig{
+				Interval:           math.MaxInt64, // so the interval will never run unless called manually in test.
+				BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
+				MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
+				MaxEjectionPercent: 0,
+				FailurePercentageEjection: &FailurePercentageEjection{
+					Threshold:             50,
+					EnforcementPercentage: 100,
+					MinimumHosts:          3,
+					RequestVolume:         3,
+				},
+				ChildPolicy: &iserviceconfig.BalancerConfig{
+					Name:   "three_upstreams_one_failure_no_ejection_max_ejection_perc",
+					Config: emptyChildConfig{},
+				},
+			},
+			numberOfConns: 3,
+			wantFailures:  1,
+			wantEjections: 0,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			scsCh := testutils.NewChannel()
+			connectivityCh := make(chan struct{})
+			var allSubConns = make([]balancer.SubConn, test.numberOfConns)
+			stub.Register(test.name, stub.BalancerFuncs{
+				UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
+					for i := range test.numberOfConns {
+						scw, err := bd.ClientConn.NewSubConn(ccs.ResolverState.Endpoints[i].Addresses, balancer.NewSubConnOptions{
+							StateListener: func(state balancer.SubConnState) {
+								if state.ConnectivityState == connectivity.Ready {
+									connectivityCh <- struct{}{}
+								}
+							},
+						})
+						if err != nil {
+							t.Errorf("NewSubConn(%v) failed: %v", ccs.ResolverState.Endpoints[i].Addresses, err)
+						}
+						scw.Connect()
+						allSubConns[i] = scw
 					}
+
+					bd.ClientConn.UpdateState(balancer.State{
+						ConnectivityState: connectivity.Ready,
+						Picker: &rrPicker{
+							scs: allSubConns,
+						},
+					})
+					return nil
 				},
 			})
-			if err != nil {
-				t.Errorf("error in od.NewSubConn call: %v", err)
+
+			od, tcc, cleanup := setup(t)
+			defer cleanup()
+			endpoints := make([]resolver.Endpoint, test.numberOfConns)
+			for i := range test.numberOfConns {
+				endpoints[i] = resolver.Endpoint{Addresses: []resolver.Address{{Addr: fmt.Sprintf("address%d", i+1)}}}
 			}
-			scw3.Connect()
-			bd.ClientConn.UpdateState(balancer.State{
-				ConnectivityState: connectivity.Ready,
-				Picker: &rrPicker{
-					scs: []balancer.SubConn{scw1, scw2, scw3},
+			od.UpdateClientConnState(balancer.ClientConnState{
+				ResolverState: resolver.State{
+					Endpoints: endpoints,
 				},
+				BalancerConfig: &test.lbConfig,
 			})
-			return nil
-		},
-	})
 
-	od, tcc, cleanup := setup(t)
-	defer func() {
-		cleanup()
-	}()
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
 
-	od.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: resolver.State{
-			Endpoints: []resolver.Endpoint{
-				{Addresses: []resolver.Address{{Addr: "address1"}}},
-				{Addresses: []resolver.Address{{Addr: "address2"}}},
-				{Addresses: []resolver.Address{{Addr: "address3"}}},
-			},
-		},
-		BalancerConfig: &LBConfig{
-			Interval:           math.MaxInt64, // so the interval will never run unless called manually in test.
-			BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
-			MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
-			MaxEjectionPercent: 10,
-			FailurePercentageEjection: &FailurePercentageEjection{
-				Threshold:             50,
-				EnforcementPercentage: 100,
-				MinimumHosts:          3,
-				RequestVolume:         3,
-			},
-			ChildPolicy: &iserviceconfig.BalancerConfig{
-				Name:   t.Name(),
-				Config: emptyChildConfig{},
-			},
-		},
-	})
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-
-	// Transition the SubConns to READY so that they can register health
-	// listeners.
-	for range 3 {
-		select {
-		case <-ctx.Done():
-			t.Fatalf("Timed out waiting for creation of new SubConn.")
-		case sc := <-tcc.NewSubConnCh:
-			sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-			sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
-		}
-	}
-
-	// Register health listeners after all the connectivity updates are
-	// processed to avoid data races while accessing the health listener within
-	// the TestClientConn.
-	select {
-	case <-ctx.Done():
-		t.Fatal("Context timed out waiting for all SubConns to become READY.")
-	case <-connectivityCh:
-	}
-
-	scw1.RegisterHealthListener(func(healthState balancer.SubConnState) {
-		scsCh.Send(subConnWithState{sc: scw1, state: healthState})
-	})
-	scw2.RegisterHealthListener(func(healthState balancer.SubConnState) {
-		scsCh.Send(subConnWithState{sc: scw2, state: healthState})
-	})
-	scw3.RegisterHealthListener(func(healthState balancer.SubConnState) {
-		scsCh.Send(subConnWithState{sc: scw3, state: healthState})
-	})
-
-	select {
-	case <-ctx.Done():
-		t.Fatalf("timeout while waiting for a UpdateState call on the ClientConn")
-	case picker := <-tcc.NewPickerCh:
-		// Set each of the three upstream addresses to have five successes each.
-		// This should cause none of the addresses to be ejected as none of them
-		// are outliers according to the success rate algorithm.
-		for i := 0; i < 3; i++ {
-			pi, err := picker.Pick(balancer.PickInfo{})
-			if err != nil {
-				t.Fatalf("picker.Pick failed with error: %v", err)
+			// Transition the SubConns to READY so that they can register health
+			// listeners.
+			for range test.numberOfConns {
+				select {
+				case <-ctx.Done():
+					t.Fatalf("Timed out waiting for creation of new SubConn.")
+				case sc := <-tcc.NewSubConnCh:
+					sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+					sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
+				}
 			}
-			for c := 0; c < 5; c++ {
-				pi.Done(balancer.DoneInfo{})
+
+			// Register health listeners after all the connectivity updates are
+			// processed to avoid data races while accessing the health listener within
+			// the TestClientConn.
+			connectionsReady := 0
+			for connectionsReady < test.numberOfConns {
+				select {
+				case <-ctx.Done():
+					t.Fatal("Context timed out waiting for all SubConns to become READY.")
+				case <-connectivityCh:
+					connectionsReady++
+				}
 			}
-		}
 
-		od.intervalTimerAlgorithm()
-
-		// verify no StateListener() call on the child, as no addresses got
-		// ejected (ejected address will cause an StateListener call).
-		sCtx, cancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
-		defer cancel()
-		if _, err := scsCh.Receive(sCtx); err == nil {
-			t.Fatalf("no SubConn update should have been sent (no SubConn got ejected)")
-		}
-
-		// Since no addresses are ejected, a SubConn update should forward down
-		// to the child.
-		od.scUpdateCh.Put(&scHealthUpdate{
-			scw: scw1.(*subConnWrapper),
-			state: balancer.SubConnState{
-				ConnectivityState: connectivity.Connecting,
-			}},
-		)
-
-		gotSCWS, err := scsCh.Receive(ctx)
-		if err != nil {
-			t.Fatalf("Error waiting for Sub Conn update: %v", err)
-		}
-		if err = scwsEqual(gotSCWS.(subConnWithState), subConnWithState{
-			sc:    scw1,
-			state: balancer.SubConnState{ConnectivityState: connectivity.Connecting},
-		}); err != nil {
-			t.Fatalf("Error in Sub Conn update: %v", err)
-		}
-
-		// Set two of the upstream addresses to have five successes each, and
-		// one of the upstream addresses to have five failures. This should
-		// cause the address which has five failures to be ejected according to
-		// the SuccessRateAlgorithm.
-		for i := 0; i < 2; i++ {
-			pi, err := picker.Pick(balancer.PickInfo{})
-			if err != nil {
-				t.Fatalf("picker.Pick failed with error: %v", err)
+			for i := range test.numberOfConns {
+				allSubConns[i].RegisterHealthListener(func(healthState balancer.SubConnState) {
+					scsCh.Send(subConnWithState{sc: allSubConns[i], state: healthState})
+				})
 			}
-			for c := 0; c < 5; c++ {
-				pi.Done(balancer.DoneInfo{})
+
+			select {
+			case <-ctx.Done():
+				t.Fatalf("timeout while waiting for a UpdateState call on the ClientConn")
+			case picker := <-tcc.NewPickerCh:
+				// Set each of the three upstream addresses to have five successes each.
+				// This should cause none of the addresses to be ejected as none of them
+				// are outliers according to the success rate algorithm.
+				for i := 0; i < test.numberOfConns; i++ {
+					pi, err := picker.Pick(balancer.PickInfo{})
+					if err != nil {
+						t.Fatalf("picker.Pick failed with error: %v", err)
+					}
+					for c := 0; c < 5; c++ {
+						pi.Done(balancer.DoneInfo{})
+					}
+				}
+
+				// Create test metrics recorder
+				tmr := stats.NewTestMetricsRecorder()
+				od.metricsRecorder = tmr
+				od.intervalTimerAlgorithm()
+
+				// verify no StateListener() call on the child, as no addresses got
+				// ejected (ejected address will cause an StateListener call).
+				sCtx, cancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
+				defer cancel()
+				if _, err := scsCh.Receive(sCtx); err == nil {
+					t.Fatalf("no SubConn update should have been sent (no SubConn got ejected)")
+				}
+				if got, _ := tmr.Metric("grpc.lb.outlier_detection.ejections_enforced"); got != 0 {
+					t.Errorf("Metric grpc.lb.outlier_detection.ejections_enforced: got %f, want 0", got)
+				}
+				if got, _ := tmr.Metric("grpc.lb.outlier_detection.ejections_unenforced"); got != 0 {
+					t.Errorf("Metric grpc.lb.outlier_detection.ejections_unenforced: got %f, want 0", got)
+				}
+
+				// Since no addresses are ejected, a SubConn update should forward down
+				// to the child.
+				newState := balancer.SubConnState{ConnectivityState: connectivity.Connecting}
+				wantSC := allSubConns[0]
+				od.scUpdateCh.Put(&scHealthUpdate{
+					scw:   wantSC.(*subConnWrapper),
+					state: newState,
+				})
+
+				gotSCWS, err := scsCh.Receive(ctx)
+				if err != nil {
+					t.Fatalf("Error waiting for Sub Conn update: %v", err)
+				}
+				if err = scwsEqual(gotSCWS.(subConnWithState), subConnWithState{
+					sc:    wantSC,
+					state: newState,
+				}); err != nil {
+					t.Fatalf("Error in Sub Conn update: %v", err)
+				}
+
+				// Set all the upstream before the offset to have five successes, but
+				// the remaining addresses to have failures.
+				offset := test.numberOfConns - test.wantFailures
+				for i := 0; i < test.numberOfConns; i++ {
+					pickerDone := balancer.DoneInfo{}
+					if i >= offset {
+						pickerDone = balancer.DoneInfo{Err: errors.New("some error")}
+					}
+					pi, err := picker.Pick(balancer.PickInfo{})
+					if err != nil {
+						t.Fatalf("picker.Pick failed with error: %v", err)
+					}
+					for c := 0; c < 5; c++ {
+						pi.Done(pickerDone)
+					}
+
+				}
+
+				// should eject address that always errored.
+				od.intervalTimerAlgorithm()
+
+				// Due to the address being ejected, the SubConn with that address
+				// should be ejected, meaning a TRANSIENT_FAILURE connectivity state
+				// gets reported to the child.
+				for i := 0; i < test.wantEjections; i++ {
+					got, err := scsCh.Receive(ctx)
+					if err != nil {
+						t.Fatalf("Error waiting for SubConn to be ejected: %v", err)
+					}
+					if err = scwsEqual(got.(subConnWithState), subConnWithState{
+						sc:    allSubConns[len(allSubConns)-1-i],
+						state: balancer.SubConnState{ConnectivityState: connectivity.TransientFailure},
+					}); err != nil {
+						t.Fatalf("Unexpected subconnection with state: %v", err)
+					}
+				}
+
+				sCtx, cancel2 := context.WithTimeout(context.Background(), defaultTestShortTimeout)
+				defer cancel2()
+				if _, err := scsCh.Receive(sCtx); err == nil {
+					t.Fatalf("Only one SubConn update should have been sent (only one SubConn got ejected)")
+				}
+
+				if got, _ := tmr.Metric("grpc.lb.outlier_detection.ejections_enforced"); got != float64(test.wantEjections) {
+					t.Errorf("Metric grpc.lb.outlier_detection.ejections_enforced: got %f, want %f", got, float64(test.wantEjections))
+				}
+				if got, _ := tmr.Metric("grpc.lb.outlier_detection.ejections_unenforced"); got != float64(test.wantFailures-test.wantEjections) {
+					t.Errorf("Metric grpc.lb.outlier_detection.ejections_unenforced: got %f, want %f", got, float64(test.wantFailures-test.wantEjections))
+				}
+
+				for i := 0; i < test.wantEjections; i++ {
+					// Now that an address is ejected, SubConn updates for SubConns using
+					// that address should not be forwarded downward. These SubConn updates
+					// will be cached to update the child sometime in the future when the
+					// address gets unejected.
+					scw := allSubConns[len(allSubConns)-1-i]
+					od.scUpdateCh.Put(&scHealthUpdate{
+						scw:   scw.(*subConnWrapper),
+						state: balancer.SubConnState{ConnectivityState: connectivity.Connecting},
+					})
+					sCtx, cancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
+					defer cancel()
+					if _, err := scsCh.Receive(sCtx); err == nil {
+						t.Fatalf("SubConn update should not have been forwarded (the SubConn is ejected)")
+					}
+				}
+
+				// Override now to cause the interval timer algorithm to always uneject
+				// the ejected address. This will always uneject the ejected address
+				// because this time is set way past the max ejection time set in the
+				// configuration, which will make the next interval timer algorithm run
+				// uneject any ejected addresses.
+				defer func(n func() time.Time) {
+					now = n
+				}(now)
+				now = func() time.Time {
+					return time.Now().Add(time.Second * 1000)
+				}
+				od.intervalTimerAlgorithm()
+				for i := 0; i < test.wantEjections; i++ {
+					scw := allSubConns[len(allSubConns)-1-i]
+					// unejected SubConn should report latest persisted state - which is
+					// connecting from earlier.
+					gotSCWS, err = scsCh.Receive(ctx)
+					if err != nil {
+						t.Fatalf("Error waiting for Sub Conn update: %v", err)
+					}
+					if err = scwsEqual(gotSCWS.(subConnWithState), subConnWithState{
+						sc:    scw,
+						state: balancer.SubConnState{ConnectivityState: connectivity.Connecting},
+					}); err != nil {
+						t.Fatalf("Error in Sub Conn update: %v", err)
+					}
+				}
 			}
-		}
-		pi, err := picker.Pick(balancer.PickInfo{})
-		if err != nil {
-			t.Fatalf("picker.Pick failed with error: %v", err)
-		}
-		if got, want := pi.SubConn, scw3.(*subConnWrapper).SubConn; got != want {
-			t.Fatalf("Unexpected SubConn chosen by picker: got %v, want %v", got, want)
-		}
-		for c := 0; c < 5; c++ {
-			pi.Done(balancer.DoneInfo{Err: errors.New("some error")})
-		}
-
-		// should eject address that always errored.
-		od.intervalTimerAlgorithm()
-		// Due to the address being ejected, the SubConn with that address
-		// should be ejected, meaning a TRANSIENT_FAILURE connectivity state
-		// gets reported to the child.
-		gotSCWS, err = scsCh.Receive(ctx)
-		if err != nil {
-			t.Fatalf("Error waiting for Sub Conn update: %v", err)
-		}
-		if err = scwsEqual(gotSCWS.(subConnWithState), subConnWithState{
-			sc:    scw3,
-			state: balancer.SubConnState{ConnectivityState: connectivity.TransientFailure},
-		}); err != nil {
-			t.Fatalf("Error in Sub Conn update: %v", err)
-		}
-		// Only one address should be ejected.
-		sCtx, cancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
-		defer cancel()
-		if _, err := scsCh.Receive(sCtx); err == nil {
-			t.Fatalf("Only one SubConn update should have been sent (only one SubConn got ejected)")
-		}
-
-		// Now that an address is ejected, SubConn updates for SubConns using
-		// that address should not be forwarded downward. These SubConn updates
-		// will be cached to update the child sometime in the future when the
-		// address gets unejected.
-		od.scUpdateCh.Put(&scHealthUpdate{
-			scw:   scw3.(*subConnWrapper),
-			state: balancer.SubConnState{ConnectivityState: connectivity.Connecting},
 		})
-		sCtx, cancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
-		defer cancel()
-		if _, err := scsCh.Receive(sCtx); err == nil {
-			t.Fatalf("SubConn update should not have been forwarded (the SubConn is ejected)")
-		}
-
-		// Override now to cause the interval timer algorithm to always uneject
-		// the ejected address. This will always uneject the ejected address
-		// because this time is set way past the max ejection time set in the
-		// configuration, which will make the next interval timer algorithm run
-		// uneject any ejected addresses.
-		defer func(n func() time.Time) {
-			now = n
-		}(now)
-		now = func() time.Time {
-			return time.Now().Add(time.Second * 1000)
-		}
-		od.intervalTimerAlgorithm()
-
-		// unejected SubConn should report latest persisted state - which is
-		// connecting from earlier.
-		gotSCWS, err = scsCh.Receive(ctx)
-		if err != nil {
-			t.Fatalf("Error waiting for Sub Conn update: %v", err)
-		}
-		if err = scwsEqual(gotSCWS.(subConnWithState), subConnWithState{
-			sc:    scw3,
-			state: balancer.SubConnState{ConnectivityState: connectivity.Connecting},
-		}); err != nil {
-			t.Fatalf("Error in Sub Conn update: %v", err)
-		}
 	}
 }
 
@@ -1414,12 +1506,20 @@ func (s) TestEjectFailureRate(t *testing.T) {
 				pi.Done(balancer.DoneInfo{})
 			}
 		}
+		tmr := stats.NewTestMetricsRecorder()
+		od.metricsRecorder = tmr
 
 		od.intervalTimerAlgorithm()
 		sCtx, cancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
 		defer cancel()
 		if _, err := scsCh.Receive(sCtx); err == nil {
-			t.Fatalf("no SubConn update should have been sent (no SubConn got ejected)")
+			t.Fatalf("Received unexpected subchannel state change when expecting none")
+		}
+		if got, _ := tmr.Metric("grpc.lb.outlier_detection.ejections_enforced"); got != 0 {
+			t.Errorf("Metric grpc.lb.outlier_detection.ejections_enforced: got %v, want 0", got)
+		}
+		if got, _ := tmr.Metric("grpc.lb.outlier_detection.ejections_unenforced"); got != 0 {
+			t.Errorf("Metric grpc.lb.outlier_detection.ejections_unenforced: got %v, want 0", got)
 		}
 
 		// Set two upstream addresses to have five successes each, and one
@@ -1463,7 +1563,13 @@ func (s) TestEjectFailureRate(t *testing.T) {
 		sCtx, cancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
 		defer cancel()
 		if _, err := scsCh.Receive(sCtx); err == nil {
-			t.Fatalf("Only one SubConn update should have been sent (only one SubConn got ejected)")
+			t.Fatalf("Received unexpected subchannel state change when expecting none")
+		}
+		if got, _ := tmr.Metric("grpc.lb.outlier_detection.ejections_enforced"); got != 1 {
+			t.Errorf("Metric grpc.lb.outlier_detection.ejections_enforced: got %v, want 1", got)
+		}
+		if got, _ := tmr.Metric("grpc.lb.outlier_detection.ejections_unenforced"); got != 0 {
+			t.Errorf("Metric grpc.lb.outlier_detection.ejections_unenforced: got %v, want 0", got)
 		}
 
 		// upon the Outlier Detection balancer being reconfigured with a noop
@@ -1734,7 +1840,7 @@ func (s) TestPickFirstHealthListenerDisabled(t *testing.T) {
 		},
 		MaxEjectionPercent: 100,
 		ChildPolicy: &iserviceconfig.BalancerConfig{
-			Name: pickfirstleaf.Name,
+			Name: pickfirst.Name,
 		},
 	}
 
