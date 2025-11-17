@@ -44,7 +44,7 @@ import (
 
 const (
 	serverFeaturesIgnoreResourceDeletion = "ignore_resource_deletion"
-	serverFeatureTrustedXDSServer        = "trusted_xds_server"
+	serverFeaturesTrustedXDSServer       = "trusted_xds_server"
 	gRPCUserAgentName                    = "gRPC Go"
 	clientFeatureNoOverprovisioning      = "envoy.lb.does_not_support_overprovisioning"
 	clientFeatureResourceWrapper         = "xds.config.resource-in-sotw"
@@ -262,7 +262,7 @@ func (sc *ServerConfig) ServerFeaturesIgnoreResourceDeletion() bool {
 // as described in gRFC A81.
 func (sc *ServerConfig) ServerFeaturesTrustedXDSServer() bool {
 	for _, sf := range sc.serverFeatures {
-		if sf == serverFeatureTrustedXDSServer {
+		if sf == serverFeaturesTrustedXDSServer {
 			return true
 		}
 	}

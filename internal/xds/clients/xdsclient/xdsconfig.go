@@ -19,9 +19,24 @@
 package xdsclient
 
 import (
+	"reflect"
 	"time"
 
 	"google.golang.org/grpc/internal/xds/clients"
+)
+
+// ServerFeature indicates the features that will be supported by an xDS server.
+type ServerFeature int
+
+const (
+	// ServerFeatureIgnoreResourceDeletion indicates that the server supports a
+	// feature where the xDS client can ignore resource deletions from this server,
+	// as described in gRFC A53.
+	ServerFeatureIgnoreResourceDeletion ServerFeature = iota
+	// ServerFeatureTrustedXDSServer returns true if this server is trusted,
+	// and gRPC should accept security-config-affecting fields from the server
+	// as described in gRFC A81.
+	ServerFeatureTrustedXDSServer
 )
 
 // Config is used to configure an xDS client. After one has been passed to the
@@ -75,16 +90,7 @@ type Config struct {
 type ServerConfig struct {
 	ServerIdentifier clients.ServerIdentifier
 
-	// IgnoreResourceDeletion is a server feature which if set to true,
-	// indicates that resource deletion errors from xDS management servers can
-	// be ignored and cached resource data can be used.
-	//
-	// This will be removed in the future once we implement gRFC A88
-	// and two new fields FailOnDataErrors and
-	// ResourceTimerIsTransientError will be introduced.
-	IgnoreResourceDeletion bool
-
-	// TODO: Link to gRFC A88
+	ServerFeature []ServerFeature
 }
 
 // Authority contains configuration for an xDS control plane authority.
@@ -98,5 +104,16 @@ type Authority struct {
 }
 
 func isServerConfigEqual(a, b *ServerConfig) bool {
-	return a.ServerIdentifier == b.ServerIdentifier && a.IgnoreResourceDeletion == b.IgnoreResourceDeletion
+	return a.ServerIdentifier == b.ServerIdentifier && reflect.DeepEqual(a.ServerFeature, b.ServerFeature)
+}
+
+// SupportsServerFeature returns true if the server configuration indicates that
+// the server supports the given feature.
+func (s *ServerConfig) SupportsServerFeature(feature ServerFeature) bool {
+	for _, sf := range s.ServerFeature {
+		if sf == feature {
+			return true
+		}
+	}
+	return false
 }
