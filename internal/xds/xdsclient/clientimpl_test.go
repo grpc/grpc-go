@@ -77,7 +77,7 @@ func (s) TestBuildXDSClientConfig_Success(t *testing.T) {
 			wantXDSClientConfig: func(c *bootstrap.Config) xdsclient.Config {
 				node, serverCfg := c.Node(), c.XDSServers()[0]
 				expectedServer := xdsclient.ServerConfig{ServerIdentifier: clients.ServerIdentifier{ServerURI: serverCfg.ServerURI(), Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"}}}
-				gServerCfgMap := map[xdsclient.ServerConfig]*bootstrap.ServerConfig{expectedServer: serverCfg}
+				gServerCfgMap := map[*xdsclient.ServerConfig]*bootstrap.ServerConfig{&expectedServer: serverCfg}
 				return xdsclient.Config{
 					Servers:     []xdsclient.ServerConfig{expectedServer},
 					Node:        clients.Node{ID: node.GetId(), Cluster: node.GetCluster(), Metadata: node.Metadata, Locality: clients.Locality{Region: node.Locality.Region, Zone: node.Locality.Zone, SubZone: node.Locality.SubZone}, UserAgentName: node.UserAgentName, UserAgentVersion: node.GetUserAgentVersion()},
@@ -115,7 +115,7 @@ func (s) TestBuildXDSClientConfig_Success(t *testing.T) {
 				topLevelSCfg, auth2SCfg := c.XDSServers()[0], c.Authorities()["auth2"].XDSServers[0]
 				expTopLevelS := xdsclient.ServerConfig{ServerIdentifier: clients.ServerIdentifier{ServerURI: topLevelSCfg.ServerURI(), Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"}}}
 				expAuth2S := xdsclient.ServerConfig{ServerIdentifier: clients.ServerIdentifier{ServerURI: auth2SCfg.ServerURI(), Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"}}}
-				gServerCfgMap := map[xdsclient.ServerConfig]*bootstrap.ServerConfig{expTopLevelS: topLevelSCfg, expAuth2S: auth2SCfg}
+				gServerCfgMap := map[*xdsclient.ServerConfig]*bootstrap.ServerConfig{&expTopLevelS: topLevelSCfg, &expAuth2S: auth2SCfg}
 				return xdsclient.Config{
 					Servers:     []xdsclient.ServerConfig{expTopLevelS},
 					Node:        clients.Node{ID: node.GetId(), Cluster: node.GetCluster(), Metadata: node.Metadata, UserAgentName: node.UserAgentName, UserAgentVersion: node.GetUserAgentVersion()},
@@ -146,8 +146,76 @@ func (s) TestBuildXDSClientConfig_Success(t *testing.T) {
 			}`, testXDSServerURL, testNodeID)),
 			wantXDSClientConfig: func(c *bootstrap.Config) xdsclient.Config {
 				node, serverCfg := c.Node(), c.XDSServers()[0]
-				expectedServer := xdsclient.ServerConfig{ServerIdentifier: clients.ServerIdentifier{ServerURI: serverCfg.ServerURI(), Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"}}, IgnoreResourceDeletion: true}
-				gServerCfgMap := map[xdsclient.ServerConfig]*bootstrap.ServerConfig{expectedServer: serverCfg}
+				expectedServer := xdsclient.ServerConfig{
+					ServerIdentifier: clients.ServerIdentifier{ServerURI: serverCfg.ServerURI(), Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"}},
+					ServerFeature:    []xdsclient.ServerFeature{xdsclient.ServerFeatureIgnoreResourceDeletion}}
+				gServerCfgMap := map[*xdsclient.ServerConfig]*bootstrap.ServerConfig{&expectedServer: serverCfg}
+				return xdsclient.Config{
+					Servers:     []xdsclient.ServerConfig{expectedServer},
+					Node:        clients.Node{ID: node.GetId(), Cluster: node.GetCluster(), Metadata: node.Metadata, UserAgentName: node.UserAgentName, UserAgentVersion: node.GetUserAgentVersion()},
+					Authorities: map[string]xdsclient.Authority{},
+					ResourceTypes: map[string]xdsclient.ResourceType{
+						version.V3ListenerURL:    {TypeURL: version.V3ListenerURL, TypeName: xdsresource.ListenerResourceTypeName, AllResourcesRequiredInSotW: true, Decoder: xdsresource.NewListenerResourceTypeDecoder(c)},
+						version.V3RouteConfigURL: {TypeURL: version.V3RouteConfigURL, TypeName: xdsresource.RouteConfigTypeName, AllResourcesRequiredInSotW: false, Decoder: xdsresource.NewRouteConfigResourceTypeDecoder(c)},
+						version.V3ClusterURL:     {TypeURL: version.V3ClusterURL, TypeName: xdsresource.ClusterResourceTypeName, AllResourcesRequiredInSotW: true, Decoder: xdsresource.NewClusterResourceTypeDecoder(c, gServerCfgMap)},
+						version.V3EndpointsURL:   {TypeURL: version.V3EndpointsURL, TypeName: xdsresource.EndpointsResourceTypeName, AllResourcesRequiredInSotW: false, Decoder: xdsresource.NewEndpointsResourceTypeDecoder(c)},
+					},
+					MetricsReporter: &metricsReporter{recorder: stats.NewTestMetricsRecorder(), target: testTargetName},
+					TransportBuilder: grpctransport.NewBuilder(map[string]grpctransport.Config{
+						"insecure": {
+							Credentials: insecure.NewBundle(),
+							GRPCNewClient: func(target string, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
+								opts = append(opts, serverCfg.DialOptions()...)
+								return grpc.NewClient(target, opts...)
+							}},
+					}),
+				}
+			},
+		},
+		{
+			name: "server features with trusted_xds_server",
+			bootstrapContents: []byte(fmt.Sprintf(`{
+				"xds_servers": [{"server_uri": "%s", "channel_creds": [{"type": "insecure"}], "server_features": ["trusted_xds_server"]}],
+				"node": {"id": "%s"}
+			}`, testXDSServerURL, testNodeID)),
+			wantXDSClientConfig: func(c *bootstrap.Config) xdsclient.Config {
+				node, serverCfg := c.Node(), c.XDSServers()[0]
+				expectedServer := xdsclient.ServerConfig{ServerIdentifier: clients.ServerIdentifier{ServerURI: serverCfg.ServerURI(), Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"}},
+					ServerFeature: []xdsclient.ServerFeature{xdsclient.ServerFeatureTrustedXDSServer}}
+				gServerCfgMap := map[*xdsclient.ServerConfig]*bootstrap.ServerConfig{&expectedServer: serverCfg}
+				return xdsclient.Config{
+					Servers:     []xdsclient.ServerConfig{expectedServer},
+					Node:        clients.Node{ID: node.GetId(), Cluster: node.GetCluster(), Metadata: node.Metadata, UserAgentName: node.UserAgentName, UserAgentVersion: node.GetUserAgentVersion()},
+					Authorities: map[string]xdsclient.Authority{},
+					ResourceTypes: map[string]xdsclient.ResourceType{
+						version.V3ListenerURL:    {TypeURL: version.V3ListenerURL, TypeName: xdsresource.ListenerResourceTypeName, AllResourcesRequiredInSotW: true, Decoder: xdsresource.NewListenerResourceTypeDecoder(c)},
+						version.V3RouteConfigURL: {TypeURL: version.V3RouteConfigURL, TypeName: xdsresource.RouteConfigTypeName, AllResourcesRequiredInSotW: false, Decoder: xdsresource.NewRouteConfigResourceTypeDecoder(c)},
+						version.V3ClusterURL:     {TypeURL: version.V3ClusterURL, TypeName: xdsresource.ClusterResourceTypeName, AllResourcesRequiredInSotW: true, Decoder: xdsresource.NewClusterResourceTypeDecoder(c, gServerCfgMap)},
+						version.V3EndpointsURL:   {TypeURL: version.V3EndpointsURL, TypeName: xdsresource.EndpointsResourceTypeName, AllResourcesRequiredInSotW: false, Decoder: xdsresource.NewEndpointsResourceTypeDecoder(c)},
+					},
+					MetricsReporter: &metricsReporter{recorder: stats.NewTestMetricsRecorder(), target: testTargetName},
+					TransportBuilder: grpctransport.NewBuilder(map[string]grpctransport.Config{
+						"insecure": {
+							Credentials: insecure.NewBundle(),
+							GRPCNewClient: func(target string, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
+								opts = append(opts, serverCfg.DialOptions()...)
+								return grpc.NewClient(target, opts...)
+							}},
+					}),
+				}
+			},
+		},
+		{
+			name: "server features with ignore_resource_deletion and trusted_xds_server",
+			bootstrapContents: []byte(fmt.Sprintf(`{
+				"xds_servers": [{"server_uri": "%s", "channel_creds": [{"type": "insecure"}], "server_features": ["ignore_resource_deletion", "trusted_xds_server"]}],
+				"node": {"id": "%s"}
+			}`, testXDSServerURL, testNodeID)),
+			wantXDSClientConfig: func(c *bootstrap.Config) xdsclient.Config {
+				node, serverCfg := c.Node(), c.XDSServers()[0]
+				expectedServer := xdsclient.ServerConfig{ServerIdentifier: clients.ServerIdentifier{ServerURI: serverCfg.ServerURI(), Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"}},
+					ServerFeature: []xdsclient.ServerFeature{xdsclient.ServerFeatureIgnoreResourceDeletion, xdsclient.ServerFeatureTrustedXDSServer}}
+				gServerCfgMap := map[*xdsclient.ServerConfig]*bootstrap.ServerConfig{&expectedServer: serverCfg}
 				return xdsclient.Config{
 					Servers:     []xdsclient.ServerConfig{expectedServer},
 					Node:        clients.Node{ID: node.GetId(), Cluster: node.GetCluster(), Metadata: node.Metadata, UserAgentName: node.UserAgentName, UserAgentVersion: node.GetUserAgentVersion()},
@@ -179,7 +247,7 @@ func (s) TestBuildXDSClientConfig_Success(t *testing.T) {
 			wantXDSClientConfig: func(c *bootstrap.Config) xdsclient.Config {
 				node, serverCfg := c.Node(), c.XDSServers()[0] // SelectedCreds will be "insecure"
 				expectedServer := xdsclient.ServerConfig{ServerIdentifier: clients.ServerIdentifier{ServerURI: serverCfg.ServerURI(), Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"}}}
-				gServerCfgMap := map[xdsclient.ServerConfig]*bootstrap.ServerConfig{expectedServer: serverCfg}
+				gServerCfgMap := map[*xdsclient.ServerConfig]*bootstrap.ServerConfig{&expectedServer: serverCfg}
 				return xdsclient.Config{
 					Servers:     []xdsclient.ServerConfig{expectedServer},
 					Node:        clients.Node{ID: node.GetId(), Cluster: node.GetCluster(), Metadata: node.Metadata, UserAgentName: node.UserAgentName, UserAgentVersion: node.GetUserAgentVersion()},
