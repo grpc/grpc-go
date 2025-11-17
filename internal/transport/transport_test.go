@@ -2794,7 +2794,7 @@ func (s) TestClientDecodeTrailer(t *testing.T) {
 					{Name: ":status", Value: "xxxx"},
 				},
 			},
-			wantEndStreamStatus: status.New(codes.Internal, ""),
+			wantEndStreamStatus: status.New(codes.Unknown, ""),
 		},
 		{
 			name: "http2_frame_size_exceeds",
@@ -2813,7 +2813,7 @@ func (s) TestClientDecodeTrailer(t *testing.T) {
 					{Name: "content-type", Value: "application/grpc"},
 				},
 			},
-			wantEndStreamStatus: status.New(codes.Internal, ""),
+			wantEndStreamStatus: status.New(codes.Unknown, ""),
 		},
 		{
 			name: "deadline_exceeded_status",
