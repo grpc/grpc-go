@@ -2516,7 +2516,7 @@ func (s) TestPickFirstLeaf_Reconnection(t *testing.T) {
 	select {
 	case state := <-cc.NewStateCh:
 		if got, want := state, connectivity.Connecting; got != want {
-			t.Fatalf("Received unexpected ClientConn sate: got %v, want %v", got, want)
+			t.Fatalf("Received unexpected ClientConn state: got %v, want %v", got, want)
 		}
 	case <-ctx.Done():
 		t.Fatal("Context timed out waiting for ClientConn state update.")
