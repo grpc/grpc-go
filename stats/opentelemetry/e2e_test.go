@@ -1705,6 +1705,7 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			resolutionWait := grpcsync.NewEvent()
+			stateUpdated := grpcsync.NewEvent()
 			prevHook := internal.NewStreamWaitingForResolver
 			internal.NewStreamWaitingForResolver = func() { resolutionWait.Fire() }
 			defer func() { internal.NewStreamWaitingForResolver = prevHook }()
@@ -1747,13 +1748,32 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
 
+			// Start the goroutine that will update resolver state once the stream
+			// is waiting for resolution. Use stateUpdated event to ensure the
+			// resolver state is updated before we start validating spans.
 			go func() {
 				<-resolutionWait.Done()
 				rb.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: ss.Address}}})
+				stateUpdated.Fire()
 			}()
+
 			if err := tt.doCall(ctx, client); err != nil {
 				t.Fatalf("%s call failed: %v", tt.name, err)
 			}
+
+			// Wait for the resolver state to be updated to ensure the delayed
+			// resolution event has been processed.
+			select {
+			case <-stateUpdated.Done():
+			case <-ctx.Done():
+				t.Fatal("Timed out waiting for resolver state update")
+			}
+
+			// Give the span exporter a small amount of time to process and export
+			// all spans from the completed RPC. This reduces flakiness by ensuring
+			// all trace events have been fully recorded before validation.
+			time.Sleep(50 * time.Millisecond)
+
 			spans, err := waitForTraceSpans(ctx, exporter, tt.wantSpanInfos)
 			if err != nil {
 				t.Fatal(err)
