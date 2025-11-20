@@ -219,6 +219,13 @@ type xdsResolver struct {
 	channelID uint64
 	dm        *xdsdepmgr.DependencyManager
 
+	// All methods on the xdsResolver type except for the ones invoked by gRPC,
+	// i.e ResolveNow() and Close(), are guaranteed to execute in the context of
+	// this serializer's callback. And since the serializer guarantees mutual
+	// exclusion among these callbacks, we can get by without any mutexes to
+	// access all of the below defined state. The only exception is Close(),
+	// which does access some of this shared state, but it does so after
+	// cancelling the context passed to the serializer.
 	serializer       *grpcsync.CallbackSerializer
 	serializerCancel context.CancelFunc
 
