@@ -187,6 +187,11 @@ func (cc *controlChannel) monitorConnectivityState() {
 	cc.connectivityStateCh.Load()
 	cc.logger.Infof("Connectivity state is READY")
 
+	// Track whether we've seen TRANSIENT_FAILURE since the last READY state.
+	// We only want to reset backoff when recovering from an actual failure,
+	// not when transitioning through benign states like IDLE.
+	seenTransientFailure := false
+
 	for {
 		s, ok := <-cc.connectivityStateCh.Get()
 		if !ok {
@@ -197,9 +202,21 @@ func (cc *controlChannel) monitorConnectivityState() {
 		if s == connectivity.Shutdown {
 			return
 		}
+
+		// Track if we've entered TRANSIENT_FAILURE state
+		if s == connectivity.TransientFailure {
+			seenTransientFailure = true
+		}
+
+		// Only reset backoff if we're returning to READY after a failure
 		if s == connectivity.Ready {
-			cc.logger.Infof("Control channel back to READY")
-			cc.backToReadyFunc()
+			if seenTransientFailure {
+				cc.logger.Infof("Control channel back to READY after TRANSIENT_FAILURE")
+				cc.backToReadyFunc()
+				seenTransientFailure = false
+			} else {
+				cc.logger.Infof("Control channel back to READY (no prior failure)")
+			}
 		}
 
 		cc.logger.Infof("Connectivity state is %s", s)

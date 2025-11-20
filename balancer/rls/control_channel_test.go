@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"sync"
 	"testing"
 	"time"
 
@@ -33,6 +34,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal"
 	rlspb "google.golang.org/grpc/internal/proto/grpc_lookup_v1"
@@ -461,5 +463,96 @@ func (s) TestNewControlChannelUnsupportedCredsBundle(t *testing.T) {
 	if err == nil {
 		ctrlCh.close()
 		t.Fatal("newControlChannel succeeded when expected to fail")
+	}
+}
+
+// TestControlChannelConnectivityStateTransitions verifies that the control
+// channel only resets backoff when recovering from TRANSIENT_FAILURE, not
+// when going through benign state changes like READY → IDLE → READY.
+func (s) TestControlChannelConnectivityStateTransitions(t *testing.T) {
+	tests := []struct {
+		name              string
+		states            []connectivity.State
+		wantCallbackCount int
+	}{
+		{
+			name: "READY → TRANSIENT_FAILURE → READY triggers callback",
+			states: []connectivity.State{
+				connectivity.TransientFailure,
+				connectivity.Ready,
+			},
+			wantCallbackCount: 1,
+		},
+		{
+			name: "READY → IDLE → READY does not trigger callback",
+			states: []connectivity.State{
+				connectivity.Idle,
+				connectivity.Ready,
+			},
+			wantCallbackCount: 0,
+		},
+		{
+			name: "Multiple failures trigger callback each time",
+			states: []connectivity.State{
+				connectivity.TransientFailure,
+				connectivity.Ready,
+				connectivity.TransientFailure,
+				connectivity.Ready,
+			},
+			wantCallbackCount: 2,
+		},
+		{
+			name: "IDLE between failures doesn't affect callback",
+			states: []connectivity.State{
+				connectivity.TransientFailure,
+				connectivity.Idle,
+				connectivity.Ready,
+			},
+			wantCallbackCount: 1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Start an RLS server
+			rlsServer, _ := rlstest.SetupFakeRLSServer(t, nil)
+
+			// Setup callback to count invocations
+			callbackCount := 0
+			var mu sync.Mutex
+			callback := func() {
+				mu.Lock()
+				callbackCount++
+				mu.Unlock()
+			}
+
+			// Create control channel
+			ctrlCh, err := newControlChannel(rlsServer.Address, "", defaultTestTimeout, balancer.BuildOptions{}, callback)
+			if err != nil {
+				t.Fatalf("Failed to create control channel: %v", err)
+			}
+			defer ctrlCh.close()
+
+			// Give the channel time to reach initial READY state
+			time.Sleep(100 * time.Millisecond)
+
+			// Inject the test state sequence
+			for _, state := range tt.states {
+				ctrlCh.OnMessage(state)
+				// Give time for the monitoring goroutine to process the state
+				time.Sleep(50 * time.Millisecond)
+			}
+
+			// Give extra time for any pending callbacks
+			time.Sleep(100 * time.Millisecond)
+
+			mu.Lock()
+			gotCallbackCount := callbackCount
+			mu.Unlock()
+
+			if gotCallbackCount != tt.wantCallbackCount {
+				t.Errorf("Got %d callback invocations, want %d", gotCallbackCount, tt.wantCallbackCount)
+			}
+		})
 	}
 }
