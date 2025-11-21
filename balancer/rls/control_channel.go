@@ -208,17 +208,11 @@ func (cc *controlChannel) monitorConnectivityState() {
 			seenTransientFailure = true
 		}
 
-		// Only reset backoff when recovering from TRANSIENT_FAILURE to READY.
-		// When the control channel enters TRANSIENT_FAILURE, it indicates the RLS
-		// server is unreachable or experiencing issues. When it then transitions to
-		// READY, we reset the backoff state in all cache entries to allow pending
-		// RPCs to proceed immediately, rather than waiting for their individual
-		// backoff timers to expire.
-		//
-		// We skip resetting backoff for benign state transitions like READY → IDLE
-		// → READY (which occur during normal operation due to connection idleness)
-		// because these don't represent actual failures that would justify clearing
-		// the backoff state.
+		// Only reset backoff when transitioning from TRANSIENT_FAILURE to READY.
+		// This indicates the RLS server has recovered from being unreachable, so
+		// we reset backoff state in all cache entries to allow pending RPCs to
+		// proceed immediately. We skip benign transitions like READY → IDLE → READY
+		// since those don't represent actual failures.
 		if s == connectivity.Ready {
 			if seenTransientFailure {
 				cc.logger.Infof("Control channel back to READY after TRANSIENT_FAILURE")
