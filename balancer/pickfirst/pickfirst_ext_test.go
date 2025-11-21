@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -1946,6 +1947,20 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TF_AfterEndOfList(t *testing.T) {
 	if got, _ := tmr.Metric("grpc.lb.pick_first.disconnections"); got != 0 {
 		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.lb.pick_first.disconnections", got, 0)
 	}
+
+	if got, _ := tmr.Metric("grpc.subchannel.connection_attempts_succeeded"); got != 0 {
+		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.subchannel.connection_attempts_succeeded", got, 0)
+	}
+	if got, _ := tmr.Metric("grpc.subchannel.connection_attempts_failed"); got != 1 {
+		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.subchannel.connection_attempts_failed", got, 1)
+	}
+	expectedLabels := []string{"whatever:///test.server", "", "{region=\"\", zone=\"\", sub_zone=\"\"}"}
+	if detail, _ := tmr.MetricDetail("grpc.subchannel.connection_attempts_failed"); !slices.Equal(detail.LabelVals, expectedLabels) {
+		t.Errorf("Unexpected label values for metric %v, got: %v, want %v", "grpc.subchannel.connection_attempts_failed", detail.LabelVals, expectedLabels)
+	}
+	if got, _ := tmr.Metric("grpc.subchannel.disconnections"); got != 0 {
+		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.subchannel.disconnections", got, 0)
+	}
 }
 
 // Test verifies that pickfirst attempts to connect to the second backend once
@@ -2006,6 +2021,27 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TriggerConnectionDelay(t *testing.T) {
 	if got, _ := tmr.Metric("grpc.lb.pick_first.disconnections"); got != 0 {
 		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.lb.pick_first.disconnections", got, 0)
 	}
+
+	if got, _ := tmr.Metric("grpc.subchannel.connection_attempts_succeeded"); got != 1 {
+		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.subchannel.connection_attempts_succeeded", got, 1)
+	}
+	expectedLabels := []string{"whatever:///test.server", "", "{region=\"\", zone=\"\", sub_zone=\"\"}"}
+	if got, _ := tmr.MetricDetail("grpc.subchannel.connection_attempts_succeeded"); !slices.Equal(got.LabelVals, expectedLabels) {
+		t.Errorf("Unexpected data for metric %v, got: %s, want: %s", "grpc.subchannel.connection_attempts_succeeded", got.LabelVals, expectedLabels)
+	}
+	if got, _ := tmr.Metric("grpc.subchannel.connection_attempts_failed"); got != 0 {
+		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.subchannel.connection_attempts_failed", got, 0)
+	}
+	if got, _ := tmr.Metric("grpc.subchannel.disconnections"); got != 0 {
+		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.subchannel.disconnections", got, 0)
+	}
+	if got, _ := tmr.Metric("grpc.subchannel.open_connections"); got != 1 {
+		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.subchannel.open_connections", got, 1)
+	}
+	expectedLabels = []string{"whatever:///test.server", "", "NoSecurity", "{region=\"\", zone=\"\", sub_zone=\"\"}"}
+	if got, _ := tmr.MetricDetail("grpc.subchannel.open_connections"); !slices.Equal(got.LabelVals, expectedLabels) {
+		t.Errorf("Unexpected data for metric %v, got: %s, want: %s", "grpc.subchannel.open_connections", got.LabelVals, expectedLabels)
+	}
 }
 
 // Test tests the pickfirst balancer by causing a SubConn to fail and then
@@ -2057,6 +2093,13 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TF_ThenTimerFires(t *testing.T) {
 	if got, _ := tmr.Metric("grpc.lb.pick_first.connection_attempts_failed"); got != 1 {
 		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.lb.pick_first.connection_attempts_failed", got, 1)
 	}
+	if got, _ := tmr.Metric("grpc.subchannel.connection_attempts_failed"); got != 1 {
+		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.subchannel.connection_attempts_failed", got, 1)
+	}
+	expectedLabels := []string{"whatever:///test.server", "", "{region=\"\", zone=\"\", sub_zone=\"\"}"}
+	if got, _ := tmr.MetricDetail("grpc.subchannel.connection_attempts_failed"); !slices.Equal(got.LabelVals, expectedLabels) {
+		t.Errorf("Unexpected data for metric %v, got: %s, want: %s", "grpc.subchannel.connection_attempts_failed", got.LabelVals, expectedLabels)
+	}
 	if holds[2].IsStarted() != false {
 		t.Fatalf("Server %d with address %q contacted unexpectedly", 2, addrs[2])
 	}
@@ -2079,6 +2122,17 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TF_ThenTimerFires(t *testing.T) {
 	}
 	if got, _ := tmr.Metric("grpc.lb.pick_first.disconnections"); got != 0 {
 		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.lb.pick_first.disconnections", got, 0)
+	}
+
+	if got, _ := tmr.Metric("grpc.subchannel.connection_attempts_succeeded"); got != 1 {
+		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.subchannel.connection_attempts_succeeded", got, 1)
+	}
+	expectedLabels = []string{"whatever:///test.server", "", "{region=\"\", zone=\"\", sub_zone=\"\"}"}
+	if got, _ := tmr.MetricDetail("grpc.subchannel.connection_attempts_succeeded"); !slices.Equal(got.LabelVals, expectedLabels) {
+		t.Errorf("Unexpected data for metric %v, got: %s, want: %s", "grpc.subchannel.connection_attempts_succeeded", got.LabelVals, expectedLabels)
+	}
+	if got, _ := tmr.Metric("grpc.subchannel.disconnections"); got != 0 {
+		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.subchannel.disconnections", got, 0)
 	}
 }
 
