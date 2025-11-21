@@ -308,7 +308,7 @@ func (s) TestFederation_UnknownAuthorityInDialTarget(t *testing.T) {
 // LDS resource associated with the dial target contains an RDS resource name
 // with an authority which is not specified in the bootstrap configuration. The
 // test verifies that RPCs fail with an appropriate error.
-func TestFederation_UnknownAuthorityInReceivedResponse(t *testing.T) {
+func (s) TestFederation_UnknownAuthorityInReceivedResponse(t *testing.T) {
 	mgmtServer, nodeID, _, xdsResolver := setup.ManagementServerAndResolver(t)
 
 	// LDS is old style name.
