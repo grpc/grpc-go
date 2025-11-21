@@ -23,7 +23,6 @@ import (
 	"strings"
 	"sync"
 
-	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/pretty"
@@ -81,17 +80,6 @@ func (ccr *ccResolverWrapper) start() error {
 			MetricsRecorder:      ccr.cc.metricsRecorderList,
 		}
 
-		// https://github.com/grpc/grpc/blob/master/doc/connectivity-semantics-and-api.md
-		// defines CONNECTING as follows:
-		// - The channel is trying to establish a connection and is waiting to
-		//   make progress on one of the steps involved in name resolution, TCP
-		//   connection establishment or TLS handshake. This may be used as the
-		//   initial state for channels upon creation.
-		//
-		// We are starting the name resolver here as part of exiting IDLE, so
-		// transitioning to CONNECTING is the right thing to do.
-		ccr.cc.csMgr.updateState(connectivity.Connecting)
-
 		var err error
 		// The delegating resolver is used unless:
 		//   - A custom dialer is provided via WithContextDialer dialoption or
@@ -102,17 +90,6 @@ func (ccr *ccResolverWrapper) start() error {
 			ccr.resolver, err = ccr.cc.resolverBuilder.Build(ccr.cc.parsedTarget, ccr, opts)
 		} else {
 			ccr.resolver, err = delegatingresolver.New(ccr.cc.parsedTarget, ccr, opts, ccr.cc.resolverBuilder, ccr.cc.dopts.enableLocalDNSResolution)
-		}
-
-		// If resolver creation fails, transition to TransientFailure. This is
-		// useful for channels created using `NewClient` and the returned error
-		// will be returned to the user when they try to make the first RPC.
-		// This is also useful when a channel is exiting IDLE state.
-		//
-		// The returned error will be returned to channels created using `Dial`.
-		if err != nil {
-			logger.Warningf("Failed to start resolver: %v", err)
-			ccr.cc.csMgr.updateState(connectivity.TransientFailure)
 		}
 		errCh <- err
 	})
