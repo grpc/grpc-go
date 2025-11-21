@@ -56,4 +56,35 @@ type lbConfig struct {
 	// The multiplier used to adjust endpoint weights with the error rate
 	// calculated as eps/qps. Default is 1.0.
 	ErrorUtilizationPenalty float64 `json:"errorUtilizationPenalty,omitempty"`
+
+	// Configuration for slow start feature
+	SlowStartConfig *SlowStartConfig `json:"slowStartConfig,omitempty"`
+}
+
+// SlowStartConfig contains configuration for the slow start feature.
+type SlowStartConfig struct {
+	// Represents the size of slow start window.
+	//
+	// The newly created endpoint remains in slow start mode starting from its creation time
+	// for the duration of slow start window.
+	SlowStartWindow iserviceconfig.Duration `json:"slowStartWindow,omitempty"`
+
+	// This parameter controls the speed of traffic increase over the slow start window. Defaults to 1.0,
+	// so that endpoint would get linearly increasing amount of traffic.
+	// When increasing the value for this parameter, the speed of traffic ramp-up increases non-linearly.
+	// The value of aggression parameter must be greater than 0.0.
+	// By tuning the parameter, it is possible to achieve polynomial or exponential shape of ramp-up curve.
+	//
+	// During slow start window, effective weight of an endpoint would be scaled with time factor and aggression:
+	// ``new_weight = weight * max(min_weight_percent / 100, time_factor ^ (1 / aggression))``,
+	// where ``time_factor = max(time_since_start_seconds, 1) / slow_start_window_seconds``.
+	//
+	// As time progresses, more and more traffic would be sent to endpoint, which is in slow start window.
+	// Once endpoint exits slow start, time_factor and aggression no longer affect its weight.
+	Aggression float64 `json:"aggression,omitempty"`
+
+	// Configures the minimum percentage of the original weight that will be used for an endpoint
+	// in slow start. This helps to avoid a scenario in which endpoints receive no traffic during the
+	// slow start window. Valid range is [0.0, 100.0]. If the value is not specified, the default is 10%.
+	MinWeightPercent float64 `json:"minWeightPercent,omitempty"`
 }
