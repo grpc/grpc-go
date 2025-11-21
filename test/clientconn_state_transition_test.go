@@ -32,6 +32,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/backoff"
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
@@ -41,6 +42,7 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
+	"google.golang.org/grpc/status"
 
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
@@ -736,7 +738,11 @@ func (s) TestStateTransitions_ResolverBuildFailure(t *testing.T) {
 				// The first attempt to kick the channel is expected to return
 				// the resolver build error to the RPC.
 				const wantErr = "simulated resolver build failure"
-				if _, err := testgrpc.NewTestServiceClient(cc).EmptyCall(ctx, &testpb.Empty{}); err == nil || !strings.Contains(err.Error(), wantErr) {
+				_, err := testgrpc.NewTestServiceClient(cc).EmptyCall(ctx, &testpb.Empty{})
+				if code := status.Code(err); code != codes.Unavailable {
+					t.Fatalf("EmptyCall RPC failed with code %v, want %v", err, codes.Unavailable)
+				}
+				if err == nil || !strings.Contains(err.Error(), wantErr) {
 					t.Fatalf("EmptyCall RPC failed with error: %q, want %q", err, wantErr)
 				}
 			} else {

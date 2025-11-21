@@ -370,8 +370,7 @@ func (cc *ClientConn) exitIdleMode() (err error) {
 		// returned by `Dial`.
 		logger.Warningf("Failed to start resolver: %v", err)
 		cc.csMgr.updateState(connectivity.TransientFailure)
-
-		return err
+		return status.Error(codes.Unavailable, err.Error())
 	}
 
 	cc.addTraceEvent("exiting idle mode")
