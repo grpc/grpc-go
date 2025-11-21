@@ -721,11 +721,13 @@ func (s) TestStateTransitions_ResolverBuildFailure(t *testing.T) {
 			defer cc.Close()
 
 			// Ensure that the client is in IDLE before connecting.
-			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-			defer cancel()
-			testutils.AwaitState(ctx, t, cc, connectivity.Idle)
+			if state := cc.GetState(); state != connectivity.Idle {
+				t.Fatalf("Expected initial state to be IDLE, got %v", state)
+			}
 
 			// Subscribe to state updates.
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
 			stateCh := make(chan connectivity.State, 1)
 			s := &funcConnectivityStateSubscriber{
 				onMsg: func(s connectivity.State) {
@@ -736,10 +738,6 @@ func (s) TestStateTransitions_ResolverBuildFailure(t *testing.T) {
 				},
 			}
 			internal.SubscribeToConnectivityStateChanges.(func(cc *grpc.ClientConn, s grpcsync.Subscriber) func())(cc, s)
-
-			if state := cc.GetState(); state != connectivity.Idle {
-				t.Fatalf("Expected initial state to be IDLE, got %v", state)
-			}
 
 			cc.Connect()
 			wantStates := []connectivity.State{
