@@ -517,15 +517,20 @@ func (s) TestControlChannelConnectivityStateTransitions(t *testing.T) {
 			// Start an RLS server
 			rlsServer, _ := rlstest.SetupFakeRLSServer(t, nil)
 
-			// Setup callback to count invocations with synchronization
-			callbackCount := 0
+			// Setup callback to count invocations
 			var mu sync.Mutex
-			callbackInvoked := make(chan struct{}, 10)
+			var callbackCount int
+			// Buffered channel to collect callback invocations without blocking
+			callbackInvoked := make(chan struct{}, tt.wantCallbackCount+5)
 			callback := func() {
 				mu.Lock()
 				callbackCount++
 				mu.Unlock()
-				callbackInvoked <- struct{}{}
+				// Non-blocking send - if channel is full, we still counted it
+				select {
+				case callbackInvoked <- struct{}{}:
+				default:
+				}
 			}
 
 			// Create control channel
@@ -535,52 +540,78 @@ func (s) TestControlChannelConnectivityStateTransitions(t *testing.T) {
 			}
 			defer ctrlCh.close()
 
-			// Wait for initial READY state by checking connectivity state buffer
+			// Wait for initial READY state using state change notifications
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
-			initialReady := false
-			for !initialReady {
-				select {
-				case <-ctx.Done():
-					t.Fatal("Timeout waiting for initial READY state")
-				default:
-					if ctrlCh.cc.GetState() == connectivity.Ready {
-						initialReady = true
-					} else {
-						time.Sleep(10 * time.Millisecond)
+
+			readyCh := make(chan struct{})
+			go func() {
+				for {
+					state := ctrlCh.cc.GetState()
+					if state == connectivity.Ready {
+						close(readyCh)
+						return
+					}
+					if !ctrlCh.cc.WaitForStateChange(ctx, state) {
+						return
+					}
+				}
+			}()
+
+			select {
+			case <-readyCh:
+				// Initial READY state achieved
+			case <-ctx.Done():
+				t.Fatal("Timeout waiting for initial READY state")
+			}
+
+			// Process states sequentially, waiting for callbacks when expected
+			seenTransientFailure := false
+			expectedCallbacks := 0
+
+			for _, state := range tt.states {
+				// Inject the state
+				ctrlCh.OnMessage(state)
+
+				// Track if we're in a failure state
+				if state == connectivity.TransientFailure {
+					seenTransientFailure = true
+				}
+
+				// If transitioning to READY after a failure, wait for callback
+				if state == connectivity.Ready && seenTransientFailure {
+					expectedCallbacks++
+					select {
+					case <-callbackInvoked:
+						// Callback received as expected
+						seenTransientFailure = false
+					case <-time.After(defaultTestTimeout):
+						mu.Lock()
+						got := callbackCount
+						mu.Unlock()
+						t.Fatalf("Timeout waiting for callback %d/%d after TRANSIENT_FAILURE→READY (got %d callbacks so far)", expectedCallbacks, tt.wantCallbackCount, got)
 					}
 				}
 			}
 
-			// Inject the test state sequence
-			for _, state := range tt.states {
-				ctrlCh.OnMessage(state)
-			}
-
-			// Wait for expected callbacks to be invoked
-			for i := 0; i < tt.wantCallbackCount; i++ {
-				select {
-				case <-callbackInvoked:
-					// Callback received as expected
-				case <-time.After(defaultTestTimeout):
-					t.Fatalf("Timeout waiting for callback %d/%d", i+1, tt.wantCallbackCount)
-				}
-			}
-
-			// Ensure no extra callbacks are invoked
-			select {
-			case <-callbackInvoked:
-				t.Fatal("Received more callbacks than expected")
-			case <-time.After(100 * time.Millisecond):
-				// Expected: no more callbacks
-			}
-
+			// Verify final callback count matches expected
 			mu.Lock()
 			gotCallbackCount := callbackCount
 			mu.Unlock()
 
 			if gotCallbackCount != tt.wantCallbackCount {
 				t.Errorf("Got %d callback invocations, want %d", gotCallbackCount, tt.wantCallbackCount)
+			}
+
+			// Ensure no extra callbacks are invoked
+			select {
+			case <-callbackInvoked:
+				mu.Lock()
+				final := callbackCount
+				mu.Unlock()
+				t.Fatalf("Received more callbacks than expected: got %d, want %d", final, tt.wantCallbackCount)
+			case <-time.After(50 * time.Millisecond):
+				// Expected: no more callbacks
 			}
 		})
 	}
