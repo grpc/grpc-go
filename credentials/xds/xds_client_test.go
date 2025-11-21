@@ -226,7 +226,7 @@ func newTestContextWithHandshakeInfo(parent context.Context, root, identity cert
 	// NewSubConn().
 	var sms []matcher.StringMatcher
 	if sanExactMatch != "" {
-		sms = []matcher.StringMatcher{matcher.StringMatcherForTesting(newStringP(sanExactMatch), nil, nil, nil, nil, false)}
+		sms = []matcher.StringMatcher{matcher.NewStringMatcher(newStringP(sanExactMatch), nil, nil, nil, nil, false)}
 	}
 	info := xdsinternal.NewHandshakeInfo(root, identity, sms, false)
 	uPtr := unsafe.Pointer(info)
@@ -542,7 +542,7 @@ func (s) TestClientCredsProviderSwitch(t *testing.T) {
 	// Create a root provider which will fail the handshake because it does not
 	// use the correct trust roots.
 	root1 := makeRootProvider(t, "x509/client_ca_cert.pem")
-	handshakeInfo := xdsinternal.NewHandshakeInfo(root1, nil, []matcher.StringMatcher{matcher.StringMatcherForTesting(newStringP(defaultTestCertSAN), nil, nil, nil, nil, false)}, false)
+	handshakeInfo := xdsinternal.NewHandshakeInfo(root1, nil, []matcher.StringMatcher{matcher.NewStringMatcher(newStringP(defaultTestCertSAN), nil, nil, nil, nil, false)}, false)
 	// We need to repeat most of what newTestContextWithHandshakeInfo() does
 	// here because we need access to the underlying HandshakeInfo so that we
 	// can update it before the next call to ClientHandshake().
@@ -568,7 +568,7 @@ func (s) TestClientCredsProviderSwitch(t *testing.T) {
 	// Create a new root provider which uses the correct trust roots. And update
 	// the HandshakeInfo with the new provider.
 	root2 := makeRootProvider(t, "x509/server_ca_cert.pem")
-	handshakeInfo = xdsinternal.NewHandshakeInfo(root2, nil, []matcher.StringMatcher{matcher.StringMatcherForTesting(newStringP(defaultTestCertSAN), nil, nil, nil, nil, false)}, false)
+	handshakeInfo = xdsinternal.NewHandshakeInfo(root2, nil, []matcher.StringMatcher{matcher.NewStringMatcher(newStringP(defaultTestCertSAN), nil, nil, nil, nil, false)}, false)
 	// Update the existing pointer, which address attribute will continue to
 	// point to.
 	atomic.StorePointer(&uPtr, unsafe.Pointer(handshakeInfo))

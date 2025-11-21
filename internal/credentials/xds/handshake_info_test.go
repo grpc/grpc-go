@@ -170,40 +170,40 @@ func TestMatchingSANExists_FailureCases(t *testing.T) {
 		{
 			desc: "exact match",
 			sanMatchers: []matcher.StringMatcher{
-				matcher.StringMatcherForTesting(newStringP("abcd.test.com"), nil, nil, nil, nil, false),
-				matcher.StringMatcherForTesting(newStringP("http://golang"), nil, nil, nil, nil, false),
-				matcher.StringMatcherForTesting(newStringP("HTTP://GOLANG.ORG"), nil, nil, nil, nil, false),
+				matcher.NewStringMatcher(newStringP("abcd.test.com"), nil, nil, nil, nil, false),
+				matcher.NewStringMatcher(newStringP("http://golang"), nil, nil, nil, nil, false),
+				matcher.NewStringMatcher(newStringP("HTTP://GOLANG.ORG"), nil, nil, nil, nil, false),
 			},
 		},
 		{
 			desc: "prefix match",
 			sanMatchers: []matcher.StringMatcher{
-				matcher.StringMatcherForTesting(nil, newStringP("i-aint-the-one"), nil, nil, nil, false),
-				matcher.StringMatcherForTesting(nil, newStringP("192.168.1.1"), nil, nil, nil, false),
-				matcher.StringMatcherForTesting(nil, newStringP("FOO.BAR"), nil, nil, nil, false),
+				matcher.NewStringMatcher(nil, newStringP("i-aint-the-one"), nil, nil, nil, false),
+				matcher.NewStringMatcher(nil, newStringP("192.168.1.1"), nil, nil, nil, false),
+				matcher.NewStringMatcher(nil, newStringP("FOO.BAR"), nil, nil, nil, false),
 			},
 		},
 		{
 			desc: "suffix match",
 			sanMatchers: []matcher.StringMatcher{
-				matcher.StringMatcherForTesting(nil, nil, newStringP("i-aint-the-one"), nil, nil, false),
-				matcher.StringMatcherForTesting(nil, nil, newStringP("1::68"), nil, nil, false),
-				matcher.StringMatcherForTesting(nil, nil, newStringP(".COM"), nil, nil, false),
+				matcher.NewStringMatcher(nil, nil, newStringP("i-aint-the-one"), nil, nil, false),
+				matcher.NewStringMatcher(nil, nil, newStringP("1::68"), nil, nil, false),
+				matcher.NewStringMatcher(nil, nil, newStringP(".COM"), nil, nil, false),
 			},
 		},
 		{
 			desc: "regex match",
 			sanMatchers: []matcher.StringMatcher{
-				matcher.StringMatcherForTesting(nil, nil, nil, nil, regexp.MustCompile(`.*\.examples\.com`), false),
-				matcher.StringMatcherForTesting(nil, nil, nil, nil, regexp.MustCompile(`192\.[0-9]{1,3}\.1\.1`), false),
+				matcher.NewStringMatcher(nil, nil, nil, nil, regexp.MustCompile(`.*\.examples\.com`), false),
+				matcher.NewStringMatcher(nil, nil, nil, nil, regexp.MustCompile(`192\.[0-9]{1,3}\.1\.1`), false),
 			},
 		},
 		{
 			desc: "contains match",
 			sanMatchers: []matcher.StringMatcher{
-				matcher.StringMatcherForTesting(nil, nil, nil, newStringP("i-aint-the-one"), nil, false),
-				matcher.StringMatcherForTesting(nil, nil, nil, newStringP("2001:db8:1:1::68"), nil, false),
-				matcher.StringMatcherForTesting(nil, nil, nil, newStringP("GRPC"), nil, false),
+				matcher.NewStringMatcher(nil, nil, nil, newStringP("i-aint-the-one"), nil, false),
+				matcher.NewStringMatcher(nil, nil, nil, newStringP("2001:db8:1:1::68"), nil, false),
+				matcher.NewStringMatcher(nil, nil, nil, newStringP("GRPC"), nil, false),
 			},
 		},
 	}
@@ -248,65 +248,65 @@ func TestMatchingSANExists_Success(t *testing.T) {
 		{
 			desc: "exact match dns wildcard",
 			sanMatchers: []matcher.StringMatcher{
-				matcher.StringMatcherForTesting(nil, newStringP("192.168.1.1"), nil, nil, nil, false),
-				matcher.StringMatcherForTesting(newStringP("https://github.com/grpc/grpc-java"), nil, nil, nil, nil, false),
-				matcher.StringMatcherForTesting(newStringP("abc.example.com"), nil, nil, nil, nil, false),
+				matcher.NewStringMatcher(nil, newStringP("192.168.1.1"), nil, nil, nil, false),
+				matcher.NewStringMatcher(newStringP("https://github.com/grpc/grpc-java"), nil, nil, nil, nil, false),
+				matcher.NewStringMatcher(newStringP("abc.example.com"), nil, nil, nil, nil, false),
 			},
 		},
 		{
 			desc: "exact match ignore case",
 			sanMatchers: []matcher.StringMatcher{
-				matcher.StringMatcherForTesting(newStringP("FOOBAR@EXAMPLE.COM"), nil, nil, nil, nil, true),
+				matcher.NewStringMatcher(newStringP("FOOBAR@EXAMPLE.COM"), nil, nil, nil, nil, true),
 			},
 		},
 		{
 			desc: "prefix match",
 			sanMatchers: []matcher.StringMatcher{
-				matcher.StringMatcherForTesting(nil, nil, newStringP(".co.in"), nil, nil, false),
-				matcher.StringMatcherForTesting(nil, newStringP("192.168.1.1"), nil, nil, nil, false),
-				matcher.StringMatcherForTesting(nil, newStringP("baz.test"), nil, nil, nil, false),
+				matcher.NewStringMatcher(nil, nil, newStringP(".co.in"), nil, nil, false),
+				matcher.NewStringMatcher(nil, newStringP("192.168.1.1"), nil, nil, nil, false),
+				matcher.NewStringMatcher(nil, newStringP("baz.test"), nil, nil, nil, false),
 			},
 		},
 		{
 			desc: "prefix match ignore case",
 			sanMatchers: []matcher.StringMatcher{
-				matcher.StringMatcherForTesting(nil, newStringP("BAZ.test"), nil, nil, nil, true),
+				matcher.NewStringMatcher(nil, newStringP("BAZ.test"), nil, nil, nil, true),
 			},
 		},
 		{
 			desc: "suffix  match",
 			sanMatchers: []matcher.StringMatcher{
-				matcher.StringMatcherForTesting(nil, nil, nil, nil, regexp.MustCompile(`192\.[0-9]{1,3}\.1\.1`), false),
-				matcher.StringMatcherForTesting(nil, nil, newStringP("192.168.1.1"), nil, nil, false),
-				matcher.StringMatcherForTesting(nil, nil, newStringP("@test.com"), nil, nil, false),
+				matcher.NewStringMatcher(nil, nil, nil, nil, regexp.MustCompile(`192\.[0-9]{1,3}\.1\.1`), false),
+				matcher.NewStringMatcher(nil, nil, newStringP("192.168.1.1"), nil, nil, false),
+				matcher.NewStringMatcher(nil, nil, newStringP("@test.com"), nil, nil, false),
 			},
 		},
 		{
 			desc: "suffix  match ignore case",
 			sanMatchers: []matcher.StringMatcher{
-				matcher.StringMatcherForTesting(nil, nil, newStringP("@test.COM"), nil, nil, true),
+				matcher.NewStringMatcher(nil, nil, newStringP("@test.COM"), nil, nil, true),
 			},
 		},
 		{
 			desc: "regex match",
 			sanMatchers: []matcher.StringMatcher{
-				matcher.StringMatcherForTesting(nil, nil, nil, newStringP("https://github.com/grpc/grpc-java"), nil, false),
-				matcher.StringMatcherForTesting(nil, nil, nil, nil, regexp.MustCompile(`192\.[0-9]{1,3}\.1\.1`), false),
-				matcher.StringMatcherForTesting(nil, nil, nil, nil, regexp.MustCompile(`.*\.test\.com`), false),
+				matcher.NewStringMatcher(nil, nil, nil, newStringP("https://github.com/grpc/grpc-java"), nil, false),
+				matcher.NewStringMatcher(nil, nil, nil, nil, regexp.MustCompile(`192\.[0-9]{1,3}\.1\.1`), false),
+				matcher.NewStringMatcher(nil, nil, nil, nil, regexp.MustCompile(`.*\.test\.com`), false),
 			},
 		},
 		{
 			desc: "contains match",
 			sanMatchers: []matcher.StringMatcher{
-				matcher.StringMatcherForTesting(newStringP("https://github.com/grpc/grpc-java"), nil, nil, nil, nil, false),
-				matcher.StringMatcherForTesting(nil, nil, nil, newStringP("2001:68::db8"), nil, false),
-				matcher.StringMatcherForTesting(nil, nil, nil, newStringP("192.0.0"), nil, false),
+				matcher.NewStringMatcher(newStringP("https://github.com/grpc/grpc-java"), nil, nil, nil, nil, false),
+				matcher.NewStringMatcher(nil, nil, nil, newStringP("2001:68::db8"), nil, false),
+				matcher.NewStringMatcher(nil, nil, nil, newStringP("192.0.0"), nil, false),
 			},
 		},
 		{
 			desc: "contains match ignore case",
 			sanMatchers: []matcher.StringMatcher{
-				matcher.StringMatcherForTesting(nil, nil, nil, newStringP("GRPC"), nil, true),
+				matcher.NewStringMatcher(nil, nil, nil, newStringP("GRPC"), nil, true),
 			},
 		},
 	}
@@ -354,31 +354,31 @@ func TestEqual(t *testing.T) {
 		{
 			desc: "same providers, same SAN matchers",
 			hi1: NewHandshakeInfo(testCertProvider{}, testCertProvider{}, []matcher.StringMatcher{
-				matcher.StringMatcherForTesting(newStringP("foo.com"), nil, nil, nil, nil, false),
+				matcher.NewStringMatcher(newStringP("foo.com"), nil, nil, nil, nil, false),
 			}, false),
 			hi2: NewHandshakeInfo(testCertProvider{}, testCertProvider{}, []matcher.StringMatcher{
-				matcher.StringMatcherForTesting(newStringP("foo.com"), nil, nil, nil, nil, false),
+				matcher.NewStringMatcher(newStringP("foo.com"), nil, nil, nil, nil, false),
 			}, false),
 			wantMatch: true,
 		},
 		{
 			desc: "same providers, different SAN matchers",
 			hi1: NewHandshakeInfo(testCertProvider{}, testCertProvider{}, []matcher.StringMatcher{
-				matcher.StringMatcherForTesting(newStringP("foo.com"), nil, nil, nil, nil, false),
+				matcher.NewStringMatcher(newStringP("foo.com"), nil, nil, nil, nil, false),
 			}, false),
 			hi2: NewHandshakeInfo(testCertProvider{}, testCertProvider{}, []matcher.StringMatcher{
-				matcher.StringMatcherForTesting(newStringP("bar.com"), nil, nil, nil, nil, false),
+				matcher.NewStringMatcher(newStringP("bar.com"), nil, nil, nil, nil, false),
 			}, false),
 			wantMatch: false,
 		},
 		{
 			desc: "same SAN matchers with different content",
 			hi1: NewHandshakeInfo(&testCertProvider{}, &testCertProvider{}, []matcher.StringMatcher{
-				matcher.StringMatcherForTesting(newStringP("foo.com"), nil, nil, nil, nil, false),
+				matcher.NewStringMatcher(newStringP("foo.com"), nil, nil, nil, nil, false),
 			}, false),
 			hi2: NewHandshakeInfo(&testCertProvider{}, &testCertProvider{}, []matcher.StringMatcher{
-				matcher.StringMatcherForTesting(newStringP("foo.com"), nil, nil, nil, nil, false),
-				matcher.StringMatcherForTesting(newStringP("bar.com"), nil, nil, nil, nil, false),
+				matcher.NewStringMatcher(newStringP("foo.com"), nil, nil, nil, nil, false),
+				matcher.NewStringMatcher(newStringP("bar.com"), nil, nil, nil, nil, false),
 			}, false),
 			wantMatch: false,
 		},
