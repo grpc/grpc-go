@@ -20,6 +20,7 @@ package grpc
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"strings"
 	"testing"
@@ -312,3 +313,36 @@ func (s) TestResolverAddressesWithTypedNilAttribute(t *testing.T) {
 type stringerVal struct{ s string }
 
 func (s stringerVal) String() string { return s.s }
+
+const errResolverBuilderScheme = "test-resolver-build-failure"
+
+// errResolverBuilder is a resolver builder that returns an error from its Build
+// method.
+type errResolverBuilder struct {
+	err error
+}
+
+func (b *errResolverBuilder) Build(resolver.Target, resolver.ClientConn, resolver.BuildOptions) (resolver.Resolver, error) {
+	return nil, b.err
+}
+
+func (b *errResolverBuilder) Scheme() string {
+	return errResolverBuilderScheme
+}
+
+// Tests that Dial returns an error if the resolver builder returns an error
+// from its Build method.
+func (s) TestDial_ResolverBuilder_Error(t *testing.T) {
+	resolverErr := fmt.Errorf("resolver builder error")
+	dopts := []DialOption{
+		WithTransportCredentials(insecure.NewCredentials()),
+		WithResolvers(&errResolverBuilder{err: resolverErr}),
+	}
+	_, err := Dial(errResolverBuilderScheme+":///test.server", dopts...)
+	if err == nil {
+		t.Fatalf("Dial() succeeded when it should have failed")
+	}
+	if !strings.Contains(err.Error(), resolverErr.Error()) {
+		t.Fatalf("Dial() failed with error %v, want %v", err, resolverErr)
+	}
+}

@@ -332,7 +332,7 @@ func (cc *ClientConn) addTraceEvent(msg string) {
 			Severity: channelz.CtInfo,
 		}
 	}
-	channelz.AddTraceEvent(logger, cc.channelz, 0, ted)
+	channelz.AddTraceEvent(logger, cc.channelz, 1, ted)
 }
 
 type idler ClientConn
@@ -356,11 +356,21 @@ func (cc *ClientConn) exitIdleMode() (err error) {
 	}
 	cc.mu.Unlock()
 
+	// Set state to CONNECTING before building the name resolver
+	// so the channel does not remain in IDLE.
+	cc.csMgr.updateState(connectivity.Connecting)
+
 	// This needs to be called without cc.mu because this builds a new resolver
 	// which might update state or report error inline, which would then need to
 	// acquire cc.mu.
 	if err := cc.resolverWrapper.start(); err != nil {
-		return err
+		// If resolver creation fails, transition to TransientFailure. For a
+		// channel created with `NewClient`, the error will be returned on the
+		// first RPC. For a channel created with `Dial`, the error will be
+		// returned by `Dial`.
+		logger.Warningf("Failed to start resolver: %v", err)
+		cc.csMgr.updateState(connectivity.TransientFailure)
+		return status.Error(codes.Unavailable, err.Error())
 	}
 
 	cc.addTraceEvent("exiting idle mode")
