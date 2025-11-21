@@ -520,17 +520,14 @@ func (s) TestControlChannelConnectivityStateTransitions(t *testing.T) {
 			// Setup callback to count invocations
 			var mu sync.Mutex
 			var callbackCount int
-			// Buffered channel to collect callback invocations without blocking
-			callbackInvoked := make(chan struct{}, tt.wantCallbackCount+5)
+			// Buffered channel large enough to never block
+			callbackInvoked := make(chan struct{}, 100)
 			callback := func() {
 				mu.Lock()
 				callbackCount++
 				mu.Unlock()
-				// Non-blocking send - if channel is full, we still counted it
-				select {
-				case callbackInvoked <- struct{}{}:
-				default:
-				}
+				// Send to channel - should never block with large buffer
+				callbackInvoked <- struct{}{}
 			}
 
 			// Create control channel
@@ -540,57 +537,35 @@ func (s) TestControlChannelConnectivityStateTransitions(t *testing.T) {
 			}
 			defer ctrlCh.close()
 
-			// Wait for initial READY state using state change notifications
-			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-			defer cancel()
-
-			readyCh := make(chan struct{})
-			go func() {
-				for {
-					state := ctrlCh.cc.GetState()
-					if state == connectivity.Ready {
-						close(readyCh)
-						return
-					}
-					if !ctrlCh.cc.WaitForStateChange(ctx, state) {
-						return
-					}
-				}
-			}()
-
+			// Wait for the monitoring goroutine to process the initial READY state
+			// before injecting test states. This ensures our injected states are
+			// processed in the main monitoring loop, not consumed during initialization.
 			select {
-			case <-readyCh:
-				// Initial READY state achieved
-			case <-ctx.Done():
-				t.Fatal("Timeout waiting for initial READY state")
+			case <-ctrlCh.testOnlyInitialReadyDone:
+				// Initial READY processed by monitoring goroutine
+			case <-time.After(defaultTestTimeout):
+				t.Fatal("Timeout waiting for monitoring goroutine to process initial READY state")
 			}
 
-			// Process states sequentially, waiting for callbacks when expected
-			seenTransientFailure := false
-			expectedCallbacks := 0
-
+			// Inject all test states
 			for _, state := range tt.states {
-				// Inject the state
 				ctrlCh.OnMessage(state)
+			}
 
-				// Track if we're in a failure state
-				if state == connectivity.TransientFailure {
-					seenTransientFailure = true
-				}
+			// Wait for all expected callbacks with timeout
+			callbackTimeout := time.NewTimer(defaultTestTimeout)
+			defer callbackTimeout.Stop()
 
-				// If transitioning to READY after a failure, wait for callback
-				if state == connectivity.Ready && seenTransientFailure {
-					expectedCallbacks++
-					select {
-					case <-callbackInvoked:
-						// Callback received as expected
-						seenTransientFailure = false
-					case <-time.After(defaultTestTimeout):
-						mu.Lock()
-						got := callbackCount
-						mu.Unlock()
-						t.Fatalf("Timeout waiting for callback %d/%d after TRANSIENT_FAILURE→READY (got %d callbacks so far)", expectedCallbacks, tt.wantCallbackCount, got)
-					}
+			receivedCallbacks := 0
+			for receivedCallbacks < tt.wantCallbackCount {
+				select {
+				case <-callbackInvoked:
+					receivedCallbacks++
+				case <-callbackTimeout.C:
+					mu.Lock()
+					got := callbackCount
+					mu.Unlock()
+					t.Fatalf("Timeout waiting for callbacks: expected %d, received %d via channel, callback count is %d", tt.wantCallbackCount, receivedCallbacks, got)
 				}
 			}
 

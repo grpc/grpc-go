@@ -63,6 +63,9 @@ type controlChannel struct {
 	connectivityStateCh *buffer.Unbounded
 	unsubscribe         func()
 	monitorDoneCh       chan struct{}
+	// testOnlyInitialReadyDone is closed when the monitoring goroutine
+	// processes the initial READY state. Only used in tests.
+	testOnlyInitialReadyDone chan struct{}
 }
 
 // newControlChannel creates a controlChannel to rlsServerName and uses
@@ -70,11 +73,12 @@ type controlChannel struct {
 // gRPC channel.
 func newControlChannel(rlsServerName, serviceConfig string, rpcTimeout time.Duration, bOpts balancer.BuildOptions, backToReadyFunc func()) (*controlChannel, error) {
 	ctrlCh := &controlChannel{
-		rpcTimeout:          rpcTimeout,
-		backToReadyFunc:     backToReadyFunc,
-		throttler:           newAdaptiveThrottler(),
-		connectivityStateCh: buffer.NewUnbounded(),
-		monitorDoneCh:       make(chan struct{}),
+		rpcTimeout:               rpcTimeout,
+		backToReadyFunc:          backToReadyFunc,
+		throttler:                newAdaptiveThrottler(),
+		connectivityStateCh:      buffer.NewUnbounded(),
+		monitorDoneCh:            make(chan struct{}),
+		testOnlyInitialReadyDone: make(chan struct{}),
 	}
 	ctrlCh.logger = internalgrpclog.NewPrefixLogger(logger, fmt.Sprintf("[rls-control-channel %p] ", ctrlCh))
 
@@ -186,6 +190,9 @@ func (cc *controlChannel) monitorConnectivityState() {
 	}
 	cc.connectivityStateCh.Load()
 	cc.logger.Infof("Connectivity state is READY")
+
+	// Signal tests that initial READY has been processed
+	close(cc.testOnlyInitialReadyDone)
 
 	// Track whether we've seen TRANSIENT_FAILURE since the last READY state.
 	// We only want to reset backoff when recovering from an actual failure,
