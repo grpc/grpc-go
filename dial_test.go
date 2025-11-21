@@ -314,7 +314,7 @@ type stringerVal struct{ s string }
 
 func (s stringerVal) String() string { return s.s }
 
-const errResolverBuildercheme = "test-resolver-build-failure"
+const errResolverBuilderScheme = "test-resolver-build-failure"
 
 // errResolverBuilder is a resolver builder that returns an error from its Build
 // method.
@@ -327,7 +327,7 @@ func (b *errResolverBuilder) Build(resolver.Target, resolver.ClientConn, resolve
 }
 
 func (b *errResolverBuilder) Scheme() string {
-	return errResolverBuildercheme
+	return errResolverBuilderScheme
 }
 
 // Tests that Dial returns an error if the resolver builder returns an error
@@ -338,7 +338,7 @@ func (s) TestDial_ResolverBuilder_Error(t *testing.T) {
 		WithTransportCredentials(insecure.NewCredentials()),
 		WithResolvers(&errResolverBuilder{err: resolverErr}),
 	}
-	_, err := Dial(errResolverBuildercheme+":///test.server", dopts...)
+	_, err := Dial(errResolverBuilderScheme+":///test.server", dopts...)
 	if err == nil {
 		t.Fatalf("Dial() succeeded when it should have failed")
 	}
