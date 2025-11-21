@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -681,24 +682,16 @@ func (b *testResolverBuilder) Scheme() string {
 // Tests for state transitions when the resolver initially fails to build.
 func (s) TestStateTransitions_ResolverBuildFailure(t *testing.T) {
 	tests := []struct {
-		name         string
-		exitIdleFunc func(ctx context.Context, cc *grpc.ClientConn) error
+		name            string
+		exitIdleWithRPC bool
 	}{
 		{
-			name: "exitIdleByConnecting",
-			exitIdleFunc: func(_ context.Context, cc *grpc.ClientConn) error {
-				cc.Connect()
-				return nil
-			},
+			name:            "exitIdleByConnecting",
+			exitIdleWithRPC: false,
 		},
 		{
-			name: "exitIdleByRPC",
-			exitIdleFunc: func(ctx context.Context, cc *grpc.ClientConn) error {
-				if _, err := testgrpc.NewTestServiceClient(cc).EmptyCall(ctx, &testpb.Empty{}); err != nil {
-					return fmt.Errorf("EmptyCall RPC failed: %v", err)
-				}
-				return nil
-			},
+			name:            "exitIdleByRPC",
+			exitIdleWithRPC: true,
 		},
 	}
 	for _, tt := range tests {
@@ -739,7 +732,17 @@ func (s) TestStateTransitions_ResolverBuildFailure(t *testing.T) {
 			}
 			internal.SubscribeToConnectivityStateChanges.(func(cc *grpc.ClientConn, s grpcsync.Subscriber) func())(cc, s)
 
-			cc.Connect()
+			if tt.exitIdleWithRPC {
+				// The first attempt to kick the channel is expected to return
+				// the resolver build error to the RPC.
+				const wantErr = "simulated resolver build failure"
+				if _, err := testgrpc.NewTestServiceClient(cc).EmptyCall(ctx, &testpb.Empty{}); err == nil || !strings.Contains(err.Error(), wantErr) {
+					t.Fatalf("EmptyCall RPC failed with error: %q, want %q", err, wantErr)
+				}
+			} else {
+				cc.Connect()
+			}
+
 			wantStates := []connectivity.State{
 				connectivity.Connecting,       // When channel exits IDLE for the first time.
 				connectivity.TransientFailure, // Resolver build failure.
@@ -750,10 +753,15 @@ func (s) TestStateTransitions_ResolverBuildFailure(t *testing.T) {
 			for _, wantState := range wantStates {
 				waitForState(ctx, t, stateCh, wantState)
 				if wantState == connectivity.Idle {
-					tt.exitIdleFunc(ctx, cc)
+					if tt.exitIdleWithRPC {
+						if _, err := testgrpc.NewTestServiceClient(cc).EmptyCall(ctx, &testpb.Empty{}); err != nil {
+							t.Fatalf("EmptyCall RPC failed: %v", err)
+						}
+					} else {
+						cc.Connect()
+					}
 				}
 			}
-
 		})
 	}
 }
