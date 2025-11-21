@@ -131,6 +131,19 @@ func TestStringMatcherFromProto(t *testing.T) {
 			wantMatcher: StringMatcher{regexMatch: regexp.MustCompile("good?regex?")},
 		},
 		{
+			desc: "regex with ignore case",
+			inputProto: &v3matcherpb.StringMatcher{
+				MatchPattern: &v3matcherpb.StringMatcher_SafeRegex{
+					SafeRegex: &v3matcherpb.RegexMatcher{Regex: "good?regex?"},
+				},
+				IgnoreCase: true,
+			},
+			wantMatcher: StringMatcher{
+				regexMatch: regexp.MustCompile("good?regex?"),
+				ignoreCase: true,
+			},
+		},
+		{
 			desc: "happy case contains",
 			inputProto: &v3matcherpb.StringMatcher{
 				MatchPattern: &v3matcherpb.StringMatcher_Contains{Contains: "contains"},
@@ -180,6 +193,10 @@ func TestMatch(t *testing.T) {
 		})
 		suffixMatcherIgnoreCase, _ = StringMatcherFromProto(&v3matcherpb.StringMatcher{
 			MatchPattern: &v3matcherpb.StringMatcher_Suffix{Suffix: "suffix"},
+			IgnoreCase:   true,
+		})
+		regexMatcherIgnoreCase, _ = StringMatcherFromProto(&v3matcherpb.StringMatcher{
+			MatchPattern: &v3matcherpb.StringMatcher_SafeRegex{SafeRegex: &v3matcherpb.RegexMatcher{Regex: "good?regex?"}},
 			IgnoreCase:   true,
 		})
 		containsMatcherIgnoreCase, _ = StringMatcherFromProto(&v3matcherpb.StringMatcher{
@@ -276,6 +293,18 @@ func TestMatch(t *testing.T) {
 			desc:    "regex match failure",
 			matcher: regexMatcher,
 			input:   "regex-is-not-here",
+		},
+		{
+			desc:      "regex match success with ignore case",
+			matcher:   regexMatcherIgnoreCase,
+			input:     "goodregex",
+			wantMatch: true,
+		},
+		{
+			desc:      "regex match failure with ignore case",
+			matcher:   regexMatcherIgnoreCase,
+			input:     "goodREGEX",
+			wantMatch: false,
 		},
 		{
 			desc:      "contains match success",
