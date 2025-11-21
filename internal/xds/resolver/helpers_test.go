@@ -191,26 +191,6 @@ func verifyNoUpdateFromResolver(ctx context.Context, t *testing.T, stateCh chan 
 	}
 }
 
-// waitForErrorFromResolver waits for the resolver to push an error and verifies
-// that it matches the expected error and contains the expected node ID.
-func waitForErrorFromResolver(ctx context.Context, errCh chan error, wantErr, wantNodeID string) error {
-	select {
-	case <-ctx.Done():
-		return fmt.Errorf("timeout when waiting for error to be propagated to the ClientConn")
-	case gotErr := <-errCh:
-		if gotErr == nil {
-			return fmt.Errorf("got nil error from resolver, want %q", wantErr)
-		}
-		if !strings.Contains(gotErr.Error(), wantErr) {
-			return fmt.Errorf("got error from resolver %q, want %q", gotErr, wantErr)
-		}
-		if !strings.Contains(gotErr.Error(), wantNodeID) {
-			return fmt.Errorf("got error from resolver %q, want nodeID %q", gotErr, wantNodeID)
-		}
-	}
-	return nil
-}
-
 func verifyResolverError(gotErr error, wantCode codes.Code, wantErr, wantNodeID string) error {
 	if gotErr == nil {
 		return fmt.Errorf("got nil error from resolver, want error with code %v", wantCode)

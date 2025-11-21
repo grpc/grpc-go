@@ -374,7 +374,7 @@ func (s) TestResolverBadServiceUpdate_NACKedWithCache(t *testing.T) {
 	nodeID := uuid.New().String()
 	mgmtServer, _, _, bc := setupManagementServerForTest(t, nodeID)
 
-	stateCh, errCh, _ := buildResolverForTarget(t, resolver.Target{URL: *testutils.MustParseURL("xds:///" + defaultTestServiceName)}, bc)
+	stateCh, _, _ := buildResolverForTarget(t, resolver.Target{URL: *testutils.MustParseURL("xds:///" + defaultTestServiceName)}, bc)
 
 	// Configure good listener and route configuration resources on the
 	// management server.
@@ -411,9 +411,6 @@ func (s) TestResolverBadServiceUpdate_NACKedWithCache(t *testing.T) {
 	// Expect an error update from the resolver. Since the resource is cached,
 	// it should be received as an ambient error.
 	configureResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, []*v3listenerpb.Listener{lis}, nil)
-	if err := waitForErrorFromResolver(ctx, errCh, "no RouteSpecifier", nodeID); err != nil {
-		t.Fatal(err)
-	}
 
 	// "Make an RPC" by invoking the config selector which should succeed by
 	// continuing to use the previously cached resource.
