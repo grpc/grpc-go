@@ -77,7 +77,7 @@ func (s) TestBuildXDSClientConfig_Success(t *testing.T) {
 			wantXDSClientConfig: func(c *bootstrap.Config) xdsclient.Config {
 				node, serverCfg := c.Node(), c.XDSServers()[0]
 				expectedServer := xdsclient.ServerConfig{ServerIdentifier: clients.ServerIdentifier{ServerURI: serverCfg.ServerURI(), Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"}}}
-				gServerCfgMap := map[*xdsclient.ServerConfig]*bootstrap.ServerConfig{&expectedServer: serverCfg}
+				gServerCfgMap := map[xdsclient.ServerConfig]*bootstrap.ServerConfig{expectedServer: serverCfg}
 				return xdsclient.Config{
 					Servers:     []xdsclient.ServerConfig{expectedServer},
 					Node:        clients.Node{ID: node.GetId(), Cluster: node.GetCluster(), Metadata: node.Metadata, Locality: clients.Locality{Region: node.Locality.Region, Zone: node.Locality.Zone, SubZone: node.Locality.SubZone}, UserAgentName: node.UserAgentName, UserAgentVersion: node.GetUserAgentVersion()},
@@ -115,7 +115,7 @@ func (s) TestBuildXDSClientConfig_Success(t *testing.T) {
 				topLevelSCfg, auth2SCfg := c.XDSServers()[0], c.Authorities()["auth2"].XDSServers[0]
 				expTopLevelS := xdsclient.ServerConfig{ServerIdentifier: clients.ServerIdentifier{ServerURI: topLevelSCfg.ServerURI(), Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"}}}
 				expAuth2S := xdsclient.ServerConfig{ServerIdentifier: clients.ServerIdentifier{ServerURI: auth2SCfg.ServerURI(), Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"}}}
-				gServerCfgMap := map[*xdsclient.ServerConfig]*bootstrap.ServerConfig{&expTopLevelS: topLevelSCfg, &expAuth2S: auth2SCfg}
+				gServerCfgMap := map[xdsclient.ServerConfig]*bootstrap.ServerConfig{expTopLevelS: topLevelSCfg, expAuth2S: auth2SCfg}
 				return xdsclient.Config{
 					Servers:     []xdsclient.ServerConfig{expTopLevelS},
 					Node:        clients.Node{ID: node.GetId(), Cluster: node.GetCluster(), Metadata: node.Metadata, UserAgentName: node.UserAgentName, UserAgentVersion: node.GetUserAgentVersion()},
@@ -146,10 +146,11 @@ func (s) TestBuildXDSClientConfig_Success(t *testing.T) {
 			}`, testXDSServerURL, testNodeID)),
 			wantXDSClientConfig: func(c *bootstrap.Config) xdsclient.Config {
 				node, serverCfg := c.Node(), c.XDSServers()[0]
+				serverFeature := xdsclient.ServerFeatureIgnoreResourceDeletion
 				expectedServer := xdsclient.ServerConfig{
 					ServerIdentifier: clients.ServerIdentifier{ServerURI: serverCfg.ServerURI(), Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"}},
-					ServerFeature:    []xdsclient.ServerFeature{xdsclient.ServerFeatureIgnoreResourceDeletion}}
-				gServerCfgMap := map[*xdsclient.ServerConfig]*bootstrap.ServerConfig{&expectedServer: serverCfg}
+					ServerFeature:    serverFeature}
+				gServerCfgMap := map[xdsclient.ServerConfig]*bootstrap.ServerConfig{expectedServer: serverCfg}
 				return xdsclient.Config{
 					Servers:     []xdsclient.ServerConfig{expectedServer},
 					Node:        clients.Node{ID: node.GetId(), Cluster: node.GetCluster(), Metadata: node.Metadata, UserAgentName: node.UserAgentName, UserAgentVersion: node.GetUserAgentVersion()},
@@ -180,9 +181,10 @@ func (s) TestBuildXDSClientConfig_Success(t *testing.T) {
 			}`, testXDSServerURL, testNodeID)),
 			wantXDSClientConfig: func(c *bootstrap.Config) xdsclient.Config {
 				node, serverCfg := c.Node(), c.XDSServers()[0]
+				serverFeature := xdsclient.ServerFeatureTrustedXDSServer
 				expectedServer := xdsclient.ServerConfig{ServerIdentifier: clients.ServerIdentifier{ServerURI: serverCfg.ServerURI(), Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"}},
-					ServerFeature: []xdsclient.ServerFeature{xdsclient.ServerFeatureTrustedXDSServer}}
-				gServerCfgMap := map[*xdsclient.ServerConfig]*bootstrap.ServerConfig{&expectedServer: serverCfg}
+					ServerFeature: serverFeature}
+				gServerCfgMap := map[xdsclient.ServerConfig]*bootstrap.ServerConfig{expectedServer: serverCfg}
 				return xdsclient.Config{
 					Servers:     []xdsclient.ServerConfig{expectedServer},
 					Node:        clients.Node{ID: node.GetId(), Cluster: node.GetCluster(), Metadata: node.Metadata, UserAgentName: node.UserAgentName, UserAgentVersion: node.GetUserAgentVersion()},
@@ -213,9 +215,10 @@ func (s) TestBuildXDSClientConfig_Success(t *testing.T) {
 			}`, testXDSServerURL, testNodeID)),
 			wantXDSClientConfig: func(c *bootstrap.Config) xdsclient.Config {
 				node, serverCfg := c.Node(), c.XDSServers()[0]
+				serverFeature := xdsclient.ServerFeatureTrustedXDSServer | xdsclient.ServerFeatureIgnoreResourceDeletion
 				expectedServer := xdsclient.ServerConfig{ServerIdentifier: clients.ServerIdentifier{ServerURI: serverCfg.ServerURI(), Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"}},
-					ServerFeature: []xdsclient.ServerFeature{xdsclient.ServerFeatureIgnoreResourceDeletion, xdsclient.ServerFeatureTrustedXDSServer}}
-				gServerCfgMap := map[*xdsclient.ServerConfig]*bootstrap.ServerConfig{&expectedServer: serverCfg}
+					ServerFeature: serverFeature}
+				gServerCfgMap := map[xdsclient.ServerConfig]*bootstrap.ServerConfig{expectedServer: serverCfg}
 				return xdsclient.Config{
 					Servers:     []xdsclient.ServerConfig{expectedServer},
 					Node:        clients.Node{ID: node.GetId(), Cluster: node.GetCluster(), Metadata: node.Metadata, UserAgentName: node.UserAgentName, UserAgentVersion: node.GetUserAgentVersion()},
@@ -247,7 +250,7 @@ func (s) TestBuildXDSClientConfig_Success(t *testing.T) {
 			wantXDSClientConfig: func(c *bootstrap.Config) xdsclient.Config {
 				node, serverCfg := c.Node(), c.XDSServers()[0] // SelectedCreds will be "insecure"
 				expectedServer := xdsclient.ServerConfig{ServerIdentifier: clients.ServerIdentifier{ServerURI: serverCfg.ServerURI(), Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"}}}
-				gServerCfgMap := map[*xdsclient.ServerConfig]*bootstrap.ServerConfig{&expectedServer: serverCfg}
+				gServerCfgMap := map[xdsclient.ServerConfig]*bootstrap.ServerConfig{expectedServer: serverCfg}
 				return xdsclient.Config{
 					Servers:     []xdsclient.ServerConfig{expectedServer},
 					Node:        clients.Node{ID: node.GetId(), Cluster: node.GetCluster(), Metadata: node.Metadata, UserAgentName: node.UserAgentName, UserAgentVersion: node.GetUserAgentVersion()},

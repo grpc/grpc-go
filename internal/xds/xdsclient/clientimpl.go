@@ -162,25 +162,25 @@ func (c *clientImpl) decrRef() int32 {
 	return atomic.AddInt32(&c.refCount, -1)
 }
 
-func buildServerConfigs(bootstrapSC []*bootstrap.ServerConfig, grpcTransportConfigs map[string]grpctransport.Config, gServerCfgMap map[*xdsclient.ServerConfig]*bootstrap.ServerConfig) ([]xdsclient.ServerConfig, error) {
+func buildServerConfigs(bootstrapSC []*bootstrap.ServerConfig, grpcTransportConfigs map[string]grpctransport.Config, gServerCfgMap map[xdsclient.ServerConfig]*bootstrap.ServerConfig) ([]xdsclient.ServerConfig, error) {
 	var gServerCfg []xdsclient.ServerConfig
 	for _, sc := range bootstrapSC {
 		if err := populateGRPCTransportConfigsFromServerConfig(sc, grpcTransportConfigs); err != nil {
 			return nil, err
 		}
-		var serverFeatures []xdsclient.ServerFeature
+		var serverFeatures xdsclient.ServerFeature
 		if sc.ServerFeaturesIgnoreResourceDeletion() {
-			serverFeatures = append(serverFeatures, xdsclient.ServerFeatureIgnoreResourceDeletion)
+			serverFeatures = serverFeatures | xdsclient.ServerFeatureIgnoreResourceDeletion
 		}
 		if sc.ServerFeaturesTrustedXDSServer() {
-			serverFeatures = append(serverFeatures, xdsclient.ServerFeatureTrustedXDSServer)
+			serverFeatures = serverFeatures | xdsclient.ServerFeatureTrustedXDSServer
 		}
 		gsc := xdsclient.ServerConfig{
 			ServerIdentifier: clients.ServerIdentifier{ServerURI: sc.ServerURI(), Extensions: grpctransport.ServerIdentifierExtension{ConfigName: sc.SelectedChannelCreds().Type}},
 			ServerFeature:    serverFeatures,
 		}
 		gServerCfg = append(gServerCfg, gsc)
-		gServerCfgMap[&gsc] = sc
+		gServerCfgMap[gsc] = sc
 	}
 	return gServerCfg, nil
 }
@@ -188,7 +188,7 @@ func buildServerConfigs(bootstrapSC []*bootstrap.ServerConfig, grpcTransportConf
 // buildXDSClientConfig builds the xdsclient.Config from the bootstrap.Config.
 func buildXDSClientConfig(config *bootstrap.Config, metricsRecorder estats.MetricsRecorder, target string, watchExpiryTimeout time.Duration) (xdsclient.Config, error) {
 	grpcTransportConfigs := make(map[string]grpctransport.Config)
-	gServerCfgMap := make(map[*xdsclient.ServerConfig]*bootstrap.ServerConfig)
+	gServerCfgMap := make(map[xdsclient.ServerConfig]*bootstrap.ServerConfig)
 
 	gAuthorities := make(map[string]xdsclient.Authority)
 	for name, cfg := range config.Authorities() {
