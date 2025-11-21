@@ -63,6 +63,9 @@ type controlChannel struct {
 	connectivityStateCh *buffer.Unbounded
 	unsubscribe         func()
 	monitorDoneCh       chan struct{}
+	// testOnlyInitialReadyDone is closed when the monitoring goroutine
+	// processes the initial READY state. Only used in tests.
+	testOnlyInitialReadyDone chan struct{}
 }
 
 // newControlChannel creates a controlChannel to rlsServerName and uses
@@ -70,11 +73,12 @@ type controlChannel struct {
 // gRPC channel.
 func newControlChannel(rlsServerName, serviceConfig string, rpcTimeout time.Duration, bOpts balancer.BuildOptions, backToReadyFunc func()) (*controlChannel, error) {
 	ctrlCh := &controlChannel{
-		rpcTimeout:          rpcTimeout,
-		backToReadyFunc:     backToReadyFunc,
-		throttler:           newAdaptiveThrottler(),
-		connectivityStateCh: buffer.NewUnbounded(),
-		monitorDoneCh:       make(chan struct{}),
+		rpcTimeout:               rpcTimeout,
+		backToReadyFunc:          backToReadyFunc,
+		throttler:                newAdaptiveThrottler(),
+		connectivityStateCh:      buffer.NewUnbounded(),
+		monitorDoneCh:            make(chan struct{}),
+		testOnlyInitialReadyDone: make(chan struct{}),
 	}
 	ctrlCh.logger = internalgrpclog.NewPrefixLogger(logger, fmt.Sprintf("[rls-control-channel %p] ", ctrlCh))
 
@@ -187,6 +191,14 @@ func (cc *controlChannel) monitorConnectivityState() {
 	cc.connectivityStateCh.Load()
 	cc.logger.Infof("Connectivity state is READY")
 
+	// Signal tests that initial READY has been processed
+	close(cc.testOnlyInitialReadyDone)
+
+	// Track whether we've seen TRANSIENT_FAILURE since the last READY state.
+	// We only want to reset backoff when recovering from an actual failure,
+	// not when transitioning through benign states like IDLE.
+	seenTransientFailure := false
+
 	for {
 		s, ok := <-cc.connectivityStateCh.Get()
 		if !ok {
@@ -197,9 +209,27 @@ func (cc *controlChannel) monitorConnectivityState() {
 		if s == connectivity.Shutdown {
 			return
 		}
+
+		// Track if we've entered TRANSIENT_FAILURE state
+		if s == connectivity.TransientFailure {
+			seenTransientFailure = true
+		}
+
+		// Only reset backoff when transitioning from TRANSIENT_FAILURE to READY.
+		// This indicates the RLS server has recovered from being unreachable, so
+		// we reset backoff state in all cache entries to allow pending RPCs to
+		// proceed immediately. We skip benign transitions like READY → IDLE → READY
+		// since those don't represent actual failures.
 		if s == connectivity.Ready {
-			cc.logger.Infof("Control channel back to READY")
-			cc.backToReadyFunc()
+			if seenTransientFailure {
+				cc.logger.Infof("Control channel back to READY after TRANSIENT_FAILURE")
+				if cc.backToReadyFunc != nil {
+					cc.backToReadyFunc()
+				}
+				seenTransientFailure = false
+			} else {
+				cc.logger.Infof("Control channel back to READY (no prior failure)")
+			}
 		}
 
 		cc.logger.Infof("Connectivity state is %s", s)

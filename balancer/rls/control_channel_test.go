@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"sync"
 	"testing"
 	"time"
 
@@ -33,6 +34,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal"
 	rlspb "google.golang.org/grpc/internal/proto/grpc_lookup_v1"
@@ -461,5 +463,131 @@ func (s) TestNewControlChannelUnsupportedCredsBundle(t *testing.T) {
 	if err == nil {
 		ctrlCh.close()
 		t.Fatal("newControlChannel succeeded when expected to fail")
+	}
+}
+
+// TestControlChannelConnectivityStateTransitions verifies that the control
+// channel only resets backoff when recovering from TRANSIENT_FAILURE, not
+// when going through benign state changes like READY → IDLE → READY.
+func (s) TestControlChannelConnectivityStateTransitions(t *testing.T) {
+	tests := []struct {
+		name              string
+		states            []connectivity.State
+		wantCallbackCount int
+	}{
+		{
+			name: "READY → TRANSIENT_FAILURE → READY triggers callback",
+			states: []connectivity.State{
+				connectivity.TransientFailure,
+				connectivity.Ready,
+			},
+			wantCallbackCount: 1,
+		},
+		{
+			name: "READY → IDLE → READY does not trigger callback",
+			states: []connectivity.State{
+				connectivity.Idle,
+				connectivity.Ready,
+			},
+			wantCallbackCount: 0,
+		},
+		{
+			name: "Multiple failures trigger callback each time",
+			states: []connectivity.State{
+				connectivity.TransientFailure,
+				connectivity.Ready,
+				connectivity.TransientFailure,
+				connectivity.Ready,
+			},
+			wantCallbackCount: 2,
+		},
+		{
+			name: "IDLE between failures doesn't affect callback",
+			states: []connectivity.State{
+				connectivity.TransientFailure,
+				connectivity.Idle,
+				connectivity.Ready,
+			},
+			wantCallbackCount: 1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Start an RLS server
+			rlsServer, _ := rlstest.SetupFakeRLSServer(t, nil)
+
+			// Setup callback to count invocations
+			var mu sync.Mutex
+			var callbackCount int
+			// Buffered channel large enough to never block
+			callbackInvoked := make(chan struct{}, 100)
+			callback := func() {
+				mu.Lock()
+				callbackCount++
+				mu.Unlock()
+				// Send to channel - should never block with large buffer
+				callbackInvoked <- struct{}{}
+			}
+
+			// Create control channel
+			ctrlCh, err := newControlChannel(rlsServer.Address, "", defaultTestTimeout, balancer.BuildOptions{}, callback)
+			if err != nil {
+				t.Fatalf("Failed to create control channel: %v", err)
+			}
+			defer ctrlCh.close()
+
+			// Wait for the monitoring goroutine to process the initial READY state
+			// before injecting test states. This ensures our injected states are
+			// processed in the main monitoring loop, not consumed during initialization.
+			select {
+			case <-ctrlCh.testOnlyInitialReadyDone:
+				// Initial READY processed by monitoring goroutine
+			case <-time.After(defaultTestTimeout):
+				t.Fatal("Timeout waiting for monitoring goroutine to process initial READY state")
+			}
+
+			// Inject all test states
+			for _, state := range tt.states {
+				ctrlCh.OnMessage(state)
+			}
+
+			// Wait for all expected callbacks with timeout
+			callbackTimeout := time.NewTimer(defaultTestTimeout)
+			defer callbackTimeout.Stop()
+
+			receivedCallbacks := 0
+			for receivedCallbacks < tt.wantCallbackCount {
+				select {
+				case <-callbackInvoked:
+					receivedCallbacks++
+				case <-callbackTimeout.C:
+					mu.Lock()
+					got := callbackCount
+					mu.Unlock()
+					t.Fatalf("Timeout waiting for callbacks: expected %d, received %d via channel, callback count is %d", tt.wantCallbackCount, receivedCallbacks, got)
+				}
+			}
+
+			// Verify final callback count matches expected
+			mu.Lock()
+			gotCallbackCount := callbackCount
+			mu.Unlock()
+
+			if gotCallbackCount != tt.wantCallbackCount {
+				t.Errorf("Got %d callback invocations, want %d", gotCallbackCount, tt.wantCallbackCount)
+			}
+
+			// Ensure no extra callbacks are invoked
+			select {
+			case <-callbackInvoked:
+				mu.Lock()
+				final := callbackCount
+				mu.Unlock()
+				t.Fatalf("Received more callbacks than expected: got %d, want %d", final, tt.wantCallbackCount)
+			case <-time.After(50 * time.Millisecond):
+				// Expected: no more callbacks
+			}
+		})
 	}
 }
