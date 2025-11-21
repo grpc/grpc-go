@@ -517,13 +517,15 @@ func (s) TestControlChannelConnectivityStateTransitions(t *testing.T) {
 			// Start an RLS server
 			rlsServer, _ := rlstest.SetupFakeRLSServer(t, nil)
 
-			// Setup callback to count invocations
+			// Setup callback to count invocations with synchronization
 			callbackCount := 0
 			var mu sync.Mutex
+			callbackInvoked := make(chan struct{}, 10)
 			callback := func() {
 				mu.Lock()
 				callbackCount++
 				mu.Unlock()
+				callbackInvoked <- struct{}{}
 			}
 
 			// Create control channel
@@ -533,18 +535,45 @@ func (s) TestControlChannelConnectivityStateTransitions(t *testing.T) {
 			}
 			defer ctrlCh.close()
 
-			// Give the channel time to reach initial READY state
-			time.Sleep(100 * time.Millisecond)
+			// Wait for initial READY state by checking connectivity state buffer
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+			initialReady := false
+			for !initialReady {
+				select {
+				case <-ctx.Done():
+					t.Fatal("Timeout waiting for initial READY state")
+				default:
+					if ctrlCh.cc.GetState() == connectivity.Ready {
+						initialReady = true
+					} else {
+						time.Sleep(10 * time.Millisecond)
+					}
+				}
+			}
 
 			// Inject the test state sequence
 			for _, state := range tt.states {
 				ctrlCh.OnMessage(state)
-				// Give time for the monitoring goroutine to process the state
-				time.Sleep(50 * time.Millisecond)
 			}
 
-			// Give extra time for any pending callbacks
-			time.Sleep(100 * time.Millisecond)
+			// Wait for expected callbacks to be invoked
+			for i := 0; i < tt.wantCallbackCount; i++ {
+				select {
+				case <-callbackInvoked:
+					// Callback received as expected
+				case <-time.After(defaultTestTimeout):
+					t.Fatalf("Timeout waiting for callback %d/%d", i+1, tt.wantCallbackCount)
+				}
+			}
+
+			// Ensure no extra callbacks are invoked
+			select {
+			case <-callbackInvoked:
+				t.Fatal("Received more callbacks than expected")
+			case <-time.After(100 * time.Millisecond):
+				// Expected: no more callbacks
+			}
 
 			mu.Lock()
 			gotCallbackCount := callbackCount
