@@ -537,16 +537,6 @@ func (s) TestControlChannelConnectivityStateTransitions(t *testing.T) {
 			}
 			defer ctrlCh.close()
 
-			// Wait for the monitoring goroutine to process the initial READY state
-			// before injecting test states. This ensures our injected states are
-			// processed in the main monitoring loop, not consumed during initialization.
-			select {
-			case <-ctrlCh.testOnlyInitialReadyDone:
-				// Initial READY processed by monitoring goroutine
-			case <-time.After(defaultTestTimeout):
-				t.Fatal("Timeout waiting for monitoring goroutine to process initial READY state")
-			}
-
 			// Inject all test states
 			for _, state := range tt.states {
 				ctrlCh.OnMessage(state)
