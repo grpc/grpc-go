@@ -121,7 +121,7 @@ func (cc *controlChannel) OnMessage(msg any) {
 	case connectivity.TransientFailure:
 		// Track that we've entered TRANSIENT_FAILURE state so we know to reset
 		// backoffs when we recover to READY.
-		cc.logger.Infof("Control channel is TRANSIENT_FAILURE")
+		cc.logger.Warningf("Control channel is TRANSIENT_FAILURE")
 		cc.seenTransientFailure = true
 	default:
 		cc.logger.Infof("Control channel connectivity state is %s", st)

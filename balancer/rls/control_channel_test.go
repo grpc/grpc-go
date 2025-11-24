@@ -472,28 +472,32 @@ func (s) TestNewControlChannelUnsupportedCredsBundle(t *testing.T) {
 func (s) TestControlChannelConnectivityStateTransitions(t *testing.T) {
 	tests := []struct {
 		name              string
+		description       string
 		states            []connectivity.State
 		wantCallbackCount int
 	}{
 		{
-			name: "READY → TRANSIENT_FAILURE → READY triggers callback",
-			states: []connectivity.State{
+			name:              "ready_after_transient_failure",
+			description:       "ready after transient failure triggers callback to reset the timer.",
+			states:            []connectivity.State{
 				connectivity.TransientFailure,
 				connectivity.Ready,
 			},
 			wantCallbackCount: 1,
 		},
 		{
-			name: "READY → IDLE → READY does not trigger callback",
-			states: []connectivity.State{
+			name:              "ready_after_idle",
+			description:       "ready after idle does not trigger callback",
+			states:            []connectivity.State{
 				connectivity.Idle,
 				connectivity.Ready,
 			},
 			wantCallbackCount: 0,
 		},
 		{
-			name: "Multiple failures trigger callback each time",
-			states: []connectivity.State{
+			name:              "multiple_failures",
+			description:       "multiple failures trigger callback each time",
+			states:            []connectivity.State{
 				connectivity.TransientFailure,
 				connectivity.Ready,
 				connectivity.TransientFailure,
@@ -502,8 +506,9 @@ func (s) TestControlChannelConnectivityStateTransitions(t *testing.T) {
 			wantCallbackCount: 2,
 		},
 		{
-			name: "IDLE between failures doesn't affect callback",
-			states: []connectivity.State{
+			name:              "idle_between_failures",
+			description:       "idle between failures doesn't affect callback",
+			states:            []connectivity.State{
 				connectivity.TransientFailure,
 				connectivity.Idle,
 				connectivity.Ready,
