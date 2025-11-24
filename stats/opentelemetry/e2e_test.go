@@ -1769,11 +1769,6 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 				t.Fatal("Timed out waiting for resolver state update")
 			}
 
-			// Give the span exporter a small amount of time to process and export
-			// all spans from the completed RPC. This reduces flakiness by ensuring
-			// all trace events have been fully recorded before validation.
-			time.Sleep(50 * time.Millisecond)
-
 			spans, err := waitForTraceSpans(ctx, exporter, tt.wantSpanInfos)
 			if err != nil {
 				t.Fatal(err)
