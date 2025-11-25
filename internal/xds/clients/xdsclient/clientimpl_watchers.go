@@ -42,11 +42,11 @@ func (w *wrappingWatcher) ResourceError(err error, done func()) {
 
 // WatchResource starts watching the specified resource.
 //
-// typeURL specifies the resource type implementation to use. if there is no
-// resource type implementation for the given typeURL, or if authority is not
-// found for the resource name, no watch is started and a no-op cancel function
-// is returned. See the ResourceTypes field in the Config struct used to create
-// the XDSClient.
+// The watch fails to start if:
+//   - There is no ResourceType implementation for the given typeURL in the
+//     ResourceTypes field of the Config struct used to create the XDSClient.
+//   - The provided resourceName contains an authority that is not present in the
+//     Authorities field.
 //
 // The returned function cancels the watch and prevents future calls to the
 // watcher.
@@ -64,9 +64,9 @@ func (c *XDSClient) WatchResource(typeURL, resourceName string, watcher Resource
 
 	rType, ok := c.config.ResourceTypes[typeURL]
 	if !ok {
-		logger.Warningf("ResourceType implementation for resource type url %v is not found", rType.TypeURL)
+		logger.Warningf("ResourceType implementation for resource type url %q is not found", rType.TypeURL)
 		c.serializer.TrySchedule(func(context.Context) {
-			watcher.ResourceError(fmt.Errorf("ResourceType implementation for resource type url %v is not found", rType.TypeURL), func() {})
+			watcher.ResourceError(fmt.Errorf("no ResourceType implementation found for typeURL %q", rType.TypeURL), func() {})
 		})
 		return func() {}
 	}

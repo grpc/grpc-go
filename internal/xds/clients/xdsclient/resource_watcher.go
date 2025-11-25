@@ -22,7 +22,7 @@ package xdsclient
 // received by the xDS client from the management server.
 //
 // All methods on this interface are guaranteed to be called serially by the xDS
-// client. Only one method will be executing for a specific watcher at a time.
+// client.
 //
 // All methods contain a done parameter which should be called when processing
 // of the update has completed.  For example, if processing a resource requires
