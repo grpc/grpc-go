@@ -135,7 +135,7 @@ func (s) TestResolverBuildFailure(t *testing.T) {
 
 // Tests the case where the resolver reports an error to the channel before
 // reporting an update. Verifies that the channel eventually moves to
-// TransientFailure and a subsequent RPC returns the error reported by the
+// TransientFailure and a subsequent RPCs returns the error reported by the
 // resolver to the user.
 func (s) TestResolverReportError(t *testing.T) {
 	const resolverErr = "test resolver error"
@@ -156,12 +156,14 @@ func (s) TestResolverReportError(t *testing.T) {
 	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
 
 	client := testgrpc.NewTestServiceClient(cc)
-	_, err = client.EmptyCall(ctx, &testpb.Empty{})
-	if code := status.Code(err); code != codes.Unavailable {
-		t.Fatalf("EmptyCall() = %v, want %v", err, codes.Unavailable)
-	}
-	if err == nil || !strings.Contains(err.Error(), resolverErr) {
-		t.Fatalf("EmptyCall() = %q, want %q", err, resolverErr)
+	for range 5 {
+		_, err = client.EmptyCall(ctx, &testpb.Empty{})
+		if code := status.Code(err); code != codes.Unavailable {
+			t.Fatalf("EmptyCall() = %v, want %v", err, codes.Unavailable)
+		}
+		if err == nil || !strings.Contains(err.Error(), resolverErr) {
+			t.Fatalf("EmptyCall() = %q, want %q", err, resolverErr)
+		}
 	}
 }
 
