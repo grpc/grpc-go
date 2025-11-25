@@ -267,6 +267,22 @@ var (
 				"server_features" : ["xds_v3"]
 			}]
 		}`,
+		"serverSupportsTrustedXDSServer": `
+		{
+			"node": {
+				"id": "ENVOY_NODE_ID",
+				"metadata": {
+				    "TRAFFICDIRECTOR_GRPC_HOSTNAME": "trafficdirector"
+			    }
+			},
+			"xds_servers" : [{
+				"server_uri": "trafficdirector.googleapis.com:443",
+				"channel_creds": [
+					{ "type": "google_default" }
+				],
+				"server_features" : ["trusted_xds_server", "xds_v3"]
+			}]
+		}`,
 	}
 	metadata = &structpb.Struct{
 		Fields: map[string]*structpb.Value{
@@ -333,6 +349,16 @@ var (
 			serverURI:            "trafficdirector.googleapis.com:443",
 			channelCreds:         []ChannelCreds{{Type: "google_default"}},
 			serverFeatures:       []string{"ignore_resource_deletion", "xds_v3"},
+			selectedChannelCreds: ChannelCreds{Type: "google_default"},
+		}},
+		node: v3Node,
+		clientDefaultListenerResourceNameTemplate: "%s",
+	}
+	configWithGoogleDefaultCredsAndTrustedXDSServer = &Config{
+		xDSServers: []*ServerConfig{{
+			serverURI:            "trafficdirector.googleapis.com:443",
+			channelCreds:         []ChannelCreds{{Type: "google_default"}},
+			serverFeatures:       []string{"trusted_xds_server", "xds_v3"},
 			selectedChannelCreds: ChannelCreds{Type: "google_default"},
 		}},
 		node: v3Node,
@@ -539,6 +565,7 @@ func (s) TestGetConfiguration_Success(t *testing.T) {
 		{"goodBootstrap", configWithGoogleDefaultCredsAndV3},
 		{"multipleXDSServers", configWithMultipleServers},
 		{"serverSupportsIgnoreResourceDeletion", configWithGoogleDefaultCredsAndIgnoreResourceDeletion},
+		{"serverSupportsTrustedXDSServer", configWithGoogleDefaultCredsAndTrustedXDSServer},
 		{"istioStyleInsecureWithoutCallCreds", configWithIstioStyleNoCallCreds},
 	}
 
