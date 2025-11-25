@@ -116,13 +116,14 @@ func (b *xdsResolverBuilder) Build(target resolver.Target, cc resolver.ClientCon
 	if b.newXDSClient != nil {
 		newXDSClient = b.newXDSClient
 	}
-	client, closeFn, err := newXDSClient(target.String(), opts.MetricsRecorder)
+	client, xdsClientClose, err := newXDSClient(target.String(), opts.MetricsRecorder)
 	if err != nil {
 		return nil, fmt.Errorf("xds: failed to create xds-client: %v", err)
 	}
 
 	template, err := sanityChecksOnBootstrapConfig(target, opts, client)
 	if err != nil {
+		xdsClientClose()
 		return nil, err
 	}
 	ldsResourceName := bootstrap.PopulateResourceTemplate(template, target.Endpoint())
@@ -130,7 +131,7 @@ func (b *xdsResolverBuilder) Build(target resolver.Target, cc resolver.ClientCon
 	r := &xdsResolver{
 		cc:              cc,
 		xdsClient:       client,
-		xdsClientClose:  closeFn,
+		xdsClientClose:  xdsClientClose,
 		activeClusters:  make(map[string]*clusterInfo),
 		channelID:       rand.Uint64(),
 		ldsResourceName: ldsResourceName,
