@@ -308,7 +308,7 @@ func (s) TestCancelWhileServerWaitingForFlowControl(t *testing.T) {
 	}
 }
 
-func TestValidateAuthority_SplitHostPort(t *testing.T) {
+func (s) TestValidateAuthoritySplitHostPort(t *testing.T) {
 	// Load certificate
 	certFile := testdata.Path("x509/server1_cert.pem")
 	b, err := os.ReadFile(certFile)
