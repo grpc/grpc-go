@@ -132,17 +132,51 @@ func StringMatcherFromProto(matcherProto *v3matcherpb.StringMatcher) (StringMatc
 	return matcher, nil
 }
 
-// NewStringMatcher is a helper function to create a StringMatcher based
-// on the given arguments. At most one of exact, prefix, suffix, contains and
-// regex should be non-nil.
-func NewStringMatcher(exact, prefix, suffix, contains *string, regex *regexp.Regexp, ignoreCase bool) StringMatcher {
+// NewExactStringMatcher creates a string matcher that requires the input string
+// to exactly match the pattern specified here. The match will be case
+// insensitive if ignore_case is true.
+func NewExactStringMatcher(pattern string, ignoreCase bool) StringMatcher {
 	return StringMatcher{
-		exactMatch:    newStrPtr(exact, ignoreCase),
-		prefixMatch:   newStrPtr(prefix, ignoreCase),
-		suffixMatch:   newStrPtr(suffix, ignoreCase),
-		containsMatch: newStrPtr(contains, ignoreCase),
-		regexMatch:    regex,
+		exactMatch: newStrPtr(&pattern, ignoreCase),
+		ignoreCase: ignoreCase,
+	}
+}
+
+// NewPrefixStringMatcher creates a string matcher that requires the input
+// string to contain the prefix specified here. The match will be case
+// insensitive if ignore_case is true.
+func NewPrefixStringMatcher(prefix string, ignoreCase bool) StringMatcher {
+	return StringMatcher{
+		prefixMatch: newStrPtr(&prefix, ignoreCase),
+		ignoreCase:  ignoreCase,
+	}
+}
+
+// NewSuffixStringMatcher creates a string matcher that requires the input
+// string to contain the suffix specified here. The match will be case
+// insensitive if ignore_case is true.
+func NewSuffixStringMatcher(suffix string, ignoreCase bool) StringMatcher {
+	return StringMatcher{
+		suffixMatch: newStrPtr(&suffix, ignoreCase),
+		ignoreCase:  ignoreCase,
+	}
+}
+
+// NewContainsStringMatcher creates a string matcher that requires the input
+// string to contain the pattern specified here. The match will be case
+// insensitive if ignore_case is true.
+func NewContainsStringMatcher(pattern string, ignoreCase bool) StringMatcher {
+	return StringMatcher{
+		containsMatch: newStrPtr(&pattern, ignoreCase),
 		ignoreCase:    ignoreCase,
+	}
+}
+
+// NewRegexStringMatcher creates a string matcher that requires the input string
+// to match the regular expression specified here.
+func NewRegexStringMatcher(regex *regexp.Regexp) StringMatcher {
+	return StringMatcher{
+		regexMatch: regex,
 	}
 }
 
