@@ -121,11 +121,11 @@ func (b *xdsResolverBuilder) Build(target resolver.Target, cc resolver.ClientCon
 		return nil, fmt.Errorf("xds: failed to create xds-client: %v", err)
 	}
 
-	// Determine the listener resource name and start a watcher for it.
 	template, err := sanityChecksOnBootstrapConfig(target, opts, client)
 	if err != nil {
 		return nil, err
 	}
+	ldsResourceName := bootstrap.PopulateResourceTemplate(template, target.Endpoint())
 
 	r := &xdsResolver{
 		cc:              cc,
@@ -133,14 +133,14 @@ func (b *xdsResolverBuilder) Build(target resolver.Target, cc resolver.ClientCon
 		xdsClientClose:  closeFn,
 		activeClusters:  make(map[string]*clusterInfo),
 		channelID:       rand.Uint64(),
-		ldsResourceName: bootstrap.PopulateResourceTemplate(template, target.Endpoint()),
+		ldsResourceName: ldsResourceName,
 	}
 	r.logger = prefixLogger(r)
 	r.logger.Infof("Creating resolver for target: %+v", target)
 
-	// Initialize the serializer used to synchronize the following: - updates
-	// from the dependency manager. This could lead to generation of new
-	//   service config if resolution is complete.
+	// Initialize the serializer used to synchronize the following:
+	// - updates from the dependency manager. This could lead to generation of
+	//   new service config if resolution is complete.
 	// - completion of an RPC to a removed cluster causing the associated ref
 	//   count to become zero, resulting in generation of new service config.
 	// - stopping of a config selector that results in generation of new service
