@@ -88,8 +88,7 @@ type Config struct {
 // ServerConfig contains configuration for an xDS management server.
 type ServerConfig struct {
 	ServerIdentifier clients.ServerIdentifier
-
-	ServerFeature ServerFeature
+	ServerFeature    ServerFeature // ServerFeature stores a bitmap of supported features.
 }
 
 // Authority contains configuration for an xDS control plane authority.
