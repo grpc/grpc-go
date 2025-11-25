@@ -19,9 +19,13 @@ package test
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/binary"
+	"encoding/pem"
 	"io"
 	"net"
+	"os"
 	"sync"
 	"testing"
 
@@ -35,6 +39,7 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/transport"
 	"google.golang.org/grpc/status"
+	"google.golang.org/grpc/testdata"
 
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
@@ -300,5 +305,65 @@ func (s) TestCancelWhileServerWaitingForFlowControl(t *testing.T) {
 	_, err = stream.Recv()
 	if err != nil {
 		t.Fatalf("Failed to read from the stream: %v", err)
+	}
+}
+
+func TestValidateAuthority_SplitHostPort(t *testing.T) {
+	// Load certificate
+	certFile := testdata.Path("x509/server1_cert.pem")
+	b, err := os.ReadFile(certFile)
+	if err != nil {
+		t.Fatalf("os.ReadFile(%q) failed: %v", certFile, err)
+	}
+	block, _ := pem.Decode(b)
+	if block == nil {
+		t.Fatalf("pem.Decode failed")
+	}
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		t.Fatalf("x509.ParseCertificate failed: %v", err)
+	}
+
+	// Create TLSInfo
+	tlsInfo := credentials.TLSInfo{
+		State: tls.ConnectionState{
+			PeerCertificates: []*x509.Certificate{cert},
+		},
+	}
+
+	// Test cases
+	tests := []struct {
+		name      string
+		authority string
+		wantErr   bool
+	}{
+		{
+			name:      "host only",
+			authority: "x.test.example.com",
+			wantErr:   false,
+		},
+		{
+			name:      "host and port",
+			authority: "x.test.example.com:1234",
+			wantErr:   false,
+		},
+		{
+			name:      "host and empty port",
+			authority: "x.test.example.com:",
+			wantErr:   false,
+		},
+		{
+			name:      "invalid host",
+			authority: "invalid",
+			wantErr:   true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := tlsInfo.ValidateAuthority(tt.authority); (err != nil) != tt.wantErr {
+				t.Errorf("ValidateAuthority(%q) error = %v, wantErr %v", tt.authority, err, tt.wantErr)
+			}
+		})
 	}
 }
