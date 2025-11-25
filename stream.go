@@ -184,7 +184,7 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 	// created for both streaming and unary RPCs, and hence is a good place to
 	// track active RPC count.
 	if err := cc.idlenessMgr.OnCallBegin(); err != nil {
-		return nil, err
+		return nil, status.Error(codes.Unavailable, err.Error())
 	}
 	// Add a calloption, to decrement the active call count, that gets executed
 	// when the RPC completes.

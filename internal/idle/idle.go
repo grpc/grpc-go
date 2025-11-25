@@ -248,7 +248,7 @@ func (m *Manager) ExitIdleMode() error {
 	m.resetIdleTimerLocked(m.timeout)
 
 	if err != nil {
-		return fmt.Errorf("failed to exit idle mode: %w", err)
+		return fmt.Errorf("failed to exit idle mode: %v", err)
 	}
 	return nil
 }
