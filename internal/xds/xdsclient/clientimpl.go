@@ -176,8 +176,11 @@ func buildServerConfigs(bootstrapSC []*bootstrap.ServerConfig, grpcTransportConf
 			serverFeatures = serverFeatures | xdsclient.ServerFeatureTrustedXDSServer
 		}
 		gsc := xdsclient.ServerConfig{
-			ServerIdentifier: clients.ServerIdentifier{ServerURI: sc.ServerURI(), Extensions: grpctransport.ServerIdentifierExtension{ConfigName: sc.SelectedChannelCreds().Type}},
-			ServerFeature:    serverFeatures,
+			ServerIdentifier: clients.ServerIdentifier{
+				ServerURI:  sc.ServerURI(),
+				Extensions: grpctransport.ServerIdentifierExtension{ConfigName: sc.SelectedChannelCreds().Type},
+			},
+			ServerFeature: serverFeatures,
 		}
 		gServerCfg = append(gServerCfg, gsc)
 		gServerCfgMap[gsc] = sc
