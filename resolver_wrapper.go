@@ -79,7 +79,6 @@ func (ccr *ccResolverWrapper) start() error {
 			Authority:            ccr.cc.authority,
 			MetricsRecorder:      ccr.cc.metricsRecorderList,
 		}
-
 		var err error
 		// The delegating resolver is used unless:
 		//   - A custom dialer is provided via WithContextDialer dialoption or

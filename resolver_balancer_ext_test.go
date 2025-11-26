@@ -135,7 +135,7 @@ func (s) TestResolverBuildFailure(t *testing.T) {
 
 // Tests the case where the resolver reports an error to the channel before
 // reporting an update. Verifies that the channel eventually moves to
-// TransientFailure and a subsequent RPCs returns the error reported by the
+// TransientFailure and subsequent RPCs returns the error reported by the
 // resolver to the user.
 func (s) TestResolverReportError(t *testing.T) {
 	const resolverErr = "test resolver error"

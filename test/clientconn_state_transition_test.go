@@ -738,12 +738,14 @@ func (s) TestStateTransitions_ResolverBuildFailure(t *testing.T) {
 				// The first attempt to kick the channel is expected to return
 				// the resolver build error to the RPC.
 				const wantErr = "simulated resolver build failure"
-				_, err := testgrpc.NewTestServiceClient(cc).EmptyCall(ctx, &testpb.Empty{})
-				if code := status.Code(err); code != codes.Unavailable {
-					t.Fatalf("EmptyCall RPC failed with code %v, want %v", err, codes.Unavailable)
-				}
-				if err == nil || !strings.Contains(err.Error(), wantErr) {
-					t.Fatalf("EmptyCall RPC failed with error: %q, want %q", err, wantErr)
+				for range 2 {
+					_, err := testgrpc.NewTestServiceClient(cc).EmptyCall(ctx, &testpb.Empty{})
+					if code := status.Code(err); code != codes.Unavailable {
+						t.Fatalf("EmptyCall RPC failed with code %v, want %v", err, codes.Unavailable)
+					}
+					if err == nil || !strings.Contains(err.Error(), wantErr) {
+						t.Fatalf("EmptyCall RPC failed with error: %q, want %q", err, wantErr)
+					}
 				}
 			} else {
 				cc.Connect()
@@ -770,4 +772,57 @@ func (s) TestStateTransitions_ResolverBuildFailure(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Tests for state transitions when the resolver reports no addresses.
+func (s) TestStateTransitions_WithRPC_ResolverUpdateContainsNoAddresses(t *testing.T) {
+	mr := manual.NewBuilderWithScheme("e2e-test")
+	mr.InitialState(resolver.State{})
+	defer mr.Close()
+
+	cc, err := grpc.NewClient(mr.Scheme()+":///", grpc.WithResolvers(mr), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithIdleTimeout(time.Second))
+	if err != nil {
+		t.Fatalf("Failed to create new client: %v", err)
+	}
+	defer cc.Close()
+
+	if state := cc.GetState(); state != connectivity.Idle {
+		t.Fatalf("Expected initial state to be IDLE, got %v", state)
+	}
+
+	// Subscribe to state updates.
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	stateCh := make(chan connectivity.State, 1)
+	s := &funcConnectivityStateSubscriber{
+		onMsg: func(s connectivity.State) {
+			select {
+			case stateCh <- s:
+			case <-ctx.Done():
+			}
+		},
+	}
+	internal.SubscribeToConnectivityStateChanges.(func(cc *grpc.ClientConn, s grpcsync.Subscriber) func())(cc, s)
+
+	// Make an RPC call to transition the channel to CONNECTING.
+	go func() {
+		const wantErr = "name resolver error: produced zero addresses"
+		_, err := testgrpc.NewTestServiceClient(cc).EmptyCall(ctx, &testpb.Empty{})
+		if code := status.Code(err); code != codes.Unavailable {
+			t.Errorf("EmptyCall RPC failed with code %v, want %v", err, codes.Unavailable)
+		}
+		if err == nil || !strings.Contains(err.Error(), wantErr) {
+			t.Errorf("EmptyCall RPC failed with error: %q, want %q", err, wantErr)
+		}
+	}()
+
+	wantStates := []connectivity.State{
+		connectivity.Connecting,       // When channel exits IDLE for the first time.
+		connectivity.TransientFailure, // No endpoints from the resolver
+		connectivity.Idle,             // After idle timeout.
+	}
+	for _, wantState := range wantStates {
+		waitForState(ctx, t, stateCh, wantState)
+	}
+
 }

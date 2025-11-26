@@ -364,12 +364,18 @@ func (cc *ClientConn) exitIdleMode() (err error) {
 	// which might update state or report error inline, which would then need to
 	// acquire cc.mu.
 	if err := cc.resolverWrapper.start(); err != nil {
-		// If resolver creation fails, transition to TransientFailure. For a
-		// channel created with `NewClient`, the error will be returned on the
-		// first RPC. For a channel created with `Dial`, the error will be
-		// returned by `Dial`.
+		// If resolver creation fails, treat it like an error reported by the
+		// resolver before any valid udpates. Set channel's state to
+		// TransientFailure, and set an erroring picker with the resolver build
+		// error. For channels created with `NewClient`, the error will be
+		// returned as part of any subsequent RPCs.  For channels created with
+		// `Dial`, the error will be returned by `Dial`.
 		logger.Warningf("Failed to start resolver: %v", err)
+		defer cc.firstResolveEvent.Fire()
+		cc.maybeApplyDefaultServiceConfig()
+		cc.balancerWrapper.resolverError(err)
 		cc.csMgr.updateState(connectivity.TransientFailure)
+
 		return status.Error(codes.Unavailable, err.Error())
 	}
 
