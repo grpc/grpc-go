@@ -95,7 +95,7 @@ func processClientSideListener(lis *v3listenerpb.Listener) (*ListenerUpdate, err
 		}
 		update.RouteConfigName = name
 	case *v3httppb.HttpConnectionManager_RouteConfig:
-		routeU, err := generateRDSUpdateFromRouteConfiguration(apiLis.GetRouteConfig())
+		routeU, err := generateRDSUpdateFromRouteConfiguration(nil, apiLis.GetRouteConfig())
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse inline RDS resp: %v", err)
 		}

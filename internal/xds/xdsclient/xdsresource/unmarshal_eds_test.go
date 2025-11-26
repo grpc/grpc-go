@@ -130,11 +130,11 @@ func (s) TestEDSParseRespProto(t *testing.T) {
 			name: "good",
 			m: func() *v3endpointpb.ClusterLoadAssignment {
 				clab0 := newClaBuilder("test", nil)
-				clab0.addLocality("locality-1", 1, 1, []endpointOpts{{addrWithPort: "addr1:314"}}, &addLocalityOptions{
+				clab0.addLocality("locality-1", 1, 1, []endpointOpts{{addrWithPort: "addr1:314", hostname: "addr1"}}, &addLocalityOptions{
 					Health: []v3corepb.HealthStatus{v3corepb.HealthStatus_UNHEALTHY},
 					Weight: []uint32{271},
 				})
-				clab0.addLocality("locality-2", 1, 0, []endpointOpts{{addrWithPort: "addr2:159"}}, &addLocalityOptions{
+				clab0.addLocality("locality-2", 1, 0, []endpointOpts{{addrWithPort: "addr2:159", hostname: "addr2"}}, &addLocalityOptions{
 					Health: []v3corepb.HealthStatus{v3corepb.HealthStatus_DRAINING},
 					Weight: []uint32{828},
 				})
@@ -148,6 +148,7 @@ func (s) TestEDSParseRespProto(t *testing.T) {
 							Addresses:    []string{"addr1:314"},
 							HealthStatus: EndpointHealthStatusUnhealthy,
 							Weight:       271,
+							Hostname:     "addr1",
 						}},
 						ID:       clients.Locality{SubZone: "locality-1"},
 						Priority: 1,
@@ -158,6 +159,7 @@ func (s) TestEDSParseRespProto(t *testing.T) {
 							Addresses:    []string{"addr2:159"},
 							HealthStatus: EndpointHealthStatusDraining,
 							Weight:       828,
+							Hostname:     "addr2",
 						}},
 						ID:       clients.Locality{SubZone: "locality-2"},
 						Priority: 0,
@@ -171,12 +173,12 @@ func (s) TestEDSParseRespProto(t *testing.T) {
 			name: "good duplicate locality with different priority",
 			m: func() *v3endpointpb.ClusterLoadAssignment {
 				clab0 := newClaBuilder("test", nil)
-				clab0.addLocality("locality-1", 1, 1, []endpointOpts{{addrWithPort: "addr1:314"}}, &addLocalityOptions{
+				clab0.addLocality("locality-1", 1, 1, []endpointOpts{{addrWithPort: "addr1:314", hostname: "addr1"}}, &addLocalityOptions{
 					Health: []v3corepb.HealthStatus{v3corepb.HealthStatus_UNHEALTHY},
 					Weight: []uint32{271},
 				})
 				// Same locality name, but with different priority.
-				clab0.addLocality("locality-1", 1, 0, []endpointOpts{{addrWithPort: "addr2:159"}}, &addLocalityOptions{
+				clab0.addLocality("locality-1", 1, 0, []endpointOpts{{addrWithPort: "addr2:159", hostname: "addr2"}}, &addLocalityOptions{
 					Health: []v3corepb.HealthStatus{v3corepb.HealthStatus_DRAINING},
 					Weight: []uint32{828},
 				})
@@ -190,6 +192,7 @@ func (s) TestEDSParseRespProto(t *testing.T) {
 							Addresses:    []string{"addr1:314"},
 							HealthStatus: EndpointHealthStatusUnhealthy,
 							Weight:       271,
+							Hostname:     "addr1",
 						}},
 						ID:       clients.Locality{SubZone: "locality-1"},
 						Priority: 1,
@@ -200,6 +203,7 @@ func (s) TestEDSParseRespProto(t *testing.T) {
 							Addresses:    []string{"addr2:159"},
 							HealthStatus: EndpointHealthStatusDraining,
 							Weight:       828,
+							Hostname:     "addr2",
 						}},
 						ID:       clients.Locality{SubZone: "locality-1"},
 						Priority: 0,
@@ -466,11 +470,11 @@ func (s) TestUnmarshalEndpoints(t *testing.T) {
 	testutils.SetEnvConfig(t, &envconfig.XDSHTTPConnectEnabled, true)
 	var v3EndpointsAny = testutils.MarshalAny(t, func() *v3endpointpb.ClusterLoadAssignment {
 		clab0 := newClaBuilder("test", nil)
-		clab0.addLocality("locality-1", 1, 1, []endpointOpts{{addrWithPort: "addr1:314"}}, &addLocalityOptions{
+		clab0.addLocality("locality-1", 1, 1, []endpointOpts{{addrWithPort: "addr1:314", hostname: "addr1"}}, &addLocalityOptions{
 			Health: []v3corepb.HealthStatus{v3corepb.HealthStatus_UNHEALTHY},
 			Weight: []uint32{271},
 		})
-		clab0.addLocality("locality-2", 1, 0, []endpointOpts{{addrWithPort: "addr2:159"}}, &addLocalityOptions{
+		clab0.addLocality("locality-2", 1, 0, []endpointOpts{{addrWithPort: "addr2:159", hostname: "addr2"}}, &addLocalityOptions{
 			Health: []v3corepb.HealthStatus{v3corepb.HealthStatus_DRAINING},
 			Weight: []uint32{828},
 		})
@@ -520,6 +524,7 @@ func (s) TestUnmarshalEndpoints(t *testing.T) {
 							Addresses:    []string{"addr1:314"},
 							HealthStatus: EndpointHealthStatusUnhealthy,
 							Weight:       271,
+							Hostname:     "addr1",
 						}},
 						ID:       clients.Locality{SubZone: "locality-1"},
 						Priority: 1,
@@ -530,6 +535,7 @@ func (s) TestUnmarshalEndpoints(t *testing.T) {
 							Addresses:    []string{"addr2:159"},
 							HealthStatus: EndpointHealthStatusDraining,
 							Weight:       828,
+							Hostname:     "addr2",
 						}},
 						ID:       clients.Locality{SubZone: "locality-2"},
 						Priority: 0,
@@ -551,6 +557,7 @@ func (s) TestUnmarshalEndpoints(t *testing.T) {
 							Addresses:    []string{"addr1:314"},
 							HealthStatus: EndpointHealthStatusUnhealthy,
 							Weight:       271,
+							Hostname:     "addr1",
 						}},
 						ID:       clients.Locality{SubZone: "locality-1"},
 						Priority: 1,
@@ -561,6 +568,7 @@ func (s) TestUnmarshalEndpoints(t *testing.T) {
 							Addresses:    []string{"addr2:159"},
 							HealthStatus: EndpointHealthStatusDraining,
 							Weight:       828,
+							Hostname:     "addr2",
 						}},
 						ID:       clients.Locality{SubZone: "locality-2"},
 						Priority: 0,
@@ -1382,6 +1390,7 @@ type endpointOpts struct {
 	addrWithPort            string
 	additionalAddrWithPorts []string
 	metadata                *v3corepb.Metadata
+	hostname                string
 }
 
 func addressFromStr(addrWithPort string) *v3corepb.Address {
@@ -1420,6 +1429,7 @@ func (clab *claBuilder) addLocality(subzone string, weight uint32, priority uint
 				Endpoint: &v3endpointpb.Endpoint{
 					Address:             addressFromStr(e.addrWithPort),
 					AdditionalAddresses: additionalAddrs,
+					Hostname:            e.hostname,
 				},
 			},
 			Metadata: e.metadata,

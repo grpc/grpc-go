@@ -37,8 +37,8 @@ type routeConfigResourceDecoder struct {
 	bootstrapConfig *bootstrap.Config
 }
 
-func (d *routeConfigResourceDecoder) Decode(resource *xdsclient.AnyProto, _ xdsclient.DecodeOptions) (*xdsclient.DecodeResult, error) {
-	name, rc, err := unmarshalRouteConfigResource(resource.ToAny())
+func (d *routeConfigResourceDecoder) Decode(resource *xdsclient.AnyProto, opts xdsclient.DecodeOptions) (*xdsclient.DecodeResult, error) {
+	name, rc, err := unmarshalRouteConfigResource(&opts, resource.ToAny())
 	if name == "" {
 		// Name is unset only when protobuf deserialization fails.
 		return nil, err
