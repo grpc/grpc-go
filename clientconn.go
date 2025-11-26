@@ -375,8 +375,7 @@ func (cc *ClientConn) exitIdleMode() (err error) {
 		cc.maybeApplyDefaultServiceConfig()
 		cc.balancerWrapper.resolverError(err)
 		cc.csMgr.updateState(connectivity.TransientFailure)
-
-		return status.Error(codes.Unavailable, err.Error())
+		return err
 	}
 
 	cc.addTraceEvent("exiting idle mode")
