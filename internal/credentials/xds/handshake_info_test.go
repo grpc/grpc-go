@@ -202,7 +202,7 @@ func TestMatchingSANExists_FailureCases(t *testing.T) {
 			desc: "contains match",
 			sanMatchers: []matcher.StringMatcher{
 				matcher.NewContainsStringMatcher("i-aint-the-one", false),
-				matcher.NewContainsStringMatcher("2001::db8:1:1::68", false),
+				matcher.NewContainsStringMatcher("2001:db8:1:1::68", false),
 				matcher.NewContainsStringMatcher("GRPC", false),
 			},
 		},
