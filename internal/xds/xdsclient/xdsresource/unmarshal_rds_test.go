@@ -29,8 +29,10 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/internal/testutils"
+	"google.golang.org/grpc/internal/xds/clients/xdsclient"
 	"google.golang.org/grpc/internal/xds/clusterspecifier"
 	"google.golang.org/grpc/internal/xds/httpfilter"
 	"google.golang.org/grpc/internal/xds/matcher"
@@ -710,13 +712,102 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			gotUpdate, gotError := generateRDSUpdateFromRouteConfiguration(test.rc)
+			gotUpdate, gotError := generateRDSUpdateFromRouteConfiguration(nil, test.rc)
 			if (gotError != nil) != test.wantError ||
 				!cmp.Equal(gotUpdate, test.wantUpdate, cmpopts.EquateEmpty(),
 					cmp.Transformer("FilterConfig", func(fc httpfilter.FilterConfig) string {
 						return fmt.Sprint(fc)
 					})) {
 				t.Errorf("generateRDSUpdateFromRouteConfiguration(%+v, %v) returned unexpected, diff (-want +got):\\n%s", test.rc, ldsTarget, cmp.Diff(test.wantUpdate, gotUpdate, cmpopts.EquateEmpty()))
+			}
+		})
+	}
+}
+
+func (s) TestGenerateRDSUpdateFromRouteConfigurationWithAutoHostRewrite(t *testing.T) {
+	const (
+		clusterName = "clusterName"
+		ldsTarget   = "lds.target.good:1111"
+	)
+
+	buildRouteConfig := func() *v3routepb.RouteConfiguration {
+		return &v3routepb.RouteConfiguration{
+			Name: "routeName",
+			VirtualHosts: []*v3routepb.VirtualHost{{
+				Domains: []string{ldsTarget},
+				Routes: []*v3routepb.Route{{
+					Match: &v3routepb.RouteMatch{PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"}},
+					Action: &v3routepb.Route_Route{
+						Route: &v3routepb.RouteAction{
+							ClusterSpecifier:     &v3routepb.RouteAction_Cluster{Cluster: clusterName},
+							HostRewriteSpecifier: &v3routepb.RouteAction_AutoHostRewrite{AutoHostRewrite: &wrapperspb.BoolValue{Value: true}},
+						},
+					},
+				}},
+			}},
+		}
+	}
+
+	tests := []struct {
+		name             string
+		isTrusted        bool // Corresponds to ServerConfig
+		envConfigRewrite bool // Corresponds to envconfig.XDSAuthorityRewrite
+		wantResult       bool
+	}{
+		{
+			name:             "envConfigOn_Trusted",
+			isTrusted:        true,
+			envConfigRewrite: true,
+			wantResult:       true,
+		},
+		{
+			name:             "envConfigOff_Trusted",
+			isTrusted:        true,
+			envConfigRewrite: false,
+			wantResult:       false,
+		},
+		{
+			name:             "envConfigOn_Untrusted",
+			isTrusted:        false,
+			envConfigRewrite: true,
+			wantResult:       false,
+		},
+		{
+			name:             "envConfigOff_Untrusted",
+			isTrusted:        false,
+			envConfigRewrite: false,
+			wantResult:       false,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			testutils.SetEnvConfig(t, &envconfig.XDSAuthorityRewrite, test.envConfigRewrite)
+
+			var serverFeature xdsclient.ServerFeature
+			if test.isTrusted {
+				serverFeature = xdsclient.ServerFeatureTrustedXDSServer
+			}
+
+			opts := &xdsclient.DecodeOptions{
+				ServerConfig: &xdsclient.ServerConfig{
+					ServerFeature: serverFeature,
+				},
+			}
+
+			update, err := generateRDSUpdateFromRouteConfiguration(opts, buildRouteConfig())
+			if err != nil {
+				t.Errorf("generateRDSUpdateFromRouteConfiguration() failed, got : %v, want: <nil>", err)
+			}
+
+			if len(update.VirtualHosts) == 0 || len(update.VirtualHosts[0].Routes) == 0 {
+				t.Errorf("Unexpected parsed routes from generateRDSUpdateFromRouteConfiguration(), got : 0, want: 1")
+			}
+
+			got := update.VirtualHosts[0].Routes[0].AutoHostRewrite
+
+			if got != test.wantResult {
+				t.Errorf("AutoHostRewrite = %v, want %v", got, test.wantResult)
 			}
 		})
 	}
@@ -874,7 +965,7 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			name, update, err := unmarshalRouteConfigResource(test.resource)
+			name, update, err := unmarshalRouteConfigResource(nil, test.resource)
 			if (err != nil) != test.wantErr {
 				t.Errorf("unmarshalRouteConfigResource(%s), got err: %v, wantErr: %v", pretty.ToJSON(test.resource), err, test.wantErr)
 			}
@@ -1505,7 +1596,7 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, _, err := routesProtoToSlice(tt.routes, nil)
+			got, _, err := routesProtoToSlice(nil, tt.routes, nil)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("routesProtoToSlice() error = %v, wantErr %v", err, tt.wantErr)
 			}
