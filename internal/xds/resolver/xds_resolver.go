@@ -128,6 +128,7 @@ func (b *xdsResolverBuilder) Build(target resolver.Target, cc resolver.ClientCon
 	}
 	ldsResourceName := bootstrap.PopulateResourceTemplate(template, target.Endpoint())
 
+	ctx, cancel := context.WithCancel(context.Background())
 	r := &xdsResolver{
 		cc:              cc,
 		xdsClient:       client,
@@ -135,20 +136,20 @@ func (b *xdsResolverBuilder) Build(target resolver.Target, cc resolver.ClientCon
 		activeClusters:  make(map[string]*clusterInfo),
 		channelID:       rand.Uint64(),
 		ldsResourceName: ldsResourceName,
+
+		// serializer used to synchronize the following:
+		// - updates from the dependency manager. This could lead to generation
+		// of new service config if resolution is complete.
+		// - completion of an RPC to a removed cluster causing the associated
+		// ref count to become zero, resulting in generation of new service
+		// config.
+		// - stopping of a config selector that results in generation of new
+		// service config.
+		serializer:       grpcsync.NewCallbackSerializer(ctx),
+		serializerCancel: cancel,
 	}
 	r.logger = prefixLogger(r)
 	r.logger.Infof("Creating resolver for target: %+v", target)
-
-	// Initialize the serializer used to synchronize the following:
-	// - updates from the dependency manager. This could lead to generation of
-	//   new service config if resolution is complete.
-	// - completion of an RPC to a removed cluster causing the associated ref
-	//   count to become zero, resulting in generation of new service config.
-	// - stopping of a config selector that results in generation of new service
-	//   config.
-	ctx, cancel := context.WithCancel(context.Background())
-	r.serializer = grpcsync.NewCallbackSerializer(ctx)
-	r.serializerCancel = cancel
 	r.dm = xdsdepmgr.New(r.ldsResourceName, opts.Authority, r.xdsClient, r)
 	return r, nil
 }
@@ -209,17 +210,14 @@ type xdsResolver struct {
 	logger          *grpclog.PrefixLogger
 	ldsResourceName string
 	dm              *xdsdepmgr.DependencyManager
-	// The underlying xdsClient which performs all xDS requests and responses.
-	xdsClient      xdsclient.XDSClient
-	xdsClientClose func()
-	// A random number which uniquely identifies the channel which owns this
-	// resolver.
-	channelID uint64
+	xdsClient       xdsclient.XDSClient
+	xdsClientClose  func()
+	channelID       uint64 // Unique random ID for the channel owning this resolver.
 	// All methods on the xdsResolver type except for the ones invoked by gRPC,
 	// i.e ResolveNow() and Close(), are guaranteed to execute in the context of
 	// this serializer's callback. We use the serializer because these shared
-	// states are accessed by each RPC when it is committed,, and so
-	// serializeris preffered over a mutex.
+	// states are accessed by each RPC when it is committed, and so
+	// serializer is preffered over a mutex.
 	serializer       *grpcsync.CallbackSerializer
 	serializerCancel context.CancelFunc
 
