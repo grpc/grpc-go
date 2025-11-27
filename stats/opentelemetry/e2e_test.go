@@ -164,7 +164,12 @@ func waitForTraceSpans(ctx context.Context, exporter *tracetest.InMemoryExporter
 		missingAnySpan := false
 		for _, wantSpan := range wantSpans {
 			if !slices.ContainsFunc(spans, func(span tracetest.SpanStub) bool {
-				return span.Name == wantSpan.name && span.SpanKind.String() == wantSpan.spanKind
+				// Check both name/kind match AND that the span has ended (is complete).
+				// An ended span has a non-zero EndTime, indicating all events and
+				// status have been recorded.
+				return span.Name == wantSpan.name &&
+					span.SpanKind.String() == wantSpan.spanKind &&
+					!span.EndTime.IsZero()
 			}) {
 				missingAnySpan = true
 			}
