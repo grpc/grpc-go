@@ -121,7 +121,7 @@ func (b *xdsResolverBuilder) Build(target resolver.Target, cc resolver.ClientCon
 		return nil, fmt.Errorf("xds: failed to create xds-client: %v", err)
 	}
 
-	template, err := sanityChecksOnBootstrapConfig(target, opts, client)
+	template, err := sanityChecksOnBootstrapConfig(target, client)
 	if err != nil {
 		xdsClientClose()
 		return nil, err
@@ -163,7 +163,7 @@ func (b *xdsResolverBuilder) Build(target resolver.Target, cc resolver.ClientCon
 //
 // Returns the listener resource name template to use. If any of the above
 // validations fail, a non-nil error is returned.
-func sanityChecksOnBootstrapConfig(target resolver.Target, _ resolver.BuildOptions, client xdsclient.XDSClient) (string, error) {
+func sanityChecksOnBootstrapConfig(target resolver.Target, client xdsclient.XDSClient) (string, error) {
 	bootstrapConfig := client.BootstrapConfig()
 	if bootstrapConfig == nil {
 		// This is never expected to happen after a successful xDS client

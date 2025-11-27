@@ -286,6 +286,65 @@ func (s) TestResolverCloseClosesXDSClient(t *testing.T) {
 	}
 }
 
+// Tests the case where there is no virtual host in the route configuration
+// matches the dataplane authority. Verifies that the resolver returns the
+// correct error.
+func (s) TestNoMatchingVirtualHost(t *testing.T) {
+	// Spin up an xDS management server for the test.
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	nodeID := uuid.New().String()
+	mgmtServer, _, _, bc := setupManagementServerForTest(t, nodeID)
+
+	// Configure route resource with no virtual host so that it does not match the authority.
+	listener := e2e.DefaultClientListener(defaultTestServiceName, defaultTestRouteConfigName)
+	route := e2e.DefaultRouteConfig(defaultTestRouteConfigName, defaultTestServiceName, defaultTestClusterName)
+	route.VirtualHosts = nil
+	configureResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, []*v3listenerpb.Listener{listener}, []*v3routepb.RouteConfiguration{route})
+
+	// Build the resolver inline (duplicating buildResolverForTarget internals)
+	// to avoid issues with blocked channel writes when NACKs occur.
+	target := resolver.Target{URL: *testutils.MustParseURL("xds:///" + defaultTestServiceName)}
+
+	// Create an xDS resolver with the provided bootstrap configuration.
+	if internal.NewXDSResolverWithConfigForTesting == nil {
+		t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
+	}
+
+	builder, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
+	if err != nil {
+		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
+	}
+
+	errCh := testutils.NewChannel()
+	tcc := &testutils.ResolverClientConn{Logger: t, ReportErrorF: func(err error) { errCh.Replace(err) }}
+	r, err := builder.Build(target, tcc, resolver.BuildOptions{
+		Authority: url.PathEscape(target.Endpoint()),
+	})
+	if err != nil {
+		t.Fatalf("Failed to build xDS resolver for target %q: %v", target, err)
+	}
+	defer r.Close()
+
+	// Wait for and verify the error update from the resolver.
+	// Since the resource is not cached, it should be received as resource error.
+	select {
+	case <-ctx.Done():
+		t.Fatalf("Timeout waiting for error to be propagated to the ClientConn")
+	case gotErr := <-errCh.C:
+		if gotErr == nil {
+			t.Fatalf("got nil error from resolver, want error containing 'could not find VirtualHost'")
+		}
+		errStr := fmt.Sprint(gotErr)
+		if !strings.Contains(errStr, fmt.Sprintf("could not find VirtualHost for %q", defaultTestServiceName)) {
+			t.Fatalf("got error from resolver %q, want error containing 'could not find VirtualHost for %q'", errStr, defaultTestServiceName)
+		}
+		if !strings.Contains(errStr, nodeID) {
+			t.Fatalf("got error from resolver %q, want nodeID %q", errStr, nodeID)
+		}
+	}
+}
+
 // Tests the case where a resource, not present in cache, returned by the
 // management server is NACKed by the xDS client, which then returns an update
 // containing a resource error to the resolver. It tests the case where the
@@ -359,14 +418,12 @@ func (s) TestResolverBadServiceUpdate_NACKedWithoutCache(t *testing.T) {
 	}
 }
 
-// Tests the case where a resource, present in cache, returned by the
-// management server is NACKed by the xDS client, which then returns
-// an update containing an ambient error to the resolver. Verifies that the
-// update is propagated to the ClientConn by the resolver. It tests the
-// case where the resolver gets a good update first, and an error
-// after the good update. The test also verifies that these are propagated to
-// the ClientConn and that RPC succeeds as expected after receiving good update
-// as well as ambient error.
+// Tests the case where a resource, present in cache, returned by the management
+// server is NACKed by the xDS client, which then returns an update containing
+// an ambient error to the resolver. It tests the case where the resolver gets a
+// good update first, and an error after the good update. The test verifies that
+// the RPCs succeeds as expected after receiving good update as well as ambient
+// error.
 func (s) TestResolverBadServiceUpdate_NACKedWithCache(t *testing.T) {
 	// Spin up an xDS management server for the test.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -408,8 +465,8 @@ func (s) TestResolverBadServiceUpdate_NACKedWithCache(t *testing.T) {
 		}},
 	}
 
-	// Expect an error update from the resolver. Since the resource is cached,
-	// it should be received as an ambient error.
+	// Since the resource is cached, it should be received as an ambient error
+	// and so the RPCs should continue passing.
 	configureResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, []*v3listenerpb.Listener{lis}, nil)
 
 	// "Make an RPC" by invoking the config selector which should succeed by
