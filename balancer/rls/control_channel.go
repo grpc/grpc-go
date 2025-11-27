@@ -44,6 +44,16 @@ type adaptiveThrottler interface {
 	RegisterBackendResponse(throttled bool)
 }
 
+// newConnectivityStateSubscriber is a variable that can be overridden in tests
+// to wrap the connectivity state subscriber for testing purposes.
+var newConnectivityStateSubscriber = connStateSubscriber
+
+// connStateSubscriber returns the subscriber as-is. This function can be
+// overridden in tests to wrap the subscriber.
+func connStateSubscriber(sub grpcsync.Subscriber) grpcsync.Subscriber {
+	return sub
+}
+
 // controlChannel is a wrapper around the gRPC channel to the RLS server
 // specified in the service config.
 type controlChannel struct {
@@ -57,12 +67,14 @@ type controlChannel struct {
 	// hammering the RLS service while it is overloaded or down.
 	throttler adaptiveThrottler
 
-	cc                   *grpc.ClientConn
-	client               rlsgrpc.RouteLookupServiceClient
-	logger               *internalgrpclog.PrefixLogger
-	unsubscribe          func()
-	seenTransientFailure bool
+	cc          *grpc.ClientConn
+	client      rlsgrpc.RouteLookupServiceClient
+	logger      *internalgrpclog.PrefixLogger
+	unsubscribe func()
+
+	// All fields below are guarded by mu.
 	mu                   sync.Mutex
+	seenTransientFailure bool
 }
 
 // newControlChannel creates a controlChannel to rlsServerName and uses
@@ -86,7 +98,7 @@ func newControlChannel(rlsServerName, serviceConfig string, rpcTimeout time.Dura
 	}
 	// Subscribe to connectivity state before connecting to avoid missing initial
 	// updates, which are only delivered to active subscribers.
-	ctrlCh.unsubscribe = internal.SubscribeToConnectivityStateChanges.(func(cc *grpc.ClientConn, s grpcsync.Subscriber) func())(ctrlCh.cc, ctrlCh)
+	ctrlCh.unsubscribe = internal.SubscribeToConnectivityStateChanges.(func(cc *grpc.ClientConn, s grpcsync.Subscriber) func())(ctrlCh.cc, newConnectivityStateSubscriber(ctrlCh))
 	ctrlCh.cc.Connect()
 	ctrlCh.client = rlsgrpc.NewRouteLookupServiceClient(ctrlCh.cc)
 	ctrlCh.logger.Infof("Control channel created to RLS server at: %v", rlsServerName)
@@ -110,13 +122,17 @@ func (cc *controlChannel) OnMessage(msg any) {
 		// proceed immediately. We skip benign transitions like READY → IDLE → READY
 		// since those don't represent actual failures.
 		if cc.seenTransientFailure {
-			cc.logger.Infof("Control channel back to READY after TRANSIENT_FAILURE")
+			if cc.logger.V(2) {
+				cc.logger.Infof("Control channel back to READY after TRANSIENT_FAILURE")
+			}
 			cc.seenTransientFailure = false
 			if cc.backToReadyFunc != nil {
 				cc.backToReadyFunc()
 			}
 		} else {
-			cc.logger.Infof("Control channel is READY")
+			if cc.logger.V(2) {
+				cc.logger.Infof("Control channel is READY")
+			}
 		}
 	case connectivity.TransientFailure:
 		// Track that we've entered TRANSIENT_FAILURE state so we know to reset
@@ -124,7 +140,9 @@ func (cc *controlChannel) OnMessage(msg any) {
 		cc.logger.Warningf("Control channel is TRANSIENT_FAILURE")
 		cc.seenTransientFailure = true
 	default:
-		cc.logger.Infof("Control channel connectivity state is %s", st)
+		if cc.logger.V(2) {
+			cc.logger.Infof("Control channel connectivity state is %s", st)
+		}
 	}
 }
 

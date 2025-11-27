@@ -37,7 +37,9 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/internal/grpcsync"
 	rlspb "google.golang.org/grpc/internal/proto/grpc_lookup_v1"
+	"google.golang.org/grpc/internal/testutils"
 	rlstest "google.golang.org/grpc/internal/testutils/rls"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -466,123 +468,256 @@ func (s) TestNewControlChannelUnsupportedCredsBundle(t *testing.T) {
 	}
 }
 
-// TestControlChannelConnectivityStateTransitions verifies that the control
-// channel only resets backoff when recovering from TRANSIENT_FAILURE, not
-// when going through benign state changes like READY → IDLE → READY.
-func (s) TestControlChannelConnectivityStateTransitions(t *testing.T) {
-	tests := []struct {
-		name              string
-		description       string
-		states            []connectivity.State
-		wantCallbackCount int
-	}{
-		{
-			name:        "ready_after_transient_failure",
-			description: "ready after transient failure triggers callback to reset the timer.",
-			states: []connectivity.State{
-				connectivity.TransientFailure,
-				connectivity.Ready,
-			},
-			wantCallbackCount: 1,
-		},
-		{
-			name:        "ready_after_idle",
-			description: "ready after idle does not trigger callback",
-			states: []connectivity.State{
-				connectivity.Idle,
-				connectivity.Ready,
-			},
-			wantCallbackCount: 0,
-		},
-		{
-			name:        "multiple_failures",
-			description: "multiple failures trigger callback each time",
-			states: []connectivity.State{
-				connectivity.TransientFailure,
-				connectivity.Ready,
-				connectivity.TransientFailure,
-				connectivity.Ready,
-			},
-			wantCallbackCount: 2,
-		},
-		{
-			name:        "idle_between_failures",
-			description: "idle between failures doesn't affect callback",
-			states: []connectivity.State{
-				connectivity.TransientFailure,
-				connectivity.Idle,
-				connectivity.Ready,
-			},
-			wantCallbackCount: 1,
-		},
+// wrappingConnectivityStateSubscriber wraps a connectivity state subscriber
+// and exposes state changes to tests via a channel.
+type wrappingConnectivityStateSubscriber struct {
+	delegate    grpcsync.Subscriber
+	connStateCh chan connectivity.State
+}
+
+func (w *wrappingConnectivityStateSubscriber) OnMessage(msg any) {
+	w.delegate.OnMessage(msg)
+	w.connStateCh <- msg.(connectivity.State)
+}
+
+// TestControlChannelConnectivityStateTransitions_TransientFailure verifies that
+// the control channel resets backoff when recovering from TRANSIENT_FAILURE.
+// It stops the RLS server to trigger TRANSIENT_FAILURE, then restarts it and
+// verifies that backoff is reset when the channel becomes READY again.
+func (s) TestControlChannelConnectivityStateTransitions_TransientFailure(t *testing.T) {
+	// Create a restartable listener for the RLS server.
+	l, err := testutils.LocalTCPListener()
+	if err != nil {
+		t.Fatalf("net.Listen() failed: %v", err)
+	}
+	lis := testutils.NewRestartableListener(l)
+
+	// Start an RLS server with the restartable listener.
+	rlsServer, _ := rlstest.SetupFakeRLSServer(t, lis)
+
+	// Override the connectivity state subscriber to wrap it for testing.
+	wrappedSubscriber := &wrappingConnectivityStateSubscriber{connStateCh: make(chan connectivity.State, 10)}
+	origConnectivityStateSubscriber := newConnectivityStateSubscriber
+	newConnectivityStateSubscriber = func(delegate grpcsync.Subscriber) grpcsync.Subscriber {
+		wrappedSubscriber.delegate = delegate
+		return wrappedSubscriber
+	}
+	defer func() { newConnectivityStateSubscriber = origConnectivityStateSubscriber }()
+
+	// Setup callback to track invocations.
+	var mu sync.Mutex
+	var callbackCount int
+	callback := func() {
+		mu.Lock()
+		callbackCount++
+		mu.Unlock()
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Start an RLS server
-			rlsServer, _ := rlstest.SetupFakeRLSServer(t, nil)
+	// Create control channel.
+	ctrlCh, err := newControlChannel(rlsServer.Address, "", defaultTestTimeout, balancer.BuildOptions{}, callback)
+	if err != nil {
+		t.Fatalf("Failed to create control channel: %v", err)
+	}
+	defer ctrlCh.close()
 
-			// Setup callback to count invocations
-			var mu sync.Mutex
-			var callbackCount int
-			// Buffered channel large enough to never block
-			callbackInvoked := make(chan struct{}, 100)
-			callback := func() {
-				mu.Lock()
-				callbackCount++
-				mu.Unlock()
-				// Send to channel - should never block with large buffer
-				callbackInvoked <- struct{}{}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	// Verify that the control channel moves to READY.
+	wantStates := []connectivity.State{
+		connectivity.Connecting,
+		connectivity.Ready,
+	}
+	for _, wantState := range wantStates {
+		select {
+		case gotState := <-wrappedSubscriber.connStateCh:
+			if gotState != wantState {
+				t.Fatalf("Unexpected connectivity state: got %v, want %v", gotState, wantState)
 			}
+		case <-ctx.Done():
+			t.Fatalf("Timeout waiting for RLS control channel to become %q", wantState)
+		}
+	}
 
-			// Create control channel
-			ctrlCh, err := newControlChannel(rlsServer.Address, "", defaultTestTimeout, balancer.BuildOptions{}, callback)
-			if err != nil {
-				t.Fatalf("Failed to create control channel: %v", err)
+	// Verify no callbacks have been invoked yet (initial READY doesn't trigger callback).
+	mu.Lock()
+	if callbackCount != 0 {
+		mu.Unlock()
+		t.Fatalf("Got %d callback invocations for initial READY, want 0", callbackCount)
+	}
+	mu.Unlock()
+
+	// Stop the RLS server to trigger TRANSIENT_FAILURE.
+	lis.Stop()
+
+	// Verify that the control channel moves to IDLE.
+	wantStates = []connectivity.State{
+		connectivity.Idle,
+	}
+	for _, wantState := range wantStates {
+		select {
+		case gotState := <-wrappedSubscriber.connStateCh:
+			if gotState != wantState {
+				t.Fatalf("Unexpected connectivity state: got %v, want %v", gotState, wantState)
 			}
-			defer ctrlCh.close()
+		case <-ctx.Done():
+			t.Fatalf("Timeout waiting for RLS control channel to become %q", wantState)
+		}
+	}
 
-			// Inject all test states
-			for _, state := range tt.states {
-				ctrlCh.OnMessage(state)
+	// Trigger a reconnection attempt by making a lookup (which will fail).
+	// This should cause the channel to attempt to reconnect and move to TRANSIENT_FAILURE.
+	ctrlCh.lookup(nil, rlspb.RouteLookupRequest_REASON_MISS, "", func(_ []string, _ string, _ error) {})
+
+	// Verify that the control channel moves to TRANSIENT_FAILURE.
+	wantStates = []connectivity.State{
+		connectivity.Connecting,
+		connectivity.TransientFailure,
+	}
+	for _, wantState := range wantStates {
+		select {
+		case gotState := <-wrappedSubscriber.connStateCh:
+			if gotState != wantState {
+				t.Fatalf("Unexpected connectivity state: got %v, want %v", gotState, wantState)
 			}
+		case <-ctx.Done():
+			t.Fatalf("Timeout waiting for RLS control channel to become %q", wantState)
+		}
+	}
 
-			// Wait for all expected callbacks with timeout
-			callbackTimeout := time.NewTimer(defaultTestTimeout)
-			defer callbackTimeout.Stop()
+	// Restart the RLS server.
+	lis.Restart()
 
-			receivedCallbacks := 0
-			for receivedCallbacks < tt.wantCallbackCount {
-				select {
-				case <-callbackInvoked:
-					receivedCallbacks++
-				case <-callbackTimeout.C:
-					mu.Lock()
-					got := callbackCount
-					mu.Unlock()
-					t.Fatalf("Timeout waiting for callbacks: expected %d, received %d via channel, callback count is %d", tt.wantCallbackCount, receivedCallbacks, got)
-				}
+	// The control channel should eventually reconnect and move to READY.
+	// This transition from TRANSIENT_FAILURE → READY should trigger the callback.
+	// We drain states until we see READY, as the channel may go through intermediate
+	// states (CONNECTING) very quickly after restart.
+	for {
+		select {
+		case gotState := <-wrappedSubscriber.connStateCh:
+			if gotState == connectivity.Ready {
+				goto ready
 			}
+		case <-ctx.Done():
+			t.Fatalf("Timeout waiting for RLS control channel to become READY")
+		}
+	}
+ready:
 
-			// Verify final callback count matches expected
-			mu.Lock()
-			gotCallbackCount := callbackCount
-			mu.Unlock()
+	// Verify that the callback was invoked exactly once (for TRANSIENT_FAILURE → READY).
+	mu.Lock()
+	got := callbackCount
+	mu.Unlock()
+	if got != 1 {
+		t.Fatalf("Got %d callback invocations, want 1", got)
+	}
+}
 
-			if gotCallbackCount != tt.wantCallbackCount {
-				t.Errorf("Got %d callback invocations, want %d", gotCallbackCount, tt.wantCallbackCount)
+// TestControlChannelConnectivityStateTransitions_IdleDoesNotTriggerCallback
+// verifies that IDLE → READY transitions do not trigger backoff reset callbacks.
+func (s) TestControlChannelConnectivityStateTransitions_IdleDoesNotTriggerCallback(t *testing.T) {
+	// Create a restartable listener for the RLS server.
+	l, err := testutils.LocalTCPListener()
+	if err != nil {
+		t.Fatalf("net.Listen() failed: %v", err)
+	}
+	lis := testutils.NewRestartableListener(l)
+
+	// Start an RLS server with the restartable listener.
+	rlsServer, _ := rlstest.SetupFakeRLSServer(t, lis)
+
+	// Override the connectivity state subscriber to wrap it for testing.
+	wrappedSubscriber := &wrappingConnectivityStateSubscriber{connStateCh: make(chan connectivity.State, 10)}
+	origConnectivityStateSubscriber := newConnectivityStateSubscriber
+	newConnectivityStateSubscriber = func(delegate grpcsync.Subscriber) grpcsync.Subscriber {
+		wrappedSubscriber.delegate = delegate
+		return wrappedSubscriber
+	}
+	defer func() { newConnectivityStateSubscriber = origConnectivityStateSubscriber }()
+
+	// Setup callback to track invocations.
+	var mu sync.Mutex
+	var callbackCount int
+	callback := func() {
+		mu.Lock()
+		callbackCount++
+		mu.Unlock()
+	}
+
+	// Create control channel.
+	ctrlCh, err := newControlChannel(rlsServer.Address, "", defaultTestTimeout, balancer.BuildOptions{}, callback)
+	if err != nil {
+		t.Fatalf("Failed to create control channel: %v", err)
+	}
+	defer ctrlCh.close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	// Verify that the control channel moves to READY.
+	wantStates := []connectivity.State{
+		connectivity.Connecting,
+		connectivity.Ready,
+	}
+	for _, wantState := range wantStates {
+		select {
+		case gotState := <-wrappedSubscriber.connStateCh:
+			if gotState != wantState {
+				t.Fatalf("Unexpected connectivity state: got %v, want %v", gotState, wantState)
 			}
+		case <-ctx.Done():
+			t.Fatalf("Timeout waiting for RLS control channel to become %q", wantState)
+		}
+	}
 
-			// Ensure no extra callbacks are invoked
-			select {
-			case <-callbackInvoked:
-				mu.Lock()
-				final := callbackCount
-				mu.Unlock()
-				t.Fatalf("Received more callbacks than expected: got %d, want %d", final, tt.wantCallbackCount)
-			case <-time.After(50 * time.Millisecond):
-				// Expected: no more callbacks
+	// Stop the RLS server (without triggering TRANSIENT_FAILURE first).
+	lis.Stop()
+
+	// Verify that the control channel moves to IDLE.
+	wantStates = []connectivity.State{
+		connectivity.Idle,
+	}
+	for _, wantState := range wantStates {
+		select {
+		case gotState := <-wrappedSubscriber.connStateCh:
+			if gotState != wantState {
+				t.Fatalf("Unexpected connectivity state: got %v, want %v", gotState, wantState)
 			}
-		})
+		case <-ctx.Done():
+			t.Fatalf("Timeout waiting for RLS control channel to become %q", wantState)
+		}
+	}
+
+	// Restart the RLS server before the channel goes to TRANSIENT_FAILURE.
+	lis.Restart()
+
+	// Trigger a reconnection by making a lookup.
+	ctrlCh.lookup(nil, rlspb.RouteLookupRequest_REASON_MISS, "", func(_ []string, _ string, _ error) {})
+
+	// The control channel should reconnect and move to READY.
+	// This transition from IDLE → READY should NOT trigger the callback.
+	// We drain states until we see READY, as the channel may go through intermediate
+	// states (CONNECTING) very quickly.
+	for {
+		select {
+		case gotState := <-wrappedSubscriber.connStateCh:
+			if gotState == connectivity.Ready {
+				goto idleready
+			}
+		case <-ctx.Done():
+			t.Fatalf("Timeout waiting for RLS control channel to become READY")
+		}
+	}
+idleready:
+
+	// Wait a bit to ensure no callback is triggered.
+	time.Sleep(100 * time.Millisecond)
+
+	// Verify that the callback was never invoked (IDLE → READY doesn't trigger callback).
+	mu.Lock()
+	got := callbackCount
+	mu.Unlock()
+	if got != 0 {
+		t.Fatalf("Got %d callback invocations for IDLE → READY, want 0", got)
 	}
 }
