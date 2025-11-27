@@ -25,4 +25,8 @@ var (
 	// BufferPool is implemented by the grpc package and returns a server
 	// option to configure a shared buffer pool for a grpc.Server.
 	BufferPool any // func (grpc.SharedBufferPool) grpc.ServerOption
+
+	// AcceptedCompressionNames is implemented by the grpc package and returns
+	// a call option that restricts the grpc-accept-encoding header for a call.
+	AcceptedCompressionNames any // func(...string) grpc.CallOption
 )

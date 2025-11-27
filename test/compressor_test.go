@@ -30,6 +30,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/experimental"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -530,6 +531,30 @@ func (s) TestClientSupportedCompressors(t *testing.T) {
 				t.Fatalf("Unexpected unary call error, got: %v, want: nil", err)
 			}
 		})
+	}
+}
+
+func (s) TestAcceptedCompressionNamesCallOption(t *testing.T) {
+	const want = "gzip"
+	ss := &stubserver.StubServer{
+		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
+			md, _ := metadata.FromIncomingContext(ctx)
+			if got := md.Get("grpc-accept-encoding"); len(got) != 1 || got[0] != want {
+				t.Fatalf("unexpected grpc-accept-encoding header: %v", got)
+			}
+			return &testpb.Empty{}, nil
+		},
+	}
+	if err := ss.Start(nil); err != nil {
+		t.Fatalf("failed to start server: %v", err)
+	}
+	defer ss.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	if _, err := ss.Client.EmptyCall(ctx, &testpb.Empty{}, experimental.AcceptedCompressionNames(want)); err != nil {
+		t.Fatalf("EmptyCall failed: %v", err)
 	}
 }
 

@@ -48,6 +48,85 @@ const (
 	decompressionErrorMsg   = "invalid compression format"
 )
 
+func (s) TestNewAcceptedCompressionConfig(t *testing.T) {
+	tests := []struct {
+		name        string
+		input       []string
+		wantHeader  string
+		wantAllowed map[string]struct{}
+		wantErr     bool
+	}{
+		{
+			name:        "identity-only",
+			input:       nil,
+			wantHeader:  "",
+			wantAllowed: map[string]struct{}{},
+		},
+		{
+			name:        "single valid",
+			input:       []string{"gzip"},
+			wantHeader:  "gzip",
+			wantAllowed: map[string]struct{}{"gzip": {}},
+		},
+		{
+			name:        "dedupe and trim",
+			input:       []string{" gzip ", "gzip"},
+			wantHeader:  "gzip",
+			wantAllowed: map[string]struct{}{"gzip": {}},
+		},
+		{
+			name:        "ignores identity",
+			input:       []string{"identity", "gzip"},
+			wantHeader:  "gzip",
+			wantAllowed: map[string]struct{}{"gzip": {}},
+		},
+		{
+			name:    "invalid compressor",
+			input:   []string{"does-not-exist"},
+			wantErr: true,
+		},
+		{
+			name:    "only whitespace",
+			input:   []string{"   ", "\t"},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg, err := newAcceptedCompressionConfig(tt.input)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("newAcceptedCompressionConfig(%v) error = %v, wantErr %v", tt.input, err, tt.wantErr)
+			}
+			if tt.wantErr {
+				return
+			}
+			if cfg.headerValue != tt.wantHeader {
+				t.Fatalf("headerValue = %q, want %q", cfg.headerValue, tt.wantHeader)
+			}
+			if diff := cmp.Diff(tt.wantAllowed, cfg.allowed); diff != "" {
+				t.Fatalf("allowed diff (-want +got): %v", diff)
+			}
+		})
+	}
+}
+
+func (s) TestCheckRecvPayloadHonorsAcceptedCompressors(t *testing.T) {
+	cfg, err := newAcceptedCompressionConfig([]string{"gzip"})
+	if err != nil {
+		t.Fatalf("newAcceptedCompressionConfig returned error: %v", err)
+	}
+
+	if st := checkRecvPayload(compressionMade, "gzip", true, false, cfg); st != nil {
+		t.Fatalf("checkRecvPayload returned error for allowed compressor: %v", st)
+	}
+
+	st := checkRecvPayload(compressionMade, "snappy", true, false, cfg)
+	if st == nil || st.Code() != codes.FailedPrecondition {
+		t.Fatalf("checkRecvPayload = %v, want code %v", st, codes.FailedPrecondition)
+	}
+}
+
 type fullReader struct {
 	data []byte
 }
