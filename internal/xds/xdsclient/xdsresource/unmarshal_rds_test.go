@@ -712,7 +712,7 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			gotUpdate, gotError := generateRDSUpdateFromRouteConfiguration(nil, test.rc)
+			gotUpdate, gotError := generateRDSUpdateFromRouteConfiguration(test.rc, nil)
 			if (gotError != nil) != test.wantError ||
 				!cmp.Equal(gotUpdate, test.wantUpdate, cmpopts.EquateEmpty(),
 					cmp.Transformer("FilterConfig", func(fc httpfilter.FilterConfig) string {
@@ -730,52 +730,46 @@ func (s) TestGenerateRDSUpdateFromRouteConfigurationWithAutoHostRewrite(t *testi
 		ldsTarget   = "lds.target.good:1111"
 	)
 
-	buildRouteConfig := func() *v3routepb.RouteConfiguration {
-		return &v3routepb.RouteConfiguration{
-			Name: "routeName",
-			VirtualHosts: []*v3routepb.VirtualHost{{
-				Domains: []string{ldsTarget},
-				Routes: []*v3routepb.Route{{
-					Match: &v3routepb.RouteMatch{PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"}},
-					Action: &v3routepb.Route_Route{
-						Route: &v3routepb.RouteAction{
-							ClusterSpecifier:     &v3routepb.RouteAction_Cluster{Cluster: clusterName},
-							HostRewriteSpecifier: &v3routepb.RouteAction_AutoHostRewrite{AutoHostRewrite: &wrapperspb.BoolValue{Value: true}},
-						},
-					},
-				}},
-			}},
-		}
-	}
-
 	tests := []struct {
 		name             string
 		isTrusted        bool // Corresponds to ServerConfig
 		envConfigRewrite bool // Corresponds to envconfig.XDSAuthorityRewrite
+		autoHostRewrite  bool
 		wantResult       bool
 	}{
 		{
 			name:             "envConfigOn_Trusted",
 			isTrusted:        true,
 			envConfigRewrite: true,
+			autoHostRewrite:  true,
 			wantResult:       true,
+		},
+		{
+			name:             "envConfigOn_Trusted_AutoHostRewriteFalse",
+			isTrusted:        true,
+			envConfigRewrite: true,
+			autoHostRewrite:  false,
+			wantResult:       false,
 		},
 		{
 			name:             "envConfigOff_Trusted",
 			isTrusted:        true,
 			envConfigRewrite: false,
+			autoHostRewrite:  true,
 			wantResult:       false,
 		},
 		{
 			name:             "envConfigOn_Untrusted",
 			isTrusted:        false,
 			envConfigRewrite: true,
+			autoHostRewrite:  false,
 			wantResult:       false,
 		},
 		{
 			name:             "envConfigOff_Untrusted",
 			isTrusted:        false,
 			envConfigRewrite: false,
+			autoHostRewrite:  true,
 			wantResult:       false,
 		},
 	}
@@ -795,17 +789,31 @@ func (s) TestGenerateRDSUpdateFromRouteConfigurationWithAutoHostRewrite(t *testi
 				},
 			}
 
-			update, err := generateRDSUpdateFromRouteConfiguration(opts, buildRouteConfig())
+			routeConfig := &v3routepb.RouteConfiguration{
+				Name: "routeName",
+				VirtualHosts: []*v3routepb.VirtualHost{{
+					Domains: []string{ldsTarget},
+					Routes: []*v3routepb.Route{{
+						Match: &v3routepb.RouteMatch{PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"}},
+						Action: &v3routepb.Route_Route{
+							Route: &v3routepb.RouteAction{
+								ClusterSpecifier:     &v3routepb.RouteAction_Cluster{Cluster: clusterName},
+								HostRewriteSpecifier: &v3routepb.RouteAction_AutoHostRewrite{AutoHostRewrite: &wrapperspb.BoolValue{Value: test.autoHostRewrite}},
+							},
+						},
+					}},
+				}},
+			}
+
+			update, err := generateRDSUpdateFromRouteConfiguration(routeConfig, opts)
 			if err != nil {
 				t.Errorf("generateRDSUpdateFromRouteConfiguration() failed, got : %v, want: <nil>", err)
 			}
-
 			if len(update.VirtualHosts) == 0 || len(update.VirtualHosts[0].Routes) == 0 {
 				t.Errorf("Unexpected parsed routes from generateRDSUpdateFromRouteConfiguration(), got : 0, want: 1")
 			}
 
 			got := update.VirtualHosts[0].Routes[0].AutoHostRewrite
-
 			if got != test.wantResult {
 				t.Errorf("AutoHostRewrite = %v, want %v", got, test.wantResult)
 			}
@@ -965,7 +973,7 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			name, update, err := unmarshalRouteConfigResource(nil, test.resource)
+			name, update, err := unmarshalRouteConfigResource(test.resource, nil)
 			if (err != nil) != test.wantErr {
 				t.Errorf("unmarshalRouteConfigResource(%s), got err: %v, wantErr: %v", pretty.ToJSON(test.resource), err, test.wantErr)
 			}
@@ -1596,7 +1604,7 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, _, err := routesProtoToSlice(nil, tt.routes, nil)
+			got, _, err := routesProtoToSlice(tt.routes, nil, nil)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("routesProtoToSlice() error = %v, wantErr %v", err, tt.wantErr)
 			}
