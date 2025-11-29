@@ -55,6 +55,7 @@ import (
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
+	v3xdsxdstypepb "github.com/cncf/xds/go/xds/type/v3"
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
@@ -64,6 +65,7 @@ import (
 	v3lrspb "github.com/envoyproxy/go-control-plane/envoy/service/load_stats/v3"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
+	"google.golang.org/protobuf/types/known/structpb"
 
 	_ "google.golang.org/grpc/xds"
 )
@@ -1124,6 +1126,40 @@ func (s) TestUpdateLRSServerToNil(t *testing.T) {
 // Test verifies that child policy was updated on receipt of
 // configuration update.
 func (s) TestChildPolicyChangeOnConfigUpdate(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	const customLBPolicy = "test_custom_lb_policy"
+
+	// Register stub customLBPolicy LB policy so that we can catch config changes.
+	pfBuilder := balancer.Get(pickfirst.Name)
+	lbCfgCh := make(chan serviceconfig.LoadBalancingConfig, 1)
+	var updatedChildPolicy atomic.Pointer[string]
+
+	stub.Register(customLBPolicy, stub.BalancerFuncs{
+		ParseConfig: func(lbCfg json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
+			return pfBuilder.(balancer.ConfigParser).ParseConfig(lbCfg)
+		},
+		Init: func(bd *stub.BalancerData) {
+			bd.ChildBalancer = pfBuilder.Build(bd.ClientConn, bd.BuildOptions)
+		},
+		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
+			name := customLBPolicy
+			updatedChildPolicy.Store(&name)
+			select {
+			case lbCfgCh <- ccs.BalancerConfig:
+			case <-ctx.Done():
+				t.Error("Timed out while waiting for BalancerConfig, context deadline exceeded")
+			}
+			return bd.ChildBalancer.UpdateClientConnState(ccs)
+		},
+		Close: func(bd *stub.BalancerData) {
+			bd.ChildBalancer.Close()
+		},
+	})
+
+	defer internal.BalancerUnregister(customLBPolicy)
+
 	// Create an xDS management server.
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
 	defer mgmtServer.Stop()
@@ -1158,8 +1194,6 @@ func (s) TestChildPolicyChangeOnConfigUpdate(t *testing.T) {
 		Port:       testutils.ParsePort(t, server.Address),
 	})
 
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatalf("Failed to update xDS resources: %v", err)
 	}
@@ -1175,39 +1209,14 @@ func (s) TestChildPolicyChangeOnConfigUpdate(t *testing.T) {
 		t.Fatalf("client.EmptyCall() failed: %v", err)
 	}
 
-	// Register stub pickfirst LB policy so that we can catch config changes.
-	pfBuilder := balancer.Get(pickfirst.Name)
-	internal.BalancerUnregister(pfBuilder.Name())
-	lbCfgCh := make(chan serviceconfig.LoadBalancingConfig, 1)
-	var updatedChildPolicy atomic.Pointer[string]
-	stub.Register(pfBuilder.Name(), stub.BalancerFuncs{
-		ParseConfig: func(lbCfg json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
-			return pfBuilder.(balancer.ConfigParser).ParseConfig(lbCfg)
-		},
-		Init: func(bd *stub.BalancerData) {
-			bd.ChildBalancer = pfBuilder.Build(bd.ClientConn, bd.BuildOptions)
-		},
-		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
-			name := pfBuilder.Name()
-			updatedChildPolicy.Store(&name)
-			select {
-			case lbCfgCh <- ccs.BalancerConfig:
-			case <-ctx.Done():
-				t.Error("Timed out while waiting for BalancerConfig, context deadline exceeded")
-			}
-			return bd.ChildBalancer.UpdateClientConnState(ccs)
-		},
-		Close: func(bd *stub.BalancerData) {
-			bd.ChildBalancer.Close()
-		},
-	})
-	defer balancer.Register(pfBuilder)
-
-	// Now update the cluster to use "pick_first" as the endpoint picking policy.
+	// Update the cluster to use customLBPolicy as the endpoint picking policy.
 	resources.Clusters[0].LoadBalancingPolicy = &v3clusterpb.LoadBalancingPolicy{
 		Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{{
 			TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
-				TypedConfig: testutils.MarshalAny(t, &v3pickfirstpb.PickFirst{}),
+				TypedConfig: testutils.MarshalAny(t, &v3xdsxdstypepb.TypedStruct{
+					TypeUrl: "type.googleapis.com/" + customLBPolicy,
+					Value:   &structpb.Struct{},
+				}),
 			},
 		}},
 	}
@@ -1217,16 +1226,16 @@ func (s) TestChildPolicyChangeOnConfigUpdate(t *testing.T) {
 
 	select {
 	case <-ctx.Done():
-		t.Fatalf("Timeout waiting for pickfirst child policy config")
+		t.Fatalf("Timeout waiting for child policy config")
 	case <-lbCfgCh:
 	}
 
-	if p := updatedChildPolicy.Load(); p == nil || *p != pfBuilder.Name() {
+	if p := updatedChildPolicy.Load(); p == nil || *p != customLBPolicy {
 		var got string
 		if p != nil {
 			got = *p
 		}
-		t.Fatalf("Unexpected child policy after config update, got %q, want %q", got, pfBuilder.Name())
+		t.Fatalf("Unexpected child policy after config update, got %q, want %q", got, customLBPolicy)
 	}
 
 	// New RPC should still be routed successfully
