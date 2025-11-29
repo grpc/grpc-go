@@ -1126,39 +1126,7 @@ func (s) TestUpdateLRSServerToNil(t *testing.T) {
 // Test verifies that child policy was updated on receipt of
 // configuration update.
 func (s) TestChildPolicyChangeOnConfigUpdate(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-
 	const customLBPolicy = "test_custom_lb_policy"
-
-	// Register stub customLBPolicy LB policy so that we can catch config changes.
-	pfBuilder := balancer.Get(pickfirst.Name)
-	lbCfgCh := make(chan serviceconfig.LoadBalancingConfig, 1)
-	var updatedChildPolicy atomic.Pointer[string]
-
-	stub.Register(customLBPolicy, stub.BalancerFuncs{
-		ParseConfig: func(lbCfg json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
-			return pfBuilder.(balancer.ConfigParser).ParseConfig(lbCfg)
-		},
-		Init: func(bd *stub.BalancerData) {
-			bd.ChildBalancer = pfBuilder.Build(bd.ClientConn, bd.BuildOptions)
-		},
-		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
-			name := customLBPolicy
-			updatedChildPolicy.Store(&name)
-			select {
-			case lbCfgCh <- ccs.BalancerConfig:
-			case <-ctx.Done():
-				t.Error("Timed out while waiting for BalancerConfig, context deadline exceeded")
-			}
-			return bd.ChildBalancer.UpdateClientConnState(ccs)
-		},
-		Close: func(bd *stub.BalancerData) {
-			bd.ChildBalancer.Close()
-		},
-	})
-
-	defer internal.BalancerUnregister(customLBPolicy)
 
 	// Create an xDS management server.
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
@@ -1194,6 +1162,9 @@ func (s) TestChildPolicyChangeOnConfigUpdate(t *testing.T) {
 		Port:       testutils.ParsePort(t, server.Address),
 	})
 
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatalf("Failed to update xDS resources: %v", err)
 	}
@@ -1208,6 +1179,35 @@ func (s) TestChildPolicyChangeOnConfigUpdate(t *testing.T) {
 	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("client.EmptyCall() failed: %v", err)
 	}
+
+	// Register stub customLBPolicy LB policy so that we can catch config changes.
+	pfBuilder := balancer.Get(pickfirst.Name)
+	lbCfgCh := make(chan serviceconfig.LoadBalancingConfig, 1)
+	var updatedChildPolicy atomic.Pointer[string]
+
+	stub.Register(customLBPolicy, stub.BalancerFuncs{
+		ParseConfig: func(lbCfg json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
+			return pfBuilder.(balancer.ConfigParser).ParseConfig(lbCfg)
+		},
+		Init: func(bd *stub.BalancerData) {
+			bd.ChildBalancer = pfBuilder.Build(bd.ClientConn, bd.BuildOptions)
+		},
+		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
+			name := customLBPolicy
+			updatedChildPolicy.Store(&name)
+			select {
+			case lbCfgCh <- ccs.BalancerConfig:
+			case <-ctx.Done():
+				t.Error("Timed out while waiting for BalancerConfig, context deadline exceeded")
+			}
+			return bd.ChildBalancer.UpdateClientConnState(ccs)
+		},
+		Close: func(bd *stub.BalancerData) {
+			bd.ChildBalancer.Close()
+		},
+	})
+
+	defer internal.BalancerUnregister(customLBPolicy)
 
 	// Update the cluster to use customLBPolicy as the endpoint picking policy.
 	resources.Clusters[0].LoadBalancingPolicy = &v3clusterpb.LoadBalancingPolicy{
