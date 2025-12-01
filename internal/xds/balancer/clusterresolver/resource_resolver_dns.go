@@ -135,11 +135,7 @@ func (dr *dnsDiscoveryMechanism) UpdateState(state resolver.State) error {
 	dr.mu.Lock()
 	var endpoints = state.Endpoints
 	if len(endpoints) == 0 {
-		endpoints = make([]resolver.Endpoint, len(state.Addresses))
-		for i, a := range state.Addresses {
-			endpoints[i] = resolver.Endpoint{Addresses: []resolver.Address{a}}
-			endpoints[i].Attributes = a.BalancerAttributes
-		}
+		endpoints = []resolver.Endpoint{{Addresses: state.Addresses}}
 	}
 	dr.endpoints = endpoints
 	dr.updateReceived = true
@@ -172,6 +168,7 @@ func (dr *dnsDiscoveryMechanism) ReportError(err error) {
 }
 
 func (dr *dnsDiscoveryMechanism) NewAddress(addresses []resolver.Address) {
+	fmt.Println("NewAddress")
 	dr.UpdateState(resolver.State{Addresses: addresses})
 }
 
