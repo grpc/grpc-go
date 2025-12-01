@@ -32,6 +32,7 @@ import (
 	"google.golang.org/grpc/internal/xds/balancer/outlierdetection"
 	"google.golang.org/grpc/internal/xds/balancer/priority"
 	"google.golang.org/grpc/internal/xds/balancer/wrrlocality"
+	"google.golang.org/grpc/internal/xds/clients"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/ringhash"
@@ -109,7 +110,7 @@ func buildPriorityConfig(priorities []priorityConfig, xdsLBPolicy *internalservi
 			}
 			continue
 		case DiscoveryMechanismTypeLogicalDNS:
-			name, config, endpoints := buildClusterImplConfigForDNS(p.childNameGen, p.endpoints, p.mechanism)
+			name, config, endpoints := buildClusterImplConfigForDNS(p.childNameGen, p.endpoints, p.mechanism, xdsLBPolicy)
 			retConfig.Priorities = append(retConfig.Priorities, name)
 			retEndpoints = append(retEndpoints, endpoints...)
 			odCfg := makeClusterImplOutlierDetectionChild(config, p.mechanism.outlierDetection)
@@ -139,13 +140,18 @@ func makeClusterImplOutlierDetectionChild(ciCfg *clusterimpl.LBConfig, odCfg out
 	return &odCfgRet
 }
 
-func buildClusterImplConfigForDNS(g *nameGenerator, endpoints []resolver.Endpoint, mechanism DiscoveryMechanism) (string, *clusterimpl.LBConfig, []resolver.Endpoint) {
-	// Endpoint picking policy for DNS is hardcoded to pick_first.
-	const childPolicy = "pick_first"
+func buildClusterImplConfigForDNS(g *nameGenerator, endpoints []resolver.Endpoint, mechanism DiscoveryMechanism, xdsLBPolicy *internalserviceconfig.BalancerConfig) (string, *clusterimpl.LBConfig, []resolver.Endpoint) {
 	retEndpoints := make([]resolver.Endpoint, len(endpoints))
 	pName := fmt.Sprintf("priority-%v", g.prefix)
 	for i, e := range endpoints {
-		retEndpoints[i] = hierarchy.SetInEndpoint(e, []string{pName})
+		lid := clients.Locality{}
+		localityStr := xdsinternal.LocalityString(lid)
+		retEndpoints[i] = hierarchy.SetInEndpoint(e, []string{pName, localityStr})
+		retEndpoints[i] = xdsinternal.SetLocalityIDInEndpoint(retEndpoints[i], lid)
+		var lw uint32 = 1
+		retEndpoints[i] = wrrlocality.SetAddrInfoInEndpoint(retEndpoints[i], wrrlocality.AddrInfo{LocalityWeight: lw})
+		var ew uint32 = 1
+		retEndpoints[i] = weight.Set(retEndpoints[i], weight.EndpointInfo{Weight: lw * ew})
 		// Copy the nested address field as slice fields are shared by the
 		// iteration variable and the original slice.
 		retEndpoints[i].Addresses = append([]resolver.Address{}, e.Addresses...)
@@ -153,7 +159,7 @@ func buildClusterImplConfigForDNS(g *nameGenerator, endpoints []resolver.Endpoin
 	return pName, &clusterimpl.LBConfig{
 		Cluster:               mechanism.Cluster,
 		TelemetryLabels:       mechanism.TelemetryLabels,
-		ChildPolicy:           &internalserviceconfig.BalancerConfig{Name: childPolicy},
+		ChildPolicy:           xdsLBPolicy,
 		MaxConcurrentRequests: mechanism.MaxConcurrentRequests,
 		LoadReportingServer:   mechanism.LoadReportingServer,
 	}, retEndpoints
