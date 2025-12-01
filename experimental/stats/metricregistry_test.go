@@ -117,6 +117,14 @@ func (s) TestMetricRegistry(t *testing.T) {
 		OptionalLabels: []string{"int up down counter optional label"},
 		Default:        false,
 	})
+	intAsyncGaugeHandle1 := RegisterInt64AsyncGauge(MetricDescriptor{
+		Name:           "simple async gauge",
+		Description:    "the most recent int emitted by test",
+		Unit:           "int",
+		Labels:         []string{"int async gauge label"},
+		OptionalLabels: []string{"int async gauge optional label"},
+		Default:        false,
+	})
 
 	fmr := newFakeMetricsRecorder(t)
 
@@ -155,9 +163,13 @@ func (s) TestMetricRegistry(t *testing.T) {
 	if got := fmr.intValues[intGaugeHandle1.Descriptor()]; got != 7 {
 		t.Fatalf("fmr.intValues[intGaugeHandle1.MetricDescriptor] got %v, want: %v", got, 7)
 	}
+	intAsyncGaugeHandle1.Record(fmr, 7, []string{"some label value", "some optional label value"}...)
+	if got := fmr.intValues[intGaugeHandle1.Descriptor()]; got != 7 {
+		t.Fatalf("fmr.intValues[intGaugeHandle1.MetricDescriptor] got %v, want: %v", got, 7)
+	}
 }
 
-func TestUpDownCounts(t *testing.T) {
+func (s) TestUpDownCounts(t *testing.T) {
 	cleanup := snapshotMetricsRegistryForTesting()
 	defer cleanup()
 
@@ -182,7 +194,7 @@ func TestUpDownCounts(t *testing.T) {
 // TestNumerousIntCounts tests numerous int count metrics registered onto the
 // metric registry. A component (simulated by test) should be able to record on
 // the different registered int count metrics.
-func TestNumerousIntCounts(t *testing.T) {
+func (s) TestNumerousIntCounts(t *testing.T) {
 	cleanup := snapshotMetricsRegistryForTesting()
 	defer cleanup()
 
@@ -305,6 +317,11 @@ func (r *fakeMetricsRecorder) RecordInt64Gauge(handle *Int64GaugeHandle, incr in
 }
 
 func (r *fakeMetricsRecorder) RecordInt64UpDownCount(handle *Int64UpDownCountHandle, incr int64, labels ...string) {
+	verifyLabels(r.t, handle.Descriptor().Labels, handle.Descriptor().OptionalLabels, labels)
+	r.intValues[handle.Descriptor()] += incr
+}
+
+func (r *fakeMetricsRecorder) RecordInt64AsyncGauge(handle *Int64AsyncGaugeHandle, incr int64, labels ...string) {
 	verifyLabels(r.t, handle.Descriptor().Labels, handle.Descriptor().OptionalLabels, labels)
 	r.intValues[handle.Descriptor()] += incr
 }
