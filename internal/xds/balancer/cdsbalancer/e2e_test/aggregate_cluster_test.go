@@ -1000,7 +1000,7 @@ func (s) TestAggregateCluster_BadEDS_BadDNS(t *testing.T) {
 		if err == nil {
 			t.Fatal("EmptyCall() succeeded when expected to fail")
 		}
-		if status.Code(err) == codes.Unavailable && strings.Contains(err.Error(), "produced zero addresses") {
+		if status.Code(err) == codes.Unavailable && strings.Contains(err.Error(), "no targets to pick from") {
 			break
 		}
 	}
