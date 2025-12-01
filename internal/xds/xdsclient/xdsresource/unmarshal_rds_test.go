@@ -732,42 +732,40 @@ func (s) TestGenerateRDSUpdateFromRouteConfigurationWithAutoHostRewrite(t *testi
 
 	tests := []struct {
 		name             string
-		isTrusted        bool // Corresponds to ServerConfig
-		envConfigRewrite bool // Corresponds to envconfig.XDSAuthorityRewrite
+		isTrusted        xdsclient.ServerFeature // Corresponds to ServerConfig
+		envConfigRewrite bool                    // Corresponds to envconfig.XDSAuthorityRewrite
 		autoHostRewrite  bool
 		wantResult       bool
 	}{
 		{
 			name:             "envConfigOn_Trusted",
-			isTrusted:        true,
+			isTrusted:        xdsclient.ServerFeatureTrustedXDSServer,
 			envConfigRewrite: true,
 			autoHostRewrite:  true,
 			wantResult:       true,
 		},
 		{
 			name:             "envConfigOn_Trusted_AutoHostRewriteFalse",
-			isTrusted:        true,
+			isTrusted:        xdsclient.ServerFeatureTrustedXDSServer,
 			envConfigRewrite: true,
 			autoHostRewrite:  false,
 			wantResult:       false,
 		},
 		{
 			name:             "envConfigOff_Trusted",
-			isTrusted:        true,
+			isTrusted:        xdsclient.ServerFeatureTrustedXDSServer,
 			envConfigRewrite: false,
 			autoHostRewrite:  true,
 			wantResult:       false,
 		},
 		{
 			name:             "envConfigOn_Untrusted",
-			isTrusted:        false,
 			envConfigRewrite: true,
 			autoHostRewrite:  false,
 			wantResult:       false,
 		},
 		{
 			name:             "envConfigOff_Untrusted",
-			isTrusted:        false,
 			envConfigRewrite: false,
 			autoHostRewrite:  true,
 			wantResult:       false,
@@ -778,14 +776,9 @@ func (s) TestGenerateRDSUpdateFromRouteConfigurationWithAutoHostRewrite(t *testi
 		t.Run(test.name, func(t *testing.T) {
 			testutils.SetEnvConfig(t, &envconfig.XDSAuthorityRewrite, test.envConfigRewrite)
 
-			var serverFeature xdsclient.ServerFeature
-			if test.isTrusted {
-				serverFeature = xdsclient.ServerFeatureTrustedXDSServer
-			}
-
 			opts := &xdsclient.DecodeOptions{
 				ServerConfig: &xdsclient.ServerConfig{
-					ServerFeature: serverFeature,
+					ServerFeature: test.isTrusted,
 				},
 			}
 
@@ -813,9 +806,8 @@ func (s) TestGenerateRDSUpdateFromRouteConfigurationWithAutoHostRewrite(t *testi
 				t.Errorf("Unexpected parsed routes from generateRDSUpdateFromRouteConfiguration(), got : 0, want: 1")
 			}
 
-			got := update.VirtualHosts[0].Routes[0].AutoHostRewrite
-			if got != test.wantResult {
-				t.Errorf("AutoHostRewrite = %v, want %v", got, test.wantResult)
+			if update.VirtualHosts[0].Routes[0].AutoHostRewrite != test.wantResult {
+				t.Errorf("AutoHostRewrite = %v, want %v", update.VirtualHosts[0].Routes[0].AutoHostRewrite, test.wantResult)
 			}
 		})
 	}
