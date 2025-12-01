@@ -21,6 +21,7 @@ package test
 import (
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"sync"
 	"testing"
@@ -37,32 +38,52 @@ import (
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
-	testgrpc "google.golang.org/grpc/interop/grpc_testing"
-	testpb "google.golang.org/grpc/interop/grpc_testing"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
+
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
-const stateRecordingBalancerName = "state_recording_balancer"
-
-var testBalancerBuilder = newStateRecordingBalancerBuilder()
-
-func init() {
-	balancer.Register(testBalancerBuilder)
+// Keep reading until something causes the connection to die (EOF, server
+// closed, etc). Useful as a tool for mindlessly keeping the connection
+// healthy, since the client will error if things like client prefaces are not
+// accepted in a timely fashion.
+func keepReading(conn net.Conn) {
+	io.Copy(io.Discard, conn)
 }
 
-// These tests use a pipeListener. This listener is similar to net.Listener
-// except that it is unbuffered, so each read and write will wait for the other
-// side's corresponding write or read.
+type funcConnectivityStateSubscriber struct {
+	onMsg func(connectivity.State)
+}
+
+func (f *funcConnectivityStateSubscriber) OnMessage(msg any) {
+	f.onMsg(msg.(connectivity.State))
+}
+
+func waitForState(ctx context.Context, t *testing.T, stateCh <-chan connectivity.State, want connectivity.State) {
+	t.Helper()
+	select {
+	case gotState := <-stateCh:
+		if gotState != want {
+			t.Fatalf("State is %s; want %s", gotState, want)
+		}
+		t.Logf("State is %s as expected", gotState)
+	case <-ctx.Done():
+		t.Fatalf("Timed out waiting for state update: %s", want)
+	}
+}
+
+// Tests for state transitions in various scenarios with a single address.
 func (s) TestStateTransitions_SingleAddress(t *testing.T) {
 	for _, test := range []struct {
-		desc   string
-		want   []connectivity.State
-		server func(net.Listener) net.Conn
+		desc       string
+		wantStates []connectivity.State
+		server     func(net.Listener) net.Conn
 	}{
 		{
-			desc: "When the server returns server preface, the client enters READY.",
-			want: []connectivity.State{
+			desc: "ServerSendsPreface",
+			wantStates: []connectivity.State{
 				connectivity.Connecting,
 				connectivity.Ready,
 			},
@@ -85,8 +106,8 @@ func (s) TestStateTransitions_SingleAddress(t *testing.T) {
 			},
 		},
 		{
-			desc: "When the connection is closed before the preface is sent, the client enters TRANSIENT FAILURE.",
-			want: []connectivity.State{
+			desc: "ConnectionClosesBeforeServerPreface",
+			wantStates: []connectivity.State{
 				connectivity.Connecting,
 				connectivity.TransientFailure,
 			},
@@ -102,9 +123,8 @@ func (s) TestStateTransitions_SingleAddress(t *testing.T) {
 			},
 		},
 		{
-			desc: `When the server sends its connection preface, but the connection dies before the client can write its
-connection preface, the client enters TRANSIENT FAILURE.`,
-			want: []connectivity.State{
+			desc: "ConnectionClosesBeforeClientPreface",
+			wantStates: []connectivity.State{
 				connectivity.Connecting,
 				connectivity.TransientFailure,
 			},
@@ -126,9 +146,8 @@ connection preface, the client enters TRANSIENT FAILURE.`,
 			},
 		},
 		{
-			desc: `When the server reads the client connection preface but does not send its connection preface, the
-client enters TRANSIENT FAILURE.`,
-			want: []connectivity.State{
+			desc: "ServerNeverSendsPreface",
+			wantStates: []connectivity.State{
 				connectivity.Connecting,
 				connectivity.TransientFailure,
 			},
@@ -145,12 +164,13 @@ client enters TRANSIENT FAILURE.`,
 			},
 		},
 	} {
-		t.Log(test.desc)
-		testStateTransitionSingleAddress(t, test.want, test.server)
+		t.Run(test.desc, func(t *testing.T) {
+			testStateTransitionSingleAddress(t, test.wantStates, test.server)
+		})
 	}
 }
 
-func testStateTransitionSingleAddress(t *testing.T, want []connectivity.State, server func(net.Listener) net.Conn) {
+func testStateTransitionSingleAddress(t *testing.T, wantStates []connectivity.State, server func(net.Listener) net.Conn) {
 	pl := testutils.NewPipeListener()
 	defer pl.Close()
 
@@ -163,36 +183,40 @@ func testStateTransitionSingleAddress(t *testing.T, want []connectivity.State, s
 		connMu.Unlock()
 	}()
 
-	client, err := grpc.NewClient("passthrough:///",
+	dopts := []grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, stateRecordingBalancerName)),
 		grpc.WithDialer(pl.Dialer()),
 		grpc.WithConnectParams(grpc.ConnectParams{
 			Backoff:           backoff.Config{},
 			MinConnectTimeout: 100 * time.Millisecond,
-		}))
+		}),
+	}
+	cc, err := grpc.NewClient("passthrough:///", dopts...)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer client.Close()
+	defer cc.Close()
 
+	// Ensure that the client is in IDLE before connecting.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	go testutils.StayConnected(ctx, client)
+	testutils.AwaitState(ctx, t, cc, connectivity.Idle)
 
-	// Wait for the test balancer to be built before capturing it's state
-	// notification channel.
-	testutils.AwaitNotState(ctx, t, client, connectivity.Idle)
-	stateNotifications := testBalancerBuilder.nextStateNotifier()
-	for i := 0; i < len(want); i++ {
-		select {
-		case <-time.After(defaultTestTimeout):
-			t.Fatalf("timed out waiting for state %d (%v) in flow %v", i, want[i], want)
-		case seen := <-stateNotifications:
-			if seen != want[i] {
-				t.Fatalf("expected to see %v at position %d in flow %v, got %v", want[i], i, want, seen)
+	// Subscribe to state updates.
+	stateCh := make(chan connectivity.State, 1)
+	s := &funcConnectivityStateSubscriber{
+		onMsg: func(s connectivity.State) {
+			select {
+			case stateCh <- s:
+			case <-ctx.Done():
 			}
-		}
+		},
+	}
+	internal.SubscribeToConnectivityStateChanges.(func(cc *grpc.ClientConn, s grpcsync.Subscriber) func())(cc, s)
+
+	cc.Connect()
+	for _, wantState := range wantStates {
+		waitForState(ctx, t, stateCh, wantState)
 	}
 
 	connMu.Lock()
@@ -205,7 +229,7 @@ func testStateTransitionSingleAddress(t *testing.T, want []connectivity.State, s
 	}
 }
 
-// When a READY connection is closed, the client enters IDLE then CONNECTING.
+// Tests for state transitions when the READY connection is closed.
 func (s) TestStateTransitions_ReadyToConnecting(t *testing.T) {
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
@@ -238,43 +262,49 @@ func (s) TestStateTransitions_ReadyToConnecting(t *testing.T) {
 		conn.Close()
 	}()
 
-	client, err := grpc.NewClient(lis.Addr().String(),
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, stateRecordingBalancerName)))
+	cc, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer client.Close()
+	defer cc.Close()
 
+	// Ensure that the client is in IDLE before connecting.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	go testutils.StayConnected(ctx, client)
-	testutils.AwaitNotState(ctx, t, client, connectivity.Idle)
-	stateNotifications := testBalancerBuilder.nextStateNotifier()
+	testutils.AwaitState(ctx, t, cc, connectivity.Idle)
 
-	want := []connectivity.State{
+	// Subscribe to state updates.
+	stateCh := make(chan connectivity.State, 1)
+	s := &funcConnectivityStateSubscriber{
+		onMsg: func(s connectivity.State) {
+			select {
+			case stateCh <- s:
+			case <-ctx.Done():
+			}
+		},
+	}
+	internal.SubscribeToConnectivityStateChanges.(func(cc *grpc.ClientConn, s grpcsync.Subscriber) func())(cc, s)
+
+	cc.Connect()
+	wantStates := []connectivity.State{
 		connectivity.Connecting,
 		connectivity.Ready,
 		connectivity.Idle,
 		connectivity.Connecting,
 	}
-	for i := 0; i < len(want); i++ {
-		select {
-		case <-time.After(defaultTestTimeout):
-			t.Fatalf("timed out waiting for state %d (%v) in flow %v", i, want[i], want)
-		case seen := <-stateNotifications:
-			if seen == connectivity.Ready {
-				sawReady <- struct{}{}
-			}
-			if seen != want[i] {
-				t.Fatalf("expected to see %v at position %d in flow %v, got %v", want[i], i, want, seen)
-			}
+	for _, wantState := range wantStates {
+		waitForState(ctx, t, stateCh, wantState)
+		if wantState == connectivity.Ready {
+			sawReady <- struct{}{}
+		}
+		if wantState == connectivity.Idle {
+			cc.Connect()
 		}
 	}
 }
 
-// When the first connection is closed, the client stays in CONNECTING until it
-// tries the second address (which succeeds, and then it enters READY).
+// Tests for state transitions when there are multiple addresses and all the
+// addresses fail.
 func (s) TestStateTransitions_TriesAllAddrsBeforeTransientFailure(t *testing.T) {
 	lis1, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
@@ -310,14 +340,7 @@ func (s) TestStateTransitions_TriesAllAddrsBeforeTransientFailure(t *testing.T) 
 			return
 		}
 
-		go keepReading(conn)
-
-		framer := http2.NewFramer(conn, conn)
-		if err := framer.WriteSettings(http2.Setting{}); err != nil {
-			t.Errorf("Error while writing settings frame. %v", err)
-			return
-		}
-
+		conn.Close()
 		close(server2Done)
 	}()
 
@@ -326,43 +349,48 @@ func (s) TestStateTransitions_TriesAllAddrsBeforeTransientFailure(t *testing.T) 
 		{Addr: lis1.Addr().String()},
 		{Addr: lis2.Addr().String()},
 	}})
-	client, err := grpc.NewClient("whatever:///this-gets-overwritten",
+
+	dopts := []grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, stateRecordingBalancerName)),
+		grpc.WithResolvers(rb),
 		grpc.WithConnectParams(grpc.ConnectParams{
-			// Set a really long back-off delay to ensure the first subConn does
-			// not enter IDLE before the second subConn connects.
-			Backoff: backoff.Config{
-				BaseDelay: 1 * time.Hour,
-			},
+			// Set a really long back-off delay to ensure the subchannels stay
+			// in TRANSIENT_FAILURE and not enter IDLE.
+			Backoff: backoff.Config{BaseDelay: 1 * time.Hour},
 		}),
-		grpc.WithResolvers(rb))
+	}
+	cc, err := grpc.NewClient("whatever:///this-gets-overwritten", dopts...)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer client.Close()
-	client.Connect()
-	stateNotifications := testBalancerBuilder.nextStateNotifier()
-	want := []connectivity.State{
-		// The first subconn fails.
-		connectivity.Connecting,
-		connectivity.TransientFailure,
-		// The second subconn connects.
-		connectivity.Connecting,
-		connectivity.Ready,
-	}
+	defer cc.Close()
+
+	// Ensure that the client is in IDLE before connecting.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	for i := 0; i < len(want); i++ {
-		select {
-		case <-ctx.Done():
-			t.Fatalf("timed out waiting for state %d (%v) in flow %v", i, want[i], want)
-		case seen := <-stateNotifications:
-			if seen != want[i] {
-				t.Fatalf("expected to see %v at position %d in flow %v, got %v", want[i], i, want, seen)
+	testutils.AwaitState(ctx, t, cc, connectivity.Idle)
+
+	// Subscribe to state updates.
+	stateCh := make(chan connectivity.State, 1)
+	s := &funcConnectivityStateSubscriber{
+		onMsg: func(s connectivity.State) {
+			select {
+			case stateCh <- s:
+			case <-ctx.Done():
 			}
-		}
+		},
 	}
+	internal.SubscribeToConnectivityStateChanges.(func(cc *grpc.ClientConn, s grpcsync.Subscriber) func())(cc, s)
+
+	cc.Connect()
+	wantStates := []connectivity.State{
+		connectivity.Connecting,
+		connectivity.TransientFailure,
+	}
+	for _, wantState := range wantStates {
+		waitForState(ctx, t, stateCh, wantState)
+	}
+
 	select {
 	case <-ctx.Done():
 		t.Fatal("saw the correct state transitions, but timed out waiting for client to finish interactions with server 1")
@@ -375,8 +403,8 @@ func (s) TestStateTransitions_TriesAllAddrsBeforeTransientFailure(t *testing.T) 
 	}
 }
 
-// When there are multiple addresses, and we enter READY on one of them, a
-// later closure should cause the client to enter CONNECTING
+// Tests for state transitions with multiple addresses when the READY connection
+// is closed.
 func (s) TestStateTransitions_MultipleAddrsEntersReady(t *testing.T) {
 	lis1, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
@@ -384,7 +412,8 @@ func (s) TestStateTransitions_MultipleAddrsEntersReady(t *testing.T) {
 	}
 	defer lis1.Close()
 
-	// Never actually gets used; we just want it to be alive so that the resolver has two addresses to target.
+	// Never actually gets used; we just want it to be alive so that the
+	// resolver has two addresses to target.
 	lis2, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("Error while listening. Err: %v", err)
@@ -423,37 +452,43 @@ func (s) TestStateTransitions_MultipleAddrsEntersReady(t *testing.T) {
 		{Addr: lis1.Addr().String()},
 		{Addr: lis2.Addr().String()},
 	}})
-	client, err := grpc.NewClient("whatever:///this-gets-overwritten",
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, stateRecordingBalancerName)),
-		grpc.WithResolvers(rb))
+	cc, err := grpc.NewClient("whatever:///this-gets-overwritten", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(rb))
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer client.Close()
-	client.Connect()
+	defer cc.Close()
+
+	// Ensure that the client is in IDLE before connecting.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	go testutils.StayConnected(ctx, client)
+	testutils.AwaitState(ctx, t, cc, connectivity.Idle)
 
-	stateNotifications := testBalancerBuilder.nextStateNotifier()
-	want := []connectivity.State{
+	// Subscribe to state updates.
+	stateCh := make(chan connectivity.State, 1)
+	s := &funcConnectivityStateSubscriber{
+		onMsg: func(s connectivity.State) {
+			select {
+			case stateCh <- s:
+			case <-ctx.Done():
+			}
+		},
+	}
+	internal.SubscribeToConnectivityStateChanges.(func(cc *grpc.ClientConn, s grpcsync.Subscriber) func())(cc, s)
+
+	cc.Connect()
+	wantStates := []connectivity.State{
 		connectivity.Connecting,
 		connectivity.Ready,
 		connectivity.Idle,
 		connectivity.Connecting,
 	}
-	for i := 0; i < len(want); i++ {
-		select {
-		case <-ctx.Done():
-			t.Fatalf("timed out waiting for state %d (%v) in flow %v", i, want[i], want)
-		case seen := <-stateNotifications:
-			if seen == connectivity.Ready {
-				sawReady <- struct{}{}
-			}
-			if seen != want[i] {
-				t.Fatalf("expected to see %v at position %d in flow %v, got %v", want[i], i, want, seen)
-			}
+	for _, wantState := range wantStates {
+		waitForState(ctx, t, stateCh, wantState)
+		if wantState == connectivity.Ready {
+			sawReady <- struct{}{}
+		}
+		if wantState == connectivity.Idle {
+			cc.Connect()
 		}
 	}
 	select {
@@ -461,77 +496,6 @@ func (s) TestStateTransitions_MultipleAddrsEntersReady(t *testing.T) {
 		t.Fatal("saw the correct state transitions, but timed out waiting for client to finish interactions with server 1")
 	case <-server1Done:
 	}
-}
-
-type stateRecordingBalancer struct {
-	balancer.Balancer
-}
-
-func (b *stateRecordingBalancer) Close() {
-	b.Balancer.Close()
-}
-
-type stateRecordingBalancerBuilder struct {
-	mu       sync.Mutex
-	notifier chan connectivity.State // The notifier used in the last Balancer.
-}
-
-func newStateRecordingBalancerBuilder() *stateRecordingBalancerBuilder {
-	return &stateRecordingBalancerBuilder{}
-}
-
-func (b *stateRecordingBalancerBuilder) Name() string {
-	return stateRecordingBalancerName
-}
-
-func (b *stateRecordingBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
-	stateNotifications := make(chan connectivity.State, 10)
-	b.mu.Lock()
-	b.notifier = stateNotifications
-	b.mu.Unlock()
-	return &stateRecordingBalancer{
-		Balancer: balancer.Get("pick_first").Build(&stateRecordingCCWrapper{cc, stateNotifications}, opts),
-	}
-}
-
-func (b *stateRecordingBalancerBuilder) nextStateNotifier() <-chan connectivity.State {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	ret := b.notifier
-	b.notifier = nil
-	return ret
-}
-
-type stateRecordingCCWrapper struct {
-	balancer.ClientConn
-	notifier chan<- connectivity.State
-}
-
-func (ccw *stateRecordingCCWrapper) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
-	oldListener := opts.StateListener
-	opts.StateListener = func(s balancer.SubConnState) {
-		ccw.notifier <- s.ConnectivityState
-		oldListener(s)
-	}
-	return ccw.ClientConn.NewSubConn(addrs, opts)
-}
-
-// Keep reading until something causes the connection to die (EOF, server
-// closed, etc). Useful as a tool for mindlessly keeping the connection
-// healthy, since the client will error if things like client prefaces are not
-// accepted in a timely fashion.
-func keepReading(conn net.Conn) {
-	buf := make([]byte, 1024)
-	for _, err := conn.Read(buf); err == nil; _, err = conn.Read(buf) {
-	}
-}
-
-type funcConnectivityStateSubscriber struct {
-	onMsg func(connectivity.State)
-}
-
-func (f *funcConnectivityStateSubscriber) OnMessage(msg any) {
-	f.onMsg(msg.(connectivity.State))
 }
 
 // TestConnectivityStateSubscriber confirms updates sent by the balancer in
@@ -616,9 +580,9 @@ func (s) TestConnectivityStateSubscriber(t *testing.T) {
 	}
 }
 
-// TestChannelStateWaitingForFirstResolverUpdate verifies the initial
-// state of the channel when a manual name resolver doesn't provide any updates.
-func (s) TestChannelStateWaitingForFirstResolverUpdate(t *testing.T) {
+// Test verifies that a channel starts off in IDLE and transitions to CONNECTING
+// when Connect() is called, and stays there when there are no resolver updates.
+func (s) TestStateTransitions_WithConnect_NoResolverUpdate(t *testing.T) {
 	t.Skip("The channel remains in IDLE until the LB policy updates the state to CONNECTING. This is a bug and the channel should transition to CONNECTING as soon as Connect() is called. See issue #7686.")
 
 	backend := stubserver.StartTestService(t, nil)
@@ -651,7 +615,9 @@ func (s) TestChannelStateWaitingForFirstResolverUpdate(t *testing.T) {
 	testutils.AwaitNoStateChange(shortCtx, t, cc, connectivity.Connecting)
 }
 
-func (s) TestChannelStateTransitionWithRPC(t *testing.T) {
+// Test verifies that a channel starts off in IDLE and transitions to CONNECTING
+// when Connect() is called, and stays there when there are no resolver updates.
+func (s) TestStateTransitions_WithRPC_NoResolverUpdate(t *testing.T) {
 	t.Skip("The channel remains in IDLE until the LB policy updates the state to CONNECTING. This is a bug and the channel should transition to CONNECTING as soon as an RPC call is made. See issue #7686.")
 
 	backend := stubserver.StartTestService(t, nil)

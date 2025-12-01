@@ -131,6 +131,19 @@ func TestStringMatcherFromProto(t *testing.T) {
 			wantMatcher: StringMatcher{regexMatch: regexp.MustCompile("good?regex?")},
 		},
 		{
+			desc: "regex with ignore case",
+			inputProto: &v3matcherpb.StringMatcher{
+				MatchPattern: &v3matcherpb.StringMatcher_SafeRegex{
+					SafeRegex: &v3matcherpb.RegexMatcher{Regex: "good?regex?"},
+				},
+				IgnoreCase: true,
+			},
+			wantMatcher: StringMatcher{
+				regexMatch: regexp.MustCompile("good?regex?"),
+				ignoreCase: true,
+			},
+		},
+		{
 			desc: "happy case contains",
 			inputProto: &v3matcherpb.StringMatcher{
 				MatchPattern: &v3matcherpb.StringMatcher_Contains{Contains: "contains"},
@@ -165,27 +178,15 @@ func TestStringMatcherFromProto(t *testing.T) {
 
 func TestMatch(t *testing.T) {
 	var (
-		exactMatcher, _           = StringMatcherFromProto(&v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: "exact"}})
-		prefixMatcher, _          = StringMatcherFromProto(&v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Prefix{Prefix: "prefix"}})
-		suffixMatcher, _          = StringMatcherFromProto(&v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Suffix{Suffix: "suffix"}})
-		regexMatcher, _           = StringMatcherFromProto(&v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_SafeRegex{SafeRegex: &v3matcherpb.RegexMatcher{Regex: "good?regex?"}}})
-		containsMatcher, _        = StringMatcherFromProto(&v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Contains{Contains: "contains"}})
-		exactMatcherIgnoreCase, _ = StringMatcherFromProto(&v3matcherpb.StringMatcher{
-			MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: "exact"},
-			IgnoreCase:   true,
-		})
-		prefixMatcherIgnoreCase, _ = StringMatcherFromProto(&v3matcherpb.StringMatcher{
-			MatchPattern: &v3matcherpb.StringMatcher_Prefix{Prefix: "prefix"},
-			IgnoreCase:   true,
-		})
-		suffixMatcherIgnoreCase, _ = StringMatcherFromProto(&v3matcherpb.StringMatcher{
-			MatchPattern: &v3matcherpb.StringMatcher_Suffix{Suffix: "suffix"},
-			IgnoreCase:   true,
-		})
-		containsMatcherIgnoreCase, _ = StringMatcherFromProto(&v3matcherpb.StringMatcher{
-			MatchPattern: &v3matcherpb.StringMatcher_Contains{Contains: "contains"},
-			IgnoreCase:   true,
-		})
+		exactMatcher              = NewExactStringMatcher("exact", false)
+		exactMatcherIgnoreCase    = NewExactStringMatcher("exact", true)
+		prefixMatcher             = NewPrefixStringMatcher("prefix", false)
+		prefixMatcherIgnoreCase   = NewPrefixStringMatcher("prefix", true)
+		suffixMatcher             = NewSuffixStringMatcher("suffix", false)
+		suffixMatcherIgnoreCase   = NewSuffixStringMatcher("suffix", true)
+		containsMatcher           = NewContainsStringMatcher("contains", false)
+		containsMatcherIgnoreCase = NewContainsStringMatcher("contains", true)
+		regexMatcher              = NewRegexStringMatcher(regexp.MustCompile("good?regex?"))
 	)
 
 	tests := []struct {

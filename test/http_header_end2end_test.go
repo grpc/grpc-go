@@ -169,7 +169,7 @@ func (s) TestHTTPHeaderFrameErrorHandlingNormalTrailer(t *testing.T) {
 				// trailer missing grpc-status
 				":status", "502",
 			},
-			errCode: codes.Internal,
+			errCode: codes.Unknown,
 		},
 		{
 			name: "malformed grpc-status-details-bin field with status 404 to be ignored due to content type",
