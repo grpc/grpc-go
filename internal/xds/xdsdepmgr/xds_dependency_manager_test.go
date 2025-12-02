@@ -488,7 +488,7 @@ func (s) TestNoVirtualHost(t *testing.T) {
 
 // Tests the case where we already have a cached resource and then we get a
 // route resource with no virtual host, which also results in error being sent
-// accross.
+// across.
 func (s) TestNoVirtualHost_ExistingResource(t *testing.T) {
 	nodeID := uuid.New().String()
 	mgmtServer, bc := setupManagementServerForTest(t, nodeID)
