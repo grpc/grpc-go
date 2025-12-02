@@ -269,20 +269,6 @@ func newFakeMetricsRecorder(t *testing.T) *fakeMetricsRecorder {
 		intValues:   make(map[*MetricDescriptor]int64),
 		floatValues: make(map[*MetricDescriptor]float64),
 	}
-
-	for _, desc := range metricsRegistry {
-		switch desc.Type {
-		case MetricTypeIntCount:
-		case MetricTypeIntHisto:
-		case MetricTypeIntGauge:
-		case MetricTypeIntUpDownCount:
-		case MetricTypeIntAsyncGauge:
-			fmr.intValues[desc] = 0
-		case MetricTypeFloatCount:
-		case MetricTypeFloatHisto:
-			fmr.floatValues[desc] = 0
-		}
-	}
 	return fmr
 }
 
