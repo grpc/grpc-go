@@ -163,9 +163,9 @@ func (s) TestMetricRegistry(t *testing.T) {
 	if got := fmr.intValues[intGaugeHandle1.Descriptor()]; got != 7 {
 		t.Fatalf("fmr.intValues[intGaugeHandle1.MetricDescriptor] got %v, want: %v", got, 7)
 	}
-	intAsyncGaugeHandle1.Record(fmr, 7, []string{"some label value", "some optional label value"}...)
-	if got := fmr.intValues[intGaugeHandle1.Descriptor()]; got != 7 {
-		t.Fatalf("fmr.intValues[intGaugeHandle1.MetricDescriptor] got %v, want: %v", got, 7)
+	intAsyncGaugeHandle1.Record(fmr, 9, []string{"some label value", "some optional label value"}...)
+	if got := fmr.intValues[intAsyncGaugeHandle1.Descriptor()]; got != 9 {
+		t.Fatalf("fmr.intValues[intAsyncGaugeHandle1.MetricDescriptor] got %v, want: %v", got, 9)
 	}
 }
 
@@ -275,6 +275,8 @@ func newFakeMetricsRecorder(t *testing.T) *fakeMetricsRecorder {
 		case MetricTypeIntCount:
 		case MetricTypeIntHisto:
 		case MetricTypeIntGauge:
+		case MetricTypeIntUpDownCount:
+		case MetricTypeIntAsyncGauge:
 			fmr.intValues[desc] = 0
 		case MetricTypeFloatCount:
 		case MetricTypeFloatHisto:
