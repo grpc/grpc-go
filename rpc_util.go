@@ -516,11 +516,16 @@ func (o CompressorCallOption) before(c *callInfo) error {
 }
 func (o CompressorCallOption) after(*callInfo, *csAttempt) {}
 
+// AcceptCompressors returns a CallOption that limits the compression algorithms
+// advertised in the grpc-accept-encoding header for response messages.
+// Compression algorithms not in the provided list will not be advertised, and
+// responses compressed with non-listed algorithms will be rejected.
 func AcceptCompressors(names ...string) CallOption {
 	cp := append([]string(nil), names...)
 	return AcceptCompressorsCallOption{names: cp}
 }
 
+// AcceptCompressorsCallOption is a CallOption that limits response compression.
 type AcceptCompressorsCallOption struct {
 	names []string
 }
