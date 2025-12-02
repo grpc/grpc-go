@@ -434,7 +434,8 @@ func unaryInterceptorAttachXDSLabels(ctx context.Context, method string, req, re
 			"csm.service_name":           "service_name_val",
 			"csm.service_namespace_name": "service_namespace_val",
 
-			"grpc.lb.locality": "grpc.lb.locality_val",
+			"grpc.lb.locality":        "grpc.lb.locality_val",
+			"grpc.lb.backend_service": "grpc.lb.backend_service_val",
 		},
 	})
 
@@ -469,7 +470,7 @@ func (s) TestXDSLabels(t *testing.T) {
 		MetricsOptions: opentelemetry.MetricsOptions{
 			MeterProvider:  provider,
 			Metrics:        opentelemetry.DefaultMetrics(),
-			OptionalLabels: []string{"csm.service_name", "csm.service_namespace_name", "grpc.lb.locality"},
+			OptionalLabels: []string{"csm.service_name", "csm.service_namespace_name", "grpc.lb.locality", "grpc.lb.backend_service"},
 		},
 	}, po), grpc.WithUnaryInterceptor(unaryInterceptorAttachXDSLabels)}
 	if err := ss.Start(nil, dopts...); err != nil {
@@ -498,6 +499,7 @@ func (s) TestXDSLabels(t *testing.T) {
 	serviceNameAttr := attribute.String("csm.service_name", "service_name_val")
 	serviceNamespaceAttr := attribute.String("csm.service_namespace_name", "service_namespace_val")
 	localityAttr := attribute.String("grpc.lb.locality", "grpc.lb.locality_val")
+	backendServiceAttr := attribute.String("grpc.lb.backend_service", "grpc.lb.backend_service_val")
 	meshIDAttr := attribute.String("csm.mesh_id", "unknown")
 	workloadCanonicalServiceAttr := attribute.String("csm.workload_canonical_service", "unknown")
 	remoteWorkloadTypeAttr := attribute.String("csm.remote_workload_type", "unknown")
@@ -510,6 +512,7 @@ func (s) TestXDSLabels(t *testing.T) {
 		serviceNameAttr,
 		serviceNamespaceAttr,
 		localityAttr,
+		backendServiceAttr,
 		meshIDAttr,
 		workloadCanonicalServiceAttr,
 		remoteWorkloadTypeAttr,

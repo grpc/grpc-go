@@ -295,9 +295,11 @@ func (b *clusterImplBalancer) UpdateClientConnState(s balancer.ClientConnState) 
 		return err
 	}
 
+	newState := resolver.SetBackendServiceOnState(s.ResolverState, b.clusterName)
+
 	// Addresses and sub-balancer config are sent to sub-balancer.
 	err = b.child.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState:  s.ResolverState,
+		ResolverState:  newState,
 		BalancerConfig: parsedCfg,
 	})
 
