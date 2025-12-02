@@ -35,6 +35,8 @@ import (
 	"google.golang.org/grpc/balancer/pickfirst"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/credentials"
+	expstats "google.golang.org/grpc/experimental/stats"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpcsync"
@@ -96,6 +98,41 @@ var (
 	// security information (e.g., OAuth2 token) which requires secure
 	// connection on an insecure connection.
 	errTransportCredentialsMissing = errors.New("grpc: the credentials require transport level security (use grpc.WithTransportCredentials() to set)")
+)
+
+var (
+	disconnectionsMetric = expstats.RegisterInt64Count(expstats.MetricDescriptor{
+		Name:           "grpc.subchannel.disconnections",
+		Description:    "EXPERIMENTAL. Number of times the selected subchannel becomes disconnected.",
+		Unit:           "{disconnection}",
+		Labels:         []string{"grpc.target"},
+		OptionalLabels: []string{"grpc.lb.backend_service", "grpc.lb.locality", "grpc.disconnect_error"},
+		Default:        false,
+	})
+	connectionAttemptsSucceededMetric = expstats.RegisterInt64Count(expstats.MetricDescriptor{
+		Name:           "grpc.subchannel.connection_attempts_succeeded",
+		Description:    "EXPERIMENTAL. Number of successful connection attempts.",
+		Unit:           "{attempt}",
+		Labels:         []string{"grpc.target"},
+		OptionalLabels: []string{"grpc.lb.backend_service", "grpc.lb.locality"},
+		Default:        false,
+	})
+	connectionAttemptsFailedMetric = expstats.RegisterInt64Count(expstats.MetricDescriptor{
+		Name:           "grpc.subchannel.connection_attempts_failed",
+		Description:    "EXPERIMENTAL. Number of failed connection attempts.",
+		Unit:           "{attempt}",
+		Labels:         []string{"grpc.target"},
+		OptionalLabels: []string{"grpc.lb.backend_service", "grpc.lb.locality"},
+		Default:        false,
+	})
+	openConnectionsMetric = expstats.RegisterInt64UpDownCount(expstats.MetricDescriptor{
+		Name:           "grpc.subchannel.open_connections",
+		Description:    "EXPERIMENTAL. Number of open connections.",
+		Unit:           "{attempt}",
+		Labels:         []string{"grpc.target"},
+		OptionalLabels: []string{"grpc.lb.backend_service", "grpc.security_level", "grpc.lb.locality"},
+		Default:        false,
+	})
 )
 
 const (
@@ -1223,6 +1260,11 @@ func (ac *addrConn) updateConnectivityState(s connectivity.State, lastErr error)
 	if ac.state == s {
 		return
 	}
+	locality, backendService := fetchLabels(ac)
+	if ac.state == connectivity.Ready || (ac.state == connectivity.Connecting && s == connectivity.Idle) {
+		disconnectionsMetric.Record(ac.cc.metricsRecorderList, 1, ac.cc.target, backendService, locality, "unknown")
+		openConnectionsMetric.Record(ac.cc.metricsRecorderList, -1, ac.cc.target, backendService, ac.securityLevel(), locality)
+	}
 	ac.state = s
 	ac.channelz.ChannelMetrics.State.Store(&s)
 	if lastErr == nil {
@@ -1276,10 +1318,13 @@ func (ac *addrConn) resetTransportAndUnlock() {
 	// https://github.com/grpc/grpc/blob/master/doc/connection-backoff.md#proposed-backoff-algorithm
 	connectDeadline := time.Now().Add(dialDuration)
 
+	locality, backendService := fetchLabels(ac)
+
 	ac.updateConnectivityState(connectivity.Connecting, nil)
 	ac.mu.Unlock()
 
 	if err := ac.tryAllAddrs(acCtx, addrs, connectDeadline); err != nil {
+		connectionAttemptsFailedMetric.Record(ac.cc.metricsRecorderList, 1, ac.cc.target, backendService, locality)
 		// TODO: #7534 - Move re-resolution requests into the pick_first LB policy
 		// to ensure one resolution request per pass instead of per subconn failure.
 		ac.cc.resolveNow(resolver.ResolveNowOptions{})
@@ -1319,8 +1364,40 @@ func (ac *addrConn) resetTransportAndUnlock() {
 	}
 	// Success; reset backoff.
 	ac.mu.Lock()
+	channelz.Infof(logger, ac.channelz, "Emitting success metric for subchannel connection")
+	connectionAttemptsSucceededMetric.Record(ac.cc.metricsRecorderList, 1, ac.cc.target, backendService, locality)
+	openConnectionsMetric.Record(ac.cc.metricsRecorderList, 1, ac.cc.target, backendService, ac.securityLevel(), locality)
 	ac.backoffIdx = 0
 	ac.mu.Unlock()
+}
+
+func fetchLabels(ac *addrConn) (string, string) {
+	var locality, backendService string
+	labelsFromAddress, ok := internal.AddressToTelemetryLabels.(func(resolver.Address) map[string]string)
+	if len(ac.addrs) > 0 && internal.AddressToTelemetryLabels != nil && ok {
+		labels := labelsFromAddress(ac.addrs[0])
+		locality = labels["grpc.lb.locality"]
+		backendService = labels["grpc.lb.backend_service"]
+	}
+	return locality, backendService
+}
+
+type securityLevelKey struct{}
+
+func (ac *addrConn) securityLevel() string {
+	var secLevel string
+	if ac.transport == nil {
+		secLevel, _ = ac.curAddr.Attributes.Value(securityLevelKey{}).(string)
+		return secLevel
+	}
+	authInfo := ac.transport.AuthInfo()
+	if ci, ok := authInfo.(interface {
+		GetCommonAuthInfo() credentials.CommonAuthInfo
+	}); ok {
+		secLevel = ci.GetCommonAuthInfo().SecurityLevel.String()
+		ac.curAddr.Attributes = ac.curAddr.Attributes.WithValue(securityLevelKey{}, secLevel)
+	}
+	return secLevel
 }
 
 // tryAllAddrs tries to create a connection to the addresses, and stop when at
