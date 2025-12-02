@@ -25,6 +25,7 @@ import (
 	"math"
 	rand "math/rand/v2"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -301,8 +302,9 @@ func newClientStreamWithParams(ctx context.Context, desc *StreamDesc, cc *Client
 		DoneFunc:       doneFunc,
 		Authority:      callInfo.authority,
 	}
-	if cfg := callInfo.acceptedResponseCompressors; cfg != nil {
-		callHdr.AcceptedCompressors = &cfg.headerValue
+	if allowed := callInfo.acceptedResponseCompressors; len(allowed) > 0 {
+		headerValue := strings.Join(allowed, ",")
+		callHdr.AcceptedCompressors = &headerValue
 	}
 
 	// Set our outgoing compression according to the UseCompressor CallOption, if
@@ -1137,6 +1139,10 @@ func (a *csAttempt) recvMsg(m any, payInfo *payloadInfo) (err error) {
 				a.decompressorV0 = nil
 				a.decompressorV1 = encoding.GetCompressor(ct)
 			}
+			// Validate that the compression method is acceptable for this call.
+			if !acceptedCompressorAllows(cs.callInfo.acceptedResponseCompressors, ct) {
+				return status.Errorf(codes.Internal, "grpc: peer compressed the response with %q which is not allowed by AcceptCompressors", ct)
+			}
 		} else {
 			// No compression is used; disable our decompressor.
 			a.decompressorV0 = nil
@@ -1144,7 +1150,7 @@ func (a *csAttempt) recvMsg(m any, payInfo *payloadInfo) (err error) {
 		// Only initialize this state once per stream.
 		a.decompressorSet = true
 	}
-	if err := recv(&a.parser, cs.codec, a.transportStream, a.decompressorV0, m, *cs.callInfo.maxReceiveMessageSize, payInfo, a.decompressorV1, false, cs.callInfo.acceptedResponseCompressors); err != nil {
+	if err := recv(&a.parser, cs.codec, a.transportStream, a.decompressorV0, m, *cs.callInfo.maxReceiveMessageSize, payInfo, a.decompressorV1, false); err != nil {
 		if err == io.EOF {
 			if statusErr := a.transportStream.Status().Err(); statusErr != nil {
 				return statusErr
@@ -1182,7 +1188,7 @@ func (a *csAttempt) recvMsg(m any, payInfo *payloadInfo) (err error) {
 	}
 	// Special handling for non-server-stream rpcs.
 	// This recv expects EOF or errors, so we don't collect inPayload.
-	if err := recv(&a.parser, cs.codec, a.transportStream, a.decompressorV0, m, *cs.callInfo.maxReceiveMessageSize, nil, a.decompressorV1, false, cs.callInfo.acceptedResponseCompressors); err == io.EOF {
+	if err := recv(&a.parser, cs.codec, a.transportStream, a.decompressorV0, m, *cs.callInfo.maxReceiveMessageSize, nil, a.decompressorV1, false); err == io.EOF {
 		return a.transportStream.Status().Err() // non-server streaming Recv returns nil on success
 	} else if err != nil {
 		return toRPCErr(err)
@@ -1482,6 +1488,10 @@ func (as *addrConnStream) RecvMsg(m any) (err error) {
 				as.decompressorV0 = nil
 				as.decompressorV1 = encoding.GetCompressor(ct)
 			}
+			// Validate that the compression method is acceptable for this call.
+			if !acceptedCompressorAllows(as.callInfo.acceptedResponseCompressors, ct) {
+				return status.Errorf(codes.Internal, "grpc: peer compressed the response with %q which is not allowed by AcceptCompressors", ct)
+			}
 		} else {
 			// No compression is used; disable our decompressor.
 			as.decompressorV0 = nil
@@ -1489,7 +1499,7 @@ func (as *addrConnStream) RecvMsg(m any) (err error) {
 		// Only initialize this state once per stream.
 		as.decompressorSet = true
 	}
-	if err := recv(&as.parser, as.codec, as.transportStream, as.decompressorV0, m, *as.callInfo.maxReceiveMessageSize, nil, as.decompressorV1, false, as.callInfo.acceptedResponseCompressors); err != nil {
+	if err := recv(&as.parser, as.codec, as.transportStream, as.decompressorV0, m, *as.callInfo.maxReceiveMessageSize, nil, as.decompressorV1, false); err != nil {
 		if err == io.EOF {
 			if statusErr := as.transportStream.Status().Err(); statusErr != nil {
 				return statusErr
@@ -1511,7 +1521,7 @@ func (as *addrConnStream) RecvMsg(m any) (err error) {
 
 	// Special handling for non-server-stream rpcs.
 	// This recv expects EOF or errors, so we don't collect inPayload.
-	if err := recv(&as.parser, as.codec, as.transportStream, as.decompressorV0, m, *as.callInfo.maxReceiveMessageSize, nil, as.decompressorV1, false, as.callInfo.acceptedResponseCompressors); err == io.EOF {
+	if err := recv(&as.parser, as.codec, as.transportStream, as.decompressorV0, m, *as.callInfo.maxReceiveMessageSize, nil, as.decompressorV1, false); err == io.EOF {
 		return as.transportStream.Status().Err() // non-server streaming Recv returns nil on success
 	} else if err != nil {
 		return toRPCErr(err)
@@ -1788,7 +1798,7 @@ func (ss *serverStream) RecvMsg(m any) (err error) {
 		payInfo = &payloadInfo{}
 		defer payInfo.free()
 	}
-	if err := recv(&ss.p, ss.codec, ss.s, ss.decompressorV0, m, ss.maxReceiveMessageSize, payInfo, ss.decompressorV1, true, nil); err != nil {
+	if err := recv(&ss.p, ss.codec, ss.s, ss.decompressorV0, m, ss.maxReceiveMessageSize, payInfo, ss.decompressorV1, true); err != nil {
 		if err == io.EOF {
 			if len(ss.binlogs) != 0 {
 				chc := &binarylog.ClientHalfClose{}
@@ -1832,7 +1842,7 @@ func (ss *serverStream) RecvMsg(m any) (err error) {
 	}
 	// Special handling for non-client-stream rpcs.
 	// This recv expects EOF or errors, so we don't collect inPayload.
-	if err := recv(&ss.p, ss.codec, ss.s, ss.decompressorV0, m, ss.maxReceiveMessageSize, nil, ss.decompressorV1, true, nil); err == io.EOF {
+	if err := recv(&ss.p, ss.codec, ss.s, ss.decompressorV0, m, ss.maxReceiveMessageSize, nil, ss.decompressorV1, true); err == io.EOF {
 		return nil
 	} else if err != nil {
 		return err

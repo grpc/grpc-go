@@ -44,7 +44,7 @@ import (
 )
 
 func init() {
-	internal.AcceptedCompressionNames = acceptedCompressionNames
+	internal.AcceptCompressors = AcceptCompressors
 }
 
 // Compressor defines the interface gRPC uses to compress a message.
@@ -167,23 +167,22 @@ type callInfo struct {
 	maxRetryRPCBufferSize       int
 	onFinish                    []func(err error)
 	authority                   string
-	acceptedResponseCompressors *acceptedCompressionConfig
+	acceptedResponseCompressors []string
 }
 
-type acceptedCompressionConfig struct {
-	headerValue string
-	allowed     map[string]struct{}
-}
-
-func (cfg *acceptedCompressionConfig) allows(name string) bool {
-	if cfg == nil {
+func acceptedCompressorAllows(allowed []string, name string) bool {
+	if allowed == nil {
 		return true
 	}
 	if name == "" || name == encoding.Identity {
 		return true
 	}
-	_, ok := cfg.allowed[name]
-	return ok
+	for _, a := range allowed {
+		if a == name {
+			return true
+		}
+	}
+	return false
 }
 
 func defaultCallInfo() *callInfo {
@@ -193,14 +192,12 @@ func defaultCallInfo() *callInfo {
 	}
 }
 
-func newAcceptedCompressionConfig(names []string) (*acceptedCompressionConfig, error) {
-	cfg := &acceptedCompressionConfig{
-		allowed: make(map[string]struct{}, len(names)),
-	}
+func newAcceptedCompressionConfig(names []string) ([]string, error) {
 	if len(names) == 0 {
-		return cfg, nil
+		return nil, nil
 	}
-	var ordered []string
+	var allowed []string
+	seen := make(map[string]struct{}, len(names))
 	for _, name := range names {
 		name = strings.TrimSpace(name)
 		if name == "" || name == encoding.Identity {
@@ -209,17 +206,13 @@ func newAcceptedCompressionConfig(names []string) (*acceptedCompressionConfig, e
 		if !grpcutil.IsCompressorNameRegistered(name) {
 			return nil, status.Errorf(codes.InvalidArgument, "grpc: compressor %q is not registered", name)
 		}
-		if _, dup := cfg.allowed[name]; dup {
+		if _, dup := seen[name]; dup {
 			continue
 		}
-		cfg.allowed[name] = struct{}{}
-		ordered = append(ordered, name)
+		seen[name] = struct{}{}
+		allowed = append(allowed, name)
 	}
-	if len(ordered) == 0 {
-		return nil, status.Error(codes.InvalidArgument, "grpc: no valid compressor names provided")
-	}
-	cfg.headerValue = strings.Join(ordered, ",")
-	return cfg, nil
+	return allowed, nil
 }
 
 // CallOption configures a Call before it starts or extracts information from
@@ -523,25 +516,25 @@ func (o CompressorCallOption) before(c *callInfo) error {
 }
 func (o CompressorCallOption) after(*callInfo, *csAttempt) {}
 
-func acceptedCompressionNames(names ...string) CallOption {
+func AcceptCompressors(names ...string) CallOption {
 	cp := append([]string(nil), names...)
-	return acceptedCompressionNamesCallOption{names: cp}
+	return AcceptCompressorsCallOption{names: cp}
 }
 
-type acceptedCompressionNamesCallOption struct {
+type AcceptCompressorsCallOption struct {
 	names []string
 }
 
-func (o acceptedCompressionNamesCallOption) before(c *callInfo) error {
-	cfg, err := newAcceptedCompressionConfig(o.names)
+func (o AcceptCompressorsCallOption) before(c *callInfo) error {
+	allowed, err := newAcceptedCompressionConfig(o.names)
 	if err != nil {
 		return err
 	}
-	c.acceptedResponseCompressors = cfg
+	c.acceptedResponseCompressors = allowed
 	return nil
 }
 
-func (acceptedCompressionNamesCallOption) after(*callInfo, *csAttempt) {}
+func (AcceptCompressorsCallOption) after(*callInfo, *csAttempt) {}
 
 // CallContentSubtype returns a CallOption that will set the content-subtype
 // for a call. For example, if content-subtype is "json", the Content-Type over
@@ -893,7 +886,7 @@ func outPayload(client bool, msg any, dataLength, payloadLength int, t time.Time
 	}
 }
 
-func checkRecvPayload(pf payloadFormat, recvCompress string, haveCompressor bool, isServer bool, acceptedCfg *acceptedCompressionConfig) *status.Status {
+func checkRecvPayload(pf payloadFormat, recvCompress string, haveCompressor bool, isServer bool) *status.Status {
 	switch pf {
 	case compressionNone:
 	case compressionMade:
@@ -905,9 +898,6 @@ func checkRecvPayload(pf payloadFormat, recvCompress string, haveCompressor bool
 				return status.Newf(codes.Unimplemented, "grpc: Decompressor is not installed for grpc-encoding %q", recvCompress)
 			}
 			return status.Newf(codes.Internal, "grpc: Decompressor is not installed for grpc-encoding %q", recvCompress)
-		}
-		if !isServer && acceptedCfg != nil && !acceptedCfg.allows(recvCompress) {
-			return status.Newf(codes.FailedPrecondition, "grpc: peer compressed the response with %q which is not allowed by AcceptedCompressionNames", recvCompress)
 		}
 	default:
 		return status.Newf(codes.Internal, "grpc: received unexpected payload format %d", pf)
@@ -932,8 +922,7 @@ func (p *payloadInfo) free() {
 // the buffer is no longer needed.
 // TODO: Refactor this function to reduce the number of arguments.
 // See: https://google.github.io/styleguide/go/best-practices.html#function-argument-lists
-func recvAndDecompress(p *parser, s recvCompressor, dc Decompressor, maxReceiveMessageSize int, payInfo *payloadInfo, compressor encoding.Compressor, isServer bool, acceptedCfg *acceptedCompressionConfig,
-) (out mem.BufferSlice, err error) {
+func recvAndDecompress(p *parser, s recvCompressor, dc Decompressor, maxReceiveMessageSize int, payInfo *payloadInfo, compressor encoding.Compressor, isServer bool) (out mem.BufferSlice, err error) {
 	pf, compressed, err := p.recvMsg(maxReceiveMessageSize)
 	if err != nil {
 		return nil, err
@@ -941,7 +930,7 @@ func recvAndDecompress(p *parser, s recvCompressor, dc Decompressor, maxReceiveM
 
 	compressedLength := compressed.Len()
 
-	if st := checkRecvPayload(pf, s.RecvCompress(), compressor != nil || dc != nil, isServer, acceptedCfg); st != nil {
+	if st := checkRecvPayload(pf, s.RecvCompress(), compressor != nil || dc != nil, isServer); st != nil {
 		compressed.Free()
 		return nil, st.Err()
 	}
@@ -1016,8 +1005,8 @@ type recvCompressor interface {
 // For the two compressor parameters, both should not be set, but if they are,
 // dc takes precedence over compressor.
 // TODO(dfawley): wrap the old compressor/decompressor using the new API?
-func recv(p *parser, c baseCodec, s recvCompressor, dc Decompressor, m any, maxReceiveMessageSize int, payInfo *payloadInfo, compressor encoding.Compressor, isServer bool, acceptedCfg *acceptedCompressionConfig) error {
-	data, err := recvAndDecompress(p, s, dc, maxReceiveMessageSize, payInfo, compressor, isServer, acceptedCfg)
+func recv(p *parser, c baseCodec, s recvCompressor, dc Decompressor, m any, maxReceiveMessageSize int, payInfo *payloadInfo, compressor encoding.Compressor, isServer bool) error {
+	data, err := recvAndDecompress(p, s, dc, maxReceiveMessageSize, payInfo, compressor, isServer)
 	if err != nil {
 		return err
 	}

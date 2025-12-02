@@ -48,37 +48,69 @@ const (
 	decompressionErrorMsg   = "invalid compression format"
 )
 
+type testCompressorForRegistry struct {
+	name string
+}
+
+func (c *testCompressorForRegistry) Compress(w io.Writer) (io.WriteCloser, error) {
+	return &testWriteCloser{w}, nil
+}
+
+func (c *testCompressorForRegistry) Decompress(r io.Reader) (io.Reader, error) {
+	return r, nil
+}
+
+func (c *testCompressorForRegistry) Name() string {
+	return c.name
+}
+
+type testWriteCloser struct {
+	io.Writer
+}
+
+func (w *testWriteCloser) Close() error {
+	return nil
+}
+
 func (s) TestNewAcceptedCompressionConfig(t *testing.T) {
+	// Register a test compressor for multi-compressor tests
+	testCompressor := &testCompressorForRegistry{name: "test-compressor"}
+	encoding.RegisterCompressor(testCompressor)
+	defer func() {
+		// Unregister the test compressor
+		encoding.RegisterCompressor(&testCompressorForRegistry{name: "test-compressor"})
+	}()
+
 	tests := []struct {
 		name        string
 		input       []string
-		wantHeader  string
-		wantAllowed map[string]struct{}
+		wantAllowed []string
 		wantErr     bool
 	}{
 		{
 			name:        "identity-only",
 			input:       nil,
-			wantHeader:  "",
-			wantAllowed: map[string]struct{}{},
+			wantAllowed: nil,
 		},
 		{
 			name:        "single valid",
 			input:       []string{"gzip"},
-			wantHeader:  "gzip",
-			wantAllowed: map[string]struct{}{"gzip": {}},
+			wantAllowed: []string{"gzip"},
 		},
 		{
 			name:        "dedupe and trim",
 			input:       []string{" gzip ", "gzip"},
-			wantHeader:  "gzip",
-			wantAllowed: map[string]struct{}{"gzip": {}},
+			wantAllowed: []string{"gzip"},
 		},
 		{
 			name:        "ignores identity",
 			input:       []string{"identity", "gzip"},
-			wantHeader:  "gzip",
-			wantAllowed: map[string]struct{}{"gzip": {}},
+			wantAllowed: []string{"gzip"},
+		},
+		{
+			name:        "explicit identity only",
+			input:       []string{"identity"},
+			wantAllowed: nil,
 		},
 		{
 			name:    "invalid compressor",
@@ -86,44 +118,45 @@ func (s) TestNewAcceptedCompressionConfig(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name:    "only whitespace",
-			input:   []string{"   ", "\t"},
+			name:        "only whitespace",
+			input:       []string{"   ", "\t"},
+			wantAllowed: nil,
+		},
+		{
+			name:        "multiple valid compressors",
+			input:       []string{"gzip", "test-compressor"},
+			wantAllowed: []string{"gzip", "test-compressor"},
+		},
+		{
+			name:        "multiple with identity and whitespace",
+			input:       []string{"gzip", "identity", " test-compressor ", "  "},
+			wantAllowed: []string{"gzip", "test-compressor"},
+		},
+		{
+			name:        "empty string in list",
+			input:       []string{"gzip", "", "test-compressor"},
+			wantAllowed: []string{"gzip", "test-compressor"},
+		},
+		{
+			name:    "mixed valid and invalid",
+			input:   []string{"gzip", "invalid-comp"},
 			wantErr: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg, err := newAcceptedCompressionConfig(tt.input)
+			allowed, err := newAcceptedCompressionConfig(tt.input)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("newAcceptedCompressionConfig(%v) error = %v, wantErr %v", tt.input, err, tt.wantErr)
 			}
 			if tt.wantErr {
 				return
 			}
-			if cfg.headerValue != tt.wantHeader {
-				t.Fatalf("headerValue = %q, want %q", cfg.headerValue, tt.wantHeader)
-			}
-			if diff := cmp.Diff(tt.wantAllowed, cfg.allowed); diff != "" {
+			if diff := cmp.Diff(tt.wantAllowed, allowed); diff != "" {
 				t.Fatalf("allowed diff (-want +got): %v", diff)
 			}
 		})
-	}
-}
-
-func (s) TestCheckRecvPayloadHonorsAcceptedCompressors(t *testing.T) {
-	cfg, err := newAcceptedCompressionConfig([]string{"gzip"})
-	if err != nil {
-		t.Fatalf("newAcceptedCompressionConfig returned error: %v", err)
-	}
-
-	if st := checkRecvPayload(compressionMade, "gzip", true, false, cfg); st != nil {
-		t.Fatalf("checkRecvPayload returned error for allowed compressor: %v", st)
-	}
-
-	st := checkRecvPayload(compressionMade, "snappy", true, false, cfg)
-	if st == nil || st.Code() != codes.FailedPrecondition {
-		t.Fatalf("checkRecvPayload = %v, want code %v", st, codes.FailedPrecondition)
 	}
 }
 
