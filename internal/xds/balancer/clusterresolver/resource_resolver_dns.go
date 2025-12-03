@@ -168,7 +168,6 @@ func (dr *dnsDiscoveryMechanism) ReportError(err error) {
 }
 
 func (dr *dnsDiscoveryMechanism) NewAddress(addresses []resolver.Address) {
-	fmt.Println("NewAddress")
 	dr.UpdateState(resolver.State{Addresses: addresses})
 }
 
