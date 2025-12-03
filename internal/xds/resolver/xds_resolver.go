@@ -351,7 +351,7 @@ func (r *xdsResolver) newConfigSelector() (*configSelector, error) {
 		virtualHost: virtualHost{
 			retryConfig: r.xdsConfig.VirtualHost.RetryConfig,
 		},
-		routes:           make([]route, len(r.xdsConfig.VirtualHost.Routes)),
+		routes:           make([]xdsresource.MatchedRoute, len(r.xdsConfig.VirtualHost.Routes)),
 		clusters:         make(map[string]*clusterInfo),
 		httpFilterConfig: r.xdsConfig.Listener.HTTPFilters,
 	}
@@ -380,18 +380,20 @@ func (r *xdsResolver) newConfigSelector() (*configSelector, error) {
 				cs.clusters[clusterName] = ci
 			}
 		}
-		cs.routes[i].clusters = clusters
+		cs.routes[i].Clusters = clusters
 
-		cs.routes[i].m = xdsresource.RouteToMatcher(rt)
-		cs.routes[i].actionType = rt.ActionType
+		cs.routes[i].M = xdsresource.RouteToMatcher(rt)
+		cs.routes[i].ActionType = rt.ActionType
 		if rt.MaxStreamDuration == nil {
-			cs.routes[i].maxStreamDuration = r.xdsConfig.Listener.MaxStreamDuration
+			cs.routes[i].MaxStreamDuration = r.xdsConfig.Listener.MaxStreamDuration
 		} else {
-			cs.routes[i].maxStreamDuration = *rt.MaxStreamDuration
+			cs.routes[i].MaxStreamDuration = *rt.MaxStreamDuration
 		}
 
-		cs.routes[i].retryConfig = rt.RetryConfig
-		cs.routes[i].hashPolicies = rt.HashPolicies
+		cs.routes[i].HTTPFilterConfigOverride = rt.HTTPFilterConfigOverride
+		cs.routes[i].RetryConfig = rt.RetryConfig
+		cs.routes[i].HashPolicies = rt.HashPolicies
+		cs.routes[i].AutoHostRewrite = rt.AutoHostRewrite
 	}
 
 	// Account for this config selector's clusters.  Do this after no further
