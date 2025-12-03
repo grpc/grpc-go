@@ -356,19 +356,3 @@ func ValidateEndpoints(endpoints []Endpoint) error {
 	}
 	return errors.New("endpoints list contains no addresses")
 }
-
-type backendServiceKey struct{}
-
-// SetBackendServiceOnState stores the backendService on the resolver state so
-// that it can be retrieved in UpdateClientConnState in wrr for metrics
-func SetBackendServiceOnState(state State, backendService string) State {
-	state.Attributes = state.Attributes.WithValue(backendServiceKey{}, backendService)
-	return state
-}
-
-// GetBackendServiceFromState provides cluster name saved in resolver state
-func GetBackendServiceFromState(state State) (string, bool) {
-	v := state.Attributes.Value(backendServiceKey{})
-	name, ok := v.(string)
-	return name, ok
-}

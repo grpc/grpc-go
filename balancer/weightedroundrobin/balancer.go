@@ -173,7 +173,7 @@ func (b *wrrBalancer) updateEndpointsLocked(endpoints []resolver.Endpoint) {
 				metricsRecorder: b.metricsRecorder,
 				target:          b.target,
 				locality:        b.locality,
-				cluster:         b.clusterName,
+				clusterName:     b.clusterName,
 			}
 			for _, addr := range endpoint.Addresses {
 				b.addressWeights.Set(addr, ew)
@@ -233,11 +233,7 @@ func (b *wrrBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error 
 	b.mu.Lock()
 	b.cfg = cfg
 	b.locality = weightedtarget.LocalityFromResolverState(ccs.ResolverState)
-	if cluster, ok := resolver.GetBackendServiceFromState(ccs.ResolverState); !ok {
-		b.logger.Infof("Backend service name not found in resolver state attributes.")
-	} else {
-		b.clusterName = cluster
-	}
+	b.clusterName = backendServiceFromState(ccs.ResolverState)
 	b.updateEndpointsLocked(ccs.ResolverState.Endpoints)
 	b.mu.Unlock()
 
@@ -508,7 +504,7 @@ type endpointWeight struct {
 	target          string
 	metricsRecorder estats.MetricsRecorder
 	locality        string
-	cluster         string
+	clusterName     string
 
 	// The following fields are only accessed on calls into the LB policy, and
 	// do not need a mutex.
@@ -612,14 +608,14 @@ func (w *endpointWeight) weight(now time.Time, weightExpirationPeriod, blackoutP
 
 	if recordMetrics {
 		defer func() {
-			endpointWeightsMetric.Record(w.metricsRecorder, weight, w.target, w.locality, w.cluster)
+			endpointWeightsMetric.Record(w.metricsRecorder, weight, w.target, w.locality, w.clusterName)
 		}()
 	}
 
 	// The endpoint has not received a load report (i.e. just turned READY with
 	// no load report).
 	if w.lastUpdated.Equal(time.Time{}) {
-		endpointWeightNotYetUsableMetric.Record(w.metricsRecorder, 1, w.target, w.locality, w.cluster)
+		endpointWeightNotYetUsableMetric.Record(w.metricsRecorder, 1, w.target, w.locality, w.clusterName)
 		return 0
 	}
 
@@ -628,7 +624,7 @@ func (w *endpointWeight) weight(now time.Time, weightExpirationPeriod, blackoutP
 	// start getting data again in the future, and return 0.
 	if now.Sub(w.lastUpdated) >= weightExpirationPeriod {
 		if recordMetrics {
-			endpointWeightStaleMetric.Record(w.metricsRecorder, 1, w.target, w.locality, w.cluster)
+			endpointWeightStaleMetric.Record(w.metricsRecorder, 1, w.target, w.locality, w.clusterName)
 		}
 		w.nonEmptySince = time.Time{}
 		return 0
@@ -637,10 +633,27 @@ func (w *endpointWeight) weight(now time.Time, weightExpirationPeriod, blackoutP
 	// If we don't have at least blackoutPeriod worth of data, return 0.
 	if blackoutPeriod != 0 && (w.nonEmptySince.Equal(time.Time{}) || now.Sub(w.nonEmptySince) < blackoutPeriod) {
 		if recordMetrics {
-			endpointWeightNotYetUsableMetric.Record(w.metricsRecorder, 1, w.target, w.locality, w.cluster)
+			endpointWeightNotYetUsableMetric.Record(w.metricsRecorder, 1, w.target, w.locality, w.clusterName)
 		}
 		return 0
 	}
 
 	return w.weightVal
+}
+
+type backendServiceKey struct{}
+
+// SetBackendServiceOnState stores the backendService on the resolver state so
+// that it can be used later as a label in wrr metrics.
+func SetBackendServiceOnState(state resolver.State, backendService string) resolver.State {
+	state.Attributes = state.Attributes.WithValue(backendServiceKey{}, backendService)
+	return state
+}
+
+// getBackendServiceFromState retrieves the cluster name stored as an attribute
+// in the resolver state.
+func backendServiceFromState(state resolver.State) string {
+	v := state.Attributes.Value(backendServiceKey{})
+	name, _ := v.(string)
+	return name
 }
