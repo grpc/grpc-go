@@ -307,13 +307,11 @@ func TestBuildPriorityConfig(t *testing.T) {
 	}
 }
 
-func testEndpointForDNS(addrStrs []string, localityWeight, endpointWeight uint32, path []string, lID *clients.Locality) resolver.Endpoint {
+func testEndpointForDNS(addrStrs []string, localityWeight uint32, path []string) resolver.Endpoint {
 	endpoint := resolver.Endpoint{}
 	endpoint.Addresses = append(endpoint.Addresses, resolver.Address{Addr: addrStrs[0]})
 	endpoint = hierarchy.SetInEndpoint(endpoint, path)
-	endpoint = xdsinternal.SetLocalityIDInEndpoint(endpoint, *lID)
 	endpoint = wrrlocality.SetAddrInfoInEndpoint(endpoint, wrrlocality.AddrInfo{LocalityWeight: localityWeight})
-	endpoint = weight.Set(endpoint, weight.EndpointInfo{Weight: localityWeight * endpointWeight})
 	return endpoint
 }
 
@@ -326,8 +324,8 @@ func TestBuildClusterImplConfigForDNS(t *testing.T) {
 		ChildPolicy: nil,
 	}
 	wantEndpoints := []resolver.Endpoint{
-		testEndpointForDNS(testEndpoints[0][0].Addresses, 1, 1, []string{wantName, localityStr}, &clients.Locality{}),
-		testEndpointForDNS(testEndpoints[0][1].Addresses, 1, 1, []string{wantName, localityStr}, &clients.Locality{}),
+		testEndpointForDNS(testEndpoints[0][0].Addresses, 1, []string{wantName, localityStr}),
+		testEndpointForDNS(testEndpoints[0][1].Addresses, 1, []string{wantName, localityStr}),
 	}
 
 	if diff := cmp.Diff(gotName, wantName); diff != "" {

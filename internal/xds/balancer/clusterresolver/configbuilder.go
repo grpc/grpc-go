@@ -144,14 +144,11 @@ func buildClusterImplConfigForDNS(g *nameGenerator, endpoints []resolver.Endpoin
 	retEndpoints := make([]resolver.Endpoint, len(endpoints))
 	pName := fmt.Sprintf("priority-%v", g.prefix)
 	for i, e := range endpoints {
-		lid := clients.Locality{}
-		localityStr := xdsinternal.LocalityString(lid)
+		// Use the canonical string representation for the locality to match
+		// the keys expected by the parent Load Balancing policy.
+		localityStr := xdsinternal.LocalityString(clients.Locality{})
 		retEndpoints[i] = hierarchy.SetInEndpoint(e, []string{pName, localityStr})
-		retEndpoints[i] = xdsinternal.SetLocalityIDInEndpoint(retEndpoints[i], lid)
-		var lw uint32 = 1
-		retEndpoints[i] = wrrlocality.SetAddrInfoInEndpoint(retEndpoints[i], wrrlocality.AddrInfo{LocalityWeight: lw})
-		var ew uint32 = 1
-		retEndpoints[i] = weight.Set(retEndpoints[i], weight.EndpointInfo{Weight: lw * ew})
+		retEndpoints[i] = wrrlocality.SetAddrInfoInEndpoint(retEndpoints[i], wrrlocality.AddrInfo{LocalityWeight: 1})
 		// Copy the nested address field as slice fields are shared by the
 		// iteration variable and the original slice.
 		retEndpoints[i].Addresses = append([]resolver.Address{}, e.Addresses...)
