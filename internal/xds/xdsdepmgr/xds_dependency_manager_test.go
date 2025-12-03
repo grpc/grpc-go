@@ -505,6 +505,52 @@ func (s) TestNoVirtualHost(t *testing.T) {
 	}
 }
 
+// Tests the case where we already have a cached resource and then we get a
+// route resource with no virtual host, which also results in error being sent
+// across.
+func (s) TestNoVirtualHost_ExistingResource(t *testing.T) {
+	nodeID, mgmtServer, xdsClient := setup(t, false)
+
+	watcher := &testWatcher{
+		updateCh: make(chan *xdsresource.XDSConfig),
+		errorCh:  make(chan error),
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		NodeID:     nodeID,
+		DialTarget: defaultTestServiceName,
+		Host:       "localhost",
+		Port:       8080,
+		SecLevel:   e2e.SecurityLevelNone,
+	})
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	dm := xdsdepmgr.New(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
+	defer dm.Close()
+
+	// Verify valid update.
+	wantXdsConfig := makedefaultXDSConfig(resources.Routes[0].Name, resources.Clusters[0].Name, resources.Endpoints[0].ClusterName, "localhost:8080")
+	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
+		t.Fatal(err)
+	}
+
+	// 3. Send route update with no virtual host.
+	resources.Routes[0].VirtualHosts = nil
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// 4. Verify error.
+	if err := verifyError(ctx, watcher.errorCh, "could not find VirtualHost", nodeID); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // Tests the case where we get an ambient error and verify that we correctly log
 // a warning for it. To make sure we get an ambient error, we send a correct
 // update first, then send an invalid one and then send the valid resource
