@@ -146,14 +146,11 @@ func buildClusterImplConfigForDNS(g *nameGenerator, endpoints []resolver.Endpoin
 		// For Logical DNS clusters, the same hostname attribute is added
 		// to all endpoints. It is set to the name that is resolved for the
 		// Logical DNS cluster, including the port number.
-		lid := clients.Locality{}
-		localityStr := xdsinternal.LocalityString(lid)
+		// Use the canonical string representation for the locality to match
+		// the keys expected by the parent Load Balancing policy.
+		localityStr := xdsinternal.LocalityString(clients.Locality{})
 		retEndpoints[i] = xdsresource.SetHostname(hierarchy.SetInEndpoint(e, []string{pName, localityStr}), mechanism.DNSHostname)
-		retEndpoints[i] = xdsinternal.SetLocalityIDInEndpoint(retEndpoints[i], lid)
-		var lw uint32 = 1
-		retEndpoints[i] = wrrlocality.SetAddrInfoInEndpoint(retEndpoints[i], wrrlocality.AddrInfo{LocalityWeight: lw})
-		var ew uint32 = 1
-		retEndpoints[i] = weight.Set(retEndpoints[i], weight.EndpointInfo{Weight: lw * ew})
+		retEndpoints[i] = wrrlocality.SetAddrInfoInEndpoint(retEndpoints[i], wrrlocality.AddrInfo{LocalityWeight: 1})
 		// Copy the nested address field as slice fields are shared by the
 		// iteration variable and the original slice.
 		retEndpoints[i].Addresses = append([]resolver.Address{}, e.Addresses...)
