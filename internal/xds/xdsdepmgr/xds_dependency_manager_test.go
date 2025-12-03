@@ -505,120 +505,6 @@ func (s) TestNoVirtualHost(t *testing.T) {
 	}
 }
 
-// Tests the case where the dependency manager receives a cluster resource error
-// and verifies that Update is called with XDSConfig containing cluster error.
-func (s) TestClusterResourceError(t *testing.T) {
-	nodeID, mgmtServer, xdsClient := setup(t, false)
-
-	watcher := &testWatcher{
-		updateCh: make(chan *xdsresource.XDSConfig),
-		errorCh:  make(chan error),
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-
-	resources := e2e.DefaultClientResources(e2e.ResourceParams{
-		NodeID:     nodeID,
-		DialTarget: defaultTestServiceName,
-		Host:       "localhost",
-		Port:       8080,
-		SecLevel:   e2e.SecurityLevelNone,
-	})
-	resources.Clusters[0].LrsServer = &v3corepb.ConfigSource{ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{}}
-
-	if err := mgmtServer.Update(ctx, resources); err != nil {
-		t.Fatal(err)
-	}
-
-	dm := xdsdepmgr.New(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
-	defer dm.Close()
-
-	wantXdsConfig := makedefaultXDSConfig(resources.Routes[0].Name, resources.Clusters[0].Name, resources.Clusters[0].EdsClusterConfig.ServiceName, "localhost:8080")
-	wantXdsConfig.Clusters[resources.Clusters[0].Name] = &xdsresource.ClusterResult{Err: fmt.Errorf("[xDS node id: %v]: %v", nodeID, fmt.Errorf("unsupported config_source_specifier *corev3.ConfigSource_Ads in lrs_server field"))}
-
-	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
-		t.Fatal(err)
-	}
-
-	// Drain the updates because management server keeps sending the error updates repeatedly causing
-	// the update from dependency manager to be blocked if we don't drain it.
-	select {
-	case <-ctx.Done():
-	case <-watcher.updateCh:
-	}
-}
-
-// Tests the case where the dependency manager receives a cluster resource ambient error.
-// We send a valid cluster resource first, then send an invalid one and then
-// send the valid resource again. We send the valid resource again so that we
-// can be sure the ambient error reaches the dependency manager since there is
-// no other way to wait for it.
-func (s) TestClusterAmbientError(t *testing.T) {
-	// Expect a warning log for the ambient error.
-	grpctest.ExpectWarning("Cluster resource ambient error")
-
-	nodeID, mgmtServer, xdsClient := setup(t, false)
-
-	watcher := &testWatcher{
-		updateCh: make(chan *xdsresource.XDSConfig),
-		errorCh:  make(chan error),
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-
-	resources := e2e.DefaultClientResources(e2e.ResourceParams{
-		NodeID:     nodeID,
-		DialTarget: defaultTestServiceName,
-		Host:       "localhost",
-		Port:       8080,
-		SecLevel:   e2e.SecurityLevelNone,
-	})
-
-	if err := mgmtServer.Update(ctx, resources); err != nil {
-		t.Fatal(err)
-	}
-
-	dm := xdsdepmgr.New(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
-	defer dm.Close()
-
-	wantXdsConfig := makedefaultXDSConfig(resources.Routes[0].Name, resources.Clusters[0].Name, resources.Clusters[0].EdsClusterConfig.ServiceName, "localhost:8080")
-	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
-		t.Fatal(err)
-	}
-
-	// Configure a cluster resource that is expected to be NACKed because it
-	// does not contain the `LrsServer` field. Since a valid one is already cached,
-	// this should result in an ambient error.
-	resources.Clusters[0].LrsServer = &v3corepb.ConfigSource{ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{}}
-	if err := mgmtServer.Update(ctx, resources); err != nil {
-		t.Fatal(err)
-	}
-
-	select {
-	case <-time.After(defaultTestShortTimeout):
-	case update := <-watcher.updateCh:
-		t.Fatalf("received unexpected update from dependency manager: %v", update)
-	}
-
-	// Send valid resources again to guarantee we get the cluster ambient error before the test ends.
-	resources = e2e.DefaultClientResources(e2e.ResourceParams{
-		NodeID:     nodeID,
-		DialTarget: defaultTestServiceName,
-		Host:       "localhost",
-		Port:       8080,
-		SecLevel:   e2e.SecurityLevelNone,
-	})
-	if err := mgmtServer.Update(ctx, resources); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
-		t.Fatal(err)
-	}
-}
-
 // Tests the case where we get an ambient error and verify that we correctly log
 // a warning for it. To make sure we get an ambient error, we send a correct
 // update first, then send an invalid one and then send the valid resource
@@ -928,6 +814,120 @@ func (s) TestRouteResourceChangeToInline(t *testing.T) {
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
+	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Tests the case where the dependency manager receives a cluster resource error
+// and verifies that Update is called with XDSConfig containing cluster error.
+func (s) TestClusterResourceError(t *testing.T) {
+	nodeID, mgmtServer, xdsClient := setup(t, false)
+
+	watcher := &testWatcher{
+		updateCh: make(chan *xdsresource.XDSConfig),
+		errorCh:  make(chan error),
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		NodeID:     nodeID,
+		DialTarget: defaultTestServiceName,
+		Host:       "localhost",
+		Port:       8080,
+		SecLevel:   e2e.SecurityLevelNone,
+	})
+	resources.Clusters[0].LrsServer = &v3corepb.ConfigSource{ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{}}
+
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	dm := xdsdepmgr.New(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
+	defer dm.Close()
+
+	wantXdsConfig := makedefaultXDSConfig(resources.Routes[0].Name, resources.Clusters[0].Name, resources.Clusters[0].EdsClusterConfig.ServiceName, "localhost:8080")
+	wantXdsConfig.Clusters[resources.Clusters[0].Name] = &xdsresource.ClusterResult{Err: fmt.Errorf("[xDS node id: %v]: %v", nodeID, fmt.Errorf("unsupported config_source_specifier *corev3.ConfigSource_Ads in lrs_server field"))}
+
+	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
+		t.Fatal(err)
+	}
+
+	// Drain the updates because management server keeps sending the error updates repeatedly causing
+	// the update from dependency manager to be blocked if we don't drain it.
+	select {
+	case <-ctx.Done():
+	case <-watcher.updateCh:
+	}
+}
+
+// Tests the case where the dependency manager receives a cluster resource ambient error.
+// We send a valid cluster resource first, then send an invalid one and then
+// send the valid resource again. We send the valid resource again so that we
+// can be sure the ambient error reaches the dependency manager since there is
+// no other way to wait for it.
+func (s) TestClusterAmbientError(t *testing.T) {
+	// Expect a warning log for the ambient error.
+	grpctest.ExpectWarning("Cluster resource ambient error")
+
+	nodeID, mgmtServer, xdsClient := setup(t, false)
+
+	watcher := &testWatcher{
+		updateCh: make(chan *xdsresource.XDSConfig),
+		errorCh:  make(chan error),
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		NodeID:     nodeID,
+		DialTarget: defaultTestServiceName,
+		Host:       "localhost",
+		Port:       8080,
+		SecLevel:   e2e.SecurityLevelNone,
+	})
+
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	dm := xdsdepmgr.New(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
+	defer dm.Close()
+
+	wantXdsConfig := makedefaultXDSConfig(resources.Routes[0].Name, resources.Clusters[0].Name, resources.Clusters[0].EdsClusterConfig.ServiceName, "localhost:8080")
+	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
+		t.Fatal(err)
+	}
+
+	// Configure a cluster resource that is expected to be NACKed because it
+	// does not contain the `LrsServer` field. Since a valid one is already cached,
+	// this should result in an ambient error.
+	resources.Clusters[0].LrsServer = &v3corepb.ConfigSource{ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{}}
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	select {
+	case <-time.After(defaultTestShortTimeout):
+	case update := <-watcher.updateCh:
+		t.Fatalf("received unexpected update from dependency manager: %v", update)
+	}
+
+	// Send valid resources again to guarantee we get the cluster ambient error before the test ends.
+	resources = e2e.DefaultClientResources(e2e.ResourceParams{
+		NodeID:     nodeID,
+		DialTarget: defaultTestServiceName,
+		Host:       "localhost",
+		Port:       8080,
+		SecLevel:   e2e.SecurityLevelNone,
+	})
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
 	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
 		t.Fatal(err)
 	}
