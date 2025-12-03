@@ -157,8 +157,8 @@ func newEndpointWatcher(resourceName string, depMgr *DependencyManager) *endpoin
 	}
 }
 
-// dnsResolverState watches updates for the given DNS hostname.
-// It implements resolver.ClientConn interface to work with the DNS resolver.
+// dnsResolverState watches updates for the given DNS hostname. It implements
+// resolver.ClientConn interface to work with the DNS resolver.
 type dnsResolver struct {
 	target string
 	dnsR   resolver.Resolver

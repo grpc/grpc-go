@@ -128,11 +128,12 @@ func verifyXDSConfig(ctx context.Context, xdsCh chan *xdsresource.XDSConfig, err
 				}
 				s := in.Error()
 
-				// Replace all sequences of whitespace (including newlines and tabs) with a single
-				// standard space.
+				// Replace all sequences of whitespace (including newlines and
+				// tabs) with a single standard space.
 				s = regexp.MustCompile(`\s+`).ReplaceAllString(s, " ")
 
-				// Trim any leading/trailing space that might be left over and return error as string.
+				// Trim any leading/trailing space that might be left over and
+				// return error as string.
 				return strings.TrimSpace(s)
 			}),
 		}
@@ -230,7 +231,8 @@ func createXDSClient(t *testing.T, bootstrapContents []byte) xdsclient.XDSClient
 	return c
 }
 
-// Spins up an xDS management server and sets up the xDS bootstrap configuration.
+// Spins up an xDS management server and sets up the xDS bootstrap
+// configuration.
 //
 // Returns the following:
 //   - A reference to the xDS management server
@@ -551,81 +553,6 @@ func (s) TestNoVirtualHost_ExistingResource(t *testing.T) {
 	}
 }
 
-// Tests the case where we already have a cached resource and then we get a
-// route resource with no virtual host, which also results in error being sent
-// across.
-func (s) TestNoVirtualHost_ExistingResource(t *testing.T) {
-	nodeID := uuid.New().String()
-	mgmtServer, bc := setupManagementServerForTest(t, nodeID)
-	xdsClient := createXDSClient(t, bc)
-
-	watcher := &testWatcher{
-		updateCh: make(chan *xdsresource.XDSConfig),
-		errorCh:  make(chan error),
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-
-	// Send valid listener and route.
-	listener := e2e.DefaultClientListener(defaultTestServiceName, defaultTestRouteConfigName)
-	route := e2e.DefaultRouteConfig(defaultTestRouteConfigName, defaultTestServiceName, defaultTestClusterName)
-	resources := e2e.UpdateOptions{
-		NodeID:         nodeID,
-		Listeners:      []*v3listenerpb.Listener{listener},
-		Routes:         []*v3routepb.RouteConfiguration{route},
-		SkipValidation: true,
-	}
-	if err := mgmtServer.Update(ctx, resources); err != nil {
-		t.Fatal(err)
-	}
-
-	dm := xdsdepmgr.New(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
-	defer dm.Close()
-
-	// Verify valid update.
-	wantXdsConfig := &xdsresource.XDSConfig{
-		Listener: &xdsresource.ListenerUpdate{
-			RouteConfigName: defaultTestRouteConfigName,
-			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
-		},
-		RouteConfig: &xdsresource.RouteConfigUpdate{
-			VirtualHosts: []*xdsresource.VirtualHost{
-				{
-					Domains: []string{defaultTestServiceName},
-					Routes: []*xdsresource.Route{{
-						Prefix:           newStringP("/"),
-						WeightedClusters: []xdsresource.WeightedCluster{{Name: defaultTestClusterName, Weight: 100}},
-						ActionType:       xdsresource.RouteActionRoute,
-					}},
-				},
-			},
-		},
-		VirtualHost: &xdsresource.VirtualHost{
-			Domains: []string{defaultTestServiceName},
-			Routes: []*xdsresource.Route{{
-				Prefix:           newStringP("/"),
-				WeightedClusters: []xdsresource.WeightedCluster{{Name: defaultTestClusterName, Weight: 100}},
-				ActionType:       xdsresource.RouteActionRoute,
-			}},
-		},
-	}
-	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
-		t.Fatal(err)
-	}
-
-	// 3. Send route update with no virtual host.
-	route.VirtualHosts = nil
-	if err := mgmtServer.Update(ctx, resources); err != nil {
-		t.Fatal(err)
-	}
-
-	// 4. Verify error.
-	if err := verifyError(ctx, watcher.errorCh, "could not find VirtualHost", nodeID); err != nil {
-		t.Fatal(err)
-	}
-}
-
 // Tests the case where we get an ambient error and verify that we correctly log
 // a warning for it. To make sure we get an ambient error, we send a correct
 // update first, then send an invalid one and then send the valid resource
@@ -691,8 +618,8 @@ func (s) TestAmbientError(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// We expect no call to Error or Update on our watcher. We just wait for
-	// a short duration to ensure that.
+	// We expect no call to Error or Update on our watcher. We just wait for a
+	// short duration to ensure that.
 	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
 	select {
@@ -976,19 +903,20 @@ func (s) TestClusterResourceError(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Drain the updates because management server keeps sending the error updates repeatedly causing
-	// the update from dependency manager to be blocked if we don't drain it.
+	// Drain the updates because management server keeps sending the error
+	// updates repeatedly causing the update from dependency manager to be
+	// blocked if we don't drain it.
 	select {
 	case <-ctx.Done():
 	case <-watcher.updateCh:
 	}
 }
 
-// Tests the case where the dependency manager receives a cluster resource ambient error.
-// We send a valid cluster resource first, then send an invalid one and then
-// send the valid resource again. We send the valid resource again so that we
-// can be sure the ambient error reaches the dependency manager since there is
-// no other way to wait for it.
+// Tests the case where the dependency manager receives a cluster resource
+// ambient error. We send a valid cluster resource first, then send an invalid
+// one and then send the valid resource again. We send the valid resource again
+// so that we can be sure the ambient error reaches the dependency manager since
+// there is no other way to wait for it.
 func (s) TestClusterAmbientError(t *testing.T) {
 	// Expect a warning log for the ambient error.
 	grpctest.ExpectWarning("Cluster resource ambient error")
@@ -1024,8 +952,8 @@ func (s) TestClusterAmbientError(t *testing.T) {
 	}
 
 	// Configure a cluster resource that is expected to be NACKed because it
-	// does not contain the `LrsServer` field. Since a valid one is already cached,
-	// this should result in an ambient error.
+	// does not contain the `LrsServer` field. Since a valid one is already
+	// cached, this should result in an ambient error.
 	resources.Clusters[0].LrsServer = &v3corepb.ConfigSource{ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{}}
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
@@ -1037,7 +965,8 @@ func (s) TestClusterAmbientError(t *testing.T) {
 		t.Fatalf("received unexpected update from dependency manager: %v", update)
 	}
 
-	// Send valid resources again to guarantee we get the cluster ambient error before the test ends.
+	// Send valid resources again to guarantee we get the cluster ambient error
+	// before the test ends.
 	resources = e2e.DefaultClientResources(e2e.ResourceParams{
 		NodeID:     nodeID,
 		DialTarget: defaultTestServiceName,
@@ -1200,7 +1129,8 @@ func (s) TestAggregateCluster(t *testing.T) {
 }
 
 // Tests the case where an aggregate cluster has one child whose resource is
-// configured with an error. Verifies that the error is correctly received in the XDSConfig.
+// configured with an error. Verifies that the error is correctly received in
+// the XDSConfig.
 func (s) TestAggregateClusterChildError(t *testing.T) {
 	nodeID, mgmtServer, xdsClient := setup(t, true)
 
@@ -1300,17 +1230,18 @@ func (s) TestAggregateClusterChildError(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Drain the updates because management server keeps sending the error updates
-	// repeatedly causing the update from dependency manager to be blocked if we
-	// don't drain it.
+	// Drain the updates because management server keeps sending the error
+	// updates repeatedly causing the update from dependency manager to be
+	// blocked if we don't drain it.
 	select {
 	case <-ctx.Done():
 	case <-watcher.updateCh:
 	}
 }
 
-// Tests the case where an aggregate cluster has no leaf clusters by creating a cyclic dependency where A->B and B->A. Verifies that
-// an error with "no leaf clusters found" is received.
+// Tests the case where an aggregate cluster has no leaf clusters by creating a
+// cyclic dependency where A->B and B->A. Verifies that an error with "no leaf
+// clusters found" is received.
 func (s) TestAggregateClusterNoLeafCluster(t *testing.T) {
 	nodeID, mgmtServer, xdsClient := setup(t, true)
 
@@ -1380,7 +1311,9 @@ func (s) TestAggregateClusterNoLeafCluster(t *testing.T) {
 	}
 }
 
-// Tests the case where nested aggregate clusters exceed the max depth of 16. Verify that the error is correctly received in the XDSConfig in all the clusters.
+// Tests the case where nested aggregate clusters exceed the max depth of 16.
+// Verify that the error is correctly received in the XDSConfig in all the
+// clusters.
 func (s) TestAggregateClusterMaxDepth(t *testing.T) {
 	nodeID, mgmtServer, xdsClient := setup(t, true)
 
@@ -1423,7 +1356,8 @@ func (s) TestAggregateClusterMaxDepth(t *testing.T) {
 			VirtualHosts: []*xdsresource.VirtualHost{{
 				Domains: []string{defaultTestServiceName},
 				Routes: []*xdsresource.Route{{
-					// The route should point to the first cluster in the chain: agg-0
+					// The route should point to the first cluster in the chain:
+					// agg-0
 					Prefix:           newStringP("/"),
 					WeightedClusters: []xdsresource.WeightedCluster{{Name: "agg-0", Weight: 100}},
 					ActionType:       xdsresource.RouteActionRoute,
@@ -1441,7 +1375,8 @@ func (s) TestAggregateClusterMaxDepth(t *testing.T) {
 		Clusters: map[string]*xdsresource.ClusterResult{}, // Initialize the map
 	}
 
-	// Populate the Clusters map with all clusters,except the last one, each having the common error
+	// Populate the Clusters map with all clusters,except the last one, each
+	// having the common error
 	for i := 0; i < 17; i++ {
 		clusterName := fmt.Sprintf("agg-%d", i)
 
@@ -1485,7 +1420,8 @@ func (s) TestEndpointAmbientError(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Send an ambient error for the endpoint resource by setting the weight to 0.
+	// Send an ambient error for the endpoint resource by setting the weight to
+	// 0.
 	resources.Endpoints[0].Endpoints[0].LbEndpoints[0].LoadBalancingWeight = &wrapperspb.UInt32Value{Value: 0}
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
@@ -1495,8 +1431,8 @@ func (s) TestEndpointAmbientError(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Drain the updates because management server keeps sending the error updates
-	// causing the update from dependency manager to be blocked if we
+	// Drain the updates because management server keeps sending the error
+	// updates causing the update from dependency manager to be blocked if we
 	// don't drain it.
 	select {
 	case <-ctx.Done():

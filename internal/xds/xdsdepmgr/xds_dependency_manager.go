@@ -157,9 +157,9 @@ func (m *DependencyManager) annotateErrorWithNodeID(err error) error {
 	return fmt.Errorf("[xDS node id: %v]: %v", m.nodeID, err)
 }
 
-// maybeSendUpdateLocked checks that all the resources have been received and sends
-// the current aggregated xDS configuration to the watcher if all the updates
-// are available.
+// maybeSendUpdateLocked checks that all the resources have been received and
+// sends the current aggregated xDS configuration to the watcher if all the
+// updates are available.
 func (m *DependencyManager) maybeSendUpdateLocked() {
 	config := &xdsresource.XDSConfig{
 		Listener:    m.currentListenerUpdate,
