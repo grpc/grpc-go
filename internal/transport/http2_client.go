@@ -1485,7 +1485,7 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 		case "grpc-status":
 			code, err := strconv.ParseInt(hf.Value, 10, 32)
 			if err != nil {
-				se := status.New(codes.Internal, fmt.Sprintf("transport: malformed grpc-status: %v", err))
+				se := status.New(codes.Unknown, fmt.Sprintf("transport: malformed grpc-status: %v", err))
 				t.closeStream(s, se.Err(), true, http2.ErrCodeProtocol, se, nil, endStream)
 				return
 			}
