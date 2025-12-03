@@ -551,6 +551,81 @@ func (s) TestNoVirtualHost_ExistingResource(t *testing.T) {
 	}
 }
 
+// Tests the case where we already have a cached resource and then we get a
+// route resource with no virtual host, which also results in error being sent
+// across.
+func (s) TestNoVirtualHost_ExistingResource(t *testing.T) {
+	nodeID := uuid.New().String()
+	mgmtServer, bc := setupManagementServerForTest(t, nodeID)
+	xdsClient := createXDSClient(t, bc)
+
+	watcher := &testWatcher{
+		updateCh: make(chan *xdsresource.XDSConfig),
+		errorCh:  make(chan error),
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	// Send valid listener and route.
+	listener := e2e.DefaultClientListener(defaultTestServiceName, defaultTestRouteConfigName)
+	route := e2e.DefaultRouteConfig(defaultTestRouteConfigName, defaultTestServiceName, defaultTestClusterName)
+	resources := e2e.UpdateOptions{
+		NodeID:         nodeID,
+		Listeners:      []*v3listenerpb.Listener{listener},
+		Routes:         []*v3routepb.RouteConfiguration{route},
+		SkipValidation: true,
+	}
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	dm := xdsdepmgr.New(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
+	defer dm.Close()
+
+	// Verify valid update.
+	wantXdsConfig := &xdsresource.XDSConfig{
+		Listener: &xdsresource.ListenerUpdate{
+			RouteConfigName: defaultTestRouteConfigName,
+			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+		},
+		RouteConfig: &xdsresource.RouteConfigUpdate{
+			VirtualHosts: []*xdsresource.VirtualHost{
+				{
+					Domains: []string{defaultTestServiceName},
+					Routes: []*xdsresource.Route{{
+						Prefix:           newStringP("/"),
+						WeightedClusters: []xdsresource.WeightedCluster{{Name: defaultTestClusterName, Weight: 100}},
+						ActionType:       xdsresource.RouteActionRoute,
+					}},
+				},
+			},
+		},
+		VirtualHost: &xdsresource.VirtualHost{
+			Domains: []string{defaultTestServiceName},
+			Routes: []*xdsresource.Route{{
+				Prefix:           newStringP("/"),
+				WeightedClusters: []xdsresource.WeightedCluster{{Name: defaultTestClusterName, Weight: 100}},
+				ActionType:       xdsresource.RouteActionRoute,
+			}},
+		},
+	}
+	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
+		t.Fatal(err)
+	}
+
+	// 3. Send route update with no virtual host.
+	route.VirtualHosts = nil
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// 4. Verify error.
+	if err := verifyError(ctx, watcher.errorCh, "could not find VirtualHost", nodeID); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // Tests the case where we get an ambient error and verify that we correctly log
 // a warning for it. To make sure we get an ambient error, we send a correct
 // update first, then send an invalid one and then send the valid resource
