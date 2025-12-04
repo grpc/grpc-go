@@ -32,15 +32,15 @@ var timeAfterFunc = func(d time.Duration, f func()) *time.Timer {
 	return time.AfterFunc(d, f)
 }
 
-// Enforcer is the functionality provided by grpc.ClientConn to enter
-// and exit from idle mode.
-type Enforcer interface {
+// ClientConn is the functionality provided by grpc.ClientConn to enter and exit
+// from idle mode.
+type ClientConn interface {
 	ExitIdleMode()
 	EnterIdleMode()
 }
 
-// Manager implements idleness detection and calls the configured Enforcer to
-// enter/exit idle mode when appropriate.  Must be created by NewManager.
+// Manager implements idleness detection and calls the ClientConn to enter/exit
+// idle mode when appropriate. Must be created by NewManager.
 type Manager struct {
 	// State accessed atomically.
 	lastCallEndTime           int64 // Unix timestamp in nanos; time when the most recent RPC completed.
@@ -50,8 +50,8 @@ type Manager struct {
 
 	// Can be accessed without atomics or mutex since these are set at creation
 	// time and read-only after that.
-	enforcer Enforcer // Functionality provided by grpc.ClientConn.
-	timeout  time.Duration
+	cc      ClientConn // Functionality provided by grpc.ClientConn.
+	timeout time.Duration
 
 	// idleMu is used to guarantee mutual exclusion in two scenarios:
 	// - Opposing intentions:
@@ -71,9 +71,9 @@ type Manager struct {
 
 // NewManager creates a new idleness manager implementation for the
 // given idle timeout.  It begins in idle mode.
-func NewManager(enforcer Enforcer, timeout time.Duration) *Manager {
+func NewManager(cc ClientConn, timeout time.Duration) *Manager {
 	return &Manager{
-		enforcer:         enforcer,
+		cc:               cc,
 		timeout:          timeout,
 		actuallyIdle:     true,
 		activeCallsCount: -math.MaxInt32,
@@ -176,7 +176,7 @@ func (m *Manager) tryEnterIdleMode() bool {
 	// No new RPCs have come in since we set the active calls count value to
 	// -math.MaxInt32. And since we have the lock, it is safe to enter idle mode
 	// unconditionally now.
-	m.enforcer.EnterIdleMode()
+	m.cc.EnterIdleMode()
 	m.actuallyIdle = true
 	return true
 }
@@ -200,7 +200,7 @@ func (m *Manager) ForceEnterIdleModeForTesting() {
 		m.timer.Stop()
 		m.timer = nil
 	}
-	m.enforcer.EnterIdleMode()
+	m.cc.EnterIdleMode()
 }
 
 // OnCallBegin is invoked at the start of every RPC.
@@ -221,7 +221,7 @@ func (m *Manager) OnCallBegin() {
 	atomic.StoreInt32(&m.activeSinceLastTimerCheck, 1)
 }
 
-// ExitIdleMode instructs m to call the enforcer's ExitIdleMode and update m's
+// ExitIdleMode instructs m to call the ClientConn's ExitIdleMode and update its
 // internal state.
 func (m *Manager) ExitIdleMode() {
 	// Holds idleMu which ensures mutual exclusion with tryEnterIdleMode.
@@ -243,7 +243,7 @@ func (m *Manager) ExitIdleMode() {
 		return
 	}
 
-	m.enforcer.ExitIdleMode()
+	m.cc.ExitIdleMode()
 
 	// Undo the idle entry process. This also respects any new RPC attempts.
 	atomic.AddInt32(&m.activeCallsCount, math.MaxInt32)
