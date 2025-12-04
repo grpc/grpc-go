@@ -191,7 +191,7 @@ func (dr *dnsResolver) UpdateState(state resolver.State) error {
 }
 
 func (dr *dnsResolver) ReportError(err error) {
-	dr.serializer.TrySchedule(func(ctx context.Context) {
+	dr.serializer.TrySchedule(func(context.Context) {
 		dr.depMgr.onDNSError(dr.target, err)
 	})
 }

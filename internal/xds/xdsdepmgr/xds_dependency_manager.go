@@ -35,6 +35,9 @@ const (
 )
 
 var logger = grpclog.Component("xds")
+
+// EnableCDSEDSlookups is a flag used to control whether the CDS/EDS watchers in
+// the dependency manager should be used. It is made false by defualt.
 var EnableCDSEDSlooksups = false
 
 func prefixLogger(p *DependencyManager) *internalgrpclog.PrefixLogger {
