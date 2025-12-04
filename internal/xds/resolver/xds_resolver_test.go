@@ -43,9 +43,9 @@ import (
 	"google.golang.org/grpc/internal/xds/balancer/clustermanager"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	serverFeature "google.golang.org/grpc/internal/xds/clients/xdsclient"
+	xdsResolver "google.golang.org/grpc/internal/xds/resolver"
 	rinternal "google.golang.org/grpc/internal/xds/resolver/internal"
 	"google.golang.org/grpc/internal/xds/xdsclient"
-	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource/version"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
@@ -1413,9 +1413,9 @@ func TestResolver_AutoHostRewrite(t *testing.T) {
 				t.Fatalf("cs.SelectConfig(): %v", err)
 			}
 
-			gotRoute := xdsresource.GetMatchedRouteForTesting(res.Context)
-			if gotRoute.AutoHostRewrite != tt.wantAutoHostRewrite {
-				t.Fatalf("Got autoHostRewrite: %v, want: %v", gotRoute.AutoHostRewrite, tt.wantAutoHostRewrite)
+			gotAutoHostRewrite := xdsResolver.GetMatchedAutoHostRewriteForTesting(res.Context)
+			if gotAutoHostRewrite != tt.wantAutoHostRewrite {
+				t.Fatalf("Got autoHostRewrite: %v, want: %v", gotAutoHostRewrite, tt.wantAutoHostRewrite)
 			}
 		})
 	}

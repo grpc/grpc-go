@@ -26,6 +26,7 @@ import (
 	rand "math/rand/v2"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	xxhash "github.com/cespare/xxhash/v2"
 	"google.golang.org/grpc/codes"
@@ -33,6 +34,7 @@ import (
 	iresolver "google.golang.org/grpc/internal/resolver"
 	iringhash "google.golang.org/grpc/internal/ringhash"
 	"google.golang.org/grpc/internal/serviceconfig"
+	"google.golang.org/grpc/internal/wrr"
 	"google.golang.org/grpc/internal/xds/balancer/clustermanager"
 	"google.golang.org/grpc/internal/xds/httpfilter"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
@@ -105,6 +107,42 @@ type routeCluster struct {
 	interceptor iresolver.ClientInterceptor // HTTP filters to run for RPCs matching this route.
 }
 
+type route struct {
+	m                 *xdsresource.CompositeMatcher // converted from route matchers
+	actionType        xdsresource.RouteActionType   // holds route action type
+	clusters          wrr.WRR                       // holds *routeCluster entries
+	maxStreamDuration time.Duration
+	retryConfig       *xdsresource.RetryConfig
+	hashPolicies      []*xdsresource.HashPolicy
+	autoHostRewrite   bool
+}
+
+func (r route) String() string {
+	return fmt.Sprintf("%s -> { clusters: %v, maxStreamDuration: %v }", r.m.String(), r.clusters, r.maxStreamDuration)
+}
+
+// autoHostRewriteKey is the context key used to store the value of
+// route's autoHostRewrite in the RPC context.
+type autoHostRewriteKey struct{}
+
+// getMatchedAutoHostRewrite retrieves the autoHostRewrite value from the provided context.
+func getMatchedAutoHostRewrite(ctx context.Context) bool {
+	autohostRewrite, _ := ctx.Value(autoHostRewriteKey{}).(bool)
+	return autohostRewrite
+}
+
+// GetMatchedAutoHostRewriteForTesting returns the value of autoHostRewrite feild;
+// to be used for testing only.
+func GetMatchedAutoHostRewriteForTesting(ctx context.Context) bool {
+	return getMatchedAutoHostRewrite(ctx)
+}
+
+// SetMatchedAutoHostRewrite adds the autoHostRewrite value to the context for
+// the xds_cluster_impl LB policy to pick.
+func SetMatchedAutoHostRewrite(ctx context.Context, autohostRewrite bool) context.Context {
+	return context.WithValue(ctx, autoHostRewriteKey{}, autohostRewrite)
+}
+
 // stoppableConfigSelector extends the iresolver.ConfigSelector interface with a
 // stop() method. This makes it possible to swap the current config selector
 // with an erroring config selector when the LDS or RDS resource is not found on
@@ -137,7 +175,7 @@ type configSelector struct {
 
 	// Configuration received from the xDS management server.
 	virtualHost      virtualHost
-	routes           []xdsresource.MatchedRoute
+	routes           []route
 	clusters         map[string]*clusterInfo
 	httpFilterConfig []xdsresource.HTTPFilter
 }
@@ -153,24 +191,24 @@ func annotateErrorWithNodeID(err error, nodeID string) error {
 }
 
 func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RPCConfig, error) {
-	var rt *xdsresource.MatchedRoute
+	var rt *route
 	// Loop through routes in order and select first match.
 	for _, r := range cs.routes {
-		if r.M.Match(rpcInfo) {
+		if r.m.Match(rpcInfo) {
 			rt = &r
 			break
 		}
 	}
 
-	if rt == nil || rt.Clusters == nil {
+	if rt == nil || rt.clusters == nil {
 		return nil, annotateErrorWithNodeID(errNoMatchedRouteFound, cs.xdsNodeID)
 	}
 
-	if rt.ActionType != xdsresource.RouteActionRoute {
+	if rt.actionType != xdsresource.RouteActionRoute {
 		return nil, annotateErrorWithNodeID(errUnsupportedClientRouteAction, cs.xdsNodeID)
 	}
 
-	cluster, ok := rt.Clusters.Next().(*routeCluster)
+	cluster, ok := rt.clusters.Next().(*routeCluster)
 	if !ok {
 		return nil, annotateErrorWithNodeID(status.Errorf(codes.Internal, "error retrieving cluster for match: %v (%T)", cluster, cluster), cs.xdsNodeID)
 	}
@@ -181,8 +219,8 @@ func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RP
 	atomic.AddInt32(ref, 1)
 
 	lbCtx := clustermanager.SetPickedCluster(rpcInfo.Context, cluster.name)
-	lbCtx = iringhash.SetXDSRequestHash(lbCtx, cs.generateHash(rpcInfo, rt.HashPolicies))
-	lbCtx = xdsresource.SetMatchedRoute(lbCtx, *rt)
+	lbCtx = iringhash.SetXDSRequestHash(lbCtx, cs.generateHash(rpcInfo, rt.hashPolicies))
+	lbCtx = SetMatchedAutoHostRewrite(lbCtx, rt.autoHostRewrite)
 
 	config := &iresolver.RPCConfig{
 		// Communicate to the LB policy the chosen cluster and request hash, if Ring Hash LB policy.
@@ -199,11 +237,11 @@ func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RP
 		Interceptor: cluster.interceptor,
 	}
 
-	if rt.MaxStreamDuration != 0 {
-		config.MethodConfig.Timeout = &rt.MaxStreamDuration
+	if rt.maxStreamDuration != 0 {
+		config.MethodConfig.Timeout = &rt.maxStreamDuration
 	}
-	if rt.RetryConfig != nil {
-		config.MethodConfig.RetryPolicy = retryConfigToPolicy(rt.RetryConfig)
+	if rt.retryConfig != nil {
+		config.MethodConfig.RetryPolicy = retryConfigToPolicy(rt.retryConfig)
 	} else if cs.virtualHost.retryConfig != nil {
 		config.MethodConfig.RetryPolicy = retryConfigToPolicy(cs.virtualHost.retryConfig)
 	}
