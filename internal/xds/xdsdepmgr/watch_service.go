@@ -18,7 +18,16 @@
 
 package xdsdepmgr
 
-import "google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
+import (
+	"context"
+	"fmt"
+	"net/url"
+
+	"google.golang.org/grpc/internal/grpcsync"
+	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
+	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/serviceconfig"
+)
 
 type listenerWatcher struct {
 	resourceName string
@@ -80,4 +89,145 @@ func (r *routeConfigWatcher) stop() {
 	if r.depMgr.logger.V(2) {
 		r.depMgr.logger.Infof("Canceling watch on RouteConfiguration resource %q", r.resourceName)
 	}
+}
+
+type clusterWatcher struct {
+	name   string
+	depMgr *DependencyManager
+}
+
+func (e *clusterWatcher) ResourceChanged(u *xdsresource.ClusterUpdate, onDone func()) {
+	e.depMgr.onClusterResourceUpdate(e.name, u, onDone)
+}
+
+func (e *clusterWatcher) ResourceError(err error, onDone func()) {
+	e.depMgr.onClusterResourceError(e.name, err, onDone)
+}
+
+func (e *clusterWatcher) AmbientError(err error, onDone func()) {
+	e.depMgr.onClusterAmbientError(e.name, err, onDone)
+}
+
+// clusterWatcherState groups the state associated with a clusterWatcher.
+type clusterWatcherState struct {
+	watcher     *clusterWatcher // The underlying watcher.
+	cancelWatch func()          // Cancel func to cancel the watch.
+	// Most recent update received for this cluster.
+	lastUpdate *xdsresource.ClusterUpdate
+	err        error
+}
+
+func newClusterWatcher(resourceName string, depMgr *DependencyManager) *clusterWatcherState {
+	w := &clusterWatcher{name: resourceName, depMgr: depMgr}
+	return &clusterWatcherState{
+		watcher:     w,
+		cancelWatch: xdsresource.WatchCluster(depMgr.xdsClient, resourceName, w),
+	}
+}
+
+type endpointWatcher struct {
+	name   string
+	depMgr *DependencyManager
+}
+
+func (e *endpointWatcher) ResourceChanged(u *xdsresource.EndpointsUpdate, onDone func()) {
+	e.depMgr.onEndpointUpdate(e.name, u, onDone)
+}
+
+func (e *endpointWatcher) ResourceError(err error, onDone func()) {
+	e.depMgr.onEndpointResourceError(e.name, err, onDone)
+}
+
+func (e *endpointWatcher) AmbientError(err error, onDone func()) {
+	e.depMgr.onEndpointAmbientError(e.name, err, onDone)
+}
+
+// endpointWatcherState groups the state associated with a endpointWatcher.
+type endpointWatcherState struct {
+	watcher     *endpointWatcher // The underlying watcher.
+	cancelWatch func()           // Cancel func to cancel the watch.
+	// Most recent update received for this cluster.
+	lastUpdate *xdsresource.EndpointsUpdate
+	err        error
+}
+
+func newEndpointWatcher(resourceName string, depMgr *DependencyManager) *endpointWatcherState {
+	w := &endpointWatcher{name: resourceName, depMgr: depMgr}
+	return &endpointWatcherState{
+		watcher:     w,
+		cancelWatch: xdsresource.WatchEndpoints(depMgr.xdsClient, resourceName, w),
+	}
+}
+
+// dnsResolverState watches updates for the given DNS hostname. It implements
+// resolver.ClientConn interface to work with the DNS resolver.
+type dnsResolver struct {
+	target string
+	dnsR   resolver.Resolver
+	depMgr *DependencyManager
+
+	//serializer is used to make sure that any methods on the resolver can be
+	//called from inside th Build function which is a garuntee that
+	//implementations of resolver.Clientconn need to maintain.
+	serializer       grpcsync.CallbackSerializer
+	serializerCancel func()
+}
+
+type dnsResolverState struct {
+	resolver       *dnsResolver
+	updateReceived bool
+	err            error
+	lastUpdate     *xdsresource.DNSUpdate
+	cancelResolver func()
+}
+
+// dnsResolverState needs to implement resolver.ClientConn interface to receive
+// updates from the real DNS resolver.
+func (dr *dnsResolver) UpdateState(state resolver.State) error {
+	dr.serializer.TrySchedule(func(context.Context) {
+		dr.depMgr.onDNSUpdate(dr.target, &state)
+	})
+	return nil
+}
+
+func (dr *dnsResolver) ReportError(err error) {
+	dr.serializer.TrySchedule(func(ctx context.Context) {
+		dr.depMgr.onDNSError(dr.target, err)
+	})
+}
+
+func (dr *dnsResolver) NewAddress(addresses []resolver.Address) {
+	dr.UpdateState(resolver.State{Addresses: addresses})
+}
+
+func (dr *dnsResolver) ParseServiceConfig(string) *serviceconfig.ParseResult {
+	return &serviceconfig.ParseResult{Err: fmt.Errorf("service config not supported")}
+}
+
+// NewDNSResolver creates a new DNS resolver for the given target.
+func newDNSResolver(target string, depMgr *DependencyManager) *dnsResolverState {
+	ctx, cancel := context.WithCancel(context.Background())
+	dr := &dnsResolver{target: target, depMgr: depMgr, serializer: *grpcsync.NewCallbackSerializer(ctx), serializerCancel: cancel}
+	drState := &dnsResolverState{resolver: dr, cancelResolver: func() {}}
+	u, err := url.Parse("dns:///" + target)
+	if err != nil {
+		drState.updateReceived = true
+		drState.err = err
+		drState.resolver.depMgr.logger.Warningf("Error while parsing DNS target %q: %v", target, drState.resolver.depMgr.annotateErrorWithNodeID(err))
+		return drState
+	}
+	r, err := resolver.Get("dns").Build(resolver.Target{URL: *u}, dr, resolver.BuildOptions{})
+	if err != nil {
+		drState.updateReceived = true
+		drState.err = err
+		drState.resolver.depMgr.logger.Warningf("Error while building DNS resolver for target %q: %v", target, drState.resolver.depMgr.annotateErrorWithNodeID(err))
+		return drState
+	}
+	drState.resolver.dnsR = r
+	drState.cancelResolver = func() {
+		drState.resolver.serializerCancel()
+		<-drState.resolver.serializer.Done()
+		r.Close()
+	}
+	return drState
 }
