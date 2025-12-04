@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"net"
 	"net/url"
 	"slices"
 	"strings"
@@ -176,6 +177,12 @@ func NewClient(target string, opts ...DialOption) (conn *ClientConn, err error) 
 	// Determine the resolver to use.
 	if err := cc.initParsedTargetAndResolverBuilder(); err != nil {
 		return nil, err
+	}
+
+	if cc.dopts.validateConnect != nil {
+		if err := cc.validateTarget(*cc.dopts.validateConnect); err != nil {
+			return nil, err
+		}
 	}
 
 	for _, opt := range globalPerTargetDialOptions {
@@ -1831,5 +1838,24 @@ func (cc *ClientConn) initAuthority() error {
 	} else {
 		cc.authority = encodeAuthority(endpoint)
 	}
+	return nil
+}
+
+func (cc *ClientConn) validateTarget(timeout time.Duration) error {
+	// Only validate for "dns" and "passthrough" schemes for now.
+	// Other schemes might have complex resolution logic that we can't easily replicate here.
+	scheme := cc.parsedTarget.URL.Scheme
+	if scheme != "dns" && scheme != "passthrough" {
+		return nil
+	}
+
+	addr := cc.parsedTarget.Endpoint()
+
+	// Attempt to dial the address for validation. Note: net.Dial requires a port.
+	conn, err := net.DialTimeout("tcp", addr, timeout)
+	if err != nil {
+		return fmt.Errorf("target validation failed for %q: %w", addr, err)
+	}
+	conn.Close()
 	return nil
 }

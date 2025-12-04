@@ -96,6 +96,7 @@ type dialOptions struct {
 	maxCallAttempts             int
 	enableLocalDNSResolution    bool // Specifies if target hostnames should be resolved when proxying is enabled.
 	useProxy                    bool // Specifies if a server should be connected via proxy.
+	validateConnect             *time.Duration
 }
 
 // DialOption configures how we set up the connection.
@@ -793,5 +794,19 @@ func WithMaxCallAttempts(n int) DialOption {
 func withBufferPool(bufferPool mem.BufferPool) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
 		o.copts.BufferPool = bufferPool
+	})
+}
+
+// WithTargetCheck returns a DialOption that validates the target address (DNS resolution and TCP reachability)
+// during client initialization. If the target cannot be resolved or reached within the specified timeout,
+// NewClient will return an error.
+//
+// This option performs network I/O during NewClient, which is a departure from the standard behavior
+// of NewClient (which typically only parses arguments and returns a ClientConn).
+//
+// This validation is primarily intended for "dns" and "passthrough" schemes.
+func WithTargetCheck(timeout time.Duration) DialOption {
+	return newFuncDialOption(func(o *dialOptions) {
+		o.validateConnect = &timeout
 	})
 }
