@@ -189,13 +189,11 @@ var (
 	// metadata to RPCs.
 	GRPCResolverSchemeExtraMetadata = "xds"
 
-	// TryEnterIdleModeForTesting gets the ClientConn to enter IDLE mode if the
-	// idleness manager allows it. For testing purposes only.
-	TryEnterIdleModeForTesting any // func(*grpc.ClientConn)
-
-	// ForceEnterIdleModeForTesting forces the ClientConn to enter IDLE mode,
-	// for testing purposes.
-	ForceEnterIdleModeForTesting any // func(*grpc.ClientConn)
+	// FireIdleTimeoutForTesting forcefully triggers the idle timeout to
+	// simulate the condition that causes the idleness manager to move the
+	// client channel into idle mode, if there has been no activity on the
+	// channel since the last timeout firing. Only for testing purposes.
+	FireIdleTimeoutForTesting any // func(*grpc.ClientConn)
 
 	// ExitIdleModeForTesting gets the ClientConn to exit IDLE mode, for testing
 	// purposes.

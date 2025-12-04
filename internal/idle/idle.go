@@ -181,26 +181,9 @@ func (m *Manager) tryEnterIdleMode() bool {
 	return true
 }
 
-// TryEnterIdleModeForTesting attempts to get the channel to enter idle mode,
-// using the same logic that is used in non-test code to enter idle mode.
-func (m *Manager) TryEnterIdleModeForTesting() {
-	m.tryEnterIdleMode()
-}
-
-// ForceEnterIdleModeForTesting bypasses the usual checks that happen before
-// entering idle mode, and forcefully enter idle mode for testing purposes.
-func (m *Manager) ForceEnterIdleModeForTesting() {
-	m.idleMu.Lock()
-	defer m.idleMu.Unlock()
-	m.lastCallEndTime = 0
-	m.activeCallsCount = -math.MaxInt32
-	m.activeSinceLastTimerCheck = 0
-	m.actuallyIdle = true
-	if m.timer != nil {
-		m.timer.Stop()
-		m.timer = nil
-	}
-	m.cc.EnterIdleMode()
+// FireIdleTimeoutForTesting forcefully triggers the idle timeout to fire.
+func (m *Manager) FireIdleTimeoutForTesting() {
+	m.handleIdleTimeout()
 }
 
 // OnCallBegin is invoked at the start of every RPC.

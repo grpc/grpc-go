@@ -706,6 +706,7 @@ func (s) TestStateTransitions_ResolverBuildFailure(t *testing.T) {
 			dopts := []grpc.DialOption{
 				grpc.WithTransportCredentials(insecure.NewCredentials()),
 				grpc.WithResolvers(&testResolverBuilder{logger: t, manualR: mr}),
+				grpc.WithIdleTimeout(time.Second), // A short idle timeout to move the channel to idle upon inactivity.
 			}
 
 			cc, err := grpc.NewClient(testResolverBuildFailureScheme+":///", dopts...)
@@ -759,12 +760,7 @@ func (s) TestStateTransitions_ResolverBuildFailure(t *testing.T) {
 			}
 			for _, wantState := range wantStates {
 				waitForState(ctx, t, stateCh, wantState)
-				switch wantState {
-				case connectivity.TransientFailure:
-					// Simulate the firing of idle timeout to move channel to IDLE.
-					enterIdle := internal.ForceEnterIdleModeForTesting.(func(*grpc.ClientConn))
-					enterIdle(cc)
-				case connectivity.Idle:
+				if wantState == connectivity.Idle {
 					if tt.exitIdleWithRPC {
 						if _, err := testgrpc.NewTestServiceClient(cc).EmptyCall(ctx, &testpb.Empty{}); err != nil {
 							t.Fatalf("EmptyCall RPC failed: %v", err)
