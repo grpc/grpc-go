@@ -61,10 +61,10 @@ var statusMap = map[int]codes.Code{
 }
 
 func init() {
-	httpfilter.Register(builder{})
+	httpfilter.Register(provider{})
 }
 
-type builder struct {
+type provider struct {
 }
 
 type config struct {
@@ -72,7 +72,7 @@ type config struct {
 	config *fpb.HTTPFault
 }
 
-func (builder) TypeURLs() []string {
+func (provider) TypeURLs() []string {
 	return []string{"type.googleapis.com/envoy.extensions.filters.http.fault.v3.HTTPFault"}
 }
 
@@ -92,21 +92,30 @@ func parseConfig(cfg proto.Message) (httpfilter.FilterConfig, error) {
 	return config{config: msg}, nil
 }
 
-func (builder) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, error) {
+func (provider) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, error) {
 	return parseConfig(cfg)
 }
 
-func (builder) ParseFilterConfigOverride(override proto.Message) (httpfilter.FilterConfig, error) {
+func (provider) ParseFilterConfigOverride(override proto.Message) (httpfilter.FilterConfig, error) {
 	return parseConfig(override)
 }
 
-func (builder) IsTerminal() bool {
-	return false
+func (provider) IsTerminal() bool { return false }
+func (provider) IsClient() bool   { return true }
+func (provider) IsServer() bool   { return false }
+
+// Build creates a new instance of the filter.
+func (p provider) Build(string) httpfilter.Filter {
+	return filter{}
 }
 
-var _ httpfilter.ClientInterceptorBuilder = builder{}
+var _ httpfilter.Filter = filter{}
 
-func (builder) BuildClientInterceptor(cfg, override httpfilter.FilterConfig) (iresolver.ClientInterceptor, error) {
+type filter struct{}
+
+func (filter) Close() error { return nil }
+
+func (filter) BuildClientInterceptor(cfg, override httpfilter.FilterConfig) (iresolver.ClientInterceptor, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("fault: nil config provided")
 	}
@@ -131,6 +140,12 @@ func (builder) BuildClientInterceptor(cfg, override httpfilter.FilterConfig) (ir
 		return nil, nil
 	}
 	return &interceptor{config: icfg}, nil
+}
+
+func (filter) BuildServerInterceptor(_, _ httpfilter.FilterConfig) (iresolver.ServerInterceptor, error) {
+	// This filter is not supported on the server. So we return a nil
+	// HTTPFilter, which will not be invoked.
+	return nil, nil
 }
 
 type interceptor struct {
