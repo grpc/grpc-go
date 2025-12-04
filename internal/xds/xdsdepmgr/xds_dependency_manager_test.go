@@ -75,8 +75,6 @@ func newStringP(s string) *string {
 	return &s
 }
 
-// depMgr.EnableCDSEDSlooksups=true
-
 // testWatcher is an implementation of the ConfigWatcher interface that sends
 // the updates and errors received from the dependency manager to respective
 // channels, for the tests to verify.
