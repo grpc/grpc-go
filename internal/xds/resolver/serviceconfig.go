@@ -114,10 +114,33 @@ type route struct {
 	maxStreamDuration time.Duration
 	retryConfig       *xdsresource.RetryConfig
 	hashPolicies      []*xdsresource.HashPolicy
+	autoHostRewrite   bool
 }
 
 func (r route) String() string {
 	return fmt.Sprintf("%s -> { clusters: %v, maxStreamDuration: %v }", r.m.String(), r.clusters, r.maxStreamDuration)
+}
+
+// autoHostRewriteKey is the context key used to store the value of
+// route's autoHostRewrite in the RPC context.
+type autoHostRewriteKey struct{}
+
+// getMatchedAutoHostRewrite retrieves the autoHostRewrite value from the provided context.
+func getMatchedAutoHostRewrite(ctx context.Context) bool {
+	autohostRewrite, _ := ctx.Value(autoHostRewriteKey{}).(bool)
+	return autohostRewrite
+}
+
+// GetMatchedAutoHostRewriteForTesting returns the value of autoHostRewrite feild;
+// to be used for testing only.
+func GetMatchedAutoHostRewriteForTesting(ctx context.Context) bool {
+	return getMatchedAutoHostRewrite(ctx)
+}
+
+// SetMatchedAutoHostRewrite adds the autoHostRewrite value to the context for
+// the xds_cluster_impl LB policy to pick.
+func SetMatchedAutoHostRewrite(ctx context.Context, autohostRewrite bool) context.Context {
+	return context.WithValue(ctx, autoHostRewriteKey{}, autohostRewrite)
 }
 
 // stoppableConfigSelector extends the iresolver.ConfigSelector interface with a
@@ -197,6 +220,7 @@ func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RP
 
 	lbCtx := clustermanager.SetPickedCluster(rpcInfo.Context, cluster.name)
 	lbCtx = iringhash.SetXDSRequestHash(lbCtx, cs.generateHash(rpcInfo, rt.hashPolicies))
+	lbCtx = SetMatchedAutoHostRewrite(lbCtx, rt.autoHostRewrite)
 
 	config := &iresolver.RPCConfig{
 		// Communicate to the LB policy the chosen cluster and request hash, if Ring Hash LB policy.
