@@ -25,7 +25,6 @@
 package randomsubsetting
 
 import (
-	"cmp"
 	"encoding/json"
 	"fmt"
 	"slices"
@@ -44,7 +43,10 @@ import (
 // Name is the name of the random subsetting load balancer.
 const Name = "random_subsetting"
 
-var logger = grpclog.Component(Name)
+var (
+	logger   = grpclog.Component(Name)
+	HashSeed = uint64(time.Now().UnixNano())
+)
 
 func prefixLogger(p *subsettingBalancer) *internalgrpclog.PrefixLogger {
 	return internalgrpclog.NewPrefixLogger(logger, fmt.Sprintf("[random-subsetting-lb %p] ", p))
@@ -59,7 +61,7 @@ type bb struct{}
 func (bb) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Balancer {
 	b := &subsettingBalancer{
 		Balancer: gracefulswitch.NewBalancer(cc, bOpts),
-		hashf:    xxhash.NewWithSeed(uint64(time.Now().UnixNano())),
+		hashf:    xxhash.NewWithSeed(HashSeed),
 	}
 	b.logger = prefixLogger(b)
 	b.logger.Infof("Created")
@@ -69,7 +71,7 @@ func (bb) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Ba
 type lbConfig struct {
 	serviceconfig.LoadBalancingConfig `json:"-"`
 
-	SubsetSize  uint64                         `json:"subsetSize,omitempty"`
+	SubsetSize  uint32                         `json:"subsetSize,omitempty"`
 	ChildPolicy *iserviceconfig.BalancerConfig `json:"childPolicy,omitempty"`
 }
 
@@ -109,7 +111,6 @@ func (b *subsettingBalancer) UpdateClientConnState(s balancer.ClientConnState) e
 		b.logger.Errorf("Received config with unexpected type %T: %v", s.BalancerConfig, s.BalancerConfig)
 		return balancer.ErrBadResolverState
 	}
-
 	if b.cfg == nil || b.cfg.ChildPolicy.Name != lbCfg.ChildPolicy.Name {
 
 		if err := b.Balancer.SwitchTo(balancer.Get(lbCfg.ChildPolicy.Name)); err != nil {
@@ -133,15 +134,13 @@ type endpointWithHash struct {
 // as described in A68: https://github.com/grpc/proposal/blob/master/A68-random-subsetting.md
 func (b *subsettingBalancer) prepareChildResolverState(s balancer.ClientConnState) resolver.State {
 	subsetSize := b.cfg.SubsetSize
-	endPoints := s.ResolverState.Endpoints
-	backendCount := len(endPoints)
-	if backendCount <= int(subsetSize) || subsetSize < 2 {
+	endpoints := s.ResolverState.Endpoints
+	if len(endpoints) <= int(subsetSize) || subsetSize < 2 {
 		return s.ResolverState
 	}
 
-	// calculate hash for each endpoint
-	endpointSet := make([]endpointWithHash, backendCount)
-	for i, endpoint := range endPoints {
+	endpointSet := make([]endpointWithHash, len(endpoints))
+	for i, endpoint := range endpoints {
 		b.hashf.Write([]byte(endpoint.Addresses[0].String()))
 		endpointSet[i] = endpointWithHash{
 			hash: b.hashf.Sum64(),
@@ -149,9 +148,14 @@ func (b *subsettingBalancer) prepareChildResolverState(s balancer.ClientConnStat
 		}
 	}
 
-	// sort endpoint by hash
 	slices.SortFunc(endpointSet, func(a, b endpointWithHash) int {
-		return cmp.Compare(a.hash, b.hash)
+		if a.hash == b.hash {
+			return 0
+		}
+		if a.hash < b.hash {
+			return -1
+		}
+		return 1
 	})
 
 	if b.logger.V(2) {

@@ -44,7 +44,7 @@ import (
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
-var defaultTestTimeout = 120 * time.Second
+var defaultTestTimeout = 5 * time.Second
 
 type s struct {
 	grpctest.Tester
@@ -120,36 +120,19 @@ func (s) TestParseConfig(t *testing.T) {
 	}
 }
 
-func setupBackends(t *testing.T, backendsCount int) ([]resolver.Address, func()) {
+func startTestServiceBackends(t *testing.T, num int) []resolver.Address {
 	t.Helper()
 
-	backends := make([]*stubserver.StubServer, backendsCount)
-	addresses := make([]resolver.Address, backendsCount)
-	for i := 0; i < backendsCount; i++ {
-		backend := &stubserver.StubServer{
-			EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
-				return &testpb.Empty{}, nil
-			},
-		}
-		if err := backend.StartServer(); err != nil {
-			t.Fatalf("Failed to start backend: %v", err)
-		}
-		t.Logf("Started good TestService backend at: %q", backend.Address)
-		backends[i] = backend
-		addresses[i] = resolver.Address{
-			Addr: backend.Address,
-		}
+	addresses := make([]resolver.Address, num)
+	for i := 0; i < num; i++ {
+		server := stubserver.StartTestService(t, nil)
+		t.Cleanup(server.Stop)
+		addresses[i] = resolver.Address{Addr: server.Address}
 	}
-
-	cancel := func() {
-		for _, backend := range backends {
-			backend.Stop()
-		}
-	}
-	return addresses, cancel
+	return addresses
 }
 
-func setupClients(t *testing.T, clientsCount int, subsetSize int, addresses []resolver.Address) ([]testgrpc.TestServiceClient, func()) {
+func startTestSetupClients(t *testing.T, clientsCount int, subsetSize int, addresses []resolver.Address) []testgrpc.TestServiceClient {
 	t.Helper()
 
 	clients := make([]testgrpc.TestServiceClient, clientsCount)
@@ -163,8 +146,8 @@ func setupClients(t *testing.T, clientsCount int, subsetSize int, addresses []re
 		  "loadBalancingConfig": [
 			{
 			  "random_subsetting": {
-				"subset_size": %d,
-				"child_policy": [{"round_robin": {}}]
+				"subsetSize": %d,
+				"childPolicy": [{"round_robin": {}}]
 			  }
 			}
 		  ]
@@ -183,12 +166,12 @@ func setupClients(t *testing.T, clientsCount int, subsetSize int, addresses []re
 		clients[i] = testgrpc.NewTestServiceClient(ccs[i])
 	}
 
-	cancel := func() {
+	t.Cleanup(func() {
 		for _, cc := range ccs {
 			cc.Close()
 		}
-	}
-	return clients, cancel
+	})
+	return clients
 }
 
 func checkRoundRobinRPCs(ctx context.Context, t *testing.T, clients []testgrpc.TestServiceClient, subsetSize int, maxDiff int) {
@@ -237,6 +220,14 @@ func checkRoundRobinRPCs(ctx context.Context, t *testing.T, clients []testgrpc.T
 }
 
 func (s) TestSubsettingE2E(t *testing.T) {
+	// Save the original hash seed and restore it at the end of the test.
+	originalHashSeed := HashSeed
+	defer func() {
+		HashSeed = originalHashSeed
+	}()
+
+	// Set a fixed hash seed to make the test deterministic.
+	HashSeed = 1
 	tests := []struct {
 		name       string
 		subsetSize int
@@ -266,7 +257,7 @@ func (s) TestSubsettingE2E(t *testing.T) {
 			maxDiff:    15,
 		},
 		{
-			name:       "Nbackends %% subsetSize == 0, but there are not enough clients to fill the last round",
+			name:       "backends %% subsetSize == 0, but there are not enough clients to fill the last round",
 			backends:   20,
 			clients:    7,
 			subsetSize: 5,
@@ -275,18 +266,16 @@ func (s) TestSubsettingE2E(t *testing.T) {
 		{
 			name:       "last round is completely filled, but there are some excluded backends on every round",
 			backends:   21,
-			clients:    8,
+			clients:    15,
 			subsetSize: 5,
-			maxDiff:    3,
+			maxDiff:    4,
 		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			addresses, stopBackends := setupBackends(t, test.backends)
-			defer stopBackends()
+			addresses := startTestServiceBackends(t, test.backends)
 
-			clients, stopClients := setupClients(t, test.clients, test.subsetSize, addresses)
-			defer stopClients()
+			clients := startTestSetupClients(t, test.clients, test.subsetSize, addresses)
 
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
