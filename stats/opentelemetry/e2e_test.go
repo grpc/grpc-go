@@ -673,7 +673,7 @@ func (s) TestWRRMetrics(t *testing.T) {
 	mo := opentelemetry.MetricsOptions{
 		MeterProvider:  provider,
 		Metrics:        opentelemetry.DefaultMetrics().Add("grpc.lb.wrr.rr_fallback", "grpc.lb.wrr.endpoint_weight_not_yet_usable", "grpc.lb.wrr.endpoint_weight_stale", "grpc.lb.wrr.endpoint_weights"),
-		OptionalLabels: []string{"grpc.lb.locality"},
+		OptionalLabels: []string{"grpc.lb.locality", "grpc.lb.backend_service"},
 	}
 
 	target := fmt.Sprintf("xds:///%s", serviceName)
@@ -699,6 +699,7 @@ func (s) TestWRRMetrics(t *testing.T) {
 
 	targetAttr := attribute.String("grpc.target", target)
 	localityAttr := attribute.String("grpc.lb.locality", `{region="region-1", zone="zone-1", sub_zone="subzone-1"}`)
+	backendServiceAttr := attribute.String("grpc.lb.backend_service", clusterName)
 
 	wantMetrics := []metricdata.Metrics{
 		{
@@ -708,7 +709,7 @@ func (s) TestWRRMetrics(t *testing.T) {
 			Data: metricdata.Sum[int64]{
 				DataPoints: []metricdata.DataPoint[int64]{
 					{
-						Attributes: attribute.NewSet(targetAttr, localityAttr),
+						Attributes: attribute.NewSet(targetAttr, localityAttr, backendServiceAttr),
 						Value:      1, // value ignored
 					},
 				},
@@ -724,7 +725,7 @@ func (s) TestWRRMetrics(t *testing.T) {
 			Data: metricdata.Sum[int64]{
 				DataPoints: []metricdata.DataPoint[int64]{
 					{
-						Attributes: attribute.NewSet(targetAttr, localityAttr),
+						Attributes: attribute.NewSet(targetAttr, localityAttr, backendServiceAttr),
 						Value:      1, // value ignored
 					},
 				},
@@ -739,7 +740,7 @@ func (s) TestWRRMetrics(t *testing.T) {
 			Data: metricdata.Histogram[float64]{
 				DataPoints: []metricdata.HistogramDataPoint[float64]{
 					{
-						Attributes: attribute.NewSet(targetAttr, localityAttr),
+						Attributes: attribute.NewSet(targetAttr, localityAttr, backendServiceAttr),
 					},
 				},
 				Temporality: metricdata.CumulativeTemporality,
@@ -761,7 +762,7 @@ func (s) TestWRRMetrics(t *testing.T) {
 		Data: metricdata.Sum[int64]{
 			DataPoints: []metricdata.DataPoint[int64]{
 				{
-					Attributes: attribute.NewSet(targetAttr, localityAttr),
+					Attributes: attribute.NewSet(targetAttr, localityAttr, backendServiceAttr),
 					Value:      1, // value ignored
 				},
 			},
