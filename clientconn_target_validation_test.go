@@ -27,38 +27,78 @@ import (
 )
 
 func TestWithTargetCheck(t *testing.T) {
-	lis, err := net.Listen("tcp", "localhost:0")
-	if err != nil {
-		t.Fatalf("net.Listen failed: %v", err)
-	}
-	defer lis.Close()
-
-	go func() {
-		conn, err := lis.Accept()
-		if err == nil {
-			conn.Close()
+	t.Run("success_passthrough", func(t *testing.T) {
+		lis, err := net.Listen("tcp", "localhost:0")
+		if err != nil {
+			t.Fatalf("net.Listen failed: %v", err)
 		}
-	}()
+		defer lis.Close()
 
-	target := lis.Addr().String()
+		go func() {
+			conn, err := lis.Accept()
+			if err == nil {
+				conn.Close()
+			}
+		}()
 
-	conn, err := NewClient(target, WithTargetCheck(1*time.Second), WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		t.Fatalf("NewClient(%q) failed with WithTargetCheck: %v", target, err)
-	}
-	conn.Close()
+		target := lis.Addr().String()
 
-	// Test with an invalid target (should fail).
-	// Create a listener, get its address, then close it to ensure the port is closed.
-	l, err := net.Listen("tcp", "localhost:0")
-	if err != nil {
-		t.Fatalf("net.Listen failed: %v", err)
-	}
-	closedAddr := l.Addr().String()
-	l.Close()
+		conn, err := NewClient(target, WithTargetCheck(1*time.Second), WithTransportCredentials(insecure.NewCredentials()))
+		if err != nil {
+			t.Fatalf("NewClient(%q) failed with WithTargetCheck: %v", target, err)
+		}
+		conn.Close()
+	})
 
-	_, err = NewClient(closedAddr, WithTargetCheck(100*time.Millisecond), WithTransportCredentials(insecure.NewCredentials()))
-	if err == nil {
-		t.Fatalf("NewClient(%q) should have failed with WithTargetCheck pointing to closed port", closedAddr)
-	}
+	t.Run("success_dns", func(t *testing.T) {
+		lis, err := net.Listen("tcp", "localhost:0")
+		if err != nil {
+			t.Fatalf("net.Listen failed: %v", err)
+		}
+		defer lis.Close()
+
+		go func() {
+			conn, err := lis.Accept()
+			if err == nil {
+				conn.Close()
+			}
+		}()
+
+		target := "dns:///" + lis.Addr().String()
+
+		conn, err := NewClient(target, WithTargetCheck(1*time.Second), WithTransportCredentials(insecure.NewCredentials()))
+		if err != nil {
+			t.Fatalf("NewClient(%q) failed with WithTargetCheck: %v", target, err)
+		}
+		conn.Close()
+	})
+
+	t.Run("failure_unreachable", func(t *testing.T) {
+		// Create a listener, get its address, then close it to ensure the port is closed.
+		l, err := net.Listen("tcp", "localhost:0")
+		if err != nil {
+			t.Fatalf("net.Listen failed: %v", err)
+		}
+		closedAddr := l.Addr().String()
+		l.Close()
+
+		_, err = NewClient(closedAddr, WithTargetCheck(100*time.Millisecond), WithTransportCredentials(insecure.NewCredentials()))
+		if err == nil {
+			t.Fatalf("NewClient(%q) should have failed with WithTargetCheck pointing to closed port", closedAddr)
+		}
+	})
+
+	t.Run("skip_other_schemes", func(t *testing.T) {
+		// For schemes other than "dns" and "passthrough", validation should be skipped.
+		// Use a unix scheme which won't cause validation.
+		target := "unix:///tmp/nonexistent.sock"
+
+		// This should succeed even though the socket doesn't exist because
+		// validation is skipped for non-dns/passthrough schemes.
+		conn, err := NewClient(target, WithTargetCheck(100*time.Millisecond), WithTransportCredentials(insecure.NewCredentials()))
+		if err != nil {
+			t.Fatalf("NewClient(%q) with unix scheme should skip validation and succeed: %v", target, err)
+		}
+		conn.Close()
+	})
 }
