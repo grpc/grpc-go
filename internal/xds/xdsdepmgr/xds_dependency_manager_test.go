@@ -111,6 +111,21 @@ func verifyError(ctx context.Context, errCh chan error, wantErr, wantNodeID stri
 	return nil
 }
 
+// This function determines the stable, canonical order for any two resolver.Endpoint structs.
+func lessEndpoint(a, b resolver.Endpoint) bool {
+	// Safely access the first address string for comparison.
+	addrA := ""
+	if len(a.Addresses) > 0 {
+		addrA = a.Addresses[0].Addr
+	}
+
+	addrB := ""
+	if len(b.Addresses) > 0 {
+		addrB = b.Addresses[0].Addr
+	}
+
+	return addrA < addrB
+}
 func verifyXDSConfig(ctx context.Context, xdsCh chan *xdsresource.XDSConfig, errCh chan error, want *xdsresource.XDSConfig) error {
 	select {
 	case <-ctx.Done():
@@ -137,6 +152,7 @@ func verifyXDSConfig(ctx context.Context, xdsCh chan *xdsresource.XDSConfig, err
 				// return error as string.
 				return strings.TrimSpace(s)
 			}),
+			cmpopts.SortSlices(lessEndpoint),
 		}
 		if diff := cmp.Diff(update, want, cmpOpts...); diff != "" {
 			return fmt.Errorf("received unexpected update from dependency manager. Diff (-got +want):\n%v", diff)
