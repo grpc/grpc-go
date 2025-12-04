@@ -1935,6 +1935,7 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TF_AfterEndOfList(t *testing.T) {
 	holds[1].Fail(fmt.Errorf("test error"))
 	tmr.WaitForInt64CountIncr(ctx, 1)
 	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
+	waitForMetric(ctx, t, tmr, "grpc.subchannel.connection_attempts_failed")
 
 	// Only connection attempt fails in this test.
 	if got, _ := tmr.Metric("grpc.lb.pick_first.connection_attempts_succeeded"); got != 0 {
@@ -1945,6 +1946,9 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TF_AfterEndOfList(t *testing.T) {
 	}
 	if got, _ := tmr.Metric("grpc.lb.pick_first.disconnections"); got != 0 {
 		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.lb.pick_first.disconnections", got, 0)
+	}
+	if got, _ := tmr.Metric("grpc.subchannel.connection_attempts_failed"); got != 1 {
+		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.subchannel.connection_attempts_failed", got, 1)
 	}
 }
 
@@ -1995,7 +1999,7 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TriggerConnectionDelay(t *testing.T) {
 	// that the channel becomes READY.
 	holds[1].Resume()
 	testutils.AwaitState(ctx, t, cc, connectivity.Ready)
-
+	waitForMetric(ctx, t, tmr, "grpc.subchannel.connection_attempts_succeeded")
 	// Only connection attempt successes in this test.
 	if got, _ := tmr.Metric("grpc.lb.pick_first.connection_attempts_succeeded"); got != 1 {
 		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.lb.pick_first.connection_attempts_succeeded", got, 1)
@@ -2005,6 +2009,25 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TriggerConnectionDelay(t *testing.T) {
 	}
 	if got, _ := tmr.Metric("grpc.lb.pick_first.disconnections"); got != 0 {
 		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.lb.pick_first.disconnections", got, 0)
+	}
+
+	if got, _ := tmr.Metric("grpc.subchannel.connection_attempts_succeeded"); got != 1 {
+		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.subchannel.connection_attempts_succeeded", got, 1)
+	}
+}
+
+func waitForMetric(ctx context.Context, t *testing.T, tmr *stats.TestMetricsRecorder, metricName string) {
+	for {
+		_, ok := tmr.Metric(metricName)
+		if ok {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			t.Fatalf("Timeout waiting for metric emission: %s", metricName)
+		case <-time.After(10 * time.Millisecond):
+			continue
+		}
 	}
 }
 
@@ -2057,6 +2080,9 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TF_ThenTimerFires(t *testing.T) {
 	if got, _ := tmr.Metric("grpc.lb.pick_first.connection_attempts_failed"); got != 1 {
 		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.lb.pick_first.connection_attempts_failed", got, 1)
 	}
+	if got, _ := tmr.Metric("grpc.subchannel.connection_attempts_failed"); got != 1 {
+		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.subchannel.connection_attempts_failed", got, 1)
+	}
 	if holds[2].IsStarted() != false {
 		t.Fatalf("Server %d with address %q contacted unexpectedly", 2, addrs[2])
 	}
@@ -2073,7 +2099,10 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TF_ThenTimerFires(t *testing.T) {
 	// that the channel becomes READY.
 	holds[1].Resume()
 	testutils.AwaitState(ctx, t, cc, connectivity.Ready)
-
+	waitForMetric(ctx, t, tmr, "grpc.subchannel.connection_attempts_succeeded")
+	if got, _ := tmr.Metric("grpc.subchannel.connection_attempts_succeeded"); got != 1 {
+		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.subchannel.connection_attempts_succeeded", got, 1)
+	}
 	if got, _ := tmr.Metric("grpc.lb.pick_first.connection_attempts_succeeded"); got != 1 {
 		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.lb.pick_first.connection_attempts_succeeded", got, 1)
 	}

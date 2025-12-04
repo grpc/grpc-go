@@ -24,6 +24,7 @@ import (
 	"fmt"
 
 	"google.golang.org/grpc/attributes"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/xds/clients"
 	"google.golang.org/grpc/resolver"
 )
@@ -44,6 +45,17 @@ func GetXDSHandshakeClusterName(attr *attributes.Attributes) (string, bool) {
 	v := attr.Value(handshakeClusterNameKey{})
 	name, ok := v.(string)
 	return name, ok
+}
+
+// AddressToTelemetryLabels prepares a telemetry label map from resolver
+// address atrributes.
+func AddressToTelemetryLabels(addr resolver.Address) map[string]string {
+	cluster, _ := GetXDSHandshakeClusterName(addr.Attributes)
+	locality := LocalityString(GetLocalityID(addr))
+	labels := make(map[string]string)
+	labels["grpc.lb.locality"] = locality
+	labels["grpc.lb.backend_service"] = cluster
+	return labels
 }
 
 // LocalityString generates a string representation of clients.Locality in the
@@ -98,4 +110,9 @@ func SetLocalityIDInEndpoint(endpoint resolver.Endpoint, l clients.Locality) res
 var UnknownCSMLabels = map[string]string{
 	"csm.service_name":           "unknown",
 	"csm.service_namespace_name": "unknown",
+}
+
+func init() {
+	// Assign the xds package's implementation to the internal variable.
+	internal.AddressToTelemetryLabels = AddressToTelemetryLabels
 }
