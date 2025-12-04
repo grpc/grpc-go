@@ -182,27 +182,27 @@ var emptyMethodConfig = serviceconfig.MethodConfig{}
 func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, method string, opts ...CallOption) (_ ClientStream, err error) {
 	if channelz.IsOn() {
 		cc.incrCallsStarted()
-		defer func() {
-			if err != nil {
+	}
+	defer func() {
+		if err != nil {
+			if channelz.IsOn() {
 				cc.incrCallsFailed()
-				// Invoke all the registered OnFinish call options explicitly. A
-				// non-nil error means that the stream wasn't created, and
-				// therefore these will be invoked as part of `cs.finish()`.
-				for _, o := range opts {
-					if o, ok := o.(OnFinishCallOption); ok {
-						o.OnFinish(err)
-					}
+			}
+			// Invoke all the registered OnFinish call options explicitly. A
+			// non-nil error means that the stream wasn't created, and
+			// therefore these will be invoked as part of `cs.finish()`.
+			for _, o := range opts {
+				if o, ok := o.(OnFinishCallOption); ok {
+					o.OnFinish(err)
 				}
 			}
-		}()
-	}
+		}
+	}()
 
 	// Start tracking the RPC for idleness purposes. This is where a stream is
 	// created for both streaming and unary RPCs, and hence is a good place to
 	// track active RPC count.
-	if err := cc.idlenessMgr.OnCallBegin(); err != nil {
-		return nil, status.Error(codes.Unavailable, err.Error())
-	}
+	cc.idlenessMgr.OnCallBegin()
 
 	// Add a calloption, to decrement the active call count, that gets executed
 	// when the RPC completes.

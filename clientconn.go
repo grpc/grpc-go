@@ -262,9 +262,10 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	}()
 
 	// This creates the name resolver, load balancer, etc.
-	if err := cc.idlenessMgr.ExitIdleMode(); err != nil {
-		return nil, err
+	if err := cc.exitIdleMode(); err != nil {
+		return nil, fmt.Errorf("failed to exit idle mode: %w", err)
 	}
+	cc.idlenessMgr.MarkAsExitedIdleMode()
 
 	// Return now for non-blocking dials.
 	if !cc.dopts.block {
@@ -341,14 +342,14 @@ func (i *idler) EnterIdleMode() {
 	(*ClientConn)(i).enterIdleMode()
 }
 
-func (i *idler) ExitIdleMode() error {
-	return (*ClientConn)(i).exitIdleMode()
+func (i *idler) ExitIdleMode() {
+	(*ClientConn)(i).exitIdleMode()
 }
 
 // exitIdleMode moves the channel out of idle mode by recreating the name
 // resolver and load balancer.  This should never be called directly; use
 // cc.idlenessMgr.ExitIdleMode instead.
-func (cc *ClientConn) exitIdleMode() (err error) {
+func (cc *ClientConn) exitIdleMode() error {
 	cc.mu.Lock()
 	if cc.conns == nil {
 		cc.mu.Unlock()
@@ -367,14 +368,11 @@ func (cc *ClientConn) exitIdleMode() (err error) {
 		// If resolver creation fails, treat it like an error reported by the
 		// resolver before any valid udpates. Set channel's state to
 		// TransientFailure, and set an erroring picker with the resolver build
-		// error. For channels created with `NewClient`, the error will be
-		// returned as part of any subsequent RPCs.  For channels created with
-		// `Dial`, the error will be returned by `Dial`.
+		// error, which will returned as part of any subsequent RPCs.
 		logger.Warningf("Failed to start resolver: %v", err)
-		defer cc.firstResolveEvent.Fire()
-		cc.maybeApplyDefaultServiceConfig()
-		cc.balancerWrapper.resolverError(err)
 		cc.csMgr.updateState(connectivity.TransientFailure)
+		cc.mu.Lock()
+		cc.updateResolverStateAndUnlock(resolver.State{}, err)
 		return err
 	}
 
@@ -696,10 +694,8 @@ func (cc *ClientConn) GetState() connectivity.State {
 // Notice: This API is EXPERIMENTAL and may be changed or removed in a later
 // release.
 func (cc *ClientConn) Connect() {
-	if err := cc.idlenessMgr.ExitIdleMode(); err != nil {
-		cc.addTraceEvent(err.Error())
-		return
-	}
+	cc.idlenessMgr.ExitIdleMode()
+
 	// If the ClientConn was not in idle mode, we need to call ExitIdle on the
 	// LB policy so that connections can be created.
 	cc.mu.Lock()
@@ -750,8 +746,8 @@ func init() {
 	internal.EnterIdleModeForTesting = func(cc *ClientConn) {
 		cc.idlenessMgr.EnterIdleModeForTesting()
 	}
-	internal.ExitIdleModeForTesting = func(cc *ClientConn) error {
-		return cc.idlenessMgr.ExitIdleMode()
+	internal.ExitIdleModeForTesting = func(cc *ClientConn) {
+		cc.idlenessMgr.ExitIdleMode()
 	}
 }
 

@@ -589,12 +589,8 @@ func (s) TestChannelIdleness_RaceBetweenEnterAndExitIdleMode(t *testing.T) {
 
 	enterIdle := internal.EnterIdleModeForTesting.(func(*grpc.ClientConn))
 	enterIdleFunc := func() { enterIdle(cc) }
-	exitIdle := internal.ExitIdleModeForTesting.(func(*grpc.ClientConn) error)
-	exitIdleFunc := func() {
-		if err := exitIdle(cc); err != nil {
-			t.Errorf("Failed to exit idle mode: %v", err)
-		}
-	}
+	exitIdle := internal.ExitIdleModeForTesting.(func(*grpc.ClientConn))
+	exitIdleFunc := func() { exitIdle(cc) }
 	// Spawn goroutines that call methods on the ClientConn to enter and exit
 	// idle mode concurrently for one second.
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)

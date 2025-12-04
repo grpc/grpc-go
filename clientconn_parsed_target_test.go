@@ -205,28 +205,31 @@ func (s) TestParsedTarget_Failure_WithoutCustomDialer(t *testing.T) {
 }
 
 func (s) TestParsedTarget_Failure_WithoutCustomDialer_WithNewClient(t *testing.T) {
-	targets := []string{
-		"",
-		"unix://a/b/c",
-		"unix://authority",
-		"unix-abstract://authority/a/b/c",
-		"unix-abstract://authority",
+	tests := []struct {
+		target        string
+		wantErrSubstr string
+	}{
+
+		{target: "", wantErrSubstr: "invalid target address"},
+		{target: "unix://a/b/c", wantErrSubstr: "invalid (non-empty) authority"},
+		{target: "unix://authority", wantErrSubstr: "invalid (non-empty) authority"},
+		{target: "unix-abstract://authority/a/b/c", wantErrSubstr: "invalid (non-empty) authority"},
+		{target: "unix-abstract://authority", wantErrSubstr: "invalid (non-empty) authority"},
 	}
 
-	for _, target := range targets {
-		t.Run(target, func(t *testing.T) {
+	for _, test := range tests {
+		t.Run(test.target, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
-			cc, err := NewClient(target, WithTransportCredentials(insecure.NewCredentials()))
+			cc, err := NewClient(test.target, WithTransportCredentials(insecure.NewCredentials()))
 			if err != nil {
-				t.Fatalf("NewClient(%q) failed: %v", target, err)
+				t.Fatalf("NewClient(%q) failed: %v", test, err)
 			}
 			defer cc.Close()
-			const wantErrSubstr = "failed to exit idle mode"
 			if _, err := cc.NewStream(ctx, &StreamDesc{}, "/my.service.v1.MyService/UnaryCall"); err == nil {
-				t.Fatalf("NewStream() succeeded with target = %q, cc.parsedTarget = %+v, expected to fail", target, cc.parsedTarget)
-			} else if !strings.Contains(err.Error(), wantErrSubstr) {
-				t.Fatalf("NewStream() with target = %q returned unexpected error: got %v, want substring %q", target, err, wantErrSubstr)
+				t.Fatalf("NewStream() succeeded with target = %q, cc.parsedTarget = %+v, expected to fail", test, cc.parsedTarget)
+			} else if !strings.Contains(err.Error(), test.wantErrSubstr) {
+				t.Fatalf("NewStream() with target = %q returned unexpected error: got %v, want substring %q", test, err, test.wantErrSubstr)
 			}
 		})
 	}

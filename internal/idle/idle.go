@@ -21,7 +21,6 @@
 package idle
 
 import (
-	"fmt"
 	"math"
 	"sync"
 	"sync/atomic"
@@ -36,7 +35,7 @@ var timeAfterFunc = func(d time.Duration, f func()) *time.Timer {
 // Enforcer is the functionality provided by grpc.ClientConn to enter
 // and exit from idle mode.
 type Enforcer interface {
-	ExitIdleMode() error
+	ExitIdleMode()
 	EnterIdleMode()
 }
 
@@ -188,33 +187,26 @@ func (m *Manager) EnterIdleModeForTesting() {
 }
 
 // OnCallBegin is invoked at the start of every RPC.
-func (m *Manager) OnCallBegin() error {
+func (m *Manager) OnCallBegin() {
 	if m.isClosed() {
-		return nil
+		return
 	}
 
 	if atomic.AddInt32(&m.activeCallsCount, 1) > 0 {
 		// Channel is not idle now. Set the activity bit and allow the call.
 		atomic.StoreInt32(&m.activeSinceLastTimerCheck, 1)
-		return nil
+		return
 	}
 
 	// Channel is either in idle mode or is in the process of moving to idle
 	// mode. Attempt to exit idle mode to allow this RPC.
-	if err := m.ExitIdleMode(); err != nil {
-		// Undo the increment to calls count, and return an error causing the
-		// RPC to fail.
-		atomic.AddInt32(&m.activeCallsCount, -1)
-		return err
-	}
-
+	m.ExitIdleMode()
 	atomic.StoreInt32(&m.activeSinceLastTimerCheck, 1)
-	return nil
 }
 
 // ExitIdleMode instructs m to call the enforcer's ExitIdleMode and update m's
 // internal state.
-func (m *Manager) ExitIdleMode() error {
+func (m *Manager) ExitIdleMode() {
 	// Holds idleMu which ensures mutual exclusion with tryEnterIdleMode.
 	m.idleMu.Lock()
 	defer m.idleMu.Unlock()
@@ -231,14 +223,10 @@ func (m *Manager) ExitIdleMode() error {
 		//   m.ExitIdleMode.
 		//
 		// In any case, there is nothing to do here.
-		return nil
+		return
 	}
 
-	// This can fail if resolver creation fails. In that case, we want to
-	// return the error to the caller so that the RPC can fail. But we still
-	// need to undo the idle entry process, and ensure that the idle timer is
-	// started again.
-	err := m.enforcer.ExitIdleMode()
+	m.enforcer.ExitIdleMode()
 
 	// Undo the idle entry process. This also respects any new RPC attempts.
 	atomic.AddInt32(&m.activeCallsCount, math.MaxInt32)
@@ -246,11 +234,18 @@ func (m *Manager) ExitIdleMode() error {
 
 	// Start a new timer to fire after the configured idle timeout.
 	m.resetIdleTimerLocked(m.timeout)
+}
 
-	if err != nil {
-		return fmt.Errorf("failed to exit idle mode: %v", err)
-	}
-	return nil
+// MarkAsExitedIdle instructs the Manager to update its internal state to
+// indicate that the channel has exited IDLE mode. This is only used by the gRPC
+// client when it exits IDLE mode manually from Dial.
+func (m *Manager) MarkAsExitedIdleMode() {
+	m.idleMu.Lock()
+	defer m.idleMu.Unlock()
+
+	atomic.AddInt32(&m.activeCallsCount, math.MaxInt32)
+	m.actuallyIdle = false
+	m.resetIdleTimerLocked(m.timeout)
 }
 
 // OnCallEnd is invoked at the end of every RPC.
