@@ -433,11 +433,12 @@ func (s) TestResolverBadServiceUpdate_NACKedWithCache(t *testing.T) {
 
 	stateCh, _, _ := buildResolverForTarget(t, resolver.Target{URL: *testutils.MustParseURL("xds:///" + defaultTestServiceName)}, bc)
 
-	// Configure good listener and route configuration resources on the
-	// management server.
+	// Configure all resources on the management server.
 	listeners := []*v3listenerpb.Listener{e2e.DefaultClientListener(defaultTestServiceName, defaultTestRouteConfigName)}
 	routes := []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(defaultTestRouteConfigName, defaultTestServiceName, defaultTestClusterName)}
-	configureResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, listeners, routes)
+	cluster := []*v3clusterpb.Cluster{e2e.DefaultCluster(defaultTestClusterName, defaultTestEndpointName, e2e.SecurityLevelNone)}
+	endpoints := []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(defaultTestEndpointName, defaultTestHostname, defaultTestPort)}
+	configureAllResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, listeners, routes, cluster, endpoints)
 
 	// Expect a good update from the resolver.
 	cs := verifyUpdateFromResolver(ctx, t, stateCh, wantServiceConfig(defaultTestClusterName))

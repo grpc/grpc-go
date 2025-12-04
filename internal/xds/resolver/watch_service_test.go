@@ -71,7 +71,8 @@ func (s) TestServiceWatch_ListenerPointsToNewRouteConfiguration(t *testing.T) {
 	// Leave the old route configuration resource unchanged.
 	newTestRouteConfigName := defaultTestRouteConfigName + "-new"
 	resources.Listeners = []*v3listenerpb.Listener{e2e.DefaultClientListener(defaultTestServiceName, newTestRouteConfigName)}
-	configureResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, resources.Listeners, resources.Routes)
+	resources.SkipValidation = true
+	mgmtServer.Update(ctx, resources)
 
 	// Verify that the new route configuration resource is requested.
 	waitForResourceNames(ctx, t, routeCfgCh, []string{newTestRouteConfigName})
@@ -88,7 +89,7 @@ func (s) TestServiceWatch_ListenerPointsToNewRouteConfiguration(t *testing.T) {
 			},
 		},
 	})
-	configureResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, resources.Listeners, resources.Routes)
+	mgmtServer.Update(ctx, resources)
 
 	// Wait for no update from the resolver.
 	verifyNoUpdateFromResolver(ctx, t, stateCh)
