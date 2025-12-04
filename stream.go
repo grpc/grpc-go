@@ -190,7 +190,7 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 			}
 			// Invoke all the registered OnFinish call options explicitly. A
 			// non-nil error means that the stream wasn't created, and
-			// therefore these will be invoked as part of `cs.finish()`.
+			// therefore these will be NOT be invoked as part of `cs.finish()`.
 			for _, o := range opts {
 				if o, ok := o.(OnFinishCallOption); ok {
 					o.OnFinish(err)

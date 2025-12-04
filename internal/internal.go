@@ -189,10 +189,16 @@ var (
 	// metadata to RPCs.
 	GRPCResolverSchemeExtraMetadata = "xds"
 
-	// EnterIdleModeForTesting gets the ClientConn to enter IDLE mode.
-	EnterIdleModeForTesting any // func(*grpc.ClientConn)
+	// TryEnterIdleModeForTesting gets the ClientConn to enter IDLE mode if the
+	// idleness manager allows it. For testing purposes only.
+	TryEnterIdleModeForTesting any // func(*grpc.ClientConn)
 
-	// ExitIdleModeForTesting gets the ClientConn to exit IDLE mode.
+	// ForceEnterIdleModeForTesting forces the ClientConn to enter IDLE mode,
+	// for testing purposes.
+	ForceEnterIdleModeForTesting any // func(*grpc.ClientConn)
+
+	// ExitIdleModeForTesting gets the ClientConn to exit IDLE mode, for testing
+	// purposes.
 	ExitIdleModeForTesting any // func(*grpc.ClientConn) error
 
 	// ChannelzTurnOffForTesting disables the Channelz service for testing
