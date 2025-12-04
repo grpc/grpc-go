@@ -551,6 +551,9 @@ func (t *http2Client) createHeaderFields(ctx context.Context, callHdr *CallHdr) 
 	hfLen := 7 // :method, :scheme, :path, :authority, content-type, user-agent, te
 	hfLen += len(authData) + len(callAuthData)
 	registeredCompressors := t.registeredCompressors
+	if callHdr.AcceptedCompressors != nil {
+		registeredCompressors = *callHdr.AcceptedCompressors
+	}
 	if callHdr.PreviousAttempts > 0 {
 		hfLen++
 	}

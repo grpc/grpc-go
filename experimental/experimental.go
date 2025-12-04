@@ -62,3 +62,12 @@ func WithBufferPool(bufferPool mem.BufferPool) grpc.DialOption {
 func BufferPool(bufferPool mem.BufferPool) grpc.ServerOption {
 	return internal.BufferPool.(func(mem.BufferPool) grpc.ServerOption)(bufferPool)
 }
+
+// AcceptCompressors returns a CallOption that limits the values
+// advertised in the grpc-accept-encoding header for the provided RPC. The
+// supplied names must correspond to compressors registered via
+// encoding.RegisterCompressor. Passing no names advertises "identity" (no
+// compression) only.
+func AcceptCompressors(names ...string) grpc.CallOption {
+	return internal.AcceptCompressors.(func(...string) grpc.CallOption)(names...)
+}

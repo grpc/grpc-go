@@ -30,6 +30,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/experimental"
+	"google.golang.org/grpc/internal/grpcutil"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -528,6 +530,57 @@ func (s) TestClientSupportedCompressors(t *testing.T) {
 			_, err := ss.Client.EmptyCall(tt.ctx, &testpb.Empty{})
 			if err != nil {
 				t.Fatalf("Unexpected unary call error, got: %v, want: nil", err)
+			}
+		})
+	}
+}
+
+func (s) TestAcceptCompressorsCallOption(t *testing.T) {
+	tests := []struct {
+		name       string
+		callOption grpc.CallOption
+		wantHeader string
+	}{
+		{
+			name:       "with AcceptCompressors",
+			callOption: experimental.AcceptCompressors("gzip"),
+			wantHeader: "gzip",
+		},
+		{
+			name:       "without AcceptCompressors uses default",
+			callOption: nil,
+			wantHeader: grpcutil.RegisteredCompressors(),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ss := &stubserver.StubServer{
+				EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
+					md, _ := metadata.FromIncomingContext(ctx)
+					header := md.Get("grpc-accept-encoding")
+
+					if len(header) != 1 || header[0] != tt.wantHeader {
+						t.Errorf("unexpected grpc-accept-encoding header: got %v, want %v", header, tt.wantHeader)
+					}
+					return &testpb.Empty{}, nil
+				},
+			}
+			if err := ss.Start(nil); err != nil {
+				t.Fatalf("failed to start server: %v", err)
+			}
+			defer ss.Stop()
+
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+
+			opts := []grpc.CallOption{}
+			if tt.callOption != nil {
+				opts = append(opts, tt.callOption)
+			}
+
+			if _, err := ss.Client.EmptyCall(ctx, &testpb.Empty{}, opts...); err != nil {
+				t.Fatalf("EmptyCall failed: %v", err)
 			}
 		})
 	}
