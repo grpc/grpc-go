@@ -253,7 +253,7 @@ func (m *Manager) ExitIdleMode() {
 	m.resetIdleTimerLocked(m.timeout)
 }
 
-// MarkAsExitedIdle instructs the Manager to update its internal state to
+// MarkAsExitedIdleMode instructs the Manager to update its internal state to
 // indicate that the channel has exited IDLE mode. This is only used by the gRPC
 // client when it exits IDLE mode manually from Dial.
 func (m *Manager) MarkAsExitedIdleMode() {
