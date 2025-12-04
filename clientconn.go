@@ -265,7 +265,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	if err := cc.exitIdleMode(); err != nil {
 		return nil, fmt.Errorf("failed to exit idle mode: %w", err)
 	}
-	cc.idlenessMgr.MarkAsExitedIdleMode()
+	cc.idlenessMgr.UnsafeSetNotIdle()
 
 	// Return now for non-blocking dials.
 	if !cc.dopts.block {

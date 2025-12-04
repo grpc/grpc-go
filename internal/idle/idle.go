@@ -253,10 +253,15 @@ func (m *Manager) ExitIdleMode() {
 	m.resetIdleTimerLocked(m.timeout)
 }
 
-// MarkAsExitedIdleMode instructs the Manager to update its internal state to
-// indicate that the channel has exited IDLE mode. This is only used by the gRPC
-// client when it exits IDLE mode manually from Dial.
-func (m *Manager) MarkAsExitedIdleMode() {
+// UnsafeSetNotIdle instructs the Manager to update its internal state to
+// reflect the reality that the channel is no longer in IDLE mode.
+//
+// N.B. This method is intended only for internal use by the gRPC client
+// when it exits IDLE mode **manually** from `Dial`. The callsite must ensure:
+//   - The channel was **actually in IDLE mode** immediately prior to the call.
+//   - There is **no concurrent activity** that could cause the channel to exit
+//     IDLE mode *naturally* at the same time.
+func (m *Manager) UnsafeSetNotIdle() {
 	m.idleMu.Lock()
 	defer m.idleMu.Unlock()
 
