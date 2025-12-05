@@ -18,7 +18,11 @@
 
 package xdsdepmgr
 
-import "google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
+import (
+	"google.golang.org/grpc/internal/buffer"
+	"google.golang.org/grpc/internal/grpcsync"
+	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
+)
 
 type listenerWatcher struct {
 	resourceName string
@@ -80,4 +84,49 @@ func (r *routeConfigWatcher) stop() {
 	if r.depMgr.logger.V(2) {
 		r.depMgr.logger.Infof("Canceling watch on RouteConfiguration resource %q", r.resourceName)
 	}
+}
+
+type clusterWatcher struct {
+	name   string
+	depMgr *DependencyManager
+}
+
+func (e *clusterWatcher) ResourceChanged(u *xdsresource.ClusterUpdate, onDone func()) {
+	e.depMgr.onClusterResourceUpdate(e.name, u, onDone)
+}
+
+func (e *clusterWatcher) ResourceError(err error, onDone func()) {
+	e.depMgr.onClusterResourceError(e.name, err, onDone)
+}
+
+func (e *clusterWatcher) AmbientError(err error, onDone func()) {
+	e.depMgr.onClusterAmbientError(e.name, err, onDone)
+}
+
+// clusterWatcherState groups the state associated with a clusterWatcher.
+type clusterWatcherState struct {
+	watcher     *clusterWatcher // The underlying watcher.
+	cancelWatch func()          // Cancel func to cancel the watch.
+	// To update the underlying resource resover of the cluster updates of leaf
+	// clusters of this cluster. Used only if this is a top-level cluster
+	// received in route config.
+	updateCh  *buffer.Unbounded
+	closed    *grpcsync.Event
+	closeDone *grpcsync.Event
+	// Most recent update received for this cluster.
+	lastUpdate *xdsresource.ClusterUpdate
+	err        error
+}
+
+func newClusterWatcher(resourceName string, depMgr *DependencyManager) *clusterWatcherState {
+	w := &clusterWatcher{name: resourceName, depMgr: depMgr}
+	state := &clusterWatcherState{
+		watcher:   w,
+		closed:    grpcsync.NewEvent(),
+		closeDone: grpcsync.NewEvent(),
+		updateCh:  buffer.NewUnbounded(),
+	}
+	cancel := xdsresource.WatchCluster(depMgr.xdsClient, resourceName, w)
+	state.cancelWatch = cancel
+	return state
 }
