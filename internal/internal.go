@@ -192,8 +192,7 @@ var (
 	// EnterIdleModeForTesting gets the ClientConn to enter IDLE mode.
 	EnterIdleModeForTesting any // func(*grpc.ClientConn)
 
-	// ExitIdleModeForTesting gets the ClientConn to exit IDLE mode, for testing
-	// purposes.
+	// ExitIdleModeForTesting gets the ClientConn to exit IDLE mode.
 	ExitIdleModeForTesting any // func(*grpc.ClientConn) error
 
 	// ChannelzTurnOffForTesting disables the Channelz service for testing

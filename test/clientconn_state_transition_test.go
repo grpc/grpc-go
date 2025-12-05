@@ -782,7 +782,7 @@ func (s) TestStateTransitions_WithRPC_ResolverUpdateContainsNoAddresses(t *testi
 	mr.InitialState(resolver.State{})
 	defer mr.Close()
 
-	cc, err := grpc.NewClient(mr.Scheme()+":///", grpc.WithResolvers(mr), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithIdleTimeout(time.Second))
+	cc, err := grpc.NewClient(mr.Scheme()+":///", grpc.WithResolvers(mr), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("Failed to create new client: %v", err)
 	}
@@ -807,18 +807,16 @@ func (s) TestStateTransitions_WithRPC_ResolverUpdateContainsNoAddresses(t *testi
 	internal.SubscribeToConnectivityStateChanges.(func(cc *grpc.ClientConn, s grpcsync.Subscriber) func())(cc, s)
 
 	// Make an RPC call to transition the channel to CONNECTING.
-	go func() {
-		const wantErr = "name resolver error: produced zero addresses"
-		for range 2 {
-			_, err := testgrpc.NewTestServiceClient(cc).EmptyCall(ctx, &testpb.Empty{})
-			if code := status.Code(err); code != codes.Unavailable {
-				t.Errorf("EmptyCall RPC failed with code %v, want %v", err, codes.Unavailable)
-			}
-			if err == nil || !strings.Contains(err.Error(), wantErr) {
-				t.Errorf("EmptyCall RPC failed with error: %q, want %q", err, wantErr)
-			}
+	const wantErr = "name resolver error: produced zero addresses"
+	for range 2 {
+		_, err := testgrpc.NewTestServiceClient(cc).EmptyCall(ctx, &testpb.Empty{})
+		if code := status.Code(err); code != codes.Unavailable {
+			t.Errorf("EmptyCall RPC failed with code %v, want %v", err, codes.Unavailable)
 		}
-	}()
+		if err == nil || !strings.Contains(err.Error(), wantErr) {
+			t.Errorf("EmptyCall RPC failed with error: %q, want %q", err, wantErr)
+		}
+	}
 
 	wantStates := []connectivity.State{
 		connectivity.Connecting,       // When channel exits IDLE for the first time.
@@ -827,6 +825,8 @@ func (s) TestStateTransitions_WithRPC_ResolverUpdateContainsNoAddresses(t *testi
 	}
 	for _, wantState := range wantStates {
 		waitForState(ctx, t, stateCh, wantState)
+		if wantState == connectivity.TransientFailure {
+			internal.EnterIdleModeForTesting.(func(*grpc.ClientConn))(cc)
+		}
 	}
-
 }

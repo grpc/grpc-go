@@ -343,6 +343,9 @@ func (i *idler) EnterIdleMode() {
 }
 
 func (i *idler) ExitIdleMode() {
+	// Ignore the error returned from this method, because from the perspective
+	// of the caller (idleness manager), the channel would have always moved out
+	// of IDLE by the time this method returns.
 	(*ClientConn)(i).exitIdleMode()
 }
 
