@@ -48,10 +48,8 @@ type testEnforcer struct {
 	enterIdleCh chan struct{}
 }
 
-func (ti *testEnforcer) ExitIdleMode() error {
+func (ti *testEnforcer) ExitIdleMode() {
 	ti.exitIdleCh <- struct{}{}
-	return nil
-
 }
 
 func (ti *testEnforcer) EnterIdleMode() {
@@ -273,9 +271,7 @@ func (s) TestManager_Enabled_ExitIdleOnRPC(t *testing.T) {
 	for i := 0; i < 100; i++ {
 		// A call to OnCallBegin and OnCallEnd simulates an RPC.
 		go func() {
-			if err := mgr.OnCallBegin(); err != nil {
-				t.Errorf("OnCallBegin() failed: %v", err)
-			}
+			mgr.OnCallBegin()
 			mgr.OnCallEnd()
 		}()
 	}
@@ -316,19 +312,20 @@ type racyEnforcer struct {
 
 // ExitIdleMode sets the internal state to stateExitedIdle. We should only ever
 // exit idle when we are currently in idle.
-func (ri *racyEnforcer) ExitIdleMode() error {
+func (ri *racyEnforcer) ExitIdleMode() {
 	// Set only on the initial ExitIdleMode
 	if ri.started == false {
 		if !atomic.CompareAndSwapInt32((*int32)(ri.state), int32(stateInitial), int32(stateInitial)) {
-			return fmt.Errorf("idleness enforcer's first ExitIdleMode after EnterIdleMode")
+			ri.t.Errorf("idleness enforcer's first ExitIdleMode after EnterIdleMode")
+			return
 		}
 		ri.started = true
-		return nil
+		return
 	}
 	if !atomic.CompareAndSwapInt32((*int32)(ri.state), int32(stateEnteredIdle), int32(stateExitedIdle)) {
-		return fmt.Errorf("idleness enforcer asked to exit idle when it did not enter idle earlier")
+		ri.t.Errorf("idleness enforcer asked to exit idle when it did not enter idle earlier")
+		return
 	}
-	return nil
 }
 
 // EnterIdleMode attempts to set the internal state to stateEnteredIdle. We should only ever enter idle before RPCs start.
@@ -370,9 +367,7 @@ func (s) TestManager_IdleTimeoutRacesWithOnCallBegin(t *testing.T) {
 					// Wait for the configured idle timeout and simulate an RPC to
 					// race with the idle timeout timer callback.
 					<-time.After(defaultTestIdleTimeout / 50)
-					if err := mgr.OnCallBegin(); err != nil {
-						t.Errorf("OnCallBegin() failed: %v", err)
-					}
+					mgr.OnCallBegin()
 					atomic.StoreInt32((*int32)(&idlenessState), int32(stateActiveRPCs))
 					mgr.OnCallEnd()
 				}()
