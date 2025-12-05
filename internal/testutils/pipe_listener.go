@@ -20,6 +20,7 @@
 package testutils
 
 import (
+	"context"
 	"errors"
 	"net"
 	"time"
@@ -81,11 +82,20 @@ func (p *PipeListener) Addr() net.Addr {
 // Dialer dials a connection.
 func (p *PipeListener) Dialer() func(string, time.Duration) (net.Conn, error) {
 	return func(string, time.Duration) (net.Conn, error) {
+		return p.ContextDialer()(context.Background(), "")
+	}
+}
+
+// ContextDialer dials a using a context.
+func (p *PipeListener) ContextDialer() func(context.Context, string) (net.Conn, error) {
+	return func(ctx context.Context, _ string) (net.Conn, error) {
 		connChan := make(chan net.Conn)
 		select {
 		case p.c <- connChan:
 		case <-p.done:
 			return nil, errClosed
+		case <-ctx.Done():
+			return nil, context.Cause(ctx)
 		}
 		conn, ok := <-connChan
 		if !ok {
