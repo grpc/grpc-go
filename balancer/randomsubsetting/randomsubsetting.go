@@ -45,7 +45,7 @@ const Name = "random_subsetting"
 
 var (
 	logger   = grpclog.Component(Name)
-	HashSeed = uint64(time.Now().UnixNano())
+	hashSeed = func() uint64 { return uint64(time.Now().UnixNano()) }
 )
 
 func prefixLogger(p *subsettingBalancer) *internalgrpclog.PrefixLogger {
@@ -61,7 +61,7 @@ type bb struct{}
 func (bb) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Balancer {
 	b := &subsettingBalancer{
 		Balancer: gracefulswitch.NewBalancer(cc, bOpts),
-		hashf:    xxhash.NewWithSeed(HashSeed),
+		hashf:    xxhash.NewWithSeed(hashSeed()),
 	}
 	b.logger = prefixLogger(b)
 	b.logger.Infof("Created")
@@ -81,7 +81,7 @@ func (bb) ParseConfig(s json.RawMessage) (serviceconfig.LoadBalancingConfig, err
 	// Ensure that the specified child policy is registered and validates its
 	// config, if present.
 	if err := json.Unmarshal(s, lbCfg); err != nil {
-		return nil, fmt.Errorf("randomsubsetting: unmarshaling configuration: %s, failed: %v", string(s), err)
+		return nil, fmt.Errorf("randomsubsetting: json.Unmarshal failed for configuration: %s with error: %v", string(s), err)
 	}
 	if lbCfg.SubsetSize == 0 {
 		return nil, fmt.Errorf("randomsubsetting: SubsetSize must be greater than 0")
@@ -108,19 +108,23 @@ type subsettingBalancer struct {
 func (b *subsettingBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
 	lbCfg, ok := s.BalancerConfig.(*lbConfig)
 	if !ok {
-		b.logger.Errorf("Received config with unexpected type %T: %v", s.BalancerConfig, s.BalancerConfig)
+		b.logger.Warningf("Received config with unexpected type %T: %v", s.BalancerConfig, s.BalancerConfig)
 		return balancer.ErrBadResolverState
 	}
 	if b.cfg == nil || b.cfg.ChildPolicy.Name != lbCfg.ChildPolicy.Name {
-
 		if err := b.Balancer.SwitchTo(balancer.Get(lbCfg.ChildPolicy.Name)); err != nil {
 			return fmt.Errorf("randomsubsetting: error switching to child of type %q: %v", lbCfg.ChildPolicy.Name, err)
 		}
 	}
 	b.cfg = lbCfg
+	endpoints := resolver.State{
+		Endpoints:     b.prepareSubsetOfEndpoints(s.ResolverState.Endpoints),
+		ServiceConfig: s.ResolverState.ServiceConfig,
+		Attributes:    s.ResolverState.Attributes,
+	}
 
 	return b.Balancer.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState:  b.prepareChildResolverState(s),
+		ResolverState:  endpoints,
 		BalancerConfig: b.cfg.ChildPolicy.Config,
 	})
 }
@@ -131,24 +135,23 @@ type endpointWithHash struct {
 }
 
 // implements the subsetting algorithm,
-// as described in A68: https://github.com/grpc/proposal/blob/master/A68-random-subsetting.md
-func (b *subsettingBalancer) prepareChildResolverState(s balancer.ClientConnState) resolver.State {
+// as described in A68: https://github.com/grpc/proposal/blob/master/A68-random-subsetting.md#subsetting-algorithm
+func (b *subsettingBalancer) prepareSubsetOfEndpoints(endpoints []resolver.Endpoint) []resolver.Endpoint {
 	subsetSize := b.cfg.SubsetSize
-	endpoints := s.ResolverState.Endpoints
-	if len(endpoints) <= int(subsetSize) || subsetSize < 2 {
-		return s.ResolverState
+	if len(endpoints) <= int(subsetSize) {
+		return endpoints
 	}
 
-	endpointSet := make([]endpointWithHash, len(endpoints))
+	hashedEndpoints := make([]endpointWithHash, len(endpoints))
 	for i, endpoint := range endpoints {
 		b.hashf.Write([]byte(endpoint.Addresses[0].String()))
-		endpointSet[i] = endpointWithHash{
+		hashedEndpoints[i] = endpointWithHash{
 			hash: b.hashf.Sum64(),
 			ep:   endpoint,
 		}
 	}
 
-	slices.SortFunc(endpointSet, func(a, b endpointWithHash) int {
+	slices.SortFunc(hashedEndpoints, func(a, b endpointWithHash) int {
 		if a.hash == b.hash {
 			return 0
 		}
@@ -159,18 +162,14 @@ func (b *subsettingBalancer) prepareChildResolverState(s balancer.ClientConnStat
 	})
 
 	if b.logger.V(2) {
-		b.logger.Infof("Resulting subset: %v", endpointSet[:subsetSize])
+		b.logger.Infof("Resulting subset: %v", hashedEndpoints[:subsetSize])
 	}
 
 	// Convert back to resolver.Endpoints
 	endpointSubset := make([]resolver.Endpoint, subsetSize)
-	for i, endpoint := range endpointSet[:subsetSize] {
+	for i, endpoint := range hashedEndpoints[:subsetSize] {
 		endpointSubset[i] = endpoint.ep
 	}
 
-	return resolver.State{
-		Endpoints:     endpointSubset,
-		ServiceConfig: s.ResolverState.ServiceConfig,
-		Attributes:    s.ResolverState.Attributes,
-	}
+	return endpointSubset
 }

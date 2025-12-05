@@ -63,9 +63,9 @@ func (s) TestParseConfig(t *testing.T) {
 		wantErr string
 	}{
 		{
-			name:    "invalid-json",
+			name:    "invalid_json",
 			input:   "{{invalidjson{{",
-			wantErr: "invalid character",
+			wantErr: "json.Unmarshal failed for configuration",
 		},
 		{
 			name:    "empty_config",
@@ -221,13 +221,13 @@ func checkRoundRobinRPCs(ctx context.Context, t *testing.T, clients []testgrpc.T
 
 func (s) TestSubsettingE2E(t *testing.T) {
 	// Save the original hash seed and restore it at the end of the test.
-	originalHashSeed := HashSeed
+	originalHashSeed := hashSeed
 	defer func() {
-		HashSeed = originalHashSeed
+		hashSeed = originalHashSeed
 	}()
 
 	// Set a fixed hash seed to make the test deterministic.
-	HashSeed = 1
+	hashSeed = func() uint64 { return 1 }
 	tests := []struct {
 		name       string
 		subsetSize int
