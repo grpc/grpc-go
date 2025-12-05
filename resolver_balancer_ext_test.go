@@ -110,7 +110,7 @@ func (b *resolverBuilderWithErr) Close() {}
 // 3. An RPC happens.
 // 4. resolver.Builder.Build() fails.
 func (s) TestResolverBuildFailure(t *testing.T) {
-	enterIdle := internal.FireIdleTimeoutForTesting.(func(*grpc.ClientConn))
+	enterIdle := internal.EnterIdleModeForTesting.(func(*grpc.ClientConn))
 	name := strings.ReplaceAll(strings.ToLower(t.Name()), "/", "")
 	resErrCh := make(chan error, 1)
 	resolver.Register(&resolverBuilderWithErr{errCh: resErrCh, scheme: name})
@@ -171,7 +171,7 @@ func (s) TestResolverReportError(t *testing.T) {
 // while calling UpdateState at the same time as the resolver being closed while
 // the channel enters idle mode.
 func (s) TestEnterIdleDuringResolverUpdateState(t *testing.T) {
-	enterIdle := internal.FireIdleTimeoutForTesting.(func(*grpc.ClientConn))
+	enterIdle := internal.EnterIdleModeForTesting.(func(*grpc.ClientConn))
 	name := strings.ReplaceAll(strings.ToLower(t.Name()), "/", "")
 
 	// Create a manual resolver that spams UpdateState calls until it is closed.
@@ -216,7 +216,7 @@ func (s) TestEnterIdleDuringResolverUpdateState(t *testing.T) {
 // TestEnterIdleDuringBalancerUpdateState tests calling UpdateState at the same
 // time as the balancer being closed while the channel enters idle mode.
 func (s) TestEnterIdleDuringBalancerUpdateState(t *testing.T) {
-	enterIdle := internal.FireIdleTimeoutForTesting.(func(*grpc.ClientConn))
+	enterIdle := internal.EnterIdleModeForTesting.(func(*grpc.ClientConn))
 	name := strings.ReplaceAll(strings.ToLower(t.Name()), "/", "")
 
 	// Create a balancer that calls UpdateState once asynchronously, attempting
@@ -261,7 +261,7 @@ func (s) TestEnterIdleDuringBalancerUpdateState(t *testing.T) {
 func (s) TestEnterIdleDuringBalancerNewSubConn(t *testing.T) {
 	channelz.TurnOn()
 	defer internal.ChannelzTurnOffForTesting()
-	enterIdle := internal.FireIdleTimeoutForTesting.(func(*grpc.ClientConn))
+	enterIdle := internal.EnterIdleModeForTesting.(func(*grpc.ClientConn))
 	name := strings.ReplaceAll(strings.ToLower(t.Name()), "/", "")
 
 	// Create a balancer that calls NewSubConn once asynchronously, attempting

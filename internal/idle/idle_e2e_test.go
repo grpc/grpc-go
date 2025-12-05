@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"io"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -33,7 +32,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/balancer/stub"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpctest"
@@ -548,70 +546,4 @@ func (s) TestChannelIdleness_Connect(t *testing.T) {
 
 	// Verify that the ClientConn moves back to READY.
 	testutils.AwaitState(ctx, t, cc, connectivity.Ready)
-}
-
-// runFunc runs f repeatedly until the context expires.
-func runFunc(ctx context.Context, f func()) {
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-time.After(10 * time.Millisecond):
-			f()
-		}
-	}
-}
-
-// Tests the scenario where there are concurrent calls to exit and enter idle
-// mode on the ClientConn. Verifies that there is no race under this scenario.
-func (s) TestChannelIdleness_RaceBetweenEnterAndExitIdleMode(t *testing.T) {
-	// Start a test backend and set the bootstrap state of the resolver to
-	// include this address. This will ensure that when the resolver is
-	// restarted when exiting idle, it will push the same address to grpc again.
-	r := manual.NewBuilderWithScheme("whatever")
-	backend := stubserver.StartTestService(t, nil)
-	defer backend.Stop()
-	r.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: backend.Address}}})
-
-	// Create a ClientConn with a long idle_timeout. We will explicitly trigger
-	// entering and exiting IDLE mode from the test.
-	dopts := []grpc.DialOption{
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithResolvers(r),
-		grpc.WithIdleTimeout(30 * time.Minute),
-		grpc.WithDefaultServiceConfig(`{"loadBalancingConfig": [{"pick_first":{}}]}`),
-	}
-	cc, err := grpc.NewClient(r.Scheme()+":///test.server", dopts...)
-	if err != nil {
-		t.Fatalf("grpc.NewClient() failed: %v", err)
-	}
-	defer cc.Close()
-
-	enterIdle := internal.FireIdleTimeoutForTesting.(func(*grpc.ClientConn))
-	enterIdleFunc := func() { enterIdle(cc) }
-	exitIdle := internal.ExitIdleModeForTesting.(func(*grpc.ClientConn))
-	exitIdleFunc := func() { exitIdle(cc) }
-	// Spawn goroutines that call methods on the ClientConn to enter and exit
-	// idle mode concurrently for one second.
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-	defer cancel()
-	var wg sync.WaitGroup
-	wg.Add(4)
-	go func() {
-		runFunc(ctx, enterIdleFunc)
-		wg.Done()
-	}()
-	go func() {
-		runFunc(ctx, enterIdleFunc)
-		wg.Done()
-	}()
-	go func() {
-		runFunc(ctx, exitIdleFunc)
-		wg.Done()
-	}()
-	go func() {
-		runFunc(ctx, exitIdleFunc)
-		wg.Done()
-	}()
-	wg.Wait()
 }

@@ -743,8 +743,9 @@ func init() {
 	internal.SubscribeToConnectivityStateChanges = func(cc *ClientConn, s grpcsync.Subscriber) func() {
 		return cc.csMgr.pubSub.Subscribe(s)
 	}
-	internal.FireIdleTimeoutForTesting = func(cc *ClientConn) {
-		cc.idlenessMgr.FireIdleTimeoutForTesting()
+	internal.EnterIdleModeForTesting = func(cc *ClientConn) {
+		cc.enterIdleMode()
+		cc.idlenessMgr.UnsafeSetIdleForTesting()
 	}
 	internal.ExitIdleModeForTesting = func(cc *ClientConn) {
 		cc.idlenessMgr.ExitIdleMode()

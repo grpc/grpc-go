@@ -181,9 +181,22 @@ func (m *Manager) tryEnterIdleMode() bool {
 	return true
 }
 
-// FireIdleTimeoutForTesting forcefully triggers the idle timeout to fire.
-func (m *Manager) FireIdleTimeoutForTesting() {
-	m.handleIdleTimeout()
+// UnsafeSetIdleForTesting instructs the Manager to update its internal state to
+// reflect the reality that the channel is now in IDLE mode.
+//
+// N.B. This method is intended only for testing purposes. The caller must
+// ensure that there are no ongoing RPCs
+func (m *Manager) UnsafeSetIdleForTesting() error {
+	m.idleMu.Lock()
+	defer m.idleMu.Unlock()
+
+	atomic.StoreInt32(&m.activeCallsCount, -math.MaxInt32)
+	m.actuallyIdle = true
+	m.activeSinceLastTimerCheck = 0
+	if m.timer != nil {
+		m.timer.Stop()
+	}
+	return nil
 }
 
 // OnCallBegin is invoked at the start of every RPC.
