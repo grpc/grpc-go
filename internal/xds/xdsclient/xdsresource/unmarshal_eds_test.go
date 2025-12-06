@@ -34,11 +34,24 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/xds/clients"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource/version"
+	"google.golang.org/grpc/resolver"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/structpb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
+
+func getResolverEndpoint(addr []string, hostname string) resolver.Endpoint {
+	address := []resolver.Address{}
+	for _, a := range addr {
+		address = append(address, resolver.Address{Addr: a})
+	}
+	resolverEndpoint := resolver.Endpoint{
+		Addresses: address,
+	}
+	resolverEndpoint = SetHostname(resolverEndpoint, hostname)
+	return resolverEndpoint
+}
 
 func (s) TestEDSParseRespProto(t *testing.T) {
 	tests := []struct {
@@ -153,10 +166,9 @@ func (s) TestEDSParseRespProto(t *testing.T) {
 				Localities: []Locality{
 					{
 						Endpoints: []Endpoint{{
-							Addresses:    []string{"addr1:314"},
-							HealthStatus: EndpointHealthStatusUnhealthy,
-							Weight:       271,
-							Hostname:     "addr1",
+							ResolverEndpoint: getResolverEndpoint([]string{"addr1:314"}, "addr1"),
+							HealthStatus:     EndpointHealthStatusUnhealthy,
+							Weight:           271,
 						}},
 						ID:       clients.Locality{SubZone: "locality-1"},
 						Priority: 1,
@@ -164,10 +176,9 @@ func (s) TestEDSParseRespProto(t *testing.T) {
 					},
 					{
 						Endpoints: []Endpoint{{
-							Addresses:    []string{"addr2:159"},
-							HealthStatus: EndpointHealthStatusDraining,
-							Weight:       828,
-							Hostname:     "addr2",
+							ResolverEndpoint: getResolverEndpoint([]string{"addr2:159"}, "addr2"),
+							HealthStatus:     EndpointHealthStatusDraining,
+							Weight:           828,
 						}},
 						ID:       clients.Locality{SubZone: "locality-2"},
 						Priority: 0,
@@ -201,10 +212,9 @@ func (s) TestEDSParseRespProto(t *testing.T) {
 				Localities: []Locality{
 					{
 						Endpoints: []Endpoint{{
-							Addresses:    []string{"addr1:314"},
-							HealthStatus: EndpointHealthStatusUnhealthy,
-							Weight:       271,
-							Hostname:     "addr1",
+							ResolverEndpoint: getResolverEndpoint([]string{"addr1:314"}, "addr1"),
+							HealthStatus:     EndpointHealthStatusUnhealthy,
+							Weight:           271,
 						}},
 						ID:       clients.Locality{SubZone: "locality-1"},
 						Priority: 1,
@@ -212,10 +222,9 @@ func (s) TestEDSParseRespProto(t *testing.T) {
 					},
 					{
 						Endpoints: []Endpoint{{
-							Addresses:    []string{"addr2:159"},
-							HealthStatus: EndpointHealthStatusDraining,
-							Weight:       828,
-							Hostname:     "addr2",
+							ResolverEndpoint: getResolverEndpoint([]string{"addr2:159"}, "addr2"),
+							HealthStatus:     EndpointHealthStatusDraining,
+							Weight:           828,
 						}},
 						ID:       clients.Locality{SubZone: "locality-1"},
 						Priority: 0,
@@ -298,13 +307,13 @@ func (s) TestEDSParseRespProtoAdditionalAddrs(t *testing.T) {
 			name: "multiple localities",
 			m: func() *v3endpointpb.ClusterLoadAssignment {
 				clab0 := newClaBuilder("test", nil)
-				endpoints1 := []endpointOpts{{addrWithPort: "addr1:997", additionalAddrWithPorts: []string{"addr1:1000"}}}
+				endpoints1 := []endpointOpts{{addrWithPort: "addr1:997", additionalAddrWithPorts: []string{"addr1:1000"}, hostname: "addr1"}}
 				locOption1 := &addLocalityOptions{
 					Health: []v3corepb.HealthStatus{v3corepb.HealthStatus_UNHEALTHY},
 					Weight: []uint32{271},
 				}
 				clab0.addLocality("locality-1", 1, 1, endpoints1, locOption1)
-				endpoints2 := []endpointOpts{{addrWithPort: "addr2:998", additionalAddrWithPorts: []string{"addr2:1000"}}}
+				endpoints2 := []endpointOpts{{addrWithPort: "addr2:998", additionalAddrWithPorts: []string{"addr2:1000"}, hostname: "addr2"}}
 				locOption2 := &addLocalityOptions{
 					Health: []v3corepb.HealthStatus{v3corepb.HealthStatus_HEALTHY},
 					Weight: []uint32{828},
@@ -317,9 +326,9 @@ func (s) TestEDSParseRespProtoAdditionalAddrs(t *testing.T) {
 				Localities: []Locality{
 					{
 						Endpoints: []Endpoint{{
-							Addresses:    []string{"addr1:997", "addr1:1000"},
-							HealthStatus: EndpointHealthStatusUnhealthy,
-							Weight:       271,
+							ResolverEndpoint: getResolverEndpoint([]string{"addr1:997", "addr1:1000"}, "addr1"),
+							HealthStatus:     EndpointHealthStatusUnhealthy,
+							Weight:           271,
 						}},
 						ID:       clients.Locality{SubZone: "locality-1"},
 						Priority: 1,
@@ -327,9 +336,9 @@ func (s) TestEDSParseRespProtoAdditionalAddrs(t *testing.T) {
 					},
 					{
 						Endpoints: []Endpoint{{
-							Addresses:    []string{"addr2:998", "addr2:1000"},
-							HealthStatus: EndpointHealthStatusHealthy,
-							Weight:       828,
+							ResolverEndpoint: getResolverEndpoint([]string{"addr2:998", "addr2:1000"}, "addr2"),
+							HealthStatus:     EndpointHealthStatusHealthy,
+							Weight:           828,
 						}},
 						ID:       clients.Locality{SubZone: "locality-2"},
 						Priority: 0,
@@ -541,10 +550,9 @@ func (s) TestUnmarshalEndpoints(t *testing.T) {
 				Localities: []Locality{
 					{
 						Endpoints: []Endpoint{{
-							Addresses:    []string{"addr1:314"},
-							HealthStatus: EndpointHealthStatusUnhealthy,
-							Weight:       271,
-							Hostname:     "addr1",
+							ResolverEndpoint: getResolverEndpoint([]string{"addr1:314"}, "addr1"),
+							HealthStatus:     EndpointHealthStatusUnhealthy,
+							Weight:           271,
 						}},
 						ID:       clients.Locality{SubZone: "locality-1"},
 						Priority: 1,
@@ -552,10 +560,9 @@ func (s) TestUnmarshalEndpoints(t *testing.T) {
 					},
 					{
 						Endpoints: []Endpoint{{
-							Addresses:    []string{"addr2:159"},
-							HealthStatus: EndpointHealthStatusDraining,
-							Weight:       828,
-							Hostname:     "addr2",
+							ResolverEndpoint: getResolverEndpoint([]string{"addr2:159"}, "addr2"),
+							HealthStatus:     EndpointHealthStatusDraining,
+							Weight:           828,
 						}},
 						ID:       clients.Locality{SubZone: "locality-2"},
 						Priority: 0,
@@ -574,10 +581,9 @@ func (s) TestUnmarshalEndpoints(t *testing.T) {
 				Localities: []Locality{
 					{
 						Endpoints: []Endpoint{{
-							Addresses:    []string{"addr1:314"},
-							HealthStatus: EndpointHealthStatusUnhealthy,
-							Weight:       271,
-							Hostname:     "addr1",
+							ResolverEndpoint: getResolverEndpoint([]string{"addr1:314"}, "addr1"),
+							HealthStatus:     EndpointHealthStatusUnhealthy,
+							Weight:           271,
 						}},
 						ID:       clients.Locality{SubZone: "locality-1"},
 						Priority: 1,
@@ -585,10 +591,9 @@ func (s) TestUnmarshalEndpoints(t *testing.T) {
 					},
 					{
 						Endpoints: []Endpoint{{
-							Addresses:    []string{"addr2:159"},
-							HealthStatus: EndpointHealthStatusDraining,
-							Weight:       828,
-							Hostname:     "addr2",
+							ResolverEndpoint: getResolverEndpoint([]string{"addr2:159"}, "addr2"),
+							HealthStatus:     EndpointHealthStatusDraining,
+							Weight:           828,
 						}},
 						ID:       clients.Locality{SubZone: "locality-2"},
 						Priority: 0,
@@ -643,6 +648,7 @@ func (s) TestEDSParseRespProto_HTTP_Connect_CustomMetadata_EnvVarOn(t *testing.T
 							}),
 						},
 					},
+					hostname: "addr1",
 				}}
 				clab0.addLocality("locality-1", 1, 0, endpoints, nil)
 				return clab0.Build()
@@ -651,9 +657,9 @@ func (s) TestEDSParseRespProto_HTTP_Connect_CustomMetadata_EnvVarOn(t *testing.T
 				Localities: []Locality{
 					{
 						Endpoints: []Endpoint{{
-							Addresses:    []string{"addr1:314"},
-							HealthStatus: EndpointHealthStatusUnknown,
-							Weight:       1,
+							ResolverEndpoint: getResolverEndpoint([]string{"addr1:314"}, "addr1"),
+							HealthStatus:     EndpointHealthStatusUnknown,
+							Weight:           1,
 							Metadata: map[string]any{
 								"test-key": ProxyAddressMetadataValue{
 									Address: "1.2.3.4:1111",
@@ -684,6 +690,7 @@ func (s) TestEDSParseRespProto_HTTP_Connect_CustomMetadata_EnvVarOn(t *testing.T
 							},
 						},
 					},
+					hostname: "addr1",
 				}}
 				clab0.addLocality("locality-1", 1, 0, endpoints, nil)
 				return clab0.Build()
@@ -692,9 +699,9 @@ func (s) TestEDSParseRespProto_HTTP_Connect_CustomMetadata_EnvVarOn(t *testing.T
 				Localities: []Locality{
 					{
 						Endpoints: []Endpoint{{
-							Addresses:    []string{"addr1:314"},
-							HealthStatus: EndpointHealthStatusUnknown,
-							Weight:       1,
+							ResolverEndpoint: getResolverEndpoint([]string{"addr1:314"}, "addr1"),
+							HealthStatus:     EndpointHealthStatusUnknown,
+							Weight:           1,
 							Metadata: map[string]any{
 								"test-key": StructMetadataValue{Data: map[string]any{
 									"key": float64(123),
@@ -712,7 +719,7 @@ func (s) TestEDSParseRespProto_HTTP_Connect_CustomMetadata_EnvVarOn(t *testing.T
 			name: "typed_filter_metadata_in_locality",
 			endpointProto: func() *v3endpointpb.ClusterLoadAssignment {
 				clab0 := newClaBuilder("test", nil)
-				endpoints := []endpointOpts{{addrWithPort: "addr1:314"}}
+				endpoints := []endpointOpts{{addrWithPort: "addr1:314", hostname: "addr1"}}
 				locOption := &addLocalityOptions{
 					Metadata: &v3corepb.Metadata{
 						TypedFilterMetadata: map[string]*anypb.Any{
@@ -735,9 +742,9 @@ func (s) TestEDSParseRespProto_HTTP_Connect_CustomMetadata_EnvVarOn(t *testing.T
 				Localities: []Locality{
 					{
 						Endpoints: []Endpoint{{
-							Addresses:    []string{"addr1:314"},
-							HealthStatus: EndpointHealthStatusUnknown,
-							Weight:       1,
+							ResolverEndpoint: getResolverEndpoint([]string{"addr1:314"}, "addr1"),
+							HealthStatus:     EndpointHealthStatusUnknown,
+							Weight:           1,
 						}},
 						ID:       clients.Locality{SubZone: "locality-1"},
 						Priority: 0,
@@ -755,7 +762,7 @@ func (s) TestEDSParseRespProto_HTTP_Connect_CustomMetadata_EnvVarOn(t *testing.T
 			name: "filter_metadata_in_locality",
 			endpointProto: func() *v3endpointpb.ClusterLoadAssignment {
 				clab0 := newClaBuilder("test", nil)
-				endpoints := []endpointOpts{{addrWithPort: "addr1:314"}}
+				endpoints := []endpointOpts{{addrWithPort: "addr1:314", hostname: "addr1"}}
 				locOption := &addLocalityOptions{
 					Metadata: &v3corepb.Metadata{
 						FilterMetadata: map[string]*structpb.Struct{
@@ -776,9 +783,9 @@ func (s) TestEDSParseRespProto_HTTP_Connect_CustomMetadata_EnvVarOn(t *testing.T
 				Localities: []Locality{
 					{
 						Endpoints: []Endpoint{{
-							Addresses:    []string{"addr1:314"},
-							HealthStatus: EndpointHealthStatusUnknown,
-							Weight:       1,
+							ResolverEndpoint: getResolverEndpoint([]string{"addr1:314"}, "addr1"),
+							HealthStatus:     EndpointHealthStatusUnknown,
+							Weight:           1,
 						}},
 						ID:       clients.Locality{SubZone: "locality-1"},
 						Priority: 0,
@@ -820,6 +827,7 @@ func (s) TestEDSParseRespProto_HTTP_Connect_CustomMetadata_EnvVarOn(t *testing.T
 							},
 						},
 					},
+					hostname: "addr1",
 				}}
 				clab0.addLocality("locality-1", 1, 0, endpoints, nil)
 				return clab0.Build()
@@ -828,9 +836,9 @@ func (s) TestEDSParseRespProto_HTTP_Connect_CustomMetadata_EnvVarOn(t *testing.T
 				Localities: []Locality{
 					{
 						Endpoints: []Endpoint{{
-							Addresses:    []string{"addr1:314"},
-							HealthStatus: EndpointHealthStatusUnknown,
-							Weight:       1,
+							ResolverEndpoint: getResolverEndpoint([]string{"addr1:314"}, "addr1"),
+							HealthStatus:     EndpointHealthStatusUnknown,
+							Weight:           1,
 							Metadata: map[string]any{
 								"test-key": ProxyAddressMetadataValue{
 									Address: "1.2.3.4:1111",
@@ -848,7 +856,7 @@ func (s) TestEDSParseRespProto_HTTP_Connect_CustomMetadata_EnvVarOn(t *testing.T
 			name: "typed_filter_metadata_over_filter_metadata_in_locality",
 			endpointProto: func() *v3endpointpb.ClusterLoadAssignment {
 				clab0 := newClaBuilder("test", nil)
-				endpoints := []endpointOpts{{addrWithPort: "addr1:314"}}
+				endpoints := []endpointOpts{{addrWithPort: "addr1:314", hostname: "addr1"}}
 				locOption := &addLocalityOptions{
 					Metadata: &v3corepb.Metadata{
 						TypedFilterMetadata: map[string]*anypb.Any{
@@ -880,9 +888,9 @@ func (s) TestEDSParseRespProto_HTTP_Connect_CustomMetadata_EnvVarOn(t *testing.T
 				Localities: []Locality{
 					{
 						Endpoints: []Endpoint{{
-							Addresses:    []string{"addr1:314"},
-							HealthStatus: EndpointHealthStatusUnknown,
-							Weight:       1,
+							ResolverEndpoint: getResolverEndpoint([]string{"addr1:314"}, "addr1"),
+							HealthStatus:     EndpointHealthStatusUnknown,
+							Weight:           1,
 						}},
 						ID:       clients.Locality{SubZone: "locality-1"},
 						Priority: 0,
@@ -924,6 +932,7 @@ func (s) TestEDSParseRespProto_HTTP_Connect_CustomMetadata_EnvVarOn(t *testing.T
 							},
 						},
 					},
+					hostname: "addr1",
 				}}
 				clab0.addLocality("locality-1", 1, 0, endpoints, nil)
 				return clab0.Build()
@@ -932,9 +941,9 @@ func (s) TestEDSParseRespProto_HTTP_Connect_CustomMetadata_EnvVarOn(t *testing.T
 				Localities: []Locality{
 					{
 						Endpoints: []Endpoint{{
-							Addresses:    []string{"addr1:314"},
-							HealthStatus: EndpointHealthStatusUnknown,
-							Weight:       1,
+							ResolverEndpoint: getResolverEndpoint([]string{"addr1:314"}, "addr1"),
+							HealthStatus:     EndpointHealthStatusUnknown,
+							Weight:           1,
 							Metadata: map[string]any{
 								"test-key": ProxyAddressMetadataValue{
 									Address: "1.2.3.4:1111",
@@ -955,7 +964,7 @@ func (s) TestEDSParseRespProto_HTTP_Connect_CustomMetadata_EnvVarOn(t *testing.T
 			name: "both_filter_and_typed_filter_metadata_in_locality",
 			endpointProto: func() *v3endpointpb.ClusterLoadAssignment {
 				clab0 := newClaBuilder("test", nil)
-				endpoints := []endpointOpts{{addrWithPort: "addr1:314"}}
+				endpoints := []endpointOpts{{addrWithPort: "addr1:314", hostname: "addr1"}}
 				locOption := &addLocalityOptions{
 					Metadata: &v3corepb.Metadata{
 						TypedFilterMetadata: map[string]*anypb.Any{
@@ -987,9 +996,9 @@ func (s) TestEDSParseRespProto_HTTP_Connect_CustomMetadata_EnvVarOn(t *testing.T
 				Localities: []Locality{
 					{
 						Endpoints: []Endpoint{{
-							Addresses:    []string{"addr1:314"},
-							HealthStatus: EndpointHealthStatusUnknown,
-							Weight:       1,
+							ResolverEndpoint: getResolverEndpoint([]string{"addr1:314"}, "addr1"),
+							HealthStatus:     EndpointHealthStatusUnknown,
+							Weight:           1,
 						}},
 						ID:       clients.Locality{SubZone: "locality-1"},
 						Priority: 0,
@@ -1048,6 +1057,7 @@ func (s) TestEDSParseRespProto_HTTP_Connect_CustomMetadata_EnvVarOff(t *testing.
 							}),
 						},
 					},
+					hostname: "addr1",
 				}}
 				clab0.addLocality("locality-1", 1, 0, endpoints, nil)
 				return clab0.Build()
@@ -1056,9 +1066,9 @@ func (s) TestEDSParseRespProto_HTTP_Connect_CustomMetadata_EnvVarOff(t *testing.
 				Localities: []Locality{
 					{
 						Endpoints: []Endpoint{{
-							Addresses:    []string{"addr1:314"},
-							HealthStatus: EndpointHealthStatusUnknown,
-							Weight:       1,
+							ResolverEndpoint: getResolverEndpoint([]string{"addr1:314"}, "addr1"),
+							HealthStatus:     EndpointHealthStatusUnknown,
+							Weight:           1,
 						}},
 						ID:       clients.Locality{SubZone: "locality-1"},
 						Priority: 0,
@@ -1084,6 +1094,7 @@ func (s) TestEDSParseRespProto_HTTP_Connect_CustomMetadata_EnvVarOff(t *testing.
 							},
 						},
 					},
+					hostname: "addr1",
 				}}
 				clab0.addLocality("locality-1", 1, 0, endpoints, nil)
 				return clab0.Build()
@@ -1092,9 +1103,9 @@ func (s) TestEDSParseRespProto_HTTP_Connect_CustomMetadata_EnvVarOff(t *testing.
 				Localities: []Locality{
 					{
 						Endpoints: []Endpoint{{
-							Addresses:    []string{"addr1:314"},
-							HealthStatus: EndpointHealthStatusUnknown,
-							Weight:       1,
+							ResolverEndpoint: getResolverEndpoint([]string{"addr1:314"}, "addr1"),
+							HealthStatus:     EndpointHealthStatusUnknown,
+							Weight:           1,
 						}},
 						ID:       clients.Locality{SubZone: "locality-1"},
 						Priority: 0,
@@ -1107,7 +1118,7 @@ func (s) TestEDSParseRespProto_HTTP_Connect_CustomMetadata_EnvVarOff(t *testing.
 			name: "typed_filter_metadata_in_locality",
 			endpointProto: func() *v3endpointpb.ClusterLoadAssignment {
 				clab0 := newClaBuilder("test", nil)
-				endpoints := []endpointOpts{{addrWithPort: "addr1:314"}}
+				endpoints := []endpointOpts{{addrWithPort: "addr1:314", hostname: "addr1"}}
 				locOption := &addLocalityOptions{
 					Metadata: &v3corepb.Metadata{
 						TypedFilterMetadata: map[string]*anypb.Any{
@@ -1130,9 +1141,9 @@ func (s) TestEDSParseRespProto_HTTP_Connect_CustomMetadata_EnvVarOff(t *testing.
 				Localities: []Locality{
 					{
 						Endpoints: []Endpoint{{
-							Addresses:    []string{"addr1:314"},
-							HealthStatus: EndpointHealthStatusUnknown,
-							Weight:       1,
+							ResolverEndpoint: getResolverEndpoint([]string{"addr1:314"}, "addr1"),
+							HealthStatus:     EndpointHealthStatusUnknown,
+							Weight:           1,
 						}},
 						ID:       clients.Locality{SubZone: "locality-1"},
 						Priority: 0,
@@ -1145,7 +1156,7 @@ func (s) TestEDSParseRespProto_HTTP_Connect_CustomMetadata_EnvVarOff(t *testing.
 			name: "filter_metadata_in_locality",
 			endpointProto: func() *v3endpointpb.ClusterLoadAssignment {
 				clab0 := newClaBuilder("test", nil)
-				endpoints := []endpointOpts{{addrWithPort: "addr1:314"}}
+				endpoints := []endpointOpts{{addrWithPort: "addr1:314", hostname: "addr1"}}
 				locOption := &addLocalityOptions{
 					Metadata: &v3corepb.Metadata{
 						FilterMetadata: map[string]*structpb.Struct{
@@ -1166,9 +1177,9 @@ func (s) TestEDSParseRespProto_HTTP_Connect_CustomMetadata_EnvVarOff(t *testing.
 				Localities: []Locality{
 					{
 						Endpoints: []Endpoint{{
-							Addresses:    []string{"addr1:314"},
-							HealthStatus: EndpointHealthStatusUnknown,
-							Weight:       1,
+							ResolverEndpoint: getResolverEndpoint([]string{"addr1:314"}, "addr1"),
+							HealthStatus:     EndpointHealthStatusUnknown,
+							Weight:           1,
 						}},
 						ID:       clients.Locality{SubZone: "locality-1"},
 						Priority: 0,
@@ -1205,6 +1216,7 @@ func (s) TestEDSParseRespProto_HTTP_Connect_CustomMetadata_EnvVarOff(t *testing.
 							},
 						},
 					},
+					hostname: "addr1",
 				}}
 				clab0.addLocality("locality-1", 1, 0, endpoints, nil)
 				return clab0.Build()
@@ -1213,9 +1225,9 @@ func (s) TestEDSParseRespProto_HTTP_Connect_CustomMetadata_EnvVarOff(t *testing.
 				Localities: []Locality{
 					{
 						Endpoints: []Endpoint{{
-							Addresses:    []string{"addr1:314"},
-							HealthStatus: EndpointHealthStatusUnknown,
-							Weight:       1,
+							ResolverEndpoint: getResolverEndpoint([]string{"addr1:314"}, "addr1"),
+							HealthStatus:     EndpointHealthStatusUnknown,
+							Weight:           1,
 						}},
 						ID:       clients.Locality{SubZone: "locality-1"},
 						Priority: 0,
@@ -1228,7 +1240,7 @@ func (s) TestEDSParseRespProto_HTTP_Connect_CustomMetadata_EnvVarOff(t *testing.
 			name: "both_filter_and_typed_filter_metadata_in_locality",
 			endpointProto: func() *v3endpointpb.ClusterLoadAssignment {
 				clab0 := newClaBuilder("test", nil)
-				endpoints := []endpointOpts{{addrWithPort: "addr1:314"}}
+				endpoints := []endpointOpts{{addrWithPort: "addr1:314", hostname: "addr1"}}
 				locOption := &addLocalityOptions{
 					Metadata: &v3corepb.Metadata{
 						TypedFilterMetadata: map[string]*anypb.Any{
@@ -1260,9 +1272,9 @@ func (s) TestEDSParseRespProto_HTTP_Connect_CustomMetadata_EnvVarOff(t *testing.
 				Localities: []Locality{
 					{
 						Endpoints: []Endpoint{{
-							Addresses:    []string{"addr1:314"},
-							HealthStatus: EndpointHealthStatusUnknown,
-							Weight:       1,
+							ResolverEndpoint: getResolverEndpoint([]string{"addr1:314"}, "addr1"),
+							HealthStatus:     EndpointHealthStatusUnknown,
+							Weight:           1,
 						}},
 						ID:       clients.Locality{SubZone: "locality-1"},
 						Priority: 0,
@@ -1288,6 +1300,7 @@ func (s) TestEDSParseRespProto_HTTP_Connect_CustomMetadata_EnvVarOff(t *testing.
 							}),
 						},
 					},
+					hostname: "addr1",
 				}}
 				locOption := &addLocalityOptions{
 					Metadata: &v3corepb.Metadata{
@@ -1309,9 +1322,9 @@ func (s) TestEDSParseRespProto_HTTP_Connect_CustomMetadata_EnvVarOff(t *testing.
 				Localities: []Locality{
 					{
 						Endpoints: []Endpoint{{
-							Addresses:    []string{"addr1:314"},
-							HealthStatus: EndpointHealthStatusUnknown,
-							Weight:       1,
+							ResolverEndpoint: getResolverEndpoint([]string{"addr1:314"}, "addr1"),
+							HealthStatus:     EndpointHealthStatusUnknown,
+							Weight:           1,
 						}},
 						ID:       clients.Locality{SubZone: "locality-1"},
 						Priority: 0,

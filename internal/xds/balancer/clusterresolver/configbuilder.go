@@ -265,25 +265,21 @@ func priorityLocalitiesToClusterImpl(localities []xdsresource.Locality, priority
 			if endpoint.HealthStatus != xdsresource.EndpointHealthStatusHealthy && endpoint.HealthStatus != xdsresource.EndpointHealthStatusUnknown {
 				continue
 			}
-			resolverEndpoint := resolver.Endpoint{}
-			for _, as := range endpoint.Addresses {
-				resolverEndpoint.Addresses = append(resolverEndpoint.Addresses, resolver.Address{Addr: as})
-			}
-			resolverEndpoint = hierarchy.SetInEndpoint(resolverEndpoint, []string{priorityName, localityStr})
-			resolverEndpoint = xdsinternal.SetLocalityIDInEndpoint(resolverEndpoint, locality.ID)
+			endpoint.ResolverEndpoint = hierarchy.SetInEndpoint(endpoint.ResolverEndpoint, []string{priorityName, localityStr})
+			endpoint.ResolverEndpoint = xdsinternal.SetLocalityIDInEndpoint(endpoint.ResolverEndpoint, locality.ID)
 			// "To provide the xds_wrr_locality load balancer information about
 			// locality weights received from EDS, the cluster resolver will
 			// populate a new locality weight attribute for each address The
 			// attribute will have the weight (as an integer) of the locality
 			// the address is part of." - A52
-			resolverEndpoint = wrrlocality.SetAddrInfoInEndpoint(resolverEndpoint, wrrlocality.AddrInfo{LocalityWeight: lw})
+			endpoint.ResolverEndpoint = wrrlocality.SetAddrInfoInEndpoint(endpoint.ResolverEndpoint, wrrlocality.AddrInfo{LocalityWeight: lw})
 			var ew uint32 = 1
 			if endpoint.Weight != 0 {
 				ew = endpoint.Weight
 			}
-			resolverEndpoint = weight.Set(resolverEndpoint, weight.EndpointInfo{Weight: lw * ew})
-			resolverEndpoint = ringhash.SetHashKey(resolverEndpoint, endpoint.HashKey)
-			retEndpoints = append(retEndpoints, resolverEndpoint)
+			endpoint.ResolverEndpoint = weight.Set(endpoint.ResolverEndpoint, weight.EndpointInfo{Weight: lw * ew})
+			endpoint.ResolverEndpoint = ringhash.SetHashKey(endpoint.ResolverEndpoint, endpoint.HashKey)
+			retEndpoints = append(retEndpoints, endpoint.ResolverEndpoint)
 		}
 	}
 	return &clusterimpl.LBConfig{

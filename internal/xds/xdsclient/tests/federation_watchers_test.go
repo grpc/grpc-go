@@ -29,6 +29,7 @@ import (
 	"google.golang.org/grpc/internal/xds/clients"
 	"google.golang.org/grpc/internal/xds/xdsclient"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
+	"google.golang.org/grpc/resolver"
 
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
@@ -291,8 +292,13 @@ func (s) TestFederation_EndpointsResourceContextParamOrder(t *testing.T) {
 		update: xdsresource.EndpointsUpdate{
 			Localities: []xdsresource.Locality{
 				{
-					Endpoints: []xdsresource.Endpoint{{Addresses: []string{"localhost:666"}, Weight: 1}},
-					Weight:    1,
+					Endpoints: []xdsresource.Endpoint{{
+						ResolverEndpoint: resolver.Endpoint{
+							Addresses: []resolver.Address{{Addr: "localhost:666"}},
+						},
+						Weight: 1,
+					}},
+					Weight: 1,
 					ID: clients.Locality{
 						Region:  "region-1",
 						Zone:    "zone-1",

@@ -30,9 +30,32 @@ import (
 	"google.golang.org/grpc/internal/pretty"
 	xdsinternal "google.golang.org/grpc/internal/xds"
 	"google.golang.org/grpc/internal/xds/clients"
+	"google.golang.org/grpc/resolver"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 )
+
+type hostnameType string
+
+// hostnameKey is the key to store the hostname key attribute in
+// a resolver.Endpoint attribute.
+const hostnameKey = hostnameType("grpc.resolver.xdsresource.hostname")
+
+// SetHostname sets the hostname key for this resolver.Endpoint attribute.
+func SetHostname(endpoint resolver.Endpoint, hostname string) resolver.Endpoint {
+	if hostname == "" {
+		return endpoint
+	}
+	endpoint.Attributes = endpoint.Attributes.WithValue(hostnameKey, hostname)
+	return endpoint
+}
+
+// GetHostname returns the hostname key attribute of endpoint. If this attribute
+// is not set, it returns the empty string.
+func GetHostname(endpoint resolver.Endpoint) string {
+	hostname, _ := endpoint.Attributes.Value(hostnameKey).(string)
+	return hostname
+}
 
 func unmarshalEndpointsResource(r *anypb.Any) (string, EndpointsUpdate, error) {
 	r, err := UnwrapResource(r)
@@ -102,7 +125,9 @@ func parseEndpoints(lbEndpoints []*v3endpointpb.LbEndpoint, uniqueEndpointAddrs 
 			}
 		}
 
+		address := []resolver.Address{}
 		for _, a := range addrs {
+			address = append(address, resolver.Address{Addr: a})
 			if uniqueEndpointAddrs[a] {
 				return nil, fmt.Errorf("duplicate endpoint with the same address %s", a)
 			}
@@ -126,13 +151,16 @@ func parseEndpoints(lbEndpoints []*v3endpointpb.LbEndpoint, uniqueEndpointAddrs 
 				hashKey = hashKeyFromMetadata(endpointMetadata)
 			}
 		}
+		endpoint := resolver.Endpoint{
+			Addresses: address,
+		}
+		endpoint = SetHostname(endpoint, lbEndpoint.GetEndpoint().GetHostname())
 		endpoints = append(endpoints, Endpoint{
-			HealthStatus: EndpointHealthStatus(lbEndpoint.GetHealthStatus()),
-			Addresses:    addrs,
-			Weight:       weight,
-			HashKey:      hashKey,
-			Metadata:     endpointMetadata,
-			Hostname:     lbEndpoint.GetEndpoint().GetHostname(),
+			ResolverEndpoint: endpoint,
+			HealthStatus:     EndpointHealthStatus(lbEndpoint.GetHealthStatus()),
+			Weight:           weight,
+			HashKey:          hashKey,
+			Metadata:         endpointMetadata,
 		})
 	}
 	return endpoints, nil
