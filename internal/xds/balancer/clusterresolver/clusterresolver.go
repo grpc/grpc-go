@@ -248,8 +248,11 @@ func (b *clusterResolverBalancer) updateChildConfig() {
 		b.logger.Infof("Built child policy config: %s", pretty.ToJSON(childCfg))
 	}
 
+	newEndpoints := make([]resolver.Endpoint, len(endpoints))
 	flattenedAddrs := make([]resolver.Address, len(endpoints))
-	for i := range endpoints {
+	for i, e := range endpoints {
+		newEP := e
+		newEP.Addresses = make([]resolver.Address, len(e.Addresses))
 		for j := range endpoints[i].Addresses {
 			addr := endpoints[i].Addresses[j]
 			addr.BalancerAttributes = endpoints[i].Attributes
@@ -268,12 +271,13 @@ func (b *clusterResolverBalancer) updateChildConfig() {
 			// address used by the transport. This workaround can be removed once
 			// the old pickfirst is removed.
 			// See https://github.com/grpc/grpc-go/issues/7339
-			endpoints[i].Addresses[j] = addr
+			newEP.Addresses[j] = addr
 		}
+		newEndpoints[i] = newEP
 	}
 	if err := b.child.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: resolver.State{
-			Endpoints:     endpoints,
+			Endpoints:     newEndpoints,
 			Addresses:     flattenedAddrs,
 			ServiceConfig: b.configRaw,
 			Attributes:    b.attrsWithClient,
