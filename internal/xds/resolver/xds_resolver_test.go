@@ -40,10 +40,10 @@ import (
 	iringhash "google.golang.org/grpc/internal/ringhash"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/internal/xds/balancer/clusterimpl"
 	"google.golang.org/grpc/internal/xds/balancer/clustermanager"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	serverFeature "google.golang.org/grpc/internal/xds/clients/xdsclient"
-	xdsResolver "google.golang.org/grpc/internal/xds/resolver"
 	rinternal "google.golang.org/grpc/internal/xds/resolver/internal"
 	"google.golang.org/grpc/internal/xds/xdsclient"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource/version"
@@ -1308,7 +1308,7 @@ func newDurationP(d time.Duration) *time.Duration {
 // 1. The environment variable (XDSAuthorityRewrite) is enabled.
 // 2. The xDS server is marked as a "trusted_xds_server" in the bootstrap config.
 // 3. The specific Route Configuration requests `auto_host_rewrite=true`.
-func TestResolver_AutoHostRewrite(t *testing.T) {
+func (s) TestResolver_AutoHostRewrite(t *testing.T) {
 	for _, tt := range []struct {
 		name                string
 		autoHostRewrite     bool
@@ -1317,7 +1317,7 @@ func TestResolver_AutoHostRewrite(t *testing.T) {
 		wantAutoHostRewrite bool
 	}{
 		{
-			name:                "AutoHostRewrite enabled",
+			name:                "Enabled",
 			autoHostRewrite:     true,
 			envconfig:           true,
 			serverfeature:       serverFeature.ServerFeatureTrustedXDSServer,
@@ -1337,7 +1337,7 @@ func TestResolver_AutoHostRewrite(t *testing.T) {
 			wantAutoHostRewrite: false,
 		},
 		{
-			name:                "Route config with AutoHostRewrite disabled",
+			name:                "Disable_Routeconfig",
 			autoHostRewrite:     false,
 			envconfig:           true,
 			serverfeature:       serverFeature.ServerFeatureTrustedXDSServer,
@@ -1413,7 +1413,7 @@ func TestResolver_AutoHostRewrite(t *testing.T) {
 				t.Fatalf("cs.SelectConfig(): %v", err)
 			}
 
-			gotAutoHostRewrite := xdsResolver.GetMatchedAutoHostRewriteForTesting(res.Context)
+			gotAutoHostRewrite := clusterimpl.GetMatchedAutoHostRewriteForTesting(res.Context)
 			if gotAutoHostRewrite != tt.wantAutoHostRewrite {
 				t.Fatalf("Got autoHostRewrite: %v, want: %v", gotAutoHostRewrite, tt.wantAutoHostRewrite)
 			}
