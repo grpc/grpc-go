@@ -898,6 +898,7 @@ func (cc *ClientConn) newAddrConnLocked(addrs []resolver.Address, opts balancer.
 		channelz:     channelz.RegisterSubChannel(cc.channelz, ""),
 		resetBackoff: make(chan struct{}),
 	}
+	ac.updateTelemetryLabelsLocked()
 	ac.ctx, ac.cancel = context.WithCancel(cc.ctx)
 	// Start with our address set to the first address; this may be updated if
 	// we connect to different addresses.
@@ -1014,7 +1015,7 @@ func (ac *addrConn) updateAddrs(addrs []resolver.Address) {
 	}
 
 	ac.addrs = addrs
-
+	ac.updateTelemetryLabelsLocked()
 	if ac.state == connectivity.Shutdown ||
 		ac.state == connectivity.TransientFailure ||
 		ac.state == connectivity.Idle {
@@ -1253,6 +1254,9 @@ type addrConn struct {
 	resetBackoff chan struct{}
 
 	channelz *channelz.SubChannel
+
+	localityLabel       string
+	backendServiceLabel string
 }
 
 // Note: this requires a lock on ac.mu.
@@ -1260,10 +1264,10 @@ func (ac *addrConn) updateConnectivityState(s connectivity.State, lastErr error)
 	if ac.state == s {
 		return
 	}
-	locality, backendService := fetchLabels(ac)
+
 	if ac.state == connectivity.Ready || (ac.state == connectivity.Connecting && s == connectivity.Idle) {
-		disconnectionsMetric.Record(ac.cc.metricsRecorderList, 1, ac.cc.target, backendService, locality, "unknown")
-		openConnectionsMetric.Record(ac.cc.metricsRecorderList, -1, ac.cc.target, backendService, ac.securityLevel(), locality)
+		disconnectionsMetric.Record(ac.cc.metricsRecorderList, 1, ac.cc.target, ac.backendServiceLabel, ac.localityLabel, "unknown")
+		openConnectionsMetric.Record(ac.cc.metricsRecorderList, -1, ac.cc.target, ac.backendServiceLabel, ac.securityLevel(), ac.localityLabel)
 	}
 	ac.state = s
 	ac.channelz.ChannelMetrics.State.Store(&s)
@@ -1318,14 +1322,12 @@ func (ac *addrConn) resetTransportAndUnlock() {
 	// https://github.com/grpc/grpc/blob/master/doc/connection-backoff.md#proposed-backoff-algorithm
 	connectDeadline := time.Now().Add(dialDuration)
 
-	locality, backendService := fetchLabels(ac)
-
 	ac.updateConnectivityState(connectivity.Connecting, nil)
 	ac.mu.Unlock()
 
 	if err := ac.tryAllAddrs(acCtx, addrs, connectDeadline); err != nil {
 		if !errors.Is(err, context.Canceled) {
-			connectionAttemptsFailedMetric.Record(ac.cc.metricsRecorderList, 1, ac.cc.target, backendService, locality)
+			connectionAttemptsFailedMetric.Record(ac.cc.metricsRecorderList, 1, ac.cc.target, ac.backendServiceLabel, ac.localityLabel)
 		} else {
 			// This records cancelled connection attempts which can be later replaced by a metric.
 			channelz.Infof(logger, ac.channelz, "Received context cancelled on subconn, not recording this as a failed connection attempt.")
@@ -1369,27 +1371,33 @@ func (ac *addrConn) resetTransportAndUnlock() {
 	}
 	// Success; reset backoff.
 	ac.mu.Lock()
-	connectionAttemptsSucceededMetric.Record(ac.cc.metricsRecorderList, 1, ac.cc.target, backendService, locality)
-	openConnectionsMetric.Record(ac.cc.metricsRecorderList, 1, ac.cc.target, backendService, ac.securityLevel(), locality)
+	connectionAttemptsSucceededMetric.Record(ac.cc.metricsRecorderList, 1, ac.cc.target, ac.backendServiceLabel, ac.localityLabel)
+	openConnectionsMetric.Record(ac.cc.metricsRecorderList, 1, ac.cc.target, ac.backendServiceLabel, ac.securityLevel(), ac.localityLabel)
 	ac.backoffIdx = 0
 	ac.mu.Unlock()
 }
 
-func fetchLabels(ac *addrConn) (string, string) {
-	var locality, backendService string
-	labelsFromAddress, ok := internal.AddressToTelemetryLabels.(func(resolver.Address) map[string]string)
-	if len(ac.addrs) > 0 && internal.AddressToTelemetryLabels != nil && ok {
-		labels := labelsFromAddress(ac.addrs[0])
-		locality = labels["grpc.lb.locality"]
-		backendService = labels["grpc.lb.backend_service"]
+// updateTelemetryLabelsLocked calculates and caches the telemetry labels based on the
+// current addresses.
+func (ac *addrConn) updateTelemetryLabelsLocked() {
+	// Reset defaults
+	ac.localityLabel = ""
+	ac.backendServiceLabel = ""
+	labelsFunc, ok := internal.AddressToTelemetryLabels.(func(resolver.Address) map[string]string)
+	if !ok || len(ac.addrs) == 0 {
+		return
 	}
-	return locality, backendService
+	labels := labelsFunc(ac.addrs[0])
+	ac.localityLabel = labels["grpc.lb.locality"]
+	ac.backendServiceLabel = labels["grpc.lb.backend_service"]
 }
 
 type securityLevelKey struct{}
 
 func (ac *addrConn) securityLevel() string {
 	var secLevel string
+	// During disconnection, ac.transport is nil. Fall back to the security level
+	// stored in the current address during connection.
 	if ac.transport == nil {
 		secLevel, _ = ac.curAddr.Attributes.Value(securityLevelKey{}).(string)
 		return secLevel
@@ -1399,6 +1407,9 @@ func (ac *addrConn) securityLevel() string {
 		GetCommonAuthInfo() credentials.CommonAuthInfo
 	}); ok {
 		secLevel = ci.GetCommonAuthInfo().SecurityLevel.String()
+		// Store the security level in the current address' attributes so
+		// that it remains available for disconnection metrics after the
+		// transport is closed.
 		ac.curAddr.Attributes = ac.curAddr.Attributes.WithValue(securityLevelKey{}, secLevel)
 	}
 	return secLevel

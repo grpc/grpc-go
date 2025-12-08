@@ -52,10 +52,10 @@ func GetXDSHandshakeClusterName(attr *attributes.Attributes) (string, bool) {
 func AddressToTelemetryLabels(addr resolver.Address) map[string]string {
 	cluster, _ := GetXDSHandshakeClusterName(addr.Attributes)
 	locality := LocalityString(GetLocalityID(addr))
-	labels := make(map[string]string)
-	labels["grpc.lb.locality"] = locality
-	labels["grpc.lb.backend_service"] = cluster
-	return labels
+	return map[string]string{
+		"grpc.lb.locality":        locality,
+		"grpc.lb.backend_service": cluster,
+	}
 }
 
 // LocalityString generates a string representation of clients.Locality in the
