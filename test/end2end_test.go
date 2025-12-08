@@ -2154,6 +2154,56 @@ func testTap(t *testing.T, e env) {
 	}
 }
 
+func (s) TestTapStatusDetails(t *testing.T) {
+	wantDetails := &testpb.Empty{}
+	st := status.New(codes.ResourceExhausted, "rate limit exceeded")
+	st, err := st.WithDetails(wantDetails)
+	if err != nil {
+		t.Fatalf("status.WithDetails() failed: %v", err)
+	}
+
+	tapHandler := func(_ context.Context, _ *tap.Info) (context.Context, error) {
+		// Return error with details for all RPCs.
+		return nil, st.Err()
+	}
+
+	ss := &stubserver.StubServer{
+		EmptyCallF: func(_ context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
+			// This should never be called since TAP handler rejects the RPC.
+			return &testpb.Empty{}, nil
+		},
+	}
+	sopts := []grpc.ServerOption{grpc.InTapHandle(tapHandler)}
+	if err := ss.Start(sopts); err != nil {
+		t.Fatalf("Error starting server: %v", err)
+	}
+	defer ss.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	_, err = ss.Client.EmptyCall(ctx, &testpb.Empty{})
+	if err == nil {
+		t.Fatal("EmptyCall() succeeded; want error")
+	}
+
+	gotStatus := status.Convert(err)
+	if gotStatus.Code() != codes.ResourceExhausted {
+		t.Fatalf("EmptyCall() returned code %v; want %v", gotStatus.Code(), codes.ResourceExhausted)
+	}
+	if gotStatus.Message() != "rate limit exceeded" {
+		t.Fatalf("EmptyCall() returned message %q; want %q", gotStatus.Message(), "rate limit exceeded")
+	}
+
+	details := gotStatus.Details()
+	if len(details) != 1 {
+		t.Fatalf("EmptyCall() returned %d details; want 1", len(details))
+	}
+	if _, ok := details[0].(*testpb.Empty); !ok {
+		t.Fatalf("EmptyCall() returned detail type %T; want *testpb.Empty", details[0])
+	}
+}
+
 func (s) TestEmptyUnaryWithUserAgent(t *testing.T) {
 	for _, e := range listTestEnv() {
 		testEmptyUnaryWithUserAgent(t, e)
