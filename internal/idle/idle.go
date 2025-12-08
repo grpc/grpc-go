@@ -126,7 +126,7 @@ func (m *Manager) handleIdleTimeout() {
 
 	// Now that we've checked that there has been no activity, attempt to enter
 	// idle mode, which is very likely to succeed.
-	if m.tryEnterIdleMode() {
+	if m.tryEnterIdleMode(true) {
 		// Successfully entered idle mode. No timer needed until we exit idle.
 		return
 	}
@@ -141,10 +141,13 @@ func (m *Manager) handleIdleTimeout() {
 // that, it performs a last minute check to ensure that no new RPC has come in,
 // making the channel active.
 //
+// checkActivity controls if a check for RPC activity, since the last time the
+// idle_timeout fired, is made.
+
 // Return value indicates whether or not the channel moved to idle mode.
 //
 // Holds idleMu which ensures mutual exclusion with exitIdleMode.
-func (m *Manager) tryEnterIdleMode() bool {
+func (m *Manager) tryEnterIdleMode(checkActivity bool) bool {
 	// Setting the activeCallsCount to -math.MaxInt32 indicates to OnCallBegin()
 	// that the channel is either in idle mode or is trying to get there.
 	if !atomic.CompareAndSwapInt32(&m.activeCallsCount, 0, -math.MaxInt32) {
@@ -165,12 +168,14 @@ func (m *Manager) tryEnterIdleMode() bool {
 		atomic.AddInt32(&m.activeCallsCount, math.MaxInt32)
 		return false
 	}
-	if atomic.LoadInt32(&m.activeSinceLastTimerCheck) == 1 {
-		// A very short RPC could have come in (and also finished) after we
-		// checked for calls count and activity in handleIdleTimeout(), but
-		// before the CAS operation. So, we need to check for activity again.
-		atomic.AddInt32(&m.activeCallsCount, math.MaxInt32)
-		return false
+	if checkActivity {
+		if atomic.LoadInt32(&m.activeSinceLastTimerCheck) == 1 {
+			// A very short RPC could have come in (and also finished) after we
+			// checked for calls count and activity in handleIdleTimeout(), but
+			// before the CAS operation. So, we need to check for activity again.
+			atomic.AddInt32(&m.activeCallsCount, math.MaxInt32)
+			return false
+		}
 	}
 
 	// No new RPCs have come in since we set the active calls count value to
@@ -181,22 +186,9 @@ func (m *Manager) tryEnterIdleMode() bool {
 	return true
 }
 
-// UnsafeSetIdleForTesting instructs the Manager to update its internal state to
-// reflect the reality that the channel is now in IDLE mode.
-//
-// N.B. This method is intended only for testing purposes. The caller must
-// ensure that there are no ongoing RPCs.
-func (m *Manager) UnsafeSetIdleForTesting() error {
-	m.idleMu.Lock()
-	defer m.idleMu.Unlock()
-
-	atomic.StoreInt32(&m.activeCallsCount, -math.MaxInt32)
-	m.actuallyIdle = true
-	m.activeSinceLastTimerCheck = 0
-	if m.timer != nil {
-		m.timer.Stop()
-	}
-	return nil
+// EnterIdleModeForTesting instructs the channel to enter idle mode.
+func (m *Manager) EnterIdleModeForTesting() {
+	m.tryEnterIdleMode(false)
 }
 
 // OnCallBegin is invoked at the start of every RPC.

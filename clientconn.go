@@ -747,8 +747,7 @@ func init() {
 		return cc.csMgr.pubSub.Subscribe(s)
 	}
 	internal.EnterIdleModeForTesting = func(cc *ClientConn) {
-		cc.enterIdleMode()
-		cc.idlenessMgr.UnsafeSetIdleForTesting()
+		cc.idlenessMgr.EnterIdleModeForTesting()
 	}
 	internal.ExitIdleModeForTesting = func(cc *ClientConn) {
 		cc.idlenessMgr.ExitIdleMode()
