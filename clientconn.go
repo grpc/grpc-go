@@ -1324,7 +1324,12 @@ func (ac *addrConn) resetTransportAndUnlock() {
 	ac.mu.Unlock()
 
 	if err := ac.tryAllAddrs(acCtx, addrs, connectDeadline); err != nil {
-		connectionAttemptsFailedMetric.Record(ac.cc.metricsRecorderList, 1, ac.cc.target, backendService, locality)
+		if !errors.Is(err, context.Canceled) {
+			connectionAttemptsFailedMetric.Record(ac.cc.metricsRecorderList, 1, ac.cc.target, backendService, locality)
+		} else {
+			// This records cancelled connection attempts which can be later replaced by a metric.
+			channelz.Infof(logger, ac.channelz, "Received context cancelled on subconn, not recording this as a failed connection attempt.")
+		}
 		// TODO: #7534 - Move re-resolution requests into the pick_first LB policy
 		// to ensure one resolution request per pass instead of per subconn failure.
 		ac.cc.resolveNow(resolver.ResolveNowOptions{})
@@ -1364,7 +1369,6 @@ func (ac *addrConn) resetTransportAndUnlock() {
 	}
 	// Success; reset backoff.
 	ac.mu.Lock()
-	channelz.Infof(logger, ac.channelz, "Emitting success metric for subchannel connection")
 	connectionAttemptsSucceededMetric.Record(ac.cc.metricsRecorderList, 1, ac.cc.target, backendService, locality)
 	openConnectionsMetric.Record(ac.cc.metricsRecorderList, 1, ac.cc.target, backendService, ac.securityLevel(), locality)
 	ac.backoffIdx = 0
