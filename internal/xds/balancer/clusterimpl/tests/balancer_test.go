@@ -1224,6 +1224,8 @@ func (s) TestChildPolicyChangeOnConfigUpdate(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	time.Sleep(time.Second)
+
 	select {
 	case <-ctx.Done():
 		t.Fatalf("Timeout waiting for child policy config")
