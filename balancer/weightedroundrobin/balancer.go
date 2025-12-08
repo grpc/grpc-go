@@ -643,9 +643,9 @@ func (w *endpointWeight) weight(now time.Time, weightExpirationPeriod, blackoutP
 
 type backendServiceKey struct{}
 
-// SetBackendServiceOnState stores the backendService on the resolver state so
+// SetBackendService stores the backendService on the resolver state so
 // that it can be used later as a label in wrr metrics.
-func SetBackendServiceOnState(state resolver.State, backendService string) resolver.State {
+func SetBackendService(state resolver.State, backendService string) resolver.State {
 	state.Attributes = state.Attributes.WithValue(backendServiceKey{}, backendService)
 	return state
 }
