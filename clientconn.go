@@ -376,7 +376,7 @@ func (cc *ClientConn) exitIdleMode() error {
 		cc.csMgr.updateState(connectivity.TransientFailure)
 		cc.mu.Lock()
 		cc.updateResolverStateAndUnlock(resolver.State{}, err)
-		return err
+		return fmt.Errorf("failed to start resolver: %w", err)
 	}
 
 	cc.addTraceEvent("exiting idle mode")

@@ -179,23 +179,33 @@ func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 
 var emptyMethodConfig = serviceconfig.MethodConfig{}
 
+// endOfClientStream performs cleanup actions required for both successful and
+// failed streams. This includes incrementing channelz stats and invoke all
+// registered OnFinish call options.
+func endOfClientStream(cc *ClientConn, err error, opts ...CallOption) {
+	if channelz.IsOn() {
+		if err != nil {
+			cc.incrCallsFailed()
+		} else {
+			cc.incrCallsSucceeded()
+		}
+	}
+
+	for _, o := range opts {
+		if o, ok := o.(OnFinishCallOption); ok {
+			o.OnFinish(err)
+		}
+	}
+}
+
 func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, method string, opts ...CallOption) (_ ClientStream, err error) {
 	if channelz.IsOn() {
 		cc.incrCallsStarted()
 	}
 	defer func() {
 		if err != nil {
-			if channelz.IsOn() {
-				cc.incrCallsFailed()
-			}
-			// Invoke all the registered OnFinish call options explicitly. A
-			// non-nil error means that the stream wasn't created, and
-			// therefore these will be NOT be invoked as part of `cs.finish()`.
-			for _, o := range opts {
-				if o, ok := o.(OnFinishCallOption); ok {
-					o.OnFinish(err)
-				}
-			}
+			// Ensure cleanup when stream creation fails.
+			endOfClientStream(cc, err, opts...)
 		}
 	}()
 
@@ -1052,9 +1062,6 @@ func (cs *clientStream) finish(err error) {
 		return
 	}
 	cs.finished = true
-	for _, onFinish := range cs.callInfo.onFinish {
-		onFinish(err)
-	}
 	cs.commitAttemptLocked()
 	if cs.attempt != nil {
 		cs.attempt.finish(err)
@@ -1094,13 +1101,7 @@ func (cs *clientStream) finish(err error) {
 	if err == nil {
 		cs.retryThrottler.successfulRPC()
 	}
-	if channelz.IsOn() {
-		if err != nil {
-			cs.cc.incrCallsFailed()
-		} else {
-			cs.cc.incrCallsSucceeded()
-		}
-	}
+	endOfClientStream(cs.cc, err, cs.opts...)
 	cs.cancel()
 }
 

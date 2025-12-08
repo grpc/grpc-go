@@ -185,7 +185,7 @@ func (m *Manager) tryEnterIdleMode() bool {
 // reflect the reality that the channel is now in IDLE mode.
 //
 // N.B. This method is intended only for testing purposes. The caller must
-// ensure that there are no ongoing RPCs
+// ensure that there are no ongoing RPCs.
 func (m *Manager) UnsafeSetIdleForTesting() error {
 	m.idleMu.Lock()
 	defer m.idleMu.Unlock()
