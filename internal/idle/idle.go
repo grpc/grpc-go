@@ -168,14 +168,12 @@ func (m *Manager) tryEnterIdleMode(checkActivity bool) bool {
 		atomic.AddInt32(&m.activeCallsCount, math.MaxInt32)
 		return false
 	}
-	if checkActivity {
-		if atomic.LoadInt32(&m.activeSinceLastTimerCheck) == 1 {
-			// A very short RPC could have come in (and also finished) after we
-			// checked for calls count and activity in handleIdleTimeout(), but
-			// before the CAS operation. So, we need to check for activity again.
-			atomic.AddInt32(&m.activeCallsCount, math.MaxInt32)
-			return false
-		}
+	if checkActivity && atomic.LoadInt32(&m.activeSinceLastTimerCheck) == 1 {
+		// A very short RPC could have come in (and also finished) after we
+		// checked for calls count and activity in handleIdleTimeout(), but
+		// before the CAS operation. So, we need to check for activity again.
+		atomic.AddInt32(&m.activeCallsCount, math.MaxInt32)
+		return false
 	}
 
 	// No new RPCs have come in since we set the active calls count value to

@@ -180,7 +180,7 @@ func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 var emptyMethodConfig = serviceconfig.MethodConfig{}
 
 // endOfClientStream performs cleanup actions required for both successful and
-// failed streams. This includes incrementing channelz stats and invoke all
+// failed streams. This includes incrementing channelz stats and invoking all
 // registered OnFinish call options.
 func endOfClientStream(cc *ClientConn, err error, opts ...CallOption) {
 	if channelz.IsOn() {
