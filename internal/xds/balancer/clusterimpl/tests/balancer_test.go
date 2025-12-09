@@ -1224,8 +1224,6 @@ func (s) TestChildPolicyChangeOnConfigUpdate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	time.Sleep(time.Second)
-
 	select {
 	case <-ctx.Done():
 		t.Fatalf("Timeout waiting for child policy config")
@@ -1240,9 +1238,20 @@ func (s) TestChildPolicyChangeOnConfigUpdate(t *testing.T) {
 		t.Fatalf("Unexpected child policy after config update, got %q, want %q", got, customLBPolicy)
 	}
 
-	// New RPC should still be routed successfully
-	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
-		t.Errorf("EmptyCall() failed after policy update: %v", err)
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			t.Fatalf("Timeout waiting for successful RPC after policy update.")
+			return
+		case <-ticker.C:
+			_, err := client.EmptyCall(ctx, &testpb.Empty{})
+			if err == nil {
+				return
+			}
+		}
 	}
 }
 
