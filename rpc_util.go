@@ -44,7 +44,7 @@ import (
 )
 
 func init() {
-	internal.AcceptCompressors = AcceptCompressors
+	internal.AcceptCompressors = acceptCompressors
 }
 
 // Compressor defines the interface gRPC uses to compress a message.
@@ -516,11 +516,11 @@ func (o CompressorCallOption) before(c *callInfo) error {
 }
 func (o CompressorCallOption) after(*callInfo, *csAttempt) {}
 
-// AcceptCompressors returns a CallOption that limits the compression algorithms
+// acceptCompressors returns a CallOption that limits the compression algorithms
 // advertised in the grpc-accept-encoding header for response messages.
 // Compression algorithms not in the provided list will not be advertised, and
 // responses compressed with non-listed algorithms will be rejected.
-func AcceptCompressors(names ...string) CallOption {
+func acceptCompressors(names ...string) CallOption {
 	cp := append([]string(nil), names...)
 	return acceptCompressorsCallOption{names: cp}
 }
