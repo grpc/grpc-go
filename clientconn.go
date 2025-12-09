@@ -369,7 +369,7 @@ func (cc *ClientConn) exitIdleMode() error {
 	// acquire cc.mu.
 	if err := cc.resolverWrapper.start(); err != nil {
 		// If resolver creation fails, treat it like an error reported by the
-		// resolver before any valid udpates. Set channel's state to
+		// resolver before any valid updates. Set channel's state to
 		// TransientFailure, and set an erroring picker with the resolver build
 		// error, which will returned as part of any subsequent RPCs.
 		logger.Warningf("Failed to start resolver: %v", err)
