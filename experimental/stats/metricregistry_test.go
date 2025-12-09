@@ -309,7 +309,22 @@ func (r *fakeMetricsRecorder) RecordInt64UpDownCount(handle *Int64UpDownCountHan
 	r.intValues[handle.Descriptor()] += incr
 }
 
-func (r *fakeMetricsRecorder) RecordInt64AsyncGauge(handle *Int64AsyncGaugeHandle, incr int64, labels ...string) {
+func (r *fakeMetricsRecorder) RecordInt64AsyncGauge(handle *Int64AsyncGaugeHandle, val int64, labels ...string) {
 	verifyLabels(r.t, handle.Descriptor().Labels, handle.Descriptor().OptionalLabels, labels)
-	r.intValues[handle.Descriptor()] += incr
+	// Async gauges in OTel are "Observer" instruments; they report
+	// the current state of the world every cycle, they do not accumulate deltas.
+	r.intValues[handle.Descriptor()] = val
+}
+
+func (r *fakeMetricsRecorder) RegisterAsyncReporter(reporter AsyncMetricReporter, _ ...AsyncMetric) func() {
+	// We execute the reporter immediately.
+	// This allows the test to verify the metric value in r.intValues immediately
+	// after the component under test calls RegisterAsyncReporter.
+	err := reporter.Report(r)
+	if err != nil {
+		r.t.Logf("Async reporter returned error: %v", err)
+	}
+
+	// Return a no-op cleanup function
+	return func() {}
 }

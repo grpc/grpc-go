@@ -41,6 +41,34 @@ type MetricsRecorder interface {
 	// RecordInt64UpDownCounter records the measurement alongside labels on the int
 	// count associated with the provided handle.
 	RecordInt64UpDownCount(handle *Int64UpDownCountHandle, incr int64, labels ...string)
+	// RegisterAsyncReporter registers a reporter to produce metric values for
+	// only the listed descriptors. The returned function must be called when
+	// the metrics are no longer needed, which will remove the reporter. The
+	// returned method needs to be idempotent and concurrent safe.
+	RegisterAsyncReporter(reporter AsyncMetricReporter, descriptors ...AsyncMetric) func()
+}
+
+// AsyncMetricReporter is an interface for types that record metrics asynchronously
+// for the set of descriptors they are registered with. The AsyncMetricsRecorder
+// parameter is used to record values for these metrics.
+//
+// Implementations must make unique recordings across all registered
+// AsyncMetricReporters. Meaning, they should not report values for a metric with
+// the same attributes as another AsyncMetricReporter will report.
+//
+// Implementations must be concurrent-safe.
+type AsyncMetricReporter interface {
+	// Report records metric values using the provided recorder.
+	Report(AsyncMetricsRecorder) error
+}
+
+// AsyncMetricReporterFunc is an adapter to allow the use of ordinary functions as
+// AsyncMetricReporters.
+type AsyncMetricReporterFunc func(AsyncMetricsRecorder) error
+
+// Report calls f(r).
+func (f AsyncMetricReporterFunc) Report(r AsyncMetricsRecorder) error {
+	return f(r)
 }
 
 // AsyncMetricsRecorder records on asynchronous metrics derived from metric registry.
