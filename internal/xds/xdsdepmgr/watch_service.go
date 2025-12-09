@@ -92,71 +92,37 @@ func (r *routeConfigWatcher) stop() {
 }
 
 type clusterWatcher struct {
-	name   string
-	depMgr *DependencyManager
+	resourceName string
+	depMgr       *DependencyManager
 }
 
-func (e *clusterWatcher) ResourceChanged(u *xdsresource.ClusterUpdate, onDone func()) {
-	e.depMgr.onClusterResourceUpdate(e.name, u, onDone)
+func (c *clusterWatcher) ResourceChanged(u *xdsresource.ClusterUpdate, onDone func()) {
+	c.depMgr.onClusterResourceUpdate(c.resourceName, u, onDone)
 }
 
-func (e *clusterWatcher) ResourceError(err error, onDone func()) {
-	e.depMgr.onClusterResourceError(e.name, err, onDone)
+func (c *clusterWatcher) ResourceError(err error, onDone func()) {
+	c.depMgr.onClusterResourceError(c.resourceName, err, onDone)
 }
 
-func (e *clusterWatcher) AmbientError(err error, onDone func()) {
-	e.depMgr.onClusterAmbientError(e.name, err, onDone)
+func (c *clusterWatcher) AmbientError(err error, onDone func()) {
+	c.depMgr.onClusterAmbientError(c.resourceName, err, onDone)
 }
 
-// clusterWatcherState groups the state associated with a clusterWatcher.
-type clusterWatcherState struct {
-	watcher     *clusterWatcher // The underlying watcher.
-	cancelWatch func()          // Cancel func to cancel the watch.
-	// Most recent update received for this cluster.
-	lastUpdate *xdsresource.ClusterUpdate
-	err        error
+type endpointsWatcher struct {
+	resourceName string
+	depMgr       *DependencyManager
 }
 
-func newClusterWatcher(resourceName string, depMgr *DependencyManager) *clusterWatcherState {
-	w := &clusterWatcher{name: resourceName, depMgr: depMgr}
-	return &clusterWatcherState{
-		watcher:     w,
-		cancelWatch: xdsresource.WatchCluster(depMgr.xdsClient, resourceName, w),
-	}
+func (e *endpointsWatcher) ResourceChanged(u *xdsresource.EndpointsUpdate, onDone func()) {
+	e.depMgr.onEndpointUpdate(e.resourceName, u, onDone)
 }
 
-type endpointWatcher struct {
-	name   string
-	depMgr *DependencyManager
+func (e *endpointsWatcher) ResourceError(err error, onDone func()) {
+	e.depMgr.onEndpointResourceError(e.resourceName, err, onDone)
 }
 
-func (e *endpointWatcher) ResourceChanged(u *xdsresource.EndpointsUpdate, onDone func()) {
-	e.depMgr.onEndpointUpdate(e.name, u, onDone)
-}
-
-func (e *endpointWatcher) ResourceError(err error, onDone func()) {
-	e.depMgr.onEndpointResourceError(e.name, err, onDone)
-}
-
-func (e *endpointWatcher) AmbientError(err error, onDone func()) {
-	e.depMgr.onEndpointAmbientError(e.name, err, onDone)
-}
-
-// endpointWatcherState groups the state associated with a endpointWatcher.
-type endpointWatcherState struct {
-	watcher     *endpointWatcher // The underlying watcher.
-	cancelWatch func()           // Cancel func to cancel the watch.
-	// Most recent update received for this cluster.
-	lastUpdate *xdsresource.EndpointsUpdate
-	err        error
-}
-
-func newEndpointWatcher(resourceName string, depMgr *DependencyManager) *endpointWatcherState {
-	w := &endpointWatcher{name: resourceName, depMgr: depMgr}
-	return &endpointWatcherState{
-		watcher:     w,
-		cancelWatch: xdsresource.WatchEndpoints(depMgr.xdsClient, resourceName, w),
-	}
+func (e *endpointsWatcher) AmbientError(err error, onDone func()) {
+	e.depMgr.onEndpointAmbientError(e.resourceName, err, onDone)
 }
 
 // dnsResolverState watches updates for the given DNS hostname. It implements
