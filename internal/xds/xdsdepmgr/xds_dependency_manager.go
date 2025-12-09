@@ -176,9 +176,9 @@ func (m *DependencyManager) maybeSendUpdateLocked() {
 		m.watcher.Update(config)
 		return
 	}
-	edsResourcesSeen := make(map[string]struct{})
-	dnsResourcesSeen := make(map[string]struct{})
-	clusterResourceSeen := make(map[string]struct{})
+	edsResourcesSeen := make(map[string]bool)
+	dnsResourcesSeen := make(map[string]bool)
+	clusterResourceSeen := make(map[string]bool)
 	haveAllResources := true
 	for cluster := range m.clustersFromRouteConfig {
 		gotAllResource, _, err := m.populateClusterConfigLocked(cluster, 0, config.Clusters, edsResourcesSeen, dnsResourcesSeen, clusterResourceSeen)
@@ -220,8 +220,8 @@ func (m *DependencyManager) maybeSendUpdateLocked() {
 	}
 }
 
-func (m *DependencyManager) populateClusterConfigLocked(name string, depth int, clusterMap map[string]*xdsresource.ClusterResult, edsSeen, dnsSeen map[string]struct{}, clusterSeen map[string]struct{}) (bool, []string, error) {
-	clusterSeen[name] = struct{}{}
+func (m *DependencyManager) populateClusterConfigLocked(name string, depth int, clusterMap map[string]*xdsresource.ClusterResult, edsSeen, dnsSeen, clusterSeen map[string]bool) (bool, []string, error) {
+	clusterSeen[name] = true
 
 	if depth > aggregateClusterMaxDepth {
 		m.logger.Warningf("aggregate cluster graph exceeds max depth (%d)", aggregateClusterMaxDepth)
@@ -268,7 +268,7 @@ func (m *DependencyManager) populateClusterConfigLocked(name string, depth int, 
 		} else {
 			edsName = update.EDSServiceName
 		}
-		edsSeen[edsName] = struct{}{}
+		edsSeen[edsName] = true
 		// If endpoint watcher does not exist, create one.
 		if _, ok := m.endpointWatchers[edsName]; !ok {
 			m.endpointWatchers[edsName] = newEndpointWatcher(edsName, m)
@@ -290,7 +290,7 @@ func (m *DependencyManager) populateClusterConfigLocked(name string, depth int, 
 
 	case xdsresource.ClusterTypeLogicalDNS:
 		target := update.DNSHostName
-		dnsSeen[target] = struct{}{}
+		dnsSeen[target] = true
 		// If dns resolver does not exist, create one.
 		if _, ok := m.dnsResolvers[target]; !ok {
 			m.dnsResolvers[target] = newDNSResolver(target, m)
