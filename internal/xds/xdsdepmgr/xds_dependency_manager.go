@@ -36,8 +36,8 @@ const (
 
 var logger = grpclog.Component("xds")
 
-// EnableClusterAndEndpointsWatch is a flag used to control whether the CDS/EDS watchers in
-// the dependency manager should be used.
+// EnableClusterAndEndpointsWatch is a flag used to control whether the CDS/EDS
+// watchers in the dependency manager should be used.
 var EnableClusterAndEndpointsWatch = false
 
 func prefixLogger(p *DependencyManager) *internalgrpclog.PrefixLogger {
@@ -159,9 +159,9 @@ func (m *DependencyManager) annotateErrorWithNodeID(err error) error {
 	return fmt.Errorf("[xDS node id: %v]: %v", m.nodeID, err)
 }
 
-// maybeSendUpdateLocked checks that all the resources have been received and sends
-// the current aggregated xDS configuration to the watcher if all the updates
-// are available.
+// maybeSendUpdateLocked checks that all the resources have been received and
+// sends the current aggregated xDS configuration to the watcher if all the
+// updates are available.
 func (m *DependencyManager) maybeSendUpdateLocked() {
 	if m.currentListenerUpdate == nil || m.currentRouteConfig == nil {
 		return
@@ -350,9 +350,9 @@ func (m *DependencyManager) applyRouteConfigUpdateLocked(update *xdsresource.Rou
 	m.currentVirtualHost = matchVH
 
 	if EnableClusterAndEndpointsWatch {
-		// Get the clusters to be watched from the routes in the virtual host. If
-		// the CLusterSpecifierField is set, we ignore it for now as the clusters
-		// will be determined dynamically for it.
+		// Get the clusters to be watched from the routes in the virtual host.
+		// If the CLusterSpecifierField is set, we ignore it for now as the
+		// clusters will be determined dynamically for it.
 		newClusters := make(map[string]bool)
 
 		for _, rt := range matchVH.Routes {

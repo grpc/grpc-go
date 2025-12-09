@@ -132,9 +132,9 @@ type dnsResolver struct {
 	dnsR   resolver.Resolver
 	depMgr *DependencyManager
 
-	//serializer is used to make sure that any methods on the resolver can be
-	//called from inside th Build function which is a garuntee that
-	//implementations of resolver.Clientconn need to maintain.
+	// serializer is used to make sure that any methods on the resolver can be
+	// called from inside th Build function which is a guarantee that
+	// implementations of resolver.Clientconn need to maintain.
 	serializer       grpcsync.CallbackSerializer
 	serializerCancel func()
 }

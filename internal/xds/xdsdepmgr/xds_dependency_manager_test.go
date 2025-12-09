@@ -111,7 +111,8 @@ func verifyError(ctx context.Context, errCh chan error, wantErr, wantNodeID stri
 	return nil
 }
 
-// This function determines the stable, canonical order for any two resolver.Endpoint structs.
+// This function determines the stable, canonical order for any two
+// resolver.Endpoint structs.
 func lessEndpoint(a, b resolver.Endpoint) bool {
 	// Safely access the first address string for comparison.
 	addrA := ""
