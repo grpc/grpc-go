@@ -199,16 +199,16 @@ func (d *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 // route's autoHostRewrite in the RPC context.
 type autoHostRewriteKey struct{}
 
-// AutoHostRewrite retrieves the autoHostRewrite value from the provided context.
-func AutoHostRewrite(ctx context.Context) bool {
+// autoHostRewrite retrieves the autoHostRewrite value from the provided context.
+func autoHostRewrite(ctx context.Context) bool {
 	autohostRewrite, _ := ctx.Value(autoHostRewriteKey{}).(bool)
 	return autohostRewrite
 }
 
-// GetAutoHostRewriteForTesting returns the value of autoHostRewrite feild;
+// AutoHostRewriteForTesting returns the value of autoHostRewrite field;
 // to be used for testing only.
-func GetAutoHostRewriteForTesting(ctx context.Context) bool {
-	return AutoHostRewrite(ctx)
+func AutoHostRewriteForTesting(ctx context.Context) bool {
+	return autoHostRewrite(ctx)
 }
 
 // SetAutoHostRewrite adds the autoHostRewrite value to the context for

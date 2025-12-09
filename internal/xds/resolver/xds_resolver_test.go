@@ -1302,12 +1302,11 @@ func newDurationP(d time.Duration) *time.Duration {
 }
 
 // TestResolver_AutoHostRewrite verifies the propagation of the AutoHostRewrite
-// field from the xDS RouteConfiguration to the internal MatchedRoute.
+// field from the xDS resolver.
 //
 // Per gRFC A81, this feature should only be active if three conditions are met:
 // 1. The environment variable (XDSAuthorityRewrite) is enabled.
 // 2. The xDS server is marked as a "trusted_xds_server" in the bootstrap config.
-// 3. The specific Route Configuration requests `auto_host_rewrite=true`.
 func (s) TestResolver_AutoHostRewrite(t *testing.T) {
 	for _, tt := range []struct {
 		name                string
@@ -1317,31 +1316,56 @@ func (s) TestResolver_AutoHostRewrite(t *testing.T) {
 		wantAutoHostRewrite bool
 	}{
 		{
-			name:                "Enabled",
-			autoHostRewrite:     true,
-			envconfig:           true,
-			serverfeature:       serverFeature.ServerFeatureTrustedXDSServer,
-			wantAutoHostRewrite: true,
+			name:                "EnvVarDisabled_NonTrustedServer_AutoHostRewriteOff",
+			autoHostRewrite:     false,
+			envconfig:           false,
+			wantAutoHostRewrite: false,
 		},
 		{
-			name:                "Disable_EnvVarOff",
+			name:                "EnvVarDisabled_NonTrustedServer_AutoHostRewriteOn",
+			autoHostRewrite:     true,
+			envconfig:           false,
+			wantAutoHostRewrite: false,
+		},
+		{
+			name:                "EnvVarDisabled_TrustedServer_AutoHostRewriteOff",
+			autoHostRewrite:     false,
+			envconfig:           false,
+			serverfeature:       serverFeature.ServerFeatureTrustedXDSServer,
+			wantAutoHostRewrite: false,
+		},
+		{
+			name:                "EnvVarDisabled_TrustedServer_AutoHostRewriteOn",
 			autoHostRewrite:     true,
 			envconfig:           false,
 			serverfeature:       serverFeature.ServerFeatureTrustedXDSServer,
 			wantAutoHostRewrite: false,
 		},
 		{
-			name:                "Disable_UntrustedServer",
+			name:                "EnvVarEnabled_NonTrustedServer_AutoHostRewriteOff",
+			autoHostRewrite:     false,
+			envconfig:           true,
+			wantAutoHostRewrite: false,
+		},
+		{
+			name:                "EnvVarEnabled_NonTrustedServer_AutoHostRewriteOn",
 			autoHostRewrite:     true,
 			envconfig:           true,
 			wantAutoHostRewrite: false,
 		},
 		{
-			name:                "Disable_Routeconfig",
+			name:                "EnvVarEnabled_TrustedServer_AutoHostRewriteOff",
 			autoHostRewrite:     false,
 			envconfig:           true,
 			serverfeature:       serverFeature.ServerFeatureTrustedXDSServer,
 			wantAutoHostRewrite: false,
+		},
+		{
+			name:                "EnvVarEnabled_TrustedServer_AutoHostRewriteOn",
+			autoHostRewrite:     true,
+			envconfig:           true,
+			serverfeature:       serverFeature.ServerFeatureTrustedXDSServer,
+			wantAutoHostRewrite: true,
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1351,36 +1375,42 @@ func (s) TestResolver_AutoHostRewrite(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
 			nodeID := uuid.New().String()
-			mgmtServer, _, _, _ := setupManagementServerForTest(t, nodeID)
+			mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
+			defer mgmtServer.Stop()
 
 			// Configure the management server with a good listener resource and a
 			// route configuration resource, as specified by the test case.
-			listeners := []*v3listenerpb.Listener{e2e.DefaultClientListener(defaultTestServiceName, defaultTestRouteConfigName)}
-			clusters := []*v3clusterpb.Cluster{e2e.DefaultCluster(defaultTestClusterName, defaultTestEndpointName, e2e.SecurityLevelNone)}
-			endpoints := []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(defaultTestEndpointName, defaultTestHostname, defaultTestPort)}
-			routes := []*v3routepb.RouteConfiguration{{
-				Name: defaultTestRouteConfigName,
-				VirtualHosts: []*v3routepb.VirtualHost{{
-					Domains: []string{defaultTestServiceName},
-					Routes: []*v3routepb.Route{{
-						Match: &v3routepb.RouteMatch{PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"}},
-						Action: &v3routepb.Route_Route{Route: &v3routepb.RouteAction{
-							ClusterSpecifier: &v3routepb.RouteAction_WeightedClusters{WeightedClusters: &v3routepb.WeightedCluster{
-								Clusters: []*v3routepb.WeightedCluster_ClusterWeight{
-									{
-										Name:   defaultTestClusterName,
-										Weight: &wrapperspb.UInt32Value{Value: 100},
+			resources := e2e.UpdateOptions{
+				NodeID:    nodeID,
+				Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(defaultTestServiceName, defaultTestRouteConfigName)},
+				Routes: []*v3routepb.RouteConfiguration{{
+					Name: defaultTestRouteConfigName,
+					VirtualHosts: []*v3routepb.VirtualHost{{
+						Domains: []string{defaultTestServiceName},
+						Routes: []*v3routepb.Route{{
+							Match: &v3routepb.RouteMatch{PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"}},
+							Action: &v3routepb.Route_Route{Route: &v3routepb.RouteAction{
+								ClusterSpecifier: &v3routepb.RouteAction_WeightedClusters{WeightedClusters: &v3routepb.WeightedCluster{
+									Clusters: []*v3routepb.WeightedCluster_ClusterWeight{
+										{
+											Name:   defaultTestClusterName,
+											Weight: &wrapperspb.UInt32Value{Value: 100},
+										},
 									},
+								}},
+								HostRewriteSpecifier: &v3routepb.RouteAction_AutoHostRewrite{
+									AutoHostRewrite: &wrapperspb.BoolValue{Value: tt.autoHostRewrite},
 								},
 							}},
-							HostRewriteSpecifier: &v3routepb.RouteAction_AutoHostRewrite{
-								AutoHostRewrite: &wrapperspb.BoolValue{Value: tt.autoHostRewrite},
-							},
 						}},
 					}},
 				}},
-			}}
-			configureAllResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, listeners, routes, clusters, endpoints)
+				SkipValidation: true,
+			}
+
+			if err := mgmtServer.Update(ctx, resources); err != nil {
+				t.Fatal(err)
+			}
 
 			trustedXdsServer := "[]"
 			if tt.serverfeature == serverFeature.ServerFeatureTrustedXDSServer {
@@ -1413,7 +1443,7 @@ func (s) TestResolver_AutoHostRewrite(t *testing.T) {
 				t.Fatalf("cs.SelectConfig(): %v", err)
 			}
 
-			gotAutoHostRewrite := clusterimpl.GetAutoHostRewriteForTesting(res.Context)
+			gotAutoHostRewrite := clusterimpl.AutoHostRewriteForTesting(res.Context)
 			if gotAutoHostRewrite != tt.wantAutoHostRewrite {
 				t.Fatalf("Got autoHostRewrite: %v, want: %v", gotAutoHostRewrite, tt.wantAutoHostRewrite)
 			}
