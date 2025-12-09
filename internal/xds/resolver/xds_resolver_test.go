@@ -1304,9 +1304,9 @@ func newDurationP(d time.Duration) *time.Duration {
 // TestResolver_AutoHostRewrite verifies the propagation of the AutoHostRewrite
 // field from the xDS resolver.
 //
-// Per gRFC A81, this feature should only be active if three conditions are met:
+// Per gRFC A81, this feature should only be active if two conditions met:
 // 1. The environment variable (XDSAuthorityRewrite) is enabled.
-// 2. The xDS server is marked as a "trusted_xds_server" in the bootstrap config.
+// 2. The xDS server is marked as "trusted_xds_server" in the bootstrap config.
 func (s) TestResolver_AutoHostRewrite(t *testing.T) {
 	for _, tt := range []struct {
 		name                string
