@@ -35,25 +35,25 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
-type hostnameType string
+// hostnameKeyType is the key to store the hostname attribute in
+// a resolver.Endpoint.
+type hostnameKeyType struct{}
 
-// hostnameKey is the key to store the hostname key attribute in
-// a resolver.Endpoint attribute.
-const hostnameKey = hostnameType("grpc.resolver.xdsresource.hostname")
-
-// SetHostname sets the hostname key for this resolver.Endpoint attribute.
-func SetHostname(endpoint resolver.Endpoint, hostname string) resolver.Endpoint {
+// setHostname returns a copy of the given endpoint with hostname added
+// as an attribute.
+func setHostname(endpoint resolver.Endpoint, hostname string) resolver.Endpoint {
+	// Only set if non-empty; xds_cluster_impl uses this to trigger :authority rewriting.
 	if hostname == "" {
 		return endpoint
 	}
-	endpoint.Attributes = endpoint.Attributes.WithValue(hostnameKey, hostname)
+	endpoint.Attributes = endpoint.Attributes.WithValue(hostnameKeyType{}, hostname)
 	return endpoint
 }
 
-// GetHostname returns the hostname key attribute of endpoint. If this attribute
-// is not set, it returns the empty string.
-func GetHostname(endpoint resolver.Endpoint) string {
-	hostname, _ := endpoint.Attributes.Value(hostnameKey).(string)
+// HostnameFromEndpoint returns the hostname attribute of endpoint. If this
+// attribute is not set, it returns the empty string.
+func HostnameFromEndpoint(endpoint resolver.Endpoint) string {
+	hostname, _ := endpoint.Attributes.Value(hostnameKeyType{}).(string)
 	return hostname
 }
 
@@ -151,10 +151,8 @@ func parseEndpoints(lbEndpoints []*v3endpointpb.LbEndpoint, uniqueEndpointAddrs 
 				hashKey = hashKeyFromMetadata(endpointMetadata)
 			}
 		}
-		endpoint := resolver.Endpoint{
-			Addresses: address,
-		}
-		endpoint = SetHostname(endpoint, lbEndpoint.GetEndpoint().GetHostname())
+		endpoint := resolver.Endpoint{Addresses: address}
+		endpoint = setHostname(endpoint, lbEndpoint.GetEndpoint().GetHostname())
 		endpoints = append(endpoints, Endpoint{
 			ResolverEndpoint: endpoint,
 			HealthStatus:     EndpointHealthStatus(lbEndpoint.GetHealthStatus()),

@@ -550,18 +550,14 @@ func TestPriorityLocalitiesToClusterImpl(t *testing.T) {
 			{
 				Endpoints: []xdsresource.Endpoint{
 					{
-						ResolverEndpoint: resolver.Endpoint{
-							Addresses: []resolver.Address{{Addr: "addr-1-1"}},
-						},
-						Weight:       90,
-						HealthStatus: xdsresource.EndpointHealthStatusHealthy,
+						ResolverEndpoint: resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-1-1"}}},
+						Weight:           90,
+						HealthStatus:     xdsresource.EndpointHealthStatusHealthy,
 					},
 					{
-						ResolverEndpoint: resolver.Endpoint{
-							Addresses: []resolver.Address{{Addr: "addr-1-2"}},
-						},
-						Weight:       10,
-						HealthStatus: xdsresource.EndpointHealthStatusHealthy,
+						ResolverEndpoint: resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-1-2"}}},
+						Weight:           10,
+						HealthStatus:     xdsresource.EndpointHealthStatusHealthy,
 					},
 				},
 				ID:     clients.Locality{Zone: "test-zone-1"},

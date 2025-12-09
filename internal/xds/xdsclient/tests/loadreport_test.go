@@ -491,7 +491,7 @@ func (s) TestConcurrentReportLoad(t *testing.T) {
 // TestConcurrentChannels verifies that we can create multiple gRPC channels
 // concurrently with a shared XDSClient, each of which will create a new LRS
 // stream without any race.
-func TestConcurrentChannels(t *testing.T) {
+func (s) TestConcurrentChannels(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
