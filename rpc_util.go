@@ -522,15 +522,15 @@ func (o CompressorCallOption) after(*callInfo, *csAttempt) {}
 // responses compressed with non-listed algorithms will be rejected.
 func AcceptCompressors(names ...string) CallOption {
 	cp := append([]string(nil), names...)
-	return AcceptCompressorsCallOption{names: cp}
+	return acceptCompressorsCallOption{names: cp}
 }
 
-// AcceptCompressorsCallOption is a CallOption that limits response compression.
-type AcceptCompressorsCallOption struct {
+// acceptCompressorsCallOption is a CallOption that limits response compression.
+type acceptCompressorsCallOption struct {
 	names []string
 }
 
-func (o AcceptCompressorsCallOption) before(c *callInfo) error {
+func (o acceptCompressorsCallOption) before(c *callInfo) error {
 	allowed, err := newAcceptedCompressionConfig(o.names)
 	if err != nil {
 		return err
@@ -539,7 +539,7 @@ func (o AcceptCompressorsCallOption) before(c *callInfo) error {
 	return nil
 }
 
-func (AcceptCompressorsCallOption) after(*callInfo, *csAttempt) {}
+func (acceptCompressorsCallOption) after(*callInfo, *csAttempt) {}
 
 // CallContentSubtype returns a CallOption that will set the content-subtype
 // for a call. For example, if content-subtype is "json", the Content-Type over
