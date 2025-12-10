@@ -47,9 +47,9 @@ func GetXDSHandshakeClusterName(attr *attributes.Attributes) (string, bool) {
 	return name, ok
 }
 
-// AddressToTelemetryLabels prepares a telemetry label map from resolver
+// addressToTelemetryLabels prepares a telemetry label map from resolver
 // address atrributes.
-func AddressToTelemetryLabels(addr resolver.Address) map[string]string {
+func addressToTelemetryLabels(addr resolver.Address) map[string]string {
 	cluster, _ := GetXDSHandshakeClusterName(addr.Attributes)
 	locality := LocalityString(GetLocalityID(addr))
 	return map[string]string{
@@ -113,6 +113,5 @@ var UnknownCSMLabels = map[string]string{
 }
 
 func init() {
-	// Assign the xds package's implementation to the internal variable.
-	internal.AddressToTelemetryLabels = AddressToTelemetryLabels
+	internal.AddressToTelemetryLabels = addressToTelemetryLabels
 }

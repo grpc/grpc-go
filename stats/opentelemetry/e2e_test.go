@@ -1790,87 +1790,37 @@ func (s) TestStreamingRPC_TraceSequenceNumbers(t *testing.T) {
 	validateTraces(t, spans, wantSpanInfos)
 }
 
-// This tests subchannel metrics which are emitted at the transport level.
-// It starts 2 backend servers and uses wrr through xds config. Makes some RPCs,
-// kills a backend server to cause disconnection for a transport and all the
-// while checks if subchannel metrics represent the number of
-// connections/disconnections and attempts correctly.
+// TestSubChannelMetrics tests subchannel metrics emitted during connection
+// lifecycle events (connect, disconnect, failure).
 func (s) TestSubChannelMetrics(t *testing.T) {
-	cmr := orca.NewServerMetricsRecorder().(orca.CallMetricsRecorder)
-	backend1 := stubserver.StartTestService(t, &stubserver.StubServer{
-		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
-			if r := orca.CallMetricsRecorderFromContext(ctx); r != nil {
-				// Copy metrics from what the test set in cmr into r.
-				sm := cmr.(orca.ServerMetricsProvider).ServerMetrics()
-				r.SetApplicationUtilization(sm.AppUtilization)
-				r.SetQPS(sm.QPS)
-				r.SetEPS(sm.EPS)
-			}
+	// Start a single backend server.
+	backend := stubserver.StartTestService(t, &stubserver.StubServer{
+		EmptyCallF: func(_ context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
 			return &testpb.Empty{}, nil
 		},
-	}, orca.CallMetricsServerOption(nil))
-	port1 := itestutils.ParsePort(t, backend1.Address)
+	})
+	port := itestutils.ParsePort(t, backend.Address)
+	defer backend.Stop()
 
-	cmr.SetQPS(10.0)
-	cmr.SetApplicationUtilization(1.0)
-
-	backend2 := stubserver.StartTestService(t, &stubserver.StubServer{
-		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
-			if r := orca.CallMetricsRecorderFromContext(ctx); r != nil {
-				// Copy metrics from what the test set in cmr into r.
-				sm := cmr.(orca.ServerMetricsProvider).ServerMetrics()
-				r.SetApplicationUtilization(sm.AppUtilization)
-				r.SetQPS(sm.QPS)
-				r.SetEPS(sm.EPS)
-			}
-			return &testpb.Empty{}, nil
-		},
-	}, orca.CallMetricsServerOption(nil))
-	port2 := itestutils.ParsePort(t, backend2.Address)
-	defer backend2.Stop()
 	const serviceName = "my-service-client-side-xds"
 
-	// Start an xDS management server.
+	// Configure xDS for that single backend.
 	managementServer, nodeID, _, xdsResolver := setup.ManagementServerAndResolver(t)
-
-	wrrConfig := &v3wrrlocalitypb.WrrLocality{
-		EndpointPickingPolicy: &v3clusterpb.LoadBalancingPolicy{
-			Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
-				{
-					TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
-						TypedConfig: itestutils.MarshalAny(t, &v3clientsideweightedroundrobinpb.ClientSideWeightedRoundRobin{
-							EnableOobLoadReport: &wrapperspb.BoolValue{
-								Value: false,
-							},
-							// BlackoutPeriod long enough to cause load report
-							// weight to trigger in the scope of test case.
-							// WeightExpirationPeriod will cause the load report
-							// weight for backend 1 to expire.
-							BlackoutPeriod:          durationpb.New(5 * time.Millisecond),
-							WeightExpirationPeriod:  durationpb.New(500 * time.Millisecond),
-							WeightUpdatePeriod:      durationpb.New(time.Second),
-							ErrorUtilizationPenalty: &wrapperspb.FloatValue{Value: 1},
-						}),
-					},
-				},
-			},
-		},
-	}
-
 	routeConfigName := "route-" + serviceName
 	clusterName := "cluster-" + serviceName
 	endpointsName := "endpoints-" + serviceName
+
 	resources := e2e.UpdateOptions{
 		NodeID:    nodeID,
 		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(serviceName, routeConfigName)},
 		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeConfigName, serviceName, clusterName)},
-		Clusters:  []*v3clusterpb.Cluster{clusterWithLBConfiguration(t, clusterName, endpointsName, e2e.SecurityLevelNone, wrrConfig)},
+		Clusters:  []*v3clusterpb.Cluster{e2e.DefaultCluster(clusterName, endpointsName, e2e.SecurityLevelNone)},
 		Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.EndpointResourceWithOptions(e2e.EndpointOptions{
 			ClusterName: endpointsName,
 			Host:        "localhost",
 			Localities: []e2e.LocalityOptions{
 				{
-					Backends: []e2e.BackendOptions{{Ports: []uint32{port1}}, {Ports: []uint32{port2}}},
+					Backends: []e2e.BackendOptions{{Ports: []uint32{port}}},
 					Weight:   1,
 				},
 			},
@@ -1883,42 +1833,36 @@ func (s) TestSubChannelMetrics(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// Setup Telemetry.
 	reader := metric.NewManualReader()
 	provider := metric.NewMeterProvider(metric.WithReader(reader))
-
 	mo := opentelemetry.MetricsOptions{
 		MeterProvider: provider,
 		Metrics: opentelemetry.DefaultMetrics().Add(
 			"grpc.subchannel.connection_attempts_succeeded",
 			"grpc.subchannel.open_connections",
 			"grpc.subchannel.disconnections",
-			"grpc.subchannel.connection_attempts_failed"),
+			"grpc.subchannel.connection_attempts_failed",
+		),
 		OptionalLabels: []string{
 			"grpc.lb.locality",
 			"grpc.lb.backend_service",
 			"grpc.security_level",
-			"grpc.disconnect_error"},
+			"grpc.disconnect_error",
+		},
 	}
 
 	target := fmt.Sprintf("xds:///%s", serviceName)
 	cc, err := grpc.NewClient(target, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsResolver), opentelemetry.DialOption(opentelemetry.Options{MetricsOptions: mo}))
 	if err != nil {
-		t.Fatalf("Failed to dial local test server: %v", err)
+		t.Fatalf("Failed to create client: %v", err)
 	}
 	defer cc.Close()
 	client := testgrpc.NewTestServiceClient(cc)
 
-	// Make 100 RPC's. The two backends will send back load reports per call
-	// giving the two SubChannels weights which will eventually expire. Two
-	// backends needed as for only one backend, WRR does not recompute the
-	// scheduler.
-	receivedExpectedMetrics := grpcsync.NewEvent()
-	go func() {
-		for !receivedExpectedMetrics.HasFired() && ctx.Err() == nil {
-			client.EmptyCall(ctx, &testpb.Empty{})
-			time.Sleep(2 * time.Millisecond)
-		}
-	}()
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+		t.Fatalf("rpc failed: %v", err)
+	}
 
 	targetAttr := attribute.String("grpc.target", target)
 	localityAttr := attribute.String("grpc.lb.locality", `{region="region-1", zone="zone-1", sub_zone="subzone-1"}`)
@@ -1926,6 +1870,7 @@ func (s) TestSubChannelMetrics(t *testing.T) {
 	disconnectionReasonAttr := attribute.String("grpc.disconnect_error", "unknown")
 	securityLevelAttr := attribute.String("grpc.security_level", "NoSecurity")
 
+	// Verify Connect Metrics.
 	wantMetrics := []metricdata.Metrics{
 		{
 			Name:        "grpc.subchannel.connection_attempts_succeeded",
@@ -1935,7 +1880,7 @@ func (s) TestSubChannelMetrics(t *testing.T) {
 				DataPoints: []metricdata.DataPoint[int64]{
 					{
 						Attributes: attribute.NewSet(targetAttr, backendServiceAttr, localityAttr),
-						Value:      1, // value ignored
+						Value:      1,
 					},
 				},
 				Temporality: metricdata.CumulativeTemporality,
@@ -1950,7 +1895,7 @@ func (s) TestSubChannelMetrics(t *testing.T) {
 				DataPoints: []metricdata.DataPoint[int64]{
 					{
 						Attributes: attribute.NewSet(targetAttr, backendServiceAttr, securityLevelAttr, localityAttr),
-						Value:      1, // value ignored
+						Value:      1,
 					},
 				},
 				Temporality: metricdata.CumulativeTemporality,
@@ -1961,8 +1906,10 @@ func (s) TestSubChannelMetrics(t *testing.T) {
 	if err := pollForWantMetrics(ctx, t, reader, wantMetrics); err != nil {
 		t.Fatal(err)
 	}
-	backend1.Stop()
-	receivedExpectedMetrics.Fire()
+
+	// Stop backend to trigger Disconnect Metrics.
+	backend.Stop()
+
 	disconnectionWantMetrics := []metricdata.Metrics{
 		{
 			Name:        "grpc.subchannel.disconnections",
@@ -1987,7 +1934,7 @@ func (s) TestSubChannelMetrics(t *testing.T) {
 				DataPoints: []metricdata.DataPoint[int64]{
 					{
 						Attributes: attribute.NewSet(targetAttr, backendServiceAttr, localityAttr),
-						Value:      1, // value ignored
+						Value:      1, // It will try to reconnect at least once
 					},
 				},
 				Temporality: metricdata.CumulativeTemporality,

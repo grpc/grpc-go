@@ -484,7 +484,7 @@ func (a *csAttempt) getTransport() error {
 		return err
 	}
 	if a.trInfo != nil {
-		a.trInfo.firstLine.SetRemoteAddr(a.transport.RemoteAddr())
+		a.trInfo.firstLine.SetRemoteAddr(a.transport.GetPeer().Addr)
 	}
 	if pick.blocked && a.statsHandler != nil {
 		a.statsHandler.HandleRPC(a.ctx, &stats.DelayedPickComplete{})

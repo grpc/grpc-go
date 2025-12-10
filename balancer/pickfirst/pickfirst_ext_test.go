@@ -2121,7 +2121,6 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TF_ThenTimerFires(t *testing.T) {
 // subchannel won) while its dial is still in-flight, it records exactly one
 // successful attempt.
 func (s) TestPickFirstLeaf_HappyEyeballs_Ignore_Inflight_Cancellations(t *testing.T) {
-	t.Log("starting test")
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
@@ -2147,7 +2146,7 @@ func (s) TestPickFirstLeaf_HappyEyeballs_Ignore_Inflight_Cancellations(t *testin
 	rb.UpdateState(resolver.State{Addresses: addrs})
 	cc.Connect()
 
-	// Make sure we conncet to second subconn
+	// Make sure we connect to second subconn
 	testutils.AwaitState(ctx, t, cc, connectivity.Connecting)
 	if holds[0].Wait(ctx) != true {
 		t.Fatalf("Timeout waiting for server %d to be contacted", 0)
@@ -2179,13 +2178,12 @@ func (s) TestPickFirstLeaf_HappyEyeballs_Ignore_Inflight_Cancellations(t *testin
 
 	// Verify Failure: Exactly 0 (The Loser was ignored).
 	// We poll briefly to ensure no delayed failure metric appears.
-	shortCtx, shortCancel := context.WithTimeout(ctx, 50*time.Millisecond)
-	defer shortCancel()
-	for shortCtx.Err() == nil {
+	sCtx, sCancel := context.WithTimeout(ctx, 50*time.Millisecond)
+	defer sCancel()
+	for ; sCtx.Err() == nil; <-time.After(time.Millisecond) {
 		if got, _ := tmr.Metric("grpc.subchannel.connection_attempts_failed"); got != 0 {
 			t.Fatalf("Unexpected failure recorded for shutdown subchannel, got: %v, want: 0", got)
 		}
-		time.Sleep(time.Millisecond)
 	}
 
 	// LB Metrics Check

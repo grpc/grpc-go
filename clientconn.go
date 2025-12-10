@@ -1265,9 +1265,16 @@ func (ac *addrConn) updateConnectivityState(s connectivity.State, lastErr error)
 		return
 	}
 
+	// If we are transitioning out of Ready, it means there is a disconnection.
+	// A SubConn can also transition from CONNECTING directly to IDLE when
+	// a transport is successfully created, but the connection fails
+	// before the SubConn can send the notification for READY. We treat
+	// this as a successful connection and transition to IDLE.
+	// TODO: https://github.com/grpc/grpc-go/issues/7862 - Remove the second
+	// part of the if condition below once the issue is fixed.
 	if ac.state == connectivity.Ready || (ac.state == connectivity.Connecting && s == connectivity.Idle) {
 		disconnectionsMetric.Record(ac.cc.metricsRecorderList, 1, ac.cc.target, ac.backendServiceLabel, ac.localityLabel, "unknown")
-		openConnectionsMetric.Record(ac.cc.metricsRecorderList, -1, ac.cc.target, ac.backendServiceLabel, ac.securityLevel(), ac.localityLabel)
+		openConnectionsMetric.Record(ac.cc.metricsRecorderList, -1, ac.cc.target, ac.backendServiceLabel, ac.securityLevelLocked(), ac.localityLabel)
 	}
 	ac.state = s
 	ac.channelz.ChannelMetrics.State.Store(&s)
@@ -1330,7 +1337,7 @@ func (ac *addrConn) resetTransportAndUnlock() {
 			connectionAttemptsFailedMetric.Record(ac.cc.metricsRecorderList, 1, ac.cc.target, ac.backendServiceLabel, ac.localityLabel)
 		} else {
 			// This records cancelled connection attempts which can be later replaced by a metric.
-			channelz.Infof(logger, ac.channelz, "Received context cancelled on subconn, not recording this as a failed connection attempt.")
+			logger.Infof("Context cancellation detected; not recording this as a failed connection attempt.")
 		}
 		// TODO: #7534 - Move re-resolution requests into the pick_first LB policy
 		// to ensure one resolution request per pass instead of per subconn failure.
@@ -1372,13 +1379,13 @@ func (ac *addrConn) resetTransportAndUnlock() {
 	// Success; reset backoff.
 	ac.mu.Lock()
 	connectionAttemptsSucceededMetric.Record(ac.cc.metricsRecorderList, 1, ac.cc.target, ac.backendServiceLabel, ac.localityLabel)
-	openConnectionsMetric.Record(ac.cc.metricsRecorderList, 1, ac.cc.target, ac.backendServiceLabel, ac.securityLevel(), ac.localityLabel)
+	openConnectionsMetric.Record(ac.cc.metricsRecorderList, 1, ac.cc.target, ac.backendServiceLabel, ac.securityLevelLocked(), ac.localityLabel)
 	ac.backoffIdx = 0
 	ac.mu.Unlock()
 }
 
 // updateTelemetryLabelsLocked calculates and caches the telemetry labels based on the
-// current addresses.
+// first address in addrConn.
 func (ac *addrConn) updateTelemetryLabelsLocked() {
 	// Reset defaults
 	ac.localityLabel = ""
@@ -1394,7 +1401,7 @@ func (ac *addrConn) updateTelemetryLabelsLocked() {
 
 type securityLevelKey struct{}
 
-func (ac *addrConn) securityLevel() string {
+func (ac *addrConn) securityLevelLocked() string {
 	var secLevel string
 	// During disconnection, ac.transport is nil. Fall back to the security level
 	// stored in the current address during connection.
@@ -1402,7 +1409,7 @@ func (ac *addrConn) securityLevel() string {
 		secLevel, _ = ac.curAddr.Attributes.Value(securityLevelKey{}).(string)
 		return secLevel
 	}
-	authInfo := ac.transport.AuthInfo()
+	authInfo := ac.transport.GetPeer().AuthInfo
 	if ci, ok := authInfo.(interface {
 		GetCommonAuthInfo() credentials.CommonAuthInfo
 	}); ok {
