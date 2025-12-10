@@ -86,6 +86,6 @@ func TestRounding(t *testing.T) {
 }
 
 func TestOverflow(t *testing.T) {
-	tc := testCase{fmt.Sprintf("%dns", math.MaxInt64), "2562048H"}
+	tc := testCase{fmt.Sprintf("%dns", int64(math.MaxInt64)), "2562048H"}
 	test(t, &tc)
 }
