@@ -35,6 +35,8 @@ import (
 	"google.golang.org/grpc/balancer/pickfirst"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/credentials"
+	expstats "google.golang.org/grpc/experimental/stats"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpcsync"
@@ -96,6 +98,41 @@ var (
 	// security information (e.g., OAuth2 token) which requires secure
 	// connection on an insecure connection.
 	errTransportCredentialsMissing = errors.New("grpc: the credentials require transport level security (use grpc.WithTransportCredentials() to set)")
+)
+
+var (
+	disconnectionsMetric = expstats.RegisterInt64Count(expstats.MetricDescriptor{
+		Name:           "grpc.subchannel.disconnections",
+		Description:    "EXPERIMENTAL. Number of times the selected subchannel becomes disconnected.",
+		Unit:           "{disconnection}",
+		Labels:         []string{"grpc.target"},
+		OptionalLabels: []string{"grpc.lb.backend_service", "grpc.lb.locality", "grpc.disconnect_error"},
+		Default:        false,
+	})
+	connectionAttemptsSucceededMetric = expstats.RegisterInt64Count(expstats.MetricDescriptor{
+		Name:           "grpc.subchannel.connection_attempts_succeeded",
+		Description:    "EXPERIMENTAL. Number of successful connection attempts.",
+		Unit:           "{attempt}",
+		Labels:         []string{"grpc.target"},
+		OptionalLabels: []string{"grpc.lb.backend_service", "grpc.lb.locality"},
+		Default:        false,
+	})
+	connectionAttemptsFailedMetric = expstats.RegisterInt64Count(expstats.MetricDescriptor{
+		Name:           "grpc.subchannel.connection_attempts_failed",
+		Description:    "EXPERIMENTAL. Number of failed connection attempts.",
+		Unit:           "{attempt}",
+		Labels:         []string{"grpc.target"},
+		OptionalLabels: []string{"grpc.lb.backend_service", "grpc.lb.locality"},
+		Default:        false,
+	})
+	openConnectionsMetric = expstats.RegisterInt64UpDownCount(expstats.MetricDescriptor{
+		Name:           "grpc.subchannel.open_connections",
+		Description:    "EXPERIMENTAL. Number of open connections.",
+		Unit:           "{attempt}",
+		Labels:         []string{"grpc.target"},
+		OptionalLabels: []string{"grpc.lb.backend_service", "grpc.security_level", "grpc.lb.locality"},
+		Default:        false,
+	})
 )
 
 const (
@@ -875,6 +912,7 @@ func (cc *ClientConn) newAddrConnLocked(addrs []resolver.Address, opts balancer.
 		channelz:     channelz.RegisterSubChannel(cc.channelz, ""),
 		resetBackoff: make(chan struct{}),
 	}
+	ac.updateTelemetryLabelsLocked()
 	ac.ctx, ac.cancel = context.WithCancel(cc.ctx)
 	// Start with our address set to the first address; this may be updated if
 	// we connect to different addresses.
@@ -991,7 +1029,7 @@ func (ac *addrConn) updateAddrs(addrs []resolver.Address) {
 	}
 
 	ac.addrs = addrs
-
+	ac.updateTelemetryLabelsLocked()
 	if ac.state == connectivity.Shutdown ||
 		ac.state == connectivity.TransientFailure ||
 		ac.state == connectivity.Idle {
@@ -1230,12 +1268,27 @@ type addrConn struct {
 	resetBackoff chan struct{}
 
 	channelz *channelz.SubChannel
+
+	localityLabel       string
+	backendServiceLabel string
 }
 
 // Note: this requires a lock on ac.mu.
 func (ac *addrConn) updateConnectivityState(s connectivity.State, lastErr error) {
 	if ac.state == s {
 		return
+	}
+
+	// If we are transitioning out of Ready, it means there is a disconnection.
+	// A SubConn can also transition from CONNECTING directly to IDLE when
+	// a transport is successfully created, but the connection fails
+	// before the SubConn can send the notification for READY. We treat
+	// this as a successful connection and transition to IDLE.
+	// TODO: https://github.com/grpc/grpc-go/issues/7862 - Remove the second
+	// part of the if condition below once the issue is fixed.
+	if ac.state == connectivity.Ready || (ac.state == connectivity.Connecting && s == connectivity.Idle) {
+		disconnectionsMetric.Record(ac.cc.metricsRecorderList, 1, ac.cc.target, ac.backendServiceLabel, ac.localityLabel, "unknown")
+		openConnectionsMetric.Record(ac.cc.metricsRecorderList, -1, ac.cc.target, ac.backendServiceLabel, ac.securityLevelLocked(), ac.localityLabel)
 	}
 	ac.state = s
 	ac.channelz.ChannelMetrics.State.Store(&s)
@@ -1294,6 +1347,15 @@ func (ac *addrConn) resetTransportAndUnlock() {
 	ac.mu.Unlock()
 
 	if err := ac.tryAllAddrs(acCtx, addrs, connectDeadline); err != nil {
+		if !errors.Is(err, context.Canceled) {
+			connectionAttemptsFailedMetric.Record(ac.cc.metricsRecorderList, 1, ac.cc.target, ac.backendServiceLabel, ac.localityLabel)
+		} else {
+			if logger.V(2) {
+				// This records cancelled connection attempts which can be later
+				// replaced by a metric.
+				logger.Infof("Context cancellation detected; not recording this as a failed connection attempt.")
+			}
+		}
 		// TODO: #7534 - Move re-resolution requests into the pick_first LB policy
 		// to ensure one resolution request per pass instead of per subconn failure.
 		ac.cc.resolveNow(resolver.ResolveNowOptions{})
@@ -1333,8 +1395,48 @@ func (ac *addrConn) resetTransportAndUnlock() {
 	}
 	// Success; reset backoff.
 	ac.mu.Lock()
+	connectionAttemptsSucceededMetric.Record(ac.cc.metricsRecorderList, 1, ac.cc.target, ac.backendServiceLabel, ac.localityLabel)
+	openConnectionsMetric.Record(ac.cc.metricsRecorderList, 1, ac.cc.target, ac.backendServiceLabel, ac.securityLevelLocked(), ac.localityLabel)
 	ac.backoffIdx = 0
 	ac.mu.Unlock()
+}
+
+// updateTelemetryLabelsLocked calculates and caches the telemetry labels based on the
+// first address in addrConn.
+func (ac *addrConn) updateTelemetryLabelsLocked() {
+	labelsFunc, ok := internal.AddressToTelemetryLabels.(func(resolver.Address) map[string]string)
+	if !ok || len(ac.addrs) == 0 {
+		// Reset defaults
+		ac.localityLabel = ""
+		ac.backendServiceLabel = ""
+		return
+	}
+	labels := labelsFunc(ac.addrs[0])
+	ac.localityLabel = labels["grpc.lb.locality"]
+	ac.backendServiceLabel = labels["grpc.lb.backend_service"]
+}
+
+type securityLevelKey struct{}
+
+func (ac *addrConn) securityLevelLocked() string {
+	var secLevel string
+	// During disconnection, ac.transport is nil. Fall back to the security level
+	// stored in the current address during connection.
+	if ac.transport == nil {
+		secLevel, _ = ac.curAddr.Attributes.Value(securityLevelKey{}).(string)
+		return secLevel
+	}
+	authInfo := ac.transport.Peer().AuthInfo
+	if ci, ok := authInfo.(interface {
+		GetCommonAuthInfo() credentials.CommonAuthInfo
+	}); ok {
+		secLevel = ci.GetCommonAuthInfo().SecurityLevel.String()
+		// Store the security level in the current address' attributes so
+		// that it remains available for disconnection metrics after the
+		// transport is closed.
+		ac.curAddr.Attributes = ac.curAddr.Attributes.WithValue(securityLevelKey{}, secLevel)
+	}
+	return secLevel
 }
 
 // tryAllAddrs tries to create a connection to the addresses, and stop when at

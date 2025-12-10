@@ -608,8 +608,9 @@ type ClientTransport interface {
 	// with a human readable string with debug info.
 	GetGoAwayReason() (GoAwayReason, string)
 
-	// RemoteAddr returns the remote network address.
-	RemoteAddr() net.Addr
+	// Peer returns information about the peer associated with the Transport.
+	// The returned information includes authentication and network address details.
+	Peer() *peer.Peer
 }
 
 // ServerTransport is the common interface for all gRPC server-side transport
