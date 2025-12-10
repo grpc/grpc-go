@@ -61,7 +61,7 @@ func EncodeDuration(t time.Duration) string {
 	// Find the largest dividing unit.
 	var i int
 	for i = range units {
-		if t%units[i].duration == 0 && i < len(units)-1 {
+		if t%units[i].duration == 0 {
 			break
 		}
 	}
