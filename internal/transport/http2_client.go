@@ -370,7 +370,7 @@ func NewHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 		})
 	t.logger = prefixLoggerForClientTransport(t)
 	// Add peer information to the http2client context.
-	t.ctx = peer.NewContext(t.ctx, t.GetPeer())
+	t.ctx = peer.NewContext(t.ctx, t.Peer())
 
 	if md, ok := addr.Metadata.(*metadata.MD); ok {
 		t.md = *md
@@ -510,7 +510,7 @@ func (t *http2Client) newStream(ctx context.Context, callHdr *CallHdr) *ClientSt
 	return s
 }
 
-func (t *http2Client) GetPeer() *peer.Peer {
+func (t *http2Client) Peer() *peer.Peer {
 	return &peer.Peer{
 		Addr:      t.remoteAddr,
 		AuthInfo:  t.authInfo, // Can be nil
@@ -742,7 +742,7 @@ func (e NewStreamError) Error() string {
 // NewStream creates a stream and registers it into the transport as "active"
 // streams.  All non-nil errors returned will be *NewStreamError.
 func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (*ClientStream, error) {
-	ctx = peer.NewContext(ctx, t.GetPeer())
+	ctx = peer.NewContext(ctx, t.Peer())
 
 	// ServerName field of the resolver returned address takes precedence over
 	// Host field of CallHdr to determine the :authority header. This is because,
@@ -1806,10 +1806,6 @@ func (t *http2Client) socketMetrics() *channelz.EphemeralSocketMetrics {
 		RemoteFlowControlWindow: t.getOutFlowWindow(),
 	}
 }
-
-func (t *http2Client) RemoteAddr() net.Addr { return t.remoteAddr }
-
-func (t *http2Client) AuthInfo() credentials.AuthInfo { return t.authInfo }
 
 func (t *http2Client) incrMsgSent() {
 	if channelz.IsOn() {

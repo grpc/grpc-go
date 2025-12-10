@@ -2024,8 +2024,7 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TriggerConnectionDelay(t *testing.T) {
 
 func waitForMetric(ctx context.Context, t *testing.T, tmr *stats.TestMetricsRecorder, metricName string) {
 	for {
-		_, ok := tmr.Metric(metricName)
-		if ok {
+		if _, ok := tmr.Metric(metricName); ok {
 			break
 		}
 		select {

@@ -1336,8 +1336,11 @@ func (ac *addrConn) resetTransportAndUnlock() {
 		if !errors.Is(err, context.Canceled) {
 			connectionAttemptsFailedMetric.Record(ac.cc.metricsRecorderList, 1, ac.cc.target, ac.backendServiceLabel, ac.localityLabel)
 		} else {
-			// This records cancelled connection attempts which can be later replaced by a metric.
-			logger.Infof("Context cancellation detected; not recording this as a failed connection attempt.")
+			if logger.V(2) {
+				// This records cancelled connection attempts which can be later
+				// replaced by a metric.
+				logger.Infof("Context cancellation detected; not recording this as a failed connection attempt.")
+			}
 		}
 		// TODO: #7534 - Move re-resolution requests into the pick_first LB policy
 		// to ensure one resolution request per pass instead of per subconn failure.
@@ -1387,11 +1390,11 @@ func (ac *addrConn) resetTransportAndUnlock() {
 // updateTelemetryLabelsLocked calculates and caches the telemetry labels based on the
 // first address in addrConn.
 func (ac *addrConn) updateTelemetryLabelsLocked() {
-	// Reset defaults
-	ac.localityLabel = ""
-	ac.backendServiceLabel = ""
 	labelsFunc, ok := internal.AddressToTelemetryLabels.(func(resolver.Address) map[string]string)
 	if !ok || len(ac.addrs) == 0 {
+		// Reset defaults
+		ac.localityLabel = ""
+		ac.backendServiceLabel = ""
 		return
 	}
 	labels := labelsFunc(ac.addrs[0])
@@ -1409,7 +1412,7 @@ func (ac *addrConn) securityLevelLocked() string {
 		secLevel, _ = ac.curAddr.Attributes.Value(securityLevelKey{}).(string)
 		return secLevel
 	}
-	authInfo := ac.transport.GetPeer().AuthInfo
+	authInfo := ac.transport.Peer().AuthInfo
 	if ci, ok := authInfo.(interface {
 		GetCommonAuthInfo() credentials.CommonAuthInfo
 	}); ok {
