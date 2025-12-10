@@ -111,10 +111,15 @@ func (b *subsettingBalancer) UpdateClientConnState(s balancer.ClientConnState) e
 		b.logger.Warningf("Received config with unexpected type %T: %v", s.BalancerConfig, s.BalancerConfig)
 		return balancer.ErrBadResolverState
 	}
-	if b.cfg == nil || b.cfg.ChildPolicy.Name != lbCfg.ChildPolicy.Name {
-		if err := b.Balancer.SwitchTo(balancer.Get(lbCfg.ChildPolicy.Name)); err != nil {
-			return fmt.Errorf("randomsubsetting: error switching to child of type %q: %v", lbCfg.ChildPolicy.Name, err)
-		}
+
+	// Build config for the gracefulswitch balancer. It is safe to ignore
+	// JSON marshaling errors here, since the config was already validated
+	// as part of ParseConfig().
+	cfg := []map[string]any{{lbCfg.ChildPolicy.Name: lbCfg.ChildPolicy.Config}}
+	cfgJSON, _ := json.Marshal(cfg)
+	parsedCfg, err := gracefulswitch.ParseConfig(cfgJSON)
+	if err != nil {
+		return fmt.Errorf("randomsubsetting: error switching to child of type %q: %v", lbCfg.ChildPolicy.Name, err)
 	}
 	b.cfg = lbCfg
 	endpoints := resolver.State{
@@ -125,7 +130,7 @@ func (b *subsettingBalancer) UpdateClientConnState(s balancer.ClientConnState) e
 
 	return b.Balancer.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState:  endpoints,
-		BalancerConfig: b.cfg.ChildPolicy.Config,
+		BalancerConfig: parsedCfg,
 	})
 }
 
