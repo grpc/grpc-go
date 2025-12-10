@@ -23,15 +23,30 @@ import (
 	"time"
 )
 
-const maxTimeoutValue int64 = 100000000 - 1
+const maxTimeoutValue int64 = 99999999
+
+type unit struct {
+	duration time.Duration
+	symbol   string
+}
+
+var units = []unit{
+	{time.Hour, "H"},
+	{time.Minute, "M"},
+	{time.Second, "S"},
+	{time.Millisecond, "m"},
+	{time.Microsecond, "u"},
+	{time.Nanosecond, "n"},
+}
 
 // div does integer division and round-up the result. Note that this is
-// equivalent to (d+r-1)/r but has less chance to overflow.
-func div(d, r time.Duration) int64 {
-	if d%r > 0 {
-		return int64(d/r + 1)
+// equivalent to (n+d-1)/d but has less chance to overflow.
+func div(n, d time.Duration) int64 {
+	q := int64(n / d)
+	if n%d > 0 {
+		q++
 	}
-	return int64(d / r)
+	return q
 }
 
 // EncodeDuration encodes the duration to the format grpc-timeout header
@@ -39,25 +54,25 @@ func div(d, r time.Duration) int64 {
 //
 // https://github.com/grpc/grpc/blob/master/doc/PROTOCOL-HTTP2.md#requests
 func EncodeDuration(t time.Duration) string {
-	// TODO: This is simplistic and not bandwidth efficient. Improve it.
 	if t <= 0 {
-		return "0n"
+		return "0S"
 	}
-	if d := div(t, time.Nanosecond); d <= maxTimeoutValue {
-		return strconv.FormatInt(d, 10) + "n"
+
+	// Find the largest dividing unit.
+	var i int
+	for i = range units {
+		if t%units[i].duration == 0 && i < len(units)-1 {
+			break
+		}
 	}
-	if d := div(t, time.Microsecond); d <= maxTimeoutValue {
-		return strconv.FormatInt(d, 10) + "u"
+	// Encode to maximum 8 digits.
+	var value int64
+	for {
+		value = div(t, units[i].duration)
+		if value <= maxTimeoutValue || i == 0 {
+			break
+		}
+		i--
 	}
-	if d := div(t, time.Millisecond); d <= maxTimeoutValue {
-		return strconv.FormatInt(d, 10) + "m"
-	}
-	if d := div(t, time.Second); d <= maxTimeoutValue {
-		return strconv.FormatInt(d, 10) + "S"
-	}
-	if d := div(t, time.Minute); d <= maxTimeoutValue {
-		return strconv.FormatInt(d, 10) + "M"
-	}
-	// Note that maxTimeoutValue * time.Hour > MaxInt64.
-	return strconv.FormatInt(div(t, time.Hour), 10) + "H"
+	return strconv.FormatInt(value, 10) + units[i].symbol
 }
