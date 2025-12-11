@@ -25,6 +25,7 @@ import (
 	"math"
 	rand "math/rand/v2"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -320,6 +321,10 @@ func newClientStreamWithParams(ctx context.Context, desc *StreamDesc, cc *Client
 		ContentSubtype: callInfo.contentSubtype,
 		DoneFunc:       doneFunc,
 		Authority:      callInfo.authority,
+	}
+	if allowed := callInfo.acceptedResponseCompressors; len(allowed) > 0 {
+		headerValue := strings.Join(allowed, ",")
+		callHdr.AcceptedCompressors = &headerValue
 	}
 
 	// Set our outgoing compression according to the UseCompressor CallOption, if
@@ -1145,6 +1150,10 @@ func (a *csAttempt) recvMsg(m any, payInfo *payloadInfo) (err error) {
 				a.decompressorV0 = nil
 				a.decompressorV1 = encoding.GetCompressor(ct)
 			}
+			// Validate that the compression method is acceptable for this call.
+			if !acceptedCompressorAllows(cs.callInfo.acceptedResponseCompressors, ct) {
+				return status.Errorf(codes.Internal, "grpc: peer compressed the response with %q which is not allowed by AcceptCompressors", ct)
+			}
 		} else {
 			// No compression is used; disable our decompressor.
 			a.decompressorV0 = nil
@@ -1489,6 +1498,10 @@ func (as *addrConnStream) RecvMsg(m any) (err error) {
 				// message encoding; attempt to find a registered compressor that does.
 				as.decompressorV0 = nil
 				as.decompressorV1 = encoding.GetCompressor(ct)
+			}
+			// Validate that the compression method is acceptable for this call.
+			if !acceptedCompressorAllows(as.callInfo.acceptedResponseCompressors, ct) {
+				return status.Errorf(codes.Internal, "grpc: peer compressed the response with %q which is not allowed by AcceptCompressors", ct)
 			}
 		} else {
 			// No compression is used; disable our decompressor.

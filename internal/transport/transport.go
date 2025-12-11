@@ -553,6 +553,12 @@ type CallHdr struct {
 	// outbound message.
 	SendCompress string
 
+	// AcceptedCompressors overrides the grpc-accept-encoding header for this
+	// call. When nil, the transport advertises the default set of registered
+	// compressors. A non-nil pointer overrides that value (including the empty
+	// string to advertise none).
+	AcceptedCompressors *string
+
 	// Creds specifies credentials.PerRPCCredentials for a call.
 	Creds credentials.PerRPCCredentials
 
