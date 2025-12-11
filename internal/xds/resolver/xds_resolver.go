@@ -392,6 +392,7 @@ func (r *xdsResolver) newConfigSelector() (*configSelector, error) {
 
 		cs.routes[i].retryConfig = rt.RetryConfig
 		cs.routes[i].hashPolicies = rt.HashPolicies
+		cs.routes[i].autoHostRewrite = rt.AutoHostRewrite
 	}
 
 	// Account for this config selector's clusters.  Do this after no further
