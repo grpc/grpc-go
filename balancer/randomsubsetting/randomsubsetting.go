@@ -25,6 +25,7 @@
 package randomsubsetting
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"slices"
@@ -123,7 +124,7 @@ func (b *subsettingBalancer) UpdateClientConnState(s balancer.ClientConnState) e
 	}
 	b.cfg = lbCfg
 	endpoints := resolver.State{
-		Endpoints:     b.prepareSubsetOfEndpoints(s.ResolverState.Endpoints),
+		Endpoints:     b.calculateSubset(s.ResolverState.Endpoints),
 		ServiceConfig: s.ResolverState.ServiceConfig,
 		Attributes:    s.ResolverState.Attributes,
 	}
@@ -134,14 +135,15 @@ func (b *subsettingBalancer) UpdateClientConnState(s balancer.ClientConnState) e
 	})
 }
 
-type endpointWithHash struct {
-	hash uint64
-	ep   resolver.Endpoint
-}
+// calculateSubset implements the subsetting algorithm, as described in A68:
+// https://github.com/grpc/proposal/blob/master/A68-random-subsetting.md#subsetting-algorithm
+func (b *subsettingBalancer) calculateSubset(endpoints []resolver.Endpoint) []resolver.Endpoint {
+	// A helper struct to hold an endpoint and its hash.
+	type endpointWithHash struct {
+		hash uint64
+		ep   resolver.Endpoint
+	}
 
-// implements the subsetting algorithm,
-// as described in A68: https://github.com/grpc/proposal/blob/master/A68-random-subsetting.md#subsetting-algorithm
-func (b *subsettingBalancer) prepareSubsetOfEndpoints(endpoints []resolver.Endpoint) []resolver.Endpoint {
 	subsetSize := b.cfg.SubsetSize
 	if len(endpoints) <= int(subsetSize) {
 		return endpoints
@@ -157,13 +159,10 @@ func (b *subsettingBalancer) prepareSubsetOfEndpoints(endpoints []resolver.Endpo
 	}
 
 	slices.SortFunc(hashedEndpoints, func(a, b endpointWithHash) int {
-		if a.hash == b.hash {
-			return 0
-		}
-		if a.hash < b.hash {
-			return -1
-		}
-		return 1
+		// Note: This uses the standard library cmp package, not the
+		// github.com/google/go-cmp/cmp package. The latter is intended for
+		// testing purposes only.
+		return cmp.Compare(a.hash, b.hash)
 	})
 
 	if b.logger.V(2) {
