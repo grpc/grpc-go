@@ -48,7 +48,7 @@ func GetXDSHandshakeClusterName(attr *attributes.Attributes) (string, bool) {
 }
 
 // addressToTelemetryLabels prepares a telemetry label map from resolver
-// address atrributes.
+// address attributes.
 func addressToTelemetryLabels(addr resolver.Address) map[string]string {
 	cluster, _ := GetXDSHandshakeClusterName(addr.Attributes)
 	locality := LocalityString(GetLocalityID(addr))
