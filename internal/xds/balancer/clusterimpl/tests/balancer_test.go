@@ -1164,7 +1164,6 @@ func (s) TestChildPolicyChangeOnConfigUpdate(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatalf("Failed to update xDS resources: %v", err)
 	}
@@ -1183,7 +1182,7 @@ func (s) TestChildPolicyChangeOnConfigUpdate(t *testing.T) {
 	// Register stub customLBPolicy LB policy so that we can catch config changes.
 	pfBuilder := balancer.Get(pickfirst.Name)
 	lbCfgCh := make(chan serviceconfig.LoadBalancingConfig, 1)
-	var updatedChildPolicy atomic.Pointer[string]
+	var updatedChildPolicy atomic.Value
 
 	stub.Register(customLBPolicy, stub.BalancerFuncs{
 		ParseConfig: func(lbCfg json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
@@ -1193,8 +1192,8 @@ func (s) TestChildPolicyChangeOnConfigUpdate(t *testing.T) {
 			bd.ChildBalancer = pfBuilder.Build(bd.ClientConn, bd.BuildOptions)
 		},
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
-			name := customLBPolicy
-			updatedChildPolicy.Store(&name)
+			// name := customLBPolicy
+			updatedChildPolicy.Store(customLBPolicy)
 			select {
 			case lbCfgCh <- ccs.BalancerConfig:
 			case <-ctx.Done():
@@ -1230,12 +1229,8 @@ func (s) TestChildPolicyChangeOnConfigUpdate(t *testing.T) {
 	case <-lbCfgCh:
 	}
 
-	if p := updatedChildPolicy.Load(); p == nil || *p != customLBPolicy {
-		var got string
-		if p != nil {
-			got = *p
-		}
-		t.Fatalf("Unexpected child policy after config update, got %q, want %q", got, customLBPolicy)
+	if p, ok := updatedChildPolicy.Load().(string); !ok || p != customLBPolicy {
+		t.Fatalf("Unexpected child policy after config update, got %q (ok: %v), want %q", p, ok, customLBPolicy)
 	}
 
 	ticker := time.NewTicker(10 * time.Millisecond)
@@ -1245,10 +1240,8 @@ func (s) TestChildPolicyChangeOnConfigUpdate(t *testing.T) {
 		select {
 		case <-ctx.Done():
 			t.Fatalf("Timeout waiting for successful RPC after policy update.")
-			return
 		case <-ticker.C:
-			_, err := client.EmptyCall(ctx, &testpb.Empty{})
-			if err == nil {
+			if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err == nil {
 				return
 			}
 		}
