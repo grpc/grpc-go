@@ -2155,44 +2155,38 @@ func testTap(t *testing.T, e env) {
 }
 
 func (s) TestTapStatusDetails(t *testing.T) {
-	wantDetails := &testpb.Empty{}
-	st := status.New(codes.ResourceExhausted, "rate limit exceeded")
-	st, err := st.WithDetails(wantDetails)
-	if err != nil {
-		t.Fatalf("status.WithDetails() failed: %v", err)
-	}
-
-	tapHandler := func(_ context.Context, _ *tap.Info) (context.Context, error) {
+	tapHandler := func(context.Context, *tap.Info) (context.Context, error) {
 		// Return error with details for all RPCs.
+		wantDetails := &testpb.Empty{}
+		st := status.New(codes.ResourceExhausted, "rate limit exceeded")
+		st, err := st.WithDetails(wantDetails)
+		if err != nil {
+			t.Fatalf("status.WithDetails() failed: %v", err)
+		}
 		return nil, st.Err()
 	}
 
-	ss := &stubserver.StubServer{
-		EmptyCallF: func(_ context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
-			// This should never be called since TAP handler rejects the RPC.
-			return &testpb.Empty{}, nil
-		},
-	}
-	sopts := []grpc.ServerOption{grpc.InTapHandle(tapHandler)}
-	if err := ss.Start(sopts); err != nil {
-		t.Fatalf("Error starting server: %v", err)
-	}
+	ss := stubserver.StartTestService(t, nil, grpc.InTapHandle(tapHandler))
 	defer ss.Stop()
+
+	if err := ss.StartClient(); err != nil {
+		t.Fatalf("ss.StartClient() failed: %v", err)
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	_, err = ss.Client.EmptyCall(ctx, &testpb.Empty{})
+	_, err := ss.Client.EmptyCall(ctx, &testpb.Empty{})
 	if err == nil {
 		t.Fatal("EmptyCall() succeeded; want error")
 	}
 
 	gotStatus := status.Convert(err)
 	if gotStatus.Code() != codes.ResourceExhausted {
-		t.Fatalf("EmptyCall() returned code %v; want %v", gotStatus.Code(), codes.ResourceExhausted)
+		t.Errorf("EmptyCall() returned code %v; want %v", gotStatus.Code(), codes.ResourceExhausted)
 	}
 	if gotStatus.Message() != "rate limit exceeded" {
-		t.Fatalf("EmptyCall() returned message %q; want %q", gotStatus.Message(), "rate limit exceeded")
+		t.Errorf("EmptyCall() returned message %q; want %q", gotStatus.Message(), "rate limit exceeded")
 	}
 
 	details := gotStatus.Details()

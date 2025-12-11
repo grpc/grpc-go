@@ -32,6 +32,7 @@ import (
 	"golang.org/x/net/http2/hpack"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcutil"
+	"google.golang.org/grpc/internal/pretty"
 	istatus "google.golang.org/grpc/internal/status"
 	"google.golang.org/grpc/mem"
 	"google.golang.org/grpc/status"
@@ -858,7 +859,9 @@ func (l *loopyWriter) earlyAbortStreamHandler(eas *earlyAbortStream) error {
 
 	if p := istatus.RawStatusProto(eas.status); len(p.GetDetails()) > 0 {
 		stBytes, err := proto.Marshal(p)
-		if err == nil {
+		if err != nil {
+			l.logger.Errorf("Failed to marshal rpc status: %s, error: %v", pretty.ToJSON(p), err)
+		} else {
 			headerFields = append(headerFields, hpack.HeaderField{Name: grpcStatusDetailsBinHeader, Value: encodeBinHeader(stBytes)})
 		}
 	}
