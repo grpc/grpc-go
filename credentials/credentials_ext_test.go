@@ -211,36 +211,6 @@ func (s) TestIncorrectAuthorityWithTLS(t *testing.T) {
 			}
 		})
 	}
-	//		serverCalled := make(chan struct{})
-	//		ss := &stubserver.StubServer{
-	//			EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
-	//				close(serverCalled)
-	//				return nil, nil
-	//			},
-	//		}
-	//		if err := ss.StartServer(grpc.Creds(credentials.NewServerTLSFromCert(&cert))); err != nil {
-	//			t.Fatalf("Error starting endpoint server: %v", err)
-	//		}
-	//		defer ss.Stop()
-	//
-	//		cc, err := grpc.NewClient(ss.Address, grpc.WithTransportCredentials(creds))
-	//		if err != nil {
-	//			t.Fatalf("grpc.NewClient(%q) = %v", ss.Address, err)
-	//		}
-	//		defer cc.Close()
-	//
-	//		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	//		defer cancel()
-	//
-	//		const authority = "auth.example.com:8443"
-	//		if _, err = testgrpc.NewTestServiceClient(cc).EmptyCall(ctx, &testpb.Empty{}, grpc.CallAuthority(authority)); status.Code(err) != codes.Unavailable {
-	//			t.Fatalf("EmptyCall() returned status %v, want %v", status.Code(err), codes.Unavailable)
-	//		}
-	//		select {
-	//		case <-serverCalled:
-	//			t.Fatalf("Server handler should not have been called")
-	//		case <-time.After(defaultTestShortTimeout):
-	//	}
 }
 
 // testAuthInfoNoValidator implements only credentials.AuthInfo and not
