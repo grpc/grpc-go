@@ -191,16 +191,13 @@ func (s) TestIncorrectAuthorityWithTLS(t *testing.T) {
 				t.Fatalf("Error starting endpoint server: %v", err)
 			}
 			defer ss.Stop()
-			
 			cc, err := grpc.NewClient(ss.Address, grpc.WithTransportCredentials(creds))
 			if err != nil {
 				t.Fatalf("grpc.NewClient(%q) = %v", ss.Address, err)
 			}
 			defer cc.Close()
-			
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
-			
 			if _, err = testgrpc.NewTestServiceClient(cc).EmptyCall(ctx, &testpb.Empty{}, grpc.CallAuthority(tt.authority)); status.Code(err) != codes.Unavailable {
 				t.Fatalf("EmptyCall() returned status %v, want %v", status.Code(err), codes.Unavailable)
 			}
