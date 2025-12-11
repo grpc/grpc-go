@@ -16,7 +16,6 @@
  *
  */
 
-// Package e2e_test contains e2e test cases for the Subsetting LB Policy.
 package randomsubsetting
 
 import (
@@ -28,18 +27,19 @@ import (
 	"testing"
 	"time"
 
+	xxhash "github.com/cespare/xxhash/v2"
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/grpctest"
+	iserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/serviceconfig"
 
-	iserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
@@ -113,10 +113,88 @@ func (s) TestParseConfig(t *testing.T) {
 			if test.wantErr != "" {
 				return
 			}
-			if diff := cmp.Diff(gotCfg, test.wantCfg); diff != "" {
-				t.Fatalf("ParseConfig(%v) got unexpected output, diff (-got +want): %v", test.input, diff)
+			if diff := cmp.Diff(test.wantCfg, gotCfg); diff != "" {
+				t.Fatalf("ParseConfig(%s) got unexpected output, diff (-want +got):\n%s", test.input, diff)
 			}
 		})
+	}
+}
+
+func makeEndpoints(n int) []resolver.Endpoint {
+	endpoints := make([]resolver.Endpoint, n)
+	for i := 0; i < n; i++ {
+		endpoints[i] = resolver.Endpoint{
+			Addresses: []resolver.Address{{Addr: fmt.Sprintf("endpoint-%d", i)}},
+		}
+	}
+	return endpoints
+}
+
+func (s) TestCalculateSubset_Simple(t *testing.T) {
+	tests := []struct {
+		name       string
+		endpoints  []resolver.Endpoint
+		subsetSize uint32
+		want       []resolver.Endpoint
+	}{
+		{
+			name:       "NoEndpoints",
+			endpoints:  []resolver.Endpoint{},
+			subsetSize: 3,
+			want:       []resolver.Endpoint{},
+		},
+		{
+			name:       "SubsetSizeLargerThanNumberOfEndpoints",
+			endpoints:  makeEndpoints(5),
+			subsetSize: 10,
+			want:       makeEndpoints(5),
+		},
+		{
+			name:       "SubsetSizeEqualToNumberOfEndpoints",
+			endpoints:  makeEndpoints(5),
+			subsetSize: 5,
+			want:       makeEndpoints(5),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			b := &subsettingBalancer{
+				cfg:        &lbConfig{SubsetSize: tt.subsetSize},
+				hashSeed:   0,
+				hashDigest: xxhash.New(),
+			}
+			got := b.calculateSubset(tt.endpoints)
+			if diff := cmp.Diff(tt.want, got); diff != "" {
+				t.Errorf("calculateSubset() returned diff (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func (s) TestCalculateSubset_EndpointsRetainHashValues(t *testing.T) {
+	endpoints := makeEndpoints(10)
+	const subsetSize = 5
+	// The subset is deterministic based on the hash, so we can hardcode
+	// the expected output.
+	want := []resolver.Endpoint{
+		{Addresses: []resolver.Address{{Addr: "endpoint-6"}}},
+		{Addresses: []resolver.Address{{Addr: "endpoint-0"}}},
+		{Addresses: []resolver.Address{{Addr: "endpoint-1"}}},
+		{Addresses: []resolver.Address{{Addr: "endpoint-7"}}},
+		{Addresses: []resolver.Address{{Addr: "endpoint-3"}}},
+	}
+
+	b := &subsettingBalancer{
+		cfg:        &lbConfig{SubsetSize: subsetSize},
+		hashSeed:   0,
+		hashDigest: xxhash.New(),
+	}
+	for range 10 {
+		got := b.calculateSubset(endpoints)
+		if diff := cmp.Diff(want, got); diff != "" {
+			t.Fatalf("calculateSubset() returned diff (-want +got):\n%s", diff)
+		}
 	}
 }
 

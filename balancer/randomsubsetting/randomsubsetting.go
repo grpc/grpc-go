@@ -61,8 +61,9 @@ type bb struct{}
 
 func (bb) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Balancer {
 	b := &subsettingBalancer{
-		Balancer: gracefulswitch.NewBalancer(cc, bOpts),
-		hashf:    xxhash.NewWithSeed(hashSeed()),
+		Balancer:   gracefulswitch.NewBalancer(cc, bOpts),
+		hashSeed:   hashSeed(),
+		hashDigest: xxhash.New(),
 	}
 	b.logger = prefixLogger(b)
 	b.logger.Infof("Created")
@@ -101,9 +102,10 @@ func (bb) Name() string {
 type subsettingBalancer struct {
 	*gracefulswitch.Balancer
 
-	logger *internalgrpclog.PrefixLogger
-	cfg    *lbConfig
-	hashf  *xxhash.Digest
+	logger     *internalgrpclog.PrefixLogger
+	cfg        *lbConfig
+	hashSeed   uint64
+	hashDigest *xxhash.Digest
 }
 
 func (b *subsettingBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
@@ -151,9 +153,19 @@ func (b *subsettingBalancer) calculateSubset(endpoints []resolver.Endpoint) []re
 
 	hashedEndpoints := make([]endpointWithHash, len(endpoints))
 	for i, endpoint := range endpoints {
-		b.hashf.Write([]byte(endpoint.Addresses[0].String()))
+		// For every endpoint in the list, compute a hash with previously
+		// generated seed - A68.
+		//
+		// The xxhash package's Sum64() function does not allow setting a seed.
+		// This means that we need to reset the digest with the seed for every
+		// endpoint. Without this, an endpoint will not retain the same hash
+		// across resolver updates.
+		//
+		// Note that we only hash the first address of the endpoint, as per A68.
+		b.hashDigest.ResetWithSeed(b.hashSeed)
+		b.hashDigest.Write([]byte(endpoint.Addresses[0].String()))
 		hashedEndpoints[i] = endpointWithHash{
-			hash: b.hashf.Sum64(),
+			hash: b.hashDigest.Sum64(),
 			ep:   endpoint,
 		}
 	}
