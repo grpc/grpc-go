@@ -42,7 +42,8 @@ type hostnameKeyType struct{}
 // setHostname returns a copy of the given endpoint with hostname added
 // as an attribute.
 func setHostname(endpoint resolver.Endpoint, hostname string) resolver.Endpoint {
-	// Only set if non-empty; xds_cluster_impl uses this to trigger :authority rewriting.
+	// Only set if non-empty; xds_cluster_impl uses this to trigger :authority
+	// rewriting.
 	if hostname == "" {
 		return endpoint
 	}
