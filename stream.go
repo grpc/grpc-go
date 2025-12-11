@@ -1341,6 +1341,7 @@ func newNonRetryClientStream(ctx context.Context, desc *StreamDesc, method strin
 		codec:            c.codec,
 		sendCompressorV0: cp,
 		sendCompressorV1: comp,
+		decompressorV0:   ac.cc.dopts.dc,
 		transport:        t,
 	}
 
