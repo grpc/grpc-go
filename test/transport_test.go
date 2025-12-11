@@ -19,13 +19,9 @@ package test
 
 import (
 	"context"
-	"crypto/tls"
-	"crypto/x509"
 	"encoding/binary"
-	"encoding/pem"
 	"io"
 	"net"
-	"os"
 	"sync"
 	"testing"
 
@@ -39,7 +35,6 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/transport"
 	"google.golang.org/grpc/status"
-	"google.golang.org/grpc/testdata"
 
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
