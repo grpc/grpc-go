@@ -257,6 +257,18 @@ func ReadAll(r io.Reader, pool BufferPool) (BufferSlice, error) {
 		_, err := wt.WriteTo(w)
 		return result, err
 	}
+
+	if lr, ok := r.(*io.LimitedReader); ok {
+		if wt, ok := lr.R.(io.WriterTo); ok {
+			// This is more optimal since wt knows the size of chunks it wants to
+			// write and, hence, we can allocate buffers of an optimal size to fit
+			// them. E.g. might be a single big chunk, and we wouldn't chop it
+			// into pieces.
+			w := NewWriter(&result, pool)
+			_, err := wt.WriteTo(w)
+			return result, err
+		}
+	}
 nextBuffer:
 	for {
 		buf := pool.Get(readAllBufSize)
