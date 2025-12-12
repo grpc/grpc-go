@@ -44,13 +44,13 @@ const goPageSize = 4 << 10 // 4KiB. N.B. this must be a power of 2.
 var defaultBufferPoolSizes = []int{
 	256,
 	goPageSize,
-	16 << 10,  // 16KB (max HTTP/2 frame size used by gRPC)
-	32 << 10,  // 32KB (default buffer size for io.Copy)
-	64 << 10,  // 64KB
-	128 << 10, // 128KB
-	256 << 10, // 256KB
-	512 << 10, // 512KB
-	1 << 20,   // 1MB
+	16 << 10,  // 16KiB (max HTTP/2 frame size used by gRPC)
+	32 << 10,  // 32KiB (default buffer size for io.Copy)
+	64 << 10,  // 64iB
+	128 << 10, // 128KiB
+	256 << 10, // 256KiB
+	512 << 10, // 512KiB
+	1 << 20,   // 1MiB
 }
 
 var defaultBufferPool BufferPool
