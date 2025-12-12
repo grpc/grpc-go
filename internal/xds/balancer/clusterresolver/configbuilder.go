@@ -265,10 +265,12 @@ func priorityLocalitiesToClusterImpl(localities []xdsresource.Locality, priority
 			if endpoint.HealthStatus != xdsresource.EndpointHealthStatusHealthy && endpoint.HealthStatus != xdsresource.EndpointHealthStatusUnknown {
 				continue
 			}
-			resolverEndpoint := resolver.Endpoint{}
-			for _, as := range endpoint.Addresses {
-				resolverEndpoint.Addresses = append(resolverEndpoint.Addresses, resolver.Address{Addr: as})
-			}
+
+			// Create a copy of endpoint.ResolverEndpoint to avoid race.
+			resolverEndpoint := endpoint.ResolverEndpoint
+			resolverEndpoint.Addresses = make([]resolver.Address, len(endpoint.ResolverEndpoint.Addresses))
+			copy(resolverEndpoint.Addresses, endpoint.ResolverEndpoint.Addresses)
+
 			resolverEndpoint = hierarchy.SetInEndpoint(resolverEndpoint, []string{priorityName, localityStr})
 			resolverEndpoint = xdsinternal.SetLocalityIDInEndpoint(resolverEndpoint, locality.ID)
 			// "To provide the xds_wrr_locality load balancer information about
