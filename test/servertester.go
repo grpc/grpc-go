@@ -91,8 +91,19 @@ func (st *serverTester) readFrame() (http2.Frame, error) {
 // greet initiates the client's HTTP/2 connection into a state where
 // frames may be sent.
 func (st *serverTester) greet() {
+	st.greetWithSettings()
+}
+
+// greetWithSettings initiates the client's HTTP/2 connection with custom settings.
+func (st *serverTester) greetWithSettings(settings ...http2.Setting) {
 	st.writePreface()
-	st.writeInitialSettings()
+	if len(settings) > 0 {
+		if err := st.fr.WriteSettings(settings...); err != nil {
+			st.t.Fatalf("Error writing initial SETTINGS frame from client to server: %v", err)
+		}
+	} else {
+		st.writeInitialSettings()
+	}
 	st.wantSettings()
 	st.writeSettingsAck()
 	for {

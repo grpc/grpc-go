@@ -480,11 +480,12 @@ func (t *http2Server) operateHeaders(ctx context.Context, frame *http2.MetaHeade
 			t.logger.Infof("Aborting the stream early: %v", errMsg)
 		}
 		t.controlBuf.put(&earlyAbortStream{
-			httpStatus:     http.StatusBadRequest,
-			streamID:       streamID,
-			contentSubtype: s.contentSubtype,
-			status:         status.New(codes.Internal, errMsg),
-			rst:            !frame.StreamEnded(),
+			httpStatus:            http.StatusBadRequest,
+			streamID:              streamID,
+			contentSubtype:        s.contentSubtype,
+			status:                status.New(codes.Internal, errMsg),
+			rst:                   !frame.StreamEnded(),
+			maxSendHeaderListSize: t.maxSendHeaderListSize,
 		})
 		return nil
 	}
@@ -500,21 +501,23 @@ func (t *http2Server) operateHeaders(ctx context.Context, frame *http2.MetaHeade
 	}
 	if !isGRPC {
 		t.controlBuf.put(&earlyAbortStream{
-			httpStatus:     http.StatusUnsupportedMediaType,
-			streamID:       streamID,
-			contentSubtype: s.contentSubtype,
-			status:         status.Newf(codes.InvalidArgument, "invalid gRPC request content-type %q", contentType),
-			rst:            !frame.StreamEnded(),
+			httpStatus:            http.StatusUnsupportedMediaType,
+			streamID:              streamID,
+			contentSubtype:        s.contentSubtype,
+			status:                status.Newf(codes.InvalidArgument, "invalid gRPC request content-type %q", contentType),
+			rst:                   !frame.StreamEnded(),
+			maxSendHeaderListSize: t.maxSendHeaderListSize,
 		})
 		return nil
 	}
 	if headerError != nil {
 		t.controlBuf.put(&earlyAbortStream{
-			httpStatus:     http.StatusBadRequest,
-			streamID:       streamID,
-			contentSubtype: s.contentSubtype,
-			status:         headerError,
-			rst:            !frame.StreamEnded(),
+			httpStatus:            http.StatusBadRequest,
+			streamID:              streamID,
+			contentSubtype:        s.contentSubtype,
+			status:                headerError,
+			rst:                   !frame.StreamEnded(),
+			maxSendHeaderListSize: t.maxSendHeaderListSize,
 		})
 		return nil
 	}
@@ -570,11 +573,12 @@ func (t *http2Server) operateHeaders(ctx context.Context, frame *http2.MetaHeade
 			t.logger.Infof("Aborting the stream early: %v", errMsg)
 		}
 		t.controlBuf.put(&earlyAbortStream{
-			httpStatus:     http.StatusMethodNotAllowed,
-			streamID:       streamID,
-			contentSubtype: s.contentSubtype,
-			status:         status.New(codes.Internal, errMsg),
-			rst:            !frame.StreamEnded(),
+			httpStatus:            http.StatusMethodNotAllowed,
+			streamID:              streamID,
+			contentSubtype:        s.contentSubtype,
+			status:                status.New(codes.Internal, errMsg),
+			rst:                   !frame.StreamEnded(),
+			maxSendHeaderListSize: t.maxSendHeaderListSize,
 		})
 		s.cancel()
 		return nil
@@ -591,11 +595,12 @@ func (t *http2Server) operateHeaders(ctx context.Context, frame *http2.MetaHeade
 				stat = status.New(codes.PermissionDenied, err.Error())
 			}
 			t.controlBuf.put(&earlyAbortStream{
-				httpStatus:     http.StatusOK,
-				streamID:       s.id,
-				contentSubtype: s.contentSubtype,
-				status:         stat,
-				rst:            !frame.StreamEnded(),
+				httpStatus:            http.StatusOK,
+				streamID:              s.id,
+				contentSubtype:        s.contentSubtype,
+				status:                stat,
+				rst:                   !frame.StreamEnded(),
+				maxSendHeaderListSize: t.maxSendHeaderListSize,
 			})
 			return nil
 		}
@@ -605,11 +610,12 @@ func (t *http2Server) operateHeaders(ctx context.Context, frame *http2.MetaHeade
 		t.mu.Unlock()
 		// Early abort in case the timeout was zero or so low it already fired.
 		t.controlBuf.put(&earlyAbortStream{
-			httpStatus:     http.StatusOK,
-			streamID:       s.id,
-			contentSubtype: s.contentSubtype,
-			status:         status.New(codes.DeadlineExceeded, context.DeadlineExceeded.Error()),
-			rst:            !frame.StreamEnded(),
+			httpStatus:            http.StatusOK,
+			streamID:              s.id,
+			contentSubtype:        s.contentSubtype,
+			status:                status.New(codes.DeadlineExceeded, context.DeadlineExceeded.Error()),
+			rst:                   !frame.StreamEnded(),
+			maxSendHeaderListSize: t.maxSendHeaderListSize,
 		})
 		return nil
 	}
@@ -969,19 +975,28 @@ func appendHeaderFieldsFromMD(headerFields []hpack.HeaderField, md metadata.MD) 
 	return headerFields
 }
 
-func (t *http2Server) checkForHeaderListSize(it any) bool {
-	if t.maxSendHeaderListSize == nil {
+// checkForHeaderListSize checks if the header list size exceeds the limit set
+// by the peer. It returns false if the limit is exceeded.
+func checkForHeaderListSize(hf []hpack.HeaderField, maxSendHeaderListSize *uint32) bool {
+	if maxSendHeaderListSize == nil {
 		return true
 	}
-	hdrFrame := it.(*headerFrame)
 	var sz int64
-	for _, f := range hdrFrame.hf {
-		if sz += int64(f.Size()); sz > int64(*t.maxSendHeaderListSize) {
-			if t.logger.V(logLevel) {
-				t.logger.Infof("Header list size to send violates the maximum size (%d bytes) set by client", *t.maxSendHeaderListSize)
-			}
+	for _, f := range hf {
+		if sz += int64(f.Size()); sz > int64(*maxSendHeaderListSize) {
 			return false
 		}
+	}
+	return true
+}
+
+func (t *http2Server) checkForHeaderListSize(it any) bool {
+	hdrFrame := it.(*headerFrame)
+	if !checkForHeaderListSize(hdrFrame.hf, t.maxSendHeaderListSize) {
+		if t.logger.V(logLevel) {
+			t.logger.Infof("Header list size to send violates the maximum size (%d bytes) set by client", *t.maxSendHeaderListSize)
+		}
+		return false
 	}
 	return true
 }

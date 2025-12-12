@@ -147,11 +147,12 @@ type cleanupStream struct {
 func (c *cleanupStream) isTransportResponseFrame() bool { return c.rst } // Results in a RST_STREAM
 
 type earlyAbortStream struct {
-	httpStatus     uint32
-	streamID       uint32
-	contentSubtype string
-	status         *status.Status
-	rst            bool
+	httpStatus            uint32
+	streamID              uint32
+	contentSubtype        string
+	status                *status.Status
+	rst                   bool
+	maxSendHeaderListSize *uint32
 }
 
 func (*earlyAbortStream) isTransportResponseFrame() bool { return false }
@@ -852,6 +853,13 @@ func (l *loopyWriter) earlyAbortStreamHandler(eas *earlyAbortStream) error {
 		{Name: "content-type", Value: grpcutil.ContentType(eas.contentSubtype)},
 		{Name: "grpc-status", Value: strconv.Itoa(int(eas.status.Code()))},
 		{Name: "grpc-message", Value: encodeGrpcMessage(eas.status.Message())},
+	}
+
+	if !checkForHeaderListSize(headerFields, eas.maxSendHeaderListSize) {
+		if l.logger.V(logLevel) {
+			l.logger.Infof("Header list size to send violates the maximum size (%d bytes) set by client", *eas.maxSendHeaderListSize)
+		}
+		return l.framer.fr.WriteRSTStream(eas.streamID, http2.ErrCodeInternal)
 	}
 
 	if err := l.writeHeader(eas.streamID, true, headerFields, nil); err != nil {
