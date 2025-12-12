@@ -29,100 +29,24 @@ import (
 	"google.golang.org/grpc/serviceconfig"
 )
 
-type listenerWatcher struct {
-	resourceName string
-	cancel       func()
-	depMgr       *DependencyManager
+// xdsResourceWatcher is a generic implementation of the xdsresource.Watcher
+// interface.
+type xdsResourceWatcher[T any] struct {
+	onUpdate       func(*T, func())
+	onError        func(error, func())
+	onAmbientError func(error, func())
 }
 
-func newListenerWatcher(resourceName string, depMgr *DependencyManager) *listenerWatcher {
-	lw := &listenerWatcher{resourceName: resourceName, depMgr: depMgr}
-	lw.cancel = xdsresource.WatchListener(depMgr.xdsClient, resourceName, lw)
-	return lw
+func (x *xdsResourceWatcher[T]) ResourceChanged(update *T, onDone func()) {
+	x.onUpdate(update, onDone)
 }
 
-func (l *listenerWatcher) ResourceChanged(update *xdsresource.ListenerUpdate, onDone func()) {
-	l.depMgr.onListenerResourceUpdate(update, onDone)
+func (x *xdsResourceWatcher[T]) ResourceError(err error, onDone func()) {
+	x.onError(err, onDone)
 }
 
-func (l *listenerWatcher) ResourceError(err error, onDone func()) {
-	l.depMgr.onListenerResourceError(err, onDone)
-}
-
-func (l *listenerWatcher) AmbientError(err error, onDone func()) {
-	l.depMgr.onListenerResourceAmbientError(err, onDone)
-}
-
-func (l *listenerWatcher) stop() {
-	l.cancel()
-	if l.depMgr.logger.V(2) {
-		l.depMgr.logger.Infof("Canceling watch on Listener resource %q", l.resourceName)
-	}
-}
-
-type routeConfigWatcher struct {
-	resourceName string
-	cancel       func()
-	depMgr       *DependencyManager
-}
-
-func newRouteConfigWatcher(resourceName string, depMgr *DependencyManager) *routeConfigWatcher {
-	rw := &routeConfigWatcher{resourceName: resourceName, depMgr: depMgr}
-	rw.cancel = xdsresource.WatchRouteConfig(depMgr.xdsClient, resourceName, rw)
-	return rw
-}
-
-func (r *routeConfigWatcher) ResourceChanged(u *xdsresource.RouteConfigUpdate, onDone func()) {
-	r.depMgr.onRouteConfigResourceUpdate(r.resourceName, u, onDone)
-}
-
-func (r *routeConfigWatcher) ResourceError(err error, onDone func()) {
-	r.depMgr.onRouteConfigResourceError(r.resourceName, err, onDone)
-}
-
-func (r *routeConfigWatcher) AmbientError(err error, onDone func()) {
-	r.depMgr.onRouteConfigResourceAmbientError(r.resourceName, err, onDone)
-}
-
-func (r *routeConfigWatcher) stop() {
-	r.cancel()
-	if r.depMgr.logger.V(2) {
-		r.depMgr.logger.Infof("Canceling watch on RouteConfiguration resource %q", r.resourceName)
-	}
-}
-
-type clusterWatcher struct {
-	resourceName string
-	depMgr       *DependencyManager
-}
-
-func (c *clusterWatcher) ResourceChanged(u *xdsresource.ClusterUpdate, onDone func()) {
-	c.depMgr.onClusterResourceUpdate(c.resourceName, u, onDone)
-}
-
-func (c *clusterWatcher) ResourceError(err error, onDone func()) {
-	c.depMgr.onClusterResourceError(c.resourceName, err, onDone)
-}
-
-func (c *clusterWatcher) AmbientError(err error, onDone func()) {
-	c.depMgr.onClusterAmbientError(c.resourceName, err, onDone)
-}
-
-type endpointsWatcher struct {
-	resourceName string
-	depMgr       *DependencyManager
-}
-
-func (e *endpointsWatcher) ResourceChanged(u *xdsresource.EndpointsUpdate, onDone func()) {
-	e.depMgr.onEndpointUpdate(e.resourceName, u, onDone)
-}
-
-func (e *endpointsWatcher) ResourceError(err error, onDone func()) {
-	e.depMgr.onEndpointResourceError(e.resourceName, err, onDone)
-}
-
-func (e *endpointsWatcher) AmbientError(err error, onDone func()) {
-	e.depMgr.onEndpointAmbientError(e.resourceName, err, onDone)
+func (x *xdsResourceWatcher[T]) AmbientError(err error, onDone func()) {
+	x.onAmbientError(err, onDone)
 }
 
 // dnsResolverState watches updates for the given DNS hostname. It implements

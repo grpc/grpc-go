@@ -80,9 +80,9 @@ type DependencyManager struct {
 	// All the fields below are protected by mu.
 	mu                      sync.Mutex
 	stopped                 bool
-	listenerWatcher         *listenerWatcher
-	currentListenerUpdate   *xdsresource.ListenerUpdate
-	routeConfigWatcher      *routeConfigWatcher
+	listenerCancel        func()
+	currentListenerUpdate *xdsresource.ListenerUpdate
+	routeConfigCancel     func()
 	rdsResourceName         string
 	currentRouteConfig      *xdsresource.RouteConfigUpdate
 	currentVirtualHost      *xdsresource.VirtualHost
@@ -117,7 +117,18 @@ func New(listenerName, dataplaneAuthority string, xdsClient xdsclient.XDSClient,
 
 	// Start the listener watch. Listener watch will start the other resource
 	// watches as needed.
-	dm.listenerWatcher = newListenerWatcher(listenerName, dm)
+	lw := &xdsResourceWatcher[xdsresource.ListenerUpdate]{
+		onUpdate: func(update *xdsresource.ListenerUpdate, onDone func()) {
+			dm.onListenerResourceUpdate(update, onDone)
+		},
+		onError: func(err error, onDone func()) {
+			dm.onListenerResourceError(err, onDone)
+		},
+		onAmbientError: func(err error, onDone func()) {
+			dm.onListenerResourceAmbientError(err, onDone)
+		},
+	}
+	dm.listenerCancel = xdsresource.WatchListener(dm.xdsClient, listenerName, lw)
 	return dm
 }
 
@@ -131,11 +142,11 @@ func (m *DependencyManager) Close() {
 	}
 
 	m.stopped = true
-	if m.listenerWatcher != nil {
-		m.listenerWatcher.stop()
+	if m.listenerCancel != nil {
+		m.listenerCancel()
 	}
-	if m.routeConfigWatcher != nil {
-		m.routeConfigWatcher.stop()
+	if m.routeConfigCancel != nil {
+		m.routeConfigCancel()
 	}
 	for name, cluster := range m.clusterWatchers {
 		cluster.cancelWatch()
@@ -420,9 +431,9 @@ func (m *DependencyManager) onListenerResourceUpdate(update *xdsresource.Listene
 		// If there was a previous route config watcher because of a non-inline
 		// route configuration, cancel it.
 		m.rdsResourceName = ""
-		if m.routeConfigWatcher != nil {
-			m.routeConfigWatcher.stop()
-			m.routeConfigWatcher = nil
+		if m.routeConfigCancel != nil {
+			m.routeConfigCancel()
+			m.routeConfigCancel = nil
 		}
 		m.applyRouteConfigUpdateLocked(update.InlineRouteConfig)
 		return
@@ -441,10 +452,22 @@ func (m *DependencyManager) onListenerResourceUpdate(update *xdsresource.Listene
 	// resolved, no update is sent to the channel, and therefore the old route
 	// configuration (if received) is used until the new one is received.
 	m.rdsResourceName = update.RouteConfigName
-	if m.routeConfigWatcher != nil {
-		m.routeConfigWatcher.stop()
+	if m.routeConfigCancel != nil {
+		m.routeConfigCancel()
 	}
-	m.routeConfigWatcher = newRouteConfigWatcher(m.rdsResourceName, m)
+
+	rw := &xdsResourceWatcher[xdsresource.RouteConfigUpdate]{
+		onUpdate: func(update *xdsresource.RouteConfigUpdate, onDone func()) {
+			m.onRouteConfigResourceUpdate(m.rdsResourceName, update, onDone)
+		},
+		onError: func(err error, onDone func()) {
+			m.onRouteConfigResourceError(m.rdsResourceName, err, onDone)
+		},
+		onAmbientError: func(err error, onDone func()) {
+			m.onRouteConfigResourceAmbientError(m.rdsResourceName, err, onDone)
+		},
+	}
+	m.routeConfigCancel = xdsresource.WatchRouteConfig(m.xdsClient, m.rdsResourceName, rw)
 
 }
 
@@ -459,12 +482,12 @@ func (m *DependencyManager) onListenerResourceError(err error, onDone func()) {
 
 	m.logger.Warningf("Received resource error for Listener resource %q: %v", m.ldsResourceName, m.annotateErrorWithNodeID(err))
 
-	if m.routeConfigWatcher != nil {
-		m.routeConfigWatcher.stop()
+	if m.routeConfigCancel != nil {
+		m.routeConfigCancel()
 	}
 	m.currentListenerUpdate = nil
 	m.rdsResourceName = ""
-	m.routeConfigWatcher = nil
+	m.routeConfigCancel = nil
 	m.watcher.Error(fmt.Errorf("listener resource error: %v", m.annotateErrorWithNodeID(err)))
 }
 
@@ -535,7 +558,17 @@ type clusterWatcherState struct {
 }
 
 func newClusterWatcher(resourceName string, depMgr *DependencyManager) *clusterWatcherState {
-	w := &clusterWatcher{resourceName: resourceName, depMgr: depMgr}
+	w := &xdsResourceWatcher[xdsresource.ClusterUpdate]{
+		onUpdate: func(u *xdsresource.ClusterUpdate, onDone func()) {
+			depMgr.onClusterResourceUpdate(resourceName, u, onDone)
+		},
+		onError: func(err error, onDone func()) {
+			depMgr.onClusterResourceError(resourceName, err, onDone)
+		},
+		onAmbientError: func(err error, onDone func()) {
+			depMgr.onClusterAmbientError(resourceName, err, onDone)
+		},
+	}
 	return &clusterWatcherState{
 		cancelWatch: xdsresource.WatchCluster(depMgr.xdsClient, resourceName, w),
 	}
@@ -598,7 +631,17 @@ type endpointWatcherState struct {
 }
 
 func newEndpointWatcher(resourceName string, depMgr *DependencyManager) *endpointWatcherState {
-	w := &endpointsWatcher{resourceName: resourceName, depMgr: depMgr}
+	w := &xdsResourceWatcher[xdsresource.EndpointsUpdate]{
+		onUpdate: func(u *xdsresource.EndpointsUpdate, onDone func()) {
+			depMgr.onEndpointUpdate(resourceName, u, onDone)
+		},
+		onError: func(err error, onDone func()) {
+			depMgr.onEndpointResourceError(resourceName, err, onDone)
+		},
+		onAmbientError: func(err error, onDone func()) {
+			depMgr.onEndpointAmbientError(resourceName, err, onDone)
+		},
+	}
 	return &endpointWatcherState{
 		cancelWatch: xdsresource.WatchEndpoints(depMgr.xdsClient, resourceName, w),
 	}
