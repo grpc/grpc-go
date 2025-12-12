@@ -290,8 +290,7 @@ func TestBuildPriorityConfig(t *testing.T) {
 						ChildPolicy: &iserviceconfig.BalancerConfig{
 							Name: clusterimpl.Name,
 							Config: &clusterimpl.LBConfig{
-								Cluster:     testClusterName2,
-								ChildPolicy: &iserviceconfig.BalancerConfig{Name: "pick_first"},
+								Cluster: testClusterName2,
 							},
 						},
 					},
@@ -306,20 +305,25 @@ func TestBuildPriorityConfig(t *testing.T) {
 	}
 }
 
+func testEndpointForDNS(addrStrs []string, localityWeight uint32, path []string) resolver.Endpoint {
+	endpoint := resolver.Endpoint{}
+	endpoint.Addresses = append(endpoint.Addresses, resolver.Address{Addr: addrStrs[0]})
+	endpoint = hierarchy.SetInEndpoint(endpoint, path)
+	endpoint = wrrlocality.SetAddrInfoInEndpoint(endpoint, wrrlocality.AddrInfo{LocalityWeight: localityWeight})
+	return endpoint
+}
+
 func TestBuildClusterImplConfigForDNS(t *testing.T) {
-	gotName, gotConfig, gotEndpoints := buildClusterImplConfigForDNS(newNameGenerator(3), testResolverEndpoints[0], DiscoveryMechanism{Cluster: testClusterName2, Type: DiscoveryMechanismTypeLogicalDNS})
+	gotName, gotConfig, gotEndpoints := buildClusterImplConfigForDNS(newNameGenerator(3), testResolverEndpoints[0], DiscoveryMechanism{Cluster: testClusterName2, Type: DiscoveryMechanismTypeLogicalDNS}, nil)
 	wantName := "priority-3"
+	localityStr := xdsinternal.LocalityString(clients.Locality{})
 	wantConfig := &clusterimpl.LBConfig{
-		Cluster: testClusterName2,
-		ChildPolicy: &iserviceconfig.BalancerConfig{
-			Name: "pick_first",
-		},
+		Cluster:     testClusterName2,
+		ChildPolicy: nil,
 	}
-	e1 := resolver.Endpoint{Addresses: []resolver.Address{{Addr: testEndpoints[0][0].Addresses[0]}}}
-	e2 := resolver.Endpoint{Addresses: []resolver.Address{{Addr: testEndpoints[0][1].Addresses[0]}}}
 	wantEndpoints := []resolver.Endpoint{
-		hierarchy.SetInEndpoint(e1, []string{"priority-3"}),
-		hierarchy.SetInEndpoint(e2, []string{"priority-3"}),
+		testEndpointForDNS(testEndpoints[0][0].Addresses, 1, []string{wantName, localityStr}),
+		testEndpointForDNS(testEndpoints[0][1].Addresses, 1, []string{wantName, localityStr}),
 	}
 
 	if diff := cmp.Diff(gotName, wantName); diff != "" {
