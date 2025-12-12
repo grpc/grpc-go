@@ -231,7 +231,11 @@ type xdsResolver struct {
 }
 
 // ResolveNow is a no-op at this point.
-func (*xdsResolver) ResolveNow(resolver.ResolveNowOptions) {}
+func (r *xdsResolver) ResolveNow(opts resolver.ResolveNowOptions) {
+	if r.dm != nil {
+		r.dm.ResolveNow(opts)
+	}
+}
 
 func (r *xdsResolver) Close() {
 	// Cancel the context passed to the serializer and wait for any scheduled
