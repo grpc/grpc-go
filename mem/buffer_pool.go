@@ -19,6 +19,7 @@
 package mem
 
 import (
+	"slices"
 	"sort"
 	"sync"
 
@@ -43,9 +44,13 @@ const goPageSize = 4 << 10 // 4KiB. N.B. this must be a power of 2.
 var defaultBufferPoolSizes = []int{
 	256,
 	goPageSize,
-	16 << 10, // 16KB (max HTTP/2 frame size used by gRPC)
-	32 << 10, // 32KB (default buffer size for io.Copy)
-	1 << 20,  // 1MB
+	16 << 10,  // 16KB (max HTTP/2 frame size used by gRPC)
+	32 << 10,  // 32KB (default buffer size for io.Copy)
+	64 << 10,  // 64KB
+	128 << 10, // 128KB
+	256 << 10, // 256KB
+	512 << 10, // 512KB
+	1 << 20,   // 1MB
 }
 
 var defaultBufferPool BufferPool
@@ -98,8 +103,8 @@ func (p *tieredBufferPool) Put(buf *[]byte) {
 }
 
 func (p *tieredBufferPool) getPool(size int) BufferPool {
-	poolIdx := sort.Search(len(p.sizedPools), func(i int) bool {
-		return p.sizedPools[i].defaultSize >= size
+	poolIdx, _ := slices.BinarySearchFunc(p.sizedPools, size, func(pool *sizedBufferPool, target int) int {
+		return pool.defaultSize - target
 	})
 
 	if poolIdx == len(p.sizedPools) {
