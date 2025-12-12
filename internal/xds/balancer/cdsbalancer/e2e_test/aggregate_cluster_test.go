@@ -366,7 +366,7 @@ func (s) TestAggregateCluster_WithOneDNSCluster(t *testing.T) {
 // that resolves to a single LOGICAL_DNS cluster. The specified dns hostname is
 // expected to fail url parsing. The test verifies that the channel moves to
 // TRANSIENT_FAILURE.
-func TestAggregateCluster_WithOneDNSCluster_ParseFailure(t *testing.T) {
+func (s) TestAggregateCluster_WithOneDNSCluster_ParseFailure(t *testing.T) {
 	// Start an xDS management server.
 	managementServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
 
@@ -860,7 +860,7 @@ func (s) TestAggregateCluster_BadEDSFromError_GoodToBadDNS(t *testing.T) {
 // cluster. When the DNS Resolver returns an error and EDS cluster returns a
 // good update, this test verifies the cluster_resolver balancer correctly falls
 // back from the LOGICAL_DNS cluster to the EDS cluster.
-func TestAggregateCluster_BadDNS_GoodEDS(t *testing.T) {
+func (s) TestAggregateCluster_BadDNS_GoodEDS(t *testing.T) {
 	dnsTargetCh, dnsR := setupDNS(t)
 	// Start an xDS management server.
 	managementServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
