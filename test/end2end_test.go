@@ -2161,7 +2161,7 @@ func (s) TestTapStatusDetails(t *testing.T) {
 		st := status.New(codes.ResourceExhausted, "rate limit exceeded")
 		st, err := st.WithDetails(wantDetails)
 		if err != nil {
-			t.Fatalf("status.WithDetails() failed: %v", err)
+			t.Errorf("status.WithDetails() failed: %v", err)
 		}
 		return nil, st.Err()
 	}
