@@ -68,7 +68,8 @@ func (s) TestServiceWatch_ListenerPointsToNewRouteConfiguration(t *testing.T) {
 	verifyUpdateFromResolver(ctx, t, stateCh, wantServiceConfig(resources.Clusters[0].Name))
 
 	// Update the listener resource to point to a new route configuration name.
-	// Leave the old route configuration resource unchanged.
+	// Leave the old route configuration resource unchanged to prevent the race
+	// between route resource error for resource removed and listener update.
 	newTestRouteConfigName := defaultTestRouteConfigName + "-new"
 	resources.Listeners = []*v3listenerpb.Listener{e2e.DefaultClientListener(defaultTestServiceName, newTestRouteConfigName)}
 	resources.SkipValidation = true

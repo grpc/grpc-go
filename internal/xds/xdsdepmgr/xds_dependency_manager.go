@@ -80,9 +80,9 @@ type DependencyManager struct {
 	// All the fields below are protected by mu.
 	mu                      sync.Mutex
 	stopped                 bool
-	listenerCancel        func()
-	currentListenerUpdate *xdsresource.ListenerUpdate
-	routeConfigCancel     func()
+	listenerCancel          func()
+	currentListenerUpdate   *xdsresource.ListenerUpdate
+	routeConfigCancel       func()
 	rdsResourceName         string
 	currentRouteConfig      *xdsresource.RouteConfigUpdate
 	currentVirtualHost      *xdsresource.VirtualHost
@@ -224,10 +224,6 @@ func (m *DependencyManager) maybeSendUpdateLocked() {
 	}
 	if haveAllResources {
 		m.watcher.Update(config)
-		return
-	}
-	if m.logger.V(2) {
-		m.logger.Infof("Not sending update to watcher as not all resources are available")
 	}
 }
 
@@ -280,24 +276,18 @@ func (m *DependencyManager) populateClusterConfigLocked(clusterName string, dept
 		return false, nil, nil
 	}
 
-	switch {
-	case state.lastUpdate == nil && state.lastErr == nil:
-		// Case 1: Watcher exists but no data or error has arrived yet.
+	if !state.updateReceived {
 		return false, nil, nil
-
-	case state.lastUpdate == nil:
-		// Case 2: No update received, but a terminal resource error occurred.
-		// (state.lastErr is implicitly non-nil here).
+	}
+	if state.lastErr != nil {
 		clusterConfigs[clusterName] = &xdsresource.ClusterResult{Err: state.lastErr}
 		return true, nil, nil
+	}
 
-	default:
-		// Case 3: A valid update was received. Store the config and continue resolution.
-		clusterConfigs[clusterName] = &xdsresource.ClusterResult{
-			Config: xdsresource.ClusterConfig{
-				Cluster: state.lastUpdate,
-			},
-		}
+	clusterConfigs[clusterName] = &xdsresource.ClusterResult{
+		Config: xdsresource.ClusterConfig{
+			Cluster: state.lastUpdate,
+		},
 	}
 	update := state.lastUpdate
 
@@ -316,7 +306,7 @@ func (m *DependencyManager) populateClusterConfigLocked(clusterName string, dept
 		endpointState := m.endpointWatchers[edsName]
 
 		// If the resource does not have any update yet, return.
-		if endpointState.lastUpdate == nil && endpointState.lastErr == nil {
+		if !endpointState.updateReceived {
 			return false, nil, nil
 		}
 
@@ -407,6 +397,8 @@ func (m *DependencyManager) applyRouteConfigUpdateLocked(update *xdsresource.Rou
 			}
 		}
 
+		// Watch for new clusters is started in populateClusterConfigLocked to avoid
+		// repeating the code.
 		m.clustersFromRouteConfig = newClusters
 	}
 	m.maybeSendUpdateLocked()
@@ -552,9 +544,10 @@ func (m *DependencyManager) onRouteConfigResourceAmbientError(resourceName strin
 }
 
 type clusterWatcherState struct {
-	cancelWatch func()
-	lastUpdate  *xdsresource.ClusterUpdate
-	lastErr     error
+	cancelWatch    func()
+	lastUpdate     *xdsresource.ClusterUpdate
+	lastErr        error
+	updateReceived bool
 }
 
 func newClusterWatcher(resourceName string, depMgr *DependencyManager) *clusterWatcherState {
@@ -590,6 +583,7 @@ func (m *DependencyManager) onClusterResourceUpdate(resourceName string, update 
 	state := m.clusterWatchers[resourceName]
 	state.lastUpdate = update
 	state.lastErr = nil
+	state.updateReceived = true
 	m.maybeSendUpdateLocked()
 
 }
@@ -608,6 +602,7 @@ func (m *DependencyManager) onClusterResourceError(resourceName string, err erro
 	state := m.clusterWatchers[resourceName]
 	state.lastErr = err
 	state.lastUpdate = nil
+	state.updateReceived = true
 	m.maybeSendUpdateLocked()
 }
 
@@ -625,9 +620,10 @@ func (m *DependencyManager) onClusterAmbientError(resourceName string, err error
 }
 
 type endpointWatcherState struct {
-	cancelWatch func()
-	lastUpdate  *xdsresource.EndpointsUpdate
-	lastErr     error
+	cancelWatch    func()
+	lastUpdate     *xdsresource.EndpointsUpdate
+	lastErr        error
+	updateReceived bool
 }
 
 func newEndpointWatcher(resourceName string, depMgr *DependencyManager) *endpointWatcherState {
@@ -664,6 +660,7 @@ func (m *DependencyManager) onEndpointUpdate(resourceName string, update *xdsres
 	state := m.endpointWatchers[resourceName]
 	state.lastUpdate = update
 	state.lastErr = nil
+	state.updateReceived = true
 	m.maybeSendUpdateLocked()
 }
 
@@ -681,6 +678,7 @@ func (m *DependencyManager) onEndpointResourceError(resourceName string, err err
 	state := m.endpointWatchers[resourceName]
 	state.lastErr = err
 	state.lastUpdate = nil
+	state.updateReceived = true
 	m.maybeSendUpdateLocked()
 }
 

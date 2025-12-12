@@ -230,7 +230,7 @@ type xdsResolver struct {
 	curConfigSelector stoppableConfigSelector
 }
 
-// ResolveNow is a no-op at this point.
+// ResolveNow calls ResolveNow on the dependency manager.
 func (r *xdsResolver) ResolveNow(opts resolver.ResolveNowOptions) {
 	if r.dm != nil {
 		r.dm.ResolveNow(opts)
