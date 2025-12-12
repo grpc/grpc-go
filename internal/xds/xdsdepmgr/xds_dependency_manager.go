@@ -717,6 +717,7 @@ func (m *DependencyManager) onDNSError(resourceName string, err error) {
 	m.maybeSendUpdateLocked()
 }
 
+// ResolveNow calls all the the DNS resolvers ResolveNow.
 func (m *DependencyManager) ResolveNow(opt resolver.ResolveNowOptions) {
 	for _, res := range m.dnsResolvers {
 		res.resolver.dnsR.ResolveNow(opt)
