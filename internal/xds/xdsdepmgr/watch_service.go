@@ -177,15 +177,13 @@ func newDNSResolver(target string, depMgr *DependencyManager) *dnsResolverState 
 	drState := &dnsResolverState{resolver: dr, cancelResolver: func() {}}
 	u, err := url.Parse("dns:///" + target)
 	if err != nil {
-		drState.updateReceived = true
-		drState.err = err
+		drState.resolver.ReportError(err)
 		drState.resolver.depMgr.logger.Warningf("Error while parsing DNS target %q: %v", target, drState.resolver.depMgr.annotateErrorWithNodeID(err))
 		return drState
 	}
 	r, err := resolver.Get("dns").Build(resolver.Target{URL: *u}, dr, resolver.BuildOptions{})
 	if err != nil {
-		drState.updateReceived = true
-		drState.err = err
+		drState.resolver.ReportError(err)
 		drState.resolver.depMgr.logger.Warningf("Error while building DNS resolver for target %q: %v", target, drState.resolver.depMgr.annotateErrorWithNodeID(err))
 		return drState
 	}
