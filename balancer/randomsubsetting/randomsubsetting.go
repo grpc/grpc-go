@@ -22,14 +22,19 @@
 // To install the LB policy, import this package as:
 //
 //	import _ "google.golang.org/grpc/balancer/randomsubsetting"
+//
+// # Experimental
+//
+// Notice: This package is EXPERIMENTAL and may be changed or removed in a
+// later release.
 package randomsubsetting
 
 import (
 	"cmp"
 	"encoding/json"
 	"fmt"
+	"math/rand/v2"
 	"slices"
-	"time"
 
 	xxhash "github.com/cespare/xxhash/v2"
 	"google.golang.org/grpc/balancer"
@@ -42,11 +47,11 @@ import (
 )
 
 // Name is the name of the random subsetting load balancer.
-const Name = "random_subsetting"
+const Name = "random_subsetting_experimental"
 
 var (
-	logger   = grpclog.Component(Name)
-	hashSeed = func() uint64 { return uint64(time.Now().UnixNano()) }
+	logger     = grpclog.Component(Name)
+	randUint64 = rand.Uint64
 )
 
 func prefixLogger(p *subsettingBalancer) *internalgrpclog.PrefixLogger {
@@ -62,7 +67,7 @@ type bb struct{}
 func (bb) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Balancer {
 	b := &subsettingBalancer{
 		Balancer:   gracefulswitch.NewBalancer(cc, bOpts),
-		hashSeed:   hashSeed(),
+		hashSeed:   randUint64(),
 		hashDigest: xxhash.New(),
 	}
 	b.logger = prefixLogger(b)
@@ -163,7 +168,7 @@ func (b *subsettingBalancer) calculateSubset(endpoints []resolver.Endpoint) []re
 		//
 		// Note that we only hash the first address of the endpoint, as per A68.
 		b.hashDigest.ResetWithSeed(b.hashSeed)
-		b.hashDigest.Write([]byte(endpoint.Addresses[0].String()))
+		b.hashDigest.WriteString(endpoint.Addresses[0].String())
 		hashedEndpoints[i] = endpointWithHash{
 			hash: b.hashDigest.Sum64(),
 			ep:   endpoint,
@@ -176,10 +181,6 @@ func (b *subsettingBalancer) calculateSubset(endpoints []resolver.Endpoint) []re
 		// testing purposes only.
 		return cmp.Compare(a.hash, b.hash)
 	})
-
-	if b.logger.V(2) {
-		b.logger.Infof("Resulting subset: %v", hashedEndpoints[:subsetSize])
-	}
 
 	// Convert back to resolver.Endpoints
 	endpointSubset := make([]resolver.Endpoint, subsetSize)
