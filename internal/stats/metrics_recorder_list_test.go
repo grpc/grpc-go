@@ -41,6 +41,7 @@ import (
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/serviceconfig"
+	gstats "google.golang.org/grpc/stats"
 )
 
 var defaultTestTimeout = 5 * time.Second
@@ -114,7 +115,6 @@ func (recordingLoadBalancerBuilder) Build(cc balancer.ClientConn, bOpts balancer
 	intHistoHandle.Record(cc.MetricsRecorder(), 3, "int histo label val", "int histo optional label val")
 	floatHistoHandle.Record(cc.MetricsRecorder(), 4, "float histo label val", "float histo optional label val")
 	intGaugeHandle.Record(cc.MetricsRecorder(), 5, "int gauge label val", "int gauge optional label val")
-
 	return &recordingLoadBalancer{
 		Balancer: balancer.Get(pickfirst.Name).Build(cc, bOpts),
 	}
@@ -254,4 +254,83 @@ func (s) TestMetricRecorderListPanic(t *testing.T) {
 	}()
 
 	intCountHandle.Record(mrl, 1, "only one label")
+}
+
+// TestMetricsRecorderList_RegisterAsyncReporter verifies that the list implementation
+// correctly fans out registration calls to all underlying recorders and
+// aggregates the cleanup calls.
+func TestMetricsRecorderList_RegisterAsyncReporter(t *testing.T) {
+	spy1 := &spyMetricsRecorder{name: "spy1"}
+	spy2 := &spyMetricsRecorder{name: "spy2"}
+	spy3 := &spyMetricsRecorder{name: "spy3"}
+
+	list := istats.NewMetricsRecorderList([]gstats.Handler{spy1, spy2, spy3})
+
+	desc := &estats.MetricDescriptor{Name: "test_metric", Description: "test"}
+	mockMetric := &mockAsyncMetric{d: desc}
+
+	dummyReporter := estats.AsyncMetricReporterFunc(func(estats.AsyncMetricsRecorder) error {
+		return nil
+	})
+	cleanup := list.RegisterAsyncReporter(dummyReporter, mockMetric)
+
+	// Check that RegisterAsyncReporter was called exactly once on ALL spies
+	if spy1.registerCalledCount != 1 {
+		t.Errorf("spy1 register called %d times, want 1", spy1.registerCalledCount)
+	}
+	if spy2.registerCalledCount != 1 {
+		t.Errorf("spy2 register called %d times, want 1", spy2.registerCalledCount)
+	}
+	if spy3.registerCalledCount != 1 {
+		t.Errorf("spy3 register called %d times, want 1", spy3.registerCalledCount)
+	}
+
+	// Verify that cleanup has NOT been called yet
+	if spy1.cleanupCalledCount != 0 {
+		t.Error("spy1 cleanup called prematurely")
+	}
+
+	cleanup()
+
+	// Check that the cleanup function returned by the list actually triggers
+	// the cleanup logic on ALL underlying spies.
+	if spy1.cleanupCalledCount != 1 {
+		t.Errorf("spy1 cleanup called %d times, want 1", spy1.cleanupCalledCount)
+	}
+	if spy2.cleanupCalledCount != 1 {
+		t.Errorf("spy2 cleanup called %d times, want 1", spy2.cleanupCalledCount)
+	}
+	if spy3.cleanupCalledCount != 1 {
+		t.Errorf("spy3 cleanup called %d times, want 1", spy3.cleanupCalledCount)
+	}
+}
+
+// --- Helpers & Spies ---
+
+// mockAsyncMetric implements estats.AsyncMetric
+type mockAsyncMetric struct {
+	estats.AsyncMetric
+	d *estats.MetricDescriptor
+}
+
+func (m *mockAsyncMetric) Descriptor() *estats.MetricDescriptor {
+	return m.d
+}
+
+// spyMetricsRecorder implements estats.MetricsRecorder
+type spyMetricsRecorder struct {
+	stats.TestMetricsRecorder
+	name                string
+	registerCalledCount int
+	cleanupCalledCount  int
+}
+
+// RegisterAsyncReporter implements the interface and tracks calls.
+func (s *spyMetricsRecorder) RegisterAsyncReporter(estats.AsyncMetricReporter, ...estats.AsyncMetric) func() {
+	s.registerCalledCount++
+
+	// Return a cleanup function that tracks if it was called
+	return func() {
+		s.cleanupCalledCount++
+	}
 }
