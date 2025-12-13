@@ -21,6 +21,7 @@ package transport
 import (
 	"bufio"
 	"context"
+	"crypto/tls"
 	"encoding/base64"
 	"fmt"
 	"io"
@@ -61,6 +62,15 @@ func doHTTPConnectHandshake(ctx context.Context, conn net.Conn, grpcUA string, o
 		}
 	}()
 
+	// Security requirement: when proxy credentials are provided, the connection MUST be encrypted
+	// with TLS to prevent Basic Auth credentials from being transmitted in cleartext over the wire.
+	if opts.User != nil {
+		// Verify connection is protected by TLS
+		if _, ok := conn.(*tls.Conn); !ok {
+			return nil, fmt.Errorf("proxy credentials are not allowed over unencrypted connections; credentials must be transmitted over TLS/HTTPS only to prevent eavesdropping attacks")
+		}
+	}
+
 	req := &http.Request{
 		Method: http.MethodConnect,
 		URL:    &url.URL{Host: opts.ConnectAddr},
@@ -100,7 +110,24 @@ func doHTTPConnectHandshake(ctx context.Context, conn net.Conn, grpcUA string, o
 
 // proxyDial establishes a TCP connection to the specified address and performs an HTTP CONNECT handshake.
 func proxyDial(ctx context.Context, addr resolver.Address, grpcUA string, opts proxyattributes.Options) (net.Conn, error) {
+	// If proxy credentials are provided, enforce TLS to prevent credential leakage
+	if opts.User != nil {
+		return proxyDialTLS(ctx, addr, grpcUA, opts)
+	}
 	conn, err := internal.NetDialerWithTCPKeepalive().DialContext(ctx, "tcp", addr.Addr)
+	if err != nil {
+		return nil, err
+	}
+	return doHTTPConnectHandshake(ctx, conn, grpcUA, opts)
+}
+
+// proxyDialTLS establishes a TLS connection to the proxy server and performs an HTTP CONNECT handshake.
+// This is used when proxy credentials are provided to ensure credentials are transmitted over an encrypted connection.
+func proxyDialTLS(ctx context.Context, addr resolver.Address, grpcUA string, opts proxyattributes.Options) (net.Conn, error) {
+	tlsDialer := &tls.Dialer{
+		NetDialer: internal.NetDialerWithTCPKeepalive(),
+	}
+	conn, err := tlsDialer.DialContext(ctx, "tcp", addr.Addr)
 	if err != nil {
 		return nil, err
 	}
