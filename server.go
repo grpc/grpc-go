@@ -83,6 +83,7 @@ func init() {
 	}
 	internal.BinaryLogger = binaryLogger
 	internal.JoinServerOptions = newJoinServerOption
+	internal.RegisterCleanupOnServerShutdown = newCleanupCapableServerOption
 	internal.BufferPool = bufferPool
 	internal.MetricsRecorderForServer = func(srv *Server) estats.MetricsRecorder {
 		return istats.NewMetricsRecorderList(srv.opts.statsHandlers)
@@ -197,6 +198,7 @@ var globalServerOptions []ServerOption
 // A ServerOption sets options such as credentials, codec and keepalive parameters, etc.
 type ServerOption interface {
 	apply(*serverOptions)
+	onServerShutdown()
 }
 
 // EmptyServerOption does not alter the server configuration. It can be embedded
@@ -209,6 +211,7 @@ type ServerOption interface {
 type EmptyServerOption struct{}
 
 func (EmptyServerOption) apply(*serverOptions) {}
+func (EmptyServerOption) onServerShutdown()    {}
 
 // funcServerOption wraps a function that modifies serverOptions into an
 // implementation of the ServerOption interface.
@@ -219,6 +222,8 @@ type funcServerOption struct {
 func (fdo *funcServerOption) apply(do *serverOptions) {
 	fdo.f(do)
 }
+
+func (fdo *funcServerOption) onServerShutdown() {}
 
 func newFuncServerOption(f func(*serverOptions)) *funcServerOption {
 	return &funcServerOption{
@@ -238,8 +243,26 @@ func (mdo *joinServerOption) apply(do *serverOptions) {
 	}
 }
 
+func (mdo *joinServerOption) onServerShutdown() {}
+
 func newJoinServerOption(opts ...ServerOption) ServerOption {
 	return &joinServerOption{opts: opts}
+}
+
+type cleanupCapableServerOption struct {
+	ServerOption
+	onShutdown func()
+}
+
+func (c *cleanupCapableServerOption) onServerShutdown() {
+	c.onShutdown()
+}
+
+func newCleanupCapableServerOption(opt ServerOption, onShutdown func()) ServerOption {
+	return &cleanupCapableServerOption{
+		ServerOption: opt,
+		onShutdown:   onShutdown,
+	}
 }
 
 // SharedWriteBuffer allows reusing per-connection transport write buffer.
@@ -584,6 +607,8 @@ type MaxHeaderListSizeServerOption struct {
 func (o MaxHeaderListSizeServerOption) apply(so *serverOptions) {
 	so.maxHeaderListSize = &o.MaxHeaderListSize
 }
+
+func (o MaxHeaderListSizeServerOption) onServerShutdown() {}
 
 // MaxHeaderListSize returns a ServerOption that sets the max (uncompressed) size
 // of header list that the server is prepared to accept.

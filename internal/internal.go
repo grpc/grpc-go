@@ -126,6 +126,10 @@ var (
 	// single server option.
 	JoinServerOptions any // func(...grpc.ServerOption) grpc.ServerOption
 
+	// RegisterCleanupOnServerShutdown returns a ServerOption that executes the
+	// given function upon server shutdown.
+	RegisterCleanupOnServerShutdown any // func(grpc.ServerOption, func()) grpc.ServerOption
+
 	// WithBinaryLogger returns a DialOption that specifies the binary logger
 	// for a ClientConn.
 	//
