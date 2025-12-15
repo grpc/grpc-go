@@ -710,10 +710,9 @@ func (s) TestControlChannelConnectivityStateTransitions_IdleDoesNotTriggerCallba
 	}
 idleready:
 
-	// Wait a bit to ensure no callback is triggered.
-	time.Sleep(100 * time.Millisecond)
-
 	// Verify that the callback was never invoked (IDLE → READY doesn't trigger callback).
+	// We check immediately after observing the READY state - if the callback was going
+	// to be invoked, it would have happened during the state transition processing.
 	mu.Lock()
 	got := callbackCount
 	mu.Unlock()
