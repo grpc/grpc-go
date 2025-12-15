@@ -858,7 +858,6 @@ func (l *loopyWriter) earlyAbortStreamHandler(eas *earlyAbortStream) error {
 		{Name: "grpc-message", Value: encodeGrpcMessage(eas.status.Message())},
 	}
 
-
 	if p := istatus.RawStatusProto(eas.status); len(p.GetDetails()) > 0 {
 		stBytes, err := proto.Marshal(p)
 		if err != nil {
@@ -867,13 +866,13 @@ func (l *loopyWriter) earlyAbortStreamHandler(eas *earlyAbortStream) error {
 			headerFields = append(headerFields, hpack.HeaderField{Name: grpcStatusDetailsBinHeader, Value: encodeBinHeader(stBytes)})
 		}
 	}
-  
-  if !checkForHeaderListSize(headerFields, eas.maxSendHeaderListSize) {
+
+	if !checkForHeaderListSize(headerFields, eas.maxSendHeaderListSize) {
 		if l.logger.V(logLevel) {
 			l.logger.Infof("Header list size to send violates the maximum size (%d bytes) set by client", *eas.maxSendHeaderListSize)
 		}
 		return l.framer.fr.WriteRSTStream(eas.streamID, http2.ErrCodeInternal)
-  }
+	}
 
 	if err := l.writeHeader(eas.streamID, true, headerFields, nil); err != nil {
 		return err
