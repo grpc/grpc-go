@@ -22,6 +22,7 @@ import (
 	"io"
 	"slices"
 	"strconv"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -1404,16 +1405,22 @@ func (s) TestRPCSpanErrorStatus(t *testing.T) {
 const delayedResolutionEventName = "Delayed name resolution complete"
 
 // blockingPicker is a picker that returns ErrNoSubConnAvailable until a
-// SubConn is provided.
+// SubConn is provided. Uses atomic operations to avoid data races.
 type blockingPicker struct {
-	sc balancer.SubConn
+	sc atomic.Pointer[subConnWrapper]
+}
+
+// subConnWrapper wraps a SubConn so it can be stored in atomic.Pointer.
+type subConnWrapper struct {
+	balancer.SubConn
 }
 
 func (p *blockingPicker) Pick(balancer.PickInfo) (balancer.PickResult, error) {
-	if p.sc == nil {
+	sc := p.sc.Load()
+	if sc == nil {
 		return balancer.PickResult{}, balancer.ErrNoSubConnAvailable
 	}
-	return balancer.PickResult{SubConn: p.sc}, nil
+	return balancer.PickResult{SubConn: sc.SubConn}, nil
 }
 
 // registerBlockingBalancer registers a stub balancer that initially returns a
@@ -1440,8 +1447,8 @@ func registerBlockingBalancer(t *testing.T, balancerName string) {
 				subConn, err := bd.ClientConn.NewSubConn(ccs.ResolverState.Addresses, balancer.NewSubConnOptions{
 					StateListener: func(state balancer.SubConnState) {
 						if state.ConnectivityState == connectivity.Ready {
-							// Update the picker with the ready SubConn.
-							picker.sc = subConn
+							// Update the picker with the ready SubConn using atomic store.
+							picker.sc.Store(&subConnWrapper{SubConn: subConn})
 							bd.ClientConn.UpdateState(balancer.State{
 								ConnectivityState: connectivity.Ready,
 								Picker:            picker,
