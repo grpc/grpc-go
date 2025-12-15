@@ -307,35 +307,96 @@ func TestBuildPriorityConfig(t *testing.T) {
 	}
 }
 
-func testEndpointForDNS(addrStrs []string, localityWeight uint32, path []string) resolver.Endpoint {
-	endpoint := resolver.Endpoint{}
-	endpoint.Addresses = append(endpoint.Addresses, resolver.Address{Addr: addrStrs[0]})
-	endpoint = hierarchy.SetInEndpoint(endpoint, path)
-	endpoint = wrrlocality.SetAddrInfoInEndpoint(endpoint, wrrlocality.AddrInfo{LocalityWeight: localityWeight})
-	return endpoint
+func testEndpointForDNS(endpoint []resolver.Endpoint, localityWeight uint32, path []string) resolver.Endpoint {
+	retEndpoint := resolver.Endpoint{}
+	for _, e := range endpoint {
+		retEndpoint.Addresses = append(retEndpoint.Addresses, e.Addresses...)
+	}
+	retEndpoint = hierarchy.SetInEndpoint(retEndpoint, path)
+	retEndpoint = wrrlocality.SetAddrInfoInEndpoint(retEndpoint, wrrlocality.AddrInfo{LocalityWeight: localityWeight})
+	return retEndpoint
 }
 
 func TestBuildClusterImplConfigForDNS(t *testing.T) {
-	gotName, gotConfig, gotEndpoints := buildClusterImplConfigForDNS(newNameGenerator(3), testResolverEndpoints[0], DiscoveryMechanism{Cluster: testClusterName2, Type: DiscoveryMechanismTypeLogicalDNS}, nil)
 	wantName := "priority-3"
 	localityStr := xdsinternal.LocalityString(clients.Locality{})
 	wantConfig := &clusterimpl.LBConfig{
 		Cluster:     testClusterName2,
 		ChildPolicy: nil,
 	}
-	wantEndpoints := []resolver.Endpoint{
-		testEndpointForDNS(testEndpoints[0][0].Addresses, 1, []string{wantName, localityStr}),
-		testEndpointForDNS(testEndpoints[0][1].Addresses, 1, []string{wantName, localityStr}),
-	}
+	for _, tt := range []struct {
+		name         string
+		endpoint     []resolver.Endpoint
+		wantEndpoint []resolver.Endpoint
+	}{
+		{
+			name:         "one endpoint with one address",
+			endpoint:     []resolver.Endpoint{{Addresses: []resolver.Address{{Addr: "addr-0-0"}}}},
+			wantEndpoint: []resolver.Endpoint{testEndpointForDNS([]resolver.Endpoint{{Addresses: []resolver.Address{{Addr: "addr-0-0"}}}}, 1, []string{wantName, localityStr})},
+		},
+		{
+			name: "one endpoint with multiple addresses",
+			endpoint: []resolver.Endpoint{{Addresses: []resolver.Address{
+				{Addr: "addr-0-0"},
+				{Addr: "addr-0-1"},
+			}}},
+			wantEndpoint: []resolver.Endpoint{
+				testEndpointForDNS([]resolver.Endpoint{{Addresses: []resolver.Address{
+					{Addr: "addr-0-0"},
+					{Addr: "addr-0-1"},
+				}}}, 1, []string{wantName, localityStr}),
+			},
+		},
+		{
+			name: "multiple endpoints, all with one address each",
+			endpoint: []resolver.Endpoint{
+				{Addresses: []resolver.Address{{Addr: "addr-0-0"}}},
+				{Addresses: []resolver.Address{{Addr: "addr-0-1"}}},
+			},
+			wantEndpoint: []resolver.Endpoint{
+				testEndpointForDNS([]resolver.Endpoint{
+					{Addresses: []resolver.Address{{Addr: "addr-0-0"}}},
+					{Addresses: []resolver.Address{{Addr: "addr-0-1"}}},
+				}, 1, []string{wantName, localityStr}),
+			},
+		},
+		{
+			name: "multiple endpoints, all with multiple addresses",
+			endpoint: []resolver.Endpoint{
+				{Addresses: []resolver.Address{
+					{Addr: "addr-0-0"},
+					{Addr: "addr-0-1"},
+				}},
+				{Addresses: []resolver.Address{
+					{Addr: "addr-1-0"},
+					{Addr: "addr-1-1"},
+				}},
+			},
+			wantEndpoint: []resolver.Endpoint{
+				testEndpointForDNS([]resolver.Endpoint{
+					{Addresses: []resolver.Address{
+						{Addr: "addr-0-0"},
+						{Addr: "addr-0-1"},
+					}},
+					{Addresses: []resolver.Address{
+						{Addr: "addr-1-0"},
+						{Addr: "addr-1-1"},
+					}},
+				}, 1, []string{wantName, localityStr}),
+			},
+		},
+	} {
+		gotName, gotConfig, gotEndpoints := buildClusterImplConfigForDNS(newNameGenerator(3), tt.endpoint, DiscoveryMechanism{Cluster: testClusterName2, Type: DiscoveryMechanismTypeLogicalDNS}, nil)
 
-	if diff := cmp.Diff(gotName, wantName); diff != "" {
-		t.Errorf("buildClusterImplConfigForDNS() diff (-got +want) %v", diff)
-	}
-	if diff := cmp.Diff(gotConfig, wantConfig); diff != "" {
-		t.Errorf("buildClusterImplConfigForDNS() diff (-got +want) %v", diff)
-	}
-	if diff := cmp.Diff(gotEndpoints, wantEndpoints, endpointCmpOpts); diff != "" {
-		t.Errorf("buildClusterImplConfigForDNS() diff (-got +want) %v", diff)
+		if diff := cmp.Diff(gotName, wantName); diff != "" {
+			t.Errorf("buildClusterImplConfigForDNS() diff (-got +want) %v", diff)
+		}
+		if diff := cmp.Diff(gotConfig, wantConfig); diff != "" {
+			t.Errorf("buildClusterImplConfigForDNS() diff (-got +want) %v", diff)
+		}
+		if diff := cmp.Diff(gotEndpoints, tt.wantEndpoint, endpointCmpOpts); diff != "" {
+			t.Errorf("buildClusterImplConfigForDNS() diff (-got +want) %v", diff)
+		}
 	}
 }
 
