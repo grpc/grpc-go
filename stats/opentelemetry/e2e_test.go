@@ -49,11 +49,14 @@ import (
 	"go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/encoding/gzip"
 	experimental "google.golang.org/grpc/experimental/opentelemetry"
 	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/internal/balancer/stub"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/stubserver"
@@ -1400,6 +1403,62 @@ func (s) TestRPCSpanErrorStatus(t *testing.T) {
 
 const delayedResolutionEventName = "Delayed name resolution complete"
 
+// blockingPicker is a picker that returns ErrNoSubConnAvailable until a
+// SubConn is provided.
+type blockingPicker struct {
+	sc balancer.SubConn
+}
+
+func (p *blockingPicker) Pick(balancer.PickInfo) (balancer.PickResult, error) {
+	if p.sc == nil {
+		return balancer.PickResult{}, balancer.ErrNoSubConnAvailable
+	}
+	return balancer.PickResult{SubConn: p.sc}, nil
+}
+
+// registerBlockingBalancer registers a stub balancer that initially returns a
+// blocking picker (ErrNoSubConnAvailable) to ensure the pick method blocks and
+// waits for the picker. This guarantees the "Delayed LB pick complete" event
+// is emitted reliably.
+func registerBlockingBalancer(t *testing.T, balancerName string) {
+	t.Helper()
+	var picker *blockingPicker
+	stub.Register(balancerName, stub.BalancerFuncs{
+		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
+			// Create a blocking picker on the first call.
+			if picker == nil {
+				picker = &blockingPicker{}
+				bd.ClientConn.UpdateState(balancer.State{
+					ConnectivityState: connectivity.Connecting,
+					Picker:            picker,
+				})
+			}
+
+			// Create a SubConn with the addresses from the resolver.
+			if len(ccs.ResolverState.Addresses) > 0 {
+				var subConn balancer.SubConn
+				subConn, err := bd.ClientConn.NewSubConn(ccs.ResolverState.Addresses, balancer.NewSubConnOptions{
+					StateListener: func(state balancer.SubConnState) {
+						if state.ConnectivityState == connectivity.Ready {
+							// Update the picker with the ready SubConn.
+							picker.sc = subConn
+							bd.ClientConn.UpdateState(balancer.State{
+								ConnectivityState: connectivity.Ready,
+								Picker:            picker,
+							})
+						}
+					},
+				})
+				if err != nil {
+					return err
+				}
+				subConn.Connect()
+			}
+			return nil
+		},
+	})
+}
+
 // TestTraceSpan_WithRetriesAndNameResolutionDelay verifies that
 // "Delayed name resolution complete" event is recorded in the call trace span
 // only once if any of the retry attempt encountered a delay in name resolution
@@ -1715,6 +1774,12 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 			internal.NewStreamWaitingForResolver = func() { resolutionWait.Fire() }
 			defer func() { internal.NewStreamWaitingForResolver = prevHook }()
 
+			// Register the blocking balancer to ensure the initial picker returns
+			// ErrNoSubConnAvailable, guaranteeing the "Delayed LB pick complete"
+			// event is emitted reliably.
+			const blockingBalancerName = "test_blocking_balancer"
+			registerBlockingBalancer(t, blockingBalancerName)
+
 			mo, _ := defaultMetricsOptions(t, nil)
 			to, exporter := defaultTraceOptions(t)
 			rb := manual.NewBuilderWithScheme("delayed")
@@ -1725,7 +1790,8 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 			}
 			defer ss.Stop()
 
-			retryPolicy := `{
+			serviceConfig := fmt.Sprintf(`{
+				"loadBalancingConfig": [{"%s":{}}],
 				"methodConfig": [{
 					"name": [{"service": "grpc.testing.TestService"}],
 					"retryPolicy": {
@@ -1736,13 +1802,13 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 						"retryableStatusCodes": ["UNAVAILABLE"]
 					}
 				}]
-			}`
+			}`, blockingBalancerName)
 			cc, err := grpc.NewClient(
 				rb.Scheme()+":///test.server",
 				grpc.WithTransportCredentials(insecure.NewCredentials()),
 				grpc.WithResolvers(rb),
 				opentelemetry.DialOption(opts),
-				grpc.WithDefaultServiceConfig(retryPolicy),
+				grpc.WithDefaultServiceConfig(serviceConfig),
 			)
 			if err != nil {
 				t.Fatal(err)
