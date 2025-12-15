@@ -21,6 +21,7 @@ package clusterresolver
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"sort"
 
 	"google.golang.org/grpc/internal/balancer/weight"
@@ -266,10 +267,11 @@ func priorityLocalitiesToClusterImpl(localities []xdsresource.Locality, priority
 				continue
 			}
 
-			// Create a copy of endpoint.ResolverEndpoint to avoid race.
+			// Create a copy of endpoint.ResolverEndpoint to avoid race between
+			// the xDS Client (which owns this shared object in its cache) and
+			// the Cluster Resolver (which is trying to modify attributes).
 			resolverEndpoint := endpoint.ResolverEndpoint
-			resolverEndpoint.Addresses = make([]resolver.Address, len(endpoint.ResolverEndpoint.Addresses))
-			copy(resolverEndpoint.Addresses, endpoint.ResolverEndpoint.Addresses)
+			resolverEndpoint.Addresses = slices.Clone(endpoint.ResolverEndpoint.Addresses)
 
 			resolverEndpoint = hierarchy.SetInEndpoint(resolverEndpoint, []string{priorityName, localityStr})
 			resolverEndpoint = xdsinternal.SetLocalityIDInEndpoint(resolverEndpoint, locality.ID)
