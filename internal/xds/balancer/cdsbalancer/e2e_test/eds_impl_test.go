@@ -109,9 +109,9 @@ func startTestServiceBackends(t *testing.T, numBackends int) ([]*stubserver.Stub
 	}
 }
 
-// clientResource returns complete resources for the specified nodeID,
+// clientResources returns complete resources for the specified nodeID,
 // service name and localities.
-func clientResource(nodeID, edsServiceName string, localities []e2e.LocalityOptions) e2e.UpdateOptions {
+func clientResources(nodeID, edsServiceName string, localities []e2e.LocalityOptions) e2e.UpdateOptions {
 	return e2e.UpdateOptions{
 		NodeID:    nodeID,
 		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(serviceName, routeName)},
@@ -147,7 +147,7 @@ func (s) TestEDS_OneLocality(t *testing.T) {
 
 	// Create xDS resources for consumption by the test. We start off with a
 	// single backend in a single EDS locality.
-	resources := clientResource(nodeID, edsServiceName, []e2e.LocalityOptions{{
+	resources := clientResources(nodeID, edsServiceName, []e2e.LocalityOptions{{
 		Name:     localityName1,
 		Weight:   1,
 		Backends: []e2e.BackendOptions{{Ports: []uint32{ports[0]}}},
@@ -169,7 +169,7 @@ func (s) TestEDS_OneLocality(t *testing.T) {
 
 	// Add a backend to the same locality, and ensure RPCs are sent in a
 	// roundrobin fashion across the two backends.
-	resources = clientResource(nodeID, edsServiceName, []e2e.LocalityOptions{{
+	resources = clientResources(nodeID, edsServiceName, []e2e.LocalityOptions{{
 		Name:     localityName1,
 		Weight:   1,
 		Backends: []e2e.BackendOptions{{Ports: []uint32{ports[0]}}, {Ports: []uint32{ports[1]}}},
@@ -183,7 +183,7 @@ func (s) TestEDS_OneLocality(t *testing.T) {
 
 	// Remove the first backend, and ensure all RPCs are sent to the second
 	// backend.
-	resources = clientResource(nodeID, edsServiceName, []e2e.LocalityOptions{{
+	resources = clientResources(nodeID, edsServiceName, []e2e.LocalityOptions{{
 		Name:     localityName1,
 		Weight:   1,
 		Backends: []e2e.BackendOptions{{Ports: []uint32{ports[1]}}},
@@ -196,7 +196,7 @@ func (s) TestEDS_OneLocality(t *testing.T) {
 	}
 
 	// Replace the backend, and ensure all RPCs are sent to the new backend.
-	resources = clientResource(nodeID, edsServiceName, []e2e.LocalityOptions{{
+	resources = clientResources(nodeID, edsServiceName, []e2e.LocalityOptions{{
 		Name:     localityName1,
 		Weight:   1,
 		Backends: []e2e.BackendOptions{{Ports: []uint32{ports[2]}}},
@@ -242,7 +242,7 @@ func (s) TestEDS_MultipleLocalities(t *testing.T) {
 
 	// Create xDS resources for consumption by the test. We start off with two
 	// localities, and single backend in each of them.
-	resources := clientResource(nodeID, edsServiceName, []e2e.LocalityOptions{
+	resources := clientResources(nodeID, edsServiceName, []e2e.LocalityOptions{
 		{
 			Name:     localityName1,
 			Weight:   1,
@@ -274,7 +274,7 @@ func (s) TestEDS_MultipleLocalities(t *testing.T) {
 
 	// Add another locality with a single backend, and ensure RPCs are being
 	// weighted roundrobined across the three backends.
-	resources = clientResource(nodeID, edsServiceName, []e2e.LocalityOptions{
+	resources = clientResources(nodeID, edsServiceName, []e2e.LocalityOptions{
 		{
 			Name:     localityName1,
 			Weight:   1,
@@ -300,7 +300,7 @@ func (s) TestEDS_MultipleLocalities(t *testing.T) {
 
 	// Remove the first locality, and ensure RPCs are being weighted
 	// roundrobined across the remaining two backends.
-	resources = clientResource(nodeID, edsServiceName, []e2e.LocalityOptions{
+	resources = clientResources(nodeID, edsServiceName, []e2e.LocalityOptions{
 		{
 			Name:     localityName2,
 			Weight:   1,
@@ -322,7 +322,7 @@ func (s) TestEDS_MultipleLocalities(t *testing.T) {
 	// Add a backend to one locality, and ensure weighted roundrobin. Since RPCs
 	// are weighted-roundrobined across localities, locality2's backend will
 	// receive twice the traffic.
-	resources = clientResource(nodeID, edsServiceName, []e2e.LocalityOptions{
+	resources = clientResources(nodeID, edsServiceName, []e2e.LocalityOptions{
 		{
 			Name:     localityName2,
 			Weight:   1,
@@ -343,9 +343,9 @@ func (s) TestEDS_MultipleLocalities(t *testing.T) {
 	}
 }
 
-// TestEDS_EndpointsHealth tests when EDS resource which specifies endpoint
-// health information is received and verifies that traffic is routed only to
-// backends deemed capable of receiving traffic.
+// TestEDS_EndpointsHealth tests the scenario where an EDS resource specifying
+// endpoint health information is received, and verifies that traffic is routed
+// only to backends deemed capable of receiving traffic.
 func (s) TestEDS_EndpointsHealth(t *testing.T) {
 	// Spin up a management server to receive xDS resources from.
 	managementServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
@@ -362,7 +362,7 @@ func (s) TestEDS_EndpointsHealth(t *testing.T) {
 	// Create xDS resources for consumption by the test.  Two localities with
 	// six backends each, with two of the six backends being healthy. Both
 	// UNKNOWN and HEALTHY are considered by gRPC for load balancing.
-	resources := clientResource(nodeID, edsServiceName, []e2e.LocalityOptions{
+	resources := clientResources(nodeID, edsServiceName, []e2e.LocalityOptions{
 		{
 			Name:   localityName1,
 			Weight: 1,
@@ -427,7 +427,7 @@ func (s) TestEDS_EmptyUpdate(t *testing.T) {
 
 	// Create xDS resources for consumption by the test. The first update is an
 	// empty update. This should put the channel in TRANSIENT_FAILURE.
-	resources := clientResource(nodeID, edsServiceName, nil)
+	resources := clientResources(nodeID, edsServiceName, nil)
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if err := managementServer.Update(ctx, resources); err != nil {
@@ -444,7 +444,7 @@ func (s) TestEDS_EmptyUpdate(t *testing.T) {
 	}
 
 	// Add a locality with one backend and ensure RPCs are successful.
-	resources = clientResource(nodeID, edsServiceName, []e2e.LocalityOptions{{
+	resources = clientResources(nodeID, edsServiceName, []e2e.LocalityOptions{{
 		Name:     localityName1,
 		Weight:   1,
 		Backends: []e2e.BackendOptions{{Ports: []uint32{ports[0]}}},
@@ -458,7 +458,7 @@ func (s) TestEDS_EmptyUpdate(t *testing.T) {
 
 	// Push another empty update and ensure that RPCs fail with the "all priorities
 	// removed" error again.
-	resources = clientResource(nodeID, edsServiceName, nil)
+	resources = clientResources(nodeID, edsServiceName, nil)
 	if err := managementServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
@@ -790,7 +790,7 @@ func (s) TestEDS_BadUpdateWithoutPreviousGoodUpdate(t *testing.T) {
 	// result in the resource being NACKed by the xDS client. Since the
 	// cluster_resolver LB policy does not have a previously received good EDS
 	// update, it should treat this update as an empty EDS update.
-	resources := clientResource(nodeID, edsServiceName, []e2e.LocalityOptions{{
+	resources := clientResources(nodeID, edsServiceName, []e2e.LocalityOptions{{
 		Name:     localityName1,
 		Weight:   1,
 		Backends: []e2e.BackendOptions{{Ports: []uint32{testutils.ParsePort(t, server.Address)}}},
@@ -829,7 +829,7 @@ func (s) TestEDS_BadUpdateWithPreviousGoodUpdate(t *testing.T) {
 	defer server.Stop()
 
 	// Create an EDS resource for consumption by the test.
-	resources := clientResource(nodeID, edsServiceName, []e2e.LocalityOptions{{
+	resources := clientResources(nodeID, edsServiceName, []e2e.LocalityOptions{{
 		Name:     localityName1,
 		Weight:   1,
 		Backends: []e2e.BackendOptions{{Ports: []uint32{testutils.ParsePort(t, server.Address)}}},
@@ -1061,7 +1061,7 @@ func (s) TestEDS_EndpointWithMultipleAddresses(t *testing.T) {
 
 			// Create xDS resources for consumption by the test. We start off with a
 			// single backend in a single EDS locality.
-			resources := clientResource(nodeID, edsServiceName, []e2e.LocalityOptions{{
+			resources := clientResources(nodeID, edsServiceName, []e2e.LocalityOptions{{
 				Name:   localityName1,
 				Weight: 1,
 				Backends: []e2e.BackendOptions{{

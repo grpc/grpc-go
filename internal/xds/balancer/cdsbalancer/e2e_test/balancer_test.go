@@ -79,7 +79,7 @@ func setupAndDial(t *testing.T, bootstrapContents []byte) (*grpc.ClientConn, fun
 	}
 	r, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bootstrapContents)
 	if err != nil {
-		t.Fatalf("xDS resolver creation failed")
+		t.Fatalf("xDS resolver creation failed: %v", err)
 	}
 	// Create a ClientConn and make a successful RPC.
 	cc, err := grpc.NewClient("xds:///"+serviceName, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
@@ -93,7 +93,7 @@ func setupAndDial(t *testing.T, bootstrapContents []byte) (*grpc.ClientConn, fun
 }
 
 // TestErrorFromParentLB_ConnectionError tests the case where a connection error
-// is received. The CDS LB policy sends a connection error when the ADS stream
+// is sent by the CDS LB Policy. The CDS LB policy sends a connection error when the ADS stream
 // to the management server breaks. The test verifies that there is no
 // perceivable effect because of this connection error, and that RPCs continue
 // to work (because the LB policies are expected to use previously received xDS
@@ -164,11 +164,11 @@ func (s) TestErrorFromParentLB_ConnectionError(t *testing.T) {
 }
 
 // TestErrorFromParentLB_ResourceNotFound tests the case where a
-// resource-not-found error is received. The CDS LB policy sends a
-// resource-not-found error when the cluster resource associated with these LB
-// policies is removed by the management server. The test verifies that the
-// associated EDS is canceled and RPCs fail. It also ensures that when the
-// Cluster resource is added back, the EDS resource is re-requested and RPCs
+// resource-not-found error is received by the CDS LB policy for a cluster. The
+// resource-not-found error is received when the cluster resource associated
+// with these LB policies is removed by the management server. The test verifies
+// that the associated EDS is canceled and RPCs fail. It also ensures that when
+// the Cluster resource is added back, the EDS resource is re-requested and RPCs
 // being to succeed.
 func (s) TestErrorFromParentLB_ResourceNotFound(t *testing.T) {
 	// Start an xDS management server that uses a couple of channels to
@@ -275,14 +275,12 @@ func (s) TestErrorFromParentLB_ResourceNotFound(t *testing.T) {
 	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
 
 	// Configure cluster and endpoints resources in the management server.
-	resources = e2e.UpdateOptions{
-		NodeID:         nodeID,
-		Listeners:      []*v3listenerpb.Listener{e2e.DefaultClientListener(serviceName, routeName)},
-		Routes:         []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeName, serviceName, clusterName)},
-		Clusters:       []*v3clusterpb.Cluster{e2e.DefaultCluster(clusterName, edsServiceName, e2e.SecurityLevelNone)},
-		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(edsServiceName, "localhost", []uint32{testutils.ParsePort(t, server.Address)})},
-		SkipValidation: true,
-	}
+	resources = e2e.DefaultClientResources(e2e.ResourceParams{
+		NodeID:     nodeID,
+		DialTarget: serviceName,
+		Host:       "localhost",
+		Port:       testutils.ParsePort(t, server.Address),
+	})
 	if err := managementServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}

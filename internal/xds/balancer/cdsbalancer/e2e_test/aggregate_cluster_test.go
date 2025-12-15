@@ -1206,8 +1206,8 @@ func (s) TestAggregateCluster_Fallback_EDS_ResourceNotFound(t *testing.T) {
 		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
 	}
 	pool := xdsclient.NewPool(config)
-	// Create new xdsCLient with WatchExpiryTimeout set to make sure we get the
-	// endpoint error within time.
+	// Create a new xDS client with a short watch expiry to quickly detect the
+	// missing endpoints resource.
 	xdsClient, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
 		Name:               t.Name(),
 		WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
