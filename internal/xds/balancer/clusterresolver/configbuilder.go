@@ -141,17 +141,18 @@ func makeClusterImplOutlierDetectionChild(ciCfg *clusterimpl.LBConfig, odCfg out
 }
 
 func buildClusterImplConfigForDNS(g *nameGenerator, endpoints []resolver.Endpoint, mechanism DiscoveryMechanism, xdsLBPolicy *internalserviceconfig.BalancerConfig) (string, *clusterimpl.LBConfig, []resolver.Endpoint) {
-	retEndpoints := make([]resolver.Endpoint, len(endpoints))
+	var retEndpoints []resolver.Endpoint
 	pName := fmt.Sprintf("priority-%v", g.prefix)
-	for i, e := range endpoints {
-		// Use the canonical string representation for the locality to match
-		// the keys expected by the parent Load Balancing policy.
+	if len(endpoints) >= 1 {
+		retEndpoints = make([]resolver.Endpoint, 1)
+		for _, e := range endpoints {
+			// Copy the nested address field as slice fields are shared by the
+			// iteration variable and the original slice.
+			retEndpoints[0].Addresses = append(retEndpoints[0].Addresses, e.Addresses...)
+		}
 		localityStr := xdsinternal.LocalityString(clients.Locality{})
-		retEndpoints[i] = hierarchy.SetInEndpoint(e, []string{pName, localityStr})
-		retEndpoints[i] = wrrlocality.SetAddrInfoInEndpoint(retEndpoints[i], wrrlocality.AddrInfo{LocalityWeight: 1})
-		// Copy the nested address field as slice fields are shared by the
-		// iteration variable and the original slice.
-		retEndpoints[i].Addresses = append([]resolver.Address{}, e.Addresses...)
+		retEndpoints[0] = hierarchy.SetInEndpoint(retEndpoints[0], []string{pName, localityStr})
+		retEndpoints[0] = wrrlocality.SetAddrInfoInEndpoint(retEndpoints[0], wrrlocality.AddrInfo{LocalityWeight: 1})
 	}
 	return pName, &clusterimpl.LBConfig{
 		Cluster:               mechanism.Cluster,
