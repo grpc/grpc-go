@@ -98,7 +98,11 @@ func (dr *dnsResolver) ParseServiceConfig(string) *serviceconfig.ParseResult {
 func newDNSResolver(target string, depMgr *DependencyManager) *dnsResolverState {
 	ctx, cancel := context.WithCancel(context.Background())
 	dr := &dnsResolver{target: target, depMgr: depMgr, serializer: *grpcsync.NewCallbackSerializer(ctx), serializerCancel: cancel}
-	drState := &dnsResolverState{resolver: dr, cancelResolver: func() {}}
+	drState := &dnsResolverState{resolver: dr}
+	drState.cancelResolver = func() {
+		drState.resolver.serializerCancel()
+		<-drState.resolver.serializer.Done()
+	}
 	u, err := url.Parse("dns:///" + target)
 	if err != nil {
 		drState.resolver.ReportError(err)
