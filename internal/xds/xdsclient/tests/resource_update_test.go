@@ -36,6 +36,7 @@ import (
 	"google.golang.org/grpc/internal/xds/clients"
 	"google.golang.org/grpc/internal/xds/xdsclient"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
+	"google.golang.org/grpc/resolver"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/anypb"
@@ -1089,16 +1090,26 @@ func (s) TestHandleEndpointsResponseFromManagementServer(t *testing.T) {
 			wantUpdate: xdsresource.EndpointsUpdate{
 				Localities: []xdsresource.Locality{
 					{
-						Endpoints: []xdsresource.Endpoint{{Addresses: []string{"addr1:314"}, Weight: 1}},
-						ID:        clients.Locality{SubZone: "locality-1"},
-						Priority:  1,
-						Weight:    1,
+						Endpoints: []xdsresource.Endpoint{{
+							ResolverEndpoint: resolver.Endpoint{
+								Addresses: []resolver.Address{{Addr: "addr1:314"}},
+							},
+							Weight: 1,
+						}},
+						ID:       clients.Locality{SubZone: "locality-1"},
+						Priority: 1,
+						Weight:   1,
 					},
 					{
-						Endpoints: []xdsresource.Endpoint{{Addresses: []string{"addr2:159"}, Weight: 1}},
-						ID:        clients.Locality{SubZone: "locality-2"},
-						Priority:  0,
-						Weight:    1,
+						Endpoints: []xdsresource.Endpoint{{
+							ResolverEndpoint: resolver.Endpoint{
+								Addresses: []resolver.Address{{Addr: "addr2:159"}},
+							},
+							Weight: 1,
+						}},
+						ID:       clients.Locality{SubZone: "locality-2"},
+						Priority: 0,
+						Weight:   1,
 					},
 				},
 			},
@@ -1123,16 +1134,26 @@ func (s) TestHandleEndpointsResponseFromManagementServer(t *testing.T) {
 			wantUpdate: xdsresource.EndpointsUpdate{
 				Localities: []xdsresource.Locality{
 					{
-						Endpoints: []xdsresource.Endpoint{{Addresses: []string{"addr1:314"}, Weight: 1}},
-						ID:        clients.Locality{SubZone: "locality-1"},
-						Priority:  1,
-						Weight:    1,
+						Endpoints: []xdsresource.Endpoint{{
+							ResolverEndpoint: resolver.Endpoint{
+								Addresses: []resolver.Address{{Addr: "addr1:314"}},
+							},
+							Weight: 1,
+						}},
+						ID:       clients.Locality{SubZone: "locality-1"},
+						Priority: 1,
+						Weight:   1,
 					},
 					{
-						Endpoints: []xdsresource.Endpoint{{Addresses: []string{"addr2:159"}, Weight: 1}},
-						ID:        clients.Locality{SubZone: "locality-2"},
-						Priority:  0,
-						Weight:    1,
+						Endpoints: []xdsresource.Endpoint{{
+							ResolverEndpoint: resolver.Endpoint{
+								Addresses: []resolver.Address{{Addr: "addr2:159"}},
+							},
+							Weight: 1,
+						}},
+						ID:       clients.Locality{SubZone: "locality-2"},
+						Priority: 0,
+						Weight:   1,
 					},
 				},
 			},
