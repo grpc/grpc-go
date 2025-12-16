@@ -42,15 +42,18 @@ import (
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
-	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
+	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
+	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
+
+	_ "google.golang.org/grpc/internal/xds/httpfilter/router" // Register the router filter
 )
 
 // makeAggregateClusterResource returns an aggregate cluster resource with the
@@ -144,7 +147,9 @@ func (s) TestAggregateCluster_WithTwoEDSClusters(t *testing.T) {
 	const clusterName1 = clusterName + "-cluster-1"
 	const clusterName2 = clusterName + "-cluster-2"
 	resources := e2e.UpdateOptions{
-		NodeID: nodeID,
+		NodeID:    nodeID,
+		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(serviceName, routeName)},
+		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeName, serviceName, clusterName)},
 		Clusters: []*v3clusterpb.Cluster{
 			makeAggregateClusterResource(clusterName, []string{clusterName1, clusterName2}),
 			e2e.DefaultCluster(clusterName1, "", e2e.SecurityLevelNone),
@@ -157,8 +162,7 @@ func (s) TestAggregateCluster_WithTwoEDSClusters(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create xDS client, configure cds_experimental LB policy with a manual
-	// resolver, and dial the test backends.
+	// Create xDS client, xdsResolver, and dial the test backends.
 	cc, cleanup := setupAndDial(t, bootstrapContents)
 	defer cleanup()
 
@@ -233,7 +237,9 @@ func (s) TestAggregateCluster_WithTwoEDSClusters_PrioritiesChange(t *testing.T) 
 	const clusterName1 = clusterName + "cluster-1"
 	const clusterName2 = clusterName + "cluster-2"
 	resources := e2e.UpdateOptions{
-		NodeID: nodeID,
+		NodeID:    nodeID,
+		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(serviceName, routeName)},
+		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeName, serviceName, clusterName)},
 		Clusters: []*v3clusterpb.Cluster{
 			makeAggregateClusterResource(clusterName, []string{clusterName1, clusterName2}),
 			e2e.DefaultCluster(clusterName1, "", e2e.SecurityLevelNone),
@@ -251,8 +257,7 @@ func (s) TestAggregateCluster_WithTwoEDSClusters_PrioritiesChange(t *testing.T) 
 		t.Fatal(err)
 	}
 
-	// Create xDS client, configure cds_experimental LB policy with a manual
-	// resolver, and dial the test backends.
+	// Create xDS client, xdsResolver, and dial the test backends.
 	cc, cleanup := setupAndDial(t, bootstrapContents)
 	defer cleanup()
 
@@ -326,7 +331,9 @@ func (s) TestAggregateCluster_WithOneDNSCluster(t *testing.T) {
 	// Configure an aggregate cluster pointing to a single LOGICAL_DNS cluster.
 	const dnsClusterName = clusterName + "-dns"
 	resources := e2e.UpdateOptions{
-		NodeID: nodeID,
+		NodeID:    nodeID,
+		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(serviceName, routeName)},
+		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeName, serviceName, clusterName)},
 		Clusters: []*v3clusterpb.Cluster{
 			makeAggregateClusterResource(clusterName, []string{dnsClusterName}),
 			makeLogicalDNSClusterResource(dnsClusterName, host, uint32(port)),
@@ -339,8 +346,7 @@ func (s) TestAggregateCluster_WithOneDNSCluster(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create xDS client, configure cds_experimental LB policy with a manual
-	// resolver, and dial the test backends.
+	// Create xDS client, xdsResolver, and dial the test backends.
 	cc, cleanup := setupAndDial(t, bootstrapContents)
 	defer cleanup()
 
@@ -371,7 +377,9 @@ func (s) TestAggregateCluster_WithOneDNSCluster_ParseFailure(t *testing.T) {
 	// Configure an aggregate cluster pointing to a single LOGICAL_DNS cluster.
 	const dnsClusterName = clusterName + "-dns"
 	resources := e2e.UpdateOptions{
-		NodeID: nodeID,
+		NodeID:    nodeID,
+		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(serviceName, routeName)},
+		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeName, serviceName, clusterName)},
 		Clusters: []*v3clusterpb.Cluster{
 			makeAggregateClusterResource(clusterName, []string{dnsClusterName}),
 			makeLogicalDNSClusterResource(dnsClusterName, "%gh&%ij", uint32(8080)),
@@ -384,8 +392,7 @@ func (s) TestAggregateCluster_WithOneDNSCluster_ParseFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create xDS client, configure cds_experimental LB policy with a manual
-	// resolver, and dial the test backends.
+	// Create xDS client, xdsResolver, and dial the test backends.
 	cc, cleanup := setupAndDial(t, bootstrapContents)
 	defer cleanup()
 
@@ -420,7 +427,9 @@ func (s) TestAggregateCluster_WithOneDNSCluster_HostnameChange(t *testing.T) {
 	const dnsClusterName = clusterName + "-dns"
 	dnsHostName, dnsPort := hostAndPortFromAddress(t, servers[0].Address)
 	resources := e2e.UpdateOptions{
-		NodeID: nodeID,
+		NodeID:    nodeID,
+		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(serviceName, routeName)},
+		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeName, serviceName, clusterName)},
 		Clusters: []*v3clusterpb.Cluster{
 			makeAggregateClusterResource(clusterName, []string{dnsClusterName}),
 			makeLogicalDNSClusterResource(dnsClusterName, dnsHostName, dnsPort),
@@ -433,8 +442,7 @@ func (s) TestAggregateCluster_WithOneDNSCluster_HostnameChange(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create xDS client, configure cds_experimental LB policy with a manual
-	// resolver, and dial the test backends.
+	// Create xDS client, xdsResolver, and dial the test backends.
 	cc, cleanup := setupAndDial(t, bootstrapContents)
 	defer cleanup()
 
@@ -452,7 +460,9 @@ func (s) TestAggregateCluster_WithOneDNSCluster_HostnameChange(t *testing.T) {
 	// Update the LOGICAL_DNS cluster's hostname to point to the second backend.
 	dnsHostName, dnsPort = hostAndPortFromAddress(t, servers[1].Address)
 	resources = e2e.UpdateOptions{
-		NodeID: nodeID,
+		NodeID:    nodeID,
+		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(serviceName, routeName)},
+		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeName, serviceName, clusterName)},
 		Clusters: []*v3clusterpb.Cluster{
 			makeAggregateClusterResource(clusterName, []string{dnsClusterName}),
 			makeLogicalDNSClusterResource(dnsClusterName, dnsHostName, dnsPort),
@@ -527,7 +537,9 @@ func (s) TestAggregateCluster_WithEDSAndDNS(t *testing.T) {
 		dnsPort        = uint32(8080)
 	)
 	resources := e2e.UpdateOptions{
-		NodeID: nodeID,
+		NodeID:    nodeID,
+		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(serviceName, routeName)},
+		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeName, serviceName, clusterName)},
 		Clusters: []*v3clusterpb.Cluster{
 			makeAggregateClusterResource(clusterName, []string{edsClusterName, dnsClusterName}),
 			e2e.DefaultCluster(edsClusterName, "", e2e.SecurityLevelNone),
@@ -542,8 +554,7 @@ func (s) TestAggregateCluster_WithEDSAndDNS(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create xDS client, configure cds_experimental LB policy with a manual
-	// resolver, and dial the test backends.
+	// Create xDS client, xdsResolver, and dial the test backends.
 	cc, cleanup := setupAndDial(t, bootstrapContents)
 	defer cleanup()
 
@@ -618,7 +629,9 @@ func (s) TestAggregateCluster_SwitchEDSAndDNS(t *testing.T) {
 	// resource) and DNS cluster (will be used later in the test).
 	const dnsClusterName = clusterName + "-dns"
 	resources := e2e.UpdateOptions{
-		NodeID: nodeID,
+		NodeID:    nodeID,
+		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(serviceName, routeName)},
+		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeName, serviceName, clusterName)},
 		Clusters: []*v3clusterpb.Cluster{
 			makeAggregateClusterResource(clusterName, []string{edsServiceName}),
 			e2e.DefaultCluster(edsServiceName, "", e2e.SecurityLevelNone),
@@ -633,8 +646,7 @@ func (s) TestAggregateCluster_SwitchEDSAndDNS(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create xDS client, configure cds_experimental LB policy with a manual
-	// resolver, and dial the test backends.
+	// Create xDS client, xdsResolver, and dial the test backends.
 	cc, cleanup := setupAndDial(t, bootstrapContents)
 	defer cleanup()
 
@@ -706,7 +718,9 @@ func (s) TestAggregateCluster_BadEDS_GoodToBadDNS(t *testing.T) {
 	)
 	emptyEndpointResource := e2e.DefaultEndpoint(edsServiceName, "localhost", nil)
 	resources := e2e.UpdateOptions{
-		NodeID: nodeID,
+		NodeID:    nodeID,
+		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(serviceName, routeName)},
+		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeName, serviceName, clusterName)},
 		Clusters: []*v3clusterpb.Cluster{
 			makeAggregateClusterResource(clusterName, []string{edsClusterName, dnsClusterName}),
 			e2e.DefaultCluster(edsClusterName, edsServiceName, e2e.SecurityLevelNone),
@@ -721,8 +735,7 @@ func (s) TestAggregateCluster_BadEDS_GoodToBadDNS(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create xDS client, configure cds_experimental LB policy with a manual
-	// resolver, and dial the test backends.
+	// Create xDS client, xdsResolver, and dial the test backends.
 	cc, cleanup := setupAndDial(t, bootstrapContents)
 	defer cleanup()
 
@@ -816,7 +829,9 @@ func (s) TestAggregateCluster_BadEDSFromError_GoodToBadDNS(t *testing.T) {
 		},
 	}
 	resources := e2e.UpdateOptions{
-		NodeID: nodeID,
+		NodeID:    nodeID,
+		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(serviceName, routeName)},
+		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeName, serviceName, clusterName)},
 		Clusters: []*v3clusterpb.Cluster{
 			makeAggregateClusterResource(clusterName, []string{edsClusterName, dnsClusterName}),
 			e2e.DefaultCluster(edsClusterName, edsServiceName, e2e.SecurityLevelNone),
@@ -831,8 +846,7 @@ func (s) TestAggregateCluster_BadEDSFromError_GoodToBadDNS(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create xDS client, configure cds_experimental LB policy with a manual
-	// resolver, and dial the test backends.
+	// Create xDS client, xdsResolver, and dial the test backends.
 	cc, cleanup := setupAndDial(t, bootstrapContents)
 	defer cleanup()
 
@@ -869,7 +883,9 @@ func (s) TestAggregateCluster_BadDNS_GoodEDS(t *testing.T) {
 		dnsPort        = 8080
 	)
 	resources := e2e.UpdateOptions{
-		NodeID: nodeID,
+		NodeID:    nodeID,
+		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(serviceName, routeName)},
+		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeName, serviceName, clusterName)},
 		Clusters: []*v3clusterpb.Cluster{
 			makeAggregateClusterResource(clusterName, []string{dnsClusterName, edsClusterName}),
 			makeLogicalDNSClusterResource(dnsClusterName, dnsHostName, dnsPort),
@@ -884,8 +900,7 @@ func (s) TestAggregateCluster_BadDNS_GoodEDS(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create xDS client, configure cds_experimental LB policy with a manual
-	// resolver, and dial the test backends.
+	// Create xDS client, xdsResolver, and dial the test backends.
 	cc, cleanup := setupAndDial(t, bootstrapContents)
 	defer cleanup()
 
@@ -942,7 +957,9 @@ func (s) TestAggregateCluster_BadEDS_BadDNS(t *testing.T) {
 	)
 	emptyEndpointResource := e2e.DefaultEndpoint(edsServiceName, "localhost", nil)
 	resources := e2e.UpdateOptions{
-		NodeID: nodeID,
+		NodeID:    nodeID,
+		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(serviceName, routeName)},
+		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeName, serviceName, clusterName)},
 		Clusters: []*v3clusterpb.Cluster{
 			makeAggregateClusterResource(clusterName, []string{edsClusterName, dnsClusterName}),
 			e2e.DefaultCluster(edsClusterName, edsServiceName, e2e.SecurityLevelNone),
@@ -951,14 +968,13 @@ func (s) TestAggregateCluster_BadEDS_BadDNS(t *testing.T) {
 		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{emptyEndpointResource},
 		SkipValidation: true,
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), 50*defaultTestTimeout)
 	defer cancel()
 	if err := managementServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
 
-	// Create xDS client, configure cds_experimental LB policy with a manual
-	// resolver, and dial the test backends.
+	// Create xDS client, xdsResolver, and dial the test backends.
 	cc, cleanup := setupAndDial(t, bootstrapContents)
 	defer cleanup()
 
@@ -1024,7 +1040,9 @@ func (s) TestAggregateCluster_NoFallback_EDSNackedWithPreviousGoodUpdate(t *test
 		dnsClusterName = clusterName + "-dns"
 	)
 	resources := e2e.UpdateOptions{
-		NodeID: nodeID,
+		NodeID:    nodeID,
+		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(serviceName, routeName)},
+		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeName, serviceName, clusterName)},
 		Clusters: []*v3clusterpb.Cluster{
 			makeAggregateClusterResource(clusterName, []string{edsClusterName, dnsClusterName}),
 			e2e.DefaultCluster(edsClusterName, "", e2e.SecurityLevelNone),
@@ -1039,8 +1057,7 @@ func (s) TestAggregateCluster_NoFallback_EDSNackedWithPreviousGoodUpdate(t *test
 		t.Fatal(err)
 	}
 
-	// Create xDS client, configure cds_experimental LB policy with a manual
-	// resolver, and dial the test backends.
+	// Create xDS client, xdsResolver, and dial the test backends.
 	cc, cleanup := setupAndDial(t, bootstrapContents)
 	defer cleanup()
 
@@ -1103,7 +1120,9 @@ func (s) TestAggregateCluster_Fallback_EDSNackedWithoutPreviousGoodUpdate(t *tes
 		dnsClusterName = clusterName + "-dns"
 	)
 	resources := e2e.UpdateOptions{
-		NodeID: nodeID,
+		NodeID:    nodeID,
+		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(serviceName, routeName)},
+		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeName, serviceName, clusterName)},
 		Clusters: []*v3clusterpb.Cluster{
 			makeAggregateClusterResource(clusterName, []string{edsClusterName, dnsClusterName}),
 			e2e.DefaultCluster(edsClusterName, "", e2e.SecurityLevelNone),
@@ -1124,8 +1143,7 @@ func (s) TestAggregateCluster_Fallback_EDSNackedWithoutPreviousGoodUpdate(t *tes
 		t.Fatal(err)
 	}
 
-	// Create xDS client, configure cds_experimental LB policy with a manual
-	// resolver, and dial the test backends.
+	// Create xDS client, xdsResolver, and dial the test backends.
 	cc, cleanup := setupAndDial(t, bootstrapContents)
 	defer cleanup()
 
@@ -1165,7 +1183,9 @@ func (s) TestAggregateCluster_Fallback_EDS_ResourceNotFound(t *testing.T) {
 		dnsClusterName = clusterName + "-dns"
 	)
 	resources := e2e.UpdateOptions{
-		NodeID: nodeID,
+		NodeID:    nodeID,
+		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(serviceName, routeName)},
+		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeName, serviceName, clusterName)},
 		Clusters: []*v3clusterpb.Cluster{
 			makeAggregateClusterResource(clusterName, []string{edsClusterName, dnsClusterName}),
 			e2e.DefaultCluster(edsClusterName, "", e2e.SecurityLevelNone),
@@ -1186,6 +1206,8 @@ func (s) TestAggregateCluster_Fallback_EDS_ResourceNotFound(t *testing.T) {
 		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
 	}
 	pool := xdsclient.NewPool(config)
+	// Create a new xDS client with a short watch expiry to quickly detect the
+	// missing endpoints resource.
 	xdsClient, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
 		Name:               t.Name(),
 		WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
@@ -1195,27 +1217,19 @@ func (s) TestAggregateCluster_Fallback_EDS_ResourceNotFound(t *testing.T) {
 	}
 	defer close()
 
-	// Create a manual resolver and push a service config specifying the use of
-	// the cds LB policy as the top-level LB policy, and a corresponding config
-	// with a single cluster.
-	r := manual.NewBuilderWithScheme("whatever")
-	jsonSC := fmt.Sprintf(`{
-			"loadBalancingConfig":[{
-				"cds_experimental":{
-					"cluster": "%s"
-				}
-			}]
-		}`, clusterName)
-	scpr := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(jsonSC)
-	r.InitialState(xdsclient.SetClient(resolver.State{ServiceConfig: scpr}, xdsClient))
-
-	// Create a ClientConn.
-	cc, err := grpc.NewClient(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
-	if err != nil {
-		t.Fatalf("failed to create new client for local test server: %v", err)
+	if internal.NewXDSResolverWithClientForTesting == nil {
+		t.Fatalf("internal.NewXDSResolverWithClientForTesting is nil")
 	}
+	r, err := internal.NewXDSResolverWithClientForTesting.(func(xdsclient.XDSClient) (resolver.Builder, error))(xdsClient)
+	if err != nil {
+		t.Fatalf("failed to create resolver")
+	}
+	cc, err := grpc.NewClient("xds:///"+serviceName, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
+	if err != nil {
+		t.Fatalf("grpc.NewClient() failed: %v", err)
+	}
+	cc.Connect()
 	defer cc.Close()
-
 	// Make an RPC and ensure that it gets routed to the LOGICAL_DNS cluster.
 	// Even though the EDS cluster is of higher priority, since the management
 	// server does not respond with an EDS resource, the cluster_resolver LB
