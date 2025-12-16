@@ -216,9 +216,9 @@ func makeXDSConfig(routeConfigName, clusterName, edsServiceName, addr string) *x
 								},
 									Endpoints: []xdsresource.Endpoint{
 										{
-											Addresses:    []string{addr},
-											HealthStatus: xdsresource.EndpointHealthStatusUnknown,
-											Weight:       1,
+											ResolverEndpoint: resolver.Endpoint{Addresses: []resolver.Address{{Addr: addr}}},
+											HealthStatus:     xdsresource.EndpointHealthStatusUnknown,
+											Weight:           1,
 										},
 									},
 									Weight: 1,
@@ -743,9 +743,9 @@ func (s) TestRouteResourceUpdate(t *testing.T) {
 							},
 								Endpoints: []xdsresource.Endpoint{
 									{
-										Addresses:    []string{"localhost:8081"},
-										HealthStatus: xdsresource.EndpointHealthStatusUnknown,
-										Weight:       1,
+										ResolverEndpoint: resolver.Endpoint{Addresses: []resolver.Address{{Addr: "localhost:8081"}}},
+										HealthStatus:     xdsresource.EndpointHealthStatusUnknown,
+										Weight:           1,
 									},
 								},
 								Weight: 1,
@@ -866,9 +866,9 @@ func (s) TestRouteResourceChangeToInline(t *testing.T) {
 								},
 									Endpoints: []xdsresource.Endpoint{
 										{
-											Addresses:    []string{"localhost:8081"},
-											HealthStatus: xdsresource.EndpointHealthStatusUnknown,
-											Weight:       1,
+											ResolverEndpoint: resolver.Endpoint{Addresses: []resolver.Address{{Addr: "localhost:8081"}}},
+											HealthStatus:     xdsresource.EndpointHealthStatusUnknown,
+											Weight:           1,
 										},
 									},
 									Weight: 1,
@@ -1113,9 +1113,9 @@ func (s) TestAggregateCluster(t *testing.T) {
 								},
 									Endpoints: []xdsresource.Endpoint{
 										{
-											Addresses:    []string{"localhost:8080"},
-											HealthStatus: xdsresource.EndpointHealthStatusUnknown,
-											Weight:       1,
+											ResolverEndpoint: resolver.Endpoint{Addresses: []resolver.Address{{Addr: "localhost:8080"}}},
+											HealthStatus:     xdsresource.EndpointHealthStatusUnknown,
+											Weight:           1,
 										},
 									},
 									Weight: 1,
