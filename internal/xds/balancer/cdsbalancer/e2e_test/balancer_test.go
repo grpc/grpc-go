@@ -93,11 +93,11 @@ func setupAndDial(t *testing.T, bootstrapContents []byte) (*grpc.ClientConn, fun
 }
 
 // TestErrorFromParentLB_ConnectionError tests the case where a connection error
-// is sent by the CDS LB Policy. The CDS LB policy sends a connection error when the ADS stream
-// to the management server breaks. The test verifies that there is no
-// perceivable effect because of this connection error, and that RPCs continue
-// to work (because the LB policies are expected to use previously received xDS
-// resources).
+// is sent by the CDS LB Policy. The CDS LB policy sends a connection error when
+// the ADS stream to the management server breaks. The test verifies that there
+// is no perceivable effect because of this connection error, and that RPCs
+// continue to work (because the LB policies are expected to use previously
+// received xDS resources).
 func (s) TestErrorFromParentLB_ConnectionError(t *testing.T) {
 	// Create a listener to be used by the management server. The test will
 	// close this listener to simulate ADS stream breakage.
