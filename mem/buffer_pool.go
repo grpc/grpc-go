@@ -19,6 +19,7 @@
 package mem
 
 import (
+	"math/bits"
 	"sort"
 	"sync"
 
@@ -38,20 +39,21 @@ type BufferPool interface {
 	Put(*[]byte)
 }
 
-const goPageSize = 4 << 10 // 4KiB. N.B. this must be a power of 2.
+const goPageSizeExponent = 12
+const goPageSize = 1 << goPageSizeExponent // 4KiB. N.B. this must be a power of 2.
 
-var defaultBufferPoolSizes = []int{
-	256,
-	goPageSize,
-	16 << 10, // 16KB (max HTTP/2 frame size used by gRPC)
-	32 << 10, // 32KB (default buffer size for io.Copy)
-	1 << 20,  // 1MB
+var defaultBufferPoolSizeExponents = []int{
+	8,
+	goPageSizeExponent,
+	14, // 16KB (max HTTP/2 frame size used by gRPC)
+	15, // 32KB (default buffer size for io.Copy)
+	20, // 1MB
 }
 
 var defaultBufferPool BufferPool
 
 func init() {
-	defaultBufferPool = NewTieredBufferPool(defaultBufferPoolSizes...)
+	defaultBufferPool = NewBinaryTieredBufferPool(defaultBufferPoolSizeExponents...)
 
 	internal.SetDefaultBufferPoolForTesting = func(pool BufferPool) {
 		defaultBufferPool = pool
@@ -107,6 +109,132 @@ func (p *tieredBufferPool) getPool(size int) BufferPool {
 	}
 
 	return p.sizedPools[poolIdx]
+}
+
+type binaryTieredBufferPool struct {
+	indexOfNextLargestBit     []int
+	indexOfPreviousLargestBit []int
+	sizedPools                []*sizedBufferPool
+	fallbackPool              simpleBufferPool
+	maxPoolCap                int // Optimization: Cache max capacity
+}
+
+// NewBinaryTieredBufferPool returns a BufferPool implementation that uses
+// multiple underlying pools of the given pool sizes. The pool sizes must be
+// powers of 2. This enables O(1) lookup when getting or putting a buffer.
+//
+// Note that the argument passed to this functions are the powers of 2 of the
+// capacity of the buffers in the pool, not the capacities of the buffers
+// themselves. For example, if you wanted a pool that had buffers with a capacity
+// of 16kb, you would pass 14 as the argument to this function.
+func NewBinaryTieredBufferPool(powerOfTwoExponents ...int) BufferPool {
+	sort.Ints(powerOfTwoExponents)
+
+	// Determine the maximum exponent we need to support.
+	// bits.Len64(math.MaxUint64) is 63.
+	const maxExponent = 63
+	indexOfNextLargestBit := make([]int, maxExponent+1)
+	indexOfPreviousLargestBit := make([]int, maxExponent+1)
+
+	// Initialize with sentinel values
+	for i := range indexOfNextLargestBit {
+		indexOfNextLargestBit[i] = -1
+		indexOfPreviousLargestBit[i] = -1
+	}
+
+	maxCap := 0
+	pools := make([]*sizedBufferPool, 0, len(powerOfTwoExponents))
+
+	for i, exp := range powerOfTwoExponents {
+		if exp > maxExponent || exp < 0 {
+			continue
+		}
+		capSize := 1 << exp
+		pools = append(pools, newSizedBufferPool(capSize))
+		if capSize > maxCap {
+			maxCap = capSize
+		}
+
+		// Map the exact power of 2 to this pool index.
+		indexOfNextLargestBit[exp] = i
+		indexOfPreviousLargestBit[exp] = i
+	}
+
+	// Fill gaps for Get() (Next Largest)
+	// We iterate backwards. If current is empty, take the value from the right (larger).
+	for i := maxExponent - 1; i >= 0; i-- {
+		if indexOfNextLargestBit[i] == -1 {
+			indexOfNextLargestBit[i] = indexOfNextLargestBit[i+1]
+		}
+	}
+
+	// Fill gaps for Put() (Previous Largest)
+	// We iterate forwards. If current is empty, take the value from the left (smaller).
+	for i := 1; i <= maxExponent; i++ {
+		if indexOfPreviousLargestBit[i] == -1 {
+			indexOfPreviousLargestBit[i] = indexOfPreviousLargestBit[i-1]
+		}
+	}
+
+	return &binaryTieredBufferPool{
+		indexOfNextLargestBit:     indexOfNextLargestBit,
+		indexOfPreviousLargestBit: indexOfPreviousLargestBit,
+		sizedPools:                pools,
+		maxPoolCap:                maxCap,
+	}
+}
+
+func (b *binaryTieredBufferPool) Get(size int) *[]byte {
+	return b.poolForGet(size).Get(size)
+}
+
+func (b *binaryTieredBufferPool) poolForGet(size int) BufferPool {
+	if size == 0 || size > b.maxPoolCap {
+		return &b.fallbackPool
+	}
+
+	// Calculate the exponent of the smallest power of 2 >= size.
+	// We subtract 1 from size to handle exact powers of 2 correctly.
+	//
+	// Examples:
+	// size=16 (0b10000) -> size-1=15 (0b01111) -> bits.Len=4 -> Pool for 2^4
+	// size=17 (0b10001) -> size-1=16 (0b10000) -> bits.Len=5 -> Pool for 2^5
+	querySize := uint(size - 1)
+	poolIdx := b.indexOfNextLargestBit[bits.Len(querySize)]
+
+	return b.sizedPools[poolIdx]
+}
+
+func (b *binaryTieredBufferPool) Put(buf *[]byte) {
+	b.poolForPut(cap(*buf)).Put(buf)
+}
+
+func (b *binaryTieredBufferPool) poolForPut(bCap int) BufferPool {
+	if bCap == 0 {
+		return NopBufferPool{}
+	}
+	if bCap > b.maxPoolCap {
+		return &b.fallbackPool
+	}
+	// Find the pool with the largest capacity <= bCap.
+	//
+	// We calculate the exponent of the largest power of 2 <= bCap.
+	// bits.Len(x) returns the minimum number of bits required to represent x;
+	// i.e. the number of bits up to and including the most significant bit.
+	// Subtracting 1 gives the 0-based index of the most significant bit,
+	// which is the exponent of the largest power of 2 <= bCap.
+	//
+	// Examples:
+	// cap=16 (0b10000) -> Len=5 -> 5-1=4 -> 2^4
+	// cap=15 (0b01111) -> Len=4 -> 4-1=3 -> 2^3
+	largestPowerOfTwo := bits.Len(uint(bCap)) - 1
+	poolIdx := b.indexOfPreviousLargestBit[largestPowerOfTwo]
+	// The buffer is smaller than the smallest power of 2, discard it.
+	if poolIdx == -1 {
+		// Buffer is smaller than our smallest pool bucket.
+		return NopBufferPool{}
+	}
+	return b.sizedPools[poolIdx]
 }
 
 // sizedBufferPool is a BufferPool implementation that is optimized for specific
