@@ -21,7 +21,6 @@ package stats
 import (
 	"fmt"
 	"strings"
-	"sync"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -260,9 +259,6 @@ type fakeMetricsRecorder struct {
 
 	intValues   map[*MetricDescriptor]int64
 	floatValues map[*MetricDescriptor]float64
-
-	// wg tracks running async reporters
-	wg sync.WaitGroup
 }
 
 // newFakeMetricsRecorder returns a fake metrics recorder based off the current
@@ -320,17 +316,8 @@ func (r *fakeMetricsRecorder) RecordInt64AsyncGauge(handle *Int64AsyncGaugeHandl
 	r.intValues[handle.Descriptor()] = val
 }
 
-func (r *fakeMetricsRecorder) RegisterAsyncReporter(reporter AsyncMetricReporter, _ ...AsyncMetric) func() {
-
-	r.wg.Add(1)
-
-	go func() {
-		defer r.wg.Done()
-		err := reporter.Report(r)
-		if err != nil {
-			r.t.Logf("Async reporter returned error: %v", err)
-		}
-	}()
-
+// RegisterAsyncReporter is noop implementation, this might be changed at a
+// later stage.
+func (r *fakeMetricsRecorder) RegisterAsyncReporter(AsyncMetricReporter, ...AsyncMetric) func() {
 	return func() {}
 }
