@@ -21,6 +21,7 @@ package xdsdepmgr_test
 import (
 	"context"
 	"fmt"
+	"hash/fnv"
 	"regexp"
 	"strings"
 	"testing"
@@ -123,18 +124,20 @@ func verifyError(ctx context.Context, errCh chan error, wantErr, wantNodeID stri
 // This function determines the stable, canonical order for any two
 // resolver.Endpoint structs.
 func lessEndpoint(a, b resolver.Endpoint) bool {
-	// Safely access the first address string for comparison.
-	addrA := ""
-	if len(a.Addresses) > 0 {
-		addrA = a.Addresses[0].Addr
+	return getHash(a) < getHash(b)
+}
+
+func getHash(e resolver.Endpoint) uint64 {
+	h := fnv.New64a()
+
+	// We iterate through all addresses to ensure the hash represents
+	// the full endpoint identity.
+	for _, addr := range e.Addresses {
+		h.Write([]byte(addr.Addr))
+		h.Write([]byte(addr.ServerName))
 	}
 
-	addrB := ""
-	if len(b.Addresses) > 0 {
-		addrB = b.Addresses[0].Addr
-	}
-
-	return addrA < addrB
+	return h.Sum64()
 }
 
 func verifyXDSConfig(ctx context.Context, xdsCh chan *xdsresource.XDSConfig, errCh chan error, want *xdsresource.XDSConfig) error {
@@ -167,7 +170,6 @@ func verifyXDSConfig(ctx context.Context, xdsCh chan *xdsresource.XDSConfig, err
 			cmpopts.SortSlices(lessEndpoint),
 		}
 		if diff := cmp.Diff(update, want, cmpOpts...); diff != "" {
-			fmt.Printf("eshita got config %v", update.Clusters)
 			return fmt.Errorf("received unexpected update from dependency manager. Diff (-got +want):\n%v", diff)
 		}
 	case err := <-errCh:
