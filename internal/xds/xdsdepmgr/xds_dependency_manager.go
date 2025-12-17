@@ -262,9 +262,9 @@ func (m *DependencyManager) populateClusterConfigLocked(clusterName string, dept
 	clustersSeen[clusterName] = true
 
 	if depth >= aggregateClusterMaxDepth {
-		err := fmt.Errorf("aggregate cluster graph exceeds max depth (%d)", aggregateClusterMaxDepth)
+		err := m.annotateErrorWithNodeID(fmt.Errorf("aggregate cluster graph exceeds max depth (%d)", aggregateClusterMaxDepth))
 		clusterConfigs[clusterName] = &xdsresource.ClusterResult{Err: err}
-		return true, nil, m.annotateErrorWithNodeID(err)
+		return true, nil, err
 	}
 
 	// If cluster is already seen in the tree, return.
