@@ -1040,7 +1040,7 @@ func (s) TestResolverDelayedOnCommitted(t *testing.T) {
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
-	// sending the cluster seperately to avoid the race between cluster resource
+	// sending the cluster separately to avoid the race between cluster resource
 	// error and route update.
 	resources.Clusters = []*v3clusterpb.Cluster{e2e.DefaultCluster(newClusterName, newEndpointName, e2e.SecurityLevelNone)}
 	resources.Endpoints = []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(newEndpointName, defaultTestHostname, defaultTestPort)}
