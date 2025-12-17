@@ -62,7 +62,8 @@ func (s) TestLogicalDNS_MultipleEndpoints(t *testing.T) {
 	server2 := stubserver.StartTestService(t, nil)
 	defer server2.Stop()
 
-	// Mock the DNS Resolver
+	// Override the DNS resolver with a manual resolver that returns the
+	// addresses of the above server backends.
 	const dnsScheme = "dns"
 	dnsR := manual.NewBuilderWithScheme(dnsScheme)
 	originalDNS := resolver.Get("dns")
