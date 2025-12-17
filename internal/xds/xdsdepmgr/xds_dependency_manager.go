@@ -34,10 +34,6 @@ const prefix = "[xdsdepmgr %p] "
 
 var logger = grpclog.Component("xds")
 
-// EnableClusterAndEndpointsWatch is a flag used to control whether the CDS/EDS
-// watchers in the dependency manager should be used.
-var EnableClusterAndEndpointsWatch = false
-
 func prefixLogger(p *DependencyManager) *internalgrpclog.PrefixLogger {
 	return internalgrpclog.NewPrefixLogger(logger, fmt.Sprintf(prefix, p))
 }
@@ -183,16 +179,19 @@ func (m *DependencyManager) maybeSendUpdateLocked() {
 		Clusters:    make(map[string]*xdsresource.ClusterResult),
 	}
 
-	if !EnableClusterAndEndpointsWatch {
-		m.watcher.Update(config)
-		return
-	}
-
 	edsResourcesSeen := make(map[string]bool)
 	dnsResourcesSeen := make(map[string]bool)
 	clusterResourcesSeen := make(map[string]bool)
 	haveAllResources := true
+
+	clusterToWatch := make(map[string]bool)
 	for cluster := range m.clustersFromRouteConfig {
+		clusterToWatch[cluster] = true
+	}
+	for cluster := range m.ClusterSubs {
+		clusterToWatch[cluster] = true
+	}
+	for cluster := range clusterToWatch {
 		ok, leafClusters, err := m.populateClusterConfigLocked(cluster, 0, config.Clusters, edsResourcesSeen, dnsResourcesSeen, clusterResourcesSeen)
 		if !ok {
 			haveAllResources = false
@@ -398,29 +397,28 @@ func (m *DependencyManager) applyRouteConfigUpdateLocked(update *xdsresource.Rou
 	m.currentRouteConfig = update
 	m.currentVirtualHost = matchVH
 
-	if EnableClusterAndEndpointsWatch {
-		// Get the clusters to be watched from the routes in the virtual host.
-		// If the CLusterSpecifierField is set, we ignore it for now as the
-		// clusters will be determined dynamically for it.
-		newClusters := make(map[string]bool)
+	// Get the clusters to be watched from the routes in the virtual host.
+	// If the CLusterSpecifierField is set, we ignore it for now as the
+	// clusters will be determined dynamically for it.
+	newClusters := make(map[string]bool)
 
-		for _, rt := range matchVH.Routes {
-			for _, cluster := range rt.WeightedClusters {
-				newClusters[cluster.Name] = true
-			}
+	for _, rt := range matchVH.Routes {
+		for _, cluster := range rt.WeightedClusters {
+			newClusters[cluster.Name] = true
 		}
-		// Cancel watch for clusters not seen in route config
-		for name := range m.clustersFromRouteConfig {
-			if _, ok := newClusters[name]; !ok {
-				m.clusterWatchers[name].cancelWatch()
-				delete(m.clusterWatchers, name)
-			}
-		}
-
-		// Watch for new clusters is started in populateClusterConfigLocked to
-		// avoid repeating the code.
-		m.clustersFromRouteConfig = newClusters
 	}
+	// Cancel watch for clusters not seen in route config
+	for name := range m.clustersFromRouteConfig {
+		if _, ok := newClusters[name]; !ok {
+			m.clusterWatchers[name].cancelWatch()
+			delete(m.clusterWatchers, name)
+		}
+	}
+
+	// Watch for new clusters is started in populateClusterConfigLocked to
+	// avoid repeating the code.
+	m.clustersFromRouteConfig = newClusters
+
 	m.maybeSendUpdateLocked()
 }
 

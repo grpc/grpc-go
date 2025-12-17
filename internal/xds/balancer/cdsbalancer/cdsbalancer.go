@@ -179,8 +179,7 @@ type cdsBalancer struct {
 	attrsWithClient  *attributes.Attributes       // Attributes with xdsClient attached to be passed to the child policies.
 	clusterConfig    map[string]*xdsresource.ClusterResult
 	clusterSubs      *xdsdepmgr.ClusterRefs
-	watchers         map[string]*watcherState // Set of watchers and associated state, keyed by cluster name.
-	lbCfg            *lbConfig                // Current load balancing configuration.
+	lbCfg            *lbConfig // Current load balancing configuration.
 	xdsLBPolicy      internalserviceconfig.BalancerConfig
 	priorityConfig   map[discoveryMechanismKey]priorityConfig
 	// Each new discovery mechanism needs a child name generator to reuse child
@@ -284,8 +283,7 @@ func buildProviderFunc(configs map[string]*certprovider.BuildableConfig, instanc
 	return provider, nil
 }
 
-// updateChildConfig builds child policy configuration using endpoint addresses
-// returned by the resource resolver and child policy configuration provided by
+// updateChildConfig builds child policy configurœation using XDSConfig and child policy configuration provided by
 // parent LB policy.
 //
 // A child policy is created if one doesn't already exist. The newly built
@@ -389,46 +387,8 @@ func (b *cdsBalancer) UpdateClientConnState(state balancer.ClientConnState) erro
 
 	// Handle the update in a blocking fashion.
 	errCh := make(chan error, 1)
-	callback := func(context.Context) {
-		// If the cluster is dynamic and we dont have a subscription yet, create
-		// one.
-		if b.lbCfg.IsDynamic && b.clusterSubs == nil {
-			xdsdepmngr := xdsdepmgr.DependencyManagerFromResolverState(state.ResolverState)
-			if xdsdepmngr == nil {
-				panic("No dependency manager passed")
-			}
-			b.clusterSubs = xdsdepmngr.Clustersubscription(lbCfg.ClusterName)
-			return
-		}
-
-		if _, ok := b.clusterConfig[b.lbCfg.ClusterName]; !ok {
-			// If the cluster is dynamic, could be that we just subscribed and
-			// have not yet received the cluster update yet.
-			if b.lbCfg.IsDynamic {
-				errCh <- nil
-				return
-			}
-			b.onClusterResourceError(lbCfg.ClusterName, b.annotateErrorWithNodeID(fmt.Errorf("did not find the static cluster in xdsConfig")))
-			errCh <- nil
-			return
-		}
-
-		// If the cluster resource has an error report transient failure
-		if b.clusterConfig[lbCfg.ClusterName].Err != nil {
-			b.onClusterResourceError(b.lbCfg.ClusterName, b.clusterConfig[lbCfg.ClusterName].Err)
-			errCh <- nil
-			return
-		}
-
-		if err := b.handleSecurityConfig(b.clusterConfig[b.lbCfg.ClusterName].Config.Cluster.SecurityCfg); err != nil {
-			// If the security config is invalid, for example, if the provider
-			// instance is not found in the bootstrap config, we need to put the
-			// channel in transient failure.
-			b.onClusterResourceError(b.lbCfg.ClusterName, b.annotateErrorWithNodeID(fmt.Errorf("received Cluster resource contains invalid security config: %v", err)))
-			errCh <- nil
-			return
-		}
-		b.onClusterUpdate()
+	callback := func(ctx context.Context) {
+		b.processUpdate()
 		errCh <- nil
 	}
 	onFailure := func() {
@@ -440,12 +400,53 @@ func (b *cdsBalancer) UpdateClientConnState(state balancer.ClientConnState) erro
 	return <-errCh
 }
 
+// processUpdate processes the update from the xDS resolver.
+func (b *cdsBalancer) processUpdate() {
+	// If the cluster is dynamic and we dont have a subscription yet, create
+	// one.
+	if b.lbCfg.IsDynamic && b.clusterSubs == nil {
+		xdsdepmngr := xdsdepmgr.DependencyManagerFromResolverState(resolver.State{Attributes: b.attrsWithClient})
+		if xdsdepmngr == nil {
+			// This should ideally strictly exist as we are using the new resolver
+			b.logger.Errorf("No dependency manager passed in resolver state")
+			return
+		}
+		b.clusterSubs = xdsdepmngr.Clustersubscription(b.lbCfg.ClusterName)
+		return
+	}
+
+	if _, ok := b.clusterConfig[b.lbCfg.ClusterName]; !ok {
+		// If the cluster is dynamic, could be that we just subscribed and
+		// have not yet received the cluster update yet.
+		if b.lbCfg.IsDynamic {
+			return
+		}
+		b.onClusterResourceError(b.lbCfg.ClusterName, b.annotateErrorWithNodeID(fmt.Errorf("did not find the static cluster in xdsConfig")))
+		return
+	}
+
+	// If the cluster resource has an error report transient failure
+	if b.clusterConfig[b.lbCfg.ClusterName].Err != nil {
+		b.onClusterResourceError(b.lbCfg.ClusterName, b.clusterConfig[b.lbCfg.ClusterName].Err)
+		return
+	}
+
+	if err := b.handleSecurityConfig(b.clusterConfig[b.lbCfg.ClusterName].Config.Cluster.SecurityCfg); err != nil {
+		// If the security config is invalid, for example, if the provider
+		// instance is not found in the bootstrap config, we need to put the
+		// channel in transient failure.
+		b.onClusterResourceError(b.lbCfg.ClusterName, b.annotateErrorWithNodeID(fmt.Errorf("received Cluster resource contains invalid security config: %v", err)))
+		return
+	}
+	b.onClusterUpdate()
+}
+
 // ResolverError handles errors reported by the xdsResolver.
 func (b *cdsBalancer) ResolverError(err error) {
 	b.serializer.TrySchedule(func(context.Context) {
 		// Missing Listener or RouteConfiguration on the management server
 		// results in a 'resource not found' error from the xDS resolver. In
-		// these cases, we should stap watching all of the current clusters
+		// these cases, we should step watching all of the current clusters
 		// being watched.
 		if xdsresource.ErrType(err) == xdsresource.ErrorTypeResourceNotFound {
 			b.closeChildPolicyAndReportTF(err)
@@ -538,192 +539,74 @@ func (b *cdsBalancer) annotateErrorWithNodeID(err error) error {
 //
 // Only executed in the context of a serializer callback.
 func (b *cdsBalancer) onClusterUpdate() {
-	// generate result to send
-	switch b.clusterConfig[b.lbCfg.ClusterName].Config.Cluster.ClusterType {
-	case xdsresource.ClusterTypeEDS:
-		if b.clusterConfig[b.lbCfg.ClusterName].Config.EndpointConfig == nil {
-			b.logger.Errorf("DEBUG: onClusterUpdate EDSUpdate is NIL")
-			b.onClusterResourceError(b.lbCfg.ClusterName, fmt.Errorf("no update received from EDS"))
-			return
-		}
-		dm := DiscoveryMechanism{
-			Type:                  DiscoveryMechanismTypeEDS,
-			Cluster:               b.lbCfg.ClusterName,
-			EDSServiceName:        b.clusterConfig[b.lbCfg.ClusterName].Config.Cluster.EDSServiceName,
-			MaxConcurrentRequests: b.clusterConfig[b.lbCfg.ClusterName].Config.Cluster.MaxRequests,
-			LoadReportingServer:   b.clusterConfig[b.lbCfg.ClusterName].Config.Cluster.LRSServerConfig,
-		}
-
-		// get correct Outlier detection
-		dmkey := discoveryMechanismToKey(dm)
-		var priority priorityConfig
-		if _, ok := b.priorityConfig[dmkey]; !ok {
-			priority = priorityConfig{
-				mechanism:    dm,
-				childNameGen: newNameGenerator(b.childNameGeneratorSeqID),
-			}
-			b.childNameGeneratorSeqID++
-			if b.clusterConfig[b.lbCfg.ClusterName].Config.EndpointConfig.EDSUpdate != nil {
-				priority.edsResp = *b.clusterConfig[b.lbCfg.ClusterName].Config.EndpointConfig.EDSUpdate
-			}
-			b.priorityConfig[dmkey] = priority
-		} else {
-			priority = b.priorityConfig[dmkey]
-			priority.mechanism = dm
-			if b.clusterConfig[b.lbCfg.ClusterName].Config.EndpointConfig.EDSUpdate != nil {
-				priority.edsResp = *b.clusterConfig[b.lbCfg.ClusterName].Config.EndpointConfig.EDSUpdate
-			} else {
-				priority.edsResp = xdsresource.EndpointsUpdate{}
-			}
-			b.priorityConfig[dmkey] = priority
-		}
-		b.priorities = []priorityConfig{priority}
-	case xdsresource.ClusterTypeLogicalDNS:
-		// if b.clusterConfig[b.lbCfg.ClusterName].Config.EndpointConfig.DNSEndpoints == nil {
-		// 	b.onClusterResourceError(b.lbCfg.ClusterName, b.clusterConfig[b.lbCfg.ClusterName].Config.EndpointConfig.ResolutionNote)
-		// 	return
-		// }
-		dm := DiscoveryMechanism{
-			Type:                  DiscoveryMechanismTypeLogicalDNS,
-			Cluster:               b.lbCfg.ClusterName,
-			DNSHostname:           b.clusterConfig[b.lbCfg.ClusterName].Config.Cluster.DNSHostName,
-			MaxConcurrentRequests: b.clusterConfig[b.lbCfg.ClusterName].Config.Cluster.MaxRequests,
-			LoadReportingServer:   b.clusterConfig[b.lbCfg.ClusterName].Config.Cluster.LRSServerConfig,
-		}
-
-		// get correct Outlier detection
-		dmkey := discoveryMechanismToKey(dm)
-		var priority priorityConfig
-		if _, ok := b.priorityConfig[dmkey]; !ok {
-			priority = priorityConfig{
-				mechanism: dm,
-				// endpoints:    b.clusterConfig[b.lbCfg.ClusterName].Config.EndpointConfig.DNSEndpoints.Endpoints,
-				childNameGen: newNameGenerator(b.childNameGeneratorSeqID),
-			}
-			b.childNameGeneratorSeqID++
-			if b.clusterConfig[b.lbCfg.ClusterName].Config.EndpointConfig.DNSEndpoints != nil {
-				priority.endpoints = b.clusterConfig[b.lbCfg.ClusterName].Config.EndpointConfig.DNSEndpoints.Endpoints
-			}
-			b.priorityConfig[dmkey] = priority
-		} else {
-			priority = b.priorityConfig[dmkey]
-			priority.mechanism = dm
-			if b.clusterConfig[b.lbCfg.ClusterName].Config.EndpointConfig.DNSEndpoints != nil {
-				priority.endpoints = b.clusterConfig[b.lbCfg.ClusterName].Config.EndpointConfig.DNSEndpoints.Endpoints
-			} else {
-				priority.endpoints = nil
-			}
-			// priority.endpoints = b.clusterConfig[b.lbCfg.ClusterName].Config.EndpointConfig.DNSEndpoints.Endpoints
-			b.priorityConfig[dmkey] = priority
-		}
-		b.priorities = []priorityConfig{priority}
-	case xdsresource.ClusterTypeAggregate:
-		newPriorities := []priorityConfig{}
-		leafClusterNames := b.clusterConfig[b.lbCfg.ClusterName].Config.AggregateConfig.LeafClusters
-		for _, leafClusterName := range leafClusterNames {
-			// if b.clusterConfig[leafClusterName].Config.EndpointConfig.EDSUpdate == nil && b.clusterConfig[leafClusterName].Config.EndpointConfig.DNSEndpoints == nil {
-			// 	b.logger.Warningf("received error for the cluster %s , %s", leafClusterName, b.clusterConfig[leafClusterName].Config.EndpointConfig.ResolutionNote)
-			// 	continue
-			// }
-			if b.clusterConfig[leafClusterName].Config.Cluster.ClusterType == xdsresource.ClusterTypeEDS {
-				dm := DiscoveryMechanism{
-					Type:                  DiscoveryMechanismTypeEDS,
-					Cluster:               leafClusterName,
-					EDSServiceName:        b.clusterConfig[leafClusterName].Config.Cluster.EDSServiceName,
-					MaxConcurrentRequests: b.clusterConfig[leafClusterName].Config.Cluster.MaxRequests,
-					LoadReportingServer:   b.clusterConfig[leafClusterName].Config.Cluster.LRSServerConfig,
-				}
-				// get correct Outlier detection
-				dmkey := discoveryMechanismToKey(dm)
-				var priority priorityConfig
-				if _, ok := b.priorityConfig[dmkey]; !ok {
-					priority = priorityConfig{
-						mechanism: dm,
-						// edsResp:      *b.clusterConfig[leafClusterName].Config.EndpointConfig.EDSUpdate,
-						childNameGen: newNameGenerator(b.childNameGeneratorSeqID),
-					}
-					b.childNameGeneratorSeqID++
-					if b.clusterConfig[leafClusterName].Config.EndpointConfig.EDSUpdate != nil {
-						priority.edsResp = *b.clusterConfig[leafClusterName].Config.EndpointConfig.EDSUpdate
-					}
-					b.priorityConfig[dmkey] = priority
-				} else {
-					priority = b.priorityConfig[dmkey]
-					priority.mechanism = dm
-					// priority.edsResp = *b.clusterConfig[leafClusterName].Config.EndpointConfig.EDSUpdate
-					if b.clusterConfig[leafClusterName].Config.EndpointConfig.EDSUpdate != nil {
-						priority.edsResp = *b.clusterConfig[leafClusterName].Config.EndpointConfig.EDSUpdate
-					} else {
-						priority.edsResp = xdsresource.EndpointsUpdate{}
-					}
-					b.priorityConfig[dmkey] = priority
-				}
-				newPriorities = append(newPriorities, priority)
-			} else if b.clusterConfig[leafClusterName].Config.Cluster.ClusterType == xdsresource.ClusterTypeLogicalDNS {
-				dm := DiscoveryMechanism{
-					Type:                  DiscoveryMechanismTypeLogicalDNS,
-					Cluster:               leafClusterName,
-					DNSHostname:           b.clusterConfig[leafClusterName].Config.Cluster.DNSHostName,
-					MaxConcurrentRequests: b.clusterConfig[leafClusterName].Config.Cluster.MaxRequests,
-					LoadReportingServer:   b.clusterConfig[leafClusterName].Config.Cluster.LRSServerConfig,
-				}
-				// get correct Outlier detection
-				dmkey := discoveryMechanismToKey(dm)
-				var priority priorityConfig
-				if _, ok := b.priorityConfig[dmkey]; !ok {
-					priority = priorityConfig{
-						mechanism: dm,
-						// endpoints:    b.clusterConfig[leafClusterName].Config.EndpointConfig.DNSEndpoints.Endpoints,
-						childNameGen: newNameGenerator(b.childNameGeneratorSeqID),
-					}
-					b.childNameGeneratorSeqID++
-					if b.clusterConfig[leafClusterName].Config.EndpointConfig.DNSEndpoints != nil {
-						priority.endpoints = b.clusterConfig[leafClusterName].Config.EndpointConfig.DNSEndpoints.Endpoints
-					}
-					b.priorityConfig[dmkey] = priority
-				} else {
-					priority = b.priorityConfig[dmkey]
-					priority.mechanism = dm
-					if b.clusterConfig[leafClusterName].Config.EndpointConfig.DNSEndpoints != nil {
-						priority.endpoints = b.clusterConfig[leafClusterName].Config.EndpointConfig.DNSEndpoints.Endpoints
-					} else {
-						priority.endpoints = nil
-					}
-					// priority.endpoints = b.clusterConfig[leafClusterName].Config.EndpointConfig.DNSEndpoints.Endpoints
-					b.priorityConfig[dmkey] = priority
-				}
-				newPriorities = append(newPriorities, priority)
-			}
-		}
-		b.priorities = newPriorities
+	clusterName := b.lbCfg.ClusterName
+	clusterRes, ok := b.clusterConfig[clusterName]
+	if !ok {
+		// Should not happen as this is called after verification
+		return
 	}
 
+	var newPriorities []priorityConfig
+
+	// Helper to add priority
+	addPriority := func(name string) {
+		dm, err := b.getDiscoveryMechanism(name)
+		if err != nil {
+			b.logger.Warningf("failed to create discovery mechanism: %v", err)
+			return
+		}
+		pc, err := b.updatePriorityConfig(dm)
+		if err != nil {
+			b.logger.Warningf("failed to update priority config: %v", err)
+			return
+		}
+		newPriorities = append(newPriorities, pc)
+	}
+
+	switch clusterRes.Config.Cluster.ClusterType {
+	case xdsresource.ClusterTypeEDS, xdsresource.ClusterTypeLogicalDNS:
+		addPriority(clusterName)
+
+	case xdsresource.ClusterTypeAggregate:
+		for _, leaf := range clusterRes.Config.AggregateConfig.LeafClusters {
+			if leafConfig, ok := b.clusterConfig[leaf]; ok {
+				// Only consider EDS and LogicalDNS leaf clusters
+				if leafConfig.Config.Cluster.ClusterType == xdsresource.ClusterTypeEDS ||
+					leafConfig.Config.Cluster.ClusterType == xdsresource.ClusterTypeLogicalDNS {
+					addPriority(leaf)
+				}
+			}
+		}
+	}
+	b.priorities = newPriorities
+
+	b.updateOutlierDetectionAndTelemetry()
+
+	if err := json.Unmarshal(b.clusterConfig[b.lbCfg.ClusterName].Config.Cluster.LBPolicy, &b.xdsLBPolicy); err != nil {
+		b.logger.Errorf("cds_balancer: error unmarshalling xDS LB Policy: %v", err)
+		return
+	}
+	b.updateChildConfig()
+}
+
+// updateOutlierDetectionAndTelemetry updates Outlier Detection configs and Telemetry Labels for all priorities.
+func (b *cdsBalancer) updateOutlierDetectionAndTelemetry() {
 	for i := range b.priorities {
-		odJSON := b.clusterConfig[b.priorities[i].mechanism.Cluster].Config.Cluster.OutlierDetection
-		// "In the cds LB policy, if the outlier_detection field is not set in
-		// the Cluster resource, a "no-op" outlier_detection config will be
-		// generated in the corresponding DiscoveryMechanism config, with all
-		// fields unset." - A50
+		cluster := b.clusterConfig[b.priorities[i].mechanism.Cluster].Config.Cluster
+		odJSON := cluster.OutlierDetection
 		if odJSON == nil {
-			// This will pick up top level defaults in Cluster Resolver
-			// ParseConfig, but sre and fpe will be nil still so still a
-			// "no-op" config.
 			odJSON = json.RawMessage(`{}`)
 		}
 		b.priorities[i].mechanism.OutlierDetection = odJSON
-
-		b.priorities[i].mechanism.TelemetryLabels = b.clusterConfig[b.priorities[i].mechanism.Cluster].Config.Cluster.TelemetryLabels
+		b.priorities[i].mechanism.TelemetryLabels = cluster.TelemetryLabels
 
 		odBuilder := balancer.Get(outlierdetection.Name)
 		if odBuilder == nil {
-			// Shouldn't happen, registered through imported Outlier Detection,
-			// defensive programming.
 			b.logger.Errorf("%q LB policy is needed but not registered", outlierdetection.Name)
 			return
 		}
 		odParser, ok := odBuilder.(balancer.ConfigParser)
 		if !ok {
-			// Shouldn't happen, imported Outlier Detection builder has this method.
 			b.logger.Errorf("%q LB policy does not implement a config parser", outlierdetection.Name)
 			return
 		}
@@ -734,19 +617,74 @@ func (b *cdsBalancer) onClusterUpdate() {
 		}
 		odCfg, ok := lbCfg.(*outlierdetection.LBConfig)
 		if !ok {
-			// Shouldn't happen, Parser built at build time with Outlier Detection
-			// builder pulled from gRPC LB Registry.
 			b.logger.Errorf("odParser returned config with unexpected type %T: %v", lbCfg, lbCfg)
 			return
 		}
 		b.priorities[i].mechanism.outlierDetection = *odCfg
 	}
-	if err := json.Unmarshal(b.clusterConfig[b.lbCfg.ClusterName].Config.Cluster.LBPolicy, &b.xdsLBPolicy); err != nil {
-		// This indicates invalid JSON in the raw message, which needs to be handled.
-		b.logger.Errorf("cds_balancer: error unmarshalling xDS LB Policy: %v", err)
-		return
+}
+
+// getDiscoveryMechanism creates a DiscoveryMechanism for the given cluster name.
+func (b *cdsBalancer) getDiscoveryMechanism(clusterName string) (DiscoveryMechanism, error) {
+	clusterRes, ok := b.clusterConfig[clusterName]
+	if !ok {
+		return DiscoveryMechanism{}, fmt.Errorf("cluster %q not found", clusterName)
 	}
-	b.updateChildConfig()
+	cluster := clusterRes.Config.Cluster
+	dm := DiscoveryMechanism{
+		Cluster:               clusterName,
+		MaxConcurrentRequests: cluster.MaxRequests,
+		LoadReportingServer:   cluster.LRSServerConfig,
+		TelemetryLabels:       cluster.TelemetryLabels,
+	}
+
+	switch cluster.ClusterType {
+	case xdsresource.ClusterTypeEDS:
+		dm.Type = DiscoveryMechanismTypeEDS
+		dm.EDSServiceName = cluster.EDSServiceName
+	case xdsresource.ClusterTypeLogicalDNS:
+		dm.Type = DiscoveryMechanismTypeLogicalDNS
+		dm.DNSHostname = cluster.DNSHostName
+	}
+	return dm, nil
+}
+
+// updatePriorityConfig updates the priority configuration for a given discovery mechanism.
+func (b *cdsBalancer) updatePriorityConfig(dm DiscoveryMechanism) (priorityConfig, error) {
+	key := discoveryMechanismToKey(dm)
+	pc, ok := b.priorityConfig[key]
+	if !ok {
+		pc = priorityConfig{
+			mechanism:    dm,
+			childNameGen: newNameGenerator(b.childNameGeneratorSeqID),
+		}
+		b.childNameGeneratorSeqID++
+	} else {
+		pc.mechanism = dm
+	}
+
+	clusterRes := b.clusterConfig[dm.Cluster]
+
+	switch dm.Type {
+	case DiscoveryMechanismTypeEDS:
+		if clusterRes.Config.EndpointConfig == nil {
+			return priorityConfig{}, fmt.Errorf("missing endpoint config for EDS cluster %q", dm.Cluster)
+		}
+		if clusterRes.Config.EndpointConfig.EDSUpdate != nil {
+			pc.edsResp = *clusterRes.Config.EndpointConfig.EDSUpdate
+		} else {
+			pc.edsResp = xdsresource.EndpointsUpdate{}
+		}
+	case DiscoveryMechanismTypeLogicalDNS:
+		if clusterRes.Config.EndpointConfig != nil && clusterRes.Config.EndpointConfig.DNSEndpoints != nil {
+			pc.endpoints = clusterRes.Config.EndpointConfig.DNSEndpoints.Endpoints
+		} else {
+			pc.endpoints = nil
+		}
+	}
+
+	b.priorityConfig[key] = pc
+	return pc, nil
 }
 
 // Handles an error in the Cluster update from the xDS resolver to stop using

@@ -47,7 +47,6 @@ import (
 )
 
 const (
-	testLRSServer       = "test-lrs-server"
 	testMaxRequests     = 314
 	testEDSServiceName  = "service-name-from-parent"
 	testDropCategory    = "test-drops"
@@ -59,7 +58,6 @@ const (
 	testEDSService         = "test-eds-service-name"
 	testClusterName        = "test-cluster-name"
 	testClusterName2       = "google_cfe_some-name"
-	testBalancerNameFooBar = "foo.bar"
 )
 
 var (

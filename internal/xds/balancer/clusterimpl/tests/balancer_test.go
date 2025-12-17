@@ -980,13 +980,13 @@ func (s) TestReResolutionAfterTransientFailure(t *testing.T) {
 	}
 
 	// Replace DNS resolver with a wrapped resolver to capture ResolveNow calls.
-	resolveNowCh := make(chan struct{}, 1)
+	resolveNowCh := make(chan struct{}, 2)
 	dnsR := manual.NewBuilderWithScheme("dns")
 	dnsResolverBuilder := resolver.Get("dns")
 	resolver.Register(dnsR)
 	defer resolver.Register(dnsResolverBuilder)
 	dnsR.ResolveNowCallback = func(resolver.ResolveNowOptions) {
-		close(resolveNowCh)
+		resolveNowCh <- struct{}{}
 	}
 	dnsR.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: fmt.Sprintf("%s:%d", host, port)}}})
 
