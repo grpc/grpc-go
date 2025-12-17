@@ -21,6 +21,7 @@ package stats
 import (
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -259,6 +260,9 @@ type fakeMetricsRecorder struct {
 
 	intValues   map[*MetricDescriptor]int64
 	floatValues map[*MetricDescriptor]float64
+
+	// wg tracks running async reporters
+	wg sync.WaitGroup
 }
 
 // newFakeMetricsRecorder returns a fake metrics recorder based off the current
@@ -317,14 +321,16 @@ func (r *fakeMetricsRecorder) RecordInt64AsyncGauge(handle *Int64AsyncGaugeHandl
 }
 
 func (r *fakeMetricsRecorder) RegisterAsyncReporter(reporter AsyncMetricReporter, _ ...AsyncMetric) func() {
-	// We execute the reporter immediately.
-	// This allows the test to verify the metric value in r.intValues immediately
-	// after the component under test calls RegisterAsyncReporter.
-	err := reporter.Report(r)
-	if err != nil {
-		r.t.Logf("Async reporter returned error: %v", err)
-	}
 
-	// Return a no-op cleanup function
+	r.wg.Add(1)
+
+	go func() {
+		defer r.wg.Done()
+		err := reporter.Report(r)
+		if err != nil {
+			r.t.Logf("Async reporter returned error: %v", err)
+		}
+	}()
+
 	return func() {}
 }
