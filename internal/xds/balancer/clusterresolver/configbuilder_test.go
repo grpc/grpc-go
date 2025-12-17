@@ -140,7 +140,7 @@ func init() {
 
 // TestBuildPriorityConfigJSON is a sanity check that the built balancer config
 // can be parsed. The behavior test is covered by TestBuildPriorityConfig.
-func TestBuildPriorityConfigJSON(t *testing.T) {
+func (s) TestBuildPriorityConfigJSON(t *testing.T) {
 	testLRSServerConfig, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{
 		URI:          "trafficdirector.googleapis.com:443",
 		ChannelCreds: []bootstrap.ChannelCreds{{Type: "google_default"}},
@@ -203,7 +203,7 @@ func TestBuildPriorityConfigJSON(t *testing.T) {
 // TestBuildPriorityConfig tests the priority config generation. Each top level
 // balancer per priority should be an Outlier Detection balancer, with a Cluster
 // Impl Balancer as a child.
-func TestBuildPriorityConfig(t *testing.T) {
+func (s) TestBuildPriorityConfig(t *testing.T) {
 	gotConfig, _, _ := buildPriorityConfig([]priorityConfig{
 		{
 			// EDS - OD config should be the top level for both of the EDS
@@ -317,7 +317,7 @@ func testEndpointForDNS(endpoint []resolver.Endpoint, localityWeight uint32, pat
 	return retEndpoint
 }
 
-func TestBuildClusterImplConfigForDNS(t *testing.T) {
+func (s) TestBuildClusterImplConfigForDNS(t *testing.T) {
 	wantName := "priority-3"
 	localityStr := xdsinternal.LocalityString(clients.Locality{})
 	wantConfig := &clusterimpl.LBConfig{
@@ -330,12 +330,12 @@ func TestBuildClusterImplConfigForDNS(t *testing.T) {
 		wantEndpoint []resolver.Endpoint
 	}{
 		{
-			name:         "one endpoint with one address",
+			name:         "one_endpoint_one_address",
 			endpoint:     []resolver.Endpoint{{Addresses: []resolver.Address{{Addr: "addr-0-0"}}}},
 			wantEndpoint: []resolver.Endpoint{testEndpointForDNS([]resolver.Endpoint{{Addresses: []resolver.Address{{Addr: "addr-0-0"}}}}, 1, []string{wantName, localityStr})},
 		},
 		{
-			name: "one endpoint with multiple addresses",
+			name: "one_endpoint_multiple_addresses",
 			endpoint: []resolver.Endpoint{{Addresses: []resolver.Address{
 				{Addr: "addr-0-0"},
 				{Addr: "addr-0-1"},
@@ -348,7 +348,7 @@ func TestBuildClusterImplConfigForDNS(t *testing.T) {
 			},
 		},
 		{
-			name: "multiple endpoints, all with one address each",
+			name: "multiple_endpoints_one_address_each",
 			endpoint: []resolver.Endpoint{
 				{Addresses: []resolver.Address{{Addr: "addr-0-0"}}},
 				{Addresses: []resolver.Address{{Addr: "addr-0-1"}}},
@@ -361,7 +361,7 @@ func TestBuildClusterImplConfigForDNS(t *testing.T) {
 			},
 		},
 		{
-			name: "multiple endpoints, all with multiple addresses",
+			name: "multiple_endpoints_multiple_addresses",
 			endpoint: []resolver.Endpoint{
 				{Addresses: []resolver.Address{
 					{Addr: "addr-0-0"},
@@ -386,21 +386,23 @@ func TestBuildClusterImplConfigForDNS(t *testing.T) {
 			},
 		},
 	} {
-		gotName, gotConfig, gotEndpoints := buildClusterImplConfigForDNS(newNameGenerator(3), tt.endpoint, DiscoveryMechanism{Cluster: testClusterName2, Type: DiscoveryMechanismTypeLogicalDNS}, nil)
+		t.Run(tt.name, func(t *testing.T) {
+			gotName, gotConfig, gotEndpoints := buildClusterImplConfigForDNS(newNameGenerator(3), tt.endpoint, DiscoveryMechanism{Cluster: testClusterName2, Type: DiscoveryMechanismTypeLogicalDNS}, nil)
 
-		if diff := cmp.Diff(gotName, wantName); diff != "" {
-			t.Errorf("buildClusterImplConfigForDNS() diff (-got +want) %v", diff)
-		}
-		if diff := cmp.Diff(gotConfig, wantConfig); diff != "" {
-			t.Errorf("buildClusterImplConfigForDNS() diff (-got +want) %v", diff)
-		}
-		if diff := cmp.Diff(gotEndpoints, tt.wantEndpoint, endpointCmpOpts); diff != "" {
-			t.Errorf("buildClusterImplConfigForDNS() diff (-got +want) %v", diff)
-		}
+			if diff := cmp.Diff(gotName, wantName); diff != "" {
+				t.Errorf("buildClusterImplConfigForDNS() diff (-got +want) %v", diff)
+			}
+			if diff := cmp.Diff(gotConfig, wantConfig); diff != "" {
+				t.Errorf("buildClusterImplConfigForDNS() diff (-got +want) %v", diff)
+			}
+			if diff := cmp.Diff(gotEndpoints, tt.wantEndpoint, endpointCmpOpts); diff != "" {
+				t.Errorf("buildClusterImplConfigForDNS() diff (-got +want) %v", diff)
+			}
+		})
 	}
 }
 
-func TestBuildClusterImplConfigForEDS(t *testing.T) {
+func (s) TestBuildClusterImplConfigForEDS(t *testing.T) {
 	testLRSServerConfig, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{
 		URI:          "trafficdirector.googleapis.com:443",
 		ChannelCreds: []bootstrap.ChannelCreds{{Type: "google_default"}},
@@ -506,7 +508,7 @@ func TestBuildClusterImplConfigForEDS(t *testing.T) {
 
 }
 
-func TestGroupLocalitiesByPriority(t *testing.T) {
+func (s) TestGroupLocalitiesByPriority(t *testing.T) {
 	tests := []struct {
 		name           string
 		localities     []xdsresource.Locality
@@ -568,7 +570,7 @@ func TestGroupLocalitiesByPriority(t *testing.T) {
 	}
 }
 
-func TestDedupSortedIntSlice(t *testing.T) {
+func (s) TestDedupSortedIntSlice(t *testing.T) {
 	tests := []struct {
 		name string
 		a    []int
@@ -599,7 +601,7 @@ func TestDedupSortedIntSlice(t *testing.T) {
 	}
 }
 
-func TestPriorityLocalitiesToClusterImpl(t *testing.T) {
+func (s) TestPriorityLocalitiesToClusterImpl(t *testing.T) {
 	tests := []struct {
 		name          string
 		localities    []xdsresource.Locality
@@ -746,7 +748,7 @@ func testEndpointWithAttrs(endpoint resolver.Endpoint, localityWeight, endpointW
 	return endpoint
 }
 
-func TestConvertClusterImplMapToOutlierDetection(t *testing.T) {
+func (s) TestConvertClusterImplMapToOutlierDetection(t *testing.T) {
 	tests := []struct {
 		name       string
 		ciCfgsMap  map[string]*clusterimpl.LBConfig

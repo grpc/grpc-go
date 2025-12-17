@@ -140,20 +140,16 @@ func makeClusterImplOutlierDetectionChild(ciCfg *clusterimpl.LBConfig, odCfg out
 }
 
 func buildClusterImplConfigForDNS(g *nameGenerator, endpoints []resolver.Endpoint, mechanism DiscoveryMechanism, xdsLBPolicy *internalserviceconfig.BalancerConfig) (string, *clusterimpl.LBConfig, []resolver.Endpoint) {
-	var retEndpoints []resolver.Endpoint
 	pName := fmt.Sprintf("priority-%v", g.prefix)
 	if len(endpoints) >= 1 {
 		retEndpoints = make([]resolver.Endpoint, 1)
 		for _, e := range endpoints {
-			// For Logical DNS clusters, the same hostname attribute is added
-			// to all endpoints. It is set to the name that is resolved for the
-			// Logical DNS cluster, including the port number.
 			// Copy the nested address field as slice fields are shared by the
 			// iteration variable and the original slice.
 			retEndpoints[0].Addresses = append(retEndpoints[0].Addresses, e.Addresses...)
 		}
 		localityStr := xdsinternal.LocalityString(clients.Locality{})
-		retEndpoints[0] = xdsresource.SetHostname(hierarchy.SetInEndpoint(retEndpoints[0], []string{pName, localityStr}), mechanism.DNSHostname)
+		retEndpoints[0] = hierarchy.SetInEndpoint(retEndpoints[0], []string{pName, localityStr})
 		retEndpoints[0] = wrrlocality.SetAddrInfoInEndpoint(retEndpoints[0], wrrlocality.AddrInfo{LocalityWeight: 1})
 	}
 	return pName, &clusterimpl.LBConfig{
@@ -162,7 +158,7 @@ func buildClusterImplConfigForDNS(g *nameGenerator, endpoints []resolver.Endpoin
 		ChildPolicy:           xdsLBPolicy,
 		MaxConcurrentRequests: mechanism.MaxConcurrentRequests,
 		LoadReportingServer:   mechanism.LoadReportingServer,
-	}, retEndpoints
+	}, []resolver.Endpoint{retEndpoint}
 }
 
 // buildClusterImplConfigForEDS returns a list of cluster_impl configs, one for
