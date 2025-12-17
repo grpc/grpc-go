@@ -147,6 +147,7 @@ func verifyXDSConfig(ctx context.Context, xdsCh chan *xdsresource.XDSConfig, err
 			cmpopts.IgnoreFields(xdsresource.RouteConfigUpdate{}, "Raw"),
 			cmpopts.IgnoreFields(xdsresource.ClusterUpdate{}, "Raw", "LBPolicy", "TelemetryLabels"),
 			cmpopts.IgnoreFields(xdsresource.EndpointsUpdate{}, "Raw"),
+			// Used for EndpointConfig.ResolutionNote and ClusterResult.Err fields.
 			cmp.Transformer("ErrorsToString", func(in error) string {
 				if in == nil {
 					return "" // Treat nil as an empty string
@@ -225,7 +226,8 @@ func makeXDSConfig(routeConfigName, clusterName, edsServiceName, addr string) *x
 								},
 							},
 						},
-					}},
+					},
+				},
 			},
 		},
 	}
@@ -1349,7 +1351,7 @@ func (s) TestAggregateClusterMaxDepth(t *testing.T) {
 		updateCh: make(chan *xdsresource.XDSConfig),
 		errorCh:  make(chan error),
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 50*defaultTestTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
 	// Create a graph of aggregate clusters with 18 clusters.

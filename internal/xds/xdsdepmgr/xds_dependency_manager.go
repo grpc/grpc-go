@@ -262,9 +262,9 @@ func (m *DependencyManager) populateClusterConfigLocked(clusterName string, dept
 	clustersSeen[clusterName] = true
 
 	if depth >= aggregateClusterMaxDepth {
-		m.logger.Warningf("aggregate cluster graph exceeds max depth (%d)", aggregateClusterMaxDepth)
-		clusterConfigs[clusterName] = &xdsresource.ClusterResult{Err: m.annotateErrorWithNodeID(fmt.Errorf("aggregate cluster graph exceeds max depth (%d)", aggregateClusterMaxDepth))}
-		return true, nil, m.annotateErrorWithNodeID(fmt.Errorf("aggregate cluster graph exceeds max depth (%d)", aggregateClusterMaxDepth))
+		err := fmt.Errorf("aggregate cluster graph exceeds max depth (%d)", aggregateClusterMaxDepth)
+		clusterConfigs[clusterName] = &xdsresource.ClusterResult{Err: err}
+		return true, nil, m.annotateErrorWithNodeID(err)
 	}
 
 	// If cluster is already seen in the tree, return.
@@ -775,7 +775,7 @@ func (m *DependencyManager) onDNSError(resourceName string, err error) {
 	m.maybeSendUpdateLocked()
 }
 
-// RequestDNSReresolution calls all the the DNS resolvers ResolveNow.
+// RequestDNSReresolution calls all the the DNS resolver's ResolveNow.
 func (m *DependencyManager) RequestDNSReresolution(opt resolver.ResolveNowOptions) {
 	for _, res := range m.dnsResolvers {
 		res.resolver.dnsR.ResolveNow(opt)
