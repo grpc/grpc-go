@@ -16,7 +16,7 @@
  *
  */
 
-package clusterresolver
+package cdsbalancer
 
 import (
 	"encoding/json"
@@ -364,8 +364,4 @@ func TestParseConfig(t *testing.T) {
 			}
 		})
 	}
-}
-
-func newUint32(i uint32) *uint32 {
-	return &i
 }

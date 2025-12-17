@@ -16,7 +16,7 @@
  *
  */
 
-package clusterresolver
+package cdsbalancer
 
 import (
 	"bytes"
@@ -55,6 +55,11 @@ const (
 
 	localityCount       = 5
 	endpointPerLocality = 2
+
+	testEDSService         = "test-eds-service-name"
+	testClusterName        = "test-cluster-name"
+	testClusterName2       = "google_cfe_some-name"
+	testBalancerNameFooBar = "foo.bar"
 )
 
 var (

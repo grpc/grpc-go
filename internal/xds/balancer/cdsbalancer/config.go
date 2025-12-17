@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package clusterresolver
+package cdsbalancer
 
 import (
 	"bytes"
@@ -37,6 +37,30 @@ const (
 	// DiscoveryMechanismTypeLogicalDNS is DNS.
 	DiscoveryMechanismTypeLogicalDNS // `json:"LOGICAL_DNS"`
 )
+
+// discoveryMechanismKey is {type+resource_name}, it's used as the map key, so
+// that the same resource resolver can be reused (e.g. when there are two
+// mechanisms, both for the same EDS resource, but has different circuit
+// breaking config).
+type discoveryMechanismKey struct {
+	typ  DiscoveryMechanismType
+	name string
+}
+
+func discoveryMechanismToKey(dm DiscoveryMechanism) discoveryMechanismKey {
+	switch dm.Type {
+	case DiscoveryMechanismTypeEDS:
+		nameToWatch := dm.EDSServiceName
+		if nameToWatch == "" {
+			nameToWatch = dm.Cluster
+		}
+		return discoveryMechanismKey{typ: dm.Type, name: nameToWatch}
+	case DiscoveryMechanismTypeLogicalDNS:
+		return discoveryMechanismKey{typ: dm.Type, name: dm.DNSHostname}
+	default:
+		return discoveryMechanismKey{}
+	}
+}
 
 // MarshalJSON marshals a DiscoveryMechanismType to a quoted json string.
 //

@@ -16,7 +16,7 @@
  *
  */
 
-package clusterresolver
+package cdsbalancer
 
 import (
 	"encoding/json"

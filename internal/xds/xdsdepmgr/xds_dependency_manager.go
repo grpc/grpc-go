@@ -21,6 +21,7 @@ package xdsdepmgr
 import (
 	"fmt"
 	"sync"
+	"sync/atomic"
 
 	"google.golang.org/grpc/grpclog"
 	internalgrpclog "google.golang.org/grpc/internal/grpclog"
@@ -87,6 +88,7 @@ type DependencyManager struct {
 	clusterWatchers         map[string]*clusterWatcherState
 	endpointWatchers        map[string]*endpointWatcherState
 	dnsResolvers            map[string]*dnsResolverState
+	ClusterSubs             map[string]*ClusterRefs
 }
 
 // New creates a new DependencyManager.
@@ -109,6 +111,7 @@ func New(listenerName, dataplaneAuthority string, xdsClient xdsclient.XDSClient,
 		endpointWatchers:        make(map[string]*endpointWatcherState),
 		dnsResolvers:            make(map[string]*dnsResolverState),
 		clusterWatchers:         make(map[string]*clusterWatcherState),
+		ClusterSubs:             make(map[string]*ClusterRefs),
 	}
 	dm.logger = prefixLogger(dm)
 
@@ -779,5 +782,55 @@ func (m *DependencyManager) onDNSError(resourceName string, err error) {
 func (m *DependencyManager) RequestDNSReresolution(opt resolver.ResolveNowOptions) {
 	for _, res := range m.dnsResolvers {
 		res.resolver.dnsR.ResolveNow(opt)
+	}
+}
+
+// DependencyManagerKey is the type used as the key to store DependencyManager in
+// the Attributes field of resolver.states.
+type DependencyManagerKey struct{}
+
+// SetDependencyManager returns a copy of state in which the Attributes field
+// is updated with the DependencyManager.
+func SetDependencyManager(state resolver.State, depsmngr *DependencyManager) resolver.State {
+	state.Attributes = state.Attributes.WithValue(DependencyManagerKey{}, depsmngr)
+	return state
+}
+
+// GetDependencyManager returns cluster name stored in attr.
+func DependencyManagerFromResolverState(state resolver.State) *DependencyManager {
+	if v := state.Attributes.Value(DependencyManagerKey{}); v != nil {
+		return v.(*DependencyManager)
+	}
+	return nil
+}
+
+type ClusterRefs struct {
+	Name     string
+	RefCount int32
+	m        *DependencyManager
+}
+
+func (m *DependencyManager) Clustersubscription(name string) *ClusterRefs {
+	subs, ok := m.ClusterSubs[name]
+	if ok {
+		ref := &subs.RefCount
+		atomic.AddInt32(ref, 1)
+		return subs
+	}
+	m.ClusterSubs[name] = &ClusterRefs{name, 1, m}
+	if _, ok := m.clustersFromRouteConfig[name]; !ok {
+		m.maybeSendUpdateLocked()
+	}
+	return m.ClusterSubs[name]
+}
+
+func (c *ClusterRefs) Unsubscribe() {
+	ref := atomic.AddInt32(&c.RefCount, -1)
+	if ref <= 0 {
+		delete(c.m.ClusterSubs, c.Name)
+	}
+
+	if _, ok := c.m.clustersFromRouteConfig[c.Name]; !ok {
+		c.m.maybeSendUpdateLocked()
 	}
 }
