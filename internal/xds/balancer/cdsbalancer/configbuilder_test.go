@@ -55,9 +55,9 @@ const (
 	localityCount       = 5
 	endpointPerLocality = 2
 
-	testEDSService         = "test-eds-service-name"
-	testClusterName        = "test-cluster-name"
-	testClusterName2       = "google_cfe_some-name"
+	testEDSService   = "test-eds-service-name"
+	testClusterName  = "test-cluster-name"
+	testClusterName2 = "google_cfe_some-name"
 )
 
 var (
