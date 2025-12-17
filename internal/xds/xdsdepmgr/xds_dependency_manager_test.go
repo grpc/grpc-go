@@ -81,23 +81,25 @@ func newStringP(s string) *string {
 type testWatcher struct {
 	updateCh chan *xdsresource.XDSConfig
 	errorCh  chan error
+	done     chan struct{}
 }
 
-// Update sends the received XDSConfig update to the update channel.
+// Update sends the received XDSConfig update to the update channel. Does not
+// send updates if the done channel is closed. The done channel is closed in the
+// cases of errors because management server keeps sending error updates that
+// cases multiple updates to be sent from dependency manager causing the update
+// channel to be blocked.
 func (w *testWatcher) Update(cfg *xdsresource.XDSConfig) {
-	w.updateCh <- cfg
+	select {
+	case <-w.done:
+		return
+	case w.updateCh <- cfg:
+	}
 }
 
 // Error sends the received error to the error channel.
 func (w *testWatcher) Error(err error) {
 	w.errorCh <- err
-}
-
-func (w *testWatcher) drainUpdates(ctx context.Context) {
-	select {
-	case <-ctx.Done():
-	case <-w.updateCh:
-	}
 }
 
 func verifyError(ctx context.Context, errCh chan error, wantErr, wantNodeID string) error {
@@ -910,6 +912,7 @@ func (s) TestClusterResourceError(t *testing.T) {
 	watcher := &testWatcher{
 		updateCh: make(chan *xdsresource.XDSConfig),
 		errorCh:  make(chan error),
+		done:     make(chan struct{}),
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -937,11 +940,10 @@ func (s) TestClusterResourceError(t *testing.T) {
 	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
 		t.Fatal(err)
 	}
-
-	// Drain the updates because management server keeps sending the error
-	// updates repeatedly causing the update from dependency manager to be
-	// blocked if we don't drain it.
-	watcher.drainUpdates(ctx)
+	// Close the watcher done channel to stop sending updates because management
+	// server keeps sending the error updates repeatedly causing the update from
+	// dependency manager to be blocked.
+	close(watcher.done)
 }
 
 // Tests the case where the dependency manager receives a cluster resource
@@ -1169,6 +1171,7 @@ func (s) TestAggregateClusterChildError(t *testing.T) {
 	watcher := &testWatcher{
 		updateCh: make(chan *xdsresource.XDSConfig),
 		errorCh:  make(chan error),
+		done:     make(chan struct{}),
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -1262,10 +1265,10 @@ func (s) TestAggregateClusterChildError(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Drain the updates because management server keeps sending the error
-	// updates repeatedly causing the update from dependency manager to be
-	// blocked if we don't drain it.
-	watcher.drainUpdates(ctx)
+	// Close the watcher done channel to stop sending updates because management
+	// server keeps sending the error updates repeatedly causing the update from
+	// dependency manager to be blocked.
+	close(watcher.done)
 }
 
 // Tests the case where an aggregate cluster has no leaf clusters by creating a
@@ -1429,6 +1432,7 @@ func (s) TestEndpointAmbientError(t *testing.T) {
 	watcher := &testWatcher{
 		updateCh: make(chan *xdsresource.XDSConfig),
 		errorCh:  make(chan error),
+		done:     make(chan struct{}),
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -1463,8 +1467,8 @@ func (s) TestEndpointAmbientError(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Drain the updates because management server keeps sending the error
-	// updates causing the update from dependency manager to be blocked if we
-	// don't drain it.
-	watcher.drainUpdates(ctx)
+	// Close the watcher done channel to stop sending updates because management
+	// server keeps sending the error updates repeatedly causing the update from
+	// dependency manager to be blocked.
+	close(watcher.done)
 }
