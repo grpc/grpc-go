@@ -84,7 +84,7 @@ type DependencyManager struct {
 	clusterWatchers         map[string]*clusterWatcherState
 	endpointWatchers        map[string]*endpointWatcherState
 	dnsResolvers            map[string]*dnsResolverState
-	ClusterSubs             map[string]*ClusterRefs
+	ClusterSubs             map[string]*ClusterRef
 }
 
 // New creates a new DependencyManager.
@@ -107,7 +107,7 @@ func New(listenerName, dataplaneAuthority string, xdsClient xdsclient.XDSClient,
 		endpointWatchers:        make(map[string]*endpointWatcherState),
 		dnsResolvers:            make(map[string]*dnsResolverState),
 		clusterWatchers:         make(map[string]*clusterWatcherState),
-		ClusterSubs:             make(map[string]*ClusterRefs),
+		ClusterSubs:             make(map[string]*ClusterRef),
 	}
 	dm.logger = prefixLogger(dm)
 
@@ -794,7 +794,8 @@ func SetDependencyManager(state resolver.State, depsmngr *DependencyManager) res
 	return state
 }
 
-// GetDependencyManager returns cluster name stored in attr.
+// DependencyManagerFromResolverState returns DependencyManager stored as an
+// attribute in the resolver state.
 func DependencyManagerFromResolverState(state resolver.State) *DependencyManager {
 	if v := state.Attributes.Value(DependencyManagerKey{}); v != nil {
 		return v.(*DependencyManager)
@@ -802,27 +803,38 @@ func DependencyManagerFromResolverState(state resolver.State) *DependencyManager
 	return nil
 }
 
-type ClusterRefs struct {
+// ClusterRef represents a reference to a cluster being used by some
+// component. It maintains a reference count of the number of users of the
+// cluster. It has a method to unsubscribe from the cluster, which decrements the
+// reference count and removes the cluster from the ClusterSubs map in the
+// DependencyManager if the reference count reaches zero.
+type ClusterRef struct {
 	Name     string
 	RefCount int32
 	m        *DependencyManager
 }
 
-func (m *DependencyManager) Clustersubscription(name string) *ClusterRefs {
+// Clustersubscription increments the reference count for the cluster and
+// returns the ClusterRef. If the cluster is not already being tracked, it adds
+// it to the ClusterSubs map.
+func (m *DependencyManager) Clustersubscription(name string) *ClusterRef {
 	subs, ok := m.ClusterSubs[name]
 	if ok {
 		ref := &subs.RefCount
 		atomic.AddInt32(ref, 1)
 		return subs
 	}
-	m.ClusterSubs[name] = &ClusterRefs{name, 1, m}
+	m.ClusterSubs[name] = &ClusterRef{name, 1, m}
 	if _, ok := m.clustersFromRouteConfig[name]; !ok {
 		m.maybeSendUpdateLocked()
 	}
 	return m.ClusterSubs[name]
 }
 
-func (c *ClusterRefs) Unsubscribe() {
+// Unsubscribe decrements the reference count for the cluster. If the reference
+// count reaches zero, it removes the cluster from the ClusterSubs map in the
+// DependencyManager.
+func (c *ClusterRef) Unsubscribe() {
 	ref := atomic.AddInt32(&c.RefCount, -1)
 	if ref <= 0 {
 		delete(c.m.ClusterSubs, c.Name)

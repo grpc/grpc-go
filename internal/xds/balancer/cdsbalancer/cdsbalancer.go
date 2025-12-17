@@ -178,7 +178,7 @@ type cdsBalancer struct {
 	xdsClient        xdsclient.XDSClient          // xDS client to watch Cluster resources.
 	attrsWithClient  *attributes.Attributes       // Attributes with xdsClient attached to be passed to the child policies.
 	clusterConfig    map[string]*xdsresource.ClusterResult
-	clusterSubs      *xdsdepmgr.ClusterRefs
+	clusterSubs      *xdsdepmgr.ClusterRef
 	lbCfg            *lbConfig // Current load balancing configuration.
 	xdsLBPolicy      internalserviceconfig.BalancerConfig
 	priorityConfig   map[discoveryMechanismKey]priorityConfig
@@ -387,7 +387,7 @@ func (b *cdsBalancer) UpdateClientConnState(state balancer.ClientConnState) erro
 
 	// Handle the update in a blocking fashion.
 	errCh := make(chan error, 1)
-	callback := func(ctx context.Context) {
+	callback := func(context.Context) {
 		b.processUpdate()
 		errCh <- nil
 	}

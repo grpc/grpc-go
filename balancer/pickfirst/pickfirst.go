@@ -134,6 +134,7 @@ func EnableHealthListener(state resolver.State) resolver.State {
 	return state
 }
 
+// PfConfig is the configuration for the pick_first balancer.
 type PfConfig struct {
 	serviceconfig.LoadBalancingConfig `json:"-"`
 

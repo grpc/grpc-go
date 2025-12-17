@@ -271,7 +271,7 @@ func (s) TestConfigUpdate_ChildPolicyChange(t *testing.T) {
 
 	// Make a UnaryCall RPC and verify that it is routed to cluster2, and the
 	// new endpoints resource.
-	for ; ctx.Err() != nil; <-time.After(defaultTestShortTimeout) {
+	for ; ctx.Err() == nil; <-time.After(defaultTestShortTimeout) {
 		if err := makeUnaryCallRPCAndVerifyPeer(ctx, client, server3.Address); err == nil {
 			break
 		}
@@ -323,7 +323,7 @@ func (s) TestConfigUpdate_ChildPolicyChange(t *testing.T) {
 	}
 
 	// Make a UnaryCall RPC and verify that it starts to fail.
-	for ; ctx.Err() != nil; <-time.After(defaultTestShortTimeout) {
+	for ; ctx.Err() == nil; <-time.After(defaultTestShortTimeout) {
 		_, err := client.UnaryCall(ctx, &testpb.SimpleRequest{})
 		got := status.Code(err)
 		if got == codes.Unavailable {
