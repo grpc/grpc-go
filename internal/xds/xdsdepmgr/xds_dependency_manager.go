@@ -279,9 +279,12 @@ func (m *DependencyManager) populateClusterConfigLocked(clusterName string, dept
 		return false, nil, nil
 	}
 
+	// If a watch exists but no update received yet, return.
 	if !state.updateReceived {
 		return false, nil, nil
 	}
+
+	// If there was a resource error, propagate it up.
 	if state.lastErr != nil {
 		return true, nil, state.lastErr
 	}
@@ -295,79 +298,92 @@ func (m *DependencyManager) populateClusterConfigLocked(clusterName string, dept
 
 	switch update.ClusterType {
 	case xdsresource.ClusterTypeEDS:
-		edsName := clusterName
-		if update.EDSServiceName != "" {
-			edsName = update.EDSServiceName
-		}
-		endpointResourcesSeen[edsName] = true
-		// If endpoint watcher does not exist, create one.
-		if _, ok := m.endpointWatchers[edsName]; !ok {
-			m.endpointWatchers[edsName] = newEndpointWatcher(edsName, m)
-			return false, nil, nil
-		}
-		endpointState := m.endpointWatchers[edsName]
-
-		// If the resource does not have any update yet, return.
-		if !endpointState.updateReceived {
-			return false, nil, nil
-		}
-
-		// Store the update and error.
-		clusterConfigs[clusterName].Config.EndpointConfig = &xdsresource.EndpointConfig{
-			EDSUpdate:      endpointState.lastUpdate,
-			ResolutionNote: endpointState.lastErr,
-		}
-		return true, []string{clusterName}, nil
-
+		return m.populateEDSClusterLocked(clusterName, update, clusterConfigs, endpointResourcesSeen)
 	case xdsresource.ClusterTypeLogicalDNS:
-		target := update.DNSHostName
-		dnsResourcesSeen[target] = true
-		// If dns resolver does not exist, create one.
-		if _, ok := m.dnsResolvers[target]; !ok {
-			m.dnsResolvers[target] = newDNSResolver(target, m)
-			return false, nil, nil
-		}
-		dnsState := m.dnsResolvers[target]
-		// If no update received, return false.
-		if !dnsState.updateReceived {
-			return false, nil, nil
-		}
-
-		clusterConfigs[clusterName].Config.EndpointConfig = &xdsresource.EndpointConfig{
-			DNSEndpoints:   dnsState.lastUpdate,
-			ResolutionNote: dnsState.err,
-		}
-		return true, []string{clusterName}, nil
-
+		return m.populateLogicalDNSClusterLocked(clusterName, update, clusterConfigs, dnsResourcesSeen)
 	case xdsresource.ClusterTypeAggregate:
-		var leafClusters []string
-		haveAllResources := true
-		for _, child := range update.PrioritizedClusterNames {
-			ok, childLeafClusters, err := m.populateClusterConfigLocked(child, depth+1, clusterConfigs, endpointResourcesSeen, dnsResourcesSeen, clustersSeen)
-			if !ok {
-				haveAllResources = false
-			}
-			if err != nil {
-				clusterConfigs[clusterName] = &xdsresource.ClusterResult{Err: err}
-				return true, leafClusters, err
-			}
-			leafClusters = append(leafClusters, childLeafClusters...)
+		return m.populateAggregateClusterLocked(clusterName, update, depth, clusterConfigs, endpointResourcesSeen, dnsResourcesSeen, clustersSeen)
+	default:
+		clusterConfigs[clusterName] = &xdsresource.ClusterResult{Err: m.annotateErrorWithNodeID(fmt.Errorf("cluster type %v of cluster %s not supported", update.ClusterType, clusterName))}
+		return true, nil, nil
+	}
+}
+
+func (m *DependencyManager) populateEDSClusterLocked(clusterName string, update *xdsresource.ClusterUpdate, clusterConfigs map[string]*xdsresource.ClusterResult, endpointResourcesSeen map[string]bool) (bool, []string, error) {
+	edsName := clusterName
+	if update.EDSServiceName != "" {
+		edsName = update.EDSServiceName
+	}
+	endpointResourcesSeen[edsName] = true
+
+	// If endpoint watcher does not exist, create one.
+	if _, ok := m.endpointWatchers[edsName]; !ok {
+		m.endpointWatchers[edsName] = newEndpointWatcher(edsName, m)
+		return false, nil, nil
+	}
+	endpointState := m.endpointWatchers[edsName]
+
+	// If the resource does not have any update yet, return.
+	if !endpointState.updateReceived {
+		return false, nil, nil
+	}
+
+	// Store the update and error.
+	clusterConfigs[clusterName].Config.EndpointConfig = &xdsresource.EndpointConfig{
+		EDSUpdate:      endpointState.lastUpdate,
+		ResolutionNote: endpointState.lastErr,
+	}
+	return true, []string{clusterName}, nil
+}
+
+func (m *DependencyManager) populateLogicalDNSClusterLocked(clusterName string, update *xdsresource.ClusterUpdate, clusterConfigs map[string]*xdsresource.ClusterResult, dnsResourcesSeen map[string]bool) (bool, []string, error) {
+	target := update.DNSHostName
+	dnsResourcesSeen[target] = true
+
+	// If dns resolver does not exist, create one.
+	if _, ok := m.dnsResolvers[target]; !ok {
+		m.dnsResolvers[target] = newDNSResolver(target, m)
+		return false, nil, nil
+	}
+	dnsState := m.dnsResolvers[target]
+
+	// If no update received, return false.
+	if !dnsState.updateReceived {
+		return false, nil, nil
+	}
+
+	clusterConfigs[clusterName].Config.EndpointConfig = &xdsresource.EndpointConfig{
+		DNSEndpoints:   dnsState.lastUpdate,
+		ResolutionNote: dnsState.err,
+	}
+	return true, []string{clusterName}, nil
+}
+
+func (m *DependencyManager) populateAggregateClusterLocked(clusterName string, update *xdsresource.ClusterUpdate, depth int, clusterConfigs map[string]*xdsresource.ClusterResult, endpointResourcesSeen, dnsResourcesSeen, clustersSeen map[string]bool) (bool, []string, error) {
+	var leafClusters []string
+	haveAllResources := true
+	for _, child := range update.PrioritizedClusterNames {
+		ok, childLeafClusters, err := m.populateClusterConfigLocked(child, depth+1, clusterConfigs, endpointResourcesSeen, dnsResourcesSeen, clustersSeen)
+		if !ok {
+			haveAllResources = false
 		}
-		if !haveAllResources {
-			return false, leafClusters, nil
+		if err != nil {
+			clusterConfigs[clusterName] = &xdsresource.ClusterResult{Err: err}
+			return true, leafClusters, err
 		}
-		if haveAllResources && len(leafClusters) == 0 {
-			clusterConfigs[clusterName] = &xdsresource.ClusterResult{Err: m.annotateErrorWithNodeID(fmt.Errorf("aggregate cluster graph has no leaf clusters"))}
-			return true, leafClusters, nil
-		}
-		clusterConfigs[clusterName].Config.AggregateConfig = &xdsresource.AggregateConfig{
-			LeafClusters: leafClusters,
-		}
+		leafClusters = append(leafClusters, childLeafClusters...)
+	}
+	if !haveAllResources {
+		return false, leafClusters, nil
+	}
+	if haveAllResources && len(leafClusters) == 0 {
+		clusterConfigs[clusterName] = &xdsresource.ClusterResult{Err: m.annotateErrorWithNodeID(fmt.Errorf("aggregate cluster graph has no leaf clusters"))}
 		return true, leafClusters, nil
 	}
-	// When the cluster update is not one of the three types of cluster updates.
-	clusterConfigs[clusterName] = &xdsresource.ClusterResult{Err: m.annotateErrorWithNodeID(fmt.Errorf("cluster type %v of cluster %s not supported", update.ClusterType, clusterName))}
-	return false, nil, nil
+	clusterConfigs[clusterName].Config.AggregateConfig = &xdsresource.AggregateConfig{
+		LeafClusters: leafClusters,
+	}
+	return true, leafClusters, nil
 }
 
 func (m *DependencyManager) applyRouteConfigUpdateLocked(update *xdsresource.RouteConfigUpdate) {
