@@ -912,7 +912,9 @@ func (s) TestDataCachePurging(t *testing.T) {
 
 // TestControlChannelConnectivityStateMonitoring tests the scenario where the
 // control channel goes down and comes back up again and verifies that backoff
-// state is reset for cache entries in this scenario.
+// state is reset for cache entries in this scenario. It also verifies that
+// backoff is NOT reset when the control channel first becomes READY (i.e., the
+// initial CONNECTING → READY transition should not trigger a backoff reset).
 func (s) TestControlChannelConnectivityStateMonitoring(t *testing.T) {
 	// Create a restartable listener which can close existing connections.
 	l, err := testutils.LocalTCPListener()
@@ -972,6 +974,16 @@ func (s) TestControlChannelConnectivityStateMonitoring(t *testing.T) {
 
 	// Make sure an RLS request is sent out.
 	verifyRLSRequest(t, rlsReqCh, true)
+
+	// Verify that the initial READY state of the control channel did NOT trigger
+	// a backoff reset. The resetBackoffHook should only be called when
+	// transitioning from TRANSIENT_FAILURE to READY, not for the initial
+	// CONNECTING → READY transition.
+	select {
+	case <-resetBackoffDone:
+		t.Fatal("Backoff reset was triggered for initial READY state, want no reset")
+	default:
+	}
 
 	// Stop the RLS server.
 	lis.Stop()

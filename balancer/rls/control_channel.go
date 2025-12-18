@@ -44,16 +44,6 @@ type adaptiveThrottler interface {
 	RegisterBackendResponse(throttled bool)
 }
 
-// newConnectivityStateSubscriber is a variable that can be overridden in tests
-// to wrap the connectivity state subscriber for testing purposes.
-var newConnectivityStateSubscriber = connStateSubscriber
-
-// connStateSubscriber returns the subscriber as-is. This function can be
-// overridden in tests to wrap the subscriber.
-func connStateSubscriber(sub grpcsync.Subscriber) grpcsync.Subscriber {
-	return sub
-}
-
 // controlChannel is a wrapper around the gRPC channel to the RLS server
 // specified in the service config.
 type controlChannel struct {
@@ -98,7 +88,7 @@ func newControlChannel(rlsServerName, serviceConfig string, rpcTimeout time.Dura
 	}
 	// Subscribe to connectivity state before connecting to avoid missing initial
 	// updates, which are only delivered to active subscribers.
-	ctrlCh.unsubscribe = internal.SubscribeToConnectivityStateChanges.(func(cc *grpc.ClientConn, s grpcsync.Subscriber) func())(ctrlCh.cc, newConnectivityStateSubscriber(ctrlCh))
+	ctrlCh.unsubscribe = internal.SubscribeToConnectivityStateChanges.(func(cc *grpc.ClientConn, s grpcsync.Subscriber) func())(ctrlCh.cc, ctrlCh)
 	ctrlCh.cc.Connect()
 	ctrlCh.client = rlsgrpc.NewRouteLookupServiceClient(ctrlCh.cc)
 	ctrlCh.logger.Infof("Control channel created to RLS server at: %v", rlsServerName)
