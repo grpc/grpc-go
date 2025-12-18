@@ -157,34 +157,23 @@ func (provider) ParseFilterConfigOverride(override proto.Message) (httpfilter.Fi
 }
 
 func (provider) IsTerminal() bool { return false }
-func (provider) IsClient() bool   { return false }
-func (provider) IsServer() bool   { return true }
 
-// Build creates a new instance of the filter.
-func (p provider) Build(string) httpfilter.Filter {
-	return filter{}
-}
-
-var _ httpfilter.Filter = filter{}
-
-type filter struct{}
-
-func (filter) BuildClientInterceptor(_, _ httpfilter.FilterConfig) (resolver.ClientInterceptor, error) {
+func (provider) BuildClientInterceptor(_ string, _, _ httpfilter.FilterConfig) (resolver.ClientInterceptor, func(), error) {
 	// This filter is not supported on the server. So we return a nil
 	// HTTPFilter, which will not be invoked.
-	return nil, nil
+	return nil, func() {}, nil
 }
 
 // BuildServerInterceptor is an optional interface builder implements in order
 // to signify it works server side.
-func (filter) BuildServerInterceptor(cfg httpfilter.FilterConfig, override httpfilter.FilterConfig) (resolver.ServerInterceptor, error) {
+func (provider) BuildServerInterceptor(_ string, cfg httpfilter.FilterConfig, override httpfilter.FilterConfig) (resolver.ServerInterceptor, func(), error) {
 	if cfg == nil {
-		return nil, fmt.Errorf("rbac: nil config provided")
+		return nil, func() {}, fmt.Errorf("rbac: nil config provided")
 	}
 
 	c, ok := cfg.(config)
 	if !ok {
-		return nil, fmt.Errorf("rbac: incorrect config type provided (%T): %v", cfg, cfg)
+		return nil, func() {}, fmt.Errorf("rbac: incorrect config type provided (%T): %v", cfg, cfg)
 	}
 
 	if override != nil {
@@ -192,7 +181,7 @@ func (filter) BuildServerInterceptor(cfg httpfilter.FilterConfig, override httpf
 		// still validate the listener config type.
 		c, ok = override.(config)
 		if !ok {
-			return nil, fmt.Errorf("rbac: incorrect override config type provided (%T): %v", override, override)
+			return nil, func() {}, fmt.Errorf("rbac: incorrect override config type provided (%T): %v", override, override)
 		}
 	}
 
@@ -202,12 +191,10 @@ func (filter) BuildServerInterceptor(cfg httpfilter.FilterConfig, override httpf
 	// "At this time, if the RBAC.action is Action.LOG then the policy will be
 	// completely ignored, as if RBAC was not configured." - A41
 	if c.chainEngine == nil {
-		return nil, nil
+		return nil, func() {}, nil
 	}
-	return &interceptor{chainEngine: c.chainEngine}, nil
+	return &interceptor{chainEngine: c.chainEngine}, func() {}, nil
 }
-
-func (filter) Close() error { return nil }
 
 type interceptor struct {
 	chainEngine *rbac.ChainEngine

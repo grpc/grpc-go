@@ -2754,25 +2754,15 @@ type filterProvider struct {
 }
 
 func (filterProvider) IsTerminal() bool { return false }
-func (filterProvider) IsClient() bool   { return false }
-func (filterProvider) IsServer() bool   { return true }
 
-func (fp *filterProvider) Build(string) httpfilter.Filter {
-	return testFilter{}
-}
-
-type testFilter struct {
-	httpfilter.Filter
-}
-
-func (testFilter) BuildServerInterceptor(config httpfilter.FilterConfig, override httpfilter.FilterConfig) (iresolver.ServerInterceptor, error) {
+func (filterProvider) BuildServerInterceptor(_ string, config httpfilter.FilterConfig, override httpfilter.FilterConfig) (iresolver.ServerInterceptor, func(), error) {
 	var level string
 	level = config.(filterCfg).level
 
 	if override != nil {
 		level = override.(filterCfg).level
 	}
-	return &serverInterceptor{level: level}, nil
+	return &serverInterceptor{level: level}, func() {}, nil
 }
 
 type serverInterceptor struct {

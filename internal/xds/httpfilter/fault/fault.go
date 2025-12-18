@@ -101,28 +101,15 @@ func (provider) ParseFilterConfigOverride(override proto.Message) (httpfilter.Fi
 }
 
 func (provider) IsTerminal() bool { return false }
-func (provider) IsClient() bool   { return true }
-func (provider) IsServer() bool   { return false }
 
-// Build creates a new instance of the filter.
-func (p provider) Build(string) httpfilter.Filter {
-	return filter{}
-}
-
-var _ httpfilter.Filter = filter{}
-
-type filter struct{}
-
-func (filter) Close() error { return nil }
-
-func (filter) BuildClientInterceptor(cfg, override httpfilter.FilterConfig) (iresolver.ClientInterceptor, error) {
+func (provider) BuildClientInterceptor(_ string, cfg, override httpfilter.FilterConfig) (iresolver.ClientInterceptor, func(), error) {
 	if cfg == nil {
-		return nil, fmt.Errorf("fault: nil config provided")
+		return nil, func() {}, fmt.Errorf("fault: nil config provided")
 	}
 
 	c, ok := cfg.(config)
 	if !ok {
-		return nil, fmt.Errorf("fault: incorrect config type provided (%T): %v", cfg, cfg)
+		return nil, func() {}, fmt.Errorf("fault: incorrect config type provided (%T): %v", cfg, cfg)
 	}
 
 	if override != nil {
@@ -130,22 +117,22 @@ func (filter) BuildClientInterceptor(cfg, override httpfilter.FilterConfig) (ire
 		// still validate the listener config type.
 		c, ok = override.(config)
 		if !ok {
-			return nil, fmt.Errorf("fault: incorrect override config type provided (%T): %v", override, override)
+			return nil, func() {}, fmt.Errorf("fault: incorrect override config type provided (%T): %v", override, override)
 		}
 	}
 
 	icfg := c.config
 	if (icfg.GetMaxActiveFaults() != nil && icfg.GetMaxActiveFaults().GetValue() == 0) ||
 		(icfg.GetDelay() == nil && icfg.GetAbort() == nil) {
-		return nil, nil
+		return nil, func() {}, nil
 	}
-	return &interceptor{config: icfg}, nil
+	return &interceptor{config: icfg}, func() {}, nil
 }
 
-func (filter) BuildServerInterceptor(_, _ httpfilter.FilterConfig) (iresolver.ServerInterceptor, error) {
+func (provider) BuildServerInterceptor(_ string, _, _ httpfilter.FilterConfig) (iresolver.ServerInterceptor, func(), error) {
 	// This filter is not supported on the server. So we return a nil
 	// HTTPFilter, which will not be invoked.
-	return nil, nil
+	return nil, func() {}, nil
 }
 
 type interceptor struct {

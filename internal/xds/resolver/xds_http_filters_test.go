@@ -121,18 +121,12 @@ func (*testHTTPFilterProvider) ParseFilterConfigOverride(override proto.Message)
 }
 
 func (*testHTTPFilterProvider) IsTerminal() bool { return false }
-func (*testHTTPFilterProvider) IsClient() bool   { return true }
-func (*testHTTPFilterProvider) IsServer() bool   { return false }
 
-func (fb *testHTTPFilterProvider) Build(string) httpfilter.Filter {
-	return fb
-}
-
-func (fb *testHTTPFilterProvider) BuildClientInterceptor(config, override httpfilter.FilterConfig) (iresolver.ClientInterceptor, error) {
-	fb.logger.Logf("BuildClientInterceptor called with config: %+v, override: %+v", config, override)
+func (fb *testHTTPFilterProvider) BuildClientInterceptor(name string, config, override httpfilter.FilterConfig) (iresolver.ClientInterceptor, func(), error) {
+	fb.logger.Logf("BuildClientInterceptor called with name %q config: %+v, override: %+v", name, config, override)
 
 	if config == nil {
-		return nil, fmt.Errorf("unexpected missing config")
+		return nil, func() {}, fmt.Errorf("unexpected missing config")
 	}
 
 	baseCfg := config.(testFilterCfg)
@@ -156,11 +150,11 @@ func (fb *testHTTPFilterProvider) BuildClientInterceptor(config, override httpfi
 			Error:        newStreamErr,
 		},
 		newStreamChan: fb.newStreamChan,
-	}, nil
+	}, func() {}, nil
 }
 
-func (fb *testHTTPFilterProvider) BuildServerInterceptor(_, _ httpfilter.FilterConfig) (iresolver.ServerInterceptor, error) {
-	return nil, nil
+func (fb *testHTTPFilterProvider) BuildServerInterceptor(_ string, _, _ httpfilter.FilterConfig) (iresolver.ServerInterceptor, func(), error) {
+	return nil, func() {}, nil
 }
 
 func (fb *testHTTPFilterProvider) Close() error { return nil }

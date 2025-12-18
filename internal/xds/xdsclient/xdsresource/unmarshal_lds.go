@@ -214,13 +214,13 @@ func processHTTPFilters(filters []*v3httppb.HttpFilter, server bool) ([]HTTPFilt
 			continue
 		}
 		if server {
-			if !filterProvider.IsServer() {
+			if _, ok := filterProvider.(httpfilter.ServerInterceptorBuilder); !ok {
 				if filter.GetIsOptional() {
 					continue
 				}
 				return nil, fmt.Errorf("HTTP filter %q not supported server-side", name)
 			}
-		} else if !filterProvider.IsClient() {
+		} else if _, ok := filterProvider.(httpfilter.ClientInterceptorBuilder); !ok {
 			if filter.GetIsOptional() {
 				continue
 			}

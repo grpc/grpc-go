@@ -31,9 +31,13 @@ type FilterConfig interface {
 	isFilterConfig()
 }
 
-// A FilterProvider is responsible for parsing a HTTP filter's configuration
-// proto messages and creating new filter instances. Every filter must implement
-// and register this interface.
+// FilterProvider is responsible for parsing an HTTP filter's configuration
+// proto messages and creating new interceptor instances. Every filter must
+// implement and register this interface.
+//
+// A FilterProvider may optionally implement either ClientInterceptorBuilder or
+// ServerInterceptorBuilder or both, indicating it is capable of working on the
+// client side or server side or both, respectively.
 type FilterProvider interface {
 	// TypeURLs are the proto message types supported by this provider.
 	// A provider will be registered by each of its supported message types.
@@ -51,44 +55,49 @@ type FilterProvider interface {
 	// The resulting FilterConfig will later be passed to BuildClientInterceptor
 	// or BuildServerInterceptor.
 	ParseFilterConfigOverride(proto.Message) (FilterConfig, error)
-	// IsTerminal returns whether Filter instances built from this Provider are
+	// IsTerminal returns whether interceptors built from this Provider are
 	// terminal or not (i.e. it must be last filter in the filter chain).
 	IsTerminal() bool
-	// IsClient returns whether Filter instances built from this Provider are
-	// capable of working on a client.
-	IsClient() bool
-	// IsServer returns whether Filter instances built from this Provider are
-	// capable of working on a server.
-	IsServer() bool
-	// Build creates a new Filter instance with the given name.
-	Build(name string) Filter
 }
 
-// A Filter is responsible for creating client or server interceptors or both
-// based on whether they implement the ClientInterceptorBuilder or
-// ServerInterceptorBuilder or both. It may also optionally maintain state that
-// is shared across all interceptors created from it.
-type Filter interface {
+// ClientInterceptorBuilder constructs a Client Interceptor.  If this type is
+// implemented by a FilterProvider, it is capable of working on a client.
+type ClientInterceptorBuilder interface {
 	// BuildClientInterceptor uses the given FilterConfigs to produce an HTTP
 	// filter interceptor for clients. config will always be non-nil, but
 	// override may be nil if no override config exists for the filter.
 	//
-	// If this Filter is a no-op or not capable of working on the client, it is
-	// valid for this method to return a nil Interceptor and a nil error. In
-	// this case, the RPC will not be intercepted by this filter.
-	BuildClientInterceptor(config, override FilterConfig) (iresolver.ClientInterceptor, error)
+	// The provider is free to use the name parameter to identify the filter
+	// instance being created, and share state across multiple instances if
+	// needed.
+	//
+	// It is valid for this method to return a nil Interceptor and a nil error.
+	// In this case, the RPC will not be intercepted by this filter.
+	//
+	// Callers must ensure that the returned cancel func is called when the
+	// interceptor is no longer needed, to allow the filter to clean up any
+	// resources.
+	BuildClientInterceptor(name string, config, override FilterConfig) (i iresolver.ClientInterceptor, cancel func(), err error)
+}
 
+// ServerInterceptorBuilder constructs a Server Interceptor.  If this type is
+// implemented by a FilterProvider, it is capable of working on a server.
+type ServerInterceptorBuilder interface {
 	// BuildServerInterceptor uses the given FilterConfigs to produce
 	// an HTTP filter interceptor for servers. config will always be non-nil,
 	// but override may be nil if no override config exists for the filter.
 	//
-	// If this Filter is a no-op or is not capable of working on the server, it
-	// is valid for this method to return a nil Interceptor and a nil error. In
-	// this case, the RPC will not be intercepted by this filter.
-	BuildServerInterceptor(config, override FilterConfig) (iresolver.ServerInterceptor, error)
-
-	// Close closes the filter, allowing it to perform any required cleanup.
-	Close() error
+	// The provider is free to use the name parameter to identify the filter
+	// instance being created, and share state across multiple instances if
+	// needed.
+	//
+	// It is valid for this method to return a nil Interceptor and a nil error.
+	// In this case, the RPC will not be intercepted by this filter.
+	//
+	// Callers must ensure that the returned cancel func is called when the
+	// interceptor is no longer needed, to allow the filter to clean up any
+	// resources.
+	BuildServerInterceptor(name string, config, override FilterConfig) (i iresolver.ServerInterceptor, cancel func(), err error)
 }
 
 var (
