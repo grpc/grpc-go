@@ -19,14 +19,18 @@
 package xdsdepmgr
 
 import (
+	"context"
 	"fmt"
+	"net/url"
 	"sync"
 
 	"google.golang.org/grpc/grpclog"
 	internalgrpclog "google.golang.org/grpc/internal/grpclog"
+	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/xds/xdsclient"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/serviceconfig"
 )
 
 const prefix = "[xdsdepmgr %p] "
@@ -74,6 +78,13 @@ type DependencyManager struct {
 	dataplaneAuthority string
 	nodeID             string
 
+	// Used to serialize callbacks from DNS resolvers to avoid deadlocks. Since
+	// the resolver's Build() is called with the dependency manager lock held,
+	// direct callbacks to ClientConn (which also require that lock) would
+	// deadlock.
+	dnsSerializer       *grpcsync.CallbackSerializer
+	dnsSerializerCancel func()
+
 	// All the fields below are protected by mu.
 	mu                      sync.Mutex
 	stopped                 bool
@@ -86,7 +97,7 @@ type DependencyManager struct {
 	clustersFromRouteConfig map[string]bool
 	clusterWatchers         map[string]*clusterWatcherState
 	endpointWatchers        map[string]*endpointWatcherState
-	dnsResolvers            map[string]*dnsResolverState
+	dnsResolvers            map[string]*dnsResourceState
 }
 
 // New creates a new DependencyManager.
@@ -99,15 +110,18 @@ type DependencyManager struct {
 //   - watcher is the ConfigWatcher interface that will receive the aggregated
 //     XDSConfig updates and errors.
 func New(listenerName, dataplaneAuthority string, xdsClient xdsclient.XDSClient, watcher ConfigWatcher) *DependencyManager {
+	ctx, cancel := context.WithCancel(context.Background())
 	dm := &DependencyManager{
 		ldsResourceName:         listenerName,
 		dataplaneAuthority:      dataplaneAuthority,
 		xdsClient:               xdsClient,
 		watcher:                 watcher,
 		nodeID:                  xdsClient.BootstrapConfig().Node().GetId(),
+		dnsSerializer:           grpcsync.NewCallbackSerializer(ctx),
+		dnsSerializerCancel:     cancel,
 		clustersFromRouteConfig: make(map[string]bool),
 		endpointWatchers:        make(map[string]*endpointWatcherState),
-		dnsResolvers:            make(map[string]*dnsResolverState),
+		dnsResolvers:            make(map[string]*dnsResourceState),
 		clusterWatchers:         make(map[string]*clusterWatcherState),
 	}
 	dm.logger = prefixLogger(dm)
@@ -155,8 +169,11 @@ func (m *DependencyManager) Close() {
 		delete(m.endpointWatchers, name)
 	}
 
+	// We cannot wait for the dns serializer to finish here, as the callbacks
+	// try to grab the dependency manager lock, which is already held here.
+	m.dnsSerializerCancel()
 	for name, dnsResolver := range m.dnsResolvers {
-		dnsResolver.cancelResolver()
+		dnsResolver.stopResolver()
 		delete(m.dnsResolvers, name)
 	}
 }
@@ -212,7 +229,7 @@ func (m *DependencyManager) maybeSendUpdateLocked() {
 	}
 	for name, dr := range m.dnsResolvers {
 		if _, ok := dnsResourcesSeen[name]; !ok {
-			dr.cancelResolver()
+			dr.stopResolver()
 			delete(m.dnsResolvers, name)
 		}
 	}
@@ -342,7 +359,7 @@ func (m *DependencyManager) populateLogicalDNSClusterLocked(clusterName string, 
 
 	// If dns resolver does not exist, create one.
 	if _, ok := m.dnsResolvers[target]; !ok {
-		m.dnsResolvers[target] = newDNSResolver(target, m)
+		m.dnsResolvers[target] = m.newDNSResolver(target)
 		return false, nil, nil
 	}
 	dnsState := m.dnsResolvers[target]
@@ -354,7 +371,7 @@ func (m *DependencyManager) populateLogicalDNSClusterLocked(clusterName string, 
 
 	clusterConfigs[clusterName].Config.EndpointConfig = &xdsresource.EndpointConfig{
 		DNSEndpoints:   dnsState.lastUpdate,
-		ResolutionNote: dnsState.err,
+		ResolutionNote: dnsState.lastErr,
 	}
 	return true, []string{clusterName}, nil
 }
@@ -741,7 +758,7 @@ func (m *DependencyManager) onDNSUpdate(resourceName string, update *resolver.St
 	state := m.dnsResolvers[resourceName]
 	state.lastUpdate = &xdsresource.DNSUpdate{Endpoints: endpoints}
 	state.updateReceived = true
-	state.err = nil
+	state.lastErr = nil
 	m.maybeSendUpdateLocked()
 }
 
@@ -766,7 +783,7 @@ func (m *DependencyManager) onDNSError(resourceName string, err error) {
 	// will continue to do so. Also suppress errors if we previously received an
 	// error, since there will be no downstream effects of propagating this
 	// error.
-	state.err = err
+	state.lastErr = err
 	if !state.updateReceived {
 		state.lastUpdate = nil
 		state.updateReceived = true
@@ -778,6 +795,69 @@ func (m *DependencyManager) onDNSError(resourceName string, err error) {
 // RequestDNSReresolution calls all the the DNS resolver's ResolveNow.
 func (m *DependencyManager) RequestDNSReresolution(opt resolver.ResolveNowOptions) {
 	for _, res := range m.dnsResolvers {
-		res.resolver.dnsR.ResolveNow(opt)
+		res.dnsR.ResolveNow(opt)
+	}
+}
+
+type dnsResourceState struct {
+	dnsR           resolver.Resolver
+	lastUpdate     *xdsresource.DNSUpdate
+	lastErr        error
+	updateReceived bool
+	stopResolver   func()
+}
+
+type resolverClientConn struct {
+	target string
+	depMgr *DependencyManager
+}
+
+func (rcc *resolverClientConn) UpdateState(state resolver.State) error {
+	rcc.depMgr.dnsSerializer.TrySchedule(func(context.Context) {
+		rcc.depMgr.onDNSUpdate(rcc.target, &state)
+	})
+	return nil
+}
+
+func (rcc *resolverClientConn) ReportError(err error) {
+	rcc.depMgr.dnsSerializer.TrySchedule(func(context.Context) {
+		rcc.depMgr.onDNSError(rcc.target, err)
+	})
+}
+
+func (rcc *resolverClientConn) NewAddress(addresses []resolver.Address) {
+	rcc.UpdateState(resolver.State{Addresses: addresses})
+}
+
+func (rcc *resolverClientConn) ParseServiceConfig(string) *serviceconfig.ParseResult {
+	return &serviceconfig.ParseResult{Err: fmt.Errorf("service config not supported")}
+}
+
+func (m *DependencyManager) newDNSResolver(target string) *dnsResourceState {
+	u, err := url.Parse("dns:///" + target)
+	if err != nil {
+		err := fmt.Errorf("failed to parse DNS target %q: %v", target, m.annotateErrorWithNodeID(err))
+		m.logger.Warningf("%v", err)
+		return &dnsResourceState{
+			lastErr:        err,
+			updateReceived: true,
+		}
+	}
+
+	rcc := &resolverClientConn{
+		target: target,
+		depMgr: m,
+	}
+	r, err := resolver.Get("dns").Build(resolver.Target{URL: *u}, rcc, resolver.BuildOptions{})
+	if err != nil {
+		rcc.ReportError(err)
+		err := fmt.Errorf("failed to build DNS resolver for target %q: %v", target, m.annotateErrorWithNodeID(err))
+		m.logger.Warningf("%v", err)
+		return nil
+	}
+
+	return &dnsResourceState{
+		dnsR:         r,
+		stopResolver: r.Close,
 	}
 }
