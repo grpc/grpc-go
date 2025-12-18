@@ -6,7 +6,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -537,8 +537,13 @@ func (a *csAttempt) newStream() error {
 		md, _ := metadata.FromOutgoingContext(a.ctx)
 		md = metadata.Join(md, a.pickResult.Metadata)
 		a.ctx = metadata.NewOutgoingContext(a.ctx, md)
-	}
 
+		if cs.callInfo.authority == "" {
+			if authMD := a.pickResult.Metadata.Get(":authority"); len(authMD) > 0 {
+				cs.callHdr.Authority = authMD[0]
+			}
+		}
+	}
 	s, err := a.transport.NewStream(a.ctx, cs.callHdr)
 	if err != nil {
 		nse, ok := err.(*transport.NewStreamError)

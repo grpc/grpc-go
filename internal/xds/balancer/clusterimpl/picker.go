@@ -31,6 +31,7 @@ import (
 	xdsinternal "google.golang.org/grpc/internal/xds"
 	"google.golang.org/grpc/internal/xds/clients"
 	"google.golang.org/grpc/internal/xds/xdsclient"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
 
@@ -145,6 +146,14 @@ func (d *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 		// If locality ID isn't found in the wrapper, an empty locality ID will
 		// be used.
 		lID = scw.localityID()
+
+		if scw.hostname != "" && autoHostRewrite(info.Ctx) {
+			if pr.Metadata == nil {
+				pr.Metadata = metadata.Pairs(":authority", scw.hostname)
+			} else {
+				pr.Metadata.Set(":authority", scw.hostname)
+			}
+		}
 	}
 
 	if err != nil {
@@ -201,8 +210,11 @@ type autoHostRewriteKey struct{}
 
 // autoHostRewrite retrieves the autoHostRewrite value from the provided context.
 func autoHostRewrite(ctx context.Context) bool {
-	v, _ := ctx.Value(autoHostRewriteKey{}).(bool)
-	return v
+	v := ctx.Value(autoHostRewriteKey{})
+	if v == nil {
+		return false
+	}
+	return v.(bool)
 }
 
 // AutoHostRewriteForTesting returns the value of autoHostRewrite field;
