@@ -129,12 +129,6 @@ func (provider) BuildClientInterceptor(_ string, cfg, override httpfilter.Filter
 	return &interceptor{config: icfg}, func() {}, nil
 }
 
-func (provider) BuildServerInterceptor(_ string, _, _ httpfilter.FilterConfig) (iresolver.ServerInterceptor, func(), error) {
-	// This filter is not supported on the server. So we return a nil
-	// HTTPFilter, which will not be invoked.
-	return nil, func() {}, nil
-}
-
 type interceptor struct {
 	config *fpb.HTTPFault
 }

@@ -87,7 +87,13 @@ func (provider) BuildClientInterceptor(_ string, cfg, override httpfilter.Filter
 	return nil, func() {}, nil
 }
 
-func (provider) BuildServerInterceptor(_ string, _, _ httpfilter.FilterConfig) (iresolver.ServerInterceptor, func(), error) {
+func (provider) BuildServerInterceptor(_ string, cfg, override httpfilter.FilterConfig) (iresolver.ServerInterceptor, func(), error) {
+	if _, ok := cfg.(config); !ok {
+		return nil, func() {}, fmt.Errorf("router: incorrect config type provided (%T): %v", cfg, cfg)
+	}
+	if override != nil {
+		return nil, func() {}, fmt.Errorf("router: unexpected override configuration specified: %v", override)
+	}
 	// The gRPC router is currently unimplemented on the server side. So we
 	// return a nil HTTPFilter, which will not be invoked.
 	return nil, func() {}, nil

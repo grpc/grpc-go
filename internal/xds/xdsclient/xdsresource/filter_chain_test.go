@@ -2755,6 +2755,8 @@ type filterProvider struct {
 
 func (filterProvider) IsTerminal() bool { return false }
 
+var _ httpfilter.ServerInterceptorBuilder = &filterProvider{}
+
 func (filterProvider) BuildServerInterceptor(_ string, config httpfilter.FilterConfig, override httpfilter.FilterConfig) (iresolver.ServerInterceptor, func(), error) {
 	var level string
 	level = config.(filterCfg).level

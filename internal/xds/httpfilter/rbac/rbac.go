@@ -158,12 +158,6 @@ func (provider) ParseFilterConfigOverride(override proto.Message) (httpfilter.Fi
 
 func (provider) IsTerminal() bool { return false }
 
-func (provider) BuildClientInterceptor(_ string, _, _ httpfilter.FilterConfig) (resolver.ClientInterceptor, func(), error) {
-	// This filter is not supported on the server. So we return a nil
-	// HTTPFilter, which will not be invoked.
-	return nil, func() {}, nil
-}
-
 // BuildServerInterceptor is an optional interface builder implements in order
 // to signify it works server side.
 func (provider) BuildServerInterceptor(_ string, cfg httpfilter.FilterConfig, override httpfilter.FilterConfig) (resolver.ServerInterceptor, func(), error) {

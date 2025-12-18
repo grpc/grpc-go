@@ -122,6 +122,10 @@ func (*testHTTPFilterProvider) ParseFilterConfigOverride(override proto.Message)
 
 func (*testHTTPFilterProvider) IsTerminal() bool { return false }
 
+// ClientInterceptorBuilder is an optional interface for filters to implement.
+// This compile time check ensures the test filter implements it.
+var _ httpfilter.ClientInterceptorBuilder = &testHTTPFilterProvider{}
+
 func (fb *testHTTPFilterProvider) BuildClientInterceptor(name string, config, override httpfilter.FilterConfig) (iresolver.ClientInterceptor, func(), error) {
 	fb.logger.Logf("BuildClientInterceptor called with name %q config: %+v, override: %+v", name, config, override)
 
@@ -152,12 +156,6 @@ func (fb *testHTTPFilterProvider) BuildClientInterceptor(name string, config, ov
 		newStreamChan: fb.newStreamChan,
 	}, func() {}, nil
 }
-
-func (fb *testHTTPFilterProvider) BuildServerInterceptor(_ string, _, _ httpfilter.FilterConfig) (iresolver.ServerInterceptor, func(), error) {
-	return nil, func() {}, nil
-}
-
-func (fb *testHTTPFilterProvider) Close() error { return nil }
 
 // overallFilterConfig is a JSON representation of the filter config.
 // It is sent as RPC metadata and written to a channel for test verification.
