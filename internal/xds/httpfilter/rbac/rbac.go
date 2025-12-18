@@ -36,10 +36,10 @@ import (
 )
 
 func init() {
-	httpfilter.Register(provider{})
+	httpfilter.Register(builder{})
 }
 
-type provider struct {
+type builder struct {
 }
 
 type config struct {
@@ -47,7 +47,7 @@ type config struct {
 	chainEngine *rbac.ChainEngine
 }
 
-func (provider) TypeURLs() []string {
+func (builder) TypeURLs() []string {
 	return []string{
 		"type.googleapis.com/envoy.extensions.filters.http.rbac.v3.RBAC",
 		"type.googleapis.com/envoy.extensions.filters.http.rbac.v3.RBACPerRoute",
@@ -126,7 +126,7 @@ func parseConfig(rbacCfg *rpb.RBAC) (httpfilter.FilterConfig, error) {
 	return config{chainEngine: ce}, nil
 }
 
-func (provider) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, error) {
+func (builder) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("rbac: nil configuration message provided")
 	}
@@ -141,7 +141,7 @@ func (provider) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, e
 	return parseConfig(msg)
 }
 
-func (provider) ParseFilterConfigOverride(override proto.Message) (httpfilter.FilterConfig, error) {
+func (builder) ParseFilterConfigOverride(override proto.Message) (httpfilter.FilterConfig, error) {
 	if override == nil {
 		return nil, fmt.Errorf("rbac: nil configuration message provided")
 	}
@@ -156,11 +156,15 @@ func (provider) ParseFilterConfigOverride(override proto.Message) (httpfilter.Fi
 	return parseConfig(msg.Rbac)
 }
 
-func (provider) IsTerminal() bool { return false }
+func (builder) IsTerminal() bool {
+	return false
+}
+
+var _ httpfilter.ServerInterceptorBuilder = builder{}
 
 // BuildServerInterceptor is an optional interface builder implements in order
 // to signify it works server side.
-func (provider) BuildServerInterceptor(_ string, cfg httpfilter.FilterConfig, override httpfilter.FilterConfig) (resolver.ServerInterceptor, func(), error) {
+func (builder) BuildServerInterceptor(_ string, cfg httpfilter.FilterConfig, override httpfilter.FilterConfig) (resolver.ServerInterceptor, func(), error) {
 	if cfg == nil {
 		return nil, func() {}, fmt.Errorf("rbac: nil config provided")
 	}
