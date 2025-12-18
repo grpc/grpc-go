@@ -178,9 +178,9 @@ type cdsBalancer struct {
 	xdsClient        xdsclient.XDSClient          // xDS client to watch Cluster resources.
 	attrsWithClient  *attributes.Attributes       // Attributes with xdsClient attached to be passed to the child policies.
 	clusterConfig    map[string]*xdsresource.ClusterResult
-	clusterSubs      *xdsdepmgr.ClusterRef
-	lbCfg            *lbConfig // Current load balancing configuration.
-	xdsLBPolicy      internalserviceconfig.BalancerConfig
+	clusterSubs      *xdsdepmgr.ClusterRef                // Cluster resource subscription for dynamic clusters.
+	lbCfg            *lbConfig                            // Current load balancing configuration.
+	xdsLBPolicy      internalserviceconfig.BalancerConfig // Stores the locality and endpoint picking policy.
 	priorityConfig   map[discoveryMechanismKey]priorityConfig
 	// Each new discovery mechanism needs a child name generator to reuse child
 	// policy names. But to make sure the names across discover mechanism
@@ -283,8 +283,7 @@ func buildProviderFunc(configs map[string]*certprovider.BuildableConfig, instanc
 	return provider, nil
 }
 
-// updateChildConfig builds child policy configurœation using XDSConfig and child policy configuration provided by
-// parent LB policy.
+// updateChildConfig builds child policy configuration using XDSConfig.
 //
 // A child policy is created if one doesn't already exist. The newly built
 // configuration is then pushed to the child policy.
@@ -388,7 +387,7 @@ func (b *cdsBalancer) UpdateClientConnState(state balancer.ClientConnState) erro
 	// Handle the update in a blocking fashion.
 	errCh := make(chan error, 1)
 	callback := func(context.Context) {
-		b.processUpdate()
+		b.processConfigUpdate()
 		errCh <- nil
 	}
 	onFailure := func() {
@@ -400,8 +399,8 @@ func (b *cdsBalancer) UpdateClientConnState(state balancer.ClientConnState) erro
 	return <-errCh
 }
 
-// processUpdate processes the update from the xDS resolver.
-func (b *cdsBalancer) processUpdate() {
+// processConfigUpdate processes the update from the xDS resolver.
+func (b *cdsBalancer) processConfigUpdate() {
 	// If the cluster is dynamic and we dont have a subscription yet, create
 	// one.
 	if b.lbCfg.IsDynamic && b.clusterSubs == nil {
@@ -438,16 +437,14 @@ func (b *cdsBalancer) processUpdate() {
 		b.onClusterResourceError(b.lbCfg.ClusterName, b.annotateErrorWithNodeID(fmt.Errorf("received Cluster resource contains invalid security config: %v", err)))
 		return
 	}
-	b.onClusterUpdate()
+	b.handleClusterUpdate()
 }
 
 // ResolverError handles errors reported by the xdsResolver.
 func (b *cdsBalancer) ResolverError(err error) {
 	b.serializer.TrySchedule(func(context.Context) {
 		// Missing Listener or RouteConfiguration on the management server
-		// results in a 'resource not found' error from the xDS resolver. In
-		// these cases, we should step watching all of the current clusters
-		// being watched.
+		// results in a 'resource not found' error from the xDS resolver.
 		if xdsresource.ErrType(err) == xdsresource.ErrorTypeResourceNotFound {
 			b.closeChildPolicyAndReportTF(err)
 			return
@@ -538,42 +535,33 @@ func (b *cdsBalancer) annotateErrorWithNodeID(err error) error {
 // policy config and pushes it down.
 //
 // Only executed in the context of a serializer callback.
-func (b *cdsBalancer) onClusterUpdate() {
+func (b *cdsBalancer) handleClusterUpdate() {
 	clusterName := b.lbCfg.ClusterName
-	clusterRes, ok := b.clusterConfig[clusterName]
-	if !ok {
-		// Should not happen as this is called after verification
-		return
-	}
+	state := b.clusterConfig[clusterName]
 
 	var newPriorities []priorityConfig
 
-	// Helper to add priority
-	addPriority := func(name string) {
-		dm, err := b.getDiscoveryMechanism(name)
-		if err != nil {
-			b.logger.Warningf("failed to create discovery mechanism: %v", err)
-			return
-		}
-		pc, err := b.updatePriorityConfig(dm)
-		if err != nil {
-			b.logger.Warningf("failed to update priority config: %v", err)
-			return
-		}
-		newPriorities = append(newPriorities, pc)
-	}
-
-	switch clusterRes.Config.Cluster.ClusterType {
+	switch state.Config.Cluster.ClusterType {
 	case xdsresource.ClusterTypeEDS, xdsresource.ClusterTypeLogicalDNS:
-		addPriority(clusterName)
+		p, err := b.updatePriority(clusterName)
+		if err != nil {
+			b.logger.Warningf("failed to update priority for cluster %q: %v", clusterName, err)
+			return
+		}
+		newPriorities = append(newPriorities, p)
 
 	case xdsresource.ClusterTypeAggregate:
-		for _, leaf := range clusterRes.Config.AggregateConfig.LeafClusters {
+		for _, leaf := range state.Config.AggregateConfig.LeafClusters {
 			if leafConfig, ok := b.clusterConfig[leaf]; ok {
 				// Only consider EDS and LogicalDNS leaf clusters
 				if leafConfig.Config.Cluster.ClusterType == xdsresource.ClusterTypeEDS ||
 					leafConfig.Config.Cluster.ClusterType == xdsresource.ClusterTypeLogicalDNS {
-					addPriority(leaf)
+					p, err := b.updatePriority(leaf)
+					if err != nil {
+						b.logger.Warningf("failed to update priority for cluster %q: %v", clusterName, err)
+						return
+					}
+					newPriorities = append(newPriorities, p)
 				}
 			}
 		}
@@ -587,6 +575,20 @@ func (b *cdsBalancer) onClusterUpdate() {
 		return
 	}
 	b.updateChildConfig()
+}
+
+func (b *cdsBalancer) updatePriority(clusterName string) (priorityConfig, error) {
+	dm, err := b.createDiscoveryMechanism(clusterName)
+	if err != nil {
+		b.logger.Warningf("failed to create discovery mechanism: %v", err)
+		return priorityConfig{}, err
+	}
+	pc, err := b.updatePriorityConfig(dm)
+	if err != nil {
+		b.logger.Warningf("failed to update priority config: %v", err)
+		return priorityConfig{}, err
+	}
+	return pc, nil
 }
 
 // updateOutlierDetectionAndTelemetry updates Outlier Detection configs and Telemetry Labels for all priorities.
@@ -624,13 +626,10 @@ func (b *cdsBalancer) updateOutlierDetectionAndTelemetry() {
 	}
 }
 
-// getDiscoveryMechanism creates a DiscoveryMechanism for the given cluster name.
-func (b *cdsBalancer) getDiscoveryMechanism(clusterName string) (DiscoveryMechanism, error) {
-	clusterRes, ok := b.clusterConfig[clusterName]
-	if !ok {
-		return DiscoveryMechanism{}, fmt.Errorf("cluster %q not found", clusterName)
-	}
-	cluster := clusterRes.Config.Cluster
+// createDiscoveryMechanism creates a DiscoveryMechanism for the given cluster name.
+func (b *cdsBalancer) createDiscoveryMechanism(clusterName string) (DiscoveryMechanism, error) {
+	state := b.clusterConfig[clusterName]
+	cluster := state.Config.Cluster
 	dm := DiscoveryMechanism{
 		Cluster:               clusterName,
 		MaxConcurrentRequests: cluster.MaxRequests,

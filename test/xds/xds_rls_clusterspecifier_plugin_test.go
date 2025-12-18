@@ -86,10 +86,10 @@ func (s) TestRLSinxDS(t *testing.T) {
 			name:     "roundrobin",
 			lbPolicy: e2e.LoadBalancingPolicyRoundRobin,
 		},
-		// {
-		// 	name:     "ringhash",
-		// 	lbPolicy: e2e.LoadBalancingPolicyRingHash,
-		// },
+		{
+			name:     "ringhash",
+			lbPolicy: e2e.LoadBalancingPolicyRingHash,
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -125,7 +125,7 @@ func testRLSinxDS(t *testing.T, lbPolicy e2e.LoadBalancingPolicy) {
 		SecLevel:   e2e.SecurityLevelNone,
 	}, rlsProto)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 50*defaultTestTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if err := managementServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)

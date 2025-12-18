@@ -1011,7 +1011,7 @@ func (s) TestAggregatedClusterSuccess_IgnoreDups(t *testing.T) {
 	// thereby completing the cluster graph. This should result in configuration
 	// being pushed down to the child policy.
 	resources.Clusters = append(resources.Clusters, e2e.DefaultCluster(clusterNameC, edsClusterName, e2e.SecurityLevelNone))
-	resources.Endpoints = append(resources.Endpoints, e2e.DefaultEndpoint(edsClusterName, "eshita_eds", []uint32{1234}))
+	resources.Endpoints = append(resources.Endpoints, e2e.DefaultEndpoint(edsClusterName, "localhost", []uint32{1234}))
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
