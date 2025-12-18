@@ -24,19 +24,13 @@ import (
 	"fmt"
 	"net"
 	"runtime"
-	"strconv"
 	"sync"
 	"sync/atomic"
 
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
 	"google.golang.org/grpc/internal/grpclog"
-	"google.golang.org/grpc/internal/grpcutil"
-	"google.golang.org/grpc/internal/pretty"
-	istatus "google.golang.org/grpc/internal/status"
 	"google.golang.org/grpc/mem"
-	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/proto"
 )
 
 var updateHeaderTblSize = func(e *hpack.Encoder, v uint32) {
@@ -150,12 +144,9 @@ type cleanupStream struct {
 func (c *cleanupStream) isTransportResponseFrame() bool { return c.rst } // Results in a RST_STREAM
 
 type earlyAbortStream struct {
-	httpStatus            uint32
-	streamID              uint32
-	contentSubtype        string
-	status                *status.Status
-	rst                   bool
-	maxSendHeaderListSize *uint32
+	streamID uint32
+	rst      bool
+	hf       []hpack.HeaderField // Pre-built header fields
 }
 
 func (*earlyAbortStream) isTransportResponseFrame() bool { return false }
@@ -847,34 +838,7 @@ func (l *loopyWriter) earlyAbortStreamHandler(eas *earlyAbortStream) error {
 	if l.side == clientSide {
 		return errors.New("earlyAbortStream not handled on client")
 	}
-	// In case the caller forgets to set the http status, default to 200.
-	if eas.httpStatus == 0 {
-		eas.httpStatus = 200
-	}
-	headerFields := []hpack.HeaderField{
-		{Name: ":status", Value: strconv.Itoa(int(eas.httpStatus))},
-		{Name: "content-type", Value: grpcutil.ContentType(eas.contentSubtype)},
-		{Name: "grpc-status", Value: strconv.Itoa(int(eas.status.Code()))},
-		{Name: "grpc-message", Value: encodeGrpcMessage(eas.status.Message())},
-	}
-
-	if p := istatus.RawStatusProto(eas.status); len(p.GetDetails()) > 0 {
-		stBytes, err := proto.Marshal(p)
-		if err != nil {
-			l.logger.Errorf("Failed to marshal rpc status: %s, error: %v", pretty.ToJSON(p), err)
-		} else {
-			headerFields = append(headerFields, hpack.HeaderField{Name: grpcStatusDetailsBinHeader, Value: encodeBinHeader(stBytes)})
-		}
-	}
-
-	if !checkForHeaderListSize(headerFields, eas.maxSendHeaderListSize) {
-		if l.logger.V(logLevel) {
-			l.logger.Infof("Header list size to send violates the maximum size (%d bytes) set by client", *eas.maxSendHeaderListSize)
-		}
-		return l.framer.fr.WriteRSTStream(eas.streamID, http2.ErrCodeInternal)
-	}
-
-	if err := l.writeHeader(eas.streamID, true, headerFields, nil); err != nil {
+	if err := l.writeHeader(eas.streamID, true, eas.hf, nil); err != nil {
 		return err
 	}
 	if eas.rst {
