@@ -61,10 +61,10 @@ var statusMap = map[int]codes.Code{
 }
 
 func init() {
-	httpfilter.Register(provider{})
+	httpfilter.Register(builder{})
 }
 
-type provider struct {
+type builder struct {
 }
 
 type config struct {
@@ -72,7 +72,7 @@ type config struct {
 	config *fpb.HTTPFault
 }
 
-func (provider) TypeURLs() []string {
+func (builder) TypeURLs() []string {
 	return []string{"type.googleapis.com/envoy.extensions.filters.http.fault.v3.HTTPFault"}
 }
 
@@ -92,17 +92,17 @@ func parseConfig(cfg proto.Message) (httpfilter.FilterConfig, error) {
 	return config{config: msg}, nil
 }
 
-func (provider) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, error) {
+func (builder) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, error) {
 	return parseConfig(cfg)
 }
 
-func (provider) ParseFilterConfigOverride(override proto.Message) (httpfilter.FilterConfig, error) {
+func (builder) ParseFilterConfigOverride(override proto.Message) (httpfilter.FilterConfig, error) {
 	return parseConfig(override)
 }
 
-func (provider) IsTerminal() bool { return false }
+func (builder) IsTerminal() bool { return false }
 
-func (provider) BuildClientInterceptor(_ string, cfg, override httpfilter.FilterConfig) (iresolver.ClientInterceptor, func(), error) {
+func (builder) BuildClientInterceptor(_ string, cfg, override httpfilter.FilterConfig) (iresolver.ClientInterceptor, func(), error) {
 	if cfg == nil {
 		return nil, func() {}, fmt.Errorf("fault: nil config provided")
 	}
