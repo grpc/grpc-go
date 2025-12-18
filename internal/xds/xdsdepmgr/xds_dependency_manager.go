@@ -144,6 +144,7 @@ func (m *DependencyManager) Close() {
 	if m.routeConfigCancel != nil {
 		m.routeConfigCancel()
 	}
+
 	for name, cluster := range m.clusterWatchers {
 		cluster.cancelWatch()
 		delete(m.clusterWatchers, name)
@@ -218,6 +219,7 @@ func (m *DependencyManager) maybeSendUpdateLocked() {
 			delete(m.dnsResolvers, name)
 		}
 	}
+
 	for name, cluster := range m.clusterWatchers {
 		if _, ok := clusterResourcesSeen[name]; !ok {
 			cluster.cancelWatch()
@@ -778,6 +780,8 @@ func (m *DependencyManager) onDNSError(resourceName string, err error) {
 
 // RequestDNSReresolution calls all the the DNS resolver's ResolveNow.
 func (m *DependencyManager) RequestDNSReresolution(opt resolver.ResolveNowOptions) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	for _, res := range m.dnsResolvers {
 		res.resolver.dnsR.ResolveNow(opt)
 	}
@@ -818,6 +822,8 @@ type ClusterRef struct {
 // returns the ClusterRef. If the cluster is not already being tracked, it adds
 // it to the ClusterSubs map.
 func (m *DependencyManager) Clustersubscription(name string) *ClusterRef {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	subs, ok := m.ClusterSubs[name]
 	if ok {
 		ref := &subs.RefCount
@@ -835,6 +841,8 @@ func (m *DependencyManager) Clustersubscription(name string) *ClusterRef {
 // count reaches zero, it removes the cluster from the ClusterSubs map in the
 // DependencyManager.
 func (c *ClusterRef) Unsubscribe() {
+	c.m.mu.Lock()
+	defer c.m.mu.Unlock()
 	ref := atomic.AddInt32(&c.RefCount, -1)
 	if ref <= 0 {
 		delete(c.m.ClusterSubs, c.Name)

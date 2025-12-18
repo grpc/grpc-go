@@ -150,7 +150,9 @@ func (b *xdsResolverBuilder) Build(target resolver.Target, cc resolver.ClientCon
 	}
 	r.logger = prefixLogger(r)
 	r.logger.Infof("Creating resolver for target: %+v", target)
-	r.dm = xdsdepmgr.New(r.ldsResourceName, opts.Authority, r.xdsClient, r)
+	// Initialize the dependency manager in a serializer because it may be
+	// accessed concurrently when creating multiple concurrent channels.
+	r.serializer.TrySchedule(func(context.Context) { r.dm = xdsdepmgr.New(r.ldsResourceName, opts.Authority, r.xdsClient, r) })
 	return r, nil
 }
 
