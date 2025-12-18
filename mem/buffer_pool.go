@@ -43,7 +43,7 @@ type BufferPool interface {
 const goPageSizeExponent = 12
 const goPageSize = 1 << goPageSizeExponent // 4KiB. N.B. this must be a power of 2.
 
-var defaultBufferPoolSizeExponents = []int{
+var defaultBufferPoolSizeExponents = []uint8{
 	8,
 	goPageSizeExponent,
 	14, // 16KB (max HTTP/2 frame size used by gRPC)
@@ -135,8 +135,8 @@ type binaryTieredBufferPool struct {
 // capacity of the buffers in the pool, not the capacities of the buffers
 // themselves. For example, if you wanted a pool that had buffers with a capacity
 // of 16kb, you would pass 14 as the argument to this function.
-func NewBinaryTieredBufferPool(powerOfTwoExponents ...int) BufferPool {
-	sort.Ints(powerOfTwoExponents)
+func NewBinaryTieredBufferPool(powerOfTwoExponents ...uint8) BufferPool {
+	slices.Sort(powerOfTwoExponents)
 
 	// Determine the maximum exponent we need to support.
 	// bits.Len64(math.MaxUint64) is 63.
@@ -150,11 +150,7 @@ func NewBinaryTieredBufferPool(powerOfTwoExponents ...int) BufferPool {
 	for i, exp := range powerOfTwoExponents {
 		// Allocating slices of size > 2^maxExponent isn't possible on 64-bit
 		// machines.
-		//
-		// Negative exponents would result in values in the range (0, 1). Since
-		// buffer sizes are integers, such values don't make sense (and would
-		// panic on bit shift). We ignore such values.
-		if exp > maxExponent || exp < 0 {
+		if exp > maxExponent {
 			continue
 		}
 		capSize := 1 << exp

@@ -108,7 +108,7 @@ func (s) TestBufferPoolIgnoresShortBuffers(t *testing.T) {
 }
 
 func TestBinaryBufferPool(t *testing.T) {
-	poolSizes := []int{0, 2, 3, 4}
+	poolSizes := []uint8{0, 2, 3, 4}
 
 	testCases := []struct {
 		requestSize  int
