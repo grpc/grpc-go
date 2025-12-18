@@ -100,7 +100,11 @@ func (builder) ParseFilterConfigOverride(override proto.Message) (httpfilter.Fil
 	return parseConfig(override)
 }
 
-func (builder) IsTerminal() bool { return false }
+func (builder) IsTerminal() bool {
+	return false
+}
+
+var _ httpfilter.ClientInterceptorBuilder = builder{}
 
 func (builder) BuildClientInterceptor(_ string, cfg, override httpfilter.FilterConfig) (iresolver.ClientInterceptor, func(), error) {
 	if cfg == nil {
