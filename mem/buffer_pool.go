@@ -20,6 +20,7 @@ package mem
 
 import (
 	"math/bits"
+	"slices"
 	"sort"
 	"sync"
 
@@ -112,11 +113,18 @@ func (p *tieredBufferPool) getPool(size int) BufferPool {
 }
 
 type binaryTieredBufferPool struct {
-	indexOfNextLargestBit     []int
-	indexOfPreviousLargestBit []int
-	sizedPools                []*sizedBufferPool
-	fallbackPool              simpleBufferPool
-	maxPoolCap                int // Optimization: Cache max capacity
+	// exponentToNextLargestPoolMap maps a power-of-two exponent (e.g., 12 for
+	// 4KB) to the index of the next largest sizedBufferPool. This is used by
+	// Get() to find the smallest pool that can satisfy a request for a given
+	// size.
+	exponentToNextLargestPoolMap []int
+	// exponentToPreviousLargestPoolMap maps a power-of-two exponent to the
+	// index of the previous largest sizedBufferPool. This is used by Put()
+	// to return a buffer to the most appropriate pool based on its capacity.
+	exponentToPreviousLargestPoolMap []int
+	sizedPools                       []*sizedBufferPool
+	fallbackPool                     simpleBufferPool
+	maxPoolCap                       int // Optimization: Cache max capacity
 }
 
 // NewBinaryTieredBufferPool returns a BufferPool implementation that uses
@@ -133,19 +141,19 @@ func NewBinaryTieredBufferPool(powerOfTwoExponents ...int) BufferPool {
 	// Determine the maximum exponent we need to support.
 	// bits.Len64(math.MaxUint64) is 63.
 	const maxExponent = 63
-	indexOfNextLargestBit := make([]int, maxExponent+1)
-	indexOfPreviousLargestBit := make([]int, maxExponent+1)
-
-	// Initialize with sentinel values
-	for i := range indexOfNextLargestBit {
-		indexOfNextLargestBit[i] = -1
-		indexOfPreviousLargestBit[i] = -1
-	}
+	indexOfNextLargestBit := slices.Repeat([]int{-1}, maxExponent+1)
+	indexOfPreviousLargestBit := slices.Repeat([]int{-1}, maxExponent+1)
 
 	maxCap := 0
 	pools := make([]*sizedBufferPool, 0, len(powerOfTwoExponents))
 
 	for i, exp := range powerOfTwoExponents {
+		// Allocating slices of size > 2^maxExponent isn't possible on 64-bit
+		// machines.
+		//
+		// Negative exponents would result in values in the range (0, 1). Since
+		// buffer sizes are integers, such values don't make sense (and would
+		// panic on bit shift). We ignore such values.
 		if exp > maxExponent || exp < 0 {
 			continue
 		}
@@ -177,10 +185,10 @@ func NewBinaryTieredBufferPool(powerOfTwoExponents ...int) BufferPool {
 	}
 
 	return &binaryTieredBufferPool{
-		indexOfNextLargestBit:     indexOfNextLargestBit,
-		indexOfPreviousLargestBit: indexOfPreviousLargestBit,
-		sizedPools:                pools,
-		maxPoolCap:                maxCap,
+		exponentToNextLargestPoolMap:     indexOfNextLargestBit,
+		exponentToPreviousLargestPoolMap: indexOfPreviousLargestBit,
+		sizedPools:                       pools,
+		maxPoolCap:                       maxCap,
 	}
 }
 
@@ -200,7 +208,7 @@ func (b *binaryTieredBufferPool) poolForGet(size int) BufferPool {
 	// size=16 (0b10000) -> size-1=15 (0b01111) -> bits.Len=4 -> Pool for 2^4
 	// size=17 (0b10001) -> size-1=16 (0b10000) -> bits.Len=5 -> Pool for 2^5
 	querySize := uint(size - 1)
-	poolIdx := b.indexOfNextLargestBit[bits.Len(querySize)]
+	poolIdx := b.exponentToNextLargestPoolMap[bits.Len(querySize)]
 
 	return b.sizedPools[poolIdx]
 }
@@ -228,7 +236,7 @@ func (b *binaryTieredBufferPool) poolForPut(bCap int) BufferPool {
 	// cap=16 (0b10000) -> Len=5 -> 5-1=4 -> 2^4
 	// cap=15 (0b01111) -> Len=4 -> 4-1=3 -> 2^3
 	largestPowerOfTwo := bits.Len(uint(bCap)) - 1
-	poolIdx := b.indexOfPreviousLargestBit[largestPowerOfTwo]
+	poolIdx := b.exponentToPreviousLargestPoolMap[largestPowerOfTwo]
 	// The buffer is smaller than the smallest power of 2, discard it.
 	if poolIdx == -1 {
 		// Buffer is smaller than our smallest pool bucket.
