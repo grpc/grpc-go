@@ -28,6 +28,7 @@ import (
 // It eats any record calls where the label values provided do not match the
 // number of label keys.
 type MetricsRecorderList struct {
+	estats.UnimplementedMetricsRecorder
 	// metricsRecorders are the metrics recorders this list will forward to.
 	metricsRecorders []estats.MetricsRecorder
 }

@@ -321,7 +321,6 @@ func (s) TestMetricsRegistryMetrics(t *testing.T) {
 					gotMetrics[m.Name] = m
 				}
 			}
-			t.Logf("Callback run value: %v.", callbackRun)
 			for _, metric := range wantMetrics {
 				val, ok := gotMetrics[metric.Name]
 				if !ok {
