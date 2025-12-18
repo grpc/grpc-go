@@ -22,10 +22,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/internal/xds/balancer/outlierdetection"
 	"google.golang.org/grpc/internal/xds/bootstrap"
-	"google.golang.org/grpc/serviceconfig"
 )
 
 // DiscoveryMechanismType is the type of discovery mechanism.
@@ -167,18 +165,4 @@ func equalUint32P(a, b *uint32) bool {
 		return false
 	}
 	return *a == *b
-}
-
-// LBConfig is the config for cluster resolver balancer.
-type LBConfig struct {
-	serviceconfig.LoadBalancingConfig `json:"-"`
-	// DiscoveryMechanisms is an ordered list of discovery mechanisms.
-	//
-	// Must have at least one element. Results from each discovery mechanism are
-	// concatenated together in successive priorities.
-	DiscoveryMechanisms []DiscoveryMechanism `json:"discoveryMechanisms,omitempty"`
-
-	// XDSLBPolicy specifies the policy for locality picking and endpoint picking.
-	XDSLBPolicy json.RawMessage `json:"xdsLbPolicy,omitempty"`
-	xdsLBPolicy internalserviceconfig.BalancerConfig
 }
