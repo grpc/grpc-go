@@ -52,14 +52,12 @@ func wrappedRegisterAsyncReporter(l *MetricsRecorderList, r estats.AsyncMetricRe
 }
 
 // trackAsyncReporters installs the tracking hook.
-// Call this in your Test Setup.
 func trackAsyncReporters() {
 	asyncReporterTracker = newReporterTracker()
 	originalDelegate = setRegisterAsyncReporterDelegate(wrappedRegisterAsyncReporter)
 }
 
 // checkAsyncReporters verifies no leaks exist and restores the original delegate.
-// Call this in your Test Teardown.
 func checkAsyncReporters(logger leakcheck.Logger) {
 	// Restore the original delegate immediately to clean up state
 	if originalDelegate != nil {
