@@ -32,6 +32,7 @@ import (
 	"google.golang.org/grpc/internal/xds/balancer/outlierdetection"
 	"google.golang.org/grpc/internal/xds/balancer/priority"
 	"google.golang.org/grpc/internal/xds/balancer/wrrlocality"
+	"google.golang.org/grpc/internal/xds/clients"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/ringhash"
@@ -109,7 +110,7 @@ func buildPriorityConfig(priorities []priorityConfig, xdsLBPolicy *internalservi
 			}
 			continue
 		case DiscoveryMechanismTypeLogicalDNS:
-			name, config, endpoints := buildClusterImplConfigForDNS(p.childNameGen, p.endpoints, p.mechanism)
+			name, config, endpoints := buildClusterImplConfigForDNS(p.childNameGen, p.endpoints, p.mechanism, xdsLBPolicy)
 			retConfig.Priorities = append(retConfig.Priorities, name)
 			retEndpoints = append(retEndpoints, endpoints...)
 			odCfg := makeClusterImplOutlierDetectionChild(config, p.mechanism.outlierDetection)
@@ -139,24 +140,36 @@ func makeClusterImplOutlierDetectionChild(ciCfg *clusterimpl.LBConfig, odCfg out
 	return &odCfgRet
 }
 
-func buildClusterImplConfigForDNS(g *nameGenerator, endpoints []resolver.Endpoint, mechanism DiscoveryMechanism) (string, *clusterimpl.LBConfig, []resolver.Endpoint) {
-	// Endpoint picking policy for DNS is hardcoded to pick_first.
-	const childPolicy = "pick_first"
-	retEndpoints := make([]resolver.Endpoint, len(endpoints))
+func buildClusterImplConfigForDNS(g *nameGenerator, endpoints []resolver.Endpoint, mechanism DiscoveryMechanism, xdsLBPolicy *internalserviceconfig.BalancerConfig) (string, *clusterimpl.LBConfig, []resolver.Endpoint) {
 	pName := fmt.Sprintf("priority-%v", g.prefix)
-	for i, e := range endpoints {
-		retEndpoints[i] = hierarchy.SetInEndpoint(e, []string{pName})
+	if len(endpoints) == 0 {
+		return pName, &clusterimpl.LBConfig{
+			Cluster:               mechanism.Cluster,
+			TelemetryLabels:       mechanism.TelemetryLabels,
+			ChildPolicy:           xdsLBPolicy,
+			MaxConcurrentRequests: mechanism.MaxConcurrentRequests,
+			LoadReportingServer:   mechanism.LoadReportingServer,
+		}, []resolver.Endpoint{}
+	}
+	var retEndpoint resolver.Endpoint
+	for _, e := range endpoints {
 		// Copy the nested address field as slice fields are shared by the
 		// iteration variable and the original slice.
-		retEndpoints[i].Addresses = append([]resolver.Address{}, e.Addresses...)
+		retEndpoint.Addresses = append(retEndpoint.Addresses, e.Addresses...)
 	}
+	localityStr := xdsinternal.LocalityString(clients.Locality{})
+	retEndpoint = hierarchy.SetInEndpoint(retEndpoint, []string{pName, localityStr})
+	// Set the locality weight to 1. This is required because the child policy
+	// like wrr which relies on locality weights to distribute traffic. These
+	// policies may drop traffic if the weight is 0.
+	retEndpoint = wrrlocality.SetAddrInfoInEndpoint(retEndpoint, wrrlocality.AddrInfo{LocalityWeight: 1})
 	return pName, &clusterimpl.LBConfig{
 		Cluster:               mechanism.Cluster,
 		TelemetryLabels:       mechanism.TelemetryLabels,
-		ChildPolicy:           &internalserviceconfig.BalancerConfig{Name: childPolicy},
+		ChildPolicy:           xdsLBPolicy,
 		MaxConcurrentRequests: mechanism.MaxConcurrentRequests,
 		LoadReportingServer:   mechanism.LoadReportingServer,
-	}, retEndpoints
+	}, []resolver.Endpoint{retEndpoint}
 }
 
 // buildClusterImplConfigForEDS returns a list of cluster_impl configs, one for
