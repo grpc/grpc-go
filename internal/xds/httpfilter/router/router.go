@@ -38,7 +38,7 @@ func init() {
 }
 
 // IsRouterFilter returns true iff a HTTP filter is a Router filter.
-func IsRouterFilter(b httpfilter.FilterProvider) bool {
+func IsRouterFilter(b httpfilter.Filter) bool {
 	_, ok := b.(builder)
 	return ok
 }

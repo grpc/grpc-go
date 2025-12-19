@@ -31,32 +31,28 @@ type FilterConfig interface {
 	isFilterConfig()
 }
 
-// FilterProvider is responsible for parsing an HTTP filter's configuration
-// proto messages and creating new interceptor instances. Every filter must
-// implement and register this interface.
-//
-// A FilterProvider may optionally implement either ClientInterceptorBuilder or
+// Filter defines the parsing functionality of an HTTP filter.  A Filter may
+// optionally implement either ClientInterceptorBuilder or
 // ServerInterceptorBuilder or both, indicating it is capable of working on the
 // client side or server side or both, respectively.
-type FilterProvider interface {
-	// TypeURLs are the proto message types supported by this provider.
-	// A provider will be registered by each of its supported message types.
+type Filter interface {
+	// TypeURLs are the proto message types supported by this filter.  A filter
+	// will be registered by each of its supported message types.
 	TypeURLs() []string
 	// ParseFilterConfig parses the provided configuration proto.Message from
 	// the LDS configuration of this filter.  This may be an anypb.Any, a
 	// udpa.type.v1.TypedStruct, or an xds.type.v3.TypedStruct for filters that
 	// do not accept a custom type. The resulting FilterConfig will later be
-	// passed to BuildClientInterceptor or BuildServerInterceptor.
+	// passed to Build.
 	ParseFilterConfig(proto.Message) (FilterConfig, error)
 	// ParseFilterConfigOverride parses the provided override configuration
 	// proto.Message from the RDS override configuration of this filter.  This
 	// may be an anypb.Any, a udpa.type.v1.TypedStruct, or an
 	// xds.type.v3.TypedStruct for filters that do not accept a custom type.
-	// The resulting FilterConfig will later be passed to BuildClientInterceptor
-	// or BuildServerInterceptor.
+	// The resulting FilterConfig will later be passed to Build.
 	ParseFilterConfigOverride(proto.Message) (FilterConfig, error)
-	// IsTerminal returns whether interceptors built from this Provider are
-	// terminal or not (i.e. it must be last filter in the filter chain).
+	// IsTerminal returns whether this Filter is terminal or not (i.e. it must
+	// be last filter in the filter chain).
 	IsTerminal() bool
 }
 
@@ -101,17 +97,17 @@ type ServerInterceptorBuilder interface {
 }
 
 var (
-	// m is a map from scheme to filter provider.
-	m = make(map[string]FilterProvider)
+	// m is a map from scheme to filter.
+	m = make(map[string]Filter)
 )
 
-// Register registers the HTTP filter provider to the filter map. b.TypeURLs()
+// Register registers the HTTP filter Builder to the filter map. b.TypeURLs()
 // will be used as the types for this filter.
 //
 // NOTE: this function must only be called during initialization time (i.e. in
 // an init() function), and is not thread-safe. If multiple filters are
 // registered with the same type URL, the one registered last will take effect.
-func Register(b FilterProvider) {
+func Register(b Filter) {
 	for _, u := range b.TypeURLs() {
 		m[u] = b
 	}
@@ -122,9 +118,9 @@ func UnregisterForTesting(typeURL string) {
 	delete(m, typeURL)
 }
 
-// Get returns the provider registered with typeURL.
+// Get returns the HTTPFilter registered with typeURL.
 //
-// If no provider is registered with typeURL, nil will be returned.
-func Get(typeURL string) FilterProvider {
+// If no filter is register with typeURL, nil will be returned.
+func Get(typeURL string) Filter {
 	return m[typeURL]
 }

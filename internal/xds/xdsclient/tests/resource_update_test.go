@@ -347,7 +347,7 @@ func (s) TestHandleListenerResponseFromManagementServer(t *testing.T) {
 			}
 			cmpOpts := []cmp.Option{
 				cmpopts.EquateEmpty(),
-				cmpopts.IgnoreFields(xdsresource.HTTPFilter{}, "FilterProvider", "Config"),
+				cmpopts.IgnoreFields(xdsresource.HTTPFilter{}, "Filter", "Config"),
 				cmpopts.IgnoreFields(xdsresource.ListenerUpdate{}, "Raw"),
 			}
 			if diff := cmp.Diff(test.wantUpdate, gotUpdate, cmpOpts...); diff != "" {

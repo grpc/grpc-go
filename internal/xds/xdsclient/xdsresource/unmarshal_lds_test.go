@@ -351,9 +351,9 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 				RouteConfigName: v3RouteConfigName, MaxStreamDuration: time.Second,
 				HTTPFilters: []HTTPFilter{
 					{
-						Name:           "customFilter",
-						FilterProvider: httpFilter{},
-						Config:         filterConfig{Cfg: customFilterConfig},
+						Name:   "customFilter",
+						Filter: httpFilter{},
+						Config: filterConfig{Cfg: customFilterConfig},
 					},
 					makeRouterFilter(t),
 				},
@@ -368,9 +368,9 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 				RouteConfigName: v3RouteConfigName, MaxStreamDuration: time.Second,
 				HTTPFilters: []HTTPFilter{
 					{
-						Name:           "customFilter",
-						FilterProvider: httpFilter{},
-						Config:         filterConfig{Cfg: customFilterOldTypedStructConfig},
+						Name:   "customFilter",
+						Filter: httpFilter{},
+						Config: filterConfig{Cfg: customFilterOldTypedStructConfig},
 					},
 					makeRouterFilter(t),
 				},
@@ -385,9 +385,9 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 				RouteConfigName: v3RouteConfigName, MaxStreamDuration: time.Second,
 				HTTPFilters: []HTTPFilter{
 					{
-						Name:           "customFilter",
-						FilterProvider: httpFilter{},
-						Config:         filterConfig{Cfg: customFilterNewTypedStructConfig},
+						Name:   "customFilter",
+						Filter: httpFilter{},
+						Config: filterConfig{Cfg: customFilterNewTypedStructConfig},
 					},
 					makeRouterFilter(t),
 				},
@@ -402,9 +402,9 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 				RouteConfigName: v3RouteConfigName, MaxStreamDuration: time.Second,
 				HTTPFilters: []HTTPFilter{
 					{
-						Name:           "customFilter",
-						FilterProvider: httpFilter{},
-						Config:         filterConfig{Cfg: customFilterConfig},
+						Name:   "customFilter",
+						Filter: httpFilter{},
+						Config: filterConfig{Cfg: customFilterConfig},
 					},
 					makeRouterFilter(t),
 				},
@@ -424,13 +424,13 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			wantUpdate: ListenerUpdate{
 				RouteConfigName: v3RouteConfigName, MaxStreamDuration: time.Second,
 				HTTPFilters: []HTTPFilter{{
-					Name:           "customFilter",
-					FilterProvider: httpFilter{},
-					Config:         filterConfig{Cfg: customFilterConfig},
+					Name:   "customFilter",
+					Filter: httpFilter{},
+					Config: filterConfig{Cfg: customFilterConfig},
 				}, {
-					Name:           "customFilter2",
-					FilterProvider: httpFilter{},
-					Config:         filterConfig{Cfg: customFilterConfig},
+					Name:   "customFilter2",
+					Filter: httpFilter{},
+					Config: filterConfig{Cfg: customFilterConfig},
 				},
 					makeRouterFilter(t),
 				},
@@ -462,9 +462,9 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 				RouteConfigName: v3RouteConfigName, MaxStreamDuration: time.Second,
 				HTTPFilters: []HTTPFilter{
 					{
-						Name:           "clientOnlyCustomFilter",
-						FilterProvider: clientOnlyHTTPFilter{},
-						Config:         filterConfig{Cfg: clientOnlyCustomFilterConfig},
+						Name:   "clientOnlyCustomFilter",
+						Filter: clientOnlyHTTPFilter{},
+						Config: filterConfig{Cfg: clientOnlyCustomFilterConfig},
 					},
 					makeRouterFilter(t)},
 				Raw: v3LisWithFilters(clientOnlyCustomFilter),

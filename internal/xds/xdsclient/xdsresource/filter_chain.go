@@ -141,7 +141,7 @@ func (fc *FilterChain) convertVirtualHost(virtualHost *VirtualHost) (VirtualHost
 				// Virtual Host is second priority.
 				override = virtualHost.HTTPFilterConfigOverride[filter.Name]
 			}
-			sb, ok := filter.FilterProvider.(httpfilter.ServerInterceptorBuilder)
+			sb, ok := filter.Filter.(httpfilter.ServerInterceptorBuilder)
 			if !ok {
 				// Should not happen if it passed xdsClient validation.
 				return VirtualHostWithInterceptors{}, fmt.Errorf("filter does not support use in server")

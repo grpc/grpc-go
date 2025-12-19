@@ -140,7 +140,7 @@ func unwrapHTTPFilterConfig(config *anypb.Any) (proto.Message, string, error) {
 	}
 }
 
-func validateHTTPFilterConfig(cfg *anypb.Any, lds, optional bool) (httpfilter.FilterProvider, httpfilter.FilterConfig, error) {
+func validateHTTPFilterConfig(cfg *anypb.Any, lds, optional bool) (httpfilter.Filter, httpfilter.FilterConfig, error) {
 	config, typeURL, err := unwrapHTTPFilterConfig(cfg)
 	if err != nil {
 		return nil, nil, err
@@ -228,7 +228,7 @@ func processHTTPFilters(filters []*v3httppb.HttpFilter, server bool) ([]HTTPFilt
 		}
 
 		// Save name/config
-		ret = append(ret, HTTPFilter{Name: name, FilterProvider: filterProvider, Config: config})
+		ret = append(ret, HTTPFilter{Name: name, Filter: filterProvider, Config: config})
 	}
 	// "Validation will fail if a terminal filter is not the last filter in the
 	// chain or if a non-terminal filter is the last filter in the chain." - A39
@@ -237,11 +237,11 @@ func processHTTPFilters(filters []*v3httppb.HttpFilter, server bool) ([]HTTPFilt
 	}
 	var i int
 	for ; i < len(ret)-1; i++ {
-		if ret[i].FilterProvider.IsTerminal() {
+		if ret[i].Filter.IsTerminal() {
 			return nil, fmt.Errorf("http filter %q is a terminal filter but it is not last in the filter chain", ret[i].Name)
 		}
 	}
-	if !ret[i].FilterProvider.IsTerminal() {
+	if !ret[i].Filter.IsTerminal() {
 		return nil, fmt.Errorf("http filter %q is not a terminal filter", ret[len(ret)-1].Name)
 	}
 	return ret, nil
