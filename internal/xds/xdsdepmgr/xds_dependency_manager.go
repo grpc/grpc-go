@@ -19,20 +19,28 @@
 package xdsdepmgr
 
 import (
+	"context"
 	"fmt"
+	"net/url"
 	"sync"
 	"sync/atomic"
 
 	"google.golang.org/grpc/grpclog"
 	internalgrpclog "google.golang.org/grpc/internal/grpclog"
+	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/xds/xdsclient"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/serviceconfig"
 )
 
 const prefix = "[xdsdepmgr %p] "
 
 var logger = grpclog.Component("xds")
+
+// EnableClusterAndEndpointsWatch is a flag used to control whether the CDS/EDS
+// watchers in the dependency manager should be used.
+var EnableClusterAndEndpointsWatch = true
 
 func prefixLogger(p *DependencyManager) *internalgrpclog.PrefixLogger {
 	return internalgrpclog.NewPrefixLogger(logger, fmt.Sprintf(prefix, p))
@@ -58,6 +66,40 @@ type ConfigWatcher interface {
 	Error(error)
 }
 
+// xdsResourceState is a generic struct to hold the state of a watched xDS
+// resource.
+type xdsResourceState[T any, U any] struct {
+	lastUpdate     *T
+	lastErr        error
+	updateReceived bool
+	stop           func()
+	extras         U // to store any additional state specific to the watcher
+}
+
+func (x *xdsResourceState[T, U]) setLastUpdate(update *T) {
+	x.lastUpdate = update
+	x.updateReceived = true
+	x.lastErr = nil
+}
+
+func (x *xdsResourceState[T, U]) setLastError(err error) {
+	x.lastErr = err
+	x.updateReceived = true
+	x.lastUpdate = nil
+}
+
+func (x *xdsResourceState[T, U]) updateLastError(err error) {
+	x.lastErr = err
+}
+
+type dnsExtras struct {
+	dnsR resolver.Resolver
+}
+
+type routeExtras struct {
+	virtualHost *xdsresource.VirtualHost
+}
+
 // DependencyManager registers watches on the xDS client for all required xDS
 // resources, resolves dependencies between them, and returns a complete
 // configuration to the xDS resolver.
@@ -71,20 +113,24 @@ type DependencyManager struct {
 	dataplaneAuthority string
 	nodeID             string
 
+	// Used to serialize callbacks from DNS resolvers to avoid deadlocks. Since
+	// the resolver's Build() is called with the dependency manager lock held,
+	// direct callbacks to ClientConn (which also require that lock) would
+	// deadlock.
+	dnsSerializer       *grpcsync.CallbackSerializer
+	dnsSerializerCancel func()
+
 	// All the fields below are protected by mu.
 	mu                      sync.Mutex
 	stopped                 bool
-	listenerCancel          func()
-	currentListenerUpdate   *xdsresource.ListenerUpdate
-	routeConfigCancel       func()
+	listenerWatcher         *xdsResourceState[xdsresource.ListenerUpdate, struct{}]
 	rdsResourceName         string
-	currentRouteConfig      *xdsresource.RouteConfigUpdate
-	currentVirtualHost      *xdsresource.VirtualHost
+	routeConfigWatcher      *xdsResourceState[xdsresource.RouteConfigUpdate, routeExtras]
 	clustersFromRouteConfig map[string]bool
-	clusterWatchers         map[string]*clusterWatcherState
-	endpointWatchers        map[string]*endpointWatcherState
-	dnsResolvers            map[string]*dnsResolverState
-	ClusterSubs             map[string]*ClusterRef
+	clusterWatchers         map[string]*xdsResourceState[xdsresource.ClusterUpdate, struct{}]
+	endpointWatchers        map[string]*xdsResourceState[xdsresource.EndpointsUpdate, struct{}]
+	dnsResolvers            map[string]*xdsResourceState[xdsresource.DNSUpdate, dnsExtras]
+	clusterSubscriptions    map[string]*ClusterRef
 }
 
 // New creates a new DependencyManager.
@@ -97,22 +143,26 @@ type DependencyManager struct {
 //   - watcher is the ConfigWatcher interface that will receive the aggregated
 //     XDSConfig updates and errors.
 func New(listenerName, dataplaneAuthority string, xdsClient xdsclient.XDSClient, watcher ConfigWatcher) *DependencyManager {
+	ctx, cancel := context.WithCancel(context.Background())
 	dm := &DependencyManager{
 		ldsResourceName:         listenerName,
 		dataplaneAuthority:      dataplaneAuthority,
 		xdsClient:               xdsClient,
 		watcher:                 watcher,
 		nodeID:                  xdsClient.BootstrapConfig().Node().GetId(),
+		dnsSerializer:           grpcsync.NewCallbackSerializer(ctx),
+		dnsSerializerCancel:     cancel,
 		clustersFromRouteConfig: make(map[string]bool),
-		endpointWatchers:        make(map[string]*endpointWatcherState),
-		dnsResolvers:            make(map[string]*dnsResolverState),
-		clusterWatchers:         make(map[string]*clusterWatcherState),
-		ClusterSubs:             make(map[string]*ClusterRef),
+		endpointWatchers:        make(map[string]*xdsResourceState[xdsresource.EndpointsUpdate, struct{}]),
+		dnsResolvers:            make(map[string]*xdsResourceState[xdsresource.DNSUpdate, dnsExtras]),
+		clusterWatchers:         make(map[string]*xdsResourceState[xdsresource.ClusterUpdate, struct{}]),
+		clusterSubscriptions:    make(map[string]*ClusterRef),
 	}
 	dm.logger = prefixLogger(dm)
 
 	// Start the listener watch. Listener watch will start the other resource
 	// watches as needed.
+	dm.listenerWatcher = &xdsResourceState[xdsresource.ListenerUpdate, struct{}]{}
 	lw := &xdsResourceWatcher[xdsresource.ListenerUpdate]{
 		onUpdate: func(update *xdsresource.ListenerUpdate, onDone func()) {
 			dm.onListenerResourceUpdate(update, onDone)
@@ -124,7 +174,7 @@ func New(listenerName, dataplaneAuthority string, xdsClient xdsclient.XDSClient,
 			dm.onListenerResourceAmbientError(err, onDone)
 		},
 	}
-	dm.listenerCancel = xdsresource.WatchListener(dm.xdsClient, listenerName, lw)
+	dm.listenerWatcher.stop = xdsresource.WatchListener(dm.xdsClient, listenerName, lw)
 	return dm
 }
 
@@ -138,26 +188,28 @@ func (m *DependencyManager) Close() {
 	}
 
 	m.stopped = true
-	if m.listenerCancel != nil {
-		m.listenerCancel()
+	m.listenerWatcher.stop()
+	if m.routeConfigWatcher != nil {
+		m.routeConfigWatcher.stop()
 	}
-	if m.routeConfigCancel != nil {
-		m.routeConfigCancel()
-	}
-
 	for name, cluster := range m.clusterWatchers {
-		cluster.cancelWatch()
+		cluster.stop()
 		delete(m.clusterWatchers, name)
 	}
 
 	for name, endpoint := range m.endpointWatchers {
-		endpoint.cancelWatch()
+		endpoint.stop()
 		delete(m.endpointWatchers, name)
 	}
 
+	// We cannot wait for the dns serializer to finish here, as the callbacks
+	// try to grab the dependency manager lock, which is already held here.
+	m.dnsSerializerCancel()
 	for name, dnsResolver := range m.dnsResolvers {
-		dnsResolver.cancelResolver()
-		delete(m.dnsResolvers, name)
+		if dnsResolver.extras.dnsR != nil {
+			dnsResolver.stop()
+			delete(m.dnsResolvers, name)
+		}
 	}
 }
 
@@ -170,26 +222,33 @@ func (m *DependencyManager) annotateErrorWithNodeID(err error) error {
 // maybeSendUpdateLocked verifies that all expected resources have been
 // received, and if so, delivers the complete xDS configuration to the watcher.
 func (m *DependencyManager) maybeSendUpdateLocked() {
-	if m.currentListenerUpdate == nil || m.currentRouteConfig == nil {
+	if m.listenerWatcher.lastUpdate == nil || m.routeConfigWatcher == nil || m.routeConfigWatcher.lastUpdate == nil {
 		return
 	}
 	config := &xdsresource.XDSConfig{
-		Listener:    m.currentListenerUpdate,
-		RouteConfig: m.currentRouteConfig,
-		VirtualHost: m.currentVirtualHost,
+		Listener:    m.listenerWatcher.lastUpdate,
+		RouteConfig: m.routeConfigWatcher.lastUpdate,
+		VirtualHost: m.routeConfigWatcher.extras.virtualHost,
 		Clusters:    make(map[string]*xdsresource.ClusterResult),
+	}
+
+	if !EnableClusterAndEndpointsWatch {
+		m.watcher.Update(config)
+		return
 	}
 
 	edsResourcesSeen := make(map[string]bool)
 	dnsResourcesSeen := make(map[string]bool)
 	clusterResourcesSeen := make(map[string]bool)
 	haveAllResources := true
-
+	// Get all clusters to be watched: from route config and from cluster
+	// subscriptions, the subscriptions can be from RPC referencing the cluster
+	// or from balancer for cluster specifier plugins.
 	clusterToWatch := make(map[string]bool)
 	for cluster := range m.clustersFromRouteConfig {
 		clusterToWatch[cluster] = true
 	}
-	for cluster := range m.ClusterSubs {
+	for cluster := range m.clusterSubscriptions {
 		clusterToWatch[cluster] = true
 	}
 	for cluster := range clusterToWatch {
@@ -209,20 +268,19 @@ func (m *DependencyManager) maybeSendUpdateLocked() {
 	// Cancel resources not seen in the tree.
 	for name, ep := range m.endpointWatchers {
 		if _, ok := edsResourcesSeen[name]; !ok {
-			ep.cancelWatch()
+			ep.stop()
 			delete(m.endpointWatchers, name)
 		}
 	}
 	for name, dr := range m.dnsResolvers {
 		if _, ok := dnsResourcesSeen[name]; !ok {
-			dr.cancelResolver()
+			dr.stop()
 			delete(m.dnsResolvers, name)
 		}
 	}
-
 	for name, cluster := range m.clusterWatchers {
 		if _, ok := clusterResourcesSeen[name]; !ok {
-			cluster.cancelWatch()
+			cluster.stop()
 			delete(m.clusterWatchers, name)
 		}
 	}
@@ -346,7 +404,11 @@ func (m *DependencyManager) populateLogicalDNSClusterLocked(clusterName string, 
 
 	// If dns resolver does not exist, create one.
 	if _, ok := m.dnsResolvers[target]; !ok {
-		m.dnsResolvers[target] = newDNSResolver(target, m)
+		state := m.newDNSResolver(target)
+		if state == nil {
+			return false, nil, nil
+		}
+		m.dnsResolvers[target] = state
 		return false, nil, nil
 	}
 	dnsState := m.dnsResolvers[target]
@@ -358,7 +420,7 @@ func (m *DependencyManager) populateLogicalDNSClusterLocked(clusterName string, 
 
 	clusterConfigs[clusterName].Config.EndpointConfig = &xdsresource.EndpointConfig{
 		DNSEndpoints:   dnsState.lastUpdate,
-		ResolutionNote: dnsState.err,
+		ResolutionNote: dnsState.lastErr,
 	}
 	return true, []string{clusterName}, nil
 }
@@ -393,11 +455,13 @@ func (m *DependencyManager) populateAggregateClusterLocked(clusterName string, u
 func (m *DependencyManager) applyRouteConfigUpdateLocked(update *xdsresource.RouteConfigUpdate) {
 	matchVH := xdsresource.FindBestMatchingVirtualHost(m.dataplaneAuthority, update.VirtualHosts)
 	if matchVH == nil {
-		m.watcher.Error(m.annotateErrorWithNodeID(fmt.Errorf("could not find VirtualHost for %q", m.dataplaneAuthority)))
+		err := m.annotateErrorWithNodeID(fmt.Errorf("could not find VirtualHost for %q", m.dataplaneAuthority))
+		m.routeConfigWatcher.setLastError(err)
+		m.watcher.Error(err)
 		return
 	}
-	m.currentRouteConfig = update
-	m.currentVirtualHost = matchVH
+	m.routeConfigWatcher.setLastUpdate(update)
+	m.routeConfigWatcher.extras.virtualHost = matchVH
 
 	// Get the clusters to be watched from the routes in the virtual host.
 	// If the CLusterSpecifierField is set, we ignore it for now as the
@@ -412,7 +476,7 @@ func (m *DependencyManager) applyRouteConfigUpdateLocked(update *xdsresource.Rou
 	// Cancel watch for clusters not seen in route config
 	for name := range m.clustersFromRouteConfig {
 		if _, ok := newClusters[name]; !ok {
-			m.clusterWatchers[name].cancelWatch()
+			m.clusterWatchers[name].stop()
 			delete(m.clusterWatchers, name)
 		}
 	}
@@ -420,7 +484,6 @@ func (m *DependencyManager) applyRouteConfigUpdateLocked(update *xdsresource.Rou
 	// Watch for new clusters is started in populateClusterConfigLocked to
 	// avoid repeating the code.
 	m.clustersFromRouteConfig = newClusters
-
 	m.maybeSendUpdateLocked()
 }
 
@@ -437,16 +500,16 @@ func (m *DependencyManager) onListenerResourceUpdate(update *xdsresource.Listene
 		m.logger.Infof("Received update for Listener resource %q: %+v", m.ldsResourceName, update)
 	}
 
-	m.currentListenerUpdate = update
+	m.listenerWatcher.setLastUpdate(update)
 
 	if update.InlineRouteConfig != nil {
 		// If there was a previous route config watcher because of a non-inline
 		// route configuration, cancel it.
 		m.rdsResourceName = ""
-		if m.routeConfigCancel != nil {
-			m.routeConfigCancel()
-			m.routeConfigCancel = nil
+		if m.routeConfigWatcher != nil {
+			m.routeConfigWatcher.stop()
 		}
+		m.routeConfigWatcher = &xdsResourceState[xdsresource.RouteConfigUpdate, routeExtras]{stop: func() {}}
 		m.applyRouteConfigUpdateLocked(update.InlineRouteConfig)
 		return
 	}
@@ -464,10 +527,9 @@ func (m *DependencyManager) onListenerResourceUpdate(update *xdsresource.Listene
 	// resolved, no update is sent to the channel, and therefore the old route
 	// configuration (if received) is used until the new one is received.
 	m.rdsResourceName = update.RouteConfigName
-	if m.routeConfigCancel != nil {
-		m.routeConfigCancel()
+	if m.routeConfigWatcher != nil {
+		m.routeConfigWatcher.stop()
 	}
-
 	rw := &xdsResourceWatcher[xdsresource.RouteConfigUpdate]{
 		onUpdate: func(update *xdsresource.RouteConfigUpdate, onDone func()) {
 			m.onRouteConfigResourceUpdate(m.rdsResourceName, update, onDone)
@@ -479,8 +541,13 @@ func (m *DependencyManager) onListenerResourceUpdate(update *xdsresource.Listene
 			m.onRouteConfigResourceAmbientError(m.rdsResourceName, err, onDone)
 		},
 	}
-	m.routeConfigCancel = xdsresource.WatchRouteConfig(m.xdsClient, m.rdsResourceName, rw)
-
+	if m.routeConfigWatcher != nil {
+		m.routeConfigWatcher.stop = xdsresource.WatchRouteConfig(m.xdsClient, m.rdsResourceName, rw)
+	} else {
+		m.routeConfigWatcher = &xdsResourceState[xdsresource.RouteConfigUpdate, routeExtras]{
+			stop: xdsresource.WatchRouteConfig(m.xdsClient, m.rdsResourceName, rw),
+		}
+	}
 }
 
 func (m *DependencyManager) onListenerResourceError(err error, onDone func()) {
@@ -494,12 +561,12 @@ func (m *DependencyManager) onListenerResourceError(err error, onDone func()) {
 
 	m.logger.Warningf("Received resource error for Listener resource %q: %v", m.ldsResourceName, m.annotateErrorWithNodeID(err))
 
-	if m.routeConfigCancel != nil {
-		m.routeConfigCancel()
+	if m.routeConfigWatcher != nil {
+		m.routeConfigWatcher.stop()
 	}
-	m.currentListenerUpdate = nil
+	m.listenerWatcher.setLastError(err)
 	m.rdsResourceName = ""
-	m.routeConfigCancel = nil
+	m.routeConfigWatcher = nil
 	m.watcher.Error(fmt.Errorf("listener resource error: %v", m.annotateErrorWithNodeID(err)))
 }
 
@@ -542,7 +609,7 @@ func (m *DependencyManager) onRouteConfigResourceError(resourceName string, err 
 	if m.stopped || m.rdsResourceName != resourceName {
 		return
 	}
-	m.currentRouteConfig = nil
+	m.routeConfigWatcher.setLastError(err)
 	m.logger.Warningf("Received resource error for RouteConfiguration resource %q: %v", resourceName, m.annotateErrorWithNodeID(err))
 	m.watcher.Error(fmt.Errorf("route resource error: %v", m.annotateErrorWithNodeID(err)))
 }
@@ -563,14 +630,7 @@ func (m *DependencyManager) onRouteConfigResourceAmbientError(resourceName strin
 	m.logger.Warningf("Route resource ambient error %q: %v", resourceName, m.annotateErrorWithNodeID(err))
 }
 
-type clusterWatcherState struct {
-	cancelWatch    func()
-	lastUpdate     *xdsresource.ClusterUpdate
-	lastErr        error
-	updateReceived bool
-}
-
-func newClusterWatcher(resourceName string, depMgr *DependencyManager) *clusterWatcherState {
+func newClusterWatcher(resourceName string, depMgr *DependencyManager) *xdsResourceState[xdsresource.ClusterUpdate, struct{}] {
 	w := &xdsResourceWatcher[xdsresource.ClusterUpdate]{
 		onUpdate: func(u *xdsresource.ClusterUpdate, onDone func()) {
 			depMgr.onClusterResourceUpdate(resourceName, u, onDone)
@@ -582,8 +642,8 @@ func newClusterWatcher(resourceName string, depMgr *DependencyManager) *clusterW
 			depMgr.onClusterAmbientError(resourceName, err, onDone)
 		},
 	}
-	return &clusterWatcherState{
-		cancelWatch: xdsresource.WatchCluster(depMgr.xdsClient, resourceName, w),
+	return &xdsResourceState[xdsresource.ClusterUpdate, struct{}]{
+		stop: xdsresource.WatchCluster(depMgr.xdsClient, resourceName, w),
 	}
 }
 
@@ -600,12 +660,8 @@ func (m *DependencyManager) onClusterResourceUpdate(resourceName string, update 
 	if m.logger.V(2) {
 		m.logger.Infof("Received update for Cluster resource %q: %+v", resourceName, update)
 	}
-	state := m.clusterWatchers[resourceName]
-	state.lastUpdate = update
-	state.lastErr = nil
-	state.updateReceived = true
+	m.clusterWatchers[resourceName].setLastUpdate(update)
 	m.maybeSendUpdateLocked()
-
 }
 
 // Records a resource error for a Cluster resource, clears the last successful
@@ -619,10 +675,7 @@ func (m *DependencyManager) onClusterResourceError(resourceName string, err erro
 		return
 	}
 	m.logger.Warningf("Received resource error for Cluster resource %q: %v", resourceName, m.annotateErrorWithNodeID(err))
-	state := m.clusterWatchers[resourceName]
-	state.lastErr = err
-	state.lastUpdate = nil
-	state.updateReceived = true
+	m.clusterWatchers[resourceName].setLastError(err)
 	m.maybeSendUpdateLocked()
 }
 
@@ -639,14 +692,7 @@ func (m *DependencyManager) onClusterAmbientError(resourceName string, err error
 	m.logger.Warningf("Cluster resource ambient error %q: %v", resourceName, m.annotateErrorWithNodeID(err))
 }
 
-type endpointWatcherState struct {
-	cancelWatch    func()
-	lastUpdate     *xdsresource.EndpointsUpdate
-	lastErr        error
-	updateReceived bool
-}
-
-func newEndpointWatcher(resourceName string, depMgr *DependencyManager) *endpointWatcherState {
+func newEndpointWatcher(resourceName string, depMgr *DependencyManager) *xdsResourceState[xdsresource.EndpointsUpdate, struct{}] {
 	w := &xdsResourceWatcher[xdsresource.EndpointsUpdate]{
 		onUpdate: func(u *xdsresource.EndpointsUpdate, onDone func()) {
 			depMgr.onEndpointUpdate(resourceName, u, onDone)
@@ -658,8 +704,8 @@ func newEndpointWatcher(resourceName string, depMgr *DependencyManager) *endpoin
 			depMgr.onEndpointAmbientError(resourceName, err, onDone)
 		},
 	}
-	return &endpointWatcherState{
-		cancelWatch: xdsresource.WatchEndpoints(depMgr.xdsClient, resourceName, w),
+	return &xdsResourceState[xdsresource.EndpointsUpdate, struct{}]{
+		stop: xdsresource.WatchEndpoints(depMgr.xdsClient, resourceName, w),
 	}
 }
 
@@ -677,10 +723,7 @@ func (m *DependencyManager) onEndpointUpdate(resourceName string, update *xdsres
 	if m.logger.V(2) {
 		m.logger.Infof("Received update for Endpoint resource %q: %+v", resourceName, update)
 	}
-	state := m.endpointWatchers[resourceName]
-	state.lastUpdate = update
-	state.lastErr = nil
-	state.updateReceived = true
+	m.endpointWatchers[resourceName].setLastUpdate(update)
 	m.maybeSendUpdateLocked()
 }
 
@@ -695,10 +738,7 @@ func (m *DependencyManager) onEndpointResourceError(resourceName string, err err
 		return
 	}
 	m.logger.Warningf("Received resource error for Endpoint resource %q: %v", resourceName, m.annotateErrorWithNodeID(err))
-	state := m.endpointWatchers[resourceName]
-	state.lastErr = err
-	state.lastUpdate = nil
-	state.updateReceived = true
+	m.endpointWatchers[resourceName].setLastError(err)
 	m.maybeSendUpdateLocked()
 }
 
@@ -714,8 +754,7 @@ func (m *DependencyManager) onEndpointAmbientError(resourceName string, err erro
 	}
 
 	m.logger.Warningf("Endpoint resource ambient error %q: %v", resourceName, m.annotateErrorWithNodeID(err))
-	state := m.endpointWatchers[resourceName]
-	state.lastErr = err
+	m.endpointWatchers[resourceName].updateLastError(err)
 	m.maybeSendUpdateLocked()
 }
 
@@ -741,10 +780,7 @@ func (m *DependencyManager) onDNSUpdate(resourceName string, update *resolver.St
 		}
 	}
 
-	state := m.dnsResolvers[resourceName]
-	state.lastUpdate = &xdsresource.DNSUpdate{Endpoints: endpoints}
-	state.updateReceived = true
-	state.err = nil
+	m.dnsResolvers[resourceName].setLastUpdate(&xdsresource.DNSUpdate{Endpoints: endpoints})
 	m.maybeSendUpdateLocked()
 }
 
@@ -763,18 +799,15 @@ func (m *DependencyManager) onDNSError(resourceName string, err error) {
 		return
 	}
 
+	err = fmt.Errorf("dns resolver error for target %q: %v", resourceName, m.annotateErrorWithNodeID(err))
+	m.logger.Warningf("%v", err)
 	state := m.dnsResolvers[resourceName]
-	// If a previous good update was received, record the error and continue
-	// using the previous update. If RPCs were succeeding prior to this, they
-	// will continue to do so. Also suppress errors if we previously received an
-	// error, since there will be no downstream effects of propagating this
-	// error.
-	state.err = err
-	if !state.updateReceived {
-		state.lastUpdate = nil
-		state.updateReceived = true
+	if state.updateReceived {
+		state.updateLastError(err)
+		return
 	}
-	m.logger.Warningf("DNS resolver error %q: %v", resourceName, m.annotateErrorWithNodeID(err))
+
+	state.setLastError(err)
 	m.maybeSendUpdateLocked()
 }
 
@@ -783,18 +816,96 @@ func (m *DependencyManager) RequestDNSReresolution(opt resolver.ResolveNowOption
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	for _, res := range m.dnsResolvers {
-		res.resolver.dnsR.ResolveNow(opt)
+		if res.extras.dnsR != nil {
+			res.extras.dnsR.ResolveNow(opt)
+		}
 	}
 }
 
-// DependencyManagerKey is the type used as the key to store DependencyManager in
-// the Attributes field of resolver.states.
+type resolverClientConn struct {
+	target string
+	depMgr *DependencyManager
+}
+
+func (rcc *resolverClientConn) UpdateState(state resolver.State) error {
+	rcc.depMgr.dnsSerializer.TrySchedule(func(context.Context) {
+		rcc.depMgr.onDNSUpdate(rcc.target, &state)
+	})
+	return nil
+}
+
+func (rcc *resolverClientConn) ReportError(err error) {
+	rcc.depMgr.dnsSerializer.TrySchedule(func(context.Context) {
+		rcc.depMgr.onDNSError(rcc.target, err)
+	})
+}
+
+func (rcc *resolverClientConn) NewAddress(addresses []resolver.Address) {
+	rcc.UpdateState(resolver.State{Addresses: addresses})
+}
+
+func (rcc *resolverClientConn) ParseServiceConfig(string) *serviceconfig.ParseResult {
+	return &serviceconfig.ParseResult{Err: fmt.Errorf("service config not supported")}
+}
+
+func (m *DependencyManager) newDNSResolver(target string) *xdsResourceState[xdsresource.DNSUpdate, dnsExtras] {
+	rcc := &resolverClientConn{
+		target: target,
+		depMgr: m,
+	}
+	u, err := url.Parse("dns:///" + target)
+	if err != nil {
+		err := fmt.Errorf("failed to parse DNS target %q: %v", target, m.annotateErrorWithNodeID(err))
+		m.logger.Warningf("%v", err)
+		rcc.ReportError(err)
+		return &xdsResourceState[xdsresource.DNSUpdate, dnsExtras]{
+			lastErr: err,
+			// updateReceived: true,
+		}
+	}
+
+	r, err := resolver.Get("dns").Build(resolver.Target{URL: *u}, rcc, resolver.BuildOptions{})
+	if err != nil {
+		rcc.ReportError(err)
+		err := fmt.Errorf("failed to build DNS resolver for target %q: %v", target, m.annotateErrorWithNodeID(err))
+		m.logger.Warningf("%v", err)
+		return nil
+	}
+
+	return &xdsResourceState[xdsresource.DNSUpdate, dnsExtras]{
+		extras: dnsExtras{dnsR: r},
+		stop:   r.Close,
+	}
+}
+
+// xdsResourceWatcher is a generic implementation of the xdsresource.Watcher
+// interface.
+type xdsResourceWatcher[T any] struct {
+	onUpdate       func(*T, func())
+	onError        func(error, func())
+	onAmbientError func(error, func())
+}
+
+func (x *xdsResourceWatcher[T]) ResourceChanged(update *T, onDone func()) {
+	x.onUpdate(update, onDone)
+}
+
+func (x *xdsResourceWatcher[T]) ResourceError(err error, onDone func()) {
+	x.onError(err, onDone)
+}
+
+func (x *xdsResourceWatcher[T]) AmbientError(err error, onDone func()) {
+	x.onAmbientError(err, onDone)
+}
+
+// DependencyManagerKey is the type used as the key to store DependencyManager
+// in the Attributes field of resolver.states.
 type DependencyManagerKey struct{}
 
-// SetDependencyManager returns a copy of state in which the Attributes field
-// is updated with the DependencyManager.
-func SetDependencyManager(state resolver.State, depsmngr *DependencyManager) resolver.State {
-	state.Attributes = state.Attributes.WithValue(DependencyManagerKey{}, depsmngr)
+// SetDependencyManager returns a copy of state in which the Attributes field is
+// updated with the DependencyManager.
+func SetDependencyManager(state resolver.State, depmngr *DependencyManager) resolver.State {
+	state.Attributes = state.Attributes.WithValue(DependencyManagerKey{}, depmngr)
 	return state
 }
 
@@ -807,48 +918,48 @@ func DependencyManagerFromResolverState(state resolver.State) *DependencyManager
 	return nil
 }
 
-// ClusterRef represents a reference to a cluster being used by some
-// component. It maintains a reference count of the number of users of the
-// cluster. It has a method to unsubscribe from the cluster, which decrements the
-// reference count and removes the cluster from the ClusterSubs map in the
+// ClusterRef represents a reference to a cluster being used by some component.
+// It maintains a reference count of the number of users of the cluster. It has
+// a method to unsubscribe from the cluster, which decrements the reference
+// count and removes the cluster from the clusterSubscriptions map in the
 // DependencyManager if the reference count reaches zero.
 type ClusterRef struct {
-	Name     string
-	RefCount int32
+	name     string
+	refCount int32
 	m        *DependencyManager
 }
 
-// Clustersubscription increments the reference count for the cluster and
+// ClusterSubscription increments the reference count for the cluster and
 // returns the ClusterRef. If the cluster is not already being tracked, it adds
 // it to the ClusterSubs map.
-func (m *DependencyManager) Clustersubscription(name string) *ClusterRef {
+func (m *DependencyManager) ClusterSubscription(name string) *ClusterRef {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	subs, ok := m.ClusterSubs[name]
+	subs, ok := m.clusterSubscriptions[name]
 	if ok {
-		ref := &subs.RefCount
+		ref := &subs.refCount
 		atomic.AddInt32(ref, 1)
 		return subs
 	}
-	m.ClusterSubs[name] = &ClusterRef{name, 1, m}
+	m.clusterSubscriptions[name] = &ClusterRef{name, 1, m}
 	if _, ok := m.clustersFromRouteConfig[name]; !ok {
 		m.maybeSendUpdateLocked()
 	}
-	return m.ClusterSubs[name]
+	return m.clusterSubscriptions[name]
 }
 
 // Unsubscribe decrements the reference count for the cluster. If the reference
-// count reaches zero, it removes the cluster from the ClusterSubs map in the
-// DependencyManager.
+// count reaches zero, it removes the cluster from the clusterSubscriptions map
+// in the DependencyManager.
 func (c *ClusterRef) Unsubscribe() {
 	c.m.mu.Lock()
 	defer c.m.mu.Unlock()
-	ref := atomic.AddInt32(&c.RefCount, -1)
+	ref := atomic.AddInt32(&c.refCount, -1)
 	if ref <= 0 {
-		delete(c.m.ClusterSubs, c.Name)
+		delete(c.m.clusterSubscriptions, c.name)
 	}
 
-	if _, ok := c.m.clustersFromRouteConfig[c.Name]; !ok {
+	if _, ok := c.m.clustersFromRouteConfig[c.name]; !ok {
 		c.m.maybeSendUpdateLocked()
 	}
 }

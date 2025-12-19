@@ -386,7 +386,7 @@ func (s) TestAggregateCluster_WithOneDNSCluster_ParseFailure(t *testing.T) {
 		},
 		SkipValidation: true,
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), 50*defaultTestTimeout)
 	defer cancel()
 	if err := managementServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)

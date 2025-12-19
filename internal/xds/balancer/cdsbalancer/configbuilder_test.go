@@ -154,12 +154,13 @@ func TestBuildPriorityConfigJSON(t *testing.T) {
 
 	gotConfig, _, err := buildPriorityConfigJSON([]priorityConfig{
 		{
-			mechanism: DiscoveryMechanism{
-				Cluster:               testClusterName,
-				LoadReportingServer:   testLRSServerConfig,
-				MaxConcurrentRequests: newUint32(testMaxRequests),
-				Type:                  DiscoveryMechanismTypeEDS,
-				EDSServiceName:        testEDSServiceName,
+			clusterName:   testClusterName,
+			clusterUpdate: xdsresource.ClusterUpdate{
+				ClusterName:     testClusterName,
+				LRSServerConfig: testLRSServerConfig,
+				MaxRequests:     newUint32(testMaxRequests),
+				ClusterType:     xdsresource.ClusterTypeEDS,
+				EDSServiceName:  testEDSServiceName,
 			},
 			edsResp: xdsresource.EndpointsUpdate{
 				Drops: []xdsresource.OverloadDropConfig{
@@ -179,8 +180,10 @@ func TestBuildPriorityConfigJSON(t *testing.T) {
 			childNameGen: newNameGenerator(0),
 		},
 		{
-			mechanism: DiscoveryMechanism{
-				Type: DiscoveryMechanismTypeLogicalDNS,
+			clusterName:   testClusterName2,
+			clusterUpdate: xdsresource.ClusterUpdate{
+				ClusterName: testClusterName2,
+				ClusterType: xdsresource.ClusterTypeLogicalDNS,
 			},
 			endpoints:    testResolverEndpoints[4],
 			childNameGen: newNameGenerator(1),
@@ -214,12 +217,13 @@ func TestBuildPriorityConfig(t *testing.T) {
 			// priorities. The Outlier Detection configuration specified in the
 			// Discovery Mechanism should be the top level for each sub
 			// priorities balancer.
-			mechanism: DiscoveryMechanism{
-				Cluster:          testClusterName,
-				Type:             DiscoveryMechanismTypeEDS,
-				EDSServiceName:   testEDSServiceName,
-				outlierDetection: noopODCfg,
+			clusterName:   testClusterName,
+			clusterUpdate: xdsresource.ClusterUpdate{
+				ClusterName:    testClusterName,
+				ClusterType:    xdsresource.ClusterTypeEDS,
+				EDSServiceName: testEDSServiceName,
 			},
+			outlierDetection: noopODCfg,
 			edsResp: xdsresource.EndpointsUpdate{
 				Localities: []xdsresource.Locality{
 					testLocalitiesP0[0],
@@ -232,13 +236,14 @@ func TestBuildPriorityConfig(t *testing.T) {
 		},
 		{
 			// This OD config should wrap the Logical DNS priorities balancer.
-			mechanism: DiscoveryMechanism{
-				Cluster:          testClusterName2,
-				Type:             DiscoveryMechanismTypeLogicalDNS,
-				outlierDetection: noopODCfg,
+			clusterName:   testClusterName2,
+			clusterUpdate: xdsresource.ClusterUpdate{
+				ClusterName: testClusterName2,
+				ClusterType: xdsresource.ClusterTypeLogicalDNS,
 			},
-			endpoints:    testResolverEndpoints[4],
-			childNameGen: newNameGenerator(1),
+			outlierDetection: noopODCfg,
+			endpoints:        testResolverEndpoints[4],
+			childNameGen:     newNameGenerator(1),
 		},
 	}, nil)
 
@@ -312,7 +317,7 @@ func TestBuildPriorityConfig(t *testing.T) {
 }
 
 func TestBuildClusterImplConfigForDNS(t *testing.T) {
-	gotName, gotConfig, gotEndpoints := buildClusterImplConfigForDNS(newNameGenerator(3), testResolverEndpoints[0], DiscoveryMechanism{Cluster: testClusterName2, Type: DiscoveryMechanismTypeLogicalDNS})
+	gotName, gotConfig, gotEndpoints := buildClusterImplConfigForDNS(newNameGenerator(3), testResolverEndpoints[0], testClusterName2, xdsresource.ClusterUpdate{ClusterName: testClusterName2, ClusterType: xdsresource.ClusterTypeLogicalDNS})
 	wantName := "priority-3"
 	wantConfig := &clusterimpl.LBConfig{
 		Cluster: testClusterName2,
@@ -381,12 +386,13 @@ func TestBuildClusterImplConfigForEDS(t *testing.T) {
 				},
 			},
 		},
-		DiscoveryMechanism{
-			Cluster:               testClusterName,
-			MaxConcurrentRequests: newUint32(testMaxRequests),
-			LoadReportingServer:   testLRSServerConfig,
-			Type:                  DiscoveryMechanismTypeEDS,
-			EDSServiceName:        testEDSServiceName,
+		testClusterName,
+		xdsresource.ClusterUpdate{
+			ClusterName:     testClusterName,
+			MaxRequests:     newUint32(testMaxRequests),
+			LRSServerConfig: testLRSServerConfig,
+			ClusterType:     xdsresource.ClusterTypeEDS,
+			EDSServiceName:  testEDSServiceName,
 		},
 		nil,
 	)
@@ -542,7 +548,8 @@ func TestPriorityLocalitiesToClusterImpl(t *testing.T) {
 		name          string
 		localities    []xdsresource.Locality
 		priorityName  string
-		mechanism     DiscoveryMechanism
+		clusterName   string
+		clusterUpdate xdsresource.ClusterUpdate
 		childPolicy   *iserviceconfig.BalancerConfig
 		wantConfig    *clusterimpl.LBConfig
 		wantEndpoints []resolver.Endpoint
@@ -585,9 +592,10 @@ func TestPriorityLocalitiesToClusterImpl(t *testing.T) {
 		},
 		priorityName: "test-priority",
 		childPolicy:  &iserviceconfig.BalancerConfig{Name: roundrobin.Name},
-		mechanism: DiscoveryMechanism{
-			Cluster:        testClusterName,
-			Type:           DiscoveryMechanismTypeEDS,
+		clusterName:  testClusterName,
+		clusterUpdate: xdsresource.ClusterUpdate{
+			ClusterName:    testClusterName,
+			ClusterType:    xdsresource.ClusterTypeEDS,
 			EDSServiceName: testEDSService,
 		},
 		// lrsServer is nil, so LRS policy will not be used.
@@ -658,7 +666,7 @@ func TestPriorityLocalitiesToClusterImpl(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, got1, err := priorityLocalitiesToClusterImpl(tt.localities, tt.priorityName, tt.mechanism, nil, tt.childPolicy)
+			got, got1, err := priorityLocalitiesToClusterImpl(tt.localities, tt.priorityName, tt.clusterName, tt.clusterUpdate, nil, tt.childPolicy)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("priorityLocalitiesToClusterImpl() error = %v, wantErr %v", err, tt.wantErr)
 			}
