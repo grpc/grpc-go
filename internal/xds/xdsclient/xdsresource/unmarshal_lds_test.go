@@ -1788,7 +1788,9 @@ func (serverOnlyHTTPFilter) ParseFilterConfigOverride(override proto.Message) (h
 	return filterConfig{Override: override}, nil
 }
 
-func (serverOnlyHTTPFilter) IsTerminal() bool { return false }
+func (serverOnlyHTTPFilter) IsTerminal() bool {
+	return false
+}
 
 // clientOnlyHTTPFilter does not implement ServerInterceptorBuilder
 type clientOnlyHTTPFilter struct {
