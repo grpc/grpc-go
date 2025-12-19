@@ -24,7 +24,7 @@ import (
 	"sync"
 
 	estats "google.golang.org/grpc/experimental/stats"
-	"google.golang.org/grpc/internal/leakcheck"
+	"google.golang.org/grpc/internal"
 )
 
 // Global tracker state
@@ -32,6 +32,13 @@ var (
 	asyncReporterTracker *reporterTracker
 	originalDelegate     RegisterAsyncReporterFuncType
 )
+
+// Logger is the interface that wraps the Logf and Errorf method. This allows
+// to mimic the type of Logger that is used in Leakcheck and/or grpctest package.
+type Logger interface {
+	Logf(format string, args ...any)
+	Errorf(format string, args ...any)
+}
 
 func wrappedRegisterAsyncReporter(l *MetricsRecorderList, r estats.AsyncMetricReporter, m ...estats.AsyncMetric) func() {
 	// Register the location of this call
@@ -58,7 +65,11 @@ func trackAsyncReporters() {
 }
 
 // checkAsyncReporters verifies no leaks exist and restores the original delegate.
-func checkAsyncReporters(logger leakcheck.Logger) {
+func checkAsyncReporters(log any) {
+	logger, ok := log.(Logger)
+	if !ok {
+		return
+	}
 	// Restore the original delegate immediately to clean up state
 	if originalDelegate != nil {
 		setRegisterAsyncReporterDelegate(originalDelegate)
@@ -149,6 +160,6 @@ func setRegisterAsyncReporterDelegate(newFunc RegisterAsyncReporterFuncType) Reg
 }
 
 func init() {
-	leakcheck.TrackAsyncReporters = trackAsyncReporters
-	leakcheck.CheckAsyncReporters = checkAsyncReporters
+	internal.TrackAsyncReporters = trackAsyncReporters
+	internal.CheckAsyncReporters = checkAsyncReporters
 }

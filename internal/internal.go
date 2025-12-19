@@ -248,6 +248,15 @@ var (
 	// AddressToTelemetryLabels is an xDS-provided function to extract telemetry
 	// labels from a resolver.Address. Callers must assert its type before calling.
 	AddressToTelemetryLabels any // func(addr resolver.Address) map[string]string
+
+	// TrackAsyncReporters installs the tracking hook during test setup. The
+	// implementation is assigned by the internal stats package.
+	TrackAsyncReporters = func() {}
+
+	// CheckAsyncReporters verifies no leaks exist and restores the original
+	// delegate during test tear down. The implementation is assigned by the internal
+	// stats package.
+	CheckAsyncReporters = func(any) {}
 )
 
 // HealthChecker defines the signature of the client-side LB channel health
