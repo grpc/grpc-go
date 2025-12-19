@@ -34,21 +34,21 @@ import (
 const TypeURL = "type.googleapis.com/envoy.extensions.filters.http.router.v3.Router"
 
 func init() {
-	httpfilter.Register(provider{})
+	httpfilter.Register(builder{})
 }
 
 // IsRouterFilter returns true iff a HTTP filter is a Router filter.
 func IsRouterFilter(b httpfilter.FilterProvider) bool {
-	_, ok := b.(provider)
+	_, ok := b.(builder)
 	return ok
 }
 
-type provider struct {
+type builder struct {
 }
 
-func (provider) TypeURLs() []string { return []string{TypeURL} }
+func (builder) TypeURLs() []string { return []string{TypeURL} }
 
-func (provider) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, error) {
+func (builder) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, error) {
 	// The gRPC router filter does not currently use any fields from the
 	// config.  Verify type only.
 	if cfg == nil {
@@ -65,16 +65,23 @@ func (provider) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, e
 	return config{}, nil
 }
 
-func (provider) ParseFilterConfigOverride(override proto.Message) (httpfilter.FilterConfig, error) {
+func (builder) ParseFilterConfigOverride(override proto.Message) (httpfilter.FilterConfig, error) {
 	if override != nil {
 		return nil, fmt.Errorf("router: unexpected config override specified: %v", override)
 	}
 	return config{}, nil
 }
 
-func (provider) IsTerminal() bool { return true }
+func (builder) IsTerminal() bool {
+	return true
+}
 
-func (provider) BuildClientInterceptor(_ string, cfg, override httpfilter.FilterConfig) (iresolver.ClientInterceptor, func(), error) {
+var (
+	_ httpfilter.ClientInterceptorBuilder = builder{}
+	_ httpfilter.ServerInterceptorBuilder = builder{}
+)
+
+func (builder) BuildClientInterceptor(_ string, cfg, override httpfilter.FilterConfig) (iresolver.ClientInterceptor, func(), error) {
 	if _, ok := cfg.(config); !ok {
 		return nil, func() {}, fmt.Errorf("router: incorrect config type provided (%T): %v", cfg, cfg)
 	}
@@ -87,7 +94,7 @@ func (provider) BuildClientInterceptor(_ string, cfg, override httpfilter.Filter
 	return nil, func() {}, nil
 }
 
-func (provider) BuildServerInterceptor(_ string, cfg, override httpfilter.FilterConfig) (iresolver.ServerInterceptor, func(), error) {
+func (builder) BuildServerInterceptor(_ string, cfg, override httpfilter.FilterConfig) (iresolver.ServerInterceptor, func(), error) {
 	if _, ok := cfg.(config); !ok {
 		return nil, func() {}, fmt.Errorf("router: incorrect config type provided (%T): %v", cfg, cfg)
 	}
