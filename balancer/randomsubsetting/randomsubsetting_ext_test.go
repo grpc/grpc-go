@@ -73,12 +73,12 @@ func (s) TestSubsettingEndpointsDomain(t *testing.T) {
 	}
 }
 
-func (s) TestUniformDistribution(t *testing.T) {
+func (s) TestUniformDistributionOfEndpoints(t *testing.T) {
 
 	var (
-		subsetSize int = 4
-		iteration  int = 1600
-		diff       int = 0
+		subsetSize = 4
+		iteration  = 1600
+		diff       int
 	)
 
 	endpoints := makeEndpoints(16)
@@ -88,6 +88,7 @@ func (s) TestUniformDistribution(t *testing.T) {
 
 	for i := 0; i < iteration; i++ {
 		t.Run(fmt.Sprint(subsetSize), func(t *testing.T) {
+			t.Helper()
 			lb := &subsettingBalancer{
 				cfg:        &lbConfig{SubsetSize: uint32(subsetSize)},
 				hashSeed:   uint64(i ^ 3 + iteration*i + subsetSize),
@@ -101,6 +102,8 @@ func (s) TestUniformDistribution(t *testing.T) {
 		})
 	}
 	// Verify the distribution is uniform within a small diff range.
+	// The expected count for each endpoint is: iteration / total_endpoints * subset_size
+	// e.g. 1600 / 16 * 4 = 400 +/- diff
 	for epAddr, count := range EndpointCount {
 		if count < expected-diff || count > expected+diff {
 			t.Fatalf("endpoint %v selected %v times; expected <=> %v", epAddr, count, expected)
