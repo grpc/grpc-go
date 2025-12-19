@@ -21,12 +21,12 @@ package xdsdepmgr_test
 import (
 	"context"
 	"fmt"
-	"hash/fnv"
 	"regexp"
 	"strings"
 	"testing"
 	"time"
 
+	xxhash "github.com/cespare/xxhash/v2"
 	"github.com/envoyproxy/go-control-plane/pkg/wellknown"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -128,7 +128,7 @@ func lessEndpoint(a, b resolver.Endpoint) bool {
 }
 
 func getHash(e resolver.Endpoint) uint64 {
-	h := fnv.New64a()
+	h := xxhash.New()
 
 	// We iterate through all addresses to ensure the hash represents
 	// the full endpoint identity.

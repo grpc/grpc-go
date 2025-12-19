@@ -230,7 +230,7 @@ type xdsResolver struct {
 	curConfigSelector stoppableConfigSelector
 }
 
-// ResolveNow calls ResolveNow on the dependency manager.
+// ResolveNow calls RequestDNSReresolution on the dependency manager.
 func (r *xdsResolver) ResolveNow(opts resolver.ResolveNowOptions) {
 	if r.dm != nil {
 		r.dm.RequestDNSReresolution(opts)

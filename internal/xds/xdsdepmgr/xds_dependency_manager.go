@@ -800,6 +800,8 @@ func (m *DependencyManager) onDNSError(resourceName string, err error) {
 
 // RequestDNSReresolution calls all the the DNS resolver's ResolveNow.
 func (m *DependencyManager) RequestDNSReresolution(opt resolver.ResolveNowOptions) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	for _, res := range m.dnsResolvers {
 		if res.extras.dnsR != nil {
 			res.extras.dnsR.ResolveNow(opt)
@@ -834,20 +836,18 @@ func (rcc *resolverClientConn) ParseServiceConfig(string) *serviceconfig.ParseRe
 }
 
 func (m *DependencyManager) newDNSResolver(target string) *xdsResourceState[xdsresource.DNSUpdate, dnsExtras] {
-	u, err := url.Parse("dns:///" + target)
-	if err != nil {
-		err := fmt.Errorf("failed to parse DNS target %q: %v", target, m.annotateErrorWithNodeID(err))
-		m.logger.Warningf("%v", err)
-		return &xdsResourceState[xdsresource.DNSUpdate, dnsExtras]{
-			lastErr:        err,
-			updateReceived: true,
-		}
-	}
-
 	rcc := &resolverClientConn{
 		target: target,
 		depMgr: m,
 	}
+	u, err := url.Parse("dns:///" + target)
+	if err != nil {
+		err := fmt.Errorf("failed to parse DNS target %q: %v", target, m.annotateErrorWithNodeID(err))
+		m.logger.Warningf("%v", err)
+		rcc.ReportError(err)
+		return &xdsResourceState[xdsresource.DNSUpdate, dnsExtras]{}
+	}
+
 	r, err := resolver.Get("dns").Build(resolver.Target{URL: *u}, rcc, resolver.BuildOptions{})
 	if err != nil {
 		rcc.ReportError(err)
