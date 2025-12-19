@@ -39,6 +39,12 @@ import (
 
 var newAdaptiveThrottler = func() adaptiveThrottler { return adaptive.New() }
 
+// newConnectivityStateSubscriber is a variable that can be overridden in tests
+// to wrap the connectivity state subscriber for testing purposes.
+var newConnectivityStateSubscriber = func(sub grpcsync.Subscriber) grpcsync.Subscriber {
+	return sub
+}
+
 type adaptiveThrottler interface {
 	ShouldThrottle() bool
 	RegisterBackendResponse(throttled bool)
@@ -88,7 +94,7 @@ func newControlChannel(rlsServerName, serviceConfig string, rpcTimeout time.Dura
 	}
 	// Subscribe to connectivity state before connecting to avoid missing initial
 	// updates, which are only delivered to active subscribers.
-	ctrlCh.unsubscribe = internal.SubscribeToConnectivityStateChanges.(func(cc *grpc.ClientConn, s grpcsync.Subscriber) func())(ctrlCh.cc, ctrlCh)
+	ctrlCh.unsubscribe = internal.SubscribeToConnectivityStateChanges.(func(cc *grpc.ClientConn, s grpcsync.Subscriber) func())(ctrlCh.cc, newConnectivityStateSubscriber(ctrlCh))
 	ctrlCh.cc.Connect()
 	ctrlCh.client = rlsgrpc.NewRouteLookupServiceClient(ctrlCh.cc)
 	ctrlCh.logger.Infof("Control channel created to RLS server at: %v", rlsServerName)

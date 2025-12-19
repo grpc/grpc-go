@@ -463,4 +463,3 @@ func (s) TestNewControlChannelUnsupportedCredsBundle(t *testing.T) {
 		t.Fatal("newControlChannel succeeded when expected to fail")
 	}
 }
-
