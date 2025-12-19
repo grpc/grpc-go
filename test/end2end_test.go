@@ -6134,6 +6134,43 @@ func testClientMaxHeaderListSizeServerIntentionalViolation(t *testing.T, e env) 
 	}
 }
 
+func (s) TestEarlyAbortStreamHeaderListSizeCheck(t *testing.T) {
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Failed to listen: %v", err)
+	}
+	s := grpc.NewServer()
+	defer s.Stop()
+	go s.Serve(lis)
+
+	conn, err := net.DialTimeout("tcp", lis.Addr().String(), defaultTestTimeout)
+	if err != nil {
+		t.Fatalf("Failed to dial: %v", err)
+	}
+	defer conn.Close()
+	st := newServerTesterFromConn(t, conn)
+
+	// Set a very small MaxHeaderListSize that any response headers would violate.
+	st.greetWithSettings(http2.Setting{ID: http2.SettingMaxHeaderListSize, Val: 1})
+
+	// Send a request with an invalid content-type to trigger early abort.
+	st.writeHeaders(http2.HeadersFrameParam{
+		StreamID: 1,
+		BlockFragment: st.encodeHeader(
+			":method", "POST",
+			":path", "/grpc.testing.TestService/UnaryCall",
+			"content-type", "text/plain", // Invalid content-type to trigger early abort
+			"te", "trailers",
+		),
+		EndStream:  true,
+		EndHeaders: true,
+	})
+
+	// We should receive a RST_STREAM with ErrCodeInternal because the response
+	// headers exceed the MaxHeaderListSize limit.
+	st.wantRSTStream(http2.ErrCodeInternal)
+}
+
 func (s) TestNetPipeConn(t *testing.T) {
 	// This test will block indefinitely if grpc writes both client and server
 	// prefaces without either reading from the Conn.
