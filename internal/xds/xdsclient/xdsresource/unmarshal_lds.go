@@ -179,11 +179,11 @@ func processHTTPFilterOverrides(cfgs map[string]*anypb.Any) (map[string]httpfilt
 			optional = s.GetIsOptional()
 		}
 
-		filterProvider, config, err := validateHTTPFilterConfig(cfg, false, optional)
+		httpFilter, config, err := validateHTTPFilterConfig(cfg, false, optional)
 		if err != nil {
 			return nil, fmt.Errorf("filter override %q: %v", name, err)
 		}
-		if filterProvider == nil {
+		if httpFilter == nil {
 			// Optional configs are ignored.
 			continue
 		}
@@ -205,22 +205,22 @@ func processHTTPFilters(filters []*v3httppb.HttpFilter, server bool) ([]HTTPFilt
 		}
 		seenNames[name] = true
 
-		filterProvider, config, err := validateHTTPFilterConfig(filter.GetTypedConfig(), true, filter.GetIsOptional())
+		httpFilter, config, err := validateHTTPFilterConfig(filter.GetTypedConfig(), true, filter.GetIsOptional())
 		if err != nil {
 			return nil, err
 		}
-		if filterProvider == nil {
+		if httpFilter == nil {
 			// Optional configs are ignored.
 			continue
 		}
 		if server {
-			if _, ok := filterProvider.(httpfilter.ServerInterceptorBuilder); !ok {
+			if _, ok := httpFilter.(httpfilter.ServerInterceptorBuilder); !ok {
 				if filter.GetIsOptional() {
 					continue
 				}
 				return nil, fmt.Errorf("HTTP filter %q not supported server-side", name)
 			}
-		} else if _, ok := filterProvider.(httpfilter.ClientInterceptorBuilder); !ok {
+		} else if _, ok := httpFilter.(httpfilter.ClientInterceptorBuilder); !ok {
 			if filter.GetIsOptional() {
 				continue
 			}
@@ -228,7 +228,7 @@ func processHTTPFilters(filters []*v3httppb.HttpFilter, server bool) ([]HTTPFilt
 		}
 
 		// Save name/config
-		ret = append(ret, HTTPFilter{Name: name, Filter: filterProvider, Config: config})
+		ret = append(ret, HTTPFilter{Name: name, Filter: httpFilter, Config: config})
 	}
 	// "Validation will fail if a terminal filter is not the last filter in the
 	// chain or if a non-terminal filter is the last filter in the chain." - A39

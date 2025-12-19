@@ -56,7 +56,7 @@ type Filter interface {
 	IsTerminal() bool
 }
 
-// ClientInterceptorBuilder constructs a Client Interceptor. If this type is
+// ClientInterceptorBuilder constructs a Client Interceptor.  If this type is
 // implemented by a Filter, it is capable of working on a client.
 type ClientInterceptorBuilder interface {
 	// BuildClientInterceptor uses the given FilterConfigs to produce an HTTP
@@ -76,7 +76,7 @@ type ClientInterceptorBuilder interface {
 	BuildClientInterceptor(name string, config, override FilterConfig) (i iresolver.ClientInterceptor, cancel func(), err error)
 }
 
-// ServerInterceptorBuilder constructs a Server Interceptor. If this type is
+// ServerInterceptorBuilder constructs a Server Interceptor.  If this type is
 // implemented by a Filter, it is capable of working on a server.
 type ServerInterceptorBuilder interface {
 	// BuildServerInterceptor uses the given FilterConfigs to produce

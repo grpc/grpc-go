@@ -2753,8 +2753,6 @@ type filterBuilder struct {
 	httpfilter.Filter
 }
 
-func (filterBuilder) IsTerminal() bool { return false }
-
 var _ httpfilter.ServerInterceptorBuilder = &filterBuilder{}
 
 func (filterBuilder) BuildServerInterceptor(_ string, config httpfilter.FilterConfig, override httpfilter.FilterConfig) (iresolver.ServerInterceptor, func(), error) {

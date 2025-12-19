@@ -1743,7 +1743,9 @@ func (httpFilter) ParseFilterConfigOverride(override proto.Message) (httpfilter.
 	return filterConfig{Override: override}, nil
 }
 
-func (httpFilter) IsTerminal() bool { return false }
+func (httpFilter) IsTerminal() bool {
+	return false
+}
 
 // errHTTPFilter returns errors no matter what is passed to ParseFilterConfig.
 type errHTTPFilter struct {
@@ -1760,7 +1762,9 @@ func (errHTTPFilter) ParseFilterConfigOverride(proto.Message) (httpfilter.Filter
 	return nil, fmt.Errorf("error from ParseFilterConfigOverride")
 }
 
-func (errHTTPFilter) IsTerminal() bool { return false }
+func (errHTTPFilter) IsTerminal() bool {
+	return false
+}
 
 func init() {
 	httpfilter.Register(httpFilter{})
@@ -1801,7 +1805,9 @@ func (clientOnlyHTTPFilter) ParseFilterConfigOverride(override proto.Message) (h
 	return filterConfig{Override: override}, nil
 }
 
-func (clientOnlyHTTPFilter) IsTerminal() bool { return false }
+func (clientOnlyHTTPFilter) IsTerminal() bool {
+	return false
+}
 
 var customFilterConfig = &anypb.Any{
 	TypeUrl: "custom.filter",
