@@ -206,10 +206,8 @@ func (m *DependencyManager) Close() {
 	// try to grab the dependency manager lock, which is already held here.
 	m.dnsSerializerCancel()
 	for name, dnsResolver := range m.dnsResolvers {
-		if dnsResolver.extras.dnsR != nil {
-			dnsResolver.stop()
-			delete(m.dnsResolvers, name)
-		}
+		dnsResolver.stop()
+		delete(m.dnsResolvers, name)
 	}
 }
 
@@ -464,7 +462,7 @@ func (m *DependencyManager) applyRouteConfigUpdateLocked(update *xdsresource.Rou
 	m.routeConfigWatcher.extras.virtualHost = matchVH
 
 	// Get the clusters to be watched from the routes in the virtual host.
-	// If the CLusterSpecifierField is set, we ignore it for now as the
+	// If the ClusterSpecifierField is set, we ignore it for now as the
 	// clusters will be determined dynamically for it.
 	newClusters := make(map[string]bool)
 
@@ -858,10 +856,7 @@ func (m *DependencyManager) newDNSResolver(target string) *xdsResourceState[xdsr
 		err := fmt.Errorf("failed to parse DNS target %q: %v", target, m.annotateErrorWithNodeID(err))
 		m.logger.Warningf("%v", err)
 		rcc.ReportError(err)
-		return &xdsResourceState[xdsresource.DNSUpdate, dnsExtras]{
-			lastErr: err,
-			// updateReceived: true,
-		}
+		return &xdsResourceState[xdsresource.DNSUpdate, dnsExtras]{}
 	}
 
 	r, err := resolver.Get("dns").Build(resolver.Target{URL: *u}, rcc, resolver.BuildOptions{})

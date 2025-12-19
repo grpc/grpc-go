@@ -276,6 +276,12 @@ func (r *TestMetricsRecorder) RecordInt64Gauge(handle *estats.Int64GaugeHandle, 
 	r.data[handle.Name] = float64(incr)
 }
 
+// RegisterAsyncReporter is noop implementation, async gauge test recorders should
+// provide their own implementation
+func (r *TestMetricsRecorder) RegisterAsyncReporter(estats.AsyncMetricReporter, ...estats.AsyncMetric) func() {
+	return func() {}
+}
+
 // To implement a stats.Handler, which allows it to be set as a dial option:
 
 // TagRPC is TestMetricsRecorder's implementation of TagRPC.
@@ -315,4 +321,9 @@ func (r *NoopMetricsRecorder) RecordInt64Gauge(*estats.Int64GaugeHandle, int64, 
 
 // RecordInt64UpDownCount is a noop implementation of RecordInt64UpDownCount.
 func (r *NoopMetricsRecorder) RecordInt64UpDownCount(*estats.Int64UpDownCountHandle, int64, ...string) {
+}
+
+// RegisterAsyncReporter is a noop implementation of RegisterAsyncReporter.
+func (r *NoopMetricsRecorder) RegisterAsyncReporter(estats.AsyncMetricReporter, ...estats.AsyncMetric) func() {
+	return func() {}
 }
