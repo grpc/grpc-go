@@ -145,22 +145,22 @@ func validateHTTPFilterConfig(cfg *anypb.Any, lds, optional bool) (httpfilter.Fi
 	if err != nil {
 		return nil, nil, err
 	}
-	filterProvider := httpfilter.Get(typeURL)
-	if filterProvider == nil {
+	filterBuilder := httpfilter.Get(typeURL)
+	if filterBuilder == nil {
 		if optional {
 			return nil, nil, nil
 		}
 		return nil, nil, fmt.Errorf("no filter implementation found for %q", typeURL)
 	}
-	parseFunc := filterProvider.ParseFilterConfig
+	parseFunc := filterBuilder.ParseFilterConfig
 	if !lds {
-		parseFunc = filterProvider.ParseFilterConfigOverride
+		parseFunc = filterBuilder.ParseFilterConfigOverride
 	}
 	filterConfig, err := parseFunc(config)
 	if err != nil {
 		return nil, nil, fmt.Errorf("error parsing config for filter %q: %v", typeURL, err)
 	}
-	return filterProvider, filterConfig, nil
+	return filterBuilder, filterConfig, nil
 }
 
 func processHTTPFilterOverrides(cfgs map[string]*anypb.Any) (map[string]httpfilter.FilterConfig, error) {

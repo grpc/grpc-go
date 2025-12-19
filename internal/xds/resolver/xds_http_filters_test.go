@@ -96,7 +96,7 @@ type logger interface {
 	Logf(format string, args ...any)
 }
 
-// testHTTPFilterProvider is a HTTP filter provider used for testing purposes.
+// testHTTPFilterWithRPCMetadata is a HTTP filter used for testing purposes.
 //
 // This filter is used to verify that the xDS resolver and filter stack
 // correctly propagate filter configuration (both base and override) to RPCs. It
@@ -104,29 +104,29 @@ type logger interface {
 // JSON-encoded metadata into outgoing RPCs.  The metadata can then be observed
 // by the backend, allowing tests to assert that the correct filter
 // configuration was applied for each RPC.
-type testHTTPFilterProvider struct {
+type testHTTPFilterWithRPCMetadata struct {
 	logger        logger
 	typeURL       string
 	newStreamChan *testutils.Channel // If set, filter config is written to this field from NewStream()
 }
 
-func (fb *testHTTPFilterProvider) TypeURLs() []string { return []string{fb.typeURL} }
+func (fb *testHTTPFilterWithRPCMetadata) TypeURLs() []string { return []string{fb.typeURL} }
 
-func (*testHTTPFilterProvider) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, error) {
+func (*testHTTPFilterWithRPCMetadata) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, error) {
 	return filterConfigFromProto(cfg)
 }
 
-func (*testHTTPFilterProvider) ParseFilterConfigOverride(override proto.Message) (httpfilter.FilterConfig, error) {
+func (*testHTTPFilterWithRPCMetadata) ParseFilterConfigOverride(override proto.Message) (httpfilter.FilterConfig, error) {
 	return filterConfigFromProto(override)
 }
 
-func (*testHTTPFilterProvider) IsTerminal() bool { return false }
+func (*testHTTPFilterWithRPCMetadata) IsTerminal() bool { return false }
 
 // ClientInterceptorBuilder is an optional interface for filters to implement.
 // This compile time check ensures the test filter implements it.
-var _ httpfilter.ClientInterceptorBuilder = &testHTTPFilterProvider{}
+var _ httpfilter.ClientInterceptorBuilder = &testHTTPFilterWithRPCMetadata{}
 
-func (fb *testHTTPFilterProvider) BuildClientInterceptor(name string, config, override httpfilter.FilterConfig) (iresolver.ClientInterceptor, func(), error) {
+func (fb *testHTTPFilterWithRPCMetadata) BuildClientInterceptor(name string, config, override httpfilter.FilterConfig) (iresolver.ClientInterceptor, func(), error) {
 	fb.logger.Logf("BuildClientInterceptor called with name %q config: %+v, override: %+v", name, config, override)
 
 	if config == nil {
@@ -256,7 +256,7 @@ func (s) TestXDSResolverHTTPFilters_AllOverrides(t *testing.T) {
 
 	// Register a custom httpFilter builder for the test.
 	testFilterName := t.Name()
-	fb := &testHTTPFilterProvider{logger: t, typeURL: testFilterName}
+	fb := &testHTTPFilterWithRPCMetadata{logger: t, typeURL: testFilterName}
 	httpfilter.Register(fb)
 	defer httpfilter.UnregisterForTesting(fb.typeURL)
 
@@ -510,7 +510,7 @@ func (s) TestXDSResolverHTTPFilters_NewStreamError(t *testing.T) {
 	// Register a custom httpFilter builder for the test and use a channel to
 	// get notified when the interceptor is invoked.
 	testFilterName := t.Name()
-	fb := &testHTTPFilterProvider{
+	fb := &testHTTPFilterWithRPCMetadata{
 		logger:        t,
 		typeURL:       testFilterName,
 		newStreamChan: testutils.NewChannelWithSize(3), // We have three filters.

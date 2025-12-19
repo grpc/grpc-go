@@ -2749,15 +2749,15 @@ type filterCfg struct {
 	level string
 }
 
-type filterProvider struct {
+type filterBuilder struct {
 	httpfilter.Filter
 }
 
-func (filterProvider) IsTerminal() bool { return false }
+func (filterBuilder) IsTerminal() bool { return false }
 
-var _ httpfilter.ServerInterceptorBuilder = &filterProvider{}
+var _ httpfilter.ServerInterceptorBuilder = &filterBuilder{}
 
-func (filterProvider) BuildServerInterceptor(_ string, config httpfilter.FilterConfig, override httpfilter.FilterConfig) (iresolver.ServerInterceptor, func(), error) {
+func (filterBuilder) BuildServerInterceptor(_ string, config httpfilter.FilterConfig, override httpfilter.FilterConfig) (iresolver.ServerInterceptor, func(), error) {
 	var level string
 	level = config.(filterCfg).level
 
@@ -2792,7 +2792,7 @@ func (s) TestHTTPFilterInstantiation(t *testing.T) {
 		{
 			name: "one http filter no overrides",
 			filters: []HTTPFilter{
-				{Name: "server-interceptor", Filter: &filterProvider{}, Config: filterCfg{level: topLevel}},
+				{Name: "server-interceptor", Filter: &filterBuilder{}, Config: filterCfg{level: topLevel}},
 			},
 			routeConfig: RouteConfigUpdate{
 				VirtualHosts: []*VirtualHost{
@@ -2809,7 +2809,7 @@ func (s) TestHTTPFilterInstantiation(t *testing.T) {
 		{
 			name: "one http filter vh override",
 			filters: []HTTPFilter{
-				{Name: "server-interceptor", Filter: &filterProvider{}, Config: filterCfg{level: topLevel}},
+				{Name: "server-interceptor", Filter: &filterBuilder{}, Config: filterCfg{level: topLevel}},
 			},
 			routeConfig: RouteConfigUpdate{
 				VirtualHosts: []*VirtualHost{
@@ -2829,7 +2829,7 @@ func (s) TestHTTPFilterInstantiation(t *testing.T) {
 		{
 			name: "one http filter route override",
 			filters: []HTTPFilter{
-				{Name: "server-interceptor", Filter: &filterProvider{}, Config: filterCfg{level: topLevel}},
+				{Name: "server-interceptor", Filter: &filterBuilder{}, Config: filterCfg{level: topLevel}},
 			},
 			routeConfig: RouteConfigUpdate{
 				VirtualHosts: []*VirtualHost{
@@ -2851,9 +2851,9 @@ func (s) TestHTTPFilterInstantiation(t *testing.T) {
 		{
 			name: "three http filters vh override route override",
 			filters: []HTTPFilter{
-				{Name: "server-interceptor1", Filter: &filterProvider{}, Config: filterCfg{level: topLevel}},
-				{Name: "server-interceptor2", Filter: &filterProvider{}, Config: filterCfg{level: topLevel}},
-				{Name: "server-interceptor3", Filter: &filterProvider{}, Config: filterCfg{level: topLevel}},
+				{Name: "server-interceptor1", Filter: &filterBuilder{}, Config: filterCfg{level: topLevel}},
+				{Name: "server-interceptor2", Filter: &filterBuilder{}, Config: filterCfg{level: topLevel}},
+				{Name: "server-interceptor3", Filter: &filterBuilder{}, Config: filterCfg{level: topLevel}},
 			},
 			routeConfig: RouteConfigUpdate{
 				VirtualHosts: []*VirtualHost{
@@ -2879,9 +2879,9 @@ func (s) TestHTTPFilterInstantiation(t *testing.T) {
 		{
 			name: "three http filters two vh",
 			filters: []HTTPFilter{
-				{Name: "server-interceptor1", Filter: &filterProvider{}, Config: filterCfg{level: topLevel}},
-				{Name: "server-interceptor2", Filter: &filterProvider{}, Config: filterCfg{level: topLevel}},
-				{Name: "server-interceptor3", Filter: &filterProvider{}, Config: filterCfg{level: topLevel}},
+				{Name: "server-interceptor1", Filter: &filterBuilder{}, Config: filterCfg{level: topLevel}},
+				{Name: "server-interceptor2", Filter: &filterBuilder{}, Config: filterCfg{level: topLevel}},
+				{Name: "server-interceptor3", Filter: &filterBuilder{}, Config: filterCfg{level: topLevel}},
 			},
 			routeConfig: RouteConfigUpdate{
 				VirtualHosts: []*VirtualHost{
