@@ -38,10 +38,6 @@ const prefix = "[xdsdepmgr %p] "
 
 var logger = grpclog.Component("xds")
 
-// EnableClusterAndEndpointsWatch is a flag used to control whether the CDS/EDS
-// watchers in the dependency manager should be used.
-var EnableClusterAndEndpointsWatch = true
-
 func prefixLogger(p *DependencyManager) *internalgrpclog.PrefixLogger {
 	return internalgrpclog.NewPrefixLogger(logger, fmt.Sprintf(prefix, p))
 }
@@ -206,7 +202,9 @@ func (m *DependencyManager) Close() {
 	// try to grab the dependency manager lock, which is already held here.
 	m.dnsSerializerCancel()
 	for name, dnsResolver := range m.dnsResolvers {
-		dnsResolver.stop()
+		if dnsResolver.extras.dnsR != nil {
+			dnsResolver.stop()
+		}
 		delete(m.dnsResolvers, name)
 	}
 }
@@ -228,11 +226,6 @@ func (m *DependencyManager) maybeSendUpdateLocked() {
 		RouteConfig: m.routeConfigWatcher.lastUpdate,
 		VirtualHost: m.routeConfigWatcher.extras.virtualHost,
 		Clusters:    make(map[string]*xdsresource.ClusterResult),
-	}
-
-	if !EnableClusterAndEndpointsWatch {
-		m.watcher.Update(config)
-		return
 	}
 
 	edsResourcesSeen := make(map[string]bool)

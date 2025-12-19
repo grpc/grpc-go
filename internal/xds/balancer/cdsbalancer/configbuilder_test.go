@@ -154,7 +154,7 @@ func TestBuildPriorityConfigJSON(t *testing.T) {
 
 	gotConfig, _, err := buildPriorityConfigJSON([]priorityConfig{
 		{
-			clusterName:   testClusterName,
+			clusterName: testClusterName,
 			clusterUpdate: xdsresource.ClusterUpdate{
 				ClusterName:     testClusterName,
 				LRSServerConfig: testLRSServerConfig,
@@ -180,7 +180,7 @@ func TestBuildPriorityConfigJSON(t *testing.T) {
 			childNameGen: newNameGenerator(0),
 		},
 		{
-			clusterName:   testClusterName2,
+			clusterName: testClusterName2,
 			clusterUpdate: xdsresource.ClusterUpdate{
 				ClusterName: testClusterName2,
 				ClusterType: xdsresource.ClusterTypeLogicalDNS,
@@ -217,7 +217,7 @@ func TestBuildPriorityConfig(t *testing.T) {
 			// priorities. The Outlier Detection configuration specified in the
 			// Discovery Mechanism should be the top level for each sub
 			// priorities balancer.
-			clusterName:   testClusterName,
+			clusterName: testClusterName,
 			clusterUpdate: xdsresource.ClusterUpdate{
 				ClusterName:    testClusterName,
 				ClusterType:    xdsresource.ClusterTypeEDS,
@@ -236,7 +236,7 @@ func TestBuildPriorityConfig(t *testing.T) {
 		},
 		{
 			// This OD config should wrap the Logical DNS priorities balancer.
-			clusterName:   testClusterName2,
+			clusterName: testClusterName2,
 			clusterUpdate: xdsresource.ClusterUpdate{
 				ClusterName: testClusterName2,
 				ClusterType: xdsresource.ClusterTypeLogicalDNS,
