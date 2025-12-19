@@ -21,10 +21,12 @@ package xdsdepmgr_test
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
 
+	xxhash "github.com/cespare/xxhash/v2"
 	"github.com/envoyproxy/go-control-plane/pkg/wellknown"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -33,10 +35,16 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/internal/xds/bootstrap"
+	"google.golang.org/grpc/internal/xds/clients"
 	"google.golang.org/grpc/internal/xds/xdsclient"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 	"google.golang.org/grpc/internal/xds/xdsdepmgr"
+	"google.golang.org/grpc/resolver"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 
+	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
+	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	v3routerpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/router/v3"
@@ -50,6 +58,7 @@ type s struct {
 }
 
 func Test(t *testing.T) {
+	xdsdepmgr.EnableClusterAndEndpointsWatch = true
 	grpctest.RunSubTests(t, s{})
 }
 
@@ -60,6 +69,7 @@ const (
 	defaultTestServiceName     = "service-name"
 	defaultTestRouteConfigName = "route-config-name"
 	defaultTestClusterName     = "cluster-name"
+	defaultTestEDSServiceName  = "eds-service-name"
 )
 
 func newStringP(s string) *string {
@@ -72,11 +82,20 @@ func newStringP(s string) *string {
 type testWatcher struct {
 	updateCh chan *xdsresource.XDSConfig
 	errorCh  chan error
+	done     chan struct{}
 }
 
-// Update sends the received XDSConfig update to the update channel.
+// Update sends the received XDSConfig update to the update channel. Does not
+// send updates if the done channel is closed. The done channel is closed in the
+// cases of errors because management server keeps sending error updates that
+// cases multiple updates to be sent from dependency manager causing the update
+// channel to be blocked.
 func (w *testWatcher) Update(cfg *xdsresource.XDSConfig) {
-	w.updateCh <- cfg
+	select {
+	case <-w.done:
+		return
+	case w.updateCh <- cfg:
+	}
 }
 
 // Error sends the received error to the error channel.
@@ -102,6 +121,25 @@ func verifyError(ctx context.Context, errCh chan error, wantErr, wantNodeID stri
 	return nil
 }
 
+// This function determines the stable, canonical order for any two
+// resolver.Endpoint structs.
+func lessEndpoint(a, b resolver.Endpoint) bool {
+	return getHash(a) < getHash(b)
+}
+
+func getHash(e resolver.Endpoint) uint64 {
+	h := xxhash.New()
+
+	// We iterate through all addresses to ensure the hash represents
+	// the full endpoint identity.
+	for _, addr := range e.Addresses {
+		h.Write([]byte(addr.Addr))
+		h.Write([]byte(addr.ServerName))
+	}
+
+	return h.Sum64()
+}
+
 func verifyXDSConfig(ctx context.Context, xdsCh chan *xdsresource.XDSConfig, errCh chan error, want *xdsresource.XDSConfig) error {
 	select {
 	case <-ctx.Done():
@@ -112,6 +150,24 @@ func verifyXDSConfig(ctx context.Context, xdsCh chan *xdsresource.XDSConfig, err
 			cmpopts.IgnoreFields(xdsresource.HTTPFilter{}, "Filter", "Config"),
 			cmpopts.IgnoreFields(xdsresource.ListenerUpdate{}, "Raw"),
 			cmpopts.IgnoreFields(xdsresource.RouteConfigUpdate{}, "Raw"),
+			cmpopts.IgnoreFields(xdsresource.ClusterUpdate{}, "Raw", "LBPolicy", "TelemetryLabels"),
+			cmpopts.IgnoreFields(xdsresource.EndpointsUpdate{}, "Raw"),
+			// Used for EndpointConfig.ResolutionNote and ClusterResult.Err fields.
+			cmp.Transformer("ErrorsToString", func(in error) string {
+				if in == nil {
+					return "" // Treat nil as an empty string
+				}
+				s := in.Error()
+
+				// Replace all sequences of whitespace (including newlines and
+				// tabs) with a single standard space.
+				s = regexp.MustCompile(`\s+`).ReplaceAllString(s, " ")
+
+				// Trim any leading/trailing space that might be left over and
+				// return error as string.
+				return strings.TrimSpace(s)
+			}),
+			cmpopts.SortSlices(lessEndpoint),
 		}
 		if diff := cmp.Diff(update, want, cmpOpts...); diff != "" {
 			return fmt.Errorf("received unexpected update from dependency manager. Diff (-got +want):\n%v", diff)
@@ -120,6 +176,75 @@ func verifyXDSConfig(ctx context.Context, xdsCh chan *xdsresource.XDSConfig, err
 		return fmt.Errorf("received unexpected error from dependency manager: %v", err)
 	}
 	return nil
+}
+
+func makeXDSConfig(routeConfigName, clusterName, edsServiceName, addr string) *xdsresource.XDSConfig {
+	return &xdsresource.XDSConfig{
+		Listener: &xdsresource.ListenerUpdate{
+			RouteConfigName: routeConfigName,
+			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+		},
+		RouteConfig: &xdsresource.RouteConfigUpdate{
+			VirtualHosts: []*xdsresource.VirtualHost{
+				{
+					Domains: []string{defaultTestServiceName},
+					Routes: []*xdsresource.Route{{
+						Prefix:           newStringP("/"),
+						WeightedClusters: []xdsresource.WeightedCluster{{Name: clusterName, Weight: 100}},
+						ActionType:       xdsresource.RouteActionRoute,
+					}},
+				},
+			},
+		},
+		VirtualHost: &xdsresource.VirtualHost{
+			Domains: []string{defaultTestServiceName},
+			Routes: []*xdsresource.Route{{
+				Prefix:           newStringP("/"),
+				WeightedClusters: []xdsresource.WeightedCluster{{Name: clusterName, Weight: 100}},
+				ActionType:       xdsresource.RouteActionRoute},
+			},
+		},
+		Clusters: map[string]*xdsresource.ClusterResult{
+			clusterName: {
+				Config: xdsresource.ClusterConfig{Cluster: &xdsresource.ClusterUpdate{
+					ClusterType:    xdsresource.ClusterTypeEDS,
+					ClusterName:    clusterName,
+					EDSServiceName: edsServiceName,
+				},
+					EndpointConfig: &xdsresource.EndpointConfig{
+						EDSUpdate: &xdsresource.EndpointsUpdate{
+							Localities: []xdsresource.Locality{
+								{ID: clients.Locality{
+									Region:  "region-1",
+									Zone:    "zone-1",
+									SubZone: "subzone-1",
+								},
+									Endpoints: []xdsresource.Endpoint{
+										{
+											ResolverEndpoint: resolver.Endpoint{Addresses: []resolver.Address{{Addr: addr}}},
+											HealthStatus:     xdsresource.EndpointHealthStatusUnknown,
+											Weight:           1,
+										},
+									},
+									Weight: 1,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+// setupManagementServerAndClient creates a management server, an xds client and
+// returns the node ID, management server and xds client.
+func setupManagementServerAndClient(t *testing.T, allowResourceSubset bool) (string, *e2e.ManagementServer, xdsclient.XDSClient) {
+	t.Helper()
+	nodeID := uuid.New().String()
+	mgmtServer, bootstrapContents := setupManagementServerForTest(t, nodeID, allowResourceSubset)
+	xdsClient := createXDSClient(t, bootstrapContents)
+	return nodeID, mgmtServer, xdsClient
 }
 
 func createXDSClient(t *testing.T, bootstrapContents []byte) xdsclient.XDSClient {
@@ -142,28 +267,50 @@ func createXDSClient(t *testing.T, bootstrapContents []byte) xdsclient.XDSClient
 	return c
 }
 
-// Spins up an xDS management server and sets up the xDS bootstrap configuration.
+// Spins up an xDS management server and sets up the xDS bootstrap
+// configuration.
 //
 // Returns the following:
 //   - A reference to the xDS management server
 //   - Contents of the bootstrap configuration pointing to xDS management
 //     server
-func setupManagementServerForTest(t *testing.T, nodeID string) (*e2e.ManagementServer, []byte) {
+func setupManagementServerForTest(t *testing.T, nodeID string, allowResourceSubset bool) (*e2e.ManagementServer, []byte) {
 	t.Helper()
 
-	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
+		AllowResourceSubset: allowResourceSubset,
+	})
 	t.Cleanup(mgmtServer.Stop)
 
 	bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 	return mgmtServer, bootstrapContents
 }
 
+// makeAggregateClusterResource returns an aggregate cluster resource with the
+// given name and list of child names.
+func makeAggregateClusterResource(name string, childNames []string) *v3clusterpb.Cluster {
+	return e2e.ClusterResourceWithOptions(e2e.ClusterOptions{
+		ClusterName: name,
+		Type:        e2e.ClusterTypeAggregate,
+		ChildNames:  childNames,
+	})
+}
+
+// makeLogicalDNSClusterResource returns a LOGICAL_DNS cluster resource with the
+// given name and given DNS host and port.
+func makeLogicalDNSClusterResource(name, dnsHost string, dnsPort uint32) *v3clusterpb.Cluster {
+	return e2e.ClusterResourceWithOptions(e2e.ClusterOptions{
+		ClusterName: name,
+		Type:        e2e.ClusterTypeLogicalDNS,
+		DNSHostName: dnsHost,
+		DNSPort:     dnsPort,
+	})
+}
+
 // Tests the happy case where the dependency manager receives all the required
-// resources and verifies that Update is called with with the correct XDSConfig.
+// resources and verifies that Update is called with the correct XDSConfig.
 func (s) TestHappyCase(t *testing.T) {
-	nodeID := uuid.New().String()
-	mgmtServer, bc := setupManagementServerForTest(t, nodeID)
-	xdsClient := createXDSClient(t, bc)
+	nodeID, mgmtServer, xdsClient := setupManagementServerAndClient(t, false)
 
 	watcher := &testWatcher{
 		updateCh: make(chan *xdsresource.XDSConfig),
@@ -173,46 +320,20 @@ func (s) TestHappyCase(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	listener := e2e.DefaultClientListener(defaultTestServiceName, defaultTestRouteConfigName)
-	route := e2e.DefaultRouteConfig(defaultTestRouteConfigName, defaultTestServiceName, defaultTestClusterName)
-	resources := e2e.UpdateOptions{
-		NodeID:         nodeID,
-		Listeners:      []*v3listenerpb.Listener{listener},
-		Routes:         []*v3routepb.RouteConfiguration{route},
-		SkipValidation: true,
-	}
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		NodeID:     nodeID,
+		DialTarget: defaultTestServiceName,
+		Host:       "localhost",
+		Port:       8080,
+		SecLevel:   e2e.SecurityLevelNone,
+	})
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
 
 	dm := xdsdepmgr.New(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
 	defer dm.Close()
-	wantXdsConfig := &xdsresource.XDSConfig{
-		Listener: &xdsresource.ListenerUpdate{
-			RouteConfigName: defaultTestRouteConfigName,
-			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
-		},
-		RouteConfig: &xdsresource.RouteConfigUpdate{
-			VirtualHosts: []*xdsresource.VirtualHost{
-				{
-					Domains: []string{defaultTestServiceName},
-					Routes: []*xdsresource.Route{{
-						Prefix:           newStringP("/"),
-						WeightedClusters: []xdsresource.WeightedCluster{{Name: defaultTestClusterName, Weight: 100}},
-						ActionType:       xdsresource.RouteActionRoute,
-					}},
-				},
-			},
-		},
-		VirtualHost: &xdsresource.VirtualHost{
-			Domains: []string{defaultTestServiceName},
-			Routes: []*xdsresource.Route{{
-				Prefix:           newStringP("/"),
-				WeightedClusters: []xdsresource.WeightedCluster{{Name: defaultTestClusterName, Weight: 100}},
-				ActionType:       xdsresource.RouteActionRoute},
-			},
-		},
-	}
+	wantXdsConfig := makeXDSConfig(resources.Routes[0].Name, resources.Clusters[0].Name, resources.Clusters[0].EdsClusterConfig.ServiceName, "localhost:8080")
 	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
 		t.Fatal(err)
 	}
@@ -221,9 +342,7 @@ func (s) TestHappyCase(t *testing.T) {
 // Tests the case where the listener contains an inline route configuration and
 // verifies that Update is called with the correct XDSConfig.
 func (s) TestInlineRouteConfig(t *testing.T) {
-	nodeID := uuid.New().String()
-	mgmtServer, bc := setupManagementServerForTest(t, nodeID)
-	xdsClient := createXDSClient(t, bc)
+	nodeID, mgmtServer, xdsClient := setupManagementServerAndClient(t, false)
 
 	watcher := &testWatcher{
 		updateCh: make(chan *xdsresource.XDSConfig),
@@ -249,9 +368,13 @@ func (s) TestInlineRouteConfig(t *testing.T) {
 			}},
 		}},
 	}
+	cluster := e2e.DefaultCluster(defaultTestClusterName, defaultTestEDSServiceName, e2e.SecurityLevelNone)
+	endpoint := e2e.DefaultEndpoint(defaultTestEDSServiceName, "localhost", []uint32{8080})
 	resources := e2e.UpdateOptions{
 		NodeID:         nodeID,
 		Listeners:      []*v3listenerpb.Listener{listener},
+		Clusters:       []*v3clusterpb.Cluster{cluster},
+		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{endpoint},
 		SkipValidation: true,
 	}
 	if err := mgmtServer.Update(ctx, resources); err != nil {
@@ -260,55 +383,20 @@ func (s) TestInlineRouteConfig(t *testing.T) {
 	dm := xdsdepmgr.New(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
 	defer dm.Close()
 
-	wantConfig := &xdsresource.XDSConfig{
-		Listener: &xdsresource.ListenerUpdate{
-			InlineRouteConfig: &xdsresource.RouteConfigUpdate{
-				VirtualHosts: []*xdsresource.VirtualHost{
-					{
-						Domains: []string{defaultTestServiceName},
-						Routes: []*xdsresource.Route{{
-							Prefix:           newStringP("/"),
-							WeightedClusters: []xdsresource.WeightedCluster{{Name: defaultTestClusterName, Weight: 100}},
-							ActionType:       xdsresource.RouteActionRoute},
-						},
-					},
-				},
-			},
-			HTTPFilters: []xdsresource.HTTPFilter{{Name: "router"}},
-		},
-		RouteConfig: &xdsresource.RouteConfigUpdate{
-			VirtualHosts: []*xdsresource.VirtualHost{
-				{
-					Domains: []string{defaultTestServiceName},
-					Routes: []*xdsresource.Route{{
-						Prefix:           newStringP("/"),
-						WeightedClusters: []xdsresource.WeightedCluster{{Name: defaultTestClusterName, Weight: 100}},
-						ActionType:       xdsresource.RouteActionRoute},
-					},
-				},
-			},
-		},
-		VirtualHost: &xdsresource.VirtualHost{
-			Domains: []string{defaultTestServiceName},
-			Routes: []*xdsresource.Route{{
-				Prefix:           newStringP("/"),
-				WeightedClusters: []xdsresource.WeightedCluster{{Name: defaultTestClusterName, Weight: 100}},
-				ActionType:       xdsresource.RouteActionRoute},
-			},
-		},
-	}
-	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantConfig); err != nil {
+	wantXdsConfig := makeXDSConfig(defaultTestRouteConfigName, defaultTestClusterName, defaultTestEDSServiceName, "localhost:8080")
+	wantXdsConfig.Listener.InlineRouteConfig = wantXdsConfig.RouteConfig
+	wantXdsConfig.Listener.RouteConfigName = ""
+
+	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
 		t.Fatal(err)
 	}
 }
 
 // Tests the case where dependency manager only receives listener resource but
-// does not receive route config resource. Verfies that Update is not called
+// does not receive route config resource. Verifies that Update is not called
 // since we do not have all resources.
-func (s) TestIncompleteResources(t *testing.T) {
-	nodeID := uuid.New().String()
-	mgmtServer, bc := setupManagementServerForTest(t, nodeID)
-	xdsClient := createXDSClient(t, bc)
+func (s) TestNoRouteConfigResource(t *testing.T) {
+	nodeID, mgmtServer, xdsClient := setupManagementServerAndClient(t, false)
 
 	watcher := &testWatcher{
 		updateCh: make(chan *xdsresource.XDSConfig),
@@ -342,10 +430,8 @@ func (s) TestIncompleteResources(t *testing.T) {
 // Tests the case where dependency manager receives a listener resource error by
 // sending the correct update first and then removing the listener resource. It
 // verifies that Error is called with the correct error.
-func (s) TestListenerResourceError(t *testing.T) {
-	nodeID := uuid.New().String()
-	mgmtServer, bc := setupManagementServerForTest(t, nodeID)
-	xdsClient := createXDSClient(t, bc)
+func (s) TestListenerResourceNotFoundError(t *testing.T) {
+	nodeID, mgmtServer, xdsClient := setupManagementServerAndClient(t, false)
 
 	watcher := &testWatcher{
 		updateCh: make(chan *xdsresource.XDSConfig),
@@ -355,54 +441,27 @@ func (s) TestListenerResourceError(t *testing.T) {
 	defer cancel()
 
 	// Send a correct update first
-	listener := e2e.DefaultClientListener(defaultTestServiceName, defaultTestRouteConfigName)
-	listener.FilterChains = nil
-	route := e2e.DefaultRouteConfig(defaultTestRouteConfigName, defaultTestServiceName, defaultTestClusterName)
-	resources := e2e.UpdateOptions{
-		NodeID:         nodeID,
-		Listeners:      []*v3listenerpb.Listener{listener},
-		Routes:         []*v3routepb.RouteConfiguration{route},
-		SkipValidation: true,
-	}
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		NodeID:     nodeID,
+		DialTarget: defaultTestServiceName,
+		Host:       "localhost",
+		Port:       8080,
+		SecLevel:   e2e.SecurityLevelNone,
+	})
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
 
 	dm := xdsdepmgr.New(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
 	defer dm.Close()
-
-	wantXdsConfig := &xdsresource.XDSConfig{
-		Listener: &xdsresource.ListenerUpdate{
-			RouteConfigName: defaultTestRouteConfigName,
-			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
-		},
-		RouteConfig: &xdsresource.RouteConfigUpdate{
-			VirtualHosts: []*xdsresource.VirtualHost{
-				{
-					Domains: []string{defaultTestServiceName},
-					Routes: []*xdsresource.Route{{
-						Prefix:           newStringP("/"),
-						WeightedClusters: []xdsresource.WeightedCluster{{Name: defaultTestClusterName, Weight: 100}},
-						ActionType:       xdsresource.RouteActionRoute,
-					}},
-				},
-			},
-		},
-		VirtualHost: &xdsresource.VirtualHost{
-			Domains: []string{defaultTestServiceName},
-			Routes: []*xdsresource.Route{{
-				Prefix:           newStringP("/"),
-				WeightedClusters: []xdsresource.WeightedCluster{{Name: defaultTestClusterName, Weight: 100}},
-				ActionType:       xdsresource.RouteActionRoute,
-			}},
-		},
-	}
+	wantXdsConfig := makeXDSConfig(resources.Routes[0].Name, resources.Clusters[0].Name, resources.Clusters[0].EdsClusterConfig.ServiceName, "localhost:8080")
 	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
 		t.Fatal(err)
 	}
 
 	// Remove listener resource so that we get listener resource error.
 	resources.Listeners = nil
+	resources.SkipValidation = true
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
@@ -412,18 +471,16 @@ func (s) TestListenerResourceError(t *testing.T) {
 	}
 }
 
-// Tests the case where dependency manager receives a route config resource
-// error by sending a route resource that is NACKed by the XDSClient. It
-// verifies that Error is called with correct error.
-func (s) TestRouteResourceError(t *testing.T) {
-	nodeID := uuid.New().String()
-	mgmtServer, bc := setupManagementServerForTest(t, nodeID)
-	xdsClient := createXDSClient(t, bc)
+// Tests the scenario where the Dependency Manager receives an invalid
+// RouteConfiguration from the management server. The test provides a
+// malformed resource to trigger a NACK, and verifies that the Dependency
+// Manager propagates the resulting error via Error method.
+func (s) TestRouteConfigResourceError(t *testing.T) {
+	nodeID, mgmtServer, xdsClient := setupManagementServerAndClient(t, false)
 
-	errorCh := make(chan error, 1)
 	watcher := &testWatcher{
 		updateCh: make(chan *xdsresource.XDSConfig),
-		errorCh:  errorCh,
+		errorCh:  make(chan error),
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -451,11 +508,11 @@ func (s) TestRouteResourceError(t *testing.T) {
 	}
 }
 
-// Tests the case where route config updates receives does not have any virtual
-// host. Verifies that Error is called with correct error.
+// Tests the case where a received route configuration update has no virtual
+// hosts. Verifies that Error is called with the expected error.
 func (s) TestNoVirtualHost(t *testing.T) {
 	nodeID := uuid.New().String()
-	mgmtServer, bc := setupManagementServerForTest(t, nodeID)
+	mgmtServer, bc := setupManagementServerForTest(t, nodeID, false)
 	xdsClient := createXDSClient(t, bc)
 
 	watcher := &testWatcher{
@@ -466,15 +523,16 @@ func (s) TestNoVirtualHost(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	listener := e2e.DefaultClientListener(defaultTestServiceName, defaultTestRouteConfigName)
-	route := e2e.DefaultRouteConfig(defaultTestRouteConfigName, defaultTestServiceName, defaultTestClusterName)
-	route.VirtualHosts = nil
-	resources := e2e.UpdateOptions{
-		NodeID:         nodeID,
-		Listeners:      []*v3listenerpb.Listener{listener},
-		Routes:         []*v3routepb.RouteConfiguration{route},
-		SkipValidation: true,
-	}
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		NodeID:     nodeID,
+		DialTarget: defaultTestServiceName,
+		Host:       "localhost",
+		Port:       8080,
+		SecLevel:   e2e.SecurityLevelNone,
+	})
+	// Make the virtual host match nil so that the route config is NACKed.
+	resources.Routes[0].VirtualHosts = nil
+
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
@@ -490,9 +548,7 @@ func (s) TestNoVirtualHost(t *testing.T) {
 // route resource with no virtual host, which also results in error being sent
 // across.
 func (s) TestNoVirtualHost_ExistingResource(t *testing.T) {
-	nodeID := uuid.New().String()
-	mgmtServer, bc := setupManagementServerForTest(t, nodeID)
-	xdsClient := createXDSClient(t, bc)
+	nodeID, mgmtServer, xdsClient := setupManagementServerAndClient(t, false)
 
 	watcher := &testWatcher{
 		updateCh: make(chan *xdsresource.XDSConfig),
@@ -502,15 +558,13 @@ func (s) TestNoVirtualHost_ExistingResource(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	// Send valid listener and route.
-	listener := e2e.DefaultClientListener(defaultTestServiceName, defaultTestRouteConfigName)
-	route := e2e.DefaultRouteConfig(defaultTestRouteConfigName, defaultTestServiceName, defaultTestClusterName)
-	resources := e2e.UpdateOptions{
-		NodeID:         nodeID,
-		Listeners:      []*v3listenerpb.Listener{listener},
-		Routes:         []*v3routepb.RouteConfiguration{route},
-		SkipValidation: true,
-	}
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		NodeID:     nodeID,
+		DialTarget: defaultTestServiceName,
+		Host:       "localhost",
+		Port:       8080,
+		SecLevel:   e2e.SecurityLevelNone,
+	})
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
@@ -519,38 +573,13 @@ func (s) TestNoVirtualHost_ExistingResource(t *testing.T) {
 	defer dm.Close()
 
 	// Verify valid update.
-	wantXdsConfig := &xdsresource.XDSConfig{
-		Listener: &xdsresource.ListenerUpdate{
-			RouteConfigName: defaultTestRouteConfigName,
-			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
-		},
-		RouteConfig: &xdsresource.RouteConfigUpdate{
-			VirtualHosts: []*xdsresource.VirtualHost{
-				{
-					Domains: []string{defaultTestServiceName},
-					Routes: []*xdsresource.Route{{
-						Prefix:           newStringP("/"),
-						WeightedClusters: []xdsresource.WeightedCluster{{Name: defaultTestClusterName, Weight: 100}},
-						ActionType:       xdsresource.RouteActionRoute,
-					}},
-				},
-			},
-		},
-		VirtualHost: &xdsresource.VirtualHost{
-			Domains: []string{defaultTestServiceName},
-			Routes: []*xdsresource.Route{{
-				Prefix:           newStringP("/"),
-				WeightedClusters: []xdsresource.WeightedCluster{{Name: defaultTestClusterName, Weight: 100}},
-				ActionType:       xdsresource.RouteActionRoute,
-			}},
-		},
-	}
+	wantXdsConfig := makeXDSConfig(resources.Routes[0].Name, resources.Clusters[0].Name, resources.Endpoints[0].ClusterName, "localhost:8080")
 	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
 		t.Fatal(err)
 	}
 
 	// 3. Send route update with no virtual host.
-	route.VirtualHosts = nil
+	resources.Routes[0].VirtualHosts = nil
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
@@ -571,26 +600,24 @@ func (s) TestAmbientError(t *testing.T) {
 	// Expect a warning log for the ambient error.
 	grpctest.ExpectWarning("Listener resource ambient error")
 
-	nodeID := uuid.New().String()
-	mgmtServer, bc := setupManagementServerForTest(t, nodeID)
-	xdsClient := createXDSClient(t, bc)
+	nodeID, mgmtServer, xdsClient := setupManagementServerAndClient(t, false)
 
 	watcher := &testWatcher{
 		updateCh: make(chan *xdsresource.XDSConfig),
 		errorCh:  make(chan error),
 	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	// Configure a valid listener and route.
-	listener := e2e.DefaultClientListener(defaultTestServiceName, defaultTestRouteConfigName)
-	route := e2e.DefaultRouteConfig(defaultTestRouteConfigName, defaultTestServiceName, defaultTestClusterName)
-	resources := e2e.UpdateOptions{
-		NodeID:         nodeID,
-		Listeners:      []*v3listenerpb.Listener{listener},
-		Routes:         []*v3routepb.RouteConfiguration{route},
-		SkipValidation: true,
-	}
+	// Configure a valid resources.
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		NodeID:     nodeID,
+		DialTarget: defaultTestServiceName,
+		Host:       "localhost",
+		Port:       8080,
+		SecLevel:   e2e.SecurityLevelNone,
+	})
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
@@ -599,32 +626,7 @@ func (s) TestAmbientError(t *testing.T) {
 	defer dm.Close()
 
 	// Wait for the initial valid update.
-	wantXdsConfig := &xdsresource.XDSConfig{
-		Listener: &xdsresource.ListenerUpdate{
-			RouteConfigName: defaultTestRouteConfigName,
-			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
-		},
-		RouteConfig: &xdsresource.RouteConfigUpdate{
-			VirtualHosts: []*xdsresource.VirtualHost{
-				{
-					Domains: []string{defaultTestServiceName},
-					Routes: []*xdsresource.Route{{
-						Prefix:           newStringP("/"),
-						WeightedClusters: []xdsresource.WeightedCluster{{Name: defaultTestClusterName, Weight: 100}},
-						ActionType:       xdsresource.RouteActionRoute,
-					}},
-				},
-			},
-		},
-		VirtualHost: &xdsresource.VirtualHost{
-			Domains: []string{defaultTestServiceName},
-			Routes: []*xdsresource.Route{{
-				Prefix:           newStringP("/"),
-				WeightedClusters: []xdsresource.WeightedCluster{{Name: defaultTestClusterName, Weight: 100}},
-				ActionType:       xdsresource.RouteActionRoute,
-			}},
-		},
-	}
+	wantXdsConfig := makeXDSConfig(resources.Routes[0].Name, resources.Clusters[0].Name, resources.Clusters[0].EdsClusterConfig.ServiceName, "localhost:8080")
 	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
 		t.Fatal(err)
 	}
@@ -648,12 +650,13 @@ func (s) TestAmbientError(t *testing.T) {
 		}},
 	}
 	resources.Listeners = []*v3listenerpb.Listener{lis}
+	resources.SkipValidation = true
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
 
-	// We expect no call to Error or Update on our watcher. We just wait for
-	// a short duration to ensure that.
+	// We expect no call to Error or Update on our watcher. We just wait for a
+	// short duration to ensure that.
 	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
 	select {
@@ -665,14 +668,13 @@ func (s) TestAmbientError(t *testing.T) {
 	}
 
 	// Send valid resources again.
-	listener = e2e.DefaultClientListener(defaultTestServiceName, defaultTestRouteConfigName)
-	route = e2e.DefaultRouteConfig(defaultTestRouteConfigName, defaultTestServiceName, defaultTestClusterName)
-	resources = e2e.UpdateOptions{
-		NodeID:         nodeID,
-		Listeners:      []*v3listenerpb.Listener{listener},
-		Routes:         []*v3routepb.RouteConfiguration{route},
-		SkipValidation: true,
-	}
+	resources = e2e.DefaultClientResources(e2e.ResourceParams{
+		NodeID:     nodeID,
+		DialTarget: defaultTestServiceName,
+		Host:       "localhost",
+		Port:       8080,
+		SecLevel:   e2e.SecurityLevelNone,
+	})
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
@@ -684,9 +686,7 @@ func (s) TestAmbientError(t *testing.T) {
 // Tests the case where the cluster name changes in the route resource update
 // and verify that each time Update is called with correct cluster name.
 func (s) TestRouteResourceUpdate(t *testing.T) {
-	nodeID := uuid.New().String()
-	mgmtServer, bc := setupManagementServerForTest(t, nodeID)
-	xdsClient := createXDSClient(t, bc)
+	nodeID, mgmtServer, xdsClient := setupManagementServerAndClient(t, false)
 
 	watcher := &testWatcher{
 		updateCh: make(chan *xdsresource.XDSConfig),
@@ -695,15 +695,14 @@ func (s) TestRouteResourceUpdate(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	// Initial resources with defaultTestClusterName
-	listener := e2e.DefaultClientListener(defaultTestServiceName, defaultTestRouteConfigName)
-	route := e2e.DefaultRouteConfig(defaultTestRouteConfigName, defaultTestServiceName, defaultTestClusterName)
-	resources := e2e.UpdateOptions{
-		NodeID:         nodeID,
-		Listeners:      []*v3listenerpb.Listener{listener},
-		Routes:         []*v3routepb.RouteConfiguration{route},
-		SkipValidation: true,
-	}
+	// Configure initial resources
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		NodeID:     nodeID,
+		DialTarget: defaultTestServiceName,
+		Host:       "localhost",
+		Port:       8080,
+		SecLevel:   e2e.SecurityLevelNone,
+	})
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
@@ -712,40 +711,19 @@ func (s) TestRouteResourceUpdate(t *testing.T) {
 	defer dm.Close()
 
 	// Wait for the first update.
-	wantXdsConfig := &xdsresource.XDSConfig{
-		Listener: &xdsresource.ListenerUpdate{
-			RouteConfigName: defaultTestRouteConfigName,
-			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
-		},
-		RouteConfig: &xdsresource.RouteConfigUpdate{
-			VirtualHosts: []*xdsresource.VirtualHost{
-				{
-					Domains: []string{defaultTestServiceName},
-					Routes: []*xdsresource.Route{{
-						Prefix:           newStringP("/"),
-						WeightedClusters: []xdsresource.WeightedCluster{{Name: defaultTestClusterName, Weight: 100}},
-						ActionType:       xdsresource.RouteActionRoute,
-					}},
-				},
-			},
-		},
-		VirtualHost: &xdsresource.VirtualHost{
-			Domains: []string{defaultTestServiceName},
-			Routes: []*xdsresource.Route{{
-				Prefix:           newStringP("/"),
-				WeightedClusters: []xdsresource.WeightedCluster{{Name: defaultTestClusterName, Weight: 100}},
-				ActionType:       xdsresource.RouteActionRoute,
-			}},
-		},
-	}
+	wantXdsConfig := makeXDSConfig(resources.Routes[0].Name, resources.Clusters[0].Name, resources.Clusters[0].EdsClusterConfig.ServiceName, "localhost:8080")
 	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
 		t.Fatal(err)
 	}
 
 	// Update route to point to a new cluster.
 	newClusterName := "new-cluster-name"
-	route2 := e2e.DefaultRouteConfig(defaultTestRouteConfigName, defaultTestServiceName, newClusterName)
+	route2 := e2e.DefaultRouteConfig(resources.Routes[0].Name, defaultTestServiceName, newClusterName)
+	cluster2 := e2e.DefaultCluster(newClusterName, newClusterName, e2e.SecurityLevelNone)
+	endpoints2 := e2e.DefaultEndpoint(newClusterName, "localhost", []uint32{8081})
 	resources.Routes = []*v3routepb.RouteConfiguration{route2}
+	resources.Clusters = []*v3clusterpb.Cluster{cluster2}
+	resources.Endpoints = []*v3endpointpb.ClusterLoadAssignment{endpoints2}
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
@@ -753,6 +731,37 @@ func (s) TestRouteResourceUpdate(t *testing.T) {
 	// Wait for the second update and verify it has the new cluster.
 	wantXdsConfig.RouteConfig.VirtualHosts[0].Routes[0].WeightedClusters[0].Name = newClusterName
 	wantXdsConfig.VirtualHost.Routes[0].WeightedClusters[0].Name = newClusterName
+	wantXdsConfig.Clusters = map[string]*xdsresource.ClusterResult{
+		newClusterName: {
+			Config: xdsresource.ClusterConfig{
+				Cluster: &xdsresource.ClusterUpdate{
+					ClusterName:    newClusterName,
+					ClusterType:    xdsresource.ClusterTypeEDS,
+					EDSServiceName: newClusterName,
+				},
+				EndpointConfig: &xdsresource.EndpointConfig{
+					EDSUpdate: &xdsresource.EndpointsUpdate{
+						Localities: []xdsresource.Locality{
+							{ID: clients.Locality{
+								Region:  "region-1",
+								Zone:    "zone-1",
+								SubZone: "subzone-1",
+							},
+								Endpoints: []xdsresource.Endpoint{
+									{
+										ResolverEndpoint: resolver.Endpoint{Addresses: []resolver.Address{{Addr: "localhost:8081"}}},
+										HealthStatus:     xdsresource.EndpointHealthStatusUnknown,
+										Weight:           1,
+									},
+								},
+								Weight: 1,
+							},
+						},
+					},
+				},
+			},
+		},
+	}
 	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
 		t.Fatal(err)
 	}
@@ -761,12 +770,9 @@ func (s) TestRouteResourceUpdate(t *testing.T) {
 // Tests the case where the route resource is first sent from the management
 // server and the changed to be inline with the listener and then again changed
 // to be received from the management server. It verifies that each time Update
-// called with the correct XDSConfig.
+// is called with the correct XDSConfig.
 func (s) TestRouteResourceChangeToInline(t *testing.T) {
-	nodeID := uuid.New().String()
-	mgmtServer, bc := setupManagementServerForTest(t, nodeID)
-	defer mgmtServer.Stop()
-	xdsClient := createXDSClient(t, bc)
+	nodeID, mgmtServer, xdsClient := setupManagementServerAndClient(t, false)
 
 	watcher := &testWatcher{
 		updateCh: make(chan *xdsresource.XDSConfig),
@@ -776,14 +782,13 @@ func (s) TestRouteResourceChangeToInline(t *testing.T) {
 	defer cancel()
 
 	// Initial resources with defaultTestClusterName
-	listener := e2e.DefaultClientListener(defaultTestServiceName, defaultTestRouteConfigName)
-	route := e2e.DefaultRouteConfig(defaultTestRouteConfigName, defaultTestServiceName, defaultTestClusterName)
-	resources := e2e.UpdateOptions{
-		NodeID:         nodeID,
-		Listeners:      []*v3listenerpb.Listener{listener},
-		Routes:         []*v3routepb.RouteConfiguration{route},
-		SkipValidation: true,
-	}
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		NodeID:     nodeID,
+		DialTarget: defaultTestServiceName,
+		Host:       "localhost",
+		Port:       8080,
+		SecLevel:   e2e.SecurityLevelNone,
+	})
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
@@ -792,10 +797,43 @@ func (s) TestRouteResourceChangeToInline(t *testing.T) {
 	defer dm.Close()
 
 	// Wait for the first update.
-	wantXdsConfig := &xdsresource.XDSConfig{
+	wantXdsConfig := makeXDSConfig(resources.Routes[0].Name, resources.Clusters[0].Name, resources.Clusters[0].EdsClusterConfig.ServiceName, "localhost:8080")
+	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
+		t.Fatal(err)
+	}
+
+	// Update route to point to a new cluster and make it inline with the
+	// listener.
+	newClusterName := "new-cluster-name"
+	hcm := testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
+		RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
+			RouteConfig: e2e.DefaultRouteConfig(defaultTestRouteConfigName, defaultTestServiceName, newClusterName),
+		},
+		HttpFilters: []*v3httppb.HttpFilter{e2e.HTTPFilter("router", &v3routerpb.Router{})}, // router fields are unused by grpc
+	})
+	resources.Listeners[0].ApiListener.ApiListener = hcm
+	resources.Clusters = []*v3clusterpb.Cluster{e2e.DefaultCluster(newClusterName, defaultTestEDSServiceName, e2e.SecurityLevelNone)}
+	resources.Endpoints = []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(defaultTestEDSServiceName, "localhost", []uint32{8081})}
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Wait for the second update and verify it has the new cluster.
+	wantInlineXdsConfig := &xdsresource.XDSConfig{
 		Listener: &xdsresource.ListenerUpdate{
-			RouteConfigName: defaultTestRouteConfigName,
-			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+			HTTPFilters: []xdsresource.HTTPFilter{{Name: "router"}},
+			InlineRouteConfig: &xdsresource.RouteConfigUpdate{
+				VirtualHosts: []*xdsresource.VirtualHost{
+					{
+						Domains: []string{defaultTestServiceName},
+						Routes: []*xdsresource.Route{{
+							Prefix:           newStringP("/"),
+							WeightedClusters: []xdsresource.WeightedCluster{{Name: newClusterName, Weight: 100}},
+							ActionType:       xdsresource.RouteActionRoute,
+						}},
+					},
+				},
+			},
 		},
 		RouteConfig: &xdsresource.RouteConfigUpdate{
 			VirtualHosts: []*xdsresource.VirtualHost{
@@ -803,7 +841,7 @@ func (s) TestRouteResourceChangeToInline(t *testing.T) {
 					Domains: []string{defaultTestServiceName},
 					Routes: []*xdsresource.Route{{
 						Prefix:           newStringP("/"),
-						WeightedClusters: []xdsresource.WeightedCluster{{Name: defaultTestClusterName, Weight: 100}},
+						WeightedClusters: []xdsresource.WeightedCluster{{Name: newClusterName, Weight: 100}},
 						ActionType:       xdsresource.RouteActionRoute,
 					}},
 				},
@@ -813,67 +851,626 @@ func (s) TestRouteResourceChangeToInline(t *testing.T) {
 			Domains: []string{defaultTestServiceName},
 			Routes: []*xdsresource.Route{{
 				Prefix:           newStringP("/"),
-				WeightedClusters: []xdsresource.WeightedCluster{{Name: defaultTestClusterName, Weight: 100}},
-				ActionType:       xdsresource.RouteActionRoute,
-			}},
+				WeightedClusters: []xdsresource.WeightedCluster{{Name: newClusterName, Weight: 100}},
+				ActionType:       xdsresource.RouteActionRoute},
+			},
 		},
-	}
-	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
-		t.Fatal(err)
-	}
-
-	// Update route to point to a new cluster.
-	newClusterName := "new-cluster-name"
-	hcm := testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
-		RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
-			RouteConfig: e2e.DefaultRouteConfig(defaultTestRouteConfigName, defaultTestServiceName, newClusterName),
-		},
-		HttpFilters: []*v3httppb.HttpFilter{e2e.HTTPFilter("router", &v3routerpb.Router{})}, // router fields are unused by grpc
-	})
-	resources.Listeners[0].ApiListener.ApiListener = hcm
-	resources.Routes = nil
-	if err := mgmtServer.Update(ctx, resources); err != nil {
-		t.Fatal(err)
-	}
-
-	// Wait for the second update and verify it has the new cluster.
-	wantXdsConfig.Listener.InlineRouteConfig = &xdsresource.RouteConfigUpdate{
-		VirtualHosts: []*xdsresource.VirtualHost{
-			{
-				Domains: []string{defaultTestServiceName},
-				Routes: []*xdsresource.Route{{Prefix: newStringP("/"),
-					WeightedClusters: []xdsresource.WeightedCluster{{Name: newClusterName, Weight: 100}},
-					ActionType:       xdsresource.RouteActionRoute,
-				}},
+		Clusters: map[string]*xdsresource.ClusterResult{
+			newClusterName: {
+				Config: xdsresource.ClusterConfig{Cluster: &xdsresource.ClusterUpdate{
+					ClusterType:    xdsresource.ClusterTypeEDS,
+					ClusterName:    newClusterName,
+					EDSServiceName: defaultTestEDSServiceName,
+				},
+					EndpointConfig: &xdsresource.EndpointConfig{
+						EDSUpdate: &xdsresource.EndpointsUpdate{
+							Localities: []xdsresource.Locality{
+								{ID: clients.Locality{
+									Region:  "region-1",
+									Zone:    "zone-1",
+									SubZone: "subzone-1",
+								},
+									Endpoints: []xdsresource.Endpoint{
+										{
+											ResolverEndpoint: resolver.Endpoint{Addresses: []resolver.Address{{Addr: "localhost:8081"}}},
+											HealthStatus:     xdsresource.EndpointHealthStatusUnknown,
+											Weight:           1,
+										},
+									},
+									Weight: 1,
+								},
+							},
+						},
+					},
+				},
 			},
 		},
 	}
-	wantXdsConfig.Listener.RouteConfigName = ""
-	wantXdsConfig.RouteConfig.VirtualHosts[0].Routes[0].WeightedClusters[0].Name = newClusterName
-	wantXdsConfig.VirtualHost.Routes[0].WeightedClusters[0].Name = newClusterName
-	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
+	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantInlineXdsConfig); err != nil {
 		t.Fatal(err)
 	}
 
 	// Change the route resource back to non-inline.
-	listener = e2e.DefaultClientListener(defaultTestServiceName, defaultTestRouteConfigName)
-	route = e2e.DefaultRouteConfig(defaultTestRouteConfigName, defaultTestServiceName, defaultTestClusterName)
-	resources = e2e.UpdateOptions{
+	resources = e2e.DefaultClientResources(e2e.ResourceParams{
+		NodeID:     nodeID,
+		DialTarget: defaultTestServiceName,
+		Host:       "localhost",
+		Port:       8080,
+		SecLevel:   e2e.SecurityLevelNone,
+	})
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Tests the case where the dependency manager receives a cluster resource error
+// and verifies that Update is called with XDSConfig containing cluster error.
+func (s) TestClusterResourceError(t *testing.T) {
+	nodeID, mgmtServer, xdsClient := setupManagementServerAndClient(t, false)
+
+	watcher := &testWatcher{
+		updateCh: make(chan *xdsresource.XDSConfig),
+		errorCh:  make(chan error),
+		done:     make(chan struct{}),
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		NodeID:     nodeID,
+		DialTarget: defaultTestServiceName,
+		Host:       "localhost",
+		Port:       8080,
+		SecLevel:   e2e.SecurityLevelNone,
+	})
+	resources.Clusters[0].LrsServer = &v3corepb.ConfigSource{ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{}}
+
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	dm := xdsdepmgr.New(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
+	defer dm.Close()
+
+	wantXdsConfig := makeXDSConfig(resources.Routes[0].Name, resources.Clusters[0].Name, resources.Clusters[0].EdsClusterConfig.ServiceName, "localhost:8080")
+	wantXdsConfig.Clusters[resources.Clusters[0].Name] = &xdsresource.ClusterResult{Err: fmt.Errorf("[xDS node id: %v]: %v", nodeID, fmt.Errorf("unsupported config_source_specifier *corev3.ConfigSource_Ads in lrs_server field"))}
+
+	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
+		t.Fatal(err)
+	}
+	// Close the watcher done channel to stop sending updates because management
+	// server keeps sending the error updates repeatedly causing the update from
+	// dependency manager to be blocked.
+	close(watcher.done)
+}
+
+// Tests the case where the dependency manager receives a cluster resource
+// ambient error. A valid cluster resource is sent first, then an invalid
+// one and then the valid resource again. The valid resource is sent again
+// to make sure that the ambient error reaches the dependency manager since
+// there is no other way to wait for it.
+func (s) TestClusterAmbientError(t *testing.T) {
+	// Expect a warning log for the ambient error.
+	grpctest.ExpectWarning("Cluster resource ambient error")
+
+	nodeID, mgmtServer, xdsClient := setupManagementServerAndClient(t, false)
+
+	watcher := &testWatcher{
+		updateCh: make(chan *xdsresource.XDSConfig),
+		errorCh:  make(chan error),
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		NodeID:     nodeID,
+		DialTarget: defaultTestServiceName,
+		Host:       "localhost",
+		Port:       8080,
+		SecLevel:   e2e.SecurityLevelNone,
+	})
+
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	dm := xdsdepmgr.New(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
+	defer dm.Close()
+
+	wantXdsConfig := makeXDSConfig(resources.Routes[0].Name, resources.Clusters[0].Name, resources.Clusters[0].EdsClusterConfig.ServiceName, "localhost:8080")
+	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
+		t.Fatal(err)
+	}
+
+	// Configure a cluster resource that is expected to be NACKed because it
+	// does not contain the `LrsServer` field. Since a valid one is already
+	// cached, this should result in an ambient error.
+	resources.Clusters[0].LrsServer = &v3corepb.ConfigSource{ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{}}
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	select {
+	case <-time.After(defaultTestShortTimeout):
+	case update := <-watcher.updateCh:
+		t.Fatalf("received unexpected update from dependency manager: %v", update)
+	}
+
+	// Send valid resources again to guarantee we get the cluster ambient error
+	// before the test ends.
+	resources = e2e.DefaultClientResources(e2e.ResourceParams{
+		NodeID:     nodeID,
+		DialTarget: defaultTestServiceName,
+		Host:       "localhost",
+		Port:       8080,
+		SecLevel:   e2e.SecurityLevelNone,
+	})
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Tests the case where a cluster is an aggregate cluster whose children are of
+// type EDS and DNS. Verifies that Update is not called when one of the child
+// resources is not configured and then verifies that Update is called with
+// correct config when all resources are configured.
+func (s) TestAggregateCluster(t *testing.T) {
+	nodeID, mgmtServer, xdsClient := setupManagementServerAndClient(t, true)
+
+	watcher := &testWatcher{
+		updateCh: make(chan *xdsresource.XDSConfig),
+		errorCh:  make(chan error),
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	listener := e2e.DefaultClientListener(defaultTestServiceName, defaultTestRouteConfigName)
+	route := e2e.DefaultRouteConfig(defaultTestRouteConfigName, defaultTestServiceName, defaultTestClusterName)
+	aggregateCluster := makeAggregateClusterResource(defaultTestClusterName, []string{"eds-cluster", "dns-cluster"})
+	edsCluster := e2e.DefaultCluster("eds-cluster", defaultTestEDSServiceName, e2e.SecurityLevelNone)
+	endpoint := e2e.DefaultEndpoint(defaultTestEDSServiceName, "localhost", []uint32{8080})
+	resources := e2e.UpdateOptions{
+		NodeID:    nodeID,
+		Listeners: []*v3listenerpb.Listener{listener},
+		Routes:    []*v3routepb.RouteConfiguration{route},
+		Clusters:  []*v3clusterpb.Cluster{aggregateCluster, edsCluster},
+		Endpoints: []*v3endpointpb.ClusterLoadAssignment{endpoint},
+	}
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	dm := xdsdepmgr.New(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
+	defer dm.Close()
+
+	// Verify that no configuration is pushed to the child policy yet, because
+	// not all clusters making up the aggregate cluster have been resolved yet.
+	select {
+	case <-time.After(defaultTestShortTimeout):
+	case update := <-watcher.updateCh:
+		t.Fatalf("received unexpected update from dependency manager: %+v", update)
+	case err := <-watcher.errorCh:
+		t.Fatalf("received unexpected error from dependency manager: %v", err)
+	}
+
+	// Now configure the LogicalDNS cluster in the management server. This
+	// should result in configuration being pushed down to the child policy.
+	resources.Clusters = append(resources.Clusters, makeLogicalDNSClusterResource("dns-cluster", "localhost", 8081))
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	wantXdsConfig := &xdsresource.XDSConfig{
+		Listener: &xdsresource.ListenerUpdate{
+			RouteConfigName: resources.Routes[0].Name,
+			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+		},
+		RouteConfig: &xdsresource.RouteConfigUpdate{
+			VirtualHosts: []*xdsresource.VirtualHost{
+				{
+					Domains: []string{defaultTestServiceName},
+					Routes: []*xdsresource.Route{{
+						Prefix:           newStringP("/"),
+						WeightedClusters: []xdsresource.WeightedCluster{{Name: resources.Clusters[0].Name, Weight: 100}},
+						ActionType:       xdsresource.RouteActionRoute,
+					}},
+				},
+			},
+		},
+		VirtualHost: &xdsresource.VirtualHost{
+			Domains: []string{defaultTestServiceName},
+			Routes: []*xdsresource.Route{{
+				Prefix:           newStringP("/"),
+				WeightedClusters: []xdsresource.WeightedCluster{{Name: resources.Clusters[0].Name, Weight: 100}},
+				ActionType:       xdsresource.RouteActionRoute},
+			}},
+		Clusters: map[string]*xdsresource.ClusterResult{
+			resources.Clusters[0].Name: {
+				Config: xdsresource.ClusterConfig{Cluster: &xdsresource.ClusterUpdate{
+					ClusterType:             xdsresource.ClusterTypeAggregate,
+					ClusterName:             resources.Clusters[0].Name,
+					PrioritizedClusterNames: []string{"eds-cluster", "dns-cluster"},
+				},
+					AggregateConfig: &xdsresource.AggregateConfig{LeafClusters: []string{"eds-cluster", "dns-cluster"}},
+				},
+			},
+			"eds-cluster": {
+				Config: xdsresource.ClusterConfig{
+					Cluster: &xdsresource.ClusterUpdate{
+						ClusterType:    xdsresource.ClusterTypeEDS,
+						ClusterName:    "eds-cluster",
+						EDSServiceName: defaultTestEDSServiceName},
+					EndpointConfig: &xdsresource.EndpointConfig{
+						EDSUpdate: &xdsresource.EndpointsUpdate{
+							Localities: []xdsresource.Locality{
+								{ID: clients.Locality{
+									Region:  "region-1",
+									Zone:    "zone-1",
+									SubZone: "subzone-1",
+								},
+									Endpoints: []xdsresource.Endpoint{
+										{
+											ResolverEndpoint: resolver.Endpoint{Addresses: []resolver.Address{{Addr: "localhost:8080"}}},
+											HealthStatus:     xdsresource.EndpointHealthStatusUnknown,
+											Weight:           1,
+										},
+									},
+									Weight: 1,
+								},
+							},
+						},
+					},
+				}},
+			"dns-cluster": {
+				Config: xdsresource.ClusterConfig{
+					Cluster: &xdsresource.ClusterUpdate{
+						ClusterType: xdsresource.ClusterTypeLogicalDNS,
+						ClusterName: "dns-cluster",
+						DNSHostName: "localhost:8081",
+					},
+					EndpointConfig: &xdsresource.EndpointConfig{
+						DNSEndpoints: &xdsresource.DNSUpdate{
+							Endpoints: []resolver.Endpoint{
+								{
+									Addresses: []resolver.Address{
+										{Addr: "[::1]:8081"},
+									},
+								},
+								{
+									Addresses: []resolver.Address{
+										{Addr: "127.0.0.1:8081"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
+		t.Fatal(err)
+	}
+
+}
+
+// Tests the case where an aggregate cluster has one child whose resource is
+// configured with an error. Verifies that the error is correctly received in
+// the XDSConfig.
+func (s) TestAggregateClusterChildError(t *testing.T) {
+	nodeID, mgmtServer, xdsClient := setupManagementServerAndClient(t, true)
+
+	watcher := &testWatcher{
+		updateCh: make(chan *xdsresource.XDSConfig),
+		errorCh:  make(chan error),
+		done:     make(chan struct{}),
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	resources := e2e.UpdateOptions{
+		NodeID:    nodeID,
+		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(defaultTestServiceName, defaultTestRouteConfigName)},
+		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(defaultTestRouteConfigName, defaultTestServiceName, defaultTestClusterName)},
+		Clusters: []*v3clusterpb.Cluster{
+			makeAggregateClusterResource(defaultTestClusterName, []string{"err-cluster", "good-cluster"}),
+			e2e.DefaultCluster("err-cluster", defaultTestEDSServiceName, e2e.SecurityLevelNone),
+			makeLogicalDNSClusterResource("good-cluster", "localhost", 8081),
+		},
+		Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(defaultTestEDSServiceName, "localhost", []uint32{8080})},
+	}
+	resources.Endpoints[0].Endpoints[0].LbEndpoints[0].LoadBalancingWeight = &wrapperspb.UInt32Value{Value: 0}
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	dm := xdsdepmgr.New(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
+	defer dm.Close()
+
+	wantXdsConfig := &xdsresource.XDSConfig{
+		Listener: &xdsresource.ListenerUpdate{
+			RouteConfigName: defaultTestRouteConfigName,
+			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+		},
+		RouteConfig: &xdsresource.RouteConfigUpdate{
+			VirtualHosts: []*xdsresource.VirtualHost{{
+				Domains: []string{defaultTestServiceName},
+				Routes: []*xdsresource.Route{{
+					Prefix:           newStringP("/"),
+					WeightedClusters: []xdsresource.WeightedCluster{{Name: defaultTestClusterName, Weight: 100}},
+					ActionType:       xdsresource.RouteActionRoute,
+				}},
+			}},
+		},
+		VirtualHost: &xdsresource.VirtualHost{
+			Domains: []string{defaultTestServiceName},
+			Routes: []*xdsresource.Route{{
+				Prefix:           newStringP("/"),
+				WeightedClusters: []xdsresource.WeightedCluster{{Name: defaultTestClusterName, Weight: 100}},
+				ActionType:       xdsresource.RouteActionRoute,
+			}},
+		},
+		Clusters: map[string]*xdsresource.ClusterResult{
+			defaultTestClusterName: {
+				Config: xdsresource.ClusterConfig{
+					Cluster: &xdsresource.ClusterUpdate{
+						ClusterType:             xdsresource.ClusterTypeAggregate,
+						ClusterName:             defaultTestClusterName,
+						PrioritizedClusterNames: []string{"err-cluster", "good-cluster"},
+					},
+					AggregateConfig: &xdsresource.AggregateConfig{LeafClusters: []string{"err-cluster", "good-cluster"}},
+				},
+			},
+			"err-cluster": {
+				Config: xdsresource.ClusterConfig{
+					Cluster: &xdsresource.ClusterUpdate{
+						ClusterType:    xdsresource.ClusterTypeEDS,
+						ClusterName:    "err-cluster",
+						EDSServiceName: defaultTestEDSServiceName,
+					},
+					EndpointConfig: &xdsresource.EndpointConfig{
+						ResolutionNote: fmt.Errorf("[xDS node id: %v]: %v", nodeID, fmt.Errorf("EDS response contains an endpoint with zero weight: endpoint:{address:{socket_address:{address:%q  port_value:%v}}}  load_balancing_weight:{}", "localhost", 8080)),
+					},
+				},
+			},
+			"good-cluster": {
+				Config: xdsresource.ClusterConfig{
+					Cluster: &xdsresource.ClusterUpdate{
+						ClusterType: xdsresource.ClusterTypeLogicalDNS,
+						ClusterName: "good-cluster",
+						DNSHostName: "localhost:8081",
+					},
+					EndpointConfig: &xdsresource.EndpointConfig{
+						DNSEndpoints: &xdsresource.DNSUpdate{
+							Endpoints: []resolver.Endpoint{
+								{Addresses: []resolver.Address{{Addr: "[::1]:8081"}}},
+								{Addresses: []resolver.Address{{Addr: "127.0.0.1:8081"}}},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
+		t.Fatal(err)
+	}
+
+	// Close the watcher done channel to stop sending updates because management
+	// server keeps sending the error updates repeatedly causing the update from
+	// dependency manager to be blocked.
+	close(watcher.done)
+}
+
+// Tests the case where an aggregate cluster has no leaf clusters by creating a
+// cyclic dependency where A->B and B->A. Verifies that an error with "no leaf
+// clusters found" is received.
+func (s) TestAggregateClusterNoLeafCluster(t *testing.T) {
+	nodeID, mgmtServer, xdsClient := setupManagementServerAndClient(t, true)
+
+	watcher := &testWatcher{
+		updateCh: make(chan *xdsresource.XDSConfig),
+		errorCh:  make(chan error),
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	const (
+		clusterNameA = defaultTestClusterName // cluster name in cds LB policy config
+		clusterNameB = defaultTestClusterName + "-B"
+	)
+	// Create a cyclic dependency where A->B and B->A.
+	resources := e2e.UpdateOptions{
+		NodeID:    nodeID,
+		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(defaultTestServiceName, defaultTestRouteConfigName)},
+		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(defaultTestRouteConfigName, defaultTestServiceName, defaultTestClusterName)},
+		Clusters: []*v3clusterpb.Cluster{
+			makeAggregateClusterResource(clusterNameA, []string{clusterNameB}),
+			makeAggregateClusterResource(clusterNameB, []string{clusterNameA}),
+		},
+	}
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	dm := xdsdepmgr.New(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
+	defer dm.Close()
+
+	wantXdsConfig := &xdsresource.XDSConfig{
+		Listener: &xdsresource.ListenerUpdate{
+			RouteConfigName: defaultTestRouteConfigName,
+			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+		},
+		RouteConfig: &xdsresource.RouteConfigUpdate{
+			VirtualHosts: []*xdsresource.VirtualHost{{
+				Domains: []string{defaultTestServiceName},
+				Routes: []*xdsresource.Route{{
+					Prefix:           newStringP("/"),
+					WeightedClusters: []xdsresource.WeightedCluster{{Name: defaultTestClusterName, Weight: 100}},
+					ActionType:       xdsresource.RouteActionRoute,
+				}},
+			}},
+		},
+		VirtualHost: &xdsresource.VirtualHost{
+			Domains: []string{defaultTestServiceName},
+			Routes: []*xdsresource.Route{{
+				Prefix:           newStringP("/"),
+				WeightedClusters: []xdsresource.WeightedCluster{{Name: defaultTestClusterName, Weight: 100}},
+				ActionType:       xdsresource.RouteActionRoute,
+			}},
+		},
+		Clusters: map[string]*xdsresource.ClusterResult{
+			defaultTestClusterName: {
+				Err: fmt.Errorf("[xDS node id: %v]: %v", nodeID, fmt.Errorf("aggregate cluster graph has no leaf clusters")),
+			},
+			clusterNameB: {
+				Err: fmt.Errorf("[xDS node id: %v]: %v", nodeID, fmt.Errorf("aggregate cluster graph has no leaf clusters")),
+			},
+		},
+	}
+
+	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Tests the case where nested aggregate clusters exceed the max depth of 16.
+// Verify that the error is correctly received in the XDSConfig in all the
+// clusters.
+func (s) TestAggregateClusterMaxDepth(t *testing.T) {
+	const clusterDepth = 17
+	nodeID, mgmtServer, xdsClient := setupManagementServerAndClient(t, true)
+
+	watcher := &testWatcher{
+		updateCh: make(chan *xdsresource.XDSConfig),
+		errorCh:  make(chan error),
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	// Create a graph of aggregate clusters with 18 clusters.
+	clusters := make([]*v3clusterpb.Cluster, clusterDepth)
+	for i := 0; i < clusterDepth; i++ {
+		clusters[i] = makeAggregateClusterResource(fmt.Sprintf("agg-%d", i), []string{fmt.Sprintf("agg-%d", i+1)})
+	}
+
+	resources := e2e.UpdateOptions{
 		NodeID:         nodeID,
-		Listeners:      []*v3listenerpb.Listener{listener},
-		Routes:         []*v3routepb.RouteConfiguration{route},
+		Listeners:      []*v3listenerpb.Listener{e2e.DefaultClientListener(defaultTestServiceName, defaultTestRouteConfigName)},
+		Routes:         []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(defaultTestRouteConfigName, defaultTestServiceName, "agg-0")},
+		Clusters:       clusters,
 		SkipValidation: true,
 	}
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
 
-	// Wait for the third update and verify it has the original cluster.
-	wantXdsConfig.Listener.InlineRouteConfig = nil
-	wantXdsConfig.Listener.RouteConfigName = defaultTestRouteConfigName
-	wantXdsConfig.RouteConfig.VirtualHosts[0].Routes[0].WeightedClusters[0].Name = defaultTestClusterName
-	wantXdsConfig.VirtualHost.Routes[0].WeightedClusters[0].Name = defaultTestClusterName
+	dm := xdsdepmgr.New(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
+	defer dm.Close()
+
+	commonError := fmt.Errorf("[xDS node id: %v]: %v", nodeID, fmt.Errorf("aggregate cluster graph exceeds max depth (%d)", 16))
+
+	wantXdsConfig := &xdsresource.XDSConfig{
+		Listener: &xdsresource.ListenerUpdate{
+			RouteConfigName: defaultTestRouteConfigName,
+			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+		},
+		RouteConfig: &xdsresource.RouteConfigUpdate{
+			VirtualHosts: []*xdsresource.VirtualHost{{
+				Domains: []string{defaultTestServiceName},
+				Routes: []*xdsresource.Route{{
+					// The route should point to the first cluster in the chain:
+					// agg-0
+					Prefix:           newStringP("/"),
+					WeightedClusters: []xdsresource.WeightedCluster{{Name: "agg-0", Weight: 100}},
+					ActionType:       xdsresource.RouteActionRoute,
+				}},
+			}},
+		},
+		VirtualHost: &xdsresource.VirtualHost{
+			Domains: []string{defaultTestServiceName},
+			Routes: []*xdsresource.Route{{
+				Prefix:           newStringP("/"),
+				WeightedClusters: []xdsresource.WeightedCluster{{Name: "agg-0", Weight: 100}},
+				ActionType:       xdsresource.RouteActionRoute,
+			}},
+		},
+		Clusters: map[string]*xdsresource.ClusterResult{}, // Initialize the map
+	}
+
+	// Populate the Clusters map with all clusters,except the last one, each
+	// having the common error
+	for i := 0; i < clusterDepth; i++ {
+		clusterName := fmt.Sprintf("agg-%d", i)
+
+		// The ClusterResult only needs the Err field set to the common error
+		wantXdsConfig.Clusters[clusterName] = &xdsresource.ClusterResult{
+			Err: commonError,
+		}
+	}
+
 	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
 		t.Fatal(err)
 	}
+}
+
+// Tests the scenrio where the Endpoint watcher receives an ambient error. Tests
+// verifies that the error is stored in resolution note and the update remains
+// too.
+func (s) TestEndpointAmbientError(t *testing.T) {
+	nodeID, mgmtServer, xdsClient := setupManagementServerAndClient(t, true)
+
+	watcher := &testWatcher{
+		updateCh: make(chan *xdsresource.XDSConfig),
+		errorCh:  make(chan error),
+		done:     make(chan struct{}),
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		NodeID:     nodeID,
+		DialTarget: defaultTestServiceName,
+		Host:       "localhost",
+		Port:       8080,
+		SecLevel:   e2e.SecurityLevelNone,
+	})
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	dm := xdsdepmgr.New(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
+	defer dm.Close()
+	wantXdsConfig := makeXDSConfig(resources.Routes[0].Name, resources.Clusters[0].Name, resources.Endpoints[0].ClusterName, "localhost:8080")
+
+	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
+		t.Fatal(err)
+	}
+
+	// Send an ambient error for the endpoint resource by setting the weight to
+	// 0.
+	resources.Endpoints[0].Endpoints[0].LbEndpoints[0].LoadBalancingWeight = &wrapperspb.UInt32Value{Value: 0}
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+	wantXdsConfig.Clusters[resources.Clusters[0].Name].Config.EndpointConfig.ResolutionNote = fmt.Errorf("[xDS node id: %v]: %v", nodeID, fmt.Errorf("EDS response contains an endpoint with zero weight: endpoint:{address:{socket_address:{address:%q port_value:%v}}} load_balancing_weight:{}", "localhost", 8080))
+	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
+		t.Fatal(err)
+	}
+
+	// Close the watcher done channel to stop sending updates because management
+	// server keeps sending the error updates repeatedly causing the update from
+	// dependency manager to be blocked.
+	close(watcher.done)
 }
