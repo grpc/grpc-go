@@ -210,11 +210,8 @@ type autoHostRewriteKey struct{}
 
 // autoHostRewrite retrieves the autoHostRewrite value from the provided context.
 func autoHostRewrite(ctx context.Context) bool {
-	v := ctx.Value(autoHostRewriteKey{})
-	if v == nil {
-		return false
-	}
-	return v.(bool)
+	v, _ := ctx.Value(autoHostRewriteKey{}).(bool)
+	return v
 }
 
 // AutoHostRewriteForTesting returns the value of autoHostRewrite field;

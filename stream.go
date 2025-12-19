@@ -6,7 +6,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -538,6 +538,9 @@ func (a *csAttempt) newStream() error {
 		md = metadata.Join(md, a.pickResult.Metadata)
 		a.ctx = metadata.NewOutgoingContext(a.ctx, md)
 
+		// If the `CallAuthority` CallOption is not set, check if the LB picker
+		// has provided an authority override in the PickResult metadata and
+		// apply it, as specified in gRFC A81.
 		if cs.callInfo.authority == "" {
 			if authMD := a.pickResult.Metadata.Get(":authority"); len(authMD) > 0 {
 				cs.callHdr.Authority = authMD[0]

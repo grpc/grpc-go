@@ -21,11 +21,13 @@ package clusterimpl_test
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
 	"net"
+	"os"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -101,7 +103,6 @@ func (s) TestConfigUpdateWithSameLoadReportingServerConfig(t *testing.T) {
 	// Create bootstrap configuration pointing to the above management server.
 	nodeID := uuid.New().String()
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-	testutils.CreateBootstrapFileForTesting(t, bc)
 
 	// Create an xDS resolver with the above bootstrap configuration.
 	if internal.NewXDSResolverWithConfigForTesting == nil {
@@ -383,7 +384,6 @@ func (s) TestCircuitBreaking(t *testing.T) {
 	// Create bootstrap configuration pointing to the above management server.
 	nodeID := uuid.New().String()
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-	testutils.CreateBootstrapFileForTesting(t, bc)
 
 	// Create an xDS resolver with the above bootstrap configuration.
 	if internal.NewXDSResolverWithConfigForTesting == nil {
@@ -580,7 +580,6 @@ func (s) TestDropByCategory(t *testing.T) {
 	// Create bootstrap configuration pointing to the above management server.
 	nodeID := uuid.New().String()
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-	testutils.CreateBootstrapFileForTesting(t, bc)
 
 	// Create an xDS resolver with the above bootstrap configuration.
 	if internal.NewXDSResolverWithConfigForTesting == nil {
@@ -723,7 +722,6 @@ func (s) TestCircuitBreakingLogicalDNS(t *testing.T) {
 	// Create bootstrap configuration pointing to the above management server.
 	nodeID := uuid.New().String()
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-	testutils.CreateBootstrapFileForTesting(t, bc)
 
 	// Create an xDS resolver with the above bootstrap configuration.
 	if internal.NewXDSResolverWithConfigForTesting == nil {
@@ -842,7 +840,6 @@ func (s) TestLRSLogicalDNS(t *testing.T) {
 	// Create bootstrap configuration pointing to the above management server.
 	nodeID := uuid.New().String()
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-	testutils.CreateBootstrapFileForTesting(t, bc)
 
 	// Create an xDS resolver with the above bootstrap configuration.
 	if internal.NewXDSResolverWithConfigForTesting == nil {
@@ -934,7 +931,6 @@ func (s) TestReResolutionAfterTransientFailure(t *testing.T) {
 	// Create bootstrap configuration pointing to the above management server.
 	nodeID := uuid.New().String()
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-	testutils.CreateBootstrapFileForTesting(t, bc)
 
 	// Create an xDS resolver with the above bootstrap configuration.
 	if internal.NewXDSResolverWithConfigForTesting == nil {
@@ -1054,7 +1050,6 @@ func (s) TestUpdateLRSServerToNil(t *testing.T) {
 	// Create bootstrap configuration pointing to the above management server.
 	nodeID := uuid.New().String()
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-	testutils.CreateBootstrapFileForTesting(t, bc)
 
 	// Create an xDS resolver with the above bootstrap configuration.
 	if internal.NewXDSResolverWithConfigForTesting == nil {
@@ -1141,7 +1136,6 @@ func (s) TestChildPolicyChangeOnConfigUpdate(t *testing.T) {
 	// Create bootstrap configuration pointing to the above management server.
 	nodeID := uuid.New().String()
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-	testutils.CreateBootstrapFileForTesting(t, bc)
 
 	// Create an xDS resolver with the above bootstrap configuration.
 	if internal.NewXDSResolverWithConfigForTesting == nil {
@@ -1264,7 +1258,6 @@ func (s) TestFailedToParseChildPolicyConfig(t *testing.T) {
 	// Create bootstrap configuration pointing to the above management server.
 	nodeID := uuid.New().String()
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-	testutils.CreateBootstrapFileForTesting(t, bc)
 
 	// Create an xDS resolver with the above bootstrap configuration.
 	if internal.NewXDSResolverWithConfigForTesting == nil {
@@ -1324,13 +1317,12 @@ func (s) TestFailedToParseChildPolicyConfig(t *testing.T) {
 }
 
 // setupManagementServerAndResolver sets up an xDS management server and returns
-// the resolver builder.
+// the management server, resolver builder and Node ID.
 func setupManagementServerAndResolver(t *testing.T) (*e2e.ManagementServer, resolver.Builder, string) {
 	t.Helper()
 
-	testutils.SetEnvConfig(t, &envconfig.XDSAuthorityRewrite, true)
 	nodeID := uuid.New().String()
-	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{SupportLoadReportingService: true})
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 
 	opts := bootstrap.ConfigOptionsForTesting{
 		Servers: []byte(fmt.Sprintf(`[{
@@ -1345,7 +1337,6 @@ func setupManagementServerAndResolver(t *testing.T) (*e2e.ManagementServer, reso
 	if err != nil {
 		t.Fatalf("Failed to create bootstrap configuration: %v", err)
 	}
-	testutils.CreateBootstrapFileForTesting(t, contents)
 
 	// Create an xDS resolver with the above bootstrap configuration.
 	if internal.NewXDSResolverWithConfigForTesting == nil {
@@ -1379,44 +1370,13 @@ func configureXDSResources(ctx context.Context, t *testing.T, mgmtServer *e2e.Ma
 		SecLevel:   e2e.SecurityLevelNone,
 	})
 
-	resources.Endpoints = []*v3endpointpb.ClusterLoadAssignment{
-		e2e.EndpointResourceWithOptions(e2e.EndpointOptions{
-			ClusterName: endpointName,
-			Host:        "localhost",
-			Localities: []e2e.LocalityOptions{
-				{
-					Backends: []e2e.BackendOptions{{
-						Ports:    []uint32{testutils.ParsePort(t, serverAddr)},
-						Hostname: endpointHostname,
-					}},
-					Weight: 1,
-				},
-			},
-		}),
-	}
+	// Set the endpoint hostname for authority rewriting.
+	resources.Endpoints[0].Endpoints[0].LbEndpoints[0].GetEndpoint().Hostname = endpointHostname
 
-	resources.Routes = []*v3routepb.RouteConfiguration{{
-		Name: routeName,
-		VirtualHosts: []*v3routepb.VirtualHost{{
-			Domains: []string{serviceName, "x.test.example.com"},
-			Routes: []*v3routepb.Route{{
-				Match: &v3routepb.RouteMatch{PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"}},
-				Action: &v3routepb.Route_Route{Route: &v3routepb.RouteAction{
-					ClusterSpecifier: &v3routepb.RouteAction_WeightedClusters{WeightedClusters: &v3routepb.WeightedCluster{
-						Clusters: []*v3routepb.WeightedCluster_ClusterWeight{
-							{
-								Name:   clusterName,
-								Weight: &wrapperspb.UInt32Value{Value: 100},
-							},
-						},
-					}},
-					HostRewriteSpecifier: &v3routepb.RouteAction_AutoHostRewrite{
-						AutoHostRewrite: &wrapperspb.BoolValue{Value: true},
-					},
-				}},
-			}},
-		}},
-	}}
+	// Modify the route to enable AutoHostRewrite.
+	resources.Routes[0].VirtualHosts[0].Routes[0].GetRoute().HostRewriteSpecifier = &v3routepb.RouteAction_AutoHostRewrite{
+		AutoHostRewrite: &wrapperspb.BoolValue{Value: true},
+	}
 
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
@@ -1427,29 +1387,29 @@ func configureXDSResources(ctx context.Context, t *testing.T, mgmtServer *e2e.Ma
 // rewritten to the endpoint's hostname. Also verifies that CallAuthority
 // call option takes precedence.
 func (s) TestAuthorityOverriding(t *testing.T) {
+	testutils.SetEnvConfig(t, &envconfig.XDSAuthorityRewrite, true)
 	mgmtServer, resolverBuilder, nodeID := setupManagementServerAndResolver(t)
 
-	authorityCh := make(chan string, 1)
-
 	// Start a server backend exposing the test service.
+	authorityCh := make(chan string, 1)
 	f := &stubserver.StubServer{
-		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
-			if md, ok := metadata.FromIncomingContext(stream.Context()); ok {
+		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
+			if md, ok := metadata.FromIncomingContext(ctx); ok {
 				if authVals := md.Get(":authority"); len(authVals) > 0 {
 					authorityCh <- authVals[0]
 				}
 			}
-			return nil
+			return &testpb.Empty{}, nil
 		},
 	}
 	server := stubserver.StartTestService(t, f)
 	defer server.Stop()
 
-	const rewrittenAuthority = "rewritten.example.com"
+	const xdsAuthorityOverride = "rewritten.example.com"
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	configureXDSResources(ctx, t, mgmtServer, nodeID, server.Address, rewrittenAuthority)
+	configureXDSResources(ctx, t, mgmtServer, nodeID, server.Address, xdsAuthorityOverride)
 
 	// Create a ClientConn and make a successful RPC.
 	cc, err := grpc.NewClient("xds:///my-test-xds-service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(resolverBuilder))
@@ -1459,14 +1419,14 @@ func (s) TestAuthorityOverriding(t *testing.T) {
 	defer cc.Close()
 
 	client := testgrpc.NewTestServiceClient(cc)
-	if _, err := client.FullDuplexCall(ctx); err != nil {
-		t.Fatalf("client.FullDuplexCall() failed: %v", err)
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+		t.Fatalf("client.EmptyCall() failed: %v", err)
 	}
 
 	select {
 	case gotAuth := <-authorityCh:
-		if gotAuth != rewrittenAuthority {
-			t.Errorf("invalid authority got: %q, want: %q", gotAuth, rewrittenAuthority)
+		if gotAuth != xdsAuthorityOverride {
+			t.Errorf("invalid authority got: %q, want: %q", gotAuth, xdsAuthorityOverride)
 		}
 	case <-ctx.Done():
 		t.Fatalf("Timeout waiting for successful RPC after authority rewriting.")
@@ -1474,15 +1434,15 @@ func (s) TestAuthorityOverriding(t *testing.T) {
 
 	// The authority specified via the `CallAuthority` CallOption takes the
 	// highest precedence when determining the `:authority` header.
-	userAuth := "user-override.com"
-	if _, err := client.FullDuplexCall(ctx, grpc.CallAuthority(userAuth)); err != nil {
-		t.Fatalf("client.FullDuplexCall() failed: %v", err)
+	userAuthorityOverride := "user-override.com"
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.CallAuthority(userAuthorityOverride)); err != nil {
+		t.Fatalf("client.EmptyCall() failed: %v", err)
 	}
 
 	select {
 	case got := <-authorityCh:
-		if got != userAuth {
-			t.Errorf("Server received authority %q, want %q (user override)", got, userAuth)
+		if got != userAuthorityOverride {
+			t.Errorf("Server received authority %q, want %q (user override)", got, userAuthorityOverride)
 		}
 	case <-ctx.Done():
 		t.Fatalf("Timeout waiting for successful RPC.")
@@ -1491,9 +1451,10 @@ func (s) TestAuthorityOverriding(t *testing.T) {
 
 // TestAuthorityOverridingWithTLS verifies the interaction between xDS Authority
 // Rewriting and TLS Secure Naming. It ensures that when the :authority header
-// is rewritten by the xDS picker, the new authority is correctly validated
-// against the server's TLS certificate before the RPC proceeds.
+// is rewritten by the clusterimpl picker, the new authority is correctly
+// validated against the server's TLS certificate before the RPC proceeds.
 func (s) TestAuthorityOverridingWithTLS(t *testing.T) {
+	testutils.SetEnvConfig(t, &envconfig.XDSAuthorityRewrite, true)
 	mgmtServer, resolverBuilder, nodeID := setupManagementServerAndResolver(t)
 
 	serverCert, err := tls.LoadX509KeyPair(testdata.Path("x509/server1_cert.pem"), testdata.Path("x509/server1_key.pem"))
@@ -1501,32 +1462,40 @@ func (s) TestAuthorityOverridingWithTLS(t *testing.T) {
 		t.Fatalf("Failed to load server key pair: %v", err)
 	}
 
-	const rewrittenAuthority = "x.test.example.com"
-	clientCreds, err := credentials.NewClientTLSFromFile(testdata.Path("x509/server_ca_cert.pem"), rewrittenAuthority)
+	pemData, err := os.ReadFile(testdata.Path("x509/client_ca_cert.pem"))
 	if err != nil {
-		t.Fatalf("Failed to create client credentials: %v", err)
+		t.Fatalf("Failed to read client CA cert: %v", err)
 	}
+	roots := x509.NewCertPool()
+	roots.AppendCertsFromPEM(pemData)
+	tlsConfig := &tls.Config{
+		Certificates:       []tls.Certificate{serverCert},
+		ClientCAs:          roots,
+		InsecureSkipVerify: true,
+	}
+	clientCreds := credentials.NewTLS(tlsConfig)
 
+	// Start a server backend exposing the test service.
 	authorityCh := make(chan string, 1)
-	// Start TLS Server
 	f := &stubserver.StubServer{
-		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
-			if md, ok := metadata.FromIncomingContext(stream.Context()); ok {
+		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
+			if md, ok := metadata.FromIncomingContext(ctx); ok {
 				if authVals := md.Get(":authority"); len(authVals) > 0 {
 					authorityCh <- authVals[0]
 				}
 			}
-			return nil
+			return &testpb.Empty{}, nil
 		},
 	}
 	if err := f.StartServer(grpc.Creds(credentials.NewServerTLSFromCert(&serverCert))); err != nil {
-		t.Fatalf("Failed to start TLS server: %v", err)
+		t.Fatalf("Failed to start the server: %v", err)
 	}
 	defer f.Stop()
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	configureXDSResources(ctx, t, mgmtServer, nodeID, f.Address, rewrittenAuthority)
+	const xdsAuthorityOverride = "x.test.example.com"
+	configureXDSResources(ctx, t, mgmtServer, nodeID, f.Address, xdsAuthorityOverride)
 
 	// Create ClientConn with TLS
 	cc, err := grpc.NewClient("xds:///my-test-xds-service", grpc.WithTransportCredentials(clientCreds), grpc.WithResolvers(resolverBuilder))
@@ -1536,14 +1505,14 @@ func (s) TestAuthorityOverridingWithTLS(t *testing.T) {
 	defer cc.Close()
 
 	client := testgrpc.NewTestServiceClient(cc)
-	if _, err := client.FullDuplexCall(ctx); err != nil {
-		t.Fatalf("client.FullDuplexCall() failed: %v", err)
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+		t.Fatalf("client.EmptyCall() failed: %v", err)
 	}
 
 	select {
 	case gotAuth := <-authorityCh:
-		if gotAuth != rewrittenAuthority {
-			t.Errorf("invalid authority got: %q, want: %q", gotAuth, rewrittenAuthority)
+		if gotAuth != xdsAuthorityOverride {
+			t.Errorf("invalid authority got: %q, want: %q", gotAuth, xdsAuthorityOverride)
 		}
 	case <-ctx.Done():
 		t.Fatalf("Timeout waiting for successful RPC after authority rewriting.")
