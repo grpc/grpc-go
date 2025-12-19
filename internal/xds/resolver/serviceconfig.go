@@ -348,7 +348,10 @@ func newInterceptor(filters []xdsresource.HTTPFilter, clusterOverride, routeOver
 			// Should not happen if it passed xdsClient validation.
 			return nil, fmt.Errorf("filter %q does not support use in client", filter.Name)
 		}
-		i, err := ib.BuildClientInterceptor(filter.Config, override)
+
+		// TODO(easwars): Ensure the returned cancel func is called when the
+		// interceptor is no longer needed.
+		i, _, err := ib.BuildClientInterceptor(filter.Name, filter.Config, override)
 		if err != nil {
 			return nil, fmt.Errorf("error constructing filter: %v", err)
 		}
