@@ -394,3 +394,6 @@ func traceToString(stack []uintptr) string {
 	}
 	return trace.String()
 }
+
+var TrackAsyncReporters = func() {}
+var CheckAsyncReporters = func(logger Logger) {}

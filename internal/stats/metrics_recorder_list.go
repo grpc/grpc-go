@@ -115,6 +115,13 @@ func (l *MetricsRecorderList) RecordInt64Gauge(handle *estats.Int64GaugeHandle, 
 	}
 }
 
+// registerAsyncReporterDelegate is the variable delegate, to be used for
+// replacement that adds additional leakchecks in tests.
+var registerAsyncReporterDelegate = defaultRegisterAsyncReporter
+
+// RegisterAsyncReporterFuncType defines the signature of the delegate function.
+type RegisterAsyncReporterFuncType func(*MetricsRecorderList, estats.AsyncMetricReporter, ...estats.AsyncMetric) func()
+
 // RegisterAsyncReporter forwards the registration to all underlying metrics
 // recorders.
 //
@@ -122,6 +129,11 @@ func (l *MetricsRecorderList) RecordInt64Gauge(handle *estats.Int64GaugeHandle, 
 // returned by each underlying recorder, ensuring the reporter is unregistered
 // from all of them.
 func (l *MetricsRecorderList) RegisterAsyncReporter(reporter estats.AsyncMetricReporter, metrics ...estats.AsyncMetric) func() {
+	return registerAsyncReporterDelegate(l, reporter, metrics...)
+}
+
+// defaultRegisterAsyncReporter contains the actual production logic.
+func defaultRegisterAsyncReporter(l *MetricsRecorderList, reporter estats.AsyncMetricReporter, metrics ...estats.AsyncMetric) func() {
 	descriptorsMap := make(map[*estats.MetricDescriptor]bool, len(metrics))
 	for _, m := range metrics {
 		descriptorsMap[m.Descriptor()] = true
