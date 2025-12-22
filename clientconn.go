@@ -977,25 +977,24 @@ func (cc *ClientConn) incrCallsFailed() {
 // connect starts creating a transport.
 // It does nothing if the ac is not IDLE.
 // TODO(bar) Move this to the addrConn section.
-func (ac *addrConn) connect() error {
+func (ac *addrConn) connect(abort <-chan struct{}) {
 	ac.mu.Lock()
 	if ac.state == connectivity.Shutdown {
 		if logger.V(2) {
 			logger.Infof("connect called on shutdown addrConn; ignoring.")
 		}
 		ac.mu.Unlock()
-		return errConnClosing
+		return
 	}
 	if ac.state != connectivity.Idle {
 		if logger.V(2) {
 			logger.Infof("connect called on addrConn in non-idle state (%v); ignoring.", ac.state)
 		}
 		ac.mu.Unlock()
-		return nil
+		return
 	}
 
-	ac.resetTransportAndUnlock()
-	return nil
+	ac.resetTransportAndUnlock(abort)
 }
 
 // equalAddressIgnoringBalAttributes returns true is a and b are considered equal.
@@ -1014,7 +1013,7 @@ func equalAddressesIgnoringBalAttributes(a, b []resolver.Address) bool {
 
 // updateAddrs updates ac.addrs with the new addresses list and handles active
 // connections or connection attempts.
-func (ac *addrConn) updateAddrs(addrs []resolver.Address) {
+func (ac *addrConn) updateAddrs(abort <-chan struct{}, addrs []resolver.Address) {
 	addrs = copyAddresses(addrs)
 	limit := len(addrs)
 	if limit > 5 {
@@ -1070,7 +1069,7 @@ func (ac *addrConn) updateAddrs(addrs []resolver.Address) {
 
 	// Since we were connecting/connected, we should start a new connection
 	// attempt.
-	go ac.resetTransportAndUnlock()
+	ac.resetTransportAndUnlock(abort)
 }
 
 // getServerName determines the serverName to be used in the connection
@@ -1316,9 +1315,17 @@ func (ac *addrConn) adjustParams(r transport.GoAwayReason) {
 // resetTransportAndUnlock unconditionally connects the addrConn.
 //
 // ac.mu must be held by the caller, and this function will guarantee it is released.
-func (ac *addrConn) resetTransportAndUnlock() {
-	acCtx := ac.ctx
-	if acCtx.Err() != nil {
+func (ac *addrConn) resetTransportAndUnlock(abort <-chan struct{}) {
+	ctx, cancel := context.WithCancel(ac.ctx)
+	go func() {
+		select {
+		case <-abort:
+			cancel()
+		case <-ctx.Done():
+		}
+	}()
+
+	if ctx.Err() != nil {
 		ac.mu.Unlock()
 		return
 	}
@@ -1346,7 +1353,7 @@ func (ac *addrConn) resetTransportAndUnlock() {
 	ac.updateConnectivityState(connectivity.Connecting, nil)
 	ac.mu.Unlock()
 
-	if err := ac.tryAllAddrs(acCtx, addrs, connectDeadline); err != nil {
+	if err := ac.tryAllAddrs(ctx, addrs, connectDeadline); err != nil {
 		if !errors.Is(err, context.Canceled) {
 			connectionAttemptsFailedMetric.Record(ac.cc.metricsRecorderList, 1, ac.cc.target, ac.backendServiceLabel, ac.localityLabel)
 		} else {
@@ -1360,7 +1367,7 @@ func (ac *addrConn) resetTransportAndUnlock() {
 		// to ensure one resolution request per pass instead of per subconn failure.
 		ac.cc.resolveNow(resolver.ResolveNowOptions{})
 		ac.mu.Lock()
-		if acCtx.Err() != nil {
+		if ctx.Err() != nil {
 			// addrConn was torn down.
 			ac.mu.Unlock()
 			return
@@ -1381,13 +1388,13 @@ func (ac *addrConn) resetTransportAndUnlock() {
 			ac.mu.Unlock()
 		case <-b:
 			timer.Stop()
-		case <-acCtx.Done():
+		case <-ctx.Done():
 			timer.Stop()
 			return
 		}
 
 		ac.mu.Lock()
-		if acCtx.Err() == nil {
+		if ctx.Err() == nil {
 			ac.updateConnectivityState(connectivity.Idle, err)
 		}
 		ac.mu.Unlock()
@@ -1482,11 +1489,26 @@ func (ac *addrConn) tryAllAddrs(ctx context.Context, addrs []resolver.Address, c
 // new transport.
 func (ac *addrConn) createTransport(ctx context.Context, addr resolver.Address, copts transport.ConnectOptions, connectDeadline time.Time) error {
 	addr.ServerName = ac.cc.getServerName(addr)
+
+	var healthCheckDone <-chan struct{}
 	hctx, hcancel := context.WithCancel(ctx)
+	defer func() {
+		if healthCheckDone == nil {
+			hcancel()
+		}
+	}()
 
 	onClose := func(r transport.GoAwayReason) {
+		var healthCheckComplete <-chan struct{}
+
 		ac.mu.Lock()
-		defer ac.mu.Unlock()
+		defer func() {
+			ac.mu.Unlock()
+			if healthCheckComplete != nil {
+				<-healthCheckComplete
+			}
+		}()
+
 		// adjust params based on GoAwayReason
 		ac.adjustParams(r)
 		if ctx.Err() != nil {
@@ -1497,6 +1519,7 @@ func (ac *addrConn) createTransport(ctx context.Context, addr resolver.Address, 
 			return
 		}
 		hcancel()
+		healthCheckComplete = healthCheckDone
 		if ac.transport == nil {
 			// We're still connecting to this address, which could error.  Do
 			// not update the connectivity state or resolve; these will happen
@@ -1522,31 +1545,31 @@ func (ac *addrConn) createTransport(ctx context.Context, addr resolver.Address, 
 			logger.Infof("Creating new client transport to %q: %v", addr, err)
 		}
 		// newTr is either nil, or closed.
-		hcancel()
 		channelz.Warningf(logger, ac.channelz, "grpc: addrConn.createTransport failed to connect to %s. Err: %v", addr, err)
 		return err
 	}
 
 	ac.mu.Lock()
-	defer ac.mu.Unlock()
 	if ctx.Err() != nil {
 		// This can happen if the subConn was removed while in `Connecting`
 		// state. tearDown() would have set the state to `Shutdown`, but
 		// would not have closed the transport since ac.transport would not
 		// have been set at that point.
-		//
-		// We run this in a goroutine because newTr.Close() calls onClose()
+
+		// We unlock ac.mu because newTr.Close() calls onClose()
 		// inline, which requires locking ac.mu.
-		//
+		ac.mu.Unlock()
+
 		// The error we pass to Close() is immaterial since there are no open
 		// streams at this point, so no trailers with error details will be sent
 		// out. We just need to pass a non-nil error.
 		//
 		// This can also happen when updateAddrs is called during a connection
 		// attempt.
-		go newTr.Close(transport.ErrConnClosing)
+		newTr.Close(transport.ErrConnClosing)
 		return nil
 	}
+	defer ac.mu.Unlock()
 	if hctx.Err() != nil {
 		// onClose was already called for this connection, but the connection
 		// was successfully established first.  Consider it a success and set
@@ -1556,12 +1579,16 @@ func (ac *addrConn) createTransport(ctx context.Context, addr resolver.Address, 
 	}
 	ac.curAddr = addr
 	ac.transport = newTr
-	ac.startHealthCheck(hctx) // Will set state to READY if appropriate.
+	healthCheckDone = ac.startHealthCheck(hctx) // Will set state to READY if appropriate.
 	return nil
 }
 
 // startHealthCheck starts the health checking stream (RPC) to watch the health
 // stats of this connection if health checking is requested and configured.
+//
+// A channel is returned that will be closed once the health check goroutine
+// exits after ctx has been canceled, or nil if the health check requirements
+// aren't met and no goroutine has been started.
 //
 // LB channel health checking is enabled when all requirements below are met:
 // 1. it is not disabled by the user with the WithDisableHealthCheck DialOption
@@ -1572,7 +1599,7 @@ func (ac *addrConn) createTransport(ctx context.Context, addr resolver.Address, 
 // It sets addrConn to READY if the health checking stream is not started.
 //
 // Caller must hold ac.mu.
-func (ac *addrConn) startHealthCheck(ctx context.Context) {
+func (ac *addrConn) startHealthCheck(ctx context.Context) <-chan struct{} {
 	var healthcheckManagingState bool
 	defer func() {
 		if !healthcheckManagingState {
@@ -1581,14 +1608,14 @@ func (ac *addrConn) startHealthCheck(ctx context.Context) {
 	}()
 
 	if ac.cc.dopts.disableHealthCheck {
-		return
+		return nil
 	}
 	healthCheckConfig := ac.cc.healthCheckConfig()
 	if healthCheckConfig == nil {
-		return
+		return nil
 	}
 	if !ac.scopts.HealthCheckEnabled {
-		return
+		return nil
 	}
 	healthCheckFunc := internal.HealthCheckFunc
 	if healthCheckFunc == nil {
@@ -1596,7 +1623,7 @@ func (ac *addrConn) startHealthCheck(ctx context.Context) {
 		//
 		// TODO: add a link to the health check doc in the error message.
 		channelz.Error(logger, ac.channelz, "Health check is requested but health check function is not set.")
-		return
+		return nil
 	}
 
 	healthcheckManagingState = true
@@ -1621,7 +1648,9 @@ func (ac *addrConn) startHealthCheck(ctx context.Context) {
 		ac.updateConnectivityState(s, lastErr)
 	}
 	// Start the health checking stream.
+	done := make(chan struct{})
 	go func() {
+		defer close(done)
 		err := healthCheckFunc(ctx, newStream, setConnectivityState, healthCheckConfig.ServiceName)
 		if err != nil {
 			if status.Code(err) == codes.Unimplemented {
@@ -1631,6 +1660,7 @@ func (ac *addrConn) startHealthCheck(ctx context.Context) {
 			}
 		}
 	}()
+	return done
 }
 
 func (ac *addrConn) resetConnectBackoff() {

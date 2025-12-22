@@ -53,8 +53,8 @@ func (s) TestPipeListener(t *testing.T) {
 		recvdBytes <- read
 	}()
 
-	dl := pl.Dialer()
-	conn, err := dl("", time.Duration(0))
+	dl := pl.ContextDialer()
+	conn, err := dl(t.Context(), "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,8 +85,8 @@ func (s) TestUnblocking(t *testing.T) {
 		{
 			desc: "Accept unblocks Dial",
 			blockFunc: func(pl *testutils.PipeListener, done chan struct{}) error {
-				dl := pl.Dialer()
-				_, err := dl("", time.Duration(0))
+				dl := pl.ContextDialer()
+				_, err := dl(t.Context(), "")
 				close(done)
 				return err
 			},
@@ -99,8 +99,8 @@ func (s) TestUnblocking(t *testing.T) {
 			desc:                 "Close unblocks Dial",
 			blockFuncShouldError: true, // because pl.Close will be called
 			blockFunc: func(pl *testutils.PipeListener, done chan struct{}) error {
-				dl := pl.Dialer()
-				_, err := dl("", time.Duration(0))
+				dl := pl.ContextDialer()
+				_, err := dl(t.Context(), "")
 				close(done)
 				return err
 			},
@@ -116,8 +116,8 @@ func (s) TestUnblocking(t *testing.T) {
 				return err
 			},
 			unblockFunc: func(pl *testutils.PipeListener) error {
-				dl := pl.Dialer()
-				_, err := dl("", time.Duration(0))
+				dl := pl.ContextDialer()
+				_, err := dl(t.Context(), "")
 				return err
 			},
 		},
