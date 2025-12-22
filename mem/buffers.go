@@ -75,7 +75,8 @@ func IsBelowBufferPoolingThreshold(size int) bool {
 type buffer struct {
 	origData *[]byte
 	data     []byte
-	refs     *atomic.Int32
+	dataRefs *atomic.Int32 // ref count for origData.
+	selfRefs *atomic.Int32 // ref count for the buffer object itself.
 	pool     BufferPool
 }
 
@@ -103,8 +104,10 @@ func NewBuffer(data *[]byte, pool BufferPool) Buffer {
 	b.origData = data
 	b.data = *data
 	b.pool = pool
-	b.refs = refObjectPool.Get().(*atomic.Int32)
-	b.refs.Add(1)
+	b.dataRefs = refObjectPool.Get().(*atomic.Int32)
+	b.dataRefs.Add(1)
+	b.selfRefs = refObjectPool.Get().(*atomic.Int32)
+	b.selfRefs.Add(1)
 	return b
 }
 
@@ -127,42 +130,54 @@ func Copy(data []byte, pool BufferPool) Buffer {
 }
 
 func (b *buffer) ReadOnlyData() []byte {
-	if b.refs == nil {
+	if b.selfRefs == nil {
 		panic("Cannot read freed buffer")
 	}
 	return b.data
 }
 
 func (b *buffer) Ref() {
-	if b.refs == nil {
+	if b.selfRefs == nil {
 		panic("Cannot ref freed buffer")
 	}
-	b.refs.Add(1)
+	b.selfRefs.Add(1)
 }
 
 func (b *buffer) Free() {
-	if b.refs == nil {
+	if b.selfRefs == nil {
 		panic("Cannot free freed buffer")
 	}
 
-	refs := b.refs.Add(-1)
+	refs := b.selfRefs.Add(-1)
 	switch {
 	case refs > 0:
 		return
 	case refs == 0:
-		if b.pool != nil {
-			b.pool.Put(b.origData)
-		}
-
-		refObjectPool.Put(b.refs)
-		b.origData = nil
-		b.data = nil
-		b.refs = nil
-		b.pool = nil
-		bufferObjectPool.Put(b)
 	default:
 		panic("Cannot free freed buffer")
 	}
+
+	refObjectPool.Put(b.selfRefs)
+	b.selfRefs = nil
+	b.data = nil
+	refs = b.dataRefs.Add(-1)
+
+	// Free the underlying data if this is the last object with a reference.
+	switch {
+	case refs > 0:
+	case refs == 0:
+		refObjectPool.Put(b.dataRefs)
+		if b.pool != nil {
+			b.pool.Put(b.origData)
+		}
+	default:
+		panic("Cannot free freed buffer")
+	}
+
+	b.origData = nil
+	b.dataRefs = nil
+	b.pool = nil
+	bufferObjectPool.Put(b)
 }
 
 func (b *buffer) Len() int {
@@ -170,16 +185,18 @@ func (b *buffer) Len() int {
 }
 
 func (b *buffer) split(n int) (Buffer, Buffer) {
-	if b.refs == nil {
+	if b.selfRefs == nil {
 		panic("Cannot split freed buffer")
 	}
 
-	b.refs.Add(1)
+	b.dataRefs.Add(1)
 	split := newBuffer()
 	split.origData = b.origData
 	split.data = b.data[n:]
-	split.refs = b.refs
+	split.dataRefs = b.dataRefs
 	split.pool = b.pool
+	split.selfRefs = refObjectPool.Get().(*atomic.Int32)
+	split.selfRefs.Add(1)
 
 	b.data = b.data[:n]
 
@@ -187,7 +204,7 @@ func (b *buffer) split(n int) (Buffer, Buffer) {
 }
 
 func (b *buffer) read(buf []byte) (int, Buffer) {
-	if b.refs == nil {
+	if b.selfRefs == nil {
 		panic("Cannot read freed buffer")
 	}
 
