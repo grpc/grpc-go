@@ -35,12 +35,15 @@ import (
 	"google.golang.org/grpc/codes"
 	estats "google.golang.org/grpc/experimental/stats"
 	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/internal/envconfig"
 	iresolver "google.golang.org/grpc/internal/resolver"
 	iringhash "google.golang.org/grpc/internal/ringhash"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/internal/xds/balancer/clusterimpl"
 	"google.golang.org/grpc/internal/xds/balancer/clustermanager"
 	"google.golang.org/grpc/internal/xds/bootstrap"
+	serverFeature "google.golang.org/grpc/internal/xds/clients/xdsclient"
 	rinternal "google.golang.org/grpc/internal/xds/resolver/internal"
 	"google.golang.org/grpc/internal/xds/xdsclient"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource/version"
@@ -1296,4 +1299,154 @@ func (s) TestConfigSelector_FailureCases(t *testing.T) {
 
 func newDurationP(d time.Duration) *time.Duration {
 	return &d
+}
+
+// TestResolver_AutoHostRewrite verifies the propagation of the AutoHostRewrite
+// field from the xDS resolver.
+//
+// Per gRFC A81, this feature should only be active if two conditions met:
+// 1. The environment variable (XDSAuthorityRewrite) is enabled.
+// 2. The xDS server is marked as "trusted_xds_server" in the bootstrap config.
+func (s) TestResolver_AutoHostRewrite(t *testing.T) {
+	for _, tt := range []struct {
+		name                string
+		autoHostRewrite     bool
+		envconfig           bool
+		serverfeature       serverFeature.ServerFeature
+		wantAutoHostRewrite bool
+	}{
+		{
+			name:                "EnvVarDisabled_NonTrustedServer_AutoHostRewriteOff",
+			autoHostRewrite:     false,
+			envconfig:           false,
+			wantAutoHostRewrite: false,
+		},
+		{
+			name:                "EnvVarDisabled_NonTrustedServer_AutoHostRewriteOn",
+			autoHostRewrite:     true,
+			envconfig:           false,
+			wantAutoHostRewrite: false,
+		},
+		{
+			name:                "EnvVarDisabled_TrustedServer_AutoHostRewriteOff",
+			autoHostRewrite:     false,
+			envconfig:           false,
+			serverfeature:       serverFeature.ServerFeatureTrustedXDSServer,
+			wantAutoHostRewrite: false,
+		},
+		{
+			name:                "EnvVarDisabled_TrustedServer_AutoHostRewriteOn",
+			autoHostRewrite:     true,
+			envconfig:           false,
+			serverfeature:       serverFeature.ServerFeatureTrustedXDSServer,
+			wantAutoHostRewrite: false,
+		},
+		{
+			name:                "EnvVarEnabled_NonTrustedServer_AutoHostRewriteOff",
+			autoHostRewrite:     false,
+			envconfig:           true,
+			wantAutoHostRewrite: false,
+		},
+		{
+			name:                "EnvVarEnabled_NonTrustedServer_AutoHostRewriteOn",
+			autoHostRewrite:     true,
+			envconfig:           true,
+			wantAutoHostRewrite: false,
+		},
+		{
+			name:                "EnvVarEnabled_TrustedServer_AutoHostRewriteOff",
+			autoHostRewrite:     false,
+			envconfig:           true,
+			serverfeature:       serverFeature.ServerFeatureTrustedXDSServer,
+			wantAutoHostRewrite: false,
+		},
+		{
+			name:                "EnvVarEnabled_TrustedServer_AutoHostRewriteOn",
+			autoHostRewrite:     true,
+			envconfig:           true,
+			serverfeature:       serverFeature.ServerFeatureTrustedXDSServer,
+			wantAutoHostRewrite: true,
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			testutils.SetEnvConfig(t, &envconfig.XDSAuthorityRewrite, tt.envconfig)
+
+			// Spin up an xDS management server for the test.
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+			nodeID := uuid.New().String()
+			mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
+			defer mgmtServer.Stop()
+
+			// Configure the management server with a good listener resource and a
+			// route configuration resource, as specified by the test case.
+			resources := e2e.UpdateOptions{
+				NodeID:    nodeID,
+				Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(defaultTestServiceName, defaultTestRouteConfigName)},
+				Routes: []*v3routepb.RouteConfiguration{{
+					Name: defaultTestRouteConfigName,
+					VirtualHosts: []*v3routepb.VirtualHost{{
+						Domains: []string{defaultTestServiceName},
+						Routes: []*v3routepb.Route{{
+							Match: &v3routepb.RouteMatch{PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"}},
+							Action: &v3routepb.Route_Route{Route: &v3routepb.RouteAction{
+								ClusterSpecifier: &v3routepb.RouteAction_WeightedClusters{WeightedClusters: &v3routepb.WeightedCluster{
+									Clusters: []*v3routepb.WeightedCluster_ClusterWeight{
+										{
+											Name:   defaultTestClusterName,
+											Weight: &wrapperspb.UInt32Value{Value: 100},
+										},
+									},
+								}},
+								HostRewriteSpecifier: &v3routepb.RouteAction_AutoHostRewrite{
+									AutoHostRewrite: &wrapperspb.BoolValue{Value: tt.autoHostRewrite},
+								},
+							}},
+						}},
+					}},
+				}},
+				SkipValidation: true,
+			}
+
+			if err := mgmtServer.Update(ctx, resources); err != nil {
+				t.Fatal(err)
+			}
+
+			trustedXdsServer := "[]"
+			if tt.serverfeature == serverFeature.ServerFeatureTrustedXDSServer {
+				trustedXdsServer = `["trusted_xds_server"]`
+			}
+
+			opts := bootstrap.ConfigOptionsForTesting{
+				Servers: []byte(fmt.Sprintf(`[{
+					"server_uri": %q,
+					"channel_creds": [{"type": "insecure"}],
+					"server_features": %s
+				}]`, mgmtServer.Address, trustedXdsServer)),
+				Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
+			}
+
+			contents, err := bootstrap.NewContentsForTesting(opts)
+			if err != nil {
+				t.Fatalf("Failed to create bootstrap configuration: %v", err)
+			}
+
+			// Build the resolver and read the config selector out of it.
+			stateCh, _, _ := buildResolverForTarget(t, resolver.Target{URL: *testutils.MustParseURL("xds:///" + defaultTestServiceName)}, contents)
+			cs := verifyUpdateFromResolver(ctx, t, stateCh, "")
+
+			res, err := cs.SelectConfig(iresolver.RPCInfo{
+				Context: ctx,
+				Method:  "/service/method",
+			})
+			if err != nil {
+				t.Fatalf("cs.SelectConfig(): %v", err)
+			}
+
+			gotAutoHostRewrite := clusterimpl.AutoHostRewriteForTesting(res.Context)
+			if gotAutoHostRewrite != tt.wantAutoHostRewrite {
+				t.Fatalf("Got autoHostRewrite: %v, want: %v", gotAutoHostRewrite, tt.wantAutoHostRewrite)
+			}
+		})
+	}
 }
