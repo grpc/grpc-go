@@ -35,6 +35,7 @@ import (
 	iringhash "google.golang.org/grpc/internal/ringhash"
 	"google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/internal/wrr"
+	"google.golang.org/grpc/internal/xds/balancer/clusterimpl"
 	"google.golang.org/grpc/internal/xds/balancer/clustermanager"
 	"google.golang.org/grpc/internal/xds/httpfilter"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
@@ -114,6 +115,7 @@ type route struct {
 	maxStreamDuration time.Duration
 	retryConfig       *xdsresource.RetryConfig
 	hashPolicies      []*xdsresource.HashPolicy
+	autoHostRewrite   bool
 }
 
 func (r route) String() string {
@@ -197,6 +199,7 @@ func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RP
 
 	lbCtx := clustermanager.SetPickedCluster(rpcInfo.Context, cluster.name)
 	lbCtx = iringhash.SetXDSRequestHash(lbCtx, cs.generateHash(rpcInfo, rt.hashPolicies))
+	lbCtx = clusterimpl.SetAutoHostRewrite(lbCtx, rt.autoHostRewrite)
 
 	config := &iresolver.RPCConfig{
 		// Communicate to the LB policy the chosen cluster and request hash, if Ring Hash LB policy.
