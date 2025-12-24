@@ -654,7 +654,7 @@ func (s) TestClusterUpdate_SuccessWithLRS(t *testing.T) {
 		ServiceName: serviceName,
 		EnableLRS:   true,
 	})
-	lrsServerCfg, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{URI: fmt.Sprintf("passthrough:///%s", mgmtServer.Address)})
+	lrsServerCfg, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{URI: fmt.Sprintf("passthrough:///%s", mgmtServer.Address), ServerFeatures: []string{"trusted_xds_server"}})
 	if err != nil {
 		t.Fatalf("Failed to create LRS server config for testing: %v", err)
 	}
