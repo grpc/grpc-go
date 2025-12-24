@@ -35,12 +35,15 @@ import (
 	"google.golang.org/grpc/codes"
 	estats "google.golang.org/grpc/experimental/stats"
 	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/internal/envconfig"
 	iresolver "google.golang.org/grpc/internal/resolver"
 	iringhash "google.golang.org/grpc/internal/ringhash"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/internal/xds/balancer/clusterimpl"
 	"google.golang.org/grpc/internal/xds/balancer/clustermanager"
 	"google.golang.org/grpc/internal/xds/bootstrap"
+	serverFeature "google.golang.org/grpc/internal/xds/clients/xdsclient"
 	rinternal "google.golang.org/grpc/internal/xds/resolver/internal"
 	"google.golang.org/grpc/internal/xds/xdsclient"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource/version"
@@ -286,6 +289,65 @@ func (s) TestResolverCloseClosesXDSClient(t *testing.T) {
 	}
 }
 
+// Tests the case where there is no virtual host in the route configuration
+// matches the dataplane authority. Verifies that the resolver returns the
+// correct error.
+func (s) TestNoMatchingVirtualHost(t *testing.T) {
+	// Spin up an xDS management server for the test.
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	nodeID := uuid.New().String()
+	mgmtServer, _, _, bc := setupManagementServerForTest(t, nodeID)
+
+	// Configure route resource with no virtual host so that it does not match the authority.
+	listener := e2e.DefaultClientListener(defaultTestServiceName, defaultTestRouteConfigName)
+	route := e2e.DefaultRouteConfig(defaultTestRouteConfigName, defaultTestServiceName, defaultTestClusterName)
+	route.VirtualHosts = nil
+	configureResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, []*v3listenerpb.Listener{listener}, []*v3routepb.RouteConfiguration{route})
+
+	// Build the resolver inline (duplicating buildResolverForTarget internals)
+	// to avoid issues with blocked channel writes when NACKs occur.
+	target := resolver.Target{URL: *testutils.MustParseURL("xds:///" + defaultTestServiceName)}
+
+	// Create an xDS resolver with the provided bootstrap configuration.
+	if internal.NewXDSResolverWithConfigForTesting == nil {
+		t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
+	}
+
+	builder, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
+	if err != nil {
+		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
+	}
+
+	errCh := testutils.NewChannel()
+	tcc := &testutils.ResolverClientConn{Logger: t, ReportErrorF: func(err error) { errCh.Replace(err) }}
+	r, err := builder.Build(target, tcc, resolver.BuildOptions{
+		Authority: url.PathEscape(target.Endpoint()),
+	})
+	if err != nil {
+		t.Fatalf("Failed to build xDS resolver for target %q: %v", target, err)
+	}
+	defer r.Close()
+
+	// Wait for and verify the error update from the resolver.
+	// Since the resource is not cached, it should be received as resource error.
+	select {
+	case <-ctx.Done():
+		t.Fatalf("Timeout waiting for error to be propagated to the ClientConn")
+	case gotErr := <-errCh.C:
+		if gotErr == nil {
+			t.Fatalf("got nil error from resolver, want error containing 'could not find VirtualHost'")
+		}
+		errStr := fmt.Sprint(gotErr)
+		if !strings.Contains(errStr, fmt.Sprintf("could not find VirtualHost for %q", defaultTestServiceName)) {
+			t.Fatalf("got error from resolver %q, want error containing 'could not find VirtualHost for %q'", errStr, defaultTestServiceName)
+		}
+		if !strings.Contains(errStr, nodeID) {
+			t.Fatalf("got error from resolver %q, want nodeID %q", errStr, nodeID)
+		}
+	}
+}
+
 // Tests the case where a resource, not present in cache, returned by the
 // management server is NACKed by the xDS client, which then returns an update
 // containing a resource error to the resolver. It tests the case where the
@@ -359,14 +421,12 @@ func (s) TestResolverBadServiceUpdate_NACKedWithoutCache(t *testing.T) {
 	}
 }
 
-// Tests the case where a resource, present in cache, returned by the
-// management server is NACKed by the xDS client, which then returns
-// an update containing an ambient error to the resolver. Verifies that the
-// update is propagated to the ClientConn by the resolver. It tests the
-// case where the resolver gets a good update first, and an error
-// after the good update. The test also verifies that these are propagated to
-// the ClientConn and that RPC succeeds as expected after receiving good update
-// as well as ambient error.
+// Tests the case where a resource, present in cache, returned by the management
+// server is NACKed by the xDS client, which then returns an update containing
+// an ambient error to the resolver. It tests the case where the resolver gets a
+// good update first, and an error after the good update. The test verifies that
+// the RPCs succeeds as expected after receiving good update as well as ambient
+// error.
 func (s) TestResolverBadServiceUpdate_NACKedWithCache(t *testing.T) {
 	// Spin up an xDS management server for the test.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -374,16 +434,19 @@ func (s) TestResolverBadServiceUpdate_NACKedWithCache(t *testing.T) {
 	nodeID := uuid.New().String()
 	mgmtServer, _, _, bc := setupManagementServerForTest(t, nodeID)
 
-	stateCh, errCh, _ := buildResolverForTarget(t, resolver.Target{URL: *testutils.MustParseURL("xds:///" + defaultTestServiceName)}, bc)
+	stateCh, _, _ := buildResolverForTarget(t, resolver.Target{URL: *testutils.MustParseURL("xds:///" + defaultTestServiceName)}, bc)
 
-	// Configure good listener and route configuration resources on the
-	// management server.
-	listeners := []*v3listenerpb.Listener{e2e.DefaultClientListener(defaultTestServiceName, defaultTestRouteConfigName)}
-	routes := []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(defaultTestRouteConfigName, defaultTestServiceName, defaultTestClusterName)}
-	configureResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, listeners, routes)
+	// Configure all resources on the management server.
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		NodeID:     nodeID,
+		DialTarget: defaultTestServiceName,
+		Host:       "localhost",
+		Port:       8080,
+	})
+	mgmtServer.Update(ctx, resources)
 
 	// Expect a good update from the resolver.
-	cs := verifyUpdateFromResolver(ctx, t, stateCh, wantServiceConfig(defaultTestClusterName))
+	cs := verifyUpdateFromResolver(ctx, t, stateCh, wantServiceConfig(resources.Clusters[0].Name))
 
 	// "Make an RPC" by invoking the config selector.
 	_, err := cs.SelectConfig(iresolver.RPCInfo{Context: ctx, Method: "/service/method"})
@@ -408,12 +471,9 @@ func (s) TestResolverBadServiceUpdate_NACKedWithCache(t *testing.T) {
 		}},
 	}
 
-	// Expect an error update from the resolver. Since the resource is cached,
-	// it should be received as an ambient error.
+	// Since the resource is cached, it should be received as an ambient error
+	// and so the RPCs should continue passing.
 	configureResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, []*v3listenerpb.Listener{lis}, nil)
-	if err := waitForErrorFromResolver(ctx, errCh, "no RouteSpecifier", nodeID); err != nil {
-		t.Fatal(err)
-	}
 
 	// "Make an RPC" by invoking the config selector which should succeed by
 	// continuing to use the previously cached resource.
@@ -944,7 +1004,9 @@ func (s) TestResolverDelayedOnCommitted(t *testing.T) {
 		Port:       defaultTestPort[0],
 		SecLevel:   e2e.SecurityLevelNone,
 	})
-	mgmtServer.Update(ctx, resources)
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
 
 	stateCh, _, _ := buildResolverForTarget(t, resolver.Target{URL: *testutils.MustParseURL("xds:///" + defaultTestServiceName)}, bc)
 
@@ -1242,4 +1304,154 @@ func (s) TestConfigSelector_FailureCases(t *testing.T) {
 
 func newDurationP(d time.Duration) *time.Duration {
 	return &d
+}
+
+// TestResolver_AutoHostRewrite verifies the propagation of the AutoHostRewrite
+// field from the xDS resolver.
+//
+// Per gRFC A81, this feature should only be active if two conditions met:
+// 1. The environment variable (XDSAuthorityRewrite) is enabled.
+// 2. The xDS server is marked as "trusted_xds_server" in the bootstrap config.
+func (s) TestResolver_AutoHostRewrite(t *testing.T) {
+	for _, tt := range []struct {
+		name                string
+		autoHostRewrite     bool
+		envconfig           bool
+		serverfeature       serverFeature.ServerFeature
+		wantAutoHostRewrite bool
+	}{
+		{
+			name:                "EnvVarDisabled_NonTrustedServer_AutoHostRewriteOff",
+			autoHostRewrite:     false,
+			envconfig:           false,
+			wantAutoHostRewrite: false,
+		},
+		{
+			name:                "EnvVarDisabled_NonTrustedServer_AutoHostRewriteOn",
+			autoHostRewrite:     true,
+			envconfig:           false,
+			wantAutoHostRewrite: false,
+		},
+		{
+			name:                "EnvVarDisabled_TrustedServer_AutoHostRewriteOff",
+			autoHostRewrite:     false,
+			envconfig:           false,
+			serverfeature:       serverFeature.ServerFeatureTrustedXDSServer,
+			wantAutoHostRewrite: false,
+		},
+		{
+			name:                "EnvVarDisabled_TrustedServer_AutoHostRewriteOn",
+			autoHostRewrite:     true,
+			envconfig:           false,
+			serverfeature:       serverFeature.ServerFeatureTrustedXDSServer,
+			wantAutoHostRewrite: false,
+		},
+		{
+			name:                "EnvVarEnabled_NonTrustedServer_AutoHostRewriteOff",
+			autoHostRewrite:     false,
+			envconfig:           true,
+			wantAutoHostRewrite: false,
+		},
+		{
+			name:                "EnvVarEnabled_NonTrustedServer_AutoHostRewriteOn",
+			autoHostRewrite:     true,
+			envconfig:           true,
+			wantAutoHostRewrite: false,
+		},
+		{
+			name:                "EnvVarEnabled_TrustedServer_AutoHostRewriteOff",
+			autoHostRewrite:     false,
+			envconfig:           true,
+			serverfeature:       serverFeature.ServerFeatureTrustedXDSServer,
+			wantAutoHostRewrite: false,
+		},
+		{
+			name:                "EnvVarEnabled_TrustedServer_AutoHostRewriteOn",
+			autoHostRewrite:     true,
+			envconfig:           true,
+			serverfeature:       serverFeature.ServerFeatureTrustedXDSServer,
+			wantAutoHostRewrite: true,
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			testutils.SetEnvConfig(t, &envconfig.XDSAuthorityRewrite, tt.envconfig)
+
+			// Spin up an xDS management server for the test.
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+			nodeID := uuid.New().String()
+			mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
+			defer mgmtServer.Stop()
+
+			// Configure the management server with a good listener resource and a
+			// route configuration resource, as specified by the test case.
+			resources := e2e.UpdateOptions{
+				NodeID:    nodeID,
+				Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(defaultTestServiceName, defaultTestRouteConfigName)},
+				Routes: []*v3routepb.RouteConfiguration{{
+					Name: defaultTestRouteConfigName,
+					VirtualHosts: []*v3routepb.VirtualHost{{
+						Domains: []string{defaultTestServiceName},
+						Routes: []*v3routepb.Route{{
+							Match: &v3routepb.RouteMatch{PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"}},
+							Action: &v3routepb.Route_Route{Route: &v3routepb.RouteAction{
+								ClusterSpecifier: &v3routepb.RouteAction_WeightedClusters{WeightedClusters: &v3routepb.WeightedCluster{
+									Clusters: []*v3routepb.WeightedCluster_ClusterWeight{
+										{
+											Name:   defaultTestClusterName,
+											Weight: &wrapperspb.UInt32Value{Value: 100},
+										},
+									},
+								}},
+								HostRewriteSpecifier: &v3routepb.RouteAction_AutoHostRewrite{
+									AutoHostRewrite: &wrapperspb.BoolValue{Value: tt.autoHostRewrite},
+								},
+							}},
+						}},
+					}},
+				}},
+				SkipValidation: true,
+			}
+
+			if err := mgmtServer.Update(ctx, resources); err != nil {
+				t.Fatal(err)
+			}
+
+			trustedXdsServer := "[]"
+			if tt.serverfeature == serverFeature.ServerFeatureTrustedXDSServer {
+				trustedXdsServer = `["trusted_xds_server"]`
+			}
+
+			opts := bootstrap.ConfigOptionsForTesting{
+				Servers: []byte(fmt.Sprintf(`[{
+					"server_uri": %q,
+					"channel_creds": [{"type": "insecure"}],
+					"server_features": %s
+				}]`, mgmtServer.Address, trustedXdsServer)),
+				Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
+			}
+
+			contents, err := bootstrap.NewContentsForTesting(opts)
+			if err != nil {
+				t.Fatalf("Failed to create bootstrap configuration: %v", err)
+			}
+
+			// Build the resolver and read the config selector out of it.
+			stateCh, _, _ := buildResolverForTarget(t, resolver.Target{URL: *testutils.MustParseURL("xds:///" + defaultTestServiceName)}, contents)
+			cs := verifyUpdateFromResolver(ctx, t, stateCh, "")
+
+			res, err := cs.SelectConfig(iresolver.RPCInfo{
+				Context: ctx,
+				Method:  "/service/method",
+			})
+			if err != nil {
+				t.Fatalf("cs.SelectConfig(): %v", err)
+			}
+
+			gotAutoHostRewrite := clusterimpl.AutoHostRewriteForTesting(res.Context)
+			if gotAutoHostRewrite != tt.wantAutoHostRewrite {
+				t.Fatalf("Got autoHostRewrite: %v, want: %v", gotAutoHostRewrite, tt.wantAutoHostRewrite)
+			}
+		})
+	}
 }

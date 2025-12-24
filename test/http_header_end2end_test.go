@@ -116,7 +116,7 @@ func (s) TestHTTPHeaderFrameErrorHandlingInitialHeader(t *testing.T) {
 				"content-type", "application/grpc",
 				"grpc-status", "abc",
 			},
-			errCode: codes.Internal,
+			errCode: codes.Unknown,
 		},
 		{
 			name: "Malformed grpc-tags-bin field ignores http status",

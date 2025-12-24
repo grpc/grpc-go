@@ -11,17 +11,6 @@ jobs:
     name: Validate PR
     runs-on: ubuntu-latest
     steps:
-      - name: Validate Label
-        uses: actions/github-script@v6
-        with:
-          script: |
-            const labels = context.payload.pull_request.labels.map(label => label.name);
-            const requiredRegex = new RegExp('^Type:');
-            const hasRequiredLabel = labels.some(label => requiredRegex.test(label));
-            if (!hasRequiredLabel) {
-              core.setFailed("This PR must have a label starting with 'Type:'.");
-            }
-
       - name: Validate Description
         uses: actions/github-script@v6
         with:
@@ -38,6 +27,17 @@ jobs:
                   RELEASE NOTES:
                   * my_package: Fix bug causing crash...
               `);
+            }
+
+      - name: Validate Label
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const labels = context.payload.pull_request.labels.map(label => label.name);
+            const requiredRegex = new RegExp('^Type:');
+            const hasRequiredLabel = labels.some(label => requiredRegex.test(label));
+            if (!hasRequiredLabel) {
+              core.setFailed("This PR must have a label starting with 'Type:'.");
             }
 
       - name: Validate Milestone

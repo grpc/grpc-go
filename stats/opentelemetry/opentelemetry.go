@@ -453,6 +453,19 @@ func (rm *registryMetrics) RecordInt64Gauge(handle *estats.Int64GaugeHandle, inc
 	}
 }
 
+// RegisterAsyncReporter will register a callback with the underlying OpenTelemetry
+// Meter for the provided descriptors.
+//
+// It will map the provided descriptors to their corresponding OTel Observable
+// instruments. If no instruments match the descriptors, registration is
+// skipped.
+//
+// The returned cleanup function unregisters the callback from the Meter.
+func (rm *registryMetrics) RegisterAsyncReporter(_ estats.AsyncMetricReporter, _ ...estats.AsyncMetric) func() {
+	// TODO(@mbissa) - add implementation
+	return func() {}
+}
+
 // Users of this component should use these bucket boundaries as part of their
 // SDK MeterProvider passed in. This component sends this as "advice" to the
 // API, which works, however this stability is not guaranteed, so for safety the

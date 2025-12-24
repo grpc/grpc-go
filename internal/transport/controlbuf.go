@@ -32,8 +32,11 @@ import (
 	"golang.org/x/net/http2/hpack"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcutil"
+	"google.golang.org/grpc/internal/pretty"
+	istatus "google.golang.org/grpc/internal/status"
 	"google.golang.org/grpc/mem"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 )
 
 var updateHeaderTblSize = func(e *hpack.Encoder, v uint32) {
@@ -852,6 +855,15 @@ func (l *loopyWriter) earlyAbortStreamHandler(eas *earlyAbortStream) error {
 		{Name: "content-type", Value: grpcutil.ContentType(eas.contentSubtype)},
 		{Name: "grpc-status", Value: strconv.Itoa(int(eas.status.Code()))},
 		{Name: "grpc-message", Value: encodeGrpcMessage(eas.status.Message())},
+	}
+
+	if p := istatus.RawStatusProto(eas.status); len(p.GetDetails()) > 0 {
+		stBytes, err := proto.Marshal(p)
+		if err != nil {
+			l.logger.Errorf("Failed to marshal rpc status: %s, error: %v", pretty.ToJSON(p), err)
+		} else {
+			headerFields = append(headerFields, hpack.HeaderField{Name: grpcStatusDetailsBinHeader, Value: encodeBinHeader(stBytes)})
+		}
 	}
 
 	if err := l.writeHeader(eas.streamID, true, headerFields, nil); err != nil {

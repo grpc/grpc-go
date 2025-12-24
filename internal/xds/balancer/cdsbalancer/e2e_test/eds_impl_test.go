@@ -19,7 +19,6 @@ package e2e_test
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -45,14 +44,14 @@ import (
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource/version"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/resolver"
-	"google.golang.org/grpc/resolver/manual"
-	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
+	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
+	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
@@ -62,6 +61,8 @@ import (
 )
 
 const (
+	serviceName    = "listener-my-service-client-side-xds"
+	routeName      = "route-my-service-client-side-xds"
 	clusterName    = "cluster-my-service-client-side-xds"
 	edsServiceName = "endpoints-my-service-client-side-xds"
 	localityName1  = "my-locality-1"
@@ -108,11 +109,14 @@ func startTestServiceBackends(t *testing.T, numBackends int) ([]*stubserver.Stub
 	}
 }
 
-// clientEndpointsResource returns an EDS resource for the specified nodeID,
+// clientResources returns complete resources for the specified nodeID,
 // service name and localities.
-func clientEndpointsResource(nodeID, edsServiceName string, localities []e2e.LocalityOptions) e2e.UpdateOptions {
+func clientResources(nodeID, edsServiceName string, localities []e2e.LocalityOptions) e2e.UpdateOptions {
 	return e2e.UpdateOptions{
-		NodeID: nodeID,
+		NodeID:    nodeID,
+		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(serviceName, routeName)},
+		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeName, serviceName, clusterName)},
+		Clusters:  []*v3clusterpb.Cluster{e2e.DefaultCluster(clusterName, edsServiceName, e2e.SecurityLevelNone)},
 		Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.EndpointResourceWithOptions(e2e.EndpointOptions{
 			ClusterName: edsServiceName,
 			Host:        "localhost",
@@ -122,8 +126,7 @@ func clientEndpointsResource(nodeID, edsServiceName string, localities []e2e.Loc
 	}
 }
 
-// TestEDS_OneLocality tests the cluster_resolver LB policy using an EDS
-// resource with one locality. The following scenarios are tested:
+// TestEDS_OneLocality tests the following scenarios:
 //  1. Single backend. Test verifies that RPCs reach this backend.
 //  2. Add a backend. Test verifies that RPCs are roundrobined across the two
 //     backends.
@@ -144,7 +147,7 @@ func (s) TestEDS_OneLocality(t *testing.T) {
 
 	// Create xDS resources for consumption by the test. We start off with a
 	// single backend in a single EDS locality.
-	resources := clientEndpointsResource(nodeID, edsServiceName, []e2e.LocalityOptions{{
+	resources := clientResources(nodeID, edsServiceName, []e2e.LocalityOptions{{
 		Name:     localityName1,
 		Weight:   1,
 		Backends: []e2e.BackendOptions{{Ports: []uint32{ports[0]}}},
@@ -155,46 +158,9 @@ func (s) TestEDS_OneLocality(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create an xDS client for use by the cluster_resolver LB policy.
-	config, err := bootstrap.NewConfigFromContents(bootstrapContents)
-	if err != nil {
-		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
-	}
-	pool := xdsclient.NewPool(config)
-	client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
-		Name: t.Name(),
-	})
-	if err != nil {
-		t.Fatalf("Failed to create xDS client: %v", err)
-	}
-	defer close()
-
-	// Create a manual resolver and push a service config specifying the use of
-	// the cluster_resolver LB policy with a single discovery mechanism.
-	r := manual.NewBuilderWithScheme("whatever")
-	jsonSC := fmt.Sprintf(`{
-			"loadBalancingConfig":[{
-				"cluster_resolver_experimental":{
-					"discoveryMechanisms": [{
-						"cluster": "%s",
-						"type": "EDS",
-						"edsServiceName": "%s",
-						"outlierDetection": {}
-					}],
-					"xdsLbPolicy":[{"round_robin":{}}]
-				}
-			}]
-		}`, clusterName, edsServiceName)
-	scpr := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(jsonSC)
-	r.InitialState(xdsclient.SetClient(resolver.State{ServiceConfig: scpr}, client))
-
-	// Create a ClientConn and make a successful RPC.
-	cc, err := grpc.NewClient(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
-	if err != nil {
-		t.Fatalf("failed to create new client for local test server: %v", err)
-	}
-	defer cc.Close()
-
+	// Create xDS client, xdsResolver, and dial the test backends.
+	cc, cleanup := setupAndDial(t, bootstrapContents)
+	defer cleanup()
 	// Ensure RPCs are being roundrobined across the single backend.
 	testClient := testgrpc.NewTestServiceClient(cc)
 	if err := rrutil.CheckRoundRobinRPCs(ctx, testClient, addrs[:1]); err != nil {
@@ -203,7 +169,7 @@ func (s) TestEDS_OneLocality(t *testing.T) {
 
 	// Add a backend to the same locality, and ensure RPCs are sent in a
 	// roundrobin fashion across the two backends.
-	resources = clientEndpointsResource(nodeID, edsServiceName, []e2e.LocalityOptions{{
+	resources = clientResources(nodeID, edsServiceName, []e2e.LocalityOptions{{
 		Name:     localityName1,
 		Weight:   1,
 		Backends: []e2e.BackendOptions{{Ports: []uint32{ports[0]}}, {Ports: []uint32{ports[1]}}},
@@ -217,7 +183,7 @@ func (s) TestEDS_OneLocality(t *testing.T) {
 
 	// Remove the first backend, and ensure all RPCs are sent to the second
 	// backend.
-	resources = clientEndpointsResource(nodeID, edsServiceName, []e2e.LocalityOptions{{
+	resources = clientResources(nodeID, edsServiceName, []e2e.LocalityOptions{{
 		Name:     localityName1,
 		Weight:   1,
 		Backends: []e2e.BackendOptions{{Ports: []uint32{ports[1]}}},
@@ -230,7 +196,7 @@ func (s) TestEDS_OneLocality(t *testing.T) {
 	}
 
 	// Replace the backend, and ensure all RPCs are sent to the new backend.
-	resources = clientEndpointsResource(nodeID, edsServiceName, []e2e.LocalityOptions{{
+	resources = clientResources(nodeID, edsServiceName, []e2e.LocalityOptions{{
 		Name:     localityName1,
 		Weight:   1,
 		Backends: []e2e.BackendOptions{{Ports: []uint32{ports[2]}}},
@@ -256,11 +222,11 @@ func (s) TestEDS_OneLocality(t *testing.T) {
 //  5. Change the weight of one of the localities. Test verifies that RPCs are
 //     weighted roundrobined across the localities.
 //
-// In our LB policy tree, one of the descendents of the "cluster_resolver" LB
-// policy is the "weighted_target" LB policy which performs weighted roundrobin
-// across localities (and this has a randomness component associated with it).
-// Therefore, the moment we have backends from more than one locality, RPCs are
-// weighted roundrobined across them.
+// In our LB policy tree, one of the descendants is the "weighted_target" LB
+// policy which performs weighted roundrobin across localities (and this has a
+// randomness component associated with it). Therefore, the moment we have
+// backends from more than one locality, RPCs are weighted roundrobined across
+// them.
 func (s) TestEDS_MultipleLocalities(t *testing.T) {
 	// Spin up a management server to receive xDS resources from.
 	managementServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
@@ -276,7 +242,7 @@ func (s) TestEDS_MultipleLocalities(t *testing.T) {
 
 	// Create xDS resources for consumption by the test. We start off with two
 	// localities, and single backend in each of them.
-	resources := clientEndpointsResource(nodeID, edsServiceName, []e2e.LocalityOptions{
+	resources := clientResources(nodeID, edsServiceName, []e2e.LocalityOptions{
 		{
 			Name:     localityName1,
 			Weight:   1,
@@ -296,45 +262,9 @@ func (s) TestEDS_MultipleLocalities(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create an xDS client for use by the cluster_resolver LB policy.
-	config, err := bootstrap.NewConfigFromContents(bootstrapContents)
-	if err != nil {
-		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
-	}
-	pool := xdsclient.NewPool(config)
-	client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
-		Name: t.Name(),
-	})
-	if err != nil {
-		t.Fatalf("Failed to create xDS client: %v", err)
-	}
-	defer close()
-
-	// Create a manual resolver and push service config specifying the use of
-	// the cluster_resolver LB policy with a single discovery mechanism.
-	r := manual.NewBuilderWithScheme("whatever")
-	jsonSC := fmt.Sprintf(`{
-			"loadBalancingConfig":[{
-				"cluster_resolver_experimental":{
-					"discoveryMechanisms": [{
-						"cluster": "%s",
-						"type": "EDS",
-						"edsServiceName": "%s",
-						"outlierDetection": {}
-					}],
-					"xdsLbPolicy":[{"xds_wrr_locality_experimental": {"childPolicy": [{"round_robin": {}}]}}]
-				}
-			}]
-		}`, clusterName, edsServiceName)
-	scpr := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(jsonSC)
-	r.InitialState(xdsclient.SetClient(resolver.State{ServiceConfig: scpr}, client))
-
-	// Create a ClientConn and make a successful RPC.
-	cc, err := grpc.NewClient(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
-	if err != nil {
-		t.Fatalf("failed to create new client for local test server: %v", err)
-	}
-	defer cc.Close()
+	// Create xDS client, xdsResolver, and dial the test backends.
+	cc, cleanup := setupAndDial(t, bootstrapContents)
+	defer cleanup()
 
 	// Ensure RPCs are being weighted roundrobined across the two backends.
 	testClient := testgrpc.NewTestServiceClient(cc)
@@ -344,7 +274,7 @@ func (s) TestEDS_MultipleLocalities(t *testing.T) {
 
 	// Add another locality with a single backend, and ensure RPCs are being
 	// weighted roundrobined across the three backends.
-	resources = clientEndpointsResource(nodeID, edsServiceName, []e2e.LocalityOptions{
+	resources = clientResources(nodeID, edsServiceName, []e2e.LocalityOptions{
 		{
 			Name:     localityName1,
 			Weight:   1,
@@ -370,7 +300,7 @@ func (s) TestEDS_MultipleLocalities(t *testing.T) {
 
 	// Remove the first locality, and ensure RPCs are being weighted
 	// roundrobined across the remaining two backends.
-	resources = clientEndpointsResource(nodeID, edsServiceName, []e2e.LocalityOptions{
+	resources = clientResources(nodeID, edsServiceName, []e2e.LocalityOptions{
 		{
 			Name:     localityName2,
 			Weight:   1,
@@ -392,7 +322,7 @@ func (s) TestEDS_MultipleLocalities(t *testing.T) {
 	// Add a backend to one locality, and ensure weighted roundrobin. Since RPCs
 	// are weighted-roundrobined across localities, locality2's backend will
 	// receive twice the traffic.
-	resources = clientEndpointsResource(nodeID, edsServiceName, []e2e.LocalityOptions{
+	resources = clientResources(nodeID, edsServiceName, []e2e.LocalityOptions{
 		{
 			Name:     localityName2,
 			Weight:   1,
@@ -413,9 +343,9 @@ func (s) TestEDS_MultipleLocalities(t *testing.T) {
 	}
 }
 
-// TestEDS_EndpointsHealth tests the cluster_resolver LB policy using an EDS
-// resource which specifies endpoint health information and verifies that
-// traffic is routed only to backends deemed capable of receiving traffic.
+// TestEDS_EndpointsHealth tests the scenario where an EDS resource specifying
+// endpoint health information is received, and verifies that traffic is routed
+// only to backends deemed capable of receiving traffic.
 func (s) TestEDS_EndpointsHealth(t *testing.T) {
 	// Spin up a management server to receive xDS resources from.
 	managementServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
@@ -432,7 +362,7 @@ func (s) TestEDS_EndpointsHealth(t *testing.T) {
 	// Create xDS resources for consumption by the test.  Two localities with
 	// six backends each, with two of the six backends being healthy. Both
 	// UNKNOWN and HEALTHY are considered by gRPC for load balancing.
-	resources := clientEndpointsResource(nodeID, edsServiceName, []e2e.LocalityOptions{
+	resources := clientResources(nodeID, edsServiceName, []e2e.LocalityOptions{
 		{
 			Name:   localityName1,
 			Weight: 1,
@@ -464,45 +394,9 @@ func (s) TestEDS_EndpointsHealth(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create an xDS client for use by the cluster_resolver LB policy.
-	config, err := bootstrap.NewConfigFromContents(bootstrapContents)
-	if err != nil {
-		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
-	}
-	pool := xdsclient.NewPool(config)
-	client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
-		Name: t.Name(),
-	})
-	if err != nil {
-		t.Fatalf("Failed to create xDS client: %v", err)
-	}
-	defer close()
-
-	// Create a manual resolver and push service config specifying the use of
-	// the cluster_resolver LB policy with a single discovery mechanism.
-	r := manual.NewBuilderWithScheme("whatever")
-	jsonSC := fmt.Sprintf(`{
-			"loadBalancingConfig":[{
-				"cluster_resolver_experimental":{
-					"discoveryMechanisms": [{
-						"cluster": "%s",
-						"type": "EDS",
-						"edsServiceName": "%s",
-						"outlierDetection": {}
-					}],
-					"xdsLbPolicy":[{"round_robin":{}}]
-				}
-			}]
-		}`, clusterName, edsServiceName)
-	scpr := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(jsonSC)
-	r.InitialState(xdsclient.SetClient(resolver.State{ServiceConfig: scpr}, client))
-
-	// Create a ClientConn and make a successful RPC.
-	cc, err := grpc.NewClient(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
-	if err != nil {
-		t.Fatalf("failed to create new client for local test server: %v", err)
-	}
-	defer cc.Close()
+	// Create xDS client, xdsResolver, and dial the test backends.
+	cc, cleanup := setupAndDial(t, bootstrapContents)
+	defer cleanup()
 
 	// Ensure RPCs are being weighted roundrobined across healthy backends from
 	// both localities.
@@ -512,9 +406,8 @@ func (s) TestEDS_EndpointsHealth(t *testing.T) {
 	}
 }
 
-// TestEDS_EmptyUpdate tests the cluster_resolver LB policy using an EDS
-// resource with no localities and verifies that RPCs fail with "all priorities
-// removed" error.
+// TestEDS_EmptyUpdate tests when an EDS resource with no localities is received
+// and verifies that RPCs fail with "all priorities removed" error.
 func (s) TestEDS_EmptyUpdate(t *testing.T) {
 	// Spin up a management server to receive xDS resources from.
 	managementServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
@@ -534,61 +427,24 @@ func (s) TestEDS_EmptyUpdate(t *testing.T) {
 
 	// Create xDS resources for consumption by the test. The first update is an
 	// empty update. This should put the channel in TRANSIENT_FAILURE.
-	resources := clientEndpointsResource(nodeID, edsServiceName, nil)
+	resources := clientResources(nodeID, edsServiceName, nil)
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if err := managementServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
 
-	// Create an xDS client for use by the cluster_resolver LB policy.
-	config, err := bootstrap.NewConfigFromContents(bootstrapContents)
-	if err != nil {
-		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
-	}
-	pool := xdsclient.NewPool(config)
-	client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
-		Name: t.Name(),
-	})
-	if err != nil {
-		t.Fatalf("Failed to create xDS client: %v", err)
-	}
-	defer close()
+	// Create xDS client, xdsResolver, and dial the test backends.
+	cc, cleanup := setupAndDial(t, bootstrapContents)
+	defer cleanup()
 
-	// Create a manual resolver and push service config specifying the use of
-	// the cluster_resolver LB policy with a single discovery mechanism.
-	r := manual.NewBuilderWithScheme("whatever")
-	jsonSC := fmt.Sprintf(`{
-			"loadBalancingConfig":[{
-				"cluster_resolver_experimental":{
-					"discoveryMechanisms": [{
-						"cluster": "%s",
-						"type": "EDS",
-						"edsServiceName": "%s",
-						"outlierDetection": {}
-					}],
-					"xdsLbPolicy":[{"round_robin":{}}]
-				}
-			}]
-		}`, clusterName, edsServiceName)
-	scpr := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(jsonSC)
-	r.InitialState(xdsclient.SetClient(resolver.State{ServiceConfig: scpr}, client))
-
-	// Create a ClientConn and ensure that RPCs fail with "all priorities
-	// removed" error. This is the expected error when the cluster_resolver LB
-	// policy receives an EDS update with no localities.
-	cc, err := grpc.NewClient(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
-	if err != nil {
-		t.Fatalf("failed to create new client for local test server: %v", err)
-	}
-	defer cc.Close()
 	testClient := testgrpc.NewTestServiceClient(cc)
 	if err := waitForProducedZeroAddressesError(ctx, t, testClient); err != nil {
 		t.Fatal(err)
 	}
 
 	// Add a locality with one backend and ensure RPCs are successful.
-	resources = clientEndpointsResource(nodeID, edsServiceName, []e2e.LocalityOptions{{
+	resources = clientResources(nodeID, edsServiceName, []e2e.LocalityOptions{{
 		Name:     localityName1,
 		Weight:   1,
 		Backends: []e2e.BackendOptions{{Ports: []uint32{ports[0]}}},
@@ -600,9 +456,9 @@ func (s) TestEDS_EmptyUpdate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Push another empty update and ensure that RPCs fail with "all priorities
+	// Push another empty update and ensure that RPCs fail with the "all priorities
 	// removed" error again.
-	resources = clientEndpointsResource(nodeID, edsServiceName, nil)
+	resources = clientResources(nodeID, edsServiceName, nil)
 	if err := managementServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
@@ -611,10 +467,10 @@ func (s) TestEDS_EmptyUpdate(t *testing.T) {
 	}
 }
 
-// TestEDS_ResourceRemoved tests the case where the EDS resource requested by
-// the clusterresolver LB policy is removed from the management server. The test
-// verifies that the EDS watch is not canceled and that RPCs continue to succeed
-// with the previously received configuration.
+// TestEDS_ResourceRemoved tests the case where the EDS resource requested is
+// removed from the management server. The test verifies that the EDS watch is
+// not canceled and that RPCs continue to succeed with the previously received
+// configuration.
 func (s) TestEDS_ResourceRemoved(t *testing.T) {
 	// Start an xDS management server that uses a couple of channels to
 	// notify the test about the following events:
@@ -657,10 +513,11 @@ func (s) TestEDS_ResourceRemoved(t *testing.T) {
 
 	// Configure cluster and endpoints resources in the management server.
 	resources := e2e.UpdateOptions{
-		NodeID:         nodeID,
-		Clusters:       []*v3clusterpb.Cluster{e2e.DefaultCluster(clusterName, edsServiceName, e2e.SecurityLevelNone)},
-		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(edsServiceName, "localhost", []uint32{testutils.ParsePort(t, server.Address)})},
-		SkipValidation: true,
+		NodeID:    nodeID,
+		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(serviceName, routeName)},
+		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeName, serviceName, clusterName)},
+		Clusters:  []*v3clusterpb.Cluster{e2e.DefaultCluster(clusterName, edsServiceName, e2e.SecurityLevelNone)},
+		Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(edsServiceName, "localhost", []uint32{testutils.ParsePort(t, server.Address)})},
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -668,8 +525,7 @@ func (s) TestEDS_ResourceRemoved(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create xDS client, configure cds_experimental LB policy with a manual
-	// resolver, and dial the test backends.
+	// Create xDS client, xdsResolver, and dial the test backends.
 	cc, cleanup := setupAndDial(t, bootstrapContents)
 	defer cleanup()
 
@@ -680,6 +536,7 @@ func (s) TestEDS_ResourceRemoved(t *testing.T) {
 
 	// Delete the endpoints resource from the management server.
 	resources.Endpoints = nil
+	resources.SkipValidation = true
 	if err := managementServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
@@ -700,8 +557,8 @@ func (s) TestEDS_ResourceRemoved(t *testing.T) {
 
 // TestEDS_ClusterResourceDoesNotContainEDSServiceName tests the case where the
 // Cluster resource sent by the management server does not contain an EDS
-// service name. The test verifies that the cluster_resolver LB policy uses the
-// cluster name for the EDS resource.
+// service name. The test verifies that the cluster name is used for the EDS
+// resource.
 func (s) TestEDS_ClusterResourceDoesNotContainEDSServiceName(t *testing.T) {
 	edsResourceCh := make(chan string, 1)
 	managementServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
@@ -728,10 +585,11 @@ func (s) TestEDS_ClusterResourceDoesNotContainEDSServiceName(t *testing.T) {
 
 	// Configure cluster and endpoints resources with the same name in the management server. The cluster resource does not specify an EDS service name.
 	resources := e2e.UpdateOptions{
-		NodeID:         nodeID,
-		Clusters:       []*v3clusterpb.Cluster{e2e.DefaultCluster(clusterName, "", e2e.SecurityLevelNone)},
-		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(clusterName, "localhost", []uint32{testutils.ParsePort(t, server.Address)})},
-		SkipValidation: true,
+		NodeID:    nodeID,
+		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(serviceName, routeName)},
+		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeName, serviceName, clusterName)},
+		Clusters:  []*v3clusterpb.Cluster{e2e.DefaultCluster(clusterName, "", e2e.SecurityLevelNone)},
+		Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(clusterName, "localhost", []uint32{testutils.ParsePort(t, server.Address)})},
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -739,8 +597,7 @@ func (s) TestEDS_ClusterResourceDoesNotContainEDSServiceName(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create xDS client, configure cds_experimental LB policy with a manual
-	// resolver, and dial the test backends.
+	// Create xDS client, xdsResolver, and dial the test backends.
 	cc, cleanup := setupAndDial(t, bootstrapContents)
 	defer cleanup()
 
@@ -813,8 +670,10 @@ func (s) TestEDS_ClusterResourceUpdates(t *testing.T) {
 
 	// Configure cluster and endpoints resources in the management server.
 	resources := e2e.UpdateOptions{
-		NodeID:   nodeID,
-		Clusters: []*v3clusterpb.Cluster{e2e.DefaultCluster(clusterName, edsServiceName, e2e.SecurityLevelNone)},
+		NodeID:    nodeID,
+		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(serviceName, routeName)},
+		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeName, serviceName, clusterName)},
+		Clusters:  []*v3clusterpb.Cluster{e2e.DefaultCluster(clusterName, edsServiceName, e2e.SecurityLevelNone)},
 		Endpoints: []*v3endpointpb.ClusterLoadAssignment{
 			e2e.DefaultEndpoint(edsServiceName, "localhost", []uint32{uint32(ports[0])}),
 			e2e.DefaultEndpoint(clusterName, "localhost", []uint32{uint32(ports[1])}),
@@ -825,8 +684,7 @@ func (s) TestEDS_ClusterResourceUpdates(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create xDS client, configure cds_experimental LB policy with a manual
-	// resolver, and dial the test backends.
+	// Create xDS client, xdsResolver, and dial the test backends.
 	cc, cleanup := setupAndDial(t, bootstrapContents)
 	defer cleanup()
 
@@ -912,10 +770,10 @@ func (s) TestEDS_ClusterResourceUpdates(t *testing.T) {
 
 // TestEDS_BadUpdateWithoutPreviousGoodUpdate tests the case where the
 // management server sends a bad update (one that is NACKed by the xDS client).
-// Since the cluster_resolver LB policy does not have a previously received good
-// update, it is expected to treat this bad update as though it received an
-// update with no endpoints. Hence RPCs are expected to fail with "all
-// priorities removed" error.
+// Since the xDS client does not have a previously received good update, it is
+// expected to treat this bad update as though it received an update with no
+// endpoints. Hence RPCs are expected to fail with "all priorities removed"
+// error.
 func (s) TestEDS_BadUpdateWithoutPreviousGoodUpdate(t *testing.T) {
 	// Spin up a management server to receive xDS resources from.
 	managementServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
@@ -932,7 +790,7 @@ func (s) TestEDS_BadUpdateWithoutPreviousGoodUpdate(t *testing.T) {
 	// result in the resource being NACKed by the xDS client. Since the
 	// cluster_resolver LB policy does not have a previously received good EDS
 	// update, it should treat this update as an empty EDS update.
-	resources := clientEndpointsResource(nodeID, edsServiceName, []e2e.LocalityOptions{{
+	resources := clientResources(nodeID, edsServiceName, []e2e.LocalityOptions{{
 		Name:     localityName1,
 		Weight:   1,
 		Backends: []e2e.BackendOptions{{Ports: []uint32{testutils.ParsePort(t, server.Address)}}},
@@ -944,46 +802,8 @@ func (s) TestEDS_BadUpdateWithoutPreviousGoodUpdate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create an xDS client for use by the cluster_resolver LB policy.
-	config, err := bootstrap.NewConfigFromContents(bootstrapContents)
-	if err != nil {
-		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
-	}
-	pool := xdsclient.NewPool(config)
-	xdsClient, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
-		Name: t.Name(),
-	})
-	if err != nil {
-		t.Fatalf("Failed to create xDS client: %v", err)
-	}
-	defer close()
-
-	// Create a manual resolver and push a service config specifying the use of
-	// the cluster_resolver LB policy with a single discovery mechanism.
-	r := manual.NewBuilderWithScheme("whatever")
-	jsonSC := fmt.Sprintf(`{
-			"loadBalancingConfig":[{
-				"cluster_resolver_experimental":{
-					"discoveryMechanisms": [{
-						"cluster": "%s",
-						"type": "EDS",
-						"edsServiceName": "%s",
-						"outlierDetection": {}
-					}],
-					"xdsLbPolicy":[{"round_robin":{}}]
-				}
-			}]
-		}`, clusterName, edsServiceName)
-	scpr := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(jsonSC)
-	r.InitialState(xdsclient.SetClient(resolver.State{ServiceConfig: scpr}, xdsClient))
-
-	// Create a ClientConn and verify that RPCs fail with "all priorities
-	// removed" error.
-	cc, err := grpc.NewClient(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
-	if err != nil {
-		t.Fatalf("failed to create new client for local test server: %v", err)
-	}
-	defer cc.Close()
+	cc, cancel := setupAndDial(t, bootstrapContents)
+	defer cancel()
 	client := testgrpc.NewTestServiceClient(cc)
 	if err := waitForProducedZeroAddressesError(ctx, t, client); err != nil {
 		t.Fatal(err)
@@ -1009,7 +829,7 @@ func (s) TestEDS_BadUpdateWithPreviousGoodUpdate(t *testing.T) {
 	defer server.Stop()
 
 	// Create an EDS resource for consumption by the test.
-	resources := clientEndpointsResource(nodeID, edsServiceName, []e2e.LocalityOptions{{
+	resources := clientResources(nodeID, edsServiceName, []e2e.LocalityOptions{{
 		Name:     localityName1,
 		Weight:   1,
 		Backends: []e2e.BackendOptions{{Ports: []uint32{testutils.ParsePort(t, server.Address)}}},
@@ -1020,45 +840,9 @@ func (s) TestEDS_BadUpdateWithPreviousGoodUpdate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create an xDS client for use by the cluster_resolver LB policy.
-	config, err := bootstrap.NewConfigFromContents(bootstrapContents)
-	if err != nil {
-		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
-	}
-	pool := xdsclient.NewPool(config)
-	xdsClient, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
-		Name: t.Name(),
-	})
-	if err != nil {
-		t.Fatalf("Failed to create xDS client: %v", err)
-	}
-	defer close()
-
-	// Create a manual resolver and push a service config specifying the use of
-	// the cluster_resolver LB policy with a single discovery mechanism.
-	r := manual.NewBuilderWithScheme("whatever")
-	jsonSC := fmt.Sprintf(`{
-			"loadBalancingConfig":[{
-				"cluster_resolver_experimental":{
-					"discoveryMechanisms": [{
-						"cluster": "%s",
-						"type": "EDS",
-						"edsServiceName": "%s",
-						"outlierDetection": {}
-					}],
-					"xdsLbPolicy":[{"round_robin":{}}]
-				}
-			}]
-		}`, clusterName, edsServiceName)
-	scpr := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(jsonSC)
-	r.InitialState(xdsclient.SetClient(resolver.State{ServiceConfig: scpr}, xdsClient))
-
-	// Create a ClientConn and make a successful RPC.
-	cc, err := grpc.NewClient(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
-	if err != nil {
-		t.Fatalf("failed to create new client for local test server: %v", err)
-	}
-	defer cc.Close()
+	// Create xDS client, xdsResolver, and dial the test backends.
+	cc, cleanup := setupAndDial(t, bootstrapContents)
+	defer cleanup()
 
 	// Ensure RPCs are being roundrobined across the single backend.
 	client := testgrpc.NewTestServiceClient(cc)
@@ -1111,39 +895,33 @@ func (s) TestEDS_ResourceNotFound(t *testing.T) {
 	}
 	defer close()
 
-	// Configure no resources on the management server.
-	resources := e2e.UpdateOptions{NodeID: nodeID, SkipValidation: true}
+	// Configure no eds resources on the management server.
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		NodeID:     nodeID,
+		DialTarget: serviceName,
+		Host:       "localhost",
+		Port:       8080,
+	})
+	resources.Endpoints = nil
+	resources.SkipValidation = true
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
 	}
 
-	// Create a manual resolver and push a service config specifying the use of
-	// the cluster_resolver LB policy with a single discovery mechanism.
-	r := manual.NewBuilderWithScheme("whatever")
-	jsonSC := fmt.Sprintf(`{
-			"loadBalancingConfig":[{
-				"cluster_resolver_experimental":{
-					"discoveryMechanisms": [{
-						"cluster": "%s",
-						"type": "EDS",
-						"edsServiceName": "%s",
-						"outlierDetection": {}
-					}],
-					"xdsLbPolicy":[{"round_robin":{}}]
-				}
-			}]
-		}`, clusterName, edsServiceName)
-	scpr := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(jsonSC)
-	r.InitialState(xdsclient.SetClient(resolver.State{ServiceConfig: scpr}, xdsClient))
-
-	// Create a ClientConn and verify that RPCs fail with "all priorities
-	// removed" error.
-	cc, err := grpc.NewClient(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
-	if err != nil {
-		t.Fatalf("failed to create new client for local test server: %v", err)
+	if internal.NewXDSResolverWithClientForTesting == nil {
+		t.Fatalf("internal.NewXDSResolverWithClientForTesting is nil")
 	}
+	r, err := internal.NewXDSResolverWithClientForTesting.(func(xdsclient.XDSClient) (resolver.Builder, error))(xdsClient)
+	if err != nil {
+		t.Fatalf("failed to create resolver")
+	}
+	cc, err := grpc.NewClient("xds:///"+serviceName, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
+	if err != nil {
+		t.Fatalf("grpc.NewClient() failed: %v", err)
+	}
+	cc.Connect()
 	defer cc.Close()
 	client := testgrpc.NewTestServiceClient(cc)
 	if err := waitForProducedZeroAddressesError(ctx, t, client); err != nil {
@@ -1166,8 +944,8 @@ func waitForProducedZeroAddressesError(ctx context.Context, t *testing.T, client
 			t.Logf("EmptyCall() returned code: %v, want: %v", code, codes.Unavailable)
 			continue
 		}
-		if !strings.Contains(err.Error(), "no children to pick from") {
-			t.Logf("EmptyCall() = %v, want %v", err, "no children to pick from")
+		if !strings.Contains(err.Error(), "no targets to pick from") {
+			t.Logf("EmptyCall() = %v, want %v", err, "no targets to pick from")
 			continue
 		}
 		return nil
@@ -1283,7 +1061,7 @@ func (s) TestEDS_EndpointWithMultipleAddresses(t *testing.T) {
 
 			// Create xDS resources for consumption by the test. We start off with a
 			// single backend in a single EDS locality.
-			resources := clientEndpointsResource(nodeID, edsServiceName, []e2e.LocalityOptions{{
+			resources := clientResources(nodeID, edsServiceName, []e2e.LocalityOptions{{
 				Name:   localityName1,
 				Weight: 1,
 				Backends: []e2e.BackendOptions{{
@@ -1304,29 +1082,18 @@ func (s) TestEDS_EndpointWithMultipleAddresses(t *testing.T) {
 			}
 			defer close()
 
-			// Create a manual resolver and push a service config specifying the use of
-			// the cluster_resolver LB policy with a single discovery mechanism.
-			r := manual.NewBuilderWithScheme("whatever")
-			jsonSC := fmt.Sprintf(`{
-				"loadBalancingConfig":[{
-					"cluster_resolver_experimental":{
-						"discoveryMechanisms": [{
-							"cluster": "%s",
-							"type": "EDS",
-							"edsServiceName": "%s",
-							"outlierDetection": {}
-						}],
-						"xdsLbPolicy":[{"round_robin":{}}]
-					}
-				}]
-			}`, clusterName, edsServiceName)
-			scpr := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(jsonSC)
-			r.InitialState(xdsclient.SetClient(resolver.State{ServiceConfig: scpr}, xdsClient))
-
-			cc, err := grpc.NewClient(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
-			if err != nil {
-				t.Fatalf("failed to create new client for local test server: %v", err)
+			if internal.NewXDSResolverWithClientForTesting == nil {
+				t.Fatalf("internal.NewXDSResolverWithClientForTesting is nil")
 			}
+			r, err := internal.NewXDSResolverWithClientForTesting.(func(xdsclient.XDSClient) (resolver.Builder, error))(xdsClient)
+			if err != nil {
+				t.Fatalf("failed to create resolver")
+			}
+			cc, err := grpc.NewClient("xds:///"+serviceName, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
+			if err != nil {
+				t.Fatalf("grpc.NewClient() failed: %v", err)
+			}
+			cc.Connect()
 			defer cc.Close()
 			client := testgrpc.NewTestServiceClient(cc)
 			if err := rrutil.CheckRoundRobinRPCs(ctx, client, []resolver.Address{{Addr: lis1.Addr().String()}}); err != nil {

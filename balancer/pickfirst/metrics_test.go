@@ -102,10 +102,30 @@ func (s) TestPickFirstMetrics(t *testing.T) {
 		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.lb.pick_first.disconnections", got, 0)
 	}
 
+	// Checking for subchannel metrics as well
+	if got, _ := tmr.Metric("grpc.subchannel.connection_attempts_succeeded"); got != 1 {
+		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.subchannel.connection_attempts_succeeded", got, 1)
+	}
+	if got, _ := tmr.Metric("grpc.subchannel.connection_attempts_failed"); got != 0 {
+		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.subchannel.connection_attempts_failed", got, 0)
+	}
+	if got, _ := tmr.Metric("grpc.subchannel.disconnections"); got != 0 {
+		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.subchannel.disconnections", got, 0)
+	}
+	if got, _ := tmr.Metric("grpc.subchannel.open_connections"); got != 1 {
+		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.subchannel.open_connections", got, 1)
+	}
+
 	ss.Stop()
 	testutils.AwaitState(ctx, t, cc, connectivity.Idle)
 	if got, _ := tmr.Metric("grpc.lb.pick_first.disconnections"); got != 1 {
 		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.lb.pick_first.disconnections", got, 1)
+	}
+	if got, _ := tmr.Metric("grpc.subchannel.disconnections"); got != 1 {
+		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.subchannel.disconnections", got, 1)
+	}
+	if got, _ := tmr.Metric("grpc.subchannel.open_connections"); got != -1 {
+		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.subchannel.open_connections", got, -1)
 	}
 }
 

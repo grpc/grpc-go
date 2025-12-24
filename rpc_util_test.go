@@ -48,6 +48,118 @@ const (
 	decompressionErrorMsg   = "invalid compression format"
 )
 
+type testCompressorForRegistry struct {
+	name string
+}
+
+func (c *testCompressorForRegistry) Compress(w io.Writer) (io.WriteCloser, error) {
+	return &testWriteCloser{w}, nil
+}
+
+func (c *testCompressorForRegistry) Decompress(r io.Reader) (io.Reader, error) {
+	return r, nil
+}
+
+func (c *testCompressorForRegistry) Name() string {
+	return c.name
+}
+
+type testWriteCloser struct {
+	io.Writer
+}
+
+func (w *testWriteCloser) Close() error {
+	return nil
+}
+
+func (s) TestNewAcceptedCompressionConfig(t *testing.T) {
+	// Register a test compressor for multi-compressor tests
+	testCompressor := &testCompressorForRegistry{name: "test-compressor"}
+	encoding.RegisterCompressor(testCompressor)
+	defer func() {
+		// Unregister the test compressor
+		encoding.RegisterCompressor(&testCompressorForRegistry{name: "test-compressor"})
+	}()
+
+	tests := []struct {
+		name        string
+		input       []string
+		wantAllowed []string
+		wantErr     bool
+	}{
+		{
+			name:        "identity-only",
+			input:       nil,
+			wantAllowed: nil,
+		},
+		{
+			name:        "single valid",
+			input:       []string{"gzip"},
+			wantAllowed: []string{"gzip"},
+		},
+		{
+			name:        "dedupe and trim",
+			input:       []string{" gzip ", "gzip"},
+			wantAllowed: []string{"gzip"},
+		},
+		{
+			name:        "ignores identity",
+			input:       []string{"identity", "gzip"},
+			wantAllowed: []string{"gzip"},
+		},
+		{
+			name:        "explicit identity only",
+			input:       []string{"identity"},
+			wantAllowed: nil,
+		},
+		{
+			name:    "invalid compressor",
+			input:   []string{"does-not-exist"},
+			wantErr: true,
+		},
+		{
+			name:        "only whitespace",
+			input:       []string{"   ", "\t"},
+			wantAllowed: nil,
+		},
+		{
+			name:        "multiple valid compressors",
+			input:       []string{"gzip", "test-compressor"},
+			wantAllowed: []string{"gzip", "test-compressor"},
+		},
+		{
+			name:        "multiple with identity and whitespace",
+			input:       []string{"gzip", "identity", " test-compressor ", "  "},
+			wantAllowed: []string{"gzip", "test-compressor"},
+		},
+		{
+			name:        "empty string in list",
+			input:       []string{"gzip", "", "test-compressor"},
+			wantAllowed: []string{"gzip", "test-compressor"},
+		},
+		{
+			name:    "mixed valid and invalid",
+			input:   []string{"gzip", "invalid-comp"},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			allowed, err := newAcceptedCompressionConfig(tt.input)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("newAcceptedCompressionConfig(%v) error = %v, wantErr %v", tt.input, err, tt.wantErr)
+			}
+			if tt.wantErr {
+				return
+			}
+			if diff := cmp.Diff(tt.wantAllowed, allowed); diff != "" {
+				t.Fatalf("allowed diff (-want +got): %v", diff)
+			}
+		})
+	}
+}
+
 type fullReader struct {
 	data []byte
 }

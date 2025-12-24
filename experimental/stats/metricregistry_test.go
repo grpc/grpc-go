@@ -117,6 +117,14 @@ func (s) TestMetricRegistry(t *testing.T) {
 		OptionalLabels: []string{"int up down counter optional label"},
 		Default:        false,
 	})
+	intAsyncGaugeHandle1 := RegisterInt64AsyncGauge(MetricDescriptor{
+		Name:           "simple async gauge",
+		Description:    "the most recent int emitted by test",
+		Unit:           "int",
+		Labels:         []string{"int async gauge label"},
+		OptionalLabels: []string{"int async gauge optional label"},
+		Default:        false,
+	})
 
 	fmr := newFakeMetricsRecorder(t)
 
@@ -155,9 +163,13 @@ func (s) TestMetricRegistry(t *testing.T) {
 	if got := fmr.intValues[intGaugeHandle1.Descriptor()]; got != 7 {
 		t.Fatalf("fmr.intValues[intGaugeHandle1.MetricDescriptor] got %v, want: %v", got, 7)
 	}
+	intAsyncGaugeHandle1.Record(fmr, 9, []string{"some label value", "some optional label value"}...)
+	if got := fmr.intValues[intAsyncGaugeHandle1.Descriptor()]; got != 9 {
+		t.Fatalf("fmr.intValues[intAsyncGaugeHandle1.MetricDescriptor] got %v, want: %v", got, 9)
+	}
 }
 
-func TestUpDownCounts(t *testing.T) {
+func (s) TestUpDownCounts(t *testing.T) {
 	cleanup := snapshotMetricsRegistryForTesting()
 	defer cleanup()
 
@@ -182,7 +194,7 @@ func TestUpDownCounts(t *testing.T) {
 // TestNumerousIntCounts tests numerous int count metrics registered onto the
 // metric registry. A component (simulated by test) should be able to record on
 // the different registered int count metrics.
-func TestNumerousIntCounts(t *testing.T) {
+func (s) TestNumerousIntCounts(t *testing.T) {
 	cleanup := snapshotMetricsRegistryForTesting()
 	defer cleanup()
 
@@ -257,18 +269,6 @@ func newFakeMetricsRecorder(t *testing.T) *fakeMetricsRecorder {
 		intValues:   make(map[*MetricDescriptor]int64),
 		floatValues: make(map[*MetricDescriptor]float64),
 	}
-
-	for _, desc := range metricsRegistry {
-		switch desc.Type {
-		case MetricTypeIntCount:
-		case MetricTypeIntHisto:
-		case MetricTypeIntGauge:
-			fmr.intValues[desc] = 0
-		case MetricTypeFloatCount:
-		case MetricTypeFloatHisto:
-			fmr.floatValues[desc] = 0
-		}
-	}
 	return fmr
 }
 
@@ -307,4 +307,17 @@ func (r *fakeMetricsRecorder) RecordInt64Gauge(handle *Int64GaugeHandle, incr in
 func (r *fakeMetricsRecorder) RecordInt64UpDownCount(handle *Int64UpDownCountHandle, incr int64, labels ...string) {
 	verifyLabels(r.t, handle.Descriptor().Labels, handle.Descriptor().OptionalLabels, labels)
 	r.intValues[handle.Descriptor()] += incr
+}
+
+func (r *fakeMetricsRecorder) RecordInt64AsyncGauge(handle *Int64AsyncGaugeHandle, val int64, labels ...string) {
+	verifyLabels(r.t, handle.Descriptor().Labels, handle.Descriptor().OptionalLabels, labels)
+	// Async gauges in OTel are "Observer" instruments; they report
+	// the current state of the world every cycle, they do not accumulate deltas.
+	r.intValues[handle.Descriptor()] = val
+}
+
+// RegisterAsyncReporter is noop implementation, this might be changed at a
+// later stage.
+func (r *fakeMetricsRecorder) RegisterAsyncReporter(AsyncMetricReporter, ...AsyncMetric) func() {
+	return func() {}
 }

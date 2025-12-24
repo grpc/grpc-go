@@ -30,9 +30,33 @@ import (
 	"google.golang.org/grpc/internal/pretty"
 	xdsinternal "google.golang.org/grpc/internal/xds"
 	"google.golang.org/grpc/internal/xds/clients"
+	"google.golang.org/grpc/resolver"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 )
+
+// hostnameKeyType is the key to store the hostname attribute in
+// a resolver.Endpoint.
+type hostnameKeyType struct{}
+
+// setHostname returns a copy of the given endpoint with hostname added
+// as an attribute.
+func setHostname(endpoint resolver.Endpoint, hostname string) resolver.Endpoint {
+	// Only set if non-empty; xds_cluster_impl uses this to trigger :authority
+	// rewriting.
+	if hostname == "" {
+		return endpoint
+	}
+	endpoint.Attributes = endpoint.Attributes.WithValue(hostnameKeyType{}, hostname)
+	return endpoint
+}
+
+// HostnameFromEndpoint returns the hostname attribute of endpoint. If this
+// attribute is not set, it returns the empty string.
+func HostnameFromEndpoint(endpoint resolver.Endpoint) string {
+	hostname, _ := endpoint.Attributes.Value(hostnameKeyType{}).(string)
+	return hostname
+}
 
 func unmarshalEndpointsResource(r *anypb.Any) (string, EndpointsUpdate, error) {
 	r, err := UnwrapResource(r)
@@ -102,7 +126,9 @@ func parseEndpoints(lbEndpoints []*v3endpointpb.LbEndpoint, uniqueEndpointAddrs 
 			}
 		}
 
+		address := []resolver.Address{}
 		for _, a := range addrs {
+			address = append(address, resolver.Address{Addr: a})
 			if uniqueEndpointAddrs[a] {
 				return nil, fmt.Errorf("duplicate endpoint with the same address %s", a)
 			}
@@ -126,12 +152,14 @@ func parseEndpoints(lbEndpoints []*v3endpointpb.LbEndpoint, uniqueEndpointAddrs 
 				hashKey = hashKeyFromMetadata(endpointMetadata)
 			}
 		}
+		endpoint := resolver.Endpoint{Addresses: address}
+		endpoint = setHostname(endpoint, lbEndpoint.GetEndpoint().GetHostname())
 		endpoints = append(endpoints, Endpoint{
-			HealthStatus: EndpointHealthStatus(lbEndpoint.GetHealthStatus()),
-			Addresses:    addrs,
-			Weight:       weight,
-			HashKey:      hashKey,
-			Metadata:     endpointMetadata,
+			ResolverEndpoint: endpoint,
+			HealthStatus:     EndpointHealthStatus(lbEndpoint.GetHealthStatus()),
+			Weight:           weight,
+			HashKey:          hashKey,
+			Metadata:         endpointMetadata,
 		})
 	}
 	return endpoints, nil

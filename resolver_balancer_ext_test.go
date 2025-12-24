@@ -29,13 +29,19 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/balancer/stub"
 	"google.golang.org/grpc/internal/channelz"
+	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
+	"google.golang.org/grpc/status"
+
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
 // TestResolverBalancerInteraction tests:
@@ -124,6 +130,40 @@ func (s) TestResolverBuildFailure(t *testing.T) {
 	defer cancel()
 	if err := cc.Invoke(ctx, "/a/b", nil, nil); err == nil || !strings.Contains(err.Error(), errStr) {
 		t.Fatalf("Invoke = %v; want %v", err, errStr)
+	}
+}
+
+// Tests the case where the resolver reports an error to the channel before
+// reporting an update. Verifies that the channel eventually moves to
+// TransientFailure and subsequent RPCs returns the error reported by the
+// resolver to the user.
+func (s) TestResolverReportError(t *testing.T) {
+	const resolverErr = "test resolver error"
+	r := manual.NewBuilderWithScheme("whatever")
+	r.BuildCallback = func(_ resolver.Target, cc resolver.ClientConn, _ resolver.BuildOptions) {
+		cc.ReportError(errors.New(resolverErr))
+	}
+
+	cc, err := grpc.NewClient(r.Scheme()+":///", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
+	if err != nil {
+		t.Fatalf("Error creating client: %v", err)
+	}
+	defer cc.Close()
+	cc.Connect()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
+
+	client := testgrpc.NewTestServiceClient(cc)
+	for range 5 {
+		_, err = client.EmptyCall(ctx, &testpb.Empty{})
+		if code := status.Code(err); code != codes.Unavailable {
+			t.Fatalf("EmptyCall() = %v, want %v", err, codes.Unavailable)
+		}
+		if err == nil || !strings.Contains(err.Error(), resolverErr) {
+			t.Fatalf("EmptyCall() = %q, want %q", err, resolverErr)
+		}
 	}
 }
 
