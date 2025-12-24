@@ -697,16 +697,6 @@ func (s) TestResolverRemovedWithRPCs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// The RPC started earlier is still in progress. So, the xDS resolver will
-	// not produce an empty service config at this point. Instead it will retain
-	// the cluster to which the RPC is ongoing in the service config, but will
-	// return an erroring config selector which will fail new RPCs.
-	cs = verifyUpdateFromResolver(ctx, t, stateCh, wantServiceConfig(resources.Clusters[0].Name))
-	_, err = cs.SelectConfig(iresolver.RPCInfo{Context: ctx, Method: "/service/method"})
-	if err := verifyResolverError(err, codes.Unavailable, "has been removed", nodeID); err != nil {
-		t.Fatal(err)
-	}
-
 	// "Finish the RPC"; this could cause a panic if the resolver doesn't
 	// handle it correctly.
 	res.OnCommitted()
@@ -811,17 +801,7 @@ func (s) TestResolverRemovedResource(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// The channel should receive the existing service config with the original
-	// cluster but with an erroring config selector.
-	cs = verifyUpdateFromResolver(ctx, t, stateCh, wantServiceConfig(resources.Clusters[0].Name))
-
-	// "Make another RPC" by invoking the config selector.
-	_, err = cs.SelectConfig(iresolver.RPCInfo{Context: ctx, Method: "/service/method"})
-	if err := verifyResolverError(err, codes.Unavailable, "has been removed", nodeID); err != nil {
-		t.Fatal(err)
-	}
-
-	// In the meantime, an empty ServiceConfig update should have been sent.
+	// A empty ServiceConfig update should have been sent.
 	var state resolver.State
 	select {
 	case <-ctx.Done():
@@ -1467,4 +1447,139 @@ func (s) TestResolver_AutoHostRewrite(t *testing.T) {
 			}
 		})
 	}
+}
+
+// waitForCDSRequest consumes resource name updates from the provided channel
+// until it finds a request that:
+// 1. Contains ALL clusters in wantPresent.
+// 2. Contains NONE of the clusters in wantAbsent.
+//
+// It ignores intermediate updates that do not match criteria to allow for
+// eventual consistency.
+func waitForCDSRequest(ctx context.Context, t *testing.T, ch <-chan []string, wantPresent, wantAbsent []string) {
+	t.Helper()
+
+	for {
+		select {
+		case <-ctx.Done():
+			t.Fatalf("Timeout waiting for CDS request. WantPresent: %v, WantAbsent: %v", wantPresent, wantAbsent)
+		case names := <-ch:
+			// Create a set for lookups
+			presentMap := make(map[string]bool, len(names))
+			for _, n := range names {
+				presentMap[n] = true
+			}
+
+			// 1. Check for required clusters
+			missing := false
+			for _, w := range wantPresent {
+				if !presentMap[w] {
+					missing = true
+					break
+				}
+			}
+			if missing {
+				continue // Current update doesn't have everything we need; keep waiting.
+			}
+
+			// 2. Check for prohibited clusters
+			hasUnexpected := false
+			for _, w := range wantAbsent {
+				if presentMap[w] {
+					hasUnexpected = true
+					break
+				}
+			}
+			if hasUnexpected {
+				continue // Current update has something we want gone; keep waiting.
+			}
+
+			// If we are here, both conditions are met.
+			return
+		}
+	}
+}
+
+// TestResolverKeepWatchOpen_ActiveRPCs tests that the dependency manager
+// keeping a cluster watch open when there are active RPCs using that cluster,
+// even if the cluster is no longer referenced by the current route
+// configuration.
+func (s) TestResolverKeepWatchOpen_ActiveRPCs(t *testing.T) {
+	// Have some buffer to prevent blocking the management server
+	clusterResourceNamesCh := make(chan []string, 2)
+
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
+		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
+			if req.GetTypeUrl() == version.V3ClusterURL {
+				// Blocking send
+				clusterResourceNamesCh <- req.GetResourceNames()
+			}
+			return nil
+		},
+		AllowResourceSubset: true,
+	})
+
+	nodeID := uuid.New().String()
+	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
+
+	clusterA := "cluster-A"
+	clusterB := "cluster-B"
+
+	// Configure initial resources: Route -> ClusterA
+	routeA := e2e.DefaultRouteConfig(defaultTestRouteConfigName, defaultTestServiceName, clusterA)
+	listeners := []*v3listenerpb.Listener{e2e.DefaultClientListener(defaultTestServiceName, defaultTestRouteConfigName)}
+	clusters := []*v3clusterpb.Cluster{
+		e2e.DefaultCluster(clusterA, "endpoint-A", e2e.SecurityLevelNone),
+		e2e.DefaultCluster(clusterB, "endpoint-B", e2e.SecurityLevelNone),
+	}
+	endpoints := []*v3endpointpb.ClusterLoadAssignment{
+		e2e.DefaultEndpoint("endpoint-A", "localhost", []uint32{8080}),
+		e2e.DefaultEndpoint("endpoint-B", "localhost", []uint32{8081}),
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	configureAllResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, listeners, []*v3routepb.RouteConfiguration{routeA}, clusters, endpoints)
+
+	stateCh, _, _ := buildResolverForTarget(t, resolver.Target{URL: *testutils.MustParseURL("xds:///" + defaultTestServiceName)}, bc)
+
+	// Start RPC (Ref Counts ClusterA)
+	cs := verifyUpdateFromResolver(ctx, t, stateCh, wantServiceConfig(clusterA))
+	res, err := cs.SelectConfig(iresolver.RPCInfo{Context: ctx, Method: "/service/method"})
+	if err != nil {
+		t.Fatalf("cs.SelectConfig(): %v", err)
+	}
+
+	// Switch Configuration to ClusterB
+	routeB := e2e.DefaultRouteConfig(defaultTestRouteConfigName, defaultTestServiceName, clusterB)
+	configureAllResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, listeners, []*v3routepb.RouteConfiguration{routeB}, clusters, endpoints)
+
+	// Resolver should request BOTH A (due to active RPC) and B (due to new config)
+	waitForCDSRequest(ctx, t, clusterResourceNamesCh, []string{clusterA, clusterB}, nil)
+
+	// Verify Service Config updates to B structure
+	const wantServiceRaw = `{
+      "loadBalancingConfig": [{
+        "xds_cluster_manager_experimental": {
+          "children": {
+            "cluster:cluster-A": {
+              "childPolicy": [{"cds_experimental": {"cluster": "cluster-A"}}]
+            },
+            "cluster:cluster-B": {
+              "childPolicy": [{"cds_experimental": {"cluster": "cluster-B"}}]
+            }
+          }
+        }
+      }]
+    }`
+	verifyUpdateFromResolver(ctx, t, stateCh, wantServiceRaw)
+
+	// Finish RPC (Drops Ref to ClusterA)
+	res.OnCommitted()
+
+	// Resolver should request ONLY B. A must be absent.
+	waitForCDSRequest(ctx, t, clusterResourceNamesCh, []string{clusterB}, []string{clusterA})
+
+	verifyUpdateFromResolver(ctx, t, stateCh, wantServiceConfig(clusterB))
 }

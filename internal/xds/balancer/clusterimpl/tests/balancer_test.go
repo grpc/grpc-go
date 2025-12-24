@@ -980,7 +980,7 @@ func (s) TestReResolutionAfterTransientFailure(t *testing.T) {
 	}
 
 	// Replace DNS resolver with a wrapped resolver to capture ResolveNow calls.
-	resolveNowCh := make(chan struct{}, 2)
+	resolveNowCh := make(chan struct{}, 3)
 	dnsR := manual.NewBuilderWithScheme("dns")
 	dnsResolverBuilder := resolver.Get("dns")
 	resolver.Register(dnsR)

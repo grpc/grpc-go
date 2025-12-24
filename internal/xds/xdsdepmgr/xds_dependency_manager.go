@@ -464,13 +464,6 @@ func (m *DependencyManager) applyRouteConfigUpdateLocked(update *xdsresource.Rou
 			newClusters[cluster.Name] = true
 		}
 	}
-	// Cancel watch for clusters not seen in route config
-	for name := range m.clustersFromRouteConfig {
-		if _, ok := newClusters[name]; !ok {
-			m.clusterWatchers[name].stop()
-			delete(m.clusterWatchers, name)
-		}
-	}
 
 	// Watch for new clusters is started in populateClusterConfigLocked to
 	// avoid repeating the code.
@@ -917,6 +910,16 @@ type ClusterRef struct {
 	m        *DependencyManager
 }
 
+// CreateClusterRef creates a new ClusterRef with a reference count of 1.
+func CreateClusterRef(name string, refCount int32, m *DependencyManager) *ClusterRef {
+	cr := &ClusterRef{
+		name:     name,
+		refCount: refCount,
+		m:        m,
+	}
+	return cr
+}
+
 // ClusterSubscription increments the reference count for the cluster and
 // returns the ClusterRef. If the cluster is not already being tracked, it adds
 // it to the ClusterSubs map.
@@ -929,7 +932,7 @@ func (m *DependencyManager) ClusterSubscription(name string) *ClusterRef {
 		atomic.AddInt32(ref, 1)
 		return subs
 	}
-	m.clusterSubscriptions[name] = &ClusterRef{name, 1, m}
+	m.clusterSubscriptions[name] = CreateClusterRef(name, 1, m)
 	if _, ok := m.clustersFromRouteConfig[name]; !ok {
 		m.maybeSendUpdateLocked()
 	}
@@ -945,9 +948,20 @@ func (c *ClusterRef) Unsubscribe() {
 	ref := atomic.AddInt32(&c.refCount, -1)
 	if ref <= 0 {
 		delete(c.m.clusterSubscriptions, c.name)
+		// This cluster is no longer in the route config, and it has no more
+		// references. Now is the time to cancel the watch.
+		if _, ok := c.m.clustersFromRouteConfig[c.name]; !ok {
+			c.m.maybeSendUpdateLocked()
+		}
 	}
+}
 
-	if _, ok := c.m.clustersFromRouteConfig[c.name]; !ok {
-		c.m.maybeSendUpdateLocked()
-	}
+// GetRefCount returns the reference count for a particluar cluster.
+func (c *ClusterRef) GetRefCount() int32 {
+	return atomic.LoadInt32(&c.refCount)
+}
+
+// AddRefCount increases the reference of a cluster by 1.
+func (c *ClusterRef) AddRefCount() {
+	atomic.AddInt32(&c.refCount, 1)
 }

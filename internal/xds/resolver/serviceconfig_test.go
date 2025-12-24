@@ -31,6 +31,7 @@ import (
 	iresolver "google.golang.org/grpc/internal/resolver"
 	_ "google.golang.org/grpc/internal/xds/balancer/cdsbalancer" // To parse LB config
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
+	"google.golang.org/grpc/internal/xds/xdsdepmgr"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -46,17 +47,17 @@ func Test(t *testing.T) {
 
 func (s) TestPruneActiveClusters(t *testing.T) {
 	r := &xdsResolver{activeClusters: map[string]*clusterInfo{
-		"zero":        {refCount: 0},
-		"one":         {refCount: 1},
-		"two":         {refCount: 2},
-		"anotherzero": {refCount: 0},
+		"zero":        {ref: xdsdepmgr.CreateClusterRef("zero", 0, nil)},
+		"one":         {ref: xdsdepmgr.CreateClusterRef("one", 1, nil)},
+		"two":         {ref: xdsdepmgr.CreateClusterRef("two", 2, nil)},
+		"anotherzero": {ref: xdsdepmgr.CreateClusterRef("anotherzero", 0, nil)},
 	}}
 	want := map[string]*clusterInfo{
-		"one": {refCount: 1},
-		"two": {refCount: 2},
+		"one": {ref: xdsdepmgr.CreateClusterRef("one", 1, nil)},
+		"two": {ref: xdsdepmgr.CreateClusterRef("two", 2, nil)},
 	}
 	r.pruneActiveClusters()
-	if d := cmp.Diff(r.activeClusters, want, cmp.AllowUnexported(clusterInfo{})); d != "" {
+	if d := cmp.Diff(r.activeClusters, want, cmp.AllowUnexported(clusterInfo{}, xdsdepmgr.ClusterRef{})); d != "" {
 		t.Fatalf("r.activeClusters = %v; want %v\nDiffs: %v", r.activeClusters, want, d)
 	}
 }

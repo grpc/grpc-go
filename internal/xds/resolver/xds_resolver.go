@@ -23,7 +23,6 @@ import (
 	"context"
 	"fmt"
 	rand "math/rand/v2"
-	"sync/atomic"
 
 	estats "google.golang.org/grpc/experimental/stats"
 	"google.golang.org/grpc/internal"
@@ -306,8 +305,7 @@ func (r *xdsResolver) sendNewServiceConfig(cs stoppableConfigSelector) bool {
 	r.pruneActiveClusters()
 
 	errCS, ok := cs.(*erroringConfigSelector)
-	if ok && len(r.activeClusters) == 0 {
-		// There are no clusters and we are sending a failing configSelector.
+	if ok {
 		// Send an empty config, which picks pick-first, with no address, and
 		// puts the ClientConn into transient failure.
 		//
@@ -369,7 +367,7 @@ func (r *xdsResolver) newConfigSelector() (*configSelector, error) {
 		if rt.ClusterSpecifierPlugin != "" {
 			clusterName := clusterSpecifierPluginPrefix + rt.ClusterSpecifierPlugin
 			clusters.Add(&routeCluster{name: clusterName}, 1)
-			ci := r.addOrGetActiveClusterInfo(clusterName)
+			ci := r.addOrGetActiveClusterInfo(clusterName, "")
 			ci.cfg = xdsChildConfig{ChildPolicy: balancerConfig(r.xdsConfig.RouteConfig.ClusterSpecifierPlugins[rt.ClusterSpecifierPlugin])}
 			cs.clusters[clusterName] = ci
 		} else {
@@ -383,7 +381,7 @@ func (r *xdsResolver) newConfigSelector() (*configSelector, error) {
 					name:        clusterName,
 					interceptor: interceptor,
 				}, int64(wc.Weight))
-				ci := r.addOrGetActiveClusterInfo(clusterName)
+				ci := r.addOrGetActiveClusterInfo(clusterName, wc.Name)
 				ci.cfg = xdsChildConfig{ChildPolicy: newBalancerConfig(cdsName, cdsBalancerConfig{Cluster: wc.Name})}
 				cs.clusters[clusterName] = ci
 			}
@@ -403,13 +401,6 @@ func (r *xdsResolver) newConfigSelector() (*configSelector, error) {
 		cs.routes[i].autoHostRewrite = rt.AutoHostRewrite
 	}
 
-	// Account for this config selector's clusters.  Do this after no further
-	// errors may occur.  Note: cs.clusters are pointers to entries in
-	// activeClusters.
-	for _, ci := range cs.clusters {
-		atomic.AddInt32(&ci.refCount, 1)
-	}
-
 	return cs, nil
 }
 
@@ -417,26 +408,39 @@ func (r *xdsResolver) newConfigSelector() (*configSelector, error) {
 // references.
 func (r *xdsResolver) pruneActiveClusters() {
 	for cluster, ci := range r.activeClusters {
-		if atomic.LoadInt32(&ci.refCount) == 0 {
+		if ci.ref.GetRefCount() <= 0 {
 			delete(r.activeClusters, cluster)
 		}
 	}
 }
 
-func (r *xdsResolver) addOrGetActiveClusterInfo(name string) *clusterInfo {
-	ci := r.activeClusters[name]
+// addOrGetActiveClusterInfo adds a new entry to r.activeClusters for the
+// provided key if one does not already exist, and returns the clusterInfo for
+// that key. If an entry already exists, its reference count is incremented and
+// returned. For ClusterSpecifierPlugins, name should be an empty string to make
+// sure we do not trigger a watch on the CDS resource. since we do not have a
+// cluster name.
+func (r *xdsResolver) addOrGetActiveClusterInfo(key string, name string) *clusterInfo {
+	ci := r.activeClusters[key]
 	if ci != nil {
+		ci.ref.AddRefCount()
 		return ci
 	}
+	ref := &xdsdepmgr.ClusterRef{}
+	if name == "" {
+		ref = xdsdepmgr.CreateClusterRef(key, 1, r.dm)
 
-	ci = &clusterInfo{refCount: 0}
-	r.activeClusters[name] = ci
+	} else {
+		ref = r.dm.ClusterSubscription(name)
+	}
+	ci = &clusterInfo{ref: ref}
+	r.activeClusters[key] = ci
 	return ci
 }
 
 type clusterInfo struct {
-	// number of references to this cluster; accessed atomically
-	refCount int32
+	// reference to the cluster in the dependency manager.
+	ref *xdsdepmgr.ClusterRef
 	// cfg is the child configuration for this cluster, containing either the
 	// csp config or the cds cluster config.
 	cfg xdsChildConfig
