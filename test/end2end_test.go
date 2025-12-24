@@ -490,6 +490,7 @@ type test struct {
 	unaryServerInt              grpc.UnaryServerInterceptor
 	streamServerInt             grpc.StreamServerInterceptor
 	serverInitialWindowSize     int32
+	serverStaticWindow          bool
 	serverInitialConnWindowSize int32
 	customServerOptions         []grpc.ServerOption
 
@@ -510,6 +511,7 @@ type test struct {
 	streamClientInt             grpc.StreamClientInterceptor
 	clientInitialWindowSize     int32
 	clientInitialConnWindowSize int32
+	clientStaticWindow          bool
 	perRPCCreds                 credentials.PerRPCCredentials
 	customDialOptions           []grpc.DialOption
 	resolverScheme              string
@@ -606,11 +608,21 @@ func (te *test) listenAndServe(ts testgrpc.TestServiceServer, listen func(networ
 		sopts = append(sopts, grpc.UnknownServiceHandler(te.unknownHandler))
 	}
 	if te.serverInitialWindowSize > 0 {
-		sopts = append(sopts, grpc.InitialWindowSize(te.serverInitialWindowSize))
+		if te.serverStaticWindow {
+			sopts = append(sopts, grpc.StaticStreamWindowSize(te.serverInitialWindowSize))
+		} else {
+			sopts = append(sopts, grpc.InitialWindowSize(te.serverInitialWindowSize))
+		}
 	}
+
 	if te.serverInitialConnWindowSize > 0 {
-		sopts = append(sopts, grpc.InitialConnWindowSize(te.serverInitialConnWindowSize))
+		if te.serverStaticWindow {
+			sopts = append(sopts, grpc.StaticConnWindowSize(te.serverInitialConnWindowSize))
+		} else {
+			sopts = append(sopts, grpc.InitialConnWindowSize(te.serverInitialConnWindowSize))
+		}
 	}
+
 	la := ":0"
 	if te.e.network == "unix" {
 		la = "/tmp/testsock" + fmt.Sprintf("%d", time.Now().UnixNano())
@@ -817,10 +829,19 @@ func (te *test) configDial(opts ...grpc.DialOption) ([]grpc.DialOption, string) 
 		opts = append(opts, grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, te.e.balancer)))
 	}
 	if te.clientInitialWindowSize > 0 {
-		opts = append(opts, grpc.WithInitialWindowSize(te.clientInitialWindowSize))
+		if te.clientStaticWindow {
+			opts = append(opts, grpc.WithStaticStreamWindowSize(te.clientInitialWindowSize))
+		} else {
+			opts = append(opts, grpc.WithInitialWindowSize(te.clientInitialWindowSize))
+		}
 	}
+
 	if te.clientInitialConnWindowSize > 0 {
-		opts = append(opts, grpc.WithInitialConnWindowSize(te.clientInitialConnWindowSize))
+		if te.clientStaticWindow {
+			opts = append(opts, grpc.WithStaticConnWindowSize(te.clientInitialConnWindowSize))
+		} else {
+			opts = append(opts, grpc.WithInitialConnWindowSize(te.clientInitialConnWindowSize))
+		}
 	}
 	if te.perRPCCreds != nil {
 		opts = append(opts, grpc.WithPerRPCCredentials(te.perRPCCreds))
@@ -5418,18 +5439,22 @@ func (s) TestClientWriteFailsAfterServerClosesStream(t *testing.T) {
 }
 
 type windowSizeConfig struct {
-	serverStream int32
-	serverConn   int32
-	clientStream int32
-	clientConn   int32
+	serverStream       int32
+	serverConn         int32
+	clientStream       int32
+	clientConn         int32
+	serverStaticWindow bool
+	clientStaticWindow bool
 }
 
 func (s) TestConfigurableWindowSizeWithLargeWindow(t *testing.T) {
 	wc := windowSizeConfig{
-		serverStream: 8 * 1024 * 1024,
-		serverConn:   12 * 1024 * 1024,
-		clientStream: 6 * 1024 * 1024,
-		clientConn:   8 * 1024 * 1024,
+		serverStream:       8 * 1024 * 1024,
+		serverConn:         12 * 1024 * 1024,
+		clientStream:       6 * 1024 * 1024,
+		clientConn:         8 * 1024 * 1024,
+		serverStaticWindow: true,
+		clientStaticWindow: true,
 	}
 	for _, e := range listTestEnv() {
 		testConfigurableWindowSize(t, e, wc)
@@ -5454,6 +5479,8 @@ func testConfigurableWindowSize(t *testing.T, e env, wc windowSizeConfig) {
 	te.serverInitialConnWindowSize = wc.serverConn
 	te.clientInitialWindowSize = wc.clientStream
 	te.clientInitialConnWindowSize = wc.clientConn
+	te.serverStaticWindow = wc.serverStaticWindow
+	te.clientStaticWindow = wc.clientStaticWindow
 
 	te.startServer(&testServer{security: e.security})
 	defer te.tearDown()

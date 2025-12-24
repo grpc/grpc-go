@@ -277,12 +277,22 @@ func ReadBufferSize(s int) ServerOption {
 }
 
 // InitialWindowSize returns a ServerOption that sets window size for stream.
-// The lower bound for window size is 64K and any value smaller than that will be ignored.
+// The lower bound for window size is 64K and any value smaller than that will
+// be ignored.
+//
+// Deprecated: use InitialStreamWindowSize() instead.  Will be supported
+// throughout 1.x.
 func InitialWindowSize(s int32) ServerOption {
 	return newFuncServerOption(func(o *serverOptions) {
 		o.initialWindowSize = s
-		o.staticWindowSize = true
 	})
+}
+
+// InitialStreamWindowSize returns a ServerOption that sets window size for
+// stream without disabling dynamic flow control. The lower bound for window
+// size is 64K and any value smaller than that will be ignored.
+func InitialStreamWindowSize(s int32) ServerOption {
+	return InitialWindowSize(s)
 }
 
 // InitialConnWindowSize returns a ServerOption that sets window size for a connection.
