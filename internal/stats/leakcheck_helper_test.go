@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2024 gRPC authors.
+ * Copyright 2025 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"runtime"
 	"sync"
+	"testing"
 
 	estats "google.golang.org/grpc/experimental/stats"
 	"google.golang.org/grpc/internal"
@@ -162,4 +163,62 @@ func setRegisterAsyncReporterDelegate(newFunc RegisterAsyncReporterFuncType) Reg
 func init() {
 	internal.TrackAsyncReporters = trackAsyncReporters
 	internal.CheckAsyncReporters = checkAsyncReporters
+}
+
+// mockLogger acts as a spy to capture errors from checkAsyncReporters
+type mockLogger struct {
+	failed  bool
+	message string
+}
+
+func (m *mockLogger) Logf(string, ...any) {
+	// No-op for info logs
+}
+
+func (m *mockLogger) Errorf(format string, args ...any) {
+	m.failed = true
+	m.message = fmt.Sprintf(format, args...)
+}
+
+func TestLeakChecker_DetectsLeak(t *testing.T) {
+	savedDelegate := registerAsyncReporterDelegate
+	defer func() { registerAsyncReporterDelegate = savedDelegate }()
+
+	registerAsyncReporterDelegate = func(*MetricsRecorderList, estats.AsyncMetricReporter, ...estats.AsyncMetric) func() {
+		return func() {} // no-op cleanup
+	}
+	trackAsyncReporters()
+
+	_ = registerAsyncReporterDelegate(nil, nil)
+
+	mock := &mockLogger{}
+	checkAsyncReporters(mock)
+
+	if !mock.failed {
+		t.Error("Expected leak checker to report a leak, but it succeeded silently.")
+	}
+	if asyncReporterTracker != nil {
+		t.Error("Expected checkAsyncReporters to cleanup global tracker, but it was not nil.")
+	}
+}
+
+func TestLeakChecker_PassesOnCleanup(t *testing.T) {
+	savedDelegate := registerAsyncReporterDelegate
+	defer func() { registerAsyncReporterDelegate = savedDelegate }()
+
+	registerAsyncReporterDelegate = func(*MetricsRecorderList, estats.AsyncMetricReporter, ...estats.AsyncMetric) func() {
+		return func() {}
+	}
+
+	trackAsyncReporters()
+
+	cleanup := registerAsyncReporterDelegate(nil, nil)
+	cleanup() // <--- We call cleanup here, so no leak should exist.
+
+	mock := &mockLogger{}
+	checkAsyncReporters(mock)
+
+	if mock.failed {
+		t.Errorf("Expected no leaks, but got error: %s", mock.message)
+	}
 }

@@ -401,6 +401,7 @@ func (rm *registryMetrics) registerMetrics(metrics *stats.MetricSet, meter otelm
 	rm.intGauges = make(map[*estats.MetricDescriptor]otelmetric.Int64Gauge)
 	rm.intUpDownCounts = make(map[*estats.MetricDescriptor]otelmetric.Int64UpDownCounter)
 	rm.intObservableGauges = make(map[*estats.MetricDescriptor]otelmetric.Int64ObservableGauge)
+
 	for metric := range metrics.Metrics() {
 		desc := estats.DescriptorForMetric(metric)
 		if desc == nil {
@@ -518,7 +519,8 @@ func (rm *registryMetrics) RegisterAsyncReporter(reporter estats.AsyncMetricRepo
 	}
 
 	return func() {
-		_ = reg.Unregister()
+		err = reg.Unregister()
+		logger.Errorf("grpc: failed to unregister callback for async metrics: %v", err)
 	}
 }
 
