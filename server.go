@@ -303,13 +303,6 @@ func InitialConnWindowSize(s int32) ServerOption {
 	})
 }
 
-// InitialStreamWindowSize returns a ServerOption that sets the window size for a stream.
-// THe lower bound for a window size is 64K, and any value smaller than that will be ignored.
-// Importantly, this does not disable dynamic flow control.
-func InitialStreamWindowSize(s int32) ServerOption {
-	return InitialWindowSize(s)
-}
-
 // StaticStreamWindowSize returns a ServerOption to set the initial stream
 // window size to the value provided and disables dynamic flow control.
 // The lower bound for window size is 64K and any value smaller than that

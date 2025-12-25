@@ -237,14 +237,6 @@ func WithInitialConnWindowSize(s int32) DialOption {
 	})
 }
 
-// WithInitialStreamWindowSize returns a DialOption which sets the value for
-// a initial window size on a stream. The lower bound for window size is 64K
-// and any value smaller than that will be ignored. Importantly, this does
-// not disable dynamic flow control.
-func WithInitialStreamWindowSize(s int32) DialOption {
-	return WithInitialWindowSize(s)
-}
-
 // WithStaticStreamWindowSize returns a DialOption which sets the initial
 // stream window size to the value provided and disables dynamic flow control.
 func WithStaticStreamWindowSize(s int32) DialOption {
