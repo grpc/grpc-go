@@ -510,7 +510,6 @@ type test struct {
 	unaryClientInt              grpc.UnaryClientInterceptor
 	streamClientInt             grpc.StreamClientInterceptor
 	clientInitialWindowSize     int32
-	clientStaticWindowSize      bool
 	clientInitialConnWindowSize int32
 	clientStaticWindow          bool
 	perRPCCreds                 credentials.PerRPCCredentials
