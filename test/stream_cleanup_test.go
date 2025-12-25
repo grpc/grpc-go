@@ -48,6 +48,8 @@ func (s) TestStreamCleanup(t *testing.T) {
 			return &testpb.Empty{}, nil
 		},
 	}
+
+	// Use a static flow control window.
 	if err := ss.Start(nil, grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(int(callRecvMsgSize))), grpc.WithStaticStreamWindowSize(int32(initialWindowSize))); err != nil {
 		t.Fatalf("Error starting endpoint server: %v", err)
 	}
@@ -81,6 +83,7 @@ func (s) TestStreamCleanupAfterSendStatus(t *testing.T) {
 			})
 		},
 	}
+	// Use a static flow control window.
 	if err := ss.Start(nil, grpc.WithStaticStreamWindowSize(int32(initialWindowSize))); err != nil {
 		t.Fatalf("Error starting endpoint server: %v", err)
 	}

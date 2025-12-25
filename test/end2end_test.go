@@ -510,6 +510,7 @@ type test struct {
 	unaryClientInt              grpc.UnaryClientInterceptor
 	streamClientInt             grpc.StreamClientInterceptor
 	clientInitialWindowSize     int32
+	clientStaticWindowSize      bool
 	clientInitialConnWindowSize int32
 	clientStaticWindow          bool
 	perRPCCreds                 credentials.PerRPCCredentials
@@ -5448,6 +5449,9 @@ type windowSizeConfig struct {
 }
 
 func (s) TestConfigurableWindowSizeWithLargeWindow(t *testing.T) {
+	// Before behavior change in PR #8665, large window sizes set
+	// using WithInitialWindowSize disabled BDP by default. Post the
+	// behavior change, we have to explicitly disable BDP.
 	wc := windowSizeConfig{
 		serverStream:       8 * 1024 * 1024,
 		serverConn:         12 * 1024 * 1024,
