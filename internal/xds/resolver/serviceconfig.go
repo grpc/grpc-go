@@ -25,7 +25,6 @@ import (
 	"math/bits"
 	rand "math/rand/v2"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	xxhash "github.com/cespare/xxhash/v2"
@@ -194,8 +193,7 @@ func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RP
 
 	// Add a ref to the selected cluster, as this RPC needs this cluster until
 	// it is committed.
-	ref := &cs.clusters[cluster.name].refCount
-	atomic.AddInt32(ref, 1)
+	cs.clusters[cluster.name].ref.AddRefCount()
 
 	lbCtx := clustermanager.SetPickedCluster(rpcInfo.Context, cluster.name)
 	lbCtx = iringhash.SetXDSRequestHash(lbCtx, cs.generateHash(rpcInfo, rt.hashPolicies))
@@ -207,11 +205,7 @@ func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RP
 		OnCommitted: func() {
 			// When the RPC is committed, the cluster is no longer required.
 			// Decrease its ref.
-			if v := atomic.AddInt32(ref, -1); v == 0 {
-				// This entry will be removed from activeClusters when
-				// producing the service config for the empty update.
-				cs.sendNewServiceConfig()
-			}
+			cs.clusters[cluster.name].ref.Unsubscribe()
 		},
 		Interceptor: cluster.interceptor,
 	}
@@ -309,21 +303,11 @@ func (cs *configSelector) stop() {
 	if cs == nil {
 		return
 	}
-	// If any refs drop to zero, we'll need a service config update to delete
-	// the cluster.
-	needUpdate := false
+
 	// Loops over cs.clusters, but these are pointers to entries in
 	// activeClusters.
 	for _, ci := range cs.clusters {
-		if v := atomic.AddInt32(&ci.refCount, -1); v == 0 {
-			needUpdate = true
-		}
-	}
-	// We stop the old config selector immediately after sending a new config
-	// selector; we need another update to delete clusters from the config (if
-	// we don't have another update pending already).
-	if needUpdate {
-		cs.sendNewServiceConfig()
+		ci.ref.Unsubscribe()
 	}
 }
 

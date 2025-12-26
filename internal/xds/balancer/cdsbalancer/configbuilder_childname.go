@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package clusterresolver
+package cdsbalancer
 
 import (
 	"fmt"
