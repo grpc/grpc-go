@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"net/url"
 	"sync"
+	"sync/atomic"
 
 	"google.golang.org/grpc/grpclog"
 	internalgrpclog "google.golang.org/grpc/internal/grpclog"
@@ -129,6 +130,7 @@ type DependencyManager struct {
 	clusterWatchers         map[string]*xdsResourceState[xdsresource.ClusterUpdate, struct{}]
 	endpointWatchers        map[string]*xdsResourceState[xdsresource.EndpointsUpdate, struct{}]
 	dnsResolvers            map[string]*xdsResourceState[xdsresource.DNSUpdate, dnsExtras]
+	clusterSubscriptions    map[string]*ClusterRef
 }
 
 // New creates a new DependencyManager.
@@ -154,6 +156,7 @@ func New(listenerName, dataplaneAuthority string, xdsClient xdsclient.XDSClient,
 		endpointWatchers:        make(map[string]*xdsResourceState[xdsresource.EndpointsUpdate, struct{}]),
 		dnsResolvers:            make(map[string]*xdsResourceState[xdsresource.DNSUpdate, dnsExtras]),
 		clusterWatchers:         make(map[string]*xdsResourceState[xdsresource.ClusterUpdate, struct{}]),
+		clusterSubscriptions:    make(map[string]*ClusterRef),
 	}
 	dm.logger = prefixLogger(dm)
 
@@ -203,7 +206,9 @@ func (m *DependencyManager) Close() {
 	// try to grab the dependency manager lock, which is already held here.
 	m.dnsSerializerCancel()
 	for name, dnsResolver := range m.dnsResolvers {
-		dnsResolver.stop()
+		if dnsResolver.extras.dnsR != nil {
+			dnsResolver.stop()
+		}
 		delete(m.dnsResolvers, name)
 	}
 }
@@ -236,7 +241,17 @@ func (m *DependencyManager) maybeSendUpdateLocked() {
 	dnsResourcesSeen := make(map[string]bool)
 	clusterResourcesSeen := make(map[string]bool)
 	haveAllResources := true
+	// Get all clusters to be watched: from route config and from cluster
+	// subscriptions, the subscriptions can be from RPC referencing the cluster
+	// or from balancer for cluster specifier plugins.
+	clusterToWatch := make(map[string]bool)
 	for cluster := range m.clustersFromRouteConfig {
+		clusterToWatch[cluster] = true
+	}
+	for cluster := range m.clusterSubscriptions {
+		clusterToWatch[cluster] = true
+	}
+	for cluster := range clusterToWatch {
 		ok, leafClusters, err := m.populateClusterConfigLocked(cluster, 0, config.Clusters, edsResourcesSeen, dnsResourcesSeen, clusterResourcesSeen)
 		if !ok {
 			haveAllResources = false
@@ -457,13 +472,6 @@ func (m *DependencyManager) applyRouteConfigUpdateLocked(update *xdsresource.Rou
 		for _, rt := range matchVH.Routes {
 			for _, cluster := range rt.WeightedClusters {
 				newClusters[cluster.Name] = true
-			}
-		}
-		// Cancel watch for clusters not seen in route config
-		for name := range m.clustersFromRouteConfig {
-			if _, ok := newClusters[name]; !ok {
-				m.clusterWatchers[name].stop()
-				delete(m.clusterWatchers, name)
 			}
 		}
 
@@ -880,4 +888,91 @@ func (x *xdsResourceWatcher[T]) ResourceError(err error, onDone func()) {
 
 func (x *xdsResourceWatcher[T]) AmbientError(err error, onDone func()) {
 	x.onAmbientError(err, onDone)
+}
+
+// DependencyManagerKey is the type used as the key to store DependencyManager
+// in the Attributes field of resolver.states.
+type DependencyManagerKey struct{}
+
+// SetDependencyManager returns a copy of state in which the Attributes field is
+// updated with the DependencyManager.
+func SetDependencyManager(state resolver.State, depmngr *DependencyManager) resolver.State {
+	state.Attributes = state.Attributes.WithValue(DependencyManagerKey{}, depmngr)
+	return state
+}
+
+// DependencyManagerFromResolverState returns DependencyManager stored as an
+// attribute in the resolver state.
+func DependencyManagerFromResolverState(state resolver.State) *DependencyManager {
+	if v := state.Attributes.Value(DependencyManagerKey{}); v != nil {
+		return v.(*DependencyManager)
+	}
+	return nil
+}
+
+// ClusterRef represents a reference to a cluster being used by some component.
+// It maintains a reference count of the number of users of the cluster. It has
+// a method to unsubscribe from the cluster, which decrements the reference
+// count and removes the cluster from the clusterSubscriptions map in the
+// DependencyManager if the reference count reaches zero.
+type ClusterRef struct {
+	name     string
+	refCount int32
+	m        *DependencyManager
+}
+
+// CreateClusterRef creates a new ClusterRef with a reference count of 1.
+func CreateClusterRef(name string, refCount int32, m *DependencyManager) *ClusterRef {
+	cr := &ClusterRef{
+		name:     name,
+		refCount: refCount,
+		m:        m,
+	}
+	return cr
+}
+
+// ClusterSubscription increments the reference count for the cluster and
+// returns the ClusterRef. If the cluster is not already being tracked, it adds
+// it to the ClusterSubs map.
+func (m *DependencyManager) ClusterSubscription(name string) *ClusterRef {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	subs, ok := m.clusterSubscriptions[name]
+	if ok {
+		ref := &subs.refCount
+		atomic.AddInt32(ref, 1)
+		return subs
+	}
+	m.clusterSubscriptions[name] = CreateClusterRef(name, 1, m)
+	if _, ok := m.clustersFromRouteConfig[name]; !ok {
+		m.maybeSendUpdateLocked()
+	}
+	return m.clusterSubscriptions[name]
+}
+
+// Unsubscribe decrements the reference count for the cluster. If the reference
+// count reaches zero, it removes the cluster from the clusterSubscriptions map
+// in the DependencyManager.
+func (c *ClusterRef) Unsubscribe() {
+	c.m.mu.Lock()
+	defer c.m.mu.Unlock()
+	ref := atomic.AddInt32(&c.refCount, -1)
+	if ref <= 0 {
+		delete(c.m.clusterSubscriptions, c.name)
+		// This cluster is no longer in the route config, and it has no more
+		// references. Now is the time to cancel the watch.
+		if _, ok := c.m.clustersFromRouteConfig[c.name]; !ok {
+			c.m.maybeSendUpdateLocked()
+		}
+	}
+}
+
+// GetRefCount returns the reference count for a particluar cluster.
+func (c *ClusterRef) GetRefCount() int32 {
+	return atomic.LoadInt32(&c.refCount)
+}
+
+// AddRefCount increases the reference of a cluster by 1.
+func (c *ClusterRef) AddRefCount() {
+	atomic.AddInt32(&c.refCount, 1)
 }

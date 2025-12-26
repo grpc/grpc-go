@@ -150,7 +150,9 @@ func (b *xdsResolverBuilder) Build(target resolver.Target, cc resolver.ClientCon
 	}
 	r.logger = prefixLogger(r)
 	r.logger.Infof("Creating resolver for target: %+v", target)
-	r.dm = xdsdepmgr.New(r.ldsResourceName, opts.Authority, r.xdsClient, r)
+	// Initialize the dependency manager in a serializer because it may be
+	// accessed concurrently when creating multiple concurrent channels.
+	r.serializer.TrySchedule(func(context.Context) { r.dm = xdsdepmgr.New(r.ldsResourceName, opts.Authority, r.xdsClient, r) })
 	return r, nil
 }
 
@@ -329,6 +331,9 @@ func (r *xdsResolver) sendNewServiceConfig(cs stoppableConfigSelector) bool {
 	state := iresolver.SetConfigSelector(resolver.State{
 		ServiceConfig: r.cc.ParseServiceConfig(string(sc)),
 	}, cs)
+	// Set the XDSConfig and Dependency manager in attributes.
+	state = xdsresource.SetXDSConfig(state, r.xdsConfig)
+	state = xdsdepmgr.SetDependencyManager(state, r.dm)
 	if err := r.cc.UpdateState(xdsclient.SetClient(state, r.xdsClient)); err != nil {
 		if r.logger.V(2) {
 			r.logger.Infof("Channel rejected new state: %+v with error: %v", state, err)

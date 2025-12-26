@@ -91,11 +91,13 @@ type testWatcher struct {
 // cases multiple updates to be sent from dependency manager causing the update
 // channel to be blocked.
 func (w *testWatcher) Update(cfg *xdsresource.XDSConfig) {
-	select {
-	case <-w.done:
-		return
-	case w.updateCh <- cfg:
-	}
+	go func() {
+		select {
+		case <-w.done:
+			return
+		case w.updateCh <- cfg:
+		}
+	}()
 }
 
 // Error sends the received error to the error channel.
@@ -1473,4 +1475,175 @@ func (s) TestEndpointAmbientError(t *testing.T) {
 	// server keeps sending the error updates repeatedly causing the update from
 	// dependency manager to be blocked.
 	close(watcher.done)
+}
+
+// Tests the lifecycle of cluster subscriptions, including reference counting
+// and interaction with RouteConfig updates.
+func (s) TestClusterSubscription_Lifecycle(t *testing.T) {
+	nodeID, mgmtServer, xdsClient := setupManagementServerAndClient(t, false)
+
+	watcher := &testWatcher{
+		updateCh: make(chan *xdsresource.XDSConfig),
+		errorCh:  make(chan error),
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	// Initial resources
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		NodeID:     nodeID,
+		DialTarget: defaultTestServiceName,
+		Host:       "localhost",
+		Port:       8080,
+		SecLevel:   e2e.SecurityLevelNone,
+	})
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	dm := xdsdepmgr.New(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
+	defer dm.Close()
+
+	// Verify initial update.
+	wantXdsConfig := makeXDSConfig(resources.Routes[0].Name, resources.Clusters[0].Name, resources.Clusters[0].EdsClusterConfig.ServiceName, "localhost:8080")
+	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
+		t.Fatal(err)
+	}
+
+	clusterName := resources.Clusters[0].Name
+	edsServiceName := resources.Clusters[0].EdsClusterConfig.ServiceName
+
+	// Subscribe to the cluster.
+	ref := dm.ClusterSubscription(clusterName)
+	if got := ref.GetRefCount(); got != 1 {
+		t.Fatalf("ClusterSubscription(%q) refCount = %d, want 1", clusterName, got)
+	}
+
+	// Another subscription (simulate multiple RPCs).
+	ref = dm.ClusterSubscription(clusterName)
+	if got := ref.GetRefCount(); got != 2 {
+		t.Fatalf("ClusterSubscription(%q) refCount = %d, want 2", clusterName, got)
+	}
+
+	// Unsubscribe once.
+	ref.Unsubscribe()
+	if got := ref.GetRefCount(); got != 1 {
+		t.Fatalf("After Unsubscribe(), refCount = %d, want 1", got)
+	}
+
+	// Update RouteConfig to REMOVE the cluster. The cluster should still be
+	// present in the update because of the remaining subscription.
+	newClusterName := "new-cluster-name"
+	newEDSServcie := "new-eds-servcie"
+	route2 := e2e.DefaultRouteConfig(resources.Routes[0].Name, defaultTestServiceName, newClusterName)
+	cluster2 := e2e.DefaultCluster(newClusterName, newEDSServcie, e2e.SecurityLevelNone)
+	endpoint2 := e2e.DefaultEndpoint(newEDSServcie, "localhost", []uint32{8081})
+
+	resources.Routes = []*v3routepb.RouteConfiguration{route2}
+	// Keep the old cluster in the management server so it doesn't return a resource error if watched.
+	resources.Clusters = append(resources.Clusters, cluster2)
+	resources.Endpoints = append(resources.Endpoints, endpoint2)
+
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify the update to contain BOTH "new-cluster-name" (from route) AND
+	// "clusterName" (from subscription).
+	wantxdsconfig := &xdsresource.XDSConfig{
+		Listener: &xdsresource.ListenerUpdate{
+			RouteConfigName: resources.Routes[0].Name,
+			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+		},
+		RouteConfig: &xdsresource.RouteConfigUpdate{
+			VirtualHosts: []*xdsresource.VirtualHost{
+				{
+					Domains: []string{defaultTestServiceName},
+					Routes: []*xdsresource.Route{{
+						Prefix:           newStringP("/"),
+						WeightedClusters: []xdsresource.WeightedCluster{{Name: newClusterName, Weight: 100}},
+						ActionType:       xdsresource.RouteActionRoute,
+					}},
+				},
+			},
+		},
+		VirtualHost: &xdsresource.VirtualHost{
+			Domains: []string{defaultTestServiceName},
+			Routes: []*xdsresource.Route{{
+				Prefix:           newStringP("/"),
+				WeightedClusters: []xdsresource.WeightedCluster{{Name: newClusterName, Weight: 100}},
+				ActionType:       xdsresource.RouteActionRoute},
+			},
+		},
+		Clusters: map[string]*xdsresource.ClusterResult{
+			clusterName: {
+				Config: xdsresource.ClusterConfig{Cluster: &xdsresource.ClusterUpdate{
+					ClusterType:    xdsresource.ClusterTypeEDS,
+					ClusterName:    clusterName,
+					EDSServiceName: edsServiceName,
+				},
+					EndpointConfig: &xdsresource.EndpointConfig{
+						EDSUpdate: &xdsresource.EndpointsUpdate{
+							Localities: []xdsresource.Locality{
+								{ID: clients.Locality{
+									Region:  "region-1",
+									Zone:    "zone-1",
+									SubZone: "subzone-1",
+								},
+									Endpoints: []xdsresource.Endpoint{
+										{
+											ResolverEndpoint: resolver.Endpoint{Addresses: []resolver.Address{{Addr: "localhost:8080"}}},
+											HealthStatus:     xdsresource.EndpointHealthStatusUnknown,
+											Weight:           1,
+										},
+									},
+									Weight: 1,
+								},
+							},
+						},
+					},
+				},
+			},
+			newClusterName: {
+				Config: xdsresource.ClusterConfig{Cluster: &xdsresource.ClusterUpdate{
+					ClusterType:    xdsresource.ClusterTypeEDS,
+					ClusterName:    newClusterName,
+					EDSServiceName: newEDSServcie,
+				},
+					EndpointConfig: &xdsresource.EndpointConfig{
+						EDSUpdate: &xdsresource.EndpointsUpdate{
+							Localities: []xdsresource.Locality{
+								{ID: clients.Locality{
+									Region:  "region-1",
+									Zone:    "zone-1",
+									SubZone: "subzone-1",
+								},
+									Endpoints: []xdsresource.Endpoint{
+										{
+											ResolverEndpoint: resolver.Endpoint{Addresses: []resolver.Address{{Addr: "localhost:8081"}}},
+											HealthStatus:     xdsresource.EndpointHealthStatusUnknown,
+											Weight:           1,
+										},
+									},
+									Weight: 1,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantxdsconfig); err != nil {
+		t.Fatal(err)
+	}
+
+	// Unsubscribe the last reference.
+	ref.Unsubscribe()
+	// Now "clusterName" should be removed. "newClusterName" should remain.
+	wantXdsConfig = makeXDSConfig(resources.Routes[0].Name, newClusterName, newEDSServcie, "localhost:8081")
+
+	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
+		t.Fatal(err)
+	}
 }
