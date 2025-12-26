@@ -72,7 +72,7 @@ func (rls) ParseClusterSpecifierConfig(cfg proto.Message) (clusterspecifier.Bala
 		RouteLookupConfig: rlcJSON, // "JSON form of RouteLookupClusterSpecifier.config" - RLS in xDS Design Doc
 		ChildPolicy: []map[string]json.RawMessage{
 			{
-				"cds_experimental": json.RawMessage("{}"),
+				"cds_experimental": json.RawMessage(`{"Is_Dynamic":true}`),
 			},
 		},
 		ChildPolicyConfigTargetFieldName: "cluster",

@@ -1232,9 +1232,9 @@ func (s) TestParseConfig(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name:    "good-config",
-			input:   json.RawMessage(`{"Cluster": "cluster1"}`),
-			wantCfg: &lbConfig{ClusterName: "cluster1"},
+			name:    "good-config-dynamic",
+			input:   json.RawMessage(`{"Cluster": "cluster1","Is_Dynamic":true}`),
+			wantCfg: &lbConfig{ClusterName: "cluster1", IsDynamic: true},
 		},
 		{
 			name:    "unknown-fields-in-config",
