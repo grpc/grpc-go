@@ -73,7 +73,11 @@ func IsBelowBufferPoolingThreshold(size int) bool {
 
 type atomicInt32 struct {
 	atomic.Int32
-	initialized bool // enables sanity checks without the overhead of atomic operations.
+	// initialized enables sanity checks without the overhead of atomic
+	// operations. This field is not safe for concurrent access and is used in a
+	// best-effort manner for assertion purposes only. It does not play a role
+	// in the concurrent logic of reference counting.
+	initialized bool
 }
 
 type buffer struct {
