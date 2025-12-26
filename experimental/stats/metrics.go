@@ -46,6 +46,11 @@ type MetricsRecorder interface {
 	// the metrics are no longer needed, which will remove the reporter. The
 	// returned method needs to be idempotent and concurrent safe.
 	RegisterAsyncReporter(reporter AsyncMetricReporter, descriptors ...AsyncMetric) func()
+
+	// mustEmbedUnimplementedMetricsRecorder is a private method that ensures
+	// users cannot implement this interface without embedding the
+	// UnimplementedMetricsRecorder struct.
+	mustEmbedUnimplementedMetricsRecorder()
 }
 
 // AsyncMetricReporter is an interface for types that record metrics asynchronously
@@ -89,4 +94,36 @@ type Metric = string
 // stats.NewMetricSet.  NewMetrics will be deleted in a future release.
 func NewMetrics(metrics ...Metric) *Metrics {
 	return stats.NewMetricSet(metrics...)
+}
+
+// UnimplementedMetricsRecorder must be embedded to have forward compatible implementations.
+type UnimplementedMetricsRecorder struct{}
+
+// mustEmbedUnimplementedMetricsRecorder implements the private marker method
+// required by the MetricsRecorder interface.
+func (UnimplementedMetricsRecorder) mustEmbedUnimplementedMetricsRecorder() {}
+
+// RecordInt64Count provides a no-op implementation.
+func (UnimplementedMetricsRecorder) RecordInt64Count(*Int64CountHandle, int64, ...string) {}
+
+// RecordFloat64Count provides a no-op implementation.
+func (UnimplementedMetricsRecorder) RecordFloat64Count(*Float64CountHandle, float64, ...string) {}
+
+// RecordInt64Histo provides a no-op implementation.
+func (UnimplementedMetricsRecorder) RecordInt64Histo(*Int64HistoHandle, int64, ...string) {}
+
+// RecordFloat64Histo provides a no-op implementation.
+func (UnimplementedMetricsRecorder) RecordFloat64Histo(*Float64HistoHandle, float64, ...string) {}
+
+// RecordInt64Gauge provides a no-op implementation.
+func (UnimplementedMetricsRecorder) RecordInt64Gauge(*Int64GaugeHandle, int64, ...string) {}
+
+// RecordInt64UpDownCount provides a no-op implementation.
+func (UnimplementedMetricsRecorder) RecordInt64UpDownCount(*Int64UpDownCountHandle, int64, ...string) {
+}
+
+// RegisterAsyncReporter provides a no-op implementation.
+func (UnimplementedMetricsRecorder) RegisterAsyncReporter(AsyncMetricReporter, ...AsyncMetric) func() {
+	// No-op: Return an empty function to ensure caller doesn't panic on nil function call
+	return func() {}
 }

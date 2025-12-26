@@ -394,3 +394,15 @@ func traceToString(stack []uintptr) string {
 	}
 	return trace.String()
 }
+
+// TrackAsyncReporters installs the tracking hook during test setup. The
+// implementation is assigned by the internal stats package.
+func TrackAsyncReporters() {
+	internal.TrackAsyncReporters()
+}
+
+// CheckAsyncReporters verifies that no leaks exist.
+// The implementation is assigned by the internal stats package.
+func CheckAsyncReporters(logger Logger) {
+	internal.CheckAsyncReporters(logger)
+}

@@ -129,6 +129,14 @@ func (s) TestMetricsRegistryMetrics(t *testing.T) {
 		OptionalLabels: []string{"int gauge optional label key"},
 		Default:        true,
 	})
+	intAsyncHandle := estats.RegisterInt64AsyncGauge(estats.MetricDescriptor{
+		Name:           "async-gauge",
+		Description:    "async gauge value from test",
+		Unit:           "int",
+		Labels:         []string{"async label key"},
+		OptionalLabels: []string{"async optional label key"},
+		Default:        true,
+	})
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -232,6 +240,21 @@ func (s) TestMetricsRegistryMetrics(t *testing.T) {
 				},
 			},
 		},
+		{
+			Name:        "async-gauge",
+			Description: "async gauge value from test",
+			Unit:        "int",
+			Data: metricdata.Gauge[int64]{
+				DataPoints: []metricdata.DataPoint[int64]{
+					{
+						// Note: Only the required label is expected because optional labels
+						// for "async optional label key" are not enabled in MetricsOptions below.
+						Attributes: attribute.NewSet(attribute.String("async label key", "async label value")),
+						Value:      999,
+					},
+				},
+			},
+		},
 	}
 
 	for _, test := range []struct {
@@ -282,6 +305,14 @@ func (s) TestMetricsRegistryMetrics(t *testing.T) {
 			intGaugeHandle.Record(mr, 7, []string{"int gauge label value", "int gauge optional label value"}...)
 			// This second gauge call should take the place of the previous gauge call.
 			intGaugeHandle.Record(mr, 8, []string{"int gauge label value", "int gauge optional label value"}...)
+			reporter := estats.AsyncMetricReporterFunc(func(r estats.AsyncMetricsRecorder) error {
+				// We record value 999.
+				// Note: We pass both required and optional labels, but the expectation (Step 2)
+				// knows that the optional one will be dropped based on 'mo' config.
+				intAsyncHandle.Record(r, 999, "async label value", "async optional label value")
+				return nil
+			})
+			mr.RegisterAsyncReporter(reporter, intAsyncHandle)
 			rm := &metricdata.ResourceMetrics{}
 			reader.Collect(ctx, rm)
 			gotMetrics := map[string]metricdata.Metrics{}
@@ -290,7 +321,6 @@ func (s) TestMetricsRegistryMetrics(t *testing.T) {
 					gotMetrics[m.Name] = m
 				}
 			}
-
 			for _, metric := range wantMetrics {
 				val, ok := gotMetrics[metric.Name]
 				if !ok {
