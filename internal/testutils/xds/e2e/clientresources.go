@@ -650,6 +650,8 @@ type BackendOptions struct {
 	HealthStatus v3corepb.HealthStatus
 	// Weight sets the backend weight. Defaults to 1.
 	Weight uint32
+	// Hostname sets the endpoint hostname for authority rewriting.
+	Hostname string
 	// Metadata sets the LB endpoint metadata (envoy.lb FilterMetadata field).
 	// See https://www.envoyproxy.io/docs/envoy/latest/api-v3/config/core/v3/base.proto#envoy-v3-api-msg-config-core-v3-metadata
 	Metadata map[string]any
@@ -721,6 +723,7 @@ func EndpointResourceWithOptions(opts EndpointOptions) *v3endpointpb.ClusterLoad
 							PortSpecifier: &v3corepb.SocketAddress_PortValue{PortValue: b.Ports[0]},
 						},
 					}},
+					Hostname:            b.Hostname,
 					AdditionalAddresses: additionalAddresses,
 				}},
 				HealthStatus:        b.HealthStatus,
