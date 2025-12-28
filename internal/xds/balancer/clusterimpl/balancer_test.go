@@ -35,6 +35,7 @@ import (
 	xdsinternal "google.golang.org/grpc/internal/xds"
 	"google.golang.org/grpc/internal/xds/testutils/fakeclient"
 	"google.golang.org/grpc/internal/xds/xdsclient"
+	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 	"google.golang.org/grpc/resolver"
 )
 
@@ -100,14 +101,24 @@ func (s) TestPickerUpdateAfterClose(t *testing.T) {
 		},
 	})
 
-	var maxRequest uint32 = 50
 	xdsC := fakeclient.NewClient()
+	state := xdsclient.SetClient(resolver.State{Endpoints: testBackendEndpoints}, xdsC)
+	state = xdsresource.SetXDSConfig(state, &xdsresource.XDSConfig{
+		Clusters: map[string]*xdsresource.ClusterResult{
+			testClusterName: {
+				Config: xdsresource.ClusterConfig{
+					Cluster: &xdsresource.ClusterUpdate{},
+					EndpointConfig: &xdsresource.EndpointConfig{
+						EDSUpdate: &xdsresource.EndpointsUpdate{},
+					},
+				},
+			},
+		},
+	})
 	if err := b.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: xdsclient.SetClient(resolver.State{Endpoints: testBackendEndpoints}, xdsC),
+		ResolverState: state,
 		BalancerConfig: &LBConfig{
-			Cluster:               testClusterName,
-			EDSServiceName:        testServiceName,
-			MaxConcurrentRequests: &maxRequest,
+			Cluster: testClusterName,
 			ChildPolicy: &internalserviceconfig.BalancerConfig{
 				Name: childPolicyName,
 			},
@@ -144,11 +155,28 @@ func (s) TestClusterNameInAddressAttributes(t *testing.T) {
 	defer b.Close()
 
 	xdsC := fakeclient.NewClient()
+	state := xdsclient.SetClient(resolver.State{Endpoints: testBackendEndpoints}, xdsC)
+	state = xdsresource.SetXDSConfig(state, &xdsresource.XDSConfig{
+		Clusters: map[string]*xdsresource.ClusterResult{
+			testClusterName: {
+				Config: xdsresource.ClusterConfig{
+					Cluster: &xdsresource.ClusterUpdate{
+						ClusterType:    xdsresource.ClusterTypeEDS,
+						ClusterName:    testClusterName,
+						EDSServiceName: testServiceName,
+					},
+					EndpointConfig: &xdsresource.EndpointConfig{
+						EDSUpdate: &xdsresource.EndpointsUpdate{},
+					},
+				},
+			},
+		},
+	})
+
 	if err := b.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: xdsclient.SetClient(resolver.State{Endpoints: testBackendEndpoints}, xdsC),
+		ResolverState: state,
 		BalancerConfig: &LBConfig{
-			Cluster:        testClusterName,
-			EDSServiceName: testServiceName,
+			Cluster: testClusterName,
 			ChildPolicy: &internalserviceconfig.BalancerConfig{
 				Name: roundrobin.Name,
 			},
@@ -181,11 +209,27 @@ func (s) TestClusterNameInAddressAttributes(t *testing.T) {
 
 	const testClusterName2 = "test-cluster-2"
 	var addr2 = resolver.Address{Addr: "2.2.2.2"}
+	state2 := xdsclient.SetClient(resolver.State{Endpoints: []resolver.Endpoint{{Addresses: []resolver.Address{addr2}}}}, xdsC)
+	state2 = xdsresource.SetXDSConfig(state2, &xdsresource.XDSConfig{
+		Clusters: map[string]*xdsresource.ClusterResult{
+			testClusterName2: {
+				Config: xdsresource.ClusterConfig{
+					Cluster: &xdsresource.ClusterUpdate{
+						ClusterType:    xdsresource.ClusterTypeEDS,
+						ClusterName:    testClusterName2,
+						EDSServiceName: testServiceName,
+					},
+					EndpointConfig: &xdsresource.EndpointConfig{
+						EDSUpdate: &xdsresource.EndpointsUpdate{},
+					},
+				},
+			},
+		},
+	})
 	if err := b.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: xdsclient.SetClient(resolver.State{Endpoints: []resolver.Endpoint{{Addresses: []resolver.Address{addr2}}}}, xdsC),
+		ResolverState: state2,
 		BalancerConfig: &LBConfig{
-			Cluster:        testClusterName2,
-			EDSServiceName: testServiceName,
+			Cluster: testClusterName2,
 			ChildPolicy: &internalserviceconfig.BalancerConfig{
 				Name: roundrobin.Name,
 			},
@@ -251,11 +295,24 @@ func (s) TestPickerUpdatedSynchronouslyOnConfigUpdate(t *testing.T) {
 	})
 
 	xdsC := fakeclient.NewClient()
+	state := xdsclient.SetClient(resolver.State{Endpoints: testBackendEndpoints}, xdsC)
+	state = xdsresource.SetXDSConfig(state, &xdsresource.XDSConfig{
+		Clusters: map[string]*xdsresource.ClusterResult{
+			testClusterName: {
+				Config: xdsresource.ClusterConfig{
+					Cluster: &xdsresource.ClusterUpdate{},
+					EndpointConfig: &xdsresource.EndpointConfig{
+						EDSUpdate: &xdsresource.EndpointsUpdate{},
+					},
+				},
+			},
+		},
+	})
+
 	if err := b.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: xdsclient.SetClient(resolver.State{Endpoints: testBackendEndpoints}, xdsC),
+		ResolverState: state,
 		BalancerConfig: &LBConfig{
-			Cluster:        testClusterName,
-			EDSServiceName: testServiceName,
+			Cluster: testClusterName,
 			ChildPolicy: &internalserviceconfig.BalancerConfig{
 				Name: t.Name(),
 			},

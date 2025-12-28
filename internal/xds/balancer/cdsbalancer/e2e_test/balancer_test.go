@@ -38,7 +38,6 @@ import (
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
-	xdsinternal "google.golang.org/grpc/internal/xds"
 	"google.golang.org/grpc/internal/xds/balancer/clusterimpl"
 	"google.golang.org/grpc/internal/xds/balancer/outlierdetection"
 	"google.golang.org/grpc/internal/xds/balancer/priority"
@@ -393,9 +392,7 @@ func (s) TestOutlierDetectionConfigPropagationToChildPolicy(t *testing.T) {
 						ChildPolicy: &iserviceconfig.BalancerConfig{
 							Name: clusterimpl.Name,
 							Config: &clusterimpl.LBConfig{
-								Cluster:         clusterName,
-								EDSServiceName:  edsServiceName,
-								TelemetryLabels: xdsinternal.UnknownCSMLabels,
+								Cluster: clusterName,
 								ChildPolicy: &iserviceconfig.BalancerConfig{
 									Name: wrrlocality.Name,
 									Config: &wrrlocality.LBConfig{

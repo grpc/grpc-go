@@ -41,7 +41,6 @@ import (
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
-	xdsinternal "google.golang.org/grpc/internal/xds"
 	"google.golang.org/grpc/internal/xds/balancer/clusterimpl"
 	"google.golang.org/grpc/internal/xds/balancer/outlierdetection"
 	"google.golang.org/grpc/internal/xds/balancer/priority"
@@ -387,10 +386,7 @@ func (s) TestClusterUpdate_Success(t *testing.T) {
 								ChildPolicy: &iserviceconfig.BalancerConfig{
 									Name: clusterimpl.Name,
 									Config: &clusterimpl.LBConfig{
-										Cluster:               clusterName,
-										EDSServiceName:        serviceName,
-										TelemetryLabels:       xdsinternal.UnknownCSMLabels,
-										MaxConcurrentRequests: newUint32(512),
+										Cluster: clusterName,
 										ChildPolicy: &iserviceconfig.BalancerConfig{
 											Name: wrrlocality.Name,
 											Config: &wrrlocality.LBConfig{
@@ -439,9 +435,7 @@ func (s) TestClusterUpdate_Success(t *testing.T) {
 								ChildPolicy: &iserviceconfig.BalancerConfig{
 									Name: clusterimpl.Name,
 									Config: &clusterimpl.LBConfig{
-										Cluster:         clusterName,
-										EDSServiceName:  serviceName,
-										TelemetryLabels: xdsinternal.UnknownCSMLabels,
+										Cluster: clusterName,
 										ChildPolicy: &iserviceconfig.BalancerConfig{
 											Name: ringhash.Name,
 											Config: &iringhash.LBConfig{
@@ -490,9 +484,7 @@ func (s) TestClusterUpdate_Success(t *testing.T) {
 								ChildPolicy: &iserviceconfig.BalancerConfig{
 									Name: clusterimpl.Name,
 									Config: &clusterimpl.LBConfig{
-										Cluster:         clusterName,
-										EDSServiceName:  serviceName,
-										TelemetryLabels: xdsinternal.UnknownCSMLabels,
+										Cluster: clusterName,
 										ChildPolicy: &iserviceconfig.BalancerConfig{
 											Name: ringhash.Name,
 											Config: &iringhash.LBConfig{
@@ -560,9 +552,7 @@ func (s) TestClusterUpdate_Success(t *testing.T) {
 								ChildPolicy: &iserviceconfig.BalancerConfig{
 									Name: clusterimpl.Name,
 									Config: &clusterimpl.LBConfig{
-										Cluster:         clusterName,
-										EDSServiceName:  serviceName,
-										TelemetryLabels: xdsinternal.UnknownCSMLabels,
+										Cluster: clusterName,
 										ChildPolicy: &iserviceconfig.BalancerConfig{
 											Name: ringhash.Name,
 											Config: &iringhash.LBConfig{
@@ -603,75 +593,6 @@ func (s) TestClusterUpdate_Success(t *testing.T) {
 				t.Fatal(err)
 			}
 		})
-	}
-}
-
-// Tests a single success scenario where the cds LB policy receives a cluster
-// resource from the management server with LRS enabled. Verifies that the load
-// balancing configuration pushed to the child is as expected.
-func (s) TestClusterUpdate_SuccessWithLRS(t *testing.T) {
-	lbCfgCh, _, _, _ := registerWrappedPriorityPolicy(t)
-	mgmtServer, nodeID, _ := setupWithManagementServer(t, nil, nil)
-
-	clusterResource := e2e.ClusterResourceWithOptions(e2e.ClusterOptions{
-		ClusterName: clusterName,
-		ServiceName: serviceName,
-		EnableLRS:   true,
-	})
-	lrsServerCfg, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{URI: fmt.Sprintf("passthrough:///%s", mgmtServer.Address)})
-	if err != nil {
-		t.Fatalf("Failed to create LRS server config for testing: %v", err)
-	}
-
-	wantChildCfg := &priority.LBConfig{
-		Children: map[string]*priority.Child{
-			"priority-0-0": {
-				Config: &iserviceconfig.BalancerConfig{
-					Name: outlierdetection.Name,
-					Config: &outlierdetection.LBConfig{
-						Interval:           iserviceconfig.Duration(10 * time.Second), // default interval
-						BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
-						MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
-						MaxEjectionPercent: 10,
-						ChildPolicy: &iserviceconfig.BalancerConfig{
-							Name: clusterimpl.Name,
-							Config: &clusterimpl.LBConfig{
-								Cluster:             clusterName,
-								EDSServiceName:      serviceName,
-								TelemetryLabels:     xdsinternal.UnknownCSMLabels,
-								LoadReportingServer: lrsServerCfg,
-								ChildPolicy: &iserviceconfig.BalancerConfig{
-									Name: wrrlocality.Name,
-									Config: &wrrlocality.LBConfig{
-										ChildPolicy: &iserviceconfig.BalancerConfig{
-											Name: roundrobin.Name,
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-				IgnoreReresolutionRequests: true,
-			},
-		},
-		Priorities: []string{"priority-0-0"},
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	if err := mgmtServer.Update(ctx, e2e.UpdateOptions{
-		NodeID:    nodeID,
-		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(target, routeName)},
-		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeName, target, clusterResource.Name)},
-		Clusters:  []*v3clusterpb.Cluster{clusterResource},
-		Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(serviceName, host, []uint32{port})},
-	}); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := compareLoadBalancingConfig(ctx, lbCfgCh, wantChildCfg); err != nil {
-		t.Fatal(err)
 	}
 }
 

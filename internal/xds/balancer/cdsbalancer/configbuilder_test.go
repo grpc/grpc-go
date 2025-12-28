@@ -260,9 +260,7 @@ func TestBuildPriorityConfig(t *testing.T) {
 						ChildPolicy: &iserviceconfig.BalancerConfig{
 							Name: clusterimpl.Name,
 							Config: &clusterimpl.LBConfig{
-								Cluster:        testClusterName,
-								EDSServiceName: testEDSServiceName,
-								DropCategories: []clusterimpl.DropConfig{},
+								Cluster: testClusterName,
 							},
 						},
 					},
@@ -280,9 +278,7 @@ func TestBuildPriorityConfig(t *testing.T) {
 						ChildPolicy: &iserviceconfig.BalancerConfig{
 							Name: clusterimpl.Name,
 							Config: &clusterimpl.LBConfig{
-								Cluster:        testClusterName,
-								EDSServiceName: testEDSServiceName,
-								DropCategories: []clusterimpl.DropConfig{},
+								Cluster: testClusterName,
 							},
 						},
 					},
@@ -355,13 +351,6 @@ func TestBuildClusterImplConfigForEDS(t *testing.T) {
 	gotNames, gotConfigs, gotEndpoints, _ := buildClusterImplConfigForEDS(
 		newNameGenerator(2),
 		xdsresource.EndpointsUpdate{
-			Drops: []xdsresource.OverloadDropConfig{
-				{
-					Category:    testDropCategory,
-					Numerator:   testDropOverMillion,
-					Denominator: million,
-				},
-			},
 			Localities: []xdsresource.Locality{
 				{
 					Endpoints: testEndpoints[3],
@@ -403,28 +392,10 @@ func TestBuildClusterImplConfigForEDS(t *testing.T) {
 	}
 	wantConfigs := map[string]*clusterimpl.LBConfig{
 		"priority-2-0": {
-			Cluster:               testClusterName,
-			EDSServiceName:        testEDSServiceName,
-			LoadReportingServer:   testLRSServerConfig,
-			MaxConcurrentRequests: newUint32(testMaxRequests),
-			DropCategories: []clusterimpl.DropConfig{
-				{
-					Category:           testDropCategory,
-					RequestsPerMillion: testDropOverMillion,
-				},
-			},
+			Cluster: testClusterName,
 		},
 		"priority-2-1": {
-			Cluster:               testClusterName,
-			EDSServiceName:        testEDSServiceName,
-			LoadReportingServer:   testLRSServerConfig,
-			MaxConcurrentRequests: newUint32(testMaxRequests),
-			DropCategories: []clusterimpl.DropConfig{
-				{
-					Category:           testDropCategory,
-					RequestsPerMillion: testDropOverMillion,
-				},
-			},
+			Cluster: testClusterName,
 		},
 	}
 	wantEndpoints := []resolver.Endpoint{
@@ -600,9 +571,8 @@ func TestPriorityLocalitiesToClusterImpl(t *testing.T) {
 		},
 		// lrsServer is nil, so LRS policy will not be used.
 		wantConfig: &clusterimpl.LBConfig{
-			Cluster:        testClusterName,
-			EDSServiceName: testEDSService,
-			ChildPolicy:    &iserviceconfig.BalancerConfig{Name: roundrobin.Name},
+			Cluster:     testClusterName,
+			ChildPolicy: &iserviceconfig.BalancerConfig{Name: roundrobin.Name},
 		},
 		wantEndpoints: []resolver.Endpoint{
 			testEndpointWithAttrs(resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-1-1"}}}, 20, 90, "test-priority", &clients.Locality{Zone: "test-zone-1"}),
@@ -666,7 +636,7 @@ func TestPriorityLocalitiesToClusterImpl(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, got1, err := priorityLocalitiesToClusterImpl(tt.localities, tt.priorityName, tt.clusterName, tt.clusterUpdate, nil, tt.childPolicy)
+			got, got1, err := priorityLocalitiesToClusterImpl(tt.localities, tt.priorityName, tt.clusterName, tt.clusterUpdate, tt.childPolicy)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("priorityLocalitiesToClusterImpl() error = %v, wantErr %v", err, tt.wantErr)
 			}

@@ -32,7 +32,6 @@ import (
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
-	xdsinternal "google.golang.org/grpc/internal/xds"
 	"google.golang.org/grpc/internal/xds/balancer/clusterimpl"
 	"google.golang.org/grpc/internal/xds/balancer/outlierdetection"
 	"google.golang.org/grpc/internal/xds/balancer/priority"
@@ -104,9 +103,7 @@ func (s) TestAggregateClusterSuccess_LeafNode(t *testing.T) {
 								ChildPolicy: &iserviceconfig.BalancerConfig{
 									Name: clusterimpl.Name,
 									Config: &clusterimpl.LBConfig{
-										Cluster:         clusterName,
-										EDSServiceName:  serviceName,
-										TelemetryLabels: xdsinternal.UnknownCSMLabels,
+										Cluster: clusterName,
 										ChildPolicy: &iserviceconfig.BalancerConfig{
 											Name: wrrlocality.Name,
 											Config: &wrrlocality.LBConfig{
@@ -137,9 +134,7 @@ func (s) TestAggregateClusterSuccess_LeafNode(t *testing.T) {
 								ChildPolicy: &iserviceconfig.BalancerConfig{
 									Name: clusterimpl.Name,
 									Config: &clusterimpl.LBConfig{
-										Cluster:         clusterName,
-										EDSServiceName:  serviceName + "-new",
-										TelemetryLabels: xdsinternal.UnknownCSMLabels,
+										Cluster: clusterName,
 										ChildPolicy: &iserviceconfig.BalancerConfig{
 											Name: wrrlocality.Name,
 											Config: &wrrlocality.LBConfig{
@@ -175,8 +170,7 @@ func (s) TestAggregateClusterSuccess_LeafNode(t *testing.T) {
 								ChildPolicy: &iserviceconfig.BalancerConfig{
 									Name: clusterimpl.Name,
 									Config: &clusterimpl.LBConfig{
-										Cluster:         clusterName,
-										TelemetryLabels: xdsinternal.UnknownCSMLabels,
+										Cluster: clusterName,
 										ChildPolicy: &iserviceconfig.BalancerConfig{
 											Name: pickfirst.Name,
 											Config: pickfirst.PfConfig{
@@ -204,8 +198,7 @@ func (s) TestAggregateClusterSuccess_LeafNode(t *testing.T) {
 								ChildPolicy: &iserviceconfig.BalancerConfig{
 									Name: clusterimpl.Name,
 									Config: &clusterimpl.LBConfig{
-										Cluster:         clusterName,
-										TelemetryLabels: xdsinternal.UnknownCSMLabels,
+										Cluster: clusterName,
 										ChildPolicy: &iserviceconfig.BalancerConfig{
 											Name: pickfirst.Name,
 											Config: pickfirst.PfConfig{
@@ -322,9 +315,7 @@ func (s) TestAggregateClusterSuccess_ThenUpdateChildClusters(t *testing.T) {
 						ChildPolicy: &iserviceconfig.BalancerConfig{
 							Name: clusterimpl.Name,
 							Config: &clusterimpl.LBConfig{
-								Cluster:         edsClusterName,
-								EDSServiceName:  serviceName,
-								TelemetryLabels: xdsinternal.UnknownCSMLabels,
+								Cluster: edsClusterName,
 								ChildPolicy: &iserviceconfig.BalancerConfig{
 									Name: wrrlocality.Name,
 									Config: &wrrlocality.LBConfig{
@@ -350,8 +341,7 @@ func (s) TestAggregateClusterSuccess_ThenUpdateChildClusters(t *testing.T) {
 						ChildPolicy: &iserviceconfig.BalancerConfig{
 							Name: clusterimpl.Name,
 							Config: &clusterimpl.LBConfig{
-								Cluster:         dnsClusterName,
-								TelemetryLabels: xdsinternal.UnknownCSMLabels,
+								Cluster: dnsClusterName,
 								ChildPolicy: &iserviceconfig.BalancerConfig{
 									Name: pickfirst.Name,
 									Config: pickfirst.PfConfig{
@@ -400,9 +390,7 @@ func (s) TestAggregateClusterSuccess_ThenUpdateChildClusters(t *testing.T) {
 						ChildPolicy: &iserviceconfig.BalancerConfig{
 							Name: clusterimpl.Name,
 							Config: &clusterimpl.LBConfig{
-								Cluster:         edsClusterName,
-								EDSServiceName:  serviceName,
-								TelemetryLabels: xdsinternal.UnknownCSMLabels,
+								Cluster: edsClusterName,
 								ChildPolicy: &iserviceconfig.BalancerConfig{
 									Name: wrrlocality.Name,
 									Config: &wrrlocality.LBConfig{
@@ -428,8 +416,7 @@ func (s) TestAggregateClusterSuccess_ThenUpdateChildClusters(t *testing.T) {
 						ChildPolicy: &iserviceconfig.BalancerConfig{
 							Name: clusterimpl.Name,
 							Config: &clusterimpl.LBConfig{
-								Cluster:         dnsClusterNameNew,
-								TelemetryLabels: xdsinternal.UnknownCSMLabels,
+								Cluster: dnsClusterNameNew,
 								ChildPolicy: &iserviceconfig.BalancerConfig{
 									Name: pickfirst.Name,
 									Config: pickfirst.PfConfig{
@@ -493,9 +480,7 @@ func (s) TestAggregateClusterSuccess_ThenChangeRootToEDS(t *testing.T) {
 						ChildPolicy: &iserviceconfig.BalancerConfig{
 							Name: clusterimpl.Name,
 							Config: &clusterimpl.LBConfig{
-								Cluster:         edsClusterName,
-								EDSServiceName:  serviceName,
-								TelemetryLabels: xdsinternal.UnknownCSMLabels,
+								Cluster: edsClusterName,
 								ChildPolicy: &iserviceconfig.BalancerConfig{
 									Name: wrrlocality.Name,
 									Config: &wrrlocality.LBConfig{
@@ -521,8 +506,7 @@ func (s) TestAggregateClusterSuccess_ThenChangeRootToEDS(t *testing.T) {
 						ChildPolicy: &iserviceconfig.BalancerConfig{
 							Name: clusterimpl.Name,
 							Config: &clusterimpl.LBConfig{
-								Cluster:         dnsClusterName,
-								TelemetryLabels: xdsinternal.UnknownCSMLabels,
+								Cluster: dnsClusterName,
 								ChildPolicy: &iserviceconfig.BalancerConfig{
 									Name: pickfirst.Name,
 									Config: pickfirst.PfConfig{
@@ -569,9 +553,7 @@ func (s) TestAggregateClusterSuccess_ThenChangeRootToEDS(t *testing.T) {
 						ChildPolicy: &iserviceconfig.BalancerConfig{
 							Name: clusterimpl.Name,
 							Config: &clusterimpl.LBConfig{
-								Cluster:         clusterName,
-								EDSServiceName:  serviceName,
-								TelemetryLabels: xdsinternal.UnknownCSMLabels,
+								Cluster: clusterName,
 								ChildPolicy: &iserviceconfig.BalancerConfig{
 									Name: wrrlocality.Name,
 									Config: &wrrlocality.LBConfig{
@@ -629,9 +611,7 @@ func (s) TestAggregatedClusterSuccess_SwitchBetweenLeafAndAggregate(t *testing.T
 						ChildPolicy: &iserviceconfig.BalancerConfig{
 							Name: clusterimpl.Name,
 							Config: &clusterimpl.LBConfig{
-								Cluster:         clusterName,
-								EDSServiceName:  serviceName,
-								TelemetryLabels: xdsinternal.UnknownCSMLabels,
+								Cluster: clusterName,
 								ChildPolicy: &iserviceconfig.BalancerConfig{
 									Name: wrrlocality.Name,
 									Config: &wrrlocality.LBConfig{
@@ -682,9 +662,7 @@ func (s) TestAggregatedClusterSuccess_SwitchBetweenLeafAndAggregate(t *testing.T
 						ChildPolicy: &iserviceconfig.BalancerConfig{
 							Name: clusterimpl.Name,
 							Config: &clusterimpl.LBConfig{
-								Cluster:         edsClusterName,
-								EDSServiceName:  serviceName,
-								TelemetryLabels: xdsinternal.UnknownCSMLabels,
+								Cluster: edsClusterName,
 								ChildPolicy: &iserviceconfig.BalancerConfig{
 									Name: wrrlocality.Name,
 									Config: &wrrlocality.LBConfig{
@@ -710,8 +688,7 @@ func (s) TestAggregatedClusterSuccess_SwitchBetweenLeafAndAggregate(t *testing.T
 						ChildPolicy: &iserviceconfig.BalancerConfig{
 							Name: clusterimpl.Name,
 							Config: &clusterimpl.LBConfig{
-								Cluster:         dnsClusterName,
-								TelemetryLabels: xdsinternal.UnknownCSMLabels,
+								Cluster: dnsClusterName,
 								ChildPolicy: &iserviceconfig.BalancerConfig{
 									Name: pickfirst.Name,
 									Config: pickfirst.PfConfig{
@@ -754,9 +731,7 @@ func (s) TestAggregatedClusterSuccess_SwitchBetweenLeafAndAggregate(t *testing.T
 						ChildPolicy: &iserviceconfig.BalancerConfig{
 							Name: clusterimpl.Name,
 							Config: &clusterimpl.LBConfig{
-								Cluster:         clusterName,
-								EDSServiceName:  serviceName,
-								TelemetryLabels: xdsinternal.UnknownCSMLabels,
+								Cluster: clusterName,
 								ChildPolicy: &iserviceconfig.BalancerConfig{
 									Name: wrrlocality.Name,
 									Config: &wrrlocality.LBConfig{
@@ -936,9 +911,7 @@ func (s) TestAggregatedClusterSuccess_DiamondDependency(t *testing.T) {
 						ChildPolicy: &iserviceconfig.BalancerConfig{
 							Name: clusterimpl.Name,
 							Config: &clusterimpl.LBConfig{
-								Cluster:         clusterNameD,
-								EDSServiceName:  serviceName,
-								TelemetryLabels: xdsinternal.UnknownCSMLabels,
+								Cluster: clusterNameD,
 								ChildPolicy: &iserviceconfig.BalancerConfig{
 									Name: wrrlocality.Name,
 									Config: &wrrlocality.LBConfig{
@@ -1029,9 +1002,7 @@ func (s) TestAggregatedClusterSuccess_IgnoreDups(t *testing.T) {
 						ChildPolicy: &iserviceconfig.BalancerConfig{
 							Name: clusterimpl.Name,
 							Config: &clusterimpl.LBConfig{
-								Cluster:         clusterNameC,
-								EDSServiceName:  edsClusterName,
-								TelemetryLabels: xdsinternal.UnknownCSMLabels,
+								Cluster: clusterNameC,
 								ChildPolicy: &iserviceconfig.BalancerConfig{
 									Name: wrrlocality.Name,
 									Config: &wrrlocality.LBConfig{
@@ -1057,9 +1028,7 @@ func (s) TestAggregatedClusterSuccess_IgnoreDups(t *testing.T) {
 						ChildPolicy: &iserviceconfig.BalancerConfig{
 							Name: clusterimpl.Name,
 							Config: &clusterimpl.LBConfig{
-								Cluster:         clusterNameD,
-								EDSServiceName:  serviceName,
-								TelemetryLabels: xdsinternal.UnknownCSMLabels,
+								Cluster: clusterNameD,
 								ChildPolicy: &iserviceconfig.BalancerConfig{
 									Name: wrrlocality.Name,
 									Config: &wrrlocality.LBConfig{
@@ -1165,9 +1134,7 @@ func (s) TestAggregatedCluster_NodeChildOfItself(t *testing.T) {
 						ChildPolicy: &iserviceconfig.BalancerConfig{
 							Name: clusterimpl.Name,
 							Config: &clusterimpl.LBConfig{
-								Cluster:         clusterNameB,
-								EDSServiceName:  serviceName,
-								TelemetryLabels: xdsinternal.UnknownCSMLabels,
+								Cluster: clusterNameB,
 								ChildPolicy: &iserviceconfig.BalancerConfig{
 									Name: wrrlocality.Name,
 									Config: &wrrlocality.LBConfig{
@@ -1298,9 +1265,7 @@ func (s) TestAggregatedCluster_CycleWithLeafNode(t *testing.T) {
 						ChildPolicy: &iserviceconfig.BalancerConfig{
 							Name: clusterimpl.Name,
 							Config: &clusterimpl.LBConfig{
-								Cluster:         clusterNameC,
-								EDSServiceName:  serviceName,
-								TelemetryLabels: xdsinternal.UnknownCSMLabels,
+								Cluster: clusterNameC,
 								ChildPolicy: &iserviceconfig.BalancerConfig{
 									Name: wrrlocality.Name,
 									Config: &wrrlocality.LBConfig{
