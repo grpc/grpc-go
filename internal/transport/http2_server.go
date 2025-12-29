@@ -573,8 +573,9 @@ func (t *http2Server) operateHeaders(ctx context.Context, frame *http2.MetaHeade
 
 	if s.ctx.Err() != nil {
 		t.mu.Unlock()
+		st := status.New(codes.DeadlineExceeded, context.DeadlineExceeded.Error())
 		// Early abort in case the timeout was zero or so low it already fired.
-		t.writeEarlyAbort(s.id, s.contentSubtype, status.New(codes.DeadlineExceeded, context.DeadlineExceeded.Error()), http.StatusOK, !frame.StreamEnded())
+		t.writeEarlyAbort(s.id, s.contentSubtype, st, http.StatusOK, !frame.StreamEnded())
 		return nil
 	}
 
@@ -933,34 +934,26 @@ func appendHeaderFieldsFromMD(headerFields []hpack.HeaderField, md metadata.MD) 
 	return headerFields
 }
 
-// checkForHeaderListSize checks if the header list size exceeds the limit set
-// by the peer. It returns false if the limit is exceeded.
-func checkForHeaderListSize(hf []hpack.HeaderField, maxSendHeaderListSize *uint32) bool {
-	if maxSendHeaderListSize == nil {
+func (t *http2Server) checkForHeaderListSize(hf []hpack.HeaderField) bool {
+	if t.maxSendHeaderListSize == nil {
 		return true
 	}
 	var sz int64
 	for _, f := range hf {
-		if sz += int64(f.Size()); sz > int64(*maxSendHeaderListSize) {
+		if sz += int64(f.Size()); sz > int64(*t.maxSendHeaderListSize) {
+			if t.logger.V(logLevel) {
+				t.logger.Infof("Header list size to send violates the maximum size (%d bytes) set by client", *t.maxSendHeaderListSize)
+			}
 			return false
 		}
 	}
 	return true
 }
 
-func (t *http2Server) checkForHeaderListSize(it any) bool {
-	hdrFrame := it.(*headerFrame)
-	if !checkForHeaderListSize(hdrFrame.hf, t.maxSendHeaderListSize) {
-		if t.logger.V(logLevel) {
-			t.logger.Infof("Header list size to send violates the maximum size (%d bytes) set by client", *t.maxSendHeaderListSize)
-		}
-		return false
-	}
-	return true
-}
-
-// buildEarlyAbortHF builds the header fields for an early abort response.
-func buildEarlyAbortHF(httpStatus uint32, contentSubtype string, stat *status.Status) []hpack.HeaderField {
+// writeEarlyAbort sends an early abort response with the given HTTP status and
+// gRPC status. If the header list size exceeds the peer's limit, it sends a
+// RST_STREAM instead.
+func (t *http2Server) writeEarlyAbort(streamID uint32, contentSubtype string, stat *status.Status, httpStatus uint32, rst bool) {
 	hf := []hpack.HeaderField{
 		{Name: ":status", Value: strconv.Itoa(int(httpStatus))},
 		{Name: "content-type", Value: grpcutil.ContentType(contentSubtype)},
@@ -969,19 +962,15 @@ func buildEarlyAbortHF(httpStatus uint32, contentSubtype string, stat *status.St
 	}
 	if p := istatus.RawStatusProto(stat); len(p.GetDetails()) > 0 {
 		stBytes, err := proto.Marshal(p)
+		if err != nil {
+			t.logger.Errorf("Failed to marshal rpc status: %s, error: %v", pretty.ToJSON(p), err)
+		}
 		if err == nil {
 			hf = append(hf, hpack.HeaderField{Name: grpcStatusDetailsBinHeader, Value: encodeBinHeader(stBytes)})
 		}
 	}
-	return hf
-}
-
-// writeEarlyAbort sends an early abort response with the given HTTP status and gRPC status.
-// If the header list size exceeds the peer's limit, it sends a RST_STREAM instead.
-func (t *http2Server) writeEarlyAbort(streamID uint32, contentSubtype string, stat *status.Status, httpStatus uint32, rst bool) {
-	hf := buildEarlyAbortHF(httpStatus, contentSubtype, stat)
 	success, _ := t.controlBuf.executeAndPut(func() bool {
-		return checkForHeaderListSize(hf, t.maxSendHeaderListSize)
+		return t.checkForHeaderListSize(hf)
 	}, &earlyAbortStream{
 		streamID: streamID,
 		rst:      rst,
@@ -1052,7 +1041,7 @@ func (t *http2Server) writeHeaderLocked(s *ServerStream) error {
 		endStream: false,
 		onWrite:   t.setResetPingStrikes,
 	}
-	success, err := t.controlBuf.executeAndPut(func() bool { return t.checkForHeaderListSize(hf) }, hf)
+	success, err := t.controlBuf.executeAndPut(func() bool { return t.checkForHeaderListSize(hf.hf) }, hf)
 	if !success {
 		if err != nil {
 			return err
@@ -1122,7 +1111,7 @@ func (t *http2Server) writeStatus(s *ServerStream, st *status.Status) error {
 	}
 
 	success, err := t.controlBuf.executeAndPut(func() bool {
-		return t.checkForHeaderListSize(trailingHeader)
+		return t.checkForHeaderListSize(trailingHeader.hf)
 	}, nil)
 	if !success {
 		if err != nil {
