@@ -2755,14 +2755,14 @@ type filterBuilder struct {
 
 var _ httpfilter.ServerInterceptorBuilder = &filterBuilder{}
 
-func (fb *filterBuilder) BuildServerInterceptor(config httpfilter.FilterConfig, override httpfilter.FilterConfig) (iresolver.ServerInterceptor, error) {
+func (filterBuilder) BuildServerInterceptor(_ string, config httpfilter.FilterConfig, override httpfilter.FilterConfig) (iresolver.ServerInterceptor, func(), error) {
 	var level string
 	level = config.(filterCfg).level
 
 	if override != nil {
 		level = override.(filterCfg).level
 	}
-	return &serverInterceptor{level: level}, nil
+	return &serverInterceptor{level: level}, func() {}, nil
 }
 
 type serverInterceptor struct {
