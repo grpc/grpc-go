@@ -1335,7 +1335,7 @@ func setupManagementServerAndResolver(t *testing.T) (*e2e.ManagementServer, reso
 
 // configureXDSResources configures the management server with a route that
 // enables auto_host_rewrite and an endpoint with the specified hostname.
-func configureXDSResources(ctx context.Context, t *testing.T, mgmtServer *e2e.ManagementServer, nodeID string, serverAddr string, endpointHostname string) {
+func configureXDSResources(ctx context.Context, t *testing.T, mgmtServer *e2e.ManagementServer, nodeID string, serverAddr string, endpointHostname string, secLevel e2e.SecurityLevel) {
 	t.Helper()
 
 	const (
@@ -1350,7 +1350,7 @@ func configureXDSResources(ctx context.Context, t *testing.T, mgmtServer *e2e.Ma
 		NodeID:     nodeID,
 		Host:       "localhost",
 		Port:       testutils.ParsePort(t, serverAddr),
-		SecLevel:   e2e.SecurityLevelMTLS,
+		SecLevel:   secLevel,
 	})
 
 	// Set the endpoint hostname for authority rewriting.
@@ -1391,7 +1391,7 @@ func (s) TestAuthorityOverriding(t *testing.T) {
 	const xdsAuthorityOverride = "rewritten.example.com"
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	configureXDSResources(ctx, t, mgmtServer, nodeID, server.Address, xdsAuthorityOverride)
+	configureXDSResources(ctx, t, mgmtServer, nodeID, server.Address, xdsAuthorityOverride, e2e.SecurityLevelNone)
 
 	// Create a ClientConn and make a successful RPC.
 	cc, err := grpc.NewClient("xds:///my-test-xds-service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(resolverBuilder))
@@ -1483,7 +1483,7 @@ func (s) TestAuthorityOverridingWithTLS(t *testing.T) {
 
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
-			configureXDSResources(ctx, t, mgmtServer, nodeID, f.Address, test.xdsAuthorityOverride)
+			configureXDSResources(ctx, t, mgmtServer, nodeID, f.Address, test.xdsAuthorityOverride, e2e.SecurityLevelMTLS)
 
 			// Create ClientConn with TLS
 			cc, err := grpc.NewClient("xds:///my-test-xds-service", grpc.WithTransportCredentials(clientCreds), grpc.WithResolvers(resolverBuilder))
