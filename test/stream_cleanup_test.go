@@ -34,9 +34,9 @@ import (
 )
 
 func (s) TestStreamCleanup(t *testing.T) {
-	const initialWindowSize uint = 70 * 1024 // Must be higher than default 64K, ignored otherwise
-	const bodySize = 2 * initialWindowSize   // Something that is not going to fit in a single window
-	const callRecvMsgSize uint = 1           // The maximum message size the client can receive
+	const initialWindowSize uint = 70 * 1024
+	const bodySize = 2 * initialWindowSize // Something that is not going to fit in a single window
+	const callRecvMsgSize uint = 1         // The maximum message size the client can receive
 
 	ss := &stubserver.StubServer{
 		UnaryCallF: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
@@ -49,7 +49,7 @@ func (s) TestStreamCleanup(t *testing.T) {
 		},
 	}
 
-	// Use a static flow control window.
+	// Disable BDP to ensure the message size exceeds window size.
 	if err := ss.Start(nil, grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(int(callRecvMsgSize))), grpc.WithStaticStreamWindowSize(int32(initialWindowSize))); err != nil {
 		t.Fatalf("Error starting endpoint server: %v", err)
 	}
@@ -66,8 +66,8 @@ func (s) TestStreamCleanup(t *testing.T) {
 }
 
 func (s) TestStreamCleanupAfterSendStatus(t *testing.T) {
-	const initialWindowSize uint = 70 * 1024 // Must be higher than default 64K, ignored otherwise
-	const bodySize = 2 * initialWindowSize   // Something that is not going to fit in a single window
+	const initialWindowSize uint = 70 * 1024
+	const bodySize = 2 * initialWindowSize // Something that is not going to fit in a single window
 
 	serverReturnedStatus := make(chan struct{})
 
@@ -83,7 +83,8 @@ func (s) TestStreamCleanupAfterSendStatus(t *testing.T) {
 			})
 		},
 	}
-	// Use a static flow control window.
+
+	// Disable BDP to ensure the message size exceeds window size.
 	if err := ss.Start(nil, grpc.WithStaticStreamWindowSize(int32(initialWindowSize))); err != nil {
 		t.Fatalf("Error starting endpoint server: %v", err)
 	}

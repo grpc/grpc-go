@@ -1061,10 +1061,9 @@ func (s) TestCZClientSocketMetricsStreamsAndMessagesCount(t *testing.T) {
 func (s) TestCZClientAndServerSocketMetricsStreamsCountFlowControlRSTStream(t *testing.T) {
 	e := tcpClearRREnv
 	te := newTest(t, e)
-	// Before behavior change in PR #8665, large window sizes set
-	// using InitialWindowSize disabled BDP by default. Post the
-	// behavior change, we have to explicitly disable BDP.
-	te.serverStaticWindow = true
+	// Disable BDP estimation to make sure the flow control is violated when a
+	// large message is sent.
+	te.isServerStaticWindow = true
 	te.serverInitialWindowSize = 65536
 	// Avoid overflowing connection level flow control window, which will lead to
 	// transport being closed.
@@ -1150,7 +1149,7 @@ func (s) TestCZClientAndServerSocketMetricsFlowControl(t *testing.T) {
 	e := tcpClearRREnv
 	te := newTest(t, e)
 	// disable BDP
-	te.serverStaticWindow = true
+	te.isServerStaticWindow = true
 	te.clientStaticWindow = true
 	te.serverInitialWindowSize = 65536
 	te.serverInitialConnWindowSize = 65536

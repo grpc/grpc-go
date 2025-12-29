@@ -211,9 +211,8 @@ func WithReadBufferSize(s int) DialOption {
 // window size on a stream. The lower bound for window size is 64K and any value
 // smaller than that will be ignored.
 //
-// Deprecated: use WithInitialStreamWindowSize to set a stream window size without disabling
-// dynamic flow control.
-// Will be supported throughout 1.x.
+// Deprecated: use [WithInitialStreamWindowSize] to set a stream window size
+// without disabling dynamic flow control. Will be supported throughout 1.x.
 func WithInitialWindowSize(s int32) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
 		o.copts.InitialWindowSize = s

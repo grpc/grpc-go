@@ -490,7 +490,7 @@ type test struct {
 	unaryServerInt              grpc.UnaryServerInterceptor
 	streamServerInt             grpc.StreamServerInterceptor
 	serverInitialWindowSize     int32
-	serverStaticWindow          bool
+	isServerStaticWindow        bool
 	serverInitialConnWindowSize int32
 	customServerOptions         []grpc.ServerOption
 
@@ -510,12 +510,12 @@ type test struct {
 	unaryClientInt                   grpc.UnaryClientInterceptor
 	streamClientInt                  grpc.StreamClientInterceptor
 	clientInitialWindowSize          int32
-	clientUseInitialStreamWindowSize bool
+	useClientInitialStreamWindowSize bool
 	clientInitialConnWindowSize      int32
-	clientStaticWindow          bool
-	perRPCCreds                 credentials.PerRPCCredentials
-	customDialOptions           []grpc.DialOption
-	resolverScheme              string
+	clientStaticWindow               bool
+	perRPCCreds                      credentials.PerRPCCredentials
+	customDialOptions                []grpc.DialOption
+	resolverScheme                   string
 
 	// These are set once startServer is called. The common case is to have
 	// only one testServer.
@@ -609,7 +609,7 @@ func (te *test) listenAndServe(ts testgrpc.TestServiceServer, listen func(networ
 		sopts = append(sopts, grpc.UnknownServiceHandler(te.unknownHandler))
 	}
 	if te.serverInitialWindowSize > 0 {
-		if te.serverStaticWindow {
+		if te.isServerStaticWindow {
 			sopts = append(sopts, grpc.StaticStreamWindowSize(te.serverInitialWindowSize))
 		} else {
 			sopts = append(sopts, grpc.InitialWindowSize(te.serverInitialWindowSize))
@@ -617,7 +617,7 @@ func (te *test) listenAndServe(ts testgrpc.TestServiceServer, listen func(networ
 	}
 
 	if te.serverInitialConnWindowSize > 0 {
-		if te.serverStaticWindow {
+		if te.isServerStaticWindow {
 			sopts = append(sopts, grpc.StaticConnWindowSize(te.serverInitialConnWindowSize))
 		} else {
 			sopts = append(sopts, grpc.InitialConnWindowSize(te.serverInitialConnWindowSize))
@@ -832,7 +832,7 @@ func (te *test) configDial(opts ...grpc.DialOption) ([]grpc.DialOption, string) 
 	if te.clientInitialWindowSize > 0 {
 		if te.clientStaticWindow {
 			opts = append(opts, grpc.WithStaticStreamWindowSize(te.clientInitialWindowSize))
-		} else if te.clientUseInitialStreamWindowSize {
+		} else if te.useClientInitialStreamWindowSize {
 			opts = append(opts, grpc.WithInitialStreamWindowSize(te.clientInitialWindowSize))
 		} else {
 			opts = append(opts, grpc.WithInitialWindowSize(te.clientInitialWindowSize))
@@ -5442,19 +5442,16 @@ func (s) TestClientWriteFailsAfterServerClosesStream(t *testing.T) {
 }
 
 type windowSizeConfig struct {
-	serverStream                   int32
-	serverConn                     int32
-	clientStream                   int32
-	clientConn                     int32
-	serverStaticWindow             bool
-	clientStaticWindow             bool
+	serverStream                     int32
+	serverConn                       int32
+	clientStream                     int32
+	clientConn                       int32
+	serverStaticWindow               bool
+	clientStaticWindow               bool
 	clientUseInitialStreamWindowSize bool
 }
 
 func (s) TestConfigurableWindowSizeWithLargeWindow(t *testing.T) {
-	// Before behavior change in PR #8665, large window sizes set
-	// using WithInitialWindowSize disabled BDP by default. Post the
-	// behavior change, we have to explicitly disable BDP.
 	wc := windowSizeConfig{
 		serverStream:       8 * 1024 * 1024,
 		serverConn:         12 * 1024 * 1024,
@@ -5482,12 +5479,12 @@ func (s) TestConfigurableWindowSizeWithSmallWindow(t *testing.T) {
 
 func (s) TestConfigurableInitialStreamWindowSizeWithLargeWindow(t *testing.T) {
 	wc := windowSizeConfig{
-		serverStream:                   8 * 1024 * 1024,
-		serverConn:                     12 * 1024 * 1024,
-		clientStream:                   6 * 1024 * 1024,
-		clientConn:                     8 * 1024 * 1024,
-		serverStaticWindow:             true,
-		clientStaticWindow:             true,
+		serverStream:                     8 * 1024 * 1024,
+		serverConn:                       12 * 1024 * 1024,
+		clientStream:                     6 * 1024 * 1024,
+		clientConn:                       8 * 1024 * 1024,
+		serverStaticWindow:               true,
+		clientStaticWindow:               true,
 		clientUseInitialStreamWindowSize: true,
 	}
 	for _, e := range listTestEnv() {
@@ -5497,10 +5494,10 @@ func (s) TestConfigurableInitialStreamWindowSizeWithLargeWindow(t *testing.T) {
 
 func (s) TestConfigurableInitialStreamWindowSizeWithSmallWindow(t *testing.T) {
 	wc := windowSizeConfig{
-		serverStream:                   1,
-		serverConn:                     1,
-		clientStream:                   1,
-		clientConn:                     1,
+		serverStream:                     1,
+		serverConn:                       1,
+		clientStream:                     1,
+		clientConn:                       1,
 		clientUseInitialStreamWindowSize: true,
 	}
 	for _, e := range listTestEnv() {
@@ -5514,9 +5511,9 @@ func testConfigurableWindowSize(t *testing.T, e env, wc windowSizeConfig) {
 	te.serverInitialConnWindowSize = wc.serverConn
 	te.clientInitialWindowSize = wc.clientStream
 	te.clientInitialConnWindowSize = wc.clientConn
-	te.serverStaticWindow = wc.serverStaticWindow
+	te.isServerStaticWindow = wc.serverStaticWindow
 	te.clientStaticWindow = wc.clientStaticWindow
-	te.clientUseInitialStreamWindowSize = wc.clientUseInitialStreamWindowSize
+	te.useClientInitialStreamWindowSize = wc.clientUseInitialStreamWindowSize
 
 	te.startServer(&testServer{security: e.security})
 	defer te.tearDown()
