@@ -510,7 +510,7 @@ type test struct {
 	unaryClientInt                   grpc.UnaryClientInterceptor
 	streamClientInt                  grpc.StreamClientInterceptor
 	clientInitialWindowSize          int32
-	useClientInitialStreamWindowSize bool
+	clientUseInitialStreamWindowSize bool
 	clientInitialConnWindowSize      int32
 	clientStaticWindow               bool
 	perRPCCreds                      credentials.PerRPCCredentials
@@ -832,7 +832,7 @@ func (te *test) configDial(opts ...grpc.DialOption) ([]grpc.DialOption, string) 
 	if te.clientInitialWindowSize > 0 {
 		if te.clientStaticWindow {
 			opts = append(opts, grpc.WithStaticStreamWindowSize(te.clientInitialWindowSize))
-		} else if te.useClientInitialStreamWindowSize {
+		} else if te.clientUseInitialStreamWindowSize {
 			opts = append(opts, grpc.WithInitialStreamWindowSize(te.clientInitialWindowSize))
 		} else {
 			opts = append(opts, grpc.WithInitialWindowSize(te.clientInitialWindowSize))
@@ -5513,7 +5513,7 @@ func testConfigurableWindowSize(t *testing.T, e env, wc windowSizeConfig) {
 	te.clientInitialConnWindowSize = wc.clientConn
 	te.isServerStaticWindow = wc.serverStaticWindow
 	te.clientStaticWindow = wc.clientStaticWindow
-	te.useClientInitialStreamWindowSize = wc.clientUseInitialStreamWindowSize
+	te.clientUseInitialStreamWindowSize = wc.clientUseInitialStreamWindowSize
 
 	te.startServer(&testServer{security: e.security})
 	defer te.tearDown()
