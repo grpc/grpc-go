@@ -446,7 +446,7 @@ func (b *clusterImplBalancer) NewSubConn(addrs []resolver.Address, opts balancer
 	var sc balancer.SubConn
 	scw := &scWrapper{}
 	if len(addrs) > 0 {
-		scw.hostname = xdsresource.HostnameFromAddress(addrs[0])
+		scw.hostname = xdsresource.Hostname(addrs[0])
 	}
 	oldListener := opts.StateListener
 	opts.StateListener = func(state balancer.SubConnState) {
