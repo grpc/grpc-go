@@ -47,9 +47,8 @@ func Test(t *testing.T) {
 }
 
 const (
-	defaultTestTimeout      = 5 * time.Second
-	defaultTestShortTimeout = 10 * time.Millisecond
-	testBackendAddrsCount   = 12
+	defaultTestTimeout    = 5 * time.Second
+	testBackendAddrsCount = 12
 )
 
 var testBackendAddrStrs []string
