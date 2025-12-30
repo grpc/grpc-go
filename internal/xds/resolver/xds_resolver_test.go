@@ -36,6 +36,7 @@ import (
 	estats "google.golang.org/grpc/experimental/stats"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/envconfig"
+	"google.golang.org/grpc/internal/grpcsync"
 	iresolver "google.golang.org/grpc/internal/resolver"
 	iringhash "google.golang.org/grpc/internal/ringhash"
 	"google.golang.org/grpc/internal/testutils"
@@ -1456,74 +1457,53 @@ func (s) TestResolver_AutoHostRewrite(t *testing.T) {
 	}
 }
 
-// waitForCDSRequest consumes resource name updates from the provided channel
-// until it finds a request that:
-// 1. Contains ALL clusters in wantPresent.
-// 2. Contains NONE of the clusters in wantAbsent.
-//
-// It ignores intermediate updates that do not match criteria to allow for
-// eventual consistency.
-func waitForCDSRequest(ctx context.Context, t *testing.T, ch <-chan []string, wantPresent, wantAbsent []string) {
-	t.Helper()
-
-	for {
-		select {
-		case <-ctx.Done():
-			t.Fatalf("Timeout waiting for CDS request. WantPresent: %v, WantAbsent: %v", wantPresent, wantAbsent)
-		case names := <-ch:
-			// Create a set for lookups
-			presentMap := make(map[string]bool, len(names))
-			for _, n := range names {
-				presentMap[n] = true
-			}
-
-			// 1. Check for required clusters
-			missing := false
-			for _, w := range wantPresent {
-				if !presentMap[w] {
-					missing = true
-					break
-				}
-			}
-			if missing {
-				continue // Current update doesn't have everything we need; keep waiting.
-			}
-
-			// 2. Check for prohibited clusters
-			hasUnexpected := false
-			for _, w := range wantAbsent {
-				if presentMap[w] {
-					hasUnexpected = true
-					break
-				}
-			}
-			if hasUnexpected {
-				continue // Current update has something we want gone; keep waiting.
-			}
-
-			// If we are here, both conditions are met.
-			return
+// resourcesMatch returns true if the got slice matches resource names in want.
+func resourcesMatch(got, want []string) bool {
+	if len(got) != len(want) {
+		return false
+	}
+	wantMap := make(map[string]bool, len(want))
+	for _, w := range want {
+		wantMap[w] = true
+	}
+	for _, n := range got {
+		if !wantMap[n] {
+			return false
 		}
 	}
+	return true
 }
 
-// TestResolverKeepWatchOpen_ActiveRPCs tests that the dependency manager
-// keeping a cluster watch open when there are active RPCs using that cluster,
-// even if the cluster is no longer referenced by the current route
-// configuration.
+// TestResolverKeepWatchOpen_ActiveRPCs tests that the dependency manager keeps
+// a cluster watch open when there are active RPCs using that cluster, even if
+// the cluster is no longer referenced by the current route configuration.
 func (s) TestResolverKeepWatchOpen_ActiveRPCs(t *testing.T) {
-	// TODO(emchandwani): Will enable when all the watchers have shifted to
-	// dependency manager
-	t.Skip()
+	t.Skip("Will be enabled when all the watchers have shifted to dependency manager")
+	gotBothClusterRequest := grpcsync.NewEvent()
+	gotOnlySecondCluster := grpcsync.NewEvent()
+	// These booleans track whether we have seen the expected updates.
+	// They are only accessed in the callback, which is executed serially.
+	seenBoth := false
+	seenSecond := false
 
-	// Have some buffer to prevent blocking the management server
-	clusterResourceNamesCh := make(chan []string, 2)
-
+	clusterA := "cluster-A"
+	clusterB := "cluster-B"
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
 		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
 			if req.GetTypeUrl() == version.V3ClusterURL {
-				// Blocking send
-				clusterResourceNamesCh <- req.GetResourceNames()
+				resourceNames := req.GetResourceNames()
+				if !seenBoth {
+					if resourcesMatch(resourceNames, []string{clusterA, clusterB}) {
+						seenBoth = true
+						gotBothClusterRequest.Fire()
+					}
+				}
+				if seenBoth && !seenSecond {
+					if resourcesMatch(resourceNames, []string{clusterB}) {
+						seenSecond = true
+						gotOnlySecondCluster.Fire()
+					}
+				}
 			}
 			return nil
 		},
@@ -1532,9 +1512,6 @@ func (s) TestResolverKeepWatchOpen_ActiveRPCs(t *testing.T) {
 
 	nodeID := uuid.New().String()
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-
-	clusterA := "cluster-A"
-	clusterB := "cluster-B"
 
 	// Configure initial resources: Route -> ClusterA
 	routeA := e2e.DefaultRouteConfig(defaultTestRouteConfigName, defaultTestServiceName, clusterA)
@@ -1567,7 +1544,11 @@ func (s) TestResolverKeepWatchOpen_ActiveRPCs(t *testing.T) {
 	configureAllResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, listeners, []*v3routepb.RouteConfiguration{routeB}, clusters, endpoints)
 
 	// Resolver should request BOTH A (due to active RPC) and B (due to new config)
-	waitForCDSRequest(ctx, t, clusterResourceNamesCh, []string{clusterA, clusterB}, nil)
+	select {
+	case <-ctx.Done():
+		t.Fatalf("Timeout waiting for updated CDS request including clusters A and B")
+	case <-gotBothClusterRequest.Done():
+	}
 
 	// Verify Service Config updates to B structure
 	const wantServiceRaw = `{
@@ -1590,7 +1571,11 @@ func (s) TestResolverKeepWatchOpen_ActiveRPCs(t *testing.T) {
 	res.OnCommitted()
 
 	// Resolver should request ONLY B. A must be absent.
-	waitForCDSRequest(ctx, t, clusterResourceNamesCh, []string{clusterB}, []string{clusterA})
+	select {
+	case <-ctx.Done():
+		t.Fatalf("Timeout waiting for updated CDS request including only cluster B")
+	case <-gotOnlySecondCluster.Done():
+	}
 
 	verifyUpdateFromResolver(ctx, t, stateCh, wantServiceConfig(clusterB))
 }

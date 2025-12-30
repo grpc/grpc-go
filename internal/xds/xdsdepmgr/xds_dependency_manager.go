@@ -159,23 +159,24 @@ func New(listenerName, dataplaneAuthority string, xdsClient xdsclient.XDSClient,
 		clusterSubscriptions:    make(map[string]*ClusterRef),
 	}
 	dm.logger = prefixLogger(dm)
-
-	// Start the listener watch. Listener watch will start the other resource
-	// watches as needed.
 	dm.listenerWatcher = &xdsResourceState[xdsresource.ListenerUpdate, struct{}]{}
-	lw := &xdsResourceWatcher[xdsresource.ListenerUpdate]{
+	return dm
+}
+
+// Start registers the listener watch on the xDS client which in turn will start
+// watches for other resources.
+func (m *DependencyManager) Start() {
+	m.listenerWatcher.stop = xdsresource.WatchListener(m.xdsClient, m.ldsResourceName, &xdsResourceWatcher[xdsresource.ListenerUpdate]{
 		onUpdate: func(update *xdsresource.ListenerUpdate, onDone func()) {
-			dm.onListenerResourceUpdate(update, onDone)
+			m.onListenerResourceUpdate(update, onDone)
 		},
 		onError: func(err error, onDone func()) {
-			dm.onListenerResourceError(err, onDone)
+			m.onListenerResourceError(err, onDone)
 		},
 		onAmbientError: func(err error, onDone func()) {
-			dm.onListenerResourceAmbientError(err, onDone)
+			m.onListenerResourceAmbientError(err, onDone)
 		},
-	}
-	dm.listenerWatcher.stop = xdsresource.WatchListener(dm.xdsClient, listenerName, lw)
-	return dm
+	})
 }
 
 // Close cancels all registered resource watches.
@@ -206,9 +207,7 @@ func (m *DependencyManager) Close() {
 	// try to grab the dependency manager lock, which is already held here.
 	m.dnsSerializerCancel()
 	for name, dnsResolver := range m.dnsResolvers {
-		if dnsResolver.extras.dnsR != nil {
-			dnsResolver.stop()
-		}
+		dnsResolver.stop()
 		delete(m.dnsResolvers, name)
 	}
 }
@@ -244,14 +243,14 @@ func (m *DependencyManager) maybeSendUpdateLocked() {
 	// Get all clusters to be watched: from route config and from cluster
 	// subscriptions, the subscriptions can be from RPC referencing the cluster
 	// or from balancer for cluster specifier plugins.
-	clusterToWatch := make(map[string]bool)
+	clustersToWatch := make(map[string]bool)
 	for cluster := range m.clustersFromRouteConfig {
-		clusterToWatch[cluster] = true
+		clustersToWatch[cluster] = true
 	}
 	for cluster := range m.clusterSubscriptions {
-		clusterToWatch[cluster] = true
+		clustersToWatch[cluster] = true
 	}
-	for cluster := range clusterToWatch {
+	for cluster := range clustersToWatch {
 		ok, leafClusters, err := m.populateClusterConfigLocked(cluster, 0, config.Clusters, edsResourcesSeen, dnsResourcesSeen, clusterResourcesSeen)
 		if !ok {
 			haveAllResources = false
@@ -853,7 +852,9 @@ func (m *DependencyManager) newDNSResolver(target string) *xdsResourceState[xdsr
 		err := fmt.Errorf("failed to parse DNS target %q: %v", target, m.annotateErrorWithNodeID(err))
 		m.logger.Warningf("%v", err)
 		rcc.ReportError(err)
-		return &xdsResourceState[xdsresource.DNSUpdate, dnsExtras]{}
+		return &xdsResourceState[xdsresource.DNSUpdate, dnsExtras]{
+			stop: func() {},
+		}
 	}
 
 	r, err := resolver.Get("dns").Build(resolver.Target{URL: *u}, rcc, resolver.BuildOptions{})
@@ -861,7 +862,9 @@ func (m *DependencyManager) newDNSResolver(target string) *xdsResourceState[xdsr
 		rcc.ReportError(err)
 		err := fmt.Errorf("failed to build DNS resolver for target %q: %v", target, m.annotateErrorWithNodeID(err))
 		m.logger.Warningf("%v", err)
-		return nil
+		return &xdsResourceState[xdsresource.DNSUpdate, dnsExtras]{
+			stop: func() {},
+		}
 	}
 
 	return &xdsResourceState[xdsresource.DNSUpdate, dnsExtras]{
@@ -890,21 +893,21 @@ func (x *xdsResourceWatcher[T]) AmbientError(err error, onDone func()) {
 	x.onAmbientError(err, onDone)
 }
 
-// DependencyManagerKey is the type used as the key to store DependencyManager
+// dependencyManagerKey is the type used as the key to store DependencyManager
 // in the Attributes field of resolver.states.
-type DependencyManagerKey struct{}
+type dependencyManagerKey struct{}
 
 // SetDependencyManager returns a copy of state in which the Attributes field is
 // updated with the DependencyManager.
 func SetDependencyManager(state resolver.State, depmngr *DependencyManager) resolver.State {
-	state.Attributes = state.Attributes.WithValue(DependencyManagerKey{}, depmngr)
+	state.Attributes = state.Attributes.WithValue(dependencyManagerKey{}, depmngr)
 	return state
 }
 
 // DependencyManagerFromResolverState returns DependencyManager stored as an
 // attribute in the resolver state.
 func DependencyManagerFromResolverState(state resolver.State) *DependencyManager {
-	if v := state.Attributes.Value(DependencyManagerKey{}); v != nil {
+	if v := state.Attributes.Value(dependencyManagerKey{}); v != nil {
 		return v.(*DependencyManager)
 	}
 	return nil
@@ -965,14 +968,4 @@ func (c *ClusterRef) Unsubscribe() {
 			c.m.maybeSendUpdateLocked()
 		}
 	}
-}
-
-// GetRefCount returns the reference count for a particluar cluster.
-func (c *ClusterRef) GetRefCount() int32 {
-	return atomic.LoadInt32(&c.refCount)
-}
-
-// AddRefCount increases the reference of a cluster by 1.
-func (c *ClusterRef) AddRefCount() {
-	atomic.AddInt32(&c.refCount, 1)
 }
