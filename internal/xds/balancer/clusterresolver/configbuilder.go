@@ -142,14 +142,15 @@ func makeClusterImplOutlierDetectionChild(ciCfg *clusterimpl.LBConfig, odCfg out
 
 func buildClusterImplConfigForDNS(g *nameGenerator, endpoints []resolver.Endpoint, mechanism DiscoveryMechanism, xdsLBPolicy *internalserviceconfig.BalancerConfig) (string, *clusterimpl.LBConfig, []resolver.Endpoint) {
 	pName := fmt.Sprintf("priority-%v", g.prefix)
+	lbconfig := &clusterimpl.LBConfig{
+		Cluster:               mechanism.Cluster,
+		TelemetryLabels:       mechanism.TelemetryLabels,
+		ChildPolicy:           xdsLBPolicy,
+		MaxConcurrentRequests: mechanism.MaxConcurrentRequests,
+		LoadReportingServer:   mechanism.LoadReportingServer,
+	}
 	if len(endpoints) == 0 {
-		return pName, &clusterimpl.LBConfig{
-			Cluster:               mechanism.Cluster,
-			TelemetryLabels:       mechanism.TelemetryLabels,
-			ChildPolicy:           xdsLBPolicy,
-			MaxConcurrentRequests: mechanism.MaxConcurrentRequests,
-			LoadReportingServer:   mechanism.LoadReportingServer,
-		}, []resolver.Endpoint{}
+		return pName, lbconfig, nil
 	}
 	var retEndpoint resolver.Endpoint
 	for _, e := range endpoints {
@@ -163,13 +164,7 @@ func buildClusterImplConfigForDNS(g *nameGenerator, endpoints []resolver.Endpoin
 	// like wrr which relies on locality weights to distribute traffic. These
 	// policies may drop traffic if the weight is 0.
 	retEndpoint = wrrlocality.SetAddrInfoInEndpoint(retEndpoint, wrrlocality.AddrInfo{LocalityWeight: 1})
-	return pName, &clusterimpl.LBConfig{
-		Cluster:               mechanism.Cluster,
-		TelemetryLabels:       mechanism.TelemetryLabels,
-		ChildPolicy:           xdsLBPolicy,
-		MaxConcurrentRequests: mechanism.MaxConcurrentRequests,
-		LoadReportingServer:   mechanism.LoadReportingServer,
-	}, []resolver.Endpoint{retEndpoint}
+	return pName, lbconfig, []resolver.Endpoint{retEndpoint}
 }
 
 // buildClusterImplConfigForEDS returns a list of cluster_impl configs, one for
