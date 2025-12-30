@@ -614,11 +614,11 @@ func (s) TestResetConnectBackoff(t *testing.T) {
 		default:
 		}
 	}()
-	dialer := func(string, time.Duration) (net.Conn, error) {
+	dialer := func(context.Context, string) (net.Conn, error) {
 		dials <- struct{}{}
 		return nil, errors.New("failed to fake dial")
 	}
-	cc, err := NewClient("passthrough:///", WithTransportCredentials(insecure.NewCredentials()), WithDialer(dialer), withBackoff(backoffForever{}))
+	cc, err := NewClient("passthrough:///", WithTransportCredentials(insecure.NewCredentials()), WithContextDialer(dialer), withBackoff(backoffForever{}))
 	if err != nil {
 		t.Fatalf("grpc.NewClient() failed with error: %v, want: nil", err)
 	}
@@ -647,7 +647,7 @@ func (s) TestResetConnectBackoff(t *testing.T) {
 
 func (s) TestBackoffCancel(t *testing.T) {
 	dialStrCh := make(chan string)
-	cc, err := NewClient("passthrough:///", WithTransportCredentials(insecure.NewCredentials()), WithDialer(func(t string, _ time.Duration) (net.Conn, error) {
+	cc, err := NewClient("passthrough:///", WithTransportCredentials(insecure.NewCredentials()), WithContextDialer(func(_ context.Context, t string) (net.Conn, error) {
 		dialStrCh <- t
 		return nil, fmt.Errorf("test dialer, always error")
 	}))

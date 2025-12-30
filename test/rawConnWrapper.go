@@ -18,12 +18,12 @@ package test
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"net"
 	"strings"
 	"sync"
-	"time"
 
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
@@ -67,8 +67,9 @@ type dialerWrapper struct {
 	rcw *rawConnWrapper
 }
 
-func (d *dialerWrapper) dialer(target string, t time.Duration) (net.Conn, error) {
-	c, err := net.DialTimeout("tcp", target, t)
+func (d *dialerWrapper) dialer(ctx context.Context, target string) (net.Conn, error) {
+	dialer := net.Dialer{}
+	c, err := dialer.DialContext(ctx, "tcp", target)
 	d.c = c
 	d.rcw = newRawConnWrapperFromConn(c)
 	return c, err
