@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
@@ -62,8 +61,10 @@ func (s) TestLogicalDNS_MultipleEndpoints(t *testing.T) {
 	server2 := stubserver.StartTestService(t, nil)
 	defer server2.Stop()
 
-	// Override the DNS resolver with a manual resolver that returns the
-	// addresses of the above server backends.
+	// Register a manual resolver with the "dns" scheme to mock DNS resolution.
+	// This global override is safe because connection to the xDS management
+	// server uses the passthrough scheme instead and therefore overriding
+	// the DNS resolver does not affect it in any way
 	const dnsScheme = "dns"
 	dnsR := manual.NewBuilderWithScheme(dnsScheme)
 	originalDNS := resolver.Get("dns")
@@ -106,27 +107,22 @@ func (s) TestLogicalDNS_MultipleEndpoints(t *testing.T) {
                         "dnsHostname": "%s:///target-name",
                         "outlierDetection": {}
                     }],
-                    "xdsLbPolicy":[{"round_robin":{}}]
+                    "xdsLbPolicy":[{"xds_wrr_locality_experimental": {"childPolicy": [{"round_robin": {}}]}}]
                 }
             }]
         }`, dnsScheme)
-
 	scpr := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(jsonSC)
 	r.InitialState(xdsclient.SetClient(resolver.State{ServiceConfig: scpr}, xdsC))
 
 	// Create a ClientConn and make a successful RPC.
-	cc, err := grpc.NewClient(r.Scheme()+":///test.service",
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithResolvers(r),
-	)
-	cc.Connect()
+	cc, err := grpc.NewClient(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
 	if err != nil {
-		t.Fatalf("failed to create new client for local test server: %v", err)
+		t.Fatalf("Failed to create new client for local test server: %v", err)
 	}
+	cc.Connect()
 	defer cc.Close()
 
-	testClient := testpb.NewTestServiceClient(cc)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
 	var dnsClientConn resolver.ClientConn
@@ -145,6 +141,7 @@ func (s) TestLogicalDNS_MultipleEndpoints(t *testing.T) {
 	})
 
 	// Ensure the RPC is routed to the first backend.
+	testClient := testpb.NewTestServiceClient(cc)
 	var peer peer.Peer
 	if _, err := testClient.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(&peer)); err != nil {
 		t.Fatalf("RPC failed: %v", err)
