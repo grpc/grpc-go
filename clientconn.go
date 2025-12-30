@@ -1528,25 +1528,26 @@ func (ac *addrConn) createTransport(ctx context.Context, addr resolver.Address, 
 	}
 
 	ac.mu.Lock()
-	defer ac.mu.Unlock()
 	if ctx.Err() != nil {
 		// This can happen if the subConn was removed while in `Connecting`
 		// state. tearDown() would have set the state to `Shutdown`, but
 		// would not have closed the transport since ac.transport would not
 		// have been set at that point.
-		//
-		// We run this in a goroutine because newTr.Close() calls onClose()
+
+		// We unlock ac.mu because newTr.Close() calls onClose()
 		// inline, which requires locking ac.mu.
-		//
+		ac.mu.Unlock()
+
 		// The error we pass to Close() is immaterial since there are no open
 		// streams at this point, so no trailers with error details will be sent
 		// out. We just need to pass a non-nil error.
 		//
 		// This can also happen when updateAddrs is called during a connection
 		// attempt.
-		go newTr.Close(transport.ErrConnClosing)
+		newTr.Close(transport.ErrConnClosing)
 		return nil
 	}
+	defer ac.mu.Unlock()
 	if hctx.Err() != nil {
 		// onClose was already called for this connection, but the connection
 		// was successfully established first.  Consider it a success and set
