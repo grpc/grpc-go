@@ -924,16 +924,6 @@ type ClusterRef struct {
 	m        *DependencyManager
 }
 
-// CreateClusterRef creates a new ClusterRef with a reference count of 1.
-func CreateClusterRef(name string, refCount int32, m *DependencyManager) *ClusterRef {
-	cr := &ClusterRef{
-		name:     name,
-		refCount: refCount,
-		m:        m,
-	}
-	return cr
-}
-
 // ClusterSubscription increments the reference count for the cluster and
 // returns the ClusterRef. If the cluster is not already being tracked, it adds
 // it to the ClusterSubs map.
@@ -946,7 +936,11 @@ func (m *DependencyManager) ClusterSubscription(name string) *ClusterRef {
 		atomic.AddInt32(ref, 1)
 		return subs
 	}
-	m.clusterSubscriptions[name] = CreateClusterRef(name, 1, m)
+	m.clusterSubscriptions[name] = &ClusterRef{
+		name:     name,
+		refCount: 1,
+		m:        m,
+	}
 	if _, ok := m.clustersFromRouteConfig[name]; !ok {
 		m.maybeSendUpdateLocked()
 	}
