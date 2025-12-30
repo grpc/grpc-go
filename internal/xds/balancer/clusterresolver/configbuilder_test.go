@@ -140,7 +140,7 @@ func init() {
 
 // TestBuildPriorityConfigJSON is a sanity check that the built balancer config
 // can be parsed. The behavior test is covered by TestBuildPriorityConfig.
-func TestBuildPriorityConfigJSON(t *testing.T) {
+func (s) TestBuildPriorityConfigJSON(t *testing.T) {
 	testLRSServerConfig, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{
 		URI:          "trafficdirector.googleapis.com:443",
 		ChannelCreds: []bootstrap.ChannelCreds{{Type: "google_default"}},
@@ -203,7 +203,7 @@ func TestBuildPriorityConfigJSON(t *testing.T) {
 // TestBuildPriorityConfig tests the priority config generation. Each top level
 // balancer per priority should be an Outlier Detection balancer, with a Cluster
 // Impl Balancer as a child.
-func TestBuildPriorityConfig(t *testing.T) {
+func (s) TestBuildPriorityConfig(t *testing.T) {
 	gotConfig, _, _ := buildPriorityConfig([]priorityConfig{
 		{
 			// EDS - OD config should be the top level for both of the EDS
@@ -292,8 +292,7 @@ func TestBuildPriorityConfig(t *testing.T) {
 						ChildPolicy: &iserviceconfig.BalancerConfig{
 							Name: clusterimpl.Name,
 							Config: &clusterimpl.LBConfig{
-								Cluster:     testClusterName2,
-								ChildPolicy: &iserviceconfig.BalancerConfig{Name: "pick_first"},
+								Cluster: testClusterName2,
 							},
 						},
 					},
@@ -308,34 +307,77 @@ func TestBuildPriorityConfig(t *testing.T) {
 	}
 }
 
-func TestBuildClusterImplConfigForDNS(t *testing.T) {
-	gotName, gotConfig, gotEndpoints := buildClusterImplConfigForDNS(newNameGenerator(3), testResolverEndpoints[0], DiscoveryMechanism{Cluster: testClusterName2, Type: DiscoveryMechanismTypeLogicalDNS})
-	wantName := "priority-3"
-	wantConfig := &clusterimpl.LBConfig{
-		Cluster: testClusterName2,
-		ChildPolicy: &iserviceconfig.BalancerConfig{
-			Name: "pick_first",
-		},
+func testEndpointForDNS(endpoints []resolver.Endpoint, localityWeight uint32, path []string) resolver.Endpoint {
+	retEndpoint := resolver.Endpoint{}
+	for _, e := range endpoints {
+		retEndpoint.Addresses = append(retEndpoint.Addresses, e.Addresses...)
 	}
-	e1 := resolver.Endpoint{Addresses: []resolver.Address{{Addr: testEndpoints[0][0].ResolverEndpoint.Addresses[0].Addr}}}
-	e2 := resolver.Endpoint{Addresses: []resolver.Address{{Addr: testEndpoints[0][1].ResolverEndpoint.Addresses[0].Addr}}}
-	wantEndpoints := []resolver.Endpoint{
-		hierarchy.SetInEndpoint(e1, []string{"priority-3"}),
-		hierarchy.SetInEndpoint(e2, []string{"priority-3"}),
-	}
+	retEndpoint = hierarchy.SetInEndpoint(retEndpoint, path)
+	retEndpoint = wrrlocality.SetAddrInfoInEndpoint(retEndpoint, wrrlocality.AddrInfo{LocalityWeight: localityWeight})
+	return retEndpoint
+}
 
-	if diff := cmp.Diff(gotName, wantName); diff != "" {
-		t.Errorf("buildClusterImplConfigForDNS() diff (-got +want) %v", diff)
-	}
-	if diff := cmp.Diff(gotConfig, wantConfig); diff != "" {
-		t.Errorf("buildClusterImplConfigForDNS() diff (-got +want) %v", diff)
-	}
-	if diff := cmp.Diff(gotEndpoints, wantEndpoints, endpointCmpOpts); diff != "" {
-		t.Errorf("buildClusterImplConfigForDNS() diff (-got +want) %v", diff)
+func (s) TestBuildClusterImplConfigForDNS(t *testing.T) {
+	for _, tt := range []struct {
+		name      string
+		endpoints []resolver.Endpoint
+	}{
+		{
+			name:      "one_endpoint_one_address",
+			endpoints: []resolver.Endpoint{{Addresses: []resolver.Address{{Addr: "addr-0-0"}}}},
+		},
+		{
+			name: "one_endpoint_multiple_addresses",
+			endpoints: []resolver.Endpoint{{Addresses: []resolver.Address{
+				{Addr: "addr-0-0"},
+				{Addr: "addr-0-1"},
+			}}},
+		},
+		{
+			name: "multiple_endpoints_one_address_each",
+			endpoints: []resolver.Endpoint{
+				{Addresses: []resolver.Address{{Addr: "addr-0-0"}}},
+				{Addresses: []resolver.Address{{Addr: "addr-0-1"}}},
+			},
+		},
+		{
+			name: "multiple_endpoints_multiple_addresses",
+			endpoints: []resolver.Endpoint{
+				{Addresses: []resolver.Address{
+					{Addr: "addr-0-0"},
+					{Addr: "addr-0-1"},
+				}},
+				{Addresses: []resolver.Address{
+					{Addr: "addr-1-0"},
+					{Addr: "addr-1-1"},
+				}},
+			},
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			gotName, gotConfig, gotEndpoints := buildClusterImplConfigForDNS(newNameGenerator(3), tt.endpoints, DiscoveryMechanism{Cluster: testClusterName2, Type: DiscoveryMechanismTypeLogicalDNS}, nil)
+
+			if diff := cmp.Diff(gotName, "priority-3"); diff != "" {
+				t.Errorf("buildClusterImplConfigForDNS() diff (-got +want) %v", diff)
+			}
+
+			wantConfig := &clusterimpl.LBConfig{
+				Cluster:     testClusterName2,
+				ChildPolicy: nil,
+			}
+			if diff := cmp.Diff(gotConfig, wantConfig); diff != "" {
+				t.Errorf("buildClusterImplConfigForDNS() diff (-got +want) %v", diff)
+			}
+
+			wantEndpoints := []resolver.Endpoint{testEndpointForDNS(tt.endpoints, 1, []string{"priority-3", xdsinternal.LocalityString(clients.Locality{})})}
+			if diff := cmp.Diff(gotEndpoints, wantEndpoints, endpointCmpOpts); diff != "" {
+				t.Errorf("buildClusterImplConfigForDNS() diff (-got +want) %v", diff)
+			}
+		})
 	}
 }
 
-func TestBuildClusterImplConfigForEDS(t *testing.T) {
+func (s) TestBuildClusterImplConfigForEDS(t *testing.T) {
 	testLRSServerConfig, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{
 		URI:          "trafficdirector.googleapis.com:443",
 		ChannelCreds: []bootstrap.ChannelCreds{{Type: "google_default"}},
@@ -441,7 +483,7 @@ func TestBuildClusterImplConfigForEDS(t *testing.T) {
 
 }
 
-func TestGroupLocalitiesByPriority(t *testing.T) {
+func (s) TestGroupLocalitiesByPriority(t *testing.T) {
 	tests := []struct {
 		name           string
 		localities     []xdsresource.Locality
@@ -503,7 +545,7 @@ func TestGroupLocalitiesByPriority(t *testing.T) {
 	}
 }
 
-func TestDedupSortedIntSlice(t *testing.T) {
+func (s) TestDedupSortedIntSlice(t *testing.T) {
 	tests := []struct {
 		name string
 		a    []int
@@ -534,7 +576,7 @@ func TestDedupSortedIntSlice(t *testing.T) {
 	}
 }
 
-func TestPriorityLocalitiesToClusterImpl(t *testing.T) {
+func (s) TestPriorityLocalitiesToClusterImpl(t *testing.T) {
 	tests := []struct {
 		name          string
 		localities    []xdsresource.Locality
@@ -681,7 +723,7 @@ func testEndpointWithAttrs(endpoint resolver.Endpoint, localityWeight, endpointW
 	return endpoint
 }
 
-func TestConvertClusterImplMapToOutlierDetection(t *testing.T) {
+func (s) TestConvertClusterImplMapToOutlierDetection(t *testing.T) {
 	tests := []struct {
 		name       string
 		ciCfgsMap  map[string]*clusterimpl.LBConfig
