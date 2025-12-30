@@ -58,7 +58,6 @@ type s struct {
 }
 
 func Test(t *testing.T) {
-	xdsdepmgr.EnableClusterAndEndpointsWatch = true
 	grpctest.RunSubTests(t, s{})
 }
 
