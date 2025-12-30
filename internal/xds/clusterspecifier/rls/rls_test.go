@@ -125,7 +125,7 @@ func (s) TestParseClusterSpecifierConfig(t *testing.T) {
 			t.Fatalf("ParseClusterSpecifierConfig(%+v) returned err: %v, wantErr: %v", test.rlcs, err, test.wantErr)
 		}
 		if test.wantErr { // Successfully received an error.
-			return
+			continue
 		}
 		// Marshal and then unmarshal into any to get rid of nondeterministic
 		// protojson Marshaling.
@@ -134,7 +134,7 @@ func (s) TestParseClusterSpecifierConfig(t *testing.T) {
 			t.Fatalf("json.Marshal(%+v) returned err %v", lbCfg, err)
 		}
 		var got any
-		err = json.Unmarshal(lbCfgJSON, got)
+		err = json.Unmarshal(lbCfgJSON, &got)
 		if err != nil {
 			t.Fatalf("json.Unmarshal(%+v) returned err %v", lbCfgJSON, err)
 		}
@@ -143,7 +143,7 @@ func (s) TestParseClusterSpecifierConfig(t *testing.T) {
 			t.Fatalf("json.Marshal(%+v) returned err %v", test.wantConfig, err)
 		}
 		var want any
-		err = json.Unmarshal(wantCfgJSON, want)
+		err = json.Unmarshal(wantCfgJSON, &want)
 		if err != nil {
 			t.Fatalf("json.Unmarshal(%+v) returned err %v", lbCfgJSON, err)
 		}
@@ -157,7 +157,7 @@ var configWithoutTransformationsWant = clusterspecifier.BalancerConfig{{"rls_exp
 	RouteLookupConfig: []byte(`{"grpcKeybuilders":[{"names":[{"service":"service","method":"method"}],"headers":[{"key":"k1","names":["v1"]}]}],"lookupService":"target","lookupServiceTimeout":"100s","maxAge":"60s","staleAge":"50s","cacheSizeBytes":"1000","defaultTarget":"passthrough:///default"}`),
 	ChildPolicy: []map[string]json.RawMessage{
 		{
-			"cds_experimental": []byte(`{}`),
+			"cds_experimental": []byte(`{"Is_Dynamic":true}`),
 		},
 	},
 	ChildPolicyConfigTargetFieldName: "cluster",
