@@ -977,25 +977,24 @@ func (cc *ClientConn) incrCallsFailed() {
 // connect starts creating a transport.
 // It does nothing if the ac is not IDLE.
 // TODO(bar) Move this to the addrConn section.
-func (ac *addrConn) connect() error {
+func (ac *addrConn) connect() {
 	ac.mu.Lock()
 	if ac.state == connectivity.Shutdown {
 		if logger.V(2) {
 			logger.Infof("connect called on shutdown addrConn; ignoring.")
 		}
 		ac.mu.Unlock()
-		return errConnClosing
+		return
 	}
 	if ac.state != connectivity.Idle {
 		if logger.V(2) {
 			logger.Infof("connect called on addrConn in non-idle state (%v); ignoring.", ac.state)
 		}
 		ac.mu.Unlock()
-		return nil
+		return
 	}
 
 	ac.resetTransportAndUnlock()
-	return nil
 }
 
 // equalAddressIgnoringBalAttributes returns true is a and b are considered equal.
