@@ -259,7 +259,7 @@ func (s) TestMetricRecorderListPanic(t *testing.T) {
 // TestMetricsRecorderList_RegisterAsyncReporter verifies that the list implementation
 // correctly fans out registration calls to all underlying recorders and
 // aggregates the cleanup calls.
-func TestMetricsRecorderList_RegisterAsyncReporter(t *testing.T) {
+func (s) TestMetricsRecorderList_RegisterAsyncReporter(t *testing.T) {
 	spy1 := &spyMetricsRecorder{name: "spy1"}
 	spy2 := &spyMetricsRecorder{name: "spy2"}
 	spy3 := &spyMetricsRecorder{name: "spy3"}
