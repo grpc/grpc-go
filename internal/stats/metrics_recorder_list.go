@@ -153,7 +153,7 @@ type asyncRecorderWrapper struct {
 // RecordIntAsync64Gauge records the measurement alongside labels on the int
 // gauge associated with the provided handle.
 func (w *asyncRecorderWrapper) RecordInt64AsyncGauge(handle *estats.Int64AsyncGaugeHandle, value int64, labels ...string) {
-	// Ensure only metrics for descriptors passed during callback registeration
+	// Ensure only metrics for descriptors passed during callback registration
 	// are emitted.
 	d := handle.Descriptor()
 	if _, ok := w.descriptors[d]; !ok {

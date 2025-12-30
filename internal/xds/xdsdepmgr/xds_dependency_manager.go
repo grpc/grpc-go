@@ -301,7 +301,7 @@ func (m *DependencyManager) maybeSendUpdateLocked() {
 //	[]string:             A slice of all "leaf" cluster names discovered in the
 //	                      traversal starting from `clusterName`. For
 //	                      non-aggregate clusters, this will contain only `clusterName`.
-//	error:                Error that needs to be propogated up the tree (like
+//	error:                Error that needs to be propagated up the tree (like
 //	                      max depth exceeded or an error propagated from a
 //	                      child cluster).
 func (m *DependencyManager) populateClusterConfigLocked(clusterName string, depth int, clusterConfigs map[string]*xdsresource.ClusterResult, endpointResourcesSeen, dnsResourcesSeen, clustersSeen map[string]bool) (bool, []string, error) {
@@ -798,7 +798,7 @@ func (m *DependencyManager) onDNSError(resourceName string, err error) {
 	m.maybeSendUpdateLocked()
 }
 
-// RequestDNSReresolution calls all the the DNS resolver's ResolveNow.
+// RequestDNSReresolution calls all the DNS resolver's ResolveNow.
 func (m *DependencyManager) RequestDNSReresolution(opt resolver.ResolveNowOptions) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
