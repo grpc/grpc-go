@@ -115,7 +115,7 @@ func (b pickfirstBuilder) Name() string {
 }
 
 func (pickfirstBuilder) ParseConfig(js json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
-	var cfg PfConfig
+	var cfg pfConfig
 	if err := json.Unmarshal(js, &cfg); err != nil {
 		return nil, fmt.Errorf("pickfirst: unable to unmarshal LB policy config: %s, error: %v", string(js), err)
 	}
@@ -134,8 +134,8 @@ func EnableHealthListener(state resolver.State) resolver.State {
 	return state
 }
 
-// PfConfig is the configuration for the pick_first balancer.
-type PfConfig struct {
+// pfConfig is the configuration for the pick_first balancer.
+type pfConfig struct {
 	serviceconfig.LoadBalancingConfig `json:"-"`
 
 	// If set to true, instructs the LB policy to shuffle the order of the list
@@ -244,7 +244,7 @@ func (b *pickfirstBalancer) UpdateClientConnState(state balancer.ClientConnState
 		return balancer.ErrBadResolverState
 	}
 	b.healthCheckingEnabled = state.ResolverState.Attributes.Value(enableHealthListenerKeyType{}) != nil
-	cfg, ok := state.BalancerConfig.(PfConfig)
+	cfg, ok := state.BalancerConfig.(pfConfig)
 	if state.BalancerConfig != nil && !ok {
 		return fmt.Errorf("pickfirst: received illegal BalancerConfig (type %T): %v: %w", state.BalancerConfig, state.BalancerConfig, balancer.ErrBadResolverState)
 	}
