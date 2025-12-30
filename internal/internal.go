@@ -304,3 +304,9 @@ type EnforceClientConnEmbedding interface {
 type Timer interface {
 	Stop() bool
 }
+
+// EnforceMetricsRecorderEmbedding is used to enforce proper MetricsRecorder
+// implementation embedding.
+type EnforceMetricsRecorderEmbedding interface {
+	enforceMetricsRecorderEmbedding()
+}

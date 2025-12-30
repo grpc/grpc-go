@@ -377,7 +377,7 @@ func optionFromLabels(labelKeys []string, optionalLabelKeys []string, optionalLa
 // registryMetrics implements MetricsRecorder for the client and server stats
 // handlers.
 type registryMetrics struct {
-	estats.UnimplementedMetricsRecorder
+	internal.EnforceMetricsRecorderEmbedding
 	intCounts       map[*estats.MetricDescriptor]otelmetric.Int64Counter
 	floatCounts     map[*estats.MetricDescriptor]otelmetric.Float64Counter
 	intHistos       map[*estats.MetricDescriptor]otelmetric.Int64Histogram

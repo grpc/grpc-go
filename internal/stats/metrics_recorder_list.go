@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	estats "google.golang.org/grpc/experimental/stats"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/stats"
 )
 
@@ -28,7 +29,7 @@ import (
 // It eats any record calls where the label values provided do not match the
 // number of label keys.
 type MetricsRecorderList struct {
-	estats.UnimplementedMetricsRecorder
+	internal.EnforceMetricsRecorderEmbedding
 	// metricsRecorders are the metrics recorders this list will forward to.
 	metricsRecorders []estats.MetricsRecorder
 }

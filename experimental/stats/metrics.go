@@ -19,7 +19,10 @@
 // Package stats contains experimental metrics/stats API's.
 package stats
 
-import "google.golang.org/grpc/stats"
+import (
+	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/stats"
+)
 
 // MetricsRecorder records on metrics derived from metric registry.
 type MetricsRecorder interface {
@@ -47,10 +50,10 @@ type MetricsRecorder interface {
 	// returned method needs to be idempotent and concurrent safe.
 	RegisterAsyncReporter(reporter AsyncMetricReporter, descriptors ...AsyncMetric) func()
 
-	// mustEmbedUnimplementedMetricsRecorder is a private method that ensures
-	// users cannot implement this interface without embedding the
-	// UnimplementedMetricsRecorder struct.
-	mustEmbedUnimplementedMetricsRecorder()
+	// EnforceMetricsRecorderEmbedding is included to force implementers to embed
+	// another implementation of this interface, allowing gRPC to add methods
+	// without breaking users.
+	internal.EnforceMetricsRecorderEmbedding
 }
 
 // AsyncMetricReporter is an interface for types that record metrics asynchronously
@@ -97,11 +100,9 @@ func NewMetrics(metrics ...Metric) *Metrics {
 }
 
 // UnimplementedMetricsRecorder must be embedded to have forward compatible implementations.
-type UnimplementedMetricsRecorder struct{}
-
-// mustEmbedUnimplementedMetricsRecorder implements the private marker method
-// required by the MetricsRecorder interface.
-func (UnimplementedMetricsRecorder) mustEmbedUnimplementedMetricsRecorder() {}
+type UnimplementedMetricsRecorder struct {
+	internal.EnforceMetricsRecorderEmbedding
+}
 
 // RecordInt64Count provides a no-op implementation.
 func (UnimplementedMetricsRecorder) RecordInt64Count(*Int64CountHandle, int64, ...string) {}
