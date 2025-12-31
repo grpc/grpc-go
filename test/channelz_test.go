@@ -21,6 +21,7 @@ package test
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net"
 	"regexp"
@@ -319,6 +320,11 @@ func (s) TestCZNestedChannelRegistrationAndDeletion(t *testing.T) {
 	e := tcpClearRREnv
 	// avoid calling API to set balancer type, which will void service config's change of balancer.
 	e.balancer = ""
+	e.customDialer = func(_, _ string, _ time.Duration) (net.Conn, error) {
+		// Short-circuit the intentional 127.0.0.1:0 placeholder to avoid
+		// leakcheck flakes on platforms where dialing :0 blocks until timeout.
+		return nil, errors.New("intentionally failing to dial")
+	}
 	te := newTest(t, e)
 	r := manual.NewBuilderWithScheme("whatever")
 	te.resolverScheme = r.Scheme()
@@ -1500,6 +1506,11 @@ func (s) TestCZChannelTraceCreationDeletion(t *testing.T) {
 	e := tcpClearRREnv
 	// avoid calling API to set balancer type, which will void service config's change of balancer.
 	e.balancer = ""
+	e.customDialer = func(_, _ string, _ time.Duration) (net.Conn, error) {
+		// Short-circuit the intentional 127.0.0.1:0 placeholder to avoid
+		// leakcheck flakes on platforms where dialing :0 blocks until timeout.
+		return nil, errors.New("intentionally failing to dial")
+	}
 	te := newTest(t, e)
 	r := manual.NewBuilderWithScheme("whatever")
 	te.resolverScheme = r.Scheme()
@@ -2008,6 +2019,11 @@ func (s) TestCZChannelConnectivityState(t *testing.T) {
 func (s) TestCZTraceOverwriteChannelDeletion(t *testing.T) {
 	e := tcpClearRREnv
 	e.balancer = ""
+	e.customDialer = func(_, _ string, _ time.Duration) (net.Conn, error) {
+		// Short-circuit the intentional 127.0.0.1:0 placeholder to avoid
+		// leakcheck flakes on platforms where dialing :0 blocks until timeout.
+		return nil, errors.New("intentionally failing to dial")
+	}
 	te := newTest(t, e)
 	channelz.SetMaxTraceEntry(1)
 	defer channelz.ResetMaxTraceEntryToDefault()
