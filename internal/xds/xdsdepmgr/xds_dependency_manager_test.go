@@ -21,6 +21,7 @@ package xdsdepmgr_test
 import (
 	"context"
 	"fmt"
+	"net"
 	"regexp"
 	"strings"
 	"testing"
@@ -1139,18 +1140,7 @@ func (s) TestAggregateCluster(t *testing.T) {
 					},
 					EndpointConfig: &xdsresource.EndpointConfig{
 						DNSEndpoints: &xdsresource.DNSUpdate{
-							Endpoints: []resolver.Endpoint{
-								{
-									Addresses: []resolver.Address{
-										{Addr: "[::1]:8081"},
-									},
-								},
-								{
-									Addresses: []resolver.Address{
-										{Addr: "127.0.0.1:8081"},
-									},
-								},
-							},
+							Endpoints: localhostEndpoints(t, "8081"),
 						},
 					},
 				},
@@ -1252,10 +1242,7 @@ func (s) TestAggregateClusterChildError(t *testing.T) {
 					},
 					EndpointConfig: &xdsresource.EndpointConfig{
 						DNSEndpoints: &xdsresource.DNSUpdate{
-							Endpoints: []resolver.Endpoint{
-								{Addresses: []resolver.Address{{Addr: "[::1]:8081"}}},
-								{Addresses: []resolver.Address{{Addr: "127.0.0.1:8081"}}},
-							},
+							Endpoints: localhostEndpoints(t, "8081"),
 						},
 					},
 				},
@@ -1473,4 +1460,25 @@ func (s) TestEndpointAmbientError(t *testing.T) {
 	// server keeps sending the error updates repeatedly causing the update from
 	// dependency manager to be blocked.
 	close(watcher.done)
+}
+
+func localhostEndpoints(t *testing.T, port string) []resolver.Endpoint {
+	ips, err := net.LookupIP("localhost")
+	if err != nil {
+		t.Fatalf("Failed to lookup localhost: %v", err)
+	}
+	if len(ips) < 1 {
+		t.Fatal("Lookup of localhost returned no IPs")
+	}
+
+	endpoints := make([]resolver.Endpoint, len(ips))
+	for i := range ips {
+		endpoints[i] = resolver.Endpoint{
+			Addresses: []resolver.Address{
+				{Addr: net.JoinHostPort(ips[i].String(), port)},
+			},
+		}
+	}
+
+	return endpoints
 }
