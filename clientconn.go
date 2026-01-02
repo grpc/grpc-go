@@ -1482,11 +1482,26 @@ func (ac *addrConn) tryAllAddrs(ctx context.Context, addrs []resolver.Address, c
 // new transport.
 func (ac *addrConn) createTransport(ctx context.Context, addr resolver.Address, copts transport.ConnectOptions, connectDeadline time.Time) error {
 	addr.ServerName = ac.cc.getServerName(addr)
+
+	var healthCheckDone <-chan struct{}
 	hctx, hcancel := context.WithCancel(ctx)
+	defer func() {
+		if healthCheckDone == nil {
+			hcancel()
+		}
+	}()
 
 	onClose := func(r transport.GoAwayReason) {
+		var healthCheckComplete <-chan struct{}
+
 		ac.mu.Lock()
-		defer ac.mu.Unlock()
+		defer func() {
+			ac.mu.Unlock()
+			if healthCheckComplete != nil {
+				<-healthCheckComplete
+			}
+		}()
+
 		// adjust params based on GoAwayReason
 		ac.adjustParams(r)
 		if ctx.Err() != nil {
@@ -1497,6 +1512,7 @@ func (ac *addrConn) createTransport(ctx context.Context, addr resolver.Address, 
 			return
 		}
 		hcancel()
+		healthCheckComplete = healthCheckDone
 		if ac.transport == nil {
 			// We're still connecting to this address, which could error.  Do
 			// not update the connectivity state or resolve; these will happen
@@ -1522,7 +1538,6 @@ func (ac *addrConn) createTransport(ctx context.Context, addr resolver.Address, 
 			logger.Infof("Creating new client transport to %q: %v", addr, err)
 		}
 		// newTr is either nil, or closed.
-		hcancel()
 		channelz.Warningf(logger, ac.channelz, "grpc: addrConn.createTransport failed to connect to %s. Err: %v", addr, err)
 		return err
 	}
@@ -1556,12 +1571,16 @@ func (ac *addrConn) createTransport(ctx context.Context, addr resolver.Address, 
 	}
 	ac.curAddr = addr
 	ac.transport = newTr
-	ac.startHealthCheck(hctx) // Will set state to READY if appropriate.
+	healthCheckDone = ac.startHealthCheck(hctx) // Will set state to READY if appropriate.
 	return nil
 }
 
 // startHealthCheck starts the health checking stream (RPC) to watch the health
 // stats of this connection if health checking is requested and configured.
+//
+// A channel is returned that will be closed once the health check goroutine
+// exits after ctx has been canceled, or nil if the health check requirements
+// aren't met and no goroutine has been started.
 //
 // LB channel health checking is enabled when all requirements below are met:
 // 1. it is not disabled by the user with the WithDisableHealthCheck DialOption
@@ -1572,7 +1591,7 @@ func (ac *addrConn) createTransport(ctx context.Context, addr resolver.Address, 
 // It sets addrConn to READY if the health checking stream is not started.
 //
 // Caller must hold ac.mu.
-func (ac *addrConn) startHealthCheck(ctx context.Context) {
+func (ac *addrConn) startHealthCheck(ctx context.Context) <-chan struct{} {
 	var healthcheckManagingState bool
 	defer func() {
 		if !healthcheckManagingState {
@@ -1581,14 +1600,14 @@ func (ac *addrConn) startHealthCheck(ctx context.Context) {
 	}()
 
 	if ac.cc.dopts.disableHealthCheck {
-		return
+		return nil
 	}
 	healthCheckConfig := ac.cc.healthCheckConfig()
 	if healthCheckConfig == nil {
-		return
+		return nil
 	}
 	if !ac.scopts.HealthCheckEnabled {
-		return
+		return nil
 	}
 	healthCheckFunc := internal.HealthCheckFunc
 	if healthCheckFunc == nil {
@@ -1596,7 +1615,7 @@ func (ac *addrConn) startHealthCheck(ctx context.Context) {
 		//
 		// TODO: add a link to the health check doc in the error message.
 		channelz.Error(logger, ac.channelz, "Health check is requested but health check function is not set.")
-		return
+		return nil
 	}
 
 	healthcheckManagingState = true
@@ -1621,7 +1640,9 @@ func (ac *addrConn) startHealthCheck(ctx context.Context) {
 		ac.updateConnectivityState(s, lastErr)
 	}
 	// Start the health checking stream.
+	done := make(chan struct{})
 	go func() {
+		defer close(done)
 		err := healthCheckFunc(ctx, newStream, setConnectivityState, healthCheckConfig.ServiceName)
 		if err != nil {
 			if status.Code(err) == codes.Unimplemented {
@@ -1631,6 +1652,7 @@ func (ac *addrConn) startHealthCheck(ctx context.Context) {
 			}
 		}
 	}()
+	return done
 }
 
 func (ac *addrConn) resetConnectBackoff() {
