@@ -1481,10 +1481,10 @@ func (s) TestResolverKeepWatchOpen_ActiveRPCs(t *testing.T) {
 	t.Skip("Will be enabled when all the watchers have shifted to dependency manager")
 	gotBothClusterRequest := grpcsync.NewEvent()
 	gotOnlySecondCluster := grpcsync.NewEvent()
-	// These booleans track whether we have seen the expected updates.
-	// They are only accessed in the callback, which is executed serially.
-	seenBoth := false
-	seenSecond := false
+
+	// These are only accessed in the callback, which is executed serially.
+	seenBothClusters := false
+	seenSecondClusterOnly := false
 
 	clusterA := "cluster-A"
 	clusterB := "cluster-B"
@@ -1492,15 +1492,15 @@ func (s) TestResolverKeepWatchOpen_ActiveRPCs(t *testing.T) {
 		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
 			if req.GetTypeUrl() == version.V3ClusterURL {
 				resourceNames := req.GetResourceNames()
-				if !seenBoth {
+				if !seenBothClusters {
 					if resourcesMatch(resourceNames, []string{clusterA, clusterB}) {
-						seenBoth = true
+						seenBothClusters = true
 						gotBothClusterRequest.Fire()
 					}
 				}
-				if seenBoth && !seenSecond {
+				if seenBothClusters && !seenSecondClusterOnly {
 					if resourcesMatch(resourceNames, []string{clusterB}) {
-						seenSecond = true
+						seenSecondClusterOnly = true
 						gotOnlySecondCluster.Fire()
 					}
 				}
@@ -1550,7 +1550,7 @@ func (s) TestResolverKeepWatchOpen_ActiveRPCs(t *testing.T) {
 	case <-gotBothClusterRequest.Done():
 	}
 
-	// Verify Service Config updates to B structure
+	// Verify Service Config has both clusters
 	const wantServiceRaw = `{
       "loadBalancingConfig": [{
         "xds_cluster_manager_experimental": {
@@ -1570,12 +1570,14 @@ func (s) TestResolverKeepWatchOpen_ActiveRPCs(t *testing.T) {
 	// Finish RPC (Drops Ref to ClusterA)
 	res.OnCommitted()
 
-	// Resolver should request ONLY B. A must be absent.
+	// ONLY cluster B should be requested now that there are no references to
+	// cluster A.
 	select {
 	case <-ctx.Done():
 		t.Fatalf("Timeout waiting for updated CDS request including only cluster B")
 	case <-gotOnlySecondCluster.Done():
 	}
 
+	// ServiceConfig update should also contain only cluster B.
 	verifyUpdateFromResolver(ctx, t, stateCh, wantServiceConfig(clusterB))
 }
