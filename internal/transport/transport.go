@@ -384,6 +384,13 @@ func (s *Stream) read(n int) (data mem.BufferSlice, err error) {
 	if er := s.trReader.er; er != nil {
 		return nil, er
 	}
+	if n == 0 {
+		return data, nil
+	}
+	// gRPC Go accepts data frames with a maximum length of 16KB. Larger
+	// messages must be split into at least ceil(n / 16KB) frames. The following
+	// line pre-allocates a slice of this capacity to avoid re-allocations.
+	data = make(mem.BufferSlice, 0, (n-1)/http2MaxFrameLen+1)
 	s.readRequester.requestRead(n)
 	for n != 0 {
 		buf, err := s.trReader.Read(n)
