@@ -421,7 +421,6 @@ type scWrapper struct {
 	// locality needs to be atomic because it can be updated while being read by
 	// the picker.
 	locality atomic.Pointer[clients.Locality]
-
 	hostname string
 }
 
