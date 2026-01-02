@@ -36,6 +36,7 @@ import (
 	estats "google.golang.org/grpc/experimental/stats"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/envconfig"
+	"google.golang.org/grpc/internal/grpcsync"
 	iresolver "google.golang.org/grpc/internal/resolver"
 	iringhash "google.golang.org/grpc/internal/ringhash"
 	"google.golang.org/grpc/internal/testutils"
@@ -1454,4 +1455,129 @@ func (s) TestResolver_AutoHostRewrite(t *testing.T) {
 			}
 		})
 	}
+}
+
+// resourcesMatch returns true if the got slice matches resource names in want.
+func resourcesMatch(got, want []string) bool {
+	if len(got) != len(want) {
+		return false
+	}
+	wantMap := make(map[string]bool, len(want))
+	for _, w := range want {
+		wantMap[w] = true
+	}
+	for _, n := range got {
+		if !wantMap[n] {
+			return false
+		}
+	}
+	return true
+}
+
+// TestResolverKeepWatchOpen_ActiveRPCs tests that the dependency manager keeps
+// a cluster watch open when there are active RPCs using that cluster, even if
+// the cluster is no longer referenced by the current route configuration.
+func (s) TestResolverKeepWatchOpen_ActiveRPCs(t *testing.T) {
+	t.Skip("Will be enabled when all the watchers have shifted to dependency manager")
+	gotBothClusterRequest := grpcsync.NewEvent()
+	gotOnlySecondCluster := grpcsync.NewEvent()
+
+	// These are only accessed in the callback, which is executed serially.
+	seenBothClusters := false
+	seenSecondClusterOnly := false
+
+	clusterA := "cluster-A"
+	clusterB := "cluster-B"
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
+		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
+			if req.GetTypeUrl() == version.V3ClusterURL {
+				resourceNames := req.GetResourceNames()
+				if !seenBothClusters {
+					if resourcesMatch(resourceNames, []string{clusterA, clusterB}) {
+						seenBothClusters = true
+						gotBothClusterRequest.Fire()
+					}
+				}
+				if seenBothClusters && !seenSecondClusterOnly {
+					if resourcesMatch(resourceNames, []string{clusterB}) {
+						seenSecondClusterOnly = true
+						gotOnlySecondCluster.Fire()
+					}
+				}
+			}
+			return nil
+		},
+		AllowResourceSubset: true,
+	})
+
+	nodeID := uuid.New().String()
+	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
+
+	// Configure initial resources: Route -> ClusterA
+	routeA := e2e.DefaultRouteConfig(defaultTestRouteConfigName, defaultTestServiceName, clusterA)
+	listeners := []*v3listenerpb.Listener{e2e.DefaultClientListener(defaultTestServiceName, defaultTestRouteConfigName)}
+	clusters := []*v3clusterpb.Cluster{
+		e2e.DefaultCluster(clusterA, "endpoint-A", e2e.SecurityLevelNone),
+		e2e.DefaultCluster(clusterB, "endpoint-B", e2e.SecurityLevelNone),
+	}
+	endpoints := []*v3endpointpb.ClusterLoadAssignment{
+		e2e.DefaultEndpoint("endpoint-A", "localhost", []uint32{8080}),
+		e2e.DefaultEndpoint("endpoint-B", "localhost", []uint32{8081}),
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	configureAllResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, listeners, []*v3routepb.RouteConfiguration{routeA}, clusters, endpoints)
+
+	stateCh, _, _ := buildResolverForTarget(t, resolver.Target{URL: *testutils.MustParseURL("xds:///" + defaultTestServiceName)}, bc)
+
+	// Start RPC (Ref Counts ClusterA)
+	cs := verifyUpdateFromResolver(ctx, t, stateCh, wantServiceConfig(clusterA))
+	res, err := cs.SelectConfig(iresolver.RPCInfo{Context: ctx, Method: "/service/method"})
+	if err != nil {
+		t.Fatalf("cs.SelectConfig(): %v", err)
+	}
+
+	// Switch Configuration to ClusterB
+	routeB := e2e.DefaultRouteConfig(defaultTestRouteConfigName, defaultTestServiceName, clusterB)
+	configureAllResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, listeners, []*v3routepb.RouteConfiguration{routeB}, clusters, endpoints)
+
+	// Resolver should request BOTH A (due to active RPC) and B (due to new config)
+	select {
+	case <-ctx.Done():
+		t.Fatalf("Timeout waiting for updated CDS request including clusters A and B")
+	case <-gotBothClusterRequest.Done():
+	}
+
+	// Verify Service Config has both clusters
+	const wantServiceRaw = `{
+      "loadBalancingConfig": [{
+        "xds_cluster_manager_experimental": {
+          "children": {
+            "cluster:cluster-A": {
+              "childPolicy": [{"cds_experimental": {"cluster": "cluster-A"}}]
+            },
+            "cluster:cluster-B": {
+              "childPolicy": [{"cds_experimental": {"cluster": "cluster-B"}}]
+            }
+          }
+        }
+      }]
+    }`
+	verifyUpdateFromResolver(ctx, t, stateCh, wantServiceRaw)
+
+	// Finish RPC (Drops Ref to ClusterA)
+	res.OnCommitted()
+
+	// ONLY cluster B should be requested now that there are no references to
+	// cluster A.
+	select {
+	case <-ctx.Done():
+		t.Fatalf("Timeout waiting for updated CDS request including only cluster B")
+	case <-gotOnlySecondCluster.Done():
+	}
+
+	// ServiceConfig update should also contain only cluster B.
+	verifyUpdateFromResolver(ctx, t, stateCh, wantServiceConfig(clusterB))
 }
