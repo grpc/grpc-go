@@ -133,7 +133,8 @@ func DefaultBootstrapContents(t *testing.T, nodeID, serverURI string) []byte {
 	bs, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
 		Servers: []byte(fmt.Sprintf(`[{
 			"server_uri": "passthrough:///%s",
-			"channel_creds": [{"type": "insecure"}]
+			"channel_creds": [{"type": "insecure"}],
+			"server_features": ["trusted_xds_server"]
 		}]`, serverURI)),
 		Node:                               []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 		CertificateProviders:               cpc,

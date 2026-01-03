@@ -1448,7 +1448,7 @@ func (s) TestResolver_AutoHostRewrite(t *testing.T) {
 				t.Fatalf("cs.SelectConfig(): %v", err)
 			}
 
-			gotAutoHostRewrite := clusterimpl.AutoHostRewriteForTesting(res.Context)
+			gotAutoHostRewrite := clusterimpl.AutoHostRewriteEnabledForTesting(res.Context)
 			if gotAutoHostRewrite != tt.wantAutoHostRewrite {
 				t.Fatalf("Got autoHostRewrite: %v, want: %v", gotAutoHostRewrite, tt.wantAutoHostRewrite)
 			}

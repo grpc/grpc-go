@@ -574,9 +574,14 @@ type CallHdr struct {
 
 	DoneFunc func() // called when the stream is finished
 
-	// Authority is used to explicitly override the `:authority` header. If set,
-	// this value takes precedence over the Host field and will be used as the
-	// value for the `:authority` header.
+	// Authority is used to explicitly override the `:authority` header.
+	//
+	// This value comes from one of two sources:
+	// 1. The `CallAuthority` call option, if specified by the user.
+	// 2. An override provided by the LB picker (e.g. xDS authority rewriting).
+	//
+	// The `CallAuthority` call option always takes precedence over the LB
+	// picker override.
 	Authority string
 }
 
