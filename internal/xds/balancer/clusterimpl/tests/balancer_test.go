@@ -39,6 +39,7 @@ import (
 	"google.golang.org/grpc/balancer/pickfirst"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/balancer/stub"
@@ -1493,7 +1494,8 @@ func (s) TestAuthorityOverridingWithTLS(t *testing.T) {
 			defer cc.Close()
 
 			client := testgrpc.NewTestServiceClient(cc)
-			_, err = client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true))
+			peer := &peer.Peer{}
+			_, err = client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(peer))
 
 			if test.expectSuccess {
 				if err != nil {
@@ -1503,6 +1505,17 @@ func (s) TestAuthorityOverridingWithTLS(t *testing.T) {
 				case gotAuth := <-authorityCh:
 					if gotAuth != test.xdsAuthorityOverride {
 						t.Errorf("invalid authority got: %q, want: %q", gotAuth, test.xdsAuthorityOverride)
+					}
+					ai, ok := peer.AuthInfo.(credentials.TLSInfo)
+					if !ok {
+						t.Fatalf("AuthInfo type is %T, want %T", peer.AuthInfo, credentials.TLSInfo{})
+					}
+					if len(ai.State.PeerCertificates) != 1 {
+						t.Fatalf("Number of peer certificates is %d, want 1", len(ai.State.PeerCertificates))
+					}
+					cert := ai.State.PeerCertificates[0]
+					if cert.Subject.CommonName != "test-server1" {
+						t.Fatalf("Common name in peer certificate is %s, want test-server1", cert.Subject.CommonName)
 					}
 				case <-ctx.Done():
 					t.Fatalf("Timeout waiting for successful RPC after authority rewriting.")
