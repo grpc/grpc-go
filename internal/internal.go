@@ -249,14 +249,13 @@ var (
 	// labels from a resolver.Address. Callers must assert its type before calling.
 	AddressToTelemetryLabels any // func(addr resolver.Address) map[string]string
 
-	// TrackAsyncReporters installs the tracking hook during test setup. The
-	// implementation is assigned by the internal stats package.
-	TrackAsyncReporters = func() {}
-
-	// CheckAsyncReporters verifies no leaks exist and restores the original
-	// delegate during test tear down. The implementation is assigned by the internal
-	// stats package.
-	CheckAsyncReporters = func(any) {}
+	// AsyncReporterCleanupDelegate is initialized to a pass-through function by
+	// default (production behavior), allowing tests to swap it with an
+	// implementation which tracks registration of async reporter and its
+	// corresponding cleanup.
+	AsyncReporterCleanupDelegate = func(cleanup func()) func() {
+		return cleanup
+	}
 )
 
 // HealthChecker defines the signature of the client-side LB channel health

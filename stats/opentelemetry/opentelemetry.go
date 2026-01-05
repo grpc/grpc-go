@@ -520,7 +520,9 @@ func (rm *registryMetrics) RegisterAsyncReporter(reporter estats.AsyncMetricRepo
 
 	return func() {
 		err = reg.Unregister()
-		logger.Errorf("grpc: failed to unregister callback for async metrics: %v", err)
+		if err != nil {
+			logger.Errorf("grpc: failed to unregister callback for async metrics: %v", err)
+		}
 	}
 }
 

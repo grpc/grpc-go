@@ -25,6 +25,7 @@ import (
 )
 
 // MetricsRecorder records on metrics derived from metric registry.
+// Implementors must embed UnimplementedMetricsRecorder.
 type MetricsRecorder interface {
 	// RecordInt64Count records the measurement alongside labels on the int
 	// count associated with the provided handle.

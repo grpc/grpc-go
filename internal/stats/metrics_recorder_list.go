@@ -116,13 +116,6 @@ func (l *MetricsRecorderList) RecordInt64Gauge(handle *estats.Int64GaugeHandle, 
 	}
 }
 
-// registerAsyncReporterDelegate is the variable delegate, to be used for
-// replacement that adds additional leakchecks in tests.
-var registerAsyncReporterDelegate = defaultRegisterAsyncReporter
-
-// RegisterAsyncReporterFuncType defines the signature of the delegate function.
-type RegisterAsyncReporterFuncType func(*MetricsRecorderList, estats.AsyncMetricReporter, ...estats.AsyncMetric) func()
-
 // RegisterAsyncReporter forwards the registration to all underlying metrics
 // recorders.
 //
@@ -130,11 +123,6 @@ type RegisterAsyncReporterFuncType func(*MetricsRecorderList, estats.AsyncMetric
 // returned by each underlying recorder, ensuring the reporter is unregistered
 // from all of them.
 func (l *MetricsRecorderList) RegisterAsyncReporter(reporter estats.AsyncMetricReporter, metrics ...estats.AsyncMetric) func() {
-	return registerAsyncReporterDelegate(l, reporter, metrics...)
-}
-
-// defaultRegisterAsyncReporter contains the actual production logic.
-func defaultRegisterAsyncReporter(l *MetricsRecorderList, reporter estats.AsyncMetricReporter, metrics ...estats.AsyncMetric) func() {
 	descriptorsMap := make(map[*estats.MetricDescriptor]bool, len(metrics))
 	for _, m := range metrics {
 		descriptorsMap[m.Descriptor()] = true
@@ -152,6 +140,14 @@ func defaultRegisterAsyncReporter(l *MetricsRecorderList, reporter estats.AsyncM
 		}
 		unregisterFns = append(unregisterFns, mr.RegisterAsyncReporter(estats.AsyncMetricReporterFunc(wrappedCallback), metrics...))
 	}
+
+	// Wrap the cleanup function using the internal delegate.
+	// In production, this returns realCleanup as-is.
+	// In tests, the leak checker can swap this to track the registration lifetime.
+	return internal.AsyncReporterCleanupDelegate(defaultCleanUp(unregisterFns))
+}
+
+func defaultCleanUp(unregisterFns []func()) func() {
 	return func() {
 		for _, unregister := range unregisterFns {
 			unregister()
