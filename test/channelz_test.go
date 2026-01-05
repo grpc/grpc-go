@@ -323,7 +323,8 @@ func (s) TestCZNestedChannelRegistrationAndDeletion(t *testing.T) {
 	r := manual.NewBuilderWithScheme("whatever")
 	te.resolverScheme = r.Scheme()
 	te.clientConn(grpc.WithResolvers(r))
-	resolvedAddrs := []resolver.Address{{Addr: "127.0.0.1:0", ServerName: "grpclb.server"}}
+	localListenAddress := randomLocalListenAddress(t)
+	resolvedAddrs := []resolver.Address{{Addr: localListenAddress, ServerName: "grpclb.server"}}
 	grpclbConfig := parseServiceConfig(t, r, `{"loadBalancingPolicy": "grpclb"}`)
 	r.UpdateState(grpclbstate.Set(resolver.State{ServiceConfig: grpclbConfig}, &grpclbstate.State{BalancerAddresses: resolvedAddrs}))
 	defer te.tearDown()
@@ -342,7 +343,7 @@ func (s) TestCZNestedChannelRegistrationAndDeletion(t *testing.T) {
 	}
 
 	r.UpdateState(resolver.State{
-		Addresses:     []resolver.Address{{Addr: "127.0.0.1:0"}},
+		Addresses:     []resolver.Address{{Addr: localListenAddress}},
 		ServiceConfig: parseServiceConfig(t, r, `{"loadBalancingPolicy": "round_robin"}`),
 	})
 
@@ -1504,7 +1505,8 @@ func (s) TestCZChannelTraceCreationDeletion(t *testing.T) {
 	r := manual.NewBuilderWithScheme("whatever")
 	te.resolverScheme = r.Scheme()
 	te.clientConn(grpc.WithResolvers(r))
-	resolvedAddrs := []resolver.Address{{Addr: "127.0.0.1:0", ServerName: "grpclb.server"}}
+	localListenAddress := randomLocalListenAddress(t)
+	resolvedAddrs := []resolver.Address{{Addr: localListenAddress, ServerName: "grpclb.server"}}
 	grpclbConfig := parseServiceConfig(t, r, `{"loadBalancingPolicy": "grpclb"}`)
 	r.UpdateState(grpclbstate.Set(resolver.State{ServiceConfig: grpclbConfig}, &grpclbstate.State{BalancerAddresses: resolvedAddrs}))
 	defer te.tearDown()
@@ -1546,7 +1548,7 @@ func (s) TestCZChannelTraceCreationDeletion(t *testing.T) {
 	}
 
 	r.UpdateState(resolver.State{
-		Addresses:     []resolver.Address{{Addr: "127.0.0.1:0"}},
+		Addresses:     []resolver.Address{{Addr: localListenAddress}},
 		ServiceConfig: parseServiceConfig(t, r, `{"loadBalancingPolicy": "round_robin"}`),
 	})
 
@@ -2014,7 +2016,8 @@ func (s) TestCZTraceOverwriteChannelDeletion(t *testing.T) {
 	r := manual.NewBuilderWithScheme("whatever")
 	te.resolverScheme = r.Scheme()
 	te.clientConn(grpc.WithResolvers(r))
-	resolvedAddrs := []resolver.Address{{Addr: "127.0.0.1:0", ServerName: "grpclb.server"}}
+	localListenAddress := randomLocalListenAddress(t)
+	resolvedAddrs := []resolver.Address{{Addr: localListenAddress, ServerName: "grpclb.server"}}
 	grpclbConfig := parseServiceConfig(t, r, `{"loadBalancingPolicy": "grpclb"}`)
 	r.UpdateState(grpclbstate.Set(resolver.State{ServiceConfig: grpclbConfig}, &grpclbstate.State{BalancerAddresses: resolvedAddrs}))
 	defer te.tearDown()
@@ -2037,7 +2040,7 @@ func (s) TestCZTraceOverwriteChannelDeletion(t *testing.T) {
 	}
 
 	r.UpdateState(resolver.State{
-		Addresses:     []resolver.Address{{Addr: "127.0.0.1:0"}},
+		Addresses:     []resolver.Address{{Addr: localListenAddress}},
 		ServiceConfig: parseServiceConfig(t, r, `{"loadBalancingPolicy": "round_robin"}`),
 	})
 
@@ -2162,4 +2165,13 @@ func (s) TestCZTraceTopChannelDeletionTraceClear(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func randomLocalListenAddress(t *testing.T) string {
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Failed to listen: %v", err)
+	}
+	t.Cleanup(func() { lis.Close() })
+	return lis.Addr().String()
 }
