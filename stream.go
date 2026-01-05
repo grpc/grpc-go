@@ -537,8 +537,16 @@ func (a *csAttempt) newStream() error {
 		md, _ := metadata.FromOutgoingContext(a.ctx)
 		md = metadata.Join(md, a.pickResult.Metadata)
 		a.ctx = metadata.NewOutgoingContext(a.ctx, md)
-	}
 
+		// If the `CallAuthority` CallOption is not set, check if the LB picker
+		// has provided an authority override in the PickResult metadata and
+		// apply it, as specified in gRFC A81.
+		if cs.callInfo.authority == "" {
+			if authMD := a.pickResult.Metadata.Get(":authority"); len(authMD) > 0 {
+				cs.callHdr.Authority = authMD[0]
+			}
+		}
+	}
 	s, err := a.transport.NewStream(a.ctx, cs.callHdr)
 	if err != nil {
 		nse, ok := err.(*transport.NewStreamError)

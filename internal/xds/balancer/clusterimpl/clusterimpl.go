@@ -45,6 +45,7 @@ import (
 	"google.golang.org/grpc/internal/xds/clients"
 	"google.golang.org/grpc/internal/xds/clients/lrsclient"
 	"google.golang.org/grpc/internal/xds/xdsclient"
+	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 )
@@ -420,6 +421,7 @@ type scWrapper struct {
 	// locality needs to be atomic because it can be updated while being read by
 	// the picker.
 	locality atomic.Pointer[clients.Locality]
+	hostname string
 }
 
 func (scw *scWrapper) updateLocalityID(lID clients.Locality) {
@@ -442,6 +444,9 @@ func (b *clusterImplBalancer) NewSubConn(addrs []resolver.Address, opts balancer
 	}
 	var sc balancer.SubConn
 	scw := &scWrapper{}
+	if len(addrs) > 0 {
+		scw.hostname = xdsresource.Hostname(addrs[0])
+	}
 	oldListener := opts.StateListener
 	opts.StateListener = func(state balancer.SubConnState) {
 		b.updateSubConnState(sc, state, oldListener)
