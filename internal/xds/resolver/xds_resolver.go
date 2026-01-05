@@ -152,9 +152,9 @@ func (b *xdsResolverBuilder) Build(target resolver.Target, cc resolver.ClientCon
 	r.logger.Infof("Creating resolver for target: %+v", target)
 
 	dmSet := make(chan struct{})
-	// Schedule a callback that blocks until r.dm is set. This acts as a
-	// gatekeeper: even if dependency manager get the updates before the
-	// xdsdepmgr.New() has a chance to return(e.g., from cache), they will be
+	// Schedule a callback that blocks until r.dm is set i.e xdsdepmgr.New()
+	// returns. This acts as a gatekeeper: even if dependency manager sends the
+	// updates before the xdsdepmgr.New() has a chance to return, they will be
 	// queued behind this blocker and processed only after initialization is
 	// complete.
 	r.serializer.TrySchedule(func(ctx context.Context) {

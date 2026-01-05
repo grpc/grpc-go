@@ -158,8 +158,11 @@ func New(listenerName, dataplaneAuthority string, xdsClient xdsclient.XDSClient,
 		clusterSubscriptions:    make(map[string]*ClusterRef),
 	}
 	dm.logger = prefixLogger(dm)
+
+	// Start the listener watch. Listener watch will start the other resource
+	// watches as needed.
 	dm.listenerWatcher = &xdsResourceState[xdsresource.ListenerUpdate, struct{}]{}
-	dm.listenerWatcher.stop = xdsresource.WatchListener(dm.xdsClient, dm.ldsResourceName, &xdsResourceWatcher[xdsresource.ListenerUpdate]{
+	lw := &xdsResourceWatcher[xdsresource.ListenerUpdate]{
 		onUpdate: func(update *xdsresource.ListenerUpdate, onDone func()) {
 			dm.onListenerResourceUpdate(update, onDone)
 		},
@@ -169,7 +172,8 @@ func New(listenerName, dataplaneAuthority string, xdsClient xdsclient.XDSClient,
 		onAmbientError: func(err error, onDone func()) {
 			dm.onListenerResourceAmbientError(err, onDone)
 		},
-	})
+	}
+	dm.listenerWatcher.stop = xdsresource.WatchListener(dm.xdsClient, listenerName, lw)
 	return dm
 }
 
@@ -236,7 +240,7 @@ func (m *DependencyManager) maybeSendUpdateLocked() {
 	haveAllResources := true
 	// Get all clusters to be watched: from route config and from cluster
 	// subscriptions, the subscriptions can be from RPC referencing the cluster
-	// or from balancer for cluster specifier plugins.
+	// or from CDS balancer for cluster specifier plugins.
 	clustersToWatch := make(map[string]bool)
 	for cluster := range m.clustersFromRouteConfig {
 		clustersToWatch[cluster] = true
@@ -922,7 +926,7 @@ type ClusterRef struct {
 // returns the ClusterRef. If the cluster is not already being tracked, it adds
 // it to the clusterSubscriptions map. If ClusterSubscription is called in a
 // blocking manner while handling the update for any resource type, it will
-// deadlock because both the update handler and this function have to aquire
+// deadlock because both the update handler and this function have to acquire
 // m.mu.
 func (m *DependencyManager) ClusterSubscription(name string) *ClusterRef {
 	m.mu.Lock()
@@ -947,7 +951,7 @@ func (m *DependencyManager) ClusterSubscription(name string) *ClusterRef {
 // count reaches zero, it removes the cluster from the clusterSubscriptions map
 // in the DependencyManager. If Unsubscribe is called in a blocking manner while
 // handling the update for any resource type, it will deadlock because both the
-// update handler and this function have to aquire m.mu.
+// update handler and this function have to acquire m.mu.
 func (c *ClusterRef) Unsubscribe() {
 	c.m.mu.Lock()
 	defer c.m.mu.Unlock()
