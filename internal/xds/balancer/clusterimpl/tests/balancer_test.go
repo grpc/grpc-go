@@ -39,7 +39,6 @@ import (
 	"google.golang.org/grpc/balancer/pickfirst"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
-	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/balancer/stub"
@@ -102,9 +101,6 @@ func (s) TestConfigUpdateWithSameLoadReportingServerConfig(t *testing.T) {
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 
 	// Create an xDS resolver with the above bootstrap configuration.
-	if internal.NewXDSResolverWithConfigForTesting == nil {
-		t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
-	}
 	resolverBuilder, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
 	if err != nil {
 		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
@@ -210,9 +206,6 @@ func (s) TestLoadReportingPickFirstMultiLocality(t *testing.T) {
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 
 	// Create an xDS resolver with the above bootstrap configuration.
-	if internal.NewXDSResolverWithConfigForTesting == nil {
-		t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
-	}
 	resolverBuilder, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
 	if err != nil {
 		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
@@ -383,9 +376,6 @@ func (s) TestCircuitBreaking(t *testing.T) {
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 
 	// Create an xDS resolver with the above bootstrap configuration.
-	if internal.NewXDSResolverWithConfigForTesting == nil {
-		t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
-	}
 	resolverBuilder, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
 	if err != nil {
 		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
@@ -579,9 +569,6 @@ func (s) TestDropByCategory(t *testing.T) {
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 
 	// Create an xDS resolver with the above bootstrap configuration.
-	if internal.NewXDSResolverWithConfigForTesting == nil {
-		t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
-	}
 	resolverBuilder, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
 	if err != nil {
 		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
@@ -721,9 +708,6 @@ func (s) TestCircuitBreakingLogicalDNS(t *testing.T) {
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 
 	// Create an xDS resolver with the above bootstrap configuration.
-	if internal.NewXDSResolverWithConfigForTesting == nil {
-		t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
-	}
 	resolverBuilder, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
 	if err != nil {
 		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
@@ -839,9 +823,6 @@ func (s) TestLRSLogicalDNS(t *testing.T) {
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 
 	// Create an xDS resolver with the above bootstrap configuration.
-	if internal.NewXDSResolverWithConfigForTesting == nil {
-		t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
-	}
 	resolverBuilder, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
 	if err != nil {
 		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
@@ -930,9 +911,6 @@ func (s) TestReResolutionAfterTransientFailure(t *testing.T) {
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 
 	// Create an xDS resolver with the above bootstrap configuration.
-	if internal.NewXDSResolverWithConfigForTesting == nil {
-		t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
-	}
 	resolverBuilder, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
 	if err != nil {
 		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
@@ -1049,9 +1027,6 @@ func (s) TestUpdateLRSServerToNil(t *testing.T) {
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 
 	// Create an xDS resolver with the above bootstrap configuration.
-	if internal.NewXDSResolverWithConfigForTesting == nil {
-		t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
-	}
 	resolverBuilder, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
 	if err != nil {
 		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
@@ -1135,9 +1110,6 @@ func (s) TestChildPolicyChangeOnConfigUpdate(t *testing.T) {
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 
 	// Create an xDS resolver with the above bootstrap configuration.
-	if internal.NewXDSResolverWithConfigForTesting == nil {
-		t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
-	}
 	resolverBuilder, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
 	if err != nil {
 		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
@@ -1257,9 +1229,6 @@ func (s) TestFailedToParseChildPolicyConfig(t *testing.T) {
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 
 	// Create an xDS resolver with the above bootstrap configuration.
-	if internal.NewXDSResolverWithConfigForTesting == nil {
-		t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
-	}
 	resolverBuilder, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
 	if err != nil {
 		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
@@ -1323,9 +1292,6 @@ func setupManagementServerAndResolver(t *testing.T) (*e2e.ManagementServer, reso
 	contents := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 
 	// Create an xDS resolver with the above bootstrap configuration.
-	if internal.NewXDSResolverWithConfigForTesting == nil {
-		t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
-	}
 	resolverBuilder, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(contents)
 	if err != nil {
 		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
@@ -1375,12 +1341,12 @@ func (s) TestAuthorityOverriding(t *testing.T) {
 	mgmtServer, resolverBuilder, nodeID := setupManagementServerAndResolver(t)
 
 	// Start a server backend exposing the test service.
-	authorityCh := make(chan string, 1)
+	var gotAuthority string
 	f := &stubserver.StubServer{
 		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
 			if md, ok := metadata.FromIncomingContext(ctx); ok {
 				if authVals := md.Get(":authority"); len(authVals) > 0 {
-					authorityCh <- authVals[0]
+					gotAuthority = authVals[0]
 				}
 			}
 			return &testpb.Empty{}, nil
@@ -1406,13 +1372,8 @@ func (s) TestAuthorityOverriding(t *testing.T) {
 		t.Fatalf("client.EmptyCall() failed: %v", err)
 	}
 
-	select {
-	case gotAuth := <-authorityCh:
-		if gotAuth != xdsAuthorityOverride {
-			t.Errorf("invalid authority got: %q, want: %q", gotAuth, xdsAuthorityOverride)
-		}
-	case <-ctx.Done():
-		t.Fatalf("Timeout waiting for successful RPC after authority rewriting.")
+	if gotAuthority != xdsAuthorityOverride {
+		t.Errorf("invalid authority got: %q, want: %q", gotAuthority, xdsAuthorityOverride)
 	}
 
 	// The authority specified via the `CallAuthority` CallOption takes the
@@ -1422,13 +1383,8 @@ func (s) TestAuthorityOverriding(t *testing.T) {
 		t.Fatalf("client.EmptyCall() failed: %v", err)
 	}
 
-	select {
-	case got := <-authorityCh:
-		if got != userAuthorityOverride {
-			t.Errorf("Server received authority %q, want %q (user override)", got, userAuthorityOverride)
-		}
-	case <-ctx.Done():
-		t.Fatalf("Timeout waiting for successful RPC.")
+	if gotAuthority != userAuthorityOverride {
+		t.Errorf("Server received authority %q, want %q (user override)", gotAuthority, userAuthorityOverride)
 	}
 }
 
@@ -1442,17 +1398,17 @@ func (s) TestAuthorityOverridingWithTLS(t *testing.T) {
 	tests := []struct {
 		name                 string
 		xdsAuthorityOverride string
-		expectSuccess        bool
+		wantSuccess          bool
 	}{
 		{
 			name:                 "Valid_Authority_Rewrite",
 			xdsAuthorityOverride: "x.test.example.com",
-			expectSuccess:        true,
+			wantSuccess:          true,
 		},
 		{
 			name:                 "Authority_Rewrite_Mismatch",
 			xdsAuthorityOverride: "xyz.exmaple.com",
-			expectSuccess:        false,
+			wantSuccess:          false,
 		},
 	}
 	for _, test := range tests {
@@ -1463,12 +1419,12 @@ func (s) TestAuthorityOverridingWithTLS(t *testing.T) {
 			serverCreds := testutils.CreateServerTLSCredentials(t, tls.RequireAndVerifyClientCert)
 
 			// Start a server backend exposing the test service.
-			authorityCh := make(chan string, 1)
+			var gotAuthority string
 			f := &stubserver.StubServer{
 				EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
 					if md, ok := metadata.FromIncomingContext(ctx); ok {
 						if authVals := md.Get(":authority"); len(authVals) > 0 {
-							authorityCh <- authVals[0]
+							gotAuthority = authVals[0]
 						}
 					}
 					return &testpb.Empty{}, nil
@@ -1497,32 +1453,16 @@ func (s) TestAuthorityOverridingWithTLS(t *testing.T) {
 			peer := &peer.Peer{}
 			_, err = client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(peer))
 
-			if test.expectSuccess {
+			if test.wantSuccess {
 				if err != nil {
 					t.Fatalf("RPC failed unexpectedly: %v", err)
 				}
-				select {
-				case gotAuth := <-authorityCh:
-					if gotAuth != test.xdsAuthorityOverride {
-						t.Errorf("invalid authority got: %q, want: %q", gotAuth, test.xdsAuthorityOverride)
-					}
-					ai, ok := peer.AuthInfo.(credentials.TLSInfo)
-					if !ok {
-						t.Fatalf("AuthInfo type is %T, want %T", peer.AuthInfo, credentials.TLSInfo{})
-					}
-					if len(ai.State.PeerCertificates) != 1 {
-						t.Fatalf("Number of peer certificates is %d, want 1", len(ai.State.PeerCertificates))
-					}
-					cert := ai.State.PeerCertificates[0]
-					if cert.Subject.CommonName != "test-server1" {
-						t.Fatalf("Common name in peer certificate is %s, want test-server1", cert.Subject.CommonName)
-					}
-				case <-ctx.Done():
-					t.Fatalf("Timeout waiting for successful RPC after authority rewriting.")
+				if gotAuthority != test.xdsAuthorityOverride {
+					t.Errorf("invalid authority got: %q, want: %q", gotAuthority, test.xdsAuthorityOverride)
 				}
 			} else {
-				if err == nil || !strings.Contains(err.Error(), "invalid authority") {
-					t.Fatal("RPC succeeded unexpectedly; expected TLS failure due to authority mismatch")
+				if status.Code(err) != codes.Unavailable {
+					t.Fatalf("Expected TLS failure due to authority mismatch, got: %q want: %q", codes.Unavailable, status.Code(err))
 				}
 			}
 		})

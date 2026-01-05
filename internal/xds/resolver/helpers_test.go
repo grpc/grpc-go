@@ -103,9 +103,6 @@ func buildResolverForTarget(t *testing.T, target resolver.Target, bootstrapConte
 	var builder resolver.Builder
 	if bootstrapContents != nil {
 		// Create an xDS resolver with the provided bootstrap configuration.
-		if internal.NewXDSResolverWithConfigForTesting == nil {
-			t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
-		}
 		var err error
 		builder, err = internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bootstrapContents)
 		if err != nil {

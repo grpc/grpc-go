@@ -87,9 +87,6 @@ func (s) TestClientSideFederation(t *testing.T) {
 		t.Fatalf("Failed to create bootstrap file: %v", err)
 	}
 
-	if internal.NewXDSResolverWithConfigForTesting == nil {
-		t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
-	}
 	resolver, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bootstrapContents)
 	if err != nil {
 		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
@@ -183,9 +180,6 @@ func (s) TestClientSideFederationWithOnlyXDSTPStyleLDS(t *testing.T) {
 		t.Fatalf("Failed to create bootstrap file: %v", err)
 	}
 
-	if internal.NewXDSResolverWithConfigForTesting == nil {
-		t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
-	}
 	resolver, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bootstrapContents)
 	if err != nil {
 		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
