@@ -309,12 +309,6 @@ func makeLogicalDNSClusterResource(name, dnsHost string, dnsPort uint32) *v3clus
 	})
 }
 
-func startDependencyManager(target, authority string, xdsClient xdsclient.XDSClient, watcher xdsdepmgr.ConfigWatcher) *xdsdepmgr.DependencyManager {
-	dm := xdsdepmgr.New(target, authority, xdsClient, watcher)
-	dm.Start()
-	return dm
-}
-
 // Tests the happy case where the dependency manager receives all the required
 // resources and verifies that Update is called with the correct XDSConfig.
 func (s) TestHappyCase(t *testing.T) {
@@ -339,7 +333,7 @@ func (s) TestHappyCase(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	dm := startDependencyManager(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
+	dm := xdsdepmgr.New(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
 	defer dm.Close()
 	wantXdsConfig := makeXDSConfig(resources.Routes[0].Name, resources.Clusters[0].Name, resources.Clusters[0].EdsClusterConfig.ServiceName, "localhost:8080")
 	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
@@ -388,8 +382,7 @@ func (s) TestInlineRouteConfig(t *testing.T) {
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
-	dm := startDependencyManager(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
-	dm.Start()
+	dm := xdsdepmgr.New(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
 	defer dm.Close()
 
 	wantXdsConfig := makeXDSConfig(defaultTestRouteConfigName, defaultTestClusterName, defaultTestEDSServiceName, "localhost:8080")
@@ -422,7 +415,7 @@ func (s) TestNoRouteConfigResource(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	dm := startDependencyManager(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
+	dm := xdsdepmgr.New(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
 	defer dm.Close()
 
 	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
@@ -461,7 +454,7 @@ func (s) TestListenerResourceNotFoundError(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	dm := startDependencyManager(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
+	dm := xdsdepmgr.New(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
 	defer dm.Close()
 	wantXdsConfig := makeXDSConfig(resources.Routes[0].Name, resources.Clusters[0].Name, resources.Clusters[0].EdsClusterConfig.ServiceName, "localhost:8080")
 	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
@@ -509,7 +502,7 @@ func (s) TestRouteConfigResourceError(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	dm := startDependencyManager(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
+	dm := xdsdepmgr.New(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
 	defer dm.Close()
 
 	if err := verifyError(ctx, watcher.errorCh, "route resource error", nodeID); err != nil {
@@ -545,7 +538,7 @@ func (s) TestNoVirtualHost(t *testing.T) {
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
-	dm := startDependencyManager(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
+	dm := xdsdepmgr.New(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
 	defer dm.Close()
 
 	if err := verifyError(ctx, watcher.errorCh, "could not find VirtualHost", nodeID); err != nil {
@@ -578,7 +571,7 @@ func (s) TestNoVirtualHost_ExistingResource(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	dm := startDependencyManager(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
+	dm := xdsdepmgr.New(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
 	defer dm.Close()
 
 	// Verify valid update.
@@ -631,7 +624,7 @@ func (s) TestAmbientError(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	dm := startDependencyManager(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
+	dm := xdsdepmgr.New(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
 	defer dm.Close()
 
 	// Wait for the initial valid update.
@@ -716,7 +709,7 @@ func (s) TestRouteResourceUpdate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	dm := startDependencyManager(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
+	dm := xdsdepmgr.New(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
 	defer dm.Close()
 
 	// Wait for the first update.
@@ -802,7 +795,7 @@ func (s) TestRouteResourceChangeToInline(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	dm := startDependencyManager(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
+	dm := xdsdepmgr.New(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
 	defer dm.Close()
 
 	// Wait for the first update.
@@ -942,7 +935,7 @@ func (s) TestClusterResourceError(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	dm := startDependencyManager(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
+	dm := xdsdepmgr.New(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
 	defer dm.Close()
 
 	wantXdsConfig := makeXDSConfig(resources.Routes[0].Name, resources.Clusters[0].Name, resources.Clusters[0].EdsClusterConfig.ServiceName, "localhost:8080")
@@ -988,7 +981,7 @@ func (s) TestClusterAmbientError(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	dm := startDependencyManager(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
+	dm := xdsdepmgr.New(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
 	defer dm.Close()
 
 	wantXdsConfig := makeXDSConfig(resources.Routes[0].Name, resources.Clusters[0].Name, resources.Clusters[0].EdsClusterConfig.ServiceName, "localhost:8080")
@@ -1058,7 +1051,7 @@ func (s) TestAggregateCluster(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	dm := startDependencyManager(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
+	dm := xdsdepmgr.New(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
 	defer dm.Close()
 
 	// Verify that no configuration is pushed to the child policy yet, because
@@ -1203,7 +1196,7 @@ func (s) TestAggregateClusterChildError(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	dm := startDependencyManager(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
+	dm := xdsdepmgr.New(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
 	defer dm.Close()
 
 	wantXdsConfig := &xdsresource.XDSConfig{
@@ -1313,7 +1306,7 @@ func (s) TestAggregateClusterNoLeafCluster(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	dm := startDependencyManager(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
+	dm := xdsdepmgr.New(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
 	defer dm.Close()
 
 	wantXdsConfig := &xdsresource.XDSConfig{
@@ -1385,7 +1378,7 @@ func (s) TestAggregateClusterMaxDepth(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	dm := startDependencyManager(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
+	dm := xdsdepmgr.New(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
 	defer dm.Close()
 
 	commonError := fmt.Errorf("[xDS node id: %v]: %v", nodeID, fmt.Errorf("aggregate cluster graph exceeds max depth (%d)", 16))
@@ -1459,7 +1452,7 @@ func (s) TestEndpointAmbientError(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	dm := startDependencyManager(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
+	dm := xdsdepmgr.New(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
 	defer dm.Close()
 	wantXdsConfig := makeXDSConfig(resources.Routes[0].Name, resources.Clusters[0].Name, resources.Endpoints[0].ClusterName, "localhost:8080")
 
@@ -1508,7 +1501,7 @@ func (s) TestClusterSubscription_Lifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	dm := startDependencyManager(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
+	dm := xdsdepmgr.New(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
 	defer dm.Close()
 
 	// Verify initial update.
@@ -1520,7 +1513,7 @@ func (s) TestClusterSubscription_Lifecycle(t *testing.T) {
 	clusterName := resources.Clusters[0].Name
 	edsServiceName := resources.Clusters[0].EdsClusterConfig.ServiceName
 
-	// Subscribe to the cluster.
+	// Subscribe to the old cluster.
 	ref := dm.ClusterSubscription(clusterName)
 
 	// Update RouteConfig to REMOVE the cluster. The cluster should still be
@@ -1532,7 +1525,8 @@ func (s) TestClusterSubscription_Lifecycle(t *testing.T) {
 	endpoint2 := e2e.DefaultEndpoint(newEDSServcie, "localhost", []uint32{8081})
 
 	resources.Routes = []*v3routepb.RouteConfiguration{route2}
-	// Keep the old cluster in the management server so it doesn't return a resource error if watched.
+	// Keep the old cluster in the management server so it doesn't return a
+	// resource error if watched.
 	resources.Clusters = append(resources.Clusters, cluster2)
 	resources.Endpoints = append(resources.Endpoints, endpoint2)
 

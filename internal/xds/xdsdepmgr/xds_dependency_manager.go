@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"net/url"
 	"sync"
-	"sync/atomic"
 
 	"google.golang.org/grpc/grpclog"
 	internalgrpclog "google.golang.org/grpc/internal/grpclog"
@@ -160,23 +159,18 @@ func New(listenerName, dataplaneAuthority string, xdsClient xdsclient.XDSClient,
 	}
 	dm.logger = prefixLogger(dm)
 	dm.listenerWatcher = &xdsResourceState[xdsresource.ListenerUpdate, struct{}]{}
-	return dm
-}
-
-// Start registers the listener watch on the xDS client which in turn will start
-// watches for other resources.
-func (m *DependencyManager) Start() {
-	m.listenerWatcher.stop = xdsresource.WatchListener(m.xdsClient, m.ldsResourceName, &xdsResourceWatcher[xdsresource.ListenerUpdate]{
+	dm.listenerWatcher.stop = xdsresource.WatchListener(dm.xdsClient, dm.ldsResourceName, &xdsResourceWatcher[xdsresource.ListenerUpdate]{
 		onUpdate: func(update *xdsresource.ListenerUpdate, onDone func()) {
-			m.onListenerResourceUpdate(update, onDone)
+			dm.onListenerResourceUpdate(update, onDone)
 		},
 		onError: func(err error, onDone func()) {
-			m.onListenerResourceError(err, onDone)
+			dm.onListenerResourceError(err, onDone)
 		},
 		onAmbientError: func(err error, onDone func()) {
-			m.onListenerResourceAmbientError(err, onDone)
+			dm.onListenerResourceAmbientError(err, onDone)
 		},
 	})
+	return dm
 }
 
 // Close cancels all registered resource watches.
@@ -926,14 +920,16 @@ type ClusterRef struct {
 
 // ClusterSubscription increments the reference count for the cluster and
 // returns the ClusterRef. If the cluster is not already being tracked, it adds
-// it to the ClusterSubs map.
+// it to the clusterSubscriptions map. If ClusterSubscription is called in a
+// blocking manner while handling the update for any resource type, it will
+// deadlock because both the update handler and this function have to aquire
+// m.mu.
 func (m *DependencyManager) ClusterSubscription(name string) *ClusterRef {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	subs, ok := m.clusterSubscriptions[name]
 	if ok {
-		ref := &subs.refCount
-		atomic.AddInt32(ref, 1)
+		subs.refCount++
 		return subs
 	}
 	m.clusterSubscriptions[name] = &ClusterRef{
@@ -949,12 +945,14 @@ func (m *DependencyManager) ClusterSubscription(name string) *ClusterRef {
 
 // Unsubscribe decrements the reference count for the cluster. If the reference
 // count reaches zero, it removes the cluster from the clusterSubscriptions map
-// in the DependencyManager.
+// in the DependencyManager. If Unsubscribe is called in a blocking manner while
+// handling the update for any resource type, it will deadlock because both the
+// update handler and this function have to aquire m.mu.
 func (c *ClusterRef) Unsubscribe() {
 	c.m.mu.Lock()
 	defer c.m.mu.Unlock()
-	ref := atomic.AddInt32(&c.refCount, -1)
-	if ref <= 0 {
+
+	if c.refCount--; c.refCount <= 0 {
 		delete(c.m.clusterSubscriptions, c.name)
 		// This cluster is no longer in the route config, and it has no more
 		// references. Now is the time to cancel the watch.

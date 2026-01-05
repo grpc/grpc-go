@@ -150,8 +150,21 @@ func (b *xdsResolverBuilder) Build(target resolver.Target, cc resolver.ClientCon
 	}
 	r.logger = prefixLogger(r)
 	r.logger.Infof("Creating resolver for target: %+v", target)
+
+	dmSet := make(chan struct{})
+	// Schedule a callback that blocks until r.dm is set. This acts as a
+	// gatekeeper: even if dependency manager get the updates before the
+	// xdsdepmgr.New() has a chance to return(e.g., from cache), they will be
+	// queued behind this blocker and processed only after initialization is
+	// complete.
+	r.serializer.TrySchedule(func(ctx context.Context) {
+		select {
+		case <-dmSet:
+		case <-ctx.Done():
+		}
+	})
 	r.dm = xdsdepmgr.New(r.ldsResourceName, opts.Authority, r.xdsClient, r)
-	r.dm.Start()
+	close(dmSet)
 	return r, nil
 }
 

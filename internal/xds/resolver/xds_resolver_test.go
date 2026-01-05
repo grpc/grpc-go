@@ -31,6 +31,7 @@ import (
 	xxhash "github.com/cespare/xxhash/v2"
 	"github.com/envoyproxy/go-control-plane/pkg/wellknown"
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
 	estats "google.golang.org/grpc/experimental/stats"
@@ -1459,19 +1460,8 @@ func (s) TestResolver_AutoHostRewrite(t *testing.T) {
 
 // resourcesMatch returns true if the got slice matches resource names in want.
 func resourcesMatch(got, want []string) bool {
-	if len(got) != len(want) {
-		return false
-	}
-	wantMap := make(map[string]bool, len(want))
-	for _, w := range want {
-		wantMap[w] = true
-	}
-	for _, n := range got {
-		if !wantMap[n] {
-			return false
-		}
-	}
-	return true
+	diff := cmp.Diff(want, got, cmpopts.SortSlices(func(i, j string) bool { return i < j }))
+	return diff != ""
 }
 
 // TestResolverKeepWatchOpen_ActiveRPCs tests that the dependency manager keeps
@@ -1490,19 +1480,21 @@ func (s) TestResolverKeepWatchOpen_ActiveRPCs(t *testing.T) {
 	clusterB := "cluster-B"
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
 		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
-			if req.GetTypeUrl() == version.V3ClusterURL {
-				resourceNames := req.GetResourceNames()
-				if !seenBothClusters {
-					if resourcesMatch(resourceNames, []string{clusterA, clusterB}) {
-						seenBothClusters = true
-						gotBothClusterRequest.Fire()
-					}
+			if req.GetTypeUrl() != version.V3ClusterURL {
+				return nil
+			}
+			resourceNames := req.GetResourceNames()
+			if !seenBothClusters {
+				if resourcesMatch(resourceNames, []string{clusterA, clusterB}) {
+					seenBothClusters = true
+					gotBothClusterRequest.Fire()
 				}
-				if seenBothClusters && !seenSecondClusterOnly {
-					if resourcesMatch(resourceNames, []string{clusterB}) {
-						seenSecondClusterOnly = true
-						gotOnlySecondCluster.Fire()
-					}
+				return nil
+			}
+			if !seenSecondClusterOnly {
+				if resourcesMatch(resourceNames, []string{clusterB}) {
+					seenSecondClusterOnly = true
+					gotOnlySecondCluster.Fire()
 				}
 			}
 			return nil
