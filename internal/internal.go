@@ -248,6 +248,14 @@ var (
 	// AddressToTelemetryLabels is an xDS-provided function to extract telemetry
 	// labels from a resolver.Address. Callers must assert its type before calling.
 	AddressToTelemetryLabels any // func(addr resolver.Address) map[string]string
+
+	// AsyncReporterCleanupDelegate is initialized to a pass-through function by
+	// default (production behavior), allowing tests to swap it with an
+	// implementation which tracks registration of async reporter and its
+	// corresponding cleanup.
+	AsyncReporterCleanupDelegate = func(cleanup func()) func() {
+		return cleanup
+	}
 )
 
 // HealthChecker defines the signature of the client-side LB channel health
@@ -294,4 +302,10 @@ type EnforceClientConnEmbedding interface {
 // during tests.
 type Timer interface {
 	Stop() bool
+}
+
+// EnforceMetricsRecorderEmbedding is used to enforce proper MetricsRecorder
+// implementation embedding.
+type EnforceMetricsRecorderEmbedding interface {
+	enforceMetricsRecorderEmbedding()
 }

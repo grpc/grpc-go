@@ -35,6 +35,7 @@ import (
 // have taken place. It also persists metrics data keyed on the metrics
 // descriptor.
 type TestMetricsRecorder struct {
+	estats.UnimplementedMetricsRecorder
 	intCountCh       *testutils.Channel
 	floatCountCh     *testutils.Channel
 	intHistoCh       *testutils.Channel
@@ -276,12 +277,6 @@ func (r *TestMetricsRecorder) RecordInt64Gauge(handle *estats.Int64GaugeHandle, 
 	r.data[handle.Name] = float64(incr)
 }
 
-// RegisterAsyncReporter is noop implementation, async gauge test recorders should
-// provide their own implementation
-func (r *TestMetricsRecorder) RegisterAsyncReporter(estats.AsyncMetricReporter, ...estats.AsyncMetric) func() {
-	return func() {}
-}
-
 // To implement a stats.Handler, which allows it to be set as a dial option:
 
 // TagRPC is TestMetricsRecorder's implementation of TagRPC.
@@ -302,28 +297,6 @@ func (r *TestMetricsRecorder) HandleConn(context.Context, stats.ConnStats) {}
 
 // NoopMetricsRecorder is a noop MetricsRecorder to be used in tests to prevent
 // nil panics.
-type NoopMetricsRecorder struct{}
-
-// RecordInt64Count is a noop implementation of RecordInt64Count.
-func (r *NoopMetricsRecorder) RecordInt64Count(*estats.Int64CountHandle, int64, ...string) {}
-
-// RecordFloat64Count is a noop implementation of RecordFloat64Count.
-func (r *NoopMetricsRecorder) RecordFloat64Count(*estats.Float64CountHandle, float64, ...string) {}
-
-// RecordInt64Histo is a noop implementation of RecordInt64Histo.
-func (r *NoopMetricsRecorder) RecordInt64Histo(*estats.Int64HistoHandle, int64, ...string) {}
-
-// RecordFloat64Histo is a noop implementation of RecordFloat64Histo.
-func (r *NoopMetricsRecorder) RecordFloat64Histo(*estats.Float64HistoHandle, float64, ...string) {}
-
-// RecordInt64Gauge is a noop implementation of RecordInt64Gauge.
-func (r *NoopMetricsRecorder) RecordInt64Gauge(*estats.Int64GaugeHandle, int64, ...string) {}
-
-// RecordInt64UpDownCount is a noop implementation of RecordInt64UpDownCount.
-func (r *NoopMetricsRecorder) RecordInt64UpDownCount(*estats.Int64UpDownCountHandle, int64, ...string) {
-}
-
-// RegisterAsyncReporter is a noop implementation of RegisterAsyncReporter.
-func (r *NoopMetricsRecorder) RegisterAsyncReporter(estats.AsyncMetricReporter, ...estats.AsyncMetric) func() {
-	return func() {}
+type NoopMetricsRecorder struct {
+	estats.UnimplementedMetricsRecorder
 }
