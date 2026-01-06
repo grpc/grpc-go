@@ -134,8 +134,7 @@ func (s) TestParseClusterSpecifierConfig(t *testing.T) {
 			t.Fatalf("json.Marshal(%+v) returned err %v", lbCfg, err)
 		}
 		var got any
-		err = json.Unmarshal(lbCfgJSON, &got)
-		if err != nil {
+		if err = json.Unmarshal(lbCfgJSON, &got); err != nil {
 			t.Fatalf("json.Unmarshal(%+v) returned err %v", lbCfgJSON, err)
 		}
 		wantCfgJSON, err := json.Marshal(test.wantConfig)
@@ -143,8 +142,7 @@ func (s) TestParseClusterSpecifierConfig(t *testing.T) {
 			t.Fatalf("json.Marshal(%+v) returned err %v", test.wantConfig, err)
 		}
 		var want any
-		err = json.Unmarshal(wantCfgJSON, &want)
-		if err != nil {
+		if err = json.Unmarshal(wantCfgJSON, &want); err != nil {
 			t.Fatalf("json.Unmarshal(%+v) returned err %v", lbCfgJSON, err)
 		}
 		if diff := cmp.Diff(want, got, cmpopts.EquateEmpty()); diff != "" {
@@ -157,7 +155,7 @@ var configWithoutTransformationsWant = clusterspecifier.BalancerConfig{{"rls_exp
 	RouteLookupConfig: []byte(`{"grpcKeybuilders":[{"names":[{"service":"service","method":"method"}],"headers":[{"key":"k1","names":["v1"]}]}],"lookupService":"target","lookupServiceTimeout":"100s","maxAge":"60s","staleAge":"50s","cacheSizeBytes":"1000","defaultTarget":"passthrough:///default"}`),
 	ChildPolicy: []map[string]json.RawMessage{
 		{
-			"cds_experimental": []byte(`{"Is_Dynamic":true}`),
+			"cds_experimental": []byte(`{"isDynamic":true}`),
 		},
 	},
 	ChildPolicyConfigTargetFieldName: "cluster",
