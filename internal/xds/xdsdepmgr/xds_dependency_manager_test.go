@@ -71,7 +71,6 @@ const (
 	defaultTestRouteConfigName = "route-config-name"
 	defaultTestClusterName     = "cluster-name"
 	defaultTestEDSServiceName  = "eds-service-name"
-	defaultDNSResolvedHost     = "127.0.0.1"
 )
 
 func newStringP(s string) *string {
@@ -1078,7 +1077,10 @@ func (s) TestAggregateCluster(t *testing.T) {
 		t.Fatalf("received unexpected error from dependency manager: %v", err)
 	}
 	dnsR := replaceDNSResolver(t)
-	dnsR.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: defaultDNSResolvedHost + ":8081"}}})
+	dnsR.InitialState(resolver.State{Addresses: []resolver.Address{
+		{Addr: "127.0.0.1:8081"},
+		{Addr: "[::1]:8081"},
+	}})
 
 	// Now configure the LogicalDNS cluster in the management server. This
 	// should result in configuration being pushed down to the child policy.
@@ -1160,7 +1162,12 @@ func (s) TestAggregateCluster(t *testing.T) {
 							Endpoints: []resolver.Endpoint{
 								{
 									Addresses: []resolver.Address{
-										{Addr: defaultDNSResolvedHost + ":8081"},
+										{Addr: "127.0.0.1:8081"},
+									},
+								},
+								{
+									Addresses: []resolver.Address{
+										{Addr: "[::1]:8081"},
 									},
 								},
 							},
@@ -1192,7 +1199,11 @@ func (s) TestAggregateClusterChildError(t *testing.T) {
 	defer cancel()
 
 	dnsR := replaceDNSResolver(t)
-	dnsR.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: defaultDNSResolvedHost + ":8081"}}})
+	dnsR.InitialState(resolver.State{Addresses: []resolver.Address{
+		{Addr: "127.0.0.1:8081"},
+		{Addr: "[::1]:8081"},
+	}})
+
 	resources := e2e.UpdateOptions{
 		NodeID:    nodeID,
 		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(defaultTestServiceName, defaultTestRouteConfigName)},
@@ -1274,7 +1285,16 @@ func (s) TestAggregateClusterChildError(t *testing.T) {
 					EndpointConfig: &xdsresource.EndpointConfig{
 						DNSEndpoints: &xdsresource.DNSUpdate{
 							Endpoints: []resolver.Endpoint{
-								{Addresses: []resolver.Address{{Addr: defaultDNSResolvedHost + ":8081"}}},
+								{
+									Addresses: []resolver.Address{
+										{Addr: "127.0.0.1:8081"},
+									},
+								},
+								{
+									Addresses: []resolver.Address{
+										{Addr: "[::1]:8081"},
+									},
+								},
 							},
 						},
 					},
