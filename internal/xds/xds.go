@@ -105,6 +105,12 @@ func SetLocalityIDInEndpoint(endpoint resolver.Endpoint, l clients.Locality) res
 	return endpoint
 }
 
+// GetLocalityIDFromEndpoint returns the locality ID of ep.
+func GetLocalityIDFromEndpoint(ep resolver.Endpoint) clients.Locality {
+	path, _ := ep.Attributes.Value(localityKey).(clients.Locality)
+	return path
+}
+
 // UnknownCSMLabels are TelemetryLabels emitted from CDS if CSM Telemetry Label
 // data is not present in the CDS Resource.
 var UnknownCSMLabels = map[string]string{
