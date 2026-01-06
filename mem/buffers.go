@@ -165,11 +165,10 @@ func (b *buffer) Free() {
 	}
 
 	refs := b.refs.Add(-1)
-	switch {
-	case refs > 0:
+	if refs > 0 {
 		return
-	case refs == 0:
-	default:
+	}
+	if refs < 0 {
 		panic("Cannot free freed buffer")
 	}
 
