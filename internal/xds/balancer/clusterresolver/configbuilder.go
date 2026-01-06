@@ -157,6 +157,10 @@ func buildClusterImplConfigForDNS(g *nameGenerator, endpoints []resolver.Endpoin
 		// iteration variable and the original slice.
 		retEndpoint.Addresses = append(retEndpoint.Addresses, e.Addresses...)
 	}
+	// Even though localities are not a thing for the LOGICAL_DNS cluster and
+	// its endpoint(s), we add an empty locality attribute here to ensure that
+	// LB policies that rely on locality information (like weighted_target)
+	// continue to work.
 	localityStr := xdsinternal.LocalityString(clients.Locality{})
 	retEndpoint = hierarchy.SetInEndpoint(retEndpoint, []string{pName, localityStr})
 	// Set the locality weight to 1. This is required because the child policy
