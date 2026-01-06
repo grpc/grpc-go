@@ -29,6 +29,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/balancer/pickfirst"
 	"google.golang.org/grpc/balancer/ringhash"
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/internal/balancer/weight"
@@ -318,13 +319,16 @@ func testEndpointForDNS(endpoints []resolver.Endpoint, localityWeight uint32, pa
 }
 
 func (s) TestBuildClusterImplConfigForDNS(t *testing.T) {
+
 	for _, tt := range []struct {
-		name      string
-		endpoints []resolver.Endpoint
+		name        string
+		endpoints   []resolver.Endpoint
+		xdsLBPolicy *iserviceconfig.BalancerConfig
 	}{
 		{
-			name:      "one_endpoint_one_address",
-			endpoints: []resolver.Endpoint{{Addresses: []resolver.Address{{Addr: "addr-0-0"}}}},
+			name:        "one_endpoint_one_address",
+			endpoints:   []resolver.Endpoint{{Addresses: []resolver.Address{{Addr: "addr-0-0"}}}},
+			xdsLBPolicy: &iserviceconfig.BalancerConfig{Name: pickfirst.Name},
 		},
 		{
 			name: "one_endpoint_multiple_addresses",
@@ -332,6 +336,7 @@ func (s) TestBuildClusterImplConfigForDNS(t *testing.T) {
 				{Addr: "addr-0-0"},
 				{Addr: "addr-0-1"},
 			}}},
+			xdsLBPolicy: &iserviceconfig.BalancerConfig{Name: wrrlocality.Name},
 		},
 		{
 			name: "multiple_endpoints_one_address_each",
@@ -339,6 +344,7 @@ func (s) TestBuildClusterImplConfigForDNS(t *testing.T) {
 				{Addresses: []resolver.Address{{Addr: "addr-0-0"}}},
 				{Addresses: []resolver.Address{{Addr: "addr-0-1"}}},
 			},
+			xdsLBPolicy: &iserviceconfig.BalancerConfig{Name: roundrobin.Name},
 		},
 		{
 			name: "multiple_endpoints_multiple_addresses",
@@ -352,24 +358,25 @@ func (s) TestBuildClusterImplConfigForDNS(t *testing.T) {
 					{Addr: "addr-1-1"},
 				}},
 			},
+			xdsLBPolicy: &iserviceconfig.BalancerConfig{Name: roundrobin.Name},
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			gotName, gotConfig, gotEndpoints := buildClusterImplConfigForDNS(newNameGenerator(3), tt.endpoints, DiscoveryMechanism{Cluster: testClusterName2, Type: DiscoveryMechanismTypeLogicalDNS}, nil)
-
-			if diff := cmp.Diff(gotName, "priority-3"); diff != "" {
+			gotName, gotConfig, gotEndpoints := buildClusterImplConfigForDNS(newNameGenerator(3), tt.endpoints, DiscoveryMechanism{Cluster: testClusterName2, Type: DiscoveryMechanismTypeLogicalDNS}, tt.xdsLBPolicy)
+			wantName := "priority-3"
+			if diff := cmp.Diff(gotName, wantName); diff != "" {
 				t.Errorf("buildClusterImplConfigForDNS() diff (-got +want) %v", diff)
 			}
 
 			wantConfig := &clusterimpl.LBConfig{
 				Cluster:     testClusterName2,
-				ChildPolicy: nil,
+				ChildPolicy: tt.xdsLBPolicy,
 			}
 			if diff := cmp.Diff(gotConfig, wantConfig); diff != "" {
 				t.Errorf("buildClusterImplConfigForDNS() diff (-got +want) %v", diff)
 			}
 
-			wantEndpoints := []resolver.Endpoint{testEndpointForDNS(tt.endpoints, 1, []string{"priority-3", xdsinternal.LocalityString(clients.Locality{})})}
+			wantEndpoints := []resolver.Endpoint{testEndpointForDNS(tt.endpoints, 1, []string{wantName, xdsinternal.LocalityString(clients.Locality{})})}
 			if diff := cmp.Diff(gotEndpoints, wantEndpoints, endpointCmpOpts); diff != "" {
 				t.Errorf("buildClusterImplConfigForDNS() diff (-got +want) %v", diff)
 			}
