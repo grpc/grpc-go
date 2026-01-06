@@ -109,4 +109,23 @@ type MetricsReporter interface {
 	// Each client will produce different metrics. Please see the client's
 	// documentation for a list of possible metrics events.
 	ReportMetric(metric any)
+
+	// RegisterAsyncReporter registers a reporter to produce metric values for
+	// only the listed descriptors. The returned function must be called when
+	// the metrics are no longer needed, which will remove the reporter.
+	RegisterAsyncReporter(reporter AsyncReporter) func()
+}
+
+// AsyncReporter is an interface for types that record metrics asynchronously.
+// Implementations must be concurrent-safe.
+type AsyncReporter interface {
+	// Report records metric values using the provided recorder.
+	Report(AsyncMetricsRecorder) error
+}
+
+// AsyncMetricsRecorder is a recorder for async metrics.
+type AsyncMetricsRecorder interface {
+	// ReportMetric reports a metric. The metric will be one of the predefined
+	// set of types in the metrics.go file.
+	ReportMetric(metric any)
 }
