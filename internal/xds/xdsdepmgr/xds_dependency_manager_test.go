@@ -40,6 +40,7 @@ import (
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 	"google.golang.org/grpc/internal/xds/xdsdepmgr"
 	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
@@ -70,6 +71,7 @@ const (
 	defaultTestRouteConfigName = "route-config-name"
 	defaultTestClusterName     = "cluster-name"
 	defaultTestEDSServiceName  = "eds-service-name"
+	defaultDNSResolvedHost     = "127.0.0.1"
 )
 
 func newStringP(s string) *string {
@@ -305,6 +307,19 @@ func makeLogicalDNSClusterResource(name, dnsHost string, dnsPort uint32) *v3clus
 		DNSHostName: dnsHost,
 		DNSPort:     dnsPort,
 	})
+}
+
+// replaceDNSResolver unregisters the DNS resolver and registers a manual resolver for the
+// same scheme. This allows the test to mock the DNS resolution by supplying the
+// addresses of the test backends.
+func replaceDNSResolver(t *testing.T) *manual.Resolver {
+	mr := manual.NewBuilderWithScheme("dns")
+
+	dnsResolverBuilder := resolver.Get("dns")
+	resolver.Register(mr)
+
+	t.Cleanup(func() { resolver.Register(dnsResolverBuilder) })
+	return mr
 }
 
 // Tests the happy case where the dependency manager receives all the required
@@ -936,16 +951,17 @@ func (s) TestClusterResourceError(t *testing.T) {
 	dm := xdsdepmgr.New(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
 	defer dm.Close()
 
+	// Close the watcher done channel as the first thing after test finishes to
+	// stop sending updates because management server keeps sending the error
+	// updates repeatedly causing the update from dependency manager to be
+	// blocked.
+	defer close(watcher.done)
 	wantXdsConfig := makeXDSConfig(resources.Routes[0].Name, resources.Clusters[0].Name, resources.Clusters[0].EdsClusterConfig.ServiceName, "localhost:8080")
 	wantXdsConfig.Clusters[resources.Clusters[0].Name] = &xdsresource.ClusterResult{Err: fmt.Errorf("[xDS node id: %v]: %v", nodeID, fmt.Errorf("unsupported config_source_specifier *corev3.ConfigSource_Ads in lrs_server field"))}
 
 	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
 		t.Fatal(err)
 	}
-	// Close the watcher done channel to stop sending updates because management
-	// server keeps sending the error updates repeatedly causing the update from
-	// dependency manager to be blocked.
-	close(watcher.done)
 }
 
 // Tests the case where the dependency manager receives a cluster resource
@@ -1061,6 +1077,8 @@ func (s) TestAggregateCluster(t *testing.T) {
 	case err := <-watcher.errorCh:
 		t.Fatalf("received unexpected error from dependency manager: %v", err)
 	}
+	dnsR := replaceDNSResolver(t)
+	dnsR.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: defaultDNSResolvedHost + ":8081"}}})
 
 	// Now configure the LogicalDNS cluster in the management server. This
 	// should result in configuration being pushed down to the child policy.
@@ -1142,12 +1160,7 @@ func (s) TestAggregateCluster(t *testing.T) {
 							Endpoints: []resolver.Endpoint{
 								{
 									Addresses: []resolver.Address{
-										{Addr: "[::1]:8081"},
-									},
-								},
-								{
-									Addresses: []resolver.Address{
-										{Addr: "127.0.0.1:8081"},
+										{Addr: defaultDNSResolvedHost + ":8081"},
 									},
 								},
 							},
@@ -1178,6 +1191,8 @@ func (s) TestAggregateClusterChildError(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
+	dnsR := replaceDNSResolver(t)
+	dnsR.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: defaultDNSResolvedHost + ":8081"}}})
 	resources := e2e.UpdateOptions{
 		NodeID:    nodeID,
 		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(defaultTestServiceName, defaultTestRouteConfigName)},
@@ -1196,6 +1211,12 @@ func (s) TestAggregateClusterChildError(t *testing.T) {
 
 	dm := xdsdepmgr.New(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
 	defer dm.Close()
+
+	// Close the watcher done channel as the first thing after test finishes to
+	// stop sending updates because management server keeps sending the error
+	// updates repeatedly causing the update from dependency manager to be
+	// blocked.
+	defer close(watcher.done)
 
 	wantXdsConfig := &xdsresource.XDSConfig{
 		Listener: &xdsresource.ListenerUpdate{
@@ -1253,8 +1274,7 @@ func (s) TestAggregateClusterChildError(t *testing.T) {
 					EndpointConfig: &xdsresource.EndpointConfig{
 						DNSEndpoints: &xdsresource.DNSUpdate{
 							Endpoints: []resolver.Endpoint{
-								{Addresses: []resolver.Address{{Addr: "[::1]:8081"}}},
-								{Addresses: []resolver.Address{{Addr: "127.0.0.1:8081"}}},
+								{Addresses: []resolver.Address{{Addr: defaultDNSResolvedHost + ":8081"}}},
 							},
 						},
 					},
@@ -1266,11 +1286,6 @@ func (s) TestAggregateClusterChildError(t *testing.T) {
 	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
 		t.Fatal(err)
 	}
-
-	// Close the watcher done channel to stop sending updates because management
-	// server keeps sending the error updates repeatedly causing the update from
-	// dependency manager to be blocked.
-	close(watcher.done)
 }
 
 // Tests the case where an aggregate cluster has no leaf clusters by creating a
@@ -1452,6 +1467,13 @@ func (s) TestEndpointAmbientError(t *testing.T) {
 
 	dm := xdsdepmgr.New(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
 	defer dm.Close()
+
+	// Close the watcher done channel as the first thing after test finishes to
+	// stop sending updates because management server keeps sending the error
+	// updates repeatedly causing the update from dependency manager to be
+	// blocked.
+	defer close(watcher.done)
+
 	wantXdsConfig := makeXDSConfig(resources.Routes[0].Name, resources.Clusters[0].Name, resources.Endpoints[0].ClusterName, "localhost:8080")
 
 	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
@@ -1468,9 +1490,4 @@ func (s) TestEndpointAmbientError(t *testing.T) {
 	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
 		t.Fatal(err)
 	}
-
-	// Close the watcher done channel to stop sending updates because management
-	// server keeps sending the error updates repeatedly causing the update from
-	// dependency manager to be blocked.
-	close(watcher.done)
 }
