@@ -145,7 +145,7 @@ func (d *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 		pr.SubConn = scw.SubConn
 		// If locality ID isn't found in the wrapper, an empty locality ID will
 		// be used.
-		lID = scw.localityID()
+		lID = scw.localityID
 
 		if scw.hostname != "" && autoHostRewriteEnabled(info.Ctx) {
 			if pr.Metadata == nil {
