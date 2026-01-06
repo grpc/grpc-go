@@ -378,21 +378,27 @@ func (s *Stream) ReadMessageHeader(header []byte) (err error) {
 	return nil
 }
 
+// ceil returns the ceil after dividing the numerator and denominator while
+// avoiding integer overflows.
+func ceil(numerator, denominator int) int {
+	if numerator == 0 {
+		return 0
+	}
+	return (numerator-1)/denominator + 1
+}
+
 // Read reads n bytes from the wire for this stream.
 func (s *Stream) read(n int) (data mem.BufferSlice, err error) {
 	// Don't request a read if there was an error earlier
 	if er := s.trReader.er; er != nil {
 		return nil, er
 	}
-	if n == 0 {
-		return data, nil
-	}
 	// gRPC Go accepts data frames with a maximum length of 16KB. Larger
 	// messages must be split into multiple frames. We pre-allocate the
 	// buffer to avoid resizing during the read loop, but cap the initial
 	// capacity to 128 frames (2MB) to prevent over-allocation or panics
 	// when reading extremely large streams.
-	allocCap := min((n-1)/http2MaxFrameLen+1, 2*1024*1024/http2MaxFrameLen)
+	allocCap := min(ceil(n, http2MaxFrameLen), 128)
 	data = make(mem.BufferSlice, 0, allocCap)
 	s.readRequester.requestRead(n)
 	for n != 0 {
