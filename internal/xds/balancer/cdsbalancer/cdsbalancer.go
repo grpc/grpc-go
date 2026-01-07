@@ -137,7 +137,8 @@ func (bb) Name() string {
 // for the cdsBalancer.
 type lbConfig struct {
 	serviceconfig.LoadBalancingConfig
-	ClusterName string `json:"Cluster"`
+	ClusterName string `json:"cluster"`
+	IsDynamic   bool   `json:"isDynamic"`
 }
 
 // ParseConfig parses the JSON load balancer config provided into an
