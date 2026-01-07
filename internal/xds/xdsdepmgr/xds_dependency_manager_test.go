@@ -308,9 +308,9 @@ func makeLogicalDNSClusterResource(name, dnsHost string, dnsPort uint32) *v3clus
 	})
 }
 
-// replaceDNSResolver unregisters the DNS resolver and registers a manual resolver for the
-// same scheme. This allows the test to mock the DNS resolution by supplying the
-// addresses of the test backends.
+// replaceDNSResolver unregisters the DNS resolver and registers a manual
+// resolver for the same scheme. This allows the test to fake the DNS resolution
+// by supplying the addresses of the test backends.
 func replaceDNSResolver(t *testing.T) *manual.Resolver {
 	t.Helper()
 	mr := manual.NewBuilderWithScheme("dns")
