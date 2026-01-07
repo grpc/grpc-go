@@ -758,8 +758,8 @@ func (m *DependencyManager) onDNSUpdate(resourceName string, update *resolver.St
 	if m.logger.V(2) {
 		m.logger.Infof("Received update from DNS resolver for resource %q: %+v", resourceName, update)
 	}
-	var endpoints []resolver.Endpoint
-	if len(update.Endpoints) == 0 {
+	endpoints := update.Endpoints
+	if len(endpoints) == 0 {
 		endpoints = make([]resolver.Endpoint, len(update.Addresses))
 		for i, a := range update.Addresses {
 			endpoints[i] = resolver.Endpoint{Addresses: []resolver.Address{a}}
