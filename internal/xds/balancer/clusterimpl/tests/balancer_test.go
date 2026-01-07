@@ -965,7 +965,9 @@ func (s) TestReResolutionAfterTransientFailure(t *testing.T) {
 	dnsR.ResolveNowCallback = func(resolver.ResolveNowOptions) {
 		close(resolveNowCh)
 	}
-	dnsR.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: fmt.Sprintf("%s:%d", host, port)}}})
+	dnsR.UpdateState(resolver.State{
+		Endpoints: []resolver.Endpoint{{Addresses: []resolver.Address{{Addr: fmt.Sprintf("%s:%d", host, port)}}}},
+	})
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()

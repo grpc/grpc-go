@@ -131,7 +131,9 @@ func (s) TestRingHash_ReconnectToMoveOutOfTransientFailure(t *testing.T) {
 	defer cc.Close()
 
 	// Push the address of the test backend through the manual resolver.
-	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: lis.Addr().String()}}})
+	r.UpdateState(resolver.State{
+		Endpoints: []resolver.Endpoint{{Addresses: []resolver.Address{{Addr: lis.Addr().String()}}}},
+	})
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	ctx = iringhash.SetXDSRequestHash(ctx, 0)
@@ -475,7 +477,9 @@ func (s) TestRingHash_AggregateClusterFallBackFromRingHashToLogicalDnsAtStartup(
 	}
 
 	dnsR := replaceDNSResolver(t)
-	dnsR.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: backends[0]}}})
+	dnsR.UpdateState(resolver.State{
+		Endpoints: []resolver.Endpoint{{Addresses: []resolver.Address{{Addr: backends[0]}}}},
+	})
 
 	if err := xdsServer.Update(ctx, updateOpts); err != nil {
 		t.Fatalf("Failed to update xDS resources: %v", err)
@@ -553,7 +557,9 @@ func (s) TestRingHash_AggregateClusterFallBackFromRingHashToLogicalDnsAtStartupN
 	}
 
 	dnsR := replaceDNSResolver(t)
-	dnsR.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: backends[0]}}})
+	dnsR.UpdateState(resolver.State{
+		Endpoints: []resolver.Endpoint{{Addresses: []resolver.Address{{Addr: backends[0]}}}},
+	})
 
 	if err := xdsServer.Update(ctx, updateOpts); err != nil {
 		t.Fatalf("Failed to update xDS resources: %v", err)
