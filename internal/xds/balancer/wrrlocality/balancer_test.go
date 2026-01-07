@@ -176,26 +176,23 @@ func (s) TestUpdateClientConnState(t *testing.T) {
 	// Create the addresses with two localities with certain locality weights.
 	// This represents what addresses the wrr_locality balancer will receive in
 	// UpdateClientConnState.
-	addr1 := resolver.Address{
-		Addr: "locality-1",
-	}
-	addr1 = xdsinternal.SetLocalityID(addr1, clients.Locality{
+	ep1 := resolver.Endpoint{Addresses: []resolver.Address{{Addr: "locality-1"}}}
+	ep1 = xdsinternal.SetLocalityIDInEndpoint(ep1, clients.Locality{
 		Region:  "region-1",
 		Zone:    "zone-1",
 		SubZone: "subzone-1",
 	})
-	addr1 = SetAddrInfo(addr1, AddrInfo{LocalityWeight: 2})
+	ep1 = SetAddrInfo(ep1, AddrInfo{LocalityWeight: 2})
 
-	addr2 := resolver.Address{
-		Addr: "locality-2",
-	}
-	addr2 = xdsinternal.SetLocalityID(addr2, clients.Locality{
+	ep2 := resolver.Endpoint{Addresses: []resolver.Address{{Addr: "locality-2"}}}
+	ep2 = xdsinternal.SetLocalityIDInEndpoint(ep2, clients.Locality{
 		Region:  "region-2",
 		Zone:    "zone-2",
 		SubZone: "subzone-2",
 	})
-	addr2 = SetAddrInfo(addr2, AddrInfo{LocalityWeight: 1})
-	addrs := []resolver.Address{addr1, addr2}
+	ep2 = SetAddrInfo(ep2, AddrInfo{LocalityWeight: 1})
+
+	eps := []resolver.Endpoint{ep1, ep2}
 
 	err := wrrL.UpdateClientConnState(balancer.ClientConnState{
 		BalancerConfig: &LBConfig{
@@ -204,7 +201,7 @@ func (s) TestUpdateClientConnState(t *testing.T) {
 			},
 		},
 		ResolverState: resolver.State{
-			Addresses: addrs,
+			Endpoints: eps,
 		},
 	})
 	if err != nil {
