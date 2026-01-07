@@ -676,7 +676,7 @@ func testEndpointWithAttrs(endpoint resolver.Endpoint, localityWeight, endpointW
 		endpoint = xdsinternal.SetLocalityIDInEndpoint(endpoint, *lID)
 	}
 	endpoint = hierarchy.SetInEndpoint(endpoint, path)
-	endpoint = wrrlocality.SetAddrInfoInEndpoint(endpoint, wrrlocality.AddrInfo{LocalityWeight: localityWeight})
+	endpoint = wrrlocality.SetAddrInfo(endpoint, wrrlocality.AddrInfo{LocalityWeight: localityWeight})
 	endpoint = weight.Set(endpoint, weight.EndpointInfo{Weight: localityWeight * endpointWeight})
 	return endpoint
 }
