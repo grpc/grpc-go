@@ -19,7 +19,6 @@
 package clusterresolver
 
 import (
-	"log"
 	"sync"
 
 	"google.golang.org/grpc/internal/grpclog"
@@ -95,7 +94,7 @@ func (er *edsDiscoveryMechanism) ResourceError(err error, onDone func()) {
 		onDone()
 		return
 	}
-	log.Printf("emchandwani log EDS discovery mechanism for resource %q reported resource error: %v", er.nameToWatch, err)
+
 	if er.logger.V(2) {
 		er.logger.Infof("EDS discovery mechanism for resource %q reported resource error: %v", er.nameToWatch, err)
 	}
@@ -118,7 +117,7 @@ func (er *edsDiscoveryMechanism) AmbientError(err error, onDone func()) {
 		onDone()
 		return
 	}
-	log.Printf("emchandwani log EDS discovery mechanism for resource %q reported ambient error: %v", er.nameToWatch, err)
+
 	if er.logger.V(2) {
 		er.logger.Infof("EDS discovery mechanism for resource %q reported ambient error: %v", er.nameToWatch, err)
 	}
