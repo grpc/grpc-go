@@ -211,13 +211,6 @@ var (
 	// default resolver scheme.
 	UserSetDefaultScheme = false
 
-	// ConnectedAddress returns the connected address for a SubConnState. The
-	// address is only valid if the state is READY.
-	ConnectedAddress any // func (scs SubConnState) resolver.Address
-
-	// SetConnectedAddress sets the connected address for a SubConnState.
-	SetConnectedAddress any // func(scs *SubConnState, addr resolver.Address)
-
 	// SnapshotMetricRegistryForTesting snapshots the global data of the metric
 	// registry. Returns a cleanup function that sets the metric registry to its
 	// original state. Only called in testing functions.
