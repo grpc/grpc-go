@@ -164,10 +164,10 @@ func (b *wrrLocalityBalancer) UpdateClientConnState(s balancer.ClientConnState) 
 		// shouldn't happen though (this attribute that is set actually gets
 		// used to build localities in the first place), and thus don't error
 		// out, and just build a weighted target with undefined behavior.
-		locality := xdsinternal.LocalityString(xdsinternal.GetLocalityIDFromEndpoint(ep))
+		locality := xdsinternal.LocalityString(xdsinternal.LocalityIDFromEndpoint(ep))
 		ai, ok := getAddrInfo(ep)
 		if !ok {
-			return fmt.Errorf("xds_wrr_locality: missing locality weight information in address %q", ep)
+			return fmt.Errorf("xds_wrr_locality: missing locality weight information in endpoint %q", ep)
 		}
 		weightedTargets[locality] = weightedtarget.Target{Weight: ai.LocalityWeight, ChildPolicy: lbCfg.ChildPolicy}
 	}

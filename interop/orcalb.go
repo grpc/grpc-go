@@ -61,7 +61,8 @@ func (o *orcab) ExitIdle() {
 }
 
 // endpointsToAddrs flattens a list of endpoints to addresses to maintain
-// existing behavior. Ideally, the Orca balancer should delegate subchannel
+// existing behavior.
+// TODO: https://github.com/grpc/grpc-go/issues/8809 - delegate subchannel
 // management to the pickfirst balancer using the endpoint sharding balancer.
 func endpointsToAddrs(eps []resolver.Endpoint) []resolver.Address {
 	addrs := make([]resolver.Address, 0, len(eps))

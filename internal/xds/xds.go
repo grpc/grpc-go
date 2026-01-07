@@ -105,8 +105,8 @@ func SetLocalityIDInEndpoint(endpoint resolver.Endpoint, l clients.Locality) res
 	return endpoint
 }
 
-// GetLocalityIDFromEndpoint returns the locality ID of ep.
-func GetLocalityIDFromEndpoint(ep resolver.Endpoint) clients.Locality {
+// LocalityIDFromEndpoint returns the locality ID of ep.
+func LocalityIDFromEndpoint(ep resolver.Endpoint) clients.Locality {
 	path, _ := ep.Attributes.Value(localityKey).(clients.Locality)
 	return path
 }
