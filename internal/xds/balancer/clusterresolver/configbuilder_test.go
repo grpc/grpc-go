@@ -314,7 +314,7 @@ func testEndpointForDNS(endpoints []resolver.Endpoint, localityWeight uint32, pa
 		retEndpoint.Addresses = append(retEndpoint.Addresses, e.Addresses...)
 	}
 	retEndpoint = hierarchy.SetInEndpoint(retEndpoint, path)
-	retEndpoint = wrrlocality.SetAddrInfoInEndpoint(retEndpoint, wrrlocality.AddrInfo{LocalityWeight: localityWeight})
+	retEndpoint = wrrlocality.SetAddrInfo(retEndpoint, wrrlocality.AddrInfo{LocalityWeight: localityWeight})
 	return retEndpoint
 }
 
@@ -363,7 +363,7 @@ func (s) TestBuildClusterImplConfigForDNS(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			gotName, gotConfig, gotEndpoints := buildClusterImplConfigForDNS(newNameGenerator(3), tt.endpoints, DiscoveryMechanism{Cluster: testClusterName2, Type: DiscoveryMechanismTypeLogicalDNS}, tt.xdsLBPolicy)
-			wantName := "priority-3"
+			const wantName = "priority-3"
 			if diff := cmp.Diff(gotName, wantName); diff != "" {
 				t.Errorf("buildClusterImplConfigForDNS() diff (-got +want) %v", diff)
 			}

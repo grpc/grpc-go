@@ -153,8 +153,9 @@ func buildClusterImplConfigForDNS(g *nameGenerator, endpoints []resolver.Endpoin
 	}
 	var retEndpoint resolver.Endpoint
 	for _, e := range endpoints {
-		// Copy the nested address field as slice fields are shared by the
-		// iteration variable and the original slice.
+		// LOGICAL_DNS requires all resolved addresses to be grouped into a
+		// single logical endpoint. We iterate over the input endpoints and
+		// aggregate their addresses into a new endpoint variable.
 		retEndpoint.Addresses = append(retEndpoint.Addresses, e.Addresses...)
 	}
 	// Even though localities are not a thing for the LOGICAL_DNS cluster and
@@ -166,7 +167,7 @@ func buildClusterImplConfigForDNS(g *nameGenerator, endpoints []resolver.Endpoin
 	// Set the locality weight to 1. This is required because the child policy
 	// like wrr which relies on locality weights to distribute traffic. These
 	// policies may drop traffic if the weight is 0.
-	retEndpoint = wrrlocality.SetAddrInfoInEndpoint(retEndpoint, wrrlocality.AddrInfo{LocalityWeight: 1})
+	retEndpoint = wrrlocality.SetAddrInfo(retEndpoint, wrrlocality.AddrInfo{LocalityWeight: 1})
 	return pName, lbconfig, []resolver.Endpoint{retEndpoint}
 }
 
