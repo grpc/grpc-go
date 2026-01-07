@@ -189,19 +189,19 @@ func verifyUpdateFromResolver(ctx context.Context, t *testing.T, stateCh chan re
 	case state = <-stateCh:
 	}
 
-	if !cmp.Equal(state.Addresses, want.addrs, cmpopts.EquateEmpty()) {
-		t.Fatalf("Got addresses: %+v, want: %+v", state.Addresses, want.addrs)
+	if diff := cmp.Diff(want.addrs, state.Addresses, cmpopts.EquateEmpty()); diff != "" {
+		t.Fatalf("Got unexpected Addresses (-want +got):\n%s", diff)
 	}
-	if !cmp.Equal(state.Endpoints, want.endpoints, cmpopts.EquateEmpty()) {
-		t.Fatalf("Got endpoints: %+v, want: %+v", state.Endpoints, want.endpoints)
+	if diff := cmp.Diff(want.endpoints, state.Endpoints, cmpopts.EquateEmpty()); diff != "" {
+		t.Fatalf("Got unexpected Endpoints (-want +got):\n%s", diff)
 	}
 	if gs := grpclbstate.Get(state); gs == nil {
 		if len(want.balancerAddrs) > 0 {
 			t.Fatalf("Got no grpclb addresses. Want %d", len(want.balancerAddrs))
 		}
 	} else {
-		if !cmp.Equal(gs.BalancerAddresses, want.balancerAddrs) {
-			t.Fatalf("Got grpclb addresses %+v, want %+v", gs.BalancerAddresses, want.balancerAddrs)
+		if diff := cmp.Diff(want.balancerAddrs, gs.BalancerAddresses); diff != "" {
+			t.Fatalf("Got unexpected grpclb addresses (-want +got):\n%s", diff)
 		}
 	}
 	if want.sc == "{}" {
