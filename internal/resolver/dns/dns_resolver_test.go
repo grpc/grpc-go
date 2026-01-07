@@ -183,6 +183,9 @@ func verifyUpdateFromResolver(ctx context.Context, t *testing.T, stateCh chan re
 	if !cmp.Equal(state.Addresses, wantAddrs, cmpopts.EquateEmpty()) {
 		t.Fatalf("Got addresses: %+v, want: %+v", state.Addresses, wantAddrs)
 	}
+	if wantEps := addrsToEndpoints(wantAddrs); !cmp.Equal(state.Endpoints, wantEps, cmpopts.EquateEmpty()) {
+		t.Fatalf("Got endpoints: %+v, want: %+v", state.Addresses, wantEps)
+	}
 	if gs := grpclbstate.Get(state); gs == nil {
 		if len(wantBalancerAddrs) > 0 {
 			t.Fatalf("Got no grpclb addresses. Want %d", len(wantBalancerAddrs))
@@ -1400,4 +1403,12 @@ func (s) TestMinResolutionInterval_NoExtraDelay(t *testing.T) {
 		t.Fatalf("Unexpected error from resolver, %v", err)
 	case <-stateCh:
 	}
+}
+
+func addrsToEndpoints(addrs []resolver.Address) []resolver.Endpoint {
+	endpoints := make([]resolver.Endpoint, len(addrs))
+	for i, addr := range addrs {
+		endpoints[i] = resolver.Endpoint{Addresses: []resolver.Address{addr}}
+	}
+	return endpoints
 }
