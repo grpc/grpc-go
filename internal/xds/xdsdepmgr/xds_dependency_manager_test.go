@@ -1163,16 +1163,8 @@ func (s) TestAggregateCluster(t *testing.T) {
 					EndpointConfig: &xdsresource.EndpointConfig{
 						DNSEndpoints: &xdsresource.DNSUpdate{
 							Endpoints: []resolver.Endpoint{
-								{
-									Addresses: []resolver.Address{
-										{Addr: "127.0.0.1:8081"},
-									},
-								},
-								{
-									Addresses: []resolver.Address{
-										{Addr: "[::1]:8081"},
-									},
-								},
+								{Addresses: []resolver.Address{{Addr: "127.0.0.1:8081"}}},
+								{Addresses: []resolver.Address{{Addr: "[::1]:8081"}}},
 							},
 						},
 					},
