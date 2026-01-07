@@ -66,7 +66,7 @@ func Test(t *testing.T) {
 }
 
 const (
-	defaultTestTimeout      = 20 * time.Second
+	defaultTestTimeout      = 10 * time.Second
 	defaultTestShortTimeout = 10 * time.Millisecond
 )
 
