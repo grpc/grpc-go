@@ -86,6 +86,14 @@ type testWatcher struct {
 	done     chan struct{}
 }
 
+func newTestWatcher() *testWatcher {
+	return &testWatcher{
+		updateCh: make(chan *xdsresource.XDSConfig),
+		errorCh:  make(chan error),
+		done:     make(chan struct{}),
+	}
+}
+
 // Update sends the received XDSConfig update to the update channel. Does not
 // send updates if the done channel is closed. The done channel is closed in the
 // cases of errors because management server keeps sending error updates that
@@ -102,6 +110,15 @@ func (w *testWatcher) Update(cfg *xdsresource.XDSConfig) {
 // Error sends the received error to the error channel.
 func (w *testWatcher) Error(err error) {
 	w.errorCh <- err
+}
+
+// Closes the testWatcher.done channel which will stop the updates being pushed
+// to testWatcher.updateCh. This is the first thing that needs to happen as soon
+// as the test ends before anything else closes to avoid deadlocks in tests with
+// CDS and EDS errors because, in case of error , management server keeps
+// sending multiple error updates.
+func (w *testWatcher) close() {
+	close(w.done)
 }
 
 func verifyError(ctx context.Context, errCh chan error, wantErr, wantNodeID string) error {
@@ -327,10 +344,8 @@ func replaceDNSResolver(t *testing.T) *manual.Resolver {
 func (s) TestHappyCase(t *testing.T) {
 	nodeID, mgmtServer, xdsClient := setupManagementServerAndClient(t, false)
 
-	watcher := &testWatcher{
-		updateCh: make(chan *xdsresource.XDSConfig),
-		errorCh:  make(chan error),
-	}
+	watcher := newTestWatcher()
+	defer watcher.close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -359,10 +374,9 @@ func (s) TestHappyCase(t *testing.T) {
 func (s) TestInlineRouteConfig(t *testing.T) {
 	nodeID, mgmtServer, xdsClient := setupManagementServerAndClient(t, false)
 
-	watcher := &testWatcher{
-		updateCh: make(chan *xdsresource.XDSConfig),
-		errorCh:  make(chan error),
-	}
+	watcher := newTestWatcher()
+	defer watcher.close()
+
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
@@ -413,10 +427,9 @@ func (s) TestInlineRouteConfig(t *testing.T) {
 func (s) TestNoRouteConfigResource(t *testing.T) {
 	nodeID, mgmtServer, xdsClient := setupManagementServerAndClient(t, false)
 
-	watcher := &testWatcher{
-		updateCh: make(chan *xdsresource.XDSConfig),
-		errorCh:  make(chan error),
-	}
+	watcher := newTestWatcher()
+	defer watcher.close()
+
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
@@ -448,10 +461,9 @@ func (s) TestNoRouteConfigResource(t *testing.T) {
 func (s) TestListenerResourceNotFoundError(t *testing.T) {
 	nodeID, mgmtServer, xdsClient := setupManagementServerAndClient(t, false)
 
-	watcher := &testWatcher{
-		updateCh: make(chan *xdsresource.XDSConfig),
-		errorCh:  make(chan error),
-	}
+	watcher := newTestWatcher()
+	defer watcher.close()
+
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
@@ -493,10 +505,9 @@ func (s) TestListenerResourceNotFoundError(t *testing.T) {
 func (s) TestRouteConfigResourceError(t *testing.T) {
 	nodeID, mgmtServer, xdsClient := setupManagementServerAndClient(t, false)
 
-	watcher := &testWatcher{
-		updateCh: make(chan *xdsresource.XDSConfig),
-		errorCh:  make(chan error),
-	}
+	watcher := newTestWatcher()
+	defer watcher.close()
+
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
@@ -530,10 +541,8 @@ func (s) TestNoVirtualHost(t *testing.T) {
 	mgmtServer, bc := setupManagementServerForTest(t, nodeID, false)
 	xdsClient := createXDSClient(t, bc)
 
-	watcher := &testWatcher{
-		updateCh: make(chan *xdsresource.XDSConfig),
-		errorCh:  make(chan error),
-	}
+	watcher := newTestWatcher()
+	defer watcher.close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -565,10 +574,8 @@ func (s) TestNoVirtualHost(t *testing.T) {
 func (s) TestNoVirtualHost_ExistingResource(t *testing.T) {
 	nodeID, mgmtServer, xdsClient := setupManagementServerAndClient(t, false)
 
-	watcher := &testWatcher{
-		updateCh: make(chan *xdsresource.XDSConfig),
-		errorCh:  make(chan error),
-	}
+	watcher := newTestWatcher()
+	defer watcher.close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -617,10 +624,8 @@ func (s) TestAmbientError(t *testing.T) {
 
 	nodeID, mgmtServer, xdsClient := setupManagementServerAndClient(t, false)
 
-	watcher := &testWatcher{
-		updateCh: make(chan *xdsresource.XDSConfig),
-		errorCh:  make(chan error),
-	}
+	watcher := newTestWatcher()
+	defer watcher.close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -703,10 +708,9 @@ func (s) TestAmbientError(t *testing.T) {
 func (s) TestRouteResourceUpdate(t *testing.T) {
 	nodeID, mgmtServer, xdsClient := setupManagementServerAndClient(t, false)
 
-	watcher := &testWatcher{
-		updateCh: make(chan *xdsresource.XDSConfig),
-		errorCh:  make(chan error),
-	}
+	watcher := newTestWatcher()
+	defer watcher.close()
+
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
@@ -789,10 +793,9 @@ func (s) TestRouteResourceUpdate(t *testing.T) {
 func (s) TestRouteResourceChangeToInline(t *testing.T) {
 	nodeID, mgmtServer, xdsClient := setupManagementServerAndClient(t, false)
 
-	watcher := &testWatcher{
-		updateCh: make(chan *xdsresource.XDSConfig),
-		errorCh:  make(chan error),
-	}
+	watcher := newTestWatcher()
+	defer watcher.close()
+
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
@@ -926,11 +929,7 @@ func (s) TestRouteResourceChangeToInline(t *testing.T) {
 func (s) TestClusterResourceError(t *testing.T) {
 	nodeID, mgmtServer, xdsClient := setupManagementServerAndClient(t, false)
 
-	watcher := &testWatcher{
-		updateCh: make(chan *xdsresource.XDSConfig),
-		errorCh:  make(chan error),
-		done:     make(chan struct{}),
-	}
+	watcher := newTestWatcher()
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -951,10 +950,13 @@ func (s) TestClusterResourceError(t *testing.T) {
 	dm := xdsdepmgr.New(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
 	defer dm.Close()
 
-	// Defer closing the watcher's done channel to prevent a potential test
-	// hang. The management server can send errors repeatedly, which could
-	// otherwise block the dependency manager's update.
-	defer close(watcher.done)
+	// Defer closing the watcher to prevent a potential hang. The management
+	// server may send repeated errors, triggering updates that hold the
+	// dependency manager's mutex. This defer is defined last so it executes
+	// first (before dm.Close()). If we don't stop the watcher, dm.Close() will
+	// deadlock waiting for the mutex currently held by the blocking Update
+	// call.
+	defer watcher.close()
 
 	wantXdsConfig := makeXDSConfig(resources.Routes[0].Name, resources.Clusters[0].Name, resources.Clusters[0].EdsClusterConfig.ServiceName, "localhost:8080")
 	wantXdsConfig.Clusters[resources.Clusters[0].Name] = &xdsresource.ClusterResult{Err: fmt.Errorf("[xDS node id: %v]: %v", nodeID, fmt.Errorf("unsupported config_source_specifier *corev3.ConfigSource_Ads in lrs_server field"))}
@@ -975,10 +977,8 @@ func (s) TestClusterAmbientError(t *testing.T) {
 
 	nodeID, mgmtServer, xdsClient := setupManagementServerAndClient(t, false)
 
-	watcher := &testWatcher{
-		updateCh: make(chan *xdsresource.XDSConfig),
-		errorCh:  make(chan error),
-	}
+	watcher := newTestWatcher()
+	defer watcher.close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -1042,10 +1042,17 @@ func (s) TestClusterAmbientError(t *testing.T) {
 func (s) TestAggregateCluster(t *testing.T) {
 	nodeID, mgmtServer, xdsClient := setupManagementServerAndClient(t, true)
 
-	watcher := &testWatcher{
-		updateCh: make(chan *xdsresource.XDSConfig),
-		errorCh:  make(chan error),
-	}
+	dnsR := replaceDNSResolver(t)
+	dnsR.UpdateState(resolver.State{
+		Addresses: []resolver.Address{
+			{Addr: "127.0.0.1:8081"},
+			{Addr: "[::1]:8081"},
+		},
+	})
+
+	watcher := newTestWatcher()
+	defer watcher.close()
+
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
@@ -1077,13 +1084,6 @@ func (s) TestAggregateCluster(t *testing.T) {
 	case err := <-watcher.errorCh:
 		t.Fatalf("received unexpected error from dependency manager: %v", err)
 	}
-	dnsR := replaceDNSResolver(t)
-	dnsR.InitialState(resolver.State{
-		Addresses: []resolver.Address{
-			{Addr: "127.0.0.1:8081"},
-			{Addr: "[::1]:8081"},
-		},
-	})
 
 	// Now configure the LogicalDNS cluster in the management server. This
 	// should result in configuration being pushed down to the child policy.
@@ -1193,16 +1193,13 @@ func (s) TestAggregateCluster(t *testing.T) {
 func (s) TestAggregateClusterChildError(t *testing.T) {
 	nodeID, mgmtServer, xdsClient := setupManagementServerAndClient(t, true)
 
-	watcher := &testWatcher{
-		updateCh: make(chan *xdsresource.XDSConfig),
-		errorCh:  make(chan error),
-		done:     make(chan struct{}),
-	}
+	watcher := newTestWatcher()
+
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
 	dnsR := replaceDNSResolver(t)
-	dnsR.InitialState(resolver.State{
+	dnsR.UpdateState(resolver.State{
 		Addresses: []resolver.Address{
 			{Addr: "127.0.0.1:8081"},
 			{Addr: "[::1]:8081"},
@@ -1228,10 +1225,13 @@ func (s) TestAggregateClusterChildError(t *testing.T) {
 	dm := xdsdepmgr.New(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
 	defer dm.Close()
 
-	// Defer closing the watcher's done channel to prevent a potential test
-	// hang. The management server can send errors repeatedly, which could
-	// otherwise block the dependency manager's update.
-	defer close(watcher.done)
+	// Defer closing the watcher to prevent a potential hang. The management
+	// server may send repeated errors, triggering updates that hold the
+	// dependency manager's mutex. This defer is defined last so it executes
+	// first (before dm.Close()). If we don't stop the watcher, dm.Close() will
+	// deadlock waiting for the mutex currently held by the blocking Update
+	// call.
+	defer watcher.close()
 
 	wantXdsConfig := &xdsresource.XDSConfig{
 		Listener: &xdsresource.ListenerUpdate{
@@ -1289,16 +1289,8 @@ func (s) TestAggregateClusterChildError(t *testing.T) {
 					EndpointConfig: &xdsresource.EndpointConfig{
 						DNSEndpoints: &xdsresource.DNSUpdate{
 							Endpoints: []resolver.Endpoint{
-								{
-									Addresses: []resolver.Address{
-										{Addr: "127.0.0.1:8081"},
-									},
-								},
-								{
-									Addresses: []resolver.Address{
-										{Addr: "[::1]:8081"},
-									},
-								},
+								{Addresses: []resolver.Address{{Addr: "127.0.0.1:8081"}}},
+								{Addresses: []resolver.Address{{Addr: "[::1]:8081"}}},
 							},
 						},
 					},
@@ -1318,10 +1310,9 @@ func (s) TestAggregateClusterChildError(t *testing.T) {
 func (s) TestAggregateClusterNoLeafCluster(t *testing.T) {
 	nodeID, mgmtServer, xdsClient := setupManagementServerAndClient(t, true)
 
-	watcher := &testWatcher{
-		updateCh: make(chan *xdsresource.XDSConfig),
-		errorCh:  make(chan error),
-	}
+	watcher := newTestWatcher()
+	defer watcher.close()
+
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
@@ -1391,10 +1382,9 @@ func (s) TestAggregateClusterMaxDepth(t *testing.T) {
 	const clusterDepth = 17
 	nodeID, mgmtServer, xdsClient := setupManagementServerAndClient(t, true)
 
-	watcher := &testWatcher{
-		updateCh: make(chan *xdsresource.XDSConfig),
-		errorCh:  make(chan error),
-	}
+	watcher := newTestWatcher()
+	defer watcher.close()
+
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
@@ -1470,11 +1460,8 @@ func (s) TestAggregateClusterMaxDepth(t *testing.T) {
 func (s) TestEndpointAmbientError(t *testing.T) {
 	nodeID, mgmtServer, xdsClient := setupManagementServerAndClient(t, true)
 
-	watcher := &testWatcher{
-		updateCh: make(chan *xdsresource.XDSConfig),
-		errorCh:  make(chan error),
-		done:     make(chan struct{}),
-	}
+	watcher := newTestWatcher()
+
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
@@ -1492,10 +1479,13 @@ func (s) TestEndpointAmbientError(t *testing.T) {
 	dm := xdsdepmgr.New(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
 	defer dm.Close()
 
-	// Defer closing the watcher's done channel to prevent a potential test
-	// hang. The management server can send errors repeatedly, which could
-	// otherwise block the dependency manager's update.
-	defer close(watcher.done)
+	// Defer closing the watcher to prevent a potential hang. The management
+	// server may send repeated errors, triggering updates that hold the
+	// dependency manager's mutex. This defer is defined last so it executes
+	// first (before dm.Close()). If we don't stop the watcher, dm.Close() will
+	// deadlock waiting for the mutex currently held by the blocking Update
+	// call.
+	defer watcher.close()
 
 	wantXdsConfig := makeXDSConfig(resources.Routes[0].Name, resources.Clusters[0].Name, resources.Endpoints[0].ClusterName, "localhost:8080")
 
