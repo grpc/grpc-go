@@ -91,13 +91,11 @@ type testWatcher struct {
 // cases multiple updates to be sent from dependency manager causing the update
 // channel to be blocked.
 func (w *testWatcher) Update(cfg *xdsresource.XDSConfig) {
-	go func() {
-		select {
-		case <-w.done:
-			return
-		case w.updateCh <- cfg:
-		}
-	}()
+	select {
+	case <-w.done:
+		return
+	case w.updateCh <- cfg:
+	}
 }
 
 // Error sends the received error to the error channel.
@@ -1483,7 +1481,7 @@ func (s) TestClusterSubscription_Lifecycle(t *testing.T) {
 	nodeID, mgmtServer, xdsClient := setupManagementServerAndClient(t, false)
 
 	watcher := &testWatcher{
-		updateCh: make(chan *xdsresource.XDSConfig),
+		updateCh: make(chan *xdsresource.XDSConfig, 1),
 		errorCh:  make(chan error),
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -1516,8 +1514,9 @@ func (s) TestClusterSubscription_Lifecycle(t *testing.T) {
 	// Subscribe to the old cluster.
 	ref := dm.ClusterSubscription(clusterName)
 
-	// Update RouteConfig to REMOVE the cluster. The cluster should still be
-	// present in the update because of the remaining subscription.
+	// Update RouteConfig to REMOVE the cluster and point to a new cluster. The
+	// old cluster should still be present in the update because of the
+	// remaining subscription.
 	newClusterName := "new-cluster-name"
 	newEDSServcie := "new-eds-servcie"
 	route2 := e2e.DefaultRouteConfig(resources.Routes[0].Name, defaultTestServiceName, newClusterName)
@@ -1624,8 +1623,9 @@ func (s) TestClusterSubscription_Lifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Unsubscribe the reference.
+	// Unsubscribe the reference to the old cluster.
 	ref.Unsubscribe()
+
 	// Now "clusterName" should be removed. "newClusterName" should remain.
 	wantXdsConfig = makeXDSConfig(resources.Routes[0].Name, newClusterName, newEDSServcie, "localhost:8081")
 

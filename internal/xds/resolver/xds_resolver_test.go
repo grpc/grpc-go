@@ -1461,7 +1461,7 @@ func (s) TestResolver_AutoHostRewrite(t *testing.T) {
 // resourcesMatch returns true if the got slice matches resource names in want.
 func resourcesMatch(got, want []string) bool {
 	diff := cmp.Diff(want, got, cmpopts.SortSlices(func(i, j string) bool { return i < j }))
-	return diff != ""
+	return diff == ""
 }
 
 // TestResolverKeepWatchOpen_ActiveRPCs tests that the dependency manager keeps
@@ -1491,11 +1491,13 @@ func (s) TestResolverKeepWatchOpen_ActiveRPCs(t *testing.T) {
 				}
 				return nil
 			}
-			if !seenSecondClusterOnly {
-				if resourcesMatch(resourceNames, []string{clusterB}) {
-					seenSecondClusterOnly = true
-					gotOnlySecondCluster.Fire()
-				}
+
+			if seenSecondClusterOnly {
+				return nil
+			}
+			if resourcesMatch(resourceNames, []string{clusterB}) {
+				seenSecondClusterOnly = true
+				gotOnlySecondCluster.Fire()
 			}
 			return nil
 		},
@@ -1506,7 +1508,7 @@ func (s) TestResolverKeepWatchOpen_ActiveRPCs(t *testing.T) {
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 
 	// Configure initial resources: Route -> ClusterA
-	routeA := e2e.DefaultRouteConfig(defaultTestRouteConfigName, defaultTestServiceName, clusterA)
+	route := []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(defaultTestRouteConfigName, defaultTestServiceName, clusterA)}
 	listeners := []*v3listenerpb.Listener{e2e.DefaultClientListener(defaultTestServiceName, defaultTestRouteConfigName)}
 	clusters := []*v3clusterpb.Cluster{
 		e2e.DefaultCluster(clusterA, "endpoint-A", e2e.SecurityLevelNone),
@@ -1520,20 +1522,21 @@ func (s) TestResolverKeepWatchOpen_ActiveRPCs(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	configureAllResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, listeners, []*v3routepb.RouteConfiguration{routeA}, clusters, endpoints)
+	configureAllResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, listeners, route, clusters, endpoints)
 
 	stateCh, _, _ := buildResolverForTarget(t, resolver.Target{URL: *testutils.MustParseURL("xds:///" + defaultTestServiceName)}, bc)
 
-	// Start RPC (Ref Counts ClusterA)
 	cs := verifyUpdateFromResolver(ctx, t, stateCh, wantServiceConfig(clusterA))
+
+	// Start RPC (Ref Counts ClusterA)
 	res, err := cs.SelectConfig(iresolver.RPCInfo{Context: ctx, Method: "/service/method"})
 	if err != nil {
 		t.Fatalf("cs.SelectConfig(): %v", err)
 	}
 
 	// Switch Configuration to ClusterB
-	routeB := e2e.DefaultRouteConfig(defaultTestRouteConfigName, defaultTestServiceName, clusterB)
-	configureAllResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, listeners, []*v3routepb.RouteConfiguration{routeB}, clusters, endpoints)
+	route[0] = e2e.DefaultRouteConfig(defaultTestRouteConfigName, defaultTestServiceName, clusterB)
+	configureAllResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, listeners, route, clusters, endpoints)
 
 	// Resolver should request BOTH A (due to active RPC) and B (due to new config)
 	select {

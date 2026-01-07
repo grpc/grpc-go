@@ -238,6 +238,7 @@ func (m *DependencyManager) maybeSendUpdateLocked() {
 	dnsResourcesSeen := make(map[string]bool)
 	clusterResourcesSeen := make(map[string]bool)
 	haveAllResources := true
+
 	// Get all clusters to be watched: from route config and from cluster
 	// subscriptions, the subscriptions can be from RPC referencing the cluster
 	// or from CDS balancer for cluster specifier plugins.
@@ -917,30 +918,33 @@ func DependencyManagerFromResolverState(state resolver.State) *DependencyManager
 // count and removes the cluster from the clusterSubscriptions map in the
 // DependencyManager if the reference count reaches zero.
 type ClusterRef struct {
-	name     string
+	name string
+	// Access to this field is protected by DependencyManager's mutex and so it
+	// doesn't need to be atomic.
 	refCount int32
 	m        *DependencyManager
 }
 
 // ClusterSubscription increments the reference count for the cluster and
 // returns the ClusterRef. If the cluster is not already being tracked, it adds
-// it to the clusterSubscriptions map. If ClusterSubscription is called in a
-// blocking manner while handling the update for any resource type, it will
-// deadlock because both the update handler and this function have to acquire
-// m.mu.
+// it to the clusterSubscriptions map. Calling ClusterSubscription in a blocking
+// manner while handling an update will lead to a deadlock
 func (m *DependencyManager) ClusterSubscription(name string) *ClusterRef {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	subs, ok := m.clusterSubscriptions[name]
 	if ok {
 		subs.refCount++
 		return subs
 	}
+
 	m.clusterSubscriptions[name] = &ClusterRef{
 		name:     name,
 		refCount: 1,
 		m:        m,
 	}
+	// If the cluster is not present in route config, start a watch for it.
 	if _, ok := m.clustersFromRouteConfig[name]; !ok {
 		m.maybeSendUpdateLocked()
 	}
@@ -949,17 +953,16 @@ func (m *DependencyManager) ClusterSubscription(name string) *ClusterRef {
 
 // Unsubscribe decrements the reference count for the cluster. If the reference
 // count reaches zero, it removes the cluster from the clusterSubscriptions map
-// in the DependencyManager. If Unsubscribe is called in a blocking manner while
-// handling the update for any resource type, it will deadlock because both the
-// update handler and this function have to acquire m.mu.
+// in the DependencyManager. Calling Unsubscribe in a blocking manner while
+// handling an update will lead to a deadlock.
 func (c *ClusterRef) Unsubscribe() {
 	c.m.mu.Lock()
 	defer c.m.mu.Unlock()
 
 	if c.refCount--; c.refCount <= 0 {
 		delete(c.m.clusterSubscriptions, c.name)
-		// This cluster is no longer in the route config, and it has no more
-		// references. Now is the time to cancel the watch.
+		// If this cluster is no longer in the route config, and it has no more
+		// references, might need to cancel the watch for it.
 		if _, ok := c.m.clustersFromRouteConfig[c.name]; !ok {
 			c.m.maybeSendUpdateLocked()
 		}
