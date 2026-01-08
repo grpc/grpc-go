@@ -186,7 +186,7 @@ func (b *priorityBalancer) handleChildStateUpdate(childName string, newState bal
 		b.logger.Warningf("Ignoring update from child policy %q which is not in started state: %+v", childName, newState)
 		return
 	}
-	curState := child.state
+	oldState := child.state
 	child.state = newState
 
 	// We start/stop the init timer of this child based on the new connectivity
@@ -200,8 +200,19 @@ func (b *priorityBalancer) handleChildStateUpdate(childName string, newState bal
 		child.reportedTF = true
 		child.stopInitTimer()
 	case connectivity.Connecting:
-		// Skip restarting the timer if the child was already in Connecting.
-		if !child.reportedTF && curState.ConnectivityState != connectivity.Connecting {
+		// The init timer is created when the child is created and is reset when
+		// it reports Ready or Idle. Most child policies start off in
+		// Connecting, but ring_hash starts off in Idle and moves to Connecting
+		// when a request comes in. To support such cases, we restart the init
+		// timer when we see Connecting, but only if the child has not reported
+		// TransientFailure more recently than it reported Ready or Idle. See
+		// gRFC A42 for details on why ring_hash is special and what provisions
+		// are required to make it work as a child of the priority LB policy.
+		//
+		// We don't want to restart the timer if the child was already in
+		// Connecting, because we want failover to happen once the timer elapses
+		// even when the child is still in Connecting.
+		if !child.reportedTF && oldState.ConnectivityState != connectivity.Connecting {
 			child.startInitTimer()
 		}
 	default:
