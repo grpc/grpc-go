@@ -136,7 +136,7 @@ func Copy(data []byte, pool BufferPool) Buffer {
 }
 
 func (b *buffer) ReadOnlyData() []byte {
-	if b.refs.Load() <= 0 {
+	if b.rootBuf == nil {
 		panic("Cannot read freed buffer")
 	}
 	return b.data
@@ -196,7 +196,7 @@ func (b *buffer) split(n int) (Buffer, Buffer) {
 }
 
 func (b *buffer) read(buf []byte) (int, Buffer) {
-	if b.refs.Load() <= 0 {
+	if b.rootBuf == nil {
 		panic("Cannot read freed buffer")
 	}
 
