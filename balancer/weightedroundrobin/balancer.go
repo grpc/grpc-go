@@ -285,7 +285,6 @@ func (b *wrrBalancer) UpdateState(state balancer.State) {
 	}
 
 	p := &picker{
-		v:               rand.Uint32(), // start the scheduler at a random point
 		cfg:             b.cfg,
 		weightedPickers: readyPickersWeight,
 		metricsRecorder: b.metricsRecorder,
@@ -293,6 +292,7 @@ func (b *wrrBalancer) UpdateState(state balancer.State) {
 		target:          b.target,
 		clusterName:     b.clusterName,
 	}
+	p.idx.Store(rand.Uint32()) // start the scheduler at a random point
 
 	b.stopPicker = grpcsync.NewEvent()
 	p.start(b.stopPicker)
@@ -416,7 +416,7 @@ func (b *wrrBalancer) ExitIdle() {
 // to those weights.
 type picker struct {
 	scheduler unsafe.Pointer // *scheduler; accessed atomically
-	v         uint32         // incrementing value used by the scheduler; accessed atomically
+	idx       atomic.Uint32  // incrementing value used by the scheduler
 	cfg       *lbConfig      // active config when picker created
 
 	weightedPickers []pickerWeightedEndpoint // all READY pickers
@@ -464,7 +464,7 @@ func (p *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 }
 
 func (p *picker) inc() uint32 {
-	return atomic.AddUint32(&p.v, 1)
+	return p.idx.Add(1)
 }
 
 func (p *picker) regenerateScheduler() {
