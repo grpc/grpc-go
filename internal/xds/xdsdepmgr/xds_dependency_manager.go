@@ -129,7 +129,7 @@ type DependencyManager struct {
 	clusterWatchers         map[string]*xdsResourceState[xdsresource.ClusterUpdate, struct{}]
 	endpointWatchers        map[string]*xdsResourceState[xdsresource.EndpointsUpdate, struct{}]
 	dnsResolvers            map[string]*xdsResourceState[xdsresource.DNSUpdate, dnsExtras]
-	clusterSubscriptions    map[string]*ClusterRef
+	clusterSubscriptions    map[string]*clusterRef
 }
 
 // New creates a new DependencyManager.
@@ -155,7 +155,7 @@ func New(listenerName, dataplaneAuthority string, xdsClient xdsclient.XDSClient,
 		endpointWatchers:        make(map[string]*xdsResourceState[xdsresource.EndpointsUpdate, struct{}]),
 		dnsResolvers:            make(map[string]*xdsResourceState[xdsresource.DNSUpdate, dnsExtras]),
 		clusterWatchers:         make(map[string]*xdsResourceState[xdsresource.ClusterUpdate, struct{}]),
-		clusterSubscriptions:    make(map[string]*ClusterRef),
+		clusterSubscriptions:    make(map[string]*clusterRef),
 	}
 	dm.logger = prefixLogger(dm)
 
@@ -912,12 +912,12 @@ func DependencyManagerFromResolverState(state resolver.State) *DependencyManager
 	return nil
 }
 
-// ClusterRef represents a reference to a cluster being used by some component.
+// clusterRef represents a reference to a cluster being used by some component.
 // It maintains a reference count of the number of users of the cluster. It has
 // a method to unsubscribe from the cluster, which decrements the reference
 // count and removes the cluster from the clusterSubscriptions map in the
 // DependencyManager if the reference count reaches zero.
-type ClusterRef struct {
+type clusterRef struct {
 	name string
 	// Access to this field is protected by DependencyManager's mutex and so it
 	// doesn't need to be atomic.
@@ -928,18 +928,18 @@ type ClusterRef struct {
 // ClusterSubscription increments the reference count for the cluster and
 // returns the ClusterRef. If the cluster is not already being tracked, it adds
 // it to the clusterSubscriptions map. Calling ClusterSubscription in a blocking
-// manner while handling an update will lead to a deadlock
-func (m *DependencyManager) ClusterSubscription(name string) *ClusterRef {
+// manner while handling an update will lead to a deadlock.
+func (m *DependencyManager) ClusterSubscription(name string) func() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	subs, ok := m.clusterSubscriptions[name]
 	if ok {
 		subs.refCount++
-		return subs
+		return subs.unsubscribe
 	}
 
-	m.clusterSubscriptions[name] = &ClusterRef{
+	m.clusterSubscriptions[name] = &clusterRef{
 		name:     name,
 		refCount: 1,
 		m:        m,
@@ -948,18 +948,21 @@ func (m *DependencyManager) ClusterSubscription(name string) *ClusterRef {
 	if _, ok := m.clustersFromRouteConfig[name]; !ok {
 		m.maybeSendUpdateLocked()
 	}
-	return m.clusterSubscriptions[name]
+	return m.clusterSubscriptions[name].unsubscribe
 }
 
-// Unsubscribe decrements the reference count for the cluster. If the reference
+// unsubscribe decrements the reference count for the cluster. If the reference
 // count reaches zero, it removes the cluster from the clusterSubscriptions map
 // in the DependencyManager. Calling Unsubscribe in a blocking manner while
 // handling an update will lead to a deadlock.
-func (c *ClusterRef) Unsubscribe() {
+func (c *clusterRef) unsubscribe() {
 	c.m.mu.Lock()
 	defer c.m.mu.Unlock()
-
-	if c.refCount--; c.refCount <= 0 {
+	c.refCount--
+	if c.refCount < 0 {
+		c.m.logger.Errorf("Reference count for a cluster dropped below zero")
+	}
+	if c.refCount == 0 {
 		delete(c.m.clusterSubscriptions, c.name)
 		// If this cluster is no longer in the route config, and it has no more
 		// references, might need to cancel the watch for it.

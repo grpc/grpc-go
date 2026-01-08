@@ -1507,7 +1507,7 @@ func (s) TestResolverKeepWatchOpen_ActiveRPCs(t *testing.T) {
 	nodeID := uuid.New().String()
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 
-	// Configure initial resources: Route -> ClusterA
+	// Configure initial resources: Route -> ClusterA.
 	route := []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(defaultTestRouteConfigName, defaultTestServiceName, clusterA)}
 	listeners := []*v3listenerpb.Listener{e2e.DefaultClientListener(defaultTestServiceName, defaultTestRouteConfigName)}
 	clusters := []*v3clusterpb.Cluster{
@@ -1528,24 +1528,33 @@ func (s) TestResolverKeepWatchOpen_ActiveRPCs(t *testing.T) {
 
 	cs := verifyUpdateFromResolver(ctx, t, stateCh, wantServiceConfig(clusterA))
 
-	// Start RPC (Ref Counts ClusterA)
+	// Start RPC (Ref Counts ClusterA).
 	res, err := cs.SelectConfig(iresolver.RPCInfo{Context: ctx, Method: "/service/method"})
 	if err != nil {
 		t.Fatalf("cs.SelectConfig(): %v", err)
 	}
 
-	// Switch Configuration to ClusterB
+	// Switch Configuration to ClusterB.
 	route[0] = e2e.DefaultRouteConfig(defaultTestRouteConfigName, defaultTestServiceName, clusterB)
 	configureAllResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, listeners, route, clusters, endpoints)
 
-	// Resolver should request BOTH A (due to active RPC) and B (due to new config)
+	// Resolver should request BOTH A (due to active RPC) and B (due to new
+	// config).
 	select {
 	case <-ctx.Done():
 		t.Fatalf("Timeout waiting for updated CDS request including clusters A and B")
 	case <-gotBothClusterRequest.Done():
 	}
 
-	// Verify Service Config has both clusters
+	sctx, cancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
+	defer cancel()
+
+	select {
+	case <-sctx.Done():
+	case <-gotOnlySecondCluster.Done():
+		t.Fatalf("CDS request only included cluster B, expected both clusters")
+	}
+	// Verify Service Config has both clusters.
 	const wantServiceRaw = `{
       "loadBalancingConfig": [{
         "xds_cluster_manager_experimental": {
@@ -1562,7 +1571,7 @@ func (s) TestResolverKeepWatchOpen_ActiveRPCs(t *testing.T) {
     }`
 	verifyUpdateFromResolver(ctx, t, stateCh, wantServiceRaw)
 
-	// Finish RPC (Drops Ref to ClusterA)
+	// Finish RPC (Drops Ref to ClusterA).
 	res.OnCommitted()
 
 	// ONLY cluster B should be requested now that there are no references to

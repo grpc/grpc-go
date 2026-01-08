@@ -1512,7 +1512,7 @@ func (s) TestClusterSubscription_Lifecycle(t *testing.T) {
 	edsServiceName := resources.Clusters[0].EdsClusterConfig.ServiceName
 
 	// Subscribe to the old cluster.
-	ref := dm.ClusterSubscription(clusterName)
+	unsubscribe := dm.ClusterSubscription(clusterName)
 
 	// Update RouteConfig to REMOVE the cluster and point to a new cluster. The
 	// old cluster should still be present in the update because of the
@@ -1624,7 +1624,7 @@ func (s) TestClusterSubscription_Lifecycle(t *testing.T) {
 	}
 
 	// Unsubscribe the reference to the old cluster.
-	ref.Unsubscribe()
+	unsubscribe()
 
 	// Now "clusterName" should be removed. "newClusterName" should remain.
 	wantXdsConfig = makeXDSConfig(resources.Routes[0].Name, newClusterName, newEDSServcie, "localhost:8081")
@@ -1632,4 +1632,46 @@ func (s) TestClusterSubscription_Lifecycle(t *testing.T) {
 	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
 		t.Fatal(err)
 	}
+}
+
+// Tests that an error is logged when the reference count for a cluster drops
+// below zero.
+func (s) TestClusterSubscription_RefCountUnderflow(t *testing.T) {
+	// Expect an error log for the ref count underflow.
+	grpctest.ExpectError("Reference count for a cluster dropped below zero")
+
+	nodeID, mgmtServer, xdsClient := setupManagementServerAndClient(t, false)
+	watcher := &testWatcher{
+		updateCh: make(chan *xdsresource.XDSConfig, 1),
+		errorCh:  make(chan error),
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		NodeID:     nodeID,
+		DialTarget: defaultTestServiceName,
+		Host:       "localhost",
+		Port:       8080,
+		SecLevel:   e2e.SecurityLevelNone,
+	})
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	dm := xdsdepmgr.New(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
+	defer dm.Close()
+
+	// Verify initial update.
+	wantXdsConfig := makeXDSConfig(resources.Routes[0].Name, resources.Clusters[0].Name, resources.Clusters[0].EdsClusterConfig.ServiceName, "localhost:8080")
+	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
+		t.Fatal(err)
+	}
+
+	clusterName := resources.Clusters[0].Name
+	unsubscribe := dm.ClusterSubscription(clusterName)
+	// We call unsubscribe twice. The first one should reduce refCount to 0.
+	// The second one should reduce refCount to -1 and log error.
+	unsubscribe()
+	unsubscribe()
 }
