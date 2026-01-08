@@ -48,9 +48,10 @@ import (
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/testdata"
 
-	_ "google.golang.org/grpc/balancer/grpclb"    // Register the grpclb load balancing policy.
-	_ "google.golang.org/grpc/balancer/rls"       // Register the RLS load balancing policy.
-	"google.golang.org/grpc/xds/googledirectpath" // Register xDS resolver required for c2p directpath.
+	_ "google.golang.org/grpc/balancer/grpclb"           // Register the grpclb load balancing policy.
+	_ "google.golang.org/grpc/balancer/randomsubsetting" // Register the random_subsetting_experimental load balancing policy.
+	_ "google.golang.org/grpc/balancer/rls"              // Register the RLS load balancing policy.
+	"google.golang.org/grpc/xds/googledirectpath"        // Register xDS resolver required for c2p directpath.
 
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 )
@@ -402,6 +403,9 @@ func main() {
 	case "orca_oob":
 		interop.DoORCAOOBTest(ctx, tc)
 		logger.Infoln("ORCAOOB done")
+	case "random_subsetting":
+		interop.DoEmptyUnaryCall(ctx, tc)
+		logger.Infoln("Random subsetting done")
 	default:
 		logger.Fatal("Unsupported test case: ", *testCase)
 	}
