@@ -972,6 +972,8 @@ func (c *clusterRef) unsubscribe() {
 	c.m.mu.Lock()
 	defer c.m.mu.Unlock()
 	c.refCount--
+	// This should not happen as unsubscribe returned from the
+	// ClusterSubscription is wrapped in sync.OnceFunc()
 	if c.refCount < 0 {
 		c.m.logger.Errorf("Reference count for a cluster dropped below zero")
 	}
