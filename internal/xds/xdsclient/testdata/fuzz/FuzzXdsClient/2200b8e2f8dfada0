@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("\n[{\"Xds_servers\": [{\"server_uri\":\"000000000000000\", \"ChAnnel_Creds\":[{\"tYpe\": \"insecure\"}]}]}\x12\x06\n\x020000")
