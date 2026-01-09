@@ -59,23 +59,41 @@ type Filter interface {
 // ClientInterceptorBuilder constructs a Client Interceptor.  If this type is
 // implemented by a Filter, it is capable of working on a client.
 type ClientInterceptorBuilder interface {
-	// BuildClientInterceptor uses the FilterConfigs produced above to produce
-	// an HTTP filter interceptor for clients.  config will always be non-nil,
-	// but override may be nil if no override config exists for the filter.  It
-	// is valid for Build to return a nil Interceptor and a nil error.  In this
-	// case, the RPC will not be intercepted by this filter.
-	BuildClientInterceptor(config, override FilterConfig) (iresolver.ClientInterceptor, error)
+	// BuildClientInterceptor uses the given FilterConfigs to produce an HTTP
+	// filter interceptor for clients. config will always be non-nil, but
+	// override may be nil if no override config exists for the filter.
+	//
+	// The provider is free to use the name parameter to identify the filter
+	// instance being created, and share state across multiple instances if
+	// needed.
+	//
+	// It is valid for this method to return a nil Interceptor and a nil error.
+	// In this case, the RPC will not be intercepted by this filter.
+	//
+	// Callers must ensure that the returned cancel func is called when the
+	// interceptor is no longer needed, to allow the filter to clean up any
+	// resources.
+	BuildClientInterceptor(name string, config, override FilterConfig) (i iresolver.ClientInterceptor, cancel func(), err error)
 }
 
 // ServerInterceptorBuilder constructs a Server Interceptor.  If this type is
 // implemented by a Filter, it is capable of working on a server.
 type ServerInterceptorBuilder interface {
-	// BuildServerInterceptor uses the FilterConfigs produced above to produce
-	// an HTTP filter interceptor for servers.  config will always be non-nil,
-	// but override may be nil if no override config exists for the filter.  It
-	// is valid for Build to return a nil Interceptor and a nil error.  In this
-	// case, the RPC will not be intercepted by this filter.
-	BuildServerInterceptor(config, override FilterConfig) (iresolver.ServerInterceptor, error)
+	// BuildServerInterceptor uses the given FilterConfigs to produce
+	// an HTTP filter interceptor for servers. config will always be non-nil,
+	// but override may be nil if no override config exists for the filter.
+	//
+	// The provider is free to use the name parameter to identify the filter
+	// instance being created, and share state across multiple instances if
+	// needed.
+	//
+	// It is valid for this method to return a nil Interceptor and a nil error.
+	// In this case, the RPC will not be intercepted by this filter.
+	//
+	// Callers must ensure that the returned cancel func is called when the
+	// interceptor is no longer needed, to allow the filter to clean up any
+	// resources.
+	BuildServerInterceptor(name string, config, override FilterConfig) (i iresolver.ServerInterceptor, cancel func(), err error)
 }
 
 var (

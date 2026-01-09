@@ -126,11 +126,11 @@ func (*testHTTPFilterWithRPCMetadata) IsTerminal() bool { return false }
 // This compile time check ensures the test filter implements it.
 var _ httpfilter.ClientInterceptorBuilder = &testHTTPFilterWithRPCMetadata{}
 
-func (fb *testHTTPFilterWithRPCMetadata) BuildClientInterceptor(config, override httpfilter.FilterConfig) (iresolver.ClientInterceptor, error) {
-	fb.logger.Logf("BuildClientInterceptor called with config: %+v, override: %+v", config, override)
+func (fb *testHTTPFilterWithRPCMetadata) BuildClientInterceptor(name string, config, override httpfilter.FilterConfig) (iresolver.ClientInterceptor, func(), error) {
+	fb.logger.Logf("BuildClientInterceptor called with name %q config: %+v, override: %+v", name, config, override)
 
 	if config == nil {
-		return nil, fmt.Errorf("unexpected missing config")
+		return nil, func() {}, fmt.Errorf("unexpected missing config")
 	}
 
 	baseCfg := config.(testFilterCfg)
@@ -154,7 +154,7 @@ func (fb *testHTTPFilterWithRPCMetadata) BuildClientInterceptor(config, override
 			Error:        newStreamErr,
 		},
 		newStreamChan: fb.newStreamChan,
-	}, nil
+	}, func() {}, nil
 }
 
 // overallFilterConfig is a JSON representation of the filter config.
