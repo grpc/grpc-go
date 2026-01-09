@@ -51,7 +51,7 @@ var failTestsOnLeakedBuffers = false
 func init() {
 	defaultPool := mem.DefaultBufferPool()
 	globalPool.Store(&defaultPool)
-	(internal.SetDefaultBufferPoolForTesting.(func(mem.BufferPool)))(&globalPool)
+	(internal.SetDefaultBufferPool.(func(mem.BufferPool)))(&globalPool)
 }
 
 var globalPool swappableBufferPool

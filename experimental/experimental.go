@@ -31,6 +31,16 @@ import (
 	"google.golang.org/grpc/mem"
 )
 
+// SetDefaultBufferPool sets the default buffer pool used by all grpc clients
+// and servers that do not have a buffer pool configured via WithBufferPool or
+// BufferPool. It also changes the buffer pool used by the proto codec, which
+// can't be changed otherwise. The provided buffer pool must be non-nil. This
+// must be called before creating any grpc clients or servers. The default value
+// is mem.DefaultBufferPool.
+func SetDefaultBufferPool(bufferPool mem.BufferPool) {
+	internal.SetDefaultBufferPool.(func(mem.BufferPool))(bufferPool)
+}
+
 // WithBufferPool returns a grpc.DialOption that configures the use of bufferPool
 // for parsing incoming messages on a grpc.ClientConn, and for temporary buffers
 // when marshaling outgoing messages. By default, mem.DefaultBufferPool is used,

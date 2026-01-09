@@ -177,7 +177,7 @@ func (p swappableBufferPool) Put(i *[]byte) {
 }
 
 func init() {
-	internal.SetDefaultBufferPoolForTesting.(func(mem.BufferPool))(swappableBufferPool{mem.DefaultBufferPool()})
+	internal.SetDefaultBufferPool.(func(mem.BufferPool))(swappableBufferPool{mem.DefaultBufferPool()})
 }
 
 var (
