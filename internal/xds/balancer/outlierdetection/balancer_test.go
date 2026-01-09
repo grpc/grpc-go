@@ -2042,7 +2042,7 @@ func (s) TestSubConnShutdownRemovesFromEndpointMap(t *testing.T) {
 	// The child balancer creates a subconn.
 	sc, err := childBalancerNewSubConnCh.Receive(ctx)
 	if err != nil {
-		t.Fatalf("timeout waiting for child balancer to create a subconn: %v", err)
+		t.Fatalf("Timeout waiting for child balancer to create a subconn: %v", err)
 	}
 	scw := sc.(*subConnWrapper)
 
@@ -2054,7 +2054,7 @@ func (s) TestSubConnShutdownRemovesFromEndpointMap(t *testing.T) {
 	epInfo, ok := od.endpoints.Get(ep)
 	if !ok {
 		od.mu.Unlock()
-		t.Fatalf("endpointInfo not found for endpoint %v", ep)
+		t.Fatalf("epInfo not found for endpoint %v", ep)
 	}
 	if len(epInfo.sws) != 1 || epInfo.sws[0] != scw {
 		od.mu.Unlock()
@@ -2069,14 +2069,14 @@ func (s) TestSubConnShutdownRemovesFromEndpointMap(t *testing.T) {
 	// The OD balancer will forward this update to the child.
 	update, err := childBalancerUpdateCh.Receive(ctx)
 	if err != nil {
-		t.Fatalf("timeout waiting for child balancer to receive subconn update: %v", err)
+		t.Fatalf("Timeout waiting for child balancer to receive subconn update: %v", err)
 	}
 	gotUpdate := update.(subConnWithState)
 	if gotUpdate.sc != scw {
-		t.Fatalf("child balancer received update for unexpected subconn: got %v, want %v", gotUpdate.sc, scw)
+		t.Fatalf("Child balancer received update for unexpected subconn: got %v, want %v", gotUpdate.sc, scw)
 	}
 	if gotUpdate.state.ConnectivityState != connectivity.Shutdown {
-		t.Fatalf("child balancer received unexpected subconn state: got %v, want %v", gotUpdate.state.ConnectivityState, connectivity.Shutdown)
+		t.Fatalf("Child balancer received unexpected subconn state: got %v, want %v", gotUpdate.state.ConnectivityState, connectivity.Shutdown)
 	}
 
 	// Now we need to verify that the subconn wrapper is removed.
@@ -2084,7 +2084,7 @@ func (s) TestSubConnShutdownRemovesFromEndpointMap(t *testing.T) {
 	for {
 		select {
 		case <-ctx.Done():
-			t.Fatalf("timed out waiting for subconn to be removed from endpoint map")
+			t.Fatalf("Timed out waiting for subconn to be removed from endpoint map")
 		default:
 		}
 		od.mu.Lock()
