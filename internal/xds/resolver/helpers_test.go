@@ -257,30 +257,15 @@ func setupManagementServerForTest(t *testing.T, nodeID string) (*e2e.ManagementS
 	return mgmtServer, listenerResourceNamesCh, routeConfigResourceNamesCh, bootstrapContents
 }
 
-// Spins up an xDS management server and configures it with a default listener
-// and route configuration resource. It also sets up an xDS bootstrap
-// configuration file that points to the above management server.
-func configureResourcesOnManagementServer(ctx context.Context, t *testing.T, mgmtServer *e2e.ManagementServer, nodeID string, listeners []*v3listenerpb.Listener, routes []*v3routepb.RouteConfiguration) {
+// Updates all resources on the given management server.
+func configureResources(ctx context.Context, t *testing.T, mgmtServer *e2e.ManagementServer, nodeID string, listeners []*v3listenerpb.Listener, routes []*v3routepb.RouteConfiguration, clusters []*v3clusterpb.Cluster, endpoints []*v3endpointpb.ClusterLoadAssignment) {
 	resources := e2e.UpdateOptions{
 		NodeID:         nodeID,
 		Listeners:      listeners,
 		Routes:         routes,
+		Clusters:       clusters,
+		Endpoints:      endpoints,
 		SkipValidation: true,
-	}
-	if err := mgmtServer.Update(ctx, resources); err != nil {
-		t.Fatal(err)
-	}
-}
-
-// Updates all the listener, route, cluster and endpoint configuration resources
-// on the given management server.
-func configureAllResourcesOnManagementServer(ctx context.Context, t *testing.T, mgmtServer *e2e.ManagementServer, nodeID string, listeners []*v3listenerpb.Listener, routes []*v3routepb.RouteConfiguration, clusters []*v3clusterpb.Cluster, endpoints []*v3endpointpb.ClusterLoadAssignment) {
-	resources := e2e.UpdateOptions{
-		NodeID:    nodeID,
-		Listeners: listeners,
-		Routes:    routes,
-		Clusters:  clusters,
-		Endpoints: endpoints,
 	}
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)

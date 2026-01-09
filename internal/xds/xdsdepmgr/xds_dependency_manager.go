@@ -892,24 +892,34 @@ func (x *xdsResourceWatcher[T]) AmbientError(err error, onDone func()) {
 	x.onAmbientError(err, onDone)
 }
 
-// dependencyManagerKey is the type used as the key to store DependencyManager
-// in the Attributes field of resolver.states.
-type dependencyManagerKey struct{}
+// xdsClusterSubscriberKey is the type used as the key to store the Subscriber
+// interface in the Attributes field of resolver.states.
+type xdsClusterSubscriberKey struct{}
 
-// SetDependencyManager returns a copy of state in which the Attributes field is
-// updated with the DependencyManager.
-func SetDependencyManager(state resolver.State, depmngr *DependencyManager) resolver.State {
-	state.Attributes = state.Attributes.WithValue(dependencyManagerKey{}, depmngr)
+// SetXDSClusterSubscriber returns a copy of state in which the Attributes field
+// is updated with the Subscriber interface.
+func SetXDSClusterSubscriber(state resolver.State, subs Subscriber) resolver.State {
+	state.Attributes = state.Attributes.WithValue(xdsClusterSubscriberKey{}, subs)
 	return state
 }
 
-// DependencyManagerFromResolverState returns DependencyManager stored as an
-// attribute in the resolver state.
-func DependencyManagerFromResolverState(state resolver.State) *DependencyManager {
-	if v := state.Attributes.Value(dependencyManagerKey{}); v != nil {
-		return v.(*DependencyManager)
+// XDSClusterSubscriberFromResolverState returns Subscriber interface stored as
+// an attribute in the resolver state.
+func XDSClusterSubscriberFromResolverState(state resolver.State) Subscriber {
+	if v := state.Attributes.Value(xdsClusterSubscriberKey{}); v != nil {
+		return v.(Subscriber)
 	}
 	return nil
+}
+
+// Subscriber handles the dynamic lifecycle and reference counting of CDS
+// cluster watches.
+type Subscriber interface {
+	// ClusterSubscription dynamically subscribes to a cluster and starts a CDS
+	// watch if not already started and holds a reference to the cluster. It
+	// returns a function to unsubscribe to the cluster which is safe to call
+	// multiple times.
+	ClusterSubscription(clusterName string) func()
 }
 
 // clusterRef represents a reference to a cluster being used by some component.
@@ -928,7 +938,10 @@ type clusterRef struct {
 // ClusterSubscription increments the reference count for the cluster and
 // returns the ClusterRef. If the cluster is not already being tracked, it adds
 // it to the clusterSubscriptions map. Calling ClusterSubscription in a blocking
-// manner while handling an update will lead to a deadlock.
+// manner while handling an update will lead to a deadlock. It returns a
+// function to unsubscribe from the cluster i.e. decrease its refcount. This
+// returned function is idempotent, meaning it can be called multiple times
+// without any additional effect.
 func (m *DependencyManager) ClusterSubscription(name string) func() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -948,7 +961,7 @@ func (m *DependencyManager) ClusterSubscription(name string) func() {
 	if _, ok := m.clustersFromRouteConfig[name]; !ok {
 		m.maybeSendUpdateLocked()
 	}
-	return m.clusterSubscriptions[name].unsubscribe
+	return sync.OnceFunc(m.clusterSubscriptions[name].unsubscribe)
 }
 
 // unsubscribe decrements the reference count for the cluster. If the reference
