@@ -146,6 +146,10 @@ func (s) TestJoinDialOption(t *testing.T) {
 	if cc.dopts.copts.InitialWindowSize != initialWindowSize {
 		t.Fatalf("Unexpected cc.dopts.copts.InitialWindowSize: %d != %d", cc.dopts.copts.InitialWindowSize, initialWindowSize)
 	}
+	// Make sure static window size is not enabled when using WithInitialWindowSize.
+	if cc.dopts.copts.StaticWindowSize {
+		t.Fatalf("Unexpected cc.dopts.copts.StaticWindowSize: %t", cc.dopts.copts.StaticWindowSize)
+	}
 }
 
 // TestJoinServerOption tests the join server option. It configures a joined
@@ -161,6 +165,10 @@ func (s) TestJoinServerOption(t *testing.T) {
 	}
 	if s.opts.initialWindowSize != initialWindowSize {
 		t.Fatalf("Unexpected s.opts.initialWindowSize: %d != %d", s.opts.initialWindowSize, initialWindowSize)
+	}
+	// Make sure static window size is not enabled when using InitialWindowSize.
+	if s.opts.staticWindowSize {
+		t.Fatalf("Unexpected s.opts.staticWindowSize: %t", s.opts.staticWindowSize)
 	}
 }
 
