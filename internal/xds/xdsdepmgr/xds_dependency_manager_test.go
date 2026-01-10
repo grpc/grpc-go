@@ -109,7 +109,11 @@ func (w *testWatcher) Update(cfg *xdsresource.XDSConfig) {
 
 // Error sends the received error to the error channel.
 func (w *testWatcher) Error(err error) {
-	w.errorCh <- err
+	select {
+	case <-w.done:
+		return
+	case w.errorCh <- err:
+	}
 }
 
 // Closes the testWatcher.done channel which will stop the updates being pushed
