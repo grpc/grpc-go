@@ -527,7 +527,7 @@ func (s) TestRouteConfigResourceError(t *testing.T) {
 
 	dm := xdsdepmgr.New(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
 	defer dm.Close()
-	
+
 	// Defer closing the watcher to prevent a potential hang. The management
 	// server may send repeated errors, triggering updates that hold the
 	// dependency manager's mutex. This defer is defined last so it executes
