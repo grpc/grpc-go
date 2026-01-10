@@ -506,7 +506,6 @@ func (s) TestRouteConfigResourceError(t *testing.T) {
 	nodeID, mgmtServer, xdsClient := setupManagementServerAndClient(t, false)
 
 	watcher := newTestWatcher()
-	defer watcher.close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -528,6 +527,14 @@ func (s) TestRouteConfigResourceError(t *testing.T) {
 
 	dm := xdsdepmgr.New(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
 	defer dm.Close()
+	
+	// Defer closing the watcher to prevent a potential hang. The management
+	// server may send repeated errors, triggering updates that hold the
+	// dependency manager's mutex. This defer is defined last so it executes
+	// first (before dm.Close()). If we don't stop the watcher, dm.Close() will
+	// deadlock waiting for the mutex currently held by the blocking Update
+	// call.
+	defer watcher.close()
 
 	if err := verifyError(ctx, watcher.errorCh, "route resource error", nodeID); err != nil {
 		t.Fatal(err)
