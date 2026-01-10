@@ -53,7 +53,7 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
-// createTestJWT creatses a test JWT token with the specified expiration
+// createTestJWT creates a test JWT token with the specified expiration.
 func createTestJWT(t *testing.T, expiration time.Time) string {
 	t.Helper()
 
@@ -103,7 +103,7 @@ func writeTempTokenFile(t *testing.T, token string) string {
 // call credentials (which require transport security) are used with an insecure
 // transport as a per-RPC call option, the RPC fails with a meaningful error.
 //
-//	This is an e2e test for gRFC A97 JWT call credentials behavior.
+// This is an e2e test for gRFC A97 JWT call credentials behavior.
 func (s) TestJWTCallCredentials_InsecureTransport_AsCallOption(t *testing.T) {
 	token := createTestJWT(t, time.Now().Add(time.Hour))
 	tokenFile := writeTempTokenFile(t, token)
@@ -185,7 +185,7 @@ func (s) TestJWTCallCredentials_InsecureTransport_AsDialOption(t *testing.T) {
 // TestJWTCallCredentials_SecureTransport verifies that JWT call credentials
 // work correctly when used with a secure transport (TLS).
 //
-// This is a positive e2etest for gRFC A97 JWT call credentials behavior.
+// This is a positive e2e test for gRFC A97 JWT call credentials behavior.
 func (s) TestJWTCallCredentials_SecureTransport(t *testing.T) {
 	token := createTestJWT(t, time.Now().Add(time.Hour))
 	tokenFile := writeTempTokenFile(t, token)
