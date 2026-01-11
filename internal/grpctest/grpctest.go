@@ -60,6 +60,7 @@ func (Tester) Setup(t *testing.T) {
 	//  fixed.
 	leakcheck.SetTrackingBufferPool(logger{t: t})
 	leakcheck.TrackTimers()
+	leakcheck.TrackAsyncReporters()
 }
 
 // Teardown performs a leak check.
@@ -74,6 +75,10 @@ func (Tester) Teardown(t *testing.T) {
 	leakcheck.CheckGoroutines(ctx, logger{t: t})
 	if atomic.LoadUint32(&lcFailed) == 1 {
 		t.Log("Goroutine leak check disabled for future tests")
+	}
+	leakcheck.CheckAsyncReporters(logger{t: t})
+	if atomic.LoadUint32(&lcFailed) == 1 {
+		return
 	}
 	tLogr.endTest(t)
 }

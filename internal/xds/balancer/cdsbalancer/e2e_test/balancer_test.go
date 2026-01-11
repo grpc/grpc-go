@@ -74,9 +74,6 @@ import (
 func setupAndDial(t *testing.T, bootstrapContents []byte) (*grpc.ClientConn, func()) {
 	t.Helper()
 	// Create an xDS resolver with the above bootstrap configuration.
-	if internal.NewXDSResolverWithConfigForTesting == nil {
-		t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
-	}
 	r, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bootstrapContents)
 	if err != nil {
 		t.Fatalf("xDS resolver creation failed: %v", err)
@@ -242,6 +239,7 @@ func (s) TestErrorFromParentLB_ResourceNotFound(t *testing.T) {
 		t.Fatalf("EmptyCall() failed: %v", err)
 	}
 
+	oldCluster := resources.Clusters
 	// Delete the cluster resource from the management server.
 	resources.Clusters = nil
 	if err := managementServer.Update(ctx, resources); err != nil {
@@ -274,13 +272,8 @@ func (s) TestErrorFromParentLB_ResourceNotFound(t *testing.T) {
 
 	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
 
-	// Configure cluster and endpoints resources in the management server.
-	resources = e2e.DefaultClientResources(e2e.ResourceParams{
-		NodeID:     nodeID,
-		DialTarget: serviceName,
-		Host:       "localhost",
-		Port:       testutils.ParsePort(t, server.Address),
-	})
+	// Add the cluster resource back to the management server.
+	resources.Clusters = oldCluster
 	if err := managementServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}

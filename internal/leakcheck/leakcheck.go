@@ -394,3 +394,96 @@ func traceToString(stack []uintptr) string {
 	}
 	return trace.String()
 }
+
+// Async Reporter Leak Checking
+
+var asyncReporterTracker *reporterTracker
+
+type reporterTracker struct {
+	mu          sync.Mutex
+	allocations map[*int][]uintptr
+}
+
+func newReporterTracker() *reporterTracker {
+	return &reporterTracker{
+		allocations: make(map[*int][]uintptr),
+	}
+}
+
+// register records the stack trace.
+func (rt *reporterTracker) register() *int {
+	rt.mu.Lock()
+	defer rt.mu.Unlock()
+
+	id := new(int)
+	// Skip 4 frames: register -> internal.Delegate -> stats.RegisterAsyncReporter -> Caller
+	rt.allocations[id] = currentStack(4)
+	return id
+}
+
+// unregister removes the ID.
+func (rt *reporterTracker) unregister(id *int) {
+	rt.mu.Lock()
+	defer rt.mu.Unlock()
+	delete(rt.allocations, id)
+}
+
+// leakedStackTraces returns formatted stack traces for all currently registered
+// reporters.
+func (rt *reporterTracker) leakedStackTraces() []string {
+	rt.mu.Lock()
+	defer rt.mu.Unlock()
+
+	var traces []string
+	for _, pcs := range rt.allocations {
+		msg := "\n--- Leaked Async Reporter Registration ---\n" + traceToString(pcs)
+		traces = append(traces, msg)
+	}
+	return traces
+}
+
+// TrackAsyncReporters installs the tracking delegate.
+func TrackAsyncReporters() {
+	asyncReporterTracker = newReporterTracker()
+
+	// Swap the delegate: Replace the default pass-through with tracking logic.
+	internal.AsyncReporterCleanupDelegate = func(originalCleanup func()) func() {
+		// 1. Capture Stack Trace (happens during Registration)
+		token := asyncReporterTracker.register()
+
+		// 2. Return Wrapped Cleanup
+		return func() {
+			// Defer unregister to ensure we stop tracking even if the original cleanup panics.
+			defer asyncReporterTracker.unregister(token)
+
+			if originalCleanup != nil {
+				originalCleanup()
+			}
+		}
+	}
+}
+
+// CheckAsyncReporters verifies that no leaks exist and restores the default delegate.
+func CheckAsyncReporters(logger Logger) {
+	// Restore the delegate: Reset to the default pass-through behavior.
+	internal.AsyncReporterCleanupDelegate = func(cleanup func()) func() {
+		return cleanup
+	}
+
+	if asyncReporterTracker == nil {
+		return
+	}
+
+	leaks := asyncReporterTracker.leakedStackTraces()
+	if len(leaks) > 0 {
+		// Join all stack traces into one message
+		allTraces := ""
+		for _, trace := range leaks {
+			allTraces += trace
+		}
+		logger.Errorf("Found %d leaked async reporters:%s", len(leaks), allTraces)
+	}
+
+	// Clean up global state
+	asyncReporterTracker = nil
+}

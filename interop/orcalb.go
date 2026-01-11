@@ -29,6 +29,7 @@ import (
 	"google.golang.org/grpc/balancer/base"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/orca"
+	"google.golang.org/grpc/resolver"
 )
 
 func init() {
@@ -59,18 +60,33 @@ func (o *orcab) ExitIdle() {
 	}
 }
 
+// endpointsToAddrs flattens a list of endpoints to addresses to maintain
+// existing behavior.
+// TODO: https://github.com/grpc/grpc-go/issues/8809 - delegate subchannel
+// management to the pickfirst balancer using the endpoint sharding balancer.
+func endpointsToAddrs(eps []resolver.Endpoint) []resolver.Address {
+	addrs := make([]resolver.Address, 0, len(eps))
+	for _, ep := range eps {
+		if len(ep.Addresses) == 0 {
+			continue
+		}
+		addrs = append(addrs, ep.Addresses[0])
+	}
+	return addrs
+}
+
 func (o *orcab) UpdateClientConnState(s balancer.ClientConnState) error {
 	if o.sc != nil {
-		o.sc.UpdateAddresses(s.ResolverState.Addresses)
+		o.sc.UpdateAddresses(endpointsToAddrs(s.ResolverState.Endpoints))
 		return nil
 	}
 
-	if len(s.ResolverState.Addresses) == 0 {
-		o.ResolverError(fmt.Errorf("produced no addresses"))
-		return fmt.Errorf("resolver produced no addresses")
+	if len(s.ResolverState.Endpoints) == 0 {
+		o.ResolverError(fmt.Errorf("produced no endpoints"))
+		return fmt.Errorf("resolver produced no endpoints")
 	}
 	var err error
-	o.sc, err = o.cc.NewSubConn(s.ResolverState.Addresses, balancer.NewSubConnOptions{StateListener: o.updateSubConnState})
+	o.sc, err = o.cc.NewSubConn(endpointsToAddrs(s.ResolverState.Endpoints), balancer.NewSubConnOptions{StateListener: o.updateSubConnState})
 	if err != nil {
 		o.cc.UpdateState(balancer.State{ConnectivityState: connectivity.TransientFailure, Picker: base.NewErrPicker(fmt.Errorf("error creating subconn: %v", err))})
 		return nil

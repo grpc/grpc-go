@@ -247,9 +247,6 @@ func setupWithManagementServer(t *testing.T, lis net.Listener, onStreamRequest f
 	nodeID := uuid.New().String()
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 
-	if internal.NewXDSResolverWithConfigForTesting == nil {
-		t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
-	}
 	r, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
 	if err != nil {
 		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
@@ -654,7 +651,7 @@ func (s) TestClusterUpdate_SuccessWithLRS(t *testing.T) {
 		ServiceName: serviceName,
 		EnableLRS:   true,
 	})
-	lrsServerCfg, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{URI: fmt.Sprintf("passthrough:///%s", mgmtServer.Address)})
+	lrsServerCfg, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{URI: fmt.Sprintf("passthrough:///%s", mgmtServer.Address), ServerFeatures: []string{"trusted_xds_server"}})
 	if err != nil {
 		t.Fatalf("Failed to create LRS server config for testing: %v", err)
 	}
@@ -1233,8 +1230,13 @@ func (s) TestParseConfig(t *testing.T) {
 	}{
 		{
 			name:    "good-config",
-			input:   json.RawMessage(`{"Cluster": "cluster1"}`),
+			input:   json.RawMessage(`{"cluster": "cluster1"}`),
 			wantCfg: &lbConfig{ClusterName: "cluster1"},
+		},
+		{
+			name:    "good-config-with-is-dynamic",
+			input:   json.RawMessage(`{"cluster": "cluster1","isDynamic":true}`),
+			wantCfg: &lbConfig{ClusterName: "cluster1", IsDynamic: true},
 		},
 		{
 			name:    "unknown-fields-in-config",
@@ -1248,7 +1250,7 @@ func (s) TestParseConfig(t *testing.T) {
 		},
 		{
 			name:    "bad-config",
-			input:   json.RawMessage(`{"Cluster": 5}`),
+			input:   json.RawMessage(`{"cluster": 5}`),
 			wantErr: true,
 		},
 	}

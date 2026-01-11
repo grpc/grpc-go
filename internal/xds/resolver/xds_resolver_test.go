@@ -97,9 +97,6 @@ func (s) TestResolverBuilder_AuthorityNotDefinedInBootstrap(t *testing.T) {
 	contents := e2e.DefaultBootstrapContents(t, "node-id", "dummy-management-server")
 
 	// Create an xDS resolver with the above bootstrap configuration.
-	if internal.NewXDSResolverWithConfigForTesting == nil {
-		t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
-	}
 	xdsResolver, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(contents)
 	if err != nil {
 		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
@@ -312,10 +309,6 @@ func (s) TestNoMatchingVirtualHost(t *testing.T) {
 	target := resolver.Target{URL: *testutils.MustParseURL("xds:///" + defaultTestServiceName)}
 
 	// Create an xDS resolver with the provided bootstrap configuration.
-	if internal.NewXDSResolverWithConfigForTesting == nil {
-		t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
-	}
-
 	builder, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
 	if err != nil {
 		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
@@ -385,10 +378,6 @@ func (s) TestResolverBadServiceUpdate_NACKedWithoutCache(t *testing.T) {
 	target := resolver.Target{URL: *testutils.MustParseURL("xds:///" + defaultTestServiceName)}
 
 	// Create an xDS resolver with the provided bootstrap configuration.
-	if internal.NewXDSResolverWithConfigForTesting == nil {
-		t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
-	}
-
 	builder, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
 	if err != nil {
 		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
@@ -1450,7 +1439,7 @@ func (s) TestResolver_AutoHostRewrite(t *testing.T) {
 				t.Fatalf("cs.SelectConfig(): %v", err)
 			}
 
-			gotAutoHostRewrite := clusterimpl.AutoHostRewriteForTesting(res.Context)
+			gotAutoHostRewrite := clusterimpl.AutoHostRewriteEnabledForTesting(res.Context)
 			if gotAutoHostRewrite != tt.wantAutoHostRewrite {
 				t.Fatalf("Got autoHostRewrite: %v, want: %v", gotAutoHostRewrite, tt.wantAutoHostRewrite)
 			}

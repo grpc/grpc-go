@@ -19,9 +19,13 @@
 // Package stats contains experimental metrics/stats API's.
 package stats
 
-import "google.golang.org/grpc/stats"
+import (
+	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/stats"
+)
 
 // MetricsRecorder records on metrics derived from metric registry.
+// Implementors must embed UnimplementedMetricsRecorder.
 type MetricsRecorder interface {
 	// RecordInt64Count records the measurement alongside labels on the int
 	// count associated with the provided handle.
@@ -46,6 +50,11 @@ type MetricsRecorder interface {
 	// the metrics are no longer needed, which will remove the reporter. The
 	// returned method needs to be idempotent and concurrent safe.
 	RegisterAsyncReporter(reporter AsyncMetricReporter, descriptors ...AsyncMetric) func()
+
+	// EnforceMetricsRecorderEmbedding is included to force implementers to embed
+	// another implementation of this interface, allowing gRPC to add methods
+	// without breaking users.
+	internal.EnforceMetricsRecorderEmbedding
 }
 
 // AsyncMetricReporter is an interface for types that record metrics asynchronously
@@ -89,4 +98,34 @@ type Metric = string
 // stats.NewMetricSet.  NewMetrics will be deleted in a future release.
 func NewMetrics(metrics ...Metric) *Metrics {
 	return stats.NewMetricSet(metrics...)
+}
+
+// UnimplementedMetricsRecorder must be embedded to have forward compatible implementations.
+type UnimplementedMetricsRecorder struct {
+	internal.EnforceMetricsRecorderEmbedding
+}
+
+// RecordInt64Count provides a no-op implementation.
+func (UnimplementedMetricsRecorder) RecordInt64Count(*Int64CountHandle, int64, ...string) {}
+
+// RecordFloat64Count provides a no-op implementation.
+func (UnimplementedMetricsRecorder) RecordFloat64Count(*Float64CountHandle, float64, ...string) {}
+
+// RecordInt64Histo provides a no-op implementation.
+func (UnimplementedMetricsRecorder) RecordInt64Histo(*Int64HistoHandle, int64, ...string) {}
+
+// RecordFloat64Histo provides a no-op implementation.
+func (UnimplementedMetricsRecorder) RecordFloat64Histo(*Float64HistoHandle, float64, ...string) {}
+
+// RecordInt64Gauge provides a no-op implementation.
+func (UnimplementedMetricsRecorder) RecordInt64Gauge(*Int64GaugeHandle, int64, ...string) {}
+
+// RecordInt64UpDownCount provides a no-op implementation.
+func (UnimplementedMetricsRecorder) RecordInt64UpDownCount(*Int64UpDownCountHandle, int64, ...string) {
+}
+
+// RegisterAsyncReporter provides a no-op implementation.
+func (UnimplementedMetricsRecorder) RegisterAsyncReporter(AsyncMetricReporter, ...AsyncMetric) func() {
+	// No-op: Return an empty function to ensure caller doesn't panic on nil function call
+	return func() {}
 }
