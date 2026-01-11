@@ -1515,10 +1515,9 @@ func (s) TestEndpointAmbientError(t *testing.T) {
 func (s) TestClusterSubscription_Lifecycle(t *testing.T) {
 	nodeID, mgmtServer, xdsClient := setupManagementServerAndClient(t, false)
 
-	watcher := &testWatcher{
-		updateCh: make(chan *xdsresource.XDSConfig, 1),
-		errorCh:  make(chan error),
-	}
+	watcher := newTestWatcher()
+	defer watcher.close()
+
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
