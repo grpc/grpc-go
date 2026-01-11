@@ -1425,7 +1425,7 @@ func (s) TestAggregateClusterMaxDepth(t *testing.T) {
 	}
 }
 
-// Tests the scenrio where the Endpoint watcher receives an ambient error. Tests
+// Tests the scenario where the Endpoint watcher receives an ambient error. Tests
 // verifies that the error is stored in resolution note and the update remains
 // too.
 func (s) TestEndpointAmbientError(t *testing.T) {
