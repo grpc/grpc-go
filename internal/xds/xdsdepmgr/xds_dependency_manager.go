@@ -935,13 +935,12 @@ type clusterRef struct {
 	m        *DependencyManager
 }
 
-// ClusterSubscription increments the reference count for the cluster and
-// returns the ClusterRef. If the cluster is not already being tracked, it adds
-// it to the clusterSubscriptions map. Calling ClusterSubscription in a blocking
-// manner while handling an update will lead to a deadlock. It returns a
-// function to unsubscribe from the cluster i.e. decrease its refcount. This
-// returned function is idempotent, meaning it can be called multiple times
-// without any additional effect.
+// ClusterSubscription increments the reference count for the cluster. If the
+// cluster is not already being tracked, it is added to the clusterSubscriptions
+// map. It returns a function to unsubscribe from the cluster i.e. decrease its
+// refcount. This returned function is idempotent, meaning it can be called
+// multiple times without any additional effect. Calling ClusterSubscription in
+// a blocking manner while handling an update will lead to a deadlock.
 func (m *DependencyManager) ClusterSubscription(name string) func() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -949,7 +948,7 @@ func (m *DependencyManager) ClusterSubscription(name string) func() {
 	subs, ok := m.clusterSubscriptions[name]
 	if ok {
 		subs.refCount++
-		return subs.unsubscribe
+		return sync.OnceFunc(subs.unsubscribe)
 	}
 
 	m.clusterSubscriptions[name] = &clusterRef{
@@ -966,7 +965,7 @@ func (m *DependencyManager) ClusterSubscription(name string) func() {
 
 // unsubscribe decrements the reference count for the cluster. If the reference
 // count reaches zero, it removes the cluster from the clusterSubscriptions map
-// in the DependencyManager. Calling Unsubscribe in a blocking manner while
+// in the DependencyManager. Calling unsubscribe in a blocking manner while
 // handling an update will lead to a deadlock.
 func (c *clusterRef) unsubscribe() {
 	c.m.mu.Lock()

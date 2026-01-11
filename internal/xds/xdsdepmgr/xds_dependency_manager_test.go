@@ -1475,8 +1475,10 @@ func (s) TestEndpointAmbientError(t *testing.T) {
 	close(watcher.done)
 }
 
-// Tests the lifecycle of cluster subscriptions, including reference counting
-// and interaction with RouteConfig updates.
+// Tests the scanerio where a cluster is removed from route config but still has
+// subscriptions. Verifies that it is present in the XDSConfig update. Also
+// verifies that it is removed from the XDSConfig update after the references
+// for that cluster are no longer present.
 func (s) TestClusterSubscription_Lifecycle(t *testing.T) {
 	nodeID, mgmtServer, xdsClient := setupManagementServerAndClient(t, false)
 
