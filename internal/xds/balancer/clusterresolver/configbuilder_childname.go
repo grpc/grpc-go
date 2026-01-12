@@ -19,6 +19,7 @@ package clusterresolver
 
 import (
 	"fmt"
+	"sort"
 
 	"google.golang.org/grpc/internal/xds/clients"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
@@ -32,8 +33,11 @@ import (
 // return names returned by the previous call.
 type nameGenerator struct {
 	existingNames map[clients.Locality]string
-	prefix        uint64
-	nextID        uint64
+	// orderedBranchNames tracks the names assigned to each priority in the
+	// previous update. This is used to provide sticky names for priorities.
+	orderedBranchNames []string
+	prefix             uint64
+	nextID             uint64
 }
 
 func newNameGenerator(prefix uint64) *nameGenerator {
@@ -56,15 +60,33 @@ func (ng *nameGenerator) generate(priorities [][]xdsresource.Locality) []string 
 	var ret []string
 	usedNames := make(map[string]bool)
 	newNames := make(map[clients.Locality]string)
-	for _, priority := range priorities {
-		var nameFound string
+	for i, priority := range priorities {
+		var candidates []string
 		for _, locality := range priority {
 			if name, ok := ng.existingNames[locality.ID]; ok {
 				if !usedNames[name] {
-					nameFound = name
-					// Found a name to use. No need to process the remaining
-					// localities.
-					break
+					candidates = append(candidates, name)
+				}
+			}
+		}
+
+		var nameFound string
+		if len(candidates) > 0 {
+			// Sort candidates to ensure deterministic selection when no sticky
+			// match is found.
+			sort.Strings(candidates)
+			nameFound = candidates[0]
+
+			// Sticky Priority Naming:
+			// If the name used by this priority index in the previous update
+			// is among the candidates, prefer it.
+			if i < len(ng.orderedBranchNames) {
+				prevName := ng.orderedBranchNames[i]
+				for _, c := range candidates {
+					if c == prevName {
+						nameFound = prevName
+						break
+					}
 				}
 			}
 		}
@@ -84,5 +106,6 @@ func (ng *nameGenerator) generate(priorities [][]xdsresource.Locality) []string 
 		usedNames[nameFound] = true
 	}
 	ng.existingNames = newNames
+	ng.orderedBranchNames = ret
 	return ret
 }
