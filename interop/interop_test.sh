@@ -113,7 +113,7 @@ else
   pass "successfully built client"
 fi
 
-JSON_CONFIG='{ "loadBalancingConfig": [{ "test_backend_metrics_load_balancer": {} }]}'
+SERVICE_CONFIG='{ "loadBalancingConfig": [{ "test_backend_metrics_load_balancer": {} }]}'
 
 # Start server
 SERVER_LOG="$(mktemp)"
@@ -123,14 +123,14 @@ for case in ${CASES[@]}; do
     echo "$(tput setaf 4) $(date): testing: ${case} $(tput sgr 0)"
 
     if [[ "${case}" == "random_subsetting" ]]; then
-      JSON_CONFIG='{ "loadBalancingConfig": [{ "random_subsetting_experimental": { "subsetSize": 3, "childPolicy": [{"round_robin": {}}]} }]}'
-    fi 
+      SERVICE_CONFIG='{ "loadBalancingConfig": [{ "random_subsetting_experimental": { "subsetSize": 3, "childPolicy": [{ "round_robin": {} }] } }]}'
+    fi
     CLIENT_LOG="$(mktemp)"
     if ! GRPC_GO_LOG_SEVERITY_LEVEL=info withTimeout 20 go run ./interop/client \
          --use_tls \
          --server_host_override=foo.test.google.fr \
          --use_test_ca --test_case="${case}" \
-         --service_config_json="${JSON_CONFIG}" \
+         --service_config_json="${SERVICE_CONFIG}" \
        &> $CLIENT_LOG; then
         fail "FAIL: test case ${case}
         got server log:
