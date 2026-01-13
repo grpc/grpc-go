@@ -60,10 +60,7 @@ func (t TLSInfo) ValidateAuthority(authority string) error {
 	}
 
 	// Verify authority against the leaf certificate.
-	if err = t.State.PeerCertificates[0].VerifyHostname(host); err == nil {
-		return nil
-	}
-	return fmt.Errorf("credentials: invalid authority %q: %v", authority, err)
+	return t.State.PeerCertificates[0].VerifyHostname(host)
 }
 
 // cipherSuiteLookup returns the string version of a TLS cipher suite ID.
