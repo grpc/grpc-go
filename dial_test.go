@@ -218,11 +218,11 @@ func (s) TestDialContextFailFast(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	failErr := failFastError{}
-	dialer := func(string, time.Duration) (net.Conn, error) {
+	dialer := func(context.Context, string) (net.Conn, error) {
 		return nil, failErr
 	}
 
-	_, err := DialContext(ctx, "Non-Existent.Server:80", WithBlock(), WithTransportCredentials(insecure.NewCredentials()), WithDialer(dialer), FailOnNonTempDialError(true))
+	_, err := DialContext(ctx, "Non-Existent.Server:80", WithBlock(), WithTransportCredentials(insecure.NewCredentials()), WithContextDialer(dialer), FailOnNonTempDialError(true))
 	if terr, ok := err.(transport.ConnectionError); !ok || terr.Origin() != failErr {
 		t.Fatalf("DialContext() = _, %v, want _, %v", err, failErr)
 	}
