@@ -99,6 +99,7 @@ type StreamServerInfo struct {
 
 // StreamServerInterceptor provides a hook to intercept the execution of a
 // streaming RPC on the server.
+//
 // srv is the service implementation on which the RPC was invoked, and needs to
 // be passed to handler, and not used otherwise. ss is the server side of the
 // stream. info contains all the information of this RPC the interceptor can
