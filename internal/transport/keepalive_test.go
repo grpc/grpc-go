@@ -296,7 +296,8 @@ func (s) TestKeepaliveClientClosesUnresponsiveServer(t *testing.T) {
 			PermitWithoutStream: true,
 		},
 	}
-	client, cancel := setUpWithNoPingServer(t, copts, connCh)
+	server, client, cancel := setUpControllablePingServer(t, copts, connCh)
+	server.setPingAck(false)
 	defer cancel()
 	defer client.Close(fmt.Errorf("closed manually by test"))
 
@@ -326,7 +327,8 @@ func (s) TestKeepaliveClientOpenWithUnresponsiveServer(t *testing.T) {
 			Timeout: 10 * time.Millisecond,
 		},
 	}
-	client, cancel := setUpWithNoPingServer(t, copts, connCh)
+	server, client, cancel := setUpControllablePingServer(t, copts, connCh)
+	server.setPingAck(false)
 	defer cancel()
 	defer client.Close(fmt.Errorf("closed manually by test"))
 
@@ -357,9 +359,8 @@ func (s) TestKeepaliveClientClosesWithActiveStreams(t *testing.T) {
 			Timeout: 500 * time.Millisecond,
 		},
 	}
-	// TODO(i/6099): Setup a server which can ping and no-ping based on a flag to
-	// reduce the flakiness in this test.
-	client, cancel := setUpWithNoPingServer(t, copts, connCh)
+	server, client, cancel := setUpControllablePingServer(t, copts, connCh)
+
 	defer cancel()
 	defer client.Close(fmt.Errorf("closed manually by test"))
 
@@ -375,6 +376,17 @@ func (s) TestKeepaliveClientClosesWithActiveStreams(t *testing.T) {
 	if _, err := client.NewStream(ctx, &CallHdr{}); err != nil {
 		t.Fatalf("Stream creation failed: %v", err)
 	}
+
+	// Wait for a ping to be sent and acked.
+	select {
+	case <-server.pingReceived:
+	case <-time.After(time.Second):
+		t.Fatalf("Connection timed out waiting for first ping")
+	}
+
+	// Now that we have an active stream and verified the connection is stable,
+	// we want to simulate a "no-ping" server.
+	server.setPingAck(false)
 
 	if err := pollForStreamCreationError(client); err != nil {
 		t.Fatal(err)
