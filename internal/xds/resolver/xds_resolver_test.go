@@ -717,22 +717,7 @@ func (s) TestResolverRemovedWithRPCs(t *testing.T) {
 	mgmtServer.Update(ctx, resources)
 
 	// The resolver should send a service config with the cluster name.
-	select {
-	case <-ctx.Done():
-		t.Fatalf("Timeout waiting for an update from the resolver: %v", ctx.Err())
-	case state = <-stateCh:
-		if err := state.ServiceConfig.Err; err != nil {
-			t.Fatalf("Received error in service config: %v", state.ServiceConfig.Err)
-		}
-		wantSCParsed := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(wantServiceConfig(resources.Clusters[0].Name))
-		if !internal.EqualServiceConfigForTesting(state.ServiceConfig.Config, wantSCParsed.Config) {
-			t.Fatalf("Got service config:\n%s \nWant service config:\n%s", cmp.Diff(nil, state.ServiceConfig.Config), cmp.Diff(nil, wantSCParsed.Config))
-		}
-	}
-	cs = iresolver.GetConfigSelector(state)
-	if cs == nil {
-		t.Fatal("Received nil config selector in update from resolver")
-	}
+	cs = verifyUpdateFromResolver(ctx, t, stateCh, wantServiceConfig(resources.Clusters[0].Name))
 
 	// Verify that RPCs pass again.
 	res, err = cs.SelectConfig(iresolver.RPCInfo{Context: ctx, Method: "/service/method"})
