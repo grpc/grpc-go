@@ -148,9 +148,10 @@ func (l *lisWrapper) Accept() (net.Conn, error) {
 	return connWrapper{c, l.remote}, nil
 }
 
-func spoofDialer(addr net.Addr) func(target string, t time.Duration) (net.Conn, error) {
-	return func(t string, d time.Duration) (net.Conn, error) {
-		c, err := net.DialTimeout("tcp", t, d)
+func spoofDialer(addr net.Addr) func(ctx context.Context, target string) (net.Conn, error) {
+	return func(ctx context.Context, t string) (net.Conn, error) {
+		d := net.Dialer{}
+		c, err := d.DialContext(ctx, "tcp", t)
 		if err != nil {
 			return nil, err
 		}
@@ -182,7 +183,7 @@ func testLocalCredsE2EFail(t *testing.T, dopts []grpc.DialOption) error {
 	stubserver.StartTestService(t, ss)
 	defer ss.S.Stop()
 
-	cc, err := grpc.NewClient(lis.Addr().String(), append(dopts, grpc.WithDialer(spoofDialer(fakeServerAddr)))...)
+	cc, err := grpc.NewClient(lis.Addr().String(), append(dopts, grpc.WithContextDialer(spoofDialer(fakeServerAddr)))...)
 	if err != nil {
 		return fmt.Errorf("Failed to dial server: %v, %v", err, lis.Addr().String())
 	}
