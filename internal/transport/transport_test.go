@@ -3318,6 +3318,83 @@ func (s) TestServerSendsRSTAfterDeadlineToMisbehavedClient(t *testing.T) {
 	}
 }
 
+// Tests the scenario where the client sends a DATA frame without END_STREAM
+// flag. The test verifies that the server responds with a RST stream when it
+// tries to send trailers.
+func (s) TestServerSendsResetStreamOnEarlyTrailer(t *testing.T) {
+	// Create a server that expects the client to send a "ping" request and
+	// responds with a "pong" response.
+	server := setUpServerOnly(t, 0, &ServerConfig{BufferPool: mem.DefaultBufferPool()}, normal)
+	defer server.stop()
+
+	// Connect to the above server with a client that sends a DATA frame without
+	// END_STREAM. This simulates a scenario where the client has not
+	// half-closed when the server is done sending the response and trailers.
+	mconn, err := net.Dial("tcp", server.lis.Addr().String())
+	if err != nil {
+		t.Fatalf("Clent failed to dial:%v", err)
+	}
+	defer mconn.Close()
+	if n, err := mconn.Write(clientPreface); err != nil || n != len(clientPreface) {
+		t.Fatalf("mconn.Write(clientPreface) = %d, %v, want %d, <nil>", n, err, len(clientPreface))
+	}
+	framer := http2.NewFramer(mconn, mconn)
+	if err := framer.WriteSettings(); err != nil {
+		t.Fatalf("Error while writing settings: %v", err)
+	}
+
+	seenResetFrame := make(chan struct{})
+	go func() { // Launch a reader for this client.
+		for {
+			frame, err := framer.ReadFrame()
+			if err != nil {
+				return
+			}
+			switch frame := frame.(type) {
+			case *http2.RSTStreamFrame:
+				const wantStreamID = 1
+				const wantErrCode = http2.ErrCodeNo
+				if frame.Header().StreamID != wantStreamID || http2.ErrCode(frame.ErrCode) != wantErrCode {
+					t.Errorf("RST stream received with streamID: %d and code: %v, want streamID: %d and code: %v", frame.Header().StreamID, http2.ErrCode(frame.ErrCode), wantStreamID, wantErrCode)
+				}
+				close(seenResetFrame)
+				return
+			default:
+				// Do nothing.
+			}
+		}
+	}()
+
+	// Create a stream, sending headers first, followed by a DATA frame without
+	// END_STREAM.
+	var buf bytes.Buffer
+	henc := hpack.NewEncoder(&buf)
+	if err := henc.WriteField(hpack.HeaderField{Name: ":method", Value: "POST"}); err != nil {
+		t.Fatalf("Error while encoding header: %v", err)
+	}
+	if err := henc.WriteField(hpack.HeaderField{Name: ":path", Value: "foo"}); err != nil {
+		t.Fatalf("Error while encoding header: %v", err)
+	}
+	if err := henc.WriteField(hpack.HeaderField{Name: ":authority", Value: "localhost"}); err != nil {
+		t.Fatalf("Error while encoding header: %v", err)
+	}
+	if err := henc.WriteField(hpack.HeaderField{Name: "content-type", Value: "application/grpc"}); err != nil {
+		t.Fatalf("Error while encoding header: %v", err)
+	}
+	if err := framer.WriteHeaders(http2.HeadersFrameParam{StreamID: 1, BlockFragment: buf.Bytes(), EndHeaders: true}); err != nil {
+		t.Fatalf("Error while writing headers: %v", err)
+	}
+	if err := framer.WriteData(1, false, expectedRequest); err != nil {
+		t.Fatalf("Error while writing data: %v", err)
+	}
+
+	select {
+	case <-time.After(defaultTestTimeout):
+		t.Fatalf("Test timed out when waiting for a RST frame from server")
+	case <-seenResetFrame:
+	}
+}
+
 // TestClientTransport_Handle1xxHeaders validates that 1xx HTTP status headers
 // are ignored and treated as a protocol error if END_STREAM is set.
 func (s) TestClientTransport_Handle1xxHeaders(t *testing.T) {
