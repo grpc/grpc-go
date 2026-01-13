@@ -47,9 +47,8 @@ type Pool struct {
 	// Note that mu should ideally only have to guard clients. But here, we need
 	// it to guard config as well since SetFallbackBootstrapConfig writes to
 	// config.
-	mu             sync.Mutex
-	clients        map[string]*clientImpl
-	fallbackConfig *bootstrap.Config // TODO(i/8661): remove fallbackConfig.
+	mu      sync.Mutex
+	clients map[string]*clientImpl
 	// getConfiguration is a sync.OnceValues that attempts to read the bootstrap
 	// configuration from environment variables once.
 	getConfiguration func() (*bootstrap.Config, error)
@@ -172,16 +171,6 @@ func (p *Pool) GetClientForTesting(name string) (XDSClient, func(), error) {
 	return c, sync.OnceFunc(func() { p.clientRefCountedClose(name) }), nil
 }
 
-// SetFallbackBootstrapConfig is used to specify a bootstrap configuration
-// that will be used as a fallback when the bootstrap environment variables
-// are not defined.
-// TODO(i/8661): remove SetFallbackBootstrapConfig function.
-func (p *Pool) SetFallbackBootstrapConfig(config *bootstrap.Config) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	p.fallbackConfig = config
-}
-
 // DumpResources returns the status and contents of all xDS resources.
 func (p *Pool) DumpResources() *v3statuspb.ClientStatusResponse {
 	p.mu.Lock()
@@ -215,7 +204,7 @@ func (p *Pool) BootstrapConfigForTesting() *bootstrap.Config {
 	if cfg != nil {
 		return cfg
 	}
-	return p.fallbackConfig
+	return nil
 }
 
 // UnsetBootstrapConfigForTesting unsets the bootstrap configuration used by
@@ -225,7 +214,6 @@ func (p *Pool) BootstrapConfigForTesting() *bootstrap.Config {
 func (p *Pool) UnsetBootstrapConfigForTesting() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	p.fallbackConfig = nil
 	p.getConfiguration = sync.OnceValues(bootstrap.GetConfiguration)
 }
 
@@ -284,16 +272,10 @@ func (p *Pool) newRefCounted(name string, metricsRecorder estats.MetricsRecorder
 		if err != nil {
 			return nil, nil, fmt.Errorf("xds: failed to read xDS bootstrap config from env vars:  %v", err)
 		}
-		if config == nil {
-			// If the environment variables are not set, then fallback bootstrap
-			// configuration should be set before attempting to create an xDS client,
-			// else xDS client creation will fail.
-			config = p.fallbackConfig
-		}
 	}
 
 	if config == nil {
-		return nil, nil, fmt.Errorf("failed to read xDS bootstrap config from env vars: bootstrap environment variables (%q or %q) not defined and fallback config not set", envconfig.XDSBootstrapFileNameEnv, envconfig.XDSBootstrapFileContentEnv)
+		return nil, nil, fmt.Errorf("failed to read xDS bootstrap config from env vars: bootstrap environment variables (%q or %q) not defined", envconfig.XDSBootstrapFileNameEnv, envconfig.XDSBootstrapFileContentEnv)
 	}
 
 	c, err := newClientImpl(config, metricsRecorder, name, watchExpiryTimeout)
