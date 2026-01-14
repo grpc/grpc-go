@@ -126,8 +126,8 @@ func (w *customTestWatcher) AmbientError(err error, onDone func()) {
 	onDone()
 }
 
-// TestCustomResourceWatch verifies that the xDS client can watch a custom resource type
-// that is injected via the config.
+// Tests that the xDS client can watch a custom resource type that is injected
+// via the config.
 func (s) TestCustomResourceWatch(t *testing.T) {
 	const authority = "my-authority"
 	resourceName := "xdstp://" + authority + "/" + customTestResourceType.TypeURL + "/my-resource"
