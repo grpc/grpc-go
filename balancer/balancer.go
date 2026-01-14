@@ -25,13 +25,11 @@ import (
 	"encoding/json"
 	"errors"
 	"net"
-	"strings"
 
 	"google.golang.org/grpc/channelz"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	estats "google.golang.org/grpc/experimental/stats"
-	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
@@ -41,13 +39,11 @@ import (
 var (
 	// m is a map from name to balancer builder.
 	m = make(map[string]Builder)
-
-	logger = grpclog.Component("balancer")
 )
 
 // Register registers the balancer builder to the balancer map. b.Name
-// (lowercased) will be used as the name registered with this builder.  If the
-// Builder implements ConfigParser, ParseConfig will be called when new service
+// will be used as the name registered with this builder. If the Builder
+// implements ConfigParser, ParseConfig will be called when new service
 // configs are received by the resolver, and the result will be provided to the
 // Balancer in UpdateClientConnState.
 //
@@ -55,14 +51,7 @@ var (
 // an init() function), and is not thread-safe. If multiple Balancers are
 // registered with the same name, the one registered last will take effect.
 func Register(b Builder) {
-	name := strings.ToLower(b.Name())
-	if name != b.Name() {
-		// TODO: Skip the use of strings.ToLower() to index the map after v1.59
-		// is released to switch to case sensitive balancer registry. Also,
-		// remove this warning and update the docstrings for Register and Get.
-		logger.Warningf("Balancer registered with name %q. grpc-go will be switching to case sensitive balancer registries soon", b.Name())
-	}
-	m[name] = b
+	m[b.Name()] = b
 }
 
 // unregisterForTesting deletes the balancer with the given name from the
@@ -78,16 +67,10 @@ func init() {
 }
 
 // Get returns the resolver builder registered with the given name.
-// Note that the compare is done in a case-insensitive fashion.
+// Note that the compare is done in a case-sensitive fashion.
 // If no builder is register with the name, nil will be returned.
 func Get(name string) Builder {
-	if strings.ToLower(name) != name {
-		// TODO: Skip the use of strings.ToLower() to index the map after v1.59
-		// is released to switch to case sensitive balancer registry. Also,
-		// remove this warning and update the docstrings for Register and Get.
-		logger.Warningf("Balancer retrieved for name %q. grpc-go will be switching to case sensitive balancer registries soon", name)
-	}
-	if b, ok := m[strings.ToLower(name)]; ok {
+	if b, ok := m[name]; ok {
 		return b
 	}
 	return nil
