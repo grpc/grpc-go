@@ -336,9 +336,6 @@ func (b *wrrBalancer) NewSubConn(addrs []resolver.Address, opts balancer.NewSubC
 	if err != nil {
 		return nil, err
 	}
-	if b.logger.V(2) {
-		b.logger.Infof("Created SubConn %v for address %+v", sc, addr)
-	}
 	b.scToWeight[sc] = ewi
 	return sc, nil
 }
@@ -465,7 +462,6 @@ func (p *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 	pickedPicker := p.weightedPickers[sched.nextIndex()]
 	pr, err := pickedPicker.picker.Pick(info)
 	if err != nil {
-		logger.Errorf("Ready picker returned error: %v", err)
 		return balancer.PickResult{}, err
 	}
 	if !p.cfg.EnableOOBLoadReport {
