@@ -18,8 +18,9 @@
 package xdsresource
 
 import (
-	"bytes"
+	"google.golang.org/protobuf/proto"
 
+	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	xdsclient "google.golang.org/grpc/internal/xds/clients/xdsclient"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource/version"
@@ -68,7 +69,18 @@ func (r *RouteConfigResourceData) Equal(other xdsclient.ResourceData) bool {
 	if other == nil {
 		return false
 	}
-	return bytes.Equal(r.Bytes(), other.Bytes())
+	o, ok := other.(*RouteConfigResourceData)
+	if !ok {
+		return false
+	}
+	var p1, p2 v3routepb.RouteConfiguration
+	if err := proto.Unmarshal(r.Resource.Raw.GetValue(), &p1); err != nil {
+		return false
+	}
+	if err := proto.Unmarshal(o.Resource.Raw.GetValue(), &p2); err != nil {
+		return false
+	}
+	return proto.Equal(&p1, &p2)
 }
 
 // Bytes returns the protobuf serialized bytes of the route config resource proto.
