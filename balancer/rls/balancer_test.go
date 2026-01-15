@@ -1020,7 +1020,7 @@ func (s) TestControlChannelConnectivityStateMonitoring(t *testing.T) {
 	select {
 	case <-resetBackoffDone:
 		t.Fatal("Backoff reset was triggered for initial READY state, want no reset")
-	default:
+	case <-time.After(10 * time.Millisecond):
 	}
 
 	// Stop the RLS server.
@@ -1037,17 +1037,17 @@ func (s) TestControlChannelConnectivityStateMonitoring(t *testing.T) {
 	// Wait for the control channel to move to TRANSIENT_FAILURE. When the server
 	// is stopped, we expect the control channel to go through Connecting and
 	// eventually reach TransientFailure.
+transientFailureLoop:
 	for {
 		select {
 		case gotState := <-wrappedSubscriber.connStateCh:
 			if gotState == connectivity.TransientFailure {
-				goto transientFailureReached
+				break transientFailureLoop
 			}
 		case <-ctx.Done():
 			t.Fatal("Timeout waiting for RLS control channel to become TRANSIENT_FAILURE")
 		}
 	}
-transientFailureReached:
 
 	// Restart the RLS server.
 	lis.Restart()
@@ -1067,17 +1067,17 @@ transientFailureReached:
 	makeTestRPCAndExpectItToReachBackend(ctxOutgoing, t, cc, backendCh)
 
 	// Wait for the control channel to move back to READY.
+readyAfterTransientFailureLoop:
 	for {
 		select {
 		case gotState := <-wrappedSubscriber.connStateCh:
 			if gotState == connectivity.Ready {
-				goto readyAfterTransientFailure
+				break readyAfterTransientFailureLoop
 			}
 		case <-ctx.Done():
 			t.Fatal("Timeout waiting for RLS control channel to become READY after TRANSIENT_FAILURE")
 		}
 	}
-readyAfterTransientFailure:
 
 	// Verify that backoff was reset when transitioning from TRANSIENT_FAILURE to READY.
 	select {
