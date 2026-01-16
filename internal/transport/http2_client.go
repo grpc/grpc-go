@@ -372,9 +372,7 @@ func NewHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 	// Add peer information to the http2client context.
 	t.ctx = peer.NewContext(t.ctx, t.Peer())
 
-	if md, ok := addr.Metadata.(*metadata.MD); ok {
-		t.md = *md
-	} else if md := imetadata.Get(addr); md != nil {
+	if md := imetadata.Get(addr); md != nil {
 		t.md = md
 	}
 	t.controlBuf = newControlBuffer(t.ctxDone)

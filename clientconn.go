@@ -1003,8 +1003,7 @@ func (ac *addrConn) connect() {
 // that are meaningful to the subConn.
 func equalAddressIgnoringBalAttributes(a, b *resolver.Address) bool {
 	return a.Addr == b.Addr && a.ServerName == b.ServerName &&
-		a.Attributes.Equal(b.Attributes) &&
-		a.Metadata == b.Metadata
+		a.Attributes.Equal(b.Attributes)
 }
 
 func equalAddressesIgnoringBalAttributes(a, b []resolver.Address) bool {

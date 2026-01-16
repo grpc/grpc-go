@@ -46,7 +46,6 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/pickfirst"
 	"google.golang.org/grpc/internal/testutils/stats"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/serviceconfig"
@@ -2539,11 +2538,6 @@ func (s) TestPickFirstLeaf_AddressUpdateWithMetadata(t *testing.T) {
 	// Add a metadata to the addresses before pushing them to the pick_first LB
 	// policy through the manual resolver.
 	addrs := backends.resolverAddrs()
-	for i := range addrs {
-		addrs[i].Metadata = &metadata.MD{
-			"test-metadata-1": []string{fmt.Sprintf("%d", i)},
-		}
-	}
 	r.UpdateState(resolver.State{Addresses: addrs})
 
 	// Ensure that RPCs succeed to the expected backend.
@@ -2557,14 +2551,6 @@ func (s) TestPickFirstLeaf_AddressUpdateWithMetadata(t *testing.T) {
 	// is not re-established.
 	holds := backends.holds(dialer)
 
-	// Add metadata to the addresses before pushing them to the pick_first LB
-	// policy through the manual resolver. Leave the order of the addresses
-	// unchanged.
-	for i := range addrs {
-		addrs[i].Metadata = &metadata.MD{
-			"test-metadata-2": []string{fmt.Sprintf("%d", i)},
-		}
-	}
 	r.UpdateState(resolver.State{Addresses: addrs})
 
 	// Ensure that no new connection is established.
@@ -2580,13 +2566,6 @@ func (s) TestPickFirstLeaf_AddressUpdateWithMetadata(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Add metadata to the addresses before pushing them to the pick_first LB
-	// policy through the manual resolver. Reverse of the order of addresses.
-	for i := range addrs {
-		addrs[i].Metadata = &metadata.MD{
-			"test-metadata-3": []string{fmt.Sprintf("%d", i)},
-		}
-	}
 	addrs[0], addrs[1] = addrs[1], addrs[0]
 	r.UpdateState(resolver.State{Addresses: addrs})
 

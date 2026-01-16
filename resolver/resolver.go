@@ -113,12 +113,6 @@ type Address struct {
 	// Deprecated: when an Address is inside an Endpoint, this field should not
 	// be used, and it will eventually be removed entirely.
 	BalancerAttributes *attributes.Attributes
-
-	// Metadata is the information associated with Addr, which may be used
-	// to make load balancing decision.
-	//
-	// Deprecated: use Attributes instead.
-	Metadata any
 }
 
 // Equal returns whether a and o are identical.  Metadata is compared directly,
@@ -130,8 +124,7 @@ type Address struct {
 func (a Address) Equal(o Address) bool {
 	return a.Addr == o.Addr && a.ServerName == o.ServerName &&
 		a.Attributes.Equal(o.Attributes) &&
-		a.BalancerAttributes.Equal(o.BalancerAttributes) &&
-		a.Metadata == o.Metadata
+		a.BalancerAttributes.Equal(o.BalancerAttributes)
 }
 
 // String returns JSON formatted string representation of the address.
