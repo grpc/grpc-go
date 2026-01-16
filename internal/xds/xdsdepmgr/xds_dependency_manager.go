@@ -758,16 +758,7 @@ func (m *DependencyManager) onDNSUpdate(resourceName string, update *resolver.St
 	if m.logger.V(2) {
 		m.logger.Infof("Received update from DNS resolver for resource %q: %+v", resourceName, update)
 	}
-	endpoints := update.Endpoints
-	if len(endpoints) == 0 {
-		endpoints = make([]resolver.Endpoint, len(update.Addresses))
-		for i, a := range update.Addresses {
-			endpoints[i] = resolver.Endpoint{Addresses: []resolver.Address{a}}
-			endpoints[i].Attributes = a.BalancerAttributes
-		}
-	}
-
-	m.dnsResolvers[resourceName].setLastUpdate(&xdsresource.DNSUpdate{Endpoints: endpoints})
+	m.dnsResolvers[resourceName].setLastUpdate(&xdsresource.DNSUpdate{Endpoints: update.Endpoints})
 	m.maybeSendUpdateLocked()
 }
 
