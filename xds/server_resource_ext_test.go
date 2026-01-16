@@ -220,6 +220,7 @@ func (s) TestServer_RedundantUpdateSuppression(t *testing.T) {
 	// Start a goroutine to make sure that we do not see any connectivity state
 	// changes on the client connection. If redundant updates are not
 	// suppressed, server will recycle client connections.
+	testutils.AwaitState(ctx, t, cc, connectivity.Ready)
 	errCh := make(chan error, 1)
 	go func() {
 		prev := connectivity.Ready // We know we are READY since we just did an RPC.

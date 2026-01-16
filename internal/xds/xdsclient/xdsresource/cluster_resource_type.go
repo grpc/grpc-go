@@ -18,13 +18,12 @@
 package xdsresource
 
 import (
+	"bytes"
 	"fmt"
 
-	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	xdsclient "google.golang.org/grpc/internal/xds/clients/xdsclient"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource/version"
-	"google.golang.org/protobuf/proto"
 )
 
 const (
@@ -83,18 +82,7 @@ func (c *ClusterResourceData) Equal(other xdsclient.ResourceData) bool {
 	if other == nil {
 		return false
 	}
-	o, ok := other.(*ClusterResourceData)
-	if !ok {
-		return false
-	}
-	var p1, p2 v3clusterpb.Cluster
-	if err := proto.Unmarshal(c.Resource.Raw.GetValue(), &p1); err != nil {
-		return false
-	}
-	if err := proto.Unmarshal(o.Resource.Raw.GetValue(), &p2); err != nil {
-		return false
-	}
-	return proto.Equal(&p1, &p2)
+	return bytes.Equal(c.Bytes(), other.Bytes())
 }
 
 // Bytes returns the protobuf serialized bytes of the cluster resource proto.

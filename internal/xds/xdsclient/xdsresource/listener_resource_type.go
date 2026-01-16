@@ -18,11 +18,9 @@
 package xdsresource
 
 import (
+	"bytes"
 	"fmt"
 
-	"google.golang.org/protobuf/proto"
-
-	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/internal/xds/clients/xdsclient"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource/version"
@@ -105,18 +103,7 @@ func (l *ListenerResourceData) Equal(other xdsclient.ResourceData) bool {
 	if other == nil {
 		return false
 	}
-	o, ok := other.(*ListenerResourceData)
-	if !ok {
-		return false
-	}
-	var p1, p2 v3listenerpb.Listener
-	if err := proto.Unmarshal(l.Resource.Raw.GetValue(), &p1); err != nil {
-		return false
-	}
-	if err := proto.Unmarshal(o.Resource.Raw.GetValue(), &p2); err != nil {
-		return false
-	}
-	return proto.Equal(&p1, &p2)
+	return bytes.Equal(l.Bytes(), other.Bytes())
 }
 
 // Bytes returns the protobuf serialized bytes of the listener resource proto.
