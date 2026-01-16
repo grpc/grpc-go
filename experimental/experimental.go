@@ -34,9 +34,11 @@ import (
 // SetDefaultBufferPool sets the default buffer pool used by all grpc clients
 // and servers that do not have a buffer pool configured via WithBufferPool or
 // BufferPool. It also changes the buffer pool used by the proto codec, which
-// can't be changed otherwise. The provided buffer pool must be non-nil. This
-// must be called before creating any grpc clients or servers. The default value
-// is mem.DefaultBufferPool.
+// can't be changed otherwise. The provided buffer pool must be non-nil. The
+// default value is mem.DefaultBufferPool.
+//
+// NOTE: this function must only be called during initialization time (i.e. in
+// an init() function), and is not thread-safe. The last caller wins.
 func SetDefaultBufferPool(bufferPool mem.BufferPool) {
 	internal.SetDefaultBufferPool.(func(mem.BufferPool))(bufferPool)
 }
