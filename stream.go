@@ -52,7 +52,8 @@ import (
 var metadataFromOutgoingContextRaw = internal.FromOutgoingContextRaw.(func(context.Context) (metadata.MD, [][]string, bool))
 
 // StreamHandler defines the handler called by gRPC server to complete the
-// execution of a streaming RPC.
+// execution of a streaming RPC. srv is the service implementation on which the
+// RPC was invoked.
 //
 // If a StreamHandler returns an error, it should either be produced by the
 // status package, or be one of the context errors. Otherwise, gRPC will use
@@ -1349,6 +1350,7 @@ func newNonRetryClientStream(ctx context.Context, desc *StreamDesc, method strin
 		codec:            c.codec,
 		sendCompressorV0: cp,
 		sendCompressorV1: comp,
+		decompressorV0:   ac.cc.dopts.dc,
 		transport:        t,
 	}
 
