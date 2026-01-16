@@ -195,4 +195,3 @@ func TestGroupE2E(t *testing.T) {
 		t.Errorf("diff: %v", cmp.Diff(gotHierarchy, hierarchy))
 	}
 }
-
