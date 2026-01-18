@@ -34,7 +34,6 @@ import (
 	"google.golang.org/grpc/internal/xds/balancer/wrrlocality"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 	"google.golang.org/grpc/resolver"
-	"google.golang.org/grpc/resolver/ringhash"
 )
 
 const million = 1000000
@@ -286,7 +285,6 @@ func priorityLocalitiesToClusterImpl(localities []xdsresource.Locality, priority
 				ew = endpoint.Weight
 			}
 			resolverEndpoint = weight.Set(resolverEndpoint, weight.EndpointInfo{Weight: lw * ew})
-			resolverEndpoint = ringhash.SetHashKey(resolverEndpoint, endpoint.HashKey)
 			retEndpoints = append(retEndpoints, resolverEndpoint)
 		}
 	}
