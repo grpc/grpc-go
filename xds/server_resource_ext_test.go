@@ -223,7 +223,7 @@ func (s) TestServer_RedundantUpdateSuppression(t *testing.T) {
 	testutils.AwaitState(ctx, t, cc, connectivity.Ready)
 	errCh := make(chan error, 1)
 	go func() {
-		prev := connectivity.Ready // We know we are READY since we just did an RPC.
+		prev := connectivity.Ready
 		for {
 			curr := cc.GetState()
 			if !(curr == connectivity.Ready || curr == connectivity.Idle) {
