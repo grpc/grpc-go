@@ -346,17 +346,15 @@ func (s) TestKeepaliveClientOpenWithUnresponsiveServer(t *testing.T) {
 	}
 }
 
-// TestKeepaliveClientClosesWithActiveStreams creates a server which does not
-// respond to keepalive pings, and makes sure that the client closes the
-// transport even when there is an active stream.
+// TestKeepaliveClientClosesWithActiveStreams test the scenerio in which we have a responsive server and server stops responding to keepalive pings, results in client closes the transport.
 func (s) TestKeepaliveClientClosesWithActiveStreams(t *testing.T) {
 	connCh := make(chan net.Conn, 1)
 	copts := ConnectOptions{
 		BufferPool:     mem.DefaultBufferPool(),
 		ChannelzParent: channelzSubChannel(t),
 		KeepaliveParams: keepalive.ClientParameters{
-			Time:    500 * time.Millisecond,
-			Timeout: 500 * time.Millisecond,
+			Time:    10 * time.Millisecond,
+			Timeout: 100 * time.Millisecond,
 		},
 	}
 	server, client, cancel := setUpControllablePingServer(t, copts, connCh)

@@ -541,7 +541,6 @@ func setUpWithOptions(t *testing.T, port int, sc *ServerConfig, ht hType, copts 
 type controllablePingServer struct {
 	mu             sync.Mutex
 	pingAck        bool
-	loopDone       chan struct{}
 	pingReceived   chan struct{}
 	pingRegistered sync.Once
 }
@@ -553,7 +552,6 @@ func (s *controllablePingServer) setPingAck(ack bool) {
 }
 
 func (s *controllablePingServer) serve(t *testing.T, conn net.Conn) {
-	defer close(s.loopDone)
 	// Read frame to consume the client preface.
 	if _, err := io.ReadFull(conn, make([]byte, len(clientPreface))); err != nil {
 		t.Errorf("Error while reading client preface: %v", err)
@@ -588,7 +586,6 @@ func setUpControllablePingServer(t *testing.T, copts ConnectOptions, connCh chan
 	}
 	s := &controllablePingServer{
 		pingAck:      true,
-		loopDone:     make(chan struct{}),
 		pingReceived: make(chan struct{}),
 	}
 	// Launch a server.
