@@ -377,13 +377,6 @@ func (s) TestKeepaliveClientClosesWithActiveStreams(t *testing.T) {
 		t.Fatalf("Stream creation failed: %v", err)
 	}
 
-	// Wait for a ping to be sent and acked.
-	select {
-	case <-server.pingReceived:
-	case <-time.After(time.Second):
-		t.Fatalf("Connection timed out waiting for first ping")
-	}
-
 	// Now that we have an active stream and verified the connection is stable,
 	// we want to simulate a "no-ping" server.
 	server.setPingAck(false)

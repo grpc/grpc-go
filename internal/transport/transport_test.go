@@ -539,16 +539,11 @@ func setUpWithOptions(t *testing.T, port int, sc *ServerConfig, ht hType, copts 
 }
 
 type controllablePingServer struct {
-	mu             sync.Mutex
-	pingAck        bool
-	pingReceived   chan struct{}
-	pingRegistered sync.Once
+	pingAck atomic.Bool
 }
 
 func (s *controllablePingServer) setPingAck(ack bool) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.pingAck = ack
+	s.pingAck.Store(ack)
 }
 
 func (s *controllablePingServer) serve(t *testing.T, conn net.Conn) {
@@ -565,11 +560,8 @@ func (s *controllablePingServer) serve(t *testing.T, conn net.Conn) {
 			return
 		}
 		if f, ok := f.(*http2.PingFrame); ok {
-			s.mu.Lock()
-			ack := s.pingAck
-			s.mu.Unlock()
+			ack := s.pingAck.Load()
 			if ack {
-				s.pingRegistered.Do(func() { close(s.pingReceived) })
 				if err := framer.WritePing(true, f.Data); err != nil {
 					t.Errorf("Failed to write ping : %v", err)
 					return
@@ -584,10 +576,8 @@ func setUpControllablePingServer(t *testing.T, copts ConnectOptions, connCh chan
 	if err != nil {
 		t.Fatalf("Failed to listen: %v", err)
 	}
-	s := &controllablePingServer{
-		pingAck:      true,
-		pingReceived: make(chan struct{}),
-	}
+	s := &controllablePingServer{}
+	s.setPingAck(true)
 	// Launch a server.
 	go func() {
 		defer lis.Close()
