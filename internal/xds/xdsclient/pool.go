@@ -44,13 +44,13 @@ var (
 // Pool represents a pool of xDS clients that share the same bootstrap
 // configuration.
 type Pool struct {
-	// Note that mu should ideally only have to guard clients. But here, we need
-	// it to guard config as well since SetFallbackBootstrapConfig writes to
-	// config.
+	// clients will be protected by mu.
 	mu      sync.Mutex
 	clients map[string]*clientImpl
 	// getConfiguration is a sync.OnceValues that attempts to read the bootstrap
-	// configuration from environment variables once.
+	// configuration from environment variables once if bootstrap.GetConfiguration
+	// is set in the case of DefaultPool. When the Pool is created with a
+	// specific configuration, it returns that configuration directly.
 	getConfiguration func() (*bootstrap.Config, error)
 }
 
@@ -81,11 +81,10 @@ type OptionsForTesting struct {
 
 // NewPool creates a new xDS client pool with the given bootstrap config.
 //
-// If a nil bootstrap config is passed and SetFallbackBootstrapConfig is not
-// called before a call to NewClient, the latter will fail. i.e. if there is an
-// attempt to create an xDS client from the pool without specifying bootstrap
-// configuration (either at pool creation time or by setting the fallback
-// bootstrap configuration), xDS client creation will fail.
+// If a nil bootstrap config is passed, the caller is expected to pass the
+// config when creating the xDS client by using NewClientWithConfig instead of
+// NewClient. If they specify a nil config and use NewClient, client creation
+// will fail.
 func NewPool(config *bootstrap.Config) *Pool {
 	return &Pool{
 		clients: make(map[string]*clientImpl),
@@ -95,9 +94,11 @@ func NewPool(config *bootstrap.Config) *Pool {
 	}
 }
 
-// NewClientWithConfig returns an xDS client with the given name from the pool. If the
-// client doesn't already exist, it creates a new xDS client and adds it to the
-// pool.
+// NewClientWithConfig returns an xDS client with the given name from the pool.
+// If the client doesn't already exist, it creates a new xDS client using the
+// provided config and adds it to the pool. The provided config takes precedence
+// over any config passed during pool creation. This should be used when a
+// non-default config is required.
 //
 // The second return value represents a close function which the caller is
 // expected to invoke once they are done using the client.  It is safe for the
@@ -201,10 +202,7 @@ func (p *Pool) BootstrapConfigForTesting() *bootstrap.Config {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	cfg, _ := p.getConfiguration()
-	if cfg != nil {
-		return cfg
-	}
-	return nil
+	return cfg
 }
 
 // UnsetBootstrapConfigForTesting unsets the bootstrap configuration used by
