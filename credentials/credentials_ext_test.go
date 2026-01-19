@@ -84,7 +84,7 @@ func loadTLSCreds(t *testing.T) (grpc.ServerOption, grpc.DialOption) {
 // different transport credentials. The test verifies that the specified
 // authority is correctly propagated to the serve when a correct authority is
 // used.
-func TestCorrectAuthorityWithCreds(t *testing.T) {
+func (s) TestCorrectAuthorityWithCreds(t *testing.T) {
 	const authority = "auth.test.example.com"
 	const authorityWithPort = "auth.test.example.com:8010"
 
@@ -376,7 +376,11 @@ func (s) TestCorrectAuthorityWithCustomCreds(t *testing.T) {
 // overwrite per-RPC authority is validated against the leaf certificate only
 // and not against the intermediate certificates.
 func (s) TestAuthorityOverrideWithChainedCerts(t *testing.T) {
-	rootCert, certChain, leafKey, err := generateThreeLevelCertChain()
+	rootCert, certChain, leafKey, err := generateCertChain([]CertConfig{
+		{CommonName: "root.example.com", IsCA: true},
+		{CommonName: "intermediate.example.com", DNSNames: []string{"intermediate.example.com"}, IsCA: true},
+		{CommonName: "*.example.leaf.com", DNSNames: []string{"*.example.leaf.com"}, IsCA: false},
+	})
 	if err != nil {
 		t.Fatalf("Failed to generate cert chain: %v", err)
 	}
@@ -453,78 +457,77 @@ func (s) TestAuthorityOverrideWithChainedCerts(t *testing.T) {
 	}
 }
 
-// generateThreeLevelCertChain generates a three-level certificate chain:
-// Root -> Intermediate -> Leaf. It returns the root certificate, a slice
-// containing the leaf and intermediate certificates (in that order), the
-// private key for the leaf certificate, and error if any.
-func generateThreeLevelCertChain() (root *x509.Certificate, chain []*x509.Certificate, leafKey *rsa.PrivateKey, err error) {
+// CertConfig defines the configuration for generating a certificate.
+type CertConfig struct {
+	CommonName string
+	DNSNames   []string
+	IsCA       bool
+}
+
+// generateCertChain creates a root CA and a chain of certificates based on the
+// provided configs. The first config is the Root CA, subsequent configs are
+// intermediates, and the last is the leaf. Returns the root certificate, the
+// chain of certificates (excluding the root) in the order [Leaf,
+// Intermediate1,...], the leaf private key, and error.
+func generateCertChain(configs []CertConfig) (root *x509.Certificate, chain []*x509.Certificate, leafKey *rsa.PrivateKey, err error) {
 	now := time.Now()
-	// Function to create the certificate based on the template provided, the
-	// parent certificate and parent key. If the parent is nil, it creates a
-	// self-signed certificate. It returns the created certificate and its
-	// private key.
-	createCert := func(template, parent *x509.Certificate, parentKey any) (*x509.Certificate, *rsa.PrivateKey, error) {
+	var parentCert *x509.Certificate
+	var parentKey *rsa.PrivateKey
+	var certs []*x509.Certificate
+
+	for i, cfg := range configs {
 		key, err := rsa.GenerateKey(rand.Reader, 2048)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 
-		signerKey := parentKey
-		if parent == nil { // Self-signed (Root)
-			parent = template
-			signerKey = key
+		tmpl := &x509.Certificate{
+			SerialNumber:          big.NewInt(int64(i + 1)),
+			Subject:               pkix.Name{CommonName: cfg.CommonName},
+			DNSNames:              cfg.DNSNames,
+			NotBefore:             now.Add(-time.Hour),
+			NotAfter:              now.Add(time.Hour),
+			BasicConstraintsValid: true,
+			IsCA:                  cfg.IsCA,
 		}
 
-		der, err := x509.CreateCertificate(rand.Reader, template, parent, key.Public(), signerKey)
+		if cfg.IsCA {
+			tmpl.KeyUsage = x509.KeyUsageCertSign | x509.KeyUsageCRLSign
+		} else {
+			tmpl.KeyUsage = x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment
+		}
+
+		// If no parent, it's a self-signed root
+		signerCert := tmpl
+		signerKey := key
+		if parentCert != nil {
+			signerCert = parentCert
+			signerKey = parentKey
+		}
+
+		der, err := x509.CreateCertificate(rand.Reader, tmpl, signerCert, key.Public(), signerKey)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
-		cert, err := x509.ParseCertificate(der)
-		return cert, key, err
+		cert, _ := x509.ParseCertificate(der)
+
+		if i == 0 {
+			root = cert
+		} else {
+			certs = append(certs, cert)
+		}
+
+		parentCert = cert
+		parentKey = key
+		if i == len(configs)-1 {
+			leafKey = key
+		}
 	}
 
-	rootTmpl := &x509.Certificate{
-		SerialNumber:          big.NewInt(1),
-		Subject:               pkix.Name{CommonName: "root.example.com"},
-		NotBefore:             now.Add(-time.Hour),
-		NotAfter:              now.Add(time.Hour),
-		BasicConstraintsValid: true,
-		IsCA:                  true,
-		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
-	}
-	rootCert, rootKey, err := createCert(rootTmpl, nil, nil)
-	if err != nil {
-		return nil, nil, nil, err
+	// Reverse the order for the chain to [Leaf, Intermediate1, ...]
+	for i, j := 0, len(certs)-1; i < j; i, j = i+1, j-1 {
+		certs[i], certs[j] = certs[j], certs[i]
 	}
 
-	interTmpl := &x509.Certificate{
-		SerialNumber:          big.NewInt(2),
-		Subject:               pkix.Name{CommonName: "inter.example.com"},
-		DNSNames:              []string{"intermediate.example.com"},
-		NotBefore:             now.Add(-time.Hour),
-		NotAfter:              now.Add(time.Hour),
-		BasicConstraintsValid: true,
-		IsCA:                  true,
-		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
-	}
-	interCert, interKey, err := createCert(interTmpl, rootCert, rootKey)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	leafTmpl := &x509.Certificate{
-		SerialNumber: big.NewInt(3),
-		Subject:      pkix.Name{CommonName: "*.example.leaf.com"},
-		DNSNames:     []string{"*.example.leaf.com"},
-		NotBefore:    now.Add(-time.Hour),
-		NotAfter:     now.Add(time.Hour),
-		KeyUsage:     x509.KeyUsageDigitalSignature,
-		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
-	}
-	leafCert, leafPriv, err := createCert(leafTmpl, interCert, interKey)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	return rootCert, []*x509.Certificate{leafCert, interCert}, leafPriv, nil
+	return root, certs, leafKey, nil
 }
