@@ -20,9 +20,15 @@ package credentials_test
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
 	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"fmt"
+	"math/big"
 	"net"
+	"strings"
 	"testing"
 	"time"
 
@@ -78,7 +84,7 @@ func loadTLSCreds(t *testing.T) (grpc.ServerOption, grpc.DialOption) {
 // different transport credentials. The test verifies that the specified
 // authority is correctly propagated to the serve when a correct authority is
 // used.
-func (s) TestCorrectAuthorityWithCreds(t *testing.T) {
+func TestCorrectAuthorityWithCreds(t *testing.T) {
 	const authority = "auth.test.example.com"
 	const authorityWithPort = "auth.test.example.com:8010"
 
@@ -364,4 +370,161 @@ func (s) TestCorrectAuthorityWithCustomCreds(t *testing.T) {
 	if _, err = testgrpc.NewTestServiceClient(cc).EmptyCall(ctx, &testpb.Empty{}, grpc.CallAuthority(authority)); status.Code(err) != codes.OK {
 		t.Fatalf("EmptyCall() returned status %v, want %v", status.Code(err), codes.OK)
 	}
+}
+
+// TestAuthorityOverrideWithChainedCerts tests that the authority being used to
+// overwrite per-RPC authority is validated against the leaf certificate only
+// and not against the intermediate certificates.
+func (s) TestAuthorityOverrideWithChainedCerts(t *testing.T) {
+	rootCert, certChain, leafKey, err := generateThreeLevelCertChain()
+	if err != nil {
+		t.Fatalf("Failed to generate cert chain: %v", err)
+	}
+
+	// Construct server credentials from leaf and intermediate certificates.
+	serverCert := tls.Certificate{
+		Certificate: [][]byte{certChain[0].Raw, certChain[1].Raw},
+		PrivateKey:  leafKey,
+	}
+	serverCreds := credentials.NewServerTLSFromCert(&serverCert)
+
+	// Create client credentials trusting the Root CA.
+	certPool := x509.NewCertPool()
+	certPool.AddCert(rootCert)
+
+	clientCreds := credentials.NewTLS(&tls.Config{
+		RootCAs:    certPool,
+		ServerName: "test1.example.leaf.com",
+	})
+
+	tests := []struct {
+		name      string
+		authority string
+		wantCode  codes.Code
+		wantErr   string
+	}{
+		{
+			name:      "AuthorityMatchesIntermediateNotLeaf",
+			authority: "intermediate.example.com",
+			wantCode:  codes.Unavailable,
+			wantErr:   "failed to validate authority",
+		},
+		{
+			name:      "AuthorityMatchesLeaf",
+			authority: "test2.example.leaf.com",
+			wantCode:  codes.OK,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+
+			// Setup and start the stub server.
+			ss := &stubserver.StubServer{
+				EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
+					if err := authorityChecker(ctx, tt.authority); err != nil {
+						return nil, err
+					}
+					return &testpb.Empty{}, nil
+				},
+			}
+			if err := ss.StartServer(grpc.Creds(serverCreds)); err != nil {
+				t.Fatalf("failed to start server: %v", err)
+			}
+			defer ss.Stop()
+
+			cc, err := grpc.NewClient(ss.Address, grpc.WithTransportCredentials(clientCreds))
+			if err != nil {
+				t.Fatalf("grpc.NewClient(%q) = %v", ss.Address, err)
+			}
+			defer cc.Close()
+
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+
+			_, err = testgrpc.NewTestServiceClient(cc).EmptyCall(ctx, &testpb.Empty{}, grpc.CallAuthority(tt.authority))
+			if got := status.Code(err); got != tt.wantCode {
+				t.Fatalf("EmptyCall() with authority %q: got code %v, want %v; err: %v", tt.authority, got, tt.wantCode, err)
+			}
+			if tt.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tt.wantErr)) {
+				t.Fatalf("EmptyCall() with authority %q: expected error to contain %q, got %v", tt.authority, tt.wantErr, err)
+			}
+		})
+	}
+}
+
+// generateThreeLevelCertChain generates a three-level certificate chain:
+// Root -> Intermediate -> Leaf. It returns the root certificate, a slice
+// containing the leaf and intermediate certificates (in that order), the
+// private key for the leaf certificate, and error if any.
+func generateThreeLevelCertChain() (root *x509.Certificate, chain []*x509.Certificate, leafKey *rsa.PrivateKey, err error) {
+	now := time.Now()
+	// Function to create the certificate based on the template provided, the
+	// parent certificate and parent key. If the parent is nil, it creates a
+	// self-signed certificate. It returns the created certificate and its
+	// private key.
+	createCert := func(template, parent *x509.Certificate, parentKey any) (*x509.Certificate, *rsa.PrivateKey, error) {
+		key, err := rsa.GenerateKey(rand.Reader, 2048)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		signerKey := parentKey
+		if parent == nil { // Self-signed (Root)
+			parent = template
+			signerKey = key
+		}
+
+		der, err := x509.CreateCertificate(rand.Reader, template, parent, key.Public(), signerKey)
+		if err != nil {
+			return nil, nil, err
+		}
+		cert, err := x509.ParseCertificate(der)
+		return cert, key, err
+	}
+
+	rootTmpl := &x509.Certificate{
+		SerialNumber:          big.NewInt(1),
+		Subject:               pkix.Name{CommonName: "root.example.com"},
+		NotBefore:             now.Add(-time.Hour),
+		NotAfter:              now.Add(time.Hour),
+		BasicConstraintsValid: true,
+		IsCA:                  true,
+		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
+	}
+	rootCert, rootKey, err := createCert(rootTmpl, nil, nil)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	interTmpl := &x509.Certificate{
+		SerialNumber:          big.NewInt(2),
+		Subject:               pkix.Name{CommonName: "inter.example.com"},
+		DNSNames:              []string{"intermediate.example.com"},
+		NotBefore:             now.Add(-time.Hour),
+		NotAfter:              now.Add(time.Hour),
+		BasicConstraintsValid: true,
+		IsCA:                  true,
+		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
+	}
+	interCert, interKey, err := createCert(interTmpl, rootCert, rootKey)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	leafTmpl := &x509.Certificate{
+		SerialNumber: big.NewInt(3),
+		Subject:      pkix.Name{CommonName: "*.example.leaf.com"},
+		DNSNames:     []string{"*.example.leaf.com"},
+		NotBefore:    now.Add(-time.Hour),
+		NotAfter:     now.Add(time.Hour),
+		KeyUsage:     x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+	}
+	leafCert, leafPriv, err := createCert(leafTmpl, interCert, interKey)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	return rootCert, []*x509.Certificate{leafCert, interCert}, leafPriv, nil
 }

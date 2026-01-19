@@ -60,6 +60,11 @@ func (t TLSInfo) ValidateAuthority(authority string) error {
 	}
 
 	// Verify authority against the leaf certificate.
+	if len(t.State.PeerCertificates) == 0 {
+		// This is not expected to happen as the TLS handshake has already
+		// completed and should have populated PeerCertificates.
+		return fmt.Errorf("credentials: no peer certificates found to verify authority %q", host)
+	}
 	return t.State.PeerCertificates[0].VerifyHostname(host)
 }
 
