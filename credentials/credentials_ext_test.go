@@ -372,18 +372,15 @@ func (s) TestCorrectAuthorityWithCustomCreds(t *testing.T) {
 	}
 }
 
-// TestAuthorityOverrideWithChainedCerts tests that the authority being used to
+// TestAuthorityOverrideWithCertChain tests that the authority being used to
 // overwrite per-RPC authority is validated against the leaf certificate only
 // and not against the intermediate certificates.
-func (s) TestAuthorityOverrideWithChainedCerts(t *testing.T) {
-	rootCert, certChain, leafKey, err := generateCertChain([]CertConfig{
+func (s) TestAuthorityOverrideWithCertChain(t *testing.T) {
+	rootCert, certChain, leafKey := generateCertChain(t, []CertConfig{
 		{CommonName: "root.example.com", IsCA: true},
 		{CommonName: "intermediate.example.com", DNSNames: []string{"intermediate.example.com"}, IsCA: true},
 		{CommonName: "*.example.leaf.com", DNSNames: []string{"*.example.leaf.com"}, IsCA: false},
 	})
-	if err != nil {
-		t.Fatalf("Failed to generate cert chain: %v", err)
-	}
 
 	// Construct server credentials from leaf and intermediate certificates.
 	serverCert := tls.Certificate{
@@ -422,7 +419,6 @@ func (s) TestAuthorityOverrideWithChainedCerts(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-
 			// Setup and start the stub server.
 			ss := &stubserver.StubServer{
 				EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
@@ -469,7 +465,8 @@ type CertConfig struct {
 // intermediates, and the last is the leaf. Returns the root certificate, the
 // chain of certificates (excluding the root) in the order [Leaf,
 // Intermediate1,...], the leaf private key, and error.
-func generateCertChain(configs []CertConfig) (root *x509.Certificate, chain []*x509.Certificate, leafKey *rsa.PrivateKey, err error) {
+func generateCertChain(t *testing.T, configs []CertConfig) (root *x509.Certificate, chain []*x509.Certificate, leafKey *rsa.PrivateKey) {
+	t.Helper()
 	now := time.Now()
 	var parentCert *x509.Certificate
 	var parentKey *rsa.PrivateKey
@@ -478,7 +475,7 @@ func generateCertChain(configs []CertConfig) (root *x509.Certificate, chain []*x
 	for i, cfg := range configs {
 		key, err := rsa.GenerateKey(rand.Reader, 2048)
 		if err != nil {
-			return nil, nil, nil, err
+			t.Fatal(err)
 		}
 
 		tmpl := &x509.Certificate{
@@ -498,16 +495,14 @@ func generateCertChain(configs []CertConfig) (root *x509.Certificate, chain []*x
 		}
 
 		// If no parent, it's a self-signed root
-		signerCert := tmpl
-		signerKey := key
-		if parentCert != nil {
-			signerCert = parentCert
-			signerKey = parentKey
+		if parentCert == nil {
+			parentCert = tmpl
+			parentKey = key
 		}
 
-		der, err := x509.CreateCertificate(rand.Reader, tmpl, signerCert, key.Public(), signerKey)
+		der, err := x509.CreateCertificate(rand.Reader, tmpl, parentCert, key.Public(), parentKey)
 		if err != nil {
-			return nil, nil, nil, err
+			t.Fatal(err)
 		}
 		cert, _ := x509.ParseCertificate(der)
 
@@ -529,5 +524,5 @@ func generateCertChain(configs []CertConfig) (root *x509.Certificate, chain []*x
 		certs[i], certs[j] = certs[j], certs[i]
 	}
 
-	return root, certs, leafKey, nil
+	return root, certs, leafKey
 }
