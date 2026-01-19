@@ -25,12 +25,15 @@ import (
 	"encoding/json"
 	"errors"
 	"net"
+	"strings"
 
 	"google.golang.org/grpc/channelz"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	estats "google.golang.org/grpc/experimental/stats"
+	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
@@ -39,6 +42,8 @@ import (
 var (
 	// m is a map from name to balancer builder.
 	m = make(map[string]Builder)
+
+	logger = grpclog.Component("balancer")
 )
 
 // Register registers the balancer builder to the balancer map. b.Name
@@ -51,7 +56,14 @@ var (
 // an init() function), and is not thread-safe. If multiple Balancers are
 // registered with the same name, the one registered last will take effect.
 func Register(b Builder) {
-	m[b.Name()] = b
+	name := b.Name()
+	if !envconfig.CaseSensitiveBalancerRegistries {
+		name = strings.ToLower(name)
+		if name != b.Name() {
+			logger.Warningf("Balancer registered with name %q. grpc-go will be switching to case sensitive balancer registries soon. After 2 releases, we will enable the env var by default.", b.Name())
+		}
+	}
+	m[name] = b
 }
 
 // unregisterForTesting deletes the balancer with the given name from the
@@ -70,6 +82,13 @@ func init() {
 // Note that the compare is done in a case-sensitive fashion.
 // If no builder is register with the name, nil will be returned.
 func Get(name string) Builder {
+	if !envconfig.CaseSensitiveBalancerRegistries {
+		lowerName := strings.ToLower(name)
+		if lowerName != name {
+			logger.Warningf("Balancer retrieved for name %q. grpc-go will be switching to case sensitive balancer registries soon. After 2 releases, we will enable the env var by default.", name)
+		}
+		name = lowerName
+	}
 	if b, ok := m[name]; ok {
 		return b
 	}
