@@ -31,6 +31,7 @@ import (
 	xdsinternal "google.golang.org/grpc/internal/xds"
 	"google.golang.org/grpc/internal/xds/clients"
 	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/resolver/ringhash"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 )
@@ -154,11 +155,11 @@ func parseEndpoints(lbEndpoints []*v3endpointpb.LbEndpoint, uniqueEndpointAddrs 
 		}
 		endpoint := resolver.Endpoint{Addresses: address}
 		endpoint = setHostname(endpoint, lbEndpoint.GetEndpoint().GetHostname())
+		endpoint = ringhash.SetHashKey(endpoint, hashKey)
 		endpoints = append(endpoints, Endpoint{
 			ResolverEndpoint: endpoint,
 			HealthStatus:     EndpointHealthStatus(lbEndpoint.GetHealthStatus()),
 			Weight:           weight,
-			HashKey:          hashKey,
 			Metadata:         endpointMetadata,
 		})
 	}
