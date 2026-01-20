@@ -216,10 +216,6 @@ var (
 	// original state. Only called in testing functions.
 	SnapshotMetricRegistryForTesting func() func()
 
-	// SetDefaultBufferPoolForTesting updates the default buffer pool, for
-	// testing purposes.
-	SetDefaultBufferPoolForTesting any // func(mem.BufferPool)
-
 	// SetBufferPoolingThresholdForTesting updates the buffer pooling threshold, for
 	// testing purposes.
 	SetBufferPoolingThresholdForTesting any // func(int)
