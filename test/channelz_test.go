@@ -1316,7 +1316,7 @@ func (s) TestCZClientSocketMetricsKeepAlive(t *testing.T) {
 	}
 }
 
-func (s) TestCZServerSocketMetricsStreamsAndMessagesCount(t *testing.T) {
+func TestCZServerSocketMetricsStreamsAndMessagesCount(t *testing.T) {
 	e := tcpClearRREnv
 	te := newTest(t, e)
 	te.maxServerReceiveMsgSize = newInt(20)

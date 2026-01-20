@@ -11,7 +11,7 @@ itself. We have an open [feature
 request](https://github.com/grpc/grpc/issues/35372) for it and might support it
 in future.
 
-Not using https to connect to HTTP CONNECT proxy does not compromise security.
+Not using https to talk to CONNECT proxy does not compromise security.
 The gRPC traffic is encrypted end-to-end between the client and the destination
 server. The HTTP CONNECT proxy only sees the destination address and cannot
 intercept the encrypted gRPC data.
