@@ -373,7 +373,7 @@ func (s) TestCorrectAuthorityWithCustomCreds(t *testing.T) {
 }
 
 // TestAuthorityOverrideWithCertChain tests that the authority being used to
-// overwrite per-RPC authority is validated against the leaf certificate only
+// override per-RPC authority is validated against the leaf certificate only
 // and not against the intermediate certificates.
 func (s) TestAuthorityOverrideWithCertChain(t *testing.T) {
 	rootCert, certChain, leafKey := generateCertChain(t, []CertConfig{
@@ -392,7 +392,6 @@ func (s) TestAuthorityOverrideWithCertChain(t *testing.T) {
 	// Create client credentials trusting the Root CA.
 	certPool := x509.NewCertPool()
 	certPool.AddCert(rootCert)
-
 	clientCreds := credentials.NewTLS(&tls.Config{
 		RootCAs:    certPool,
 		ServerName: "test1.example.leaf.com",
@@ -405,7 +404,7 @@ func (s) TestAuthorityOverrideWithCertChain(t *testing.T) {
 		wantErr   string
 	}{
 		{
-			name:      "AuthorityMatchesIntermediateNotLeaf",
+			name:      "AuthorityMatchesIntermediate",
 			authority: "intermediate.example.com",
 			wantCode:  codes.Unavailable,
 			wantErr:   "failed to validate authority",
