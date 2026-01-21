@@ -3395,220 +3395,308 @@ func (s) TestServerSendsResetStreamOnEarlyTrailer(t *testing.T) {
 	}
 }
 
-// Tests the scenario where the server sets the END_STREAM flag in one of its
-// frames and verifies that the client responds with a RST stream.
-func (s) TestClientSendsResetStreamOnReceivingEndStream(t *testing.T) {
-	tests := []struct {
-		name           string
-		serverFrames   func(t *testing.T, framer *http2.Framer, streamID uint32)
-		wantReadErr    error
-		wantStatusCode codes.Code
-	}{
-		{
-			name: "in_headers",
-			serverFrames: func(t *testing.T, framer *http2.Framer, streamID uint32) {
-				var buf bytes.Buffer
-				henc := hpack.NewEncoder(&buf)
-				henc.WriteField(hpack.HeaderField{Name: "content-type", Value: "application/grpc"})
-				if err := framer.WriteHeaders(http2.HeadersFrameParam{
-					StreamID:      streamID,
-					BlockFragment: buf.Bytes(),
-					EndHeaders:    true,
-					EndStream:     true,
-				}); err != nil {
-					t.Errorf("Server failed to write headers: %v", err)
-				}
-			},
-			wantReadErr:    io.EOF,
-			wantStatusCode: codes.Unknown,
-		},
-		{
-			name: "in_data",
-			serverFrames: func(t *testing.T, framer *http2.Framer, streamID uint32) {
-				var buf bytes.Buffer
-				henc := hpack.NewEncoder(&buf)
-				henc.WriteField(hpack.HeaderField{Name: "content-type", Value: "application/grpc"})
-				if err := framer.WriteHeaders(http2.HeadersFrameParam{
-					StreamID:      streamID,
-					BlockFragment: buf.Bytes(),
-					EndHeaders:    true,
-					EndStream:     false,
-				}); err != nil {
-					t.Errorf("Server failed to write headers: %v", err)
-				}
-				if err := framer.WriteData(streamID, true, expectedResponse); err != nil {
-					t.Errorf("Server failed to write data: %v", err)
-				}
-			},
-			wantStatusCode: codes.Internal,
-		},
-		{
-			name: "in_trailers",
-			serverFrames: func(t *testing.T, framer *http2.Framer, streamID uint32) {
-				var buf bytes.Buffer
-				henc := hpack.NewEncoder(&buf)
-				henc.WriteField(hpack.HeaderField{Name: "content-type", Value: "application/grpc"})
-				if err := framer.WriteHeaders(http2.HeadersFrameParam{
-					StreamID:      streamID,
-					BlockFragment: buf.Bytes(),
-					EndHeaders:    true,
-					EndStream:     false,
-				}); err != nil {
-					t.Errorf("Server failed to write headers: %v", err)
-				}
-				if err := framer.WriteData(streamID, false, expectedResponse); err != nil {
-					t.Errorf("Server failed to write data: %v", err)
-				}
-				buf.Reset()
-				henc = hpack.NewEncoder(&buf)
-				henc.WriteField(hpack.HeaderField{Name: "grpc-status", Value: "0"})
-				if err := framer.WriteHeaders(http2.HeadersFrameParam{
-					StreamID:      streamID,
-					BlockFragment: buf.Bytes(),
-					EndHeaders:    true,
-					EndStream:     true,
-				}); err != nil {
-					t.Errorf("Server failed to write trailers: %v", err)
-				}
-			},
-			wantStatusCode: codes.OK,
-		},
+// setupRSTStreamOnEOSTest sets up a test scenario where a client and a manual
+// server are connected. The server invokes the provided serverFrames function
+// to send frames to the client (using the framer and the stream ID provided by
+// the test).
+//
+// Returns the client stream created for the test and a channel that is closed
+// when the server has finished processing.
+func setupRSTStreamOnEOSTest(t *testing.T, serverFrames func(*testing.T, *http2.Framer, uint32)) (*ClientStream, <-chan struct{}) {
+	// Set up a listener for a manual server.
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Failed to listen: %v", err)
 	}
+	t.Cleanup(func() { lis.Close() })
 
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			// Set up a listener for a manual server.
-			lis, err := net.Listen("tcp", "localhost:0")
+	// Set up a manual server.
+	seenResetFrame := make(chan struct{})
+	seenHeadersFrame := make(chan struct{})
+	serverDone := make(chan struct{})
+	go func() {
+		defer close(serverDone)
+
+		conn, err := lis.Accept()
+		if err != nil {
+			// Let client fail with connection error.
+			return
+		}
+		defer conn.Close()
+
+		// Read client preface.
+		if _, err := io.ReadFull(conn, make([]byte, len(clientPreface))); err != nil {
+			t.Errorf("Server failed to read client preface: %v", err)
+			return
+		}
+
+		// Read client's initial SETTINGS frame.
+		framer := http2.NewFramer(conn, conn)
+		frame, err := framer.ReadFrame()
+		if err != nil {
+			t.Errorf("Server failed to read client SETTINGS frame: %v", err)
+			return
+		}
+		if _, ok := frame.(*http2.SettingsFrame); !ok {
+			t.Errorf("Server read unexpected frame of type %T, want *http2.SettingsFrame", frame)
+			return
+		}
+
+		// Write server SETTINGS and ACK frame.
+		if err := framer.WriteSettings(); err != nil {
+			t.Errorf("Server failed to write SETTINGS frame: %v", err)
+			return
+		}
+		if err := framer.WriteSettingsAck(); err != nil {
+			t.Errorf("Server failed to write SETTINGS ACK frame: %v", err)
+			return
+		}
+
+		// Read client headers. Loop until we get a HEADERS frame, skipping
+		// any SETTINGS ACK frames.
+		var hframe *http2.HeadersFrame
+		for {
+			frame, err = framer.ReadFrame()
 			if err != nil {
-				t.Fatalf("Failed to listen: %v", err)
+				t.Errorf("Server failed to read client headers: %v", err)
+				return
 			}
-			defer lis.Close()
+			if f, ok := frame.(*http2.HeadersFrame); ok {
+				hframe = f
+				break
+			}
+		}
+		streamID := hframe.StreamID
+		close(seenHeadersFrame)
 
-			// Set up a manual server.
-			seenResetFrame := make(chan struct{})
-			seenHeadersFrame := make(chan struct{})
-			serverDone := make(chan struct{})
-			go func() {
-				defer close(serverDone)
-
-				conn, err := lis.Accept()
-				if err != nil {
-					// Let client fail with connection error.
-					return
-				}
-				defer conn.Close()
-
-				// Read client preface.
-				if _, err := io.ReadFull(conn, make([]byte, len(clientPreface))); err != nil {
-					t.Errorf("Server failed to read client preface: %v", err)
-					return
-				}
-
-				// Read client's initial SETTINGS frame.
-				framer := http2.NewFramer(conn, conn)
+		// Launch a reader goroutine to look for RST frame from the client.
+		go func() {
+			for {
 				frame, err := framer.ReadFrame()
 				if err != nil {
-					t.Errorf("Server failed to read client SETTINGS frame: %v", err)
 					return
 				}
-				if _, ok := frame.(*http2.SettingsFrame); !ok {
-					t.Errorf("Server read unexpected frame of type %T, want *http2.SettingsFrame", frame)
-					return
-				}
-
-				// Write server SETTINGS and ACK frame.
-				if err := framer.WriteSettings(); err != nil {
-					t.Errorf("Server failed to write SETTINGS frame: %v", err)
-					return
-				}
-				if err := framer.WriteSettingsAck(); err != nil {
-					t.Errorf("Server failed to write SETTINGS ACK frame: %v", err)
-					return
-				}
-
-				// Read client headers. Loop until we get a HEADERS frame, skipping
-				// any SETTINGS ACK frames.
-				var hframe *http2.HeadersFrame
-				for {
-					frame, err = framer.ReadFrame()
-					if err != nil {
-						t.Errorf("Server failed to read client headers: %v", err)
-						return
+				switch frame := frame.(type) {
+				case *http2.RSTStreamFrame:
+					const wantErrCode = http2.ErrCodeNo
+					if frame.Header().StreamID != streamID || http2.ErrCode(frame.ErrCode) != wantErrCode {
+						t.Errorf("RST stream received with streamID: %d and code: %v, want streamID: %d and code: %v", frame.Header().StreamID, http2.ErrCode(frame.ErrCode), streamID, wantErrCode)
 					}
-					if f, ok := frame.(*http2.HeadersFrame); ok {
-						hframe = f
-						break
-					}
-				}
-				streamID := hframe.StreamID
-				close(seenHeadersFrame)
-
-				// Launch a reader goroutine to look for RST frame from the client.
-				go func() {
-					for {
-						frame, err := framer.ReadFrame()
-						if err != nil {
-							return
-						}
-						switch frame := frame.(type) {
-						case *http2.RSTStreamFrame:
-							const wantErrCode = http2.ErrCodeNo
-							if frame.Header().StreamID != streamID || http2.ErrCode(frame.ErrCode) != wantErrCode {
-								t.Errorf("RST stream received with streamID: %d and code: %v, want streamID: %d and code: %v", frame.Header().StreamID, http2.ErrCode(frame.ErrCode), streamID, wantErrCode)
-							}
-							close(seenResetFrame)
-							return
-						default:
-							// Do nothing.
-						}
-					}
-				}()
-
-				test.serverFrames(t, framer, streamID)
-				<-seenResetFrame
-			}()
-
-			// Set up a client.
-			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-			defer cancel()
-			copts := ConnectOptions{
-				BufferPool: mem.DefaultBufferPool(),
-			}
-			ct, err := NewHTTP2Client(ctx, ctx, resolver.Address{Addr: lis.Addr().String()}, copts, func(GoAwayReason) {})
-			if err != nil {
-				t.Fatalf("NewHTTP2Client failed: %v", err)
-			}
-			defer ct.Close(errors.New("test cleanup"))
-
-			// Create a stream.
-			stream, err := ct.NewStream(ctx, &CallHdr{})
-			if err != nil {
-				t.Fatalf("NewStream failed: %v", err)
-			}
-
-			// Wait for server to see client's headers.
-			<-seenHeadersFrame
-
-			// This read may or may not be necessary depending on the test case.
-			// But it should not cause any deadlocks.
-			if test.wantReadErr != nil {
-				if _, err := stream.readTo(make([]byte, 1)); !errors.Is(err, test.wantReadErr) {
-					t.Fatalf("stream.readTo() got %v, want %v", err, test.wantReadErr)
+					close(seenResetFrame)
+					return
+				default:
+					// Do nothing.
 				}
 			}
+		}()
 
-			// Ensure the stream is done before checking status.
-			<-stream.Done()
-			if code := stream.Status().Code(); code != test.wantStatusCode {
-				t.Fatalf("stream.Status().Code() got %s, want %s", code, test.wantStatusCode)
-			}
+		serverFrames(t, framer, streamID)
+		<-seenResetFrame
+	}()
 
-			select {
-			case <-serverDone:
-			case <-ctx.Done():
-				t.Fatalf("Server did not receive RST stream from client")
-			}
-		})
+	// Set up a client.
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	t.Cleanup(cancel)
+	copts := ConnectOptions{BufferPool: mem.DefaultBufferPool()}
+	ct, err := NewHTTP2Client(ctx, ctx, resolver.Address{Addr: lis.Addr().String()}, copts, func(GoAwayReason) {})
+	if err != nil {
+		t.Fatalf("NewHTTP2Client failed: %v", err)
+	}
+	t.Cleanup(func() { ct.Close(errors.New("test cleanup: forcing close")) })
+
+	// Create a stream.
+	stream, err := ct.NewStream(ctx, &CallHdr{})
+	if err != nil {
+		t.Fatalf("NewStream failed: %v", err)
+	}
+
+	// Wait for server to see client's headers.
+	<-seenHeadersFrame
+
+	return stream, serverDone
+}
+
+// Tests the scenario where the server sets the END_STREAM flag in the HEADERS
+// frame and verifies that the client responds with a RST stream.
+func (s) TestClientSendsRSTStream_InHeaders(t *testing.T) {
+	serverFrames := func(t *testing.T, framer *http2.Framer, streamID uint32) {
+		var buf bytes.Buffer
+		henc := hpack.NewEncoder(&buf)
+		henc.WriteField(hpack.HeaderField{Name: "content-type", Value: "application/grpc"})
+		if err := framer.WriteHeaders(http2.HeadersFrameParam{
+			StreamID:      streamID,
+			BlockFragment: buf.Bytes(),
+			EndHeaders:    true,
+			EndStream:     true,
+		}); err != nil {
+			t.Errorf("Server failed to write headers: %v", err)
+		}
+	}
+
+	stream, serverDone := setupRSTStreamOnEOSTest(t, serverFrames)
+
+	if _, err := stream.readTo(make([]byte, 1)); !errors.Is(err, io.EOF) {
+		t.Fatalf("stream.readTo() got %v, want %v", err, io.EOF)
+	}
+
+	// Ensure the stream is done before checking status.
+	<-stream.Done()
+	if code := stream.Status().Code(); code != codes.Unknown {
+		t.Fatalf("stream.Status().Code() got %s, want %s", code, codes.Unknown)
+	}
+
+	select {
+	case <-serverDone:
+	case <-stream.ctx.Done():
+		t.Fatalf("Server did not receive RST stream from client")
+	}
+}
+
+// Tests the scenario where the server sets the END_STREAM flag in a DATA
+// frame and verifies that the client responds with a RST stream.
+func (s) TestClientSendsRSTStream_InData(t *testing.T) {
+	serverFrames := func(t *testing.T, framer *http2.Framer, streamID uint32) {
+		var buf bytes.Buffer
+		henc := hpack.NewEncoder(&buf)
+		henc.WriteField(hpack.HeaderField{Name: "content-type", Value: "application/grpc"})
+		if err := framer.WriteHeaders(http2.HeadersFrameParam{
+			StreamID:      streamID,
+			BlockFragment: buf.Bytes(),
+			EndHeaders:    true,
+			EndStream:     false,
+		}); err != nil {
+			t.Errorf("Server failed to write headers: %v", err)
+		}
+		if err := framer.WriteData(streamID, true, expectedResponse); err != nil {
+			t.Errorf("Server failed to write data: %v", err)
+		}
+	}
+
+	stream, serverDone := setupRSTStreamOnEOSTest(t, serverFrames)
+
+	// Wait for the stream to be closed.
+	<-stream.Done()
+	if code := stream.Status().Code(); code != codes.Internal {
+		t.Fatalf("stream.Status().Code() got %s, want %s", code, codes.Internal)
+	}
+
+	select {
+	case <-serverDone:
+	case <-stream.ctx.Done():
+		t.Fatalf("Server did not receive RST stream from client")
+	}
+}
+
+// Tests the scenario where the server sets the END_STREAM flag in the Trailers
+// (HEADERS frame) and verifies that the client responds with a RST stream.
+func (s) TestClientSendsRSTStream_InTrailers(t *testing.T) {
+	serverFrames := func(t *testing.T, framer *http2.Framer, streamID uint32) {
+		var buf bytes.Buffer
+		henc := hpack.NewEncoder(&buf)
+		henc.WriteField(hpack.HeaderField{Name: "content-type", Value: "application/grpc"})
+		if err := framer.WriteHeaders(http2.HeadersFrameParam{
+			StreamID:      streamID,
+			BlockFragment: buf.Bytes(),
+			EndHeaders:    true,
+			EndStream:     false,
+		}); err != nil {
+			t.Errorf("Server failed to write headers: %v", err)
+		}
+		if err := framer.WriteData(streamID, false, expectedResponse); err != nil {
+			t.Errorf("Server failed to write data: %v", err)
+		}
+		buf.Reset()
+		henc = hpack.NewEncoder(&buf)
+		henc.WriteField(hpack.HeaderField{Name: "grpc-status", Value: "0"})
+		if err := framer.WriteHeaders(http2.HeadersFrameParam{
+			StreamID:      streamID,
+			BlockFragment: buf.Bytes(),
+			EndHeaders:    true,
+			EndStream:     true,
+		}); err != nil {
+			t.Errorf("Server failed to write trailers: %v", err)
+		}
+	}
+
+	stream, serverDone := setupRSTStreamOnEOSTest(t, serverFrames)
+
+	// Wait for the stream to be closed.
+	<-stream.Done()
+	if code := stream.Status().Code(); code != codes.OK {
+		t.Fatalf("stream.Status().Code() got %s, want %s", code, codes.OK)
+	}
+
+	select {
+	case <-serverDone:
+	case <-stream.ctx.Done():
+		t.Fatalf("Server did not receive RST stream from client")
+	}
+}
+
+// Tests the scenario where the server sets the END_STREAM flag in the Trailers,
+// causing the client to send a RST_STREAM. The test verifies that the client
+// can still read buffered data from the stream after this event.
+func (s) TestClientSendsRSTStream_ReadUnreadData(t *testing.T) {
+	serverFrames := func(t *testing.T, framer *http2.Framer, streamID uint32) {
+		var buf bytes.Buffer
+		henc := hpack.NewEncoder(&buf)
+		henc.WriteField(hpack.HeaderField{Name: "content-type", Value: "application/grpc"})
+		if err := framer.WriteHeaders(http2.HeadersFrameParam{
+			StreamID:      streamID,
+			BlockFragment: buf.Bytes(),
+			EndHeaders:    true,
+			EndStream:     false,
+		}); err != nil {
+			t.Errorf("Server failed to write headers: %v", err)
+		}
+		if err := framer.WriteData(streamID, false, expectedResponse); err != nil {
+			t.Errorf("Server failed to write data: %v", err)
+		}
+		buf.Reset()
+		henc = hpack.NewEncoder(&buf)
+		henc.WriteField(hpack.HeaderField{Name: "grpc-status", Value: "0"})
+		if err := framer.WriteHeaders(http2.HeadersFrameParam{
+			StreamID:      streamID,
+			BlockFragment: buf.Bytes(),
+			EndHeaders:    true,
+			EndStream:     true,
+		}); err != nil {
+			t.Errorf("Server failed to write trailers: %v", err)
+		}
+	}
+
+	stream, serverDone := setupRSTStreamOnEOSTest(t, serverFrames)
+
+	// Wait for the stream to match the state we expect (which is that it
+	// has sent a RST_STREAM, which means it has closed).
+	//
+	// If we read before the RST_STREAM is sent, we might race with the
+	// client receiving the EOS from the server, and the client might
+	// not have sent the RST_STREAM yet.
+	<-stream.Done()
+
+	// Read the data.
+	gotData := make([]byte, len(expectedResponse))
+	if _, err := stream.readTo(gotData); err != nil {
+		t.Fatalf("stream.readTo() got %v, want <nil>", err)
+	}
+	if !bytes.Equal(gotData, expectedResponse) {
+		t.Fatalf("stream.readTo() got %v, want %v", gotData, expectedResponse)
+	}
+	if _, err := stream.readTo(make([]byte, 1)); !errors.Is(err, io.EOF) {
+		t.Fatalf("stream.readTo() got %v, want %v", err, io.EOF)
+	}
+
+	// Ensure the stream is done before checking status.
+	<-stream.Done()
+	if code := stream.Status().Code(); code != codes.OK {
+		t.Fatalf("stream.Status().Code() got %s, want %s", code, codes.OK)
+	}
+
+	select {
+	case <-serverDone:
+	case <-stream.ctx.Done():
+		t.Fatalf("Server did not receive RST stream from client")
 	}
 }
 
