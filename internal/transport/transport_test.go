@@ -538,12 +538,49 @@ func setUpWithOptions(t *testing.T, port int, sc *ServerConfig, ht hType, copts 
 	return server, ct.(*http2Client), cCancel
 }
 
-func setUpWithNoPingServer(t *testing.T, copts ConnectOptions, connCh chan net.Conn) (*http2Client, func()) {
+type controllablePingServer struct {
+	pingAck atomic.Bool
+}
+
+func (s *controllablePingServer) setPingAck(ack bool) {
+	s.pingAck.Store(ack)
+}
+
+func (s *controllablePingServer) serve(t *testing.T, conn net.Conn) {
+	// Read frame to consume the client preface.
+	if _, err := io.ReadFull(conn, make([]byte, len(clientPreface))); err != nil {
+		t.Errorf("Error while reading client preface: %v", err)
+		return
+	}
+	// Read ping frames and ack checks.
+	framer := http2.NewFramer(conn, conn)
+	for {
+		f, err := framer.ReadFrame()
+		if err != nil {
+			return
+		}
+		if !s.pingAck.Load() {
+			return
+		}
+		pf, ok := f.(*http2.PingFrame)
+		if !ok {
+			return
+		}
+		if err := framer.WritePing(true, pf.Data); err != nil {
+			t.Errorf("Failed to write ping : %v", err)
+			return
+		}
+	}
+}
+
+func setUpControllablePingServer(t *testing.T, copts ConnectOptions, connCh chan net.Conn) (*controllablePingServer, *http2Client, func()) {
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("Failed to listen: %v", err)
 	}
-	// Launch a non responsive server.
+	s := &controllablePingServer{}
+	s.setPingAck(true)
+	// Launch a server.
 	go func() {
 		defer lis.Close()
 		conn, err := lis.Accept()
@@ -559,6 +596,7 @@ func setUpWithNoPingServer(t *testing.T, copts ConnectOptions, connCh chan net.C
 			return
 		}
 		connCh <- conn
+		s.serve(t, conn)
 	}()
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	t.Cleanup(cancel)
@@ -573,7 +611,7 @@ func setUpWithNoPingServer(t *testing.T, copts ConnectOptions, connCh chan net.C
 		}
 		t.Fatalf("Failed to dial: %v", err)
 	}
-	return tr.(*http2Client), cCancel
+	return s, tr.(*http2Client), cCancel
 }
 
 // TestInflightStreamClosing ensures that closing in-flight stream
