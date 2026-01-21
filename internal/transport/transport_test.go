@@ -559,14 +559,16 @@ func (s *controllablePingServer) serve(t *testing.T, conn net.Conn) {
 		if err != nil {
 			return
 		}
-		if f, ok := f.(*http2.PingFrame); ok {
-			ack := s.pingAck.Load()
-			if ack {
-				if err := framer.WritePing(true, f.Data); err != nil {
-					t.Errorf("Failed to write ping : %v", err)
-					return
-				}
-			}
+		if !s.pingAck.Load() {
+			return
+		}
+		pf, ok := f.(*http2.PingFrame)
+		if !ok {
+			return
+		}
+		if err := framer.WritePing(true, pf.Data); err != nil {
+			t.Errorf("Failed to write ping : %v", err)
+			return
 		}
 	}
 }
