@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2020 gRPC authors.
+ * Copyright 2026 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,13 +16,14 @@
  *
  */
 
-package hierarchy
+package hierarchy_test
 
 import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/attributes"
+	"google.golang.org/grpc/internal/hierarchy"
 	"google.golang.org/grpc/resolver"
 )
 
@@ -39,15 +40,13 @@ func TestFromEndpoint(t *testing.T) {
 		},
 		{
 			name: "set",
-			ep: resolver.Endpoint{
-				Attributes: attributes.New(pathKey, pathValue{"a", "b"}),
-			},
+			ep:   hierarchy.SetInEndpoint(resolver.Endpoint{}, []string{"a", "b"}),
 			want: []string{"a", "b"},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := FromEndpoint(tt.ep); !cmp.Equal(got, tt.want) {
+			if got := hierarchy.FromEndpoint(tt.ep); !cmp.Equal(got, tt.want) {
 				t.Errorf("FromEndpoint() = %v, want %v", got, tt.want)
 			}
 		})
@@ -67,16 +66,14 @@ func TestSetInEndpoint(t *testing.T) {
 		},
 		{
 			name: "before is set",
-			ep: resolver.Endpoint{
-				Attributes: attributes.New(pathKey, pathValue{"before", "a", "b"}),
-			},
+			ep:   hierarchy.SetInEndpoint(resolver.Endpoint{}, []string{"before", "a", "b"}),
 			path: []string{"a", "b"},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			newEP := SetInEndpoint(tt.ep, tt.path)
-			newPath := FromEndpoint(newEP)
+			newEP := hierarchy.SetInEndpoint(tt.ep, tt.path)
+			newPath := hierarchy.FromEndpoint(newEP)
 			if !cmp.Equal(newPath, tt.path) {
 				t.Errorf("path after SetInEndpoint() = %v, want %v", newPath, tt.path)
 			}
@@ -93,19 +90,19 @@ func TestGroup(t *testing.T) {
 		{
 			name: "all with hierarchy",
 			eps: []resolver.Endpoint{
-				{Addresses: []resolver.Address{{Addr: "a0"}}, Attributes: attributes.New(pathKey, pathValue{"a"})},
-				{Addresses: []resolver.Address{{Addr: "a1"}}, Attributes: attributes.New(pathKey, pathValue{"a"})},
-				{Addresses: []resolver.Address{{Addr: "b0"}}, Attributes: attributes.New(pathKey, pathValue{"b"})},
-				{Addresses: []resolver.Address{{Addr: "b1"}}, Attributes: attributes.New(pathKey, pathValue{"b"})},
+				hierarchy.SetInEndpoint(resolver.Endpoint{Addresses: []resolver.Address{{Addr: "a0"}}}, []string{"a"}),
+				hierarchy.SetInEndpoint(resolver.Endpoint{Addresses: []resolver.Address{{Addr: "a1"}}}, []string{"a"}),
+				hierarchy.SetInEndpoint(resolver.Endpoint{Addresses: []resolver.Address{{Addr: "b0"}}}, []string{"b"}),
+				hierarchy.SetInEndpoint(resolver.Endpoint{Addresses: []resolver.Address{{Addr: "b1"}}}, []string{"b"}),
 			},
 			want: map[string][]resolver.Endpoint{
 				"a": {
-					{Addresses: []resolver.Address{{Addr: "a0"}}, Attributes: attributes.New(pathKey, pathValue{})},
-					{Addresses: []resolver.Address{{Addr: "a1"}}, Attributes: attributes.New(pathKey, pathValue{})},
+					hierarchy.SetInEndpoint(resolver.Endpoint{Addresses: []resolver.Address{{Addr: "a0"}}}, nil),
+					hierarchy.SetInEndpoint(resolver.Endpoint{Addresses: []resolver.Address{{Addr: "a1"}}}, nil),
 				},
 				"b": {
-					{Addresses: []resolver.Address{{Addr: "b0"}}, Attributes: attributes.New(pathKey, pathValue{})},
-					{Addresses: []resolver.Address{{Addr: "b1"}}, Attributes: attributes.New(pathKey, pathValue{})},
+					hierarchy.SetInEndpoint(resolver.Endpoint{Addresses: []resolver.Address{{Addr: "b0"}}}, nil),
+					hierarchy.SetInEndpoint(resolver.Endpoint{Addresses: []resolver.Address{{Addr: "b1"}}}, nil),
 				},
 			},
 		},
@@ -113,39 +110,22 @@ func TestGroup(t *testing.T) {
 			// Endpoints without hierarchy are ignored.
 			name: "without hierarchy",
 			eps: []resolver.Endpoint{
-				{Addresses: []resolver.Address{{Addr: "a0"}}, Attributes: attributes.New(pathKey, pathValue{"a"})},
-				{Addresses: []resolver.Address{{Addr: "a1"}}, Attributes: attributes.New(pathKey, pathValue{"a"})},
+				hierarchy.SetInEndpoint(resolver.Endpoint{Addresses: []resolver.Address{{Addr: "a0"}}}, []string{"a"}),
+				hierarchy.SetInEndpoint(resolver.Endpoint{Addresses: []resolver.Address{{Addr: "a1"}}}, []string{"a"}),
 				{Addresses: []resolver.Address{{Addr: "b0"}}, Attributes: nil},
 				{Addresses: []resolver.Address{{Addr: "b1"}}, Attributes: nil},
 			},
 			want: map[string][]resolver.Endpoint{
 				"a": {
-					{Addresses: []resolver.Address{{Addr: "a0"}}, Attributes: attributes.New(pathKey, pathValue{})},
-					{Addresses: []resolver.Address{{Addr: "a1"}}, Attributes: attributes.New(pathKey, pathValue{})},
-				},
-			},
-		},
-		{
-			// If hierarchy is set to a wrong type (which should never happen),
-			// the endpoint is ignored.
-			name: "wrong type",
-			eps: []resolver.Endpoint{
-				{Addresses: []resolver.Address{{Addr: "a0"}}, Attributes: attributes.New(pathKey, pathValue{"a"})},
-				{Addresses: []resolver.Address{{Addr: "a1"}}, Attributes: attributes.New(pathKey, pathValue{"a"})},
-				{Addresses: []resolver.Address{{Addr: "b0"}}, Attributes: attributes.New(pathKey, "b")},
-				{Addresses: []resolver.Address{{Addr: "b1"}}, Attributes: attributes.New(pathKey, 314)},
-			},
-			want: map[string][]resolver.Endpoint{
-				"a": {
-					{Addresses: []resolver.Address{{Addr: "a0"}}, Attributes: attributes.New(pathKey, pathValue{})},
-					{Addresses: []resolver.Address{{Addr: "a1"}}, Attributes: attributes.New(pathKey, pathValue{})},
+					hierarchy.SetInEndpoint(resolver.Endpoint{Addresses: []resolver.Address{{Addr: "a0"}}}, nil),
+					hierarchy.SetInEndpoint(resolver.Endpoint{Addresses: []resolver.Address{{Addr: "a1"}}}, nil),
 				},
 			},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := Group(tt.eps); !cmp.Equal(got, tt.want, cmp.AllowUnexported(attributes.Attributes{})) {
+			if got := hierarchy.Group(tt.eps); !cmp.Equal(got, tt.want, cmp.AllowUnexported(attributes.Attributes{})) {
 				t.Errorf("Group() = %v, want %v", got, tt.want)
 				t.Errorf("diff: %v", cmp.Diff(got, tt.want, cmp.AllowUnexported(attributes.Attributes{})))
 			}
@@ -154,7 +134,7 @@ func TestGroup(t *testing.T) {
 }
 
 func TestGroupE2E(t *testing.T) {
-	hierarchy := map[string]map[string][]string{
+	testHierarchy := map[string]map[string][]string{
 		"p0": {
 			"wt0": {"addr0", "addr1"},
 			"wt1": {"addr2", "addr3"},
@@ -166,32 +146,29 @@ func TestGroupE2E(t *testing.T) {
 	}
 
 	var epsWithHierarchy []resolver.Endpoint
-	for p, wts := range hierarchy {
-		path1 := pathValue{p}
+	for p, wts := range testHierarchy {
+		path1 := []string{p}
 		for wt, addrs := range wts {
-			path2 := append(pathValue(nil), path1...)
+			path2 := append([]string(nil), path1...)
 			path2 = append(path2, wt)
 			for _, addr := range addrs {
-				a := resolver.Endpoint{
-					Addresses:  []resolver.Address{{Addr: addr}},
-					Attributes: attributes.New(pathKey, path2),
-				}
+				a := hierarchy.SetInEndpoint(resolver.Endpoint{Addresses: []resolver.Address{{Addr: addr}}}, path2)
 				epsWithHierarchy = append(epsWithHierarchy, a)
 			}
 		}
 	}
 
 	gotHierarchy := make(map[string]map[string][]string)
-	for p1, wts := range Group(epsWithHierarchy) {
+	for p1, wts := range hierarchy.Group(epsWithHierarchy) {
 		gotHierarchy[p1] = make(map[string][]string)
-		for p2, eps := range Group(wts) {
+		for p2, eps := range hierarchy.Group(wts) {
 			for _, ep := range eps {
 				gotHierarchy[p1][p2] = append(gotHierarchy[p1][p2], ep.Addresses[0].Addr)
 			}
 		}
 	}
 
-	if !cmp.Equal(gotHierarchy, hierarchy) {
-		t.Errorf("diff: %v", cmp.Diff(gotHierarchy, hierarchy))
+	if !cmp.Equal(gotHierarchy, testHierarchy) {
+		t.Errorf("diff: %v", cmp.Diff(gotHierarchy, testHierarchy))
 	}
 }
