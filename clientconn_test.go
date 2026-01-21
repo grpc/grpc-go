@@ -664,6 +664,52 @@ func (s) TestBackoffCancel(t *testing.T) {
 	}
 }
 
+// Verifies the deprecated WithDialer option receives a timeout derived from the
+// connect deadline.
+func (s) TestWithDialerReceivesTimeout(t *testing.T) {
+	var recordedTimeout atomic.Pointer[time.Duration]
+	timeoutRecorded := make(chan struct{})
+	dialer := func(_ string, timeout time.Duration) (net.Conn, error) {
+		if recordedTimeout.CompareAndSwap(nil, &timeout) {
+			close(timeoutRecorded)
+			return nil, errors.New("timeout recorded")
+		}
+		return nil, errors.New("timeout has already been recorded")
+	}
+	connectTimeout := func() time.Duration {
+		// Some absurd duration that's unlikely to be chosen by something else.
+		return 1337 * time.Second
+	}
+
+	cc, err := NewClient(
+		"passthrough:///unused",
+		WithTransportCredentials(insecure.NewCredentials()),
+		WithDialer(dialer), withMinConnectDeadline(connectTimeout),
+	)
+	if err != nil {
+		t.Fatalf("grpc.NewClient() failed: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := cc.Close(); err != nil {
+			t.Errorf("cc.Close() failed: %v", err)
+		}
+	})
+	cc.Connect()
+
+	select {
+	case <-timeoutRecorded:
+	case <-time.After(defaultTestTimeout):
+		t.Fatal("Timeout when waiting for custom dialer to be invoked")
+	}
+
+	got := *recordedTimeout.Load()
+	hi := connectTimeout()
+	lo := hi - defaultTestTimeout
+	if lo >= got || got > hi {
+		t.Fatalf("timeout = %v, want %s < timeout <= %s", got, lo, hi)
+	}
+}
+
 // TestUpdateAddresses_NoopIfCalledWithSameAddresses tests that UpdateAddresses
 // should be noop if UpdateAddresses is called with the same list of addresses,
 // even when the SubConn is in Connecting and doesn't have a current address.
