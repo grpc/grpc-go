@@ -475,7 +475,9 @@ func (s) TestRingHash_AggregateClusterFallBackFromRingHashToLogicalDnsAtStartup(
 	}
 
 	dnsR := replaceDNSResolver(t)
-	dnsR.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: backends[0]}}})
+	dnsR.UpdateState(resolver.State{
+		Endpoints: []resolver.Endpoint{{Addresses: []resolver.Address{{Addr: backends[0]}}}},
+	})
 
 	if err := xdsServer.Update(ctx, updateOpts); err != nil {
 		t.Fatalf("Failed to update xDS resources: %v", err)
@@ -553,7 +555,9 @@ func (s) TestRingHash_AggregateClusterFallBackFromRingHashToLogicalDnsAtStartupN
 	}
 
 	dnsR := replaceDNSResolver(t)
-	dnsR.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: backends[0]}}})
+	dnsR.UpdateState(resolver.State{
+		Endpoints: []resolver.Endpoint{{Addresses: []resolver.Address{{Addr: backends[0]}}}},
+	})
 
 	if err := xdsServer.Update(ctx, updateOpts); err != nil {
 		t.Fatalf("Failed to update xDS resources: %v", err)
