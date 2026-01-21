@@ -1304,7 +1304,7 @@ func setupManagementServerAndResolver(t *testing.T) (*e2e.ManagementServer, reso
 
 // configureXDSResources configures the management server with a route that
 // enables auto_host_rewrite and an endpoint with the specified hostname.
-func configureXDSResources(ctx context.Context, t *testing.T, mgmtServer *e2e.ManagementServer, nodeID string, serverAddr string, endpointHostname string, secLevel e2e.SecurityLevel) {
+func configureXDSResources(ctx context.Context, t *testing.T, mgmtServer *e2e.ManagementServer, nodeID, serverAddr, endpointHostname string, secLevel e2e.SecurityLevel, clusterType e2e.ClusterType) {
 	t.Helper()
 
 	const (
@@ -1314,16 +1314,30 @@ func configureXDSResources(ctx context.Context, t *testing.T, mgmtServer *e2e.Ma
 		endpointName = "endpoints-my-test-xds-service"
 	)
 
+	port := testutils.ParsePort(t, serverAddr)
+
 	resources := e2e.DefaultClientResources(e2e.ResourceParams{
 		DialTarget: serviceName,
 		NodeID:     nodeID,
 		Host:       "localhost",
-		Port:       testutils.ParsePort(t, serverAddr),
+		Port:       port,
 		SecLevel:   secLevel,
 	})
 
-	// Set the endpoint hostname for authority rewriting.
-	resources.Endpoints[0].Endpoints[0].LbEndpoints[0].GetEndpoint().Hostname = endpointHostname
+	if clusterType == e2e.ClusterTypeLogicalDNS {
+		resources.Clusters = []*v3clusterpb.Cluster{
+			e2e.ClusterResourceWithOptions(e2e.ClusterOptions{
+				ClusterName: clusterName,
+				Type:        e2e.ClusterTypeLogicalDNS,
+				DNSHostName: endpointHostname,
+				DNSPort:     port,
+			}),
+		}
+		resources.Endpoints = nil
+	} else {
+		// Set the endpoint hostname for authority rewriting.
+		resources.Endpoints[0].Endpoints[0].LbEndpoints[0].GetEndpoint().Hostname = endpointHostname
+	}
 
 	// Modify the route to enable AutoHostRewrite.
 	resources.Routes[0].VirtualHosts[0].Routes[0].GetRoute().HostRewriteSpecifier = &v3routepb.RouteAction_AutoHostRewrite{
@@ -1339,54 +1353,84 @@ func configureXDSResources(ctx context.Context, t *testing.T, mgmtServer *e2e.Ma
 // rewritten to the endpoint's hostname. Also verifies that CallAuthority
 // call option takes precedence.
 func (s) TestAuthorityOverriding(t *testing.T) {
-	testutils.SetEnvConfig(t, &envconfig.XDSAuthorityRewrite, true)
-	mgmtServer, resolverBuilder, nodeID := setupManagementServerAndResolver(t)
-
-	// Start a server backend exposing the test service.
-	var gotAuthority string
-	f := &stubserver.StubServer{
-		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
-			if md, ok := metadata.FromIncomingContext(ctx); ok {
-				if authVals := md.Get(":authority"); len(authVals) > 0 {
-					gotAuthority = authVals[0]
-				}
-			}
-			return &testpb.Empty{}, nil
+	tests := []struct {
+		name        string
+		clusterType e2e.ClusterType
+	}{
+		{
+			name:        "EDS",
+			clusterType: e2e.ClusterTypeEDS,
+		},
+		{
+			name:        "LogicalDNS",
+			clusterType: e2e.ClusterTypeLogicalDNS,
 		},
 	}
-	server := stubserver.StartTestService(t, f)
-	defer server.Stop()
 
-	const xdsAuthorityOverride = "rewritten.example.com"
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	configureXDSResources(ctx, t, mgmtServer, nodeID, server.Address, xdsAuthorityOverride, e2e.SecurityLevelNone)
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			testutils.SetEnvConfig(t, &envconfig.XDSAuthorityRewrite, true)
+			mgmtServer, resolverBuilder, nodeID := setupManagementServerAndResolver(t)
 
-	// Create a ClientConn and make a successful RPC.
-	cc, err := grpc.NewClient("xds:///my-test-xds-service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(resolverBuilder))
-	if err != nil {
-		t.Fatalf("Failed to create client: %v", err)
-	}
-	defer cc.Close()
+			// Start a server backend exposing the test service.
+			var gotAuthority string
+			f := &stubserver.StubServer{
+				EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
+					if md, ok := metadata.FromIncomingContext(ctx); ok {
+						if authVals := md.Get(":authority"); len(authVals) > 0 {
+							gotAuthority = authVals[0]
+						}
+					}
+					return &testpb.Empty{}, nil
+				},
+			}
+			server := stubserver.StartTestService(t, f)
+			defer server.Stop()
 
-	client := testgrpc.NewTestServiceClient(cc)
-	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
-		t.Fatalf("client.EmptyCall() failed: %v", err)
-	}
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
 
-	if gotAuthority != xdsAuthorityOverride {
-		t.Errorf("invalid authority got: %q, want: %q", gotAuthority, xdsAuthorityOverride)
-	}
+			var hostname string
+			if test.clusterType == e2e.ClusterTypeEDS {
+				hostname = "rewritten.example.com"
+			} else {
+				hostname, _ = hostAndPortFromAddress(t, server.Address)
+			}
+			configureXDSResources(ctx, t, mgmtServer, nodeID, server.Address, hostname, e2e.SecurityLevelNone, test.clusterType)
 
-	// The authority specified via the `CallAuthority` CallOption takes the
-	// highest precedence when determining the `:authority` header.
-	const userAuthorityOverride = "user-override.com"
-	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.CallAuthority(userAuthorityOverride)); err != nil {
-		t.Fatalf("client.EmptyCall() failed: %v", err)
-	}
+			// Create a ClientConn and make a successful RPC.
+			cc, err := grpc.NewClient("xds:///my-test-xds-service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(resolverBuilder))
+			if err != nil {
+				t.Fatalf("Failed to create client: %v", err)
+			}
+			defer cc.Close()
 
-	if gotAuthority != userAuthorityOverride {
-		t.Errorf("Server received authority %q, want %q (user override)", gotAuthority, userAuthorityOverride)
+			client := testgrpc.NewTestServiceClient(cc)
+			if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+				t.Fatalf("client.EmptyCall() failed: %v", err)
+			}
+
+			var wantAuthority string
+			if test.clusterType == e2e.ClusterTypeEDS {
+				wantAuthority = "rewritten.example.com"
+			} else {
+				wantAuthority = server.Address
+			}
+			if gotAuthority != wantAuthority {
+				t.Errorf("invalid authority got: %q, want: %q", gotAuthority, wantAuthority)
+			}
+
+			// The authority specified via the `CallAuthority` CallOption takes the
+			// highest precedence when determining the `:authority` header.
+			const userAuthorityOverride = "user-override.com"
+			if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.CallAuthority(userAuthorityOverride)); err != nil {
+				t.Fatalf("client.EmptyCall() failed: %v", err)
+			}
+
+			if gotAuthority != userAuthorityOverride {
+				t.Errorf("Server received authority %q, want %q (user override)", gotAuthority, userAuthorityOverride)
+			}
+		})
 	}
 }
 
@@ -1442,7 +1486,7 @@ func (s) TestAuthorityOverridingWithTLS(t *testing.T) {
 
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
-			configureXDSResources(ctx, t, mgmtServer, nodeID, f.Address, test.xdsAuthorityOverride, e2e.SecurityLevelMTLS)
+			configureXDSResources(ctx, t, mgmtServer, nodeID, f.Address, test.xdsAuthorityOverride, e2e.SecurityLevelMTLS, e2e.ClusterTypeEDS)
 
 			// Create ClientConn with TLS
 			cc, err := grpc.NewClient("xds:///my-test-xds-service", grpc.WithTransportCredentials(clientCreds), grpc.WithResolvers(resolverBuilder))

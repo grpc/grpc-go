@@ -48,7 +48,7 @@ func buildResolverEndpoint(addr []string, hostname string) resolver.Endpoint {
 		address = append(address, resolver.Address{Addr: a})
 	}
 	resolverEndpoint := resolver.Endpoint{Addresses: address}
-	resolverEndpoint = setHostname(resolverEndpoint, hostname)
+	resolverEndpoint = SetHostname(resolverEndpoint, hostname)
 	return resolverEndpoint
 }
 
