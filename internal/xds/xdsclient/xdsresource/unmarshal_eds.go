@@ -40,9 +40,9 @@ import (
 // a resolver.Endpoint.
 type hostnameKeyType struct{}
 
-// setHostname returns a copy of the given endpoint with hostname added
+// SetHostname returns a copy of the given endpoint with hostname added
 // as an attribute.
-func setHostname(endpoint resolver.Endpoint, hostname string) resolver.Endpoint {
+func SetHostname(endpoint resolver.Endpoint, hostname string) resolver.Endpoint {
 	// Only set if non-empty; xds_cluster_impl uses this to trigger :authority
 	// rewriting.
 	if hostname == "" {
@@ -154,7 +154,7 @@ func parseEndpoints(lbEndpoints []*v3endpointpb.LbEndpoint, uniqueEndpointAddrs 
 			}
 		}
 		endpoint := resolver.Endpoint{Addresses: address}
-		endpoint = setHostname(endpoint, lbEndpoint.GetEndpoint().GetHostname())
+		endpoint = SetHostname(endpoint, lbEndpoint.GetEndpoint().GetHostname())
 		endpoint = ringhash.SetHashKey(endpoint, hashKey)
 		endpoints = append(endpoints, Endpoint{
 			ResolverEndpoint: endpoint,

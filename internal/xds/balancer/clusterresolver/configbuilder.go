@@ -144,7 +144,10 @@ func buildClusterImplConfigForDNS(g *nameGenerator, endpoints []resolver.Endpoin
 	retEndpoints := make([]resolver.Endpoint, len(endpoints))
 	pName := fmt.Sprintf("priority-%v", g.prefix)
 	for i, e := range endpoints {
-		retEndpoints[i] = hierarchy.SetInEndpoint(e, []string{pName})
+		// For Logical DNS clusters, the same hostname attribute is added
+		// to all endpoints. It is set to the name that is resolved for the
+		// Logical DNS cluster, including the port number.
+		retEndpoints[i] = xdsresource.SetHostname(hierarchy.SetInEndpoint(e, []string{pName}), mechanism.DNSHostname)
 		// Copy the nested address field as slice fields are shared by the
 		// iteration variable and the original slice.
 		retEndpoints[i].Addresses = append([]resolver.Address{}, e.Addresses...)
