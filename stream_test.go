@@ -31,6 +31,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
 const defaultTestTimeout = 10 * time.Second
@@ -88,7 +89,7 @@ func (s) TestUnaryClient_ServerStreamingMismatch(t *testing.T) {
 		{
 			name: "server_sends_error_after_message",
 			fullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
-				if err := stream.Send(&testgrpc.StreamingOutputCallResponse{}); err != nil {
+				if err := stream.Send(&testpb.StreamingOutputCallResponse{}); err != nil {
 					return err
 				}
 				return status.Error(codes.Internal, "server error after message")
@@ -99,13 +100,13 @@ func (s) TestUnaryClient_ServerStreamingMismatch(t *testing.T) {
 		{
 			name: "server_sends_second_message_exceeding_limit",
 			fullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
-				if err := stream.Send(&testgrpc.StreamingOutputCallResponse{
-					Payload: &testgrpc.Payload{Body: make([]byte, 1)},
+				if err := stream.Send(&testpb.StreamingOutputCallResponse{
+					Payload: &testpb.Payload{Body: make([]byte, 1)},
 				}); err != nil {
 					return err
 				}
-				return stream.Send(&testgrpc.StreamingOutputCallResponse{
-					Payload: &testgrpc.Payload{Body: make([]byte, 10)},
+				return stream.Send(&testpb.StreamingOutputCallResponse{
+					Payload: &testpb.Payload{Body: make([]byte, 10)},
 				})
 			},
 			clientCallOptions: []grpc.CallOption{grpc.MaxCallRecvMsgSize(5)},
@@ -131,7 +132,7 @@ func (s) TestUnaryClient_ServerStreamingMismatch(t *testing.T) {
 			// to use the non-streaming RecvMsg path, while the server handles it as
 			// a stream (allowing it to send messages and errors in ways a standard
 			// Unary server cannot).
-			err := ss.CC.Invoke(ctx, "/grpc.testing.TestService/FullDuplexCall", &testgrpc.StreamingOutputCallRequest{}, &testgrpc.StreamingOutputCallResponse{}, test.clientCallOptions...)
+			err := ss.CC.Invoke(ctx, "/grpc.testing.TestService/FullDuplexCall", &testpb.StreamingOutputCallRequest{}, &testpb.StreamingOutputCallResponse{}, test.clientCallOptions...)
 			if err == nil {
 				t.Fatal("Client.Invoke returned nil, want error")
 			}
