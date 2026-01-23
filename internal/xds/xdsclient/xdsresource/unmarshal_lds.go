@@ -85,6 +85,9 @@ func processClientSideListener(lis *v3listenerpb.Listener, opts *xdsclient.Decod
 		return nil, fmt.Errorf("original_ip_detection_extensions must be empty %+v", apiLis)
 	}
 
+	hcm := &HTTPConnectionManagerConfig{}
+	update.APIListener = hcm
+
 	switch apiLis.RouteSpecifier.(type) {
 	case *v3httppb.HttpConnectionManager_Rds:
 		if configsource := apiLis.GetRds().GetConfigSource(); configsource.GetAds() == nil && configsource.GetSelf() == nil {
@@ -94,13 +97,13 @@ func processClientSideListener(lis *v3listenerpb.Listener, opts *xdsclient.Decod
 		if name == "" {
 			return nil, fmt.Errorf("empty route_config_name: %+v", lis)
 		}
-		update.RouteConfigName = name
+		hcm.RouteConfigName = name
 	case *v3httppb.HttpConnectionManager_RouteConfig:
 		routeU, err := generateRDSUpdateFromRouteConfiguration(apiLis.GetRouteConfig(), opts)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse inline RDS resp: %v", err)
 		}
-		update.InlineRouteConfig = &routeU
+		hcm.InlineRouteConfig = &routeU
 	case nil:
 		return nil, fmt.Errorf("no RouteSpecifier: %+v", apiLis)
 	default:
@@ -109,10 +112,10 @@ func processClientSideListener(lis *v3listenerpb.Listener, opts *xdsclient.Decod
 
 	// The following checks and fields only apply to xDS protocol versions v3+.
 
-	update.MaxStreamDuration = apiLis.GetCommonHttpProtocolOptions().GetMaxStreamDuration().AsDuration()
+	hcm.MaxStreamDuration = apiLis.GetCommonHttpProtocolOptions().GetMaxStreamDuration().AsDuration()
 
 	var err error
-	if update.HTTPFilters, err = processHTTPFilters(apiLis.GetHttpFilters(), false); err != nil {
+	if hcm.HTTPFilters, err = processHTTPFilters(apiLis.GetHttpFilters(), false); err != nil {
 		return nil, err
 	}
 

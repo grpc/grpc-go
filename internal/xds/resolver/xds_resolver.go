@@ -322,7 +322,7 @@ func (r *xdsResolver) sendNewServiceConfig(cs stoppableConfigSelector) bool {
 
 	sc := serviceConfigJSON(r.activeClusters)
 	if r.logger.V(2) {
-		r.logger.Infof("For Listener resource %q and RouteConfiguration resource %q, generated service config: %+v", r.ldsResourceName, r.xdsConfig.Listener.RouteConfigName, sc)
+		r.logger.Infof("For Listener resource %q and RouteConfiguration resource %q, generated service config: %+v", r.ldsResourceName, r.xdsConfig.Listener.APIListener.RouteConfigName, sc)
 	}
 
 	// Send the update to the ClientConn.
@@ -357,7 +357,7 @@ func (r *xdsResolver) newConfigSelector() (*configSelector, error) {
 		},
 		routes:           make([]route, len(r.xdsConfig.VirtualHost.Routes)),
 		clusters:         make(map[string]*clusterInfo),
-		httpFilterConfig: r.xdsConfig.Listener.HTTPFilters,
+		httpFilterConfig: r.xdsConfig.Listener.APIListener.HTTPFilters,
 	}
 
 	for i, rt := range r.xdsConfig.VirtualHost.Routes {
@@ -371,7 +371,7 @@ func (r *xdsResolver) newConfigSelector() (*configSelector, error) {
 		} else {
 			for _, wc := range rt.WeightedClusters {
 				clusterName := clusterPrefix + wc.Name
-				interceptor, err := newInterceptor(r.xdsConfig.Listener.HTTPFilters, wc.HTTPFilterConfigOverride, rt.HTTPFilterConfigOverride, r.xdsConfig.VirtualHost.HTTPFilterConfigOverride)
+				interceptor, err := newInterceptor(r.xdsConfig.Listener.APIListener.HTTPFilters, wc.HTTPFilterConfigOverride, rt.HTTPFilterConfigOverride, r.xdsConfig.VirtualHost.HTTPFilterConfigOverride)
 				if err != nil {
 					return nil, err
 				}
@@ -389,7 +389,7 @@ func (r *xdsResolver) newConfigSelector() (*configSelector, error) {
 		cs.routes[i].m = xdsresource.RouteToMatcher(rt)
 		cs.routes[i].actionType = rt.ActionType
 		if rt.MaxStreamDuration == nil {
-			cs.routes[i].maxStreamDuration = r.xdsConfig.Listener.MaxStreamDuration
+			cs.routes[i].maxStreamDuration = r.xdsConfig.Listener.APIListener.MaxStreamDuration
 		} else {
 			cs.routes[i].maxStreamDuration = *rt.MaxStreamDuration
 		}

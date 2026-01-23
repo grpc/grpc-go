@@ -489,7 +489,7 @@ func (m *DependencyManager) onListenerResourceUpdate(update *xdsresource.Listene
 
 	m.listenerWatcher.setLastUpdate(update)
 
-	if update.InlineRouteConfig != nil {
+	if update.APIListener != nil && update.APIListener.InlineRouteConfig != nil {
 		// If there was a previous route config watcher because of a non-inline
 		// route configuration, cancel it.
 		m.rdsResourceName = ""
@@ -497,14 +497,18 @@ func (m *DependencyManager) onListenerResourceUpdate(update *xdsresource.Listene
 			m.routeConfigWatcher.stop()
 		}
 		m.routeConfigWatcher = &xdsResourceState[xdsresource.RouteConfigUpdate, routeExtras]{stop: func() {}}
-		m.applyRouteConfigUpdateLocked(update.InlineRouteConfig)
+		m.applyRouteConfigUpdateLocked(update.APIListener.InlineRouteConfig)
 		return
 	}
 
 	// We get here only if there was no inline route configuration. If the route
 	// config name has not changed, send an update with existing route
 	// configuration and the newly received listener configuration.
-	if m.rdsResourceName == update.RouteConfigName {
+	if update.APIListener == nil {
+		// This should not happen for a client-side listener, but just in case.
+		return
+	}
+	if m.rdsResourceName == update.APIListener.RouteConfigName {
 		m.maybeSendUpdateLocked()
 		return
 	}
@@ -513,7 +517,7 @@ func (m *DependencyManager) onListenerResourceUpdate(update *xdsresource.Listene
 	// new one. At this point, since the new route config name has not yet been
 	// resolved, no update is sent to the channel, and therefore the old route
 	// configuration (if received) is used until the new one is received.
-	m.rdsResourceName = update.RouteConfigName
+	m.rdsResourceName = update.APIListener.RouteConfigName
 	if m.routeConfigWatcher != nil {
 		m.routeConfigWatcher.stop()
 	}

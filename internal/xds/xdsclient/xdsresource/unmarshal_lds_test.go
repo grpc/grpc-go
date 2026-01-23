@@ -281,9 +281,11 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			resource: v3ListenerWithCDSConfigSourceSelf,
 			wantName: v3LDSTarget,
 			wantUpdate: ListenerUpdate{
-				RouteConfigName: v3RouteConfigName,
-				HTTPFilters:     []HTTPFilter{makeRouterFilter(t)},
-				Raw:             v3ListenerWithCDSConfigSourceSelf,
+				APIListener: &HTTPConnectionManagerConfig{
+					RouteConfigName: v3RouteConfigName,
+					HTTPFilters:     []HTTPFilter{makeRouterFilter(t)},
+				},
+				Raw: v3ListenerWithCDSConfigSourceSelf,
 			},
 		},
 		{
@@ -313,10 +315,12 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			resource: v3LisWithFilters(),
 			wantName: v3LDSTarget,
 			wantUpdate: ListenerUpdate{
-				RouteConfigName:   v3RouteConfigName,
-				MaxStreamDuration: time.Second,
-				HTTPFilters:       makeRouterFilterList(t),
-				Raw:               v3LisWithFilters(),
+				APIListener: &HTTPConnectionManagerConfig{
+					RouteConfigName:   v3RouteConfigName,
+					MaxStreamDuration: time.Second,
+					HTTPFilters:       makeRouterFilterList(t),
+				},
+				Raw: v3LisWithFilters(),
 			},
 		},
 		{
@@ -348,14 +352,17 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			resource: v3LisWithFilters(customFilter),
 			wantName: v3LDSTarget,
 			wantUpdate: ListenerUpdate{
-				RouteConfigName: v3RouteConfigName, MaxStreamDuration: time.Second,
-				HTTPFilters: []HTTPFilter{
-					{
-						Name:   "customFilter",
-						Filter: httpFilter{},
-						Config: filterConfig{Cfg: customFilterConfig},
+				APIListener: &HTTPConnectionManagerConfig{
+					RouteConfigName:   v3RouteConfigName,
+					MaxStreamDuration: time.Second,
+					HTTPFilters: []HTTPFilter{
+						{
+							Name:   "customFilter",
+							Filter: httpFilter{},
+							Config: filterConfig{Cfg: customFilterConfig},
+						},
+						makeRouterFilter(t),
 					},
-					makeRouterFilter(t),
 				},
 				Raw: v3LisWithFilters(customFilter),
 			},
@@ -365,14 +372,17 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			resource: v3LisWithFilters(oldTypedStructFilter),
 			wantName: v3LDSTarget,
 			wantUpdate: ListenerUpdate{
-				RouteConfigName: v3RouteConfigName, MaxStreamDuration: time.Second,
-				HTTPFilters: []HTTPFilter{
-					{
-						Name:   "customFilter",
-						Filter: httpFilter{},
-						Config: filterConfig{Cfg: customFilterOldTypedStructConfig},
+				APIListener: &HTTPConnectionManagerConfig{
+					RouteConfigName:   v3RouteConfigName,
+					MaxStreamDuration: time.Second,
+					HTTPFilters: []HTTPFilter{
+						{
+							Name:   "customFilter",
+							Filter: httpFilter{},
+							Config: filterConfig{Cfg: customFilterOldTypedStructConfig},
+						},
+						makeRouterFilter(t),
 					},
-					makeRouterFilter(t),
 				},
 				Raw: v3LisWithFilters(oldTypedStructFilter),
 			},
@@ -382,14 +392,17 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			resource: v3LisWithFilters(newTypedStructFilter),
 			wantName: v3LDSTarget,
 			wantUpdate: ListenerUpdate{
-				RouteConfigName: v3RouteConfigName, MaxStreamDuration: time.Second,
-				HTTPFilters: []HTTPFilter{
-					{
-						Name:   "customFilter",
-						Filter: httpFilter{},
-						Config: filterConfig{Cfg: customFilterNewTypedStructConfig},
+				APIListener: &HTTPConnectionManagerConfig{
+					RouteConfigName:   v3RouteConfigName,
+					MaxStreamDuration: time.Second,
+					HTTPFilters: []HTTPFilter{
+						{
+							Name:   "customFilter",
+							Filter: httpFilter{},
+							Config: filterConfig{Cfg: customFilterNewTypedStructConfig},
+						},
+						makeRouterFilter(t),
 					},
-					makeRouterFilter(t),
 				},
 				Raw: v3LisWithFilters(newTypedStructFilter),
 			},
@@ -399,14 +412,17 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			resource: v3LisWithFilters(customOptionalFilter),
 			wantName: v3LDSTarget,
 			wantUpdate: ListenerUpdate{
-				RouteConfigName: v3RouteConfigName, MaxStreamDuration: time.Second,
-				HTTPFilters: []HTTPFilter{
-					{
-						Name:   "customFilter",
-						Filter: httpFilter{},
-						Config: filterConfig{Cfg: customFilterConfig},
+				APIListener: &HTTPConnectionManagerConfig{
+					RouteConfigName:   v3RouteConfigName,
+					MaxStreamDuration: time.Second,
+					HTTPFilters: []HTTPFilter{
+						{
+							Name:   "customFilter",
+							Filter: httpFilter{},
+							Config: filterConfig{Cfg: customFilterConfig},
+						},
+						makeRouterFilter(t),
 					},
-					makeRouterFilter(t),
 				},
 				Raw: v3LisWithFilters(customOptionalFilter),
 			},
@@ -422,17 +438,20 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			resource: v3LisWithFilters(customFilter, customFilter2),
 			wantName: v3LDSTarget,
 			wantUpdate: ListenerUpdate{
-				RouteConfigName: v3RouteConfigName, MaxStreamDuration: time.Second,
-				HTTPFilters: []HTTPFilter{{
-					Name:   "customFilter",
-					Filter: httpFilter{},
-					Config: filterConfig{Cfg: customFilterConfig},
-				}, {
-					Name:   "customFilter2",
-					Filter: httpFilter{},
-					Config: filterConfig{Cfg: customFilterConfig},
-				},
-					makeRouterFilter(t),
+				APIListener: &HTTPConnectionManagerConfig{
+					RouteConfigName:   v3RouteConfigName,
+					MaxStreamDuration: time.Second,
+					HTTPFilters: []HTTPFilter{{
+						Name:   "customFilter",
+						Filter: httpFilter{},
+						Config: filterConfig{Cfg: customFilterConfig},
+					}, {
+						Name:   "customFilter2",
+						Filter: httpFilter{},
+						Config: filterConfig{Cfg: customFilterConfig},
+					},
+						makeRouterFilter(t),
+					},
 				},
 				Raw: v3LisWithFilters(customFilter, customFilter2),
 			},
@@ -448,10 +467,12 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			resource: v3LisWithFilters(serverOnlyOptionalCustomFilter),
 			wantName: v3LDSTarget,
 			wantUpdate: ListenerUpdate{
-				RouteConfigName:   v3RouteConfigName,
-				MaxStreamDuration: time.Second,
-				Raw:               v3LisWithFilters(serverOnlyOptionalCustomFilter),
-				HTTPFilters:       makeRouterFilterList(t),
+				APIListener: &HTTPConnectionManagerConfig{
+					RouteConfigName:   v3RouteConfigName,
+					MaxStreamDuration: time.Second,
+					HTTPFilters:       makeRouterFilterList(t),
+				},
+				Raw: v3LisWithFilters(serverOnlyOptionalCustomFilter),
 			},
 		},
 		{
@@ -459,14 +480,17 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			resource: v3LisWithFilters(clientOnlyCustomFilter),
 			wantName: v3LDSTarget,
 			wantUpdate: ListenerUpdate{
-				RouteConfigName: v3RouteConfigName, MaxStreamDuration: time.Second,
-				HTTPFilters: []HTTPFilter{
-					{
-						Name:   "clientOnlyCustomFilter",
-						Filter: clientOnlyHTTPFilter{},
-						Config: filterConfig{Cfg: clientOnlyCustomFilterConfig},
-					},
-					makeRouterFilter(t)},
+				APIListener: &HTTPConnectionManagerConfig{
+					RouteConfigName:   v3RouteConfigName,
+					MaxStreamDuration: time.Second,
+					HTTPFilters: []HTTPFilter{
+						{
+							Name:   "clientOnlyCustomFilter",
+							Filter: clientOnlyHTTPFilter{},
+							Config: filterConfig{Cfg: clientOnlyCustomFilterConfig},
+						},
+						makeRouterFilter(t)},
+				},
 				Raw: v3LisWithFilters(clientOnlyCustomFilter),
 			},
 		},
@@ -493,10 +517,12 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			resource: v3LisWithFilters(unknownOptionalFilter),
 			wantName: v3LDSTarget,
 			wantUpdate: ListenerUpdate{
-				RouteConfigName:   v3RouteConfigName,
-				MaxStreamDuration: time.Second,
-				HTTPFilters:       makeRouterFilterList(t),
-				Raw:               v3LisWithFilters(unknownOptionalFilter),
+				APIListener: &HTTPConnectionManagerConfig{
+					RouteConfigName:   v3RouteConfigName,
+					MaxStreamDuration: time.Second,
+					HTTPFilters:       makeRouterFilterList(t),
+				},
+				Raw: v3LisWithFilters(unknownOptionalFilter),
 			},
 		},
 		{
@@ -504,10 +530,12 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			resource: v3LisWithFilters(),
 			wantName: v3LDSTarget,
 			wantUpdate: ListenerUpdate{
-				RouteConfigName:   v3RouteConfigName,
-				MaxStreamDuration: time.Second,
-				HTTPFilters:       makeRouterFilterList(t),
-				Raw:               v3LisWithFilters(),
+				APIListener: &HTTPConnectionManagerConfig{
+					RouteConfigName:   v3RouteConfigName,
+					MaxStreamDuration: time.Second,
+					HTTPFilters:       makeRouterFilterList(t),
+				},
+				Raw: v3LisWithFilters(),
 			},
 		},
 		{
@@ -515,10 +543,12 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			resource: testutils.MarshalAny(t, &v3discoverypb.Resource{Resource: v3LisWithFilters()}),
 			wantName: v3LDSTarget,
 			wantUpdate: ListenerUpdate{
-				RouteConfigName:   v3RouteConfigName,
-				MaxStreamDuration: time.Second,
-				HTTPFilters:       makeRouterFilterList(t),
-				Raw:               v3LisWithFilters(),
+				APIListener: &HTTPConnectionManagerConfig{
+					RouteConfigName:   v3RouteConfigName,
+					MaxStreamDuration: time.Second,
+					HTTPFilters:       makeRouterFilterList(t),
+				},
+				Raw: v3LisWithFilters(),
 			},
 		},
 		// "To allow equating RBAC's direct_remote_ip and
@@ -530,10 +560,12 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			resource: v3LisToTestRBAC(0, nil),
 			wantName: v3LDSTarget,
 			wantUpdate: ListenerUpdate{
-				RouteConfigName:   v3RouteConfigName,
-				MaxStreamDuration: time.Second,
-				HTTPFilters:       []HTTPFilter{makeRouterFilter(t)},
-				Raw:               v3LisToTestRBAC(0, nil),
+				APIListener: &HTTPConnectionManagerConfig{
+					RouteConfigName:   v3RouteConfigName,
+					MaxStreamDuration: time.Second,
+					HTTPFilters:       []HTTPFilter{makeRouterFilter(t)},
+				},
+				Raw: v3LisToTestRBAC(0, nil),
 			},
 		},
 		// In order to support xDS Configured RBAC HTTPFilter equating direct
@@ -562,18 +594,20 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			resource: v3LisWithInlineRoute,
 			wantName: v3LDSTarget,
 			wantUpdate: ListenerUpdate{
-				InlineRouteConfig: &RouteConfigUpdate{
-					VirtualHosts: []*VirtualHost{{
-						Domains: []string{v3LDSTarget},
-						Routes: []*Route{{
-							Prefix:           newStringP("/"),
-							WeightedClusters: []WeightedCluster{{Name: clusterName, Weight: 1}},
-							ActionType:       RouteActionRoute,
-						}},
-					}}},
-				MaxStreamDuration: time.Second,
-				Raw:               v3LisWithInlineRoute,
-				HTTPFilters:       makeRouterFilterList(t),
+				APIListener: &HTTPConnectionManagerConfig{
+					InlineRouteConfig: &RouteConfigUpdate{
+						VirtualHosts: []*VirtualHost{{
+							Domains: []string{v3LDSTarget},
+							Routes: []*Route{{
+								Prefix:           newStringP("/"),
+								WeightedClusters: []WeightedCluster{{Name: clusterName, Weight: 1}},
+								ActionType:       RouteActionRoute,
+							}},
+						}}},
+					MaxStreamDuration: time.Second,
+					HTTPFilters:       makeRouterFilterList(t),
+				},
+				Raw: v3LisWithInlineRoute,
 			},
 		},
 	}
