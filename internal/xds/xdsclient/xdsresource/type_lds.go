@@ -27,11 +27,10 @@ import (
 // ListenerUpdate contains information received in an LDS response, which is of
 // interest to the registered LDS watcher.
 type ListenerUpdate struct {
-	// APIListener contains the HTTP connection manager configuration sourced from
-	// the api_listener field.
+	// APIListener contains the HTTP connection manager configuration.
 	APIListener *HTTPConnectionManagerConfig
-	// InboundListenerCfg contains inbound listener configuration.
-	InboundListenerCfg *InboundListenerConfig
+	// TCPListener contains inbound listener configuration.
+	TCPListener *InboundListenerConfig
 
 	// Raw is the resource from the xds response.
 	Raw *anypb.Any

@@ -266,7 +266,7 @@ func processServerSideListener(lis *v3listenerpb.Listener) (*ListenerUpdate, err
 		return nil, fmt.Errorf("no socket_address field in LDS response: %+v", lis)
 	}
 	lu := &ListenerUpdate{
-		InboundListenerCfg: &InboundListenerConfig{
+		TCPListener: &InboundListenerConfig{
 			Address: sockAddr.GetAddress(),
 			Port:    strconv.Itoa(int(sockAddr.GetPortValue())),
 		},
@@ -276,6 +276,6 @@ func processServerSideListener(lis *v3listenerpb.Listener) (*ListenerUpdate, err
 	if err != nil {
 		return nil, err
 	}
-	lu.InboundListenerCfg.FilterChains = fcMgr
+	lu.TCPListener.FilterChains = fcMgr
 	return lu, nil
 }

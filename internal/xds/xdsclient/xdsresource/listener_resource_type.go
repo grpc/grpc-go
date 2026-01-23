@@ -81,10 +81,10 @@ func securityConfigValidator(bc *bootstrap.Config, sc *SecurityConfig) error {
 }
 
 func listenerValidator(bc *bootstrap.Config, lis ListenerUpdate) error {
-	if lis.InboundListenerCfg == nil || lis.InboundListenerCfg.FilterChains == nil {
+	if lis.TCPListener == nil || lis.TCPListener.FilterChains == nil {
 		return nil
 	}
-	return lis.InboundListenerCfg.FilterChains.Validate(func(fc *FilterChain) error {
+	return lis.TCPListener.FilterChains.Validate(func(fc *FilterChain) error {
 		if fc == nil {
 			return nil
 		}

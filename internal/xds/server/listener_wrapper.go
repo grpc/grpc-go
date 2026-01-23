@@ -397,7 +397,7 @@ func (lw *ldsWatcher) ResourceChanged(update *xdsresource.ListenerUpdate, onDone
 		lw.logger.Infof("LDS watch for resource %q received update: %#v", lw.name, update)
 	}
 	l := lw.parent
-	ilc := update.InboundListenerCfg
+	ilc := update.TCPListener
 	// Make sure that the socket address on the received Listener resource
 	// matches the address of the net.Listener passed to us by the user. This
 	// check is done here instead of at the XDSClient layer because of the

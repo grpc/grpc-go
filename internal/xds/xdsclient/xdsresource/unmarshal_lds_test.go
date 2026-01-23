@@ -1356,7 +1356,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 			resource: v3LisToTestRBAC(0, nil),
 			wantName: v3LDSTarget,
 			wantUpdate: ListenerUpdate{
-				InboundListenerCfg: &InboundListenerConfig{
+				TCPListener: &InboundListenerConfig{
 					Address: "0.0.0.0",
 					Port:    "9999",
 					FilterChains: &FilterChainManager{
@@ -1441,7 +1441,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 			resource: listenerEmptyTransportSocket,
 			wantName: v3LDSTarget,
 			wantUpdate: ListenerUpdate{
-				InboundListenerCfg: &InboundListenerConfig{
+				TCPListener: &InboundListenerConfig{
 					Address: "0.0.0.0",
 					Port:    "9999",
 					FilterChains: &FilterChainManager{
@@ -1554,7 +1554,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 			resource: listenerNoValidationContextDeprecatedFields,
 			wantName: v3LDSTarget,
 			wantUpdate: ListenerUpdate{
-				InboundListenerCfg: &InboundListenerConfig{
+				TCPListener: &InboundListenerConfig{
 					Address: "0.0.0.0",
 					Port:    "9999",
 					FilterChains: &FilterChainManager{
@@ -1598,7 +1598,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 			resource: listenerNoValidationContextNewFields,
 			wantName: v3LDSTarget,
 			wantUpdate: ListenerUpdate{
-				InboundListenerCfg: &InboundListenerConfig{
+				TCPListener: &InboundListenerConfig{
 					Address: "0.0.0.0",
 					Port:    "9999",
 					FilterChains: &FilterChainManager{
@@ -1642,7 +1642,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 			resource: listenerWithValidationContextDeprecatedFields,
 			wantName: v3LDSTarget,
 			wantUpdate: ListenerUpdate{
-				InboundListenerCfg: &InboundListenerConfig{
+				TCPListener: &InboundListenerConfig{
 					Address: "0.0.0.0",
 					Port:    "9999",
 					FilterChains: &FilterChainManager{
@@ -1692,7 +1692,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 			resource: listenerWithValidationContextNewFields,
 			wantName: v3LDSTarget,
 			wantUpdate: ListenerUpdate{
-				InboundListenerCfg: &InboundListenerConfig{
+				TCPListener: &InboundListenerConfig{
 					Address: "0.0.0.0",
 					Port:    "9999",
 					FilterChains: &FilterChainManager{
