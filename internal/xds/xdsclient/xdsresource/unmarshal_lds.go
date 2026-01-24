@@ -20,6 +20,7 @@ package xdsresource
 import (
 	"errors"
 	"fmt"
+	"net"
 	"strconv"
 
 	v1xdsudpatypepb "github.com/cncf/xds/go/udpa/type/v1"
@@ -27,8 +28,10 @@ import (
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
+	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
 	"google.golang.org/grpc/internal/xds/clients/xdsclient"
 	"google.golang.org/grpc/internal/xds/httpfilter"
+	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource/version"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 )
@@ -272,10 +275,309 @@ func processServerSideListener(lis *v3listenerpb.Listener) (*ListenerUpdate, err
 		},
 	}
 
-	fcMgr, err := NewFilterChainManager(lis)
+	// Populate the default filter chain.
+	if dfc := lis.GetDefaultFilterChain(); dfc != nil {
+		fc, err := filterChainFromProto(dfc)
+		if err != nil {
+			return nil, fmt.Errorf("failed to unmarshal default filter chain: %v", err)
+		}
+		lu.TCPListener.DefaultFilterChain = fc
+	}
+
+	// Populated the filter chain map.
+	fcm, err := buildFilterChainMap(lis.GetFilterChains())
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal filter chains: %v", err)
+	}
+	lu.TCPListener.FilterChains = fcm
+
+	// If there are no supported filter chains and no default filter chain, we
+	// fail here. This will call the Listener resource to be NACK'ed.
+	if len(lu.TCPListener.FilterChains.DstPrefixes) == 0 && lu.TCPListener.DefaultFilterChain == nil {
+		return nil, fmt.Errorf("no supported filter chains and no default filter chain")
+	}
+
+	return lu, nil
+}
+
+func filterChainFromProto(fc *v3listenerpb.FilterChain) (*NetworkFilterChainConfig, error) {
+	hcmConfig, err := processNetworkFilters(fc.GetFilters())
 	if err != nil {
 		return nil, err
 	}
-	lu.TCPListener.FilterChains = fcMgr
-	return lu, nil
+
+	fcc := &NetworkFilterChainConfig{HTTPConnMgr: hcmConfig}
+	// If the transport_socket field is not specified, it means that the control
+	// plane has not sent us any security config. This is fine and the server
+	// will use the fallback credentials configured as part of the
+	// xdsCredentials.
+	ts := fc.GetTransportSocket()
+	if ts == nil {
+		return fcc, nil
+	}
+	if name := ts.GetName(); name != transportSocketName {
+		return nil, fmt.Errorf("transport_socket field has unexpected name: %s", name)
+	}
+	tc := ts.GetTypedConfig()
+	if typeURL := tc.GetTypeUrl(); typeURL != version.V3DownstreamTLSContextURL {
+		return nil, fmt.Errorf("transport_socket missing typed_config or wrong type_url: %q", typeURL)
+	}
+	downstreamCtx := &v3tlspb.DownstreamTlsContext{}
+	if err := proto.Unmarshal(tc.GetValue(), downstreamCtx); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal DownstreamTlsContext in LDS response: %v", err)
+	}
+	if downstreamCtx.GetRequireSni().GetValue() {
+		return nil, fmt.Errorf("require_sni field set to true in DownstreamTlsContext message: %v", downstreamCtx)
+	}
+	if downstreamCtx.GetOcspStaplePolicy() != v3tlspb.DownstreamTlsContext_LENIENT_STAPLING {
+		return nil, fmt.Errorf("ocsp_staple_policy field set to unsupported value in DownstreamTlsContext message: %v", downstreamCtx)
+	}
+	if downstreamCtx.GetCommonTlsContext() == nil {
+		return nil, errors.New("DownstreamTlsContext in LDS response does not contain a CommonTlsContext")
+	}
+	sc, err := securityConfigFromCommonTLSContext(downstreamCtx.GetCommonTlsContext(), true)
+	if err != nil {
+		return nil, err
+	}
+	if sc != nil {
+		sc.RequireClientCert = downstreamCtx.GetRequireClientCertificate().GetValue()
+		if sc.RequireClientCert && sc.RootInstanceName == "" {
+			return nil, errors.New("security configuration on the server-side does not contain root certificate provider instance name, but require_client_cert field is set")
+		}
+		fcc.SecurityCfg = sc
+	}
+	return fcc, nil
+}
+
+// dstPrefixEntry wraps DestinationPrefixEntry to track build state.
+type dstPrefixEntry struct {
+	entry         *DestinationPrefixEntry
+	rawBufferSeen bool
+}
+
+func buildFilterChainMap(fcs []*v3listenerpb.FilterChain) (NetworkFilterChainMap, error) {
+	dstPrefixEntries := []*dstPrefixEntry{}
+	for _, fc := range fcs {
+		fcMatch := fc.GetFilterChainMatch()
+		if fcMatch.GetDestinationPort().GetValue() != 0 {
+			// Destination port is the first match criteria and we do not
+			// support filter chains which contains this match criteria.
+			logger.Warningf("Dropping filter chain %q since it contains unsupported destination_port match field", fc.GetName())
+			continue
+		}
+
+		var err error
+		dstPrefixEntries, err = addFilterChainsForDestPrefixes(dstPrefixEntries, fc)
+		if err != nil {
+			return NetworkFilterChainMap{}, err
+		}
+	}
+
+	entries := []*DestinationPrefixEntry{}
+	for _, bEntry := range dstPrefixEntries {
+		fcSeen := false
+		for _, srcPrefixes := range bEntry.entry.SourceTypeArr {
+			if srcPrefixes == nil {
+				continue
+			}
+			for _, srcPrefix := range srcPrefixes.Entries {
+				for _, fc := range srcPrefix.PortMap {
+					if fc != nil {
+						fcSeen = true
+					}
+				}
+			}
+		}
+		if fcSeen {
+			entries = append(entries, bEntry.entry)
+		}
+	}
+	return NetworkFilterChainMap{DstPrefixes: entries}, nil
+}
+
+func addFilterChainsForDestPrefixes(dstPrefixEntries []*dstPrefixEntry, fc *v3listenerpb.FilterChain) ([]*dstPrefixEntry, error) {
+	ranges := fc.GetFilterChainMatch().GetPrefixRanges()
+	dstPrefixes := make([]*net.IPNet, 0, len(ranges))
+	for _, pr := range ranges {
+		cidr := fmt.Sprintf("%s/%d", pr.GetAddressPrefix(), pr.GetPrefixLen().GetValue())
+		_, ipnet, err := net.ParseCIDR(cidr)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse destination prefix range: %+v", pr)
+		}
+		dstPrefixes = append(dstPrefixes, ipnet)
+	}
+
+	var dpe *dstPrefixEntry
+	if len(dstPrefixes) == 0 {
+		// Use the unspecified entry when destination prefix is unspecified, and
+		// set the `net` field to nil.
+		dstPrefixEntries, dpe = addOrCreateDestPrefixEntry(dstPrefixEntries, nil)
+		if err := addFilterChainsForServerNames(dpe, fc); err != nil {
+			return nil, err
+		}
+		return dstPrefixEntries, nil
+	}
+	for _, prefix := range dstPrefixes {
+		dstPrefixEntries, dpe = addOrCreateDestPrefixEntry(dstPrefixEntries, prefix)
+		if err := addFilterChainsForServerNames(dpe, fc); err != nil {
+			return nil, err
+		}
+	}
+	return dstPrefixEntries, nil
+}
+
+func addOrCreateDestPrefixEntry(dstPrefixEntries []*dstPrefixEntry, prefix *net.IPNet) ([]*dstPrefixEntry, *dstPrefixEntry) {
+	for _, e := range dstPrefixEntries {
+		if ipNetEqual(e.entry.Prefix, prefix) {
+			return dstPrefixEntries, e
+		}
+	}
+	dpe := &dstPrefixEntry{entry: &DestinationPrefixEntry{Prefix: prefix}}
+	dstPrefixEntries = append(dstPrefixEntries, dpe)
+	return dstPrefixEntries, dpe
+}
+
+func addFilterChainsForServerNames(dstEntry *dstPrefixEntry, fc *v3listenerpb.FilterChain) error {
+	// Filter chains specifying server names in their match criteria always fail
+	// a match at connection time. So, these filter chains can be dropped now.
+	if len(fc.GetFilterChainMatch().GetServerNames()) != 0 {
+		logger.Warningf("Dropping filter chain %q since it contains unsupported server_names match field", fc.GetName())
+		return nil
+	}
+
+	return addFilterChainsForTransportProtocols(dstEntry, fc)
+}
+
+func addFilterChainsForTransportProtocols(dstEntry *dstPrefixEntry, fc *v3listenerpb.FilterChain) error {
+	tp := fc.GetFilterChainMatch().GetTransportProtocol()
+	switch {
+	case tp != "" && tp != "raw_buffer":
+		// Only allow filter chains with transport protocol set to empty string
+		// or "raw_buffer".
+		logger.Warningf("Dropping filter chain %q since it contains unsupported value for transport_protocol match field", fc.GetName())
+		return nil
+	case tp == "" && dstEntry.rawBufferSeen:
+		// If we have already seen filter chains with transport protocol set to
+		// "raw_buffer", we can drop filter chains with transport protocol set
+		// to empty string, since the former takes precedence.
+		logger.Warningf("Dropping filter chain %q since it contains unsupported value for transport_protocol match field", fc.GetName())
+		return nil
+	case tp != "" && !dstEntry.rawBufferSeen:
+		// This is the first "raw_buffer" that we are seeing. Set the bit and
+		// reset the source types array which might contain entries for filter
+		// chains with transport protocol set to empty string.
+		dstEntry.rawBufferSeen = true
+		dstEntry.entry.SourceTypeArr = [3]*SourcePrefixes{}
+	}
+	return addFilterChainsForApplicationProtocols(dstEntry, fc)
+}
+
+func addFilterChainsForApplicationProtocols(dstEntry *dstPrefixEntry, fc *v3listenerpb.FilterChain) error {
+	if len(fc.GetFilterChainMatch().GetApplicationProtocols()) != 0 {
+		logger.Warningf("Dropping filter chain %q since it contains unsupported application_protocols match field", fc.GetName())
+		return nil
+	}
+	return addFilterChainsForSourceType(dstEntry.entry, fc)
+}
+
+func addFilterChainsForSourceType(entry *DestinationPrefixEntry, fc *v3listenerpb.FilterChain) error {
+	var srcType int
+	switch st := fc.GetFilterChainMatch().GetSourceType(); st {
+	case v3listenerpb.FilterChainMatch_ANY:
+		srcType = 0
+	case v3listenerpb.FilterChainMatch_SAME_IP_OR_LOOPBACK:
+		srcType = 1
+	case v3listenerpb.FilterChainMatch_EXTERNAL:
+		srcType = 2
+	default:
+		return fmt.Errorf("unsupported source type: %v", st)
+	}
+
+	if entry.SourceTypeArr[srcType] == nil {
+		entry.SourceTypeArr[srcType] = &SourcePrefixes{}
+	}
+	return addFilterChainsForSourcePrefixes(entry.SourceTypeArr[srcType], fc)
+}
+
+func addFilterChainsForSourcePrefixes(srcPrefixes *SourcePrefixes, fc *v3listenerpb.FilterChain) error {
+	ranges := fc.GetFilterChainMatch().GetSourcePrefixRanges()
+	prefixes := make([]*net.IPNet, 0, len(ranges))
+	for _, pr := range ranges {
+		cidr := fmt.Sprintf("%s/%d", pr.GetAddressPrefix(), pr.GetPrefixLen().GetValue())
+		_, ipnet, err := net.ParseCIDR(cidr)
+		if err != nil {
+			return fmt.Errorf("failed to parse source prefix range: %+v", pr)
+		}
+		prefixes = append(prefixes, ipnet)
+	}
+
+	if len(prefixes) == 0 {
+		return addOrCreateSourcePrefixEntry(srcPrefixes, nil, fc)
+	}
+	for _, prefix := range prefixes {
+		if err := addOrCreateSourcePrefixEntry(srcPrefixes, prefix, fc); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func addOrCreateSourcePrefixEntry(srcPrefixes *SourcePrefixes, prefix *net.IPNet, fc *v3listenerpb.FilterChain) error {
+	// Find existing entry
+	var entry *SourcePrefixEntry
+	for _, e := range srcPrefixes.Entries {
+		if ipNetEqual(e.Prefix, prefix) {
+			entry = e
+			break
+		}
+	}
+	if entry == nil {
+		entry = &SourcePrefixEntry{
+			Prefix:  prefix,
+			PortMap: make(map[int]*NetworkFilterChainConfig),
+		}
+		srcPrefixes.Entries = append(srcPrefixes.Entries, entry)
+	}
+	return addFilterChainsForSourcePorts(entry, fc)
+}
+
+func addFilterChainsForSourcePorts(entry *SourcePrefixEntry, fc *v3listenerpb.FilterChain) error {
+	ports := fc.GetFilterChainMatch().GetSourcePorts()
+	srcPorts := make([]int, 0, len(ports))
+	for _, port := range ports {
+		srcPorts = append(srcPorts, int(port))
+	}
+
+	if len(srcPorts) == 0 {
+		if entry.PortMap[0] != nil {
+			return errors.New("multiple filter chains with overlapping matching rules are defined")
+		}
+		fcc, err := filterChainFromProto(fc)
+		if err != nil {
+			return err
+		}
+		entry.PortMap[0] = fcc
+		return nil
+	}
+	for _, port := range srcPorts {
+		if entry.PortMap[port] != nil {
+			return errors.New("multiple filter chains with overlapping matching rules are defined")
+		}
+		fcc, err := filterChainFromProto(fc)
+		if err != nil {
+			return err
+		}
+		entry.PortMap[port] = fcc
+	}
+	return nil
+}
+
+func ipNetEqual(a, b *net.IPNet) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.String() == b.String()
 }

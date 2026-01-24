@@ -80,6 +80,10 @@ type InboundListenerConfig struct {
 	// Port is the local port on which the inbound listener is expected to
 	// accept incoming connections.
 	Port string
-	// FilterChains is the list of filter chains associated with this listener.
-	FilterChains *FilterChainManager
+
+	// DefaultFilterChain is the default filter chain to use if no other filter
+	// chain matches.
+	DefaultFilterChain *NetworkFilterChainConfig
+	// FilterChains contains the filter chains associated with this listener.
+	FilterChains NetworkFilterChainMap
 }
