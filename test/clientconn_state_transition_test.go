@@ -188,7 +188,7 @@ func testStateTransitionSingleAddress(t *testing.T, wantStates []connectivity.St
 
 	dopts := []grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithDialer(pl.Dialer()),
+		grpc.WithContextDialer(pl.ContextDialer()),
 		grpc.WithConnectParams(grpc.ConnectParams{
 			Backoff:           backoff.Config{},
 			MinConnectTimeout: 100 * time.Millisecond,

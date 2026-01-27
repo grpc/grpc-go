@@ -19,12 +19,15 @@
 package testutils_test
 
 import (
+	"context"
 	"testing"
 	"time"
 
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
 )
+
+const defaultTestTimeout = 10 * time.Second
 
 type s struct {
 	grpctest.Tester
@@ -53,8 +56,10 @@ func (s) TestPipeListener(t *testing.T) {
 		recvdBytes <- read
 	}()
 
-	dl := pl.Dialer()
-	conn, err := dl("", time.Duration(0))
+	dl := pl.ContextDialer()
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	conn, err := dl(ctx, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,8 +90,10 @@ func (s) TestUnblocking(t *testing.T) {
 		{
 			desc: "Accept unblocks Dial",
 			blockFunc: func(pl *testutils.PipeListener, done chan struct{}) error {
-				dl := pl.Dialer()
-				_, err := dl("", time.Duration(0))
+				dl := pl.ContextDialer()
+				ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+				defer cancel()
+				_, err := dl(ctx, "")
 				close(done)
 				return err
 			},
@@ -99,8 +106,10 @@ func (s) TestUnblocking(t *testing.T) {
 			desc:                 "Close unblocks Dial",
 			blockFuncShouldError: true, // because pl.Close will be called
 			blockFunc: func(pl *testutils.PipeListener, done chan struct{}) error {
-				dl := pl.Dialer()
-				_, err := dl("", time.Duration(0))
+				dl := pl.ContextDialer()
+				ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+				defer cancel()
+				_, err := dl(ctx, "")
 				close(done)
 				return err
 			},
@@ -116,8 +125,10 @@ func (s) TestUnblocking(t *testing.T) {
 				return err
 			},
 			unblockFunc: func(pl *testutils.PipeListener) error {
-				dl := pl.Dialer()
-				_, err := dl("", time.Duration(0))
+				dl := pl.ContextDialer()
+				ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+				defer cancel()
+				_, err := dl(ctx, "")
 				return err
 			},
 		},
