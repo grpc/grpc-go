@@ -25,7 +25,6 @@ import (
 
 	v3statuspb "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
 	estats "google.golang.org/grpc/experimental/stats"
-	"google.golang.org/grpc/internal/envconfig"
 	istats "google.golang.org/grpc/internal/stats"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/protobuf/proto"
@@ -44,7 +43,6 @@ var (
 // Pool represents a pool of xDS clients that share the same bootstrap
 // configuration.
 type Pool struct {
-	// mu guards the following.
 	mu      sync.Mutex
 	clients map[string]*clientImpl
 	// getConfiguration is a sync.OnceValues that attempts to read the bootstrap
@@ -89,24 +87,32 @@ func NewPool(config *bootstrap.Config) *Pool {
 	return &Pool{
 		clients: make(map[string]*clientImpl),
 		getConfiguration: func() (*bootstrap.Config, error) {
+			if config == nil {
+				return nil, fmt.Errorf("xds: bootstrap config cannot be nil")
+			}
 			return config, nil
 		},
 	}
 }
 
-// getBootstrapConfiguration returns the bootstrap configuration loaded from
-// the environment variables.
+// getBootstrapConfiguration returns the config specified at pool creation time.
 func (p *Pool) getBootstrapConfiguration() (*bootstrap.Config, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	config, err := p.getConfiguration()
 	if err != nil {
-		return nil, fmt.Errorf("xds: failed to read xDS bootstrap config from env vars:  %v", err)
-	}
-	if config == nil {
-		return nil, fmt.Errorf("failed to read xDS bootstrap config from env vars: bootstrap environment variables (%q or %q) not defined", envconfig.XDSBootstrapFileNameEnv, envconfig.XDSBootstrapFileContentEnv)
+		return nil, fmt.Errorf("xds: failed to read xDS bootstrap config:  %v", err)
 	}
 	return config, nil
+}
+
+// getConfig returns the provided config if it is non-nil. Otherwise, it
+// delegates to getBootstrapConfiguration to retrieve the configuration.
+func (p *Pool) getConfig(config *bootstrap.Config) (*bootstrap.Config, error) {
+	if config != nil {
+		return config, nil
+	}
+	return p.getBootstrapConfiguration()
 }
 
 // NewClientWithConfig returns an xDS client with the given name from the pool.
@@ -120,12 +126,9 @@ func (p *Pool) getBootstrapConfiguration() (*bootstrap.Config, error) {
 // expected to invoke once they are done using the client.  It is safe for the
 // caller to invoke this close function multiple times.
 func (p *Pool) NewClientWithConfig(name string, metricsRecorder estats.MetricsRecorder, config *bootstrap.Config) (XDSClient, func(), error) {
-	if config == nil {
-		var err error
-		config, err = p.getBootstrapConfiguration()
-		if err != nil {
-			return nil, nil, err
-		}
+	config, err := p.getConfig(config)
+	if err != nil {
+		return nil, nil, err
 	}
 	return p.newRefCounted(name, metricsRecorder, defaultWatchExpiryTimeout, config)
 }
@@ -138,7 +141,7 @@ func (p *Pool) NewClientWithConfig(name string, metricsRecorder estats.MetricsRe
 // expected to invoke once they are done using the client.  It is safe for the
 // caller to invoke this close function multiple times.
 func (p *Pool) NewClient(name string, metricsRecorder estats.MetricsRecorder) (XDSClient, func(), error) {
-	config, err := p.getBootstrapConfiguration()
+	config, err := p.getConfig(nil)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -172,13 +175,9 @@ func (p *Pool) NewClientForTesting(opts OptionsForTesting) (XDSClient, func(), e
 		opts.MetricsRecorder = istats.NewMetricsRecorderList(nil)
 	}
 
-	config := opts.Config
-	if config == nil {
-		var err error
-		config, err = p.getBootstrapConfiguration()
-		if err != nil {
-			return nil, nil, err
-		}
+	config, err := p.getConfig(opts.Config)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	c, cancel, err := p.newRefCounted(opts.Name, opts.MetricsRecorder, opts.WatchExpiryTimeout, config)
@@ -293,13 +292,11 @@ func (p *Pool) clientRefCountedClose(name string) {
 // newRefCounted creates a new reference counted xDS client implementation for
 // name, if one does not exist already. If an xDS client for the given name
 // exists, it gets a reference to it and returns it.
+//
+// The config should not be nil.
 func (p *Pool) newRefCounted(name string, metricsRecorder estats.MetricsRecorder, watchExpiryTimeout time.Duration, config *bootstrap.Config) (*clientImpl, func(), error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-
-	if config == nil {
-		return nil, nil, fmt.Errorf("xds: bootstrap config cannot be nil")
-	}
 
 	if c := p.clients[name]; c != nil {
 		c.incrRef()
