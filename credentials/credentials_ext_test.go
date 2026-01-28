@@ -375,11 +375,11 @@ func (s) TestCorrectAuthorityWithCustomCreds(t *testing.T) {
 // TestAuthorityOverrideWithCertChain tests that the authority being used to
 // override per-RPC authority is validated against the leaf certificate only
 // and not against the intermediate certificates.
-func (s) TestAuthorityOverrideWithCertChain(t *testing.T) {
+func TestAuthorityOverrideWithCertChain(t *testing.T) {
 	rootCert, certChain, leafKey := generateCertChain(t,
-		CertConfig{CommonName: "root.example.com", IsCA: true},
-		CertConfig{CommonName: "intermediate.example.com", DNSNames: []string{"intermediate.example.com"}, IsCA: true},
-		CertConfig{CommonName: "*.example.leaf.com", DNSNames: []string{"*.example.leaf.com"}, IsCA: false},
+		certConfig{commonName: "root.example.com", isCA: true},
+		certConfig{commonName: "intermediate.example.com", dnsNames: []string{"intermediate.example.com"}, isCA: true},
+		certConfig{commonName: "*.example.leaf.com", dnsNames: []string{"*.example.leaf.com"}, isCA: false},
 	)
 
 	// Construct server credentials from leaf and intermediate certificates.
@@ -443,7 +443,7 @@ func (s) TestAuthorityOverrideWithCertChain(t *testing.T) {
 
 			_, err = testgrpc.NewTestServiceClient(cc).EmptyCall(ctx, &testpb.Empty{}, grpc.CallAuthority(tt.authority))
 			if got := status.Code(err); got != tt.wantCode {
-				t.Fatalf("EmptyCall() with authority %q: got code %v, want %v; err: %v", tt.authority, got, tt.wantCode, err)
+				t.Fatalf("EmptyCall() with authority %q: got code %v, want %v", tt.authority, got, tt.wantCode)
 			}
 			if tt.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tt.wantErr)) {
 				t.Fatalf("EmptyCall() with authority %q: expected error to contain %q, got %v", tt.authority, tt.wantErr, err)
@@ -452,17 +452,17 @@ func (s) TestAuthorityOverrideWithCertChain(t *testing.T) {
 	}
 }
 
-// CertConfig defines the configuration for generating a certificate.
-type CertConfig struct {
-	CommonName string
-	DNSNames   []string
-	IsCA       bool
+// certConfig defines the configuration for generating a certificate.
+type certConfig struct {
+	commonName string
+	dnsNames   []string
+	isCA       bool
 }
 
-// createCertificate generates a certificate based on the provided CertConfig.
-// It can create self-signed certificates(if parentCert passed is nil) or
-// certificates signed by a parent certificate.
-func createCertificate(t *testing.T, cfg CertConfig, serial int64, parentCert *x509.Certificate, parentKey *rsa.PrivateKey) (*x509.Certificate, *rsa.PrivateKey) {
+// createCertificate generates a certificate based on the provided certConfig.
+// It creates self-signed certificates if parentCert passed is nil otherwise it
+// creates certificates signed by a parent certificate.
+func createCertificate(t *testing.T, cfg certConfig, serial int64, parentCert *x509.Certificate, parentKey *rsa.PrivateKey) (*x509.Certificate, *rsa.PrivateKey) {
 	t.Helper()
 
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
@@ -473,18 +473,12 @@ func createCertificate(t *testing.T, cfg CertConfig, serial int64, parentCert *x
 	now := time.Now()
 	tmpl := &x509.Certificate{
 		SerialNumber:          big.NewInt(serial),
-		Subject:               pkix.Name{CommonName: cfg.CommonName},
-		DNSNames:              cfg.DNSNames,
+		Subject:               pkix.Name{CommonName: cfg.commonName},
+		DNSNames:              cfg.dnsNames,
 		NotBefore:             now.Add(-time.Hour),
 		NotAfter:              now.Add(time.Hour),
 		BasicConstraintsValid: true,
-		IsCA:                  cfg.IsCA,
-	}
-
-	if cfg.IsCA {
-		tmpl.KeyUsage = x509.KeyUsageCertSign | x509.KeyUsageCRLSign
-	} else {
-		tmpl.KeyUsage = x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment
+		IsCA:                  cfg.isCA,
 	}
 
 	// If no parent is provided, the certificate is self-signed
@@ -512,7 +506,7 @@ func createCertificate(t *testing.T, cfg CertConfig, serial int64, parentCert *x
 // Leaf). It returns the root certificate, a slice containing the leaf and
 // intermediate certificates in the order [leaf, intermediate], and the private
 // key for the leaf certificate.
-func generateCertChain(t *testing.T, rootCfg, interCfg, leafCfg CertConfig) (root *x509.Certificate, chain []*x509.Certificate, leafKey *rsa.PrivateKey) {
+func generateCertChain(t *testing.T, rootCfg, interCfg, leafCfg certConfig) (root *x509.Certificate, chain []*x509.Certificate, leafKey *rsa.PrivateKey) {
 	t.Helper()
 	root, rootKey := createCertificate(t, rootCfg, 1, nil, nil)
 	intermediate, interKey := createCertificate(t, interCfg, 2, root, rootKey)
