@@ -1508,10 +1508,10 @@ func (s) TestEndpointAmbientError(t *testing.T) {
 	}
 }
 
-// Tests the scanerio where a cluster is removed from route config but still has
+// Tests the scenario where a cluster is removed from route config but still has
 // subscriptions. Verifies that it is present in the XDSConfig update. Also
-// verifies that it is removed from the XDSConfig update after the references
-// for that cluster are no longer present.
+// verifies that it is removed from the XDSConfig update after all the
+// references for that cluster are no longer present.
 func (s) TestClusterSubscription_Lifecycle(t *testing.T) {
 	xdsdepmgr.EnableClusterAndEndpointsWatch = true
 	nodeID, mgmtServer, xdsClient := setupManagementServerAndClient(t, false)
@@ -1547,7 +1547,10 @@ func (s) TestClusterSubscription_Lifecycle(t *testing.T) {
 	edsServiceName := resources.Clusters[0].EdsClusterConfig.ServiceName
 
 	// Subscribe to the old cluster.
-	unsubscribe := dm.ClusterSubscription(clusterName)
+	unsubscribe := dm.Subscribe(clusterName)
+	// subscribe twice to test multiple subscriptions and verify that the
+	// cluster is only removed after all subscriptions are removed.
+	unsubscribe1 := dm.Subscribe(clusterName)
 
 	// Update RouteConfig to REMOVE the cluster and point to a new cluster. The
 	// old cluster should still be present in the update because of the
@@ -1658,9 +1661,22 @@ func (s) TestClusterSubscription_Lifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Unsubscribe the reference to the old cluster.
+	// Unsubscribe one reference to the old cluster.
 	unsubscribe()
 
+	// Verify that no update is received since there is still one subscription
+	// to the old cluster remaining.
+	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
+	defer sCancel()
+	select {
+	case <-sCtx.Done():
+	case update := <-watcher.updateCh:
+		t.Fatalf("Received unexpected update from dependency manager: %+v", update)
+	case err := <-watcher.errorCh:
+		t.Fatalf("Received unexpected error from dependency manager: %v", err)
+	}
+
+	unsubscribe1()
 	// Now "clusterName" should be removed. "newClusterName" should remain.
 	wantXdsConfig = makeXDSConfig(resources.Routes[0].Name, newClusterName, newEDSServcie, "localhost:8081")
 
