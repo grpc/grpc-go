@@ -79,7 +79,7 @@ func (c *customTestResourceData) Equal(other xdsclient.ResourceData) bool {
 	if c == nil && other == nil {
 		return true
 	}
-	if (c == nil) != (other == nil) {
+	if c == nil || other == nil {
 		return false
 	}
 	o, ok := other.(*customTestResourceData)
@@ -91,11 +91,6 @@ func (c *customTestResourceData) Equal(other xdsclient.ResourceData) bool {
 
 func (c *customTestResourceData) Bytes() []byte {
 	return []byte(c.val)
-}
-
-func (c *customTestResourceData) Raw() *anypb.Any {
-	a, _ := anypb.New(&wrapperspb.StringValue{Value: c.val})
-	return a
 }
 
 // customTestWatcher is a watcher for the custom resource type.
@@ -207,7 +202,7 @@ func (s) TestCustomResourceWatch(t *testing.T) {
 			}
 
 			// Send a response with the custom resource.
-			any, err := anypb.New(&wrapperspb.StringValue{Value: test.resourceValue})
+			resource, err := anypb.New(&wrapperspb.StringValue{Value: test.resourceValue})
 			if err != nil {
 				t.Fatalf("Failed to marshal resource: %v", err)
 			}
@@ -215,7 +210,7 @@ func (s) TestCustomResourceWatch(t *testing.T) {
 				Resp: &v3discoverypb.DiscoveryResponse{
 					TypeUrl:     customTestResourceType.TypeURL,
 					VersionInfo: "1",
-					Resources:   []*anypb.Any{any},
+					Resources:   []*anypb.Any{resource},
 				},
 			}
 
