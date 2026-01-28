@@ -1231,7 +1231,10 @@ func (t *http2Client) handleData(f *parsedDataFrame) {
 	// The server has closed the stream without sending trailers.  Record that
 	// the read direction is closed, and set the status appropriately.
 	if f.StreamEnded() {
-		t.closeStream(s, io.EOF, false, http2.ErrCodeNo, status.New(codes.Internal, "server closed the stream without sending trailers"), nil, true)
+		// If client received END_STREAM from server while stream was still
+		// active, send RST_STREAM.
+		rstStream := s.getState() == streamActive
+		t.closeStream(s, io.EOF, rstStream, http2.ErrCodeNo, status.New(codes.Internal, "server closed the stream without sending trailers"), nil, true)
 	}
 }
 
