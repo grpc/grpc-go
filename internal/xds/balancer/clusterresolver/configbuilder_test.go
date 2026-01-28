@@ -503,37 +503,6 @@ func TestGroupLocalitiesByPriority(t *testing.T) {
 	}
 }
 
-func TestDedupSortedIntSlice(t *testing.T) {
-	tests := []struct {
-		name string
-		a    []int
-		want []int
-	}{
-		{
-			name: "empty",
-			a:    []int{},
-			want: []int{},
-		},
-		{
-			name: "no dup",
-			a:    []int{0, 1, 2, 3},
-			want: []int{0, 1, 2, 3},
-		},
-		{
-			name: "with dup",
-			a:    []int{0, 0, 1, 1, 1, 2, 3},
-			want: []int{0, 1, 2, 3},
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := dedupSortedIntSlice(tt.a); !cmp.Equal(got, tt.want) {
-				t.Errorf("dedupSortedIntSlice() = %v, want %v, diff %v", got, tt.want, cmp.Diff(got, tt.want))
-			}
-		})
-	}
-}
-
 func TestPriorityLocalitiesToClusterImpl(t *testing.T) {
 	tests := []struct {
 		name          string

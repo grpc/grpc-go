@@ -21,8 +21,8 @@ package clusterresolver
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"slices"
-	"sort"
 
 	"google.golang.org/grpc/internal/balancer/weight"
 	"google.golang.org/grpc/internal/hierarchy"
@@ -213,40 +213,20 @@ func buildClusterImplConfigForEDS(g *nameGenerator, edsResp xdsresource.Endpoint
 // For example, for L0-p0, L1-p0, L2-p1, results will be
 // - [[L0, L1], [L2]]
 func groupLocalitiesByPriority(localities []xdsresource.Locality) [][]xdsresource.Locality {
-	var priorityIntSlice []int
 	priorities := make(map[int][]xdsresource.Locality)
 	for _, locality := range localities {
 		priority := int(locality.Priority)
 		priorities[priority] = append(priorities[priority], locality)
-		priorityIntSlice = append(priorityIntSlice, priority)
 	}
 	// Sort the priorities based on the int value, deduplicate, and then turn
 	// the sorted list into a string list. This will be child names, in priority
 	// order.
-	sort.Ints(priorityIntSlice)
-	priorityIntSliceDeduped := dedupSortedIntSlice(priorityIntSlice)
-	ret := make([][]xdsresource.Locality, 0, len(priorityIntSliceDeduped))
-	for _, p := range priorityIntSliceDeduped {
+	priorityIntSlice := slices.Sorted(maps.Keys(priorities))
+	ret := make([][]xdsresource.Locality, 0, len(priorityIntSlice))
+	for _, p := range priorityIntSlice {
 		ret = append(ret, priorities[p])
 	}
 	return ret
-}
-
-func dedupSortedIntSlice(a []int) []int {
-	if len(a) == 0 {
-		return a
-	}
-	i, j := 0, 1
-	for ; j < len(a); j++ {
-		if a[i] == a[j] {
-			continue
-		}
-		i++
-		if i != j {
-			a[i] = a[j]
-		}
-	}
-	return a[:i+1]
 }
 
 // priorityLocalitiesToClusterImpl takes a list of localities (with the same
