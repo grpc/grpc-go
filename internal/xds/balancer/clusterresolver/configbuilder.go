@@ -236,10 +236,6 @@ func groupLocalitiesByPriority(localities []xdsresource.Locality) [][]xdsresourc
 func priorityLocalitiesToClusterImpl(localities []xdsresource.Locality, priorityName string, mechanism DiscoveryMechanism, drops []clusterimpl.DropConfig, xdsLBPolicy *internalserviceconfig.BalancerConfig) (*clusterimpl.LBConfig, []resolver.Endpoint, error) {
 	var retEndpoints []resolver.Endpoint
 	for _, locality := range localities {
-		var lw uint32 = 1
-		if locality.Weight != 0 {
-			lw = locality.Weight
-		}
 		localityStr := xdsinternal.LocalityString(locality.ID)
 		for _, endpoint := range locality.Endpoints {
 			// Filter out all "unhealthy" endpoints (unknown and healthy are
@@ -262,12 +258,8 @@ func priorityLocalitiesToClusterImpl(localities []xdsresource.Locality, priority
 			// populate a new locality weight attribute for each address The
 			// attribute will have the weight (as an integer) of the locality
 			// the address is part of." - A52
-			resolverEndpoint = wrrlocality.SetAddrInfo(resolverEndpoint, wrrlocality.AddrInfo{LocalityWeight: lw})
-			var ew uint32 = 1
-			if endpoint.Weight != 0 {
-				ew = endpoint.Weight
-			}
-			resolverEndpoint = weight.Set(resolverEndpoint, weight.EndpointInfo{Weight: lw * ew})
+			resolverEndpoint = wrrlocality.SetAddrInfo(resolverEndpoint, wrrlocality.AddrInfo{LocalityWeight: locality.Weight})
+			resolverEndpoint = weight.Set(resolverEndpoint, weight.EndpointInfo{Weight: locality.Weight * endpoint.Weight})
 			retEndpoints = append(retEndpoints, resolverEndpoint)
 		}
 	}

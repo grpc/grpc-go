@@ -102,6 +102,7 @@ func init() {
 						{Addr: fmt.Sprintf("addr-%d-%d-additional-2", i, j)},
 					},
 				},
+				Weight: 1,
 			})
 		}
 		testResolverEndpoints = append(testResolverEndpoints, endpoints)
