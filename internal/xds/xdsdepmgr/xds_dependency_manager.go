@@ -895,19 +895,19 @@ func (x *xdsResourceWatcher[T]) AmbientError(err error, onDone func()) {
 	x.onAmbientError(err, onDone)
 }
 
-// xdsClusterSubscriberKey is the type used as the key to store the Subscriber
-// interface in the Attributes field of resolver.states.
+// xdsClusterSubscriberKey is the type used as the key to store the
+// ClusterSubscriber interface in the Attributes field of resolver.states.
 type xdsClusterSubscriberKey struct{}
 
 // SetXDSClusterSubscriber returns a copy of state in which the Attributes field
-// is updated with the Subscriber interface.
+// is updated with the ClusterSubscriber interface.
 func SetXDSClusterSubscriber(state resolver.State, subs ClusterSubscriber) resolver.State {
 	state.Attributes = state.Attributes.WithValue(xdsClusterSubscriberKey{}, subs)
 	return state
 }
 
-// XDSClusterSubscriberFromResolverState returns Subscriber interface stored as
-// an attribute in the resolver state.
+// XDSClusterSubscriberFromResolverState returns ClusterSubscriber interface
+// stored as an attribute in the resolver state.
 func XDSClusterSubscriberFromResolverState(state resolver.State) ClusterSubscriber {
 	if v := state.Attributes.Value(xdsClusterSubscriberKey{}); v != nil {
 		return v.(ClusterSubscriber)
