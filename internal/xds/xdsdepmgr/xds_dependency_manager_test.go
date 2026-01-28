@@ -1548,7 +1548,7 @@ func (s) TestClusterSubscription_Lifecycle(t *testing.T) {
 
 	// Subscribe to the old cluster.
 	unsubscribe := dm.Subscribe(clusterName)
-	// subscribe twice to test multiple subscriptions and verify that the
+	// Subscribe twice to test multiple subscriptions and verify that the
 	// cluster is only removed after all subscriptions are removed.
 	unsubscribe1 := dm.Subscribe(clusterName)
 
