@@ -163,10 +163,10 @@ func buildClusterImplConfigForDNS(g *nameGenerator, endpoints []resolver.Endpoin
 	// LB policies that rely on locality information (like weighted_target)
 	// continue to work.
 	localityStr := xdsinternal.LocalityString(clients.Locality{})
-	retEndpoint = hierarchy.SetInEndpoint(retEndpoint, []string{pName, localityStr})
+	retEndpoint = xdsresource.SetHostname(hierarchy.SetInEndpoint(retEndpoint, []string{pName, localityStr}), mechanism.DNSHostname)
 	// Set the locality weight to 1. This is required because the child policy
-	// like wrr which relies on locality weights to distribute traffic. These
-	// policies may drop traffic if the weight is 0.
+	// like weighted_target which relies on locality weights to distribute
+	// traffic. These policies may drop traffic if the weight is 0.
 	retEndpoint = wrrlocality.SetAddrInfo(retEndpoint, wrrlocality.AddrInfo{LocalityWeight: 1})
 	return pName, lbconfig, []resolver.Endpoint{retEndpoint}
 }

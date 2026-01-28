@@ -319,7 +319,6 @@ func testEndpointForDNS(endpoints []resolver.Endpoint, localityWeight uint32, pa
 }
 
 func (s) TestBuildClusterImplConfigForDNS(t *testing.T) {
-
 	for _, tt := range []struct {
 		name        string
 		endpoints   []resolver.Endpoint
@@ -364,21 +363,21 @@ func (s) TestBuildClusterImplConfigForDNS(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			gotName, gotConfig, gotEndpoints := buildClusterImplConfigForDNS(newNameGenerator(3), tt.endpoints, DiscoveryMechanism{Cluster: testClusterName2, Type: DiscoveryMechanismTypeLogicalDNS}, tt.xdsLBPolicy)
 			const wantName = "priority-3"
-			if diff := cmp.Diff(gotName, wantName); diff != "" {
-				t.Errorf("buildClusterImplConfigForDNS() diff (-got +want) %v", diff)
+			if diff := cmp.Diff(wantName, gotName); diff != "" {
+				t.Errorf("buildClusterImplConfigForDNS() diff (-want +got) %v", diff)
 			}
 
 			wantConfig := &clusterimpl.LBConfig{
 				Cluster:     testClusterName2,
 				ChildPolicy: tt.xdsLBPolicy,
 			}
-			if diff := cmp.Diff(gotConfig, wantConfig); diff != "" {
-				t.Errorf("buildClusterImplConfigForDNS() diff (-got +want) %v", diff)
+			if diff := cmp.Diff(wantConfig, gotConfig); diff != "" {
+				t.Errorf("buildClusterImplConfigForDNS() diff (-want +got) %v", diff)
 			}
 
 			wantEndpoints := []resolver.Endpoint{testEndpointForDNS(tt.endpoints, 1, []string{wantName, xdsinternal.LocalityString(clients.Locality{})})}
-			if diff := cmp.Diff(gotEndpoints, wantEndpoints, endpointCmpOpts); diff != "" {
-				t.Errorf("buildClusterImplConfigForDNS() diff (-got +want) %v", diff)
+			if diff := cmp.Diff(wantEndpoints, gotEndpoints, endpointCmpOpts); diff != "" {
+				t.Errorf("buildClusterImplConfigForDNS() diff (-want +got) %v", diff)
 			}
 		})
 	}
@@ -478,14 +477,14 @@ func (s) TestBuildClusterImplConfigForEDS(t *testing.T) {
 		testEndpointWithAttrs(testEndpoints[3][1].ResolverEndpoint, 80, 1, "priority-2-1", &testLocalityIDs[3]),
 	}
 
-	if diff := cmp.Diff(gotNames, wantNames); diff != "" {
-		t.Errorf("buildClusterImplConfigForEDS() diff (-got +want) %v", diff)
+	if diff := cmp.Diff(wantNames, gotNames); diff != "" {
+		t.Errorf("buildClusterImplConfigForEDS() diff (-want +got) %v", diff)
 	}
-	if diff := cmp.Diff(gotConfigs, wantConfigs); diff != "" {
-		t.Errorf("buildClusterImplConfigForEDS() diff (-got +want) %v", diff)
+	if diff := cmp.Diff(wantConfigs, gotConfigs); diff != "" {
+		t.Errorf("buildClusterImplConfigForEDS() diff (-want +got) %v", diff)
 	}
-	if diff := cmp.Diff(gotEndpoints, wantEndpoints, endpointCmpOpts); diff != "" {
-		t.Errorf("buildClusterImplConfigForEDS() diff (-got +want) %v", diff)
+	if diff := cmp.Diff(wantEndpoints, gotEndpoints, endpointCmpOpts); diff != "" {
+		t.Errorf("buildClusterImplConfigForEDS() diff (-want +got) %v", diff)
 	}
 
 }
@@ -545,8 +544,8 @@ func (s) TestGroupLocalitiesByPriority(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			gotLocalities := groupLocalitiesByPriority(tt.localities)
-			if diff := cmp.Diff(gotLocalities, tt.wantLocalities); diff != "" {
-				t.Errorf("groupLocalitiesByPriority() diff(-got +want) %v", diff)
+			if diff := cmp.Diff(tt.wantLocalities, gotLocalities); diff != "" {
+				t.Errorf("groupLocalitiesByPriority() diff(-want +got) %v", diff)
 			}
 		})
 	}
@@ -708,11 +707,11 @@ func (s) TestPriorityLocalitiesToClusterImpl(t *testing.T) {
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("priorityLocalitiesToClusterImpl() error = %v, wantErr %v", err, tt.wantErr)
 			}
-			if diff := cmp.Diff(got, tt.wantConfig); diff != "" {
-				t.Errorf("localitiesToWeightedTarget() diff (-got +want) %v", diff)
+			if diff := cmp.Diff(tt.wantConfig, got); diff != "" {
+				t.Errorf("localitiesToWeightedTarget() diff (-want +got) %v", diff)
 			}
-			if diff := cmp.Diff(got1, tt.wantEndpoints, cmp.AllowUnexported(attributes.Attributes{})); diff != "" {
-				t.Errorf("localitiesToWeightedTarget() diff (-got +want) %v", diff)
+			if diff := cmp.Diff(tt.wantEndpoints, got1, cmp.AllowUnexported(attributes.Attributes{})); diff != "" {
+				t.Errorf("localitiesToWeightedTarget() diff (-want +got) %v", diff)
 			}
 		})
 	}
@@ -797,8 +796,8 @@ func (s) TestConvertClusterImplMapToOutlierDetection(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			got := convertClusterImplMapToOutlierDetection(test.ciCfgsMap, test.odCfg)
-			if diff := cmp.Diff(got, test.wantODCfgs); diff != "" {
-				t.Fatalf("convertClusterImplMapToOutlierDetection() diff(-got +want) %v", diff)
+			if diff := cmp.Diff(test.wantODCfgs, got); diff != "" {
+				t.Fatalf("convertClusterImplMapToOutlierDetection() diff(-want +got) %v", diff)
 			}
 		})
 	}

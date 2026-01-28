@@ -65,7 +65,7 @@ func (s) TestLogicalDNS_MultipleEndpoints(t *testing.T) {
 	server2 := stubserver.StartTestService(t, nil)
 	defer server2.Stop()
 
-	// Register a manual resolver with the "dns" scheme to mock DNS resolution.
+	// Register a manual resolver with the "dns" scheme to override DNS resolution.
 	// This global override is safe because connection to the xDS management
 	// server uses the passthrough scheme instead and therefore overriding
 	// the DNS resolver does not affect it in any way.
@@ -77,10 +77,11 @@ func (s) TestLogicalDNS_MultipleEndpoints(t *testing.T) {
 
 	// For LOGICAL_DNS, this updates the SINGLE endpoint to have 2 IPs.
 	dnsR.InitialState(resolver.State{
-		Addresses: []resolver.Address{
-			{Addr: server1.Address},
-			{Addr: server2.Address},
-		},
+		Endpoints: []resolver.Endpoint{{
+			Addresses: []resolver.Address{
+				{Addr: server1.Address},
+				{Addr: server2.Address},
+			}}},
 	})
 
 	const (
