@@ -35,7 +35,6 @@ import (
 	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
-	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/internal/xds/xdsclient"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 	"google.golang.org/grpc/xds/csds"
@@ -221,14 +220,10 @@ func (s) TestCSDS(t *testing.T) {
 	// Create a bootstrap contents pointing to the above management server.
 	nodeID := uuid.New().String()
 	bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-	config, err := bootstrap.NewConfigFromContents(bootstrapContents)
-	if err != nil {
-		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
-	}
 	// We use the default xDS client pool here because the CSDS service reports
 	// on the state of the default xDS client which is implicitly managed
 	// within the xdsclient.DefaultPool.
-	xdsclient.DefaultPool.SetFallbackBootstrapConfig(config)
+	testutils.CreateBootstrapFileForTesting(t, bootstrapContents)
 	defer func() { xdsclient.DefaultPool.UnsetBootstrapConfigForTesting() }()
 	// Create two xDS clients, with different names. These should end up
 	// creating two different xDS clients.
@@ -424,14 +419,10 @@ func (s) TestCSDS_NACK(t *testing.T) {
 	// Create a bootstrap contents pointing to the above management server.
 	nodeID := uuid.New().String()
 	bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-	config, err := bootstrap.NewConfigFromContents(bootstrapContents)
-	if err != nil {
-		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
-	}
 	// We use the default xDS client pool here because the CSDS service reports
 	// on the state of the default xDS client which is implicitly managed
 	// within the xdsclient.DefaultPool.
-	xdsclient.DefaultPool.SetFallbackBootstrapConfig(config)
+	testutils.CreateBootstrapFileForTesting(t, bootstrapContents)
 	defer func() { xdsclient.DefaultPool.UnsetBootstrapConfigForTesting() }()
 	// Create two xDS clients, with different names. These should end up
 	// creating two different xDS clients.

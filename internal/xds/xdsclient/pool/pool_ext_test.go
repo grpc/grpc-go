@@ -185,11 +185,8 @@ func (s) TestNestedXDSChannel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create bootstrap configuration: %v", err)
 	}
-	config, err := bootstrap.NewConfigFromContents(bootstrapContents)
-	if err != nil {
-		t.Fatalf("Failed to parse bootstrap contents: %v", err)
-	}
-	xdsclient.DefaultPool.SetFallbackBootstrapConfig(config)
+
+	testutils.CreateBootstrapFileForTesting(t, bootstrapContents)
 	defer func() { xdsclient.DefaultPool.UnsetBootstrapConfigForTesting() }()
 
 	// Update the management server that holds resources for resolving the real
