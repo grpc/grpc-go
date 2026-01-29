@@ -896,12 +896,10 @@ func (s) TestGetConfiguration_CertificateProviders(t *testing.T) {
 
 			name:       "allUnknownCertProviders",
 			wantConfig: configWithGoogleDefaultCredsAndV3,
-			wantErr:    false,
 		},
 		{
 			name:       "goodCertProviderConfig",
 			wantConfig: goodConfig,
-			wantErr:    false,
 		},
 	}
 

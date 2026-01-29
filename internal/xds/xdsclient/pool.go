@@ -120,7 +120,7 @@ func (p *Pool) getConfig(config *bootstrap.Config) (*bootstrap.Config, error) {
 // provided config and adds it to the pool. The provided config takes precedence
 // over any config passed during pool creation. This should be used when a
 // non-default config is required. If the provided config is nil, it attempts
-// to load the configuration from the environment variables.
+// to load the configuration provided at pool creation time.
 //
 // The second return value represents a close function which the caller is
 // expected to invoke once they are done using the client.  It is safe for the
@@ -134,8 +134,8 @@ func (p *Pool) NewClientWithConfig(name string, metricsRecorder estats.MetricsRe
 }
 
 // NewClient returns an xDS client with the given name from the pool. If the
-// client doesn't already exist, it loads the configuration from the
-// environment variables, creates a new xDS client and adds it to the pool.
+// client doesn't already exist, it loads the configuration and creates a new
+// xDS client and adds it to the pool.
 //
 // The second return value represents a close function which the caller is
 // expected to invoke once they are done using the client.  It is safe for the
@@ -151,8 +151,9 @@ func (p *Pool) NewClient(name string, metricsRecorder estats.MetricsRecorder) (X
 // NewClientForTesting returns an xDS client configured with the provided
 // options from the pool. If the client doesn't already exist, it creates a new
 // xDS client and adds it to the pool.
-// If the config in options is nil, it attempts to load the configuration from
-// the environment variables.
+//
+// If the config in options is nil, it attempts to load the configuration
+// provided at the time of pool creation.
 //
 // The second return value represents a close function which the caller is
 // expected to invoke once they are done using the client.  It is safe for the
