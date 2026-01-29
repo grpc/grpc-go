@@ -1513,7 +1513,6 @@ func (s) TestEndpointAmbientError(t *testing.T) {
 // verifies that it is removed from the XDSConfig update after all the
 // references for that cluster are no longer present.
 func (s) TestClusterSubscription_Lifecycle(t *testing.T) {
-	xdsdepmgr.EnableClusterAndEndpointsWatch = true
 	nodeID, mgmtServer, xdsClient := setupManagementServerAndClient(t, false)
 
 	watcher := newTestWatcher()
