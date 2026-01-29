@@ -1585,6 +1585,109 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 			routes:     goodRouteWithFilterConfigs(map[string]*anypb.Any{"foo": wrappedOptionalFilter(t, "unknown.custom.filter")}),
 			wantRoutes: goodUpdateWithFilterConfigs(nil),
 		},
+		{
+			name: "weighted cluster with weight=0 (Blue-Green 100:0)",
+			routes: []*v3routepb.Route{{
+				Match: &v3routepb.RouteMatch{
+					PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"},
+					CaseSensitive: &wrapperspb.BoolValue{Value: false},
+				},
+				Action: &v3routepb.Route_Route{
+					Route: &v3routepb.RouteAction{
+						ClusterSpecifier: &v3routepb.RouteAction_WeightedClusters{
+							WeightedClusters: &v3routepb.WeightedCluster{
+								Clusters: []*v3routepb.WeightedCluster_ClusterWeight{
+									{Name: "cluster-blue", Weight: &wrapperspb.UInt32Value{Value: 100}},
+									{Name: "cluster-green", Weight: &wrapperspb.UInt32Value{Value: 0}},
+								},
+							},
+						},
+					},
+				},
+			}},
+			wantRoutes: []*Route{{
+				Prefix:          newStringP("/"),
+				CaseInsensitive: true,
+				WeightedClusters: []WeightedCluster{
+					{Name: "cluster-blue", Weight: 100},
+					{Name: "cluster-green", Weight: 0},
+				},
+				ActionType: RouteActionRoute,
+			}},
+			wantErr: false,
+		},
+		{
+			name: "weighted cluster with weight=0 (Blue-Green 0:100)",
+			routes: []*v3routepb.Route{{
+				Match: &v3routepb.RouteMatch{
+					PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"},
+					CaseSensitive: &wrapperspb.BoolValue{Value: false},
+				},
+				Action: &v3routepb.Route_Route{
+					Route: &v3routepb.RouteAction{
+						ClusterSpecifier: &v3routepb.RouteAction_WeightedClusters{
+							WeightedClusters: &v3routepb.WeightedCluster{
+								Clusters: []*v3routepb.WeightedCluster_ClusterWeight{
+									{Name: "cluster-blue", Weight: &wrapperspb.UInt32Value{Value: 0}},
+									{Name: "cluster-green", Weight: &wrapperspb.UInt32Value{Value: 100}},
+								},
+							},
+						},
+					},
+				},
+			}},
+			wantRoutes: []*Route{{
+				Prefix:          newStringP("/"),
+				CaseInsensitive: true,
+				WeightedClusters: []WeightedCluster{
+					{Name: "cluster-blue", Weight: 0},
+					{Name: "cluster-green", Weight: 100},
+				},
+				ActionType: RouteActionRoute,
+			}},
+			wantErr: false,
+		},
+		{
+			name: "weighted cluster with all weights=0 (invalid config)",
+			routes: []*v3routepb.Route{{
+				Match: &v3routepb.RouteMatch{
+					PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"},
+					CaseSensitive: &wrapperspb.BoolValue{Value: false},
+				},
+				Action: &v3routepb.Route_Route{
+					Route: &v3routepb.RouteAction{
+						ClusterSpecifier: &v3routepb.RouteAction_WeightedClusters{
+							WeightedClusters: &v3routepb.WeightedCluster{
+								Clusters: []*v3routepb.WeightedCluster_ClusterWeight{
+									{Name: "cluster-blue", Weight: &wrapperspb.UInt32Value{Value: 0}},
+									{Name: "cluster-green", Weight: &wrapperspb.UInt32Value{Value: 0}},
+								},
+							},
+						},
+					},
+				},
+			}},
+			wantErr: true,
+		},
+		{
+			name: "weighted cluster with empty clusters array",
+			routes: []*v3routepb.Route{{
+				Match: &v3routepb.RouteMatch{
+					PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"},
+					CaseSensitive: &wrapperspb.BoolValue{Value: false},
+				},
+				Action: &v3routepb.Route_Route{
+					Route: &v3routepb.RouteAction{
+						ClusterSpecifier: &v3routepb.RouteAction_WeightedClusters{
+							WeightedClusters: &v3routepb.WeightedCluster{
+								Clusters: []*v3routepb.WeightedCluster_ClusterWeight{},
+							},
+						},
+					},
+				},
+			}},
+			wantErr: true,
+		},
 	}
 
 	cmpOpts := []cmp.Option{

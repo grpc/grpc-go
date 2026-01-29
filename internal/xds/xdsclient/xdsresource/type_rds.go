@@ -159,7 +159,7 @@ type Route struct {
 type WeightedCluster struct {
 	// Name is the name of the cluster.
 	Name string
-	// Weight is the relative weight of the cluster.  It will never be zero.
+	// Weight is the relative weight of the cluster. Can be zero for 0% traffic.
 	Weight uint32
 	// HTTPFilterConfigOverride contains any HTTP filter config overrides for
 	// the weighted cluster which may be present.
