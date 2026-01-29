@@ -25,6 +25,7 @@ import (
 	"slices"
 
 	"google.golang.org/grpc/internal/balancer/weight"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/hierarchy"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	xdsinternal "google.golang.org/grpc/internal/xds"
@@ -235,7 +236,27 @@ func groupLocalitiesByPriority(localities []xdsresource.Locality) [][]xdsresourc
 // priority and the xDS LB Policy know which child policy each address is for.
 func priorityLocalitiesToClusterImpl(localities []xdsresource.Locality, priorityName string, mechanism DiscoveryMechanism, drops []clusterimpl.DropConfig, xdsLBPolicy *internalserviceconfig.BalancerConfig) (*clusterimpl.LBConfig, []resolver.Endpoint, error) {
 	var retEndpoints []resolver.Endpoint
+
+	// Compute the sum of locality weights to normalize locality weights. The
+	// xDS client guarantees that the sum of locality weights (within a
+	// priority) will not exceed MaxUint32.
+	var localityWeightSum uint32
 	for _, locality := range localities {
+		localityWeightSum += locality.Weight
+	}
+
+	for _, locality := range localities {
+		// Compute the sum of endpoint weights to normalize endpoint weights.
+		// The xDS client does not currently guarantee that the sum of endpoint
+		// weights (within a locality) will not exceed MaxUint32. TODO(i/8862):
+		// Once the xDS client guarantees that the sum of endpoint weights does
+		// not exceed MaxUint32, we can change the type of this variable from
+		// uint64 to uint32.
+		var endpointWeightSum uint64
+		for _, endpoint := range locality.Endpoints {
+			endpointWeightSum += uint64(endpoint.Weight)
+		}
+
 		localityStr := xdsinternal.LocalityString(locality.ID)
 		for _, endpoint := range locality.Endpoints {
 			// Filter out all "unhealthy" endpoints (unknown and healthy are
@@ -259,7 +280,18 @@ func priorityLocalitiesToClusterImpl(localities []xdsresource.Locality, priority
 			// attribute will have the weight (as an integer) of the locality
 			// the address is part of." - A52
 			resolverEndpoint = wrrlocality.SetAddrInfo(resolverEndpoint, wrrlocality.AddrInfo{LocalityWeight: locality.Weight})
-			resolverEndpoint = weight.Set(resolverEndpoint, weight.EndpointInfo{Weight: locality.Weight * endpoint.Weight})
+
+			if envconfig.PickFirstWeightedShuffling {
+				normalizedLocalityWeight := fractionToFixedPoint(uint64(locality.Weight), uint64(localityWeightSum))
+				normalizedEndpointWeight := fractionToFixedPoint(uint64(endpoint.Weight), endpointWeightSum)
+				endpointWeight := fixedPointMultiply(normalizedEndpointWeight, normalizedLocalityWeight)
+				if endpointWeight == 0 {
+					endpointWeight = 1
+				}
+				resolverEndpoint = weight.Set(resolverEndpoint, weight.EndpointInfo{Weight: endpointWeight})
+			} else {
+				resolverEndpoint = weight.Set(resolverEndpoint, weight.EndpointInfo{Weight: locality.Weight * endpoint.Weight})
+			}
 			retEndpoints = append(retEndpoints, resolverEndpoint)
 		}
 	}
@@ -272,4 +304,24 @@ func priorityLocalitiesToClusterImpl(localities []xdsresource.Locality, priority
 		DropCategories:        drops,
 		ChildPolicy:           xdsLBPolicy,
 	}, retEndpoints, nil
+}
+
+// We normalize endpoint and locality weights to a fixed-point number between 0
+// and 1. We use a uint32 to represent these weights with 31 bits for the
+// fractional part. See gRFC A113 for details.
+const fixedPointFractionalBits = 31
+
+// fractionToFixedPoint converts a fraction represented by numerator and
+// denominator to a fixed-point number between 0 and 1 represented as a uint32.
+//
+// The xDS client guarantees that the sum of locality weights (within a
+// priority) will not exceed MaxUint32. TODO(i/8862): Once the xDS client
+// guarantees that the sum of endpoint weights does not exceed MaxUint32, we can
+// change the types of this function's arguments from uint64 to uint32.
+func fractionToFixedPoint(numerator, denominator uint64) uint32 {
+	return uint32(uint64(numerator) << fixedPointFractionalBits / uint64(denominator))
+}
+
+func fixedPointMultiply(a, b uint32) uint32 {
+	return uint32((uint64(a) * uint64(b)) >> fixedPointFractionalBits)
 }
