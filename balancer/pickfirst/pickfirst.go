@@ -21,11 +21,14 @@
 package pickfirst
 
 import (
+	"cmp"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"net"
 	"net/netip"
+	"slices"
 	"sync"
 	"time"
 
@@ -34,6 +37,8 @@ import (
 	"google.golang.org/grpc/connectivity"
 	expstats "google.golang.org/grpc/experimental/stats"
 	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/internal/balancer/weight"
+	"google.golang.org/grpc/internal/envconfig"
 	internalgrpclog "google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/resolver"
@@ -258,8 +263,35 @@ func (b *pickfirstBalancer) UpdateClientConnState(state balancer.ClientConnState
 		// will change the order of endpoints but not touch the order of the
 		// addresses within each endpoint. - A61
 		if cfg.ShuffleAddressList {
-			endpoints = append([]resolver.Endpoint{}, endpoints...)
-			internal.RandShuffle(len(endpoints), func(i, j int) { endpoints[i], endpoints[j] = endpoints[j], endpoints[i] })
+			if envconfig.PickFirstWeightedShuffling {
+				type weightedEndpoint struct {
+					endpoint resolver.Endpoint
+					weight   float64
+				}
+
+				// For each endpoint, compute a key as described in A113 and
+				// https://utopia.duth.gr/~pefraimi/research/data/2007EncOfAlg.pdf:
+				var weightedEndpoints []weightedEndpoint
+				for _, endpoint := range endpoints {
+					u := internal.RandFloat64() // Random number in (0.0, 1.0]
+					weight := getWeightAttribute(endpoint)
+					weightedEndpoints = append(weightedEndpoints, weightedEndpoint{
+						endpoint: endpoint,
+						weight:   math.Pow(u, 1.0/float64(weight)),
+					})
+				}
+				// Sort endpoints by key in descending order and reconstruct the
+				// endpoints slice.
+				slices.SortFunc(weightedEndpoints, func(a, b weightedEndpoint) int {
+					return cmp.Compare(b.weight, a.weight)
+				})
+				for i, we := range weightedEndpoints {
+					endpoints[i] = we.endpoint
+				}
+			} else {
+				endpoints = append([]resolver.Endpoint{}, endpoints...)
+				internal.RandShuffle(len(endpoints), func(i, j int) { endpoints[i], endpoints[j] = endpoints[j], endpoints[i] })
+			}
 		}
 
 		// "Flatten the list by concatenating the ordered list of addresses for
@@ -905,4 +937,18 @@ func (al *addressList) hasNext() bool {
 func equalAddressIgnoringBalAttributes(a, b *resolver.Address) bool {
 	return a.Addr == b.Addr && a.ServerName == b.ServerName &&
 		a.Attributes.Equal(b.Attributes)
+}
+
+// getWeightAttribute is a convenience function which returns the value of the
+// weight endpoint Attribute.
+//
+// When used in the xDS context, the weight attribute is guaranteed to be
+// non-zero. But, when used in a non-xDS context, the weight attribute could be
+// unset. A Default of 1 is used in the latter case.
+func getWeightAttribute(e resolver.Endpoint) uint32 {
+	w := weight.FromEndpoint(e).Weight
+	if w == 0 {
+		return 1
+	}
+	return w
 }

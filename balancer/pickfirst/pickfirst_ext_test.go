@@ -40,6 +40,7 @@ import (
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/balancer/stub"
 	"google.golang.org/grpc/internal/channelz"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/stubserver"
@@ -425,6 +426,8 @@ func (s) TestPickFirst_StickyTransientFailure(t *testing.T) {
 
 // Tests the PF LB policy with shuffling enabled.
 func (s) TestPickFirst_ShuffleAddressList(t *testing.T) {
+	testutils.SetEnvConfig(t, &envconfig.PickFirstWeightedShuffling, false)
+
 	const serviceConfig = `{"loadBalancingConfig": [{"pick_first":{ "shuffleAddressList": true }}]}`
 
 	// Install a shuffler that always reverses two entries.
@@ -485,6 +488,8 @@ func (s) TestPickFirst_ShuffleAddressList(t *testing.T) {
 // Endpoints field in the resolver update to test the shuffling of the
 // Addresses.
 func (s) TestPickFirst_ShuffleAddressListNoEndpoints(t *testing.T) {
+	testutils.SetEnvConfig(t, &envconfig.PickFirstWeightedShuffling, false)
+
 	// Install a shuffler that always reverses two entries.
 	origShuf := pfinternal.RandShuffle
 	defer func() { pfinternal.RandShuffle = origShuf }()
@@ -560,8 +565,84 @@ func (s) TestPickFirst_ShuffleAddressListNoEndpoints(t *testing.T) {
 	}
 }
 
+// Tests the PF LB policy with weighted shuffling enabled.
+func (s) TestPickFirst_ShuffleAddressList_WeightedShuffling(t *testing.T) {
+	testutils.SetEnvConfig(t, &envconfig.PickFirstWeightedShuffling, true)
+
+	const serviceConfig = `{"loadBalancingConfig": [{"pick_first":{ "shuffleAddressList": true }}]}`
+
+	// Install a rand func that returns the a monotonically increasing number.
+	// Since the test does not setup endpoint weights, they will end up with a
+	// value of 1. This means that in the weighted shuffling algorithm, the
+	// first endpoint will end up with a key of 1, the second with 2, and the
+	// thid with 3. And since the algorithm sorts in descending order, the last
+	// endpoint should be the one that would get picked.
+	orignRand := pfinternal.RandFloat64
+	defer func() { pfinternal.RandFloat64 = orignRand }()
+	key := 0.0
+	pfinternal.RandFloat64 = func() float64 {
+		key++
+		return key
+	}
+
+	// Set up our backends.
+	cc, r, backends := setupPickFirst(t, 3)
+	addrs := stubBackendsToResolverAddrs(backends)
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	// Push an update with all addresses and shuffling disabled.  We should
+	// connect to backend 0.
+	r.UpdateState(resolver.State{Endpoints: []resolver.Endpoint{
+		{Addresses: []resolver.Address{addrs[0]}},
+		{Addresses: []resolver.Address{addrs[1]}},
+		{Addresses: []resolver.Address{addrs[2]}},
+	}})
+	if err := pickfirst.CheckRPCsToBackend(ctx, cc, addrs[0]); err != nil {
+		t.Fatal(err)
+	}
+
+	// Send a config with shuffling enabled.  This will reverse the addresses,
+	// but the channel should still be connected to backend 0.
+	shufState := resolver.State{
+		ServiceConfig: parseServiceConfig(t, r, serviceConfig),
+		Endpoints: []resolver.Endpoint{
+			{Addresses: []resolver.Address{addrs[0]}},
+			{Addresses: []resolver.Address{addrs[1]}},
+			{Addresses: []resolver.Address{addrs[2]}},
+		},
+	}
+	r.UpdateState(shufState)
+	if err := pickfirst.CheckRPCsToBackend(ctx, cc, addrs[0]); err != nil {
+		t.Fatal(err)
+	}
+
+	// Send a resolver update with no addresses. This should push the channel
+	// into TransientFailure.
+	r.UpdateState(resolver.State{})
+	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
+
+	// Send the same config as last time with shuffling enabled.  Since we are
+	// not connected to backend 0, we should connect to backend 2.
+	shufState = resolver.State{
+		ServiceConfig: parseServiceConfig(t, r, serviceConfig),
+		Endpoints: []resolver.Endpoint{
+			{Addresses: []resolver.Address{addrs[0]}},
+			{Addresses: []resolver.Address{addrs[1]}},
+			{Addresses: []resolver.Address{addrs[2]}},
+		},
+	}
+	r.UpdateState(shufState)
+	if err := pickfirst.CheckRPCsToBackend(ctx, cc, addrs[2]); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // Test config parsing with the env var turned on and off for various scenarios.
 func (s) TestPickFirst_ParseConfig_Success(t *testing.T) {
+	testutils.SetEnvConfig(t, &envconfig.PickFirstWeightedShuffling, false)
+
 	// Install a shuffler that always reverses two entries.
 	origShuf := pfinternal.RandShuffle
 	defer func() { pfinternal.RandShuffle = origShuf }()
