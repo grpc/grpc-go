@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -655,6 +656,25 @@ func (s) TestConfigUpdate_DataCacheSizeDecrease(t *testing.T) {
 	verifyRLSRequest(t, rlsReqCh, true)
 }
 
+// stateCapturingCC wraps a balancer.ClientConn, overrides UpdateState, pushes
+// the update on to a channel, and delegates to the wrapped balancer.ClientConn.
+type stateCapturingCC struct {
+	balancer.ClientConn
+	stateCh chan balancer.State
+}
+
+func (cc *stateCapturingCC) UpdateState(bs balancer.State) {
+	cc.stateCh <- bs
+	cc.ClientConn.UpdateState(bs)
+}
+
+func newStateCapturingCC(cc balancer.ClientConn) *stateCapturingCC {
+	return &stateCapturingCC{
+		ClientConn: cc,
+		stateCh:    make(chan balancer.State, 10), // Some operations result in multiple UpdateState calls.
+	}
+}
+
 // Test that when a data cache entry is evicted due to config change
 // in cache size, the picker is updated accordingly.
 func (s) TestPickerUpdateOnDataCacheSizeDecrease(t *testing.T) {
@@ -685,10 +705,10 @@ func (s) TestPickerUpdateOnDataCacheSizeDecrease(t *testing.T) {
 
 	// Register the top-level wrapping balancer which forwards calls to RLS.
 	topLevelBalancerName := t.Name() + "top-level"
-	var ccWrapper *testCCWrapper
+	var ccWrapper *stateCapturingCC
 	stub.Register(topLevelBalancerName, stub.BalancerFuncs{
 		Init: func(bd *stub.BalancerData) {
-			ccWrapper = &testCCWrapper{ClientConn: bd.ClientConn}
+			ccWrapper = newStateCapturingCC(bd.ClientConn)
 			bd.ChildBalancer = balancer.Get(Name).Build(ccWrapper, bd.BuildOptions)
 		},
 		ParseConfig: func(sc json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
@@ -777,27 +797,68 @@ func (s) TestPickerUpdateOnDataCacheSizeDecrease(t *testing.T) {
 	defer cc.Close()
 	cc.Connect()
 
-	<-clientConnUpdateDone
-
+	// Wait for the clientconn update to be processed by the RLS LB policy.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
+	select {
+	case <-ctx.Done():
+		t.Fatalf("Timeout waiting for RLS LB policy to process the initial clientconn update")
+	case <-clientConnUpdateDone:
+	}
+
+	// RLS LB policy starts off in IDLE state.
+	gotStates := waitForStateTransitions(ctx, t, ccWrapper.stateCh, 1)
+	if gotStates[0] != connectivity.Idle {
+		t.Fatalf("RLS LB policy in state %s, want IDLE", gotStates[0])
+	}
+
 	// Make an RPC call with empty metadata, which will eventually throw
 	// the error as no metadata will match from rlsServer response
 	// callback defined above. This will cause the control channel to
 	// throw the error and cause the item to get into backoff.
 	makeTestRPCAndVerifyError(ctx, t, cc, codes.Unavailable, nil)
 
+	// RLS LB policy sends a picker update when it receives the RLS response, but
+	// continues to remain in IDLE state, as no child policy is created yet
+	gotStates = waitForStateTransitions(ctx, t, ccWrapper.stateCh, 1)
+	if gotStates[0] != connectivity.Idle {
+		t.Fatalf("RLS LB policy in state %s, want IDLE", gotStates[0])
+	}
+
 	ctxOutgoing := metadata.AppendToOutgoingContext(ctx, "n1", "v1")
 	makeTestRPCAndExpectItToReachBackend(ctxOutgoing, t, cc, backendCh1)
 	verifyRLSRequest(t, rlsReqCh, true)
+
+	// We expect three state updates as the LB policy transitions to READY. Two of
+	// them correspond to the child policy's state updates (pick_first reports
+	// CONNECTING and READY), and one corresponds to the picker update that is
+	// sent upon receiving the RLS response (this could be CONNECTING or READY
+	// based on when this runs relative to the update from the child policy).
+	gotStates = waitForStateTransitions(ctx, t, ccWrapper.stateCh, 3)
+	gotStates = slices.Compact(gotStates)
+	wantStates := []connectivity.State{connectivity.Connecting, connectivity.Ready}
+	if !cmp.Equal(gotStates, wantStates) {
+		t.Fatalf("RLS LB policy in states %v, want %v", gotStates, wantStates)
+	}
 
 	ctxOutgoing = metadata.AppendToOutgoingContext(ctx, "n2", "v2")
 	makeTestRPCAndExpectItToReachBackend(ctxOutgoing, t, cc, backendCh2)
 	verifyRLSRequest(t, rlsReqCh, true)
 
-	initialStateCnt := len(ccWrapper.getStates())
-	// Setting the size to 1 will cause the entries to be
-	// evicted.
+	// We expect three state updates as the LB policy stays in READY. Two of
+	// them correspond to the child policy's state updates (pick_first reports
+	// CONNECTING and READY), and one corresponds to the picker update that is
+	// sent upon receiving the RLS response.
+	gotStates = waitForStateTransitions(ctx, t, ccWrapper.stateCh, 3)
+	gotStates = slices.Compact(gotStates)
+	wantStates = []connectivity.State{connectivity.Ready}
+	if !cmp.Equal(gotStates, wantStates) {
+		t.Fatalf("RLS LB policy in states %v, want %v", gotStates, wantStates)
+	}
+
+	// Setting the size to 2 will cause the entry corresponding to the first RPC
+	// to be evicted from the cache. This entry has an ongoing backoff, and so
+	// the picker needs to be updated to reflect this change.
 	scJSON1 := fmt.Sprintf(`
 {
   "loadBalancingConfig": [
@@ -819,11 +880,15 @@ func (s) TestPickerUpdateOnDataCacheSizeDecrease(t *testing.T) {
 }`, topLevelBalancerName, headers, rlsServer.Address, childPolicyName)
 	sc1 := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(scJSON1)
 	r.UpdateState(resolver.State{ServiceConfig: sc1})
-	<-clientConnUpdateDone
-	finalStateCnt := len(ccWrapper.getStates())
+	select {
+	case <-ctx.Done():
+		t.Fatalf("Timeout waiting for RLS LB policy to process the subsequent clientconn update")
+	case <-clientConnUpdateDone:
+	}
 
-	if finalStateCnt != initialStateCnt+1 {
-		t.Errorf("Unexpected balancer state count: got %v, want %v", finalStateCnt, initialStateCnt)
+	gotStates = waitForStateTransitions(ctx, t, ccWrapper.stateCh, 1)
+	if gotStates[0] != connectivity.Ready {
+		t.Fatalf("RLS LB policy in state %s, want Ready", gotStates[0])
 	}
 }
 
@@ -1257,4 +1322,21 @@ func (s) TestUpdateStatePauses(t *testing.T) {
 	if len(states1) != len(states0)+1 {
 		t.Fatalf("more than one state update seen. before %v, after %v", states0, states1)
 	}
+}
+
+// waitForStateTransitions waits for the given number of state updates on the
+// channel and returns the sequence of connectivity states received.
+func waitForStateTransitions(ctx context.Context, t *testing.T, stateCh <-chan balancer.State, wantNum int) []connectivity.State {
+	t.Helper()
+
+	var gotStates []connectivity.State
+	for i := 0; i < wantNum; i++ {
+		select {
+		case state := <-stateCh:
+			gotStates = append(gotStates, state.ConnectivityState)
+		case <-ctx.Done():
+			t.Fatalf("Timeout waiting for %d balancer state updates, got %d", wantNum, len(gotStates))
+		}
+	}
+	return gotStates
 }
