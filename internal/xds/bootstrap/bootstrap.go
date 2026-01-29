@@ -658,7 +658,7 @@ func (c *Config) UnmarshalJSON(data []byte) error {
 // defaults.
 //
 // This function returns an error if it's unable to parse the contents of the
-// bootstrap config. It returns (nil, nil) if none of the env vars are set.
+// bootstrap config. It returns error if none of the env vars are set.
 func GetConfiguration() (*Config, error) {
 	fName := envconfig.XDSBootstrapFileName
 	fContent := envconfig.XDSBootstrapFileContent
@@ -681,7 +681,7 @@ func GetConfiguration() (*Config, error) {
 		return NewConfigFromContents([]byte(fContent))
 	}
 
-	return nil, nil
+	return nil, fmt.Errorf("none of the bootstrap environment variables (%q or %q) are set", envconfig.XDSBootstrapFileNameEnv, envconfig.XDSBootstrapFileContentEnv)
 }
 
 // NewConfigFromContents creates a new bootstrap configuration from the provided
