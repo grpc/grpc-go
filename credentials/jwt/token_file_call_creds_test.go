@@ -539,10 +539,14 @@ func (s) TestJWTCallCredentials_E2E(t *testing.T) {
 			wantErr:        "the credentials require transport level security",
 		},
 		{
-			name:           "secure_transport_success",
+			name:           "secure_transport_creds_as_dial_option",
 			useTLS:         true,
 			credsAsDialOpt: true,
-			wantErr:        "",
+		},
+		{
+			name:           "secure_transport_creds_as_call_option",
+			useTLS:         true,
+			credsAsDialOpt: false,
 		},
 	}
 
@@ -574,19 +578,13 @@ func (s) TestJWTCallCredentials_E2E(t *testing.T) {
 			var serverOpts []grpc.ServerOption
 			var clientCreds credentials.TransportCredentials
 			if tt.useTLS {
-				serverCert, err := tls.LoadX509KeyPair(
-					testdata.Path("x509/server1_cert.pem"),
-					testdata.Path("x509/server1_key.pem"),
-				)
+				serverCert, err := tls.LoadX509KeyPair(testdata.Path("x509/server1_cert.pem"), testdata.Path("x509/server1_key.pem"))
 				if err != nil {
 					t.Fatalf("Failed to load server cert: %v", err)
 				}
 				serverOpts = append(serverOpts, grpc.Creds(credentials.NewServerTLSFromCert(&serverCert)))
 
-				clientCreds, err = credentials.NewClientTLSFromFile(
-					testdata.Path("x509/server_ca_cert.pem"),
-					"x.test.example.com",
-				)
+				clientCreds, err = credentials.NewClientTLSFromFile(testdata.Path("x509/server_ca_cert.pem"), "x.test.example.com")
 				if err != nil {
 					t.Fatalf("Failed to create client TLS credentials: %v", err)
 				}
