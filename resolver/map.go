@@ -20,6 +20,7 @@ package resolver
 
 import (
 	"encoding/base64"
+	"iter"
 	"sort"
 	"strings"
 )
@@ -156,6 +157,19 @@ func (a *AddressMapV2[T]) Values() []T {
 	return ret
 }
 
+// All returns an iterator over all elements.
+func (a *AddressMapV2[T]) All() iter.Seq2[Address, T] {
+	return func(yield func(Address, T) bool) {
+		for _, entryList := range a.m {
+			for _, entry := range entryList {
+				if !yield(entry.addr, entry.value) {
+					return
+				}
+			}
+		}
+	}
+}
+
 type endpointMapKey string
 
 // EndpointMap is a map of endpoints to arbitrary values keyed on only the
@@ -238,6 +252,18 @@ func (em *EndpointMap[T]) Values() []T {
 		ret = append(ret, val.value)
 	}
 	return ret
+}
+
+// All returns an iterator over all elements.
+// See the documentation of Keys().
+func (em *EndpointMap[T]) All() iter.Seq2[Endpoint, T] {
+	return func(yield func(Endpoint, T) bool) {
+		for _, en := range em.endpoints {
+			if !yield(en.decodedKey, en.value) {
+				return
+			}
+		}
+	}
 }
 
 // Delete removes the specified endpoint from the map.
