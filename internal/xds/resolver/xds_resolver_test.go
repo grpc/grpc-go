@@ -1451,8 +1451,8 @@ func (s) TestResolverKeepWatchOpen_ActiveRPCs(t *testing.T) {
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 
 	// Configure initial resources: Route -> ClusterA.
-	route := []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(defaultTestRouteConfigName, defaultTestServiceName, clusterA)}
 	listeners := []*v3listenerpb.Listener{e2e.DefaultClientListener(defaultTestServiceName, defaultTestRouteConfigName)}
+	routes := []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(defaultTestRouteConfigName, defaultTestServiceName, clusterA)}
 	clusters := []*v3clusterpb.Cluster{
 		e2e.DefaultCluster(clusterA, "endpoint-A", e2e.SecurityLevelNone),
 		e2e.DefaultCluster(clusterB, "endpoint-B", e2e.SecurityLevelNone),
@@ -1462,7 +1462,7 @@ func (s) TestResolverKeepWatchOpen_ActiveRPCs(t *testing.T) {
 		e2e.DefaultEndpoint("endpoint-B", "localhost", []uint32{8081}),
 	}
 
-	configureResources(ctx, t, mgmtServer, nodeID, listeners, route, clusters, endpoints)
+	configureResources(ctx, t, mgmtServer, nodeID, listeners, routes, clusters, endpoints)
 
 	stateCh, _, _ := buildResolverForTarget(t, resolver.Target{URL: *testutils.MustParseURL("xds:///" + defaultTestServiceName)}, bc)
 
@@ -1475,8 +1475,8 @@ func (s) TestResolverKeepWatchOpen_ActiveRPCs(t *testing.T) {
 	}
 
 	// Switch Configuration to ClusterB.
-	route[0] = e2e.DefaultRouteConfig(defaultTestRouteConfigName, defaultTestServiceName, clusterB)
-	configureResources(ctx, t, mgmtServer, nodeID, listeners, route, clusters, endpoints)
+	routes[0] = e2e.DefaultRouteConfig(defaultTestRouteConfigName, defaultTestServiceName, clusterB)
+	configureResources(ctx, t, mgmtServer, nodeID, listeners, routes, clusters, endpoints)
 
 	// Resolver should request BOTH A (due to active RPC) and B (due to new
 	// config).
