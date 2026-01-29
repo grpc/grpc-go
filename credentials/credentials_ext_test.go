@@ -375,12 +375,8 @@ func (s) TestCorrectAuthorityWithCustomCreds(t *testing.T) {
 // TestAuthorityOverrideWithCertChain tests that the authority being used to
 // override per-RPC authority is validated against the leaf certificate only
 // and not against the intermediate certificates.
-func TestAuthorityOverrideWithCertChain(t *testing.T) {
-	rootCert, certChain, leafKey := generateCertChain(t,
-		certConfig{commonName: "root.example.com", isCA: true},
-		certConfig{commonName: "intermediate.example.com", dnsNames: []string{"intermediate.example.com"}, isCA: true},
-		certConfig{commonName: "*.example.leaf.com", dnsNames: []string{"*.example.leaf.com"}, isCA: false},
-	)
+func (s) TestAuthorityOverrideWithCertChain(t *testing.T) {
+	rootCert, certChain, leafKey := generateCertChain(t, "root.example.com", "intermediate.example.com", "*.leaf.example.com")
 
 	// Construct server credentials from leaf and intermediate certificates.
 	serverCert := tls.Certificate{
@@ -394,7 +390,7 @@ func TestAuthorityOverrideWithCertChain(t *testing.T) {
 	certPool.AddCert(rootCert)
 	clientCreds := credentials.NewTLS(&tls.Config{
 		RootCAs:    certPool,
-		ServerName: "test1.example.leaf.com",
+		ServerName: "test1.leaf.example.com",
 	})
 
 	tests := []struct {
@@ -411,7 +407,7 @@ func TestAuthorityOverrideWithCertChain(t *testing.T) {
 		},
 		{
 			name:      "AuthorityMatchesLeaf",
-			authority: "test2.example.leaf.com",
+			authority: "test2.leaf.example.com",
 			wantCode:  codes.OK,
 		},
 	}
@@ -457,12 +453,15 @@ type certConfig struct {
 	commonName string
 	dnsNames   []string
 	isCA       bool
+	serial     int64
+	parentCert *x509.Certificate
+	parentKey  *rsa.PrivateKey
 }
 
 // createCertificate generates a certificate based on the provided certConfig.
-// It creates self-signed certificates if parentCert passed is nil otherwise it
-// creates certificates signed by a parent certificate.
-func createCertificate(t *testing.T, cfg certConfig, serial int64, parentCert *x509.Certificate, parentKey *rsa.PrivateKey) (*x509.Certificate, *rsa.PrivateKey) {
+// It creates self-signed certificates if parentCert is nil otherwise it creates
+// certificates signed by a parent certificate.
+func createCertificate(t *testing.T, cfg certConfig) (*x509.Certificate, *rsa.PrivateKey) {
 	t.Helper()
 
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
@@ -472,7 +471,7 @@ func createCertificate(t *testing.T, cfg certConfig, serial int64, parentCert *x
 
 	now := time.Now()
 	tmpl := &x509.Certificate{
-		SerialNumber:          big.NewInt(serial),
+		SerialNumber:          big.NewInt(cfg.serial),
 		Subject:               pkix.Name{CommonName: cfg.commonName},
 		DNSNames:              cfg.dnsNames,
 		NotBefore:             now.Add(-time.Hour),
@@ -482,8 +481,8 @@ func createCertificate(t *testing.T, cfg certConfig, serial int64, parentCert *x
 	}
 
 	// If no parent is provided, the certificate is self-signed
-	signingCert := parentCert
-	signingKey := parentKey
+	signingCert := cfg.parentCert
+	signingKey := cfg.parentKey
 	if signingCert == nil {
 		signingCert = tmpl
 		signingKey = key
@@ -506,10 +505,34 @@ func createCertificate(t *testing.T, cfg certConfig, serial int64, parentCert *x
 // Leaf). It returns the root certificate, a slice containing the leaf and
 // intermediate certificates in the order [leaf, intermediate], and the private
 // key for the leaf certificate.
-func generateCertChain(t *testing.T, rootCfg, interCfg, leafCfg certConfig) (root *x509.Certificate, chain []*x509.Certificate, leafKey *rsa.PrivateKey) {
+func generateCertChain(t *testing.T, rootName, interName, leafName string) (root *x509.Certificate, chain []*x509.Certificate, leafKey *rsa.PrivateKey) {
 	t.Helper()
-	root, rootKey := createCertificate(t, rootCfg, 1, nil, nil)
-	intermediate, interKey := createCertificate(t, interCfg, 2, root, rootKey)
-	leaf, leafKey := createCertificate(t, leafCfg, 3, intermediate, interKey)
+
+	rootCfg := certConfig{
+		commonName: rootName,
+		isCA:       true,
+	}
+	root, rootKey := createCertificate(t, rootCfg)
+
+	interCfg := certConfig{
+		commonName: interName,
+		dnsNames:   []string{interName},
+		isCA:       true,
+		serial:     2,
+		parentCert: root,
+		parentKey:  rootKey,
+	}
+	intermediate, interKey := createCertificate(t, interCfg)
+
+	leafCfg := certConfig{
+		commonName: leafName,
+		dnsNames:   []string{leafName},
+		isCA:       false,
+		serial:     3,
+		parentCert: intermediate,
+		parentKey:  interKey,
+	}
+	leaf, leafKey := createCertificate(t, leafCfg)
+
 	return root, []*x509.Certificate{leaf, intermediate}, leafKey
 }
