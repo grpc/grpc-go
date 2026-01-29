@@ -20,9 +20,15 @@ package credentials_test
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
 	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"fmt"
+	"math/big"
 	"net"
+	"strings"
 	"testing"
 	"time"
 
@@ -364,4 +370,169 @@ func (s) TestCorrectAuthorityWithCustomCreds(t *testing.T) {
 	if _, err = testgrpc.NewTestServiceClient(cc).EmptyCall(ctx, &testpb.Empty{}, grpc.CallAuthority(authority)); status.Code(err) != codes.OK {
 		t.Fatalf("EmptyCall() returned status %v, want %v", status.Code(err), codes.OK)
 	}
+}
+
+// TestAuthorityOverrideWithCertChain tests that the authority being used to
+// override per-RPC authority is validated against the leaf certificate only
+// and not against the intermediate certificates.
+func (s) TestAuthorityOverrideWithCertChain(t *testing.T) {
+	rootCert, certChain, leafKey := generateCertChain(t, "root.example.com", "intermediate.example.com", "*.leaf.example.com")
+
+	// Construct server credentials from leaf and intermediate certificates.
+	serverCert := tls.Certificate{
+		Certificate: [][]byte{certChain[0].Raw, certChain[1].Raw},
+		PrivateKey:  leafKey,
+	}
+	serverCreds := credentials.NewServerTLSFromCert(&serverCert)
+
+	// Create client credentials trusting the Root CA.
+	certPool := x509.NewCertPool()
+	certPool.AddCert(rootCert)
+	clientCreds := credentials.NewTLS(&tls.Config{
+		RootCAs:    certPool,
+		ServerName: "test1.leaf.example.com",
+	})
+
+	tests := []struct {
+		name      string
+		authority string
+		wantCode  codes.Code
+		wantErr   string
+	}{
+		{
+			name:      "AuthorityMatchesIntermediate",
+			authority: "intermediate.example.com",
+			wantCode:  codes.Unavailable,
+			wantErr:   "failed to validate authority",
+		},
+		{
+			name:      "AuthorityMatchesLeaf",
+			authority: "test2.leaf.example.com",
+			wantCode:  codes.OK,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Setup and start the stub server.
+			ss := &stubserver.StubServer{
+				EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
+					if err := authorityChecker(ctx, tt.authority); err != nil {
+						return nil, err
+					}
+					return &testpb.Empty{}, nil
+				},
+			}
+			if err := ss.StartServer(grpc.Creds(serverCreds)); err != nil {
+				t.Fatalf("failed to start server: %v", err)
+			}
+			defer ss.Stop()
+
+			cc, err := grpc.NewClient(ss.Address, grpc.WithTransportCredentials(clientCreds))
+			if err != nil {
+				t.Fatalf("grpc.NewClient(%q) = %v", ss.Address, err)
+			}
+			defer cc.Close()
+
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+
+			_, err = testgrpc.NewTestServiceClient(cc).EmptyCall(ctx, &testpb.Empty{}, grpc.CallAuthority(tt.authority))
+			if got := status.Code(err); got != tt.wantCode {
+				t.Fatalf("EmptyCall() with authority %q: got code %v, want %v", tt.authority, got, tt.wantCode)
+			}
+			if tt.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tt.wantErr)) {
+				t.Fatalf("EmptyCall() with authority %q: expected error to contain %q, got %v", tt.authority, tt.wantErr, err)
+			}
+		})
+	}
+}
+
+// certConfig defines the configuration for generating a certificate.
+type certConfig struct {
+	commonName string
+	dnsNames   []string
+	isCA       bool
+	serial     int64
+	parentCert *x509.Certificate
+	parentKey  *rsa.PrivateKey
+}
+
+// createCertificate generates a certificate based on the provided certConfig.
+// It creates self-signed certificates if parentCert is nil otherwise it creates
+// certificates signed by a parent certificate.
+func createCertificate(t *testing.T, cfg certConfig) (*x509.Certificate, *rsa.PrivateKey) {
+	t.Helper()
+
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	now := time.Now()
+	tmpl := &x509.Certificate{
+		SerialNumber:          big.NewInt(cfg.serial),
+		Subject:               pkix.Name{CommonName: cfg.commonName},
+		DNSNames:              cfg.dnsNames,
+		NotBefore:             now.Add(-time.Hour),
+		NotAfter:              now.Add(time.Hour),
+		BasicConstraintsValid: true,
+		IsCA:                  cfg.isCA,
+	}
+
+	// If no parent is provided, the certificate is self-signed
+	signingCert := cfg.parentCert
+	signingKey := cfg.parentKey
+	if signingCert == nil {
+		signingCert = tmpl
+		signingKey = key
+	}
+
+	der, err := x509.CreateCertificate(rand.Reader, tmpl, signingCert, key.Public(), signingKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cert, err := x509.ParseCertificate(der)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return cert, key
+}
+
+// generateCertChain creates a 3 certificate chain (Root -> Intermediate ->
+// Leaf). It returns the root certificate, a slice containing the leaf and
+// intermediate certificates in the order [leaf, intermediate], and the private
+// key for the leaf certificate.
+func generateCertChain(t *testing.T, rootName, interName, leafName string) (root *x509.Certificate, chain []*x509.Certificate, leafKey *rsa.PrivateKey) {
+	t.Helper()
+
+	rootCfg := certConfig{
+		commonName: rootName,
+		isCA:       true,
+	}
+	root, rootKey := createCertificate(t, rootCfg)
+
+	interCfg := certConfig{
+		commonName: interName,
+		dnsNames:   []string{interName},
+		isCA:       true,
+		serial:     2,
+		parentCert: root,
+		parentKey:  rootKey,
+	}
+	intermediate, interKey := createCertificate(t, interCfg)
+
+	leafCfg := certConfig{
+		commonName: leafName,
+		dnsNames:   []string{leafName},
+		isCA:       false,
+		serial:     3,
+		parentCert: intermediate,
+		parentKey:  interKey,
+	}
+	leaf, leafKey := createCertificate(t, leafCfg)
+
+	return root, []*x509.Certificate{leaf, intermediate}, leafKey
 }
