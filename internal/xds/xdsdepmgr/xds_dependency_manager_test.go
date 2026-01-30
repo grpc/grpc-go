@@ -1683,3 +1683,172 @@ func (s) TestClusterSubscription_Lifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// Tests the scenario where a dynamic subscription is made for a new cluster
+// while an existing cluster is already being watched via route configuration.
+// It verifies that updates to the existing cluster are still correctly
+// propagated even while the dynamic cluster remains unresolved. Finally, it
+// verifies that once the missing resource for the dynamic cluster is provided,
+// the manager successfully resolves the complete picture and delivers an update
+// containing the state for both clusters.
+func (s) TestUpdateWithUnresolvedDynamicSubscription(t *testing.T) {
+	nodeID, mgmtServer, xdsClient := setupManagementServerAndClient(t, false)
+
+	watcher := newTestWatcher()
+	defer watcher.close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 50*defaultTestTimeout)
+	defer cancel()
+
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		NodeID:     nodeID,
+		DialTarget: defaultTestServiceName,
+		Host:       "localhost",
+		Port:       8080,
+		SecLevel:   e2e.SecurityLevelNone,
+	})
+
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	dm := xdsdepmgr.New(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
+	defer dm.Close()
+
+	wantXdsConfig := makeXDSConfig(resources.Routes[0].Name, resources.Clusters[0].Name, resources.Clusters[0].EdsClusterConfig.ServiceName, "localhost:8080")
+	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
+		t.Fatal(err)
+	}
+
+	// Subscribe to cluster present in route config emulating a RPC.
+	dm.Subscribe(resources.Clusters[0].Name)
+
+	// Subscribe to new cluster not present in route config emulating
+	// susbscription for a dynamic resource.
+	newClusterName := "new-cluster-name"
+	dm.Subscribe(newClusterName)
+
+	// Verify that update is received since all static clusters are present.
+	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
+		t.Fatal(err)
+	}
+
+	// Update EDS for the first cluster only.
+	endpoint := e2e.DefaultEndpoint(resources.Clusters[0].EdsClusterConfig.ServiceName, "localhost", []uint32{9090})
+	resources.Endpoints = []*v3endpointpb.ClusterLoadAssignment{endpoint}
+
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify that we get the update even though we have a subscription to
+	// new-cluster-name which has no resources yet.
+	wantXdsConfig = makeXDSConfig(resources.Routes[0].Name, resources.Clusters[0].Name, resources.Clusters[0].EdsClusterConfig.ServiceName, "localhost:9090")
+	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
+		t.Fatal(err)
+	}
+
+	// Add resources for new cluster.
+	resources.Clusters = append(resources.Clusters, e2e.DefaultCluster(newClusterName, "new-eds-service", e2e.SecurityLevelNone))
+	resources.Endpoints = append(resources.Endpoints, e2e.DefaultEndpoint("new-eds-service", "localhost", []uint32{10080}))
+
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// We will get an extra update when the new-cluster-name has an update but
+	// EDS update for it has not yet reached but all the static clusters are
+	// present.
+	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
+		t.Fatal(err)
+	}
+
+	wantXdsConfig = &xdsresource.XDSConfig{
+		Listener: &xdsresource.ListenerUpdate{
+			RouteConfigName: resources.Routes[0].Name,
+			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+		},
+		RouteConfig: &xdsresource.RouteConfigUpdate{
+			VirtualHosts: []*xdsresource.VirtualHost{
+				{
+					Domains: []string{defaultTestServiceName},
+					Routes: []*xdsresource.Route{{
+						Prefix:           newStringP("/"),
+						WeightedClusters: []xdsresource.WeightedCluster{{Name: resources.Clusters[0].Name, Weight: 100}},
+						ActionType:       xdsresource.RouteActionRoute,
+					}},
+				},
+			},
+		},
+		VirtualHost: &xdsresource.VirtualHost{
+			Domains: []string{defaultTestServiceName},
+			Routes: []*xdsresource.Route{{
+				Prefix:           newStringP("/"),
+				WeightedClusters: []xdsresource.WeightedCluster{{Name: resources.Clusters[0].Name, Weight: 100}},
+				ActionType:       xdsresource.RouteActionRoute},
+			},
+		},
+		Clusters: map[string]*xdsresource.ClusterResult{
+			resources.Clusters[0].Name: {
+				Config: xdsresource.ClusterConfig{Cluster: &xdsresource.ClusterUpdate{
+					ClusterType:    xdsresource.ClusterTypeEDS,
+					ClusterName:    resources.Clusters[0].Name,
+					EDSServiceName: resources.Clusters[0].EdsClusterConfig.ServiceName,
+				},
+					EndpointConfig: &xdsresource.EndpointConfig{
+						EDSUpdate: &xdsresource.EndpointsUpdate{
+							Localities: []xdsresource.Locality{
+								{ID: clients.Locality{
+									Region:  "region-1",
+									Zone:    "zone-1",
+									SubZone: "subzone-1",
+								},
+									Endpoints: []xdsresource.Endpoint{
+										{
+											ResolverEndpoint: resolver.Endpoint{Addresses: []resolver.Address{{Addr: "localhost:9090"}}},
+											HealthStatus:     xdsresource.EndpointHealthStatusUnknown,
+											Weight:           1,
+										},
+									},
+									Weight: 1,
+								},
+							},
+						},
+					},
+				},
+			},
+			newClusterName: {
+				Config: xdsresource.ClusterConfig{Cluster: &xdsresource.ClusterUpdate{
+					ClusterType:    xdsresource.ClusterTypeEDS,
+					ClusterName:    newClusterName,
+					EDSServiceName: "new-eds-service",
+				},
+					EndpointConfig: &xdsresource.EndpointConfig{
+						EDSUpdate: &xdsresource.EndpointsUpdate{
+							Localities: []xdsresource.Locality{
+								{ID: clients.Locality{
+									Region:  "region-1",
+									Zone:    "zone-1",
+									SubZone: "subzone-1",
+								},
+									Endpoints: []xdsresource.Endpoint{
+										{
+											ResolverEndpoint: resolver.Endpoint{Addresses: []resolver.Address{{Addr: "localhost:10080"}}},
+											HealthStatus:     xdsresource.EndpointHealthStatusUnknown,
+											Weight:           1,
+										},
+									},
+									Weight: 1,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	// Verify both clusters are now present.
+	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
+		t.Fatal(err)
+	}
+}
