@@ -25,6 +25,7 @@ import (
 
 	v3statuspb "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
 	estats "google.golang.org/grpc/experimental/stats"
+	"google.golang.org/grpc/internal/envconfig"
 	istats "google.golang.org/grpc/internal/stats"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/protobuf/proto"
@@ -43,12 +44,14 @@ var (
 // Pool represents a pool of xDS clients that share the same bootstrap
 // configuration.
 type Pool struct {
-	mu      sync.Mutex
-	clients map[string]*clientImpl
+	// Note that mu should ideally only have to guard clients. But here, we need
+	// it to guard config as well since SetFallbackBootstrapConfig writes to
+	// config.
+	mu             sync.Mutex
+	clients        map[string]*clientImpl
+	fallbackConfig *bootstrap.Config // TODO(i/8661): remove fallbackConfig.
 	// getConfiguration is a sync.OnceValues that attempts to read the bootstrap
-	// configuration from environment variables once if bootstrap.GetConfiguration
-	// is set in the case of DefaultPool. When the Pool is created with a
-	// specific configuration, it returns that configuration directly.
+	// configuration from environment variables once.
 	getConfiguration func() (*bootstrap.Config, error)
 }
 
@@ -79,81 +82,45 @@ type OptionsForTesting struct {
 
 // NewPool creates a new xDS client pool with the given bootstrap config.
 //
-// If a nil bootstrap config is passed, the caller is expected to pass the
-// config when creating the xDS client by using NewClientWithConfig instead of
-// NewClient. If they specify a nil config and use NewClient, client creation
-// will fail.
+// If a nil bootstrap config is passed and SetFallbackBootstrapConfig is not
+// called before a call to NewClient, the latter will fail. i.e. if there is an
+// attempt to create an xDS client from the pool without specifying bootstrap
+// configuration (either at pool creation time or by setting the fallback
+// bootstrap configuration), xDS client creation will fail.
 func NewPool(config *bootstrap.Config) *Pool {
 	return &Pool{
 		clients: make(map[string]*clientImpl),
 		getConfiguration: func() (*bootstrap.Config, error) {
-			if config == nil {
-				return nil, fmt.Errorf("xds: bootstrap config cannot be nil")
-			}
 			return config, nil
 		},
 	}
 }
 
-// getBootstrapConfiguration returns the config specified at pool creation time.
-func (p *Pool) getBootstrapConfiguration() (*bootstrap.Config, error) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	config, err := p.getConfiguration()
-	if err != nil {
-		return nil, fmt.Errorf("xds: failed to read xDS bootstrap config:  %v", err)
-	}
-	return config, nil
-}
-
-// getConfig returns the provided config if it is non-nil. Otherwise, it
-// delegates to getBootstrapConfiguration to retrieve the configuration.
-func (p *Pool) getConfig(config *bootstrap.Config) (*bootstrap.Config, error) {
-	if config != nil {
-		return config, nil
-	}
-	return p.getBootstrapConfiguration()
-}
-
-// NewClientWithConfig returns an xDS client with the given name from the pool.
-// If the client doesn't already exist, it creates a new xDS client using the
-// provided config and adds it to the pool. The provided config takes precedence
-// over any config passed during pool creation. This should be used when a
-// non-default config is required. If the provided config is nil, it attempts
-// to load the configuration provided at pool creation time.
+// NewClientWithConfig returns an xDS client with the given name from the pool. If the
+// client doesn't already exist, it creates a new xDS client and adds it to the
+// pool.
 //
 // The second return value represents a close function which the caller is
 // expected to invoke once they are done using the client.  It is safe for the
 // caller to invoke this close function multiple times.
 func (p *Pool) NewClientWithConfig(name string, metricsRecorder estats.MetricsRecorder, config *bootstrap.Config) (XDSClient, func(), error) {
-	config, err := p.getConfig(config)
-	if err != nil {
-		return nil, nil, err
-	}
 	return p.newRefCounted(name, metricsRecorder, defaultWatchExpiryTimeout, config)
 }
 
 // NewClient returns an xDS client with the given name from the pool. If the
-// client doesn't already exist, it loads the configuration and creates a new
-// xDS client and adds it to the pool.
+// client doesn't already exist, it creates a new xDS client and adds it to the
+// pool.
 //
 // The second return value represents a close function which the caller is
 // expected to invoke once they are done using the client.  It is safe for the
 // caller to invoke this close function multiple times.
 func (p *Pool) NewClient(name string, metricsRecorder estats.MetricsRecorder) (XDSClient, func(), error) {
-	config, err := p.getConfig(nil)
-	if err != nil {
-		return nil, nil, err
-	}
-	return p.newRefCounted(name, metricsRecorder, defaultWatchExpiryTimeout, config)
+	return p.newRefCounted(name, metricsRecorder, defaultWatchExpiryTimeout, nil)
 }
 
 // NewClientForTesting returns an xDS client configured with the provided
 // options from the pool. If the client doesn't already exist, it creates a new
 // xDS client and adds it to the pool.
-//
-// If the config in options is nil, it attempts to load the configuration
-// provided at the time of pool creation.
 //
 // The second return value represents a close function which the caller is
 // expected to invoke once they are done using the client.  It is safe for the
@@ -175,13 +142,7 @@ func (p *Pool) NewClientForTesting(opts OptionsForTesting) (XDSClient, func(), e
 	if opts.MetricsRecorder == nil {
 		opts.MetricsRecorder = istats.NewMetricsRecorderList(nil)
 	}
-
-	config, err := p.getConfig(opts.Config)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	c, cancel, err := p.newRefCounted(opts.Name, opts.MetricsRecorder, opts.WatchExpiryTimeout, config)
+	c, cancel, err := p.newRefCounted(opts.Name, opts.MetricsRecorder, opts.WatchExpiryTimeout, opts.Config)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -209,6 +170,16 @@ func (p *Pool) GetClientForTesting(name string) (XDSClient, func(), error) {
 	}
 	c.incrRef()
 	return c, sync.OnceFunc(func() { p.clientRefCountedClose(name) }), nil
+}
+
+// SetFallbackBootstrapConfig is used to specify a bootstrap configuration
+// that will be used as a fallback when the bootstrap environment variables
+// are not defined.
+// TODO(i/8661): remove SetFallbackBootstrapConfig function.
+func (p *Pool) SetFallbackBootstrapConfig(config *bootstrap.Config) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.fallbackConfig = config
 }
 
 // DumpResources returns the status and contents of all xDS resources.
@@ -241,7 +212,10 @@ func (p *Pool) BootstrapConfigForTesting() *bootstrap.Config {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	cfg, _ := p.getConfiguration()
-	return cfg
+	if cfg != nil {
+		return cfg
+	}
+	return p.fallbackConfig
 }
 
 // UnsetBootstrapConfigForTesting unsets the bootstrap configuration used by
@@ -251,6 +225,7 @@ func (p *Pool) BootstrapConfigForTesting() *bootstrap.Config {
 func (p *Pool) UnsetBootstrapConfigForTesting() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	p.fallbackConfig = nil
 	p.getConfiguration = sync.OnceValues(bootstrap.GetConfiguration)
 }
 
@@ -293,15 +268,32 @@ func (p *Pool) clientRefCountedClose(name string) {
 // newRefCounted creates a new reference counted xDS client implementation for
 // name, if one does not exist already. If an xDS client for the given name
 // exists, it gets a reference to it and returns it.
-//
-// The config should not be nil.
-func (p *Pool) newRefCounted(name string, metricsRecorder estats.MetricsRecorder, watchExpiryTimeout time.Duration, config *bootstrap.Config) (*clientImpl, func(), error) {
+func (p *Pool) newRefCounted(name string, metricsRecorder estats.MetricsRecorder, watchExpiryTimeout time.Duration, bConfig *bootstrap.Config) (*clientImpl, func(), error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
 	if c := p.clients[name]; c != nil {
 		c.incrRef()
 		return c, sync.OnceFunc(func() { p.clientRefCountedClose(name) }), nil
+	}
+
+	config := bConfig
+	if config == nil {
+		var err error
+		config, err = p.getConfiguration()
+		if err != nil {
+			return nil, nil, fmt.Errorf("xds: failed to read xDS bootstrap config from env vars:  %v", err)
+		}
+		if config == nil {
+			// If the environment variables are not set, then fallback bootstrap
+			// configuration should be set before attempting to create an xDS client,
+			// else xDS client creation will fail.
+			config = p.fallbackConfig
+		}
+	}
+
+	if config == nil {
+		return nil, nil, fmt.Errorf("failed to read xDS bootstrap config from env vars: bootstrap environment variables (%q or %q) not defined and fallback config not set", envconfig.XDSBootstrapFileNameEnv, envconfig.XDSBootstrapFileContentEnv)
 	}
 
 	c, err := newClientImpl(config, metricsRecorder, name, watchExpiryTimeout)

@@ -178,7 +178,7 @@ func (s) TestNewServer_Failure(t *testing.T) {
 		{
 			desc:       "bootstrap env var not set",
 			serverOpts: []grpc.ServerOption{grpc.Creds(xdsCreds), BootstrapContentsForTesting(nil)},
-			wantErr:    "failed to read xDS bootstrap config",
+			wantErr:    "failed to read xDS bootstrap config from env vars",
 		},
 		{
 			desc: "empty bootstrap config",
