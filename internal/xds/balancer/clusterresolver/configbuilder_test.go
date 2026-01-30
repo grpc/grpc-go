@@ -32,9 +32,11 @@ import (
 	"google.golang.org/grpc/balancer/ringhash"
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/internal/balancer/weight"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/hierarchy"
 	iringhash "google.golang.org/grpc/internal/ringhash"
 	iserviceconfig "google.golang.org/grpc/internal/serviceconfig"
+	"google.golang.org/grpc/internal/testutils"
 	xdsinternal "google.golang.org/grpc/internal/xds"
 	"google.golang.org/grpc/internal/xds/balancer/clusterimpl"
 	"google.golang.org/grpc/internal/xds/balancer/outlierdetection"
@@ -47,7 +49,6 @@ import (
 )
 
 const (
-	testLRSServer       = "test-lrs-server"
 	testMaxRequests     = 314
 	testEDSServiceName  = "service-name-from-parent"
 	testDropCategory    = "test-drops"
@@ -102,6 +103,7 @@ func init() {
 						{Addr: fmt.Sprintf("addr-%d-%d-additional-2", i, j)},
 					},
 				},
+				Weight: 1,
 			})
 		}
 		testResolverEndpoints = append(testResolverEndpoints, endpoints)
@@ -335,7 +337,9 @@ func TestBuildClusterImplConfigForDNS(t *testing.T) {
 	}
 }
 
-func TestBuildClusterImplConfigForEDS(t *testing.T) {
+func TestBuildClusterImplConfigForEDS_PickFirstWeightedShuffling_Disabled(t *testing.T) {
+	testutils.SetEnvConfig(t, &envconfig.PickFirstWeightedShuffling, false)
+
 	testLRSServerConfig, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{
 		URI:          "trafficdirector.googleapis.com:443",
 		ChannelCreds: []bootstrap.ChannelCreds{{Type: "google_default"}},
@@ -418,15 +422,16 @@ func TestBuildClusterImplConfigForEDS(t *testing.T) {
 			},
 		},
 	}
+	// Endpoint weight is the product of locality weight and endpoint weight.
 	wantEndpoints := []resolver.Endpoint{
-		testEndpointWithAttrs(testEndpoints[0][0].ResolverEndpoint, 20, 1, "priority-2-0", &testLocalityIDs[0]),
-		testEndpointWithAttrs(testEndpoints[0][1].ResolverEndpoint, 20, 1, "priority-2-0", &testLocalityIDs[0]),
-		testEndpointWithAttrs(testEndpoints[1][0].ResolverEndpoint, 80, 1, "priority-2-0", &testLocalityIDs[1]),
-		testEndpointWithAttrs(testEndpoints[1][1].ResolverEndpoint, 80, 1, "priority-2-0", &testLocalityIDs[1]),
-		testEndpointWithAttrs(testEndpoints[2][0].ResolverEndpoint, 20, 1, "priority-2-1", &testLocalityIDs[2]),
-		testEndpointWithAttrs(testEndpoints[2][1].ResolverEndpoint, 20, 1, "priority-2-1", &testLocalityIDs[2]),
-		testEndpointWithAttrs(testEndpoints[3][0].ResolverEndpoint, 80, 1, "priority-2-1", &testLocalityIDs[3]),
-		testEndpointWithAttrs(testEndpoints[3][1].ResolverEndpoint, 80, 1, "priority-2-1", &testLocalityIDs[3]),
+		testEndpointWithAttrs(testEndpoints[0][0].ResolverEndpoint, 20, 20*1, "priority-2-0", &testLocalityIDs[0]),
+		testEndpointWithAttrs(testEndpoints[0][1].ResolverEndpoint, 20, 20*1, "priority-2-0", &testLocalityIDs[0]),
+		testEndpointWithAttrs(testEndpoints[1][0].ResolverEndpoint, 80, 80*1, "priority-2-0", &testLocalityIDs[1]),
+		testEndpointWithAttrs(testEndpoints[1][1].ResolverEndpoint, 80, 80*1, "priority-2-0", &testLocalityIDs[1]),
+		testEndpointWithAttrs(testEndpoints[2][0].ResolverEndpoint, 20, 20*1, "priority-2-1", &testLocalityIDs[2]),
+		testEndpointWithAttrs(testEndpoints[2][1].ResolverEndpoint, 20, 20*1, "priority-2-1", &testLocalityIDs[2]),
+		testEndpointWithAttrs(testEndpoints[3][0].ResolverEndpoint, 80, 80*1, "priority-2-1", &testLocalityIDs[3]),
+		testEndpointWithAttrs(testEndpoints[3][1].ResolverEndpoint, 80, 80*1, "priority-2-1", &testLocalityIDs[3]),
 	}
 
 	if diff := cmp.Diff(gotNames, wantNames); diff != "" {
@@ -438,9 +443,132 @@ func TestBuildClusterImplConfigForEDS(t *testing.T) {
 	if diff := cmp.Diff(gotEndpoints, wantEndpoints, endpointCmpOpts); diff != "" {
 		t.Errorf("buildClusterImplConfigForEDS() diff (-got +want) %v", diff)
 	}
-
 }
 
+func TestBuildClusterImplConfigForEDS_PickFirstWeightedShuffling_Enabled(t *testing.T) {
+	testutils.SetEnvConfig(t, &envconfig.PickFirstWeightedShuffling, true)
+
+	testLRSServerConfig, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{
+		URI:          "trafficdirector.googleapis.com:443",
+		ChannelCreds: []bootstrap.ChannelCreds{{Type: "google_default"}},
+	})
+	if err != nil {
+		t.Fatalf("Failed to create LRS server config for testing: %v", err)
+	}
+
+	gotNames, gotConfigs, gotEndpoints, _ := buildClusterImplConfigForEDS(
+		newNameGenerator(2),
+		xdsresource.EndpointsUpdate{
+			Drops: []xdsresource.OverloadDropConfig{
+				{
+					Category:    testDropCategory,
+					Numerator:   testDropOverMillion,
+					Denominator: million,
+				},
+			},
+			Localities: []xdsresource.Locality{
+				{
+					Endpoints: testEndpoints[3],
+					ID:        testLocalityIDs[3],
+					Weight:    80,
+					Priority:  1,
+				}, {
+					Endpoints: testEndpoints[1],
+					ID:        testLocalityIDs[1],
+					Weight:    80,
+					Priority:  0,
+				}, {
+					Endpoints: testEndpoints[2],
+					ID:        testLocalityIDs[2],
+					Weight:    20,
+					Priority:  1,
+				}, {
+					Endpoints: testEndpoints[0],
+					ID:        testLocalityIDs[0],
+					Weight:    20,
+					Priority:  0,
+				},
+			},
+		},
+		DiscoveryMechanism{
+			Cluster:               testClusterName,
+			MaxConcurrentRequests: newUint32(testMaxRequests),
+			LoadReportingServer:   testLRSServerConfig,
+			Type:                  DiscoveryMechanismTypeEDS,
+			EDSServiceName:        testEDSServiceName,
+		},
+		nil,
+	)
+
+	wantNames := []string{
+		fmt.Sprintf("priority-%v-%v", 2, 0),
+		fmt.Sprintf("priority-%v-%v", 2, 1),
+	}
+	wantConfigs := map[string]*clusterimpl.LBConfig{
+		"priority-2-0": {
+			Cluster:               testClusterName,
+			EDSServiceName:        testEDSServiceName,
+			LoadReportingServer:   testLRSServerConfig,
+			MaxConcurrentRequests: newUint32(testMaxRequests),
+			DropCategories: []clusterimpl.DropConfig{
+				{
+					Category:           testDropCategory,
+					RequestsPerMillion: testDropOverMillion,
+				},
+			},
+		},
+		"priority-2-1": {
+			Cluster:               testClusterName,
+			EDSServiceName:        testEDSServiceName,
+			LoadReportingServer:   testLRSServerConfig,
+			MaxConcurrentRequests: newUint32(testMaxRequests),
+			DropCategories: []clusterimpl.DropConfig{
+				{
+					Category:           testDropCategory,
+					RequestsPerMillion: testDropOverMillion,
+				},
+			},
+		},
+	}
+	// Endpoints weights are the product of normalized locality weight and
+	// endpoint weight, represented as a fixed-point number in uQ1.31 format.
+	// Locality weights are normalized as:
+	//   P1: locality 3: 80 / (100) = 0.8
+	//   P0: locality 1: 80 / (100) = 0.8
+	//   P1: locality 2: 20 / (100) = 0.2
+	//   P0: locality 0: 20 / (100) = 0.2
+	// In fixed-point uQ1.31 format, the weights are:
+	//   locality 3: 0.8 * 2^31 = 1717986918
+	//   locality 1: 0.8 * 2^31 = 1717986918
+	//   locality 2: 0.2 * 2^31 =  429496729
+	//   locality 0: 0.2 * 2^31 =  429496729
+	//
+	// There are two endpoints in each locality, each with weight 1. So, their
+	// normalized weights are 0.5 each. And the final endpoint weights are a
+	// product of their locality weights and 0.5, which turns out to be either
+	//   1717986918 * 0.5 = 858993459, or,
+	//    429496729 * 0.5 = 214748364
+	wantEndpoints := []resolver.Endpoint{
+		testEndpointWithAttrs(testEndpoints[0][0].ResolverEndpoint, 20, 214748364, "priority-2-0", &testLocalityIDs[0]),
+		testEndpointWithAttrs(testEndpoints[0][1].ResolverEndpoint, 20, 214748364, "priority-2-0", &testLocalityIDs[0]),
+		testEndpointWithAttrs(testEndpoints[1][0].ResolverEndpoint, 80, 858993459, "priority-2-0", &testLocalityIDs[1]),
+		testEndpointWithAttrs(testEndpoints[1][1].ResolverEndpoint, 80, 858993459, "priority-2-0", &testLocalityIDs[1]),
+		testEndpointWithAttrs(testEndpoints[2][0].ResolverEndpoint, 20, 214748364, "priority-2-1", &testLocalityIDs[2]),
+		testEndpointWithAttrs(testEndpoints[2][1].ResolverEndpoint, 20, 214748364, "priority-2-1", &testLocalityIDs[2]),
+		testEndpointWithAttrs(testEndpoints[3][0].ResolverEndpoint, 80, 858993459, "priority-2-1", &testLocalityIDs[3]),
+		testEndpointWithAttrs(testEndpoints[3][1].ResolverEndpoint, 80, 858993459, "priority-2-1", &testLocalityIDs[3]),
+	}
+
+	if diff := cmp.Diff(gotNames, wantNames); diff != "" {
+		t.Errorf("buildClusterImplConfigForEDS() diff (-got +want) %v", diff)
+	}
+	if diff := cmp.Diff(gotConfigs, wantConfigs); diff != "" {
+		t.Errorf("buildClusterImplConfigForEDS() diff (-got +want) %v", diff)
+	}
+	if diff := cmp.Diff(gotEndpoints, wantEndpoints, endpointCmpOpts); diff != "" {
+		t.Errorf("buildClusterImplConfigForEDS() diff (-got +want) %v", diff)
+	}
+}
 func TestGroupLocalitiesByPriority(t *testing.T) {
 	tests := []struct {
 		name           string
@@ -503,38 +631,8 @@ func TestGroupLocalitiesByPriority(t *testing.T) {
 	}
 }
 
-func TestDedupSortedIntSlice(t *testing.T) {
-	tests := []struct {
-		name string
-		a    []int
-		want []int
-	}{
-		{
-			name: "empty",
-			a:    []int{},
-			want: []int{},
-		},
-		{
-			name: "no dup",
-			a:    []int{0, 1, 2, 3},
-			want: []int{0, 1, 2, 3},
-		},
-		{
-			name: "with dup",
-			a:    []int{0, 0, 1, 1, 1, 2, 3},
-			want: []int{0, 1, 2, 3},
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := dedupSortedIntSlice(tt.a); !cmp.Equal(got, tt.want) {
-				t.Errorf("dedupSortedIntSlice() = %v, want %v, diff %v", got, tt.want, cmp.Diff(got, tt.want))
-			}
-		})
-	}
-}
-
-func TestPriorityLocalitiesToClusterImpl(t *testing.T) {
+func TestPriorityLocalitiesToClusterImpl_PickFirstWeightedShuffling_Disabled(t *testing.T) {
+	testutils.SetEnvConfig(t, &envconfig.PickFirstWeightedShuffling, false)
 	tests := []struct {
 		name          string
 		localities    []xdsresource.Locality
@@ -544,64 +642,66 @@ func TestPriorityLocalitiesToClusterImpl(t *testing.T) {
 		wantConfig    *clusterimpl.LBConfig
 		wantEndpoints []resolver.Endpoint
 		wantErr       bool
-	}{{
-		name: "round robin as child, no LRS",
-		localities: []xdsresource.Locality{
-			{
-				Endpoints: []xdsresource.Endpoint{
-					{
-						ResolverEndpoint: resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-1-1"}}},
-						Weight:           90,
-						HealthStatus:     xdsresource.EndpointHealthStatusHealthy,
-					},
-					{
-						ResolverEndpoint: resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-1-2"}}},
-						Weight:           10,
-						HealthStatus:     xdsresource.EndpointHealthStatusHealthy,
-					},
-				},
-				ID:     clients.Locality{Zone: "test-zone-1"},
-				Weight: 20,
-			},
-			{
-				Endpoints: []xdsresource.Endpoint{
-					{
-						ResolverEndpoint: resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-2-1"}}},
-						Weight:           90,
-						HealthStatus:     xdsresource.EndpointHealthStatusHealthy,
-					},
-					{
-						ResolverEndpoint: resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-2-2"}}},
-						Weight:           10,
-						HealthStatus:     xdsresource.EndpointHealthStatusHealthy,
-					},
-				},
-				ID:     clients.Locality{Zone: "test-zone-2"},
-				Weight: 80,
-			},
-		},
-		priorityName: "test-priority",
-		childPolicy:  &iserviceconfig.BalancerConfig{Name: roundrobin.Name},
-		mechanism: DiscoveryMechanism{
-			Cluster:        testClusterName,
-			Type:           DiscoveryMechanismTypeEDS,
-			EDSServiceName: testEDSService,
-		},
-		// lrsServer is nil, so LRS policy will not be used.
-		wantConfig: &clusterimpl.LBConfig{
-			Cluster:        testClusterName,
-			EDSServiceName: testEDSService,
-			ChildPolicy:    &iserviceconfig.BalancerConfig{Name: roundrobin.Name},
-		},
-		wantEndpoints: []resolver.Endpoint{
-			testEndpointWithAttrs(resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-1-1"}}}, 20, 90, "test-priority", &clients.Locality{Zone: "test-zone-1"}),
-			testEndpointWithAttrs(resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-1-2"}}}, 20, 10, "test-priority", &clients.Locality{Zone: "test-zone-1"}),
-			testEndpointWithAttrs(resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-2-1"}}}, 80, 90, "test-priority", &clients.Locality{Zone: "test-zone-2"}),
-			testEndpointWithAttrs(resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-2-2"}}}, 80, 10, "test-priority", &clients.Locality{Zone: "test-zone-2"}),
-		},
-	},
+	}{
 		{
-			name: "ring_hash as child",
+			name: "round_robin_as_child_no_LRS",
+			localities: []xdsresource.Locality{
+				{
+					Endpoints: []xdsresource.Endpoint{
+						{
+							ResolverEndpoint: resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-1-1"}}},
+							Weight:           90,
+							HealthStatus:     xdsresource.EndpointHealthStatusHealthy,
+						},
+						{
+							ResolverEndpoint: resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-1-2"}}},
+							Weight:           10,
+							HealthStatus:     xdsresource.EndpointHealthStatusHealthy,
+						},
+					},
+					ID:     clients.Locality{Zone: "test-zone-1"},
+					Weight: 20,
+				},
+				{
+					Endpoints: []xdsresource.Endpoint{
+						{
+							ResolverEndpoint: resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-2-1"}}},
+							Weight:           90,
+							HealthStatus:     xdsresource.EndpointHealthStatusHealthy,
+						},
+						{
+							ResolverEndpoint: resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-2-2"}}},
+							Weight:           10,
+							HealthStatus:     xdsresource.EndpointHealthStatusHealthy,
+						},
+					},
+					ID:     clients.Locality{Zone: "test-zone-2"},
+					Weight: 80,
+				},
+			},
+			priorityName: "test-priority",
+			childPolicy:  &iserviceconfig.BalancerConfig{Name: roundrobin.Name},
+			mechanism: DiscoveryMechanism{
+				Cluster:        testClusterName,
+				Type:           DiscoveryMechanismTypeEDS,
+				EDSServiceName: testEDSService,
+			},
+			// lrsServer is nil, so LRS policy will not be used.
+			wantConfig: &clusterimpl.LBConfig{
+				Cluster:        testClusterName,
+				EDSServiceName: testEDSService,
+				ChildPolicy:    &iserviceconfig.BalancerConfig{Name: roundrobin.Name},
+			},
+			// Endpoint weight is the product of locality weight and endpoint weight.
+			wantEndpoints: []resolver.Endpoint{
+				testEndpointWithAttrs(resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-1-1"}}}, 20, 20*90, "test-priority", &clients.Locality{Zone: "test-zone-1"}),
+				testEndpointWithAttrs(resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-1-2"}}}, 20, 20*10, "test-priority", &clients.Locality{Zone: "test-zone-1"}),
+				testEndpointWithAttrs(resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-2-1"}}}, 80, 80*90, "test-priority", &clients.Locality{Zone: "test-zone-2"}),
+				testEndpointWithAttrs(resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-2-2"}}}, 80, 80*10, "test-priority", &clients.Locality{Zone: "test-zone-2"}),
+			},
+		},
+		{
+			name: "ring_hash_as_child",
 			localities: []xdsresource.Locality{
 				{
 					Endpoints: []xdsresource.Endpoint{
@@ -645,25 +745,201 @@ func TestPriorityLocalitiesToClusterImpl(t *testing.T) {
 					Config: &iringhash.LBConfig{MinRingSize: 1, MaxRingSize: 2},
 				},
 			},
+			// Endpoint weight is the product of locality weight and endpoint weight.
 			wantEndpoints: []resolver.Endpoint{
-				testEndpointWithAttrs(resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-1-1"}}}, 20, 90, "test-priority", &clients.Locality{Zone: "test-zone-1"}),
-				testEndpointWithAttrs(resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-1-2"}}}, 20, 10, "test-priority", &clients.Locality{Zone: "test-zone-1"}),
-				testEndpointWithAttrs(resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-2-1"}}}, 80, 90, "test-priority", &clients.Locality{Zone: "test-zone-2"}),
-				testEndpointWithAttrs(resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-2-2"}}}, 80, 10, "test-priority", &clients.Locality{Zone: "test-zone-2"}),
+				testEndpointWithAttrs(resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-1-1"}}}, 20, 20*90, "test-priority", &clients.Locality{Zone: "test-zone-1"}),
+				testEndpointWithAttrs(resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-1-2"}}}, 20, 20*10, "test-priority", &clients.Locality{Zone: "test-zone-1"}),
+				testEndpointWithAttrs(resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-2-1"}}}, 80, 80*90, "test-priority", &clients.Locality{Zone: "test-zone-2"}),
+				testEndpointWithAttrs(resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-2-2"}}}, 80, 80*10, "test-priority", &clients.Locality{Zone: "test-zone-2"}),
 			},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, got1, err := priorityLocalitiesToClusterImpl(tt.localities, tt.priorityName, tt.mechanism, nil, tt.childPolicy)
+			gotConfig, gotEndpoints, err := priorityLocalitiesToClusterImpl(tt.localities, tt.priorityName, tt.mechanism, nil, tt.childPolicy)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("priorityLocalitiesToClusterImpl() error = %v, wantErr %v", err, tt.wantErr)
 			}
-			if diff := cmp.Diff(got, tt.wantConfig); diff != "" {
-				t.Errorf("localitiesToWeightedTarget() diff (-got +want) %v", diff)
+			if diff := cmp.Diff(gotConfig, tt.wantConfig); diff != "" {
+				t.Errorf("priorityLocalitiesToClusterImpl() diff (-got +want) %v", diff)
 			}
-			if diff := cmp.Diff(got1, tt.wantEndpoints, cmp.AllowUnexported(attributes.Attributes{})); diff != "" {
-				t.Errorf("localitiesToWeightedTarget() diff (-got +want) %v", diff)
+			if diff := cmp.Diff(gotEndpoints, tt.wantEndpoints, cmp.AllowUnexported(attributes.Attributes{})); diff != "" {
+				t.Errorf("priorityLocalitiesToClusterImpl() diff (-got +want) %v", diff)
+			}
+		})
+	}
+}
+
+func TestPriorityLocalitiesToClusterImpl_PickFirstWeightedShuffling_Enabled(t *testing.T) {
+	testutils.SetEnvConfig(t, &envconfig.PickFirstWeightedShuffling, true)
+	tests := []struct {
+		name          string
+		localities    []xdsresource.Locality
+		priorityName  string
+		mechanism     DiscoveryMechanism
+		childPolicy   *iserviceconfig.BalancerConfig
+		wantConfig    *clusterimpl.LBConfig
+		wantEndpoints []resolver.Endpoint
+		wantErr       bool
+	}{
+		{
+			name: "round_robin_as_child_no_LRS",
+			localities: []xdsresource.Locality{
+				{
+					Endpoints: []xdsresource.Endpoint{
+						{
+							ResolverEndpoint: resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-1-1"}}},
+							Weight:           90,
+							HealthStatus:     xdsresource.EndpointHealthStatusHealthy,
+						},
+						{
+							ResolverEndpoint: resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-1-2"}}},
+							Weight:           10,
+							HealthStatus:     xdsresource.EndpointHealthStatusHealthy,
+						},
+					},
+					ID:     clients.Locality{Zone: "test-zone-1"},
+					Weight: 20,
+				},
+				{
+					Endpoints: []xdsresource.Endpoint{
+						{
+							ResolverEndpoint: resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-2-1"}}},
+							Weight:           90,
+							HealthStatus:     xdsresource.EndpointHealthStatusHealthy,
+						},
+						{
+							ResolverEndpoint: resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-2-2"}}},
+							Weight:           10,
+							HealthStatus:     xdsresource.EndpointHealthStatusHealthy,
+						},
+					},
+					ID:     clients.Locality{Zone: "test-zone-2"},
+					Weight: 80,
+				},
+			},
+			priorityName: "test-priority",
+			childPolicy:  &iserviceconfig.BalancerConfig{Name: roundrobin.Name},
+			mechanism: DiscoveryMechanism{
+				Cluster:        testClusterName,
+				Type:           DiscoveryMechanismTypeEDS,
+				EDSServiceName: testEDSService,
+			},
+			// lrsServer is nil, so LRS policy will not be used.
+			wantConfig: &clusterimpl.LBConfig{
+				Cluster:        testClusterName,
+				EDSServiceName: testEDSService,
+				ChildPolicy:    &iserviceconfig.BalancerConfig{Name: roundrobin.Name},
+			},
+			// Endpoints weights are the product of normalized locality weight and
+			// endpoint weight, represented as a fixed-point number in uQ1.31 format.
+			// Locality weights are normalized as:
+			//   locality 0: 20 / (100) = 0.2
+			//   locality 1: 80 / (100) = 0.8
+			// In fixed-point uQ1.31 format, the weights are:
+			//   locality 0: 0.2 * 2^31 =  429496729
+			//   locality 1: 0.8 * 2^31 = 1717986918
+			//
+			// The normalized weights of endpoints in each locality are:
+			//   locality 0: endpoint 0: 90 / (100) = 0.9, endpoint 1: 10 / (100) = 0.1
+			//   locality 1: endpoint 0: 90 / (100) = 0.9, endpoint 1: 10 / (100) = 0.1
+			//
+			// The final endpoint weights are a product of the above normalized weights,
+			// which turns out to be:
+			//   locality 0, endpoint 0:  0.2 * 0.9   =  386547056
+			//   locality 0, endpoint 1:  0.2 * 0.1   =   42949672
+			//   locality 1, endpoint 0:  0.8 * 0.9   = 1546188226
+			//   locality 1, endpoint 1:  0.8 * 0.1   =  171798691
+			wantEndpoints: []resolver.Endpoint{
+				testEndpointWithAttrs(resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-1-1"}}}, 20, 386547056, "test-priority", &clients.Locality{Zone: "test-zone-1"}),
+				testEndpointWithAttrs(resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-1-2"}}}, 20, 42949672, "test-priority", &clients.Locality{Zone: "test-zone-1"}),
+				testEndpointWithAttrs(resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-2-1"}}}, 80, 1546188226, "test-priority", &clients.Locality{Zone: "test-zone-2"}),
+				testEndpointWithAttrs(resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-2-2"}}}, 80, 171798691, "test-priority", &clients.Locality{Zone: "test-zone-2"}),
+			},
+		},
+		{
+			name: "ring_hash_as_child",
+			localities: []xdsresource.Locality{
+				{
+					Endpoints: []xdsresource.Endpoint{
+						{
+							ResolverEndpoint: resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-1-1"}}},
+							Weight:           90,
+							HealthStatus:     xdsresource.EndpointHealthStatusHealthy,
+						},
+						{
+							ResolverEndpoint: resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-1-2"}}},
+							Weight:           10,
+							HealthStatus:     xdsresource.EndpointHealthStatusHealthy,
+						},
+					},
+					ID:     clients.Locality{Zone: "test-zone-1"},
+					Weight: 20,
+				},
+				{
+					Endpoints: []xdsresource.Endpoint{
+						{
+							ResolverEndpoint: resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-2-1"}}},
+							Weight:           90,
+							HealthStatus:     xdsresource.EndpointHealthStatusHealthy,
+						},
+						{
+							ResolverEndpoint: resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-2-2"}}},
+							Weight:           10,
+							HealthStatus:     xdsresource.EndpointHealthStatusHealthy,
+						},
+					},
+					ID:     clients.Locality{Zone: "test-zone-2"},
+					Weight: 80,
+				},
+			},
+			priorityName: "test-priority",
+			childPolicy:  &iserviceconfig.BalancerConfig{Name: ringhash.Name, Config: &iringhash.LBConfig{MinRingSize: 1, MaxRingSize: 2}},
+			// lrsServer is nil, so LRS policy will not be used.
+			wantConfig: &clusterimpl.LBConfig{
+				ChildPolicy: &iserviceconfig.BalancerConfig{
+					Name:   ringhash.Name,
+					Config: &iringhash.LBConfig{MinRingSize: 1, MaxRingSize: 2},
+				},
+			},
+			// Endpoints weights are the product of normalized locality weight and
+			// endpoint weight, represented as a fixed-point number in uQ1.31 format.
+			// Locality weights are normalized as:
+			//   locality 0: 20 / (100) = 0.2
+			//   locality 1: 80 / (100) = 0.8
+			// In fixed-point uQ1.31 format, the weights are:
+			//   locality 0: 0.2 * 2^31 =  429496729
+			//   locality 1: 0.8 * 2^31 = 1717986918
+			//
+			// The normalized weights of endpoints in each locality are:
+			//   locality 0: endpoint 0: 90 / (100) = 0.9, endpoint 1: 10 / (100) = 0.1
+			//   locality 1: endpoint 0: 90 / (100) = 0.9, endpoint 1: 10 / (100) = 0.1
+			//
+			// The final endpoint weights are a product of the above normalized weights,
+			// which turns out to be:
+			//   locality 0, endpoint 0:  0.2 * 0.9   =  386547056
+			//   locality 0, endpoint 1:  0.2 * 0.1   =   42949672
+			//   locality 1, endpoint 0:  0.8 * 0.9   = 1546188226
+			//   locality 1, endpoint 1:  0.8 * 0.1   =  171798691
+			wantEndpoints: []resolver.Endpoint{
+				testEndpointWithAttrs(resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-1-1"}}}, 20, 386547056, "test-priority", &clients.Locality{Zone: "test-zone-1"}),
+				testEndpointWithAttrs(resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-1-2"}}}, 20, 42949672, "test-priority", &clients.Locality{Zone: "test-zone-1"}),
+				testEndpointWithAttrs(resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-2-1"}}}, 80, 1546188226, "test-priority", &clients.Locality{Zone: "test-zone-2"}),
+				testEndpointWithAttrs(resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-2-2"}}}, 80, 171798691, "test-priority", &clients.Locality{Zone: "test-zone-2"}),
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotConfig, gotEndpoints, err := priorityLocalitiesToClusterImpl(tt.localities, tt.priorityName, tt.mechanism, nil, tt.childPolicy)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("priorityLocalitiesToClusterImpl() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if diff := cmp.Diff(gotConfig, tt.wantConfig); diff != "" {
+				t.Errorf("priorityLocalitiesToClusterImpl() diff (-got +want) %v", diff)
+			}
+			if diff := cmp.Diff(gotEndpoints, tt.wantEndpoints, cmp.AllowUnexported(attributes.Attributes{})); diff != "" {
+				t.Errorf("priorityLocalitiesToClusterImpl() diff (-got +want) %v", diff)
 			}
 		})
 	}
@@ -677,7 +953,7 @@ func testEndpointWithAttrs(endpoint resolver.Endpoint, localityWeight, endpointW
 	}
 	endpoint = hierarchy.SetInEndpoint(endpoint, path)
 	endpoint = wrrlocality.SetAddrInfo(endpoint, wrrlocality.AddrInfo{LocalityWeight: localityWeight})
-	endpoint = weight.Set(endpoint, weight.EndpointInfo{Weight: localityWeight * endpointWeight})
+	endpoint = weight.Set(endpoint, weight.EndpointInfo{Weight: endpointWeight})
 	return endpoint
 }
 
