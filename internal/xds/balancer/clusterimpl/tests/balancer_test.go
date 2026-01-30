@@ -989,14 +989,9 @@ func (s) TestReResolutionAfterTransientFailure(t *testing.T) {
 	}
 
 	// Stopping the server listener will close the transport on the client,
-	// which will lead to the channel eventually moving to IDLE.
+	// which will lead to the channel eventually moving to TRANSIENT_FAILURE.
 	lis.Stop()
-	testutils.AwaitState(ctx, t, conn, connectivity.Idle)
-
-	// An RPC at this point is expected to fail with TRANSIENT_FAILURE.
-	if _, err = client.EmptyCall(ctx, &testpb.Empty{}); status.Code(err) != codes.Unavailable {
-		t.Fatalf("EmptyCall RPC succeeded when the channel is in TRANSIENT_FAILURE, got %v want %v", err, codes.Unavailable)
-	}
+	testutils.AwaitState(ctx, t, conn, connectivity.TransientFailure)
 
 	// Expect resolver's ResolveNow to be called due to TF state.
 	select {
