@@ -525,8 +525,9 @@ func (s) TestGetConfiguration_Failure(t *testing.T) {
 	const name = "empty"
 	t.Run(name, func(t *testing.T) {
 		testGetConfigurationWithFileNameEnv(t, name, true, nil)
-		// If both the env vars are empty, an error must be returned.
-		testGetConfigurationWithFileContentEnv(t, name, true, nil)
+		// If both the env vars are empty, a nil config with a nil error must be
+		// returned.
+		testGetConfigurationWithFileContentEnv(t, name, false, nil)
 	})
 }
 
@@ -664,9 +665,9 @@ func (s) TestGetConfiguration_BootstrapEnvPriority(t *testing.T) {
 	envconfig.XDSBootstrapFileContent = ""
 	defer func() { envconfig.XDSBootstrapFileContent = origBootstrapContent }()
 
-	// When both env variables are empty, GetConfiguration should return error.
-	if _, err := GetConfiguration(); err == nil {
-		t.Errorf("GetConfiguration() returned nil, want error")
+	// When both env variables are empty, GetConfiguration should return nil.
+	if cfg, err := GetConfiguration(); err != nil || cfg != nil {
+		t.Errorf("GetConfiguration() returned (%v, %v), want (<nil>, <nil>)", cfg, err)
 	}
 
 	// When one of them is set, it should be used.
