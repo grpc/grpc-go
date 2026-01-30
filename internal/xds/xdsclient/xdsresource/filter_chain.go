@@ -146,7 +146,9 @@ func (fc *FilterChain) convertVirtualHost(virtualHost *VirtualHost) (VirtualHost
 				// Should not happen if it passed xdsClient validation.
 				return VirtualHostWithInterceptors{}, fmt.Errorf("filter does not support use in server")
 			}
-			si, err := sb.BuildServerInterceptor(filter.Config, override)
+			// TODO(easwars): Ensure the returned cancel func is called when the
+			// interceptor is no longer needed.
+			si, _, err := sb.BuildServerInterceptor(filter.Name, filter.Config, override)
 			if err != nil {
 				return VirtualHostWithInterceptors{}, fmt.Errorf("filter construction: %v", err)
 			}
