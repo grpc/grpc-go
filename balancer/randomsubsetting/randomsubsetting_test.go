@@ -22,6 +22,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"strings"
 	"testing"
 	"time"
@@ -257,5 +258,202 @@ func (s) TestSubsettingBalancer_DeterministicSubset(t *testing.T) {
 		}
 	case <-ctx.Done():
 		t.Fatal("Timed out waiting for second child policy update")
+	}
+}
+
+func (s) TestSubsettingEndpoints(t *testing.T) {
+
+	testCases := []struct {
+		endpoints  []resolver.Endpoint
+		subsetSize uint32
+		want       uint32
+	}{
+		{
+			endpoints:  makeEndpoints(100),
+			subsetSize: 10,
+			want:       10,
+		},
+		{
+			endpoints:  makeEndpoints(10),
+			subsetSize: 2,
+			want:       2,
+		},
+		{
+			endpoints:  makeEndpoints(150),
+			subsetSize: 50,
+			want:       50,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(fmt.Sprint(tc.subsetSize), func(t *testing.T) {
+			b := &subsettingBalancer{
+				cfg:        &lbConfig{SubsetSize: tc.subsetSize},
+				hashSeed:   0,
+				hashDigest: xxhash.New(),
+			}
+			subsetOfEndpoints := b.calculateSubset(tc.endpoints)
+			got := len(subsetOfEndpoints)
+			if fmt.Sprint(got) != fmt.Sprint(tc.want) {
+				t.Fatalf("subset size=%v; endpoints(%v) = %v; want %v", tc.want, tc.endpoints, got, tc.want)
+			}
+		})
+	}
+}
+
+func (s) TestUniformDistributionOfEndpoints(t *testing.T) {
+
+	testCases := []struct {
+		eps        int
+		subsetSize uint32
+		iteration  uint32
+	}{
+		{
+			eps:        16,
+			subsetSize: 4,
+			iteration:  10,
+		},
+		{
+			eps:        40,
+			subsetSize: 20,
+			iteration:  100,
+		},
+		{
+			eps:        10,
+			subsetSize: 2,
+			iteration:  1000,
+		},
+		{
+			eps:        16,
+			subsetSize: 4,
+			iteration:  1600,
+		},
+		{
+			eps:        8,
+			subsetSize: 4,
+			iteration:  3200,
+		},
+		{
+			eps:        4,
+			subsetSize: 4,
+			iteration:  6400,
+		},
+		{
+			eps:        16,
+			subsetSize: 4,
+			iteration:  10000,
+		},
+		{
+			eps:        16,
+			subsetSize: 4,
+			iteration:  100000,
+		},
+	}
+
+	for _, tc := range testCases {
+		endpoints := makeEndpoints(tc.eps)
+		// From a set of N numbers, we randomly select K-times a subset of L numbers,
+		// where L < N. Calculate how many times each number belonging to set N appears.
+		// Calculate the variance and standard deviation.
+		// Check whether the distribution is uniform.
+
+		// Theoretical Calculations
+		N := len(endpoints)
+		L := int(tc.subsetSize)
+		K := int(tc.iteration)
+
+		p := float64(L) / float64(N)         // Probability of x ∈ N being drawn p(x) = L / N
+		E := float64(K) * p                  // Expected Value (Mean) E(N) = K * p
+		variance := float64(K) * p * (1 - p) // Variance σ²(N) = K * p * (1 - p)
+		sigma := math.Sqrt(variance)         // Standard Deviation σ(N) = sqrt(σ²(N))
+
+		EndpointCount := make(map[string]int, N)
+
+		for i := 0; i < K; i++ {
+			t.Run(fmt.Sprint(L), func(t *testing.T) {
+				t.Helper()
+				lb := &subsettingBalancer{
+					cfg:        &lbConfig{SubsetSize: uint32(L)},
+					hashSeed:   uint64(i ^ 3 + K*i + L),
+					hashDigest: xxhash.New(),
+				}
+				subsetOfEndpoints := lb.calculateSubset(endpoints)
+
+				for _, ep := range subsetOfEndpoints {
+					EndpointCount[ep.Addresses[0].Addr]++
+				}
+			})
+		}
+		t.Logf("Test Case: Endpoints=%d, SubsetSize=%d, Iterations=%d", N, L, K)
+		verifyUniformDistribution(EndpointCount, E, sigma, N, t)
+	}
+}
+
+func verifyUniformDistribution(eps map[string]int, E float64, sigma float64, N int, t *testing.T) {
+	// Verify the distribution is uniform within a small diff range.
+	var chi2 float64
+	for epAddr, count := range eps {
+		diff := float64(count) - E
+		absDiff := math.Abs(diff)
+
+		// Chi-Square Statistic Calculation (χ²)
+		chi2 += (diff * diff) / E
+
+		// Determine Sigma Range Status
+		status := "E ± Standard Deviation (Normal)"
+		if absDiff > 3*sigma {
+			status = "!!! Out of three times of Standard Deviation (Extreme)"
+		} else if absDiff > 2*sigma {
+			status = "!! Out of two times of Standard Deviation (Rare)"
+		} else if absDiff > sigma {
+			status = "! Out of Standard Deviation (Noticeable)"
+		}
+
+		t.Logf("%-8s | %-12d | %-15.2f | %s\n", epAddr, count, diff, status)
+	}
+
+	t.Logf("Chi-Square Statistic (χ²): %.2f\n", chi2)
+
+	// Degrees of Freedom
+	df := float64(N - 1)
+
+	// Critical Value for α = 0.05 and df
+	criticalValue := ChiSquareCriticalValue(0.05, df)
+
+	if chi2 > criticalValue {
+		t.Errorf("Distribution is not uniform (χ²=%.2f > critical value=%.2f)", chi2, criticalValue)
+	}
+}
+
+// ChiSquareCriticalValue calculates the critical value for alpha (e.g., 0.05)
+// and degrees of freedom (df).
+func ChiSquareCriticalValue(alpha float64, df float64) float64 {
+	// 1. Find the Z-score for the given alpha.
+	// For alpha = 0.05 (95% confidence), Z is approx 1.64485
+	z := getZScore(1 - alpha)
+
+	// 2. Wilson-Hilferty transformation
+	dfFloat := float64(df)
+	fraction := 2.0 / (9.0 * dfFloat)
+
+	// Formula: df * (1 - 2/(9df) + z * sqrt(2/(9df)))^3
+	inner := 1.0 - fraction + z*math.Sqrt(fraction)
+	return dfFloat * math.Pow(inner, 3)
+}
+
+// Helper to get Z-score for common alpha levels
+func getZScore(probability float64) float64 {
+	// Simplified mapping for common statistical confidence levels
+	switch {
+	case probability >= 0.99:
+		return 2.326
+	case probability >= 0.975:
+		return 1.960
+	case probability >= 0.95:
+		return 1.645
+	case probability >= 0.90:
+		return 1.282
+	default:
+		return 1.645 // Default to 95%
 	}
 }
