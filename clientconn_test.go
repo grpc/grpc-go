@@ -614,11 +614,11 @@ func (s) TestResetConnectBackoff(t *testing.T) {
 		default:
 		}
 	}()
-	dialer := func(string, time.Duration) (net.Conn, error) {
+	dialer := func(context.Context, string) (net.Conn, error) {
 		dials <- struct{}{}
 		return nil, errors.New("failed to fake dial")
 	}
-	cc, err := NewClient("passthrough:///", WithTransportCredentials(insecure.NewCredentials()), WithDialer(dialer), withBackoff(backoffForever{}))
+	cc, err := NewClient("passthrough:///", WithTransportCredentials(insecure.NewCredentials()), WithContextDialer(dialer), withBackoff(backoffForever{}))
 	if err != nil {
 		t.Fatalf("grpc.NewClient() failed with error: %v, want: nil", err)
 	}
@@ -647,7 +647,7 @@ func (s) TestResetConnectBackoff(t *testing.T) {
 
 func (s) TestBackoffCancel(t *testing.T) {
 	dialStrCh := make(chan string)
-	cc, err := NewClient("passthrough:///", WithTransportCredentials(insecure.NewCredentials()), WithDialer(func(t string, _ time.Duration) (net.Conn, error) {
+	cc, err := NewClient("passthrough:///", WithTransportCredentials(insecure.NewCredentials()), WithContextDialer(func(_ context.Context, t string) (net.Conn, error) {
 		dialStrCh <- t
 		return nil, fmt.Errorf("test dialer, always error")
 	}))
@@ -661,6 +661,52 @@ func (s) TestBackoffCancel(t *testing.T) {
 	case <-time.After(defaultTestTimeout):
 		t.Fatal("Timeout when waiting for custom dialer to be invoked during Connect()")
 	case <-dialStrCh:
+	}
+}
+
+// Verifies the deprecated WithDialer option receives a timeout derived from the
+// connect deadline.
+func (s) TestWithDialerReceivesTimeout(t *testing.T) {
+	var recordedTimeout atomic.Pointer[time.Duration]
+	timeoutRecorded := make(chan struct{})
+	dialer := func(_ string, timeout time.Duration) (net.Conn, error) {
+		if recordedTimeout.CompareAndSwap(nil, &timeout) {
+			close(timeoutRecorded)
+			return nil, errors.New("timeout recorded")
+		}
+		return nil, errors.New("timeout has already been recorded")
+	}
+	connectTimeout := func() time.Duration {
+		// Some absurd duration that's unlikely to be chosen by something else.
+		return 1337 * time.Second
+	}
+
+	cc, err := NewClient(
+		"passthrough:///unused",
+		WithTransportCredentials(insecure.NewCredentials()),
+		WithDialer(dialer), withMinConnectDeadline(connectTimeout),
+	)
+	if err != nil {
+		t.Fatalf("grpc.NewClient() failed: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := cc.Close(); err != nil {
+			t.Errorf("cc.Close() failed: %v", err)
+		}
+	})
+	cc.Connect()
+
+	select {
+	case <-timeoutRecorded:
+	case <-time.After(defaultTestTimeout):
+		t.Fatal("Timeout when waiting for custom dialer to be invoked")
+	}
+
+	got := *recordedTimeout.Load()
+	hi := connectTimeout()
+	lo := hi - defaultTestTimeout
+	if lo >= got || got > hi {
+		t.Fatalf("timeout = %v, want %s < timeout <= %s", got, lo, hi)
 	}
 }
 
