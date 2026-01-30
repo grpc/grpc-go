@@ -422,15 +422,16 @@ func TestBuildClusterImplConfigForEDS_PickFirstWeightedShuffling_Disabled(t *tes
 			},
 		},
 	}
+	// Endpoint weight is the product of locality weight and endpoint weight.
 	wantEndpoints := []resolver.Endpoint{
-		testEndpointWithAttrs(testEndpoints[0][0].ResolverEndpoint, 20, 20, "priority-2-0", &testLocalityIDs[0]),
-		testEndpointWithAttrs(testEndpoints[0][1].ResolverEndpoint, 20, 20, "priority-2-0", &testLocalityIDs[0]),
-		testEndpointWithAttrs(testEndpoints[1][0].ResolverEndpoint, 80, 80, "priority-2-0", &testLocalityIDs[1]),
-		testEndpointWithAttrs(testEndpoints[1][1].ResolverEndpoint, 80, 80, "priority-2-0", &testLocalityIDs[1]),
-		testEndpointWithAttrs(testEndpoints[2][0].ResolverEndpoint, 20, 20, "priority-2-1", &testLocalityIDs[2]),
-		testEndpointWithAttrs(testEndpoints[2][1].ResolverEndpoint, 20, 20, "priority-2-1", &testLocalityIDs[2]),
-		testEndpointWithAttrs(testEndpoints[3][0].ResolverEndpoint, 80, 80, "priority-2-1", &testLocalityIDs[3]),
-		testEndpointWithAttrs(testEndpoints[3][1].ResolverEndpoint, 80, 80, "priority-2-1", &testLocalityIDs[3]),
+		testEndpointWithAttrs(testEndpoints[0][0].ResolverEndpoint, 20, 20*1, "priority-2-0", &testLocalityIDs[0]),
+		testEndpointWithAttrs(testEndpoints[0][1].ResolverEndpoint, 20, 20*1, "priority-2-0", &testLocalityIDs[0]),
+		testEndpointWithAttrs(testEndpoints[1][0].ResolverEndpoint, 80, 80*1, "priority-2-0", &testLocalityIDs[1]),
+		testEndpointWithAttrs(testEndpoints[1][1].ResolverEndpoint, 80, 80*1, "priority-2-0", &testLocalityIDs[1]),
+		testEndpointWithAttrs(testEndpoints[2][0].ResolverEndpoint, 20, 20*1, "priority-2-1", &testLocalityIDs[2]),
+		testEndpointWithAttrs(testEndpoints[2][1].ResolverEndpoint, 20, 20*1, "priority-2-1", &testLocalityIDs[2]),
+		testEndpointWithAttrs(testEndpoints[3][0].ResolverEndpoint, 80, 80*1, "priority-2-1", &testLocalityIDs[3]),
+		testEndpointWithAttrs(testEndpoints[3][1].ResolverEndpoint, 80, 80*1, "priority-2-1", &testLocalityIDs[3]),
 	}
 
 	if diff := cmp.Diff(gotNames, wantNames); diff != "" {
@@ -529,6 +530,24 @@ func TestBuildClusterImplConfigForEDS_PickFirstWeightedShuffling_Enabled(t *test
 			},
 		},
 	}
+	// Endpoints weights are the product of normalized locality weight and
+	// endpoint weight, represented as a fixed-point number in uQ1.31 format.
+	// Locality weights are normalized as:
+	//   P1: locality 0: 80 / (100) = 0.8
+	//   P0: locality 1: 80 / (100) = 0.8
+	//   P1: locality 2: 20 / (100) = 0.2
+	//   P0: locality 3: 20 / (100) = 0.2
+	// In fixed-point uQ1.31 format, the weights are:
+	//   locality 0: 0.8 * 2^31 = 1717986918
+	//   locality 1: 0.8 * 2^31 = 1717986918
+	//   locality 2: 0.2 * 2^31 =  429496729
+	//   locality 3: 0.2 * 2^31 =  429496729
+	//
+	// There are two endpoints in each locality, each with weight 1. So, their
+	// normalized weights are 0.5 each. And the final endpoint weights are a
+	// product of their locality weights and 0.5, which turns out to be either
+	//   1717986918 * 0.5 = 858993459, or,
+	//    429496729 * 0.5 = 214748364
 	wantEndpoints := []resolver.Endpoint{
 		testEndpointWithAttrs(testEndpoints[0][0].ResolverEndpoint, 20, 214748364, "priority-2-0", &testLocalityIDs[0]),
 		testEndpointWithAttrs(testEndpoints[0][1].ResolverEndpoint, 20, 214748364, "priority-2-0", &testLocalityIDs[0]),
@@ -674,11 +693,12 @@ func TestPriorityLocalitiesToClusterImpl_PickFirstWeightedShuffling_Disabled(t *
 				EDSServiceName: testEDSService,
 				ChildPolicy:    &iserviceconfig.BalancerConfig{Name: roundrobin.Name},
 			},
+			// Endpoint weight is the product of locality weight and endpoint weight.
 			wantEndpoints: []resolver.Endpoint{
-				testEndpointWithAttrs(resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-1-1"}}}, 20, 1800, "test-priority", &clients.Locality{Zone: "test-zone-1"}),
-				testEndpointWithAttrs(resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-1-2"}}}, 20, 200, "test-priority", &clients.Locality{Zone: "test-zone-1"}),
-				testEndpointWithAttrs(resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-2-1"}}}, 80, 7200, "test-priority", &clients.Locality{Zone: "test-zone-2"}),
-				testEndpointWithAttrs(resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-2-2"}}}, 80, 800, "test-priority", &clients.Locality{Zone: "test-zone-2"}),
+				testEndpointWithAttrs(resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-1-1"}}}, 20, 20*90, "test-priority", &clients.Locality{Zone: "test-zone-1"}),
+				testEndpointWithAttrs(resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-1-2"}}}, 20, 20*10, "test-priority", &clients.Locality{Zone: "test-zone-1"}),
+				testEndpointWithAttrs(resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-2-1"}}}, 80, 80*90, "test-priority", &clients.Locality{Zone: "test-zone-2"}),
+				testEndpointWithAttrs(resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-2-2"}}}, 80, 80*10, "test-priority", &clients.Locality{Zone: "test-zone-2"}),
 			},
 		},
 		{
@@ -726,11 +746,12 @@ func TestPriorityLocalitiesToClusterImpl_PickFirstWeightedShuffling_Disabled(t *
 					Config: &iringhash.LBConfig{MinRingSize: 1, MaxRingSize: 2},
 				},
 			},
+			// Endpoint weight is the product of locality weight and endpoint weight.
 			wantEndpoints: []resolver.Endpoint{
-				testEndpointWithAttrs(resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-1-1"}}}, 20, 1800, "test-priority", &clients.Locality{Zone: "test-zone-1"}),
-				testEndpointWithAttrs(resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-1-2"}}}, 20, 200, "test-priority", &clients.Locality{Zone: "test-zone-1"}),
-				testEndpointWithAttrs(resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-2-1"}}}, 80, 7200, "test-priority", &clients.Locality{Zone: "test-zone-2"}),
-				testEndpointWithAttrs(resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-2-2"}}}, 80, 800, "test-priority", &clients.Locality{Zone: "test-zone-2"}),
+				testEndpointWithAttrs(resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-1-1"}}}, 20, 20*90, "test-priority", &clients.Locality{Zone: "test-zone-1"}),
+				testEndpointWithAttrs(resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-1-2"}}}, 20, 20*10, "test-priority", &clients.Locality{Zone: "test-zone-1"}),
+				testEndpointWithAttrs(resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-2-1"}}}, 80, 80*90, "test-priority", &clients.Locality{Zone: "test-zone-2"}),
+				testEndpointWithAttrs(resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-2-2"}}}, 80, 80*10, "test-priority", &clients.Locality{Zone: "test-zone-2"}),
 			},
 		},
 	}
@@ -811,6 +832,25 @@ func TestPriorityLocalitiesToClusterImpl_PickFirstWeightedShuffling_Enabled(t *t
 				EDSServiceName: testEDSService,
 				ChildPolicy:    &iserviceconfig.BalancerConfig{Name: roundrobin.Name},
 			},
+			// Endpoints weights are the product of normalized locality weight and
+			// endpoint weight, represented as a fixed-point number in uQ1.31 format.
+			// Locality weights are normalized as:
+			//   locality 0: 20 / (100) = 0.2
+			//   locality 1: 80 / (100) = 0.8
+			// In fixed-point uQ1.31 format, the weights are:
+			//   locality 0: 0.2 * 2^31 =  429496729
+			//   locality 1: 0.8 * 2^31 = 1717986918
+			//
+			// The normalized weights of endpoints in each locality are:
+			//   locality 0: endpoint 0: 90 / (100) = 0.9, endpoint 1: 10 / (100) = 0.1
+			//   locality 1: endpoint 0: 90 / (100) = 0.9, endpoint 1: 10 / (100) = 0.1
+			//
+			// The final endpoint weights are a product of the above normalized weights,
+			// which turns out to be:
+			//   locality 0, endpoint 0:  0.2 * 0.9   =  386547056
+			//   locality 0, endpoint 1:  0.2 * 0.1   =   42949672
+			//   locality 1, endpoint 0:  0.8 * 0.9   = 1546188226
+			//   locality 1, endpoint 1:  0.8 * 0.1   =  171798691
 			wantEndpoints: []resolver.Endpoint{
 				testEndpointWithAttrs(resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-1-1"}}}, 20, 386547056, "test-priority", &clients.Locality{Zone: "test-zone-1"}),
 				testEndpointWithAttrs(resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-1-2"}}}, 20, 42949672, "test-priority", &clients.Locality{Zone: "test-zone-1"}),
@@ -863,6 +903,25 @@ func TestPriorityLocalitiesToClusterImpl_PickFirstWeightedShuffling_Enabled(t *t
 					Config: &iringhash.LBConfig{MinRingSize: 1, MaxRingSize: 2},
 				},
 			},
+			// Endpoints weights are the product of normalized locality weight and
+			// endpoint weight, represented as a fixed-point number in uQ1.31 format.
+			// Locality weights are normalized as:
+			//   locality 0: 20 / (100) = 0.2
+			//   locality 1: 80 / (100) = 0.8
+			// In fixed-point uQ1.31 format, the weights are:
+			//   locality 0: 0.2 * 2^31 =  429496729
+			//   locality 1: 0.8 * 2^31 = 1717986918
+			//
+			// The normalized weights of endpoints in each locality are:
+			//   locality 0: endpoint 0: 90 / (100) = 0.9, endpoint 1: 10 / (100) = 0.1
+			//   locality 1: endpoint 0: 90 / (100) = 0.9, endpoint 1: 10 / (100) = 0.1
+			//
+			// The final endpoint weights are a product of the above normalized weights,
+			// which turns out to be:
+			//   locality 0, endpoint 0:  0.2 * 0.9   =  386547056
+			//   locality 0, endpoint 1:  0.2 * 0.1   =   42949672
+			//   locality 1, endpoint 0:  0.8 * 0.9   = 1546188226
+			//   locality 1, endpoint 1:  0.8 * 0.1   =  171798691
 			wantEndpoints: []resolver.Endpoint{
 				testEndpointWithAttrs(resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-1-1"}}}, 20, 386547056, "test-priority", &clients.Locality{Zone: "test-zone-1"}),
 				testEndpointWithAttrs(resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-1-2"}}}, 20, 42949672, "test-priority", &clients.Locality{Zone: "test-zone-1"}),

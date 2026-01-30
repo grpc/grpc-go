@@ -1290,6 +1290,13 @@ func (s) TestRingHash_RandomHashingDistributionAccordingToLocalityAndEndpointWei
 	defer conn.Close()
 	client := testgrpc.NewTestServiceClient(conn)
 
+	// The target fraction of RPCs to each backend is computed as the product of
+	// the probability of selecting the locality and the probability of
+	// selecting the endpoint within the locality. The probability of selecting
+	// locality0 is 1/3 and locality1 is 2/3. Since there is only one endpoint
+	// in each locality, the probability of selecting the endpoint within the
+	// locality is 1. Therefore, the target fractions end up as 1/3 and 2/3
+	// respectively.
 	const wantRPCs0 = float64(1) / float64(3)
 	const wantRPCs1 = float64(2) / float64(3)
 	numRPCs := computeIdealNumberOfRPCs(t, math.Min(wantRPCs0, wantRPCs1), errorTolerance)

@@ -273,8 +273,8 @@ func (b *pickfirstBalancer) UpdateClientConnState(state balancer.ClientConnState
 				// https://utopia.duth.gr/~pefraimi/research/data/2007EncOfAlg.pdf:
 				var weightedEndpoints []weightedEndpoint
 				for _, endpoint := range endpoints {
-					u := internal.RandFloat64() // Random number in (0.0, 1.0]
-					weight := getWeightAttribute(endpoint)
+					u := internal.RandFloat64() // Random number in [0.0, 1.0)
+					weight := weightAttribute(endpoint)
 					weightedEndpoints = append(weightedEndpoints, weightedEndpoint{
 						endpoint: endpoint,
 						weight:   math.Pow(u, 1.0/float64(weight)),
@@ -285,11 +285,18 @@ func (b *pickfirstBalancer) UpdateClientConnState(state balancer.ClientConnState
 				slices.SortFunc(weightedEndpoints, func(a, b weightedEndpoint) int {
 					return cmp.Compare(b.weight, a.weight)
 				})
+
+				// Here, and in the "else" block below, we clone the endpoints
+				// slice to avoid mutating the resolver state. Doing the latter
+				// would lead to data races if the caller is accessing the same
+				// slice concurrently.
+				sortedEndpoints := make([]resolver.Endpoint, len(endpoints))
 				for i, we := range weightedEndpoints {
-					endpoints[i] = we.endpoint
+					sortedEndpoints[i] = we.endpoint
 				}
+				endpoints = sortedEndpoints
 			} else {
-				endpoints = append([]resolver.Endpoint{}, endpoints...)
+				endpoints = slices.Clone(endpoints)
 				internal.RandShuffle(len(endpoints), func(i, j int) { endpoints[i], endpoints[j] = endpoints[j], endpoints[i] })
 			}
 		}
@@ -939,13 +946,13 @@ func equalAddressIgnoringBalAttributes(a, b *resolver.Address) bool {
 		a.Attributes.Equal(b.Attributes)
 }
 
-// getWeightAttribute is a convenience function which returns the value of the
+// weightAttribute is a convenience function which returns the value of the
 // weight endpoint Attribute.
 //
 // When used in the xDS context, the weight attribute is guaranteed to be
 // non-zero. But, when used in a non-xDS context, the weight attribute could be
 // unset. A Default of 1 is used in the latter case.
-func getWeightAttribute(e resolver.Endpoint) uint32 {
+func weightAttribute(e resolver.Endpoint) uint32 {
 	w := weight.FromEndpoint(e).Weight
 	if w == 0 {
 		return 1

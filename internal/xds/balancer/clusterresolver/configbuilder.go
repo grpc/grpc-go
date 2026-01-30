@@ -306,9 +306,21 @@ func priorityLocalitiesToClusterImpl(localities []xdsresource.Locality, priority
 	}, retEndpoints, nil
 }
 
-// We normalize endpoint and locality weights to a fixed-point number between 0
-// and 1. We use a uint32 to represent these weights with 31 bits for the
-// fractional part. See gRFC A113 for details.
+// fixedPointFractionalBits is the number of bits used for the fractional part
+// of normalized endpoint and locality weights.
+//
+// We use the UQ1.31 fixed-point format (Unsigned, 1 integer bit, 31 fractional bits).
+// This allows representing values in the range [0.0, 2.0) with a precision
+// of 2^-31.
+//
+// Bit Layout:
+// [ 31 ] [ 30 ................. 0 ]
+//
+//	|              |
+//	|              +--- Fractional Part (31 bits)
+//	+------------------ Integer Part (1 bit)
+//
+// See gRFC A113 for more details.
 const fixedPointFractionalBits = 31
 
 // fractionToFixedPoint converts a fraction represented by numerator and
