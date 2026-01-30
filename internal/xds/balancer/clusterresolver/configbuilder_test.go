@@ -533,15 +533,15 @@ func TestBuildClusterImplConfigForEDS_PickFirstWeightedShuffling_Enabled(t *test
 	// Endpoints weights are the product of normalized locality weight and
 	// endpoint weight, represented as a fixed-point number in uQ1.31 format.
 	// Locality weights are normalized as:
-	//   P1: locality 0: 80 / (100) = 0.8
+	//   P1: locality 3: 80 / (100) = 0.8
 	//   P0: locality 1: 80 / (100) = 0.8
 	//   P1: locality 2: 20 / (100) = 0.2
-	//   P0: locality 3: 20 / (100) = 0.2
+	//   P0: locality 0: 20 / (100) = 0.2
 	// In fixed-point uQ1.31 format, the weights are:
-	//   locality 0: 0.8 * 2^31 = 1717986918
+	//   locality 3: 0.8 * 2^31 = 1717986918
 	//   locality 1: 0.8 * 2^31 = 1717986918
 	//   locality 2: 0.2 * 2^31 =  429496729
-	//   locality 3: 0.2 * 2^31 =  429496729
+	//   locality 0: 0.2 * 2^31 =  429496729
 	//
 	// There are two endpoints in each locality, each with weight 1. So, their
 	// normalized weights are 0.5 each. And the final endpoint weights are a
@@ -567,7 +567,6 @@ func TestBuildClusterImplConfigForEDS_PickFirstWeightedShuffling_Enabled(t *test
 	}
 	if diff := cmp.Diff(gotEndpoints, wantEndpoints, endpointCmpOpts); diff != "" {
 		t.Errorf("buildClusterImplConfigForEDS() diff (-got +want) %v", diff)
-		t.Errorf("got endpoints: %+v", gotEndpoints)
 	}
 }
 func TestGroupLocalitiesByPriority(t *testing.T) {
@@ -762,10 +761,10 @@ func TestPriorityLocalitiesToClusterImpl_PickFirstWeightedShuffling_Disabled(t *
 				t.Fatalf("priorityLocalitiesToClusterImpl() error = %v, wantErr %v", err, tt.wantErr)
 			}
 			if diff := cmp.Diff(gotConfig, tt.wantConfig); diff != "" {
-				t.Errorf("localitiesToWeightedTarget() diff (-got +want) %v", diff)
+				t.Errorf("priorityLocalitiesToClusterImpl() diff (-got +want) %v", diff)
 			}
 			if diff := cmp.Diff(gotEndpoints, tt.wantEndpoints, cmp.AllowUnexported(attributes.Attributes{})); diff != "" {
-				t.Errorf("localitiesToWeightedTarget() diff (-got +want) %v", diff)
+				t.Errorf("priorityLocalitiesToClusterImpl() diff (-got +want) %v", diff)
 			}
 		})
 	}
@@ -937,10 +936,10 @@ func TestPriorityLocalitiesToClusterImpl_PickFirstWeightedShuffling_Enabled(t *t
 				t.Fatalf("priorityLocalitiesToClusterImpl() error = %v, wantErr %v", err, tt.wantErr)
 			}
 			if diff := cmp.Diff(gotConfig, tt.wantConfig); diff != "" {
-				t.Errorf("localitiesToWeightedTarget() diff (-got +want) %v", diff)
+				t.Errorf("priorityLocalitiesToClusterImpl() diff (-got +want) %v", diff)
 			}
 			if diff := cmp.Diff(gotEndpoints, tt.wantEndpoints, cmp.AllowUnexported(attributes.Attributes{})); diff != "" {
-				t.Errorf("localitiesToWeightedTarget() diff (-got +want) %v", diff)
+				t.Errorf("priorityLocalitiesToClusterImpl() diff (-got +want) %v", diff)
 			}
 		})
 	}
