@@ -325,9 +325,10 @@ func routesProtoToSlice(routes []*v3routepb.Route, csps map[string]clusterspecif
 				var totalWeight uint64
 				for _, c := range wcs.Clusters {
 					w := c.GetWeight().GetValue()
-					if w == 0 {
-						continue
-					}
+					// Include weight=0 clusters per xDS spec. Weight=0 means 0% traffic,
+					// but the cluster must be tracked for ADS consistency. The weighted_target
+					// load balancer already handles weight=0 correctly by not routing traffic
+					// to those clusters.
 					totalWeight += uint64(w)
 					if totalWeight > math.MaxUint32 {
 						return nil, nil, fmt.Errorf("xds: total weight of clusters exceeds MaxUint32")
@@ -340,6 +341,10 @@ func routesProtoToSlice(routes []*v3routepb.Route, csps map[string]clusterspecif
 					wc.HTTPFilterConfigOverride = cfgs
 					route.WeightedClusters = append(route.WeightedClusters, wc)
 				}
+				if len(route.WeightedClusters) == 0 {
+					return nil, nil, fmt.Errorf("route %+v, action %+v, has no cluster in WeightedCluster action", r, a)
+				}
+				// Per xDS spec, total_weight must be > 0 (at least one cluster must have weight > 0).
 				if totalWeight == 0 {
 					return nil, nil, fmt.Errorf("route %+v, action %+v, has no valid cluster in WeightedCluster action", r, a)
 				}
