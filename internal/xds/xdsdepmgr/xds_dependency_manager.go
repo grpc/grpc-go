@@ -21,6 +21,7 @@ package xdsdepmgr
 import (
 	"context"
 	"fmt"
+	"maps"
 	"net/url"
 	"sync"
 
@@ -120,15 +121,17 @@ type DependencyManager struct {
 	dnsSerializerCancel func()
 
 	// All the fields below are protected by mu.
-	mu                      sync.Mutex
-	stopped                 bool
-	listenerWatcher         *xdsResourceState[xdsresource.ListenerUpdate, struct{}]
-	rdsResourceName         string
-	routeConfigWatcher      *xdsResourceState[xdsresource.RouteConfigUpdate, routeExtras]
-	clustersFromRouteConfig map[string]bool
-	clusterWatchers         map[string]*xdsResourceState[xdsresource.ClusterUpdate, struct{}]
-	endpointWatchers        map[string]*xdsResourceState[xdsresource.EndpointsUpdate, struct{}]
-	dnsResolvers            map[string]*xdsResourceState[xdsresource.DNSUpdate, dnsExtras]
+	mu                         sync.Mutex
+	stopped                    bool
+	listenerWatcher            *xdsResourceState[xdsresource.ListenerUpdate, struct{}]
+	rdsResourceName            string
+	routeConfigWatcher         *xdsResourceState[xdsresource.RouteConfigUpdate, routeExtras]
+	clustersFromRouteConfig    map[string]func()
+	clusterWatchers            map[string]*xdsResourceState[xdsresource.ClusterUpdate, struct{}]
+	endpointWatchers           map[string]*xdsResourceState[xdsresource.EndpointsUpdate, struct{}]
+	dnsResolvers               map[string]*xdsResourceState[xdsresource.DNSUpdate, dnsExtras]
+	clusterSubscriptions       map[string]*clusterRef
+	staticClusterSubscriptions map[string]*clusterRef
 }
 
 // New creates a new DependencyManager.
@@ -143,17 +146,19 @@ type DependencyManager struct {
 func New(listenerName, dataplaneAuthority string, xdsClient xdsclient.XDSClient, watcher ConfigWatcher) *DependencyManager {
 	ctx, cancel := context.WithCancel(context.Background())
 	dm := &DependencyManager{
-		ldsResourceName:         listenerName,
-		dataplaneAuthority:      dataplaneAuthority,
-		xdsClient:               xdsClient,
-		watcher:                 watcher,
-		nodeID:                  xdsClient.BootstrapConfig().Node().GetId(),
-		dnsSerializer:           grpcsync.NewCallbackSerializer(ctx),
-		dnsSerializerCancel:     cancel,
-		clustersFromRouteConfig: make(map[string]bool),
-		endpointWatchers:        make(map[string]*xdsResourceState[xdsresource.EndpointsUpdate, struct{}]),
-		dnsResolvers:            make(map[string]*xdsResourceState[xdsresource.DNSUpdate, dnsExtras]),
-		clusterWatchers:         make(map[string]*xdsResourceState[xdsresource.ClusterUpdate, struct{}]),
+		ldsResourceName:            listenerName,
+		dataplaneAuthority:         dataplaneAuthority,
+		xdsClient:                  xdsClient,
+		watcher:                    watcher,
+		nodeID:                     xdsClient.BootstrapConfig().Node().GetId(),
+		dnsSerializer:              grpcsync.NewCallbackSerializer(ctx),
+		dnsSerializerCancel:        cancel,
+		clustersFromRouteConfig:    make(map[string]func()),
+		endpointWatchers:           make(map[string]*xdsResourceState[xdsresource.EndpointsUpdate, struct{}]),
+		dnsResolvers:               make(map[string]*xdsResourceState[xdsresource.DNSUpdate, dnsExtras]),
+		clusterWatchers:            make(map[string]*xdsResourceState[xdsresource.ClusterUpdate, struct{}]),
+		clusterSubscriptions:       make(map[string]*clusterRef),
+		staticClusterSubscriptions: make(map[string]*clusterRef),
 	}
 	dm.logger = prefixLogger(dm)
 
@@ -236,7 +241,11 @@ func (m *DependencyManager) maybeSendUpdateLocked() {
 	dnsResourcesSeen := make(map[string]bool)
 	clusterResourcesSeen := make(map[string]bool)
 	haveAllResources := true
-	for cluster := range m.clustersFromRouteConfig {
+
+	// Start watches for all statuic clusters referenced in the route
+	// configuration or referenced by RPCs. Wait for all the clusters to be
+	// resolved before sending the update.
+	for cluster := range m.staticClusterSubscriptions {
 		ok, leafClusters, err := m.populateClusterConfigLocked(cluster, 0, config.Clusters, edsResourcesSeen, dnsResourcesSeen, clusterResourcesSeen)
 		if !ok {
 			haveAllResources = false
@@ -247,6 +256,25 @@ func (m *DependencyManager) maybeSendUpdateLocked() {
 		}
 		if err != nil {
 			config.Clusters[cluster] = &xdsresource.ClusterResult{Err: err}
+		}
+	}
+
+	// Do not wait for all dynamic resource to be resolved before sending an
+	// update.
+	for cluster := range m.clusterSubscriptions {
+		clusterConfig := make(map[string]*xdsresource.ClusterResult)
+		ok, leafClusters, err := m.populateClusterConfigLocked(cluster, 0, clusterConfig, edsResourcesSeen, dnsResourcesSeen, clusterResourcesSeen)
+		// If there are no leaf clusters, add that as error.
+		if ok && len(leafClusters) == 0 {
+			config.Clusters[cluster] = &xdsresource.ClusterResult{Err: m.annotateErrorWithNodeID(fmt.Errorf("aggregate cluster graph has no leaf clusters"))}
+		}
+		if err != nil {
+			config.Clusters[cluster] = &xdsresource.ClusterResult{Err: err}
+		}
+		// Only after we have the whole tree for a particular cluster resolved,
+		// add it to the update config.
+		if ok {
+			maps.Copy(config.Clusters, clusterConfig)
 		}
 	}
 
@@ -459,18 +487,46 @@ func (m *DependencyManager) applyRouteConfigUpdateLocked(update *xdsresource.Rou
 				newClusters[cluster.Name] = true
 			}
 		}
-		// Cancel watch for clusters not seen in route config
-		for name := range m.clustersFromRouteConfig {
-			if _, ok := newClusters[name]; !ok {
-				m.clusterWatchers[name].stop()
-				delete(m.clusterWatchers, name)
+
+		// Add subscriptions for new clusters not already present in route
+		// config.
+		for cluster := range newClusters {
+			if _, ok := m.clustersFromRouteConfig[cluster]; ok {
+				continue
+			}
+			subs, ok := m.staticClusterSubscriptions[cluster]
+			if ok {
+				subs.refCount++
+				m.clustersFromRouteConfig[cluster] = sync.OnceFunc(subs.unsubscribe)
+			} else {
+				m.staticClusterSubscriptions[cluster] = &clusterRef{
+					name:     cluster,
+					refCount: 1,
+					mgr:      m,
+					isStatic: true,
+				}
+				m.clustersFromRouteConfig[cluster] = sync.OnceFunc(m.staticClusterSubscriptions[cluster].unsubscribe)
 			}
 		}
 
-		// Watch for new clusters is started in populateClusterConfigLocked to
-		// avoid repeating the code.
-		m.clustersFromRouteConfig = newClusters
+		// Remove subscriptions for clusters no longer needed.
+		for cluster, unsubscribe := range m.clustersFromRouteConfig {
+			if _, ok := newClusters[cluster]; !ok {
+				delete(m.clustersFromRouteConfig, cluster)
+				// Unlock the mutex before calling unsubscribe to avoid
+				// deadlocks as unsubscribe will try to acquire the lock.
+				// unsubscribe needs the lock because it accesses the shared
+				// fields of dependency manager and can be called from
+				// xds_resolver and cdsbalancer also.
+				m.mu.Unlock()
+				unsubscribe()
+				m.mu.Lock()
+			}
+		}
 	}
+	// maybeSendUpdate is called to update the configuration with the new route,
+	// start watching the newly added clusters and stop watching clusters that
+	// are not needed anymore.
 	m.maybeSendUpdateLocked()
 }
 
@@ -836,7 +892,9 @@ func (m *DependencyManager) newDNSResolver(target string) *xdsResourceState[xdsr
 		err := fmt.Errorf("failed to parse DNS target %q: %v", target, m.annotateErrorWithNodeID(err))
 		m.logger.Warningf("%v", err)
 		rcc.ReportError(err)
-		return &xdsResourceState[xdsresource.DNSUpdate, dnsExtras]{}
+		return &xdsResourceState[xdsresource.DNSUpdate, dnsExtras]{
+			stop: func() {},
+		}
 	}
 
 	r, err := resolver.Get("dns").Build(resolver.Target{URL: *u}, rcc, resolver.BuildOptions{})
@@ -844,7 +902,9 @@ func (m *DependencyManager) newDNSResolver(target string) *xdsResourceState[xdsr
 		rcc.ReportError(err)
 		err := fmt.Errorf("failed to build DNS resolver for target %q: %v", target, m.annotateErrorWithNodeID(err))
 		m.logger.Warningf("%v", err)
-		return nil
+		return &xdsResourceState[xdsresource.DNSUpdate, dnsExtras]{
+			stop: func() {},
+		}
 	}
 
 	return &xdsResourceState[xdsresource.DNSUpdate, dnsExtras]{
@@ -871,4 +931,108 @@ func (x *xdsResourceWatcher[T]) ResourceError(err error, onDone func()) {
 
 func (x *xdsResourceWatcher[T]) AmbientError(err error, onDone func()) {
 	x.onAmbientError(err, onDone)
+}
+
+// xdsClusterSubscriberKey is the type used as the key to store the
+// ClusterSubscriber interface in the Attributes field of resolver.states.
+type xdsClusterSubscriberKey struct{}
+
+// SetXDSClusterSubscriber returns a copy of state in which the Attributes field
+// is updated with the ClusterSubscriber interface.
+func SetXDSClusterSubscriber(state resolver.State, subs ClusterSubscriber) resolver.State {
+	state.Attributes = state.Attributes.WithValue(xdsClusterSubscriberKey{}, subs)
+	return state
+}
+
+// XDSClusterSubscriberFromResolverState returns ClusterSubscriber interface
+// stored as an attribute in the resolver state.
+func XDSClusterSubscriberFromResolverState(state resolver.State) ClusterSubscriber {
+	if v := state.Attributes.Value(xdsClusterSubscriberKey{}); v != nil {
+		return v.(ClusterSubscriber)
+	}
+	return nil
+}
+
+// ClusterSubscriber allows dynamic subscription to clusters. This is useful for
+// scenarios where the cluster name was not present in the RouteConfiguration,
+// e.g. when the route uses a ClusterSpecifierPlugin.
+//
+// The xDS resolver will pass this interface to the LB policies as an attribute
+// in the resolver update.
+type ClusterSubscriber interface {
+	// Subscribe creates a dynamic subscription for the named cluster.
+	//
+	// The returned cancel function must be called when the subscription is no
+	// longer needed. It is safe to call cancel multiple times.
+	Subscribe(clusterName string) (cancel func())
+}
+
+// clusterRef represents a reference to a cluster and maintains reference count
+// of the number of users of the cluster.
+type clusterRef struct {
+	name string
+	// Access to this field is protected by DependencyManager's mutex and so it
+	// doesn't need to be atomic.
+	refCount int32
+	isStatic bool
+	mgr      *DependencyManager
+}
+
+// Subscribe increments the reference count for the cluster. If the cluster is
+// not already being tracked, it is added to the clusterSubscriptions map. It
+// returns a function to unsubscribe from the cluster i.e. decrease its
+// refcount. This returned function is idempotent, meaning it can be called
+// multiple times without any additional effect. Calling Subscribe in a blocking
+// manner while handling an update will lead to a deadlock.
+func (m *DependencyManager) Subscribe(name string) func() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	// If the Subscribe is called from RPCs, cluster will already be present in
+	// staticClusterSubscriptions because whenever a cluster is referenced in
+	// route config we add it to the staticClusterSubscriptions.
+	subs, ok := m.staticClusterSubscriptions[name]
+	if ok {
+		subs.refCount++
+		return sync.OnceFunc(subs.unsubscribe)
+	}
+
+	// If cluster is not in staticClusterSubscriptions, means it is a dynamic
+	// cluster subscription.
+	subs, ok = m.clusterSubscriptions[name]
+	if ok {
+		subs.refCount++
+		return sync.OnceFunc(subs.unsubscribe)
+	}
+
+	m.clusterSubscriptions[name] = &clusterRef{
+		name:     name,
+		refCount: 1,
+		mgr:      m,
+	}
+	m.maybeSendUpdateLocked()
+	return sync.OnceFunc(m.clusterSubscriptions[name].unsubscribe)
+}
+
+// unsubscribe decrements the reference count for the cluster. If the reference
+// count reaches zero, it removes the cluster from the clusterSubscriptions map
+// in the DependencyManager. Calling unsubscribe in a blocking manner while
+// handling an update will lead to a deadlock.
+func (c *clusterRef) unsubscribe() {
+	c.mgr.mu.Lock()
+	defer c.mgr.mu.Unlock()
+	c.refCount--
+	// This should not happen as unsubscribe returned from the
+	// ClusterSubscription is wrapped in sync.OnceFunc()
+	if c.refCount < 0 {
+		c.mgr.logger.Errorf("Reference count for a cluster dropped below zero")
+	}
+	if c.refCount == 0 {
+		if c.isStatic {
+			delete(c.mgr.staticClusterSubscriptions, c.name)
+		} else {
+			delete(c.mgr.clusterSubscriptions, c.name)
+		}
+		// Since this cluster has no more references, cancel the watch for it.
+		c.mgr.maybeSendUpdateLocked()
+	}
 }
