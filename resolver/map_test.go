@@ -170,6 +170,35 @@ func (s) TestAddressMap_Values(t *testing.T) {
 	}
 }
 
+func (s) TestAddressMap_All(t *testing.T) {
+	addrMap := NewAddressMapV2[int]()
+	addrMap.Set(addr1, 1)
+	addrMap.Set(addr2, 2)
+	addrMap.Set(addr3, 3)
+	addrMap.Set(addr4, 4)
+	addrMap.Set(addr5, 5)
+	addrMap.Set(addr6, 6)
+	addrMap.Set(addr7, 7) // aliases addr1
+
+	type pair struct {
+		K Address
+		V int
+	}
+
+	want := []pair{{addr1, 7}, {addr2, 2}, {addr3, 3}, {addr4, 4}, {addr5, 5}, {addr6, 6}}
+	var got []pair
+	for k, v := range addrMap.All() {
+		got = append(got, pair{k, v})
+	}
+	if d := cmp.Diff(want, got, cmp.Transformer("sort", func(in []pair) []pair {
+		out := append([]pair(nil), in...)
+		sort.Slice(out, func(i, j int) bool { return out[i].V < out[j].V })
+		return out
+	})); d != "" {
+		t.Fatalf("addrMap.All returned unexpected elements (-want, +got):\n%v", d)
+	}
+}
+
 func (s) TestEndpointMap_Length(t *testing.T) {
 	em := NewEndpointMap[struct{}]()
 	// Should be empty at creation time.
