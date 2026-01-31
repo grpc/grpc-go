@@ -1018,9 +1018,7 @@ func (m *DependencyManager) Subscribe(name string) func() {
 		refCount: 1,
 		mgr:      m,
 	}
-
 	m.maybeSendUpdateLocked()
-
 	return sync.OnceFunc(m.clusterSubscriptions[name].unsubscribe)
 }
 
