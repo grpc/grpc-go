@@ -261,24 +261,29 @@ func validateAndConstructMetadata(metadataProto *v3corepb.Metadata) (map[string]
 		return nil, nil
 	}
 	metadata := make(map[string]any)
-	// First go through TypedFilterMetadata.
-	for key, anyProto := range metadataProto.GetTypedFilterMetadata() {
-		converter := metadataConverterForType(anyProto.GetTypeUrl())
-		// Ignore types we don't have a converter for.
-		if converter == nil {
-			continue
+	// First go through TypedFilterMetadata. Only process this when HTTP Connect
+	// is enabled, as the converters (e.g., for envoy.config.core.v3.Address)
+	// are specific to A86 and can fail validation. A76 only needs
+	// FilterMetadata for envoy.lb hash_key.
+	if envconfig.XDSHTTPConnectEnabled {
+		for key, anyProto := range metadataProto.GetTypedFilterMetadata() {
+			converter := metadataConverterForType(anyProto.GetTypeUrl())
+			// Ignore types we don't have a converter for.
+			if converter == nil {
+				continue
+			}
+			val, err := converter.convert(anyProto)
+			if err != nil {
+				// If the converter fails, nack the whole resource.
+				return nil, fmt.Errorf("metadata conversion for key %q and type %q failed: %v", key, anyProto.GetTypeUrl(), err)
+			}
+			metadata[key] = val
 		}
-		val, err := converter.convert(anyProto)
-		if err != nil {
-			// If the converter fails, nack the whole resource.
-			return nil, fmt.Errorf("metadata conversion for key %q and type %q failed: %v", key, anyProto.GetTypeUrl(), err)
-		}
-		metadata[key] = val
 	}
 
 	// Process FilterMetadata for any keys not already handled.
 	for key, structProto := range metadataProto.GetFilterMetadata() {
-		// Skip keys already added from TyperFilterMetadata.
+		// Skip keys already added from TypedFilterMetadata.
 		if metadata[key] != nil {
 			continue
 		}
