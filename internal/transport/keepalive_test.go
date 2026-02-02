@@ -69,7 +69,7 @@ func (s) TestMaxConnectionIdle(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	stream, err := client.NewStream(ctx, &CallHdr{})
+	stream, err := client.NewStream(ctx, &CallHdr{}, nil)
 	if err != nil {
 		t.Fatalf("client.NewStream() failed: %v", err)
 	}
@@ -111,7 +111,7 @@ func (s) TestMaxConnectionIdleBusyClient(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	_, err := client.NewStream(ctx, &CallHdr{})
+	_, err := client.NewStream(ctx, &CallHdr{}, nil)
 	if err != nil {
 		t.Fatalf("client.NewStream() failed: %v", err)
 	}
@@ -150,7 +150,7 @@ func (s) TestMaxConnectionAge(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	if _, err := client.NewStream(ctx, &CallHdr{}); err != nil {
+	if _, err := client.NewStream(ctx, &CallHdr{}, nil); err != nil {
 		t.Fatalf("client.NewStream() failed: %v", err)
 	}
 
@@ -373,7 +373,7 @@ func (s) TestKeepaliveClientClosesWithActiveStreams(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	// Create a stream, but send no data on it.
-	if _, err := client.NewStream(ctx, &CallHdr{}); err != nil {
+	if _, err := client.NewStream(ctx, &CallHdr{}, nil); err != nil {
 		t.Fatalf("Stream creation failed: %v", err)
 	}
 
@@ -519,7 +519,7 @@ func (s) TestKeepaliveServerEnforcementWithAbusiveClientWithRPC(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	if _, err := client.NewStream(ctx, &CallHdr{}); err != nil {
+	if _, err := client.NewStream(ctx, &CallHdr{}, nil); err != nil {
 		t.Fatalf("Stream creation failed: %v", err)
 	}
 
@@ -748,7 +748,7 @@ func (s) TestTCPUserTimeout(t *testing.T) {
 
 		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 		defer cancel()
-		stream, err := client.NewStream(ctx, &CallHdr{})
+		stream, err := client.NewStream(ctx, &CallHdr{}, nil)
 		if err != nil {
 			t.Fatalf("client.NewStream() failed: %v", err)
 		}
@@ -815,7 +815,7 @@ func makeTLSCreds(t *testing.T, certPath, keyPath, rootsPath string) credentials
 func checkForHealthyStream(client *http2Client) error {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	stream, err := client.NewStream(ctx, &CallHdr{})
+	stream, err := client.NewStream(ctx, &CallHdr{}, nil)
 	stream.Close(err)
 	return err
 }
@@ -824,7 +824,7 @@ func pollForStreamCreationError(client *http2Client) error {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	for {
-		if _, err := client.NewStream(ctx, &CallHdr{}); err != nil {
+		if _, err := client.NewStream(ctx, &CallHdr{}, nil); err != nil {
 			break
 		}
 		time.Sleep(50 * time.Millisecond)
@@ -850,7 +850,7 @@ func waitForGoAwayTooManyPings(client *http2Client) error {
 		return fmt.Errorf("test timed out before getting GoAway with reason:GoAwayTooManyPings from server")
 	}
 
-	if _, err := client.NewStream(ctx, &CallHdr{}); err == nil {
+	if _, err := client.NewStream(ctx, &CallHdr{}, nil); err == nil {
 		return fmt.Errorf("stream creation succeeded after receiving a GoAway from the server")
 	}
 	return nil
