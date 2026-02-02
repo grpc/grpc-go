@@ -26,6 +26,7 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
+	estats "google.golang.org/grpc/experimental/stats"
 	"google.golang.org/grpc/internal/stats"
 	"google.golang.org/grpc/internal/wrr"
 	xdsinternal "google.golang.org/grpc/internal/xds"
@@ -164,6 +165,8 @@ func (d *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 		return pr, err
 	}
 
+	estats.ExecuteTelemetryLabelCallback(info.Ctx, "grpc.lb.locality", xdsinternal.LocalityString(lID))
+	estats.ExecuteTelemetryLabelCallback(info.Ctx, "grpc.lb.backend_service", d.clusterName)
 	if labels != nil {
 		labels["grpc.lb.locality"] = xdsinternal.LocalityString(lID)
 		labels["grpc.lb.backend_service"] = d.clusterName
