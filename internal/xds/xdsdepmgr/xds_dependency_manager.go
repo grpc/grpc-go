@@ -238,12 +238,12 @@ func (m *DependencyManager) maybeSendUpdateLocked() {
 	edsResourcesSeen := make(map[string]bool)
 	dnsResourcesSeen := make(map[string]bool)
 	clusterResourcesSeen := make(map[string]bool)
-	clusterConfig := make(map[string]*xdsresource.ClusterResult)
 	haveAllResources := true
 
 	// Start watches for all clusters. Wait for all the clusters with static
 	// reference(from route config) to be resolved before sending the update.
 	for cluster := range m.clusterSubscriptions {
+		clusterConfig := make(map[string]*xdsresource.ClusterResult)
 		ok, leafClusters, err := m.populateClusterConfigLocked(cluster, 0, clusterConfig, edsResourcesSeen, dnsResourcesSeen, clusterResourcesSeen)
 		if !ok && m.clusterSubscriptions[cluster].staticRefCount > 0 {
 			haveAllResources = false
@@ -256,7 +256,8 @@ func (m *DependencyManager) maybeSendUpdateLocked() {
 			config.Clusters[cluster] = &xdsresource.ClusterResult{Err: err}
 		}
 		// Only if all the dependencies for the cluster is resolved, add the
-		// clusters to the config.
+		// clusters to the config. This is to ensure we do not send partial
+		// updates for dynamic clusters.
 		if ok {
 			maps.Copy(config.Clusters, clusterConfig)
 		}
