@@ -100,10 +100,10 @@ func BenchmarkTieredPool(b *testing.B) {
 
 	b.Run("pool=BinaryTiered", func(b *testing.B) {
 		pool, err := NewBinaryTieredBufferPool(defaultBufferPoolSizeExponents...)
-		p := pool.(*binaryTieredBufferPool)
 		if err != nil {
-			b.Fatalf("Faield to create buffer pool: %v", err)
+			b.Fatalf("Failed to create buffer pool: %v", err)
 		}
+		p := pool.(*binaryTieredBufferPool)
 		for b.Loop() {
 			for size := range 1 << 19 {
 				_ = p.poolForGet(size)
