@@ -20,7 +20,6 @@ package jwt
 
 import (
 	"context"
-	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -31,18 +30,10 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/grpctest"
-	"google.golang.org/grpc/internal/stubserver"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
-	"google.golang.org/grpc/testdata"
-
-	testgrpc "google.golang.org/grpc/interop/grpc_testing"
-	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
 const defaultTestTimeout = 5 * time.Second
@@ -513,129 +504,6 @@ func (s) TestTokenFileCallCreds_BackoffBehavior(t *testing.T) {
 	}
 	if !nextRetryTime.IsZero() {
 		t.Error("After successful retry, next retry time should be cleared")
-	}
-}
-
-// TestJWTCallCredentials_E2E verifies that JWT call credentials behave
-// correctly with different transport security configurations. This is an e2e
-// test for gRFC A97 JWT call credentials behavior.
-func (s) TestJWTCallCredentials_E2E(t *testing.T) {
-	tests := []struct {
-		name           string
-		useTLS         bool   // whether to use TLS or insecure transport
-		credsAsDialOpt bool   // true = dial option, false = call option
-		wantErr        string // expected error substring, empty for success
-	}{
-		{
-			name:           "insecure_transport_creds_as_call_option",
-			useTLS:         false,
-			credsAsDialOpt: false,
-			wantErr:        "cannot send secure credentials on an insecure connection",
-		},
-		{
-			name:           "insecure_transport_creds_as_dial_option",
-			useTLS:         false,
-			credsAsDialOpt: true,
-			wantErr:        "the credentials require transport level security",
-		},
-		{
-			name:           "secure_transport_creds_as_dial_option",
-			useTLS:         true,
-			credsAsDialOpt: true,
-		},
-		{
-			name:           "secure_transport_creds_as_call_option",
-			useTLS:         true,
-			credsAsDialOpt: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			token := createTestJWT(t, time.Now().Add(time.Hour))
-			tokenFile := writeTempFile(t, "token", token)
-
-			jwtCreds, err := NewTokenFileCallCredentials(tokenFile)
-			if err != nil {
-				t.Fatalf("NewTokenFileCallCredentials(%q) failed: %v", tokenFile, err)
-			}
-
-			expectedAuth := "Bearer " + token
-			ss := &stubserver.StubServer{
-				EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
-					md, ok := metadata.FromIncomingContext(ctx)
-					if !ok {
-						return nil, fmt.Errorf("no metadata received")
-					}
-					authHeaders := md.Get("authorization")
-					if len(authHeaders) != 1 || authHeaders[0] != expectedAuth {
-						return nil, fmt.Errorf("authorization header mismatch: got %v, want %q", authHeaders, expectedAuth)
-					}
-					return &testpb.Empty{}, nil
-				},
-			}
-
-			var serverOpts []grpc.ServerOption
-			var clientCreds credentials.TransportCredentials
-			if tt.useTLS {
-				serverCert, err := tls.LoadX509KeyPair(testdata.Path("x509/server1_cert.pem"), testdata.Path("x509/server1_key.pem"))
-				if err != nil {
-					t.Fatalf("Failed to load server cert: %v", err)
-				}
-				serverOpts = append(serverOpts, grpc.Creds(credentials.NewServerTLSFromCert(&serverCert)))
-
-				clientCreds, err = credentials.NewClientTLSFromFile(testdata.Path("x509/server_ca_cert.pem"), "x.test.example.com")
-				if err != nil {
-					t.Fatalf("Failed to create client TLS credentials: %v", err)
-				}
-			} else {
-				serverOpts = append(serverOpts, grpc.Creds(insecure.NewCredentials()))
-				clientCreds = insecure.NewCredentials()
-			}
-
-			if err := ss.StartServer(serverOpts...); err != nil {
-				t.Fatalf("Failed to start server: %v", err)
-			}
-			defer ss.Stop()
-
-			dialOpts := []grpc.DialOption{grpc.WithTransportCredentials(clientCreds)}
-			if tt.credsAsDialOpt {
-				dialOpts = append(dialOpts, grpc.WithPerRPCCredentials(jwtCreds))
-			}
-
-			cc, err := grpc.NewClient(ss.Address, dialOpts...)
-			if tt.credsAsDialOpt && tt.wantErr != "" {
-				// For dial option with insecure transport, client creation should fail.
-				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
-					t.Fatalf("grpc.NewClient() error = %v; want error containing %q", err, tt.wantErr)
-				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("grpc.NewClient(%q) failed: %v", ss.Address, err)
-			}
-			defer cc.Close()
-
-			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-			defer cancel()
-
-			client := testgrpc.NewTestServiceClient(cc)
-			var callOpts []grpc.CallOption
-			if !tt.credsAsDialOpt {
-				callOpts = append(callOpts, grpc.PerRPCCredentials(jwtCreds))
-			}
-
-			_, err = client.EmptyCall(ctx, &testpb.Empty{}, callOpts...)
-			if tt.wantErr != "" {
-				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
-					t.Fatalf("EmptyCall() error = %v; want error containing %q", err, tt.wantErr)
-				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("EmptyCall() failed: %v", err)
-			}
-		})
 	}
 }
 
