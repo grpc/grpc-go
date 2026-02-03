@@ -131,7 +131,10 @@ func TestBinaryBufferPool(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(fmt.Sprintf("requestSize=%d", tc.requestSize), func(t *testing.T) {
-			pool := mem.NewBinaryTieredBufferPool(poolSizes...)
+			pool, err := mem.NewBinaryTieredBufferPool(poolSizes...)
+			if err != nil {
+				t.Fatalf("Failed to create buffer pool: %v", err)
+			}
 			buf := pool.Get(tc.requestSize)
 			if cap(*buf) != tc.wantCapacity {
 				t.Errorf("Get(%d) returned buffer with capacity: %d, want %d", tc.requestSize, cap(*buf), tc.wantCapacity)

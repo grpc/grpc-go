@@ -19,6 +19,7 @@
 package mem
 
 import (
+	"fmt"
 	"math/bits"
 	"slices"
 	"sort"
@@ -51,10 +52,17 @@ var defaultBufferPoolSizeExponents = []uint8{
 	20, // 1MB
 }
 
-var defaultBufferPool BufferPool
+var (
+	defaultBufferPool BufferPool
+	uintSize          = bits.UintSize // use a variable for mocking during tests.
+)
 
 func init() {
-	defaultBufferPool = NewBinaryTieredBufferPool(defaultBufferPoolSizeExponents...)
+	var err error
+	defaultBufferPool, err = NewBinaryTieredBufferPool(defaultBufferPoolSizeExponents...)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to create default buffer pool: %v", err))
+	}
 
 	internal.SetDefaultBufferPoolForTesting = func(pool BufferPool) {
 		defaultBufferPool = pool
@@ -127,37 +135,33 @@ type binaryTieredBufferPool struct {
 	maxPoolCap                       int // Optimization: Cache max capacity
 }
 
-// NewBinaryTieredBufferPool returns a BufferPool implementation that uses
-// multiple underlying pools of the given pool sizes. The pool sizes must be
-// powers of 2. This enables O(1) lookup when getting or putting a buffer.
+// NewBinaryTieredBufferPool returns a BufferPool backed by multiple sub-pools.
+// This structure enables O(1) lookup time for Get and Put operations.
 //
-// Note that the argument passed to this functions are the powers of 2 of the
-// capacity of the buffers in the pool, not the capacities of the buffers
-// themselves. For example, if you wanted a pool that had buffers with a capacity
-// of 16kb, you would pass 14 as the argument to this function.
-func NewBinaryTieredBufferPool(powerOfTwoExponents ...uint8) BufferPool {
+// The arguments provided are the exponents for the buffer capacities (powers
+// of 2), not the raw byte sizes. For example, to create a pool of 16KB buffers
+// (2^14 bytes), pass 14 as the argument.
+func NewBinaryTieredBufferPool(powerOfTwoExponents ...uint8) (BufferPool, error) {
 	slices.Sort(powerOfTwoExponents)
 
-	// Determine the maximum exponent we need to support.
-	// bits.Len64(math.MaxUint64) is 63.
-	const maxExponent = 63
+	// Determine the maximum exponent we need to support. This depends on the
+	// word size (32-bit vs 64-bit).
+	maxExponent := uintSize - 1
 	indexOfNextLargestBit := slices.Repeat([]int{-1}, maxExponent+1)
 	indexOfPreviousLargestBit := slices.Repeat([]int{-1}, maxExponent+1)
 
-	maxCap := 0
+	maxTier := 0
 	pools := make([]*sizedBufferPool, 0, len(powerOfTwoExponents))
 
 	for i, exp := range powerOfTwoExponents {
-		// Allocating slices of size > 2^maxExponent isn't possible on 64-bit
-		// machines.
-		if exp > maxExponent {
-			continue
+		// Allocating slices of size > 2^maxExponent isn't possible on
+		// maxExponent-bit machines.
+		if int(exp) > maxExponent {
+			return nil, fmt.Errorf("allocating slice of size 2^%d is not possible", exp)
 		}
-		capSize := 1 << exp
-		pools = append(pools, newSizedBufferPool(capSize))
-		if capSize > maxCap {
-			maxCap = capSize
-		}
+		tierSize := 1 << exp
+		pools = append(pools, newSizedBufferPool(tierSize))
+		maxTier = max(maxTier, tierSize)
 
 		// Map the exact power of 2 to this pool index.
 		indexOfNextLargestBit[exp] = i
@@ -184,8 +188,8 @@ func NewBinaryTieredBufferPool(powerOfTwoExponents ...uint8) BufferPool {
 		exponentToNextLargestPoolMap:     indexOfNextLargestBit,
 		exponentToPreviousLargestPoolMap: indexOfPreviousLargestBit,
 		sizedPools:                       pools,
-		maxPoolCap:                       maxCap,
-	}
+		maxPoolCap:                       maxTier,
+	}, nil
 }
 
 func (b *binaryTieredBufferPool) Get(size int) *[]byte {
