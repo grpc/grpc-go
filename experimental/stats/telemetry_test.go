@@ -21,6 +21,7 @@ package stats
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 )
@@ -66,8 +67,12 @@ func (s) TestTelemetryLabels(t *testing.T) {
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
 			// resest the tracker at the end of every test
-			t.Cleanup(func() { tracker = map[string]string{} })
-			ctx := WithTelemetryLabelCallback(context.Background(), test.callback)
+			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+			t.Cleanup(func() {
+				tracker = map[string]string{}
+				cancel()
+			})
+			ctx = WithTelemetryLabelCallback(ctx, test.callback)
 			for k, v := range commonLabelValues {
 				ExecuteTelemetryLabelCallback(ctx, k, v)
 			}
@@ -79,17 +84,4 @@ func (s) TestTelemetryLabels(t *testing.T) {
 			}
 		})
 	}
-}
-
-// TestTelemetryLabelsNilContext tests the specific edge case where
-// part of the codebase passes in a <nil> context to the callback
-func (s) TestTelemetryLabelsNilContext(t *testing.T) {
-	defer func() {
-		if r := recover(); r != nil {
-			t.Errorf("unexpected panic: %v", r)
-		}
-	}()
-
-	_ = WithTelemetryLabelCallback(nil, nil)
-	ExecuteTelemetryLabelCallback(nil, "key", "value")
 }

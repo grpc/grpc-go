@@ -51,7 +51,7 @@ func ExecuteTelemetryLabelCallback(ctx context.Context, key, value string) {
 	if callback, ok := ctx.Value(telemetryLabelCallbackKey{}).(LabelCallback); ok {
 		defer func() {
 			if r := recover(); r != nil {
-				grpclog.Warningf("LabelCallback panicked: %v", r)
+				grpclog.Component("experimental-stats").Warningf("LabelCallback panicked: %v", r)
 			}
 		}()
 		callback(key, value)
