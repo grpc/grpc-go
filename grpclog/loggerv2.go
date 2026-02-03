@@ -30,6 +30,39 @@ import (
 // LoggerV2 does underlying logging work for grpclog.
 type LoggerV2 internal.LoggerV2
 
+func componentInfoDepth(depth int, args ...any) {
+	if internal.ComponentDepthLoggerV2Impl != nil {
+		internal.ComponentDepthLoggerV2Impl.InfoDepth(depth, args...)
+	} else {
+		internal.ComponentLoggerV2Impl.Infoln(args...)
+	}
+}
+
+func componentWarningDepth(depth int, args ...any) {
+	if internal.ComponentDepthLoggerV2Impl != nil {
+		internal.ComponentDepthLoggerV2Impl.WarningDepth(depth, args...)
+	} else {
+		internal.ComponentLoggerV2Impl.Warningln(args...)
+	}
+}
+
+func componentErrorDepth(depth int, args ...any) {
+	if internal.ComponentDepthLoggerV2Impl != nil {
+		internal.ComponentDepthLoggerV2Impl.ErrorDepth(depth, args...)
+	} else {
+		internal.ComponentLoggerV2Impl.Errorln(args...)
+	}
+}
+
+func componentFatalDepth(depth int, args ...any) {
+	if internal.ComponentDepthLoggerV2Impl != nil {
+		internal.ComponentDepthLoggerV2Impl.FatalDepth(depth, args...)
+	} else {
+		internal.ComponentLoggerV2Impl.Fatalln(args...)
+	}
+	os.Exit(1)
+}
+
 // SetLoggerV2 sets logger that is used in grpc to a V2 logger.
 // Not mutex-protected, should be called before any gRPC functions.
 func SetLoggerV2(l LoggerV2) {
@@ -38,6 +71,8 @@ func SetLoggerV2(l LoggerV2) {
 	}
 	internal.LoggerV2Impl = l
 	internal.DepthLoggerV2Impl, _ = l.(internal.DepthLoggerV2)
+	internal.ComponentLoggerV2Impl = l
+	internal.ComponentDepthLoggerV2Impl, _ = l.(internal.DepthLoggerV2)
 }
 
 // NewLoggerV2 creates a loggerV2 with the provided writers.
@@ -55,35 +90,51 @@ func NewLoggerV2WithVerbosity(infoW, warningW, errorW io.Writer, v int) LoggerV2
 	return internal.NewLoggerV2(infoW, warningW, errorW, internal.LoggerV2Config{Verbosity: v})
 }
 
+func loggerV2Config(level, formatter string) internal.LoggerV2Config {
+	var v int
+	if vl, err := strconv.Atoi(level); err == nil {
+		v = vl
+	}
+
+	jsonFormat := strings.EqualFold(formatter, "json")
+
+	return internal.LoggerV2Config{
+		Verbosity:  v,
+		FormatJSON: jsonFormat,
+	}
+}
+
 // newLoggerV2 creates a loggerV2 to be used as default logger.
 // All logs are written to stderr.
-func newLoggerV2() LoggerV2 {
+func newLoggerV2(w io.Writer, config internal.LoggerV2Config, level string) LoggerV2 {
 	errorW := io.Discard
 	warningW := io.Discard
 	infoW := io.Discard
 
-	logLevel := os.Getenv("GRPC_GO_LOG_SEVERITY_LEVEL")
-	switch logLevel {
+	switch level {
 	case "", "ERROR", "error": // If env is unset, set level to ERROR.
-		errorW = os.Stderr
+		errorW = w
 	case "WARNING", "warning":
-		warningW = os.Stderr
+		warningW = w
 	case "INFO", "info":
-		infoW = os.Stderr
+		infoW = w
 	}
 
-	var v int
-	vLevel := os.Getenv("GRPC_GO_LOG_VERBOSITY_LEVEL")
-	if vl, err := strconv.Atoi(vLevel); err == nil {
-		v = vl
-	}
+	return internal.NewLoggerV2(infoW, warningW, errorW, config)
+}
 
-	jsonFormat := strings.EqualFold(os.Getenv("GRPC_GO_LOG_FORMATTER"), "json")
+func newComponentLoggerV2(w io.Writer, config internal.LoggerV2Config) LoggerV2 {
+	return internal.NewLoggerV2(w, io.Discard, io.Discard, config)
+}
 
-	return internal.NewLoggerV2(infoW, warningW, errorW, internal.LoggerV2Config{
-		Verbosity:  v,
-		FormatJSON: jsonFormat,
-	})
+func setLoggerV2(l LoggerV2) {
+	internal.LoggerV2Impl = l
+	internal.DepthLoggerV2Impl, _ = l.(internal.DepthLoggerV2)
+}
+
+func setComponentLoggerV2(l LoggerV2) {
+	internal.ComponentLoggerV2Impl = l
+	internal.ComponentDepthLoggerV2Impl, _ = l.(internal.DepthLoggerV2)
 }
 
 // DepthLoggerV2 logs at a specified call frame. If a LoggerV2 also implements

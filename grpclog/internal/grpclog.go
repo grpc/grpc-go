@@ -24,3 +24,9 @@ var LoggerV2Impl LoggerV2
 
 // DepthLoggerV2Impl is the logger used for the depth log functions.
 var DepthLoggerV2Impl DepthLoggerV2
+
+// ComponentLoggerV2Impl is the logger used for non-depth per-component log functions.
+var ComponentLoggerV2Impl LoggerV2
+
+// ComponentDepthLoggerV2Impl is the logger used for depth per-component log functions.
+var ComponentDepthLoggerV2Impl DepthLoggerV2
