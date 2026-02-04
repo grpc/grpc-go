@@ -1240,29 +1240,30 @@ func (s) TestRingHash_UnsupportedHashPolicyUntilChannelIdHashing(t *testing.T) {
 // Tests that ring hash policy that hashes using a random value can spread RPCs
 // across all the backends according to locality weight.
 func (s) TestRingHash_RandomHashingDistributionAccordingToLocalityAndEndpointWeight(t *testing.T) {
+	testutils.SetEnvConfig(t, &envconfig.PickFirstWeightedShuffling, true)
 	backends := backendAddrs(startTestServiceBackends(t, 2))
 
 	const clusterName = "cluster"
-	const locality1Weight = uint32(1)
-	const endpoint1Weight = uint32(1)
-	const locality2Weight = uint32(2)
-	const endpoint2Weight = uint32(2)
+	const locality0Weight = uint32(1)
+	const endpoint0Weight = uint32(1)
+	const locality1Weight = uint32(2)
+	const endpoint1Weight = uint32(2)
 	endpoints := e2e.EndpointResourceWithOptions(e2e.EndpointOptions{
 		ClusterName: clusterName,
 		Localities: []e2e.LocalityOptions{
 			{
 				Backends: []e2e.BackendOptions{{
 					Ports:  []uint32{testutils.ParsePort(t, backends[0])},
-					Weight: endpoint1Weight,
+					Weight: endpoint0Weight,
 				}},
-				Weight: locality1Weight,
+				Weight: locality0Weight,
 			},
 			{
 				Backends: []e2e.BackendOptions{{
 					Ports:  []uint32{testutils.ParsePort(t, backends[1])},
-					Weight: endpoint2Weight,
+					Weight: endpoint1Weight,
 				}},
-				Weight: locality2Weight,
+				Weight: locality1Weight,
 			},
 		},
 	})
@@ -1289,21 +1290,26 @@ func (s) TestRingHash_RandomHashingDistributionAccordingToLocalityAndEndpointWei
 	defer conn.Close()
 	client := testgrpc.NewTestServiceClient(conn)
 
-	const weight1 = endpoint1Weight * locality1Weight
-	const weight2 = endpoint2Weight * locality2Weight
-	const wantRPCs1 = float64(weight1) / float64(weight1+weight2)
-	const wantRPCs2 = float64(weight2) / float64(weight1+weight2)
-	numRPCs := computeIdealNumberOfRPCs(t, math.Min(wantRPCs1, wantRPCs2), errorTolerance)
+	// The target fraction of RPCs to each backend is computed as the product of
+	// the probability of selecting the locality and the probability of
+	// selecting the endpoint within the locality. The probability of selecting
+	// locality0 is 1/3 and locality1 is 2/3. Since there is only one endpoint
+	// in each locality, the probability of selecting the endpoint within the
+	// locality is 1. Therefore, the target fractions end up as 1/3 and 2/3
+	// respectively.
+	const wantRPCs0 = float64(1) / float64(3)
+	const wantRPCs1 = float64(2) / float64(3)
+	numRPCs := computeIdealNumberOfRPCs(t, math.Min(wantRPCs0, wantRPCs1), errorTolerance)
 
 	// Send a large number of RPCs and check that they are distributed randomly.
 	gotPerBackend := checkRPCSendOK(ctx, t, client, numRPCs)
 	got := float64(gotPerBackend[backends[0]]) / float64(numRPCs)
-	if !cmp.Equal(got, wantRPCs1, cmpopts.EquateApprox(0, errorTolerance)) {
-		t.Errorf("Fraction of RPCs to backend %s: got %v, want %v (margin: +-%v)", backends[2], got, wantRPCs1, errorTolerance)
+	if !cmp.Equal(got, wantRPCs0, cmpopts.EquateApprox(0, errorTolerance)) {
+		t.Errorf("Fraction of RPCs to backend %s: got %v, want %v (margin: +-%v)", backends[0], got, wantRPCs0, errorTolerance)
 	}
 	got = float64(gotPerBackend[backends[1]]) / float64(numRPCs)
-	if !cmp.Equal(got, wantRPCs2, cmpopts.EquateApprox(0, errorTolerance)) {
-		t.Errorf("Fraction of RPCs to backend %s: got %v, want %v (margin: +-%v)", backends[2], got, wantRPCs2, errorTolerance)
+	if !cmp.Equal(got, wantRPCs1, cmpopts.EquateApprox(0, errorTolerance)) {
+		t.Errorf("Fraction of RPCs to backend %s: got %v, want %v (margin: +-%v)", backends[1], got, wantRPCs1, errorTolerance)
 	}
 }
 
