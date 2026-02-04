@@ -1545,11 +1545,11 @@ func (s) TestClusterSubscription_Lifecycle(t *testing.T) {
 	clusterName := resources.Clusters[0].Name
 	edsServiceName := resources.Clusters[0].EdsClusterConfig.ServiceName
 
-	// Subscribe to the old cluster.
-	unsubscribe := dm.Subscribe(clusterName)
-	// Subscribe twice to test multiple subscriptions and verify that the
-	// cluster is only removed after all subscriptions are removed.
-	unsubscribe1 := dm.Subscribe(clusterName)
+	// Subscribe twice to the old cluster to test multiple subscriptions and
+	// verify that the cluster is only removed after all subscriptions are
+	// removed.
+	unsubscribe1 := dm.SubscribeToCluster(clusterName)
+	unsubscribe2 := dm.SubscribeToCluster(clusterName)
 
 	// Update RouteConfig to REMOVE the cluster and point to a new cluster. The
 	// old cluster should still be present in the update because of the
@@ -1572,7 +1572,7 @@ func (s) TestClusterSubscription_Lifecycle(t *testing.T) {
 
 	// Verify the update to contain BOTH "new-cluster-name" (from route) AND
 	// "clusterName" (from subscription).
-	wantxdsconfig := &xdsresource.XDSConfig{
+	wantXDSConfig := &xdsresource.XDSConfig{
 		Listener: &xdsresource.ListenerUpdate{
 			RouteConfigName: resources.Routes[0].Name,
 			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
@@ -1607,11 +1607,12 @@ func (s) TestClusterSubscription_Lifecycle(t *testing.T) {
 					EndpointConfig: &xdsresource.EndpointConfig{
 						EDSUpdate: &xdsresource.EndpointsUpdate{
 							Localities: []xdsresource.Locality{
-								{ID: clients.Locality{
-									Region:  "region-1",
-									Zone:    "zone-1",
-									SubZone: "subzone-1",
-								},
+								{
+									ID: clients.Locality{
+										Region:  "region-1",
+										Zone:    "zone-1",
+										SubZone: "subzone-1",
+									},
 									Endpoints: []xdsresource.Endpoint{
 										{
 											ResolverEndpoint: resolver.Endpoint{Addresses: []resolver.Address{{Addr: "localhost:8080"}}},
@@ -1627,19 +1628,21 @@ func (s) TestClusterSubscription_Lifecycle(t *testing.T) {
 				},
 			},
 			newClusterName: {
-				Config: xdsresource.ClusterConfig{Cluster: &xdsresource.ClusterUpdate{
-					ClusterType:    xdsresource.ClusterTypeEDS,
-					ClusterName:    newClusterName,
-					EDSServiceName: newEDSServcie,
-				},
+				Config: xdsresource.ClusterConfig{
+					Cluster: &xdsresource.ClusterUpdate{
+						ClusterType:    xdsresource.ClusterTypeEDS,
+						ClusterName:    newClusterName,
+						EDSServiceName: newEDSServcie,
+					},
 					EndpointConfig: &xdsresource.EndpointConfig{
 						EDSUpdate: &xdsresource.EndpointsUpdate{
 							Localities: []xdsresource.Locality{
-								{ID: clients.Locality{
-									Region:  "region-1",
-									Zone:    "zone-1",
-									SubZone: "subzone-1",
-								},
+								{
+									ID: clients.Locality{
+										Region:  "region-1",
+										Zone:    "zone-1",
+										SubZone: "subzone-1",
+									},
 									Endpoints: []xdsresource.Endpoint{
 										{
 											ResolverEndpoint: resolver.Endpoint{Addresses: []resolver.Address{{Addr: "localhost:8081"}}},
@@ -1656,12 +1659,12 @@ func (s) TestClusterSubscription_Lifecycle(t *testing.T) {
 			},
 		},
 	}
-	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantxdsconfig); err != nil {
+	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXDSConfig); err != nil {
 		t.Fatal(err)
 	}
 
 	// Unsubscribe one reference to the old cluster.
-	unsubscribe()
+	unsubscribe1()
 
 	// Verify that no update is received since there is still one subscription
 	// to the old cluster remaining.
@@ -1675,7 +1678,7 @@ func (s) TestClusterSubscription_Lifecycle(t *testing.T) {
 		t.Fatalf("Received unexpected error from dependency manager: %v", err)
 	}
 
-	unsubscribe1()
+	unsubscribe2()
 	// Now "clusterName" should be removed. "newClusterName" should remain.
 	wantXdsConfig = makeXDSConfig(resources.Routes[0].Name, newClusterName, newEDSServcie, "localhost:8081")
 
@@ -1721,12 +1724,12 @@ func (s) TestUpdateWithUnresolvedDynamicSubscription(t *testing.T) {
 	}
 
 	// Subscribe to cluster present in route config emulating a RPC.
-	dm.Subscribe(resources.Clusters[0].Name)
+	dm.SubscribeToCluster(resources.Clusters[0].Name)
 
 	// Subscribe to new cluster not present in route config emulating
 	// susbscription for a dynamic resource.
 	newClusterName := "new-cluster-name"
-	dm.Subscribe(newClusterName)
+	dm.SubscribeToCluster(newClusterName)
 
 	// Verify that update is received since all static clusters are present.
 	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
@@ -1790,19 +1793,21 @@ func (s) TestUpdateWithUnresolvedDynamicSubscription(t *testing.T) {
 		},
 		Clusters: map[string]*xdsresource.ClusterResult{
 			resources.Clusters[0].Name: {
-				Config: xdsresource.ClusterConfig{Cluster: &xdsresource.ClusterUpdate{
-					ClusterType:    xdsresource.ClusterTypeEDS,
-					ClusterName:    resources.Clusters[0].Name,
-					EDSServiceName: resources.Clusters[0].EdsClusterConfig.ServiceName,
-				},
+				Config: xdsresource.ClusterConfig{
+					Cluster: &xdsresource.ClusterUpdate{
+						ClusterType:    xdsresource.ClusterTypeEDS,
+						ClusterName:    resources.Clusters[0].Name,
+						EDSServiceName: resources.Clusters[0].EdsClusterConfig.ServiceName,
+					},
 					EndpointConfig: &xdsresource.EndpointConfig{
 						EDSUpdate: &xdsresource.EndpointsUpdate{
 							Localities: []xdsresource.Locality{
-								{ID: clients.Locality{
-									Region:  "region-1",
-									Zone:    "zone-1",
-									SubZone: "subzone-1",
-								},
+								{
+									ID: clients.Locality{
+										Region:  "region-1",
+										Zone:    "zone-1",
+										SubZone: "subzone-1",
+									},
 									Endpoints: []xdsresource.Endpoint{
 										{
 											ResolverEndpoint: resolver.Endpoint{Addresses: []resolver.Address{{Addr: "localhost:9090"}}},
@@ -1826,11 +1831,12 @@ func (s) TestUpdateWithUnresolvedDynamicSubscription(t *testing.T) {
 					EndpointConfig: &xdsresource.EndpointConfig{
 						EDSUpdate: &xdsresource.EndpointsUpdate{
 							Localities: []xdsresource.Locality{
-								{ID: clients.Locality{
-									Region:  "region-1",
-									Zone:    "zone-1",
-									SubZone: "subzone-1",
-								},
+								{
+									ID: clients.Locality{
+										Region:  "region-1",
+										Zone:    "zone-1",
+										SubZone: "subzone-1",
+									},
 									Endpoints: []xdsresource.Endpoint{
 										{
 											ResolverEndpoint: resolver.Endpoint{Addresses: []resolver.Address{{Addr: "localhost:10080"}}},
