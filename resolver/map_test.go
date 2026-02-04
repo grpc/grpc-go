@@ -311,6 +311,37 @@ func (s) TestEndpointMap_Values(t *testing.T) {
 	}
 }
 
+func (s) TestEndpointMap_All(t *testing.T) {
+	em := NewEndpointMap[int]()
+	em.Set(endpoint1, 1)
+	// The second endpoint endpoint21 should override.
+	em.Set(endpoint12, 1)
+	em.Set(endpoint21, 2)
+	em.Set(endpoint3, 3)
+	em.Set(endpoint4, 4)
+	em.Set(endpoint5, 5)
+	em.Set(endpoint6, 6)
+	em.Set(endpoint7, 7)
+
+	type pair struct {
+		K Endpoint
+		V int
+	}
+
+	want := []pair{{endpoint1, 1}, {endpoint21, 2}, {endpoint3, 3}, {endpoint4, 4}, {endpoint5, 5}, {endpoint6, 6}, {endpoint7, 7}}
+	var got []pair
+	for k, v := range em.All() {
+		got = append(got, pair{k, v})
+	}
+	if d := cmp.Diff(want, got, cmp.Transformer("sort", func(in []pair) []pair {
+		out := append([]pair(nil), in...)
+		sort.Slice(out, func(i, j int) bool { return out[i].V < out[j].V })
+		return out
+	})); d != "" {
+		t.Fatalf("em.All returned unexpected elements (-want, +got):\n%v", d)
+	}
+}
+
 // BenchmarkEndpointMap benchmarks map operations that are expected to run
 // faster than O(n). This test doesn't run O(n) operations including listing
 // keys and values.
