@@ -42,7 +42,7 @@ import (
 	"google.golang.org/protobuf/types/pluginpb"
 )
 
-const version = "1.6.0"
+const version = "1.6.1"
 
 var requireUnimplemented *bool
 var useGenericStreams *bool
