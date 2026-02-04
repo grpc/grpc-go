@@ -121,7 +121,7 @@ func (b *baseBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
 			sc.Connect()
 		}
 	}
-	for _, a := range b.subConns.Keys() {
+	for a := range b.subConns.All() {
 		sc, _ := b.subConns.Get(a)
 		// a was removed by resolver.
 		if _, ok := addrsSet.Get(a); !ok {
@@ -171,7 +171,7 @@ func (b *baseBalancer) regeneratePicker() {
 	readySCs := make(map[balancer.SubConn]SubConnInfo)
 
 	// Filter out all ready SCs from full subConn map.
-	for _, addr := range b.subConns.Keys() {
+	for addr := range b.subConns.All() {
 		sc, _ := b.subConns.Get(addr)
 		if st, ok := b.scStates[sc]; ok && st == connectivity.Ready {
 			readySCs[sc] = SubConnInfo{Address: addr}
