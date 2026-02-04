@@ -22,12 +22,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"net/url"
 	"time"
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/rls/internal/keys"
 	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/internal/grpcutil"
 	"google.golang.org/grpc/internal/pretty"
 	rlspb "google.golang.org/grpc/internal/proto/grpc_lookup_v1"
 	"google.golang.org/grpc/resolver"
@@ -195,16 +195,9 @@ func parseRLSProto(rlsProto *rlspb.RouteLookupConfig) (*lbConfig, error) {
 	if lookupService == "" {
 		return nil, fmt.Errorf("rls: empty lookup_service in route lookup config %+v", rlsProto)
 	}
-	parsedTarget, err := url.Parse(lookupService)
+	parsedTarget, err := grpcutil.ParseTarget(lookupService, resolver.GetDefaultScheme())
 	if err != nil {
-		// url.Parse() fails if scheme is missing. Retry with default scheme.
-		parsedTarget, err = url.Parse(resolver.GetDefaultScheme() + ":///" + lookupService)
-		if err != nil {
-			return nil, fmt.Errorf("rls: invalid target URI in lookup_service %s", lookupService)
-		}
-	}
-	if parsedTarget.Scheme == "" {
-		parsedTarget.Scheme = resolver.GetDefaultScheme()
+		return nil, fmt.Errorf("rls: invalid target URI in lookup_service %s: %v", lookupService, err)
 	}
 	if resolver.Get(parsedTarget.Scheme) == nil {
 		return nil, fmt.Errorf("rls: unregistered scheme in lookup_service %s", lookupService)

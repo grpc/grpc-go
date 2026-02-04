@@ -23,7 +23,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"net/url"
 	"slices"
 	"strings"
 	"sync"
@@ -40,6 +39,7 @@ import (
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpcsync"
+	"google.golang.org/grpc/internal/grpcutil"
 	"google.golang.org/grpc/internal/idle"
 	iresolver "google.golang.org/grpc/internal/resolver"
 	istats "google.golang.org/grpc/internal/stats"
@@ -1799,11 +1799,11 @@ func (cc *ClientConn) initParsedTargetAndResolverBuilder() error {
 	logger.Infof("original dial target is: %q", cc.target)
 
 	var rb resolver.Builder
-	parsedTarget, err := parseTarget(cc.target)
+	u, err := grpcutil.ParseTarget(cc.target, "")
 	if err == nil {
-		rb = cc.getResolver(parsedTarget.URL.Scheme)
+		rb = cc.getResolver(u.Scheme)
 		if rb != nil {
-			cc.parsedTarget = parsedTarget
+			cc.parsedTarget = resolver.Target{URL: *u}
 			cc.resolverBuilder = rb
 			return nil
 		}
@@ -1820,30 +1820,17 @@ func (cc *ClientConn) initParsedTargetAndResolverBuilder() error {
 	}
 
 	canonicalTarget := defScheme + ":///" + cc.target
-
-	parsedTarget, err = parseTarget(canonicalTarget)
+	u, err = grpcutil.ParseTarget(canonicalTarget, "")
 	if err != nil {
 		return err
 	}
-	rb = cc.getResolver(parsedTarget.URL.Scheme)
+	rb = cc.getResolver(u.Scheme)
 	if rb == nil {
-		return fmt.Errorf("could not get resolver for default scheme: %q", parsedTarget.URL.Scheme)
+		return fmt.Errorf("could not get resolver for default scheme: %q", u.Scheme)
 	}
-	cc.parsedTarget = parsedTarget
+	cc.parsedTarget = resolver.Target{URL: *u}
 	cc.resolverBuilder = rb
 	return nil
-}
-
-// parseTarget uses RFC 3986 semantics to parse the given target into a
-// resolver.Target struct containing url. Query params are stripped from the
-// endpoint.
-func parseTarget(target string) (resolver.Target, error) {
-	u, err := url.Parse(target)
-	if err != nil {
-		return resolver.Target{}, err
-	}
-
-	return resolver.Target{URL: *u}, nil
 }
 
 // encodeAuthority escapes the authority string based on valid chars defined in
