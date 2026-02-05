@@ -150,7 +150,21 @@ func (b *xdsResolverBuilder) Build(target resolver.Target, cc resolver.ClientCon
 	}
 	r.logger = prefixLogger(r)
 	r.logger.Infof("Creating resolver for target: %+v", target)
+
+	dmSet := make(chan struct{})
+	// Schedule a callback that blocks until r.dm is set i.e xdsdepmgr.New()
+	// returns. This acts as a gatekeeper: even if dependency manager sends the
+	// updates before the xdsdepmgr.New() has a chance to return, they will be
+	// queued behind this blocker and processed only after initialization is
+	// complete.
+	r.serializer.TrySchedule(func(ctx context.Context) {
+		select {
+		case <-dmSet:
+		case <-ctx.Done():
+		}
+	})
 	r.dm = xdsdepmgr.New(r.ldsResourceName, opts.Authority, r.xdsClient, r)
+	close(dmSet)
 	return r, nil
 }
 
@@ -329,6 +343,8 @@ func (r *xdsResolver) sendNewServiceConfig(cs stoppableConfigSelector) bool {
 	state := iresolver.SetConfigSelector(resolver.State{
 		ServiceConfig: r.cc.ParseServiceConfig(string(sc)),
 	}, cs)
+	state = xdsresource.SetXDSConfig(state, r.xdsConfig)
+	state = xdsdepmgr.SetXDSClusterSubscriber(state, r.dm)
 	if err := r.cc.UpdateState(xdsclient.SetClient(state, r.xdsClient)); err != nil {
 		if r.logger.V(2) {
 			r.logger.Infof("Channel rejected new state: %+v with error: %v", state, err)
