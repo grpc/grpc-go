@@ -34,6 +34,7 @@ import (
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 
 	_ "google.golang.org/grpc/internal/xds/balancer/clusterresolver"
@@ -121,7 +122,7 @@ func (s) TestLogicalDNS_MultipleEndpoints(t *testing.T) {
 	defer cc.Close()
 
 	// Ensure the RPC is routed to the first backend.
-	testClient := testpb.NewTestServiceClient(cc)
+	testClient := testgrpc.NewTestServiceClient(cc)
 	for i := 0; i < 10; i++ {
 		var peer peer.Peer
 		if _, err := testClient.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(&peer)); err != nil {
