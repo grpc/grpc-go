@@ -416,9 +416,9 @@ func verifyUniformDistribution(eps map[string]int, dd DistributionData) (bool, s
 	var (
 		chi2          float64
 		reportBuilder strings.Builder
-		testPassed    bool = true
 	)
 
+	testPassed := true
 	reportBuilder.WriteString(fmt.Sprintf("%-12s | %-15s | %-15s | %s\n", "Endpoint", "ExpValue", "Diff from E", "Status"))
 	reportBuilder.WriteString(strings.Repeat("-", 75) + "\n")
 
