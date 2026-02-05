@@ -447,7 +447,7 @@ func verifyUniformDistribution(eps map[string]int, dd DistributionData) (bool, s
 	df := float64(dd.cardinality - 1)
 
 	// Critical Value for α = 0.05 and df
-	criticalValue := ChiSquareCriticalValue(0.05, df)
+	criticalValue := chiSquareCriticalValue(0.05, df)
 
 	if chi2 > criticalValue {
 		if dd.expectSuccess {
