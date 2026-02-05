@@ -83,7 +83,7 @@ type InboundListenerConfig struct {
 
 	// DefaultFilterChain is the default filter chain to use if no other filter
 	// chain matches.
-	DefaultFilterChain *NetworkFilterChainConfig
+	DefaultFilterChain NetworkFilterChainConfig
 	// FilterChains contains the filter chains associated with this listener.
 	FilterChains NetworkFilterChainMap
 }

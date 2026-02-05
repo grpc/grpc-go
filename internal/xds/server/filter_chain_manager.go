@@ -80,7 +80,7 @@ func newFilterChainManager(fcMap *xdsresource.NetworkFilterChainMap, def *xdsres
 					stDest.srcPrefixes = append(stDest.srcPrefixes, finalSrcEntry)
 
 					for port, fcConfig := range srcEntry.PortMap {
-						fc := fci.filterChainFromConfig(fcConfig)
+						fc := fci.filterChainFromConfig(&fcConfig)
 						finalSrcEntry.srcPortMap[port] = fc
 						fci.fcs = append(fci.fcs, fc)
 					}
@@ -90,7 +90,7 @@ func newFilterChainManager(fcMap *xdsresource.NetworkFilterChainMap, def *xdsres
 		}
 	}
 
-	if def != nil {
+	if def != nil && !def.IsEmpty() {
 		fc := fci.filterChainFromConfig(def)
 		fci.def = fc
 		fci.fcs = append(fci.fcs, fc)

@@ -1356,7 +1356,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 									{
 										Entries: []*SourcePrefixEntry{
 											/*unspecified*/ {
-												PortMap: map[int]*NetworkFilterChainConfig{
+												PortMap: map[int]NetworkFilterChainConfig{
 													0: {
 														HTTPConnMgr: &HTTPConnectionManagerConfig{InlineRouteConfig: inlineRouteConfig,
 															HTTPFilters: makeRouterFilterList(t),
@@ -1442,7 +1442,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 									{
 										Entries: []*SourcePrefixEntry{
 											/*unspecified*/ {
-												PortMap: map[int]*NetworkFilterChainConfig{
+												PortMap: map[int]NetworkFilterChainConfig{
 													0: {
 														HTTPConnMgr: &HTTPConnectionManagerConfig{InlineRouteConfig: inlineRouteConfig,
 															HTTPFilters: makeRouterFilterList(t),
@@ -1556,7 +1556,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 									{
 										Entries: []*SourcePrefixEntry{
 											/*unspecified*/ {
-												PortMap: map[int]*NetworkFilterChainConfig{
+												PortMap: map[int]NetworkFilterChainConfig{
 													0: {
 														SecurityCfg: &SecurityConfig{
 															IdentityInstanceName: "identityPluginInstance",
@@ -1574,7 +1574,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 							},
 						},
 					},
-					DefaultFilterChain: &NetworkFilterChainConfig{
+					DefaultFilterChain: NetworkFilterChainConfig{
 						SecurityCfg: &SecurityConfig{
 							IdentityInstanceName: "defaultIdentityPluginInstance",
 							IdentityCertName:     "defaultIdentityCertName",
@@ -1603,7 +1603,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 									{
 										Entries: []*SourcePrefixEntry{
 											/*unspecified*/ {
-												PortMap: map[int]*NetworkFilterChainConfig{
+												PortMap: map[int]NetworkFilterChainConfig{
 													0: {
 														SecurityCfg: &SecurityConfig{
 															IdentityInstanceName: "identityPluginInstance",
@@ -1621,7 +1621,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 							},
 						},
 					},
-					DefaultFilterChain: &NetworkFilterChainConfig{
+					DefaultFilterChain: NetworkFilterChainConfig{
 						SecurityCfg: &SecurityConfig{
 							IdentityInstanceName: "defaultIdentityPluginInstance",
 							IdentityCertName:     "defaultIdentityCertName",
@@ -1650,7 +1650,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 									{
 										Entries: []*SourcePrefixEntry{
 											/*unspecified*/ {
-												PortMap: map[int]*NetworkFilterChainConfig{
+												PortMap: map[int]NetworkFilterChainConfig{
 													0: {
 														SecurityCfg: &SecurityConfig{
 															RootInstanceName:     "rootPluginInstance",
@@ -1671,7 +1671,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 							},
 						},
 					},
-					DefaultFilterChain: &NetworkFilterChainConfig{
+					DefaultFilterChain: NetworkFilterChainConfig{
 						SecurityCfg: &SecurityConfig{
 							RootInstanceName:     "defaultRootPluginInstance",
 							RootCertName:         "defaultRootCertName",
@@ -1700,7 +1700,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 						DstPrefixes: []*DestinationPrefixEntry{{
 							SourceTypeArr: [3]*SourcePrefixes{{
 								Entries: []*SourcePrefixEntry{{
-									PortMap: map[int]*NetworkFilterChainConfig{
+									PortMap: map[int]NetworkFilterChainConfig{
 										0: {
 											SecurityCfg: &SecurityConfig{
 												RootInstanceName:     "rootPluginInstance",
@@ -1718,7 +1718,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 							}},
 						}},
 					},
-					DefaultFilterChain: &NetworkFilterChainConfig{
+					DefaultFilterChain: NetworkFilterChainConfig{
 						SecurityCfg: &SecurityConfig{
 							RootInstanceName:     "defaultRootPluginInstance",
 							RootCertName:         "defaultRootCertName",

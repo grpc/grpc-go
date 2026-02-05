@@ -61,7 +61,7 @@ type SourcePrefixEntry struct {
 	// Prefix is the source IP prefix.
 	Prefix *net.IPNet
 	// PortMap contains the matchers for source ports.
-	PortMap map[int]*NetworkFilterChainConfig
+	PortMap map[int]NetworkFilterChainConfig
 }
 
 // NetworkFilterChainConfig contains the configuration for a network filter
@@ -72,6 +72,13 @@ type NetworkFilterChainConfig struct {
 	SecurityCfg *SecurityConfig
 	// HTTPConnMgr contains the HTTP connection manager configuration.
 	HTTPConnMgr *HTTPConnectionManagerConfig
+}
+
+// IsEmpty returns true if the NetworkFilterChainConfig contains no
+// configuration.
+
+func (n NetworkFilterChainConfig) IsEmpty() bool {
+	return n.SecurityCfg == nil && n.HTTPConnMgr == nil
 }
 
 func processNetworkFilters(filters []*v3listenerpb.Filter) (*HTTPConnectionManagerConfig, error) {

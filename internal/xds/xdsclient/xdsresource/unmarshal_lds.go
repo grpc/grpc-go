@@ -293,20 +293,22 @@ func processServerSideListener(lis *v3listenerpb.Listener) (*ListenerUpdate, err
 
 	// If there are no supported filter chains and no default filter chain, we
 	// fail here. This will call the Listener resource to be NACK'ed.
-	if len(lu.TCPListener.FilterChains.DstPrefixes) == 0 && lu.TCPListener.DefaultFilterChain == nil {
+	if len(lu.TCPListener.FilterChains.DstPrefixes) == 0 && lu.TCPListener.DefaultFilterChain.IsEmpty() {
 		return nil, fmt.Errorf("no supported filter chains and no default filter chain")
 	}
 
 	return lu, nil
 }
 
-func filterChainFromProto(fc *v3listenerpb.FilterChain) (*NetworkFilterChainConfig, error) {
+func filterChainFromProto(fc *v3listenerpb.FilterChain) (NetworkFilterChainConfig, error) {
+	var emptyFilterChain NetworkFilterChainConfig
+
 	hcmConfig, err := processNetworkFilters(fc.GetFilters())
 	if err != nil {
-		return nil, err
+		return emptyFilterChain, err
 	}
 
-	fcc := &NetworkFilterChainConfig{HTTPConnMgr: hcmConfig}
+	fcc := NetworkFilterChainConfig{HTTPConnMgr: hcmConfig}
 	// If the transport_socket field is not specified, it means that the control
 	// plane has not sent us any security config. This is fine and the server
 	// will use the fallback credentials configured as part of the
@@ -316,33 +318,33 @@ func filterChainFromProto(fc *v3listenerpb.FilterChain) (*NetworkFilterChainConf
 		return fcc, nil
 	}
 	if name := ts.GetName(); name != transportSocketName {
-		return nil, fmt.Errorf("transport_socket field has unexpected name: %s", name)
+		return emptyFilterChain, fmt.Errorf("transport_socket field has unexpected name: %s", name)
 	}
 	tc := ts.GetTypedConfig()
 	if typeURL := tc.GetTypeUrl(); typeURL != version.V3DownstreamTLSContextURL {
-		return nil, fmt.Errorf("transport_socket missing typed_config or wrong type_url: %q", typeURL)
+		return emptyFilterChain, fmt.Errorf("transport_socket missing typed_config or wrong type_url: %q", typeURL)
 	}
 	downstreamCtx := &v3tlspb.DownstreamTlsContext{}
 	if err := proto.Unmarshal(tc.GetValue(), downstreamCtx); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal DownstreamTlsContext in LDS response: %v", err)
+		return emptyFilterChain, fmt.Errorf("failed to unmarshal DownstreamTlsContext in LDS response: %v", err)
 	}
 	if downstreamCtx.GetRequireSni().GetValue() {
-		return nil, fmt.Errorf("require_sni field set to true in DownstreamTlsContext message: %v", downstreamCtx)
+		return emptyFilterChain, fmt.Errorf("require_sni field set to true in DownstreamTlsContext message: %v", downstreamCtx)
 	}
 	if downstreamCtx.GetOcspStaplePolicy() != v3tlspb.DownstreamTlsContext_LENIENT_STAPLING {
-		return nil, fmt.Errorf("ocsp_staple_policy field set to unsupported value in DownstreamTlsContext message: %v", downstreamCtx)
+		return emptyFilterChain, fmt.Errorf("ocsp_staple_policy field set to unsupported value in DownstreamTlsContext message: %v", downstreamCtx)
 	}
 	if downstreamCtx.GetCommonTlsContext() == nil {
-		return nil, errors.New("DownstreamTlsContext in LDS response does not contain a CommonTlsContext")
+		return emptyFilterChain, errors.New("DownstreamTlsContext in LDS response does not contain a CommonTlsContext")
 	}
 	sc, err := securityConfigFromCommonTLSContext(downstreamCtx.GetCommonTlsContext(), true)
 	if err != nil {
-		return nil, err
+		return emptyFilterChain, err
 	}
 	if sc != nil {
 		sc.RequireClientCert = downstreamCtx.GetRequireClientCertificate().GetValue()
 		if sc.RequireClientCert && sc.RootInstanceName == "" {
-			return nil, errors.New("security configuration on the server-side does not contain root certificate provider instance name, but require_client_cert field is set")
+			return emptyFilterChain, errors.New("security configuration on the server-side does not contain root certificate provider instance name, but require_client_cert field is set")
 		}
 		fcc.SecurityCfg = sc
 	}
@@ -382,7 +384,7 @@ func buildFilterChainMap(fcs []*v3listenerpb.FilterChain) (NetworkFilterChainMap
 			}
 			for _, srcPrefix := range srcPrefixes.Entries {
 				for _, fc := range srcPrefix.PortMap {
-					if fc != nil {
+					if !fc.IsEmpty() {
 						fcSeen = true
 					}
 				}
@@ -512,17 +514,17 @@ func addFilterChainsForSourcePrefixes(srcPrefixes *SourcePrefixes, fc *v3listene
 	}
 
 	if len(prefixes) == 0 {
-		return addOrCreateSourcePrefixEntry(srcPrefixes, nil, fc)
+		return getOrCreateSourcePrefixEntry(srcPrefixes, nil, fc)
 	}
 	for _, prefix := range prefixes {
-		if err := addOrCreateSourcePrefixEntry(srcPrefixes, prefix, fc); err != nil {
+		if err := getOrCreateSourcePrefixEntry(srcPrefixes, prefix, fc); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func addOrCreateSourcePrefixEntry(srcPrefixes *SourcePrefixes, prefix *net.IPNet, fc *v3listenerpb.FilterChain) error {
+func getOrCreateSourcePrefixEntry(srcPrefixes *SourcePrefixes, prefix *net.IPNet, fc *v3listenerpb.FilterChain) error {
 	// Find existing entry
 	var entry *SourcePrefixEntry
 	for _, e := range srcPrefixes.Entries {
@@ -534,7 +536,7 @@ func addOrCreateSourcePrefixEntry(srcPrefixes *SourcePrefixes, prefix *net.IPNet
 	if entry == nil {
 		entry = &SourcePrefixEntry{
 			Prefix:  prefix,
-			PortMap: make(map[int]*NetworkFilterChainConfig),
+			PortMap: make(map[int]NetworkFilterChainConfig),
 		}
 		srcPrefixes.Entries = append(srcPrefixes.Entries, entry)
 	}
@@ -549,7 +551,7 @@ func addFilterChainsForSourcePorts(entry *SourcePrefixEntry, fc *v3listenerpb.Fi
 	}
 
 	if len(srcPorts) == 0 {
-		if entry.PortMap[0] != nil {
+		if !entry.PortMap[0].IsEmpty() {
 			return errors.New("multiple filter chains with overlapping matching rules are defined")
 		}
 		fcc, err := filterChainFromProto(fc)
@@ -560,7 +562,7 @@ func addFilterChainsForSourcePorts(entry *SourcePrefixEntry, fc *v3listenerpb.Fi
 		return nil
 	}
 	for _, port := range srcPorts {
-		if entry.PortMap[port] != nil {
+		if !entry.PortMap[port].IsEmpty() {
 			return errors.New("multiple filter chains with overlapping matching rules are defined")
 		}
 		fcc, err := filterChainFromProto(fc)

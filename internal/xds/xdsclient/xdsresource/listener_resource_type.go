@@ -92,7 +92,7 @@ func listenerValidator(bc *bootstrap.Config, lis ListenerUpdate) error {
 	if lis.TCPListener == nil {
 		return nil
 	}
-	if err := validateFC(lis.TCPListener.DefaultFilterChain); err != nil {
+	if err := validateFC(&lis.TCPListener.DefaultFilterChain); err != nil {
 		return err
 	}
 	for _, dst := range lis.TCPListener.FilterChains.DstPrefixes {
@@ -102,7 +102,7 @@ func listenerValidator(bc *bootstrap.Config, lis ListenerUpdate) error {
 			}
 			for _, src := range srcType.Entries {
 				for _, fc := range src.PortMap {
-					if err := validateFC(fc); err != nil {
+					if err := validateFC(&fc); err != nil {
 						return err
 					}
 				}

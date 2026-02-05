@@ -148,7 +148,7 @@ func newFilterChainManagerForTesting(t *testing.T, lis *v3listenerpb.Listener) *
 	if upd.TCPListener == nil {
 		t.Fatalf("Decoded listener is not TCP or failed validation")
 	}
-	return newFilterChainManager(&upd.TCPListener.FilterChains, upd.TCPListener.DefaultFilterChain)
+	return newFilterChainManager(&upd.TCPListener.FilterChains, &upd.TCPListener.DefaultFilterChain)
 }
 
 func emptyValidNetworkFilters(t *testing.T) []*v3listenerpb.Filter {

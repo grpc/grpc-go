@@ -420,7 +420,7 @@ func (lw *ldsWatcher) ResourceChanged(update *xdsresource.ListenerUpdate, onDone
 		return
 	}
 
-	fcm := newFilterChainManager(&ilc.FilterChains, ilc.DefaultFilterChain)
+	fcm := newFilterChainManager(&ilc.FilterChains, &ilc.DefaultFilterChain)
 	l.pendingFilterChainManager = fcm
 	l.rdsHandler.updateRouteNamesToWatch(fcm.routeConfigNames)
 

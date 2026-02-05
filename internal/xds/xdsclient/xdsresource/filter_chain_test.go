@@ -659,7 +659,7 @@ func (s) TestUnmarshalListener_ServerSide_GoodRouteUpdate(t *testing.T) {
 						DstPrefixes: []*DestinationPrefixEntry{{
 							SourceTypeArr: [3]*SourcePrefixes{{
 								Entries: []*SourcePrefixEntry{{
-									PortMap: map[int]*NetworkFilterChainConfig{
+									PortMap: map[int]NetworkFilterChainConfig{
 										0: {
 											HTTPConnMgr: &HTTPConnectionManagerConfig{
 												RouteConfigName: "route-1",
@@ -671,7 +671,7 @@ func (s) TestUnmarshalListener_ServerSide_GoodRouteUpdate(t *testing.T) {
 							}},
 						}},
 					},
-					DefaultFilterChain: &NetworkFilterChainConfig{
+					DefaultFilterChain: NetworkFilterChainConfig{
 						HTTPConnMgr: &HTTPConnectionManagerConfig{
 							RouteConfigName: "route-1",
 							HTTPFilters:     makeRouterFilterList(t),
@@ -726,7 +726,7 @@ func (s) TestUnmarshalListener_ServerSide_GoodRouteUpdate(t *testing.T) {
 						DstPrefixes: []*DestinationPrefixEntry{{
 							SourceTypeArr: [3]*SourcePrefixes{{
 								Entries: []*SourcePrefixEntry{{
-									PortMap: map[int]*NetworkFilterChainConfig{
+									PortMap: map[int]NetworkFilterChainConfig{
 										0: {
 											HTTPConnMgr: &HTTPConnectionManagerConfig{
 												InlineRouteConfig: inlineRouteConfig,
@@ -738,7 +738,7 @@ func (s) TestUnmarshalListener_ServerSide_GoodRouteUpdate(t *testing.T) {
 							}},
 						}},
 					},
-					DefaultFilterChain: &NetworkFilterChainConfig{
+					DefaultFilterChain: NetworkFilterChainConfig{
 						HTTPConnMgr: &HTTPConnectionManagerConfig{
 							InlineRouteConfig: inlineRouteConfig,
 							HTTPFilters:       makeRouterFilterList(t),
@@ -803,7 +803,7 @@ func (s) TestUnmarshalListener_ServerSide_GoodRouteUpdate(t *testing.T) {
 						DstPrefixes: []*DestinationPrefixEntry{{
 							SourceTypeArr: [3]*SourcePrefixes{{
 								Entries: []*SourcePrefixEntry{{
-									PortMap: map[int]*NetworkFilterChainConfig{
+									PortMap: map[int]NetworkFilterChainConfig{
 										0: {
 											HTTPConnMgr: &HTTPConnectionManagerConfig{
 												RouteConfigName: "route-1",
@@ -815,7 +815,7 @@ func (s) TestUnmarshalListener_ServerSide_GoodRouteUpdate(t *testing.T) {
 							}},
 						}},
 					},
-					DefaultFilterChain: &NetworkFilterChainConfig{
+					DefaultFilterChain: NetworkFilterChainConfig{
 						HTTPConnMgr: &HTTPConnectionManagerConfig{
 							RouteConfigName: "route-2",
 							HTTPFilters:     makeRouterFilterList(t),
@@ -1109,7 +1109,7 @@ func (s) TestUnmarshalListener_ServerSide_GoodHTTPFilters(t *testing.T) {
 						DstPrefixes: []*DestinationPrefixEntry{{
 							SourceTypeArr: [3]*SourcePrefixes{{
 								Entries: []*SourcePrefixEntry{{
-									PortMap: map[int]*NetworkFilterChainConfig{
+									PortMap: map[int]NetworkFilterChainConfig{
 										0: {
 											HTTPConnMgr: &HTTPConnectionManagerConfig{
 												InlineRouteConfig: inlineRouteConfig,
@@ -1128,7 +1128,7 @@ func (s) TestUnmarshalListener_ServerSide_GoodHTTPFilters(t *testing.T) {
 							}},
 						}},
 					},
-					DefaultFilterChain: &NetworkFilterChainConfig{
+					DefaultFilterChain: NetworkFilterChainConfig{
 						HTTPConnMgr: &HTTPConnectionManagerConfig{
 							InlineRouteConfig: inlineRouteConfig,
 							HTTPFilters: []HTTPFilter{
@@ -1198,7 +1198,7 @@ func (s) TestUnmarshalListener_ServerSide_GoodHTTPFilters(t *testing.T) {
 						DstPrefixes: []*DestinationPrefixEntry{{
 							SourceTypeArr: [3]*SourcePrefixes{{
 								Entries: []*SourcePrefixEntry{{
-									PortMap: map[int]*NetworkFilterChainConfig{
+									PortMap: map[int]NetworkFilterChainConfig{
 										0: {
 											HTTPConnMgr: &HTTPConnectionManagerConfig{
 												InlineRouteConfig: inlineRouteConfig,
@@ -1222,7 +1222,7 @@ func (s) TestUnmarshalListener_ServerSide_GoodHTTPFilters(t *testing.T) {
 							}},
 						}},
 					},
-					DefaultFilterChain: &NetworkFilterChainConfig{
+					DefaultFilterChain: NetworkFilterChainConfig{
 						HTTPConnMgr: &HTTPConnectionManagerConfig{
 							InlineRouteConfig: inlineRouteConfig,
 							HTTPFilters: []HTTPFilter{
@@ -1327,7 +1327,7 @@ func (s) TestUnmarshalListener_ServerSide_GoodHTTPFilters(t *testing.T) {
 						DstPrefixes: []*DestinationPrefixEntry{{
 							SourceTypeArr: [3]*SourcePrefixes{{
 								Entries: []*SourcePrefixEntry{{
-									PortMap: map[int]*NetworkFilterChainConfig{
+									PortMap: map[int]NetworkFilterChainConfig{
 										0: {
 											HTTPConnMgr: &HTTPConnectionManagerConfig{
 												InlineRouteConfig: inlineRouteConfig,
@@ -1351,7 +1351,7 @@ func (s) TestUnmarshalListener_ServerSide_GoodHTTPFilters(t *testing.T) {
 							}},
 						}},
 					},
-					DefaultFilterChain: &NetworkFilterChainConfig{
+					DefaultFilterChain: NetworkFilterChainConfig{
 						HTTPConnMgr: &HTTPConnectionManagerConfig{
 							InlineRouteConfig: inlineRouteConfig,
 							HTTPFilters: []HTTPFilter{
@@ -1419,7 +1419,7 @@ func (s) TestUnmarshalListener_ServerSide_GoodSecurityConfig(t *testing.T) {
 						DstPrefixes: []*DestinationPrefixEntry{{
 							SourceTypeArr: [3]*SourcePrefixes{{
 								Entries: []*SourcePrefixEntry{{
-									PortMap: map[int]*NetworkFilterChainConfig{
+									PortMap: map[int]NetworkFilterChainConfig{
 										0: {
 											HTTPConnMgr: &HTTPConnectionManagerConfig{
 												InlineRouteConfig: inlineRouteConfig,
@@ -1431,7 +1431,7 @@ func (s) TestUnmarshalListener_ServerSide_GoodSecurityConfig(t *testing.T) {
 							}},
 						}},
 					},
-					DefaultFilterChain: &NetworkFilterChainConfig{
+					DefaultFilterChain: NetworkFilterChainConfig{
 						HTTPConnMgr: &HTTPConnectionManagerConfig{
 							InlineRouteConfig: inlineRouteConfig,
 							HTTPFilters:       makeRouterFilterList(t),
@@ -1487,7 +1487,7 @@ func (s) TestUnmarshalListener_ServerSide_GoodSecurityConfig(t *testing.T) {
 						DstPrefixes: []*DestinationPrefixEntry{{
 							SourceTypeArr: [3]*SourcePrefixes{{
 								Entries: []*SourcePrefixEntry{{
-									PortMap: map[int]*NetworkFilterChainConfig{
+									PortMap: map[int]NetworkFilterChainConfig{
 										0: {
 											SecurityCfg: &SecurityConfig{
 												IdentityInstanceName: "identityPluginInstance",
@@ -1503,7 +1503,7 @@ func (s) TestUnmarshalListener_ServerSide_GoodSecurityConfig(t *testing.T) {
 							}},
 						}},
 					},
-					DefaultFilterChain: &NetworkFilterChainConfig{
+					DefaultFilterChain: NetworkFilterChainConfig{
 						SecurityCfg: &SecurityConfig{
 							IdentityInstanceName: "defaultIdentityPluginInstance",
 							IdentityCertName:     "defaultIdentityCertName",
@@ -1578,7 +1578,7 @@ func (s) TestUnmarshalListener_ServerSide_GoodSecurityConfig(t *testing.T) {
 						DstPrefixes: []*DestinationPrefixEntry{{
 							SourceTypeArr: [3]*SourcePrefixes{{
 								Entries: []*SourcePrefixEntry{{
-									PortMap: map[int]*NetworkFilterChainConfig{
+									PortMap: map[int]NetworkFilterChainConfig{
 										0: {
 											SecurityCfg: &SecurityConfig{
 												RootInstanceName:     "rootPluginInstance",
@@ -1597,7 +1597,7 @@ func (s) TestUnmarshalListener_ServerSide_GoodSecurityConfig(t *testing.T) {
 							}},
 						}},
 					},
-					DefaultFilterChain: &NetworkFilterChainConfig{
+					DefaultFilterChain: NetworkFilterChainConfig{
 						SecurityCfg: &SecurityConfig{
 							RootInstanceName:     "defaultRootPluginInstance",
 							RootCertName:         "defaultRootCertName",
@@ -1690,7 +1690,7 @@ func (s) TestUnmarshalListener_ServerSide_GoodSecurityConfig(t *testing.T) {
 						DstPrefixes: []*DestinationPrefixEntry{{
 							SourceTypeArr: [3]*SourcePrefixes{{
 								Entries: []*SourcePrefixEntry{{
-									PortMap: map[int]*NetworkFilterChainConfig{
+									PortMap: map[int]NetworkFilterChainConfig{
 										0: {
 											SecurityCfg: &SecurityConfig{
 												RootInstanceName:     "rootPluginInstance",
@@ -1709,7 +1709,7 @@ func (s) TestUnmarshalListener_ServerSide_GoodSecurityConfig(t *testing.T) {
 							}},
 						}},
 					},
-					DefaultFilterChain: &NetworkFilterChainConfig{
+					DefaultFilterChain: NetworkFilterChainConfig{
 						SecurityCfg: &SecurityConfig{
 							RootInstanceName:     "defaultRootPluginInstance",
 							RootCertName:         "defaultRootCertName",
@@ -1781,7 +1781,7 @@ func (s) TestUnmarshalListener_ServerSide_Success_UnsupportedMatchFields(t *test
 						DstPrefixes: []*DestinationPrefixEntry{{
 							SourceTypeArr: [3]*SourcePrefixes{{
 								Entries: []*SourcePrefixEntry{{
-									PortMap: map[int]*NetworkFilterChainConfig{
+									PortMap: map[int]NetworkFilterChainConfig{
 										0: {
 											HTTPConnMgr: &HTTPConnectionManagerConfig{
 												InlineRouteConfig: inlineRouteConfig,
@@ -1793,7 +1793,7 @@ func (s) TestUnmarshalListener_ServerSide_Success_UnsupportedMatchFields(t *test
 							}},
 						}},
 					},
-					DefaultFilterChain: &NetworkFilterChainConfig{
+					DefaultFilterChain: NetworkFilterChainConfig{
 						HTTPConnMgr: &HTTPConnectionManagerConfig{
 							InlineRouteConfig: inlineRouteConfig,
 							HTTPFilters:       makeRouterFilterList(t),
@@ -1830,7 +1830,7 @@ func (s) TestUnmarshalListener_ServerSide_Success_UnsupportedMatchFields(t *test
 						DstPrefixes: []*DestinationPrefixEntry{{
 							SourceTypeArr: [3]*SourcePrefixes{{
 								Entries: []*SourcePrefixEntry{{
-									PortMap: map[int]*NetworkFilterChainConfig{
+									PortMap: map[int]NetworkFilterChainConfig{
 										0: {
 											HTTPConnMgr: &HTTPConnectionManagerConfig{
 												InlineRouteConfig: inlineRouteConfig,
@@ -1842,7 +1842,7 @@ func (s) TestUnmarshalListener_ServerSide_Success_UnsupportedMatchFields(t *test
 							}},
 						}},
 					},
-					DefaultFilterChain: &NetworkFilterChainConfig{
+					DefaultFilterChain: NetworkFilterChainConfig{
 						HTTPConnMgr: &HTTPConnectionManagerConfig{
 							InlineRouteConfig: inlineRouteConfig,
 							HTTPFilters:       makeRouterFilterList(t),
@@ -1879,7 +1879,7 @@ func (s) TestUnmarshalListener_ServerSide_Success_UnsupportedMatchFields(t *test
 						DstPrefixes: []*DestinationPrefixEntry{{
 							SourceTypeArr: [3]*SourcePrefixes{{
 								Entries: []*SourcePrefixEntry{{
-									PortMap: map[int]*NetworkFilterChainConfig{
+									PortMap: map[int]NetworkFilterChainConfig{
 										0: {
 											HTTPConnMgr: &HTTPConnectionManagerConfig{
 												InlineRouteConfig: inlineRouteConfig,
@@ -1891,7 +1891,7 @@ func (s) TestUnmarshalListener_ServerSide_Success_UnsupportedMatchFields(t *test
 							}},
 						}},
 					},
-					DefaultFilterChain: &NetworkFilterChainConfig{
+					DefaultFilterChain: NetworkFilterChainConfig{
 						HTTPConnMgr: &HTTPConnectionManagerConfig{
 							InlineRouteConfig: inlineRouteConfig,
 							HTTPFilters:       makeRouterFilterList(t),
@@ -1928,7 +1928,7 @@ func (s) TestUnmarshalListener_ServerSide_Success_UnsupportedMatchFields(t *test
 						DstPrefixes: []*DestinationPrefixEntry{{
 							SourceTypeArr: [3]*SourcePrefixes{{
 								Entries: []*SourcePrefixEntry{{
-									PortMap: map[int]*NetworkFilterChainConfig{
+									PortMap: map[int]NetworkFilterChainConfig{
 										0: {
 											HTTPConnMgr: &HTTPConnectionManagerConfig{
 												InlineRouteConfig: inlineRouteConfig,
@@ -1940,7 +1940,7 @@ func (s) TestUnmarshalListener_ServerSide_Success_UnsupportedMatchFields(t *test
 							}},
 						}},
 					},
-					DefaultFilterChain: &NetworkFilterChainConfig{
+					DefaultFilterChain: NetworkFilterChainConfig{
 						HTTPConnMgr: &HTTPConnectionManagerConfig{
 							InlineRouteConfig: inlineRouteConfig,
 							HTTPFilters:       makeRouterFilterList(t),
@@ -2019,7 +2019,7 @@ func (s) TestUnmarshalListener_ServerSide_Success_AllCombinations(t *testing.T) 
 							{
 								SourceTypeArr: [3]*SourcePrefixes{{
 									Entries: []*SourcePrefixEntry{{
-										PortMap: map[int]*NetworkFilterChainConfig{
+										PortMap: map[int]NetworkFilterChainConfig{
 											0: {
 												HTTPConnMgr: &HTTPConnectionManagerConfig{
 													InlineRouteConfig: inlineRouteConfig,
@@ -2037,7 +2037,7 @@ func (s) TestUnmarshalListener_ServerSide_Success_AllCombinations(t *testing.T) 
 									nil,
 									{
 										Entries: []*SourcePrefixEntry{{
-											PortMap: map[int]*NetworkFilterChainConfig{
+											PortMap: map[int]NetworkFilterChainConfig{
 												0: {
 													HTTPConnMgr: &HTTPConnectionManagerConfig{
 														InlineRouteConfig: inlineRouteConfig,
@@ -2056,7 +2056,7 @@ func (s) TestUnmarshalListener_ServerSide_Success_AllCombinations(t *testing.T) 
 									nil,
 									{
 										Entries: []*SourcePrefixEntry{{
-											PortMap: map[int]*NetworkFilterChainConfig{
+											PortMap: map[int]NetworkFilterChainConfig{
 												0: {
 													HTTPConnMgr: &HTTPConnectionManagerConfig{
 														InlineRouteConfig: inlineRouteConfig,
@@ -2072,7 +2072,7 @@ func (s) TestUnmarshalListener_ServerSide_Success_AllCombinations(t *testing.T) 
 								Prefix: ipNetFromCIDR("192.168.1.1/16"),
 								SourceTypeArr: [3]*SourcePrefixes{{
 									Entries: []*SourcePrefixEntry{{
-										PortMap: map[int]*NetworkFilterChainConfig{
+										PortMap: map[int]NetworkFilterChainConfig{
 											0: {
 												HTTPConnMgr: &HTTPConnectionManagerConfig{
 													InlineRouteConfig: inlineRouteConfig,
@@ -2087,7 +2087,7 @@ func (s) TestUnmarshalListener_ServerSide_Success_AllCombinations(t *testing.T) 
 								Prefix: ipNetFromCIDR("10.0.0.0/8"),
 								SourceTypeArr: [3]*SourcePrefixes{{
 									Entries: []*SourcePrefixEntry{{
-										PortMap: map[int]*NetworkFilterChainConfig{
+										PortMap: map[int]NetworkFilterChainConfig{
 											0: {
 												HTTPConnMgr: &HTTPConnectionManagerConfig{
 													InlineRouteConfig: inlineRouteConfig,
@@ -2100,7 +2100,7 @@ func (s) TestUnmarshalListener_ServerSide_Success_AllCombinations(t *testing.T) 
 							},
 						},
 					},
-					DefaultFilterChain: &NetworkFilterChainConfig{
+					DefaultFilterChain: NetworkFilterChainConfig{
 						HTTPConnMgr: &HTTPConnectionManagerConfig{
 							InlineRouteConfig: inlineRouteConfig,
 							HTTPFilters:       makeRouterFilterList(t),
@@ -2139,7 +2139,7 @@ func (s) TestUnmarshalListener_ServerSide_Success_AllCombinations(t *testing.T) 
 									nil,
 									{
 										Entries: []*SourcePrefixEntry{{
-											PortMap: map[int]*NetworkFilterChainConfig{
+											PortMap: map[int]NetworkFilterChainConfig{
 												0: {
 													HTTPConnMgr: &HTTPConnectionManagerConfig{
 														InlineRouteConfig: inlineRouteConfig,
@@ -2158,7 +2158,7 @@ func (s) TestUnmarshalListener_ServerSide_Success_AllCombinations(t *testing.T) 
 									nil,
 									{
 										Entries: []*SourcePrefixEntry{{
-											PortMap: map[int]*NetworkFilterChainConfig{
+											PortMap: map[int]NetworkFilterChainConfig{
 												0: {
 													HTTPConnMgr: &HTTPConnectionManagerConfig{
 														InlineRouteConfig: inlineRouteConfig,
@@ -2172,7 +2172,7 @@ func (s) TestUnmarshalListener_ServerSide_Success_AllCombinations(t *testing.T) 
 							},
 						},
 					},
-					DefaultFilterChain: &NetworkFilterChainConfig{
+					DefaultFilterChain: NetworkFilterChainConfig{
 						HTTPConnMgr: &HTTPConnectionManagerConfig{
 							InlineRouteConfig: inlineRouteConfig,
 							HTTPFilters:       makeRouterFilterList(t),
@@ -2210,7 +2210,7 @@ func (s) TestUnmarshalListener_ServerSide_Success_AllCombinations(t *testing.T) 
 								SourceTypeArr: [3]*SourcePrefixes{{
 									Entries: []*SourcePrefixEntry{{
 										Prefix: ipNetFromCIDR("10.0.0.0/8"),
-										PortMap: map[int]*NetworkFilterChainConfig{
+										PortMap: map[int]NetworkFilterChainConfig{
 											0: {
 												HTTPConnMgr: &HTTPConnectionManagerConfig{
 													InlineRouteConfig: inlineRouteConfig,
@@ -2228,7 +2228,7 @@ func (s) TestUnmarshalListener_ServerSide_Success_AllCombinations(t *testing.T) 
 										Entries: []*SourcePrefixEntry{
 											{
 												Prefix: ipNetFromCIDR("192.168.1.1/16"),
-												PortMap: map[int]*NetworkFilterChainConfig{
+												PortMap: map[int]NetworkFilterChainConfig{
 													0: {
 														HTTPConnMgr: &HTTPConnectionManagerConfig{
 															InlineRouteConfig: inlineRouteConfig,
@@ -2243,7 +2243,7 @@ func (s) TestUnmarshalListener_ServerSide_Success_AllCombinations(t *testing.T) 
 							},
 						},
 					},
-					DefaultFilterChain: &NetworkFilterChainConfig{
+					DefaultFilterChain: NetworkFilterChainConfig{
 						HTTPConnMgr: &HTTPConnectionManagerConfig{
 							InlineRouteConfig: inlineRouteConfig,
 							HTTPFilters:       makeRouterFilterList(t),
@@ -2282,7 +2282,7 @@ func (s) TestUnmarshalListener_ServerSide_Success_AllCombinations(t *testing.T) 
 							{
 								SourceTypeArr: [3]*SourcePrefixes{{
 									Entries: []*SourcePrefixEntry{{
-										PortMap: map[int]*NetworkFilterChainConfig{
+										PortMap: map[int]NetworkFilterChainConfig{
 											1: {
 												HTTPConnMgr: &HTTPConnectionManagerConfig{
 													InlineRouteConfig: inlineRouteConfig,
@@ -2314,7 +2314,7 @@ func (s) TestUnmarshalListener_ServerSide_Success_AllCombinations(t *testing.T) 
 										Entries: []*SourcePrefixEntry{
 											{
 												Prefix: ipNetFromCIDR("192.168.1.1/16"),
-												PortMap: map[int]*NetworkFilterChainConfig{
+												PortMap: map[int]NetworkFilterChainConfig{
 													1: {
 														HTTPConnMgr: &HTTPConnectionManagerConfig{
 															InlineRouteConfig: inlineRouteConfig,
@@ -2341,7 +2341,7 @@ func (s) TestUnmarshalListener_ServerSide_Success_AllCombinations(t *testing.T) 
 							},
 						},
 					},
-					DefaultFilterChain: &NetworkFilterChainConfig{
+					DefaultFilterChain: NetworkFilterChainConfig{
 						HTTPConnMgr: &HTTPConnectionManagerConfig{
 							InlineRouteConfig: inlineRouteConfig,
 							HTTPFilters:       makeRouterFilterList(t),
@@ -2423,7 +2423,7 @@ func (s) TestUnmarshalListener_ServerSide_Success_AllCombinations(t *testing.T) 
 							{
 								SourceTypeArr: [3]*SourcePrefixes{{
 									Entries: []*SourcePrefixEntry{{
-										PortMap: map[int]*NetworkFilterChainConfig{
+										PortMap: map[int]NetworkFilterChainConfig{
 											0: {
 												HTTPConnMgr: &HTTPConnectionManagerConfig{
 													InlineRouteConfig: inlineRouteConfig,
@@ -2438,7 +2438,7 @@ func (s) TestUnmarshalListener_ServerSide_Success_AllCombinations(t *testing.T) 
 								Prefix: ipNetFromCIDR("192.168.1.1/16"),
 								SourceTypeArr: [3]*SourcePrefixes{{
 									Entries: []*SourcePrefixEntry{{
-										PortMap: map[int]*NetworkFilterChainConfig{
+										PortMap: map[int]NetworkFilterChainConfig{
 											0: {
 												HTTPConnMgr: &HTTPConnectionManagerConfig{
 													InlineRouteConfig: inlineRouteConfig,
@@ -2453,7 +2453,7 @@ func (s) TestUnmarshalListener_ServerSide_Success_AllCombinations(t *testing.T) 
 								Prefix: ipNetFromCIDR("10.0.0.0/8"),
 								SourceTypeArr: [3]*SourcePrefixes{{
 									Entries: []*SourcePrefixEntry{{
-										PortMap: map[int]*NetworkFilterChainConfig{
+										PortMap: map[int]NetworkFilterChainConfig{
 											0: {
 												HTTPConnMgr: &HTTPConnectionManagerConfig{
 													InlineRouteConfig: inlineRouteConfig,
@@ -2466,7 +2466,7 @@ func (s) TestUnmarshalListener_ServerSide_Success_AllCombinations(t *testing.T) 
 							},
 						},
 					},
-					DefaultFilterChain: &NetworkFilterChainConfig{
+					DefaultFilterChain: NetworkFilterChainConfig{
 						HTTPConnMgr: &HTTPConnectionManagerConfig{
 							InlineRouteConfig: inlineRouteConfig,
 							HTTPFilters:       makeRouterFilterList(t),
