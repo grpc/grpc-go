@@ -261,7 +261,7 @@ func (s) TestSubsettingBalancer_DeterministicSubset(t *testing.T) {
 	}
 }
 
-func (s) TestSubsettingEndpoints(t *testing.T) {
+func (s) TestSubsettingEndpointsSimply(t *testing.T) {
 
 	testCases := []struct {
 		endpoints  []resolver.Endpoint
@@ -474,7 +474,7 @@ func initEndpointCount(epCount *map[string]int, eps []resolver.Endpoint) {
 
 // ChiSquareCriticalValue calculates the critical value for alpha (e.g., 0.05)
 // and degrees of freedom (df).
-func ChiSquareCriticalValue(alpha float64, df float64) float64 {
+func chiSquareCriticalValue(alpha float64, df float64) float64 {
 	// 1. Find the Z-score for the given alpha.
 	// For alpha = 0.05 (95% confidence), Z is approx 1.64485
 	z := getZScore(1 - alpha)
