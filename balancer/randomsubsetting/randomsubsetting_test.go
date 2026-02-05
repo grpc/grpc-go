@@ -301,52 +301,68 @@ func (s) TestSubsettingEndpoints(t *testing.T) {
 	}
 }
 
+type DistributionData struct {
+	cardinality   int
+	mean          float64
+	sigma         float64
+	expectSuccess bool
+}
+
 func (s) TestUniformDistributionOfEndpoints(t *testing.T) {
 
 	testCases := []struct {
 		eps        int
 		subsetSize uint32
 		iteration  uint32
+		positive   bool
 	}{
 		{
 			eps:        16,
 			subsetSize: 4,
 			iteration:  10,
+			positive:   true,
 		},
 		{
 			eps:        40,
 			subsetSize: 20,
 			iteration:  100,
+			positive:   true,
 		},
 		{
 			eps:        10,
 			subsetSize: 2,
 			iteration:  1000,
+			positive:   true,
 		},
 		{
 			eps:        16,
 			subsetSize: 4,
 			iteration:  1600,
+			positive:   true,
 		},
 		{
 			eps:        8,
 			subsetSize: 4,
 			iteration:  3200,
+			positive:   true,
 		},
 		{
 			eps:        4,
 			subsetSize: 4,
 			iteration:  6400,
+			positive:   true,
 		},
 		{
-			eps:        16,
-			subsetSize: 4,
-			iteration:  10000,
+			eps:        6,
+			subsetSize: 1,
+			iteration:  30,
+			positive:   false,
 		},
 		{
-			eps:        16,
-			subsetSize: 4,
-			iteration:  100000,
+			eps:        17,
+			subsetSize: 2,
+			iteration:  100,
+			positive:   false,
 		},
 	}
 
@@ -368,6 +384,7 @@ func (s) TestUniformDistributionOfEndpoints(t *testing.T) {
 		sigma := math.Sqrt(variance)         // Standard Deviation σ(N) = sqrt(σ²(N))
 
 		EndpointCount := make(map[string]int, N)
+		initEndpointCount(&EndpointCount, endpoints)
 
 		for i := 0; i < K; i++ {
 			t.Run(fmt.Sprint(L), func(t *testing.T) {
@@ -385,43 +402,73 @@ func (s) TestUniformDistributionOfEndpoints(t *testing.T) {
 			})
 		}
 		t.Logf("Test Case: Endpoints=%d, SubsetSize=%d, Iterations=%d", N, L, K)
-		verifyUniformDistribution(EndpointCount, E, sigma, N, t)
+		result, msgs := verifyUniformDistribution(EndpointCount, DistributionData{N, E, sigma, tc.positive})
+		if !result {
+			t.Errorf("Distribution check failed:\n%s", msgs.String())
+		} else {
+			t.Logf("Distribution check passed:\n%s", msgs.String())
+		}
 	}
 }
 
-func verifyUniformDistribution(eps map[string]int, E float64, sigma float64, N int, t *testing.T) {
+func verifyUniformDistribution(eps map[string]int, dd DistributionData) (bool, strings.Builder) {
 	// Verify the distribution is uniform within a small diff range.
-	var chi2 float64
+	var (
+		chi2          float64
+		reportBuilder strings.Builder
+		testPassed    bool = true
+	)
+
+	reportBuilder.WriteString(fmt.Sprintf("%-12s | %-15s | %-15s | %s\n", "Endpoint", "ExpValue", "Diff from E", "Status"))
+	reportBuilder.WriteString(strings.Repeat("-", 75) + "\n")
+
 	for epAddr, count := range eps {
-		diff := float64(count) - E
+		diff := float64(count) - dd.mean
 		absDiff := math.Abs(diff)
 
 		// Chi-Square Statistic Calculation (χ²)
-		chi2 += (diff * diff) / E
+		chi2 += (diff * diff) / dd.mean
 
 		// Determine Sigma Range Status
-		status := "E ± Standard Deviation (Normal)"
-		if absDiff > 3*sigma {
-			status = "!!! Out of three times of Standard Deviation (Extreme)"
-		} else if absDiff > 2*sigma {
-			status = "!! Out of two times of Standard Deviation (Rare)"
-		} else if absDiff > sigma {
-			status = "! Out of Standard Deviation (Noticeable)"
+		status := "      E ± σ  (Normal)"
+		if absDiff > 3*dd.sigma {
+			status = "!!! > E ± 3σ (Extreme)"
+		} else if absDiff > 2*dd.sigma {
+			status = "!!  > E ± 2σ (Rare)"
+		} else if absDiff > dd.sigma {
+			status = "!   > E ± σ  (Noticeable)"
 		}
 
-		t.Logf("%-8s | %-12d | %-15.2f | %s\n", epAddr, count, diff, status)
+		reportBuilder.WriteString(fmt.Sprintf("%-12s | %-15.2f | %-15.2f | %s\n", epAddr, dd.mean, absDiff, status))
 	}
-
-	t.Logf("Chi-Square Statistic (χ²): %.2f\n", chi2)
+	reportBuilder.WriteString(strings.Repeat("-", 75) + "\n")
 
 	// Degrees of Freedom
-	df := float64(N - 1)
+	df := float64(dd.cardinality - 1)
 
 	// Critical Value for α = 0.05 and df
 	criticalValue := ChiSquareCriticalValue(0.05, df)
 
 	if chi2 > criticalValue {
-		t.Errorf("Distribution is not uniform (χ²=%.2f > critical value=%.2f)", chi2, criticalValue)
+		if dd.expectSuccess {
+			testPassed = false
+		} else {
+			testPassed = true
+		}
+		reportBuilder.WriteString(fmt.Sprintf("Distribution is not uniform (χ²=%.2f > critical value=%.2f)", chi2, criticalValue))
+	} else {
+		if !dd.expectSuccess {
+			testPassed = false
+		}
+		reportBuilder.WriteString(fmt.Sprintf("Distribution is uniform (χ²=%.2f <= critical value=%.2f)", chi2, criticalValue))
+	}
+	return testPassed, reportBuilder
+}
+
+// Initialize EndpointCount map with endpoint addresses as keys and zero counts.
+func initEndpointCount(epCount *map[string]int, eps []resolver.Endpoint) {
+	for _, ep := range eps {
+		(*epCount)[ep.Addresses[0].Addr] = 0
 	}
 }
 
