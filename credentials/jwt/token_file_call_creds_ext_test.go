@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2025 gRPC authors.
+ * Copyright 2026 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,6 +44,8 @@ import (
 
 const defaultTestTimeout = 5 * time.Second
 
+const wantErr = "cannot send secure credentials on an insecure connection"
+
 // TestJWTCallCredentials_InsecureTransport_AsCallOption verifies that when JWT
 // call credentials are passed as a per-RPC call option over an insecure
 // transport, the RPC fails with a meaningful error.
@@ -73,9 +75,8 @@ func TestJWTCallCredentials_InsecureTransport_AsCallOption(t *testing.T) {
 
 	client := testgrpc.NewTestServiceClient(cc)
 	_, err = client.EmptyCall(ctx, &testpb.Empty{}, grpc.PerRPCCredentials(jwtCreds))
-
-	if err == nil || !strings.Contains(err.Error(), "cannot send secure credentials on an insecure connection") {
-		t.Fatalf("EmptyCall() error = %v; want error containing %q", err, "cannot send secure credentials on an insecure connection")
+	if err == nil || !strings.Contains(err.Error(), wantErr) {
+		t.Fatalf("EmptyCall() error = %v; want error containing %q", err, wantErr)
 	}
 }
 
@@ -97,11 +98,7 @@ func TestJWTCallCredentials_InsecureTransport_AsDialOption(t *testing.T) {
 	}
 	defer ss.Stop()
 
-	_, err = grpc.NewClient(ss.Address,
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithPerRPCCredentials(jwtCreds),
-	)
-
+	_, err = grpc.NewClient(ss.Address, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithPerRPCCredentials(jwtCreds))
 	if err == nil || !strings.Contains(err.Error(), "the credentials require transport level security") {
 		t.Fatalf("grpc.NewClient() error = %v; want error containing %q", err, "the credentials require transport level security")
 	}
@@ -148,10 +145,7 @@ func TestJWTCallCredentials_SecureTransport_AsDialOption(t *testing.T) {
 		t.Fatalf("Failed to create client TLS credentials: %v", err)
 	}
 
-	cc, err := grpc.NewClient(ss.Address,
-		grpc.WithTransportCredentials(clientCreds),
-		grpc.WithPerRPCCredentials(jwtCreds),
-	)
+	cc, err := grpc.NewClient(ss.Address, grpc.WithTransportCredentials(clientCreds), grpc.WithPerRPCCredentials(jwtCreds))
 	if err != nil {
 		t.Fatalf("grpc.NewClient(%q) failed: %v", ss.Address, err)
 	}
