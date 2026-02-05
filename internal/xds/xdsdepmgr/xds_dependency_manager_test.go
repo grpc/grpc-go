@@ -1578,51 +1578,46 @@ func (s) TestClusterSubscription_Lifecycle(t *testing.T) {
 			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
 		},
 		RouteConfig: &xdsresource.RouteConfigUpdate{
-			VirtualHosts: []*xdsresource.VirtualHost{
-				{
-					Domains: []string{defaultTestServiceName},
-					Routes: []*xdsresource.Route{{
-						Prefix:           newStringP("/"),
-						WeightedClusters: []xdsresource.WeightedCluster{{Name: newClusterName, Weight: 100}},
-						ActionType:       xdsresource.RouteActionRoute,
-					}},
-				},
-			},
+			VirtualHosts: []*xdsresource.VirtualHost{{
+				Domains: []string{defaultTestServiceName},
+				Routes: []*xdsresource.Route{{
+					Prefix:           newStringP("/"),
+					WeightedClusters: []xdsresource.WeightedCluster{{Name: newClusterName, Weight: 100}},
+					ActionType:       xdsresource.RouteActionRoute,
+				}},
+			}},
 		},
 		VirtualHost: &xdsresource.VirtualHost{
 			Domains: []string{defaultTestServiceName},
 			Routes: []*xdsresource.Route{{
 				Prefix:           newStringP("/"),
 				WeightedClusters: []xdsresource.WeightedCluster{{Name: newClusterName, Weight: 100}},
-				ActionType:       xdsresource.RouteActionRoute},
-			},
+				ActionType:       xdsresource.RouteActionRoute,
+			}},
 		},
 		Clusters: map[string]*xdsresource.ClusterResult{
 			clusterName: {
-				Config: xdsresource.ClusterConfig{Cluster: &xdsresource.ClusterUpdate{
-					ClusterType:    xdsresource.ClusterTypeEDS,
-					ClusterName:    clusterName,
-					EDSServiceName: edsServiceName,
-				},
+				Config: xdsresource.ClusterConfig{
+					Cluster: &xdsresource.ClusterUpdate{
+						ClusterType:    xdsresource.ClusterTypeEDS,
+						ClusterName:    clusterName,
+						EDSServiceName: edsServiceName,
+					},
 					EndpointConfig: &xdsresource.EndpointConfig{
 						EDSUpdate: &xdsresource.EndpointsUpdate{
-							Localities: []xdsresource.Locality{
-								{
-									ID: clients.Locality{
-										Region:  "region-1",
-										Zone:    "zone-1",
-										SubZone: "subzone-1",
-									},
-									Endpoints: []xdsresource.Endpoint{
-										{
-											ResolverEndpoint: resolver.Endpoint{Addresses: []resolver.Address{{Addr: "localhost:8080"}}},
-											HealthStatus:     xdsresource.EndpointHealthStatusUnknown,
-											Weight:           1,
-										},
-									},
-									Weight: 1,
+							Localities: []xdsresource.Locality{{
+								ID: clients.Locality{
+									Region:  "region-1",
+									Zone:    "zone-1",
+									SubZone: "subzone-1",
 								},
-							},
+								Endpoints: []xdsresource.Endpoint{{
+									ResolverEndpoint: resolver.Endpoint{Addresses: []resolver.Address{{Addr: "localhost:8080"}}},
+									HealthStatus:     xdsresource.EndpointHealthStatusUnknown,
+									Weight:           1,
+								}},
+								Weight: 1,
+							}},
 						},
 					},
 				},
@@ -1636,23 +1631,19 @@ func (s) TestClusterSubscription_Lifecycle(t *testing.T) {
 					},
 					EndpointConfig: &xdsresource.EndpointConfig{
 						EDSUpdate: &xdsresource.EndpointsUpdate{
-							Localities: []xdsresource.Locality{
-								{
-									ID: clients.Locality{
-										Region:  "region-1",
-										Zone:    "zone-1",
-										SubZone: "subzone-1",
-									},
-									Endpoints: []xdsresource.Endpoint{
-										{
-											ResolverEndpoint: resolver.Endpoint{Addresses: []resolver.Address{{Addr: "localhost:8081"}}},
-											HealthStatus:     xdsresource.EndpointHealthStatusUnknown,
-											Weight:           1,
-										},
-									},
-									Weight: 1,
+							Localities: []xdsresource.Locality{{
+								ID: clients.Locality{
+									Region:  "region-1",
+									Zone:    "zone-1",
+									SubZone: "subzone-1",
 								},
-							},
+								Endpoints: []xdsresource.Endpoint{{
+									ResolverEndpoint: resolver.Endpoint{Addresses: []resolver.Address{{Addr: "localhost:8081"}}},
+									HealthStatus:     xdsresource.EndpointHealthStatusUnknown,
+									Weight:           1,
+								}},
+								Weight: 1,
+							}},
 						},
 					},
 				},
@@ -1759,9 +1750,11 @@ func (s) TestUpdateWithUnresolvedDynamicSubscription(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// We will get an extra update when the new-cluster-name has an update but
-	// EDS update for it has not yet reached but all the static clusters are
-	// present.
+	// The dependency manager sends a duplicate update when the cluster resource
+	// corresponding to the dynamic subscription is received, because all static
+	// clusters are fully resolved at this point. A subsequent update with both
+	// clusters will be sent when the EDS resource corresponding to the dynamic
+	// cluster is also received.
 	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
 		t.Fatal(err)
 	}
@@ -1772,16 +1765,14 @@ func (s) TestUpdateWithUnresolvedDynamicSubscription(t *testing.T) {
 			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
 		},
 		RouteConfig: &xdsresource.RouteConfigUpdate{
-			VirtualHosts: []*xdsresource.VirtualHost{
-				{
-					Domains: []string{defaultTestServiceName},
-					Routes: []*xdsresource.Route{{
-						Prefix:           newStringP("/"),
-						WeightedClusters: []xdsresource.WeightedCluster{{Name: resources.Clusters[0].Name, Weight: 100}},
-						ActionType:       xdsresource.RouteActionRoute,
-					}},
-				},
-			},
+			VirtualHosts: []*xdsresource.VirtualHost{{
+				Domains: []string{defaultTestServiceName},
+				Routes: []*xdsresource.Route{{
+					Prefix:           newStringP("/"),
+					WeightedClusters: []xdsresource.WeightedCluster{{Name: resources.Clusters[0].Name, Weight: 100}},
+					ActionType:       xdsresource.RouteActionRoute,
+				}},
+			}},
 		},
 		VirtualHost: &xdsresource.VirtualHost{
 			Domains: []string{defaultTestServiceName},
@@ -1801,52 +1792,45 @@ func (s) TestUpdateWithUnresolvedDynamicSubscription(t *testing.T) {
 					},
 					EndpointConfig: &xdsresource.EndpointConfig{
 						EDSUpdate: &xdsresource.EndpointsUpdate{
-							Localities: []xdsresource.Locality{
-								{
-									ID: clients.Locality{
-										Region:  "region-1",
-										Zone:    "zone-1",
-										SubZone: "subzone-1",
-									},
-									Endpoints: []xdsresource.Endpoint{
-										{
-											ResolverEndpoint: resolver.Endpoint{Addresses: []resolver.Address{{Addr: "localhost:9090"}}},
-											HealthStatus:     xdsresource.EndpointHealthStatusUnknown,
-											Weight:           1,
-										},
-									},
-									Weight: 1,
+							Localities: []xdsresource.Locality{{
+								ID: clients.Locality{
+									Region:  "region-1",
+									Zone:    "zone-1",
+									SubZone: "subzone-1",
 								},
-							},
+								Endpoints: []xdsresource.Endpoint{{
+									ResolverEndpoint: resolver.Endpoint{Addresses: []resolver.Address{{Addr: "localhost:9090"}}},
+									HealthStatus:     xdsresource.EndpointHealthStatusUnknown,
+									Weight:           1,
+								}},
+								Weight: 1,
+							}},
 						},
 					},
 				},
 			},
 			newClusterName: {
-				Config: xdsresource.ClusterConfig{Cluster: &xdsresource.ClusterUpdate{
-					ClusterType:    xdsresource.ClusterTypeEDS,
-					ClusterName:    newClusterName,
-					EDSServiceName: "new-eds-service",
-				},
+				Config: xdsresource.ClusterConfig{
+					Cluster: &xdsresource.ClusterUpdate{
+						ClusterType:    xdsresource.ClusterTypeEDS,
+						ClusterName:    newClusterName,
+						EDSServiceName: "new-eds-service",
+					},
 					EndpointConfig: &xdsresource.EndpointConfig{
 						EDSUpdate: &xdsresource.EndpointsUpdate{
-							Localities: []xdsresource.Locality{
-								{
-									ID: clients.Locality{
-										Region:  "region-1",
-										Zone:    "zone-1",
-										SubZone: "subzone-1",
-									},
-									Endpoints: []xdsresource.Endpoint{
-										{
-											ResolverEndpoint: resolver.Endpoint{Addresses: []resolver.Address{{Addr: "localhost:10080"}}},
-											HealthStatus:     xdsresource.EndpointHealthStatusUnknown,
-											Weight:           1,
-										},
-									},
-									Weight: 1,
+							Localities: []xdsresource.Locality{{
+								ID: clients.Locality{
+									Region:  "region-1",
+									Zone:    "zone-1",
+									SubZone: "subzone-1",
 								},
-							},
+								Endpoints: []xdsresource.Endpoint{{
+									ResolverEndpoint: resolver.Endpoint{Addresses: []resolver.Address{{Addr: "localhost:10080"}}},
+									HealthStatus:     xdsresource.EndpointHealthStatusUnknown,
+									Weight:           1,
+								}},
+								Weight: 1,
+							}},
 						},
 					},
 				},
