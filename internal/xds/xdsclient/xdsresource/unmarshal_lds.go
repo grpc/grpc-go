@@ -526,15 +526,15 @@ func addFilterChainsForSourcePrefixes(srcPrefixes *SourcePrefixes, fc *v3listene
 
 func getOrCreateSourcePrefixEntry(srcPrefixes *SourcePrefixes, prefix *net.IPNet, fc *v3listenerpb.FilterChain) error {
 	// Find existing entry
-	var entry *SourcePrefixEntry
+	var entry SourcePrefixEntry
 	for _, e := range srcPrefixes.Entries {
 		if ipNetEqual(e.Prefix, prefix) {
 			entry = e
 			break
 		}
 	}
-	if entry == nil {
-		entry = &SourcePrefixEntry{
+	if entry.isEmpty() {
+		entry = SourcePrefixEntry{
 			Prefix:  prefix,
 			PortMap: make(map[int]NetworkFilterChainConfig),
 		}
@@ -543,7 +543,7 @@ func getOrCreateSourcePrefixEntry(srcPrefixes *SourcePrefixes, prefix *net.IPNet
 	return addFilterChainsForSourcePorts(entry, fc)
 }
 
-func addFilterChainsForSourcePorts(entry *SourcePrefixEntry, fc *v3listenerpb.FilterChain) error {
+func addFilterChainsForSourcePorts(entry SourcePrefixEntry, fc *v3listenerpb.FilterChain) error {
 	ports := fc.GetFilterChainMatch().GetSourcePorts()
 	srcPorts := make([]int, 0, len(ports))
 	for _, port := range ports {

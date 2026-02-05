@@ -1350,25 +1350,19 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 					Address: "0.0.0.0",
 					Port:    "9999",
 					FilterChains: NetworkFilterChainMap{
-						DstPrefixes: []*DestinationPrefixEntry{
-							/*unspecified*/ {
-								SourceTypeArr: [3]*SourcePrefixes{
-									{
-										Entries: []*SourcePrefixEntry{
-											/*unspecified*/ {
-												PortMap: map[int]NetworkFilterChainConfig{
-													0: {
-														HTTPConnMgr: &HTTPConnectionManagerConfig{InlineRouteConfig: inlineRouteConfig,
-															HTTPFilters: makeRouterFilterList(t),
-														},
-													},
-												},
+						DstPrefixes: []*DestinationPrefixEntry{{
+							SourceTypeArr: [3]*SourcePrefixes{{
+								Entries: []SourcePrefixEntry{{
+									PortMap: map[int]NetworkFilterChainConfig{
+										0: {
+											HTTPConnMgr: &HTTPConnectionManagerConfig{InlineRouteConfig: inlineRouteConfig,
+												HTTPFilters: makeRouterFilterList(t),
 											},
 										},
 									},
-								},
-							},
-						},
+								}},
+							}},
+						}},
 					},
 				},
 				Raw: listenerEmptyTransportSocket,
@@ -1436,25 +1430,19 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 					Address: "0.0.0.0",
 					Port:    "9999",
 					FilterChains: NetworkFilterChainMap{
-						DstPrefixes: []*DestinationPrefixEntry{
-							/*unspecified*/ {
-								SourceTypeArr: [3]*SourcePrefixes{
-									{
-										Entries: []*SourcePrefixEntry{
-											/*unspecified*/ {
-												PortMap: map[int]NetworkFilterChainConfig{
-													0: {
-														HTTPConnMgr: &HTTPConnectionManagerConfig{InlineRouteConfig: inlineRouteConfig,
-															HTTPFilters: makeRouterFilterList(t),
-														},
-													},
-												},
+						DstPrefixes: []*DestinationPrefixEntry{{
+							SourceTypeArr: [3]*SourcePrefixes{{
+								Entries: []SourcePrefixEntry{{
+									PortMap: map[int]NetworkFilterChainConfig{
+										0: {
+											HTTPConnMgr: &HTTPConnectionManagerConfig{InlineRouteConfig: inlineRouteConfig,
+												HTTPFilters: makeRouterFilterList(t),
 											},
 										},
 									},
-								},
-							},
-						},
+								}},
+							}},
+						}},
 					},
 				},
 				Raw: listenerEmptyTransportSocket,
@@ -1550,29 +1538,23 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 					Address: "0.0.0.0",
 					Port:    "9999",
 					FilterChains: NetworkFilterChainMap{
-						DstPrefixes: []*DestinationPrefixEntry{
-							/*unspecified*/ {
-								SourceTypeArr: [3]*SourcePrefixes{
-									{
-										Entries: []*SourcePrefixEntry{
-											/*unspecified*/ {
-												PortMap: map[int]NetworkFilterChainConfig{
-													0: {
-														SecurityCfg: &SecurityConfig{
-															IdentityInstanceName: "identityPluginInstance",
-															IdentityCertName:     "identityCertName",
-														},
-														HTTPConnMgr: &HTTPConnectionManagerConfig{InlineRouteConfig: inlineRouteConfig,
-															HTTPFilters: makeRouterFilterList(t),
-														},
-													},
-												},
+						DstPrefixes: []*DestinationPrefixEntry{{
+							SourceTypeArr: [3]*SourcePrefixes{{
+								Entries: []SourcePrefixEntry{{
+									PortMap: map[int]NetworkFilterChainConfig{
+										0: {
+											SecurityCfg: &SecurityConfig{
+												IdentityInstanceName: "identityPluginInstance",
+												IdentityCertName:     "identityCertName",
+											},
+											HTTPConnMgr: &HTTPConnectionManagerConfig{InlineRouteConfig: inlineRouteConfig,
+												HTTPFilters: makeRouterFilterList(t),
 											},
 										},
 									},
-								},
-							},
-						},
+								}},
+							}},
+						}},
 					},
 					DefaultFilterChain: NetworkFilterChainConfig{
 						SecurityCfg: &SecurityConfig{
@@ -1597,29 +1579,24 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 					Address: "0.0.0.0",
 					Port:    "9999",
 					FilterChains: NetworkFilterChainMap{
-						DstPrefixes: []*DestinationPrefixEntry{
-							/*unspecified*/ {
-								SourceTypeArr: [3]*SourcePrefixes{
-									{
-										Entries: []*SourcePrefixEntry{
-											/*unspecified*/ {
-												PortMap: map[int]NetworkFilterChainConfig{
-													0: {
-														SecurityCfg: &SecurityConfig{
-															IdentityInstanceName: "identityPluginInstance",
-															IdentityCertName:     "identityCertName",
-														},
-														HTTPConnMgr: &HTTPConnectionManagerConfig{InlineRouteConfig: inlineRouteConfig,
-															HTTPFilters: makeRouterFilterList(t),
-														},
-													},
-												},
+						DstPrefixes: []*DestinationPrefixEntry{{
+							SourceTypeArr: [3]*SourcePrefixes{{
+								Entries: []SourcePrefixEntry{{
+									PortMap: map[int]NetworkFilterChainConfig{
+										0: {
+											SecurityCfg: &SecurityConfig{
+												IdentityInstanceName: "identityPluginInstance",
+												IdentityCertName:     "identityCertName",
+											},
+											HTTPConnMgr: &HTTPConnectionManagerConfig{InlineRouteConfig: inlineRouteConfig,
+												HTTPFilters: makeRouterFilterList(t),
 											},
 										},
 									},
 								},
-							},
-						},
+								},
+							}},
+						}},
 					},
 					DefaultFilterChain: NetworkFilterChainConfig{
 						SecurityCfg: &SecurityConfig{
@@ -1644,32 +1621,26 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 					Address: "0.0.0.0",
 					Port:    "9999",
 					FilterChains: NetworkFilterChainMap{
-						DstPrefixes: []*DestinationPrefixEntry{
-							/*unspecified*/ {
-								SourceTypeArr: [3]*SourcePrefixes{
-									{
-										Entries: []*SourcePrefixEntry{
-											/*unspecified*/ {
-												PortMap: map[int]NetworkFilterChainConfig{
-													0: {
-														SecurityCfg: &SecurityConfig{
-															RootInstanceName:     "rootPluginInstance",
-															RootCertName:         "rootCertName",
-															IdentityInstanceName: "identityPluginInstance",
-															IdentityCertName:     "identityCertName",
-															RequireClientCert:    true,
-														},
-														HTTPConnMgr: &HTTPConnectionManagerConfig{InlineRouteConfig: inlineRouteConfig,
-															HTTPFilters: makeRouterFilterList(t),
-														},
-													},
-												},
+						DstPrefixes: []*DestinationPrefixEntry{{
+							SourceTypeArr: [3]*SourcePrefixes{{
+								Entries: []SourcePrefixEntry{{
+									PortMap: map[int]NetworkFilterChainConfig{
+										0: {
+											SecurityCfg: &SecurityConfig{
+												RootInstanceName:     "rootPluginInstance",
+												RootCertName:         "rootCertName",
+												IdentityInstanceName: "identityPluginInstance",
+												IdentityCertName:     "identityCertName",
+												RequireClientCert:    true,
+											},
+											HTTPConnMgr: &HTTPConnectionManagerConfig{InlineRouteConfig: inlineRouteConfig,
+												HTTPFilters: makeRouterFilterList(t),
 											},
 										},
 									},
-								},
-							},
-						},
+								}},
+							}},
+						}},
 					},
 					DefaultFilterChain: NetworkFilterChainConfig{
 						SecurityCfg: &SecurityConfig{
@@ -1699,7 +1670,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 					FilterChains: NetworkFilterChainMap{
 						DstPrefixes: []*DestinationPrefixEntry{{
 							SourceTypeArr: [3]*SourcePrefixes{{
-								Entries: []*SourcePrefixEntry{{
+								Entries: []SourcePrefixEntry{{
 									PortMap: map[int]NetworkFilterChainConfig{
 										0: {
 											SecurityCfg: &SecurityConfig{

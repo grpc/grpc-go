@@ -52,7 +52,7 @@ type DestinationPrefixEntry struct {
 // SourcePrefixes contains a list of source prefix entries to match on.
 type SourcePrefixes struct {
 	// Entries is the list of source prefix entries.
-	Entries []*SourcePrefixEntry
+	Entries []SourcePrefixEntry
 }
 
 // SourcePrefixEntry contains a source prefix entry and the associated source
@@ -62,6 +62,10 @@ type SourcePrefixEntry struct {
 	Prefix *net.IPNet
 	// PortMap contains the matchers for source ports.
 	PortMap map[int]NetworkFilterChainConfig
+}
+
+func (s SourcePrefixEntry) isEmpty() bool {
+	return s.Prefix == nil && len(s.PortMap) == 0
 }
 
 // NetworkFilterChainConfig contains the configuration for a network filter
