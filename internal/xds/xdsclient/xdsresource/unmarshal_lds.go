@@ -353,7 +353,7 @@ func filterChainFromProto(fc *v3listenerpb.FilterChain) (NetworkFilterChainConfi
 
 // dstPrefixEntry wraps DestinationPrefixEntry to track build state.
 type dstPrefixEntry struct {
-	entry         *DestinationPrefixEntry
+	entry         DestinationPrefixEntry
 	rawBufferSeen bool
 }
 
@@ -375,7 +375,7 @@ func buildFilterChainMap(fcs []*v3listenerpb.FilterChain) (NetworkFilterChainMap
 		}
 	}
 
-	entries := []*DestinationPrefixEntry{}
+	entries := []DestinationPrefixEntry{}
 	for _, bEntry := range dstPrefixEntries {
 		fcSeen := false
 		for _, srcPrefixes := range bEntry.entry.SourceTypeArr {
@@ -413,14 +413,14 @@ func addFilterChainsForDestPrefixes(dstPrefixEntries []*dstPrefixEntry, fc *v3li
 	if len(dstPrefixes) == 0 {
 		// Use the unspecified entry when destination prefix is unspecified, and
 		// set the `net` field to nil.
-		dstPrefixEntries, dpe = addOrCreateDestPrefixEntry(dstPrefixEntries, nil)
+		dstPrefixEntries, dpe = getOrCreateDestPrefixEntry(dstPrefixEntries, nil)
 		if err := addFilterChainsForServerNames(dpe, fc); err != nil {
 			return nil, err
 		}
 		return dstPrefixEntries, nil
 	}
 	for _, prefix := range dstPrefixes {
-		dstPrefixEntries, dpe = addOrCreateDestPrefixEntry(dstPrefixEntries, prefix)
+		dstPrefixEntries, dpe = getOrCreateDestPrefixEntry(dstPrefixEntries, prefix)
 		if err := addFilterChainsForServerNames(dpe, fc); err != nil {
 			return nil, err
 		}
@@ -428,13 +428,13 @@ func addFilterChainsForDestPrefixes(dstPrefixEntries []*dstPrefixEntry, fc *v3li
 	return dstPrefixEntries, nil
 }
 
-func addOrCreateDestPrefixEntry(dstPrefixEntries []*dstPrefixEntry, prefix *net.IPNet) ([]*dstPrefixEntry, *dstPrefixEntry) {
+func getOrCreateDestPrefixEntry(dstPrefixEntries []*dstPrefixEntry, prefix *net.IPNet) ([]*dstPrefixEntry, *dstPrefixEntry) {
 	for _, e := range dstPrefixEntries {
 		if ipNetEqual(e.entry.Prefix, prefix) {
 			return dstPrefixEntries, e
 		}
 	}
-	dpe := &dstPrefixEntry{entry: &DestinationPrefixEntry{Prefix: prefix}}
+	dpe := &dstPrefixEntry{entry: DestinationPrefixEntry{Prefix: prefix}}
 	dstPrefixEntries = append(dstPrefixEntries, dpe)
 	return dstPrefixEntries, dpe
 }
@@ -479,7 +479,7 @@ func addFilterChainsForApplicationProtocols(dstEntry *dstPrefixEntry, fc *v3list
 		logger.Warningf("Dropping filter chain %q since it contains unsupported application_protocols match field", fc.GetName())
 		return nil
 	}
-	return addFilterChainsForSourceType(dstEntry.entry, fc)
+	return addFilterChainsForSourceType(&dstEntry.entry, fc)
 }
 
 func addFilterChainsForSourceType(entry *DestinationPrefixEntry, fc *v3listenerpb.FilterChain) error {

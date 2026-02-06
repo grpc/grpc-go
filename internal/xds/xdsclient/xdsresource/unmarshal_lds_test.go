@@ -1350,7 +1350,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 					Address: "0.0.0.0",
 					Port:    "9999",
 					FilterChains: NetworkFilterChainMap{
-						DstPrefixes: []*DestinationPrefixEntry{{
+						DstPrefixes: []DestinationPrefixEntry{{
 							SourceTypeArr: [3]SourcePrefixes{{
 								Entries: []SourcePrefixEntry{{
 									PortMap: map[int]NetworkFilterChainConfig{
@@ -1430,7 +1430,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 					Address: "0.0.0.0",
 					Port:    "9999",
 					FilterChains: NetworkFilterChainMap{
-						DstPrefixes: []*DestinationPrefixEntry{{
+						DstPrefixes: []DestinationPrefixEntry{{
 							SourceTypeArr: [3]SourcePrefixes{{
 								Entries: []SourcePrefixEntry{{
 									PortMap: map[int]NetworkFilterChainConfig{
@@ -1538,7 +1538,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 					Address: "0.0.0.0",
 					Port:    "9999",
 					FilterChains: NetworkFilterChainMap{
-						DstPrefixes: []*DestinationPrefixEntry{{
+						DstPrefixes: []DestinationPrefixEntry{{
 							SourceTypeArr: [3]SourcePrefixes{{
 								Entries: []SourcePrefixEntry{{
 									PortMap: map[int]NetworkFilterChainConfig{
@@ -1579,7 +1579,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 					Address: "0.0.0.0",
 					Port:    "9999",
 					FilterChains: NetworkFilterChainMap{
-						DstPrefixes: []*DestinationPrefixEntry{{
+						DstPrefixes: []DestinationPrefixEntry{{
 							SourceTypeArr: [3]SourcePrefixes{{
 								Entries: []SourcePrefixEntry{{
 									PortMap: map[int]NetworkFilterChainConfig{
@@ -1621,7 +1621,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 					Address: "0.0.0.0",
 					Port:    "9999",
 					FilterChains: NetworkFilterChainMap{
-						DstPrefixes: []*DestinationPrefixEntry{{
+						DstPrefixes: []DestinationPrefixEntry{{
 							SourceTypeArr: [3]SourcePrefixes{{
 								Entries: []SourcePrefixEntry{{
 									PortMap: map[int]NetworkFilterChainConfig{
@@ -1668,7 +1668,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 					Address: "0.0.0.0",
 					Port:    "9999",
 					FilterChains: NetworkFilterChainMap{
-						DstPrefixes: []*DestinationPrefixEntry{{
+						DstPrefixes: []DestinationPrefixEntry{{
 							SourceTypeArr: [3]SourcePrefixes{{
 								Entries: []SourcePrefixEntry{{
 									PortMap: map[int]NetworkFilterChainConfig{

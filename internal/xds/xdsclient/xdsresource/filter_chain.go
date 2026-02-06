@@ -33,7 +33,7 @@ import (
 // {type, IP and port}.
 type NetworkFilterChainMap struct {
 	// DstPrefixes is the list of destination prefix entries to match on.
-	DstPrefixes []*DestinationPrefixEntry
+	DstPrefixes []DestinationPrefixEntry
 }
 
 // DestinationPrefixEntry contains a destination prefix entry and the associated

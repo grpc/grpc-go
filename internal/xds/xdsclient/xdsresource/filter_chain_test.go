@@ -656,7 +656,7 @@ func (s) TestUnmarshalListener_ServerSide_GoodRouteUpdate(t *testing.T) {
 					Address: "0.0.0.0",
 					Port:    "9999",
 					FilterChains: NetworkFilterChainMap{
-						DstPrefixes: []*DestinationPrefixEntry{{
+						DstPrefixes: []DestinationPrefixEntry{{
 							SourceTypeArr: [3]SourcePrefixes{{
 								Entries: []SourcePrefixEntry{{
 									PortMap: map[int]NetworkFilterChainConfig{
@@ -723,7 +723,7 @@ func (s) TestUnmarshalListener_ServerSide_GoodRouteUpdate(t *testing.T) {
 					Address: "0.0.0.0",
 					Port:    "9999",
 					FilterChains: NetworkFilterChainMap{
-						DstPrefixes: []*DestinationPrefixEntry{{
+						DstPrefixes: []DestinationPrefixEntry{{
 							SourceTypeArr: [3]SourcePrefixes{{
 								Entries: []SourcePrefixEntry{{
 									PortMap: map[int]NetworkFilterChainConfig{
@@ -800,7 +800,7 @@ func (s) TestUnmarshalListener_ServerSide_GoodRouteUpdate(t *testing.T) {
 					Address: "0.0.0.0",
 					Port:    "9999",
 					FilterChains: NetworkFilterChainMap{
-						DstPrefixes: []*DestinationPrefixEntry{{
+						DstPrefixes: []DestinationPrefixEntry{{
 							SourceTypeArr: [3]SourcePrefixes{{
 								Entries: []SourcePrefixEntry{{
 									PortMap: map[int]NetworkFilterChainConfig{
@@ -1106,7 +1106,7 @@ func (s) TestUnmarshalListener_ServerSide_GoodHTTPFilters(t *testing.T) {
 					Address: "0.0.0.0",
 					Port:    "9999",
 					FilterChains: NetworkFilterChainMap{
-						DstPrefixes: []*DestinationPrefixEntry{{
+						DstPrefixes: []DestinationPrefixEntry{{
 							SourceTypeArr: [3]SourcePrefixes{{
 								Entries: []SourcePrefixEntry{{
 									PortMap: map[int]NetworkFilterChainConfig{
@@ -1195,7 +1195,7 @@ func (s) TestUnmarshalListener_ServerSide_GoodHTTPFilters(t *testing.T) {
 					Address: "0.0.0.0",
 					Port:    "9999",
 					FilterChains: NetworkFilterChainMap{
-						DstPrefixes: []*DestinationPrefixEntry{{
+						DstPrefixes: []DestinationPrefixEntry{{
 							SourceTypeArr: [3]SourcePrefixes{{
 								Entries: []SourcePrefixEntry{{
 									PortMap: map[int]NetworkFilterChainConfig{
@@ -1324,7 +1324,7 @@ func (s) TestUnmarshalListener_ServerSide_GoodHTTPFilters(t *testing.T) {
 					Address: "0.0.0.0",
 					Port:    "9999",
 					FilterChains: NetworkFilterChainMap{
-						DstPrefixes: []*DestinationPrefixEntry{{
+						DstPrefixes: []DestinationPrefixEntry{{
 							SourceTypeArr: [3]SourcePrefixes{{
 								Entries: []SourcePrefixEntry{{
 									PortMap: map[int]NetworkFilterChainConfig{
@@ -1416,7 +1416,7 @@ func (s) TestUnmarshalListener_ServerSide_GoodSecurityConfig(t *testing.T) {
 					Address: "0.0.0.0",
 					Port:    "9999",
 					FilterChains: NetworkFilterChainMap{
-						DstPrefixes: []*DestinationPrefixEntry{{
+						DstPrefixes: []DestinationPrefixEntry{{
 							SourceTypeArr: [3]SourcePrefixes{{
 								Entries: []SourcePrefixEntry{{
 									PortMap: map[int]NetworkFilterChainConfig{
@@ -1484,7 +1484,7 @@ func (s) TestUnmarshalListener_ServerSide_GoodSecurityConfig(t *testing.T) {
 					Address: "0.0.0.0",
 					Port:    "9999",
 					FilterChains: NetworkFilterChainMap{
-						DstPrefixes: []*DestinationPrefixEntry{{
+						DstPrefixes: []DestinationPrefixEntry{{
 							SourceTypeArr: [3]SourcePrefixes{{
 								Entries: []SourcePrefixEntry{{
 									PortMap: map[int]NetworkFilterChainConfig{
@@ -1575,7 +1575,7 @@ func (s) TestUnmarshalListener_ServerSide_GoodSecurityConfig(t *testing.T) {
 					Address: "0.0.0.0",
 					Port:    "9999",
 					FilterChains: NetworkFilterChainMap{
-						DstPrefixes: []*DestinationPrefixEntry{{
+						DstPrefixes: []DestinationPrefixEntry{{
 							SourceTypeArr: [3]SourcePrefixes{{
 								Entries: []SourcePrefixEntry{{
 									PortMap: map[int]NetworkFilterChainConfig{
@@ -1687,7 +1687,7 @@ func (s) TestUnmarshalListener_ServerSide_GoodSecurityConfig(t *testing.T) {
 					Address: "0.0.0.0",
 					Port:    "9999",
 					FilterChains: NetworkFilterChainMap{
-						DstPrefixes: []*DestinationPrefixEntry{{
+						DstPrefixes: []DestinationPrefixEntry{{
 							SourceTypeArr: [3]SourcePrefixes{{
 								Entries: []SourcePrefixEntry{{
 									PortMap: map[int]NetworkFilterChainConfig{
@@ -1778,7 +1778,7 @@ func (s) TestUnmarshalListener_ServerSide_Success_UnsupportedMatchFields(t *test
 					Address: "0.0.0.0",
 					Port:    "9999",
 					FilterChains: NetworkFilterChainMap{
-						DstPrefixes: []*DestinationPrefixEntry{{
+						DstPrefixes: []DestinationPrefixEntry{{
 							SourceTypeArr: [3]SourcePrefixes{{
 								Entries: []SourcePrefixEntry{{
 									PortMap: map[int]NetworkFilterChainConfig{
@@ -1827,7 +1827,7 @@ func (s) TestUnmarshalListener_ServerSide_Success_UnsupportedMatchFields(t *test
 					Address: "0.0.0.0",
 					Port:    "9999",
 					FilterChains: NetworkFilterChainMap{
-						DstPrefixes: []*DestinationPrefixEntry{{
+						DstPrefixes: []DestinationPrefixEntry{{
 							SourceTypeArr: [3]SourcePrefixes{{
 								Entries: []SourcePrefixEntry{{
 									PortMap: map[int]NetworkFilterChainConfig{
@@ -1876,7 +1876,7 @@ func (s) TestUnmarshalListener_ServerSide_Success_UnsupportedMatchFields(t *test
 					Address: "0.0.0.0",
 					Port:    "9999",
 					FilterChains: NetworkFilterChainMap{
-						DstPrefixes: []*DestinationPrefixEntry{{
+						DstPrefixes: []DestinationPrefixEntry{{
 							SourceTypeArr: [3]SourcePrefixes{{
 								Entries: []SourcePrefixEntry{{
 									PortMap: map[int]NetworkFilterChainConfig{
@@ -1925,7 +1925,7 @@ func (s) TestUnmarshalListener_ServerSide_Success_UnsupportedMatchFields(t *test
 					Address: "0.0.0.0",
 					Port:    "9999",
 					FilterChains: NetworkFilterChainMap{
-						DstPrefixes: []*DestinationPrefixEntry{{
+						DstPrefixes: []DestinationPrefixEntry{{
 							SourceTypeArr: [3]SourcePrefixes{{
 								Entries: []SourcePrefixEntry{{
 									PortMap: map[int]NetworkFilterChainConfig{
@@ -2015,7 +2015,7 @@ func (s) TestUnmarshalListener_ServerSide_Success_AllCombinations(t *testing.T) 
 					Address: "0.0.0.0",
 					Port:    "9999",
 					FilterChains: NetworkFilterChainMap{
-						DstPrefixes: []*DestinationPrefixEntry{
+						DstPrefixes: []DestinationPrefixEntry{
 							{
 								SourceTypeArr: [3]SourcePrefixes{{
 									Entries: []SourcePrefixEntry{{
@@ -2133,7 +2133,7 @@ func (s) TestUnmarshalListener_ServerSide_Success_AllCombinations(t *testing.T) 
 					Address: "0.0.0.0",
 					Port:    "9999",
 					FilterChains: NetworkFilterChainMap{
-						DstPrefixes: []*DestinationPrefixEntry{
+						DstPrefixes: []DestinationPrefixEntry{
 							{
 								SourceTypeArr: [3]SourcePrefixes{
 									{},
@@ -2206,7 +2206,7 @@ func (s) TestUnmarshalListener_ServerSide_Success_AllCombinations(t *testing.T) 
 					Address: "0.0.0.0",
 					Port:    "9999",
 					FilterChains: NetworkFilterChainMap{
-						DstPrefixes: []*DestinationPrefixEntry{
+						DstPrefixes: []DestinationPrefixEntry{
 							{
 								SourceTypeArr: [3]SourcePrefixes{{
 									Entries: []SourcePrefixEntry{{
@@ -2279,7 +2279,7 @@ func (s) TestUnmarshalListener_ServerSide_Success_AllCombinations(t *testing.T) 
 					Address: "0.0.0.0",
 					Port:    "9999",
 					FilterChains: NetworkFilterChainMap{
-						DstPrefixes: []*DestinationPrefixEntry{
+						DstPrefixes: []DestinationPrefixEntry{
 							{
 								SourceTypeArr: [3]SourcePrefixes{{
 									Entries: []SourcePrefixEntry{{
@@ -2420,7 +2420,7 @@ func (s) TestUnmarshalListener_ServerSide_Success_AllCombinations(t *testing.T) 
 					Address: "0.0.0.0",
 					Port:    "9999",
 					FilterChains: NetworkFilterChainMap{
-						DstPrefixes: []*DestinationPrefixEntry{
+						DstPrefixes: []DestinationPrefixEntry{
 							{
 								SourceTypeArr: [3]SourcePrefixes{{
 									Entries: []SourcePrefixEntry{{
