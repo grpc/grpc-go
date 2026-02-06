@@ -46,7 +46,7 @@ type DestinationPrefixEntry struct {
 	//   - 0: Any: matches connection attempts from any source.
 	//   - 1: SameOrLoopback: matches connection attempts from the same host.
 	//   - 2: External: matches connection attempts from a different host.
-	SourceTypeArr [3]*SourcePrefixes
+	SourceTypeArr [3]SourcePrefixes
 }
 
 // SourcePrefixes contains a list of source prefix entries to match on.
@@ -80,7 +80,6 @@ type NetworkFilterChainConfig struct {
 
 // IsEmpty returns true if the NetworkFilterChainConfig contains no
 // configuration.
-
 func (n NetworkFilterChainConfig) IsEmpty() bool {
 	return n.SecurityCfg == nil && n.HTTPConnMgr == nil
 }

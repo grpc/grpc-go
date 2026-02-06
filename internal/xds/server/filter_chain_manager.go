@@ -67,7 +67,7 @@ func newFilterChainManager(fcMap *xdsresource.NetworkFilterChainMap, def *xdsres
 			dstEntry := &destPrefixEntry{net: entry.Prefix}
 
 			for i, srcPrefixes := range entry.SourceTypeArr {
-				if srcPrefixes == nil {
+				if len(srcPrefixes.Entries) == 0 {
 					continue
 				}
 				stDest := &sourcePrefixes{}

@@ -97,7 +97,7 @@ func listenerValidator(bc *bootstrap.Config, lis ListenerUpdate) error {
 	}
 	for _, dst := range lis.TCPListener.FilterChains.DstPrefixes {
 		for _, srcType := range dst.SourceTypeArr {
-			if srcType == nil {
+			if len(srcType.Entries) == 0 {
 				continue
 			}
 			for _, src := range srcType.Entries {

@@ -379,7 +379,7 @@ func buildFilterChainMap(fcs []*v3listenerpb.FilterChain) (NetworkFilterChainMap
 	for _, bEntry := range dstPrefixEntries {
 		fcSeen := false
 		for _, srcPrefixes := range bEntry.entry.SourceTypeArr {
-			if srcPrefixes == nil {
+			if len(srcPrefixes.Entries) == 0 {
 				continue
 			}
 			for _, srcPrefix := range srcPrefixes.Entries {
@@ -469,7 +469,7 @@ func addFilterChainsForTransportProtocols(dstEntry *dstPrefixEntry, fc *v3listen
 		// reset the source types array which might contain entries for filter
 		// chains with transport protocol set to empty string.
 		dstEntry.rawBufferSeen = true
-		dstEntry.entry.SourceTypeArr = [3]*SourcePrefixes{}
+		dstEntry.entry.SourceTypeArr = [3]SourcePrefixes{}
 	}
 	return addFilterChainsForApplicationProtocols(dstEntry, fc)
 }
@@ -495,10 +495,7 @@ func addFilterChainsForSourceType(entry *DestinationPrefixEntry, fc *v3listenerp
 		return fmt.Errorf("unsupported source type: %v", st)
 	}
 
-	if entry.SourceTypeArr[srcType] == nil {
-		entry.SourceTypeArr[srcType] = &SourcePrefixes{}
-	}
-	return addFilterChainsForSourcePrefixes(entry.SourceTypeArr[srcType], fc)
+	return addFilterChainsForSourcePrefixes(&entry.SourceTypeArr[srcType], fc)
 }
 
 func addFilterChainsForSourcePrefixes(srcPrefixes *SourcePrefixes, fc *v3listenerpb.FilterChain) error {

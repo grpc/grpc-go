@@ -1351,7 +1351,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 					Port:    "9999",
 					FilterChains: NetworkFilterChainMap{
 						DstPrefixes: []*DestinationPrefixEntry{{
-							SourceTypeArr: [3]*SourcePrefixes{{
+							SourceTypeArr: [3]SourcePrefixes{{
 								Entries: []SourcePrefixEntry{{
 									PortMap: map[int]NetworkFilterChainConfig{
 										0: {
@@ -1431,7 +1431,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 					Port:    "9999",
 					FilterChains: NetworkFilterChainMap{
 						DstPrefixes: []*DestinationPrefixEntry{{
-							SourceTypeArr: [3]*SourcePrefixes{{
+							SourceTypeArr: [3]SourcePrefixes{{
 								Entries: []SourcePrefixEntry{{
 									PortMap: map[int]NetworkFilterChainConfig{
 										0: {
@@ -1539,7 +1539,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 					Port:    "9999",
 					FilterChains: NetworkFilterChainMap{
 						DstPrefixes: []*DestinationPrefixEntry{{
-							SourceTypeArr: [3]*SourcePrefixes{{
+							SourceTypeArr: [3]SourcePrefixes{{
 								Entries: []SourcePrefixEntry{{
 									PortMap: map[int]NetworkFilterChainConfig{
 										0: {
@@ -1580,7 +1580,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 					Port:    "9999",
 					FilterChains: NetworkFilterChainMap{
 						DstPrefixes: []*DestinationPrefixEntry{{
-							SourceTypeArr: [3]*SourcePrefixes{{
+							SourceTypeArr: [3]SourcePrefixes{{
 								Entries: []SourcePrefixEntry{{
 									PortMap: map[int]NetworkFilterChainConfig{
 										0: {
@@ -1622,7 +1622,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 					Port:    "9999",
 					FilterChains: NetworkFilterChainMap{
 						DstPrefixes: []*DestinationPrefixEntry{{
-							SourceTypeArr: [3]*SourcePrefixes{{
+							SourceTypeArr: [3]SourcePrefixes{{
 								Entries: []SourcePrefixEntry{{
 									PortMap: map[int]NetworkFilterChainConfig{
 										0: {
@@ -1669,7 +1669,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 					Port:    "9999",
 					FilterChains: NetworkFilterChainMap{
 						DstPrefixes: []*DestinationPrefixEntry{{
-							SourceTypeArr: [3]*SourcePrefixes{{
+							SourceTypeArr: [3]SourcePrefixes{{
 								Entries: []SourcePrefixEntry{{
 									PortMap: map[int]NetworkFilterChainConfig{
 										0: {
