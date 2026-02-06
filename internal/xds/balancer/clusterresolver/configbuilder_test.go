@@ -29,6 +29,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/balancer/pickfirst"
 	"google.golang.org/grpc/balancer/ringhash"
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/internal/balancer/weight"
@@ -142,7 +143,7 @@ func init() {
 
 // TestBuildPriorityConfigJSON is a sanity check that the built balancer config
 // can be parsed. The behavior test is covered by TestBuildPriorityConfig.
-func TestBuildPriorityConfigJSON(t *testing.T) {
+func (s) TestBuildPriorityConfigJSON(t *testing.T) {
 	testLRSServerConfig, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{
 		URI:          "trafficdirector.googleapis.com:443",
 		ChannelCreds: []bootstrap.ChannelCreds{{Type: "google_default"}},
@@ -205,7 +206,7 @@ func TestBuildPriorityConfigJSON(t *testing.T) {
 // TestBuildPriorityConfig tests the priority config generation. Each top level
 // balancer per priority should be an Outlier Detection balancer, with a Cluster
 // Impl Balancer as a child.
-func TestBuildPriorityConfig(t *testing.T) {
+func (s) TestBuildPriorityConfig(t *testing.T) {
 	gotConfig, _, _ := buildPriorityConfig([]priorityConfig{
 		{
 			// EDS - OD config should be the top level for both of the EDS
@@ -294,8 +295,7 @@ func TestBuildPriorityConfig(t *testing.T) {
 						ChildPolicy: &iserviceconfig.BalancerConfig{
 							Name: clusterimpl.Name,
 							Config: &clusterimpl.LBConfig{
-								Cluster:     testClusterName2,
-								ChildPolicy: &iserviceconfig.BalancerConfig{Name: "pick_first"},
+								Cluster: testClusterName2,
 							},
 						},
 					},
@@ -310,30 +310,78 @@ func TestBuildPriorityConfig(t *testing.T) {
 	}
 }
 
-func TestBuildClusterImplConfigForDNS(t *testing.T) {
-	gotName, gotConfig, gotEndpoints := buildClusterImplConfigForDNS(newNameGenerator(3), testResolverEndpoints[0], DiscoveryMechanism{Cluster: testClusterName2, Type: DiscoveryMechanismTypeLogicalDNS})
-	wantName := "priority-3"
-	wantConfig := &clusterimpl.LBConfig{
-		Cluster: testClusterName2,
-		ChildPolicy: &iserviceconfig.BalancerConfig{
-			Name: "pick_first",
-		},
+func testEndpointForDNS(endpoints []resolver.Endpoint, localityWeight uint32, path []string) resolver.Endpoint {
+	retEndpoint := resolver.Endpoint{}
+	for _, e := range endpoints {
+		retEndpoint.Addresses = append(retEndpoint.Addresses, e.Addresses...)
 	}
-	e1 := resolver.Endpoint{Addresses: []resolver.Address{{Addr: testEndpoints[0][0].ResolverEndpoint.Addresses[0].Addr}}}
-	e2 := resolver.Endpoint{Addresses: []resolver.Address{{Addr: testEndpoints[0][1].ResolverEndpoint.Addresses[0].Addr}}}
-	wantEndpoints := []resolver.Endpoint{
-		hierarchy.SetInEndpoint(e1, []string{"priority-3"}),
-		hierarchy.SetInEndpoint(e2, []string{"priority-3"}),
-	}
+	retEndpoint = hierarchy.SetInEndpoint(retEndpoint, path)
+	retEndpoint = wrrlocality.SetAddrInfo(retEndpoint, wrrlocality.AddrInfo{LocalityWeight: localityWeight})
+	return retEndpoint
+}
 
-	if diff := cmp.Diff(gotName, wantName); diff != "" {
-		t.Errorf("buildClusterImplConfigForDNS() diff (-got +want) %v", diff)
-	}
-	if diff := cmp.Diff(gotConfig, wantConfig); diff != "" {
-		t.Errorf("buildClusterImplConfigForDNS() diff (-got +want) %v", diff)
-	}
-	if diff := cmp.Diff(gotEndpoints, wantEndpoints, endpointCmpOpts); diff != "" {
-		t.Errorf("buildClusterImplConfigForDNS() diff (-got +want) %v", diff)
+func (s) TestBuildClusterImplConfigForDNS(t *testing.T) {
+	for _, tt := range []struct {
+		name        string
+		endpoints   []resolver.Endpoint
+		xdsLBPolicy *iserviceconfig.BalancerConfig
+	}{
+		{
+			name:        "one_endpoint_one_address",
+			endpoints:   []resolver.Endpoint{{Addresses: []resolver.Address{{Addr: "addr-0-0"}}}},
+			xdsLBPolicy: &iserviceconfig.BalancerConfig{Name: pickfirst.Name},
+		},
+		{
+			name: "one_endpoint_multiple_addresses",
+			endpoints: []resolver.Endpoint{{Addresses: []resolver.Address{
+				{Addr: "addr-0-0"},
+				{Addr: "addr-0-1"},
+			}}},
+			xdsLBPolicy: &iserviceconfig.BalancerConfig{Name: wrrlocality.Name},
+		},
+		{
+			name: "multiple_endpoints_one_address_each",
+			endpoints: []resolver.Endpoint{
+				{Addresses: []resolver.Address{{Addr: "addr-0-0"}}},
+				{Addresses: []resolver.Address{{Addr: "addr-0-1"}}},
+			},
+			xdsLBPolicy: &iserviceconfig.BalancerConfig{Name: roundrobin.Name},
+		},
+		{
+			name: "multiple_endpoints_multiple_addresses",
+			endpoints: []resolver.Endpoint{
+				{Addresses: []resolver.Address{
+					{Addr: "addr-0-0"},
+					{Addr: "addr-0-1"},
+				}},
+				{Addresses: []resolver.Address{
+					{Addr: "addr-1-0"},
+					{Addr: "addr-1-1"},
+				}},
+			},
+			xdsLBPolicy: &iserviceconfig.BalancerConfig{Name: roundrobin.Name},
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			gotName, gotConfig, gotEndpoints := buildClusterImplConfigForDNS(newNameGenerator(3), tt.endpoints, DiscoveryMechanism{Cluster: testClusterName2, Type: DiscoveryMechanismTypeLogicalDNS}, tt.xdsLBPolicy)
+			const wantName = "priority-3"
+			if diff := cmp.Diff(wantName, gotName); diff != "" {
+				t.Errorf("buildClusterImplConfigForDNS() diff (-want +got) %v", diff)
+			}
+
+			wantConfig := &clusterimpl.LBConfig{
+				Cluster:     testClusterName2,
+				ChildPolicy: tt.xdsLBPolicy,
+			}
+			if diff := cmp.Diff(wantConfig, gotConfig); diff != "" {
+				t.Errorf("buildClusterImplConfigForDNS() diff (-want +got) %v", diff)
+			}
+
+			wantEndpoints := []resolver.Endpoint{testEndpointForDNS(tt.endpoints, 1, []string{wantName, xdsinternal.LocalityString(clients.Locality{})})}
+			if diff := cmp.Diff(wantEndpoints, gotEndpoints, endpointCmpOpts); diff != "" {
+				t.Errorf("buildClusterImplConfigForDNS() diff (-want +got) %v", diff)
+			}
+		})
 	}
 }
 
@@ -434,14 +482,14 @@ func TestBuildClusterImplConfigForEDS_PickFirstWeightedShuffling_Disabled(t *tes
 		testEndpointWithAttrs(testEndpoints[3][1].ResolverEndpoint, 80, 80*1, "priority-2-1", &testLocalityIDs[3]),
 	}
 
-	if diff := cmp.Diff(gotNames, wantNames); diff != "" {
-		t.Errorf("buildClusterImplConfigForEDS() diff (-got +want) %v", diff)
+	if diff := cmp.Diff(wantNames, gotNames); diff != "" {
+		t.Errorf("buildClusterImplConfigForEDS() diff (-want +got) %v", diff)
 	}
-	if diff := cmp.Diff(gotConfigs, wantConfigs); diff != "" {
-		t.Errorf("buildClusterImplConfigForEDS() diff (-got +want) %v", diff)
+	if diff := cmp.Diff(wantConfigs, gotConfigs); diff != "" {
+		t.Errorf("buildClusterImplConfigForEDS() diff (-want +got) %v", diff)
 	}
-	if diff := cmp.Diff(gotEndpoints, wantEndpoints, endpointCmpOpts); diff != "" {
-		t.Errorf("buildClusterImplConfigForEDS() diff (-got +want) %v", diff)
+	if diff := cmp.Diff(wantEndpoints, gotEndpoints, endpointCmpOpts); diff != "" {
+		t.Errorf("buildClusterImplConfigForEDS() diff (-want +got) %v", diff)
 	}
 }
 
@@ -624,8 +672,8 @@ func TestGroupLocalitiesByPriority(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			gotLocalities := groupLocalitiesByPriority(tt.localities)
-			if diff := cmp.Diff(gotLocalities, tt.wantLocalities); diff != "" {
-				t.Errorf("groupLocalitiesByPriority() diff(-got +want) %v", diff)
+			if diff := cmp.Diff(tt.wantLocalities, gotLocalities); diff != "" {
+				t.Errorf("groupLocalitiesByPriority() diff(-want +got) %v", diff)
 			}
 		})
 	}
@@ -957,7 +1005,7 @@ func testEndpointWithAttrs(endpoint resolver.Endpoint, localityWeight, endpointW
 	return endpoint
 }
 
-func TestConvertClusterImplMapToOutlierDetection(t *testing.T) {
+func (s) TestConvertClusterImplMapToOutlierDetection(t *testing.T) {
 	tests := []struct {
 		name       string
 		ciCfgsMap  map[string]*clusterimpl.LBConfig
@@ -1024,8 +1072,8 @@ func TestConvertClusterImplMapToOutlierDetection(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			got := convertClusterImplMapToOutlierDetection(test.ciCfgsMap, test.odCfg)
-			if diff := cmp.Diff(got, test.wantODCfgs); diff != "" {
-				t.Fatalf("convertClusterImplMapToOutlierDetection() diff(-got +want) %v", diff)
+			if diff := cmp.Diff(test.wantODCfgs, got); diff != "" {
+				t.Fatalf("convertClusterImplMapToOutlierDetection() diff(-want +got) %v", diff)
 			}
 		})
 	}

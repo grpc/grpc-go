@@ -33,6 +33,7 @@ import (
 	"google.golang.org/grpc/internal/xds/balancer/outlierdetection"
 	"google.golang.org/grpc/internal/xds/balancer/priority"
 	"google.golang.org/grpc/internal/xds/balancer/wrrlocality"
+	"google.golang.org/grpc/internal/xds/clients"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 	"google.golang.org/grpc/resolver"
 )
@@ -109,7 +110,7 @@ func buildPriorityConfig(priorities []priorityConfig, xdsLBPolicy *internalservi
 			}
 			continue
 		case DiscoveryMechanismTypeLogicalDNS:
-			name, config, endpoints := buildClusterImplConfigForDNS(p.childNameGen, p.endpoints, p.mechanism)
+			name, config, endpoints := buildClusterImplConfigForDNS(p.childNameGen, p.endpoints, p.mechanism, xdsLBPolicy)
 			retConfig.Priorities = append(retConfig.Priorities, name)
 			retEndpoints = append(retEndpoints, endpoints...)
 			odCfg := makeClusterImplOutlierDetectionChild(config, p.mechanism.outlierDetection)
@@ -139,27 +140,36 @@ func makeClusterImplOutlierDetectionChild(ciCfg *clusterimpl.LBConfig, odCfg out
 	return &odCfgRet
 }
 
-func buildClusterImplConfigForDNS(g *nameGenerator, endpoints []resolver.Endpoint, mechanism DiscoveryMechanism) (string, *clusterimpl.LBConfig, []resolver.Endpoint) {
-	// Endpoint picking policy for DNS is hardcoded to pick_first.
-	const childPolicy = "pick_first"
-	retEndpoints := make([]resolver.Endpoint, len(endpoints))
+func buildClusterImplConfigForDNS(g *nameGenerator, endpoints []resolver.Endpoint, mechanism DiscoveryMechanism, xdsLBPolicy *internalserviceconfig.BalancerConfig) (string, *clusterimpl.LBConfig, []resolver.Endpoint) {
 	pName := fmt.Sprintf("priority-%v", g.prefix)
-	for i, e := range endpoints {
-		// For Logical DNS clusters, the same hostname attribute is added
-		// to all endpoints. It is set to the name that is resolved for the
-		// Logical DNS cluster, including the port number.
-		retEndpoints[i] = xdsresource.SetHostname(hierarchy.SetInEndpoint(e, []string{pName}), mechanism.DNSHostname)
-		// Copy the nested address field as slice fields are shared by the
-		// iteration variable and the original slice.
-		retEndpoints[i].Addresses = append([]resolver.Address{}, e.Addresses...)
-	}
-	return pName, &clusterimpl.LBConfig{
+	lbconfig := &clusterimpl.LBConfig{
 		Cluster:               mechanism.Cluster,
 		TelemetryLabels:       mechanism.TelemetryLabels,
-		ChildPolicy:           &internalserviceconfig.BalancerConfig{Name: childPolicy},
+		ChildPolicy:           xdsLBPolicy,
 		MaxConcurrentRequests: mechanism.MaxConcurrentRequests,
 		LoadReportingServer:   mechanism.LoadReportingServer,
-	}, retEndpoints
+	}
+	if len(endpoints) == 0 {
+		return pName, lbconfig, nil
+	}
+	var retEndpoint resolver.Endpoint
+	for _, e := range endpoints {
+		// LOGICAL_DNS requires all resolved addresses to be grouped into a
+		// single logical endpoint. We iterate over the input endpoints and
+		// aggregate their addresses into a new endpoint variable.
+		retEndpoint.Addresses = append(retEndpoint.Addresses, e.Addresses...)
+	}
+	// Even though localities are not a thing for the LOGICAL_DNS cluster and
+	// its endpoint(s), we add an empty locality attribute here to ensure that
+	// LB policies that rely on locality information (like weighted_target)
+	// continue to work.
+	localityStr := xdsinternal.LocalityString(clients.Locality{})
+	retEndpoint = xdsresource.SetHostname(hierarchy.SetInEndpoint(retEndpoint, []string{pName, localityStr}), mechanism.DNSHostname)
+	// Set the locality weight to 1. This is required because the child policy
+	// like weighted_target which relies on locality weights to distribute
+	// traffic. These policies may drop traffic if the weight is 0.
+	retEndpoint = wrrlocality.SetAddrInfo(retEndpoint, wrrlocality.AddrInfo{LocalityWeight: 1})
+	return pName, lbconfig, []resolver.Endpoint{retEndpoint}
 }
 
 // buildClusterImplConfigForEDS returns a list of cluster_impl configs, one for
