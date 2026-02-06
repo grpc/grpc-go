@@ -18,6 +18,7 @@
 package xdsresource
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"net"
@@ -68,8 +69,6 @@ func processListener(lis *v3listenerpb.Listener, opts *xdsclient.DecodeOptions) 
 // processClientSideListener checks if the provided Listener proto meets
 // the expected criteria. If so, it returns a non-empty routeConfigName.
 func processClientSideListener(lis *v3listenerpb.Listener, opts *xdsclient.DecodeOptions) (*ListenerUpdate, error) {
-	update := &ListenerUpdate{}
-
 	apiLisAny := lis.GetApiListener().GetApiListener()
 	if !IsHTTPConnManagerResource(apiLisAny.GetTypeUrl()) {
 		return nil, fmt.Errorf("unexpected http connection manager resource type: %q", apiLisAny.GetTypeUrl())
@@ -89,8 +88,6 @@ func processClientSideListener(lis *v3listenerpb.Listener, opts *xdsclient.Decod
 	}
 
 	hcm := &HTTPConnectionManagerConfig{}
-	update.APIListener = hcm
-
 	switch apiLis.RouteSpecifier.(type) {
 	case *v3httppb.HttpConnectionManager_Rds:
 		if configsource := apiLis.GetRds().GetConfigSource(); configsource.GetAds() == nil && configsource.GetSelf() == nil {
@@ -122,7 +119,7 @@ func processClientSideListener(lis *v3listenerpb.Listener, opts *xdsclient.Decod
 		return nil, err
 	}
 
-	return update, nil
+	return &ListenerUpdate{APIListener: hcm}, nil
 }
 
 func unwrapHTTPFilterConfig(config *anypb.Any) (proto.Message, string, error) {
@@ -292,7 +289,7 @@ func processServerSideListener(lis *v3listenerpb.Listener) (*ListenerUpdate, err
 	lu.TCPListener.FilterChains = fcm
 
 	// If there are no supported filter chains and no default filter chain, we
-	// fail here. This will call the Listener resource to be NACK'ed.
+	// fail here. This will cause the Listener resource to be NACK'ed.
 	if len(lu.TCPListener.FilterChains.DstPrefixes) == 0 && lu.TCPListener.DefaultFilterChain.IsEmpty() {
 		return nil, fmt.Errorf("no supported filter chains and no default filter chain")
 	}
@@ -363,7 +360,7 @@ func buildFilterChainMap(fcs []*v3listenerpb.FilterChain) (NetworkFilterChainMap
 		fcMatch := fc.GetFilterChainMatch()
 		if fcMatch.GetDestinationPort().GetValue() != 0 {
 			// Destination port is the first match criteria and we do not
-			// support filter chains which contains this match criteria.
+			// support filter chains that contain this match criteria.
 			logger.Warningf("Dropping filter chain %q since it contains unsupported destination_port match field", fc.GetName())
 			continue
 		}
@@ -409,34 +406,38 @@ func addFilterChainsForDestPrefixes(dstPrefixEntries []*dstPrefixEntry, fc *v3li
 		dstPrefixes = append(dstPrefixes, ipnet)
 	}
 
-	var dpe *dstPrefixEntry
+	var entry *dstPrefixEntry
 	if len(dstPrefixes) == 0 {
 		// Use the unspecified entry when destination prefix is unspecified, and
 		// set the `net` field to nil.
-		dstPrefixEntries, dpe = getOrCreateDestPrefixEntry(dstPrefixEntries, nil)
-		if err := addFilterChainsForServerNames(dpe, fc); err != nil {
+		dstPrefixEntries, entry = getOrCreateDestPrefixEntry(dstPrefixEntries, nil)
+		if err := addFilterChainsForServerNames(entry, fc); err != nil {
 			return nil, err
 		}
 		return dstPrefixEntries, nil
 	}
 	for _, prefix := range dstPrefixes {
-		dstPrefixEntries, dpe = getOrCreateDestPrefixEntry(dstPrefixEntries, prefix)
-		if err := addFilterChainsForServerNames(dpe, fc); err != nil {
+		dstPrefixEntries, entry = getOrCreateDestPrefixEntry(dstPrefixEntries, prefix)
+		if err := addFilterChainsForServerNames(entry, fc); err != nil {
 			return nil, err
 		}
 	}
 	return dstPrefixEntries, nil
 }
 
+// getOrCreateDestPrefixEntry looks for an existing dstPrefixEntry in the
+// provided slice with the same destination prefix as the provided prefix. If
+// such an entry is found, it is returned. Otherwise, a new entry is created and
+// appended to the slice, and the new entry is returned.
 func getOrCreateDestPrefixEntry(dstPrefixEntries []*dstPrefixEntry, prefix *net.IPNet) ([]*dstPrefixEntry, *dstPrefixEntry) {
 	for _, e := range dstPrefixEntries {
 		if ipNetEqual(e.entry.Prefix, prefix) {
 			return dstPrefixEntries, e
 		}
 	}
-	dpe := &dstPrefixEntry{entry: DestinationPrefixEntry{Prefix: prefix}}
-	dstPrefixEntries = append(dstPrefixEntries, dpe)
-	return dstPrefixEntries, dpe
+	entry := &dstPrefixEntry{entry: DestinationPrefixEntry{Prefix: prefix}}
+	dstPrefixEntries = append(dstPrefixEntries, entry)
+	return dstPrefixEntries, entry
 }
 
 func addFilterChainsForServerNames(dstEntry *dstPrefixEntry, fc *v3listenerpb.FilterChain) error {
@@ -462,7 +463,7 @@ func addFilterChainsForTransportProtocols(dstEntry *dstPrefixEntry, fc *v3listen
 		// If we have already seen filter chains with transport protocol set to
 		// "raw_buffer", we can drop filter chains with transport protocol set
 		// to empty string, since the former takes precedence.
-		logger.Warningf("Dropping filter chain %q since it contains unsupported value for transport_protocol match field", fc.GetName())
+		logger.Warningf("Dropping filter chain %q since it contains empty string for transport_protocol match field, but one with raw_buffer already exists", fc.GetName())
 		return nil
 	case tp != "" && !dstEntry.rawBufferSeen:
 		// This is the first "raw_buffer" that we are seeing. Set the bit and
@@ -482,15 +483,27 @@ func addFilterChainsForApplicationProtocols(dstEntry *dstPrefixEntry, fc *v3list
 	return addFilterChainsForSourceType(&dstEntry.entry, fc)
 }
 
+// sourceType specifies the connection source IP match type.
+type sourceType int
+
+const (
+	// sourceTypeAny matches connection attempts from any source.
+	sourceTypeAny sourceType = iota
+	// sourceTypeSameOrLoopback matches connection attempts from the same host.
+	sourceTypeSameOrLoopback
+	// sourceTypeExternal matches connection attempts from a different host.
+	sourceTypeExternal
+)
+
 func addFilterChainsForSourceType(entry *DestinationPrefixEntry, fc *v3listenerpb.FilterChain) error {
-	var srcType int
+	var srcType sourceType
 	switch st := fc.GetFilterChainMatch().GetSourceType(); st {
 	case v3listenerpb.FilterChainMatch_ANY:
-		srcType = 0
+		srcType = sourceTypeAny
 	case v3listenerpb.FilterChainMatch_SAME_IP_OR_LOOPBACK:
-		srcType = 1
+		srcType = sourceTypeSameOrLoopback
 	case v3listenerpb.FilterChainMatch_EXTERNAL:
-		srcType = 2
+		srcType = sourceTypeExternal
 	default:
 		return fmt.Errorf("unsupported source type: %v", st)
 	}
@@ -521,8 +534,14 @@ func addFilterChainsForSourcePrefixes(srcPrefixes *SourcePrefixes, fc *v3listene
 	return nil
 }
 
+// getOrCreateSourcePrefixEntry looks for an existing SourcePrefixEntry in the
+// provided SourcePrefixes with the same source prefix as the provided prefix. If
+// such an entry is found, the provided filter chain is added to the entry and
+// nil is returned. Otherwise, a new entry is created and appended to the
+// SourcePrefixes, the provided filter chain is added to the new entry, and nil
+// is returned. If there are multiple filter chains with overlapping matching
+// rules, an error is returned.
 func getOrCreateSourcePrefixEntry(srcPrefixes *SourcePrefixes, prefix *net.IPNet, fc *v3listenerpb.FilterChain) error {
-	// Find existing entry
 	var entry SourcePrefixEntry
 	for _, e := range srcPrefixes.Entries {
 		if ipNetEqual(e.Prefix, prefix) {
@@ -537,10 +556,10 @@ func getOrCreateSourcePrefixEntry(srcPrefixes *SourcePrefixes, prefix *net.IPNet
 		}
 		srcPrefixes.Entries = append(srcPrefixes.Entries, entry)
 	}
-	return addFilterChainsForSourcePorts(entry, fc)
+	return addFilterChainsForSourcePorts(&entry, fc)
 }
 
-func addFilterChainsForSourcePorts(entry SourcePrefixEntry, fc *v3listenerpb.FilterChain) error {
+func addFilterChainsForSourcePorts(entry *SourcePrefixEntry, fc *v3listenerpb.FilterChain) error {
 	ports := fc.GetFilterChainMatch().GetSourcePorts()
 	srcPorts := make([]int, 0, len(ports))
 	for _, port := range ports {
@@ -578,5 +597,5 @@ func ipNetEqual(a, b *net.IPNet) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return a.String() == b.String()
+	return a.IP.Equal(b.IP) && bytes.Equal(a.Mask, b.Mask)
 }
