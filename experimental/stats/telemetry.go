@@ -26,13 +26,16 @@ import (
 
 // LabelCallback is a function that is executed when telemetry
 // label keys are updated
-type LabelCallback func(string, string)
+type LabelCallback func(map[string]string)
 
 type telemetryLabelCallbackKey struct{}
 
 // WithTelemetryLabelCallback registers a callback function that is executed whenever
 // telemetry labels will be updated. This does _not_ require opentelemetry instrumentation
 // to be configured on the client or server.
+//
+// WARNING: The callback is executed on the RPC path so users should be mindful of the
+// potential performance impact when this is eventually executed.
 func WithTelemetryLabelCallback(ctx context.Context, callback LabelCallback) context.Context {
 	if callback == nil {
 		return ctx
@@ -44,7 +47,7 @@ func WithTelemetryLabelCallback(ctx context.Context, callback LabelCallback) con
 // key and value. If no callback is registered it does nothing.
 //
 // If the registered callback panics it will be swallowed and logged
-func ExecuteTelemetryLabelCallback(ctx context.Context, key, value string) {
+func ExecuteTelemetryLabelCallback(ctx context.Context, labels map[string]string) {
 	if ctx == nil {
 		return
 	}
@@ -54,6 +57,6 @@ func ExecuteTelemetryLabelCallback(ctx context.Context, key, value string) {
 				grpclog.Component("experimental-stats").Warningf("LabelCallback panicked: %v", r)
 			}
 		}()
-		callback(key, value)
+		callback(labels)
 	}
 }

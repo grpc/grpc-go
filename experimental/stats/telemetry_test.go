@@ -30,11 +30,11 @@ import (
 // the effects of executing the callback on a local label state tracker. Each test
 // case constructs a new context with the provided callback registered.
 func (s) TestTelemetryLabels(t *testing.T) {
-	commonLabelValues := map[string]string{"grpc.lb.backend_service": "grpc.lb.backend_service_val", "grpc.lb.locality_val": "grpc.lb.locality_val"}
+	commonLabelValues := map[string]string{"grpc.lb.backend_service": "grpc.lb.backend_service_val", "grpc.lb.locality": "grpc.lb.locality_val"}
 	tracker := map[string]string{}
 
 	tests := map[string]struct {
-		callback         func(string, string)
+		callback         func(map[string]string)
 		additionalLabels map[string]string
 		wantLabels       map[string]string
 	}{
@@ -43,25 +43,29 @@ func (s) TestTelemetryLabels(t *testing.T) {
 			wantLabels: map[string]string{},
 		},
 		"NoOPCallback": {
-			callback:   func(string, string) {},
+			callback:   func(map[string]string) {},
 			wantLabels: map[string]string{},
 		},
 		"PanicCallback": {
-			callback:   func(string, string) { panic("intentional panic") },
+			callback:   func(map[string]string) { panic("intentional panic") },
 			wantLabels: map[string]string{},
 		},
 		"MutatingCallback": {
-			callback: func(key, value string) {
-				tracker[key] = value
+			callback: func(u map[string]string) {
+				for key, value := range u {
+					tracker[key] = value
+				}
 			},
-			wantLabels: map[string]string{"grpc.lb.backend_service": "grpc.lb.backend_service_val", "grpc.lb.locality_val": "grpc.lb.locality_val"},
+			wantLabels: map[string]string{"grpc.lb.backend_service": "grpc.lb.backend_service_val", "grpc.lb.locality": "grpc.lb.locality_val"},
 		},
 		"OverrideLabelsWithCallback": {
-			callback: func(key, value string) {
-				tracker[key] = value
+			callback: func(u map[string]string) {
+				for key, value := range u {
+					tracker[key] = value
+				}
 			},
 			additionalLabels: map[string]string{"grpc.lb.backend_service": "grpc.lb.backend_service_other_val"},
-			wantLabels:       map[string]string{"grpc.lb.backend_service": "grpc.lb.backend_service_other_val", "grpc.lb.locality_val": "grpc.lb.locality_val"},
+			wantLabels:       map[string]string{"grpc.lb.backend_service": "grpc.lb.backend_service_other_val", "grpc.lb.locality": "grpc.lb.locality_val"},
 		},
 	}
 	for name, test := range tests {
@@ -73,12 +77,9 @@ func (s) TestTelemetryLabels(t *testing.T) {
 				cancel()
 			})
 			ctx = WithTelemetryLabelCallback(ctx, test.callback)
-			for k, v := range commonLabelValues {
-				ExecuteTelemetryLabelCallback(ctx, k, v)
-			}
-			for k, v := range test.additionalLabels {
-				ExecuteTelemetryLabelCallback(ctx, k, v)
-			}
+			ExecuteTelemetryLabelCallback(ctx, commonLabelValues)
+			ExecuteTelemetryLabelCallback(ctx, test.additionalLabels)
+
 			if diff := cmp.Diff(tracker, test.wantLabels); diff != "" {
 				t.Fatalf("tracked labels did not match expcted values (-got, +want): %v", diff)
 			}

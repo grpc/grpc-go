@@ -19,7 +19,12 @@
 // Package stats provides internal stats related functionality.
 package stats
 
-import "context"
+import (
+	"context"
+	"maps"
+
+	estats "google.golang.org/grpc/experimental/stats"
+)
 
 // Labels are the labels for metrics.
 type Labels struct {
@@ -39,4 +44,20 @@ func GetLabels(ctx context.Context) *Labels {
 func SetLabels(ctx context.Context, labels *Labels) context.Context {
 	// could also append
 	return context.WithValue(ctx, labelsKey{}, labels)
+}
+
+// UpdateLabels copies the key-values from update into the existing context labels if they
+// have been set. When a key is already present in the context labels, it is
+// overwritten.
+func UpdateLabels(ctx context.Context, update map[string]string) {
+	if ctx == nil {
+		return
+	}
+
+	labels := GetLabels(ctx)
+	if labels != nil {
+		maps.Copy(labels.TelemetryLabels, update)
+	}
+
+	estats.ExecuteTelemetryLabelCallback(ctx, update)
 }
