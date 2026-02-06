@@ -187,8 +187,7 @@ func (es *endpointSharding) UpdateClientConnState(state balancer.ClientConnState
 		}
 	}
 	// Delete old children that are no longer present.
-	for e := range children.All() {
-		child, _ := children.Get(e)
+	for e, child := range children.All() {
 		if _, ok := newChildren.Get(e); !ok {
 			child.closeLocked()
 		}
