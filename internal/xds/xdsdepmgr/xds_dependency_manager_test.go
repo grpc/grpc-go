@@ -1583,8 +1583,10 @@ func (s) TestClusterSubscription_Lifecycle(t *testing.T) {
 	// "clusterName" (from subscription).
 	wantXDSConfig := &xdsresource.XDSConfig{
 		Listener: &xdsresource.ListenerUpdate{
-			RouteConfigName: resources.Routes[0].Name,
-			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+			APIListener: &xdsresource.HTTPConnectionManagerConfig{
+				RouteConfigName: resources.Routes[0].Name,
+				HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+			},
 		},
 		RouteConfig: &xdsresource.RouteConfigUpdate{
 			VirtualHosts: []*xdsresource.VirtualHost{{
@@ -1770,8 +1772,10 @@ func (s) TestUpdateWithUnresolvedDynamicSubscription(t *testing.T) {
 
 	wantXdsConfig = &xdsresource.XDSConfig{
 		Listener: &xdsresource.ListenerUpdate{
-			RouteConfigName: resources.Routes[0].Name,
-			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+			APIListener: &xdsresource.HTTPConnectionManagerConfig{
+				RouteConfigName: resources.Routes[0].Name,
+				HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+			},
 		},
 		RouteConfig: &xdsresource.RouteConfigUpdate{
 			VirtualHosts: []*xdsresource.VirtualHost{{
