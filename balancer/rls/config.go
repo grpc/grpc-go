@@ -195,12 +195,9 @@ func parseRLSProto(rlsProto *rlspb.RouteLookupConfig) (*lbConfig, error) {
 	if lookupService == "" {
 		return nil, fmt.Errorf("rls: empty lookup_service in route lookup config %+v", rlsProto)
 	}
-	parsedTarget, err := grpcutil.ParseTarget(lookupService, resolver.GetDefaultScheme())
+	_, err = grpcutil.ParseTarget(lookupService, resolver.GetDefaultScheme())
 	if err != nil {
 		return nil, fmt.Errorf("rls: invalid target URI in lookup_service %s: %v", lookupService, err)
-	}
-	if resolver.Get(parsedTarget.Scheme) == nil {
-		return nil, fmt.Errorf("rls: unregistered scheme in lookup_service %s", lookupService)
 	}
 
 	lookupServiceTimeout, err := convertDuration(rlsProto.GetLookupServiceTimeout())

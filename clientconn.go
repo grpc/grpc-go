@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"net/url"
 	"slices"
 	"strings"
 	"sync"
@@ -39,7 +40,6 @@ import (
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpcsync"
-	"google.golang.org/grpc/internal/grpcutil"
 	"google.golang.org/grpc/internal/idle"
 	iresolver "google.golang.org/grpc/internal/resolver"
 	istats "google.golang.org/grpc/internal/stats"
@@ -1799,7 +1799,7 @@ func (cc *ClientConn) initParsedTargetAndResolverBuilder() error {
 	logger.Infof("original dial target is: %q", cc.target)
 
 	var rb resolver.Builder
-	u, err := grpcutil.ParseTarget(cc.target, "")
+	u, err := url.Parse(cc.target)
 	if err == nil {
 		rb = cc.getResolver(u.Scheme)
 		if rb != nil {
@@ -1820,7 +1820,7 @@ func (cc *ClientConn) initParsedTargetAndResolverBuilder() error {
 	}
 
 	canonicalTarget := defScheme + ":///" + cc.target
-	u, err = grpcutil.ParseTarget(canonicalTarget, "")
+	u, err = url.Parse(canonicalTarget)
 	if err != nil {
 		return err
 	}

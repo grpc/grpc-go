@@ -25,10 +25,11 @@ import (
 	"google.golang.org/grpc/resolver"
 )
 
-// ParseTarget parses a gRPC target string into a URL. If parsing fails,
-// it prepends defaultScheme and retries. If the scheme is empty after
-// parsing, it is set to defaultScheme. If defaultScheme is empty, no
-// fallback is attempted.
+// ParseTarget parses a gRPC target string into a URL and verifies that a
+// resolver is registered for the parsed scheme. If parsing fails and
+// defaultScheme is provided, it prepends defaultScheme and retries. If
+// the scheme is empty after parsing, it is set to defaultScheme. Returns
+// an error if no resolver is registered for the resulting scheme.
 func ParseTarget(target, defaultScheme string) (*url.URL, error) {
 	u, err := url.Parse(target)
 	if err != nil {
@@ -46,18 +47,8 @@ func ParseTarget(target, defaultScheme string) (*url.URL, error) {
 		}
 		u.Scheme = defaultScheme
 	}
-	return u, nil
-}
-
-// ValidateTargetURI validates that target is a valid RFC 3986 URI
-// and that a resolver is registered for its scheme.
-func ValidateTargetURI(target string) error {
-	u, err := ParseTarget(target, "")
-	if err != nil {
-		return err
-	}
 	if resolver.Get(u.Scheme) == nil {
-		return fmt.Errorf("no resolver registered for scheme %q", u.Scheme)
+		return nil, fmt.Errorf("no resolver registered for scheme %q in target %q", u.Scheme, target)
 	}
-	return nil
+	return u, nil
 }

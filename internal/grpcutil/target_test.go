@@ -50,10 +50,17 @@ func TestParseTarget(t *testing.T) {
 			wantErr:       false,
 		},
 		{
+			name:          "valid dns scheme with default",
+			target:        "dns:///example.com:443",
+			defaultScheme: "dns",
+			wantScheme:    "dns",
+			wantErr:       false,
+		},
+		{
 			name:          "missing scheme with default",
 			target:        "/path/to/socket",
-			defaultScheme: "unix",
-			wantScheme:    "unix",
+			defaultScheme: "passthrough",
+			wantScheme:    "passthrough",
 			wantErr:       false,
 		},
 		{
@@ -64,11 +71,32 @@ func TestParseTarget(t *testing.T) {
 			errContain:    "has no scheme",
 		},
 		{
-			name:          "host:port parsed as scheme",
+			name:          "host:port with no default errors",
+			target:        "localhost:8080",
+			defaultScheme: "",
+			wantErr:       true,
+			errContain:    "no resolver registered for scheme",
+		},
+		{
+			name:          "host:port with default errors",
 			target:        "localhost:8080",
 			defaultScheme: "dns",
-			wantScheme:    "localhost",
-			wantErr:       false,
+			wantErr:       true,
+			errContain:    "no resolver registered for scheme",
+		},
+		{
+			name:          "unregistered scheme without default",
+			target:        "unknown:///example.com:443",
+			defaultScheme: "",
+			wantErr:       true,
+			errContain:    "no resolver registered for scheme",
+		},
+		{
+			name:          "unregistered scheme with default",
+			target:        "unknown:///example.com:443",
+			defaultScheme: "dns",
+			wantErr:       true,
+			errContain:    "no resolver registered for scheme",
 		},
 		{
 			name:          "invalid URI without default",
@@ -101,65 +129,6 @@ func TestParseTarget(t *testing.T) {
 			}
 			if u.Scheme != tt.wantScheme {
 				t.Errorf("ParseTarget(%q, %q).Scheme = %q, want %q", tt.target, tt.defaultScheme, u.Scheme, tt.wantScheme)
-			}
-		})
-	}
-}
-
-func TestValidateTargetURI(t *testing.T) {
-	tests := []struct {
-		name       string
-		target     string
-		wantErr    bool
-		errContain string
-	}{
-		{
-			name:    "valid dns scheme",
-			target:  "dns:///example.com:443",
-			wantErr: false,
-		},
-		{
-			name:    "valid passthrough scheme",
-			target:  "passthrough:///localhost:8080",
-			wantErr: false,
-		},
-		{
-			name:       "missing scheme",
-			target:     "/path/to/socket",
-			wantErr:    true,
-			errContain: "has no scheme",
-		},
-		{
-			name:       "host:port parsed as scheme",
-			target:     "example.com:443",
-			wantErr:    true,
-			errContain: "no resolver registered for scheme",
-		},
-		{
-			name:       "unregistered scheme",
-			target:     "unknown:///example.com:443",
-			wantErr:    true,
-			errContain: "no resolver registered for scheme",
-		},
-		{
-			name:       "invalid URI with control character",
-			target:     "dns:///example\x00.com",
-			wantErr:    true,
-			errContain: "invalid target URI",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateTargetURI(tt.target)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("ValidateTargetURI(%q) error = %v, wantErr %v", tt.target, err, tt.wantErr)
-				return
-			}
-			if tt.wantErr && tt.errContain != "" {
-				if !strings.Contains(err.Error(), tt.errContain) {
-					t.Errorf("ValidateTargetURI(%q) error = %v, want error containing %q", tt.target, err, tt.errContain)
-				}
 			}
 		})
 	}
