@@ -59,8 +59,15 @@ func Hostname(addr resolver.Address) string {
 	return hostname
 }
 
-func unmarshalEndpointsResource(r *anypb.Any) (string, EndpointsUpdate, error) {
-	r, err := UnwrapResource(r)
+func unmarshalEndpointsResource(r *anypb.Any) (name string, update EndpointsUpdate, err error) {
+	defer func() {
+		if envconfig.XDSRecoverPanic {
+			if r := recover(); r != nil {
+				err = fmt.Errorf("panic during EDS resource unmarshaling: %v", r)
+			}
+		}
+	}()
+	r, err = UnwrapResource(r)
 	if err != nil {
 		return "", EndpointsUpdate{}, fmt.Errorf("failed to unwrap resource: %v", err)
 	}
@@ -178,7 +185,9 @@ func hashKeyFromMetadata(metadata map[string]any) string {
 	return ""
 }
 
-func parseEDSRespProto(m *v3endpointpb.ClusterLoadAssignment) (EndpointsUpdate, error) {
+var parseEDSRespProto = parseEDSRespProtoImpl
+
+func parseEDSRespProtoImpl(m *v3endpointpb.ClusterLoadAssignment) (EndpointsUpdate, error) {
 	ret := EndpointsUpdate{}
 	for _, dropPolicy := range m.GetPolicy().GetDropOverloads() {
 		ret.Drops = append(ret.Drops, parseDropPolicy(dropPolicy))

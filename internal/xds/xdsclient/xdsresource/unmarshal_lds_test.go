@@ -25,9 +25,11 @@ import (
 
 	v2xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	"github.com/google/go-cmp/cmp"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	xdsclient "google.golang.org/grpc/internal/xds/clients/xdsclient"
 	"google.golang.org/grpc/internal/xds/httpfilter"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource/version"
 	"google.golang.org/protobuf/proto"
@@ -1719,6 +1721,57 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 			}
 			if diff := cmp.Diff(update, test.wantUpdate, cmpOpts); diff != "" {
 				t.Errorf("unmarshalListenerResource(%s), got unexpected update, diff (-got +want): %v", pretty.ToJSON(test.resource), diff)
+			}
+		})
+	}
+}
+
+// TestUnmarshalListenerResource_PanicRecovery tests the panic recovery
+// mechanism in unmarshalListenerResource. It verifies that when
+// XDSRecoverPanic env variable is enabled, panics during unmarshaling
+// are caught and returned as errors. When the env variable is disabled,
+// it ensures the panic propagates.
+func (s) TestUnmarshalListenerResource_PanicRecovery(t *testing.T) {
+	origParse := processListener
+	defer func() { processListener = origParse }()
+	processListener = func(_ *v3listenerpb.Listener, _ *xdsclient.DecodeOptions) (*ListenerUpdate, error) {
+		panic("simulate panic")
+	}
+
+	tests := []struct {
+		name          string
+		enableRecover bool
+		wantPanic     bool
+		wantErr       string
+	}{
+		{
+			name:          "Enable_XDSRecoverPanic",
+			enableRecover: true,
+			wantPanic:     false,
+			wantErr:       "panic during LDS resource unmarshaling: simulate panic",
+		},
+		{
+			name:          "Disable_XDSRecoverPanic",
+			enableRecover: false,
+			wantPanic:     true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			testutils.SetEnvConfig(t, &envconfig.XDSRecoverPanic, tt.enableRecover)
+			marshaled := testutils.MarshalAny(t, &v3listenerpb.Listener{Name: "test-listener"})
+
+			if tt.wantPanic {
+				defer func() {
+					if r := recover(); r == nil {
+						t.Errorf("The code did not panic but was expected to")
+					}
+				}()
+				unmarshalListenerResource(marshaled, nil)
+			} else {
+				if _, _, err := unmarshalListenerResource(marshaled, nil); err == nil || err.Error() != tt.wantErr {
+					t.Errorf("unmarshalListenerResource() failed with err : %v, want %q", err, tt.wantErr)
+				}
 			}
 		})
 	}

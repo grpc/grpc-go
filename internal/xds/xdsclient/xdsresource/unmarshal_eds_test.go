@@ -1404,6 +1404,57 @@ func (s) TestEDSParseRespProto_HTTP_Connect_CustomMetadata_ConverterFailure(t *t
 	}
 }
 
+// TestUnmarshalEndpointsResource_PanicRecovery tests the panic recovery
+// mechanism in unmarshalEndpointsResource. It verifies that when
+// XDSRecoverPanic env variable is enabled, panics during unmarshaling
+// are caught and returned as errors. When the env variable is disabled,
+// it ensures the panic propagates.
+func (s) TestUnmarshalEndpointsResource_PanicRecovery(t *testing.T) {
+	origParse := parseEDSRespProto
+	defer func() { parseEDSRespProto = origParse }()
+	parseEDSRespProto = func(_ *v3endpointpb.ClusterLoadAssignment) (EndpointsUpdate, error) {
+		panic("simulate panic")
+	}
+
+	tests := []struct {
+		name          string
+		enableRecover bool
+		wantPanic     bool
+		wantErr       string
+	}{
+		{
+			name:          "Enable_XDSRecoverPanic",
+			enableRecover: true,
+			wantPanic:     false,
+			wantErr:       "panic during EDS resource unmarshaling: simulate panic",
+		},
+		{
+			name:          "Disable_XDSRecoverPanic",
+			enableRecover: false,
+			wantPanic:     true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			testutils.SetEnvConfig(t, &envconfig.XDSRecoverPanic, tt.enableRecover)
+			marshaled := testutils.MarshalAny(t, &v3endpointpb.ClusterLoadAssignment{ClusterName: "test-endpoint"})
+
+			if tt.wantPanic {
+				defer func() {
+					if r := recover(); r == nil {
+						t.Errorf("The code did not panic but was expected to")
+					}
+				}()
+				unmarshalEndpointsResource(marshaled)
+			} else {
+				if _, _, err := unmarshalEndpointsResource(marshaled); err == nil || err.Error() != tt.wantErr {
+					t.Errorf("unmarshalEndpointsResource() failed with err : %v, want %q", err, tt.wantErr)
+				}
+			}
+		})
+	}
+}
+
 // claBuilder builds a ClusterLoadAssignment, aka EDS
 // response.
 type claBuilder struct {
