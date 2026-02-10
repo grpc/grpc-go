@@ -51,8 +51,15 @@ var ValidateClusterAndConstructClusterUpdateForTesting = validateClusterAndConst
 // to this value by the management server.
 const transportSocketName = "envoy.transport_sockets.tls"
 
-func unmarshalClusterResource(r *anypb.Any, serverCfg *bootstrap.ServerConfig) (string, ClusterUpdate, error) {
-	r, err := UnwrapResource(r)
+func unmarshalClusterResource(r *anypb.Any, serverCfg *bootstrap.ServerConfig) (name string, update ClusterUpdate, err error) {
+	defer func() {
+		if envconfig.XDSRecoverPanic {
+			if r := recover(); r != nil {
+				err = fmt.Errorf("panic during CDS resource unmarshaling: %v", r)
+			}
+		}
+	}()
+	r, err = UnwrapResource(r)
 	if err != nil {
 		return "", ClusterUpdate{}, fmt.Errorf("failed to unwrap resource: %v", err)
 	}
@@ -82,7 +89,9 @@ const (
 	defaultLeastRequestChoiceCount = 2
 )
 
-func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster, serverCfg *bootstrap.ServerConfig) (ClusterUpdate, error) {
+var validateClusterAndConstructClusterUpdate = validateClusterAndConstructClusterUpdateImpl
+
+func validateClusterAndConstructClusterUpdateImpl(cluster *v3clusterpb.Cluster, serverCfg *bootstrap.ServerConfig) (ClusterUpdate, error) {
 	telemetryLabels := make(map[string]string)
 	if fmd := cluster.GetMetadata().GetFilterMetadata(); fmd != nil {
 		if val, ok := fmd["com.google.csm.telemetry_labels"]; ok {
