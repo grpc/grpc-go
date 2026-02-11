@@ -45,19 +45,34 @@ func Test(t *testing.T) {
 }
 
 func (s) TestPruneActiveClusters(t *testing.T) {
-	r := &xdsResolver{activeClusters: map[string]*clusterInfo{
-		"zero":        {refCount: 0},
-		"one":         {refCount: 1},
-		"two":         {refCount: 2},
-		"anotherzero": {refCount: 0},
-	}}
-	want := map[string]*clusterInfo{
+	r := &xdsResolver{
+		activeClusters: map[string]*clusterInfo{
+			"zero":        {refCount: 0},
+			"one":         {refCount: 1},
+			"two":         {refCount: 2},
+			"anotherzero": {refCount: 0},
+		},
+		activePlugins: map[string]*clusterInfo{
+			"zero":        {refCount: 0},
+			"one":         {refCount: 1},
+			"two":         {refCount: 2},
+			"anotherzero": {refCount: 0},
+		},
+	}
+	wantActiveClusters := map[string]*clusterInfo{
+		"one": {refCount: 1},
+		"two": {refCount: 2},
+	}
+	wantActivePlugins := map[string]*clusterInfo{
 		"one": {refCount: 1},
 		"two": {refCount: 2},
 	}
 	r.pruneActiveClusters()
-	if d := cmp.Diff(r.activeClusters, want, cmp.AllowUnexported(clusterInfo{})); d != "" {
-		t.Fatalf("r.activeClusters = %v; want %v\nDiffs: %v", r.activeClusters, want, d)
+	if d := cmp.Diff(r.activeClusters, wantActiveClusters, cmp.AllowUnexported(clusterInfo{})); d != "" {
+		t.Fatalf("r.activeClusters = %v; want %v\nDiffs: %v", r.activeClusters, wantActiveClusters, d)
+	}
+	if d := cmp.Diff(r.activePlugins, wantActivePlugins, cmp.AllowUnexported(clusterInfo{})); d != "" {
+		t.Fatalf("r.activeClusters = %v; want %v\nDiffs: %v", r.activeClusters, wantActivePlugins, d)
 	}
 }
 

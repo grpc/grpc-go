@@ -648,8 +648,7 @@ func (s) TestResolverRequestHash(t *testing.T) {
 
 // Tests the case where resources are removed from the management server,
 // causing it to send an empty update to the xDS client, which returns a
-// resource-not-found error to the xDS resolver. The test verifies that an
-// ongoing RPC is handled to completion when this happens.
+// resource-not-found error to the xDS resolver.
 func (s) TestResolverRemovedWithRPCs(t *testing.T) {
 	// Spin up an xDS management server for the test.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -677,28 +676,17 @@ func (s) TestResolverRemovedWithRPCs(t *testing.T) {
 		t.Fatalf("cs.SelectConfig(): %v", err)
 	}
 
-	// Delete the resources on the management server. This should result in a
-	// resource-not-found error from the xDS client.
-	if err := mgmtServer.Update(ctx, e2e.UpdateOptions{NodeID: nodeID}); err != nil {
+	// Delete the listener resource on the management server. This should result
+	// in a resource-not-found error from the xDS client.
+	oldListeners := resources.Listeners
+	resources.Listeners = nil
+	resources.SkipValidation = true
+	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
 
-	// The RPC started earlier is still in progress. So, the xDS resolver will
-	// not produce an empty service config at this point. Instead it will retain
-	// the cluster to which the RPC is ongoing in the service config, but will
-	// return an erroring config selector which will fail new RPCs.
-	cs = verifyUpdateFromResolver(ctx, t, stateCh, wantServiceConfig(resources.Clusters[0].Name))
-	_, err = cs.SelectConfig(iresolver.RPCInfo{Context: ctx, Method: "/service/method"})
-	if err := verifyResolverError(err, codes.Unavailable, "has been removed", nodeID); err != nil {
-		t.Fatal(err)
-	}
-
-	// "Finish the RPC"; this could cause a panic if the resolver doesn't
-	// handle it correctly.
-	res.OnCommitted()
-
-	// Now that the RPC is committed, the xDS resolver is expected to send an
-	// update with an empty service config.
+	// Even though the RPC started earlier is still in progress, the xDS resolver will
+	// produce an empty service config.
 	var state resolver.State
 	select {
 	case <-ctx.Done():
@@ -713,7 +701,12 @@ func (s) TestResolverRemovedWithRPCs(t *testing.T) {
 		}
 	}
 
+	// "Finish the RPC"; this could cause a panic if the resolver doesn't
+	// handle it correctly.
+	res.OnCommitted()
+
 	// Add the resources back.
+	resources.Listeners = oldListeners
 	mgmtServer.Update(ctx, resources)
 
 	// The resolver should send a service config with the cluster name.
@@ -762,23 +755,15 @@ func (s) TestResolverRemovedResource(t *testing.T) {
 	// handle it correctly.
 	res.OnCommitted()
 
-	// Delete the resources on the management server, resulting in a
+	// Delete the listener resource on the management server, resulting in a
 	// resource-not-found error from the xDS client.
-	if err := mgmtServer.Update(ctx, e2e.UpdateOptions{NodeID: nodeID}); err != nil {
+	resources.Listeners = nil
+	resources.SkipValidation = true
+	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
 
-	// The channel should receive the existing service config with the original
-	// cluster but with an erroring config selector.
-	cs = verifyUpdateFromResolver(ctx, t, stateCh, wantServiceConfig(resources.Clusters[0].Name))
-
-	// "Make another RPC" by invoking the config selector.
-	_, err = cs.SelectConfig(iresolver.RPCInfo{Context: ctx, Method: "/service/method"})
-	if err := verifyResolverError(err, codes.Unavailable, "has been removed", nodeID); err != nil {
-		t.Fatal(err)
-	}
-
-	// In the meantime, an empty ServiceConfig update should have been sent.
+	// An empty ServiceConfig update should have been sent.
 	var state resolver.State
 	select {
 	case <-ctx.Done():
@@ -994,8 +979,10 @@ func (s) TestResolverDelayedOnCommitted(t *testing.T) {
 	newClusterName := "new-" + defaultTestClusterName
 	newEndpointName := "new-" + defaultTestEndpointName
 	resources.Routes = []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(resources.Routes[0].Name, defaultTestServiceName, newClusterName)}
-	resources.Clusters = []*v3clusterpb.Cluster{e2e.DefaultCluster(newClusterName, newEndpointName, e2e.SecurityLevelNone)}
-	resources.Endpoints = []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(newEndpointName, defaultTestHostname, defaultTestPort)}
+	// Appending the new cluster and endpoint resources to avoid getting
+	// resource removed errors.
+	resources.Clusters = append(resources.Clusters, e2e.DefaultCluster(newClusterName, newEndpointName, e2e.SecurityLevelNone))
+	resources.Endpoints = append(resources.Endpoints, e2e.DefaultEndpoint(newEndpointName, defaultTestHostname, defaultTestPort))
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
@@ -1373,7 +1360,8 @@ func (s) TestResolver_AutoHostRewrite(t *testing.T) {
 						}},
 					}},
 				}},
-				SkipValidation: true,
+				Clusters:  []*v3clusterpb.Cluster{e2e.DefaultCluster(defaultTestClusterName, defaultTestEndpointName, e2e.SecurityLevelNone)},
+				Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(defaultTestEndpointName, "localhost", []uint32{8080})},
 			}
 
 			if err := mgmtServer.Update(ctx, resources); err != nil {
@@ -1423,8 +1411,6 @@ func (s) TestResolver_AutoHostRewrite(t *testing.T) {
 // a cluster watch open when there are active RPCs using that cluster, even if
 // the cluster is no longer referenced by the current route configuration.
 func (s) TestResolverKeepWatchOpen_ActiveRPCs(t *testing.T) {
-	t.Skip("Will be enabled when all the watchers have shifted to dependency manager")
-
 	clusterA := "cluster-A"
 	clusterB := "cluster-B"
 

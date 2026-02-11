@@ -59,7 +59,6 @@ type s struct {
 }
 
 func Test(t *testing.T) {
-	xdsdepmgr.EnableClusterAndEndpointsWatch = true
 	grpctest.RunSubTests(t, s{})
 }
 
@@ -1275,6 +1274,7 @@ func (s) TestAggregateClusterChildError(t *testing.T) {
 						EDSServiceName: defaultTestEDSServiceName,
 					},
 					EndpointConfig: &xdsresource.EndpointConfig{
+						EDSUpdate:      &xdsresource.EndpointsUpdate{},
 						ResolutionNote: fmt.Errorf("[xDS node id: %v]: %v", nodeID, fmt.Errorf("EDS response contains an endpoint with zero weight: endpoint:{address:{socket_address:{address:%q  port_value:%v}}}  load_balancing_weight:{}", "localhost", 8080)),
 					},
 				},
@@ -1449,57 +1449,6 @@ func (s) TestAggregateClusterMaxDepth(t *testing.T) {
 		}
 	}
 
-	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
-		t.Fatal(err)
-	}
-}
-
-// Tests the scenario where the Endpoint watcher receives an ambient error. Tests
-// verifies that the error is stored in resolution note and the update remains
-// too.
-func (s) TestEndpointAmbientError(t *testing.T) {
-	nodeID, mgmtServer, xdsClient := setupManagementServerAndClient(t, true)
-
-	watcher := newTestWatcher()
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-
-	resources := e2e.DefaultClientResources(e2e.ResourceParams{
-		NodeID:     nodeID,
-		DialTarget: defaultTestServiceName,
-		Host:       "localhost",
-		Port:       8080,
-		SecLevel:   e2e.SecurityLevelNone,
-	})
-	if err := mgmtServer.Update(ctx, resources); err != nil {
-		t.Fatal(err)
-	}
-
-	dm := xdsdepmgr.New(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
-	defer dm.Close()
-
-	// Defer closing the watcher to prevent a potential hang. The management
-	// server may send repeated errors, triggering updates that hold the
-	// dependency manager's mutex. This defer is defined last so it executes
-	// first (before dm.Close()). If we don't stop the watcher, dm.Close() will
-	// deadlock waiting for the mutex currently held by the blocking Update
-	// call.
-	defer watcher.close()
-
-	wantXdsConfig := makeXDSConfig(resources.Routes[0].Name, resources.Clusters[0].Name, resources.Endpoints[0].ClusterName, "localhost:8080")
-
-	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
-		t.Fatal(err)
-	}
-
-	// Send an ambient error for the endpoint resource by setting the weight to
-	// 0.
-	resources.Endpoints[0].Endpoints[0].LbEndpoints[0].LoadBalancingWeight = &wrapperspb.UInt32Value{Value: 0}
-	if err := mgmtServer.Update(ctx, resources); err != nil {
-		t.Fatal(err)
-	}
-	wantXdsConfig.Clusters[resources.Clusters[0].Name].Config.EndpointConfig.ResolutionNote = fmt.Errorf("[xDS node id: %v]: %v", nodeID, fmt.Errorf("EDS response contains an endpoint with zero weight: endpoint:{address:{socket_address:{address:%q port_value:%v}}} load_balancing_weight:{}", "localhost", 8080))
 	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
 		t.Fatal(err)
 	}

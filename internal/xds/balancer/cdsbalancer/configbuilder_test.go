@@ -16,7 +16,7 @@
  *
  */
 
-package clusterresolver
+package cdsbalancer
 
 import (
 	"bytes"
@@ -50,6 +50,8 @@ import (
 )
 
 const (
+	testClusterName     = "test-cluster-name"
+	testClusterName2    = "google_cfe_some-name"
 	testMaxRequests     = 314
 	testEDSServiceName  = "service-name-from-parent"
 	testDropCategory    = "test-drops"
@@ -154,12 +156,12 @@ func (s) TestBuildPriorityConfigJSON(t *testing.T) {
 
 	gotConfig, _, err := buildPriorityConfigJSON([]priorityConfig{
 		{
-			mechanism: DiscoveryMechanism{
-				Cluster:               testClusterName,
-				LoadReportingServer:   testLRSServerConfig,
-				MaxConcurrentRequests: newUint32(testMaxRequests),
-				Type:                  DiscoveryMechanismTypeEDS,
-				EDSServiceName:        testEDSServiceName,
+			clusterUpdate: xdsresource.ClusterUpdate{
+				ClusterName:     testClusterName,
+				ClusterType:     xdsresource.ClusterTypeEDS,
+				EDSServiceName:  testEDSServiceName,
+				MaxRequests:     newUint32(testMaxRequests),
+				LRSServerConfig: testLRSServerConfig,
 			},
 			edsResp: xdsresource.EndpointsUpdate{
 				Drops: []xdsresource.OverloadDropConfig{
@@ -179,8 +181,8 @@ func (s) TestBuildPriorityConfigJSON(t *testing.T) {
 			childNameGen: newNameGenerator(0),
 		},
 		{
-			mechanism: DiscoveryMechanism{
-				Type: DiscoveryMechanismTypeLogicalDNS,
+			clusterUpdate: xdsresource.ClusterUpdate{
+				ClusterType: xdsresource.ClusterTypeLogicalDNS,
 			},
 			endpoints:    testResolverEndpoints[4],
 			childNameGen: newNameGenerator(1),
@@ -214,12 +216,13 @@ func (s) TestBuildPriorityConfig(t *testing.T) {
 			// priorities. The Outlier Detection configuration specified in the
 			// Discovery Mechanism should be the top level for each sub
 			// priorities balancer.
-			mechanism: DiscoveryMechanism{
-				Cluster:          testClusterName,
-				Type:             DiscoveryMechanismTypeEDS,
-				EDSServiceName:   testEDSServiceName,
-				outlierDetection: noopODCfg,
+			clusterUpdate: xdsresource.ClusterUpdate{
+				ClusterName:    testClusterName,
+				ClusterType:    xdsresource.ClusterTypeEDS,
+				EDSServiceName: testEDSServiceName,
+				// Do we need outlier detection here too?
 			},
+			outlierDetection: noopODCfg,
 			edsResp: xdsresource.EndpointsUpdate{
 				Localities: []xdsresource.Locality{
 					testLocalitiesP0[0],
@@ -232,13 +235,13 @@ func (s) TestBuildPriorityConfig(t *testing.T) {
 		},
 		{
 			// This OD config should wrap the Logical DNS priorities balancer.
-			mechanism: DiscoveryMechanism{
-				Cluster:          testClusterName2,
-				Type:             DiscoveryMechanismTypeLogicalDNS,
-				outlierDetection: noopODCfg,
+			clusterUpdate: xdsresource.ClusterUpdate{
+				ClusterName: testClusterName2,
+				ClusterType: xdsresource.ClusterTypeLogicalDNS,
 			},
-			endpoints:    testResolverEndpoints[4],
-			childNameGen: newNameGenerator(1),
+			outlierDetection: noopODCfg,
+			endpoints:        testResolverEndpoints[4],
+			childNameGen:     newNameGenerator(1),
 		},
 	}, nil)
 
@@ -363,7 +366,7 @@ func (s) TestBuildClusterImplConfigForDNS(t *testing.T) {
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			gotName, gotConfig, gotEndpoints := buildClusterImplConfigForDNS(newNameGenerator(3), tt.endpoints, DiscoveryMechanism{Cluster: testClusterName2, Type: DiscoveryMechanismTypeLogicalDNS}, tt.xdsLBPolicy)
+			gotName, gotConfig, gotEndpoints := buildClusterImplConfigForDNS(newNameGenerator(3), tt.endpoints, xdsresource.ClusterUpdate{ClusterName: testClusterName2, ClusterType: xdsresource.ClusterTypeLogicalDNS}, tt.xdsLBPolicy)
 			const wantName = "priority-3"
 			if diff := cmp.Diff(wantName, gotName); diff != "" {
 				t.Errorf("buildClusterImplConfigForDNS() diff (-want +got) %v", diff)
@@ -385,7 +388,7 @@ func (s) TestBuildClusterImplConfigForDNS(t *testing.T) {
 	}
 }
 
-func TestBuildClusterImplConfigForEDS_PickFirstWeightedShuffling_Disabled(t *testing.T) {
+func (s) TestBuildClusterImplConfigForEDS_PickFirstWeightedShuffling_Disabled(t *testing.T) {
 	testutils.SetEnvConfig(t, &envconfig.PickFirstWeightedShuffling, false)
 
 	testLRSServerConfig, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{
@@ -430,12 +433,12 @@ func TestBuildClusterImplConfigForEDS_PickFirstWeightedShuffling_Disabled(t *tes
 				},
 			},
 		},
-		DiscoveryMechanism{
-			Cluster:               testClusterName,
-			MaxConcurrentRequests: newUint32(testMaxRequests),
-			LoadReportingServer:   testLRSServerConfig,
-			Type:                  DiscoveryMechanismTypeEDS,
-			EDSServiceName:        testEDSServiceName,
+		xdsresource.ClusterUpdate{
+			ClusterName:     testClusterName,
+			ClusterType:     xdsresource.ClusterTypeEDS,
+			EDSServiceName:  testEDSServiceName,
+			LRSServerConfig: testLRSServerConfig,
+			MaxRequests:     newUint32(testMaxRequests),
 		},
 		nil,
 	)
@@ -493,7 +496,7 @@ func TestBuildClusterImplConfigForEDS_PickFirstWeightedShuffling_Disabled(t *tes
 	}
 }
 
-func TestBuildClusterImplConfigForEDS_PickFirstWeightedShuffling_Enabled(t *testing.T) {
+func (s) TestBuildClusterImplConfigForEDS_PickFirstWeightedShuffling_Enabled(t *testing.T) {
 	testutils.SetEnvConfig(t, &envconfig.PickFirstWeightedShuffling, true)
 
 	testLRSServerConfig, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{
@@ -538,12 +541,12 @@ func TestBuildClusterImplConfigForEDS_PickFirstWeightedShuffling_Enabled(t *test
 				},
 			},
 		},
-		DiscoveryMechanism{
-			Cluster:               testClusterName,
-			MaxConcurrentRequests: newUint32(testMaxRequests),
-			LoadReportingServer:   testLRSServerConfig,
-			Type:                  DiscoveryMechanismTypeEDS,
-			EDSServiceName:        testEDSServiceName,
+		xdsresource.ClusterUpdate{
+			ClusterName:     testClusterName,
+			ClusterType:     xdsresource.ClusterTypeEDS,
+			EDSServiceName:  testEDSServiceName,
+			LRSServerConfig: testLRSServerConfig,
+			MaxRequests:     newUint32(testMaxRequests),
 		},
 		nil,
 	)
@@ -617,7 +620,7 @@ func TestBuildClusterImplConfigForEDS_PickFirstWeightedShuffling_Enabled(t *test
 		t.Errorf("buildClusterImplConfigForEDS() diff (-got +want) %v", diff)
 	}
 }
-func TestGroupLocalitiesByPriority(t *testing.T) {
+func (s) TestGroupLocalitiesByPriority(t *testing.T) {
 	tests := []struct {
 		name           string
 		localities     []xdsresource.Locality
@@ -679,13 +682,13 @@ func TestGroupLocalitiesByPriority(t *testing.T) {
 	}
 }
 
-func TestPriorityLocalitiesToClusterImpl_PickFirstWeightedShuffling_Disabled(t *testing.T) {
+func (s) TestPriorityLocalitiesToClusterImpl_PickFirstWeightedShuffling_Disabled(t *testing.T) {
 	testutils.SetEnvConfig(t, &envconfig.PickFirstWeightedShuffling, false)
 	tests := []struct {
 		name          string
 		localities    []xdsresource.Locality
 		priorityName  string
-		mechanism     DiscoveryMechanism
+		clusterUpdate xdsresource.ClusterUpdate
 		childPolicy   *iserviceconfig.BalancerConfig
 		wantConfig    *clusterimpl.LBConfig
 		wantEndpoints []resolver.Endpoint
@@ -729,15 +732,15 @@ func TestPriorityLocalitiesToClusterImpl_PickFirstWeightedShuffling_Disabled(t *
 			},
 			priorityName: "test-priority",
 			childPolicy:  &iserviceconfig.BalancerConfig{Name: roundrobin.Name},
-			mechanism: DiscoveryMechanism{
-				Cluster:        testClusterName,
-				Type:           DiscoveryMechanismTypeEDS,
-				EDSServiceName: testEDSService,
+			clusterUpdate: xdsresource.ClusterUpdate{
+				ClusterName:    testClusterName,
+				ClusterType:    xdsresource.ClusterTypeEDS,
+				EDSServiceName: testEDSServiceName,
 			},
 			// lrsServer is nil, so LRS policy will not be used.
 			wantConfig: &clusterimpl.LBConfig{
 				Cluster:        testClusterName,
-				EDSServiceName: testEDSService,
+				EDSServiceName: testEDSServiceName,
 				ChildPolicy:    &iserviceconfig.BalancerConfig{Name: roundrobin.Name},
 			},
 			// Endpoint weight is the product of locality weight and endpoint weight.
@@ -804,7 +807,7 @@ func TestPriorityLocalitiesToClusterImpl_PickFirstWeightedShuffling_Disabled(t *
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotConfig, gotEndpoints, err := priorityLocalitiesToClusterImpl(tt.localities, tt.priorityName, tt.mechanism, nil, tt.childPolicy)
+			gotConfig, gotEndpoints, err := priorityLocalitiesToClusterImpl(tt.localities, tt.priorityName, tt.clusterUpdate, nil, tt.childPolicy)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("priorityLocalitiesToClusterImpl() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -818,13 +821,13 @@ func TestPriorityLocalitiesToClusterImpl_PickFirstWeightedShuffling_Disabled(t *
 	}
 }
 
-func TestPriorityLocalitiesToClusterImpl_PickFirstWeightedShuffling_Enabled(t *testing.T) {
+func (s) TestPriorityLocalitiesToClusterImpl_PickFirstWeightedShuffling_Enabled(t *testing.T) {
 	testutils.SetEnvConfig(t, &envconfig.PickFirstWeightedShuffling, true)
 	tests := []struct {
 		name          string
 		localities    []xdsresource.Locality
 		priorityName  string
-		mechanism     DiscoveryMechanism
+		clusterUpdate xdsresource.ClusterUpdate
 		childPolicy   *iserviceconfig.BalancerConfig
 		wantConfig    *clusterimpl.LBConfig
 		wantEndpoints []resolver.Endpoint
@@ -868,15 +871,15 @@ func TestPriorityLocalitiesToClusterImpl_PickFirstWeightedShuffling_Enabled(t *t
 			},
 			priorityName: "test-priority",
 			childPolicy:  &iserviceconfig.BalancerConfig{Name: roundrobin.Name},
-			mechanism: DiscoveryMechanism{
-				Cluster:        testClusterName,
-				Type:           DiscoveryMechanismTypeEDS,
-				EDSServiceName: testEDSService,
+			clusterUpdate: xdsresource.ClusterUpdate{
+				ClusterName:    testClusterName,
+				ClusterType:    xdsresource.ClusterTypeEDS,
+				EDSServiceName: testEDSServiceName,
 			},
 			// lrsServer is nil, so LRS policy will not be used.
 			wantConfig: &clusterimpl.LBConfig{
 				Cluster:        testClusterName,
-				EDSServiceName: testEDSService,
+				EDSServiceName: testEDSServiceName,
 				ChildPolicy:    &iserviceconfig.BalancerConfig{Name: roundrobin.Name},
 			},
 			// Endpoints weights are the product of normalized locality weight and
@@ -979,7 +982,7 @@ func TestPriorityLocalitiesToClusterImpl_PickFirstWeightedShuffling_Enabled(t *t
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotConfig, gotEndpoints, err := priorityLocalitiesToClusterImpl(tt.localities, tt.priorityName, tt.mechanism, nil, tt.childPolicy)
+			gotConfig, gotEndpoints, err := priorityLocalitiesToClusterImpl(tt.localities, tt.priorityName, tt.clusterUpdate, nil, tt.childPolicy)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("priorityLocalitiesToClusterImpl() error = %v, wantErr %v", err, tt.wantErr)
 			}
