@@ -27,14 +27,22 @@ import (
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/xds/clients/xdsclient"
 	"google.golang.org/grpc/internal/xds/httpfilter"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
-func unmarshalListenerResource(r *anypb.Any, opts *xdsclient.DecodeOptions) (string, ListenerUpdate, error) {
-	r, err := UnwrapResource(r)
+func unmarshalListenerResource(r *anypb.Any, opts *xdsclient.DecodeOptions) (name string, update ListenerUpdate, err error) {
+	defer func() {
+		if envconfig.XDSRecoverPanic {
+			if r := recover(); r != nil {
+				err = fmt.Errorf("panic during LDS resource unmarshaling: %v", r)
+			}
+		}
+	}()
+	r, err = UnwrapResource(r)
 	if err != nil {
 		return "", ListenerUpdate{}, fmt.Errorf("failed to unwrap resource: %v", err)
 	}
@@ -55,7 +63,9 @@ func unmarshalListenerResource(r *anypb.Any, opts *xdsclient.DecodeOptions) (str
 	return lis.GetName(), *lu, nil
 }
 
-func processListener(lis *v3listenerpb.Listener, opts *xdsclient.DecodeOptions) (*ListenerUpdate, error) {
+var processListener = processListenerImpl
+
+func processListenerImpl(lis *v3listenerpb.Listener, opts *xdsclient.DecodeOptions) (*ListenerUpdate, error) {
 	if lis.GetApiListener() != nil {
 		return processClientSideListener(lis, opts)
 	}

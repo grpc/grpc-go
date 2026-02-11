@@ -36,8 +36,15 @@ import (
 	v3typepb "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 )
 
-func unmarshalRouteConfigResource(r *anypb.Any, opts *xdsclient.DecodeOptions) (string, RouteConfigUpdate, error) {
-	r, err := UnwrapResource(r)
+func unmarshalRouteConfigResource(r *anypb.Any, opts *xdsclient.DecodeOptions) (name string, update RouteConfigUpdate, err error) {
+	defer func() {
+		if envconfig.XDSRecoverPanic {
+			if r := recover(); r != nil {
+				err = fmt.Errorf("panic during RDS resource unmarshaling: %v", r)
+			}
+		}
+	}()
+	r, err = UnwrapResource(r)
 	if err != nil {
 		return "", RouteConfigUpdate{}, fmt.Errorf("failed to unwrap resource: %v", err)
 	}
@@ -58,7 +65,7 @@ func unmarshalRouteConfigResource(r *anypb.Any, opts *xdsclient.DecodeOptions) (
 	return rc.GetName(), u, nil
 }
 
-// generateRDSUpdateFromRouteConfiguration checks if the provided
+// generateRDSUpdateFromRouteConfigurationImpl checks if the provided
 // RouteConfiguration meets the expected criteria. If so, it returns a
 // RouteConfigUpdate with nil error.
 //
@@ -74,7 +81,9 @@ func unmarshalRouteConfigResource(r *anypb.Any, opts *xdsclient.DecodeOptions) (
 // field must be empty and whose route field must be set. Inside that route
 // message, the cluster field will contain the clusterName or weighted clusters
 // we are looking for.
-func generateRDSUpdateFromRouteConfiguration(rc *v3routepb.RouteConfiguration, opts *xdsclient.DecodeOptions) (RouteConfigUpdate, error) {
+var generateRDSUpdateFromRouteConfiguration = generateRDSUpdateImplFromRouteConfiguration
+
+func generateRDSUpdateImplFromRouteConfiguration(rc *v3routepb.RouteConfiguration, opts *xdsclient.DecodeOptions) (RouteConfigUpdate, error) {
 	vhs := make([]*VirtualHost, 0, len(rc.GetVirtualHosts()))
 	csps, err := processClusterSpecifierPlugins(rc.ClusterSpecifierPlugins)
 	if err != nil {

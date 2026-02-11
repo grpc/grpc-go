@@ -96,6 +96,17 @@ var (
 	// feature can be disabled by setting the environment variable
 	// GRPC_EXPERIMENTAL_PF_WEIGHTED_SHUFFLING to "false".
 	PickFirstWeightedShuffling = boolFromEnv("GRPC_EXPERIMENTAL_PF_WEIGHTED_SHUFFLING", true)
+
+	// XDSRecoverPanic indicates whether the xDS resolver should recover from
+	// panics while parsing xDS resources.
+	//
+	// The recover logic in xdsclient resource parsing is protected by an
+	// environment variable so that it can be disabled during fuzz testing to
+	// catch unexpected panics.
+	//
+	// This feature can be disabled by setting the environment variable
+	// "GRPC_EXPERIMENTAL_XDS_PANIC_RECOVERY" to "false".
+	XDSRecoverPanic = boolFromEnv("GRPC_EXPERIMENTAL_XDS_PANIC_RECOVERY", true)
 )
 
 func boolFromEnv(envVar string, def bool) bool {

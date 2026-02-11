@@ -813,6 +813,57 @@ func (s) TestGenerateRDSUpdateFromRouteConfigurationWithAutoHostRewrite(t *testi
 	}
 }
 
+// TestunmarshalRouteConfigResource_PanicRecovery tests the panic recovery
+// mechanism in unmarshalRouteConfigResource. It verifies that when
+// XDSRecoverPanic env variable is enabled, panics during unmarshaling
+// are caught and returned as errors. When the env variable is disabled,
+// it ensures the panic propagates.
+func (s) TestUnmarshalRouteConfigResource_PanicRecovery(t *testing.T) {
+	origParse := generateRDSUpdateFromRouteConfiguration
+	defer func() { generateRDSUpdateFromRouteConfiguration = origParse }()
+	generateRDSUpdateFromRouteConfiguration = func(_ *v3routepb.RouteConfiguration, _ *xdsclient.DecodeOptions) (RouteConfigUpdate, error) {
+		panic("simulate panic")
+	}
+
+	tests := []struct {
+		name          string
+		enableRecover bool
+		wantPanic     bool
+		wantErr       string
+	}{
+		{
+			name:          "Enable_XDSRecoverPanic",
+			enableRecover: true,
+			wantPanic:     false,
+			wantErr:       "panic during RDS resource unmarshaling: simulate panic",
+		},
+		{
+			name:          "Disable_XDSRecoverPanic",
+			enableRecover: false,
+			wantPanic:     true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			testutils.SetEnvConfig(t, &envconfig.XDSRecoverPanic, tt.enableRecover)
+			marshaled := testutils.MarshalAny(t, &v3routepb.RouteConfiguration{Name: "test-route"})
+
+			if tt.wantPanic {
+				defer func() {
+					if r := recover(); r == nil {
+						t.Errorf("The code did not panic but was expected to")
+					}
+				}()
+				unmarshalRouteConfigResource(marshaled, nil)
+			} else {
+				if _, _, err := unmarshalRouteConfigResource(marshaled, nil); err == nil || err.Error() != tt.wantErr {
+					t.Errorf("unmarshalRouteConfigResource() failed with err : %v, want %q", err, tt.wantErr)
+				}
+			}
+		})
+	}
+}
+
 var configOfClusterSpecifierDoesntExist = &anypb.Any{
 	TypeUrl: "does.not.exist",
 	Value:   []byte{1, 2, 3},
