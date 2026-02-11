@@ -542,21 +542,18 @@ func addFilterChainsForSourcePrefixes(srcPrefixes *SourcePrefixes, fc *v3listene
 // is returned. If there are multiple filter chains with overlapping matching
 // rules, an error is returned.
 func getOrCreateSourcePrefixEntry(srcPrefixes *SourcePrefixes, prefix *net.IPNet, fc *v3listenerpb.FilterChain) error {
-	var entry SourcePrefixEntry
-	for _, e := range srcPrefixes.Entries {
-		if ipNetEqual(e.Prefix, prefix) {
-			entry = e
-			break
+	for i := range srcPrefixes.Entries {
+		if ipNetEqual(srcPrefixes.Entries[i].Prefix, prefix) {
+			return addFilterChainsForSourcePorts(&srcPrefixes.Entries[i], fc)
 		}
 	}
-	if entry.isEmpty() {
-		entry = SourcePrefixEntry{
-			Prefix:  prefix,
-			PortMap: make(map[int]NetworkFilterChainConfig),
-		}
-		srcPrefixes.Entries = append(srcPrefixes.Entries, entry)
-	}
-	return addFilterChainsForSourcePorts(&entry, fc)
+
+	// Not found, create a new entry.
+	srcPrefixes.Entries = append(srcPrefixes.Entries, SourcePrefixEntry{
+		Prefix:  prefix,
+		PortMap: make(map[int]NetworkFilterChainConfig),
+	})
+	return addFilterChainsForSourcePorts(&srcPrefixes.Entries[len(srcPrefixes.Entries)-1], fc)
 }
 
 func addFilterChainsForSourcePorts(entry *SourcePrefixEntry, fc *v3listenerpb.FilterChain) error {

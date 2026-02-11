@@ -53,17 +53,17 @@ const (
 // state. Here, we need to store runtime state such as the usable route
 // configuration.
 type filterChainManager struct {
-	dstPrefixes      []*destPrefixEntry // Linear lookup list.
-	def              *filterChain       // Default filter chain, if specified.
-	fcs              []*filterChain     // Filter chains managed by this filter chain manager.
-	routeConfigNames map[string]bool    // Route configuration names which need to be dynamically queried.
+	dstPrefixes        []*destPrefixEntry // Linear lookup list.
+	defaultFilterChain *filterChain       // Default filter chain, if specified.
+	filterChains       []*filterChain     // Filter chains managed by this filter chain manager.
+	routeConfigNames   map[string]bool    // Route configuration names which need to be dynamically queried.
 }
 
-func newFilterChainManager(fcMap *xdsresource.NetworkFilterChainMap, def *xdsresource.NetworkFilterChainConfig) *filterChainManager {
-	fci := &filterChainManager{routeConfigNames: make(map[string]bool)}
+func newFilterChainManager(filterChainConfigs *xdsresource.NetworkFilterChainMap, defFilterChainConfig *xdsresource.NetworkFilterChainConfig) *filterChainManager {
+	fcMgr := &filterChainManager{routeConfigNames: make(map[string]bool)}
 
-	if fcMap != nil {
-		for _, entry := range fcMap.DstPrefixes {
+	if filterChainConfigs != nil {
+		for _, entry := range filterChainConfigs.DstPrefixes {
 			dstEntry := &destPrefixEntry{net: entry.Prefix}
 
 			for i, srcPrefixes := range entry.SourceTypeArr {
@@ -72,31 +72,37 @@ func newFilterChainManager(fcMap *xdsresource.NetworkFilterChainMap, def *xdsres
 				}
 				stDest := &sourcePrefixes{}
 				dstEntry.srcTypeArr[i] = stDest
-				for _, srcEntry := range srcPrefixes.Entries {
-					finalSrcEntry := &sourcePrefixEntry{
-						net:        srcEntry.Prefix,
-						srcPortMap: make(map[int]*filterChain),
+				for _, srcEntryConfig := range srcPrefixes.Entries {
+					srcEntry := &sourcePrefixEntry{
+						net:        srcEntryConfig.Prefix,
+						srcPortMap: make(map[int]*filterChain, len(srcEntryConfig.PortMap)),
 					}
-					stDest.srcPrefixes = append(stDest.srcPrefixes, finalSrcEntry)
+					stDest.srcPrefixes = append(stDest.srcPrefixes, srcEntry)
 
-					for port, fcConfig := range srcEntry.PortMap {
-						fc := fci.filterChainFromConfig(&fcConfig)
-						finalSrcEntry.srcPortMap[port] = fc
-						fci.fcs = append(fci.fcs, fc)
+					for port, fcConfig := range srcEntryConfig.PortMap {
+						fc := fcMgr.filterChainFromConfig(&fcConfig)
+						if fc.routeConfigName != "" {
+							fcMgr.routeConfigNames[fc.routeConfigName] = true
+						}
+						srcEntry.srcPortMap[port] = fc
+						fcMgr.filterChains = append(fcMgr.filterChains, fc)
 					}
 				}
 			}
-			fci.dstPrefixes = append(fci.dstPrefixes, dstEntry)
+			fcMgr.dstPrefixes = append(fcMgr.dstPrefixes, dstEntry)
 		}
 	}
 
-	if def != nil && !def.IsEmpty() {
-		fc := fci.filterChainFromConfig(def)
-		fci.def = fc
-		fci.fcs = append(fci.fcs, fc)
+	if defFilterChainConfig != nil && !defFilterChainConfig.IsEmpty() {
+		fc := fcMgr.filterChainFromConfig(defFilterChainConfig)
+		if fc.routeConfigName != "" {
+			fcMgr.routeConfigNames[fc.routeConfigName] = true
+		}
+		fcMgr.defaultFilterChain = fc
+		fcMgr.filterChains = append(fcMgr.filterChains, fc)
 	}
 
-	return fci
+	return fcMgr
 }
 
 func (fcm *filterChainManager) filterChainFromConfig(config *xdsresource.NetworkFilterChainConfig) *filterChain {
@@ -108,10 +114,6 @@ func (fcm *filterChainManager) filterChainFromConfig(config *xdsresource.Network
 		usableRouteConfiguration: &atomic.Pointer[usableRouteConfiguration]{}, // Active state
 	}
 	fc.usableRouteConfiguration.Store(&usableRouteConfiguration{})
-
-	if fc.routeConfigName != "" {
-		fcm.routeConfigNames[fc.routeConfigName] = true
-	}
 	return fc
 }
 
@@ -193,8 +195,8 @@ type lookupParams struct {
 func (fcm *filterChainManager) lookup(params lookupParams) (*filterChain, error) {
 	dstPrefixes := filterByDestinationPrefixes(fcm.dstPrefixes, params.isUnspecifiedListener, params.dstAddr)
 	if len(dstPrefixes) == 0 {
-		if fcm.def != nil {
-			return fcm.def, nil
+		if fcm.defaultFilterChain != nil {
+			return fcm.defaultFilterChain, nil
 		}
 		return nil, fmt.Errorf("no matching filter chain based on destination prefix match for %+v", params)
 	}
@@ -205,8 +207,8 @@ func (fcm *filterChainManager) lookup(params lookupParams) (*filterChain, error)
 	}
 	srcPrefixes := filterBySourceType(dstPrefixes, srcType)
 	if len(srcPrefixes) == 0 {
-		if fcm.def != nil {
-			return fcm.def, nil
+		if fcm.defaultFilterChain != nil {
+			return fcm.defaultFilterChain, nil
 		}
 		return nil, fmt.Errorf("no matching filter chain based on source type match for %+v", params)
 	}
@@ -217,8 +219,8 @@ func (fcm *filterChainManager) lookup(params lookupParams) (*filterChain, error)
 	if fc := filterBySourcePorts(srcPrefixEntry, params.srcPort); fc != nil {
 		return fc, nil
 	}
-	if fcm.def != nil {
-		return fcm.def, nil
+	if fcm.defaultFilterChain != nil {
+		return fcm.defaultFilterChain, nil
 	}
 	return nil, fmt.Errorf("no matching filter chain after all match criteria for %+v", params)
 }
@@ -238,7 +240,7 @@ func filterByDestinationPrefixes(dstPrefixes []*destPrefixEntry, isUnspecified b
 	maxSubnetMatch := noPrefixMatch
 	for _, prefix := range dstPrefixes {
 		if prefix.net != nil && !prefix.net.Contains(dstAddr) {
-			// Skip prefixes which don't match.fc
+			// Skip prefixes which don't match.
 			continue
 		}
 		// For unspecified prefixes, since we do not store a real net.IPNet

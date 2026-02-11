@@ -544,7 +544,7 @@ func (m *DependencyManager) onListenerResourceUpdate(update *xdsresource.Listene
 	// config name has not changed, send an update with existing route
 	// configuration and the newly received listener configuration.
 	if update.APIListener == nil {
-		// This should not happen for a client-side listener, but just in case.
+		m.logger.Errorf("Received a listener resource with no api_listener configuration")
 		return
 	}
 	if m.rdsResourceName == update.APIListener.RouteConfigName {

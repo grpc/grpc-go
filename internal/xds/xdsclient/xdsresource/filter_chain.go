@@ -64,10 +64,6 @@ type SourcePrefixEntry struct {
 	PortMap map[int]NetworkFilterChainConfig
 }
 
-func (s SourcePrefixEntry) isEmpty() bool {
-	return s.Prefix == nil && len(s.PortMap) == 0
-}
-
 // NetworkFilterChainConfig contains the configuration for a network filter
 // chain on the server side. The only support network filter is the HTTP
 // connection manager.

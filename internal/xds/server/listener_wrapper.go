@@ -197,7 +197,7 @@ func (l *listenerWrapper) maybeUpdateFilterChains() {
 func (l *listenerWrapper) handleRDSUpdate(routeName string, rcu rdsWatcherUpdate) {
 	// Update any filter chains that point to this route configuration.
 	if l.activeFilterChainManager != nil {
-		for _, fc := range l.activeFilterChainManager.fcs {
+		for _, fc := range l.activeFilterChainManager.filterChains {
 			if fc.routeConfigName != routeName {
 				continue
 			}
@@ -222,7 +222,7 @@ func (l *listenerWrapper) handleRDSUpdate(routeName string, rcu rdsWatcherUpdate
 // route configurations, uses that, otherwise uses cached rdsHandler updates.
 // Must be called within an xDS Client Callback.
 func (l *listenerWrapper) instantiateFilterChainRoutingConfigurationsLocked() {
-	for _, fc := range l.activeFilterChainManager.fcs {
+	for _, fc := range l.activeFilterChainManager.filterChains {
 		if fc.inlineRouteConfig != nil {
 			urc := fc.constructUsableRouteConfiguration(*fc.inlineRouteConfig)
 			urc.nodeID = l.xdsNodeID
