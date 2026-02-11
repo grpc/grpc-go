@@ -111,7 +111,9 @@ func (bb) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Ba
 
 	b.child = endpointsharding.NewBalancer(b, bOpts, balancer.Get(pickfirst.Name).Build, endpointsharding.Options{})
 	b.logger = prefixLogger(b)
-	b.logger.Infof("Created")
+	if b.logger.V(2) {
+		b.logger.Infof("Created")
+	}
 	return b
 }
 
@@ -221,7 +223,7 @@ type wrrBalancer struct {
 
 func (b *wrrBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error {
 	if b.logger.V(2) {
-		b.logger.Infof("UpdateCCS: %v", ccs)
+		b.logger.Infof("Received update from resolver with state: %+v", ccs)
 	}
 	cfg, ok := ccs.BalancerConfig.(*lbConfig)
 	if !ok {
@@ -247,6 +249,10 @@ func (b *wrrBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error 
 }
 
 func (b *wrrBalancer) UpdateState(state balancer.State) {
+	if b.logger.V(2) {
+		b.logger.Infof("Received update from child policy with state: %+v", state)
+	}
+
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
@@ -324,7 +330,7 @@ func (b *wrrBalancer) NewSubConn(addrs []resolver.Address, opts balancer.NewSubC
 	if !ok {
 		// SubConn state updates can come in for a no longer relevant endpoint
 		// weight (from the old system after a new config update is applied).
-		return nil, fmt.Errorf("balancer is being closed; no new SubConns allowed")
+		return nil, fmt.Errorf("wrr: balancer is being closed; no new SubConns allowed")
 	}
 	sc, err := b.ClientConn.NewSubConn([]resolver.Address{addr}, opts)
 	if err != nil {
@@ -335,6 +341,9 @@ func (b *wrrBalancer) NewSubConn(addrs []resolver.Address, opts balancer.NewSubC
 }
 
 func (b *wrrBalancer) ResolverError(err error) {
+	if b.logger.V(2) {
+		b.logger.Infof("Received error from resolver: %v", err)
+	}
 	// Will cause inline picker update from endpoint sharding.
 	b.child.ResolverError(err)
 }
@@ -344,6 +353,10 @@ func (b *wrrBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.Sub
 }
 
 func (b *wrrBalancer) updateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
+	if b.logger.V(2) {
+		b.logger.Infof("Received update from SubConn %v with state: %+v", sc, state)
+	}
+
 	b.mu.Lock()
 	ew := b.scToWeight[sc]
 	// updates from a no longer relevant SubConn update, nothing to do here but
@@ -405,6 +418,9 @@ func (b *wrrBalancer) Close() {
 		}
 	}
 	b.child.Close()
+	if b.logger.V(2) {
+		b.logger.Infof("Shutdown")
+	}
 }
 
 func (b *wrrBalancer) ExitIdle() {
@@ -446,7 +462,6 @@ func (p *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 	pickedPicker := p.weightedPickers[sched.nextIndex()]
 	pr, err := pickedPicker.picker.Pick(info)
 	if err != nil {
-		logger.Errorf("ready picker returned error: %v", err)
 		return balancer.PickResult{}, err
 	}
 	if !p.cfg.EnableOOBLoadReport {

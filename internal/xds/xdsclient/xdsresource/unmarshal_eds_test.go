@@ -35,6 +35,7 @@ import (
 	"google.golang.org/grpc/internal/xds/clients"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource/version"
 	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/resolver/ringhash"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/structpb"
@@ -47,7 +48,7 @@ func buildResolverEndpoint(addr []string, hostname string) resolver.Endpoint {
 		address = append(address, resolver.Address{Addr: a})
 	}
 	resolverEndpoint := resolver.Endpoint{Addresses: address}
-	resolverEndpoint = setHostname(resolverEndpoint, hostname)
+	resolverEndpoint = SetHostname(resolverEndpoint, hostname)
 	return resolverEndpoint
 }
 
@@ -477,7 +478,7 @@ func (s) TestUnmarshalEndpointHashKey(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unmarshalEndpointsResource() got error = %v, want success", err)
 			}
-			got := update.Localities[0].Endpoints[0].HashKey
+			got := ringhash.HashKey(update.Localities[0].Endpoints[0].ResolverEndpoint)
 			if got != test.wantHashKey {
 				t.Errorf("unmarshalEndpointResource() endpoint hash key: got %s, want %s", got, test.wantHashKey)
 			}
