@@ -102,7 +102,7 @@ func (s) TestFindBestMatchingVirtualHost(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := findBestMatchingVirtualHostServer(tt.host, tt.vHosts); !cmp.Equal(got, tt.want, cmp.AllowUnexported(virtualHostWithInterceptors{}, routeWithInterceptors{})) {
-				t.Errorf("FindBestMatchingxdsclient.virtualHostWithInterceptors() = %v, want %v", got, tt.want)
+				t.Errorf("findBestMatchingVirtualHostServer() = %v, want %v", got, tt.want)
 			}
 		})
 	}

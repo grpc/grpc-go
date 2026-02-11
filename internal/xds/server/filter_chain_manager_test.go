@@ -736,8 +736,8 @@ func (s) TestHTTPFilterInstantiation(t *testing.T) {
 			var errs []string
 			for _, vh := range urc.vhs {
 				for _, r := range vh.routes {
-					for _, int := range r.interceptors {
-						errs = append(errs, int.AllowRPC(ctx).Error())
+					for _, interceptor := range r.interceptors {
+						errs = append(errs, interceptor.AllowRPC(ctx).Error())
 					}
 				}
 			}
@@ -761,11 +761,11 @@ func transportSocketWithInstanceName(t *testing.T, name string) *v3corepb.Transp
 	}
 }
 
-func cidrRangeFromAddressAndPrefixLen(address string, len int) *v3corepb.CidrRange {
+func cidrRangeFromAddressAndPrefixLen(address string, prefixLen int) *v3corepb.CidrRange {
 	return &v3corepb.CidrRange{
 		AddressPrefix: address,
 		PrefixLen: &wrapperspb.UInt32Value{
-			Value: uint32(len),
+			Value: uint32(prefixLen),
 		},
 	}
 }
