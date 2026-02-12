@@ -22,6 +22,8 @@ import (
 	"io"
 	"slices"
 	"strconv"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -53,6 +55,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/encoding/gzip"
 	experimental "google.golang.org/grpc/experimental/opentelemetry"
+	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/grpctest"
@@ -1946,5 +1949,90 @@ func (s) TestSubChannelMetrics(t *testing.T) {
 
 	if err := pollForWantMetrics(ctx, t, reader, disconnectionWantMetrics); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func (s) TestHealthStreamNoOtelErrorLog(t *testing.T) {
+	// Setup a minimal, non-recursive logger to capture the specific error log.
+	tl := &testLogReader{}
+	grpclog.SetLoggerV2(tl)
+
+	mo, _ := defaultMetricsOptions(t, nil)
+	to, _ := defaultTraceOptions(t)
+	otelOptions := opentelemetry.Options{
+		MetricsOptions: *mo,
+		TraceOptions:   *to,
+	}
+
+	// Start a vanilla backend.
+	backend := stubserver.StartTestService(t, &stubserver.StubServer{
+		EmptyCallF: func(_ context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
+			return &testpb.Empty{}, nil
+		},
+	})
+	defer backend.Stop()
+
+	// Dial with healthCheckConfig to trigger the internal health stream.
+	sc := `{"healthCheckConfig": {"serviceName": ""}}`
+	dopts := []grpc.DialOption{
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		opentelemetry.DialOption(otelOptions),
+		grpc.WithDefaultServiceConfig(sc),
+	}
+
+	cc, err := grpc.NewClient(backend.Address, dopts...)
+	if err != nil {
+		t.Fatalf("Failed to create client: %v", err)
+	}
+	defer cc.Close()
+
+	// Perform an RPC to ensure the subchannel connects and health stream initializes.
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	client := testgrpc.NewTestServiceClient(cc)
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+		t.Fatalf("EmptyCall failed: %v", err)
+	}
+
+	// Short sleep to allow async telemetry logs (if any) to propagate.
+	time.Sleep(100 * time.Millisecond)
+
+	if tl.found() {
+		t.Fatal("Unexpected OpenTelemetry error log found for health stream")
+	}
+}
+
+// Minimal LoggerV2 implementation to avoid recursion and capture specific errors.
+type testLogReader struct {
+	mu   sync.Mutex
+	seen bool
+	grpclog.LoggerV2
+}
+
+func (l *testLogReader) found() bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.seen
+}
+
+func (l *testLogReader) Error(args ...any)                   { l.check(fmt.Sprint(args...)) }
+func (l *testLogReader) Errorf(format string, args ...any)   { l.check(fmt.Sprintf(format, args...)) }
+func (l *testLogReader) Errorln(args ...any)                 { l.check(fmt.Sprintln(args...)) }
+func (l *testLogReader) Info(args ...any)                    {}
+func (l *testLogReader) Infoln(args ...any)                  {}
+func (l *testLogReader) Infof(format string, args ...any)    {}
+func (l *testLogReader) Warning(args ...any)                 {}
+func (l *testLogReader) Warningln(args ...any)               {}
+func (l *testLogReader) Warningf(format string, args ...any) {}
+func (l *testLogReader) V(level int) bool                    { return false }
+func (l *testLogReader) Fatal(args ...any)                   {}
+func (l *testLogReader) Fatalln(args ...any)                 {}
+func (l *testLogReader) Fatalf(format string, args ...any)   {}
+
+func (l *testLogReader) check(s string) {
+	if strings.Contains(s, "has no client attempt data present") {
+		l.mu.Lock()
+		l.seen = true
+		l.mu.Unlock()
 	}
 }

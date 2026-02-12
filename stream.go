@@ -1354,6 +1354,7 @@ func newNonRetryClientStream(ctx context.Context, desc *StreamDesc, method strin
 		transport:        t,
 	}
 
+	// nil stats handler: internal streams like health and ORCA do not support telemetry.
 	s, err := as.transport.NewStream(as.ctx, as.callHdr, nil)
 	if err != nil {
 		err = toRPCErr(err)
