@@ -124,8 +124,10 @@ func (s) TestFederation_ListenerResourceContextParamOrder(t *testing.T) {
 
 	wantUpdate := listenerUpdateErrTuple{
 		update: &xdsresource.ListenerUpdate{
-			RouteConfigName: "rds-resource",
-			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+			APIListener: &xdsresource.HTTPConnectionManagerConfig{
+				RouteConfigName: "rds-resource",
+				HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+			},
 		},
 	}
 	// Verify the contents of the received update.
