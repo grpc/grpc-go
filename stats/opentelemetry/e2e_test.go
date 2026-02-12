@@ -2015,19 +2015,19 @@ func (l *testLogReader) found() bool {
 	return l.seen
 }
 
-func (l *testLogReader) Error(args ...any)                   { l.check(fmt.Sprint(args...)) }
-func (l *testLogReader) Errorf(format string, args ...any)   { l.check(fmt.Sprintf(format, args...)) }
-func (l *testLogReader) Errorln(args ...any)                 { l.check(fmt.Sprintln(args...)) }
-func (l *testLogReader) Info(args ...any)                    {}
-func (l *testLogReader) Infoln(args ...any)                  {}
-func (l *testLogReader) Infof(format string, args ...any)    {}
-func (l *testLogReader) Warning(args ...any)                 {}
-func (l *testLogReader) Warningln(args ...any)               {}
-func (l *testLogReader) Warningf(format string, args ...any) {}
-func (l *testLogReader) V(level int) bool                    { return false }
-func (l *testLogReader) Fatal(args ...any)                   {}
-func (l *testLogReader) Fatalln(args ...any)                 {}
-func (l *testLogReader) Fatalf(format string, args ...any)   {}
+func (l *testLogReader) Error(args ...any)                 { l.check(fmt.Sprint(args...)) }
+func (l *testLogReader) Errorf(format string, args ...any) { l.check(fmt.Sprintf(format, args...)) }
+func (l *testLogReader) Errorln(args ...any)               { l.check(fmt.Sprintln(args...)) }
+func (l *testLogReader) Info(...any)                       {}
+func (l *testLogReader) Infoln(...any)                     {}
+func (l *testLogReader) Infof(string, ...any)              {}
+func (l *testLogReader) Warning(...any)                    {}
+func (l *testLogReader) Warningln(...any)                  {}
+func (l *testLogReader) Warningf(string, ...any)           {}
+func (l *testLogReader) V(int) bool                        { return false }
+func (l *testLogReader) Fatal(...any)                      {}
+func (l *testLogReader) Fatalln(...any)                    {}
+func (l *testLogReader) Fatalf(string, ...any)             {}
 
 func (l *testLogReader) check(s string) {
 	if strings.Contains(s, "has no client attempt data present") {
