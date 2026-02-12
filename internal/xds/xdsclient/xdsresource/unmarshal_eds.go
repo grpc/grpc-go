@@ -31,6 +31,7 @@ import (
 	xdsinternal "google.golang.org/grpc/internal/xds"
 	"google.golang.org/grpc/internal/xds/clients"
 	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/resolver/ringhash"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 )
@@ -39,9 +40,9 @@ import (
 // a resolver.Endpoint.
 type hostnameKeyType struct{}
 
-// setHostname returns a copy of the given endpoint with hostname added
+// SetHostname returns a copy of the given endpoint with hostname added
 // as an attribute.
-func setHostname(endpoint resolver.Endpoint, hostname string) resolver.Endpoint {
+func SetHostname(endpoint resolver.Endpoint, hostname string) resolver.Endpoint {
 	// Only set if non-empty; xds_cluster_impl uses this to trigger :authority
 	// rewriting.
 	if hostname == "" {
@@ -153,12 +154,12 @@ func parseEndpoints(lbEndpoints []*v3endpointpb.LbEndpoint, uniqueEndpointAddrs 
 			}
 		}
 		endpoint := resolver.Endpoint{Addresses: address}
-		endpoint = setHostname(endpoint, lbEndpoint.GetEndpoint().GetHostname())
+		endpoint = SetHostname(endpoint, lbEndpoint.GetEndpoint().GetHostname())
+		endpoint = ringhash.SetHashKey(endpoint, hashKey)
 		endpoints = append(endpoints, Endpoint{
 			ResolverEndpoint: endpoint,
 			HealthStatus:     EndpointHealthStatus(lbEndpoint.GetHealthStatus()),
 			Weight:           weight,
-			HashKey:          hashKey,
 			Metadata:         endpointMetadata,
 		})
 	}

@@ -278,9 +278,6 @@ func createXDSClient(t *testing.T, bootstrapContents []byte) xdsclient.XDSClient
 	}
 
 	pool := xdsclient.NewPool(config)
-	if err != nil {
-		t.Fatalf("Failed to create an xDS client pool: %v", err)
-	}
 	c, cancel, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{Name: t.Name()})
 	if err != nil {
 		t.Fatalf("Failed to create an xDS client: %v", err)
@@ -1055,9 +1052,9 @@ func (s) TestAggregateCluster(t *testing.T) {
 
 	dnsR := replaceDNSResolver(t)
 	dnsR.UpdateState(resolver.State{
-		Addresses: []resolver.Address{
-			{Addr: "127.0.0.1:8081"},
-			{Addr: "[::1]:8081"},
+		Endpoints: []resolver.Endpoint{
+			{Addresses: []resolver.Address{{Addr: "127.0.0.1:8081"}}},
+			{Addresses: []resolver.Address{{Addr: "[::1]:8081"}}},
 		},
 	})
 
@@ -1203,9 +1200,9 @@ func (s) TestAggregateClusterChildError(t *testing.T) {
 
 	dnsR := replaceDNSResolver(t)
 	dnsR.UpdateState(resolver.State{
-		Addresses: []resolver.Address{
-			{Addr: "127.0.0.1:8081"},
-			{Addr: "[::1]:8081"},
+		Endpoints: []resolver.Endpoint{
+			{Addresses: []resolver.Address{{Addr: "127.0.0.1:8081"}}},
+			{Addresses: []resolver.Address{{Addr: "[::1]:8081"}}},
 		},
 	})
 
