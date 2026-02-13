@@ -23,7 +23,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"net/url"
 	"slices"
 	"strings"
 	"sync"
@@ -1798,38 +1797,18 @@ func (cc *ClientConn) connectionError() error {
 func (cc *ClientConn) initParsedTargetAndResolverBuilder() error {
 	logger.Infof("original dial target is: %q", cc.target)
 
-	var rb resolver.Builder
-	u, err := url.Parse(cc.target)
-	if err == nil {
-		rb = cc.getResolver(u.Scheme)
-		if rb != nil {
-			cc.parsedTarget = resolver.Target{URL: *u}
-			cc.resolverBuilder = rb
-			return nil
-		}
-	}
-
-	// We are here because the user's dial target did not contain a scheme or
-	// specified an unregistered scheme. We should fallback to the default
-	// scheme, except when a custom dialer is specified in which case, we should
-	// always use passthrough scheme. For either case, we need to respect any overridden
-	// global defaults set by the user.
 	defScheme := cc.dopts.defaultScheme
 	if internal.UserSetDefaultScheme {
 		defScheme = resolver.GetDefaultScheme()
 	}
 
-	canonicalTarget := defScheme + ":///" + cc.target
-	u, err = url.Parse(canonicalTarget)
+	target, err := resolver.ParseTargetWithRegistry(cc.target, defScheme, cc.getResolver)
 	if err != nil {
 		return err
 	}
-	rb = cc.getResolver(u.Scheme)
-	if rb == nil {
-		return fmt.Errorf("could not get resolver for default scheme: %q", u.Scheme)
-	}
-	cc.parsedTarget = resolver.Target{URL: *u}
-	cc.resolverBuilder = rb
+
+	cc.parsedTarget = target
+	cc.resolverBuilder = cc.getResolver(target.URL.Scheme)
 	return nil
 }
 

@@ -27,7 +27,6 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/rls/internal/keys"
 	"google.golang.org/grpc/internal"
-	"google.golang.org/grpc/internal/grpcutil"
 	"google.golang.org/grpc/internal/pretty"
 	rlspb "google.golang.org/grpc/internal/proto/grpc_lookup_v1"
 	"google.golang.org/grpc/resolver"
@@ -195,7 +194,7 @@ func parseRLSProto(rlsProto *rlspb.RouteLookupConfig) (*lbConfig, error) {
 	if lookupService == "" {
 		return nil, fmt.Errorf("rls: empty lookup_service in route lookup config %+v", rlsProto)
 	}
-	_, err = grpcutil.ParseTarget(lookupService, resolver.GetDefaultScheme())
+	_, err = resolver.ParseTarget(lookupService, resolver.GetDefaultScheme())
 	if err != nil {
 		return nil, fmt.Errorf("rls: invalid target URI in lookup_service %s: %v", lookupService, err)
 	}
