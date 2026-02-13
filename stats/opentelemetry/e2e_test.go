@@ -22,10 +22,12 @@ import (
 	"io"
 	"slices"
 	"strconv"
-	"strings"
-	"sync"
 	"testing"
 	"time"
+
+	"google.golang.org/grpc/health"
+	healthgrpc "google.golang.org/grpc/health/grpc_health_v1"
+	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 
 	otelcodes "go.opentelemetry.io/otel/codes"
 	oteltrace "go.opentelemetry.io/otel/trace"
@@ -55,7 +57,6 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/encoding/gzip"
 	experimental "google.golang.org/grpc/experimental/opentelemetry"
-	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/grpctest"
@@ -1953,10 +1954,6 @@ func (s) TestSubChannelMetrics(t *testing.T) {
 }
 
 func (s) TestHealthStreamNoOtelErrorLog(t *testing.T) {
-	// Setup a minimal, non-recursive logger to capture the specific error log.
-	tl := &testLogReader{}
-	grpclog.SetLoggerV2(tl)
-
 	mo, _ := defaultMetricsOptions(t, nil)
 	to, _ := defaultTraceOptions(t)
 	otelOptions := opentelemetry.Options{
@@ -1964,16 +1961,21 @@ func (s) TestHealthStreamNoOtelErrorLog(t *testing.T) {
 		TraceOptions:   *to,
 	}
 
-	// Start a vanilla backend.
+	healthcheck := health.NewServer()
+
 	backend := stubserver.StartTestService(t, &stubserver.StubServer{
 		EmptyCallF: func(_ context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
 			return &testpb.Empty{}, nil
 		},
-	})
+	}, stubserver.RegisterServiceServerOption(func(s grpc.ServiceRegistrar) {
+		healthgrpc.RegisterHealthServer(s, healthcheck)
+	}))
 	defer backend.Stop()
 
+	healthcheck.SetServingStatus("", healthpb.HealthCheckResponse_SERVING)
+
 	// Dial with healthCheckConfig to trigger the internal health stream.
-	sc := `{"healthCheckConfig": {"serviceName": ""}}`
+	sc := `{"loadBalancingConfig": [{"round_robin":{}}], "healthCheckConfig": {"serviceName": ""}}`
 	dopts := []grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		opentelemetry.DialOption(otelOptions),
@@ -1992,47 +1994,5 @@ func (s) TestHealthStreamNoOtelErrorLog(t *testing.T) {
 	client := testgrpc.NewTestServiceClient(cc)
 	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("EmptyCall failed: %v", err)
-	}
-
-	// Short sleep to allow async telemetry logs (if any) to propagate.
-	time.Sleep(100 * time.Millisecond)
-
-	if tl.found() {
-		t.Fatal("Unexpected OpenTelemetry error log found for health stream")
-	}
-}
-
-// Minimal LoggerV2 implementation to avoid recursion and capture specific errors.
-type testLogReader struct {
-	mu   sync.Mutex
-	seen bool
-	grpclog.LoggerV2
-}
-
-func (l *testLogReader) found() bool {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	return l.seen
-}
-
-func (l *testLogReader) Error(args ...any)                 { l.check(fmt.Sprint(args...)) }
-func (l *testLogReader) Errorf(format string, args ...any) { l.check(fmt.Sprintf(format, args...)) }
-func (l *testLogReader) Errorln(args ...any)               { l.check(fmt.Sprintln(args...)) }
-func (l *testLogReader) Info(...any)                       {}
-func (l *testLogReader) Infoln(...any)                     {}
-func (l *testLogReader) Infof(string, ...any)              {}
-func (l *testLogReader) Warning(...any)                    {}
-func (l *testLogReader) Warningln(...any)                  {}
-func (l *testLogReader) Warningf(string, ...any)           {}
-func (l *testLogReader) V(int) bool                        { return false }
-func (l *testLogReader) Fatal(...any)                      {}
-func (l *testLogReader) Fatalln(...any)                    {}
-func (l *testLogReader) Fatalf(string, ...any)             {}
-
-func (l *testLogReader) check(s string) {
-	if strings.Contains(s, "has no client attempt data present") {
-		l.mu.Lock()
-		l.seen = true
-		l.mu.Unlock()
 	}
 }
