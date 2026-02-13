@@ -372,33 +372,36 @@ func ParseTarget(target, defaultScheme string) (Target, error) {
 
 // ParseTargetWithRegistry parses a gRPC target string into a resolver.Target
 // and verifies that a resolver is registered for the parsed scheme using the
-// provided getBuilder function. If parsing fails and defaultScheme is provided,
-// it prepends defaultScheme and retries. If the scheme is empty after parsing,
-// it is set to defaultScheme. Returns an error if no resolver is registered for
-// the resulting scheme.
+// provided getBuilder function. If parsing fails or no resolver is registered
+// for the parsed scheme, and defaultScheme is provided, it prepends defaultScheme
+// and retries. If the scheme is empty after parsing, it is set to defaultScheme.
+// Returns an error if no resolver is registered for the resulting scheme.
 //
 // The getBuilder function should return a resolver.Builder for the given scheme,
 // or nil if no resolver is registered. This allows callers to provide custom
 // resolver registries (e.g., cc.getResolver from clientconn).
 func ParseTargetWithRegistry(target, defaultScheme string, getBuilder func(string) Builder) (Target, error) {
 	u, err := url.Parse(target)
-	if err != nil {
-		if defaultScheme == "" {
-			return Target{}, fmt.Errorf("invalid target URI %q: %v", target, err)
-		}
-		u, err = url.Parse(defaultScheme + ":///" + target)
+	if err == nil && u.Scheme != "" && getBuilder(u.Scheme) != nil {
+		return Target{URL: *u}, nil
+	}
+
+	if defaultScheme == "" {
 		if err != nil {
 			return Target{}, fmt.Errorf("invalid target URI %q: %v", target, err)
 		}
-	}
-	if u.Scheme == "" {
-		if defaultScheme == "" {
+		if u.Scheme == "" {
 			return Target{}, fmt.Errorf("target URI %q has no scheme", target)
 		}
-		u.Scheme = defaultScheme
+		return Target{}, fmt.Errorf("no resolver registered for scheme %q in target %q", u.Scheme, target)
+	}
+
+	u, err = url.Parse(defaultScheme + ":///" + target)
+	if err != nil {
+		return Target{}, fmt.Errorf("invalid target URI %q: %v", target, err)
 	}
 	if getBuilder(u.Scheme) == nil {
-		return Target{}, fmt.Errorf("no resolver registered for scheme %q in target %q", u.Scheme, target)
+		return Target{}, fmt.Errorf("no resolver registered for scheme %q", u.Scheme)
 	}
 
 	return Target{URL: *u}, nil
