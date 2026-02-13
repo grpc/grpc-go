@@ -109,7 +109,7 @@ func parseDropPolicy(dropPolicy *v3endpointpb.ClusterLoadAssignment_Policy_DropO
 
 func parseEndpoints(lbEndpoints []*v3endpointpb.LbEndpoint, uniqueEndpointAddrs map[string]bool) ([]Endpoint, error) {
 	endpoints := make([]Endpoint, 0, len(lbEndpoints))
-	var totalweight uint64
+	var totalWeight uint64
 	for _, lbEndpoint := range lbEndpoints {
 		// If the load_balancing_weight field is specified, it must be set to a
 		// value of at least 1.  If unspecified, each host is presumed to have
@@ -121,9 +121,9 @@ func parseEndpoints(lbEndpoints []*v3endpointpb.LbEndpoint, uniqueEndpointAddrs 
 			}
 			weight = w.GetValue()
 		}
-		
-		totalweight += uint64(weight)
-		if totalweight > math.MaxUint32 {
+
+		totalWeight += uint64(weight)
+		if totalWeight > math.MaxUint32 {
 			return nil, fmt.Errorf("sum of weights of endpoints in the same locality exceeded maximal value")
 		}
 

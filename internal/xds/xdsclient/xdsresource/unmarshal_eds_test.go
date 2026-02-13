@@ -116,20 +116,20 @@ func (s) TestEDSParseRespProto(t *testing.T) {
 			want: EndpointsUpdate{},
 		},
 		{
-			name:"max sum of endpoint weights within a locality exceeded",
-			m: func()*v3endpointpb.ClusterLoadAssignment{	
+			name: "max sum of endpoint weights within a locality exceeded",
+			m: func() *v3endpointpb.ClusterLoadAssignment {
 				clab0 := newClaBuilder("test", nil)
 				endpoints := []endpointOpts{
-            		{addrWithPort: "addr1:314"}, 
-            		{addrWithPort: "addr2:159"},
-        		}
+					{addrWithPort: "addr1:314"},
+					{addrWithPort: "addr2:159"},
+				}
 				locOption := &addLocalityOptions{
-            		Weight: []uint32{4294967295, 1}, 
-        		}
+					Weight: []uint32{4294967295, 1},
+				}
 				clab0.addLocality("locality-1", 1, 0, endpoints, locOption)
 				return clab0.Build()
 			}(),
-			want: EndpointsUpdate{},
+			want:    EndpointsUpdate{},
 			wantErr: true,
 		},
 		{
