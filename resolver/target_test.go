@@ -266,7 +266,7 @@ type testResolverBuilder struct {
 	scheme string
 }
 
-func (b *testResolverBuilder) Build(target Target, cc ClientConn, opts BuildOptions) (Resolver, error) {
+func (b *testResolverBuilder) Build(_ Target, _ ClientConn, _ BuildOptions) (Resolver, error) {
 	return &testResolver{}, nil
 }
 
