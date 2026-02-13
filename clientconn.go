@@ -1802,7 +1802,14 @@ func (cc *ClientConn) initParsedTargetAndResolverBuilder() error {
 		defScheme = resolver.GetDefaultScheme()
 	}
 
-	target, err := resolver.ParseTargetWithRegistry(cc.target, defScheme, cc.getResolver)
+	target, err := resolver.ParseTargetWithRegistry(cc.target, "", cc.getResolver)
+	if err == nil {
+		cc.parsedTarget = target
+		cc.resolverBuilder = cc.getResolver(target.URL.Scheme)
+		return nil
+	}
+
+	target, err = resolver.ParseTargetWithRegistry(defScheme+":///"+cc.target, "", cc.getResolver)
 	if err != nil {
 		return err
 	}

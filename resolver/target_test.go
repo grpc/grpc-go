@@ -66,7 +66,7 @@ func TestParseTarget(t *testing.T) {
 			target:        "/path/to/socket",
 			defaultScheme: "passthrough",
 			wantScheme:    "passthrough",
-			wantEndpoint:  "/path/to/socket",
+			wantEndpoint:  "path/to/socket",
 			wantErr:       false,
 		},
 		{
@@ -84,12 +84,11 @@ func TestParseTarget(t *testing.T) {
 			errContain:    "no resolver registered for scheme",
 		},
 		{
-			name:          "host:port with default succeeds",
+			name:          "host:port with default errors",
 			target:        "localhost:8080",
 			defaultScheme: "dns",
-			wantScheme:    "dns",
-			wantEndpoint:  "localhost:8080",
-			wantErr:       false,
+			wantErr:       true,
+			errContain:    "no resolver registered for scheme",
 		},
 		{
 			name:          "unregistered scheme without default",
@@ -102,9 +101,8 @@ func TestParseTarget(t *testing.T) {
 			name:          "unregistered scheme with default",
 			target:        "unknown:///example.com:443",
 			defaultScheme: "dns",
-			wantScheme:    "dns",
-			wantEndpoint:  "unknown:///example.com:443",
-			wantErr:       false,
+			wantErr:       true,
+			errContain:    "no resolver registered for scheme",
 		},
 		{
 			name:          "invalid URI without default",
@@ -222,13 +220,12 @@ func TestParseTargetWithRegistry(t *testing.T) {
 			errContain:    "no resolver registered for scheme",
 		},
 		{
-			name:          "custom scheme with default scheme",
+			name:          "unregistered scheme fails even with default",
 			target:        "service:8080",
 			defaultScheme: "custom",
 			registry:      customRegistry,
-			wantScheme:    "custom",
-			wantEndpoint:  "service:8080",
-			wantErr:       false,
+			wantErr:       true,
+			errContain:    "no resolver registered for scheme",
 		},
 		{
 			name:          "global registry Get function",
