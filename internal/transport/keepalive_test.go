@@ -816,7 +816,9 @@ func checkForHealthyStream(client *http2Client) error {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	stream, err := client.NewStream(ctx, &CallHdr{})
-	stream.Close(err)
+	if stream != nil {
+		stream.Close(err)
+	}
 	return err
 }
 
