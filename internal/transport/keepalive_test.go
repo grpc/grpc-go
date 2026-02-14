@@ -816,10 +816,11 @@ func checkForHealthyStream(client *http2Client) error {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	stream, err := client.NewStream(ctx, &CallHdr{}, nil)
-	if stream != nil {
-		stream.Close(err)
+	if err != nil {
+		return err
 	}
-	return err
+	stream.Close(nil)
+	return nil
 }
 
 func pollForStreamCreationError(client *http2Client) error {
