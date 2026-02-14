@@ -25,6 +25,10 @@ import (
 	"testing"
 	"time"
 
+	"google.golang.org/grpc/health"
+	healthgrpc "google.golang.org/grpc/health/grpc_health_v1"
+	healthpb "google.golang.org/grpc/health/grpc_health_v1"
+
 	otelcodes "go.opentelemetry.io/otel/codes"
 	oteltrace "go.opentelemetry.io/otel/trace"
 
@@ -1946,5 +1950,49 @@ func (s) TestSubChannelMetrics(t *testing.T) {
 
 	if err := pollForWantMetrics(ctx, t, reader, disconnectionWantMetrics); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func (s) TestHealthStreamNoOtelErrorLog(t *testing.T) {
+	mo, _ := defaultMetricsOptions(t, nil)
+	to, _ := defaultTraceOptions(t)
+	otelOptions := opentelemetry.Options{
+		MetricsOptions: *mo,
+		TraceOptions:   *to,
+	}
+
+	healthcheck := health.NewServer()
+
+	backend := stubserver.StartTestService(t, &stubserver.StubServer{
+		EmptyCallF: func(_ context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
+			return &testpb.Empty{}, nil
+		},
+	}, stubserver.RegisterServiceServerOption(func(s grpc.ServiceRegistrar) {
+		healthgrpc.RegisterHealthServer(s, healthcheck)
+	}))
+	defer backend.Stop()
+
+	healthcheck.SetServingStatus("", healthpb.HealthCheckResponse_SERVING)
+
+	// Dial with healthCheckConfig to trigger the internal health stream.
+	sc := `{"loadBalancingConfig": [{"round_robin":{}}], "healthCheckConfig": {"serviceName": ""}}`
+	dopts := []grpc.DialOption{
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		opentelemetry.DialOption(otelOptions),
+		grpc.WithDefaultServiceConfig(sc),
+	}
+
+	cc, err := grpc.NewClient(backend.Address, dopts...)
+	if err != nil {
+		t.Fatalf("Failed to create client: %v", err)
+	}
+	defer cc.Close()
+
+	// Perform an RPC to ensure the subchannel connects and health stream initializes.
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	client := testgrpc.NewTestServiceClient(cc)
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+		t.Fatalf("EmptyCall failed: %v", err)
 	}
 }
