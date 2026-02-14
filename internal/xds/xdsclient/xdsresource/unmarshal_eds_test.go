@@ -19,6 +19,7 @@ package xdsresource
 
 import (
 	"fmt"
+	"math"
 	"net"
 	"strconv"
 	"testing"
@@ -124,7 +125,7 @@ func (s) TestEDSParseRespProto(t *testing.T) {
 					{addrWithPort: "addr2:159"},
 				}
 				locOption := &addLocalityOptions{
-					Weight: []uint32{4294967295, 1},
+					Weight: []uint32{math.MaxUint32, 1},
 				}
 				clab0.addLocality("locality-1", 1, 0, endpoints, locOption)
 				return clab0.Build()
