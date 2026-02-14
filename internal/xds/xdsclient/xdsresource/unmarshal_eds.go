@@ -124,7 +124,7 @@ func parseEndpoints(lbEndpoints []*v3endpointpb.LbEndpoint, uniqueEndpointAddrs 
 
 		totalWeight += uint64(weight)
 		if totalWeight > math.MaxUint32 {
-			return nil, fmt.Errorf("sum of weights of endpoints in the same locality exceeds maximum value %d", math.MaxUint32)
+			return nil, fmt.Errorf("sum of weights of endpoints in the same locality exceeds maximum value %d", uint64(math.MaxUint32))
 		}
 
 		addrs := []string{parseAddress(lbEndpoint.GetEndpoint().GetAddress().GetSocketAddress())}
