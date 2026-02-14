@@ -294,9 +294,3 @@ func (r *TestMetricsRecorder) TagConn(ctx context.Context, _ *stats.ConnTagInfo)
 
 // HandleConn is TestMetricsRecorder's implementation of HandleConn.
 func (r *TestMetricsRecorder) HandleConn(context.Context, stats.ConnStats) {}
-
-// NoopMetricsRecorder is a noop MetricsRecorder to be used in tests to prevent
-// nil panics.
-type NoopMetricsRecorder struct {
-	estats.UnimplementedMetricsRecorder
-}
