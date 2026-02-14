@@ -20,6 +20,7 @@ package test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -282,7 +283,7 @@ func (s) TestRetryStreaming(t *testing.T) {
 			res, err := stream.Recv()
 			if res != nil ||
 				((err == nil) != (want == nil)) ||
-				(want != nil && err.Error() != want.Error()) {
+				(want != nil && !errors.Is(err, want)) {
 				return fmt.Errorf("client: Recv() = %v, %v; want <nil>, %v", res, err, want)
 			}
 			return nil
@@ -550,7 +551,10 @@ func (s) TestMaxCallAttempts(t *testing.T) {
 				t.Fatalf("client: Recv() = %s, %v; want <nil>, error", got, err)
 			} else if status.Code(err) != codes.Unavailable {
 				t.Fatalf("client: Recv() = _, %v; want _, Unavailable", err)
+			} else if !errors.Is(err, grpc.ErrRetriesExhausted) {
+				t.Fatalf("want: ErrRetriesExhausted, got: %v", err)
 			}
+
 			if streamCallCount != tc.expectedAttempts {
 				t.Fatalf("stream expectedAttempts = %v; want %v", streamCallCount, tc.expectedAttempts)
 			}
