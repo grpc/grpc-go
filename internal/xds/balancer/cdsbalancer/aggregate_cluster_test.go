@@ -23,19 +23,13 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/pretty"
-	iserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
-	xdsinternal "google.golang.org/grpc/internal/xds"
-	"google.golang.org/grpc/internal/xds/balancer/clusterimpl"
-	"google.golang.org/grpc/internal/xds/balancer/outlierdetection"
 	"google.golang.org/grpc/internal/xds/balancer/priority"
-	"google.golang.org/grpc/internal/xds/balancer/wrrlocality"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource/version"
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/status"
@@ -94,31 +88,7 @@ func (s) TestAggregateClusterSuccess_LeafNode(t *testing.T) {
 			wantFirstChildCfg: &priority.LBConfig{
 				Children: map[string]*priority.Child{
 					"priority-0-0": {
-						Config: &iserviceconfig.BalancerConfig{
-							Name: outlierdetection.Name,
-							Config: &outlierdetection.LBConfig{
-								Interval:           iserviceconfig.Duration(10 * time.Second), // default interval
-								BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
-								MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
-								MaxEjectionPercent: 10,
-								ChildPolicy: &iserviceconfig.BalancerConfig{
-									Name: clusterimpl.Name,
-									Config: &clusterimpl.LBConfig{
-										Cluster:         clusterName,
-										EDSServiceName:  serviceName,
-										TelemetryLabels: xdsinternal.UnknownCSMLabels,
-										ChildPolicy: &iserviceconfig.BalancerConfig{
-											Name: wrrlocality.Name,
-											Config: &wrrlocality.LBConfig{
-												ChildPolicy: &iserviceconfig.BalancerConfig{
-													Name: roundrobin.Name,
-												},
-											},
-										},
-									},
-								},
-							},
-						},
+						Config:                     createEDSPriorityConfig(clusterName, serviceName),
 						IgnoreReresolutionRequests: true,
 					},
 				},
@@ -127,31 +97,7 @@ func (s) TestAggregateClusterSuccess_LeafNode(t *testing.T) {
 			wantSecondChildCfg: &priority.LBConfig{
 				Children: map[string]*priority.Child{
 					"priority-1-0": {
-						Config: &iserviceconfig.BalancerConfig{
-							Name: outlierdetection.Name,
-							Config: &outlierdetection.LBConfig{
-								Interval:           iserviceconfig.Duration(10 * time.Second), // default interval
-								BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
-								MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
-								MaxEjectionPercent: 10,
-								ChildPolicy: &iserviceconfig.BalancerConfig{
-									Name: clusterimpl.Name,
-									Config: &clusterimpl.LBConfig{
-										Cluster:         clusterName,
-										EDSServiceName:  serviceName + "-new",
-										TelemetryLabels: xdsinternal.UnknownCSMLabels,
-										ChildPolicy: &iserviceconfig.BalancerConfig{
-											Name: wrrlocality.Name,
-											Config: &wrrlocality.LBConfig{
-												ChildPolicy: &iserviceconfig.BalancerConfig{
-													Name: roundrobin.Name,
-												},
-											},
-										},
-									},
-								},
-							},
-						},
+						Config:                     createEDSPriorityConfig(clusterName, serviceName+"-new"),
 						IgnoreReresolutionRequests: true,
 					},
 				},
@@ -165,30 +111,7 @@ func (s) TestAggregateClusterSuccess_LeafNode(t *testing.T) {
 			wantFirstChildCfg: &priority.LBConfig{
 				Children: map[string]*priority.Child{
 					"priority-0": {
-						Config: &iserviceconfig.BalancerConfig{
-							Name: outlierdetection.Name,
-							Config: &outlierdetection.LBConfig{
-								Interval:           iserviceconfig.Duration(10 * time.Second), // default interval
-								BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
-								MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
-								MaxEjectionPercent: 10,
-								ChildPolicy: &iserviceconfig.BalancerConfig{
-									Name: clusterimpl.Name,
-									Config: &clusterimpl.LBConfig{
-										Cluster:         clusterName,
-										TelemetryLabels: xdsinternal.UnknownCSMLabels,
-										ChildPolicy: &iserviceconfig.BalancerConfig{
-											Name: wrrlocality.Name,
-											Config: &wrrlocality.LBConfig{
-												ChildPolicy: &iserviceconfig.BalancerConfig{
-													Name: roundrobin.Name,
-												},
-											},
-										},
-									},
-								},
-							},
-						},
+						Config: createDNSPriorityConfig(clusterName),
 					},
 				},
 				Priorities: []string{"priority-0"},
@@ -196,30 +119,7 @@ func (s) TestAggregateClusterSuccess_LeafNode(t *testing.T) {
 			wantSecondChildCfg: &priority.LBConfig{
 				Children: map[string]*priority.Child{
 					"priority-1": {
-						Config: &iserviceconfig.BalancerConfig{
-							Name: outlierdetection.Name,
-							Config: &outlierdetection.LBConfig{
-								Interval:           iserviceconfig.Duration(10 * time.Second), // default interval
-								BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
-								MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
-								MaxEjectionPercent: 10,
-								ChildPolicy: &iserviceconfig.BalancerConfig{
-									Name: clusterimpl.Name,
-									Config: &clusterimpl.LBConfig{
-										Cluster:         clusterName,
-										TelemetryLabels: xdsinternal.UnknownCSMLabels,
-										ChildPolicy: &iserviceconfig.BalancerConfig{
-											Name: wrrlocality.Name,
-											Config: &wrrlocality.LBConfig{
-												ChildPolicy: &iserviceconfig.BalancerConfig{
-													Name: roundrobin.Name,
-												},
-											},
-										},
-									},
-								},
-							},
-						},
+						Config: createDNSPriorityConfig(clusterName),
 					},
 				},
 				Priorities: []string{"priority-1"},
@@ -269,11 +169,11 @@ func (s) TestAggregateClusterSuccess_LeafNode(t *testing.T) {
 // root pointing to two child clusters, one of type EDS and the other of type
 // LogicalDNS. The test verifies that load balancing configuration is pushed to
 // the priority LB policy only when all child clusters are resolved and it also
-// verifies that the pushed configuration contains the expected discovery
-// mechanisms. The test then updates the aggregate cluster to point to two child
-// clusters, the same leaf cluster of type EDS and a different leaf cluster of
-// type LogicalDNS and verifies that the load balancing configuration pushed to
-// the priority LB policy contains the expected discovery mechanisms.
+// verifies that the pushed configuration contains the expected priority config.
+// The test then updates the aggregate cluster to point to two child clusters,
+// the same leaf cluster of type EDS and a different leaf cluster of type
+// LogicalDNS and verifies that the load balancing configuration pushed to the
+// priority LB policy contains the expected config.
 func (s) TestAggregateClusterSuccess_ThenUpdateChildClusters(t *testing.T) {
 	lbCfgCh, _, _, _ := registerWrappedPriorityPolicy(t)
 	mgmtServer, nodeID, _ := setupWithManagementServer(t, nil, nil)
@@ -316,58 +216,11 @@ func (s) TestAggregateClusterSuccess_ThenUpdateChildClusters(t *testing.T) {
 	wantChildCfg := &priority.LBConfig{
 		Children: map[string]*priority.Child{
 			"priority-0-0": {
-				Config: &iserviceconfig.BalancerConfig{
-					Name: outlierdetection.Name,
-					Config: &outlierdetection.LBConfig{
-						Interval:           iserviceconfig.Duration(10 * time.Second), // default interval
-						BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
-						MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
-						MaxEjectionPercent: 10,
-						ChildPolicy: &iserviceconfig.BalancerConfig{
-							Name: clusterimpl.Name,
-							Config: &clusterimpl.LBConfig{
-								Cluster:         edsClusterName,
-								EDSServiceName:  serviceName,
-								TelemetryLabels: xdsinternal.UnknownCSMLabels,
-								ChildPolicy: &iserviceconfig.BalancerConfig{
-									Name: wrrlocality.Name,
-									Config: &wrrlocality.LBConfig{
-										ChildPolicy: &iserviceconfig.BalancerConfig{
-											Name: roundrobin.Name,
-										},
-									},
-								},
-							},
-						},
-					},
-				},
+				Config:                     createEDSPriorityConfig(edsClusterName, serviceName),
 				IgnoreReresolutionRequests: true,
 			},
 			"priority-1": {
-				Config: &iserviceconfig.BalancerConfig{
-					Name: outlierdetection.Name,
-					Config: &outlierdetection.LBConfig{
-						Interval:           iserviceconfig.Duration(10 * time.Second), // default interval
-						BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
-						MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
-						MaxEjectionPercent: 10,
-						ChildPolicy: &iserviceconfig.BalancerConfig{
-							Name: clusterimpl.Name,
-							Config: &clusterimpl.LBConfig{
-								Cluster:         dnsClusterName,
-								TelemetryLabels: xdsinternal.UnknownCSMLabels,
-								ChildPolicy: &iserviceconfig.BalancerConfig{
-									Name: wrrlocality.Name,
-									Config: &wrrlocality.LBConfig{
-										ChildPolicy: &iserviceconfig.BalancerConfig{
-											Name: roundrobin.Name,
-										},
-									},
-								},
-							},
-						},
-					},
-				},
+				Config: createDNSPriorityConfig(dnsClusterName),
 			},
 		},
 		Priorities: []string{"priority-0-0", "priority-1"},
@@ -396,58 +249,11 @@ func (s) TestAggregateClusterSuccess_ThenUpdateChildClusters(t *testing.T) {
 	wantChildCfg = &priority.LBConfig{
 		Children: map[string]*priority.Child{
 			"priority-0-0": {
-				Config: &iserviceconfig.BalancerConfig{
-					Name: outlierdetection.Name,
-					Config: &outlierdetection.LBConfig{
-						Interval:           iserviceconfig.Duration(10 * time.Second), // default interval
-						BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
-						MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
-						MaxEjectionPercent: 10,
-						ChildPolicy: &iserviceconfig.BalancerConfig{
-							Name: clusterimpl.Name,
-							Config: &clusterimpl.LBConfig{
-								Cluster:         edsClusterName,
-								EDSServiceName:  serviceName,
-								TelemetryLabels: xdsinternal.UnknownCSMLabels,
-								ChildPolicy: &iserviceconfig.BalancerConfig{
-									Name: wrrlocality.Name,
-									Config: &wrrlocality.LBConfig{
-										ChildPolicy: &iserviceconfig.BalancerConfig{
-											Name: roundrobin.Name,
-										},
-									},
-								},
-							},
-						},
-					},
-				},
+				Config:                     createEDSPriorityConfig(edsClusterName, serviceName),
 				IgnoreReresolutionRequests: true,
 			},
 			"priority-2": {
-				Config: &iserviceconfig.BalancerConfig{
-					Name: outlierdetection.Name,
-					Config: &outlierdetection.LBConfig{
-						Interval:           iserviceconfig.Duration(10 * time.Second), // default interval
-						BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
-						MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
-						MaxEjectionPercent: 10,
-						ChildPolicy: &iserviceconfig.BalancerConfig{
-							Name: clusterimpl.Name,
-							Config: &clusterimpl.LBConfig{
-								Cluster:         dnsClusterNameNew,
-								TelemetryLabels: xdsinternal.UnknownCSMLabels,
-								ChildPolicy: &iserviceconfig.BalancerConfig{
-									Name: wrrlocality.Name,
-									Config: &wrrlocality.LBConfig{
-										ChildPolicy: &iserviceconfig.BalancerConfig{
-											Name: roundrobin.Name,
-										},
-									},
-								},
-							},
-						},
-					},
-				},
+				Config: createDNSPriorityConfig(dnsClusterNameNew),
 			},
 		},
 		Priorities: []string{"priority-0-0", "priority-2"},
@@ -491,58 +297,11 @@ func (s) TestAggregateClusterSuccess_ThenChangeRootToEDS(t *testing.T) {
 	wantChildCfg := &priority.LBConfig{
 		Children: map[string]*priority.Child{
 			"priority-0-0": {
-				Config: &iserviceconfig.BalancerConfig{
-					Name: outlierdetection.Name,
-					Config: &outlierdetection.LBConfig{
-						Interval:           iserviceconfig.Duration(10 * time.Second), // default interval
-						BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
-						MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
-						MaxEjectionPercent: 10,
-						ChildPolicy: &iserviceconfig.BalancerConfig{
-							Name: clusterimpl.Name,
-							Config: &clusterimpl.LBConfig{
-								Cluster:         edsClusterName,
-								EDSServiceName:  serviceName,
-								TelemetryLabels: xdsinternal.UnknownCSMLabels,
-								ChildPolicy: &iserviceconfig.BalancerConfig{
-									Name: wrrlocality.Name,
-									Config: &wrrlocality.LBConfig{
-										ChildPolicy: &iserviceconfig.BalancerConfig{
-											Name: roundrobin.Name,
-										},
-									},
-								},
-							},
-						},
-					},
-				},
+				Config:                     createEDSPriorityConfig(edsClusterName, serviceName),
 				IgnoreReresolutionRequests: true,
 			},
 			"priority-1": {
-				Config: &iserviceconfig.BalancerConfig{
-					Name: outlierdetection.Name,
-					Config: &outlierdetection.LBConfig{
-						Interval:           iserviceconfig.Duration(10 * time.Second), // default interval
-						BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
-						MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
-						MaxEjectionPercent: 10,
-						ChildPolicy: &iserviceconfig.BalancerConfig{
-							Name: clusterimpl.Name,
-							Config: &clusterimpl.LBConfig{
-								Cluster:         dnsClusterName,
-								TelemetryLabels: xdsinternal.UnknownCSMLabels,
-								ChildPolicy: &iserviceconfig.BalancerConfig{
-									Name: wrrlocality.Name,
-									Config: &wrrlocality.LBConfig{
-										ChildPolicy: &iserviceconfig.BalancerConfig{
-											Name: roundrobin.Name,
-										},
-									},
-								},
-							},
-						},
-					},
-				},
+				Config: createDNSPriorityConfig(dnsClusterName),
 			},
 		},
 		Priorities: []string{"priority-0-0", "priority-1"},
@@ -569,31 +328,7 @@ func (s) TestAggregateClusterSuccess_ThenChangeRootToEDS(t *testing.T) {
 	wantChildCfg = &priority.LBConfig{
 		Children: map[string]*priority.Child{
 			"priority-0-0": {
-				Config: &iserviceconfig.BalancerConfig{
-					Name: outlierdetection.Name,
-					Config: &outlierdetection.LBConfig{
-						Interval:           iserviceconfig.Duration(10 * time.Second), // default interval
-						BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
-						MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
-						MaxEjectionPercent: 10,
-						ChildPolicy: &iserviceconfig.BalancerConfig{
-							Name: clusterimpl.Name,
-							Config: &clusterimpl.LBConfig{
-								Cluster:         clusterName,
-								EDSServiceName:  serviceName,
-								TelemetryLabels: xdsinternal.UnknownCSMLabels,
-								ChildPolicy: &iserviceconfig.BalancerConfig{
-									Name: wrrlocality.Name,
-									Config: &wrrlocality.LBConfig{
-										ChildPolicy: &iserviceconfig.BalancerConfig{
-											Name: roundrobin.Name,
-										},
-									},
-								},
-							},
-						},
-					},
-				},
+				Config:                     createEDSPriorityConfig(clusterName, serviceName),
 				IgnoreReresolutionRequests: true,
 			},
 		},
@@ -607,8 +342,7 @@ func (s) TestAggregateClusterSuccess_ThenChangeRootToEDS(t *testing.T) {
 // Tests the case where a requested cluster resource switches between being a
 // leaf and an aggregate cluster pointing to an EDS and LogicalDNS child
 // cluster. In each of these cases, the test verifies that the load balancing
-// configuration pushed to the priority LB policy contains the expected
-// discovery mechanisms.
+// configuration pushed to the priority LB policy contains the expected config.
 func (s) TestAggregatedClusterSuccess_SwitchBetweenLeafAndAggregate(t *testing.T) {
 	lbCfgCh, _, _, _ := registerWrappedPriorityPolicy(t)
 	mgmtServer, nodeID, _ := setupWithManagementServer(t, nil, nil)
@@ -629,31 +363,7 @@ func (s) TestAggregatedClusterSuccess_SwitchBetweenLeafAndAggregate(t *testing.T
 	wantChildCfg := &priority.LBConfig{
 		Children: map[string]*priority.Child{
 			"priority-0-0": {
-				Config: &iserviceconfig.BalancerConfig{
-					Name: outlierdetection.Name,
-					Config: &outlierdetection.LBConfig{
-						Interval:           iserviceconfig.Duration(10 * time.Second), // default interval
-						BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
-						MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
-						MaxEjectionPercent: 10,
-						ChildPolicy: &iserviceconfig.BalancerConfig{
-							Name: clusterimpl.Name,
-							Config: &clusterimpl.LBConfig{
-								Cluster:         clusterName,
-								EDSServiceName:  serviceName,
-								TelemetryLabels: xdsinternal.UnknownCSMLabels,
-								ChildPolicy: &iserviceconfig.BalancerConfig{
-									Name: wrrlocality.Name,
-									Config: &wrrlocality.LBConfig{
-										ChildPolicy: &iserviceconfig.BalancerConfig{
-											Name: roundrobin.Name,
-										},
-									},
-								},
-							},
-						},
-					},
-				},
+				Config:                     createEDSPriorityConfig(clusterName, serviceName),
 				IgnoreReresolutionRequests: true,
 			},
 		},
@@ -682,58 +392,11 @@ func (s) TestAggregatedClusterSuccess_SwitchBetweenLeafAndAggregate(t *testing.T
 	wantChildCfg = &priority.LBConfig{
 		Children: map[string]*priority.Child{
 			"priority-0-0": {
-				Config: &iserviceconfig.BalancerConfig{
-					Name: outlierdetection.Name,
-					Config: &outlierdetection.LBConfig{
-						Interval:           iserviceconfig.Duration(10 * time.Second), // default interval
-						BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
-						MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
-						MaxEjectionPercent: 10,
-						ChildPolicy: &iserviceconfig.BalancerConfig{
-							Name: clusterimpl.Name,
-							Config: &clusterimpl.LBConfig{
-								Cluster:         edsClusterName,
-								EDSServiceName:  serviceName,
-								TelemetryLabels: xdsinternal.UnknownCSMLabels,
-								ChildPolicy: &iserviceconfig.BalancerConfig{
-									Name: wrrlocality.Name,
-									Config: &wrrlocality.LBConfig{
-										ChildPolicy: &iserviceconfig.BalancerConfig{
-											Name: roundrobin.Name,
-										},
-									},
-								},
-							},
-						},
-					},
-				},
+				Config:                     createEDSPriorityConfig(edsClusterName, serviceName),
 				IgnoreReresolutionRequests: true,
 			},
 			"priority-1": {
-				Config: &iserviceconfig.BalancerConfig{
-					Name: outlierdetection.Name,
-					Config: &outlierdetection.LBConfig{
-						Interval:           iserviceconfig.Duration(10 * time.Second), // default interval
-						BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
-						MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
-						MaxEjectionPercent: 10,
-						ChildPolicy: &iserviceconfig.BalancerConfig{
-							Name: clusterimpl.Name,
-							Config: &clusterimpl.LBConfig{
-								Cluster:         dnsClusterName,
-								TelemetryLabels: xdsinternal.UnknownCSMLabels,
-								ChildPolicy: &iserviceconfig.BalancerConfig{
-									Name: wrrlocality.Name,
-									Config: &wrrlocality.LBConfig{
-										ChildPolicy: &iserviceconfig.BalancerConfig{
-											Name: roundrobin.Name,
-										},
-									},
-								},
-							},
-						},
-					},
-				},
+				Config: createDNSPriorityConfig(dnsClusterName),
 			},
 		},
 		Priorities: []string{"priority-0-0", "priority-1"},
@@ -756,31 +419,7 @@ func (s) TestAggregatedClusterSuccess_SwitchBetweenLeafAndAggregate(t *testing.T
 	wantChildCfg = &priority.LBConfig{
 		Children: map[string]*priority.Child{
 			"priority-0-0": {
-				Config: &iserviceconfig.BalancerConfig{
-					Name: outlierdetection.Name,
-					Config: &outlierdetection.LBConfig{
-						Interval:           iserviceconfig.Duration(10 * time.Second), // default interval
-						BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
-						MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
-						MaxEjectionPercent: 10,
-						ChildPolicy: &iserviceconfig.BalancerConfig{
-							Name: clusterimpl.Name,
-							Config: &clusterimpl.LBConfig{
-								Cluster:         clusterName,
-								EDSServiceName:  serviceName,
-								TelemetryLabels: xdsinternal.UnknownCSMLabels,
-								ChildPolicy: &iserviceconfig.BalancerConfig{
-									Name: wrrlocality.Name,
-									Config: &wrrlocality.LBConfig{
-										ChildPolicy: &iserviceconfig.BalancerConfig{
-											Name: roundrobin.Name,
-										},
-									},
-								},
-							},
-						},
-					},
-				},
+				Config:                     createEDSPriorityConfig(clusterName, serviceName),
 				IgnoreReresolutionRequests: true,
 			},
 		},
@@ -938,31 +577,7 @@ func (s) TestAggregatedClusterSuccess_DiamondDependency(t *testing.T) {
 	wantChildCfg := &priority.LBConfig{
 		Children: map[string]*priority.Child{
 			"priority-0-0": {
-				Config: &iserviceconfig.BalancerConfig{
-					Name: outlierdetection.Name,
-					Config: &outlierdetection.LBConfig{
-						Interval:           iserviceconfig.Duration(10 * time.Second), // default interval
-						BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
-						MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
-						MaxEjectionPercent: 10,
-						ChildPolicy: &iserviceconfig.BalancerConfig{
-							Name: clusterimpl.Name,
-							Config: &clusterimpl.LBConfig{
-								Cluster:         clusterNameD,
-								EDSServiceName:  serviceName,
-								TelemetryLabels: xdsinternal.UnknownCSMLabels,
-								ChildPolicy: &iserviceconfig.BalancerConfig{
-									Name: wrrlocality.Name,
-									Config: &wrrlocality.LBConfig{
-										ChildPolicy: &iserviceconfig.BalancerConfig{
-											Name: roundrobin.Name,
-										},
-									},
-								},
-							},
-						},
-					},
-				},
+				Config:                     createEDSPriorityConfig(clusterNameD, serviceName),
 				IgnoreReresolutionRequests: true,
 			},
 		},
@@ -975,10 +590,9 @@ func (s) TestAggregatedClusterSuccess_DiamondDependency(t *testing.T) {
 
 // Tests the case where the aggregate cluster graph contains duplicates (A->[B,
 // C]; B->[C, D]). Verifies that the load balancing configuration pushed to the
-// priority LB policy does not contain duplicates, and that the discovery
-// mechanism corresponding to cluster C is of higher priority than the discovery
-// mechanism for cluster D. Also verifies that the configuration is pushed only
-// after all child clusters are resolved.
+// priority LB policy does not contain duplicates, and that the priority
+// corresponding to cluster C is higher than that for cluster D. Also verifies
+// that the configuration is pushed only after all child clusters are resolved.
 func (s) TestAggregatedClusterSuccess_IgnoreDups(t *testing.T) {
 	lbCfgCh, _, _, _ := registerWrappedPriorityPolicy(t)
 	mgmtServer, nodeID, _ := setupWithManagementServer(t, nil, nil)
@@ -1031,59 +645,11 @@ func (s) TestAggregatedClusterSuccess_IgnoreDups(t *testing.T) {
 	wantChildCfg := &priority.LBConfig{
 		Children: map[string]*priority.Child{
 			"priority-0-0": {
-				Config: &iserviceconfig.BalancerConfig{
-					Name: outlierdetection.Name,
-					Config: &outlierdetection.LBConfig{
-						Interval:           iserviceconfig.Duration(10 * time.Second), // default interval
-						BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
-						MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
-						MaxEjectionPercent: 10,
-						ChildPolicy: &iserviceconfig.BalancerConfig{
-							Name: clusterimpl.Name,
-							Config: &clusterimpl.LBConfig{
-								Cluster:         clusterNameC,
-								EDSServiceName:  edsClusterName,
-								TelemetryLabels: xdsinternal.UnknownCSMLabels,
-								ChildPolicy: &iserviceconfig.BalancerConfig{
-									Name: wrrlocality.Name,
-									Config: &wrrlocality.LBConfig{
-										ChildPolicy: &iserviceconfig.BalancerConfig{
-											Name: roundrobin.Name,
-										},
-									},
-								},
-							},
-						},
-					},
-				},
+				Config:                     createEDSPriorityConfig(clusterNameC, edsClusterName),
 				IgnoreReresolutionRequests: true,
 			},
 			"priority-1-0": {
-				Config: &iserviceconfig.BalancerConfig{
-					Name: outlierdetection.Name,
-					Config: &outlierdetection.LBConfig{
-						Interval:           iserviceconfig.Duration(10 * time.Second), // default interval
-						BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
-						MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
-						MaxEjectionPercent: 10,
-						ChildPolicy: &iserviceconfig.BalancerConfig{
-							Name: clusterimpl.Name,
-							Config: &clusterimpl.LBConfig{
-								Cluster:         clusterNameD,
-								EDSServiceName:  serviceName,
-								TelemetryLabels: xdsinternal.UnknownCSMLabels,
-								ChildPolicy: &iserviceconfig.BalancerConfig{
-									Name: wrrlocality.Name,
-									Config: &wrrlocality.LBConfig{
-										ChildPolicy: &iserviceconfig.BalancerConfig{
-											Name: roundrobin.Name,
-										},
-									},
-								},
-							},
-						},
-					},
-				},
+				Config:                     createEDSPriorityConfig(clusterNameD, serviceName),
 				IgnoreReresolutionRequests: true,
 			},
 		},
@@ -1167,31 +733,7 @@ func (s) TestAggregatedCluster_NodeChildOfItself(t *testing.T) {
 	wantChildCfg := &priority.LBConfig{
 		Children: map[string]*priority.Child{
 			"priority-0-0": {
-				Config: &iserviceconfig.BalancerConfig{
-					Name: outlierdetection.Name,
-					Config: &outlierdetection.LBConfig{
-						Interval:           iserviceconfig.Duration(10 * time.Second), // default interval
-						BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
-						MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
-						MaxEjectionPercent: 10,
-						ChildPolicy: &iserviceconfig.BalancerConfig{
-							Name: clusterimpl.Name,
-							Config: &clusterimpl.LBConfig{
-								Cluster:         clusterNameB,
-								EDSServiceName:  serviceName,
-								TelemetryLabels: xdsinternal.UnknownCSMLabels,
-								ChildPolicy: &iserviceconfig.BalancerConfig{
-									Name: wrrlocality.Name,
-									Config: &wrrlocality.LBConfig{
-										ChildPolicy: &iserviceconfig.BalancerConfig{
-											Name: roundrobin.Name,
-										},
-									},
-								},
-							},
-						},
-					},
-				},
+				Config:                     createEDSPriorityConfig(clusterNameB, serviceName),
 				IgnoreReresolutionRequests: true,
 			},
 		},
@@ -1300,31 +842,7 @@ func (s) TestAggregatedCluster_CycleWithLeafNode(t *testing.T) {
 	wantChildCfg := &priority.LBConfig{
 		Children: map[string]*priority.Child{
 			"priority-0-0": {
-				Config: &iserviceconfig.BalancerConfig{
-					Name: outlierdetection.Name,
-					Config: &outlierdetection.LBConfig{
-						Interval:           iserviceconfig.Duration(10 * time.Second), // default interval
-						BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
-						MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
-						MaxEjectionPercent: 10,
-						ChildPolicy: &iserviceconfig.BalancerConfig{
-							Name: clusterimpl.Name,
-							Config: &clusterimpl.LBConfig{
-								Cluster:         clusterNameC,
-								EDSServiceName:  serviceName,
-								TelemetryLabels: xdsinternal.UnknownCSMLabels,
-								ChildPolicy: &iserviceconfig.BalancerConfig{
-									Name: wrrlocality.Name,
-									Config: &wrrlocality.LBConfig{
-										ChildPolicy: &iserviceconfig.BalancerConfig{
-											Name: roundrobin.Name,
-										},
-									},
-								},
-							},
-						},
-					},
-				},
+				Config:                     createEDSPriorityConfig(clusterNameC, serviceName),
 				IgnoreReresolutionRequests: true,
 			},
 		},

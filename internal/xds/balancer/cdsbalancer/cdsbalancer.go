@@ -527,10 +527,11 @@ func (b *cdsBalancer) updatePriorityConfig(clusterName string, clusterConfig *xd
 // Telemetry Labels for all priorities.
 func (b *cdsBalancer) updateOutlierDetectionAndTelemetry() {
 	for i := range b.priorities {
+		clusterName := b.priorities[i].clusterName
 		// Update Telemetry Labels.
-		b.priorities[i].clusterUpdate.TelemetryLabels = b.clusterConfigs[b.priorities[i].clusterName].Config.Cluster.TelemetryLabels
+		b.priorities[i].clusterUpdate.TelemetryLabels = b.clusterConfigs[clusterName].Config.Cluster.TelemetryLabels
 		// Update Outlier Detection Config.
-		odJSON := b.clusterConfigs[b.priorities[i].clusterName].Config.Cluster.OutlierDetection
+		odJSON := b.clusterConfigs[clusterName].Config.Cluster.OutlierDetection
 		if odJSON == nil {
 			odJSON = json.RawMessage(`{}`)
 		}

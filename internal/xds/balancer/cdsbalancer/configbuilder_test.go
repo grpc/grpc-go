@@ -220,7 +220,6 @@ func (s) TestBuildPriorityConfig(t *testing.T) {
 				ClusterName:    testClusterName,
 				ClusterType:    xdsresource.ClusterTypeEDS,
 				EDSServiceName: testEDSServiceName,
-				// Do we need outlier detection here too?
 			},
 			outlierDetection: noopODCfg,
 			edsResp: xdsresource.EndpointsUpdate{

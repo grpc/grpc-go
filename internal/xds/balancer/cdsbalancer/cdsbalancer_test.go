@@ -247,6 +247,61 @@ func verifyRPCError(gotErr error, wantCode codes.Code, wantErr, wantNodeID strin
 	return nil
 }
 
+func createEDSPriorityConfig(cluster, edsServiceName string) *iserviceconfig.BalancerConfig {
+	return &iserviceconfig.BalancerConfig{
+		Name: outlierdetection.Name,
+		Config: &outlierdetection.LBConfig{
+			Interval:           iserviceconfig.Duration(10 * time.Second), // default interval
+			BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
+			MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
+			MaxEjectionPercent: 10,
+			ChildPolicy: &iserviceconfig.BalancerConfig{
+				Name: clusterimpl.Name,
+				Config: &clusterimpl.LBConfig{
+					Cluster:         cluster,
+					EDSServiceName:  edsServiceName,
+					TelemetryLabels: xdsinternal.UnknownCSMLabels,
+					ChildPolicy: &iserviceconfig.BalancerConfig{
+						Name: wrrlocality.Name,
+						Config: &wrrlocality.LBConfig{
+							ChildPolicy: &iserviceconfig.BalancerConfig{
+								Name: roundrobin.Name,
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func createDNSPriorityConfig(cluster string) *iserviceconfig.BalancerConfig {
+	return &iserviceconfig.BalancerConfig{
+		Name: outlierdetection.Name,
+		Config: &outlierdetection.LBConfig{
+			Interval:           iserviceconfig.Duration(10 * time.Second), // default interval
+			BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
+			MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
+			MaxEjectionPercent: 10,
+			ChildPolicy: &iserviceconfig.BalancerConfig{
+				Name: clusterimpl.Name,
+				Config: &clusterimpl.LBConfig{
+					Cluster:         cluster,
+					TelemetryLabels: xdsinternal.UnknownCSMLabels,
+					ChildPolicy: &iserviceconfig.BalancerConfig{
+						Name: wrrlocality.Name,
+						Config: &wrrlocality.LBConfig{
+							ChildPolicy: &iserviceconfig.BalancerConfig{
+								Name: roundrobin.Name,
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
 // Tests the case where a configuration with an empty cluster name is pushed to
 // the CDS LB policy. Verifies that ErrBadResolverState is returned.
 func (s) TestConfigurationUpdate_EmptyCluster(t *testing.T) {
@@ -1031,7 +1086,7 @@ func (s) TestClusterUpdate_ResourceNotFound(t *testing.T) {
 
 // Tests that closing the cds LB policy results in the the child policy being
 // closed.
-func TestClose(t *testing.T) {
+func (s) TestClose(t *testing.T) {
 	_, _, _, childPolicyCloseCh := registerWrappedPriorityPolicy(t)
 	mgmtServer, nodeID, cc := setupWithManagementServer(t, nil, nil)
 
