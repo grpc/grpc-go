@@ -264,9 +264,7 @@ func createEDSPriorityConfig(cluster, edsServiceName string) *iserviceconfig.Bal
 					ChildPolicy: &iserviceconfig.BalancerConfig{
 						Name: wrrlocality.Name,
 						Config: &wrrlocality.LBConfig{
-							ChildPolicy: &iserviceconfig.BalancerConfig{
-								Name: roundrobin.Name,
-							},
+							ChildPolicy: &iserviceconfig.BalancerConfig{Name: roundrobin.Name},
 						},
 					},
 				},
@@ -291,9 +289,7 @@ func createDNSPriorityConfig(cluster string) *iserviceconfig.BalancerConfig {
 					ChildPolicy: &iserviceconfig.BalancerConfig{
 						Name: wrrlocality.Name,
 						Config: &wrrlocality.LBConfig{
-							ChildPolicy: &iserviceconfig.BalancerConfig{
-								Name: roundrobin.Name,
-							},
+							ChildPolicy: &iserviceconfig.BalancerConfig{Name: roundrobin.Name},
 						},
 					},
 				},

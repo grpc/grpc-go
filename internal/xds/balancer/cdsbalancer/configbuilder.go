@@ -43,7 +43,7 @@ const million = 1000000
 // priorityConfig is config for one priority. For example, if there's an EDS and
 // a DNS, the priority list will be [priorityConfig{EDS}, priorityConfig{DNS}].
 //
-// Each priorityConfig corresponds to one leaf cluster retrived from XDSConfig
+// Each priorityConfig corresponds to one leaf cluster retrieved from XDSConfig
 // for the top-level cluster.
 type priorityConfig struct {
 	clusterName   string

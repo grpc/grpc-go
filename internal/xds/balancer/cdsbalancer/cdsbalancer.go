@@ -48,8 +48,6 @@ import (
 const cdsName = "cds_experimental"
 
 var (
-	errBalancerClosed = fmt.Errorf("cds_experimental LB policy is closed")
-
 	// newChildBalancer is a helper function to build a new priority balancer
 	// and will be overridden in unittests.
 	newChildBalancer = func(cc balancer.ClientConn, opts balancer.BuildOptions) (balancer.Balancer, error) {
@@ -98,9 +96,9 @@ func (bb) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Bal
 	b := &cdsBalancer{
 		bOpts:             opts,
 		childConfigParser: parser,
-		xdsHIPtr:        &xdsHIPtr,
-		clusterConfigs:  make(map[string]*xdsresource.ClusterResult),
-		priorityConfigs: make(map[string]priorityConfig),
+		xdsHIPtr:          &xdsHIPtr,
+		clusterConfigs:    make(map[string]*xdsresource.ClusterResult),
+		priorityConfigs:   make(map[string]priorityConfig),
 	}
 	b.logger = prefixLogger(b)
 	b.ccw = &ccWrapper{
@@ -421,7 +419,6 @@ func (b *cdsBalancer) updateChildConfig() {
 			return
 		}
 		b.childLB = childLB
-
 	}
 
 	childCfgBytes, endpoints, err := buildPriorityConfigJSON(b.priorities, &b.xdsLBPolicy)
