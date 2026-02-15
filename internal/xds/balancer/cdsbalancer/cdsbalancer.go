@@ -34,6 +34,7 @@ import (
 	"google.golang.org/grpc/internal/balancer/nop"
 	xdsinternal "google.golang.org/grpc/internal/credentials/xds"
 	"google.golang.org/grpc/internal/grpclog"
+	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/pretty"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/internal/xds/balancer/outlierdetection"
@@ -93,11 +94,14 @@ func (bb) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Bal
 		return nop.NewBalancer(cc, fmt.Errorf("%q LB policy does not implement a config parser", priority.Name))
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
 	hi := xdsinternal.NewHandshakeInfo(nil, nil, nil, false)
 	xdsHIPtr := unsafe.Pointer(hi)
 	b := &cdsBalancer{
 		bOpts:             opts,
 		childConfigParser: parser,
+		serializer:        grpcsync.NewCallbackSerializer(ctx),
+		serializerCancel:  cancel,
 		xdsHIPtr:          &xdsHIPtr,
 		clusterConfigs:    make(map[string]*xdsresource.ClusterResult),
 		priorityConfigs:   make(map[string]priorityConfig),
@@ -164,6 +168,12 @@ type cdsBalancer struct {
 
 	xdsHIPtr *unsafe.Pointer // Accessed atomically.
 
+	// The serializer and its cancel func are initialized at build time, and the
+	// rest of the fields here are only accessed from serializer callbacks (or
+	// from balancer.Balancer methods, which themselves are guaranteed to be
+	// mutually exclusive) and hence do not need to be guarded by a mutex.
+	serializer        *grpcsync.CallbackSerializer          // Serializes updates from gRPC and xDS client.
+	serializerCancel  context.CancelFunc                    // Stops the above serializer.
 	childLB           balancer.Balancer                     // Child policy, built upon resolution of the cluster graph.
 	xdsClient         xdsclient.XDSClient                   // xDS client to watch Cluster resources.
 	clusterConfigs    map[string]*xdsresource.ClusterResult // Map of cluster name to the last received result for that cluster.
@@ -315,8 +325,19 @@ func (b *cdsBalancer) UpdateClientConnState(state balancer.ClientConnState) erro
 	b.serviceConfig = state.ResolverState.ServiceConfig
 	b.attributes = state.ResolverState.Attributes
 
-	b.handleXDSConfigUpdate()
-	return nil
+	// Handle the update in a blocking fashion.
+	errCh := make(chan error, 1)
+	callback := func(context.Context) {
+		b.handleXDSConfigUpdate()
+		errCh <- nil
+	}
+	onFailure := func() {
+		// The call to Schedule returns false *only* if the serializer has been
+		// closed, which happens only when we receive an update after close.
+		errCh <- errBalancerClosed
+	}
+	b.serializer.ScheduleOr(callback, onFailure)
+	return <-errCh
 }
 
 // handleXDSConfigUpdate processes the update from the xDS resolver.
@@ -372,18 +393,29 @@ func (b *cdsBalancer) handleClusterUpdate() {
 
 	switch clusterConfig.Cluster.ClusterType {
 	case xdsresource.ClusterTypeEDS, xdsresource.ClusterTypeLogicalDNS:
-		p, err := b.handleEDSClusterUpdate(clusterName, &clusterConfig)
+		p, err := b.updatePriorityConfig(clusterName, &clusterConfig)
 		if err != nil {
+			b.logger.Warningf("failed to update priority for cluster %q: %v", clusterName, err)
 			return
 		}
 		newPriorities = append(newPriorities, p)
 
 	case xdsresource.ClusterTypeAggregate:
-		ps, err := b.handleAggregateClusterUpdate(clusterName, &clusterConfig)
-		if err != nil {
-			return
+		for _, leaf := range clusterConfig.AggregateConfig.LeafClusters {
+			if _, ok := b.clusterConfigs[leaf]; ok {
+				if b.clusterConfigs[leaf].Err != nil {
+					b.logger.Warningf("skipping leaf cluster %q for aggregate cluster %q due to error: %v", leaf, clusterName, b.clusterConfigs[leaf].Err)
+					continue
+				}
+				// Only consider EDS and LogicalDNS leaf clusters
+				p, err := b.updatePriorityConfig(leaf, &b.clusterConfigs[leaf].Config)
+				if err != nil {
+					b.logger.Warningf("failed to update priority for cluster %q: %v", clusterName, err)
+					return
+				}
+				newPriorities = append(newPriorities, p)
+			}
 		}
-		newPriorities = append(newPriorities, ps...)
 	}
 	b.priorities = newPriorities
 
@@ -395,35 +427,6 @@ func (b *cdsBalancer) handleClusterUpdate() {
 		return
 	}
 	b.updateChildConfig()
-}
-
-func (b *cdsBalancer) handleEDSClusterUpdate(clusterName string, clusterConfig *xdsresource.ClusterConfig) (priorityConfig, error) {
-	p, err := b.updatePriorityConfig(clusterName, clusterConfig)
-	if err != nil {
-		b.logger.Warningf("failed to update priority for cluster %q: %v", clusterName, err)
-		return priorityConfig{}, err
-	}
-	return p, nil
-}
-
-func (b *cdsBalancer) handleAggregateClusterUpdate(clusterName string, clusterConfig *xdsresource.ClusterConfig) ([]priorityConfig, error) {
-	var prioritizedClusters []priorityConfig
-	for _, leaf := range clusterConfig.AggregateConfig.LeafClusters {
-		if _, ok := b.clusterConfigs[leaf]; ok {
-			if b.clusterConfigs[leaf].Err != nil {
-				b.logger.Warningf("skipping leaf cluster %q for aggregate cluster %q due to error: %v", leaf, clusterName, b.clusterConfigs[leaf].Err)
-				continue
-			}
-			// Only consider EDS and LogicalDNS leaf clusters
-			p, err := b.updatePriorityConfig(leaf, &b.clusterConfigs[leaf].Config)
-			if err != nil {
-				b.logger.Warningf("failed to update priority for cluster %q: %v", clusterName, err)
-				return nil, err
-			}
-			prioritizedClusters = append(prioritizedClusters, p)
-		}
-	}
-	return prioritizedClusters, nil
 }
 
 // updateChildConfig builds child policy configuration using endpoint addresses
@@ -558,18 +561,20 @@ func (b *cdsBalancer) updateOutlierDetectionAndTelemetry() {
 
 // ResolverError handles errors reported by the xdsResolver.
 func (b *cdsBalancer) ResolverError(err error) {
-	// Missing Listener or RouteConfiguration on the management server
-	// results in a 'resource not found' error from the xDS resolver. In
-	// these cases, we should report transient failure.
-	if xdsresource.ErrType(err) == xdsresource.ErrorTypeResourceNotFound {
-		b.closeChildPolicyAndReportTF(err)
-		return
-	}
-	var root string
-	if b.lbCfg != nil {
-		root = b.lbCfg.ClusterName
-	}
-	b.onClusterError(root, err)
+	b.serializer.TrySchedule(func(context.Context) {
+		// Missing Listener or RouteConfiguration on the management server
+		// results in a 'resource not found' error from the xDS resolver. In
+		// these cases, we should report transient failure.
+		if xdsresource.ErrType(err) == xdsresource.ErrorTypeResourceNotFound {
+			b.closeChildPolicyAndReportTF(err)
+			return
+		}
+		var root string
+		if b.lbCfg != nil {
+			root = b.lbCfg.ClusterName
+		}
+		b.onClusterError(root, err)
+	})
 }
 
 // UpdateSubConnState handles subConn updates from gRPC.
@@ -596,29 +601,36 @@ func (b *cdsBalancer) closeChildPolicyAndReportTF(err error) {
 // Close cancels the CDS watch, closes the child policy and closes the
 // cdsBalancer.
 func (b *cdsBalancer) Close() {
-	if b.childLB != nil {
-		b.childLB.Close()
-		b.childLB = nil
-	}
-	if b.cachedRoot != nil {
-		b.cachedRoot.Close()
-	}
-	if b.cachedIdentity != nil {
-		b.cachedIdentity.Close()
-	}
-	b.logger.Infof("Shutdown")
+	b.serializer.TrySchedule(func(context.Context) {
+
+		if b.childLB != nil {
+			b.childLB.Close()
+			b.childLB = nil
+		}
+		if b.cachedRoot != nil {
+			b.cachedRoot.Close()
+		}
+		if b.cachedIdentity != nil {
+			b.cachedIdentity.Close()
+		}
+		b.logger.Infof("Shutdown")
+	})
+	b.serializerCancel()
+	<-b.serializer.Done()
 }
 
 func (b *cdsBalancer) ExitIdle() {
-	if b.childLB == nil {
-		b.logger.Warningf("Received ExitIdle with no child policy")
-		return
-	}
-	// This implementation assumes the child balancer supports
-	// ExitIdle (but still checks for the interface's existence to
-	// avoid a panic if not).  If the child does not, no subconns
-	// will be connected.
-	b.childLB.ExitIdle()
+	b.serializer.TrySchedule(func(context.Context) {
+		if b.childLB == nil {
+			b.logger.Warningf("Received ExitIdle with no child policy")
+			return
+		}
+		// This implementation assumes the child balancer supports
+		// ExitIdle (but still checks for the interface's existence to
+		// avoid a panic if not).  If the child does not, no subconns
+		// will be connected.
+		b.childLB.ExitIdle()
+	})
 }
 
 // Node ID needs to be manually added to errors generated in the following
