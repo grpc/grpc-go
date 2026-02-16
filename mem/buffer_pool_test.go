@@ -108,7 +108,7 @@ func (s) TestBufferPoolIgnoresShortBuffers(t *testing.T) {
 }
 
 func TestBinaryBufferPool(t *testing.T) {
-	poolSizes := []uint8{0, 2, 3, 4}
+	poolSizes := []uint8{0, 2, 3, 4, 2, 3, 4} // duplicates will be ignored.
 
 	testCases := []struct {
 		requestSize  int

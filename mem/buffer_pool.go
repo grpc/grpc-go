@@ -143,7 +143,7 @@ type binaryTieredBufferPool struct {
 // of 2), not the raw byte sizes. For example, to create a pool of 16KB buffers
 // (2^14 bytes), pass 14 as the argument.
 func NewBinaryTieredBufferPool(powerOfTwoExponents ...uint8) (BufferPool, error) {
-slices.Sort(powerOfTwoExponents)
+	slices.Sort(powerOfTwoExponents)
 	powerOfTwoExponents = slices.Compact(powerOfTwoExponents)
 
 	// Determine the maximum exponent we need to support. This depends on the

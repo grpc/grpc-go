@@ -63,17 +63,17 @@ func TestNewBinaryTieredBufferPool_WordSize(t *testing.T) {
 			uintSize = tt.wordSize
 			pool, err := NewBinaryTieredBufferPool(tt.exponents...)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("NewBinaryTieredBufferPool() error = %t, wantErr %t", err, tt.wantErr)
+				t.Fatalf("NewBinaryTieredBufferPool() error = %t, wantErr %t", err, tt.wantErr)
+			}
+			if err != nil {
 				return
 			}
-			if err == nil {
-				bp := pool.(*binaryTieredBufferPool)
-				if len(bp.exponentToNextLargestPoolMap) != tt.wordSize {
-					t.Errorf("exponentToNextLargestPoolMap length = %d, want %d", len(bp.exponentToNextLargestPoolMap), tt.wordSize)
-				}
-				if len(bp.exponentToPreviousLargestPoolMap) != tt.wordSize {
-					t.Errorf("exponentToPreviousLargestPoolMap length = %d, want %d", len(bp.exponentToPreviousLargestPoolMap), tt.wordSize)
-				}
+			bp := pool.(*binaryTieredBufferPool)
+			if len(bp.exponentToNextLargestPoolMap) != tt.wordSize {
+				t.Errorf("exponentToNextLargestPoolMap length = %d, want %d", len(bp.exponentToNextLargestPoolMap), tt.wordSize)
+			}
+			if len(bp.exponentToPreviousLargestPoolMap) != tt.wordSize {
+				t.Errorf("exponentToPreviousLargestPoolMap length = %d, want %d", len(bp.exponentToPreviousLargestPoolMap), tt.wordSize)
 			}
 		})
 	}
@@ -111,4 +111,16 @@ func BenchmarkTieredPool(b *testing.B) {
 			}
 		}
 	})
+}
+
+func TestNewBinaryTieredBufferPool_Duplicates(t *testing.T) {
+	exponents := []uint8{1, 2, 3, 4, 5, 6, 6, 5, 4, 3, 2, 1}
+	pool, err := NewBinaryTieredBufferPool(exponents...)
+	if err != nil {
+		t.Fatalf("NewBinaryTieredBufferPool() error = %v", err)
+	}
+	binaryPool := pool.(*binaryTieredBufferPool)
+	if len(binaryPool.sizedPools) != 6 {
+		t.Errorf("sized buffer pool count = %d, want %d", len(binaryPool.sizedPools), 6)
+	}
 }
