@@ -41,18 +41,19 @@ type BufferPool interface {
 	Put(*[]byte)
 }
 
-const goPageSizeExponent = 12
-const goPageSize = 1 << goPageSizeExponent // 4KiB. N.B. this must be a power of 2.
-
-var defaultBufferPoolSizeExponents = []uint8{
-	8,
-	goPageSizeExponent,
-	14, // 16KB (max HTTP/2 frame size used by gRPC)
-	15, // 32KB (default buffer size for io.Copy)
-	20, // 1MB
-}
+const (
+	goPageSizeExponent = 12
+	goPageSize         = 1 << goPageSizeExponent // 4KiB. N.B. this must be a power of 2.
+)
 
 var (
+	defaultBufferPoolSizeExponents = []uint8{
+		8,
+		goPageSizeExponent,
+		14, // 16KB (max HTTP/2 frame size used by gRPC)
+		15, // 32KB (default buffer size for io.Copy)
+		20, // 1MB
+	}
 	defaultBufferPool BufferPool
 	uintSize          = bits.UintSize // use a variable for mocking during tests.
 )
@@ -157,7 +158,7 @@ func NewBinaryTieredBufferPool(powerOfTwoExponents ...uint8) (BufferPool, error)
 		// Allocating slices of size > 2^maxExponent isn't possible on
 		// maxExponent-bit machines.
 		if int(exp) > maxExponent {
-			return nil, fmt.Errorf("allocating slice of size 2^%d is not possible", exp)
+			return nil, fmt.Errorf("mem: allocating slice of size 2^%d is not possible", exp)
 		}
 		tierSize := 1 << exp
 		pools = append(pools, newSizedBufferPool(tierSize))
@@ -214,6 +215,9 @@ func (b *binaryTieredBufferPool) poolForGet(size int) BufferPool {
 }
 
 func (b *binaryTieredBufferPool) Put(buf *[]byte) {
+	// We pass the capacity of the buffer, and not the size of the buffer here.
+	// If we did the latter, all buffers would eventually move to the smallest
+	// pool.
 	b.poolForPut(cap(*buf)).Put(buf)
 }
 
