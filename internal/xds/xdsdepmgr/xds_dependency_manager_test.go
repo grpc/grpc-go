@@ -202,8 +202,10 @@ func verifyXDSConfig(ctx context.Context, xdsCh chan *xdsresource.XDSConfig, err
 func makeXDSConfig(routeConfigName, clusterName, edsServiceName, addr string) *xdsresource.XDSConfig {
 	return &xdsresource.XDSConfig{
 		Listener: &xdsresource.ListenerUpdate{
-			RouteConfigName: routeConfigName,
-			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+			APIListener: &xdsresource.HTTPConnectionManagerConfig{
+				RouteConfigName: routeConfigName,
+				HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+			},
 		},
 		RouteConfig: &xdsresource.RouteConfigUpdate{
 			VirtualHosts: []*xdsresource.VirtualHost{
@@ -413,8 +415,8 @@ func (s) TestInlineRouteConfig(t *testing.T) {
 	defer dm.Close()
 
 	wantXdsConfig := makeXDSConfig(defaultTestRouteConfigName, defaultTestClusterName, defaultTestEDSServiceName, "localhost:8080")
-	wantXdsConfig.Listener.InlineRouteConfig = wantXdsConfig.RouteConfig
-	wantXdsConfig.Listener.RouteConfigName = ""
+	wantXdsConfig.Listener.APIListener.InlineRouteConfig = wantXdsConfig.RouteConfig
+	wantXdsConfig.Listener.APIListener.RouteConfigName = ""
 
 	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
 		t.Fatal(err)
@@ -846,16 +848,18 @@ func (s) TestRouteResourceChangeToInline(t *testing.T) {
 	// Wait for the second update and verify it has the new cluster.
 	wantInlineXdsConfig := &xdsresource.XDSConfig{
 		Listener: &xdsresource.ListenerUpdate{
-			HTTPFilters: []xdsresource.HTTPFilter{{Name: "router"}},
-			InlineRouteConfig: &xdsresource.RouteConfigUpdate{
-				VirtualHosts: []*xdsresource.VirtualHost{
-					{
-						Domains: []string{defaultTestServiceName},
-						Routes: []*xdsresource.Route{{
-							Prefix:           newStringP("/"),
-							WeightedClusters: []xdsresource.WeightedCluster{{Name: newClusterName, Weight: 100}},
-							ActionType:       xdsresource.RouteActionRoute,
-						}},
+			APIListener: &xdsresource.HTTPConnectionManagerConfig{
+				HTTPFilters: []xdsresource.HTTPFilter{{Name: "router"}},
+				InlineRouteConfig: &xdsresource.RouteConfigUpdate{
+					VirtualHosts: []*xdsresource.VirtualHost{
+						{
+							Domains: []string{defaultTestServiceName},
+							Routes: []*xdsresource.Route{{
+								Prefix:           newStringP("/"),
+								WeightedClusters: []xdsresource.WeightedCluster{{Name: newClusterName, Weight: 100}},
+								ActionType:       xdsresource.RouteActionRoute,
+							}},
+						},
 					},
 				},
 			},
@@ -1101,8 +1105,10 @@ func (s) TestAggregateCluster(t *testing.T) {
 
 	wantXdsConfig := &xdsresource.XDSConfig{
 		Listener: &xdsresource.ListenerUpdate{
-			RouteConfigName: resources.Routes[0].Name,
-			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+			APIListener: &xdsresource.HTTPConnectionManagerConfig{
+				RouteConfigName: resources.Routes[0].Name,
+				HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+			},
 		},
 		RouteConfig: &xdsresource.RouteConfigUpdate{
 			VirtualHosts: []*xdsresource.VirtualHost{
@@ -1234,8 +1240,10 @@ func (s) TestAggregateClusterChildError(t *testing.T) {
 
 	wantXdsConfig := &xdsresource.XDSConfig{
 		Listener: &xdsresource.ListenerUpdate{
-			RouteConfigName: defaultTestRouteConfigName,
-			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+			APIListener: &xdsresource.HTTPConnectionManagerConfig{
+				RouteConfigName: defaultTestRouteConfigName,
+				HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+			},
 		},
 		RouteConfig: &xdsresource.RouteConfigUpdate{
 			VirtualHosts: []*xdsresource.VirtualHost{{
@@ -1339,8 +1347,10 @@ func (s) TestAggregateClusterNoLeafCluster(t *testing.T) {
 
 	wantXdsConfig := &xdsresource.XDSConfig{
 		Listener: &xdsresource.ListenerUpdate{
-			RouteConfigName: defaultTestRouteConfigName,
-			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+			APIListener: &xdsresource.HTTPConnectionManagerConfig{
+				RouteConfigName: defaultTestRouteConfigName,
+				HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+			},
 		},
 		RouteConfig: &xdsresource.RouteConfigUpdate{
 			VirtualHosts: []*xdsresource.VirtualHost{{
@@ -1412,8 +1422,10 @@ func (s) TestAggregateClusterMaxDepth(t *testing.T) {
 
 	wantXdsConfig := &xdsresource.XDSConfig{
 		Listener: &xdsresource.ListenerUpdate{
-			RouteConfigName: defaultTestRouteConfigName,
-			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+			APIListener: &xdsresource.HTTPConnectionManagerConfig{
+				RouteConfigName: defaultTestRouteConfigName,
+				HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+			},
 		},
 		RouteConfig: &xdsresource.RouteConfigUpdate{
 			VirtualHosts: []*xdsresource.VirtualHost{{
@@ -1520,8 +1532,10 @@ func (s) TestClusterSubscription_Lifecycle(t *testing.T) {
 	// "clusterName" (from subscription).
 	wantXDSConfig := &xdsresource.XDSConfig{
 		Listener: &xdsresource.ListenerUpdate{
-			RouteConfigName: resources.Routes[0].Name,
-			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+			APIListener: &xdsresource.HTTPConnectionManagerConfig{
+				RouteConfigName: resources.Routes[0].Name,
+				HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+			},
 		},
 		RouteConfig: &xdsresource.RouteConfigUpdate{
 			VirtualHosts: []*xdsresource.VirtualHost{{
@@ -1707,8 +1721,10 @@ func (s) TestUpdateWithUnresolvedDynamicSubscription(t *testing.T) {
 
 	wantXdsConfig = &xdsresource.XDSConfig{
 		Listener: &xdsresource.ListenerUpdate{
-			RouteConfigName: resources.Routes[0].Name,
-			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+			APIListener: &xdsresource.HTTPConnectionManagerConfig{
+				RouteConfigName: resources.Routes[0].Name,
+				HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+			},
 		},
 		RouteConfig: &xdsresource.RouteConfigUpdate{
 			VirtualHosts: []*xdsresource.VirtualHost{{

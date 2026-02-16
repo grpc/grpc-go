@@ -6,7 +6,7 @@ openssl req -x509                                                      \
   -newkey rsa:4096                                                     \
   -keyout provider_server_trust_key.pem                                \
   -out provider_server_trust_cert.pem                                  \
-  -days 365                                                            \
+  -days 3650                                                            \
   -subj "/C=US/ST=VA/O=Internet Widgits Pty Ltd/CN=foo.bar.hoo.ca.com" \
   -nodes
 
@@ -14,7 +14,7 @@ openssl req -x509                                      \
   -newkey rsa:4096                                     \
   -keyout provider_client_trust_key.pem                \
   -out provider_client_trust_cert.pem                  \
-  -days 365                                            \
+  -days 3650                                            \
   -subj "/C=US/ST=CA/L=SVL/O=Internet Widgits Pty Ltd" \
   -nodes
 
