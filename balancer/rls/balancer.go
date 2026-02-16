@@ -141,9 +141,8 @@ func (rlsBB) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.
 	}
 	lb.logger = internalgrpclog.NewPrefixLogger(logger, fmt.Sprintf("[rls-experimental-lb %p] ", lb))
 	lb.dataCache = newDataCache(maxCacheSize, lb.logger, opts.Target.String())
-	if metricsRecorder := cc.MetricsRecorder(); metricsRecorder != nil {
-		lb.metricHandler = metricsRecorder.RegisterAsyncReporter(lb, cacheEntriesMetric, cacheSizeMetric)
-	}
+	metricsRecorder := cc.MetricsRecorder()
+	lb.unregisterMetricHandler = metricsRecorder.RegisterAsyncReporter(lb, cacheEntriesMetric, cacheSizeMetric)
 	lb.bg = balancergroup.New(balancergroup.Options{
 		CC:                      cc,
 		BuildOpts:               opts,
@@ -165,8 +164,8 @@ type rlsBalancer struct {
 	dataCachePurgeHook func()
 	logger             *internalgrpclog.PrefixLogger
 
-	// metricHandler is the function to deregister the async metric reporter.
-	metricHandler func()
+	// unregisterMetricHandler is the function to deregister the async metric reporter.
+	unregisterMetricHandler func()
 
 	// If both cacheMu and stateMu need to be acquired, the former must be
 	// acquired first to prevent a deadlock. This order restriction is due to the
@@ -494,9 +493,7 @@ func (b *rlsBalancer) Close() {
 	if b.ctrlCh != nil {
 		b.ctrlCh.close()
 	}
-	if b.metricHandler != nil {
-		b.metricHandler()
-	}
+	b.unregisterMetricHandler()
 	b.bg.Close()
 	b.stateMu.Unlock()
 
@@ -715,10 +712,10 @@ func (b *rlsBalancer) releaseChildPolicyReferences(targets []string) {
 // Report reports the metrics data to the provided recorder.
 func (b *rlsBalancer) Report(r estats.AsyncMetricsRecorder) error {
 	b.cacheMu.Lock()
-	defer b.cacheMu.Unlock()
+	currentSize := b.dataCache.currentSize
+	entriesLen := int64(len(b.dataCache.entries))
+	rlsServerTarget := b.dataCache.rlsServerTarget
+	b.cacheMu.Unlock()
 
-	if b.dataCache == nil {
-		return nil
-	}
-	return b.dataCache.reportMetrics(r)
+	return b.dataCache.reportMetrics(r, currentSize, entriesLen, rlsServerTarget)
 }

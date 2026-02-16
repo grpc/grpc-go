@@ -277,6 +277,24 @@ func (r *TestMetricsRecorder) RecordInt64Gauge(handle *estats.Int64GaugeHandle, 
 	r.data[handle.Name] = float64(incr)
 }
 
+// To implement a estats.AsyncMetricsRecorder, which allows it to be used in async metrics:
+
+// RecordInt64AsyncGauge sends the metrics data to the intGaugeCh channel and updates
+// the internal data map with the recorded value.
+func (r *TestMetricsRecorder) RecordInt64AsyncGauge(handle *estats.Int64AsyncGaugeHandle, incr int64, labels ...string) {
+	r.intGaugeCh.ReceiveOrFail()
+	r.intGaugeCh.Send(MetricsData{
+		Handle:    handle.Descriptor(),
+		IntIncr:   incr,
+		LabelKeys: append(handle.Labels, handle.OptionalLabels...),
+		LabelVals: labels,
+	})
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.data[handle.Name] = float64(incr)
+}
+
 // To implement a stats.Handler, which allows it to be set as a dial option:
 
 // TagRPC is TestMetricsRecorder's implementation of TagRPC.

@@ -371,13 +371,12 @@ func (dc *dataCache) deleteAndCleanup(key cacheKey, entry *cacheEntry) {
 
 }
 
-func (dc *dataCache) reportMetrics(r estats.AsyncMetricsRecorder) error {
+func (dc *dataCache) reportMetrics(r estats.AsyncMetricsRecorder, currentSize int64, entriesLen int64, rlsServerTarget string) error {
 	if dc.shutdown.HasFired() {
 		return nil
 	}
-	// Caller (rlsBalancer) holds usage lock.
-	cacheSizeMetric.Record(r, dc.currentSize, dc.grpcTarget, dc.rlsServerTarget, dc.uuid)
-	cacheEntriesMetric.Record(r, int64(len(dc.entries)), dc.grpcTarget, dc.rlsServerTarget, dc.uuid)
+	cacheSizeMetric.Record(r, currentSize, dc.grpcTarget, rlsServerTarget, dc.uuid)
+	cacheEntriesMetric.Record(r, entriesLen, dc.grpcTarget, rlsServerTarget, dc.uuid)
 	return nil
 }
 
