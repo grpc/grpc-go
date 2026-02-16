@@ -278,7 +278,7 @@ func waitForResourceNames(ctx context.Context, t *testing.T, namesCh chan []stri
 		select {
 		case <-ctx.Done():
 		case gotNames := <-namesCh:
-			if cmp.Equal(gotNames, wantNames, cmpopts.EquateEmpty()) {
+			if cmp.Equal(gotNames, wantNames, cmpopts.EquateEmpty(), cmpopts.SortSlices(func(a, b string) bool { return a < b })) {
 				return
 			}
 			t.Logf("Received resource names %v, want %v", gotNames, wantNames)

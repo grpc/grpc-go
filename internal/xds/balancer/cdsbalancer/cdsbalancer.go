@@ -471,7 +471,7 @@ func (b *cdsBalancer) updatePriorityConfig(clusterName string, clusterConfig *xd
 		return nil, fmt.Errorf("missing endpoint config for cluster %q", clusterName)
 	}
 	clusterUpdate := *clusterConfig.Cluster
-	name := getHostName(clusterName, clusterUpdate)
+	name := hostName(clusterName, clusterUpdate)
 	pc, ok := b.priorityConfigs[name]
 	// If this is the first time we are seeing this cluster, we need to create a
 	// new priority config for it. Otherwise, we just update the existing

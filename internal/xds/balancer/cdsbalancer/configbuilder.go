@@ -60,11 +60,11 @@ type priorityConfig struct {
 	childNameGen *nameGenerator
 }
 
-// getHostName returns the name of the host for the given cluster.
+// hostName returns the name of the host for the given cluster.
 //
 // For EDS, it's the EDSServiceName (or ClusterName if empty).
 // For DNS, it's the DNSHostName.
-func getHostName(clusterName string, update xdsresource.ClusterUpdate) string {
+func hostName(clusterName string, update xdsresource.ClusterUpdate) string {
 	switch update.ClusterType {
 	case xdsresource.ClusterTypeEDS:
 		nameToWatch := update.EDSServiceName
