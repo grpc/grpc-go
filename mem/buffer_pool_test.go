@@ -20,6 +20,7 @@ package mem_test
 
 import (
 	"bytes"
+	"fmt"
 	"testing"
 	"unsafe"
 
@@ -104,4 +105,44 @@ func (s) TestBufferPoolIgnoresShortBuffers(t *testing.T) {
 	// short buffer would have been returned. If the short buffer is pulled from the
 	// pool, it could cause a panic.
 	pool.Get(10)
+}
+
+func TestBinaryBufferPool(t *testing.T) {
+	poolSizes := []uint8{0, 2, 3, 4, 2, 3, 4} // duplicates will be ignored.
+
+	testCases := []struct {
+		requestSize  int
+		wantCapacity int
+	}{
+		{requestSize: 0, wantCapacity: 0},
+		{requestSize: 1, wantCapacity: 1},
+		{requestSize: 2, wantCapacity: 4},
+		{requestSize: 3, wantCapacity: 4},
+		{requestSize: 4, wantCapacity: 4},
+		{requestSize: 5, wantCapacity: 8},
+		{requestSize: 6, wantCapacity: 8},
+		{requestSize: 7, wantCapacity: 8},
+		{requestSize: 8, wantCapacity: 8},
+		{requestSize: 9, wantCapacity: 16},
+		{requestSize: 15, wantCapacity: 16},
+		{requestSize: 16, wantCapacity: 16},
+		{requestSize: 17, wantCapacity: 4096}, // fallback pool returns sizes in multiples of 4096.
+	}
+
+	for _, tc := range testCases {
+		t.Run(fmt.Sprintf("requestSize=%d", tc.requestSize), func(t *testing.T) {
+			pool, err := mem.NewBinaryTieredBufferPool(poolSizes...)
+			if err != nil {
+				t.Fatalf("Failed to create buffer pool: %v", err)
+			}
+			buf := pool.Get(tc.requestSize)
+			if cap(*buf) != tc.wantCapacity {
+				t.Errorf("Get(%d) returned buffer with capacity: %d, want %d", tc.requestSize, cap(*buf), tc.wantCapacity)
+			}
+			if len(*buf) != tc.requestSize {
+				t.Errorf("Get(%d) returned buffer with length: %d, want %d", tc.requestSize, len(*buf), tc.requestSize)
+			}
+			pool.Put(buf)
+		})
+	}
 }
