@@ -98,7 +98,7 @@ func (bb) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Bal
 		childConfigParser: parser,
 		xdsHIPtr:          &xdsHIPtr,
 		clusterConfigs:    make(map[string]*xdsresource.ClusterResult),
-		priorityConfigs:   make(map[string]priorityConfig),
+		priorityConfigs:   make(map[string]*priorityConfig),
 	}
 	b.logger = prefixLogger(b)
 	b.ccw = &ccWrapper{
@@ -165,7 +165,7 @@ type cdsBalancer struct {
 	childLB           balancer.Balancer                     // Child policy, built upon resolution of the cluster graph.
 	xdsClient         xdsclient.XDSClient                   // xDS client to watch Cluster resources.
 	clusterConfigs    map[string]*xdsresource.ClusterResult // Map of cluster name to the last received result for that cluster.
-	priorityConfigs   map[string]priorityConfig             // Map of priority config for each leaf cluster. Key is host name i.e. EDSServiceName(or clusterName if not present) or DNSHostName.
+	priorityConfigs   map[string]*priorityConfig            // Map of priority config for each leaf cluster. Key is host name i.e. EDSServiceName(or clusterName if not present) or DNSHostName.
 	lbCfg             *lbConfig                             // Current load balancing configuration.
 	priorities        []priorityConfig                      // List of priorities in the order.
 	unsubscribe       func()                                // Function to unsubscribe to a cluster in case of dynamic clusters.
@@ -338,7 +338,7 @@ func (b *cdsBalancer) handleXDSConfigUpdate() {
 		if b.lbCfg.IsDynamic {
 			return
 		}
-		b.onClusterError(clusterName, b.annotateErrorWithNodeID(fmt.Errorf("did not find the static cluster in xdsConfig")))
+		b.onClusterError(clusterName, b.annotateErrorWithNodeID(fmt.Errorf("did not find the cluster in xdsConfig")))
 		return
 	}
 
@@ -360,8 +360,6 @@ func (b *cdsBalancer) handleXDSConfigUpdate() {
 
 // Handles a good XDSConfig update from the xDS resolver. Builds the child
 // policy config and pushes it down.
-//
-// Only executed in the context of a serializer callback.
 func (b *cdsBalancer) handleClusterUpdate() {
 	clusterName := b.lbCfg.ClusterName
 	clusterConfig := b.clusterConfigs[clusterName].Config
@@ -372,35 +370,38 @@ func (b *cdsBalancer) handleClusterUpdate() {
 	case xdsresource.ClusterTypeEDS, xdsresource.ClusterTypeLogicalDNS:
 		p, err := b.updatePriorityConfig(clusterName, &clusterConfig)
 		if err != nil {
-			b.logger.Warningf("failed to update priority for cluster %q: %v", clusterName, err)
+			b.logger.Warningf("Failed to update priority for cluster %q: %v", clusterName, err)
 			return
 		}
-		newPriorities = append(newPriorities, p)
+		newPriorities = append(newPriorities, *p)
 
 	case xdsresource.ClusterTypeAggregate:
 		for _, leaf := range clusterConfig.AggregateConfig.LeafClusters {
 			if _, ok := b.clusterConfigs[leaf]; ok {
 				if b.clusterConfigs[leaf].Err != nil {
-					b.logger.Warningf("skipping leaf cluster %q for aggregate cluster %q due to error: %v", leaf, clusterName, b.clusterConfigs[leaf].Err)
+					b.logger.Warningf("Skipping leaf cluster %q for aggregate cluster %q due to error: %v", leaf, clusterName, b.clusterConfigs[leaf].Err)
 					continue
 				}
 				// Only consider EDS and LogicalDNS leaf clusters
 				p, err := b.updatePriorityConfig(leaf, &b.clusterConfigs[leaf].Config)
 				if err != nil {
-					b.logger.Warningf("failed to update priority for cluster %q: %v", clusterName, err)
+					b.logger.Warningf("Failed to update priority for cluster %q: %v", clusterName, err)
 					return
 				}
-				newPriorities = append(newPriorities, p)
+				newPriorities = append(newPriorities, *p)
 			}
 		}
 	}
 	b.priorities = newPriorities
 
-	b.updateOutlierDetectionAndTelemetry()
+	if err := b.updateOutlierDetection(); err != nil {
+		b.logger.Errorf("Failed to correctly update Outlier Detection config %v", err)
+		return
+	}
 
 	// The LB policy is configured by the root cluster.
-	if err := json.Unmarshal(b.clusterConfigs[b.lbCfg.ClusterName].Config.Cluster.LBPolicy, &b.xdsLBPolicy); err != nil {
-		b.logger.Errorf("cds_balancer: error unmarshalling xDS LB Policy: %v", err)
+	if err := json.Unmarshal(clusterConfig.Cluster.LBPolicy, &b.xdsLBPolicy); err != nil {
+		b.logger.Errorf("Error unmarshalling xDS LB Policy: %v", err)
 		return
 	}
 	b.updateChildConfig()
@@ -465,75 +466,83 @@ func (b *cdsBalancer) updateChildConfig() {
 // updatePriorityConfig updates the priority config for a given EDS/DNS cluster.
 // If the priority config for the cluster doesn't exist, it creates a new one.
 // It returns the updated/created priority config.
-func (b *cdsBalancer) updatePriorityConfig(clusterName string, clusterConfig *xdsresource.ClusterConfig) (priorityConfig, error) {
+func (b *cdsBalancer) updatePriorityConfig(clusterName string, clusterConfig *xdsresource.ClusterConfig) (*priorityConfig, error) {
 	if clusterConfig.EndpointConfig == nil {
-		return priorityConfig{}, fmt.Errorf("missing endpoint config for EDS cluster %q", clusterName)
+		return nil, fmt.Errorf("missing endpoint config for cluster %q", clusterName)
 	}
-	update := *clusterConfig.Cluster
-	name := getHostName(clusterName, update)
+	clusterUpdate := *clusterConfig.Cluster
+	name := getHostName(clusterName, clusterUpdate)
 	pc, ok := b.priorityConfigs[name]
 	// If this is the first time we are seeing this cluster, we need to create a
 	// new priority config for it. Otherwise, we just update the existing
 	// priority config with the new cluster update and endpoints.
 	if !ok {
-		pc.childNameGen = newNameGenerator(b.childNameGeneratorSeqID)
+		pc = &priorityConfig{
+			childNameGen: newNameGenerator(b.childNameGeneratorSeqID),
+		}
+		b.priorityConfigs[name] = pc
 		// Increment the seq ID for the next new cluster. This is done to make
 		// sure that the child policy names generated for different clusters
 		// don't conflict with each other.
 		b.childNameGeneratorSeqID++
 	}
 	pc.clusterName = clusterName
-	pc.clusterUpdate = update
+	pc.clusterUpdate = clusterUpdate
 
 	// Depending on the cluster type, we update the endpoints or edsResp in the
 	// priority config.
-	switch update.ClusterType {
+	switch clusterUpdate.ClusterType {
 	case xdsresource.ClusterTypeEDS:
 		pc.edsResp = *clusterConfig.EndpointConfig.EDSUpdate
 	case xdsresource.ClusterTypeLogicalDNS:
 		pc.endpoints = clusterConfig.EndpointConfig.DNSEndpoints.Endpoints
 	}
 
-	// Update the priority config in the map and return it.
-	b.priorityConfigs[name] = pc
 	return pc, nil
 }
 
 // updateOutlierDetectionAndTelemetry updates Outlier Detection configs and
 // Telemetry Labels for all priorities.
-func (b *cdsBalancer) updateOutlierDetectionAndTelemetry() {
+func (b *cdsBalancer) updateOutlierDetection() error {
+	odBuilder := balancer.Get(outlierdetection.Name)
+	if odBuilder == nil {
+		// Shouldn't happen, registered through imported Outlier Detection,
+		// defensive programming.
+		return fmt.Errorf("%q LB policy is needed but not registered", outlierdetection.Name)
+	}
+
+	odParser, ok := odBuilder.(balancer.ConfigParser)
+	if !ok {
+		// Shouldn't happen, imported Outlier Detection builder has this method.
+		return fmt.Errorf("%q LB policy does not implement a config parser", outlierdetection.Name)
+
+	}
+
 	for i := range b.priorities {
 		clusterName := b.priorities[i].clusterName
-		// Update Telemetry Labels.
-		b.priorities[i].clusterUpdate.TelemetryLabels = b.clusterConfigs[clusterName].Config.Cluster.TelemetryLabels
+
 		// Update Outlier Detection Config.
 		odJSON := b.clusterConfigs[clusterName].Config.Cluster.OutlierDetection
 		if odJSON == nil {
 			odJSON = json.RawMessage(`{}`)
 		}
-		b.priorities[i].clusterUpdate.OutlierDetection = odJSON
-		odBuilder := balancer.Get(outlierdetection.Name)
-		if odBuilder == nil {
-			b.logger.Errorf("%q LB policy is needed but not registered", outlierdetection.Name)
-			return
-		}
-		odParser, ok := odBuilder.(balancer.ConfigParser)
-		if !ok {
-			b.logger.Errorf("%q LB policy does not implement a config parser", outlierdetection.Name)
-			return
-		}
+
 		lbCfg, err := odParser.ParseConfig(odJSON)
 		if err != nil {
-			b.logger.Errorf("error parsing Outlier Detection config %v: %v", odJSON, err)
-			return
+			return fmt.Errorf("error parsing Outlier Detection config %v: %v", odJSON, err)
+
 		}
+
 		odCfg, ok := lbCfg.(*outlierdetection.LBConfig)
 		if !ok {
-			b.logger.Errorf("odParser returned config with unexpected type %T: %v", lbCfg, lbCfg)
-			return
+			// Shouldn't happen, Parser built at build time with Outlier Detection
+			// builder pulled from gRPC LB Registry.
+			return fmt.Errorf("odParser returned config with unexpected type %T: %v", lbCfg, lbCfg)
+
 		}
 		b.priorities[i].outlierDetection = *odCfg
 	}
+	return nil
 }
 
 // ResolverError handles errors reported by the xdsResolver.
@@ -573,10 +582,9 @@ func (b *cdsBalancer) closeChildPolicyAndReportTF(err error) {
 	})
 }
 
-// Close cancels the CDS watch, closes the child policy and closes the
-// cdsBalancer.
+// Close closes the child policy, unsubscribes to the dynamic cluster, and
+// closes the cdsBalancer.
 func (b *cdsBalancer) Close() {
-
 	if b.childLB != nil {
 		b.childLB.Close()
 		b.childLB = nil
@@ -586,6 +594,9 @@ func (b *cdsBalancer) Close() {
 	}
 	if b.cachedIdentity != nil {
 		b.cachedIdentity.Close()
+	}
+	if b.unsubscribe != nil {
+		b.unsubscribe()
 	}
 	b.logger.Infof("Shutdown")
 }
@@ -597,7 +608,7 @@ func (b *cdsBalancer) ExitIdle() {
 	}
 	// This implementation assumes the child balancer supports
 	// ExitIdle (but still checks for the interface's existence to
-	// avoid a panic if not).  If the child does not, no subconns
+	// avoid a panic if not). If the child does not, no subconns
 	// will be connected.
 	b.childLB.ExitIdle()
 }
@@ -617,10 +628,8 @@ func (b *cdsBalancer) annotateErrorWithNodeID(err error) error {
 	return fmt.Errorf("[xDS node id: %v]: %w", nodeID, err)
 }
 
-// Handles an ambient error Cluster update from the xDS client to not stop
-// using the previously seen resource.
-//
-// Only executed in the context of a serializer callback.
+// Handles an ambient errors, if a childLB already has a good update, it should
+// continue using that.
 func (b *cdsBalancer) onClusterAmbientError(name string, err error) {
 	b.logger.Warningf("Cluster resource %q received ambient error update: %v", name, err)
 
@@ -631,11 +640,9 @@ func (b *cdsBalancer) onClusterAmbientError(name string, err error) {
 	}
 }
 
-// Handles an error Cluster update from the xDS client to stop using the
-// previously seen resource. Propagates the error down to the child policy
-// if one exists, and puts the channel in TRANSIENT_FAILURE.
-//
-// Only executed in the context of a serializer callback.
+// Handles errors to stop using the previously seen resource. Propagates the
+// error down to the child policy if one exists, and puts the channel in
+// TRANSIENT_FAILURE.
 func (b *cdsBalancer) onClusterResourceError(name string, err error) {
 	b.logger.Warningf("CDS watch for resource %q reported resource error", name)
 	b.closeChildPolicyAndReportTF(err)
