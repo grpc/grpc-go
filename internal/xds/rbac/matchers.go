@@ -344,10 +344,7 @@ func newRemoteIPMatcher(cidrRange *v3corepb.CidrRange) (*remoteIPMatcher, error)
 }
 
 func (sim *remoteIPMatcher) match(data *rpcData) bool {
-	ip, err := netip.ParseAddr(data.peerInfo.Addr.String())
-	if err != nil {
-		return false
-	}
+	ip, _ := netip.ParseAddr(data.peerInfo.Addr.String())
 	return sim.ipNet.Contains(ip)
 }
 
@@ -365,10 +362,7 @@ func newLocalIPMatcher(cidrRange *v3corepb.CidrRange) (*localIPMatcher, error) {
 }
 
 func (dim *localIPMatcher) match(data *rpcData) bool {
-	ip, err := netip.ParseAddr(data.localAddr.String())
-	if err != nil {
-		return false
-	}
+	ip, _ := netip.ParseAddr(data.localAddr.String())
 	return dim.ipNet.Contains(ip)
 }
 
