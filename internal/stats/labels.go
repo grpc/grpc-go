@@ -21,7 +21,6 @@ package stats
 
 import (
 	"context"
-	"maps"
 
 	"google.golang.org/grpc/grpclog"
 )
@@ -29,41 +28,12 @@ import (
 // LabelCallback is a function that is executed when telemetry
 // label keys are updated
 type LabelCallback func(map[string]string)
-
-// Labels are the labels for metrics.
-type Labels struct {
-	// TelemetryLabels are the telemetry labels to record.
-	TelemetryLabels map[string]string
-}
-
-type labelsKey struct{}
 type telemetryLabelCallbackKey struct{}
 
-// GetLabels returns the Labels stored in the context, or nil if there is one.
-func GetLabels(ctx context.Context) *Labels {
-	labels, _ := ctx.Value(labelsKey{}).(*Labels)
-	return labels
-}
-
-// SetLabels sets the Labels in the context.
-func SetLabels(ctx context.Context, labels *Labels) context.Context {
-	// could also append
-	return context.WithValue(ctx, labelsKey{}, labels)
-}
-
-// UpdateLabels copies the key-values from update into the existing context labels if they
-// have been set. When a key is already present in the context labels, it is
-// overwritten.
+// UpdateLabels executes registered telemetry callbacks with the update labels.
+//
+// It is the responsibility of the registrant to handle conflicts or label resets.
 func UpdateLabels(ctx context.Context, update map[string]string) {
-	if ctx == nil {
-		return
-	}
-
-	labels := GetLabels(ctx)
-	if labels != nil {
-		maps.Copy(labels.TelemetryLabels, update)
-	}
-
 	executeTelemetryLabelCallbacks(ctx, update)
 }
 

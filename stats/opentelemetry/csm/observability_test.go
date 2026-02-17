@@ -427,20 +427,17 @@ func (s) TestCSMPluginOptionStreaming(t *testing.T) {
 }
 
 func unaryInterceptorAttachXDSLabels(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
-	ctx = istats.SetLabels(ctx, &istats.Labels{
-		TelemetryLabels: map[string]string{
-			// mock what the cluster impl would write here ("csm." xDS Labels
-			// and locality label)
-			"csm.service_name":           "service_name_val",
-			"csm.service_namespace_name": "service_namespace_val",
+	// For the purposes of testing this simulates the behavior of the cluster impl
+	// that would update telemetry labels through the default registered metrics handler
+	istats.UpdateLabels(ctx, map[string]string{
+		// mock what the cluster impl would write here ("csm." xDS Labels
+		// and locality label)
+		"csm.service_name":           "service_name_val",
+		"csm.service_namespace_name": "service_namespace_val",
 
-			"grpc.lb.locality":        "grpc.lb.locality_val",
-			"grpc.lb.backend_service": "grpc.lb.backend_service_val",
-		},
+		"grpc.lb.locality":        "grpc.lb.locality_val",
+		"grpc.lb.backend_service": "grpc.lb.backend_service_val",
 	})
-
-	// TagRPC will just see this in the context and set it's xDS Labels to point
-	// to this map on the heap.
 	return invoker(ctx, method, req, reply, cc, opts...)
 }
 
