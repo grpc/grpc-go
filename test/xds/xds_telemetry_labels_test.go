@@ -24,7 +24,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	estats "google.golang.org/grpc/experimental/stats"
+	telemetry "google.golang.org/grpc/experimental/stats/telemetry"
 	istats "google.golang.org/grpc/internal/stats"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
@@ -123,7 +123,7 @@ func (fsh *fakeStatsHandler) TagRPC(ctx context.Context, _ *stats.RPCTagInfo) co
 	fsh.labels = labels
 	ctx = istats.SetLabels(ctx, labels) // ctx passed is immutable, however cluster_impl writes to the map of Telemetry Labels on the heap.
 	fsh.callbackTracker = make(map[string]string)
-	ctx = estats.WithTelemetryLabelCallback(ctx, func(l map[string]string) {
+	ctx = telemetry.WithTelemetryLabelCallback(ctx, func(l map[string]string) {
 		for k, v := range l {
 			fsh.callbackTracker[k] = v
 		}
