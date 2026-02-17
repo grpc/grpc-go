@@ -50,32 +50,48 @@ func (b *Builder) Build(serverIdentifier clients.ServerIdentifier) (clients.Tran
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	ft := NewFakeTransport(serverIdentifier.ServerURI)
+	if _, ok := b.ActiveTransports[serverIdentifier.ServerURI]; ok {
+		return b.ActiveTransports[serverIdentifier.ServerURI], nil
+	}
+
+	ft := NewFakeTransport()
 	b.ActiveTransports[serverIdentifier.ServerURI] = ft
 	return ft, nil
 }
 
 // GetTransport returns the active transport for a given server URI.
 func (b *Builder) GetTransport(serverURI string) *FakeTransport {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	return b.ActiveTransports[serverURI]
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-ticker.C:
+			b.mu.Lock()
+			if t, ok := b.ActiveTransports[serverURI]; ok && t.ActiveAdsStream != nil {
+				b.mu.Unlock()
+				return t
+			}
+			b.mu.Unlock()
+		}
+	}
 }
 
 // FakeTransport implements clients.Transport.
 type FakeTransport struct {
-	ServerURI string
-
 	mu              sync.Mutex
 	ActiveAdsStream *FakeStream
 	closed          bool
 }
 
 // NewFakeTransport creates a FakeTransport for the given server URI.
-func NewFakeTransport(serverURI string) *FakeTransport {
-	return &FakeTransport{
-		ServerURI: serverURI,
-	}
+func NewFakeTransport() *FakeTransport {
+	return &FakeTransport{}
 }
 
 // NewStream creates a new fake stream to the server.
@@ -176,10 +192,7 @@ func (s *FakeStream) Close() {
 // ReadRequest reads the next request from the reqQueue. It blocks until a
 // request is available or the timeout expires. It returns an error if the
 // timeout expires or if the request cannot be unmarshaled.
-func (s *FakeStream) ReadRequest(timeout time.Duration) (*v3discoverypb.DiscoveryRequest, error) {
-	timer := time.NewTimer(timeout)
-	defer timer.Stop()
-
+func (s *FakeStream) ReadRequest() (*v3discoverypb.DiscoveryRequest, error) {
 	for {
 		s.mu.Lock()
 		if len(s.reqQueue) > 0 {
@@ -197,8 +210,8 @@ func (s *FakeStream) ReadRequest(timeout time.Duration) (*v3discoverypb.Discover
 
 		select {
 		case <-s.reqChan:
-		case <-timer.C:
-			return nil, fmt.Errorf("timeout waiting for request after %v", timeout)
+		case <-s.ctx.Done():
+			return nil, s.ctx.Err()
 		}
 	}
 }
