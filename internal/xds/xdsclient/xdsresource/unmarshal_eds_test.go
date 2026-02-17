@@ -42,6 +42,25 @@ import (
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
+// enableA86 enables A86 support for the duration of the test by:
+// 1. Setting the GRPC_EXPERIMENTAL_XDS_HTTP_CONNECT environment variable
+// 2. Registering the proxy address converter, since this is otherwise done in init.
+func enableA86(t *testing.T) {
+	testutils.SetEnvConfig(t, &envconfig.XDSHTTPConnectEnabled, true)
+	registerMetadataConverter(proxyAddressTypeURL, proxyAddressConvertor{})
+	t.Cleanup(func() {
+		unregisterMetadataConverterForTesting(proxyAddressTypeURL)
+	})
+}
+
+// disableA86 disables A86 support for the duration of the test by:
+// 1. Setting the GRPC_EXPERIMENTAL_XDS_HTTP_CONNECT environment variable to false
+// 2. Unregistering the proxy address converter (in case it was registered by init or previous test)
+func disableA86(t *testing.T) {
+	testutils.SetEnvConfig(t, &envconfig.XDSHTTPConnectEnabled, false)
+	unregisterMetadataConverterForTesting(proxyAddressTypeURL)
+}
+
 func buildResolverEndpoint(addr []string, hostname string) resolver.Endpoint {
 	address := []resolver.Address{}
 	for _, a := range addr {
@@ -487,7 +506,7 @@ func (s) TestUnmarshalEndpointHashKey(t *testing.T) {
 }
 
 func (s) TestUnmarshalEndpoints(t *testing.T) {
-	testutils.SetEnvConfig(t, &envconfig.XDSHTTPConnectEnabled, true)
+	enableA86(t)
 	var v3EndpointsAny = testutils.MarshalAny(t, func() *v3endpointpb.ClusterLoadAssignment {
 		clab0 := newClaBuilder("test", nil)
 		endpoints1 := []endpointOpts{{addrWithPort: "addr1:314", hostname: "addr1"}}
@@ -618,7 +637,7 @@ func (s) TestUnmarshalEndpoints(t *testing.T) {
 // Tests custom metadata parsing for success cases when the
 // GRPC_EXPERIMENTAL_XDS_HTTP_CONNECT environment variable is set.
 func (s) TestEDSParseRespProto_HTTP_Connect_CustomMetadata_EnvVarOn(t *testing.T) {
-	testutils.SetEnvConfig(t, &envconfig.XDSHTTPConnectEnabled, true)
+	enableA86(t)
 	tests := []struct {
 		name          string
 		endpointProto *v3endpointpb.ClusterLoadAssignment
@@ -1028,7 +1047,7 @@ func (s) TestEDSParseRespProto_HTTP_Connect_CustomMetadata_EnvVarOn(t *testing.T
 // GRPC_EXPERIMENTAL_XDS_HTTP_CONNECT environment variable is not set and
 // GRPC_XDS_ENDPOINT_HASH_KEY_BACKWARD_COMPAT is set to true (disabling A76).
 func (s) TestEDSParseRespProto_HTTP_Connect_CustomMetadata_EnvVarOff(t *testing.T) {
-	testutils.SetEnvConfig(t, &envconfig.XDSHTTPConnectEnabled, false)
+	disableA86(t)
 	testutils.SetEnvConfig(t, &envconfig.XDSEndpointHashKeyBackwardCompat, true)
 	tests := []struct {
 		name          string
@@ -1347,7 +1366,7 @@ func (s) TestEDSParseRespProto_HTTP_Connect_CustomMetadata_EnvVarOff(t *testing.
 // Tests custom metadata parsing for converter failure cases when the
 // GRPC_EXPERIMENTAL_XDS_HTTP_CONNECT environment variable is set.
 func (s) TestEDSParseRespProto_HTTP_Connect_CustomMetadata_ConverterFailure(t *testing.T) {
-	testutils.SetEnvConfig(t, &envconfig.XDSHTTPConnectEnabled, true)
+	enableA86(t)
 	tests := []struct {
 		name          string
 		endpointProto *v3endpointpb.ClusterLoadAssignment
@@ -1408,10 +1427,10 @@ func (s) TestEDSParseRespProto_HTTP_Connect_CustomMetadata_ConverterFailure(t *t
 
 // Tests metadata parsing when HTTP Connect is enabled but A76 hash key is
 // disabled (backward compat mode). This verifies that:
-// - Full metadata parsing happens (TypedFilterMetadata + FilterMetadata)
+// - Metadata parsing happens (TypedFilterMetadata + FilterMetadata)
 // - Hash key is NOT extracted from envoy.lb
 func (s) TestEDSParseRespProto_HTTP_Connect_On_HashKeyBackwardCompat_On(t *testing.T) {
-	testutils.SetEnvConfig(t, &envconfig.XDSHTTPConnectEnabled, true)
+	enableA86(t)
 	testutils.SetEnvConfig(t, &envconfig.XDSEndpointHashKeyBackwardCompat, true)
 
 	clab0 := newClaBuilder("test", nil)
@@ -1486,7 +1505,7 @@ func (s) TestEDSParseRespProto_HTTP_Connect_On_HashKeyBackwardCompat_On(t *testi
 // Tests that when A76 is enabled but A86 is disabled, invalid typed metadata
 // does not cause a parsing failure, and hash key is still extracted.
 func (s) TestEDSParseRespProto_HTTP_Connect_Off_HashKeyBackwardCompat_Off_InvalidTypedMetadata(t *testing.T) {
-	testutils.SetEnvConfig(t, &envconfig.XDSHTTPConnectEnabled, false)
+	disableA86(t)
 	testutils.SetEnvConfig(t, &envconfig.XDSEndpointHashKeyBackwardCompat, false) // A76 on
 
 	clab0 := newClaBuilder("test", nil)

@@ -26,7 +26,15 @@ import (
 
 const proxyAddressTypeURL = "type.googleapis.com/envoy.config.core.v3.Address"
 
+func setupProxyAddressConverter(t *testing.T) {
+	registerMetadataConverter(proxyAddressTypeURL, proxyAddressConvertor{})
+	t.Cleanup(func() {
+		unregisterMetadataConverterForTesting(proxyAddressTypeURL)
+	})
+}
+
 func (s) TestProxyAddressConverterSuccess(t *testing.T) {
+	setupProxyAddressConverter(t)
 	converter := metadataConverterForType(proxyAddressTypeURL)
 	if converter == nil {
 		t.Fatalf("Converter for %q not found in registry", proxyAddressTypeURL)
@@ -133,6 +141,7 @@ func (s) TestProxyAddressConverterSuccess(t *testing.T) {
 }
 
 func (s) TestProxyAddressConverterFailure(t *testing.T) {
+	setupProxyAddressConverter(t)
 	converter := metadataConverterForType(proxyAddressTypeURL)
 	if converter == nil {
 		t.Fatalf("Converter for %q not found in registry", proxyAddressTypeURL)
