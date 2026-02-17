@@ -150,6 +150,11 @@ type ClientStream interface {
 
 // ErrRetriesExhausted is returned when an operation exceeds its configured
 // maximum number of retry attempts.
+//
+// # Experimental
+//
+// Notice: This type is EXPERIMENTAL and may be changed or removed in a
+// later release.
 var ErrRetriesExhausted = errors.New("max retry attempts exhausted")
 
 // NewStream creates a new Stream for the client side. This is typically

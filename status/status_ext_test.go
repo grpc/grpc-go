@@ -261,7 +261,7 @@ func (s) TestStatus_ErrorDetailsMessageV1AndV2(t *testing.T) {
 	}
 }
 
-func TestFromError_Wrapped(t *testing.T) {
+func (s) TestFromError_Wrapped(t *testing.T) {
 	details := []protoadapt.MessageV1{
 		&testpb.Empty{},
 	}
@@ -298,6 +298,13 @@ func TestFromError_Wrapped(t *testing.T) {
 			err:         fmt.Errorf("outer: %w", fmt.Errorf("inner: %w", innerErr)),
 			wantCode:    codes.Canceled,
 			wantMessage: "outer: inner: rpc error: code = Canceled desc = inner canceled",
+			wantDetails: 1,
+		},
+		{
+			name:        "double_wrapped_single_errorf",
+			err:         fmt.Errorf("error: %w: %w", errors.New("test error"), innerErr),
+			wantCode:    codes.Canceled,
+			wantMessage: "error: test error: rpc error: code = Canceled desc = inner canceled",
 			wantDetails: 1,
 		},
 	}
