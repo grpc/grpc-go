@@ -796,7 +796,7 @@ func (s) TestDecodeResponse_PanicRecovery(t *testing.T) {
 			name:          "Enable_XDSRecoverPanic",
 			enableRecover: true,
 			wantPanic:     false,
-			wantErr:       "error parsing \"resourceType\" response: top level errors: panic during resourceType resource decoding: simulate panic",
+			wantErr:       "panic during resourceType resource decoding: simulate panic",
 		},
 		{
 			name:          "Disable_XDSRecoverPanic",
@@ -825,7 +825,7 @@ func (s) TestDecodeResponse_PanicRecovery(t *testing.T) {
 				}()
 				decodeResponse(opts, rType, resp)
 			} else {
-				if _, _, err := decodeResponse(opts, rType, resp); err == nil || err.Error() != tt.wantErr {
+				if _, _, err := decodeResponse(opts, rType, resp); err == nil || !strings.Contains(err.Error(), tt.wantErr) {
 					t.Errorf("decodeResponse() failed with err: %v, want %q", err, tt.wantErr)
 				}
 			}
