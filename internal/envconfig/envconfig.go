@@ -45,13 +45,6 @@ var (
 	// handshakes that can be performed.
 	ALTSMaxConcurrentHandshakes = uint64FromEnv("GRPC_ALTS_MAX_CONCURRENT_HANDSHAKES", 100, 1, 100)
 
-	// EnforceALPNEnabled is set if TLS connections to servers with ALPN disabled
-	// should be rejected. The HTTP/2 protocol requires ALPN to be enabled, this
-	// option is present for backward compatibility. This option may be overridden
-	// by setting the environment variable "GRPC_ENFORCE_ALPN_ENABLED" to "true"
-	// or "false".
-	EnforceALPNEnabled = boolFromEnv("GRPC_ENFORCE_ALPN_ENABLED", true)
-
 	// XDSEndpointHashKeyBackwardCompat controls the parsing of the endpoint hash
 	// key from EDS LbEndpoint metadata. Endpoint hash keys can be disabled by
 	// setting "GRPC_XDS_ENDPOINT_HASH_KEY_BACKWARD_COMPAT" to "true". When the
