@@ -21,6 +21,7 @@ package xdsclient
 import (
 	"errors"
 	"fmt"
+	"runtime/debug"
 	"strings"
 	"time"
 
@@ -258,7 +259,7 @@ func decodeResponse(opts *DecodeOptions, rType *ResourceType, resp response) (ma
 			defer func() {
 				if envconfig.XDSRecoverPanicInResourceParsing {
 					if p := recover(); p != nil {
-						err = fmt.Errorf("panic during %v resource decoding: %v", rType.TypeName, p)
+						err = fmt.Errorf("panic during %v resource decoding: %v\nstack: %s", rType.TypeName, p, debug.Stack())
 					}
 				}
 			}()
