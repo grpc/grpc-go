@@ -16,8 +16,9 @@
  *
  */
 
-// Package faketransport provides a fake implementation of the
-// clients.TransportBuilder interface for testing purposes.
+// Package faketransport provides a fake implementation of the xDS client's
+// transport layer. It implements the clients.TransportBuilder,
+// clients.Transport and clients.Stream interfaces for testing purposes.
 package faketransport
 
 import (
@@ -50,8 +51,8 @@ func (b *Builder) Build(serverIdentifier clients.ServerIdentifier) (clients.Tran
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	if _, ok := b.ActiveTransports[serverIdentifier.ServerURI]; ok {
-		return b.ActiveTransports[serverIdentifier.ServerURI], nil
+	if at, ok := b.ActiveTransports[serverIdentifier.ServerURI]; ok {
+		return at, nil
 	}
 
 	ft := NewFakeTransport()
@@ -190,8 +191,8 @@ func (s *FakeStream) Close() {
 }
 
 // ReadRequest reads the next request from the reqQueue. It blocks until a
-// request is available or the timeout expires. It returns an error if the
-// timeout expires or if the request cannot be unmarshaled.
+// request is available or the context expires. It returns an error if the
+// context expires or if the request cannot be unmarshaled.
 func (s *FakeStream) ReadRequest() (*v3discoverypb.DiscoveryRequest, error) {
 	for {
 		s.mu.Lock()
