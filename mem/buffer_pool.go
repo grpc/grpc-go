@@ -88,6 +88,7 @@ func NewBinaryTieredBufferPool(powerOfTwoExponents ...uint8) (BufferPool, error)
 	return mem.NewBinaryTieredBufferPool(powerOfTwoExponents...)
 }
 
+// NopBufferPool is a buffer pool that returns new buffers without pooling.
 type NopBufferPool struct {
 	mem.NopBufferPool
 }

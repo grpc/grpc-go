@@ -16,6 +16,7 @@
  *
  */
 
+// Package mem provides a tiered buffer pool implementation for efficient memory management.
 package mem
 
 import (
@@ -45,6 +46,7 @@ type bufferPool interface {
 	Put(*[]byte)
 }
 
+// BinaryTieredBufferPool is a buffer pool that uses multiple sub-pools with power-of-two sizes.
 type BinaryTieredBufferPool struct {
 	// exponentToNextLargestPoolMap maps a power-of-two exponent (e.g., 12 for
 	// 4KB) to the index of the next largest sizedBufferPool. This is used by
@@ -119,6 +121,7 @@ func NewBinaryTieredBufferPool(powerOfTwoExponents ...uint8) (*BinaryTieredBuffe
 	}, nil
 }
 
+// Get returns a buffer with specified length from the pool.
 func (b *BinaryTieredBufferPool) Get(size int) *[]byte {
 	return b.poolForGet(size).Get(size)
 }
@@ -140,6 +143,7 @@ func (b *BinaryTieredBufferPool) poolForGet(size int) bufferPool {
 	return b.sizedPools[poolIdx]
 }
 
+// Put returns a buffer to the pool.
 func (b *BinaryTieredBufferPool) Put(buf *[]byte) {
 	// We pass the capacity of the buffer, and not the size of the buffer here.
 	// If we did the latter, all buffers would eventually move to the smallest
@@ -249,10 +253,12 @@ func NewTieredBufferPool(poolSizes ...int) *TieredBufferPool {
 	}
 }
 
+// Get returns a buffer with specified length from the pool.
 func (p *TieredBufferPool) Get(size int) *[]byte {
 	return p.getPool(size).Get(size)
 }
 
+// Put returns a buffer to the pool.
 func (p *TieredBufferPool) Put(buf *[]byte) {
 	p.getPool(cap(*buf)).Put(buf)
 }
