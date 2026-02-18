@@ -30,6 +30,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/google/uuid"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/xds/clients"
 	"google.golang.org/grpc/internal/xds/clients/grpctransport"
 	"google.golang.org/grpc/internal/xds/clients/internal/testutils"
@@ -44,6 +45,7 @@ import (
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
+	utils "google.golang.org/grpc/internal/testutils"
 )
 
 // xdsChannelForTest creates an xdsChannel to the specified serverURI for
@@ -771,4 +773,62 @@ func (ta *testEventHandler) waitForResourceDoesNotExist(ctx context.Context) (Re
 		return ResourceType{}, "", ctx.Err()
 	}
 	return typ, name, nil
+}
+
+type panicDecoder struct{}
+
+func (panicDecoder) Decode(*AnyProto, DecodeOptions) (*DecodeResult, error) {
+	panic("simulate panic")
+}
+
+// TestDecodeResponse_PanicRecovery tests the panic recovery mechanism in
+// decodeResponse. It verifies that when XDSRecoverPanicInResourceParsing env variable is
+// enabled, panics during unmarshaling are caught and returned as errors.
+// When the env variable is disabled, it ensures the panic propagates.
+func (s) TestDecodeResponse_PanicRecovery(t *testing.T) {
+	tests := []struct {
+		name          string
+		enableRecover bool
+		wantPanic     bool
+		wantErr       string
+	}{
+		{
+			name:          "Enable_XDSRecoverPanic",
+			enableRecover: true,
+			wantPanic:     false,
+			wantErr:       "error parsing \"resourceType\" response: top level errors: panic during resourceType resource decoding: simulate panic",
+		},
+		{
+			name:          "Disable_XDSRecoverPanic",
+			enableRecover: false,
+			wantPanic:     true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			utils.SetEnvConfig(t, &envconfig.XDSRecoverPanicInResourceParsing, tt.enableRecover)
+
+			opts := &DecodeOptions{}
+			rType := &ResourceType{
+				TypeName: "resourceType",
+				Decoder:  panicDecoder{},
+			}
+			resp := response{
+				resources: []*anypb.Any{{Value: []byte("test")}},
+			}
+
+			if tt.wantPanic {
+				defer func() {
+					if r := recover(); r == nil {
+						t.Errorf("The code did not panic but was expected to")
+					}
+				}()
+				decodeResponse(opts, rType, resp)
+			} else {
+				if _, _, err := decodeResponse(opts, rType, resp); err == nil || err.Error() != tt.wantErr {
+					t.Errorf("decodeResponse() failed with err: %v, want %q", err, tt.wantErr)
+				}
+			}
+		})
+	}
 }
