@@ -18,10 +18,9 @@
 package xdsresource
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
-	"net"
+	"net/netip"
 	"strconv"
 
 	v1xdsudpatypepb "github.com/cncf/xds/go/udpa/type/v1"
@@ -396,21 +395,29 @@ func buildFilterChainMap(fcs []*v3listenerpb.FilterChain) (NetworkFilterChainMap
 
 func addFilterChainsForDestPrefixes(dstPrefixEntries []*dstPrefixEntry, fc *v3listenerpb.FilterChain) ([]*dstPrefixEntry, error) {
 	ranges := fc.GetFilterChainMatch().GetPrefixRanges()
-	dstPrefixes := make([]*net.IPNet, 0, len(ranges))
+	dstPrefixes := make([]netip.Prefix, 0, len(ranges))
 	for _, pr := range ranges {
-		cidr := fmt.Sprintf("%s/%d", pr.GetAddressPrefix(), pr.GetPrefixLen().GetValue())
-		_, ipnet, err := net.ParseCIDR(cidr)
+		addrStr := pr.GetAddressPrefix()
+		bits := int(pr.GetPrefixLen().GetValue())
+
+		addr, err := netip.ParseAddr(addrStr)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse destination prefix range: %+v", pr)
+			return nil, fmt.Errorf("failed to parse destination address: %+v", pr)
 		}
-		dstPrefixes = append(dstPrefixes, ipnet)
+		prefix := netip.PrefixFrom(addr.Unmap(), bits).Masked()
+
+		if !prefix.IsValid() {
+			return nil, fmt.Errorf(`invalid prefix: "%s/%d"`, addrStr, bits)
+		}
+
+		dstPrefixes = append(dstPrefixes, prefix)
 	}
 
 	var entry *dstPrefixEntry
 	if len(dstPrefixes) == 0 {
 		// Use the unspecified entry when destination prefix is unspecified, and
-		// set the `net` field to nil.
-		dstPrefixEntries, entry = getOrCreateDestPrefixEntry(dstPrefixEntries, nil)
+		// set the `prefix` field to nil.
+		dstPrefixEntries, entry = getOrCreateDestPrefixEntry(dstPrefixEntries, netip.Prefix{})
 		if err := addFilterChainsForServerNames(entry, fc); err != nil {
 			return nil, err
 		}
@@ -429,9 +436,9 @@ func addFilterChainsForDestPrefixes(dstPrefixEntries []*dstPrefixEntry, fc *v3li
 // provided slice with the same destination prefix as the provided prefix. If
 // such an entry is found, it is returned. Otherwise, a new entry is created and
 // appended to the slice, and the new entry is returned.
-func getOrCreateDestPrefixEntry(dstPrefixEntries []*dstPrefixEntry, prefix *net.IPNet) ([]*dstPrefixEntry, *dstPrefixEntry) {
+func getOrCreateDestPrefixEntry(dstPrefixEntries []*dstPrefixEntry, prefix netip.Prefix) ([]*dstPrefixEntry, *dstPrefixEntry) {
 	for _, e := range dstPrefixEntries {
-		if ipNetEqual(e.entry.Prefix, prefix) {
+		if e.entry.Prefix == prefix {
 			return dstPrefixEntries, e
 		}
 	}
@@ -513,18 +520,26 @@ func addFilterChainsForSourceType(entry *DestinationPrefixEntry, fc *v3listenerp
 
 func addFilterChainsForSourcePrefixes(srcPrefixes *SourcePrefixes, fc *v3listenerpb.FilterChain) error {
 	ranges := fc.GetFilterChainMatch().GetSourcePrefixRanges()
-	prefixes := make([]*net.IPNet, 0, len(ranges))
+	prefixes := make([]netip.Prefix, 0, len(ranges))
 	for _, pr := range ranges {
-		cidr := fmt.Sprintf("%s/%d", pr.GetAddressPrefix(), pr.GetPrefixLen().GetValue())
-		_, ipnet, err := net.ParseCIDR(cidr)
+		addrStr := pr.GetAddressPrefix()
+		bits := int(pr.GetPrefixLen().GetValue())
+
+		addr, err := netip.ParseAddr(addrStr)
 		if err != nil {
-			return fmt.Errorf("failed to parse source prefix range: %+v", pr)
+			return fmt.Errorf("failed to parse source address: %+v", pr)
 		}
-		prefixes = append(prefixes, ipnet)
+		prefix := netip.PrefixFrom(addr.Unmap(), bits).Masked()
+
+		if !prefix.IsValid() {
+			return fmt.Errorf(`invalid prefix: "%s/%d"`, addrStr, bits)
+		}
+
+		prefixes = append(prefixes, prefix)
 	}
 
 	if len(prefixes) == 0 {
-		return getOrCreateSourcePrefixEntry(srcPrefixes, nil, fc)
+		return getOrCreateSourcePrefixEntry(srcPrefixes, netip.Prefix{}, fc)
 	}
 	for _, prefix := range prefixes {
 		if err := getOrCreateSourcePrefixEntry(srcPrefixes, prefix, fc); err != nil {
@@ -541,9 +556,9 @@ func addFilterChainsForSourcePrefixes(srcPrefixes *SourcePrefixes, fc *v3listene
 // SourcePrefixes, the provided filter chain is added to the new entry, and nil
 // is returned. If there are multiple filter chains with overlapping matching
 // rules, an error is returned.
-func getOrCreateSourcePrefixEntry(srcPrefixes *SourcePrefixes, prefix *net.IPNet, fc *v3listenerpb.FilterChain) error {
+func getOrCreateSourcePrefixEntry(srcPrefixes *SourcePrefixes, prefix netip.Prefix, fc *v3listenerpb.FilterChain) error {
 	for i := range srcPrefixes.Entries {
-		if ipNetEqual(srcPrefixes.Entries[i].Prefix, prefix) {
+		if srcPrefixes.Entries[i].Prefix == prefix {
 			return addFilterChainsForSourcePorts(&srcPrefixes.Entries[i], fc)
 		}
 	}
@@ -585,14 +600,4 @@ func addFilterChainsForSourcePorts(entry *SourcePrefixEntry, fc *v3listenerpb.Fi
 		entry.PortMap[port] = fcc
 	}
 	return nil
-}
-
-func ipNetEqual(a, b *net.IPNet) bool {
-	if a == nil && b == nil {
-		return true
-	}
-	if a == nil || b == nil {
-		return false
-	}
-	return a.IP.Equal(b.IP) && bytes.Equal(a.Mask, b.Mask)
 }
