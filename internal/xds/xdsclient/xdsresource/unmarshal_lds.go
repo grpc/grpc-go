@@ -25,6 +25,7 @@ import (
 
 	v1xdsudpatypepb "github.com/cncf/xds/go/udpa/type/v1"
 	v3xdsxdstypepb "github.com/cncf/xds/go/xds/type/v3"
+	corev3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
@@ -393,24 +394,32 @@ func buildFilterChainMap(fcs []*v3listenerpb.FilterChain) (NetworkFilterChainMap
 	return NetworkFilterChainMap{DstPrefixes: entries}, nil
 }
 
-func addFilterChainsForDestPrefixes(dstPrefixEntries []*dstPrefixEntry, fc *v3listenerpb.FilterChain) ([]*dstPrefixEntry, error) {
-	ranges := fc.GetFilterChainMatch().GetPrefixRanges()
-	dstPrefixes := make([]netip.Prefix, 0, len(ranges))
+func parsePrefixRanges(ranges []*corev3.CidrRange) ([]netip.Prefix, error) {
+	prefixes := make([]netip.Prefix, 0, len(ranges))
 	for _, pr := range ranges {
 		addrStr := pr.GetAddressPrefix()
 		bits := int(pr.GetPrefixLen().GetValue())
 
 		addr, err := netip.ParseAddr(addrStr)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse destination address: %+v", pr)
+			return nil, fmt.Errorf("invalid address: %q", addrStr)
 		}
 		prefix := netip.PrefixFrom(addr.Unmap(), bits).Masked()
 
 		if !prefix.IsValid() {
-			return nil, fmt.Errorf(`invalid prefix: "%s/%d"`, addrStr, bits)
+			return nil, fmt.Errorf(`length %d is invalid for "%s" (max %d)`, bits, addrStr, addr.BitLen())
 		}
 
-		dstPrefixes = append(dstPrefixes, prefix)
+		prefixes = append(prefixes, prefix)
+	}
+	return prefixes, nil
+}
+
+func addFilterChainsForDestPrefixes(dstPrefixEntries []*dstPrefixEntry, fc *v3listenerpb.FilterChain) ([]*dstPrefixEntry, error) {
+	ranges := fc.GetFilterChainMatch().GetPrefixRanges()
+	dstPrefixes, err := parsePrefixRanges(ranges)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse destination prefix ranges: %v", err)
 	}
 
 	var entry *dstPrefixEntry
@@ -520,22 +529,9 @@ func addFilterChainsForSourceType(entry *DestinationPrefixEntry, fc *v3listenerp
 
 func addFilterChainsForSourcePrefixes(srcPrefixes *SourcePrefixes, fc *v3listenerpb.FilterChain) error {
 	ranges := fc.GetFilterChainMatch().GetSourcePrefixRanges()
-	prefixes := make([]netip.Prefix, 0, len(ranges))
-	for _, pr := range ranges {
-		addrStr := pr.GetAddressPrefix()
-		bits := int(pr.GetPrefixLen().GetValue())
-
-		addr, err := netip.ParseAddr(addrStr)
-		if err != nil {
-			return fmt.Errorf("failed to parse source address: %+v", pr)
-		}
-		prefix := netip.PrefixFrom(addr.Unmap(), bits).Masked()
-
-		if !prefix.IsValid() {
-			return fmt.Errorf(`invalid prefix: "%s/%d"`, addrStr, bits)
-		}
-
-		prefixes = append(prefixes, prefix)
+	prefixes, err := parsePrefixRanges(ranges)
+	if err != nil {
+		return fmt.Errorf("failed to parse source prefix ranges: %v", err)
 	}
 
 	if len(prefixes) == 0 {

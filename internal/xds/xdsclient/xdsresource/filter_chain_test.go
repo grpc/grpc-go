@@ -142,7 +142,7 @@ func (s) TestUnmarshalListener_ServerSide_FilterChains_FailureCases(t *testing.T
 					},
 				},
 			},
-			wantErr: `failed to parse destination address: address_prefix:"a.b.c.d"`,
+			wantErr: `failed to parse destination prefix ranges: invalid address: "a.b.c.d"`,
 		},
 		{
 			desc: "bad dest prefix length",
@@ -155,7 +155,7 @@ func (s) TestUnmarshalListener_ServerSide_FilterChains_FailureCases(t *testing.T
 					},
 				},
 			},
-			wantErr: `invalid prefix: "10.1.1.0/50"`,
+			wantErr: `failed to parse destination prefix ranges: length 50 is invalid for "10.1.1.0" (max 32)`,
 		},
 		{
 			desc: "bad source address prefix",
@@ -168,7 +168,7 @@ func (s) TestUnmarshalListener_ServerSide_FilterChains_FailureCases(t *testing.T
 					},
 				},
 			},
-			wantErr: `failed to parse source address: address_prefix:"a.b.c.d"`,
+			wantErr: `failed to parse source prefix ranges: invalid address: "a.b.c.d"`,
 		},
 		{
 			desc: "bad source prefix length",
@@ -181,7 +181,7 @@ func (s) TestUnmarshalListener_ServerSide_FilterChains_FailureCases(t *testing.T
 					},
 				},
 			},
-			wantErr: `invalid prefix: "10.1.1.0/50"`,
+			wantErr: `failed to parse source prefix ranges: length 50 is invalid for "10.1.1.0" (max 32)`,
 		},
 	}
 
