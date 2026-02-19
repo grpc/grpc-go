@@ -131,6 +131,10 @@ func (b *orcab) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOpt
 func (b *orcab) updateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	if b.stopOOBListeners == nil {
+		// Already closed; drop the state update.
+		return
+	}
 	if state.ConnectivityState == connectivity.Ready {
 		// Register an OOB listener when the SubConn becomes READY.
 		stop := orca.RegisterOOBListener(sc, b, orca.OOBListenerOptions{
