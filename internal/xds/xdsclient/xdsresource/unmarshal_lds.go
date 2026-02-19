@@ -25,7 +25,7 @@ import (
 
 	v1xdsudpatypepb "github.com/cncf/xds/go/udpa/type/v1"
 	v3xdsxdstypepb "github.com/cncf/xds/go/xds/type/v3"
-	corev3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
@@ -394,7 +394,7 @@ func buildFilterChainMap(fcs []*v3listenerpb.FilterChain) (NetworkFilterChainMap
 	return NetworkFilterChainMap{DstPrefixes: entries}, nil
 }
 
-func parsePrefixRanges(ranges []*corev3.CidrRange) ([]netip.Prefix, error) {
+func parsePrefixRanges(ranges []*v3corepb.CidrRange) ([]netip.Prefix, error) {
 	prefixes := make([]netip.Prefix, 0, len(ranges))
 	for _, pr := range ranges {
 		addrStr := pr.GetAddressPrefix()
