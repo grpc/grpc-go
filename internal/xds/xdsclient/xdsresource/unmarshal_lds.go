@@ -394,27 +394,6 @@ func buildFilterChainMap(fcs []*v3listenerpb.FilterChain) (NetworkFilterChainMap
 	return NetworkFilterChainMap{DstPrefixes: entries}, nil
 }
 
-func parsePrefixRanges(ranges []*v3corepb.CidrRange) ([]netip.Prefix, error) {
-	prefixes := make([]netip.Prefix, 0, len(ranges))
-	for _, pr := range ranges {
-		addrStr := pr.GetAddressPrefix()
-		bits := int(pr.GetPrefixLen().GetValue())
-
-		addr, err := netip.ParseAddr(addrStr)
-		if err != nil {
-			return nil, fmt.Errorf("invalid address: %q", addrStr)
-		}
-		prefix := netip.PrefixFrom(addr.Unmap(), bits).Masked()
-
-		if !prefix.IsValid() {
-			return nil, fmt.Errorf(`length %d is invalid for "%s" (max %d)`, bits, addrStr, addr.BitLen())
-		}
-
-		prefixes = append(prefixes, prefix)
-	}
-	return prefixes, nil
-}
-
 func addFilterChainsForDestPrefixes(dstPrefixEntries []*dstPrefixEntry, fc *v3listenerpb.FilterChain) ([]*dstPrefixEntry, error) {
 	ranges := fc.GetFilterChainMatch().GetPrefixRanges()
 	dstPrefixes, err := parsePrefixRanges(ranges)
@@ -543,6 +522,27 @@ func addFilterChainsForSourcePrefixes(srcPrefixes *SourcePrefixes, fc *v3listene
 		}
 	}
 	return nil
+}
+
+func parsePrefixRanges(ranges []*v3corepb.CidrRange) ([]netip.Prefix, error) {
+	prefixes := make([]netip.Prefix, 0, len(ranges))
+	for _, pr := range ranges {
+		addrStr := pr.GetAddressPrefix()
+		bits := int(pr.GetPrefixLen().GetValue())
+
+		addr, err := netip.ParseAddr(addrStr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid address: %q", addrStr)
+		}
+		prefix := netip.PrefixFrom(addr.Unmap(), bits).Masked()
+
+		if !prefix.IsValid() {
+			return nil, fmt.Errorf(`length %d is invalid for "%s" (max %d)`, bits, addrStr, addr.BitLen())
+		}
+
+		prefixes = append(prefixes, prefix)
+	}
+	return prefixes, nil
 }
 
 // getOrCreateSourcePrefixEntry looks for an existing SourcePrefixEntry in the
