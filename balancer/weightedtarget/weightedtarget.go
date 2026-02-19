@@ -42,7 +42,7 @@ const Name = "weighted_target_experimental"
 
 // NewRandomWRR is the WRR constructor used to pick sub-pickers from
 // sub-balancers. It's to be modified in tests.
-var NewRandomWRR = wrr.NewRandom
+var NewRandomWRR = wrr.NewAlias
 
 func init() {
 	balancer.Register(bb{})
