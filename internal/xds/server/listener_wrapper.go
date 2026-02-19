@@ -302,8 +302,8 @@ func (l *listenerWrapper) Accept() (net.Conn, error) {
 		srcIP, _ := netip.AddrFromSlice(srcAddr.IP)
 		fc, err := l.activeFilterChainManager.lookup(lookupParams{
 			isUnspecifiedListener: l.isUnspecifiedAddr,
-			dstAddr:               destIP,
-			srcAddr:               srcIP,
+			dstAddr:               destIP.Unmap(),
+			srcAddr:               srcIP.Unmap(),
 			srcPort:               srcAddr.Port,
 		})
 		if err != nil {
