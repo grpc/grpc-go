@@ -1732,8 +1732,8 @@ type filterConfig struct {
 
 // httpFilter allows testing the http filter registry and parsing functionality.
 type httpFilter struct {
-	httpfilter.ClientInterceptorBuilder
-	httpfilter.ServerInterceptorBuilder
+	httpfilter.ClientFilterBuilder
+	httpfilter.ServerFilterBuilder
 }
 
 func (httpFilter) TypeURLs() []string { return []string{"custom.filter"} }
@@ -1752,7 +1752,7 @@ func (httpFilter) IsTerminal() bool {
 
 // errHTTPFilter returns errors no matter what is passed to ParseFilterConfig.
 type errHTTPFilter struct {
-	httpfilter.ClientInterceptorBuilder
+	httpfilter.ClientFilterBuilder
 }
 
 func (errHTTPFilter) TypeURLs() []string { return []string{"err.custom.filter"} }
@@ -1776,9 +1776,9 @@ func init() {
 	httpfilter.Register(clientOnlyHTTPFilter{})
 }
 
-// serverOnlyHTTPFilter does not implement ClientInterceptorBuilder
+// serverOnlyHTTPFilter does not implement ClientFilterBuilder
 type serverOnlyHTTPFilter struct {
-	httpfilter.ServerInterceptorBuilder
+	httpfilter.ServerFilterBuilder
 }
 
 func (serverOnlyHTTPFilter) TypeURLs() []string { return []string{"serverOnly.custom.filter"} }
@@ -1795,9 +1795,9 @@ func (serverOnlyHTTPFilter) IsTerminal() bool {
 	return false
 }
 
-// clientOnlyHTTPFilter does not implement ServerInterceptorBuilder
+// clientOnlyHTTPFilter does not implement ServerFilterBuilder
 type clientOnlyHTTPFilter struct {
-	httpfilter.ClientInterceptorBuilder
+	httpfilter.ClientFilterBuilder
 }
 
 func (clientOnlyHTTPFilter) TypeURLs() []string { return []string{"clientOnly.custom.filter"} }

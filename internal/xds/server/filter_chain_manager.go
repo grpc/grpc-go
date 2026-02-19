@@ -18,9 +18,11 @@
 package server
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
+	"strings"
 	"sync/atomic"
 
 	"google.golang.org/grpc/codes"
@@ -117,6 +119,25 @@ func (fcm *filterChainManager) filterChainFromConfig(config *xdsresource.Network
 	return fc
 }
 
+func (fcm *filterChainManager) stop() {
+	for _, fc := range fcm.filterChains {
+		urc := fc.usableRouteConfiguration.Load()
+		if urc.err != nil {
+			continue
+		}
+		for _, vh := range urc.vhs {
+			for _, r := range vh.routes {
+				if r.interceptor != nil {
+					if si, ok := r.interceptor.(stoppableServerInterceptor); ok {
+						si.stop()
+					}
+				}
+			}
+		}
+		fc.stop()
+	}
+}
+
 // destPrefixEntry contains a destination prefix entry and associated source
 // type matchers.
 type destPrefixEntry struct {
@@ -154,6 +175,7 @@ type sourcePrefixEntry struct {
 type filterChain struct {
 	securityCfg              *xdsresource.SecurityConfig
 	httpFilters              []xdsresource.HTTPFilter
+	serverFilters            []*refCountedServerFilter // Server filters with reference counts, stored for cleanup purposes.
 	routeConfigName          string
 	inlineRouteConfig        *xdsresource.RouteConfigUpdate
 	usableRouteConfiguration *atomic.Pointer[usableRouteConfiguration]
@@ -177,9 +199,9 @@ type virtualHostWithInterceptors struct {
 // routeWithInterceptors captures information in a Route, and contains
 // a usable matcher and also instantiated HTTP Filters.
 type routeWithInterceptors struct {
-	matcher      *xdsresource.CompositeMatcher
-	actionType   xdsresource.RouteActionType
-	interceptors []resolver.ServerInterceptor
+	matcher     *xdsresource.CompositeMatcher
+	actionType  xdsresource.RouteActionType
+	interceptor resolver.ServerInterceptor
 }
 
 type lookupParams struct {
@@ -361,54 +383,170 @@ func filterBySourcePorts(spe *sourcePrefixEntry, srcPort int) *filterChain {
 	return nil
 }
 
+func (fc *filterChain) stop() {
+	for _, sf := range fc.serverFilters {
+		sf.decRef()
+	}
+}
+
+// addOrGetFilterFunc is a function type that is used for adding or getting a
+// server filter with reference counting. The function takes a
+// ServerFilterBuilder and a key, and returns a refCountedServerFilter.
+//
+// This functionality if provided by the listener wrapper, which maintains a map
+// of refCountedServerFilters keyed by {filter_name + type_urls} for all
+// filters across all filter chains, and ensures that the same filter instance
+// is resused across resource updates. This allows filter instances to retain
+// state across resource updates.
+type addOrGetFilterFunc func(builder httpfilter.ServerFilterBuilder, key string) *refCountedServerFilter
+
 // constructUsableRouteConfiguration takes Route Configuration and converts it
 // into matchable route configuration, with instantiated HTTP Filters per route.
-func (fc *filterChain) constructUsableRouteConfiguration(config xdsresource.RouteConfigUpdate) *usableRouteConfiguration {
+func (fc *filterChain) constructUsableRouteConfiguration(config xdsresource.RouteConfigUpdate, addOrGet addOrGetFilterFunc) *usableRouteConfiguration {
 	vhs := make([]virtualHostWithInterceptors, 0, len(config.VirtualHosts))
+	var serverFilters []*refCountedServerFilter
 	for _, vh := range config.VirtualHosts {
-		vhwi, err := fc.convertVirtualHost(vh)
+		vhwi, sfs, err := fc.convertVirtualHost(vh, addOrGet)
 		if err != nil {
+			for _, sf := range serverFilters {
+				sf.decRef()
+			}
 			// Non nil if (lds + rds) fails, shouldn't happen since validated by
 			// xDS Client, treat as L7 error but shouldn't happen.
 			return &usableRouteConfiguration{err: fmt.Errorf("virtual host construction: %v", err)}
 		}
 		vhs = append(vhs, vhwi)
+		serverFilters = append(serverFilters, sfs...)
 	}
+
+	// Release references to old server filters before replacing with new ones.
+	for _, sf := range fc.serverFilters {
+		sf.decRef()
+	}
+	fc.serverFilters = serverFilters
+
 	return &usableRouteConfiguration{vhs: vhs}
 }
 
-func (fc *filterChain) convertVirtualHost(virtualHost *xdsresource.VirtualHost) (virtualHostWithInterceptors, error) {
+func (fc *filterChain) convertVirtualHost(virtualHost *xdsresource.VirtualHost, addOrGet addOrGetFilterFunc) (virtualHostWithInterceptors, []*refCountedServerFilter, error) {
+	var serverFilters []*refCountedServerFilter
 	rs := make([]routeWithInterceptors, len(virtualHost.Routes))
 	for i, r := range virtualHost.Routes {
 		rs[i].actionType = r.ActionType
 		rs[i].matcher = xdsresource.RouteToMatcher(r)
-		for _, filter := range fc.httpFilters {
-			// Route is highest priority on server side, as there is no concept
-			// of an upstream cluster on server side.
-			override := r.HTTPFilterConfigOverride[filter.Name]
-			if override == nil {
-				// Virtual Host is second priority.
-				override = virtualHost.HTTPFilterConfigOverride[filter.Name]
+		interceptor, sfs, err := fc.newInterceptor(r.HTTPFilterConfigOverride, virtualHost.HTTPFilterConfigOverride, addOrGet)
+		if err != nil {
+			for _, sf := range serverFilters {
+				sf.decRef()
 			}
-			sb, ok := filter.Filter.(httpfilter.ServerInterceptorBuilder)
-			if !ok {
-				// Should not happen if it passed xdsClient validation.
-				return virtualHostWithInterceptors{}, fmt.Errorf("filter does not support use in server")
-			}
-			si, err := sb.BuildServerInterceptor(filter.Config, override)
-			if err != nil {
-				return virtualHostWithInterceptors{}, fmt.Errorf("filter construction: %v", err)
-			}
-			if si != nil {
-				rs[i].interceptors = append(rs[i].interceptors, si)
-			}
+			return virtualHostWithInterceptors{}, nil, err
 		}
+		serverFilters = append(serverFilters, sfs...)
+		rs[i].interceptor = interceptor
 	}
-	return virtualHostWithInterceptors{domains: virtualHost.Domains, routes: rs}, nil
+	return virtualHostWithInterceptors{domains: virtualHost.Domains, routes: rs}, serverFilters, nil
 }
 
 // statusErrWithNodeID returns an error produced by the status package with the
 // specified code and message, and includes the xDS node ID.
 func (rc *usableRouteConfiguration) statusErrWithNodeID(c codes.Code, msg string, args ...any) error {
 	return status.Error(c, fmt.Sprintf("[xDS node id: %v]: %s", rc.nodeID, fmt.Sprintf(msg, args...)))
+}
+
+func (fc *filterChain) newInterceptor(routeOverride, virtualHostOverride map[string]httpfilter.FilterConfig, addOrGet addOrGetFilterFunc) (resolver.ServerInterceptor, []*refCountedServerFilter, error) {
+	var serverFilters []*refCountedServerFilter
+	interceptors := make([]*serverInterceptorWithCleanup, 0, len(fc.httpFilters))
+	for _, filter := range fc.httpFilters {
+		builder, ok := filter.Filter.(httpfilter.ServerFilterBuilder)
+		if !ok {
+			for _, sf := range serverFilters {
+				sf.decRef()
+			}
+			// Should not happen if it passed xdsClient validation.
+			return nil, nil, fmt.Errorf("filter %q does not support use in server", filter.Name)
+		}
+
+		// Route is highest priority on server side, as there is no concept
+		// of an upstream cluster on server side.
+		override := routeOverride[filter.Name]
+		if override == nil {
+			// Virtual Host is second priority.
+			override = virtualHostOverride[filter.Name]
+		}
+
+		serverFilter := addOrGet(builder, filterKey(&filter))
+		serverFilters = append(serverFilters, serverFilter)
+		i, cleanup, err := serverFilter.filter.BuildServerInterceptor(filter.Config, override)
+		if err != nil {
+			for _, sf := range serverFilters {
+				sf.decRef()
+			}
+			return nil, nil, fmt.Errorf("error constructing filter: %v", err)
+		}
+		if i != nil {
+			interceptors = append(interceptors, &serverInterceptorWithCleanup{
+				interceptor: i,
+				cleanup:     cleanup,
+			})
+		}
+	}
+
+	return &interceptorList{interceptors: interceptors}, serverFilters, nil
+}
+
+type interceptorList struct {
+	interceptors []*serverInterceptorWithCleanup
+}
+
+func (il *interceptorList) AllowRPC(ctx context.Context) error {
+	for _, i := range il.interceptors {
+		if err := i.interceptor.AllowRPC(ctx); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (il *interceptorList) stop() {
+	for _, i := range il.interceptors {
+		if i.cleanup != nil {
+			i.cleanup()
+		}
+	}
+}
+
+// refCountedServerFilter contains a ServerFilter along with a reference count
+// and a cleanup function to be called when the filter is no longer needed. This
+// is used to manage server filters that are shared across filter chains within
+// a filter chain manager.
+type refCountedServerFilter struct {
+	filter  httpfilter.ServerFilter
+	cleanup func()
+	refCnt  atomic.Int32
+}
+
+func (rsf *refCountedServerFilter) incRef() {
+	rsf.refCnt.Add(1)
+}
+
+func (rsf *refCountedServerFilter) decRef() {
+	if rsf.refCnt.Add(-1) <= 0 && rsf.cleanup != nil {
+		rsf.cleanup()
+	}
+}
+
+type serverInterceptorWithCleanup struct {
+	interceptor resolver.ServerInterceptor
+	cleanup     func()
+}
+
+type stoppableServerInterceptor interface {
+	resolver.ServerInterceptor
+	stop()
+}
+
+// filterKey generates a key for the given filter using the filter name and type
+// URLs. This is used for storing ClientFilters in a map.
+func filterKey(f *xdsresource.HTTPFilter) string {
+	return f.Name + ":" + strings.Join(f.Filter.TypeURLs(), ":")
 }

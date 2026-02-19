@@ -23,6 +23,7 @@ import (
 	"context"
 	"fmt"
 	rand "math/rand/v2"
+	"strings"
 	"sync/atomic"
 
 	estats "google.golang.org/grpc/experimental/stats"
@@ -32,6 +33,7 @@ import (
 	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/wrr"
 	"google.golang.org/grpc/internal/xds/bootstrap"
+	"google.golang.org/grpc/internal/xds/httpfilter"
 	rinternal "google.golang.org/grpc/internal/xds/resolver/internal"
 	"google.golang.org/grpc/internal/xds/xdsclient"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
@@ -134,6 +136,7 @@ func (b *xdsResolverBuilder) Build(target resolver.Target, cc resolver.ClientCon
 		xdsClient:       client,
 		xdsClientClose:  xdsClientClose,
 		activeClusters:  make(map[string]*clusterInfo),
+		httpFilters:     make(map[string]*clientFilterWithCleanup),
 		channelID:       rand.Uint64(),
 		ldsResourceName: ldsResourceName,
 
@@ -242,6 +245,11 @@ type xdsResolver struct {
 	// cluster that includes a ref count and load balancing configuration.
 	activeClusters    map[string]*clusterInfo
 	curConfigSelector stoppableConfigSelector
+	// httpFilters is a map from {filter_name + type_urls} to client filter
+	// instance. It lives here so that the resolver can reuse filter instances
+	// across config updates when the same filter is specified, and to be able
+	// to clean up filter instances that are no longer used.
+	httpFilters map[string]*clientFilterWithCleanup
 }
 
 // ResolveNow calls RequestDNSReresolution on the dependency manager.
@@ -261,9 +269,16 @@ func (r *xdsResolver) Close() {
 	if r.dm != nil {
 		r.dm.Close()
 	}
-
 	if r.xdsClientClose != nil {
 		r.xdsClientClose()
+	}
+	for _, cf := range r.httpFilters {
+		if cf.cleanup != nil {
+			cf.cleanup()
+		}
+	}
+	if r.curConfigSelector != nil {
+		r.curConfigSelector.stop()
 	}
 	r.logger.Infof("Shutdown")
 }
@@ -336,7 +351,7 @@ func (r *xdsResolver) sendNewServiceConfig(cs stoppableConfigSelector) bool {
 
 	sc := serviceConfigJSON(r.activeClusters)
 	if r.logger.V(2) {
-		r.logger.Infof("For Listener resource %q and RouteConfiguration resource %q, generated service config: %+v", r.ldsResourceName, r.xdsConfig.Listener.APIListener.RouteConfigName, sc)
+		r.logger.Infof("For Listener resource %q and RouteConfiguration resource %q, generated service config: %v", r.ldsResourceName, r.xdsConfig.Listener.APIListener.RouteConfigName, string(sc))
 	}
 
 	// Send the update to the ClientConn.
@@ -371,13 +386,13 @@ func (r *xdsResolver) newConfigSelector() (*configSelector, error) {
 		virtualHost: virtualHost{
 			retryConfig: r.xdsConfig.VirtualHost.RetryConfig,
 		},
-		routes:           make([]route, len(r.xdsConfig.VirtualHost.Routes)),
-		clusters:         make(map[string]*clusterInfo),
-		httpFilterConfig: r.xdsConfig.Listener.APIListener.HTTPFilters,
+		routes:   make([]route, len(r.xdsConfig.VirtualHost.Routes)),
+		clusters: make(map[string]*clusterInfo),
 	}
 
 	for i, rt := range r.xdsConfig.VirtualHost.Routes {
 		clusters := rinternal.NewWRR.(func() wrr.WRR)()
+		interceptors := []iresolver.ClientInterceptor{}
 		if rt.ClusterSpecifierPlugin != "" {
 			clusterName := clusterSpecifierPluginPrefix + rt.ClusterSpecifierPlugin
 			clusters.Add(&routeCluster{name: clusterName}, 1)
@@ -387,7 +402,7 @@ func (r *xdsResolver) newConfigSelector() (*configSelector, error) {
 		} else {
 			for _, wc := range rt.WeightedClusters {
 				clusterName := clusterPrefix + wc.Name
-				interceptor, err := newInterceptor(r.xdsConfig.Listener.APIListener.HTTPFilters, wc.HTTPFilterConfigOverride, rt.HTTPFilterConfigOverride, r.xdsConfig.VirtualHost.HTTPFilterConfigOverride)
+				interceptor, err := r.newInterceptor(r.xdsConfig.Listener.APIListener.HTTPFilters, wc.HTTPFilterConfigOverride, rt.HTTPFilterConfigOverride, r.xdsConfig.VirtualHost.HTTPFilterConfigOverride)
 				if err != nil {
 					return nil, err
 				}
@@ -395,13 +410,14 @@ func (r *xdsResolver) newConfigSelector() (*configSelector, error) {
 					name:        clusterName,
 					interceptor: interceptor,
 				}, int64(wc.Weight))
+				interceptors = append(interceptors, interceptor)
 				ci := r.addOrGetActiveClusterInfo(clusterName)
 				ci.cfg = xdsChildConfig{ChildPolicy: newBalancerConfig(cdsName, cdsBalancerConfig{Cluster: wc.Name})}
 				cs.clusters[clusterName] = ci
 			}
 		}
 		cs.routes[i].clusters = clusters
-
+		cs.routes[i].interceptors = interceptors
 		cs.routes[i].m = xdsresource.RouteToMatcher(rt)
 		cs.routes[i].actionType = rt.ActionType
 		if rt.MaxStreamDuration == nil {
@@ -420,6 +436,24 @@ func (r *xdsResolver) newConfigSelector() (*configSelector, error) {
 	// activeClusters.
 	for _, ci := range cs.clusters {
 		atomic.AddInt32(&ci.refCount, 1)
+	}
+
+	// Cleanup filter instances that are no longer specified in the current
+	// listener resource.
+	for key, cf := range r.httpFilters {
+		found := false
+		for _, filter := range r.xdsConfig.Listener.APIListener.HTTPFilters {
+			if key == filterKey(&filter) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			if cf.cleanup != nil {
+				cf.cleanup()
+			}
+			delete(r.httpFilters, key)
+		}
 	}
 
 	return cs, nil
@@ -475,4 +509,112 @@ func (r *xdsResolver) onResourceError(err error) {
 		r.curConfigSelector.stop()
 	}
 	r.curConfigSelector = cs
+}
+
+// newInterceptor builds a chain of client interceptors for the given filters
+// and override configuration. The cluster override has the highest priority,
+// followed by the route override, and finally the virtual host override.
+//
+// Only executed in the context of a serializer callback.
+func (r *xdsResolver) newInterceptor(filters []xdsresource.HTTPFilter, clusterOverride, routeOverride, virtualHostOverride map[string]httpfilter.FilterConfig) (iresolver.ClientInterceptor, error) {
+	if len(filters) == 0 {
+		return nil, nil
+	}
+	interceptors := make([]*clientInterceptorWithCleanup, 0, len(filters))
+	for _, filter := range filters {
+		override := clusterOverride[filter.Name]
+		if override == nil {
+			override = routeOverride[filter.Name]
+		}
+		if override == nil {
+			override = virtualHostOverride[filter.Name]
+		}
+		builder, ok := filter.Filter.(httpfilter.ClientFilterBuilder)
+		if !ok {
+			// Should not happen if it passed xdsClient validation.
+			return nil, fmt.Errorf("filter %q does not support use in client", filter.Name)
+		}
+
+		clientFilter := r.getOrCreateClientFilter(builder, filterKey(&filter))
+		i, cleanup, err := clientFilter.filter.BuildClientInterceptor(filter.Config, override)
+		if err != nil {
+			return nil, fmt.Errorf("error constructing filter: %v", err)
+		}
+		if i != nil {
+			interceptors = append(interceptors, &clientInterceptorWithCleanup{
+				interceptor: i,
+				cleanup:     cleanup,
+			})
+		}
+	}
+
+	return &interceptorList{interceptors: interceptors}, nil
+}
+
+// interceptorList is a client interceptor that contains a list of client
+// interceptors to execute in order. It also contains a cleanup function for
+// each interceptor, which will be executed when the interceptorList is stopped.
+type interceptorList struct {
+	interceptors []*clientInterceptorWithCleanup
+}
+
+func (il *interceptorList) NewStream(ctx context.Context, ri iresolver.RPCInfo, _ func(), newStream func(ctx context.Context, _ func()) (iresolver.ClientStream, error)) (iresolver.ClientStream, error) {
+	for idx := len(il.interceptors) - 1; idx >= 0; idx-- {
+		ns := newStream
+		i := il.interceptors[idx]
+		newStream = func(ctx context.Context, done func()) (iresolver.ClientStream, error) {
+			return i.interceptor.NewStream(ctx, ri, done, ns)
+		}
+	}
+	return newStream(ctx, func() {})
+}
+
+func (il *interceptorList) stop() {
+	for _, i := range il.interceptors {
+		if i.cleanup != nil {
+			i.cleanup()
+		}
+	}
+}
+
+// getOrCreateClientFilter retrieves an existing client filter from the
+// httpFilters map or creates a new one if it doesn't exist. It uses the filter
+// builder to create a new client filter and stores it in the httpFilters map
+// for future use.
+//
+// Only executed in the context of a serializer callback.
+func (r *xdsResolver) getOrCreateClientFilter(builder httpfilter.ClientFilterBuilder, key string) *clientFilterWithCleanup {
+	clientFilter, ok := r.httpFilters[key]
+	if ok {
+		return clientFilter
+	}
+
+	cf, cleanup := builder.BuildClientFilter()
+	clientFilter = &clientFilterWithCleanup{
+		filter:  cf,
+		cleanup: cleanup,
+	}
+	r.httpFilters[key] = clientFilter
+	return clientFilter
+}
+
+// filterKey generates a key for the given filter using the filter name and type
+// URLs. This is used for storing ClientFilters in a map.
+func filterKey(f *xdsresource.HTTPFilter) string {
+	return f.Name + ":" + strings.Join(f.Filter.TypeURLs(), ":")
+}
+
+type clientFilterWithCleanup struct {
+	filter  httpfilter.ClientFilter
+	cleanup func()
+}
+
+type clientInterceptorWithCleanup struct {
+	interceptor iresolver.ClientInterceptor
+	cleanup     func()
+}
+
+type stoppableClientInterceptor interface {
+	iresolver.ClientInterceptor
+	stop()
 }
