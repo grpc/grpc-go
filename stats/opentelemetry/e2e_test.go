@@ -22,9 +22,12 @@ import (
 	"io"
 	"slices"
 	"strconv"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/health"
 	healthgrpc "google.golang.org/grpc/health/grpc_health_v1"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
@@ -58,6 +61,7 @@ import (
 	"google.golang.org/grpc/encoding/gzip"
 	experimental "google.golang.org/grpc/experimental/opentelemetry"
 	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/internal/balancer/stub"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/stubserver"
@@ -1399,6 +1403,75 @@ func (s) TestRPCSpanErrorStatus(t *testing.T) {
 
 const delayedResolutionEventName = "Delayed name resolution complete"
 
+type blockingPicker struct {
+	sc          atomic.Pointer[subConnWrapper]
+	pickInvoked chan struct{}
+}
+
+type subConnWrapper struct {
+	balancer.SubConn
+}
+
+func (p *blockingPicker) Pick(balancer.PickInfo) (balancer.PickResult, error) {
+	select {
+	case <-p.pickInvoked:
+	default:
+		close(p.pickInvoked)
+	}
+	sc := p.sc.Load()
+	if sc == nil {
+		return balancer.PickResult{}, balancer.ErrNoSubConnAvailable
+	}
+	return balancer.PickResult{SubConn: sc.SubConn}, nil
+}
+
+// registerBlockingBalancer registers a stub balancer that initially returns a
+// blocking picker to ensure the pick method blocks and waits for the picker.
+// This guarantees the "Delayed LB pick complete" event is emitted reliably.
+func registerBlockingBalancer(ctx context.Context, t *testing.T, balancerName string) {
+	t.Helper()
+	var picker *blockingPicker
+	stub.Register(balancerName, stub.BalancerFuncs{
+		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
+			// Create a blocking picker on the first call.
+			if picker == nil {
+				picker = &blockingPicker{pickInvoked: make(chan struct{})}
+				bd.ClientConn.UpdateState(balancer.State{
+					ConnectivityState: connectivity.Connecting,
+					Picker:            picker,
+				})
+			}
+
+			// Create a SubConn with the addresses from the resolver.
+			if len(ccs.ResolverState.Addresses) > 0 {
+				var subConn balancer.SubConn
+				subConn, err := bd.ClientConn.NewSubConn(ccs.ResolverState.Addresses, balancer.NewSubConnOptions{
+					StateListener: func(state balancer.SubConnState) {
+						if state.ConnectivityState == connectivity.Ready {
+							go func() {
+								select {
+								case <-picker.pickInvoked:
+									picker.sc.Store(&subConnWrapper{SubConn: subConn})
+									bd.ClientConn.UpdateState(balancer.State{
+										ConnectivityState: connectivity.Ready,
+										Picker:            picker,
+									})
+								case <-ctx.Done():
+								}
+							}()
+						}
+					},
+				})
+				if err != nil {
+					return err
+				}
+				subConn.Connect()
+			}
+			return nil
+		},
+	})
+}
+
 // TestTraceSpan_WithRetriesAndNameResolutionDelay verifies that
 // "Delayed name resolution complete" event is recorded in the call trace span
 // only once if any of the retry attempt encountered a delay in name resolution
@@ -1708,10 +1781,15 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
 			resolutionWait := grpcsync.NewEvent()
 			prevHook := internal.NewStreamWaitingForResolver
 			internal.NewStreamWaitingForResolver = func() { resolutionWait.Fire() }
 			defer func() { internal.NewStreamWaitingForResolver = prevHook }()
+
+			blockingBalancerName := "test_blocking_balancer"
+			registerBlockingBalancer(ctx, t, blockingBalancerName)
 
 			mo, _ := defaultMetricsOptions(t, nil)
 			to, exporter := defaultTraceOptions(t)
@@ -1723,24 +1801,25 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 			}
 			defer ss.Stop()
 
-			retryPolicy := `{
-				"methodConfig": [{
-					"name": [{"service": "grpc.testing.TestService"}],
-					"retryPolicy": {
-						"maxAttempts": 3,
-						"initialBackoff": "0.05s",
-						"maxBackoff": "0.2s",
-						"backoffMultiplier": 1.0,
-						"retryableStatusCodes": ["UNAVAILABLE"]
-					}
-				}]
-			}`
+			serviceConfig := fmt.Sprintf(`{
+			   "loadBalancingConfig": [{"%s":{}}],
+			   "methodConfig": [{
+			     "name": [{"service": "grpc.testing.TestService"}],
+			     "retryPolicy": {
+			       "maxAttempts": 3,
+			       "initialBackoff": "0.05s",
+			       "maxBackoff": "0.2s",
+			       "backoffMultiplier": 1.0,
+			       "retryableStatusCodes": ["UNAVAILABLE"]
+			     }
+			   }]
+			 }`, blockingBalancerName)
 			cc, err := grpc.NewClient(
 				rb.Scheme()+":///test.server",
 				grpc.WithTransportCredentials(insecure.NewCredentials()),
 				grpc.WithResolvers(rb),
 				opentelemetry.DialOption(opts),
-				grpc.WithDefaultServiceConfig(retryPolicy),
+				grpc.WithDefaultServiceConfig(serviceConfig),
 			)
 			if err != nil {
 				t.Fatal(err)
@@ -1748,8 +1827,6 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 			defer cc.Close()
 
 			client := testgrpc.NewTestServiceClient(cc)
-			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-			defer cancel()
 
 			go func() {
 				<-resolutionWait.Done()
