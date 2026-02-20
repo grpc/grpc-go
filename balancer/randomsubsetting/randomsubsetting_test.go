@@ -22,6 +22,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"strings"
 	"testing"
 	"time"
@@ -257,5 +258,243 @@ func (s) TestSubsettingBalancer_DeterministicSubset(t *testing.T) {
 		}
 	case <-ctx.Done():
 		t.Fatal("Timed out waiting for second child policy update")
+	}
+}
+
+func (s) TestSubsettingEndpointsSimply(t *testing.T) {
+
+	testCases := []struct {
+		endpoints  []resolver.Endpoint
+		subsetSize uint32
+		want       uint32
+	}{
+		{
+			endpoints:  makeEndpoints(100),
+			subsetSize: 10,
+			want:       10,
+		},
+		{
+			endpoints:  makeEndpoints(10),
+			subsetSize: 2,
+			want:       2,
+		},
+		{
+			endpoints:  makeEndpoints(150),
+			subsetSize: 50,
+			want:       50,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(fmt.Sprint(tc.subsetSize), func(t *testing.T) {
+			b := &subsettingBalancer{
+				cfg:        &lbConfig{SubsetSize: tc.subsetSize},
+				hashSeed:   0,
+				hashDigest: xxhash.New(),
+			}
+			subsetOfEndpoints := b.calculateSubset(tc.endpoints)
+			got := len(subsetOfEndpoints)
+			if got != int(tc.want) {
+				t.Fatalf("len(subsetOfEndpoints) = %d; want %d", got, tc.want)
+			}
+		})
+	}
+}
+
+type DistributionData struct {
+	cardinality   int
+	mean          float64
+	sigma         float64
+	expectSuccess bool
+}
+
+func (s) TestUniformDistributionOfEndpoints(t *testing.T) {
+
+	testCases := []struct {
+		eps        int
+		subsetSize uint32
+		iteration  uint32
+		positive   bool
+	}{
+		{
+			eps:        16,
+			subsetSize: 4,
+			iteration:  10,
+			positive:   true,
+		},
+		{
+			eps:        40,
+			subsetSize: 20,
+			iteration:  100,
+			positive:   true,
+		},
+		{
+			eps:        10,
+			subsetSize: 2,
+			iteration:  1000,
+			positive:   true,
+		},
+		{
+			eps:        16,
+			subsetSize: 4,
+			iteration:  1600,
+			positive:   true,
+		},
+		{
+			eps:        8,
+			subsetSize: 4,
+			iteration:  3200,
+			positive:   true,
+		},
+		{
+			eps:        4,
+			subsetSize: 4,
+			iteration:  6400,
+			positive:   true,
+		},
+		{
+			eps:        6,
+			subsetSize: 1,
+			iteration:  30,
+			positive:   false,
+		},
+		{
+			eps:        17,
+			subsetSize: 2,
+			iteration:  100,
+			positive:   false,
+		},
+	}
+
+	for _, tc := range testCases {
+		endpoints := makeEndpoints(tc.eps)
+		// From a set of N numbers, we randomly select K-times a subset of L numbers,
+		// where L < N. Calculate how many times each number belonging to set N appears.
+		// Calculate the variance and standard deviation.
+		// Check whether the distribution is uniform.
+
+		// Theoretical Calculations
+		N := len(endpoints)
+		L := int(tc.subsetSize)
+		K := int(tc.iteration)
+
+		p := float64(L) / float64(N)         // Probability of x ∈ N being drawn p(x) = L / N
+		E := float64(K) * p                  // Expected Value (Mean) E(N) = K * p
+		variance := float64(K) * p * (1 - p) // Variance σ²(N) = K * p * (1 - p)
+		sigma := math.Sqrt(variance)         // Standard Deviation σ(N) = sqrt(σ²(N))
+
+		EndpointCount := make(map[string]int, N)
+		initEndpointCount(EndpointCount, endpoints)
+
+		for i := 0; i < K; i++ {
+			lb := &subsettingBalancer{
+				cfg:        &lbConfig{SubsetSize: uint32(L)},
+				hashSeed:   uint64(i ^ 3 + K*i + L),
+				hashDigest: xxhash.New(),
+			}
+			subsetOfEndpoints := lb.calculateSubset(endpoints)
+
+			for _, ep := range subsetOfEndpoints {
+				EndpointCount[ep.Addresses[0].Addr]++
+			}
+		}
+
+		t.Logf("Test Case: Endpoints=%d, SubsetSize=%d, Iterations=%d", N, L, K)
+		result, msgs := verifyUniformDistribution(EndpointCount, DistributionData{N, E, sigma, tc.positive})
+		if !result {
+			t.Errorf("Distribution check failed:\n%s", msgs.String())
+		} else {
+			t.Logf("Distribution check passed:\n%s", msgs.String())
+		}
+	}
+}
+
+func verifyUniformDistribution(eps map[string]int, dd DistributionData) (bool, strings.Builder) {
+	// Verify the distribution is uniform within a small diff range.
+	var (
+		chi2          float64
+		reportBuilder strings.Builder
+	)
+
+	testPassed := true
+	reportBuilder.WriteString(fmt.Sprintf("%-12s | %-15s | %-15s | %s\n", "Endpoint", "ExpValue", "Diff from E", "Status"))
+	reportBuilder.WriteString(strings.Repeat("-", 75) + "\n")
+
+	for epAddr, count := range eps {
+		diff := float64(count) - dd.mean
+		absDiff := math.Abs(diff)
+
+		// Chi-Square Statistic Calculation (χ²)
+		chi2 += (diff * diff) / dd.mean
+
+		// Determine Sigma Range Status
+		status := "      E ± σ  (Normal)"
+		if absDiff > 3*dd.sigma {
+			status = "!!! > E ± 3σ (Extreme)"
+		} else if absDiff > 2*dd.sigma {
+			status = "!!  > E ± 2σ (Rare)"
+		} else if absDiff > dd.sigma {
+			status = "!   > E ± σ  (Noticeable)"
+		}
+
+		reportBuilder.WriteString(fmt.Sprintf("%-12s | %-15.2f | %-15.2f | %s\n", epAddr, dd.mean, absDiff, status))
+	}
+	reportBuilder.WriteString(strings.Repeat("-", 75) + "\n")
+
+	// Degrees of Freedom
+	df := float64(dd.cardinality - 1)
+
+	// Critical Value for α = 0.05 and df
+	criticalValue := chiSquareCriticalValue(0.05, df)
+
+	isUniform := chi2 <= criticalValue
+	testPassed = isUniform == dd.expectSuccess
+
+	if isUniform {
+		reportBuilder.WriteString(fmt.Sprintf("Distribution is uniform (χ²=%.2f <= critical value=%.2f)", chi2, criticalValue))
+	} else {
+		reportBuilder.WriteString(fmt.Sprintf("Distribution is not uniform (χ²=%.2f > critical value=%.2f)", chi2, criticalValue))
+	}
+
+	return testPassed, reportBuilder
+}
+
+// Initialize EndpointCount map with endpoint addresses as keys and zero counts.
+func initEndpointCount(epCount map[string]int, eps []resolver.Endpoint) {
+	for _, ep := range eps {
+		epCount[ep.Addresses[0].Addr] = 0
+	}
+}
+
+// ChiSquareCriticalValue calculates the critical value for alpha (e.g., 0.05)
+// and degrees of freedom (df).
+func chiSquareCriticalValue(alpha float64, df float64) float64 {
+	// 1. Find the Z-score for the given alpha.
+	// For alpha = 0.05 (95% confidence), Z is approx 1.64485
+	z := getZScore(1 - alpha)
+
+	// 2. Wilson-Hilferty transformation
+	dfFloat := float64(df)
+	fraction := 2.0 / (9.0 * dfFloat)
+
+	// Formula: df * (1 - 2/(9df) + z * sqrt(2/(9df)))^3
+	inner := 1.0 - fraction + z*math.Sqrt(fraction)
+	return dfFloat * math.Pow(inner, 3)
+}
+
+// Helper to get Z-score for common alpha levels
+func getZScore(probability float64) float64 {
+	// Simplified mapping for common statistical confidence levels
+	switch {
+	case probability >= 0.99:
+		return 2.326
+	case probability >= 0.975:
+		return 1.960
+	case probability >= 0.95:
+		return 1.645
+	case probability >= 0.90:
+		return 1.282
+	default:
+		return 1.645 // Default to 95%
 	}
 }
