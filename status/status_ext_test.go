@@ -21,6 +21,7 @@ package status_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -257,5 +258,76 @@ func (s) TestStatus_ErrorDetailsMessageV1AndV2(t *testing.T) {
 		if diff := cmp.Diff(msg, details[i], protocmp.Transform()); diff != "" {
 			t.Errorf("(%v).Details got unexpected output, diff (-got +want):\n%s", s, diff)
 		}
+	}
+}
+
+func (s) TestFromError_Wrapped(t *testing.T) {
+	details := []protoadapt.MessageV1{
+		&testpb.Empty{},
+	}
+	s := status.New(codes.Canceled, "inner canceled")
+	sWithDetails, err := s.WithDetails(details...)
+	if err != nil {
+		t.Fatalf("WithDetails failed: %v", err)
+	}
+	innerErr := sWithDetails.Err()
+
+	testCases := []struct {
+		name        string
+		err         error
+		wantCode    codes.Code
+		wantMessage string
+		wantDetails int
+	}{
+		{
+			name:        "direct_error",
+			err:         innerErr,
+			wantCode:    codes.Canceled,
+			wantMessage: "inner canceled",
+			wantDetails: 1,
+		},
+		{
+			name:        "wrapped_error",
+			err:         fmt.Errorf("wrapped: %w", innerErr),
+			wantCode:    codes.Canceled,
+			wantMessage: "wrapped: rpc error: code = Canceled desc = inner canceled",
+			wantDetails: 1,
+		},
+		{
+			name:        "double_wrapped_error",
+			err:         fmt.Errorf("outer: %w", fmt.Errorf("inner: %w", innerErr)),
+			wantCode:    codes.Canceled,
+			wantMessage: "outer: inner: rpc error: code = Canceled desc = inner canceled",
+			wantDetails: 1,
+		},
+		{
+			name:        "double_wrapped_single_errorf",
+			err:         fmt.Errorf("error: %w: %w", errors.New("test error"), innerErr),
+			wantCode:    codes.Canceled,
+			wantMessage: "error: test error: rpc error: code = Canceled desc = inner canceled",
+			wantDetails: 1,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := status.Code(tc.err); got != tc.wantCode {
+				t.Errorf("status.Code(%v) = %v; want %v", tc.err, got, tc.wantCode)
+			}
+
+			st, ok := status.FromError(tc.err)
+			if !ok {
+				t.Fatalf("status.FromError(%v) returned false; want true", tc.err)
+			}
+			if got := st.Code(); got != tc.wantCode {
+				t.Errorf("st.Code() = %v; want %v", got, tc.wantCode)
+			}
+			if got := st.Message(); got != tc.wantMessage {
+				t.Errorf("st.Message() = %q; want %q", got, tc.wantMessage)
+			}
+			if got := len(st.Details()); got != tc.wantDetails {
+				t.Errorf("len(st.Details()) = %v; want %v", got, tc.wantDetails)
+			}
+		})
 	}
 }
