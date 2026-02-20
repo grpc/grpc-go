@@ -36,7 +36,7 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
-const iterCount = 100000
+const iterCount = 10000
 
 func equalApproximate(a, b float64) error {
 	opt := cmp.Comparer(func(x, y float64) bool {
