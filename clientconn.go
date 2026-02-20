@@ -23,7 +23,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"net/url"
 	"slices"
 	"strings"
 	"sync"
@@ -1798,52 +1797,31 @@ func (cc *ClientConn) connectionError() error {
 func (cc *ClientConn) initParsedTargetAndResolverBuilder() error {
 	logger.Infof("original dial target is: %q", cc.target)
 
-	var rb resolver.Builder
-	parsedTarget, err := parseTarget(cc.target)
-	if err == nil {
-		rb = cc.getResolver(parsedTarget.URL.Scheme)
-		if rb != nil {
-			cc.parsedTarget = parsedTarget
-			cc.resolverBuilder = rb
-			return nil
-		}
+	// Try the target as given first. cc.getResolver checks both globally
+	// registered resolvers and any resolver registered via dial options.
+	if parsedTarget, err := iresolver.ParseTarget(cc.target, "", cc.getResolver); err == nil {
+		cc.parsedTarget = parsedTarget
+		cc.resolverBuilder = cc.getResolver(parsedTarget.URL.Scheme)
+		return nil
 	}
 
 	// We are here because the user's dial target did not contain a scheme or
 	// specified an unregistered scheme. We should fallback to the default
 	// scheme, except when a custom dialer is specified in which case, we should
-	// always use passthrough scheme. For either case, we need to respect any overridden
-	// global defaults set by the user.
+	// always use passthrough scheme. For either case, we need to respect any
+	// overridden global defaults set by the user.
 	defScheme := cc.dopts.defaultScheme
 	if internal.UserSetDefaultScheme {
 		defScheme = resolver.GetDefaultScheme()
 	}
 
-	canonicalTarget := defScheme + ":///" + cc.target
-
-	parsedTarget, err = parseTarget(canonicalTarget)
+	parsedTarget, err := iresolver.ParseTarget(defScheme+":///"+cc.target, "", cc.getResolver)
 	if err != nil {
 		return err
 	}
-	rb = cc.getResolver(parsedTarget.URL.Scheme)
-	if rb == nil {
-		return fmt.Errorf("could not get resolver for default scheme: %q", parsedTarget.URL.Scheme)
-	}
 	cc.parsedTarget = parsedTarget
-	cc.resolverBuilder = rb
+	cc.resolverBuilder = cc.getResolver(parsedTarget.URL.Scheme)
 	return nil
-}
-
-// parseTarget uses RFC 3986 semantics to parse the given target into a
-// resolver.Target struct containing url. Query params are stripped from the
-// endpoint.
-func parseTarget(target string) (resolver.Target, error) {
-	u, err := url.Parse(target)
-	if err != nil {
-		return resolver.Target{}, err
-	}
-
-	return resolver.Target{URL: *u}, nil
 }
 
 // encodeAuthority escapes the authority string based on valid chars defined in
