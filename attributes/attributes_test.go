@@ -126,3 +126,22 @@ func TestNotEqual(t *testing.T) {
 		t.Fatalf("%+v.Equals(%+v) = true; want false", a3, a1)
 	}
 }
+
+func BenchmarkWithValue(b *testing.B) {
+	keys := make([]any, 10)
+	for i := range 10 {
+		keys[i] = i
+	}
+	b.ReportAllocs()
+
+	for b.Loop() {
+		// 50 endpoints
+		for range 50 {
+			a := attributes.New(keys[0], keys[0])
+			// 10 attributes each.
+			for j := 1; j < 10; j++ {
+				a = a.WithValue(keys[j], keys[j])
+			}
+		}
+	}
+}
