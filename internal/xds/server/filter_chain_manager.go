@@ -546,7 +546,7 @@ type stoppableServerInterceptor interface {
 }
 
 // filterKey generates a key for the given filter using the filter name and type
-// URLs. This is used for storing ClientFilters in a map.
+// URLs. This is used for storing ServerFilters in a map.
 func filterKey(f *xdsresource.HTTPFilter) string {
 	return f.Name + ":" + strings.Join(f.Filter.TypeURLs(), ":")
 }
