@@ -584,7 +584,7 @@ func (b *cdsBalancer) annotateErrorWithNodeID(err error) error {
 	return fmt.Errorf("[xDS node id: %v]: %w", nodeID, err)
 }
 
-// onClusterAmbientError handles an ambient errors, if a childLB already has a
+// onClusterAmbientError handles an ambient error, if a childLB already has a
 // good update, it should continue using that.
 func (b *cdsBalancer) onClusterAmbientError(name string, err error) {
 	b.logger.Warningf("Cluster resource %q received ambient error update: %v", name, err)
