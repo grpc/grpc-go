@@ -27,6 +27,8 @@ package attributes
 
 import (
 	"fmt"
+	"iter"
+	"maps"
 	"strings"
 )
 
@@ -37,12 +39,17 @@ import (
 // any) bool', it will be called by (*Attributes).Equal to determine whether
 // two values with the same key should be considered equal.
 type Attributes struct {
-	m map[any]any
+	root *node
 }
 
 // New returns a new Attributes containing the key/value pair.
 func New(key, value any) *Attributes {
-	return &Attributes{m: map[any]any{key: value}}
+	return &Attributes{
+		root: &node{
+			key:   key,
+			value: value,
+		},
+	}
 }
 
 // WithValue returns a new Attributes containing the previous keys and values
@@ -53,21 +60,21 @@ func (a *Attributes) WithValue(key, value any) *Attributes {
 	if a == nil {
 		return New(key, value)
 	}
-	n := &Attributes{m: make(map[any]any, len(a.m)+1)}
-	for k, v := range a.m {
-		n.m[k] = v
-	}
-	n.m[key] = value
-	return n
+	return &Attributes{root: a.root.insert(key, value)}
 }
 
 // Value returns the value associated with these attributes for key, or nil if
 // no value is associated with key.  The returned value should not be modified.
-func (a *Attributes) Value(key any) any {
+func (a *Attributes) Value(needle any) any {
 	if a == nil {
 		return nil
 	}
-	return a.m[key]
+	for key, value := range a.root.all() {
+		if key == needle {
+			return value
+		}
+	}
+	return nil
 }
 
 // Equal returns whether a and o are equivalent.  If 'Equal(o any) bool' is
@@ -83,11 +90,10 @@ func (a *Attributes) Equal(o *Attributes) bool {
 	if a == nil || o == nil {
 		return false
 	}
-	if len(a.m) != len(o.m) {
-		return false
-	}
-	for k, v := range a.m {
-		ov, ok := o.m[k]
+	m := maps.Collect(o.root.all())
+
+	for k, v := range a.root.all() {
+		ov, ok := m[k]
 		if !ok {
 			// o missing element of a
 			return false
@@ -110,11 +116,11 @@ func (a *Attributes) String() string {
 	var sb strings.Builder
 	sb.WriteString("{")
 	first := true
-	for k, v := range a.m {
+	for k, v := range a.root.all() {
 		if !first {
 			sb.WriteString(", ")
 		}
-		sb.WriteString(fmt.Sprintf("%q: %q ", str(k), str(v)))
+		fmt.Fprintf(&sb, "%q: %q ", str(k), str(v))
 		first = false
 	}
 	sb.WriteString("}")
@@ -138,4 +144,33 @@ func str(x any) (s string) {
 // method is meant only for debugging purposes.
 func (a *Attributes) MarshalJSON() ([]byte, error) {
 	return []byte(a.String()), nil
+}
+
+type node struct {
+	key   any
+	value any
+	next  *node
+}
+
+func (n *node) insert(key, value any) *node {
+	return &node{
+		key:   key,
+		value: value,
+		next:  n,
+	}
+}
+
+func (n *node) all() iter.Seq2[any, any] {
+	return func(yield func(any, any) bool) {
+		seen := map[any]bool{}
+		for cur := n; cur != nil; cur = cur.next {
+			if seen[cur.key] {
+				continue
+			}
+			if !yield(cur.key, cur.value) {
+				return
+			}
+			seen[cur.key] = true
+		}
+	}
 }
