@@ -169,11 +169,11 @@ type cdsBalancer struct {
 	lbCfg             *lbConfig                             // Current load balancing configuration.
 	priorities        []*priorityConfig                     // List of priorities in the order.
 	unsubscribe       func()                                // Function to unsubscribe to a cluster in case of dynamic clusters.
-	isSubscribed      bool                                  // Specifies is the dynamic cluster has been subscribed to. It is not needed for static clusters.
+	isSubscribed      bool                                  // Specifies if the dynamic cluster has been subscribed to. It is not needed for static clusters.
 	clusterSubscriber xdsdepmgr.ClusterSubscriber           // To subscribe to dynamic cluster resource.
 	xdsLBPolicy       internalserviceconfig.BalancerConfig  // Stores the locality and endpoint picking policy.
+	attributes        *attributes.Attributes                // Attributes from resolver state.
 	serviceConfig     *serviceconfig.ParseResult
-	attributes        *attributes.Attributes // Attributes from resolver state.
 	// Each new leaf cluster needs a child name generator to reuse child policy
 	// names. But to make sure the names across leaf clusters doesn't conflict,
 	// we need a seq ID. This ID is incremented for each new cluster.
@@ -313,7 +313,6 @@ func (b *cdsBalancer) UpdateClientConnState(state balancer.ClientConnState) erro
 	b.lbCfg = lbCfg
 	b.serviceConfig = state.ResolverState.ServiceConfig
 	b.attributes = state.ResolverState.Attributes
-
 	return b.handleXDSConfigUpdate()
 }
 
@@ -340,8 +339,7 @@ func (b *cdsBalancer) handleXDSConfigUpdate() error {
 		}
 		return b.annotateErrorWithNodeID(fmt.Errorf("did not find the cluster %s in XDSConfig", clusterName))
 	}
-
-	// If the cluster resource has an error, report transient failure.
+	// If the cluster resource has an error, return the error.
 	if clusterUpdate.Err != nil {
 		return clusterUpdate.Err
 	}
@@ -446,16 +444,11 @@ func (b *cdsBalancer) updateChildConfig() error {
 	return nil
 }
 
-// updatePriorityConfig updates the priority config for a given EDS/DNS cluster.
-// If the priority config for the cluster doesn't exist, it creates a new one.
-// It returns the updated/created priority config.
+// updatePriorityConfig updates the priority configuration for the specified EDS
+// or DNS cluster, creating it if it does not already exist.
 func (b *cdsBalancer) updatePriorityConfig(clusterName string, clusterConfig *xdsresource.ClusterConfig) *priorityConfig {
-	clusterUpdate := *clusterConfig.Cluster
-	name := hostName(clusterName, clusterUpdate)
+	name := hostName(clusterName, *clusterConfig.Cluster)
 	pc, ok := b.priorityConfigs[name]
-	// If this is the first time we are seeing this cluster, we need to create a
-	// new priority config for it. Otherwise, we just update the existing
-	// priority config with the new cluster update and endpoints.
 	if !ok {
 		pc = &priorityConfig{
 			childNameGen: newNameGenerator(b.childNameGeneratorSeqID),
@@ -483,7 +476,6 @@ func (b *cdsBalancer) updateOutlierDetection() error {
 	if !ok {
 		// Shouldn't happen, imported Outlier Detection builder has this method.
 		return fmt.Errorf("%q LB policy does not implement a config parser", outlierdetection.Name)
-
 	}
 
 	for _, p := range b.priorities {
@@ -496,15 +488,13 @@ func (b *cdsBalancer) updateOutlierDetection() error {
 		lbCfg, err := odParser.ParseConfig(odJSON)
 		if err != nil {
 			return fmt.Errorf("error parsing Outlier Detection config %v: %v", odJSON, err)
-
 		}
 
 		odCfg, ok := lbCfg.(*outlierdetection.LBConfig)
 		if !ok {
-			// Shouldn't happen, Parser built at build time with Outlier Detection
-			// builder pulled from gRPC LB Registry.
+			// Shouldn't happen, Parser built at build time with Outlier
+			// Detection builder pulled from gRPC LB Registry.
 			return fmt.Errorf("odParser returned config with unexpected type %T: %v", lbCfg, lbCfg)
-
 		}
 		p.outlierDetection = *odCfg
 	}

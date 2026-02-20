@@ -166,13 +166,11 @@ func (s) TestBuildPriorityConfigJSON(t *testing.T) {
 				},
 				EndpointConfig: &xdsresource.EndpointConfig{
 					EDSUpdate: &xdsresource.EndpointsUpdate{
-						Drops: []xdsresource.OverloadDropConfig{
-							{
-								Category:    testDropCategory,
-								Numerator:   testDropOverMillion,
-								Denominator: million,
-							},
-						},
+						Drops: []xdsresource.OverloadDropConfig{{
+							Category:    testDropCategory,
+							Numerator:   testDropOverMillion,
+							Denominator: million,
+						}},
 						Localities: []xdsresource.Locality{
 							testLocalitiesP0[0],
 							testLocalitiesP0[1],
@@ -436,30 +434,31 @@ func (s) TestBuildClusterImplConfigForEDS_PickFirstWeightedShuffling_Disabled(t 
 			},
 			EndpointConfig: &xdsresource.EndpointConfig{
 				EDSUpdate: &xdsresource.EndpointsUpdate{
-					Drops: []xdsresource.OverloadDropConfig{
-						{
-							Category:    testDropCategory,
-							Numerator:   testDropOverMillion,
-							Denominator: million,
-						},
-					},
+					Drops: []xdsresource.OverloadDropConfig{{
+						Category:    testDropCategory,
+						Numerator:   testDropOverMillion,
+						Denominator: million,
+					}},
 					Localities: []xdsresource.Locality{
 						{
 							Endpoints: testEndpoints[3],
 							ID:        testLocalityIDs[3],
 							Weight:    80,
 							Priority:  1,
-						}, {
+						},
+						{
 							Endpoints: testEndpoints[1],
 							ID:        testLocalityIDs[1],
 							Weight:    80,
 							Priority:  0,
-						}, {
+						},
+						{
 							Endpoints: testEndpoints[2],
 							ID:        testLocalityIDs[2],
 							Weight:    20,
 							Priority:  1,
-						}, {
+						},
+						{
 							Endpoints: testEndpoints[0],
 							ID:        testLocalityIDs[0],
 							Weight:    20,
@@ -482,24 +481,20 @@ func (s) TestBuildClusterImplConfigForEDS_PickFirstWeightedShuffling_Disabled(t 
 			EDSServiceName:        testEDSServiceName,
 			LoadReportingServer:   testLRSServerConfig,
 			MaxConcurrentRequests: newUint32(testMaxRequests),
-			DropCategories: []clusterimpl.DropConfig{
-				{
-					Category:           testDropCategory,
-					RequestsPerMillion: testDropOverMillion,
-				},
-			},
+			DropCategories: []clusterimpl.DropConfig{{
+				Category:           testDropCategory,
+				RequestsPerMillion: testDropOverMillion,
+			}},
 		},
 		"priority-2-1": {
 			Cluster:               testClusterName,
 			EDSServiceName:        testEDSServiceName,
 			LoadReportingServer:   testLRSServerConfig,
 			MaxConcurrentRequests: newUint32(testMaxRequests),
-			DropCategories: []clusterimpl.DropConfig{
-				{
-					Category:           testDropCategory,
-					RequestsPerMillion: testDropOverMillion,
-				},
-			},
+			DropCategories: []clusterimpl.DropConfig{{
+				Category:           testDropCategory,
+				RequestsPerMillion: testDropOverMillion,
+			}},
 		},
 	}
 	// Endpoint weight is the product of locality weight and endpoint weight.
@@ -548,30 +543,31 @@ func (s) TestBuildClusterImplConfigForEDS_PickFirstWeightedShuffling_Enabled(t *
 			},
 			EndpointConfig: &xdsresource.EndpointConfig{
 				EDSUpdate: &xdsresource.EndpointsUpdate{
-					Drops: []xdsresource.OverloadDropConfig{
-						{
-							Category:    testDropCategory,
-							Numerator:   testDropOverMillion,
-							Denominator: million,
-						},
-					},
+					Drops: []xdsresource.OverloadDropConfig{{
+						Category:    testDropCategory,
+						Numerator:   testDropOverMillion,
+						Denominator: million,
+					}},
 					Localities: []xdsresource.Locality{
 						{
 							Endpoints: testEndpoints[3],
 							ID:        testLocalityIDs[3],
 							Weight:    80,
 							Priority:  1,
-						}, {
+						},
+						{
 							Endpoints: testEndpoints[1],
 							ID:        testLocalityIDs[1],
 							Weight:    80,
 							Priority:  0,
-						}, {
+						},
+						{
 							Endpoints: testEndpoints[2],
 							ID:        testLocalityIDs[2],
 							Weight:    20,
 							Priority:  1,
-						}, {
+						},
+						{
 							Endpoints: testEndpoints[0],
 							ID:        testLocalityIDs[0],
 							Weight:    20,
@@ -594,24 +590,20 @@ func (s) TestBuildClusterImplConfigForEDS_PickFirstWeightedShuffling_Enabled(t *
 			EDSServiceName:        testEDSServiceName,
 			LoadReportingServer:   testLRSServerConfig,
 			MaxConcurrentRequests: newUint32(testMaxRequests),
-			DropCategories: []clusterimpl.DropConfig{
-				{
-					Category:           testDropCategory,
-					RequestsPerMillion: testDropOverMillion,
-				},
-			},
+			DropCategories: []clusterimpl.DropConfig{{
+				Category:           testDropCategory,
+				RequestsPerMillion: testDropOverMillion,
+			}},
 		},
 		"priority-2-1": {
 			Cluster:               testClusterName,
 			EDSServiceName:        testEDSServiceName,
 			LoadReportingServer:   testLRSServerConfig,
 			MaxConcurrentRequests: newUint32(testMaxRequests),
-			DropCategories: []clusterimpl.DropConfig{
-				{
-					Category:           testDropCategory,
-					RequestsPerMillion: testDropOverMillion,
-				},
-			},
+			DropCategories: []clusterimpl.DropConfig{{
+				Category:           testDropCategory,
+				RequestsPerMillion: testDropOverMillion,
+			}},
 		},
 	}
 	// Endpoints weights are the product of normalized locality weight and

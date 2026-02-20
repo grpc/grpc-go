@@ -109,19 +109,11 @@ func (s) TestAggregateClusterSuccess_LeafNode(t *testing.T) {
 			firstClusterResource:  makeLogicalDNSClusterResource(clusterName, "dns_host", uint32(port)),
 			secondClusterResource: makeLogicalDNSClusterResource(clusterName, "dns_host_new", uint32(port)),
 			wantFirstChildCfg: &priority.LBConfig{
-				Children: map[string]*priority.Child{
-					"priority-0": {
-						Config: createPriorityConfig(clusterName, ""),
-					},
-				},
+				Children:   map[string]*priority.Child{"priority-0": {Config: createPriorityConfig(clusterName, "")}},
 				Priorities: []string{"priority-0"},
 			},
 			wantSecondChildCfg: &priority.LBConfig{
-				Children: map[string]*priority.Child{
-					"priority-1": {
-						Config: createPriorityConfig(clusterName, ""),
-					},
-				},
+				Children:   map[string]*priority.Child{"priority-1": {Config: createPriorityConfig(clusterName, "")}},
 				Priorities: []string{"priority-1"},
 			},
 		},
@@ -219,9 +211,7 @@ func (s) TestAggregateClusterSuccess_ThenUpdateChildClusters(t *testing.T) {
 				Config:                     createPriorityConfig(edsClusterName, serviceName),
 				IgnoreReresolutionRequests: true,
 			},
-			"priority-1": {
-				Config: createPriorityConfig(dnsClusterName, ""),
-			},
+			"priority-1": {Config: createPriorityConfig(dnsClusterName, "")},
 		},
 		Priorities: []string{"priority-0-0", "priority-1"},
 	}
@@ -252,9 +242,7 @@ func (s) TestAggregateClusterSuccess_ThenUpdateChildClusters(t *testing.T) {
 				Config:                     createPriorityConfig(edsClusterName, serviceName),
 				IgnoreReresolutionRequests: true,
 			},
-			"priority-2": {
-				Config: createPriorityConfig(dnsClusterNameNew, ""),
-			},
+			"priority-2": {Config: createPriorityConfig(dnsClusterNameNew, "")},
 		},
 		Priorities: []string{"priority-0-0", "priority-2"},
 	}
@@ -300,9 +288,7 @@ func (s) TestAggregateClusterSuccess_ThenChangeRootToEDS(t *testing.T) {
 				Config:                     createPriorityConfig(edsClusterName, serviceName),
 				IgnoreReresolutionRequests: true,
 			},
-			"priority-1": {
-				Config: createPriorityConfig(dnsClusterName, ""),
-			},
+			"priority-1": {Config: createPriorityConfig(dnsClusterName, "")},
 		},
 		Priorities: []string{"priority-0-0", "priority-1"},
 	}
@@ -395,9 +381,7 @@ func (s) TestAggregatedClusterSuccess_SwitchBetweenLeafAndAggregate(t *testing.T
 				Config:                     createPriorityConfig(edsClusterName, serviceName),
 				IgnoreReresolutionRequests: true,
 			},
-			"priority-1": {
-				Config: createPriorityConfig(dnsClusterName, ""),
-			},
+			"priority-1": {Config: createPriorityConfig(dnsClusterName, "")},
 		},
 		Priorities: []string{"priority-0-0", "priority-1"},
 	}

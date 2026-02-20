@@ -264,10 +264,8 @@ func createPriorityConfig(cluster, edsServiceName string) *iserviceconfig.Balanc
 					EDSServiceName:  edsServiceName,
 					TelemetryLabels: xdsinternal.UnknownCSMLabels,
 					ChildPolicy: &iserviceconfig.BalancerConfig{
-						Name: wrrlocality.Name,
-						Config: &wrrlocality.LBConfig{
-							ChildPolicy: &iserviceconfig.BalancerConfig{Name: roundrobin.Name},
-						},
+						Name:   wrrlocality.Name,
+						Config: &wrrlocality.LBConfig{ChildPolicy: &iserviceconfig.BalancerConfig{Name: roundrobin.Name}},
 					},
 				},
 			},
@@ -417,12 +415,8 @@ func (s) TestClusterUpdate_Success(t *testing.T) {
 										TelemetryLabels:       xdsinternal.UnknownCSMLabels,
 										MaxConcurrentRequests: newUint32(512),
 										ChildPolicy: &iserviceconfig.BalancerConfig{
-											Name: wrrlocality.Name,
-											Config: &wrrlocality.LBConfig{
-												ChildPolicy: &iserviceconfig.BalancerConfig{
-													Name: roundrobin.Name,
-												},
-											},
+											Name:   wrrlocality.Name,
+											Config: &wrrlocality.LBConfig{ChildPolicy: &iserviceconfig.BalancerConfig{Name: roundrobin.Name}},
 										},
 									},
 								},
@@ -666,12 +660,8 @@ func (s) TestClusterUpdate_SuccessWithLRS(t *testing.T) {
 								TelemetryLabels:     xdsinternal.UnknownCSMLabels,
 								LoadReportingServer: lrsServerCfg,
 								ChildPolicy: &iserviceconfig.BalancerConfig{
-									Name: wrrlocality.Name,
-									Config: &wrrlocality.LBConfig{
-										ChildPolicy: &iserviceconfig.BalancerConfig{
-											Name: roundrobin.Name,
-										},
-									},
+									Name:   wrrlocality.Name,
+									Config: &wrrlocality.LBConfig{ChildPolicy: &iserviceconfig.BalancerConfig{Name: roundrobin.Name}},
 								},
 							},
 						},
