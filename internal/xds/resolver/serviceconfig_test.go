@@ -67,9 +67,9 @@ func (s) TestPruneActiveClusters(t *testing.T) {
 		"one": {refCount: 1},
 		"two": {refCount: 2},
 	}
-	r.pruneActiveClusters()
+	r.pruneActiveClustersAndPlugins()
 	if d := cmp.Diff(r.activeClusters, wantActiveClusters, cmp.AllowUnexported(clusterInfo{})); d != "" {
-		t.Fatalf("r.activeClusters = %v; want %v\nDiffs: %v", r.activeClusters, wantActiveClusters, d)
+		t.Errorf("r.activeClusters = %v; want %v\nDiffs: %v", r.activeClusters, wantActiveClusters, d)
 	}
 	if d := cmp.Diff(r.activePlugins, wantActivePlugins, cmp.AllowUnexported(clusterInfo{})); d != "" {
 		t.Fatalf("r.activeClusters = %v; want %v\nDiffs: %v", r.activeClusters, wantActivePlugins, d)

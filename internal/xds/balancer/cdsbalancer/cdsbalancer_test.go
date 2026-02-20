@@ -247,7 +247,9 @@ func verifyRPCError(gotErr error, wantCode codes.Code, wantErr, wantNodeID strin
 	return nil
 }
 
-func createEDSPriorityConfig(cluster, edsServiceName string) *iserviceconfig.BalancerConfig {
+// createPriorityConfig creates priority config for both EDS and DNS cluster.
+// For DNS clusters, edsServiceName passed should be empty.
+func createPriorityConfig(cluster, edsServiceName string) *iserviceconfig.BalancerConfig {
 	return &iserviceconfig.BalancerConfig{
 		Name: outlierdetection.Name,
 		Config: &outlierdetection.LBConfig{
@@ -260,31 +262,6 @@ func createEDSPriorityConfig(cluster, edsServiceName string) *iserviceconfig.Bal
 				Config: &clusterimpl.LBConfig{
 					Cluster:         cluster,
 					EDSServiceName:  edsServiceName,
-					TelemetryLabels: xdsinternal.UnknownCSMLabels,
-					ChildPolicy: &iserviceconfig.BalancerConfig{
-						Name: wrrlocality.Name,
-						Config: &wrrlocality.LBConfig{
-							ChildPolicy: &iserviceconfig.BalancerConfig{Name: roundrobin.Name},
-						},
-					},
-				},
-			},
-		},
-	}
-}
-
-func createDNSPriorityConfig(cluster string) *iserviceconfig.BalancerConfig {
-	return &iserviceconfig.BalancerConfig{
-		Name: outlierdetection.Name,
-		Config: &outlierdetection.LBConfig{
-			Interval:           iserviceconfig.Duration(10 * time.Second), // default interval
-			BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
-			MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
-			MaxEjectionPercent: 10,
-			ChildPolicy: &iserviceconfig.BalancerConfig{
-				Name: clusterimpl.Name,
-				Config: &clusterimpl.LBConfig{
-					Cluster:         cluster,
 					TelemetryLabels: xdsinternal.UnknownCSMLabels,
 					ChildPolicy: &iserviceconfig.BalancerConfig{
 						Name: wrrlocality.Name,
@@ -851,19 +828,15 @@ func (s) TestResolverError(t *testing.T) {
 	host := "localhost"
 	port := testutils.ParsePort(t, server.Address)
 
-	// 1. Push a resolver error (Bad Listener) on STARTUP.
-	// Since there are no active clusters, xdsResolver SHOULD call ReportError.
+	// Push a resolver error (Bad Listener) on startup. Since there are no
+	// active clusters, xdsResolver should call ReportError.
 	resources := e2e.DefaultClientResources(e2e.ResourceParams{
 		DialTarget: target,
 		NodeID:     nodeID,
 		Host:       host,
 		Port:       port,
 	})
-	resources.Routes[0].Name = routeName
-	badListener := e2e.DefaultClientListener(target, routeName)
-	badListener.ApiListener.ApiListener = nil
-	resources.Listeners = []*v3listenerpb.Listener{badListener}
-	resources.SkipValidation = true
+	resources.Listeners[0].ApiListener.ApiListener = nil
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if err := mgmtServer.Update(ctx, resources); err != nil {
@@ -875,13 +848,17 @@ func (s) TestResolverError(t *testing.T) {
 
 	// Verify that RPCs fail.
 	client := testgrpc.NewTestServiceClient(cc)
-	_, err := client.EmptyCall(ctx, &testpb.Empty{})
-	if err == nil {
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err == nil {
 		t.Fatalf("EmptyCall() succeeded, want failure due to bad listener")
 	}
 
 	// Configure good resources.
-	resources.Listeners = []*v3listenerpb.Listener{e2e.DefaultClientListener(target, routeName)}
+	resources = e2e.DefaultClientResources(e2e.ResourceParams{
+		DialTarget: target,
+		NodeID:     nodeID,
+		Host:       host,
+		Port:       port,
+	})
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
@@ -894,9 +871,10 @@ func (s) TestResolverError(t *testing.T) {
 		t.Fatalf("EmptyCall() failed: %v", err)
 	}
 
-	// Push a Bad Listener again (NACK).
-	// xdsResolver has active clusters, so it should NOT call ReportError, but keep old config.
-	resources.Listeners = []*v3listenerpb.Listener{badListener}
+	// Push a Bad Listener again (NACK). xdsResolver has active clusters, so it
+	// should NOT call ReportError, but keep old config. This should be treated
+	// as an ambient error.
+	resources.Listeners[0].ApiListener.ApiListener = nil
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
@@ -918,8 +896,7 @@ func (s) TestResolverError(t *testing.T) {
 	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
 
 	// Ensure that the resolver error is propagated to the RPC caller.
-	_, err = client.EmptyCall(ctx, &testpb.Empty{})
-	if err == nil {
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err == nil {
 		t.Fatal("EmptyCall() succeeded, want failure due to removed listener")
 	}
 }

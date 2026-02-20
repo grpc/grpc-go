@@ -222,13 +222,12 @@ func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RP
 			if info, ok := cs.clusters[cluster.name]; ok {
 				ref := &info.refCount
 				if v := atomic.AddInt32(ref, -1); v == 0 {
-					// We call unsubscribe here instead of sendNewServiceConfig
-					// because if all the references, including the one in
-					// dependency manager drop to zero, we send an update from
-					// dependency manager which will trigger sending the service
-					// config with this cluster removed. So to avoid sending two
-					// updates, we just call unsubscribe here and let dependency
-					// manager do the rest.
+					// We call unsubscribe rather than sendNewServiceConfig to
+					// prevent redundant updates. If the reference count in the
+					// dependency manager drops to zero, it will automatically
+					// trigger a service config update with this cluster
+					// removed. Calling unsubscribe allows the dependency
+					// manager to handle the update flow once and for all.
 					info.unsubscribe()
 				}
 			}
@@ -236,7 +235,7 @@ func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RP
 				ref := &info.refCount
 				if v := atomic.AddInt32(ref, -1); v == 0 {
 					// This entry will be removed from activePlugins when
-					// producing the service config for the empty update.
+					// producing a new service config update.
 					cs.sendNewServiceConfig()
 				}
 			}
@@ -337,11 +336,10 @@ func (cs *configSelector) stop() {
 	if cs == nil {
 		return
 	}
-	// If any refs drop to zero, we'll need a service config update to delete
-	// the cluster.
-	// We stop the old config selector immediately after sending a new config
-	// selector; we need another update to delete clusters from the config (if
-	// we don't have another update pending already).
+	// If any reference counts drop to zero, a service config update is required
+	// to remove the clusters. Since the old config selector is stopped
+	// after a new one is active, we must trigger a subsequent update to delete
+	// the now-unused clusters.
 	for _, ci := range cs.clusters {
 		if v := atomic.AddInt32(&ci.refCount, -1); v == 0 {
 			ci.unsubscribe()

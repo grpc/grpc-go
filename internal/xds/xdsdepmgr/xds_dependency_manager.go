@@ -454,7 +454,6 @@ func (m *DependencyManager) applyRouteConfigUpdateLocked(update *xdsresource.Rou
 	// If the ClusterSpecifierPlugin field is set, we ignore it for now as the
 	// clusters will be determined dynamically for it.
 	newClusters := make(map[string]bool)
-
 	for _, rt := range matchVH.Routes {
 		for _, cluster := range rt.WeightedClusters {
 			newClusters[cluster.Name] = true

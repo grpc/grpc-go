@@ -240,12 +240,19 @@ type xdsResolver struct {
 	// callbacks.
 	xdsConfig *xdsresource.XDSConfig
 	// activeClusters is a map from cluster name to information about the
-	// weighted cluster that includes a ref count and load balancing
-	// configuration.
+	// weighted cluster that includes a reference count and load balancing
+	// configuration. These counts are used only by the resolver. The current
+	// configSelector holds one reference, and each ongoing RPC holds an
+	// additional reference. When the count hits zero, the resolver removes the
+	// cluster from this map and calls unsubscribe. This signals the dependency
+	// manager to stop the xDS watch once its own reference count reaches zero.
 	activeClusters map[string]*clusterInfo
 	// activePlugins is a map from cluster specifier plugin name to information
 	// about the cluster specifier plugin that includes a ref count and load
-	// balancing configuration.
+	// balancing configuration. These counts are used only by the resolver. The
+	// current configSelector holds one reference, and each ongoing RPC holds an
+	// additional reference. When the count hits zero, the resolver removes the
+	// plugin name from this map.
 	activePlugins     map[string]*clusterInfo
 	curConfigSelector stoppableConfigSelector
 }
@@ -321,7 +328,7 @@ func (r *xdsResolver) sendNewServiceConfig(cs stoppableConfigSelector) bool {
 	// Delete entries from r.activeClusters with zero references;
 	// otherwise serviceConfigJSON will generate a config including
 	// them.
-	r.pruneActiveClusters()
+	r.pruneActiveClustersAndPlugins()
 
 	if errCS, ok := cs.(*erroringConfigSelector); ok {
 		// Send an empty config, which picks pick-first, with no address, and
@@ -433,13 +440,16 @@ func (r *xdsResolver) newConfigSelector() (*configSelector, error) {
 	return cs, nil
 }
 
-// pruneActiveClusters deletes entries in r.activePlugins with zero references.
-// It also deletes entries in r.activeClusters with zero references, and calls
-// the unsubscribe function for those entries.
-func (r *xdsResolver) pruneActiveClusters() {
+// pruneActiveClustersAndPlugins removes entries from activeClusters and
+// activePlugins that have a reference count of zero. For clusters, it also
+// invokes the unsubscribe function to signal the dependency manager to stop the
+// xDS watch. Because cluster specifier plugins do not have their own watches,
+// they are simply removed from the map without an unsubscribe call.
+func (r *xdsResolver) pruneActiveClustersAndPlugins() {
 	for cluster, ci := range r.activeClusters {
 		if atomic.LoadInt32(&ci.refCount) == 0 {
 			if ci.unsubscribe != nil {
+				// This should never happen, defensive programming.
 				ci.unsubscribe()
 			}
 			delete(r.activeClusters, cluster)
@@ -453,27 +463,26 @@ func (r *xdsResolver) pruneActiveClusters() {
 }
 
 // addOrGetActiveClusterInfo returns the clusterInfo for the provided key,
-// creating it if it does not exist.
+// creating it if it does not exist. It accepts the following parameters:
+//   - key: Formatted as "cluster:<name>" or "cluster_specifier_plugin:<name>",
+//     this is the lookup key for the activeClusters or activePlugins maps.
+//   - name: The actual xDS resource name used to initiate a CDS watch.
+//     If empty (e.g., for plugins), no resource watch is triggered.
 //
-// If name is non-empty, the entry is managed in r.activeClusters and triggers
-// a subscription to the cluster's CDS resource. If name is empty (e.g., for
-// ClusterSpecifierPlugins), the entry is managed in r.activePlugins without
-// triggering a resource watch.
+// This function manages entry creation and xDS subscriptions but does not
+// increment the reference count of the returned clusterInfo.
 func (r *xdsResolver) addOrGetActiveClusterInfo(key string, name string) *clusterInfo {
 	if name == "" {
 		ci, ok := r.activePlugins[key]
 		if !ok {
-			ci = &clusterInfo{refCount: 0}
+			ci = &clusterInfo{}
 			r.activePlugins[key] = ci
 		}
 		return ci
 	}
 	ci, ok := r.activeClusters[key]
 	if !ok {
-		ci = &clusterInfo{
-			refCount:    0,
-			unsubscribe: r.dm.SubscribeToCluster(name),
-		}
+		ci = &clusterInfo{unsubscribe: r.dm.SubscribeToCluster(name)}
 		r.activeClusters[key] = ci
 	}
 	return ci
@@ -486,8 +495,11 @@ type clusterInfo struct {
 	// csp config or the cds cluster config.
 	cfg xdsChildConfig
 	// unsubscribe is the function to call to unsubscribe from this cluster's
-	// CDS resource. It is only populated for weighted clusters and not for
-	// cluster specifier plugins.
+	// CDS resource. It is populated only for clusters in activeClusters and not
+	// for cluster specifier plugins. When invoked, it decrements the reference
+	// count in the dependency manager; once that count reaches zero, the
+	// underlying CDS watch is terminated. Plugins do not have associated
+	// watches and therefore do not require an unsubscribe function.
 	unsubscribe func()
 }
 

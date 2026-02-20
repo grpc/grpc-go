@@ -88,7 +88,7 @@ func (s) TestAggregateClusterSuccess_LeafNode(t *testing.T) {
 			wantFirstChildCfg: &priority.LBConfig{
 				Children: map[string]*priority.Child{
 					"priority-0-0": {
-						Config:                     createEDSPriorityConfig(clusterName, serviceName),
+						Config:                     createPriorityConfig(clusterName, serviceName),
 						IgnoreReresolutionRequests: true,
 					},
 				},
@@ -97,7 +97,7 @@ func (s) TestAggregateClusterSuccess_LeafNode(t *testing.T) {
 			wantSecondChildCfg: &priority.LBConfig{
 				Children: map[string]*priority.Child{
 					"priority-1-0": {
-						Config:                     createEDSPriorityConfig(clusterName, serviceName+"-new"),
+						Config:                     createPriorityConfig(clusterName, serviceName+"-new"),
 						IgnoreReresolutionRequests: true,
 					},
 				},
@@ -111,7 +111,7 @@ func (s) TestAggregateClusterSuccess_LeafNode(t *testing.T) {
 			wantFirstChildCfg: &priority.LBConfig{
 				Children: map[string]*priority.Child{
 					"priority-0": {
-						Config: createDNSPriorityConfig(clusterName),
+						Config: createPriorityConfig(clusterName, ""),
 					},
 				},
 				Priorities: []string{"priority-0"},
@@ -119,7 +119,7 @@ func (s) TestAggregateClusterSuccess_LeafNode(t *testing.T) {
 			wantSecondChildCfg: &priority.LBConfig{
 				Children: map[string]*priority.Child{
 					"priority-1": {
-						Config: createDNSPriorityConfig(clusterName),
+						Config: createPriorityConfig(clusterName, ""),
 					},
 				},
 				Priorities: []string{"priority-1"},
@@ -216,11 +216,11 @@ func (s) TestAggregateClusterSuccess_ThenUpdateChildClusters(t *testing.T) {
 	wantChildCfg := &priority.LBConfig{
 		Children: map[string]*priority.Child{
 			"priority-0-0": {
-				Config:                     createEDSPriorityConfig(edsClusterName, serviceName),
+				Config:                     createPriorityConfig(edsClusterName, serviceName),
 				IgnoreReresolutionRequests: true,
 			},
 			"priority-1": {
-				Config: createDNSPriorityConfig(dnsClusterName),
+				Config: createPriorityConfig(dnsClusterName, ""),
 			},
 		},
 		Priorities: []string{"priority-0-0", "priority-1"},
@@ -249,11 +249,11 @@ func (s) TestAggregateClusterSuccess_ThenUpdateChildClusters(t *testing.T) {
 	wantChildCfg = &priority.LBConfig{
 		Children: map[string]*priority.Child{
 			"priority-0-0": {
-				Config:                     createEDSPriorityConfig(edsClusterName, serviceName),
+				Config:                     createPriorityConfig(edsClusterName, serviceName),
 				IgnoreReresolutionRequests: true,
 			},
 			"priority-2": {
-				Config: createDNSPriorityConfig(dnsClusterNameNew),
+				Config: createPriorityConfig(dnsClusterNameNew, ""),
 			},
 		},
 		Priorities: []string{"priority-0-0", "priority-2"},
@@ -297,11 +297,11 @@ func (s) TestAggregateClusterSuccess_ThenChangeRootToEDS(t *testing.T) {
 	wantChildCfg := &priority.LBConfig{
 		Children: map[string]*priority.Child{
 			"priority-0-0": {
-				Config:                     createEDSPriorityConfig(edsClusterName, serviceName),
+				Config:                     createPriorityConfig(edsClusterName, serviceName),
 				IgnoreReresolutionRequests: true,
 			},
 			"priority-1": {
-				Config: createDNSPriorityConfig(dnsClusterName),
+				Config: createPriorityConfig(dnsClusterName, ""),
 			},
 		},
 		Priorities: []string{"priority-0-0", "priority-1"},
@@ -328,7 +328,7 @@ func (s) TestAggregateClusterSuccess_ThenChangeRootToEDS(t *testing.T) {
 	wantChildCfg = &priority.LBConfig{
 		Children: map[string]*priority.Child{
 			"priority-0-0": {
-				Config:                     createEDSPriorityConfig(clusterName, serviceName),
+				Config:                     createPriorityConfig(clusterName, serviceName),
 				IgnoreReresolutionRequests: true,
 			},
 		},
@@ -363,7 +363,7 @@ func (s) TestAggregatedClusterSuccess_SwitchBetweenLeafAndAggregate(t *testing.T
 	wantChildCfg := &priority.LBConfig{
 		Children: map[string]*priority.Child{
 			"priority-0-0": {
-				Config:                     createEDSPriorityConfig(clusterName, serviceName),
+				Config:                     createPriorityConfig(clusterName, serviceName),
 				IgnoreReresolutionRequests: true,
 			},
 		},
@@ -392,11 +392,11 @@ func (s) TestAggregatedClusterSuccess_SwitchBetweenLeafAndAggregate(t *testing.T
 	wantChildCfg = &priority.LBConfig{
 		Children: map[string]*priority.Child{
 			"priority-0-0": {
-				Config:                     createEDSPriorityConfig(edsClusterName, serviceName),
+				Config:                     createPriorityConfig(edsClusterName, serviceName),
 				IgnoreReresolutionRequests: true,
 			},
 			"priority-1": {
-				Config: createDNSPriorityConfig(dnsClusterName),
+				Config: createPriorityConfig(dnsClusterName, ""),
 			},
 		},
 		Priorities: []string{"priority-0-0", "priority-1"},
@@ -419,7 +419,7 @@ func (s) TestAggregatedClusterSuccess_SwitchBetweenLeafAndAggregate(t *testing.T
 	wantChildCfg = &priority.LBConfig{
 		Children: map[string]*priority.Child{
 			"priority-0-0": {
-				Config:                     createEDSPriorityConfig(clusterName, serviceName),
+				Config:                     createPriorityConfig(clusterName, serviceName),
 				IgnoreReresolutionRequests: true,
 			},
 		},
@@ -577,7 +577,7 @@ func (s) TestAggregatedClusterSuccess_DiamondDependency(t *testing.T) {
 	wantChildCfg := &priority.LBConfig{
 		Children: map[string]*priority.Child{
 			"priority-0-0": {
-				Config:                     createEDSPriorityConfig(clusterNameD, serviceName),
+				Config:                     createPriorityConfig(clusterNameD, serviceName),
 				IgnoreReresolutionRequests: true,
 			},
 		},
@@ -645,11 +645,11 @@ func (s) TestAggregatedClusterSuccess_IgnoreDups(t *testing.T) {
 	wantChildCfg := &priority.LBConfig{
 		Children: map[string]*priority.Child{
 			"priority-0-0": {
-				Config:                     createEDSPriorityConfig(clusterNameC, edsClusterName),
+				Config:                     createPriorityConfig(clusterNameC, edsClusterName),
 				IgnoreReresolutionRequests: true,
 			},
 			"priority-1-0": {
-				Config:                     createEDSPriorityConfig(clusterNameD, serviceName),
+				Config:                     createPriorityConfig(clusterNameD, serviceName),
 				IgnoreReresolutionRequests: true,
 			},
 		},
@@ -733,7 +733,7 @@ func (s) TestAggregatedCluster_NodeChildOfItself(t *testing.T) {
 	wantChildCfg := &priority.LBConfig{
 		Children: map[string]*priority.Child{
 			"priority-0-0": {
-				Config:                     createEDSPriorityConfig(clusterNameB, serviceName),
+				Config:                     createPriorityConfig(clusterNameB, serviceName),
 				IgnoreReresolutionRequests: true,
 			},
 		},
@@ -842,7 +842,7 @@ func (s) TestAggregatedCluster_CycleWithLeafNode(t *testing.T) {
 	wantChildCfg := &priority.LBConfig{
 		Children: map[string]*priority.Child{
 			"priority-0-0": {
-				Config:                     createEDSPriorityConfig(clusterNameC, serviceName),
+				Config:                     createPriorityConfig(clusterNameC, serviceName),
 				IgnoreReresolutionRequests: true,
 			},
 		},

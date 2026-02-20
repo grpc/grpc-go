@@ -46,15 +46,12 @@ const million = 1000000
 // Each priorityConfig corresponds to one leaf cluster retrieved from XDSConfig
 // for the top-level cluster.
 type priorityConfig struct {
-	clusterName   string
-	clusterUpdate xdsresource.ClusterUpdate
+	// clusterConfig has the cluster update as well as EDS or DNS endpoints
+	// depending on the leaf cluster type.
+	clusterConfig *xdsresource.ClusterConfig
 	// outlierDetection is the Outlier Detection LB configuration for this
 	// priority.
 	outlierDetection outlierdetection.LBConfig
-	// edsResp is set only if type is EDS.
-	edsResp xdsresource.EndpointsUpdate
-	// endpoints is set only if type is DNS.
-	endpoints []resolver.Endpoint
 	// Each leaf cluster has a name generator so that the child policies can
 	// reuse names between updates (EDS updates for example).
 	childNameGen *nameGenerator
@@ -67,11 +64,10 @@ type priorityConfig struct {
 func hostName(clusterName string, update xdsresource.ClusterUpdate) string {
 	switch update.ClusterType {
 	case xdsresource.ClusterTypeEDS:
-		nameToWatch := update.EDSServiceName
-		if nameToWatch == "" {
-			nameToWatch = clusterName
+		if update.EDSServiceName != "" {
+			return update.EDSServiceName
 		}
-		return nameToWatch
+		return clusterName
 	case xdsresource.ClusterTypeLogicalDNS:
 		return update.DNSHostName
 	default:
@@ -95,7 +91,7 @@ func hostName(clusterName string, update xdsresource.ClusterUpdate) string {
 //	┌──────▼─────┐  ┌─────▼──────┐
 //	│xDSLBPolicy │  │xDSLBPolicy │ (Locality and Endpoint picking layer)
 //	└────────────┘  └────────────┘
-func buildPriorityConfigJSON(priorities []priorityConfig, xdsLBPolicy *internalserviceconfig.BalancerConfig) ([]byte, []resolver.Endpoint, error) {
+func buildPriorityConfigJSON(priorities []*priorityConfig, xdsLBPolicy *internalserviceconfig.BalancerConfig) ([]byte, []resolver.Endpoint, error) {
 	pc, endpoints, err := buildPriorityConfig(priorities, xdsLBPolicy)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to build priority config: %v", err)
@@ -107,15 +103,16 @@ func buildPriorityConfigJSON(priorities []priorityConfig, xdsLBPolicy *internals
 	return ret, endpoints, nil
 }
 
-func buildPriorityConfig(priorities []priorityConfig, xdsLBPolicy *internalserviceconfig.BalancerConfig) (*priority.LBConfig, []resolver.Endpoint, error) {
+func buildPriorityConfig(priorities []*priorityConfig, xdsLBPolicy *internalserviceconfig.BalancerConfig) (*priority.LBConfig, []resolver.Endpoint, error) {
 	var (
 		retConfig    = &priority.LBConfig{Children: make(map[string]*priority.Child)}
 		retEndpoints []resolver.Endpoint
 	)
 	for _, p := range priorities {
-		switch p.clusterUpdate.ClusterType {
+		clusterUpdate := p.clusterConfig.Cluster
+		switch clusterUpdate.ClusterType {
 		case xdsresource.ClusterTypeEDS:
-			names, configs, endpoints, err := buildClusterImplConfigForEDS(p.childNameGen, p.edsResp, p.clusterUpdate, xdsLBPolicy)
+			names, configs, endpoints, err := buildClusterImplConfigForEDS(p.childNameGen, p.clusterConfig, xdsLBPolicy)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -131,7 +128,7 @@ func buildPriorityConfig(priorities []priorityConfig, xdsLBPolicy *internalservi
 			}
 			continue
 		case xdsresource.ClusterTypeLogicalDNS:
-			name, config, endpoints := buildClusterImplConfigForDNS(p.childNameGen, p.endpoints, p.clusterUpdate, xdsLBPolicy)
+			name, config, endpoints := buildClusterImplConfigForDNS(p.childNameGen, p.clusterConfig, xdsLBPolicy)
 			retConfig.Priorities = append(retConfig.Priorities, name)
 			retEndpoints = append(retEndpoints, endpoints...)
 			odCfg := makeClusterImplOutlierDetectionChild(config, p.outlierDetection)
@@ -161,8 +158,9 @@ func makeClusterImplOutlierDetectionChild(ciCfg *clusterimpl.LBConfig, odCfg out
 	return &odCfgRet
 }
 
-func buildClusterImplConfigForDNS(g *nameGenerator, endpoints []resolver.Endpoint, clusterUpdate xdsresource.ClusterUpdate, xdsLBPolicy *internalserviceconfig.BalancerConfig) (string, *clusterimpl.LBConfig, []resolver.Endpoint) {
+func buildClusterImplConfigForDNS(g *nameGenerator, config *xdsresource.ClusterConfig, xdsLBPolicy *internalserviceconfig.BalancerConfig) (string, *clusterimpl.LBConfig, []resolver.Endpoint) {
 	pName := fmt.Sprintf("priority-%v", g.prefix)
+	clusterUpdate := config.Cluster
 	lbconfig := &clusterimpl.LBConfig{
 		Cluster:               clusterUpdate.ClusterName,
 		TelemetryLabels:       clusterUpdate.TelemetryLabels,
@@ -170,6 +168,7 @@ func buildClusterImplConfigForDNS(g *nameGenerator, endpoints []resolver.Endpoin
 		MaxConcurrentRequests: clusterUpdate.MaxRequests,
 		LoadReportingServer:   clusterUpdate.LRSServerConfig,
 	}
+	endpoints := config.EndpointConfig.DNSEndpoints.Endpoints
 	if len(endpoints) == 0 {
 		return pName, lbconfig, nil
 	}
@@ -202,9 +201,10 @@ func buildClusterImplConfigForDNS(g *nameGenerator, endpoints []resolver.Endpoin
 // - map{"p0":p0_config, "p1":p1_config}
 // - [p0_address_0, p0_address_1, p1_address_0, p1_address_1]
 //   - p0 addresses' hierarchy attributes are set to p0
-func buildClusterImplConfigForEDS(g *nameGenerator, edsResp xdsresource.EndpointsUpdate, clusterUpdate xdsresource.ClusterUpdate, xdsLBPolicy *internalserviceconfig.BalancerConfig) ([]string, map[string]*clusterimpl.LBConfig, []resolver.Endpoint, error) {
-	drops := make([]clusterimpl.DropConfig, 0, len(edsResp.Drops))
-	for _, d := range edsResp.Drops {
+func buildClusterImplConfigForEDS(g *nameGenerator, config *xdsresource.ClusterConfig, xdsLBPolicy *internalserviceconfig.BalancerConfig) ([]string, map[string]*clusterimpl.LBConfig, []resolver.Endpoint, error) {
+	edsUpdate := config.EndpointConfig.EDSUpdate
+	drops := make([]clusterimpl.DropConfig, 0, len(edsUpdate.Drops))
+	for _, d := range edsUpdate.Drops {
 		drops = append(drops, clusterimpl.DropConfig{
 			Category:           d.Category,
 			RequestsPerMillion: d.Numerator * million / d.Denominator,
@@ -219,15 +219,15 @@ func buildClusterImplConfigForEDS(g *nameGenerator, edsResp xdsresource.Endpoint
 	// should report a result that is a single priority with no endpoints." -
 	// A37
 	priorities := [][]xdsresource.Locality{{}}
-	if len(edsResp.Localities) != 0 {
-		priorities = groupLocalitiesByPriority(edsResp.Localities)
+	if len(edsUpdate.Localities) != 0 {
+		priorities = groupLocalitiesByPriority(edsUpdate.Localities)
 	}
 	retNames := g.generate(priorities)
 	retConfigs := make(map[string]*clusterimpl.LBConfig, len(retNames))
 	var retEndpoints []resolver.Endpoint
 	for i, pName := range retNames {
 		priorityLocalities := priorities[i]
-		cfg, endpoints, err := priorityLocalitiesToClusterImpl(priorityLocalities, pName, clusterUpdate, drops, xdsLBPolicy)
+		cfg, endpoints, err := priorityLocalitiesToClusterImpl(priorityLocalities, pName, *config.Cluster, drops, xdsLBPolicy)
 		if err != nil {
 			return nil, nil, nil, err
 		}
