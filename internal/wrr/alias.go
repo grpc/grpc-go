@@ -29,6 +29,7 @@ type aliasWRR struct {
 	equalWeights bool
 }
 
+// NewAlias creates a new WRR with aliasing.
 func NewAlias() WRR {
 	return &aliasWRR{equalWeights: true}
 }
