@@ -20,7 +20,7 @@ package server
 import (
 	"errors"
 	"fmt"
-	"net"
+	"net/netip"
 	"sync/atomic"
 
 	"google.golang.org/grpc/codes"
@@ -64,7 +64,7 @@ func newFilterChainManager(filterChainConfigs *xdsresource.NetworkFilterChainMap
 
 	if filterChainConfigs != nil {
 		for _, entry := range filterChainConfigs.DstPrefixes {
-			dstEntry := &destPrefixEntry{net: entry.Prefix}
+			dstEntry := &destPrefixEntry{prefix: entry.Prefix}
 
 			for i, srcPrefixes := range entry.SourceTypeArr {
 				if len(srcPrefixes.Entries) == 0 {
@@ -74,7 +74,7 @@ func newFilterChainManager(filterChainConfigs *xdsresource.NetworkFilterChainMap
 				dstEntry.srcTypeArr[i] = stDest
 				for _, srcEntryConfig := range srcPrefixes.Entries {
 					srcEntry := &sourcePrefixEntry{
-						net:        srcEntryConfig.Prefix,
+						prefix:     srcEntryConfig.Prefix,
 						srcPortMap: make(map[int]*filterChain, len(srcEntryConfig.PortMap)),
 					}
 					stDest.srcPrefixes = append(stDest.srcPrefixes, srcEntry)
@@ -120,7 +120,7 @@ func (fcm *filterChainManager) filterChainFromConfig(config *xdsresource.Network
 // destPrefixEntry contains a destination prefix entry and associated source
 // type matchers.
 type destPrefixEntry struct {
-	net        *net.IPNet
+	prefix     netip.Prefix
 	srcTypeArr sourceTypesArray
 }
 
@@ -144,7 +144,7 @@ type sourcePrefixes struct {
 // sourcePrefixEntry contains a source prefix entry and associated source port
 // matchers.
 type sourcePrefixEntry struct {
-	net        *net.IPNet
+	prefix     netip.Prefix
 	srcPortMap map[int]*filterChain
 }
 
@@ -183,10 +183,10 @@ type routeWithInterceptors struct {
 }
 
 type lookupParams struct {
-	isUnspecifiedListener bool   // Whether the server is listening on a wildcard address.
-	dstAddr               net.IP // dstAddr is the local address of an incoming connection.
-	srcAddr               net.IP // srcAddr is the remote address of an incoming connection.
-	srcPort               int    // srcPort is the remote port of an incoming connection.
+	isUnspecifiedListener bool       // Whether the server is listening on a wildcard address.
+	dstAddr               netip.Addr // dstAddr is the local address of an incoming connection.
+	srcAddr               netip.Addr // srcAddr is the remote address of an incoming connection.
+	srcPort               int        // srcPort is the remote port of an incoming connection.
 }
 
 // lookup returns the most specific matching filter chain to be used for an
@@ -202,7 +202,7 @@ func (fcm *filterChainManager) lookup(params lookupParams) (*filterChain, error)
 	}
 
 	srcType := sourceTypeExternal
-	if params.srcAddr.Equal(params.dstAddr) || params.srcAddr.IsLoopback() {
+	if params.srcAddr == params.dstAddr || params.srcAddr.IsLoopback() {
 		srcType = sourceTypeSameOrLoopback
 	}
 	srcPrefixes := filterBySourceType(dstPrefixes, srcType)
@@ -229,7 +229,7 @@ func (fcm *filterChainManager) lookup(params lookupParams) (*filterChain, error)
 // matching algorithm. It takes the complete set of configured filter chain
 // matchers and returns the most specific matchers based on the destination
 // prefix match criteria (the prefixes which match the most number of bits).
-func filterByDestinationPrefixes(dstPrefixes []*destPrefixEntry, isUnspecified bool, dstAddr net.IP) []*destPrefixEntry {
+func filterByDestinationPrefixes(dstPrefixes []*destPrefixEntry, isUnspecified bool, dstAddr netip.Addr) []*destPrefixEntry {
 	if !isUnspecified {
 		// Destination prefix matchers are considered only when the listener is
 		// bound to the wildcard address.
@@ -238,18 +238,18 @@ func filterByDestinationPrefixes(dstPrefixes []*destPrefixEntry, isUnspecified b
 
 	var matchingDstPrefixes []*destPrefixEntry
 	maxSubnetMatch := noPrefixMatch
-	for _, prefix := range dstPrefixes {
-		if prefix.net != nil && !prefix.net.Contains(dstAddr) {
+	for _, entry := range dstPrefixes {
+		if entry.prefix.IsValid() && !entry.prefix.Contains(dstAddr) {
 			// Skip prefixes which don't match.
 			continue
 		}
-		// For unspecified prefixes, since we do not store a real net.IPNet
+		// For unspecified prefixes, since we do not store a real netip.Prefix
 		// inside prefix, we do not perform a match. Instead we simply set
 		// the matchSize to -1, which is less than the matchSize (0) for a
 		// wildcard prefix.
 		matchSize := unspecifiedPrefixMatch
-		if prefix.net != nil {
-			matchSize, _ = prefix.net.Mask.Size()
+		if entry.prefix.IsValid() {
+			matchSize = entry.prefix.Bits()
 		}
 		if matchSize < maxSubnetMatch {
 			continue
@@ -258,7 +258,7 @@ func filterByDestinationPrefixes(dstPrefixes []*destPrefixEntry, isUnspecified b
 			maxSubnetMatch = matchSize
 			matchingDstPrefixes = make([]*destPrefixEntry, 0, 1)
 		}
-		matchingDstPrefixes = append(matchingDstPrefixes, prefix)
+		matchingDstPrefixes = append(matchingDstPrefixes, entry)
 	}
 	return matchingDstPrefixes
 }
@@ -272,12 +272,12 @@ func filterBySourceType(dstPrefixes []*destPrefixEntry, srcType sourceType) []*s
 		srcPrefixes      []*sourcePrefixes
 		bestSrcTypeMatch sourceType
 	)
-	for _, prefix := range dstPrefixes {
+	for _, entry := range dstPrefixes {
 		match := srcType
-		srcPrefix := prefix.srcTypeArr[srcType]
+		srcPrefix := entry.srcTypeArr[srcType]
 		if srcPrefix == nil {
 			match = sourceTypeAny
-			srcPrefix = prefix.srcTypeArr[sourceTypeAny]
+			srcPrefix = entry.srcTypeArr[sourceTypeAny]
 		}
 		if match < bestSrcTypeMatch {
 			continue
@@ -298,22 +298,22 @@ func filterBySourceType(dstPrefixes []*destPrefixEntry, srcType sourceType) []*s
 // filterBySourcePrefixes is the third stage of the filter chain matching
 // algorithm. It trims the filter chains based on the source prefix. At most one
 // filter chain with the most specific match progress to the next stage.
-func filterBySourcePrefixes(srcPrefixes []*sourcePrefixes, srcAddr net.IP) (*sourcePrefixEntry, error) {
+func filterBySourcePrefixes(srcPrefixes []*sourcePrefixes, srcAddr netip.Addr) (*sourcePrefixEntry, error) {
 	var matchingSrcPrefixes []*sourcePrefixEntry
 	maxSubnetMatch := noPrefixMatch
 	for _, sp := range srcPrefixes {
-		for _, prefix := range sp.srcPrefixes {
-			if prefix.net != nil && !prefix.net.Contains(srcAddr) {
+		for _, entry := range sp.srcPrefixes {
+			if entry.prefix.IsValid() && !entry.prefix.Contains(srcAddr) {
 				// Skip prefixes which don't match.
 				continue
 			}
-			// For unspecified prefixes, since we do not store a real net.IPNet
+			// For unspecified prefixes, since we do not store a real netip.Prefix
 			// inside prefix, we do not perform a match. Instead we simply set
 			// the matchSize to -1, which is less than the matchSize (0) for a
 			// wildcard prefix.
 			matchSize := unspecifiedPrefixMatch
-			if prefix.net != nil {
-				matchSize, _ = prefix.net.Mask.Size()
+			if entry.prefix.IsValid() {
+				matchSize = entry.prefix.Bits()
 			}
 			if matchSize < maxSubnetMatch {
 				continue
@@ -322,7 +322,7 @@ func filterBySourcePrefixes(srcPrefixes []*sourcePrefixes, srcAddr net.IP) (*sou
 				maxSubnetMatch = matchSize
 				matchingSrcPrefixes = make([]*sourcePrefixEntry, 0, 1)
 			}
-			matchingSrcPrefixes = append(matchingSrcPrefixes, prefix)
+			matchingSrcPrefixes = append(matchingSrcPrefixes, entry)
 		}
 	}
 	if len(matchingSrcPrefixes) == 0 {
