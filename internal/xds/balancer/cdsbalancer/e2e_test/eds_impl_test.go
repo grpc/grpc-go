@@ -56,7 +56,6 @@ import (
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 
-	_ "google.golang.org/grpc/internal/xds/balancer/clusterresolver" // Register the "cluster_resolver_experimental" LB policy.
 	"google.golang.org/grpc/internal/xds/balancer/priority"
 )
 

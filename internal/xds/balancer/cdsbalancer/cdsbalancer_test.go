@@ -36,14 +36,18 @@ import (
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/balancer/stub"
 	"google.golang.org/grpc/internal/grpctest"
+	iringhash "google.golang.org/grpc/internal/ringhash"
+	iserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	xdsinternal "google.golang.org/grpc/internal/xds"
-	"google.golang.org/grpc/internal/xds/balancer/clusterresolver"
+	"google.golang.org/grpc/internal/xds/balancer/clusterimpl"
+	"google.golang.org/grpc/internal/xds/balancer/outlierdetection"
+	"google.golang.org/grpc/internal/xds/balancer/priority"
+	"google.golang.org/grpc/internal/xds/balancer/wrrlocality"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/internal/xds/xdsclient"
-	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource/version"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
@@ -61,7 +65,8 @@ import (
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 
-	_ "google.golang.org/grpc/balancer/ringhash"              // Register the ring_hash LB policy
+	"google.golang.org/grpc/balancer/ringhash"
+	"google.golang.org/grpc/balancer/roundrobin"
 	_ "google.golang.org/grpc/internal/xds/httpfilter/router" // Register the router filter.
 	_ "google.golang.org/grpc/internal/xds/resolver"          // Register the xds resolver
 )
@@ -107,7 +112,7 @@ func waitForResourceNames(ctx context.Context, resourceNamesCh chan []string, wa
 	return nil
 }
 
-// Registers a wrapped cluster_resolver LB policy (child policy of the cds LB
+// Registers a wrapped priority LB policy (child policy of the cds LB
 // policy) for the duration of this test that retains all the functionality of
 // the former, but makes certain events available for inspection by the test.
 //
@@ -116,21 +121,21 @@ func waitForResourceNames(ctx context.Context, resourceNamesCh chan []string, wa
 // - a channel to read received resolver error
 // - a channel that is closed when ExitIdle() is called
 // - a channel that is closed when the balancer is closed
-func registerWrappedClusterResolverPolicy(t *testing.T) (chan serviceconfig.LoadBalancingConfig, chan error, chan struct{}, chan struct{}) {
-	clusterresolverBuilder := balancer.Get(clusterresolver.Name)
-	internal.BalancerUnregister(clusterresolverBuilder.Name())
+func registerWrappedPriorityPolicy(t *testing.T) (chan serviceconfig.LoadBalancingConfig, chan error, chan struct{}, chan struct{}) {
+	priorityBuilder := balancer.Get(priority.Name)
+	internal.BalancerUnregister(priorityBuilder.Name())
 
 	lbCfgCh := make(chan serviceconfig.LoadBalancingConfig, 1)
 	resolverErrCh := make(chan error, 1)
 	exitIdleCh := make(chan struct{})
 	closeCh := make(chan struct{})
 
-	stub.Register(clusterresolver.Name, stub.BalancerFuncs{
+	stub.Register(priority.Name, stub.BalancerFuncs{
 		Init: func(bd *stub.BalancerData) {
-			bd.ChildBalancer = clusterresolverBuilder.Build(bd.ClientConn, bd.BuildOptions)
+			bd.ChildBalancer = priorityBuilder.Build(bd.ClientConn, bd.BuildOptions)
 		},
 		ParseConfig: func(lbCfg json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
-			return clusterresolverBuilder.(balancer.ConfigParser).ParseConfig(lbCfg)
+			return priorityBuilder.(balancer.ConfigParser).ParseConfig(lbCfg)
 		},
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
 			select {
@@ -155,71 +160,9 @@ func registerWrappedClusterResolverPolicy(t *testing.T) (chan serviceconfig.Load
 			close(closeCh)
 		},
 	})
-	t.Cleanup(func() { balancer.Register(clusterresolverBuilder) })
+	t.Cleanup(func() { balancer.Register(priorityBuilder) })
 
 	return lbCfgCh, resolverErrCh, exitIdleCh, closeCh
-}
-
-// Performs the following setup required for tests:
-//   - Spins up an xDS management server and the provided onStreamRequest
-//     function is set to be called for every incoming request on the ADS stream.
-//   - Creates an xDS client talking to this management server
-//   - Creates a manual resolver that configures the cds LB policy as the
-//     top-level policy, and pushes an initial configuration to it
-//   - Creates a gRPC channel with the above manual resolver
-//
-// Returns the following:
-//   - the xDS management server
-//   - the nodeID expected by the management server
-//   - the grpc channel to the test backend service
-//   - the manual resolver configured on the channel
-//   - the xDS client used the grpc channel
-func setupWithManagementServerAndManualResolver(t *testing.T, lis net.Listener, onStreamRequest func(int64, *v3discoverypb.DiscoveryRequest) error) (*e2e.ManagementServer, string, *grpc.ClientConn, *manual.Resolver, xdsclient.XDSClient) {
-	t.Helper()
-	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
-		Listener:        lis,
-		OnStreamRequest: onStreamRequest,
-		// Required for aggregate clusters as all resources cannot be requested
-		// at once.
-		AllowResourceSubset: true,
-	})
-
-	// Create bootstrap configuration pointing to the above management server.
-	nodeID := uuid.New().String()
-	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-
-	config, err := bootstrap.NewConfigFromContents(bc)
-	if err != nil {
-		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
-	}
-	pool := xdsclient.NewPool(config)
-	xdsC, xdsClose, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
-		Name: t.Name(),
-	})
-	if err != nil {
-		t.Fatalf("Failed to create xDS client: %v", err)
-	}
-	t.Cleanup(xdsClose)
-
-	r := manual.NewBuilderWithScheme("whatever")
-	jsonSC := fmt.Sprintf(`{
-			"loadBalancingConfig":[{
-				"cds_experimental":{
-					"cluster": "%s"
-				}
-			}]
-		}`, clusterName)
-	scpr := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(jsonSC)
-	r.InitialState(xdsclient.SetClient(resolver.State{ServiceConfig: scpr}, xdsC))
-
-	cc, err := grpc.NewClient(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
-	if err != nil {
-		t.Fatalf("grpc.NewClient(\"%s:///test.service\") = %v", r.Scheme(), err)
-	}
-	cc.Connect()
-	t.Cleanup(func() { cc.Close() })
-
-	return mgmtServer, nodeID, cc, r, xdsC
 }
 
 // Performs the following setup required for tests:
@@ -304,72 +247,29 @@ func verifyRPCError(gotErr error, wantCode codes.Code, wantErr, wantNodeID strin
 	return nil
 }
 
-// Tests the functionality that handles LB policy configuration. Verifies that
-// the appropriate xDS resource is requested corresponding to the provided LB
-// policy configuration. Also verifies that when the LB policy receives the same
-// configuration again, it does not send out a new request, and when the
-// configuration changes, it stops requesting the old cluster resource and
-// starts requesting the new one.
-func (s) TestConfigurationUpdate_Success(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	cdsResourceRequestedCh := make(chan []string, 1)
-	onStreamReq := func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
-		if req.GetTypeUrl() == version.V3ClusterURL {
-			if len(req.GetResourceNames()) > 0 {
-				select {
-				case cdsResourceRequestedCh <- req.GetResourceNames():
-				case <-ctx.Done():
-				}
-			}
-		}
-		return nil
-	}
-	_, _, _, r, xdsClient := setupWithManagementServerAndManualResolver(t, nil, onStreamReq)
-
-	// Verify that the specified cluster resource is requested.
-	wantNames := []string{clusterName}
-	if err := waitForResourceNames(ctx, cdsResourceRequestedCh, wantNames); err != nil {
-		t.Fatal(err)
-	}
-
-	// Push the same configuration again.
-	jsonSC := fmt.Sprintf(`{
-			"loadBalancingConfig":[{
-				"cds_experimental":{
-					"cluster": "%s"
-				}
-			}]
-		}`, clusterName)
-	scpr := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(jsonSC)
-	r.UpdateState(xdsclient.SetClient(resolver.State{ServiceConfig: scpr}, xdsClient))
-
-	// Verify that a new CDS request is not sent.
-	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
-	defer sCancel()
-	select {
-	case <-sCtx.Done():
-	case gotNames := <-cdsResourceRequestedCh:
-		t.Fatalf("CDS resources %v requested when none expected", gotNames)
-	}
-
-	// Push an updated configuration with a different cluster name.
-	newClusterName := clusterName + "-new"
-	jsonSC = fmt.Sprintf(`{
-			"loadBalancingConfig":[{
-				"cds_experimental":{
-					"cluster": "%s"
-				}
-			}]
-		}`, newClusterName)
-	scpr = internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(jsonSC)
-	r.UpdateState(xdsclient.SetClient(resolver.State{ServiceConfig: scpr}, xdsClient))
-
-	// Verify that the new cluster name is requested and the old one is no
-	// longer requested.
-	wantNames = []string{newClusterName}
-	if err := waitForResourceNames(ctx, cdsResourceRequestedCh, wantNames); err != nil {
-		t.Fatal(err)
+// createPriorityConfig creates priority config for both EDS and DNS cluster.
+// For DNS clusters, edsServiceName passed should be empty.
+func createPriorityConfig(cluster, edsServiceName string) *iserviceconfig.BalancerConfig {
+	return &iserviceconfig.BalancerConfig{
+		Name: outlierdetection.Name,
+		Config: &outlierdetection.LBConfig{
+			Interval:           iserviceconfig.Duration(10 * time.Second), // default interval
+			BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
+			MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
+			MaxEjectionPercent: 10,
+			ChildPolicy: &iserviceconfig.BalancerConfig{
+				Name: clusterimpl.Name,
+				Config: &clusterimpl.LBConfig{
+					Cluster:         cluster,
+					EDSServiceName:  edsServiceName,
+					TelemetryLabels: xdsinternal.UnknownCSMLabels,
+					ChildPolicy: &iserviceconfig.BalancerConfig{
+						Name:   wrrlocality.Name,
+						Config: &wrrlocality.LBConfig{ChildPolicy: &iserviceconfig.BalancerConfig{Name: roundrobin.Name}},
+					},
+				},
+			},
+		},
 	}
 }
 
@@ -497,16 +397,35 @@ func (s) TestClusterUpdate_Success(t *testing.T) {
 				}
 				return c
 			}(),
-			wantChildCfg: &clusterresolver.LBConfig{
-				DiscoveryMechanisms: []clusterresolver.DiscoveryMechanism{{
-					Cluster:               clusterName,
-					Type:                  clusterresolver.DiscoveryMechanismTypeEDS,
-					EDSServiceName:        serviceName,
-					MaxConcurrentRequests: newUint32(512),
-					OutlierDetection:      json.RawMessage(`{}`),
-					TelemetryLabels:       xdsinternal.UnknownCSMLabels,
-				}},
-				XDSLBPolicy: json.RawMessage(`[{"xds_wrr_locality_experimental": {"childPolicy": [{"round_robin": {}}]}}]`),
+			wantChildCfg: &priority.LBConfig{
+				Children: map[string]*priority.Child{
+					"priority-0-0": {
+						Config: &iserviceconfig.BalancerConfig{
+							Name: outlierdetection.Name,
+							Config: &outlierdetection.LBConfig{
+								Interval:           iserviceconfig.Duration(10 * time.Second), // default interval
+								BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
+								MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
+								MaxEjectionPercent: 10,
+								ChildPolicy: &iserviceconfig.BalancerConfig{
+									Name: clusterimpl.Name,
+									Config: &clusterimpl.LBConfig{
+										Cluster:               clusterName,
+										EDSServiceName:        serviceName,
+										TelemetryLabels:       xdsinternal.UnknownCSMLabels,
+										MaxConcurrentRequests: newUint32(512),
+										ChildPolicy: &iserviceconfig.BalancerConfig{
+											Name:   wrrlocality.Name,
+											Config: &wrrlocality.LBConfig{ChildPolicy: &iserviceconfig.BalancerConfig{Name: roundrobin.Name}},
+										},
+									},
+								},
+							},
+						},
+						IgnoreReresolutionRequests: true,
+					},
+				},
+				Priorities: []string{"priority-0-0"},
 			},
 		},
 		{
@@ -526,15 +445,37 @@ func (s) TestClusterUpdate_Success(t *testing.T) {
 				}
 				return c
 			}(),
-			wantChildCfg: &clusterresolver.LBConfig{
-				DiscoveryMechanisms: []clusterresolver.DiscoveryMechanism{{
-					Cluster:          clusterName,
-					Type:             clusterresolver.DiscoveryMechanismTypeEDS,
-					EDSServiceName:   serviceName,
-					OutlierDetection: json.RawMessage(`{}`),
-					TelemetryLabels:  xdsinternal.UnknownCSMLabels,
-				}},
-				XDSLBPolicy: json.RawMessage(`[{"ring_hash_experimental": {"minRingSize":100, "maxRingSize":1000}}]`),
+			wantChildCfg: &priority.LBConfig{
+				Children: map[string]*priority.Child{
+					"priority-0-0": {
+						Config: &iserviceconfig.BalancerConfig{
+							Name: outlierdetection.Name,
+							Config: &outlierdetection.LBConfig{
+								Interval:           iserviceconfig.Duration(10 * time.Second), // default interval
+								BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
+								MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
+								MaxEjectionPercent: 10,
+								ChildPolicy: &iserviceconfig.BalancerConfig{
+									Name: clusterimpl.Name,
+									Config: &clusterimpl.LBConfig{
+										Cluster:         clusterName,
+										EDSServiceName:  serviceName,
+										TelemetryLabels: xdsinternal.UnknownCSMLabels,
+										ChildPolicy: &iserviceconfig.BalancerConfig{
+											Name: ringhash.Name,
+											Config: &iringhash.LBConfig{
+												MinRingSize: 100,
+												MaxRingSize: 1000,
+											},
+										},
+									},
+								},
+							},
+						},
+						IgnoreReresolutionRequests: true,
+					},
+				},
+				Priorities: []string{"priority-0-0"},
 			},
 		},
 		{
@@ -549,15 +490,43 @@ func (s) TestClusterUpdate_Success(t *testing.T) {
 				c.OutlierDetection = &v3clusterpb.OutlierDetection{}
 				return c
 			}(),
-			wantChildCfg: &clusterresolver.LBConfig{
-				DiscoveryMechanisms: []clusterresolver.DiscoveryMechanism{{
-					Cluster:          clusterName,
-					Type:             clusterresolver.DiscoveryMechanismTypeEDS,
-					EDSServiceName:   serviceName,
-					OutlierDetection: json.RawMessage(`{"successRateEjection":{}}`),
-					TelemetryLabels:  xdsinternal.UnknownCSMLabels,
-				}},
-				XDSLBPolicy: json.RawMessage(`[{"ring_hash_experimental": {"minRingSize":1024, "maxRingSize":8388608}}]`),
+			wantChildCfg: &priority.LBConfig{
+				Children: map[string]*priority.Child{
+					"priority-0-0": {
+						Config: &iserviceconfig.BalancerConfig{
+							Name: outlierdetection.Name,
+							Config: &outlierdetection.LBConfig{
+								Interval:           iserviceconfig.Duration(10 * time.Second), // default interval
+								BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
+								MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
+								MaxEjectionPercent: 10,
+								SuccessRateEjection: &outlierdetection.SuccessRateEjection{
+									StdevFactor:           1900,
+									EnforcementPercentage: 100,
+									MinimumHosts:          5,
+									RequestVolume:         100,
+								},
+								ChildPolicy: &iserviceconfig.BalancerConfig{
+									Name: clusterimpl.Name,
+									Config: &clusterimpl.LBConfig{
+										Cluster:         clusterName,
+										EDSServiceName:  serviceName,
+										TelemetryLabels: xdsinternal.UnknownCSMLabels,
+										ChildPolicy: &iserviceconfig.BalancerConfig{
+											Name: ringhash.Name,
+											Config: &iringhash.LBConfig{
+												MinRingSize: 1024, // default sizes
+												MaxRingSize: 4096,
+											},
+										},
+									},
+								},
+							},
+						},
+						IgnoreReresolutionRequests: true,
+					},
+				},
+				Priorities: []string{"priority-0-0"},
 			},
 		},
 		{
@@ -585,39 +554,56 @@ func (s) TestClusterUpdate_Success(t *testing.T) {
 				}
 				return c
 			}(),
-			wantChildCfg: &clusterresolver.LBConfig{
-				DiscoveryMechanisms: []clusterresolver.DiscoveryMechanism{{
-					Cluster:        clusterName,
-					Type:           clusterresolver.DiscoveryMechanismTypeEDS,
-					EDSServiceName: serviceName,
-					OutlierDetection: json.RawMessage(`{
-						"interval": "10s",
-						"baseEjectionTime": "30s",
-						"maxEjectionTime": "300s",
-						"maxEjectionPercent": 10,
-						"successRateEjection": {
-							"stdevFactor": 1900,
-							"enforcementPercentage": 100,
-							"minimumHosts": 5,
-							"requestVolume": 100
+			wantChildCfg: &priority.LBConfig{
+				Children: map[string]*priority.Child{
+					"priority-0-0": {
+						Config: &iserviceconfig.BalancerConfig{
+							Name: outlierdetection.Name,
+							Config: &outlierdetection.LBConfig{
+								Interval:           iserviceconfig.Duration(10 * time.Second), // default interval
+								BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
+								MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
+								MaxEjectionPercent: 10,
+								SuccessRateEjection: &outlierdetection.SuccessRateEjection{
+									StdevFactor:           1900,
+									EnforcementPercentage: 100,
+									MinimumHosts:          5,
+									RequestVolume:         100,
+								},
+								FailurePercentageEjection: &outlierdetection.FailurePercentageEjection{
+									Threshold:             85,
+									EnforcementPercentage: 5,
+									MinimumHosts:          5,
+									RequestVolume:         50,
+								},
+								ChildPolicy: &iserviceconfig.BalancerConfig{
+									Name: clusterimpl.Name,
+									Config: &clusterimpl.LBConfig{
+										Cluster:         clusterName,
+										EDSServiceName:  serviceName,
+										TelemetryLabels: xdsinternal.UnknownCSMLabels,
+										ChildPolicy: &iserviceconfig.BalancerConfig{
+											Name: ringhash.Name,
+											Config: &iringhash.LBConfig{
+												MinRingSize: 1024, // default sizes
+												MaxRingSize: 4096,
+											},
+										},
+									},
+								},
+							},
 						},
-						"failurePercentageEjection": {
-							"threshold": 85,
-							"enforcementPercentage": 5,
-							"minimumHosts": 5,
-							"requestVolume": 50
-						}
-					}`),
-					TelemetryLabels: xdsinternal.UnknownCSMLabels,
-				}},
-				XDSLBPolicy: json.RawMessage(`[{"ring_hash_experimental": {"minRingSize":1024, "maxRingSize":8388608}}]`),
+						IgnoreReresolutionRequests: true,
+					},
+				},
+				Priorities: []string{"priority-0-0"},
 			},
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			lbCfgCh, _, _, _ := registerWrappedClusterResolverPolicy(t)
+			lbCfgCh, _, _, _ := registerWrappedPriorityPolicy(t)
 			mgmtServer, nodeID, _ := setupWithManagementServer(t, nil, nil)
 
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -643,7 +629,7 @@ func (s) TestClusterUpdate_Success(t *testing.T) {
 // resource from the management server with LRS enabled. Verifies that the load
 // balancing configuration pushed to the child is as expected.
 func (s) TestClusterUpdate_SuccessWithLRS(t *testing.T) {
-	lbCfgCh, _, _, _ := registerWrappedClusterResolverPolicy(t)
+	lbCfgCh, _, _, _ := registerWrappedPriorityPolicy(t)
 	mgmtServer, nodeID, _ := setupWithManagementServer(t, nil, nil)
 
 	clusterResource := e2e.ClusterResourceWithOptions(e2e.ClusterOptions{
@@ -656,16 +642,35 @@ func (s) TestClusterUpdate_SuccessWithLRS(t *testing.T) {
 		t.Fatalf("Failed to create LRS server config for testing: %v", err)
 	}
 
-	wantChildCfg := &clusterresolver.LBConfig{
-		DiscoveryMechanisms: []clusterresolver.DiscoveryMechanism{{
-			Cluster:             clusterName,
-			Type:                clusterresolver.DiscoveryMechanismTypeEDS,
-			EDSServiceName:      serviceName,
-			LoadReportingServer: lrsServerCfg,
-			OutlierDetection:    json.RawMessage(`{}`),
-			TelemetryLabels:     xdsinternal.UnknownCSMLabels,
-		}},
-		XDSLBPolicy: json.RawMessage(`[{"xds_wrr_locality_experimental": {"childPolicy": [{"round_robin": {}}]}}]`),
+	wantChildCfg := &priority.LBConfig{
+		Children: map[string]*priority.Child{
+			"priority-0-0": {
+				Config: &iserviceconfig.BalancerConfig{
+					Name: outlierdetection.Name,
+					Config: &outlierdetection.LBConfig{
+						Interval:           iserviceconfig.Duration(10 * time.Second), // default interval
+						BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
+						MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
+						MaxEjectionPercent: 10,
+						ChildPolicy: &iserviceconfig.BalancerConfig{
+							Name: clusterimpl.Name,
+							Config: &clusterimpl.LBConfig{
+								Cluster:             clusterName,
+								EDSServiceName:      serviceName,
+								TelemetryLabels:     xdsinternal.UnknownCSMLabels,
+								LoadReportingServer: lrsServerCfg,
+								ChildPolicy: &iserviceconfig.BalancerConfig{
+									Name:   wrrlocality.Name,
+									Config: &wrrlocality.LBConfig{ChildPolicy: &iserviceconfig.BalancerConfig{Name: roundrobin.Name}},
+								},
+							},
+						},
+					},
+				},
+				IgnoreReresolutionRequests: true,
+			},
+		},
+		Priorities: []string{"priority-0-0"},
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -694,7 +699,6 @@ func (s) TestClusterUpdate_SuccessWithLRS(t *testing.T) {
 //     update from the management server, the cds LB policy is expected to
 //     continue using the previous good update.
 func (s) TestClusterUpdate_Failure(t *testing.T) {
-	_, resolverErrCh, _, _ := registerWrappedClusterResolverPolicy(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 	cdsResourceCanceledCh := make(chan struct{}, 1)
@@ -787,16 +791,6 @@ func (s) TestClusterUpdate_Failure(t *testing.T) {
 	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
 		t.Fatalf("EmptyCall() failed: %v", err)
 	}
-
-	// Verify that the resolver error is pushed to the child policy.
-	select {
-	case err := <-resolverErrCh:
-		if !strings.Contains(err.Error(), wantClusterNACKErr) {
-			t.Fatalf("Error pushed to child policy is %v, want %v", err, wantClusterNACKErr)
-		}
-	case <-ctx.Done():
-		t.Fatal("Timeout when waiting for resolver error to be pushed to the child policy")
-	}
 }
 
 // Tests the following scenarios for resolver errors:
@@ -805,114 +799,74 @@ func (s) TestClusterUpdate_Failure(t *testing.T) {
 //     TRANSIENT_FAILURE.
 //   - when a resolver error is received (one that is not a resource-not-found
 //     error), with a previous good update from the management server, the cds LB
-//     policy is expected to push the error down the child policy, but is expected
-//     to continue to use the previously received good configuration.
+//     policy is expected to continue to use the previously received good
+//     configuration.
 //   - when a resolver error is received (one that is a resource-not-found
 //     error, which is usually the case when the LDS resource is removed),
 //     with a previous good update from the management server, the cds LB policy
 //     is expected to push the error down the child policy and put the channel in
 //     TRANSIENT_FAILURE. It is also expected to cancel the CDS watch.
 func (s) TestResolverError(t *testing.T) {
-	_, resolverErrCh, _, childPolicyCloseCh := registerWrappedClusterResolverPolicy(t)
-	lis := testutils.NewListenerWrapper(t, nil)
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	cdsResourceCanceledCh := make(chan struct{}, 1)
-	cdsResourceRequestedCh := make(chan []string, 1)
-	onStreamReq := func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
-		if req.GetTypeUrl() == version.V3ClusterURL {
-			switch len(req.GetResourceNames()) {
-			case 0:
-				select {
-				case cdsResourceCanceledCh <- struct{}{}:
-				case <-ctx.Done():
-				}
-			default:
-				select {
-				case cdsResourceRequestedCh <- req.GetResourceNames():
-				case <-ctx.Done():
-				}
-			}
-		}
-		return nil
-	}
-	mgmtServer, nodeID, cc, r, _ := setupWithManagementServerAndManualResolver(t, lis, onStreamReq)
-
-	// Grab the wrapped connection from the listener wrapper. This will be used
-	// to verify the connection is closed.
-	val, err := lis.NewConnCh.Receive(ctx)
-	if err != nil {
-		t.Fatalf("Failed to receive new connection from wrapped listener: %v", err)
-	}
-	conn := val.(*testutils.ConnWrapper)
-
-	// Verify that the specified cluster resource is requested.
-	wantNames := []string{clusterName}
-	if err := waitForResourceNames(ctx, cdsResourceRequestedCh, wantNames); err != nil {
-		t.Fatal(err)
-	}
-
-	// Push a resolver error that is not a resource-not-found error. Here, we
-	// assume that errors from the xDS client or from the xDS resolver contain
-	// the xDS node ID.
-	resolverErr := fmt.Errorf("[xds node id: %s]: resolver-error-not-a-resource-not-found-error", nodeID)
-	r.CC().ReportError(resolverErr)
-
-	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
-
-	// Drain the resolver error channel.
-	select {
-	case <-resolverErrCh:
-	default:
-	}
-
-	// Ensure that the resolver error is propagated to the RPC caller.
-	client := testgrpc.NewTestServiceClient(cc)
-	_, err = client.EmptyCall(ctx, &testpb.Empty{})
-	if err := verifyRPCError(err, codes.Unavailable, resolverErr.Error(), nodeID); err != nil {
-		t.Fatal(err)
-	}
-
-	// Also verify that the watch for the cluster resource is not cancelled.
-	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
-	defer sCancel()
-	select {
-	case <-sCtx.Done():
-	case <-cdsResourceCanceledCh:
-		t.Fatal("Watch for cluster resource is cancelled when not expected to")
-	}
+	registerWrappedPriorityPolicy(t)
+	mgmtServer, nodeID, cc := setupWithManagementServer(t, nil, nil)
 
 	// Start a test service backend.
 	server := stubserver.StartTestService(t, nil)
 	t.Cleanup(server.Stop)
 
-	// Configure good cluster and endpoints resources in the management server.
-	resources := e2e.UpdateOptions{
-		NodeID:         nodeID,
-		Clusters:       []*v3clusterpb.Cluster{e2e.DefaultCluster(clusterName, serviceName, e2e.SecurityLevelNone)},
-		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(serviceName, host, []uint32{testutils.ParsePort(t, server.Address)})},
-		SkipValidation: true,
-	}
+	// Host and port for the backend.
+	host := "localhost"
+	port := testutils.ParsePort(t, server.Address)
+
+	// Push a resolver error (Bad Listener) on startup. Since there are no
+	// active clusters, xdsResolver should call ReportError.
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		DialTarget: target,
+		NodeID:     nodeID,
+		Host:       host,
+		Port:       port,
+	})
+	resources.Listeners[0].ApiListener.ApiListener = nil
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
+
+	// Verify that the channel enters TRANSIENT_FAILURE.
+	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
+
+	// Verify that RPCs fail.
+	client := testgrpc.NewTestServiceClient(cc)
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err == nil {
+		t.Fatalf("EmptyCall() succeeded, want failure due to bad listener")
+	}
+
+	// Configure good resources.
+	resources = e2e.DefaultClientResources(e2e.ResourceParams{
+		DialTarget: target,
+		NodeID:     nodeID,
+		Host:       host,
+		Port:       port,
+	})
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify that the channel enters READY state.
+	testutils.AwaitState(ctx, t, cc, connectivity.Ready)
 
 	// Verify that a successful RPC can be made.
 	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
 		t.Fatalf("EmptyCall() failed: %v", err)
 	}
 
-	// Again push a resolver error that is not a resource-not-found error.
-	r.CC().ReportError(resolverErr)
-
-	// And again verify that the watch for the cluster resource is not
-	// cancelled.
-	sCtx, sCancel = context.WithTimeout(ctx, defaultTestShortTimeout)
-	defer sCancel()
-	select {
-	case <-sCtx.Done():
-	case <-cdsResourceCanceledCh:
-		t.Fatal("Watch for cluster resource is cancelled when not expected to")
+	// Push a Bad Listener again (NACK). xdsResolver has active clusters, so it
+	// should NOT call ReportError, but keep old config. This should be treated
+	// as an ambient error.
+	resources.Listeners[0].ApiListener.ApiListener = nil
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
 	}
 
 	// Verify that a successful RPC can be made, using the previously received
@@ -921,50 +875,19 @@ func (s) TestResolverError(t *testing.T) {
 		t.Fatalf("EmptyCall() failed: %v", err)
 	}
 
-	// Verify that the resolver error is pushed to the child policy.
-	select {
-	case err := <-resolverErrCh:
-		if err != resolverErr {
-			t.Fatalf("Error pushed to child policy is %v, want %v", err, resolverErr)
-		}
-	case <-ctx.Done():
-		t.Fatal("Timeout when waiting for resolver error to be pushed to the child policy")
+	// Remove the Listener (Resource Not Found).
+	resources.Listeners = nil
+	resources.SkipValidation = true
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
 	}
 
-	// Push a resource-not-found-error this time around. Our xDS resolver does
-	// not send this error though. When an LDS or RDS resource is missing, the
-	// xDS resolver instead sends an erroring config selector which returns an
-	// error at RPC time with the xDS node ID, for new RPCs. Once ongoing RPCs
-	// complete, the xDS resolver will send an empty service config with no
-	// addresses, which will result in pick_first being configured on the
-	// channel. And pick_first will put the channel in TRANSIENT_FAILURE since
-	// it would have received an update with no addresses.
-	resolverErr = fmt.Errorf("[xds node id: %s]: %w", nodeID, xdsresource.NewError(xdsresource.ErrorTypeResourceNotFound, "xds resource not found error"))
-	r.CC().ReportError(resolverErr)
-
-	// Wait for the CDS resource to be not requested anymore, or the connection
-	// to the management server to be closed (which happens as part of the last
-	// resource watch being canceled).
-	select {
-	case <-ctx.Done():
-		t.Fatal("Timeout when waiting for CDS resource to be not requested")
-	case <-cdsResourceCanceledCh:
-	case <-conn.CloseCh.C:
-	}
-
-	// Verify that the resolver error is pushed to the child policy.
-	select {
-	case <-childPolicyCloseCh:
-	case <-ctx.Done():
-		t.Fatal("Timeout when waiting for child policy to be closed")
-	}
-
+	// Verify that RPCs eventually fail.
 	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
 
 	// Ensure that the resolver error is propagated to the RPC caller.
-	_, err = client.EmptyCall(ctx, &testpb.Empty{})
-	if err := verifyRPCError(err, codes.Unavailable, resolverErr.Error(), nodeID); err != nil {
-		t.Fatal(err)
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err == nil {
+		t.Fatal("EmptyCall() succeeded, want failure due to removed listener")
 	}
 }
 
@@ -974,7 +897,7 @@ func (s) TestResolverError(t *testing.T) {
 // error down the child policy and put the channel in TRANSIENT_FAILURE. It is
 // also expected to cancel the CDS watch.
 func (s) TestResourceNotFoundResolverError(t *testing.T) {
-	_, _, _, childPolicyCloseCh := registerWrappedClusterResolverPolicy(t)
+	_, _, _, childPolicyCloseCh := registerWrappedPriorityPolicy(t)
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	cdsResourceCanceledCh := make(chan struct{}, 1)
@@ -1016,13 +939,6 @@ func (s) TestResourceNotFoundResolverError(t *testing.T) {
 	resources.Listeners = nil
 	resources.SkipValidation = true
 	mgmtServer.Update(ctx, resources)
-
-	// Wait for the CDS resource to be not requested anymore.
-	select {
-	case <-ctx.Done():
-		t.Fatal("Timeout when waiting for CDS resource to be not requested")
-	case <-cdsResourceCanceledCh:
-	}
 
 	// Verify that the resolver error is pushed to the child policy.
 	select {
@@ -1133,8 +1049,8 @@ func (s) TestClusterUpdate_ResourceNotFound(t *testing.T) {
 
 // Tests that closing the cds LB policy results in the the child policy being
 // closed.
-func TestClose(t *testing.T) {
-	_, _, _, childPolicyCloseCh := registerWrappedClusterResolverPolicy(t)
+func (s) TestClose(t *testing.T) {
+	_, _, _, childPolicyCloseCh := registerWrappedPriorityPolicy(t)
 	mgmtServer, nodeID, cc := setupWithManagementServer(t, nil, nil)
 
 	// Start a test service backend.
@@ -1174,7 +1090,7 @@ func TestClose(t *testing.T) {
 // Tests that calling ExitIdle on the cds LB policy results in the call being
 // propagated to the child policy.
 func (s) TestExitIdle(t *testing.T) {
-	_, _, exitIdleCh, _ := registerWrappedClusterResolverPolicy(t)
+	_, _, exitIdleCh, _ := registerWrappedPriorityPolicy(t)
 	mgmtServer, nodeID, cc := setupWithManagementServer(t, nil, nil)
 
 	// Start a test service backend.
