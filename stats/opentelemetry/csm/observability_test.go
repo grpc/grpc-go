@@ -21,6 +21,7 @@ package csm
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"testing"
@@ -29,6 +30,8 @@ import (
 	"go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/balancer/base"
 	"google.golang.org/grpc/encoding/gzip"
 	istats "google.golang.org/grpc/internal/stats"
 	"google.golang.org/grpc/internal/stubserver"
@@ -426,25 +429,10 @@ func (s) TestCSMPluginOptionStreaming(t *testing.T) {
 	}
 }
 
-func unaryInterceptorAttachXDSLabels(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
-	// For the purposes of testing this simulates the behavior of the cluster impl
-	// that would update telemetry labels through the default registered metrics handler
-	istats.UpdateLabels(ctx, map[string]string{
-		// mock what the cluster impl would write here ("csm." xDS Labels
-		// and locality label)
-		"csm.service_name":           "service_name_val",
-		"csm.service_namespace_name": "service_namespace_val",
-
-		"grpc.lb.locality":        "grpc.lb.locality_val",
-		"grpc.lb.backend_service": "grpc.lb.backend_service_val",
-	})
-	return invoker(ctx, method, req, reply, cc, opts...)
-}
-
 // TestXDSLabels tests that xDS Labels get emitted from OpenTelemetry metrics.
 // This test configures OpenTelemetry with the CSM Plugin Option, and xDS
-// Optional Labels turned on. It then configures an interceptor to attach
-// labels, representing the cluster_impl picker. It then makes a unary RPC, and
+// Optional Labels turned on. It then configures a mock balancer that updates
+// labels, simulating the cluster_impl picker. It then makes a unary RPC, and
 // expects xDS Labels labels to be attached to emitted relevant metrics. Full
 // xDS System alongside OpenTelemetry will be tested with interop. (there is a
 // test for xDS -> Stats handler and this tests -> OTel -> emission). It also
@@ -452,6 +440,8 @@ func unaryInterceptorAttachXDSLabels(ctx context.Context, method string, req, re
 func (s) TestXDSLabels(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
+	balancerName := "o11y_balancer_xds_labels"
+	balancer.Register(base.NewBalancerBuilder(balancerName, &o11yPickerBuilder{}, base.Config{}))
 	reader := metric.NewManualReader()
 	provider := metric.NewMeterProvider(metric.WithReader(reader))
 	ss := &stubserver.StubServer{
@@ -463,13 +453,14 @@ func (s) TestXDSLabels(t *testing.T) {
 	}
 
 	po := newPluginOption(ctx)
+	sc := fmt.Sprintf(`{"loadBalancingConfig": [{"%s": {}}]}`, balancerName)
 	dopts := []grpc.DialOption{dialOptionSetCSM(opentelemetry.Options{
 		MetricsOptions: opentelemetry.MetricsOptions{
 			MeterProvider:  provider,
 			Metrics:        opentelemetry.DefaultMetrics(),
 			OptionalLabels: []string{"csm.service_name", "csm.service_namespace_name", "grpc.lb.locality", "grpc.lb.backend_service"},
 		},
-	}, po), grpc.WithUnaryInterceptor(unaryInterceptorAttachXDSLabels)}
+	}, po), grpc.WithDefaultServiceConfig(sc)}
 	if err := ss.Start(nil, dopts...); err != nil {
 		t.Fatalf("Error starting endpoint server: %v", err)
 	}
@@ -618,4 +609,32 @@ func (s) TestObservability(*testing.T) {
 
 	cleanup := EnableObservability(ctx, opentelemetry.Options{})
 	cleanup()
+}
+
+type o11yPickerBuilder struct{}
+
+func (*o11yPickerBuilder) Build(info base.PickerBuildInfo) balancer.Picker {
+	return &o11yPicker{info: info}
+}
+
+type o11yPicker struct {
+	info base.PickerBuildInfo
+}
+
+func (p *o11yPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
+	// This simulates the behavior of the cluster_impl picker.
+	// It runs after TagRPC has already registered the default telemetry
+	// callback.
+	istats.UpdateLabels(info.Ctx, map[string]string{
+		"csm.service_name":           "service_name_val",
+		"csm.service_namespace_name": "service_namespace_val",
+
+		"grpc.lb.locality":        "grpc.lb.locality_val",
+		"grpc.lb.backend_service": "grpc.lb.backend_service_val",
+	})
+
+	for sc := range p.info.ReadySCs {
+		return balancer.PickResult{SubConn: sc}, nil
+	}
+	return balancer.PickResult{}, balancer.ErrNoSubConnAvailable
 }
