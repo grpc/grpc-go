@@ -173,11 +173,12 @@ func (l *listenerWrapper) maybeUpdateFilterChains() {
 	// Remove HTTP filters that are not referenced by any active filter chain.
 	for key, filter := range l.httpFilters {
 		found := false
+	findFilter:
 		for _, fc := range l.activeFilterChainManager.filterChains {
 			for _, f := range fc.httpFilters {
 				if key == filterKey(&f) {
 					found = true
-					break
+					break findFilter
 				}
 			}
 		}

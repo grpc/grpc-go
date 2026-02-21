@@ -66,7 +66,8 @@ type ClientFilterBuilder interface {
 
 // ClientFilter represents the actual filter implementation on the client side.
 // Implementations are free to maintain internal state when required, and share
-// it across interceptors.
+// it across interceptors. Filter instances are retained by the resolver as long
+// as they are present in the LDS configuration.
 type ClientFilter interface {
 	// BuildClientInterceptor uses the given FilterConfigs to produce an HTTP
 	// filter interceptor for clients. config will always be non-nil, but
@@ -90,7 +91,8 @@ type ServerFilterBuilder interface {
 
 // ServerFilter represents the actual filter implementation on the server side.
 // Implementations are free to maintain internal state when required, and share
-// it across interceptors.
+// it across interceptors. Filter instances are retained by the server as long
+// as they are present in any of the filter chains in the LDS configuration.
 type ServerFilter interface {
 	// BuildServerInterceptor uses the given FilterConfigs to produce
 	// an HTTP filter interceptor for servers. config will always be non-nil,
