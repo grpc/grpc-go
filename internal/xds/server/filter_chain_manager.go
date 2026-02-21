@@ -530,7 +530,7 @@ func (rsf *refCountedServerFilter) incRef() {
 }
 
 func (rsf *refCountedServerFilter) decRef() {
-	if rsf.refCnt.Add(-1) <= 0 && rsf.cleanup != nil {
+	if rsf.refCnt.Add(-1) == 0 && rsf.cleanup != nil {
 		rsf.cleanup()
 	}
 }

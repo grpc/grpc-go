@@ -160,17 +160,42 @@ func (l *listenerWrapper) maybeUpdateFilterChains() {
 	// configuration apply." - A36
 	connsToClose := l.conns
 	l.conns = make(map[*connWrapper]bool)
+
+	// Swap in the new filter chain manager before draining connections.
 	oldActive := l.activeFilterChainManager
 	l.activeFilterChainManager = l.pendingFilterChainManager
 	l.pendingFilterChainManager = nil
 	l.instantiateFilterChainRoutingConfigurationsLocked()
+	if oldActive != nil {
+		oldActive.stop()
+	}
+
+	// Remove HTTP filters that are not referenced by any active filter chain.
+	for key, filter := range l.httpFilters {
+		found := false
+		for _, fc := range l.activeFilterChainManager.filterChains {
+			for _, f := range fc.httpFilters {
+				if key == filterKey(&f) {
+					found = true
+					break
+				}
+			}
+		}
+		if !found {
+			if filter.refCnt.Load() != 0 {
+				l.logger.Errorf("HTTP filter with key %q is not used by any active filter chain but has non-zero reference count: %d. This indicates a bug in the filter reference counting logic.", key, filter.refCnt.Load())
+			}
+			delete(l.httpFilters, key)
+			// Note that we do not call the cleanup function for the filter
+			// here. That would have happened when the filter's ref count went
+			// to zero.
+		}
+	}
 	l.mu.Unlock()
+
 	go func() {
 		for conn := range connsToClose {
 			conn.Drain()
-		}
-		if oldActive != nil {
-			oldActive.stop()
 		}
 	}()
 }
@@ -334,6 +359,9 @@ func (l *listenerWrapper) Close() error {
 	l.mu.Lock()
 	if l.activeFilterChainManager != nil {
 		l.activeFilterChainManager.stop()
+	}
+	if l.pendingFilterChainManager != nil {
+		l.pendingFilterChainManager.stop()
 	}
 	l.mu.Unlock()
 	return nil
