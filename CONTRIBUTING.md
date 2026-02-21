@@ -60,6 +60,10 @@ smoothly and quickly.
   often written as "iff". Please do not make spelling correction changes unless
   you are certain they are misspellings.
 
+- For performance-focused PRs, include benchmark results comparing the base
+  and feature branches. See the [benchmark directory](benchmark/README.md) for
+  recommended ways of running benchmarks.
+
 - **All tests need to be passing** before your change can be merged. We
   recommend you run tests locally before creating your PR to catch breakages
   early on:
