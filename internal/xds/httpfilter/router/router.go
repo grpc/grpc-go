@@ -38,7 +38,7 @@ func init() {
 }
 
 // IsRouterFilter returns true iff a HTTP filter is a Router filter.
-func IsRouterFilter(b httpfilter.Filter) bool {
+func IsRouterFilter(b httpfilter.Builder) bool {
 	_, ok := b.(builder)
 	return ok
 }
@@ -76,34 +76,37 @@ func (builder) IsTerminal() bool {
 	return true
 }
 
-var (
-	_ httpfilter.ClientInterceptorBuilder = builder{}
-	_ httpfilter.ServerInterceptorBuilder = builder{}
-)
+func (builder) BuildClientFilter() (httpfilter.ClientFilter, func()) {
+	return builder{}, func() {}
+}
 
-func (builder) BuildClientInterceptor(cfg, override httpfilter.FilterConfig) (iresolver.ClientInterceptor, error) {
+func (builder) BuildServerFilter() (httpfilter.ServerFilter, func()) {
+	return builder{}, func() {}
+}
+
+func (builder) BuildClientInterceptor(cfg, override httpfilter.FilterConfig) (iresolver.ClientInterceptor, func(), error) {
 	if _, ok := cfg.(config); !ok {
-		return nil, fmt.Errorf("router: incorrect config type provided (%T): %v", cfg, cfg)
+		return nil, nil, fmt.Errorf("router: incorrect config type provided (%T): %v", cfg, cfg)
 	}
 	if override != nil {
-		return nil, fmt.Errorf("router: unexpected override configuration specified: %v", override)
+		return nil, nil, fmt.Errorf("router: unexpected override configuration specified: %v", override)
 	}
 	// The gRPC router is implemented within the xds resolver's config
 	// selector, not as a separate plugin.  So we return a nil HTTPFilter,
 	// which will not be invoked.
-	return nil, nil
+	return nil, nil, nil
 }
 
-func (builder) BuildServerInterceptor(cfg, override httpfilter.FilterConfig) (iresolver.ServerInterceptor, error) {
+func (builder) BuildServerInterceptor(cfg, override httpfilter.FilterConfig) (iresolver.ServerInterceptor, func(), error) {
 	if _, ok := cfg.(config); !ok {
-		return nil, fmt.Errorf("router: incorrect config type provided (%T): %v", cfg, cfg)
+		return nil, nil, fmt.Errorf("router: incorrect config type provided (%T): %v", cfg, cfg)
 	}
 	if override != nil {
-		return nil, fmt.Errorf("router: unexpected override configuration specified: %v", override)
+		return nil, nil, fmt.Errorf("router: unexpected override configuration specified: %v", override)
 	}
 	// The gRPC router is currently unimplemented on the server side. So we
 	// return a nil HTTPFilter, which will not be invoked.
-	return nil, nil
+	return nil, nil, nil
 }
 
 // The gRPC router filter does not currently support any configuration.  Verify
