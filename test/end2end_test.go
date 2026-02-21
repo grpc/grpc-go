@@ -408,7 +408,7 @@ type env struct {
 	security     string // The security protocol such as TLS, SSH, etc.
 	httpHandler  bool   // whether to use the http.Handler ServerTransport; requires TLS
 	balancer     string // One of "round_robin", "pick_first", or "".
-	customDialer func(string, string, time.Duration) (net.Conn, error)
+	customDialer func(context.Context, string, string) (net.Conn, error)
 }
 
 func (e env) runnable() bool {
@@ -418,11 +418,12 @@ func (e env) runnable() bool {
 	return true
 }
 
-func (e env) dialer(addr string, timeout time.Duration) (net.Conn, error) {
+func (e env) dialer(ctx context.Context, addr string) (net.Conn, error) {
 	if e.customDialer != nil {
-		return e.customDialer(e.network, addr, timeout)
+		return e.customDialer(ctx, e.network, addr)
 	}
-	return net.DialTimeout(e.network, addr, timeout)
+	d := net.Dialer{}
+	return d.DialContext(ctx, e.network, addr)
 }
 
 var (
@@ -759,7 +760,7 @@ func (d *nopDecompressor) Type() string {
 }
 
 func (te *test) configDial(opts ...grpc.DialOption) ([]grpc.DialOption, string) {
-	opts = append(opts, grpc.WithDialer(te.e.dialer), grpc.WithUserAgent(te.userAgent))
+	opts = append(opts, grpc.WithContextDialer(te.e.dialer), grpc.WithUserAgent(te.userAgent))
 
 	if te.clientCompression {
 		opts = append(opts,
@@ -839,7 +840,7 @@ func (te *test) clientConnWithConnControl() (*grpc.ClientConn, *dialerWrapper) {
 	opts, scheme := te.configDial()
 	dw := &dialerWrapper{}
 	// overwrite the dialer before
-	opts = append(opts, grpc.WithDialer(dw.dialer))
+	opts = append(opts, grpc.WithContextDialer(dw.dialer))
 	var err error
 	te.cc, err = grpc.NewClient(scheme+te.srvAddr, opts...)
 	if err != nil {
@@ -868,7 +869,9 @@ func (te *test) declareLogNoise(phrases ...string) {
 }
 
 func (te *test) withServerTester(fn func(st *serverTester)) {
-	c, err := te.e.dialer(te.srvAddr, 10*time.Second)
+	ctx, cancel := context.WithTimeout(te.ctx, 10*time.Second)
+	defer cancel()
+	c, err := te.e.dialer(ctx, te.srvAddr)
 	if err != nil {
 		te.t.Fatal(err)
 	}
@@ -925,8 +928,9 @@ func (l *lazyConn) Write(b []byte) (int, error) {
 func (s) TestContextDeadlineNotIgnored(t *testing.T) {
 	e := noBalancerEnv
 	var lc *lazyConn
-	e.customDialer = func(network, addr string, timeout time.Duration) (net.Conn, error) {
-		conn, err := net.DialTimeout(network, addr, timeout)
+	e.customDialer = func(ctx context.Context, network, addr string) (net.Conn, error) {
+		d := net.Dialer{}
+		conn, err := d.DialContext(ctx, network, addr)
 		if err != nil {
 			return nil, err
 		}
@@ -6184,7 +6188,7 @@ func (s) TestNetPipeConn(t *testing.T) {
 	go s.Serve(pl)
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	cc, err := grpc.NewClient("passthrough:///", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithDialer(pl.Dialer()))
+	cc, err := grpc.NewClient("passthrough:///", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithContextDialer(pl.ContextDialer()))
 	if err != nil {
 		t.Fatalf("Error creating client: %v", err)
 	}
