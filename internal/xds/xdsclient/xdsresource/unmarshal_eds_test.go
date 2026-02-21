@@ -19,6 +19,7 @@ package xdsresource
 
 import (
 	"fmt"
+	"math"
 	"net"
 	"strconv"
 	"testing"
@@ -133,6 +134,23 @@ func (s) TestEDSParseRespProto(t *testing.T) {
 				return clab0.Build()
 			}(),
 			want: EndpointsUpdate{},
+		},
+		{
+			name: "max sum of endpoint weights within a locality exceeded",
+			m: func() *v3endpointpb.ClusterLoadAssignment {
+				clab0 := newClaBuilder("test", nil)
+				endpoints := []endpointOpts{
+					{addrWithPort: "addr1:314"},
+					{addrWithPort: "addr2:159"},
+				}
+				locOption := &addLocalityOptions{
+					Weight: []uint32{math.MaxUint32, 1},
+				}
+				clab0.addLocality("locality-1", 1, 0, endpoints, locOption)
+				return clab0.Build()
+			}(),
+			want:    EndpointsUpdate{},
+			wantErr: true,
 		},
 		{
 			name: "max sum of weights at the same priority exceeded",
