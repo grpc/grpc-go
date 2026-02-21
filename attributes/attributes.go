@@ -65,16 +65,11 @@ func (a *Attributes) WithValue(key, value any) *Attributes {
 
 // Value returns the value associated with these attributes for key, or nil if
 // no value is associated with key.  The returned value should not be modified.
-func (a *Attributes) Value(needle any) any {
+func (a *Attributes) Value(key any) any {
 	if a == nil {
 		return nil
 	}
-	for key, value := range a.root.all() {
-		if key == needle {
-			return value
-		}
-	}
-	return nil
+	return a.root.get(key)
 }
 
 // Equal returns whether a and o are equivalent.  If 'Equal(o any) bool' is
@@ -160,6 +155,15 @@ func (n *node) insert(key, value any) *node {
 		value: value,
 		next:  n,
 	}
+}
+
+func (n *node) get(key any) any {
+	for cur := n; cur != nil; cur = cur.next {
+		if cur.key == key {
+			return cur.value
+		}
+	}
+	return nil
 }
 
 func (n *node) all() iter.Seq2[any, any] {
