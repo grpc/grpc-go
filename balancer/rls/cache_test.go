@@ -120,7 +120,7 @@ func (s) TestLRU_BasicOperations(t *testing.T) {
 
 func (s) TestDataCache_BasicOperations(t *testing.T) {
 	initCacheEntries()
-	dc := newDataCache(5, nil, &stats.NoopMetricsRecorder{}, "")
+	dc := newDataCache(5, nil, "")
 	for i, k := range cacheKeys {
 		dc.addEntry(k, cacheEntries[i])
 	}
@@ -134,7 +134,7 @@ func (s) TestDataCache_BasicOperations(t *testing.T) {
 
 func (s) TestDataCache_AddForcesResize(t *testing.T) {
 	initCacheEntries()
-	dc := newDataCache(1, nil, &stats.NoopMetricsRecorder{}, "")
+	dc := newDataCache(1, nil, "")
 
 	// The first entry in cacheEntries has a minimum expiry time in the future.
 	// This entry would stop the resize operation since we do not evict entries
@@ -163,7 +163,7 @@ func (s) TestDataCache_AddForcesResize(t *testing.T) {
 
 func (s) TestDataCache_Resize(t *testing.T) {
 	initCacheEntries()
-	dc := newDataCache(5, nil, &stats.NoopMetricsRecorder{}, "")
+	dc := newDataCache(5, nil, "")
 	for i, k := range cacheKeys {
 		dc.addEntry(k, cacheEntries[i])
 	}
@@ -194,7 +194,7 @@ func (s) TestDataCache_Resize(t *testing.T) {
 
 func (s) TestDataCache_EvictExpiredEntries(t *testing.T) {
 	initCacheEntries()
-	dc := newDataCache(5, nil, &stats.NoopMetricsRecorder{}, "")
+	dc := newDataCache(5, nil, "")
 	for i, k := range cacheKeys {
 		dc.addEntry(k, cacheEntries[i])
 	}
@@ -221,7 +221,7 @@ func (s) TestDataCache_ResetBackoffState(t *testing.T) {
 	}
 
 	initCacheEntries()
-	dc := newDataCache(5, nil, &stats.NoopMetricsRecorder{}, "")
+	dc := newDataCache(5, nil, "")
 	for i, k := range cacheKeys {
 		dc.addEntry(k, cacheEntries[i])
 	}
@@ -252,7 +252,7 @@ func (s) TestDataCache_Metrics(t *testing.T) {
 		{size: 5},
 	}
 	tmr := stats.NewTestMetricsRecorder()
-	dc := newDataCache(50, nil, tmr, "")
+	dc := newDataCache(50, nil, "")
 
 	dc.updateRLSServerTarget("rls-server-target")
 	for i, k := range cacheKeys {
@@ -261,42 +261,50 @@ func (s) TestDataCache_Metrics(t *testing.T) {
 
 	const cacheEntriesKey = "grpc.lb.rls.cache_entries"
 	const cacheSizeKey = "grpc.lb.rls.cache_size"
-	// 5 total entries which add up to 15 size, so should record that.
-	if got, _ := tmr.Metric(cacheEntriesKey); got != 5 {
-		t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", cacheEntriesKey, got, 5)
+
+	// 5 total entries which add up to 15 size.
+	tmr.ClearMetrics()
+	dc.reportMetrics(tmr, dc.currentSize, int64(len(dc.entries)), dc.rlsServerTarget)
+	if got, _ := tmr.Metric(cacheEntriesKey); int64(got) != 5 {
+		t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", cacheEntriesKey, int64(got), 5)
 	}
-	if got, _ := tmr.Metric(cacheSizeKey); got != 15 {
-		t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", cacheSizeKey, got, 15)
+	if got, _ := tmr.Metric(cacheSizeKey); int64(got) != 15 {
+		t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", cacheSizeKey, int64(got), 15)
 	}
 
 	// Resize down the cache to 2 entries (deterministic as based of LRU).
 	dc.resize(9)
-	if got, _ := tmr.Metric(cacheEntriesKey); got != 2 {
-		t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", cacheEntriesKey, got, 2)
+	tmr.ClearMetrics()
+	dc.reportMetrics(tmr, dc.currentSize, int64(len(dc.entries)), dc.rlsServerTarget)
+	if got, _ := tmr.Metric(cacheEntriesKey); int64(got) != 2 {
+		t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", cacheEntriesKey, int64(got), 2)
 	}
-	if got, _ := tmr.Metric(cacheSizeKey); got != 9 {
-		t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", cacheSizeKey, got, 9)
+	if got, _ := tmr.Metric(cacheSizeKey); int64(got) != 9 {
+		t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", cacheSizeKey, int64(got), 9)
 	}
 
 	// Update an entry to have size 6. This should reflect in the size metrics,
 	// which will increase by 1 to 11, while the number of cache entries should
 	// stay same. This write is deterministic and writes to the last one.
 	dc.updateEntrySize(cacheEntriesMetricsTests[4], 6)
-
-	if got, _ := tmr.Metric(cacheEntriesKey); got != 2 {
-		t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", cacheEntriesKey, got, 2)
+	tmr.ClearMetrics()
+	dc.reportMetrics(tmr, dc.currentSize, int64(len(dc.entries)), dc.rlsServerTarget)
+	if got, _ := tmr.Metric(cacheEntriesKey); int64(got) != 2 {
+		t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", cacheEntriesKey, int64(got), 2)
 	}
-	if got, _ := tmr.Metric(cacheSizeKey); got != 10 {
-		t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", cacheSizeKey, got, 10)
+	if got, _ := tmr.Metric(cacheSizeKey); int64(got) != 10 {
+		t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", cacheSizeKey, int64(got), 10)
 	}
 
 	// Delete this scaled up cache key. This should scale down the cache to 1
 	// entries, and remove 6 size so cache size should be 4.
 	dc.deleteAndCleanup(cacheKeys[4], cacheEntriesMetricsTests[4])
-	if got, _ := tmr.Metric(cacheEntriesKey); got != 1 {
-		t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", cacheEntriesKey, got, 1)
+	tmr.ClearMetrics()
+	dc.reportMetrics(tmr, dc.currentSize, int64(len(dc.entries)), dc.rlsServerTarget)
+	if got, _ := tmr.Metric(cacheEntriesKey); int64(got) != 1 {
+		t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", cacheEntriesKey, int64(got), 1)
 	}
-	if got, _ := tmr.Metric(cacheSizeKey); got != 4 {
-		t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", cacheSizeKey, got, 4)
+	if got, _ := tmr.Metric(cacheSizeKey); int64(got) != 4 {
+		t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", cacheSizeKey, int64(got), 4)
 	}
 }
