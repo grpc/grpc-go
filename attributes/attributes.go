@@ -91,8 +91,10 @@ func (a *Attributes) Equal(o *Attributes) bool {
 		return false
 	}
 	m := maps.Collect(o.root.all())
+	lenA := 0
 
 	for k, v := range a.root.all() {
+		lenA++
 		ov, ok := m[k]
 		if !ok {
 			// o missing element of a
@@ -107,7 +109,7 @@ func (a *Attributes) Equal(o *Attributes) bool {
 			return false
 		}
 	}
-	return true
+	return lenA == len(m)
 }
 
 // String prints the attribute map. If any key or values throughout the map

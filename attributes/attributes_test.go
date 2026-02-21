@@ -95,35 +95,60 @@ func ExampleAttributes_String() {
 	// a8: {"<%!p(int=1)>": "<%!p(bool=true)>" }
 }
 
-// Test that two attributes with the same content are Equal.
+// Test that two attributes with different content are not Equal.
 func TestEqual(t *testing.T) {
 	type keyOne struct{}
 	type keyTwo struct{}
-	a1 := attributes.New(keyOne{}, 1).WithValue(keyTwo{}, stringVal{s: "two"})
-	a2 := attributes.New(keyOne{}, 1).WithValue(keyTwo{}, stringVal{s: "two"})
-	if !a1.Equal(a2) {
-		t.Fatalf("%+v.Equals(%+v) = false; want true", a1, a2)
+	tests := []struct {
+		name string
+		a    *attributes.Attributes
+		b    *attributes.Attributes
+		want bool
+	}{
+		{
+			name: "different_first_value",
+			a:    attributes.New(keyOne{}, 1).WithValue(keyTwo{}, stringVal{s: "two"}),
+			b:    attributes.New(keyOne{}, 2).WithValue(keyTwo{}, stringVal{s: "two"}),
+			want: false,
+		},
+		{
+			name: "different_first_value_symmetric",
+			a:    attributes.New(keyOne{}, 2).WithValue(keyTwo{}, stringVal{s: "two"}),
+			b:    attributes.New(keyOne{}, 1).WithValue(keyTwo{}, stringVal{s: "two"}),
+			want: false,
+		},
+		{
+			name: "different_second_value",
+			a:    attributes.New(keyOne{}, 1).WithValue(keyTwo{}, stringVal{s: "one"}),
+			b:    attributes.New(keyOne{}, 1).WithValue(keyTwo{}, stringVal{s: "two"}),
+			want: false,
+		},
+		{
+			name: "same",
+			a:    attributes.New(keyOne{}, 1).WithValue(keyTwo{}, stringVal{s: "two"}),
+			b:    attributes.New(keyOne{}, 1).WithValue(keyTwo{}, stringVal{s: "two"}),
+			want: true,
+		},
+		{
+			name: "subset",
+			a:    attributes.New(keyOne{}, 1),
+			b:    attributes.New(keyOne{}, 1).WithValue(keyTwo{}, stringVal{s: "two"}),
+			want: false,
+		},
+		{
+			name: "superset",
+			a:    attributes.New(keyOne{}, 1).WithValue(keyTwo{}, stringVal{s: "two"}),
+			b:    attributes.New(keyTwo{}, stringVal{s: "two"}),
+			want: false,
+		},
 	}
-	if !a2.Equal(a1) {
-		t.Fatalf("%+v.Equals(%+v) = false; want true", a2, a1)
-	}
-}
 
-// Test that two attributes with different content are not Equal.
-func TestNotEqual(t *testing.T) {
-	type keyOne struct{}
-	type keyTwo struct{}
-	a1 := attributes.New(keyOne{}, 1).WithValue(keyTwo{}, stringVal{s: "two"})
-	a2 := attributes.New(keyOne{}, 2).WithValue(keyTwo{}, stringVal{s: "two"})
-	a3 := attributes.New(keyOne{}, 1).WithValue(keyTwo{}, stringVal{s: "one"})
-	if a1.Equal(a2) {
-		t.Fatalf("%+v.Equals(%+v) = true; want false", a1, a2)
-	}
-	if a2.Equal(a1) {
-		t.Fatalf("%+v.Equals(%+v) = true; want false", a2, a1)
-	}
-	if a3.Equal(a1) {
-		t.Fatalf("%+v.Equals(%+v) = true; want false", a3, a1)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.a.Equal(tt.b); got != tt.want {
+				t.Errorf("%+v.Equal(%+v) = %v; want %v", tt.a, tt.b, got, tt.want)
+			}
+		})
 	}
 }
 
