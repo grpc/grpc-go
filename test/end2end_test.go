@@ -34,6 +34,7 @@ import (
 	"os"
 	"reflect"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -6782,6 +6783,118 @@ func (s) TestAuthorityHeader(t *testing.T) {
 			}
 			if gotAuthority != test.wantAuthority {
 				t.Fatalf("gotAuthority: %v, wantAuthority %v", gotAuthority, test.wantAuthority)
+			}
+		})
+	}
+}
+
+func (s) TestHTTPServerSendsNonGRPCHeaderSurfaceFurtherData(t *testing.T) {
+	tests := []struct {
+		name      string
+		responses []httpServerResponse
+		wantCode  codes.Code
+		wantErr   string
+	}{
+		{
+			name: "non-gRPC content-type without payload",
+			responses: []httpServerResponse{
+				{
+					headers: [][]string{
+						{
+							":status", "200",
+							"content-type", "text/html",
+						},
+					},
+					// payload: nil
+				},
+			},
+			wantCode: codes.Unknown,
+			wantErr: `rpc error: code = Unknown desc = unexpected HTTP status code received from server: 200 (OK); transport: received unexpected content-type "text/html"
+data: ""`,
+		},
+		{
+			name: "non-gRPC content-type with payload",
+			responses: []httpServerResponse{
+				{
+					headers: [][]string{
+						{
+							":status", "200",
+							"content-type", "text/html",
+						},
+					},
+					payload: []byte(`<html><body>Hello World</body></html>`),
+				},
+			},
+			wantCode: codes.Unknown,
+			wantErr: `rpc error: code = Unknown desc = unexpected HTTP status code received from server: 200 (OK); transport: received unexpected content-type "text/html"
+data: "<html><body>Hello World</body></html>"`,
+		},
+		{
+			name: "non-gRPC content-type with bytes payload length more than transport.NonGRPCDataMaxLen",
+			responses: []httpServerResponse{
+				{
+					headers: [][]string{
+						{
+							":status", "200",
+							"content-type", "text/html",
+						},
+					},
+					payload: bytes.Repeat([]byte("a"), transport.NonGRPCDataMaxLen+1),
+				},
+			},
+			wantCode: codes.Unknown,
+			wantErr: `rpc error: code = Unknown desc = unexpected HTTP status code received from server: 200 (OK); transport: received unexpected content-type "text/html"
+data: ` + strconv.Quote(strings.Repeat("a", transport.NonGRPCDataMaxLen)),
+		},
+		{
+			name: "content-type not provided",
+			responses: []httpServerResponse{
+				{
+					headers: [][]string{{
+						":status", "502",
+					}},
+					payload: []byte("hello"),
+				},
+			},
+			wantCode: codes.Unavailable,
+			wantErr: `rpc error: code = Unavailable desc = unexpected HTTP status code received from server: 502 (Bad Gateway); malformed header: missing HTTP content-type
+data: "hello"`,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			lis, err := net.Listen("tcp", "localhost:0")
+			if err != nil {
+				t.Fatalf("net.Listen() failed: %v", err)
+			}
+			defer lis.Close()
+
+			hs := &httpServer{responses: test.responses}
+			hs.start(t, lis)
+
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+
+			cc, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+			if err != nil {
+				t.Fatalf("grpc.NewClient() failed: %v", err)
+			}
+			defer cc.Close()
+
+			client := testgrpc.NewTestServiceClient(cc)
+			_, err = client.EmptyCall(ctx, &testpb.Empty{})
+
+			if err == nil {
+				t.Fatalf("EmptyCall() = nil; want non-nil error due to non-gRPC response")
+			}
+
+			if got, want := status.Code(err), test.wantCode; got != want {
+				t.Fatalf("Unexpected error code: got %v, want %v\nfull error:\n%v", got, want, err)
+			}
+
+			if err.Error() != test.wantErr {
+				t.Errorf("Unexpected error message: got\n %v, want\n %v", err.Error(), test.wantErr)
 			}
 		})
 	}
