@@ -2,21 +2,20 @@
 
 # The script contains a sequence of commands described in README.md
 # Generate client/server self signed CAs and certs.
-openssl req -x509                                                      \
-  -newkey rsa:4096                                                     \
-  -keyout provider_server_trust_key.pem                                \
-  -out provider_server_trust_cert.pem                                  \
-  -days 3650                                                            \
-  -subj "/C=US/ST=VA/O=Internet Widgits Pty Ltd/CN=foo.bar.hoo.ca.com" \
+openssl req -x509 -newkey rsa:4096 \
+  -keyout provider_server_trust_key.pem \
+  -out provider_server_trust_cert.pem \
+  -days 3650 \
+  -config provider_ca.cnf \
   -nodes
 
-openssl req -x509                                      \
-  -newkey rsa:4096                                     \
-  -keyout provider_client_trust_key.pem                \
-  -out provider_client_trust_cert.pem                  \
-  -days 3650                                            \
-  -subj "/C=US/ST=CA/L=SVL/O=Internet Widgits Pty Ltd" \
+openssl req -x509 -newkey rsa:4096 \
+  -keyout provider_client_trust_key.pem \
+  -out provider_client_trust_cert.pem \
+  -days 3650 \
+  -config provider_ca.cnf \
   -nodes
+
 
 openssl req -newkey rsa:4096                                                \
   -keyout provider_server_cert.key                                          \
@@ -87,14 +86,14 @@ SubjectKeyIdentifier=$(openssl x509 -in provider_client_trust_cert.pem \
   -text                                               \
   | awk '/Subject Key Identifier/ {getline; print $1;}')
 
-sed -i "s/subjectKeyIdentifier = hash/subjectKeyIdentifier = $SubjectKeyIdentifier/g" \
-  provider_extensions.conf
+
+sed "s/subjectKeyIdentifier = hash/subjectKeyIdentifier = $SubjectKeyIdentifier/g" \
+  provider_extensions.conf > provider_extensions.conf.tmp && mv provider_extensions.conf.tmp provider_extensions.conf
 
 openssl req -new                                       \
   -key provider_malicious_client_trust_key.pem         \
   -out cert_malicious_request.csr                      \
-  -subj "/C=US/ST=CA/L=SVL/O=Internet Widgits Pty Ltd" \
-  -config provider_extensions.conf
+  -subj "/C=US/ST=CA/L=SVL/O=Internet Widgits Pty Ltd"
 
 openssl x509 -req                                  \
   -in cert_malicious_request.csr                   \
@@ -110,7 +109,8 @@ openssl ca -gencrl                                 \
   -out provider_malicious_crl_empty.pem            \
   -config provider_crl.cnf
 
-sed -i "s/subjectKeyIdentifier = .*/subjectKeyIdentifier = hash/g" \
-  provider_extensions.conf
+sed "s/subjectKeyIdentifier = .*/subjectKeyIdentifier = hash/g" \
+  provider_extensions.conf > provider_extensions.conf.tmp && mv provider_extensions.conf.tmp provider_extensions.conf
 
 rm *.csr
+rm -f provider_{index.txt*,crlnumber.txt*,ca_client.cnf,ca_server.cnf} *.srl
