@@ -18,9 +18,15 @@
 
 package mem
 
-import (
-	"testing"
-)
+import "testing"
+
+var defaultBufferPoolSizeExponents = []uint8{
+	8,
+	12,
+	14, // 16KB (max HTTP/2 frame size used by gRPC)
+	15, // 32KB (default buffer size for io.Copy)
+	20, // 1MB
+}
 
 func TestNewBinaryTieredBufferPool_WordSize(t *testing.T) {
 	origUintSize := uintSize
@@ -68,12 +74,11 @@ func TestNewBinaryTieredBufferPool_WordSize(t *testing.T) {
 			if err != nil {
 				return
 			}
-			bp := pool.(*binaryTieredBufferPool)
-			if len(bp.exponentToNextLargestPoolMap) != tt.wordSize {
-				t.Errorf("exponentToNextLargestPoolMap length = %d, want %d", len(bp.exponentToNextLargestPoolMap), tt.wordSize)
+			if len(pool.exponentToNextLargestPoolMap) != tt.wordSize {
+				t.Errorf("exponentToNextLargestPoolMap length = %d, want %d", len(pool.exponentToNextLargestPoolMap), tt.wordSize)
 			}
-			if len(bp.exponentToPreviousLargestPoolMap) != tt.wordSize {
-				t.Errorf("exponentToPreviousLargestPoolMap length = %d, want %d", len(bp.exponentToPreviousLargestPoolMap), tt.wordSize)
+			if len(pool.exponentToPreviousLargestPoolMap) != tt.wordSize {
+				t.Errorf("exponentToPreviousLargestPoolMap length = %d, want %d", len(pool.exponentToPreviousLargestPoolMap), tt.wordSize)
 			}
 		})
 	}
@@ -87,8 +92,9 @@ func BenchmarkTieredPool(b *testing.B) {
 	for i, exp := range defaultBufferPoolSizeExponents {
 		defaultBufferPoolSizes[i] = 1 << exp
 	}
+
 	b.Run("pool=Tiered", func(b *testing.B) {
-		p := NewTieredBufferPool(defaultBufferPoolSizes...).(*tieredBufferPool)
+		p := NewTieredBufferPool(defaultBufferPoolSizes...)
 		for b.Loop() {
 			for size := range 1 << 19 {
 				// One for get, one for put.
@@ -103,11 +109,10 @@ func BenchmarkTieredPool(b *testing.B) {
 		if err != nil {
 			b.Fatalf("Failed to create buffer pool: %v", err)
 		}
-		p := pool.(*binaryTieredBufferPool)
 		for b.Loop() {
 			for size := range 1 << 19 {
-				_ = p.poolForGet(size)
-				_ = p.poolForPut(size)
+				_ = pool.poolForGet(size)
+				_ = pool.poolForPut(size)
 			}
 		}
 	})
@@ -119,8 +124,7 @@ func TestNewBinaryTieredBufferPool_Duplicates(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewBinaryTieredBufferPool() error = %v", err)
 	}
-	binaryPool := pool.(*binaryTieredBufferPool)
-	if len(binaryPool.sizedPools) != 6 {
-		t.Errorf("sized buffer pool count = %d, want %d", len(binaryPool.sizedPools), 6)
+	if len(pool.sizedPools) != 6 {
+		t.Errorf("sized buffer pool count = %d, want %d", len(pool.sizedPools), 6)
 	}
 }

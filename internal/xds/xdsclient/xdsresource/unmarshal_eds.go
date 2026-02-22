@@ -278,7 +278,7 @@ func validateAndConstructMetadata(metadataProto *v3corepb.Metadata) (map[string]
 
 	// Process FilterMetadata for any keys not already handled.
 	for key, structProto := range metadataProto.GetFilterMetadata() {
-		// Skip keys already added from TyperFilterMetadata.
+		// Skip keys already added from TypedFilterMetadata.
 		if metadata[key] != nil {
 			continue
 		}
