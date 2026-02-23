@@ -27,11 +27,15 @@ import (
 	"sync"
 	"time"
 
+	"google.golang.org/grpc/internal/buffer"
 	"google.golang.org/grpc/internal/xds/clients"
 	"google.golang.org/protobuf/proto"
 
 	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 )
+
+// This compile time check ensures that Builder implements clients.TransportBuilder.
+var _ clients.TransportBuilder = &Builder{}
 
 // Builder implements clients.TransportBuilder.
 type Builder struct {
@@ -55,7 +59,7 @@ func (b *Builder) Build(serverIdentifier clients.ServerIdentifier) (clients.Tran
 		return at, nil
 	}
 
-	ft := NewFakeTransport()
+	ft := newFakeTransport()
 	b.ActiveTransports[serverIdentifier.ServerURI] = ft
 	return ft, nil
 }
@@ -74,7 +78,7 @@ func (b *Builder) GetTransport(serverURI string) *FakeTransport {
 			return nil
 		case <-ticker.C:
 			b.mu.Lock()
-			if t, ok := b.ActiveTransports[serverURI]; ok && t.ActiveAdsStream != nil {
+			if t, ok := b.ActiveTransports[serverURI]; ok && t.GetAdsStream() != nil {
 				b.mu.Unlock()
 				return t
 			}
@@ -83,16 +87,33 @@ func (b *Builder) GetTransport(serverURI string) *FakeTransport {
 	}
 }
 
+// This compile time check ensures that FakeTransport implements clients.Transport.
+var _ clients.Transport = &FakeTransport{}
+
 // FakeTransport implements clients.Transport.
 type FakeTransport struct {
 	mu              sync.Mutex
-	ActiveAdsStream *FakeStream
+	activeAdsStream *FakeStream
+	fakeServer      *FakeServerHandle
 	closed          bool
 }
 
-// NewFakeTransport creates a FakeTransport for the given server URI.
-func NewFakeTransport() *FakeTransport {
+func newFakeTransport() *FakeTransport {
 	return &FakeTransport{}
+}
+
+// GetServerHandle returns a fake serverhandle for testing.
+func (t *FakeTransport) GetServerHandle() *FakeServerHandle {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.fakeServer
+}
+
+// GetAdsStream returns the active ADS stream for testing.
+func (t *FakeTransport) GetAdsStream() *FakeStream {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.activeAdsStream
 }
 
 // NewStream creates a new fake stream to the server.
@@ -104,135 +125,101 @@ func (t *FakeTransport) NewStream(ctx context.Context, _ string) (clients.Stream
 		return nil, fmt.Errorf("transport is closed")
 	}
 
-	t.ActiveAdsStream = newFakeStream(ctx)
-	return t.ActiveAdsStream, nil
+	fs := newFakeStream(ctx)
+	t.activeAdsStream, t.fakeServer = fs, &FakeServerHandle{fs: fs}
+	return fs, nil
 }
 
 // Close closes the fake stream.
 func (t *FakeTransport) Close() {
 	t.mu.Lock()
-	defer t.mu.Unlock()
 	t.closed = true
-	if t.ActiveAdsStream != nil {
-		t.ActiveAdsStream.Close()
+	t.mu.Unlock()
+	if stream := t.GetAdsStream(); stream != nil {
+		stream.Close()
 	}
 }
+
+// This compile time check ensures that FakeStream implements clients.Stream.
+var _ clients.Stream = &FakeStream{}
 
 // FakeStream implements clients.Stream.
 type FakeStream struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	mu        sync.Mutex
-	reqQueue  [][]byte // reqQueue stores marshaled requests sent by the client
-	respQueue [][]byte // respQueue stores responses to be returned to the client
-
-	reqChan  chan struct{} // reqChan signals that the request queue is non-empty.
-	respChan chan struct{} // respChan signals that the response queue is non-empty.
+	reqBuffer  *buffer.Unbounded
+	respBuffer *buffer.Unbounded
 }
 
 func newFakeStream(ctx context.Context) *FakeStream {
 	c, cancel := context.WithCancel(ctx)
 	return &FakeStream{
-		ctx:      c,
-		cancel:   cancel,
-		reqChan:  make(chan struct{}, 1),
-		respChan: make(chan struct{}, 1),
+		ctx:        c,
+		cancel:     cancel,
+		reqBuffer:  buffer.NewUnbounded(),
+		respBuffer: buffer.NewUnbounded(),
 	}
 }
 
-// Send sends the provided message on the stream. It appends the request to the
-// reqQueue and signals the reqChan to notify that a request is available.
+// Send sends the provided message on the stream. It puts the request into the
+// reqBuffer for consumption.
 func (s *FakeStream) Send(data []byte) error {
 	if s.ctx.Err() != nil {
 		return s.ctx.Err()
 	}
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	s.reqQueue = append(s.reqQueue, data)
-	select {
-	case s.reqChan <- struct{}{}:
-	default:
-	}
-	return nil
+	return s.reqBuffer.Put(data)
 }
 
 // Recv blocks until the next message is received on the stream. It blocks until
-// a response is available in the respQueue (pushed via InjectResponse) or the
-// context is canceled.
+// a response is available in the respBuffer or the context is canceled.
 func (s *FakeStream) Recv() ([]byte, error) {
-	for {
-		s.mu.Lock()
-		if len(s.respQueue) > 0 {
-			data := s.respQueue[0]
-			s.respQueue = s.respQueue[1:]
-			s.mu.Unlock()
-			return data, nil
-		}
-		if s.ctx.Err() != nil {
-			s.mu.Unlock()
-			return nil, s.ctx.Err()
-		}
-		s.mu.Unlock()
-
-		select {
-		case <-s.respChan:
-		case <-s.ctx.Done():
-			return nil, s.ctx.Err()
-		}
+	select {
+	case data := <-s.respBuffer.Get():
+		s.respBuffer.Load()
+		return data.([]byte), nil
+	case <-s.ctx.Done():
+		return nil, s.ctx.Err()
 	}
 }
 
 // Close closes the fake stream.
 func (s *FakeStream) Close() {
+	s.respBuffer.Close()
+	s.reqBuffer.Close()
 	s.cancel()
 }
 
-// ReadRequest reads the next request from the reqQueue. It blocks until a
+// FakeServerHandle provides the server-side send/recv methods to interact with
+// the fakeStream.
+type FakeServerHandle struct {
+	fs *FakeStream
+}
+
+// Recv reads the next request from the reqBuffer. It blocks until a
 // request is available or the context expires. It returns an error if the
 // context expires or if the request cannot be unmarshaled.
-func (s *FakeStream) ReadRequest() (*v3discoverypb.DiscoveryRequest, error) {
-	for {
-		s.mu.Lock()
-		if len(s.reqQueue) > 0 {
-			data := s.reqQueue[0]
-			s.reqQueue = s.reqQueue[1:]
-			s.mu.Unlock()
-
-			req := &v3discoverypb.DiscoveryRequest{}
-			if err := proto.Unmarshal(data, req); err != nil {
-				return nil, fmt.Errorf("failed to unmarshal request: %v", err)
-			}
-			return req, nil
+func (h *FakeServerHandle) Recv() (*v3discoverypb.DiscoveryRequest, error) {
+	select {
+	case data := <-h.fs.reqBuffer.Get():
+		h.fs.reqBuffer.Load()
+		req := &v3discoverypb.DiscoveryRequest{}
+		if err := proto.Unmarshal(data.([]byte), req); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal request: %v", err)
 		}
-		s.mu.Unlock()
-
-		select {
-		case <-s.reqChan:
-		case <-s.ctx.Done():
-			return nil, s.ctx.Err()
-		}
+		return req, nil
+	case <-h.fs.ctx.Done():
+		return nil, h.fs.ctx.Err()
 	}
 }
 
-// InjectResponse simulates a server response. It marshals the provided
-// DiscoveryResponse, queues it in the respQueue, and signals the respChan to
-// notify that a response is available for the client to Recv.
-func (s *FakeStream) InjectResponse(resp *v3discoverypb.DiscoveryResponse) error {
+// Send simulates a server response. It marshals the provided
+// DiscoveryResponse, puts it in the respBuffer to notify that a response
+// is available for the client to Recv.
+func (h *FakeServerHandle) Send(resp *v3discoverypb.DiscoveryResponse) error {
 	data, err := proto.Marshal(resp)
 	if err != nil {
 		return err
 	}
-
-	s.mu.Lock()
-	s.respQueue = append(s.respQueue, data)
-	s.mu.Unlock()
-
-	select {
-	case s.respChan <- struct{}{}:
-	default:
-	}
-	return nil
+	return h.fs.respBuffer.Put(data)
 }
