@@ -16,7 +16,6 @@ openssl req -x509 -newkey rsa:4096 \
   -config provider_ca.cnf \
   -nodes
 
-
 openssl req -newkey rsa:4096                                                \
   -keyout provider_server_cert.key                                          \
   -out provider_new_cert.csr                                                \
