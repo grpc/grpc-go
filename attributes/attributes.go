@@ -143,12 +143,17 @@ func (a *Attributes) MarshalJSON() ([]byte, error) {
 	return []byte(a.String()), nil
 }
 
+// node is a node in a linked list for storing key-value pairs. The list
+// functions as a persistent map where inserting a key-value pair shadows any
+// existing value with the same key.
 type node struct {
 	key   any
 	value any
 	next  *node
 }
 
+// insert returns a new node with the key/value pair added to the front
+// of the list.
 func (n *node) insert(key, value any) *node {
 	return &node{
 		key:   key,
@@ -157,6 +162,8 @@ func (n *node) insert(key, value any) *node {
 	}
 }
 
+// get returns the value associated with the given key, or nil if the key
+// is not found in the linked list.
 func (n *node) get(key any) any {
 	for cur := n; cur != nil; cur = cur.next {
 		if cur.key == key {
@@ -166,6 +173,9 @@ func (n *node) get(key any) any {
 	return nil
 }
 
+// all returns an iterator that yields all key-value pairs in the linked list.
+// If a key appears multiple times, only the most recently added value is
+// yielded.
 func (n *node) all() iter.Seq2[any, any] {
 	return func(yield func(any, any) bool) {
 		seen := map[any]bool{}
