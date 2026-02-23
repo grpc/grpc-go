@@ -85,6 +85,9 @@ func (a *Attributes) Equal(o *Attributes) bool {
 	if a == nil || o == nil {
 		return false
 	}
+	if a.root == o.root {
+		return true
+	}
 	m := maps.Collect(o.root.all())
 	lenA := 0
 
@@ -178,6 +181,9 @@ func (n *node) get(key any) any {
 // yielded.
 func (n *node) all() iter.Seq2[any, any] {
 	return func(yield func(any, any) bool) {
+		if n == nil {
+			return
+		}
 		seen := map[any]bool{}
 		for cur := n; cur != nil; cur = cur.next {
 			if seen[cur.key] {
