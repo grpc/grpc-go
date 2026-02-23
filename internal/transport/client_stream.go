@@ -37,15 +37,6 @@ const NonGRPCDataMaxLen = 1024
 // nonGRPCDataCollectionTimeout is the timeout for collecting non-gRPC data.
 const nonGRPCDataCollectionTimeout = 3 * time.Second
 
-// nonGRPCDataCollectionState indicates the stage of non-gRPC data collection.
-type nonGRPCDataCollectionState int
-
-const (
-	none nonGRPCDataCollectionState = iota
-	collecting
-	stopped
-)
-
 // ClientStream implements streaming functionality for a gRPC client.
 type ClientStream struct {
 	Stream // Embed for common stream functionality.
@@ -67,9 +58,9 @@ type ClientStream struct {
 	headerValid bool
 
 	collectionMu    sync.Mutex
-	collectionState nonGRPCDataCollectionState // indicates the stage of non-gRPC data collection.
-	collectionTimer *time.Timer                // used to limit the time spent on collecting non-gRPC error details.
-	nonGRPCDataBuf  []byte                     // stores the data of a non-gRPC response.
+	collecting      bool        // indicates if stream entered the stage of non-gRPC data collection.
+	collectionTimer *time.Timer // used to limit the time spent on collecting non-gRPC error details.
+	nonGRPCDataBuf  []byte      // stores the data of a non-gRPC response.
 
 	noHeaders        bool          // set if the client never received headers (set only after the stream is done).
 	headerChanClosed uint32        // set when headerChan is closed. Used to avoid closing headerChan multiple times.
@@ -81,11 +72,11 @@ type ClientStream struct {
 func (s *ClientStream) startNonGRPCDataCollection(st *status.Status, onTimeout func()) {
 	s.collectionMu.Lock()
 	defer s.collectionMu.Unlock()
-	if s.collectionState != none {
+	if s.collecting {
 		return
 	}
 	s.status = st
-	s.collectionState = collecting
+	s.collecting = true
 	s.nonGRPCDataBuf = make([]byte, 0, NonGRPCDataMaxLen)
 	s.collectionTimer = time.AfterFunc(nonGRPCDataCollectionTimeout, onTimeout)
 }
@@ -97,13 +88,8 @@ func (s *ClientStream) startNonGRPCDataCollection(st *status.Status, onTimeout f
 func (s *ClientStream) tryHandleNonGRPCData(f *parsedDataFrame) (handle bool, end bool) {
 	s.collectionMu.Lock()
 	defer s.collectionMu.Unlock()
-	switch s.collectionState {
-	case none:
+	if !s.collecting {
 		return false, false
-	case stopped:
-		return true, true
-	case collecting:
-		// Continue to collect data.
 	}
 
 	n := min(f.data.Len(), NonGRPCDataMaxLen-len(s.nonGRPCDataBuf))
@@ -117,10 +103,9 @@ func (s *ClientStream) tryHandleNonGRPCData(f *parsedDataFrame) (handle bool, en
 // stopNonGRPCBodyCollection stops collecting non-gRPC body and appends the collected.
 // Should only be called in closeStream.
 func (s *ClientStream) stopNonGRPCDataCollectionLocked() {
-	if s.collectionState != collecting {
+	if !s.collecting {
 		return
 	}
-	s.collectionState = stopped
 	if s.collectionTimer != nil {
 		s.collectionTimer.Stop()
 		s.collectionTimer = nil

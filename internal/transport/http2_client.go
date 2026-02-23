@@ -947,10 +947,8 @@ func (t *http2Client) closeStream(s *ClientStream, err error, rst bool, rstCode 
 		return
 	}
 	s.collectionMu.Lock()
-	if s.collectionState == collecting {
-		// If the stream is still in the collecting state, but stream is being closed, it means
-		// the stream is being closed in a non-graceful way, so we force stop collecting to release
-		// resource and finalize the status.
+	if s.collecting {
+		// If the stream is collecting data for non-gRPC, stop collection to finalize status
 		s.stopNonGRPCDataCollectionLocked()
 	}
 	if s.status != nil {
