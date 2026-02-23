@@ -64,8 +64,8 @@ func (b *Builder) Build(serverIdentifier clients.ServerIdentifier) (clients.Tran
 	return ft, nil
 }
 
-// GetTransport returns the active transport for a given server URI.
-func (b *Builder) GetTransport(serverURI string) *FakeTransport {
+// Transport returns the active transport for a given server URI.
+func (b *Builder) Transport(serverURI string) *FakeTransport {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
@@ -78,11 +78,11 @@ func (b *Builder) GetTransport(serverURI string) *FakeTransport {
 			return nil
 		case <-ticker.C:
 			b.mu.Lock()
-			if t, ok := b.ActiveTransports[serverURI]; ok && t.GetAdsStream() != nil {
-				b.mu.Unlock()
+			t, ok := b.ActiveTransports[serverURI]
+			b.mu.Unlock()
+			if ok && t.ADSStream() != nil {
 				return t
 			}
-			b.mu.Unlock()
 		}
 	}
 }
@@ -93,7 +93,7 @@ var _ clients.Transport = &FakeTransport{}
 // FakeTransport implements clients.Transport.
 type FakeTransport struct {
 	mu              sync.Mutex
-	activeAdsStream *FakeStream
+	activeadsStream *FakeStream
 	fakeServer      *FakeServerHandle
 	closed          bool
 }
@@ -102,18 +102,18 @@ func newFakeTransport() *FakeTransport {
 	return &FakeTransport{}
 }
 
-// GetServerHandle returns a fake serverhandle for testing.
-func (t *FakeTransport) GetServerHandle() *FakeServerHandle {
+// ServerHandle returns a fake serverhandle for testing.
+func (t *FakeTransport) ServerHandle() *FakeServerHandle {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	return t.fakeServer
 }
 
-// GetAdsStream returns the active ADS stream for testing.
-func (t *FakeTransport) GetAdsStream() *FakeStream {
+// ADSStream returns the active ADS stream for testing.
+func (t *FakeTransport) ADSStream() *FakeStream {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	return t.activeAdsStream
+	return t.activeadsStream
 }
 
 // NewStream creates a new fake stream to the server.
@@ -126,7 +126,7 @@ func (t *FakeTransport) NewStream(ctx context.Context, _ string) (clients.Stream
 	}
 
 	fs := newFakeStream(ctx)
-	t.activeAdsStream, t.fakeServer = fs, &FakeServerHandle{fs: fs}
+	t.activeadsStream, t.fakeServer = fs, &FakeServerHandle{fs: fs}
 	return fs, nil
 }
 
@@ -135,7 +135,7 @@ func (t *FakeTransport) Close() {
 	t.mu.Lock()
 	t.closed = true
 	t.mu.Unlock()
-	if stream := t.GetAdsStream(); stream != nil {
+	if stream := t.ADSStream(); stream != nil {
 		stream.Close()
 	}
 }
