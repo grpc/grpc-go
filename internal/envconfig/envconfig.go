@@ -100,13 +100,10 @@ var (
 	// XDSRecoverPanicInResourceParsing indicates whether the xDS resolver should
 	// recover from panics while parsing xDS resources.
 	//
-	// The recover logic in xdsclient resource parsing is protected by an
-	// environment variable so that it can be disabled during fuzz testing to
-	// catch unexpected panics.
-	//
-	// This feature can be disabled by setting the environment variable
-	// "GRPC_EXPERIMENTAL_XDS_PANIC_RECOVERY" to "false".
-	XDSRecoverPanicInResourceParsing = boolFromEnv("GRPC_EXPERIMENTAL_XDS_PANIC_RECOVERY", true)
+	// This feature can be disabled (e.g. for fuzz testing) by setting the
+	// environment variable "GRPC_GO_EXPERIMENTAL_XDS_RESOURCE_PANIC_RECOVERY"
+	// to "false".
+	XDSRecoverPanicInResourceParsing = boolFromEnv("GRPC_GO_EXPERIMENTAL_XDS_RESOURCE_PANIC_RECOVERY", true)
 )
 
 func boolFromEnv(envVar string, def bool) bool {

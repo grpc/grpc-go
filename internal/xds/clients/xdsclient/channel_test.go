@@ -782,9 +782,9 @@ func (panicDecoder) Decode(*AnyProto, DecodeOptions) (*DecodeResult, error) {
 }
 
 // TestDecodeResponse_PanicRecovery tests the panic recovery mechanism in
-// decodeResponse. It verifies that when XDSRecoverPanicInResourceParsing env variable is
-// enabled, panics during unmarshaling are caught and returned as errors.
-// When the env variable is disabled, it ensures the panic propagates.
+// decodeResponse. It verifies that when XDSRecoverPanicInResourceParsing env
+// variable is enabled, panics during unmarshaling are caught and returned as
+// errors. When the env variable is disabled, it ensures the panic propagates.
 func (s) TestDecodeResponse_PanicRecovery(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -795,13 +795,12 @@ func (s) TestDecodeResponse_PanicRecovery(t *testing.T) {
 		{
 			name:          "Enable_XDSRecoverPanic",
 			enableRecover: true,
-			wantPanic:     false,
 			wantErr:       "panic during resourceType resource decoding: simulate panic",
 		},
 		{
-			name:          "Disable_XDSRecoverPanic",
-			enableRecover: false,
-			wantPanic:     true,
+			name:      "Disable_XDSRecoverPanic",
+			wantPanic: true,
+			wantErr:   "simulate panic",
 		},
 	}
 	for _, tt := range tests {
@@ -819,14 +818,14 @@ func (s) TestDecodeResponse_PanicRecovery(t *testing.T) {
 
 			if tt.wantPanic {
 				defer func() {
-					if r := recover(); r == nil {
-						t.Errorf("The code did not panic but was expected to")
+					if r := recover(); r == nil || !strings.Contains(fmt.Sprint(r), tt.wantErr) {
+						t.Errorf("Expected panic want: %q, got: %q", tt.wantErr, r)
 					}
 				}()
 				decodeResponse(opts, rType, resp)
 			} else {
 				if _, _, err := decodeResponse(opts, rType, resp); err == nil || !strings.Contains(err.Error(), tt.wantErr) {
-					t.Errorf("decodeResponse() failed with err: %v, want %q", err, tt.wantErr)
+					t.Fatalf("decodeResponse() failed with err: %v, want %q", err, tt.wantErr)
 				}
 			}
 		})
