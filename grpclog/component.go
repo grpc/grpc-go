@@ -32,7 +32,7 @@ const (
 	severityFatal
 )
 
-func parseComponentLogLevel(logLevel string) map[string]severityLevel {
+func parseComponentLogLevels(logLevel string) map[string]severityLevel {
 	if logLevel == "" {
 		return nil
 	}

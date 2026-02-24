@@ -48,7 +48,7 @@ func init() {
 }
 
 func initLogger(w io.Writer, logSeverityLevel, logVerbosityLevel, logFormatter, componentLogLevel string) {
-	componentLogLevels = parseComponentLogLevel(componentLogLevel)
+	componentLogLevels = parseComponentLogLevels(componentLogLevel)
 	config := loggerV2Config(logVerbosityLevel, logFormatter)
 	setLoggerV2(newLoggerV2(w, config, logSeverityLevel))
 	setComponentLoggerV2(newComponentLoggerV2(w, config))

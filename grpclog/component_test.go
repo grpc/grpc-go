@@ -112,7 +112,7 @@ func TestParseComponentLogLevel(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := parseComponentLogLevel(tt.input)
+			got := parseComponentLogLevels(tt.input)
 			if tt.want == nil {
 				if got != nil {
 					t.Errorf("got %v for input %q, want nil", got, tt.input)
