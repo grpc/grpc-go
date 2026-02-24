@@ -113,5 +113,4 @@ sed "s/subjectKeyIdentifier = .*/subjectKeyIdentifier = hash/g" \
   provider_extensions.conf > provider_extensions.conf.tmp &&
   mv provider_extensions.conf.tmp provider_extensions.conf
 
-rm *.csr
-rm -f provider_{index.txt*,crlnumber.txt*,ca_client.cnf,ca_server.cnf} *.srl
+rm -f *.csr provider_{index.txt*,crlnumber.txt*,ca_client.cnf,ca_server.cnf} *.srl
