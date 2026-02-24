@@ -87,7 +87,8 @@ SubjectKeyIdentifier=$(openssl x509 -in provider_client_trust_cert.pem \
 
 
 sed "s/subjectKeyIdentifier = hash/subjectKeyIdentifier = $SubjectKeyIdentifier/g" \
-  provider_extensions.conf > provider_extensions.conf.tmp && mv provider_extensions.conf.tmp provider_extensions.conf
+  provider_extensions.conf > provider_extensions.conf.tmp && 
+  mv provider_extensions.conf.tmp provider_extensions.conf
 
 openssl req -new                                       \
   -key provider_malicious_client_trust_key.pem         \
@@ -109,7 +110,8 @@ openssl ca -gencrl                                 \
   -config provider_crl.cnf
 
 sed "s/subjectKeyIdentifier = .*/subjectKeyIdentifier = hash/g" \
-  provider_extensions.conf > provider_extensions.conf.tmp && mv provider_extensions.conf.tmp provider_extensions.conf
+  provider_extensions.conf > provider_extensions.conf.tmp && 
+  mv provider_extensions.conf.tmp provider_extensions.conf
 
 rm *.csr
 rm -f provider_{index.txt*,crlnumber.txt*,ca_client.cnf,ca_server.cnf} *.srl
