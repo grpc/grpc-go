@@ -20,7 +20,6 @@ package interop
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"time"
 
@@ -28,12 +27,14 @@ import (
 	"google.golang.org/grpc/balancer/endpointsharding"
 	"google.golang.org/grpc/balancer/pickfirst"
 	"google.golang.org/grpc/connectivity"
-	internalgrpclog "google.golang.org/grpc/internal/grpclog"
+	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/orca"
 	"google.golang.org/grpc/resolver"
 
 	v3orcapb "github.com/cncf/xds/go/xds/data/orca/v3"
 )
+
+var orcaLogger = grpclog.Component("orca")
 
 func init() {
 	balancer.Register(orcabb{})
@@ -48,8 +49,7 @@ func (orcabb) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balance
 		stopOOBListeners: make(map[balancer.SubConn]func()),
 	}
 	b.child = endpointsharding.NewBalancer(b, bOpts, balancer.Get(pickfirst.Name).Build, endpointsharding.Options{})
-	b.logger = internalgrpclog.NewPrefixLogger(logger, fmt.Sprintf("[%p] ", b))
-	b.logger.Infof("Created")
+	orcaLogger.Infof("[%p] Created", b)
 	return b
 }
 
@@ -64,8 +64,7 @@ type orcab struct {
 	// Embeds balancer.ClientConn to intercept NewSubConn and UpdateState
 	// calls from child balancers.
 	balancer.ClientConn
-	child  balancer.Balancer
-	logger *internalgrpclog.PrefixLogger
+	child balancer.Balancer
 
 	// mu guards stopOOBListeners.
 	mu               sync.Mutex
@@ -89,7 +88,7 @@ func (b *orcab) ResolverError(err error) {
 }
 
 func (b *orcab) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
-	b.logger.Errorf("UpdateSubConnState(%v, %+v) called unexpectedly", sc, state)
+	orcaLogger.Errorf("UpdateSubConnState(%v, %+v) called unexpectedly", sc, state)
 }
 
 func (b *orcab) ExitIdle() {
@@ -137,9 +136,7 @@ func (b *orcab) updateSubConnState(sc balancer.SubConn, state balancer.SubConnSt
 	}
 	if state.ConnectivityState == connectivity.Ready {
 		// Register an OOB listener when the SubConn becomes READY.
-		stop := orca.RegisterOOBListener(sc, b, orca.OOBListenerOptions{
-			ReportInterval: time.Second,
-		})
+		stop := orca.RegisterOOBListener(sc, b, orca.OOBListenerOptions{ReportInterval: time.Second})
 		b.stopOOBListeners[sc] = stop
 		return
 	}
@@ -154,9 +151,8 @@ func (b *orcab) updateSubConnState(sc balancer.SubConn, state balancer.SubConnSt
 // UpdateState intercepts state updates from endpointsharding to wrap the
 // picker with ORCA load report handling.
 func (b *orcab) UpdateState(state balancer.State) {
-	// When at least one child is READY, wrap the picker to inject the ORCA
-	// load report Done callback. For non-READY states, pass through the
-	// endpointsharding picker as-is.
+	// If READY, wrap the picker to inject the ORCA Done callback; otherwise,
+	// pass through the child picker as-is.
 	if state.ConnectivityState == connectivity.Ready {
 		state.Picker = &orcaPicker{
 			childPicker: state.Picker,
@@ -170,7 +166,7 @@ func (b *orcab) UpdateState(state balancer.State) {
 func (b *orcab) OnLoadReport(r *v3orcapb.OrcaLoadReport) {
 	b.reportMu.Lock()
 	defer b.reportMu.Unlock()
-	b.logger.Infof("received OOB load report: %v", r)
+	orcaLogger.Infof("Received OOB load report: %v", r)
 	b.report = r
 }
 

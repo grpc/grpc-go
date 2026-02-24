@@ -23,13 +23,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/orca"
 	"google.golang.org/grpc/resolver"
-	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/testing/protocmp"
 
 	v3orcapb "github.com/cncf/xds/go/xds/data/orca/v3"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
@@ -124,8 +125,8 @@ func (s) TestORCAPerRPCReport(t *testing.T) {
 		RequestCost:    map[string]float64{"cost": 3456.32},
 		Utilization:    map[string]float64{"util": 0.30499},
 	}
-	if !proto.Equal(orcaRes, want) {
-		t.Fatalf("Per-RPC ORCA load report = %v; want %v", orcaRes, want)
+	if diff := cmp.Diff(want, orcaRes, protocmp.Transform()); diff != "" {
+		t.Fatalf("Per-RPC ORCA load report mismatch (-want +got):\n%s", diff)
 	}
 }
 
@@ -232,18 +233,14 @@ func (s) TestORCAOOBFallback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("UnaryCall failed: %v", err)
 	}
-	if !proto.Equal(orcaRes, oobWant) {
-		t.Fatalf("ORCA load report with zero per-call = %v; want OOB fallback %v", orcaRes, oobWant)
+	if diff := cmp.Diff(oobWant, orcaRes, protocmp.Transform()); diff != "" {
+		t.Fatalf("ORCA load report with zero per-call mismatch (-want +got):\n%s", diff)
 	}
 }
 
-// TestEndpoints_MultipleAddresses is the regression test for
-// https://github.com/grpc/grpc-go/issues/8809. It verifies that orcalb
-// correctly delegates SubConn management to endpointsharding + pick_first.
-// The old orcalb managed SubConns directly and had no address-failover; it
-// would never become READY when an endpoint's first address is unreachable.
-// With the delegation, pick_first walks the address list and connects via the
-// first reachable address, so per-call ORCA reports flow correctly.
+// TestEndpoints_MultipleAddresses verifies client behavior when an endpoint has multiple addresses
+// and the first is unreachable. It validates that the pick_first falls through the address list and
+// connects via the first reachable address, so per-call ORCA reports flow correctly.
 func (s) TestEndpoints_MultipleAddresses(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -277,8 +274,8 @@ func (s) TestEndpoints_MultipleAddresses(t *testing.T) {
 			time.Sleep(100 * time.Millisecond)
 			continue
 		}
-		if !proto.Equal(orcaRes, want) {
-			t.Fatalf("Per-RPC ORCA = %v; want %v", orcaRes, want)
+		if diff := cmp.Diff(want, orcaRes, protocmp.Transform()); diff != "" {
+			t.Fatalf("Per-RPC ORCA mismatch (-want +got):\n%s", diff)
 		}
 		return
 	}
@@ -323,10 +320,9 @@ func (s) TestMultipleEndpoints_OOBListeners(t *testing.T) {
 			time.Sleep(100 * time.Millisecond)
 			continue
 		}
-		switch {
-		case proto.Equal(orcaRes, wantA):
+		if diff := cmp.Diff(wantA, orcaRes, protocmp.Transform()); diff == "" {
 			seenA = true
-		case proto.Equal(orcaRes, wantB):
+		} else if diff := cmp.Diff(wantB, orcaRes, protocmp.Transform()); diff == "" {
 			seenB = true
 		}
 	}
@@ -335,9 +331,12 @@ func (s) TestMultipleEndpoints_OOBListeners(t *testing.T) {
 	}
 }
 
-// TestEndpointUpdate verifies that a resolver update reconnects via pick_first,
-// stops OOB listeners for old SubConns (original code never stored the stop
-// function), and registers new ones once READY.
+// TestEndpointUpdate verifies client behavior in response to a resolver update
+// that changes an endpoint's address. It ensures that the client disconnects
+// from the old address and connects to the new address via pick_first. It
+// also validates that the OOB listener for the old connection is stopped,
+// and a new OOB listener is registered for the new connection once it becomes
+// READY.
 func (s) TestEndpointUpdate(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -359,8 +358,8 @@ func (s) TestEndpointUpdate(t *testing.T) {
 		t.Fatalf("UnaryCall to srvA failed: %v", err)
 	}
 	wantA := &v3orcapb.OrcaLoadReport{CpuUtilization: 0.11, MemUtilization: 0.22}
-	if !proto.Equal(orcaRes, wantA) {
-		t.Fatalf("ORCA from srvA = %v; want %v", orcaRes, wantA)
+	if diff := cmp.Diff(wantA, orcaRes, protocmp.Transform()); diff != "" {
+		t.Fatalf("ORCA from srvA mismatch (-want +got):\n%s", diff)
 	}
 
 	// Distinctive OOB metric on srvB to confirm the switch via OOB fallback.
@@ -383,7 +382,7 @@ func (s) TestEndpointUpdate(t *testing.T) {
 			time.Sleep(100 * time.Millisecond)
 			continue
 		}
-		if proto.Equal(orcaRes, wantB) {
+		if diff := cmp.Diff(wantB, orcaRes, protocmp.Transform()); diff == "" {
 			return
 		}
 		t.Logf("ORCA after endpoint update = %v; want %v; retrying...", orcaRes, wantB)
@@ -399,7 +398,7 @@ func pollORCAResult(ctx context.Context, t *testing.T, tc testgrpc.TestServiceCl
 		if _, err := tc.UnaryCall(contextWithORCAResult(ctx, &orcaRes), &testpb.SimpleRequest{}); err != nil {
 			t.Fatalf("UnaryCall failed: %v", err)
 		}
-		if proto.Equal(orcaRes, want) {
+		if diff := cmp.Diff(want, orcaRes, protocmp.Transform()); diff == "" {
 			return
 		}
 		t.Logf("ORCA load report = %v; want %v; retrying...", orcaRes, want)
