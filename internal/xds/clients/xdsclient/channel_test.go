@@ -819,14 +819,14 @@ func (s) TestDecodeResponse_PanicRecovery(t *testing.T) {
 			if tt.wantPanic {
 				defer func() {
 					if r := recover(); r == nil || !strings.Contains(fmt.Sprint(r), tt.wantErr) {
-						t.Errorf("Expected panic want: %q, got: %q", tt.wantErr, r)
+						t.Errorf("Expected panic got: %q, want: %q", r, tt.wantErr)
 					}
 				}()
 				decodeResponse(opts, rType, resp)
-			} else {
-				if _, _, err := decodeResponse(opts, rType, resp); err == nil || !strings.Contains(err.Error(), tt.wantErr) {
-					t.Fatalf("decodeResponse() failed with err: %v, want %q", err, tt.wantErr)
-				}
+				return
+			}
+			if _, _, err := decodeResponse(opts, rType, resp); err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("decodeResponse() failed with err: %v, want %q", err, tt.wantErr)
 			}
 		})
 	}
