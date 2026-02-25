@@ -1482,7 +1482,6 @@ func (s) TestEndpointAmbientError(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-
 	resources := e2e.DefaultClientResources(e2e.ResourceParams{
 		NodeID:     nodeID,
 		DialTarget: defaultTestServiceName,
