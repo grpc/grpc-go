@@ -39,16 +39,15 @@ import (
 // any) bool', it will be called by (*Attributes).Equal to determine whether
 // two values with the same key should be considered equal.
 type Attributes struct {
-	root *node
+	parent     *Attributes
+	key, value any
 }
 
 // New returns a new Attributes containing the key/value pair.
 func New(key, value any) *Attributes {
 	return &Attributes{
-		root: &node{
-			key:   key,
-			value: value,
-		},
+		key:   key,
+		value: value,
 	}
 }
 
@@ -57,19 +56,22 @@ func New(key, value any) *Attributes {
 // last value overwrites all previous values for that key.  To remove an
 // existing key, use a nil value.  value should not be modified later.
 func (a *Attributes) WithValue(key, value any) *Attributes {
-	if a == nil {
-		return New(key, value)
+	return &Attributes{
+		parent: a,
+		key:    key,
+		value:  value,
 	}
-	return &Attributes{root: a.root.insert(key, value)}
 }
 
 // Value returns the value associated with these attributes for key, or nil if
 // no value is associated with key.  The returned value should not be modified.
 func (a *Attributes) Value(key any) any {
-	if a == nil {
-		return nil
+	for cur := a; cur != nil; cur = cur.parent {
+		if cur.key == key {
+			return cur.value
+		}
 	}
-	return a.root.get(key)
+	return nil
 }
 
 // Equal returns whether a and o are equivalent.  If 'Equal(o any) bool' is
@@ -85,13 +87,13 @@ func (a *Attributes) Equal(o *Attributes) bool {
 	if a == nil || o == nil {
 		return false
 	}
-	if a.root == o.root {
+	if a == o {
 		return true
 	}
-	m := maps.Collect(o.root.all())
+	m := maps.Collect(o.all())
 	lenA := 0
 
-	for k, v := range a.root.all() {
+	for k, v := range a.all() {
 		lenA++
 		ov, ok := m[k]
 		if !ok {
@@ -116,7 +118,7 @@ func (a *Attributes) String() string {
 	var sb strings.Builder
 	sb.WriteString("{")
 	first := true
-	for k, v := range a.root.all() {
+	for k, v := range a.all() {
 		if !first {
 			sb.WriteString(", ")
 		}
@@ -146,46 +148,13 @@ func (a *Attributes) MarshalJSON() ([]byte, error) {
 	return []byte(a.String()), nil
 }
 
-// node is a node in a linked list for storing key-value pairs. The list
-// functions as a persistent map where inserting a key-value pair shadows any
-// existing value with the same key.
-type node struct {
-	key   any
-	value any
-	next  *node
-}
-
-// insert returns a new node with the key/value pair added to the front
-// of the list.
-func (n *node) insert(key, value any) *node {
-	return &node{
-		key:   key,
-		value: value,
-		next:  n,
-	}
-}
-
-// get returns the value associated with the given key, or nil if the key
-// is not found in the linked list.
-func (n *node) get(key any) any {
-	for cur := n; cur != nil; cur = cur.next {
-		if cur.key == key {
-			return cur.value
-		}
-	}
-	return nil
-}
-
-// all returns an iterator that yields all key-value pairs in the linked list.
-// If a key appears multiple times, only the most recently added value is
-// yielded.
-func (n *node) all() iter.Seq2[any, any] {
+// all returns an iterator that yields all key-value pairs in the Attributes
+// chain. If a key appears multiple times, only the most recently added value
+// is yielded.
+func (a *Attributes) all() iter.Seq2[any, any] {
 	return func(yield func(any, any) bool) {
-		if n == nil {
-			return
-		}
 		seen := map[any]bool{}
-		for cur := n; cur != nil; cur = cur.next {
+		for cur := a; cur != nil; cur = cur.parent {
 			if seen[cur.key] {
 				continue
 			}

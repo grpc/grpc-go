@@ -112,12 +112,6 @@ func TestEqual(t *testing.T) {
 			want: false,
 		},
 		{
-			name: "different_first_value_symmetric",
-			a:    attributes.New(keyOne{}, 2).WithValue(keyTwo{}, stringVal{s: "two"}),
-			b:    attributes.New(keyOne{}, 1).WithValue(keyTwo{}, stringVal{s: "two"}),
-			want: false,
-		},
-		{
 			name: "different_second_value",
 			a:    attributes.New(keyOne{}, 1).WithValue(keyTwo{}, stringVal{s: "one"}),
 			b:    attributes.New(keyOne{}, 1).WithValue(keyTwo{}, stringVal{s: "two"}),
@@ -147,6 +141,11 @@ func TestEqual(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := tt.a.Equal(tt.b); got != tt.want {
 				t.Errorf("%+v.Equal(%+v) = %v; want %v", tt.a, tt.b, got, tt.want)
+			}
+			// The Equal function should be symmetric, i.e. a.Equals(b) ==
+			// b.Equals(a).
+			if got := tt.b.Equal(tt.a); got != tt.want {
+				t.Errorf("%+v.Equal(%+v) = %v; want %v", tt.b, tt.a, got, tt.want)
 			}
 		})
 	}
