@@ -22,7 +22,7 @@ import (
 	"io"
 	"slices"
 	"strconv"
-	"sync/atomic"
+	"sync"
 	"testing"
 	"time"
 
@@ -1404,40 +1404,45 @@ func (s) TestRPCSpanErrorStatus(t *testing.T) {
 
 const delayedResolutionEventName = "Delayed name resolution complete"
 
-// blockingPicker is a picker that returns ErrNoSubConnAvailable until a
-// SubConn is provided. Uses atomic operations to avoid data races.
+// blockingPicker always returns ErrNoSubConnAvailable and signals when Pick
+// has been called. This ensures the pick method in picker_wrapper.go blocks
+// and sets pickBlocked=true before the ready picker is produced.
 type blockingPicker struct {
-	sc atomic.Pointer[subConnWrapper]
-}
-
-// subConnWrapper wraps a SubConn so it can be stored in atomic.Pointer.
-type subConnWrapper struct {
-	balancer.SubConn
+	pickCalled chan struct{}
+	once       sync.Once
 }
 
 func (p *blockingPicker) Pick(balancer.PickInfo) (balancer.PickResult, error) {
-	sc := p.sc.Load()
-	if sc == nil {
-		return balancer.PickResult{}, balancer.ErrNoSubConnAvailable
-	}
-	return balancer.PickResult{SubConn: sc.SubConn}, nil
+	p.once.Do(func() { close(p.pickCalled) })
+	return balancer.PickResult{}, balancer.ErrNoSubConnAvailable
+}
+
+// readyPicker returns the provided SubConn on every Pick call.
+type readyPicker struct {
+	sc balancer.SubConn
+}
+
+func (p *readyPicker) Pick(balancer.PickInfo) (balancer.PickResult, error) {
+	return balancer.PickResult{SubConn: p.sc}, nil
 }
 
 // registerBlockingBalancer registers a stub balancer that initially returns a
 // blocking picker (ErrNoSubConnAvailable) to ensure the pick method blocks and
-// waits for the picker. This guarantees the "Delayed LB pick complete" event
-// is emitted reliably.
+// waits for the picker. Only after pick() has called Pick() on the blocking
+// picker does the balancer produce a ready picker. This guarantees the
+// "Delayed LB pick complete" event is emitted reliably regardless of timing.
 func registerBlockingBalancer(t *testing.T, balancerName string) {
 	t.Helper()
-	var picker *blockingPicker
+	bp := &blockingPicker{pickCalled: make(chan struct{})}
+	var pickerPushed bool
 	stub.Register(balancerName, stub.BalancerFuncs{
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
-			// Create a blocking picker on the first call.
-			if picker == nil {
-				picker = &blockingPicker{}
+			// Push the blocking picker on the first call.
+			if !pickerPushed {
+				pickerPushed = true
 				bd.ClientConn.UpdateState(balancer.State{
 					ConnectivityState: connectivity.Connecting,
-					Picker:            picker,
+					Picker:            bp,
 				})
 			}
 
@@ -1447,12 +1452,16 @@ func registerBlockingBalancer(t *testing.T, balancerName string) {
 				subConn, err := bd.ClientConn.NewSubConn(ccs.ResolverState.Addresses, balancer.NewSubConnOptions{
 					StateListener: func(state balancer.SubConnState) {
 						if state.ConnectivityState == connectivity.Ready {
-							// Update the picker with the ready SubConn using atomic store.
-							picker.sc.Store(&subConnWrapper{SubConn: subConn})
-							bd.ClientConn.UpdateState(balancer.State{
-								ConnectivityState: connectivity.Ready,
-								Picker:            picker,
-							})
+							// Wait for pick() to call Pick() on the blocking
+							// picker before producing the ready picker. This
+							// ensures pickBlocked is set in picker_wrapper.go.
+							go func() {
+								<-bp.pickCalled
+								bd.ClientConn.UpdateState(balancer.State{
+									ConnectivityState: connectivity.Ready,
+									Picker:            &readyPicker{sc: subConn},
+								})
+							}()
 						}
 					},
 				})
