@@ -1466,6 +1466,75 @@ func (s) TestAggregateClusterMaxDepth(t *testing.T) {
 	}
 }
 
+// Tests the case where the dependency manager receives a endpoint resource
+// ambient error. A valid endpoint resource is sent first, then an invalid
+// one and then the valid resource again. The valid resource is sent again
+// to make sure that the ambient error reaches the dependency manager since
+// there is no other way to wait for it.
+func (s) TestEndpointAmbientError(t *testing.T) {
+	// Expect a warning log for the ambient error.
+	grpctest.ExpectWarning("Endpoint resource ambient error")
+
+	nodeID, mgmtServer, xdsClient := setupManagementServerAndClient(t, false)
+
+	watcher := newTestWatcher()
+	defer watcher.close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		NodeID:     nodeID,
+		DialTarget: defaultTestServiceName,
+		Host:       "localhost",
+		Port:       8080,
+		SecLevel:   e2e.SecurityLevelNone,
+	})
+
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	dm := xdsdepmgr.New(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
+	defer dm.Close()
+
+	wantXdsConfig := makeXDSConfig(resources.Routes[0].Name, resources.Clusters[0].Name, resources.Clusters[0].EdsClusterConfig.ServiceName, "localhost:8080")
+	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
+		t.Fatal(err)
+	}
+
+	// Configure a endpoint resource that is expected to be NACKed because it
+	// does not contain the `Locality` field. Since a valid one is already
+	// cached, this should result in an ambient error.
+	resources.Endpoints[0].Endpoints[0].Locality = nil
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	select {
+	case <-time.After(defaultTestShortTimeout):
+	case update := <-watcher.updateCh:
+		t.Fatalf("received unexpected update from dependency manager: %v", update)
+	}
+
+	// Send valid resources again to guarantee we get the cluster ambient error
+	// before the test ends.
+	resources = e2e.DefaultClientResources(e2e.ResourceParams{
+		NodeID:     nodeID,
+		DialTarget: defaultTestServiceName,
+		Host:       "localhost",
+		Port:       8080,
+		SecLevel:   e2e.SecurityLevelNone,
+	})
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // Tests the scenario where a cluster is removed from route config but still has
 // subscriptions. Verifies that it is present in the XDSConfig update. Also
 // verifies that it is removed from the XDSConfig update after all the

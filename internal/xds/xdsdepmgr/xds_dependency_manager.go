@@ -752,6 +752,9 @@ func (m *DependencyManager) onEndpointResourceError(resourceName string, err err
 		return
 	}
 	m.logger.Warningf("Received resource error for Endpoint resource %q: %v", resourceName, m.annotateErrorWithNodeID(err))
+	// Send an empty EndpointsUpdate instead of nil to avoid nil-check handling
+	// in the CDS balancer. The priority balancer will handle the case of having
+	// no endpoints and transition the channel to Transient Failure if needed.
 	m.endpointWatchers[resourceName].lastUpdate = &xdsresource.EndpointsUpdate{}
 	m.endpointWatchers[resourceName].lastErr = err
 	m.endpointWatchers[resourceName].updateReceived = true
@@ -810,6 +813,9 @@ func (m *DependencyManager) onDNSError(resourceName string, err error) {
 		return
 	}
 
+	// Send an empty DNSUpdate instead of nil to avoid nil-check handling in the
+	// CDS balancer. The priority balancer will handle the case of having no
+	// endpoints and transition the channel to Transient Failure if needed.
 	state.lastUpdate = &xdsresource.DNSUpdate{}
 	state.lastErr = err
 	state.updateReceived = true

@@ -448,10 +448,7 @@ func (r *xdsResolver) newConfigSelector() (*configSelector, error) {
 func (r *xdsResolver) pruneActiveClustersAndPlugins() {
 	for cluster, ci := range r.activeClusters {
 		if atomic.LoadInt32(&ci.refCount) == 0 {
-			if ci.unsubscribe != nil {
-				// This should never happen, defensive programming.
-				ci.unsubscribe()
-			}
+			ci.unsubscribe()
 			delete(r.activeClusters, cluster)
 		}
 	}
