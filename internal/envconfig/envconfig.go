@@ -54,17 +54,16 @@ var (
 
 	// XDSEndpointHashKeyBackwardCompat controls the parsing of the endpoint hash
 	// key from EDS LbEndpoint metadata. Endpoint hash keys can be disabled by
-	// setting "GRPC_XDS_ENDPOINT_HASH_KEY_BACKWARD_COMPAT" to "true". When the
-	// implementation of A76 is stable, we will flip the default value to false
-	// in a subsequent release. A final release will remove this environment
-	// variable, enabling the new behavior unconditionally.
-	XDSEndpointHashKeyBackwardCompat = boolFromEnv("GRPC_XDS_ENDPOINT_HASH_KEY_BACKWARD_COMPAT", true)
+	// setting "GRPC_XDS_ENDPOINT_HASH_KEY_BACKWARD_COMPAT" to "true". A future
+	// release will remove this environment variable, enabling the new behavior
+	// unconditionally.
+	XDSEndpointHashKeyBackwardCompat = boolFromEnv("GRPC_XDS_ENDPOINT_HASH_KEY_BACKWARD_COMPAT", false)
 
 	// RingHashSetRequestHashKey is set if the ring hash balancer can get the
 	// request hash header by setting the "requestHashHeader" field, according
-	// to gRFC A76. It can be enabled by setting the environment variable
-	// "GRPC_EXPERIMENTAL_RING_HASH_SET_REQUEST_HASH_KEY" to "true".
-	RingHashSetRequestHashKey = boolFromEnv("GRPC_EXPERIMENTAL_RING_HASH_SET_REQUEST_HASH_KEY", false)
+	// to gRFC A76. It can be disabled by setting the environment variable
+	// "GRPC_EXPERIMENTAL_RING_HASH_SET_REQUEST_HASH_KEY" to "false".
+	RingHashSetRequestHashKey = boolFromEnv("GRPC_EXPERIMENTAL_RING_HASH_SET_REQUEST_HASH_KEY", true)
 
 	// ALTSHandshakerKeepaliveParams is set if we should add the
 	// KeepaliveParams when dial the ALTS handshaker service.
@@ -78,10 +77,24 @@ var (
 	//   - The DNS resolver is being used.
 	EnableDefaultPortForProxyTarget = boolFromEnv("GRPC_EXPERIMENTAL_ENABLE_DEFAULT_PORT_FOR_PROXY_TARGET", true)
 
+	// CaseSensitiveBalancerRegistries is set if the balancer registry should be
+	// case-sensitive. This is disabled by default, but can be enabled by setting
+	// the env variable "GRPC_GO_EXPERIMENTAL_CASE_SENSITIVE_BALANCER_REGISTRIES"
+	// to "true".
+	//
+	// TODO: After 2 releases, we will enable the env var by default.
+	CaseSensitiveBalancerRegistries = boolFromEnv("GRPC_GO_EXPERIMENTAL_CASE_SENSITIVE_BALANCER_REGISTRIES", false)
+
 	// XDSAuthorityRewrite indicates whether xDS authority rewriting is enabled.
 	// This feature is defined in gRFC A81 and is enabled by setting the
 	// environment variable GRPC_EXPERIMENTAL_XDS_AUTHORITY_REWRITE to "true".
 	XDSAuthorityRewrite = boolFromEnv("GRPC_EXPERIMENTAL_XDS_AUTHORITY_REWRITE", false)
+
+	// PickFirstWeightedShuffling indicates whether weighted endpoint shuffling
+	// is enabled in the pick_first LB policy, as defined in gRFC A113. This
+	// feature can be disabled by setting the environment variable
+	// GRPC_EXPERIMENTAL_PF_WEIGHTED_SHUFFLING to "false".
+	PickFirstWeightedShuffling = boolFromEnv("GRPC_EXPERIMENTAL_PF_WEIGHTED_SHUFFLING", true)
 )
 
 func boolFromEnv(envVar string, def bool) bool {

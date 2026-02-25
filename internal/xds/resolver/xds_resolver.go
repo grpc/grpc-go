@@ -150,7 +150,21 @@ func (b *xdsResolverBuilder) Build(target resolver.Target, cc resolver.ClientCon
 	}
 	r.logger = prefixLogger(r)
 	r.logger.Infof("Creating resolver for target: %+v", target)
+
+	dmSet := make(chan struct{})
+	// Schedule a callback that blocks until r.dm is set i.e xdsdepmgr.New()
+	// returns. This acts as a gatekeeper: even if dependency manager sends the
+	// updates before the xdsdepmgr.New() has a chance to return, they will be
+	// queued behind this blocker and processed only after initialization is
+	// complete.
+	r.serializer.TrySchedule(func(ctx context.Context) {
+		select {
+		case <-dmSet:
+		case <-ctx.Done():
+		}
+	})
 	r.dm = xdsdepmgr.New(r.ldsResourceName, opts.Authority, r.xdsClient, r)
+	close(dmSet)
 	return r, nil
 }
 
@@ -322,13 +336,15 @@ func (r *xdsResolver) sendNewServiceConfig(cs stoppableConfigSelector) bool {
 
 	sc := serviceConfigJSON(r.activeClusters)
 	if r.logger.V(2) {
-		r.logger.Infof("For Listener resource %q and RouteConfiguration resource %q, generated service config: %+v", r.ldsResourceName, r.xdsConfig.Listener.RouteConfigName, sc)
+		r.logger.Infof("For Listener resource %q and RouteConfiguration resource %q, generated service config: %+v", r.ldsResourceName, r.xdsConfig.Listener.APIListener.RouteConfigName, sc)
 	}
 
 	// Send the update to the ClientConn.
 	state := iresolver.SetConfigSelector(resolver.State{
 		ServiceConfig: r.cc.ParseServiceConfig(string(sc)),
 	}, cs)
+	state = xdsresource.SetXDSConfig(state, r.xdsConfig)
+	state = xdsdepmgr.SetXDSClusterSubscriber(state, r.dm)
 	if err := r.cc.UpdateState(xdsclient.SetClient(state, r.xdsClient)); err != nil {
 		if r.logger.V(2) {
 			r.logger.Infof("Channel rejected new state: %+v with error: %v", state, err)
@@ -357,7 +373,7 @@ func (r *xdsResolver) newConfigSelector() (*configSelector, error) {
 		},
 		routes:           make([]route, len(r.xdsConfig.VirtualHost.Routes)),
 		clusters:         make(map[string]*clusterInfo),
-		httpFilterConfig: r.xdsConfig.Listener.HTTPFilters,
+		httpFilterConfig: r.xdsConfig.Listener.APIListener.HTTPFilters,
 	}
 
 	for i, rt := range r.xdsConfig.VirtualHost.Routes {
@@ -371,7 +387,7 @@ func (r *xdsResolver) newConfigSelector() (*configSelector, error) {
 		} else {
 			for _, wc := range rt.WeightedClusters {
 				clusterName := clusterPrefix + wc.Name
-				interceptor, err := newInterceptor(r.xdsConfig.Listener.HTTPFilters, wc.HTTPFilterConfigOverride, rt.HTTPFilterConfigOverride, r.xdsConfig.VirtualHost.HTTPFilterConfigOverride)
+				interceptor, err := newInterceptor(r.xdsConfig.Listener.APIListener.HTTPFilters, wc.HTTPFilterConfigOverride, rt.HTTPFilterConfigOverride, r.xdsConfig.VirtualHost.HTTPFilterConfigOverride)
 				if err != nil {
 					return nil, err
 				}
@@ -389,7 +405,7 @@ func (r *xdsResolver) newConfigSelector() (*configSelector, error) {
 		cs.routes[i].m = xdsresource.RouteToMatcher(rt)
 		cs.routes[i].actionType = rt.ActionType
 		if rt.MaxStreamDuration == nil {
-			cs.routes[i].maxStreamDuration = r.xdsConfig.Listener.MaxStreamDuration
+			cs.routes[i].maxStreamDuration = r.xdsConfig.Listener.APIListener.MaxStreamDuration
 		} else {
 			cs.routes[i].maxStreamDuration = *rt.MaxStreamDuration
 		}

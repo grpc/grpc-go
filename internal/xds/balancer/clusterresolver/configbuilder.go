@@ -21,10 +21,11 @@ package clusterresolver
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"slices"
-	"sort"
 
 	"google.golang.org/grpc/internal/balancer/weight"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/hierarchy"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	xdsinternal "google.golang.org/grpc/internal/xds"
@@ -32,9 +33,9 @@ import (
 	"google.golang.org/grpc/internal/xds/balancer/outlierdetection"
 	"google.golang.org/grpc/internal/xds/balancer/priority"
 	"google.golang.org/grpc/internal/xds/balancer/wrrlocality"
+	"google.golang.org/grpc/internal/xds/clients"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 	"google.golang.org/grpc/resolver"
-	"google.golang.org/grpc/resolver/ringhash"
 )
 
 const million = 1000000
@@ -109,7 +110,7 @@ func buildPriorityConfig(priorities []priorityConfig, xdsLBPolicy *internalservi
 			}
 			continue
 		case DiscoveryMechanismTypeLogicalDNS:
-			name, config, endpoints := buildClusterImplConfigForDNS(p.childNameGen, p.endpoints, p.mechanism)
+			name, config, endpoints := buildClusterImplConfigForDNS(p.childNameGen, p.endpoints, p.mechanism, xdsLBPolicy)
 			retConfig.Priorities = append(retConfig.Priorities, name)
 			retEndpoints = append(retEndpoints, endpoints...)
 			odCfg := makeClusterImplOutlierDetectionChild(config, p.mechanism.outlierDetection)
@@ -139,24 +140,36 @@ func makeClusterImplOutlierDetectionChild(ciCfg *clusterimpl.LBConfig, odCfg out
 	return &odCfgRet
 }
 
-func buildClusterImplConfigForDNS(g *nameGenerator, endpoints []resolver.Endpoint, mechanism DiscoveryMechanism) (string, *clusterimpl.LBConfig, []resolver.Endpoint) {
-	// Endpoint picking policy for DNS is hardcoded to pick_first.
-	const childPolicy = "pick_first"
-	retEndpoints := make([]resolver.Endpoint, len(endpoints))
+func buildClusterImplConfigForDNS(g *nameGenerator, endpoints []resolver.Endpoint, mechanism DiscoveryMechanism, xdsLBPolicy *internalserviceconfig.BalancerConfig) (string, *clusterimpl.LBConfig, []resolver.Endpoint) {
 	pName := fmt.Sprintf("priority-%v", g.prefix)
-	for i, e := range endpoints {
-		retEndpoints[i] = hierarchy.SetInEndpoint(e, []string{pName})
-		// Copy the nested address field as slice fields are shared by the
-		// iteration variable and the original slice.
-		retEndpoints[i].Addresses = append([]resolver.Address{}, e.Addresses...)
-	}
-	return pName, &clusterimpl.LBConfig{
+	lbconfig := &clusterimpl.LBConfig{
 		Cluster:               mechanism.Cluster,
 		TelemetryLabels:       mechanism.TelemetryLabels,
-		ChildPolicy:           &internalserviceconfig.BalancerConfig{Name: childPolicy},
+		ChildPolicy:           xdsLBPolicy,
 		MaxConcurrentRequests: mechanism.MaxConcurrentRequests,
 		LoadReportingServer:   mechanism.LoadReportingServer,
-	}, retEndpoints
+	}
+	if len(endpoints) == 0 {
+		return pName, lbconfig, nil
+	}
+	var retEndpoint resolver.Endpoint
+	for _, e := range endpoints {
+		// LOGICAL_DNS requires all resolved addresses to be grouped into a
+		// single logical endpoint. We iterate over the input endpoints and
+		// aggregate their addresses into a new endpoint variable.
+		retEndpoint.Addresses = append(retEndpoint.Addresses, e.Addresses...)
+	}
+	// Even though localities are not a thing for the LOGICAL_DNS cluster and
+	// its endpoint(s), we add an empty locality attribute here to ensure that
+	// LB policies that rely on locality information (like weighted_target)
+	// continue to work.
+	localityStr := xdsinternal.LocalityString(clients.Locality{})
+	retEndpoint = xdsresource.SetHostname(hierarchy.SetInEndpoint(retEndpoint, []string{pName, localityStr}), mechanism.DNSHostname)
+	// Set the locality weight to 1. This is required because the child policy
+	// like weighted_target which relies on locality weights to distribute
+	// traffic. These policies may drop traffic if the weight is 0.
+	retEndpoint = wrrlocality.SetAddrInfo(retEndpoint, wrrlocality.AddrInfo{LocalityWeight: 1})
+	return pName, lbconfig, []resolver.Endpoint{retEndpoint}
 }
 
 // buildClusterImplConfigForEDS returns a list of cluster_impl configs, one for
@@ -211,40 +224,20 @@ func buildClusterImplConfigForEDS(g *nameGenerator, edsResp xdsresource.Endpoint
 // For example, for L0-p0, L1-p0, L2-p1, results will be
 // - [[L0, L1], [L2]]
 func groupLocalitiesByPriority(localities []xdsresource.Locality) [][]xdsresource.Locality {
-	var priorityIntSlice []int
 	priorities := make(map[int][]xdsresource.Locality)
 	for _, locality := range localities {
 		priority := int(locality.Priority)
 		priorities[priority] = append(priorities[priority], locality)
-		priorityIntSlice = append(priorityIntSlice, priority)
 	}
 	// Sort the priorities based on the int value, deduplicate, and then turn
 	// the sorted list into a string list. This will be child names, in priority
 	// order.
-	sort.Ints(priorityIntSlice)
-	priorityIntSliceDeduped := dedupSortedIntSlice(priorityIntSlice)
-	ret := make([][]xdsresource.Locality, 0, len(priorityIntSliceDeduped))
-	for _, p := range priorityIntSliceDeduped {
+	priorityIntSlice := slices.Sorted(maps.Keys(priorities))
+	ret := make([][]xdsresource.Locality, 0, len(priorityIntSlice))
+	for _, p := range priorityIntSlice {
 		ret = append(ret, priorities[p])
 	}
 	return ret
-}
-
-func dedupSortedIntSlice(a []int) []int {
-	if len(a) == 0 {
-		return a
-	}
-	i, j := 0, 1
-	for ; j < len(a); j++ {
-		if a[i] == a[j] {
-			continue
-		}
-		i++
-		if i != j {
-			a[i] = a[j]
-		}
-	}
-	return a[:i+1]
 }
 
 // priorityLocalitiesToClusterImpl takes a list of localities (with the same
@@ -253,11 +246,27 @@ func dedupSortedIntSlice(a []int) []int {
 // priority and the xDS LB Policy know which child policy each address is for.
 func priorityLocalitiesToClusterImpl(localities []xdsresource.Locality, priorityName string, mechanism DiscoveryMechanism, drops []clusterimpl.DropConfig, xdsLBPolicy *internalserviceconfig.BalancerConfig) (*clusterimpl.LBConfig, []resolver.Endpoint, error) {
 	var retEndpoints []resolver.Endpoint
+
+	// Compute the sum of locality weights to normalize locality weights. The
+	// xDS client guarantees that the sum of locality weights (within a
+	// priority) will not exceed MaxUint32.
+	var localityWeightSum uint32
 	for _, locality := range localities {
-		var lw uint32 = 1
-		if locality.Weight != 0 {
-			lw = locality.Weight
+		localityWeightSum += locality.Weight
+	}
+
+	for _, locality := range localities {
+		// Compute the sum of endpoint weights to normalize endpoint weights.
+		// The xDS client does not currently guarantee that the sum of endpoint
+		// weights (within a locality) will not exceed MaxUint32. TODO(i/8862):
+		// Once the xDS client guarantees that the sum of endpoint weights does
+		// not exceed MaxUint32, we can change the type of this variable from
+		// uint64 to uint32.
+		var endpointWeightSum uint64
+		for _, endpoint := range locality.Endpoints {
+			endpointWeightSum += uint64(endpoint.Weight)
 		}
+
 		localityStr := xdsinternal.LocalityString(locality.ID)
 		for _, endpoint := range locality.Endpoints {
 			// Filter out all "unhealthy" endpoints (unknown and healthy are
@@ -280,13 +289,19 @@ func priorityLocalitiesToClusterImpl(localities []xdsresource.Locality, priority
 			// populate a new locality weight attribute for each address The
 			// attribute will have the weight (as an integer) of the locality
 			// the address is part of." - A52
-			resolverEndpoint = wrrlocality.SetAddrInfo(resolverEndpoint, wrrlocality.AddrInfo{LocalityWeight: lw})
-			var ew uint32 = 1
-			if endpoint.Weight != 0 {
-				ew = endpoint.Weight
+			resolverEndpoint = wrrlocality.SetAddrInfo(resolverEndpoint, wrrlocality.AddrInfo{LocalityWeight: locality.Weight})
+
+			if envconfig.PickFirstWeightedShuffling {
+				normalizedLocalityWeight := fractionToFixedPoint(uint64(locality.Weight), uint64(localityWeightSum))
+				normalizedEndpointWeight := fractionToFixedPoint(uint64(endpoint.Weight), endpointWeightSum)
+				endpointWeight := fixedPointMultiply(normalizedEndpointWeight, normalizedLocalityWeight)
+				if endpointWeight == 0 {
+					endpointWeight = 1
+				}
+				resolverEndpoint = weight.Set(resolverEndpoint, weight.EndpointInfo{Weight: endpointWeight})
+			} else {
+				resolverEndpoint = weight.Set(resolverEndpoint, weight.EndpointInfo{Weight: locality.Weight * endpoint.Weight})
 			}
-			resolverEndpoint = weight.Set(resolverEndpoint, weight.EndpointInfo{Weight: lw * ew})
-			resolverEndpoint = ringhash.SetHashKey(resolverEndpoint, endpoint.HashKey)
 			retEndpoints = append(retEndpoints, resolverEndpoint)
 		}
 	}
@@ -299,4 +314,36 @@ func priorityLocalitiesToClusterImpl(localities []xdsresource.Locality, priority
 		DropCategories:        drops,
 		ChildPolicy:           xdsLBPolicy,
 	}, retEndpoints, nil
+}
+
+// fixedPointFractionalBits is the number of bits used for the fractional part
+// of normalized endpoint and locality weights.
+//
+// We use the UQ1.31 fixed-point format (Unsigned, 1 integer bit, 31 fractional bits).
+// This allows representing values in the range [0.0, 2.0) with a precision
+// of 2^-31.
+//
+// Bit Layout:
+// [ 31 ] [ 30 ................. 0 ]
+//
+//	|              |
+//	|              +--- Fractional Part (31 bits)
+//	+------------------ Integer Part (1 bit)
+//
+// See gRFC A113 for more details.
+const fixedPointFractionalBits = 31
+
+// fractionToFixedPoint converts a fraction represented by numerator and
+// denominator to a fixed-point number between 0 and 1 represented as a uint32.
+//
+// The xDS client guarantees that the sum of locality weights (within a
+// priority) will not exceed MaxUint32. TODO(i/8862): Once the xDS client
+// guarantees that the sum of endpoint weights does not exceed MaxUint32, we can
+// change the types of this function's arguments from uint64 to uint32.
+func fractionToFixedPoint(numerator, denominator uint64) uint32 {
+	return uint32(uint64(numerator) << fixedPointFractionalBits / uint64(denominator))
+}
+
+func fixedPointMultiply(a, b uint32) uint32 {
+	return uint32((uint64(a) * uint64(b)) >> fixedPointFractionalBits)
 }

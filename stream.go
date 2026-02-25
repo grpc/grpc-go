@@ -52,7 +52,8 @@ import (
 var metadataFromOutgoingContextRaw = internal.FromOutgoingContextRaw.(func(context.Context) (metadata.MD, [][]string, bool))
 
 // StreamHandler defines the handler called by gRPC server to complete the
-// execution of a streaming RPC.
+// execution of a streaming RPC. srv is the service implementation on which the
+// RPC was invoked.
 //
 // If a StreamHandler returns an error, it should either be produced by the
 // status package, or be one of the context errors. Otherwise, gRPC will use
@@ -547,7 +548,7 @@ func (a *csAttempt) newStream() error {
 			}
 		}
 	}
-	s, err := a.transport.NewStream(a.ctx, cs.callHdr)
+	s, err := a.transport.NewStream(a.ctx, cs.callHdr, a.statsHandler)
 	if err != nil {
 		nse, ok := err.(*transport.NewStreamError)
 		if !ok {
@@ -1353,7 +1354,8 @@ func newNonRetryClientStream(ctx context.Context, desc *StreamDesc, method strin
 		transport:        t,
 	}
 
-	s, err := as.transport.NewStream(as.ctx, as.callHdr)
+	// nil stats handler: internal streams like health and ORCA do not support telemetry.
+	s, err := as.transport.NewStream(as.ctx, as.callHdr, nil)
 	if err != nil {
 		err = toRPCErr(err)
 		return nil, err

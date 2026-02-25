@@ -254,9 +254,9 @@ func (s) TestEDS_MultipleLocalities(t *testing.T) {
 			Backends: []e2e.BackendOptions{{Ports: []uint32{ports[1]}}},
 		},
 	})
-	// Use a 10 second timeout since validating WRR requires sending 500+ unary
+	// Use a 20 second timeout since validating WRR requires sending 500+ unary
 	// RPCs.
-	ctx, cancel := context.WithTimeout(context.Background(), 2*defaultTestTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	if err := managementServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
@@ -1004,18 +1004,15 @@ func (s) TestEDS_EndpointWithMultipleAddresses(t *testing.T) {
 		name                      string
 		dualstackEndpointsEnabled bool
 		wantEndpointPorts         []uint32
-		wantAddrPorts             []uint32
 	}{
 		{
 			name:                      "flag_enabled",
 			dualstackEndpointsEnabled: true,
 			wantEndpointPorts:         ports,
-			wantAddrPorts:             ports[:1],
 		},
 		{
 			name:              "flag_disabled",
 			wantEndpointPorts: ports[:1],
-			wantAddrPorts:     ports[:1],
 		},
 	}
 
@@ -1108,14 +1105,6 @@ func (s) TestEDS_EndpointWithMultipleAddresses(t *testing.T) {
 			}
 			if diff := cmp.Diff(gotEndpointPorts, tc.wantEndpointPorts); diff != "" {
 				t.Errorf("Unexpected endpoint address ports in resolver update, diff (-got +want): %v", diff)
-			}
-
-			gotAddrPorts := []uint32{}
-			for _, a := range gotState.Addresses {
-				gotAddrPorts = append(gotAddrPorts, testutils.ParsePort(t, a.Addr))
-			}
-			if diff := cmp.Diff(gotAddrPorts, tc.wantAddrPorts); diff != "" {
-				t.Errorf("Unexpected address ports in resolver update, diff (-got +want): %v", diff)
 			}
 		})
 	}

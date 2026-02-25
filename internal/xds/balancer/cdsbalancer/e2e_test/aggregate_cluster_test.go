@@ -589,7 +589,7 @@ func (s) TestAggregateCluster_WithEDSAndDNS(t *testing.T) {
 	}
 
 	// Update DNS resolver with test backend addresses.
-	dnsR.UpdateState(resolver.State{Addresses: addrs[1:]})
+	dnsR.UpdateState(resolver.State{Endpoints: addrsToEndpoints(addrs[1:])})
 
 	// Make an RPC and ensure that it gets routed to the first backend since the
 	// EDS cluster is of higher priority than the LOGICAL_DNS cluster.
@@ -761,7 +761,7 @@ func (s) TestAggregateCluster_BadEDS_GoodToBadDNS(t *testing.T) {
 	}
 
 	// Update DNS resolver with test backend addresses.
-	dnsR.UpdateState(resolver.State{Addresses: addrs})
+	dnsR.UpdateState(resolver.State{Endpoints: addrsToEndpoints(addrs)})
 
 	// Ensure that RPCs start getting routed to the first backend since the
 	// child policy for a LOGICAL_DNS cluster is pick_first by default.
@@ -1000,7 +1000,7 @@ func (s) TestAggregateCluster_BadEDS_BadDNS(t *testing.T) {
 		if err == nil {
 			t.Fatal("EmptyCall() succeeded when expected to fail")
 		}
-		if status.Code(err) == codes.Unavailable && strings.Contains(err.Error(), "produced zero addresses") {
+		if status.Code(err) == codes.Unavailable && strings.Contains(err.Error(), "no targets to pick from") {
 			break
 		}
 	}
@@ -1243,4 +1243,12 @@ func (s) TestAggregateCluster_Fallback_EDS_ResourceNotFound(t *testing.T) {
 	if peer.Addr.String() != server.Address {
 		t.Fatalf("EmptyCall() routed to backend %q, want %q", peer.Addr, server.Address)
 	}
+}
+
+func addrsToEndpoints(addrs []resolver.Address) []resolver.Endpoint {
+	endpoints := make([]resolver.Endpoint, len(addrs))
+	for i, addr := range addrs {
+		endpoints[i] = resolver.Endpoint{Addresses: []resolver.Address{addr}}
+	}
+	return endpoints
 }
