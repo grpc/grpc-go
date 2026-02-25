@@ -85,7 +85,7 @@ func NewDirtyBinaryTieredBufferPool(powerOfTwoExponents ...uint8) (*BinaryTiered
 	}, &simpleBufferPool{shouldZero: false}, powerOfTwoExponents...)
 }
 
-func newBinaryTiered(newSizedBufferPool func(int) bufferPool, fallbackPool bufferPool, powerOfTwoExponents ...uint8) (*BinaryTieredBufferPool, error) {
+func newBinaryTiered(sizedPoolFactory func(int) bufferPool, fallbackPool bufferPool, powerOfTwoExponents ...uint8) (*BinaryTieredBufferPool, error) {
 	slices.Sort(powerOfTwoExponents)
 	powerOfTwoExponents = slices.Compact(powerOfTwoExponents)
 
@@ -105,7 +105,7 @@ func newBinaryTiered(newSizedBufferPool func(int) bufferPool, fallbackPool buffe
 			return nil, fmt.Errorf("mem: allocating slice of size 2^%d is not possible", exp)
 		}
 		tierSize := 1 << exp
-		pools = append(pools, newSizedBufferPool(tierSize))
+		pools = append(pools, sizedPoolFactory(tierSize))
 		maxTier = max(maxTier, tierSize)
 
 		// Map the exact power of 2 to this pool index.
