@@ -135,6 +135,24 @@ func TestEqual(t *testing.T) {
 			b:    attributes.New(keyTwo{}, stringVal{s: "two"}),
 			want: false,
 		},
+		{
+			name: "a_nil",
+			a:    nil,
+			b:    attributes.New(keyOne{}, 1),
+			want: false,
+		},
+		{
+			name: "b_nil",
+			a:    attributes.New(keyOne{}, 1),
+			b:    nil,
+			want: false,
+		},
+		{
+			name: "both_nil",
+			a:    nil,
+			b:    nil,
+			want: true,
+		},
 	}
 
 	for _, tt := range tests {
