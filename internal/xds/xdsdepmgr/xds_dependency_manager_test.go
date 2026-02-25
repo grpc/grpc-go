@@ -64,7 +64,7 @@ func Test(t *testing.T) {
 
 const (
 	defaultTestTimeout      = 10 * time.Second
-	defaultTestShortTimeout = 100 * time.Microsecond
+	defaultTestShortTimeout = 100 * time.Millisecond
 
 	defaultTestServiceName     = "service-name"
 	defaultTestRouteConfigName = "route-config-name"
