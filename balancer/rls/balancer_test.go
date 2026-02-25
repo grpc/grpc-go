@@ -1169,23 +1169,23 @@ func (s) TestControlChannelIdleTransitionNoBackoffReset(t *testing.T) {
 	verifyRLSRequest(t, rlsReqCh, true)
 
 	// Wait for the control channel to move to READY.
+initialReadyLoop:
 	for {
 		select {
 		case gotState := <-wrappedSubscriber.connStateCh:
 			if gotState == connectivity.Ready {
-				goto initialReadyReached
+				break initialReadyLoop
 			}
 		case <-ctx.Done():
 			t.Fatal("Timeout waiting for RLS control channel to become READY")
 		}
 	}
-initialReadyReached:
 
 	// Verify that the initial READY state did NOT trigger a backoff reset.
 	select {
 	case <-resetBackoffCalled:
 		t.Fatal("Backoff reset was triggered for initial READY state, want no reset")
-	default:
+	case <-time.After(10 * time.Millisecond):
 	}
 
 	// Stop the RLS server to force the control channel to go IDLE. We use Stop()
@@ -1194,25 +1194,17 @@ initialReadyReached:
 	lis.Stop()
 
 	// Wait for the control channel to move to IDLE.
+idleLoop:
 	for {
 		select {
 		case gotState := <-wrappedSubscriber.connStateCh:
 			if gotState == connectivity.Idle {
-				goto idleReached
-			}
-			// If we see TRANSIENT_FAILURE before IDLE, that's also acceptable
-			// for this test - we just need to verify READY->IDLE->READY doesn't
-			// trigger reset. Skip this iteration if we don't see IDLE.
-			if gotState == connectivity.TransientFailure {
-				// This test is specifically for IDLE transitions. If we hit
-				// TRANSIENT_FAILURE, the other test covers that case.
-				t.Skip("Control channel went to TRANSIENT_FAILURE instead of IDLE; skipping IDLE transition test")
+				break idleLoop
 			}
 		case <-ctx.Done():
 			t.Fatal("Timeout waiting for RLS control channel to become IDLE")
 		}
 	}
-idleReached:
 
 	// Restart the RLS server.
 	lis.Restart()
@@ -1224,24 +1216,24 @@ idleReached:
 	makeTestRPCAndExpectItToReachBackend(ctxOutgoing, t, cc, backendCh)
 
 	// Wait for the control channel to move back to READY.
+readyAfterIdleLoop:
 	for {
 		select {
 		case gotState := <-wrappedSubscriber.connStateCh:
 			if gotState == connectivity.Ready {
-				goto readyAfterIdle
+				break readyAfterIdleLoop
 			}
 		case <-ctx.Done():
 			t.Fatal("Timeout waiting for RLS control channel to become READY after IDLE")
 		}
 	}
-readyAfterIdle:
 
 	// Verify that the READY → IDLE → READY transition did NOT trigger a backoff reset.
 	// This is the key assertion of this test.
 	select {
 	case <-resetBackoffCalled:
 		t.Fatal("Backoff reset was triggered for READY → IDLE → READY transition, want no reset")
-	default:
+	case <-time.After(10 * time.Millisecond):
 		// Good - no backoff reset was triggered for this benign transition.
 	}
 }
