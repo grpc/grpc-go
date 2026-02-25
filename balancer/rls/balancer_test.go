@@ -923,6 +923,23 @@ func (w *wrappingConnectivityStateSubscriber) OnMessage(msg any) {
 	w.connStateCh <- msg.(connectivity.State)
 }
 
+// waitForConnectivityState waits for the specified connectivity state to appear
+// on the channel. It skips intermediate states and fails the test if the
+// context expires before the desired state is reached.
+func waitForConnectivityState(ctx context.Context, t *testing.T, ch <-chan connectivity.State, want connectivity.State) {
+	t.Helper()
+	for {
+		select {
+		case gotState := <-ch:
+			if gotState == want {
+				return
+			}
+		case <-ctx.Done():
+			t.Fatalf("Timeout waiting for RLS control channel to become %q", want)
+		}
+	}
+}
+
 // TestControlChannelConnectivityStateMonitoring tests the scenario where the
 // control channel goes down and comes back up again and verifies that backoff
 // state is reset for cache entries in this scenario. It also verifies that:
@@ -1037,17 +1054,7 @@ func (s) TestControlChannelConnectivityStateMonitoring(t *testing.T) {
 	// Wait for the control channel to move to TRANSIENT_FAILURE. When the server
 	// is stopped, we expect the control channel to go through Connecting and
 	// eventually reach TransientFailure.
-transientFailureLoop:
-	for {
-		select {
-		case gotState := <-wrappedSubscriber.connStateCh:
-			if gotState == connectivity.TransientFailure {
-				break transientFailureLoop
-			}
-		case <-ctx.Done():
-			t.Fatal("Timeout waiting for RLS control channel to become TRANSIENT_FAILURE")
-		}
-	}
+	waitForConnectivityState(ctx, t, wrappedSubscriber.connStateCh, connectivity.TransientFailure)
 
 	// Restart the RLS server.
 	lis.Restart()
@@ -1067,17 +1074,7 @@ transientFailureLoop:
 	makeTestRPCAndExpectItToReachBackend(ctxOutgoing, t, cc, backendCh)
 
 	// Wait for the control channel to move back to READY.
-readyAfterTransientFailureLoop:
-	for {
-		select {
-		case gotState := <-wrappedSubscriber.connStateCh:
-			if gotState == connectivity.Ready {
-				break readyAfterTransientFailureLoop
-			}
-		case <-ctx.Done():
-			t.Fatal("Timeout waiting for RLS control channel to become READY after TRANSIENT_FAILURE")
-		}
-	}
+	waitForConnectivityState(ctx, t, wrappedSubscriber.connStateCh, connectivity.Ready)
 
 	// Verify that backoff was reset when transitioning from TRANSIENT_FAILURE to READY.
 	select {
@@ -1169,17 +1166,7 @@ func (s) TestControlChannelIdleTransitionNoBackoffReset(t *testing.T) {
 	verifyRLSRequest(t, rlsReqCh, true)
 
 	// Wait for the control channel to move to READY.
-initialReadyLoop:
-	for {
-		select {
-		case gotState := <-wrappedSubscriber.connStateCh:
-			if gotState == connectivity.Ready {
-				break initialReadyLoop
-			}
-		case <-ctx.Done():
-			t.Fatal("Timeout waiting for RLS control channel to become READY")
-		}
-	}
+	waitForConnectivityState(ctx, t, wrappedSubscriber.connStateCh, connectivity.Ready)
 
 	// Verify that the initial READY state did NOT trigger a backoff reset.
 	select {
@@ -1194,17 +1181,7 @@ initialReadyLoop:
 	lis.Stop()
 
 	// Wait for the control channel to move to IDLE.
-idleLoop:
-	for {
-		select {
-		case gotState := <-wrappedSubscriber.connStateCh:
-			if gotState == connectivity.Idle {
-				break idleLoop
-			}
-		case <-ctx.Done():
-			t.Fatal("Timeout waiting for RLS control channel to become IDLE")
-		}
-	}
+	waitForConnectivityState(ctx, t, wrappedSubscriber.connStateCh, connectivity.Idle)
 
 	// Restart the RLS server.
 	lis.Restart()
@@ -1216,17 +1193,7 @@ idleLoop:
 	makeTestRPCAndExpectItToReachBackend(ctxOutgoing, t, cc, backendCh)
 
 	// Wait for the control channel to move back to READY.
-readyAfterIdleLoop:
-	for {
-		select {
-		case gotState := <-wrappedSubscriber.connStateCh:
-			if gotState == connectivity.Ready {
-				break readyAfterIdleLoop
-			}
-		case <-ctx.Done():
-			t.Fatal("Timeout waiting for RLS control channel to become READY after IDLE")
-		}
-	}
+	waitForConnectivityState(ctx, t, wrappedSubscriber.connStateCh, connectivity.Ready)
 
 	// Verify that the READY → IDLE → READY transition did NOT trigger a backoff reset.
 	// This is the key assertion of this test.
