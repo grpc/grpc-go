@@ -3543,7 +3543,7 @@ func setupRSTStreamOnEOSTest(t *testing.T, serverFrames func(*testing.T, *http2.
 	t.Cleanup(func() { ct.Close(errors.New("test cleanup: forcing close")) })
 
 	// Create a stream.
-	stream, err := ct.NewStream(ctx, &CallHdr{})
+	stream, err := ct.NewStream(ctx, &CallHdr{}, nil)
 	if err != nil {
 		t.Fatalf("NewStream failed: %v", err)
 	}
