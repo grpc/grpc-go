@@ -3633,9 +3633,10 @@ func (s) TestClientSendsRSTStream_InTrailers(t *testing.T) {
 	}
 }
 
-// Tests the scenario where the server sets the END_STREAM flag in the Trailers,
-// causing the client to send a RST_STREAM. The test verifies that the client
-// can still read buffered data from the stream after this event.
+// Tests the scenario where the server sets the END_STREAM flag in one of its
+// DATA frames (before sending trailers), causing the client to send a
+// RST_STREAM. The test verifies that the client can still read buffered data
+// from the stream after this event.
 func (s) TestClientSendsRSTStream_ReadUnreadData(t *testing.T) {
 	serverFrames := func(t *testing.T, framer *http2.Framer, streamID uint32) {
 		var buf bytes.Buffer
@@ -3649,19 +3650,8 @@ func (s) TestClientSendsRSTStream_ReadUnreadData(t *testing.T) {
 		}); err != nil {
 			t.Errorf("Server failed to write headers: %v", err)
 		}
-		if err := framer.WriteData(streamID, false, expectedResponse); err != nil {
+		if err := framer.WriteData(streamID, true, expectedResponse); err != nil {
 			t.Errorf("Server failed to write data: %v", err)
-		}
-		buf.Reset()
-		henc = hpack.NewEncoder(&buf)
-		henc.WriteField(hpack.HeaderField{Name: "grpc-status", Value: "0"})
-		if err := framer.WriteHeaders(http2.HeadersFrameParam{
-			StreamID:      streamID,
-			BlockFragment: buf.Bytes(),
-			EndHeaders:    true,
-			EndStream:     true,
-		}); err != nil {
-			t.Errorf("Server failed to write trailers: %v", err)
 		}
 	}
 
@@ -3689,7 +3679,7 @@ func (s) TestClientSendsRSTStream_ReadUnreadData(t *testing.T) {
 
 	// Ensure the stream is done before checking status.
 	<-stream.Done()
-	if code := stream.Status().Code(); code != codes.OK {
+	if code := stream.Status().Code(); code != codes.Internal {
 		t.Fatalf("stream.Status().Code() got %s, want %s", code, codes.OK)
 	}
 
