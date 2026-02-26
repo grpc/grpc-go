@@ -1826,3 +1826,172 @@ func (s) TestValidateClusterWithOutlierDetection(t *testing.T) {
 		})
 	}
 }
+
+func (s) TestValidateClusterWithSecurityConfigWithSNI(t *testing.T) {
+	const (
+		rootPluginInstance = "rootPluginInstance"
+		rootCertName       = "rootCert"
+		clusterName        = "cluster"
+		serviceName        = "service"
+		sniString          = "test-sni"
+	)
+
+	tests := []struct {
+		name       string
+		sniEnabled bool
+		cluster    *v3clusterpb.Cluster
+		wantUpdate ClusterUpdate
+		wantErr    string
+	}{
+		{
+			name:       "env-variable-enabled",
+			sniEnabled: true,
+			cluster: &v3clusterpb.Cluster{
+				Name:                 clusterName,
+				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
+				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
+					EdsConfig: &v3corepb.ConfigSource{
+						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
+							Ads: &v3corepb.AggregatedConfigSource{},
+						},
+					},
+					ServiceName: serviceName,
+				},
+				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
+				TransportSocket: &v3corepb.TransportSocket{
+					Name: "envoy.transport_sockets.tls",
+					ConfigType: &v3corepb.TransportSocket_TypedConfig{
+						TypedConfig: testutils.MarshalAny(t, &v3tlspb.UpstreamTlsContext{
+							CommonTlsContext: &v3tlspb.CommonTlsContext{
+								ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContext{
+									ValidationContext: &v3tlspb.CertificateValidationContext{
+										CaCertificateProviderInstance: &v3tlspb.CertificateProviderPluginInstance{
+											InstanceName:    rootPluginInstance,
+											CertificateName: rootCertName,
+										},
+									},
+								},
+							},
+							Sni:                  sniString,
+							AutoHostSni:          true,
+							AutoSniSanValidation: true,
+						}),
+					},
+				},
+			},
+			wantUpdate: ClusterUpdate{
+				ClusterName:    clusterName,
+				EDSServiceName: serviceName,
+				SecurityCfg: &SecurityConfig{
+					RootInstanceName:     rootPluginInstance,
+					RootCertName:         rootCertName,
+					SNI:                  sniString,
+					AutoHostSNI:          true,
+					AutoSNISANValidation: true,
+				},
+				TelemetryLabels: xdsinternal.UnknownCSMLabels,
+			},
+		},
+
+		{
+			name:       "env-variable-disabled",
+			sniEnabled: false,
+			cluster: &v3clusterpb.Cluster{
+				Name:                 clusterName,
+				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
+				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
+					EdsConfig: &v3corepb.ConfigSource{
+						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
+							Ads: &v3corepb.AggregatedConfigSource{},
+						},
+					},
+					ServiceName: serviceName,
+				},
+				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
+				TransportSocket: &v3corepb.TransportSocket{
+					Name: "envoy.transport_sockets.tls",
+					ConfigType: &v3corepb.TransportSocket_TypedConfig{
+						TypedConfig: testutils.MarshalAny(t, &v3tlspb.UpstreamTlsContext{
+							CommonTlsContext: &v3tlspb.CommonTlsContext{
+								ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContext{
+									ValidationContext: &v3tlspb.CertificateValidationContext{
+										CaCertificateProviderInstance: &v3tlspb.CertificateProviderPluginInstance{
+											InstanceName:    rootPluginInstance,
+											CertificateName: rootCertName,
+										},
+									},
+								},
+							},
+							Sni:                  sniString,
+							AutoHostSni:          true,
+							AutoSniSanValidation: true,
+						}),
+					},
+				},
+			},
+			wantUpdate: ClusterUpdate{
+				ClusterName:    clusterName,
+				EDSServiceName: serviceName,
+				SecurityCfg: &SecurityConfig{
+					RootInstanceName: rootPluginInstance,
+					RootCertName:     rootCertName,
+				},
+				TelemetryLabels: xdsinternal.UnknownCSMLabels,
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			testutils.SetEnvConfig(t, &envconfig.XDSSNIEnabled, test.sniEnabled)
+			update, err := validateClusterAndConstructClusterUpdate(test.cluster, nil)
+			if err != nil {
+				t.Fatalf("validateClusterAndConstructClusterUpdate() returned unexpected err: %v", err)
+			}
+			if diff := cmp.Diff(update, test.wantUpdate, cmpopts.EquateEmpty(), cmp.AllowUnexported(regexp.Regexp{}), cmpopts.IgnoreFields(ClusterUpdate{}, "LBPolicy")); diff != "" {
+				t.Fatalf("validateClusterAndConstructClusterUpdate() returned unexpected diff (-got, +want):\n%s", diff)
+			}
+		})
+	}
+}
+
+func (s) TestValidateClusterWithSecurityConfig_SNITooLong(t *testing.T) {
+	testutils.SetEnvConfig(t, &envconfig.XDSSNIEnabled, true)
+
+	cluster := &v3clusterpb.Cluster{
+		Name:                 "cluster",
+		ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
+		EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
+			EdsConfig: &v3corepb.ConfigSource{
+				ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
+					Ads: &v3corepb.AggregatedConfigSource{},
+				},
+			},
+			ServiceName: "service",
+		},
+		LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
+		TransportSocket: &v3corepb.TransportSocket{
+			Name: "envoy.transport_sockets.tls",
+			ConfigType: &v3corepb.TransportSocket_TypedConfig{
+				TypedConfig: testutils.MarshalAny(t, &v3tlspb.UpstreamTlsContext{
+					CommonTlsContext: &v3tlspb.CommonTlsContext{
+						ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContext{
+							ValidationContext: &v3tlspb.CertificateValidationContext{
+								CaCertificateProviderInstance: &v3tlspb.CertificateProviderPluginInstance{
+									InstanceName:    "rootPluginInstance",
+									CertificateName: "rootCert",
+								},
+							},
+						},
+					},
+					Sni: strings.Repeat("a", 256),
+				}),
+			},
+		},
+	}
+
+	wantErr := "exceeds max length"
+	if _, err := validateClusterAndConstructClusterUpdate(cluster, nil); err == nil || !strings.Contains(err.Error(), wantErr) {
+		t.Fatalf("validateClusterAndConstructClusterUpdate() returned err: %v, want err containing: %s", err, wantErr)
+	}
+}
