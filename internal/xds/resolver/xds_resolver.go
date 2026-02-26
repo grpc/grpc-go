@@ -136,7 +136,7 @@ func (b *xdsResolverBuilder) Build(target resolver.Target, cc resolver.ClientCon
 		xdsClient:       client,
 		xdsClientClose:  xdsClientClose,
 		activeClusters:  make(map[string]*clusterInfo),
-		httpFilters:     make(map[string]*clientFilterWithCleanup),
+		httpFilters:     make(map[clientFilterKey]*clientFilterWithCleanup),
 		channelID:       rand.Uint64(),
 		ldsResourceName: ldsResourceName,
 
@@ -245,11 +245,11 @@ type xdsResolver struct {
 	// cluster that includes a ref count and load balancing configuration.
 	activeClusters    map[string]*clusterInfo
 	curConfigSelector stoppableConfigSelector
-	// httpFilters is a map from {filter_name + type_urls} to client filter
-	// instance. It lives here so that the resolver can reuse filter instances
-	// across config updates when the same filter is specified, and to be able
-	// to clean up filter instances that are no longer used.
-	httpFilters map[string]*clientFilterWithCleanup
+	// httpFilters is a map from client filter key to client filter instance. It
+	// lives here so that the resolver can reuse filter instances across config
+	// updates when the same filter is specified, and to be able to clean up
+	// filter instances that are no longer used.
+	httpFilters map[clientFilterKey]*clientFilterWithCleanup
 }
 
 // ResolveNow calls RequestDNSReresolution on the dependency manager.
@@ -440,20 +440,18 @@ func (r *xdsResolver) newConfigSelector() (*configSelector, error) {
 
 	// Cleanup filter instances that are no longer specified in the current
 	// listener resource.
+	filtersInNewConfig := make(map[clientFilterKey]bool)
+	for _, filter := range r.xdsConfig.Listener.APIListener.HTTPFilters {
+		filtersInNewConfig[newClientFilterKey(&filter)] = true
+	}
 	for key, cf := range r.httpFilters {
-		found := false
-		for _, filter := range r.xdsConfig.Listener.APIListener.HTTPFilters {
-			if key == filterKey(&filter) {
-				found = true
-				break
-			}
+		if _, ok := filtersInNewConfig[key]; ok {
+			continue
 		}
-		if !found {
-			if cf.cleanup != nil {
-				cf.cleanup()
-			}
-			delete(r.httpFilters, key)
+		if cf.cleanup != nil {
+			cf.cleanup()
 		}
+		delete(r.httpFilters, key)
 	}
 
 	return cs, nil
@@ -535,7 +533,7 @@ func (r *xdsResolver) newInterceptor(filters []xdsresource.HTTPFilter, clusterOv
 			return nil, fmt.Errorf("filter %q does not support use in client", filter.Name)
 		}
 
-		clientFilter := r.getOrCreateClientFilter(builder, filterKey(&filter))
+		clientFilter := r.getOrCreateClientFilter(builder, newClientFilterKey(&filter))
 		i, cleanup, err := clientFilter.filter.BuildClientInterceptor(filter.Config, override)
 		if err != nil {
 			return nil, fmt.Errorf("error constructing filter: %v", err)
@@ -548,7 +546,26 @@ func (r *xdsResolver) newInterceptor(filters []xdsresource.HTTPFilter, clusterOv
 		}
 	}
 
-	return &interceptorList{interceptors: interceptors}, nil
+	return newInterceptorList(interceptors), nil
+}
+
+func newInterceptorList(interceptors []*clientInterceptorWithCleanup) *interceptorList {
+	return &interceptorList{
+		interceptors: interceptors,
+		chained: func(ctx context.Context, ri iresolver.RPCInfo, done func(), newStream func(context.Context, func()) (iresolver.ClientStream, error)) (iresolver.ClientStream, error) {
+			curr := 0
+			var ns func(context.Context, func()) (iresolver.ClientStream, error)
+			ns = func(ctx context.Context, done func()) (iresolver.ClientStream, error) {
+				if curr == len(interceptors) {
+					return newStream(ctx, done)
+				}
+				i := interceptors[curr]
+				curr++
+				return i.interceptor.NewStream(ctx, ri, done, ns)
+			}
+			return ns(ctx, done)
+		},
+	}
 }
 
 // interceptorList is a client interceptor that contains a list of client
@@ -556,17 +573,13 @@ func (r *xdsResolver) newInterceptor(filters []xdsresource.HTTPFilter, clusterOv
 // each interceptor, which will be executed when the interceptorList is stopped.
 type interceptorList struct {
 	interceptors []*clientInterceptorWithCleanup
+	chained      chainedInterceptor
 }
 
+type chainedInterceptor func(ctx context.Context, ri iresolver.RPCInfo, done func(), final func(context.Context, func()) (iresolver.ClientStream, error)) (iresolver.ClientStream, error)
+
 func (il *interceptorList) NewStream(ctx context.Context, ri iresolver.RPCInfo, _ func(), newStream func(ctx context.Context, _ func()) (iresolver.ClientStream, error)) (iresolver.ClientStream, error) {
-	for idx := len(il.interceptors) - 1; idx >= 0; idx-- {
-		ns := newStream
-		i := il.interceptors[idx]
-		newStream = func(ctx context.Context, done func()) (iresolver.ClientStream, error) {
-			return i.interceptor.NewStream(ctx, ri, done, ns)
-		}
-	}
-	return newStream(ctx, func() {})
+	return il.chained(ctx, ri, func() {}, newStream)
 }
 
 func (il *interceptorList) stop() {
@@ -583,7 +596,7 @@ func (il *interceptorList) stop() {
 // for future use.
 //
 // Only executed in the context of a serializer callback.
-func (r *xdsResolver) getOrCreateClientFilter(builder httpfilter.ClientFilterBuilder, key string) *clientFilterWithCleanup {
+func (r *xdsResolver) getOrCreateClientFilter(builder httpfilter.ClientFilterBuilder, key clientFilterKey) *clientFilterWithCleanup {
 	clientFilter, ok := r.httpFilters[key]
 	if ok {
 		return clientFilter
@@ -598,10 +611,22 @@ func (r *xdsResolver) getOrCreateClientFilter(builder httpfilter.ClientFilterBui
 	return clientFilter
 }
 
-// filterKey generates a key for the given filter using the filter name and type
-// URLs. This is used for storing ClientFilters in a map.
-func filterKey(f *xdsresource.HTTPFilter) string {
-	return f.Name + ":" + strings.Join(f.Filter.TypeURLs(), ":")
+// newClientFilterKey generates a key for the given filter using the filter name
+// and type URLs. This is used for storing ClientFilters in a map.
+func newClientFilterKey(f *xdsresource.HTTPFilter) clientFilterKey {
+	return clientFilterKey{
+		name:     f.Name,
+		typeURLs: strings.Join(f.Filter.TypeURLs(), ":"),
+	}
+}
+
+func (f *clientFilterKey) String() string {
+	return f.name + ":" + f.typeURLs
+}
+
+type clientFilterKey struct {
+	name     string
+	typeURLs string
 }
 
 type clientFilterWithCleanup struct {
