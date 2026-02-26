@@ -946,17 +946,15 @@ func (t *http2Client) closeStream(s *ClientStream, err error, rst bool, rstCode 
 		<-s.done
 		return
 	}
-	s.collectionMu.Lock()
-	if s.collecting {
+	if s.collecting.Load() {
 		// If the stream is collecting data for non-gRPC, stop collection to finalize status
-		s.stopNonGRPCDataCollectionLocked()
+		s.stopNonGRPCDataCollection()
 	}
 	if s.status != nil {
 		st = s.status
 		err = st.Err()
 	}
 	s.status = st
-	s.collectionMu.Unlock()
 	if len(mdata) > 0 {
 		s.trailer = mdata
 	}
