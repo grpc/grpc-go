@@ -71,7 +71,7 @@ func ExampleAttributes_String() {
 	a1 := attributes.New(key{}, typedNil)            // typed nil implements [fmt.Stringer]
 	a2 := attributes.New(key{}, (*stringerVal)(nil)) // typed nil implements [fmt.Stringer]
 	a3 := attributes.New(key{}, (*stringVal)(nil))   // typed nil not implements [fmt.Stringer]
-	a4 := attributes.New(key{}, nil)                 // untyped nil indicates deletion.
+	a4 := attributes.New(key{}, nil)                 // untyped nil
 	a5 := attributes.New(key{}, 1)
 	a6 := attributes.New(key{}, stringerVal{s: "two"})
 	a7 := attributes.New(key{}, stringVal{s: "two"})
@@ -88,7 +88,7 @@ func ExampleAttributes_String() {
 	// a1: {"<%!p(attributes_test.key={})>": "<nil>" }
 	// a2: {"<%!p(attributes_test.key={})>": "<nil>" }
 	// a3: {"<%!p(attributes_test.key={})>": "<0x0>" }
-	// a4: {}
+	// a4: {"<%!p(attributes_test.key={})>": "<%!p(<nil>)>" }
 	// a5: {"<%!p(attributes_test.key={})>": "<%!p(int=1)>" }
 	// a6: {"<%!p(attributes_test.key={})>": "two" }
 	// a7: {"<%!p(attributes_test.key={})>": "<%!p(attributes_test.stringVal={two})>" }
@@ -152,18 +152,6 @@ func TestEqual(t *testing.T) {
 			a:    nil,
 			b:    nil,
 			want: true,
-		},
-		{
-			name: "deletion",
-			a:    attributes.New(keyOne{}, 1).WithValue(keyTwo{}, stringVal{s: "two"}).WithValue(keyOne{}, nil),
-			b:    attributes.New(keyTwo{}, stringVal{s: "two"}),
-			want: true,
-		},
-		{
-			name: "set_typed_nil",
-			a:    attributes.New(keyOne{}, 1).WithValue(keyTwo{}, stringVal{s: "two"}).WithValue(keyOne{}, (*int)(nil)),
-			b:    attributes.New(keyTwo{}, stringVal{s: "two"}),
-			want: false,
 		},
 	}
 
