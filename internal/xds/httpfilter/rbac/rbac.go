@@ -161,14 +161,14 @@ func (builder) IsTerminal() bool {
 }
 
 func (builder) BuildServerFilter() (httpfilter.ServerFilter, func()) {
-	return builder{}, func() {}
+	return serverFilter{}, func() {}
 }
 
 var _ httpfilter.ServerFilterBuilder = builder{}
 
-// BuildServerInterceptor is an optional interface builder implements in order
-// to signify it works server side.
-func (builder) BuildServerInterceptor(cfg httpfilter.FilterConfig, override httpfilter.FilterConfig) (resolver.ServerInterceptor, func(), error) {
+type serverFilter struct{}
+
+func (serverFilter) BuildServerInterceptor(cfg httpfilter.FilterConfig, override httpfilter.FilterConfig) (resolver.ServerInterceptor, func(), error) {
 	if cfg == nil {
 		return nil, nil, fmt.Errorf("rbac: nil config provided")
 	}

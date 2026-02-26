@@ -77,14 +77,19 @@ func (builder) IsTerminal() bool {
 }
 
 func (builder) BuildClientFilter() (httpfilter.ClientFilter, func()) {
-	return builder{}, func() {}
+	return filter{}, func() {}
 }
 
 func (builder) BuildServerFilter() (httpfilter.ServerFilter, func()) {
-	return builder{}, func() {}
+	return filter{}, func() {}
 }
 
-func (builder) BuildClientInterceptor(cfg, override httpfilter.FilterConfig) (iresolver.ClientInterceptor, func(), error) {
+var _ httpfilter.ClientFilterBuilder = builder{}
+var _ httpfilter.ServerFilterBuilder = builder{}
+
+type filter struct{}
+
+func (filter) BuildClientInterceptor(cfg, override httpfilter.FilterConfig) (iresolver.ClientInterceptor, func(), error) {
 	if _, ok := cfg.(config); !ok {
 		return nil, nil, fmt.Errorf("router: incorrect config type provided (%T): %v", cfg, cfg)
 	}
@@ -97,7 +102,7 @@ func (builder) BuildClientInterceptor(cfg, override httpfilter.FilterConfig) (ir
 	return nil, nil, nil
 }
 
-func (builder) BuildServerInterceptor(cfg, override httpfilter.FilterConfig) (iresolver.ServerInterceptor, func(), error) {
+func (filter) BuildServerInterceptor(cfg, override httpfilter.FilterConfig) (iresolver.ServerInterceptor, func(), error) {
 	if _, ok := cfg.(config); !ok {
 		return nil, nil, fmt.Errorf("router: incorrect config type provided (%T): %v", cfg, cfg)
 	}
