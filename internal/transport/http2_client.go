@@ -1585,8 +1585,7 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 			errs = append(errs, contentTypeErr)
 		}
 
-		errMsg := strings.Join(errs, "; ")
-		se := status.New(grpcErrorCode, errMsg)
+		se := status.New(grpcErrorCode, strings.Join(errs, "; "))
 		if endStream {
 			t.closeStream(s, se.Err(), true, http2.ErrCodeProtocol, se, nil, true)
 			return
