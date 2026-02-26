@@ -124,9 +124,11 @@ func (*testHTTPFilterWithRPCMetadata) ParseFilterConfigOverride(override proto.M
 
 func (*testHTTPFilterWithRPCMetadata) IsTerminal() bool { return false }
 
-func (fb *testHTTPFilterWithRPCMetadata) BuildClientFilter() (httpfilter.ClientFilter, func()) {
-	return fb, nil
+func (fb *testHTTPFilterWithRPCMetadata) BuildClientFilter() httpfilter.ClientFilter {
+	return fb
 }
+
+func (fb *testHTTPFilterWithRPCMetadata) Close() {}
 
 // ClientFilterBuilder is an optional interface for filters to implement. This
 // compile time check ensures the test filter implements it.
@@ -678,9 +680,13 @@ func (*trackingHTTPFilterBuilder) ParseFilterConfig(cfg proto.Message) (httpfilt
 	return filterConfigFromProto(cfg)
 }
 
-func (t *trackingHTTPFilterBuilder) BuildClientFilter() (httpfilter.ClientFilter, func()) {
+func (t *trackingHTTPFilterBuilder) BuildClientFilter() httpfilter.ClientFilter {
 	t.filtersCreated.Add(1)
-	return t, func() { t.filtersDestroyed.Add(1) }
+	return t
+}
+
+func (t *trackingHTTPFilterBuilder) Close() {
+	t.filtersDestroyed.Add(1)
 }
 
 var _ httpfilter.ClientFilterBuilder = &trackingHTTPFilterBuilder{}

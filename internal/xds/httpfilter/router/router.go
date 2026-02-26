@@ -76,8 +76,8 @@ func (builder) IsTerminal() bool {
 	return true
 }
 
-func (builder) BuildClientFilter() (httpfilter.ClientFilter, func()) {
-	return filter{}, func() {}
+func (builder) BuildClientFilter() httpfilter.ClientFilter {
+	return filter{}
 }
 
 func (builder) BuildServerFilter() (httpfilter.ServerFilter, func()) {
@@ -88,6 +88,8 @@ var _ httpfilter.ClientFilterBuilder = builder{}
 var _ httpfilter.ServerFilterBuilder = builder{}
 
 type filter struct{}
+
+func (filter) Close() {}
 
 func (filter) BuildClientInterceptor(cfg, override httpfilter.FilterConfig) (iresolver.ClientInterceptor, func(), error) {
 	if _, ok := cfg.(config); !ok {

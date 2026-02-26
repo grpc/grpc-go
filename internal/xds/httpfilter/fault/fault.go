@@ -104,13 +104,15 @@ func (builder) IsTerminal() bool {
 	return false
 }
 
-func (builder) BuildClientFilter() (httpfilter.ClientFilter, func()) {
-	return clientFilter{}, func() {}
+func (builder) BuildClientFilter() httpfilter.ClientFilter {
+	return clientFilter{}
 }
 
 var _ httpfilter.ClientFilterBuilder = builder{}
 
 type clientFilter struct{}
+
+func (clientFilter) Close() {}
 
 func (clientFilter) BuildClientInterceptor(cfg, override httpfilter.FilterConfig) (iresolver.ClientInterceptor, func(), error) {
 	if cfg == nil {
