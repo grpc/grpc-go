@@ -1594,9 +1594,7 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 			return
 		}
 
-		s.startNonGRPCDataCollection(se, func() {
-			t.closeStreamWithNonGRPCStatus(s)
-		})
+		s.startNonGRPCDataCollection(se)
 		if atomic.CompareAndSwapUint32(&s.headerChanClosed, 0, 1) {
 			close(s.headerChan)
 		}

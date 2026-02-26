@@ -22,7 +22,6 @@ import (
 	"strconv"
 	"sync"
 	"sync/atomic"
-	"time"
 
 	"golang.org/x/net/http2"
 	"google.golang.org/grpc/mem"
@@ -36,9 +35,6 @@ import (
 // NOTE: If changed this value, you MUST update the corresponding test in:
 //   - /test/end2end_test.go:TestHTTPServerSendsNonGRPCHeaderSurfaceFurtherData
 const nonGRPCDataMaxLen = 1024
-
-// nonGRPCDataCollectionTimeout is the timeout for collecting non-gRPC data.
-const nonGRPCDataCollectionTimeout = 3 * time.Second
 
 // ClientStream implements streaming functionality for a gRPC client.
 type ClientStream struct {
@@ -60,10 +56,9 @@ type ClientStream struct {
 	// reading its value).
 	headerValid bool
 
-	collectionMu    sync.Mutex
-	collecting      bool        // indicates if stream entered the stage of non-gRPC data collection.
-	collectionTimer *time.Timer // used to limit the time spent on collecting non-gRPC error details.
-	nonGRPCDataBuf  []byte      // stores the data of a non-gRPC response.
+	collectionMu   sync.Mutex
+	collecting     bool   // indicates if stream entered the stage of non-gRPC data collection.
+	nonGRPCDataBuf []byte // stores the data of a non-gRPC response.
 
 	noHeaders        bool          // set if the client never received headers (set only after the stream is done).
 	headerChanClosed uint32        // set when headerChan is closed. Used to avoid closing headerChan multiple times.
@@ -72,7 +67,7 @@ type ClientStream struct {
 	statsHandler     stats.Handler // nil for internal streams (e.g., health check, ORCA) where telemetry is not supported.
 }
 
-func (s *ClientStream) startNonGRPCDataCollection(st *status.Status, onTimeout func()) {
+func (s *ClientStream) startNonGRPCDataCollection(st *status.Status) {
 	s.collectionMu.Lock()
 	defer s.collectionMu.Unlock()
 	if s.collecting {
@@ -81,7 +76,6 @@ func (s *ClientStream) startNonGRPCDataCollection(st *status.Status, onTimeout f
 	s.status = st
 	s.collecting = true
 	s.nonGRPCDataBuf = make([]byte, 0, nonGRPCDataMaxLen)
-	s.collectionTimer = time.AfterFunc(nonGRPCDataCollectionTimeout, onTimeout)
 }
 
 // tryHandleNonGRPCData tries to collect non-gRPC body from the given data frame.
@@ -108,10 +102,6 @@ func (s *ClientStream) tryHandleNonGRPCData(f *parsedDataFrame) (handle bool, en
 func (s *ClientStream) stopNonGRPCDataCollectionLocked() {
 	if !s.collecting {
 		return
-	}
-	if s.collectionTimer != nil {
-		s.collectionTimer.Stop()
-		s.collectionTimer = nil
 	}
 	data := "\ndata: " + strconv.Quote(string(s.nonGRPCDataBuf))
 	s.status = status.New(s.status.Code(), s.status.Message()+data)
