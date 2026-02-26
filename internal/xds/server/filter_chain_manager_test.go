@@ -702,8 +702,8 @@ func (s) TestHTTPFilterInstantiation(t *testing.T) {
 				httpFilters: test.filters,
 			}
 
-			filters := make(map[string]*refCountedServerFilter)
-			addOrGetFilterFunc := func(builder httpfilter.ServerFilterBuilder, key string) *refCountedServerFilter {
+			filters := make(map[serverFilterKey]*refCountedServerFilter)
+			addOrGetFilterFunc := func(builder httpfilter.ServerFilterBuilder, key serverFilterKey) *refCountedServerFilter {
 				serverFilter, ok := filters[key]
 				if ok {
 					serverFilter.incRef()

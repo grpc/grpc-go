@@ -398,7 +398,7 @@ func (fc *filterChain) stop() {
 // filters across all filter chains, and ensures that the same filter instance
 // is resused across resource updates. This allows filter instances to retain
 // state across resource updates.
-type addOrGetFilterFunc func(builder httpfilter.ServerFilterBuilder, key string) *refCountedServerFilter
+type addOrGetFilterFunc func(builder httpfilter.ServerFilterBuilder, key serverFilterKey) *refCountedServerFilter
 
 // constructUsableRouteConfiguration takes Route Configuration and converts it
 // into matchable route configuration, with instantiated HTTP Filters per route.
@@ -474,7 +474,7 @@ func (fc *filterChain) newInterceptor(routeOverride, virtualHostOverride map[str
 			override = virtualHostOverride[filter.Name]
 		}
 
-		serverFilter := addOrGet(builder, filterKey(&filter))
+		serverFilter := addOrGet(builder, newServerFilterKey(&filter))
 		serverFilters = append(serverFilters, serverFilter)
 		i, cleanup, err := serverFilter.filter.BuildServerInterceptor(filter.Config, override)
 		if err != nil {
@@ -545,8 +545,20 @@ type stoppableServerInterceptor interface {
 	stop()
 }
 
-// filterKey generates a key for the given filter using the filter name and type
-// URLs. This is used for storing ServerFilters in a map.
-func filterKey(f *xdsresource.HTTPFilter) string {
-	return f.Name + ":" + strings.Join(f.Filter.TypeURLs(), ":")
+// newServerFilterKey generates a key for the given filter using the filter name
+// and type URLs. This is used for storing ServerFilters in a map.
+func newServerFilterKey(f *xdsresource.HTTPFilter) serverFilterKey {
+	return serverFilterKey{
+		name:     f.Name,
+		typeURLs: strings.Join(f.Filter.TypeURLs(), ":"),
+	}
+}
+
+type serverFilterKey struct {
+	name     string
+	typeURLs string
+}
+
+func (f *serverFilterKey) String() string {
+	return f.name + ":" + f.typeURLs
 }

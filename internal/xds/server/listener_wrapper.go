@@ -92,7 +92,7 @@ func NewListenerWrapper(params ListenerWrapperParams) net.Listener {
 		conns:             make(map[*connWrapper]bool),
 		mode:              connectivity.ServingModeNotServing,
 		closed:            grpcsync.NewEvent(),
-		httpFilters:       make(map[string]*refCountedServerFilter),
+		httpFilters:       make(map[serverFilterKey]*refCountedServerFilter),
 	}
 	lw.logger = internalgrpclog.NewPrefixLogger(logger, fmt.Sprintf("[xds-server-listener %p] ", lw))
 
@@ -129,10 +129,10 @@ type listenerWrapper struct {
 
 	// mu guards access to the below fields.
 	mu                       sync.Mutex
-	mode                     connectivity.ServingMode           // Current serving mode.
-	activeFilterChainManager *filterChainManager                // Filter chain manager currently serving.
-	httpFilters              map[string]*refCountedServerFilter // HTTP filter instances keyed by {filter_name + type_urls}.
-	conns                    map[*connWrapper]bool              // conns accepted with configuration from activeFilterChainManager.
+	mode                     connectivity.ServingMode                    // Current serving mode.
+	activeFilterChainManager *filterChainManager                         // Filter chain manager currently serving.
+	httpFilters              map[serverFilterKey]*refCountedServerFilter // HTTP filter instances keyed by {filter_name + type_urls}.
+	conns                    map[*connWrapper]bool                       // conns accepted with configuration from activeFilterChainManager.
 
 	// These fields are read/written to in the context of xDS updates, which are
 	// guaranteed to be emitted synchronously from the xDS Client. Thus, they do
@@ -176,7 +176,7 @@ func (l *listenerWrapper) maybeUpdateFilterChains() {
 	findFilter:
 		for _, fc := range l.activeFilterChainManager.filterChains {
 			for _, f := range fc.httpFilters {
-				if key == filterKey(&f) {
+				if key == newServerFilterKey(&f) {
 					found = true
 					break findFilter
 				}
@@ -184,7 +184,7 @@ func (l *listenerWrapper) maybeUpdateFilterChains() {
 		}
 		if !found {
 			if filter.refCnt.Load() != 0 {
-				l.logger.Errorf("HTTP filter with key %q is not used by any active filter chain but has non-zero reference count: %d. This indicates a bug in the filter reference counting logic.", key, filter.refCnt.Load())
+				l.logger.Errorf("HTTP filter with key %s is not used by any active filter chain but has non-zero reference count: %d. This indicates a bug in the filter reference counting logic.", key, filter.refCnt.Load())
 			}
 			delete(l.httpFilters, key)
 			// Note that we do not call the cleanup function for the filter
@@ -407,7 +407,7 @@ func (l *listenerWrapper) switchModeLocked(newMode connectivity.ServingMode, err
 // for future use.
 //
 // Must be called with l.mu held.
-func (l *listenerWrapper) getOrCreateServerFilterLocked(builder httpfilter.ServerFilterBuilder, key string) *refCountedServerFilter {
+func (l *listenerWrapper) getOrCreateServerFilterLocked(builder httpfilter.ServerFilterBuilder, key serverFilterKey) *refCountedServerFilter {
 	serverFilter, ok := l.httpFilters[key]
 	if ok {
 		serverFilter.incRef()
