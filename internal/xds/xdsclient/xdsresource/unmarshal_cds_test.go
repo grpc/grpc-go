@@ -1841,7 +1841,6 @@ func (s) TestValidateClusterWithSecurityConfigWithSNI(t *testing.T) {
 		sniEnabled bool
 		cluster    *v3clusterpb.Cluster
 		wantUpdate ClusterUpdate
-		wantErr    string
 	}{
 		{
 			name:       "env-variable-enabled",
@@ -1892,7 +1891,6 @@ func (s) TestValidateClusterWithSecurityConfigWithSNI(t *testing.T) {
 				TelemetryLabels: xdsinternal.UnknownCSMLabels,
 			},
 		},
-
 		{
 			name:       "env-variable-disabled",
 			sniEnabled: false,

@@ -131,7 +131,7 @@ type SecurityConfig struct {
 	// AutoSNISANValidation indicates whether to replace any Subject Alternative
 	// Name (SAN) matchers with a validation for a DNS SAN matching the SNI
 	// value sent. This validation uses the SNI being set in the TLS
-	// configuration, regardless of how the SNI being used.
+	// configuration, regardless of how the SNI is determined.
 	AutoSNISANValidation bool
 }
 
