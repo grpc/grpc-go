@@ -54,7 +54,7 @@ func New(key, value any) *Attributes {
 // WithValue returns a new Attributes containing the previous keys and values
 // and the new key/value pair.  If the same key appears multiple times, the
 // last value overwrites all previous values for that key.  To remove an
-// existing key, use a nil value.  value should not be modified later.
+// existing key, use an untyped nil value.  value should not be modified later.
 func (a *Attributes) WithValue(key, value any) *Attributes {
 	return &Attributes{
 		parent: a,
@@ -158,10 +158,14 @@ func (a *Attributes) all() iter.Seq2[any, any] {
 			if seen[cur.key] {
 				continue
 			}
+			seen[cur.key] = true
+			if cur.value == nil {
+				// Setting a value to an untyped `nil` indicates deletion.
+				continue
+			}
 			if !yield(cur.key, cur.value) {
 				return
 			}
-			seen[cur.key] = true
 		}
 	}
 }
