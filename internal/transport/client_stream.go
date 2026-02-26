@@ -31,8 +31,11 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// NonGRPCDataMaxLen is the maximum length of nonGRPCDataBuf.
-const NonGRPCDataMaxLen = 1024
+// nonGRPCDataMaxLen is the maximum length of nonGRPCDataBuf.
+//
+// NOTE: If changed this value, you MUST update the corresponding test in:
+//   - /test/end2end_test.go:TestHTTPServerSendsNonGRPCHeaderSurfaceFurtherData
+const nonGRPCDataMaxLen = 1024
 
 // nonGRPCDataCollectionTimeout is the timeout for collecting non-gRPC data.
 const nonGRPCDataCollectionTimeout = 3 * time.Second
@@ -77,7 +80,7 @@ func (s *ClientStream) startNonGRPCDataCollection(st *status.Status, onTimeout f
 	}
 	s.status = st
 	s.collecting = true
-	s.nonGRPCDataBuf = make([]byte, 0, NonGRPCDataMaxLen)
+	s.nonGRPCDataBuf = make([]byte, 0, nonGRPCDataMaxLen)
 	s.collectionTimer = time.AfterFunc(nonGRPCDataCollectionTimeout, onTimeout)
 }
 
@@ -92,9 +95,9 @@ func (s *ClientStream) tryHandleNonGRPCData(f *parsedDataFrame) (handle bool, en
 		return false, false
 	}
 
-	n := min(f.data.Len(), NonGRPCDataMaxLen-len(s.nonGRPCDataBuf))
+	n := min(f.data.Len(), nonGRPCDataMaxLen-len(s.nonGRPCDataBuf))
 	s.nonGRPCDataBuf = append(s.nonGRPCDataBuf, f.data.ReadOnlyData()[0:n]...)
-	if len(s.nonGRPCDataBuf) >= NonGRPCDataMaxLen || f.StreamEnded() {
+	if len(s.nonGRPCDataBuf) >= nonGRPCDataMaxLen || f.StreamEnded() {
 		return true, true
 	}
 	return true, false

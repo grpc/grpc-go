@@ -6789,6 +6789,7 @@ func (s) TestAuthorityHeader(t *testing.T) {
 }
 
 func (s) TestHTTPServerSendsNonGRPCHeaderSurfaceFurtherData(t *testing.T) {
+	const nonGRPCDataMaxLen = 1024
 	tests := []struct {
 		name      string
 		responses []httpServerResponse
@@ -6830,7 +6831,7 @@ data: ""`,
 data: "<html><body>Hello World</body></html>"`,
 		},
 		{
-			name: "non-gRPC content-type with bytes payload length more than transport.NonGRPCDataMaxLen",
+			name: "non-gRPC content-type with bytes payload length more than nonGRPCDataMaxLen",
 			responses: []httpServerResponse{
 				{
 					headers: [][]string{
@@ -6839,12 +6840,12 @@ data: "<html><body>Hello World</body></html>"`,
 							"content-type", "text/html",
 						},
 					},
-					payload: bytes.Repeat([]byte("a"), transport.NonGRPCDataMaxLen+1),
+					payload: bytes.Repeat([]byte("a"), nonGRPCDataMaxLen+1),
 				},
 			},
 			wantCode: codes.Unknown,
 			wantErr: `rpc error: code = Unknown desc = unexpected HTTP status code received from server: 200 (OK); transport: received unexpected content-type "text/html"
-data: ` + strconv.Quote(strings.Repeat("a", transport.NonGRPCDataMaxLen)),
+data: ` + strconv.Quote(strings.Repeat("a", nonGRPCDataMaxLen)),
 		},
 		{
 			name: "content-type not provided",
