@@ -20,6 +20,7 @@ package transport
 
 import (
 	"strconv"
+	"sync"
 	"sync/atomic"
 
 	"golang.org/x/net/http2"
@@ -55,8 +56,9 @@ type ClientStream struct {
 	// reading its value).
 	headerValid bool
 
-	collecting     atomic.Bool // indicates if stream entered the stage of non-gRPC data collection.
-	nonGRPCDataBuf []byte      // stores the data of a non-gRPC response.
+	collectionMu   sync.Mutex
+	collecting     bool   // indicates if stream entered the stage of non-gRPC data collection.
+	nonGRPCDataBuf []byte // stores the data of a non-gRPC response.
 
 	noHeaders        bool          // set if the client never received headers (set only after the stream is done).
 	headerChanClosed uint32        // set when headerChan is closed. Used to avoid closing headerChan multiple times.
@@ -66,10 +68,13 @@ type ClientStream struct {
 }
 
 func (s *ClientStream) startNonGRPCDataCollection(st *status.Status) {
-	if !s.collecting.CompareAndSwap(false, true) {
+	s.collectionMu.Lock()
+	defer s.collectionMu.Unlock()
+	if s.collecting {
 		return
 	}
 	s.status = st
+	s.collecting = true
 	s.nonGRPCDataBuf = make([]byte, 0, nonGRPCDataMaxLen)
 }
 
@@ -78,7 +83,9 @@ func (s *ClientStream) startNonGRPCDataCollection(st *status.Status) {
 // handle indicates whether the frame should be handled as a non-gRPC response body,
 // end indicates whether the stream should be closed after handling this frame.
 func (s *ClientStream) tryHandleNonGRPCData(f *parsedDataFrame) (handle bool, end bool) {
-	if !s.collecting.Load() {
+	s.collectionMu.Lock()
+	defer s.collectionMu.Unlock()
+	if !s.collecting {
 		return false, false
 	}
 
@@ -92,8 +99,8 @@ func (s *ClientStream) tryHandleNonGRPCData(f *parsedDataFrame) (handle bool, en
 
 // stopNonGRPCBodyCollection stops collecting non-gRPC body and appends the collected.
 // Should only be called in closeStream.
-func (s *ClientStream) stopNonGRPCDataCollection() {
-	if !s.collecting.Load() {
+func (s *ClientStream) stopNonGRPCDataCollectionLocked() {
+	if !s.collecting {
 		return
 	}
 	data := "\ndata: " + strconv.Quote(string(s.nonGRPCDataBuf))
@@ -172,6 +179,8 @@ func (s *ClientStream) Header() (metadata.MD, error) {
 	s.waitOnHeader()
 
 	if !s.headerValid || s.noHeaders {
+		s.collectionMu.Lock()
+		defer s.collectionMu.Unlock()
 		return nil, s.status.Err()
 	}
 
