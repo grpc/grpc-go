@@ -175,7 +175,7 @@ type sourcePrefixEntry struct {
 type filterChain struct {
 	securityCfg              *xdsresource.SecurityConfig
 	httpFilters              []xdsresource.HTTPFilter
-	serverFilters            []*refCountedServerFilter // Server filters with reference counts, stored for cleanup purposes.
+	serverFilters            []httpfilter.ServerFilter // Server filters with reference counts, stored for cleanup purposes.
 	routeConfigName          string
 	inlineRouteConfig        *xdsresource.RouteConfigUpdate
 	usableRouteConfiguration *atomic.Pointer[usableRouteConfiguration]
@@ -385,7 +385,7 @@ func filterBySourcePorts(spe *sourcePrefixEntry, srcPort int) *filterChain {
 
 func (fc *filterChain) stop() {
 	for _, sf := range fc.serverFilters {
-		sf.decRef()
+		sf.Close()
 	}
 }
 
@@ -398,18 +398,18 @@ func (fc *filterChain) stop() {
 // filters across all filter chains, and ensures that the same filter instance
 // is resused across resource updates. This allows filter instances to retain
 // state across resource updates.
-type addOrGetFilterFunc func(builder httpfilter.ServerFilterBuilder, key serverFilterKey) *refCountedServerFilter
+type addOrGetFilterFunc func(builder httpfilter.ServerFilterBuilder, key serverFilterKey) httpfilter.ServerFilter
 
 // constructUsableRouteConfiguration takes Route Configuration and converts it
 // into matchable route configuration, with instantiated HTTP Filters per route.
 func (fc *filterChain) constructUsableRouteConfiguration(config xdsresource.RouteConfigUpdate, addOrGet addOrGetFilterFunc) *usableRouteConfiguration {
 	vhs := make([]virtualHostWithInterceptors, 0, len(config.VirtualHosts))
-	var serverFilters []*refCountedServerFilter
+	var serverFilters []httpfilter.ServerFilter
 	for _, vh := range config.VirtualHosts {
 		vhwi, sfs, err := fc.convertVirtualHost(vh, addOrGet)
 		if err != nil {
 			for _, sf := range serverFilters {
-				sf.decRef()
+				sf.Close()
 			}
 			// Non nil if (lds + rds) fails, shouldn't happen since validated by
 			// xDS Client, treat as L7 error but shouldn't happen.
@@ -421,15 +421,15 @@ func (fc *filterChain) constructUsableRouteConfiguration(config xdsresource.Rout
 
 	// Release references to old server filters before replacing with new ones.
 	for _, sf := range fc.serverFilters {
-		sf.decRef()
+		sf.Close()
 	}
 	fc.serverFilters = serverFilters
 
 	return &usableRouteConfiguration{vhs: vhs}
 }
 
-func (fc *filterChain) convertVirtualHost(virtualHost *xdsresource.VirtualHost, addOrGet addOrGetFilterFunc) (virtualHostWithInterceptors, []*refCountedServerFilter, error) {
-	var serverFilters []*refCountedServerFilter
+func (fc *filterChain) convertVirtualHost(virtualHost *xdsresource.VirtualHost, addOrGet addOrGetFilterFunc) (virtualHostWithInterceptors, []httpfilter.ServerFilter, error) {
+	var serverFilters []httpfilter.ServerFilter
 	rs := make([]routeWithInterceptors, len(virtualHost.Routes))
 	for i, r := range virtualHost.Routes {
 		rs[i].actionType = r.ActionType
@@ -437,7 +437,7 @@ func (fc *filterChain) convertVirtualHost(virtualHost *xdsresource.VirtualHost, 
 		interceptor, sfs, err := fc.newInterceptor(r.HTTPFilterConfigOverride, virtualHost.HTTPFilterConfigOverride, addOrGet)
 		if err != nil {
 			for _, sf := range serverFilters {
-				sf.decRef()
+				sf.Close()
 			}
 			return virtualHostWithInterceptors{}, nil, err
 		}
@@ -453,14 +453,14 @@ func (rc *usableRouteConfiguration) statusErrWithNodeID(c codes.Code, msg string
 	return status.Error(c, fmt.Sprintf("[xDS node id: %v]: %s", rc.nodeID, fmt.Sprintf(msg, args...)))
 }
 
-func (fc *filterChain) newInterceptor(routeOverride, virtualHostOverride map[string]httpfilter.FilterConfig, addOrGet addOrGetFilterFunc) (resolver.ServerInterceptor, []*refCountedServerFilter, error) {
-	var serverFilters []*refCountedServerFilter
+func (fc *filterChain) newInterceptor(routeOverride, virtualHostOverride map[string]httpfilter.FilterConfig, addOrGet addOrGetFilterFunc) (resolver.ServerInterceptor, []httpfilter.ServerFilter, error) {
+	var serverFilters []httpfilter.ServerFilter
 	interceptors := make([]*serverInterceptorWithCleanup, 0, len(fc.httpFilters))
 	for _, filter := range fc.httpFilters {
 		builder, ok := filter.Filter.(httpfilter.ServerFilterBuilder)
 		if !ok {
 			for _, sf := range serverFilters {
-				sf.decRef()
+				sf.Close()
 			}
 			// Should not happen if it passed xdsClient validation.
 			return nil, nil, fmt.Errorf("filter %q does not support use in server", filter.Name)
@@ -476,10 +476,10 @@ func (fc *filterChain) newInterceptor(routeOverride, virtualHostOverride map[str
 
 		serverFilter := addOrGet(builder, newServerFilterKey(&filter))
 		serverFilters = append(serverFilters, serverFilter)
-		i, cleanup, err := serverFilter.filter.BuildServerInterceptor(filter.Config, override)
+		i, cleanup, err := serverFilter.BuildServerInterceptor(filter.Config, override)
 		if err != nil {
 			for _, sf := range serverFilters {
-				sf.decRef()
+				sf.Close()
 			}
 			return nil, nil, fmt.Errorf("error constructing filter: %v", err)
 		}
@@ -515,12 +515,11 @@ func (il *interceptorList) stop() {
 	}
 }
 
-// refCountedServerFilter contains a ServerFilter along with a reference count
-// and a cleanup function to be called when the filter is no longer needed. This
-// is used to manage server filters that are shared across filter chains within
-// a filter chain manager.
+// refCountedServerFilter wraps a ServerFilter along with a reference count.
+// This is used to manage server filters that are shared across filter chains
+// within a filter chain manager.
 type refCountedServerFilter struct {
-	filter httpfilter.ServerFilter
+	httpfilter.ServerFilter
 	refCnt atomic.Int32
 }
 
@@ -528,9 +527,9 @@ func (rsf *refCountedServerFilter) incRef() {
 	rsf.refCnt.Add(1)
 }
 
-func (rsf *refCountedServerFilter) decRef() {
+func (rsf *refCountedServerFilter) Close() {
 	if rsf.refCnt.Add(-1) == 0 {
-		rsf.filter.Close()
+		rsf.ServerFilter.Close()
 	}
 }
 

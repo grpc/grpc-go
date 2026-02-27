@@ -407,18 +407,22 @@ func (l *listenerWrapper) switchModeLocked(newMode connectivity.ServingMode, err
 // for future use.
 //
 // Must be called with l.mu held.
-func (l *listenerWrapper) getOrCreateServerFilterLocked(builder httpfilter.ServerFilterBuilder, key serverFilterKey) *refCountedServerFilter {
-	serverFilter, ok := l.httpFilters[key]
+func (l *listenerWrapper) getOrCreateServerFilterLocked(builder httpfilter.ServerFilterBuilder, key serverFilterKey) httpfilter.ServerFilter {
+	return getOrCreateServerFilterWithMap(l.httpFilters, builder, key)
+}
+
+// This functionality is put in a separate function to allow for testing with a
+// custom map.
+func getOrCreateServerFilterWithMap(httpFilters map[serverFilterKey]*refCountedServerFilter, builder httpfilter.ServerFilterBuilder, key serverFilterKey) httpfilter.ServerFilter {
+	serverFilter, ok := httpFilters[key]
 	if ok {
 		serverFilter.incRef()
 		return serverFilter
 	}
 
 	sf := builder.BuildServerFilter()
-	serverFilter = &refCountedServerFilter{
-		filter: sf,
-	}
-	l.httpFilters[key] = serverFilter
+	serverFilter = &refCountedServerFilter{ServerFilter: sf}
+	httpFilters[key] = serverFilter
 	serverFilter.incRef()
 	return serverFilter
 }

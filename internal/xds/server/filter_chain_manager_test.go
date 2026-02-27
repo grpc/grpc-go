@@ -705,20 +705,8 @@ func (s) TestHTTPFilterInstantiation(t *testing.T) {
 			}
 
 			filters := make(map[serverFilterKey]*refCountedServerFilter)
-			addOrGetFilterFunc := func(builder httpfilter.ServerFilterBuilder, key serverFilterKey) *refCountedServerFilter {
-				serverFilter, ok := filters[key]
-				if ok {
-					serverFilter.incRef()
-					return serverFilter
-				}
-
-				sf := builder.BuildServerFilter()
-				serverFilter = &refCountedServerFilter{
-					filter: sf,
-				}
-				filters[key] = serverFilter
-				serverFilter.incRef()
-				return serverFilter
+			addOrGetFilterFunc := func(builder httpfilter.ServerFilterBuilder, key serverFilterKey) httpfilter.ServerFilter {
+				return getOrCreateServerFilterWithMap(filters, builder, key)
 			}
 			urc := fc.constructUsableRouteConfiguration(test.routeConfig, addOrGetFilterFunc)
 			if urc.err != nil {
