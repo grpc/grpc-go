@@ -95,34 +95,95 @@ func ExampleAttributes_String() {
 	// a8: {"<%!p(int=1)>": "<%!p(bool=true)>" }
 }
 
-// Test that two attributes with the same content are Equal.
+// Test that two attributes with different content are not Equal.
 func TestEqual(t *testing.T) {
 	type keyOne struct{}
 	type keyTwo struct{}
-	a1 := attributes.New(keyOne{}, 1).WithValue(keyTwo{}, stringVal{s: "two"})
-	a2 := attributes.New(keyOne{}, 1).WithValue(keyTwo{}, stringVal{s: "two"})
-	if !a1.Equal(a2) {
-		t.Fatalf("%+v.Equals(%+v) = false; want true", a1, a2)
+	tests := []struct {
+		name string
+		a    *attributes.Attributes
+		b    *attributes.Attributes
+		want bool
+	}{
+		{
+			name: "different_first_value",
+			a:    attributes.New(keyOne{}, 1).WithValue(keyTwo{}, stringVal{s: "two"}),
+			b:    attributes.New(keyOne{}, 2).WithValue(keyTwo{}, stringVal{s: "two"}),
+			want: false,
+		},
+		{
+			name: "different_second_value",
+			a:    attributes.New(keyOne{}, 1).WithValue(keyTwo{}, stringVal{s: "one"}),
+			b:    attributes.New(keyOne{}, 1).WithValue(keyTwo{}, stringVal{s: "two"}),
+			want: false,
+		},
+		{
+			name: "same",
+			a:    attributes.New(keyOne{}, 1).WithValue(keyTwo{}, stringVal{s: "two"}),
+			b:    attributes.New(keyOne{}, 1).WithValue(keyTwo{}, stringVal{s: "two"}),
+			want: true,
+		},
+		{
+			name: "subset",
+			a:    attributes.New(keyOne{}, 1),
+			b:    attributes.New(keyOne{}, 1).WithValue(keyTwo{}, stringVal{s: "two"}),
+			want: false,
+		},
+		{
+			name: "superset",
+			a:    attributes.New(keyOne{}, 1).WithValue(keyTwo{}, stringVal{s: "two"}),
+			b:    attributes.New(keyTwo{}, stringVal{s: "two"}),
+			want: false,
+		},
+		{
+			name: "a_nil",
+			a:    nil,
+			b:    attributes.New(keyOne{}, 1),
+			want: false,
+		},
+		{
+			name: "b_nil",
+			a:    attributes.New(keyOne{}, 1),
+			b:    nil,
+			want: false,
+		},
+		{
+			name: "both_nil",
+			a:    nil,
+			b:    nil,
+			want: true,
+		},
 	}
-	if !a2.Equal(a1) {
-		t.Fatalf("%+v.Equals(%+v) = false; want true", a2, a1)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.a.Equal(tt.b); got != tt.want {
+				t.Errorf("%+v.Equal(%+v) = %v; want %v", tt.a, tt.b, got, tt.want)
+			}
+			// The Equal function should be symmetric, i.e. a.Equals(b) ==
+			// b.Equals(a).
+			if got := tt.b.Equal(tt.a); got != tt.want {
+				t.Errorf("%+v.Equal(%+v) = %v; want %v", tt.b, tt.a, got, tt.want)
+			}
+		})
 	}
 }
 
-// Test that two attributes with different content are not Equal.
-func TestNotEqual(t *testing.T) {
-	type keyOne struct{}
-	type keyTwo struct{}
-	a1 := attributes.New(keyOne{}, 1).WithValue(keyTwo{}, stringVal{s: "two"})
-	a2 := attributes.New(keyOne{}, 2).WithValue(keyTwo{}, stringVal{s: "two"})
-	a3 := attributes.New(keyOne{}, 1).WithValue(keyTwo{}, stringVal{s: "one"})
-	if a1.Equal(a2) {
-		t.Fatalf("%+v.Equals(%+v) = true; want false", a1, a2)
+func BenchmarkWithValue(b *testing.B) {
+	keys := make([]any, 10)
+	for i := range 10 {
+		keys[i] = i
 	}
-	if a2.Equal(a1) {
-		t.Fatalf("%+v.Equals(%+v) = true; want false", a2, a1)
-	}
-	if a3.Equal(a1) {
-		t.Fatalf("%+v.Equals(%+v) = true; want false", a3, a1)
+	b.ReportAllocs()
+
+	for b.Loop() {
+		// 50 endpoints
+		for range 50 {
+			a := attributes.New(keys[0], keys[0])
+			// 10 attributes each.
+			for j := 1; j < 10; j++ {
+				a = a.WithValue(keys[j], keys[j])
+			}
+		}
 	}
 }
