@@ -520,9 +520,8 @@ func (il *interceptorList) stop() {
 // is used to manage server filters that are shared across filter chains within
 // a filter chain manager.
 type refCountedServerFilter struct {
-	filter  httpfilter.ServerFilter
-	cleanup func()
-	refCnt  atomic.Int32
+	filter httpfilter.ServerFilter
+	refCnt atomic.Int32
 }
 
 func (rsf *refCountedServerFilter) incRef() {
@@ -530,8 +529,8 @@ func (rsf *refCountedServerFilter) incRef() {
 }
 
 func (rsf *refCountedServerFilter) decRef() {
-	if rsf.refCnt.Add(-1) == 0 && rsf.cleanup != nil {
-		rsf.cleanup()
+	if rsf.refCnt.Add(-1) == 0 {
+		rsf.filter.Close()
 	}
 }
 

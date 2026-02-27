@@ -560,9 +560,11 @@ type filterBuilder struct {
 
 func (fb *filterBuilder) TypeURLs() []string { return []string{"custom.server.filter"} }
 
-func (fb *filterBuilder) BuildServerFilter() (httpfilter.ServerFilter, func()) {
-	return fb, nil
+func (fb *filterBuilder) BuildServerFilter() httpfilter.ServerFilter {
+	return fb
 }
+
+func (fb *filterBuilder) Close() {}
 
 var _ httpfilter.ServerFilterBuilder = &filterBuilder{}
 
@@ -710,10 +712,9 @@ func (s) TestHTTPFilterInstantiation(t *testing.T) {
 					return serverFilter
 				}
 
-				sf, cleanup := builder.BuildServerFilter()
+				sf := builder.BuildServerFilter()
 				serverFilter = &refCountedServerFilter{
-					filter:  sf,
-					cleanup: cleanup,
+					filter: sf,
 				}
 				filters[key] = serverFilter
 				serverFilter.incRef()

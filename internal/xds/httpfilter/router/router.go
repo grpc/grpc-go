@@ -80,8 +80,8 @@ func (builder) BuildClientFilter() httpfilter.ClientFilter {
 	return filter{}
 }
 
-func (builder) BuildServerFilter() (httpfilter.ServerFilter, func()) {
-	return filter{}, func() {}
+func (builder) BuildServerFilter() httpfilter.ServerFilter {
+	return filter{}
 }
 
 var _ httpfilter.ClientFilterBuilder = builder{}

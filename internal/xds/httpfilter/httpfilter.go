@@ -85,9 +85,8 @@ type ClientFilter interface {
 // ServerFilterBuilder is an optional interface that a Builder can implement to
 // indicate its capability to build server-side filters.
 type ServerFilterBuilder interface {
-	// BuildServerFilter constructs a ServerFilter. The returned cleanup function
-	// is to be invoked when the filter is no longer needed.
-	BuildServerFilter() (filter ServerFilter, cleanup func())
+	// BuildServerFilter constructs a ServerFilter.
+	BuildServerFilter() (filter ServerFilter)
 }
 
 // ServerFilter represents the actual filter implementation on the server side.
@@ -105,6 +104,8 @@ type ServerFilter interface {
 	// The returned cleanup function is to be invoked when the interceptor is no
 	// longer needed.
 	BuildServerInterceptor(config, override FilterConfig) (interceptor iresolver.ServerInterceptor, cleanup func(), err error)
+	// Close is called when the filter is no longer needed.
+	Close()
 }
 
 var (

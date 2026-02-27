@@ -414,10 +414,9 @@ func (l *listenerWrapper) getOrCreateServerFilterLocked(builder httpfilter.Serve
 		return serverFilter
 	}
 
-	sf, cleanup := builder.BuildServerFilter()
+	sf := builder.BuildServerFilter()
 	serverFilter = &refCountedServerFilter{
-		filter:  sf,
-		cleanup: cleanup,
+		filter: sf,
 	}
 	l.httpFilters[key] = serverFilter
 	serverFilter.incRef()

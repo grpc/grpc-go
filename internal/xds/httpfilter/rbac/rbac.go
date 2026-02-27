@@ -160,13 +160,15 @@ func (builder) IsTerminal() bool {
 	return false
 }
 
-func (builder) BuildServerFilter() (httpfilter.ServerFilter, func()) {
-	return serverFilter{}, func() {}
+func (builder) BuildServerFilter() httpfilter.ServerFilter {
+	return serverFilter{}
 }
 
 var _ httpfilter.ServerFilterBuilder = builder{}
 
 type serverFilter struct{}
+
+func (serverFilter) Close() {}
 
 func (serverFilter) BuildServerInterceptor(cfg httpfilter.FilterConfig, override httpfilter.FilterConfig) (resolver.ServerInterceptor, func(), error) {
 	if cfg == nil {

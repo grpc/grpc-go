@@ -95,9 +95,13 @@ func (*trackingHTTPFilterBuilder) ParseFilterConfig(cfg proto.Message) (httpfilt
 	return filterConfigFromProto(cfg)
 }
 
-func (t *trackingHTTPFilterBuilder) BuildServerFilter() (httpfilter.ServerFilter, func()) {
+func (t *trackingHTTPFilterBuilder) BuildServerFilter() httpfilter.ServerFilter {
 	t.filtersCreated.Add(1)
-	return t, func() { t.filtersDestroyed.Add(1) }
+	return t
+}
+
+func (t *trackingHTTPFilterBuilder) Close() {
+	t.filtersDestroyed.Add(1)
 }
 
 var _ httpfilter.ServerFilterBuilder = &trackingHTTPFilterBuilder{}
