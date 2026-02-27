@@ -20,6 +20,7 @@ package server
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
 	"net/netip"
 	"strings"
@@ -705,10 +706,14 @@ func (s) TestHTTPFilterInstantiation(t *testing.T) {
 			}
 
 			filters := make(map[serverFilterKey]*refCountedServerFilter)
-			addOrGetFilterFunc := func(builder httpfilter.ServerFilterBuilder, key serverFilterKey) httpfilter.ServerFilter {
-				return getOrCreateServerFilterWithMap(filters, builder, key)
+			provider := func(filter xdsresource.HTTPFilter) (httpfilter.ServerFilter, error) {
+				builder, ok := filter.Filter.(httpfilter.ServerFilterBuilder)
+				if !ok {
+					return nil, fmt.Errorf("filter %q does not support use in server", filter.Name)
+				}
+				return getOrCreateServerFilterWithMap(filters, builder, newServerFilterKey(&filter)), nil
 			}
-			urc := fc.constructUsableRouteConfiguration(test.routeConfig, addOrGetFilterFunc)
+			urc := fc.constructUsableRouteConfiguration(test.routeConfig, provider)
 			if urc.err != nil {
 				t.Fatalf("Error constructing usable route configuration: %v", urc.err)
 			}

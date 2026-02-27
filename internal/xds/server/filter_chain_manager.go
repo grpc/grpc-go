@@ -389,24 +389,22 @@ func (fc *filterChain) stop() {
 	}
 }
 
-// addOrGetFilterFunc is a function type that is used for adding or getting a
-// server filter with reference counting. The function takes a
-// ServerFilterBuilder and a key, and returns a refCountedServerFilter.
+// serverFilterProvider is used to get a ServerFilter.
 //
-// This functionality if provided by the listener wrapper, which maintains a map
-// of refCountedServerFilters keyed by {filter_name + type_urls} for all
+// This functionality is provided by the listener wrapper, which maintains a map
+// of reference counted ServerFilters keyed by {filter_name + type_urls} for all
 // filters across all filter chains, and ensures that the same filter instance
-// is resused across resource updates. This allows filter instances to retain
+// is reused across resource updates. This allows filter instances to retain
 // state across resource updates.
-type addOrGetFilterFunc func(builder httpfilter.ServerFilterBuilder, key serverFilterKey) httpfilter.ServerFilter
+type serverFilterProvider func(filter xdsresource.HTTPFilter) (httpfilter.ServerFilter, error)
 
 // constructUsableRouteConfiguration takes Route Configuration and converts it
 // into matchable route configuration, with instantiated HTTP Filters per route.
-func (fc *filterChain) constructUsableRouteConfiguration(config xdsresource.RouteConfigUpdate, addOrGet addOrGetFilterFunc) *usableRouteConfiguration {
+func (fc *filterChain) constructUsableRouteConfiguration(config xdsresource.RouteConfigUpdate, provider serverFilterProvider) *usableRouteConfiguration {
 	vhs := make([]virtualHostWithInterceptors, 0, len(config.VirtualHosts))
 	var serverFilters []httpfilter.ServerFilter
 	for _, vh := range config.VirtualHosts {
-		vhwi, sfs, err := fc.convertVirtualHost(vh, addOrGet)
+		vhwi, sfs, err := fc.convertVirtualHost(vh, provider)
 		if err != nil {
 			for _, sf := range serverFilters {
 				sf.Close()
@@ -428,13 +426,21 @@ func (fc *filterChain) constructUsableRouteConfiguration(config xdsresource.Rout
 	return &usableRouteConfiguration{vhs: vhs}
 }
 
-func (fc *filterChain) convertVirtualHost(virtualHost *xdsresource.VirtualHost, addOrGet addOrGetFilterFunc) (virtualHostWithInterceptors, []httpfilter.ServerFilter, error) {
+func (fc *filterChain) convertVirtualHost(virtualHost *xdsresource.VirtualHost, provider serverFilterProvider) (_ virtualHostWithInterceptors, _ []httpfilter.ServerFilter, err error) {
 	var serverFilters []httpfilter.ServerFilter
+	defer func() {
+		if err != nil {
+			for _, sf := range serverFilters {
+				sf.Close()
+			}
+		}
+	}()
+
 	rs := make([]routeWithInterceptors, len(virtualHost.Routes))
 	for i, r := range virtualHost.Routes {
 		rs[i].actionType = r.ActionType
 		rs[i].matcher = xdsresource.RouteToMatcher(r)
-		interceptor, sfs, err := fc.newInterceptor(r.HTTPFilterConfigOverride, virtualHost.HTTPFilterConfigOverride, addOrGet)
+		interceptor, sfs, err := fc.newInterceptor(r.HTTPFilterConfigOverride, virtualHost.HTTPFilterConfigOverride, provider)
 		if err != nil {
 			for _, sf := range serverFilters {
 				sf.Close()
@@ -453,19 +459,18 @@ func (rc *usableRouteConfiguration) statusErrWithNodeID(c codes.Code, msg string
 	return status.Error(c, fmt.Sprintf("[xDS node id: %v]: %s", rc.nodeID, fmt.Sprintf(msg, args...)))
 }
 
-func (fc *filterChain) newInterceptor(routeOverride, virtualHostOverride map[string]httpfilter.FilterConfig, addOrGet addOrGetFilterFunc) (resolver.ServerInterceptor, []httpfilter.ServerFilter, error) {
-	var serverFilters []httpfilter.ServerFilter
-	interceptors := make([]*serverInterceptorWithCleanup, 0, len(fc.httpFilters))
-	for _, filter := range fc.httpFilters {
-		builder, ok := filter.Filter.(httpfilter.ServerFilterBuilder)
-		if !ok {
+func (fc *filterChain) newInterceptor(routeOverride, virtualHostOverride map[string]httpfilter.FilterConfig, provider serverFilterProvider) (_ resolver.ServerInterceptor, _ []httpfilter.ServerFilter, err error) {
+	serverFilters := []httpfilter.ServerFilter{}
+	defer func() {
+		if err != nil {
 			for _, sf := range serverFilters {
 				sf.Close()
 			}
-			// Should not happen if it passed xdsClient validation.
-			return nil, nil, fmt.Errorf("filter %q does not support use in server", filter.Name)
 		}
+	}()
 
+	interceptors := make([]*serverInterceptorWithCleanup, 0, len(fc.httpFilters))
+	for _, filter := range fc.httpFilters {
 		// Route is highest priority on server side, as there is no concept
 		// of an upstream cluster on server side.
 		override := routeOverride[filter.Name]
@@ -474,13 +479,13 @@ func (fc *filterChain) newInterceptor(routeOverride, virtualHostOverride map[str
 			override = virtualHostOverride[filter.Name]
 		}
 
-		serverFilter := addOrGet(builder, newServerFilterKey(&filter))
+		serverFilter, err := provider(filter)
+		if err != nil {
+			return nil, nil, err
+		}
 		serverFilters = append(serverFilters, serverFilter)
 		i, cleanup, err := serverFilter.BuildServerInterceptor(filter.Config, override)
 		if err != nil {
-			for _, sf := range serverFilters {
-				sf.Close()
-			}
 			return nil, nil, fmt.Errorf("error constructing filter: %v", err)
 		}
 		if i != nil {

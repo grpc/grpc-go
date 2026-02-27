@@ -407,8 +407,12 @@ func (l *listenerWrapper) switchModeLocked(newMode connectivity.ServingMode, err
 // for future use.
 //
 // Must be called with l.mu held.
-func (l *listenerWrapper) getOrCreateServerFilterLocked(builder httpfilter.ServerFilterBuilder, key serverFilterKey) httpfilter.ServerFilter {
-	return getOrCreateServerFilterWithMap(l.httpFilters, builder, key)
+func (l *listenerWrapper) getOrCreateServerFilterLocked(filter xdsresource.HTTPFilter) (httpfilter.ServerFilter, error) {
+	builder, ok := filter.Filter.(httpfilter.ServerFilterBuilder)
+	if !ok {
+		return nil, fmt.Errorf("filter %q does not support use in server", filter.Name)
+	}
+	return getOrCreateServerFilterWithMap(l.httpFilters, builder, newServerFilterKey(&filter)), nil
 }
 
 // This functionality is put in a separate function to allow for testing with a
