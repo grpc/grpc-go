@@ -104,16 +104,24 @@ func (builder) IsTerminal() bool {
 	return false
 }
 
-var _ httpfilter.ClientInterceptorBuilder = builder{}
+func (builder) BuildClientFilter() httpfilter.ClientFilter {
+	return clientFilter{}
+}
 
-func (builder) BuildClientInterceptor(cfg, override httpfilter.FilterConfig) (iresolver.ClientInterceptor, error) {
+var _ httpfilter.ClientFilterBuilder = builder{}
+
+type clientFilter struct{}
+
+func (clientFilter) Close() {}
+
+func (clientFilter) BuildClientInterceptor(cfg, override httpfilter.FilterConfig) (iresolver.ClientInterceptor, func(), error) {
 	if cfg == nil {
-		return nil, fmt.Errorf("fault: nil config provided")
+		return nil, nil, fmt.Errorf("fault: nil config provided")
 	}
 
 	c, ok := cfg.(config)
 	if !ok {
-		return nil, fmt.Errorf("fault: incorrect config type provided (%T): %v", cfg, cfg)
+		return nil, nil, fmt.Errorf("fault: incorrect config type provided (%T): %v", cfg, cfg)
 	}
 
 	if override != nil {
@@ -121,16 +129,16 @@ func (builder) BuildClientInterceptor(cfg, override httpfilter.FilterConfig) (ir
 		// still validate the listener config type.
 		c, ok = override.(config)
 		if !ok {
-			return nil, fmt.Errorf("fault: incorrect override config type provided (%T): %v", override, override)
+			return nil, nil, fmt.Errorf("fault: incorrect override config type provided (%T): %v", override, override)
 		}
 	}
 
 	icfg := c.config
 	if (icfg.GetMaxActiveFaults() != nil && icfg.GetMaxActiveFaults().GetValue() == 0) ||
 		(icfg.GetDelay() == nil && icfg.GetAbort() == nil) {
-		return nil, nil
+		return nil, nil, nil
 	}
-	return &interceptor{config: icfg}, nil
+	return &interceptor{config: icfg}, nil, nil
 }
 
 type interceptor struct {

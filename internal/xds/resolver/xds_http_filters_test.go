@@ -23,7 +23,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
@@ -122,15 +124,21 @@ func (*testHTTPFilterWithRPCMetadata) ParseFilterConfigOverride(override proto.M
 
 func (*testHTTPFilterWithRPCMetadata) IsTerminal() bool { return false }
 
-// ClientInterceptorBuilder is an optional interface for filters to implement.
-// This compile time check ensures the test filter implements it.
-var _ httpfilter.ClientInterceptorBuilder = &testHTTPFilterWithRPCMetadata{}
+func (fb *testHTTPFilterWithRPCMetadata) BuildClientFilter() httpfilter.ClientFilter {
+	return fb
+}
 
-func (fb *testHTTPFilterWithRPCMetadata) BuildClientInterceptor(config, override httpfilter.FilterConfig) (iresolver.ClientInterceptor, error) {
+func (fb *testHTTPFilterWithRPCMetadata) Close() {}
+
+// ClientFilterBuilder is an optional interface for filters to implement. This
+// compile time check ensures the test filter implements it.
+var _ httpfilter.ClientFilterBuilder = &testHTTPFilterWithRPCMetadata{}
+
+func (fb *testHTTPFilterWithRPCMetadata) BuildClientInterceptor(config, override httpfilter.FilterConfig) (iresolver.ClientInterceptor, func(), error) {
 	fb.logger.Logf("BuildClientInterceptor called with config: %+v, override: %+v", config, override)
 
 	if config == nil {
-		return nil, fmt.Errorf("unexpected missing config")
+		return nil, nil, fmt.Errorf("unexpected missing config")
 	}
 
 	baseCfg := config.(testFilterCfg)
@@ -154,7 +162,7 @@ func (fb *testHTTPFilterWithRPCMetadata) BuildClientInterceptor(config, override
 			Error:        newStreamErr,
 		},
 		newStreamChan: fb.newStreamChan,
-	}, nil
+	}, nil, nil
 }
 
 // overallFilterConfig is a JSON representation of the filter config.
@@ -649,5 +657,241 @@ func (s) TestXDSResolverHTTPFilters_NewStreamError(t *testing.T) {
 	defer sCancel()
 	if _, err = fb.newStreamChan.Receive(sCtx); err == nil {
 		t.Fatal("Last filter was invoked when expected not to be")
+	}
+}
+
+// trackingHTTPFilterBuilder is a test filter that allows counting the number of
+// times a filter instance or an interceptor instance is built or closed.
+type trackingHTTPFilterBuilder struct {
+	httpfilter.Builder
+	filtersCreated        *atomic.Int32
+	filtersDestroyed      *atomic.Int32
+	interceptorsCreated   *atomic.Int32
+	interceptorsDestroyed *atomic.Int32
+	typeURL               string
+	pathCh                chan string
+}
+
+func (t *trackingHTTPFilterBuilder) IsTerminal() bool { return false }
+
+func (t *trackingHTTPFilterBuilder) TypeURLs() []string { return []string{t.typeURL} }
+
+func (*trackingHTTPFilterBuilder) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, error) {
+	return filterConfigFromProto(cfg)
+}
+
+func (t *trackingHTTPFilterBuilder) BuildClientFilter() httpfilter.ClientFilter {
+	t.filtersCreated.Add(1)
+	return t
+}
+
+func (t *trackingHTTPFilterBuilder) Close() {
+	t.filtersDestroyed.Add(1)
+}
+
+var _ httpfilter.ClientFilterBuilder = &trackingHTTPFilterBuilder{}
+
+func (t *trackingHTTPFilterBuilder) BuildClientInterceptor(config, _ httpfilter.FilterConfig) (iresolver.ClientInterceptor, func(), error) {
+	t.interceptorsCreated.Add(1)
+
+	if config == nil {
+		return nil, nil, fmt.Errorf("unexpected missing config")
+	}
+	baseCfg := config.(testFilterCfg)
+
+	interceptor := &trackingInterceptor{
+		pathCh:   t.pathCh,
+		basePath: baseCfg.path,
+	}
+	return interceptor, func() { t.interceptorsDestroyed.Add(1) }, nil
+}
+
+type trackingInterceptor struct {
+	pathCh   chan string
+	basePath string
+}
+
+func (i *trackingInterceptor) NewStream(ctx context.Context, _ iresolver.RPCInfo, done func(), newStream func(ctx context.Context, done func()) (iresolver.ClientStream, error)) (iresolver.ClientStream, error) {
+	i.pathCh <- i.basePath
+	return newStream(ctx, done)
+}
+
+// Tests that a single filter instance is created for a given filter
+// configuration, and that this instance is retained across config updates.
+// Verifies that a new interceptor is built for each config update, and that the
+// old interceptor is closed.
+func (s) TestXDSResolverHTTPFilters_FilterInstanceRetained(t *testing.T) {
+	// Register a custom httpFilter builder for the test.
+	var filtersCreated, filtersDestroyed, interceptorsCreated, interceptorsDestroyed atomic.Int32
+	pathCh := make(chan string, 1)
+	testFilterTypeURL := t.Name()
+	fb := &trackingHTTPFilterBuilder{
+		filtersCreated:        &filtersCreated,
+		filtersDestroyed:      &filtersDestroyed,
+		interceptorsCreated:   &interceptorsCreated,
+		interceptorsDestroyed: &interceptorsDestroyed,
+		typeURL:               testFilterTypeURL,
+		pathCh:                pathCh,
+	}
+	httpfilter.Register(fb)
+	defer httpfilter.UnregisterForTesting(fb.typeURL)
+
+	// Spin up an xDS management server.
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
+	defer mgmtServer.Stop()
+
+	// Create an xDS resolver with bootstrap configuration pointing to the above
+	// management server.
+	nodeID := uuid.New().String()
+	bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
+	resolverBuilder, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bootstrapContents)
+	if err != nil {
+		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
+	}
+
+	// Start a test backend.
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	backend := stubserver.StartTestService(t, nil)
+	defer backend.Stop()
+
+	// Configure resources on the management server.
+	const testServiceName = "service-name"
+	const routeConfigName = "route-config"
+	listener := &v3listenerpb.Listener{
+		Name: testServiceName,
+		ApiListener: &v3listenerpb.ApiListener{
+			ApiListener: testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
+				RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
+					RouteConfig: &v3routepb.RouteConfiguration{
+						Name: routeConfigName,
+						VirtualHosts: []*v3routepb.VirtualHost{{
+							Domains: []string{testServiceName},
+							Routes: []*v3routepb.Route{{
+								Match: &v3routepb.RouteMatch{
+									PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: ""},
+								},
+								Action: &v3routepb.Route_Route{
+									Route: &v3routepb.RouteAction{
+										ClusterSpecifier: &v3routepb.RouteAction_Cluster{Cluster: "A"},
+									},
+								},
+							}},
+						}},
+					},
+				},
+				HttpFilters: []*v3httppb.HttpFilter{
+					newHTTPFilter(t, "tracker", testFilterTypeURL, "initial-path", ""),
+					e2e.RouterHTTPFilter,
+				},
+			}),
+		},
+	}
+	resources := e2e.UpdateOptions{
+		NodeID:         nodeID,
+		Listeners:      []*v3listenerpb.Listener{listener},
+		Clusters:       []*v3clusterpb.Cluster{e2e.DefaultCluster("A", "endpoint_A", e2e.SecurityLevelNone)},
+		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint("endpoint_A", "localhost", []uint32{testutils.ParsePort(t, backend.Address)})},
+		SkipValidation: true,
+	}
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a gRPC client using the xDS resolver.
+	cc, err := grpc.NewClient("xds:///"+testServiceName, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(resolverBuilder))
+	if err != nil {
+		t.Fatalf("Failed to create a gRPC client: %v", err)
+	}
+	defer cc.Close()
+
+	// Make an RPC and verify that one filter and one interceptor are created.
+	client := testgrpc.NewTestServiceClient(cc)
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+		t.Fatalf("EmptyCall() failed: %v", err)
+	}
+	select {
+	case cfg := <-pathCh:
+		if got, want := cfg, "initial-path"; got != want {
+			t.Fatalf("Unexpected config sent to filter, got: %q, want: %q", got, want)
+		}
+	case <-ctx.Done():
+		t.Fatalf("Timeout waiting for interceptor to be invoked")
+	}
+	if got, want := filtersCreated.Load(), int32(1); got != want {
+		t.Fatalf("Created %d filter instances, want: %d", got, want)
+	}
+	if got, want := interceptorsCreated.Load(), int32(1); got != want {
+		t.Fatalf("Created %d interceptor instances, want: %d", got, want)
+	}
+
+	// Update the filter config in the listener resource.
+	listener.ApiListener.ApiListener = testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
+		RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
+			RouteConfig: &v3routepb.RouteConfiguration{
+				Name: routeConfigName,
+				VirtualHosts: []*v3routepb.VirtualHost{{
+					Domains: []string{testServiceName},
+					Routes: []*v3routepb.Route{{
+						Match: &v3routepb.RouteMatch{
+							PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: ""},
+						},
+						Action: &v3routepb.Route_Route{
+							Route: &v3routepb.RouteAction{
+								ClusterSpecifier: &v3routepb.RouteAction_Cluster{Cluster: "A"},
+							},
+						},
+					}},
+				}},
+			},
+		},
+		HttpFilters: []*v3httppb.HttpFilter{
+			newHTTPFilter(t, "tracker", testFilterTypeURL, "final-path", ""),
+			e2e.RouterHTTPFilter,
+		},
+	})
+	resources.Listeners = []*v3listenerpb.Listener{listener}
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Wait for the updated config to be applied on the gRPC client.
+WaitForUpdatedConfig:
+	for ; ctx.Err() == nil; <-time.After(defaultTestShortTimeout) {
+		if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+			t.Fatalf("EmptyCall() failed: %v", err)
+		}
+		select {
+		case cfg := <-pathCh:
+			if got, want := cfg, "final-path"; got == want {
+				break WaitForUpdatedConfig
+			}
+		case <-ctx.Done():
+			t.Fatalf("Timeout waiting for interceptor get updated config")
+		}
+	}
+	if ctx.Err() != nil {
+		t.Fatalf("Timeout when waiting for updated config to be applied: %v", ctx.Err())
+	}
+
+	// Verify the filter instance is retained, while the interceptor instances
+	// are replaced with the updated config.
+	if got, want := filtersCreated.Load(), int32(1); got != want {
+		t.Fatalf("Created %d filter instances, want: %d", got, want)
+	}
+	if got, want := interceptorsCreated.Load(), int32(2); got != want {
+		t.Fatalf("Created %d interceptor instances, want: %d", got, want)
+	}
+	if got, want := interceptorsDestroyed.Load(), int32(1); got != want {
+		t.Fatalf("Destroyed %d interceptor instances, want: %d", got, want)
+	}
+
+	// Close the client and verify that the filter and interceptor are closed.
+	cc.Close()
+	if got, want := filtersDestroyed.Load(), int32(1); got != want {
+		t.Fatalf("Destroyed %d filter instances, want: %d", got, want)
+	}
+	if got, want := interceptorsDestroyed.Load(), int32(2); got != want {
+		t.Fatalf("Destroyed %d interceptor instances, want: %d", got, want)
 	}
 }

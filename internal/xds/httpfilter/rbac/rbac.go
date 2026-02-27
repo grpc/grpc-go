@@ -160,18 +160,24 @@ func (builder) IsTerminal() bool {
 	return false
 }
 
-var _ httpfilter.ServerInterceptorBuilder = builder{}
+func (builder) BuildServerFilter() httpfilter.ServerFilter {
+	return serverFilter{}
+}
 
-// BuildServerInterceptor is an optional interface builder implements in order
-// to signify it works server side.
-func (builder) BuildServerInterceptor(cfg httpfilter.FilterConfig, override httpfilter.FilterConfig) (resolver.ServerInterceptor, error) {
+var _ httpfilter.ServerFilterBuilder = builder{}
+
+type serverFilter struct{}
+
+func (serverFilter) Close() {}
+
+func (serverFilter) BuildServerInterceptor(cfg httpfilter.FilterConfig, override httpfilter.FilterConfig) (resolver.ServerInterceptor, func(), error) {
 	if cfg == nil {
-		return nil, fmt.Errorf("rbac: nil config provided")
+		return nil, nil, fmt.Errorf("rbac: nil config provided")
 	}
 
 	c, ok := cfg.(config)
 	if !ok {
-		return nil, fmt.Errorf("rbac: incorrect config type provided (%T): %v", cfg, cfg)
+		return nil, nil, fmt.Errorf("rbac: incorrect config type provided (%T): %v", cfg, cfg)
 	}
 
 	if override != nil {
@@ -179,7 +185,7 @@ func (builder) BuildServerInterceptor(cfg httpfilter.FilterConfig, override http
 		// still validate the listener config type.
 		c, ok = override.(config)
 		if !ok {
-			return nil, fmt.Errorf("rbac: incorrect override config type provided (%T): %v", override, override)
+			return nil, nil, fmt.Errorf("rbac: incorrect override config type provided (%T): %v", override, override)
 		}
 	}
 
@@ -189,9 +195,9 @@ func (builder) BuildServerInterceptor(cfg httpfilter.FilterConfig, override http
 	// "At this time, if the RBAC.action is Action.LOG then the policy will be
 	// completely ignored, as if RBAC was not configured." - A41
 	if c.chainEngine == nil {
-		return nil, nil
+		return nil, nil, nil
 	}
-	return &interceptor{chainEngine: c.chainEngine}, nil
+	return &interceptor{chainEngine: c.chainEngine}, nil, nil
 }
 
 type interceptor struct {

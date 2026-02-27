@@ -20,6 +20,7 @@ package server
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
 	"net/netip"
 	"strings"
@@ -555,19 +556,27 @@ type filterCfg struct {
 }
 
 type filterBuilder struct {
-	httpfilter.Filter
+	httpfilter.Builder
 }
 
-var _ httpfilter.ServerInterceptorBuilder = &filterBuilder{}
+func (fb *filterBuilder) TypeURLs() []string { return []string{"custom.server.filter"} }
 
-func (fb *filterBuilder) BuildServerInterceptor(config httpfilter.FilterConfig, override httpfilter.FilterConfig) (iresolver.ServerInterceptor, error) {
+func (fb *filterBuilder) BuildServerFilter() httpfilter.ServerFilter {
+	return fb
+}
+
+func (fb *filterBuilder) Close() {}
+
+var _ httpfilter.ServerFilterBuilder = &filterBuilder{}
+
+func (fb *filterBuilder) BuildServerInterceptor(config httpfilter.FilterConfig, override httpfilter.FilterConfig) (iresolver.ServerInterceptor, func(), error) {
 	var level string
 	level = config.(filterCfg).level
 
 	if override != nil {
 		level = override.(filterCfg).level
 	}
-	return &serverInterceptor{level: level}, nil
+	return &serverInterceptor{level: level}, nil, nil
 }
 
 type serverInterceptor struct {
@@ -649,75 +658,43 @@ func (s) TestHTTPFilterInstantiation(t *testing.T) {
 				}},
 			wantErrs: []string{rLevel},
 		},
-		// This tests the scenario where there are three http filters, and one
-		// gets overridden by route and one by virtual host.
 		{
-			name: "three http filters vh override route override",
+			name: "three routes with different overrides",
 			filters: []xdsresource.HTTPFilter{
-				{Name: "server-interceptor1", Filter: &filterBuilder{}, Config: filterCfg{level: topLevel}},
-				{Name: "server-interceptor2", Filter: &filterBuilder{}, Config: filterCfg{level: topLevel}},
-				{Name: "server-interceptor3", Filter: &filterBuilder{}, Config: filterCfg{level: topLevel}},
+				{Name: "server-interceptor", Filter: &filterBuilder{}, Config: filterCfg{level: topLevel}},
 			},
 			routeConfig: xdsresource.RouteConfigUpdate{
 				VirtualHosts: []*xdsresource.VirtualHost{
 					{
-						Domains: []string{"target"},
+						Domains: []string{"no overrides"},
+						Routes: []*xdsresource.Route{{
+							Prefix: newStringP("1"),
+						}},
+					},
+					{
+						Domains: []string{"virtual host override"},
+						Routes: []*xdsresource.Route{{
+							Prefix: newStringP("1"),
+						}},
+						HTTPFilterConfigOverride: map[string]httpfilter.FilterConfig{
+							"server-interceptor": filterCfg{level: vhLevel},
+						},
+					},
+					{
+						Domains: []string{"route and virtual host override"},
 						Routes: []*xdsresource.Route{{
 							Prefix: newStringP("1"),
 							HTTPFilterConfigOverride: map[string]httpfilter.FilterConfig{
-								"server-interceptor3": filterCfg{level: rLevel},
+								"server-interceptor": filterCfg{level: rLevel},
 							},
-						},
-						},
+						}},
 						HTTPFilterConfigOverride: map[string]httpfilter.FilterConfig{
-							"server-interceptor2": filterCfg{level: vhLevel},
+							"server-interceptor": filterCfg{level: vhLevel},
 						},
 					},
-				}},
+				},
+			},
 			wantErrs: []string{topLevel, vhLevel, rLevel},
-		},
-		// This tests the scenario where there are three http filters, and two
-		// virtual hosts with different vh + route overrides for each virtual
-		// host.
-		{
-			name: "three http filters two vh",
-			filters: []xdsresource.HTTPFilter{
-				{Name: "server-interceptor1", Filter: &filterBuilder{}, Config: filterCfg{level: topLevel}},
-				{Name: "server-interceptor2", Filter: &filterBuilder{}, Config: filterCfg{level: topLevel}},
-				{Name: "server-interceptor3", Filter: &filterBuilder{}, Config: filterCfg{level: topLevel}},
-			},
-			routeConfig: xdsresource.RouteConfigUpdate{
-				VirtualHosts: []*xdsresource.VirtualHost{
-					{
-						Domains: []string{"target"},
-						Routes: []*xdsresource.Route{{
-							Prefix: newStringP("1"),
-							HTTPFilterConfigOverride: map[string]httpfilter.FilterConfig{
-								"server-interceptor3": filterCfg{level: rLevel},
-							},
-						},
-						},
-						HTTPFilterConfigOverride: map[string]httpfilter.FilterConfig{
-							"server-interceptor2": filterCfg{level: vhLevel},
-						},
-					},
-					{
-						Domains: []string{"target"},
-						Routes: []*xdsresource.Route{{
-							Prefix: newStringP("1"),
-							HTTPFilterConfigOverride: map[string]httpfilter.FilterConfig{
-								"server-interceptor1": filterCfg{level: rLevel},
-								"server-interceptor2": filterCfg{level: rLevel},
-							},
-						},
-						},
-						HTTPFilterConfigOverride: map[string]httpfilter.FilterConfig{
-							"server-interceptor2": filterCfg{level: vhLevel},
-							"server-interceptor3": filterCfg{level: vhLevel},
-						},
-					},
-				}},
-			wantErrs: []string{topLevel, vhLevel, rLevel, rLevel, rLevel, vhLevel},
 		},
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -727,7 +704,16 @@ func (s) TestHTTPFilterInstantiation(t *testing.T) {
 			fc := filterChain{
 				httpFilters: test.filters,
 			}
-			urc := fc.constructUsableRouteConfiguration(test.routeConfig)
+
+			filters := make(map[serverFilterKey]*refCountedServerFilter)
+			provider := func(filter xdsresource.HTTPFilter) (httpfilter.ServerFilter, error) {
+				builder, ok := filter.Filter.(httpfilter.ServerFilterBuilder)
+				if !ok {
+					return nil, fmt.Errorf("filter %q does not support use in server", filter.Name)
+				}
+				return getOrCreateServerFilterWithMap(filters, builder, newServerFilterKey(&filter)), nil
+			}
+			urc := fc.constructUsableRouteConfiguration(test.routeConfig, provider)
 			if urc.err != nil {
 				t.Fatalf("Error constructing usable route configuration: %v", urc.err)
 			}
@@ -736,9 +722,7 @@ func (s) TestHTTPFilterInstantiation(t *testing.T) {
 			var errs []string
 			for _, vh := range urc.vhs {
 				for _, r := range vh.routes {
-					for _, interceptor := range r.interceptors {
-						errs = append(errs, interceptor.AllowRPC(ctx).Error())
-					}
+					errs = append(errs, r.interceptor.AllowRPC(ctx).Error())
 				}
 			}
 			if !cmp.Equal(errs, test.wantErrs) {
