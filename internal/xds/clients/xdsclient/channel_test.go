@@ -30,9 +30,11 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/google/uuid"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/internal/envconfig"
+	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/xds/clients"
 	"google.golang.org/grpc/internal/xds/clients/grpctransport"
-	"google.golang.org/grpc/internal/xds/clients/internal/testutils"
+	xdstestutils "google.golang.org/grpc/internal/xds/clients/internal/testutils"
 	"google.golang.org/grpc/internal/xds/clients/internal/testutils/e2e"
 	"google.golang.org/grpc/internal/xds/clients/internal/testutils/fakeserver"
 	"google.golang.org/grpc/internal/xds/clients/xdsclient/internal/xdsresource"
@@ -184,18 +186,18 @@ func (s) TestChannel_ADS_HandleResponseFromManagementServer(t *testing.T) {
 			Value:   []byte{1, 2, 3, 4},
 		}
 		apiListener = &v3listenerpb.ApiListener{
-			ApiListener: testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
+			ApiListener: xdstestutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
 				RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
 					RouteConfig: &v3routepb.RouteConfiguration{
 						Name: routeName},
 				},
 			}),
 		}
-		listener1 = testutils.MarshalAny(t, &v3listenerpb.Listener{
+		listener1 = xdstestutils.MarshalAny(t, &v3listenerpb.Listener{
 			Name:        listenerName1,
 			ApiListener: apiListener,
 		})
-		listener2 = testutils.MarshalAny(t, &v3listenerpb.Listener{
+		listener2 = xdstestutils.MarshalAny(t, &v3listenerpb.Listener{
 			Name:        listenerName2,
 			ApiListener: apiListener,
 		})
@@ -234,10 +236,10 @@ func (s) TestChannel_ADS_HandleResponseFromManagementServer(t *testing.T) {
 			managementServerResponse: &v3discoverypb.DiscoveryResponse{
 				VersionInfo: "0",
 				TypeUrl:     "type.googleapis.com/envoy.config.listener.v3.Listener",
-				Resources: []*anypb.Any{testutils.MarshalAny(t, &v3listenerpb.Listener{
+				Resources: []*anypb.Any{xdstestutils.MarshalAny(t, &v3listenerpb.Listener{
 					Name: listenerName1,
 					ApiListener: &v3listenerpb.ApiListener{
-						ApiListener: testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
+						ApiListener: xdstestutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
 							RouteSpecifier: &v3httppb.HttpConnectionManager_ScopedRoutes{},
 						}),
 					},
@@ -265,10 +267,10 @@ func (s) TestChannel_ADS_HandleResponseFromManagementServer(t *testing.T) {
 				TypeUrl:     "type.googleapis.com/envoy.config.listener.v3.Listener",
 				Resources: []*anypb.Any{
 					badlyMarshaledResource,
-					testutils.MarshalAny(t, &v3listenerpb.Listener{
+					xdstestutils.MarshalAny(t, &v3listenerpb.Listener{
 						Name: listenerName2,
 						ApiListener: &v3listenerpb.ApiListener{
-							ApiListener: testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
+							ApiListener: xdstestutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
 								RouteSpecifier: &v3httppb.HttpConnectionManager_ScopedRoutes{},
 							}),
 						},
@@ -345,10 +347,10 @@ func (s) TestChannel_ADS_HandleResponseFromManagementServer(t *testing.T) {
 				VersionInfo: "0",
 				TypeUrl:     "type.googleapis.com/envoy.config.listener.v3.Listener",
 				Resources: []*anypb.Any{
-					testutils.MarshalAny(t, &v3listenerpb.Listener{
+					xdstestutils.MarshalAny(t, &v3listenerpb.Listener{
 						Name: listenerName1,
 						ApiListener: &v3listenerpb.ApiListener{
-							ApiListener: testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
+							ApiListener: xdstestutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
 								RouteSpecifier: &v3httppb.HttpConnectionManager_ScopedRoutes{},
 							}),
 						},
@@ -513,7 +515,7 @@ func (s) TestChannel_ADS_StreamFailure(t *testing.T) {
 	if err != nil {
 		t.Fatalf("net.Listen() failed: %v", err)
 	}
-	lis := testutils.NewRestartableListener(l)
+	lis := xdstestutils.NewRestartableListener(l)
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{Listener: lis})
 
 	// Configure a listener resource on the management server.
@@ -539,7 +541,7 @@ func (s) TestChannel_ADS_StreamFailure(t *testing.T) {
 
 	// Wait for an update callback on the event handler and verify the
 	// contents of the update and the metadata.
-	hcm := testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
+	hcm := xdstestutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
 		RouteSpecifier: &v3httppb.HttpConnectionManager_Rds{Rds: &v3httppb.Rds{
 			ConfigSource: &v3corepb.ConfigSource{
 				ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{Ads: &v3corepb.AggregatedConfigSource{}},
@@ -771,4 +773,47 @@ func (ta *testEventHandler) waitForResourceDoesNotExist(ctx context.Context) (Re
 		return ResourceType{}, "", ctx.Err()
 	}
 	return typ, name, nil
+}
+
+type panicDecoder struct{}
+
+func (panicDecoder) Decode(*AnyProto, DecodeOptions) (*DecodeResult, error) {
+	panic("simulate panic")
+}
+
+// TestDecodeResponse_PanicRecoveryEnabled tests the panic recovery mechanism
+// in decodeResponse. It verifies that if XDSRecoverPanicInResourceParsing
+// env variable is enabled, panics during unmarshaling are caught and returned
+// as errors.
+func (s) TestDecodeResponse_PanicRecoveryEnabled(t *testing.T) {
+	rType := &ResourceType{
+		TypeName: "resourceType",
+		Decoder:  panicDecoder{},
+	}
+	resp := response{resources: []*anypb.Any{{Value: []byte("test")}}}
+	wantErr := "recovered from panic during resource parsing"
+
+	if _, _, err := decodeResponse(&DecodeOptions{}, rType, resp); err == nil || !strings.Contains(err.Error(), wantErr) {
+		t.Fatalf("decodeResponse() failed with err: %v, want %q", err, wantErr)
+	}
+}
+
+// TestDecodeResponse_PanicRecoveryDisabled tests the panic recovery mechanism
+// in decodeResponse. It verifies that when XDSRecoverPanicInResourceParsing
+// env variable is disabled, panics during unmarshaling propagate.
+func (s) TestDecodeResponse_PanicRecoveryDisabled(t *testing.T) {
+	testutils.SetEnvConfig(t, &envconfig.XDSRecoverPanicInResourceParsing, false)
+	rType := &ResourceType{
+		TypeName: "resourceType",
+		Decoder:  panicDecoder{},
+	}
+	resp := response{resources: []*anypb.Any{{Value: []byte("test")}}}
+	wantErr := "simulate panic"
+
+	defer func() {
+		if r := recover(); r == nil || !strings.Contains(fmt.Sprint(r), wantErr) {
+			t.Fatalf("Expected panic in decodeResponse, got: %v, want: %q", r, wantErr)
+		}
+	}()
+	decodeResponse(&DecodeOptions{}, rType, resp)
 }
