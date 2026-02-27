@@ -53,8 +53,15 @@ func New(key, value any) *Attributes {
 
 // WithValue returns a new Attributes containing the previous keys and values
 // and the new key/value pair.  If the same key appears multiple times, the
-// last value overwrites all previous values for that key.  To remove an
-// existing key, use a nil value.  value should not be modified later.
+// last value overwrites all previous values for that key.  value should not be
+// modified later.
+//
+// Note that Attributes do not support deletion. Avoid using untyped nil values.
+// Since the Value method returns an untyped nil when a key is absent, it is
+// impossible to distinguish between a missing key and a key explicitly set to
+// an untyped nil. If you need to represent a value being unset, consider
+// storing a specific sentinel type or a wrapper struct with a boolean field
+// indicating presence.
 func (a *Attributes) WithValue(key, value any) *Attributes {
 	return &Attributes{
 		parent: a,
