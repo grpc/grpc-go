@@ -21,16 +21,37 @@
 // In the default logger, severity level can be set by environment variable
 // GRPC_GO_LOG_SEVERITY_LEVEL, verbosity level can be set by
 // GRPC_GO_LOG_VERBOSITY_LEVEL.
+//
+// Per-component severity level can be set by GRPC_GO_COMPONENT_LOG_LEVEL with
+// format "component1:LEVEL,component2:LEVEL" (e.g., "dns:error,xds:warning").
+// Component-specific settings take precedence over GRPC_GO_LOG_SEVERITY_LEVEL
+// for that component.
 package grpclog
 
 import (
+	"io"
 	"os"
 
 	"google.golang.org/grpc/grpclog/internal"
 )
 
+var componentLogLevels map[string]severityLevel
+
 func init() {
-	SetLoggerV2(newLoggerV2())
+	initLogger(
+		os.Stderr,
+		os.Getenv("GRPC_GO_LOG_SEVERITY_LEVEL"),
+		os.Getenv("GRPC_GO_LOG_VERBOSITY_LEVEL"),
+		os.Getenv("GRPC_GO_LOG_FORMATTER"),
+		os.Getenv("GRPC_GO_COMPONENT_LOG_LEVEL"),
+	)
+}
+
+func initLogger(w io.Writer, logSeverityLevel, logVerbosityLevel, logFormatter, componentLogLevel string) {
+	componentLogLevels = parseComponentLogLevels(componentLogLevel)
+	config := loggerV2Config(logVerbosityLevel, logFormatter)
+	setLoggerV2(newLoggerV2(w, config, logSeverityLevel))
+	setComponentLoggerV2(newComponentLoggerV2(w, config))
 }
 
 // V reports whether verbosity level l is at least the requested verbose level.
