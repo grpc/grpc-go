@@ -25,10 +25,12 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/grpc/internal/xds/clients"
 	"google.golang.org/grpc/internal/xds/clients/internal/pretty"
 	"google.golang.org/grpc/internal/xds/clients/internal/testutils"
 	"google.golang.org/grpc/internal/xds/clients/xdsclient"
@@ -279,12 +281,16 @@ func buildResourceName(typeName, auth, id string, ctxParams map[string]string) s
 // have taken place.
 type testMetricsReporter struct {
 	metricsCh *testutils.Channel
+
+	mu             sync.Mutex
+	asyncReporters map[clients.AsyncReporter]struct{}
 }
 
 // newTestMetricsReporter returns a new testMetricsReporter.
 func newTestMetricsReporter() *testMetricsReporter {
 	return &testMetricsReporter{
-		metricsCh: testutils.NewChannelWithSize(1),
+		metricsCh:      testutils.NewChannelWithSize(50),
+		asyncReporters: make(map[clients.AsyncReporter]struct{}),
 	}
 }
 
@@ -302,7 +308,40 @@ func (r *testMetricsReporter) waitForMetric(ctx context.Context, metricsDataWant
 	return nil
 }
 
+func (r *testMetricsReporter) waitForSpecificMetric(ctx context.Context, metricsDataWant any) error {
+	for {
+		got, err := r.metricsCh.Receive(ctx)
+		if err != nil {
+			return fmt.Errorf("timeout waiting for metric: %v (want %T)", err, metricsDataWant)
+		}
+		if diff := cmp.Diff(got, metricsDataWant); diff == "" {
+			return nil
+		}
+		// Continue if mismatch.
+
+	}
+}
+
 // ReportMetric sends the metrics data to the metricsCh channel.
 func (r *testMetricsReporter) ReportMetric(m any) {
-	r.metricsCh.Replace(m)
+	r.metricsCh.Send(m)
+}
+
+func (r *testMetricsReporter) RegisterAsyncReporter(reporter clients.AsyncReporter) func() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.asyncReporters[reporter] = struct{}{}
+	return func() {
+		r.mu.Lock()
+		defer r.mu.Unlock()
+		delete(r.asyncReporters, reporter)
+	}
+}
+
+func (r *testMetricsReporter) triggerAsyncMetrics() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for reporter := range r.asyncReporters {
+		reporter.Report(r)
+	}
 }

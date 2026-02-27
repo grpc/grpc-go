@@ -715,3 +715,9 @@ func (fc *adsFlowControl) wait() bool {
 
 	return fc.stopped
 }
+
+func (fc *adsFlowControl) isStopped() bool {
+	fc.mu.Lock()
+	defer fc.mu.Unlock()
+	return fc.stopped
+}

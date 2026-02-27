@@ -40,3 +40,18 @@ type ResourceUpdateInvalid struct {
 type ServerFailure struct {
 	ServerURI string
 }
+
+// XDSClientConnected reports the connectivity state of the xDS stream.
+// Value is 1 if connected, 0 otherwise.
+type XDSClientConnected struct {
+	ServerURI string
+	Value     int64
+}
+
+// XDSClientResourceStats reports the number of resources currently cached.
+type XDSClientResourceStats struct {
+	Authority    string
+	ResourceType string
+	CacheState   string
+	Count        int64
+}
