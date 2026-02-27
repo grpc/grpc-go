@@ -19,6 +19,8 @@
 package transport
 
 import (
+	"strconv"
+	"sync"
 	"sync/atomic"
 
 	"golang.org/x/net/http2"
@@ -27,6 +29,12 @@ import (
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
 )
+
+// nonGRPCDataMaxLen is the maximum length of nonGRPCDataBuf.
+//
+// NOTE: If changed this value, you MUST update the corresponding test in:
+//   - /test/end2end_test.go:TestHTTPServerSendsNonGRPCHeaderSurfaceFurtherData
+const nonGRPCDataMaxLen = 1024
 
 // ClientStream implements streaming functionality for a gRPC client.
 type ClientStream struct {
@@ -46,12 +54,57 @@ type ClientStream struct {
 	// headerValid indicates whether a valid header was received.  Only
 	// meaningful after headerChan is closed (always call waitOnHeader() before
 	// reading its value).
-	headerValid      bool
+	headerValid bool
+
+	collectionMu   sync.Mutex
+	collecting     bool   // indicates if stream entered the stage of non-gRPC data collection.
+	nonGRPCDataBuf []byte // stores the data of a non-gRPC response.
+
 	noHeaders        bool          // set if the client never received headers (set only after the stream is done).
 	headerChanClosed uint32        // set when headerChan is closed. Used to avoid closing headerChan multiple times.
 	bytesReceived    atomic.Bool   // indicates whether any bytes have been received on this stream
 	unprocessed      atomic.Bool   // set if the server sends a refused stream or GOAWAY including this stream
 	statsHandler     stats.Handler // nil for internal streams (e.g., health check, ORCA) where telemetry is not supported.
+}
+
+func (s *ClientStream) startNonGRPCDataCollection(st *status.Status) {
+	s.collectionMu.Lock()
+	defer s.collectionMu.Unlock()
+	if s.collecting {
+		return
+	}
+	s.status = st
+	s.collecting = true
+	s.nonGRPCDataBuf = make([]byte, 0, nonGRPCDataMaxLen)
+}
+
+// tryHandleNonGRPCData tries to collect non-gRPC body from the given data frame.
+// It returns two booleans:
+// handle indicates whether the frame should be handled as a non-gRPC response body,
+// end indicates whether the stream should be closed after handling this frame.
+func (s *ClientStream) tryHandleNonGRPCData(f *parsedDataFrame) (handle bool, end bool) {
+	s.collectionMu.Lock()
+	defer s.collectionMu.Unlock()
+	if !s.collecting {
+		return false, false
+	}
+
+	n := min(f.data.Len(), nonGRPCDataMaxLen-len(s.nonGRPCDataBuf))
+	s.nonGRPCDataBuf = append(s.nonGRPCDataBuf, f.data.ReadOnlyData()[0:n]...)
+	if len(s.nonGRPCDataBuf) >= nonGRPCDataMaxLen || f.StreamEnded() {
+		return true, true
+	}
+	return true, false
+}
+
+// stopNonGRPCBodyCollection stops collecting non-gRPC body and appends the collected.
+// Should only be called in closeStream.
+func (s *ClientStream) stopNonGRPCDataCollectionLocked() {
+	if !s.collecting {
+		return
+	}
+	data := "\ndata: " + strconv.Quote(string(s.nonGRPCDataBuf))
+	s.status = status.New(s.status.Code(), s.status.Message()+data)
 }
 
 // Read reads an n byte message from the input stream.
@@ -126,6 +179,8 @@ func (s *ClientStream) Header() (metadata.MD, error) {
 	s.waitOnHeader()
 
 	if !s.headerValid || s.noHeaders {
+		s.collectionMu.Lock()
+		defer s.collectionMu.Unlock()
 		return nil, s.status.Err()
 	}
 
