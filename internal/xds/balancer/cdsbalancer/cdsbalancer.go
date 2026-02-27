@@ -337,7 +337,7 @@ func (b *cdsBalancer) handleXDSConfigUpdate() error {
 		if b.lbCfg.IsDynamic {
 			return nil
 		}
-		return b.annotateErrorWithNodeID(fmt.Errorf("did not find the cluster %s in XDSConfig", clusterName))
+		return b.annotateErrorWithNodeID(fmt.Errorf("did not find the cluster %q in XDSConfig", clusterName))
 	}
 	// If the cluster resource has an error, return the error.
 	if clusterUpdate.Err != nil {
@@ -361,7 +361,6 @@ func (b *cdsBalancer) handleClusterUpdate() error {
 	clusterConfig := b.clusterConfigs[clusterName].Config
 
 	var newPriorities []*priorityConfig
-
 	switch clusterConfig.Cluster.ClusterType {
 	case xdsresource.ClusterTypeEDS, xdsresource.ClusterTypeLogicalDNS:
 		p := b.updatePriorityConfig(clusterName, &clusterConfig)
@@ -494,7 +493,7 @@ func (b *cdsBalancer) updateOutlierDetection() error {
 		if !ok {
 			// Shouldn't happen, Parser built at build time with Outlier
 			// Detection builder pulled from gRPC LB Registry.
-			return fmt.Errorf("odParser returned config with unexpected type %T: %v", lbCfg, lbCfg)
+			return fmt.Errorf("config parser for Outlier Detection returned config with unexpected type %T: %v", lbCfg, lbCfg)
 		}
 		p.outlierDetection = *odCfg
 	}

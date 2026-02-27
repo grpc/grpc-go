@@ -445,6 +445,8 @@ func (r *xdsResolver) newConfigSelector() (*configSelector, error) {
 // invokes the unsubscribe function to signal the dependency manager to stop the
 // xDS watch. Because cluster specifier plugins do not have their own watches,
 // they are simply removed from the map without an unsubscribe call.
+//
+// Only executed in the context of a serializer callback.
 func (r *xdsResolver) pruneActiveClustersAndPlugins() {
 	for cluster, ci := range r.activeClusters {
 		if atomic.LoadInt32(&ci.refCount) == 0 {
