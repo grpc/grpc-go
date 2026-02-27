@@ -67,8 +67,8 @@ func addrToProto(a net.Addr) *channelzpb.Address {
 		// Note mask info is discarded through the conversion.
 		return &channelzpb.Address{Address: &channelzpb.Address_TcpipAddress{TcpipAddress: &channelzpb.Address_TcpIpAddress{IpAddress: a.(*net.IPNet).IP}}}
 	case "tcp":
-		// Note zone info is discarded through the conversion.
-		return &channelzpb.Address{Address: &channelzpb.Address_TcpipAddress{TcpipAddress: &channelzpb.Address_TcpIpAddress{IpAddress: a.(*net.TCPAddr).IP, Port: int32(a.(*net.TCPAddr).Port)}}}
+		addrPort := a.(*net.TCPAddr).AddrPort()
+		return &channelzpb.Address{Address: &channelzpb.Address_TcpipAddress{TcpipAddress: &channelzpb.Address_TcpIpAddress{IpAddress: addrPort.Addr().AsSlice(), Port: int32(addrPort.Port())}}}
 	case "unix", "unixgram", "unixpacket":
 		return &channelzpb.Address{Address: &channelzpb.Address_UdsAddress_{UdsAddress: &channelzpb.Address_UdsAddress{Filename: a.String()}}}
 	default:
