@@ -83,14 +83,12 @@ func (lb *lbBalancer) processServerList(l *lbpb.ServerList) {
 		}
 
 		md := metadata.Pairs(lbTokenKey, s.LoadBalanceToken)
-		ip, ok := netip.AddrFromSlice(s.IpAddress)
-		if !ok {
-			if lb.logger.V(2) {
-				lb.logger.Infof("Server list entry:|%d|, failed to parse IP address: %x", i, s.IpAddress)
-			}
-			continue
+		var ipStr string
+		if ip, ok := netip.AddrFromSlice(s.IpAddress); ok {
+			ipStr = ip.String()
+		} else {
+			ipStr = fmt.Sprintf("? %x", s.IpAddress)
 		}
-		ipStr := ip.String()
 		addr := imetadata.Set(resolver.Address{Addr: net.JoinHostPort(ipStr, fmt.Sprintf("%d", s.Port))}, md)
 		if lb.logger.V(2) {
 			lb.logger.Infof("Server list entry:|%d|, ipStr:|%s|, port:|%d|, load balancer token:|%v|", i, ipStr, s.Port, s.LoadBalanceToken)

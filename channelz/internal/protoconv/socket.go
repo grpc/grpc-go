@@ -20,7 +20,6 @@ package protoconv
 
 import (
 	"net"
-	"net/netip"
 	"time"
 
 	"google.golang.org/grpc/codes"
@@ -63,17 +62,12 @@ func addrToProto(a net.Addr) *channelzpb.Address {
 		// TODO: Address_OtherAddress{}. Need proto def for Value.
 	case "ip":
 		// Note zone info is discarded through the conversion.
-		if addr, ok := netip.AddrFromSlice(a.(*net.IPAddr).IP); ok {
-			return &channelzpb.Address{Address: &channelzpb.Address_TcpipAddress{TcpipAddress: &channelzpb.Address_TcpIpAddress{IpAddress: addr.AsSlice()}}}
-		}
+		return &channelzpb.Address{Address: &channelzpb.Address_TcpipAddress{TcpipAddress: &channelzpb.Address_TcpIpAddress{IpAddress: a.(*net.IPAddr).IP}}}
 	case "ip+net":
 		// Note mask info is discarded through the conversion.
-		if addr, ok := netip.AddrFromSlice(a.(*net.IPNet).IP); ok {
-			return &channelzpb.Address{Address: &channelzpb.Address_TcpipAddress{TcpipAddress: &channelzpb.Address_TcpIpAddress{IpAddress: addr.AsSlice()}}}
-		}
+		return &channelzpb.Address{Address: &channelzpb.Address_TcpipAddress{TcpipAddress: &channelzpb.Address_TcpIpAddress{IpAddress: a.(*net.IPNet).IP}}}
 	case "tcp":
-		tcpAddr := a.(*net.TCPAddr)
-		addrPort := tcpAddr.AddrPort()
+		addrPort := a.(*net.TCPAddr).AddrPort()
 		return &channelzpb.Address{Address: &channelzpb.Address_TcpipAddress{TcpipAddress: &channelzpb.Address_TcpIpAddress{IpAddress: addrPort.Addr().AsSlice(), Port: int32(addrPort.Port())}}}
 	case "unix", "unixgram", "unixpacket":
 		return &channelzpb.Address{Address: &channelzpb.Address_UdsAddress_{UdsAddress: &channelzpb.Address_UdsAddress{Filename: a.String()}}}
