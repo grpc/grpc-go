@@ -20,17 +20,21 @@ package interop
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"time"
 
-	v3orcapb "github.com/cncf/xds/go/xds/data/orca/v3"
 	"google.golang.org/grpc/balancer"
-	"google.golang.org/grpc/balancer/base"
+	"google.golang.org/grpc/balancer/endpointsharding"
+	"google.golang.org/grpc/balancer/pickfirst"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/orca"
 	"google.golang.org/grpc/resolver"
+
+	v3orcapb "github.com/cncf/xds/go/xds/data/orca/v3"
 )
+
+var orcaLogger = grpclog.Component("orca")
 
 func init() {
 	balancer.Register(orcabb{})
@@ -38,106 +42,146 @@ func init() {
 
 type orcabb struct{}
 
-func (orcabb) Build(cc balancer.ClientConn, _ balancer.BuildOptions) balancer.Balancer {
-	return &orcab{cc: cc}
+// Build creates a new orcab balancer.
+func (orcabb) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Balancer {
+	b := &orcab{
+		ClientConn:       cc,
+		stopOOBListeners: make(map[balancer.SubConn]func()),
+	}
+	b.child = endpointsharding.NewBalancer(b, bOpts, balancer.Get(pickfirst.Name).Build, endpointsharding.Options{})
+	orcaLogger.Infof("[%p] Created", b)
+	return b
 }
 
 func (orcabb) Name() string {
 	return "test_backend_metrics_load_balancer"
 }
 
+// orcab is the balancer for the test_backend_metrics_load_balancer policy.
+// It delegates SubConn management to endpointsharding + pick_first and
+// intercepts NewSubConn calls to register OOB listeners on READY SubConns.
 type orcab struct {
-	cc balancer.ClientConn
-	sc balancer.SubConn
+	// Embeds balancer.ClientConn to intercept NewSubConn and UpdateState
+	// calls from child balancers.
+	balancer.ClientConn
+	child balancer.Balancer
 
+	// mu guards stopOOBListeners.
+	mu               sync.Mutex
+	stopOOBListeners map[balancer.SubConn]func()
+
+	// reportMu guards report. It is held by OnLoadReport (called
+	// asynchronously by the ORCA producer) and by the picker's Done callback.
 	reportMu sync.Mutex
 	report   *v3orcapb.OrcaLoadReport
 }
 
-func (o *orcab) ExitIdle() {
-	if o.sc != nil {
-		o.sc.Connect()
-	}
+func (b *orcab) UpdateClientConnState(s balancer.ClientConnState) error {
+	// Delegate to the child endpoint sharding balancer, which distributes
+	// state updates to its pick_first children.
+	return b.child.UpdateClientConnState(s)
 }
 
-// endpointsToAddrs flattens a list of endpoints to addresses to maintain
-// existing behavior.
-// TODO: https://github.com/grpc/grpc-go/issues/8809 - delegate subchannel
-// management to the pickfirst balancer using the endpoint sharding balancer.
-func endpointsToAddrs(eps []resolver.Endpoint) []resolver.Address {
-	addrs := make([]resolver.Address, 0, len(eps))
-	for _, ep := range eps {
-		if len(ep.Addresses) == 0 {
-			continue
+func (b *orcab) ResolverError(err error) {
+	// Will cause an inline picker update from endpoint sharding.
+	b.child.ResolverError(err)
+}
+
+func (b *orcab) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
+	orcaLogger.Errorf("UpdateSubConnState(%v, %+v) called unexpectedly", sc, state)
+}
+
+func (b *orcab) ExitIdle() {
+	// Propagate to the child endpoint sharding balancer.
+	b.child.ExitIdle()
+}
+
+func (b *orcab) Close() {
+	b.mu.Lock()
+	for _, stop := range b.stopOOBListeners {
+		stop()
+	}
+	b.stopOOBListeners = nil
+	b.mu.Unlock()
+	b.child.Close()
+}
+
+// NewSubConn intercepts SubConn creation from pick_first children to wrap the
+// StateListener for OOB listener management on READY transitions.
+func (b *orcab) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
+	// The variable sc is declared before the closure so the closure captures
+	// the variable, not its (zero) value. After ClientConn.NewSubConn assigns
+	// to sc, the closure sees the real SubConn when invoked.
+	var sc balancer.SubConn
+	oldListener := opts.StateListener
+	opts.StateListener = func(state balancer.SubConnState) {
+		b.updateSubConnState(sc, state)
+		if oldListener != nil {
+			oldListener(state)
 		}
-		addrs = append(addrs, ep.Addresses[0])
 	}
-	return addrs
-}
-
-func (o *orcab) UpdateClientConnState(s balancer.ClientConnState) error {
-	if o.sc != nil {
-		o.sc.UpdateAddresses(endpointsToAddrs(s.ResolverState.Endpoints))
-		return nil
-	}
-
-	if len(s.ResolverState.Endpoints) == 0 {
-		o.ResolverError(fmt.Errorf("produced no endpoints"))
-		return fmt.Errorf("resolver produced no endpoints")
-	}
-	var err error
-	o.sc, err = o.cc.NewSubConn(endpointsToAddrs(s.ResolverState.Endpoints), balancer.NewSubConnOptions{StateListener: o.updateSubConnState})
+	sc, err := b.ClientConn.NewSubConn(addrs, opts)
 	if err != nil {
-		o.cc.UpdateState(balancer.State{ConnectivityState: connectivity.TransientFailure, Picker: base.NewErrPicker(fmt.Errorf("error creating subconn: %v", err))})
-		return nil
+		return nil, err
 	}
-	o.sc.Connect()
-	o.cc.UpdateState(balancer.State{ConnectivityState: connectivity.Connecting, Picker: base.NewErrPicker(balancer.ErrNoSubConnAvailable)})
-	return nil
+	return sc, nil
 }
 
-func (o *orcab) ResolverError(err error) {
-	if o.sc == nil {
-		o.cc.UpdateState(balancer.State{ConnectivityState: connectivity.TransientFailure, Picker: base.NewErrPicker(fmt.Errorf("resolver error: %v", err))})
+func (b *orcab) updateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.stopOOBListeners == nil {
+		// Already closed; drop the state update.
+		return
 	}
-}
-
-func (o *orcab) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
-	logger.Errorf("UpdateSubConnState(%v, %+v) called unexpectedly", sc, state)
-}
-
-func (o *orcab) updateSubConnState(state balancer.SubConnState) {
-	switch state.ConnectivityState {
-	case connectivity.Ready:
-		orca.RegisterOOBListener(o.sc, o, orca.OOBListenerOptions{ReportInterval: time.Second})
-		o.cc.UpdateState(balancer.State{ConnectivityState: connectivity.Ready, Picker: &orcaPicker{o: o}})
-	case connectivity.TransientFailure:
-		o.cc.UpdateState(balancer.State{ConnectivityState: connectivity.TransientFailure, Picker: base.NewErrPicker(fmt.Errorf("all subchannels in transient failure: %v", state.ConnectionError))})
-	case connectivity.Connecting:
-		// Ignore; picker already set to "connecting".
-	case connectivity.Idle:
-		o.sc.Connect()
-		o.cc.UpdateState(balancer.State{ConnectivityState: connectivity.Connecting, Picker: base.NewErrPicker(balancer.ErrNoSubConnAvailable)})
-	case connectivity.Shutdown:
-		// Ignore; we are closing but handle that in Close instead.
+	if state.ConnectivityState == connectivity.Ready {
+		// Register an OOB listener when the SubConn becomes READY.
+		stop := orca.RegisterOOBListener(sc, b, orca.OOBListenerOptions{ReportInterval: time.Second})
+		b.stopOOBListeners[sc] = stop
+		return
+	}
+	// For any other state (including Shutdown), stop and remove the OOB
+	// listener if one was registered for this SubConn.
+	if stop, ok := b.stopOOBListeners[sc]; ok {
+		stop()
+		delete(b.stopOOBListeners, sc)
 	}
 }
 
-func (o *orcab) Close() {}
+// UpdateState intercepts state updates from endpointsharding to wrap the
+// picker with ORCA load report handling.
+func (b *orcab) UpdateState(state balancer.State) {
+	// If READY, wrap the picker to inject the ORCA Done callback; otherwise,
+	// pass through the child picker as-is.
+	if state.ConnectivityState == connectivity.Ready {
+		state.Picker = &orcaPicker{
+			childPicker: state.Picker,
+			o:           b,
+		}
+	}
+	b.ClientConn.UpdateState(state)
+}
 
-func (o *orcab) OnLoadReport(r *v3orcapb.OrcaLoadReport) {
-	o.reportMu.Lock()
-	defer o.reportMu.Unlock()
-	logger.Infof("received OOB load report: %v", r)
-	o.report = r
+// OnLoadReport implements orca.OOBListener.
+func (b *orcab) OnLoadReport(r *v3orcapb.OrcaLoadReport) {
+	b.reportMu.Lock()
+	defer b.reportMu.Unlock()
+	orcaLogger.Infof("Received OOB load report: %v", r)
+	b.report = r
 }
 
 type orcaPicker struct {
-	o *orcab
+	childPicker balancer.Picker
+	o           *orcab
 }
 
 func (p *orcaPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
-	doneCB := func(di balancer.DoneInfo) {
+	res, err := p.childPicker.Pick(info)
+	if err != nil {
+		return res, err
+	}
+	origDone := res.Done
+	res.Done = func(di balancer.DoneInfo) {
 		if lr, _ := di.ServerLoad.(*v3orcapb.OrcaLoadReport); lr != nil &&
 			(lr.CpuUtilization != 0 || lr.MemUtilization != 0 || len(lr.Utilization) > 0 || len(lr.RequestCost) > 0) {
 			// Since all RPCs will respond with a load report due to the
@@ -151,8 +195,11 @@ func (p *orcaPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 				setContextCMR(info.Ctx, lr)
 			}
 		}
+		if origDone != nil {
+			origDone(di)
+		}
 	}
-	return balancer.PickResult{SubConn: p.o.sc, Done: doneCB}, nil
+	return res, nil
 }
 
 func setContextCMR(ctx context.Context, lr *v3orcapb.OrcaLoadReport) {
