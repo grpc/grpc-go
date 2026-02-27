@@ -94,7 +94,7 @@ func makeUnaryCallRPCAndVerifyPeer(ctx context.Context, client testgrpc.TestServ
 
 func (s) TestConfigUpdate_ChildPolicyChange(t *testing.T) {
 	// Spin up an xDS management server.
-	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
 
 	// Create bootstrap configuration pointing to the above management server.
 	nodeID := uuid.New().String()
@@ -250,7 +250,7 @@ func (s) TestConfigUpdate_ChildPolicyChange(t *testing.T) {
 	server3 := stubserver.StartTestService(t, nil)
 	defer server3.Stop()
 	endpoints3 := e2e.DefaultEndpoint(endpointsName3, "localhost", []uint32{testutils.ParsePort(t, server3.Address)})
-	resources.Clusters[1] = cluster2
+	resources.Clusters = append(resources.Clusters, cluster2)
 	resources.Endpoints = append(resources.Endpoints, endpoints3)
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)

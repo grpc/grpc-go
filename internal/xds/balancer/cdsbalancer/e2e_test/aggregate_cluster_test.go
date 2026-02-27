@@ -33,6 +33,7 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils/pickfirst"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
@@ -109,7 +110,11 @@ func (s) TestAggregateCluster_WithTwoEDSClusters(t *testing.T) {
 
 	// Start an xDS management server that pushes the EDS resource names onto a
 	// channel when requested.
-	edsResourceNameCh := make(chan []string, 1)
+	const clusterName1 = clusterName + "-cluster-1"
+	const clusterName2 = clusterName + "-cluster-2"
+
+	gotEDSRequests := grpcsync.NewEvent()
+
 	managementServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
 		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
 			if req.GetTypeUrl() != version.V3EndpointsURL {
@@ -121,9 +126,15 @@ func (s) TestAggregateCluster_WithTwoEDSClusters(t *testing.T) {
 				// resources.
 				return nil
 			}
-			select {
-			case edsResourceNameCh <- req.GetResourceNames():
-			case <-ctx.Done():
+
+			// Check if we have a request for both EDS resources. If so, fire
+			// the event to unblock the test.
+			names := req.GetResourceNames()
+			sortedNames := make([]string, len(names))
+			copy(sortedNames, names)
+			sort.Strings(sortedNames)
+			if cmp.Equal(sortedNames, []string{clusterName1, clusterName2}) {
+				gotEDSRequests.Fire()
 			}
 			return nil
 		},
@@ -144,8 +155,6 @@ func (s) TestAggregateCluster_WithTwoEDSClusters(t *testing.T) {
 	// Configure an aggregate cluster, two EDS clusters and only one endpoints
 	// resource (corresponding to the first EDS cluster) in the management
 	// server.
-	const clusterName1 = clusterName + "-cluster-1"
-	const clusterName2 = clusterName + "-cluster-2"
 	resources := e2e.UpdateOptions{
 		NodeID:    nodeID,
 		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(serviceName, routeName)},
@@ -167,23 +176,9 @@ func (s) TestAggregateCluster_WithTwoEDSClusters(t *testing.T) {
 	defer cleanup()
 
 	// Wait for both EDS resources to be requested.
-	func() {
-		for ; ctx.Err() == nil; <-time.After(defaultTestShortTimeout) {
-			select {
-			case names := <-edsResourceNameCh:
-				// Copy and sort the sortedNames to avoid racing with an
-				// OnStreamRequest call.
-				sortedNames := make([]string, len(names))
-				copy(sortedNames, names)
-				sort.Strings(sortedNames)
-				if cmp.Equal(sortedNames, []string{clusterName1, clusterName2}) {
-					return
-				}
-			default:
-			}
-		}
-	}()
-	if ctx.Err() != nil {
+	select {
+	case <-gotEDSRequests.Done():
+	case <-ctx.Done():
 		t.Fatalf("Timeout when waiting for all EDS resources %v to be requested", []string{clusterName1, clusterName2})
 	}
 

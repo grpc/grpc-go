@@ -38,10 +38,6 @@ const prefix = "[xdsdepmgr %p] "
 
 var logger = grpclog.Component("xds")
 
-// EnableClusterAndEndpointsWatch is a flag used to control whether the CDS/EDS
-// watchers in the dependency manager should be used.
-var EnableClusterAndEndpointsWatch = false
-
 func prefixLogger(p *DependencyManager) *internalgrpclog.PrefixLogger {
 	return internalgrpclog.NewPrefixLogger(logger, fmt.Sprintf(prefix, p))
 }
@@ -86,10 +82,6 @@ func (x *xdsResourceState[T, U]) setLastError(err error) {
 	x.lastErr = err
 	x.updateReceived = true
 	x.lastUpdate = nil
-}
-
-func (x *xdsResourceState[T, U]) updateLastError(err error) {
-	x.lastErr = err
 }
 
 type dnsExtras struct {
@@ -230,11 +222,6 @@ func (m *DependencyManager) maybeSendUpdateLocked() {
 		RouteConfig: m.routeConfigWatcher.lastUpdate,
 		VirtualHost: m.routeConfigWatcher.extras.virtualHost,
 		Clusters:    make(map[string]*xdsresource.ClusterResult),
-	}
-
-	if !EnableClusterAndEndpointsWatch {
-		m.watcher.Update(config)
-		return
 	}
 
 	edsResourcesSeen := make(map[string]bool)
@@ -463,49 +450,46 @@ func (m *DependencyManager) applyRouteConfigUpdateLocked(update *xdsresource.Rou
 	m.routeConfigWatcher.setLastUpdate(update)
 	m.routeConfigWatcher.extras.virtualHost = matchVH
 
-	if EnableClusterAndEndpointsWatch {
-		// Get the clusters to be watched from the routes in the virtual host.
-		// If the ClusterSpecifierPlugin field is set, we ignore it for now as the
-		// clusters will be determined dynamically for it.
-		newClusters := make(map[string]bool)
-
-		for _, rt := range matchVH.Routes {
-			for _, cluster := range rt.WeightedClusters {
-				newClusters[cluster.Name] = true
-			}
+	// Get the clusters to be watched from the routes in the virtual host.
+	// If the ClusterSpecifierPlugin field is set, we ignore it for now as the
+	// clusters will be determined dynamically for it.
+	newClusters := make(map[string]bool)
+	for _, rt := range matchVH.Routes {
+		for _, cluster := range rt.WeightedClusters {
+			newClusters[cluster.Name] = true
 		}
-
-		// Add subscriptions for all new clusters.
-		for cluster := range newClusters {
-			// If the cluster already has a reference, increase its static
-			// reference.
-			if sub, ok := m.clusterSubscriptions[cluster]; ok {
-				sub.staticRefCount++
-				continue
-			}
-			// If cluster is not present in subscriptions, add it with static
-			// ref count as 1.
-			m.clusterSubscriptions[cluster] = &clusterRef{
-				staticRefCount: 1,
-			}
-		}
-
-		// Unsubscribe to clusters from last route config.
-		for cluster := range m.clustersFromLastRouteConfig {
-			clusterRef, ok := m.clusterSubscriptions[cluster]
-			if !ok {
-				// Should not reach here as the cluster was present in last
-				// route config so should be present in current cluster
-				// subscriptions.
-				continue
-			}
-			clusterRef.staticRefCount--
-			if clusterRef.staticRefCount == 0 && clusterRef.dynamicRefCount == 0 {
-				delete(m.clusterSubscriptions, cluster)
-			}
-		}
-		m.clustersFromLastRouteConfig = newClusters
 	}
+
+	// Add subscriptions for all new clusters.
+	for cluster := range newClusters {
+		// If the cluster already has a reference, increase its static
+		// reference.
+		if sub, ok := m.clusterSubscriptions[cluster]; ok {
+			sub.staticRefCount++
+			continue
+		}
+		// If cluster is not present in subscriptions, add it with static
+		// ref count as 1.
+		m.clusterSubscriptions[cluster] = &clusterRef{
+			staticRefCount: 1,
+		}
+	}
+
+	// Unsubscribe to clusters from last route config.
+	for cluster := range m.clustersFromLastRouteConfig {
+		clusterRef, ok := m.clusterSubscriptions[cluster]
+		if !ok {
+			// Should not reach here as the cluster was present in last
+			// route config so should be present in current cluster
+			// subscriptions.
+			continue
+		}
+		clusterRef.staticRefCount--
+		if clusterRef.staticRefCount == 0 && clusterRef.dynamicRefCount == 0 {
+			delete(m.clusterSubscriptions, cluster)
+		}
+	}
+	m.clustersFromLastRouteConfig = newClusters
 
 	// maybeSendUpdate is called to update the configuration with the new route,
 	// start watching the newly added clusters and stop watching clusters that
@@ -709,8 +693,8 @@ func (m *DependencyManager) onClusterResourceError(resourceName string, err erro
 	m.maybeSendUpdateLocked()
 }
 
-// Records the error in the state. The last successful update is retained
-// because it should continue to be used as an amnbient error is received.
+// Ambient errors from cluster resource are logged and the last successful
+// update is retained because it should continue to be used.
 func (m *DependencyManager) onClusterAmbientError(resourceName string, err error, onDone func()) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -768,24 +752,26 @@ func (m *DependencyManager) onEndpointResourceError(resourceName string, err err
 		return
 	}
 	m.logger.Warningf("Received resource error for Endpoint resource %q: %v", resourceName, m.annotateErrorWithNodeID(err))
-	m.endpointWatchers[resourceName].setLastError(err)
+	// Send an empty EndpointsUpdate instead of nil to avoid nil-check handling
+	// in the CDS balancer. The priority balancer will handle the case of having
+	// no endpoints and transition the channel to Transient Failure if needed.
+	m.endpointWatchers[resourceName].lastUpdate = &xdsresource.EndpointsUpdate{}
+	m.endpointWatchers[resourceName].lastErr = err
+	m.endpointWatchers[resourceName].updateReceived = true
 	m.maybeSendUpdateLocked()
 }
 
-// Records the ambient error without clearing the last successful update, as the
-// endpoints should continue to be used.
+// Logs the ambient error and does not update the state, as the last successful
+// update for endpoints should continue to be used.
 func (m *DependencyManager) onEndpointAmbientError(resourceName string, err error, onDone func()) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-
 	defer onDone()
 	if m.stopped || m.endpointWatchers[resourceName] == nil {
 		return
 	}
 
 	m.logger.Warningf("Endpoint resource ambient error %q: %v", resourceName, m.annotateErrorWithNodeID(err))
-	m.endpointWatchers[resourceName].updateLastError(err)
-	m.maybeSendUpdateLocked()
 }
 
 // Converts the DNS resolver state to an internal update, handling address-only
@@ -808,10 +794,10 @@ func (m *DependencyManager) onDNSUpdate(resourceName string, update *resolver.St
 // Records a DNS resolver error. It clears the last update only if no successful
 // update has been received yet, then triggers a dependency update.
 //
-// If a previous good update was received, the error is recorded but the
-// previous update is retained for continued use. Errors are suppressed if a
-// resource error was already received, as further propagation would have no
-// downstream effect.
+// If a previous good update was received, the error is logged and the previous
+// update is retained for continued use. Errors are suppressed if a resource
+// error was already received, as further propagation would have no downstream
+// effect.
 func (m *DependencyManager) onDNSError(resourceName string, err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -824,11 +810,15 @@ func (m *DependencyManager) onDNSError(resourceName string, err error) {
 	m.logger.Warningf("%v", err)
 	state := m.dnsResolvers[resourceName]
 	if state.updateReceived {
-		state.updateLastError(err)
 		return
 	}
 
-	state.setLastError(err)
+	// Send an empty DNSUpdate instead of nil to avoid nil-check handling in the
+	// CDS balancer. The priority balancer will handle the case of having no
+	// endpoints and transition the channel to Transient Failure if needed.
+	state.lastUpdate = &xdsresource.DNSUpdate{}
+	state.lastErr = err
+	state.updateReceived = true
 	m.maybeSendUpdateLocked()
 }
 
