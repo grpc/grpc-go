@@ -27,26 +27,30 @@ import (
 	"sync"
 	"time"
 
-	"google.golang.org/grpc/internal/buffer"
 	"google.golang.org/grpc/internal/xds/clients"
 	"google.golang.org/protobuf/proto"
 
 	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 )
 
-// This compile time check ensures that Builder implements clients.TransportBuilder.
+// This compile time checks ensures that the Builder, transport and stream
+// implementations satisfy the required interfaces.
 var _ clients.TransportBuilder = &Builder{}
+var _ clients.Transport = &transport{}
+var _ clients.Stream = &stream{}
 
 // Builder implements clients.TransportBuilder.
 type Builder struct {
-	mu               sync.Mutex
-	ActiveTransports map[string]*FakeTransport // Tracks created transports for the fuzzer to interact with.
+	mu                   sync.Mutex
+	activeTransports     map[string]*transport    // Tracks created transports for the fuzzer to interact with.
+	activeTransportsChan map[string]chan struct{} // Notifies when transport and stream are ready
 }
 
 // NewBuilder creates a new Builder.
 func NewBuilder() *Builder {
 	return &Builder{
-		ActiveTransports: make(map[string]*FakeTransport),
+		activeTransports:     make(map[string]*transport),
+		activeTransportsChan: make(map[string]chan struct{}),
 	}
 }
 
@@ -55,69 +59,82 @@ func (b *Builder) Build(serverIdentifier clients.ServerIdentifier) (clients.Tran
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	if at, ok := b.ActiveTransports[serverIdentifier.ServerURI]; ok {
+	if at, ok := b.activeTransports[serverIdentifier.ServerURI]; ok {
 		return at, nil
 	}
 
-	ft := newFakeTransport()
-	b.ActiveTransports[serverIdentifier.ServerURI] = ft
+	ch, ok := b.activeTransportsChan[serverIdentifier.ServerURI]
+	if !ok {
+		ch = make(chan struct{})
+		b.activeTransportsChan[serverIdentifier.ServerURI] = ch
+	}
+
+	ft := newTransport(ch)
+	b.activeTransports[serverIdentifier.ServerURI] = ft
 	return ft, nil
 }
 
-// Transport returns the active transport for a given server URI.
-func (b *Builder) Transport(serverURI string) *FakeTransport {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-
-	ticker := time.NewTicker(10 * time.Millisecond)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return nil
-		case <-ticker.C:
-			b.mu.Lock()
-			t, ok := b.ActiveTransports[serverURI]
-			b.mu.Unlock()
-			if ok && t.ADSStream() != nil {
-				return t
-			}
-		}
+// Close closes the transport for the given server identifier.
+func (b *Builder) Close(serverURI string) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if t, ok := b.activeTransports[serverURI]; ok {
+		t.activeadsStream.Close()
 	}
 }
 
-// This compile time check ensures that FakeTransport implements clients.Transport.
-var _ clients.Transport = &FakeTransport{}
+// Transport returns the active transport for a given server URI.
+func (b *Builder) Transport(serverURI string) (*ServerHandle, error) {
+	b.mu.Lock()
+	if t, ok := b.activeTransports[serverURI]; ok && t.activeadsStream != nil {
+		b.mu.Unlock()
+		return t.ServerHandle(), nil
+	}
 
-// FakeTransport implements clients.Transport.
-type FakeTransport struct {
+	ch, ok := b.activeTransportsChan[serverURI]
+	if !ok {
+		ch = make(chan struct{})
+		b.activeTransportsChan[serverURI] = ch
+	}
+	b.mu.Unlock()
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-ch:
+		b.mu.Lock()
+		defer b.mu.Unlock()
+		return b.activeTransports[serverURI].ServerHandle(), nil
+	}
+}
+
+// transport implements clients.Transport.
+type transport struct {
 	mu              sync.Mutex
-	activeadsStream *FakeStream
-	fakeServer      *FakeServerHandle
+	activeadsStream *stream
 	closed          bool
+	readyCh         chan struct{}
 }
 
-func newFakeTransport() *FakeTransport {
-	return &FakeTransport{}
+func newTransport(ch chan struct{}) *transport {
+	return &transport{readyCh: ch}
 }
 
-// ServerHandle returns a fake serverhandle for testing.
-func (t *FakeTransport) ServerHandle() *FakeServerHandle {
+// ServerHandle returns a serverhandle for testing.
+func (t *transport) ServerHandle() *ServerHandle {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	return t.fakeServer
+	if t.activeadsStream == nil {
+		return nil
+	}
+	return &ServerHandle{fs: t.activeadsStream}
 }
 
-// ADSStream returns the active ADS stream for testing.
-func (t *FakeTransport) ADSStream() *FakeStream {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	return t.activeadsStream
-}
-
-// NewStream creates a new fake stream to the server.
-func (t *FakeTransport) NewStream(ctx context.Context, _ string) (clients.Stream, error) {
+// NewStream creates a new stream to the server.
+func (t *transport) NewStream(ctx context.Context, _ string) (clients.Stream, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
@@ -125,86 +142,84 @@ func (t *FakeTransport) NewStream(ctx context.Context, _ string) (clients.Stream
 		return nil, fmt.Errorf("transport is closed")
 	}
 
-	fs := newFakeStream(ctx)
-	t.activeadsStream, t.fakeServer = fs, &FakeServerHandle{fs: fs}
+	fs := newStream(ctx)
+	t.activeadsStream = fs
+	close(t.readyCh)
+
 	return fs, nil
 }
 
-// Close closes the fake stream.
-func (t *FakeTransport) Close() {
+// Close closes the stream.
+func (t *transport) Close() {
 	t.mu.Lock()
 	t.closed = true
+	stream := t.activeadsStream
 	t.mu.Unlock()
-	if stream := t.ADSStream(); stream != nil {
+	if stream != nil {
 		stream.Close()
 	}
 }
 
-// This compile time check ensures that FakeStream implements clients.Stream.
-var _ clients.Stream = &FakeStream{}
-
-// FakeStream implements clients.Stream.
-type FakeStream struct {
+// stream implements clients.Stream.
+type stream struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	reqBuffer  *buffer.Unbounded
-	respBuffer *buffer.Unbounded
+	reqChan  chan []byte
+	respChan chan []byte
 }
 
-func newFakeStream(ctx context.Context) *FakeStream {
+func newStream(ctx context.Context) *stream {
 	c, cancel := context.WithCancel(ctx)
-	return &FakeStream{
-		ctx:        c,
-		cancel:     cancel,
-		reqBuffer:  buffer.NewUnbounded(),
-		respBuffer: buffer.NewUnbounded(),
+	return &stream{
+		ctx:      c,
+		cancel:   cancel,
+		reqChan:  make(chan []byte),
+		respChan: make(chan []byte),
 	}
 }
 
 // Send sends the provided message on the stream. It puts the request into the
-// reqBuffer for consumption.
-func (s *FakeStream) Send(data []byte) error {
-	if s.ctx.Err() != nil {
+// reqChan for consumption.
+func (s *stream) Send(data []byte) error {
+	select {
+	case <-s.ctx.Done():
 		return s.ctx.Err()
+	case s.reqChan <- data:
+		return nil
 	}
-	return s.reqBuffer.Put(data)
 }
 
 // Recv blocks until the next message is received on the stream. It blocks until
-// a response is available in the respBuffer or the context is canceled.
-func (s *FakeStream) Recv() ([]byte, error) {
+// a response is available in the respChan or the context is canceled.
+func (s *stream) Recv() ([]byte, error) {
 	select {
-	case data := <-s.respBuffer.Get():
-		s.respBuffer.Load()
-		return data.([]byte), nil
+	case data := <-s.respChan:
+		return data, nil
 	case <-s.ctx.Done():
 		return nil, s.ctx.Err()
 	}
 }
 
-// Close closes the fake stream.
-func (s *FakeStream) Close() {
-	s.respBuffer.Close()
-	s.reqBuffer.Close()
+// Close closes the stream.
+func (s *stream) Close() {
 	s.cancel()
 }
 
-// FakeServerHandle provides the server-side send/recv methods to interact with
-// the fakeStream.
-type FakeServerHandle struct {
-	fs *FakeStream
+// ServerHandle provides the server-side send/recv methods to interact with
+// the stream.
+type ServerHandle struct {
+	fs *stream
 }
 
-// Recv reads the next request from the reqBuffer. It blocks until a
+// Recv reads the next request from the reqChan. It blocks until a
 // request is available or the context expires. It returns an error if the
 // context expires or if the request cannot be unmarshaled.
-func (h *FakeServerHandle) Recv() (*v3discoverypb.DiscoveryRequest, error) {
+func (h *ServerHandle) Recv() (*v3discoverypb.DiscoveryRequest, error) {
 	select {
-	case data := <-h.fs.reqBuffer.Get():
-		h.fs.reqBuffer.Load()
+	case data := <-h.fs.reqChan:
 		req := &v3discoverypb.DiscoveryRequest{}
-		if err := proto.Unmarshal(data.([]byte), req); err != nil {
+		if err := proto.Unmarshal(data, req); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal request: %v", err)
 		}
 		return req, nil
@@ -214,12 +229,17 @@ func (h *FakeServerHandle) Recv() (*v3discoverypb.DiscoveryRequest, error) {
 }
 
 // Send simulates a server response. It marshals the provided
-// DiscoveryResponse, puts it in the respBuffer to notify that a response
+// DiscoveryResponse, puts it in the respChan to notify that a response
 // is available for the client to Recv.
-func (h *FakeServerHandle) Send(resp *v3discoverypb.DiscoveryResponse) error {
+func (h *ServerHandle) Send(resp *v3discoverypb.DiscoveryResponse) error {
 	data, err := proto.Marshal(resp)
 	if err != nil {
 		return err
 	}
-	return h.fs.respBuffer.Put(data)
+	select {
+	case <-h.fs.ctx.Done():
+		return h.fs.ctx.Err()
+	case h.fs.respChan <- data:
+		return nil
+	}
 }
