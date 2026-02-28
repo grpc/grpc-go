@@ -81,7 +81,7 @@ func (b *Builder) Close(serverURI string) {
 	b.mu.Unlock()
 	if ok {
 		t.mu.Lock()
-		stream := t.activeadsStream
+		stream := t.activeADSStream
 		t.mu.Unlock()
 		if stream != nil {
 			stream.Close()
@@ -92,7 +92,7 @@ func (b *Builder) Close(serverURI string) {
 // Transport returns the active transport for a given server URI.
 func (b *Builder) Transport(serverURI string) (*ServerHandle, error) {
 	b.mu.Lock()
-	if t, ok := b.activeTransports[serverURI]; ok && t.activeadsStream != nil {
+	if t, ok := b.activeTransports[serverURI]; ok && t.ServerHandle() != nil {
 		b.mu.Unlock()
 		return t.ServerHandle(), nil
 	}
@@ -120,7 +120,7 @@ func (b *Builder) Transport(serverURI string) (*ServerHandle, error) {
 // transport implements clients.Transport.
 type transport struct {
 	mu              sync.Mutex
-	activeadsStream *stream
+	activeADSStream *stream
 	closed          bool
 	readyCh         chan struct{}
 	streamReady     sync.Once
@@ -134,10 +134,10 @@ func newTransport(ch chan struct{}) *transport {
 func (t *transport) ServerHandle() *ServerHandle {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	if t.activeadsStream == nil {
+	if t.activeADSStream == nil {
 		return nil
 	}
-	return &ServerHandle{fs: t.activeadsStream}
+	return &ServerHandle{fs: t.activeADSStream}
 }
 
 // NewStream creates a new stream to the server.
@@ -150,7 +150,7 @@ func (t *transport) NewStream(ctx context.Context, _ string) (clients.Stream, er
 	}
 
 	fs := newStream(ctx)
-	t.activeadsStream = fs
+	t.activeADSStream = fs
 	t.streamReady.Do(func() {
 		close(t.readyCh)
 	})
@@ -161,7 +161,7 @@ func (t *transport) NewStream(ctx context.Context, _ string) (clients.Stream, er
 func (t *transport) Close() {
 	t.mu.Lock()
 	t.closed = true
-	stream := t.activeadsStream
+	stream := t.activeADSStream
 	t.mu.Unlock()
 	if stream != nil {
 		stream.Close()
