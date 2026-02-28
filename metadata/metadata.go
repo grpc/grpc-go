@@ -158,6 +158,7 @@ func Join(mds ...MD) MD {
 
 type mdIncomingKey struct{}
 type mdOutgoingKey struct{}
+type mdOutgoingKeyV2 struct{}
 
 // NewIncomingContext creates a new context with incoming md attached. md must
 // not be modified after calling this function.
@@ -171,6 +172,12 @@ func NewIncomingContext(ctx context.Context, md MD) context.Context {
 // calling this function.
 func NewOutgoingContext(ctx context.Context, md MD) context.Context {
 	return context.WithValue(ctx, mdOutgoingKey{}, rawMD{md: md})
+}
+
+// NewOutgoingContextV2 creates a new context with outgoing md attached.
+// Compared to NewOutgoingContext, md is deep-copied to ensure write safety.
+func NewOutgoingContextV2(ctx context.Context, md MD) context.Context {
+	return context.WithValue(ctx, mdOutgoingKeyV2{}, rawMDV2{md: md.Copy()})
 }
 
 // AppendToOutgoingContext returns a new context with the provided kv merged
@@ -189,6 +196,33 @@ func AppendToOutgoingContext(ctx context.Context, kv ...string) context.Context 
 	}
 	added[len(added)-1] = kvCopy
 	return context.WithValue(ctx, mdOutgoingKey{}, rawMD{md: md.md, added: added})
+}
+
+// AppendToOutgoingContextV2 returns a new context with the provided kv merged
+// with any existing metadata in the context.
+//
+// Compared to AppendToOutgoingContext, this uses a persistent linked list to
+// avoid copying append history on every call.
+func AppendToOutgoingContextV2(ctx context.Context, kv ...string) context.Context {
+	if len(kv)%2 == 1 {
+		panic(fmt.Sprintf("metadata: AppendToOutgoingContextV2 got an odd number of input pairs for metadata: %d", len(kv)))
+	}
+	raw, _ := ctx.Value(mdOutgoingKeyV2{}).(rawMDV2)
+	kvCopy := make([]string, len(kv))
+	for i := 0; i < len(kv); i += 2 {
+		kvCopy[i] = strings.ToLower(kv[i])
+		kvCopy[i+1] = kv[i+1]
+	}
+	addedNode := &rawMDAddedV2{
+		added: kvCopy,
+		prev:  raw.addedTail,
+	}
+	newRaw := rawMDV2{
+		md:         raw.md,
+		addedTail:  addedNode,
+		addedPairs: raw.addedPairs + len(kv)/2,
+	}
+	return context.WithValue(ctx, mdOutgoingKeyV2{}, newRaw)
 }
 
 // FromIncomingContext returns the incoming metadata in ctx if it exists.
@@ -289,7 +323,51 @@ func FromOutgoingContext(ctx context.Context) (MD, bool) {
 	return out, ok
 }
 
+// FromOutgoingContextV2 returns the outgoing metadata in ctx if it exists.
+//
+// All keys in the returned MD are lowercase.
+func FromOutgoingContextV2(ctx context.Context) (MD, bool) {
+	raw, ok := ctx.Value(mdOutgoingKeyV2{}).(rawMDV2)
+	if !ok {
+		return nil, false
+	}
+	mdSize := len(raw.md) + raw.addedPairs
+
+	out := make(MD, mdSize)
+	for k, v := range raw.md {
+		key := strings.ToLower(k)
+		out[key] = copyOf(v)
+	}
+	if raw.addedTail == nil {
+		return out, true
+	}
+	appendAddedToOutgoingMDV2(out, raw.addedTail)
+	return out, true
+}
+
+func appendAddedToOutgoingMDV2(out MD, node *rawMDAddedV2) {
+	if node == nil {
+		return
+	}
+	appendAddedToOutgoingMDV2(out, node.prev)
+	added := node.added
+	for i := 0; i < len(added); i += 2 {
+		out[added[i]] = append(out[added[i]], added[i+1])
+	}
+}
+
 type rawMD struct {
 	md    MD
 	added [][]string
+}
+
+type rawMDV2 struct {
+	md         MD
+	addedTail  *rawMDAddedV2
+	addedPairs int
+}
+
+type rawMDAddedV2 struct {
+	added []string
+	prev  *rawMDAddedV2
 }

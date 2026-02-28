@@ -20,6 +20,7 @@ package metadata
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 	"strconv"
 	"testing"
@@ -376,6 +377,58 @@ func BenchmarkFromOutgoingContext(b *testing.B) {
 
 	for n := 0; n < b.N; n++ {
 		FromOutgoingContext(ctx)
+	}
+}
+
+func BenchmarkOutgoingContextAPIComparison(b *testing.B) {
+	base := context.Background()
+	b.ReportAllocs()
+
+	for _, appendDepth := range []int{1, 4, 16} {
+		b.Run(fmt.Sprintf("append_depth_%d", appendDepth), func(b *testing.B) {
+			b.Run("append_old", func(b *testing.B) {
+				b.ResetTimer()
+				for n := 0; n < b.N; n++ {
+					ctx := base
+					for i := 0; i < appendDepth; i++ {
+						ctx = AppendToOutgoingContext(ctx, "k1", "v1", "k2", "v2")
+					}
+				}
+			})
+
+			b.Run("append_v2", func(b *testing.B) {
+				b.ResetTimer()
+				for n := 0; n < b.N; n++ {
+					ctx := base
+					for i := 0; i < appendDepth; i++ {
+						ctx = AppendToOutgoingContextV2(ctx, "k1", "v1", "k2", "v2")
+					}
+				}
+			})
+
+			outCtx := base
+			outCtx = NewOutgoingContext(outCtx, MD{"k3": {"v3", "v4"}})
+			for i := 0; i < appendDepth; i++ {
+				outCtx = AppendToOutgoingContext(outCtx, "k1", "v1", "k2", "v2")
+			}
+			outCtxV2 := base
+			outCtxV2 = NewOutgoingContextV2(outCtxV2, MD{"k3": {"v3", "v4"}})
+			for i := 0; i < appendDepth; i++ {
+				outCtxV2 = AppendToOutgoingContextV2(outCtxV2, "k1", "v1", "k2", "v2")
+			}
+
+			b.Run("from_old", func(b *testing.B) {
+				for n := 0; n < b.N; n++ {
+					FromOutgoingContext(outCtx)
+				}
+			})
+
+			b.Run("from_v2", func(b *testing.B) {
+				for n := 0; n < b.N; n++ {
+					FromOutgoingContextV2(outCtxV2)
+				}
+			})
+		})
 	}
 }
 
