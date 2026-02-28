@@ -19,7 +19,7 @@ package xdsresource
 
 import (
 	"fmt"
-	"net"
+	"net/netip"
 	"strings"
 	"testing"
 
@@ -43,6 +43,7 @@ import (
 
 var cmpOptsIgnoreRawProto = cmp.Options{
 	cmpopts.EquateEmpty(),
+	cmpopts.EquateComparable(netip.Addr{}, netip.Prefix{}),
 	cmpopts.IgnoreFields(ListenerUpdate{}, "Raw"),
 	cmpopts.IgnoreFields(RouteConfigUpdate{}, "Raw"),
 	protocmp.Transform(),
@@ -141,7 +142,7 @@ func (s) TestUnmarshalListener_ServerSide_FilterChains_FailureCases(t *testing.T
 					},
 				},
 			},
-			wantErr: `failed to parse destination prefix range: address_prefix:"a.b.c.d"`,
+			wantErr: `failed to parse destination prefix ranges: invalid address: "a.b.c.d"`,
 		},
 		{
 			desc: "bad dest prefix length",
@@ -154,7 +155,7 @@ func (s) TestUnmarshalListener_ServerSide_FilterChains_FailureCases(t *testing.T
 					},
 				},
 			},
-			wantErr: `failed to parse destination prefix range: address_prefix:"10.1.1.0"`,
+			wantErr: `failed to parse destination prefix ranges: length 50 is invalid for "10.1.1.0" (max 32)`,
 		},
 		{
 			desc: "bad source address prefix",
@@ -167,7 +168,7 @@ func (s) TestUnmarshalListener_ServerSide_FilterChains_FailureCases(t *testing.T
 					},
 				},
 			},
-			wantErr: `failed to parse source prefix range: address_prefix:"a.b.c.d"`,
+			wantErr: `failed to parse source prefix ranges: invalid address: "a.b.c.d"`,
 		},
 		{
 			desc: "bad source prefix length",
@@ -180,7 +181,7 @@ func (s) TestUnmarshalListener_ServerSide_FilterChains_FailureCases(t *testing.T
 					},
 				},
 			},
-			wantErr: `failed to parse source prefix range: address_prefix:"10.1.1.0"`,
+			wantErr: `failed to parse source prefix ranges: length 50 is invalid for "10.1.1.0" (max 32)`,
 		},
 	}
 
@@ -2031,7 +2032,7 @@ func (s) TestUnmarshalListener_ServerSide_Success_AllCombinations(t *testing.T) 
 								}},
 							},
 							{
-								Prefix: ipNetFromCIDR("0.0.0.0/0"),
+								Prefix: prefixFromCIDR("0.0.0.0/0"),
 								SourceTypeArr: [3]SourcePrefixes{
 									{},
 									{},
@@ -2050,7 +2051,7 @@ func (s) TestUnmarshalListener_ServerSide_Success_AllCombinations(t *testing.T) 
 								},
 							},
 							{
-								Prefix: ipNetFromCIDR("::/0"),
+								Prefix: prefixFromCIDR("::/0"),
 								SourceTypeArr: [3]SourcePrefixes{
 									{},
 									{},
@@ -2069,7 +2070,7 @@ func (s) TestUnmarshalListener_ServerSide_Success_AllCombinations(t *testing.T) 
 								},
 							},
 							{
-								Prefix: ipNetFromCIDR("192.168.1.1/16"),
+								Prefix: prefixFromCIDR("192.168.1.1/16"),
 								SourceTypeArr: [3]SourcePrefixes{{
 									Entries: []SourcePrefixEntry{{
 										PortMap: map[int]NetworkFilterChainConfig{
@@ -2084,7 +2085,7 @@ func (s) TestUnmarshalListener_ServerSide_Success_AllCombinations(t *testing.T) 
 								}},
 							},
 							{
-								Prefix: ipNetFromCIDR("10.0.0.0/8"),
+								Prefix: prefixFromCIDR("10.0.0.0/8"),
 								SourceTypeArr: [3]SourcePrefixes{{
 									Entries: []SourcePrefixEntry{{
 										PortMap: map[int]NetworkFilterChainConfig{
@@ -2153,7 +2154,7 @@ func (s) TestUnmarshalListener_ServerSide_Success_AllCombinations(t *testing.T) 
 								},
 							},
 							{
-								Prefix: ipNetFromCIDR("192.168.1.1/16"),
+								Prefix: prefixFromCIDR("192.168.1.1/16"),
 								SourceTypeArr: [3]SourcePrefixes{
 									{},
 									{},
@@ -2210,7 +2211,7 @@ func (s) TestUnmarshalListener_ServerSide_Success_AllCombinations(t *testing.T) 
 							{
 								SourceTypeArr: [3]SourcePrefixes{{
 									Entries: []SourcePrefixEntry{{
-										Prefix: ipNetFromCIDR("10.0.0.0/8"),
+										Prefix: prefixFromCIDR("10.0.0.0/8"),
 										PortMap: map[int]NetworkFilterChainConfig{
 											0: {
 												HTTPConnMgr: &HTTPConnectionManagerConfig{
@@ -2223,12 +2224,12 @@ func (s) TestUnmarshalListener_ServerSide_Success_AllCombinations(t *testing.T) 
 								}},
 							},
 							{
-								Prefix: ipNetFromCIDR("192.168.1.1/16"),
+								Prefix: prefixFromCIDR("192.168.1.1/16"),
 								SourceTypeArr: [3]SourcePrefixes{
 									{
 										Entries: []SourcePrefixEntry{
 											{
-												Prefix: ipNetFromCIDR("192.168.1.1/16"),
+												Prefix: prefixFromCIDR("192.168.1.1/16"),
 												PortMap: map[int]NetworkFilterChainConfig{
 													0: {
 														HTTPConnMgr: &HTTPConnectionManagerConfig{
@@ -2307,14 +2308,14 @@ func (s) TestUnmarshalListener_ServerSide_Success_AllCombinations(t *testing.T) 
 								}},
 							},
 							{
-								Prefix: ipNetFromCIDR("192.168.1.1/16"),
+								Prefix: prefixFromCIDR("192.168.1.1/16"),
 								SourceTypeArr: [3]SourcePrefixes{
 									{},
 									{},
 									{
 										Entries: []SourcePrefixEntry{
 											{
-												Prefix: ipNetFromCIDR("192.168.1.1/16"),
+												Prefix: prefixFromCIDR("192.168.1.1/16"),
 												PortMap: map[int]NetworkFilterChainConfig{
 													1: {
 														HTTPConnMgr: &HTTPConnectionManagerConfig{
@@ -2436,7 +2437,7 @@ func (s) TestUnmarshalListener_ServerSide_Success_AllCombinations(t *testing.T) 
 								}},
 							},
 							{
-								Prefix: ipNetFromCIDR("192.168.1.1/16"),
+								Prefix: prefixFromCIDR("192.168.1.1/16"),
 								SourceTypeArr: [3]SourcePrefixes{{
 									Entries: []SourcePrefixEntry{{
 										PortMap: map[int]NetworkFilterChainConfig{
@@ -2451,7 +2452,7 @@ func (s) TestUnmarshalListener_ServerSide_Success_AllCombinations(t *testing.T) 
 								}},
 							},
 							{
-								Prefix: ipNetFromCIDR("10.0.0.0/8"),
+								Prefix: prefixFromCIDR("10.0.0.0/8"),
 								SourceTypeArr: [3]SourcePrefixes{{
 									Entries: []SourcePrefixEntry{{
 										PortMap: map[int]NetworkFilterChainConfig{
@@ -2504,12 +2505,8 @@ func listenerProtoToAny(t *testing.T, lis *v3listenerpb.Listener) *anypb.Any {
 	}
 }
 
-func ipNetFromCIDR(cidr string) *net.IPNet {
-	_, ipnet, err := net.ParseCIDR(cidr)
-	if err != nil {
-		panic(err)
-	}
-	return ipnet
+func prefixFromCIDR(cidr string) netip.Prefix {
+	return netip.MustParsePrefix(cidr).Masked()
 }
 
 func cidrRangeFromAddressAndPrefixLen(address string, len int) *v3corepb.CidrRange {
