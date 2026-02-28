@@ -77,9 +77,15 @@ func (b *Builder) Build(serverIdentifier clients.ServerIdentifier) (clients.Tran
 // Close closes the transport for the given server identifier.
 func (b *Builder) Close(serverURI string) {
 	b.mu.Lock()
-	defer b.mu.Unlock()
-	if t, ok := b.activeTransports[serverURI]; ok {
-		t.activeadsStream.Close()
+	t, ok := b.activeTransports[serverURI]
+	b.mu.Unlock()
+	if ok {
+		t.mu.Lock()
+		stream := t.activeadsStream
+		t.mu.Unlock()
+		if stream != nil {
+			stream.Close()
+		}
 	}
 }
 
@@ -117,6 +123,7 @@ type transport struct {
 	activeadsStream *stream
 	closed          bool
 	readyCh         chan struct{}
+	streamReady     sync.Once
 }
 
 func newTransport(ch chan struct{}) *transport {
@@ -144,8 +151,9 @@ func (t *transport) NewStream(ctx context.Context, _ string) (clients.Stream, er
 
 	fs := newStream(ctx)
 	t.activeadsStream = fs
-	close(t.readyCh)
-
+	t.streamReady.Do(func() {
+		close(t.readyCh)
+	})
 	return fs, nil
 }
 
@@ -182,9 +190,11 @@ func newStream(ctx context.Context) *stream {
 // Send sends the provided message on the stream. It puts the request into the
 // reqChan for consumption.
 func (s *stream) Send(data []byte) error {
+	ctx, cancel := context.WithTimeout(s.ctx, 10*time.Millisecond)
+	defer cancel()
 	select {
-	case <-s.ctx.Done():
-		return s.ctx.Err()
+	case <-ctx.Done():
+		return ctx.Err()
 	case s.reqChan <- data:
 		return nil
 	}
@@ -193,11 +203,13 @@ func (s *stream) Send(data []byte) error {
 // Recv blocks until the next message is received on the stream. It blocks until
 // a response is available in the respChan or the context is canceled.
 func (s *stream) Recv() ([]byte, error) {
+	ctx, cancel := context.WithTimeout(s.ctx, 10*time.Millisecond)
+	defer cancel()
 	select {
 	case data := <-s.respChan:
 		return data, nil
-	case <-s.ctx.Done():
-		return nil, s.ctx.Err()
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	}
 }
 
