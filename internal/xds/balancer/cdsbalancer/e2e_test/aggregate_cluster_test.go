@@ -20,7 +20,7 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -108,13 +108,13 @@ func (s) TestAggregateCluster_WithTwoEDSClusters(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	// Start an xDS management server that pushes the EDS resource names onto a
-	// channel when requested.
 	const clusterName1 = clusterName + "-cluster-1"
 	const clusterName2 = clusterName + "-cluster-2"
 
-	gotEDSRequests := grpcsync.NewEvent()
-
+	// gotBothEDSRequests is fired when the management server receives EDS
+	// requests for both clusterName1 and clusterName2. This is used to block
+	// the test until both EDS requests have been received.
+	gotBothEDSRequests := grpcsync.NewEvent()
 	managementServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
 		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
 			if req.GetTypeUrl() != version.V3EndpointsURL {
@@ -130,11 +130,10 @@ func (s) TestAggregateCluster_WithTwoEDSClusters(t *testing.T) {
 			// Check if we have a request for both EDS resources. If so, fire
 			// the event to unblock the test.
 			names := req.GetResourceNames()
-			sortedNames := make([]string, len(names))
-			copy(sortedNames, names)
-			sort.Strings(sortedNames)
+			sortedNames := slices.Clone(names)
+			slices.Sort(sortedNames)
 			if cmp.Equal(sortedNames, []string{clusterName1, clusterName2}) {
-				gotEDSRequests.Fire()
+				gotBothEDSRequests.Fire()
 			}
 			return nil
 		},
@@ -177,7 +176,7 @@ func (s) TestAggregateCluster_WithTwoEDSClusters(t *testing.T) {
 
 	// Wait for both EDS resources to be requested.
 	select {
-	case <-gotEDSRequests.Done():
+	case <-gotBothEDSRequests.Done():
 	case <-ctx.Done():
 		t.Fatalf("Timeout when waiting for all EDS resources %v to be requested", []string{clusterName1, clusterName2})
 	}

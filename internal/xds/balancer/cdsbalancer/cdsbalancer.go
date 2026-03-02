@@ -162,14 +162,18 @@ type cdsBalancer struct {
 
 	xdsHIPtr *unsafe.Pointer // Accessed atomically.
 
+	// All fields below are accessed only from methods implementing the
+	// balancer.Balancer interface. Since gRPC guarantees that these methods are
+	// never invoked concurrently, no additional synchronization is required to
+	// protect access to these fields.
+	xdsClient         xdsclient.XDSClient
 	childLB           balancer.Balancer                     // Child policy, built upon resolution of the cluster graph.
-	xdsClient         xdsclient.XDSClient                   // xDS client to watch Cluster resources.
-	clusterConfigs    map[string]*xdsresource.ClusterResult // Map of cluster name to the last received result for that cluster.
-	priorityConfigs   map[string]*priorityConfig            // Map of priority config for each leaf cluster. Key is host name i.e. EDSServiceName(or clusterName if not present) or DNSHostName.
+	clusterConfigs    map[string]*xdsresource.ClusterResult // Cluster name to the last received result for that cluster.
+	priorityConfigs   map[string]*priorityConfig            // Hostname to priority config for that leaf cluster.
 	lbCfg             *lbConfig                             // Current load balancing configuration.
 	priorities        []*priorityConfig                     // List of priorities in the order.
-	unsubscribe       func()                                // Function to unsubscribe to a cluster in case of dynamic clusters.
-	isSubscribed      bool                                  // Specifies if the dynamic cluster has been subscribed to. It is not needed for static clusters.
+	unsubscribe       func()                                // For dynamic cluster unsubscription.
+	isSubscribed      bool                                  // True if a dynamic cluster has been subscribed to.
 	clusterSubscriber xdsdepmgr.ClusterSubscriber           // To subscribe to dynamic cluster resource.
 	xdsLBPolicy       internalserviceconfig.BalancerConfig  // Stores the locality and endpoint picking policy.
 	attributes        *attributes.Attributes                // Attributes from resolver state.
@@ -189,8 +193,6 @@ type cdsBalancer struct {
 // management server, creates appropriate certificate provider plugins, and
 // updates the HandshakeInfo which is added as an address attribute in
 // NewSubConn() calls.
-//
-// Only executed in the context of a serializer callback.
 func (b *cdsBalancer) handleSecurityConfig(config *xdsresource.SecurityConfig) error {
 	// If xdsCredentials are not in use, i.e, the user did not want to get
 	// security configuration from an xDS server, we should not be acting on the
@@ -274,7 +276,10 @@ func buildProviderFunc(configs map[string]*certprovider.BuildableConfig, instanc
 }
 
 // UpdateClientConnState receives the serviceConfig, xdsConfig,
-// ClusterSubscriber and the xdsClient object from the xdsResolver.
+// ClusterSubscriber and the xdsClient object from the xdsResolver. If an error
+// is encountered, the parent (clustermanager) sets the corresponding cluster’s
+// picker to transient_failure. Otherwise, the received configuration is
+// processed and forwarded to the appropriate child policy.
 func (b *cdsBalancer) UpdateClientConnState(state balancer.ClientConnState) error {
 	if b.xdsClient == nil {
 		c := xdsclient.FromResolverState(state.ResolverState)
@@ -524,8 +529,6 @@ func (b *cdsBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.Sub
 // closeChildPolicyAndReportTF closes the child policy, if it exists, and
 // updates the connectivity state of the channel to TransientFailure with an
 // error picker.
-//
-// Only executed in the context of a serializer callback.
 func (b *cdsBalancer) closeChildPolicyAndReportTF(err error) {
 	if b.childLB != nil {
 		b.childLB.Close()
