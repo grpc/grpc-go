@@ -21,6 +21,7 @@ package grpclog
 import (
 	"fmt"
 	"strings"
+	"sync"
 )
 
 type severityLevel int
@@ -72,7 +73,14 @@ type componentData struct {
 	fatalDepth   func(depth int, args ...any)
 }
 
-var cache = map[string]*componentData{}
+type componentCache struct {
+	mu   sync.Mutex
+	data map[string]*componentData
+}
+
+var cache = componentCache{
+	data: map[string]*componentData{},
+}
 
 func (c *componentData) InfoDepth(depth int, args ...any) {
 	args = append([]any{"[" + string(c.name) + "]"}, args...)
@@ -154,7 +162,9 @@ func noopDepth(_ int, _ ...any) {
 // returned. SetLoggerV2 will panic if it is called with a logger created by
 // Component.
 func Component(componentName string) DepthLoggerV2 {
-	if cData, ok := cache[componentName]; ok {
+	cache.mu.Lock()
+	defer cache.mu.Unlock()
+	if cData, ok := cache.data[componentName]; ok {
 		return cData
 	}
 	c := &componentData{
@@ -201,6 +211,6 @@ func Component(componentName string) DepthLoggerV2 {
 		}
 	}
 
-	cache[componentName] = c
+	cache.data[componentName] = c
 	return c
 }

@@ -236,7 +236,7 @@ func TestLogger(t *testing.T) {
 	originalDepthLoggerV2 := internal.DepthLoggerV2Impl
 	originalComponentLoggerV2 := internal.ComponentLoggerV2Impl
 	originalComponentDepthLoggerV2 := internal.ComponentDepthLoggerV2Impl
-	originalCache := cache
+	originalCache := cache.data
 
 	t.Cleanup(func() {
 		componentLogLevels = originalComponentLogLevels
@@ -244,14 +244,14 @@ func TestLogger(t *testing.T) {
 		internal.DepthLoggerV2Impl = originalDepthLoggerV2
 		internal.ComponentLoggerV2Impl = originalComponentLoggerV2
 		internal.ComponentDepthLoggerV2Impl = originalComponentDepthLoggerV2
-		cache = originalCache
+		cache.data = originalCache
 	})
 
 	const logTimestampPrefixLen = len("2006/01/02 15:04:05 ")
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cache = map[string]*componentData{}
+			cache.data = map[string]*componentData{}
 
 			var buf bytes.Buffer
 			initLogger(&buf, tt.logSeverityLevel, "", "", tt.componentLogLevel)
