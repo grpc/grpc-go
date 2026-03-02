@@ -20,48 +20,8 @@ package grpclog
 
 import (
 	"fmt"
-	"strings"
 	"sync"
 )
-
-type severityLevel int
-
-const (
-	severityInfo severityLevel = iota
-	severityWarning
-	severityError
-	severityFatal
-)
-
-func parseComponentLogLevels(logLevel string) map[string]severityLevel {
-	if logLevel == "" {
-		return nil
-	}
-
-	logLevels := make(map[string]severityLevel)
-	for part := range strings.SplitSeq(logLevel, ",") {
-		kv := strings.Split(part, ":")
-		if len(kv) < 2 {
-			continue
-		}
-		component := kv[0]
-		if component == "" {
-			continue
-		}
-		level := kv[1]
-		switch level {
-		case "INFO", "info":
-			logLevels[component] = severityInfo
-		case "WARNING", "warning":
-			logLevels[component] = severityWarning
-		case "ERROR", "error":
-			logLevels[component] = severityError
-		default:
-			logLevels[component] = severityFatal
-		}
-	}
-	return logLevels
-}
 
 // componentData records the settings for a component.
 type componentData struct {
