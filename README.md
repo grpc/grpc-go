@@ -71,35 +71,8 @@ Please update to the latest version of gRPC-Go using
 
 ### How to turn on logging
 
-The default logger is controlled by environment variables. Turn everything on
-like this:
-
-```console
-$ export GRPC_GO_LOG_VERBOSITY_LEVEL=99
-$ export GRPC_GO_LOG_SEVERITY_LEVEL=info
-```
-
-Additionally, you can configure log severity levels for individual components
-using the `GRPC_GO_COMPONENT_LOG_LEVEL` environment variable. The format is a
-comma-separated list of `component:LEVEL` pairs like this:
-
-```console
-$ export GRPC_GO_COMPONENT_LOG_LEVEL=dns:ERROR,transport:WARNING
-```
-
-When both `GRPC_GO_LOG_SEVERITY_LEVEL` and `GRPC_GO_COMPONENT_LOG_LEVEL` are
-set, component-specific settings take precedence over `GRPC_GO_LOG_SEVERITY_LEVEL`
-for the specified components. Components not listed in
-`GRPC_GO_COMPONENT_LOG_LEVEL` will use the `GRPC_GO_LOG_SEVERITY_LEVEL` setting.
-For example:
-
-```console
-$ export GRPC_GO_LOG_SEVERITY_LEVEL=ERROR
-$ export GRPC_GO_COMPONENT_LOG_LEVEL=dns:INFO
-```
-
-In this case, the `dns` component will log at `INFO` level, while all other
-components will log at `ERROR` level.
+See the [grpclog package documentation](https://pkg.go.dev/google.golang.org/grpc/grpclog)
+for details on how to configure logging.
 
 ### The RPC failed with error `"code = Unavailable desc = transport is closing"`
 
