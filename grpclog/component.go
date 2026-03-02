@@ -28,7 +28,8 @@ import (
 
 // componentData records the settings for a component.
 type componentData struct {
-	name string
+	name      string
+	logPrefix string
 
 	infoDepth    func(depth int, args ...any)
 	warningDepth func(depth int, args ...any)
@@ -46,22 +47,22 @@ var cache = componentCache{
 }
 
 func (c *componentData) InfoDepth(depth int, args ...any) {
-	args = append([]any{"[" + string(c.name) + "]"}, args...)
+	args = append([]any{c.logPrefix}, args...)
 	c.infoDepth(depth+1, args...)
 }
 
 func (c *componentData) WarningDepth(depth int, args ...any) {
-	args = append([]any{"[" + string(c.name) + "]"}, args...)
+	args = append([]any{c.logPrefix}, args...)
 	c.warningDepth(depth+1, args...)
 }
 
 func (c *componentData) ErrorDepth(depth int, args ...any) {
-	args = append([]any{"[" + string(c.name) + "]"}, args...)
+	args = append([]any{c.logPrefix}, args...)
 	c.errorDepth(depth+1, args...)
 }
 
 func (c *componentData) FatalDepth(depth int, args ...any) {
-	args = append([]any{"[" + string(c.name) + "]"}, args...)
+	args = append([]any{c.logPrefix}, args...)
 	c.fatalDepth(depth+1, args...)
 }
 
@@ -165,6 +166,7 @@ func Component(componentName string) DepthLoggerV2 {
 	}
 	c := &componentData{
 		name:         componentName,
+		logPrefix:    "[" + componentName + "]",
 		infoDepth:    InfoDepth,
 		warningDepth: WarningDepth,
 		errorDepth:   ErrorDepth,
