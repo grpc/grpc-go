@@ -164,10 +164,6 @@ func Component(componentName string) DepthLoggerV2 {
 			c.errorDepth = func(depth int, args ...any) {
 				componentErrorDepth(depth+1, args...)
 			}
-		case severityFatal:
-			c.infoDepth = noopDepth
-			c.warningDepth = noopDepth
-			c.errorDepth = noopDepth
 		}
 	}
 

@@ -69,13 +69,9 @@ func TestParseComponentLogLevel(t *testing.T) {
 			},
 		},
 		{
-			name:  "mixed-case level names are treated as unknown and default to FATAL",
+			name:  "mixed-case level names are treated as unknown and skipped",
 			input: "dns:Error,xds:Warning,authz:Info",
-			want: map[string]severityLevel{
-				"dns":   severityFatal,
-				"xds":   severityFatal,
-				"authz": severityFatal,
-			},
+			want:  map[string]severityLevel{},
 		},
 		{
 			name:  "parses multiple comma-separated components with different levels",
@@ -102,10 +98,9 @@ func TestParseComponentLogLevel(t *testing.T) {
 			},
 		},
 		{
-			name:  "unrecognized level name defaults to FATAL",
+			name:  "unrecognized level name is skipped",
 			input: "dns:UNKNOWN,xds:ERROR",
 			want: map[string]severityLevel{
-				"dns": severityFatal,
 				"xds": severityError,
 			},
 		},
@@ -220,11 +215,14 @@ func TestLogger(t *testing.T) {
 			},
 		},
 		{
-			name:              "FATAL GRPC_GO_COMPONENT_LOG_LEVEL suppresses all non-fatal logs",
+			name:              "unrecognized GRPC_GO_COMPONENT_LOG_LEVEL falls back to global default",
 			componentLogLevel: "dns:FATAL",
 			logSeverityLevel:  "INFO",
 			components:        []string{"dns", "balancer"},
 			want: []string{
+				"INFO: [dns] dns-info",
+				"WARNING: [dns] dns-warning",
+				"ERROR: [dns] dns-error",
 				"INFO: [balancer] balancer-info",
 				"WARNING: [balancer] balancer-warning",
 				"ERROR: [balancer] balancer-error",

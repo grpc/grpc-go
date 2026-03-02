@@ -58,7 +58,6 @@ const (
 	severityInfo severityLevel = iota
 	severityWarning
 	severityError
-	severityFatal
 )
 
 func parseComponentLogLevels(logLevel string) map[string]severityLevel {
@@ -85,7 +84,7 @@ func parseComponentLogLevels(logLevel string) map[string]severityLevel {
 		case "ERROR", "error":
 			logLevels[component] = severityError
 		default:
-			logLevels[component] = severityFatal
+			continue
 		}
 	}
 	return logLevels
