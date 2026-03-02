@@ -298,8 +298,10 @@ func (b *clusterImplBalancer) UpdateClientConnState(s balancer.ClientConnState) 
 		return balancer.ErrBadResolverState
 	}
 	clusterUpdate := clusterCfg.Config.Cluster
-	// Will be nil if the cluster is a DNS cluster.
-	edsUpdate := clusterCfg.Config.EndpointConfig.EDSUpdate
+	var edsUpdate *xdsresource.EndpointsUpdate
+	if clusterUpdate.ClusterType == xdsresource.ClusterTypeEDS {
+		edsUpdate = clusterCfg.Config.EndpointConfig.EDSUpdate
+	}
 
 	// Update load reporting config. This needs to be done before updating the
 	// child policy because we need the loadStore from the updated client to be

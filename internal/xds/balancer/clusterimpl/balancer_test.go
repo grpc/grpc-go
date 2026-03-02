@@ -108,7 +108,13 @@ func (s) TestPickerUpdateAfterClose(t *testing.T) {
 		Clusters: map[string]*xdsresource.ClusterResult{
 			testClusterName: {
 				Config: xdsresource.ClusterConfig{
-					Cluster: &xdsresource.ClusterUpdate{MaxRequests: &maxRequest},
+					Cluster: &xdsresource.ClusterUpdate{
+						ClusterName:    testClusterName,
+						ClusterType:    xdsresource.ClusterTypeEDS,
+						EDSServiceName: testServiceName,
+						MaxRequests:    &maxRequest,
+					},
+					EndpointConfig: &xdsresource.EndpointConfig{EDSUpdate: &xdsresource.EndpointsUpdate{}},
 				},
 			},
 		},
@@ -163,6 +169,7 @@ func (s) TestClusterNameInAddressAttributes(t *testing.T) {
 						ClusterName:    testClusterName,
 						EDSServiceName: testServiceName,
 					},
+					EndpointConfig: &xdsresource.EndpointConfig{EDSUpdate: &xdsresource.EndpointsUpdate{}},
 				},
 			},
 		},
@@ -213,6 +220,7 @@ func (s) TestClusterNameInAddressAttributes(t *testing.T) {
 						ClusterName:    testClusterName2,
 						EDSServiceName: testServiceName,
 					},
+					EndpointConfig: &xdsresource.EndpointConfig{EDSUpdate: &xdsresource.EndpointsUpdate{}},
 				},
 			},
 		},
@@ -291,10 +299,12 @@ func (s) TestPickerUpdatedSynchronouslyOnConfigUpdate(t *testing.T) {
 		Clusters: map[string]*xdsresource.ClusterResult{
 			testClusterName: {
 				Config: xdsresource.ClusterConfig{
-					Cluster: &xdsresource.ClusterUpdate{},
-					EndpointConfig: &xdsresource.EndpointConfig{
-						EDSUpdate: &xdsresource.EndpointsUpdate{},
+					Cluster: &xdsresource.ClusterUpdate{
+						ClusterName:    testClusterName,
+						ClusterType:    xdsresource.ClusterTypeEDS,
+						EDSServiceName: testServiceName,
 					},
+					EndpointConfig: &xdsresource.EndpointConfig{EDSUpdate: &xdsresource.EndpointsUpdate{}},
 				},
 			},
 		},
