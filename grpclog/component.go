@@ -20,7 +20,10 @@ package grpclog
 
 import (
 	"fmt"
+	"os"
 	"sync"
+
+	"google.golang.org/grpc/grpclog/internal"
 )
 
 // componentData records the settings for a component.
@@ -112,6 +115,39 @@ func (c *componentData) Fatalln(args ...any) {
 
 func (c *componentData) V(l int) bool {
 	return V(l)
+}
+
+func componentInfoDepth(depth int, args ...any) {
+	if internal.ComponentDepthLoggerV2Impl != nil {
+		internal.ComponentDepthLoggerV2Impl.InfoDepth(depth, args...)
+	} else {
+		internal.ComponentLoggerV2Impl.Infoln(args...)
+	}
+}
+
+func componentWarningDepth(depth int, args ...any) {
+	if internal.ComponentDepthLoggerV2Impl != nil {
+		internal.ComponentDepthLoggerV2Impl.WarningDepth(depth, args...)
+	} else {
+		internal.ComponentLoggerV2Impl.Warningln(args...)
+	}
+}
+
+func componentErrorDepth(depth int, args ...any) {
+	if internal.ComponentDepthLoggerV2Impl != nil {
+		internal.ComponentDepthLoggerV2Impl.ErrorDepth(depth, args...)
+	} else {
+		internal.ComponentLoggerV2Impl.Errorln(args...)
+	}
+}
+
+func componentFatalDepth(depth int, args ...any) {
+	if internal.ComponentDepthLoggerV2Impl != nil {
+		internal.ComponentDepthLoggerV2Impl.FatalDepth(depth, args...)
+	} else {
+		internal.ComponentLoggerV2Impl.Fatalln(args...)
+	}
+	os.Exit(1)
 }
 
 func noopDepth(int, ...any) {

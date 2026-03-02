@@ -20,7 +20,6 @@ package grpclog
 
 import (
 	"io"
-	"os"
 	"strconv"
 	"strings"
 
@@ -29,39 +28,6 @@ import (
 
 // LoggerV2 does underlying logging work for grpclog.
 type LoggerV2 internal.LoggerV2
-
-func componentInfoDepth(depth int, args ...any) {
-	if internal.ComponentDepthLoggerV2Impl != nil {
-		internal.ComponentDepthLoggerV2Impl.InfoDepth(depth, args...)
-	} else {
-		internal.ComponentLoggerV2Impl.Infoln(args...)
-	}
-}
-
-func componentWarningDepth(depth int, args ...any) {
-	if internal.ComponentDepthLoggerV2Impl != nil {
-		internal.ComponentDepthLoggerV2Impl.WarningDepth(depth, args...)
-	} else {
-		internal.ComponentLoggerV2Impl.Warningln(args...)
-	}
-}
-
-func componentErrorDepth(depth int, args ...any) {
-	if internal.ComponentDepthLoggerV2Impl != nil {
-		internal.ComponentDepthLoggerV2Impl.ErrorDepth(depth, args...)
-	} else {
-		internal.ComponentLoggerV2Impl.Errorln(args...)
-	}
-}
-
-func componentFatalDepth(depth int, args ...any) {
-	if internal.ComponentDepthLoggerV2Impl != nil {
-		internal.ComponentDepthLoggerV2Impl.FatalDepth(depth, args...)
-	} else {
-		internal.ComponentLoggerV2Impl.Fatalln(args...)
-	}
-	os.Exit(1)
-}
 
 // SetLoggerV2 sets logger that is used in grpc to a V2 logger.
 // Not mutex-protected, should be called before any gRPC functions.
