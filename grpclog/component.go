@@ -154,7 +154,7 @@ func (c *componentData) V(l int) bool {
 	return V(l)
 }
 
-func noopDepth(_ int, _ ...any) {
+func noopDepth(int, ...any) {
 }
 
 // Component creates a new component and returns it for logging. If a component
