@@ -23,6 +23,7 @@ import (
 	"context"
 	"fmt"
 	rand "math/rand/v2"
+	"slices"
 	"strings"
 	"sync/atomic"
 
@@ -604,9 +605,11 @@ func (r *xdsResolver) getOrCreateClientFilter(builder httpfilter.ClientFilterBui
 // newClientFilterKey generates a key for the given filter using the filter name
 // and type URLs. This is used for storing ClientFilters in a map.
 func newClientFilterKey(f *xdsresource.HTTPFilter) clientFilterKey {
+	typeURLs := slices.Clone(f.Filter.TypeURLs())
+	slices.Sort(typeURLs)
 	return clientFilterKey{
 		name:     f.Name,
-		typeURLs: strings.Join(f.Filter.TypeURLs(), ":"),
+		typeURLs: strings.Join(typeURLs, ":"),
 	}
 }
 

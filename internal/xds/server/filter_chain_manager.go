@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"slices"
 	"strings"
 	"sync/atomic"
 
@@ -549,9 +550,11 @@ type stoppableServerInterceptor interface {
 // newServerFilterKey generates a key for the given filter using the filter name
 // and type URLs. This is used for storing ServerFilters in a map.
 func newServerFilterKey(f *xdsresource.HTTPFilter) serverFilterKey {
+	typeURLs := slices.Clone(f.Filter.TypeURLs())
+	slices.Sort(typeURLs)
 	return serverFilterKey{
 		name:     f.Name,
-		typeURLs: strings.Join(f.Filter.TypeURLs(), ":"),
+		typeURLs: strings.Join(typeURLs, ":"),
 	}
 }
 
