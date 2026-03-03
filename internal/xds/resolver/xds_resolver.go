@@ -557,26 +557,7 @@ func (r *xdsResolver) newInterceptor(filters []xdsresource.HTTPFilter, clusterOv
 		}
 	}
 
-	return newInterceptorList(interceptors), nil
-}
-
-func newInterceptorList(interceptors []*clientInterceptorWithCleanup) *interceptorList {
-	return &interceptorList{
-		interceptors: interceptors,
-		chained: func(ctx context.Context, ri iresolver.RPCInfo, done func(), newStream func(context.Context, func()) (iresolver.ClientStream, error)) (iresolver.ClientStream, error) {
-			curr := 0
-			var ns func(context.Context, func()) (iresolver.ClientStream, error)
-			ns = func(ctx context.Context, done func()) (iresolver.ClientStream, error) {
-				if curr == len(interceptors) {
-					return newStream(ctx, done)
-				}
-				i := interceptors[curr]
-				curr++
-				return i.interceptor.NewStream(ctx, ri, done, ns)
-			}
-			return ns(ctx, done)
-		},
-	}
+	return &interceptorList{interceptors: interceptors}, nil
 }
 
 // interceptorList is a client interceptor that contains a list of client
@@ -584,13 +565,17 @@ func newInterceptorList(interceptors []*clientInterceptorWithCleanup) *intercept
 // each interceptor, which will be executed when the interceptorList is stopped.
 type interceptorList struct {
 	interceptors []*clientInterceptorWithCleanup
-	chained      chainedInterceptor
 }
 
-type chainedInterceptor func(ctx context.Context, ri iresolver.RPCInfo, done func(), final func(context.Context, func()) (iresolver.ClientStream, error)) (iresolver.ClientStream, error)
-
 func (il *interceptorList) NewStream(ctx context.Context, ri iresolver.RPCInfo, _ func(), newStream func(ctx context.Context, _ func()) (iresolver.ClientStream, error)) (iresolver.ClientStream, error) {
-	return il.chained(ctx, ri, func() {}, newStream)
+	for idx := len(il.interceptors) - 1; idx >= 0; idx-- {
+		ns := newStream
+		i := il.interceptors[idx]
+		newStream = func(ctx context.Context, done func()) (iresolver.ClientStream, error) {
+			return i.interceptor.NewStream(ctx, ri, done, ns)
+		}
+	}
+	return newStream(ctx, func() {})
 }
 
 func (il *interceptorList) stop() {
