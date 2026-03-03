@@ -84,17 +84,17 @@ func (b *Builder) Close(serverURI string) {
 		stream := t.activeADSStream
 		t.mu.Unlock()
 		if stream != nil {
-			stream.Close()
+			stream.close()
 		}
 	}
 }
 
 // Transport returns the active transport for a given server URI.
-func (b *Builder) Transport(serverURI string) (*ServerHandle, error) {
+func (b *Builder) Transport(ctx context.Context, serverURI string) (*ServerHandle, error) {
 	b.mu.Lock()
-	if t, ok := b.activeTransports[serverURI]; ok && t.ServerHandle() != nil {
+	if t, ok := b.activeTransports[serverURI]; ok && t.serverHandle() != nil {
 		b.mu.Unlock()
-		return t.ServerHandle(), nil
+		return t.serverHandle(), nil
 	}
 
 	ch, ok := b.activeTransportsChan[serverURI]
@@ -104,16 +104,13 @@ func (b *Builder) Transport(serverURI string) (*ServerHandle, error) {
 	}
 	b.mu.Unlock()
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	case <-ch:
 		b.mu.Lock()
 		defer b.mu.Unlock()
-		return b.activeTransports[serverURI].ServerHandle(), nil
+		return b.activeTransports[serverURI].serverHandle(), nil
 	}
 }
 
@@ -123,15 +120,14 @@ type transport struct {
 	activeADSStream *stream
 	closed          bool
 	readyCh         chan struct{}
-	streamReady     sync.Once
 }
 
 func newTransport(ch chan struct{}) *transport {
 	return &transport{readyCh: ch}
 }
 
-// ServerHandle returns a serverhandle for testing.
-func (t *transport) ServerHandle() *ServerHandle {
+// serverHandle returns a serverhandle for testing.
+func (t *transport) serverHandle() *ServerHandle {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if t.activeADSStream == nil {
@@ -151,9 +147,7 @@ func (t *transport) NewStream(ctx context.Context, _ string) (clients.Stream, er
 
 	fs := newStream(ctx)
 	t.activeADSStream = fs
-	t.streamReady.Do(func() {
-		close(t.readyCh)
-	})
+	close(t.readyCh)
 	return fs, nil
 }
 
@@ -164,7 +158,7 @@ func (t *transport) Close() {
 	stream := t.activeADSStream
 	t.mu.Unlock()
 	if stream != nil {
-		stream.Close()
+		stream.close()
 	}
 }
 
@@ -214,7 +208,7 @@ func (s *stream) Recv() ([]byte, error) {
 }
 
 // Close closes the stream.
-func (s *stream) Close() {
+func (s *stream) close() {
 	s.cancel()
 }
 
@@ -227,7 +221,7 @@ type ServerHandle struct {
 // Recv reads the next request from the reqChan. It blocks until a
 // request is available or the context expires. It returns an error if the
 // context expires or if the request cannot be unmarshaled.
-func (h *ServerHandle) Recv() (*v3discoverypb.DiscoveryRequest, error) {
+func (h *ServerHandle) Recv(ctx context.Context) (*v3discoverypb.DiscoveryRequest, error) {
 	select {
 	case data := <-h.fs.reqChan:
 		req := &v3discoverypb.DiscoveryRequest{}
@@ -235,22 +229,22 @@ func (h *ServerHandle) Recv() (*v3discoverypb.DiscoveryRequest, error) {
 			return nil, fmt.Errorf("failed to unmarshal request: %v", err)
 		}
 		return req, nil
-	case <-h.fs.ctx.Done():
-		return nil, h.fs.ctx.Err()
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	}
 }
 
 // Send simulates a server response. It marshals the provided
 // DiscoveryResponse, puts it in the respChan to notify that a response
 // is available for the client to Recv.
-func (h *ServerHandle) Send(resp *v3discoverypb.DiscoveryResponse) error {
+func (h *ServerHandle) Send(ctx context.Context, resp *v3discoverypb.DiscoveryResponse) error {
 	data, err := proto.Marshal(resp)
 	if err != nil {
 		return err
 	}
 	select {
-	case <-h.fs.ctx.Done():
-		return h.fs.ctx.Err()
+	case <-ctx.Done():
+		return ctx.Err()
 	case h.fs.respChan <- data:
 		return nil
 	}
