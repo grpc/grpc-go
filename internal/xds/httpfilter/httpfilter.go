@@ -60,7 +60,7 @@ type Builder interface {
 // indicate its capability to build client-side filters.
 type ClientFilterBuilder interface {
 	// BuildClientFilter constructs a ClientFilter.
-	BuildClientFilter() (filter ClientFilter)
+	BuildClientFilter() ClientFilter
 }
 
 // ClientFilter represents the actual filter implementation on the client side.
@@ -86,7 +86,7 @@ type ClientFilter interface {
 // indicate its capability to build server-side filters.
 type ServerFilterBuilder interface {
 	// BuildServerFilter constructs a ServerFilter.
-	BuildServerFilter() (filter ServerFilter)
+	BuildServerFilter() ServerFilter
 }
 
 // ServerFilter represents the actual filter implementation on the server side.
@@ -109,8 +109,8 @@ type ServerFilter interface {
 }
 
 var (
-	// m is a map from scheme to filter builder.
-	m = make(map[string]Builder)
+	// registeredBuilders is a map from scheme to filter builder.
+	registeredBuilders = make(map[string]Builder)
 )
 
 // Register registers the HTTP Filter Builder with the registry. b.TypeURLs()
@@ -121,18 +121,18 @@ var (
 // registered with the same type URL, the one registered last will take effect.
 func Register(b Builder) {
 	for _, u := range b.TypeURLs() {
-		m[u] = b
+		registeredBuilders[u] = b
 	}
 }
 
 // UnregisterForTesting unregisters the HTTP Filter Builder for testing purposes.
 func UnregisterForTesting(typeURL string) {
-	delete(m, typeURL)
+	delete(registeredBuilders, typeURL)
 }
 
 // Get returns the HTTP Filter Builder registered with typeURL.
 //
 // If no filter builder is register with typeURL, nil will be returned.
 func Get(typeURL string) Builder {
-	return m[typeURL]
+	return registeredBuilders[typeURL]
 }
