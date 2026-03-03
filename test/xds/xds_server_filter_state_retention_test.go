@@ -110,7 +110,7 @@ func (t *trackingHTTPFilterBuilder) BuildServerInterceptor(config, _ httpfilter.
 	t.interceptorsCreated.Add(1)
 
 	if config == nil {
-		return nil, nil, fmt.Errorf("unexpected missing config")
+		return nil, func() {}, fmt.Errorf("unexpected missing config")
 	}
 	baseCfg := config.(testFilterCfg)
 

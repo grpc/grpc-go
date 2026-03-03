@@ -580,9 +580,7 @@ func (il *interceptorList) NewStream(ctx context.Context, ri iresolver.RPCInfo, 
 
 func (il *interceptorList) stop() {
 	for _, i := range il.interceptors {
-		if i.cleanup != nil {
-			i.cleanup()
-		}
+		i.cleanup()
 	}
 }
 

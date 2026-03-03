@@ -514,9 +514,7 @@ func (il *interceptorList) AllowRPC(ctx context.Context) error {
 
 func (il *interceptorList) stop() {
 	for _, i := range il.interceptors {
-		if i.cleanup != nil {
-			i.cleanup()
-		}
+		i.cleanup()
 	}
 }
 

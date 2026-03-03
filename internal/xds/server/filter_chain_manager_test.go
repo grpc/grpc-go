@@ -576,7 +576,7 @@ func (fb *filterBuilder) BuildServerInterceptor(config httpfilter.FilterConfig, 
 	if override != nil {
 		level = override.(filterCfg).level
 	}
-	return &serverInterceptor{level: level}, nil, nil
+	return &serverInterceptor{level: level}, func() {}, nil
 }
 
 type serverInterceptor struct {

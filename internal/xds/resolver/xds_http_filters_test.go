@@ -138,7 +138,7 @@ func (fb *testHTTPFilterWithRPCMetadata) BuildClientInterceptor(config, override
 	fb.logger.Logf("BuildClientInterceptor called with config: %+v, override: %+v", config, override)
 
 	if config == nil {
-		return nil, nil, fmt.Errorf("unexpected missing config")
+		return nil, func() {}, fmt.Errorf("unexpected missing config")
 	}
 
 	baseCfg := config.(testFilterCfg)
@@ -162,7 +162,7 @@ func (fb *testHTTPFilterWithRPCMetadata) BuildClientInterceptor(config, override
 			Error:        newStreamErr,
 		},
 		newStreamChan: fb.newStreamChan,
-	}, nil, nil
+	}, func() {}, nil
 }
 
 // overallFilterConfig is a JSON representation of the filter config.
@@ -695,7 +695,7 @@ func (t *trackingHTTPFilterBuilder) BuildClientInterceptor(config, _ httpfilter.
 	t.interceptorsCreated.Add(1)
 
 	if config == nil {
-		return nil, nil, fmt.Errorf("unexpected missing config")
+		return nil, func() {}, fmt.Errorf("unexpected missing config")
 	}
 	baseCfg := config.(testFilterCfg)
 
