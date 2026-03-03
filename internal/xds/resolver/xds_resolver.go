@@ -372,7 +372,7 @@ func (r *xdsResolver) sendNewServiceConfig(cs stoppableConfigSelector) bool {
 // r.activeClusters for previously-unseen clusters.
 //
 // Only executed in the context of a serializer callback.
-func (r *xdsResolver) newConfigSelector() (*configSelector, error) {
+func (r *xdsResolver) newConfigSelector() (_ *configSelector, err error) {
 	cs := &configSelector{
 		channelID: r.channelID,
 		xdsNodeID: r.xdsClient.BootstrapConfig().Node().GetId(),
@@ -387,6 +387,15 @@ func (r *xdsResolver) newConfigSelector() (*configSelector, error) {
 		routes:   make([]route, len(r.xdsConfig.VirtualHost.Routes)),
 		clusters: make(map[string]*clusterInfo),
 	}
+
+	defer func() {
+		if err != nil {
+			// Stop the config selector if an error occurs during construction
+			// to ensure that interceptors that were created successfully before
+			// the error are cleaned up.
+			cs.stop()
+		}
+	}()
 
 	for i, rt := range r.xdsConfig.VirtualHost.Routes {
 		clusters := rinternal.NewWRR.(func() wrr.WRR)()
@@ -510,11 +519,17 @@ func (r *xdsResolver) onResourceError(err error) {
 // followed by the route override, and finally the virtual host override.
 //
 // Only executed in the context of a serializer callback.
-func (r *xdsResolver) newInterceptor(filters []xdsresource.HTTPFilter, clusterOverride, routeOverride, virtualHostOverride map[string]httpfilter.FilterConfig) (iresolver.ClientInterceptor, error) {
-	if len(filters) == 0 {
-		return nil, nil
-	}
+func (r *xdsResolver) newInterceptor(filters []xdsresource.HTTPFilter, clusterOverride, routeOverride, virtualHostOverride map[string]httpfilter.FilterConfig) (_ iresolver.ClientInterceptor, err error) {
 	interceptors := make([]*clientInterceptorWithCleanup, 0, len(filters))
+	defer func() {
+		// Clean up any interceptors that were successfully built before the
+		// error occurred, to avoid leaking resources.
+		if err != nil {
+			for _, i := range interceptors {
+				i.cleanup()
+			}
+		}
+	}()
 	for _, filter := range filters {
 		override := clusterOverride[filter.Name]
 		if override == nil {
