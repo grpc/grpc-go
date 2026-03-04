@@ -128,20 +128,20 @@ type clusterImplBalancer struct {
 func (b *clusterImplBalancer) handleDropAndRequestCountLocked(clusterUpdate *xdsresource.ClusterUpdate, edsUpdate *xdsresource.EndpointsUpdate) bool {
 	var updatePicker bool
 
-	var drops []DropConfig
+	var newDrops []DropConfig
 	if edsUpdate != nil {
-		drops = make([]DropConfig, 0, len(edsUpdate.Drops))
+		newDrops = make([]DropConfig, 0, len(edsUpdate.Drops))
 		for _, d := range edsUpdate.Drops {
-			drops = append(drops, DropConfig{
+			newDrops = append(newDrops, DropConfig{
 				Category:           d.Category,
 				RequestsPerMillion: d.Numerator * million / d.Denominator,
 			})
 		}
 	}
-	if !slices.Equal(b.dropCategories, drops) {
-		b.dropCategories = drops
-		b.drops = make([]*dropper, 0, len(drops))
-		for _, c := range drops {
+	if !slices.Equal(b.dropCategories, newDrops) {
+		b.dropCategories = newDrops
+		b.drops = make([]*dropper, 0, len(newDrops))
+		for _, c := range newDrops {
 			b.drops = append(b.drops, newDropper(c))
 		}
 		updatePicker = true
@@ -292,11 +292,7 @@ func (b *clusterImplBalancer) UpdateClientConnState(s balancer.ClientConnState) 
 		b.logger.Warningf("Received balancer config with no xDS config")
 		return balancer.ErrBadResolverState
 	}
-	clusterCfg, ok := xdsConfig.Clusters[newConfig.Cluster]
-	if !ok {
-		b.logger.Warningf("Received balancer config with no cluster config for cluster %q", newConfig.Cluster)
-		return balancer.ErrBadResolverState
-	}
+	clusterCfg := xdsConfig.Clusters[newConfig.Cluster]
 	clusterUpdate := clusterCfg.Config.Cluster
 	var edsUpdate *xdsresource.EndpointsUpdate
 	if clusterUpdate.ClusterType == xdsresource.ClusterTypeEDS {
