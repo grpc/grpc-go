@@ -3439,9 +3439,8 @@ func (s) TestServerSendsResetStreamOnEarlyTrailer(t *testing.T) {
 // the test).
 //
 // Returns the client stream created for the test, a channel that is closed when
-// the server receives a RST_STREAM frame, and a channel that is closed when the
-// server has finished processing.
-func setupRSTStreamOnEOSTest(t *testing.T, serverFrames func(*testing.T, *http2.Framer, uint32)) (*ClientStream, <-chan struct{}, <-chan struct{}) {
+// the server receives a RST_STREAM frame.
+func setupRSTStreamOnEOSTest(t *testing.T, serverFrames func(*testing.T, *http2.Framer, uint32)) (*ClientStream, <-chan struct{}) {
 	// Set up a listener for a manual server.
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
@@ -3452,16 +3451,25 @@ func setupRSTStreamOnEOSTest(t *testing.T, serverFrames func(*testing.T, *http2.
 	// Set up a manual server.
 	seenResetFrame := make(chan struct{})
 	seenHeadersFrame := make(chan struct{})
-	serverDone := make(chan struct{})
 	go func() {
-		defer close(serverDone)
+		var conn net.Conn
+
+		// The connection is closed once the expected RST_STREAM frame is
+		// received from the client. If the test fails before that, we need to
+		// ensure that the connection is closed.
+		defer func() {
+			if t.Failed() {
+				if conn != nil {
+					conn.Close()
+				}
+			}
+		}()
 
 		conn, err := lis.Accept()
 		if err != nil {
 			t.Errorf("Server failed to accept connection: %v", err)
 			return
 		}
-		defer conn.Close()
 
 		// Read client preface.
 		if _, err := io.ReadFull(conn, make([]byte, len(clientPreface))); err != nil {
@@ -3513,13 +3521,7 @@ func setupRSTStreamOnEOSTest(t *testing.T, serverFrames func(*testing.T, *http2.
 			for {
 				frame, err := framer.ReadFrame()
 				if err != nil {
-					select {
-					case <-seenResetFrame:
-						// Already saw the RST frame, error is expected as
-						// connection is closing.
-					default:
-						t.Errorf("Server reader goroutine failed to read frame: %v", err)
-					}
+					t.Errorf("Server reader goroutine failed to read frame: %v", err)
 					return
 				}
 				switch frame := frame.(type) {
@@ -3529,6 +3531,7 @@ func setupRSTStreamOnEOSTest(t *testing.T, serverFrames func(*testing.T, *http2.
 						t.Errorf("RST stream received with streamID: %d and code: %v, want streamID: %d and code: %v", frame.Header().StreamID, http2.ErrCode(frame.ErrCode), streamID, wantErrCode)
 					}
 					close(seenResetFrame)
+					conn.Close()
 					return
 				default:
 					// Do nothing.
@@ -3537,16 +3540,6 @@ func setupRSTStreamOnEOSTest(t *testing.T, serverFrames func(*testing.T, *http2.
 		}()
 
 		serverFrames(t, framer, streamID)
-
-		// Wait for the reader goroutine to see the RST frame. This ensures that
-		// the connection stays open until the client sends the RST frame, and
-		// also allows the main test goroutine to verify that the RST frame was
-		// actually received.
-		select {
-		case <-seenResetFrame:
-		case <-time.After(defaultTestTimeout):
-			t.Errorf("Timed out waiting for RST frame from client")
-		}
 	}()
 
 	// Set up a client.
@@ -3568,7 +3561,7 @@ func setupRSTStreamOnEOSTest(t *testing.T, serverFrames func(*testing.T, *http2.
 	// Wait for server to see client's headers.
 	<-seenHeadersFrame
 
-	return stream, seenResetFrame, serverDone
+	return stream, seenResetFrame
 }
 
 // Tests the scenario where the server sets the END_STREAM flag in the HEADERS
@@ -3588,7 +3581,7 @@ func (s) TestClientSendsRSTStream_InHeaders(t *testing.T) {
 		}
 	}
 
-	stream, seenResetFrame, serverDone := setupRSTStreamOnEOSTest(t, serverFrames)
+	stream, seenResetFrame := setupRSTStreamOnEOSTest(t, serverFrames)
 
 	if _, err := stream.readTo(make([]byte, 1)); !errors.Is(err, io.EOF) {
 		t.Fatalf("stream.readTo() got %v, want %v", err, io.EOF)
@@ -3605,7 +3598,6 @@ func (s) TestClientSendsRSTStream_InHeaders(t *testing.T) {
 	case <-time.After(defaultTestTimeout):
 		t.Fatalf("Server did not receive RST stream from client")
 	}
-	<-serverDone
 }
 
 // Tests the scenario where the server sets the END_STREAM flag in a DATA
@@ -3628,7 +3620,7 @@ func (s) TestClientSendsRSTStream_InData(t *testing.T) {
 		}
 	}
 
-	stream, seenResetFrame, serverDone := setupRSTStreamOnEOSTest(t, serverFrames)
+	stream, seenResetFrame := setupRSTStreamOnEOSTest(t, serverFrames)
 
 	// Wait for the stream to be closed.
 	<-stream.Done()
@@ -3641,7 +3633,6 @@ func (s) TestClientSendsRSTStream_InData(t *testing.T) {
 	case <-time.After(defaultTestTimeout):
 		t.Fatalf("Server did not receive RST stream from client")
 	}
-	<-serverDone
 }
 
 // Tests the scenario where the server sets the END_STREAM flag in the Trailers
@@ -3675,7 +3666,7 @@ func (s) TestClientSendsRSTStream_InTrailers(t *testing.T) {
 		}
 	}
 
-	stream, seenResetFrame, serverDone := setupRSTStreamOnEOSTest(t, serverFrames)
+	stream, seenResetFrame := setupRSTStreamOnEOSTest(t, serverFrames)
 
 	// Wait for the stream to be closed.
 	<-stream.Done()
@@ -3688,7 +3679,6 @@ func (s) TestClientSendsRSTStream_InTrailers(t *testing.T) {
 	case <-time.After(defaultTestTimeout):
 		t.Fatalf("Server did not receive RST stream from client")
 	}
-	<-serverDone
 }
 
 // Tests the scenario where the server sets the END_STREAM flag in one of its
@@ -3713,7 +3703,7 @@ func (s) TestClientSendsRSTStream_ReadUnreadData(t *testing.T) {
 		}
 	}
 
-	stream, seenResetFrame, serverDone := setupRSTStreamOnEOSTest(t, serverFrames)
+	stream, seenResetFrame := setupRSTStreamOnEOSTest(t, serverFrames)
 
 	// Wait for the stream to match the state we expect (which is that it
 	// has sent a RST_STREAM, which means it has closed).
@@ -3746,7 +3736,6 @@ func (s) TestClientSendsRSTStream_ReadUnreadData(t *testing.T) {
 	case <-time.After(defaultTestTimeout):
 		t.Fatalf("Server did not receive RST stream from client")
 	}
-	<-serverDone
 }
 
 // TestClientTransport_Handle1xxHeaders validates that 1xx HTTP status headers
