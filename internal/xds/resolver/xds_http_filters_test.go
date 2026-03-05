@@ -134,11 +134,11 @@ func (fb *testHTTPFilterWithRPCMetadata) Close() {}
 // compile time check ensures the test filter implements it.
 var _ httpfilter.ClientFilterBuilder = &testHTTPFilterWithRPCMetadata{}
 
-func (fb *testHTTPFilterWithRPCMetadata) BuildClientInterceptor(config, override httpfilter.FilterConfig) (iresolver.ClientInterceptor, func(), error) {
+func (fb *testHTTPFilterWithRPCMetadata) BuildClientInterceptor(config, override httpfilter.FilterConfig) (iresolver.ClientInterceptor, error) {
 	fb.logger.Logf("BuildClientInterceptor called with config: %+v, override: %+v", config, override)
 
 	if config == nil {
-		return nil, func() {}, fmt.Errorf("unexpected missing config")
+		return nil, fmt.Errorf("unexpected missing config")
 	}
 
 	baseCfg := config.(testFilterCfg)
@@ -162,7 +162,7 @@ func (fb *testHTTPFilterWithRPCMetadata) BuildClientInterceptor(config, override
 			Error:        newStreamErr,
 		},
 		newStreamChan: fb.newStreamChan,
-	}, func() {}, nil
+	}, nil
 }
 
 // overallFilterConfig is a JSON representation of the filter config.
@@ -204,6 +204,8 @@ func (fi *testFilterInterceptor) NewStream(ctx context.Context, _ iresolver.RPCI
 
 	return newStream(metadata.AppendToOutgoingContext(ctx, filterCfgMetadataKey, fmt.Sprintf("%v", cfg)), done)
 }
+
+func (fi *testFilterInterceptor) Close() {}
 
 func newHTTPFilter(t *testing.T, name, typeURL, path, err string) *v3httppb.HttpFilter {
 	return &v3httppb.HttpFilter{
@@ -691,22 +693,24 @@ func (t *trackingHTTPFilterBuilder) Close() {
 
 var _ httpfilter.ClientFilterBuilder = &trackingHTTPFilterBuilder{}
 
-func (t *trackingHTTPFilterBuilder) BuildClientInterceptor(config, _ httpfilter.FilterConfig) (iresolver.ClientInterceptor, func(), error) {
+func (t *trackingHTTPFilterBuilder) BuildClientInterceptor(config, _ httpfilter.FilterConfig) (iresolver.ClientInterceptor, error) {
 	t.interceptorsCreated.Add(1)
 
 	if config == nil {
-		return nil, func() {}, fmt.Errorf("unexpected missing config")
+		return nil, fmt.Errorf("unexpected missing config")
 	}
 	baseCfg := config.(testFilterCfg)
 
 	interceptor := &trackingInterceptor{
 		pathCh:   t.pathCh,
 		basePath: baseCfg.path,
+		parent:   t,
 	}
-	return interceptor, func() { t.interceptorsDestroyed.Add(1) }, nil
+	return interceptor, nil
 }
 
 type trackingInterceptor struct {
+	parent   *trackingHTTPFilterBuilder
 	pathCh   chan string
 	basePath string
 }
@@ -714,6 +718,10 @@ type trackingInterceptor struct {
 func (i *trackingInterceptor) NewStream(ctx context.Context, _ iresolver.RPCInfo, done func(), newStream func(ctx context.Context, done func()) (iresolver.ClientStream, error)) (iresolver.ClientStream, error) {
 	i.pathCh <- i.basePath
 	return newStream(ctx, done)
+}
+
+func (i *trackingInterceptor) Close() {
+	i.parent.interceptorsDestroyed.Add(1)
 }
 
 // Tests that a single filter instance is created for a given filter

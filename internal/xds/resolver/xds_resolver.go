@@ -521,13 +521,13 @@ func (r *xdsResolver) onResourceError(err error) {
 //
 // Only executed in the context of a serializer callback.
 func (r *xdsResolver) newInterceptor(filters []xdsresource.HTTPFilter, clusterOverride, routeOverride, virtualHostOverride map[string]httpfilter.FilterConfig) (_ iresolver.ClientInterceptor, err error) {
-	interceptors := make([]*clientInterceptorWithCleanup, 0, len(filters))
+	interceptors := make([]iresolver.ClientInterceptor, 0, len(filters))
 	defer func() {
 		// Clean up any interceptors that were successfully built before the
 		// error occurred, to avoid leaking resources.
 		if err != nil {
 			for _, i := range interceptors {
-				i.cleanup()
+				i.Close()
 			}
 		}
 	}()
@@ -546,15 +546,12 @@ func (r *xdsResolver) newInterceptor(filters []xdsresource.HTTPFilter, clusterOv
 		}
 
 		clientFilter := r.getOrCreateClientFilter(builder, newClientFilterKey(&filter))
-		i, cleanup, err := clientFilter.BuildClientInterceptor(filter.Config, override)
+		i, err := clientFilter.BuildClientInterceptor(filter.Config, override)
 		if err != nil {
-			return nil, fmt.Errorf("error constructing filter: %v", err)
+			return nil, fmt.Errorf("failed to build client interceptor for filter %q: %v", filter.Name, err)
 		}
 		if i != nil {
-			interceptors = append(interceptors, &clientInterceptorWithCleanup{
-				interceptor: i,
-				cleanup:     cleanup,
-			})
+			interceptors = append(interceptors, i)
 		}
 	}
 
@@ -562,10 +559,9 @@ func (r *xdsResolver) newInterceptor(filters []xdsresource.HTTPFilter, clusterOv
 }
 
 // interceptorList is a client interceptor that contains a list of client
-// interceptors to execute in order. It also contains a cleanup function for
-// each interceptor, which will be executed when the interceptorList is stopped.
+// interceptors to execute in order.
 type interceptorList struct {
-	interceptors []*clientInterceptorWithCleanup
+	interceptors []iresolver.ClientInterceptor
 }
 
 func (il *interceptorList) NewStream(ctx context.Context, ri iresolver.RPCInfo, _ func(), newStream func(ctx context.Context, _ func()) (iresolver.ClientStream, error)) (iresolver.ClientStream, error) {
@@ -573,15 +569,15 @@ func (il *interceptorList) NewStream(ctx context.Context, ri iresolver.RPCInfo, 
 		ns := newStream
 		i := il.interceptors[idx]
 		newStream = func(ctx context.Context, done func()) (iresolver.ClientStream, error) {
-			return i.interceptor.NewStream(ctx, ri, done, ns)
+			return i.NewStream(ctx, ri, done, ns)
 		}
 	}
 	return newStream(ctx, func() {})
 }
 
-func (il *interceptorList) stop() {
+func (il *interceptorList) Close() {
 	for _, i := range il.interceptors {
-		i.cleanup()
+		i.Close()
 	}
 }
 
@@ -620,14 +616,4 @@ func (f *clientFilterKey) String() string {
 type clientFilterKey struct {
 	name     string
 	typeURLs string
-}
-
-type clientInterceptorWithCleanup struct {
-	interceptor iresolver.ClientInterceptor
-	cleanup     func()
-}
-
-type stoppableClientInterceptor interface {
-	iresolver.ClientInterceptor
-	stop()
 }

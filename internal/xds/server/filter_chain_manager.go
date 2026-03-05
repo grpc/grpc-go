@@ -129,9 +129,7 @@ func (fcm *filterChainManager) stop() {
 		for _, vh := range urc.vhs {
 			for _, r := range vh.routes {
 				if r.interceptor != nil {
-					if si, ok := r.interceptor.(stoppableServerInterceptor); ok {
-						si.stop()
-					}
+					r.interceptor.Close()
 				}
 			}
 		}
@@ -470,7 +468,7 @@ func (fc *filterChain) newInterceptor(routeOverride, virtualHostOverride map[str
 		}
 	}()
 
-	interceptors := make([]*serverInterceptorWithCleanup, 0, len(fc.httpFilters))
+	interceptors := make([]resolver.ServerInterceptor, 0, len(fc.httpFilters))
 	for _, filter := range fc.httpFilters {
 		// Route is highest priority on server side, as there is no concept
 		// of an upstream cluster on server side.
@@ -485,15 +483,12 @@ func (fc *filterChain) newInterceptor(routeOverride, virtualHostOverride map[str
 			return nil, nil, err
 		}
 		serverFilters = append(serverFilters, serverFilter)
-		i, cleanup, err := serverFilter.BuildServerInterceptor(filter.Config, override)
+		i, err := serverFilter.BuildServerInterceptor(filter.Config, override)
 		if err != nil {
 			return nil, nil, fmt.Errorf("error constructing filter: %v", err)
 		}
 		if i != nil {
-			interceptors = append(interceptors, &serverInterceptorWithCleanup{
-				interceptor: i,
-				cleanup:     cleanup,
-			})
+			interceptors = append(interceptors, i)
 		}
 	}
 
@@ -501,21 +496,21 @@ func (fc *filterChain) newInterceptor(routeOverride, virtualHostOverride map[str
 }
 
 type interceptorList struct {
-	interceptors []*serverInterceptorWithCleanup
+	interceptors []resolver.ServerInterceptor
 }
 
 func (il *interceptorList) AllowRPC(ctx context.Context) error {
 	for _, i := range il.interceptors {
-		if err := i.interceptor.AllowRPC(ctx); err != nil {
+		if err := i.AllowRPC(ctx); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (il *interceptorList) stop() {
+func (il *interceptorList) Close() {
 	for _, i := range il.interceptors {
-		i.cleanup()
+		i.Close()
 	}
 }
 
@@ -535,16 +530,6 @@ func (rsf *refCountedServerFilter) Close() {
 	if rsf.refCnt.Add(-1) == 0 {
 		rsf.ServerFilter.Close()
 	}
-}
-
-type serverInterceptorWithCleanup struct {
-	interceptor resolver.ServerInterceptor
-	cleanup     func()
-}
-
-type stoppableServerInterceptor interface {
-	resolver.ServerInterceptor
-	stop()
 }
 
 // newServerFilterKey generates a key for the given filter using the filter name

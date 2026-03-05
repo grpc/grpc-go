@@ -170,14 +170,14 @@ type serverFilter struct{}
 
 func (serverFilter) Close() {}
 
-func (serverFilter) BuildServerInterceptor(cfg httpfilter.FilterConfig, override httpfilter.FilterConfig) (resolver.ServerInterceptor, func(), error) {
+func (serverFilter) BuildServerInterceptor(cfg httpfilter.FilterConfig, override httpfilter.FilterConfig) (resolver.ServerInterceptor, error) {
 	if cfg == nil {
-		return nil, func() {}, fmt.Errorf("rbac: nil config provided")
+		return nil, fmt.Errorf("rbac: nil config provided")
 	}
 
 	c, ok := cfg.(config)
 	if !ok {
-		return nil, func() {}, fmt.Errorf("rbac: incorrect config type provided (%T): %v", cfg, cfg)
+		return nil, fmt.Errorf("rbac: incorrect config type provided (%T): %v", cfg, cfg)
 	}
 
 	if override != nil {
@@ -185,7 +185,7 @@ func (serverFilter) BuildServerInterceptor(cfg httpfilter.FilterConfig, override
 		// still validate the listener config type.
 		c, ok = override.(config)
 		if !ok {
-			return nil, func() {}, fmt.Errorf("rbac: incorrect override config type provided (%T): %v", override, override)
+			return nil, fmt.Errorf("rbac: incorrect override config type provided (%T): %v", override, override)
 		}
 	}
 
@@ -195,9 +195,9 @@ func (serverFilter) BuildServerInterceptor(cfg httpfilter.FilterConfig, override
 	// "At this time, if the RBAC.action is Action.LOG then the policy will be
 	// completely ignored, as if RBAC was not configured." - A41
 	if c.chainEngine == nil {
-		return nil, func() {}, nil
+		return nil, nil
 	}
-	return &interceptor{chainEngine: c.chainEngine}, func() {}, nil
+	return &interceptor{chainEngine: c.chainEngine}, nil
 }
 
 type interceptor struct {
@@ -207,3 +207,5 @@ type interceptor struct {
 func (i *interceptor) AllowRPC(ctx context.Context) error {
 	return i.chainEngine.IsAuthorized(ctx)
 }
+
+func (i *interceptor) Close() {}

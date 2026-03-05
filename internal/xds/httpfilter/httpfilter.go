@@ -74,10 +74,8 @@ type ClientFilter interface {
 	//
 	// It is valid for this method to return a nil Interceptor and a nil error.
 	// In this case, the RPC will not be intercepted by this filter.
-	//
-	// The returned cleanup function is to be invoked when the interceptor is no
-	// longer needed.
-	BuildClientInterceptor(config, override FilterConfig) (interceptor iresolver.ClientInterceptor, cleanup func(), err error)
+	BuildClientInterceptor(config, override FilterConfig) (iresolver.ClientInterceptor, error)
+
 	// Close is called when the filter is no longer needed.
 	Close()
 }
@@ -100,10 +98,8 @@ type ServerFilter interface {
 	//
 	// It is valid for this method to return a nil Interceptor and a nil error.
 	// In this case, the RPC will not be intercepted by this filter.
-	//
-	// The returned cleanup function is to be invoked when the interceptor is no
-	// longer needed.
-	BuildServerInterceptor(config, override FilterConfig) (interceptor iresolver.ServerInterceptor, cleanup func(), err error)
+	BuildServerInterceptor(config, override FilterConfig) (iresolver.ServerInterceptor, error)
+
 	// Close is called when the filter is no longer needed.
 	Close()
 }

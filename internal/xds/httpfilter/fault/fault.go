@@ -114,14 +114,14 @@ type clientFilter struct{}
 
 func (clientFilter) Close() {}
 
-func (clientFilter) BuildClientInterceptor(cfg, override httpfilter.FilterConfig) (iresolver.ClientInterceptor, func(), error) {
+func (clientFilter) BuildClientInterceptor(cfg, override httpfilter.FilterConfig) (iresolver.ClientInterceptor, error) {
 	if cfg == nil {
-		return nil, func() {}, fmt.Errorf("fault: nil config provided")
+		return nil, fmt.Errorf("fault: nil config provided")
 	}
 
 	c, ok := cfg.(config)
 	if !ok {
-		return nil, func() {}, fmt.Errorf("fault: incorrect config type provided (%T): %v", cfg, cfg)
+		return nil, fmt.Errorf("fault: incorrect config type provided (%T): %v", cfg, cfg)
 	}
 
 	if override != nil {
@@ -129,16 +129,16 @@ func (clientFilter) BuildClientInterceptor(cfg, override httpfilter.FilterConfig
 		// still validate the listener config type.
 		c, ok = override.(config)
 		if !ok {
-			return nil, func() {}, fmt.Errorf("fault: incorrect override config type provided (%T): %v", override, override)
+			return nil, fmt.Errorf("fault: incorrect override config type provided (%T): %v", override, override)
 		}
 	}
 
 	icfg := c.config
 	if (icfg.GetMaxActiveFaults() != nil && icfg.GetMaxActiveFaults().GetValue() == 0) ||
 		(icfg.GetDelay() == nil && icfg.GetAbort() == nil) {
-		return nil, func() {}, nil
+		return nil, nil
 	}
-	return &interceptor{config: icfg}, func() {}, nil
+	return &interceptor{config: icfg}, nil
 }
 
 type interceptor struct {
@@ -168,6 +168,8 @@ func (i *interceptor) NewStream(ctx context.Context, _ iresolver.RPCInfo, done f
 	}
 	return newStream(ctx, done)
 }
+
+func (i *interceptor) Close() {}
 
 // For overriding in tests
 var randIntn = rand.IntN

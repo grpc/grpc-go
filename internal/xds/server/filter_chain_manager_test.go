@@ -569,14 +569,14 @@ func (fb *filterBuilder) Close() {}
 
 var _ httpfilter.ServerFilterBuilder = &filterBuilder{}
 
-func (fb *filterBuilder) BuildServerInterceptor(config httpfilter.FilterConfig, override httpfilter.FilterConfig) (iresolver.ServerInterceptor, func(), error) {
+func (fb *filterBuilder) BuildServerInterceptor(config httpfilter.FilterConfig, override httpfilter.FilterConfig) (iresolver.ServerInterceptor, error) {
 	var level string
 	level = config.(filterCfg).level
 
 	if override != nil {
 		level = override.(filterCfg).level
 	}
-	return &serverInterceptor{level: level}, func() {}, nil
+	return &serverInterceptor{level: level}, nil
 }
 
 type serverInterceptor struct {
@@ -586,6 +586,8 @@ type serverInterceptor struct {
 func (si *serverInterceptor) AllowRPC(context.Context) error {
 	return errors.New(si.level)
 }
+
+func (si *serverInterceptor) Close() {}
 
 func (s) TestHTTPFilterInstantiation(t *testing.T) {
 	tests := []struct {

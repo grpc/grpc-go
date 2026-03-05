@@ -106,22 +106,24 @@ func (t *trackingHTTPFilterBuilder) Close() {
 
 var _ httpfilter.ServerFilterBuilder = &trackingHTTPFilterBuilder{}
 
-func (t *trackingHTTPFilterBuilder) BuildServerInterceptor(config, _ httpfilter.FilterConfig) (resolver.ServerInterceptor, func(), error) {
+func (t *trackingHTTPFilterBuilder) BuildServerInterceptor(config, _ httpfilter.FilterConfig) (resolver.ServerInterceptor, error) {
 	t.interceptorsCreated.Add(1)
 
 	if config == nil {
-		return nil, func() {}, fmt.Errorf("unexpected missing config")
+		return nil, fmt.Errorf("unexpected missing config")
 	}
 	baseCfg := config.(testFilterCfg)
 
 	interceptor := &trackingInterceptor{
+		parent:   t,
 		pathCh:   t.pathCh,
 		basePath: baseCfg.path,
 	}
-	return interceptor, func() { t.interceptorsDestroyed.Add(1) }, nil
+	return interceptor, nil
 }
 
 type trackingInterceptor struct {
+	parent   *trackingHTTPFilterBuilder
 	pathCh   chan string
 	basePath string
 }
@@ -129,6 +131,10 @@ type trackingInterceptor struct {
 func (i *trackingInterceptor) AllowRPC(context.Context) error {
 	i.pathCh <- i.basePath
 	return nil
+}
+
+func (i *trackingInterceptor) Close() {
+	i.parent.interceptorsDestroyed.Add(1)
 }
 
 func newHTTPFilter(t *testing.T, name, typeURL, path string) *v3httppb.HttpFilter {

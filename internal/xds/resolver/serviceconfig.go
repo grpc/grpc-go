@@ -312,10 +312,8 @@ func (cs *configSelector) stop() {
 
 	// Stop all interceptors associated with this config selector.
 	for _, r := range cs.routes {
-		for _, interceptor := range r.interceptors {
-			if si, ok := interceptor.(stoppableClientInterceptor); ok {
-				si.stop()
-			}
+		for _, i := range r.interceptors {
+			i.Close()
 		}
 	}
 
