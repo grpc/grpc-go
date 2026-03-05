@@ -119,11 +119,15 @@ type transport struct {
 	mu              sync.Mutex
 	activeADSStream *stream
 	closed          bool
-	readyCh         chan struct{}
+	streamReady     func()
 }
 
 func newTransport(ch chan struct{}) *transport {
-	return &transport{readyCh: ch}
+	return &transport{
+		streamReady: sync.OnceFunc(func() {
+			close(ch)
+		}),
+	}
 }
 
 // serverHandle returns a serverhandle for testing.
@@ -147,7 +151,7 @@ func (t *transport) NewStream(ctx context.Context, _ string) (clients.Stream, er
 
 	fs := newStream(ctx)
 	t.activeADSStream = fs
-	close(t.readyCh)
+	t.streamReady()
 	return fs, nil
 }
 
