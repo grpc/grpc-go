@@ -162,11 +162,8 @@ func buildClusterImplConfigForDNS(g *nameGenerator, config *xdsresource.ClusterC
 	pName := fmt.Sprintf("priority-%v", g.prefix)
 	clusterUpdate := config.Cluster
 	lbconfig := &clusterimpl.LBConfig{
-		Cluster:               clusterUpdate.ClusterName,
-		TelemetryLabels:       clusterUpdate.TelemetryLabels,
-		ChildPolicy:           xdsLBPolicy,
-		MaxConcurrentRequests: clusterUpdate.MaxRequests,
-		LoadReportingServer:   clusterUpdate.LRSServerConfig,
+		Cluster:     clusterUpdate.ClusterName,
+		ChildPolicy: xdsLBPolicy,
 	}
 	endpoints := config.EndpointConfig.DNSEndpoints.Endpoints
 	if len(endpoints) == 0 {
@@ -203,13 +200,6 @@ func buildClusterImplConfigForDNS(g *nameGenerator, config *xdsresource.ClusterC
 //   - p0 addresses' hierarchy attributes are set to p0
 func buildClusterImplConfigForEDS(g *nameGenerator, config *xdsresource.ClusterConfig, xdsLBPolicy *internalserviceconfig.BalancerConfig) ([]string, map[string]*clusterimpl.LBConfig, []resolver.Endpoint, error) {
 	edsUpdate := config.EndpointConfig.EDSUpdate
-	drops := make([]clusterimpl.DropConfig, 0, len(edsUpdate.Drops))
-	for _, d := range edsUpdate.Drops {
-		drops = append(drops, clusterimpl.DropConfig{
-			Category:           d.Category,
-			RequestsPerMillion: d.Numerator * million / d.Denominator,
-		})
-	}
 
 	// Localities of length 0 is triggered by an NACK or resource-not-found
 	// error before update, or an empty localities list in an update. In either
@@ -227,7 +217,7 @@ func buildClusterImplConfigForEDS(g *nameGenerator, config *xdsresource.ClusterC
 	var retEndpoints []resolver.Endpoint
 	for i, pName := range retNames {
 		priorityLocalities := priorities[i]
-		cfg, endpoints, err := priorityLocalitiesToClusterImpl(priorityLocalities, pName, *config.Cluster, drops, xdsLBPolicy)
+		cfg, endpoints, err := priorityLocalitiesToClusterImpl(priorityLocalities, pName, *config.Cluster, xdsLBPolicy)
 		if err != nil {
 			return nil, nil, nil, err
 		}
@@ -265,7 +255,7 @@ func groupLocalitiesByPriority(localities []xdsresource.Locality) [][]xdsresourc
 // priority), and generates a cluster impl policy config, and a list of
 // addresses with their path hierarchy set to [priority-name, locality-name], so
 // priority and the xDS LB Policy know which child policy each address is for.
-func priorityLocalitiesToClusterImpl(localities []xdsresource.Locality, priorityName string, clusterUpdate xdsresource.ClusterUpdate, drops []clusterimpl.DropConfig, xdsLBPolicy *internalserviceconfig.BalancerConfig) (*clusterimpl.LBConfig, []resolver.Endpoint, error) {
+func priorityLocalitiesToClusterImpl(localities []xdsresource.Locality, priorityName string, clusterUpdate xdsresource.ClusterUpdate, xdsLBPolicy *internalserviceconfig.BalancerConfig) (*clusterimpl.LBConfig, []resolver.Endpoint, error) {
 	var retEndpoints []resolver.Endpoint
 
 	// Compute the sum of locality weights to normalize locality weights. The
@@ -327,13 +317,8 @@ func priorityLocalitiesToClusterImpl(localities []xdsresource.Locality, priority
 		}
 	}
 	return &clusterimpl.LBConfig{
-		Cluster:               clusterUpdate.ClusterName,
-		EDSServiceName:        clusterUpdate.EDSServiceName,
-		LoadReportingServer:   clusterUpdate.LRSServerConfig,
-		MaxConcurrentRequests: clusterUpdate.MaxRequests,
-		TelemetryLabels:       clusterUpdate.TelemetryLabels,
-		DropCategories:        drops,
-		ChildPolicy:           xdsLBPolicy,
+		Cluster:     clusterUpdate.ClusterName,
+		ChildPolicy: xdsLBPolicy,
 	}, retEndpoints, nil
 }
 
