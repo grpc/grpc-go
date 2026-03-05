@@ -125,11 +125,13 @@ type clusterImplBalancer struct {
 // handleDropAndRequestCountLocked compares drop and request counter in new
 // update with the one currently used by picker, and is protected by b.mu. It
 // returns a boolean indicating if a new picker needs to be generated.
-func (b *clusterImplBalancer) handleDropAndRequestCountLocked(clusterUpdate *xdsresource.ClusterUpdate, edsUpdate *xdsresource.EndpointsUpdate) bool {
+func (b *clusterImplBalancer) handleDropAndRequestCountLocked(clusterConfig *xdsresource.ClusterConfig) bool {
+	clusterUpdate := clusterConfig.Cluster
 	var updatePicker bool
 
 	var newDrops []DropConfig
 	if clusterUpdate.ClusterType == xdsresource.ClusterTypeEDS {
+		edsUpdate := clusterConfig.EndpointConfig.EDSUpdate
 		newDrops = make([]DropConfig, 0, len(edsUpdate.Drops))
 		for _, d := range edsUpdate.Drops {
 			newDrops = append(newDrops, DropConfig{
@@ -294,10 +296,6 @@ func (b *clusterImplBalancer) UpdateClientConnState(s balancer.ClientConnState) 
 	}
 	clusterCfg := xdsConfig.Clusters[newConfig.Cluster]
 	clusterUpdate := clusterCfg.Config.Cluster
-	var edsUpdate *xdsresource.EndpointsUpdate
-	if clusterUpdate.ClusterType == xdsresource.ClusterTypeEDS {
-		edsUpdate = clusterCfg.Config.EndpointConfig.EDSUpdate
-	}
 
 	// Update load reporting config. This needs to be done before updating the
 	// child policy because we need the loadStore from the updated client to be
@@ -332,7 +330,7 @@ func (b *clusterImplBalancer) UpdateClientConnState(s balancer.ClientConnState) 
 	// - there is a pending picker update from the child (and this covers the
 	//   case where the drop/request config has not changed, but the child sent
 	//   a picker update while we were still processing config from our parent).
-	if (b.handleDropAndRequestCountLocked(clusterUpdate, edsUpdate) && b.childState.Picker != nil) || b.pendingPickerUpdates {
+	if (b.handleDropAndRequestCountLocked(&clusterCfg.Config) && b.childState.Picker != nil) || b.pendingPickerUpdates {
 		b.pendingPickerUpdates = false
 		b.ClientConn.UpdateState(balancer.State{
 			ConnectivityState: b.childState.ConnectivityState,
