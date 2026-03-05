@@ -125,7 +125,7 @@ type clusterImplBalancer struct {
 // handleDropAndRequestCountLocked compares drop and request counter in new
 // update with the one currently used by picker, and is protected by b.mu. It
 // returns a boolean indicating if a new picker needs to be generated.
-func (b *clusterImplBalancer) handleDropAndRequestCountLocked(clusterConfig *xdsresource.ClusterConfig) bool {
+func (b *clusterImplBalancer) handleDropAndRequestCountLocked(clusterConfig xdsresource.ClusterConfig) bool {
 	clusterUpdate := clusterConfig.Cluster
 	var updatePicker bool
 
@@ -330,7 +330,7 @@ func (b *clusterImplBalancer) UpdateClientConnState(s balancer.ClientConnState) 
 	// - there is a pending picker update from the child (and this covers the
 	//   case where the drop/request config has not changed, but the child sent
 	//   a picker update while we were still processing config from our parent).
-	if (b.handleDropAndRequestCountLocked(&clusterCfg.Config) && b.childState.Picker != nil) || b.pendingPickerUpdates {
+	if (b.handleDropAndRequestCountLocked(clusterCfg.Config) && b.childState.Picker != nil) || b.pendingPickerUpdates {
 		b.pendingPickerUpdates = false
 		b.ClientConn.UpdateState(balancer.State{
 			ConnectivityState: b.childState.ConnectivityState,
