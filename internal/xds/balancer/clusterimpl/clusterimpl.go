@@ -129,7 +129,7 @@ func (b *clusterImplBalancer) handleDropAndRequestCountLocked(clusterUpdate *xds
 	var updatePicker bool
 
 	var newDrops []DropConfig
-	if edsUpdate != nil {
+	if clusterUpdate.ClusterType == xdsresource.ClusterTypeEDS {
 		newDrops = make([]DropConfig, 0, len(edsUpdate.Drops))
 		for _, d := range edsUpdate.Drops {
 			newDrops = append(newDrops, DropConfig{
@@ -137,14 +137,14 @@ func (b *clusterImplBalancer) handleDropAndRequestCountLocked(clusterUpdate *xds
 				RequestsPerMillion: d.Numerator * million / d.Denominator,
 			})
 		}
-	}
-	if !slices.Equal(b.dropCategories, newDrops) {
-		b.dropCategories = newDrops
-		b.drops = make([]*dropper, 0, len(newDrops))
-		for _, c := range newDrops {
-			b.drops = append(b.drops, newDropper(c))
+		if !slices.Equal(b.dropCategories, newDrops) {
+			b.dropCategories = newDrops
+			b.drops = make([]*dropper, 0, len(newDrops))
+			for _, c := range newDrops {
+				b.drops = append(b.drops, newDropper(c))
+			}
+			updatePicker = true
 		}
-		updatePicker = true
 	}
 
 	if b.requestCounterCluster != clusterUpdate.ClusterName || b.requestCounterService != clusterUpdate.EDSServiceName {
