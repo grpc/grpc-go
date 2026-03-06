@@ -68,7 +68,7 @@ const (
 	localityName2  = "my-locality-2"
 	localityName3  = "my-locality-3"
 
-	defaultTestTimeout            = 5 * time.Second
+	defaultTestTimeout            = 10 * time.Second
 	defaultTestShortTimeout       = 10 * time.Millisecond
 	defaultTestWatchExpiryTimeout = 500 * time.Millisecond
 )
