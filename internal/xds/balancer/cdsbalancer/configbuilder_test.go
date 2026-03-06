@@ -271,12 +271,8 @@ func (s) TestBuildPriorityConfig(t *testing.T) {
 						MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
 						MaxEjectionPercent: 10,
 						ChildPolicy: &iserviceconfig.BalancerConfig{
-							Name: clusterimpl.Name,
-							Config: &clusterimpl.LBConfig{
-								Cluster:        testClusterName,
-								EDSServiceName: testEDSServiceName,
-								DropCategories: []clusterimpl.DropConfig{},
-							},
+							Name:   clusterimpl.Name,
+							Config: &clusterimpl.LBConfig{Cluster: testClusterName},
 						},
 					},
 				},
@@ -291,12 +287,8 @@ func (s) TestBuildPriorityConfig(t *testing.T) {
 						MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
 						MaxEjectionPercent: 10,
 						ChildPolicy: &iserviceconfig.BalancerConfig{
-							Name: clusterimpl.Name,
-							Config: &clusterimpl.LBConfig{
-								Cluster:        testClusterName,
-								EDSServiceName: testEDSServiceName,
-								DropCategories: []clusterimpl.DropConfig{},
-							},
+							Name:   clusterimpl.Name,
+							Config: &clusterimpl.LBConfig{Cluster: testClusterName},
 						},
 					},
 				},
@@ -476,26 +468,8 @@ func (s) TestBuildClusterImplConfigForEDS_PickFirstWeightedShuffling_Disabled(t 
 		fmt.Sprintf("priority-%v-%v", 2, 1),
 	}
 	wantConfigs := map[string]*clusterimpl.LBConfig{
-		"priority-2-0": {
-			Cluster:               testClusterName,
-			EDSServiceName:        testEDSServiceName,
-			LoadReportingServer:   testLRSServerConfig,
-			MaxConcurrentRequests: newUint32(testMaxRequests),
-			DropCategories: []clusterimpl.DropConfig{{
-				Category:           testDropCategory,
-				RequestsPerMillion: testDropOverMillion,
-			}},
-		},
-		"priority-2-1": {
-			Cluster:               testClusterName,
-			EDSServiceName:        testEDSServiceName,
-			LoadReportingServer:   testLRSServerConfig,
-			MaxConcurrentRequests: newUint32(testMaxRequests),
-			DropCategories: []clusterimpl.DropConfig{{
-				Category:           testDropCategory,
-				RequestsPerMillion: testDropOverMillion,
-			}},
-		},
+		"priority-2-0": {Cluster: testClusterName},
+		"priority-2-1": {Cluster: testClusterName},
 	}
 	// Endpoint weight is the product of locality weight and endpoint weight.
 	wantEndpoints := []resolver.Endpoint{
@@ -585,26 +559,8 @@ func (s) TestBuildClusterImplConfigForEDS_PickFirstWeightedShuffling_Enabled(t *
 		fmt.Sprintf("priority-%v-%v", 2, 1),
 	}
 	wantConfigs := map[string]*clusterimpl.LBConfig{
-		"priority-2-0": {
-			Cluster:               testClusterName,
-			EDSServiceName:        testEDSServiceName,
-			LoadReportingServer:   testLRSServerConfig,
-			MaxConcurrentRequests: newUint32(testMaxRequests),
-			DropCategories: []clusterimpl.DropConfig{{
-				Category:           testDropCategory,
-				RequestsPerMillion: testDropOverMillion,
-			}},
-		},
-		"priority-2-1": {
-			Cluster:               testClusterName,
-			EDSServiceName:        testEDSServiceName,
-			LoadReportingServer:   testLRSServerConfig,
-			MaxConcurrentRequests: newUint32(testMaxRequests),
-			DropCategories: []clusterimpl.DropConfig{{
-				Category:           testDropCategory,
-				RequestsPerMillion: testDropOverMillion,
-			}},
-		},
+		"priority-2-0": {Cluster: testClusterName},
+		"priority-2-1": {Cluster: testClusterName},
 	}
 	// Endpoints weights are the product of normalized locality weight and
 	// endpoint weight, represented as a fixed-point number in uQ1.31 format.
@@ -764,9 +720,8 @@ func (s) TestPriorityLocalitiesToClusterImpl_PickFirstWeightedShuffling_Disabled
 			},
 			// lrsServer is nil, so LRS policy will not be used.
 			wantConfig: &clusterimpl.LBConfig{
-				Cluster:        testClusterName,
-				EDSServiceName: testEDSServiceName,
-				ChildPolicy:    &iserviceconfig.BalancerConfig{Name: roundrobin.Name},
+				Cluster:     testClusterName,
+				ChildPolicy: &iserviceconfig.BalancerConfig{Name: roundrobin.Name},
 			},
 			// Endpoint weight is the product of locality weight and endpoint weight.
 			wantEndpoints: []resolver.Endpoint{
@@ -832,7 +787,7 @@ func (s) TestPriorityLocalitiesToClusterImpl_PickFirstWeightedShuffling_Disabled
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotConfig, gotEndpoints, err := priorityLocalitiesToClusterImpl(tt.localities, tt.priorityName, tt.clusterUpdate, nil, tt.childPolicy)
+			gotConfig, gotEndpoints, err := priorityLocalitiesToClusterImpl(tt.localities, tt.priorityName, tt.clusterUpdate, tt.childPolicy)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("priorityLocalitiesToClusterImpl() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -903,9 +858,8 @@ func (s) TestPriorityLocalitiesToClusterImpl_PickFirstWeightedShuffling_Enabled(
 			},
 			// lrsServer is nil, so LRS policy will not be used.
 			wantConfig: &clusterimpl.LBConfig{
-				Cluster:        testClusterName,
-				EDSServiceName: testEDSServiceName,
-				ChildPolicy:    &iserviceconfig.BalancerConfig{Name: roundrobin.Name},
+				Cluster:     testClusterName,
+				ChildPolicy: &iserviceconfig.BalancerConfig{Name: roundrobin.Name},
 			},
 			// Endpoints weights are the product of normalized locality weight and
 			// endpoint weight, represented as a fixed-point number in uQ1.31 format.
@@ -1007,7 +961,7 @@ func (s) TestPriorityLocalitiesToClusterImpl_PickFirstWeightedShuffling_Enabled(
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotConfig, gotEndpoints, err := priorityLocalitiesToClusterImpl(tt.localities, tt.priorityName, tt.clusterUpdate, nil, tt.childPolicy)
+			gotConfig, gotEndpoints, err := priorityLocalitiesToClusterImpl(tt.localities, tt.priorityName, tt.clusterUpdate, tt.childPolicy)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("priorityLocalitiesToClusterImpl() error = %v, wantErr %v", err, tt.wantErr)
 			}
