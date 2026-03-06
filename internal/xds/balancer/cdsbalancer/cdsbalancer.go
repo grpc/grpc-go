@@ -424,14 +424,10 @@ func (b *cdsBalancer) updateChildConfig() error {
 		for j := range endpoints[i].Addresses {
 			addr := endpoints[i].Addresses[j]
 			addr.BalancerAttributes = endpoints[i].Attributes
-			// BalancerAttributes need to be present in endpoint addresses. This
-			// temporary workaround is required to make load reporting work
-			// with the old pickfirst policy which creates SubConns with multiple
-			// addresses. Since the addresses can be from different localities,
-			// an Address.BalancerAttribute is used to identify the locality of the
-			// address used by the transport. This workaround can be removed once
-			// the old pickfirst is removed.
-			// See https://github.com/grpc/grpc-go/issues/7339
+			// BalancerAttributes are used for the following:
+			// * Authority Override.
+			// * grpc.lb.backend_service metric label propagation.
+			// See https://github.com/grpc/grpc-go/issues/6472
 			endpoints[i].Addresses[j] = addr
 		}
 	}
