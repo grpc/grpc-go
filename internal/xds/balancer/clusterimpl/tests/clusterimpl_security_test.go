@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package cdsbalancer
+package clusterimpl_test
 
 import (
 	"context"
@@ -37,6 +37,7 @@ import (
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/internal/xds/balancer/clusterimpl"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/resolver"
@@ -48,6 +49,7 @@ import (
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
+	v3matcherpb "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 
@@ -163,6 +165,16 @@ func verifySecurityInformationFromPeer(t *testing.T, pr *peer.Peer, wantSecLevel
 			t.Fatalf("Common name in peer certificate is %s, want %s", cn, wantCommonName)
 		}
 	}
+}
+
+// makeAggregateClusterResource returns an aggregate cluster resource with the
+// given name and list of child names.
+func makeAggregateClusterResource(name string, childNames []string) *v3clusterpb.Cluster {
+	return e2e.ClusterResourceWithOptions(e2e.ClusterOptions{
+		ClusterName: name,
+		Type:        e2e.ClusterTypeAggregate,
+		ChildNames:  childNames,
+	})
 }
 
 // Tests the case where xDS credentials are not in use, but the cds LB policy
@@ -620,15 +632,15 @@ func (s) TestSecurityConfigUpdate_GoodToBad(t *testing.T) {
 // Verifies that the connection between the client and the server is secure.
 func (s) TestSystemRootCertsSecurityConfig(t *testing.T) {
 	origFlag := envconfig.XDSSystemRootCertsEnabled
-	origSRCF := x509SystemCertPoolFunc
+	origSRCF := clusterimpl.X509SystemCertPoolFunc
 	defer func() {
 		envconfig.XDSSystemRootCertsEnabled = origFlag
-		x509SystemCertPoolFunc = origSRCF
+		clusterimpl.X509SystemCertPoolFunc = origSRCF
 	}()
 	envconfig.XDSSystemRootCertsEnabled = true
 
 	systemRootCertsFuncCalled := false
-	x509SystemCertPoolFunc = func() (*x509.CertPool, error) {
+	clusterimpl.X509SystemCertPoolFunc = func() (*x509.CertPool, error) {
 		certData, err := os.ReadFile(testdata.Path("x509/server_ca_cert.pem"))
 		if err != nil {
 			return nil, fmt.Errorf("failed to read certificate file: %w", err)
@@ -679,4 +691,79 @@ func (s) TestSystemRootCertsSecurityConfig(t *testing.T) {
 	if systemRootCertsFuncCalled != true {
 		t.Errorf("System root certs were not used during the test.")
 	}
+}
+
+// TestAggregateClusterSecurityConfig tests the case where the CDS LB policy
+// receives a top-level aggregate cluster pointing to a child EDS cluster. The
+// test verifies that the CDS LB policy correctly ignores the aggregate
+// cluster's security configuration and uses the child EDS cluster's security
+// configuration to establish the mTLS connection.
+func (s) TestAggregateClusterSecurityConfig(t *testing.T) {
+	// Spin up an xDS management server.
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
+
+	// Create bootstrap configuration pointing to the above management server
+	// and one that includes certificate providers configuration.
+	nodeID := uuid.New().String()
+	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
+
+	// Create a grpc channel with xDS creds talking to a test server with TLS
+	// credentials.
+	cc, serverAddress := setupForSecurityTests(t, bc, xdsClientCredsWithInsecureFallback(t), tlsServerCreds(t))
+
+	const edsClusterName = clusterName + "-eds"
+
+	// Configures an aggregate cluster with a security config that is not NACKed
+	// by the xdsclient but would fail the handshake as it has an invalid SAN
+	// matcher.
+	aggCluster := makeAggregateClusterResource(clusterName, []string{edsClusterName})
+	aggCluster.TransportSocket = &v3corepb.TransportSocket{
+		Name: "envoy.transport_sockets.tls",
+		ConfigType: &v3corepb.TransportSocket_TypedConfig{
+			TypedConfig: testutils.MarshalAny(t, &v3tlspb.UpstreamTlsContext{
+				CommonTlsContext: &v3tlspb.CommonTlsContext{
+					ValidationContextType: &v3tlspb.CommonTlsContext_CombinedValidationContext{
+						CombinedValidationContext: &v3tlspb.CommonTlsContext_CombinedCertificateValidationContext{
+							DefaultValidationContext: &v3tlspb.CertificateValidationContext{
+								MatchSubjectAltNames: []*v3matcherpb.StringMatcher{
+									{MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: "bad-cn"}},
+								},
+							},
+							ValidationContextCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
+								InstanceName: e2e.ClientSideCertProviderInstance,
+							},
+						},
+					},
+				},
+			}),
+		},
+	}
+
+	// Create the child EDS cluster with a valid mTLS security configuration.
+	resources := e2e.UpdateOptions{
+		NodeID:    nodeID,
+		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(target, routeName)},
+		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeName, target, clusterName)},
+		Clusters: []*v3clusterpb.Cluster{
+			aggCluster,
+			e2e.DefaultCluster(edsClusterName, serviceName, e2e.SecurityLevelMTLS),
+		},
+		Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(serviceName, host, []uint32{testutils.ParsePort(t, serverAddress)})},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify that a successful RPC can be made over a secure connection since
+	// the EDS cluster has a valid mTLS configuration even though the top level
+	// cluster has an incorrect security configuration.
+	client := testgrpc.NewTestServiceClient(cc)
+	peer := &peer.Peer{}
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(peer)); err != nil {
+		t.Fatalf("EmptyCall() failed: %v", err)
+	}
+	verifySecurityInformationFromPeer(t, peer, e2e.SecurityLevelMTLS)
 }

@@ -25,19 +25,26 @@ package clusterimpl
 
 import (
 	"context"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"slices"
 	"sync"
+	"sync/atomic"
 	"time"
+	"unsafe"
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/weightedroundrobin"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/internal/balancer/gracefulswitch"
+	"google.golang.org/grpc/internal/credentials/xds"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/pretty"
 	xdsinternal "google.golang.org/grpc/internal/xds"
+
 	"google.golang.org/grpc/internal/xds/balancer/loadstore"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/internal/xds/clients"
@@ -60,6 +67,11 @@ var (
 	// tests to give tests visibility into exactly when certain events happen.
 	clientConnUpdateHook = func() {}
 	pickerUpdateHook     = func() {}
+	buildProvider        = buildProviderFunc
+
+	// X509SystemCertPoolFunc is used for mocking the system cert pool for
+	// tests.
+	X509SystemCertPoolFunc = x509.SystemCertPool
 )
 
 func init() {
@@ -69,14 +81,29 @@ func init() {
 type bb struct{}
 
 func (bb) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Balancer {
+	hi := xds.NewHandshakeInfo(nil, nil, nil, false)
+	xdsHIPtr := unsafe.Pointer(hi)
 	b := &clusterImplBalancer{
 		ClientConn:      cc,
 		loadWrapper:     loadstore.NewWrapper(),
 		requestCountMax: defaultRequestCountMax,
+		xdsHIPtr:        &xdsHIPtr,
 	}
 	b.logger = prefixLogger(b)
 	b.child = gracefulswitch.NewBalancer(b, bOpts)
 	b.logger.Infof("Created")
+
+	var creds credentials.TransportCredentials
+	switch {
+	case bOpts.DialCreds != nil:
+		creds = bOpts.DialCreds
+	case bOpts.CredsBundle != nil:
+		creds = bOpts.CredsBundle.TransportCredentials()
+	}
+	if xc, ok := creds.(interface{ UsesXDS() bool }); ok && xc.UsesXDS() {
+		b.xdsCredsInUse = true
+	}
+	b.logger.Infof("xDS credentials in use: %v", b.xdsCredsInUse)
 	return b
 }
 
@@ -106,6 +133,13 @@ type clusterImplBalancer struct {
 	lrsServer        *bootstrap.ServerConfig // Load reporting server configuration.
 	dropCategories   []DropConfig            // The categories for drops.
 	child            *gracefulswitch.Balancer
+	xdsHIPtr         *unsafe.Pointer // Accessed atomically as it is shared between the balancer and the transport.
+	xdsCredsInUse    bool
+
+	// The certificate providers are cached here to that they can be closed when
+	// a new provider is to be created.
+	cachedRoot     certprovider.Provider
+	cachedIdentity certprovider.Provider
 
 	// The following fields are protected by mu, since they are accessed in
 	// balancer API methods and in methods called from the child policy.
@@ -246,6 +280,92 @@ func (b *clusterImplBalancer) updateLoadStore(newConfig *LBConfig) error {
 	return nil
 }
 
+func buildProviderFunc(configs map[string]*certprovider.BuildableConfig, instanceName, certName string, wantIdentity, wantRoot bool) (certprovider.Provider, error) {
+	cfg, ok := configs[instanceName]
+	if !ok {
+		// Defensive programming. If a resource received from the management
+		// server contains a certificate provider instance name that is not
+		// found in the bootstrap, the resource is NACKed by the xDS client.
+		return nil, fmt.Errorf("certificate provider instance %q not found in bootstrap file", instanceName)
+	}
+	provider, err := cfg.Build(certprovider.BuildOptions{
+		CertName:     certName,
+		WantIdentity: wantIdentity,
+		WantRoot:     wantRoot,
+	})
+	if err != nil {
+		// This error is not expected since the bootstrap process parses the
+		// config and makes sure that it is acceptable to the plugin. Still, it
+		// is possible that the plugin parses the config successfully, but its
+		// Build() method errors out.
+		return nil, fmt.Errorf("xds: failed to get security plugin instance (%+v): %v", cfg, err)
+	}
+	return provider, nil
+}
+
+// handleSecurityConfig processes the security configuration received from the
+// management server, creates appropriate certificate provider plugins, and
+// updates the HandshakeInfo which is added as an address attribute in
+// NewSubConn() calls.
+func (b *clusterImplBalancer) handleSecurityConfig(config *xdsresource.SecurityConfig) error {
+	// If xdsCredentials are not in use, i.e, the user did not want to get
+	// security configuration from an xDS server, we should not be acting on the
+	// received security config here. Doing so poses a security threat.
+	if !b.xdsCredsInUse {
+		return nil
+	}
+	var xdsHI *xds.HandshakeInfo
+
+	// Security config being nil is a valid case where the management server has
+	// not sent any security configuration. The xdsCredentials implementation
+	// handles this by delegating to its fallback credentials.
+	if config == nil {
+		// We need to explicitly set the fields to nil here since this might be
+		// a case of switching from a good security configuration to an empty
+		// one where fallback credentials are to be used.
+		xdsHI = xds.NewHandshakeInfo(nil, nil, nil, false)
+		atomic.StorePointer(b.xdsHIPtr, unsafe.Pointer(xdsHI))
+		return nil
+
+	}
+
+	// A root provider is required whether we are using TLS or mTLS.
+	cpc := b.xdsClient.BootstrapConfig().CertProviderConfigs()
+	var rootProvider certprovider.Provider
+	if config.UseSystemRootCerts {
+		rootProvider = systemRootCertsProvider{}
+	} else {
+		rp, err := buildProvider(cpc, config.RootInstanceName, config.RootCertName, false, true)
+		if err != nil {
+			return err
+		}
+		rootProvider = rp
+	}
+
+	// The identity provider is only present when using mTLS.
+	var identityProvider certprovider.Provider
+	if name, cert := config.IdentityInstanceName, config.IdentityCertName; name != "" {
+		var err error
+		identityProvider, err = buildProvider(cpc, name, cert, true, false)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Close the old providers and cache the new ones.
+	if b.cachedRoot != nil {
+		b.cachedRoot.Close()
+	}
+	if b.cachedIdentity != nil {
+		b.cachedIdentity.Close()
+	}
+	b.cachedRoot = rootProvider
+	b.cachedIdentity = identityProvider
+	xdsHI = xds.NewHandshakeInfo(rootProvider, identityProvider, config.SubjectAltNameMatchers, false)
+	atomic.StorePointer(b.xdsHIPtr, unsafe.Pointer(xdsHI))
+	return nil
+}
+
 func (b *clusterImplBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
 	defer clientConnUpdateHook()
 
@@ -276,6 +396,21 @@ func (b *clusterImplBalancer) UpdateClientConnState(s balancer.ClientConnState) 
 		b.xdsClient = c
 	}
 
+	xdsConfig := xdsresource.XDSConfigFromResolverState(s.ResolverState)
+	if xdsConfig == nil {
+		b.logger.Warningf("Received balancer config with no xDS config")
+		return balancer.ErrBadResolverState
+	}
+	clusterCfg := xdsConfig.Clusters[newConfig.Cluster]
+	clusterUpdate := clusterCfg.Config.Cluster
+
+	if err := b.handleSecurityConfig(clusterUpdate.SecurityCfg); err != nil {
+		// If the security config is invalid, for example, if the provider
+		// instance is not found in the bootstrap config, we need to put the
+		// channel in transient failure.
+		return fmt.Errorf("received Cluster resource that contains invalid security config: %v", err)
+
+	}
 	// Update load reporting config. This needs to be done before updating the
 	// child policy because we need the loadStore from the updated client to be
 	// passed to the ccWrapper, so that the next picker from the child policy
@@ -357,6 +492,12 @@ func (b *clusterImplBalancer) Close() {
 		b.cancelLoadReport(stopCtx)
 		b.cancelLoadReport = nil
 	}
+	if b.cachedRoot != nil {
+		b.cachedRoot.Close()
+	}
+	if b.cachedIdentity != nil {
+		b.cachedIdentity.Close()
+	}
 	b.logger.Infof("Shutdown")
 }
 
@@ -425,6 +566,7 @@ func (b *clusterImplBalancer) NewSubConn(addrs []resolver.Address, opts balancer
 	newAddrs := make([]resolver.Address, len(addrs))
 	for i, addr := range addrs {
 		newAddrs[i] = xdsinternal.SetXDSHandshakeClusterName(addr, clusterName)
+		newAddrs[i] = xds.SetHandshakeInfo(newAddrs[i], b.xdsHIPtr)
 	}
 	var sc balancer.SubConn
 	scw := &scWrapper{}
@@ -450,4 +592,20 @@ func (b *clusterImplBalancer) RemoveSubConn(sc balancer.SubConn) {
 
 func (b *clusterImplBalancer) UpdateAddresses(sc balancer.SubConn, _ []resolver.Address) {
 	b.logger.Errorf("UpdateAddresses(%v) called unexpectedly", sc)
+}
+
+// systemRootCertsProvider implements a certprovider.Provider that returns the
+// system default root certificates for validation.
+type systemRootCertsProvider struct{}
+
+func (systemRootCertsProvider) Close() {}
+
+func (systemRootCertsProvider) KeyMaterial(context.Context) (*certprovider.KeyMaterial, error) {
+	rootCAs, err := X509SystemCertPoolFunc()
+	if err != nil {
+		return nil, err
+	}
+	return &certprovider.KeyMaterial{
+		Roots: rootCAs,
+	}, nil
 }
