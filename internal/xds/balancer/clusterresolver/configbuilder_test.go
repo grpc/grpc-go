@@ -83,10 +83,12 @@ func makeLocalityID(idx int) clients.Locality {
 }
 
 // makeEndpoint creates a test xdsresource.Endpoint with a healthy status, the
-// specified endpoint weight, and three addresses: "addr-{li}-{ei}",
-// "addr-{li}-{ei}-additional-1", and "addr-{li}-{ei}-additional-2".
-func makeEndpoint(li, ei int, ew uint32) xdsresource.Endpoint {
-	addr := fmt.Sprintf("addr-%d-%d", li, ei)
+// specified endpoint weight, and three addresses:
+// "addr-{localityIdx}-{endpointIdx}",
+// "addr-{localityIdx}-{endpointIdx}-additional-1", and
+// "addr-{localityIdx}-{endpointIdx}-additional-2".
+func makeEndpoint(localityIdx, endpointIdx int, endpointWeight uint32) xdsresource.Endpoint {
+	addr := fmt.Sprintf("addr-%d-%d", localityIdx, endpointIdx)
 	return xdsresource.Endpoint{
 		HealthStatus: xdsresource.EndpointHealthStatusHealthy,
 		ResolverEndpoint: resolver.Endpoint{
@@ -96,26 +98,26 @@ func makeEndpoint(li, ei int, ew uint32) xdsresource.Endpoint {
 				{Addr: fmt.Sprintf("%s-additional-2", addr)},
 			},
 		},
-		Weight: ew,
+		Weight: endpointWeight,
 	}
 }
 
 // makeResolverEndpoint creates a resolver.Endpoint with a single address
-// "addr-{li}-{ei}".
-func makeResolverEndpoint(li, ei int) resolver.Endpoint {
+// "addr-{localityIdx}-{endpointIdx}".
+func makeResolverEndpoint(localityIdx, endpointIdx int) resolver.Endpoint {
 	return resolver.Endpoint{
-		Addresses: []resolver.Address{{Addr: fmt.Sprintf("addr-%d-%d", li, ei)}},
+		Addresses: []resolver.Address{{Addr: fmt.Sprintf("addr-%d-%d", localityIdx, endpointIdx)}},
 	}
 }
 
 // makeLocality creates an xdsresource.Locality with endpointCount endpoints,
-// each with the given endpoint weight. The locality has the specified weight
+// each with an endpoint weight of 1. The locality has the specified weight
 // and priority. The locality ID and endpoint addresses are derived from
 // localityIdx.
-func makeLocality(localityIdx int, localityWeight, priority uint32, endpointCount int, endpointWeight uint32) xdsresource.Locality {
+func makeLocality(localityIdx int, localityWeight, priority uint32, endpointCount int) xdsresource.Locality {
 	endpoints := make([]xdsresource.Endpoint, endpointCount)
 	for j := range endpointCount {
-		endpoints[j] = makeEndpoint(localityIdx, j, endpointWeight)
+		endpoints[j] = makeEndpoint(localityIdx, j, 1)
 	}
 	return xdsresource.Locality{
 		Endpoints: endpoints,
@@ -154,10 +156,10 @@ func (s) TestBuildPriorityConfigJSON(t *testing.T) {
 					},
 				},
 				Localities: []xdsresource.Locality{
-					makeLocality(0, 20, 0, 2, 1),
-					makeLocality(1, 80, 0, 2, 1),
-					makeLocality(2, 20, 1, 2, 1),
-					makeLocality(3, 80, 1, 2, 1),
+					makeLocality(0, 20, 0, 2),
+					makeLocality(1, 80, 0, 2),
+					makeLocality(2, 20, 1, 2),
+					makeLocality(3, 80, 1, 2),
 				},
 			},
 			childNameGen: newNameGenerator(0),
@@ -206,10 +208,10 @@ func (s) TestBuildPriorityConfig(t *testing.T) {
 			},
 			edsResp: xdsresource.EndpointsUpdate{
 				Localities: []xdsresource.Locality{
-					makeLocality(0, 20, 0, 2, 1),
-					makeLocality(1, 80, 0, 2, 1),
-					makeLocality(2, 20, 1, 2, 1),
-					makeLocality(3, 80, 1, 2, 1),
+					makeLocality(0, 20, 0, 2),
+					makeLocality(1, 80, 0, 2),
+					makeLocality(2, 20, 1, 2),
+					makeLocality(3, 80, 1, 2),
 				},
 			},
 			childNameGen: newNameGenerator(0),
@@ -380,12 +382,12 @@ func TestBuildClusterImplConfigForEDS_PickFirstWeightedShuffling_Disabled(t *tes
 		t.Fatalf("Failed to create LRS server config for testing: %v", err)
 	}
 
-	// Create test localities with 2 endpoints each, endpoint weight 1.
-	// Localities are listed in non-priority order to verify sorting.
-	loc0 := makeLocality(0, 20, 0, 2, 1)
-	loc1 := makeLocality(1, 80, 0, 2, 1)
-	loc2 := makeLocality(2, 20, 1, 2, 1)
-	loc3 := makeLocality(3, 80, 1, 2, 1)
+	// Create test localities with 2 endpoints each.
+	// Localities are passed in shuffled order to verify sorting by priority.
+	loc0 := makeLocality(0, 20, 0, 2)
+	loc1 := makeLocality(1, 80, 0, 2)
+	loc2 := makeLocality(2, 20, 1, 2)
+	loc3 := makeLocality(3, 80, 1, 2)
 
 	gotNames, gotConfigs, gotEndpoints, _ := buildClusterImplConfigForEDS(
 		newNameGenerator(2),
@@ -470,12 +472,12 @@ func TestBuildClusterImplConfigForEDS_PickFirstWeightedShuffling_Enabled(t *test
 		t.Fatalf("Failed to create LRS server config for testing: %v", err)
 	}
 
-	// Create test localities with 2 endpoints each, endpoint weight 1.
-	// Localities are listed in non-priority order to verify sorting.
-	loc0 := makeLocality(0, 20, 0, 2, 1)
-	loc1 := makeLocality(1, 80, 0, 2, 1)
-	loc2 := makeLocality(2, 20, 1, 2, 1)
-	loc3 := makeLocality(3, 80, 1, 2, 1)
+	// Create test localities with 2 endpoints each.
+	// Localities are passed in shuffled order to verify sorting by priority.
+	loc0 := makeLocality(0, 20, 0, 2)
+	loc1 := makeLocality(1, 80, 0, 2)
+	loc2 := makeLocality(2, 20, 1, 2)
+	loc3 := makeLocality(3, 80, 1, 2)
 
 	gotNames, gotConfigs, gotEndpoints, _ := buildClusterImplConfigForEDS(
 		newNameGenerator(2),
@@ -568,10 +570,10 @@ func TestBuildClusterImplConfigForEDS_PickFirstWeightedShuffling_Enabled(t *test
 
 func TestGroupLocalitiesByPriority(t *testing.T) {
 	// Create localities for two priorities (p0 and p1).
-	p0Loc0 := makeLocality(0, 20, 0, 2, 1)
-	p0Loc1 := makeLocality(1, 80, 0, 2, 1)
-	p1Loc0 := makeLocality(2, 20, 1, 2, 1)
-	p1Loc1 := makeLocality(3, 80, 1, 2, 1)
+	p0Loc0 := makeLocality(0, 20, 0, 2)
+	p0Loc1 := makeLocality(1, 80, 0, 2)
+	p1Loc0 := makeLocality(2, 20, 1, 2)
+	p1Loc1 := makeLocality(3, 80, 1, 2)
 
 	tests := []struct {
 		name           string
