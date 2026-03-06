@@ -441,9 +441,6 @@ func (fc *filterChain) convertVirtualHost(virtualHost *xdsresource.VirtualHost, 
 		rs[i].matcher = xdsresource.RouteToMatcher(r)
 		interceptor, sfs, err := fc.newInterceptor(r.HTTPFilterConfigOverride, virtualHost.HTTPFilterConfigOverride, provider)
 		if err != nil {
-			for _, sf := range serverFilters {
-				sf.Close()
-			}
 			return virtualHostWithInterceptors{}, nil, err
 		}
 		serverFilters = append(serverFilters, sfs...)
@@ -460,15 +457,18 @@ func (rc *usableRouteConfiguration) statusErrWithNodeID(c codes.Code, msg string
 
 func (fc *filterChain) newInterceptor(routeOverride, virtualHostOverride map[string]httpfilter.FilterConfig, provider serverFilterProvider) (_ resolver.ServerInterceptor, _ []httpfilter.ServerFilter, err error) {
 	serverFilters := []httpfilter.ServerFilter{}
+	interceptors := make([]resolver.ServerInterceptor, 0, len(fc.httpFilters))
 	defer func() {
 		if err != nil {
 			for _, sf := range serverFilters {
 				sf.Close()
 			}
+			for _, i := range interceptors {
+				i.Close()
+			}
 		}
 	}()
 
-	interceptors := make([]resolver.ServerInterceptor, 0, len(fc.httpFilters))
 	for _, filter := range fc.httpFilters {
 		// Route is highest priority on server side, as there is no concept
 		// of an upstream cluster on server side.
