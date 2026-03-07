@@ -47,9 +47,12 @@ import (
 // validateClusterAndConstructClusterUpdate function for testing purposes.
 var ValidateClusterAndConstructClusterUpdateForTesting = validateClusterAndConstructClusterUpdate
 
-// TransportSocket proto message has a `name` field which is expected to be set
-// to this value by the management server.
-const transportSocketName = "envoy.transport_sockets.tls"
+const (
+	maxSNILength = 255
+	// TransportSocket proto message has a `name` field which is expected to be set
+	// to this value by the management server.
+	transportSocketName = "envoy.transport_sockets.tls"
+)
 
 func unmarshalClusterResource(r *anypb.Any, serverCfg *bootstrap.ServerConfig) (string, ClusterUpdate, error) {
 	r, err := UnwrapResource(r)
@@ -295,14 +298,27 @@ func securityConfigFromCluster(cluster *v3clusterpb.Cluster) (*SecurityConfig, e
 		return nil, fmt.Errorf("failed to unmarshal UpstreamTlsContext in CDS response: %v", err)
 	}
 	// The following fields from `UpstreamTlsContext` are ignored:
-	// - sni
 	// - allow_renegotiation
 	// - max_session_keys
 	if upstreamCtx.GetCommonTlsContext() == nil {
 		return nil, errors.New("UpstreamTlsContext in CDS response does not contain a CommonTlsContext")
 	}
 
-	return securityConfigFromCommonTLSContext(upstreamCtx.GetCommonTlsContext(), false)
+	sc, err := securityConfigFromCommonTLSContext(upstreamCtx.GetCommonTlsContext(), false)
+	if err != nil {
+		return nil, err
+	}
+	// Set SNI related fields in SecurityConfig from UpstreamTlsContext if
+	// `GRPC_EXPERIMENTAL_XDS_SNI` is enabled.
+	if envconfig.XDSSNIEnabled {
+		sc.SNI = upstreamCtx.GetSni()
+		if len(sc.SNI) > maxSNILength {
+			return nil, fmt.Errorf("SNI value %q in UpstreamTlsContext in CDS response exceeds max length of %d", sc.SNI, maxSNILength)
+		}
+		sc.AutoHostSNI = upstreamCtx.GetAutoHostSni()
+		sc.AutoSNISANValidation = upstreamCtx.GetAutoSniSanValidation()
+	}
+	return sc, nil
 }
 
 // common is expected to be not nil.
