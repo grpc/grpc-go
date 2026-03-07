@@ -23,6 +23,7 @@ package server
 import (
 	"fmt"
 	"net"
+	"net/netip"
 	"sync"
 	"time"
 
@@ -297,10 +298,12 @@ func (l *listenerWrapper) Accept() (net.Conn, error) {
 			continue
 		}
 
+		destIP, _ := netip.AddrFromSlice(destAddr.IP)
+		srcIP, _ := netip.AddrFromSlice(srcAddr.IP)
 		fc, err := l.activeFilterChainManager.lookup(lookupParams{
 			isUnspecifiedListener: l.isUnspecifiedAddr,
-			dstAddr:               destAddr.IP,
-			srcAddr:               srcAddr.IP,
+			dstAddr:               destIP.Unmap(),
+			srcAddr:               srcIP.Unmap(),
 			srcPort:               srcAddr.Port,
 		})
 		if err != nil {
