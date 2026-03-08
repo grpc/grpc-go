@@ -116,6 +116,7 @@ func (cb *childBalancer) sendUpdate() {
 		ResolverState:  cb.rState,
 		BalancerConfig: cb.config,
 	})
+	// Report TF if update to the child fails.
 	if err != nil {
 		cb.parent.logger.Warningf("Failed to update state for child policy %q: %v", cb.name, err)
 		cb.reportedTF = true

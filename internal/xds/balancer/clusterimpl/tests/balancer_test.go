@@ -77,12 +77,6 @@ import (
 const (
 	defaultTestTimeout      = 5 * time.Second
 	defaultTestShortTimeout = 100 * time.Millisecond
-	target                  = "test.service"
-	routeName               = "test_route"
-	clusterName             = "cluster1"
-	serviceName             = "service1"
-	host                    = "localhost"
-	port                    = 8080
 )
 
 type s struct {

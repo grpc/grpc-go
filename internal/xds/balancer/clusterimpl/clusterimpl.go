@@ -25,14 +25,12 @@ package clusterimpl
 
 import (
 	"context"
-	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
-	"unsafe"
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/weightedroundrobin"
@@ -45,6 +43,7 @@ import (
 	"google.golang.org/grpc/internal/pretty"
 	xdsinternal "google.golang.org/grpc/internal/xds"
 
+	"google.golang.org/grpc/internal/xds/balancer/clusterimpl/internal"
 	"google.golang.org/grpc/internal/xds/balancer/loadstore"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/internal/xds/clients"
@@ -68,10 +67,6 @@ var (
 	clientConnUpdateHook = func() {}
 	pickerUpdateHook     = func() {}
 	buildProvider        = buildProviderFunc
-
-	// X509SystemCertPoolFunc is used for mocking the system cert pool for
-	// tests.
-	X509SystemCertPoolFunc = x509.SystemCertPool
 )
 
 func init() {
@@ -81,14 +76,12 @@ func init() {
 type bb struct{}
 
 func (bb) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Balancer {
-	hi := xds.NewHandshakeInfo(nil, nil, nil, false)
-	xdsHIPtr := unsafe.Pointer(hi)
 	b := &clusterImplBalancer{
 		ClientConn:      cc,
 		loadWrapper:     loadstore.NewWrapper(),
 		requestCountMax: defaultRequestCountMax,
-		xdsHIPtr:        &xdsHIPtr,
 	}
+	b.xdsHIPtr.Store(xds.NewHandshakeInfo(nil, nil, nil, false))
 	b.logger = prefixLogger(b)
 	b.child = gracefulswitch.NewBalancer(b, bOpts)
 	b.logger.Infof("Created")
@@ -133,7 +126,7 @@ type clusterImplBalancer struct {
 	lrsServer        *bootstrap.ServerConfig // Load reporting server configuration.
 	dropCategories   []DropConfig            // The categories for drops.
 	child            *gracefulswitch.Balancer
-	xdsHIPtr         *unsafe.Pointer // Accessed atomically as it is shared between the balancer and the transport.
+	xdsHIPtr         atomic.Pointer[xds.HandshakeInfo] // Accessed atomically as it is shared between the balancer and the transport.
 	xdsCredsInUse    bool
 
 	// The certificate providers are cached here to that they can be closed when
@@ -294,13 +287,7 @@ func (b *clusterImplBalancer) updateLoadStore(clusterUpdate *xdsresource.Cluster
 }
 
 func buildProviderFunc(configs map[string]*certprovider.BuildableConfig, instanceName, certName string, wantIdentity, wantRoot bool) (certprovider.Provider, error) {
-	cfg, ok := configs[instanceName]
-	if !ok {
-		// Defensive programming. If a resource received from the management
-		// server contains a certificate provider instance name that is not
-		// found in the bootstrap, the resource is NACKed by the xDS client.
-		return nil, fmt.Errorf("certificate provider instance %q not found in bootstrap file", instanceName)
-	}
+	cfg := configs[instanceName]
 	provider, err := cfg.Build(certprovider.BuildOptions{
 		CertName:     certName,
 		WantIdentity: wantIdentity,
@@ -337,7 +324,7 @@ func (b *clusterImplBalancer) handleSecurityConfig(config *xdsresource.SecurityC
 		// a case of switching from a good security configuration to an empty
 		// one where fallback credentials are to be used.
 		xdsHI = xds.NewHandshakeInfo(nil, nil, nil, false)
-		atomic.StorePointer(b.xdsHIPtr, unsafe.Pointer(xdsHI))
+		b.xdsHIPtr.Store(xdsHI)
 		return nil
 
 	}
@@ -375,7 +362,7 @@ func (b *clusterImplBalancer) handleSecurityConfig(config *xdsresource.SecurityC
 	b.cachedRoot = rootProvider
 	b.cachedIdentity = identityProvider
 	xdsHI = xds.NewHandshakeInfo(rootProvider, identityProvider, config.SubjectAltNameMatchers, false)
-	atomic.StorePointer(b.xdsHIPtr, unsafe.Pointer(xdsHI))
+	b.xdsHIPtr.Store(xdsHI)
 	return nil
 }
 
@@ -579,7 +566,7 @@ func (b *clusterImplBalancer) NewSubConn(addrs []resolver.Address, opts balancer
 	newAddrs := make([]resolver.Address, len(addrs))
 	for i, addr := range addrs {
 		newAddrs[i] = xdsinternal.SetXDSHandshakeClusterName(addr, clusterName)
-		newAddrs[i] = xds.SetHandshakeInfo(newAddrs[i], b.xdsHIPtr)
+		newAddrs[i] = xds.SetHandshakeInfo(newAddrs[i], &b.xdsHIPtr)
 	}
 	var sc balancer.SubConn
 	scw := &scWrapper{}
@@ -614,11 +601,9 @@ type systemRootCertsProvider struct{}
 func (systemRootCertsProvider) Close() {}
 
 func (systemRootCertsProvider) KeyMaterial(context.Context) (*certprovider.KeyMaterial, error) {
-	rootCAs, err := X509SystemCertPoolFunc()
+	rootCAs, err := internal.X509SystemCertPoolFunc()
 	if err != nil {
 		return nil, err
 	}
-	return &certprovider.KeyMaterial{
-		Roots: rootCAs,
-	}, nil
+	return &certprovider.KeyMaterial{Roots: rootCAs}, nil
 }

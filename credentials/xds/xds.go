@@ -25,7 +25,6 @@ import (
 	"crypto/tls"
 	"errors"
 	"net"
-	"sync/atomic"
 	"time"
 
 	"google.golang.org/grpc/credentials"
@@ -114,8 +113,8 @@ func (c *credsImpl) ClientHandshake(ctx context.Context, authority string, rawCo
 		return c.fallback.ClientHandshake(ctx, authority, rawConn)
 	}
 
-	uPtr := xdsinternal.GetHandshakeInfo(chi.Attributes)
-	hi := (*xdsinternal.HandshakeInfo)(atomic.LoadPointer(uPtr))
+	hiPtr := xdsinternal.GetHandshakeInfo(chi.Attributes)
+	hi := (*xdsinternal.HandshakeInfo)(hiPtr.Load())
 	if hi.UseFallbackCreds() {
 		return c.fallback.ClientHandshake(ctx, authority, rawConn)
 	}
