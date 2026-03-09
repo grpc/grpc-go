@@ -23,7 +23,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -552,14 +551,8 @@ func (s) TestSecurityConfigUpdate_GoodToFallback(t *testing.T) {
 // bootstrap file contents. Verifies that the connection between the client and
 // the server is secure. Subsequently, the cds LB policy receives a cluster
 // resource that is NACKed by the xDS client. Test verifies that the cds LB
-// policy continues to use the previous good configuration, but the error from
-// the xDS client is propagated to the child policy.
+// policy continues to use the previous good configuration.
 func (s) TestSecurityConfigUpdate_GoodToBad(t *testing.T) {
-	// Register a wrapped clusterresolver LB policy (child policy of the cds LB
-	// policy) for the duration of this test that makes the resolver error
-	// pushed to it available to the test.
-	_, resolverErrCh, _, _ := registerWrappedClusterResolverPolicy(t)
-
 	// Spin up an xDS management server.
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 
@@ -613,16 +606,6 @@ func (s) TestSecurityConfigUpdate_GoodToBad(t *testing.T) {
 	}
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
-	}
-
-	const wantNACKErr = "instance name \"unknown-certificate-provider-instance\" missing in bootstrap configuration"
-	select {
-	case err := <-resolverErrCh:
-		if !strings.Contains(err.Error(), wantNACKErr) {
-			t.Fatalf("Child policy got resolver error: %v, want err: %v", err, wantNACKErr)
-		}
-	case <-ctx.Done():
-		t.Fatal("Timeout when waiting for resolver error to be pushed to the child policy")
 	}
 
 	// Verify that a successful RPC can be made over a secure connection.
