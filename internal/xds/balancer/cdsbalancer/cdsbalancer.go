@@ -96,7 +96,7 @@ func (bb) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Bal
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
-	hi := xdsinternal.NewHandshakeInfo(nil, nil, nil, false)
+	hi := xdsinternal.NewHandshakeInfo(nil, nil, nil, false, "", false)
 	xdsHIPtr := unsafe.Pointer(hi)
 	b := &cdsBalancer{
 		bOpts:             opts,
@@ -207,7 +207,7 @@ func (b *cdsBalancer) handleSecurityConfig(config *xdsresource.SecurityConfig) e
 		// We need to explicitly set the fields to nil here since this might be
 		// a case of switching from a good security configuration to an empty
 		// one where fallback credentials are to be used.
-		xdsHI = xdsinternal.NewHandshakeInfo(nil, nil, nil, false)
+		xdsHI = xdsinternal.NewHandshakeInfo(nil, nil, nil, false, "", false)
 		atomic.StorePointer(b.xdsHIPtr, unsafe.Pointer(xdsHI))
 		return nil
 
@@ -245,7 +245,7 @@ func (b *cdsBalancer) handleSecurityConfig(config *xdsresource.SecurityConfig) e
 	}
 	b.cachedRoot = rootProvider
 	b.cachedIdentity = identityProvider
-	xdsHI = xdsinternal.NewHandshakeInfo(rootProvider, identityProvider, config.SubjectAltNameMatchers, false)
+	xdsHI = xdsinternal.NewHandshakeInfo(rootProvider, identityProvider, config.SubjectAltNameMatchers, false, "", false)
 	atomic.StorePointer(b.xdsHIPtr, unsafe.Pointer(xdsHI))
 	return nil
 }
