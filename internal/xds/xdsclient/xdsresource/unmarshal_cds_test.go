@@ -481,11 +481,7 @@ func (s) TestSecurityConfigFromCommonTLSContextUsingNewFields_ErrorCases(t *test
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			origFlag := envconfig.XDSSystemRootCertsEnabled
-			defer func() {
-				envconfig.XDSSystemRootCertsEnabled = origFlag
-			}()
-			envconfig.XDSSystemRootCertsEnabled = test.enableSystemRootCertsFlag
+			testutils.SetEnvConfig(t, &envconfig.XDSSystemRootCertsEnabled, test.enableSystemRootCertsFlag)
 			_, err := securityConfigFromCommonTLSContextUsingNewFields(test.common, test.server)
 			if err == nil {
 				t.Fatal("securityConfigFromCommonTLSContextUsingNewFields() succeeded when expected to fail")
@@ -511,6 +507,7 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 		sanRegexBad            = "??"
 		sanRegexGood           = "san?regex?"
 		sanContains            = "san-contains"
+		sniString              = "test-sni"
 	)
 	var sanRE = regexp.MustCompile(sanRegexGood)
 
@@ -520,6 +517,7 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 		wantUpdate                ClusterUpdate
 		wantErr                   bool
 		enableSystemRootCertsFlag bool
+		enableSNIFlag             bool
 	}{
 		{
 			name: "transport-socket-matches",
@@ -1357,15 +1355,106 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 				TelemetryLabels: xdsinternal.UnknownCSMLabels,
 			},
 		},
+		{
+			name:          "happy-case-with-sni-flag-enabled",
+			enableSNIFlag: true,
+			cluster: &v3clusterpb.Cluster{
+				Name:                 clusterName,
+				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
+				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
+					EdsConfig: &v3corepb.ConfigSource{
+						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
+							Ads: &v3corepb.AggregatedConfigSource{},
+						},
+					},
+					ServiceName: serviceName,
+				},
+				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
+				TransportSocket: &v3corepb.TransportSocket{
+					Name: "envoy.transport_sockets.tls",
+					ConfigType: &v3corepb.TransportSocket_TypedConfig{
+						TypedConfig: testutils.MarshalAny(t, &v3tlspb.UpstreamTlsContext{
+							CommonTlsContext: &v3tlspb.CommonTlsContext{
+								ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContext{
+									ValidationContext: &v3tlspb.CertificateValidationContext{
+										CaCertificateProviderInstance: &v3tlspb.CertificateProviderPluginInstance{
+											InstanceName:    rootPluginInstance,
+											CertificateName: rootCertName,
+										},
+									},
+								},
+							},
+							Sni:                  sniString,
+							AutoHostSni:          true,
+							AutoSniSanValidation: true,
+						}),
+					},
+				},
+			},
+			wantUpdate: ClusterUpdate{
+				ClusterName:    clusterName,
+				EDSServiceName: serviceName,
+				SecurityCfg: &SecurityConfig{
+					RootInstanceName:     rootPluginInstance,
+					RootCertName:         rootCertName,
+					SNI:                  sniString,
+					AutoHostSNI:          true,
+					AutoSNISANValidation: true,
+				},
+				TelemetryLabels: xdsinternal.UnknownCSMLabels,
+			},
+		},
+		{
+			name: "sni-env-variable-disabled-should-not-be-populated-in-update",
+			cluster: &v3clusterpb.Cluster{
+				Name:                 clusterName,
+				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
+				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
+					EdsConfig: &v3corepb.ConfigSource{
+						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
+							Ads: &v3corepb.AggregatedConfigSource{},
+						},
+					},
+					ServiceName: serviceName,
+				},
+				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
+				TransportSocket: &v3corepb.TransportSocket{
+					Name: "envoy.transport_sockets.tls",
+					ConfigType: &v3corepb.TransportSocket_TypedConfig{
+						TypedConfig: testutils.MarshalAny(t, &v3tlspb.UpstreamTlsContext{
+							CommonTlsContext: &v3tlspb.CommonTlsContext{
+								ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContext{
+									ValidationContext: &v3tlspb.CertificateValidationContext{
+										CaCertificateProviderInstance: &v3tlspb.CertificateProviderPluginInstance{
+											InstanceName:    rootPluginInstance,
+											CertificateName: rootCertName,
+										},
+									},
+								},
+							},
+							Sni:                  sniString,
+							AutoHostSni:          true,
+							AutoSniSanValidation: true,
+						}),
+					},
+				},
+			},
+			wantUpdate: ClusterUpdate{
+				ClusterName:    clusterName,
+				EDSServiceName: serviceName,
+				SecurityCfg: &SecurityConfig{
+					RootInstanceName: rootPluginInstance,
+					RootCertName:     rootCertName,
+				},
+				TelemetryLabels: xdsinternal.UnknownCSMLabels,
+			},
+		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			origFlag := envconfig.XDSSystemRootCertsEnabled
-			defer func() {
-				envconfig.XDSSystemRootCertsEnabled = origFlag
-			}()
-			envconfig.XDSSystemRootCertsEnabled = test.enableSystemRootCertsFlag
+			testutils.SetEnvConfig(t, &envconfig.XDSSystemRootCertsEnabled, test.enableSystemRootCertsFlag)
+			testutils.SetEnvConfig(t, &envconfig.XDSSNIEnabled, test.enableSNIFlag)
 			update, err := validateClusterAndConstructClusterUpdate(test.cluster, nil)
 			if (err != nil) != test.wantErr {
 				t.Errorf("validateClusterAndConstructClusterUpdate() returned err %v wantErr %v)", err, test.wantErr)
@@ -1822,132 +1911,6 @@ func (s) TestValidateClusterWithOutlierDetection(t *testing.T) {
 			}
 			if diff := cmp.Diff(got, want); diff != "" {
 				t.Fatalf("cluster.OutlierDetection got unexpected output, diff (-got, +want): %v", diff)
-			}
-		})
-	}
-}
-
-func (s) TestValidateClusterWithSecurityConfigWithSNI(t *testing.T) {
-	const (
-		rootPluginInstance = "rootPluginInstance"
-		rootCertName       = "rootCert"
-		clusterName        = "cluster"
-		serviceName        = "service"
-		sniString          = "test-sni"
-	)
-
-	tests := []struct {
-		name       string
-		sniEnabled bool
-		cluster    *v3clusterpb.Cluster
-		wantUpdate ClusterUpdate
-	}{
-		{
-			name:       "env-variable-enabled",
-			sniEnabled: true,
-			cluster: &v3clusterpb.Cluster{
-				Name:                 clusterName,
-				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
-				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
-					EdsConfig: &v3corepb.ConfigSource{
-						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
-							Ads: &v3corepb.AggregatedConfigSource{},
-						},
-					},
-					ServiceName: serviceName,
-				},
-				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
-				TransportSocket: &v3corepb.TransportSocket{
-					Name: "envoy.transport_sockets.tls",
-					ConfigType: &v3corepb.TransportSocket_TypedConfig{
-						TypedConfig: testutils.MarshalAny(t, &v3tlspb.UpstreamTlsContext{
-							CommonTlsContext: &v3tlspb.CommonTlsContext{
-								ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContext{
-									ValidationContext: &v3tlspb.CertificateValidationContext{
-										CaCertificateProviderInstance: &v3tlspb.CertificateProviderPluginInstance{
-											InstanceName:    rootPluginInstance,
-											CertificateName: rootCertName,
-										},
-									},
-								},
-							},
-							Sni:                  sniString,
-							AutoHostSni:          true,
-							AutoSniSanValidation: true,
-						}),
-					},
-				},
-			},
-			wantUpdate: ClusterUpdate{
-				ClusterName:    clusterName,
-				EDSServiceName: serviceName,
-				SecurityCfg: &SecurityConfig{
-					RootInstanceName:     rootPluginInstance,
-					RootCertName:         rootCertName,
-					SNI:                  sniString,
-					AutoHostSNI:          true,
-					AutoSNISANValidation: true,
-				},
-				TelemetryLabels: xdsinternal.UnknownCSMLabels,
-			},
-		},
-		{
-			name:       "env-variable-disabled",
-			sniEnabled: false,
-			cluster: &v3clusterpb.Cluster{
-				Name:                 clusterName,
-				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
-				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
-					EdsConfig: &v3corepb.ConfigSource{
-						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
-							Ads: &v3corepb.AggregatedConfigSource{},
-						},
-					},
-					ServiceName: serviceName,
-				},
-				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
-				TransportSocket: &v3corepb.TransportSocket{
-					Name: "envoy.transport_sockets.tls",
-					ConfigType: &v3corepb.TransportSocket_TypedConfig{
-						TypedConfig: testutils.MarshalAny(t, &v3tlspb.UpstreamTlsContext{
-							CommonTlsContext: &v3tlspb.CommonTlsContext{
-								ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContext{
-									ValidationContext: &v3tlspb.CertificateValidationContext{
-										CaCertificateProviderInstance: &v3tlspb.CertificateProviderPluginInstance{
-											InstanceName:    rootPluginInstance,
-											CertificateName: rootCertName,
-										},
-									},
-								},
-							},
-							Sni:                  sniString,
-							AutoHostSni:          true,
-							AutoSniSanValidation: true,
-						}),
-					},
-				},
-			},
-			wantUpdate: ClusterUpdate{
-				ClusterName:    clusterName,
-				EDSServiceName: serviceName,
-				SecurityCfg: &SecurityConfig{
-					RootInstanceName: rootPluginInstance,
-					RootCertName:     rootCertName,
-				},
-				TelemetryLabels: xdsinternal.UnknownCSMLabels,
-			},
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			testutils.SetEnvConfig(t, &envconfig.XDSSNIEnabled, test.sniEnabled)
-			update, err := validateClusterAndConstructClusterUpdate(test.cluster, nil)
-			if err != nil {
-				t.Fatalf("validateClusterAndConstructClusterUpdate() returned unexpected err: %v", err)
-			}
-			if diff := cmp.Diff(update, test.wantUpdate, cmpopts.EquateEmpty(), cmp.AllowUnexported(regexp.Regexp{}), cmpopts.IgnoreFields(ClusterUpdate{}, "LBPolicy")); diff != "" {
-				t.Fatalf("validateClusterAndConstructClusterUpdate() returned unexpected diff (-got, +want):\n%s", diff)
 			}
 		})
 	}
