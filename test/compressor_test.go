@@ -30,6 +30,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/encoding"
 	"google.golang.org/grpc/experimental"
 	"google.golang.org/grpc/internal/grpcutil"
 	"google.golang.org/grpc/internal/stubserver"
@@ -690,5 +691,198 @@ func (s) TestGzipBadChecksum(t *testing.T) {
 		status.Code(err) != codes.Internal ||
 		!strings.Contains(status.Convert(err).Message(), gzip.ErrChecksum.Error()) {
 		t.Errorf("ss.Client.UnaryCall(_) = _, %v\n\twant: _, status(codes.Internal, contains %q)", err, gzip.ErrChecksum)
+	}
+}
+
+type countEncodingCompressor struct {
+	encoding.Compressor
+	compressCount   int
+	decompressCount int
+}
+
+func (c *countEncodingCompressor) Compress(w io.Writer) (io.WriteCloser, error) {
+	c.compressCount++
+	return c.Compressor.Compress(w)
+}
+
+func (c *countEncodingCompressor) Decompress(r io.Reader) (io.Reader, error) {
+	c.decompressCount++
+	return c.Compressor.Decompress(r)
+}
+
+func (c *countEncodingCompressor) Name() string {
+	return "count-gzip"
+}
+
+func (s) TestMessageCompression_Stream(t *testing.T) {
+	comp := &countEncodingCompressor{Compressor: encoding.GetCompressor("gzip")}
+	encoding.RegisterCompressor(comp)
+
+	ss := &stubserver.StubServer{
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
+			// Read the first message
+			_, err := stream.Recv()
+			if err != nil {
+				return err
+			}
+
+			// Send compressed message
+			if err := stream.Send(&testpb.StreamingOutputCallResponse{
+				Payload: &testpb.Payload{Body: []byte("22222")},
+			}); err != nil {
+				return err
+			}
+
+			// Read second message
+			_, err = stream.Recv()
+			if err != nil {
+				return err
+			}
+
+			// Disable compression and send message
+			if err := grpc.SetMessageCompression(stream.Context(), false); err != nil {
+				return err
+			}
+			if err := stream.Send(&testpb.StreamingOutputCallResponse{
+				Payload: &testpb.Payload{Body: []byte("44444")},
+			}); err != nil {
+				return err
+			}
+
+			// Read third message
+			_, err = stream.Recv()
+			if err != nil {
+				return err
+			}
+
+			// Enable compression again
+			if err := grpc.SetMessageCompression(stream.Context(), true); err != nil {
+				return err
+			}
+			return stream.Send(&testpb.StreamingOutputCallResponse{
+				Payload: &testpb.Payload{Body: []byte("66666")},
+			})
+		},
+	}
+
+	if err := ss.Start(nil); err != nil {
+		t.Fatalf("Error starting server: %v", err)
+	}
+	defer ss.Stop()
+
+	if err := ss.StartClient(); err != nil {
+		t.Fatalf("Error starting client: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	stream, err := ss.Client.FullDuplexCall(ctx, grpc.UseCompressor("count-gzip"))
+	if err != nil {
+		t.Fatalf("FullDuplexCall failed: %v", err)
+	}
+
+	// 1. Send first compressed message
+	if err := stream.Send(&testpb.StreamingOutputCallRequest{
+		Payload: &testpb.Payload{Body: []byte("11111")},
+	}); err != nil {
+		t.Fatalf("stream.Send failed: %v", err)
+	}
+	if _, err := stream.Recv(); err != nil {
+		t.Fatalf("stream.Recv failed: %v", err)
+	}
+
+	if comp.compressCount != 2 || comp.decompressCount != 2 {
+		t.Fatalf("After Call 1, expected 2, 2. got %d, %d", comp.compressCount, comp.decompressCount)
+	}
+
+	// 2. Disable message compression and send second message
+	if err := grpc.SetMessageCompression(stream.Context(), false); err != nil {
+		t.Fatalf("SetMessageCompression failed: %v", err)
+	}
+	if err := stream.Send(&testpb.StreamingOutputCallRequest{
+		Payload: &testpb.Payload{Body: []byte("33333")},
+	}); err != nil {
+		t.Fatalf("stream.Send failed: %v", err)
+	}
+	if _, err := stream.Recv(); err != nil {
+		t.Fatalf("stream.Recv failed: %v", err)
+	}
+
+	// Client uncompressed, Server still compressed its response.
+	if comp.compressCount != 3 || comp.decompressCount != 3 {
+		t.Fatalf("After Call 2, expected 3, 3. got %d, %d", comp.compressCount, comp.decompressCount)
+	}
+
+	// 3. Enable message compression and send third message
+	if err := grpc.SetMessageCompression(stream.Context(), true); err != nil {
+		t.Fatalf("SetMessageCompression failed: %v", err)
+	}
+	if err := stream.Send(&testpb.StreamingOutputCallRequest{
+		Payload: &testpb.Payload{Body: []byte("55555")},
+	}); err != nil {
+		t.Fatalf("stream.Send failed: %v", err)
+	}
+	if _, err := stream.Recv(); err != nil {
+		t.Fatalf("stream.Recv failed: %v", err)
+	}
+
+	if comp.compressCount != 5 || comp.decompressCount != 5 {
+		t.Fatalf("After Call 3, expected 5, 5. got %d, %d", comp.compressCount, comp.decompressCount)
+	}
+}
+
+func (s) TestMessageCompression_Unary(t *testing.T) {
+	comp := &countEncodingCompressor{Compressor: encoding.GetCompressor("gzip")}
+	encoding.RegisterCompressor(comp)
+
+	ss := &stubserver.StubServer{
+		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			grpc.SetSendCompressor(ctx, "count-gzip")
+			if in.ResponseSize == 0 {
+				if err := grpc.SetMessageCompression(ctx, false); err != nil {
+					return nil, err
+				}
+			}
+			return &testpb.SimpleResponse{
+				Payload: &testpb.Payload{Body: make([]byte, 10000)},
+			}, nil
+		},
+	}
+
+	if err := ss.Start(nil); err != nil {
+		t.Fatalf("Error starting server: %v", err)
+	}
+	defer ss.Stop()
+
+	if err := ss.StartClient(); err != nil {
+		t.Fatalf("Error starting client: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	// Call 1: Compression ON
+	if _, err := ss.Client.UnaryCall(ctx, &testpb.SimpleRequest{
+		ResponseSize: 1,
+		Payload:      &testpb.Payload{Body: []byte("11111")},
+	}, grpc.UseCompressor("count-gzip")); err != nil {
+		t.Fatalf("UnaryCall failed: %v", err)
+	}
+
+	if comp.decompressCount != 2 || comp.compressCount != 2 {
+		t.Fatalf("Expected 2/2, got %d/%d", comp.compressCount, comp.decompressCount)
+	}
+
+	// Call 2: Compression OFF
+	if _, err := ss.Client.UnaryCall(ctx, &testpb.SimpleRequest{
+		ResponseSize: 0,
+		Payload:      &testpb.Payload{Body: []byte("33333")},
+	}, grpc.UseCompressor("count-gzip")); err != nil {
+		t.Fatalf("UnaryCall failed: %v", err)
+	}
+
+	if comp.decompressCount != 3 || comp.compressCount != 3 {
+		t.Fatalf("Expected 3/3, got %d/%d", comp.compressCount, comp.decompressCount)
 	}
 }
