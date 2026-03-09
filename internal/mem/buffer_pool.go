@@ -306,12 +306,14 @@ type SimpleBufferPool struct {
 	shouldZero bool
 }
 
+// NewDirtySimplePool constructs a [SimpleBufferPool].
 func NewDirtySimplePool() *SimpleBufferPool {
 	return &SimpleBufferPool{
 		shouldZero: false,
 	}
 }
 
+// Get returns a buffer with specified length from the pool.
 func (p *SimpleBufferPool) Get(size int) *[]byte {
 	bs, ok := p.pool.Get().(*[]byte)
 	if ok && cap(*bs) >= size {
@@ -339,6 +341,7 @@ func (p *SimpleBufferPool) Get(size int) *[]byte {
 	return &b
 }
 
+// Put returns a buffer to the pool.
 func (p *SimpleBufferPool) Put(buf *[]byte) {
 	p.pool.Put(buf)
 }
