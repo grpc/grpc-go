@@ -1398,7 +1398,7 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 					RootInstanceName:     rootPluginInstance,
 					RootCertName:         rootCertName,
 					SNI:                  sniString,
-					UseAutoHostSNI:          true,
+					UseAutoHostSNI:       true,
 					AutoSNISANValidation: true,
 				},
 				TelemetryLabels: xdsinternal.UnknownCSMLabels,
