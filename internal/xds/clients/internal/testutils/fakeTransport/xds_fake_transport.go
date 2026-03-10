@@ -25,7 +25,6 @@ import (
 	"context"
 	"fmt"
 	"sync"
-	"time"
 
 	"google.golang.org/grpc/internal/xds/clients"
 	"google.golang.org/protobuf/proto"
@@ -44,13 +43,15 @@ type Builder struct {
 	mu                   sync.Mutex
 	activeTransports     map[string]*transport    // Tracks created transports for the fuzzer to interact with.
 	activeTransportsChan map[string]chan struct{} // Notifies when transport and stream are ready
+	testCtx              context.Context
 }
 
 // NewBuilder creates a new Builder.
-func NewBuilder() *Builder {
+func NewBuilder(ctx context.Context) *Builder {
 	return &Builder{
 		activeTransports:     make(map[string]*transport),
 		activeTransportsChan: make(map[string]chan struct{}),
+		testCtx:              ctx,
 	}
 }
 
@@ -69,28 +70,32 @@ func (b *Builder) Build(serverIdentifier clients.ServerIdentifier) (clients.Tran
 		b.activeTransportsChan[serverIdentifier.ServerURI] = ch
 	}
 
-	ft := newTransport(ch)
+	ft := newTransport(b.testCtx, ch)
 	b.activeTransports[serverIdentifier.ServerURI] = ft
 	return ft, nil
 }
 
-// Close closes the transport for the given server identifier.
-func (b *Builder) Close(serverURI string) {
+// CloseTransport closes the transport for the given server identifier.
+func (b *Builder) CloseTransport(serverURI string) {
 	b.mu.Lock()
 	t, ok := b.activeTransports[serverURI]
 	b.mu.Unlock()
 	if ok {
-		t.mu.Lock()
-		stream := t.activeADSStream
-		t.mu.Unlock()
-		if stream != nil {
-			stream.close()
-		}
+		t.Close()
+	}
+}
+
+// Close closes all active transports.
+func (b *Builder) Close() {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	for _, t := range b.activeTransports {
+		t.Close()
 	}
 }
 
 // Transport returns the active transport for a given server URI.
-func (b *Builder) Transport(ctx context.Context, serverURI string) (*ServerHandle, error) {
+func (b *Builder) Transport(serverURI string) (*ServerHandle, error) {
 	b.mu.Lock()
 	if t, ok := b.activeTransports[serverURI]; ok && t.serverHandle() != nil {
 		b.mu.Unlock()
@@ -105,8 +110,8 @@ func (b *Builder) Transport(ctx context.Context, serverURI string) (*ServerHandl
 	b.mu.Unlock()
 
 	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
+	case <-b.testCtx.Done():
+		return nil, b.testCtx.Err()
 	case <-ch:
 		b.mu.Lock()
 		defer b.mu.Unlock()
@@ -120,13 +125,15 @@ type transport struct {
 	activeADSStream *stream
 	closed          bool
 	streamReady     func()
+	testCtx         context.Context
 }
 
-func newTransport(ch chan struct{}) *transport {
+func newTransport(ctx context.Context, ch chan struct{}) *transport {
 	return &transport{
 		streamReady: sync.OnceFunc(func() {
 			close(ch)
 		}),
+		testCtx: ctx,
 	}
 }
 
@@ -149,7 +156,7 @@ func (t *transport) NewStream(ctx context.Context, _ string) (clients.Stream, er
 		return nil, fmt.Errorf("transport is closed")
 	}
 
-	fs := newStream(ctx)
+	fs := newStream(ctx, t.testCtx)
 	t.activeADSStream = fs
 	t.streamReady()
 	return fs, nil
@@ -168,18 +175,20 @@ func (t *transport) Close() {
 
 // stream implements clients.Stream.
 type stream struct {
-	ctx    context.Context
-	cancel context.CancelFunc
+	ctx     context.Context
+	cancel  context.CancelFunc
+	testCtx context.Context
 
 	reqChan  chan []byte
 	respChan chan []byte
 }
 
-func newStream(ctx context.Context) *stream {
+func newStream(ctx, testCtx context.Context) *stream {
 	c, cancel := context.WithCancel(ctx)
 	return &stream{
 		ctx:      c,
 		cancel:   cancel,
+		testCtx:  testCtx,
 		reqChan:  make(chan []byte),
 		respChan: make(chan []byte),
 	}
@@ -188,11 +197,9 @@ func newStream(ctx context.Context) *stream {
 // Send sends the provided message on the stream. It puts the request into the
 // reqChan for consumption.
 func (s *stream) Send(data []byte) error {
-	ctx, cancel := context.WithTimeout(s.ctx, 10*time.Millisecond)
-	defer cancel()
 	select {
-	case <-ctx.Done():
-		return ctx.Err()
+	case <-s.testCtx.Done():
+		return nil
 	case s.reqChan <- data:
 		return nil
 	}
@@ -201,13 +208,11 @@ func (s *stream) Send(data []byte) error {
 // Recv blocks until the next message is received on the stream. It blocks until
 // a response is available in the respChan or the context is canceled.
 func (s *stream) Recv() ([]byte, error) {
-	ctx, cancel := context.WithTimeout(s.ctx, 10*time.Millisecond)
-	defer cancel()
 	select {
 	case data := <-s.respChan:
 		return data, nil
-	case <-ctx.Done():
-		return nil, ctx.Err()
+	case <-s.ctx.Done():
+		return nil, s.ctx.Err()
 	}
 }
 
@@ -225,7 +230,7 @@ type ServerHandle struct {
 // Recv reads the next request from the reqChan. It blocks until a
 // request is available or the context expires. It returns an error if the
 // context expires or if the request cannot be unmarshaled.
-func (h *ServerHandle) Recv(ctx context.Context) (*v3discoverypb.DiscoveryRequest, error) {
+func (h *ServerHandle) Recv() (*v3discoverypb.DiscoveryRequest, error) {
 	select {
 	case data := <-h.fs.reqChan:
 		req := &v3discoverypb.DiscoveryRequest{}
@@ -233,22 +238,22 @@ func (h *ServerHandle) Recv(ctx context.Context) (*v3discoverypb.DiscoveryReques
 			return nil, fmt.Errorf("failed to unmarshal request: %v", err)
 		}
 		return req, nil
-	case <-ctx.Done():
-		return nil, ctx.Err()
+	case <-h.fs.testCtx.Done():
+		return nil, h.fs.testCtx.Err()
 	}
 }
 
 // Send simulates a server response. It marshals the provided
 // DiscoveryResponse, puts it in the respChan to notify that a response
 // is available for the client to Recv.
-func (h *ServerHandle) Send(ctx context.Context, resp *v3discoverypb.DiscoveryResponse) error {
+func (h *ServerHandle) Send(resp *v3discoverypb.DiscoveryResponse) error {
 	data, err := proto.Marshal(resp)
 	if err != nil {
 		return err
 	}
 	select {
-	case <-ctx.Done():
-		return ctx.Err()
+	case <-h.fs.testCtx.Done():
+		return h.fs.testCtx.Err()
 	case h.fs.respChan <- data:
 		return nil
 	}
