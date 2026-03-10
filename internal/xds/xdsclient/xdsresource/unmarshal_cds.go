@@ -315,7 +315,7 @@ func securityConfigFromCluster(cluster *v3clusterpb.Cluster) (*SecurityConfig, e
 		if len(sc.SNI) > maxSNILength {
 			return nil, fmt.Errorf("SNI value %q in UpstreamTlsContext in CDS response exceeds max length of %d", sc.SNI, maxSNILength)
 		}
-		sc.AutoHostSNI = upstreamCtx.GetAutoHostSni()
+		sc.UseAutoHostSNI = upstreamCtx.GetAutoHostSni()
 		sc.AutoSNISANValidation = upstreamCtx.GetAutoSniSanValidation()
 	}
 	return sc, nil

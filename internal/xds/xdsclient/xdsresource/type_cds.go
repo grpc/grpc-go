@@ -121,13 +121,14 @@ type SecurityConfig struct {
 	// when both RootCertName and RootInstanceName are empty.
 	UseSystemRootCerts bool
 	// SNI is the string to be used as the Server Name when creating TLS
-	// configurations for the handshake.
+	// configurations for the handshake. An empty string for SNI value will be
+	// treated as SNI not specified.
 	SNI string
-	// AutoHostSNI indicates whether to set the ServerName for the TLS handshake
+	// UseAutoHostSNI indicates whether to set the ServerName for the TLS handshake
 	// configuration to the hostname (if available). The host is the DNS
 	// hostname for DNS clusters, or Endpoint.hostname for EDS clusters. The
 	// port will not be included in the SNI value.
-	AutoHostSNI bool
+	UseAutoHostSNI bool
 	// AutoSNISANValidation indicates whether to replace any Subject Alternative
 	// Name (SAN) matchers with a validation for a DNS SAN matching the SNI
 	// value sent. This validation uses the SNI being set in the TLS
@@ -158,7 +159,7 @@ func (sc *SecurityConfig) Equal(other *SecurityConfig) bool {
 		return false
 	case sc.SNI != other.SNI:
 		return false
-	case sc.AutoHostSNI != other.AutoHostSNI:
+	case sc.UseAutoHostSNI != other.UseAutoHostSNI:
 		return false
 	case sc.AutoSNISANValidation != other.AutoSNISANValidation:
 		return false
