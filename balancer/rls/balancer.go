@@ -715,7 +715,16 @@ func (b *rlsBalancer) Report(r estats.AsyncMetricsRecorder) error {
 	currentSize := b.dataCache.currentSize
 	entriesLen := int64(len(b.dataCache.entries))
 	rlsServerTarget := b.dataCache.rlsServerTarget
+	grpcTarget := b.dataCache.grpcTarget
+	uuid := b.dataCache.uuid
+	shutdown := b.dataCache.shutdown.HasFired()
 	b.cacheMu.Unlock()
 
-	return b.dataCache.reportMetrics(r, currentSize, entriesLen, rlsServerTarget)
+	if shutdown {
+		return nil
+	}
+
+	cacheSizeMetric.Record(r, currentSize, grpcTarget, rlsServerTarget, uuid)
+	cacheEntriesMetric.Record(r, entriesLen, grpcTarget, rlsServerTarget, uuid)
+	return nil
 }

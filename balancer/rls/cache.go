@@ -23,7 +23,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	estats "google.golang.org/grpc/experimental/stats"
 	"google.golang.org/grpc/internal/backoff"
 	internalgrpclog "google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcsync"
@@ -369,15 +368,6 @@ func (dc *dataCache) deleteAndCleanup(key cacheKey, entry *cacheEntry) {
 	dc.currentSize -= entry.size
 	dc.keys.removeEntry(key)
 
-}
-
-func (dc *dataCache) reportMetrics(r estats.AsyncMetricsRecorder, currentSize int64, entriesLen int64, rlsServerTarget string) error {
-	if dc.shutdown.HasFired() {
-		return nil
-	}
-	cacheSizeMetric.Record(r, currentSize, dc.grpcTarget, rlsServerTarget, dc.uuid)
-	cacheEntriesMetric.Record(r, entriesLen, dc.grpcTarget, rlsServerTarget, dc.uuid)
-	return nil
 }
 
 func (dc *dataCache) stop() {
