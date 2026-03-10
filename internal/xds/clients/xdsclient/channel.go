@@ -271,7 +271,7 @@ func decodeResponse(opts *DecodeOptions, rType *ResourceType, resp response) (ma
 		if result != nil {
 			name = xdsresource.ParseName(result.Name).String()
 		}
-		if err == nil {
+		if err == nil && result != nil {
 			ret[name] = dataAndErrTuple{Resource: result.Resource}
 			continue
 		}
