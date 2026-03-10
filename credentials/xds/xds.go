@@ -113,8 +113,10 @@ func (c *credsImpl) ClientHandshake(ctx context.Context, authority string, rawCo
 		return c.fallback.ClientHandshake(ctx, authority, rawConn)
 	}
 
-	hiPtr := xdsinternal.GetHandshakeInfo(chi.Attributes)
-	hi := (*xdsinternal.HandshakeInfo)(hiPtr.Load())
+	hi := xdsinternal.HandshakeInfoFromAttributes(chi.Attributes).Load()
+	if hi == nil {
+		return c.fallback.ClientHandshake(ctx, authority, rawConn)
+	}
 	if hi.UseFallbackCreds() {
 		return c.fallback.ClientHandshake(ctx, authority, rawConn)
 	}

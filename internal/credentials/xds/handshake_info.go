@@ -37,7 +37,7 @@ import (
 )
 
 func init() {
-	internal.GetXDSHandshakeInfoForTesting = GetHandshakeInfo
+	internal.GetXDSHandshakeInfoForTesting = HandshakeInfoFromAttributes
 }
 
 // handshakeAttrKey is the type used as the key to store HandshakeInfo in
@@ -73,8 +73,8 @@ func SetHandshakeInfo(addr resolver.Address, hiPtr *atomic.Pointer[HandshakeInfo
 	return addr
 }
 
-// GetHandshakeInfo returns a pointer to the *HandshakeInfo stored in attr.
-func GetHandshakeInfo(attr *attributes.Attributes) *atomic.Pointer[HandshakeInfo] {
+// HandshakeInfoFromAttributes returns a pointer to the *HandshakeInfo stored in attr.
+func HandshakeInfoFromAttributes(attr *attributes.Attributes) *atomic.Pointer[HandshakeInfo] {
 	v := attr.Value(handshakeAttrKey{})
 	hi, _ := v.(*atomic.Pointer[HandshakeInfo])
 	return hi

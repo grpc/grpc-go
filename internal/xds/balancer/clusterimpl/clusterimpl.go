@@ -314,7 +314,6 @@ func (b *clusterImplBalancer) handleSecurityConfig(config *xdsresource.SecurityC
 	if !b.xdsCredsInUse {
 		return nil
 	}
-	var xdsHI *xds.HandshakeInfo
 
 	// Security config being nil is a valid case where the management server has
 	// not sent any security configuration. The xdsCredentials implementation
@@ -323,8 +322,7 @@ func (b *clusterImplBalancer) handleSecurityConfig(config *xdsresource.SecurityC
 		// We need to explicitly set the fields to nil here since this might be
 		// a case of switching from a good security configuration to an empty
 		// one where fallback credentials are to be used.
-		xdsHI = xds.NewHandshakeInfo(nil, nil, nil, false)
-		b.xdsHIPtr.Store(xdsHI)
+		b.xdsHIPtr.Store(xds.NewHandshakeInfo(nil, nil, nil, false))
 		return nil
 
 	}
@@ -361,8 +359,7 @@ func (b *clusterImplBalancer) handleSecurityConfig(config *xdsresource.SecurityC
 	}
 	b.cachedRoot = rootProvider
 	b.cachedIdentity = identityProvider
-	xdsHI = xds.NewHandshakeInfo(rootProvider, identityProvider, config.SubjectAltNameMatchers, false)
-	b.xdsHIPtr.Store(xdsHI)
+	b.xdsHIPtr.Store(xds.NewHandshakeInfo(rootProvider, identityProvider, config.SubjectAltNameMatchers, false))
 	return nil
 }
 
