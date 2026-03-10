@@ -3434,13 +3434,16 @@ func (s) TestServerSendsResetStreamOnEarlyTrailer(t *testing.T) {
 }
 
 // setupRSTStreamOnEOSTest sets up a test scenario where a client and a manual
-// server are connected. The server invokes the provided serverFrames function
-// to send frames to the client (using the framer and the stream ID provided by
-// the test).
+// server are connected.
+//
+// The server invokes the provided sendServerFrames function to send frames to
+// the client (using the framer and the stream ID provided by the test). Callers
+// should not read from the framer passed to this function, as the server will
+// be reading from it to look for the RST_STREAM frame from the client.
 //
 // Returns the client stream created for the test, a channel that is closed when
 // the server receives a RST_STREAM frame.
-func setupRSTStreamOnEOSTest(t *testing.T, serverFrames func(*testing.T, *http2.Framer, uint32)) (*ClientStream, <-chan struct{}) {
+func setupRSTStreamOnEOSTest(t *testing.T, sendServerFrames func(*testing.T, *http2.Framer, uint32)) (*ClientStream, <-chan struct{}) {
 	// Set up a listener for a manual server.
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
@@ -3539,7 +3542,7 @@ func setupRSTStreamOnEOSTest(t *testing.T, serverFrames func(*testing.T, *http2.
 			}
 		}()
 
-		serverFrames(t, framer, streamID)
+		sendServerFrames(t, framer, streamID)
 	}()
 
 	// Set up a client.
