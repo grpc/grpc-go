@@ -1,0 +1,14 @@
+[req]
+distinguished_name = req_distinguished_name
+prompt = no
+x509_extensions = extensions
+
+[req_distinguished_name]
+C = US
+ST = CA
+L = SVL
+O = Internet Widgits Pty Ltd
+
+[extensions]
+basicConstraints = CA:true
+subjectKeyIdentifier = hash

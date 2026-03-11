@@ -369,3 +369,17 @@ func (s) TestProtectedBuffer(t *testing.T) {
 		testProtectedBuffer(t, rp)
 	}
 }
+
+// BenchmarkMemoryUsage measures the allocations per ALTS connection.
+// Run this with: go test -bench=BenchmarkMemoryUsage -benchmem
+func BenchmarkMemoryUsage(b *testing.B) {
+	b.ReportAllocs()
+
+	for i := 0; i < b.N; i++ {
+		c, _ := newConnPair(rekeyRecordProtocol, nil, nil)
+
+		if _, err := c.Write([]byte("d")); err != nil {
+			b.Fatalf("Write failed: %v", err)
+		}
+	}
+}
