@@ -112,6 +112,7 @@ type adsStreamImpl struct {
 	mu                sync.Mutex
 	resourceTypeState map[ResourceType]*resourceTypeState // Map of resource types to their state.
 	firstRequest      bool                                // False after the first request is sent out.
+	streamEstablished bool                                // True after a successful NewStream call.
 	pendingRequests   []request                           // Subscriptions and unsubscriptions are pushed here.
 }
 
@@ -250,6 +251,7 @@ func (s *adsStreamImpl) runner(ctx context.Context) {
 
 		s.mu.Lock()
 		s.firstRequest = true
+		s.streamEstablished = true
 		s.mu.Unlock()
 
 		// Ensure that the most recently created stream is pushed on the
@@ -437,6 +439,9 @@ func (s *adsStreamImpl) recv(stream clients.Stream) bool {
 
 		resources, url, version, nonce, err := s.recvMessage(stream)
 		if err != nil {
+			s.mu.Lock()
+			s.streamEstablished = false
+			s.mu.Unlock()
 			s.onError(err, msgReceived)
 			s.logger.Warningf("ADS stream closed: %v", err)
 			return msgReceived
@@ -714,4 +719,10 @@ func (fc *adsFlowControl) wait() bool {
 	}
 
 	return fc.stopped
+}
+
+func (s *adsStreamImpl) isStreamEstablished() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.streamEstablished
 }

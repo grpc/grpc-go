@@ -95,6 +95,8 @@ type XDSClient struct {
 	// Once all references to a channel are dropped, the channel is closed.
 	channelsMu        sync.Mutex
 	xdsActiveChannels map[ServerConfig]*channelState // Map from server config to in-use xdsChannels.
+
+	metricsCleanup func()
 }
 
 // New returns a new xDS Client configured with the provided config.
@@ -113,6 +115,11 @@ func New(config Config) (*XDSClient, error) {
 	client, err := newClient(&config, name)
 	if err != nil {
 		return nil, err
+	}
+	// Register this client instance as an Async Reporter.
+	if client.metricsReporter != nil {
+		reporter := &xdsClientMetricReporter{c: client}
+		client.metricsCleanup = client.metricsReporter.RegisterAsyncReporter(reporter)
 	}
 	return client, nil
 }
@@ -170,6 +177,9 @@ func newClient(config *Config, target string) (*XDSClient, error) {
 func (c *XDSClient) Close() {
 	if c.done.HasFired() {
 		return
+	}
+	if c.metricsCleanup != nil {
+		c.metricsCleanup()
 	}
 	c.done.Fire()
 
@@ -440,4 +450,59 @@ func resourceWatchStateForTesting(c *XDSClient, rType ResourceType, resourceName
 	}
 	return a.resourceWatchStateForTesting(rType, resourceName)
 
+}
+
+type xdsClientMetricReporter struct {
+	c *XDSClient
+}
+
+// Report implements clients.AsyncReporter.
+// This is the entry point invoked by the metrics system during a scrape.
+func (r *xdsClientMetricReporter) Report(rec clients.AsyncMetricsRecorder) error {
+	r.c.reportConnectedState(rec)
+	r.c.reportResourceStats(rec)
+	return nil
+}
+
+// reportConnectedState handles the "grpc.xds_client.connected" metric.
+func (c *XDSClient) reportConnectedState(rec clients.AsyncMetricsRecorder) {
+	c.channelsMu.Lock()
+	defer c.channelsMu.Unlock()
+
+	for _, cs := range c.xdsActiveChannels {
+		val := int64(0)
+		if cs.channel.ads.isStreamEstablished() {
+			val = 1
+		}
+
+		rec.ReportMetric(&metrics.XDSClientConnected{
+			ServerURI: cs.serverConfig.ServerIdentifier.ServerURI,
+			Value:     val,
+		})
+	}
+}
+
+// reportResourceStats handles the "grpc.xds_client.resources" metric.
+func (c *XDSClient) reportResourceStats(rec clients.AsyncMetricsRecorder) {
+	reportForAuthority := func(auth *authority) {
+		stats := auth.resourceStats()
+		for typeURL, stateCounts := range stats {
+			for cacheState, count := range stateCounts {
+				if count > 0 {
+					rec.ReportMetric(&metrics.XDSClientResourceStats{
+						Authority:    auth.name,
+						ResourceType: typeURL,
+						CacheState:   cacheState,
+						Count:        int64(count),
+					})
+				}
+			}
+		}
+	}
+	if c.topLevelAuthority != nil {
+		reportForAuthority(c.topLevelAuthority)
+	}
+	for _, auth := range c.authorities {
+		reportForAuthority(auth)
+	}
 }
