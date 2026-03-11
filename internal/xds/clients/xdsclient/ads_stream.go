@@ -721,9 +721,8 @@ func (fc *adsFlowControl) wait() bool {
 	return fc.stopped
 }
 
-
 func (s *adsStreamImpl) isStreamEstablished() bool {
-s.mu.Lock()
-defer s.mu.Unlock()
-return s.streamEstablished
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.streamEstablished
 }

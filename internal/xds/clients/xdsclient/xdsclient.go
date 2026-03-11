@@ -484,13 +484,13 @@ func (c *XDSClient) reportConnectedState(rec clients.AsyncMetricsRecorder) {
 
 // reportResourceStats handles the "grpc.xds_client.resources" metric.
 func (c *XDSClient) reportResourceStats(rec clients.AsyncMetricsRecorder) {
-	reportForAuthority := func(a *authority) {
-		stats := a.resourceStats()
+	reportForAuthority := func(auth *authority) {
+		stats := auth.resourceStats()
 		for typeURL, stateCounts := range stats {
 			for cacheState, count := range stateCounts {
 				if count > 0 {
 					rec.ReportMetric(&metrics.XDSClientResourceStats{
-						Authority:    a.name,
+						Authority:    auth.name,
 						ResourceType: typeURL,
 						CacheState:   cacheState,
 						Count:        int64(count),
@@ -499,12 +499,10 @@ func (c *XDSClient) reportResourceStats(rec clients.AsyncMetricsRecorder) {
 			}
 		}
 	}
-
 	if c.topLevelAuthority != nil {
 		reportForAuthority(c.topLevelAuthority)
 	}
-	for _, a := range c.authorities {
-		reportForAuthority(a)
+	for _, auth := range c.authorities {
+		reportForAuthority(auth)
 	}
 }
-
