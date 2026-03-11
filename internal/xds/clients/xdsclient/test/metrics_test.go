@@ -348,8 +348,13 @@ func (s) TestConnectedMetric(t *testing.T) {
 	}
 	defer client.Close()
 
-	// Initial State: Not connected (until watch starts or channel created?).
-	// The client creates channels on demand. WatchResource triggers channel creation.
+	// Verify initial state: No metrics reported because no stream is established.
+	tmr.triggerAsyncMetrics()
+	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
+	defer sCancel()
+	if err := tmr.waitForSpecificMetric(sCtx, &metrics.XDSClientConnected{ServerURI: mgmtServer.Address}); err == nil {
+		t.Fatal("XDSClientConnected metric reported before any watch was started")
+	}
 
 	// Watch a resource to trigger connection.
 	client.WatchResource(listenerType.TypeURL, "foo", noopListenerWatcher{})
@@ -385,6 +390,33 @@ func (s) TestConnectedMetric(t *testing.T) {
 	// We can wait for ServerFailure metric (synchronous).
 	if err := tmr.waitForSpecificMetric(ctx, &metrics.ServerFailure{ServerURI: mgmtServer.Address}); err != nil {
 		t.Fatal(err.Error())
+	}
+
+	// Trigger async metrics again after disconnect to verify Value is 0.
+	tmr.triggerAsyncMetrics()
+	if err := tmr.waitForSpecificMetric(ctx, &metrics.XDSClientConnected{ServerURI: mgmtServer.Address, Value: 0}); err != nil {
+		t.Fatal(err.Error())
+	}
+
+	// Verify unregistration after client close.
+	client.Close()
+
+	tmr.mu.Lock()
+	numReporters := len(tmr.asyncReporters)
+	tmr.mu.Unlock()
+	if numReporters != 0 {
+		t.Fatalf("Async reporter not unregistered after client close, count: %d", numReporters)
+	}
+
+	// Drain the channel of any leftover metrics from previous pulses.
+	tmr.metricsCh.Drain()
+
+	tmr.triggerAsyncMetrics()
+	// No metrics should be reported now because there are no reporters.
+	sCtx2, sCancel2 := context.WithTimeout(ctx, defaultTestShortTimeout)
+	defer sCancel2()
+	if _, err := tmr.metricsCh.Receive(sCtx2); err == nil {
+		t.Fatal("Metrics reported after all reporters were unregistered")
 	}
 }
 

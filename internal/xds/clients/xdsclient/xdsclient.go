@@ -116,10 +116,10 @@ func New(config Config) (*XDSClient, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	// Register this client instance as an Async Reporter.
 	if client.metricsReporter != nil {
-		client.metricsCleanup = client.metricsReporter.RegisterAsyncReporter(client)
+		reporter := &xdsClientMetricReporter{c: client}
+		client.metricsCleanup = client.metricsReporter.RegisterAsyncReporter(reporter)
 	}
 	return client, nil
 }
@@ -452,11 +452,15 @@ func resourceWatchStateForTesting(c *XDSClient, rType ResourceType, resourceName
 
 }
 
+type xdsClientMetricReporter struct {
+	c *XDSClient
+}
+
 // Report implements clients.AsyncReporter.
 // This is the entry point invoked by the metrics system during a scrape.
-func (c *XDSClient) Report(rec clients.AsyncMetricsRecorder) error {
-	c.reportConnectedState(rec)
-	c.reportResourceStats(rec)
+func (r *xdsClientMetricReporter) Report(rec clients.AsyncMetricsRecorder) error {
+	r.c.reportConnectedState(rec)
+	r.c.reportResourceStats(rec)
 	return nil
 }
 
@@ -467,7 +471,7 @@ func (c *XDSClient) reportConnectedState(rec clients.AsyncMetricsRecorder) {
 
 	for _, cs := range c.xdsActiveChannels {
 		val := int64(0)
-		if cs.channel.ads != nil && cs.channel.ads.fc != nil && !cs.channel.ads.fc.isStopped() {
+		if cs.channel.ads.isStreamEstablished() {
 			val = 1
 		}
 
@@ -480,15 +484,7 @@ func (c *XDSClient) reportConnectedState(rec clients.AsyncMetricsRecorder) {
 
 // reportResourceStats handles the "grpc.xds_client.resources" metric.
 func (c *XDSClient) reportResourceStats(rec clients.AsyncMetricsRecorder) {
-	allAuthorities := make([]*authority, 0, len(c.authorities)+1)
-	if c.topLevelAuthority != nil {
-		allAuthorities = append(allAuthorities, c.topLevelAuthority)
-	}
-	for _, a := range c.authorities {
-		allAuthorities = append(allAuthorities, a)
-	}
-
-	for _, a := range allAuthorities {
+	reportForAuthority := func(a *authority) {
 		stats := a.resourceStats()
 		for typeURL, stateCounts := range stats {
 			for cacheState, count := range stateCounts {
@@ -503,61 +499,12 @@ func (c *XDSClient) reportResourceStats(rec clients.AsyncMetricsRecorder) {
 			}
 		}
 	}
-}
 
-func (a *authority) resourceStats() map[string]map[string]int {
-	// Create a channel to receive the result
-	ret := make(chan map[string]map[string]int, 1)
-
-	op := func(context.Context) {
-		// Map: ResourceType (String) -> CacheState (String) -> Count (Int)
-		summary := make(map[string]map[string]int)
-		for rType, resourceMap := range a.resources {
-			rName := rType.TypeName
-			if _, ok := summary[rName]; !ok {
-				summary[rName] = make(map[string]int)
-			}
-			for _, state := range resourceMap {
-				s := getCacheState(state)
-				summary[rName][s]++
-			}
-		}
-
-		ret <- summary
+	if c.topLevelAuthority != nil {
+		reportForAuthority(c.topLevelAuthority)
 	}
-
-	// Schedule the operation.
-	// If the serializer is closed/context canceled, the second func (onFailure) runs.
-	a.xdsClientSerializer.ScheduleOr(op, func() {
-		ret <- nil
-	})
-
-	return <-ret
-}
-
-// getCacheState determines the metrics label string for a given resource state.
-func getCacheState(r *resourceState) string {
-	switch r.md.Status {
-	case xdsresource.ServiceStatusRequested:
-		return "requested"
-
-	case xdsresource.ServiceStatusNotExist:
-		return "does_not_exist"
-
-	case xdsresource.ServiceStatusACKed:
-		return "acked"
-
-	case xdsresource.ServiceStatusNACKed:
-		// If the status is NACKed, it means the *latest* update failed.
-		// However, if 'r.cache' is not nil, it means we are still holding onto
-		// a previously ACKed version of the resource.
-		if r.cache != nil {
-			return "nacked_but_cached"
-		}
-		return "nacked"
-
-	default:
-		// Fallback for initialization states
-		return "requested"
+	for _, a := range c.authorities {
+		reportForAuthority(a)
 	}
 }
+

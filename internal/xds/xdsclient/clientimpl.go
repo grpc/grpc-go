@@ -77,8 +77,8 @@ var (
 	})
 	xdsClientConnectedMetric = estats.RegisterInt64AsyncGauge(estats.MetricDescriptor{
 		Name:        "grpc.xds_client.connected",
-		Description: "Experimental. 1 if the xDS stream is connected, 0 otherwise.",
-		Unit:        "1",
+		Description: "Experimental. A metric that is 1 if the xDS Client is connected to an xDS server, 0 otherwise.",
+		Unit:        "{connected}",
 		Type:        estats.MetricTypeIntAsyncGauge,
 		Labels:      []string{"grpc.target", "grpc.xds.server"},
 	})
@@ -281,7 +281,7 @@ func populateGRPCTransportConfigsFromServerConfig(sc *bootstrap.ServerConfig, gr
 // RegisterAsyncReporter adapts the generic clients.AsyncReporter to the
 // estats.AsyncMetricReporter interface and registers it.
 func (mr *metricsReporter) RegisterAsyncReporter(reporter clients.AsyncReporter) func() {
-	if mr.recorder == nil {
+	if mr.recorder == nil || reporter == nil {
 		return func() {}
 	}
 
@@ -316,20 +316,11 @@ func (a *asyncMetricsRecorderAdapter) ReportMetric(metric any) {
 	switch m := metric.(type) {
 	case *metrics.XDSClientConnected:
 		// Record: grpc.xds_client.connected
-		// Labels: grpc.target, grpc.xds.authority
-		a.delegate.RecordInt64AsyncGauge(xdsClientConnectedMetric, m.Value,
-			a.target,
-			m.ServerURI,
-		)
-
+		// Labels: grpc.target, grpc.xds.server
+		a.delegate.RecordInt64AsyncGauge(xdsClientConnectedMetric, m.Value, a.target, m.ServerURI)
 	case *metrics.XDSClientResourceStats:
 		// Record: grpc.xds_client.resources
 		// Labels: grpc.target, grpc.xds.authority, grpc.xds.cache_state, grpc.xds.resource_type
-		a.delegate.RecordInt64AsyncGauge(xdsClientResourcesMetric, m.Count,
-			a.target,
-			m.Authority,
-			m.CacheState,
-			m.ResourceType,
-		)
+		a.delegate.RecordInt64AsyncGauge(xdsClientResourcesMetric, m.Count, a.target, m.Authority, m.CacheState, m.ResourceType)
 	}
 }
