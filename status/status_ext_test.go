@@ -262,71 +262,55 @@ func (s) TestStatus_ErrorDetailsMessageV1AndV2(t *testing.T) {
 }
 
 func (s) TestFromError_Wrapped(t *testing.T) {
-	details := []protoadapt.MessageV1{
-		&testpb.Empty{},
-	}
-	s := status.New(codes.Canceled, "inner canceled")
-	sWithDetails, err := s.WithDetails(details...)
+	base := status.New(codes.Canceled, "inner canceled")
+	sWithDetails, err := base.WithDetails(&testpb.Empty{})
 	if err != nil {
 		t.Fatalf("WithDetails failed: %v", err)
 	}
 	innerErr := sWithDetails.Err()
+	mustStatus := func(message string) *status.Status {
+		st, err := status.New(codes.Canceled, message).WithDetails(&testpb.Empty{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return st
+	}
 
 	testCases := []struct {
-		name        string
-		err         error
-		wantCode    codes.Code
-		wantMessage string
-		wantDetails int
+		name       string
+		err        error
+		wantStatus *status.Status
 	}{
 		{
-			name:        "direct_error",
-			err:         innerErr,
-			wantCode:    codes.Canceled,
-			wantMessage: "inner canceled",
-			wantDetails: 1,
+			name:       "direct_error",
+			err:        innerErr,
+			wantStatus: mustStatus("inner canceled"),
 		},
 		{
-			name:        "wrapped_error",
-			err:         fmt.Errorf("wrapped: %w", innerErr),
-			wantCode:    codes.Canceled,
-			wantMessage: "wrapped: rpc error: code = Canceled desc = inner canceled",
-			wantDetails: 1,
+			name:       "wrapped_error",
+			err:        fmt.Errorf("wrapped: %w", innerErr),
+			wantStatus: mustStatus("wrapped: rpc error: code = Canceled desc = inner canceled"),
 		},
 		{
-			name:        "double_wrapped_error",
-			err:         fmt.Errorf("outer: %w", fmt.Errorf("inner: %w", innerErr)),
-			wantCode:    codes.Canceled,
-			wantMessage: "outer: inner: rpc error: code = Canceled desc = inner canceled",
-			wantDetails: 1,
+			name:       "double_wrapped_error",
+			err:        fmt.Errorf("outer: %w", fmt.Errorf("inner: %w", innerErr)),
+			wantStatus: mustStatus("outer: inner: rpc error: code = Canceled desc = inner canceled"),
 		},
 		{
-			name:        "double_wrapped_single_errorf",
-			err:         fmt.Errorf("error: %w: %w", errors.New("test error"), innerErr),
-			wantCode:    codes.Canceled,
-			wantMessage: "error: test error: rpc error: code = Canceled desc = inner canceled",
-			wantDetails: 1,
+			name:       "double_wrapped_single_errorf",
+			err:        fmt.Errorf("error: %w: %w", errors.New("test error"), innerErr),
+			wantStatus: mustStatus("error: test error: rpc error: code = Canceled desc = inner canceled"),
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := status.Code(tc.err); got != tc.wantCode {
-				t.Errorf("status.Code(%v) = %v; want %v", tc.err, got, tc.wantCode)
-			}
-
-			st, ok := status.FromError(tc.err)
+			got, ok := status.FromError(tc.err)
 			if !ok {
 				t.Fatalf("status.FromError(%v) returned false; want true", tc.err)
 			}
-			if got := st.Code(); got != tc.wantCode {
-				t.Errorf("st.Code() = %v; want %v", got, tc.wantCode)
-			}
-			if got := st.Message(); got != tc.wantMessage {
-				t.Errorf("st.Message() = %q; want %q", got, tc.wantMessage)
-			}
-			if got := len(st.Details()); got != tc.wantDetails {
-				t.Errorf("len(st.Details()) = %v; want %v", got, tc.wantDetails)
+			if diff := cmp.Diff(tc.wantStatus, got, protocmp.Transform(), cmp.AllowUnexported(status.Status{})); diff != "" {
+				t.Fatalf("status.FromError(%v) got unexpected output, diff (-want +got):\n%s", tc.err, diff)
 			}
 		})
 	}

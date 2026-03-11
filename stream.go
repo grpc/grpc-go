@@ -148,8 +148,8 @@ type ClientStream interface {
 	RecvMsg(m any) error
 }
 
-// ErrRetriesExhausted is returned when an operation exceeds its configured
-// maximum number of retry attempts.
+// ErrRetriesExhausted is returned when an RPC exceeds its configured maximum
+// number of retry attempts.
 //
 // # Experimental
 //

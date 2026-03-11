@@ -821,106 +821,80 @@ func (s) TestRetryTransparentWhenCommitted(t *testing.T) {
 	stream1.Send(&testpb.StreamingOutputCallRequest{})
 }
 
-func (s) TestRetryDisabled(t *testing.T) {
-	ss := &stubserver.StubServer{
-		FullDuplexCallF: func(testgrpc.TestService_FullDuplexCallServer) error {
-			return status.New(codes.Unavailable, "retryable error").Err()
+func (s) TestNoRetry(t *testing.T) {
+	scJSON := `{
+	"methodConfig": [{
+	  "name": [{"service": "grpc.testing.TestService"}],
+	  "retryPolicy": {
+		"MaxAttempts": 4,
+		"InitialBackoff": ".01s",
+		"MaxBackoff": ".01s",
+		"BackoffMultiplier": 1.0,
+		"RetryableStatusCodes": [ "UNAVAILABLE" ]
+	  }
+	}]}`
+	tests := []struct {
+		name     string
+		dialOpts []grpc.DialOption
+	}{
+		{
+			name: "disabled",
+			dialOpts: []grpc.DialOption{
+				grpc.WithDefaultServiceConfig(scJSON),
+				grpc.WithDisableRetry(),
+			},
 		},
-		EmptyCallF: func(context.Context, *testpb.Empty) (r *testpb.Empty, err error) {
-			return nil, status.New(codes.Unavailable, "retryable error").Err()
-		},
-	}
-	if err := ss.Start([]grpc.ServerOption{},
-		grpc.WithDefaultServiceConfig(`{
-    "methodConfig": [{
-      "name": [{"service": "grpc.testing.TestService"}],
-      "retryPolicy": {
-        "MaxAttempts": 4,
-        "InitialBackoff": ".01s",
-        "MaxBackoff": ".01s",
-        "BackoffMultiplier": 1.0,
-        "RetryableStatusCodes": [ "UNAVAILABLE" ]
-      }
-    }]}`),
-		grpc.WithDisableRetry()); err != nil {
-		t.Fatalf("Error starting endpoint server: %v", err)
-	}
-	defer ss.Stop()
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-
-	// Test streaming RPC
-	stream, err := ss.Client.FullDuplexCall(ctx)
-	if err != nil {
-		t.Fatalf("Error while creating stream: %v", err)
-	}
-	_, err = stream.Recv()
-	if err == nil {
-		t.Fatalf("client: Recv() = <nil>, <nil>; want <nil>, error")
-	}
-	if status.Code(err) != codes.Unavailable {
-		t.Fatalf("client: Recv() = _, %v; want _, Unavailable", err)
-	}
-	if errors.Is(err, grpc.ErrRetriesExhausted) {
-		t.Fatalf("client: Recv() error matches ErrRetriesExhausted, want not match")
-	}
-
-	// Test unary RPC
-	_, err = ss.Client.EmptyCall(ctx, &testpb.Empty{})
-	if err == nil {
-		t.Fatalf("client: EmptyCall() = <nil>, <nil>; want <nil>, error")
-	}
-	if status.Code(err) != codes.Unavailable {
-		t.Fatalf("client: EmptyCall() = _, %v; want _, Unavailable", err)
-	}
-	if errors.Is(err, grpc.ErrRetriesExhausted) {
-		t.Fatalf("client: EmptyCall() error matches ErrRetriesExhausted, want not match")
-	}
-}
-
-func (s) TestRetryNotConfigured(t *testing.T) {
-	ss := &stubserver.StubServer{
-		FullDuplexCallF: func(testgrpc.TestService_FullDuplexCallServer) error {
-			return status.New(codes.Unavailable, "retryable error").Err()
-		},
-		EmptyCallF: func(context.Context, *testpb.Empty) (r *testpb.Empty, err error) {
-			return nil, status.New(codes.Unavailable, "retryable error").Err()
+		{
+			name:     "not_configured",
+			dialOpts: []grpc.DialOption{},
 		},
 	}
-	if err := ss.Start([]grpc.ServerOption{}); err != nil {
-		t.Fatalf("Error starting endpoint server: %v", err)
-	}
-	defer ss.Stop()
 
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ss := &stubserver.StubServer{
+				FullDuplexCallF: func(testgrpc.TestService_FullDuplexCallServer) error {
+					return status.New(codes.Unavailable, "retryable error").Err()
+				},
+				EmptyCallF: func(context.Context, *testpb.Empty) (r *testpb.Empty, err error) {
+					return nil, status.New(codes.Unavailable, "retryable error").Err()
+				},
+			}
+			if err := ss.Start([]grpc.ServerOption{}, tc.dialOpts...); err != nil {
+				t.Fatalf("Error starting endpoint server: %v", err)
+			}
+			defer ss.Stop()
 
-	// Test streaming RPC
-	stream, err := ss.Client.FullDuplexCall(ctx)
-	if err != nil {
-		t.Fatalf("Error while creating stream: %v", err)
-	}
-	_, err = stream.Recv()
-	if err == nil {
-		t.Fatalf("client: Recv() = <nil>, <nil>; want <nil>, error")
-	}
-	if status.Code(err) != codes.Unavailable {
-		t.Fatalf("client: Recv() = _, %v; want _, Unavailable", err)
-	}
-	if errors.Is(err, grpc.ErrRetriesExhausted) {
-		t.Fatalf("client: Recv() error matches ErrRetriesExhausted, want not match")
-	}
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
 
-	// Test unary RPC
-	_, err = ss.Client.EmptyCall(ctx, &testpb.Empty{})
-	if err == nil {
-		t.Fatalf("client: EmptyCall() = <nil>, <nil>; want <nil>, error")
-	}
-	if status.Code(err) != codes.Unavailable {
-		t.Fatalf("client: EmptyCall() = _, %v; want _, Unavailable", err)
-	}
-	if errors.Is(err, grpc.ErrRetriesExhausted) {
-		t.Fatalf("client: EmptyCall() error matches ErrRetriesExhausted, want not match")
+			// Test streaming RPC
+			stream, err := ss.Client.FullDuplexCall(ctx)
+			if err != nil {
+				t.Fatalf("Error while creating stream: %v", err)
+			}
+			_, err = stream.Recv()
+			if err == nil {
+				t.Fatal("stream.Recv() succeeded when expected to fail")
+			}
+			if status.Code(err) != codes.Unavailable {
+				t.Fatalf("client: Recv() = _, %v; want _, Unavailable", err)
+			}
+			if errors.Is(err, grpc.ErrRetriesExhausted) {
+				t.Fatalf("client: Recv() error matches ErrRetriesExhausted, want not match")
+			}
+
+			// Test unary RPC
+			_, err = ss.Client.EmptyCall(ctx, &testpb.Empty{})
+			if err == nil {
+				t.Fatal("EmptyCall() succeeded when expected to fail")
+			}
+			if status.Code(err) != codes.Unavailable {
+				t.Fatalf("client: EmptyCall() = _, %v; want _, Unavailable", err)
+			}
+			if errors.Is(err, grpc.ErrRetriesExhausted) {
+				t.Fatalf("client: EmptyCall() error matches ErrRetriesExhausted, want not match")
+			}
+		})
 	}
 }
