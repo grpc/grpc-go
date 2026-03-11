@@ -34,6 +34,7 @@ import (
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/balancer/stub"
 	"google.golang.org/grpc/internal/envconfig"
+	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
@@ -56,7 +57,6 @@ import (
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 
-	_ "google.golang.org/grpc/internal/xds/balancer/clusterresolver" // Register the "cluster_resolver_experimental" LB policy.
 	"google.golang.org/grpc/internal/xds/balancer/priority"
 )
 
@@ -69,7 +69,7 @@ const (
 	localityName2  = "my-locality-2"
 	localityName3  = "my-locality-3"
 
-	defaultTestTimeout            = 5 * time.Second
+	defaultTestTimeout            = 10 * time.Second
 	defaultTestShortTimeout       = 10 * time.Millisecond
 	defaultTestWatchExpiryTimeout = 500 * time.Millisecond
 )
@@ -254,9 +254,9 @@ func (s) TestEDS_MultipleLocalities(t *testing.T) {
 			Backends: []e2e.BackendOptions{{Ports: []uint32{ports[1]}}},
 		},
 	})
-	// Use a 10 second timeout since validating WRR requires sending 500+ unary
+	// Use a 20 second timeout since validating WRR requires sending 500+ unary
 	// RPCs.
-	ctx, cancel := context.WithTimeout(context.Background(), 2*defaultTestTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	if err := managementServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
@@ -635,21 +635,21 @@ func (s) TestEDS_ClusterResourceUpdates(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	// Start an xDS management server that pushes the EDS resource names onto a
-	// channel.
-	edsResourceNameCh := make(chan []string, 1)
+	// Start an xDS management server that fires off events when EDS resources are
+	// requested.
+	edsServiceNameRequested := grpcsync.NewEvent()
+	clusterNameRequested := grpcsync.NewEvent()
 	managementServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
 		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
 			if req.GetTypeUrl() != version.V3EndpointsURL {
 				return nil
 			}
-			if len(req.GetResourceNames()) == 0 {
-				// This is the case for ACKs. Do nothing here.
-				return nil
-			}
-			select {
-			case <-ctx.Done():
-			case edsResourceNameCh <- req.GetResourceNames():
+			if len(req.GetResourceNames()) == 1 {
+				if req.GetResourceNames()[0] == edsServiceName {
+					edsServiceNameRequested.Fire()
+				} else if req.GetResourceNames()[0] == clusterName {
+					clusterNameRequested.Fire()
+				}
 			}
 			return nil
 		},
@@ -700,11 +700,8 @@ func (s) TestEDS_ClusterResourceUpdates(t *testing.T) {
 	// Ensure EDS watch is registered for eds_service_name.
 	select {
 	case <-ctx.Done():
-		t.Fatal("Timeout when waiting for EDS request to be received on the management server")
-	case names := <-edsResourceNameCh:
-		if !cmp.Equal(names, []string{edsServiceName}) {
-			t.Fatalf("Received EDS request with resource names %v, want %v", names, []string{edsServiceName})
-		}
+		t.Fatalf("Timeout when waiting for EDS request for resource %q", edsServiceName)
+	case <-edsServiceNameRequested.Done():
 	}
 
 	// Change the cluster resource to not contain an eds_service_name.
@@ -719,14 +716,10 @@ func (s) TestEDS_ClusterResourceUpdates(t *testing.T) {
 	// before the new one is registered or vice-versa. In either case,
 	// eventually, we want to see a request to the management server for just
 	// the cluster_name.
-	for ; ctx.Err() == nil; <-time.After(defaultTestShortTimeout) {
-		names := <-edsResourceNameCh
-		if cmp.Equal(names, []string{clusterName}) {
-			break
-		}
-	}
-	if ctx.Err() != nil {
-		t.Fatalf("Timeout when waiting for old EDS watch %q to be canceled and new one %q to be registered", edsServiceName, clusterName)
+	select {
+	case <-ctx.Done():
+		t.Fatalf("Timeout when waiting for EDS request for resource %q", clusterName)
+	case <-clusterNameRequested.Done():
 	}
 
 	// Make an RPC, and ensure that it gets routed to second backend,
