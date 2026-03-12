@@ -39,6 +39,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/balancer/stub"
+	"google.golang.org/grpc/internal/grpcsync"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/internal/testutils"
 	rlstest "google.golang.org/grpc/internal/testutils/rls"
@@ -975,9 +976,42 @@ func (s) TestDataCachePurging(t *testing.T) {
 	verifyRLSRequest(t, rlsReqCh, true)
 }
 
+// wrappingConnectivityStateSubscriber wraps a grpcsync.Subscriber and forwards
+// connectivity state updates to both the delegate and a channel for testing.
+type wrappingConnectivityStateSubscriber struct {
+	delegate    grpcsync.Subscriber
+	connStateCh chan connectivity.State
+}
+
+func (w *wrappingConnectivityStateSubscriber) OnMessage(msg any) {
+	w.delegate.OnMessage(msg)
+	w.connStateCh <- msg.(connectivity.State)
+}
+
+// waitForConnectivityState waits for the specified connectivity state to appear
+// on the channel. It skips intermediate states and fails the test if the
+// context expires before the desired state is reached.
+func waitForConnectivityState(ctx context.Context, t *testing.T, ch <-chan connectivity.State, want connectivity.State) {
+	t.Helper()
+	for {
+		select {
+		case gotState := <-ch:
+			if gotState == want {
+				return
+			}
+		case <-ctx.Done():
+			t.Fatalf("Timeout waiting for RLS control channel to become %q", want)
+		}
+	}
+}
+
 // TestControlChannelConnectivityStateMonitoring tests the scenario where the
 // control channel goes down and comes back up again and verifies that backoff
-// state is reset for cache entries in this scenario.
+// state is reset for cache entries in this scenario. It also verifies that:
+//   - Backoff is NOT reset when the control channel first becomes READY (i.e.,
+//     the initial CONNECTING → READY transition should not trigger a backoff reset)
+//   - Backoff is NOT reset for READY → IDLE → READY transitions (benign state changes)
+//   - Backoff IS reset for READY → TRANSIENT_FAILURE → READY transitions
 func (s) TestControlChannelConnectivityStateMonitoring(t *testing.T) {
 	// Create a restartable listener which can close existing connections.
 	l, err := testutils.LocalTCPListener()
@@ -1003,6 +1037,16 @@ func (s) TestControlChannelConnectivityStateMonitoring(t *testing.T) {
 	origBackoffStrategy := defaultBackoffStrategy
 	defaultBackoffStrategy = &fakeBackoffStrategy{backoff: defaultTestTimeout}
 	defer func() { defaultBackoffStrategy = origBackoffStrategy }()
+
+	// Override the connectivity state subscriber to wrap the original and
+	// make connectivity state changes visible to the test.
+	wrappedSubscriber := &wrappingConnectivityStateSubscriber{connStateCh: make(chan connectivity.State, 10)}
+	origConnectivityStateSubscriber := newConnectivityStateSubscriber
+	newConnectivityStateSubscriber = func(delegate grpcsync.Subscriber) grpcsync.Subscriber {
+		wrappedSubscriber.delegate = delegate
+		return wrappedSubscriber
+	}
+	defer func() { newConnectivityStateSubscriber = origConnectivityStateSubscriber }()
 
 	// Register an LB policy to act as the child policy for RLS LB policy.
 	childPolicyName := "test-child-policy" + t.Name()
@@ -1038,6 +1082,29 @@ func (s) TestControlChannelConnectivityStateMonitoring(t *testing.T) {
 	// Make sure an RLS request is sent out.
 	verifyRLSRequest(t, rlsReqCh, true)
 
+	// Verify that the control channel moves to READY.
+	wantStates := []connectivity.State{connectivity.Connecting, connectivity.Ready}
+	for _, wantState := range wantStates {
+		select {
+		case gotState := <-wrappedSubscriber.connStateCh:
+			if gotState != wantState {
+				t.Fatalf("Unexpected connectivity state: got %v, want %v", gotState, wantState)
+			}
+		case <-ctx.Done():
+			t.Fatalf("Timeout waiting for RLS control channel to become %q", wantState)
+		}
+	}
+
+	// Verify that the initial READY state of the control channel did NOT trigger
+	// a backoff reset. The resetBackoffHook should only be called when
+	// transitioning from TRANSIENT_FAILURE to READY, not for the initial
+	// CONNECTING → READY transition.
+	select {
+	case <-resetBackoffDone:
+		t.Fatal("Backoff reset was triggered for initial READY state, want no reset")
+	case <-time.After(10 * time.Millisecond):
+	}
+
 	// Stop the RLS server.
 	lis.Stop()
 
@@ -1048,6 +1115,11 @@ func (s) TestControlChannelConnectivityStateMonitoring(t *testing.T) {
 	// return a value which will keep this entry in backoff for the whole duration
 	// of the test.
 	makeTestRPCAndVerifyError(ctx, t, cc, codes.Unavailable, nil)
+
+	// Wait for the control channel to move to TRANSIENT_FAILURE. When the server
+	// is stopped, we expect the control channel to go through Connecting and
+	// eventually reach TransientFailure.
+	waitForConnectivityState(ctx, t, wrappedSubscriber.connStateCh, connectivity.TransientFailure)
 
 	// Restart the RLS server.
 	lis.Restart()
@@ -1066,6 +1138,10 @@ func (s) TestControlChannelConnectivityStateMonitoring(t *testing.T) {
 	ctxOutgoing := metadata.AppendToOutgoingContext(ctx, "n1", "v1")
 	makeTestRPCAndExpectItToReachBackend(ctxOutgoing, t, cc, backendCh)
 
+	// Wait for the control channel to move back to READY.
+	waitForConnectivityState(ctx, t, wrappedSubscriber.connStateCh, connectivity.Ready)
+
+	// Verify that backoff was reset when transitioning from TRANSIENT_FAILURE to READY.
 	select {
 	case <-ctx.Done():
 		t.Fatalf("Timed out waiting for resetBackoffDone")
@@ -1079,6 +1155,119 @@ func (s) TestControlChannelConnectivityStateMonitoring(t *testing.T) {
 	// should succeed with an RLS request being sent out.
 	makeTestRPCAndExpectItToReachBackend(ctx, t, cc, backendCh)
 	verifyRLSRequest(t, rlsReqCh, true)
+}
+
+// TestControlChannelIdleTransitionNoBackoffReset tests that READY → IDLE → READY
+// transitions do not trigger backoff resets. This is a benign state change that
+// should not affect cache entry backoff state.
+func (s) TestControlChannelIdleTransitionNoBackoffReset(t *testing.T) {
+	// Create a restartable listener which can close existing connections.
+	l, err := testutils.LocalTCPListener()
+	if err != nil {
+		t.Fatalf("net.Listen() failed: %v", err)
+	}
+	lis := testutils.NewRestartableListener(l)
+
+	// Start an RLS server with the restartable listener and set the throttler to
+	// never throttle requests.
+	rlsServer, rlsReqCh := rlstest.SetupFakeRLSServer(t, lis)
+	overrideAdaptiveThrottler(t, neverThrottlingThrottler())
+
+	// Override the reset backoff hook to get notified.
+	resetBackoffCalled := make(chan struct{}, 1)
+	origResetBackoffHook := resetBackoffHook
+	resetBackoffHook = func() { resetBackoffCalled <- struct{}{} }
+	defer func() { resetBackoffHook = origResetBackoffHook }()
+
+	// Override the backoff strategy to return a large backoff which
+	// will make sure the data cache entry remains in backoff for the
+	// duration of the test.
+	origBackoffStrategy := defaultBackoffStrategy
+	defaultBackoffStrategy = &fakeBackoffStrategy{backoff: defaultTestTimeout}
+	defer func() { defaultBackoffStrategy = origBackoffStrategy }()
+
+	// Override the connectivity state subscriber to wrap the original and
+	// make connectivity state changes visible to the test.
+	wrappedSubscriber := &wrappingConnectivityStateSubscriber{connStateCh: make(chan connectivity.State, 10)}
+	origConnectivityStateSubscriber := newConnectivityStateSubscriber
+	newConnectivityStateSubscriber = func(delegate grpcsync.Subscriber) grpcsync.Subscriber {
+		wrappedSubscriber.delegate = delegate
+		return wrappedSubscriber
+	}
+	defer func() { newConnectivityStateSubscriber = origConnectivityStateSubscriber }()
+
+	// Register an LB policy to act as the child policy for RLS LB policy.
+	childPolicyName := "test-child-policy" + t.Name()
+	e2e.RegisterRLSChildPolicy(childPolicyName, nil)
+	t.Logf("Registered child policy with name %q", childPolicyName)
+
+	// Build RLS service config with header matchers, and a very low value for
+	// maxAge to ensure that cache entries become invalid very soon.
+	rlsConfig := buildBasicRLSConfig(childPolicyName, rlsServer.Address)
+	rlsConfig.RouteLookupConfig.MaxAge = durationpb.New(defaultTestShortTimeout)
+
+	// Start a test backend, and set up the fake RLS server to return this as a
+	// target in the RLS response.
+	backendCh, backendAddress := startBackend(t)
+	rlsServer.SetResponseCallback(func(_ context.Context, _ *rlspb.RouteLookupRequest) *rlstest.RouteLookupResponse {
+		return &rlstest.RouteLookupResponse{Resp: &rlspb.RouteLookupResponse{Targets: []string{backendAddress}}}
+	})
+
+	// Register a manual resolver and push the RLS service config through it.
+	r := startManualResolverWithConfig(t, rlsConfig)
+
+	cc, err := grpc.NewClient(r.Scheme()+":///", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("Failed to create gRPC client: %v", err)
+	}
+	defer cc.Close()
+
+	// Make an RPC and ensure it gets routed to the test backend.
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	makeTestRPCAndExpectItToReachBackend(ctx, t, cc, backendCh)
+
+	// Make sure an RLS request is sent out.
+	verifyRLSRequest(t, rlsReqCh, true)
+
+	// Wait for the control channel to move to READY.
+	waitForConnectivityState(ctx, t, wrappedSubscriber.connStateCh, connectivity.Ready)
+
+	// Verify that the initial READY state did NOT trigger a backoff reset.
+	select {
+	case <-resetBackoffCalled:
+		t.Fatal("Backoff reset was triggered for initial READY state, want no reset")
+	case <-time.After(10 * time.Millisecond):
+	}
+
+	// Stop the RLS server to force the control channel to go IDLE. We use Stop()
+	// which closes connections gracefully, allowing the channel to transition
+	// to IDLE rather than TRANSIENT_FAILURE.
+	lis.Stop()
+
+	// Wait for the control channel to move to IDLE.
+	waitForConnectivityState(ctx, t, wrappedSubscriber.connStateCh, connectivity.Idle)
+
+	// Restart the RLS server.
+	lis.Restart()
+
+	// Make another RPC to trigger reconnection. Use different headers to create
+	// a new cache entry.
+	ctxOutgoing := metadata.AppendToOutgoingContext(ctx, "n1", "v1")
+	defaultBackoffStrategy = &fakeBackoffStrategy{backoff: defaultTestShortTimeout}
+	makeTestRPCAndExpectItToReachBackend(ctxOutgoing, t, cc, backendCh)
+
+	// Wait for the control channel to move back to READY.
+	waitForConnectivityState(ctx, t, wrappedSubscriber.connStateCh, connectivity.Ready)
+
+	// Verify that the READY → IDLE → READY transition did NOT trigger a backoff reset.
+	// This is the key assertion of this test.
+	select {
+	case <-resetBackoffCalled:
+		t.Fatal("Backoff reset was triggered for READY → IDLE → READY transition, want no reset")
+	case <-time.After(10 * time.Millisecond):
+		// Good - no backoff reset was triggered for this benign transition.
+	}
 }
 
 // testCCWrapper wraps a balancer.ClientConn and overrides UpdateState and
