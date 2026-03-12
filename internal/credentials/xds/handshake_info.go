@@ -26,7 +26,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"unsafe"
+	"sync/atomic"
 
 	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/credentials/tls/certprovider"
@@ -38,7 +38,7 @@ import (
 )
 
 func init() {
-	internal.GetXDSHandshakeInfoForTesting = GetHandshakeInfo
+	internal.GetXDSHandshakeInfoForTesting = HandshakeInfoFromAttributes
 }
 
 // handshakeAttrKey is the type used as the key to store HandshakeInfo in
@@ -71,15 +71,15 @@ func (hi *HandshakeInfo) Equal(other *HandshakeInfo) bool {
 
 // SetHandshakeInfo returns a copy of addr in which the Attributes field is
 // updated with hiPtr.
-func SetHandshakeInfo(addr resolver.Address, hiPtr *unsafe.Pointer) resolver.Address {
+func SetHandshakeInfo(addr resolver.Address, hiPtr *atomic.Pointer[HandshakeInfo]) resolver.Address {
 	addr.Attributes = addr.Attributes.WithValue(handshakeAttrKey{}, hiPtr)
 	return addr
 }
 
-// GetHandshakeInfo returns a pointer to the *HandshakeInfo stored in attr.
-func GetHandshakeInfo(attr *attributes.Attributes) *unsafe.Pointer {
+// HandshakeInfoFromAttributes returns a pointer to the *HandshakeInfo stored in attr.
+func HandshakeInfoFromAttributes(attr *attributes.Attributes) *atomic.Pointer[HandshakeInfo] {
 	v := attr.Value(handshakeAttrKey{})
-	hi, _ := v.(*unsafe.Pointer)
+	hi, _ := v.(*atomic.Pointer[HandshakeInfo])
 	return hi
 }
 

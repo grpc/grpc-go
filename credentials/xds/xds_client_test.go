@@ -30,7 +30,6 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
-	"unsafe"
 
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/tls/certprovider"
@@ -229,9 +228,10 @@ func newTestContextWithHandshakeInfo(parent context.Context, root, identity cert
 	if sanExactMatch != "" {
 		sms = []matcher.StringMatcher{matcher.NewExactStringMatcher(sanExactMatch, false)}
 	}
+	var hiPtr atomic.Pointer[xdsinternal.HandshakeInfo]
 	info := xdsinternal.NewHandshakeInfo(root, identity, sms, false, sni, autoSniSanValidation)
-	uPtr := unsafe.Pointer(info)
-	addr := xdsinternal.SetHandshakeInfo(resolver.Address{}, &uPtr)
+	hiPtr.Store(info)
+	addr := xdsinternal.SetHandshakeInfo(resolver.Address{}, &hiPtr)
 
 	// Moving the attributes from the resolver.Address to the context passed to
 	// the handshaker is done in the transport layer. Since we directly call the
@@ -622,8 +622,9 @@ func (s) TestClientCredsProviderSwitch(t *testing.T) {
 	// We need to repeat most of what newTestContextWithHandshakeInfo() does
 	// here because we need access to the underlying HandshakeInfo so that we
 	// can update it before the next call to ClientHandshake().
-	uPtr := unsafe.Pointer(handshakeInfo)
-	addr := xdsinternal.SetHandshakeInfo(resolver.Address{}, &uPtr)
+	var hiPtr atomic.Pointer[xdsinternal.HandshakeInfo]
+	hiPtr.Store(handshakeInfo)
+	addr := xdsinternal.SetHandshakeInfo(resolver.Address{}, &hiPtr)
 	ctx = icredentials.NewClientHandshakeInfoContext(ctx, credentials.ClientHandshakeInfo{Attributes: addr.Attributes})
 	if _, _, err := creds.ClientHandshake(ctx, authority, conn); err == nil {
 		t.Fatal("ClientHandshake() succeeded when expected to fail")
@@ -647,7 +648,7 @@ func (s) TestClientCredsProviderSwitch(t *testing.T) {
 	handshakeInfo = xdsinternal.NewHandshakeInfo(root2, nil, []matcher.StringMatcher{matcher.NewExactStringMatcher(defaultTestCertSAN, false)}, false, "", false)
 	// Update the existing pointer, which address attribute will continue to
 	// point to.
-	atomic.StorePointer(&uPtr, unsafe.Pointer(handshakeInfo))
+	hiPtr.Store(handshakeInfo)
 	_, ai, err := creds.ClientHandshake(ctx, authority, conn)
 	if err != nil {
 		t.Fatalf("ClientHandshake() returned failed: %q", err)
