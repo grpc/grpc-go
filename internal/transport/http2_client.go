@@ -134,6 +134,8 @@ type http2Client struct {
 	// goAwayDebugMessage contains a detailed human readable string about a
 	// GoAway frame, useful for error messages.
 	goAwayDebugMessage string
+	// goAwayCode records the http2.ErrCode received with the GoAway frame.
+	goAwayCode http2.ErrCode
 	// A condition variable used to signal when the keepalive goroutine should
 	// go dormant. The condition for dormancy is based on the number of active
 	// streams and the `PermitWithoutStream` keepalive client parameter. And
@@ -147,7 +149,7 @@ type http2Client struct {
 
 	channelz *channelz.Socket
 
-	onClose func(GoAwayReason)
+	onClose func(GoAwayReason, http2.ErrCode, error)
 
 	bufferPool mem.BufferPool
 
@@ -204,7 +206,7 @@ func isTemporary(err error) bool {
 // NewHTTP2Client constructs a connected ClientTransport to addr based on HTTP2
 // and starts to receive messages on it. Non-nil error returns if construction
 // fails.
-func NewHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts ConnectOptions, onClose func(GoAwayReason)) (_ ClientTransport, err error) {
+func NewHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts ConnectOptions, onClose func(GoAwayReason, http2.ErrCode, error)) (_ ClientTransport, err error) {
 	scheme := "http"
 	ctx, cancel := context.WithCancel(ctx)
 	defer func() {
@@ -1015,7 +1017,7 @@ func (t *http2Client) Close(err error) {
 	// Call t.onClose ASAP to prevent the client from attempting to create new
 	// streams.
 	if t.state != draining {
-		t.onClose(GoAwayInvalid)
+		t.onClose(GoAwayInvalid, http2.ErrCodeNo, err)
 	}
 	t.state = closing
 	streams := t.activeStreams
@@ -1086,7 +1088,7 @@ func (t *http2Client) GracefulClose() {
 	if t.logger.V(logLevel) {
 		t.logger.Infof("GracefulClose called")
 	}
-	t.onClose(GoAwayInvalid)
+	t.onClose(GoAwayInvalid, http2.ErrCodeNo, nil)
 	t.state = draining
 	active := len(t.activeStreams)
 	t.mu.Unlock()
@@ -1372,7 +1374,7 @@ func (t *http2Client) handleGoAway(f *http2.GoAwayFrame) error {
 		// draining, to allow the client to stop attempting to create streams
 		// before disallowing new streams on this connection.
 		if t.state != draining {
-			t.onClose(t.goAwayReason)
+			t.onClose(t.goAwayReason, t.goAwayCode, nil)
 			t.state = draining
 		}
 	}
@@ -1417,11 +1419,11 @@ func (t *http2Client) setGoAwayReason(f *http2.GoAwayFrame) {
 			t.goAwayReason = GoAwayTooManyPings
 		}
 	}
-	if len(f.DebugData()) == 0 {
-		t.goAwayDebugMessage = fmt.Sprintf("code: %s", f.ErrCode)
-	} else {
-		t.goAwayDebugMessage = fmt.Sprintf("code: %s, debug data: %q", f.ErrCode, string(f.DebugData()))
+	t.goAwayDebugMessage = fmt.Sprintf("code: %s", f.ErrCode)
+	if len(f.DebugData()) > 0 {
+		t.goAwayDebugMessage += fmt.Sprintf(", debug data: %q", string(f.DebugData()))
 	}
+	t.goAwayCode = f.ErrCode
 }
 
 func (t *http2Client) GetGoAwayReason() (GoAwayReason, string) {

@@ -22,6 +22,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer/pickfirst"
@@ -290,4 +291,126 @@ func metricsDataFromReader(ctx context.Context, reader *metric.ManualReader) map
 		}
 	}
 	return gotMetrics
+}
+
+func (s) TestDisconnectLabel(t *testing.T) {
+	// 1. Valid GOAWAY
+	// Server GracefulStop sends GOAWAY with active streams = 0.
+	// This usually sends NoError(0) code.
+	t.Run("GoAway", func(t *testing.T) {
+		runDisconnectLabelTest(t, "GOAWAY NO_ERROR", func(ss *stubserver.StubServer) {
+			ss.S.GracefulStop()
+			// GracefulStop waits for connections to close, which happens after
+			// GOAWAY is sent.
+		})
+	})
+
+	// 2. IO Error
+	// Server Stop closes the listener and active connections immediately.
+	// This often results in "connection reset" or "EOF" (unknown) depending on timing/OS.
+	// Let's check for "unknown" or "connection reset" or "subchannel shutdown" strictly.
+	// In this test env, it often results in io.EOF which we mapped to "unknown".
+	t.Run("IO_Error", func(t *testing.T) {
+		runDisconnectLabelTest(t, "unknown", func(ss *stubserver.StubServer) {
+			ss.Stop()
+		})
+	})
+
+	// Scenario 3: Unknown (Client closes - voluntary? actually client close might be UNKNOWN or not recorded as split)
+	// If client closes, we might not record "disconnections" metric from ClientConn perspective?
+	// disconnections metric is "Number of times the selected subchannel becomes disconnected".
+	// If we close 'cc', we tear down subchannels.
+	// But let's try to trigger a case where we just disconnect without server side action?
+	// Or maybe "unknown" is what we get for "Idle" timeout?
+	// Let's stick to IO and GoAway first which are explicit in A94.
+}
+
+func runDisconnectLabelTest(t *testing.T, wantLabel string, triggerFunc func(*stubserver.StubServer)) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	ss := &stubserver.StubServer{
+		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
+			return &testpb.Empty{}, nil
+		},
+	}
+	ss.StartServer()
+	defer ss.Stop() // Cleanup in case triggerFunc didn't fully stop or strict cleanup needed
+
+	sc := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(pfConfig)
+	r := manual.NewBuilderWithScheme("whatever")
+	r.InitialState(resolver.State{
+		ServiceConfig: sc,
+		Addresses:     []resolver.Address{{Addr: ss.Address}},
+	})
+
+	grpcTarget := r.Scheme() + ":///"
+	reader := metric.NewManualReader()
+	provider := metric.NewMeterProvider(metric.WithReader(reader))
+	mo := opentelemetry.MetricsOptions{
+		MeterProvider:  provider,
+		Metrics:        opentelemetry.DefaultMetrics().Add("grpc.subchannel.disconnections"),
+		OptionalLabels: []string{"grpc.disconnect_error"},
+	}
+
+	cc, err := grpc.NewClient(grpcTarget, opentelemetry.DialOption(opentelemetry.Options{MetricsOptions: mo}), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
+	if err != nil {
+		t.Fatalf("NewClient() failed: %v", err)
+	}
+	defer cc.Close()
+
+	tsc := testgrpc.NewTestServiceClient(cc)
+	// Ensure connected
+	if _, err := tsc.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
+		t.Fatalf("EmptyCall() failed: %v", err)
+	}
+
+	// Trigger disconnection
+	triggerFunc(ss)
+
+	// Wait for Idle state (disconnection happened)
+	testutils.AwaitState(ctx, t, cc, connectivity.Idle)
+
+	// Verify metrics
+
+	gotMetrics := metricsDataFromReader(ctx, reader)
+	val, ok := gotMetrics["grpc.subchannel.disconnections"]
+	if !ok {
+		t.Fatalf("Metric grpc.subchannel.disconnections not found")
+	}
+
+	// We used AssertEqual in the other test, let's use it here too if available.
+	// But checking attributes manually might be safer if AssertEqual is strict on other optional fields.
+	// Let's iterate datapoints.
+	start := time.Now()
+	for {
+		points := val.Data.(metricdata.Sum[int64]).DataPoints
+		if len(points) == 0 {
+			t.Fatalf("No data points for disconnections")
+		}
+		dp := points[0]
+		// Check attributes
+		seenLabel := false
+		var foundAttrs []string
+		for _, kv := range dp.Attributes.ToSlice() {
+			foundAttrs = append(foundAttrs, fmt.Sprintf("%s=%s", kv.Key, kv.Value.AsString()))
+			if kv.Key == "grpc.disconnect_error" {
+				seenLabel = true
+				if kv.Value.AsString() != wantLabel {
+					t.Errorf("Want label %q, got %q", wantLabel, kv.Value.AsString())
+				}
+			}
+		}
+		if !seenLabel && wantLabel != "" {
+			if time.Since(start) > time.Second {
+				t.Errorf("Label grpc.disconnect_error missing. Found attributes: %v", foundAttrs)
+			}
+		}
+		if seenLabel || time.Since(start) > time.Second {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+		gotMetrics = metricsDataFromReader(ctx, reader)
+		val = gotMetrics["grpc.subchannel.disconnections"]
+	}
 }
