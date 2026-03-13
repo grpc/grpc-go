@@ -19,6 +19,7 @@ package xdsresource
 
 import (
 	"bytes"
+	"fmt"
 
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	xdsclient "google.golang.org/grpc/internal/xds/clients/xdsclient"
@@ -40,8 +41,10 @@ type endpointsResourceDecoder struct {
 func (d *endpointsResourceDecoder) Decode(resource *xdsclient.AnyProto, _ xdsclient.DecodeOptions) (*xdsclient.DecodeResult, error) {
 	name, endpoints, err := unmarshalEndpointsResource(resource.ToAny())
 	if name == "" {
-		// Name is unset only when protobuf deserialization fails.
-		return nil, err
+		if err != nil {
+			return nil, err
+		}
+		return nil, fmt.Errorf("empty resource name in Endpoints resource")
 	}
 	if err != nil {
 		// Protobuf deserialization succeeded, but resource validation failed.

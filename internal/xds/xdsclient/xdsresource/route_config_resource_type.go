@@ -19,6 +19,7 @@ package xdsresource
 
 import (
 	"bytes"
+	"fmt"
 
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	xdsclient "google.golang.org/grpc/internal/xds/clients/xdsclient"
@@ -40,8 +41,10 @@ type routeConfigResourceDecoder struct {
 func (d *routeConfigResourceDecoder) Decode(resource *xdsclient.AnyProto, opts xdsclient.DecodeOptions) (*xdsclient.DecodeResult, error) {
 	name, rc, err := unmarshalRouteConfigResource(resource.ToAny(), &opts)
 	if name == "" {
-		// Name is unset only when protobuf deserialization fails.
-		return nil, err
+		if err != nil {
+			return nil, err
+		}
+		return nil, fmt.Errorf("empty resource name in RouteConfig resource")
 	}
 	if err != nil {
 		// Protobuf deserialization succeeded, but resource validation failed.

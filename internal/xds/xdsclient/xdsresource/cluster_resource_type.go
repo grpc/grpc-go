@@ -46,8 +46,10 @@ func (d *clusterResourceDecoder) Decode(resource *xdsclient.AnyProto, opts xdscl
 	}
 	name, cluster, err := unmarshalClusterResource(resource.ToAny(), serverCfg)
 	if name == "" {
-		// Name is unset only when protobuf deserialization fails.
-		return nil, err
+		if err != nil {
+			return nil, err
+		}
+		return nil, fmt.Errorf("empty resource name in Cluster resource")
 	}
 	if err != nil {
 		// Protobuf deserialization succeeded, but resource validation failed.
