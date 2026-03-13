@@ -141,13 +141,11 @@ func (t *transport) NewStream(ctx context.Context, _ string) (clients.Stream, er
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	select {
-	case <-t.closed.Done():
+	if t.closed.HasFired() {
 		return nil, fmt.Errorf("transport is closed")
-	default:
 	}
 
-	fs := newStream(ctx, t.closed)
+	fs := newStream(ctx)
 	t.activeADSStream = fs
 	t.streamReady()
 	return fs, nil
@@ -168,18 +166,16 @@ func (t *transport) Close() {
 type stream struct {
 	ctx    context.Context
 	cancel context.CancelFunc
-	closed *grpcsync.Event
 
 	reqChan  chan []byte
 	respChan chan []byte
 }
 
-func newStream(ctx context.Context, closed *grpcsync.Event) *stream {
+func newStream(ctx context.Context) *stream {
 	c, cancel := context.WithCancel(ctx)
 	return &stream{
 		ctx:      c,
 		cancel:   cancel,
-		closed:   closed,
 		reqChan:  make(chan []byte),
 		respChan: make(chan []byte),
 	}
@@ -191,8 +187,6 @@ func (s *stream) Send(data []byte) error {
 	select {
 	case <-s.ctx.Done():
 		return s.ctx.Err()
-	case <-s.closed.Done():
-		return nil
 	case s.reqChan <- data:
 		return nil
 	}
