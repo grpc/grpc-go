@@ -821,9 +821,9 @@ func (s) TestMessageCompression_Stream(t *testing.T) {
 		t.Fatalf("stream.Recv failed: %v", err)
 	}
 
-	// Client uncompressed, Server still compressed its response.
-	if streamComp.compressCount.Load() != 3 || streamComp.decompressCount.Load() != 3 {
-		t.Fatalf("After Call 2, expected 3, 3. got %d, %d", streamComp.compressCount.Load(), streamComp.decompressCount.Load())
+	// Client uncompressed, Server uncompressed its response.
+	if streamComp.compressCount.Load() != 2 || streamComp.decompressCount.Load() != 2 {
+		t.Fatalf("After Call 2, expected 2, 2. got %d, %d", streamComp.compressCount.Load(), streamComp.decompressCount.Load())
 	}
 
 	// 3. Enable message compression and send third message
@@ -839,8 +839,8 @@ func (s) TestMessageCompression_Stream(t *testing.T) {
 		t.Fatalf("stream.Recv failed: %v", err)
 	}
 
-	if streamComp.compressCount.Load() != 5 || streamComp.decompressCount.Load() != 5 {
-		t.Fatalf("After Call 3, expected 5, 5. got %d, %d", streamComp.compressCount.Load(), streamComp.decompressCount.Load())
+	if streamComp.compressCount.Load() != 4 || streamComp.decompressCount.Load() != 4 {
+		t.Fatalf("After Call 3, expected 4, 4. got %d, %d", streamComp.compressCount.Load(), streamComp.decompressCount.Load())
 	}
 }
 

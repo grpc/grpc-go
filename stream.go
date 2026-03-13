@@ -1494,7 +1494,11 @@ func (as *addrConnStream) SendMsg(m any) (err error) {
 	}
 
 	// load hdr, payload, data
-	hdr, data, payload, pf, err := prepareMsg(m, as.codec, as.sendCompressorV0, as.sendCompressorV1, as.ac.dopts.copts.BufferPool)
+	compV0, compV1 := as.sendCompressorV0, as.sendCompressorV1
+	if opts, ok := as.ctx.Value(compressKey{}).(*compressOptions); ok && opts.DoNotCompress {
+		compV0, compV1 = nil, nil
+	}
+	hdr, data, payload, pf, err := prepareMsg(m, as.codec, compV0, compV1, as.ac.dopts.copts.BufferPool)
 	if err != nil {
 		return err
 	}
@@ -1774,7 +1778,11 @@ func (ss *serverStream) SendMsg(m any) (err error) {
 	}
 
 	// load hdr, payload, data
-	hdr, data, payload, pf, err := prepareMsg(m, ss.codec, ss.compressorV0, ss.compressorV1, ss.p.bufferPool)
+	compV0, compV1 := ss.compressorV0, ss.compressorV1
+	if opts, ok := ss.ctx.Value(compressKey{}).(*compressOptions); ok && opts.DoNotCompress {
+		compV0, compV1 = nil, nil
+	}
+	hdr, data, payload, pf, err := prepareMsg(m, ss.codec, compV0, compV1, ss.p.bufferPool)
 	if err != nil {
 		return err
 	}
