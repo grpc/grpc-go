@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"sync"
 
+	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/xds/clients"
 	"google.golang.org/protobuf/proto"
 
@@ -62,32 +63,23 @@ func (b *Builder) Build(serverIdentifier clients.ServerIdentifier) (clients.Tran
 		return at, nil
 	}
 
-	ch, ok := b.activeTransportsChan[serverIdentifier.ServerURI]
+	streamReadyCh, ok := b.activeTransportsChan[serverIdentifier.ServerURI]
 	if !ok {
-		ch = make(chan struct{})
-		b.activeTransportsChan[serverIdentifier.ServerURI] = ch
+		streamReadyCh = make(chan struct{})
+		b.activeTransportsChan[serverIdentifier.ServerURI] = streamReadyCh
 	}
 
-	ft := newTransport(ch)
+	ft := newTransport(streamReadyCh)
 	b.activeTransports[serverIdentifier.ServerURI] = ft
 	return ft, nil
 }
 
-// CloseTransport closes the transport for the given server identifier.
-func (b *Builder) CloseTransport(serverURI string) {
+// Close closes the transport for the given server identifier.
+func (b *Builder) Close(serverURI string) {
 	b.mu.Lock()
 	t, ok := b.activeTransports[serverURI]
 	b.mu.Unlock()
 	if ok {
-		t.Close()
-	}
-}
-
-// Close closes all active transports.
-func (b *Builder) Close() {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	for _, t := range b.activeTransports {
 		t.Close()
 	}
 }
@@ -121,15 +113,15 @@ func (b *Builder) Transport(ctx context.Context, serverURI string) (*ServerHandl
 type transport struct {
 	mu              sync.Mutex
 	activeADSStream *stream
-	closed          chan struct{}
+	closed          *grpcsync.Event
 	streamReady     func()
 }
 
-func newTransport(ch chan struct{}) *transport {
+func newTransport(streamReady chan struct{}) *transport {
 	return &transport{
-		closed: make(chan struct{}),
+		closed: grpcsync.NewEvent(),
 		streamReady: sync.OnceFunc(func() {
-			close(ch)
+			close(streamReady)
 		}),
 	}
 }
@@ -150,7 +142,7 @@ func (t *transport) NewStream(ctx context.Context, _ string) (clients.Stream, er
 	defer t.mu.Unlock()
 
 	select {
-	case <-t.closed:
+	case <-t.closed.Done():
 		return nil, fmt.Errorf("transport is closed")
 	default:
 	}
@@ -164,11 +156,7 @@ func (t *transport) NewStream(ctx context.Context, _ string) (clients.Stream, er
 // Close closes the stream.
 func (t *transport) Close() {
 	t.mu.Lock()
-	select {
-	case <-t.closed:
-	default:
-		close(t.closed)
-	}
+	t.closed.Fire()
 	stream := t.activeADSStream
 	t.mu.Unlock()
 	if stream != nil {
@@ -180,13 +168,13 @@ func (t *transport) Close() {
 type stream struct {
 	ctx    context.Context
 	cancel context.CancelFunc
-	closed chan struct{}
+	closed *grpcsync.Event
 
 	reqChan  chan []byte
 	respChan chan []byte
 }
 
-func newStream(ctx context.Context, closed chan struct{}) *stream {
+func newStream(ctx context.Context, closed *grpcsync.Event) *stream {
 	c, cancel := context.WithCancel(ctx)
 	return &stream{
 		ctx:      c,
@@ -203,7 +191,7 @@ func (s *stream) Send(data []byte) error {
 	select {
 	case <-s.ctx.Done():
 		return s.ctx.Err()
-	case <-s.closed:
+	case <-s.closed.Done():
 		return nil
 	case s.reqChan <- data:
 		return nil
