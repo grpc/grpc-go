@@ -55,6 +55,10 @@ func unmarshalRouteConfigResource(r *anypb.Any, opts *xdsclient.DecodeOptions) (
 		return rc.GetName(), RouteConfigUpdate{}, err
 	}
 	u.Raw = r
+
+	if rc.GetName() == "" {
+		return "", RouteConfigUpdate{}, fmt.Errorf("empty resource name in route config resource")
+	}
 	return rc.GetName(), u, nil
 }
 

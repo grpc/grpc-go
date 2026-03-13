@@ -1401,6 +1401,24 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 				},
 			},
 		})
+		v3ClusterWithEmptyName = testutils.MarshalAny(t, &v3clusterpb.Cluster{
+			Name:                 "",
+			ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
+			EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
+				EdsConfig: &v3corepb.ConfigSource{
+					ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
+						Ads: &v3corepb.AggregatedConfigSource{},
+					},
+				},
+				ServiceName: v3Service,
+			},
+			LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
+			LrsServer: &v3corepb.ConfigSource{
+				ConfigSourceSpecifier: &v3corepb.ConfigSource_Self{
+					Self: &v3corepb.SelfConfigSource{},
+				},
+			},
+		})
 
 		v3ClusterAnyWithEDSConfigSourceSelf = testutils.MarshalAny(t, &v3clusterpb.Cluster{
 			Name:                 v3ClusterName,
@@ -1512,7 +1530,7 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "bad cluster resource",
+			name: "bad_cluster_resource",
 			resource: testutils.MarshalAny(t, &v3clusterpb.Cluster{
 				Name:                 "test",
 				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_STATIC},
@@ -1521,7 +1539,7 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 			wantErr:  true,
 		},
 		{
-			name: "cluster resource with non-self lrs_server field",
+			name: "cluster_resource_with_non-self_lrs_server_field",
 			resource: testutils.MarshalAny(t, &v3clusterpb.Cluster{
 				Name:                 "test",
 				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
@@ -1544,7 +1562,7 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 			wantErr:  true,
 		},
 		{
-			name:      "v3 cluster",
+			name:      "v3_cluster",
 			resource:  v3ClusterAny,
 			serverCfg: serverCfg,
 			wantName:  v3ClusterName,
@@ -1557,7 +1575,14 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 			},
 		},
 		{
-			name:      "v3 cluster wrapped",
+			name:      "cluster_resource_with_empty_name",
+			resource:  v3ClusterWithEmptyName,
+			serverCfg: serverCfg,
+			wantName:  "",
+			wantErr:   true,
+		},
+		{
+			name:      "v3_cluster_wrapped",
 			resource:  testutils.MarshalAny(t, &v3discoverypb.Resource{Resource: v3ClusterAny}),
 			serverCfg: serverCfg,
 			wantName:  v3ClusterName,
@@ -1570,7 +1595,7 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 			},
 		},
 		{
-			name:      "v3 cluster with EDS config source self",
+			name:      "v3_cluster_with_EDS_config_source_self",
 			resource:  v3ClusterAnyWithEDSConfigSourceSelf,
 			serverCfg: serverCfg,
 			wantName:  v3ClusterName,
@@ -1583,7 +1608,7 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 			},
 		},
 		{
-			name:      "v3 cluster with telemetry case",
+			name:      "v3_cluster_with_telemetry_case",
 			resource:  v3ClusterAnyWithTelemetryLabels,
 			serverCfg: serverCfg,
 			wantName:  v3ClusterName,
@@ -1599,7 +1624,7 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 			},
 		},
 		{
-			name:      "v3 metadata ignore other types not string and not com.google.csm.telemetry_labels",
+			name:      "v3_metadata_ignore_other_types_not_string_and_not_com.google.csm.telemetry_labels",
 			resource:  v3ClusterAnyWithTelemetryLabelsIgnoreSome,
 			serverCfg: serverCfg,
 			wantName:  v3ClusterName,
@@ -1615,7 +1640,7 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 			},
 		},
 		{
-			name: "xdstp cluster resource with unset EDS service name",
+			name: "xdstp_cluster_resource_with_unset_EDS_service_name",
 			resource: testutils.MarshalAny(t, &v3clusterpb.Cluster{
 				Name:                 "xdstp:foo",
 				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
