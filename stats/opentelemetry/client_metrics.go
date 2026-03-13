@@ -165,20 +165,20 @@ func getOrCreateRPCAttemptInfo(ctx context.Context) (context.Context, *attemptIn
 // TagRPC implements per RPC attempt context management for metrics.
 func (h *clientMetricsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo) context.Context {
 	ctx, ai := getOrCreateRPCAttemptInfo(ctx)
+	if ai.xdsLabels == nil {
+		ai.xdsLabels = map[string]string{
+			// The defaults for all the per call labels from a plugin that
+			// executes on the callpath that this OpenTelemetry component
+			// currently supports.
+			"grpc.lb.locality":        "",
+			"grpc.lb.backend_service": "",
+		}
+	}
 
 	// Numerous stats handlers can be used for the same channel. This callback
 	// ensures that all label updates are propagated to the rpc attempt info across
 	// derived contexts.
 	ctx = istats.RegisterTelemetryLabelCallback(ctx, func(labels map[string]string) {
-		if ai.xdsLabels == nil {
-			ai.xdsLabels = map[string]string{
-				// The defaults for all the per call labels from a plugin that
-				// executes on the callpath that this OpenTelemetry component
-				// currently supports.
-				"grpc.lb.locality":        "",
-				"grpc.lb.backend_service": "",
-			}
-		}
 		maps.Copy(ai.xdsLabels, labels)
 	})
 

@@ -21,6 +21,7 @@ package stats
 
 import (
 	"context"
+	"maps"
 
 	"google.golang.org/grpc/grpclog"
 )
@@ -30,7 +31,9 @@ import (
 type LabelCallback func(map[string]string)
 type telemetryLabelCallbackKey struct{}
 
-// UpdateLabels executes registered telemetry callbacks with the update labels.
+// UpdateLabels executes registered telemetry callbacks with the update labels. Labels
+// are copied before being processed by any callbacks to ensure mutations are not
+// shared among derived contexts.
 //
 // It is the responsibility of the registrant to handle conflicts or label resets.
 func UpdateLabels(ctx context.Context, update map[string]string) {
@@ -45,7 +48,7 @@ func RegisterTelemetryLabelCallback(ctx context.Context, callback LabelCallback)
 	}
 
 	if callbacks, ok := ctx.Value(telemetryLabelCallbackKey{}).([]LabelCallback); ok {
-		return context.WithValue(ctx, telemetryLabelCallbackKey{}, append(callbacks, callback))
+		return context.WithValue(ctx, telemetryLabelCallbackKey{}, append(append([]LabelCallback(nil), callbacks...), callback))
 	}
 	return context.WithValue(ctx, telemetryLabelCallbackKey{}, []LabelCallback{callback})
 }
@@ -54,13 +57,18 @@ func RegisterTelemetryLabelCallback(ctx context.Context, callback LabelCallback)
 // registered on the context with the provided labels. If no callbacks are registered
 // it does nothing. If any registered callback panics it will be swallowed and logged and
 // continue running any other registered callbacks.
+//
+// To ensure callbacks do not mutate the state of the provided label map it is copied
+// before execution.
 func executeTelemetryLabelCallbacks(ctx context.Context, labels map[string]string) {
 	if ctx == nil {
 		return
 	}
 	if callbacks, ok := ctx.Value(telemetryLabelCallbackKey{}).([]LabelCallback); ok {
+		labelsCopy := map[string]string{}
+		maps.Copy(labelsCopy, labels)
 		for _, callback := range callbacks {
-			runWithRecovery(callback, labels)
+			runWithRecovery(callback, labelsCopy)
 		}
 
 	}
