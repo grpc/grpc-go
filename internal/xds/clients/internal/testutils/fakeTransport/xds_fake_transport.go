@@ -26,7 +26,6 @@ import (
 	"fmt"
 	"sync"
 
-	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/xds/clients"
 	"google.golang.org/protobuf/proto"
 
@@ -113,13 +112,12 @@ func (b *Builder) Transport(ctx context.Context, serverURI string) (*ServerHandl
 type transport struct {
 	mu              sync.Mutex
 	activeADSStream *stream
-	closed          *grpcsync.Event
+	closed          bool
 	streamReady     func()
 }
 
 func newTransport(streamReady chan struct{}) *transport {
 	return &transport{
-		closed: grpcsync.NewEvent(),
 		streamReady: sync.OnceFunc(func() {
 			close(streamReady)
 		}),
@@ -141,7 +139,7 @@ func (t *transport) NewStream(ctx context.Context, _ string) (clients.Stream, er
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	if t.closed.HasFired() {
+	if t.closed {
 		return nil, fmt.Errorf("transport is closed")
 	}
 
@@ -154,7 +152,7 @@ func (t *transport) NewStream(ctx context.Context, _ string) (clients.Stream, er
 // Close closes the stream.
 func (t *transport) Close() {
 	t.mu.Lock()
-	t.closed.Fire()
+	t.closed = true
 	stream := t.activeADSStream
 	t.mu.Unlock()
 	if stream != nil {
