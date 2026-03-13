@@ -35,6 +35,7 @@ import (
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	icredentials "google.golang.org/grpc/internal/credentials"
 	xdsinternal "google.golang.org/grpc/internal/credentials/xds"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/xds/matcher"
@@ -219,7 +220,7 @@ func makeRootProvider(t *testing.T, caPath string) *fakeProvider {
 
 // newTestContextWithHandshakeInfo returns a copy of parent with HandshakeInfo
 // context value added to it.
-func newTestContextWithHandshakeInfo(parent context.Context, root, identity certprovider.Provider, sanExactMatch string) context.Context {
+func newTestContextWithHandshakeInfo(parent context.Context, root, identity certprovider.Provider, sanExactMatch, sni string, autoSniSanValidation bool) context.Context {
 	// Creating the HandshakeInfo and adding it to the attributes is very
 	// similar to what the CDS balancer would do when it intercepts calls to
 	// NewSubConn().
@@ -228,7 +229,7 @@ func newTestContextWithHandshakeInfo(parent context.Context, root, identity cert
 		sms = []matcher.StringMatcher{matcher.NewExactStringMatcher(sanExactMatch, false)}
 	}
 	var hiPtr atomic.Pointer[xdsinternal.HandshakeInfo]
-	info := xdsinternal.NewHandshakeInfo(root, identity, sms, false)
+	info := xdsinternal.NewHandshakeInfo(root, identity, sms, false, sni, autoSniSanValidation)
 	hiPtr.Store(info)
 	addr := xdsinternal.SetHandshakeInfo(resolver.Address{}, &hiPtr)
 
@@ -302,7 +303,7 @@ func (s) TestClientCredsInvalidHandshakeInfo(t *testing.T) {
 
 	pCtx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	ctx := newTestContextWithHandshakeInfo(pCtx, nil, &fakeProvider{}, "")
+	ctx := newTestContextWithHandshakeInfo(pCtx, nil, &fakeProvider{}, "", "", false)
 	if _, _, err := creds.ClientHandshake(ctx, authority, nil); err == nil {
 		t.Fatal("ClientHandshake succeeded without root certificate provider in HandshakeInfo")
 	}
@@ -339,7 +340,7 @@ func (s) TestClientCredsProviderFailure(t *testing.T) {
 		t.Run(test.desc, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
-			ctx = newTestContextWithHandshakeInfo(ctx, test.rootProvider, test.identityProvider, "")
+			ctx = newTestContextWithHandshakeInfo(ctx, test.rootProvider, test.identityProvider, "", "", false)
 			if _, _, err := creds.ClientHandshake(ctx, authority, nil); err == nil || !strings.Contains(err.Error(), test.wantErr) {
 				t.Fatalf("ClientHandshake() returned error: %q, wantErr: %q", err, test.wantErr)
 			}
@@ -353,6 +354,7 @@ func (s) TestClientCredsSuccess(t *testing.T) {
 		desc             string
 		handshakeFunc    testHandshakeFunc
 		handshakeInfoCtx func(ctx context.Context) context.Context
+		enableSNIFlag    bool
 	}{
 		{
 			desc:          "fallback",
@@ -367,27 +369,59 @@ func (s) TestClientCredsSuccess(t *testing.T) {
 			desc:          "TLS",
 			handshakeFunc: testServerTLSHandshake,
 			handshakeInfoCtx: func(ctx context.Context) context.Context {
-				return newTestContextWithHandshakeInfo(ctx, makeRootProvider(t, "x509/server_ca_cert.pem"), nil, defaultTestCertSAN)
+				return newTestContextWithHandshakeInfo(ctx, makeRootProvider(t, "x509/server_ca_cert.pem"), nil, defaultTestCertSAN, "", false)
 			},
 		},
 		{
 			desc:          "mTLS",
 			handshakeFunc: testServerMutualTLSHandshake,
 			handshakeInfoCtx: func(ctx context.Context) context.Context {
-				return newTestContextWithHandshakeInfo(ctx, makeRootProvider(t, "x509/server_ca_cert.pem"), makeIdentityProvider(t, "x509/server1_cert.pem", "x509/server1_key.pem"), defaultTestCertSAN)
+				return newTestContextWithHandshakeInfo(ctx, makeRootProvider(t, "x509/server_ca_cert.pem"), makeIdentityProvider(t, "x509/server1_cert.pem", "x509/server1_key.pem"), defaultTestCertSAN, "", false)
 			},
 		},
 		{
 			desc:          "mTLS with no acceptedSANs specified",
 			handshakeFunc: testServerMutualTLSHandshake,
 			handshakeInfoCtx: func(ctx context.Context) context.Context {
-				return newTestContextWithHandshakeInfo(ctx, makeRootProvider(t, "x509/server_ca_cert.pem"), makeIdentityProvider(t, "x509/server1_cert.pem", "x509/server1_key.pem"), "")
+				return newTestContextWithHandshakeInfo(ctx, makeRootProvider(t, "x509/server_ca_cert.pem"), makeIdentityProvider(t, "x509/server1_cert.pem", "x509/server1_key.pem"), "", "", false)
 			},
+		},
+		{
+			desc:          "TLS with SNI",
+			handshakeFunc: testServerTLSHandshake,
+			handshakeInfoCtx: func(ctx context.Context) context.Context {
+				return newTestContextWithHandshakeInfo(ctx, makeRootProvider(t, "x509/server_ca_cert.pem"), nil, "bad-match", defaultTestCertSAN, true)
+			},
+			enableSNIFlag: true,
+		},
+		{
+			desc:          "TLS with SNI, env variable disabled, AutoSniSanValidation enabled",
+			handshakeFunc: testServerTLSHandshake,
+			handshakeInfoCtx: func(ctx context.Context) context.Context {
+				return newTestContextWithHandshakeInfo(ctx, makeRootProvider(t, "x509/server_ca_cert.pem"), nil, defaultTestCertSAN, "bad-sni", true)
+			},
+		},
+		{
+			desc:          "TLS with SNI, env variable enabled but AutoSniSanValidation disabled",
+			handshakeFunc: testServerTLSHandshake,
+			handshakeInfoCtx: func(ctx context.Context) context.Context {
+				return newTestContextWithHandshakeInfo(ctx, makeRootProvider(t, "x509/server_ca_cert.pem"), nil, defaultTestCertSAN, "bad-sni", false)
+			},
+			enableSNIFlag: true,
+		},
+		{
+			desc:          "TLS with empty SNI, env variable enabled, AutoSniSanValidation enabled",
+			handshakeFunc: testServerTLSHandshake,
+			handshakeInfoCtx: func(ctx context.Context) context.Context {
+				return newTestContextWithHandshakeInfo(ctx, makeRootProvider(t, "x509/server_ca_cert.pem"), nil, defaultTestCertSAN, "", true)
+			},
+			enableSNIFlag: true,
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
+			testutils.SetEnvConfig(t, &envconfig.XDSSNIEnabled, test.enableSNIFlag)
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
 			ts := newTestServerWithHandshakeFunc(ctx, test.handshakeFunc)
@@ -444,7 +478,7 @@ func (s) TestClientCredsHandshakeTimeout(t *testing.T) {
 
 	sCtx, sCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
 	defer sCancel()
-	ctx = newTestContextWithHandshakeInfo(sCtx, makeRootProvider(t, "x509/server_ca_cert.pem"), nil, defaultTestCertSAN)
+	ctx = newTestContextWithHandshakeInfo(sCtx, makeRootProvider(t, "x509/server_ca_cert.pem"), nil, defaultTestCertSAN, "", false)
 	if _, _, err := creds.ClientHandshake(ctx, authority, conn); err == nil {
 		t.Fatal("ClientHandshake() succeeded when expected to timeout")
 	}
@@ -467,11 +501,14 @@ func (s) TestClientCredsHandshakeTimeout(t *testing.T) {
 // TestClientCredsHandshakeFailure verifies different handshake failure cases.
 func (s) TestClientCredsHandshakeFailure(t *testing.T) {
 	tests := []struct {
-		desc          string
-		handshakeFunc testHandshakeFunc
-		rootProvider  certprovider.Provider
-		san           string
-		wantErr       string
+		desc                 string
+		handshakeFunc        testHandshakeFunc
+		rootProvider         certprovider.Provider
+		san                  string
+		sni                  string
+		autoSniSanValidation bool
+		enableSniFlag        bool
+		wantErr              string
 	}{
 		{
 			desc:          "cert validation failure",
@@ -487,10 +524,49 @@ func (s) TestClientCredsHandshakeFailure(t *testing.T) {
 			san:           "bad-san",
 			wantErr:       "do not match any of the accepted SANs",
 		},
+		{
+			desc:                 "SNI SAN mismatch",
+			handshakeFunc:        testServerTLSHandshake,
+			rootProvider:         makeRootProvider(t, "x509/server_ca_cert.pem"),
+			sni:                  "bad-sni",
+			autoSniSanValidation: true,
+			wantErr:              "do not match the SNI",
+			enableSniFlag:        true,
+		},
+		{
+			desc:                 "SNI set, AutoSniSanValidation disabled with SAN mismatch",
+			handshakeFunc:        testServerTLSHandshake,
+			rootProvider:         makeRootProvider(t, "x509/server_ca_cert.pem"),
+			sni:                  defaultTestCertSAN,
+			san:                  "bad-san",
+			autoSniSanValidation: false,
+			wantErr:              "do not match any of the accepted SANs",
+			enableSniFlag:        true,
+		},
+		{
+			desc:                 "SNI set with SAN mismatch and AutoSniSanValidation enabled, environment variable disabled",
+			handshakeFunc:        testServerTLSHandshake,
+			rootProvider:         makeRootProvider(t, "x509/server_ca_cert.pem"),
+			sni:                  defaultTestCertSAN,
+			san:                  "bad-san",
+			autoSniSanValidation: true,
+			wantErr:              "do not match any of the accepted SANs",
+		},
+		{
+			desc:                 "SNI empty, AutoSniSanValidation enabled with SAN mismatch",
+			handshakeFunc:        testServerTLSHandshake,
+			rootProvider:         makeRootProvider(t, "x509/server_ca_cert.pem"),
+			sni:                  "",
+			san:                  "bad-san",
+			autoSniSanValidation: true,
+			wantErr:              "do not match any of the accepted SANs",
+			enableSniFlag:        true,
+		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
+			testutils.SetEnvConfig(t, &envconfig.XDSSNIEnabled, test.enableSniFlag)
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
 			ts := newTestServerWithHandshakeFunc(ctx, test.handshakeFunc)
@@ -508,7 +584,7 @@ func (s) TestClientCredsHandshakeFailure(t *testing.T) {
 			}
 			defer conn.Close()
 
-			ctx = newTestContextWithHandshakeInfo(ctx, test.rootProvider, nil, test.san)
+			ctx = newTestContextWithHandshakeInfo(ctx, test.rootProvider, nil, test.san, test.sni, test.autoSniSanValidation)
 			if _, _, err := creds.ClientHandshake(ctx, authority, conn); err == nil || !strings.Contains(err.Error(), test.wantErr) {
 				t.Fatalf("ClientHandshake() returned %q, wantErr %q", err, test.wantErr)
 			}
@@ -542,7 +618,7 @@ func (s) TestClientCredsProviderSwitch(t *testing.T) {
 	// Create a root provider which will fail the handshake because it does not
 	// use the correct trust roots.
 	root1 := makeRootProvider(t, "x509/client_ca_cert.pem")
-	handshakeInfo := xdsinternal.NewHandshakeInfo(root1, nil, []matcher.StringMatcher{matcher.NewExactStringMatcher(defaultTestCertSAN, false)}, false)
+	handshakeInfo := xdsinternal.NewHandshakeInfo(root1, nil, []matcher.StringMatcher{matcher.NewExactStringMatcher(defaultTestCertSAN, false)}, false, "", false)
 	// We need to repeat most of what newTestContextWithHandshakeInfo() does
 	// here because we need access to the underlying HandshakeInfo so that we
 	// can update it before the next call to ClientHandshake().
@@ -569,7 +645,7 @@ func (s) TestClientCredsProviderSwitch(t *testing.T) {
 	// Create a new root provider which uses the correct trust roots. And update
 	// the HandshakeInfo with the new provider.
 	root2 := makeRootProvider(t, "x509/server_ca_cert.pem")
-	handshakeInfo = xdsinternal.NewHandshakeInfo(root2, nil, []matcher.StringMatcher{matcher.NewExactStringMatcher(defaultTestCertSAN, false)}, false)
+	handshakeInfo = xdsinternal.NewHandshakeInfo(root2, nil, []matcher.StringMatcher{matcher.NewExactStringMatcher(defaultTestCertSAN, false)}, false, "", false)
 	// Update the existing pointer, which address attribute will continue to
 	// point to.
 	hiPtr.Store(handshakeInfo)

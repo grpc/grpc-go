@@ -81,7 +81,7 @@ func (bb) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Ba
 		loadWrapper:     loadstore.NewWrapper(),
 		requestCountMax: defaultRequestCountMax,
 	}
-	b.xdsHIPtr.Store(xds.NewHandshakeInfo(nil, nil, nil, false))
+	b.xdsHIPtr.Store(xds.NewHandshakeInfo(nil, nil, nil, false, "", false))
 	b.logger = prefixLogger(b)
 	b.child = gracefulswitch.NewBalancer(b, bOpts)
 	b.logger.Infof("Created")
@@ -322,7 +322,7 @@ func (b *clusterImplBalancer) handleSecurityConfig(config *xdsresource.SecurityC
 		// We need to explicitly set the fields to nil here since this might be
 		// a case of switching from a good security configuration to an empty
 		// one where fallback credentials are to be used.
-		b.xdsHIPtr.Store(xds.NewHandshakeInfo(nil, nil, nil, false))
+		b.xdsHIPtr.Store(xds.NewHandshakeInfo(nil, nil, nil, false, "", false))
 		return nil
 
 	}
@@ -359,7 +359,7 @@ func (b *clusterImplBalancer) handleSecurityConfig(config *xdsresource.SecurityC
 	}
 	b.cachedRoot = rootProvider
 	b.cachedIdentity = identityProvider
-	b.xdsHIPtr.Store(xds.NewHandshakeInfo(rootProvider, identityProvider, config.SubjectAltNameMatchers, false))
+	b.xdsHIPtr.Store(xds.NewHandshakeInfo(rootProvider, identityProvider, config.SubjectAltNameMatchers, false, "", false))
 	return nil
 }
 
