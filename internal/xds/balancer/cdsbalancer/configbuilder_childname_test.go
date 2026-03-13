@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package clusterresolver
+package cdsbalancer
 
 import (
 	"testing"
@@ -25,7 +25,7 @@ import (
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 )
 
-func Test_nameGenerator_generate(t *testing.T) {
+func (s) Test_nameGenerator_generate(t *testing.T) {
 	tests := []struct {
 		name   string
 		prefix uint64

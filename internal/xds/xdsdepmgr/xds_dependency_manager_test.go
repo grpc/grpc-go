@@ -59,13 +59,12 @@ type s struct {
 }
 
 func Test(t *testing.T) {
-	xdsdepmgr.EnableClusterAndEndpointsWatch = true
 	grpctest.RunSubTests(t, s{})
 }
 
 const (
 	defaultTestTimeout      = 10 * time.Second
-	defaultTestShortTimeout = 100 * time.Microsecond
+	defaultTestShortTimeout = 10 * time.Millisecond
 
 	defaultTestServiceName     = "service-name"
 	defaultTestRouteConfigName = "route-config-name"
@@ -1283,6 +1282,7 @@ func (s) TestAggregateClusterChildError(t *testing.T) {
 						EDSServiceName: defaultTestEDSServiceName,
 					},
 					EndpointConfig: &xdsresource.EndpointConfig{
+						EDSUpdate:      &xdsresource.EndpointsUpdate{},
 						ResolutionNote: fmt.Errorf("[xDS node id: %v]: %v", nodeID, fmt.Errorf("EDS response contains an endpoint with zero weight: endpoint:{address:{socket_address:{address:%q  port_value:%v}}}  load_balancing_weight:{}", "localhost", 8080)),
 					},
 				},
@@ -1466,18 +1466,59 @@ func (s) TestAggregateClusterMaxDepth(t *testing.T) {
 	}
 }
 
-// Tests the scenario where the Endpoint watcher receives an ambient error. Tests
-// verifies that the error is stored in resolution note and the update remains
-// too.
+// Tests the case where the dependency manager receives a endpoint resource
+// ambient error. A valid endpoint resource is sent first, then an invalid
+// one and then the valid resource again. The valid resource is sent again
+// to make sure that the ambient error reaches the dependency manager since
+// there is no other way to wait for it.
 func (s) TestEndpointAmbientError(t *testing.T) {
-	nodeID, mgmtServer, xdsClient := setupManagementServerAndClient(t, true)
+	// Expect a warning log for the ambient error.
+	grpctest.ExpectWarning("Endpoint resource ambient error")
+
+	nodeID, mgmtServer, xdsClient := setupManagementServerAndClient(t, false)
 
 	watcher := newTestWatcher()
+	defer watcher.close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-
 	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		NodeID:     nodeID,
+		DialTarget: defaultTestServiceName,
+		Host:       "localhost",
+		Port:       8080,
+		SecLevel:   e2e.SecurityLevelNone,
+	})
+
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	dm := xdsdepmgr.New(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
+	defer dm.Close()
+
+	wantXdsConfig := makeXDSConfig(resources.Routes[0].Name, resources.Clusters[0].Name, resources.Clusters[0].EdsClusterConfig.ServiceName, "localhost:8080")
+	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
+		t.Fatal(err)
+	}
+
+	// Configure a endpoint resource that is expected to be NACKed because it
+	// does not contain the `Locality` field. Since a valid one is already
+	// cached, this should result in an ambient error.
+	resources.Endpoints[0].Endpoints[0].Locality = nil
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	select {
+	case <-time.After(defaultTestShortTimeout):
+	case update := <-watcher.updateCh:
+		t.Fatalf("received unexpected update from dependency manager: %v", update)
+	}
+
+	// Send valid resources again to guarantee we get the cluster ambient error
+	// before the test ends.
+	resources = e2e.DefaultClientResources(e2e.ResourceParams{
 		NodeID:     nodeID,
 		DialTarget: defaultTestServiceName,
 		Host:       "localhost",
@@ -1488,30 +1529,6 @@ func (s) TestEndpointAmbientError(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	dm := xdsdepmgr.New(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
-	defer dm.Close()
-
-	// Defer closing the watcher to prevent a potential hang. The management
-	// server may send repeated errors, triggering updates that hold the
-	// dependency manager's mutex. This defer is defined last so it executes
-	// first (before dm.Close()). If we don't stop the watcher, dm.Close() will
-	// deadlock waiting for the mutex currently held by the blocking Update
-	// call.
-	defer watcher.close()
-
-	wantXdsConfig := makeXDSConfig(resources.Routes[0].Name, resources.Clusters[0].Name, resources.Endpoints[0].ClusterName, "localhost:8080")
-
-	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
-		t.Fatal(err)
-	}
-
-	// Send an ambient error for the endpoint resource by setting the weight to
-	// 0.
-	resources.Endpoints[0].Endpoints[0].LbEndpoints[0].LoadBalancingWeight = &wrapperspb.UInt32Value{Value: 0}
-	if err := mgmtServer.Update(ctx, resources); err != nil {
-		t.Fatal(err)
-	}
-	wantXdsConfig.Clusters[resources.Clusters[0].Name].Config.EndpointConfig.ResolutionNote = fmt.Errorf("[xDS node id: %v]: %v", nodeID, fmt.Errorf("EDS response contains an endpoint with zero weight: endpoint:{address:{socket_address:{address:%q port_value:%v}}} load_balancing_weight:{}", "localhost", 8080))
 	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
 		t.Fatal(err)
 	}

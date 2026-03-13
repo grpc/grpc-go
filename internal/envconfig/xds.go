@@ -79,4 +79,9 @@ var (
 	// xDS bootstrap configuration via the `call_creds` field. For more details,
 	// see: https://github.com/grpc/proposal/blob/master/A97-xds-jwt-call-creds.md
 	XDSBootstrapCallCredsEnabled = boolFromEnv("GRPC_EXPERIMENTAL_XDS_BOOTSTRAP_CALL_CREDS", false)
+
+	// XDSSNIEnabled controls if gRPC should send SNI information in xDS
+	// configured TLS handshakes. For more details, see:
+	// https://github.com/grpc/proposal/blob/master/A101-SNI-setting-and-SNI-SAN-validation.md
+	XDSSNIEnabled = boolFromEnv("GRPC_EXPERIMENTAL_XDS_SNI", false)
 )

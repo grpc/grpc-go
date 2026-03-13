@@ -955,22 +955,25 @@ func (s) TestReResolutionAfterTransientFailure(t *testing.T) {
 		Clusters:  []*v3clusterpb.Cluster{cluster, ldnsCluster},
 		Endpoints: nil,
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 
 	// Replace DNS resolver with a wrapped resolver to capture ResolveNow calls.
-	resolveNowCh := make(chan struct{}, 1)
+	resolveNowCh := make(chan struct{})
 	dnsR := manual.NewBuilderWithScheme("dns")
 	dnsResolverBuilder := resolver.Get("dns")
 	resolver.Register(dnsR)
 	defer resolver.Register(dnsResolverBuilder)
 	dnsR.ResolveNowCallback = func(resolver.ResolveNowOptions) {
-		close(resolveNowCh)
+		select {
+		case resolveNowCh <- struct{}{}:
+		case <-ctx.Done():
+		}
 	}
 	dnsR.UpdateState(resolver.State{
 		Endpoints: []resolver.Endpoint{{Addresses: []resolver.Address{{Addr: fmt.Sprintf("%s:%d", host, port)}}}},
 	})
 
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	if err := mgmtServer.Update(ctx, updateOpts); err != nil {
 		t.Fatalf("Failed to update xDS resources: %v", err)
 	}

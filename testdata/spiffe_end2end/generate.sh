@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Generate client/server self signed CAs and certs.
-openssl req -x509 -newkey rsa:4096 -keyout ca.key -out ca.pem -days 365 -nodes -subj "/C=US/ST=VA/O=Internet Widgits Pty Ltd/CN=foo.bar.hoo.ca.com"
+openssl req -x509 -newkey rsa:4096 -keyout ca.key -out ca.pem -days 3650 -nodes -subj "/C=US/ST=VA/O=Internet Widgits Pty Ltd/CN=foo.bar.hoo.ca.com"
 
 # The SPIFFE related extensions are listed in spiffe-openssl.cnf config. Both
 # client_spiffe.pem and server_spiffe.pem are generated in the same way with
