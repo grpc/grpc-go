@@ -1424,6 +1424,7 @@ func (s *Server) processUnaryRPC(ctx context.Context, stream *transport.ServerSt
 		return nil
 	}
 	ctx = NewContextWithServerTransportStream(ctx, stream)
+	ctx = context.WithValue(ctx, compressKey{}, &compressOptions{})
 	reply, appErr := md.Handler(info.serviceImpl, ctx, df, s.opts.unaryInt)
 	if appErr != nil {
 		appStatus, ok := status.FromError(appErr)
@@ -1471,7 +1472,11 @@ func (s *Server) processUnaryRPC(ctx context.Context, stream *transport.ServerSt
 	if stream.SendCompress() != sendCompressorName {
 		comp = encoding.GetCompressor(stream.SendCompress())
 	}
-	if err := s.sendResponse(ctx, stream, reply, cp, opts, comp); err != nil {
+	compV0, compV1 := cp, comp
+	if opts, ok := ctx.Value(compressKey{}).(*compressOptions); ok && opts.DoNotCompress {
+		compV0, compV1 = nil, nil
+	}
+	if err := s.sendResponse(ctx, stream, reply, compV0, opts, compV1); err != nil {
 		if err == io.EOF {
 			// The entire stream is done (for unary RPC only).
 			return err
@@ -1586,6 +1591,7 @@ func (s *Server) processStreamingRPC(ctx context.Context, stream *transport.Serv
 		sh.HandleRPC(ctx, statsBegin)
 	}
 	ctx = NewContextWithServerTransportStream(ctx, stream)
+	ctx = context.WithValue(ctx, compressKey{}, &compressOptions{})
 	ss := &serverStream{
 		ctx:                   ctx,
 		s:                     stream,
