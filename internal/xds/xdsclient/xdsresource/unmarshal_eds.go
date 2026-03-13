@@ -79,6 +79,10 @@ func unmarshalEndpointsResource(r *anypb.Any) (string, EndpointsUpdate, error) {
 		return cla.GetClusterName(), EndpointsUpdate{}, err
 	}
 	u.Raw = r
+
+	if cla.GetClusterName() == "" {
+		return "", EndpointsUpdate{}, fmt.Errorf("empty resource name in endpoints resource")
+	}
 	return cla.GetClusterName(), u, nil
 }
 

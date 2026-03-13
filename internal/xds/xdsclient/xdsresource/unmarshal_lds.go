@@ -56,6 +56,10 @@ func unmarshalListenerResource(r *anypb.Any, opts *xdsclient.DecodeOptions) (str
 		return lis.GetName(), ListenerUpdate{}, err
 	}
 	lu.Raw = r
+
+	if lis.GetName() == "" {
+		return "", ListenerUpdate{}, fmt.Errorf("empty resource name in listener resource")
+	}
 	return lis.GetName(), *lu, nil
 }
 

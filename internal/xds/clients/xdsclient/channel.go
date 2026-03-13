@@ -268,6 +268,9 @@ func decodeResponse(opts *DecodeOptions, rType *ResourceType, resp response) (ma
 		// Name field of the result is left unpopulated only when resource
 		// deserialization fails.
 		name := ""
+		if result == nil && err == nil {
+			continue
+		}
 		if result != nil {
 			name = xdsresource.ParseName(result.Name).String()
 		}

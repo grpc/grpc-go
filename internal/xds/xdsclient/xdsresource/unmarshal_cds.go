@@ -74,6 +74,9 @@ func unmarshalClusterResource(r *anypb.Any, serverCfg *bootstrap.ServerConfig) (
 	}
 	cu.Raw = r
 
+	if cluster.GetName() == "" {
+		return "", ClusterUpdate{}, fmt.Errorf("empty resource name in Cluster resource")
+	}
 	return cluster.GetName(), cu, nil
 }
 
