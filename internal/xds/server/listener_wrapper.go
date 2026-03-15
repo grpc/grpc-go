@@ -162,12 +162,12 @@ func (l *listenerWrapper) maybeUpdateFilterChains() {
 	l.conns = make(map[*connWrapper]bool)
 
 	// Swap in the new filter chain manager before draining connections.
-	oldActive := l.activeFilterChainManager
+	prevActive := l.activeFilterChainManager
 	l.activeFilterChainManager = l.pendingFilterChainManager
 	l.pendingFilterChainManager = nil
 	l.instantiateFilterChainRoutingConfigurationsLocked()
-	if oldActive != nil {
-		oldActive.stop()
+	if prevActive != nil {
+		prevActive.stop()
 	}
 
 	// Remove HTTP filters that are not referenced by any active filter chain.
