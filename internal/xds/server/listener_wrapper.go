@@ -170,26 +170,22 @@ func (l *listenerWrapper) maybeUpdateFilterChains() {
 		prevActive.stop()
 	}
 
-	// Remove HTTP filters that are not referenced by any active filter chain.
-	for key, filter := range l.httpFilters {
-		found := false
-	findFilter:
-		for _, fc := range l.activeFilterChainManager.filterChains {
-			for _, f := range fc.httpFilters {
-				if key == newServerFilterKey(&f) {
-					found = true
-					break findFilter
-				}
-			}
+	// Build a set of all keys currently in use.
+	activeKeys := make(map[serverFilterKey]struct{})
+	for _, fc := range l.activeFilterChainManager.filterChains {
+		for _, f := range fc.httpFilters {
+			activeKeys[newServerFilterKey(&f)] = struct{}{}
 		}
-		if !found {
+	}
+
+	// Iterate through the existing filters and delete those not in the active
+	// set.
+	for key, filter := range l.httpFilters {
+		if _, active := activeKeys[key]; !active {
 			if filter.refCnt.Load() != 0 {
 				l.logger.Errorf("HTTP filter with key %s is not used by any active filter chain but has non-zero reference count: %d. This indicates a bug in the filter reference counting logic.", key, filter.refCnt.Load())
 			}
 			delete(l.httpFilters, key)
-			// Note that we do not call the cleanup function for the filter
-			// here. That would have happened when the filter's ref count went
-			// to zero.
 		}
 	}
 	l.mu.Unlock()
