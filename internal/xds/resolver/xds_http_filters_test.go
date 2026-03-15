@@ -883,15 +883,29 @@ WaitForUpdatedConfig:
 	}
 
 	// Verify the filter instance is retained, while the interceptor instances
-	// are replaced with the updated config.
-	if got, want := filtersCreated.Load(), int32(1); got != want {
-		t.Fatalf("Created %d filter instances, want: %d", got, want)
+	// are replaced with the updated config. The new ConfigSelector is pushed to
+	// the channel before the old one is stopped. So, the previous loop waiting
+	// for the updated config to be applied does not guarantee that the old
+	// interceptor is stopped. We need to wait for a short duration after the
+	// updated config is applied to ensure that the old interceptor is stopped
+	// and the new one is created.
+	for ; ctx.Err() == nil; <-time.After(defaultTestShortTimeout) {
+		if got, want := filtersCreated.Load(), int32(1); got != want {
+			continue
+		}
+		if got, want := interceptorsCreated.Load(), int32(2); got != want {
+			continue
+		}
+		if got, want := interceptorsDestroyed.Load(), int32(1); got != want {
+			continue
+		}
+		break
 	}
-	if got, want := interceptorsCreated.Load(), int32(2); got != want {
-		t.Fatalf("Created %d interceptor instances, want: %d", got, want)
-	}
-	if got, want := interceptorsDestroyed.Load(), int32(1); got != want {
-		t.Fatalf("Destroyed %d interceptor instances, want: %d", got, want)
+	if ctx.Err() != nil {
+		t.Errorf("Destroyed %d interceptor instances, want: %d", filtersCreated.Load(), 1)
+		t.Errorf("Created %d interceptor instances, want: %d", interceptorsCreated.Load(), 2)
+		t.Errorf("Destroyed %d interceptor instances, want: %d", interceptorsDestroyed.Load(), 1)
+		t.Fatal("Timeout when waiting for interceptos instances to be replaced")
 	}
 
 	// Close the client and verify that the filter and interceptor are closed.

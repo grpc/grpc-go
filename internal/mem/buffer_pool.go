@@ -16,7 +16,8 @@
  *
  */
 
-// Package mem provides a tiered buffer pool implementation for efficient memory management.
+// Package mem provides utilities that facilitate memory reuse in byte slices
+// that are used as buffers.
 package mem
 
 import (
@@ -46,7 +47,8 @@ type bufferPool interface {
 	Put(*[]byte)
 }
 
-// BinaryTieredBufferPool is a buffer pool that uses multiple sub-pools with power-of-two sizes.
+// BinaryTieredBufferPool is a buffer pool that uses multiple sub-pools with
+// power-of-two sizes.
 type BinaryTieredBufferPool struct {
 	// exponentToNextLargestPoolMap maps a power-of-two exponent (e.g., 12 for
 	// 4KB) to the index of the next largest sizedBufferPool. This is used by
@@ -69,12 +71,27 @@ type BinaryTieredBufferPool struct {
 // of 2), not the raw byte sizes. For example, to create a pool of 16KB buffers
 // (2^14 bytes), pass 14 as the argument.
 func NewBinaryTieredBufferPool(powerOfTwoExponents ...uint8) (*BinaryTieredBufferPool, error) {
+	return newBinaryTiered(func(size int) bufferPool {
+		return newSizedBufferPool(size, true)
+	}, &simpleBufferPool{shouldZero: true}, powerOfTwoExponents...)
+}
+
+// NewDirtyBinaryTieredBufferPool returns a BufferPool backed by multiple
+// sub-pools. It is similar to NewBinaryTieredBufferPool but it does not
+// initialize the buffers before returning them.
+func NewDirtyBinaryTieredBufferPool(powerOfTwoExponents ...uint8) (*BinaryTieredBufferPool, error) {
+	return newBinaryTiered(func(size int) bufferPool {
+		return newSizedBufferPool(size, false)
+	}, &simpleBufferPool{shouldZero: false}, powerOfTwoExponents...)
+}
+
+func newBinaryTiered(sizedPoolFactory func(int) bufferPool, fallbackPool bufferPool, powerOfTwoExponents ...uint8) (*BinaryTieredBufferPool, error) {
 	slices.Sort(powerOfTwoExponents)
 	powerOfTwoExponents = slices.Compact(powerOfTwoExponents)
 
 	// Determine the maximum exponent we need to support. This depends on the
 	// word size (32-bit vs 64-bit).
-	maxExponent := uintSize - 1
+	maxExponent := uintSize - 2
 	indexOfNextLargestBit := slices.Repeat([]int{-1}, maxExponent+1)
 	indexOfPreviousLargestBit := slices.Repeat([]int{-1}, maxExponent+1)
 
@@ -88,7 +105,7 @@ func NewBinaryTieredBufferPool(powerOfTwoExponents ...uint8) (*BinaryTieredBuffe
 			return nil, fmt.Errorf("mem: allocating slice of size 2^%d is not possible", exp)
 		}
 		tierSize := 1 << exp
-		pools = append(pools, newSizedBufferPool(tierSize))
+		pools = append(pools, sizedPoolFactory(tierSize))
 		maxTier = max(maxTier, tierSize)
 
 		// Map the exact power of 2 to this pool index.
@@ -117,7 +134,7 @@ func NewBinaryTieredBufferPool(powerOfTwoExponents ...uint8) (*BinaryTieredBuffe
 		exponentToPreviousLargestPoolMap: indexOfPreviousLargestBit,
 		sizedPools:                       pools,
 		maxPoolCap:                       maxTier,
-		fallbackPool:                     &simpleBufferPool{},
+		fallbackPool:                     fallbackPool,
 	}, nil
 }
 
@@ -203,6 +220,7 @@ func (NopBufferPool) Put(*[]byte) {
 type sizedBufferPool struct {
 	pool        sync.Pool
 	defaultSize int
+	shouldZero  bool
 }
 
 func (p *sizedBufferPool) Get(size int) *[]byte {
@@ -212,7 +230,9 @@ func (p *sizedBufferPool) Get(size int) *[]byte {
 		return &buf
 	}
 	b := *buf
-	clear(b[:cap(b)])
+	if p.shouldZero {
+		clear(b[:cap(b)])
+	}
 	*buf = b[:size]
 	return buf
 }
@@ -227,9 +247,10 @@ func (p *sizedBufferPool) Put(buf *[]byte) {
 	p.pool.Put(buf)
 }
 
-func newSizedBufferPool(size int) *sizedBufferPool {
+func newSizedBufferPool(size int, zero bool) *sizedBufferPool {
 	return &sizedBufferPool{
 		defaultSize: size,
+		shouldZero:  zero,
 	}
 }
 
@@ -246,10 +267,11 @@ func NewTieredBufferPool(poolSizes ...int) *TieredBufferPool {
 	sort.Ints(poolSizes)
 	pools := make([]*sizedBufferPool, len(poolSizes))
 	for i, s := range poolSizes {
-		pools[i] = newSizedBufferPool(s)
+		pools[i] = newSizedBufferPool(s, true)
 	}
 	return &TieredBufferPool{
-		sizedPools: pools,
+		sizedPools:   pools,
+		fallbackPool: simpleBufferPool{shouldZero: true},
 	}
 }
 
@@ -280,13 +302,16 @@ func (p *TieredBufferPool) getPool(size int) bufferPool {
 // acquire a buffer from the pool but if that buffer is too small, it returns it
 // to the pool and creates a new one.
 type simpleBufferPool struct {
-	pool sync.Pool
+	pool       sync.Pool
+	shouldZero bool
 }
 
 func (p *simpleBufferPool) Get(size int) *[]byte {
 	bs, ok := p.pool.Get().(*[]byte)
 	if ok && cap(*bs) >= size {
-		clear((*bs)[:cap(*bs)])
+		if p.shouldZero {
+			clear((*bs)[:cap(*bs)])
+		}
 		*bs = (*bs)[:size]
 		return bs
 	}
