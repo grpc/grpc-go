@@ -759,11 +759,7 @@ func (a *csAttempt) shouldRetry(err error) (bool, error) {
 		return false, err
 	}
 	if cs.numRetries+1 >= rp.MaxAttempts {
-		return false, fmt.Errorf("stopped after %d attempts: %w: %w",
-			cs.numRetries+1,
-			ErrRetriesExhausted,
-			err,
-		)
+		return false, fmt.Errorf("stopped after %d attempts: %w: %w", cs.numRetries+1, ErrRetriesExhausted, err)
 	}
 
 	var dur time.Duration
