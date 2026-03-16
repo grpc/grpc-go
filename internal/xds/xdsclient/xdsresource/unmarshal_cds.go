@@ -65,15 +65,16 @@ func unmarshalClusterResource(r *anypb.Any, serverCfg *bootstrap.ServerConfig) (
 	if err := proto.Unmarshal(r.GetValue(), cluster); err != nil {
 		return "", ClusterUpdate{}, fmt.Errorf("failed to unmarshal resource: %v", err)
 	}
+
+	if cluster.GetName() == "" {
+		return "", ClusterUpdate{}, fmt.Errorf("empty resource name in Cluster resource")
+	}
 	cu, err := validateClusterAndConstructClusterUpdate(cluster, serverCfg)
 	if err != nil {
 		return cluster.GetName(), ClusterUpdate{}, err
 	}
 	cu.Raw = r
 
-	if cluster.GetName() == "" {
-		return "", ClusterUpdate{}, fmt.Errorf("empty resource name in Cluster resource")
-	}
 	return cluster.GetName(), cu, nil
 }
 

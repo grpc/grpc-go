@@ -51,15 +51,16 @@ func unmarshalListenerResource(r *anypb.Any, opts *xdsclient.DecodeOptions) (str
 		return "", ListenerUpdate{}, fmt.Errorf("failed to unmarshal resource: %v", err)
 	}
 
+	if lis.GetName() == "" {
+		return "", ListenerUpdate{}, fmt.Errorf("empty resource name in listener resource")
+	}
+
 	lu, err := processListener(lis, opts)
 	if err != nil {
 		return lis.GetName(), ListenerUpdate{}, err
 	}
 	lu.Raw = r
 
-	if lis.GetName() == "" {
-		return "", ListenerUpdate{}, fmt.Errorf("empty resource name in listener resource")
-	}
 	return lis.GetName(), *lu, nil
 }
 

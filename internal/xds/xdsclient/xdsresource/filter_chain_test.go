@@ -60,6 +60,7 @@ func (s) TestUnmarshalListener_ServerSide_DroppedFilterChains(t *testing.T) {
 		{
 			desc: "unsupported destination port field",
 			lis: &v3listenerpb.Listener{
+				Name:    "test-listener",
 				Address: localSocketAddress,
 				FilterChains: []*v3listenerpb.FilterChain{
 					{
@@ -73,6 +74,7 @@ func (s) TestUnmarshalListener_ServerSide_DroppedFilterChains(t *testing.T) {
 		{
 			desc: "unsupported server names field",
 			lis: &v3listenerpb.Listener{
+				Name:    "test-listener",
 				Address: localSocketAddress,
 				FilterChains: []*v3listenerpb.FilterChain{
 					{
@@ -86,6 +88,7 @@ func (s) TestUnmarshalListener_ServerSide_DroppedFilterChains(t *testing.T) {
 		{
 			desc: "unsupported transport protocol field",
 			lis: &v3listenerpb.Listener{
+				Name:    "test-listener",
 				Address: localSocketAddress,
 				FilterChains: []*v3listenerpb.FilterChain{
 					{
@@ -99,6 +102,7 @@ func (s) TestUnmarshalListener_ServerSide_DroppedFilterChains(t *testing.T) {
 		{
 			desc: "unsupported application protocol field",
 			lis: &v3listenerpb.Listener{
+				Name:    "test-listener",
 				Address: localSocketAddress,
 				FilterChains: []*v3listenerpb.FilterChain{
 					{
@@ -133,6 +137,7 @@ func (s) TestUnmarshalListener_ServerSide_FilterChains_FailureCases(t *testing.T
 		{
 			desc: "bad dest address prefix",
 			lis: &v3listenerpb.Listener{
+				Name:    "test-listener",
 				Address: localSocketAddress,
 				FilterChains: []*v3listenerpb.FilterChain{
 					{
@@ -146,6 +151,7 @@ func (s) TestUnmarshalListener_ServerSide_FilterChains_FailureCases(t *testing.T
 		{
 			desc: "bad dest prefix length",
 			lis: &v3listenerpb.Listener{
+				Name:    "test-listener",
 				Address: localSocketAddress,
 				FilterChains: []*v3listenerpb.FilterChain{
 					{
@@ -159,6 +165,7 @@ func (s) TestUnmarshalListener_ServerSide_FilterChains_FailureCases(t *testing.T
 		{
 			desc: "bad source address prefix",
 			lis: &v3listenerpb.Listener{
+				Name:    "test-listener",
 				Address: localSocketAddress,
 				FilterChains: []*v3listenerpb.FilterChain{
 					{
@@ -172,6 +179,7 @@ func (s) TestUnmarshalListener_ServerSide_FilterChains_FailureCases(t *testing.T
 		{
 			desc: "bad source prefix length",
 			lis: &v3listenerpb.Listener{
+				Name:    "test-listener",
 				Address: localSocketAddress,
 				FilterChains: []*v3listenerpb.FilterChain{
 					{
@@ -204,6 +212,7 @@ func (s) TestUnmarshalListener_ServerSide_OverlappingMatchingRules(t *testing.T)
 		{
 			desc: "matching destination prefixes with no other matchers",
 			lis: &v3listenerpb.Listener{
+				Name:    "test-listener",
 				Address: localSocketAddress,
 				FilterChains: []*v3listenerpb.FilterChain{
 					{
@@ -224,6 +233,7 @@ func (s) TestUnmarshalListener_ServerSide_OverlappingMatchingRules(t *testing.T)
 		{
 			desc: "matching source type",
 			lis: &v3listenerpb.Listener{
+				Name:    "test-listener",
 				Address: localSocketAddress,
 				FilterChains: []*v3listenerpb.FilterChain{
 					{
@@ -248,6 +258,7 @@ func (s) TestUnmarshalListener_ServerSide_OverlappingMatchingRules(t *testing.T)
 		{
 			desc: "matching source prefixes",
 			lis: &v3listenerpb.Listener{
+				Name:    "test-listener",
 				Address: localSocketAddress,
 				FilterChains: []*v3listenerpb.FilterChain{
 					{
@@ -268,6 +279,7 @@ func (s) TestUnmarshalListener_ServerSide_OverlappingMatchingRules(t *testing.T)
 		{
 			desc: "matching source ports",
 			lis: &v3listenerpb.Listener{
+				Name:    "test-listener",
 				Address: localSocketAddress,
 				FilterChains: []*v3listenerpb.FilterChain{
 					{
@@ -307,13 +319,17 @@ func (s) TestUnmarshalListener_ServerSide_BadSecurityConfig(t *testing.T) {
 		enableSystemRootCertsFlag bool
 	}{
 		{
-			desc:    "no filter chains",
-			lis:     &v3listenerpb.Listener{Address: localSocketAddress},
+			desc: "no filter chains",
+			lis: &v3listenerpb.Listener{
+				Name:    "test-listener",
+				Address: localSocketAddress,
+			},
 			wantErr: "no supported filter chains and no default filter chain",
 		},
 		{
 			desc: "unexpected transport socket name",
 			lis: &v3listenerpb.Listener{
+				Name:    "test-listener",
 				Address: localSocketAddress,
 				FilterChains: []*v3listenerpb.FilterChain{
 					{
@@ -327,6 +343,7 @@ func (s) TestUnmarshalListener_ServerSide_BadSecurityConfig(t *testing.T) {
 		{
 			desc: "unexpected transport socket URL",
 			lis: &v3listenerpb.Listener{
+				Name:    "test-listener",
 				Address: localSocketAddress,
 				FilterChains: []*v3listenerpb.FilterChain{
 					{
@@ -345,6 +362,7 @@ func (s) TestUnmarshalListener_ServerSide_BadSecurityConfig(t *testing.T) {
 		{
 			desc: "badly marshaled transport socket",
 			lis: &v3listenerpb.Listener{
+				Name:    "test-listener",
 				Address: localSocketAddress,
 				FilterChains: []*v3listenerpb.FilterChain{
 					{
@@ -366,6 +384,7 @@ func (s) TestUnmarshalListener_ServerSide_BadSecurityConfig(t *testing.T) {
 		{
 			desc: "missing CommonTlsContext",
 			lis: &v3listenerpb.Listener{
+				Name:    "test-listener",
 				Address: localSocketAddress,
 				FilterChains: []*v3listenerpb.FilterChain{
 					{
@@ -384,6 +403,7 @@ func (s) TestUnmarshalListener_ServerSide_BadSecurityConfig(t *testing.T) {
 		{
 			desc: "require_sni-set-to-true-in-downstreamTlsContext",
 			lis: &v3listenerpb.Listener{
+				Name:    "test-listener",
 				Address: localSocketAddress,
 				FilterChains: []*v3listenerpb.FilterChain{
 					{
@@ -404,6 +424,7 @@ func (s) TestUnmarshalListener_ServerSide_BadSecurityConfig(t *testing.T) {
 		{
 			desc: "unsupported-ocsp_staple_policy-in-downstreamTlsContext",
 			lis: &v3listenerpb.Listener{
+				Name:    "test-listener",
 				Address: localSocketAddress,
 				FilterChains: []*v3listenerpb.FilterChain{
 					{
@@ -424,6 +445,7 @@ func (s) TestUnmarshalListener_ServerSide_BadSecurityConfig(t *testing.T) {
 		{
 			desc: "unsupported validation context in transport socket",
 			lis: &v3listenerpb.Listener{
+				Name:    "test-listener",
 				Address: localSocketAddress,
 				FilterChains: []*v3listenerpb.FilterChain{
 					{
@@ -450,6 +472,7 @@ func (s) TestUnmarshalListener_ServerSide_BadSecurityConfig(t *testing.T) {
 		{
 			desc: "unsupported match_subject_alt_names field in transport socket",
 			lis: &v3listenerpb.Listener{
+				Name:    "test-listener",
 				Address: localSocketAddress,
 				FilterChains: []*v3listenerpb.FilterChain{
 					{
@@ -476,6 +499,7 @@ func (s) TestUnmarshalListener_ServerSide_BadSecurityConfig(t *testing.T) {
 		{
 			desc: "no root certificate provider with require_client_cert",
 			lis: &v3listenerpb.Listener{
+				Name:    "test-listener",
 				Address: localSocketAddress,
 				FilterChains: []*v3listenerpb.FilterChain{
 					{
@@ -500,8 +524,9 @@ func (s) TestUnmarshalListener_ServerSide_BadSecurityConfig(t *testing.T) {
 			wantErr: "security configuration on the server-side does not contain root certificate provider instance name, but require_client_cert field is set",
 		},
 		{
-			desc: "no identity certificate provider",
+			desc: "no_identity_certificate_provider",
 			lis: &v3listenerpb.Listener{
+				Name:    "test-listener",
 				Address: localSocketAddress,
 				FilterChains: []*v3listenerpb.FilterChain{
 					{
@@ -523,6 +548,7 @@ func (s) TestUnmarshalListener_ServerSide_BadSecurityConfig(t *testing.T) {
 			desc:                      "system root certificate field set on server",
 			enableSystemRootCertsFlag: true,
 			lis: &v3listenerpb.Listener{
+				Name:    "test-listener",
 				Address: localSocketAddress,
 				FilterChains: []*v3listenerpb.FilterChain{
 					{
@@ -554,6 +580,7 @@ func (s) TestUnmarshalListener_ServerSide_BadSecurityConfig(t *testing.T) {
 		{
 			desc: "system root certificate field set on server, env var disabled",
 			lis: &v3listenerpb.Listener{
+				Name:    "test-listener",
 				Address: localSocketAddress,
 				FilterChains: []*v3listenerpb.FilterChain{
 					{
@@ -853,6 +880,7 @@ func (s) TestUnmarshalListener_ServerSide_BadRouteUpdate(t *testing.T) {
 		{
 			name: "missing-route-specifier",
 			lis: &v3listenerpb.Listener{
+				Name:    "test-listener",
 				Address: localSocketAddress,
 				FilterChains: []*v3listenerpb.FilterChain{
 					{
@@ -888,6 +916,7 @@ func (s) TestUnmarshalListener_ServerSide_BadRouteUpdate(t *testing.T) {
 		{
 			name: "not-ads",
 			lis: &v3listenerpb.Listener{
+				Name:    "test-listener",
 				Address: localSocketAddress,
 				FilterChains: []*v3listenerpb.FilterChain{
 					{
@@ -933,6 +962,7 @@ func (s) TestUnmarshalListener_ServerSide_BadRouteUpdate(t *testing.T) {
 		{
 			name: "unsupported-route-specifier",
 			lis: &v3listenerpb.Listener{
+				Name:    "test-listener",
 				Address: localSocketAddress,
 				FilterChains: []*v3listenerpb.FilterChain{
 					{
