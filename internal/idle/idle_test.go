@@ -64,7 +64,7 @@ func newTestEnforcer() *testEnforcer {
 }
 
 // overrideNewTimer overrides the new timer creation function by ensuring that a
-// message is pushed on the returned channel everytime the timer fires.
+// message is pushed on the returned channel every time the timer fires.
 func overrideNewTimer(t *testing.T) <-chan struct{} {
 	t.Helper()
 

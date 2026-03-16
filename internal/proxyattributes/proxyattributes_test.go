@@ -108,7 +108,7 @@ func (s) TestSet(t *testing.T) {
 		t.Errorf("Get(%v) = %v, want %v ", populatedAddr, attrPresent, true)
 	}
 	if got, want := gotOption.ConnectAddr, pOpts.ConnectAddr; got != want {
-		t.Errorf("unexpected ConnectAddr proxy atrribute = %v, want %v", got, want)
+		t.Errorf("unexpected ConnectAddr proxy attribute = %v, want %v", got, want)
 	}
 	if got, want := gotOption.User, pOpts.User; got != want {
 		t.Errorf("unexpected User proxy attribute = %v, want %v", got, want)
