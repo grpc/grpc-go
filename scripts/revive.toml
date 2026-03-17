@@ -1,0 +1,60 @@
+# Enabled rules
+[rule.blank-imports]
+
+[rule.context-as-argument]
+
+[rule.context-keys-type]
+
+[rule.dot-imports]
+
+[rule.errorf]
+
+[rule.error-return]
+
+[rule.error-strings]
+
+[rule.error-naming]
+
+[rule.exported]
+
+[rule.increment-decrement]
+
+[rule.indent-error-flow]
+    arguments = ["preserveScope"]
+
+[rule.package-comments]
+
+[rule.range]
+
+[rule.receiver-naming]
+
+[rule.superfluous-else]
+    arguments = ["preserveScope"]
+
+[rule.time-naming]
+
+[rule.unexported-return]
+
+[rule.unnecessary-stmt]
+
+[rule.unreachable-code]
+
+[rule.unused-parameter]
+
+[rule.use-any]
+
+[rule.useless-break]
+
+[rule.var-declaration]
+
+[rule.var-naming]
+
+# Disabled rules
+[rule.empty-block] # Disabled to allow intentional no-op blocks (e.g., channel draining).
+    Disabled = true
+
+[rule.import-shadowing] # Disabled to allow intentional reuse of variable names that are the same as package imports.
+    Disabled = true
+
+[rule.redefines-builtin-id] # Disabled to allow intentional reuse of variable names that are the same as built-in functions.
+    Disabled = true

@@ -1,0 +1,60 @@
+name: Dependency Changes
+
+# Trigger on PRs.
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  # Compare dependencies before and after this PR.
+  dependencies:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: true
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache-dependency-path: "**/*go.sum"
+
+      # Run the commands to generate dependencies before and after and compare.
+      - name: Compare dependencies
+        run: |
+          set -eu
+          TEMP_DIR="$(mktemp -d)"
+          # GITHUB_BASE_REF is set when the job is triggered by a PR.
+          TARGET_REF="${GITHUB_BASE_REF:-master}"
+
+          mkdir "${TEMP_DIR}/after"
+          scripts/gen-deps.sh "${TEMP_DIR}/after"
+
+          git checkout "origin/${TARGET_REF}"
+          mkdir "${TEMP_DIR}/before"
+          scripts/gen-deps.sh "${TEMP_DIR}/before"
+
+          echo -e " \nComparing dependencies..."
+          cd "${TEMP_DIR}"
+          # Run grep in a sub-shell since bash does not support ! in the middle of a pipe.
+          if diff -u0 -r "before" "after" | bash -c '! grep -v "@@"'; then
+            echo "No changes detected."
+            exit 0
+          fi
+
+          # Print packages in `after` but not `before`.
+          for x in $(ls -1 after | grep -vF "$(ls -1 before)"); do
+            echo -e " \nDependencies of new package $x:"
+            cat "after/$x"
+          done
+
+          echo -e " \nChanges detected; exiting with error."
+          exit 1
