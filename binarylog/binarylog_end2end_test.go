@@ -130,111 +130,14 @@ func payloadToID(p *testpb.Payload) int32 {
 	return int32(p.Body[0]) + int32(p.Body[1])<<8 + int32(p.Body[2])<<16 + int32(p.Body[3])<<24
 }
 
-type testServer struct {
-	testgrpc.UnimplementedTestServiceServer
-	te *test
-}
-
-func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
-	md, ok := metadata.FromIncomingContext(ctx)
-	if ok {
-		if err := grpc.SendHeader(ctx, md); err != nil {
-			return nil, status.Errorf(status.Code(err), "grpc.SendHeader(_, %v) = %v, want <nil>", md, err)
-		}
-		if err := grpc.SetTrailer(ctx, testTrailerMetadata); err != nil {
-			return nil, status.Errorf(status.Code(err), "grpc.SetTrailer(_, %v) = %v, want <nil>", testTrailerMetadata, err)
-		}
-	}
-
-	if id := payloadToID(in.Payload); id == errorID {
-		return nil, fmt.Errorf("got error id: %v", id)
-	}
-
-	return &testpb.SimpleResponse{Payload: in.Payload}, nil
-}
-
-func (s *testServer) FullDuplexCall(stream testgrpc.TestService_FullDuplexCallServer) error {
-	md, ok := metadata.FromIncomingContext(stream.Context())
-	if ok {
-		if err := stream.SendHeader(md); err != nil {
-			return status.Errorf(status.Code(err), "stream.SendHeader(%v) = %v, want %v", md, err, nil)
-		}
-		stream.SetTrailer(testTrailerMetadata)
-	}
-	for {
-		in, err := stream.Recv()
-		if err == io.EOF {
-			// read done.
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-
-		if id := payloadToID(in.Payload); id == errorID {
-			return fmt.Errorf("got error id: %v", id)
-		}
-
-		if err := stream.Send(&testpb.StreamingOutputCallResponse{Payload: in.Payload}); err != nil {
-			return err
-		}
-	}
-}
-
-func (s *testServer) StreamingInputCall(stream testgrpc.TestService_StreamingInputCallServer) error {
-	md, ok := metadata.FromIncomingContext(stream.Context())
-	if ok {
-		if err := stream.SendHeader(md); err != nil {
-			return status.Errorf(status.Code(err), "stream.SendHeader(%v) = %v, want %v", md, err, nil)
-		}
-		stream.SetTrailer(testTrailerMetadata)
-	}
-	for {
-		in, err := stream.Recv()
-		if err == io.EOF {
-			// read done.
-			return stream.SendAndClose(&testpb.StreamingInputCallResponse{AggregatedPayloadSize: 0})
-		}
-		if err != nil {
-			return err
-		}
-
-		if id := payloadToID(in.Payload); id == errorID {
-			return fmt.Errorf("got error id: %v", id)
-		}
-	}
-}
-
-func (s *testServer) StreamingOutputCall(in *testpb.StreamingOutputCallRequest, stream testgrpc.TestService_StreamingOutputCallServer) error {
-	md, ok := metadata.FromIncomingContext(stream.Context())
-	if ok {
-		if err := stream.SendHeader(md); err != nil {
-			return status.Errorf(status.Code(err), "stream.SendHeader(%v) = %v, want %v", md, err, nil)
-		}
-		stream.SetTrailer(testTrailerMetadata)
-	}
-
-	if id := payloadToID(in.Payload); id == errorID {
-		return fmt.Errorf("got error id: %v", id)
-	}
-
-	for i := 0; i < 5; i++ {
-		if err := stream.Send(&testpb.StreamingOutputCallResponse{Payload: in.Payload}); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 // test is an end-to-end test. It should be created with the newTest
 // func, modified as needed, and then started with its startServer method.
 // It should be cleaned up with the tearDown method.
 type test struct {
 	t *testing.T
 
-	testService testgrpc.TestServiceServer // nil means none
-	// srv and srvAddr are set once startServer is called.
-	srv     *grpc.Server
+	// ss and srvAddr are set once startServer is called.
+	ss      *stubserver.StubServer
 	srvAddr string // Server IP without port.
 	srvIP   net.IP
 	srvPort int
@@ -252,7 +155,7 @@ func (te *test) tearDown() {
 		te.cc.Close()
 		te.cc = nil
 	}
-	te.srv.Stop()
+	te.ss.Stop()
 }
 
 // newTest returns a new test using the provided testing.T and
@@ -284,8 +187,7 @@ func (lw *listenerWrapper) Accept() (net.Conn, error) {
 
 // startServer starts a gRPC server listening. Callers should defer a
 // call to te.tearDown to clean up.
-func (te *test) startServer(ts testgrpc.TestServiceServer) {
-	te.testService = ts
+func (te *test) startServer() {
 	lis, err := net.Listen("tcp", "localhost:0")
 
 	lis = &listenerWrapper{
@@ -296,14 +198,91 @@ func (te *test) startServer(ts testgrpc.TestServiceServer) {
 	if err != nil {
 		te.t.Fatalf("Failed to listen: %v", err)
 	}
-	var opts []grpc.ServerOption
-	s := grpc.NewServer(opts...)
-	te.srv = s
-	if te.testService != nil {
-		testgrpc.RegisterTestServiceServer(s, te.testService)
-	}
 
-	go s.Serve(lis)
+	te.ss = &stubserver.StubServer{
+		Listener: lis,
+		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			md, ok := metadata.FromIncomingContext(ctx)
+			if ok {
+				if err := grpc.SendHeader(ctx, md); err != nil {
+					return nil, status.Errorf(status.Code(err), "grpc.SendHeader(_, %v) = %v, want <nil>", md, err)
+				}
+				if err := grpc.SetTrailer(ctx, testTrailerMetadata); err != nil {
+					return nil, status.Errorf(status.Code(err), "grpc.SetTrailer(_, %v) = %v, want <nil>", testTrailerMetadata, err)
+				}
+			}
+			if id := payloadToID(in.Payload); id == errorID {
+				return nil, fmt.Errorf("got error id: %v", id)
+			}
+			return &testpb.SimpleResponse{Payload: in.Payload}, nil
+		},
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
+			md, ok := metadata.FromIncomingContext(stream.Context())
+			if ok {
+				if err := stream.SendHeader(md); err != nil {
+					return status.Errorf(status.Code(err), "stream.SendHeader(%v) = %v, want %v", md, err, nil)
+				}
+				stream.SetTrailer(testTrailerMetadata)
+			}
+			for {
+				in, err := stream.Recv()
+				if err == io.EOF {
+					return nil
+				}
+				if err != nil {
+					return err
+				}
+				if id := payloadToID(in.Payload); id == errorID {
+					return fmt.Errorf("got error id: %v", id)
+				}
+				if err := stream.Send(&testpb.StreamingOutputCallResponse{Payload: in.Payload}); err != nil {
+					return err
+				}
+			}
+		},
+		StreamingInputCallF: func(stream testgrpc.TestService_StreamingInputCallServer) error {
+			md, ok := metadata.FromIncomingContext(stream.Context())
+			if ok {
+				if err := stream.SendHeader(md); err != nil {
+					return status.Errorf(status.Code(err), "stream.SendHeader(%v) = %v, want %v", md, err, nil)
+				}
+				stream.SetTrailer(testTrailerMetadata)
+			}
+			for {
+				in, err := stream.Recv()
+				if err == io.EOF {
+					return stream.SendAndClose(&testpb.StreamingInputCallResponse{AggregatedPayloadSize: 0})
+				}
+				if err != nil {
+					return err
+				}
+				if id := payloadToID(in.Payload); id == errorID {
+					return fmt.Errorf("got error id: %v", id)
+				}
+			}
+		},
+		StreamingOutputCallF: func(in *testpb.StreamingOutputCallRequest, stream testgrpc.TestService_StreamingOutputCallServer) error {
+			md, ok := metadata.FromIncomingContext(stream.Context())
+			if ok {
+				if err := stream.SendHeader(md); err != nil {
+					return status.Errorf(status.Code(err), "stream.SendHeader(%v) = %v, want %v", md, err, nil)
+				}
+				stream.SetTrailer(testTrailerMetadata)
+			}
+			if id := payloadToID(in.Payload); id == errorID {
+				return fmt.Errorf("got error id: %v", id)
+			}
+			for i := 0; i < 5; i++ {
+				if err := stream.Send(&testpb.StreamingOutputCallResponse{Payload: in.Payload}); err != nil {
+					return err
+				}
+			}
+			return nil
+		},
+	}
+	if err := te.ss.StartServer(); err != nil {
+		te.t.Fatalf("Failed to start server: %v", err)
+	}
 	te.srvAddr = lis.Addr().String()
 	te.srvIP = lis.Addr().(*net.TCPAddr).IP
 	te.srvPort = lis.Addr().(*net.TCPAddr).Port
@@ -796,7 +775,7 @@ func (ed *expectedData) toServerLogEntries() []*binlogpb.GrpcLogEntry {
 
 func runRPCs(t *testing.T, cc *rpcConfig) *expectedData {
 	te := newTest(t)
-	te.startServer(&testServer{te: te})
+	te.startServer()
 	defer te.tearDown()
 
 	expect := &expectedData{
@@ -831,7 +810,7 @@ func runRPCs(t *testing.T, cc *rpcConfig) *expectedData {
 		t.Fatalf("cc.success: %v, got error: %v", cc.success, expect.err)
 	}
 	te.cc.Close()
-	te.srv.GracefulStop() // Wait for the server to stop.
+	te.ss.S.GracefulStop() // Wait for the server to stop.
 
 	return expect
 }
