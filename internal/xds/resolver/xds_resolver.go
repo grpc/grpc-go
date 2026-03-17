@@ -347,7 +347,7 @@ func (r *xdsResolver) sendNewServiceConfig(cs stoppableConfigSelector) bool {
 
 	sc := serviceConfigJSON(r.activeClusters, r.activePlugins)
 	if r.logger.V(2) {
-		r.logger.Infof("For Listener resource %q and RouteConfiguration resource %q, generated service config: %+v", r.ldsResourceName, r.xdsConfig.Listener.APIListener.RouteConfigName, sc)
+		r.logger.Infof("For Listener resource %q and RouteConfiguration resource %q, generated service config: %s", r.ldsResourceName, r.xdsConfig.Listener.APIListener.RouteConfigName, string(sc))
 	}
 
 	// Send the update to the ClientConn.
