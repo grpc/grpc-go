@@ -86,7 +86,7 @@ func (s) TestMalformedMethodPath(t *testing.T) {
 			testutils.SetEnvConfig(t, &envconfig.DisableStrictPathChecking, tc.envVar)
 
 			ss := &stubserver.StubServer{
-				UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+				UnaryCallF: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 					return &testpb.SimpleResponse{Payload: &testpb.Payload{Body: []byte("pwned")}}, nil
 				},
 			}
