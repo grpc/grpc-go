@@ -1522,7 +1522,7 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 	// If a non-gRPC response is received, then evaluate the HTTP status to
 	// process the response and close the stream.
 	// In case http status doesn't provide any error information (status : 200),
-	// then evalute response code to be Unknown.
+	// then evaluate response code to be Unknown.
 	if !isGRPC {
 		var grpcErrorCode = codes.Internal
 		if httpStatus == "" {
