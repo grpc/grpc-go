@@ -3551,7 +3551,7 @@ func setupRSTStreamOnEOSTest(ctx context.Context, t *testing.T, sendServerFrames
 
 	// Set up a client.
 	copts := ConnectOptions{BufferPool: mem.DefaultBufferPool()}
-	ct, err := NewHTTP2Client(ctx, ctx, resolver.Address{Addr: lis.Addr().String()}, copts, func(GoAwayReason) {})
+	ct, err := NewHTTP2Client(ctx, ctx, resolver.Address{Addr: lis.Addr().String()}, copts, func(GoAwayReason, http2.ErrCode, error) {})
 	if err != nil {
 		t.Fatalf("NewHTTP2Client failed: %v", err)
 	}
