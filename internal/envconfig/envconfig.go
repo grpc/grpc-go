@@ -103,6 +103,22 @@ var (
 	// environment variable "GRPC_GO_EXPERIMENTAL_XDS_RESOURCE_PANIC_RECOVERY"
 	// to "false".
 	XDSRecoverPanicInResourceParsing = boolFromEnv("GRPC_GO_EXPERIMENTAL_XDS_RESOURCE_PANIC_RECOVERY", true)
+
+	// DisableStrictPathChecking indicates whether strict path checking is
+	// disabled. This feature can be disabled by setting the environment
+	// variable GRPC_GO_EXPERIMENTAL_DISABLE_STRICT_PATH_CHECKING to "true".
+	//
+	// When strict path checking is enabled, gRPC will reject requests with
+	// paths that do not conform to the gRPC over HTTP/2 specification found at
+	// https://github.com/grpc/grpc/blob/master/doc/PROTOCOL-HTTP2.md.
+	//
+	// When disabled, gRPC will allow paths that do not contain a leading slash.
+	// Enabling strict path checking is recommended for security reasons, as it
+	// prevents potential path traversal vulnerabilities.
+	//
+	// A future release will remove this environment variable, enabling strict
+	// path checking behavior unconditionally.
+	DisableStrictPathChecking = boolFromEnv("GRPC_GO_EXPERIMENTAL_DISABLE_STRICT_PATH_CHECKING", false)
 )
 
 func boolFromEnv(envVar string, def bool) bool {
