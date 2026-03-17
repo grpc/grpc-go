@@ -1419,9 +1419,10 @@ func (t *http2Client) setGoAwayReason(f *http2.GoAwayFrame) {
 			t.goAwayReason = GoAwayTooManyPings
 		}
 	}
-	t.goAwayDebugMessage = fmt.Sprintf("code: %s", f.ErrCode)
-	if len(f.DebugData()) > 0 {
-		t.goAwayDebugMessage += fmt.Sprintf(", debug data: %q", string(f.DebugData()))
+	if len(f.DebugData()) == 0 {
+		t.goAwayDebugMessage = fmt.Sprintf("code: %s", f.ErrCode)
+	} else {
+		t.goAwayDebugMessage = fmt.Sprintf("code: %s, debug data: %q", f.ErrCode, string(f.DebugData()))
 	}
 	t.goAwayCode = f.ErrCode
 }
