@@ -21,6 +21,10 @@ package pickfirst_test
 import (
 	"context"
 	"fmt"
+	"io"
+	"net"
+	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -298,34 +302,48 @@ func (s) TestDisconnectLabel(t *testing.T) {
 	// Server GracefulStop sends GOAWAY with active streams = 0.
 	// This usually sends NoError(0) code.
 	t.Run("GoAway", func(t *testing.T) {
-		runDisconnectLabelTest(t, "GOAWAY NO_ERROR", func(ss *stubserver.StubServer) {
+		runDisconnectLabelTest(t, "GOAWAY NO_ERROR", func(ss *stubserver.StubServer, _ *controllableConn) {
 			ss.S.GracefulStop()
-			// GracefulStop waits for connections to close, which happens after
-			// GOAWAY is sent.
 		})
 	})
 
-	// 2. IO Error
-	// Server Stop closes the listener and active connections immediately.
-	// This often results in "connection reset" or "EOF" (unknown) depending on timing/OS.
-	// Let's check for "unknown" or "connection reset" or "subchannel shutdown" strictly.
-	// In this test env, it often results in io.EOF which we mapped to "unknown".
-	t.Run("IO_Error", func(t *testing.T) {
-		runDisconnectLabelTest(t, "unknown", func(ss *stubserver.StubServer) {
-			ss.Stop()
+	t.Run("ConnectionReset", func(t *testing.T) {
+		runDisconnectLabelTest(t, "connection reset", func(_ *stubserver.StubServer, cc *controllableConn) {
+			cc.breakWith(syscall.ECONNRESET)
 		})
 	})
 
-	// Scenario 3: Unknown (Client closes - voluntary? actually client close might be UNKNOWN or not recorded as split)
-	// If client closes, we might not record "disconnections" metric from ClientConn perspective?
-	// disconnections metric is "Number of times the selected subchannel becomes disconnected".
-	// If we close 'cc', we tear down subchannels.
-	// But let's try to trigger a case where we just disconnect without server side action?
-	// Or maybe "unknown" is what we get for "Idle" timeout?
-	// Let's stick to IO and GoAway first which are explicit in A94.
+	t.Run("EOF", func(t *testing.T) {
+		runDisconnectLabelTest(t, "unknown", func(_ *stubserver.StubServer, cc *controllableConn) {
+			cc.breakWith(io.EOF)
+		})
+	})
 }
 
-func runDisconnectLabelTest(t *testing.T, wantLabel string, triggerFunc func(*stubserver.StubServer)) {
+type controllableConn struct {
+	net.Conn
+	mu      sync.Mutex
+	readErr error
+}
+
+func (c *controllableConn) Read(b []byte) (int, error) {
+	n, err := c.Conn.Read(b)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.readErr != nil {
+		return 0, c.readErr
+	}
+	return n, err
+}
+
+func (c *controllableConn) breakWith(err error) {
+	c.mu.Lock()
+	c.readErr = err
+	c.mu.Unlock()
+	c.Conn.Close()
+}
+
+func runDisconnectLabelTest(t *testing.T, wantLabel string, triggerFunc func(*stubserver.StubServer, *controllableConn)) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
@@ -353,7 +371,21 @@ func runDisconnectLabelTest(t *testing.T, wantLabel string, triggerFunc func(*st
 		OptionalLabels: []string{"grpc.disconnect_error"},
 	}
 
-	cc, err := grpc.NewClient(grpcTarget, opentelemetry.DialOption(opentelemetry.Options{MetricsOptions: mo}), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
+	var mu sync.Mutex
+	var lastConn *controllableConn
+	dialer := func(ctx context.Context, addr string) (net.Conn, error) {
+		conn, err := (&net.Dialer{}).DialContext(ctx, "tcp", addr)
+		if err != nil {
+			return nil, err
+		}
+		cc := &controllableConn{Conn: conn}
+		mu.Lock()
+		lastConn = cc
+		mu.Unlock()
+		return cc, nil
+	}
+
+	cc, err := grpc.NewClient(grpcTarget, opentelemetry.DialOption(opentelemetry.Options{MetricsOptions: mo}), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r), grpc.WithContextDialer(dialer))
 	if err != nil {
 		t.Fatalf("NewClient() failed: %v", err)
 	}
@@ -365,8 +397,12 @@ func runDisconnectLabelTest(t *testing.T, wantLabel string, triggerFunc func(*st
 		t.Fatalf("EmptyCall() failed: %v", err)
 	}
 
+	mu.Lock()
+	lc := lastConn
+	mu.Unlock()
+
 	// Trigger disconnection
-	triggerFunc(ss)
+	triggerFunc(ss, lc)
 
 	// Wait for Idle state (disconnection happened)
 	testutils.AwaitState(ctx, t, cc, connectivity.Idle)
