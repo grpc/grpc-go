@@ -1472,7 +1472,7 @@ func (s *Server) processUnaryRPC(ctx context.Context, stream *transport.ServerSt
 		comp = encoding.GetCompressor(stream.SendCompress())
 	}
 	compV0, compV1 := cp, comp
-	if opts, ok := ctx.Value(compressKey{}).(*compressOptions); ok && opts.DoNotCompress {
+	if opts, ok := ctx.Value(compressKey{}).(*compressOptions); ok && opts.doNotCompress {
 		compV0, compV1 = nil, nil
 	}
 	if err := s.sendResponse(ctx, stream, reply, compV0, opts, compV1); err != nil {

@@ -58,6 +58,10 @@ var metadataFromOutgoingContextRaw = internal.FromOutgoingContextRaw.(func(conte
 // By default, message compression is enabled, but is a no-op if compression
 // is not enabled on the stream.
 //
+// On the server side, the context provided must be the context passed to the
+// server's handler. On the client side, the context provided must be the
+// context associated with the stream, obtained via ClientStream.Context().
+//
 // This method must not be called concurrently with SendMsg.
 //
 // # Experimental
@@ -69,12 +73,12 @@ func SetMessageCompression(ctx context.Context, enable bool) error {
 	if !ok || opts == nil {
 		return fmt.Errorf("grpc: SetMessageCompression called on an uninitialized or non-stream context")
 	}
-	opts.DoNotCompress = !enable
+	opts.doNotCompress = !enable
 	return nil
 }
 
 type compressOptions struct {
-	DoNotCompress bool
+	doNotCompress bool
 }
 
 type compressKey struct{}
@@ -984,7 +988,7 @@ func (cs *clientStream) SendMsg(m any) (err error) {
 
 	// load hdr, payload, data
 	compV0, compV1 := cs.compressorV0, cs.compressorV1
-	if opts, ok := cs.ctx.Value(compressKey{}).(*compressOptions); ok && opts.DoNotCompress {
+	if opts, ok := cs.ctx.Value(compressKey{}).(*compressOptions); ok && opts.doNotCompress {
 		compV0, compV1 = nil, nil
 	}
 	hdr, data, payload, pf, err := prepareMsg(m, cs.codec, compV0, compV1, cs.cc.dopts.copts.BufferPool)
@@ -1495,7 +1499,7 @@ func (as *addrConnStream) SendMsg(m any) (err error) {
 
 	// load hdr, payload, data
 	compV0, compV1 := as.sendCompressorV0, as.sendCompressorV1
-	if opts, ok := as.ctx.Value(compressKey{}).(*compressOptions); ok && opts.DoNotCompress {
+	if opts, ok := as.ctx.Value(compressKey{}).(*compressOptions); ok && opts.doNotCompress {
 		compV0, compV1 = nil, nil
 	}
 	hdr, data, payload, pf, err := prepareMsg(m, as.codec, compV0, compV1, as.ac.dopts.copts.BufferPool)
@@ -1779,7 +1783,7 @@ func (ss *serverStream) SendMsg(m any) (err error) {
 
 	// load hdr, payload, data
 	compV0, compV1 := ss.compressorV0, ss.compressorV1
-	if opts, ok := ss.ctx.Value(compressKey{}).(*compressOptions); ok && opts.DoNotCompress {
+	if opts, ok := ss.ctx.Value(compressKey{}).(*compressOptions); ok && opts.doNotCompress {
 		compV0, compV1 = nil, nil
 	}
 	hdr, data, payload, pf, err := prepareMsg(m, ss.codec, compV0, compV1, ss.p.bufferPool)
