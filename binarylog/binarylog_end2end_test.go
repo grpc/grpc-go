@@ -31,7 +31,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/binarylog"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/grpclog"
 	iblog "google.golang.org/grpc/internal/binarylog"
 	"google.golang.org/grpc/internal/grpctest"
@@ -142,20 +141,10 @@ type test struct {
 	srvIP   net.IP
 	srvPort int
 
-	cc *grpc.ClientConn // nil until requested via clientConn
-
 	// Fields for client address. Set by the service handler.
 	clientAddrMu sync.Mutex
 	clientIP     net.IP
 	clientPort   int
-}
-
-func (te *test) tearDown() {
-	if te.cc != nil {
-		te.cc.Close()
-		te.cc = nil
-	}
-	te.ss.Stop()
 }
 
 // newTest returns a new test using the provided testing.T and
@@ -280,26 +269,12 @@ func (te *test) startServer() {
 			return nil
 		},
 	}
-	if err := te.ss.StartServer(); err != nil {
+	if err := te.ss.Start(nil); err != nil {
 		te.t.Fatalf("Failed to start server: %v", err)
 	}
 	te.srvAddr = lis.Addr().String()
 	te.srvIP = lis.Addr().(*net.TCPAddr).IP
 	te.srvPort = lis.Addr().(*net.TCPAddr).Port
-}
-
-func (te *test) clientConn() *grpc.ClientConn {
-	if te.cc != nil {
-		return te.cc
-	}
-	opts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock()}
-
-	var err error
-	te.cc, err = grpc.NewClient(te.srvAddr, opts...)
-	if err != nil {
-		te.t.Fatalf("Dial(%q) = %v", te.srvAddr, err)
-	}
-	return te.cc
 }
 
 type rpcType int
@@ -324,7 +299,7 @@ func (te *test) doUnaryCall(c *rpcConfig) (*testpb.SimpleRequest, *testpb.Simple
 		req  *testpb.SimpleRequest
 		err  error
 	)
-	tc := testgrpc.NewTestServiceClient(te.clientConn())
+	tc := testgrpc.NewTestServiceClient(te.ss.CC)
 	if c.success {
 		req = &testpb.SimpleRequest{Payload: idToPayload(errorID + 1)}
 	} else {
@@ -344,7 +319,7 @@ func (te *test) doFullDuplexCallRoundtrip(c *rpcConfig) ([]proto.Message, []prot
 		resps []proto.Message
 		err   error
 	)
-	tc := testgrpc.NewTestServiceClient(te.clientConn())
+	tc := testgrpc.NewTestServiceClient(te.ss.CC)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	ctx = metadata.NewOutgoingContext(ctx, testMetadata)
@@ -393,7 +368,7 @@ func (te *test) doClientStreamCall(c *rpcConfig) ([]proto.Message, proto.Message
 		resp *testpb.StreamingInputCallResponse
 		err  error
 	)
-	tc := testgrpc.NewTestServiceClient(te.clientConn())
+	tc := testgrpc.NewTestServiceClient(te.ss.CC)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	ctx = metadata.NewOutgoingContext(ctx, testMetadata)
@@ -426,7 +401,7 @@ func (te *test) doServerStreamCall(c *rpcConfig) (proto.Message, []proto.Message
 		err   error
 	)
 
-	tc := testgrpc.NewTestServiceClient(te.clientConn())
+	tc := testgrpc.NewTestServiceClient(te.ss.CC)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	ctx = metadata.NewOutgoingContext(ctx, testMetadata)
@@ -776,7 +751,7 @@ func (ed *expectedData) toServerLogEntries() []*binlogpb.GrpcLogEntry {
 func runRPCs(t *testing.T, cc *rpcConfig) *expectedData {
 	te := newTest(t)
 	te.startServer()
-	defer te.tearDown()
+	defer te.ss.Stop()
 
 	expect := &expectedData{
 		te: te,
@@ -809,7 +784,6 @@ func runRPCs(t *testing.T, cc *rpcConfig) *expectedData {
 	if cc.success != (expect.err == nil) {
 		t.Fatalf("cc.success: %v, got error: %v", cc.success, expect.err)
 	}
-	te.cc.Close()
 	te.ss.S.GracefulStop() // Wait for the server to stop.
 
 	return expect
