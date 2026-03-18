@@ -52,21 +52,12 @@ import (
 
 var metadataFromOutgoingContextRaw = internal.FromOutgoingContextRaw.(func(context.Context) (metadata.MD, [][]string, bool))
 
-type doNotCompressSetter interface {
-	SetDoNotCompress(bool)
-}
-
 type compressKey struct{}
 
-// SetMessageCompression enables or disables per-message compression on a stream
-// if a compressor is specified for the stream (e.g. using UseCompressor or
-// SetSendCompressor) and if the encoding type is supported by the receiver.
-// By default, message compression is enabled, but is a no-op if compression
-// is not enabled on the stream.
-//
-// On the server side, the context provided must be the context passed to the
-// server's handler. On the client side, the context provided must be the
-// context associated with the stream, obtained via ClientStream.Context().
+// SetServerStreamMessageCompression enables or disables per-message compression
+// on a server stream. The provided context must be the context passed to the
+// server handler. Compression is enabled by default and is a no-op if no
+// compressor is configured on the stream (e.g. via SetSendCompressor).
 //
 // This method must not be called concurrently with SendMsg.
 //
@@ -74,20 +65,35 @@ type compressKey struct{}
 //
 // Notice: This API is EXPERIMENTAL and may be changed or removed in a
 // later release.
-func SetMessageCompression(ctx context.Context, enable bool) error {
-	// Server side: transport.ServerStream is stored in context via streamKey.
-	// We use an interface upgrade to avoid importing transport directly here.
-
-	if sts := ServerTransportStreamFromContext(ctx); sts != nil {
-		if s, ok := sts.(doNotCompressSetter); ok {
-			s.SetDoNotCompress(!enable)
-			return nil
-		}
+func SetServerStreamMessageCompression(ctx context.Context, enable bool) error {
+	sts := ServerTransportStreamFromContext(ctx)
+	if sts == nil {
+		return fmt.Errorf("grpc: SetServerStreamMessageCompression called on a non-server-stream context")
 	}
+	s, ok := sts.(*transport.ServerStream)
+	if !ok {
+		return fmt.Errorf("grpc: SetServerStreamMessageCompression: unexpected stream type %T", sts)
+	}
+	s.SetDoNotCompress(!enable)
+	return nil
+}
+
+// SetClientStreamMessageCompression enables or disables per-message compression
+// on a client stream. The provided context must be the stream context obtained
+// via ClientStream.Context(). Compression is enabled by default and is a no-op
+// if no compressor is configured on the stream (e.g. via UseCompressor).
+//
+// This method must not be called concurrently with SendMsg.
+//
+// # Experimental
+//
+// Notice: This API is EXPERIMENTAL and may be changed or removed in a
+// later release.
+func SetClientStreamMessageCompression(ctx context.Context, enable bool) error {
 	// Client side: *bool pointing to clientStream.doNotCompress is stored in context.
 	flag, ok := ctx.Value(compressKey{}).(*bool)
 	if !ok || flag == nil {
-		return fmt.Errorf("grpc: SetMessageCompression called on an uninitialized or non-stream context")
+		return fmt.Errorf("grpc: SetClientStreamMessageCompression called on a non-client-stream context")
 	}
 	*flag = !enable
 	return nil
