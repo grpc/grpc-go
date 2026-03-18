@@ -425,6 +425,13 @@ func (r *xdsResolver) newConfigSelector() (_ *configSelector, err error) {
 				clusterName := clusterPrefix + wc.Name
 				interceptor, err := r.newInterceptor(r.xdsConfig.Listener.APIListener.HTTPFilters, wc.HTTPFilterConfigOverride, rt.HTTPFilterConfigOverride, r.xdsConfig.VirtualHost.HTTPFilterConfigOverride)
 				if err != nil {
+					// Clean up any interceptors that were successfully built
+					// for the current route before this error occurred. Note
+					// that this is not handled by the call to cs.stop() in the
+					// deferred function.
+					for _, i := range interceptors {
+						i.Close()
+					}
 					return nil, err
 				}
 				clusters.Add(&routeCluster{
