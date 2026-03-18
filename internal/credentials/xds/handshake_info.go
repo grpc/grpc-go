@@ -57,7 +57,7 @@ func (hi *HandshakeInfo) Equal(other *HandshakeInfo) bool {
 		hi.identityProvider != other.identityProvider ||
 		hi.requireClientCert != other.requireClientCert ||
 		hi.sni != other.sni ||
-		hi.autoSniSanValidation != other.autoSniSanValidation ||
+		hi.validateSANUsingSNI != other.validateSANUsingSNI ||
 		len(hi.sanMatchers) != len(other.sanMatchers) {
 		return false
 	}
@@ -89,24 +89,24 @@ func HandshakeInfoFromAttributes(attr *attributes.Attributes) *atomic.Pointer[Ha
 type HandshakeInfo struct {
 	// All fields written at init time and read only after that, so no
 	// synchronization needed.
-	rootProvider         certprovider.Provider
-	identityProvider     certprovider.Provider
-	sanMatchers          []matcher.StringMatcher // Only on the client side.
-	requireClientCert    bool                    // Only on server side.
-	sni                  string                  // Only on client side, used for Server Name Indication in TLS handshake.
-	autoSniSanValidation bool                    // Only on client side, indicates whether to perform validation of SANs based on SNI value.
+	rootProvider        certprovider.Provider
+	identityProvider    certprovider.Provider
+	sanMatchers         []matcher.StringMatcher // Only on the client side.
+	requireClientCert   bool                    // Only on server side.
+	sni                 string                  // Only on client side, used for Server Name Indication in TLS handshake.
+	validateSANUsingSNI bool                    // Only on client side, indicates whether to perform validation of SANs based on SNI value.
 }
 
 // NewHandshakeInfo returns a new handshake info configured with the provided
 // options.
-func NewHandshakeInfo(rootProvider certprovider.Provider, identityProvider certprovider.Provider, sanMatchers []matcher.StringMatcher, requireClientCert bool, sni string, autoSniSanValidation bool) *HandshakeInfo {
+func NewHandshakeInfo(rootProvider certprovider.Provider, identityProvider certprovider.Provider, sanMatchers []matcher.StringMatcher, requireClientCert bool, sni string, validateSANUsingSNI bool) *HandshakeInfo {
 	return &HandshakeInfo{
-		rootProvider:         rootProvider,
-		identityProvider:     identityProvider,
-		sanMatchers:          sanMatchers,
-		requireClientCert:    requireClientCert,
-		sni:                  sni,
-		autoSniSanValidation: autoSniSanValidation,
+		rootProvider:        rootProvider,
+		identityProvider:    identityProvider,
+		sanMatchers:         sanMatchers,
+		requireClientCert:   requireClientCert,
+		sni:                 sni,
+		validateSANUsingSNI: validateSANUsingSNI,
 	}
 }
 
@@ -211,7 +211,7 @@ func (hi *HandshakeInfo) buildVerifyFunc(km *certprovider.KeyMaterial, isClient 
 		if _, err := certs[0].Verify(opts); err != nil {
 			return err
 		}
-		if envconfig.XDSSNIEnabled && hi.autoSniSanValidation && hi.sni != "" {
+		if envconfig.XDSSNIEnabled && hi.validateSANUsingSNI && hi.sni != "" {
 			// Verify SAN of leaf certificate with SNI using exact DNS matcher.
 			for _, san := range certs[0].DNSNames {
 				if dnsMatch(hi.sni, san) {
@@ -220,7 +220,7 @@ func (hi *HandshakeInfo) buildVerifyFunc(km *certprovider.KeyMaterial, isClient 
 			}
 			return fmt.Errorf("xds: received DNS SANs: %v do not match the SNI: %v", certs[0].DNSNames, hi.sni)
 		}
-		// The SANs sent by the MeshCA are encoded as SPIFFE IDs. We need to
+		// The SANs sent by the xDS control plane are encoded as SPIFFE IDs. We need to
 		// only look at the SANs on the leaf cert.
 		if cert := certs[0]; !hi.MatchingSANExists(cert) {
 			// TODO: Print the complete certificate once the x509 package

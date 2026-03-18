@@ -406,7 +406,7 @@ func (s) TestEqual(t *testing.T) {
 			wantMatch: false,
 		},
 		{
-			desc:      "same sni and autoSniSanValidation",
+			desc:      "same sni and validateSANUsingSNI",
 			hi1:       NewHandshakeInfo(nil, nil, nil, false, "sni", true),
 			hi2:       NewHandshakeInfo(nil, nil, nil, false, "sni", true),
 			wantMatch: true,
@@ -418,7 +418,7 @@ func (s) TestEqual(t *testing.T) {
 			wantMatch: false,
 		},
 		{
-			desc:      "same sni, different autoSniSanValidation",
+			desc:      "same sni, different validateSANUsingSNI",
 			hi1:       NewHandshakeInfo(nil, nil, nil, false, "sni", false),
 			hi2:       NewHandshakeInfo(nil, nil, nil, false, "sni", true),
 			wantMatch: false,

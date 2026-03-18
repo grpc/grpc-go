@@ -220,7 +220,7 @@ func makeRootProvider(t *testing.T, caPath string) *fakeProvider {
 
 // newTestContextWithHandshakeInfo returns a copy of parent with HandshakeInfo
 // context value added to it.
-func newTestContextWithHandshakeInfo(parent context.Context, root, identity certprovider.Provider, sanExactMatch, sni string, autoSniSanValidation bool) context.Context {
+func newTestContextWithHandshakeInfo(parent context.Context, root, identity certprovider.Provider, sanExactMatch, sni string, validateSANUsingSNI bool) context.Context {
 	// Creating the HandshakeInfo and adding it to the attributes is very
 	// similar to what the CDS balancer would do when it intercepts calls to
 	// NewSubConn().
@@ -229,7 +229,7 @@ func newTestContextWithHandshakeInfo(parent context.Context, root, identity cert
 		sms = []matcher.StringMatcher{matcher.NewExactStringMatcher(sanExactMatch, false)}
 	}
 	var hiPtr atomic.Pointer[xdsinternal.HandshakeInfo]
-	info := xdsinternal.NewHandshakeInfo(root, identity, sms, false, sni, autoSniSanValidation)
+	info := xdsinternal.NewHandshakeInfo(root, identity, sms, false, sni, validateSANUsingSNI)
 	hiPtr.Store(info)
 	addr := xdsinternal.SetHandshakeInfo(resolver.Address{}, &hiPtr)
 
@@ -506,8 +506,8 @@ func (s) TestClientCredsHandshakeFailure(t *testing.T) {
 		rootProvider         certprovider.Provider
 		san                  string
 		sni                  string
-		autoSniSanValidation bool
-		enableSniFlag        bool
+		validateSANUsingSNI bool
+		enableSNIFlag        bool
 		wantErr              string
 	}{
 		{
@@ -529,9 +529,9 @@ func (s) TestClientCredsHandshakeFailure(t *testing.T) {
 			handshakeFunc:        testServerTLSHandshake,
 			rootProvider:         makeRootProvider(t, "x509/server_ca_cert.pem"),
 			sni:                  "bad-sni",
-			autoSniSanValidation: true,
+			validateSANUsingSNI: true,
 			wantErr:              "do not match the SNI",
-			enableSniFlag:        true,
+			enableSNIFlag:        true,
 		},
 		{
 			desc:                 "SNI set, AutoSniSanValidation disabled with SAN mismatch",
@@ -539,9 +539,9 @@ func (s) TestClientCredsHandshakeFailure(t *testing.T) {
 			rootProvider:         makeRootProvider(t, "x509/server_ca_cert.pem"),
 			sni:                  defaultTestCertSAN,
 			san:                  "bad-san",
-			autoSniSanValidation: false,
+			validateSANUsingSNI: false,
 			wantErr:              "do not match any of the accepted SANs",
-			enableSniFlag:        true,
+			enableSNIFlag:        true,
 		},
 		{
 			desc:                 "SNI set with SAN mismatch and AutoSniSanValidation enabled, environment variable disabled",
@@ -549,7 +549,7 @@ func (s) TestClientCredsHandshakeFailure(t *testing.T) {
 			rootProvider:         makeRootProvider(t, "x509/server_ca_cert.pem"),
 			sni:                  defaultTestCertSAN,
 			san:                  "bad-san",
-			autoSniSanValidation: true,
+			validateSANUsingSNI: true,
 			wantErr:              "do not match any of the accepted SANs",
 		},
 		{
@@ -558,15 +558,15 @@ func (s) TestClientCredsHandshakeFailure(t *testing.T) {
 			rootProvider:         makeRootProvider(t, "x509/server_ca_cert.pem"),
 			sni:                  "",
 			san:                  "bad-san",
-			autoSniSanValidation: true,
+			validateSANUsingSNI: true,
 			wantErr:              "do not match any of the accepted SANs",
-			enableSniFlag:        true,
+			enableSNIFlag:        true,
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			testutils.SetEnvConfig(t, &envconfig.XDSSNIEnabled, test.enableSniFlag)
+			testutils.SetEnvConfig(t, &envconfig.XDSSNIEnabled, test.enableSNIFlag)
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
 			ts := newTestServerWithHandshakeFunc(ctx, test.handshakeFunc)
@@ -584,7 +584,7 @@ func (s) TestClientCredsHandshakeFailure(t *testing.T) {
 			}
 			defer conn.Close()
 
-			ctx = newTestContextWithHandshakeInfo(ctx, test.rootProvider, nil, test.san, test.sni, test.autoSniSanValidation)
+			ctx = newTestContextWithHandshakeInfo(ctx, test.rootProvider, nil, test.san, test.sni, test.validateSANUsingSNI)
 			if _, _, err := creds.ClientHandshake(ctx, authority, conn); err == nil || !strings.Contains(err.Error(), test.wantErr) {
 				t.Fatalf("ClientHandshake() returned %q, wantErr %q", err, test.wantErr)
 			}
