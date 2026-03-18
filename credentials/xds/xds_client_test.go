@@ -501,14 +501,14 @@ func (s) TestClientCredsHandshakeTimeout(t *testing.T) {
 // TestClientCredsHandshakeFailure verifies different handshake failure cases.
 func (s) TestClientCredsHandshakeFailure(t *testing.T) {
 	tests := []struct {
-		desc                 string
-		handshakeFunc        testHandshakeFunc
-		rootProvider         certprovider.Provider
-		san                  string
-		sni                  string
+		desc                string
+		handshakeFunc       testHandshakeFunc
+		rootProvider        certprovider.Provider
+		san                 string
+		sni                 string
 		validateSANUsingSNI bool
-		enableSNIFlag        bool
-		wantErr              string
+		enableSNIFlag       bool
+		wantErr             string
 	}{
 		{
 			desc:          "cert validation failure",
@@ -525,42 +525,42 @@ func (s) TestClientCredsHandshakeFailure(t *testing.T) {
 			wantErr:       "do not match any of the accepted SANs",
 		},
 		{
-			desc:                 "SNI SAN mismatch",
-			handshakeFunc:        testServerTLSHandshake,
-			rootProvider:         makeRootProvider(t, "x509/server_ca_cert.pem"),
-			sni:                  "bad-sni",
+			desc:                "SNI SAN mismatch",
+			handshakeFunc:       testServerTLSHandshake,
+			rootProvider:        makeRootProvider(t, "x509/server_ca_cert.pem"),
+			sni:                 "bad-sni",
 			validateSANUsingSNI: true,
-			wantErr:              "do not match the SNI",
-			enableSNIFlag:        true,
+			wantErr:             "do not match the SNI",
+			enableSNIFlag:       true,
 		},
 		{
-			desc:                 "SNI set, AutoSniSanValidation disabled with SAN mismatch",
-			handshakeFunc:        testServerTLSHandshake,
-			rootProvider:         makeRootProvider(t, "x509/server_ca_cert.pem"),
-			sni:                  defaultTestCertSAN,
-			san:                  "bad-san",
+			desc:                "SNI set, AutoSniSanValidation disabled with SAN mismatch",
+			handshakeFunc:       testServerTLSHandshake,
+			rootProvider:        makeRootProvider(t, "x509/server_ca_cert.pem"),
+			sni:                 defaultTestCertSAN,
+			san:                 "bad-san",
 			validateSANUsingSNI: false,
-			wantErr:              "do not match any of the accepted SANs",
-			enableSNIFlag:        true,
+			wantErr:             "do not match any of the accepted SANs",
+			enableSNIFlag:       true,
 		},
 		{
-			desc:                 "SNI set with SAN mismatch and AutoSniSanValidation enabled, environment variable disabled",
-			handshakeFunc:        testServerTLSHandshake,
-			rootProvider:         makeRootProvider(t, "x509/server_ca_cert.pem"),
-			sni:                  defaultTestCertSAN,
-			san:                  "bad-san",
+			desc:                "SNI set with SAN mismatch and AutoSniSanValidation enabled, environment variable disabled",
+			handshakeFunc:       testServerTLSHandshake,
+			rootProvider:        makeRootProvider(t, "x509/server_ca_cert.pem"),
+			sni:                 defaultTestCertSAN,
+			san:                 "bad-san",
 			validateSANUsingSNI: true,
-			wantErr:              "do not match any of the accepted SANs",
+			wantErr:             "do not match any of the accepted SANs",
 		},
 		{
-			desc:                 "SNI empty, AutoSniSanValidation enabled with SAN mismatch",
-			handshakeFunc:        testServerTLSHandshake,
-			rootProvider:         makeRootProvider(t, "x509/server_ca_cert.pem"),
-			sni:                  "",
-			san:                  "bad-san",
+			desc:                "SNI empty, AutoSniSanValidation enabled with SAN mismatch",
+			handshakeFunc:       testServerTLSHandshake,
+			rootProvider:        makeRootProvider(t, "x509/server_ca_cert.pem"),
+			sni:                 "",
+			san:                 "bad-san",
 			validateSANUsingSNI: true,
-			wantErr:              "do not match any of the accepted SANs",
-			enableSNIFlag:        true,
+			wantErr:             "do not match any of the accepted SANs",
+			enableSNIFlag:       true,
 		},
 	}
 
