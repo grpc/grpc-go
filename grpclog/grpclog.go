@@ -18,19 +18,95 @@
 
 // Package grpclog defines logging for grpc.
 //
-// In the default logger, severity level can be set by environment variable
-// GRPC_GO_LOG_SEVERITY_LEVEL, verbosity level can be set by
-// GRPC_GO_LOG_VERBOSITY_LEVEL.
+// The default logger is controlled by environment variables. Turn
+// everything on like this:
+//
+//	export GRPC_GO_LOG_VERBOSITY_LEVEL=99
+//	export GRPC_GO_LOG_SEVERITY_LEVEL=info
+//
+// Additionally, you can configure log severity levels for individual
+// components using the GRPC_GO_COMPONENT_LOG_LEVEL environment
+// variable. The format is a comma-separated list of component:LEVEL
+// pairs like this:
+//
+//	export GRPC_GO_COMPONENT_LOG_LEVEL=dns:ERROR,transport:WARNING
+//
+// When both GRPC_GO_LOG_SEVERITY_LEVEL and GRPC_GO_COMPONENT_LOG_LEVEL
+// are set, component-specific settings take precedence over
+// GRPC_GO_LOG_SEVERITY_LEVEL for the specified components. Components
+// not listed in GRPC_GO_COMPONENT_LOG_LEVEL will use the
+// GRPC_GO_LOG_SEVERITY_LEVEL setting. For example:
+//
+//	export GRPC_GO_LOG_SEVERITY_LEVEL=ERROR
+//	export GRPC_GO_COMPONENT_LOG_LEVEL=dns:INFO
+//
+// In this case, the dns component will log at INFO level, while all
+// other components will log at ERROR level.
 package grpclog
 
 import (
+	"io"
 	"os"
+	"strings"
 
 	"google.golang.org/grpc/grpclog/internal"
 )
 
+type severityLevel int
+
+const (
+	severityInfo severityLevel = iota
+	severityWarning
+	severityError
+)
+
+func parseComponentLogLevels(logLevel string) map[string]severityLevel {
+	if logLevel == "" {
+		return nil
+	}
+
+	logLevels := make(map[string]severityLevel)
+	for part := range strings.SplitSeq(logLevel, ",") {
+		kv := strings.Split(part, ":")
+		if len(kv) < 2 {
+			continue
+		}
+		component := kv[0]
+		if component == "" {
+			continue
+		}
+		level := kv[1]
+		switch level {
+		case "INFO", "info":
+			logLevels[component] = severityInfo
+		case "WARNING", "warning":
+			logLevels[component] = severityWarning
+		case "ERROR", "error":
+			logLevels[component] = severityError
+		default:
+			continue
+		}
+	}
+	return logLevels
+}
+
+var componentLogLevels map[string]severityLevel
+
 func init() {
-	SetLoggerV2(newLoggerV2())
+	initLogger(
+		os.Stderr,
+		os.Getenv("GRPC_GO_LOG_SEVERITY_LEVEL"),
+		os.Getenv("GRPC_GO_LOG_VERBOSITY_LEVEL"),
+		os.Getenv("GRPC_GO_LOG_FORMATTER"),
+		os.Getenv("GRPC_GO_COMPONENT_LOG_LEVEL"),
+	)
+}
+
+func initLogger(w io.Writer, logSeverityLevel, logVerbosityLevel, logFormatter, componentLogLevel string) {
+	componentLogLevels = parseComponentLogLevels(componentLogLevel)
+	config := loggerV2Config(logVerbosityLevel, logFormatter)
+	setLoggerV2(newLoggerV2(w, config, logSeverityLevel))
+	setComponentLoggerV2(newComponentLoggerV2(w, config))
 }
 
 // V reports whether verbosity level l is at least the requested verbose level.
