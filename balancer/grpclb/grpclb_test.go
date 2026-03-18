@@ -306,8 +306,8 @@ func startBackends(t *testing.T, sn string, fallback bool, lis ...net.Listener) 
 		creds := &serverNameCheckCreds{
 			sn: sn,
 		}
-		s := grpc.NewServer(grpc.Creds(creds))
 		ss := &stubserver.StubServer{
+			Listener: l,
 			EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
 				md, ok := metadata.FromIncomingContext(ctx)
 				if !ok {
@@ -323,11 +323,10 @@ func startBackends(t *testing.T, sn string, fallback bool, lis ...net.Listener) 
 				return nil
 			},
 		}
-		testgrpc.RegisterTestServiceServer(s, ss)
-		servers = append(servers, s)
-		go func(s *grpc.Server, l net.Listener) {
-			s.Serve(l)
-		}(s, l)
+		if err := ss.StartServer(grpc.Creds(creds)); err != nil {
+			t.Fatalf("Failed to start backend: %v", err)
+		}
+		servers = append(servers, ss.S.(*grpc.Server))
 		t.Logf("Started backend server listening on %s", l.Addr().String())
 	}
 	return
