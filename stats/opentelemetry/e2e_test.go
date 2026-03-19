@@ -1875,7 +1875,7 @@ func (s) TestSubChannelMetrics(t *testing.T) {
 	targetAttr := attribute.String("grpc.target", target)
 	localityAttr := attribute.String("grpc.lb.locality", `{region="region-1", zone="zone-1", sub_zone="subzone-1"}`)
 	backendServiceAttr := attribute.String("grpc.lb.backend_service", clusterName)
-	disconnectionReasonAttr := attribute.String("grpc.disconnect_error", "unknown")
+	disconnectionReasonAttr := attribute.String("grpc.disconnect_error", "GOAWAY NO_ERROR")
 	securityLevelAttr := attribute.String("grpc.security_level", "NoSecurity")
 
 	// Verify Connect Metrics.
@@ -1915,8 +1915,8 @@ func (s) TestSubChannelMetrics(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Stop backend to trigger Disconnect Metrics.
-	backend.Stop()
+	// Stop backend gracefully to trigger Disconnect Metrics with GOAWAY NO_ERROR.
+	backend.S.GracefulStop()
 
 	disconnectionWantMetrics := []metricdata.Metrics{
 		{
