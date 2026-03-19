@@ -20,8 +20,11 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net"
 	"slices"
 	"strconv"
+	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -1872,7 +1875,7 @@ func (s) TestSubChannelMetrics(t *testing.T) {
 	targetAttr := attribute.String("grpc.target", target)
 	localityAttr := attribute.String("grpc.lb.locality", `{region="region-1", zone="zone-1", sub_zone="subzone-1"}`)
 	backendServiceAttr := attribute.String("grpc.lb.backend_service", clusterName)
-	disconnectionReasonAttr := attribute.String("grpc.disconnect_error", "unknown")
+	disconnectionReasonAttr := attribute.String("grpc.disconnect_error", "GOAWAY NO_ERROR")
 	securityLevelAttr := attribute.String("grpc.security_level", "NoSecurity")
 
 	// Verify Connect Metrics.
@@ -1912,8 +1915,8 @@ func (s) TestSubChannelMetrics(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Stop backend to trigger Disconnect Metrics.
-	backend.Stop()
+	// Stop backend gracefully to trigger Disconnect Metrics with GOAWAY NO_ERROR.
+	backend.S.GracefulStop()
 
 	disconnectionWantMetrics := []metricdata.Metrics{
 		{
@@ -1995,4 +1998,190 @@ func (s) TestHealthStreamNoOtelErrorLog(t *testing.T) {
 	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("EmptyCall failed: %v", err)
 	}
+}
+
+type errorConn struct {
+	net.Conn
+	mu  sync.Mutex
+	err error
+}
+
+func (c *errorConn) Read(b []byte) (int, error) {
+	n, err := c.Conn.Read(b)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.err != nil {
+		return 0, c.err
+	}
+	return n, err
+}
+
+// TestSubChannelDisconnectionLabels verifies granular disconnect error labels.
+func (s) TestSubChannelDisconnectionLabels(t *testing.T) {
+	// Wrapper to run valid scenarios
+
+	runScenario := func(name, expectedLabel string, action func(backend *stubserver.StubServer, cc *grpc.ClientConn, injectErr func(error), updateResource func(*e2e.UpdateOptions))) {
+		t.Run(name, func(t *testing.T) {
+			// Start a single backend server.
+			backend := stubserver.StartTestService(t, &stubserver.StubServer{
+				EmptyCallF: func(_ context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
+					return &testpb.Empty{}, nil
+				},
+			})
+			port := itestutils.ParsePort(t, backend.Address)
+			defer backend.Stop()
+
+			serviceName := "service-" + name
+			managementServer, nodeID, _, xdsResolver := setup.ManagementServerAndResolver(t)
+			routeConfigName := "route-" + serviceName
+			clusterName := "cluster-" + serviceName
+			endpointsName := "endpoints-" + serviceName
+
+			resources := e2e.UpdateOptions{
+				NodeID:    nodeID,
+				Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(serviceName, routeConfigName)},
+				Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeConfigName, serviceName, clusterName)},
+				Clusters:  []*v3clusterpb.Cluster{e2e.DefaultCluster(clusterName, endpointsName, e2e.SecurityLevelNone)},
+				Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.EndpointResourceWithOptions(e2e.EndpointOptions{
+					ClusterName: endpointsName,
+					Host:        "localhost",
+					Localities: []e2e.LocalityOptions{
+						{
+							Backends: []e2e.BackendOptions{{Ports: []uint32{port}}},
+							Weight:   1,
+						},
+					},
+				})},
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+			if err := managementServer.Update(ctx, resources); err != nil {
+				t.Fatal(err)
+			}
+
+			// Setup Telemetry.
+			reader := metric.NewManualReader()
+			provider := metric.NewMeterProvider(metric.WithReader(reader))
+			mo := opentelemetry.MetricsOptions{
+				MeterProvider: provider,
+				Metrics: opentelemetry.DefaultMetrics().Add(
+					"grpc.subchannel.disconnections",
+				),
+				OptionalLabels: []string{
+					"grpc.lb.locality",
+					"grpc.lb.backend_service",
+					"grpc.disconnect_error",
+				},
+			}
+
+			var activeConn *errorConn
+			dialer := func(ctx context.Context, addr string) (net.Conn, error) {
+				conn, err := (&net.Dialer{}).DialContext(ctx, "tcp", addr)
+				if err != nil {
+					return nil, err
+				}
+				activeConn = &errorConn{Conn: conn}
+				return activeConn, nil
+			}
+
+			target := fmt.Sprintf("xds:///%s", serviceName)
+			cc, err := grpc.NewClient(target,
+				grpc.WithTransportCredentials(insecure.NewCredentials()),
+				grpc.WithResolvers(xdsResolver),
+				grpc.WithContextDialer(dialer),
+				opentelemetry.DialOption(opentelemetry.Options{MetricsOptions: mo}),
+			)
+			if err != nil {
+				t.Fatalf("Failed to create client: %v", err)
+			}
+			defer cc.Close()
+
+			// Wait for connection to be READY
+			client := testpb.NewTestServiceClient(cc)
+			if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+				t.Fatalf("EmptyCall failed: %v", err)
+			}
+
+			injectErr := func(err error) {
+				if activeConn != nil {
+					activeConn.mu.Lock()
+					activeConn.err = err
+					activeConn.mu.Unlock()
+					activeConn.Conn.Close()
+				}
+			}
+
+			// Perform the action to trigger disconnect
+			action(backend, cc, injectErr, func(opts *e2e.UpdateOptions) {
+				opts.NodeID = nodeID // Ensure NodeID matches
+				if err := managementServer.Update(ctx, *opts); err != nil {
+					t.Fatal(err)
+				}
+			})
+
+			// Verify Metric
+			wantMetrics := []metricdata.Metrics{
+				{
+					Name:        "grpc.subchannel.disconnections",
+					Description: "EXPERIMENTAL. Number of times the selected subchannel becomes disconnected.",
+					Unit:        "{disconnection}",
+					Data: metricdata.Sum[int64]{
+						DataPoints: []metricdata.DataPoint[int64]{
+							{
+								Attributes: attribute.NewSet(
+									attribute.String("grpc.target", target),
+									attribute.String("grpc.lb.backend_service", clusterName),
+									attribute.String("grpc.lb.locality", `{region="region-1", zone="zone-1", sub_zone="subzone-1"}`),
+									attribute.String("grpc.disconnect_error", expectedLabel),
+								),
+								Value: 1,
+							},
+						},
+						Temporality: metricdata.CumulativeTemporality,
+						IsMonotonic: true,
+					},
+				},
+			}
+
+			if err := pollForWantMetrics(ctx, t, reader, wantMetrics); err != nil {
+				t.Fatalf("Failed to verify metric for case %s: %v", name, err)
+			}
+		})
+	}
+
+	// 1. GOAWAY
+	runScenario("GoAway", "GOAWAY NO_ERROR", func(backend *stubserver.StubServer, _ *grpc.ClientConn, _ func(error), _ func(*e2e.UpdateOptions)) {
+		backend.S.GracefulStop()
+	})
+
+	// 2. IO Error (Generic unknown)
+	runScenario("IO_Error", "unknown", func(_ *stubserver.StubServer, _ *grpc.ClientConn, injectErr func(error), _ func(*e2e.UpdateOptions)) {
+		injectErr(io.EOF)
+	})
+
+	// 3. Subchannel Shutdown
+	runScenario("SubchannelShutdown", "subchannel shutdown", func(_ *stubserver.StubServer, cc *grpc.ClientConn, _ func(error), _ func(*e2e.UpdateOptions)) {
+		cc.Close()
+	})
+
+	// 4. Connection Reset
+	runScenario("ConnectionReset", "connection reset", func(_ *stubserver.StubServer, _ *grpc.ClientConn, injectErr func(error), _ func(*e2e.UpdateOptions)) {
+		injectErr(syscall.ECONNRESET)
+	})
+
+	// 5. Connection Timed Out
+	runScenario("ConnectionTimeout", "connection timed out", func(_ *stubserver.StubServer, _ *grpc.ClientConn, injectErr func(error), _ func(*e2e.UpdateOptions)) {
+		injectErr(context.DeadlineExceeded)
+	})
+
+	// 6. Socket Error
+	runScenario("SocketError", "socket error", func(_ *stubserver.StubServer, _ *grpc.ClientConn, injectErr func(error), _ func(*e2e.UpdateOptions)) {
+		injectErr(syscall.ECONNREFUSED)
+	})
+
+	// 7. Connection Aborted
+	runScenario("ConnectionAborted", "connection aborted", func(_ *stubserver.StubServer, _ *grpc.ClientConn, injectErr func(error), _ func(*e2e.UpdateOptions)) {
+		injectErr(syscall.ECONNABORTED)
+	})
 }

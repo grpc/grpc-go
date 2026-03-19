@@ -24,11 +24,15 @@ import (
 	"fmt"
 	"math"
 	"net/url"
+	"os"
 	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
+
+	"golang.org/x/net/http2"
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/base"
@@ -1268,8 +1272,9 @@ type addrConn struct {
 
 	channelz *channelz.SubChannel
 
-	localityLabel       string
-	backendServiceLabel string
+	localityLabel        string
+	backendServiceLabel  string
+	disconnectErrorLabel string
 }
 
 // Note: this requires a lock on ac.mu.
@@ -1286,9 +1291,14 @@ func (ac *addrConn) updateConnectivityState(s connectivity.State, lastErr error)
 	// TODO: https://github.com/grpc/grpc-go/issues/7862 - Remove the second
 	// part of the if condition below once the issue is fixed.
 	if ac.state == connectivity.Ready || (ac.state == connectivity.Connecting && s == connectivity.Idle) {
-		disconnectionsMetric.Record(ac.cc.metricsRecorderList, 1, ac.cc.target, ac.backendServiceLabel, ac.localityLabel, "unknown")
+		disconnectError := ac.disconnectErrorLabel
+		if disconnectError == "" {
+			disconnectError = "unknown"
+		}
+		disconnectionsMetric.Record(ac.cc.metricsRecorderList, 1, ac.cc.target, ac.backendServiceLabel, ac.localityLabel, disconnectError)
 		openConnectionsMetric.Record(ac.cc.metricsRecorderList, -1, ac.cc.target, ac.backendServiceLabel, ac.securityLevelLocked(), ac.localityLabel)
 	}
+	ac.disconnectErrorLabel = "" // Reset for next time
 	ac.state = s
 	ac.channelz.ChannelMetrics.State.Store(&s)
 	if lastErr == nil {
@@ -1483,7 +1493,7 @@ func (ac *addrConn) createTransport(ctx context.Context, addr resolver.Address, 
 	addr.ServerName = ac.cc.getServerName(addr)
 	hctx, hcancel := context.WithCancel(ctx)
 
-	onClose := func(r transport.GoAwayReason) {
+	onClose := func(r transport.GoAwayReason, goAwayCode http2.ErrCode, err error) {
 		ac.mu.Lock()
 		defer ac.mu.Unlock()
 		// adjust params based on GoAwayReason
@@ -1504,6 +1514,7 @@ func (ac *addrConn) createTransport(ctx context.Context, addr resolver.Address, 
 			return
 		}
 		ac.transport = nil
+		ac.disconnectErrorLabel = disconnectErrorString(r, goAwayCode, err)
 		// Refresh the name resolver on any connection loss.
 		ac.cc.resolveNow(resolver.ResolveNowOptions{})
 		// Always go idle and wait for the LB policy to initiate a new
@@ -1558,6 +1569,27 @@ func (ac *addrConn) createTransport(ctx context.Context, addr resolver.Address, 
 	ac.transport = newTr
 	ac.startHealthCheck(hctx) // Will set state to READY if appropriate.
 	return nil
+}
+
+func disconnectErrorString(r transport.GoAwayReason, goAwayCode http2.ErrCode, err error) string {
+	switch {
+	case r != transport.GoAwayInvalid:
+		return fmt.Sprintf("GOAWAY %s", goAwayCode.String())
+	case err == nil:
+		return "unknown"
+	case errors.Is(err, context.Canceled):
+		return "subchannel shutdown"
+	case errors.Is(err, syscall.ECONNRESET):
+		return "connection reset"
+	case errors.Is(err, syscall.ETIMEDOUT), errors.Is(err, context.DeadlineExceeded), errors.Is(err, os.ErrDeadlineExceeded):
+		return "connection timed out"
+	case errors.Is(err, syscall.ECONNABORTED):
+		return "connection aborted"
+	case errors.Is(err, syscall.ECONNREFUSED):
+		return "socket error"
+	default:
+		return "unknown"
+	}
 }
 
 // startHealthCheck starts the health checking stream (RPC) to watch the health
@@ -1665,6 +1697,9 @@ func (ac *addrConn) tearDown(err error) {
 	ac.transport = nil
 	// We have to set the state to Shutdown before anything else to prevent races
 	// between setting the state and logic that waits on context cancellation / etc.
+	if ac.disconnectErrorLabel == "" {
+		ac.disconnectErrorLabel = "subchannel shutdown"
+	}
 	ac.updateConnectivityState(connectivity.Shutdown, nil)
 	ac.cancel()
 	ac.curAddr = resolver.Address{}

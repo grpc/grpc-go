@@ -21,7 +21,12 @@ package pickfirst_test
 import (
 	"context"
 	"fmt"
+	"io"
+	"net"
+	"sync"
+	"syscall"
 	"testing"
+	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer/pickfirst"
@@ -290,4 +295,158 @@ func metricsDataFromReader(ctx context.Context, reader *metric.ManualReader) map
 		}
 	}
 	return gotMetrics
+}
+
+func (s) TestDisconnectLabel(t *testing.T) {
+	// 1. Valid GOAWAY
+	// Server GracefulStop sends GOAWAY with active streams = 0.
+	// This usually sends NoError(0) code.
+	t.Run("GoAway", func(t *testing.T) {
+		runDisconnectLabelTest(t, "GOAWAY NO_ERROR", func(ss *stubserver.StubServer, _ *controllableConn) {
+			ss.S.GracefulStop()
+		})
+	})
+
+	t.Run("ConnectionReset", func(t *testing.T) {
+		runDisconnectLabelTest(t, "connection reset", func(_ *stubserver.StubServer, cc *controllableConn) {
+			cc.breakWith(syscall.ECONNRESET)
+		})
+	})
+
+	t.Run("EOF", func(t *testing.T) {
+		runDisconnectLabelTest(t, "unknown", func(_ *stubserver.StubServer, cc *controllableConn) {
+			cc.breakWith(io.EOF)
+		})
+	})
+}
+
+type controllableConn struct {
+	net.Conn
+	mu      sync.Mutex
+	readErr error
+}
+
+func (c *controllableConn) Read(b []byte) (int, error) {
+	n, err := c.Conn.Read(b)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.readErr != nil {
+		return 0, c.readErr
+	}
+	return n, err
+}
+
+func (c *controllableConn) breakWith(err error) {
+	c.mu.Lock()
+	c.readErr = err
+	c.mu.Unlock()
+	c.Conn.Close()
+}
+
+func runDisconnectLabelTest(t *testing.T, wantLabel string, triggerFunc func(*stubserver.StubServer, *controllableConn)) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	ss := &stubserver.StubServer{
+		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
+			return &testpb.Empty{}, nil
+		},
+	}
+	ss.StartServer()
+	defer ss.Stop() // Cleanup in case triggerFunc didn't fully stop or strict cleanup needed
+
+	sc := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(pfConfig)
+	r := manual.NewBuilderWithScheme("whatever")
+	r.InitialState(resolver.State{
+		ServiceConfig: sc,
+		Addresses:     []resolver.Address{{Addr: ss.Address}},
+	})
+
+	grpcTarget := r.Scheme() + ":///"
+	reader := metric.NewManualReader()
+	provider := metric.NewMeterProvider(metric.WithReader(reader))
+	mo := opentelemetry.MetricsOptions{
+		MeterProvider:  provider,
+		Metrics:        opentelemetry.DefaultMetrics().Add("grpc.subchannel.disconnections"),
+		OptionalLabels: []string{"grpc.disconnect_error"},
+	}
+
+	var mu sync.Mutex
+	var lastConn *controllableConn
+	dialer := func(ctx context.Context, addr string) (net.Conn, error) {
+		conn, err := (&net.Dialer{}).DialContext(ctx, "tcp", addr)
+		if err != nil {
+			return nil, err
+		}
+		cc := &controllableConn{Conn: conn}
+		mu.Lock()
+		lastConn = cc
+		mu.Unlock()
+		return cc, nil
+	}
+
+	cc, err := grpc.NewClient(grpcTarget, opentelemetry.DialOption(opentelemetry.Options{MetricsOptions: mo}), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r), grpc.WithContextDialer(dialer))
+	if err != nil {
+		t.Fatalf("NewClient() failed: %v", err)
+	}
+	defer cc.Close()
+
+	tsc := testgrpc.NewTestServiceClient(cc)
+	// Ensure connected
+	if _, err := tsc.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
+		t.Fatalf("EmptyCall() failed: %v", err)
+	}
+
+	mu.Lock()
+	lc := lastConn
+	mu.Unlock()
+
+	// Trigger disconnection
+	triggerFunc(ss, lc)
+
+	// Wait for Idle state (disconnection happened)
+	testutils.AwaitState(ctx, t, cc, connectivity.Idle)
+
+	// Verify metrics
+
+	gotMetrics := metricsDataFromReader(ctx, reader)
+	val, ok := gotMetrics["grpc.subchannel.disconnections"]
+	if !ok {
+		t.Fatalf("Metric grpc.subchannel.disconnections not found")
+	}
+
+	// We used AssertEqual in the other test, let's use it here too if available.
+	// But checking attributes manually might be safer if AssertEqual is strict on other optional fields.
+	// Let's iterate datapoints.
+	start := time.Now()
+	for {
+		points := val.Data.(metricdata.Sum[int64]).DataPoints
+		if len(points) == 0 {
+			t.Fatalf("No data points for disconnections")
+		}
+		dp := points[0]
+		// Check attributes
+		seenLabel := false
+		var foundAttrs []string
+		for _, kv := range dp.Attributes.ToSlice() {
+			foundAttrs = append(foundAttrs, fmt.Sprintf("%s=%s", kv.Key, kv.Value.AsString()))
+			if kv.Key == "grpc.disconnect_error" {
+				seenLabel = true
+				if kv.Value.AsString() != wantLabel {
+					t.Errorf("Want label %q, got %q", wantLabel, kv.Value.AsString())
+				}
+			}
+		}
+		if !seenLabel && wantLabel != "" {
+			if time.Since(start) > time.Second {
+				t.Errorf("Label grpc.disconnect_error missing. Found attributes: %v", foundAttrs)
+			}
+		}
+		if seenLabel || time.Since(start) > time.Second {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+		gotMetrics = metricsDataFromReader(ctx, reader)
+		val = gotMetrics["grpc.subchannel.disconnections"]
+	}
 }
