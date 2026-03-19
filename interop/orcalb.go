@@ -130,22 +130,35 @@ func (b *orcab) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOpt
 
 func (b *orcab) updateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
 	b.mu.Lock()
-	defer b.mu.Unlock()
 	if b.stopOOBListeners == nil {
-		// Already closed; drop the state update.
+		b.mu.Unlock()
 		return
 	}
+
 	if state.ConnectivityState == connectivity.Ready {
-		// Register an OOB listener when the SubConn becomes READY.
-		stop := orca.RegisterOOBListener(sc, b, orca.OOBListenerOptions{ReportInterval: time.Second})
+		oldStop, exists := b.stopOOBListeners[sc]
+		stop := orca.RegisterOOBListener(sc, &orcaOOBListener{subConn: sc, balancer: b}, orca.OOBListenerOptions{ReportInterval: time.Second})
 		b.stopOOBListeners[sc] = stop
+		b.mu.Unlock()
+
+		if exists {
+			oldStop()
+		}
 		return
 	}
-	// For any other state (including Shutdown), stop and remove the OOB
-	// listener if one was registered for this SubConn.
-	if stop, ok := b.stopOOBListeners[sc]; ok {
-		stop()
+
+	stop, ok := b.stopOOBListeners[sc]
+	if ok {
 		delete(b.stopOOBListeners, sc)
+	}
+	b.mu.Unlock()
+
+	if ok {
+		stop()
+	}
+
+	if state.ConnectivityState == connectivity.Shutdown {
+		b.oobState.reports.Delete(sc)
 	}
 }
 
@@ -163,17 +176,21 @@ func (b *orcab) UpdateState(state balancer.State) {
 	b.ClientConn.UpdateState(state)
 }
 
+type orcaOOBListener struct {
+	subConn  balancer.SubConn
+	balancer *orcab
+}
+
 // OnLoadReport implements orca.OOBListener.
-func (b *orcab) OnLoadReport(r *v3orcapb.OrcaLoadReport) {
-	b.oobState.mu.Lock()
-	defer b.oobState.mu.Unlock()
-	b.logger.Infof("Received OOB load report: %v", r)
-	b.oobState.report = r
+func (l *orcaOOBListener) OnLoadReport(r *v3orcapb.OrcaLoadReport) {
+	if r == nil {
+		return
+	}
+	l.balancer.oobState.reports.Store(l.subConn, r)
 }
 
 type oobState struct {
-	mu     sync.Mutex
-	report *v3orcapb.OrcaLoadReport
+	reports sync.Map // map[balancer.SubConn]*v3orcapb.OrcaLoadReport
 }
 type orcaPicker struct {
 	childPicker balancer.Picker
@@ -185,20 +202,19 @@ func (p *orcaPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 	if err != nil {
 		return res, err
 	}
+
+	var lr *v3orcapb.OrcaLoadReport
+	if val, ok := p.oobState.reports.Load(res.SubConn); ok {
+		lr = val.(*v3orcapb.OrcaLoadReport)
+	}
+
 	origDone := res.Done
 	res.Done = func(di balancer.DoneInfo) {
-		if lr, _ := di.ServerLoad.(*v3orcapb.OrcaLoadReport); lr != nil &&
-			(lr.CpuUtilization != 0 || lr.MemUtilization != 0 || len(lr.Utilization) > 0 || len(lr.RequestCost) > 0) {
-			// Since all RPCs will respond with a load report due to the
-			// presence of the DialOption, we need to inspect every field and
-			// use the out-of-band report instead if all are unset/zero.
+		if perRPCLR, _ := di.ServerLoad.(*v3orcapb.OrcaLoadReport); perRPCLR != nil &&
+			(perRPCLR.CpuUtilization != 0 || perRPCLR.MemUtilization != 0 || len(perRPCLR.Utilization) > 0 || len(perRPCLR.RequestCost) > 0) {
+			setContextCMR(info.Ctx, perRPCLR)
+		} else if lr != nil {
 			setContextCMR(info.Ctx, lr)
-		} else {
-			p.oobState.mu.Lock()
-			defer p.oobState.mu.Unlock()
-			if lr := p.oobState.report; lr != nil {
-				setContextCMR(info.Ctx, lr)
-			}
 		}
 		if origDone != nil {
 			origDone(di)
