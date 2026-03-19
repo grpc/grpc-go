@@ -99,11 +99,12 @@ func (b *orcab) ExitIdle() {
 
 func (b *orcab) Close() {
 	b.mu.Lock()
-	for _, stop := range b.stopOOBListeners {
-		stop()
-	}
+	listeners := b.stopOOBListeners
 	b.stopOOBListeners = nil
 	b.mu.Unlock()
+	for _, stop := range listeners {
+		stop()
+	}
 	b.child.Close()
 }
 
