@@ -109,10 +109,12 @@ type adsStreamImpl struct {
 	notifySender chan struct{}       // To notify the sending goroutine of a pending request.
 
 	// Guards access to the below fields (and to the contents of the map).
-	mu                sync.Mutex
-	resourceTypeState map[ResourceType]*resourceTypeState // Map of resource types to their state.
-	firstRequest      bool                                // False after the first request is sent out.
-	pendingRequests   []request                           // Subscriptions and unsubscriptions are pushed here.
+	mu                 sync.Mutex
+	resourceTypeState  map[ResourceType]*resourceTypeState // Map of resource types to their state.
+	firstRequest       bool                                // False after the first request is sent out.
+	firstStreamCreated bool                                // Set to true after the very first ADS stream is created.
+	streamEstablished  bool                                // Set to true when an ADS stream is established and a response is received, except for the very first stream which is set to true immediately.
+	pendingRequests    []request                           // Subscriptions and unsubscriptions are pushed here.
 }
 
 // adsStreamOpts contains the options for creating a new ADS Stream.
@@ -241,6 +243,9 @@ func (s *adsStreamImpl) runner(ctx context.Context) {
 		stream, err := s.transport.NewStream(ctx, "/envoy.service.discovery.v3.AggregatedDiscoveryService/StreamAggregatedResources")
 		if err != nil {
 			s.logger.Warningf("Failed to create a new ADS streaming RPC: %v", err)
+			s.mu.Lock()
+			s.streamEstablished = false
+			s.mu.Unlock()
 			s.onError(err, false)
 			return nil
 		}
@@ -250,6 +255,10 @@ func (s *adsStreamImpl) runner(ctx context.Context) {
 
 		s.mu.Lock()
 		s.firstRequest = true
+		if !s.firstStreamCreated {
+			s.streamEstablished = true
+			s.firstStreamCreated = true
+		}
 		s.mu.Unlock()
 
 		// Ensure that the most recently created stream is pushed on the
@@ -437,10 +446,18 @@ func (s *adsStreamImpl) recv(stream clients.Stream) bool {
 
 		resources, url, version, nonce, err := s.recvMessage(stream)
 		if err != nil {
+			s.mu.Lock()
+			if !msgReceived {
+				s.streamEstablished = false
+			}
+			s.mu.Unlock()
 			s.onError(err, msgReceived)
 			s.logger.Warningf("ADS stream closed: %v", err)
 			return msgReceived
 		}
+		s.mu.Lock()
+		s.streamEstablished = true
+		s.mu.Unlock()
 		msgReceived = true
 
 		// Invoke the onResponse event handler to parse the incoming message and
@@ -714,4 +731,10 @@ func (fc *adsFlowControl) wait() bool {
 	}
 
 	return fc.stopped
+}
+
+func (s *adsStreamImpl) isStreamEstablished() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.streamEstablished
 }
