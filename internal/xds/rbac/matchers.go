@@ -19,6 +19,7 @@ package rbac
 import (
 	"errors"
 	"fmt"
+	"net"
 	"net/netip"
 	"regexp"
 
@@ -344,7 +345,12 @@ func newRemoteIPMatcher(cidrRange *v3corepb.CidrRange) (*remoteIPMatcher, error)
 }
 
 func (sim *remoteIPMatcher) match(data *rpcData) bool {
-	ip, _ := netip.ParseAddr(data.peerInfo.Addr.String())
+	addrStr := data.peerInfo.Addr.String()
+	host, _, err := net.SplitHostPort(addrStr)
+	if err != nil {
+		host = addrStr
+	}
+	ip, _ := netip.ParseAddr(host)
 	return sim.ipNet.Contains(ip)
 }
 
@@ -362,7 +368,12 @@ func newLocalIPMatcher(cidrRange *v3corepb.CidrRange) (*localIPMatcher, error) {
 }
 
 func (dim *localIPMatcher) match(data *rpcData) bool {
-	ip, _ := netip.ParseAddr(data.localAddr.String())
+	addrStr := data.localAddr.String()
+	host, _, err := net.SplitHostPort(addrStr)
+	if err != nil {
+		host = addrStr
+	}
+	ip, _ := netip.ParseAddr(host)
 	return dim.ipNet.Contains(ip)
 }
 
