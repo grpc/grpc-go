@@ -47,6 +47,7 @@ type ServerFailure struct {
 // XDSClientConnected reports the connectivity state of the ADS stream.
 // Per gRFC A78, Value is 1 if connected, 0 otherwise.
 // Labels: grpc.target, grpc.xds.server
+// grpc.target is added by asyncMetricsRecorderAdapter
 type XDSClientConnected struct {
 	ServerURI string
 	Value     int64
@@ -55,6 +56,7 @@ type XDSClientConnected struct {
 // XDSClientResourceStats reports the current cache states of xDS resources
 // For label definitions, see gRFC A78.
 // Labels: grpc.target, grpc.xds.authority, grpc.xds.cache_state, grpc.xds.resource_type
+// grpc.target is added by asyncMetricsRecorderAdapter
 type XDSClientResourceStats struct {
 	Authority    string
 	ResourceType string

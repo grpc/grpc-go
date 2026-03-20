@@ -935,27 +935,29 @@ func (a *authority) resourceWatchStateForTesting(rType ResourceType, resourceNam
 	return state, err
 }
 
+// resourceStats returns a snapshot of the current state of all resources watched
+// by this authority. The return value is a nested map where:
+//   - The outer map's key is the resource type name (e.g., "ListenerResource").
+//   - The inner map's key is the cache state of the resource (e.g., "requested",
+//     "acked", "nacked", "does_not_exist").
+//   - The inner map's value is the total count of resources in that specific state.
 func (a *authority) resourceStats() map[string]map[string]int {
 	ret := make(chan map[string]map[string]int, 1)
 	op := func(context.Context) {
-		// Map: ResourceType (String) -> CacheState (String) -> Count (Int)
 		summary := make(map[string]map[string]int)
 		for rType, resourceMap := range a.resources {
-			rName := rType.TypeName
-			if _, ok := summary[rName]; !ok {
-				summary[rName] = make(map[string]int)
+			typeName := rType.TypeName
+			if _, ok := summary[typeName]; !ok {
+				summary[typeName] = make(map[string]int)
 			}
 			for _, state := range resourceMap {
-				s := getCacheState(state)
-				summary[rName][s]++
+				s := cacheState(state)
+				summary[typeName][s]++
 			}
 		}
 
 		ret <- summary
 	}
-
-	// Schedule the operation.
-	// If the serializer is closed/context canceled, the second func (onFailure) runs.
 	a.xdsClientSerializer.ScheduleOr(op, func() {
 		ret <- nil
 	})
@@ -963,8 +965,8 @@ func (a *authority) resourceStats() map[string]map[string]int {
 	return <-ret
 }
 
-// getCacheState determines the metrics label string for a given resource state.
-func getCacheState(r *resourceState) string {
+// cacheState determines the metrics label string for a given resource state.
+func cacheState(r *resourceState) string {
 	switch r.md.Status {
 	case xdsresource.ServiceStatusRequested:
 		return "requested"

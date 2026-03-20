@@ -77,14 +77,14 @@ var (
 	})
 	xdsClientConnectedMetric = estats.RegisterInt64AsyncGauge(estats.MetricDescriptor{
 		Name:        "grpc.xds_client.connected",
-		Description: "Experimental. A metric that is 1 if the xDS Client is connected to an xDS server, 0 otherwise.",
+		Description: "A metric that is 1 if the xDS Client is connected to an xDS server, 0 otherwise.",
 		Unit:        "{connected}",
 		Type:        estats.MetricTypeIntAsyncGauge,
 		Labels:      []string{"grpc.target", "grpc.xds.server"},
 	})
 	xdsClientResourcesMetric = estats.RegisterInt64AsyncGauge(estats.MetricDescriptor{
 		Name:        "grpc.xds_client.resources",
-		Description: "Experimental. Number of xDS resources currently cached.",
+		Description: "Counts of xDS resources.",
 		Unit:        "{resource}",
 		Type:        estats.MetricTypeIntAsyncGauge,
 		Labels:      []string{"grpc.target", "grpc.xds.authority", "grpc.xds.cache_state", "grpc.xds.resource_type"},

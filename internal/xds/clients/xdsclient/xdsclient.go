@@ -452,6 +452,12 @@ func resourceWatchStateForTesting(c *XDSClient, rType ResourceType, resourceName
 
 }
 
+// xdsClientMetricReporter is a wrapper around XDSClient used solely for
+// reporting metrics. We create this separate type to implement the
+// clients.AsyncReporter interface, preventing its Report method from
+// becoming part of the public XDSClient API. This is especially important
+// because the AsyncReporter interface is experimental, and we want to
+// avoid coupling experimental changes to the stable XDSClient API.
 type xdsClientMetricReporter struct {
 	c *XDSClient
 }
@@ -484,14 +490,18 @@ func (c *XDSClient) reportConnectedState(rec clients.AsyncMetricsRecorder) {
 
 // reportResourceStats handles the "grpc.xds_client.resources" metric.
 func (c *XDSClient) reportResourceStats(rec clients.AsyncMetricsRecorder) {
-	reportForAuthority := func(auth *authority) {
-		stats := auth.resourceStats()
-        for resourceType, stateCounts := range stats {
-            for cacheState, count := range stateCounts {
-                if count > 0 {
-                    rec.ReportMetric(&metrics.XDSClientResourceStats{
-                        Authority:    auth.name,
-                        ResourceType: resourceType,
+	reportForAuthority := func(a *authority) {
+		stats := a.resourceStats()
+		for resourceType, stateCounts := range stats {
+			for cacheState, count := range stateCounts {
+				if count > 0 {
+					authorityName := a.name
+					if authorityName == "" {
+						authorityName = "#old"
+					}
+					rec.ReportMetric(&metrics.XDSClientResourceStats{
+						Authority:    authorityName,
+						ResourceType: resourceType,
 						CacheState:   cacheState,
 						Count:        int64(count),
 					})
@@ -499,10 +509,8 @@ func (c *XDSClient) reportResourceStats(rec clients.AsyncMetricsRecorder) {
 			}
 		}
 	}
-	if c.topLevelAuthority != nil {
-		reportForAuthority(c.topLevelAuthority)
-	}
-	for _, auth := range c.authorities {
-		reportForAuthority(auth)
+	reportForAuthority(c.topLevelAuthority)
+	for _, a := range c.authorities {
+		reportForAuthority(a)
 	}
 }
