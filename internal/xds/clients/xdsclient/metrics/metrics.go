@@ -52,7 +52,7 @@ type XDSClientConnected struct {
 	Value     int64
 }
 
-// XDSClientResourceStats reports the number of resources currently cached.
+// XDSClientResourceStats reports the current cache states of xDS resources
 // For label definitions, see gRFC A78.
 // Labels: grpc.target, grpc.xds.authority, grpc.xds.cache_state, grpc.xds.resource_type
 type XDSClientResourceStats struct {
