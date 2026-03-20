@@ -61,7 +61,7 @@ func (s) TestRemoteIPMatcherWithTCPAddr(t *testing.T) {
 		{
 			name:      "TCPAddr not matching CIDR",
 			addr:      &net.TCPAddr{IP: netip.MustParseAddr("192.168.1.1").AsSlice(), Port: 443},
-		wantMatch: false,
+			wantMatch: false,
 		},
 		{
 			name:      "IPv6 TCPAddr matching CIDR",
