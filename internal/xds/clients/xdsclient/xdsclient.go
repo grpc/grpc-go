@@ -486,12 +486,12 @@ func (c *XDSClient) reportConnectedState(rec clients.AsyncMetricsRecorder) {
 func (c *XDSClient) reportResourceStats(rec clients.AsyncMetricsRecorder) {
 	reportForAuthority := func(auth *authority) {
 		stats := auth.resourceStats()
-		for typeURL, stateCounts := range stats {
-			for cacheState, count := range stateCounts {
-				if count > 0 {
-					rec.ReportMetric(&metrics.XDSClientResourceStats{
-						Authority:    auth.name,
-						ResourceType: typeURL,
+        for resourceType, stateCounts := range stats {
+            for cacheState, count := range stateCounts {
+                if count > 0 {
+                    rec.ReportMetric(&metrics.XDSClientResourceStats{
+                        Authority:    auth.name,
+                        ResourceType: resourceType,
 						CacheState:   cacheState,
 						Count:        int64(count),
 					})
