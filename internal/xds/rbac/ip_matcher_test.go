@@ -18,6 +18,7 @@ package rbac
 
 import (
 	"net"
+	"net/netip"
 	"testing"
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -49,7 +50,7 @@ func (s) TestRemoteIPMatcherWithTCPAddr(t *testing.T) {
 		},
 		{
 			name:      "TCPAddr matching CIDR",
-			addr:      &net.TCPAddr{IP: net.ParseIP("10.0.0.5"), Port: 8080},
+			addr:      &net.TCPAddr{IP: netip.MustParseAddr("10.0.0.5").AsSlice(), Port: 8080},
 			wantMatch: true,
 		},
 		{
@@ -59,12 +60,12 @@ func (s) TestRemoteIPMatcherWithTCPAddr(t *testing.T) {
 		},
 		{
 			name:      "TCPAddr not matching CIDR",
-			addr:      &net.TCPAddr{IP: net.ParseIP("192.168.1.1"), Port: 443},
-			wantMatch: false,
+			addr:      &net.TCPAddr{IP: netip.MustParseAddr("192.168.1.1").AsSlice(), Port: 443},
+		wantMatch: false,
 		},
 		{
 			name:      "IPv6 TCPAddr matching CIDR",
-			addr:      &net.TCPAddr{IP: net.ParseIP("10.0.0.1"), Port: 0},
+			addr:      &net.TCPAddr{IP: netip.MustParseAddr("10.0.0.1").AsSlice(), Port: 0},
 			wantMatch: true,
 		},
 	}
@@ -105,7 +106,7 @@ func (s) TestLocalIPMatcherWithTCPAddr(t *testing.T) {
 		},
 		{
 			name:      "TCPAddr matching CIDR",
-			addr:      &net.TCPAddr{IP: net.ParseIP("172.16.5.1"), Port: 9090},
+			addr:      &net.TCPAddr{IP: netip.MustParseAddr("172.16.5.1").AsSlice(), Port: 9090},
 			wantMatch: true,
 		},
 		{
@@ -115,7 +116,7 @@ func (s) TestLocalIPMatcherWithTCPAddr(t *testing.T) {
 		},
 		{
 			name:      "TCPAddr not matching CIDR",
-			addr:      &net.TCPAddr{IP: net.ParseIP("192.168.1.1"), Port: 443},
+			addr:      &net.TCPAddr{IP: netip.MustParseAddr("192.168.1.1").AsSlice(), Port: 443},
 			wantMatch: false,
 		},
 	}
