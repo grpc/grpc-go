@@ -109,3 +109,26 @@ func (s) Test_nameGenerator_generate(t *testing.T) {
 		})
 	}
 }
+
+func (s) TestNameGenerator_Generate_EmptyLocalities(t *testing.T) {
+	ng := newNameGenerator(0)
+	// Repeated calls to generate with an empty list of localities should
+	// generate the same single name.
+	for i := 0; i < 5; i++ {
+		if diff := cmp.Diff(ng.generate([][]xdsresource.Locality{{}}), []string{"priority-0-0"}); diff != "" {
+			t.Errorf("generate() = got: %v, want: %v, diff (-got +want): %s", ng.generate(nil), []string{"priority-0-0"}, diff)
+		}
+	}
+}
+
+func (s) TestNameGenerator_Generate_MultipleEmptyLocalities(t *testing.T) {
+	ng := newNameGenerator(0)
+	// Two empty priorities should get stable names across repeated calls.
+	want := []string{"priority-0-0", "priority-0-1"}
+	for i := 0; i < 5; i++ {
+		got := ng.generate([][]xdsresource.Locality{{}, {}})
+		if diff := cmp.Diff(got, want); diff != "" {
+			t.Errorf("iteration %d: generate() = got: %v, want: %v, diff (-got +want): %s", i, got, want, diff)
+		}
+	}
+}
