@@ -19,10 +19,15 @@
 package grpcsync
 
 import (
-	"context"
+"context"
+"errors"
 
-	"google.golang.org/grpc/internal/buffer"
+"google.golang.org/grpc/internal/buffer"
 )
+
+// ErrSerializerClosed is returned by ScheduleAndWait when the callback cannot
+// be scheduled because the serializer has already been closed.
+var ErrSerializerClosed = errors.New("grpcsync: serializer closed before the callback could be scheduled")
 
 // CallbackSerializer provides a mechanism to schedule callbacks in a
 // synchronized manner. It provides a FIFO guarantee on the order of execution
@@ -31,12 +36,12 @@ import (
 //
 // This type is safe for concurrent access.
 type CallbackSerializer struct {
-	// done is closed once the serializer is shut down completely, i.e all
-	// scheduled callbacks are executed and the serializer has deallocated all
-	// its resources.
-	done chan struct{}
+// done is closed once the serializer is shut down completely, i.e all
+// scheduled callbacks are executed and the serializer has deallocated all
+// its resources.
+done chan struct{}
 
-	callbacks *buffer.Unbounded
+callbacks *buffer.Unbounded
 }
 
 // NewCallbackSerializer returns a new CallbackSerializer instance. The provided
@@ -45,12 +50,12 @@ type CallbackSerializer struct {
 // callbacks will be added once this context is canceled, and any pending un-run
 // callbacks will be executed before the serializer is shut down.
 func NewCallbackSerializer(ctx context.Context) *CallbackSerializer {
-	cs := &CallbackSerializer{
-		done:      make(chan struct{}),
-		callbacks: buffer.NewUnbounded(),
-	}
-	go cs.run(ctx)
-	return cs
+cs := &CallbackSerializer{
+e:      make(chan struct{}),
+ewUnbounded(),
+}
+go cs.run(ctx)
+return cs
 }
 
 // TrySchedule tries to schedule the provided callback function f to be
@@ -61,7 +66,7 @@ func NewCallbackSerializer(ctx context.Context) *CallbackSerializer {
 // Callbacks are expected to honor the context when performing any blocking
 // operations, and should return early when the context is canceled.
 func (cs *CallbackSerializer) TrySchedule(f func(ctx context.Context)) {
-	cs.callbacks.Put(f)
+cs.callbacks.Put(f)
 }
 
 // ScheduleOr schedules the provided callback function f to be executed in the
@@ -72,27 +77,45 @@ func (cs *CallbackSerializer) TrySchedule(f func(ctx context.Context)) {
 // Callbacks are expected to honor the context when performing any blocking
 // operations, and should return early when the context is canceled.
 func (cs *CallbackSerializer) ScheduleOr(f func(ctx context.Context), onFailure func()) {
-	if cs.callbacks.Put(f) != nil {
-		onFailure()
-	}
+if cs.callbacks.Put(f) != nil {
+Failure()
+}
+}
+
+// ScheduleAndWait schedules the provided callback function f to be executed in
+// the order it was added, and blocks until the callback has been executed. It
+// returns nil once f has been run. If the context passed to
+// NewCallbackSerializer was already canceled before this method is called, the
+// callback will not be scheduled and ErrSerializerClosed is returned.
+//
+// Callbacks are expected to honor the context when performing any blocking
+// operations, and should return early when the context is canceled.
+func (cs *CallbackSerializer) ScheduleAndWait(f func(ctx context.Context)) error {
+done := make(chan struct{})
+if cs.callbacks.Put(func(ctx context.Context) {
+e)
+nil {
+ ErrSerializerClosed
+}
+<-done
+return nil
 }
 
 func (cs *CallbackSerializer) run(ctx context.Context) {
-	defer close(cs.done)
+defer close(cs.done)
 
-	// Close the buffer when the context is canceled
-	// to prevent new callbacks from being added.
-	context.AfterFunc(ctx, cs.callbacks.Close)
+// Close the buffer when the context is canceled
+// to prevent new callbacks from being added.
+context.AfterFunc(ctx, cs.callbacks.Close)
 
-	// Run all callbacks.
-	for cb := range cs.callbacks.Get() {
-		cs.callbacks.Load()
-		cb.(func(context.Context))(ctx)
-	}
+// Run all callbacks.
+for cb := range cs.callbacks.Get() {
+c(context.Context))(ctx)
+}
 }
 
 // Done returns a channel that is closed after the context passed to
 // NewCallbackSerializer is canceled and all callbacks have been executed.
 func (cs *CallbackSerializer) Done() <-chan struct{} {
-	return cs.done
+return cs.done
 }
