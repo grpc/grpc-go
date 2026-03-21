@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	_ "google.golang.org/grpc/balancer/roundrobin"
@@ -36,6 +37,7 @@ import (
 	_ "google.golang.org/grpc/xds" // Register the xDS LB Registry Converters.
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
+	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/structpb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
@@ -43,6 +45,7 @@ import (
 	v3xdsxdstypepb "github.com/cncf/xds/go/xds/type/v3"
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	v3clientsideweightedroundrobinpb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/client_side_weighted_round_robin/v3"
 	v3leastrequestpb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/least_request/v3"
 	v3maglevpb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/maglev/v3"
 	v3pickfirstpb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/pick_first/v3"
@@ -151,6 +154,46 @@ func (s) TestConvertToServiceConfigSuccess(t *testing.T) {
 				},
 			},
 			wantConfig: `[{"round_robin": {}}]`,
+		},
+		{
+			name: "weighted_round_robin",
+			policy: &v3clusterpb.LoadBalancingPolicy{
+				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
+					{
+						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
+							TypedConfig: testutils.MarshalAny(t, &v3clientsideweightedroundrobinpb.ClientSideWeightedRoundRobin{}),
+						},
+					},
+				},
+			},
+			wantConfig: `[{"weighted_round_robin": {}}]`,
+		},
+		{
+			name: "weighted_round_robin_populated",
+			policy: &v3clusterpb.LoadBalancingPolicy{
+				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
+					{
+						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
+							TypedConfig: testutils.MarshalAny(t, &v3clientsideweightedroundrobinpb.ClientSideWeightedRoundRobin{
+								EnableOobLoadReport:     wrapperspb.Bool(true),
+								OobReportingPeriod:      durationpb.New(10 * time.Second),
+								BlackoutPeriod:          durationpb.New(5 * time.Second),
+								WeightExpirationPeriod:  durationpb.New(3 * time.Minute),
+								WeightUpdatePeriod:      durationpb.New(1 * time.Second),
+								ErrorUtilizationPenalty: wrapperspb.Float(1.5),
+							}),
+						},
+					},
+				},
+			},
+			wantConfig: `[{"weighted_round_robin": {
+				"enableOobLoadReport": true,
+				"oobReportingPeriod": "10s",
+				"blackoutPeriod": "5s",
+				"weightExpirationPeriod": "180s",
+				"weightUpdatePeriod": "1s",
+				"errorUtilizationPenalty": 1.5
+			}}]`,
 		},
 		{
 			name: "round_robin_ring_hash_use_first_supported",

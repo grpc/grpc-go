@@ -51,11 +51,16 @@ func unmarshalListenerResource(r *anypb.Any, opts *xdsclient.DecodeOptions) (str
 		return "", ListenerUpdate{}, fmt.Errorf("failed to unmarshal resource: %v", err)
 	}
 
+	if lis.GetName() == "" {
+		return "", ListenerUpdate{}, fmt.Errorf("empty resource name in listener resource")
+	}
+
 	lu, err := processListener(lis, opts)
 	if err != nil {
 		return lis.GetName(), ListenerUpdate{}, err
 	}
 	lu.Raw = r
+
 	return lis.GetName(), *lu, nil
 }
 
@@ -143,7 +148,7 @@ func unwrapHTTPFilterConfig(config *anypb.Any) (proto.Message, string, error) {
 	}
 }
 
-func validateHTTPFilterConfig(cfg *anypb.Any, lds, optional bool) (httpfilter.Filter, httpfilter.FilterConfig, error) {
+func validateHTTPFilterConfig(cfg *anypb.Any, lds, optional bool) (httpfilter.Builder, httpfilter.FilterConfig, error) {
 	config, typeURL, err := unwrapHTTPFilterConfig(cfg)
 	if err != nil {
 		return nil, nil, err
@@ -217,13 +222,13 @@ func processHTTPFilters(filters []*v3httppb.HttpFilter, server bool) ([]HTTPFilt
 			continue
 		}
 		if server {
-			if _, ok := httpFilter.(httpfilter.ServerInterceptorBuilder); !ok {
+			if _, ok := httpFilter.(httpfilter.ServerFilterBuilder); !ok {
 				if filter.GetIsOptional() {
 					continue
 				}
 				return nil, fmt.Errorf("HTTP filter %q not supported server-side", name)
 			}
-		} else if _, ok := httpFilter.(httpfilter.ClientInterceptorBuilder); !ok {
+		} else if _, ok := httpFilter.(httpfilter.ClientFilterBuilder); !ok {
 			if filter.GetIsOptional() {
 				continue
 			}

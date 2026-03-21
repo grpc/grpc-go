@@ -212,12 +212,31 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 		wantErr    bool
 	}{
 		{
-			name:     "non-listener resource",
+			name:     "non-listener_resource",
 			resource: &anypb.Any{TypeUrl: version.V3HTTPConnManagerURL},
 			wantErr:  true,
 		},
 		{
-			name: "badly marshaled listener resource",
+			name: "listener_resource_with_empty_name",
+			resource: &anypb.Any{
+				TypeUrl: version.V3ListenerURL,
+				Value: func() []byte {
+					lis := &v3listenerpb.Listener{
+						ApiListener: &v3listenerpb.ApiListener{
+							ApiListener: &anypb.Any{
+								TypeUrl: version.V3HTTPConnManagerURL,
+								Value:   []byte{1, 2, 3, 4},
+							},
+						},
+					}
+					mLis, _ := proto.Marshal(lis)
+					return mLis
+				}(),
+			},
+			wantErr: true,
+		},
+		{
+			name: "badly_marshaled_listener_resource",
 			resource: &anypb.Any{
 				TypeUrl: version.V3ListenerURL,
 				Value: func() []byte {
@@ -238,7 +257,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			wantErr:  true,
 		},
 		{
-			name: "wrong type in apiListener",
+			name: "wrong_type_in_apiListener",
 			resource: testutils.MarshalAny(t, &v3listenerpb.Listener{
 				Name: v3LDSTarget,
 				ApiListener: &v3listenerpb.ApiListener{
@@ -249,7 +268,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			wantErr:  true,
 		},
 		{
-			name: "empty httpConnMgr in apiListener",
+			name: "empty_httpConnMgr_in_apiListener",
 			resource: testutils.MarshalAny(t, &v3listenerpb.Listener{
 				Name: v3LDSTarget,
 				ApiListener: &v3listenerpb.ApiListener{
@@ -264,7 +283,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			wantErr:  true,
 		},
 		{
-			name: "scopedRoutes routeConfig in apiListener",
+			name: "scopedRoutes_routeConfig_in_apiListener",
 			resource: testutils.MarshalAny(t, &v3listenerpb.Listener{
 				Name: v3LDSTarget,
 				ApiListener: &v3listenerpb.ApiListener{
@@ -277,7 +296,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			wantErr:  true,
 		},
 		{
-			name:     "rds.ConfigSource in apiListener is Self",
+			name:     "rds.ConfigSource_in_apiListener_is_Self",
 			resource: v3ListenerWithCDSConfigSourceSelf,
 			wantName: v3LDSTarget,
 			wantUpdate: ListenerUpdate{
@@ -289,7 +308,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			},
 		},
 		{
-			name: "rds.ConfigSource in apiListener is not ADS or Self",
+			name: "rds.ConfigSource_in_apiListener_is_not_ADS_or_Self",
 			resource: testutils.MarshalAny(t, &v3listenerpb.Listener{
 				Name: v3LDSTarget,
 				ApiListener: &v3listenerpb.ApiListener{
@@ -311,7 +330,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			wantErr:  true,
 		},
 		{
-			name:     "v3 with no filters",
+			name:     "v3_with_no_filters",
 			resource: v3LisWithFilters(),
 			wantName: v3LDSTarget,
 			wantUpdate: ListenerUpdate{
@@ -324,7 +343,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			},
 		},
 		{
-			name: "v3 no terminal filter",
+			name: "v3_no_terminal_filter",
 			resource: testutils.MarshalAny(t, &v3listenerpb.Listener{
 				Name: v3LDSTarget,
 				ApiListener: &v3listenerpb.ApiListener{
@@ -348,7 +367,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			wantErr:  true,
 		},
 		{
-			name:     "v3 with custom filter",
+			name:     "v3_with_custom_filter",
 			resource: v3LisWithFilters(customFilter),
 			wantName: v3LDSTarget,
 			wantUpdate: ListenerUpdate{
@@ -368,7 +387,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			},
 		},
 		{
-			name:     "v3 with custom filter in old typed struct",
+			name:     "v3_with_custom_filter_in_old_typed_struct",
 			resource: v3LisWithFilters(oldTypedStructFilter),
 			wantName: v3LDSTarget,
 			wantUpdate: ListenerUpdate{
@@ -388,7 +407,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			},
 		},
 		{
-			name:     "v3 with custom filter in new typed struct",
+			name:     "v3_with_custom_filter_in_new_typed_struct",
 			resource: v3LisWithFilters(newTypedStructFilter),
 			wantName: v3LDSTarget,
 			wantUpdate: ListenerUpdate{
@@ -408,7 +427,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			},
 		},
 		{
-			name:     "v3 with optional custom filter",
+			name:     "v3_with_optional_custom_filter",
 			resource: v3LisWithFilters(customOptionalFilter),
 			wantName: v3LDSTarget,
 			wantUpdate: ListenerUpdate{
@@ -428,13 +447,13 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			},
 		},
 		{
-			name:     "v3 with two filters with same name",
+			name:     "v3_with_two_filters_with_same_name",
 			resource: v3LisWithFilters(customFilter, customFilter),
 			wantName: v3LDSTarget,
 			wantErr:  true,
 		},
 		{
-			name:     "v3 with two filters - same type different name",
+			name:     "v3_with_two_filters_same_type_different_name",
 			resource: v3LisWithFilters(customFilter, customFilter2),
 			wantName: v3LDSTarget,
 			wantUpdate: ListenerUpdate{
@@ -457,13 +476,13 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			},
 		},
 		{
-			name:     "v3 with server-only filter",
+			name:     "v3_with_server_only_filter",
 			resource: v3LisWithFilters(serverOnlyCustomFilter),
 			wantName: v3LDSTarget,
 			wantErr:  true,
 		},
 		{
-			name:     "v3 with optional server-only filter",
+			name:     "v3_with_optional_server_only_filter",
 			resource: v3LisWithFilters(serverOnlyOptionalCustomFilter),
 			wantName: v3LDSTarget,
 			wantUpdate: ListenerUpdate{
@@ -476,7 +495,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			},
 		},
 		{
-			name:     "v3 with client-only filter",
+			name:     "v3_with_client_only_filter",
 			resource: v3LisWithFilters(clientOnlyCustomFilter),
 			wantName: v3LDSTarget,
 			wantUpdate: ListenerUpdate{
@@ -495,25 +514,25 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			},
 		},
 		{
-			name:     "v3 with err filter",
+			name:     "v3_with_err_filter",
 			resource: v3LisWithFilters(errFilter),
 			wantName: v3LDSTarget,
 			wantErr:  true,
 		},
 		{
-			name:     "v3 with optional err filter",
+			name:     "v3_with_optional_err_filter",
 			resource: v3LisWithFilters(errOptionalFilter),
 			wantName: v3LDSTarget,
 			wantErr:  true,
 		},
 		{
-			name:     "v3 with unknown filter",
+			name:     "v3_with_unknown_filter",
 			resource: v3LisWithFilters(unknownFilter),
 			wantName: v3LDSTarget,
 			wantErr:  true,
 		},
 		{
-			name:     "v3 with unknown filter (optional)",
+			name:     "v3_with_unknown_filter_optional",
 			resource: v3LisWithFilters(unknownOptionalFilter),
 			wantName: v3LDSTarget,
 			wantUpdate: ListenerUpdate{
@@ -526,7 +545,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			},
 		},
 		{
-			name:     "v3 listener resource",
+			name:     "v3_listener_resource",
 			resource: v3LisWithFilters(),
 			wantName: v3LDSTarget,
 			wantUpdate: ListenerUpdate{
@@ -539,7 +558,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			},
 		},
 		{
-			name:     "v3 listener resource wrapped",
+			name:     "v3_listener_resource_wrapped",
 			resource: testutils.MarshalAny(t, &v3discoverypb.Resource{Resource: v3LisWithFilters()}),
 			wantName: v3LDSTarget,
 			wantUpdate: ListenerUpdate{
@@ -590,7 +609,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			wantErr:  true,
 		},
 		{
-			name:     "v3 listener with inline route configuration",
+			name:     "v3_listener_with_inline_route_configuration",
 			resource: v3LisWithInlineRoute,
 			wantName: v3LDSTarget,
 			wantUpdate: ListenerUpdate{
@@ -1732,8 +1751,8 @@ type filterConfig struct {
 
 // httpFilter allows testing the http filter registry and parsing functionality.
 type httpFilter struct {
-	httpfilter.ClientInterceptorBuilder
-	httpfilter.ServerInterceptorBuilder
+	httpfilter.ClientFilterBuilder
+	httpfilter.ServerFilterBuilder
 }
 
 func (httpFilter) TypeURLs() []string { return []string{"custom.filter"} }
@@ -1752,7 +1771,7 @@ func (httpFilter) IsTerminal() bool {
 
 // errHTTPFilter returns errors no matter what is passed to ParseFilterConfig.
 type errHTTPFilter struct {
-	httpfilter.ClientInterceptorBuilder
+	httpfilter.ClientFilterBuilder
 }
 
 func (errHTTPFilter) TypeURLs() []string { return []string{"err.custom.filter"} }
@@ -1776,9 +1795,9 @@ func init() {
 	httpfilter.Register(clientOnlyHTTPFilter{})
 }
 
-// serverOnlyHTTPFilter does not implement ClientInterceptorBuilder
+// serverOnlyHTTPFilter does not implement ClientFilterBuilder
 type serverOnlyHTTPFilter struct {
-	httpfilter.ServerInterceptorBuilder
+	httpfilter.ServerFilterBuilder
 }
 
 func (serverOnlyHTTPFilter) TypeURLs() []string { return []string{"serverOnly.custom.filter"} }
@@ -1795,9 +1814,9 @@ func (serverOnlyHTTPFilter) IsTerminal() bool {
 	return false
 }
 
-// clientOnlyHTTPFilter does not implement ServerInterceptorBuilder
+// clientOnlyHTTPFilter does not implement ServerFilterBuilder
 type clientOnlyHTTPFilter struct {
-	httpfilter.ClientInterceptorBuilder
+	httpfilter.ClientFilterBuilder
 }
 
 func (clientOnlyHTTPFilter) TypeURLs() []string { return []string{"clientOnly.custom.filter"} }
