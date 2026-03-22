@@ -84,10 +84,11 @@ func TestParseTarget(t *testing.T) {
 			errContain: "no resolver registered for scheme",
 		},
 		{
-			name:          "unregistered_scheme_falls_back_to_default",
+			name:          "unregistered_hierarchical_scheme_no_fallback",
 			target:        "unknown:///foo",
 			defaultScheme: "passthrough",
-			wantScheme:    "passthrough",
+			wantErr:       true,
+			errContain:    "no resolver registered for scheme",
 		},
 		{
 			name:       "invalid_URI",
@@ -148,10 +149,11 @@ func TestParseTargetWithCustomBuilder(t *testing.T) {
 			errContain: "no resolver registered for scheme",
 		},
 		{
-			name:          "unregistered_scheme_falls_back_to_default",
+			name:          "unregistered_hierarchical_scheme_no_fallback",
 			target:        "dns:///example.com:443",
 			defaultScheme: "passthrough",
-			wantScheme:    "passthrough",
+			wantErr:       true,
+			errContain:    "no resolver registered for scheme",
 		},
 		{
 			// Opaque URI (host:port form) falls back to the default scheme.

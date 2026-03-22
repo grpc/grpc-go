@@ -29,8 +29,13 @@ import (
 // that a resolver is registered for the parsed scheme using builder.
 //
 // If the target parses successfully and builder recognises the scheme, the
-// parsed target is returned directly. Otherwise ParseTarget retries by
-// prepending defaultScheme + ":///" if defaultScheme is non-empty.
+// parsed target is returned directly.
+//
+// For hierarchical URIs (scheme://authority/path) with an unregistered scheme,
+// ParseTarget returns an error immediately because the caller explicitly chose
+// that scheme. For opaque URIs (e.g. host:port), empty-scheme URIs, and parse
+// failures, ParseTarget retries by prepending defaultScheme + ":///" if
+// defaultScheme is non-empty.
 //
 // builder is a function that returns the resolver.Builder for a given scheme,
 // or nil if no resolver is registered. Pass resolver.Get to use the global
@@ -41,8 +46,13 @@ func ParseTarget(target, defaultScheme string, builder func(string) resolver.Bui
 	if err == nil && u.Scheme != "" && builder(u.Scheme) != nil {
 		return resolver.Target{URL: *u}, nil
 	}
-	// Parse error, empty scheme, or opaque URI with unregistered scheme:
-	// retry by prepending defaultScheme if one is provided.
+	// Hierarchical URI with an unregistered scheme: the caller explicitly
+	// chose this scheme, so do not silently fall back.
+	if err == nil && u.Scheme != "" && u.Opaque == "" {
+		return resolver.Target{}, fmt.Errorf("no resolver registered for scheme %q in target %q", u.Scheme, target)
+	}
+	// Parse error, empty scheme, or opaque URI (e.g. host:port): retry by
+	// prepending defaultScheme if one is provided.
 	if defaultScheme != "" {
 		if u2, err2 := url.Parse(defaultScheme + ":///" + target); err2 == nil && builder(u2.Scheme) != nil {
 			return resolver.Target{URL: *u2}, nil
