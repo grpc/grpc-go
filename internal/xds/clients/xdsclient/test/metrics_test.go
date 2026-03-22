@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/xds/clients"
@@ -675,9 +676,13 @@ func (s) TestConnectedMetric_Reconnection(t *testing.T) {
 			return nil
 		},
 		OnStreamRequest: func(_ int64, _ *v3discoverypb.DiscoveryRequest) error {
-			// For all streams, wait until we are told to send a response.
-			<-sendResponse
 			return nil
+		},
+		OnStreamResponse: func(ctx context.Context, _ int64, _ *v3discoverypb.DiscoveryRequest, _ *v3discoverypb.DiscoveryResponse) {
+			select {
+			case <-sendResponse:
+			case <-ctx.Done():
+			}
 		},
 	})
 	nodeID := uuid.New().String()
@@ -687,7 +692,28 @@ func (s) TestConnectedMetric_Reconnection(t *testing.T) {
 		ServerURI:  mgmtServer.Address,
 		Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"},
 	}
-	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
+	blockNextStream := make(chan struct{}, 1)
+	blocked := make(chan struct{})
+	unblock := make(chan struct{})
+
+	customGRPCNewClient := func(target string, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
+		interceptor := func(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, cops ...grpc.CallOption) (grpc.ClientStream, error) {
+			select {
+			case <-blockNextStream:
+				select {
+				case blocked <- struct{}{}:
+				default:
+				}
+				<-unblock
+			default:
+			}
+			return streamer(ctx, desc, cc, method, cops...)
+		}
+		opts = append(opts, grpc.WithStreamInterceptor(interceptor))
+		return grpc.NewClient(target, opts...)
+	}
+
+	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle(), GRPCNewClient: customGRPCNewClient}}
 	xdsClientConfig := xdsclient.Config{
 		Servers:          []xdsclient.ServerConfig{{ServerIdentifier: si}},
 		Node:             clients.Node{ID: nodeID},
@@ -730,13 +756,21 @@ func (s) TestConnectedMetric_Reconnection(t *testing.T) {
 	// 2. 1st NewStream OK - metric value 1
 	lis.Restart()
 
-	// Wait a bit for the stream to be created.
-	time.Sleep(1 * time.Second)
-
-	tmr.metricsCh.Drain()
-	tmr.triggerAsyncMetrics()
-	if err := tmr.waitForSpecificMetric(ctx, &metrics.XDSClientConnected{ServerURI: mgmtServer.Address, Value: 1}); err != nil {
-		t.Fatalf("Step 2 failed: Expected XDSClientConnected to be 1 after 1st NewStream, got: %v", err)
+	// Wait for the stream to be created. Try polling the async metric a few times to prevent flakes.
+	var step2Passed bool
+	for i := 0; i < 50; i++ {
+		tmr.metricsCh.Drain()
+		tmr.triggerAsyncMetrics()
+		sCtx, sCancel := context.WithTimeout(ctx, 100*time.Millisecond)
+		err := tmr.waitForSpecificMetric(sCtx, &metrics.XDSClientConnected{ServerURI: mgmtServer.Address, Value: 1})
+		sCancel()
+		if err == nil {
+			step2Passed = true
+			break
+		}
+	}
+	if !step2Passed {
+		t.Fatalf("Step 2 failed: Expected XDSClientConnected to be 1 after 1st NewStream")
 	}
 
 	// Allow the first response.
@@ -745,25 +779,35 @@ func (s) TestConnectedMetric_Reconnection(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 
-	// 3. Stream Fails - metric value 0
+	// 3. Stream Fails - metric value 1
+	blockNextStream <- struct{}{}
 	lis.Stop()
 
-	// Wait for disconnect to be detected.
+	<-blocked
+
+	tmr.triggerAsyncMetrics()
+	if err := tmr.waitForSpecificMetric(ctx, &metrics.XDSClientConnected{ServerURI: mgmtServer.Address, Value: 1}); err != nil {
+		t.Fatalf("Step 3 failed: Expected XDSClientConnected to be 1 while NewStream is blocked, got: %v", err)
+	}
+
+	// 4. NewStream Fails - metric value 0
+	close(unblock)
+
 	if err := tmr.waitForSpecificMetric(ctx, &metrics.ServerFailure{ServerURI: mgmtServer.Address}); err != nil {
 		t.Fatal(err.Error())
 	}
 
 	tmr.triggerAsyncMetrics()
 	if err := tmr.waitForSpecificMetric(ctx, &metrics.XDSClientConnected{ServerURI: mgmtServer.Address, Value: 0}); err != nil {
-		t.Fatalf("Step 3 failed: Expected XDSClientConnected to be 0 after failure, got: %v", err)
+		t.Fatalf("Step 4 failed: Expected XDSClientConnected to be 0 after NewStream failure, got: %v", err)
 	}
 
-	// Prepare for the second stream.
+	// Prepare for the next stream.
 	sendResponse = make(chan struct{})
+
+	// 5. NewStream OK - metric value 0
 	lis.Restart()
 
-	// 4. 2nd NewStream OK - metric value 0
-	// Wait for the client to attempt a new stream.
 	time.Sleep(5 * time.Second)
 
 	tmr.metricsCh.Drain()
@@ -772,29 +816,27 @@ func (s) TestConnectedMetric_Reconnection(t *testing.T) {
 	defer sCancel()
 	got, err := tmr.metricsCh.Receive(sCtx)
 	if err != nil {
-		t.Fatalf("Step 4 failed: Timeout waiting for XDSClientConnected metric: %v", err)
+		t.Fatalf("Step 5 failed: Timeout waiting for XDSClientConnected metric: %v", err)
 	}
 	t.Logf("Got metric: %+v", got)
 	if m, ok := got.(*metrics.XDSClientConnected); ok {
 		if m.Value != 0 {
-			// This is where it will fail with ORIGINAL code.
-			t.Fatalf("Step 4 failed: Expected XDSClientConnected to be 0 after 2nd NewStream but before response, got: %d", m.Value)
+			t.Fatalf("Step 5 failed: Expected XDSClientConnected to be 0 after successful NewStream but before response, got: %d", m.Value)
 		}
 	} else {
 		t.Fatalf("Expected XDSClientConnected metric, got: %T", got)
 	}
 
-	// 5. 1st Response Recv - metric value 1
+	// 6. 1st Response Recv - metric value 1
 	close(sendResponse)
 
-	// Wait for the update to ensure we received a response.
 	if err := tmr.waitForSpecificMetric(ctx, &metrics.ResourceUpdateValid{ServerURI: mgmtServer.Address, ResourceType: "ListenerResource"}); err != nil {
 		t.Fatal(err.Error())
 	}
 
 	tmr.triggerAsyncMetrics()
 	if err := tmr.waitForSpecificMetric(ctx, &metrics.XDSClientConnected{ServerURI: mgmtServer.Address, Value: 1}); err != nil {
-		t.Fatalf("Step 5 failed: Expected XDSClientConnected to be 1 after response, got: %v", err)
+		t.Fatalf("Step 6 failed: Expected XDSClientConnected to be 1 after response, got: %v", err)
 	}
 }
 
