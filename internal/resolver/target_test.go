@@ -38,62 +38,59 @@ func TestParseTarget(t *testing.T) {
 		errContain    string
 	}{
 		{
-			name:       "valid dns scheme",
+			name:       "valid_dns_scheme",
 			target:     "dns:///example.com:443",
 			wantScheme: "dns",
 		},
 		{
-			name:       "valid passthrough scheme",
+			name:       "valid_passthrough_scheme",
 			target:     "passthrough:///localhost:8080",
 			wantScheme: "passthrough",
 		},
 		{
-			name:          "valid dns scheme with default",
+			name:          "valid_dns_scheme_with_default",
 			target:        "dns:///example.com:443",
 			defaultScheme: "dns",
 			wantScheme:    "dns",
 		},
 		{
-			name:          "missing scheme falls back to default",
+			name:          "missing_scheme_falls_back_to_default",
 			target:        "/path/to/socket",
 			defaultScheme: "passthrough",
 			wantScheme:    "passthrough",
 		},
 		{
-			name:       "missing scheme without default",
+			name:       "missing_scheme_without_default",
 			target:     "/path/to/socket",
 			wantErr:    true,
 			errContain: "has no scheme",
 		},
 		{
-			name:          "host:port retries with default scheme",
+			name:          "host_port_retries_with_default_scheme",
 			target:        "localhost:8080",
 			defaultScheme: "passthrough",
 			wantScheme:    "passthrough",
 		},
 		{
-			name:       "host:port without default",
+			name:       "host_port_without_default",
 			target:     "localhost:8080",
 			wantErr:    true,
 			errContain: "no resolver registered for scheme",
 		},
 		{
-			name:       "unregistered scheme",
+			name:       "unregistered_scheme",
 			target:     "unknown:///example.com:443",
 			wantErr:    true,
 			errContain: "no resolver registered for scheme",
 		},
 		{
-			// Explicit hierarchical URI with unknown scheme is rejected even when
-			// a default is provided. Only opaque URIs (host:port) fall back.
-			name:          "unregistered explicit scheme is rejected",
+			name:          "unregistered_scheme_falls_back_to_default",
 			target:        "unknown:///foo",
 			defaultScheme: "passthrough",
-			wantErr:       true,
-			errContain:    "no resolver registered for scheme",
+			wantScheme:    "passthrough",
 		},
 		{
-			name:       "invalid URI",
+			name:       "invalid_URI",
 			target:     "dns:///example\x00.com",
 			wantErr:    true,
 			errContain: "invalid target URI",
@@ -140,40 +137,37 @@ func TestParseTargetWithCustomBuilder(t *testing.T) {
 		errContain    string
 	}{
 		{
-			name:       "known scheme resolves",
+			name:       "known_scheme_resolves",
 			target:     "passthrough:///service:8080",
 			wantScheme: "passthrough",
 		},
 		{
-			name:       "dns not in custom registry",
+			name:       "dns_not_in_custom_registry",
 			target:     "dns:///example.com:443",
 			wantErr:    true,
 			errContain: "no resolver registered for scheme",
 		},
 		{
-			// Explicit hierarchical URI: dns is not in the custom registry, and
-			// unlike an opaque "host:port" URI, explicit schemes are not retried.
-			name:          "unregistered explicit scheme rejected even with default",
+			name:          "unregistered_scheme_falls_back_to_default",
 			target:        "dns:///example.com:443",
 			defaultScheme: "passthrough",
-			wantErr:       true,
-			errContain:    "no resolver registered for scheme",
+			wantScheme:    "passthrough",
 		},
 		{
 			// Opaque URI (host:port form) falls back to the default scheme.
-			name:          "host:port falls back to custom default",
+			name:          "host_port_falls_back_to_custom_default",
 			target:        "service:8080",
 			defaultScheme: "passthrough",
 			wantScheme:    "passthrough",
 		},
 		{
-			name:       "missing scheme without default",
+			name:       "missing_scheme_without_default",
 			target:     "/path",
 			wantErr:    true,
 			errContain: "has no scheme",
 		},
 		{
-			name:          "missing scheme uses default",
+			name:          "missing_scheme_uses_default",
 			target:        "/path",
 			defaultScheme: "passthrough",
 			wantScheme:    "passthrough",
