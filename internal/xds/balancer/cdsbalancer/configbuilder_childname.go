@@ -32,8 +32,12 @@ import (
 // return names returned by the previous call.
 type nameGenerator struct {
 	existingNames map[clients.Locality]string
-	prefix        uint64
-	nextID        uint64
+	// existingEmptyPriorityNames stores names assigned to priorities with no
+	// localities in the previous update, so they can be reused in subsequent
+	// updates to maintain name stability.
+	existingEmptyPriorityNames []string
+	prefix                     uint64
+	nextID                     uint64
 }
 
 func newNameGenerator(prefix uint64) *nameGenerator {
@@ -56,6 +60,8 @@ func (ng *nameGenerator) generate(priorities [][]xdsresource.Locality) []string 
 	var ret []string
 	usedNames := make(map[string]bool)
 	newNames := make(map[clients.Locality]string)
+	var newEmptyPriorityNames []string
+	emptyPriorityIdx := 0
 	for _, priority := range priorities {
 		var nameFound string
 		for _, locality := range priority {
@@ -65,6 +71,28 @@ func (ng *nameGenerator) generate(priorities [][]xdsresource.Locality) []string 
 					// Found a name to use. No need to process the remaining
 					// localities.
 					break
+				}
+			}
+		}
+
+		if nameFound == "" {
+			// For priorities with no localities, try to reuse a name from the
+			// previous update's empty-priority names list (in order) to
+			// maintain stability across updates.
+			//
+			// If the candidate name is already in usedNames (e.g. due to a
+			// priority reorder where a non-empty priority claimed it first),
+			// emptyPriorityIdx does not advance and a new name is generated
+			// instead. xDS priority ordering guarantees that each priority is
+			// processed in index order, so a collision can only occur when a
+			// previously-empty priority now has localities — in that case
+			// falling through to generate a fresh name is the correct
+			// behaviour.
+			if len(priority) == 0 && emptyPriorityIdx < len(ng.existingEmptyPriorityNames) {
+				candidate := ng.existingEmptyPriorityNames[emptyPriorityIdx]
+				if !usedNames[candidate] {
+					nameFound = candidate
+					emptyPriorityIdx++
 				}
 			}
 		}
@@ -81,8 +109,12 @@ func (ng *nameGenerator) generate(priorities [][]xdsresource.Locality) []string 
 		for _, l := range priority {
 			newNames[l.ID] = nameFound
 		}
+		if len(priority) == 0 {
+			newEmptyPriorityNames = append(newEmptyPriorityNames, nameFound)
+		}
 		usedNames[nameFound] = true
 	}
 	ng.existingNames = newNames
+	ng.existingEmptyPriorityNames = newEmptyPriorityNames
 	return ret
 }
