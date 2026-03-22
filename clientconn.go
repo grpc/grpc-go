@@ -1797,16 +1797,24 @@ func (cc *ClientConn) connectionError() error {
 func (cc *ClientConn) initParsedTargetAndResolverBuilder() error {
 	logger.Infof("original dial target is: %q", cc.target)
 
-	// Compute the default scheme upfront so ParseTarget can fall back to it
-	// when the target has no scheme or an unregistered one. When a custom
-	// dialer is specified we use passthrough; otherwise respect any global
-	// default the user may have overridden.
+	// Try the target as given first. cc.getResolver checks both globally
+	// registered resolvers and any resolver registered via dial options.
+	if parsedTarget, err := iresolver.ParseTarget(cc.target, "", cc.getResolver); err == nil {
+		cc.parsedTarget = parsedTarget
+		cc.resolverBuilder = cc.getResolver(parsedTarget.URL.Scheme)
+		return nil
+	}
+
+	// The target did not contain a scheme or specified an unregistered
+	// scheme. Fall back to the default scheme. When a custom dialer is
+	// specified we use passthrough; otherwise respect any global default
+	// the user may have overridden.
 	defScheme := cc.dopts.defaultScheme
 	if internal.UserSetDefaultScheme {
 		defScheme = resolver.GetDefaultScheme()
 	}
 
-	parsedTarget, err := iresolver.ParseTarget(cc.target, defScheme, cc.getResolver)
+	parsedTarget, err := iresolver.ParseTarget(defScheme+":///"+cc.target, "", cc.getResolver)
 	if err != nil {
 		return err
 	}
