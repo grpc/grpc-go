@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/testutils"
@@ -36,6 +37,7 @@ import (
 	"google.golang.org/grpc/internal/xds/httpfilter"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
+	"google.golang.org/grpc/xds"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/structpb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
@@ -175,7 +177,15 @@ func (s) TestServerSideXDS_FilterStateRetention_AcrossUpdates_FilterConfigChange
 
 	managementServer, nodeID, bootstrapContents, xdsResolver := setup.ManagementServerAndResolver(t)
 
-	lis, stopServer := setupGRPCServer(t, bootstrapContents)
+	// Wait for the server to enter SERVING mode before making RPCs to avoid
+	// flakes due to the server closing connections.
+	servingCh := make(chan struct{})
+	opt := xds.ServingModeCallback(func(_ net.Addr, args xds.ServingModeChangeArgs) {
+		if args.Mode == connectivity.ServingModeServing {
+			close(servingCh)
+		}
+	})
+	lis, stopServer := setupGRPCServer(t, bootstrapContents, opt)
 	defer stopServer()
 
 	host, port, err := hostPortFromListener(lis)
@@ -277,10 +287,15 @@ func (s) TestServerSideXDS_FilterStateRetention_AcrossUpdates_FilterConfigChange
 	}
 	defer cc.Close()
 
-	client := testgrpc.NewTestServiceClient(cc)
+	select {
+	case <-servingCh:
+	case <-ctx.Done():
+		t.Fatalf("Timeout waiting for server to enter SERVING mode")
+	}
 
 	// Make an RPC and verify that one filter and two interceptors are created
 	// (one per filter chain).
+	client := testgrpc.NewTestServiceClient(cc)
 	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("EmptyCall() failed: %v", err)
 	}
@@ -389,7 +404,15 @@ func (s) TestServerSideXDS_FilterStateRetention_AcrossUpdates_FilterChainsChange
 
 	managementServer, nodeID, bootstrapContents, xdsResolver := setup.ManagementServerAndResolver(t)
 
-	lis, stopServer := setupGRPCServer(t, bootstrapContents)
+	// Wait for the server to enter SERVING mode before making RPCs to avoid
+	// flakes due to the server closing connections.
+	servingCh := make(chan struct{})
+	opt := xds.ServingModeCallback(func(_ net.Addr, args xds.ServingModeChangeArgs) {
+		if args.Mode == connectivity.ServingModeServing {
+			close(servingCh)
+		}
+	})
+	lis, stopServer := setupGRPCServer(t, bootstrapContents, opt)
 	defer stopServer()
 
 	host, port, err := hostPortFromListener(lis)
@@ -460,10 +483,15 @@ func (s) TestServerSideXDS_FilterStateRetention_AcrossUpdates_FilterChainsChange
 	}
 	defer cc.Close()
 
-	client := testgrpc.NewTestServiceClient(cc)
+	select {
+	case <-servingCh:
+	case <-ctx.Done():
+		t.Fatalf("Timeout waiting for server to enter SERVING mode")
+	}
 
 	// Make an RPC and verify that one filter and one interceptor (for the
 	// default filter chain) is created.
+	client := testgrpc.NewTestServiceClient(cc)
 	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("EmptyCall() failed: %v", err)
 	}
