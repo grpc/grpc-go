@@ -53,10 +53,10 @@ func (s) TestBalancerGroup_RemoveImmediately(t *testing.T) {
 	childLBName1 := strings.ToLower(t.Name()) + "-child-1"
 	t.Logf("Registering a child balancer with name %q", childLBName1)
 	stub.Register(childLBName1, stub.BalancerFuncs{
-		Init: func(bd *stub.BalancerData) {
+		Init: func(*stub.BalancerData) {
 			childLBCreated <- childLBName1
 		},
-		Close: func(bd *stub.BalancerData) {
+		Close: func(*stub.BalancerData) {
 			childLBClosed <- childLBName1
 		},
 	})
@@ -64,10 +64,10 @@ func (s) TestBalancerGroup_RemoveImmediately(t *testing.T) {
 	childLBName2 := strings.ToLower(t.Name()) + "-child-2"
 	t.Logf("Registering a child balancer with name %q", childLBName2)
 	stub.Register(childLBName2, stub.BalancerFuncs{
-		Init: func(bd *stub.BalancerData) {
+		Init: func(*stub.BalancerData) {
 			childLBCreated <- childLBName2
 		},
-		Close: func(bd *stub.BalancerData) {
+		Close: func(*stub.BalancerData) {
 			childLBClosed <- childLBName2
 		},
 	})
