@@ -119,6 +119,13 @@ var (
 	// A future release will remove this environment variable, enabling strict
 	// path checking behavior unconditionally.
 	DisableStrictPathChecking = boolFromEnv("GRPC_GO_EXPERIMENTAL_DISABLE_STRICT_PATH_CHECKING", false)
+
+	// EnablePriorityLBChildPolicyCache controls whether the priority balancer
+	// should cache child balancers that are removed from the LB policy config,
+	// for a period of 15 minutes. This is disabled by default, but can be
+	// enabled by setting the env variable
+	// GRPC_EXPERIMENTAL_ENABLE_PRIORITY_LB_CHILD_POLICY_CACHE to true.
+	EnablePriorityLBChildPolicyCache = boolFromEnv("GRPC_EXPERIMENTAL_ENABLE_PRIORITY_LB_CHILD_POLICY_CACHE", false)
 )
 
 func boolFromEnv(envVar string, def bool) bool {
