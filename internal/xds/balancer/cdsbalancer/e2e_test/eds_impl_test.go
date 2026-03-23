@@ -236,8 +236,8 @@ func (s) TestEDS_MultipleLocalities(t *testing.T) {
 	bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, managementServer.Address)
 
 	// Start backend servers which provide an implementation of the TestService.
-	servers, cleanup2 := startTestServiceBackends(t, 4)
-	defer cleanup2()
+	servers, cleanup := startTestServiceBackends(t, 4)
+	defer cleanup()
 	addrs, ports := backendAddressesAndPorts(t, servers)
 
 	// Create xDS resources for consumption by the test. We start off with two
