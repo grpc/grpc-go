@@ -149,7 +149,7 @@ type http2Client struct {
 
 	channelz *channelz.Socket
 
-	onClose func(GoAwayReason, http2.ErrCode, error)
+	onClose OnCloseFunc
 
 	bufferPool mem.BufferPool
 
@@ -206,7 +206,7 @@ func isTemporary(err error) bool {
 // NewHTTP2Client constructs a connected ClientTransport to addr based on HTTP2
 // and starts to receive messages on it. Non-nil error returns if construction
 // fails.
-func NewHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts ConnectOptions, onClose func(GoAwayReason, http2.ErrCode, error)) (_ ClientTransport, err error) {
+func NewHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts ConnectOptions, onClose OnCloseFunc) (_ ClientTransport, err error) {
 	scheme := "http"
 	ctx, cancel := context.WithCancel(ctx)
 	defer func() {
@@ -1017,7 +1017,7 @@ func (t *http2Client) Close(err error) {
 	// Call t.onClose ASAP to prevent the client from attempting to create new
 	// streams.
 	if t.state != draining {
-		t.onClose(GoAwayInvalid, http2.ErrCodeNo, err)
+		t.onClose(GoAwayInfo{Reason: GoAwayInvalid, GoAwayCode: http2.ErrCodeNo, Err: err})
 	}
 	t.state = closing
 	streams := t.activeStreams
@@ -1088,7 +1088,7 @@ func (t *http2Client) GracefulClose() {
 	if t.logger.V(logLevel) {
 		t.logger.Infof("GracefulClose called")
 	}
-	t.onClose(GoAwayInvalid, http2.ErrCodeNo, nil)
+	t.onClose(GoAwayInfo{Reason: GoAwayInvalid, GoAwayCode: http2.ErrCodeNo})
 	t.state = draining
 	active := len(t.activeStreams)
 	t.mu.Unlock()
@@ -1377,7 +1377,7 @@ func (t *http2Client) handleGoAway(f *http2.GoAwayFrame) error {
 		// draining, to allow the client to stop attempting to create streams
 		// before disallowing new streams on this connection.
 		if t.state != draining {
-			t.onClose(t.goAwayReason, t.goAwayCode, nil)
+			t.onClose(GoAwayInfo{Reason: t.goAwayReason, GoAwayCode: t.goAwayCode})
 			t.state = draining
 		}
 	}

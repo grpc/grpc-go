@@ -32,8 +32,6 @@ import (
 	"syscall"
 	"time"
 
-	"golang.org/x/net/http2"
-
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/base"
 	"google.golang.org/grpc/balancer/pickfirst"
@@ -1493,11 +1491,11 @@ func (ac *addrConn) createTransport(ctx context.Context, addr resolver.Address, 
 	addr.ServerName = ac.cc.getServerName(addr)
 	hctx, hcancel := context.WithCancel(ctx)
 
-	onClose := func(r transport.GoAwayReason, goAwayCode http2.ErrCode, err error) {
+	onClose := func(info transport.GoAwayInfo) {
 		ac.mu.Lock()
 		defer ac.mu.Unlock()
 		// adjust params based on GoAwayReason
-		ac.adjustParams(r)
+		ac.adjustParams(info.Reason)
 		if ctx.Err() != nil {
 			// Already shut down or connection attempt canceled.  tearDown() or
 			// updateAddrs() already cleared the transport and canceled hctx
@@ -1514,7 +1512,7 @@ func (ac *addrConn) createTransport(ctx context.Context, addr resolver.Address, 
 			return
 		}
 		ac.transport = nil
-		ac.disconnectErrorLabel = disconnectErrorString(r, goAwayCode, err)
+		ac.disconnectErrorLabel = disconnectErrorString(info)
 		// Refresh the name resolver on any connection loss.
 		ac.cc.resolveNow(resolver.ResolveNowOptions{})
 		// Always go idle and wait for the LB policy to initiate a new
@@ -1571,10 +1569,11 @@ func (ac *addrConn) createTransport(ctx context.Context, addr resolver.Address, 
 	return nil
 }
 
-func disconnectErrorString(r transport.GoAwayReason, goAwayCode http2.ErrCode, err error) string {
+func disconnectErrorString(info transport.GoAwayInfo) string {
+	err := info.Err
 	switch {
-	case r != transport.GoAwayInvalid:
-		return fmt.Sprintf("GOAWAY %s", goAwayCode.String())
+	case info.Reason != transport.GoAwayInvalid:
+		return fmt.Sprintf("GOAWAY %s", info.GoAwayCode.String())
 	case err == nil:
 		return "unknown"
 	case errors.Is(err, context.Canceled):
