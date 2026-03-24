@@ -230,11 +230,12 @@ func (p *rlsPicker) delegateToChildPoliciesLocked(dcEntry *cacheEntry, info bala
 // target if one is configured, or fails the pick with the given error. Returns
 // a function to be invoked to record metrics.
 func (p *rlsPicker) useDefaultPickIfPossible(info balancer.PickInfo, errOnNoDefault error) (balancer.PickResult, func(), error) {
+	customLabel, _ := grpc.CustomLabelFromContext(info.Ctx)
+
 	if p.defaultPolicy != nil {
 		state := (*balancer.State)(atomic.LoadPointer(&p.defaultPolicy.state))
 		res, err := state.Picker.Pick(info)
 		pr := errToPickResult(err)
-		customLabel, _ := grpc.CustomLabelFromContext(info.Ctx)
 		return res, func() {
 			if pr == "queue" {
 				// Don't record metrics for queued Picks.
@@ -245,7 +246,6 @@ func (p *rlsPicker) useDefaultPickIfPossible(info balancer.PickInfo, errOnNoDefa
 	}
 
 	return balancer.PickResult{}, func() {
-		customLabel, _ := grpc.CustomLabelFromContext(info.Ctx)
 		failedPicksMetric.Record(p.metricsRecorder, 1, p.grpcTarget, p.rlsServerTarget, customLabel)
 	}, errOnNoDefault
 }
