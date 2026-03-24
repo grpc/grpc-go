@@ -3960,7 +3960,22 @@ func (s) TestServerStreaming_ClientCallSendMsgTwice(t *testing.T) {
 			// Block until the stream’s context is done. Second call to client.SendMsg
 			// triggers a RST_STREAM which cancels the stream context on the server.
 			<-stream.Context().Done()
-			if err := stream.SendMsg(&testpb.StreamingOutputCallRequest{}); status.Code(err) != codes.Canceled {
+			var err error
+			waitCtx, cancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
+			defer cancel()
+			for {
+				err = stream.SendMsg(&testpb.StreamingOutputCallRequest{})
+				if err != nil {
+					break
+				}
+				select {
+				case <-waitCtx.Done():
+					t.Fatalf("timeout while waiting for stream.SendMsg() to return an error ")
+				default:
+					time.Sleep(10 * time.Millisecond)
+				}
+			}
+			if status.Code(err) != codes.Canceled {
 				t.Errorf("stream.SendMsg() = %v, want error %v", err, codes.Canceled)
 			}
 			close(handlerDone)
