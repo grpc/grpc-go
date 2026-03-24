@@ -25,6 +25,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/rls/internal/keys"
 	"google.golang.org/grpc/codes"
@@ -198,12 +199,13 @@ func (p *rlsPicker) delegateToChildPoliciesLocked(dcEntry *cacheEntry, info bala
 			res, err := state.Picker.Pick(info)
 			if err != nil {
 				pr := errToPickResult(err)
+				customLabel, _ := grpc.CustomLabelFromContext(info.Ctx)
 				return res, func() {
 					if pr == "queue" {
 						// Don't record metrics for queued Picks.
 						return
 					}
-					targetPicksMetric.Record(p.metricsRecorder, 1, p.grpcTarget, p.rlsServerTarget, cpw.target, pr)
+					targetPicksMetric.Record(p.metricsRecorder, 1, p.grpcTarget, p.rlsServerTarget, cpw.target, pr, customLabel)
 				}, err
 			}
 
@@ -213,7 +215,8 @@ func (p *rlsPicker) delegateToChildPoliciesLocked(dcEntry *cacheEntry, info bala
 				res.Metadata.Append(rlsDataHeaderName, dcEntry.headerData)
 			}
 			return res, func() {
-				targetPicksMetric.Record(p.metricsRecorder, 1, p.grpcTarget, p.rlsServerTarget, cpw.target, "complete")
+				customLabel, _ := grpc.CustomLabelFromContext(info.Ctx)
+				targetPicksMetric.Record(p.metricsRecorder, 1, p.grpcTarget, p.rlsServerTarget, cpw.target, "complete", customLabel)
 			}, nil
 		}
 	}
@@ -231,17 +234,19 @@ func (p *rlsPicker) useDefaultPickIfPossible(info balancer.PickInfo, errOnNoDefa
 		state := (*balancer.State)(atomic.LoadPointer(&p.defaultPolicy.state))
 		res, err := state.Picker.Pick(info)
 		pr := errToPickResult(err)
+		customLabel, _ := grpc.CustomLabelFromContext(info.Ctx)
 		return res, func() {
 			if pr == "queue" {
 				// Don't record metrics for queued Picks.
 				return
 			}
-			defaultTargetPicksMetric.Record(p.metricsRecorder, 1, p.grpcTarget, p.rlsServerTarget, p.defaultPolicy.target, pr)
+			defaultTargetPicksMetric.Record(p.metricsRecorder, 1, p.grpcTarget, p.rlsServerTarget, p.defaultPolicy.target, pr, customLabel)
 		}, err
 	}
 
 	return balancer.PickResult{}, func() {
-		failedPicksMetric.Record(p.metricsRecorder, 1, p.grpcTarget, p.rlsServerTarget)
+		customLabel, _ := grpc.CustomLabelFromContext(info.Ctx)
+		failedPicksMetric.Record(p.metricsRecorder, 1, p.grpcTarget, p.rlsServerTarget, customLabel)
 	}, errOnNoDefault
 }
 

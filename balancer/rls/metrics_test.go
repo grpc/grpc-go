@@ -76,8 +76,9 @@ func (s) TestRLSTargetPickMetric(t *testing.T) {
 	reader := metric.NewManualReader()
 	provider := metric.NewMeterProvider(metric.WithReader(reader))
 	mo := opentelemetry.MetricsOptions{
-		MeterProvider: provider,
-		Metrics:       opentelemetry.DefaultMetrics().Add("grpc.lb.rls.cache_entries", "grpc.lb.rls.cache_size", "grpc.lb.rls.default_target_picks", "grpc.lb.rls.target_picks", "grpc.lb.rls.failed_picks"),
+		MeterProvider:  provider,
+		Metrics:        opentelemetry.DefaultMetrics().Add("grpc.lb.rls.cache_entries", "grpc.lb.rls.cache_size", "grpc.lb.rls.default_target_picks", "grpc.lb.rls.target_picks", "grpc.lb.rls.failed_picks"),
+		OptionalLabels: []string{"grpc.client.call.custom"},
 	}
 	grpcTarget := r.Scheme() + ":///"
 	cc, err := grpc.NewClient(grpcTarget, grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()), opentelemetry.DialOption(opentelemetry.Options{MetricsOptions: mo}))
@@ -94,7 +95,7 @@ func (s) TestRLSTargetPickMetric(t *testing.T) {
 			Data: metricdata.Sum[int64]{
 				DataPoints: []metricdata.DataPoint[int64]{
 					{
-						Attributes: attribute.NewSet(attribute.String("grpc.target", grpcTarget), attribute.String("grpc.lb.rls.server_target", rlsServer.Address), attribute.String("grpc.lb.rls.data_plane_target", backend.Address), attribute.String("grpc.lb.pick_result", "complete")),
+						Attributes: attribute.NewSet(attribute.String("grpc.target", grpcTarget), attribute.String("grpc.lb.rls.server_target", rlsServer.Address), attribute.String("grpc.lb.rls.data_plane_target", backend.Address), attribute.String("grpc.lb.pick_result", "complete"), attribute.String("grpc.client.call.custom", "target-pick-custom")),
 						Value:      1,
 					},
 				},
@@ -134,6 +135,7 @@ func (s) TestRLSTargetPickMetric(t *testing.T) {
 	client := testgrpc.NewTestServiceClient(cc)
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
+	ctx = grpc.NewContextWithCustomLabel(ctx, "target-pick-custom")
 	_, err = client.EmptyCall(ctx, &testpb.Empty{})
 	if err != nil {
 		t.Fatalf("client.EmptyCall failed with error: %v", err)
@@ -187,8 +189,9 @@ func (s) TestRLSDefaultTargetPickMetric(t *testing.T) {
 	reader := metric.NewManualReader()
 	provider := metric.NewMeterProvider(metric.WithReader(reader))
 	mo := opentelemetry.MetricsOptions{
-		MeterProvider: provider,
-		Metrics:       opentelemetry.DefaultMetrics().Add("grpc.lb.rls.cache_entries", "grpc.lb.rls.cache_size", "grpc.lb.rls.default_target_picks", "grpc.lb.rls.target_picks", "grpc.lb.rls.failed_picks"),
+		MeterProvider:  provider,
+		Metrics:        opentelemetry.DefaultMetrics().Add("grpc.lb.rls.cache_entries", "grpc.lb.rls.cache_size", "grpc.lb.rls.default_target_picks", "grpc.lb.rls.target_picks", "grpc.lb.rls.failed_picks"),
+		OptionalLabels: []string{"grpc.client.call.custom"},
 	}
 	grpcTarget := r.Scheme() + ":///"
 	cc, err := grpc.NewClient(grpcTarget, grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()), opentelemetry.DialOption(opentelemetry.Options{MetricsOptions: mo}))
@@ -205,7 +208,7 @@ func (s) TestRLSDefaultTargetPickMetric(t *testing.T) {
 			Data: metricdata.Sum[int64]{
 				DataPoints: []metricdata.DataPoint[int64]{
 					{
-						Attributes: attribute.NewSet(attribute.String("grpc.target", grpcTarget), attribute.String("grpc.lb.rls.server_target", rlsServer.Address), attribute.String("grpc.lb.rls.data_plane_target", backend.Address), attribute.String("grpc.lb.pick_result", "complete")),
+						Attributes: attribute.NewSet(attribute.String("grpc.target", grpcTarget), attribute.String("grpc.lb.rls.server_target", rlsServer.Address), attribute.String("grpc.lb.rls.data_plane_target", backend.Address), attribute.String("grpc.lb.pick_result", "complete"), attribute.String("grpc.client.call.custom", "default-target-pick-custom")),
 						Value:      1,
 					},
 				},
@@ -245,6 +248,7 @@ func (s) TestRLSDefaultTargetPickMetric(t *testing.T) {
 	client := testgrpc.NewTestServiceClient(cc)
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
+	ctx = grpc.NewContextWithCustomLabel(ctx, "default-target-pick-custom")
 	if _, err = client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("client.EmptyCall failed with error: %v", err)
 	}
@@ -285,8 +289,9 @@ func (s) TestRLSFailedRPCMetric(t *testing.T) {
 	reader := metric.NewManualReader()
 	provider := metric.NewMeterProvider(metric.WithReader(reader))
 	mo := opentelemetry.MetricsOptions{
-		MeterProvider: provider,
-		Metrics:       opentelemetry.DefaultMetrics().Add("grpc.lb.rls.cache_entries", "grpc.lb.rls.cache_size", "grpc.lb.rls.default_target_picks", "grpc.lb.rls.target_picks", "grpc.lb.rls.failed_picks"),
+		MeterProvider:  provider,
+		Metrics:        opentelemetry.DefaultMetrics().Add("grpc.lb.rls.cache_entries", "grpc.lb.rls.cache_size", "grpc.lb.rls.default_target_picks", "grpc.lb.rls.target_picks", "grpc.lb.rls.failed_picks"),
+		OptionalLabels: []string{"grpc.client.call.custom"},
 	}
 	grpcTarget := r.Scheme() + ":///"
 	cc, err := grpc.NewClient(grpcTarget, grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()), opentelemetry.DialOption(opentelemetry.Options{MetricsOptions: mo}))
@@ -303,7 +308,7 @@ func (s) TestRLSFailedRPCMetric(t *testing.T) {
 			Data: metricdata.Sum[int64]{
 				DataPoints: []metricdata.DataPoint[int64]{
 					{
-						Attributes: attribute.NewSet(attribute.String("grpc.target", grpcTarget), attribute.String("grpc.lb.rls.server_target", rlsServer.Address)),
+						Attributes: attribute.NewSet(attribute.String("grpc.target", grpcTarget), attribute.String("grpc.lb.rls.server_target", rlsServer.Address), attribute.String("grpc.client.call.custom", "failed-pick-custom")),
 						Value:      1,
 					},
 				},
@@ -342,6 +347,7 @@ func (s) TestRLSFailedRPCMetric(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
+	ctx = grpc.NewContextWithCustomLabel(ctx, "failed-pick-custom")
 	client := testgrpc.NewTestServiceClient(cc)
 	if _, err = client.EmptyCall(ctx, &testpb.Empty{}); err == nil {
 		t.Fatalf("client.EmptyCall error = %v, expected a non nil error", err)
