@@ -202,8 +202,8 @@ func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster, serv
 			case "named_metrics.*":
 				lrsReportEndpointMetrics.NamedMetricsAll = true
 			default:
-				if strings.HasPrefix(m, "named_metrics.") {
-					lrsReportEndpointMetrics.NamedMetrics[strings.TrimPrefix(m, "named_metrics.")] = true
+				if name, found := strings.CutPrefix(m, "named_metrics."); found && name != "" {
+					lrsReportEndpointMetrics.NamedMetrics[name] = true
 				}
 			}
 		}
