@@ -59,6 +59,11 @@ var (
 	// unconditionally.
 	XDSEndpointHashKeyBackwardCompat = boolFromEnv("GRPC_XDS_ENDPOINT_HASH_KEY_BACKWARD_COMPAT", false)
 
+	// LabelServerStreamGoroutines controls setting [runtime/pprof.Labels] on the
+	// goroutines spawned to handle incoming requests on the server.
+	// Set "GRPC_SERVER_METHOD_GOROUTINE_LABELS" to "false" to disable.
+	LabelServerStreamGoroutines = boolFromEnv("GRPC_SERVER_METHOD_GOROUTINE_LABELS", true)
+
 	// RingHashSetRequestHashKey is set if the ring hash balancer can get the
 	// request hash header by setting the "requestHashHeader" field, according
 	// to gRFC A76. It can be disabled by setting the environment variable
