@@ -21,7 +21,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net"
 	"net/netip"
 	"strings"
 	"testing"
@@ -219,7 +218,7 @@ func (s) TestLookup_Failures(t *testing.T) {
 			},
 			params: lookupParams{
 				isUnspecifiedListener: true,
-				dstAddr:               net.IPv4(10, 1, 1, 1),
+				dstAddr:               netip.AddrFrom4([4]byte([]byte{10, 1, 1, 1})),
 			},
 			wantErr: "no matching filter chain based on destination prefix match",
 		},
@@ -238,8 +237,8 @@ func (s) TestLookup_Failures(t *testing.T) {
 			},
 			params: lookupParams{
 				isUnspecifiedListener: true,
-				dstAddr:               net.IPv4(192, 168, 100, 1),
-				srcAddr:               net.IPv4(192, 168, 100, 2),
+				dstAddr:               netip.AddrFrom4([4]byte([]byte{192, 168, 100, 1})),
+				srcAddr:               netip.AddrFrom4([4]byte([]byte{192, 168, 100, 2})),
 			},
 			wantErr: "no matching filter chain based on source type match",
 		},
@@ -258,8 +257,8 @@ func (s) TestLookup_Failures(t *testing.T) {
 			},
 			params: lookupParams{
 				isUnspecifiedListener: true,
-				dstAddr:               net.IPv4(192, 168, 100, 1),
-				srcAddr:               net.IPv4(192, 168, 100, 1),
+				dstAddr:               netip.AddrFrom4([4]byte([]byte{192, 168, 100, 1})),
+				srcAddr:               netip.AddrFrom4([4]byte([]byte{192, 168, 100, 1})),
 			},
 			wantErr: "no matching filter chain after all match criteria",
 		},
@@ -283,8 +282,8 @@ func (s) TestLookup_Failures(t *testing.T) {
 			params: lookupParams{
 				// IsUnspecified is not set. This means that the destination
 				// prefix matchers will be ignored.
-				dstAddr: net.IPv4(192, 168, 100, 1),
-				srcAddr: net.IPv4(192, 168, 100, 1),
+				dstAddr: netip.AddrFrom4([4]byte([]byte{192, 168, 100, 1})),
+				srcAddr: netip.AddrFrom4([4]byte([]byte{192, 168, 100, 1})),
 				srcPort: 1,
 			},
 			wantErr: "multiple matching filter chains",
@@ -301,8 +300,8 @@ func (s) TestLookup_Failures(t *testing.T) {
 			},
 			params: lookupParams{
 				isUnspecifiedListener: true,
-				dstAddr:               net.IPv4(192, 168, 100, 1),
-				srcAddr:               net.IPv4(192, 168, 100, 1),
+				dstAddr:               netip.AddrFrom4([4]byte([]byte{192, 168, 100, 1})),
+				srcAddr:               netip.AddrFrom4([4]byte([]byte{192, 168, 100, 1})),
 				srcPort:               80,
 			},
 			wantErr: "no matching filter chain after all match criteria",
@@ -419,7 +418,7 @@ func (s) TestLookup_Successes(t *testing.T) {
 			lis:  lisWithDefaultChain,
 			params: lookupParams{
 				isUnspecifiedListener: true,
-				dstAddr:               net.IPv4(10, 1, 1, 1),
+				dstAddr:               netip.AddrFrom4([4]byte([]byte{10, 1, 1, 1})),
 			},
 			wantFC: &filterChain{
 				securityCfg:       &xdsresource.SecurityConfig{IdentityInstanceName: "default"},
@@ -432,8 +431,8 @@ func (s) TestLookup_Successes(t *testing.T) {
 			lis:  lisWithoutDefaultChain,
 			params: lookupParams{
 				isUnspecifiedListener: true,
-				dstAddr:               netip.MustParseAddr("2001:68::db8").AsSlice(),
-				srcAddr:               net.IPv4(10, 1, 1, 1),
+				dstAddr:               netip.MustParseAddr("2001:68::db8"),
+				srcAddr:               netip.AddrFrom4([4]byte([]byte{10, 1, 1, 1})),
 				srcPort:               1,
 			},
 			wantFC: &filterChain{
@@ -447,8 +446,8 @@ func (s) TestLookup_Successes(t *testing.T) {
 			lis:  lisWithoutDefaultChain,
 			params: lookupParams{
 				isUnspecifiedListener: true,
-				dstAddr:               net.IPv4(10, 1, 1, 1),
-				srcAddr:               net.IPv4(10, 1, 1, 1),
+				dstAddr:               netip.AddrFrom4([4]byte([]byte{10, 1, 1, 1})),
+				srcAddr:               netip.AddrFrom4([4]byte([]byte{10, 1, 1, 1})),
 				srcPort:               1,
 			},
 			wantFC: &filterChain{
@@ -462,8 +461,8 @@ func (s) TestLookup_Successes(t *testing.T) {
 			lis:  lisWithoutDefaultChain,
 			params: lookupParams{
 				isUnspecifiedListener: true,
-				dstAddr:               netip.MustParseAddr("2001:68::1").AsSlice(),
-				srcAddr:               netip.MustParseAddr("2001:68::2").AsSlice(),
+				dstAddr:               netip.MustParseAddr("2001:68::1"),
+				srcAddr:               netip.MustParseAddr("2001:68::2"),
 				srcPort:               1,
 			},
 			wantFC: &filterChain{
@@ -477,8 +476,8 @@ func (s) TestLookup_Successes(t *testing.T) {
 			lis:  lisWithoutDefaultChain,
 			params: lookupParams{
 				isUnspecifiedListener: true,
-				dstAddr:               net.IPv4(192, 168, 100, 1),
-				srcAddr:               net.IPv4(192, 168, 100, 1),
+				dstAddr:               netip.AddrFrom4([4]byte([]byte{192, 168, 100, 1})),
+				srcAddr:               netip.AddrFrom4([4]byte([]byte{192, 168, 100, 1})),
 				srcPort:               80,
 			},
 			wantFC: &filterChain{
@@ -492,8 +491,8 @@ func (s) TestLookup_Successes(t *testing.T) {
 			lis:  lisWithoutDefaultChain,
 			params: lookupParams{
 				isUnspecifiedListener: true,
-				dstAddr:               net.IPv4(192, 168, 1, 1),
-				srcAddr:               net.IPv4(10, 1, 1, 1),
+				dstAddr:               netip.AddrFrom4([4]byte([]byte{192, 168, 1, 1})),
+				srcAddr:               netip.AddrFrom4([4]byte([]byte{10, 1, 1, 1})),
 				srcPort:               80,
 			},
 			wantFC: &filterChain{
@@ -507,8 +506,8 @@ func (s) TestLookup_Successes(t *testing.T) {
 			lis:  lisWithoutDefaultChain,
 			params: lookupParams{
 				isUnspecifiedListener: true,
-				dstAddr:               net.IPv4(192, 168, 1, 1),
-				srcAddr:               net.IPv4(192, 168, 92, 100),
+				dstAddr:               netip.AddrFrom4([4]byte([]byte{192, 168, 1, 1})),
+				srcAddr:               netip.AddrFrom4([4]byte([]byte{192, 168, 92, 100})),
 				srcPort:               70,
 			},
 			wantFC: &filterChain{
@@ -522,8 +521,8 @@ func (s) TestLookup_Successes(t *testing.T) {
 			lis:  lisWithoutDefaultChain,
 			params: lookupParams{
 				isUnspecifiedListener: true,
-				dstAddr:               net.IPv4(192, 168, 1, 1),
-				srcAddr:               net.IPv4(192, 168, 92, 100),
+				dstAddr:               netip.AddrFrom4([4]byte([]byte{192, 168, 1, 1})),
+				srcAddr:               netip.AddrFrom4([4]byte([]byte{192, 168, 92, 100})),
 				srcPort:               80,
 			},
 			wantFC: &filterChain{
@@ -779,8 +778,8 @@ func (s) TestLookup_DroppedChainFallback(t *testing.T) {
 	}
 	params := lookupParams{
 		isUnspecifiedListener: true,
-		dstAddr:               net.IPv4(192, 168, 100, 1),
-		srcAddr:               net.IPv4(192, 168, 100, 1),
+		dstAddr:               netip.AddrFrom4([4]byte([]byte{192, 168, 100, 1})),
+		srcAddr:               netip.AddrFrom4([4]byte([]byte{192, 168, 100, 1})),
 		srcPort:               80,
 	}
 
