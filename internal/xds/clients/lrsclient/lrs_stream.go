@@ -247,28 +247,28 @@ func (lrs *streamImpl) sendLoadStatsRequest(stream clients.Stream, loads []*load
 			var cpuUtilization, memUtilization, appUtilization *v3endpointpb.UnnamedEndpointLoadMetricStats
 			for name, loadData := range localityData.loadStats {
 				switch name {
-					case "cpu_utilization":
-						cpuUtilization = &v3endpointpb.UnnamedEndpointLoadMetricStats{
-							NumRequestsFinishedWithMetric: loadData.count,
-							TotalMetricValue:              loadData.sum,
-						}
-					case "mem_utilization":
-						memUtilization = &v3endpointpb.UnnamedEndpointLoadMetricStats{
-							NumRequestsFinishedWithMetric: loadData.count,
-							TotalMetricValue:              loadData.sum,
-						}
-					case "application_utilization":
-						appUtilization = &v3endpointpb.UnnamedEndpointLoadMetricStats{
-							NumRequestsFinishedWithMetric: loadData.count,
-							TotalMetricValue:              loadData.sum,
-						}
-					default:
-						loadMetricStats = append(loadMetricStats, &v3endpointpb.EndpointLoadMetricStats{
-							MetricName:                    name,
-							NumRequestsFinishedWithMetric: loadData.count,
-							TotalMetricValue:              loadData.sum,
-						})
+				case "cpu_utilization":
+					cpuUtilization = &v3endpointpb.UnnamedEndpointLoadMetricStats{
+						NumRequestsFinishedWithMetric: loadData.count,
+						TotalMetricValue:              loadData.sum,
 					}
+				case "mem_utilization":
+					memUtilization = &v3endpointpb.UnnamedEndpointLoadMetricStats{
+						NumRequestsFinishedWithMetric: loadData.count,
+						TotalMetricValue:              loadData.sum,
+					}
+				case "application_utilization":
+					appUtilization = &v3endpointpb.UnnamedEndpointLoadMetricStats{
+						NumRequestsFinishedWithMetric: loadData.count,
+						TotalMetricValue:              loadData.sum,
+					}
+				default:
+					loadMetricStats = append(loadMetricStats, &v3endpointpb.EndpointLoadMetricStats{
+						MetricName:                    name,
+						NumRequestsFinishedWithMetric: loadData.count,
+						TotalMetricValue:              loadData.sum,
+					})
+				}
 			}
 			localityStats = append(localityStats, &v3endpointpb.UpstreamLocalityStats{
 				Locality: &v3corepb.Locality{

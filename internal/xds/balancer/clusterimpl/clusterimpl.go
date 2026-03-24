@@ -136,17 +136,17 @@ type clusterImplBalancer struct {
 
 	// The following fields are protected by mu, since they are accessed in
 	// balancer API methods and in methods called from the child policy.
-	mu                    sync.Mutex
-	clusterName           string                            // The cluster name for credentials handshaking.
-	inhibitPickerUpdates  bool                              // Inhibits state updates from child policy when processing an update from the parent.
-	pendingPickerUpdates  bool                              // True if a picker update from the child policy was inhibited when processing an update from the parent.
-	childState            balancer.State                    // Most recent state update from the child policy.
-	drops                 []*dropper                        // Drops implementation.
-	requestCounterCluster string                            // The cluster name for the request counter, from LB config.
-	requestCounterService string                            // The service name for the request counter, from LB config.
-	requestCountMax       uint32                            // Max concurrent requests, from LB config.
-	requestCounter        *xdsclient.ClusterRequestsCounter // Tracks total inflight requests for a given service.
-	telemetryLabels       map[string]string                 // Telemetry labels to set on picks, from LB config.
+	mu                       sync.Mutex
+	clusterName              string                                // The cluster name for credentials handshaking.
+	inhibitPickerUpdates     bool                                  // Inhibits state updates from child policy when processing an update from the parent.
+	pendingPickerUpdates     bool                                  // True if a picker update from the child policy was inhibited when processing an update from the parent.
+	childState               balancer.State                        // Most recent state update from the child policy.
+	drops                    []*dropper                            // Drops implementation.
+	requestCounterCluster    string                                // The cluster name for the request counter, from LB config.
+	requestCounterService    string                                // The service name for the request counter, from LB config.
+	requestCountMax          uint32                                // Max concurrent requests, from LB config.
+	requestCounter           *xdsclient.ClusterRequestsCounter     // Tracks total inflight requests for a given service.
+	telemetryLabels          map[string]string                     // Telemetry labels to set on picks, from LB config.
 	backendMetricPropagation *xdsresource.BackendMetricPropagation // LRS metrics to propagate, from LB config.
 }
 
