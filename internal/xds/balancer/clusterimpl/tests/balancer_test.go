@@ -1369,7 +1369,15 @@ func (s) TestAuthorityOverriding(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			testutils.SetEnvConfig(t, &envconfig.XDSAuthorityRewrite, true)
-			mgmtServer, resolverBuilder, nodeID := setupManagementServerAndResolver(t)
+			mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{SupportLoadReportingService: true})
+
+			nodeID := uuid.New().String()
+			bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
+
+			resolverBuilder, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
+			if err != nil {
+				t.Fatalf("Failed to create xDS resolver for testing: %v", err)
+			}
 
 			// Start a server backend exposing the test service.
 			var gotAuthority string
@@ -1513,12 +1521,13 @@ func (s) TestAuthorityOverridingWithTLS(t *testing.T) {
 		})
 	}
 }
-func (s) TestLoadReportingA85_Metrics(t *testing.T) {
+
+// Tests that configured LRS metrics are successfully propagated from the backend to the LRS server.
+func (s) TestLoadReporting_CustomMetricsPropagation(t *testing.T) {
 	origEnv := envconfig.XDSORCALRSPropagationEnabled
 	envconfig.XDSORCALRSPropagationEnabled = true
 	defer func() { envconfig.XDSORCALRSPropagationEnabled = origEnv }()
 
-	// Create an xDS management server that serves ADS and LRS requests.
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{SupportLoadReportingService: true})
 
 	nodeID := uuid.New().String()
@@ -1579,33 +1588,27 @@ func (s) TestLoadReportingA85_Metrics(t *testing.T) {
 	cc.Connect()
 	client := testgrpc.NewTestServiceClient(cc)
 
-	// Wait for the balancer to become ready
 	testutils.AwaitState(ctx, t, cc, connectivity.Ready)
 
-	// Issue one RPC to trigger the metric
 	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("rpc EmptyCall() failed: %v", err)
 	}
 
-	// Ensure that an LRS stream is created.
 	if _, err = mgmtServer.LRSServer.LRSStreamOpenChan.Receive(ctx); err != nil {
 		t.Fatalf("Failure when waiting for an LRS stream to be opened: %v", err)
 	}
 
-	// Handle the initial LRS request from the xDS client.
 	if _, err = mgmtServer.LRSServer.LRSRequestChan.Receive(ctx); err != nil {
 		t.Fatalf("Failure waiting for initial LRS request: %v", err)
 	}
 
-	resp := fakeserver.Response{
+	mgmtServer.LRSServer.LRSResponseChan <- &fakeserver.Response{
 		Resp: &v3lrspb.LoadStatsResponse{
 			SendAllClusters:       true,
 			LoadReportingInterval: durationpb.New(10 * time.Millisecond),
 		},
 	}
-	mgmtServer.LRSServer.LRSResponseChan <- &resp
 
-	// Wait for load to be reported for locality that includes the metrics
 	for {
 		select {
 		case <-ctx.Done():
@@ -1615,7 +1618,6 @@ func (s) TestLoadReportingA85_Metrics(t *testing.T) {
 			for _, load := range loadStats.ClusterStats {
 				for _, locality := range load.UpstreamLocalityStats {
 					if locality.TotalSuccessfulRequests > 0 {
-						// Validate metrics are correctly extracted and transformed per A85
 						foundDBCost := false
 
 						for _, m := range locality.LoadMetricStats {
@@ -1626,7 +1628,7 @@ func (s) TestLoadReportingA85_Metrics(t *testing.T) {
 								}
 							}
 							if m.MetricName == "named_metrics.ignored_metric" {
-								t.Errorf("ignored_metric should not have been reported according to A85 config")
+								t.Errorf("ignored_metric should not have been reported")
 							}
 						}
 
@@ -1635,7 +1637,7 @@ func (s) TestLoadReportingA85_Metrics(t *testing.T) {
 						}
 
 						if locality.CpuUtilization == nil {
-							t.Errorf("Expected CpuUtilization to be explicitly set in the UnnamedEndpointLoadMetricStats but got nil")
+							t.Errorf("Expected CpuUtilization to be explicitly set but got nil")
 						} else if locality.CpuUtilization.NumRequestsFinishedWithMetric != 1 || locality.CpuUtilization.TotalMetricValue != 0.8 {
 							t.Errorf("Unexpected values for CpuUtilization. NumRequests=%d, TotalValue=%f", locality.CpuUtilization.NumRequestsFinishedWithMetric, locality.CpuUtilization.TotalMetricValue)
 						}
