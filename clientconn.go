@@ -1585,9 +1585,11 @@ func disconnectErrorString(r transport.GoAwayReason, goAwayCode http2.ErrCode, e
 		return "connection timed out"
 	case errors.Is(err, syscall.ECONNABORTED):
 		return "connection aborted"
-	case errors.Is(err, syscall.ECONNREFUSED):
-		return "socket error"
 	default:
+		var sysErr syscall.Errno
+		if errors.As(err, &sysErr) {
+			return "socket error"
+		}
 		return "unknown"
 	}
 }
