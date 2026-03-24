@@ -52,6 +52,11 @@ func newNameGenerator(prefix uint64) *nameGenerator {
 // - update 2: [[L1], [L2], [L3]] --> ["0", "1", "2"]
 // - update 3: [[L1, L2], [L3]] --> ["0", "2"]   (Two priorities were merged)
 // - update 4: [[L1], [L4]] --> ["0", "3",]      (A priority was split, and a new priority was added)
+// emptyLocalityKey is used as a sentinel map key to track names assigned to
+// priorities that contain no localities. This allows generate() to return a
+// stable name across repeated calls when an EDS resource has no localities.
+var emptyLocalityKey = clients.Locality{Region: "\x00"}
+
 func (ng *nameGenerator) generate(priorities [][]xdsresource.Locality) []string {
 	var ret []string
 	usedNames := make(map[string]bool)
@@ -69,6 +74,15 @@ func (ng *nameGenerator) generate(priorities [][]xdsresource.Locality) []string 
 			}
 		}
 
+		if nameFound == "" && len(priority) == 0 {
+			// For priorities with no localities, look up a previously assigned
+			// name via a sentinel key so that repeated calls with an empty
+			// locality list reuse the same name rather than generating a new one.
+			if name, ok := ng.existingNames[emptyLocalityKey]; ok && !usedNames[name] {
+				nameFound = name
+			}
+		}
+
 		if nameFound == "" {
 			// No appropriate used name is found. Make a new name.
 			nameFound = fmt.Sprintf("priority-%d-%d", ng.prefix, ng.nextID)
@@ -80,6 +94,10 @@ func (ng *nameGenerator) generate(priorities [][]xdsresource.Locality) []string 
 		// the new map.
 		for _, l := range priority {
 			newNames[l.ID] = nameFound
+		}
+		if len(priority) == 0 {
+			// Persist the name under the sentinel key so future calls can reuse it.
+			newNames[emptyLocalityKey] = nameFound
 		}
 		usedNames[nameFound] = true
 	}
