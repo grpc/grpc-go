@@ -33,6 +33,7 @@ import (
 	"google.golang.org/grpc/internal/xds/balancer/priority"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource/version"
 	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/status"
 
@@ -68,6 +69,23 @@ func makeLogicalDNSClusterResource(name, dnsHost string, dnsPort uint32) *v3clus
 		DNSHostName: dnsHost,
 		DNSPort:     dnsPort,
 	})
+}
+
+// verifyDNSResolution verifies that the DNS resolver is started for the expected target.
+func verifyDNSResolution(ctx context.Context, t *testing.T, dnsTargetCh chan resolver.Target, dnsR *manual.Resolver, host string, port uint32) {
+	t.Helper()
+	select {
+	case <-ctx.Done():
+		t.Fatal("Timeout waiting for DNS watch")
+	case target := <-dnsTargetCh:
+		addr := fmt.Sprintf("%s:%d", host, port)
+		if target.Endpoint() != addr {
+			t.Fatalf("DNS resolution started for target %q, want %q", target.Endpoint(), addr)
+		}
+		dnsR.UpdateState(resolver.State{
+			Endpoints: []resolver.Endpoint{{Addresses: []resolver.Address{{Addr: addr}}}},
+		})
+	}
 }
 
 // Tests the case where the cluster resource requested is a leaf cluster. The
@@ -207,20 +225,7 @@ func (s) TestAggregateClusterSuccess_ThenUpdateChildClusters(t *testing.T) {
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
-
-	// Ensure that the DNS resolver is started for the expected target.
-	select {
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for DNS watch")
-	case target := <-dnsTargetCh:
-		addr := fmt.Sprintf("%s:%d", dnsHostName, dnsPort)
-		if target.Endpoint() != addr {
-			t.Fatalf("DNS resolution started for target %q, want %q", target.Endpoint(), addr)
-		}
-		dnsR.UpdateState(resolver.State{
-			Endpoints: []resolver.Endpoint{{Addresses: []resolver.Address{{Addr: addr}}}},
-		})
-	}
+	verifyDNSResolution(ctx, t, dnsTargetCh, dnsR, dnsHostName, dnsPort)
 
 	wantChildCfg := &priority.LBConfig{
 		Children: map[string]*priority.Child{
@@ -253,17 +258,7 @@ func (s) TestAggregateClusterSuccess_ThenUpdateChildClusters(t *testing.T) {
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
-
-	select {
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for DNS watch")
-	case <-dnsTargetCh:
-		addr1 := fmt.Sprintf("%s:%d", dnsHostName, dnsPort)
-		addr2 := fmt.Sprintf("%s:%d", dnsHostNameNew, dnsPort)
-		dnsR.UpdateState(resolver.State{
-			Endpoints: []resolver.Endpoint{{Addresses: []resolver.Address{{Addr: addr1}, {Addr: addr2}}}},
-		})
-	}
+	verifyDNSResolution(ctx, t, dnsTargetCh, dnsR, dnsHostNameNew, dnsPort)
 
 	wantChildCfg = &priority.LBConfig{
 		Children: map[string]*priority.Child{
@@ -311,20 +306,7 @@ func (s) TestAggregateClusterSuccess_ThenChangeRootToEDS(t *testing.T) {
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
-
-	// Ensure that the DNS resolver is started for the expected target.
-	select {
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for DNS watch")
-	case target := <-dnsTargetCh:
-		addr := fmt.Sprintf("%s:%d", dnsHostName, dnsPort)
-		if target.Endpoint() != addr {
-			t.Fatalf("DNS resolution started for target %q, want %q", target.Endpoint(), addr)
-		}
-		dnsR.UpdateState(resolver.State{
-			Endpoints: []resolver.Endpoint{{Addresses: []resolver.Address{{Addr: addr}}}},
-		})
-	}
+	verifyDNSResolution(ctx, t, dnsTargetCh, dnsR, dnsHostName, dnsPort)
 
 	wantChildCfg := &priority.LBConfig{
 		Children: map[string]*priority.Child{
@@ -420,20 +402,7 @@ func (s) TestAggregatedClusterSuccess_SwitchBetweenLeafAndAggregate(t *testing.T
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
-
-	// Ensure that the DNS resolver is started for the expected target.
-	select {
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for DNS watch")
-	case target := <-dnsTargetCh:
-		addr := fmt.Sprintf("%s:%d", dnsHostName, dnsPort)
-		if target.Endpoint() != addr {
-			t.Fatalf("DNS resolution started for target %q, want %q", target.Endpoint(), addr)
-		}
-		dnsR.UpdateState(resolver.State{
-			Endpoints: []resolver.Endpoint{{Addresses: []resolver.Address{{Addr: addr}}}},
-		})
-	}
+	verifyDNSResolution(ctx, t, dnsTargetCh, dnsR, dnsHostName, dnsPort)
 
 	wantChildCfg = &priority.LBConfig{
 		Children: map[string]*priority.Child{
