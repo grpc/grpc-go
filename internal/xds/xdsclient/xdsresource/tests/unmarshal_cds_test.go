@@ -27,6 +27,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/grpc/balancer/leastrequest"
 	"google.golang.org/grpc/internal/balancer/stub"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpctest"
 	iringhash "google.golang.org/grpc/internal/ringhash"
 	iserviceconfig "google.golang.org/grpc/internal/serviceconfig"
@@ -569,6 +570,61 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 			}
 			if diff := cmp.Diff(bc, test.wantLBConfig); diff != "" {
 				t.Fatalf("update.LBConfig got unexpected output, diff (-got +want): %v", diff)
+			}
+		})
+	}
+}
+
+func TestValidateCluster_LRSReportEndpointMetrics(t *testing.T) {
+	origEnv := envconfig.XDSORCALRSPropagationEnabled
+	defer func() { envconfig.XDSORCALRSPropagationEnabled = origEnv }()
+
+	cluster := &v3clusterpb.Cluster{
+		Name:                 "test-cluster",
+		ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
+		EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
+			EdsConfig: &v3corepb.ConfigSource{
+				ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
+					Ads: &v3corepb.AggregatedConfigSource{},
+				},
+			},
+			ServiceName: "test-service",
+		},
+		LrsReportEndpointMetrics: []string{"cpu_utilization", "named_metrics.foo", "named_metrics.*"},
+	}
+
+	tests := []struct {
+		desc       string
+		envEnabled bool
+		wantProp   *xdsresource.BackendMetricPropagation
+	}{
+		{
+			desc:       "disabled by env var",
+			envEnabled: false,
+			wantProp:   nil,
+		},
+		{
+			desc:       "enabled by env var",
+			envEnabled: true,
+			wantProp: &xdsresource.BackendMetricPropagation{
+				CPUUtilization:  true,
+				NamedMetricsAll: true,
+				NamedMetrics: map[string]bool{
+					"foo": true,
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			envconfig.XDSORCALRSPropagationEnabled = tt.envEnabled
+			update, err := xdsresource.ValidateClusterAndConstructClusterUpdateForTesting(cluster, nil)
+			if err != nil {
+				t.Fatalf("ValidateClusterAndConstructClusterUpdateForTesting() failed: %v", err)
+			}
+			if !update.LRSReportEndpointMetrics.Equal(tt.wantProp) {
+				t.Errorf("LRSReportEndpointMetrics = %+v, want %+v", update.LRSReportEndpointMetrics, tt.wantProp)
 			}
 		})
 	}

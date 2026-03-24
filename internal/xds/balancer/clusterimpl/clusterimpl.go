@@ -147,6 +147,7 @@ type clusterImplBalancer struct {
 	requestCountMax       uint32                            // Max concurrent requests, from LB config.
 	requestCounter        *xdsclient.ClusterRequestsCounter // Tracks total inflight requests for a given service.
 	telemetryLabels       map[string]string                 // Telemetry labels to set on picks, from LB config.
+	backendMetricPropagation *xdsresource.BackendMetricPropagation // LRS metrics to propagate, from LB config.
 }
 
 // handleDropAndRequestCountLocked compares drop and request counter in new
@@ -203,6 +204,7 @@ func (b *clusterImplBalancer) newPickerLocked() *picker {
 		countMax:        b.requestCountMax,
 		telemetryLabels: b.telemetryLabels,
 		clusterName:     b.clusterName,
+		propagation:     b.backendMetricPropagation,
 	}
 }
 
@@ -434,6 +436,7 @@ func (b *clusterImplBalancer) UpdateClientConnState(s balancer.ClientConnState) 
 
 	b.mu.Lock()
 	b.telemetryLabels = clusterUpdate.TelemetryLabels
+	b.backendMetricPropagation = clusterUpdate.LRSReportEndpointMetrics
 	// We want to send a picker update to the parent if one of the two
 	// conditions are met:
 	// - drop/request config has changed *and* there is already a picker from
