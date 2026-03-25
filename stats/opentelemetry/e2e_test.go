@@ -1984,10 +1984,19 @@ func (s) TestHealthStreamNoOtelErrorLog(t *testing.T) {
 	}
 }
 
+// errorConn wraps a standard net.Conn to allow manual error injection.
+// It is used to simulate transport-level failures (like ECONNRESET) that
+// are otherwise difficult to trigger deterministically in a loopback environment.
 type errorConn struct {
 	net.Conn
 	mu  sync.Mutex
 	err error
+}
+
+func (c *errorConn) setError(err error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.err = err
 }
 
 func (c *errorConn) getErr() error {
@@ -1996,85 +2005,97 @@ func (c *errorConn) getErr() error {
 	return c.err
 }
 
-func (c *errorConn) setErr(err error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.err = err
-}
-
+// Read overrides the underlying net.Conn.Read to prioritize injected errors.
 func (c *errorConn) Read(b []byte) (int, error) {
+	if err := c.getErr(); err != nil {
+		return 0, err
+	}
 	n, err := c.Conn.Read(b)
-	if e := c.getErr(); e != nil {
-		return 0, e
+	if injectErr := c.getErr(); injectErr != nil {
+		return 0, injectErr
 	}
 	return n, err
 }
 
-// TestSubChannelDisconnectionLabels verifies granular disconnect error labels.
+// TestSubChannelDisconnectionLabels verifies that gRPC correctly labels
+// subchannel disconnection metrics based on the root cause of the disconnect.
 func (s) TestSubChannelDisconnectionLabels(t *testing.T) {
-	// 1. GOAWAY
-	t.Run("GoAway", func(t *testing.T) {
-		runDisconnectScenario(t, "GoAway", "GOAWAY NO_ERROR", func(backend *stubserver.StubServer, _ *grpc.ClientConn, _ func(error), _ func(*e2e.UpdateOptions)) {
-			backend.S.GracefulStop()
-		})
-	})
+	tests := []struct {
+		name      string
+		wantLabel string
+		action    func(backend *stubserver.StubServer, cc *grpc.ClientConn, injectErr func(error))
+	}{
+		{
+			name:      "GoAway",
+			wantLabel: "GOAWAY NO_ERROR",
+			action: func(backend *stubserver.StubServer, _ *grpc.ClientConn, _ func(error)) {
+				backend.S.GracefulStop()
+			},
+		},
+		{
+			name:      "IO_Error",
+			wantLabel: "unknown",
+			action: func(_ *stubserver.StubServer, _ *grpc.ClientConn, injectErr func(error)) {
+				injectErr(io.EOF)
+			},
+		},
+		{
+			name:      "SubchannelShutdown",
+			wantLabel: "subchannel shutdown",
+			action: func(_ *stubserver.StubServer, cc *grpc.ClientConn, _ func(error)) {
+				cc.Close()
+			},
+		},
+		{
+			name:      "ConnectionReset",
+			wantLabel: "connection reset",
+			action: func(_ *stubserver.StubServer, _ *grpc.ClientConn, injectErr func(error)) {
+				injectErr(syscall.ECONNRESET)
+			},
+		},
+		{
+			name:      "ConnectionTimeout",
+			wantLabel: "connection timed out",
+			action: func(_ *stubserver.StubServer, _ *grpc.ClientConn, injectErr func(error)) {
+				injectErr(context.DeadlineExceeded)
+			},
+		},
+		{
+			name:      "SocketError",
+			wantLabel: "socket error",
+			action: func(_ *stubserver.StubServer, _ *grpc.ClientConn, injectErr func(error)) {
+				injectErr(syscall.ECONNREFUSED)
+			},
+		},
+		{
+			name:      "ConnectionAborted",
+			wantLabel: "connection aborted",
+			action: func(_ *stubserver.StubServer, _ *grpc.ClientConn, injectErr func(error)) {
+				injectErr(syscall.ECONNABORTED)
+			},
+		},
+	}
 
-	// 2. IO Error (Generic unknown)
-	t.Run("IO_Error", func(t *testing.T) {
-		runDisconnectScenario(t, "IO_Error", "unknown", func(_ *stubserver.StubServer, _ *grpc.ClientConn, injectErr func(error), _ func(*e2e.UpdateOptions)) {
-			injectErr(io.EOF)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			runDisconnectScenario(t, tt.name, tt.wantLabel, tt.action)
 		})
-	})
-
-	// 3. Subchannel Shutdown
-	t.Run("SubchannelShutdown", func(t *testing.T) {
-		runDisconnectScenario(t, "SubchannelShutdown", "subchannel shutdown", func(_ *stubserver.StubServer, cc *grpc.ClientConn, _ func(error), _ func(*e2e.UpdateOptions)) {
-			cc.Close()
-		})
-	})
-
-	// 4. Connection Reset
-	t.Run("ConnectionReset", func(t *testing.T) {
-		runDisconnectScenario(t, "ConnectionReset", "connection reset", func(_ *stubserver.StubServer, _ *grpc.ClientConn, injectErr func(error), _ func(*e2e.UpdateOptions)) {
-			injectErr(syscall.ECONNRESET)
-		})
-	})
-
-	// 5. Connection Timed Out
-	t.Run("ConnectionTimeout", func(t *testing.T) {
-		runDisconnectScenario(t, "ConnectionTimeout", "connection timed out", func(_ *stubserver.StubServer, _ *grpc.ClientConn, injectErr func(error), _ func(*e2e.UpdateOptions)) {
-			injectErr(context.DeadlineExceeded)
-		})
-	})
-
-	// 6. Socket Error
-	t.Run("SocketError", func(t *testing.T) {
-		runDisconnectScenario(t, "SocketError", "socket error", func(_ *stubserver.StubServer, _ *grpc.ClientConn, injectErr func(error), _ func(*e2e.UpdateOptions)) {
-			injectErr(syscall.ECONNREFUSED)
-		})
-	})
-
-	// 7. Connection Aborted
-	t.Run("ConnectionAborted", func(t *testing.T) {
-		runDisconnectScenario(t, "ConnectionAborted", "connection aborted", func(_ *stubserver.StubServer, _ *grpc.ClientConn, injectErr func(error), _ func(*e2e.UpdateOptions)) {
-			injectErr(syscall.ECONNABORTED)
-		})
-	})
+	}
 }
 
-// runDisconnectScenario sets up an OpenTelemetry telemetry environment, constructs
-// an xDS route configuration for a named service, and spins up a functional gRPC client.
-// It executes a clean RPC, then hands execution over to the "action" callback to simulate
-// specific connection breaks (via error injection, resource update, or generic shutdown).
-// After "action" concludes, it polls OpenTelemetry for the precise disconnected metric label.
-func runDisconnectScenario(t *testing.T, name, wantLabel string, action func(backend *stubserver.StubServer, cc *grpc.ClientConn, injectErr func(error), updateResource func(*e2e.UpdateOptions))) {
-	// Start a single backend server.
+// runDisconnectScenario sets up a functional xDS environment with OpenTelemetry enabled.
+// It performs the following steps:
+// 1. Starts a backend and configures an xDS management server.
+// 2. Establishes a gRPC connection using a custom dialer to capture the underlying transport.
+// 3. Performs a warm-up RPC to ensure the subchannel is active.
+// 4. Executes the provided 'action' callback to trigger a specific disconnection event.
+// 5. Polls the OpenTelemetry metric reader to verify the 'grpc.disconnect_error' label matches wantLabel.
+func runDisconnectScenario(t *testing.T, name, wantLabel string, action func(*stubserver.StubServer, *grpc.ClientConn, func(error))) {
 	backend := stubserver.StartTestService(t, nil)
 	port := itestutils.ParsePort(t, backend.Address)
 	defer backend.Stop()
 
-	// Configure xDS for that single backend.
-	managementServer, nodeID, _, xdsResolver := setup.ManagementServerAndResolver(t)
+	mgmtServer, nodeID, _, xdsResolver := setup.ManagementServerAndResolver(t)
 
 	serviceName := "service-" + name
 	clusterName := "cluster-" + serviceName
@@ -2088,23 +2109,18 @@ func runDisconnectScenario(t *testing.T, name, wantLabel string, action func(bac
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	if err := managementServer.Update(ctx, resources); err != nil {
-		t.Fatal(err)
+
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatalf("Failed to update xDS resources: %v", err)
 	}
 
-	// Setup Telemetry.
+	// Setup Telemetry
 	reader := metric.NewManualReader()
 	provider := metric.NewMeterProvider(metric.WithReader(reader))
 	mo := opentelemetry.MetricsOptions{
-		MeterProvider: provider,
-		Metrics: opentelemetry.DefaultMetrics().Add(
-			"grpc.subchannel.disconnections",
-		),
-		OptionalLabels: []string{
-			"grpc.lb.locality",
-			"grpc.lb.backend_service",
-			"grpc.disconnect_error",
-		},
+		MeterProvider:  provider,
+		Metrics:        opentelemetry.DefaultMetrics().Add("grpc.subchannel.disconnections"),
+		OptionalLabels: []string{"grpc.lb.locality", "grpc.lb.backend_service", "grpc.disconnect_error"},
 	}
 
 	connCh := make(chan *errorConn, 1)
@@ -2114,6 +2130,7 @@ func runDisconnectScenario(t *testing.T, name, wantLabel string, action func(bac
 			return nil, err
 		}
 		activeConn := &errorConn{Conn: conn}
+		// Ensure we only track the latest active connection if gRPC reconnects
 		select {
 		case <-connCh:
 		default:
@@ -2129,32 +2146,32 @@ func runDisconnectScenario(t *testing.T, name, wantLabel string, action func(bac
 		grpc.WithContextDialer(dialer),
 		opentelemetry.DialOption(opentelemetry.Options{MetricsOptions: mo}),
 	}
+
 	cc, err := grpc.NewClient(target, dopts...)
 	if err != nil {
 		t.Fatalf("Failed to create client: %v", err)
 	}
 	defer cc.Close()
+
+	// Perform warm-up call to ensure the subchannel and connection are ready.
 	client := testpb.NewTestServiceClient(cc)
 	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
-		t.Fatalf("EmptyCall failed: %v", err)
+		t.Fatalf("Warm-up EmptyCall failed: %v", err)
 	}
 
 	activeConn := <-connCh
 
+	// injectErr provides a way for test cases to force the transport to fail
+	// with a specific error and immediately close the physical socket.
 	injectErr := func(err error) {
-		activeConn.setErr(err)
+		activeConn.setError(err)
 		activeConn.Conn.Close()
 	}
 
-	// Perform the action to trigger disconnect
-	action(backend, cc, injectErr, func(opts *e2e.UpdateOptions) {
-		opts.NodeID = nodeID // Ensure NodeID matches
-		if err := managementServer.Update(ctx, *opts); err != nil {
-			t.Fatal(err)
-		}
-	})
+	// Trigger the disconnection scenario
+	action(backend, cc, injectErr)
 
-	// Verify Metric
+	// Define expected metric state
 	wantMetrics := []metricdata.Metrics{
 		{
 			Name:        "grpc.subchannel.disconnections",
@@ -2178,7 +2195,8 @@ func runDisconnectScenario(t *testing.T, name, wantLabel string, action func(bac
 		},
 	}
 
+	// Poll for metrics to allow for OTel asynchronous processing
 	if err := pollForWantMetrics(ctx, t, reader, wantMetrics); err != nil {
-		t.Fatalf("Failed to verify metric for case %s: %v", name, err)
+		t.Fatalf("Metric verification failed for case %s: %v", name, err)
 	}
 }
