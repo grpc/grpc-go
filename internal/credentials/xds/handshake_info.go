@@ -211,6 +211,11 @@ func (hi *HandshakeInfo) buildVerifyFunc(km *certprovider.KeyMaterial, isClient 
 		if _, err := certs[0].Verify(opts); err != nil {
 			return err
 		}
+
+		// If XDSSNIEnabled and AutoSNISANValidation are both true and the SNI is
+		// non-empty, validate only DNS SANs against the SNI. Otherwise, fallback to
+		// validating all received SANs against the control plane provided SAN
+		// matchers.
 		if envconfig.XDSSNIEnabled && hi.validateSANUsingSNI && hi.sni != "" {
 			// Verify SAN of leaf certificate with SNI using exact DNS matcher.
 			for _, san := range certs[0].DNSNames {
