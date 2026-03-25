@@ -22,6 +22,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer/pickfirst"
@@ -92,41 +93,26 @@ func (s) TestPickFirstMetrics(t *testing.T) {
 		t.Fatalf("EmptyCall() failed: %v", err)
 	}
 
-	if got, _ := tmr.Metric("grpc.lb.pick_first.connection_attempts_succeeded"); got != 1 {
-		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.lb.pick_first.connection_attempts_succeeded", got, 1)
-	}
-	if got, _ := tmr.Metric("grpc.lb.pick_first.connection_attempts_failed"); got != 0 {
-		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.lb.pick_first.connection_attempts_failed", got, 0)
-	}
-	if got, _ := tmr.Metric("grpc.lb.pick_first.disconnections"); got != 0 {
-		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.lb.pick_first.disconnections", got, 0)
-	}
-
-	// Checking for subchannel metrics as well
-	if got, _ := tmr.Metric("grpc.subchannel.connection_attempts_succeeded"); got != 1 {
-		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.subchannel.connection_attempts_succeeded", got, 1)
-	}
-	if got, _ := tmr.Metric("grpc.subchannel.connection_attempts_failed"); got != 0 {
-		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.subchannel.connection_attempts_failed", got, 0)
-	}
-	if got, _ := tmr.Metric("grpc.subchannel.disconnections"); got != 0 {
-		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.subchannel.disconnections", got, 0)
-	}
-	if got, _ := tmr.Metric("grpc.subchannel.open_connections"); got != 1 {
-		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.subchannel.open_connections", got, 1)
+	for _, metric := range []struct {
+		name string
+		want float64
+	}{
+		{"grpc.lb.pick_first.connection_attempts_succeeded", 1},
+		{"grpc.lb.pick_first.connection_attempts_failed", 0},
+		{"grpc.lb.pick_first.disconnections", 0},
+		{"grpc.subchannel.connection_attempts_succeeded", 1},
+		{"grpc.subchannel.connection_attempts_failed", 0},
+		{"grpc.subchannel.disconnections", 0},
+		{"grpc.subchannel.open_connections", 1},
+	} {
+		awaitMetric(ctx, t, tmr, metric.name, metric.want)
 	}
 
 	ss.Stop()
 	testutils.AwaitState(ctx, t, cc, connectivity.Idle)
-	if got, _ := tmr.Metric("grpc.lb.pick_first.disconnections"); got != 1 {
-		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.lb.pick_first.disconnections", got, 1)
-	}
-	if got, _ := tmr.Metric("grpc.subchannel.disconnections"); got != 1 {
-		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.subchannel.disconnections", got, 1)
-	}
-	if got, _ := tmr.Metric("grpc.subchannel.open_connections"); got != -1 {
-		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.subchannel.open_connections", got, -1)
-	}
+	awaitMetric(ctx, t, tmr, "grpc.lb.pick_first.disconnections", 1)
+	awaitMetric(ctx, t, tmr, "grpc.subchannel.disconnections", 1)
+	awaitMetric(ctx, t, tmr, "grpc.subchannel.open_connections", -1)
 }
 
 // TestPickFirstMetricsFailure tests the connection attempts failed metric. It
@@ -156,15 +142,9 @@ func (s) TestPickFirstMetricsFailure(t *testing.T) {
 		t.Fatalf("EmptyCall() passed when expected to fail")
 	}
 
-	if got, _ := tmr.Metric("grpc.lb.pick_first.connection_attempts_succeeded"); got != 0 {
-		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.lb.pick_first.connection_attempts_succeeded", got, 0)
-	}
-	if got, _ := tmr.Metric("grpc.lb.pick_first.connection_attempts_failed"); got != 1 {
-		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.lb.pick_first.connection_attempts_failed", got, 1)
-	}
-	if got, _ := tmr.Metric("grpc.lb.pick_first.disconnections"); got != 0 {
-		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.lb.pick_first.disconnections", got, 0)
-	}
+	awaitMetric(ctx, t, tmr, "grpc.lb.pick_first.connection_attempts_succeeded", 0)
+	awaitMetric(ctx, t, tmr, "grpc.lb.pick_first.connection_attempts_failed", 1)
+	awaitMetric(ctx, t, tmr, "grpc.lb.pick_first.disconnections", 0)
 }
 
 // TestPickFirstMetricsE2E tests the pick first metrics end to end. It
@@ -290,4 +270,19 @@ func metricsDataFromReader(ctx context.Context, reader *metric.ManualReader) map
 		}
 	}
 	return gotMetrics
+}
+
+func awaitMetric(ctx context.Context, t *testing.T, tmr *stats.TestMetricsRecorder, name string, want float64) {
+	t.Helper()
+	for {
+		got, _ := tmr.Metric(name)
+		if got == want {
+			return
+		}
+		select {
+		case <-ctx.Done():
+			t.Fatalf("Timeout waiting for expected data for metric %v, got: %v, want: %v", name, got, want)
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
 }
