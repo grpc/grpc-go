@@ -575,7 +575,7 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 	}
 }
 
-func TestValidateCluster_LRSReportEndpointMetrics(t *testing.T) {
+func (s) TestValidateCluster_LRSReportEndpointMetrics(t *testing.T) {
 	origEnv := envconfig.XDSORCALRSPropagationEnabled
 	defer func() { envconfig.XDSORCALRSPropagationEnabled = origEnv }()
 
