@@ -121,7 +121,7 @@ func (mr *metricsReporter) ReportMetric(metric any) {
 }
 
 func newClientImpl(config *bootstrap.Config, metricsRecorder estats.MetricsRecorder, target string, watchExpiryTimeout time.Duration) (*clientImpl, error) {
-	gConfig, err := buildXDSClientConfig(config, metricsRecorder, target, watchExpiryTimeout)
+	gConfig, err := BuildXDSClientConfig(config, metricsRecorder, target, watchExpiryTimeout)
 	if err != nil {
 		return nil, err
 	}
@@ -188,8 +188,8 @@ func buildServerConfigs(bootstrapSC []*bootstrap.ServerConfig, grpcTransportConf
 	return gServerCfg, nil
 }
 
-// buildXDSClientConfig builds the xdsclient.Config from the bootstrap.Config.
-func buildXDSClientConfig(config *bootstrap.Config, metricsRecorder estats.MetricsRecorder, target string, watchExpiryTimeout time.Duration) (xdsclient.Config, error) {
+// BuildXDSClientConfig builds the xdsclient.Config from the bootstrap.Config.
+func BuildXDSClientConfig(config *bootstrap.Config, metricsRecorder estats.MetricsRecorder, target string, watchExpiryTimeout time.Duration) (xdsclient.Config, error) {
 	grpcTransportConfigs := make(map[string]grpctransport.Config)
 	gServerCfgMap := make(map[xdsclient.ServerConfig]*bootstrap.ServerConfig)
 
