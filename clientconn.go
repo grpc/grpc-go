@@ -1569,6 +1569,9 @@ func (ac *addrConn) createTransport(ctx context.Context, addr resolver.Address, 
 	return nil
 }
 
+// disconnectErrorString returns the grpc.disconnect_error metric label corresponding
+// to the provided transport.GoAwayInfo, as specified by gRFC A94:
+// https://github.com/grpc/proposal/blob/master/A94-grpc-subchannel-disconnections-metrics.md
 func disconnectErrorString(info transport.GoAwayInfo) string {
 	err := info.Err
 	switch {
