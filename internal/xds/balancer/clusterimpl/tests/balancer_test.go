@@ -1517,17 +1517,13 @@ func (s) TestAuthorityOverridingWithTLS(t *testing.T) {
 // Tests that configured LRS metrics are successfully propagated from the backend to the LRS server.
 func (s) TestLoadReporting_CustomMetricsPropagation(t *testing.T) {
 	testutils.SetEnvConfig(t, &envconfig.XDSORCAToLRSPropEnabled, true)
-
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{SupportLoadReportingService: true})
-
 	nodeID := uuid.New().String()
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-
 	resolverBuilder, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
 	if err != nil {
 		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
 	}
-
 	smr := orca.NewServerMetricsRecorder()
 	smr.SetCPUUtilization(0.8)
 
@@ -1543,7 +1539,6 @@ func (s) TestLoadReporting_CustomMetricsPropagation(t *testing.T) {
 	}
 	server := stubserver.StartTestService(t, f, orca.CallMetricsServerOption(smr))
 	defer server.Stop()
-
 	const serviceName = "my-test-xds-service"
 	resources := e2e.DefaultClientResources(e2e.ResourceParams{
 		DialTarget: serviceName,
@@ -1552,7 +1547,6 @@ func (s) TestLoadReporting_CustomMetricsPropagation(t *testing.T) {
 		Port:       testutils.ParsePort(t, server.Address),
 		SecLevel:   e2e.SecurityLevelNone,
 	})
-
 	resources.Clusters[0].LrsServer = &v3corepb.ConfigSource{
 		ConfigSourceSpecifier: &v3corepb.ConfigSource_Self{
 			Self: &v3corepb.SelfConfigSource{},
@@ -1562,7 +1556,6 @@ func (s) TestLoadReporting_CustomMetricsPropagation(t *testing.T) {
 		"cpu_utilization",
 		"named_metrics.db_cost",
 	}
-
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if err := mgmtServer.Update(ctx, resources); err != nil {
@@ -1574,7 +1567,6 @@ func (s) TestLoadReporting_CustomMetricsPropagation(t *testing.T) {
 		t.Fatalf("failed to dial local test server: %v", err)
 	}
 	defer cc.Close()
-
 	client := testgrpc.NewTestServiceClient(cc)
 
 	// Reverting to EmptyCall automatically triggering the channel state progression,
@@ -1582,11 +1574,9 @@ func (s) TestLoadReporting_CustomMetricsPropagation(t *testing.T) {
 	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("rpc EmptyCall() failed: %v", err)
 	}
-
 	if _, err = mgmtServer.LRSServer.LRSStreamOpenChan.Receive(ctx); err != nil {
 		t.Fatalf("Failure when waiting for an LRS stream to be opened: %v", err)
 	}
-
 	if _, err = mgmtServer.LRSServer.LRSRequestChan.Receive(ctx); err != nil {
 		t.Fatalf("Failure waiting for initial LRS request: %v", err)
 	}
