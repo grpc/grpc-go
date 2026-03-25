@@ -36,8 +36,17 @@ import (
 
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/internal/credentials/spiffe"
+	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/xds/matcher"
 )
+
+type s struct {
+	grpctest.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
 
 type testCertProvider struct {
 	certprovider.Provider
@@ -47,7 +56,7 @@ type testCertProviderWithKeyMaterial struct {
 	certprovider.Provider
 }
 
-func TestDNSMatch(t *testing.T) {
+func (s) TestDNSMatch(t *testing.T) {
 	tests := []struct {
 		desc      string
 		host      string
@@ -144,7 +153,7 @@ func TestDNSMatch(t *testing.T) {
 	}
 }
 
-func TestMatchingSANExists_FailureCases(t *testing.T) {
+func (s) TestMatchingSANExists_FailureCases(t *testing.T) {
 	url1, err := url.Parse("http://golang.org")
 	if err != nil {
 		t.Fatalf("url.Parse() failed: %v", err)
@@ -210,7 +219,7 @@ func TestMatchingSANExists_FailureCases(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			hi := NewHandshakeInfo(nil, nil, test.sanMatchers, false)
+			hi := NewHandshakeInfo(nil, nil, test.sanMatchers, false, "", false)
 
 			if hi.MatchingSANExists(inputCert) {
 				t.Fatalf("hi.MatchingSANExists(%+v) with SAN matchers +%v succeeded when expected to fail", inputCert, test.sanMatchers)
@@ -219,7 +228,7 @@ func TestMatchingSANExists_FailureCases(t *testing.T) {
 	}
 }
 
-func TestMatchingSANExists_Success(t *testing.T) {
+func (s) TestMatchingSANExists_Success(t *testing.T) {
 	url1, err := url.Parse("http://golang.org")
 	if err != nil {
 		t.Fatalf("url.Parse() failed: %v", err)
@@ -313,7 +322,7 @@ func TestMatchingSANExists_Success(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			hi := NewHandshakeInfo(nil, nil, test.sanMatchers, false)
+			hi := NewHandshakeInfo(nil, nil, test.sanMatchers, false, "", false)
 
 			if !hi.MatchingSANExists(inputCert) {
 				t.Fatalf("hi.MatchingSANExists(%+v) with SAN matchers +%v failed when expected to succeed", inputCert, test.sanMatchers)
@@ -322,7 +331,7 @@ func TestMatchingSANExists_Success(t *testing.T) {
 	}
 }
 
-func TestEqual(t *testing.T) {
+func (s) TestEqual(t *testing.T) {
 	tests := []struct {
 		desc      string
 		hi1       *HandshakeInfo
@@ -338,62 +347,80 @@ func TestEqual(t *testing.T) {
 		{
 			desc:      "one HandshakeInfo is nil",
 			hi1:       nil,
-			hi2:       NewHandshakeInfo(&testCertProvider{}, nil, nil, false),
+			hi2:       NewHandshakeInfo(&testCertProvider{}, nil, nil, false, "", false),
 			wantMatch: false,
 		},
 		{
 			desc:      "different root providers",
-			hi1:       NewHandshakeInfo(&testCertProvider{}, nil, nil, false),
-			hi2:       NewHandshakeInfo(&testCertProvider{}, nil, nil, false),
+			hi1:       NewHandshakeInfo(&testCertProvider{}, nil, nil, false, "", false),
+			hi2:       NewHandshakeInfo(&testCertProvider{}, nil, nil, false, "", false),
 			wantMatch: false,
 		},
 		{
 			desc: "same providers, same SAN matchers",
 			hi1: NewHandshakeInfo(testCertProvider{}, testCertProvider{}, []matcher.StringMatcher{
 				matcher.NewExactStringMatcher("foo.com", false),
-			}, false),
+			}, false, "", false),
 			hi2: NewHandshakeInfo(testCertProvider{}, testCertProvider{}, []matcher.StringMatcher{
 				matcher.NewExactStringMatcher("foo.com", false),
-			}, false),
+			}, false, "", false),
 			wantMatch: true,
 		},
 		{
 			desc: "same providers, different SAN matchers",
 			hi1: NewHandshakeInfo(testCertProvider{}, testCertProvider{}, []matcher.StringMatcher{
 				matcher.NewExactStringMatcher("foo.com", false),
-			}, false),
+			}, false, "", false),
 			hi2: NewHandshakeInfo(testCertProvider{}, testCertProvider{}, []matcher.StringMatcher{
 				matcher.NewExactStringMatcher("bar.com", false),
-			}, false),
+			}, false, "", false),
 			wantMatch: false,
 		},
 		{
 			desc: "same SAN matchers with different content",
 			hi1: NewHandshakeInfo(&testCertProvider{}, &testCertProvider{}, []matcher.StringMatcher{
 				matcher.NewExactStringMatcher("foo.com", false),
-			}, false),
+			}, false, "", false),
 			hi2: NewHandshakeInfo(&testCertProvider{}, &testCertProvider{}, []matcher.StringMatcher{
 				matcher.NewExactStringMatcher("foo.com", false),
 				matcher.NewExactStringMatcher("bar.com", false),
-			}, false),
+			}, false, "", false),
 			wantMatch: false,
 		},
 		{
 			desc:      "different requireClientCert flags",
-			hi1:       NewHandshakeInfo(&testCertProvider{}, &testCertProvider{}, nil, true),
-			hi2:       NewHandshakeInfo(&testCertProvider{}, &testCertProvider{}, nil, false),
+			hi1:       NewHandshakeInfo(&testCertProvider{}, &testCertProvider{}, nil, true, "", false),
+			hi2:       NewHandshakeInfo(&testCertProvider{}, &testCertProvider{}, nil, false, "", false),
 			wantMatch: false,
 		},
 		{
 			desc:      "same identity provider, different root provider",
-			hi1:       NewHandshakeInfo(&testCertProvider{}, testCertProvider{}, nil, false),
-			hi2:       NewHandshakeInfo(&testCertProvider{}, testCertProvider{}, nil, false),
+			hi1:       NewHandshakeInfo(&testCertProvider{}, testCertProvider{}, nil, false, "", false),
+			hi2:       NewHandshakeInfo(&testCertProvider{}, testCertProvider{}, nil, false, "", false),
 			wantMatch: false,
 		},
 		{
 			desc:      "different identity provider, same root provider",
-			hi1:       NewHandshakeInfo(testCertProvider{}, &testCertProvider{}, nil, false),
-			hi2:       NewHandshakeInfo(testCertProvider{}, &testCertProvider{}, nil, false),
+			hi1:       NewHandshakeInfo(testCertProvider{}, &testCertProvider{}, nil, false, "", false),
+			hi2:       NewHandshakeInfo(testCertProvider{}, &testCertProvider{}, nil, false, "", false),
+			wantMatch: false,
+		},
+		{
+			desc:      "same sni and validateSANUsingSNI",
+			hi1:       NewHandshakeInfo(nil, nil, nil, false, "sni", true),
+			hi2:       NewHandshakeInfo(nil, nil, nil, false, "sni", true),
+			wantMatch: true,
+		},
+		{
+			desc:      "different sni",
+			hi1:       NewHandshakeInfo(nil, nil, nil, false, "sni1", false),
+			hi2:       NewHandshakeInfo(nil, nil, nil, false, "sni2", false),
+			wantMatch: false,
+		},
+		{
+			desc:      "same sni, different validateSANUsingSNI",
+			hi1:       NewHandshakeInfo(nil, nil, nil, false, "sni", false),
+			hi2:       NewHandshakeInfo(nil, nil, nil, false, "sni", true),
 			wantMatch: false,
 		},
 	}
@@ -444,7 +471,7 @@ func (p *testCertProviderWithKeyMaterial) KeyMaterial(_ context.Context) (*certp
 	return km, nil
 }
 
-func TestBuildVerifyFuncFailures(t *testing.T) {
+func (s) TestBuildVerifyFuncFailures(t *testing.T) {
 	tests := []struct {
 		desc          string
 		peerCertChain [][]byte
@@ -464,7 +491,7 @@ func TestBuildVerifyFuncFailures(t *testing.T) {
 		},
 	}
 	testProvider := testCertProviderWithKeyMaterial{}
-	hi := NewHandshakeInfo(&testProvider, &testProvider, nil, true)
+	hi := NewHandshakeInfo(&testProvider, &testProvider, nil, true, "", false)
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 	cfg, err := hi.ClientSideTLSConfig(ctx)
