@@ -3964,8 +3964,7 @@ func (s) TestServerStreaming_ClientCallSendMsgTwice(t *testing.T) {
 			waitCtx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
 			for ; waitCtx.Err() == nil; <-time.After(time.Millisecond) {
-				err = stream.SendMsg(&testpb.StreamingOutputCallRequest{})
-				if err != nil {
+				if err = stream.SendMsg(&testpb.StreamingOutputCallRequest{}); err != nil {
 					break
 				}
 			}
