@@ -361,14 +361,12 @@ func (b *clusterImplBalancer) handleSecurityConfig(config *xdsresource.SecurityC
 	b.cachedRoot = rootProvider
 	b.cachedIdentity = identityProvider
 	// Determine the Server Name Indication (SNI) to use for the TLS handshake. If
-	// AutoHostSNI is enabled and a hostname is available (e.g., from Logical DNS
-	// or Endpoint), use it. Otherwise, use the SNI specified in the security
+	// AutoHostSNI is enabled and a hostname is available either from Logical DNS
+	// or Endpoint, use it. Otherwise, use the SNI specified in the security
 	// configuration.
-	var sni string
+	sni := config.SNI
 	if config.UseAutoHostSNI && hostname != "" {
 		sni = hostname
-	} else if config.SNI != "" {
-		sni = config.SNI
 	}
 	b.xdsHIPtr.Store(xds.NewHandshakeInfo(rootProvider, identityProvider, config.SubjectAltNameMatchers, false, sni, config.AutoSNISANValidation))
 	return nil

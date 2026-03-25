@@ -35,6 +35,8 @@ import (
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/internal/testutils/xds/e2e/setup"
 	"google.golang.org/grpc/peer"
+	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/status"
 
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
@@ -46,17 +48,14 @@ import (
 	v3matcherpb "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
-	"google.golang.org/grpc/resolver"
-	"google.golang.org/grpc/resolver/manual"
 )
 
 const defaultTestCertSAN = "x.test.example.com"
 
-// TestXDSClientSNIValidation tests the SNI and SAN validation logic by
-// verifying that RPCs succeed when AutoSNISANValidation is enabled and the SNI
-// matches a server certificate DNS SAN. Also verifies that RPCs fail with an
-// 'Unavailable' status if the SNI is present but does not match any DNS SAN in
-// the certificate.
+// Tests the SNI and SAN validation logic by verifying that RPCs succeed when
+// AutoSNISANValidation is enabled and the SNI matches a server certificate DNS
+// SAN. Also verifies that RPCs fail with an 'Unavailable' status if the SNI is
+// present but does not match any DNS SAN in the certificate.
 func (s) TestClientSideXDS_SNISANValidation(t *testing.T) {
 	testutils.SetEnvConfig(t, &envconfig.XDSSNIEnabled, true)
 
@@ -77,8 +76,8 @@ func (s) TestClientSideXDS_SNISANValidation(t *testing.T) {
 	const routeConfigName = "route-" + serviceName
 	const clusterName1 = "cluster1-" + serviceName
 	const clusterName2 = "cluster2-" + serviceName
-	const endpointsName1 = "endpoints1-" + serviceName
-	const endpointsName2 = "endpoints2-" + serviceName
+	const endpointName1 = "endpoint1-" + serviceName
+	const endpointName2 = "endpoint2-" + serviceName
 
 	listeners := []*v3listenerpb.Listener{e2e.DefaultClientListener(serviceName, routeConfigName)}
 
@@ -91,23 +90,19 @@ func (s) TestClientSideXDS_SNISANValidation(t *testing.T) {
 			Domains: []string{serviceName},
 			Routes: []*v3routepb.Route{
 				{
-					Match: &v3routepb.RouteMatch{PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/grpc.testing.TestService/EmptyCall"}},
-					Action: &v3routepb.Route_Route{Route: &v3routepb.RouteAction{
-						ClusterSpecifier: &v3routepb.RouteAction_Cluster{Cluster: clusterName1},
-					}},
+					Match:  &v3routepb.RouteMatch{PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/grpc.testing.TestService/EmptyCall"}},
+					Action: &v3routepb.Route_Route{Route: &v3routepb.RouteAction{ClusterSpecifier: &v3routepb.RouteAction_Cluster{Cluster: clusterName1}}},
 				},
 				{
-					Match: &v3routepb.RouteMatch{PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/grpc.testing.TestService/UnaryCall"}},
-					Action: &v3routepb.Route_Route{Route: &v3routepb.RouteAction{
-						ClusterSpecifier: &v3routepb.RouteAction_Cluster{Cluster: clusterName2},
-					}},
+					Match:  &v3routepb.RouteMatch{PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/grpc.testing.TestService/UnaryCall"}},
+					Action: &v3routepb.Route_Route{Route: &v3routepb.RouteAction{ClusterSpecifier: &v3routepb.RouteAction_Cluster{Cluster: clusterName2}}},
 				},
 			},
 		}},
 	}}
 
 	// Configure cluster1 with valid SNI and AutoSniSanValidation set to true.
-	cluster1 := e2e.DefaultCluster(clusterName1, endpointsName1, e2e.SecurityLevelMTLS)
+	cluster1 := e2e.DefaultCluster(clusterName1, endpointName1, e2e.SecurityLevelMTLS)
 	cluster1.TransportSocket = &v3corepb.TransportSocket{
 		Name: "envoy.transport_sockets.tls",
 		ConfigType: &v3corepb.TransportSocket_TypedConfig{
@@ -116,21 +111,16 @@ func (s) TestClientSideXDS_SNISANValidation(t *testing.T) {
 				AutoSniSanValidation: true,
 				CommonTlsContext: &v3tlspb.CommonTlsContext{
 					ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContextCertificateProviderInstance{
-						ValidationContextCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
-							InstanceName: e2e.ClientSideCertProviderInstance,
-						},
+						ValidationContextCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{InstanceName: e2e.ClientSideCertProviderInstance},
 					},
-					TlsCertificateCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
-						InstanceName: e2e.ClientSideCertProviderInstance,
-					},
+					TlsCertificateCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{InstanceName: e2e.ClientSideCertProviderInstance},
 				},
 			}),
 		},
 	}
 
-	// cluster2 configuration with invalid SNI and AutoSniSanValidation set to
-	// true.
-	cluster2 := e2e.DefaultCluster(clusterName2, endpointsName2, e2e.SecurityLevelMTLS)
+	// Configure cluster2 with invalid SNI and AutoSniSanValidation set to true.
+	cluster2 := e2e.DefaultCluster(clusterName2, endpointName2, e2e.SecurityLevelMTLS)
 	cluster2.TransportSocket = &v3corepb.TransportSocket{
 		Name: "envoy.transport_sockets.tls",
 		ConfigType: &v3corepb.TransportSocket_TypedConfig{
@@ -154,11 +144,9 @@ func (s) TestClientSideXDS_SNISANValidation(t *testing.T) {
 	}
 
 	clusters := []*v3clusterpb.Cluster{cluster1, cluster2}
-
-	// Endpoints for each of the above clusters with backends created earlier.
 	endpoints := []*v3endpointpb.ClusterLoadAssignment{
-		e2e.DefaultEndpoint(endpointsName1, "localhost", []uint32{testutils.ParsePort(t, server1.Address)}),
-		e2e.DefaultEndpoint(endpointsName2, "localhost", []uint32{testutils.ParsePort(t, server2.Address)}),
+		e2e.DefaultEndpoint(endpointName1, "localhost", []uint32{testutils.ParsePort(t, server1.Address)}),
+		e2e.DefaultEndpoint(endpointName2, "localhost", []uint32{testutils.ParsePort(t, server2.Address)}),
 	}
 
 	resources := e2e.UpdateOptions{
@@ -175,13 +163,10 @@ func (s) TestClientSideXDS_SNISANValidation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create client-side xDS credentials.
 	clientCreds, err := xdscreds.NewClientCredentials(xdscreds.ClientOptions{FallbackCreds: insecure.NewCredentials()})
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	// Create a ClientConn.
 	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(clientCreds), grpc.WithResolvers(xdsResolver))
 	if err != nil {
 		t.Fatalf("failed to dial local test server: %v", err)
@@ -189,7 +174,6 @@ func (s) TestClientSideXDS_SNISANValidation(t *testing.T) {
 	defer cc.Close()
 
 	client := testgrpc.NewTestServiceClient(cc)
-
 	// RPC to cluster1 should succeed because auto_sni_san_validation is true
 	// and sni matches server cert SAN.
 	peerInfo := &peer.Peer{}
@@ -208,11 +192,10 @@ func (s) TestClientSideXDS_SNISANValidation(t *testing.T) {
 	}
 }
 
-// Tests that when AutoHostSNI is enabled, the client-side xDS balancer ignores
-// any explicitly specified SNI in the security configuration and instead uses
-// the endpoint's hostname for the SNI. It verifies that the TLS handshake and
-// subsequent RPC succeed because the resolved SNI i.e. the hostname matches the
-// server's certificate SAN.
+// Tests that when AutoHostSNI is enabled, the endpoint's hostname is used for
+// the ServerName even though SNI is specified. It verifies that the TLS
+// handshake and subsequent RPC succeed because the resolved SNI i.e. the
+// hostname matches the server's certificate SAN.
 func (s) TestClientSideXDS_AutoHostSNI(t *testing.T) {
 	testutils.SetEnvConfig(t, &envconfig.XDSSNIEnabled, true)
 
@@ -228,21 +211,21 @@ func (s) TestClientSideXDS_AutoHostSNI(t *testing.T) {
 	const serviceName = "my-service-client-side-xds"
 	const routeConfigName = "route-" + serviceName
 	const clusterName = "cluster-" + serviceName
-	const endpointsName = "endpoints-" + serviceName
+	const endpointName = "endpoint-" + serviceName
 
 	listeners := []*v3listenerpb.Listener{e2e.DefaultClientListener(serviceName, routeConfigName)}
 	routes := []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeConfigName, serviceName, clusterName)}
 
-	// cluster configuration with AutoHostSni and AutoSniSanValidation set to
-	// true.
-	cluster := e2e.DefaultCluster(clusterName, endpointsName, e2e.SecurityLevelMTLS)
+	// Configure the cluster with AutoHostSni and AutoSniSanValidation set to
+	// true with a invalid SNI.
+	cluster := e2e.DefaultCluster(clusterName, endpointName, e2e.SecurityLevelMTLS)
 	cluster.TransportSocket = &v3corepb.TransportSocket{
 		Name: "envoy.transport_sockets.tls",
 		ConfigType: &v3corepb.TransportSocket_TypedConfig{
 			TypedConfig: testutils.MarshalAny(t, &v3tlspb.UpstreamTlsContext{
 				AutoHostSni:          true,
 				AutoSniSanValidation: true,
-				Sni:                  "hgvujsdvjkas",
+				Sni:                  "wrong.sni.domain",
 				CommonTlsContext: &v3tlspb.CommonTlsContext{
 					ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContextCertificateProviderInstance{
 						ValidationContextCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
@@ -259,10 +242,11 @@ func (s) TestClientSideXDS_AutoHostSNI(t *testing.T) {
 		},
 	}
 
-	// Endpoints configuring Hostname to the defaultTestCertSAN to verify AutoHostSni usage
+	// Endpoints configuring Hostname to the defaultTestCertSAN to verify
+	// AutoHostSni usage.
 	endpoints := []*v3endpointpb.ClusterLoadAssignment{
 		e2e.EndpointResourceWithOptions(e2e.EndpointOptions{
-			ClusterName: endpointsName,
+			ClusterName: endpointName,
 			Host:        "localhost",
 			Localities: []e2e.LocalityOptions{{
 				Weight: 1,
@@ -288,13 +272,10 @@ func (s) TestClientSideXDS_AutoHostSNI(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create client-side xDS credentials.
 	clientCreds, err := xdscreds.NewClientCredentials(xdscreds.ClientOptions{FallbackCreds: insecure.NewCredentials()})
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	// Create a ClientConn.
 	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(clientCreds), grpc.WithResolvers(xdsResolver))
 	if err != nil {
 		t.Fatalf("failed to dial local test server: %v", err)
@@ -302,15 +283,15 @@ func (s) TestClientSideXDS_AutoHostSNI(t *testing.T) {
 	defer cc.Close()
 
 	client := testgrpc.NewTestServiceClient(cc)
-
-	// RPC should succeed because auto_host_sni sets SNI from the endpoint hostname
-	// and auto_sni_san_validation validates that the SNI matches server cert SAN.
+	// RPC should succeed because auto_host_sni sets SNI from the endpoint
+	// hostname and auto_sni_san_validation validates that the SNI matches
+	// server cert SAN.
 	peerInfo := &peer.Peer{}
 	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(peerInfo)); err != nil {
 		t.Fatalf("EmptyCall() failed: %v", err)
 	}
 	if got, want := peerInfo.Addr.String(), server.Address; got != want {
-		t.Errorf("EmptyCall() routed to %q, want to be routed to: %q", got, want)
+		t.Fatalf("EmptyCall() routed to %q, want to be routed to: %q", got, want)
 	}
 }
 
@@ -338,8 +319,8 @@ func (s) TestClientSideXDS_FallbackSANMatchers(t *testing.T) {
 	const routeConfigName = "route-" + serviceName
 	const clusterName1 = "cluster1-" + serviceName
 	const clusterName2 = "cluster2-" + serviceName
-	const endpointsName1 = "endpoints1-" + serviceName
-	const endpointsName2 = "endpoints2-" + serviceName
+	const endpointName1 = "endpoint1-" + serviceName
+	const endpointName2 = "endpoint2-" + serviceName
 
 	listeners := []*v3listenerpb.Listener{e2e.DefaultClientListener(serviceName, routeConfigName)}
 
@@ -349,16 +330,12 @@ func (s) TestClientSideXDS_FallbackSANMatchers(t *testing.T) {
 			Domains: []string{serviceName},
 			Routes: []*v3routepb.Route{
 				{
-					Match: &v3routepb.RouteMatch{PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/grpc.testing.TestService/EmptyCall"}},
-					Action: &v3routepb.Route_Route{Route: &v3routepb.RouteAction{
-						ClusterSpecifier: &v3routepb.RouteAction_Cluster{Cluster: clusterName1},
-					}},
+					Match:  &v3routepb.RouteMatch{PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/grpc.testing.TestService/EmptyCall"}},
+					Action: &v3routepb.Route_Route{Route: &v3routepb.RouteAction{ClusterSpecifier: &v3routepb.RouteAction_Cluster{Cluster: clusterName1}}},
 				},
 				{
-					Match: &v3routepb.RouteMatch{PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/grpc.testing.TestService/UnaryCall"}},
-					Action: &v3routepb.Route_Route{Route: &v3routepb.RouteAction{
-						ClusterSpecifier: &v3routepb.RouteAction_Cluster{Cluster: clusterName2},
-					}},
+					Match:  &v3routepb.RouteMatch{PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/grpc.testing.TestService/UnaryCall"}},
+					Action: &v3routepb.Route_Route{Route: &v3routepb.RouteAction{ClusterSpecifier: &v3routepb.RouteAction_Cluster{Cluster: clusterName2}}},
 				},
 			},
 		}},
@@ -368,41 +345,8 @@ func (s) TestClientSideXDS_FallbackSANMatchers(t *testing.T) {
 	// provided for the handshake. The validation falls back to using the explicit
 	// SAN matchers specified in the configuration which matches the server1's
 	// certificate SAN.
-	cluster1 := e2e.DefaultCluster(clusterName1, endpointsName1, e2e.SecurityLevelMTLS)
+	cluster1 := e2e.DefaultCluster(clusterName1, endpointName1, e2e.SecurityLevelMTLS)
 	cluster1.TransportSocket = &v3corepb.TransportSocket{
-		Name: "envoy.transport_sockets.tls",
-		ConfigType: &v3corepb.TransportSocket_TypedConfig{
-			TypedConfig: testutils.MarshalAny(t, &v3tlspb.UpstreamTlsContext{
-		AutoSniSanValidation: true,
-		CommonTlsContext: &v3tlspb.CommonTlsContext{
-			ValidationContextType: &v3tlspb.CommonTlsContext_CombinedValidationContext{
-				CombinedValidationContext: &v3tlspb.CommonTlsContext_CombinedCertificateValidationContext{
-					DefaultValidationContext: &v3tlspb.CertificateValidationContext{
-						MatchSubjectAltNames: []*v3matcherpb.StringMatcher{
-							{MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: "*.test.example.com"}},
-						},
-						CaCertificateProviderInstance: &v3tlspb.CertificateProviderPluginInstance{
-							InstanceName:    e2e.ClientSideCertProviderInstance,
-							CertificateName: "root",
-						},
-					},
-				},
-			},
-			TlsCertificateProviderInstance: &v3tlspb.CertificateProviderPluginInstance{
-				InstanceName:    e2e.ClientSideCertProviderInstance,
-				CertificateName: "identity",
-			},
-		},
-	}),
-		},
-	}
-
-	// Configure cluster2 with AutoSniSanValidation set to true and no SNI
-	// provided for the handshake. The validation falls back to using the explicit
-	// SAN matchers specified in the configuration which does not match the server2's
-	// certificate SAN.
-	cluster2 := e2e.DefaultCluster(clusterName2, endpointsName2, e2e.SecurityLevelMTLS)
-	cluster2.TransportSocket = &v3corepb.TransportSocket{
 		Name: "envoy.transport_sockets.tls",
 		ConfigType: &v3corepb.TransportSocket_TypedConfig{
 			TypedConfig: testutils.MarshalAny(t, &v3tlspb.UpstreamTlsContext{
@@ -412,7 +356,7 @@ func (s) TestClientSideXDS_FallbackSANMatchers(t *testing.T) {
 						CombinedValidationContext: &v3tlspb.CommonTlsContext_CombinedCertificateValidationContext{
 							DefaultValidationContext: &v3tlspb.CertificateValidationContext{
 								MatchSubjectAltNames: []*v3matcherpb.StringMatcher{
-									{MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: "wrong.san.domain"}},
+									{MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: "*.test.example.com"}},
 								},
 								CaCertificateProviderInstance: &v3tlspb.CertificateProviderPluginInstance{
 									InstanceName:    e2e.ClientSideCertProviderInstance,
@@ -430,16 +374,48 @@ func (s) TestClientSideXDS_FallbackSANMatchers(t *testing.T) {
 		},
 	}
 
+	// Configure cluster2 with AutoSniSanValidation set to true and no SNI
+	// provided for the handshake. The validation falls back to using the explicit
+	// SAN matchers specified in the configuration which does not match the server2's
+	// certificate SAN.
+	cluster2 := e2e.DefaultCluster(clusterName2, endpointName2, e2e.SecurityLevelMTLS)
+	cluster2.TransportSocket = &v3corepb.TransportSocket{
+		Name: "envoy.transport_sockets.tls",
+		ConfigType: &v3corepb.TransportSocket_TypedConfig{
+			TypedConfig: testutils.MarshalAny(t, &v3tlspb.UpstreamTlsContext{
+				AutoSniSanValidation: true,
+				CommonTlsContext: &v3tlspb.CommonTlsContext{
+					ValidationContextType: &v3tlspb.CommonTlsContext_CombinedValidationContext{
+						CombinedValidationContext: &v3tlspb.CommonTlsContext_CombinedCertificateValidationContext{
+							DefaultValidationContext: &v3tlspb.CertificateValidationContext{
+								MatchSubjectAltNames: []*v3matcherpb.StringMatcher{{MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: "wrong.san.domain"}}},
+								CaCertificateProviderInstance: &v3tlspb.CertificateProviderPluginInstance{
+									InstanceName:    e2e.ClientSideCertProviderInstance,
+									CertificateName: "root",
+								},
+							},
+						},
+					},
+					TlsCertificateProviderInstance: &v3tlspb.CertificateProviderPluginInstance{
+						InstanceName:    e2e.ClientSideCertProviderInstance,
+						CertificateName: "identity",
+					},
+				},
+			}),
+		},
+	}
+
+	clusters := []*v3clusterpb.Cluster{cluster1, cluster2}
 	endpoints := []*v3endpointpb.ClusterLoadAssignment{
-		e2e.DefaultEndpoint(endpointsName1, "localhost", []uint32{testutils.ParsePort(t, server1.Address)}),
-		e2e.DefaultEndpoint(endpointsName2, "localhost", []uint32{testutils.ParsePort(t, server2.Address)}),
+		e2e.DefaultEndpoint(endpointName1, "localhost", []uint32{testutils.ParsePort(t, server1.Address)}),
+		e2e.DefaultEndpoint(endpointName2, "localhost", []uint32{testutils.ParsePort(t, server2.Address)}),
 	}
 
 	resources := e2e.UpdateOptions{
 		NodeID:    nodeID,
 		Listeners: listeners,
 		Routes:    routes,
-		Clusters:  []*v3clusterpb.Cluster{cluster1, cluster2},
+		Clusters:  clusters,
 		Endpoints: endpoints,
 	}
 
@@ -480,9 +456,10 @@ func (s) TestClientSideXDS_FallbackSANMatchers(t *testing.T) {
 }
 
 // Tests that when the XDSSNIEnabled environment variable is set to false, SNI
-// is not used for validation even if AutoSniSanValidation is true. It verifies
-// that the system falls back to using explicit SAN matchers if provided, and
-// the TLS handshake succeeds when they match the server certificate SAN.
+// is not used for validation even if AutoSniSanValidation is true and SNI is
+// set. It verifies that the system falls back to using explicit SAN matchers if
+// provided, and the TLS handshake succeeds when they match the server
+// certificate SAN.
 func (s) TestClientSideXDS_SNIEnvVarDisabled(t *testing.T) {
 	testutils.SetEnvConfig(t, &envconfig.XDSSNIEnabled, false)
 
@@ -502,8 +479,8 @@ func (s) TestClientSideXDS_SNIEnvVarDisabled(t *testing.T) {
 	const routeConfigName = "route-" + serviceName
 	const clusterName1 = "cluster1-" + serviceName
 	const clusterName2 = "cluster2-" + serviceName
-	const endpointsName1 = "endpoints1-" + serviceName
-	const endpointsName2 = "endpoints2-" + serviceName
+	const endpointName1 = "endpoint1-" + serviceName
+	const endpointName2 = "endpoint2-" + serviceName
 
 	listeners := []*v3listenerpb.Listener{e2e.DefaultClientListener(serviceName, routeConfigName)}
 
@@ -513,16 +490,12 @@ func (s) TestClientSideXDS_SNIEnvVarDisabled(t *testing.T) {
 			Domains: []string{serviceName},
 			Routes: []*v3routepb.Route{
 				{
-					Match: &v3routepb.RouteMatch{PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/grpc.testing.TestService/EmptyCall"}},
-					Action: &v3routepb.Route_Route{Route: &v3routepb.RouteAction{
-						ClusterSpecifier: &v3routepb.RouteAction_Cluster{Cluster: clusterName1},
-					}},
+					Match:  &v3routepb.RouteMatch{PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/grpc.testing.TestService/EmptyCall"}},
+					Action: &v3routepb.Route_Route{Route: &v3routepb.RouteAction{ClusterSpecifier: &v3routepb.RouteAction_Cluster{Cluster: clusterName1}}},
 				},
 				{
-					Match: &v3routepb.RouteMatch{PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/grpc.testing.TestService/UnaryCall"}},
-					Action: &v3routepb.Route_Route{Route: &v3routepb.RouteAction{
-						ClusterSpecifier: &v3routepb.RouteAction_Cluster{Cluster: clusterName2},
-					}},
+					Match:  &v3routepb.RouteMatch{PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/grpc.testing.TestService/UnaryCall"}},
+					Action: &v3routepb.Route_Route{Route: &v3routepb.RouteAction{ClusterSpecifier: &v3routepb.RouteAction_Cluster{Cluster: clusterName2}}},
 				},
 			},
 		}},
@@ -532,52 +505,19 @@ func (s) TestClientSideXDS_SNIEnvVarDisabled(t *testing.T) {
 	// provided for the handshake. The validation falls back to using the explicit
 	// SAN matchers specified in the configuration which matches the server1's
 	// certificate SAN.
-	cluster1 := e2e.DefaultCluster(clusterName1, endpointsName1, e2e.SecurityLevelMTLS)
+	cluster1 := e2e.DefaultCluster(clusterName1, endpointName1, e2e.SecurityLevelMTLS)
 	cluster1.TransportSocket = &v3corepb.TransportSocket{
 		Name: "envoy.transport_sockets.tls",
 		ConfigType: &v3corepb.TransportSocket_TypedConfig{
 			TypedConfig: testutils.MarshalAny(t, &v3tlspb.UpstreamTlsContext{
-		Sni:                  "incorrect.sni",
-		AutoSniSanValidation: true,
-		CommonTlsContext: &v3tlspb.CommonTlsContext{
-			ValidationContextType: &v3tlspb.CommonTlsContext_CombinedValidationContext{
-				CombinedValidationContext: &v3tlspb.CommonTlsContext_CombinedCertificateValidationContext{
-					DefaultValidationContext: &v3tlspb.CertificateValidationContext{
-						MatchSubjectAltNames: []*v3matcherpb.StringMatcher{
-							{MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: "*.test.example.com"}},
-						},
-						CaCertificateProviderInstance: &v3tlspb.CertificateProviderPluginInstance{
-							InstanceName:    e2e.ClientSideCertProviderInstance,
-							CertificateName: "root",
-						},
-					},
-				},
-			},
-			TlsCertificateProviderInstance: &v3tlspb.CertificateProviderPluginInstance{
-				InstanceName:    e2e.ClientSideCertProviderInstance,
-				CertificateName: "identity",
-			},
-		},
-	}),
-		},
-	}
-	// cluster2 configuration with AutoSniSanValidation set to true and correct
-	// SNI provided for the handshake. The validation falls back to using the
-	// explicit SAN matchers specified in the configuration which does not match
-	// the server2's certificate SAN.
-	cluster2 := e2e.DefaultCluster(clusterName2, endpointsName2, e2e.SecurityLevelMTLS)
-	cluster2.TransportSocket = &v3corepb.TransportSocket{
-		Name: "envoy.transport_sockets.tls",
-		ConfigType: &v3corepb.TransportSocket_TypedConfig{
-			TypedConfig: testutils.MarshalAny(t, &v3tlspb.UpstreamTlsContext{
-				Sni:                  defaultTestCertSAN,
+				Sni:                  "incorrect.sni",
 				AutoSniSanValidation: true,
 				CommonTlsContext: &v3tlspb.CommonTlsContext{
 					ValidationContextType: &v3tlspb.CommonTlsContext_CombinedValidationContext{
 						CombinedValidationContext: &v3tlspb.CommonTlsContext_CombinedCertificateValidationContext{
 							DefaultValidationContext: &v3tlspb.CertificateValidationContext{
 								MatchSubjectAltNames: []*v3matcherpb.StringMatcher{
-									{MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: "wrong.san.domain"}},
+									{MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: "*.test.example.com"}},
 								},
 								CaCertificateProviderInstance: &v3tlspb.CertificateProviderPluginInstance{
 									InstanceName:    e2e.ClientSideCertProviderInstance,
@@ -595,16 +535,49 @@ func (s) TestClientSideXDS_SNIEnvVarDisabled(t *testing.T) {
 		},
 	}
 
+	// Configure cluster2 with AutoSniSanValidation set to true and correct SNI
+	// provided for the handshake. The validation falls back to using the
+	// explicit SAN matchers specified in the configuration which does not match
+	// the server2's certificate SAN.
+	cluster2 := e2e.DefaultCluster(clusterName2, endpointName2, e2e.SecurityLevelMTLS)
+	cluster2.TransportSocket = &v3corepb.TransportSocket{
+		Name: "envoy.transport_sockets.tls",
+		ConfigType: &v3corepb.TransportSocket_TypedConfig{
+			TypedConfig: testutils.MarshalAny(t, &v3tlspb.UpstreamTlsContext{
+				Sni:                  defaultTestCertSAN,
+				AutoSniSanValidation: true,
+				CommonTlsContext: &v3tlspb.CommonTlsContext{
+					ValidationContextType: &v3tlspb.CommonTlsContext_CombinedValidationContext{
+						CombinedValidationContext: &v3tlspb.CommonTlsContext_CombinedCertificateValidationContext{
+							DefaultValidationContext: &v3tlspb.CertificateValidationContext{
+								MatchSubjectAltNames: []*v3matcherpb.StringMatcher{{MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: "wrong.san.domain"}}},
+								CaCertificateProviderInstance: &v3tlspb.CertificateProviderPluginInstance{
+									InstanceName:    e2e.ClientSideCertProviderInstance,
+									CertificateName: "root",
+								},
+							},
+						},
+					},
+					TlsCertificateProviderInstance: &v3tlspb.CertificateProviderPluginInstance{
+						InstanceName:    e2e.ClientSideCertProviderInstance,
+						CertificateName: "identity",
+					},
+				},
+			}),
+		},
+	}
+
+	clusters := []*v3clusterpb.Cluster{cluster1, cluster2}
 	endpoints := []*v3endpointpb.ClusterLoadAssignment{
-		e2e.DefaultEndpoint(endpointsName1, "localhost", []uint32{testutils.ParsePort(t, server1.Address)}),
-		e2e.DefaultEndpoint(endpointsName2, "localhost", []uint32{testutils.ParsePort(t, server2.Address)}),
+		e2e.DefaultEndpoint(endpointName1, "localhost", []uint32{testutils.ParsePort(t, server1.Address)}),
+		e2e.DefaultEndpoint(endpointName2, "localhost", []uint32{testutils.ParsePort(t, server2.Address)}),
 	}
 
 	resources := e2e.UpdateOptions{
 		NodeID:    nodeID,
 		Listeners: listeners,
 		Routes:    routes,
-		Clusters:  []*v3clusterpb.Cluster{cluster1, cluster2},
+		Clusters:  clusters,
 		Endpoints: endpoints,
 	}
 
@@ -659,18 +632,13 @@ func (s) TestClientSideXDS_AutoHostSNI_LogicalDNS(t *testing.T) {
 	server := stubserver.StartTestService(t, nil, grpc.Creds(serverCreds))
 	defer server.Stop()
 
-	// Override global "dns" scheme resolver with a manual resolver pointing to
-	// our local test server.
+	// Replace DNS resolver with a manual resolver.
 	dnsR := manual.NewBuilderWithScheme("dns")
 	originalDNS := resolver.Get("dns")
 	resolver.Register(dnsR)
 	t.Cleanup(func() { resolver.Register(originalDNS) })
 
-	dnsR.UpdateState(resolver.State{
-		Endpoints: []resolver.Endpoint{{
-			Addresses: []resolver.Address{{Addr: server.Address}},
-		}},
-	})
+	dnsR.UpdateState(resolver.State{Endpoints: []resolver.Endpoint{{Addresses: []resolver.Address{{Addr: server.Address}}}}})
 
 	// Configure client side xDS resources on the management server.
 	const serviceName = "my-service-client-side-xds"
@@ -728,7 +696,6 @@ func (s) TestClientSideXDS_AutoHostSNI_LogicalDNS(t *testing.T) {
 	defer cc.Close()
 
 	client := testgrpc.NewTestServiceClient(cc)
-
 	// RPC should succeed because DNSHostName matches the server's certificate
 	// SAN.
 	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
