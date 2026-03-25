@@ -6,7 +6,7 @@ require (
 	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/cncf/xds/go v0.0.0-20251210132809-ee656c7534f5
 	github.com/envoyproxy/go-control-plane v0.14.0
-	github.com/envoyproxy/go-control-plane/envoy v1.36.0
+	github.com/envoyproxy/go-control-plane/envoy v1.37.0
 	github.com/golang/glog v1.2.5
 	github.com/golang/protobuf v1.5.4
 	github.com/google/go-cmp v0.7.0

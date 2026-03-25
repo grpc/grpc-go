@@ -85,7 +85,7 @@ func (s) TestParseConfig(t *testing.T) {
 		{
 			name:  "success",
 			input: `{ "subsetSize": 3, "childPolicy": [{"round_robin": {}}]}`,
-			wantCfg: &lbConfig{
+			wantCfg: &LBConfig{
 				SubsetSize:  3,
 				ChildPolicy: &iserviceconfig.BalancerConfig{Name: "round_robin"},
 			},
@@ -155,7 +155,7 @@ func (s) TestCalculateSubset_Simple(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			b := &subsettingBalancer{
-				cfg:        &lbConfig{SubsetSize: tt.subsetSize},
+				cfg:        &LBConfig{SubsetSize: tt.subsetSize},
 				hashSeed:   0,
 				hashDigest: xxhash.New(),
 			}
@@ -181,7 +181,7 @@ func (s) TestCalculateSubset_EndpointsRetainHashValues(t *testing.T) {
 	}
 
 	b := &subsettingBalancer{
-		cfg:        &lbConfig{SubsetSize: subsetSize},
+		cfg:        &LBConfig{SubsetSize: subsetSize},
 		hashSeed:   0,
 		hashDigest: xxhash.New(),
 	}
@@ -220,7 +220,7 @@ func (s) TestSubsettingBalancer_DeterministicSubset(t *testing.T) {
 	endpoints := makeEndpoints(10)
 	state := balancer.ClientConnState{
 		ResolverState: resolver.State{Endpoints: endpoints},
-		BalancerConfig: &lbConfig{
+		BalancerConfig: &LBConfig{
 			SubsetSize:  5,
 			ChildPolicy: &iserviceconfig.BalancerConfig{Name: "stub-child-balancer"},
 		},

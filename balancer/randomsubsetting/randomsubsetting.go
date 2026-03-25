@@ -75,7 +75,7 @@ func (bb) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Ba
 	return b
 }
 
-type lbConfig struct {
+type LBConfig struct {
 	serviceconfig.LoadBalancingConfig `json:"-"`
 
 	SubsetSize  uint32                         `json:"subsetSize,omitempty"`
@@ -83,7 +83,7 @@ type lbConfig struct {
 }
 
 func (bb) ParseConfig(s json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
-	lbCfg := &lbConfig{}
+	lbCfg := &LBConfig{}
 
 	// Ensure that the specified child policy is registered and validates its
 	// config, if present.
@@ -108,13 +108,13 @@ type subsettingBalancer struct {
 	*gracefulswitch.Balancer
 
 	logger     *internalgrpclog.PrefixLogger
-	cfg        *lbConfig
+	cfg        *LBConfig
 	hashSeed   uint64
 	hashDigest *xxhash.Digest
 }
 
 func (b *subsettingBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
-	lbCfg, ok := s.BalancerConfig.(*lbConfig)
+	lbCfg, ok := s.BalancerConfig.(*LBConfig)
 	if !ok {
 		b.logger.Warningf("Received config with unexpected type %T: %v", s.BalancerConfig, s.BalancerConfig)
 		return balancer.ErrBadResolverState

@@ -30,6 +30,7 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/leastrequest"
 	"google.golang.org/grpc/balancer/pickfirst"
+	"google.golang.org/grpc/balancer/randomsubsetting"
 	"google.golang.org/grpc/balancer/ringhash"
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/balancer/weightedroundrobin"
@@ -45,6 +46,7 @@ import (
 	v3clientsideweightedroundrobinpb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/client_side_weighted_round_robin/v3"
 	v3leastrequestpb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/least_request/v3"
 	v3pickfirstpb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/pick_first/v3"
+	v3randomsubsettingpb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/random_subsetting/v3"
 	v3ringhashpb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/ring_hash/v3"
 	v3wrrlocalitypb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/wrr_locality/v3"
 )
@@ -56,6 +58,7 @@ func init() {
 	xdslbregistry.Register("type.googleapis.com/envoy.extensions.load_balancing_policies.round_robin.v3.RoundRobin", convertRoundRobinProtoToServiceConfig)
 	xdslbregistry.Register("type.googleapis.com/envoy.extensions.load_balancing_policies.wrr_locality.v3.WrrLocality", convertWRRLocalityProtoToServiceConfig)
 	xdslbregistry.Register("type.googleapis.com/envoy.extensions.load_balancing_policies.least_request.v3.LeastRequest", convertLeastRequestProtoToServiceConfig)
+	xdslbregistry.Register("type.googleapis.com/envoy.extensions.load_balancing_policies.random_subsetting.v3.RandomSubsetting", convertRandomSubsettingProtoToServiceConfig)
 	xdslbregistry.Register("type.googleapis.com/udpa.type.v1.TypedStruct", convertV1TypedStructToServiceConfig)
 	xdslbregistry.Register("type.googleapis.com/xds.type.v3.TypedStruct", convertV3TypedStructToServiceConfig)
 }
@@ -64,6 +67,7 @@ const (
 	defaultRingHashMinSize         = 1024
 	defaultRingHashMaxSize         = 8 * 1024 * 1024 // 8M
 	defaultLeastRequestChoiceCount = 2
+	defaultRandomSubsetSize        = 1
 )
 
 func convertRingHashProtoToServiceConfig(rawProto []byte, _ int) (json.RawMessage, error) {
@@ -193,6 +197,26 @@ func convertLeastRequestProtoToServiceConfig(rawProto []byte, _ int) (json.RawMe
 		return nil, fmt.Errorf("error marshaling JSON for type %T: %v", lrCfg, err)
 	}
 	return makeBalancerConfigJSON(leastrequest.Name, js), nil
+}
+
+func convertRandomSubsettingProtoToServiceConfig(rawProto []byte, _ int) (json.RawMessage, error) {
+	rsProto := &v3randomsubsettingpb.RandomSubsetting{}
+	if err := proto.Unmarshal(rawProto, rsProto); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal resource: %v", err)
+	}
+	// "The configuration for the Random Subsetting LB policy is the
+	// least_request_lb_config field. The field is optional; if not present,
+	// defaults will be assumed for all of its values." - A48
+	subsetSize := uint32(defaultRandomSubsetSize)
+	if ss := rsProto.GetSubsetSize(); ss != nil {
+		subsetSize = ss.GetValue()
+	}
+	rsCfg := &randomsubsetting.LBConfig{SubsetSize: subsetSize}
+	js, err := json.Marshal(rsCfg)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling JSON for type %T: %v", rsCfg, err)
+	}
+	return makeBalancerConfigJSON(randomsubsetting.Name, js), nil
 }
 
 func convertV1TypedStructToServiceConfig(rawProto []byte, _ int) (json.RawMessage, error) {
