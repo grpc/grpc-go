@@ -308,6 +308,14 @@ func (r *testMetricsReporter) waitForMetric(ctx context.Context, metricsDataWant
 	return nil
 }
 
+// waitForSpecificMetric waits for a specific metric to be recorded, ignoring
+// and discarding any other metrics received in the meantime. Returns an error
+// if the context expires before the requested metric is received.
+//
+// This is necessary when multiple distinct metrics (e.g., ServerFailure,
+// ResourceUpdateValid, and XDSClientConnected) might be emitted asynchronously
+// and concurrently. Using waitForMetric would fail the test if an unrelated
+// metric happens to be at the front of the channel.
 func (r *testMetricsReporter) waitForSpecificMetric(ctx context.Context, metricsDataWant any) error {
 	for {
 		got, err := r.metricsCh.Receive(ctx)
@@ -317,8 +325,6 @@ func (r *testMetricsReporter) waitForSpecificMetric(ctx context.Context, metrics
 		if diff := cmp.Diff(got, metricsDataWant); diff == "" {
 			return nil
 		}
-		// Continue if mismatch.
-
 	}
 }
 
@@ -331,13 +337,16 @@ func (r *testMetricsReporter) RegisterAsyncReporter(reporter clients.AsyncReport
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.asyncReporters[reporter] = struct{}{}
-	return func() {
+	return sync.OnceFunc(func() {
 		r.mu.Lock()
 		defer r.mu.Unlock()
 		delete(r.asyncReporters, reporter)
-	}
+	})
 }
 
+// triggerAsyncMetrics invokes the Report method on all registered asynchronous
+// metric reporters. This allows tests to explicitly compel the emission of
+// async gauge metrics at specific precise points in time for verification.
 func (r *testMetricsReporter) triggerAsyncMetrics() {
 	r.mu.Lock()
 	defer r.mu.Unlock()

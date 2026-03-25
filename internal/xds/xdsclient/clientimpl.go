@@ -77,7 +77,7 @@ var (
 	})
 	xdsClientConnectedMetric = estats.RegisterInt64AsyncGauge(estats.MetricDescriptor{
 		Name:        "grpc.xds_client.connected",
-		Description: "A metric that is 1 if the xDS Client is connected to an xDS server, 0 otherwise.",
+		Description: "A metric that is 1 if the xDS Client has a working ADS stream to the server, 0 otherwise.",
 		Unit:        "{connected}",
 		Type:        estats.MetricTypeIntAsyncGauge,
 		Labels:      []string{"grpc.target", "grpc.xds.server"},
