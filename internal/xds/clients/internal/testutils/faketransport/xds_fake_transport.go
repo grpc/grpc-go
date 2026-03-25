@@ -25,6 +25,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"google.golang.org/grpc/internal/xds/clients"
 	"google.golang.org/protobuf/proto"
@@ -182,9 +183,15 @@ func newStream(ctx context.Context) *stream {
 // Send sends the provided message on the stream. It puts the request into the
 // reqChan for consumption.
 func (s *stream) Send(data []byte) error {
+	// A short timeout prevents the client from deadlocking if there is no
+	// receiver on the server-side to consume the request (e.g., if the xDS
+	// client sends an ACK after creating a stream but the server handle is
+	// not actively receiving).
+	ctx, cancel := context.WithTimeout(s.ctx, 10*time.Millisecond)
+	defer cancel()
 	select {
-	case <-s.ctx.Done():
-		return s.ctx.Err()
+	case <-ctx.Done():
+		return ctx.Err()
 	case s.reqChan <- data:
 		return nil
 	}
