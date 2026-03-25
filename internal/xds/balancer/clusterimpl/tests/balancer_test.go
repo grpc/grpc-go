@@ -1369,15 +1369,7 @@ func (s) TestAuthorityOverriding(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			testutils.SetEnvConfig(t, &envconfig.XDSAuthorityRewrite, true)
-			mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{SupportLoadReportingService: true})
-
-			nodeID := uuid.New().String()
-			bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-
-			resolverBuilder, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
-			if err != nil {
-				t.Fatalf("Failed to create xDS resolver for testing: %v", err)
-			}
+			mgmtServer, resolverBuilder, nodeID := setupManagementServerAndResolver(t)
 
 			// Start a server backend exposing the test service.
 			var gotAuthority string
@@ -1524,9 +1516,7 @@ func (s) TestAuthorityOverridingWithTLS(t *testing.T) {
 
 // Tests that configured LRS metrics are successfully propagated from the backend to the LRS server.
 func (s) TestLoadReporting_CustomMetricsPropagation(t *testing.T) {
-	origEnv := envconfig.XDSORCALRSPropagationEnabled
-	envconfig.XDSORCALRSPropagationEnabled = true
-	defer func() { envconfig.XDSORCALRSPropagationEnabled = origEnv }()
+	testutils.SetEnvConfig(t, &envconfig.XDSORCAToLRSPropEnabled, true)
 
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{SupportLoadReportingService: true})
 
@@ -1585,11 +1575,10 @@ func (s) TestLoadReporting_CustomMetricsPropagation(t *testing.T) {
 	}
 	defer cc.Close()
 
-	cc.Connect()
 	client := testgrpc.NewTestServiceClient(cc)
 
-	testutils.AwaitState(ctx, t, cc, connectivity.Ready)
-
+	// Reverting to EmptyCall automatically triggering the channel state progression,
+	// rendering explicit cc.Connect() and AwaitState checks unnecessary.
 	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("rpc EmptyCall() failed: %v", err)
 	}
@@ -1624,7 +1613,7 @@ func (s) TestLoadReporting_CustomMetricsPropagation(t *testing.T) {
 							if m.MetricName == "named_metrics.db_cost" {
 								foundDBCost = true
 								if m.NumRequestsFinishedWithMetric != 1 || m.TotalMetricValue != 50.0 {
-									t.Errorf("Unexpected values for db_cost. NumRequests=%d, TotalValue=%f", m.NumRequestsFinishedWithMetric, m.TotalMetricValue)
+									t.Errorf("Unexpected values for db_cost. NumRequests got: %d, want: 1, TotalValue got: %f, want: 50.0", m.NumRequestsFinishedWithMetric, m.TotalMetricValue)
 								}
 							}
 							if m.MetricName == "named_metrics.ignored_metric" {
@@ -1639,7 +1628,7 @@ func (s) TestLoadReporting_CustomMetricsPropagation(t *testing.T) {
 						if locality.CpuUtilization == nil {
 							t.Errorf("Expected CpuUtilization to be explicitly set but got nil")
 						} else if locality.CpuUtilization.NumRequestsFinishedWithMetric != 1 || locality.CpuUtilization.TotalMetricValue != 0.8 {
-							t.Errorf("Unexpected values for CpuUtilization. NumRequests=%d, TotalValue=%f", locality.CpuUtilization.NumRequestsFinishedWithMetric, locality.CpuUtilization.TotalMetricValue)
+							t.Errorf("Unexpected values for CpuUtilization. NumRequests got: %d, want: 1, TotalValue got: %f, want: 0.8", locality.CpuUtilization.NumRequestsFinishedWithMetric, locality.CpuUtilization.TotalMetricValue)
 						}
 
 						if locality.MemUtilization != nil {

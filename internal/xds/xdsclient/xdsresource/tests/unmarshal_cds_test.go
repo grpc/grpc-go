@@ -576,41 +576,51 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 }
 
 func (s) TestValidateCluster_LRSReportEndpointMetrics(t *testing.T) {
-	origEnv := envconfig.XDSORCALRSPropagationEnabled
-	defer func() { envconfig.XDSORCALRSPropagationEnabled = origEnv }()
-
-	cluster := &v3clusterpb.Cluster{
-		Name:                 "test-cluster",
-		ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
-		EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
-			EdsConfig: &v3corepb.ConfigSource{
-				ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
-					Ads: &v3corepb.AggregatedConfigSource{},
-				},
-			},
-			ServiceName: "test-service",
-		},
-		LrsReportEndpointMetrics: []string{"cpu_utilization", "named_metrics.foo", "named_metrics.*"},
-	}
-
 	tests := []struct {
 		desc       string
 		envEnabled bool
-		wantProp   *xdsresource.BackendMetricPropagation
+		metrics    []string
+		wantProp   *xdsresource.BackendMetric
 	}{
 		{
 			desc:       "disabled by env var",
 			envEnabled: false,
+			metrics:    []string{"cpu_utilization", "named_metrics.foo", "named_metrics.*"},
 			wantProp:   nil,
+		},
+		{
+			desc:       "all valid metrics",
+			envEnabled: true,
+			metrics:    []string{"cpu_utilization", "mem_utilization", "application_utilization", "named_metrics.foo", "named_metrics.bar"},
+			wantProp: &xdsresource.BackendMetric{
+				CPUUtilization:         true,
+				MemUtilization:         true,
+				ApplicationUtilization: true,
+				NamedMetricsAll:        false,
+				NamedMetrics: map[string]bool{
+					"foo": true,
+					"bar": true,
+				},
+			},
 		},
 		{
 			desc:       "enabled by env var",
 			envEnabled: true,
-			wantProp: &xdsresource.BackendMetricPropagation{
+			metrics:    []string{"named_metrics.*", "named_metrics.foo", "cpu_utilization"},
+			wantProp: &xdsresource.BackendMetric{
 				CPUUtilization:  true,
 				NamedMetricsAll: true,
+				NamedMetrics:    nil,
+			},
+		},
+		{
+			desc:       "ignores invalid metrics",
+			envEnabled: true,
+			metrics:    []string{"named_metrics.", "invalid_metric", "named_metrics.valid"},
+			wantProp: &xdsresource.BackendMetric{
+				NamedMetricsAll: false,
 				NamedMetrics: map[string]bool{
-					"foo": true,
+					"valid": true,
 				},
 			},
 		},
@@ -618,13 +628,26 @@ func (s) TestValidateCluster_LRSReportEndpointMetrics(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
-			envconfig.XDSORCALRSPropagationEnabled = tt.envEnabled
+			testutils.SetEnvConfig(t, &envconfig.XDSORCAToLRSPropEnabled, tt.envEnabled)
+			cluster := &v3clusterpb.Cluster{
+				Name:                 "test-cluster",
+				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
+				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
+					EdsConfig: &v3corepb.ConfigSource{
+						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
+							Ads: &v3corepb.AggregatedConfigSource{},
+						},
+					},
+					ServiceName: "test-service",
+				},
+				LrsReportEndpointMetrics: tt.metrics,
+			}
 			update, err := xdsresource.ValidateClusterAndConstructClusterUpdateForTesting(cluster, nil)
 			if err != nil {
 				t.Fatalf("ValidateClusterAndConstructClusterUpdateForTesting() failed: %v", err)
 			}
 			if !update.LRSReportEndpointMetrics.Equal(tt.wantProp) {
-				t.Errorf("LRSReportEndpointMetrics = %+v, want %+v", update.LRSReportEndpointMetrics, tt.wantProp)
+				t.Errorf("LRSReportEndpointMetrics:\n got %+v\nwant %+v", update.LRSReportEndpointMetrics, tt.wantProp)
 			}
 		})
 	}

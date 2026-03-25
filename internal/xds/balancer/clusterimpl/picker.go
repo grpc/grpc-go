@@ -92,7 +92,7 @@ type picker struct {
 	countMax        uint32
 	telemetryLabels map[string]string
 	clusterName     string
-	propagation     *xdsresource.BackendMetricPropagation
+	metrics         *xdsresource.BackendMetric
 }
 
 func telemetryLabels(ctx context.Context) map[string]string {
@@ -187,19 +187,19 @@ func (d *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 				return
 			}
 
-			if envconfig.XDSORCALRSPropagationEnabled {
-				if d.propagation != nil {
-					if d.propagation.CPUUtilization {
+			if envconfig.XDSORCAToLRSPropEnabled {
+				if d.metrics != nil {
+					if d.metrics.CPUUtilization {
 						d.loadStore.CallServerLoad(locality, "cpu_utilization", load.CpuUtilization)
 					}
-					if d.propagation.MemUtilization {
+					if d.metrics.MemUtilization {
 						d.loadStore.CallServerLoad(locality, "mem_utilization", load.MemUtilization)
 					}
-					if d.propagation.ApplicationUtilization {
+					if d.metrics.ApplicationUtilization {
 						d.loadStore.CallServerLoad(locality, "application_utilization", load.ApplicationUtilization)
 					}
 					for n, c := range load.NamedMetrics {
-						if d.propagation.NamedMetricsAll || d.propagation.NamedMetrics[n] {
+						if d.metrics.NamedMetricsAll || d.metrics.NamedMetrics[n] {
 							d.loadStore.CallServerLoad(locality, "named_metrics."+n, c)
 						}
 					}

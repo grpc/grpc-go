@@ -80,14 +80,14 @@ type ClusterUpdate struct {
 	// "service_namespace".
 	TelemetryLabels map[string]string
 
-	// LRSReportEndpointMetrics contains the backend metric propagation
-	// configuration. If nil, no metrics are propagated.
-	LRSReportEndpointMetrics *BackendMetricPropagation
+	// LRSReportEndpointMetrics specifies the subset of ORCA metrics that
+	// should be propagated to the LRS server.
+	LRSReportEndpointMetrics *BackendMetric
 }
 
-// BackendMetricPropagation holds the configuration for propagating ORCA metrics
+// BackendMetric holds the configuration for propagating ORCA metrics
 // to the LRS server.
-type BackendMetricPropagation struct {
+type BackendMetric struct {
 	CPUUtilization         bool
 	MemUtilization         bool
 	ApplicationUtilization bool
@@ -95,8 +95,8 @@ type BackendMetricPropagation struct {
 	NamedMetrics           map[string]bool
 }
 
-// Equal returns whether the two BackendMetricPropagation configurations are identical.
-func (bmp *BackendMetricPropagation) Equal(other *BackendMetricPropagation) bool {
+// Equal returns whether the two BackendMetric configurations are identical.
+func (bmp *BackendMetric) Equal(other *BackendMetric) bool {
 	switch {
 	case bmp == nil && other == nil:
 		return true
