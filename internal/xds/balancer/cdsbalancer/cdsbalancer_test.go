@@ -165,13 +165,13 @@ func registerWrappedPriorityPolicy(t *testing.T) (chan serviceconfig.LoadBalanci
 }
 
 // setupDNS unregisters the DNS resolver and registers a manual resolver for the
-// same scheme. This allows the test to mock the DNS resolution by supplying the
+// same scheme. This allows the test to fake the DNS resolution by supplying the
 // addresses of the test backends.
 //
 // Returns the following:
 //   - a channel onto which the DNS target being resolved is written to by the
-//     mock DNS resolver
-//   - a manual resolver which is used to mock the actual DNS resolution
+//     fake DNS resolver
+//   - a manual resolver which is used to fake the actual DNS resolution
 func setupDNS(t *testing.T) (chan resolver.Target, *manual.Resolver) {
 	targetCh := make(chan resolver.Target, 1)
 
