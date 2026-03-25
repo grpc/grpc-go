@@ -26,8 +26,10 @@ import (
 	"go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata/metricdatatest"
+
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	estats "google.golang.org/grpc/experimental/stats"
 	rlspb "google.golang.org/grpc/internal/proto/grpc_lookup_v1"
 	"google.golang.org/grpc/internal/stubserver"
 	rlstest "google.golang.org/grpc/internal/testutils/rls"
@@ -135,7 +137,7 @@ func (s) TestRLSTargetPickMetric(t *testing.T) {
 	client := testgrpc.NewTestServiceClient(cc)
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	ctx = grpc.NewContextWithCustomLabel(ctx, "target-pick-custom")
+	ctx = estats.NewContextWithCustomLabel(ctx, "target-pick-custom")
 	_, err = client.EmptyCall(ctx, &testpb.Empty{})
 	if err != nil {
 		t.Fatalf("client.EmptyCall failed with error: %v", err)
@@ -248,7 +250,7 @@ func (s) TestRLSDefaultTargetPickMetric(t *testing.T) {
 	client := testgrpc.NewTestServiceClient(cc)
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	ctx = grpc.NewContextWithCustomLabel(ctx, "default-target-pick-custom")
+	ctx = estats.NewContextWithCustomLabel(ctx, "default-target-pick-custom")
 	if _, err = client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("client.EmptyCall failed with error: %v", err)
 	}
@@ -347,7 +349,7 @@ func (s) TestRLSFailedRPCMetric(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	ctx = grpc.NewContextWithCustomLabel(ctx, "failed-pick-custom")
+	ctx = estats.NewContextWithCustomLabel(ctx, "failed-pick-custom")
 	client := testgrpc.NewTestServiceClient(cc)
 	if _, err = client.EmptyCall(ctx, &testpb.Empty{}); err == nil {
 		t.Fatalf("client.EmptyCall error = %v, expected a non nil error", err)

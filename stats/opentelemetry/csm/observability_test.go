@@ -30,6 +30,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/encoding/gzip"
+	estats "google.golang.org/grpc/experimental/stats"
 	istats "google.golang.org/grpc/internal/stats"
 	"google.golang.org/grpc/internal/stubserver"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
@@ -478,7 +479,7 @@ func (s) TestXDSLabels(t *testing.T) {
 	}
 
 	defer ss.Stop()
-	ss.Client.UnaryCall(grpc.NewContextWithCustomLabel(ctx, "my-custom-label"), &testpb.SimpleRequest{Payload: &testpb.Payload{
+	ss.Client.UnaryCall(estats.NewContextWithCustomLabel(ctx, "my-custom-label"), &testpb.SimpleRequest{Payload: &testpb.Payload{
 		Body: make([]byte, 10000),
 	}}, grpc.UseCompressor(gzip.Name))
 

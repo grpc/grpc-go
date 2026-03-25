@@ -1175,19 +1175,3 @@ const (
 )
 
 const grpcUA = "grpc-go/" + Version
-
-type customLabelKey struct{}
-
-// NewContextWithCustomLabel returns a new context with the provided custom label
-// attached. The label will be propagated to per-call metrics (e.g., OpenTelemetry
-// and RLS load balancer metrics).
-func NewContextWithCustomLabel(ctx context.Context, label string) context.Context {
-	return context.WithValue(ctx, customLabelKey{}, label)
-}
-
-// CustomLabelFromContext returns the custom label from the context if it exists.
-// If the custom label is not present, it returns an empty string and false.
-func CustomLabelFromContext(ctx context.Context) (string, bool) {
-	label, ok := ctx.Value(customLabelKey{}).(string)
-	return label, ok
-}

@@ -25,7 +25,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/rls/internal/keys"
 	"google.golang.org/grpc/codes"
@@ -199,7 +198,7 @@ func (p *rlsPicker) delegateToChildPoliciesLocked(dcEntry *cacheEntry, info bala
 			res, err := state.Picker.Pick(info)
 			if err != nil {
 				pr := errToPickResult(err)
-				customLabel, _ := grpc.CustomLabelFromContext(info.Ctx)
+				customLabel := estats.CustomLabelFromContext(info.Ctx)
 				return res, func() {
 					if pr == "queue" {
 						// Don't record metrics for queued Picks.
@@ -215,7 +214,7 @@ func (p *rlsPicker) delegateToChildPoliciesLocked(dcEntry *cacheEntry, info bala
 				res.Metadata.Append(rlsDataHeaderName, dcEntry.headerData)
 			}
 			return res, func() {
-				customLabel, _ := grpc.CustomLabelFromContext(info.Ctx)
+				customLabel := estats.CustomLabelFromContext(info.Ctx)
 				targetPicksMetric.Record(p.metricsRecorder, 1, p.grpcTarget, p.rlsServerTarget, cpw.target, "complete", customLabel)
 			}, nil
 		}
@@ -230,7 +229,7 @@ func (p *rlsPicker) delegateToChildPoliciesLocked(dcEntry *cacheEntry, info bala
 // target if one is configured, or fails the pick with the given error. Returns
 // a function to be invoked to record metrics.
 func (p *rlsPicker) useDefaultPickIfPossible(info balancer.PickInfo, errOnNoDefault error) (balancer.PickResult, func(), error) {
-	customLabel, _ := grpc.CustomLabelFromContext(info.Ctx)
+	customLabel := estats.CustomLabelFromContext(info.Ctx)
 
 	if p.defaultPolicy != nil {
 		state := (*balancer.State)(atomic.LoadPointer(&p.defaultPolicy.state))

@@ -141,7 +141,7 @@ func (h *clientMetricsHandler) perCallMetrics(ctx context.Context, err error, st
 	}
 	for _, o := range h.options.MetricsOptions.OptionalLabels {
 		if o == "grpc.client.call.custom" {
-			label, _ := grpc.CustomLabelFromContext(ctx)
+			label := estats.CustomLabelFromContext(ctx)
 			attributes = append(attributes, otelattribute.String(o, label))
 		}
 	}
@@ -220,8 +220,10 @@ func (h *clientMetricsHandler) processRPCEvent(ctx context.Context, s stats.RPCS
 		}
 		for _, o := range h.options.MetricsOptions.OptionalLabels {
 			if o == "grpc.client.call.custom" {
-				label, _ := grpc.CustomLabelFromContext(ctx)
-				attributes = append(attributes, otelattribute.String(o, label))
+				label := estats.CustomLabelFromContext(ctx)
+				if label != "" {
+					attributes = append(attributes, otelattribute.String(o, label))
+				}
 			}
 		}
 
@@ -280,8 +282,10 @@ func (h *clientMetricsHandler) processRPCEnd(ctx context.Context, ai *attemptInf
 		if val, ok := ai.xdsLabels[o]; ok {
 			attributes = append(attributes, otelattribute.String(o, val))
 		} else if o == "grpc.client.call.custom" {
-			label, _ := grpc.CustomLabelFromContext(ctx)
-			attributes = append(attributes, otelattribute.String(o, label))
+			label := estats.CustomLabelFromContext(ctx)
+			if label != "" {
+				attributes = append(attributes, otelattribute.String(o, label))
+			}
 		}
 	}
 
