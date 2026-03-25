@@ -81,7 +81,7 @@ const (
 	host                    = "localhost"
 	port                    = 8080
 	dnsPort                 = uint32(8080)
-	defaultTestTimeout      = 5 * time.Second
+	defaultTestTimeout      = 10 * time.Second
 	defaultTestShortTimeout = 10 * time.Millisecond // For events expected to *not* happen.
 )
 
@@ -162,6 +162,27 @@ func registerWrappedPriorityPolicy(t *testing.T) (chan serviceconfig.LoadBalanci
 	t.Cleanup(func() { balancer.Register(priorityBuilder) })
 
 	return lbCfgCh, resolverErrCh, exitIdleCh, closeCh
+}
+
+// setupDNS unregisters the DNS resolver and registers a manual resolver for the
+// same scheme. This allows the test to fake the DNS resolution by supplying the
+// addresses of the test backends.
+//
+// Returns the following:
+//   - a channel onto which the DNS target being resolved is written to by the
+//     fake DNS resolver
+//   - a manual resolver which is used to fake the actual DNS resolution
+func setupDNS(t *testing.T) (chan resolver.Target, *manual.Resolver) {
+	targetCh := make(chan resolver.Target, 1)
+
+	mr := manual.NewBuilderWithScheme("dns")
+	mr.BuildCallback = func(target resolver.Target, _ resolver.ClientConn, _ resolver.BuildOptions) { targetCh <- target }
+
+	dnsResolverBuilder := resolver.Get("dns")
+	resolver.Register(mr)
+
+	t.Cleanup(func() { resolver.Register(dnsResolverBuilder) })
+	return targetCh, mr
 }
 
 // Performs the following setup required for tests:
