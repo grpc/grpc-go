@@ -103,13 +103,18 @@ func (s) TestPickFirstMetrics(t *testing.T) {
 		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.lb.pick_first.disconnections", got, 0)
 	}
 
+	if got, _ := tmr.Metric("grpc.subchannel.connection_attempts_failed"); got != 0 {
+		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.subchannel.connection_attempts_failed", got, 0)
+	}
+	if got, _ := tmr.Metric("grpc.subchannel.disconnections"); got != 0 {
+		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.subchannel.disconnections", got, 0)
+	}
+
 	for _, metric := range []struct {
 		name string
 		want float64
 	}{
 		{"grpc.subchannel.connection_attempts_succeeded", 1},
-		{"grpc.subchannel.connection_attempts_failed", 0},
-		{"grpc.subchannel.disconnections", 0},
 		{"grpc.subchannel.open_connections", 1},
 	} {
 		awaitMetric(ctx, t, tmr, metric.name, metric.want)
@@ -120,7 +125,9 @@ func (s) TestPickFirstMetrics(t *testing.T) {
 	if got, _ := tmr.Metric("grpc.lb.pick_first.disconnections"); got != 1 {
 		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.lb.pick_first.disconnections", got, 1)
 	}
-	awaitMetric(ctx, t, tmr, "grpc.subchannel.disconnections", 1)
+	if got, _ := tmr.Metric("grpc.subchannel.disconnections"); got != 1 {
+		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.subchannel.disconnections", got, 1)
+	}
 	awaitMetric(ctx, t, tmr, "grpc.subchannel.open_connections", -1)
 }
 
