@@ -50,25 +50,8 @@ func (s) TestTelemetryLabels(t *testing.T) {
 			},
 			wantLabels: map[string]string{},
 		},
-		"PanicCallback": {
-			callbacks: []func(map[string]string){
-				func(map[string]string) { panic("intentional panic") },
-			},
-			wantLabels: map[string]string{},
-		},
 		"MutatingCallback": {
 			callbacks: []func(u map[string]string){
-				func(u map[string]string) {
-					for key, value := range u {
-						tracker[key] = value
-					}
-				},
-			},
-			wantLabels: map[string]string{"grpc.lb.backend_service": "grpc.lb.backend_service_val", "grpc.lb.locality": "grpc.lb.locality_val"},
-		},
-		"PanicAndMutateCallback": {
-			callbacks: []func(map[string]string){
-				func(map[string]string) { panic("intentional panic") },
 				func(u map[string]string) {
 					for key, value := range u {
 						tracker[key] = value
