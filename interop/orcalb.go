@@ -49,7 +49,9 @@ func (orcabb) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balance
 	b := &orcab{
 		ClientConn:       cc,
 		stopOOBListeners: make(map[balancer.SubConn]func()),
-		oobState:         &oobState{},
+		oobState: &oobState{
+			reports: make(map[balancer.SubConn]*v3orcapb.OrcaLoadReport),
+		},
 	}
 	b.logger = internalgrpclog.NewPrefixLogger(orcaLogger, fmt.Sprintf("[%p] ", b))
 	b.child = endpointsharding.NewBalancer(b, bOpts, balancer.Get(pickfirst.Name).Build, endpointsharding.Options{})
@@ -65,16 +67,16 @@ func (orcabb) Name() string {
 // It delegates SubConn management to endpointsharding + pick_first and
 // intercepts NewSubConn calls to register OOB listeners on READY SubConns.
 type orcab struct {
-	// Embeds balancer.ClientConn to intercept NewSubConn and UpdateState
-	// calls from child balancers.
-	balancer.ClientConn
-	child balancer.Balancer
-	// mu guards stopOOBListeners.
+	// The following fields are initialized at build time and read-only after
+	// that and therefore do not need to be guarded by a mutex.
+	balancer.ClientConn // Embeds to intercept NewSubConn and UpdateState calls
+	child               balancer.Balancer
+	oobState            *oobState
+	logger              *internalgrpclog.PrefixLogger
+
+	// mu guards the fields below.
 	mu               sync.Mutex
 	stopOOBListeners map[balancer.SubConn]func()
-
-	oobState *oobState
-	logger   *internalgrpclog.PrefixLogger
 }
 
 func (b *orcab) UpdateClientConnState(s balancer.ClientConnState) error {
@@ -137,29 +139,31 @@ func (b *orcab) updateSubConnState(sc balancer.SubConn, state balancer.SubConnSt
 	}
 
 	if state.ConnectivityState == connectivity.Ready {
-		oldStop, exists := b.stopOOBListeners[sc]
+		oldStop := b.stopOOBListeners[sc]
 		stop := orca.RegisterOOBListener(sc, &orcaOOBListener{subConn: sc, balancer: b}, orca.OOBListenerOptions{ReportInterval: time.Second})
 		b.stopOOBListeners[sc] = stop
 		b.mu.Unlock()
 
-		if exists {
+		if oldStop != nil {
 			oldStop()
 		}
 		return
 	}
 
-	stop, ok := b.stopOOBListeners[sc]
-	if ok {
+	stop := b.stopOOBListeners[sc]
+	if stop != nil {
 		delete(b.stopOOBListeners, sc)
 	}
 	b.mu.Unlock()
 
-	if ok {
+	if stop != nil {
 		stop()
 	}
 
 	if state.ConnectivityState == connectivity.Shutdown {
-		b.oobState.reports.Delete(sc)
+		b.oobState.mu.Lock()
+		delete(b.oobState.reports, sc)
+		b.oobState.mu.Unlock()
 	}
 }
 
@@ -187,11 +191,14 @@ func (l *orcaOOBListener) OnLoadReport(r *v3orcapb.OrcaLoadReport) {
 	if r == nil {
 		return
 	}
-	l.balancer.oobState.reports.Store(l.subConn, r)
+	l.balancer.oobState.mu.Lock()
+	defer l.balancer.oobState.mu.Unlock()
+	l.balancer.oobState.reports[l.subConn] = r
 }
 
 type oobState struct {
-	reports sync.Map // map[balancer.SubConn]*v3orcapb.OrcaLoadReport
+	mu      sync.Mutex
+	reports map[balancer.SubConn]*v3orcapb.OrcaLoadReport
 }
 type orcaPicker struct {
 	childPicker balancer.Picker
@@ -204,15 +211,18 @@ func (p *orcaPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 		return res, err
 	}
 
-	var lr *v3orcapb.OrcaLoadReport
-	if val, ok := p.oobState.reports.Load(res.SubConn); ok {
-		lr = val.(*v3orcapb.OrcaLoadReport)
-	}
+	p.oobState.mu.Lock()
+	lr := p.oobState.reports[res.SubConn]
+	p.oobState.mu.Unlock()
 
 	origDone := res.Done
 	res.Done = func(di balancer.DoneInfo) {
-		if perRPCLR, _ := di.ServerLoad.(*v3orcapb.OrcaLoadReport); perRPCLR != nil &&
-			(perRPCLR.CpuUtilization != 0 || perRPCLR.MemUtilization != 0 || len(perRPCLR.Utilization) > 0 || len(perRPCLR.RequestCost) > 0) {
+		perRPCLR, _ := di.ServerLoad.(*v3orcapb.OrcaLoadReport)
+		hasMetrics := perRPCLR != nil && (perRPCLR.CpuUtilization != 0 ||
+			perRPCLR.MemUtilization != 0 ||
+			len(perRPCLR.Utilization) > 0 ||
+			len(perRPCLR.RequestCost) > 0)
+		if hasMetrics {
 			setContextCMR(info.Ctx, perRPCLR)
 		} else if lr != nil {
 			setContextCMR(info.Ctx, lr)
