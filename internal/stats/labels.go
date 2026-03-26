@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2026 gRPC authors.
+ * Copyright 2024 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,12 +22,10 @@ package stats
 import (
 	"context"
 	"maps"
-
-	"google.golang.org/grpc/grpclog"
 )
 
 // LabelCallback is a function that is executed when telemetry
-// label keys are updated
+// label keys are updated.
 type LabelCallback func(map[string]string)
 type telemetryLabelCallbackKey struct{}
 
@@ -41,16 +39,18 @@ func UpdateLabels(ctx context.Context, update map[string]string) {
 }
 
 // RegisterTelemetryLabelCallback registers a callback function that is executed whenever
-// telemetry labels will be updated.
+// telemetry labels are updated.
 func RegisterTelemetryLabelCallback(ctx context.Context, callback LabelCallback) context.Context {
 	if callback == nil {
 		return ctx
 	}
 
-	if callbacks, ok := ctx.Value(telemetryLabelCallbackKey{}).([]LabelCallback); ok {
-		return context.WithValue(ctx, telemetryLabelCallbackKey{}, append(append([]LabelCallback(nil), callbacks...), callback))
+	callbacks, ok := ctx.Value(telemetryLabelCallbackKey{}).([]LabelCallback)
+	if !ok {
+		return context.WithValue(ctx, telemetryLabelCallbackKey{}, []LabelCallback{callback})
 	}
-	return context.WithValue(ctx, telemetryLabelCallbackKey{}, []LabelCallback{callback})
+	return context.WithValue(ctx, telemetryLabelCallbackKey{}, append(append([]LabelCallback(nil), callbacks...), callback))
+
 }
 
 // executeTelemetryLabelCallback runs the registered callbacks in the order they were
@@ -68,19 +68,8 @@ func executeTelemetryLabelCallbacks(ctx context.Context, labels map[string]strin
 		labelsCopy := map[string]string{}
 		maps.Copy(labelsCopy, labels)
 		for _, callback := range callbacks {
-			runWithRecovery(callback, labelsCopy)
+			callback(labelsCopy)
 		}
 
 	}
-}
-
-// runWithRecovery ensures that callbacks that panic don't prevent other callback
-// functions from executing.
-func runWithRecovery(callback LabelCallback, labels map[string]string) {
-	defer func() {
-		if r := recover(); r != nil {
-			grpclog.Component("stats").Warningf("LabelCallback panicked: %v", r)
-		}
-	}()
-	callback(labels)
 }

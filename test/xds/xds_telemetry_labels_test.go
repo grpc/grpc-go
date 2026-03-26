@@ -116,7 +116,7 @@ func (fsh *fakeStatsHandler) HandleConn(context.Context, stats.ConnStats) {}
 
 func (fsh *fakeStatsHandler) TagRPC(ctx context.Context, _ *stats.RPCTagInfo) context.Context {
 	fsh.labels = make(map[string]string)
-	ctx = telemetry.WithTelemetryLabelCallback(ctx, func(l map[string]string) {
+	ctx = telemetry.NewContextWithLabelCallback(ctx, func(l map[string]string) {
 		for k, v := range l {
 			fsh.labels[k] = v
 		}

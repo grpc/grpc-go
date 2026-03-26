@@ -28,14 +28,12 @@ import (
 	stats "google.golang.org/grpc/internal/stats"
 )
 
-// WithTelemetryLabelCallback registers a callback function that is executed whenever
-// telemetry labels will be updated. This does _not_ require opentelemetry instrumentation
-// to be configured on the client or server.
+// NewContextWithLabelCallback registers a callback function that is executed
+// whenever telemetry labels are updated. This does _not_ require opentelemetry
+// instrumentation to be configured on the client or server.
 //
-// Callbacks are appended to the context when registered and do not modify the original context.
-//
-// WARNING: Callbacks are executed on the RPC path so users should be mindful of the
-// potential performance impact when this is eventually executed.
-func WithTelemetryLabelCallback(ctx context.Context, callback func(map[string]string)) context.Context {
+// WARNING: Callbacks are executed on the RPC path so users should be mindful
+// of the potential performance impact when this is eventually executed.
+func NewContextWithLabelCallback(ctx context.Context, callback stats.LabelCallback) context.Context {
 	return stats.RegisterTelemetryLabelCallback(ctx, callback)
 }

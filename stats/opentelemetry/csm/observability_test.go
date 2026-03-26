@@ -431,7 +431,7 @@ func (s) TestCSMPluginOptionStreaming(t *testing.T) {
 
 // TestXDSLabels tests that xDS Labels get emitted from OpenTelemetry metrics.
 // This test configures OpenTelemetry with the CSM Plugin Option, and xDS
-// Optional Labels turned on. It then configures a mock balancer that updates
+// Optional Labels turned on. It then configures a test balancer that updates
 // labels, simulating the cluster_impl picker. It then makes a unary RPC, and
 // expects xDS Labels labels to be attached to emitted relevant metrics. Full
 // xDS System alongside OpenTelemetry will be tested with interop. (there is a
