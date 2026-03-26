@@ -31,6 +31,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"golang.org/x/net/http2"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal/channelz"
@@ -741,6 +742,24 @@ const (
 	// "too_many_pings".
 	GoAwayTooManyPings GoAwayReason = 2
 )
+
+// GoAwayInfo contains metadata about why a connection was closed.
+type GoAwayInfo struct {
+	// Reason is the parsed reason for an HTTP/2 GOAWAY frame.
+	Reason GoAwayReason
+	// GoAwayCode is the raw HTTP/2 error code received in a GOAWAY frame.
+	GoAwayCode http2.ErrCode
+	// Err is the underlying error that caused the connection to close. If the
+	// connection was closed due to a socket error or context cancellation
+	// instead of a GOAWAY, this field will be populated.
+	//
+	// If the connection was closed by a GOAWAY frame, this will usually be a
+	// connection error that describes the connection closing.
+	Err error
+}
+
+// OnCloseFunc is a callback invoked when a ClientTransport closes.
+type OnCloseFunc func(GoAwayInfo)
 
 // ContextErr converts the error from context package into a status error.
 func ContextErr(err error) error {
