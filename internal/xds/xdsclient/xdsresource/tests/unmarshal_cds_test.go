@@ -647,7 +647,7 @@ func (s) TestValidateCluster_LRSReportEndpointMetrics(t *testing.T) {
 				t.Fatalf("ValidateClusterAndConstructClusterUpdateForTesting() failed: %v", err)
 			}
 			if !update.LRSReportEndpointMetrics.Equal(tt.wantProp) {
-				t.Errorf("LRSReportEndpointMetrics:\n got %+v\nwant %+v", update.LRSReportEndpointMetrics, tt.wantProp)
+				t.Fatalf("LRSReportEndpointMetrics:\n got %+v\nwant %+v", update.LRSReportEndpointMetrics, tt.wantProp)
 			}
 		})
 	}

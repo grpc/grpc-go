@@ -1569,8 +1569,6 @@ func (s) TestLoadReporting_CustomMetricsPropagation(t *testing.T) {
 	defer cc.Close()
 	client := testgrpc.NewTestServiceClient(cc)
 
-	// Reverting to EmptyCall automatically triggering the channel state progression,
-	// rendering explicit cc.Connect() and AwaitState checks unnecessary.
 	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("rpc EmptyCall() failed: %v", err)
 	}
@@ -1622,7 +1620,7 @@ func (s) TestLoadReporting_CustomMetricsPropagation(t *testing.T) {
 						}
 
 						if locality.MemUtilization != nil {
-							t.Errorf("Expected MemUtilization to be nil as it was not configured")
+							t.Errorf("Expected MemUtilization to be nil as it was not configured, got: %v", locality.MemUtilization)
 						}
 
 						return

@@ -443,8 +443,8 @@ func (b *clusterImplBalancer) UpdateClientConnState(s balancer.ClientConnState) 
 	}
 	// We want to send a picker update to the parent if one of the two
 	// conditions are met:
-	// - drop/request config has changed *and* there is already a picker from
-	//   the child, or
+	// - drop/request count config or LRS metrics config has changed *and* there
+	//   is already a picker from the child, or
 	// - there is a pending picker update from the child (and this covers the
 	//   case where the drop/request config has not changed, but the child sent
 	//   a picker update while we were still processing config from our parent).
