@@ -605,6 +605,48 @@ func (s) TestRBACHTTPFilter(t *testing.T) {
 			wantStatusEmptyCall: codes.PermissionDenied,
 			wantStatusUnaryCall: codes.PermissionDenied,
 		},
+		{
+			name: "match-on-principal-remote-ip",
+			rbacCfg: &rpb.RBAC{
+				Rules: &v3rbacpb.RBAC{
+					Action: v3rbacpb.RBAC_ALLOW,
+					Policies: map[string]*v3rbacpb.Policy{
+						"match-on-principal-remote-ip": {
+							Permissions: []*v3rbacpb.Permission{
+								{
+									Rule: &v3rbacpb.Permission_Header{
+										Header: &v3routepb.HeaderMatcher{
+											Name:                 "host",
+											HeaderMatchSpecifier: &v3routepb.HeaderMatcher_PrefixMatch{PrefixMatch: "my-service-fallback"},
+										},
+									},
+								},
+							},
+							Principals: []*v3rbacpb.Principal{
+								{
+									Identifier: &v3rbacpb.Principal_RemoteIp{
+										RemoteIp: &v3corepb.CidrRange{
+											AddressPrefix: "127.0.0.0",
+											PrefixLen:     &wrapperspb.UInt32Value{Value: 8},
+										},
+									},
+								},
+								{
+									Identifier: &v3rbacpb.Principal_RemoteIp{
+										RemoteIp: &v3corepb.CidrRange{
+											AddressPrefix: "::1",
+											PrefixLen:     &wrapperspb.UInt32Value{Value: 128},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantStatusEmptyCall: codes.OK,
+			wantStatusUnaryCall: codes.OK,
+		},
 		// This test tests that RBAC ignores the TE: trailers header (which is
 		// hardcoded in http2_client.go for every RPC). Since the RBAC
 		// Configuration says to only ALLOW RPC's with a TE: Trailers, every RPC
