@@ -244,9 +244,11 @@ func makeXDSConfig(routeConfigName, clusterName, edsServiceName, addr string) *x
 								},
 									Endpoints: []xdsresource.Endpoint{
 										{
-											ResolverEndpoint: resolver.Endpoint{Addresses: []resolver.Address{{Addr: addr}}},
-											HealthStatus:     xdsresource.EndpointHealthStatusUnknown,
-											Weight:           1,
+											ResolverEndpoint: xdsresource.SetHealthStatus(
+												resolver.Endpoint{Addresses: []resolver.Address{{Addr: addr}}},
+												xdsresource.EndpointHealthStatusUnknown,
+											),
+											Weight: 1,
 										},
 									},
 									Weight: 1,
@@ -777,9 +779,11 @@ func (s) TestRouteResourceUpdate(t *testing.T) {
 							},
 								Endpoints: []xdsresource.Endpoint{
 									{
-										ResolverEndpoint: resolver.Endpoint{Addresses: []resolver.Address{{Addr: "localhost:8081"}}},
-										HealthStatus:     xdsresource.EndpointHealthStatusUnknown,
-										Weight:           1,
+										ResolverEndpoint: xdsresource.SetHealthStatus(
+											resolver.Endpoint{Addresses: []resolver.Address{{Addr: "localhost:8081"}}},
+											xdsresource.EndpointHealthStatusUnknown,
+										),
+										Weight: 1,
 									},
 								},
 								Weight: 1,
@@ -901,9 +905,11 @@ func (s) TestRouteResourceChangeToInline(t *testing.T) {
 								},
 									Endpoints: []xdsresource.Endpoint{
 										{
-											ResolverEndpoint: resolver.Endpoint{Addresses: []resolver.Address{{Addr: "localhost:8081"}}},
-											HealthStatus:     xdsresource.EndpointHealthStatusUnknown,
-											Weight:           1,
+											ResolverEndpoint: xdsresource.SetHealthStatus(
+												resolver.Endpoint{Addresses: []resolver.Address{{Addr: "localhost:8081"}}},
+												xdsresource.EndpointHealthStatusUnknown,
+											),
+											Weight: 1,
 										},
 									},
 									Weight: 1,
@@ -1155,9 +1161,11 @@ func (s) TestAggregateCluster(t *testing.T) {
 								},
 									Endpoints: []xdsresource.Endpoint{
 										{
-											ResolverEndpoint: resolver.Endpoint{Addresses: []resolver.Address{{Addr: "localhost:8080"}}},
-											HealthStatus:     xdsresource.EndpointHealthStatusUnknown,
-											Weight:           1,
+											ResolverEndpoint: xdsresource.SetHealthStatus(
+												resolver.Endpoint{Addresses: []resolver.Address{{Addr: "localhost:8080"}}},
+												xdsresource.EndpointHealthStatusUnknown,
+											),
+											Weight: 1,
 										},
 									},
 									Weight: 1,
@@ -1640,9 +1648,11 @@ func (s) TestClusterSubscription_Lifecycle(t *testing.T) {
 									SubZone: "subzone-1",
 								},
 								Endpoints: []xdsresource.Endpoint{{
-									ResolverEndpoint: resolver.Endpoint{Addresses: []resolver.Address{{Addr: "localhost:8080"}}},
-									HealthStatus:     xdsresource.EndpointHealthStatusUnknown,
-									Weight:           1,
+									ResolverEndpoint: xdsresource.SetHealthStatus(
+										resolver.Endpoint{Addresses: []resolver.Address{{Addr: "localhost:8080"}}},
+										xdsresource.EndpointHealthStatusUnknown,
+									),
+									Weight: 1,
 								}},
 								Weight: 1,
 							}},
@@ -1666,9 +1676,11 @@ func (s) TestClusterSubscription_Lifecycle(t *testing.T) {
 									SubZone: "subzone-1",
 								},
 								Endpoints: []xdsresource.Endpoint{{
-									ResolverEndpoint: resolver.Endpoint{Addresses: []resolver.Address{{Addr: "localhost:8081"}}},
-									HealthStatus:     xdsresource.EndpointHealthStatusUnknown,
-									Weight:           1,
+									ResolverEndpoint: xdsresource.SetHealthStatus(
+										resolver.Endpoint{Addresses: []resolver.Address{{Addr: "localhost:8081"}}},
+										xdsresource.EndpointHealthStatusUnknown,
+									),
+									Weight: 1,
 								}},
 								Weight: 1,
 							}},
@@ -1829,9 +1841,11 @@ func (s) TestUpdateWithUnresolvedDynamicSubscription(t *testing.T) {
 									SubZone: "subzone-1",
 								},
 								Endpoints: []xdsresource.Endpoint{{
-									ResolverEndpoint: resolver.Endpoint{Addresses: []resolver.Address{{Addr: "localhost:9090"}}},
-									HealthStatus:     xdsresource.EndpointHealthStatusUnknown,
-									Weight:           1,
+									ResolverEndpoint: xdsresource.SetHealthStatus(
+										resolver.Endpoint{Addresses: []resolver.Address{{Addr: "localhost:9090"}}},
+										xdsresource.EndpointHealthStatusUnknown,
+									),
+									Weight: 1,
 								}},
 								Weight: 1,
 							}},
@@ -1855,9 +1869,11 @@ func (s) TestUpdateWithUnresolvedDynamicSubscription(t *testing.T) {
 									SubZone: "subzone-1",
 								},
 								Endpoints: []xdsresource.Endpoint{{
-									ResolverEndpoint: resolver.Endpoint{Addresses: []resolver.Address{{Addr: "localhost:10080"}}},
-									HealthStatus:     xdsresource.EndpointHealthStatusUnknown,
-									Weight:           1,
+									ResolverEndpoint: xdsresource.SetHealthStatus(
+										resolver.Endpoint{Addresses: []resolver.Address{{Addr: "localhost:10080"}}},
+										xdsresource.EndpointHealthStatusUnknown,
+									),
+									Weight: 1,
 								}},
 								Weight: 1,
 							}},
