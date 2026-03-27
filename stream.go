@@ -52,6 +52,53 @@ import (
 
 var metadataFromOutgoingContextRaw = internal.FromOutgoingContextRaw.(func(context.Context) (metadata.MD, [][]string, bool))
 
+type compressKey struct{}
+
+// SetServerStreamMessageCompression enables or disables per-message compression
+// on a server stream. The provided context must be the context passed to the
+// server handler. Compression is enabled by default and is a no-op if no
+// compressor is configured on the stream (e.g. via SetSendCompressor).
+//
+// This method must not be called concurrently with SendMsg.
+//
+// # Experimental
+//
+// Notice: This API is EXPERIMENTAL and may be changed or removed in a
+// later release.
+func SetServerStreamMessageCompression(ctx context.Context, enable bool) error {
+	sts := ServerTransportStreamFromContext(ctx)
+	if sts == nil {
+		return fmt.Errorf("grpc: SetServerStreamMessageCompression called on a non-server-stream context")
+	}
+	s, ok := sts.(*transport.ServerStream)
+	if !ok {
+		return fmt.Errorf("grpc: SetServerStreamMessageCompression: unexpected stream type %T", sts)
+	}
+	s.SetDoNotCompress(!enable)
+	return nil
+}
+
+// SetClientStreamMessageCompression enables or disables per-message compression
+// on a client stream. The provided context must be the stream context obtained
+// via ClientStream.Context(). Compression is enabled by default and is a no-op
+// if no compressor is configured on the stream (e.g. via UseCompressor).
+//
+// This method must not be called concurrently with SendMsg.
+//
+// # Experimental
+//
+// Notice: This API is EXPERIMENTAL and may be changed or removed in a
+// later release.
+func SetClientStreamMessageCompression(ctx context.Context, enable bool) error {
+	// Client side: *bool pointing to clientStream.doNotCompress is stored in context.
+	flag, ok := ctx.Value(compressKey{}).(*bool)
+	if !ok || flag == nil {
+		return fmt.Errorf("grpc: SetClientStreamMessageCompression called on a non-client-stream context")
+	}
+	*flag = !enable
+	return nil
+}
+
 // StreamHandler defines the handler called by gRPC server to complete the
 // execution of a streaming RPC. srv is the service implementation on which the
 // RPC was invoked.
@@ -375,6 +422,9 @@ func newClientStreamWithParams(ctx context.Context, desc *StreamDesc, cc *Client
 		firstAttempt:        true,
 		onCommit:            onCommit,
 		nameResolutionDelay: nameResolutionDelayed,
+	}
+	if compressorV0 != nil || compressorV1 != nil {
+		cs.ctx = context.WithValue(cs.ctx, compressKey{}, new(bool))
 	}
 	if !cc.dopts.disableRetry {
 		cs.retryThrottler = cc.retryThrottler.Load().(*retryThrottler)
@@ -964,7 +1014,11 @@ func (cs *clientStream) SendMsg(m any) (err error) {
 	}
 
 	// load hdr, payload, data
-	hdr, data, payload, pf, err := prepareMsg(m, cs.codec, cs.compressorV0, cs.compressorV1, cs.cc.dopts.copts.BufferPool)
+	compV0, compV1 := cs.compressorV0, cs.compressorV1
+	if flag, ok := cs.ctx.Value(compressKey{}).(*bool); ok && *flag {
+		compV0, compV1 = nil, nil
+	}
+	hdr, data, payload, pf, err := prepareMsg(m, cs.codec, compV0, compV1, cs.cc.dopts.copts.BufferPool)
 	if err != nil {
 		return err
 	}
@@ -1471,7 +1525,11 @@ func (as *addrConnStream) SendMsg(m any) (err error) {
 	}
 
 	// load hdr, payload, data
-	hdr, data, payload, pf, err := prepareMsg(m, as.codec, as.sendCompressorV0, as.sendCompressorV1, as.ac.dopts.copts.BufferPool)
+	compV0, compV1 := as.sendCompressorV0, as.sendCompressorV1
+	if flag, ok := as.ctx.Value(compressKey{}).(*bool); ok && *flag {
+		compV0, compV1 = nil, nil
+	}
+	hdr, data, payload, pf, err := prepareMsg(m, as.codec, compV0, compV1, as.ac.dopts.copts.BufferPool)
 	if err != nil {
 		return err
 	}
@@ -1751,7 +1809,11 @@ func (ss *serverStream) SendMsg(m any) (err error) {
 	}
 
 	// load hdr, payload, data
-	hdr, data, payload, pf, err := prepareMsg(m, ss.codec, ss.compressorV0, ss.compressorV1, ss.p.bufferPool)
+	compV0, compV1 := ss.compressorV0, ss.compressorV1
+	if ss.s.IsDoNotCompress() {
+		compV0, compV1 = nil, nil
+	}
+	hdr, data, payload, pf, err := prepareMsg(m, ss.codec, compV0, compV1, ss.p.bufferPool)
 	if err != nil {
 		return err
 	}
