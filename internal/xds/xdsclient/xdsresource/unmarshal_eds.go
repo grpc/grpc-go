@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"math"
 	"net"
+	"reflect"
 	"strconv"
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -35,6 +36,46 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 )
+
+// metadataKeyType is the key to store the endpoint metadata attribute
+// in a resolver.Endpoint.
+type metadataKeyType struct{}
+
+// MetadataValue wraps endpoint metadata so it can be stored as a
+// resolver.Endpoint attribute. Attributes.Equal requires values to
+// implement Equal(o any) bool or be comparable with ==.
+type MetadataValue struct {
+	// Metadata stores the parsed endpoint metadata.
+	Metadata map[string]any
+}
+
+// Equal implements the interface used by attributes.Attributes.Equal.
+func (md MetadataValue) Equal(o any) bool {
+	omd, ok := o.(MetadataValue)
+	if !ok {
+		return false
+	}
+	return reflect.DeepEqual(md.Metadata, omd.Metadata)
+}
+
+// SetMetadata returns a copy of the given endpoint with the metadata
+// added as an attribute.
+func SetMetadata(endpoint resolver.Endpoint, metadata map[string]any) resolver.Endpoint {
+	// The default value of the metadata attribute is nil. Only set
+	// the attribute if the metadata is non-empty to avoid confusion.
+	if len(metadata) == 0 {
+		return endpoint
+	}
+	endpoint.Attributes = endpoint.Attributes.WithValue(metadataKeyType{}, MetadataValue{Metadata: metadata})
+	return endpoint
+}
+
+// Metadata returns the metadata from the Attributes of the given endpoint.
+// If this attribute is not set, it returns nil.
+func Metadata(endpoint resolver.Endpoint) map[string]any {
+	md, _ := endpoint.Attributes.Value(metadataKeyType{}).(MetadataValue)
+	return md.Metadata
+}
 
 // hostnameKeyType is the key to store the hostname attribute in
 // a resolver.Endpoint.
@@ -168,11 +209,11 @@ func parseEndpoints(lbEndpoints []*v3endpointpb.LbEndpoint, uniqueEndpointAddrs 
 		endpoint := resolver.Endpoint{Addresses: address}
 		endpoint = SetHostname(endpoint, lbEndpoint.GetEndpoint().GetHostname())
 		endpoint = ringhash.SetHashKey(endpoint, hashKey)
+		endpoint = SetMetadata(endpoint, endpointMetadata)
 		endpoints = append(endpoints, Endpoint{
 			ResolverEndpoint: endpoint,
 			HealthStatus:     EndpointHealthStatus(lbEndpoint.GetHealthStatus()),
 			Weight:           weight,
-			Metadata:         endpointMetadata,
 		})
 	}
 	return endpoints, nil
