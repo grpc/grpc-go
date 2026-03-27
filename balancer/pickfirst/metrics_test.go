@@ -22,6 +22,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer/pickfirst"
@@ -102,18 +103,21 @@ func (s) TestPickFirstMetrics(t *testing.T) {
 		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.lb.pick_first.disconnections", got, 0)
 	}
 
-	// Checking for subchannel metrics as well
-	if got, _ := tmr.Metric("grpc.subchannel.connection_attempts_succeeded"); got != 1 {
-		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.subchannel.connection_attempts_succeeded", got, 1)
-	}
 	if got, _ := tmr.Metric("grpc.subchannel.connection_attempts_failed"); got != 0 {
 		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.subchannel.connection_attempts_failed", got, 0)
 	}
 	if got, _ := tmr.Metric("grpc.subchannel.disconnections"); got != 0 {
 		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.subchannel.disconnections", got, 0)
 	}
-	if got, _ := tmr.Metric("grpc.subchannel.open_connections"); got != 1 {
-		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.subchannel.open_connections", got, 1)
+
+	for _, metric := range []struct {
+		name string
+		want float64
+	}{
+		{"grpc.subchannel.connection_attempts_succeeded", 1},
+		{"grpc.subchannel.open_connections", 1},
+	} {
+		awaitMetric(ctx, t, tmr, metric.name, metric.want)
 	}
 
 	ss.Stop()
@@ -124,9 +128,7 @@ func (s) TestPickFirstMetrics(t *testing.T) {
 	if got, _ := tmr.Metric("grpc.subchannel.disconnections"); got != 1 {
 		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.subchannel.disconnections", got, 1)
 	}
-	if got, _ := tmr.Metric("grpc.subchannel.open_connections"); got != -1 {
-		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.subchannel.open_connections", got, -1)
-	}
+	awaitMetric(ctx, t, tmr, "grpc.subchannel.open_connections", -1)
 }
 
 // TestPickFirstMetricsFailure tests the connection attempts failed metric. It
@@ -290,4 +292,19 @@ func metricsDataFromReader(ctx context.Context, reader *metric.ManualReader) map
 		}
 	}
 	return gotMetrics
+}
+
+func awaitMetric(ctx context.Context, t *testing.T, tmr *stats.TestMetricsRecorder, name string, want float64) {
+	t.Helper()
+	for {
+		got, _ := tmr.Metric(name)
+		if got == want {
+			return
+		}
+		select {
+		case <-ctx.Done():
+			t.Fatalf("Timeout waiting for expected data for metric %v, got: %v, want: %v", name, got, want)
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
 }
