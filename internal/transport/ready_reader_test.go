@@ -40,7 +40,7 @@ func (s) TestReadyReader_NonRawConn(t *testing.T) {
 
 	bufHandle, n, err := readyReader.ReadOnReady(1024, pool)
 	if err != nil {
-		t.Fatalf("readInitial() failed: %v", err)
+		t.Fatalf("ReadOnReady() failed: %v", err)
 	}
 	defer pool.Put(bufHandle)
 
@@ -48,7 +48,7 @@ func (s) TestReadyReader_NonRawConn(t *testing.T) {
 		t.Errorf("n = %d; want %d", n, len(data))
 	}
 	if !bytes.Equal((*bufHandle)[:n], data) {
-		t.Errorf("read data = %s; want %s", string((*bufHandle)[:n]), string(data))
+		t.Errorf("Read data = %s; want %s", string((*bufHandle)[:n]), string(data))
 	}
 }
 
@@ -102,12 +102,12 @@ func (s) TestReadyReader_TCP_Blocking(t *testing.T) {
 	defer sCancel()
 	if n, err := pool.requestChan.Receive(sCtx); err == nil {
 		if n != readBufSize {
-			t.Fatalf("unexpected request buffer size: got %d, want %d", n, readBufSize)
+			t.Fatalf("Unexpected request buffer size: got %d, want %d", n, readBufSize)
 		}
 		if n, err := pool.putChan.Receive(ctx); err != nil {
 			t.Fatal("Read buffer allocated and NOT returned while idle.")
 		} else if n != readBufSize {
-			t.Fatalf("unexpected returned buffer size: got %d, want %d", n, readBufSize)
+			t.Fatalf("Unexpected returned buffer size: got %d, want %d", n, readBufSize)
 		}
 	}
 
@@ -117,7 +117,7 @@ func (s) TestReadyReader_TCP_Blocking(t *testing.T) {
 	if n, err := pool.requestChan.Receive(ctx); err != nil {
 		t.Fatal("Context timed out while waiting for a read buffer to be allocated.")
 	} else if n != readBufSize {
-		t.Fatalf("unexpected request buffer size: got %d, want %d", n, readBufSize)
+		t.Fatalf("Unexpected request buffer size: got %d, want %d", n, readBufSize)
 	}
 
 	var res []byte
@@ -127,10 +127,13 @@ func (s) TestReadyReader_TCP_Blocking(t *testing.T) {
 		t.Fatal("Context timed out waiting for read to complete.")
 	}
 	if !bytes.Equal(res, data) {
-		t.Errorf("read data = %s; want %s", string(res), string(data))
+		t.Errorf("Read data = %s; want %s", string(res), string(data))
 	}
 }
 
+// trackingBufferPool wraps a mem.BufferPool and provides channels to track
+// when buffers are requested and returned, useful for verifying allocation
+// behavior in tests.
 type trackingBufferPool struct {
 	mem.BufferPool
 	requestChan testutils.Channel
