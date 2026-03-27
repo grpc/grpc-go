@@ -75,9 +75,9 @@ func SetHealthStatus(endpoint resolver.Endpoint, hs EndpointHealthStatus) resolv
 	return endpoint
 }
 
-// GetHealthStatus returns the health status from the attributes of the given
+// HealthStatus returns the health status from the attributes of the given
 // endpoint. If this attribute is not set, it returns EndpointHealthStatusUnknown.
-func GetHealthStatus(endpoint resolver.Endpoint) EndpointHealthStatus {
+func HealthStatus(endpoint resolver.Endpoint) EndpointHealthStatus {
 	hs, _ := endpoint.Attributes.Value(healthStatusKeyType{}).(EndpointHealthStatus)
 	return hs
 }
