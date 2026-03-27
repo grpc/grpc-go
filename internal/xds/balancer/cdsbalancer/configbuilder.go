@@ -283,7 +283,8 @@ func priorityLocalitiesToClusterImpl(localities []xdsresource.Locality, priority
 			// Filter out all "unhealthy" endpoints (unknown and healthy are
 			// both considered to be healthy:
 			// https://www.envoyproxy.io/docs/envoy/latest/api-v2/api/v2/core/health_check.proto#envoy-api-enum-core-healthstatus).
-			if endpoint.HealthStatus != xdsresource.EndpointHealthStatusHealthy && endpoint.HealthStatus != xdsresource.EndpointHealthStatusUnknown {
+			hs := xdsresource.HealthStatus(endpoint.ResolverEndpoint)
+			if hs != xdsresource.EndpointHealthStatusHealthy && hs != xdsresource.EndpointHealthStatusUnknown {
 				continue
 			}
 
