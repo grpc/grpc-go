@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -34,6 +35,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/balancer/stub"
+	"google.golang.org/grpc/internal/envconfig"
 	iserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
@@ -139,7 +141,7 @@ func (s) TestErrorFromParentLB_ConnectionError(t *testing.T) {
 	defer cleanup()
 
 	client := testgrpc.NewTestServiceClient(cc)
-	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
 		t.Fatalf("EmptyCall() failed: %v", err)
 	}
 
@@ -153,7 +155,7 @@ func (s) TestErrorFromParentLB_ConnectionError(t *testing.T) {
 
 	// Ensure that RPCs continue to succeed for the next second.
 	for end := time.Now().Add(time.Second); time.Now().Before(end); <-time.After(defaultTestShortTimeout) {
-		if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+		if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
 			t.Fatalf("EmptyCall() failed: %v", err)
 		}
 	}
@@ -234,7 +236,7 @@ func (s) TestErrorFromParentLB_ResourceNotFound(t *testing.T) {
 
 	// Ensure that a successful RPC can be made.
 	client := testgrpc.NewTestServiceClient(cc)
-	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
 		t.Fatalf("EmptyCall() failed: %v", err)
 	}
 
@@ -416,5 +418,227 @@ func (s) TestOutlierDetectionConfigPropagationToChildPolicy(t *testing.T) {
 		}
 	case <-ctx.Done():
 		t.Fatalf("Timeout when waiting for child policy to receive its configuration")
+	}
+}
+
+// TestPriority_ConfigFlapping_CachingDisabled tests the fix for PR 8997.
+// It simulates EDS updates where localities move between Priority 0 and 1
+// back and forth 50 times. Without PR 8997, the priority LB's child policy
+// cache would leak subconnections. With the cache disabled (default),
+// they are correctly cleaned up.
+func (s) TestPriority_ConfigFlapping_CachingDisabled(t *testing.T) {
+
+	serverAA := stubserver.StartTestService(t, nil)
+	defer serverAA.Stop()
+	serverBB := stubserver.StartTestService(t, nil)
+	defer serverBB.Stop()
+	serverCC := stubserver.StartTestService(t, nil)
+	defer serverCC.Stop()
+	serverDD := stubserver.StartTestService(t, nil)
+	defer serverDD.Stop()
+
+	managementServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
+	nodeID := uuid.New().String()
+	bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, managementServer.Address)
+
+	const serviceName = "my-service-client-side-xds"
+	const routeName = "route-" + serviceName
+	const clusterName = "cluster-" + serviceName
+	const edsServiceName = "eds-service-" + serviceName
+
+	portAA := testutils.ParsePort(t, serverAA.Address)
+	portBB := testutils.ParsePort(t, serverBB.Address)
+	portCC := testutils.ParsePort(t, serverCC.Address)
+	portDD := testutils.ParsePort(t, serverDD.Address)
+
+	testutils.SetEnvConfig(t, &envconfig.EnablePriorityLBChildPolicyCache, false)
+
+	resources := e2e.UpdateOptions{
+		NodeID:         nodeID,
+		Listeners:      []*v3listenerpb.Listener{e2e.DefaultClientListener(serviceName, routeName)},
+		Routes:         []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeName, serviceName, clusterName)},
+		Clusters:       []*v3clusterpb.Cluster{e2e.DefaultCluster(clusterName, edsServiceName, e2e.SecurityLevelNone)},
+		SkipValidation: true,
+	}
+
+	var client testgrpc.TestServiceClient
+	var ccCleanup func()
+
+	baseline := atomic.LoadInt64(&grpc.OpenConnectionsCount)
+
+	for i := 0; i < 50; i++ {
+		locs := []e2e.LocalityOptions{
+			{Locality: e2e.LocalityID{Zone: fmt.Sprintf("aa-%d", i)}, Weight: 1, Priority: 0, Backends: []e2e.BackendOptions{{Ports: []uint32{portAA}, Weight: 1}}},
+			{Locality: e2e.LocalityID{Zone: fmt.Sprintf("bb-%d", i)}, Weight: 1, Priority: 0, Backends: []e2e.BackendOptions{{Ports: []uint32{portBB}, Weight: 1}}},
+			{Locality: e2e.LocalityID{Zone: fmt.Sprintf("cc-%d", i)}, Weight: 1, Priority: 1, Backends: []e2e.BackendOptions{{Ports: []uint32{portCC}, Weight: 1}}},
+			{Locality: e2e.LocalityID{Zone: fmt.Sprintf("dd-%d", i)}, Weight: 1, Priority: 1, Backends: []e2e.BackendOptions{{Ports: []uint32{portDD}, Weight: 1}}},
+		}
+
+		resources.Endpoints = []*v3endpointpb.ClusterLoadAssignment{
+			e2e.EndpointResourceWithOptions(e2e.EndpointOptions{
+				ClusterName: edsServiceName,
+				Host:        "127.0.0.1",
+				Localities:  locs,
+			}),
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+		if err := managementServer.Update(ctx, resources); err != nil {
+			cancel()
+			t.Fatalf("Failed to update management server at iteration %d: %v", i, err)
+		}
+		cancel()
+
+		if i == 0 {
+			r, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bootstrapContents)
+			if err != nil {
+				t.Fatalf("xDS resolver creation failed: %v", err)
+			}
+			cc, err := grpc.NewClient("xds:///"+serviceName, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
+			if err != nil {
+				t.Fatalf("grpc.NewClient() failed: %v", err)
+			}
+			cc.Connect()
+			ccCleanup = func() { cc.Close() }
+			client = testgrpc.NewTestServiceClient(cc)
+		}
+
+		ctx, cancel = context.WithTimeout(context.Background(), defaultTestTimeout)
+		if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
+			cancel()
+			t.Fatalf("RPC failed at iteration %d: %v", i, err)
+		}
+		cancel()
+
+		// Without the PR 8997 fix, this metric would scale linearly to over 200.
+		// With it, the count is securely bounded based on concurrently active balancers.
+		currentOpc := atomic.LoadInt64(&grpc.OpenConnectionsCount)
+		if currentOpc > baseline+15 {
+			t.Fatalf("Open connections scaled to %d at iteration %d (baseline %d)! Priority child caching leak detected.", currentOpc, i, baseline)
+		}
+	}
+
+	if ccCleanup != nil {
+		ccCleanup()
+	}
+}
+
+// TestPriority_ConfigFlappingStatic_CachingDisabled simulates frequent updates
+// utilizing static locality shifts (merging/splitting) between priorities exactly
+// as seen in production. Without PR 8997, the priority LB nameGenerator drops the ball
+// on name affinities during splits/merges and causes runaway cache leaks.
+func (s) TestPriority_ConfigFlappingStatic_CachingDisabled(t *testing.T) {
+
+	serverAA := stubserver.StartTestService(t, nil)
+	defer serverAA.Stop()
+	serverBB := stubserver.StartTestService(t, nil)
+	defer serverBB.Stop()
+	serverCC := stubserver.StartTestService(t, nil)
+	defer serverCC.Stop()
+	serverDD := stubserver.StartTestService(t, nil)
+	defer serverDD.Stop()
+
+	managementServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
+
+	nodeID := uuid.New().String()
+	bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, managementServer.Address)
+
+	const serviceName = "my-service-client-side-xds"
+	const routeName = "route-" + serviceName
+	const clusterName = "cluster-" + serviceName
+	const edsServiceName = "eds-service-" + serviceName
+
+	portAA := testutils.ParsePort(t, serverAA.Address)
+	portBB := testutils.ParsePort(t, serverBB.Address)
+	portCC := testutils.ParsePort(t, serverCC.Address)
+	portDD := testutils.ParsePort(t, serverDD.Address)
+
+	testutils.SetEnvConfig(t, &envconfig.EnablePriorityLBChildPolicyCache, false)
+
+	resources := e2e.UpdateOptions{
+		NodeID:    nodeID,
+		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(serviceName, routeName)},
+		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeName, serviceName, clusterName)},
+		Clusters:  []*v3clusterpb.Cluster{e2e.DefaultCluster(clusterName, edsServiceName, e2e.SecurityLevelNone)},
+	}
+
+	var client testgrpc.TestServiceClient
+	var ccCleanup func()
+
+	baseline := atomic.LoadInt64(&grpc.OpenConnectionsCount)
+
+	for i := 0; i < 50; i++ {
+		var locs []e2e.LocalityOptions
+		switch i % 3 {
+		case 0:
+			// P0: aa, bb. P1: cc, dd
+			locs = []e2e.LocalityOptions{
+				{Locality: e2e.LocalityID{Zone: "aa"}, Weight: 1, Priority: 0, Backends: []e2e.BackendOptions{{Ports: []uint32{portAA}, Weight: 1}}},
+				{Locality: e2e.LocalityID{Zone: "bb"}, Weight: 1, Priority: 0, Backends: []e2e.BackendOptions{{Ports: []uint32{portBB}, Weight: 1}}},
+				{Locality: e2e.LocalityID{Zone: "cc"}, Weight: 1, Priority: 1, Backends: []e2e.BackendOptions{{Ports: []uint32{portCC}, Weight: 1}}},
+				{Locality: e2e.LocalityID{Zone: "dd"}, Weight: 1, Priority: 1, Backends: []e2e.BackendOptions{{Ports: []uint32{portDD}, Weight: 1}}},
+			}
+		case 1:
+			// P0: aa, bb, cc. P1: dd (move cc to primary)
+			locs = []e2e.LocalityOptions{
+				{Locality: e2e.LocalityID{Zone: "aa"}, Weight: 1, Priority: 0, Backends: []e2e.BackendOptions{{Ports: []uint32{portAA}, Weight: 1}}},
+				{Locality: e2e.LocalityID{Zone: "bb"}, Weight: 1, Priority: 0, Backends: []e2e.BackendOptions{{Ports: []uint32{portBB}, Weight: 1}}},
+				{Locality: e2e.LocalityID{Zone: "cc"}, Weight: 1, Priority: 0, Backends: []e2e.BackendOptions{{Ports: []uint32{portCC}, Weight: 1}}},
+				{Locality: e2e.LocalityID{Zone: "dd"}, Weight: 1, Priority: 1, Backends: []e2e.BackendOptions{{Ports: []uint32{portDD}, Weight: 1}}},
+			}
+		case 2:
+			// P0: aa. P1: bb, cc, dd (move cc and bb to failover)
+			locs = []e2e.LocalityOptions{
+				{Locality: e2e.LocalityID{Zone: "aa"}, Weight: 1, Priority: 0, Backends: []e2e.BackendOptions{{Ports: []uint32{portAA}, Weight: 1}}},
+				{Locality: e2e.LocalityID{Zone: "bb"}, Weight: 1, Priority: 1, Backends: []e2e.BackendOptions{{Ports: []uint32{portBB}, Weight: 1}}},
+				{Locality: e2e.LocalityID{Zone: "cc"}, Weight: 1, Priority: 1, Backends: []e2e.BackendOptions{{Ports: []uint32{portCC}, Weight: 1}}},
+				{Locality: e2e.LocalityID{Zone: "dd"}, Weight: 1, Priority: 1, Backends: []e2e.BackendOptions{{Ports: []uint32{portDD}, Weight: 1}}},
+			}
+		}
+
+		resources.Endpoints = []*v3endpointpb.ClusterLoadAssignment{
+			e2e.EndpointResourceWithOptions(e2e.EndpointOptions{
+				ClusterName: edsServiceName,
+				Host:        "127.0.0.1",
+				Localities:  locs,
+			}),
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+		if err := managementServer.Update(ctx, resources); err != nil {
+			cancel()
+			t.Fatalf("Failed to update management server at iteration %d: %v", i, err)
+		}
+		cancel()
+
+		if i == 0 {
+			r, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bootstrapContents)
+			if err != nil {
+				t.Fatalf("xDS resolver creation failed: %v", err)
+			}
+			cc, err := grpc.NewClient("xds:///"+serviceName, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
+			if err != nil {
+				t.Fatalf("grpc.NewClient() failed: %v", err)
+			}
+			cc.Connect()
+			ccCleanup = func() { cc.Close() }
+			client = testgrpc.NewTestServiceClient(cc)
+		}
+
+		ctx, cancel = context.WithTimeout(context.Background(), defaultTestTimeout)
+		if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
+			cancel()
+			t.Fatalf("RPC failed at iteration %d: %v", i, err)
+		}
+		cancel()
+
+		currentOpc := atomic.LoadInt64(&grpc.OpenConnectionsCount)
+		if currentOpc > baseline+15 {
+			t.Fatalf("Open connections scaled to %d at iteration %d (baseline %d)! Priority child caching leak detected.", currentOpc, i, baseline)
+		}
+	}
+
+	if ccCleanup != nil {
+		ccCleanup()
 	}
 }

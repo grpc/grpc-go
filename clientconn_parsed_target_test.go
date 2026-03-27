@@ -295,6 +295,11 @@ func (s) TestParsedTarget_WithCustomDialer(t *testing.T) {
 			wantParsed:        resolver.Target{URL: *testutils.MustParseURL("passthrough://a.server.com/google.com")},
 			wantDialerAddress: "google.com",
 		},
+		{
+			target:            "[fe80::1:2:3:4%25eth0]:9339",
+			wantParsed:        resolver.Target{URL: *testutils.MustParseURL(fmt.Sprintf("%s:///%s", defScheme, "[fe80::1:2:3:4%25eth0]:9339"))},
+			wantDialerAddress: "[fe80::1:2:3:4%eth0]:9339",
+		},
 	}
 
 	for _, test := range tests {

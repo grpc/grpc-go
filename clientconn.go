@@ -125,6 +125,7 @@ var (
 		OptionalLabels: []string{"grpc.lb.backend_service", "grpc.lb.locality"},
 		Default:        false,
 	})
+	OpenConnectionsCount  int64
 	openConnectionsMetric = expstats.RegisterInt64UpDownCount(expstats.MetricDescriptor{
 		Name:           "grpc.subchannel.open_connections",
 		Description:    "EXPERIMENTAL. Number of open connections.",
@@ -1287,6 +1288,8 @@ func (ac *addrConn) updateConnectivityState(s connectivity.State, lastErr error)
 	// part of the if condition below once the issue is fixed.
 	if ac.state == connectivity.Ready || (ac.state == connectivity.Connecting && s == connectivity.Idle) {
 		disconnectionsMetric.Record(ac.cc.metricsRecorderList, 1, ac.cc.target, ac.backendServiceLabel, ac.localityLabel, "unknown")
+		val := atomic.AddInt64(&OpenConnectionsCount, -1)
+		logger.Infof("Active subchannel connections: %d", val)
 		openConnectionsMetric.Record(ac.cc.metricsRecorderList, -1, ac.cc.target, ac.backendServiceLabel, ac.securityLevelLocked(), ac.localityLabel)
 	}
 	ac.state = s
@@ -1395,6 +1398,8 @@ func (ac *addrConn) resetTransportAndUnlock() {
 	// Success; reset backoff.
 	ac.mu.Lock()
 	connectionAttemptsSucceededMetric.Record(ac.cc.metricsRecorderList, 1, ac.cc.target, ac.backendServiceLabel, ac.localityLabel)
+	val := atomic.AddInt64(&OpenConnectionsCount, 1)
+	logger.Infof("Active subchannel connections: %d", val)
 	openConnectionsMetric.Record(ac.cc.metricsRecorderList, 1, ac.cc.target, ac.backendServiceLabel, ac.securityLevelLocked(), ac.localityLabel)
 	ac.backoffIdx = 0
 	ac.mu.Unlock()
