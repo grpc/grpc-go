@@ -28,6 +28,7 @@ import (
 	"net/http"
 	"reflect"
 	"runtime"
+	"runtime/pprof"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -1787,6 +1788,10 @@ func (s *Server) handleMalformedMethodName(stream *transport.ServerStream, ti *t
 func (s *Server) handleStream(t transport.ServerTransport, stream *transport.ServerStream) {
 	ctx := stream.Context()
 	ctx = contextWithServer(ctx, s)
+	// This method always runs in its own goroutine, so we can set a
+	// goroutine label without needing to restore a previous context.
+	ctx = pprof.WithLabels(ctx, pprof.Labels("grpc.server.method", stream.Method()))
+	pprof.SetGoroutineLabels(ctx)
 	var ti *traceInfo
 	if EnableTracing {
 		tr := newTrace("grpc.Recv."+methodFamily(stream.Method()), stream.Method())
