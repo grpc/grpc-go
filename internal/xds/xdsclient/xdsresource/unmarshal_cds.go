@@ -186,13 +186,42 @@ func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster, serv
 		}
 	}
 
+	var lrsReportEndpointMetrics *BackendMetric
+
+	if envconfig.XDSORCAToLRSPropEnabled && len(cluster.GetLrsReportEndpointMetrics()) > 0 {
+		lrsReportEndpointMetrics = &BackendMetric{
+			NamedMetrics: make(map[string]bool),
+		}
+		for _, m := range cluster.GetLrsReportEndpointMetrics() {
+			switch m {
+			case "cpu_utilization":
+				lrsReportEndpointMetrics.CPUUtilization = true
+			case "mem_utilization":
+				lrsReportEndpointMetrics.MemUtilization = true
+			case "application_utilization":
+				lrsReportEndpointMetrics.ApplicationUtilization = true
+			case "named_metrics.*":
+				lrsReportEndpointMetrics.NamedMetricsAll = true
+				lrsReportEndpointMetrics.NamedMetrics = nil
+			default:
+				if lrsReportEndpointMetrics.NamedMetricsAll {
+					continue
+				}
+				if name, found := strings.CutPrefix(m, "named_metrics."); found && name != "" {
+					lrsReportEndpointMetrics.NamedMetrics[name] = true
+				}
+			}
+		}
+	}
+
 	ret := ClusterUpdate{
-		ClusterName:      cluster.GetName(),
-		SecurityCfg:      sc,
-		MaxRequests:      circuitBreakersFromCluster(cluster),
-		LBPolicy:         lbPolicy,
-		OutlierDetection: od,
-		TelemetryLabels:  telemetryLabels,
+		ClusterName:              cluster.GetName(),
+		SecurityCfg:              sc,
+		MaxRequests:              circuitBreakersFromCluster(cluster),
+		LBPolicy:                 lbPolicy,
+		OutlierDetection:         od,
+		TelemetryLabels:          telemetryLabels,
+		LRSReportEndpointMetrics: lrsReportEndpointMetrics,
 	}
 
 	if lrs := cluster.GetLrsServer(); lrs != nil {

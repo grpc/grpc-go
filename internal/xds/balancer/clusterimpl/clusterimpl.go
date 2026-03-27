@@ -147,6 +147,7 @@ type clusterImplBalancer struct {
 	requestCountMax       uint32                            // Max concurrent requests, from LB config.
 	requestCounter        *xdsclient.ClusterRequestsCounter // Tracks total inflight requests for a given service.
 	telemetryLabels       map[string]string                 // Telemetry labels to set on picks, from LB config.
+	backendMetric         *xdsresource.BackendMetric        // LRS metrics to propagate, from LB config.
 }
 
 // handleDropAndRequestCountLocked compares drop and request counter in new
@@ -203,6 +204,7 @@ func (b *clusterImplBalancer) newPickerLocked() *picker {
 		countMax:        b.requestCountMax,
 		telemetryLabels: b.telemetryLabels,
 		clusterName:     b.clusterName,
+		metrics:         b.backendMetric,
 	}
 }
 
@@ -434,14 +436,19 @@ func (b *clusterImplBalancer) UpdateClientConnState(s balancer.ClientConnState) 
 
 	b.mu.Lock()
 	b.telemetryLabels = clusterUpdate.TelemetryLabels
+	updatePicker := b.handleDropAndRequestCountLocked(clusterCfg.Config)
+	if !b.backendMetric.Equal(clusterUpdate.LRSReportEndpointMetrics) {
+		b.backendMetric = clusterUpdate.LRSReportEndpointMetrics
+		updatePicker = true
+	}
 	// We want to send a picker update to the parent if one of the two
 	// conditions are met:
-	// - drop/request config has changed *and* there is already a picker from
-	//   the child, or
+	// - drop/request count config or LRS metrics config has changed *and* there
+	//   is already a picker from the child, or
 	// - there is a pending picker update from the child (and this covers the
 	//   case where the drop/request config has not changed, but the child sent
 	//   a picker update while we were still processing config from our parent).
-	if (b.handleDropAndRequestCountLocked(clusterCfg.Config) && b.childState.Picker != nil) || b.pendingPickerUpdates {
+	if (updatePicker && b.childState.Picker != nil) || b.pendingPickerUpdates {
 		b.pendingPickerUpdates = false
 		b.ClientConn.UpdateState(balancer.State{
 			ConnectivityState: b.childState.ConnectivityState,

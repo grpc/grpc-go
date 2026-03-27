@@ -79,6 +79,45 @@ type ClusterUpdate struct {
 	// "com.google.csm.telemetry_labels" with keys "service_name" or
 	// "service_namespace".
 	TelemetryLabels map[string]string
+
+	// LRSReportEndpointMetrics specifies the subset of ORCA metrics that
+	// should be propagated to the LRS server.
+	LRSReportEndpointMetrics *BackendMetric
+}
+
+// BackendMetric holds the configuration for propagating ORCA metrics
+// to the LRS server.
+type BackendMetric struct {
+	CPUUtilization         bool
+	MemUtilization         bool
+	ApplicationUtilization bool
+	NamedMetricsAll        bool
+	NamedMetrics           map[string]bool
+}
+
+// Equal returns whether the two BackendMetric configurations are identical.
+func (bmp *BackendMetric) Equal(other *BackendMetric) bool {
+	switch {
+	case bmp == nil && other == nil:
+		return true
+	case (bmp != nil) != (other != nil):
+		return false
+	}
+	if bmp.CPUUtilization != other.CPUUtilization ||
+		bmp.MemUtilization != other.MemUtilization ||
+		bmp.ApplicationUtilization != other.ApplicationUtilization ||
+		bmp.NamedMetricsAll != other.NamedMetricsAll {
+		return false
+	}
+	if len(bmp.NamedMetrics) != len(other.NamedMetrics) {
+		return false
+	}
+	for k, v := range bmp.NamedMetrics {
+		if other.NamedMetrics[k] != v {
+			return false
+		}
+	}
+	return true
 }
 
 // SecurityConfig contains the security configuration received as part of the
