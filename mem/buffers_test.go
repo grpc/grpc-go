@@ -269,19 +269,19 @@ func (s) TestBuffer_Split(t *testing.T) {
 
 	buf, split1 := mem.SplitUnsafe(buf, 2)
 	if !bytes.Equal(buf.ReadOnlyData(), data[:2]) {
-		t.Fatalf("Buffer did not contain expected data %v, got %v", data[:2], buf.ReadOnlyData())
+		t.Fatalf("Buffer did not contain expected data. got %v, want %v", buf.ReadOnlyData(), data[:2])
 	}
 	if !bytes.Equal(split1.ReadOnlyData(), data[2:]) {
-		t.Fatalf("Buffer did not contain expected data %v, got %v", data[2:], split1.ReadOnlyData())
+		t.Fatalf("Buffer did not contain expected data. got %v, want %v", split1.ReadOnlyData(), data[2:])
 	}
 
 	// Check that splitting the buffer more than once works as intended.
 	split1, split2 := mem.SplitUnsafe(split1, 1)
 	if !bytes.Equal(split1.ReadOnlyData(), data[2:3]) {
-		t.Fatalf("Buffer did not contain expected data %v, got %v", data[2:3], split1.ReadOnlyData())
+		t.Fatalf("Buffer did not contain expected data. got %v, want %v", split1.ReadOnlyData(), data[2:3])
 	}
 	if !bytes.Equal(split2.ReadOnlyData(), data[3:]) {
-		t.Fatalf("Buffer did not contain expected data %v, got %v", data[3:], split2.ReadOnlyData())
+		t.Fatalf("Buffer did not contain expected data. got %v, want %v", split2.ReadOnlyData(), data[3:])
 	}
 
 	// If any of the following frees actually free the buffer, the test will fail.
@@ -310,18 +310,18 @@ func (s) TestBuffer_Slice(t *testing.T) {
 	// Slice the buffer and verify the data.
 	slice1 := buf.Slice(1, 3)
 	if !bytes.Equal(slice1.ReadOnlyData(), data[1:3]) {
-		t.Fatalf("Buffer did not contain expected data %v, got %v", data[1:3], slice1.ReadOnlyData())
+		t.Fatalf("Buffer did not contain expected data. got %v, want %v", slice1.ReadOnlyData(), data[1:3])
 	}
 
 	// Verify the original buffer is not modified.
 	if !bytes.Equal(buf.ReadOnlyData(), data) {
-		t.Fatalf("Buffer did not contain expected data %v, got %v", data, buf.ReadOnlyData())
+		t.Fatalf("Buffer did not contain expected data. got %v, want %v", buf.ReadOnlyData(), data)
 	}
 
 	// Slice the slice.
 	slice2 := slice1.Slice(0, 1)
 	if !bytes.Equal(slice2.ReadOnlyData(), data[1:2]) {
-		t.Fatalf("Buffer did not contain expected data %v, got %v", data[1:2], slice2.ReadOnlyData())
+		t.Fatalf("Buffer did not contain expected data. got %v, want %v", slice2.ReadOnlyData(), data[1:2])
 	}
 
 	// Free original and first slice — root should not be freed yet.
@@ -330,7 +330,7 @@ func (s) TestBuffer_Slice(t *testing.T) {
 
 	// The last slice keeps the root alive.
 	if !bytes.Equal(slice2.ReadOnlyData(), data[1:2]) {
-		t.Fatalf("Buffer did not contain expected data %v, got %v", data[1:2], slice2.ReadOnlyData())
+		t.Fatalf("Buffer did not contain expected data. got %v, want %v", slice2.ReadOnlyData(), data[1:2])
 	}
 
 	ready = true
@@ -375,7 +375,7 @@ func (s) TestBuffer_SliceBasic(t *testing.T) {
 				buf := c.newBuf()
 				got := buf.Slice(tc.start, tc.end)
 				if !bytes.Equal(got.ReadOnlyData(), tc.want) {
-					t.Fatalf("Buffer did not contain expected data %v, got %v", tc.want, got.ReadOnlyData())
+					t.Fatalf("Buffer did not contain expected data. got %v, want %v", got.ReadOnlyData(), tc.want)
 				}
 			})
 		}
@@ -389,7 +389,7 @@ func (s) TestBuffer_SliceSubslice(t *testing.T) {
 			slice := buf.Slice(1, 3)
 			slice2 := slice.Slice(0, 1)
 			if !bytes.Equal(slice2.ReadOnlyData(), []byte{2}) {
-				t.Fatalf("Buffer did not contain expected data %v, got %v", []byte{2}, buf.ReadOnlyData())
+				t.Fatalf("Buffer did not contain expected data. got %v, want %v", buf.ReadOnlyData(), []byte{2})
 			}
 		})
 	}
@@ -399,7 +399,7 @@ func (s) TestBuffer_SliceEmpty(t *testing.T) {
 	buf := newEmptyBuf()
 	got := buf.Slice(0, 0)
 	if !bytes.Equal(got.ReadOnlyData(), nil) {
-		t.Fatalf("Buffer did not contain expected data %v, got %v", nil, got.ReadOnlyData())
+		t.Fatalf("Buffer did not contain expected data. got %v, want %v", got.ReadOnlyData(), nil)
 	}
 }
 
