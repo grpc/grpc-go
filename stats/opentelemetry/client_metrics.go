@@ -221,9 +221,7 @@ func (h *clientMetricsHandler) processRPCEvent(ctx context.Context, s stats.RPCS
 		for _, o := range h.options.MetricsOptions.OptionalLabels {
 			if o == "grpc.client.call.custom" {
 				label := estats.CustomLabelFromContext(ctx)
-				if label != "" {
-					attributes = append(attributes, otelattribute.String(o, label))
-				}
+				attributes = append(attributes, otelattribute.String(o, label))
 			}
 		}
 
@@ -283,9 +281,7 @@ func (h *clientMetricsHandler) processRPCEnd(ctx context.Context, ai *attemptInf
 			attributes = append(attributes, otelattribute.String(o, val))
 		} else if o == "grpc.client.call.custom" {
 			label := estats.CustomLabelFromContext(ctx)
-			if label != "" {
-				attributes = append(attributes, otelattribute.String(o, label))
-			}
+			attributes = append(attributes, otelattribute.String(o, label))
 		}
 	}
 
