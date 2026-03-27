@@ -22,9 +22,12 @@ import (
 	"context"
 	"errors"
 	"net"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/xds/clients"
@@ -309,5 +312,592 @@ func (s) TestServerFailureMetrics_AfterResponseRecv(t *testing.T) {
 	close(streamCreationQuota)
 	if err := tmr.waitForMetric(ctx, &metrics.ResourceUpdateValid{ServerURI: mgmtServer.Address, ResourceType: "ListenerResource"}); err != nil {
 		t.Fatal(err.Error())
+	}
+}
+
+func (s) TestConnectedMetric(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	tmr := newTestMetricsReporter()
+	l, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("net.Listen() failed: %v", err)
+	}
+
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{Listener: l})
+	nodeID := uuid.New().String()
+
+	resourceTypes := map[string]xdsclient.ResourceType{xdsresource.V3ListenerURL: listenerType}
+	si := clients.ServerIdentifier{
+		ServerURI:  mgmtServer.Address,
+		Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"},
+	}
+	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
+	xdsClientConfig := xdsclient.Config{
+		Servers:          []xdsclient.ServerConfig{{ServerIdentifier: si}},
+		Node:             clients.Node{ID: nodeID},
+		TransportBuilder: grpctransport.NewBuilder(configs),
+		ResourceTypes:    resourceTypes,
+		Authorities: map[string]xdsclient.Authority{
+			"": {XDSServers: []xdsclient.ServerConfig{}},
+		},
+		MetricsReporter: tmr,
+	}
+	client, err := xdsclient.New(xdsClientConfig)
+	if err != nil {
+		t.Fatalf("Failed to create xDS client: %v", err)
+	}
+	defer client.Close()
+
+	// Verify initial state: No metrics reported because no stream is established.
+	tmr.triggerAsyncMetrics()
+	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
+	defer sCancel()
+	if err := tmr.waitForSpecificMetric(sCtx, &metrics.XDSClientConnected{ServerURI: mgmtServer.Address}); err == nil {
+		t.Fatal("XDSClientConnected metric reported before any watch was started")
+	}
+
+	// Watch a resource to trigger connection.
+	client.WatchResource(listenerType.TypeURL, "foo", noopListenerWatcher{})
+
+	// Wait for connection.
+	const listenerName = "test-listener-resource"
+	resources := e2e.UpdateOptions{
+		NodeID:         nodeID,
+		Listeners:      []*v3listenerpb.Listener{e2e.DefaultClientListener(listenerName, "route-config")},
+		SkipValidation: true,
+	}
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatalf("Failed to update management server: %v", err)
+	}
+	client.WatchResource(listenerType.TypeURL, listenerName, noopListenerWatcher{})
+
+	// Wait for the update to ensure we are connected.
+	if err := tmr.waitForMetric(ctx, &metrics.ResourceUpdateValid{ServerURI: mgmtServer.Address, ResourceType: "ListenerResource"}); err != nil {
+		t.Fatal(err.Error())
+	}
+
+	// Now trigger async metrics.
+	tmr.triggerAsyncMetrics()
+	if err := tmr.waitForSpecificMetric(ctx, &metrics.XDSClientConnected{ServerURI: mgmtServer.Address, Value: 1}); err != nil {
+		t.Fatal(err.Error())
+	}
+
+	// Stop server to force disconnect.
+	mgmtServer.Stop()
+
+	// Wait a bit for disconnect to be detected.
+	// xDS client should detect it on stream failure.
+	// We can wait for ServerFailure metric (synchronous).
+	if err := tmr.waitForSpecificMetric(ctx, &metrics.ServerFailure{ServerURI: mgmtServer.Address}); err != nil {
+		t.Fatal(err.Error())
+	}
+
+	// Trigger async metrics again after disconnect to verify Value is 0.
+	tmr.triggerAsyncMetrics()
+	if err := tmr.waitForSpecificMetric(ctx, &metrics.XDSClientConnected{ServerURI: mgmtServer.Address, Value: 0}); err != nil {
+		t.Fatal(err.Error())
+	}
+
+	// Verify unregistration after client close.
+	client.Close()
+
+	tmr.mu.Lock()
+	numReporters := len(tmr.asyncReporters)
+	tmr.mu.Unlock()
+	if numReporters != 0 {
+		t.Fatalf("Async reporter not unregistered after client close, count: %d", numReporters)
+	}
+
+	// Drain the channel of any leftover metrics from previous pulses.
+	tmr.metricsCh.Drain()
+
+	tmr.triggerAsyncMetrics()
+	// No metrics should be reported now because there are no reporters.
+	sCtx2, sCancel2 := context.WithTimeout(ctx, defaultTestShortTimeout)
+	defer sCancel2()
+	if _, err := tmr.metricsCh.Receive(sCtx2); err == nil {
+		t.Fatal("Metrics reported after all reporters were unregistered")
+	}
+}
+
+func (s) TestResourceMetrics(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	tmr := newTestMetricsReporter()
+	l, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("net.Listen() failed: %v", err)
+	}
+
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{Listener: l})
+	nodeID := uuid.New().String()
+
+	resourceTypes := map[string]xdsclient.ResourceType{xdsresource.V3ListenerURL: listenerType}
+	si := clients.ServerIdentifier{
+		ServerURI:  mgmtServer.Address,
+		Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"},
+	}
+	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
+	xdsClientConfig := xdsclient.Config{
+		Servers:          []xdsclient.ServerConfig{{ServerIdentifier: si}},
+		Node:             clients.Node{ID: nodeID},
+		TransportBuilder: grpctransport.NewBuilder(configs),
+		ResourceTypes:    resourceTypes,
+		Authorities: map[string]xdsclient.Authority{
+			"": {XDSServers: []xdsclient.ServerConfig{}},
+		},
+		MetricsReporter: tmr,
+	}
+	client, err := xdsclient.New(xdsClientConfig)
+	if err != nil {
+		t.Fatalf("Failed to create xDS client: %v", err)
+	}
+	defer client.Close()
+
+	const listenerName = "test-listener-resource"
+	const routeConfigName = "test-route-configuration-resource"
+
+	// Requested state.
+	client.WatchResource(listenerType.TypeURL, listenerName, noopListenerWatcher{})
+
+	resources := e2e.UpdateOptions{
+		NodeID:         nodeID,
+		Listeners:      []*v3listenerpb.Listener{e2e.DefaultClientListener(listenerName, routeConfigName)},
+		SkipValidation: true,
+	}
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatalf("Failed to update management server: %v", err)
+	}
+
+	// Wait for Valid update.
+	if err := tmr.waitForMetric(ctx, &metrics.ResourceUpdateValid{ServerURI: mgmtServer.Address, ResourceType: "ListenerResource"}); err != nil {
+		t.Fatal(err.Error())
+	}
+
+	// Trigger async metrics.
+	tmr.triggerAsyncMetrics()
+	if err := tmr.waitForSpecificMetric(ctx, &metrics.XDSClientResourceStats{
+		Authority:    "#old", // Default authority
+		ResourceType: "ListenerResource",
+		CacheState:   "acked",
+		Count:        1,
+	}); err != nil {
+		t.Fatal(err.Error())
+	}
+
+	// Nacked but cached.
+	// Update with bad resource.
+	resources.Listeners[0].ApiListener = nil
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatalf("Failed to update management server: %v", err)
+	}
+
+	// Wait for Invalid update.
+	if err := tmr.waitForMetric(ctx, &metrics.ResourceUpdateInvalid{ServerURI: mgmtServer.Address, ResourceType: "ListenerResource"}); err != nil {
+		t.Fatal(err.Error())
+	}
+
+	tmr.triggerAsyncMetrics()
+	if err := tmr.waitForSpecificMetric(ctx, &metrics.XDSClientResourceStats{
+		Authority:    "#old",
+		ResourceType: "ListenerResource",
+		CacheState:   "nacked_but_cached",
+		Count:        1,
+	}); err != nil {
+		t.Fatal(err.Error())
+	}
+}
+
+// TestResourceMetrics_Extended tests multiple resources in different states:
+// - 2 in "requested" state
+// - 2 in "nacked" state
+// - 1 in "does_not_exist" state
+func (s) TestResourceMetrics_Extended(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	tmr := newTestMetricsReporter()
+	l, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("net.Listen() failed: %v", err)
+	}
+
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{Listener: l})
+	nodeID := uuid.New().String()
+
+	resourceTypes := map[string]xdsclient.ResourceType{xdsresource.V3ListenerURL: listenerType}
+	si := clients.ServerIdentifier{
+		ServerURI:  mgmtServer.Address,
+		Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"},
+	}
+	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
+	xdsClientConfig := xdsclient.Config{
+		Servers:          []xdsclient.ServerConfig{{ServerIdentifier: si}},
+		Node:             clients.Node{ID: nodeID},
+		TransportBuilder: grpctransport.NewBuilder(configs),
+		ResourceTypes:    resourceTypes,
+		Authorities: map[string]xdsclient.Authority{
+			"": {XDSServers: []xdsclient.ServerConfig{}},
+		},
+		MetricsReporter: tmr,
+	}
+	client, err := xdsclient.New(xdsClientConfig)
+	if err != nil {
+		t.Fatalf("Failed to create xDS client: %v", err)
+	}
+	defer client.Close()
+
+	// Resource names
+	resRequested1 := "res-requested-1"
+	resRequested2 := "res-requested-2"
+	resNacked1 := "res-nacked-1"
+	resNacked2 := "res-nacked-2"
+	resNotExist := "res-not-exist"
+
+	resList := []string{resRequested1, resRequested2, resNacked1, resNacked2, resNotExist}
+	for _, res := range resList {
+		client.WatchResource(listenerType.TypeURL, res, noopListenerWatcher{})
+	}
+
+	resources := e2e.UpdateOptions{
+		NodeID: nodeID,
+		Listeners: []*v3listenerpb.Listener{
+			e2e.DefaultClientListener(resNacked1, "route-config"),
+			e2e.DefaultClientListener(resNacked2, "route-config"),
+			e2e.DefaultClientListener(resNotExist, "route-config"),
+		},
+		SkipValidation: true,
+	}
+	// Make Nacked resources invalid
+	resources.Listeners[0].ApiListener = nil
+	resources.Listeners[1].ApiListener = nil
+
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatalf("Failed to update management server: %v", err)
+	}
+
+	// Wait for Res5 to be valid.
+	if err := tmr.waitForSpecificMetric(ctx, &metrics.ResourceUpdateValid{ServerURI: mgmtServer.Address, ResourceType: "ListenerResource"}); err != nil {
+		t.Fatal(err.Error())
+	}
+	resourcesEmpty := e2e.UpdateOptions{
+		NodeID:         nodeID,
+		Listeners:      []*v3listenerpb.Listener{},
+		SkipValidation: true,
+	}
+	if err := mgmtServer.Update(ctx, resourcesEmpty); err != nil {
+		t.Fatalf("Failed to update management server: %v", err)
+	}
+
+	// Verify "requested" count 2
+	tmr.triggerAsyncMetrics()
+	if err := tmr.waitForSpecificMetric(ctx, &metrics.XDSClientResourceStats{
+		Authority:    "#old",
+		ResourceType: "ListenerResource",
+		CacheState:   "requested",
+		Count:        2,
+	}); err != nil {
+		t.Fatalf("Failed to verify requested count: %v", err)
+	}
+
+	// Verify "nacked" count 2
+	tmr.triggerAsyncMetrics()
+	if err := tmr.waitForSpecificMetric(ctx, &metrics.XDSClientResourceStats{
+		Authority:    "#old",
+		ResourceType: "ListenerResource",
+		CacheState:   "nacked",
+		Count:        2,
+	}); err != nil {
+		t.Fatalf("Failed to verify nacked count: %v", err)
+	}
+
+	// Wait for the does_not_exist state.
+	// We need to wait for the client to process the empty update and mark the resource as removed.
+	// We use a watcher to detect the specific error.
+	removed := make(chan struct{})
+	var closeOnce sync.Once
+	client.WatchResource(listenerType.TypeURL, resNotExist, &testWatcher{
+		onError: func(err error) {
+			if xdsresource.ErrType(err) == xdsresource.ErrorTypeResourceNotFound {
+				closeOnce.Do(func() { close(removed) })
+			}
+		},
+	})
+
+	// Verify "does_not_exist" count 1
+	select {
+	case <-removed:
+	case <-ctx.Done():
+		t.Fatal("timeout waiting for resource removal")
+	}
+
+	tmr.triggerAsyncMetrics()
+	if err := tmr.waitForSpecificMetric(ctx, &metrics.XDSClientResourceStats{
+		Authority:    "#old",
+		ResourceType: "ListenerResource",
+		CacheState:   "does_not_exist",
+		Count:        1,
+	}); err != nil {
+		t.Fatalf("Failed to verify does_not_exist count: %v", err)
+	}
+}
+
+type testWatcher struct {
+	onError func(error)
+}
+
+func (w *testWatcher) ResourceChanged(_ xdsclient.ResourceData, onDone func()) { onDone() }
+func (w *testWatcher) ResourceError(err error, onDone func()) {
+	if w.onError != nil {
+		w.onError(err)
+	}
+	onDone()
+}
+func (w *testWatcher) AmbientError(_ error, onDone func()) { onDone() }
+func (s) TestConnectedMetric_Reconnection(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	tmr := newTestMetricsReporter()
+	l, err := testutils.LocalTCPListener()
+	if err != nil {
+		t.Fatalf("net.Listen() failed: %v", err)
+	}
+	lis := testutils.NewRestartableListener(l)
+
+	// Use a channel to control when the server sends a response.
+	sendResponse := make(chan struct{})
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
+		Listener: lis,
+		OnStreamOpen: func(_ context.Context, _ int64, _ string) error {
+			return nil
+		},
+		OnStreamRequest: func(_ int64, _ *v3discoverypb.DiscoveryRequest) error {
+			return nil
+		},
+		OnStreamResponse: func(ctx context.Context, _ int64, _ *v3discoverypb.DiscoveryRequest, _ *v3discoverypb.DiscoveryResponse) {
+			select {
+			case <-sendResponse:
+			case <-ctx.Done():
+			}
+		},
+	})
+	nodeID := uuid.New().String()
+
+	resourceTypes := map[string]xdsclient.ResourceType{xdsresource.V3ListenerURL: listenerType}
+	si := clients.ServerIdentifier{
+		ServerURI:  mgmtServer.Address,
+		Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"},
+	}
+	blockNextStream := make(chan struct{}, 1)
+	blocked := make(chan struct{})
+	unblock := make(chan struct{})
+
+	customGRPCNewClient := func(target string, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
+		interceptor := func(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, cops ...grpc.CallOption) (grpc.ClientStream, error) {
+			select {
+			case <-blockNextStream:
+				select {
+				case blocked <- struct{}{}:
+				default:
+				}
+				<-unblock
+			default:
+			}
+			return streamer(ctx, desc, cc, method, cops...)
+		}
+		opts = append(opts, grpc.WithStreamInterceptor(interceptor))
+		return grpc.NewClient(target, opts...)
+	}
+
+	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle(), GRPCNewClient: customGRPCNewClient}}
+	xdsClientConfig := xdsclient.Config{
+		Servers:          []xdsclient.ServerConfig{{ServerIdentifier: si}},
+		Node:             clients.Node{ID: nodeID},
+		TransportBuilder: grpctransport.NewBuilder(configs),
+		ResourceTypes:    resourceTypes,
+		Authorities: map[string]xdsclient.Authority{
+			"": {XDSServers: []xdsclient.ServerConfig{}},
+		},
+		MetricsReporter: tmr,
+	}
+
+	// 1. Initial Start - metric value 0
+	// Keep the listener stopped initially so NewStream fails/blocks.
+	lis.Stop()
+
+	client, err := xdsclient.New(xdsClientConfig)
+	if err != nil {
+		t.Fatalf("Failed to create xDS client: %v", err)
+	}
+	defer client.Close()
+
+	const listenerName = "test-listener-resource"
+	resources := e2e.UpdateOptions{
+		NodeID:         nodeID,
+		Listeners:      []*v3listenerpb.Listener{e2e.DefaultClientListener(listenerName, "route-config")},
+		SkipValidation: true,
+	}
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatalf("Failed to update management server: %v", err)
+	}
+
+	// Start watching. This will create the channel entry in xdsActiveChannels.
+	client.WatchResource(listenerType.TypeURL, listenerName, noopListenerWatcher{})
+
+	tmr.triggerAsyncMetrics()
+	if err := tmr.waitForSpecificMetric(ctx, &metrics.XDSClientConnected{ServerURI: mgmtServer.Address, Value: 0}); err != nil {
+		t.Fatalf("Step 1 failed: Expected XDSClientConnected to be 0 at start, got: %v", err)
+	}
+
+	// 2. 1st NewStream OK - metric value 1
+	lis.Restart()
+
+	// Wait for the stream to be created. Try polling the async metric a few times to prevent flakes.
+	var step2Passed bool
+	for i := 0; i < 50; i++ {
+		tmr.metricsCh.Drain()
+		tmr.triggerAsyncMetrics()
+		sCtx, sCancel := context.WithTimeout(ctx, 100*time.Millisecond)
+		err := tmr.waitForSpecificMetric(sCtx, &metrics.XDSClientConnected{ServerURI: mgmtServer.Address, Value: 1})
+		sCancel()
+		if err == nil {
+			step2Passed = true
+			break
+		}
+	}
+	if !step2Passed {
+		t.Fatalf("Step 2 failed: Expected XDSClientConnected to be 1 after 1st NewStream")
+	}
+
+	// Allow the first response.
+	close(sendResponse)
+	if err := tmr.waitForSpecificMetric(ctx, &metrics.ResourceUpdateValid{ServerURI: mgmtServer.Address, ResourceType: "ListenerResource"}); err != nil {
+		t.Fatal(err.Error())
+	}
+
+	// 3. Stream Fails - metric value 1
+	blockNextStream <- struct{}{}
+	lis.Stop()
+
+	<-blocked
+
+	tmr.triggerAsyncMetrics()
+	if err := tmr.waitForSpecificMetric(ctx, &metrics.XDSClientConnected{ServerURI: mgmtServer.Address, Value: 1}); err != nil {
+		t.Fatalf("Step 3 failed: Expected XDSClientConnected to be 1 while NewStream is blocked, got: %v", err)
+	}
+
+	// 4. NewStream Fails - metric value 0
+	close(unblock)
+
+	if err := tmr.waitForSpecificMetric(ctx, &metrics.ServerFailure{ServerURI: mgmtServer.Address}); err != nil {
+		t.Fatal(err.Error())
+	}
+
+	tmr.triggerAsyncMetrics()
+	if err := tmr.waitForSpecificMetric(ctx, &metrics.XDSClientConnected{ServerURI: mgmtServer.Address, Value: 0}); err != nil {
+		t.Fatalf("Step 4 failed: Expected XDSClientConnected to be 0 after NewStream failure, got: %v", err)
+	}
+
+	// Prepare for the next stream.
+	sendResponse = make(chan struct{})
+
+	// 5. NewStream OK - metric value 0
+	lis.Restart()
+
+	time.Sleep(5 * time.Second)
+
+	tmr.metricsCh.Drain()
+	tmr.triggerAsyncMetrics()
+	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
+	defer sCancel()
+	got, err := tmr.metricsCh.Receive(sCtx)
+	if err != nil {
+		t.Fatalf("Step 5 failed: Timeout waiting for XDSClientConnected metric: %v", err)
+	}
+	t.Logf("Got metric: %+v", got)
+	if m, ok := got.(*metrics.XDSClientConnected); ok {
+		if m.Value != 0 {
+			t.Fatalf("Step 5 failed: Expected XDSClientConnected to be 0 after successful NewStream but before response, got: %d", m.Value)
+		}
+	} else {
+		t.Fatalf("Expected XDSClientConnected metric, got: %T", got)
+	}
+
+	// 6. 1st Response Recv - metric value 1
+	close(sendResponse)
+
+	if err := tmr.waitForSpecificMetric(ctx, &metrics.ResourceUpdateValid{ServerURI: mgmtServer.Address, ResourceType: "ListenerResource"}); err != nil {
+		t.Fatal(err.Error())
+	}
+
+	tmr.triggerAsyncMetrics()
+	if err := tmr.waitForSpecificMetric(ctx, &metrics.XDSClientConnected{ServerURI: mgmtServer.Address, Value: 1}); err != nil {
+		t.Fatalf("Step 6 failed: Expected XDSClientConnected to be 1 after response, got: %v", err)
+	}
+}
+
+func (s) TestResourceMetrics_AuthorityOldStyle(t *testing.T) {
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
+	nodeID := uuid.New().String()
+
+	resourceTypes := map[string]xdsclient.ResourceType{xdsresource.V3ListenerURL: listenerType}
+	si := clients.ServerIdentifier{
+		ServerURI:  mgmtServer.Address,
+		Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"},
+	}
+	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
+	serverCfg := xdsclient.ServerConfig{ServerIdentifier: si}
+
+	tmr := newTestMetricsReporter()
+	xdsClientConfig := xdsclient.Config{
+		Servers:          []xdsclient.ServerConfig{serverCfg},
+		Node:             clients.Node{ID: nodeID},
+		TransportBuilder: grpctransport.NewBuilder(configs),
+		ResourceTypes:    resourceTypes,
+		Authorities: map[string]xdsclient.Authority{
+			"": {XDSServers: []xdsclient.ServerConfig{serverCfg}},
+		},
+		MetricsReporter: tmr,
+	}
+
+	client, err := xdsclient.New(xdsClientConfig)
+	if err != nil {
+		t.Fatalf("Failed to create xDS client: %v", err)
+	}
+	defer client.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	const listenerName = "test-listener"
+
+	client.WatchResource(listenerType.TypeURL, listenerName, &testWatcher{})
+
+	resources := e2e.UpdateOptions{
+		NodeID:         nodeID,
+		Listeners:      []*v3listenerpb.Listener{e2e.DefaultClientListener(listenerName, "route-config")},
+		SkipValidation: true,
+	}
+
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatalf("Failed to update management server: %v", err)
+	}
+
+	if err := tmr.waitForMetric(ctx, &metrics.ResourceUpdateValid{ServerURI: mgmtServer.Address, ResourceType: "ListenerResource"}); err != nil {
+		t.Fatal(err.Error())
+	}
+
+	tmr.triggerAsyncMetrics()
+	if err := tmr.waitForSpecificMetric(ctx, &metrics.XDSClientResourceStats{
+		Authority:    "#old",
+		ResourceType: "ListenerResource",
+		CacheState:   "acked",
+		Count:        1,
+	}); err != nil {
+		t.Fatalf("Failed to observe grpc.xds.authority '#old' metric substitution: %v", err)
 	}
 }
