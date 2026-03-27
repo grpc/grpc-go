@@ -27,9 +27,8 @@ import (
 	"net"
 
 	core "google.golang.org/grpc/credentials/alts/internal"
-	imem "google.golang.org/grpc/internal/mem"
+	"google.golang.org/grpc/internal/mem"
 	"google.golang.org/grpc/internal/transport"
-	"google.golang.org/grpc/mem"
 )
 
 // ALTSRecordCrypto is the interface for gRPC ALTS record protocol.
@@ -76,16 +75,16 @@ const (
 
 var (
 	protocols    = make(map[string]ALTSRecordFunc)
-	writeBufPool mem.BufferPool
+	writeBufPool *mem.BinaryTieredBufferPool
 	// readBufPool pools buffers of at least `altsReadBufferInitialSize` size.
 	// Since the read buffer size is slightly larger than 32KB, using a regular
 	// BinaryTieredBufferPool results in allocating buffers of almost double the
 	// required length.
-	readBufPool = imem.NewDirtySimplePool()
+	readBufPool = mem.NewDirtySimplePool()
 )
 
 func init() {
-	pool, err := imem.NewDirtyBinaryTieredBufferPool(
+	pool, err := mem.NewDirtyBinaryTieredBufferPool(
 		8,
 		12, // Go page size, 4KB
 		14, // 16KB (max HTTP/2 frame size used by gRPC)

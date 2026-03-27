@@ -24,18 +24,21 @@ import (
 	"net"
 	"testing"
 
+	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/mem"
 )
 
-func (s) TestReadyReader_Fallback(t *testing.T) {
+// TestReadyReader_NonRawConn verifies that ReadOnReady correctly reads data
+// from a net.Conn that doesn't support non-memory-pinning reads.
+func (s) TestReadyReader_NonRawConn(t *testing.T) {
 	data := []byte("hello world")
-	mc := &testConn{
-		in: bytes.NewBuffer(data),
-	}
-	pool := mem.DefaultBufferPool()
-	ac := NewReadyReader(mc)
+	reader, writer := net.Pipe()
+	go writer.Write(data)
 
-	bufHandle, n, err := ac.ReadOnReady(1024, pool)
+	pool := mem.DefaultBufferPool()
+	readyReader := NewReadyReader(reader)
+
+	bufHandle, n, err := readyReader.ReadOnReady(1024, pool)
 	if err != nil {
 		t.Fatalf("readInitial() failed: %v", err)
 	}
@@ -81,9 +84,10 @@ func (s) TestReadyReader_TCP_Blocking(t *testing.T) {
 	ac := NewReadyReader(conn)
 
 	resCh := make(chan []byte)
+	const readBufSize = 1024
 
 	go func() {
-		bufHandle, n, err := ac.ReadOnReady(1024, pool)
+		bufHandle, n, err := ac.ReadOnReady(readBufSize, pool)
 		if err != nil {
 			t.Errorf("Failed to read: %v", err)
 			return
@@ -96,19 +100,25 @@ func (s) TestReadyReader_TCP_Blocking(t *testing.T) {
 	// allocated (e.g. for a probe), it must be returned immediately.
 	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
-	select {
-	case <-pool.requestChan:
-		select {
-		case <-pool.putChan:
-		case <-sCtx.Done():
-			t.Fatal("Read buffer allocated and NOT returned while idle.")
+	if n, err := pool.requestChan.Receive(sCtx); err == nil {
+		if n != readBufSize {
+			t.Fatalf("unexpected request buffer size: got %d, want %d", n, readBufSize)
 		}
-	case <-sCtx.Done():
+		if n, err := pool.putChan.Receive(ctx); err != nil {
+			t.Fatal("Read buffer allocated and NOT returned while idle.")
+		} else if n != readBufSize {
+			t.Fatalf("unexpected returned buffer size: got %d, want %d", n, readBufSize)
+		}
 	}
 
 	// Write data to unblock.
-	close(pool.doneCh)
 	serverConn.Write(data)
+
+	if n, err := pool.requestChan.Receive(ctx); err != nil {
+		t.Fatal("Context timed out while waiting for a read buffer to be allocated.")
+	} else if n != readBufSize {
+		t.Fatalf("unexpected request buffer size: got %d, want %d", n, readBufSize)
+	}
 
 	var res []byte
 	select {
@@ -123,51 +133,24 @@ func (s) TestReadyReader_TCP_Blocking(t *testing.T) {
 
 type trackingBufferPool struct {
 	mem.BufferPool
-	doneCh      chan struct{}
-	requestChan chan int
-	putChan     chan int
+	requestChan testutils.Channel
+	putChan     testutils.Channel
 }
 
 func newTrackingPool(pool mem.BufferPool) *trackingBufferPool {
 	return &trackingBufferPool{
 		BufferPool:  pool,
-		requestChan: make(chan int),
-		putChan:     make(chan int),
-		doneCh:      make(chan struct{}),
+		requestChan: *testutils.NewChannelWithSize(1),
+		putChan:     *testutils.NewChannelWithSize(1),
 	}
 }
 
 func (p *trackingBufferPool) Get(size int) *[]byte {
-	select {
-	case p.requestChan <- size:
-	case <-p.doneCh:
-	}
+	p.requestChan.Replace(size)
 	return p.BufferPool.Get(size)
 }
 
 func (p *trackingBufferPool) Put(b *[]byte) {
-	select {
-	case p.putChan <- len(*b):
-	case <-p.doneCh:
-	}
+	p.putChan.Replace(len(*b))
 	p.BufferPool.Put(b)
-}
-
-// testConn mimics a net.Conn to the peer.
-type testConn struct {
-	net.Conn
-	in  *bytes.Buffer
-	out *bytes.Buffer
-}
-
-func (c *testConn) Read(b []byte) (n int, err error) {
-	return c.in.Read(b)
-}
-
-func (c *testConn) Write(b []byte) (n int, err error) {
-	return c.out.Write(b)
-}
-
-func (c *testConn) Close() error {
-	return nil
 }

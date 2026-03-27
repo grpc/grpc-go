@@ -297,7 +297,7 @@ func (p *TieredBufferPool) getPool(size int) bufferPool {
 	return p.sizedPools[poolIdx]
 }
 
-// SimpleBufferPool is an implementation of the BufferPool interface that
+// SimpleBufferPool is an implementation of the mem.BufferPool interface that
 // attempts to pool buffers with a sync.Pool. When Get is invoked, it tries to
 // acquire a buffer from the pool but if that buffer is too small, it returns it
 // to the pool and creates a new one.
@@ -306,7 +306,9 @@ type SimpleBufferPool struct {
 	shouldZero bool
 }
 
-// NewDirtySimplePool constructs a [SimpleBufferPool].
+// NewDirtySimplePool constructs a [SimpleBufferPool]. It does not initialize
+// the buffers before returning them. Callers must ensure they don't read the
+// buffers before writing data to them.
 func NewDirtySimplePool() *SimpleBufferPool {
 	return &SimpleBufferPool{
 		shouldZero: false,

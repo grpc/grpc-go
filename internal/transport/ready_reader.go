@@ -25,13 +25,20 @@ import (
 	"google.golang.org/grpc/mem"
 )
 
-// ReadyReader is an optional interface that can be implemented by net.Conn
+// ReadyReader is an optional interface that can be implemented by [net.Conn]
 // implementations to enable gRPC to perform non-memory-pinning reads.
 type ReadyReader interface {
 	// ReadOnReady waits for data to arrive, fetches a buffer, and performs a
-	// read. It returns a pointer to the buffer so you can return it to the pool
-	// later.
-	ReadOnReady(bufSize int, pool mem.BufferPool) (*[]byte, int, error)
+	// read. When the underlying IO is readable, it allocates a buffer of size
+	// bufSize from the pool and reads up to bufSize bytes into the buffer.
+	//
+	// It returns a pointer to the buffer so it can be returned to the pool
+	// later, the number of bytes read, and an error.
+	//
+	// Callers should always process the n > 0 bytes returned before considering
+	// the error. Doing so correctly handles I/O errors that happen after
+	// reading some bytes, as well as both of the allowed EOF behaviors.
+	ReadOnReady(bufSize int, pool mem.BufferPool) (b *[]byte, n int, err error)
 }
 
 // nonBlockingReader is optimized for non-memory-pinning reads using the RawConn
@@ -40,12 +47,9 @@ type nonBlockingReader struct {
 	raw syscall.RawConn
 }
 
-func (c *nonBlockingReader) ReadOnReady(bufSize int, pool mem.BufferPool) (*[]byte, int, error) {
-	var n int
+func (c *nonBlockingReader) ReadOnReady(bufSize int, pool mem.BufferPool) (buf *[]byte, n int, err error) {
 	var readErr error
-	var buf *[]byte
-
-	err := c.raw.Read(func(fd uintptr) bool {
+	err = c.raw.Read(func(fd uintptr) bool {
 		buf = pool.Get(bufSize)
 		n, readErr = sysRead(fd, *buf)
 		if readErr != nil {
@@ -86,24 +90,16 @@ func (c *blockingReader) ReadOnReady(bufSize int, pool mem.BufferPool) (*[]byte,
 	return buf, n, nil
 }
 
-// NewReadyReader detects if RawConn is available for non-memory-pinning reads.
-// If RawConn is unavailable, it falls back to using the simpler net.Conn
-// interface for reads.
+// NewReadyReader detects if [syscall.RawConn] is available for
+// non-memory-pinning reads. If [syscall.RawConn] is unavailable, it falls back
+// to using the simpler [net.Conn] interface for reads.
 func NewReadyReader(conn net.Conn) ReadyReader {
-	sysConn, isSyscall := conn.(syscall.Conn)
-	if !isSyscall || !isRawConnSupported() {
-		return &blockingReader{
-			conn: conn,
-		}
+	sysConn, ok := conn.(syscall.Conn)
+	if !ok || !isRawConnSupported() {
+		return &blockingReader{conn: conn}
 	}
-
 	if raw, err := sysConn.SyscallConn(); err == nil {
-		return &nonBlockingReader{
-			raw: raw,
-		}
+		return &nonBlockingReader{raw: raw}
 	}
-
-	return &blockingReader{
-		conn: conn,
-	}
+	return &blockingReader{conn: conn}
 }
