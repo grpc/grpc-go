@@ -94,25 +94,28 @@ var (
 		Default:     false,
 	})
 	defaultTargetPicksMetric = estats.RegisterInt64Count(estats.MetricDescriptor{
-		Name:        "grpc.lb.rls.default_target_picks",
-		Description: "EXPERIMENTAL. Number of LB picks sent to the default target.",
-		Unit:        "{pick}",
-		Labels:      []string{"grpc.target", "grpc.lb.rls.server_target", "grpc.lb.rls.data_plane_target", "grpc.lb.pick_result"},
-		Default:     false,
+		Name:           "grpc.lb.rls.default_target_picks",
+		Description:    "EXPERIMENTAL. Number of LB picks sent to the default target.",
+		Unit:           "{pick}",
+		Labels:         []string{"grpc.target", "grpc.lb.rls.server_target", "grpc.lb.rls.data_plane_target", "grpc.lb.pick_result"},
+		OptionalLabels: []string{"grpc.client.call.custom"},
+		Default:        false,
 	})
 	targetPicksMetric = estats.RegisterInt64Count(estats.MetricDescriptor{
-		Name:        "grpc.lb.rls.target_picks",
-		Description: "EXPERIMENTAL. Number of LB picks sent to each RLS target. Note that if the default target is also returned by the RLS server, RPCs sent to that target from the cache will be counted in this metric, not in grpc.rls.default_target_picks.",
-		Unit:        "{pick}",
-		Labels:      []string{"grpc.target", "grpc.lb.rls.server_target", "grpc.lb.rls.data_plane_target", "grpc.lb.pick_result"},
-		Default:     false,
+		Name:           "grpc.lb.rls.target_picks",
+		Description:    "EXPERIMENTAL. Number of LB picks sent to each RLS target. Note that if the default target is also returned by the RLS server, RPCs sent to that target from the cache will be counted in this metric, not in grpc.rls.default_target_picks.",
+		Unit:           "{pick}",
+		Labels:         []string{"grpc.target", "grpc.lb.rls.server_target", "grpc.lb.rls.data_plane_target", "grpc.lb.pick_result"},
+		OptionalLabels: []string{"grpc.client.call.custom"},
+		Default:        false,
 	})
 	failedPicksMetric = estats.RegisterInt64Count(estats.MetricDescriptor{
-		Name:        "grpc.lb.rls.failed_picks",
-		Description: "EXPERIMENTAL. Number of LB picks failed due to either a failed RLS request or the RLS channel being throttled.",
-		Unit:        "{pick}",
-		Labels:      []string{"grpc.target", "grpc.lb.rls.server_target"},
-		Default:     false,
+		Name:           "grpc.lb.rls.failed_picks",
+		Description:    "EXPERIMENTAL. Number of LB picks failed due to either a failed RLS request or the RLS channel being throttled.",
+		Unit:           "{pick}",
+		Labels:         []string{"grpc.target", "grpc.lb.rls.server_target"},
+		OptionalLabels: []string{"grpc.client.call.custom"},
+		Default:        false,
 	})
 )
 
