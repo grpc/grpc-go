@@ -760,7 +760,7 @@ func (s) TestChainEngine(t *testing.T) {
 					rpcData: &rpcData{
 						fullMethod: "localhost-fan-page",
 						peerInfo: &peer.Peer{
-							Addr: &addr{ipAddress: "0.0.0.0"},
+							Addr: &addr{ipAddress: "0.0.0.0:8080"},
 						},
 					},
 					wantStatusCode: codes.OK,
@@ -823,7 +823,7 @@ func (s) TestChainEngine(t *testing.T) {
 					rpcData: &rpcData{
 						fullMethod: "some method",
 						peerInfo: &peer.Peer{
-							Addr: &addr{ipAddress: "0.0.0.0"},
+							Addr: &addr{ipAddress: "0.0.0.0:8080"},
 							AuthInfo: credentials.TLSInfo{
 								State: tls.ConnectionState{
 									PeerCertificates: []*x509.Certificate{
@@ -855,7 +855,7 @@ func (s) TestChainEngine(t *testing.T) {
 					rpcData: &rpcData{
 						fullMethod: "get-product-list",
 						peerInfo: &peer.Peer{
-							Addr: &addr{ipAddress: "0.0.0.0"},
+							Addr: &addr{ipAddress: "0.0.0.0:8080"},
 						},
 					},
 					wantStatusCode: codes.PermissionDenied,
@@ -907,7 +907,7 @@ func (s) TestChainEngine(t *testing.T) {
 					rpcData: &rpcData{
 						fullMethod: "/regular-content",
 						peerInfo: &peer.Peer{
-							Addr: &addr{ipAddress: "0.0.0.0"},
+							Addr: &addr{ipAddress: "0.0.0.0:8080"},
 						},
 					},
 					wantStatusCode: codes.OK,
@@ -945,7 +945,7 @@ func (s) TestChainEngine(t *testing.T) {
 				{
 					rpcData: &rpcData{
 						peerInfo: &peer.Peer{
-							Addr: &addr{ipAddress: "0.0.0.0"},
+							Addr: &addr{ipAddress: "0.0.0.0:8080"},
 						},
 					},
 					wantStatusCode: codes.OK,
@@ -995,7 +995,7 @@ func (s) TestChainEngine(t *testing.T) {
 				{
 					rpcData: &rpcData{
 						peerInfo: &peer.Peer{
-							Addr: &addr{ipAddress: "10.0.0.0"},
+							Addr: &addr{ipAddress: "10.0.0.0:8080"},
 						},
 					},
 					wantStatusCode: codes.PermissionDenied,
@@ -1072,7 +1072,7 @@ func (s) TestChainEngine(t *testing.T) {
 				{
 					rpcData: &rpcData{
 						peerInfo: &peer.Peer{
-							Addr: &addr{ipAddress: "0.0.0.0"},
+							Addr: &addr{ipAddress: "0.0.0.0:8080"},
 						},
 					},
 					wantStatusCode: codes.OK,
@@ -1093,7 +1093,7 @@ func (s) TestChainEngine(t *testing.T) {
 				{
 					rpcData: &rpcData{
 						peerInfo: &peer.Peer{
-							Addr: &addr{ipAddress: "10.0.0.0"},
+							Addr: &addr{ipAddress: "10.0.0.0:8080"},
 						},
 					},
 					wantStatusCode: codes.PermissionDenied,
@@ -1139,7 +1139,7 @@ func (s) TestChainEngine(t *testing.T) {
 					rpcData: &rpcData{
 						fullMethod: "some method",
 						peerInfo: &peer.Peer{
-							Addr: &addr{ipAddress: "0.0.0.0"},
+							Addr: &addr{ipAddress: "0.0.0.0:8080"},
 							AuthInfo: credentials.TLSInfo{
 								State: tls.ConnectionState{
 									PeerCertificates: []*x509.Certificate{
@@ -1218,7 +1218,7 @@ func (s) TestChainEngine(t *testing.T) {
 					rpcData: &rpcData{
 						fullMethod: "some method",
 						peerInfo: &peer.Peer{
-							Addr: &addr{ipAddress: "0.0.0.0"},
+							Addr: &addr{ipAddress: "0.0.0.0:8080"},
 						},
 					},
 					wantStatusCode: codes.OK,
@@ -1328,7 +1328,7 @@ func (s) TestChainEngine(t *testing.T) {
 					rpcData: &rpcData{
 						fullMethod: "localhost-fan-page",
 						peerInfo: &peer.Peer{
-							Addr: &addr{ipAddress: "0.0.0.0"},
+							Addr: &addr{ipAddress: "0.0.0.0:8080"},
 						},
 					},
 					wantStatusCode: codes.PermissionDenied,
@@ -1338,7 +1338,7 @@ func (s) TestChainEngine(t *testing.T) {
 				{
 					rpcData: &rpcData{
 						peerInfo: &peer.Peer{
-							Addr: &addr{ipAddress: "10.0.0.0"},
+							Addr: &addr{ipAddress: "10.0.0.0:8080"},
 						},
 					},
 					wantStatusCode: codes.PermissionDenied,
@@ -1427,7 +1427,7 @@ func (s) TestChainEngine(t *testing.T) {
 					rpcData: &rpcData{
 						fullMethod: "localhost-fan-page",
 						peerInfo: &peer.Peer{
-							Addr: &addr{ipAddress: "0.0.0.0"},
+							Addr: &addr{ipAddress: "0.0.0.0:8080"},
 							AuthInfo: credentials.TLSInfo{
 								State: tls.ConnectionState{
 									PeerCertificates: []*x509.Certificate{
@@ -1460,7 +1460,7 @@ func (s) TestChainEngine(t *testing.T) {
 				{
 					rpcData: &rpcData{
 						peerInfo: &peer.Peer{
-							Addr: &addr{ipAddress: "10.0.0.0"},
+							Addr: &addr{ipAddress: "10.0.0.0:8080"},
 						},
 					},
 					wantStatusCode: codes.PermissionDenied,
@@ -1566,7 +1566,7 @@ func (s) TestChainEngine(t *testing.T) {
 					rpcData: &rpcData{
 						fullMethod: "localhost-fan-page",
 						peerInfo: &peer.Peer{
-							Addr: &addr{ipAddress: "0.0.0.0"},
+							Addr: &addr{ipAddress: "0.0.0.0:8080"},
 						},
 					},
 					wantStatusCode: codes.PermissionDenied,
@@ -1577,7 +1577,7 @@ func (s) TestChainEngine(t *testing.T) {
 				{
 					rpcData: &rpcData{
 						peerInfo: &peer.Peer{
-							Addr: &addr{ipAddress: "10.0.0.0"},
+							Addr: &addr{ipAddress: "10.0.0.0:8080"},
 						},
 					},
 					wantStatusCode: codes.PermissionDenied,
@@ -1675,7 +1675,7 @@ func (s) TestChainEngine(t *testing.T) {
 					rpcData: &rpcData{
 						fullMethod: "localhost-fan-page",
 						peerInfo: &peer.Peer{
-							Addr: &addr{ipAddress: "0.0.0.0"},
+							Addr: &addr{ipAddress: "0.0.0.0:8080"},
 						},
 					},
 					wantStatusCode: codes.PermissionDenied,
@@ -1694,7 +1694,7 @@ func (s) TestChainEngine(t *testing.T) {
 				{
 					rpcData: &rpcData{
 						peerInfo: &peer.Peer{
-							Addr: &addr{ipAddress: "10.0.0.0"},
+							Addr: &addr{ipAddress: "10.0.0.0:8080"},
 						},
 					},
 					wantStatusCode: codes.PermissionDenied,
