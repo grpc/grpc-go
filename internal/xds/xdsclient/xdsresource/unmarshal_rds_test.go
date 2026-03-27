@@ -919,6 +919,15 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name: "v3 routeConfig resource with empty name",
+			resource: testutils.MarshalAny(t, &v3routepb.RouteConfiguration{
+				Name:         "",
+				VirtualHosts: v3VirtualHost,
+			}),
+			wantName: "",
+			wantErr:  true,
+		},
+		{
 			name:     "v3 routeConfig resource",
 			resource: v3RouteConfig,
 			wantName: v3RouteConfigName,

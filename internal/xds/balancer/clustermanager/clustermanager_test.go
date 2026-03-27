@@ -513,7 +513,7 @@ func (s) TestClusterManagerForwardsBalancerBuildOptions(t *testing.T) {
 	}
 }
 
-const initIdleBalancerName = "test-init-Idle-balancer"
+const initIdleBalancerName = "test-init-idle-balancer"
 
 var errTestInitIdle = fmt.Errorf("init Idle balancer error 0")
 
@@ -551,7 +551,7 @@ func (s) TestInitialIdle(t *testing.T) {
 
 	configJSON1 := `{
 "children": {
-	"cds:cluster_1":{ "childPolicy": [{"test-init-Idle-balancer":""}] }
+	"cds:cluster_1":{ "childPolicy": [{"test-init-idle-balancer":""}] }
 }
 }`
 	config1, err := parser.ParseConfig([]byte(configJSON1))

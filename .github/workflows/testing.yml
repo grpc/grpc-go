@@ -27,7 +27,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.25'
+          go-version: '1.26'
           cache-dependency-path: "**/go.sum"
 
       # Run the vet-proto checks.
@@ -36,6 +36,8 @@ jobs:
 
   # Run the main gRPC-Go tests.
   tests:
+    name: ${{ matrix.display_name }}
+
     # Use the matrix variable to set the runner, with 'ubuntu-latest' as the
     # default.
     runs-on: ${{ matrix.runner || 'ubuntu-latest' }}
@@ -45,29 +47,36 @@ jobs:
       matrix:
         include:
           - type: vet
-            goversion: '1.24'
+            goversion: '1.25'
+            display_name: 'static checks (latest-1)'
 
           - type: extras
-            goversion: '1.25'
+            goversion: '1.26'
+            display_name: 'extras (latest)'
 
           - type: tests
-            goversion: '1.25'
+            goversion: '1.26'
+            display_name: 'tests (latest)'
 
           - type: tests
-            goversion: '1.25'
+            goversion: '1.26'
             testflags: -race
+            display_name: 'tests (-race, latest)'
 
           - type: tests
-            goversion: '1.25'
+            goversion: '1.26'
             goarch: 386
+            display_name: 'tests (i386, latest)'
 
           - type: tests
-            goversion: '1.25'
+            goversion: '1.26'
             goarch: arm64
             runner: ubuntu-24.04-arm
+            display_name: 'tests (arm, latest)'
 
           - type: tests
-            goversion: '1.24'
+            goversion: '1.25'
+            display_name: 'tests (latest-1)'
 
     steps:
       # Setup the environment.

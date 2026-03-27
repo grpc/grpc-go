@@ -262,9 +262,6 @@ func (s) TestResolverCloseClosesXDSClient(t *testing.T) {
 			t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
 		}
 		pool := xdsclient.NewPool(config)
-		if err != nil {
-			t.Fatalf("Failed to create an xDS client pool: %v", err)
-		}
 		c, cancel, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
 			Name:               t.Name(),
 			WatchExpiryTimeout: defaultTestTimeout,
