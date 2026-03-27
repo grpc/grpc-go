@@ -78,12 +78,12 @@ var (
 	EnableDefaultPortForProxyTarget = boolFromEnv("GRPC_EXPERIMENTAL_ENABLE_DEFAULT_PORT_FOR_PROXY_TARGET", true)
 
 	// CaseSensitiveBalancerRegistries is set if the balancer registry should be
-	// case-sensitive. This is disabled by default, but can be enabled by setting
+	// case-sensitive. This is enabled by default, but can be disabled by setting
 	// the env variable "GRPC_GO_EXPERIMENTAL_CASE_SENSITIVE_BALANCER_REGISTRIES"
-	// to "true".
+	// to "false".
 	//
-	// TODO: After 2 releases, we will enable the env var by default.
-	CaseSensitiveBalancerRegistries = boolFromEnv("GRPC_GO_EXPERIMENTAL_CASE_SENSITIVE_BALANCER_REGISTRIES", false)
+	// This env varible will be removed after a release.
+	CaseSensitiveBalancerRegistries = boolFromEnv("GRPC_GO_EXPERIMENTAL_CASE_SENSITIVE_BALANCER_REGISTRIES", true)
 
 	// XDSAuthorityRewrite indicates whether xDS authority rewriting is enabled.
 	// This feature is defined in gRFC A81 and is enabled by setting the
