@@ -54,7 +54,6 @@ type Endpoint struct {
 	ResolverEndpoint resolver.Endpoint
 	HealthStatus     EndpointHealthStatus
 	Weight           uint32
-	Metadata         map[string]any
 }
 
 // Locality contains information of a locality.
