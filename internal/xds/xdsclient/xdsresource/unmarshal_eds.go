@@ -41,17 +41,17 @@ import (
 // in a resolver.Endpoint.
 type metadataKeyType struct{}
 
-// MetadataValue wraps endpoint metadata so it can be stored as a
+// metadataValue wraps endpoint metadata so it can be stored as a
 // resolver.Endpoint attribute. Attributes.Equal requires values to
 // implement Equal(o any) bool or be comparable with ==.
-type MetadataValue struct {
+type metadataValue struct {
 	// Metadata stores the parsed endpoint metadata.
 	Metadata map[string]any
 }
 
 // Equal implements the interface used by attributes.Attributes.Equal.
-func (md MetadataValue) Equal(o any) bool {
-	omd, ok := o.(MetadataValue)
+func (md metadataValue) Equal(o any) bool {
+	omd, ok := o.(metadataValue)
 	if !ok {
 		return false
 	}
@@ -66,14 +66,14 @@ func SetMetadata(endpoint resolver.Endpoint, metadata map[string]any) resolver.E
 	if len(metadata) == 0 {
 		return endpoint
 	}
-	endpoint.Attributes = endpoint.Attributes.WithValue(metadataKeyType{}, MetadataValue{Metadata: metadata})
+	endpoint.Attributes = endpoint.Attributes.WithValue(metadataKeyType{}, metadataValue{Metadata: metadata})
 	return endpoint
 }
 
 // Metadata returns the metadata from the Attributes of the given endpoint.
 // If this attribute is not set, it returns nil.
 func Metadata(endpoint resolver.Endpoint) map[string]any {
-	md, _ := endpoint.Attributes.Value(metadataKeyType{}).(MetadataValue)
+	md, _ := endpoint.Attributes.Value(metadataKeyType{}).(metadataValue)
 	return md.Metadata
 }
 
