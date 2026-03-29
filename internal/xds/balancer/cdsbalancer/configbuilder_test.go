@@ -691,22 +691,10 @@ func (s) TestPriorityLocalitiesToClusterImpl_PickFirstWeightedShuffling_Disabled
 			},
 			// Endpoint weight is the product of locality weight and endpoint weight.
 			wantEndpoints: []resolver.Endpoint{
-				testEndpointWithAttrs(
-					healthyEndpoint("addr-1-1"),
-					20, 20*90, "test-priority", &clients.Locality{Zone: "test-zone-1"},
-				),
-				testEndpointWithAttrs(
-					healthyEndpoint("addr-1-2"),
-					20, 20*10, "test-priority", &clients.Locality{Zone: "test-zone-1"},
-				),
-				testEndpointWithAttrs(
-					healthyEndpoint("addr-2-1"),
-					80, 80*90, "test-priority", &clients.Locality{Zone: "test-zone-2"},
-				),
-				testEndpointWithAttrs(
-					healthyEndpoint("addr-2-2"),
-					80, 80*10, "test-priority", &clients.Locality{Zone: "test-zone-2"},
-				),
+				testEndpointWithAttrs(healthyEndpoint("addr-1-1"), 20, 20*90, "test-priority", &clients.Locality{Zone: "test-zone-1"}),
+				testEndpointWithAttrs(healthyEndpoint("addr-1-2"), 20, 20*10, "test-priority", &clients.Locality{Zone: "test-zone-1"}),
+				testEndpointWithAttrs(healthyEndpoint("addr-2-1"), 80, 80*90, "test-priority", &clients.Locality{Zone: "test-zone-2"}),
+				testEndpointWithAttrs(healthyEndpoint("addr-2-2"), 80, 80*10, "test-priority", &clients.Locality{Zone: "test-zone-2"}),
 			},
 		},
 		{
@@ -752,22 +740,10 @@ func (s) TestPriorityLocalitiesToClusterImpl_PickFirstWeightedShuffling_Disabled
 			},
 			// Endpoint weight is the product of locality weight and endpoint weight.
 			wantEndpoints: []resolver.Endpoint{
-				testEndpointWithAttrs(
-					healthyEndpoint("addr-1-1"),
-					20, 20*90, "test-priority", &clients.Locality{Zone: "test-zone-1"},
-				),
-				testEndpointWithAttrs(
-					healthyEndpoint("addr-1-2"),
-					20, 20*10, "test-priority", &clients.Locality{Zone: "test-zone-1"},
-				),
-				testEndpointWithAttrs(
-					healthyEndpoint("addr-2-1"),
-					80, 80*90, "test-priority", &clients.Locality{Zone: "test-zone-2"},
-				),
-				testEndpointWithAttrs(
-					healthyEndpoint("addr-2-2"),
-					80, 80*10, "test-priority", &clients.Locality{Zone: "test-zone-2"},
-				),
+				testEndpointWithAttrs(healthyEndpoint("addr-1-1"), 20, 20*90, "test-priority", &clients.Locality{Zone: "test-zone-1"}),
+				testEndpointWithAttrs(healthyEndpoint("addr-1-2"), 20, 20*10, "test-priority", &clients.Locality{Zone: "test-zone-1"}),
+				testEndpointWithAttrs(healthyEndpoint("addr-2-1"), 80, 80*90, "test-priority", &clients.Locality{Zone: "test-zone-2"}),
+				testEndpointWithAttrs(healthyEndpoint("addr-2-2"), 80, 80*10, "test-priority", &clients.Locality{Zone: "test-zone-2"}),
 			},
 		},
 	}
@@ -863,22 +839,10 @@ func (s) TestPriorityLocalitiesToClusterImpl_PickFirstWeightedShuffling_Enabled(
 			//   locality 1, endpoint 0:  0.8 * 0.9   = 1546188226
 			//   locality 1, endpoint 1:  0.8 * 0.1   =  171798691
 			wantEndpoints: []resolver.Endpoint{
-				testEndpointWithAttrs(
-					healthyEndpoint("addr-1-1"),
-					20, 386547056, "test-priority", &clients.Locality{Zone: "test-zone-1"},
-				),
-				testEndpointWithAttrs(
-					healthyEndpoint("addr-1-2"),
-					20, 42949672, "test-priority", &clients.Locality{Zone: "test-zone-1"},
-				),
-				testEndpointWithAttrs(
-					healthyEndpoint("addr-2-1"),
-					80, 1546188226, "test-priority", &clients.Locality{Zone: "test-zone-2"},
-				),
-				testEndpointWithAttrs(
-					healthyEndpoint("addr-2-2"),
-					80, 171798691, "test-priority", &clients.Locality{Zone: "test-zone-2"},
-				),
+				testEndpointWithAttrs(healthyEndpoint("addr-1-1"), 20, 386547056, "test-priority", &clients.Locality{Zone: "test-zone-1"}),
+				testEndpointWithAttrs(healthyEndpoint("addr-1-2"), 20, 42949672, "test-priority", &clients.Locality{Zone: "test-zone-1"}),
+				testEndpointWithAttrs(healthyEndpoint("addr-2-1"), 80, 1546188226, "test-priority", &clients.Locality{Zone: "test-zone-2"}),
+				testEndpointWithAttrs(healthyEndpoint("addr-2-2"), 80, 171798691, "test-priority", &clients.Locality{Zone: "test-zone-2"}),
 			},
 		},
 		{
@@ -942,22 +906,10 @@ func (s) TestPriorityLocalitiesToClusterImpl_PickFirstWeightedShuffling_Enabled(
 			//   locality 1, endpoint 0:  0.8 * 0.9   = 1546188226
 			//   locality 1, endpoint 1:  0.8 * 0.1   =  171798691
 			wantEndpoints: []resolver.Endpoint{
-				testEndpointWithAttrs(
-					healthyEndpoint("addr-1-1"),
-					20, 386547056, "test-priority", &clients.Locality{Zone: "test-zone-1"},
-				),
-				testEndpointWithAttrs(
-					healthyEndpoint("addr-1-2"),
-					20, 42949672, "test-priority", &clients.Locality{Zone: "test-zone-1"},
-				),
-				testEndpointWithAttrs(
-					healthyEndpoint("addr-2-1"),
-					80, 1546188226, "test-priority", &clients.Locality{Zone: "test-zone-2"},
-				),
-				testEndpointWithAttrs(
-					healthyEndpoint("addr-2-2"),
-					80, 171798691, "test-priority", &clients.Locality{Zone: "test-zone-2"},
-				),
+				testEndpointWithAttrs(healthyEndpoint("addr-1-1"), 20, 386547056, "test-priority", &clients.Locality{Zone: "test-zone-1"}),
+				testEndpointWithAttrs(healthyEndpoint("addr-1-2"), 20, 42949672, "test-priority", &clients.Locality{Zone: "test-zone-1"}),
+				testEndpointWithAttrs(healthyEndpoint("addr-2-1"), 80, 1546188226, "test-priority", &clients.Locality{Zone: "test-zone-2"}),
+				testEndpointWithAttrs(healthyEndpoint("addr-2-2"), 80, 171798691, "test-priority", &clients.Locality{Zone: "test-zone-2"}),
 			},
 		},
 	}
