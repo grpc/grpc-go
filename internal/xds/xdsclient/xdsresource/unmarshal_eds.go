@@ -70,13 +70,6 @@ func setMetadata(endpoint resolver.Endpoint, metadata map[string]any) resolver.E
 	return endpoint
 }
 
-// Metadata returns the metadata from the Attributes of the given endpoint.
-// If this attribute is not set, it returns nil.
-func Metadata(endpoint resolver.Endpoint) map[string]any {
-	md, _ := endpoint.Attributes.Value(metadataKeyType{}).(metadataValue)
-	return md.Metadata
-}
-
 // hostnameKeyType is the key to store the hostname attribute in
 // a resolver.Endpoint.
 type hostnameKeyType struct{}
