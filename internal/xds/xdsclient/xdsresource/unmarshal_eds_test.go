@@ -701,7 +701,7 @@ func (s) TestEDSParseRespProto_HTTP_Connect_CustomMetadata_EnvVarOn(t *testing.T
 				Localities: []Locality{
 					{
 						Endpoints: []Endpoint{{
-							ResolverEndpoint: SetMetadata(buildResolverEndpoint([]string{"addr1:314"}, "addr1"),
+							ResolverEndpoint: setMetadata(buildResolverEndpoint([]string{"addr1:314"}, "addr1"),
 								map[string]any{
 									"test-key": ProxyAddressMetadataValue{
 										Address: "1.2.3.4:1111",
@@ -743,7 +743,7 @@ func (s) TestEDSParseRespProto_HTTP_Connect_CustomMetadata_EnvVarOn(t *testing.T
 				Localities: []Locality{
 					{
 						Endpoints: []Endpoint{{
-							ResolverEndpoint: SetMetadata(buildResolverEndpoint([]string{"addr1:314"}, "addr1"),
+							ResolverEndpoint: setMetadata(buildResolverEndpoint([]string{"addr1:314"}, "addr1"),
 								map[string]any{
 									"test-key": StructMetadataValue{Data: map[string]any{
 										"key": float64(123),
@@ -880,7 +880,7 @@ func (s) TestEDSParseRespProto_HTTP_Connect_CustomMetadata_EnvVarOn(t *testing.T
 				Localities: []Locality{
 					{
 						Endpoints: []Endpoint{{
-							ResolverEndpoint: SetMetadata(buildResolverEndpoint([]string{"addr1:314"}, "addr1"),
+							ResolverEndpoint: setMetadata(buildResolverEndpoint([]string{"addr1:314"}, "addr1"),
 								map[string]any{
 									"test-key": ProxyAddressMetadataValue{
 										Address: "1.2.3.4:1111",
@@ -985,7 +985,7 @@ func (s) TestEDSParseRespProto_HTTP_Connect_CustomMetadata_EnvVarOn(t *testing.T
 				Localities: []Locality{
 					{
 						Endpoints: []Endpoint{{
-							ResolverEndpoint: SetMetadata(buildResolverEndpoint([]string{"addr1:314"}, "addr1"),
+							ResolverEndpoint: setMetadata(buildResolverEndpoint([]string{"addr1:314"}, "addr1"),
 								map[string]any{
 									"test-key": ProxyAddressMetadataValue{
 										Address: "1.2.3.4:1111",
@@ -1502,7 +1502,7 @@ func (s) TestEDSParseRespProto_HTTP_Connect_On_HashKeyBackwardCompat_On(t *testi
 		Localities: []Locality{
 			{
 				Endpoints: []Endpoint{{
-					ResolverEndpoint: SetMetadata(buildResolverEndpoint([]string{"addr1:314"}, "addr1"),
+					ResolverEndpoint: setMetadata(buildResolverEndpoint([]string{"addr1:314"}, "addr1"),
 						map[string]any{
 							"envoy.http11_proxy_transport_socket.proxy_address": ProxyAddressMetadataValue{
 								Address: "1.2.3.4:1111",

@@ -58,9 +58,9 @@ func (md metadataValue) Equal(o any) bool {
 	return reflect.DeepEqual(md.Metadata, omd.Metadata)
 }
 
-// SetMetadata returns a copy of the given endpoint with the metadata
+// setMetadata returns a copy of the given endpoint with the metadata
 // added as an attribute.
-func SetMetadata(endpoint resolver.Endpoint, metadata map[string]any) resolver.Endpoint {
+func setMetadata(endpoint resolver.Endpoint, metadata map[string]any) resolver.Endpoint {
 	// The default value of the metadata attribute is nil. Only set
 	// the attribute if the metadata is non-empty to avoid confusion.
 	if len(metadata) == 0 {
@@ -209,7 +209,7 @@ func parseEndpoints(lbEndpoints []*v3endpointpb.LbEndpoint, uniqueEndpointAddrs 
 		endpoint := resolver.Endpoint{Addresses: address}
 		endpoint = SetHostname(endpoint, lbEndpoint.GetEndpoint().GetHostname())
 		endpoint = ringhash.SetHashKey(endpoint, hashKey)
-		endpoint = SetMetadata(endpoint, endpointMetadata)
+		endpoint = setMetadata(endpoint, endpointMetadata)
 		endpoints = append(endpoints, Endpoint{
 			ResolverEndpoint: endpoint,
 			HealthStatus:     EndpointHealthStatus(lbEndpoint.GetHealthStatus()),
