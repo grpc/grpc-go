@@ -60,8 +60,6 @@ func (md metadataValue) Equal(o any) bool {
 // setMetadata returns a copy of the given endpoint with the metadata
 // added as an attribute.
 func setMetadata(endpoint resolver.Endpoint, metadata map[string]any) resolver.Endpoint {
-	// The default value of the metadata attribute is nil. Only set
-	// the attribute if the metadata is non-empty to avoid confusion.
 	if len(metadata) == 0 {
 		return endpoint
 	}
