@@ -45,8 +45,7 @@ type metadataKeyType struct{}
 // resolver.Endpoint attribute. Attributes.Equal requires values to
 // implement Equal(o any) bool or be comparable with ==.
 type metadataValue struct {
-	// Metadata stores the parsed endpoint metadata.
-	Metadata map[string]any
+	Metadata map[string]any // Stores the parsed endpoint metadata.
 }
 
 // Equal implements the interface used by attributes.Attributes.Equal.
