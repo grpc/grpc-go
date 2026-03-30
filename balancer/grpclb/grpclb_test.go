@@ -41,6 +41,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/pickfirst"
 	"google.golang.org/grpc/internal/testutils/roundrobin"
@@ -298,42 +299,34 @@ func (b *remoteBalancer) BalanceLoad(stream lbgrpc.LoadBalancer_BalanceLoadServe
 	}
 }
 
-type testServer struct {
-	testgrpc.UnimplementedTestServiceServer
-
-	addr     string
-	fallback bool
-}
-
 const testmdkey = "testmd"
-
-func (s *testServer) EmptyCall(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
-	md, ok := metadata.FromIncomingContext(ctx)
-	if !ok {
-		return nil, status.Error(codes.Internal, "failed to receive metadata")
-	}
-	if !s.fallback && (md == nil || len(md["lb-token"]) == 0 || md["lb-token"][0] != lbToken) {
-		return nil, status.Errorf(codes.Internal, "received unexpected metadata: %v", md)
-	}
-	grpc.SetTrailer(ctx, metadata.Pairs(testmdkey, s.addr))
-	return &testpb.Empty{}, nil
-}
-
-func (s *testServer) FullDuplexCall(testgrpc.TestService_FullDuplexCallServer) error {
-	return nil
-}
 
 func startBackends(t *testing.T, sn string, fallback bool, lis ...net.Listener) (servers []*grpc.Server) {
 	for _, l := range lis {
 		creds := &serverNameCheckCreds{
 			sn: sn,
 		}
-		s := grpc.NewServer(grpc.Creds(creds))
-		testgrpc.RegisterTestServiceServer(s, &testServer{addr: l.Addr().String(), fallback: fallback})
-		servers = append(servers, s)
-		go func(s *grpc.Server, l net.Listener) {
-			s.Serve(l)
-		}(s, l)
+		ss := &stubserver.StubServer{
+			Listener: l,
+			EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
+				md, ok := metadata.FromIncomingContext(ctx)
+				if !ok {
+					return nil, status.Error(codes.Internal, "failed to receive metadata")
+				}
+				if !fallback && (md == nil || len(md["lb-token"]) == 0 || md["lb-token"][0] != lbToken) {
+					return nil, status.Errorf(codes.Internal, "received unexpected metadata: %v", md)
+				}
+				grpc.SetTrailer(ctx, metadata.Pairs(testmdkey, l.Addr().String()))
+				return &testpb.Empty{}, nil
+			},
+			FullDuplexCallF: func(testgrpc.TestService_FullDuplexCallServer) error {
+				return nil
+			},
+		}
+		if err := ss.StartServer(grpc.Creds(creds)); err != nil {
+			t.Fatalf("Failed to start backend: %v", err)
+		}
+		servers = append(servers, ss.S.(*grpc.Server))
 		t.Logf("Started backend server listening on %s", l.Addr().String())
 	}
 	return
