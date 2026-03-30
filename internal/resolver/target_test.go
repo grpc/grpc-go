@@ -66,13 +66,13 @@ func TestParseTarget(t *testing.T) {
 			errContain: "has no scheme",
 		},
 		{
-			name:          "host:port retries with default scheme",
+			name:          "host:port_retries_with_default_scheme",
 			target:        "localhost:8080",
 			defaultScheme: "passthrough",
 			wantScheme:    "passthrough",
 		},
 		{
-			name:       "host:port without default",
+			name:       "host:port_without_default",
 			target:     "localhost:8080",
 			wantErr:    true,
 			errContain: "no resolver registered for scheme",
@@ -155,7 +155,7 @@ func TestParseTargetWithCustomBuilder(t *testing.T) {
 		},
 		{
 			// Opaque URI (host:port form) falls back to the default scheme.
-			name:          "host:port falls back to custom default",
+			name:          "host:port_falls_back_to_custom_default",
 			target:        "service:8080",
 			defaultScheme: "passthrough",
 			wantScheme:    "passthrough",
