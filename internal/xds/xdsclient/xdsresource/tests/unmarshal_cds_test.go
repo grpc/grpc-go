@@ -577,22 +577,22 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 
 func (s) TestValidateCluster_LRSReportEndpointMetrics(t *testing.T) {
 	tests := []struct {
-		desc       string
-		envEnabled bool
-		metrics    []string
-		wantProp   *xdsresource.BackendMetric
+		desc           string
+		lrsPropEnabled bool
+		metrics        []string
+		wantMetrics    *xdsresource.BackendMetric
 	}{
 		{
-			desc:       "disabled by env var",
-			envEnabled: false,
-			metrics:    []string{"cpu_utilization", "named_metrics.foo", "named_metrics.*"},
-			wantProp:   nil,
+			desc:           "disabled by env var",
+			lrsPropEnabled: false,
+			metrics:        []string{"cpu_utilization", "named_metrics.foo", "named_metrics.*"},
+			wantMetrics:    nil,
 		},
 		{
-			desc:       "all valid metrics",
-			envEnabled: true,
-			metrics:    []string{"cpu_utilization", "mem_utilization", "application_utilization", "named_metrics.foo", "named_metrics.bar"},
-			wantProp: &xdsresource.BackendMetric{
+			desc:           "all valid metrics",
+			lrsPropEnabled: true,
+			metrics:        []string{"cpu_utilization", "mem_utilization", "application_utilization", "named_metrics.foo", "named_metrics.bar"},
+			wantMetrics: &xdsresource.BackendMetric{
 				CPUUtilization:         true,
 				MemUtilization:         true,
 				ApplicationUtilization: true,
@@ -604,20 +604,20 @@ func (s) TestValidateCluster_LRSReportEndpointMetrics(t *testing.T) {
 			},
 		},
 		{
-			desc:       "enabled by env var",
-			envEnabled: true,
-			metrics:    []string{"named_metrics.*", "named_metrics.foo", "cpu_utilization"},
-			wantProp: &xdsresource.BackendMetric{
+			desc:           "enabled by env var",
+			lrsPropEnabled: true,
+			metrics:        []string{"named_metrics.*", "named_metrics.foo", "cpu_utilization"},
+			wantMetrics: &xdsresource.BackendMetric{
 				CPUUtilization:  true,
 				NamedMetricsAll: true,
 				NamedMetrics:    nil,
 			},
 		},
 		{
-			desc:       "ignores invalid metrics",
-			envEnabled: true,
-			metrics:    []string{"named_metrics.", "invalid_metric", "named_metrics.valid"},
-			wantProp: &xdsresource.BackendMetric{
+			desc:           "ignores invalid metrics",
+			lrsPropEnabled: true,
+			metrics:        []string{"named_metrics.", "invalid_metric", "named_metrics.valid"},
+			wantMetrics: &xdsresource.BackendMetric{
 				NamedMetricsAll: false,
 				NamedMetrics: map[string]bool{
 					"valid": true,
@@ -628,7 +628,7 @@ func (s) TestValidateCluster_LRSReportEndpointMetrics(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
-			testutils.SetEnvConfig(t, &envconfig.XDSORCAToLRSPropEnabled, tt.envEnabled)
+			testutils.SetEnvConfig(t, &envconfig.XDSORCAToLRSPropEnabled, tt.lrsPropEnabled)
 			cluster := &v3clusterpb.Cluster{
 				Name:                 "test-cluster",
 				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
@@ -646,8 +646,8 @@ func (s) TestValidateCluster_LRSReportEndpointMetrics(t *testing.T) {
 			if err != nil {
 				t.Fatalf("ValidateClusterAndConstructClusterUpdateForTesting() failed: %v", err)
 			}
-			if !update.LRSReportEndpointMetrics.Equal(tt.wantProp) {
-				t.Fatalf("LRSReportEndpointMetrics:\n got %+v\nwant %+v", update.LRSReportEndpointMetrics, tt.wantProp)
+			if !update.LRSReportEndpointMetrics.Equal(tt.wantMetrics) {
+				t.Fatalf("LRSReportEndpointMetrics:\n got %+v\nwant %+v", update.LRSReportEndpointMetrics, tt.wantMetrics)
 			}
 		})
 	}
