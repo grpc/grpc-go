@@ -22,11 +22,11 @@ import (
 	"io"
 	"slices"
 	"strconv"
-	"sync/atomic"
 	"testing"
 	"time"
 
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/balancer/pickfirst"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/health"
 	healthgrpc "google.golang.org/grpc/health/grpc_health_v1"
@@ -169,6 +169,9 @@ func setupStubServer(t *testing.T, metricsOptions *opentelemetry.MetricsOptions,
 func waitForTraceSpans(ctx context.Context, exporter *tracetest.InMemoryExporter, wantSpans []traceSpanInfo) (tracetest.SpanStubs, error) {
 	for ; ctx.Err() == nil; <-time.After(time.Millisecond) {
 		spans := exporter.GetSpans()
+		if len(spans) < len(wantSpans) {
+			continue
+		}
 		missingAnySpan := false
 		for _, wantSpan := range wantSpans {
 			if !slices.ContainsFunc(spans, func(span tracetest.SpanStub) bool {
@@ -1403,71 +1406,69 @@ func (s) TestRPCSpanErrorStatus(t *testing.T) {
 
 const delayedResolutionEventName = "Delayed name resolution complete"
 
+type testCCWrapper struct {
+	balancer.ClientConn
+	pickInvoked *grpcsync.Event
+	ctx         context.Context
+}
+
+func (t *testCCWrapper) UpdateState(state balancer.State) {
+	state.Picker = &blockingPicker{
+		p:           state.Picker,
+		pickInvoked: t.pickInvoked,
+	}
+	// Delay propagating the Ready connectivity state until Pick has been invoked
+	// at least once. This ensures the "Delayed LB pick complete" condition.
+	if state.ConnectivityState == connectivity.Ready {
+		go func() {
+			select {
+			case <-t.pickInvoked.Done():
+				t.ClientConn.UpdateState(state)
+			case <-t.ctx.Done():
+			}
+		}()
+		return
+	}
+	t.ClientConn.UpdateState(state)
+}
+
 type blockingPicker struct {
-	sc          atomic.Pointer[subConnWrapper]
-	pickInvoked chan struct{}
+	p           balancer.Picker
+	pickInvoked *grpcsync.Event
 }
 
-type subConnWrapper struct {
-	balancer.SubConn
+func (p *blockingPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
+	p.pickInvoked.Fire()
+	return p.p.Pick(info)
 }
 
-func (p *blockingPicker) Pick(balancer.PickInfo) (balancer.PickResult, error) {
-	select {
-	case <-p.pickInvoked:
-	default:
-		close(p.pickInvoked)
-	}
-	sc := p.sc.Load()
-	if sc == nil {
-		return balancer.PickResult{}, balancer.ErrNoSubConnAvailable
-	}
-	return balancer.PickResult{SubConn: sc.SubConn}, nil
-}
-
-// registerBlockingBalancer registers a stub balancer that initially returns a
-// blocking picker to ensure the pick method blocks and waits for the picker.
-// This guarantees the "Delayed LB pick complete" event is emitted reliably.
+// registerBlockingBalancer registers a stub balancer that delegates to
+// pick_first. It wraps the ClientConn to intercept state updates and wraps
+// the picker to detect calls to Pick. This guarantees the "Delayed LB pick
+// complete" event is emitted reliably.
 func registerBlockingBalancer(ctx context.Context, t *testing.T, balancerName string) {
 	t.Helper()
-	var picker *blockingPicker
 	stub.Register(balancerName, stub.BalancerFuncs{
+		Init: func(bd *stub.BalancerData) {
+			cc := &testCCWrapper{
+				ClientConn:  bd.ClientConn,
+				pickInvoked: grpcsync.NewEvent(),
+				ctx:         ctx,
+			}
+			bd.ChildBalancer = balancer.Get(pickfirst.Name).Build(cc, bd.BuildOptions)
+		},
+		Close: func(bd *stub.BalancerData) {
+			if bd.ChildBalancer != nil {
+				bd.ChildBalancer.Close()
+			}
+		},
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
-			// Create a blocking picker on the first call.
-			if picker == nil {
-				picker = &blockingPicker{pickInvoked: make(chan struct{})}
-				bd.ClientConn.UpdateState(balancer.State{
-					ConnectivityState: connectivity.Connecting,
-					Picker:            picker,
-				})
+			return bd.ChildBalancer.UpdateClientConnState(ccs)
+		},
+		ExitIdle: func(bd *stub.BalancerData) {
+			if bd.ChildBalancer != nil {
+				bd.ChildBalancer.ExitIdle()
 			}
-
-			// Create a SubConn with the addresses from the resolver.
-			if len(ccs.ResolverState.Addresses) > 0 {
-				var subConn balancer.SubConn
-				subConn, err := bd.ClientConn.NewSubConn(ccs.ResolverState.Addresses, balancer.NewSubConnOptions{
-					StateListener: func(state balancer.SubConnState) {
-						if state.ConnectivityState == connectivity.Ready {
-							go func() {
-								select {
-								case <-picker.pickInvoked:
-									picker.sc.Store(&subConnWrapper{SubConn: subConn})
-									bd.ClientConn.UpdateState(balancer.State{
-										ConnectivityState: connectivity.Ready,
-										Picker:            picker,
-									})
-								case <-ctx.Done():
-								}
-							}()
-						}
-					},
-				})
-				if err != nil {
-					return err
-				}
-				subConn.Connect()
-			}
-			return nil
 		},
 	})
 }
