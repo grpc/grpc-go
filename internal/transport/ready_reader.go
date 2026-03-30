@@ -19,6 +19,8 @@
 package transport
 
 import (
+	"errors"
+	"io"
 	"net"
 	"syscall"
 
@@ -90,16 +92,126 @@ func (c *blockingReader) ReadOnReady(bufSize int, pool mem.BufferPool) (*[]byte,
 	return buf, n, nil
 }
 
-// NewReadyReader detects if [syscall.RawConn] is available for
-// non-memory-pinning reads. If [syscall.RawConn] is unavailable, it falls back
-// to using the simpler [net.Conn] interface for reads.
-func NewReadyReader(conn net.Conn) ReadyReader {
-	sysConn, ok := conn.(syscall.Conn)
+// newNonBlockingReader returns a ReadyReader if the passed reader supports
+// non-memory-pinning reads, else nil.
+func newNonBlockingReader(r io.Reader) ReadyReader {
+	if rr, ok := r.(ReadyReader); ok {
+		return rr
+	}
+	sysConn, ok := r.(syscall.Conn)
 	if !ok || !isRawConnSupported() {
-		return &blockingReader{conn: conn}
+		return nil
 	}
 	if raw, err := sysConn.SyscallConn(); err == nil {
 		return &nonBlockingReader{raw: raw}
 	}
+	return nil
+}
+
+// NewReadyReader detects if [syscall.RawConn] is available for
+// non-memory-pinning reads. If [syscall.RawConn] is unavailable, it falls back
+// to using the simpler [net.Conn] interface for reads.
+func NewReadyReader(conn net.Conn) ReadyReader {
+	if r := newNonBlockingReader(conn); r != nil {
+		return r
+	}
 	return &blockingReader{conn: conn}
 }
+
+// bufReadyReader implements buffering for an io.bufReadyReader object.
+// A new bufReadyReader is created by calling [NewReader] or [newBufReadyReader];
+// alternatively the zero value of a bufReadyReader may be used after calling [Reset]
+// on it.
+type bufReadyReader struct {
+	buf       *[]byte
+	pool      mem.BufferPool
+	bufSize   int
+	rd        ReadyReader // reader provided by the client
+	r, w      int         // buf read and write positions
+	err       error
+	constPool constBufferPool // stored as a field to avoid heap allocations.
+}
+
+// newBufReadyReader returns a new [bufferedReadyReader] whose buffer has the
+// specified size. If the argument.
+func newBufReadyReader(rd ReadyReader, size int, pool mem.BufferPool) *bufReadyReader {
+	r := &bufReadyReader{
+		rd:      rd,
+		pool:    pool,
+		bufSize: size,
+	}
+	return r
+}
+
+var errNegativeRead = errors.New("bufio: reader returned negative count from Read")
+
+func (b *bufReadyReader) readErr() error {
+	err := b.err
+	b.err = nil
+	return err
+}
+
+func (b *bufReadyReader) buffered() int { return b.w - b.r }
+
+// Read reads data into p.
+// It returns the number of bytes read into p.
+// The bytes are taken from at most one Read on the underlying [ReadyReader],
+// hence n may be less than len(p).
+// If the underlying [ReadyReader] can return a non-zero count with io.EOF,
+// then this Read method can do so as well; see the [io.Reader] docs.
+func (b *bufReadyReader) Read(p []byte) (n int, err error) {
+	n = len(p)
+	if n == 0 {
+		if b.buffered() > 0 {
+			return 0, nil
+		}
+		return 0, b.readErr()
+	}
+	if b.r == b.w {
+		if b.err != nil {
+			return 0, b.readErr()
+		}
+		if len(p) >= b.bufSize {
+			// Large read, empty buffer.
+			// Read directly into p to avoid copy.
+			b.constPool.buffer = p
+			_, n, err := b.rd.ReadOnReady(len(p), &b.constPool)
+			b.err = err
+			if n < 0 {
+				panic(errNegativeRead)
+			}
+			return n, b.readErr()
+		}
+		// One read.
+		b.r = 0
+		b.w = 0
+		b.buf, n, b.err = b.rd.ReadOnReady(b.bufSize, b.pool)
+		if n < 0 {
+			panic(errNegativeRead)
+		}
+		if n == 0 {
+			return 0, b.readErr()
+		}
+		b.w += n
+	}
+
+	// copy as much as we can
+	buf := *b.buf
+	n = copy(p, buf[b.r:b.w])
+	b.r += n
+	if b.r == b.w {
+		// Consumed entire buffer, release it.
+		b.pool.Put(b.buf)
+	}
+	return n, nil
+}
+
+type constBufferPool struct {
+	buffer []byte
+}
+
+func (p *constBufferPool) Get(int) *[]byte {
+	return &p.buffer
+}
+
+func (p *constBufferPool) Put(*[]byte) {}
