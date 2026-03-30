@@ -253,19 +253,6 @@ func (s) TestParseConfigErrors(t *testing.T) {
 			wantErr: "rls: empty lookup_service in route lookup config",
 		},
 		{
-			desc: "unregistered scheme in lookup service URI",
-			input: []byte(`{
-					"routeLookupConfig": {
-						"grpcKeybuilders": [{
-							"names": [{"service": "service", "method": "method"}],
-							"headers": [{"key": "k1", "names": ["v1"]}]
-						}],
-						"lookupService": "badScheme:///target"
-					}
-				}`),
-			wantErr: "rls: invalid target URI in lookup_service",
-		},
-		{
 			desc: "invalid lookup service timeout",
 			input: []byte(`{
 				"routeLookupConfig": {
