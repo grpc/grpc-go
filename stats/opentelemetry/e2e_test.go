@@ -2130,12 +2130,12 @@ func runDisconnectScenario(t *testing.T, name, wantLabel string, action func(*st
 			return nil, err
 		}
 		activeConn := &errorConn{Conn: conn}
-		// Ensure we only track the latest active connection if gRPC reconnects
 		select {
-		case <-connCh:
-		default:
+		case connCh <- activeConn:
+		case <-ctx.Done():
+			activeConn.Conn.Close()
+			return nil, ctx.Err()
 		}
-		connCh <- activeConn
 		return activeConn, nil
 	}
 
@@ -2146,7 +2146,6 @@ func runDisconnectScenario(t *testing.T, name, wantLabel string, action func(*st
 		grpc.WithContextDialer(dialer),
 		opentelemetry.DialOption(opentelemetry.Options{MetricsOptions: mo}),
 	}
-
 	cc, err := grpc.NewClient(target, dopts...)
 	if err != nil {
 		t.Fatalf("Failed to create client: %v", err)
@@ -2159,7 +2158,12 @@ func runDisconnectScenario(t *testing.T, name, wantLabel string, action func(*st
 		t.Fatalf("Warm-up EmptyCall failed: %v", err)
 	}
 
-	activeConn := <-connCh
+	var activeConn *errorConn
+	select {
+	case activeConn = <-connCh:
+	case <-ctx.Done():
+		t.Fatalf("Timed out waiting for connection from dialer: %v", ctx.Err())
+	}
 
 	// injectErr provides a way for test cases to force the transport to fail
 	// with a specific error and immediately close the physical socket.

@@ -349,7 +349,7 @@ func (c *controllableConn) breakWith(err error) {
 // triggerFunc to simulate a specific disconnection scenario.
 //
 // triggerFunc is called when the connection has been successfully established and
-// the RPC has started. It is responsible for triggering the disconnect condition
+// one RPC has completed. It is responsible for triggering the disconnect condition
 // (e.g. graceful shutdown, connection reset) that results in the emission of the
 // wantLabel metric.
 func runDisconnectLabelTest(t *testing.T, wantLabel string, triggerFunc func(*stubserver.StubServer, *controllableConn)) {
@@ -365,7 +365,6 @@ func runDisconnectLabelTest(t *testing.T, wantLabel string, triggerFunc func(*st
 		Addresses:     []resolver.Address{{Addr: ss.Address}},
 	})
 
-	grpcTarget := r.Scheme() + ":///"
 	reader := metric.NewManualReader()
 	provider := metric.NewMeterProvider(metric.WithReader(reader))
 	mo := opentelemetry.MetricsOptions{
@@ -383,11 +382,13 @@ func runDisconnectLabelTest(t *testing.T, wantLabel string, triggerFunc func(*st
 		cc := &controllableConn{Conn: conn}
 		select {
 		case connCh <- cc:
-		default:
+		case <-ctx.Done():
+			return nil, ctx.Err()
 		}
 		return cc, nil
 	}
 
+	grpcTarget := r.Scheme() + ":///"
 	cc, err := grpc.NewClient(grpcTarget, opentelemetry.DialOption(opentelemetry.Options{MetricsOptions: mo}), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r), grpc.WithContextDialer(dialer))
 	if err != nil {
 		t.Fatalf("NewClient() failed: %v", err)
@@ -403,8 +404,8 @@ func runDisconnectLabelTest(t *testing.T, wantLabel string, triggerFunc func(*st
 	var lc *controllableConn
 	select {
 	case lc = <-connCh:
-	default:
-		t.Fatalf("Connection not available from dialer")
+	case <-ctx.Done():
+		t.Fatalf("Timed out waiting for connection from dialer: %v", ctx.Err())
 	}
 
 	// Trigger disconnection
