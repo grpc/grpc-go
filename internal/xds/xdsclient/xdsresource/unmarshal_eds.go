@@ -67,7 +67,6 @@ func Hostname(addr resolver.Address) string {
 // added as an attribute. If the health status is EndpointHealthStatusUnknown,
 // the endpoint is returned unchanged.
 func SetHealthStatus(endpoint resolver.Endpoint, hs EndpointHealthStatus) resolver.Endpoint {
-	// Since the health status is unknown(nil) by default, we only set it if it is not unknown.
 	if hs == EndpointHealthStatusUnknown {
 		return endpoint
 	}
