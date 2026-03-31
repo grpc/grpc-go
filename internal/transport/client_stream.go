@@ -199,6 +199,8 @@ func (s *ClientStream) TrailersOnly() bool {
 // Status can be read safely only after the stream has ended,
 // that is, after Done() is closed.
 func (s *ClientStream) Status() *status.Status {
+	s.collectionMu.Lock()
+	defer s.collectionMu.Unlock()
 	return s.status
 }
 
