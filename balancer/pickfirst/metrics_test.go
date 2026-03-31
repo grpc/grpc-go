@@ -297,22 +297,31 @@ func metricsDataFromReader(ctx context.Context, reader *metric.ManualReader) map
 	return gotMetrics
 }
 
+// TestDisconnectLabel tests the disconnect label metric plumbing.
+// Separately, e2e tests are more exhaustive and check for all disconnect reasons.
 func (s) TestDisconnectLabel(t *testing.T) {
-	// 1. Valid GOAWAY
-	// Server GracefulStop sends GOAWAY with active streams = 0.
-	// This usually sends NoError(0) code.
+	// This subtest verifies the "GOAWAY NO_ERROR" label when the server shuts
+	// down gracefully. Since runDisconnectLabelTest performs a unary RPC which
+	// completes before the triggerFunc is invoked, there are no active streams.
+	// GracefulStop sends a GOAWAY with active streams = 0, which results in a
+	// NO_ERROR code.
 	t.Run("GoAway", func(t *testing.T) {
 		runDisconnectLabelTest(t, "GOAWAY NO_ERROR", func(ss *stubserver.StubServer, _ *controllableConn) {
 			ss.S.GracefulStop()
 		})
 	})
 
+	// This subtest verifies the "connection reset" label when the connection is
+	// reset by the peer. It injects a syscall.ECONNRESET error into the transport
+	// read to simulate this scenario.
 	t.Run("ConnectionReset", func(t *testing.T) {
 		runDisconnectLabelTest(t, "connection reset", func(_ *stubserver.StubServer, cc *controllableConn) {
 			cc.breakWith(syscall.ECONNRESET)
 		})
 	})
 
+	// This subtest verifies that an io.EOF error injected into the transport read
+	// maps to the "unknown" label.
 	t.Run("EOF", func(t *testing.T) {
 		runDisconnectLabelTest(t, "unknown", func(_ *stubserver.StubServer, cc *controllableConn) {
 			cc.breakWith(io.EOF)

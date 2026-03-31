@@ -749,12 +749,10 @@ type GoAwayInfo struct {
 	Reason GoAwayReason
 	// GoAwayCode is the raw HTTP/2 error code received in a GOAWAY frame.
 	GoAwayCode http2.ErrCode
-	// Err is the underlying error that caused the connection to close. If the
-	// connection was closed due to a socket error or context cancellation
-	// instead of a GOAWAY, this field will be populated.
-	//
-	// If the connection was closed by a GOAWAY frame, this will usually be a
-	// connection error that describes the connection closing.
+	// Err is the underlying error that caused the connection to close. It is
+	// populated if the connection was closed due to a socket error or context
+	// cancellation without receiving a GOAWAY frame. If the connection was
+	// closed due to a GOAWAY frame, this field will be nil.
 	Err error
 }
 

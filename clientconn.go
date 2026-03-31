@@ -1574,6 +1574,7 @@ func (ac *addrConn) createTransport(ctx context.Context, addr resolver.Address, 
 // https://github.com/grpc/proposal/blob/master/A94-grpc-subchannel-disconnections-metrics.md
 func disconnectErrorString(info transport.GoAwayInfo) string {
 	err := info.Err
+	var sysErr syscall.Errno
 	switch {
 	case info.Reason != transport.GoAwayInvalid:
 		return fmt.Sprintf("GOAWAY %s", info.GoAwayCode.String())
@@ -1587,11 +1588,9 @@ func disconnectErrorString(info transport.GoAwayInfo) string {
 		return "connection timed out"
 	case errors.Is(err, syscall.ECONNABORTED):
 		return "connection aborted"
+	case errors.As(err, &sysErr):
+		return "socket error"
 	default:
-		var sysErr syscall.Errno
-		if errors.As(err, &sysErr) {
-			return "socket error"
-		}
 		return "unknown"
 	}
 }
@@ -1699,11 +1698,11 @@ func (ac *addrConn) tearDown(err error) {
 	}
 	curTr := ac.transport
 	ac.transport = nil
-	// We have to set the state to Shutdown before anything else to prevent races
-	// between setting the state and logic that waits on context cancellation / etc.
 	if ac.disconnectErrorLabel == "" {
 		ac.disconnectErrorLabel = "subchannel shutdown"
 	}
+	// We have to set the state to Shutdown before anything else to prevent races
+	// between setting the state and logic that waits on context cancellation / etc.
 	ac.updateConnectivityState(connectivity.Shutdown, nil)
 	ac.cancel()
 	ac.curAddr = resolver.Address{}
