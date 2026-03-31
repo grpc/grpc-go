@@ -19,10 +19,10 @@
 package grpcsync
 
 import (
-"context"
-"errors"
+	"context"
+	"errors"
 
-"google.golang.org/grpc/internal/buffer"
+	"google.golang.org/grpc/internal/buffer"
 )
 
 // ErrSerializerClosed is returned by ScheduleAndWait when the callback cannot
