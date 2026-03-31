@@ -52,12 +52,10 @@ scheduleOrderCh := make(chan int, numCallbacks)
 executionOrderCh := make(chan int, numCallbacks)
 for i := 0; i < numCallbacks; i++ {
 c(id int) {
+Schedule(func(ctx context.Context) {
+e():
+OrderCh <- id
 lock()
-id
-c(ctx context.Context) {
-<-ctx.Done():
-
-OrderCh <- id:
  a couple of goroutines to capture the order or scheduling and the
 // order of execution.
 scheduleOrder := make([]int, numCallbacks)
@@ -66,20 +64,19 @@ var wg sync.WaitGroup
 wg.Add(2)
 go func() {
 e()
-:= 0; i < numCallbacks; i++ {
-<-ctx.Done():
+0; i < numCallbacks; i++ {
+e():
 
-:= <-scheduleOrderCh:
-id
+<-scheduleOrderCh:
 c() {
 e()
-:= 0; i < numCallbacks; i++ {
-<-ctx.Done():
+0; i < numCallbacks; i++ {
+e():
 
-:= <-executionOrderCh:
+<-executionOrderCh:
 Order[i] = id
 := cmp.Diff(executionOrder, scheduleOrder); diff != "" {
-not executed in scheduled order. diff(-want, +got):\n%s", diff)
+ot executed in scheduled order. diff(-want, +got):\n%s", diff)
 }
 }
 
@@ -136,12 +133,9 @@ const numCallbacks = 10
 callbackCh := make(chan int, numCallbacks)
 for i := 0; i < numCallbacks; i++ {
 um := i
-func(context.Context) { callbackCh <- num }
-Failure := func() { t.Fatal("Schedule failed to accept a callback when the serializer is yet to be closed") }
-Failure)
-}
-
-// Ensure that none of the newer callbacks are executed at this point.
+c(context.Context) { callbackCh <- num },
+c() { t.Fatal("Schedule failed to accept a callback when the serializer is yet to be closed") },
+sure that none of the newer callbacks are executed at this point.
 select {
 case <-time.After(defaultTestShortTimeout):
 case <-callbackCh:
@@ -158,11 +152,11 @@ serializerCancel()
 
 // Ensure that the newer callbacks are executed.
 for i := 0; i < numCallbacks; i++ {
-<-ctx.Done():
- waiting for callback scheduled before close to be executed")
+e():
+g for callback scheduled before close to be executed")
 um := <-callbackCh:
 um != i {
-g callback %d, want %d", num, i)
+want %d", num, i)
 e()
 
 // Ensure that a callback cannot be scheduled after the serializer is
@@ -173,7 +167,7 @@ onFailure := func() { close(done) }
 cs.ScheduleOr(callback, onFailure)
 select {
 case <-ctx.Done():
- waiting for onFailure to be called")
+g for onFailure to be called")
 case <-done:
 }
 }
@@ -187,7 +181,7 @@ cs := NewCallbackSerializer(ctx)
 
 executed := make(chan struct{})
 if err := cs.ScheduleAndWait(func(context.Context) {
-!= nil {
+nil {
 dWait() returned unexpected error: %v", err)
 }
 
@@ -213,7 +207,7 @@ serializerCancel()
 <-cs.Done()
 
 err := cs.ScheduleAndWait(func(context.Context) {
-not be executed on a closed serializer")
+ot be executed on a closed serializer")
 })
 if err != ErrSerializerClosed {
 dWait() = %v, want ErrSerializerClosed", err)
@@ -232,9 +226,12 @@ cs := NewCallbackSerializer(ctx)
 firstStarted := make(chan struct{})
 firstUnblock := make(chan struct{})
 cs.TrySchedule(func(ctx context.Context) {
-<-firstUnblock:
+block:
 e():
-a second callback via TrySchedule while the first is running.
+the first callback to start.
+<-firstStarted
+
+// Schedule a second callback via TrySchedule while the first is running.
 secondExecuted := make(chan struct{})
 cs.TrySchedule(func(context.Context) {
 dExecuted)
@@ -269,7 +266,7 @@ select {
 case <-ctx.Done():
 g for ScheduleAndWait to return")
 case err := <-waitDone:
-!= nil {
+nil {
 dWait() = %v, want nil", err)
 dWait_Concurrent verifies that multiple
 // concurrent ScheduleAndWait calls all complete successfully, with their
@@ -281,7 +278,7 @@ cs := NewCallbackSerializer(ctx)
 
 const numCallbacks = 50
 var (
-    sync.Mutex
+   sync.Mutex
 ter int
 )
 var wg sync.WaitGroup
@@ -290,10 +287,10 @@ wg.Add(numCallbacks)
 for i := 0; i < numCallbacks; i++ {
 c() {
 e()
-:= cs.ScheduleAndWait(func(context.Context) {
+cs.ScheduleAndWait(func(context.Context) {
 ter++
 lock()
-!= nil {
+nil {
 dWait() returned unexpected error: %v", err)
 e := make(chan struct{})
 go func() {
