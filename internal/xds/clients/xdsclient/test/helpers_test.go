@@ -354,3 +354,9 @@ func (r *testMetricsReporter) triggerAsyncMetrics() {
 		reporter.Report(r)
 	}
 }
+
+func (r *testMetricsReporter) numAsyncReporters() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return len(r.asyncReporters)
+}
