@@ -36,20 +36,20 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
-// metadataKeyType is the key to store the endpoint metadata attribute
+// metadataAttrKeyType is the key to store the endpoint metadata attribute
 // in a resolver.Endpoint.
-type metadataKeyType struct{}
+type metadataAttrKeyType struct{}
 
-// metadataValue wraps endpoint metadata so it can be stored as a
+// metadataAttrValue wraps endpoint metadata so it can be stored as a
 // resolver.Endpoint attribute. Attributes.Equal requires values to
 // implement Equal(o any) bool or be comparable with ==.
-type metadataValue struct {
+type metadataAttrValue struct {
 	Metadata map[string]MetadataValue // Stores the parsed endpoint metadata.
 }
 
 // Equal implements the interface used by attributes.Attributes.Equal.
-func (md metadataValue) Equal(o any) bool {
-	omd, ok := o.(metadataValue)
+func (md metadataAttrValue) Equal(o any) bool {
+	omd, ok := o.(metadataAttrValue)
 	if !ok {
 		return false
 	}
@@ -74,7 +74,7 @@ func setMetadata(endpoint resolver.Endpoint, metadata map[string]MetadataValue) 
 	if len(metadata) == 0 {
 		return endpoint
 	}
-	endpoint.Attributes = endpoint.Attributes.WithValue(metadataKeyType{}, metadataValue{Metadata: metadata})
+	endpoint.Attributes = endpoint.Attributes.WithValue(metadataAttrKeyType{}, metadataAttrValue{Metadata: metadata})
 	return endpoint
 }
 
