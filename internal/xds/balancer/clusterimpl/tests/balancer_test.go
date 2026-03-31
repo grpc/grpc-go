@@ -1514,7 +1514,8 @@ func (s) TestAuthorityOverridingWithTLS(t *testing.T) {
 	}
 }
 
-// Tests that configured LRS metrics are successfully propagated from the backend to the LRS server.
+// Tests that configured LRS metrics are successfully propagated from the
+// backend to the LRS server.
 func (s) TestLoadReporting_CustomMetricsPropagation(t *testing.T) {
 	testutils.SetEnvConfig(t, &envconfig.XDSORCAToLRSPropEnabled, true)
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{SupportLoadReportingService: true})
@@ -1600,8 +1601,11 @@ func (s) TestLoadReporting_CustomMetricsPropagation(t *testing.T) {
 						for _, m := range locality.LoadMetricStats {
 							if m.MetricName == "named_metrics.db_cost" {
 								foundDBCost = true
-								if m.NumRequestsFinishedWithMetric != 1 || m.TotalMetricValue != 50.0 {
-									t.Errorf("Unexpected values for db_cost. NumRequests got: %d, want: 1, TotalValue got: %f, want: 50.0", m.NumRequestsFinishedWithMetric, m.TotalMetricValue)
+								if got, want := m.NumRequestsFinishedWithMetric, uint64(1); got != want {
+									t.Errorf("db_cost NumRequestsFinishedWithMetric = %v, want %v", got, want)
+								}
+								if got, want := m.TotalMetricValue, 50.0; got != want {
+									t.Errorf("db_cost TotalMetricValue = %v, want %v", got, want)
 								}
 							}
 							if m.MetricName == "named_metrics.ignored_metric" {
@@ -1615,8 +1619,13 @@ func (s) TestLoadReporting_CustomMetricsPropagation(t *testing.T) {
 
 						if locality.CpuUtilization == nil {
 							t.Errorf("Expected CpuUtilization to be explicitly set but got nil")
-						} else if locality.CpuUtilization.NumRequestsFinishedWithMetric != 1 || locality.CpuUtilization.TotalMetricValue != 0.8 {
-							t.Errorf("Unexpected values for CpuUtilization. NumRequests got: %d, want: 1, TotalValue got: %f, want: 0.8", locality.CpuUtilization.NumRequestsFinishedWithMetric, locality.CpuUtilization.TotalMetricValue)
+						} else {
+							if got, want := locality.CpuUtilization.NumRequestsFinishedWithMetric, uint64(1); got != want {
+								t.Errorf("CpuUtilization NumRequestsFinishedWithMetric = %v, want %v", got, want)
+							}
+							if got, want := locality.CpuUtilization.TotalMetricValue, 0.8; got != want {
+								t.Errorf("CpuUtilization TotalMetricValue = %v, want %v", got, want)
+							}
 						}
 
 						if locality.MemUtilization != nil {

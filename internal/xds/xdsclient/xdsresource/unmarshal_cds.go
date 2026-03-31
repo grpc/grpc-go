@@ -185,12 +185,10 @@ func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster, serv
 			return ClusterUpdate{}, fmt.Errorf("JSON generated from xDS LB policy registry: %s is invalid: %v", pretty.FormatJSON(lbPolicy), err)
 		}
 	}
-
-	var lrsReportEndpointMetrics *BackendMetric
-
+	var lrsReportEndpointMetrics *LRSReportEndpointMetricsConfig
 	if envconfig.XDSORCAToLRSPropEnabled && len(cluster.GetLrsReportEndpointMetrics()) > 0 {
-		lrsReportEndpointMetrics = &BackendMetric{
-			NamedMetrics: make(map[string]bool),
+		lrsReportEndpointMetrics = &LRSReportEndpointMetricsConfig{
+			NamedMetrics: make(map[string]struct{}),
 		}
 		for _, m := range cluster.GetLrsReportEndpointMetrics() {
 			switch m {
@@ -201,6 +199,9 @@ func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster, serv
 			case "application_utilization":
 				lrsReportEndpointMetrics.ApplicationUtilization = true
 			case "named_metrics.*":
+				// If "named_metrics.*" is present, it takes precedence over any specific
+				// "named_metrics.foo" fields. Per gRFC A85, specific named metrics are ignored
+				// if NamedMetricsAll is true. We clear the map to save memory.
 				lrsReportEndpointMetrics.NamedMetricsAll = true
 				lrsReportEndpointMetrics.NamedMetrics = nil
 			default:
@@ -208,7 +209,7 @@ func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster, serv
 					continue
 				}
 				if name, found := strings.CutPrefix(m, "named_metrics."); found && name != "" {
-					lrsReportEndpointMetrics.NamedMetrics[name] = true
+					lrsReportEndpointMetrics.NamedMetrics[name] = struct{}{}
 				}
 			}
 		}

@@ -29,7 +29,9 @@ import (
 	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpctest"
+	grpctestutils "google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/xds/clients"
 	"google.golang.org/grpc/internal/xds/clients/grpctransport"
 	"google.golang.org/grpc/internal/xds/clients/internal/testutils"
@@ -267,6 +269,7 @@ func (s) TestReportLoad_ConnectionCreation(t *testing.T) {
 //     cancel functions
 //   - creating new streams after the previous one was closed works
 func (s) TestReportLoad_StreamCreation(t *testing.T) {
+	grpctestutils.SetEnvConfig(t, &envconfig.XDSORCAToLRSPropEnabled, true)
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 

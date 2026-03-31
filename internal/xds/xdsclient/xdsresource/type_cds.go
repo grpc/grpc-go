@@ -82,21 +82,25 @@ type ClusterUpdate struct {
 
 	// LRSReportEndpointMetrics specifies the subset of ORCA metrics that
 	// should be propagated to the LRS server.
-	LRSReportEndpointMetrics *BackendMetric
+	LRSReportEndpointMetrics *LRSReportEndpointMetricsConfig
 }
 
-// BackendMetric holds the configuration for propagating ORCA metrics
+// LRSReportEndpointMetricsConfig holds the configuration for propagating ORCA metrics
 // to the LRS server.
-type BackendMetric struct {
+type LRSReportEndpointMetricsConfig struct {
 	CPUUtilization         bool
 	MemUtilization         bool
 	ApplicationUtilization bool
-	NamedMetricsAll        bool
-	NamedMetrics           map[string]bool
+	// NamedMetricsAll specifies whether all named metrics should be propagated.
+	// If true, NamedMetrics is ignored.
+	NamedMetricsAll bool
+	// NamedMetrics specifies the set of named metrics to propagate when
+	// NamedMetricsAll is false.
+	NamedMetrics map[string]struct{}
 }
 
-// Equal returns whether the two BackendMetric configurations are identical.
-func (bmp *BackendMetric) Equal(other *BackendMetric) bool {
+// Equal returns whether the two LRSReportEndpointMetricsConfig configurations are identical.
+func (bmp *LRSReportEndpointMetricsConfig) Equal(other *LRSReportEndpointMetricsConfig) bool {
 	switch {
 	case bmp == nil && other == nil:
 		return true
@@ -112,8 +116,8 @@ func (bmp *BackendMetric) Equal(other *BackendMetric) bool {
 	if len(bmp.NamedMetrics) != len(other.NamedMetrics) {
 		return false
 	}
-	for k, v := range bmp.NamedMetrics {
-		if other.NamedMetrics[k] != v {
+	for k := range bmp.NamedMetrics {
+		if _, ok := other.NamedMetrics[k]; !ok {
 			return false
 		}
 	}

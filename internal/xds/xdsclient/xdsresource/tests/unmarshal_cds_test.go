@@ -575,52 +575,56 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 	}
 }
 
+// TestValidateCluster_LRSReportEndpointMetrics tests the parsing of CDS
+// lrs_report_endpoint_metrics field and verifies it is correctly ignored when
+// the feature flag is disabled and parsed correctly when enabled, including
+// precedence rules for named_metrics.*.
 func (s) TestValidateCluster_LRSReportEndpointMetrics(t *testing.T) {
 	tests := []struct {
-		desc           string
-		lrsPropEnabled bool
-		metrics        []string
-		wantMetrics    *xdsresource.BackendMetric
+		desc                     string
+		lrsPropEnabled           bool
+		lrsReportEndpointMetrics []string
+		wantMetrics              *xdsresource.LRSReportEndpointMetricsConfig
 	}{
 		{
-			desc:           "disabled by env var",
-			lrsPropEnabled: false,
-			metrics:        []string{"cpu_utilization", "named_metrics.foo", "named_metrics.*"},
-			wantMetrics:    nil,
+			desc:                     "DisabledByEnvVar",
+			lrsPropEnabled:           false,
+			lrsReportEndpointMetrics: []string{"cpu_utilization", "named_metrics.foo", "named_metrics.*"},
+			wantMetrics:              nil,
 		},
 		{
-			desc:           "all valid metrics",
-			lrsPropEnabled: true,
-			metrics:        []string{"cpu_utilization", "mem_utilization", "application_utilization", "named_metrics.foo", "named_metrics.bar"},
-			wantMetrics: &xdsresource.BackendMetric{
+			desc:                     "AllValidMetrics",
+			lrsPropEnabled:           true,
+			lrsReportEndpointMetrics: []string{"cpu_utilization", "mem_utilization", "application_utilization", "named_metrics.foo", "named_metrics.bar"},
+			wantMetrics: &xdsresource.LRSReportEndpointMetricsConfig{
 				CPUUtilization:         true,
 				MemUtilization:         true,
 				ApplicationUtilization: true,
 				NamedMetricsAll:        false,
-				NamedMetrics: map[string]bool{
-					"foo": true,
-					"bar": true,
+				NamedMetrics: map[string]struct{}{
+					"foo": {},
+					"bar": {},
 				},
 			},
 		},
 		{
-			desc:           "enabled by env var",
-			lrsPropEnabled: true,
-			metrics:        []string{"named_metrics.*", "named_metrics.foo", "cpu_utilization"},
-			wantMetrics: &xdsresource.BackendMetric{
+			desc:                     "EnabledByEnvVar",
+			lrsPropEnabled:           true,
+			lrsReportEndpointMetrics: []string{"named_metrics.*", "named_metrics.foo", "cpu_utilization"},
+			wantMetrics: &xdsresource.LRSReportEndpointMetricsConfig{
 				CPUUtilization:  true,
 				NamedMetricsAll: true,
 				NamedMetrics:    nil,
 			},
 		},
 		{
-			desc:           "ignores invalid metrics",
-			lrsPropEnabled: true,
-			metrics:        []string{"named_metrics.", "invalid_metric", "named_metrics.valid"},
-			wantMetrics: &xdsresource.BackendMetric{
+			desc:                     "IgnoresInvalidMetrics",
+			lrsPropEnabled:           true,
+			lrsReportEndpointMetrics: []string{"named_metrics.", "invalid_metric", "named_metrics.valid"},
+			wantMetrics: &xdsresource.LRSReportEndpointMetricsConfig{
 				NamedMetricsAll: false,
-				NamedMetrics: map[string]bool{
-					"valid": true,
+				NamedMetrics: map[string]struct{}{
+					"valid": {},
 				},
 			},
 		},
@@ -640,7 +644,7 @@ func (s) TestValidateCluster_LRSReportEndpointMetrics(t *testing.T) {
 					},
 					ServiceName: "test-service",
 				},
-				LrsReportEndpointMetrics: tt.metrics,
+				LrsReportEndpointMetrics: tt.lrsReportEndpointMetrics,
 			}
 			update, err := xdsresource.ValidateClusterAndConstructClusterUpdateForTesting(cluster, nil)
 			if err != nil {
