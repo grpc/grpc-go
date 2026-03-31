@@ -53,15 +53,15 @@ func (s) TestCallbackSerializer_Schedule_FIFO(t *testing.T) {
 	for i := 0; i < numCallbacks; i++ {
 		go func(id int) {
 			mu.Lock()
+			defer mu.Unlock()
 			scheduleOrderCh <- id
 			cs.TrySchedule(func(ctx context.Context) {
 				select {
 				case <-ctx.Done():
-				default:
+					return
+				case executionOrderCh <- id:
 				}
-				executionOrderCh <- id
 			})
-			mu.Unlock()
 		}(i)
 	}
 
@@ -96,7 +96,7 @@ func (s) TestCallbackSerializer_Schedule_FIFO(t *testing.T) {
 	wg.Wait()
 
 	if diff := cmp.Diff(executionOrder, scheduleOrder); diff != "" {
-		t.Fatalf("Callbacks not executed in scheduled order. diff(-want, +got):\n%s", diff)
+		t.Fatalf("Callbacks are not executed in scheduled order. diff(-want, +got):\n%s", diff)
 	}
 }
 
@@ -131,7 +131,7 @@ func (s) TestCallbackSerializer_Schedule_Concurrent(t *testing.T) {
 
 	select {
 	case <-ctx.Done():
-		t.Fatal("Timed out waiting for all scheduled callbacks to be executed")
+		t.Fatal("Timeout waiting for all scheduled callbacks to be executed")
 	case <-done:
 	}
 }
@@ -159,10 +159,9 @@ func (s) TestCallbackSerializer_Schedule_Close(t *testing.T) {
 	callbackCh := make(chan int, numCallbacks)
 	for i := 0; i < numCallbacks; i++ {
 		num := i
-		cs.ScheduleOr(
-			func(context.Context) { callbackCh <- num },
-			func() { t.Fatal("Schedule failed to accept a callback when the serializer is yet to be closed") },
-		)
+		callback := func(context.Context) { callbackCh <- num }
+		onFailure := func() { t.Fatal("Schedule failed to accept a callback when the serializer is yet to be closed") }
+		cs.ScheduleOr(callback, onFailure)
 	}
 
 	// Ensure that none of the newer callbacks are executed at this point.
@@ -184,14 +183,13 @@ func (s) TestCallbackSerializer_Schedule_Close(t *testing.T) {
 	for i := 0; i < numCallbacks; i++ {
 		select {
 		case <-ctx.Done():
-			t.Fatal("Timed out waiting for callback scheduled before close to be executed")
+			t.Fatal("Timeout when waiting for callback scheduled before close to be executed")
 		case num := <-callbackCh:
 			if num != i {
-				t.Fatalf("Got callback %d, want %d", num, i)
+				t.Fatalf("Executing callback %d, want %d", num, i)
 			}
 		}
 	}
-
 	<-cs.Done()
 
 	// Ensure that a callback cannot be scheduled after the serializer is
@@ -201,8 +199,8 @@ func (s) TestCallbackSerializer_Schedule_Close(t *testing.T) {
 	onFailure := func() { close(done) }
 	cs.ScheduleOr(callback, onFailure)
 	select {
-	case <-ctx.Done():
-		t.Fatal("Timed out waiting for onFailure to be called")
+	case <-time.After(defaultTestTimeout):
+		t.Fatal("Successfully scheduled callback after serializer is closed")
 	case <-done:
 	}
 }
@@ -232,9 +230,6 @@ func (s) TestCallbackSerializer_ScheduleAndWait_Normal(t *testing.T) {
 // TestCallbackSerializer_ScheduleAndWait_Closed verifies that ScheduleAndWait
 // returns ErrSerializerClosed when the serializer has already been shut down.
 func (s) TestCallbackSerializer_ScheduleAndWait_Closed(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-
 	serializerCtx, serializerCancel := context.WithCancel(context.Background())
 	cs := NewCallbackSerializer(serializerCtx)
 
