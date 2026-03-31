@@ -76,6 +76,7 @@ type StructMetadataValue struct {
 	Data map[string]any
 }
 
+// Equal implements MetadataValue.
 func (s StructMetadataValue) Equal(o MetadataValue) bool {
 	ov, ok := o.(StructMetadataValue)
 	if !ok {
@@ -92,6 +93,7 @@ type ProxyAddressMetadataValue struct {
 	Address string
 }
 
+// Equal implements MetadataValue.
 func (p ProxyAddressMetadataValue) Equal(o MetadataValue) bool {
 	op, ok := o.(ProxyAddressMetadataValue)
 	return ok && p.Address == op.Address
