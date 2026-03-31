@@ -26,18 +26,19 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"unsafe"
+	"sync/atomic"
 
 	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/credentials/spiffe"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/xds/matcher"
 	"google.golang.org/grpc/resolver"
 )
 
 func init() {
-	internal.GetXDSHandshakeInfoForTesting = GetHandshakeInfo
+	internal.GetXDSHandshakeInfoForTesting = HandshakeInfoFromAttributes
 }
 
 // handshakeAttrKey is the type used as the key to store HandshakeInfo in
@@ -55,6 +56,8 @@ func (hi *HandshakeInfo) Equal(other *HandshakeInfo) bool {
 	if hi.rootProvider != other.rootProvider ||
 		hi.identityProvider != other.identityProvider ||
 		hi.requireClientCert != other.requireClientCert ||
+		hi.sni != other.sni ||
+		hi.validateSANUsingSNI != other.validateSANUsingSNI ||
 		len(hi.sanMatchers) != len(other.sanMatchers) {
 		return false
 	}
@@ -68,15 +71,15 @@ func (hi *HandshakeInfo) Equal(other *HandshakeInfo) bool {
 
 // SetHandshakeInfo returns a copy of addr in which the Attributes field is
 // updated with hiPtr.
-func SetHandshakeInfo(addr resolver.Address, hiPtr *unsafe.Pointer) resolver.Address {
+func SetHandshakeInfo(addr resolver.Address, hiPtr *atomic.Pointer[HandshakeInfo]) resolver.Address {
 	addr.Attributes = addr.Attributes.WithValue(handshakeAttrKey{}, hiPtr)
 	return addr
 }
 
-// GetHandshakeInfo returns a pointer to the *HandshakeInfo stored in attr.
-func GetHandshakeInfo(attr *attributes.Attributes) *unsafe.Pointer {
+// HandshakeInfoFromAttributes returns a pointer to the *HandshakeInfo stored in attr.
+func HandshakeInfoFromAttributes(attr *attributes.Attributes) *atomic.Pointer[HandshakeInfo] {
 	v := attr.Value(handshakeAttrKey{})
-	hi, _ := v.(*unsafe.Pointer)
+	hi, _ := v.(*atomic.Pointer[HandshakeInfo])
 	return hi
 }
 
@@ -86,20 +89,24 @@ func GetHandshakeInfo(attr *attributes.Attributes) *unsafe.Pointer {
 type HandshakeInfo struct {
 	// All fields written at init time and read only after that, so no
 	// synchronization needed.
-	rootProvider      certprovider.Provider
-	identityProvider  certprovider.Provider
-	sanMatchers       []matcher.StringMatcher // Only on the client side.
-	requireClientCert bool                    // Only on server side.
+	rootProvider        certprovider.Provider
+	identityProvider    certprovider.Provider
+	sanMatchers         []matcher.StringMatcher // Only on the client side.
+	requireClientCert   bool                    // Only on server side.
+	sni                 string                  // Only on client side, used for Server Name Indication in TLS handshake.
+	validateSANUsingSNI bool                    // Only on client side, indicates whether to perform validation of SANs based on SNI value.
 }
 
 // NewHandshakeInfo returns a new handshake info configured with the provided
 // options.
-func NewHandshakeInfo(rootProvider certprovider.Provider, identityProvider certprovider.Provider, sanMatchers []matcher.StringMatcher, requireClientCert bool) *HandshakeInfo {
+func NewHandshakeInfo(rootProvider certprovider.Provider, identityProvider certprovider.Provider, sanMatchers []matcher.StringMatcher, requireClientCert bool, sni string, validateSANUsingSNI bool) *HandshakeInfo {
 	return &HandshakeInfo{
-		rootProvider:      rootProvider,
-		identityProvider:  identityProvider,
-		sanMatchers:       sanMatchers,
-		requireClientCert: requireClientCert,
+		rootProvider:        rootProvider,
+		identityProvider:    identityProvider,
+		sanMatchers:         sanMatchers,
+		requireClientCert:   requireClientCert,
+		sni:                 sni,
+		validateSANUsingSNI: validateSANUsingSNI,
 	}
 }
 
@@ -154,6 +161,10 @@ func (hi *HandshakeInfo) ClientSideTLSConfig(ctx context.Context) (*tls.Config, 
 		}
 		cfg.Certificates = km.Certs
 	}
+
+	if envconfig.XDSSNIEnabled && hi.sni != "" {
+		cfg.ServerName = hi.sni
+	}
 	return cfg, nil
 }
 
@@ -200,7 +211,21 @@ func (hi *HandshakeInfo) buildVerifyFunc(km *certprovider.KeyMaterial, isClient 
 		if _, err := certs[0].Verify(opts); err != nil {
 			return err
 		}
-		// The SANs sent by the MeshCA are encoded as SPIFFE IDs. We need to
+
+		// If XDSSNIEnabled and AutoSNISANValidation are both true and the SNI is
+		// non-empty, validate only DNS SANs against the SNI. Otherwise, fallback to
+		// validating all received SANs against the control plane provided SAN
+		// matchers.
+		if envconfig.XDSSNIEnabled && hi.validateSANUsingSNI && hi.sni != "" {
+			// Verify SAN of leaf certificate with SNI using exact DNS matcher.
+			for _, san := range certs[0].DNSNames {
+				if dnsMatch(hi.sni, san) {
+					return nil
+				}
+			}
+			return fmt.Errorf("xds: received DNS SANs: %v do not match the SNI: %v", certs[0].DNSNames, hi.sni)
+		}
+		// The SANs sent by the xDS control plane are encoded as SPIFFE IDs. We need to
 		// only look at the SANs on the leaf cert.
 		if cert := certs[0]; !hi.MatchingSANExists(cert) {
 			// TODO: Print the complete certificate once the x509 package

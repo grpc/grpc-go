@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package cdsbalancer
+package clusterimpl_test
 
 import (
 	"context"
@@ -23,7 +23,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -38,6 +37,7 @@ import (
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	iclusterimpl "google.golang.org/grpc/internal/xds/balancer/clusterimpl/internal"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/resolver"
@@ -49,6 +49,7 @@ import (
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
+	v3matcherpb "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 
@@ -166,6 +167,16 @@ func verifySecurityInformationFromPeer(t *testing.T, pr *peer.Peer, wantSecLevel
 	}
 }
 
+// makeAggregateClusterResource returns an aggregate cluster resource with the
+// given name and list of child names.
+func makeAggregateClusterResource(name string, childNames []string) *v3clusterpb.Cluster {
+	return e2e.ClusterResourceWithOptions(e2e.ClusterOptions{
+		ClusterName: name,
+		Type:        e2e.ClusterTypeAggregate,
+		ChildNames:  childNames,
+	})
+}
+
 // Tests the case where xDS credentials are not in use, but the cds LB policy
 // receives a Cluster update with security configuration. Verifies that the
 // connection between client and server is insecure.
@@ -184,9 +195,9 @@ func (s) TestSecurityConfigWithoutXDSCreds(t *testing.T) {
 	// Configure default resources in the management server. The
 	// cluster resource is configured to return security configuration.
 	resources := e2e.DefaultClientResources(e2e.ResourceParams{
-		DialTarget: target,
+		DialTarget: "test.service",
 		NodeID:     nodeID,
-		Host:       host,
+		Host:       "localhost",
 		Port:       testutils.ParsePort(t, serverAddress),
 		SecLevel:   e2e.SecurityLevelMTLS,
 	})
@@ -224,9 +235,9 @@ func (s) TestNoSecurityConfigWithXDSCreds(t *testing.T) {
 	// Configure default resources in the management server. The
 	// cluster resource is not configured to return any security configuration.
 	resources := e2e.DefaultClientResources(e2e.ResourceParams{
-		DialTarget: target,
+		DialTarget: "test.service",
 		NodeID:     nodeID,
-		Host:       host,
+		Host:       "localhost",
 		Port:       testutils.ParsePort(t, serverAddress),
 	})
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -272,10 +283,10 @@ func (s) TestSecurityConfigNotFoundInBootstrap(t *testing.T) {
 	// Configure a cluster resource that contains security configuration, in the
 	// management server.
 	resources := e2e.DefaultClientResources(e2e.ResourceParams{
-		DialTarget: target,
+		DialTarget: "test.service",
 		NodeID:     nodeID,
-		Host:       host,
-		Port:       port,
+		Host:       "localhost",
+		Port:       8080,
 		SecLevel:   e2e.SecurityLevelMTLS,
 	})
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -341,9 +352,9 @@ func (s) TestCertproviderStoreError(t *testing.T) {
 	// Configure a cluster resource that contains security configuration, in the
 	// management server.
 	resources := e2e.DefaultClientResources(e2e.ResourceParams{
-		DialTarget: target,
+		DialTarget: "test.service",
 		NodeID:     nodeID,
-		Host:       host,
+		Host:       "localhost",
 		Port:       testutils.ParsePort(t, serverAddress),
 		SecLevel:   e2e.SecurityLevelMTLS,
 	})
@@ -376,9 +387,9 @@ func (s) TestGoodSecurityConfig(t *testing.T) {
 	// Configure default resources in the management server. The
 	// cluster resource is configured to return security configuration.
 	resources := e2e.DefaultClientResources(e2e.ResourceParams{
-		DialTarget: target,
+		DialTarget: "test.service",
 		NodeID:     nodeID,
-		Host:       host,
+		Host:       "localhost",
 		Port:       testutils.ParsePort(t, serverAddress),
 		SecLevel:   e2e.SecurityLevelMTLS,
 	})
@@ -405,6 +416,12 @@ func (s) TestGoodSecurityConfig(t *testing.T) {
 // bootstrap file.  Verifies that the connection between the client and the
 // server is secure.
 func (s) TestSecurityConfigUpdate_BadToGood(t *testing.T) {
+	var (
+		target      = "test.service"
+		routeName   = "route1"
+		clusterName = "cluster1"
+		serviceName = "service1"
+	)
 	// Spin up an xDS management server.
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 
@@ -438,7 +455,7 @@ func (s) TestSecurityConfigUpdate_BadToGood(t *testing.T) {
 		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(target, routeName)},
 		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeName, target, clusterName)},
 		Clusters:  []*v3clusterpb.Cluster{cluster},
-		Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(serviceName, host, []uint32{testutils.ParsePort(t, serverAddress)})},
+		Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(serviceName, "localhost", []uint32{testutils.ParsePort(t, serverAddress)})},
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -456,7 +473,7 @@ func (s) TestSecurityConfigUpdate_BadToGood(t *testing.T) {
 		Listeners:      []*v3listenerpb.Listener{e2e.DefaultClientListener(target, routeName)},
 		Routes:         []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeName, target, clusterName)},
 		Clusters:       []*v3clusterpb.Cluster{e2e.DefaultCluster(clusterName, serviceName, e2e.SecurityLevelMTLS)},
-		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(serviceName, host, []uint32{testutils.ParsePort(t, serverAddress)})},
+		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(serviceName, "localhost", []uint32{testutils.ParsePort(t, serverAddress)})},
 		SkipValidation: true,
 	}
 	if err := mgmtServer.Update(ctx, resources); err != nil {
@@ -479,6 +496,8 @@ func (s) TestSecurityConfigUpdate_BadToGood(t *testing.T) {
 // resource without security configuration. Verifies that this results in the
 // use of fallback credentials, which in this case is insecure creds.
 func (s) TestSecurityConfigUpdate_GoodToFallback(t *testing.T) {
+	target := "test.service"
+
 	// Spin up an xDS management server.
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 
@@ -495,7 +514,7 @@ func (s) TestSecurityConfigUpdate_GoodToFallback(t *testing.T) {
 	resources := e2e.DefaultClientResources(e2e.ResourceParams{
 		DialTarget: target,
 		NodeID:     nodeID,
-		Host:       host,
+		Host:       "localhost",
 		Port:       testutils.ParsePort(t, serverAddress),
 		SecLevel:   e2e.SecurityLevelMTLS,
 	})
@@ -523,7 +542,7 @@ func (s) TestSecurityConfigUpdate_GoodToFallback(t *testing.T) {
 	resources = e2e.DefaultClientResources(e2e.ResourceParams{
 		DialTarget: target,
 		NodeID:     nodeID,
-		Host:       host,
+		Host:       "localhost",
 		Port:       testutils.ParsePort(t, insecureServer.Address),
 		SecLevel:   e2e.SecurityLevelNone,
 	})
@@ -552,14 +571,8 @@ func (s) TestSecurityConfigUpdate_GoodToFallback(t *testing.T) {
 // bootstrap file contents. Verifies that the connection between the client and
 // the server is secure. Subsequently, the cds LB policy receives a cluster
 // resource that is NACKed by the xDS client. Test verifies that the cds LB
-// policy continues to use the previous good configuration, but the error from
-// the xDS client is propagated to the child policy.
+// policy continues to use the previous good configuration.
 func (s) TestSecurityConfigUpdate_GoodToBad(t *testing.T) {
-	// Register a wrapped clusterresolver LB policy (child policy of the cds LB
-	// policy) for the duration of this test that makes the resolver error
-	// pushed to it available to the test.
-	_, resolverErrCh, _, _ := registerWrappedClusterResolverPolicy(t)
-
 	// Spin up an xDS management server.
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 
@@ -574,9 +587,9 @@ func (s) TestSecurityConfigUpdate_GoodToBad(t *testing.T) {
 	// Configure default resources in the management server. The
 	// cluster resource is configured to return security configuration.
 	resources := e2e.DefaultClientResources(e2e.ResourceParams{
-		DialTarget: target,
+		DialTarget: "test.service",
 		NodeID:     nodeID,
-		Host:       host,
+		Host:       "localhost",
 		Port:       testutils.ParsePort(t, serverAddress),
 		SecLevel:   e2e.SecurityLevelMTLS,
 	})
@@ -615,16 +628,6 @@ func (s) TestSecurityConfigUpdate_GoodToBad(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	const wantNACKErr = "instance name \"unknown-certificate-provider-instance\" missing in bootstrap configuration"
-	select {
-	case err := <-resolverErrCh:
-		if !strings.Contains(err.Error(), wantNACKErr) {
-			t.Fatalf("Child policy got resolver error: %v, want err: %v", err, wantNACKErr)
-		}
-	case <-ctx.Done():
-		t.Fatal("Timeout when waiting for resolver error to be pushed to the child policy")
-	}
-
 	// Verify that a successful RPC can be made over a secure connection.
 	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
 		t.Fatalf("EmptyCall() failed: %v", err)
@@ -637,15 +640,15 @@ func (s) TestSecurityConfigUpdate_GoodToBad(t *testing.T) {
 // Verifies that the connection between the client and the server is secure.
 func (s) TestSystemRootCertsSecurityConfig(t *testing.T) {
 	origFlag := envconfig.XDSSystemRootCertsEnabled
-	origSRCF := x509SystemCertPoolFunc
+	origSRCF := iclusterimpl.X509SystemCertPoolFunc
 	defer func() {
 		envconfig.XDSSystemRootCertsEnabled = origFlag
-		x509SystemCertPoolFunc = origSRCF
+		iclusterimpl.X509SystemCertPoolFunc = origSRCF
 	}()
 	envconfig.XDSSystemRootCertsEnabled = true
 
 	systemRootCertsFuncCalled := false
-	x509SystemCertPoolFunc = func() (*x509.CertPool, error) {
+	iclusterimpl.X509SystemCertPoolFunc = func() (*x509.CertPool, error) {
 		certData, err := os.ReadFile(testdata.Path("x509/server_ca_cert.pem"))
 		if err != nil {
 			return nil, fmt.Errorf("failed to read certificate file: %w", err)
@@ -673,9 +676,9 @@ func (s) TestSystemRootCertsSecurityConfig(t *testing.T) {
 	// Configure default resources in the management server. The cluster
 	// resource is configured to return security configuration.
 	resources := e2e.DefaultClientResources(e2e.ResourceParams{
-		DialTarget: target,
+		DialTarget: "test.service",
 		NodeID:     nodeID,
-		Host:       host,
+		Host:       "localhost",
 		Port:       testutils.ParsePort(t, serverAddress),
 		SecLevel:   e2e.SecurityLevelTLSWithSystemRootCerts,
 	})
@@ -696,4 +699,85 @@ func (s) TestSystemRootCertsSecurityConfig(t *testing.T) {
 	if systemRootCertsFuncCalled != true {
 		t.Errorf("System root certs were not used during the test.")
 	}
+}
+
+// TestAggregateClusterSecurityConfig tests the case where the CDS LB policy
+// receives a top-level aggregate cluster pointing to a child EDS cluster. The
+// test verifies that the CDS LB policy correctly ignores the aggregate
+// cluster's security configuration and uses the child EDS cluster's security
+// configuration to establish the mTLS connection.
+func (s) TestAggregateClusterSecurityConfig(t *testing.T) {
+	var (
+		target         = "test.service"
+		routeName      = "route1"
+		clusterName    = "cluster1"
+		serviceName    = "service1"
+		edsClusterName = clusterName + "-eds"
+	)
+
+	// Spin up an xDS management server.
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
+
+	// Create bootstrap configuration pointing to the above management server
+	// and one that includes certificate providers configuration.
+	nodeID := uuid.New().String()
+	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
+
+	// Create a grpc channel with xDS creds talking to a test server with TLS
+	// credentials.
+	cc, serverAddress := setupForSecurityTests(t, bc, xdsClientCredsWithInsecureFallback(t), tlsServerCreds(t))
+
+	// Configures an aggregate cluster with a security config that is not NACKed
+	// by the xdsclient but would fail the handshake as it has an invalid SAN
+	// matcher.
+	aggCluster := makeAggregateClusterResource(clusterName, []string{edsClusterName})
+	aggCluster.TransportSocket = &v3corepb.TransportSocket{
+		Name: "envoy.transport_sockets.tls",
+		ConfigType: &v3corepb.TransportSocket_TypedConfig{
+			TypedConfig: testutils.MarshalAny(t, &v3tlspb.UpstreamTlsContext{
+				CommonTlsContext: &v3tlspb.CommonTlsContext{
+					ValidationContextType: &v3tlspb.CommonTlsContext_CombinedValidationContext{
+						CombinedValidationContext: &v3tlspb.CommonTlsContext_CombinedCertificateValidationContext{
+							DefaultValidationContext: &v3tlspb.CertificateValidationContext{
+								MatchSubjectAltNames: []*v3matcherpb.StringMatcher{
+									{MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: "bad-cn"}},
+								},
+							},
+							ValidationContextCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
+								InstanceName: e2e.ClientSideCertProviderInstance,
+							},
+						},
+					},
+				},
+			}),
+		},
+	}
+
+	// Create the child EDS cluster with a valid mTLS security configuration.
+	resources := e2e.UpdateOptions{
+		NodeID:    nodeID,
+		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(target, routeName)},
+		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeName, target, clusterName)},
+		Clusters: []*v3clusterpb.Cluster{
+			aggCluster,
+			e2e.DefaultCluster(edsClusterName, serviceName, e2e.SecurityLevelMTLS),
+		},
+		Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(serviceName, "localhost", []uint32{testutils.ParsePort(t, serverAddress)})},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify that a successful RPC can be made over a secure connection since
+	// the EDS cluster has a valid mTLS configuration even though the top level
+	// cluster has an incorrect security configuration.
+	client := testgrpc.NewTestServiceClient(cc)
+	peer := &peer.Peer{}
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(peer)); err != nil {
+		t.Fatalf("EmptyCall() failed: %v", err)
+	}
+	verifySecurityInformationFromPeer(t, peer, e2e.SecurityLevelMTLS)
 }

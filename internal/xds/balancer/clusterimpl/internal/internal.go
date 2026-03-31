@@ -1,6 +1,5 @@
 /*
- *
- * Copyright 2020 gRPC authors.
+ * Copyright 2026 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,19 +15,11 @@
  *
  */
 
-package clusterresolver
+// Package internal contains code internal to the clusterimpl package.
+package internal
 
-import (
-	"fmt"
+import "crypto/x509"
 
-	"google.golang.org/grpc/grpclog"
-	internalgrpclog "google.golang.org/grpc/internal/grpclog"
-)
-
-const prefix = "[xds-cluster-resolver-lb %p] "
-
-var logger = grpclog.Component("xds")
-
-func prefixLogger(p *clusterResolverBalancer) *internalgrpclog.PrefixLogger {
-	return internalgrpclog.NewPrefixLogger(logger, fmt.Sprintf(prefix, p))
-}
+// X509SystemCertPoolFunc is used for overriding the system cert pool for
+// tests.
+var X509SystemCertPoolFunc = x509.SystemCertPool

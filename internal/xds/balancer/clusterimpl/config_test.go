@@ -26,7 +26,6 @@ import (
 	_ "google.golang.org/grpc/balancer/roundrobin"
 	_ "google.golang.org/grpc/balancer/weightedtarget"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
-	"google.golang.org/grpc/internal/xds/bootstrap"
 )
 
 const (
@@ -87,15 +86,7 @@ var (
 	wtConfig, _ = wtConfigParser.ParseConfig([]byte(wtConfigJSON))
 )
 
-func TestParseConfig(t *testing.T) {
-	testLRSServerConfig, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{
-		URI:          "trafficdirector.googleapis.com:443",
-		ChannelCreds: []bootstrap.ChannelCreds{{Type: "google_default"}},
-	})
-	if err != nil {
-		t.Fatalf("Failed to create LRS server config for testing: %v", err)
-	}
-
+func (s) TestParseConfig(t *testing.T) {
 	tests := []struct {
 		name    string
 		js      string
@@ -118,14 +109,7 @@ func TestParseConfig(t *testing.T) {
 			name: "OK",
 			js:   testJSONConfig,
 			want: &LBConfig{
-				Cluster:               "test_cluster",
-				EDSServiceName:        "test-eds",
-				LoadReportingServer:   testLRSServerConfig,
-				MaxConcurrentRequests: newUint32(123),
-				DropCategories: []DropConfig{
-					{Category: "drop-1", RequestsPerMillion: 314},
-					{Category: "drop-2", RequestsPerMillion: 159},
-				},
+				Cluster: "test_cluster",
 				ChildPolicy: &internalserviceconfig.BalancerConfig{
 					Name:   wtName,
 					Config: wtConfig,
@@ -145,8 +129,4 @@ func TestParseConfig(t *testing.T) {
 			}
 		})
 	}
-}
-
-func newUint32(i uint32) *uint32 {
-	return &i
 }

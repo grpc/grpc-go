@@ -21,6 +21,7 @@ package grpc
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"math"
 	rand "math/rand/v2"
@@ -146,6 +147,15 @@ type ClientStream interface {
 	// safe to call RecvMsg on the same stream in different goroutines.
 	RecvMsg(m any) error
 }
+
+// ErrRetriesExhausted is returned when an RPC exceeds its configured maximum
+// number of retry attempts.
+//
+// # Experimental
+//
+// Notice: This type is EXPERIMENTAL and may be changed or removed in a
+// later release.
+var ErrRetriesExhausted = errors.New("max retry attempts exhausted")
 
 // NewStream creates a new Stream for the client side. This is typically
 // called by generated code. ctx is used for the lifetime of the stream.
@@ -548,7 +558,7 @@ func (a *csAttempt) newStream() error {
 			}
 		}
 	}
-	s, err := a.transport.NewStream(a.ctx, cs.callHdr)
+	s, err := a.transport.NewStream(a.ctx, cs.callHdr, a.statsHandler)
 	if err != nil {
 		nse, ok := err.(*transport.NewStreamError)
 		if !ok {
@@ -749,7 +759,7 @@ func (a *csAttempt) shouldRetry(err error) (bool, error) {
 		return false, err
 	}
 	if cs.numRetries+1 >= rp.MaxAttempts {
-		return false, err
+		return false, fmt.Errorf("stopped after %d attempts: %w: %w", cs.numRetries+1, ErrRetriesExhausted, err)
 	}
 
 	var dur time.Duration
@@ -1354,7 +1364,8 @@ func newNonRetryClientStream(ctx context.Context, desc *StreamDesc, method strin
 		transport:        t,
 	}
 
-	s, err := as.transport.NewStream(as.ctx, as.callHdr)
+	// nil stats handler: internal streams like health and ORCA do not support telemetry.
+	s, err := as.transport.NewStream(as.ctx, as.callHdr, nil)
 	if err != nil {
 		err = toRPCErr(err)
 		return nil, err
