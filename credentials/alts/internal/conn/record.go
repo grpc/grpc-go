@@ -246,38 +246,40 @@ func (p *conn) Read(b []byte) (n int, err error) {
 			if err != nil {
 				return 0, err
 			}
-			n = len(dec)
-		} else {
-			// Decrypt requires that if the dst and ciphertext alias, they
-			// must alias exactly. Code here used to use msg[:0], but msg
-			// starts MsgLenFieldSize+msgTypeFieldSize bytes earlier than
-			// ciphertext, so they alias inexactly. Using ciphertext[:0]
-			// arranges the appropriate aliasing without needing to copy
-			// ciphertext or use a separate destination buffer. For more info
-			// check: https://golang.org/pkg/crypto/cipher/#AEAD.
-			p.buf, err = p.crypto.Decrypt(ciphertext[:0], ciphertext)
-			if err != nil {
-				return 0, err
-			}
-			n = copy(b, p.buf)
-			p.buf = p.buf[n:]
+			p.dropReadBufferIfEmtpy()
+			return len(dec), nil
 		}
-	} else {
-		n = copy(b, p.buf)
-		p.buf = p.buf[n:]
+		// Decrypt requires that if the dst and ciphertext alias, they
+		// must alias exactly. Code here used to use msg[:0], but msg
+		// starts MsgLenFieldSize+msgTypeFieldSize bytes earlier than
+		// ciphertext, so they alias inexactly. Using ciphertext[:0]
+		// arranges the appropriate aliasing without needing to copy
+		// ciphertext or use a separate destination buffer. For more info
+		// check: https://golang.org/pkg/crypto/cipher/#AEAD.
+		p.buf, err = p.crypto.Decrypt(ciphertext[:0], ciphertext)
+		if err != nil {
+			return 0, err
+		}
 	}
 
-	if len(p.buf) == 0 && len(p.nextFrame) == 0 {
-		// Idle connection, release the read buffer.
-		p.protected = nil
-		p.nextFrame = nil
-		p.buf = nil
-		if p.readBufHandle != nil {
-			readBufPool.Put(p.readBufHandle)
-			p.readBufHandle = nil
-		}
-	}
+	n = copy(b, p.buf)
+	p.buf = p.buf[n:]
+	p.dropReadBufferIfEmtpy()
 	return n, nil
+}
+
+func (p *conn) dropReadBufferIfEmtpy() {
+	if len(p.buf) > 0 || len(p.nextFrame) > 0 {
+		return
+	}
+	// Potentially idle connection, release the read buffer.
+	p.protected = nil
+	p.nextFrame = nil
+	p.buf = nil
+	if p.readBufHandle != nil {
+		readBufPool.Put(p.readBufHandle)
+		p.readBufHandle = nil
+	}
 }
 
 // Write encrypts, frames, and writes bytes from b to the underlying connection.
