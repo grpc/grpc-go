@@ -20,6 +20,7 @@ package xdsresource
 import (
 	"fmt"
 	"net/netip"
+	"reflect"
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	"google.golang.org/grpc/internal/envconfig"
@@ -37,12 +38,18 @@ var (
 	metadataRegistry = make(map[string]metadataConverter)
 )
 
+// MetadataValue is the interface that all endpoint metadata values must
+// implement.
+type MetadataValue interface {
+	Equal(o MetadataValue) bool
+}
+
 // metadataConverter converts xds metadata entries in
 // Metadata.typed_filter_metadata into an internal form with the fields relevant
 // to gRPC.
 type metadataConverter interface {
-	// convert parses the Any proto into a concrete struct.
-	convert(*anypb.Any) (any, error)
+	// convert parses the Any proto into a concrete MetadataValue.
+	convert(*anypb.Any) (MetadataValue, error)
 }
 
 // registerMetadataConverter registers the converter to the map keyed on a proto
@@ -69,6 +76,14 @@ type StructMetadataValue struct {
 	Data map[string]any
 }
 
+func (s StructMetadataValue) Equal(o MetadataValue) bool {
+	ov, ok := o.(StructMetadataValue)
+	if !ok {
+		return false
+	}
+	return reflect.DeepEqual(s.Data, ov.Data)
+}
+
 // ProxyAddressMetadataValue holds the address parsed from the
 // envoy.config.core.v3.Address proto message, as specified in gRFC A86.
 type ProxyAddressMetadataValue struct {
@@ -77,12 +92,17 @@ type ProxyAddressMetadataValue struct {
 	Address string
 }
 
+func (p ProxyAddressMetadataValue) Equal(o MetadataValue) bool {
+	op, ok := o.(ProxyAddressMetadataValue)
+	return ok && p.Address == op.Address
+}
+
 // proxyAddressConvertor implements the metadataConverter interface to handle
 // the conversion of envoy.config.core.v3.Address protobuf messages into an
 // internal representation.
 type proxyAddressConvertor struct{}
 
-func (proxyAddressConvertor) convert(anyProto *anypb.Any) (any, error) {
+func (proxyAddressConvertor) convert(anyProto *anypb.Any) (MetadataValue, error) {
 	addressProto := &v3corepb.Address{}
 	if err := anyProto.UnmarshalTo(addressProto); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal resource from Any proto: %v", err)

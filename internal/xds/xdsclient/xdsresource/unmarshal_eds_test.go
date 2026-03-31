@@ -702,7 +702,7 @@ func (s) TestEDSParseRespProto_HTTP_Connect_CustomMetadata_EnvVarOn(t *testing.T
 					{
 						Endpoints: []Endpoint{{
 							ResolverEndpoint: setMetadata(buildResolverEndpoint([]string{"addr1:314"}, "addr1"),
-								map[string]any{
+								map[string]MetadataValue{
 									"test-key": ProxyAddressMetadataValue{
 										Address: "1.2.3.4:1111",
 									},
@@ -744,7 +744,7 @@ func (s) TestEDSParseRespProto_HTTP_Connect_CustomMetadata_EnvVarOn(t *testing.T
 					{
 						Endpoints: []Endpoint{{
 							ResolverEndpoint: setMetadata(buildResolverEndpoint([]string{"addr1:314"}, "addr1"),
-								map[string]any{
+								map[string]MetadataValue{
 									"test-key": StructMetadataValue{Data: map[string]any{
 										"key": float64(123),
 									}},
@@ -793,7 +793,7 @@ func (s) TestEDSParseRespProto_HTTP_Connect_CustomMetadata_EnvVarOn(t *testing.T
 						ID:       clients.Locality{SubZone: "locality-1"},
 						Priority: 0,
 						Weight:   1,
-						Metadata: map[string]any{
+						Metadata: map[string]MetadataValue{
 							"test-key": ProxyAddressMetadataValue{
 								Address: "1.2.3.4:1111",
 							},
@@ -834,7 +834,7 @@ func (s) TestEDSParseRespProto_HTTP_Connect_CustomMetadata_EnvVarOn(t *testing.T
 						ID:       clients.Locality{SubZone: "locality-1"},
 						Priority: 0,
 						Weight:   1,
-						Metadata: map[string]any{
+						Metadata: map[string]MetadataValue{
 							"test-key": StructMetadataValue{Data: map[string]any{
 								"key": float64(123),
 							}},
@@ -881,7 +881,7 @@ func (s) TestEDSParseRespProto_HTTP_Connect_CustomMetadata_EnvVarOn(t *testing.T
 					{
 						Endpoints: []Endpoint{{
 							ResolverEndpoint: setMetadata(buildResolverEndpoint([]string{"addr1:314"}, "addr1"),
-								map[string]any{
+								map[string]MetadataValue{
 									"test-key": ProxyAddressMetadataValue{
 										Address: "1.2.3.4:1111",
 									},
@@ -939,7 +939,7 @@ func (s) TestEDSParseRespProto_HTTP_Connect_CustomMetadata_EnvVarOn(t *testing.T
 						ID:       clients.Locality{SubZone: "locality-1"},
 						Priority: 0,
 						Weight:   1,
-						Metadata: map[string]any{
+						Metadata: map[string]MetadataValue{
 							"test-key": ProxyAddressMetadataValue{
 								Address: "1.2.3.4:1111",
 							},
@@ -986,7 +986,7 @@ func (s) TestEDSParseRespProto_HTTP_Connect_CustomMetadata_EnvVarOn(t *testing.T
 					{
 						Endpoints: []Endpoint{{
 							ResolverEndpoint: setMetadata(buildResolverEndpoint([]string{"addr1:314"}, "addr1"),
-								map[string]any{
+								map[string]MetadataValue{
 									"test-key": ProxyAddressMetadataValue{
 										Address: "1.2.3.4:1111",
 									},
@@ -1047,7 +1047,7 @@ func (s) TestEDSParseRespProto_HTTP_Connect_CustomMetadata_EnvVarOn(t *testing.T
 						ID:       clients.Locality{SubZone: "locality-1"},
 						Priority: 0,
 						Weight:   1,
-						Metadata: map[string]any{
+						Metadata: map[string]MetadataValue{
 							"test-key": ProxyAddressMetadataValue{
 								Address: "1.2.3.4:1111",
 							},
@@ -1503,7 +1503,7 @@ func (s) TestEDSParseRespProto_HTTP_Connect_On_HashKeyBackwardCompat_On(t *testi
 			{
 				Endpoints: []Endpoint{{
 					ResolverEndpoint: setMetadata(buildResolverEndpoint([]string{"addr1:314"}, "addr1"),
-						map[string]any{
+						map[string]MetadataValue{
 							"envoy.http11_proxy_transport_socket.proxy_address": ProxyAddressMetadataValue{
 								Address: "1.2.3.4:1111",
 							},
