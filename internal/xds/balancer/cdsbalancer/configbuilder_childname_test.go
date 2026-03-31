@@ -29,82 +29,282 @@ func (s) Test_nameGenerator_generate(t *testing.T) {
 	tests := []struct {
 		name   string
 		prefix uint64
-		input1 [][]xdsresource.Locality
-		input2 [][]xdsresource.Locality
-		want   []string
+		steps  []struct {
+			input [][]xdsresource.Locality
+			want  []string
+		}
 	}{
 		{
 			name:   "init, two new priorities",
 			prefix: 3,
-			input1: nil,
-			input2: [][]xdsresource.Locality{
-				{{ID: clients.Locality{Zone: "L0"}}},
-				{{ID: clients.Locality{Zone: "L1"}}},
+			steps: []struct {
+				input [][]xdsresource.Locality
+				want  []string
+			}{
+				{
+					input: [][]xdsresource.Locality{
+						{{ID: clients.Locality{Zone: "L0"}}},
+						{{ID: clients.Locality{Zone: "L1"}}},
+					},
+					want: []string{"priority-3-0", "priority-3-1"},
+				},
 			},
-			want: []string{"priority-3-0", "priority-3-1"},
 		},
 		{
 			name:   "one new priority",
 			prefix: 1,
-			input1: [][]xdsresource.Locality{
-				{{ID: clients.Locality{Zone: "L0"}}},
+			steps: []struct {
+				input [][]xdsresource.Locality
+				want  []string
+			}{
+				{
+					input: [][]xdsresource.Locality{
+						{{ID: clients.Locality{Zone: "L0"}}},
+					},
+					want: []string{"priority-1-0"},
+				},
+				{
+					input: [][]xdsresource.Locality{
+						{{ID: clients.Locality{Zone: "L0"}}},
+						{{ID: clients.Locality{Zone: "L1"}}},
+					},
+					want: []string{"priority-1-0", "priority-1-1"},
+				},
 			},
-			input2: [][]xdsresource.Locality{
-				{{ID: clients.Locality{Zone: "L0"}}},
-				{{ID: clients.Locality{Zone: "L1"}}},
-			},
-			want: []string{"priority-1-0", "priority-1-1"},
 		},
 		{
 			name:   "merge two priorities",
 			prefix: 4,
-			input1: [][]xdsresource.Locality{
-				{{ID: clients.Locality{Zone: "L0"}}},
-				{{ID: clients.Locality{Zone: "L1"}}},
-				{{ID: clients.Locality{Zone: "L2"}}},
+			steps: []struct {
+				input [][]xdsresource.Locality
+				want  []string
+			}{
+				{
+					input: [][]xdsresource.Locality{
+						{{ID: clients.Locality{Zone: "L0"}}},
+						{{ID: clients.Locality{Zone: "L1"}}},
+						{{ID: clients.Locality{Zone: "L2"}}},
+					},
+					want: []string{"priority-4-0", "priority-4-1", "priority-4-2"},
+				},
+				{
+					input: [][]xdsresource.Locality{
+						{{ID: clients.Locality{Zone: "L0"}}, {ID: clients.Locality{Zone: "L1"}}},
+						{{ID: clients.Locality{Zone: "L2"}}},
+					},
+					want: []string{"priority-4-0", "priority-4-2"},
+				},
 			},
-			input2: [][]xdsresource.Locality{
-				{{ID: clients.Locality{Zone: "L0"}}, {ID: clients.Locality{Zone: "L1"}}},
-				{{ID: clients.Locality{Zone: "L2"}}},
-			},
-			want: []string{"priority-4-0", "priority-4-2"},
 		},
 		{
 			name: "swap two priorities",
-			input1: [][]xdsresource.Locality{
-				{{ID: clients.Locality{Zone: "L0"}}},
-				{{ID: clients.Locality{Zone: "L1"}}},
-				{{ID: clients.Locality{Zone: "L2"}}},
+			steps: []struct {
+				input [][]xdsresource.Locality
+				want  []string
+			}{
+				{
+					input: [][]xdsresource.Locality{
+						{{ID: clients.Locality{Zone: "L0"}}},
+						{{ID: clients.Locality{Zone: "L1"}}},
+						{{ID: clients.Locality{Zone: "L2"}}},
+					},
+					want: []string{"priority-0-0", "priority-0-1", "priority-0-2"},
+				},
+				{
+					input: [][]xdsresource.Locality{
+						{{ID: clients.Locality{Zone: "L1"}}},
+						{{ID: clients.Locality{Zone: "L0"}}},
+						{{ID: clients.Locality{Zone: "L2"}}},
+					},
+					want: []string{"priority-0-1", "priority-0-0", "priority-0-2"},
+				},
 			},
-			input2: [][]xdsresource.Locality{
-				{{ID: clients.Locality{Zone: "L1"}}},
-				{{ID: clients.Locality{Zone: "L0"}}},
-				{{ID: clients.Locality{Zone: "L2"}}},
-			},
-			want: []string{"priority-0-1", "priority-0-0", "priority-0-2"},
 		},
 		{
 			name: "split priority",
-			input1: [][]xdsresource.Locality{
-				{{ID: clients.Locality{Zone: "L0"}}, {ID: clients.Locality{Zone: "L1"}}},
-				{{ID: clients.Locality{Zone: "L2"}}},
+			steps: []struct {
+				input [][]xdsresource.Locality
+				want  []string
+			}{
+				{
+					input: [][]xdsresource.Locality{
+						{{ID: clients.Locality{Zone: "L0"}}, {ID: clients.Locality{Zone: "L1"}}},
+						{{ID: clients.Locality{Zone: "L2"}}},
+					},
+					want: []string{"priority-0-0", "priority-0-1"},
+				},
+				{
+					input: [][]xdsresource.Locality{
+						{{ID: clients.Locality{Zone: "L0"}}},
+						{{ID: clients.Locality{Zone: "L1"}}},
+						{{ID: clients.Locality{Zone: "L2"}}},
+					},
+					want: []string{"priority-0-0", "priority-0-2", "priority-0-1"},
+				},
 			},
-			input2: [][]xdsresource.Locality{
-				{{ID: clients.Locality{Zone: "L0"}}},
-				{{ID: clients.Locality{Zone: "L1"}}}, // This gets a newly generated name, since "0-0" was already picked.
-				{{ID: clients.Locality{Zone: "L2"}}},
+		},
+		{
+			name: "priority index preference",
+			steps: []struct {
+				input [][]xdsresource.Locality
+				want  []string
+			}{
+				{
+					input: [][]xdsresource.Locality{
+						{{ID: clients.Locality{Zone: "L0"}}},
+						{{ID: clients.Locality{Zone: "L1"}}},
+					},
+					want: []string{"priority-0-0", "priority-0-1"},
+				},
+				{
+					input: [][]xdsresource.Locality{
+						{{ID: clients.Locality{Zone: "L1"}}, {ID: clients.Locality{Zone: "L0"}}},
+					},
+					want: []string{"priority-0-0"},
+				},
 			},
-			want: []string{"priority-0-0", "priority-0-2", "priority-0-1"},
+		},
+		{
+			name: "merge partial",
+			steps: []struct {
+				input [][]xdsresource.Locality
+				want  []string
+			}{
+				{
+					input: [][]xdsresource.Locality{
+						{{ID: clients.Locality{Zone: "L0"}}, {ID: clients.Locality{Zone: "L1"}}},
+						{{ID: clients.Locality{Zone: "L2"}}, {ID: clients.Locality{Zone: "L3"}}},
+					},
+					want: []string{"priority-0-0", "priority-0-1"},
+				},
+				{
+					input: [][]xdsresource.Locality{
+						{{ID: clients.Locality{Zone: "L0"}}, {ID: clients.Locality{Zone: "L1"}}, {ID: clients.Locality{Zone: "L2"}}},
+						{{ID: clients.Locality{Zone: "L3"}}},
+					},
+					want: []string{"priority-0-0", "priority-0-1"},
+				},
+				{
+					input: [][]xdsresource.Locality{
+						{{ID: clients.Locality{Zone: "L0"}}, {ID: clients.Locality{Zone: "L1"}}},
+						{{ID: clients.Locality{Zone: "L2"}}, {ID: clients.Locality{Zone: "L3"}}},
+					},
+					want: []string{"priority-0-0", "priority-0-1"},
+				},
+			},
+		},
+		{
+			name: "swap shift",
+			steps: []struct {
+				input [][]xdsresource.Locality
+				want  []string
+			}{
+				{
+					input: [][]xdsresource.Locality{
+						{{ID: clients.Locality{Zone: "L0"}}, {ID: clients.Locality{Zone: "L1"}}},
+						{{ID: clients.Locality{Zone: "L2"}}, {ID: clients.Locality{Zone: "L3"}}},
+					},
+					want: []string{"priority-0-0", "priority-0-1"},
+				},
+				{
+					input: [][]xdsresource.Locality{
+						{{ID: clients.Locality{Zone: "L2"}}},
+						{{ID: clients.Locality{Zone: "L0"}}, {ID: clients.Locality{Zone: "L1"}}},
+					},
+					want: []string{"priority-0-1", "priority-0-0"},
+				},
+			},
+		},
+		{
+			name: "replace priority",
+			steps: []struct {
+				input [][]xdsresource.Locality
+				want  []string
+			}{
+				{
+					input: [][]xdsresource.Locality{
+						{{ID: clients.Locality{Zone: "L0"}}, {ID: clients.Locality{Zone: "L1"}}},
+						{{ID: clients.Locality{Zone: "L2"}}, {ID: clients.Locality{Zone: "L3"}}},
+					},
+					want: []string{"priority-0-0", "priority-0-1"},
+				},
+				{
+					input: [][]xdsresource.Locality{
+						{{ID: clients.Locality{Zone: "L0"}}, {ID: clients.Locality{Zone: "L1"}}},
+						{{ID: clients.Locality{Zone: "L5"}}},
+					},
+					want: []string{"priority-0-0", "priority-0-2"},
+				},
+			},
+		},
+		{
+			name: "reordered merge",
+			steps: []struct {
+				input [][]xdsresource.Locality
+				want  []string
+			}{
+				{
+					input: [][]xdsresource.Locality{
+						{{ID: clients.Locality{Zone: "L1"}}, {ID: clients.Locality{Zone: "L2"}}},
+						{{ID: clients.Locality{Zone: "L0"}}, {ID: clients.Locality{Zone: "L3"}}},
+					},
+					want: []string{"priority-0-0", "priority-0-1"},
+				},
+				{
+					input: [][]xdsresource.Locality{
+						{{ID: clients.Locality{Zone: "L0"}}, {ID: clients.Locality{Zone: "L1"}}, {ID: clients.Locality{Zone: "L2"}}},
+						{{ID: clients.Locality{Zone: "L3"}}},
+					},
+					want: []string{"priority-0-0", "priority-0-1"},
+				},
+				{
+					input: [][]xdsresource.Locality{
+						{{ID: clients.Locality{Zone: "L1"}}, {ID: clients.Locality{Zone: "L2"}}},
+						{{ID: clients.Locality{Zone: "L0"}}, {ID: clients.Locality{Zone: "L3"}}},
+					},
+					want: []string{"priority-0-0", "priority-0-1"},
+				},
+			},
+		},
+		{
+			name: "three-step shift stability",
+			steps: []struct {
+				input [][]xdsresource.Locality
+				want  []string
+			}{
+				{
+					input: [][]xdsresource.Locality{
+						{{ID: clients.Locality{Zone: "L0"}}},
+						{{ID: clients.Locality{Zone: "L1"}}},
+					},
+					want: []string{"priority-0-0", "priority-0-1"},
+				},
+				{
+					input: [][]xdsresource.Locality{
+						{{ID: clients.Locality{Zone: "L2"}}},
+						{{ID: clients.Locality{Zone: "L0"}}},
+						{{ID: clients.Locality{Zone: "L1"}}},
+					},
+					want: []string{"priority-0-2", "priority-0-0", "priority-0-1"},
+				},
+				{
+					input: [][]xdsresource.Locality{
+						{{ID: clients.Locality{Zone: "L0"}}},
+						{{ID: clients.Locality{Zone: "L1"}}},
+					},
+					want: []string{"priority-0-0", "priority-0-1"},
+				},
+			},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ng := newNameGenerator(tt.prefix)
-			got1 := ng.generate(tt.input1)
-			t.Logf("%v", got1)
-			got := ng.generate(tt.input2)
-			if diff := cmp.Diff(got, tt.want); diff != "" {
-				t.Errorf("generate() = got: %v, want: %v, diff (-got +want): %s", got, tt.want, diff)
+			for i, step := range tt.steps {
+				got := ng.generate(step.input)
+				if diff := cmp.Diff(got, step.want); diff != "" {
+					t.Errorf("step %d: generate() = got: %v, want: %v, diff (-got +want): %s", i, got, step.want, diff)
+				}
 			}
 		})
 	}
