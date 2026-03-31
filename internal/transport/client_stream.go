@@ -97,8 +97,8 @@ func (s *ClientStream) tryHandleNonGRPCData(f *parsedDataFrame) (handle bool, en
 	return true, false
 }
 
-// stopNonGRPCBodyCollection stops collecting non-gRPC body and appends the collected.
-// Should only be called in closeStream.
+// stopNonGRPCDataCollectionLocked stops collecting non-gRPC data and appends the collected data to the status message.
+// Must be called with collectionMu held. Should only be called in closeStream.
 func (s *ClientStream) stopNonGRPCDataCollectionLocked() {
 	if !s.collecting {
 		return
