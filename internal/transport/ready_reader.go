@@ -19,6 +19,7 @@
 package transport
 
 import (
+	"io"
 	"net"
 	"syscall"
 
@@ -72,6 +73,12 @@ func (c *nonBlockingReader) ReadOnReady(bufSize int, pool mem.BufferPool) (buf *
 	if readErr != nil {
 		// buffer is already released in the callback.
 		return nil, 0, readErr
+	}
+	if n == 0 {
+		// syscall.Read doesn't consider a graceful socket closure to be an
+		// error condition, but Go's io.Reader expects an EOF error.
+		pool.Put(buf)
+		return nil, 0, io.EOF
 	}
 	return buf, n, nil
 }

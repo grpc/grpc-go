@@ -21,6 +21,7 @@ package transport
 import (
 	"bytes"
 	"context"
+	"io"
 	"net"
 	"testing"
 
@@ -49,6 +50,56 @@ func (s) TestReadyReader_NonRawConn(t *testing.T) {
 	}
 	if !bytes.Equal((*bufHandle)[:n], data) {
 		t.Errorf("Read data = %s; want %s", string((*bufHandle)[:n]), string(data))
+	}
+}
+
+func (s) TestReadyReader_EOF(t *testing.T) {
+	ln, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("net.Listen failed: %v", err)
+	}
+	defer ln.Close()
+
+	data := []byte("hello")
+	go func() {
+		conn, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		if _, err := conn.Write(data); err != nil {
+			t.Errorf("Failed to write data: %v", err)
+			return
+		}
+		conn.Close()
+	}()
+
+	conn, err := net.Dial("tcp", ln.Addr().String())
+	if err != nil {
+		t.Fatalf("net.Dial failed: %v", err)
+	}
+	defer conn.Close()
+
+	pool := mem.DefaultBufferPool()
+	rr := NewReadyReader(conn)
+	res, _, err := rr.ReadOnReady(len(data), pool)
+	if err != nil {
+		t.Errorf("Failed to read: %v", err)
+		return
+	}
+
+	if !bytes.Equal(*res, data) {
+		t.Errorf("Read data = %s; want %s", string(*res), string(data))
+	}
+	pool.Put(res)
+
+	// Since the server closes the TCP connection, the next read should return
+	// an io.EOF.
+	res, _, err = rr.ReadOnReady(len(data), pool)
+	if err != io.EOF {
+		t.Errorf("Read after server connection close returned err = %v; want io.EOF", err)
+	}
+	if res != nil {
+		t.Error("ReadOnReady() returned non-nil buffer.")
 	}
 }
 
