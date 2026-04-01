@@ -121,13 +121,12 @@ type conn struct {
 	// but has not yet been returned by Read. It is a sub-slice of protected.
 	buf                []byte
 	payloadLengthLimit int
-	// readBufHandle holds the buffer pointer to return to the bufferPool.
-	// The handle should only be returned to the pool once protected, nextFrame
-	// and buf are empty.
-	readBufHandle *[]byte
-	// protected holds data read from the network but have not yet been
-	// decrypted. This data might not compose a complete frame.
-	protected []byte
+	// protectedHandle buffer holds data read from the network but have not yet
+	// been decrypted. This data might not compose a complete frame.
+	//
+	// The buffer pointer to points to a buffer from the readBufPool. The handle
+	// should only be returned to the pool once nextFrame and buf are empty.
+	protectedHandle *[]byte
 	// nextFrame stores the next frame (in protected buffer) info.
 	nextFrame []byte
 	// overhead is the calculated overhead of each frame.
@@ -151,8 +150,8 @@ func NewConn(c net.Conn, side core.Side, recordProtocol string, key []byte, prot
 	// We pre-allocate protected to be of size 32KB during initialization.
 	// We increase the size of the buffer by the required amount if it can't
 	// hold a complete encrypted record.
-	readBufHandle := readBufPool.Get(max(altsReadBufferInitialSize, len(protected)))
-	protectedBuf := *readBufHandle
+	protectedHandle := readBufPool.Get(max(altsReadBufferInitialSize, len(protected)))
+	protectedBuf := *protectedHandle
 	// Copy additional data from hanshaker service.
 	copy(protectedBuf, protected)
 	protectedBuf = protectedBuf[:len(protected)]
@@ -162,8 +161,7 @@ func NewConn(c net.Conn, side core.Side, recordProtocol string, key []byte, prot
 		reader:             transport.NewReadyReader(c),
 		crypto:             crypto,
 		payloadLengthLimit: payloadLengthLimit,
-		readBufHandle:      readBufHandle,
-		protected:          protectedBuf,
+		protectedHandle:    protectedHandle,
 		nextFrame:          protectedBuf,
 		overhead:           overhead,
 	}
@@ -191,9 +189,13 @@ func (p *conn) Read(b []byte) (n int, err error) {
 }
 
 func (p *conn) ReadOnReady(bufSize int, pool mem.BufferPool) (b *[]byte, n int, err error) {
-	var allocatedBuf *[]byte
 	if len(p.buf) == 0 {
 		var framedMsg []byte
+		var protected []byte
+		if p.protectedHandle != nil {
+			protected = *p.protectedHandle
+			protected = protected[:cap(protected)]
+		}
 		framedMsg, p.nextFrame, err = ParseFramedMsg(p.nextFrame, altsRecordLengthLimit)
 		if err != nil {
 			return nil, 0, err
@@ -201,53 +203,53 @@ func (p *conn) ReadOnReady(bufSize int, pool mem.BufferPool) (b *[]byte, n int, 
 		// Check whether the next frame to be decrypted has been
 		// completely received yet.
 		if len(framedMsg) == 0 {
-			copy(p.protected, p.nextFrame)
-			p.protected = p.protected[:len(p.nextFrame)]
+			copy(protected, p.nextFrame)
+			protected = protected[:len(p.nextFrame)]
 			// Always copy next incomplete frame to the beginning of
 			// the protected buffer and reset nextFrame to it.
-			p.nextFrame = p.protected
+			p.nextFrame = protected
 		}
 		// Check whether a complete frame has been received yet.
 		for len(framedMsg) == 0 {
-			if p.readBufHandle != nil && len(p.protected) == cap(p.protected) {
+			if p.protectedHandle != nil && len(protected) == cap(protected) {
 				// We can parse the length header to know exactly how large
 				// the buffer needs to be to hold the entire frame.
-				length, didParse := parseMessageLength(p.protected)
+				length, didParse := parseMessageLength(protected)
 				if !didParse {
 					// The protected buffer is initialized with a capacity of
 					// larger than 4B. It should always hold the message length
 					// header.
-					panic(fmt.Sprintf("protected buffer length shorter than expected: %d vs %d", len(p.protected), MsgLenFieldSize))
+					panic(fmt.Sprintf("protected buffer length shorter than expected: %d vs %d", len(protected), MsgLenFieldSize))
 				}
-				oldProtectedBuf := p.protected
-				oldBufHandle := p.readBufHandle
+				oldProtectedBuf := protected
+				oldBufHandle := p.protectedHandle
 				// The new buffer must be able to hold the message length header
 				// and the entire message.
 				requiredCapacity := int(length) + MsgLenFieldSize
-				p.readBufHandle = readBufPool.Get(requiredCapacity)
-				p.protected = *p.readBufHandle
+				p.protectedHandle = readBufPool.Get(requiredCapacity)
+				protected = *p.protectedHandle
 				// Copy the contents of the old buffer and set the length of the
 				// new buffer to the number of bytes already read.
-				copy(p.protected, oldProtectedBuf)
-				p.protected = p.protected[:len(oldProtectedBuf)]
+				copy(protected, oldProtectedBuf)
+				protected = protected[:len(oldProtectedBuf)]
 				readBufPool.Put(oldBufHandle)
 			}
-			if p.readBufHandle == nil {
+			if p.protectedHandle == nil {
 				// Connection was idle, need to re-allocate the read buffer.
 				newBuf, nRead, err := p.reader.ReadOnReady(altsReadBufferInitialSize, readBufPool)
 				if err != nil {
 					return nil, 0, err
 				}
-				p.readBufHandle = newBuf
-				p.protected = (*newBuf)[:nRead]
+				p.protectedHandle = newBuf
+				protected = (*newBuf)[:nRead]
 			} else {
-				nRead, err := p.Conn.Read(p.protected[len(p.protected):cap(p.protected)])
+				nRead, err := p.Conn.Read(protected[len(protected):cap(protected)])
 				if err != nil {
 					return nil, 0, err
 				}
-				p.protected = p.protected[:len(p.protected)+nRead]
+				protected = protected[:len(protected)+nRead]
 			}
-			framedMsg, p.nextFrame, err = ParseFramedMsg(p.protected, altsRecordLengthLimit)
+			framedMsg, p.nextFrame, err = ParseFramedMsg(protected, altsRecordLengthLimit)
 			if err != nil {
 				return nil, 0, err
 			}
@@ -264,46 +266,46 @@ func (p *conn) ReadOnReady(bufSize int, pool mem.BufferPool) (b *[]byte, n int, 
 		// Decrypt directly into the buffer, avoiding a copy from p.buf if
 		// possible.
 		if bufSize >= len(ciphertext) {
-			allocatedBuf = pool.Get(bufSize)
+			allocatedBuf := pool.Get(bufSize)
 			dec, err := p.crypto.Decrypt((*allocatedBuf)[:0], ciphertext)
 			if err != nil {
 				pool.Put(allocatedBuf)
 				return nil, 0, err
 			}
-			n = len(dec)
-		} else {
-			// Decrypt requires that if the dst and ciphertext alias, they
-			// must alias exactly. Code here used to use msg[:0], but msg
-			// starts MsgLenFieldSize+msgTypeFieldSize bytes earlier than
-			// ciphertext, so they alias inexactly. Using ciphertext[:0]
-			// arranges the appropriate aliasing without needing to copy
-			// ciphertext or use a separate destination buffer. For more info
-			// check: https://golang.org/pkg/crypto/cipher/#AEAD.
-			p.buf, err = p.crypto.Decrypt(ciphertext[:0], ciphertext)
-			if err != nil {
-				return nil, 0, err
-			}
-			allocatedBuf = pool.Get(bufSize)
-			n = copy(*allocatedBuf, p.buf)
-			p.buf = p.buf[n:]
+			p.dropProtectedIfEmtpy()
+			return allocatedBuf, len(dec), nil
 		}
-	} else {
-		allocatedBuf = pool.Get(bufSize)
-		n = copy(*allocatedBuf, p.buf)
-		p.buf = p.buf[n:]
+		// Decrypt requires that if the dst and ciphertext alias, they
+		// must alias exactly. Code here used to use msg[:0], but msg
+		// starts MsgLenFieldSize+msgTypeFieldSize bytes earlier than
+		// ciphertext, so they alias inexactly. Using ciphertext[:0]
+		// arranges the appropriate aliasing without needing to copy
+		// ciphertext or use a separate destination buffer. For more info
+		// check: https://golang.org/pkg/crypto/cipher/#AEAD.
+		p.buf, err = p.crypto.Decrypt(ciphertext[:0], ciphertext)
+		if err != nil {
+			return nil, 0, err
+		}
 	}
 
-	if len(p.buf) == 0 && len(p.nextFrame) == 0 {
-		// Idle connection, release the read buffer.
-		p.protected = nil
-		p.nextFrame = nil
-		p.buf = nil
-		if p.readBufHandle != nil {
-			readBufPool.Put(p.readBufHandle)
-			p.readBufHandle = nil
-		}
-	}
+	allocatedBuf := pool.Get(bufSize)
+	n = copy(*allocatedBuf, p.buf)
+	p.buf = p.buf[n:]
+	p.dropProtectedIfEmtpy()
 	return allocatedBuf, n, nil
+}
+
+func (p *conn) dropProtectedIfEmtpy() {
+	if len(p.buf) > 0 || len(p.nextFrame) > 0 {
+		return
+	}
+	// Potentially idle connection, release the read buffer.
+	p.nextFrame = nil
+	p.buf = nil
+	if p.protectedHandle != nil {
+		readBufPool.Put(p.protectedHandle)
+		p.protectedHandle = nil
+	}
 }
 
 // Write encrypts, frames, and writes bytes from b to the underlying connection.
