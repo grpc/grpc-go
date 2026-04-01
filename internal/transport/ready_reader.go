@@ -67,23 +67,30 @@ func (c *nonBlockingReader) ReadOnReady(bufSize int, pool mem.BufferPool) (*[]by
 	}
 	err := c.raw.Read(c.doRead)
 
+	buf := c.state.buf
+	n := c.state.bytesRead
+	readErr := c.state.readError
+
 	if err != nil {
-		if c.state.buf != nil {
-			pool.Put(c.state.buf)
+		if buf != nil {
+			pool.Put(buf)
 		}
 		return nil, 0, err
 	}
-	if c.state.readError != nil {
+
+	if readErr != nil {
 		// buffer is already released in the callback.
-		return nil, 0, c.state.readError
+		return nil, 0, readErr
 	}
-	if c.state.bytesRead == 0 {
+
+	if n == 0 {
 		// syscall.Read doesn't consider a graceful socket closure to be an
 		// error condition, but Go's io.Reader expects an EOF error.
-		pool.Put(c.state.buf)
+		pool.Put(buf)
 		return nil, 0, io.EOF
 	}
-	return c.state.buf, c.state.bytesRead, nil
+
+	return buf, n, nil
 }
 
 type blockingReader struct {
