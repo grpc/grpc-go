@@ -47,41 +47,43 @@ type ReadyReader interface {
 // interface.
 type nonBlockingReader struct {
 	raw syscall.RawConn
+	// The following fields are stored as field to avoid heap allocations.
+	state  readState
+	doRead func(fd uintptr) bool
 }
 
-func (c *nonBlockingReader) ReadOnReady(bufSize int, pool mem.BufferPool) (buf *[]byte, n int, err error) {
-	var readErr error
-	err = c.raw.Read(func(fd uintptr) bool {
-		buf = pool.Get(bufSize)
-		n, readErr = sysRead(fd, *buf)
-		if readErr != nil {
-			pool.Put(buf)
-			buf = nil
-		}
+type readState struct {
+	readError error
+	bytesRead int
+	buf       *[]byte
+	bufSize   int
+	pool      mem.BufferPool
+}
 
-		if wouldBlock(readErr) {
-			return false // Wait for readiness
-		}
-		return true // Done
-	})
+func (c *nonBlockingReader) ReadOnReady(bufSize int, pool mem.BufferPool) (*[]byte, int, error) {
+	c.state = readState{
+		pool:    pool,
+		bufSize: bufSize,
+	}
+	err := c.raw.Read(c.doRead)
 
 	if err != nil {
-		if buf != nil {
-			pool.Put(buf)
+		if c.state.buf != nil {
+			pool.Put(c.state.buf)
 		}
 		return nil, 0, err
 	}
-	if readErr != nil {
+	if c.state.readError != nil {
 		// buffer is already released in the callback.
-		return nil, 0, readErr
+		return nil, 0, c.state.readError
 	}
-	if n == 0 {
+	if c.state.bytesRead == 0 {
 		// syscall.Read doesn't consider a graceful socket closure to be an
 		// error condition, but Go's io.Reader expects an EOF error.
-		pool.Put(buf)
+		pool.Put(c.state.buf)
 		return nil, 0, io.EOF
 	}
-	return buf, n, nil
+	return c.state.buf, c.state.bytesRead, nil
 }
 
 type blockingReader struct {
@@ -122,7 +124,19 @@ func newNonBlockingReader(r io.Reader) ReadyReader {
 		return nil
 	}
 	if raw, err := sysConn.SyscallConn(); err == nil {
-		return &nonBlockingReader{raw: raw}
+		r := &nonBlockingReader{raw: raw}
+		r.doRead = func(fd uintptr) bool {
+			s := &r.state
+
+			s.buf = s.pool.Get(s.bufSize)
+			s.bytesRead, s.readError = sysRead(fd, *s.buf)
+
+			if s.readError != nil {
+				s.pool.Put(s.buf)
+				s.buf = nil
+			}
+			return !wouldBlock(s.readError)
+		}
 	}
 	return nil
 }

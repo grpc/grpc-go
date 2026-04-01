@@ -188,7 +188,7 @@ func (p *conn) Read(b []byte) (n int, err error) {
 	return n, err
 }
 
-func (p *conn) ReadOnReady(bufSize int, pool mem.BufferPool) (b *[]byte, n int, err error) {
+func (p *conn) ReadOnReady(bufSize int, pool mem.BufferPool) (*[]byte, int, error) {
 	if len(p.buf) == 0 {
 		var framedMsg []byte
 		var protected []byte
@@ -196,6 +196,7 @@ func (p *conn) ReadOnReady(bufSize int, pool mem.BufferPool) (b *[]byte, n int, 
 			protected = *p.protectedHandle
 			protected = protected[:cap(protected)]
 		}
+		var err error
 		framedMsg, p.nextFrame, err = ParseFramedMsg(p.nextFrame, altsRecordLengthLimit)
 		if err != nil {
 			return nil, 0, err
@@ -289,7 +290,7 @@ func (p *conn) ReadOnReady(bufSize int, pool mem.BufferPool) (b *[]byte, n int, 
 	}
 
 	allocatedBuf := pool.Get(bufSize)
-	n = copy(*allocatedBuf, p.buf)
+	n := copy(*allocatedBuf, p.buf)
 	p.buf = p.buf[n:]
 	p.dropProtectedIfEmtpy()
 	return allocatedBuf, n, nil
