@@ -532,7 +532,7 @@ type mockProvider struct {
 	roots *x509.CertPool
 }
 
-func (m *mockProvider) KeyMaterial(ctx context.Context) (*certprovider.KeyMaterial, error) {
+func (m *mockProvider) KeyMaterial(context.Context) (*certprovider.KeyMaterial, error) {
 	return &certprovider.KeyMaterial{
 		Roots: m.roots,
 	}, nil
