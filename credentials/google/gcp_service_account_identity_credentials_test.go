@@ -66,7 +66,7 @@ func (s) TestGcpServiceAccountIdentity_GetRequestMetadata(t *testing.T) {
 	}
 	creds := &gcpServiceAccountIdentityCallCreds{
 		audience: "my-audience",
-		ts: auth.NewCredentials(&auth.CredentialsOptions{
+		creds: auth.NewCredentials(&auth.CredentialsOptions{
 			TokenProvider: auth.NewCachedTokenProvider(mockTp, &auth.CachedTokenProviderOptions{
 				ExpireEarly: 5 * time.Minute,
 			})}),
@@ -106,7 +106,7 @@ func (s) TestGcpServiceAccountIdentity_Backoff(t *testing.T) {
 	}
 	creds := &gcpServiceAccountIdentityCallCreds{
 		audience: "audience",
-		ts: auth.NewCredentials(&auth.CredentialsOptions{
+		creds: auth.NewCredentials(&auth.CredentialsOptions{
 			TokenProvider: auth.NewCachedTokenProvider(mockTp, &auth.CachedTokenProviderOptions{
 				ExpireEarly: 5 * time.Minute,
 			}),
@@ -188,7 +188,7 @@ func (s) TestGcpServiceAccountIdentity_ConcurrentCalls(t *testing.T) {
 	}
 	creds := &gcpServiceAccountIdentityCallCreds{
 		audience: "audience",
-		ts:       auth.NewCredentials(&auth.CredentialsOptions{TokenProvider: mockTp}),
+		creds:    auth.NewCredentials(&auth.CredentialsOptions{TokenProvider: mockTp}),
 		backoff:  backoff.DefaultExponential,
 	}
 

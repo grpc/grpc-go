@@ -36,16 +36,16 @@ var earlyExpiry = 5 * time.Minute
 
 type gcpServiceAccountIdentityCallCreds struct {
 	audience string
-	ts       *auth.Credentials
+	creds    *auth.Credentials
 	backoff  backoff.Strategy
 
 	mu    sync.Mutex
 	token *auth.Token
 
-	fetching      chan struct{}
-	nextRetryTime time.Time // When we can try next (backoff)
-	retryAttempt  int       // consecutive failures
-	lastErr       error     // error from last attempt
+	fetching      chan struct{} // used to deduplicate concurrent fetches
+	nextRetryTime time.Time     // When we can try next (backoff)
+	retryAttempt  int           // number of consecutive failures used to calculate backoff
+	lastErr       error         // error from last attempt
 }
 
 // NewGcpServiceAccountIdentity creates a PerRPCCredentials that authenticates
@@ -68,7 +68,7 @@ func NewGcpServiceAccountIdentity(audience string) (credentials.PerRPCCredential
 
 	return &gcpServiceAccountIdentityCallCreds{
 		audience: audience,
-		ts:       creds,
+		creds:    creds,
 		backoff:  backoff.DefaultExponential,
 	}, nil
 }
@@ -90,7 +90,7 @@ func (c *gcpServiceAccountIdentityCallCreds) GetRequestMetadata(ctx context.Cont
 	c.mu.Lock()
 
 	if c.isTokenValid() {
-		c.mu.Unlock()
+		defer c.mu.Unlock()
 		return map[string]string{
 			"authorization": "Bearer " + c.token.Value,
 		}, nil
@@ -105,23 +105,18 @@ func (c *gcpServiceAccountIdentityCallCreds) GetRequestMetadata(ctx context.Cont
 		c.fetching = make(chan struct{})
 		c.mu.Unlock()
 
-		token, err := c.ts.TokenProvider.Token(context.Background())
+		token, err := c.creds.TokenProvider.Token(ctx)
 
 		c.mu.Lock()
+		defer c.mu.Unlock()
 
-		if err != nil {
-			c.setBackoff(err)
-			close(c.fetching)
-			c.fetching = nil
-			c.mu.Unlock()
-			return nil, err
-		}
-
-		c.setBackoff(nil)
-		c.token = token
 		close(c.fetching)
 		c.fetching = nil
-		c.mu.Unlock()
+		c.setBackoff(err)
+		if err != nil {
+			return nil, err
+		}
+		c.token = token
 		return map[string]string{
 			"authorization": "Bearer " + c.token.Value,
 		}, nil
@@ -130,16 +125,14 @@ func (c *gcpServiceAccountIdentityCallCreds) GetRequestMetadata(ctx context.Cont
 	c.mu.Unlock()
 	select {
 	case <-wait:
-		return func() (map[string]string, error) {
-			c.mu.Lock()
-			defer c.mu.Unlock()
-			if c.isTokenValid() {
-				return map[string]string{
-					"authorization": "Bearer " + c.token.Value,
-				}, nil
-			}
-			return nil, c.lastErr
-		}()
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		if c.isTokenValid() {
+			return map[string]string{
+				"authorization": "Bearer " + c.token.Value,
+			}, nil
+		}
+		return nil, c.lastErr
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
