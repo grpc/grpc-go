@@ -133,7 +133,8 @@ func (c *credsImpl) ClientHandshake(ctx context.Context, authority string, rawCo
 	// 4. Key usage to match whether client/server usage.
 	// 5. A `VerifyPeerCertificate` function which performs normal peer
 	// 	  cert verification using configured roots, and the custom SAN checks.
-	cfg, err := hi.ClientSideTLSConfig(ctx)
+	hostname := xdsinternal.Hostname(chi.Attributes)
+	cfg, err := hi.ClientSideTLSConfig(ctx, hostname)
 	if err != nil {
 		return nil, nil, err
 	}

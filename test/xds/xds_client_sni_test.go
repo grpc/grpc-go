@@ -50,7 +50,9 @@ import (
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
-const defaultTestCertSAN = "x.test.example.com"
+// validSNI matches the wildcard SAN (*.test.example.com) in the test server
+// certificate.
+const validSNI = "x.test.example.com"
 
 // Tests the SNI and SAN validation logic by verifying that RPCs succeed when
 // AutoSNISANValidation is enabled and the SNI matches a server certificate DNS
@@ -107,7 +109,7 @@ func (s) TestClientSideXDS_SNISANValidation(t *testing.T) {
 		Name: "envoy.transport_sockets.tls",
 		ConfigType: &v3corepb.TransportSocket_TypedConfig{
 			TypedConfig: testutils.MarshalAny(t, &v3tlspb.UpstreamTlsContext{
-				Sni:                  defaultTestCertSAN,
+				Sni:                  validSNI,
 				AutoSniSanValidation: true,
 				CommonTlsContext: &v3tlspb.CommonTlsContext{
 					ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContextCertificateProviderInstance{
@@ -177,7 +179,7 @@ func (s) TestClientSideXDS_SNISANValidation(t *testing.T) {
 	// RPC to cluster1 should succeed because auto_sni_san_validation is true
 	// and sni matches server cert SAN.
 	peerInfo := &peer.Peer{}
-	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(peerInfo)); err != nil {
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(peerInfo)); err != nil {
 		t.Fatalf("EmptyCall() failed: %v", err)
 	}
 	if got, want := peerInfo.Addr.String(), server1.Address; got != want {
@@ -252,7 +254,7 @@ func (s) TestClientSideXDS_AutoHostSNI(t *testing.T) {
 				Weight: 1,
 				Backends: []e2e.BackendOptions{{
 					Ports:    []uint32{testutils.ParsePort(t, server.Address)},
-					Hostname: defaultTestCertSAN,
+					Hostname: validSNI,
 				}},
 			}},
 		}),
@@ -287,7 +289,7 @@ func (s) TestClientSideXDS_AutoHostSNI(t *testing.T) {
 	// hostname and auto_sni_san_validation validates that the SNI matches
 	// server cert SAN.
 	peerInfo := &peer.Peer{}
-	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(peerInfo)); err != nil {
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(peerInfo)); err != nil {
 		t.Fatalf("EmptyCall() failed: %v", err)
 	}
 	if got, want := peerInfo.Addr.String(), server.Address; got != want {
@@ -295,11 +297,160 @@ func (s) TestClientSideXDS_AutoHostSNI(t *testing.T) {
 	}
 }
 
+// Tests the scenario where multiple endpoints are configured with distinct
+// hostnames. It verifies that the client uses the specific hostname associated
+// with each endpoint during the TLS handshake by simulating an EDS failover and
+// confirming that the SNI is dynamically updated to match the active endpoint.
+func (s) TestClientSideXDS_AutoHostSNI_MultipleEndpoints(t *testing.T) {
+	testutils.SetEnvConfig(t, &envconfig.XDSSNIEnabled, true)
+
+	// Spin up an xDS management server.
+	mgmtServer, nodeID, _, xdsResolver := setup.ManagementServerAndResolver(t)
+
+	// Create test backends
+	serverCreds := testutils.CreateServerTLSCredentials(t, tls.RequireAndVerifyClientCert)
+	server1 := stubserver.StartTestService(t, nil, grpc.Creds(serverCreds))
+	defer server1.Stop()
+
+	server2 := stubserver.StartTestService(t, nil, grpc.Creds(serverCreds))
+	defer server2.Stop()
+
+	// Configure client side xDS resources on the management server.
+	const serviceName = "my-service-client-side-xds"
+	const routeConfigName = "route-" + serviceName
+	const clusterName = "cluster-" + serviceName
+	const endpointName = "endpoint-" + serviceName
+
+	listeners := []*v3listenerpb.Listener{e2e.DefaultClientListener(serviceName, routeConfigName)}
+	routes := []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeConfigName, serviceName, clusterName)}
+
+	clusters := []*v3clusterpb.Cluster{e2e.DefaultCluster(clusterName, endpointName, e2e.SecurityLevelMTLS)}
+	clusters[0].TransportSocket = &v3corepb.TransportSocket{
+		Name: "envoy.transport_sockets.tls",
+		ConfigType: &v3corepb.TransportSocket_TypedConfig{
+			TypedConfig: testutils.MarshalAny(t, &v3tlspb.UpstreamTlsContext{
+				AutoHostSni:          true,
+				AutoSniSanValidation: true,
+				Sni:                  "wrong.sni.domain",
+				CommonTlsContext: &v3tlspb.CommonTlsContext{
+					ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContextCertificateProviderInstance{
+						ValidationContextCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
+							InstanceName:    e2e.ClientSideCertProviderInstance,
+							CertificateName: "root",
+						},
+					},
+					TlsCertificateCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
+						InstanceName:    e2e.ClientSideCertProviderInstance,
+						CertificateName: "identity",
+					},
+				},
+			}),
+		},
+	}
+
+	// Configure only Priority 0 with an invalid hostname. RPC should fail due
+	// to SAN mismatch.
+	endpoints := []*v3endpointpb.ClusterLoadAssignment{
+		e2e.EndpointResourceWithOptions(e2e.EndpointOptions{
+			ClusterName: endpointName,
+			Host:        "localhost",
+			Localities: []e2e.LocalityOptions{
+				{
+					Name:     "locality-0",
+					Weight:   1,
+					Priority: 0,
+					Backends: []e2e.BackendOptions{{
+						Ports:    []uint32{testutils.ParsePort(t, server1.Address)},
+						Hostname: "wrong.sni.domain",
+					}},
+				},
+			},
+		}),
+	}
+
+	resources := e2e.UpdateOptions{
+		NodeID:    nodeID,
+		Listeners: listeners,
+		Routes:    routes,
+		Clusters:  clusters,
+		Endpoints: endpoints,
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	clientCreds, err := xdscreds.NewClientCredentials(xdscreds.ClientOptions{FallbackCreds: insecure.NewCredentials()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(clientCreds), grpc.WithResolvers(xdsResolver))
+	if err != nil {
+		t.Fatalf("failed to dial local test server: %v", err)
+	}
+	defer cc.Close()
+
+	client := testgrpc.NewTestServiceClient(cc)
+
+	// RPC should fail because hostname for endpoints in Priority 0 is invalid.
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err == nil {
+		t.Fatalf("EmptyCall() unexpectedly succeeded with invalid SNI and no failover")
+	} else if !strings.Contains(err.Error(), "authentication handshake failed") {
+		t.Fatalf("EmptyCall() failed with %v, want error containing 'authentication handshake failed'", err)
+	}
+
+	// Update the same EDS resource to add Priority 1 with an endpoint with
+	// valid hostname.
+	endpoints = []*v3endpointpb.ClusterLoadAssignment{
+		e2e.EndpointResourceWithOptions(e2e.EndpointOptions{
+			ClusterName: endpointName,
+			Host:        "localhost",
+			Localities: []e2e.LocalityOptions{
+				{
+					Name:     "locality-0",
+					Weight:   1,
+					Priority: 0,
+					Backends: []e2e.BackendOptions{{
+						Ports:    []uint32{testutils.ParsePort(t, server1.Address)},
+						Hostname: "wrong.sni.domain",
+					}},
+				},
+				{
+					Name:     "locality-1",
+					Weight:   1,
+					Priority: 1,
+					Backends: []e2e.BackendOptions{{
+						Ports:    []uint32{testutils.ParsePort(t, server2.Address)},
+						Hostname: validSNI,
+					}},
+				},
+			},
+		}),
+	}
+	resources.Endpoints = endpoints
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// RPC should succeed because it automatically fails over to Priority 1. Id
+	// only one hostname would have been used per leaf cluster , this RPC should
+	// have failed due to invalid SNI in Priority 0.
+	peerInfo := &peer.Peer{}
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(peerInfo), grpc.WaitForReady(true)); err != nil {
+		t.Fatalf("EmptyCall() failed after adding Priority 1: %v", err)
+	}
+	if got, want := peerInfo.Addr.String(), server2.Address; got != want {
+		t.Fatalf("EmptyCall() successes routed to %q, want %q", got, want)
+	}
+}
+
 // TestClientSideXDS_FallbackSANMatchers tests that when AutoSniSanValidation is
-// true, if no SNI is provided for the handshake, the validation falls back to
-// using the explicit SAN matchers specified in the configuration. It verifies
-// that RPCs succeed when the fallback matchers match the server certificate SAN
-// and fail when they do not.
+// true, and no SNI is provided by the control plane and AutoHostSNI is not set,
+// the validation falls back to using the explicit SAN matchers specified in the
+// configuration. It verifies that RPCs succeed when the fallback matchers match
+// the server certificate SAN and fail when they do not.
 func (s) TestClientSideXDS_FallbackSANMatchers(t *testing.T) {
 	testutils.SetEnvConfig(t, &envconfig.XDSSNIEnabled, true)
 
@@ -440,7 +591,7 @@ func (s) TestClientSideXDS_FallbackSANMatchers(t *testing.T) {
 	// RPC to cluster1 should succeed because fallback SAN mathchers are used
 	// and they match server cert SAN.
 	peerInfo := &peer.Peer{}
-	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(peerInfo)); err != nil {
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(peerInfo)); err != nil {
 		t.Fatalf("EmptyCall() failed: %v", err)
 	}
 	if got, want := peerInfo.Addr.String(), server1.Address; got != want {
@@ -544,7 +695,7 @@ func (s) TestClientSideXDS_SNIEnvVarDisabled(t *testing.T) {
 		Name: "envoy.transport_sockets.tls",
 		ConfigType: &v3corepb.TransportSocket_TypedConfig{
 			TypedConfig: testutils.MarshalAny(t, &v3tlspb.UpstreamTlsContext{
-				Sni:                  defaultTestCertSAN,
+				Sni:                  validSNI,
 				AutoSniSanValidation: true,
 				CommonTlsContext: &v3tlspb.CommonTlsContext{
 					ValidationContextType: &v3tlspb.CommonTlsContext_CombinedValidationContext{
@@ -602,7 +753,7 @@ func (s) TestClientSideXDS_SNIEnvVarDisabled(t *testing.T) {
 	// RPC to cluster1 should succeed because fallback SAN mathchers are used
 	// and they match server cert SAN.
 	peerInfo := &peer.Peer{}
-	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(peerInfo)); err != nil {
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(peerInfo)); err != nil {
 		t.Fatalf("EmptyCall() failed: %v", err)
 	}
 	if got, want := peerInfo.Addr.String(), server1.Address; got != want {
@@ -653,7 +804,7 @@ func (s) TestClientSideXDS_AutoHostSNI_LogicalDNS(t *testing.T) {
 	cluster := e2e.ClusterResourceWithOptions(e2e.ClusterOptions{
 		Type:          e2e.ClusterTypeLogicalDNS,
 		ClusterName:   clusterName,
-		DNSHostName:   defaultTestCertSAN,
+		DNSHostName:   validSNI,
 		DNSPort:       uint32(testutils.ParsePort(t, server.Address)),
 		SecurityLevel: e2e.SecurityLevelMTLS,
 	})

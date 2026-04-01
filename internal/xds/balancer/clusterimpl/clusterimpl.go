@@ -82,7 +82,7 @@ func (bb) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Ba
 		loadWrapper:     loadstore.NewWrapper(),
 		requestCountMax: defaultRequestCountMax,
 	}
-	b.xdsHIPtr.Store(xds.NewHandshakeInfo(nil, nil, nil, false, "", false))
+	b.xdsHIPtr.Store(xds.NewHandshakeInfo(nil, nil, nil, false, "", false, false))
 	b.logger = prefixLogger(b)
 	b.child = gracefulswitch.NewBalancer(b, bOpts)
 	b.logger.Infof("Created")
@@ -308,7 +308,7 @@ func buildProviderFunc(configs map[string]*certprovider.BuildableConfig, instanc
 // management server, creates appropriate certificate provider plugins, and
 // updates the HandshakeInfo which is added as an address attribute in
 // NewSubConn() calls.
-func (b *clusterImplBalancer) handleSecurityConfig(config *xdsresource.SecurityConfig, hostname string) error {
+func (b *clusterImplBalancer) handleSecurityConfig(config *xdsresource.SecurityConfig) error {
 	// If xdsCredentials are not in use, i.e, the user did not want to get
 	// security configuration from an xDS server, we should not be acting on the
 	// received security config here. Doing so poses a security threat.
@@ -323,7 +323,7 @@ func (b *clusterImplBalancer) handleSecurityConfig(config *xdsresource.SecurityC
 		// We need to explicitly set the fields to nil here since this might be
 		// a case of switching from a good security configuration to an empty
 		// one where fallback credentials are to be used.
-		b.xdsHIPtr.Store(xds.NewHandshakeInfo(nil, nil, nil, false, "", false))
+		b.xdsHIPtr.Store(xds.NewHandshakeInfo(nil, nil, nil, false, "", false, false))
 		return nil
 
 	}
@@ -360,15 +360,8 @@ func (b *clusterImplBalancer) handleSecurityConfig(config *xdsresource.SecurityC
 	}
 	b.cachedRoot = rootProvider
 	b.cachedIdentity = identityProvider
-	// Determine the Server Name Indication (SNI) to use for the TLS handshake. If
-	// AutoHostSNI is enabled and a hostname is available either from Logical DNS
-	// or Endpoint, use it. Otherwise, use the SNI specified in the security
-	// configuration.
-	sni := config.SNI
-	if config.UseAutoHostSNI && hostname != "" {
-		sni = hostname
-	}
-	b.xdsHIPtr.Store(xds.NewHandshakeInfo(rootProvider, identityProvider, config.SubjectAltNameMatchers, false, sni, config.AutoSNISANValidation))
+
+	b.xdsHIPtr.Store(xds.NewHandshakeInfo(rootProvider, identityProvider, config.SubjectAltNameMatchers, false, config.SNI, config.AutoSNISANValidation, config.UseAutoHostSNI))
 	return nil
 }
 
@@ -409,23 +402,7 @@ func (b *clusterImplBalancer) UpdateClientConnState(s balancer.ClientConnState) 
 	}
 	clusterCfg := xdsConfig.Clusters[newConfig.Cluster]
 	clusterUpdate := clusterCfg.Config.Cluster
-	var hostname string
-	// For Logical DNS clusters the hostname is available in the ClusterUpdate.
-	// For EDS clusters, the hostname is stored in Endpoint.Attributes
-	if clusterUpdate.ClusterType == xdsresource.ClusterTypeLogicalDNS {
-		hostname = clusterUpdate.DNSHostName
-		if h, _, err := net.SplitHostPort(hostname); err == nil {
-			hostname = h
-		}
-	} else {
-		for _, ep := range s.ResolverState.Endpoints {
-			if h := xdsresource.EndpointHostname(ep); h != "" {
-				hostname = h
-				break
-			}
-		}
-	}
-	if err := b.handleSecurityConfig(clusterUpdate.SecurityCfg, hostname); err != nil {
+	if err := b.handleSecurityConfig(clusterUpdate.SecurityCfg); err != nil {
 		// If the security config is invalid, for example, if the provider
 		// instance is not found in the bootstrap config, we need to put the
 		// channel in transient failure.
@@ -588,6 +565,19 @@ func (b *clusterImplBalancer) NewSubConn(addrs []resolver.Address, opts balancer
 	for i, addr := range addrs {
 		newAddrs[i] = xdsinternal.SetXDSHandshakeClusterName(addr, clusterName)
 		newAddrs[i] = xds.SetHandshakeInfo(newAddrs[i], &b.xdsHIPtr)
+
+		hostname := xdsresource.Hostname(addr)
+		// If the hostname contains a port, strip it. Per [RFC 6066, Section
+		// 3](https://www.rfc-editor.org/rfc/rfc6066.html#section-3), the SNI
+		// may only contain a qualified DNS hostname, which excludes port
+		// numbers.
+		h, _, err := net.SplitHostPort(hostname)
+		if err == nil {
+			hostname = h
+		}
+		// Store hostname in the address attributes, so that it can be used in
+		// the client handshake.
+		newAddrs[i] = xds.SetEndpointHostname(newAddrs[i], hostname)
 	}
 	var sc balancer.SubConn
 	scw := &scWrapper{}
