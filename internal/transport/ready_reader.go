@@ -21,6 +21,7 @@ package transport
 import (
 	"errors"
 	"io"
+	"net"
 	"syscall"
 
 	"google.golang.org/grpc/mem"
@@ -74,6 +75,12 @@ func (c *nonBlockingReader) ReadOnReady(bufSize int, pool mem.BufferPool) (buf *
 		// buffer is already released in the callback.
 		return nil, 0, readErr
 	}
+	if n == 0 {
+		// syscall.Read doesn't consider a graceful socket closure to be an
+		// error condition, but Go's io.Reader expects an EOF error.
+		pool.Put(buf)
+		return nil, 0, io.EOF
+	}
 	return buf, n, nil
 }
 
@@ -97,8 +104,21 @@ func newNonBlockingReader(r io.Reader) ReadyReader {
 	if rr, ok := r.(ReadyReader); ok {
 		return rr
 	}
+	if !isRawConnSupported() {
+		return nil
+	}
+	// We restrict the types before asserting syscall.Conn. The credentials
+	// package may return a wrapper that implements syscall.Conn by embedding
+	// both the raw connection and the encrypted connection. If the code
+	// attempts to read directly from the raw syscall.RawConn, it would read
+	// encrypted data.
+	switch r.(type) {
+	case *net.TCPConn, *net.UDPConn, *net.UnixConn, *net.IPConn:
+	default:
+		return nil
+	}
 	sysConn, ok := r.(syscall.Conn)
-	if !ok || !isRawConnSupported() {
+	if !ok {
 		return nil
 	}
 	if raw, err := sysConn.SyscallConn(); err == nil {
@@ -193,12 +213,14 @@ func (b *bufReadyReader) Read(p []byte) (n int, err error) {
 	}
 
 	// copy as much as we can
+	// b.buf must be non-nil since b.r != b.w.
 	buf := *b.buf
 	n = copy(p, buf[b.r:b.w])
 	b.r += n
 	if b.r == b.w {
 		// Consumed entire buffer, release it.
 		b.pool.Put(b.buf)
+		b.buf = nil
 	}
 	return n, nil
 }
