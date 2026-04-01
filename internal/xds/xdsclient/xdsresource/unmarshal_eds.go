@@ -52,13 +52,6 @@ func SetHostname(endpoint resolver.Endpoint, hostname string) resolver.Endpoint 
 	return endpoint
 }
 
-// EndpointHostname returns the hostname from the Attributes of the given
-// Endpoint. If this attribute is not set, it returns the empty string.
-func EndpointHostname(endpoint resolver.Endpoint) string {
-	hostname, _ := endpoint.Attributes.Value(hostnameKeyType{}).(string)
-	return hostname
-}
-
 // Hostname returns the hostname from the BalancerAttributes of the given
 // Address. If this attribute is not set, it returns the empty string.
 func Hostname(addr resolver.Address) string {
