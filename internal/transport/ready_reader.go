@@ -68,6 +68,7 @@ func (c *nonBlockingReader) ReadOnReady(bufSize int, pool mem.BufferPool) (*[]by
 	err := c.raw.Read(c.doRead)
 
 	buf := c.state.buf
+	c.state.buf = nil
 	n := c.state.bytesRead
 	readErr := c.state.readError
 
@@ -144,6 +145,7 @@ func newNonBlockingReader(r io.Reader) ReadyReader {
 			}
 			return !wouldBlock(s.readError)
 		}
+		return r
 	}
 	return nil
 }

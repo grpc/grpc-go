@@ -183,8 +183,8 @@ func (s) TestReadyReader_TCP_Blocking(t *testing.T) {
 				resCh <- res
 			}()
 
-			// Verify that no read buffer is allocated for a short while. If it is
-			// allocated (e.g. for a probe), it must be returned immediately.
+			// Verify that no read buffer is allocated for a short while. If it
+			// is allocated (e.g. for a probe), it must be returned immediately.
 			sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 			defer sCancel()
 			if n, err := pool.requestChan.Receive(sCtx); err == nil {
