@@ -1629,7 +1629,7 @@ func (s) TestLoadReporting_CustomMetricsPropagation(t *testing.T) {
 						}
 
 						if locality.MemUtilization != nil {
-							t.Errorf("Expected MemUtilization to be nil as it was not configured, got: %v", locality.MemUtilization)
+							t.Errorf("MemUtilization metric set to %v when expected to be unset", locality.MemUtilization)
 						}
 
 						return

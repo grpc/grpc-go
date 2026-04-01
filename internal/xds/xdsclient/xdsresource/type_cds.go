@@ -85,8 +85,8 @@ type ClusterUpdate struct {
 	LRSReportEndpointMetrics *LRSReportEndpointMetricsConfig
 }
 
-// LRSReportEndpointMetricsConfig holds the configuration for propagating ORCA metrics
-// to the LRS server.
+// LRSReportEndpointMetricsConfig holds the configuration for propagating ORCA
+// metrics to the LRS server.
 type LRSReportEndpointMetricsConfig struct {
 	CPUUtilization         bool
 	MemUtilization         bool
@@ -99,7 +99,8 @@ type LRSReportEndpointMetricsConfig struct {
 	NamedMetrics map[string]struct{}
 }
 
-// Equal returns whether the two LRSReportEndpointMetricsConfig configurations are identical.
+// Equal returns whether the two LRSReportEndpointMetricsConfig configurations
+// are identical.
 func (bmp *LRSReportEndpointMetricsConfig) Equal(other *LRSReportEndpointMetricsConfig) bool {
 	switch {
 	case bmp == nil && other == nil:
