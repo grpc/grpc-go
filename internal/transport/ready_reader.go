@@ -21,7 +21,6 @@ package transport
 import (
 	"errors"
 	"io"
-	"net"
 	"syscall"
 
 	"google.golang.org/grpc/mem"
@@ -79,12 +78,12 @@ func (c *nonBlockingReader) ReadOnReady(bufSize int, pool mem.BufferPool) (buf *
 }
 
 type blockingReader struct {
-	conn net.Conn
+	reader io.Reader
 }
 
 func (c *blockingReader) ReadOnReady(bufSize int, pool mem.BufferPool) (*[]byte, int, error) {
 	buf := pool.Get(bufSize)
-	n, err := c.conn.Read(*buf)
+	n, err := c.reader.Read(*buf)
 	if err != nil {
 		pool.Put(buf)
 		return nil, 0, err
@@ -111,22 +110,20 @@ func newNonBlockingReader(r io.Reader) ReadyReader {
 // NewReadyReader detects if [syscall.RawConn] is available for
 // non-memory-pinning reads. If [syscall.RawConn] is unavailable, it falls back
 // to using the simpler [net.Conn] interface for reads.
-func NewReadyReader(conn net.Conn) ReadyReader {
-	if r := newNonBlockingReader(conn); r != nil {
+func NewReadyReader(r io.Reader) ReadyReader {
+	if r := newNonBlockingReader(r); r != nil {
 		return r
 	}
-	return &blockingReader{conn: conn}
+	return &blockingReader{reader: r}
 }
 
-// bufReadyReader implements buffering for an io.bufReadyReader object.
-// A new bufReadyReader is created by calling [NewReader] or [newBufReadyReader];
-// alternatively the zero value of a bufReadyReader may be used after calling [Reset]
-// on it.
+// bufReadyReader implements buffering for a ReadyReader object.
+// A new bufReadyReader is created by calling [newBufReadyReader].
 type bufReadyReader struct {
 	buf       *[]byte
 	pool      mem.BufferPool
 	bufSize   int
-	rd        ReadyReader // reader provided by the client
+	rd        ReadyReader // reader provided by the caller
 	r, w      int         // buf read and write positions
 	err       error
 	constPool constBufferPool // stored as a field to avoid heap allocations.
@@ -143,7 +140,7 @@ func newBufReadyReader(rd ReadyReader, size int, pool mem.BufferPool) *bufReadyR
 	return r
 }
 
-var errNegativeRead = errors.New("bufio: reader returned negative count from Read")
+var errNegativeRead = errors.New("transport: reader returned negative count from Read")
 
 func (b *bufReadyReader) readErr() error {
 	err := b.err
