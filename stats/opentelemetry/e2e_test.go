@@ -2153,7 +2153,7 @@ func runDisconnectScenario(t *testing.T, name, wantLabel string, action func(*st
 	defer cc.Close()
 
 	// Perform warm-up call to ensure the subchannel and connection are ready.
-	client := testpb.NewTestServiceClient(cc)
+	client := testgrpc.NewTestServiceClient(cc)
 	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("Warm-up EmptyCall failed: %v", err)
 	}
