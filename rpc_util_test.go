@@ -52,7 +52,7 @@ type testCompressorForRegistry struct {
 	name string
 }
 
-func (c *testCompressorForRegistry) Compress(w io.Writer) (io.WriteCloser, error) {
+func (c *testCompressorForRegistry) Compress(w io.Writer, _ ...any) (io.WriteCloser, error) {
 	return &testWriteCloser{w}, nil
 }
 
@@ -541,7 +541,7 @@ type mockCompressor struct {
 	ch chan<- struct{}
 }
 
-func (m *mockCompressor) Compress(io.Writer) (io.WriteCloser, error) {
+func (m *mockCompressor) Compress(io.Writer, ...any) (io.WriteCloser, error) {
 	panic("unimplemented")
 }
 

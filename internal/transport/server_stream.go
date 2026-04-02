@@ -50,6 +50,8 @@ type ServerStream struct {
 	headerSent atomic.Bool // atomically set when the headers are sent out.
 
 	headerWireLength int
+
+	sendCompressOptions []any
 }
 
 // Read reads an n byte message from the input stream.
@@ -106,6 +108,17 @@ func (s *ServerStream) SendCompress() string {
 // more details.
 func (s *ServerStream) ContentSubtype() string {
 	return s.contentSubtype
+}
+
+// SetSendCompressOptions sets the compressor options to be passed to the
+// compressor's Compress method.
+func (s *ServerStream) SetSendCompressOptions(opts []any) {
+	s.sendCompressOptions = opts
+}
+
+// SendCompressOptions returns the compressor options set for the stream.
+func (s *ServerStream) SendCompressOptions() []any {
+	return s.sendCompressOptions
 }
 
 // SetSendCompress sets the compression algorithm to the stream.

@@ -2146,11 +2146,15 @@ func SendHeader(ctx context.Context, md metadata.MD) error {
 // It is not safe to call SetSendCompressor concurrently with SendHeader and
 // SendMsg.
 //
+// The optional compressorOptions are forwarded to the compressor's Compress
+// method on each SendMsg call, allowing callers to pass additional context
+// such as dictionary IDs for trained compression formats.
+//
 // # Experimental
 //
 // Notice: This function is EXPERIMENTAL and may be changed or removed in a
 // later release.
-func SetSendCompressor(ctx context.Context, name string) error {
+func SetSendCompressor(ctx context.Context, name string, compressorOptions ...any) error {
 	stream, ok := ServerTransportStreamFromContext(ctx).(*transport.ServerStream)
 	if !ok || stream == nil {
 		return fmt.Errorf("failed to fetch the stream from the given context")
@@ -2160,6 +2164,7 @@ func SetSendCompressor(ctx context.Context, name string) error {
 		return fmt.Errorf("unable to set send compressor: %w", err)
 	}
 
+	stream.SetSendCompressOptions(compressorOptions)
 	return stream.SetSendCompress(name)
 }
 
