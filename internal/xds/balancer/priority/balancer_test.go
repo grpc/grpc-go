@@ -29,6 +29,7 @@ import (
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/balancer/stub"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/hierarchy"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
@@ -68,9 +69,6 @@ func init() {
 	for i := 0; i < testBackendAddrsCount; i++ {
 		testBackendAddrStrs = append(testBackendAddrStrs, fmt.Sprintf("%d.%d.%d.%d:%d", i, i, i, i, i))
 	}
-	// Disable sub-balancer caching for all but the tests which exercise the
-	// caching behavior.
-	DefaultSubBalancerCloseTimeout = time.Duration(0)
 	balancer.Register(&anotherRR{Builder: balancer.Get(roundrobin.Name)})
 }
 
@@ -85,6 +83,17 @@ func overrideInitTimeout(t *testing.T, val time.Duration) {
 //
 // Init 0 and 1; 0 is up, use 0; add 2, use 0; remove 2, use 0.
 func (s) TestPriority_HighPriorityReady(t *testing.T) {
+	t.Run("caching_enabled", func(t *testing.T) {
+		testutils.SetEnvConfig(t, &envconfig.EnablePriorityLBChildPolicyCache, true)
+		testPriorityHighPriorityReady(t)
+	})
+	t.Run("caching_disabled", func(t *testing.T) {
+		testutils.SetEnvConfig(t, &envconfig.EnablePriorityLBChildPolicyCache, false)
+		testPriorityHighPriorityReady(t)
+	})
+}
+
+func testPriorityHighPriorityReady(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
@@ -199,6 +208,17 @@ func (s) TestPriority_HighPriorityReady(t *testing.T) {
 // Init 0 and 1; 0 is up, use 0; 0 is down, 1 is up, use 1; add 2, use 1; 1 is
 // down, use 2; remove 2, use 1.
 func (s) TestPriority_SwitchPriority(t *testing.T) {
+	t.Run("caching_enabled", func(t *testing.T) {
+		testutils.SetEnvConfig(t, &envconfig.EnablePriorityLBChildPolicyCache, true)
+		testPrioritySwitchPriority(t)
+	})
+	t.Run("caching_disabled", func(t *testing.T) {
+		testutils.SetEnvConfig(t, &envconfig.EnablePriorityLBChildPolicyCache, false)
+		testPrioritySwitchPriority(t)
+	})
+}
+
+func testPrioritySwitchPriority(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
@@ -340,16 +360,19 @@ func (s) TestPriority_SwitchPriority(t *testing.T) {
 		t.Fatalf("failed to update ClientConn state: %v", err)
 	}
 
-	// p2 SubConns are shut down.
-	scToShutdown := <-cc.ShutdownSubConnCh
-	// The same SubConn is closed by gracefulswitch and pickfirstleaf when they
-	// are closed. Remove duplicate events.
-	// TODO: https://github.com/grpc/grpc-go/issues/6472 - Remove this
-	// workaround once pickfirst is the only leaf policy and responsible for
-	// shutting down SubConns.
-	<-cc.ShutdownSubConnCh
-	if scToShutdown != sc2 {
-		t.Fatalf("ShutdownSubConn, want %v, got %v", sc2, scToShutdown)
+	// p2 will be closed immediately only if the cache is not enabled.
+	if !envconfig.EnablePriorityLBChildPolicyCache {
+		// p2 SubConns are shut down.
+		scToShutdown := <-cc.ShutdownSubConnCh
+		// The same SubConn is closed by gracefulswitch and pickfirstleaf when
+		// they are closed. Remove duplicate events.
+		// TODO: https://github.com/grpc/grpc-go/issues/6472 - Remove this
+		// workaround once pickfirst is the only leaf policy and responsible for
+		// shutting down SubConns.
+		<-cc.ShutdownSubConnCh
+		if scToShutdown != sc2 {
+			t.Fatalf("ShutdownSubConn, want %v, got %v", sc2, scToShutdown)
+		}
 	}
 
 	// Should get an update with 1's old transient failure picker, to override
@@ -374,6 +397,10 @@ func (s) TestPriority_SwitchPriority(t *testing.T) {
 //
 // Init 0 and 1; 0 is up, use 0; 0 is connecting, 1 is up, use 1; 0 is ready,
 // use 0.
+//
+// Env var GRPC_EXPERIMENTAL_ENABLE_PRIORITY_LB_CHILD_POLICY_CACHE does not
+// affect whether a lower priority child policy is cached when it is removed
+// from the balancer group.
 func (s) TestPriority_HighPriorityToConnectingFromReady(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -383,7 +410,7 @@ func (s) TestPriority_HighPriorityToConnectingFromReady(t *testing.T) {
 	pb := bb.Build(cc, balancer.BuildOptions{})
 	defer pb.Close()
 
-	// Two localities, with priorities [0, 1], each with one backend.
+	t.Log("Two localities, with priorities [0, 1], each with one backend.")
 	if err := pb.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: resolver.State{
 			Endpoints: []resolver.Endpoint{
@@ -408,7 +435,7 @@ func (s) TestPriority_HighPriorityToConnectingFromReady(t *testing.T) {
 	}
 	sc0 := <-cc.NewSubConnCh
 
-	// p0 is ready.
+	t.Log("Make p0 ready.")
 	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
@@ -417,16 +444,15 @@ func (s) TestPriority_HighPriorityToConnectingFromReady(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 
-	// Turn 0 to TransientFailure, will start and use 1.
+	t.Log("Turn down 0, will start and use 1.")
 	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
-
 	// Before 1 gets READY, picker should return NoSubConnAvailable, so RPCs
 	// will retry.
 	if err := cc.WaitForPickerWithErr(ctx, balancer.ErrNoSubConnAvailable); err != nil {
 		t.Fatal(err.Error())
 	}
 
-	// Handle SubConn creation from 1.
+	t.Log("Handle SubConn creation from 1.")
 	addrs1 := <-cc.NewSubConnAddrsCh
 	if got, want := addrs1[0].Addr, testBackendAddrStrs[1]; got != want {
 		t.Fatalf("sc is created with addr %v, want %v", got, want)
@@ -440,22 +466,15 @@ func (s) TestPriority_HighPriorityToConnectingFromReady(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 
-	// Turn 0 back to Ready.
+	t.Logf("Turn 0 back to Ready.")
 	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
-	// p1 subconn should be shut down.
-	scToShutdown := <-cc.ShutdownSubConnCh
-	// The same SubConn is closed by gracefulswitch and pickfirstleaf when they
-	// are closed. Remove duplicate events.
-	// TODO: https://github.com/grpc/grpc-go/issues/6472 - Remove this
-	// workaround once pickfirst is the only leaf policy and responsible for
-	// shutting down SubConns.
-	<-cc.ShutdownSubConnCh
-	if scToShutdown != sc1 {
-		t.Fatalf("ShutdownSubConn, want %v, got %v", sc0, scToShutdown)
-	}
-
+	// At this point p1 is removed from the balancer group, but it gets cached.
+	// Therefore its subchannels will not be removed immediately. So, we do not
+	// check for the shutdown of p1's subchannels here. Instead, we check that
+	// p0 is used again after it becomes ready, which indicates that the
+	// priority switch is successful.
 	if err := cc.WaitForRoundRobinPicker(ctx, sc0); err != nil {
 		t.Fatal(err.Error())
 	}
@@ -646,25 +665,6 @@ func (s) TestPriority_HigherReadyCloseAllLower(t *testing.T) {
 	// When 0 becomes ready, 0 should be used, 1 and 2 should all be closed.
 	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
-	// sc1 and sc2 should be shut down.
-	//
-	// With localities caching, the lower priorities are closed after a timeout,
-	// in goroutines. The order is no longer guaranteed.
-	// The same SubConn is closed by gracefulswitch and pickfirstleaf when they
-	// are closed. Remove duplicate events.
-	// TODO: https://github.com/grpc/grpc-go/issues/6472 - Remove this
-	// workaround once pickfirst is the only leaf policy and responsible for
-	// shutting down SubConns.
-	scToShutdown := [2]balancer.SubConn{}
-	scToShutdown[0] = <-cc.ShutdownSubConnCh
-	<-cc.ShutdownSubConnCh
-	scToShutdown[1] = <-cc.ShutdownSubConnCh
-	<-cc.ShutdownSubConnCh
-
-	if !(scToShutdown[0] == sc1 && scToShutdown[1] == sc2) && !(scToShutdown[0] == sc2 && scToShutdown[1] == sc1) {
-		t.Errorf("ShutdownSubConn, want [%v, %v], got %v", sc1, sc2, scToShutdown)
-	}
-
 	// Test pick with 0.
 	if err := cc.WaitForRoundRobinPicker(ctx, sc0); err != nil {
 		t.Fatal(err.Error())
@@ -741,6 +741,17 @@ func (s) TestPriority_InitTimeout(t *testing.T) {
 
 // EDS removes all priorities, and re-adds them.
 func (s) TestPriority_RemovesAllPriorities(t *testing.T) {
+	t.Run("caching_enabled", func(t *testing.T) {
+		testutils.SetEnvConfig(t, &envconfig.EnablePriorityLBChildPolicyCache, true)
+		testPriorityRemovesAllPriorities(t)
+	})
+	t.Run("caching_disabled", func(t *testing.T) {
+		testutils.SetEnvConfig(t, &envconfig.EnablePriorityLBChildPolicyCache, false)
+		testPriorityRemovesAllPriorities(t)
+	})
+}
+
+func testPriorityRemovesAllPriorities(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
@@ -797,16 +808,19 @@ func (s) TestPriority_RemovesAllPriorities(t *testing.T) {
 		t.Fatalf("failed to update ClientConn state: %v", err)
 	}
 
-	// p0 subconn should be shut down.
-	scToShutdown := <-cc.ShutdownSubConnCh
-	// The same SubConn is closed by gracefulswitch and pickfirstleaf when they
-	// are closed. Remove duplicate events.
-	// TODO: https://github.com/grpc/grpc-go/issues/6472 - Remove this
-	// workaround once pickfirst is the only leaf policy and responsible for
-	// shutting down SubConns.
-	<-cc.ShutdownSubConnCh
-	if scToShutdown != sc0 {
-		t.Fatalf("ShutdownSubConn, want %v, got %v", sc0, scToShutdown)
+	// p0 will be closed immediately only if the cache is not enabled.
+	if !envconfig.EnablePriorityLBChildPolicyCache {
+		// p0 SubConns are shut down.
+		scToShutdown := <-cc.ShutdownSubConnCh
+		// The same SubConn is closed by gracefulswitch and pickfirstleaf when
+		// they are closed. Remove duplicate events.
+		// TODO: https://github.com/grpc/grpc-go/issues/6472 - Remove this
+		// workaround once pickfirst is the only leaf policy and responsible for
+		// shutting down SubConns.
+		<-cc.ShutdownSubConnCh
+		if scToShutdown != sc0 {
+			t.Fatalf("ShutdownSubConn, want %v, got %v", sc0, scToShutdown)
+		}
 	}
 
 	// Test pick return TransientFailure.
@@ -838,6 +852,14 @@ func (s) TestPriority_RemovesAllPriorities(t *testing.T) {
 		t.Fatalf("sc is created with addr %v, want %v", got, want)
 	}
 	sc01 := <-cc.NewSubConnCh
+
+	if envconfig.EnablePriorityLBChildPolicyCache {
+		// The old p0 SubConn is shut down.
+		scToShutdown := <-cc.ShutdownSubConnCh
+		if scToShutdown != sc0 {
+			t.Fatalf("ShutdownSubConn, want %v, got %v", sc0, scToShutdown)
+		}
+	}
 
 	// Don't send any update to p0, so to not override the old state of p0.
 	// Later, connect to p1 and then remove p1. This will fallback to p0, and
@@ -874,16 +896,19 @@ func (s) TestPriority_RemovesAllPriorities(t *testing.T) {
 		t.Fatalf("failed to update ClientConn state: %v", err)
 	}
 
-	// p1 subconn should be shut down.
-	scToShutdown1 := <-cc.ShutdownSubConnCh
-	// The same SubConn is closed by gracefulswitch and pickfirstleaf when they
-	// are closed. Remove duplicate events.
-	// TODO: https://github.com/grpc/grpc-go/issues/6472 - Remove this
-	// workaround once pickfirst is the only leaf policy and responsible for
-	// shutting down SubConns.
-	<-cc.ShutdownSubConnCh
-	if scToShutdown1 != sc11 {
-		t.Fatalf("ShutdownSubConn, want %v, got %v", sc11, scToShutdown1)
+	// p1 will be closed immediately only if the cache is not enabled.
+	if !envconfig.EnablePriorityLBChildPolicyCache {
+		// p1 SubConns are shut down.
+		scToShutdown := <-cc.ShutdownSubConnCh
+		// The same SubConn is closed by gracefulswitch and pickfirstleaf when
+		// they are closed. Remove duplicate events.
+		// TODO: https://github.com/grpc/grpc-go/issues/6472 - Remove this
+		// workaround once pickfirst is the only leaf policy and responsible for
+		// shutting down SubConns.
+		<-cc.ShutdownSubConnCh
+		if scToShutdown != sc11 {
+			t.Fatalf("ShutdownSubConn, want %v, got %v", sc11, scToShutdown)
+		}
 	}
 
 	// Test pick return NoSubConn.
@@ -1004,8 +1029,19 @@ func (s) TestPriority_HighPriorityNoEndpoints(t *testing.T) {
 
 // Test the case where the first and only priority is removed.
 func (s) TestPriority_FirstPriorityUnavailable(t *testing.T) {
-	const testPriorityInitTimeout = 200 * time.Millisecond
-	overrideInitTimeout(t, testPriorityInitTimeout)
+	t.Run("caching_enabled", func(t *testing.T) {
+		testutils.SetEnvConfig(t, &envconfig.EnablePriorityLBChildPolicyCache, true)
+		testPriorityFirstPriorityUnavailable(t)
+	})
+	t.Run("caching_disabled", func(t *testing.T) {
+		testutils.SetEnvConfig(t, &envconfig.EnablePriorityLBChildPolicyCache, false)
+		testPriorityFirstPriorityUnavailable(t)
+	})
+}
+
+func testPriorityFirstPriorityUnavailable(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 
 	cc := testutils.NewBalancerClientConn(t)
 	bb := balancer.Get(Name)
@@ -1029,6 +1065,12 @@ func (s) TestPriority_FirstPriorityUnavailable(t *testing.T) {
 		t.Fatalf("failed to update ClientConn state: %v", err)
 	}
 
+	addrs0 := <-cc.NewSubConnAddrsCh
+	if got, want := addrs0[0].Addr, testBackendAddrStrs[0]; got != want {
+		t.Fatalf("sc is created with addr %v, want %v", got, want)
+	}
+	sc0 := <-cc.NewSubConnCh
+
 	// Remove the only localities.
 	if err := pb.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: resolver.State{
@@ -1042,14 +1084,42 @@ func (s) TestPriority_FirstPriorityUnavailable(t *testing.T) {
 		t.Fatalf("failed to update ClientConn state: %v", err)
 	}
 
-	// Wait after double the init timer timeout, to ensure it doesn't panic.
-	time.Sleep(testPriorityInitTimeout * 2)
+	// p0 will be closed immediately only if the cache is not enabled.
+	if !envconfig.EnablePriorityLBChildPolicyCache {
+		// p0 SubConns are shut down.
+		scToShutdown := <-cc.ShutdownSubConnCh
+		// The same SubConn is closed by gracefulswitch and pickfirstleaf when
+		// they are closed. Remove duplicate events.
+		// TODO: https://github.com/grpc/grpc-go/issues/6472 - Remove this
+		// workaround once pickfirst is the only leaf policy and responsible for
+		// shutting down SubConns.
+		<-cc.ShutdownSubConnCh
+		if scToShutdown != sc0 {
+			t.Fatalf("ShutdownSubConn, want %v, got %v", sc0, scToShutdown)
+		}
+	}
+
+	// Test pick return TransientFailure.
+	if err := cc.WaitForPickerWithErr(ctx, ErrAllPrioritiesRemoved); err != nil {
+		t.Fatal(err.Error())
+	}
 }
 
 // When a child is moved from low priority to high.
 //
 // Init a(p0) and b(p1); a(p0) is up, use a; move b to p0, a to p1, use b.
 func (s) TestPriority_MoveChildToHigherPriority(t *testing.T) {
+	t.Run("caching_enabled", func(t *testing.T) {
+		testutils.SetEnvConfig(t, &envconfig.EnablePriorityLBChildPolicyCache, true)
+		testPriorityMoveChildToHigherPriority(t)
+	})
+	t.Run("caching_disabled", func(t *testing.T) {
+		testutils.SetEnvConfig(t, &envconfig.EnablePriorityLBChildPolicyCache, false)
+		testPriorityMoveChildToHigherPriority(t)
+	})
+}
+
+func testPriorityMoveChildToHigherPriority(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
@@ -1120,18 +1190,6 @@ func (s) TestPriority_MoveChildToHigherPriority(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 
-	// Old subconn should be shut down.
-	scToShutdown := <-cc.ShutdownSubConnCh
-	// The same SubConn is closed by gracefulswitch and pickfirstleaf when they
-	// are closed. Remove duplicate events.
-	// TODO: https://github.com/grpc/grpc-go/issues/6472 - Remove this
-	// workaround once pickfirst is the only leaf policy and responsible for
-	// shutting down SubConns.
-	<-cc.ShutdownSubConnCh
-	if scToShutdown != sc1 {
-		t.Fatalf("ShutdownSubConn, want %v, got %v", sc1, scToShutdown)
-	}
-
 	addrs2 := <-cc.NewSubConnAddrsCh
 	if got, want := addrs2[0].Addr, testBackendAddrStrs[1]; got != want {
 		t.Fatalf("sc is created with addr %v, want %v", got, want)
@@ -1153,6 +1211,17 @@ func (s) TestPriority_MoveChildToHigherPriority(t *testing.T) {
 //
 // Init a(p0) and b(p1); a(p0) is down, use b; move b to p0, a to p1, use b.
 func (s) TestPriority_MoveReadyChildToHigherPriority(t *testing.T) {
+	t.Run("caching_enabled", func(t *testing.T) {
+		testutils.SetEnvConfig(t, &envconfig.EnablePriorityLBChildPolicyCache, true)
+		testPriorityMoveReadyChildToHigherPriority(t)
+	})
+	t.Run("caching_disabled", func(t *testing.T) {
+		testutils.SetEnvConfig(t, &envconfig.EnablePriorityLBChildPolicyCache, false)
+		testPriorityMoveReadyChildToHigherPriority(t)
+	})
+}
+
+func testPriorityMoveReadyChildToHigherPriority(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
@@ -1227,18 +1296,6 @@ func (s) TestPriority_MoveReadyChildToHigherPriority(t *testing.T) {
 		t.Fatalf("failed to update ClientConn state: %v", err)
 	}
 
-	// Old subconn from child-0 should be removed.
-	scToShutdown := <-cc.ShutdownSubConnCh
-	// The same SubConn is closed by gracefulswitch and pickfirstleaf when they
-	// are closed. Remove duplicate events.
-	// TODO: https://github.com/grpc/grpc-go/issues/6472 - Remove this
-	// workaround once pickfirst is the only leaf policy and responsible for
-	// shutting down SubConns.
-	<-cc.ShutdownSubConnCh
-	if scToShutdown != sc0 {
-		t.Fatalf("ShutdownSubConn, want %v, got %v", sc0, scToShutdown)
-	}
-
 	// Because this was a ready child moved to a higher priority, no new subconn
 	// or picker should be updated.
 	select {
@@ -1255,6 +1312,17 @@ func (s) TestPriority_MoveReadyChildToHigherPriority(t *testing.T) {
 //
 // Init a(p0) and b(p1); a(p0) is down, use b; move b to p0, a to p1, use b.
 func (s) TestPriority_RemoveReadyLowestChild(t *testing.T) {
+	t.Run("caching_enabled", func(t *testing.T) {
+		testutils.SetEnvConfig(t, &envconfig.EnablePriorityLBChildPolicyCache, true)
+		testPriorityRemoveReadyLowestChild(t)
+	})
+	t.Run("caching_disabled", func(t *testing.T) {
+		testutils.SetEnvConfig(t, &envconfig.EnablePriorityLBChildPolicyCache, false)
+		testPriorityRemoveReadyLowestChild(t)
+	})
+}
+
+func testPriorityRemoveReadyLowestChild(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
@@ -1329,16 +1397,18 @@ func (s) TestPriority_RemoveReadyLowestChild(t *testing.T) {
 		t.Fatalf("failed to update ClientConn state: %v", err)
 	}
 
-	// Old subconn from child-1 should be shut down.
-	scToShutdown := <-cc.ShutdownSubConnCh
-	// The same SubConn is closed by gracefulswitch and pickfirstleaf when they
-	// are closed. Remove duplicate events.
-	// TODO: https://github.com/grpc/grpc-go/issues/6472 - Remove this
-	// workaround once pickfirst is the only leaf policy and responsible for
-	// shutting down SubConns.
-	<-cc.ShutdownSubConnCh
-	if scToShutdown != sc1 {
-		t.Fatalf("ShutdownSubConn, want %v, got %v", sc1, scToShutdown)
+	if !envconfig.EnablePriorityLBChildPolicyCache {
+		// Old subconn from child-1 should be shut down.
+		scToShutdown := <-cc.ShutdownSubConnCh
+		// The same SubConn is closed by gracefulswitch and pickfirstleaf when they
+		// are closed. Remove duplicate events.
+		// TODO: https://github.com/grpc/grpc-go/issues/6472 - Remove this
+		// workaround once pickfirst is the only leaf policy and responsible for
+		// shutting down SubConns.
+		<-cc.ShutdownSubConnCh
+		if scToShutdown != sc1 {
+			t.Fatalf("ShutdownSubConn, want %v, got %v", sc1, scToShutdown)
+		}
 	}
 
 	if err := cc.WaitForErrPicker(ctx); err != nil {
@@ -1358,18 +1428,10 @@ func (s) TestPriority_RemoveReadyLowestChild(t *testing.T) {
 //
 // Init 0; 0 is up, use 0; remove 0, only picker is updated, no subconn is
 // removed; re-add 0, picker is updated.
-func (s) TestPriority_ReadyChildRemovedButInCache(t *testing.T) {
+func (s) TestPriority_RemoveOnlyReadyChild_CachingEnabled(t *testing.T) {
+	testutils.SetEnvConfig(t, &envconfig.EnablePriorityLBChildPolicyCache, true)
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-
-	const testChildCacheTimeout = time.Second
-	defer func() func() {
-		old := DefaultSubBalancerCloseTimeout
-		DefaultSubBalancerCloseTimeout = testChildCacheTimeout
-		return func() {
-			DefaultSubBalancerCloseTimeout = old
-		}
-	}()()
 
 	cc := testutils.NewBalancerClientConn(t)
 	bb := balancer.Get(Name)
@@ -1408,8 +1470,7 @@ func (s) TestPriority_ReadyChildRemovedButInCache(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 
-	// Remove the child, it shouldn't cause any conn changed, but picker should
-	// be different.
+	// Remove the child.
 	if err := pb.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState:  resolver.State{},
 		BalancerConfig: &LBConfig{},
@@ -1430,7 +1491,7 @@ func (s) TestPriority_ReadyChildRemovedButInCache(t *testing.T) {
 	case <-time.After(time.Millisecond * 100):
 	}
 
-	// Re-add the child, shouldn't create new connections.
+	// Re-add the child.
 	if err := pb.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: resolver.State{
 			Endpoints: []resolver.Endpoint{
@@ -1460,6 +1521,109 @@ func (s) TestPriority_ReadyChildRemovedButInCache(t *testing.T) {
 	case sc := <-cc.ShutdownSubConnCh:
 		t.Fatalf("got unexpected shutdown SubConn: %v", sc)
 	case <-time.After(time.Millisecond * 100):
+	}
+}
+
+// When the only ready child is removed, it is deleted and subchannels are shut
+// down.  Re-adding results in subchannels being recreated.
+//
+// Init 0; 0 is up, use 0; remove 0, re-add 0.
+func (s) TestPriority_RemoveOnlyReadyChild_CachingDisabled(t *testing.T) {
+	testutils.SetEnvConfig(t, &envconfig.EnablePriorityLBChildPolicyCache, false)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	cc := testutils.NewBalancerClientConn(t)
+	bb := balancer.Get(Name)
+	pb := bb.Build(cc, balancer.BuildOptions{})
+	defer pb.Close()
+
+	// One children, with priorities [0], with one backend.
+	if err := pb.UpdateClientConnState(balancer.ClientConnState{
+		ResolverState: resolver.State{
+			Endpoints: []resolver.Endpoint{
+				hierarchy.SetInEndpoint(resolver.Endpoint{Addresses: []resolver.Address{{Addr: testBackendAddrStrs[0]}}}, []string{"child-0"}),
+			},
+		},
+		BalancerConfig: &LBConfig{
+			Children: map[string]*Child{
+				"child-0": {Config: &internalserviceconfig.BalancerConfig{Name: roundrobin.Name}},
+			},
+			Priorities: []string{"child-0"},
+		},
+	}); err != nil {
+		t.Fatalf("failed to update ClientConn state: %v", err)
+	}
+
+	addrs1 := <-cc.NewSubConnAddrsCh
+	if got, want := addrs1[0].Addr, testBackendAddrStrs[0]; got != want {
+		t.Fatalf("sc is created with addr %v, want %v", got, want)
+	}
+	sc1 := <-cc.NewSubConnCh
+
+	// p0 is ready.
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
+
+	// Test roundrobin with only p0 subconns.
+	if err := cc.WaitForRoundRobinPicker(ctx, sc1); err != nil {
+		t.Fatal(err.Error())
+	}
+
+	// Remove the child.
+	if err := pb.UpdateClientConnState(balancer.ClientConnState{
+		ResolverState:  resolver.State{},
+		BalancerConfig: &LBConfig{},
+	}); err != nil {
+		t.Fatalf("failed to update ClientConn state: %v", err)
+	}
+
+	// p0 SubConns are shut down.
+	scToShutdown := <-cc.ShutdownSubConnCh
+	// The same SubConn is closed by gracefulswitch and pickfirstleaf when
+	// they are closed. Remove duplicate events.
+	// TODO: https://github.com/grpc/grpc-go/issues/6472 - Remove this
+	// workaround once pickfirst is the only leaf policy and responsible for
+	// shutting down SubConns.
+	<-cc.ShutdownSubConnCh
+	if scToShutdown != sc1 {
+		t.Fatalf("ShutdownSubConn, want %v, got %v", sc1, scToShutdown)
+	}
+
+	if err := cc.WaitForPickerWithErr(ctx, ErrAllPrioritiesRemoved); err != nil {
+		t.Fatal(err.Error())
+	}
+
+	// Re-add the child.
+	if err := pb.UpdateClientConnState(balancer.ClientConnState{
+		ResolverState: resolver.State{
+			Endpoints: []resolver.Endpoint{
+				hierarchy.SetInEndpoint(resolver.Endpoint{Addresses: []resolver.Address{{Addr: testBackendAddrStrs[0]}}}, []string{"child-0"}),
+			},
+		},
+		BalancerConfig: &LBConfig{
+			Children: map[string]*Child{
+				"child-0": {Config: &internalserviceconfig.BalancerConfig{Name: roundrobin.Name}},
+			},
+			Priorities: []string{"child-0"},
+		},
+	}); err != nil {
+		t.Fatalf("failed to update ClientConn state: %v", err)
+	}
+
+	addrs1 = <-cc.NewSubConnAddrsCh
+	if got, want := addrs1[0].Addr, testBackendAddrStrs[0]; got != want {
+		t.Fatalf("sc is created with addr %v, want %v", got, want)
+	}
+	sc1 = <-cc.NewSubConnCh
+
+	// p0 is ready.
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
+
+	// Test roundrobin with only p0 subconns.
+	if err := cc.WaitForRoundRobinPicker(ctx, sc1); err != nil {
+		t.Fatal(err.Error())
 	}
 }
 
@@ -1691,7 +1855,6 @@ func (s) TestPriority_IgnoreReresolutionRequest(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatalf("timeout waiting for ResolveNow()")
 	}
-
 }
 
 // TestPriority_IgnoreReresolutionRequestTwoChildren tests the case where the
@@ -1791,7 +1954,7 @@ func (s) TestPriority_IgnoreReresolutionRequestTwoChildren(t *testing.T) {
 	}
 }
 
-const initIdleBalancerName = "test-init-Idle-balancer"
+const initIdleBalancerName = "test-init-idle-balancer"
 
 var errsTestInitIdle = []error{
 	fmt.Errorf("init Idle balancer error 0"),
@@ -2096,5 +2259,108 @@ func (s) TestPriority_HighPriorityUpdatesWhenLowInUse(t *testing.T) {
 	// Test pick with 0.
 	if err := cc.WaitForRoundRobinPicker(ctx, sc2); err != nil {
 		t.Fatal(err.Error())
+	}
+}
+
+// Tests that the priority balancer's init timer is not restarted when its child
+// reports a state transition from CONNECTING to CONNECTING.
+func (s) TestPriority_InitTimerNotRestarted_OnConnectingToConnecting(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	initTimerStarted := make(chan struct{}, 1)
+	origTimeAfterFunc := timeAfterFunc
+	timeAfterFunc = func(d time.Duration, f func()) *time.Timer {
+		select {
+		case initTimerStarted <- struct{}{}:
+		case <-ctx.Done():
+			t.Errorf("Timeout waiting to send init timer started signal")
+		}
+		return time.AfterFunc(d, f)
+	}
+	defer func() { timeAfterFunc = origTimeAfterFunc }()
+
+	cc := testutils.NewBalancerClientConn(t)
+	bb := balancer.Get(Name)
+	pb := bb.Build(cc, balancer.BuildOptions{})
+	defer pb.Close()
+
+	// One child, with two backends.
+	ccs := balancer.ClientConnState{
+		ResolverState: resolver.State{
+			Endpoints: []resolver.Endpoint{
+				hierarchy.SetInEndpoint(resolver.Endpoint{Addresses: []resolver.Address{{Addr: testBackendAddrStrs[0]}}}, []string{"child-0"}),
+				hierarchy.SetInEndpoint(resolver.Endpoint{Addresses: []resolver.Address{{Addr: testBackendAddrStrs[1]}}}, []string{"child-0"}),
+			},
+		},
+		BalancerConfig: &LBConfig{
+			Children: map[string]*Child{
+				"child-0": {Config: &internalserviceconfig.BalancerConfig{Name: roundrobin.Name}},
+			},
+			Priorities: []string{"child-0"},
+		},
+	}
+	if err := pb.UpdateClientConnState(ccs); err != nil {
+		t.Fatalf("UpdateClientConnState(%+v) failed: %v", ccs, err)
+	}
+
+	// Wait for child-0 to be started and two subchannels to be created.
+	var sc0, sc1 *testutils.TestSubConn
+	for i := range 2 {
+		var addrs []resolver.Address
+		select {
+		case addrs = <-cc.NewSubConnAddrsCh:
+		case <-ctx.Done():
+			t.Fatalf("Timeout waiting for subconn %d to be created", i)
+		}
+		switch got := addrs[0].Addr; got {
+		case testBackendAddrStrs[0]:
+			sc0 = <-cc.NewSubConnCh
+		case testBackendAddrStrs[1]:
+			sc1 = <-cc.NewSubConnCh
+		default:
+			t.Fatalf("Got unexpected new subconn addr: %q, want %q or %q", got, testBackendAddrStrs[0], testBackendAddrStrs[1])
+		}
+	}
+
+	// Move both subchannels to CONNECTING.
+	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+
+	// Ensure that the init timer is started only once.
+	select {
+	case <-initTimerStarted:
+	case <-ctx.Done():
+		t.Fatalf("Timeout waiting for init timer to start")
+	}
+	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
+	defer sCancel()
+	select {
+	case <-initTimerStarted:
+		t.Fatalf("Init timer started when second subchannel moved to CONNECTING")
+	case <-sCtx.Done():
+	}
+
+	// Simulate the connection succeeding (subchannel becoming Ready), and then
+	// failing (subchannel moving to Idle). RR will immediately start connecting
+	// on the failed subchannel, and will therefore reporting an overall state
+	// of Connecting. This should trigger a restart of the init timer.
+	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Idle})
+	select {
+	case <-initTimerStarted:
+	case <-ctx.Done():
+		t.Fatalf("Timeout waiting for init timer to start")
+	}
+
+	// Move the subchannel to CONNECTING again, and ensure that the init timer
+	// is not restarted.
+	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sCtx, sCancel = context.WithTimeout(ctx, defaultTestShortTimeout)
+	defer sCancel()
+	select {
+	case <-initTimerStarted:
+		t.Fatalf("Init timer restarted when subchannel moved from Ready to Idle")
+	case <-sCtx.Done():
 	}
 }

@@ -206,7 +206,18 @@ for example in ${EXAMPLES[@]}; do
     # Check server log for expected output if expecting an
     # output
     if [ -n "${EXPECTED_SERVER_OUTPUT[$example]}" ]; then
-        if ! grep -q "${EXPECTED_SERVER_OUTPUT[$example]}" $SERVER_LOG; then
+        found=false
+
+        # Poll for up to 10 seconds.
+        for i in {1..10}; do
+            if grep -q "${EXPECTED_SERVER_OUTPUT[$example]}" "$SERVER_LOG"; then
+                found=true
+                break
+            fi
+            sleep 1
+        done
+
+        if [ "$found" = "false" ]; then
             fail "server log missing output: ${EXPECTED_SERVER_OUTPUT[$example]}
             got server log:
             $(cat $SERVER_LOG)

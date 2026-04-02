@@ -38,7 +38,6 @@ import (
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
-	xdsinternal "google.golang.org/grpc/internal/xds"
 	"google.golang.org/grpc/internal/xds/balancer/clusterimpl"
 	"google.golang.org/grpc/internal/xds/balancer/outlierdetection"
 	"google.golang.org/grpc/internal/xds/balancer/priority"
@@ -239,6 +238,7 @@ func (s) TestErrorFromParentLB_ResourceNotFound(t *testing.T) {
 		t.Fatalf("EmptyCall() failed: %v", err)
 	}
 
+	oldCluster := resources.Clusters
 	// Delete the cluster resource from the management server.
 	resources.Clusters = nil
 	if err := managementServer.Update(ctx, resources); err != nil {
@@ -271,13 +271,8 @@ func (s) TestErrorFromParentLB_ResourceNotFound(t *testing.T) {
 
 	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
 
-	// Configure cluster and endpoints resources in the management server.
-	resources = e2e.DefaultClientResources(e2e.ResourceParams{
-		NodeID:     nodeID,
-		DialTarget: serviceName,
-		Host:       "localhost",
-		Port:       testutils.ParsePort(t, server.Address),
-	})
+	// Add the cluster resource back to the management server.
+	resources.Clusters = oldCluster
 	if err := managementServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
@@ -394,9 +389,7 @@ func (s) TestOutlierDetectionConfigPropagationToChildPolicy(t *testing.T) {
 						ChildPolicy: &iserviceconfig.BalancerConfig{
 							Name: clusterimpl.Name,
 							Config: &clusterimpl.LBConfig{
-								Cluster:         clusterName,
-								EDSServiceName:  edsServiceName,
-								TelemetryLabels: xdsinternal.UnknownCSMLabels,
+								Cluster: clusterName,
 								ChildPolicy: &iserviceconfig.BalancerConfig{
 									Name: wrrlocality.Name,
 									Config: &wrrlocality.LBConfig{

@@ -481,11 +481,7 @@ func (s) TestSecurityConfigFromCommonTLSContextUsingNewFields_ErrorCases(t *test
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			origFlag := envconfig.XDSSystemRootCertsEnabled
-			defer func() {
-				envconfig.XDSSystemRootCertsEnabled = origFlag
-			}()
-			envconfig.XDSSystemRootCertsEnabled = test.enableSystemRootCertsFlag
+			testutils.SetEnvConfig(t, &envconfig.XDSSystemRootCertsEnabled, test.enableSystemRootCertsFlag)
 			_, err := securityConfigFromCommonTLSContextUsingNewFields(test.common, test.server)
 			if err == nil {
 				t.Fatal("securityConfigFromCommonTLSContextUsingNewFields() succeeded when expected to fail")
@@ -511,6 +507,7 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 		sanRegexBad            = "??"
 		sanRegexGood           = "san?regex?"
 		sanContains            = "san-contains"
+		sniString              = "test-sni"
 	)
 	var sanRE = regexp.MustCompile(sanRegexGood)
 
@@ -520,6 +517,7 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 		wantUpdate                ClusterUpdate
 		wantErr                   bool
 		enableSystemRootCertsFlag bool
+		enableSNIFlag             bool
 	}{
 		{
 			name: "transport-socket-matches",
@@ -1357,15 +1355,106 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 				TelemetryLabels: xdsinternal.UnknownCSMLabels,
 			},
 		},
+		{
+			name:          "happy-case-with-sni-flag-enabled",
+			enableSNIFlag: true,
+			cluster: &v3clusterpb.Cluster{
+				Name:                 clusterName,
+				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
+				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
+					EdsConfig: &v3corepb.ConfigSource{
+						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
+							Ads: &v3corepb.AggregatedConfigSource{},
+						},
+					},
+					ServiceName: serviceName,
+				},
+				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
+				TransportSocket: &v3corepb.TransportSocket{
+					Name: "envoy.transport_sockets.tls",
+					ConfigType: &v3corepb.TransportSocket_TypedConfig{
+						TypedConfig: testutils.MarshalAny(t, &v3tlspb.UpstreamTlsContext{
+							CommonTlsContext: &v3tlspb.CommonTlsContext{
+								ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContext{
+									ValidationContext: &v3tlspb.CertificateValidationContext{
+										CaCertificateProviderInstance: &v3tlspb.CertificateProviderPluginInstance{
+											InstanceName:    rootPluginInstance,
+											CertificateName: rootCertName,
+										},
+									},
+								},
+							},
+							Sni:                  sniString,
+							AutoHostSni:          true,
+							AutoSniSanValidation: true,
+						}),
+					},
+				},
+			},
+			wantUpdate: ClusterUpdate{
+				ClusterName:    clusterName,
+				EDSServiceName: serviceName,
+				SecurityCfg: &SecurityConfig{
+					RootInstanceName:     rootPluginInstance,
+					RootCertName:         rootCertName,
+					SNI:                  sniString,
+					UseAutoHostSNI:       true,
+					AutoSNISANValidation: true,
+				},
+				TelemetryLabels: xdsinternal.UnknownCSMLabels,
+			},
+		},
+		{
+			name: "sni-env-variable-disabled-should-not-be-populated-in-update",
+			cluster: &v3clusterpb.Cluster{
+				Name:                 clusterName,
+				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
+				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
+					EdsConfig: &v3corepb.ConfigSource{
+						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
+							Ads: &v3corepb.AggregatedConfigSource{},
+						},
+					},
+					ServiceName: serviceName,
+				},
+				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
+				TransportSocket: &v3corepb.TransportSocket{
+					Name: "envoy.transport_sockets.tls",
+					ConfigType: &v3corepb.TransportSocket_TypedConfig{
+						TypedConfig: testutils.MarshalAny(t, &v3tlspb.UpstreamTlsContext{
+							CommonTlsContext: &v3tlspb.CommonTlsContext{
+								ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContext{
+									ValidationContext: &v3tlspb.CertificateValidationContext{
+										CaCertificateProviderInstance: &v3tlspb.CertificateProviderPluginInstance{
+											InstanceName:    rootPluginInstance,
+											CertificateName: rootCertName,
+										},
+									},
+								},
+							},
+							Sni:                  sniString,
+							AutoHostSni:          true,
+							AutoSniSanValidation: true,
+						}),
+					},
+				},
+			},
+			wantUpdate: ClusterUpdate{
+				ClusterName:    clusterName,
+				EDSServiceName: serviceName,
+				SecurityCfg: &SecurityConfig{
+					RootInstanceName: rootPluginInstance,
+					RootCertName:     rootCertName,
+				},
+				TelemetryLabels: xdsinternal.UnknownCSMLabels,
+			},
+		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			origFlag := envconfig.XDSSystemRootCertsEnabled
-			defer func() {
-				envconfig.XDSSystemRootCertsEnabled = origFlag
-			}()
-			envconfig.XDSSystemRootCertsEnabled = test.enableSystemRootCertsFlag
+			testutils.SetEnvConfig(t, &envconfig.XDSSystemRootCertsEnabled, test.enableSystemRootCertsFlag)
+			testutils.SetEnvConfig(t, &envconfig.XDSSNIEnabled, test.enableSNIFlag)
 			update, err := validateClusterAndConstructClusterUpdate(test.cluster, nil)
 			if (err != nil) != test.wantErr {
 				t.Errorf("validateClusterAndConstructClusterUpdate() returned err %v wantErr %v)", err, test.wantErr)
@@ -1385,6 +1474,24 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 	var (
 		v3ClusterAny = testutils.MarshalAny(t, &v3clusterpb.Cluster{
 			Name:                 v3ClusterName,
+			ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
+			EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
+				EdsConfig: &v3corepb.ConfigSource{
+					ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
+						Ads: &v3corepb.AggregatedConfigSource{},
+					},
+				},
+				ServiceName: v3Service,
+			},
+			LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
+			LrsServer: &v3corepb.ConfigSource{
+				ConfigSourceSpecifier: &v3corepb.ConfigSource_Self{
+					Self: &v3corepb.SelfConfigSource{},
+				},
+			},
+		})
+		v3ClusterWithEmptyName = testutils.MarshalAny(t, &v3clusterpb.Cluster{
+			Name:                 "",
 			ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
 			EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
 				EdsConfig: &v3corepb.ConfigSource{
@@ -1512,7 +1619,7 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "bad cluster resource",
+			name: "bad_cluster_resource",
 			resource: testutils.MarshalAny(t, &v3clusterpb.Cluster{
 				Name:                 "test",
 				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_STATIC},
@@ -1521,7 +1628,7 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 			wantErr:  true,
 		},
 		{
-			name: "cluster resource with non-self lrs_server field",
+			name: "cluster_resource_with_non-self_lrs_server_field",
 			resource: testutils.MarshalAny(t, &v3clusterpb.Cluster{
 				Name:                 "test",
 				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
@@ -1544,7 +1651,7 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 			wantErr:  true,
 		},
 		{
-			name:      "v3 cluster",
+			name:      "v3_cluster",
 			resource:  v3ClusterAny,
 			serverCfg: serverCfg,
 			wantName:  v3ClusterName,
@@ -1557,7 +1664,14 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 			},
 		},
 		{
-			name:      "v3 cluster wrapped",
+			name:      "cluster_resource_with_empty_name",
+			resource:  v3ClusterWithEmptyName,
+			serverCfg: serverCfg,
+			wantName:  "",
+			wantErr:   true,
+		},
+		{
+			name:      "v3_cluster_wrapped",
 			resource:  testutils.MarshalAny(t, &v3discoverypb.Resource{Resource: v3ClusterAny}),
 			serverCfg: serverCfg,
 			wantName:  v3ClusterName,
@@ -1570,7 +1684,7 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 			},
 		},
 		{
-			name:      "v3 cluster with EDS config source self",
+			name:      "v3_cluster_with_EDS_config_source_self",
 			resource:  v3ClusterAnyWithEDSConfigSourceSelf,
 			serverCfg: serverCfg,
 			wantName:  v3ClusterName,
@@ -1583,7 +1697,7 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 			},
 		},
 		{
-			name:      "v3 cluster with telemetry case",
+			name:      "v3_cluster_with_telemetry_case",
 			resource:  v3ClusterAnyWithTelemetryLabels,
 			serverCfg: serverCfg,
 			wantName:  v3ClusterName,
@@ -1599,7 +1713,7 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 			},
 		},
 		{
-			name:      "v3 metadata ignore other types not string and not com.google.csm.telemetry_labels",
+			name:      "v3_metadata_ignore_other_types_not_string_and_not_com.google.csm.telemetry_labels",
 			resource:  v3ClusterAnyWithTelemetryLabelsIgnoreSome,
 			serverCfg: serverCfg,
 			wantName:  v3ClusterName,
@@ -1615,7 +1729,7 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 			},
 		},
 		{
-			name: "xdstp cluster resource with unset EDS service name",
+			name: "xdstp_cluster_resource_with_unset_EDS_service_name",
 			resource: testutils.MarshalAny(t, &v3clusterpb.Cluster{
 				Name:                 "xdstp:foo",
 				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
@@ -1822,6 +1936,129 @@ func (s) TestValidateClusterWithOutlierDetection(t *testing.T) {
 			}
 			if diff := cmp.Diff(got, want); diff != "" {
 				t.Fatalf("cluster.OutlierDetection got unexpected output, diff (-got, +want): %v", diff)
+			}
+		})
+	}
+}
+
+func (s) TestValidateClusterWithSecurityConfig_SNITooLong(t *testing.T) {
+	testutils.SetEnvConfig(t, &envconfig.XDSSNIEnabled, true)
+
+	cluster := &v3clusterpb.Cluster{
+		Name:                 "cluster",
+		ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
+		EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
+			EdsConfig: &v3corepb.ConfigSource{
+				ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
+					Ads: &v3corepb.AggregatedConfigSource{},
+				},
+			},
+			ServiceName: "service",
+		},
+		LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
+		TransportSocket: &v3corepb.TransportSocket{
+			Name: "envoy.transport_sockets.tls",
+			ConfigType: &v3corepb.TransportSocket_TypedConfig{
+				TypedConfig: testutils.MarshalAny(t, &v3tlspb.UpstreamTlsContext{
+					CommonTlsContext: &v3tlspb.CommonTlsContext{
+						ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContext{
+							ValidationContext: &v3tlspb.CertificateValidationContext{
+								CaCertificateProviderInstance: &v3tlspb.CertificateProviderPluginInstance{
+									InstanceName:    "rootPluginInstance",
+									CertificateName: "rootCert",
+								},
+							},
+						},
+					},
+					Sni: strings.Repeat("a", 256),
+				}),
+			},
+		},
+	}
+
+	wantErr := "exceeds max length"
+	if _, err := validateClusterAndConstructClusterUpdate(cluster, nil); err == nil || !strings.Contains(err.Error(), wantErr) {
+		t.Fatalf("validateClusterAndConstructClusterUpdate() returned err: %v, want err containing: %s", err, wantErr)
+	}
+}
+
+// TestValidateCluster_LRSReportEndpointMetrics tests the parsing of CDS
+// lrs_report_endpoint_metrics field and verifies it is correctly ignored when
+// the feature flag is disabled and parsed correctly when enabled, including
+// precedence rules for named_metrics.*.
+func (s) TestValidateCluster_LRSReportEndpointMetrics(t *testing.T) {
+	tests := []struct {
+		desc                     string
+		lrsPropEnabled           bool
+		lrsReportEndpointMetrics []string
+		wantMetrics              *LRSReportEndpointMetricsConfig
+	}{
+		{
+			desc:                     "DisabledByEnvVar",
+			lrsPropEnabled:           false,
+			lrsReportEndpointMetrics: []string{"cpu_utilization", "named_metrics.foo", "named_metrics.*"},
+			wantMetrics:              nil,
+		},
+		{
+			desc:                     "AllValidMetrics",
+			lrsPropEnabled:           true,
+			lrsReportEndpointMetrics: []string{"cpu_utilization", "mem_utilization", "application_utilization", "named_metrics.foo", "named_metrics.bar"},
+			wantMetrics: &LRSReportEndpointMetricsConfig{
+				CPUUtilization:         true,
+				MemUtilization:         true,
+				ApplicationUtilization: true,
+				NamedMetricsAll:        false,
+				NamedMetrics: map[string]struct{}{
+					"foo": {},
+					"bar": {},
+				},
+			},
+		},
+		{
+			desc:                     "EnabledByEnvVar",
+			lrsPropEnabled:           true,
+			lrsReportEndpointMetrics: []string{"named_metrics.*", "named_metrics.foo", "cpu_utilization"},
+			wantMetrics: &LRSReportEndpointMetricsConfig{
+				CPUUtilization:  true,
+				NamedMetricsAll: true,
+				NamedMetrics:    nil,
+			},
+		},
+		{
+			desc:                     "IgnoresInvalidMetrics",
+			lrsPropEnabled:           true,
+			lrsReportEndpointMetrics: []string{"named_metrics.", "invalid_metric", "named_metrics.valid"},
+			wantMetrics: &LRSReportEndpointMetricsConfig{
+				NamedMetricsAll: false,
+				NamedMetrics: map[string]struct{}{
+					"valid": {},
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			testutils.SetEnvConfig(t, &envconfig.XDSORCAToLRSPropEnabled, tt.lrsPropEnabled)
+			cluster := &v3clusterpb.Cluster{
+				Name:                 "test-cluster",
+				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
+				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
+					EdsConfig: &v3corepb.ConfigSource{
+						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
+							Ads: &v3corepb.AggregatedConfigSource{},
+						},
+					},
+					ServiceName: "test-service",
+				},
+				LrsReportEndpointMetrics: tt.lrsReportEndpointMetrics,
+			}
+			update, err := validateClusterAndConstructClusterUpdate(cluster, nil)
+			if err != nil {
+				t.Fatalf("validateClusterAndConstructClusterUpdate() failed: %v", err)
+			}
+			if !update.LRSReportEndpointMetrics.Equal(tt.wantMetrics) {
+				t.Fatalf("LRSReportEndpointMetrics:\n got %+v\nwant %+v", update.LRSReportEndpointMetrics, tt.wantMetrics)
 			}
 		})
 	}

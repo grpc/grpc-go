@@ -236,7 +236,11 @@ func (f *fakeORCAService) close() {
 }
 
 func (f *fakeORCAService) StreamCoreMetrics(req *v3orcaservicepb.OrcaLoadReportRequest, stream v3orcaservicegrpc.OpenRcaService_StreamCoreMetricsServer) error {
-	f.reqCh <- req
+	select {
+	case f.reqCh <- req:
+	case <-stream.Context().Done():
+		return stream.Context().Err()
+	}
 	for {
 		var resp any
 		select {

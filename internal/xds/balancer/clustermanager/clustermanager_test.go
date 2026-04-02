@@ -47,9 +47,8 @@ func Test(t *testing.T) {
 }
 
 const (
-	defaultTestTimeout      = 5 * time.Second
-	defaultTestShortTimeout = 10 * time.Millisecond
-	testBackendAddrsCount   = 12
+	defaultTestTimeout    = 5 * time.Second
+	testBackendAddrsCount = 12
 )
 
 var testBackendAddrStrs []string
@@ -106,13 +105,9 @@ func (s) TestClusterPicks(t *testing.T) {
 	}
 
 	m1 := make(map[resolver.Address]balancer.SubConn)
-	// Verify that a subconn is created with the address, and the hierarchy path
-	// in the address is cleared.
+	// Verify that a subconn is created with the address.
 	for range wantAddrs {
 		addrs := <-cc.NewSubConnAddrsCh
-		if len(hierarchy.Get(addrs[0])) != 0 {
-			t.Fatalf("NewSubConn with address %+v, attrs %+v, want address with hierarchy cleared", addrs[0], addrs[0].BalancerAttributes)
-		}
 		sc := <-cc.NewSubConnCh
 		// Clear the attributes before adding to map.
 		addrs[0].BalancerAttributes = nil
@@ -187,13 +182,9 @@ func (s) TestConfigUpdateAddCluster(t *testing.T) {
 	}
 
 	m1 := make(map[resolver.Address]balancer.SubConn)
-	// Verify that a subconn is created with the address, and the hierarchy path
-	// in the address is cleared.
+	// Verify that a subconn is created with the address.
 	for range wantAddrs {
 		addrs := <-cc.NewSubConnAddrsCh
-		if len(hierarchy.Get(addrs[0])) != 0 {
-			t.Fatalf("NewSubConn with address %+v, attrs %+v, want address with hierarchy cleared", addrs[0], addrs[0].BalancerAttributes)
-		}
 		sc := <-cc.NewSubConnCh
 		// Clear the attributes before adding to map.
 		addrs[0].BalancerAttributes = nil
@@ -259,9 +250,6 @@ func (s) TestConfigUpdateAddCluster(t *testing.T) {
 
 	// Expect exactly one new subconn.
 	addrs := <-cc.NewSubConnAddrsCh
-	if len(hierarchy.Get(addrs[0])) != 0 {
-		t.Fatalf("NewSubConn with address %+v, attrs %+v, want address with hierarchy cleared", addrs[0], addrs[0].BalancerAttributes)
-	}
 	sc := <-cc.NewSubConnCh
 	// Clear the attributes before adding to map.
 	addrs[0].BalancerAttributes = nil
@@ -351,9 +339,6 @@ func (s) TestRoutingConfigUpdateDeleteAll(t *testing.T) {
 	// in the address is cleared.
 	for range wantAddrs {
 		addrs := <-cc.NewSubConnAddrsCh
-		if len(hierarchy.Get(addrs[0])) != 0 {
-			t.Fatalf("NewSubConn with address %+v, attrs %+v, want address with hierarchy cleared", addrs[0], addrs[0].BalancerAttributes)
-		}
 		sc := <-cc.NewSubConnCh
 		// Clear the attributes before adding to map.
 		addrs[0].BalancerAttributes = nil
@@ -437,9 +422,6 @@ func (s) TestRoutingConfigUpdateDeleteAll(t *testing.T) {
 	// in the address is cleared.
 	for range wantAddrs {
 		addrs := <-cc.NewSubConnAddrsCh
-		if len(hierarchy.Get(addrs[0])) != 0 {
-			t.Fatalf("NewSubConn with address %+v, attrs %+v, want address with hierarchy cleared", addrs[0], addrs[0].BalancerAttributes)
-		}
 		sc := <-cc.NewSubConnCh
 		// Clear the attributes before adding to map.
 		addrs[0].BalancerAttributes = nil
@@ -531,7 +513,7 @@ func (s) TestClusterManagerForwardsBalancerBuildOptions(t *testing.T) {
 	}
 }
 
-const initIdleBalancerName = "test-init-Idle-balancer"
+const initIdleBalancerName = "test-init-idle-balancer"
 
 var errTestInitIdle = fmt.Errorf("init Idle balancer error 0")
 
@@ -569,7 +551,7 @@ func (s) TestInitialIdle(t *testing.T) {
 
 	configJSON1 := `{
 "children": {
-	"cds:cluster_1":{ "childPolicy": [{"test-init-Idle-balancer":""}] }
+	"cds:cluster_1":{ "childPolicy": [{"test-init-idle-balancer":""}] }
 }
 }`
 	config1, err := parser.ParseConfig([]byte(configJSON1))

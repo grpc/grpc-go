@@ -3960,7 +3960,18 @@ func (s) TestServerStreaming_ClientCallSendMsgTwice(t *testing.T) {
 			// Block until the stream’s context is done. Second call to client.SendMsg
 			// triggers a RST_STREAM which cancels the stream context on the server.
 			<-stream.Context().Done()
-			if err := stream.SendMsg(&testpb.StreamingOutputCallRequest{}); status.Code(err) != codes.Canceled {
+			var err error
+			waitCtx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+			for ; waitCtx.Err() == nil; <-time.After(time.Millisecond) {
+				if err = stream.SendMsg(&testpb.StreamingOutputCallRequest{}); err != nil {
+					break
+				}
+			}
+			if waitCtx.Err() != nil {
+				t.Fatalf("Context timed out waiting for stream.SendMsg() to return an error")
+			}
+			if status.Code(err) != codes.Canceled {
 				t.Errorf("stream.SendMsg() = %v, want error %v", err, codes.Canceled)
 			}
 			close(handlerDone)
@@ -6132,6 +6143,43 @@ func testClientMaxHeaderListSizeServerIntentionalViolation(t *testing.T, e env) 
 	if _, err := stream.Recv(); err == nil || status.Code(err) != codes.Internal {
 		t.Fatalf("stream.Recv() = _, %v, want _, error code: %v", err, codes.Internal)
 	}
+}
+
+func (s) TestEarlyAbortStreamHeaderListSizeCheck(t *testing.T) {
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Failed to listen: %v", err)
+	}
+	s := grpc.NewServer()
+	defer s.Stop()
+	go s.Serve(lis)
+
+	conn, err := net.DialTimeout("tcp", lis.Addr().String(), defaultTestTimeout)
+	if err != nil {
+		t.Fatalf("Failed to dial: %v", err)
+	}
+	defer conn.Close()
+	st := newServerTesterFromConn(t, conn)
+
+	// Set a very small MaxHeaderListSize that any response headers would violate.
+	st.greetWithSettings(http2.Setting{ID: http2.SettingMaxHeaderListSize, Val: 1})
+
+	// Send a request with an invalid content-type to trigger early abort.
+	st.writeHeaders(http2.HeadersFrameParam{
+		StreamID: 1,
+		BlockFragment: st.encodeHeader(
+			":method", "POST",
+			":path", "/grpc.testing.TestService/UnaryCall",
+			"content-type", "text/plain", // Invalid content-type to trigger early abort
+			"te", "trailers",
+		),
+		EndStream:  true,
+		EndHeaders: true,
+	})
+
+	// We should receive a RST_STREAM with ErrCodeInternal because the response
+	// headers exceed the MaxHeaderListSize limit.
+	st.wantRSTStream(http2.ErrCodeInternal)
 }
 
 func (s) TestNetPipeConn(t *testing.T) {

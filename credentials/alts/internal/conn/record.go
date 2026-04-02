@@ -27,6 +27,8 @@ import (
 	"net"
 
 	core "google.golang.org/grpc/credentials/alts/internal"
+	"google.golang.org/grpc/internal/mem"
+	"google.golang.org/grpc/internal/transport/readyreader"
 )
 
 // ALTSRecordCrypto is the interface for gRPC ALTS record protocol.
@@ -62,8 +64,6 @@ const (
 	altsRecordDefaultLength = 4 * 1024 // 4KiB
 	// Message type value included in ALTS record framing.
 	altsRecordMsgType = uint32(0x06)
-	// The initial write buffer size.
-	altsWriteBufferInitialSize = 32 * 1024 // 32KiB
 	// The maximum write buffer size. This *must* be multiple of
 	// altsRecordDefaultLength.
 	altsWriteBufferMaxSize = 512 * 1024 // 512KiB
@@ -74,8 +74,30 @@ const (
 )
 
 var (
-	protocols = make(map[string]ALTSRecordFunc)
+	protocols    = make(map[string]ALTSRecordFunc)
+	writeBufPool *mem.BinaryTieredBufferPool
+	// readBufPool pools buffers of at least `altsReadBufferInitialSize` size.
+	// Since the read buffer size is slightly larger than 32KB, using a regular
+	// BinaryTieredBufferPool results in allocating buffers of almost double the
+	// required length.
+	readBufPool = mem.NewDirtySimplePool()
 )
+
+func init() {
+	pool, err := mem.NewDirtyBinaryTieredBufferPool(
+		8,
+		12, // Go page size, 4KB
+		14, // 16KB (max HTTP/2 frame size used by gRPC)
+		15, // 32KB (default buffer size for gRPC)
+		16, // 64KB
+		17, // 128KB
+		19, // 512KB, max write buffer size
+	)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to create write buffer pool: %v", err))
+	}
+	writeBufPool = pool
+}
 
 // RegisterProtocol register a ALTS record encryption protocol.
 func RegisterProtocol(protocol string, f ALTSRecordFunc) error {
@@ -89,17 +111,18 @@ func RegisterProtocol(protocol string, f ALTSRecordFunc) error {
 // conn represents a secured connection. It implements the net.Conn interface.
 type conn struct {
 	net.Conn
+	reader readyreader.Reader
 	crypto ALTSRecordCrypto
 	// buf holds data that has been read from the connection and decrypted,
 	// but has not yet been returned by Read. It is a sub-slice of protected.
 	buf                []byte
 	payloadLengthLimit int
-	// protected holds data read from the network but have not yet been
-	// decrypted. This data might not compose a complete frame.
-	protected []byte
-	// writeBuf is a buffer used to contain encrypted frames before being
-	// written to the network.
-	writeBuf []byte
+	// protectedHandle buffer holds data read from the network but have not yet
+	// been decrypted. This data might not compose a complete frame.
+	//
+	// The buffer pointer to points to a buffer from the readBufPool. The handle
+	// should only be returned to the pool once nextFrame and buf are empty.
+	protectedHandle *[]byte
 	// nextFrame stores the next frame (in protected buffer) info.
 	nextFrame []byte
 	// overhead is the calculated overhead of each frame.
@@ -122,17 +145,18 @@ func NewConn(c net.Conn, side core.Side, recordProtocol string, key []byte, prot
 	// We pre-allocate protected to be of size 32KB during initialization.
 	// We increase the size of the buffer by the required amount if it can't
 	// hold a complete encrypted record.
-	protectedBuf := make([]byte, max(altsReadBufferInitialSize, len(protected)))
+	protectedHandle := readBufPool.Get(max(altsReadBufferInitialSize, len(protected)))
+	protectedBuf := *protectedHandle
 	// Copy additional data from hanshaker service.
 	copy(protectedBuf, protected)
 	protectedBuf = protectedBuf[:len(protected)]
 
 	altsConn := &conn{
 		Conn:               c,
+		reader:             readyreader.New(c),
 		crypto:             crypto,
 		payloadLengthLimit: payloadLengthLimit,
-		protected:          protectedBuf,
-		writeBuf:           make([]byte, altsWriteBufferInitialSize),
+		protectedHandle:    protectedHandle,
 		nextFrame:          protectedBuf,
 		overhead:           overhead,
 	}
@@ -146,47 +170,65 @@ func NewConn(c net.Conn, side core.Side, recordProtocol string, key []byte, prot
 func (p *conn) Read(b []byte) (n int, err error) {
 	if len(p.buf) == 0 {
 		var framedMsg []byte
+		var protected []byte
+		if p.protectedHandle != nil {
+			protected = *p.protectedHandle
+			protected = protected[:cap(protected)]
+		}
 		framedMsg, p.nextFrame, err = ParseFramedMsg(p.nextFrame, altsRecordLengthLimit)
 		if err != nil {
-			return n, err
+			return 0, err
 		}
 		// Check whether the next frame to be decrypted has been
 		// completely received yet.
 		if len(framedMsg) == 0 {
-			copy(p.protected, p.nextFrame)
-			p.protected = p.protected[:len(p.nextFrame)]
+			copy(protected, p.nextFrame)
+			protected = protected[:len(p.nextFrame)]
 			// Always copy next incomplete frame to the beginning of
 			// the protected buffer and reset nextFrame to it.
-			p.nextFrame = p.protected
+			p.nextFrame = protected
 		}
 		// Check whether a complete frame has been received yet.
 		for len(framedMsg) == 0 {
-			if len(p.protected) == cap(p.protected) {
+			if p.protectedHandle != nil && len(protected) == cap(protected) {
 				// We can parse the length header to know exactly how large
 				// the buffer needs to be to hold the entire frame.
-				length, didParse := parseMessageLength(p.protected)
+				length, didParse := parseMessageLength(protected)
 				if !didParse {
 					// The protected buffer is initialized with a capacity of
 					// larger than 4B. It should always hold the message length
 					// header.
-					panic(fmt.Sprintf("protected buffer length shorter than expected: %d vs %d", len(p.protected), MsgLenFieldSize))
+					panic(fmt.Sprintf("protected buffer length shorter than expected: %d vs %d", len(protected), MsgLenFieldSize))
 				}
-				oldProtectedBuf := p.protected
+				oldProtectedBuf := protected
+				oldBufHandle := p.protectedHandle
 				// The new buffer must be able to hold the message length header
 				// and the entire message.
 				requiredCapacity := int(length) + MsgLenFieldSize
-				p.protected = make([]byte, requiredCapacity)
+				p.protectedHandle = readBufPool.Get(requiredCapacity)
+				protected = *p.protectedHandle
 				// Copy the contents of the old buffer and set the length of the
 				// new buffer to the number of bytes already read.
-				copy(p.protected, oldProtectedBuf)
-				p.protected = p.protected[:len(oldProtectedBuf)]
+				copy(protected, oldProtectedBuf)
+				protected = protected[:len(oldProtectedBuf)]
+				readBufPool.Put(oldBufHandle)
 			}
-			n, err = p.Conn.Read(p.protected[len(p.protected):cap(p.protected)])
-			if err != nil {
-				return 0, err
+			if p.protectedHandle == nil {
+				// Connection was idle, need to re-allocate the read buffer.
+				newBuf, nRead, err := p.reader.ReadOnReady(altsReadBufferInitialSize, readBufPool)
+				if err != nil {
+					return 0, err
+				}
+				p.protectedHandle = newBuf
+				protected = (*newBuf)[:nRead]
+			} else {
+				nRead, err := p.Conn.Read(protected[len(protected):cap(protected)])
+				if err != nil {
+					return 0, err
+				}
+				protected = protected[:len(protected)+nRead]
 			}
-			p.protected = p.protected[:len(p.protected)+n]
-			framedMsg, p.nextFrame, err = ParseFramedMsg(p.protected, altsRecordLengthLimit)
+			framedMsg, p.nextFrame, err = ParseFramedMsg(protected, altsRecordLengthLimit)
 			if err != nil {
 				return 0, err
 			}
@@ -207,6 +249,7 @@ func (p *conn) Read(b []byte) (n int, err error) {
 			if err != nil {
 				return 0, err
 			}
+			p.dropProtectedIfEmtpy()
 			return len(dec), nil
 		}
 		// Decrypt requires that if the dst and ciphertext alias, they
@@ -224,7 +267,21 @@ func (p *conn) Read(b []byte) (n int, err error) {
 
 	n = copy(b, p.buf)
 	p.buf = p.buf[n:]
+	p.dropProtectedIfEmtpy()
 	return n, nil
+}
+
+func (p *conn) dropProtectedIfEmtpy() {
+	if len(p.buf) > 0 || len(p.nextFrame) > 0 {
+		return
+	}
+	// Potentially idle connection, release the read buffer.
+	p.nextFrame = nil
+	p.buf = nil
+	if p.protectedHandle != nil {
+		readBufPool.Put(p.protectedHandle)
+		p.protectedHandle = nil
+	}
 }
 
 // Write encrypts, frames, and writes bytes from b to the underlying connection.
@@ -233,29 +290,23 @@ func (p *conn) Write(b []byte) (n int, err error) {
 	// Calculate the output buffer size with framing and encryption overhead.
 	numOfFrames := int(math.Ceil(float64(len(b)) / float64(p.payloadLengthLimit)))
 	size := len(b) + numOfFrames*p.overhead
-	// If writeBuf is too small, increase its size up to the maximum size.
 	partialBSize := len(b)
 	if size > altsWriteBufferMaxSize {
 		size = altsWriteBufferMaxSize
 		const numOfFramesInMaxWriteBuf = altsWriteBufferMaxSize / altsRecordDefaultLength
 		partialBSize = numOfFramesInMaxWriteBuf * p.payloadLengthLimit
 	}
-	if len(p.writeBuf) < size {
-		p.writeBuf = make([]byte, size)
-	}
+	// Get a writeBuf of the required length.
+	bufHandle := writeBufPool.Get(size)
+	defer writeBufPool.Put(bufHandle)
+	writeBuf := *bufHandle
 
 	for partialBStart := 0; partialBStart < len(b); partialBStart += partialBSize {
-		partialBEnd := partialBStart + partialBSize
-		if partialBEnd > len(b) {
-			partialBEnd = len(b)
-		}
+		partialBEnd := min(partialBStart+partialBSize, len(b))
 		partialB := b[partialBStart:partialBEnd]
 		writeBufIndex := 0
 		for len(partialB) > 0 {
-			payloadLen := len(partialB)
-			if payloadLen > p.payloadLengthLimit {
-				payloadLen = p.payloadLengthLimit
-			}
+			payloadLen := min(len(partialB), p.payloadLengthLimit)
 			buf := partialB[:payloadLen]
 			partialB = partialB[payloadLen:]
 
@@ -263,7 +314,7 @@ func (p *conn) Write(b []byte) (n int, err error) {
 			// if any.
 
 			// 1. Fill in type field.
-			msg := p.writeBuf[writeBufIndex+MsgLenFieldSize:]
+			msg := writeBuf[writeBufIndex+MsgLenFieldSize:]
 			binary.LittleEndian.PutUint32(msg, altsRecordMsgType)
 
 			// 2. Encrypt the payload and create a tag if any.
@@ -273,12 +324,12 @@ func (p *conn) Write(b []byte) (n int, err error) {
 			}
 
 			// 3. Fill in the size field.
-			binary.LittleEndian.PutUint32(p.writeBuf[writeBufIndex:], uint32(len(msg)))
+			binary.LittleEndian.PutUint32(writeBuf[writeBufIndex:], uint32(len(msg)))
 
 			// 4. Increase writeBufIndex.
 			writeBufIndex += len(buf) + p.overhead
 		}
-		nn, err := p.Conn.Write(p.writeBuf[:writeBufIndex])
+		nn, err := p.Conn.Write(writeBuf[:writeBufIndex])
 		if err != nil {
 			// We need to calculate the actual data size that was
 			// written. This means we need to remove header,

@@ -20,9 +20,10 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -33,6 +34,7 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils/pickfirst"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
@@ -107,9 +109,13 @@ func (s) TestAggregateCluster_WithTwoEDSClusters(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	// Start an xDS management server that pushes the EDS resource names onto a
-	// channel when requested.
-	edsResourceNameCh := make(chan []string, 1)
+	const clusterName1 = clusterName + "-cluster-1"
+	const clusterName2 = clusterName + "-cluster-2"
+
+	// gotBothEDSRequests is fired when the management server receives EDS
+	// requests for both clusterName1 and clusterName2. This is used to block
+	// the test until both EDS requests have been received.
+	gotBothEDSRequests := grpcsync.NewEvent()
 	managementServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
 		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
 			if req.GetTypeUrl() != version.V3EndpointsURL {
@@ -121,9 +127,14 @@ func (s) TestAggregateCluster_WithTwoEDSClusters(t *testing.T) {
 				// resources.
 				return nil
 			}
-			select {
-			case edsResourceNameCh <- req.GetResourceNames():
-			case <-ctx.Done():
+
+			// Check if we have a request for both EDS resources. If so, fire
+			// the event to unblock the test.
+			names := req.GetResourceNames()
+			sortedNames := slices.Clone(names)
+			slices.Sort(sortedNames)
+			if cmp.Equal(sortedNames, []string{clusterName1, clusterName2}) {
+				gotBothEDSRequests.Fire()
 			}
 			return nil
 		},
@@ -144,8 +155,6 @@ func (s) TestAggregateCluster_WithTwoEDSClusters(t *testing.T) {
 	// Configure an aggregate cluster, two EDS clusters and only one endpoints
 	// resource (corresponding to the first EDS cluster) in the management
 	// server.
-	const clusterName1 = clusterName + "-cluster-1"
-	const clusterName2 = clusterName + "-cluster-2"
 	resources := e2e.UpdateOptions{
 		NodeID:    nodeID,
 		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(serviceName, routeName)},
@@ -167,23 +176,9 @@ func (s) TestAggregateCluster_WithTwoEDSClusters(t *testing.T) {
 	defer cleanup()
 
 	// Wait for both EDS resources to be requested.
-	func() {
-		for ; ctx.Err() == nil; <-time.After(defaultTestShortTimeout) {
-			select {
-			case names := <-edsResourceNameCh:
-				// Copy and sort the sortedNames to avoid racing with an
-				// OnStreamRequest call.
-				sortedNames := make([]string, len(names))
-				copy(sortedNames, names)
-				sort.Strings(sortedNames)
-				if cmp.Equal(sortedNames, []string{clusterName1, clusterName2}) {
-					return
-				}
-			default:
-			}
-		}
-	}()
-	if ctx.Err() != nil {
+	select {
+	case <-gotBothEDSRequests.Done():
+	case <-ctx.Done():
 		t.Fatalf("Timeout when waiting for all EDS resources %v to be requested", []string{clusterName1, clusterName2})
 	}
 
@@ -589,7 +584,7 @@ func (s) TestAggregateCluster_WithEDSAndDNS(t *testing.T) {
 	}
 
 	// Update DNS resolver with test backend addresses.
-	dnsR.UpdateState(resolver.State{Addresses: addrs[1:]})
+	dnsR.UpdateState(resolver.State{Endpoints: addrsToEndpoints(addrs[1:])})
 
 	// Make an RPC and ensure that it gets routed to the first backend since the
 	// EDS cluster is of higher priority than the LOGICAL_DNS cluster.
@@ -703,8 +698,8 @@ func (s) TestAggregateCluster_BadEDS_GoodToBadDNS(t *testing.T) {
 	bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, managementServer.Address)
 
 	// Start two test backends.
-	servers, cleanup3 := startTestServiceBackends(t, 2)
-	defer cleanup3()
+	servers, cleanup := startTestServiceBackends(t, 2)
+	defer cleanup()
 	addrs, _ := backendAddressesAndPorts(t, servers)
 
 	// Configure an aggregate cluster pointing to an EDS and LOGICAL_DNS
@@ -761,7 +756,7 @@ func (s) TestAggregateCluster_BadEDS_GoodToBadDNS(t *testing.T) {
 	}
 
 	// Update DNS resolver with test backend addresses.
-	dnsR.UpdateState(resolver.State{Addresses: addrs})
+	dnsR.UpdateState(resolver.State{Endpoints: addrsToEndpoints(addrs)})
 
 	// Ensure that RPCs start getting routed to the first backend since the
 	// child policy for a LOGICAL_DNS cluster is pick_first by default.
@@ -801,8 +796,28 @@ func (s) TestAggregateCluster_BadEDS_GoodToBadDNS(t *testing.T) {
 // the DNS resolver pushes an update, the test verifies that we switch to the
 // DNS cluster and can make a successful RPC.
 func (s) TestAggregateCluster_BadEDSFromError_GoodToBadDNS(t *testing.T) {
-	// Start an xDS management server.
-	managementServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
+	// Start an xDS management server and block it from continuously re-sending
+	// the same EDS response that triggers a NACK. This is to ensure that the
+	// test can proceed to the point of verifying that we fall back to the
+	// LOGICAL_DNS cluster. More more details see:
+	// https://github.com/grpc/grpc-go/issues/8994.
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	edsResponseSeen := atomic.Bool{}
+	managementServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
+		OnStreamResponse: func(_ context.Context, _ int64, _ *v3discoverypb.DiscoveryRequest, resp *v3discoverypb.DiscoveryResponse) {
+			if resp.GetTypeUrl() != version.V3EndpointsURL {
+				return
+			}
+			if edsResponseSeen.Load() {
+				t.Logf("Received EDS response again, blocking to prevent test from busylooping on the same EDS response: %v", resp)
+				<-ctx.Done()
+				return
+			}
+			edsResponseSeen.Store(true)
+		},
+		AllowResourceSubset: true,
+	})
 
 	// Create bootstrap configuration pointing to the above management server.
 	nodeID := uuid.New().String()
@@ -840,8 +855,6 @@ func (s) TestAggregateCluster_BadEDSFromError_GoodToBadDNS(t *testing.T) {
 		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{nackEndpointResource},
 		SkipValidation: true,
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	if err := managementServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
@@ -1000,7 +1013,7 @@ func (s) TestAggregateCluster_BadEDS_BadDNS(t *testing.T) {
 		if err == nil {
 			t.Fatal("EmptyCall() succeeded when expected to fail")
 		}
-		if status.Code(err) == codes.Unavailable && strings.Contains(err.Error(), "produced zero addresses") {
+		if status.Code(err) == codes.Unavailable && strings.Contains(err.Error(), "no targets to pick from") {
 			break
 		}
 	}
@@ -1099,8 +1112,29 @@ func (s) TestAggregateCluster_NoFallback_EDSNackedWithPreviousGoodUpdate(t *test
 // the LOGICAL_DNS cluster, because it is supposed to treat the bad EDS response
 // as though it received an update with no endpoints.
 func (s) TestAggregateCluster_Fallback_EDSNackedWithoutPreviousGoodUpdate(t *testing.T) {
-	// Start an xDS management server.
-	managementServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	// Start an xDS management server and block it from continuously re-sending
+	// the same EDS response that triggers a NACK. This is to ensure that the
+	// test can proceed to the point of verifying that we fall back to the
+	// LOGICAL_DNS cluster. More more details see:
+	// https://github.com/grpc/grpc-go/issues/8994.
+	edsResponseSeen := atomic.Bool{}
+	managementServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
+		OnStreamResponse: func(_ context.Context, _ int64, _ *v3discoverypb.DiscoveryRequest, resp *v3discoverypb.DiscoveryResponse) {
+			if resp.GetTypeUrl() != version.V3EndpointsURL {
+				return
+			}
+			if edsResponseSeen.Load() {
+				t.Logf("Received EDS response again, blocking to prevent test from busylooping on the same EDS response: %v", resp)
+				<-ctx.Done()
+				return
+			}
+			edsResponseSeen.Store(true)
+		},
+		AllowResourceSubset: true,
+	})
 
 	// Create bootstrap configuration pointing to the above management server.
 	nodeID := uuid.New().String()
@@ -1109,8 +1143,8 @@ func (s) TestAggregateCluster_Fallback_EDSNackedWithoutPreviousGoodUpdate(t *tes
 	// Start two test backends and extract their host and port. The first
 	// backend is used for the EDS cluster and the second backend is used for
 	// the LOGICAL_DNS cluster.
-	servers, cleanup3 := startTestServiceBackends(t, 2)
-	defer cleanup3()
+	servers, cleanup := startTestServiceBackends(t, 2)
+	defer cleanup()
 	addrs, ports := backendAddressesAndPorts(t, servers)
 	dnsHostName, dnsPort := hostAndPortFromAddress(t, servers[1].Address)
 
@@ -1134,11 +1168,7 @@ func (s) TestAggregateCluster_Fallback_EDSNackedWithoutPreviousGoodUpdate(t *tes
 
 	// Set a load balancing weight of 0 for the backend in the EDS resource.
 	// This is expected to be NACKed by the xDS client. Since the
-	// cluster_resolver LB policy has no previously received good EDS resource,
-	// it will treat this as though it received an update with no endpoints.
 	resources.Endpoints[0].Endpoints[0].LbEndpoints[0].LoadBalancingWeight = &wrapperspb.UInt32Value{Value: 0}
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	if err := managementServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
@@ -1243,4 +1273,12 @@ func (s) TestAggregateCluster_Fallback_EDS_ResourceNotFound(t *testing.T) {
 	if peer.Addr.String() != server.Address {
 		t.Fatalf("EmptyCall() routed to backend %q, want %q", peer.Addr, server.Address)
 	}
+}
+
+func addrsToEndpoints(addrs []resolver.Address) []resolver.Endpoint {
+	endpoints := make([]resolver.Endpoint, len(addrs))
+	for i, addr := range addrs {
+		endpoints[i] = resolver.Endpoint{Addresses: []resolver.Address{addr}}
+	}
+	return endpoints
 }

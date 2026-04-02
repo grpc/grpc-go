@@ -26,11 +26,13 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/stats"
 	"google.golang.org/grpc/internal/wrr"
 	xdsinternal "google.golang.org/grpc/internal/xds"
 	"google.golang.org/grpc/internal/xds/clients"
 	"google.golang.org/grpc/internal/xds/xdsclient"
+	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
@@ -90,6 +92,7 @@ type picker struct {
 	countMax        uint32
 	telemetryLabels map[string]string
 	clusterName     string
+	metrics         *xdsresource.LRSReportEndpointMetricsConfig
 }
 
 func telemetryLabels(ctx context.Context) map[string]string {
@@ -145,7 +148,7 @@ func (d *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 		pr.SubConn = scw.SubConn
 		// If locality ID isn't found in the wrapper, an empty locality ID will
 		// be used.
-		lID = scw.localityID()
+		lID = scw.localityID
 
 		if scw.hostname != "" && autoHostRewriteEnabled(info.Ctx) {
 			if pr.Metadata == nil {
@@ -183,8 +186,29 @@ func (d *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 			if !ok || load == nil {
 				return
 			}
-			for n, c := range load.NamedMetrics {
-				d.loadStore.CallServerLoad(locality, n, c)
+
+			if envconfig.XDSORCAToLRSPropEnabled {
+				if d.metrics != nil {
+					if d.metrics.CPUUtilization {
+						d.loadStore.CallServerLoad(locality, "cpu_utilization", load.CpuUtilization)
+					}
+					if d.metrics.MemUtilization {
+						d.loadStore.CallServerLoad(locality, "mem_utilization", load.MemUtilization)
+					}
+					if d.metrics.ApplicationUtilization {
+						d.loadStore.CallServerLoad(locality, "application_utilization", load.ApplicationUtilization)
+					}
+					for n, c := range load.NamedMetrics {
+						_, ok := d.metrics.NamedMetrics[n]
+						if d.metrics.NamedMetricsAll || ok {
+							d.loadStore.CallServerLoad(locality, "named_metrics."+n, c)
+						}
+					}
+				}
+			} else {
+				for n, c := range load.NamedMetrics {
+					d.loadStore.CallServerLoad(locality, n, c)
+				}
 			}
 		}
 	}

@@ -168,7 +168,7 @@ func (s *Server) BalanceLoad(stream lbgrpc.LoadBalancer_BalanceLoadServer) error
 		return nil
 	}
 	if err != nil {
-		logger.Warning("Failed to read LoadBalanceRequest from stream: %v", err)
+		logger.Warningf("Failed to read LoadBalanceRequest from stream: %v", err)
 		return err
 	}
 	logger.Infof("Received LoadBalancerRequest:\n%s", pretty.ToJSON(req))
@@ -191,16 +191,16 @@ func (s *Server) BalanceLoad(stream lbgrpc.LoadBalancer_BalanceLoadServer) error
 	} else {
 		p, err := strconv.Atoi(port)
 		if err != nil {
-			logger.Info("Failed to parse requested service port %q to integer", port)
+			logger.Infof("Failed to parse requested service port %q to integer", port)
 			return status.Error(codes.Unknown, "Bad requested service port number")
 		}
 		if p != s.servicePort {
-			logger.Info("Requested service port number %q does not match expected", port, s.servicePort)
+			logger.Infof("Requested service port number %d does not match expected %d", p, s.servicePort)
 			return status.Error(codes.Unknown, "Bad requested service port number")
 		}
 	}
 	if serviceName != s.serviceName {
-		logger.Info("Requested service name %q does not match expected %q", serviceName, s.serviceName)
+		logger.Infof("Requested service name %q does not match expected %q", serviceName, s.serviceName)
 		return status.Error(codes.NotFound, "Bad requested service name")
 	}
 

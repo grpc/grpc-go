@@ -54,7 +54,6 @@ type Endpoint struct {
 	ResolverEndpoint resolver.Endpoint
 	HealthStatus     EndpointHealthStatus
 	Weight           uint32
-	HashKey          string
 	Metadata         map[string]any
 }
 

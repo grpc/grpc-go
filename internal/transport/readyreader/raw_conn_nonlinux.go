@@ -1,6 +1,8 @@
+//go:build !linux
+
 /*
  *
- * Copyright 2020 gRPC authors.
+ * Copyright 2026 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,19 +18,18 @@
  *
  */
 
-package clusterresolver
+package readyreader
 
-import (
-	"fmt"
+func isRawConnSupported() bool {
+	return false
+}
 
-	"google.golang.org/grpc/grpclog"
-	internalgrpclog "google.golang.org/grpc/internal/grpclog"
-)
+// sysRead is not implemented. Support can be added in the future if necessary.
+func sysRead(fd uintptr, p []byte) (int, error) {
+	panic("RawConn functionality is not implemented for non-unix platforms.")
+}
 
-const prefix = "[xds-cluster-resolver-lb %p] "
-
-var logger = grpclog.Component("xds")
-
-func prefixLogger(p *clusterResolverBalancer) *internalgrpclog.PrefixLogger {
-	return internalgrpclog.NewPrefixLogger(logger, fmt.Sprintf(prefix, p))
+// wouldBlock is not implemented. Support can be added in the future if necessary.
+func wouldBlock(err error) bool {
+	panic("RawConn functionality is not implemented for non-unix platforms.")
 }
