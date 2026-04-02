@@ -53,7 +53,7 @@ func (s) TestReadyReader_NonRawConn(t *testing.T) {
 	go writer.Write(data)
 
 	pool := mem.DefaultBufferPool()
-	readyReader := readyreader.NewReadyReader(reader)
+	readyReader := readyreader.New(reader)
 
 	bufHandle, n, err := readyReader.ReadOnReady(1024, pool)
 	if err != nil {
@@ -96,7 +96,7 @@ func (s) TestReadyReader_EOF(t *testing.T) {
 	defer conn.Close()
 
 	pool := mem.DefaultBufferPool()
-	rr := readyreader.NewReadyReader(conn)
+	rr := readyreader.New(conn)
 	res, _, err := rr.ReadOnReady(len(data), pool)
 	if err != nil {
 		t.Errorf("Failed to read: %v", err)
@@ -148,7 +148,7 @@ func (s) TestReadyReader_TCP_Blocking(t *testing.T) {
 	defer serverConn.Close()
 
 	pool := newTrackingPool(mem.DefaultBufferPool())
-	ac := readyreader.NewReadyReader(conn)
+	ac := readyreader.New(conn)
 
 	resCh := make(chan []byte)
 	const readBufSize = 1024

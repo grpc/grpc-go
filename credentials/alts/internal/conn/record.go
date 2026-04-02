@@ -111,7 +111,7 @@ func RegisterProtocol(protocol string, f ALTSRecordFunc) error {
 // conn represents a secured connection. It implements the net.Conn interface.
 type conn struct {
 	net.Conn
-	reader readyreader.ReadyReader
+	reader readyreader.Reader
 	crypto ALTSRecordCrypto
 	// buf holds data that has been read from the connection and decrypted,
 	// but has not yet been returned by Read. It is a sub-slice of protected.
@@ -153,7 +153,7 @@ func NewConn(c net.Conn, side core.Side, recordProtocol string, key []byte, prot
 
 	altsConn := &conn{
 		Conn:               c,
-		reader:             readyreader.NewReadyReader(c),
+		reader:             readyreader.New(c),
 		crypto:             crypto,
 		payloadLengthLimit: payloadLengthLimit,
 		protectedHandle:    protectedHandle,
