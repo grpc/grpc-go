@@ -25,6 +25,7 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 
 	v3xdsxdstypepb "github.com/cncf/xds/go/xds/type/v3"
@@ -749,6 +750,8 @@ func (s) TestRBACHTTPFilter(t *testing.T) {
 					t.Fatalf("UnaryCall() returned err with status: %v, wantStatusUnaryCall: %v", err, test.wantStatusUnaryCall)
 				}
 
+				lb.mu.Lock()
+				defer lb.mu.Unlock()
 				if test.wantAuthzOutcomes != nil {
 					if diff := cmp.Diff(lb.authzDecisionStat, test.wantAuthzOutcomes); diff != "" {
 						t.Fatalf("authorization decision do not match\ndiff (-got +want):\n%s", diff)
@@ -956,28 +959,30 @@ func (s) TestRBAC_WithBadRouteConfiguration(t *testing.T) {
 }
 
 type statAuditLogger struct {
+	builder *loggerBuilder
+}
+
+func (s *statAuditLogger) Log(event *audit.Event) {
+	b := s.builder
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.authzDecisionStat[event.Authorized]++
+	*b.lastEvent = *event
+}
+
+type loggerBuilder struct {
+	mu                sync.Mutex
 	authzDecisionStat map[bool]int // Map to hold counts of authorization decisions
 	lastEvent         *audit.Event // Field to store last received event
 }
 
-func (s *statAuditLogger) Log(event *audit.Event) {
-	s.authzDecisionStat[event.Authorized]++
-	*s.lastEvent = *event
-}
-
-type loggerBuilder struct {
-	authzDecisionStat map[bool]int
-	lastEvent         *audit.Event
-}
-
-func (loggerBuilder) Name() string {
+func (*loggerBuilder) Name() string {
 	return "stat_logger"
 }
 
 func (lb *loggerBuilder) Build(audit.LoggerConfig) audit.Logger {
 	return &statAuditLogger{
-		authzDecisionStat: lb.authzDecisionStat,
-		lastEvent:         lb.lastEvent,
+		builder: lb,
 	}
 }
 
