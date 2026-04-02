@@ -46,9 +46,12 @@ import (
 )
 
 func (s) TestRetryUnary(t *testing.T) {
+	serverMu := sync.Mutex{}
 	i := -1
 	ss := &stubserver.StubServer{
 		EmptyCallF: func(context.Context, *testpb.Empty) (r *testpb.Empty, err error) {
+			serverMu.Lock()
+			defer serverMu.Unlock()
 			defer func() { t.Logf("server call %v returning err %v", i, err) }()
 			i++
 			switch i {
@@ -97,16 +100,23 @@ func (s) TestRetryUnary(t *testing.T) {
 		if status.Code(err) != tc.code {
 			t.Fatalf("EmptyCall(_, _) = _, %v; want _, <Code() = %v>", err, tc.code)
 		}
+		serverMu.Lock()
 		if i != tc.count {
+			serverMu.Unlock()
 			t.Fatalf("i = %v; want %v", i, tc.count)
 		}
+		serverMu.Unlock()
 	}
 }
 
 func (s) TestRetryThrottling(t *testing.T) {
+	serverMu := sync.Mutex{}
 	i := -1
+
 	ss := &stubserver.StubServer{
 		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
+			serverMu.Lock()
+			defer serverMu.Unlock()
 			i++
 			switch i {
 			case 0, 3, 6, 10, 11, 12, 13, 14, 16, 18:
@@ -161,9 +171,11 @@ func (s) TestRetryThrottling(t *testing.T) {
 		if status.Code(err) != tc.code {
 			t.Errorf("EmptyCall(_, _) = _, %v; want _, <Code() = %v>", err, tc.code)
 		}
+		serverMu.Lock()
 		if i != tc.count {
 			t.Errorf("i = %v; want %v", i, tc.count)
 		}
+		serverMu.Unlock()
 	}
 }
 
@@ -414,10 +426,14 @@ func (s) TestRetryStreaming(t *testing.T) {
 		clientOps: []clientOp{cReqPayload(largePayload), cErr(codes.Unavailable)},
 	}}
 
+	serverMu := sync.Mutex{}
 	var serverOpIter int
 	var serverOps []serverOp
+
 	ss := &stubserver.StubServer{
 		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
+			serverMu.Lock()
+			defer serverMu.Unlock()
 			for serverOpIter < len(serverOps) {
 				op := serverOps[serverOpIter]
 				serverOpIter++
@@ -458,8 +474,10 @@ func (s) TestRetryStreaming(t *testing.T) {
 
 	for i, tc := range testCases {
 		func() {
+			serverMu.Lock()
 			serverOpIter = 0
 			serverOps = tc.serverOps
+			serverMu.Unlock()
 
 			stream, err := ss.Client.FullDuplexCall(ctx)
 			if err != nil {
@@ -471,6 +489,8 @@ func (s) TestRetryStreaming(t *testing.T) {
 					break
 				}
 			}
+			serverMu.Lock()
+			defer serverMu.Unlock()
 			if serverOpIter != len(serverOps) {
 				t.Errorf("%v: serverOpIter = %v; want %v", tc.desc, serverOpIter, len(serverOps))
 			}
@@ -509,15 +529,20 @@ func (s) TestMaxCallAttempts(t *testing.T) {
 			),
 		}
 
+		serverMu := sync.Mutex{}
 		streamCallCount := 0
 		unaryCallCount := 0
 
 		ss := &stubserver.StubServer{
 			FullDuplexCallF: func(testgrpc.TestService_FullDuplexCallServer) error {
+				serverMu.Lock()
+				defer serverMu.Unlock()
 				streamCallCount++
 				return status.New(codes.Unavailable, "this is a test error").Err()
 			},
 			EmptyCallF: func(context.Context, *testpb.Empty) (r *testpb.Empty, err error) {
+				serverMu.Lock()
+				defer serverMu.Unlock()
 				unaryCallCount++
 				return nil, status.New(codes.Unavailable, "this is a test error").Err()
 			},
@@ -555,9 +580,12 @@ func (s) TestMaxCallAttempts(t *testing.T) {
 				t.Fatalf("want: ErrRetriesExhausted, got: %v", err)
 			}
 
+			serverMu.Lock()
 			if streamCallCount != tc.expectedAttempts {
+				serverMu.Unlock()
 				t.Fatalf("stream expectedAttempts = %v; want %v", streamCallCount, tc.expectedAttempts)
 			}
+			serverMu.Unlock()
 
 			// Test unary RPC
 			if ugot, err := ss.Client.EmptyCall(ctx, &testpb.Empty{}); err == nil {
@@ -565,6 +593,8 @@ func (s) TestMaxCallAttempts(t *testing.T) {
 			} else if status.Code(err) != codes.Unavailable {
 				t.Fatalf("client: EmptyCall() = _, %v; want _, Unavailable", err)
 			}
+			serverMu.Lock()
+			defer serverMu.Unlock()
 			if unaryCallCount != tc.expectedAttempts {
 				t.Fatalf("unary expectedAttempts = %v; want %v", unaryCallCount, tc.expectedAttempts)
 			}

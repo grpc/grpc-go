@@ -19,6 +19,7 @@
 package transport
 
 import (
+	"errors"
 	"io"
 	"net"
 	"syscall"
@@ -46,23 +47,30 @@ type ReadyReader interface {
 // interface.
 type nonBlockingReader struct {
 	raw syscall.RawConn
+	// The following fields are stored as field to avoid heap allocations.
+	state  readState
+	doRead func(fd uintptr) bool
 }
 
-func (c *nonBlockingReader) ReadOnReady(bufSize int, pool mem.BufferPool) (buf *[]byte, n int, err error) {
-	var readErr error
-	err = c.raw.Read(func(fd uintptr) bool {
-		buf = pool.Get(bufSize)
-		n, readErr = sysRead(fd, *buf)
-		if readErr != nil {
-			pool.Put(buf)
-			buf = nil
-		}
+type readState struct {
+	readError error
+	bytesRead int
+	buf       *[]byte
+	bufSize   int
+	pool      mem.BufferPool
+}
 
-		if wouldBlock(readErr) {
-			return false // Wait for readiness
-		}
-		return true // Done
-	})
+func (c *nonBlockingReader) ReadOnReady(bufSize int, pool mem.BufferPool) (*[]byte, int, error) {
+	c.state = readState{
+		pool:    pool,
+		bufSize: bufSize,
+	}
+	err := c.raw.Read(c.doRead)
+
+	buf := c.state.buf
+	c.state.buf = nil
+	n := c.state.bytesRead
+	readErr := c.state.readError
 
 	if err != nil {
 		if buf != nil {
@@ -70,26 +78,29 @@ func (c *nonBlockingReader) ReadOnReady(bufSize int, pool mem.BufferPool) (buf *
 		}
 		return nil, 0, err
 	}
+
 	if readErr != nil {
 		// buffer is already released in the callback.
 		return nil, 0, readErr
 	}
+
 	if n == 0 {
 		// syscall.Read doesn't consider a graceful socket closure to be an
 		// error condition, but Go's io.Reader expects an EOF error.
 		pool.Put(buf)
 		return nil, 0, io.EOF
 	}
+
 	return buf, n, nil
 }
 
 type blockingReader struct {
-	conn net.Conn
+	reader io.Reader
 }
 
 func (c *blockingReader) ReadOnReady(bufSize int, pool mem.BufferPool) (*[]byte, int, error) {
 	buf := pool.Get(bufSize)
-	n, err := c.conn.Read(*buf)
+	n, err := c.reader.Read(*buf)
 	if err != nil {
 		pool.Put(buf)
 		return nil, 0, err
@@ -97,16 +108,152 @@ func (c *blockingReader) ReadOnReady(bufSize int, pool mem.BufferPool) (*[]byte,
 	return buf, n, nil
 }
 
+// newNonBlockingReader returns a ReadyReader if the passed reader supports
+// non-memory-pinning reads, else nil.
+func newNonBlockingReader(r io.Reader) ReadyReader {
+	if rr, ok := r.(ReadyReader); ok {
+		return rr
+	}
+	if !isRawConnSupported() {
+		return nil
+	}
+	// We restrict the types before asserting syscall.Conn. The credentials
+	// package may return a wrapper that implements syscall.Conn by embedding
+	// both the raw connection and the encrypted connection. If the code
+	// attempts to read directly from the raw syscall.RawConn, it would read
+	// encrypted data.
+	switch r.(type) {
+	case *net.TCPConn, *net.UDPConn, *net.UnixConn, *net.IPConn:
+	default:
+		return nil
+	}
+	sysConn, ok := r.(syscall.Conn)
+	if !ok {
+		return nil
+	}
+	if raw, err := sysConn.SyscallConn(); err == nil {
+		r := &nonBlockingReader{raw: raw}
+		r.doRead = func(fd uintptr) bool {
+			s := &r.state
+
+			s.buf = s.pool.Get(s.bufSize)
+			s.bytesRead, s.readError = sysRead(fd, *s.buf)
+
+			if s.readError != nil {
+				s.pool.Put(s.buf)
+				s.buf = nil
+			}
+			return !wouldBlock(s.readError)
+		}
+		return r
+	}
+	return nil
+}
+
 // NewReadyReader detects if [syscall.RawConn] is available for
 // non-memory-pinning reads. If [syscall.RawConn] is unavailable, it falls back
 // to using the simpler [net.Conn] interface for reads.
-func NewReadyReader(conn net.Conn) ReadyReader {
-	sysConn, ok := conn.(syscall.Conn)
-	if !ok || !isRawConnSupported() {
-		return &blockingReader{conn: conn}
+func NewReadyReader(r io.Reader) ReadyReader {
+	if r := newNonBlockingReader(r); r != nil {
+		return r
 	}
-	if raw, err := sysConn.SyscallConn(); err == nil {
-		return &nonBlockingReader{raw: raw}
-	}
-	return &blockingReader{conn: conn}
+	return &blockingReader{reader: r}
 }
+
+// bufReadyReader implements buffering for a ReadyReader object.
+// A new bufReadyReader is created by calling [newBufReadyReader].
+type bufReadyReader struct {
+	buf       *[]byte
+	pool      mem.BufferPool
+	bufSize   int
+	rd        ReadyReader // reader provided by the caller
+	r, w      int         // buf read and write positions
+	err       error
+	constPool constBufferPool // stored as a field to avoid heap allocations.
+}
+
+// newBufReadyReader returns a new [bufferedReadyReader] whose buffer has the
+// specified size. If the argument.
+func newBufReadyReader(rd ReadyReader, size int, pool mem.BufferPool) *bufReadyReader {
+	r := &bufReadyReader{
+		rd:      rd,
+		pool:    pool,
+		bufSize: size,
+	}
+	return r
+}
+
+var errNegativeRead = errors.New("transport: reader returned negative count from Read")
+
+func (b *bufReadyReader) readErr() error {
+	err := b.err
+	b.err = nil
+	return err
+}
+
+func (b *bufReadyReader) buffered() int { return b.w - b.r }
+
+// Read reads data into p.
+// It returns the number of bytes read into p.
+// The bytes are taken from at most one Read on the underlying [ReadyReader],
+// hence n may be less than len(p).
+// If the underlying [ReadyReader] can return a non-zero count with io.EOF,
+// then this Read method can do so as well; see the [io.Reader] docs.
+func (b *bufReadyReader) Read(p []byte) (n int, err error) {
+	n = len(p)
+	if n == 0 {
+		if b.buffered() > 0 {
+			return 0, nil
+		}
+		return 0, b.readErr()
+	}
+	if b.r == b.w {
+		if b.err != nil {
+			return 0, b.readErr()
+		}
+		if len(p) >= b.bufSize {
+			// Large read, empty buffer.
+			// Read directly into p to avoid copy.
+			b.constPool.buffer = p
+			_, n, err := b.rd.ReadOnReady(len(p), &b.constPool)
+			b.err = err
+			if n < 0 {
+				panic(errNegativeRead)
+			}
+			return n, b.readErr()
+		}
+		// One read.
+		b.r = 0
+		b.w = 0
+		b.buf, n, b.err = b.rd.ReadOnReady(b.bufSize, b.pool)
+		if n < 0 {
+			panic(errNegativeRead)
+		}
+		if n == 0 {
+			return 0, b.readErr()
+		}
+		b.w += n
+	}
+
+	// copy as much as we can
+	// b.buf must be non-nil since b.r != b.w.
+	buf := *b.buf
+	n = copy(p, buf[b.r:b.w])
+	b.r += n
+	if b.r == b.w {
+		// Consumed entire buffer, release it.
+		b.pool.Put(b.buf)
+		b.buf = nil
+	}
+	return n, nil
+}
+
+type constBufferPool struct {
+	buffer []byte
+}
+
+func (p *constBufferPool) Get(int) *[]byte {
+	return &p.buffer
+}
+
+func (p *constBufferPool) Put(*[]byte) {}

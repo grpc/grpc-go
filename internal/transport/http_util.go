@@ -36,6 +36,7 @@ import (
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
 	"google.golang.org/grpc/codes"
+	imem "google.golang.org/grpc/internal/mem"
 	"google.golang.org/grpc/mem"
 )
 
@@ -296,7 +297,7 @@ func decodeGrpcMessageUnchecked(msg string) string {
 }
 
 type bufWriter struct {
-	pool      *sync.Pool
+	pool      *imem.SimpleBufferPool
 	buf       []byte
 	offset    int
 	batchSize int
@@ -304,7 +305,7 @@ type bufWriter struct {
 	err       error
 }
 
-func newBufWriter(conn io.Writer, batchSize int, pool *sync.Pool) *bufWriter {
+func newBufWriter(conn io.Writer, batchSize int, pool *imem.SimpleBufferPool) *bufWriter {
 	w := &bufWriter{
 		batchSize: batchSize,
 		conn:      conn,
@@ -326,7 +327,7 @@ func (w *bufWriter) Write(b []byte) (int, error) {
 		return n, toIOError(err)
 	}
 	if w.buf == nil {
-		b := w.pool.Get().(*[]byte)
+		b := w.pool.Get(w.batchSize)
 		w.buf = *b
 	}
 	written := 0
@@ -407,8 +408,8 @@ type framer struct {
 	errDetail error
 }
 
-var writeBufferPoolMap = make(map[int]*sync.Pool)
-var writeBufferMutex sync.Mutex
+var ioBufferPoolMap = make(map[int]*imem.SimpleBufferPool)
+var ioBufferMutex sync.Mutex
 
 func newFramer(conn io.ReadWriter, writeBufferSize, readBufferSize int, sharedWriteBuffer bool, maxHeaderListSize uint32, memPool mem.BufferPool) *framer {
 	if writeBufferSize < 0 {
@@ -416,13 +417,18 @@ func newFramer(conn io.ReadWriter, writeBufferSize, readBufferSize int, sharedWr
 	}
 	var r io.Reader = conn
 	if readBufferSize > 0 {
-		r = bufio.NewReaderSize(r, readBufferSize)
+		if rr := newNonBlockingReader(conn); rr != nil {
+			readPool := getIOBufferPool(readBufferSize)
+			r = newBufReadyReader(rr, readBufferSize, readPool)
+		} else {
+			r = bufio.NewReaderSize(r, readBufferSize)
+		}
 	}
-	var pool *sync.Pool
+	var writePool *imem.SimpleBufferPool
 	if sharedWriteBuffer {
-		pool = getWriteBufferPool(writeBufferSize)
+		writePool = getIOBufferPool(writeBufferSize)
 	}
-	w := newBufWriter(conn, writeBufferSize, pool)
+	w := newBufWriter(conn, writeBufferSize, writePool)
 	f := &framer{
 		writer: w,
 		fr:     http2.NewFramer(w, r),
@@ -578,20 +584,15 @@ func (df *parsedDataFrame) Header() http2.FrameHeader {
 	return df.FrameHeader
 }
 
-func getWriteBufferPool(size int) *sync.Pool {
-	writeBufferMutex.Lock()
-	defer writeBufferMutex.Unlock()
-	pool, ok := writeBufferPoolMap[size]
+func getIOBufferPool(size int) *imem.SimpleBufferPool {
+	ioBufferMutex.Lock()
+	defer ioBufferMutex.Unlock()
+	pool, ok := ioBufferPoolMap[size]
 	if ok {
 		return pool
 	}
-	pool = &sync.Pool{
-		New: func() any {
-			b := make([]byte, size)
-			return &b
-		},
-	}
-	writeBufferPoolMap[size] = pool
+	pool = imem.NewDirtySimplePool()
+	ioBufferPoolMap[size] = pool
 	return pool
 }
 
