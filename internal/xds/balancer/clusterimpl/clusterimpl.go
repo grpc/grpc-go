@@ -150,9 +150,9 @@ type clusterImplBalancer struct {
 	lrsReportEndpointMetrics *xdsresource.LRSReportEndpointMetricsConfig // LRS metrics to propagate.
 }
 
-// handleClusterConfigLocked compares internal state with the new cluster
-// configuration, and is protected by b.mu. It returns a boolean indicating
-// if a new picker needs to be generated.
+// handleClusterConfigLocked updates the internal state of the balancer with the
+// new cluster configuration. It returns true if a new picker needs to be
+// generated as a result of these changes. It must be called with b.mu held.
 func (b *clusterImplBalancer) handleClusterConfigLocked(clusterConfig xdsresource.ClusterConfig) bool {
 	clusterUpdate := clusterConfig.Cluster
 	var updatePicker bool
