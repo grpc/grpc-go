@@ -47,23 +47,75 @@ type Reader interface {
 // interface.
 type nonBlockingReader struct {
 	raw syscall.RawConn
+	// The following fields are stored as field to avoid heap allocations.
+	state  readState
+	doRead func(fd uintptr) bool
 }
 
-func (c *nonBlockingReader) ReadOnReady(bufSize int, pool mem.BufferPool) (buf *[]byte, n int, err error) {
-	var readErr error
-	err = c.raw.Read(func(fd uintptr) bool {
-		buf = pool.Get(bufSize)
-		n, readErr = sysRead(fd, *buf)
-		if readErr != nil {
-			pool.Put(buf)
-			buf = nil
-		}
+type readState struct {
+	// Request params.
+	bufSize int
+	pool    mem.BufferPool
 
-		if wouldBlock(readErr) {
-			return false // Wait for readiness
+	// Response params.
+	readError error
+	bytesRead int
+	buf       *[]byte
+}
+
+// newNonBlockingReader returns a ReadyReader if the passed reader supports
+// non-memory-pinning reads, else nil.
+func newNonBlockingReader(r io.Reader) Reader {
+	if rr, ok := r.(Reader); ok {
+		return rr
+	}
+	if !isRawConnSupported() {
+		return nil
+	}
+	// We restrict the types before asserting syscall.Conn. The credentials
+	// package may return a wrapper that implements syscall.Conn by embedding
+	// both the raw connection and the encrypted connection. If the code
+	// attempts to read directly from the raw syscall.RawConn, it would read
+	// encrypted data.
+	switch r.(type) {
+	case *net.TCPConn, *net.UDPConn, *net.UnixConn, *net.IPConn:
+	default:
+		return nil
+	}
+	sysConn, ok := r.(syscall.Conn)
+	if !ok {
+		return nil
+	}
+	if raw, err := sysConn.SyscallConn(); err == nil {
+		r := &nonBlockingReader{raw: raw}
+		r.doRead = func(fd uintptr) bool {
+			s := &r.state
+
+			s.buf = s.pool.Get(s.bufSize)
+			s.bytesRead, s.readError = sysRead(fd, *s.buf)
+
+			if s.readError != nil {
+				s.pool.Put(s.buf)
+				s.buf = nil
+			}
+			return !wouldBlock(s.readError)
 		}
-		return true // Done
-	})
+		return r
+	}
+	return nil
+}
+
+func (c *nonBlockingReader) ReadOnReady(bufSize int, pool mem.BufferPool) (*[]byte, int, error) {
+	c.state = readState{
+		pool:    pool,
+		bufSize: bufSize,
+	}
+	err := c.raw.Read(c.doRead)
+
+	buf := c.state.buf
+	c.state.buf = nil
+	n := c.state.bytesRead
+	readErr := c.state.readError
 
 	if err != nil {
 		if buf != nil {
@@ -85,12 +137,12 @@ func (c *nonBlockingReader) ReadOnReady(bufSize int, pool mem.BufferPool) (buf *
 }
 
 type blockingReader struct {
-	conn net.Conn
+	reader io.Reader
 }
 
 func (c *blockingReader) ReadOnReady(bufSize int, pool mem.BufferPool) (*[]byte, int, error) {
 	buf := pool.Get(bufSize)
-	n, err := c.conn.Read(*buf)
+	n, err := c.reader.Read(*buf)
 	if err != nil {
 		pool.Put(buf)
 		return nil, 0, err
@@ -101,13 +153,9 @@ func (c *blockingReader) ReadOnReady(bufSize int, pool mem.BufferPool) (*[]byte,
 // New detects if [syscall.RawConn] is available for non-memory-pinning reads.
 // If [syscall.RawConn] is unavailable, it falls back to using the simpler
 // [net.Conn] interface for reads.
-func New(conn net.Conn) Reader {
-	sysConn, ok := conn.(syscall.Conn)
-	if !ok || !isRawConnSupported() {
-		return &blockingReader{conn: conn}
+func New(r io.Reader) Reader {
+	if r := newNonBlockingReader(r); r != nil {
+		return r
 	}
-	if raw, err := sysConn.SyscallConn(); err == nil {
-		return &nonBlockingReader{raw: raw}
-	}
-	return &blockingReader{conn: conn}
+	return &blockingReader{reader: r}
 }
