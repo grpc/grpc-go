@@ -16,7 +16,7 @@
  *
  */
 
-package transport
+package readyreader
 
 import (
 	"golang.org/x/sys/unix"

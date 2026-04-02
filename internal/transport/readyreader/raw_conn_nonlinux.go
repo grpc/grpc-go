@@ -18,7 +18,7 @@
  *
  */
 
-package transport
+package readyreader
 
 func isRawConnSupported() bool {
 	return false
