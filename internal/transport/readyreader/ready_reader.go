@@ -16,7 +16,8 @@
  *
  */
 
-package transport
+// Package readyreader provides utilities to perform non-memory-pinning reads.
+package readyreader
 
 import (
 	"io"
