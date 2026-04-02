@@ -31,8 +31,8 @@ import (
 
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/xds/clients"
+	"google.golang.org/grpc/internal/xds/clients/internal/buffer"
 	"google.golang.org/grpc/internal/xds/clients/internal/pretty"
-	"google.golang.org/grpc/internal/xds/clients/internal/testutils"
 	"google.golang.org/grpc/internal/xds/clients/xdsclient"
 	"google.golang.org/grpc/internal/xds/clients/xdsclient/internal/xdsresource"
 	"google.golang.org/protobuf/proto"
@@ -280,7 +280,7 @@ func buildResourceName(typeName, auth, id string, ctxParams map[string]string) s
 // recording events on channels and provides helpers to check if certain events
 // have taken place.
 type testMetricsReporter struct {
-	metricsCh *testutils.Channel
+	metricsCh *buffer.Unbounded
 
 	mu             sync.Mutex
 	asyncReporters map[clients.AsyncReporter]struct{}
@@ -289,7 +289,7 @@ type testMetricsReporter struct {
 // newTestMetricsReporter returns a new testMetricsReporter.
 func newTestMetricsReporter() *testMetricsReporter {
 	return &testMetricsReporter{
-		metricsCh:      testutils.NewChannelWithSize(50),
+		metricsCh:      buffer.NewUnbounded(),
 		asyncReporters: make(map[clients.AsyncReporter]struct{}),
 	}
 }
@@ -298,14 +298,16 @@ func newTestMetricsReporter() *testMetricsReporter {
 // recorded metrics data matches the expected metricsDataWant. Returns
 // an error if failed to wait or received wrong data.
 func (r *testMetricsReporter) waitForMetric(ctx context.Context, metricsDataWant any) error {
-	got, err := r.metricsCh.Receive(ctx)
-	if err != nil {
-		return fmt.Errorf("timeout waiting for int64Count")
+	select {
+	case got := <-r.metricsCh.Get():
+		r.metricsCh.Load()
+		if diff := cmp.Diff(got, metricsDataWant); diff != "" {
+			return fmt.Errorf("received unexpected metrics value (-got, +want): %v", diff)
+		}
+		return nil
+	case <-ctx.Done():
+		return fmt.Errorf("timeout waiting for metric check: %v", ctx.Err())
 	}
-	if diff := cmp.Diff(got, metricsDataWant); diff != "" {
-		return fmt.Errorf("received unexpected metrics value (-got, +want): %v", diff)
-	}
-	return nil
 }
 
 // waitForSpecificMetric waits for a specific metric to be recorded, ignoring
@@ -318,19 +320,45 @@ func (r *testMetricsReporter) waitForMetric(ctx context.Context, metricsDataWant
 // metric happens to be at the front of the channel.
 func (r *testMetricsReporter) waitForSpecificMetric(ctx context.Context, metricsDataWant any) error {
 	for {
-		got, err := r.metricsCh.Receive(ctx)
-		if err != nil {
-			return fmt.Errorf("timeout waiting for metric: %v (want %T)", err, metricsDataWant)
+		select {
+		case got := <-r.metricsCh.Get():
+			r.metricsCh.Load()
+			if diff := cmp.Diff(got, metricsDataWant); diff == "" {
+				return nil
+			}
+		case <-ctx.Done():
+			return fmt.Errorf("timeout waiting for specific metric: %v", ctx.Err())
 		}
-		if diff := cmp.Diff(got, metricsDataWant); diff == "" {
-			return nil
+	}
+}
+
+// Receive waits for a metric to be recorded and returns it. Returns an error
+// if the context expires before a metric is received.
+func (r *testMetricsReporter) Receive(ctx context.Context) (any, error) {
+	select {
+	case got := <-r.metricsCh.Get():
+		r.metricsCh.Load()
+		return got, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+// Drain clears all accumulated metrics from the channel.
+func (r *testMetricsReporter) Drain() {
+	for {
+		select {
+		case <-r.metricsCh.Get():
+			r.metricsCh.Load()
+		default:
+			return
 		}
 	}
 }
 
 // ReportMetric sends the metrics data to the metricsCh channel.
 func (r *testMetricsReporter) ReportMetric(m any) {
-	r.metricsCh.Send(m)
+	r.metricsCh.Put(m)
 }
 
 func (r *testMetricsReporter) RegisterAsyncReporter(reporter clients.AsyncReporter) func() {

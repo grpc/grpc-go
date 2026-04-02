@@ -22,7 +22,6 @@ import (
 	"context"
 	"errors"
 	"net"
-	"sync"
 	"testing"
 
 	"github.com/google/uuid"
@@ -314,10 +313,11 @@ func (s) TestServerFailureMetrics_AfterResponseRecv(t *testing.T) {
 	}
 }
 
-// TestConnectedMetric verifies the "grpc.xds_client.connected" metric state transitions.
-// It begins by ensuring no metrics are reported before connection is attempted.
-// Then it establishes a connection by watching a valid resource and verifies the connected state pulses to 1.
-// Finally, it stops the management server and verifies the state drops back to 0.
+// TestConnectedMetric verifies the "grpc.xds_client.connected" metric state
+// transitions. It begins by ensuring no metrics are reported before connection
+// is attempted. Then it establishes a connection by watching a valid resource
+// and verifies the connected state pulses to 1. Finally, it stops the
+// management server and verifies the state drops back to 0.
 func (s) TestConnectedMetric(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -403,21 +403,23 @@ func (s) TestConnectedMetric(t *testing.T) {
 	}
 
 	// Drain the channel of any leftover metrics from previous pulses.
-	tmr.metricsCh.Drain()
+	tmr.Drain()
 
 	tmr.triggerAsyncMetrics()
 	// No metrics should be reported now because there are no reporters.
 	sCtx, sCancel = context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
-	if _, err := tmr.metricsCh.Receive(sCtx); err == nil {
+	if _, err := tmr.Receive(sCtx); err == nil {
 		t.Fatal("Metrics reported after all reporters were unregistered")
 	}
 }
 
-// TestResourceMetrics verifies that the xDS client correctly tracks resource states (acked, nacked_but_cached)
-// in "grpc.xds_client.resources" metric. It watches a resource, pushes a valid update from the management
-// server, and asserts that the resource transitions to 'acked' state. Then it pushes an invalid update
-// and asserts that the resource transitions to 'nacked_but_cached' state.
+// TestResourceMetrics verifies that the xDS client correctly tracks resource
+// states (acked, nacked_but_cached) in "grpc.xds_client.resources" metric. It
+// watches a resource, pushes a valid update from the management server, and
+// asserts that the resource transitions to 'acked' state. Then it pushes an
+// invalid update and asserts that the resource transitions to
+// 'nacked_but_cached' state.
 func (s) TestResourceMetrics(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -504,11 +506,13 @@ func (s) TestResourceMetrics(t *testing.T) {
 	}
 }
 
-// TestResourceMetrics_Extended verifies complex resource state transitions (requested, does_not_exist, nacked)
-// in "grpc.xds_client.resources" metric across multiple resources. It watches several resources, pushes a
-// partial update (some valid, some invalid) to transition them to 'acked' and 'nacked' states. Then it pushes
-// an empty authoritative update and asserts that active watchers transition back to 'requested' while omitted
-// resources transition to 'does_not_exist'.
+// TestResourceMetrics_Extended verifies complex resource state transitions
+// (requested, does_not_exist, nacked) in "grpc.xds_client.resources" metric
+// across multiple resources. It watches several resources, pushes a partial
+// update (some valid, some invalid) to transition them to 'acked' and 'nacked'
+// states, then management server removes a resource and asserts that active
+// watchers transition back to 'requested' while omitted resources transition
+// to 'does_not_exist'.
 func (s) TestResourceMetrics_Extended(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -576,6 +580,7 @@ func (s) TestResourceMetrics_Extended(t *testing.T) {
 	if err := tmr.waitForSpecificMetric(ctx, &metrics.ResourceUpdateValid{ServerURI: mgmtServer.Address, ResourceType: "ListenerResource"}); err != nil {
 		t.Fatal(err)
 	}
+	// Push an empty update to remove all resources from the management server.
 	resourcesEmpty := e2e.UpdateOptions{
 		NodeID:         nodeID,
 		Listeners:      []*v3listenerpb.Listener{},
@@ -607,22 +612,13 @@ func (s) TestResourceMetrics_Extended(t *testing.T) {
 
 	// Wait for the xDS client to process the empty update and trigger
 	// ResourceNotFound for omitted resources immediately.
-	removed := make(chan struct{})
-	var closeOnce sync.Once
-	client.WatchResource(listenerType.TypeURL, resRemoved, &testWatcher{
-		onError: func(err error) {
-			if xdsresource.ErrType(err) == xdsresource.ErrorTypeResourceNotFound {
-				closeOnce.Do(func() { close(removed) })
-			}
-		},
-	})
+	lw := newListenerWatcher()
+	client.WatchResource(listenerType.TypeURL, resRemoved, lw)
 
 	// Verify that resources missing from the authoritative update transition to
 	// the does_not_exist state.
-	select {
-	case <-removed:
-	case <-ctx.Done():
-		t.Fatal("timeout waiting for resource removal")
+	if err := verifyResourceErrorType(ctx, lw.resourceErrCh, xdsresource.ErrorTypeResourceNotFound, ""); err != nil {
+		t.Fatal(err)
 	}
 
 	tmr.triggerAsyncMetrics()
@@ -636,26 +632,12 @@ func (s) TestResourceMetrics_Extended(t *testing.T) {
 	}
 }
 
-// testWatcher is a test helper that implements the xdsclient resource watcher
-// interface. It allows tests to intercept and handle `ResourceError` events
-// via the optional `onError` callback, while ignoring other events.
-type testWatcher struct {
-	onError func(error)
-}
-
-func (w *testWatcher) ResourceChanged(_ xdsclient.ResourceData, onDone func()) { onDone() }
-func (w *testWatcher) ResourceError(err error, onDone func()) {
-	if w.onError != nil {
-		w.onError(err)
-	}
-	onDone()
-}
-func (w *testWatcher) AmbientError(_ error, onDone func()) { onDone() }
-
-// TestConnectedMetric_Reconnection verifies "grpc.xds_client.connected" metric accuracy during flaky network conditions.
-// It uses a restartable listener and a dial interceptor to pause connection attempts. It asserts that the
-// connected state pulses to 1 when a stream succeeds, remains 1 immediately after failures before retries,
-// transitions to 0 after subsequent failures, and returns to 1 only after successful stream recreation.
+// TestConnectedMetric_Reconnection verifies "grpc.xds_client.connected" metric
+// accuracy during flaky network conditions. It uses a restartable listener and
+// a dial interceptor to pause connection attempts. It asserts that the
+// connected state pulses to 1 when a stream succeeds, remains 1 immediately
+// after failures before retries, transitions to 0 after subsequent failures,
+// and returns to 1 only after successful stream recreation.
 func (s) TestConnectedMetric_Reconnection(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -670,10 +652,10 @@ func (s) TestConnectedMetric_Reconnection(t *testing.T) {
 	streamOpened := make(chan struct{}, 10)
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
 		Listener: lis,
-		OnStreamOpen: func(_ context.Context, _ int64, _ string) error {
+		OnStreamOpen: func(ctx context.Context, _ int64, _ string) error {
 			select {
 			case streamOpened <- struct{}{}:
-			default:
+			case <-ctx.Done():
 			}
 			return nil
 		},
@@ -691,26 +673,37 @@ func (s) TestConnectedMetric_Reconnection(t *testing.T) {
 		ServerURI:  mgmtServer.Address,
 		Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"},
 	}
-	// blockNextStream is used to tell the interceptor to block the next stream creation attempt.
-	blockNextStream := make(chan struct{}, 1)
-	// blocked is used by the interceptor to signal the test that it has successfully blocked the stream creation attempt.
+	// streamAttemptCh is used by the interceptor to notify the test that a
+	// stream is attempting to open.
+	streamAttemptCh := testutils.NewChannel()
+	// commandCh is used by the test to tell the interceptor whether to block or pass.
+	commandCh := testutils.NewChannel()
+	// blocked is used by the interceptor to signal the test that it has
+	// successfully blocked the stream creation attempt.
 	blocked := make(chan struct{})
-	// unblock is used by the test to release the interceptor and allow the stream creation to proceed.
+	// unblock is used by the test to release the interceptor and allow the
+	// stream creation to proceed.
 	unblock := make(chan struct{})
 
-	// customGRPCNewClient overrides the gRPC client creation to inject a stream interceptor
-	// that can block ADS stream creation attempts for testing reconnection behavior.
+	// customGRPCNewClient overrides the gRPC client creation to inject a stream
+	// interceptor that can block ADS stream creation attempts for testing
+	// reconnection behavior.
 	customGRPCNewClient := func(target string, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
 		interceptor := func(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, cops ...grpc.CallOption) (grpc.ClientStream, error) {
-			select {
-			case <-blockNextStream:
+			streamAttemptCh.Send(struct{}{}) // Notify test
+
+			cmd, err := commandCh.Receive(ctx) // Wait for command
+			if err != nil {
+				return nil, err
+			}
+
+			if cmd.(string) == "block" {
 				select {
 				case blocked <- struct{}{}:
-				default:
+				case <-ctx.Done():
 				}
 				// Pause stream creation until released by the test.
 				<-unblock
-			default:
 			}
 			return streamer(ctx, desc, cc, method, cops...)
 		}
@@ -729,6 +722,19 @@ func (s) TestConnectedMetric_Reconnection(t *testing.T) {
 			"": {XDSServers: []xdsclient.ServerConfig{}},
 		},
 		MetricsReporter: tmr,
+	}
+
+	waitForStreamSuccess := func() {
+		for {
+			select {
+			case <-streamOpened:
+				return
+			case <-streamAttemptCh.C:
+				commandCh.Send("pass")
+			case <-ctx.Done():
+				t.Fatalf("Timeout waiting for stream success")
+			}
+		}
 	}
 
 	// Stop listener to force initial connection failure.
@@ -755,21 +761,17 @@ func (s) TestConnectedMetric_Reconnection(t *testing.T) {
 
 	tmr.triggerAsyncMetrics()
 	if err := tmr.waitForSpecificMetric(ctx, &metrics.XDSClientConnected{ServerURI: mgmtServer.Address, Value: 0}); err != nil {
-		t.Fatalf("Expected XDSClientConnected to be 0 at start, got: %v", err)
+		t.Fatalf("XDSClientConnected check failed at start - got: %v, want 0", err)
 	}
 
 	// Verify state transitions to connected (Value: 1) when stream succeeds.
 	lis.Restart()
 
-	select {
-	case <-streamOpened:
-	case <-ctx.Done():
-		t.Fatalf("Timeout waiting for stream in Step 2")
-	}
+	waitForStreamSuccess()
 
 	tmr.triggerAsyncMetrics()
 	if err := tmr.waitForSpecificMetric(ctx, &metrics.XDSClientConnected{ServerURI: mgmtServer.Address, Value: 1}); err != nil {
-		t.Fatalf("Expected XDSClientConnected to be 1 after 1st NewStream, got: %v", err)
+		t.Fatalf("XDSClientConnected check failed after 1st NewStream - got: %v, want 1", err)
 	}
 
 	// Push resource update to confirm the connection is functional.
@@ -778,18 +780,24 @@ func (s) TestConnectedMetric_Reconnection(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Verify state remains connected (Value: 1) immediately after failure before NewStream retry.
-	blockNextStream <- struct{}{}
+	// Verify state remains connected (Value: 1) immediately after failure before
+	// NewStream retry.
 	lis.Stop()
+
+	if _, err := streamAttemptCh.Receive(ctx); err != nil {
+		t.Fatalf("Timeout waiting for 2nd stream attempt (block): %v", err)
+	}
+	commandCh.Send("block")
 
 	<-blocked
 
 	tmr.triggerAsyncMetrics()
 	if err := tmr.waitForSpecificMetric(ctx, &metrics.XDSClientConnected{ServerURI: mgmtServer.Address, Value: 1}); err != nil {
-		t.Fatalf("Expected XDSClientConnected to be 1 while NewStream is blocked, got: %v", err)
+		t.Fatalf("XDSClientConnected check failed while NewStream is blocked - got: %v, want 1", err)
 	}
 
-	// Verify state transitions to disconnected (Value: 0) after NewStream attempt fails.
+	// Verify state transitions to disconnected (Value: 0) after NewStream attempt
+	// fails.
 	close(unblock)
 
 	if err := tmr.waitForSpecificMetric(ctx, &metrics.ServerFailure{ServerURI: mgmtServer.Address}); err != nil {
@@ -798,12 +806,13 @@ func (s) TestConnectedMetric_Reconnection(t *testing.T) {
 
 	tmr.triggerAsyncMetrics()
 	if err := tmr.waitForSpecificMetric(ctx, &metrics.XDSClientConnected{ServerURI: mgmtServer.Address, Value: 0}); err != nil {
-		t.Fatalf("Expected XDSClientConnected to be 0 after NewStream failure, got: %v", err)
+		t.Fatalf("XDSClientConnected check failed after NewStream failure - got: %v, want 0", err)
 	}
 
 	sendResponse = make(chan struct{})
 
-	// Verify state remains disconnected (Value: 0) while waiting for the first response on the new stream.
+	// Verify state remains disconnected (Value: 0) while waiting for the first
+	// response on the new stream.
 	lis.Restart()
 
 	// Clear channels to ensure fresh readings.
@@ -811,30 +820,16 @@ func (s) TestConnectedMetric_Reconnection(t *testing.T) {
 		<-streamOpened
 	}
 
-	select {
-	case <-streamOpened:
-	case <-ctx.Done():
-		t.Fatalf("Timeout waiting for stream in Step 5")
-	}
+	waitForStreamSuccess()
 
-	tmr.metricsCh.Drain()
+	tmr.Drain()
 	tmr.triggerAsyncMetrics()
-	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
-	defer sCancel()
-	got, err := tmr.metricsCh.Receive(sCtx)
-	if err != nil {
-		t.Fatalf("Timeout waiting for XDSClientConnected metric: %v", err)
-	}
-	t.Logf("Got metric: %+v", got)
-	if m, ok := got.(*metrics.XDSClientConnected); ok {
-		if m.Value != 0 {
-			t.Fatalf("Expected XDSClientConnected to be 0 after successful NewStream but before response, got: %d", m.Value)
-		}
-	} else {
-		t.Fatalf("Expected XDSClientConnected metric, got: %T", got)
+	if err := tmr.waitForSpecificMetric(ctx, &metrics.XDSClientConnected{ServerURI: mgmtServer.Address, Value: 0}); err != nil {
+		t.Fatalf("XDSClientConnected check failed after successful NewStream but before response - got: %v, want 0", err)
 	}
 
-	// Verify state returns to connected (Value: 1) after receiving the first response on the new stream.
+	// Verify state returns to connected (Value: 1) after receiving the first
+	// response on the new stream.
 	close(sendResponse)
 
 	if err := tmr.waitForSpecificMetric(ctx, &metrics.ResourceUpdateValid{ServerURI: mgmtServer.Address, ResourceType: "ListenerResource"}); err != nil {
@@ -843,13 +838,14 @@ func (s) TestConnectedMetric_Reconnection(t *testing.T) {
 
 	tmr.triggerAsyncMetrics()
 	if err := tmr.waitForSpecificMetric(ctx, &metrics.XDSClientConnected{ServerURI: mgmtServer.Address, Value: 1}); err != nil {
-		t.Fatalf("Expected XDSClientConnected to be 1 after response, got: %v", err)
+		t.Fatalf("XDSClientConnected check failed after response- got: %v, want 1", err)
 	}
 }
 
-// TestResourceMetrics_AuthorityOldStyle verifies that the xDS client correctly falls back to '#old' in
-// "grpc.xds_client.resources" metrics for legacy authorities. It watches a resource using default authority
-// and asserts that the metric is reported under '#old' instead of an empty string.
+// TestResourceMetrics_AuthorityOldStyle verifies that the xDS client correctly
+// falls back to '#old' in "grpc.xds_client.resources" metrics for legacy
+// authorities. It watches a resource using default authority and asserts that
+// the metric is reported under '#old' instead of an empty string.
 func (s) TestResourceMetrics_AuthorityOldStyle(t *testing.T) {
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 	nodeID := uuid.New().String()
@@ -886,7 +882,7 @@ func (s) TestResourceMetrics_AuthorityOldStyle(t *testing.T) {
 
 	const listenerName = "test-listener"
 
-	client.WatchResource(listenerType.TypeURL, listenerName, &testWatcher{})
+	client.WatchResource(listenerType.TypeURL, listenerName, newListenerWatcher())
 
 	resources := e2e.UpdateOptions{
 		NodeID:         nodeID,
