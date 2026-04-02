@@ -39,6 +39,7 @@ import (
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/channelz"
 	icredentials "google.golang.org/grpc/internal/credentials"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/grpcutil"
@@ -319,6 +320,9 @@ func NewHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 	writeBufSize := opts.WriteBufferSize
 	readBufSize := opts.ReadBufferSize
 	maxHeaderListSize := defaultClientMaxHeaderListSize
+	if envconfig.DefaultHeaderListSize {
+		maxHeaderListSize = upcomingDefaultHeaderListSize
+	}
 	if opts.MaxHeaderListSize != nil {
 		maxHeaderListSize = *opts.MaxHeaderListSize
 	}
@@ -879,7 +883,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr, handler s
 				return false
 			}
 		}
-		if sz > int64(upcomingDefaultHeaderListSize) {
+		if !envconfig.DefaultHeaderListSize && sz > int64(upcomingDefaultHeaderListSize) {
 			t.logger.Warningf("Header list size to send (%d bytes) is larger than the upcoming default limit (%d bytes). In a future release, this will be restricted to %d bytes.", sz, upcomingDefaultHeaderListSize, upcomingDefaultHeaderListSize)
 		}
 		return true
