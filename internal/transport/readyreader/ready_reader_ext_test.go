@@ -16,7 +16,7 @@
  *
  */
 
-package transport
+package readyreader_test
 
 import (
 	"bytes"
@@ -24,10 +24,26 @@ import (
 	"io"
 	"net"
 	"testing"
+	"time"
 
+	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
+	"google.golang.org/grpc/internal/transport/readyreader"
 	"google.golang.org/grpc/mem"
 )
+
+var (
+	defaultTestTimeout      = 10 * time.Second
+	defaultTestShortTimeout = 10 * time.Millisecond
+)
+
+type s struct {
+	grpctest.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
 
 // TestReadyReader_NonRawConn verifies that ReadOnReady correctly reads data
 // from a net.Conn that doesn't support non-memory-pinning reads.
@@ -37,7 +53,7 @@ func (s) TestReadyReader_NonRawConn(t *testing.T) {
 	go writer.Write(data)
 
 	pool := mem.DefaultBufferPool()
-	readyReader := NewReadyReader(reader)
+	readyReader := readyreader.New(reader)
 
 	bufHandle, n, err := readyReader.ReadOnReady(1024, pool)
 	if err != nil {
@@ -80,7 +96,7 @@ func (s) TestReadyReader_EOF(t *testing.T) {
 	defer conn.Close()
 
 	pool := mem.DefaultBufferPool()
-	rr := NewReadyReader(conn)
+	rr := readyreader.New(conn)
 	res, _, err := rr.ReadOnReady(len(data), pool)
 	if err != nil {
 		t.Errorf("Failed to read: %v", err)
@@ -132,7 +148,7 @@ func (s) TestReadyReader_TCP_Blocking(t *testing.T) {
 	defer serverConn.Close()
 
 	pool := newTrackingPool(mem.DefaultBufferPool())
-	ac := NewReadyReader(conn)
+	ac := readyreader.New(conn)
 
 	resCh := make(chan []byte)
 	const readBufSize = 1024

@@ -16,7 +16,8 @@
  *
  */
 
-package transport
+// Package readyreader provides utilities to perform non-memory-pinning reads.
+package readyreader
 
 import (
 	"io"
@@ -26,9 +27,9 @@ import (
 	"google.golang.org/grpc/mem"
 )
 
-// ReadyReader is an optional interface that can be implemented by [net.Conn]
+// Reader is an optional interface that can be implemented by [net.Conn]
 // implementations to enable gRPC to perform non-memory-pinning reads.
-type ReadyReader interface {
+type Reader interface {
 	// ReadOnReady waits for data to arrive, fetches a buffer, and performs a
 	// read. When the underlying IO is readable, it allocates a buffer of size
 	// bufSize from the pool and reads up to bufSize bytes into the buffer.
@@ -97,10 +98,10 @@ func (c *blockingReader) ReadOnReady(bufSize int, pool mem.BufferPool) (*[]byte,
 	return buf, n, nil
 }
 
-// NewReadyReader detects if [syscall.RawConn] is available for
-// non-memory-pinning reads. If [syscall.RawConn] is unavailable, it falls back
-// to using the simpler [net.Conn] interface for reads.
-func NewReadyReader(conn net.Conn) ReadyReader {
+// New detects if [syscall.RawConn] is available for non-memory-pinning reads.
+// If [syscall.RawConn] is unavailable, it falls back to using the simpler
+// [net.Conn] interface for reads.
+func New(conn net.Conn) Reader {
 	sysConn, ok := conn.(syscall.Conn)
 	if !ok || !isRawConnSupported() {
 		return &blockingReader{conn: conn}
