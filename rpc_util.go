@@ -168,6 +168,7 @@ type callInfo struct {
 	onFinish                    []func(err error)
 	authority                   string
 	acceptedResponseCompressors []string
+	compressorOptions           []any
 }
 
 func acceptedCompressorAllows(allowed []string, name string) bool {
@@ -490,14 +491,16 @@ func (o PerRPCCredsCallOption) after(*callInfo, *csAttempt) {}
 
 // UseCompressor returns a CallOption which sets the compressor used when
 // sending the request.  If WithCompressor is also set, UseCompressor has
-// higher priority.
+// higher priority.  The optional compressorOptions are forwarded to the
+// compressor's Compress method, allowing callers to pass additional context
+// such as dictionary IDs for trained compression formats.
 //
 // # Experimental
 //
 // Notice: This API is EXPERIMENTAL and may be changed or removed in a
 // later release.
-func UseCompressor(name string) CallOption {
-	return CompressorCallOption{CompressorType: name}
+func UseCompressor(name string, compressorOptions ...any) CallOption {
+	return CompressorCallOption{CompressorType: name, CompressorOptions: compressorOptions}
 }
 
 // CompressorCallOption is a CallOption that indicates the compressor to use.
@@ -507,11 +510,13 @@ func UseCompressor(name string) CallOption {
 // Notice: This type is EXPERIMENTAL and may be changed or removed in a
 // later release.
 type CompressorCallOption struct {
-	CompressorType string
+	CompressorType    string
+	CompressorOptions []any
 }
 
 func (o CompressorCallOption) before(c *callInfo) error {
 	c.compressorName = o.CompressorType
+	c.compressorOptions = o.CompressorOptions
 	return nil
 }
 func (o CompressorCallOption) after(*callInfo, *csAttempt) {}
@@ -817,7 +822,7 @@ func encode(c baseCodec, msg any) (mem.BufferSlice, error) {
 // indicating no compression was done.
 //
 // TODO(dfawley): eliminate cp parameter by wrapping Compressor in an encoding.Compressor.
-func compress(in mem.BufferSlice, cp Compressor, compressor encoding.Compressor, pool mem.BufferPool) (mem.BufferSlice, payloadFormat, error) {
+func compress(in mem.BufferSlice, cp Compressor, compressor encoding.Compressor, pool mem.BufferPool, compressorOptions ...any) (mem.BufferSlice, payloadFormat, error) {
 	if (compressor == nil && cp == nil) || in.Len() == 0 {
 		return nil, compressionNone, nil
 	}
@@ -828,7 +833,7 @@ func compress(in mem.BufferSlice, cp Compressor, compressor encoding.Compressor,
 		return status.Errorf(codes.Internal, "grpc: error while compressing: %v", err.Error())
 	}
 	if compressor != nil {
-		z, err := compressor.Compress(w)
+		z, err := compressor.Compress(w, compressorOptions...)
 		if err != nil {
 			return nil, 0, wrapErr(err)
 		}
