@@ -21,6 +21,7 @@ package mem_test
 import (
 	"bytes"
 	"fmt"
+	"slices"
 	"testing"
 
 	"google.golang.org/grpc/internal"
@@ -257,14 +258,10 @@ func (p poolFunc) Put(i *[]byte) {
 }
 
 func (s) TestBuffer_Split(t *testing.T) {
-	ready := false
-	freed := false
+	freed := make(chan struct{})
 	data := []byte{1, 2, 3, 4}
 	buf := mem.NewBuffer(&data, poolFunc(func(*[]byte) {
-		if !ready {
-			t.Fatalf("Freed too early")
-		}
-		freed = true
+		close(freed)
 	}))
 
 	buf, split1 := mem.SplitUnsafe(buf, 2)
@@ -287,24 +284,26 @@ func (s) TestBuffer_Split(t *testing.T) {
 	// If any of the following frees actually free the buffer, the test will fail.
 	buf.Free()
 	split2.Free()
+	select {
+	case <-freed:
+		t.Fatalf("Freed too early")
+	default:
+	}
 
-	ready = true
 	split1.Free()
 
-	if !freed {
-		t.Fatalf("Buffer never freed")
+	select {
+	case <-freed:
+	default:
+		t.Fatalf("Still not freed")
 	}
 }
 
 func (s) TestBuffer_Slice(t *testing.T) {
-	ready := false
-	freed := false
+	freed := make(chan struct{})
 	data := []byte{1, 2, 3, 4}
 	buf := mem.NewBuffer(&data, poolFunc(func(*[]byte) {
-		if !ready {
-			t.Fatalf("Freed too early")
-		}
-		freed = true
+		close(freed)
 	}))
 
 	// Slice the buffer and verify the data.
@@ -327,17 +326,23 @@ func (s) TestBuffer_Slice(t *testing.T) {
 	// Free original and first slice — root should not be freed yet.
 	buf.Free()
 	slice1.Free()
+	select {
+	case <-freed:
+		t.Fatalf("Freed too early")
+	default:
+	}
 
 	// The last slice keeps the root alive.
 	if !bytes.Equal(slice2.ReadOnlyData(), data[1:2]) {
 		t.Fatalf("Buffer did not contain expected data. got %v, want %v", slice2.ReadOnlyData(), data[1:2])
 	}
 
-	ready = true
 	slice2.Free()
 
-	if !freed {
-		t.Fatalf("Buffer never freed")
+	select {
+	case <-freed:
+	default:
+		t.Fatalf("Still not freed")
 	}
 }
 
@@ -366,7 +371,6 @@ func (s) TestBuffer_SliceBasic(t *testing.T) {
 	cases := []sliceCase{
 		{1, 3, []byte{2, 3}},
 		{0, 4, []byte{1, 2, 3, 4}},
-		{0, 0, []byte{}},
 		{4, 4, []byte{}},
 	}
 	for _, c := range ctors {
@@ -396,10 +400,15 @@ func (s) TestBuffer_SliceSubslice(t *testing.T) {
 }
 
 func (s) TestBuffer_SliceEmpty(t *testing.T) {
-	buf := newEmptyBuf(nil)
-	got := buf.Slice(0, 0)
-	if !bytes.Equal(got.ReadOnlyData(), nil) {
-		t.Fatalf("Buffer did not contain expected data. got %v, want %v", got.ReadOnlyData(), nil)
+	allCtors := append(slices.Clip(ctors), namedCtor{name: "empty", newBuf: newEmptyBuf})
+	for _, c := range allCtors {
+		t.Run(c.name, func(t *testing.T) {
+			buf := c.newBuf([]byte{1, 2, 3, 4})
+			got := buf.Slice(0, 0)
+			if !bytes.Equal(got.ReadOnlyData(), nil) {
+				t.Fatalf("Buffer did not contain expected data. got %v, want %v", got.ReadOnlyData(), nil)
+			}
+		})
 	}
 }
 
@@ -414,23 +423,28 @@ func (s) TestBuffer_SliceBoundsCheck(t *testing.T) {
 		{"start_greater_than_end", 3, 0},
 	}
 	tests := []struct {
-		name       string
-		buf        func([]byte) mem.Buffer
+		namedCtor
 		panicCases []panicCase
 	}{
 		{
-			name:       "buffer",
-			buf:        newPooledBuffer,
+			namedCtor: namedCtor{
+				name:   "buffer",
+				newBuf: newPooledBuffer,
+			},
 			panicCases: nonEmptyCases,
 		},
 		{
-			name:       "SliceBuffer",
-			buf:        newSliceBuf,
+			namedCtor: namedCtor{
+				name:   "SliceBuffer",
+				newBuf: newSliceBuf,
+			},
 			panicCases: nonEmptyCases,
 		},
 		{
-			name: "emptyBuffer",
-			buf:  newEmptyBuf,
+			namedCtor: namedCtor{
+				name:   "emptyBuffer",
+				newBuf: newEmptyBuf,
+			},
 			panicCases: []panicCase{
 				{"end_out_of_bounds", 0, 1},
 				{"start_negative", -1, 0},
@@ -441,7 +455,7 @@ func (s) TestBuffer_SliceBoundsCheck(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			for _, pc := range tt.panicCases {
 				t.Run(pc.name, func(t *testing.T) {
-					buf := tt.buf([]byte{1, 2, 3, 4})
+					buf := tt.newBuf([]byte{1, 2, 3, 4})
 					defer func() {
 						if recover() == nil {
 							t.Fatalf("Slice(%d, %d) did not panic", pc.start, pc.end)
@@ -462,7 +476,7 @@ func newSliceBuf(data []byte) mem.Buffer {
 	return mem.SliceBuffer(data)
 }
 
-func newEmptyBuf(_ []byte) mem.Buffer {
+func newEmptyBuf([]byte) mem.Buffer {
 	var bs mem.BufferSlice
 	return bs.MaterializeToBuffer(mem.NopBufferPool{})
 }
