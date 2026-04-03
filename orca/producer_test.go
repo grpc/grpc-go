@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -279,14 +280,15 @@ func (s) TestProducerBackoff(t *testing.T) {
 	// value.
 	const backoffShouldNotBeCalled = 9999 // Use to assert backoff function is not called.
 	const backoffAllowAny = -1            // Use to ignore any backoff calls.
-	expectedBackoff := backoffAllowAny
+	expectedBackoff := atomic.Int32{}
+	expectedBackoff.Store(backoffAllowAny)
 	oldBackoff := internal.DefaultBackoffFunc
 	internal.DefaultBackoffFunc = func(got int) time.Duration {
-		if expectedBackoff == backoffShouldNotBeCalled {
+		if expectedBackoff.Load() == backoffShouldNotBeCalled {
 			t.Errorf("Unexpected backoff call; parameter = %v", got)
-		} else if expectedBackoff != backoffAllowAny {
-			if got != expectedBackoff {
-				t.Errorf("Unexpected backoff received; got %v want %v", got, expectedBackoff)
+		} else if expectedBackoff.Load() != backoffAllowAny {
+			if got != int(expectedBackoff.Load()) {
+				t.Errorf("Unexpected backoff received; got %v want %v", got, expectedBackoff.Load())
 			}
 		}
 		return time.Millisecond
@@ -363,23 +365,23 @@ func (s) TestProducerBackoff(t *testing.T) {
 
 	// The next request should be immediate, since there was a message
 	// received.
-	expectedBackoff = backoffShouldNotBeCalled
+	expectedBackoff.Store(backoffShouldNotBeCalled)
 	fake.respCh <- status.Errorf(codes.Internal, "injected error")
 	awaitRequest(reportInterval)
 
 	// The next requests will need to backoff.
-	expectedBackoff = 0
+	expectedBackoff.Store(0)
 	fake.respCh <- status.Errorf(codes.Internal, "injected error")
 	awaitRequest(reportInterval)
-	expectedBackoff = 1
+	expectedBackoff.Store(1)
 	fake.respCh <- status.Errorf(codes.Internal, "injected error")
 	awaitRequest(reportInterval)
-	expectedBackoff = 2
+	expectedBackoff.Store(2)
 	fake.respCh <- status.Errorf(codes.Internal, "injected error")
 	awaitRequest(reportInterval)
 	// The next request should be immediate, since there was a message
 	// received.
-	expectedBackoff = backoffShouldNotBeCalled
+	expectedBackoff.Store(backoffShouldNotBeCalled)
 
 	// Send another valid response and wait for it on the client.
 	fake.respCh <- loadReportWant
