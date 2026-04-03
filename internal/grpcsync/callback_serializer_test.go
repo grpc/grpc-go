@@ -204,3 +204,155 @@ func (s) TestCallbackSerializer_Schedule_Close(t *testing.T) {
 	case <-done:
 	}
 }
+
+// TestCallbackSerializer_ScheduleAndWait_Normal verifies that ScheduleAndWait
+// blocks until the callback is executed and returns nil on success.
+func (s) TestCallbackSerializer_ScheduleAndWait_Normal(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	cs := NewCallbackSerializer(ctx)
+
+	executed := make(chan struct{})
+	if err := cs.ScheduleAndWait(func(context.Context) {
+		close(executed)
+	}); err != nil {
+		t.Fatalf("ScheduleAndWait() returned unexpected error: %v", err)
+	}
+
+	// Verify the callback was in fact executed.
+	select {
+	case <-executed:
+	default:
+		t.Fatal("ScheduleAndWait returned but callback was not executed")
+	}
+}
+
+// TestCallbackSerializer_ScheduleAndWait_Closed verifies that ScheduleAndWait
+// returns ErrSerializerClosed when the serializer has already been shut down.
+func (s) TestCallbackSerializer_ScheduleAndWait_Closed(t *testing.T) {
+	serializerCtx, serializerCancel := context.WithCancel(context.Background())
+	cs := NewCallbackSerializer(serializerCtx)
+
+	// Cancel the serializer context and wait for shutdown.
+	serializerCancel()
+	<-cs.Done()
+
+	err := cs.ScheduleAndWait(func(context.Context) {
+		t.Fatal("Callback should not be executed on a closed serializer")
+	})
+	if err != ErrSerializerClosed {
+		t.Fatalf("ScheduleAndWait() = %v, want ErrSerializerClosed", err)
+	}
+}
+
+// TestCallbackSerializer_ScheduleAndWait_FIFO verifies that a callback
+// submitted via ScheduleAndWait respects FIFO ordering relative to callbacks
+// submitted via TrySchedule.
+func (s) TestCallbackSerializer_ScheduleAndWait_FIFO(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	cs := NewCallbackSerializer(ctx)
+
+	// Block the serializer on a long-running callback.
+	firstStarted := make(chan struct{})
+	firstUnblock := make(chan struct{})
+	cs.TrySchedule(func(ctx context.Context) {
+		close(firstStarted)
+		select {
+		case <-firstUnblock:
+		case <-ctx.Done():
+		}
+	})
+
+	// Wait for the first callback to start.
+	<-firstStarted
+
+	// Schedule a second callback via TrySchedule while the first is running.
+	secondExecuted := make(chan struct{})
+	cs.TrySchedule(func(context.Context) {
+		close(secondExecuted)
+	})
+
+	// ScheduleAndWait must run *after* the second callback (FIFO order).
+	waitDone := make(chan error, 1)
+	go func() {
+		waitDone <- cs.ScheduleAndWait(func(context.Context) {})
+	}()
+
+	// Ensure neither the second callback nor ScheduleAndWait have returned yet.
+	select {
+	case <-time.After(defaultTestShortTimeout):
+	case <-secondExecuted:
+		t.Fatal("Second callback ran before first was unblocked")
+	case err := <-waitDone:
+		t.Fatalf("ScheduleAndWait returned early: %v", err)
+	}
+
+	// Unblock the first callback.
+	close(firstUnblock)
+
+	// The second callback and ScheduleAndWait should both complete now.
+	select {
+	case <-ctx.Done():
+		t.Fatal("Timed out waiting for second callback to execute")
+	case <-secondExecuted:
+	}
+
+	select {
+	case <-ctx.Done():
+		t.Fatal("Timed out waiting for ScheduleAndWait to return")
+	case err := <-waitDone:
+		if err != nil {
+			t.Fatalf("ScheduleAndWait() = %v, want nil", err)
+		}
+	}
+}
+
+// TestCallbackSerializer_ScheduleAndWait_Concurrent verifies that multiple
+// concurrent ScheduleAndWait calls all complete successfully, with their
+// callbacks executed exactly once each.
+func (s) TestCallbackSerializer_ScheduleAndWait_Concurrent(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	cs := NewCallbackSerializer(ctx)
+
+	const numCallbacks = 50
+	var (
+		mu      sync.Mutex
+		counter int
+	)
+	var wg sync.WaitGroup
+	wg.Add(numCallbacks)
+
+	for i := 0; i < numCallbacks; i++ {
+		go func() {
+			defer wg.Done()
+			if err := cs.ScheduleAndWait(func(context.Context) {
+				mu.Lock()
+				counter++
+				mu.Unlock()
+			}); err != nil {
+				t.Errorf("ScheduleAndWait() returned unexpected error: %v", err)
+			}
+		}()
+	}
+
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-ctx.Done():
+		t.Fatal("Timed out waiting for all ScheduleAndWait calls to complete")
+	case <-done:
+	}
+
+	mu.Lock()
+	got := counter
+	mu.Unlock()
+	if got != numCallbacks {
+		t.Fatalf("Got counter = %d, want %d", got, numCallbacks)
+	}
+}
