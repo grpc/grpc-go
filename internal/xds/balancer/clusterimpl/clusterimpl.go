@@ -27,6 +27,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"slices"
 	"sync"
 	"sync/atomic"
@@ -81,7 +82,7 @@ func (bb) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Ba
 		loadWrapper:     loadstore.NewWrapper(),
 		requestCountMax: defaultRequestCountMax,
 	}
-	b.xdsHIPtr.Store(xds.NewHandshakeInfo(nil, nil, nil, false, "", false))
+	b.xdsHIPtr.Store(xds.NewHandshakeInfo(nil, nil, nil, false, "", false, false))
 	b.logger = prefixLogger(b)
 	b.child = gracefulswitch.NewBalancer(b, bOpts)
 	b.logger.Infof("Created")
@@ -331,7 +332,7 @@ func (b *clusterImplBalancer) handleSecurityConfig(config *xdsresource.SecurityC
 		// We need to explicitly set the fields to nil here since this might be
 		// a case of switching from a good security configuration to an empty
 		// one where fallback credentials are to be used.
-		b.xdsHIPtr.Store(xds.NewHandshakeInfo(nil, nil, nil, false, "", false))
+		b.xdsHIPtr.Store(xds.NewHandshakeInfo(nil, nil, nil, false, "", false, false))
 		return nil
 
 	}
@@ -368,7 +369,8 @@ func (b *clusterImplBalancer) handleSecurityConfig(config *xdsresource.SecurityC
 	}
 	b.cachedRoot = rootProvider
 	b.cachedIdentity = identityProvider
-	b.xdsHIPtr.Store(xds.NewHandshakeInfo(rootProvider, identityProvider, config.SubjectAltNameMatchers, false, "", false))
+
+	b.xdsHIPtr.Store(xds.NewHandshakeInfo(rootProvider, identityProvider, config.SubjectAltNameMatchers, false, config.SNI, config.AutoSNISANValidation, config.UseAutoHostSNI))
 	return nil
 }
 
@@ -409,7 +411,6 @@ func (b *clusterImplBalancer) UpdateClientConnState(s balancer.ClientConnState) 
 	}
 	clusterCfg := xdsConfig.Clusters[newConfig.Cluster]
 	clusterUpdate := clusterCfg.Config.Cluster
-
 	if err := b.handleSecurityConfig(clusterUpdate.SecurityCfg); err != nil {
 		// If the security config is invalid, for example, if the provider
 		// instance is not found in the bootstrap config, we need to put the
@@ -573,6 +574,19 @@ func (b *clusterImplBalancer) NewSubConn(addrs []resolver.Address, opts balancer
 	for i, addr := range addrs {
 		newAddrs[i] = xdsinternal.SetXDSHandshakeClusterName(addr, clusterName)
 		newAddrs[i] = xds.SetHandshakeInfo(newAddrs[i], &b.xdsHIPtr)
+
+		hostname := xdsresource.Hostname(addr)
+		// If the hostname contains a port, strip it. Per [RFC 6066, Section
+		// 3](https://www.rfc-editor.org/rfc/rfc6066.html#section-3), the SNI
+		// may only contain a qualified DNS hostname, which excludes port
+		// numbers.
+		h, _, err := net.SplitHostPort(hostname)
+		if err == nil {
+			hostname = h
+		}
+		// Store hostname in the address attributes, so that it can be used in
+		// the client handshake.
+		newAddrs[i] = xds.SetEndpointHostname(newAddrs[i], hostname)
 	}
 	var sc balancer.SubConn
 	scw := &scWrapper{}

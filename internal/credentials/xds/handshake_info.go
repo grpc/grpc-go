@@ -45,6 +45,27 @@ func init() {
 // the Attributes field of resolver.Address.
 type handshakeAttrKey struct{}
 
+// hostnameKey is the type used as the key to store the hostname in the
+// Attributes field of resolver.Address.
+type hostnameKey struct{}
+
+// SetEndpointHostname returns a copy of addr in which the Attributes field is
+// updated with the provided hostname.
+func SetEndpointHostname(addr resolver.Address, hostname string) resolver.Address {
+	addr.Attributes = addr.Attributes.WithValue(hostnameKey{}, hostname)
+	return addr
+}
+
+// Hostname returns the endpoint hostname stored in attr.
+func Hostname(attr *attributes.Attributes) string {
+	if attr == nil {
+		return ""
+	}
+	v := attr.Value(hostnameKey{})
+	hn, _ := v.(string)
+	return hn
+}
+
 // Equal reports whether the handshake info structs are identical.
 func (hi *HandshakeInfo) Equal(other *HandshakeInfo) bool {
 	if hi == nil && other == nil {
@@ -58,6 +79,7 @@ func (hi *HandshakeInfo) Equal(other *HandshakeInfo) bool {
 		hi.requireClientCert != other.requireClientCert ||
 		hi.sni != other.sni ||
 		hi.validateSANUsingSNI != other.validateSANUsingSNI ||
+		hi.useAutoHostSNI != other.useAutoHostSNI ||
 		len(hi.sanMatchers) != len(other.sanMatchers) {
 		return false
 	}
@@ -95,11 +117,12 @@ type HandshakeInfo struct {
 	requireClientCert   bool                    // Only on server side.
 	sni                 string                  // Only on client side, used for Server Name Indication in TLS handshake.
 	validateSANUsingSNI bool                    // Only on client side, indicates whether to perform validation of SANs based on SNI value.
+	useAutoHostSNI      bool                    // Only on client side, indicates whether to use endpoint hostname as SNI.
 }
 
 // NewHandshakeInfo returns a new handshake info configured with the provided
 // options.
-func NewHandshakeInfo(rootProvider certprovider.Provider, identityProvider certprovider.Provider, sanMatchers []matcher.StringMatcher, requireClientCert bool, sni string, validateSANUsingSNI bool) *HandshakeInfo {
+func NewHandshakeInfo(rootProvider certprovider.Provider, identityProvider certprovider.Provider, sanMatchers []matcher.StringMatcher, requireClientCert bool, sni string, validateSANUsingSNI bool, useAutoHostSNI bool) *HandshakeInfo {
 	return &HandshakeInfo{
 		rootProvider:        rootProvider,
 		identityProvider:    identityProvider,
@@ -107,6 +130,7 @@ func NewHandshakeInfo(rootProvider certprovider.Provider, identityProvider certp
 		requireClientCert:   requireClientCert,
 		sni:                 sni,
 		validateSANUsingSNI: validateSANUsingSNI,
+		useAutoHostSNI:      useAutoHostSNI,
 	}
 }
 
@@ -127,7 +151,7 @@ func (hi *HandshakeInfo) GetSANMatchersForTesting() []matcher.StringMatcher {
 
 // ClientSideTLSConfig constructs a tls.Config to be used in a client-side
 // handshake based on the contents of the HandshakeInfo.
-func (hi *HandshakeInfo) ClientSideTLSConfig(ctx context.Context) (*tls.Config, error) {
+func (hi *HandshakeInfo) ClientSideTLSConfig(ctx context.Context, hostname string) (*tls.Config, error) {
 	// On the client side, rootProvider is mandatory. IdentityProvider is
 	// optional based on whether the client is doing TLS or mTLS.
 	if hi.rootProvider == nil {
@@ -152,7 +176,17 @@ func (hi *HandshakeInfo) ClientSideTLSConfig(ctx context.Context) (*tls.Config, 
 		return nil, fmt.Errorf("xds: fetching trusted roots from CertificateProvider failed: %v", err)
 	}
 	cfg.RootCAs = km.Roots
-	cfg.VerifyPeerCertificate = hi.buildVerifyFunc(km, true)
+
+	// If AutoHostSNI is true, and the endpoint hostname is present, we use the
+	// endpoint hostname as the SNI value and also for SAN validation.
+	// Otherwise, we use the SNI value from HandshakeInfo (which is configured
+	// by the control plane) and validating SANs based on that.
+	sni := hi.sni
+	if hi.useAutoHostSNI && hostname != "" {
+		sni = hostname
+	}
+
+	cfg.VerifyPeerCertificate = hi.buildVerifyFunc(km, true, sni)
 
 	if idProv != nil {
 		km, err := idProv.KeyMaterial(ctx)
@@ -162,13 +196,13 @@ func (hi *HandshakeInfo) ClientSideTLSConfig(ctx context.Context) (*tls.Config, 
 		cfg.Certificates = km.Certs
 	}
 
-	if envconfig.XDSSNIEnabled && hi.sni != "" {
-		cfg.ServerName = hi.sni
+	if envconfig.XDSSNIEnabled && sni != "" {
+		cfg.ServerName = sni
 	}
 	return cfg, nil
 }
 
-func (hi *HandshakeInfo) buildVerifyFunc(km *certprovider.KeyMaterial, isClient bool) func(rawCerts [][]byte, _ [][]*x509.Certificate) error {
+func (hi *HandshakeInfo) buildVerifyFunc(km *certprovider.KeyMaterial, isClient bool, sni string) func(rawCerts [][]byte, _ [][]*x509.Certificate) error {
 	return func(rawCerts [][]byte, _ [][]*x509.Certificate) error {
 		// Parse all raw certificates presented by the peer.
 		var certs []*x509.Certificate
@@ -216,14 +250,14 @@ func (hi *HandshakeInfo) buildVerifyFunc(km *certprovider.KeyMaterial, isClient 
 		// non-empty, validate only DNS SANs against the SNI. Otherwise, fallback to
 		// validating all received SANs against the control plane provided SAN
 		// matchers.
-		if envconfig.XDSSNIEnabled && hi.validateSANUsingSNI && hi.sni != "" {
+		if envconfig.XDSSNIEnabled && hi.validateSANUsingSNI && sni != "" {
 			// Verify SAN of leaf certificate with SNI using exact DNS matcher.
 			for _, san := range certs[0].DNSNames {
-				if dnsMatch(hi.sni, san) {
+				if dnsMatch(sni, san) {
 					return nil
 				}
 			}
-			return fmt.Errorf("xds: received DNS SANs: %v do not match the SNI: %v", certs[0].DNSNames, hi.sni)
+			return fmt.Errorf("xds: received DNS SANs: %v do not match the SNI: %s", certs[0].DNSNames, sni)
 		}
 		// The SANs sent by the xDS control plane are encoded as SPIFFE IDs. We need to
 		// only look at the SANs on the leaf cert.
@@ -272,7 +306,7 @@ func (hi *HandshakeInfo) ServerSideTLSConfig(ctx context.Context) (*tls.Config, 
 			// dropped to tls.RequireAnyClientCert so that custom verification
 			// to use SPIFFE Bundles is done.
 			cfg.ClientAuth = tls.RequireAnyClientCert
-			cfg.VerifyPeerCertificate = hi.buildVerifyFunc(km, false)
+			cfg.VerifyPeerCertificate = hi.buildVerifyFunc(km, false, "")
 		} else {
 			cfg.ClientCAs = km.Roots
 		}
