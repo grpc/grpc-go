@@ -36,6 +36,48 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
+// metadataAttrKeyType is the key to store the endpoint metadata attribute
+// in a resolver.Endpoint.
+type metadataAttrKeyType struct{}
+
+// metadataAttrValue wraps endpoint metadata so it can be stored as a
+// resolver.Endpoint attribute. Attributes.Equal requires values to
+// implement Equal(o any) bool or be comparable with ==.
+type metadataAttrValue struct {
+	Metadata map[string]MetadataValue // Stores the parsed endpoint metadata.
+}
+
+// Equal implements the interface used by attributes.Attributes.Equal.
+func (md metadataAttrValue) Equal(o any) bool {
+	omd, ok := o.(metadataAttrValue)
+	if !ok {
+		return false
+	}
+	if len(md.Metadata) != len(omd.Metadata) {
+		return false
+	}
+	for k, v := range md.Metadata {
+		ov, ok := omd.Metadata[k]
+		if !ok {
+			return false
+		}
+		if !v.Equal(ov) {
+			return false
+		}
+	}
+	return true
+}
+
+// setMetadata returns a copy of the given endpoint with the metadata
+// added as an attribute.
+func setMetadata(endpoint resolver.Endpoint, metadata map[string]MetadataValue) resolver.Endpoint {
+	if len(metadata) == 0 {
+		return endpoint
+	}
+	endpoint.Attributes = endpoint.Attributes.WithValue(metadataAttrKeyType{}, metadataAttrValue{Metadata: metadata})
+	return endpoint
+}
+
 // hostnameKeyType is the key to store the hostname attribute in
 // a resolver.Endpoint.
 type hostnameKeyType struct{}
@@ -148,7 +190,7 @@ func parseEndpoints(lbEndpoints []*v3endpointpb.LbEndpoint, uniqueEndpointAddrs 
 			uniqueEndpointAddrs[a] = true
 		}
 
-		var endpointMetadata map[string]any
+		var endpointMetadata map[string]MetadataValue
 		var hashKey string
 		if envconfig.XDSHTTPConnectEnabled || !envconfig.XDSEndpointHashKeyBackwardCompat {
 			var err error
@@ -168,11 +210,11 @@ func parseEndpoints(lbEndpoints []*v3endpointpb.LbEndpoint, uniqueEndpointAddrs 
 		endpoint := resolver.Endpoint{Addresses: address}
 		endpoint = SetHostname(endpoint, lbEndpoint.GetEndpoint().GetHostname())
 		endpoint = ringhash.SetHashKey(endpoint, hashKey)
+		endpoint = setMetadata(endpoint, endpointMetadata)
 		endpoints = append(endpoints, Endpoint{
 			ResolverEndpoint: endpoint,
 			HealthStatus:     EndpointHealthStatus(lbEndpoint.GetHealthStatus()),
 			Weight:           weight,
-			Metadata:         endpointMetadata,
 		})
 	}
 	return endpoints, nil
@@ -180,7 +222,7 @@ func parseEndpoints(lbEndpoints []*v3endpointpb.LbEndpoint, uniqueEndpointAddrs 
 
 // hashKey extracts and returns the hash key from the given endpoint metadata.
 // If no hash key is found, it returns an empty string.
-func hashKeyFromMetadata(metadata map[string]any) string {
+func hashKeyFromMetadata(metadata map[string]MetadataValue) string {
 	envoyLB, ok := metadata["envoy.lb"].(StructMetadataValue)
 	if ok {
 		if h, ok := envoyLB.Data["hash_key"].(string); ok {
@@ -243,7 +285,7 @@ func parseEDSRespProto(m *v3endpointpb.ClusterLoadAssignment) (EndpointsUpdate, 
 		if err != nil {
 			return EndpointsUpdate{}, err
 		}
-		var localityMetadata map[string]any
+		var localityMetadata map[string]MetadataValue
 		if envconfig.XDSHTTPConnectEnabled {
 			var err error
 			localityMetadata, err = validateAndConstructMetadata(locality.GetMetadata())
@@ -268,11 +310,11 @@ func parseEDSRespProto(m *v3endpointpb.ClusterLoadAssignment) (EndpointsUpdate, 
 	return ret, nil
 }
 
-func validateAndConstructMetadata(metadataProto *v3corepb.Metadata) (map[string]any, error) {
+func validateAndConstructMetadata(metadataProto *v3corepb.Metadata) (map[string]MetadataValue, error) {
 	if metadataProto == nil {
 		return nil, nil
 	}
-	metadata := make(map[string]any)
+	metadata := make(map[string]MetadataValue)
 	// First go through TypedFilterMetadata.
 	for key, anyProto := range metadataProto.GetTypedFilterMetadata() {
 		converter := metadataConverterForType(anyProto.GetTypeUrl())

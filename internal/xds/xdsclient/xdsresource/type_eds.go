@@ -54,7 +54,6 @@ type Endpoint struct {
 	ResolverEndpoint resolver.Endpoint
 	HealthStatus     EndpointHealthStatus
 	Weight           uint32
-	Metadata         map[string]any
 }
 
 // Locality contains information of a locality.
@@ -63,7 +62,7 @@ type Locality struct {
 	ID        clients.Locality
 	Priority  uint32
 	Weight    uint32
-	Metadata  map[string]any
+	Metadata  map[string]MetadataValue
 }
 
 // EndpointsUpdate contains an EDS update.
