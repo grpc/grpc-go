@@ -50,7 +50,16 @@ type ServerStream struct {
 	headerSent atomic.Bool // atomically set when the headers are sent out.
 
 	headerWireLength int
+
+	doNotCompress bool
 }
+
+// SetDoNotCompress sets whether compression should be disabled for subsequent
+// messages sent on this stream.
+func (s *ServerStream) SetDoNotCompress(v bool) { s.doNotCompress = v }
+
+// IsDoNotCompress reports whether compression is disabled for this stream.
+func (s *ServerStream) IsDoNotCompress() bool { return s.doNotCompress }
 
 // Read reads an n byte message from the input stream.
 func (s *ServerStream) Read(n int) (mem.BufferSlice, error) {
