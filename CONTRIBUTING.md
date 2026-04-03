@@ -23,6 +23,12 @@ wanted"](https://github.com/grpc/grpc-go/issues?q=sort%3Aupdated-desc%20is%3Aiss
 are especially nice for first-time contributors, as they should be well-defined
 problems that already have agreed-upon solutions.
 
+## Running Benchmarks
+
+If your change is focused on performance improvements, you may need to run
+benchmarks. See the [benchmark directory](./benchmark/README.md) for detailed
+instructions on how to build, run, and interpret the benchmarks.
+
 ## Code Style
 
 We follow [Google's published Go style
