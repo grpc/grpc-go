@@ -40,6 +40,10 @@ import (
 // a resolver.Endpoint.
 type hostnameKeyType struct{}
 
+// healthStatusKeyType is the key to store the health status attribute in
+// a resolver.Endpoint.
+type healthStatusKeyType struct{}
+
 // SetHostname returns a copy of the given endpoint with hostname added
 // as an attribute.
 func SetHostname(endpoint resolver.Endpoint, hostname string) resolver.Endpoint {
@@ -57,6 +61,24 @@ func SetHostname(endpoint resolver.Endpoint, hostname string) resolver.Endpoint 
 func Hostname(addr resolver.Address) string {
 	hostname, _ := addr.BalancerAttributes.Value(hostnameKeyType{}).(string)
 	return hostname
+}
+
+// SetHealthStatus returns a copy of the given endpoint with the health status
+// added as an attribute. If the health status is EndpointHealthStatusUnknown,
+// the endpoint is returned unchanged.
+func SetHealthStatus(endpoint resolver.Endpoint, hs EndpointHealthStatus) resolver.Endpoint {
+	if hs == EndpointHealthStatusUnknown {
+		return endpoint
+	}
+	endpoint.Attributes = endpoint.Attributes.WithValue(healthStatusKeyType{}, hs)
+	return endpoint
+}
+
+// HealthStatus returns the health status from the attributes of the given
+// endpoint. If this attribute is not set, it returns EndpointHealthStatusUnknown.
+func HealthStatus(endpoint resolver.Endpoint) EndpointHealthStatus {
+	hs, _ := endpoint.Attributes.Value(healthStatusKeyType{}).(EndpointHealthStatus)
+	return hs
 }
 
 func unmarshalEndpointsResource(r *anypb.Any) (string, EndpointsUpdate, error) {
@@ -168,9 +190,9 @@ func parseEndpoints(lbEndpoints []*v3endpointpb.LbEndpoint, uniqueEndpointAddrs 
 		endpoint := resolver.Endpoint{Addresses: address}
 		endpoint = SetHostname(endpoint, lbEndpoint.GetEndpoint().GetHostname())
 		endpoint = ringhash.SetHashKey(endpoint, hashKey)
+		endpoint = SetHealthStatus(endpoint, EndpointHealthStatus(lbEndpoint.GetHealthStatus()))
 		endpoints = append(endpoints, Endpoint{
 			ResolverEndpoint: endpoint,
-			HealthStatus:     EndpointHealthStatus(lbEndpoint.GetHealthStatus()),
 			Weight:           weight,
 			Metadata:         endpointMetadata,
 		})

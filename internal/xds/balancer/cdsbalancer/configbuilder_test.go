@@ -84,6 +84,14 @@ func makeLocalityID(idx int) clients.Locality {
 	return clients.Locality{Zone: fmt.Sprintf("test-zone-%d", idx)}
 }
 
+// healthyEndpoint returns a resolver.Endpoint with EndpointHealthStatusHealthy.
+func healthyEndpoint(addr string) resolver.Endpoint {
+	return xdsresource.SetHealthStatus(
+		resolver.Endpoint{Addresses: []resolver.Address{{Addr: addr}}},
+		xdsresource.EndpointHealthStatusHealthy,
+	)
+}
+
 // makeEndpoint creates a test xdsresource.Endpoint with a healthy status, the
 // specified endpoint weight, and three addresses:
 // "addr-{localityIdx}-{endpointIdx}",
@@ -91,16 +99,17 @@ func makeLocalityID(idx int) clients.Locality {
 // "addr-{localityIdx}-{endpointIdx}-additional-2".
 func makeEndpoint(localityIdx, endpointIdx int, endpointWeight uint32) xdsresource.Endpoint {
 	addr := fmt.Sprintf("addr-%d-%d", localityIdx, endpointIdx)
-	return xdsresource.Endpoint{
-		HealthStatus: xdsresource.EndpointHealthStatusHealthy,
-		ResolverEndpoint: resolver.Endpoint{
-			Addresses: []resolver.Address{
-				{Addr: addr},
-				{Addr: fmt.Sprintf("%s-additional-1", addr)},
-				{Addr: fmt.Sprintf("%s-additional-2", addr)},
-			},
+	endpoint := resolver.Endpoint{
+		Addresses: []resolver.Address{
+			{Addr: addr},
+			{Addr: fmt.Sprintf("%s-additional-1", addr)},
+			{Addr: fmt.Sprintf("%s-additional-2", addr)},
 		},
-		Weight: endpointWeight,
+	}
+	endpoint = xdsresource.SetHealthStatus(endpoint, xdsresource.EndpointHealthStatusHealthy)
+	return xdsresource.Endpoint{
+		ResolverEndpoint: endpoint,
+		Weight:           endpointWeight,
 	}
 }
 
@@ -642,14 +651,12 @@ func (s) TestPriorityLocalitiesToClusterImpl_PickFirstWeightedShuffling_Disabled
 				{
 					Endpoints: []xdsresource.Endpoint{
 						{
-							ResolverEndpoint: resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-1-1"}}},
+							ResolverEndpoint: healthyEndpoint("addr-1-1"),
 							Weight:           90,
-							HealthStatus:     xdsresource.EndpointHealthStatusHealthy,
 						},
 						{
-							ResolverEndpoint: resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-1-2"}}},
+							ResolverEndpoint: healthyEndpoint("addr-1-2"),
 							Weight:           10,
-							HealthStatus:     xdsresource.EndpointHealthStatusHealthy,
 						},
 					},
 					ID:     clients.Locality{Zone: "test-zone-1"},
@@ -658,14 +665,12 @@ func (s) TestPriorityLocalitiesToClusterImpl_PickFirstWeightedShuffling_Disabled
 				{
 					Endpoints: []xdsresource.Endpoint{
 						{
-							ResolverEndpoint: resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-2-1"}}},
+							ResolverEndpoint: healthyEndpoint("addr-2-1"),
 							Weight:           90,
-							HealthStatus:     xdsresource.EndpointHealthStatusHealthy,
 						},
 						{
-							ResolverEndpoint: resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-2-2"}}},
+							ResolverEndpoint: healthyEndpoint("addr-2-2"),
 							Weight:           10,
-							HealthStatus:     xdsresource.EndpointHealthStatusHealthy,
 						},
 					},
 					ID:     clients.Locality{Zone: "test-zone-2"},
@@ -686,10 +691,10 @@ func (s) TestPriorityLocalitiesToClusterImpl_PickFirstWeightedShuffling_Disabled
 			},
 			// Endpoint weight is the product of locality weight and endpoint weight.
 			wantEndpoints: []resolver.Endpoint{
-				testEndpointWithAttrs(resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-1-1"}}}, 20, 20*90, "test-priority", &clients.Locality{Zone: "test-zone-1"}),
-				testEndpointWithAttrs(resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-1-2"}}}, 20, 20*10, "test-priority", &clients.Locality{Zone: "test-zone-1"}),
-				testEndpointWithAttrs(resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-2-1"}}}, 80, 80*90, "test-priority", &clients.Locality{Zone: "test-zone-2"}),
-				testEndpointWithAttrs(resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-2-2"}}}, 80, 80*10, "test-priority", &clients.Locality{Zone: "test-zone-2"}),
+				testEndpointWithAttrs(healthyEndpoint("addr-1-1"), 20, 20*90, "test-priority", &clients.Locality{Zone: "test-zone-1"}),
+				testEndpointWithAttrs(healthyEndpoint("addr-1-2"), 20, 20*10, "test-priority", &clients.Locality{Zone: "test-zone-1"}),
+				testEndpointWithAttrs(healthyEndpoint("addr-2-1"), 80, 80*90, "test-priority", &clients.Locality{Zone: "test-zone-2"}),
+				testEndpointWithAttrs(healthyEndpoint("addr-2-2"), 80, 80*10, "test-priority", &clients.Locality{Zone: "test-zone-2"}),
 			},
 		},
 		{
@@ -698,14 +703,12 @@ func (s) TestPriorityLocalitiesToClusterImpl_PickFirstWeightedShuffling_Disabled
 				{
 					Endpoints: []xdsresource.Endpoint{
 						{
-							ResolverEndpoint: resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-1-1"}}},
+							ResolverEndpoint: healthyEndpoint("addr-1-1"),
 							Weight:           90,
-							HealthStatus:     xdsresource.EndpointHealthStatusHealthy,
 						},
 						{
-							ResolverEndpoint: resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-1-2"}}},
+							ResolverEndpoint: healthyEndpoint("addr-1-2"),
 							Weight:           10,
-							HealthStatus:     xdsresource.EndpointHealthStatusHealthy,
 						},
 					},
 					ID:     clients.Locality{Zone: "test-zone-1"},
@@ -714,14 +717,12 @@ func (s) TestPriorityLocalitiesToClusterImpl_PickFirstWeightedShuffling_Disabled
 				{
 					Endpoints: []xdsresource.Endpoint{
 						{
-							ResolverEndpoint: resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-2-1"}}},
+							ResolverEndpoint: healthyEndpoint("addr-2-1"),
 							Weight:           90,
-							HealthStatus:     xdsresource.EndpointHealthStatusHealthy,
 						},
 						{
-							ResolverEndpoint: resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-2-2"}}},
+							ResolverEndpoint: healthyEndpoint("addr-2-2"),
 							Weight:           10,
-							HealthStatus:     xdsresource.EndpointHealthStatusHealthy,
 						},
 					},
 					ID:     clients.Locality{Zone: "test-zone-2"},
@@ -739,10 +740,10 @@ func (s) TestPriorityLocalitiesToClusterImpl_PickFirstWeightedShuffling_Disabled
 			},
 			// Endpoint weight is the product of locality weight and endpoint weight.
 			wantEndpoints: []resolver.Endpoint{
-				testEndpointWithAttrs(resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-1-1"}}}, 20, 20*90, "test-priority", &clients.Locality{Zone: "test-zone-1"}),
-				testEndpointWithAttrs(resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-1-2"}}}, 20, 20*10, "test-priority", &clients.Locality{Zone: "test-zone-1"}),
-				testEndpointWithAttrs(resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-2-1"}}}, 80, 80*90, "test-priority", &clients.Locality{Zone: "test-zone-2"}),
-				testEndpointWithAttrs(resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-2-2"}}}, 80, 80*10, "test-priority", &clients.Locality{Zone: "test-zone-2"}),
+				testEndpointWithAttrs(healthyEndpoint("addr-1-1"), 20, 20*90, "test-priority", &clients.Locality{Zone: "test-zone-1"}),
+				testEndpointWithAttrs(healthyEndpoint("addr-1-2"), 20, 20*10, "test-priority", &clients.Locality{Zone: "test-zone-1"}),
+				testEndpointWithAttrs(healthyEndpoint("addr-2-1"), 80, 80*90, "test-priority", &clients.Locality{Zone: "test-zone-2"}),
+				testEndpointWithAttrs(healthyEndpoint("addr-2-2"), 80, 80*10, "test-priority", &clients.Locality{Zone: "test-zone-2"}),
 			},
 		},
 	}
@@ -780,14 +781,12 @@ func (s) TestPriorityLocalitiesToClusterImpl_PickFirstWeightedShuffling_Enabled(
 				{
 					Endpoints: []xdsresource.Endpoint{
 						{
-							ResolverEndpoint: resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-1-1"}}},
+							ResolverEndpoint: healthyEndpoint("addr-1-1"),
 							Weight:           90,
-							HealthStatus:     xdsresource.EndpointHealthStatusHealthy,
 						},
 						{
-							ResolverEndpoint: resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-1-2"}}},
+							ResolverEndpoint: healthyEndpoint("addr-1-2"),
 							Weight:           10,
-							HealthStatus:     xdsresource.EndpointHealthStatusHealthy,
 						},
 					},
 					ID:     clients.Locality{Zone: "test-zone-1"},
@@ -796,14 +795,12 @@ func (s) TestPriorityLocalitiesToClusterImpl_PickFirstWeightedShuffling_Enabled(
 				{
 					Endpoints: []xdsresource.Endpoint{
 						{
-							ResolverEndpoint: resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-2-1"}}},
+							ResolverEndpoint: healthyEndpoint("addr-2-1"),
 							Weight:           90,
-							HealthStatus:     xdsresource.EndpointHealthStatusHealthy,
 						},
 						{
-							ResolverEndpoint: resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-2-2"}}},
+							ResolverEndpoint: healthyEndpoint("addr-2-2"),
 							Weight:           10,
-							HealthStatus:     xdsresource.EndpointHealthStatusHealthy,
 						},
 					},
 					ID:     clients.Locality{Zone: "test-zone-2"},
@@ -842,10 +839,10 @@ func (s) TestPriorityLocalitiesToClusterImpl_PickFirstWeightedShuffling_Enabled(
 			//   locality 1, endpoint 0:  0.8 * 0.9   = 1546188226
 			//   locality 1, endpoint 1:  0.8 * 0.1   =  171798691
 			wantEndpoints: []resolver.Endpoint{
-				testEndpointWithAttrs(resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-1-1"}}}, 20, 386547056, "test-priority", &clients.Locality{Zone: "test-zone-1"}),
-				testEndpointWithAttrs(resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-1-2"}}}, 20, 42949672, "test-priority", &clients.Locality{Zone: "test-zone-1"}),
-				testEndpointWithAttrs(resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-2-1"}}}, 80, 1546188226, "test-priority", &clients.Locality{Zone: "test-zone-2"}),
-				testEndpointWithAttrs(resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-2-2"}}}, 80, 171798691, "test-priority", &clients.Locality{Zone: "test-zone-2"}),
+				testEndpointWithAttrs(healthyEndpoint("addr-1-1"), 20, 386547056, "test-priority", &clients.Locality{Zone: "test-zone-1"}),
+				testEndpointWithAttrs(healthyEndpoint("addr-1-2"), 20, 42949672, "test-priority", &clients.Locality{Zone: "test-zone-1"}),
+				testEndpointWithAttrs(healthyEndpoint("addr-2-1"), 80, 1546188226, "test-priority", &clients.Locality{Zone: "test-zone-2"}),
+				testEndpointWithAttrs(healthyEndpoint("addr-2-2"), 80, 171798691, "test-priority", &clients.Locality{Zone: "test-zone-2"}),
 			},
 		},
 		{
@@ -854,14 +851,12 @@ func (s) TestPriorityLocalitiesToClusterImpl_PickFirstWeightedShuffling_Enabled(
 				{
 					Endpoints: []xdsresource.Endpoint{
 						{
-							ResolverEndpoint: resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-1-1"}}},
+							ResolverEndpoint: healthyEndpoint("addr-1-1"),
 							Weight:           90,
-							HealthStatus:     xdsresource.EndpointHealthStatusHealthy,
 						},
 						{
-							ResolverEndpoint: resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-1-2"}}},
+							ResolverEndpoint: healthyEndpoint("addr-1-2"),
 							Weight:           10,
-							HealthStatus:     xdsresource.EndpointHealthStatusHealthy,
 						},
 					},
 					ID:     clients.Locality{Zone: "test-zone-1"},
@@ -870,14 +865,12 @@ func (s) TestPriorityLocalitiesToClusterImpl_PickFirstWeightedShuffling_Enabled(
 				{
 					Endpoints: []xdsresource.Endpoint{
 						{
-							ResolverEndpoint: resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-2-1"}}},
+							ResolverEndpoint: healthyEndpoint("addr-2-1"),
 							Weight:           90,
-							HealthStatus:     xdsresource.EndpointHealthStatusHealthy,
 						},
 						{
-							ResolverEndpoint: resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-2-2"}}},
+							ResolverEndpoint: healthyEndpoint("addr-2-2"),
 							Weight:           10,
-							HealthStatus:     xdsresource.EndpointHealthStatusHealthy,
 						},
 					},
 					ID:     clients.Locality{Zone: "test-zone-2"},
@@ -913,10 +906,10 @@ func (s) TestPriorityLocalitiesToClusterImpl_PickFirstWeightedShuffling_Enabled(
 			//   locality 1, endpoint 0:  0.8 * 0.9   = 1546188226
 			//   locality 1, endpoint 1:  0.8 * 0.1   =  171798691
 			wantEndpoints: []resolver.Endpoint{
-				testEndpointWithAttrs(resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-1-1"}}}, 20, 386547056, "test-priority", &clients.Locality{Zone: "test-zone-1"}),
-				testEndpointWithAttrs(resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-1-2"}}}, 20, 42949672, "test-priority", &clients.Locality{Zone: "test-zone-1"}),
-				testEndpointWithAttrs(resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-2-1"}}}, 80, 1546188226, "test-priority", &clients.Locality{Zone: "test-zone-2"}),
-				testEndpointWithAttrs(resolver.Endpoint{Addresses: []resolver.Address{{Addr: "addr-2-2"}}}, 80, 171798691, "test-priority", &clients.Locality{Zone: "test-zone-2"}),
+				testEndpointWithAttrs(healthyEndpoint("addr-1-1"), 20, 386547056, "test-priority", &clients.Locality{Zone: "test-zone-1"}),
+				testEndpointWithAttrs(healthyEndpoint("addr-1-2"), 20, 42949672, "test-priority", &clients.Locality{Zone: "test-zone-1"}),
+				testEndpointWithAttrs(healthyEndpoint("addr-2-1"), 80, 1546188226, "test-priority", &clients.Locality{Zone: "test-zone-2"}),
+				testEndpointWithAttrs(healthyEndpoint("addr-2-2"), 80, 171798691, "test-priority", &clients.Locality{Zone: "test-zone-2"}),
 			},
 		},
 	}

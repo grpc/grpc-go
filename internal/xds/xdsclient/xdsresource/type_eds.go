@@ -52,7 +52,6 @@ const (
 // TODO(i/8757) : Replace Endpoint with resolver.Endpoint struct.
 type Endpoint struct {
 	ResolverEndpoint resolver.Endpoint
-	HealthStatus     EndpointHealthStatus
 	Weight           uint32
 	Metadata         map[string]any
 }

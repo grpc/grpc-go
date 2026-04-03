@@ -62,13 +62,14 @@ func disableA86(t *testing.T) {
 	unregisterMetadataConverterForTesting(proxyAddressTypeURL)
 }
 
-func buildResolverEndpoint(addr []string, hostname string) resolver.Endpoint {
+func buildResolverEndpoint(addr []string, hostname string, hs EndpointHealthStatus) resolver.Endpoint {
 	address := []resolver.Address{}
 	for _, a := range addr {
 		address = append(address, resolver.Address{Addr: a})
 	}
 	resolverEndpoint := resolver.Endpoint{Addresses: address}
 	resolverEndpoint = SetHostname(resolverEndpoint, hostname)
+	resolverEndpoint = SetHealthStatus(resolverEndpoint, hs)
 	return resolverEndpoint
 }
 
@@ -198,8 +199,7 @@ func (s) TestEDSParseRespProto(t *testing.T) {
 				Localities: []Locality{
 					{
 						Endpoints: []Endpoint{{
-							ResolverEndpoint: buildResolverEndpoint([]string{"addr1:314"}, "addr1"),
-							HealthStatus:     EndpointHealthStatusUnhealthy,
+							ResolverEndpoint: buildResolverEndpoint([]string{"addr1:314"}, "addr1", EndpointHealthStatusUnhealthy),
 							Weight:           271,
 						}},
 						ID:       clients.Locality{SubZone: "locality-1"},
@@ -208,8 +208,7 @@ func (s) TestEDSParseRespProto(t *testing.T) {
 					},
 					{
 						Endpoints: []Endpoint{{
-							ResolverEndpoint: buildResolverEndpoint([]string{"addr2:159"}, "addr2"),
-							HealthStatus:     EndpointHealthStatusDraining,
+							ResolverEndpoint: buildResolverEndpoint([]string{"addr2:159"}, "addr2", EndpointHealthStatusDraining),
 							Weight:           828,
 						}},
 						ID:       clients.Locality{SubZone: "locality-2"},
@@ -244,8 +243,7 @@ func (s) TestEDSParseRespProto(t *testing.T) {
 				Localities: []Locality{
 					{
 						Endpoints: []Endpoint{{
-							ResolverEndpoint: buildResolverEndpoint([]string{"addr1:314"}, "addr1"),
-							HealthStatus:     EndpointHealthStatusUnhealthy,
+							ResolverEndpoint: buildResolverEndpoint([]string{"addr1:314"}, "addr1", EndpointHealthStatusUnhealthy),
 							Weight:           271,
 						}},
 						ID:       clients.Locality{SubZone: "locality-1"},
@@ -254,8 +252,7 @@ func (s) TestEDSParseRespProto(t *testing.T) {
 					},
 					{
 						Endpoints: []Endpoint{{
-							ResolverEndpoint: buildResolverEndpoint([]string{"addr2:159"}, "addr2"),
-							HealthStatus:     EndpointHealthStatusDraining,
+							ResolverEndpoint: buildResolverEndpoint([]string{"addr2:159"}, "addr2", EndpointHealthStatusDraining),
 							Weight:           828,
 						}},
 						ID:       clients.Locality{SubZone: "locality-1"},
@@ -358,8 +355,7 @@ func (s) TestEDSParseRespProtoAdditionalAddrs(t *testing.T) {
 				Localities: []Locality{
 					{
 						Endpoints: []Endpoint{{
-							ResolverEndpoint: buildResolverEndpoint([]string{"addr1:997", "addr1:1000"}, "addr1"),
-							HealthStatus:     EndpointHealthStatusUnhealthy,
+							ResolverEndpoint: buildResolverEndpoint([]string{"addr1:997", "addr1:1000"}, "addr1", EndpointHealthStatusUnhealthy),
 							Weight:           271,
 						}},
 						ID:       clients.Locality{SubZone: "locality-1"},
@@ -368,8 +364,7 @@ func (s) TestEDSParseRespProtoAdditionalAddrs(t *testing.T) {
 					},
 					{
 						Endpoints: []Endpoint{{
-							ResolverEndpoint: buildResolverEndpoint([]string{"addr2:998", "addr2:1000"}, "addr2"),
-							HealthStatus:     EndpointHealthStatusHealthy,
+							ResolverEndpoint: buildResolverEndpoint([]string{"addr2:998", "addr2:1000"}, "addr2", EndpointHealthStatusHealthy),
 							Weight:           828,
 						}},
 						ID:       clients.Locality{SubZone: "locality-2"},
@@ -594,8 +589,7 @@ func (s) TestUnmarshalEndpoints(t *testing.T) {
 				Localities: []Locality{
 					{
 						Endpoints: []Endpoint{{
-							ResolverEndpoint: buildResolverEndpoint([]string{"addr1:314"}, "addr1"),
-							HealthStatus:     EndpointHealthStatusUnhealthy,
+							ResolverEndpoint: buildResolverEndpoint([]string{"addr1:314"}, "addr1", EndpointHealthStatusUnhealthy),
 							Weight:           271,
 						}},
 						ID:       clients.Locality{SubZone: "locality-1"},
@@ -604,8 +598,7 @@ func (s) TestUnmarshalEndpoints(t *testing.T) {
 					},
 					{
 						Endpoints: []Endpoint{{
-							ResolverEndpoint: buildResolverEndpoint([]string{"addr2:159"}, "addr2"),
-							HealthStatus:     EndpointHealthStatusDraining,
+							ResolverEndpoint: buildResolverEndpoint([]string{"addr2:159"}, "addr2", EndpointHealthStatusDraining),
 							Weight:           828,
 						}},
 						ID:       clients.Locality{SubZone: "locality-2"},
@@ -625,8 +618,7 @@ func (s) TestUnmarshalEndpoints(t *testing.T) {
 				Localities: []Locality{
 					{
 						Endpoints: []Endpoint{{
-							ResolverEndpoint: buildResolverEndpoint([]string{"addr1:314"}, "addr1"),
-							HealthStatus:     EndpointHealthStatusUnhealthy,
+							ResolverEndpoint: buildResolverEndpoint([]string{"addr1:314"}, "addr1", EndpointHealthStatusUnhealthy),
 							Weight:           271,
 						}},
 						ID:       clients.Locality{SubZone: "locality-1"},
@@ -635,8 +627,7 @@ func (s) TestUnmarshalEndpoints(t *testing.T) {
 					},
 					{
 						Endpoints: []Endpoint{{
-							ResolverEndpoint: buildResolverEndpoint([]string{"addr2:159"}, "addr2"),
-							HealthStatus:     EndpointHealthStatusDraining,
+							ResolverEndpoint: buildResolverEndpoint([]string{"addr2:159"}, "addr2", EndpointHealthStatusDraining),
 							Weight:           828,
 						}},
 						ID:       clients.Locality{SubZone: "locality-2"},
@@ -701,8 +692,7 @@ func (s) TestEDSParseRespProto_HTTP_Connect_CustomMetadata_EnvVarOn(t *testing.T
 				Localities: []Locality{
 					{
 						Endpoints: []Endpoint{{
-							ResolverEndpoint: buildResolverEndpoint([]string{"addr1:314"}, "addr1"),
-							HealthStatus:     EndpointHealthStatusUnknown,
+							ResolverEndpoint: buildResolverEndpoint([]string{"addr1:314"}, "addr1", EndpointHealthStatusUnknown),
 							Weight:           1,
 							Metadata: map[string]any{
 								"test-key": ProxyAddressMetadataValue{
@@ -743,8 +733,7 @@ func (s) TestEDSParseRespProto_HTTP_Connect_CustomMetadata_EnvVarOn(t *testing.T
 				Localities: []Locality{
 					{
 						Endpoints: []Endpoint{{
-							ResolverEndpoint: buildResolverEndpoint([]string{"addr1:314"}, "addr1"),
-							HealthStatus:     EndpointHealthStatusUnknown,
+							ResolverEndpoint: buildResolverEndpoint([]string{"addr1:314"}, "addr1", EndpointHealthStatusUnknown),
 							Weight:           1,
 							Metadata: map[string]any{
 								"test-key": StructMetadataValue{Data: map[string]any{
@@ -786,8 +775,7 @@ func (s) TestEDSParseRespProto_HTTP_Connect_CustomMetadata_EnvVarOn(t *testing.T
 				Localities: []Locality{
 					{
 						Endpoints: []Endpoint{{
-							ResolverEndpoint: buildResolverEndpoint([]string{"addr1:314"}, "addr1"),
-							HealthStatus:     EndpointHealthStatusUnknown,
+							ResolverEndpoint: buildResolverEndpoint([]string{"addr1:314"}, "addr1", EndpointHealthStatusUnknown),
 							Weight:           1,
 						}},
 						ID:       clients.Locality{SubZone: "locality-1"},
@@ -827,8 +815,7 @@ func (s) TestEDSParseRespProto_HTTP_Connect_CustomMetadata_EnvVarOn(t *testing.T
 				Localities: []Locality{
 					{
 						Endpoints: []Endpoint{{
-							ResolverEndpoint: buildResolverEndpoint([]string{"addr1:314"}, "addr1"),
-							HealthStatus:     EndpointHealthStatusUnknown,
+							ResolverEndpoint: buildResolverEndpoint([]string{"addr1:314"}, "addr1", EndpointHealthStatusUnknown),
 							Weight:           1,
 						}},
 						ID:       clients.Locality{SubZone: "locality-1"},
@@ -880,8 +867,7 @@ func (s) TestEDSParseRespProto_HTTP_Connect_CustomMetadata_EnvVarOn(t *testing.T
 				Localities: []Locality{
 					{
 						Endpoints: []Endpoint{{
-							ResolverEndpoint: buildResolverEndpoint([]string{"addr1:314"}, "addr1"),
-							HealthStatus:     EndpointHealthStatusUnknown,
+							ResolverEndpoint: buildResolverEndpoint([]string{"addr1:314"}, "addr1", EndpointHealthStatusUnknown),
 							Weight:           1,
 							Metadata: map[string]any{
 								"test-key": ProxyAddressMetadataValue{
@@ -932,8 +918,7 @@ func (s) TestEDSParseRespProto_HTTP_Connect_CustomMetadata_EnvVarOn(t *testing.T
 				Localities: []Locality{
 					{
 						Endpoints: []Endpoint{{
-							ResolverEndpoint: buildResolverEndpoint([]string{"addr1:314"}, "addr1"),
-							HealthStatus:     EndpointHealthStatusUnknown,
+							ResolverEndpoint: buildResolverEndpoint([]string{"addr1:314"}, "addr1", EndpointHealthStatusUnknown),
 							Weight:           1,
 						}},
 						ID:       clients.Locality{SubZone: "locality-1"},
@@ -985,8 +970,7 @@ func (s) TestEDSParseRespProto_HTTP_Connect_CustomMetadata_EnvVarOn(t *testing.T
 				Localities: []Locality{
 					{
 						Endpoints: []Endpoint{{
-							ResolverEndpoint: buildResolverEndpoint([]string{"addr1:314"}, "addr1"),
-							HealthStatus:     EndpointHealthStatusUnknown,
+							ResolverEndpoint: buildResolverEndpoint([]string{"addr1:314"}, "addr1", EndpointHealthStatusUnknown),
 							Weight:           1,
 							Metadata: map[string]any{
 								"test-key": ProxyAddressMetadataValue{
@@ -1040,8 +1024,7 @@ func (s) TestEDSParseRespProto_HTTP_Connect_CustomMetadata_EnvVarOn(t *testing.T
 				Localities: []Locality{
 					{
 						Endpoints: []Endpoint{{
-							ResolverEndpoint: buildResolverEndpoint([]string{"addr1:314"}, "addr1"),
-							HealthStatus:     EndpointHealthStatusUnknown,
+							ResolverEndpoint: buildResolverEndpoint([]string{"addr1:314"}, "addr1", EndpointHealthStatusUnknown),
 							Weight:           1,
 						}},
 						ID:       clients.Locality{SubZone: "locality-1"},
@@ -1112,8 +1095,7 @@ func (s) TestEDSParseRespProto_HTTP_Connect_CustomMetadata_EnvVarOff(t *testing.
 				Localities: []Locality{
 					{
 						Endpoints: []Endpoint{{
-							ResolverEndpoint: buildResolverEndpoint([]string{"addr1:314"}, "addr1"),
-							HealthStatus:     EndpointHealthStatusUnknown,
+							ResolverEndpoint: buildResolverEndpoint([]string{"addr1:314"}, "addr1", EndpointHealthStatusUnknown),
 							Weight:           1,
 						}},
 						ID:       clients.Locality{SubZone: "locality-1"},
@@ -1149,8 +1131,7 @@ func (s) TestEDSParseRespProto_HTTP_Connect_CustomMetadata_EnvVarOff(t *testing.
 				Localities: []Locality{
 					{
 						Endpoints: []Endpoint{{
-							ResolverEndpoint: buildResolverEndpoint([]string{"addr1:314"}, "addr1"),
-							HealthStatus:     EndpointHealthStatusUnknown,
+							ResolverEndpoint: buildResolverEndpoint([]string{"addr1:314"}, "addr1", EndpointHealthStatusUnknown),
 							Weight:           1,
 						}},
 						ID:       clients.Locality{SubZone: "locality-1"},
@@ -1187,8 +1168,7 @@ func (s) TestEDSParseRespProto_HTTP_Connect_CustomMetadata_EnvVarOff(t *testing.
 				Localities: []Locality{
 					{
 						Endpoints: []Endpoint{{
-							ResolverEndpoint: buildResolverEndpoint([]string{"addr1:314"}, "addr1"),
-							HealthStatus:     EndpointHealthStatusUnknown,
+							ResolverEndpoint: buildResolverEndpoint([]string{"addr1:314"}, "addr1", EndpointHealthStatusUnknown),
 							Weight:           1,
 						}},
 						ID:       clients.Locality{SubZone: "locality-1"},
@@ -1223,8 +1203,7 @@ func (s) TestEDSParseRespProto_HTTP_Connect_CustomMetadata_EnvVarOff(t *testing.
 				Localities: []Locality{
 					{
 						Endpoints: []Endpoint{{
-							ResolverEndpoint: buildResolverEndpoint([]string{"addr1:314"}, "addr1"),
-							HealthStatus:     EndpointHealthStatusUnknown,
+							ResolverEndpoint: buildResolverEndpoint([]string{"addr1:314"}, "addr1", EndpointHealthStatusUnknown),
 							Weight:           1,
 						}},
 						ID:       clients.Locality{SubZone: "locality-1"},
@@ -1271,8 +1250,7 @@ func (s) TestEDSParseRespProto_HTTP_Connect_CustomMetadata_EnvVarOff(t *testing.
 				Localities: []Locality{
 					{
 						Endpoints: []Endpoint{{
-							ResolverEndpoint: buildResolverEndpoint([]string{"addr1:314"}, "addr1"),
-							HealthStatus:     EndpointHealthStatusUnknown,
+							ResolverEndpoint: buildResolverEndpoint([]string{"addr1:314"}, "addr1", EndpointHealthStatusUnknown),
 							Weight:           1,
 						}},
 						ID:       clients.Locality{SubZone: "locality-1"},
@@ -1318,8 +1296,7 @@ func (s) TestEDSParseRespProto_HTTP_Connect_CustomMetadata_EnvVarOff(t *testing.
 				Localities: []Locality{
 					{
 						Endpoints: []Endpoint{{
-							ResolverEndpoint: buildResolverEndpoint([]string{"addr1:314"}, "addr1"),
-							HealthStatus:     EndpointHealthStatusUnknown,
+							ResolverEndpoint: buildResolverEndpoint([]string{"addr1:314"}, "addr1", EndpointHealthStatusUnknown),
 							Weight:           1,
 						}},
 						ID:       clients.Locality{SubZone: "locality-1"},
@@ -1368,8 +1345,7 @@ func (s) TestEDSParseRespProto_HTTP_Connect_CustomMetadata_EnvVarOff(t *testing.
 				Localities: []Locality{
 					{
 						Endpoints: []Endpoint{{
-							ResolverEndpoint: buildResolverEndpoint([]string{"addr1:314"}, "addr1"),
-							HealthStatus:     EndpointHealthStatusUnknown,
+							ResolverEndpoint: buildResolverEndpoint([]string{"addr1:314"}, "addr1", EndpointHealthStatusUnknown),
 							Weight:           1,
 						}},
 						ID:       clients.Locality{SubZone: "locality-1"},
@@ -1502,8 +1478,7 @@ func (s) TestEDSParseRespProto_HTTP_Connect_On_HashKeyBackwardCompat_On(t *testi
 		Localities: []Locality{
 			{
 				Endpoints: []Endpoint{{
-					ResolverEndpoint: buildResolverEndpoint([]string{"addr1:314"}, "addr1"),
-					HealthStatus:     EndpointHealthStatusUnknown,
+					ResolverEndpoint: buildResolverEndpoint([]string{"addr1:314"}, "addr1", EndpointHealthStatusUnknown),
 					Weight:           1,
 					Metadata: map[string]any{
 						"envoy.http11_proxy_transport_socket.proxy_address": ProxyAddressMetadataValue{
