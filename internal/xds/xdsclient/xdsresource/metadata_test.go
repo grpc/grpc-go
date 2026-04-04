@@ -20,16 +20,27 @@ import (
 	"testing"
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	v3gcpauthnpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/gcp_authn/v3"
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/internal/testutils"
 )
 
-const proxyAddressTypeURL = "type.googleapis.com/envoy.config.core.v3.Address"
+const (
+	proxyAddressTypeURL = "type.googleapis.com/envoy.config.core.v3.Address"
+	audienceTypeURL     = "type.googleapis.com/envoy.extensions.filters.http.gcp_authn.v3.Audience"
+)
 
 func setupProxyAddressConverter(t *testing.T) {
 	registerMetadataConverter(proxyAddressTypeURL, proxyAddressConvertor{})
 	t.Cleanup(func() {
 		unregisterMetadataConverterForTesting(proxyAddressTypeURL)
+	})
+}
+
+func setupAudienceConverter(t *testing.T) {
+	registerMetadataConverter(audienceTypeURL, audienceConverter{})
+	t.Cleanup(func() {
+		unregisterMetadataConverterForTesting(audienceTypeURL)
 	})
 }
 
@@ -199,6 +210,68 @@ func (s) TestProxyAddressConverterFailure(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			anyProto := testutils.MarshalAny(t, tt.addr)
+			_, err := converter.convert(anyProto)
+			if err == nil || err.Error() != tt.wantErr {
+				t.Errorf("convert() got error = %v, wantErr = %q", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func (s) TestAudienceConverterSuccess(t *testing.T) {
+	setupAudienceConverter(t)
+	converter := metadataConverterForType(audienceTypeURL)
+	if converter == nil {
+		t.Fatalf("Converter for %q not found in registry", audienceTypeURL)
+	}
+	tests := []struct {
+		name  string
+		proto *v3gcpauthnpb.Audience
+		want  AudienceMetadataValue
+	}{
+		{
+			name:  "valid audience",
+			proto: &v3gcpauthnpb.Audience{Url: "https://example.com"},
+			want:  AudienceMetadataValue{Audience: "https://example.com"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			anyProto := testutils.MarshalAny(t, tt.proto)
+			got, err := converter.convert(anyProto)
+			if err != nil {
+				t.Fatalf("convert() failed with error: %v", err)
+			}
+			if diff := cmp.Diff(tt.want, got); diff != "" {
+				t.Errorf("convert(%s) returned unexpected diff (-want +got):\n%s", anyProto.GetTypeUrl(), diff)
+			}
+		})
+	}
+}
+
+func (s) TestAudienceConverterFailure(t *testing.T) {
+	setupAudienceConverter(t)
+	converter := metadataConverterForType(audienceTypeURL)
+	if converter == nil {
+		t.Fatalf("Converter for %q not found in registry", audienceTypeURL)
+	}
+	tests := []struct {
+		name    string
+		proto   *v3gcpauthnpb.Audience
+		want    AudienceMetadataValue
+		wantErr string
+	}{
+		{
+			name:    "empty audience",
+			proto:   &v3gcpauthnpb.Audience{Url: ""},
+			wantErr: "empty url field in audience metadata",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			anyProto := testutils.MarshalAny(t, tt.proto)
 			_, err := converter.convert(anyProto)
 			if err == nil || err.Error() != tt.wantErr {
 				t.Errorf("convert() got error = %v, wantErr = %q", err, tt.wantErr)
