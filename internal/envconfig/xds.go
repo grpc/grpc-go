@@ -90,8 +90,8 @@ var (
 	// https://github.com/grpc/proposal/blob/master/A85-lrs-custom-metrics-changes.md
 	XDSORCAToLRSPropEnabled = boolFromEnv("GRPC_EXPERIMENTAL_XDS_ORCA_LRS_PROPAGATION", false)
 
-	// XDSGCPAuthenticationFilterEnabled is true if gRPC should parse custom
-	// Metadata configuring use of an HTTP CONNECT proxy via xDS from cluster
+	// XDSGCPAuthenticationFilterEnabled enables the xDS GCP Authentication
+	// filter. When enabled, gRPC parses Audience Metadata from cluster
 	// resources. For more details, see:
 	// https://github.com/grpc/proposal/blob/master/A83-xds-gcp-authn-filter.md
 	XDSGCPAuthenticationFilterEnabled = boolFromEnv("GRPC_EXPERIMENTAL_XDS_GCP_AUTHENTICATION_FILTER", false)
