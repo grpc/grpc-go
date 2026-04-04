@@ -152,7 +152,7 @@ func parseEndpoints(lbEndpoints []*v3endpointpb.LbEndpoint, uniqueEndpointAddrs 
 		var hashKey string
 		if envconfig.XDSHTTPConnectEnabled || !envconfig.XDSEndpointHashKeyBackwardCompat {
 			var err error
-			endpointMetadata, err = validateAndConstructMetadata(lbEndpoint.GetMetadata())
+			endpointMetadata, err = ValidateAndConstructMetadata(lbEndpoint.GetMetadata())
 			if err != nil {
 				return nil, err
 			}
@@ -246,7 +246,7 @@ func parseEDSRespProto(m *v3endpointpb.ClusterLoadAssignment) (EndpointsUpdate, 
 		var localityMetadata map[string]any
 		if envconfig.XDSHTTPConnectEnabled {
 			var err error
-			localityMetadata, err = validateAndConstructMetadata(locality.GetMetadata())
+			localityMetadata, err = ValidateAndConstructMetadata(locality.GetMetadata())
 			if err != nil {
 				return EndpointsUpdate{}, err
 			}
@@ -266,35 +266,4 @@ func parseEDSRespProto(m *v3endpointpb.ClusterLoadAssignment) (EndpointsUpdate, 
 		}
 	}
 	return ret, nil
-}
-
-func validateAndConstructMetadata(metadataProto *v3corepb.Metadata) (map[string]any, error) {
-	if metadataProto == nil {
-		return nil, nil
-	}
-	metadata := make(map[string]any)
-	// First go through TypedFilterMetadata.
-	for key, anyProto := range metadataProto.GetTypedFilterMetadata() {
-		converter := metadataConverterForType(anyProto.GetTypeUrl())
-		// Ignore types we don't have a converter for.
-		if converter == nil {
-			continue
-		}
-		val, err := converter.convert(anyProto)
-		if err != nil {
-			// If the converter fails, nack the whole resource.
-			return nil, fmt.Errorf("metadata conversion for key %q and type %q failed: %v", key, anyProto.GetTypeUrl(), err)
-		}
-		metadata[key] = val
-	}
-
-	// Process FilterMetadata for any keys not already handled.
-	for key, structProto := range metadataProto.GetFilterMetadata() {
-		// Skip keys already added from TypedFilterMetadata.
-		if metadata[key] != nil {
-			continue
-		}
-		metadata[key] = StructMetadataValue{Data: structProto.AsMap()}
-	}
-	return metadata, nil
 }
