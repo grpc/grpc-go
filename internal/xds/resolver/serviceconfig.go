@@ -160,6 +160,7 @@ type configSelector struct {
 	clusters         map[string]*clusterInfo
 	plugins          map[string]*clusterInfo
 	httpFilterConfig []xdsresource.HTTPFilter
+	xdsConfig        *xdsresource.XDSConfig
 }
 
 var errNoMatchedRouteFound = status.Errorf(codes.Unavailable, "no matched route was found")
@@ -207,6 +208,7 @@ func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RP
 	atomic.AddInt32(ref, 1)
 
 	lbCtx := clustermanager.SetPickedCluster(rpcInfo.Context, cluster.name)
+	lbCtx = xdsresource.SetXDSConfigToContext(lbCtx, cs.xdsConfig)
 	lbCtx = iringhash.SetXDSRequestHash(lbCtx, cs.generateHash(rpcInfo, rt.hashPolicies))
 	if rt.autoHostRewrite {
 		lbCtx = clusterimpl.EnableAutoHostRewrite(lbCtx)

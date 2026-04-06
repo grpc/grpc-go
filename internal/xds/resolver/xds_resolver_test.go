@@ -45,7 +45,9 @@ import (
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	serverFeature "google.golang.org/grpc/internal/xds/clients/xdsclient"
 	rinternal "google.golang.org/grpc/internal/xds/resolver/internal"
+	utils "google.golang.org/grpc/internal/xds/test/e2e"
 	"google.golang.org/grpc/internal/xds/xdsclient"
+	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource/version"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
@@ -1500,4 +1502,47 @@ func (s) TestResolverKeepWatchOpen_ActiveRPCs(t *testing.T) {
 		t.Fatalf("cs.SelectConfig(): %v", err)
 	}
 	res.OnCommitted()
+}
+
+// TestResolver_XDSConfigInRPCContext verifies that the xDS resolver's config
+// selector places the complete XDSConfig into the RPC context during config
+// selection, making it available to HTTP filters.
+func (s) TestResolver_XDSConfigInRPCContext(t *testing.T) {
+	// Spin up an xDS management server for the test.
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	nodeID := uuid.New().String()
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
+	defer mgmtServer.Stop()
+
+	// Configure xDS resources on the management server.
+	listeners := []*v3listenerpb.Listener{e2e.DefaultClientListener(defaultTestServiceName, defaultTestRouteConfigName)}
+	routes := []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(defaultTestRouteConfigName, defaultTestServiceName, defaultTestClusterName)}
+	cluster := []*v3clusterpb.Cluster{e2e.DefaultCluster(defaultTestClusterName, defaultTestEndpointName, e2e.SecurityLevelNone)}
+	endpoints := []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(defaultTestEndpointName, defaultTestHostname, defaultTestPort)}
+	configureResources(ctx, t, mgmtServer, nodeID, listeners, routes, cluster, endpoints)
+
+	// Create default bootstrap config.
+	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
+
+	// Build the resolver and read the config selector out of it.
+	stateCh, _, _ := buildResolverForTarget(t, resolver.Target{URL: *testutils.MustParseURL("xds:///" + defaultTestServiceName)}, bc)
+	cs := verifyUpdateFromResolver(ctx, t, stateCh, "")
+
+	// Selecting a config should put the XDSConfig in the config's context.
+	res, err := cs.SelectConfig(iresolver.RPCInfo{
+		Context: ctx,
+		Method:  "/service/method",
+	})
+	if err != nil {
+		t.Fatalf("cs.SelectConfig(): %v", err)
+	}
+
+	wantXDSConfig := utils.MakeXDSConfig(defaultTestServiceName, defaultTestRouteConfigName, defaultTestClusterName, defaultTestEndpointName, "test-host:8080")
+
+	// Verify the XDSConfig.
+	gotConfig := xdsresource.XDSConfigFromContext(res.Context)
+	if err := utils.CompareXDSConfig(gotConfig, wantXDSConfig); err != nil {
+		t.Fatal(err)
+	}
 }
