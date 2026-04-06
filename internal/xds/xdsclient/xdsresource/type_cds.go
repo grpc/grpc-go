@@ -79,6 +79,50 @@ type ClusterUpdate struct {
 	// "com.google.csm.telemetry_labels" with keys "service_name" or
 	// "service_namespace".
 	TelemetryLabels map[string]string
+
+	// LRSReportEndpointMetrics specifies the subset of ORCA metrics that
+	// should be propagated to the LRS server.
+	LRSReportEndpointMetrics *LRSReportEndpointMetricsConfig
+}
+
+// LRSReportEndpointMetricsConfig holds the configuration for propagating ORCA
+// metrics to the LRS server.
+type LRSReportEndpointMetricsConfig struct {
+	CPUUtilization         bool
+	MemUtilization         bool
+	ApplicationUtilization bool
+	// NamedMetricsAll specifies whether all named metrics should be propagated.
+	// If true, NamedMetrics is ignored.
+	NamedMetricsAll bool
+	// NamedMetrics specifies the set of named metrics to propagate when
+	// NamedMetricsAll is false.
+	NamedMetrics map[string]struct{}
+}
+
+// Equal returns whether the two LRSReportEndpointMetricsConfig configurations
+// are identical.
+func (bmp *LRSReportEndpointMetricsConfig) Equal(other *LRSReportEndpointMetricsConfig) bool {
+	switch {
+	case bmp == nil && other == nil:
+		return true
+	case (bmp != nil) != (other != nil):
+		return false
+	}
+	if bmp.CPUUtilization != other.CPUUtilization ||
+		bmp.MemUtilization != other.MemUtilization ||
+		bmp.ApplicationUtilization != other.ApplicationUtilization ||
+		bmp.NamedMetricsAll != other.NamedMetricsAll {
+		return false
+	}
+	if len(bmp.NamedMetrics) != len(other.NamedMetrics) {
+		return false
+	}
+	for k := range bmp.NamedMetrics {
+		if _, ok := other.NamedMetrics[k]; !ok {
+			return false
+		}
+	}
+	return true
 }
 
 // SecurityConfig contains the security configuration received as part of the

@@ -1981,3 +1981,85 @@ func (s) TestValidateClusterWithSecurityConfig_SNITooLong(t *testing.T) {
 		t.Fatalf("validateClusterAndConstructClusterUpdate() returned err: %v, want err containing: %s", err, wantErr)
 	}
 }
+
+// TestValidateCluster_LRSReportEndpointMetrics tests the parsing of CDS
+// lrs_report_endpoint_metrics field and verifies it is correctly ignored when
+// the feature flag is disabled and parsed correctly when enabled, including
+// precedence rules for named_metrics.*.
+func (s) TestValidateCluster_LRSReportEndpointMetrics(t *testing.T) {
+	tests := []struct {
+		desc                     string
+		lrsPropEnabled           bool
+		lrsReportEndpointMetrics []string
+		wantMetrics              *LRSReportEndpointMetricsConfig
+	}{
+		{
+			desc:                     "DisabledByEnvVar",
+			lrsPropEnabled:           false,
+			lrsReportEndpointMetrics: []string{"cpu_utilization", "named_metrics.foo", "named_metrics.*"},
+			wantMetrics:              nil,
+		},
+		{
+			desc:                     "AllValidMetrics",
+			lrsPropEnabled:           true,
+			lrsReportEndpointMetrics: []string{"cpu_utilization", "mem_utilization", "application_utilization", "named_metrics.foo", "named_metrics.bar"},
+			wantMetrics: &LRSReportEndpointMetricsConfig{
+				CPUUtilization:         true,
+				MemUtilization:         true,
+				ApplicationUtilization: true,
+				NamedMetricsAll:        false,
+				NamedMetrics: map[string]struct{}{
+					"foo": {},
+					"bar": {},
+				},
+			},
+		},
+		{
+			desc:                     "EnabledByEnvVar",
+			lrsPropEnabled:           true,
+			lrsReportEndpointMetrics: []string{"named_metrics.*", "named_metrics.foo", "cpu_utilization"},
+			wantMetrics: &LRSReportEndpointMetricsConfig{
+				CPUUtilization:  true,
+				NamedMetricsAll: true,
+				NamedMetrics:    nil,
+			},
+		},
+		{
+			desc:                     "IgnoresInvalidMetrics",
+			lrsPropEnabled:           true,
+			lrsReportEndpointMetrics: []string{"named_metrics.", "invalid_metric", "named_metrics.valid"},
+			wantMetrics: &LRSReportEndpointMetricsConfig{
+				NamedMetricsAll: false,
+				NamedMetrics: map[string]struct{}{
+					"valid": {},
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			testutils.SetEnvConfig(t, &envconfig.XDSORCAToLRSPropEnabled, tt.lrsPropEnabled)
+			cluster := &v3clusterpb.Cluster{
+				Name:                 "test-cluster",
+				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
+				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
+					EdsConfig: &v3corepb.ConfigSource{
+						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
+							Ads: &v3corepb.AggregatedConfigSource{},
+						},
+					},
+					ServiceName: "test-service",
+				},
+				LrsReportEndpointMetrics: tt.lrsReportEndpointMetrics,
+			}
+			update, err := validateClusterAndConstructClusterUpdate(cluster, nil)
+			if err != nil {
+				t.Fatalf("validateClusterAndConstructClusterUpdate() failed: %v", err)
+			}
+			if !update.LRSReportEndpointMetrics.Equal(tt.wantMetrics) {
+				t.Fatalf("LRSReportEndpointMetrics:\n got %+v\nwant %+v", update.LRSReportEndpointMetrics, tt.wantMetrics)
+			}
+		})
+	}
+}
