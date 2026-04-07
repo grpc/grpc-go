@@ -23,6 +23,7 @@ import (
 	"context"
 	"io"
 	"net"
+	"runtime"
 	"testing"
 	"time"
 
@@ -120,6 +121,9 @@ func (s) TestReadyReader_EOF(t *testing.T) {
 }
 
 func (s) TestReadyReader_TCP_Blocking(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("This test is only applicable for Linux, as RawConn functionality is not implemented for non-linux platforms.")
+	}
 	ctx, cancel := context.WithTimeout(t.Context(), defaultTestTimeout)
 	defer cancel()
 	ln, err := net.Listen("tcp", "localhost:0")
