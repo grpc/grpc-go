@@ -675,6 +675,7 @@ func (s) TestRouteResourceUpdate(t *testing.T) {
 // to be received from the management server. It verifies that each time Update
 // is called with the correct XDSConfig.
 func (s) TestRouteResourceChangeToInline(t *testing.T) {
+	prefix := "/"
 	nodeID, mgmtServer, xdsClient := setupManagementServerAndClient(t, false)
 
 	watcher := newTestWatcher()
@@ -730,7 +731,7 @@ func (s) TestRouteResourceChangeToInline(t *testing.T) {
 						{
 							Domains: []string{defaultTestServiceName},
 							Routes: []*xdsresource.Route{{
-								Prefix:           utils.NewStringP("/"),
+								Prefix:           &prefix,
 								WeightedClusters: []xdsresource.WeightedCluster{{Name: newClusterName, Weight: 100}},
 								ActionType:       xdsresource.RouteActionRoute,
 							}},
@@ -744,7 +745,7 @@ func (s) TestRouteResourceChangeToInline(t *testing.T) {
 				{
 					Domains: []string{defaultTestServiceName},
 					Routes: []*xdsresource.Route{{
-						Prefix:           utils.NewStringP("/"),
+						Prefix:           &prefix,
 						WeightedClusters: []xdsresource.WeightedCluster{{Name: newClusterName, Weight: 100}},
 						ActionType:       xdsresource.RouteActionRoute,
 					}},
@@ -754,7 +755,7 @@ func (s) TestRouteResourceChangeToInline(t *testing.T) {
 		VirtualHost: &xdsresource.VirtualHost{
 			Domains: []string{defaultTestServiceName},
 			Routes: []*xdsresource.Route{{
-				Prefix:           utils.NewStringP("/"),
+				Prefix:           &prefix,
 				WeightedClusters: []xdsresource.WeightedCluster{{Name: newClusterName, Weight: 100}},
 				ActionType:       xdsresource.RouteActionRoute},
 			},
@@ -926,6 +927,7 @@ func (s) TestClusterAmbientError(t *testing.T) {
 // resources is not configured and then verifies that Update is called with
 // correct config when all resources are configured.
 func (s) TestAggregateCluster(t *testing.T) {
+	prefix := "/"
 	nodeID, mgmtServer, xdsClient := setupManagementServerAndClient(t, true)
 
 	dnsR := replaceDNSResolver(t)
@@ -990,7 +992,7 @@ func (s) TestAggregateCluster(t *testing.T) {
 				{
 					Domains: []string{defaultTestServiceName},
 					Routes: []*xdsresource.Route{{
-						Prefix:           utils.NewStringP("/"),
+						Prefix:           &prefix,
 						WeightedClusters: []xdsresource.WeightedCluster{{Name: resources.Clusters[0].Name, Weight: 100}},
 						ActionType:       xdsresource.RouteActionRoute,
 					}},
@@ -1000,7 +1002,7 @@ func (s) TestAggregateCluster(t *testing.T) {
 		VirtualHost: &xdsresource.VirtualHost{
 			Domains: []string{defaultTestServiceName},
 			Routes: []*xdsresource.Route{{
-				Prefix:           utils.NewStringP("/"),
+				Prefix:           &prefix,
 				WeightedClusters: []xdsresource.WeightedCluster{{Name: resources.Clusters[0].Name, Weight: 100}},
 				ActionType:       xdsresource.RouteActionRoute},
 			}},
@@ -1071,6 +1073,7 @@ func (s) TestAggregateCluster(t *testing.T) {
 // configured with an error. Verifies that the error is correctly received in
 // the XDSConfig.
 func (s) TestAggregateClusterChildError(t *testing.T) {
+	prefix := "/"
 	nodeID, mgmtServer, xdsClient := setupManagementServerAndClient(t, true)
 
 	watcher := newTestWatcher()
@@ -1124,7 +1127,7 @@ func (s) TestAggregateClusterChildError(t *testing.T) {
 			VirtualHosts: []*xdsresource.VirtualHost{{
 				Domains: []string{defaultTestServiceName},
 				Routes: []*xdsresource.Route{{
-					Prefix:           utils.NewStringP("/"),
+					Prefix:           &prefix,
 					WeightedClusters: []xdsresource.WeightedCluster{{Name: defaultTestClusterName, Weight: 100}},
 					ActionType:       xdsresource.RouteActionRoute,
 				}},
@@ -1133,7 +1136,7 @@ func (s) TestAggregateClusterChildError(t *testing.T) {
 		VirtualHost: &xdsresource.VirtualHost{
 			Domains: []string{defaultTestServiceName},
 			Routes: []*xdsresource.Route{{
-				Prefix:           utils.NewStringP("/"),
+				Prefix:           &prefix,
 				WeightedClusters: []xdsresource.WeightedCluster{{Name: defaultTestClusterName, Weight: 100}},
 				ActionType:       xdsresource.RouteActionRoute,
 			}},
@@ -1191,6 +1194,7 @@ func (s) TestAggregateClusterChildError(t *testing.T) {
 // cyclic dependency where A->B and B->A. Verifies that an error with "no leaf
 // clusters found" is received.
 func (s) TestAggregateClusterNoLeafCluster(t *testing.T) {
+	prefix := "/"
 	nodeID, mgmtServer, xdsClient := setupManagementServerAndClient(t, true)
 
 	watcher := newTestWatcher()
@@ -1231,7 +1235,7 @@ func (s) TestAggregateClusterNoLeafCluster(t *testing.T) {
 			VirtualHosts: []*xdsresource.VirtualHost{{
 				Domains: []string{defaultTestServiceName},
 				Routes: []*xdsresource.Route{{
-					Prefix:           utils.NewStringP("/"),
+					Prefix:           &prefix,
 					WeightedClusters: []xdsresource.WeightedCluster{{Name: defaultTestClusterName, Weight: 100}},
 					ActionType:       xdsresource.RouteActionRoute,
 				}},
@@ -1240,7 +1244,7 @@ func (s) TestAggregateClusterNoLeafCluster(t *testing.T) {
 		VirtualHost: &xdsresource.VirtualHost{
 			Domains: []string{defaultTestServiceName},
 			Routes: []*xdsresource.Route{{
-				Prefix:           utils.NewStringP("/"),
+				Prefix:           &prefix,
 				WeightedClusters: []xdsresource.WeightedCluster{{Name: defaultTestClusterName, Weight: 100}},
 				ActionType:       xdsresource.RouteActionRoute,
 			}},
@@ -1264,6 +1268,7 @@ func (s) TestAggregateClusterNoLeafCluster(t *testing.T) {
 // Verify that the error is correctly received in the XDSConfig in all the
 // clusters.
 func (s) TestAggregateClusterMaxDepth(t *testing.T) {
+	prefix := "/"
 	const clusterDepth = 17
 	nodeID, mgmtServer, xdsClient := setupManagementServerAndClient(t, true)
 
@@ -1308,7 +1313,7 @@ func (s) TestAggregateClusterMaxDepth(t *testing.T) {
 				Routes: []*xdsresource.Route{{
 					// The route should point to the first cluster in the chain:
 					// agg-0
-					Prefix:           utils.NewStringP("/"),
+					Prefix:           &prefix,
 					WeightedClusters: []xdsresource.WeightedCluster{{Name: "agg-0", Weight: 100}},
 					ActionType:       xdsresource.RouteActionRoute,
 				}},
@@ -1317,7 +1322,7 @@ func (s) TestAggregateClusterMaxDepth(t *testing.T) {
 		VirtualHost: &xdsresource.VirtualHost{
 			Domains: []string{defaultTestServiceName},
 			Routes: []*xdsresource.Route{{
-				Prefix:           utils.NewStringP("/"),
+				Prefix:           &prefix,
 				WeightedClusters: []xdsresource.WeightedCluster{{Name: "agg-0", Weight: 100}},
 				ActionType:       xdsresource.RouteActionRoute,
 			}},
@@ -1414,6 +1419,7 @@ func (s) TestEndpointAmbientError(t *testing.T) {
 // verifies that it is removed from the XDSConfig update after all the
 // references for that cluster are no longer present.
 func (s) TestClusterSubscription_Lifecycle(t *testing.T) {
+	prefix := "/"
 	nodeID, mgmtServer, xdsClient := setupManagementServerAndClient(t, false)
 
 	watcher := newTestWatcher()
@@ -1484,7 +1490,7 @@ func (s) TestClusterSubscription_Lifecycle(t *testing.T) {
 			VirtualHosts: []*xdsresource.VirtualHost{{
 				Domains: []string{defaultTestServiceName},
 				Routes: []*xdsresource.Route{{
-					Prefix:           utils.NewStringP("/"),
+					Prefix:           &prefix,
 					WeightedClusters: []xdsresource.WeightedCluster{{Name: newClusterName, Weight: 100}},
 					ActionType:       xdsresource.RouteActionRoute,
 				}},
@@ -1493,7 +1499,7 @@ func (s) TestClusterSubscription_Lifecycle(t *testing.T) {
 		VirtualHost: &xdsresource.VirtualHost{
 			Domains: []string{defaultTestServiceName},
 			Routes: []*xdsresource.Route{{
-				Prefix:           utils.NewStringP("/"),
+				Prefix:           &prefix,
 				WeightedClusters: []xdsresource.WeightedCluster{{Name: newClusterName, Weight: 100}},
 				ActionType:       xdsresource.RouteActionRoute,
 			}},
@@ -1589,6 +1595,7 @@ func (s) TestClusterSubscription_Lifecycle(t *testing.T) {
 // the manager successfully resolves the complete picture and delivers an update
 // containing the state for both clusters.
 func (s) TestUpdateWithUnresolvedDynamicSubscription(t *testing.T) {
+	prefix := "/"
 	nodeID, mgmtServer, xdsClient := setupManagementServerAndClient(t, false)
 
 	watcher := newTestWatcher()
@@ -1673,7 +1680,7 @@ func (s) TestUpdateWithUnresolvedDynamicSubscription(t *testing.T) {
 			VirtualHosts: []*xdsresource.VirtualHost{{
 				Domains: []string{defaultTestServiceName},
 				Routes: []*xdsresource.Route{{
-					Prefix:           utils.NewStringP("/"),
+					Prefix:           &prefix,
 					WeightedClusters: []xdsresource.WeightedCluster{{Name: resources.Clusters[0].Name, Weight: 100}},
 					ActionType:       xdsresource.RouteActionRoute,
 				}},
@@ -1682,7 +1689,7 @@ func (s) TestUpdateWithUnresolvedDynamicSubscription(t *testing.T) {
 		VirtualHost: &xdsresource.VirtualHost{
 			Domains: []string{defaultTestServiceName},
 			Routes: []*xdsresource.Route{{
-				Prefix:           utils.NewStringP("/"),
+				Prefix:           &prefix,
 				WeightedClusters: []xdsresource.WeightedCluster{{Name: resources.Clusters[0].Name, Weight: 100}},
 				ActionType:       xdsresource.RouteActionRoute},
 			},

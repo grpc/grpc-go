@@ -119,8 +119,8 @@ func XDSConfigFromResolverState(state resolver.State) *XDSConfig {
 
 type xdsConfigKey struct{}
 
-// SetXDSConfigToContext adds the xDSConfig to the context for the http filter.
-func SetXDSConfigToContext(ctx context.Context, config *XDSConfig) context.Context {
+// NewContextWithXDSConfig returns a new context with xDSConfig added to it.
+func NewContextWithXDSConfig(ctx context.Context, config *XDSConfig) context.Context {
 	return context.WithValue(ctx, xdsConfigKey{}, config)
 }
 

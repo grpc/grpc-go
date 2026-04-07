@@ -44,11 +44,6 @@ func verifySubConnStates(t *testing.T, scs []*channelzpb.Subchannel, want map[ch
 	}
 }
 
-// NewStringP returns a pointer to the provided string.
-func NewStringP(s string) *string {
-	return &s
-}
-
 // This function determines the stable, canonical order for any two
 // resolver.Endpoint structs.
 func lessEndpoint(a, b resolver.Endpoint) bool {
@@ -76,32 +71,8 @@ func VerifyXDSConfig(ctx context.Context, xdsCh chan *xdsresource.XDSConfig, err
 	case <-ctx.Done():
 		return fmt.Errorf("timeout waiting for update from dependency manager")
 	case update := <-xdsCh:
-		cmpOpts := []cmp.Option{
-			cmpopts.EquateEmpty(),
-			cmpopts.IgnoreFields(xdsresource.HTTPFilter{}, "Filter", "Config"),
-			cmpopts.IgnoreFields(xdsresource.ListenerUpdate{}, "Raw"),
-			cmpopts.IgnoreFields(xdsresource.RouteConfigUpdate{}, "Raw"),
-			cmpopts.IgnoreFields(xdsresource.ClusterUpdate{}, "Raw", "LBPolicy", "TelemetryLabels"),
-			cmpopts.IgnoreFields(xdsresource.EndpointsUpdate{}, "Raw"),
-			// Used for EndpointConfig.ResolutionNote and ClusterResult.Err fields.
-			cmp.Transformer("ErrorsToString", func(in error) string {
-				if in == nil {
-					return "" // Treat nil as an empty string
-				}
-				s := in.Error()
-
-				// Replace all sequences of whitespace (including newlines and
-				// tabs) with a single standard space.
-				s = regexp.MustCompile(`\s+`).ReplaceAllString(s, " ")
-
-				// Trim any leading/trailing space that might be left over and
-				// return error as string.
-				return strings.TrimSpace(s)
-			}),
-			cmpopts.SortSlices(lessEndpoint),
-		}
-		if diff := cmp.Diff(update, want, cmpOpts...); diff != "" {
-			return fmt.Errorf("received unexpected update from dependency manager. Diff (-got +want):\n%v", diff)
+		if err := CompareXDSConfig(update, want); err != nil {
+			return err
 		}
 	case err := <-errCh:
 		return fmt.Errorf("received unexpected error from dependency manager: %v", err)
@@ -146,6 +117,7 @@ func CompareXDSConfig(gotXDSConfig, wantXDSConfig *xdsresource.XDSConfig) error 
 // a Listener, RouteConfig, VirtualHost, and a single EDS Cluster, populated
 // with the provided parameters.
 func MakeXDSConfig(servicename, routeConfigName, clusterName, edsServiceName, addr string) *xdsresource.XDSConfig {
+	prefix := "/"
 	return &xdsresource.XDSConfig{
 		Listener: &xdsresource.ListenerUpdate{
 			APIListener: &xdsresource.HTTPConnectionManagerConfig{
@@ -158,7 +130,7 @@ func MakeXDSConfig(servicename, routeConfigName, clusterName, edsServiceName, ad
 				{
 					Domains: []string{servicename},
 					Routes: []*xdsresource.Route{{
-						Prefix:           NewStringP("/"),
+						Prefix:           &prefix,
 						WeightedClusters: []xdsresource.WeightedCluster{{Name: clusterName, Weight: 100}},
 						ActionType:       xdsresource.RouteActionRoute,
 					}},
@@ -168,7 +140,7 @@ func MakeXDSConfig(servicename, routeConfigName, clusterName, edsServiceName, ad
 		VirtualHost: &xdsresource.VirtualHost{
 			Domains: []string{servicename},
 			Routes: []*xdsresource.Route{{
-				Prefix:           NewStringP("/"),
+				Prefix:           &prefix,
 				WeightedClusters: []xdsresource.WeightedCluster{{Name: clusterName, Weight: 100}},
 				ActionType:       xdsresource.RouteActionRoute},
 			},

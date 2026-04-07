@@ -208,7 +208,7 @@ func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RP
 	atomic.AddInt32(ref, 1)
 
 	lbCtx := clustermanager.SetPickedCluster(rpcInfo.Context, cluster.name)
-	lbCtx = xdsresource.SetXDSConfigToContext(lbCtx, cs.xdsConfig)
+	lbCtx = xdsresource.NewContextWithXDSConfig(lbCtx, cs.xdsConfig)
 	lbCtx = iringhash.SetXDSRequestHash(lbCtx, cs.generateHash(rpcInfo, rt.hashPolicies))
 	if rt.autoHostRewrite {
 		lbCtx = clusterimpl.EnableAutoHostRewrite(lbCtx)

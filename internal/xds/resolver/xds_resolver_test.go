@@ -1512,7 +1512,7 @@ func (s) TestResolver_XDSConfigInRPCContext(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	nodeID := uuid.New().String()
-	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 	defer mgmtServer.Stop()
 
 	// Configure xDS resources on the management server.
