@@ -64,13 +64,12 @@ func (s) TestClientSideXDS_SNISANValidation(t *testing.T) {
 	// Spin up an xDS management server.
 	mgmtServer, nodeID, _, xdsResolver := setup.ManagementServerAndResolver(t)
 
-	// Create test backends for two clusters
-	// backend1 configured with TLS creds, represents cluster1 (valid SNI)
-	// backend2 configured with TLS creds, represents cluster2 (invalid SNI)
+	// Create test backends for two clusters:
+	// - backend1 configured with TLS creds, represents cluster1 (valid SNI)
+	// - backend2 configured with TLS creds, represents cluster2 (invalid SNI)
 	serverCreds := testutils.CreateServerTLSCredentials(t, tls.RequireAndVerifyClientCert)
 	server1 := stubserver.StartTestService(t, nil, grpc.Creds(serverCreds))
 	defer server1.Stop()
-
 	server2 := stubserver.StartTestService(t, nil, grpc.Creds(serverCreds))
 	defer server2.Stop()
 
@@ -307,11 +306,10 @@ func (s) TestClientSideXDS_AutoHostSNI_MultipleEndpoints(t *testing.T) {
 	// Spin up an xDS management server.
 	mgmtServer, nodeID, _, xdsResolver := setup.ManagementServerAndResolver(t)
 
-	// Create test backends
+	// Create test backends.
 	serverCreds := testutils.CreateServerTLSCredentials(t, tls.RequireAndVerifyClientCert)
 	server1 := stubserver.StartTestService(t, nil, grpc.Creds(serverCreds))
 	defer server1.Stop()
-
 	server2 := stubserver.StartTestService(t, nil, grpc.Creds(serverCreds))
 	defer server2.Stop()
 
@@ -457,11 +455,10 @@ func (s) TestClientSideXDS_FallbackSANMatchers(t *testing.T) {
 	// Spin up an xDS management server.
 	mgmtServer, nodeID, _, xdsResolver := setup.ManagementServerAndResolver(t)
 
-	// Create test backends
+	// Create test backends.
 	serverCreds := testutils.CreateServerTLSCredentials(t, tls.RequireAndVerifyClientCert)
 	server1 := stubserver.StartTestService(t, nil, grpc.Creds(serverCreds))
 	defer server1.Stop()
-
 	server2 := stubserver.StartTestService(t, nil, grpc.Creds(serverCreds))
 	defer server2.Stop()
 
@@ -527,8 +524,8 @@ func (s) TestClientSideXDS_FallbackSANMatchers(t *testing.T) {
 
 	// Configure cluster2 with AutoSniSanValidation set to true and no SNI
 	// provided for the handshake. The validation falls back to using the explicit
-	// SAN matchers specified in the configuration which does not match the server2's
-	// certificate SAN.
+	// SAN matchers specified in the configuration which does not match the
+	// server2's certificate SAN.
 	cluster2 := e2e.DefaultCluster(clusterName2, endpointName2, e2e.SecurityLevelMTLS)
 	cluster2.TransportSocket = &v3corepb.TransportSocket{
 		Name: "envoy.transport_sockets.tls",
@@ -617,11 +614,10 @@ func (s) TestClientSideXDS_SNIEnvVarDisabled(t *testing.T) {
 	// Spin up an xDS management server.
 	mgmtServer, nodeID, _, xdsResolver := setup.ManagementServerAndResolver(t)
 
-	// Create test backends
+	// Create test backends.
 	serverCreds := testutils.CreateServerTLSCredentials(t, tls.RequireAndVerifyClientCert)
 	server1 := stubserver.StartTestService(t, nil, grpc.Creds(serverCreds))
 	defer server1.Stop()
-
 	server2 := stubserver.StartTestService(t, nil, grpc.Creds(serverCreds))
 	defer server2.Stop()
 

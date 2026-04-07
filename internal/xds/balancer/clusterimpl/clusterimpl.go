@@ -577,7 +577,7 @@ func (b *clusterImplBalancer) NewSubConn(addrs []resolver.Address, opts balancer
 		}
 		// Store hostname in the address attributes, so that it can be used in
 		// the client handshake.
-		newAddrs[i] = xds.SetEndpointHostname(newAddrs[i], hostname)
+		newAddrs[i] = xds.SetAddressHostname(newAddrs[i], hostname)
 	}
 	var sc balancer.SubConn
 	scw := &scWrapper{}

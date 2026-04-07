@@ -527,12 +527,12 @@ func loadCert(t *testing.T, certPath, keyPath string) [][]byte {
 
 }
 
-type mockProvider struct {
+type testProviderWithRoots struct {
 	certprovider.Provider
 	roots *x509.CertPool
 }
 
-func (m *mockProvider) KeyMaterial(context.Context) (*certprovider.KeyMaterial, error) {
+func (m *testProviderWithRoots) KeyMaterial(context.Context) (*certprovider.KeyMaterial, error) {
 	return &certprovider.KeyMaterial{
 		Roots: m.roots,
 	}, nil
@@ -575,7 +575,7 @@ func (s) TestAutoHostSNI_DNS_SANValidation_Failures(t *testing.T) {
 	roots := x509.NewCertPool()
 	roots.AddCert(cert)
 
-	provider := &mockProvider{roots: roots}
+	provider := &testProviderWithRoots{roots: roots}
 	hi := NewHandshakeInfo(provider, nil, nil, true, "wrong.sni.domain", true, false)
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()

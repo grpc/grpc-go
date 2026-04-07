@@ -49,9 +49,9 @@ type handshakeAttrKey struct{}
 // Attributes field of resolver.Address.
 type hostnameKey struct{}
 
-// SetEndpointHostname returns a copy of addr in which the Attributes field is
+// SetAddressHostname returns a copy of addr in which the Attributes field is
 // updated with the provided hostname.
-func SetEndpointHostname(addr resolver.Address, hostname string) resolver.Address {
+func SetAddressHostname(addr resolver.Address, hostname string) resolver.Address {
 	addr.Attributes = addr.Attributes.WithValue(hostnameKey{}, hostname)
 	return addr
 }
@@ -151,6 +151,12 @@ func (hi *HandshakeInfo) GetSANMatchersForTesting() []matcher.StringMatcher {
 
 // ClientSideTLSConfig constructs a tls.Config to be used in a client-side
 // handshake based on the contents of the HandshakeInfo.
+//
+// hostname is passed as a parameter here instead of being part of the
+// HandshakeInfo because HandshakeInfo contains cluster-level security
+// configuration that applies to all endpoints in the cluster, while hostname is
+// specific to each endpoint. This allows sharing a single HandshakeInfo
+// instance across multiple endpoints in the same cluster.
 func (hi *HandshakeInfo) ClientSideTLSConfig(ctx context.Context, hostname string) (*tls.Config, error) {
 	// On the client side, rootProvider is mandatory. IdentityProvider is
 	// optional based on whether the client is doing TLS or mTLS.
