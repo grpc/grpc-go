@@ -70,11 +70,7 @@ func SetServerStreamMessageCompression(ctx context.Context, enable bool) error {
 	if sts == nil {
 		return fmt.Errorf("grpc: SetServerStreamMessageCompression called on a non-server-stream context")
 	}
-	s, ok := sts.(*transport.ServerStream)
-	if !ok {
-		return fmt.Errorf("grpc: SetServerStreamMessageCompression: unexpected stream type %T", sts)
-	}
-	s.SetDoNotCompress(!enable)
+	sts.SetEnableCompression(enable)
 	return nil
 }
 
@@ -90,12 +86,12 @@ func SetServerStreamMessageCompression(ctx context.Context, enable bool) error {
 // Notice: This API is EXPERIMENTAL and may be changed or removed in a
 // later release.
 func SetClientStreamMessageCompression(ctx context.Context, enable bool) error {
-	// Client side: *bool pointing to clientStream.doNotCompress is stored in context.
+	// Client side: *bool (enableCompression flag) is stored in context via compressKey.
 	flag, ok := ctx.Value(compressKey{}).(*bool)
 	if !ok || flag == nil {
 		return fmt.Errorf("grpc: SetClientStreamMessageCompression called on a non-client-stream context")
 	}
-	*flag = !enable
+	*flag = enable
 	return nil
 }
 
@@ -415,7 +411,9 @@ func newClientStreamWithParams(ctx context.Context, desc *StreamDesc, cc *Client
 		nameResolutionDelay: nameResolutionDelayed,
 	}
 	if compressorV0 != nil || compressorV1 != nil {
-		cs.ctx = context.WithValue(cs.ctx, compressKey{}, new(bool))
+		flag := new(bool)
+		*flag = true // enableCompression defaults to true
+		cs.ctx = context.WithValue(cs.ctx, compressKey{}, flag)
 	}
 	if !cc.dopts.disableRetry {
 		cs.retryThrottler = cc.retryThrottler.Load().(*retryThrottler)
@@ -1006,7 +1004,7 @@ func (cs *clientStream) SendMsg(m any) (err error) {
 
 	// load hdr, payload, data
 	compV0, compV1 := cs.compressorV0, cs.compressorV1
-	if flag, ok := cs.ctx.Value(compressKey{}).(*bool); ok && *flag {
+	if flag, ok := cs.ctx.Value(compressKey{}).(*bool); ok && !*flag {
 		compV0, compV1 = nil, nil
 	}
 	hdr, data, payload, pf, err := prepareMsg(m, cs.codec, compV0, compV1, cs.cc.dopts.copts.BufferPool)
@@ -1517,7 +1515,7 @@ func (as *addrConnStream) SendMsg(m any) (err error) {
 
 	// load hdr, payload, data
 	compV0, compV1 := as.sendCompressorV0, as.sendCompressorV1
-	if flag, ok := as.ctx.Value(compressKey{}).(*bool); ok && *flag {
+	if flag, ok := as.ctx.Value(compressKey{}).(*bool); ok && !*flag {
 		compV0, compV1 = nil, nil
 	}
 	hdr, data, payload, pf, err := prepareMsg(m, as.codec, compV0, compV1, as.ac.dopts.copts.BufferPool)
@@ -1801,7 +1799,7 @@ func (ss *serverStream) SendMsg(m any) (err error) {
 
 	// load hdr, payload, data
 	compV0, compV1 := ss.compressorV0, ss.compressorV1
-	if ss.s.IsDoNotCompress() {
+	if !ss.s.IsCompressionEnabled() {
 		compV0, compV1 = nil, nil
 	}
 	hdr, data, payload, pf, err := prepareMsg(m, ss.codec, compV0, compV1, ss.p.bufferPool)

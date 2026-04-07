@@ -1471,7 +1471,7 @@ func (s *Server) processUnaryRPC(ctx context.Context, stream *transport.ServerSt
 		comp = encoding.GetCompressor(stream.SendCompress())
 	}
 	compV0, compV1 := cp, comp
-	if stream.IsDoNotCompress() {
+	if !stream.IsCompressionEnabled() {
 		compV0, compV1 = nil, nil
 	}
 	if err := s.sendResponse(ctx, stream, reply, compV0, opts, compV1); err != nil {
@@ -1896,6 +1896,9 @@ type ServerTransportStream interface {
 	SetHeader(md metadata.MD) error
 	SendHeader(md metadata.MD) error
 	SetTrailer(md metadata.MD) error
+	// SetEnableCompression controls whether per-message compression is enabled
+	// for subsequent messages sent on this stream.
+	SetEnableCompression(enable bool)
 }
 
 // ServerTransportStreamFromContext returns the ServerTransportStream saved in

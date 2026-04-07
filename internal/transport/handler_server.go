@@ -420,9 +420,10 @@ func (ht *serverHandlerTransport) HandleStreams(ctx context.Context, startStream
 			recvCompress:   req.Header.Get("grpc-encoding"),
 			contentSubtype: ht.contentSubtype,
 		},
-		cancel:           cancel,
-		st:               ht,
-		headerWireLength: 0, // won't have access to header wire length until golang/go#18997.
+		cancel:            cancel,
+		st:                ht,
+		headerWireLength:  0,    // won't have access to header wire length until golang/go#18997.
+		enableCompression: true, // compression is enabled by default
 	}
 	s.Stream.buf.init()
 	s.readRequester = s
