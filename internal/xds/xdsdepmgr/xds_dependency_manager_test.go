@@ -1505,6 +1505,13 @@ func (s) TestEndpointAmbientError(t *testing.T) {
 	// Configure a endpoint resource that is expected to be NACKed because it
 	// does not contain the `Locality` field. Since a valid one is already
 	// cached, this should result in an ambient error.
+	resources = e2e.DefaultClientResources(e2e.ResourceParams{
+		NodeID:     nodeID,
+		DialTarget: defaultTestServiceName,
+		Host:       "localhost",
+		Port:       8080,
+		SecLevel:   e2e.SecurityLevelNone,
+	})
 	resources.Endpoints[0].Endpoints[0].Locality = nil
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
