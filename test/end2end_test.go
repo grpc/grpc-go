@@ -2077,14 +2077,14 @@ func (s) TestTap(t *testing.T) {
 }
 
 type myTap struct {
-	cnt int
+	cnt atomic.Int32
 }
 
 func (t *myTap) handle(ctx context.Context, info *tap.Info) (context.Context, error) {
 	if info != nil {
 		switch info.FullMethodName {
 		case "/grpc.testing.TestService/EmptyCall":
-			t.cnt++
+			t.cnt.Add(1)
 
 			if vals := info.Header.Get("return-error"); len(vals) > 0 && vals[0] == "true" {
 				return nil, status.Errorf(codes.Unknown, "tap error")
@@ -2114,22 +2114,22 @@ func testTap(t *testing.T, e env) {
 	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
 	}
-	if ttap.cnt != 1 {
-		t.Fatalf("Get the count in ttap %d, want 1", ttap.cnt)
+	if ttap.cnt.Load() != 1 {
+		t.Fatalf("Get the count in ttap %d, want 1", ttap.cnt.Load())
 	}
 
 	if _, err := tc.EmptyCall(metadata.AppendToOutgoingContext(ctx, "return-error", "false"), &testpb.Empty{}); err != nil {
 		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
 	}
-	if ttap.cnt != 2 {
-		t.Fatalf("Get the count in ttap %d, want 2", ttap.cnt)
+	if ttap.cnt.Load() != 2 {
+		t.Fatalf("Get the count in ttap %d, want 2", ttap.cnt.Load())
 	}
 
 	if _, err := tc.EmptyCall(metadata.AppendToOutgoingContext(ctx, "return-error", "true"), &testpb.Empty{}); status.Code(err) != codes.Unknown {
 		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, %s", err, codes.Unknown)
 	}
-	if ttap.cnt != 3 {
-		t.Fatalf("Get the count in ttap %d, want 3", ttap.cnt)
+	if ttap.cnt.Load() != 3 {
+		t.Fatalf("Get the count in ttap %d, want 3", ttap.cnt.Load())
 	}
 
 	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, 31)
@@ -5167,11 +5167,14 @@ func (fw *filterWriter) Write(p []byte) (n int, err error) {
 }
 
 func (s) TestGRPCMethod(t *testing.T) {
+	mu := sync.Mutex{}
 	var method string
 	var ok bool
 
 	ss := &stubserver.StubServer{
 		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
+			mu.Lock()
+			defer mu.Unlock()
 			method, ok = grpc.Method(ctx)
 			return &testpb.Empty{}, nil
 		},
@@ -5188,6 +5191,8 @@ func (s) TestGRPCMethod(t *testing.T) {
 		t.Fatalf("ss.Client.EmptyCall(_, _) = _, %v; want _, nil", err)
 	}
 
+	mu.Lock()
+	defer mu.Unlock()
 	if want := "/grpc.testing.TestService/EmptyCall"; !ok || method != want {
 		t.Fatalf("grpc.Method(_) = %q, %v; want %q, true", method, ok, want)
 	}
@@ -5614,9 +5619,12 @@ func (s) TestMethodFromServerStream(t *testing.T) {
 	const testMethod = "/package.service/method"
 	e := tcpClearRREnv
 	te := newTest(t, e)
+	var mu sync.Mutex
 	var method string
 	var ok bool
 	te.unknownHandler = func(_ any, stream grpc.ServerStream) error {
+		mu.Lock()
+		defer mu.Unlock()
 		method, ok = grpc.MethodFromServerStream(stream)
 		return nil
 	}
@@ -5626,6 +5634,8 @@ func (s) TestMethodFromServerStream(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	_ = te.clientConn().Invoke(ctx, testMethod, nil, nil)
+	mu.Lock()
+	defer mu.Unlock()
 	if !ok || method != testMethod {
 		t.Fatalf("Invoke with method %q, got %q, %v, want %q, true", testMethod, method, ok, testMethod)
 	}
@@ -6213,13 +6223,6 @@ func (s) TestLargeTimeout(t *testing.T) {
 }
 
 func testLargeTimeout(t *testing.T, e env) {
-	te := newTest(t, e)
-	te.declareLogNoise("Server.processUnaryRPC failed to write status")
-
-	ts := &funcServer{}
-	te.startServer(ts)
-	defer te.tearDown()
-	tc := testgrpc.NewTestServiceClient(te.clientConn())
 
 	timeouts := []time.Duration{
 		time.Duration(math.MaxInt64), // will be (correctly) converted to
@@ -6228,23 +6231,33 @@ func testLargeTimeout(t *testing.T, e env) {
 	}
 
 	for i, maxTimeout := range timeouts {
-		ts.unaryCall = func(ctx context.Context, _ *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
-			deadline, ok := ctx.Deadline()
-			timeout := time.Until(deadline)
-			minTimeout := maxTimeout - 5*time.Second
-			if !ok || timeout < minTimeout || timeout > maxTimeout {
-				t.Errorf("ctx.Deadline() = (now+%v), %v; want [%v, %v], true", timeout, ok, minTimeout, maxTimeout)
-				return nil, status.Error(codes.OutOfRange, "deadline error")
+		func() {
+			te := newTest(t, e)
+			te.declareLogNoise("Server.processUnaryRPC failed to write status")
+
+			ts := &funcServer{
+				unaryCall: func(ctx context.Context, _ *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+					deadline, ok := ctx.Deadline()
+					timeout := time.Until(deadline)
+					minTimeout := maxTimeout - 5*time.Second
+					if !ok || timeout < minTimeout || timeout > maxTimeout {
+						t.Errorf("ctx.Deadline() = (now+%v), %v; want [%v, %v], true", timeout, ok, minTimeout, maxTimeout)
+						return nil, status.Error(codes.OutOfRange, "deadline error")
+					}
+					return &testpb.SimpleResponse{}, nil
+				},
 			}
-			return &testpb.SimpleResponse{}, nil
-		}
+			te.startServer(ts)
+			defer te.tearDown()
+			tc := testgrpc.NewTestServiceClient(te.clientConn())
 
-		ctx, cancel := context.WithTimeout(context.Background(), maxTimeout)
-		defer cancel()
+			ctx, cancel := context.WithTimeout(context.Background(), maxTimeout)
+			defer cancel()
 
-		if _, err := tc.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil {
-			t.Errorf("case %v: UnaryCall(_) = _, %v; want _, nil", i, err)
-		}
+			if _, err := tc.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil {
+				t.Errorf("case %v: UnaryCall(_) = _, %v; want _, nil", i, err)
+			}
+		}()
 	}
 }
 
@@ -6960,11 +6973,11 @@ func (mbl *mockBinaryLogger) GetMethodLogger(string) binarylog.MethodLogger {
 }
 
 type mockMethodLogger struct {
-	events uint64
+	events atomic.Uint64
 }
 
 func (mml *mockMethodLogger) Log(context.Context, binarylog.LogEntryConfig) {
-	atomic.AddUint64(&mml.events, 1)
+	mml.events.Add(1)
 }
 
 // TestGlobalBinaryLoggingOptions tests the binary logging options for client
@@ -7008,11 +7021,11 @@ func (s) TestGlobalBinaryLoggingOptions(t *testing.T) {
 	if _, err := ss.Client.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil {
 		t.Fatalf("Unexpected error from UnaryCall: %v", err)
 	}
-	if csbl.mml.events != 5 {
-		t.Fatalf("want 5 client side binary logging events, got %v", csbl.mml.events)
+	if got := csbl.mml.events.Load(); got != 5 {
+		t.Fatalf("want 5 client side binary logging events, got %v", got)
 	}
-	if ssbl.mml.events != 5 {
-		t.Fatalf("want 5 server side binary logging events, got %v", ssbl.mml.events)
+	if got := ssbl.mml.events.Load(); got != 5 {
+		t.Fatalf("want 5 server side binary logging events, got %v", got)
 	}
 
 	// Make a streaming RPC. This should cause Log calls on the MethodLogger.
@@ -7026,11 +7039,11 @@ func (s) TestGlobalBinaryLoggingOptions(t *testing.T) {
 		t.Fatalf("unexpected error: %v, expected an EOF error", err)
 	}
 
-	if csbl.mml.events != 8 {
-		t.Fatalf("want 8 client side binary logging events, got %v", csbl.mml.events)
+	if got := csbl.mml.events.Load(); got != 8 {
+		t.Fatalf("want 8 client side binary logging events, got %v", got)
 	}
-	if ssbl.mml.events != 8 {
-		t.Fatalf("want 8 server side binary logging events, got %v", ssbl.mml.events)
+	if got := ssbl.mml.events.Load(); got != 8 {
+		t.Fatalf("want 8 server side binary logging events, got %v", got)
 	}
 }
 

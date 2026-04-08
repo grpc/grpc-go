@@ -21,6 +21,7 @@ package lrsclient_test
 import (
 	"context"
 	"net"
+	"sync"
 	"testing"
 	"time"
 
@@ -665,9 +666,12 @@ func (s) TestReportLoad_LoadReportInterval(t *testing.T) {
 		t.Fatalf("Timeout when waiting for LRS stream to be created: %v", err)
 	}
 
+	stateMu := sync.Mutex{}
 	// Initial time for reporter creation
 	currentTime := time.Now()
 	lrsclientinternal.TimeNow = func() time.Time {
+		stateMu.Lock()
+		defer stateMu.Unlock()
 		return currentTime
 	}
 
@@ -676,7 +680,9 @@ func (s) TestReportLoad_LoadReportInterval(t *testing.T) {
 
 	// Update currentTime to simulate the passage of time between the reporter
 	// creation and first stats() call.
+	stateMu.Lock()
 	currentTime = currentTime.Add(5 * time.Second)
+	stateMu.Unlock()
 
 	// Ensure the initial load reporting request is received at the server.
 	req, err := lrsServer.LRSRequestChan.Receive(ctx)
