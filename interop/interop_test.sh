@@ -137,4 +137,40 @@ for case in ${CASES[@]}; do
     fi
 done
 
+echo "$(tput setaf 4) $(date): testing: custom_lb_wrr $(tput sgr 0)"
+CLIENT_LOG="$(mktemp)"
+if ! GRPC_GO_LOG_SEVERITY_LEVEL=info withTimeout 20 go run ./interop/client \
+    --use_tls \
+    --server_host_override=foo.test.google.fr \
+    --use_test_ca --test_case="empty_unary" \
+    --service_config_json='{ "loadBalancingConfig": [{ "weighted_round_robin": {} }]}' \
+    &> $CLIENT_LOG; then
+    fail "FAIL: test case custom_lb_wrr
+    got server log:
+    $(cat $SERVER_LOG)
+    got client log:
+    $(cat $CLIENT_LOG)
+    "
+else
+  pass "PASS: test case custom_lb_wrr"
+fi
+
+echo "$(tput setaf 4) $(date): testing: custom_lb_random_subsetting $(tput sgr 0)"
+CLIENT_LOG="$(mktemp)"
+if ! GRPC_GO_LOG_SEVERITY_LEVEL=info withTimeout 20 go run ./interop/client \
+    --use_tls \
+    --server_host_override=foo.test.google.fr \
+    --use_test_ca --test_case="empty_unary" \
+    --service_config_json='{ "loadBalancingConfig": [{ "random_subsetting_experimental": { "subsetSize": 2, "childPolicy": [{"round_robin": {}}] } }]}' \
+    &> $CLIENT_LOG; then
+    fail "FAIL: test case custom_lb_random_subsetting
+    got server log:
+    $(cat $SERVER_LOG)
+    got client log:
+    $(cat $CLIENT_LOG)
+    "
+else
+  pass "PASS: test case custom_lb_random_subsetting"
+fi
+
 clean

@@ -47,6 +47,7 @@ import (
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3clientsideweightedroundrobinpb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/client_side_weighted_round_robin/v3"
 	v3leastrequestpb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/least_request/v3"
+	v3randomsubsettingpb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/random_subsetting/v3"
 	v3maglevpb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/maglev/v3"
 	v3pickfirstpb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/pick_first/v3"
 	v3ringhashpb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/ring_hash/v3"
@@ -194,6 +195,21 @@ func (s) TestConvertToServiceConfigSuccess(t *testing.T) {
 				"weightUpdatePeriod": "1s",
 				"errorUtilizationPenalty": 1.5
 			}}]`,
+		},
+		{
+			name: "random_subsetting",
+			policy: &v3clusterpb.LoadBalancingPolicy{
+				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
+					{
+						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
+							TypedConfig: testutils.MarshalAny(t, &v3randomsubsettingpb.RandomSubsetting{
+								SubsetSize: wrapperspb.UInt32(2),
+							}),
+						},
+					},
+				},
+			},
+			wantConfig: `[{"random_subsetting_experimental": { "subsetSize": 2 }}]`,
 		},
 		{
 			name: "round_robin_ring_hash_use_first_supported",
