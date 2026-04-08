@@ -119,13 +119,13 @@ func (s) TestEncodeDoesntPanicOnServer(t *testing.T) {
 	ec := &errProtoCodec{name: t.Name(), encodingErr: encodingErr}
 
 	// Start a server with the above codec.
-	backend1 := stubserver.StartTestService(t, nil, grpc.ForceServerCodecV2(ec))
-	defer backend1.Stop()
-
-	// Create a channel to the above server.
-	if err := backend1.StartClient(grpc.WithTransportCredentials(insecure.NewCredentials())); err != nil {
-		t.Fatalf("Failed to dial test backend at %q: %v", backend1.Address, err)
+	backend1 := stubserver.StubServer{
+		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) { return &testpb.Empty{}, nil },
 	}
+	if err := backend1.Start([]grpc.ServerOption{grpc.ForceServerCodecV2(ec)}, grpc.WithTransportCredentials(insecure.NewCredentials())); err != nil {
+		t.Fatal(err)
+	}
+	defer backend1.Stop()
 
 	// Make an RPC and expect it to fail. Since we do not specify any codec
 	// here, the proto codec will get automatically used.
@@ -139,12 +139,14 @@ func (s) TestEncodeDoesntPanicOnServer(t *testing.T) {
 	// Configure the codec on the server to not return errors anymore and expect
 	// the RPC to succeed.
 	ec = &errProtoCodec{name: t.Name()}
-	backend2 := stubserver.StartTestService(t, nil, grpc.ForceServerCodecV2(ec))
+	backend2 := stubserver.StubServer{
+		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) { return &testpb.Empty{}, nil },
+	}
+	if err := backend2.Start([]grpc.ServerOption{grpc.ForceServerCodecV2(ec)}, grpc.WithTransportCredentials(insecure.NewCredentials())); err != nil {
+		t.Fatal(err)
+	}
 	defer backend2.Stop()
 
-	if err := backend2.StartClient(grpc.WithTransportCredentials(insecure.NewCredentials())); err != nil {
-		t.Fatalf("Failed to dial test backend at %q: %v", backend2.Address, err)
-	}
 	if _, err := backend2.Client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("RPC failed with error: %v", err)
 	}
@@ -157,15 +159,14 @@ func (s) TestDecodeDoesntPanicOnServer(t *testing.T) {
 	decodingErr := errors.New("decoding failed")
 	ec := &errProtoCodec{name: t.Name(), decodingErr: decodingErr}
 
-	// Start a server with the above codec.
-	backend1 := stubserver.StartTestService(t, nil, grpc.ForceServerCodecV2(ec))
-	defer backend1.Stop()
-
-	// Create a channel to the above server. Since we do not specify any codec
-	// here, the proto codec will get automatically used.
-	if err := backend1.StartClient(grpc.WithTransportCredentials(insecure.NewCredentials())); err != nil {
-		t.Fatalf("Failed to dial test backend at %q: %v", backend1.Address, err)
+	// Start a server with the above codec and a channel to the server.
+	backend1 := stubserver.StubServer{
+		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) { return &testpb.Empty{}, nil },
 	}
+	if err := backend1.Start([]grpc.ServerOption{grpc.ForceServerCodecV2(ec)}, grpc.WithTransportCredentials(insecure.NewCredentials())); err != nil {
+		t.Fatal(err)
+	}
+	defer backend1.Stop()
 
 	// Make an RPC and expect it to fail. Since we do not specify any codec
 	// here, the proto codec will get automatically used.
@@ -179,11 +180,14 @@ func (s) TestDecodeDoesntPanicOnServer(t *testing.T) {
 	// Configure the codec on the server to not return errors anymore and expect
 	// the RPC to succeed.
 	ec = &errProtoCodec{name: t.Name()}
-	backend2 := stubserver.StartTestService(t, nil, grpc.ForceServerCodecV2(ec))
-	defer backend2.Stop()
-	if err := backend2.StartClient(grpc.WithTransportCredentials(insecure.NewCredentials())); err != nil {
-		t.Fatalf("Failed to dial test backend at %q: %v", backend2.Address, err)
+	backend2 := stubserver.StubServer{
+		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) { return &testpb.Empty{}, nil },
 	}
+	if err := backend2.Start([]grpc.ServerOption{grpc.ForceServerCodecV2(ec)}, grpc.WithTransportCredentials(insecure.NewCredentials())); err != nil {
+		t.Fatal(err)
+	}
+	defer backend2.Stop()
+
 	if _, err := backend2.Client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("RPC failed with error: %v", err)
 	}

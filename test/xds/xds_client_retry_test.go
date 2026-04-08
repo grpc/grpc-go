@@ -40,6 +40,7 @@ import (
 )
 
 func (s) TestClientSideRetry(t *testing.T) {
+	// serverMu guards access to ctr and errs.
 	serverMu := sync.Mutex{}
 	ctr := 0
 	errs := []codes.Code{codes.ResourceExhausted}

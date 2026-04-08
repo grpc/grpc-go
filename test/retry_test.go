@@ -81,8 +81,8 @@ func (s) TestRetryUnary(t *testing.T) {
 	defer ss.Stop()
 
 	testCases := []struct {
-		code  codes.Code
-		count int
+		wantCode  codes.Code
+		wantCount int
 	}{
 		{codes.OK, 0},
 		{codes.OK, 2},
@@ -97,13 +97,13 @@ func (s) TestRetryUnary(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 		_, err := ss.Client.EmptyCall(ctx, &testpb.Empty{})
 		cancel()
-		if status.Code(err) != tc.code {
-			t.Fatalf("EmptyCall(_, _) = _, %v; want _, <Code() = %v>", err, tc.code)
+		if status.Code(err) != tc.wantCode {
+			t.Fatalf("EmptyCall(_, _) = _, %v; want _, <Code() = %v>", err, tc.wantCode)
 		}
 		serverMu.Lock()
-		if i != tc.count {
+		if i != tc.wantCount {
 			serverMu.Unlock()
-			t.Fatalf("i = %v; want %v", i, tc.count)
+			t.Fatalf("i = %v; want %v", i, tc.wantCount)
 		}
 		serverMu.Unlock()
 	}
@@ -148,8 +148,8 @@ func (s) TestRetryThrottling(t *testing.T) {
 	defer ss.Stop()
 
 	testCases := []struct {
-		code  codes.Code
-		count int
+		wantCode  codes.Code
+		wantCount int
 	}{
 		{codes.OK, 0},           // tokens = 10
 		{codes.OK, 3},           // tokens = 8.5 (10 - 2 failures + 0.5 success)
@@ -168,12 +168,12 @@ func (s) TestRetryThrottling(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 		_, err := ss.Client.EmptyCall(ctx, &testpb.Empty{})
 		cancel()
-		if status.Code(err) != tc.code {
-			t.Errorf("EmptyCall(_, _) = _, %v; want _, <Code() = %v>", err, tc.code)
+		if status.Code(err) != tc.wantCode {
+			t.Errorf("EmptyCall(_, _) = _, %v; want _, <Code() = %v>", err, tc.wantCode)
 		}
 		serverMu.Lock()
-		if i != tc.count {
-			t.Errorf("i = %v; want %v", i, tc.count)
+		if i != tc.wantCount {
+			t.Errorf("i = %v; want %v", i, tc.wantCount)
 		}
 		serverMu.Unlock()
 	}
