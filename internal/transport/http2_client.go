@@ -949,12 +949,9 @@ func (t *http2Client) closeStream(s *ClientStream, err error, rst bool, rstCode 
 		return
 	}
 	s.collectionMu.Lock()
-	if s.collecting {
-		// If the stream is collecting data for non-gRPC, stop collection to finalize status
-		s.stopNonGRPCDataCollectionLocked()
-	}
-	if s.status != nil {
-		st = s.status
+	// Finalize non-gRPC data collection and use the resulting status if available.
+	if finalized := s.finalizeNonGRPCDataCollectionLocked(); finalized != nil {
+		st = finalized
 		err = st.Err()
 	}
 	s.status = st
