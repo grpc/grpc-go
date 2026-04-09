@@ -56,9 +56,9 @@ type ClientStream struct {
 	// reading its value).
 	headerValid bool
 
-	collectionMu   sync.Mutex
-	collecting     bool   // indicates if stream entered the stage of non-gRPC data collection.
-	nonGRPCDataBuf []byte // stores the data of a non-gRPC response.
+	collectionMu   sync.Mutex // protects collecting, nonGRPCDataBuf, and status during the non-gRPC data collection lifecycle.
+	collecting     bool       // indicates if stream entered the stage of non-gRPC data collection.
+	nonGRPCDataBuf []byte     // stores the data of a non-gRPC response.
 
 	noHeaders        bool          // set if the client never received headers (set only after the stream is done).
 	headerChanClosed uint32        // set when headerChan is closed. Used to avoid closing headerChan multiple times.
