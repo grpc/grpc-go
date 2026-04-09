@@ -914,6 +914,9 @@ WaitForUpdatedConfig:
 	if got, want := filtersDestroyed.Load(), int32(1); got != want {
 		t.Fatalf("Destroyed %d filter instances, want: %d", got, want)
 	}
+	if got, want := interceptorsDestroyed.Load(), int32(2); got != want {
+		t.Fatalf("Destroyed %d interceptor instances, want: %d", got, want)
+	}
 }
 
 // TestXDSResolverHTTPFilters_DisabledOverride tests that a filter is skipped if
@@ -1019,8 +1022,8 @@ func (s) TestXDSResolverHTTPFilters_DisabledOverride(t *testing.T) {
 	}
 }
 
-// TestXDSResolverHTTPFilters_EnabledOverride tests that a filter is enabled if
-// it is disabled in base config but enabled via a route override.
+// TestXDSResolverHTTPFilters_EnabledOverride tests that a filter is
+// enabled if it is disabled in base config but enabled via a route override.
 func (s) TestXDSResolverHTTPFilters_EnabledOverride(t *testing.T) {
 	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProc, true)
 	// Register a custom httpFilter builder for the test.
@@ -1035,7 +1038,7 @@ func (s) TestXDSResolverHTTPFilters_EnabledOverride(t *testing.T) {
 	defer httpfilter.UnregisterForTesting(fb.typeURL)
 
 	// Spin up an xDS management server.
-	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 	defer mgmtServer.Stop()
 
 	// Create an xDS resolver with bootstrap configuration pointing to the above
@@ -1103,10 +1106,10 @@ func (s) TestXDSResolverHTTPFilters_EnabledOverride(t *testing.T) {
 		},
 	}
 	resources := e2e.UpdateOptions{
-		NodeID:    nodeID,
-		Listeners: []*v3listenerpb.Listener{listener},
-		Clusters:  []*v3clusterpb.Cluster{e2e.DefaultCluster("A", "endpoint_A", e2e.SecurityLevelNone)},
-		Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint("endpoint_A", "localhost", []uint32{testutils.ParsePort(t, backend.Address)})},
+		NodeID:         nodeID,
+		Listeners:      []*v3listenerpb.Listener{listener},
+		Clusters:       []*v3clusterpb.Cluster{e2e.DefaultCluster("A", "endpoint_A", e2e.SecurityLevelNone)},
+		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint("endpoint_A", "localhost", []uint32{testutils.ParsePort(t, backend.Address)})},
 	}
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
@@ -1119,8 +1122,7 @@ func (s) TestXDSResolverHTTPFilters_EnabledOverride(t *testing.T) {
 	}
 	defer cc.Close()
 
-	// Make an RPC and verify that the filter was invoked with the override
-	// config.
+	// Make an RPC and verify that the filter was invoked with the override config.
 	client := testgrpc.NewTestServiceClient(cc)
 	if _, err := client.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil {
 		t.Fatalf("UnaryCall() failed: %v", err)
