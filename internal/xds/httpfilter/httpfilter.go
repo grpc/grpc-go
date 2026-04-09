@@ -31,6 +31,11 @@ type FilterConfig interface {
 	isFilterConfig()
 }
 
+// DisabledFilterConfig represents a disabled filter override.
+type DisabledFilterConfig struct{}
+
+func (DisabledFilterConfig) isFilterConfig() {}
+
 // Builder defines the parsing functionality of an HTTP filter.  A Builder may
 // optionally implement either ClientFilterBuilder or ServerFilterBuilder or
 // both, indicating it is capable of working on the client side or server side

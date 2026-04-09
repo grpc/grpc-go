@@ -69,6 +69,8 @@ type HTTPFilter struct {
 	Filter httpfilter.Builder
 	// Config contains the filter's configuration
 	Config httpfilter.FilterConfig
+	// Disabled specifies if the filter is disabled.
+	Disabled bool
 }
 
 // InboundListenerConfig contains information about the inbound listener, i.e

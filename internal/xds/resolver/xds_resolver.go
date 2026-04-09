@@ -29,6 +29,7 @@ import (
 
 	estats "google.golang.org/grpc/experimental/stats"
 	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcsync"
 	iresolver "google.golang.org/grpc/internal/resolver"
@@ -595,6 +596,23 @@ func (r *xdsResolver) newInterceptor(filters []xdsresource.HTTPFilter, clusterOv
 		if override == nil {
 			override = virtualHostOverride[filter.Name]
 		}
+
+		// Determine the effective disabled state. The base configuration's disabled
+		// state is used unless an override is present. If an override is present,
+		// the filter is disabled if the override is a DisabledFilterConfig.
+		// This logic is guarded by the GRPC_EXPERIMENTAL_XDS_EXT_PROC_ON_CLIENT flag.
+		disable := false
+		if envconfig.XDSClientExtProc {
+			disable = filter.Disabled
+			if override != nil {
+				_, disable = override.(httpfilter.DisabledFilterConfig)
+			}
+		}
+
+		if disable {
+			continue
+		}
+
 		builder, ok := filter.Filter.(httpfilter.ClientFilterBuilder)
 		if !ok {
 			// Should not happen if it passed xdsClient validation.
