@@ -1892,6 +1892,7 @@ func NewContextWithServerTransportStream(ctx context.Context, stream ServerTrans
 // Notice: This type is EXPERIMENTAL and may be changed or removed in a
 // later release.
 type ServerTransportStream interface {
+	internal.EnforceServerTransportStreamEmbedding
 	Method() string
 	SetHeader(md metadata.MD) error
 	SendHeader(md metadata.MD) error

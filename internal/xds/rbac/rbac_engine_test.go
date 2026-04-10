@@ -1805,6 +1805,7 @@ func (s) TestChainEngine(t *testing.T) {
 }
 
 type ServerTransportStreamWithMethod struct {
+	grpc.ServerTransportStream
 	method string
 }
 

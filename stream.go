@@ -76,8 +76,9 @@ func SetServerStreamMessageCompression(ctx context.Context, enable bool) error {
 
 // SetClientStreamMessageCompression enables or disables per-message compression
 // on a client stream. The provided context must be the stream context obtained
-// via ClientStream.Context(). Compression is enabled by default and is a no-op
-// if no compressor is configured on the stream (e.g. via UseCompressor).
+// via ClientStream.Context(). Compression is enabled by default. An error is
+// returned if the context is not a client-stream context or no compressor is
+// configured on the stream (e.g. via UseCompressor).
 //
 // This method must not be called concurrently with SendMsg.
 //
@@ -89,7 +90,7 @@ func SetClientStreamMessageCompression(ctx context.Context, enable bool) error {
 	// Client side: *bool (enableCompression flag) is stored in context via compressKey.
 	flag, ok := ctx.Value(compressKey{}).(*bool)
 	if !ok || flag == nil {
-		return fmt.Errorf("grpc: SetClientStreamMessageCompression called on a non-client-stream context")
+		return fmt.Errorf("grpc: SetClientStreamMessageCompression called on a non-client-stream context or a compressor is not configured on the stream")
 	}
 	*flag = enable
 	return nil
@@ -1405,6 +1406,11 @@ func newNonRetryClientStream(ctx context.Context, desc *StreamDesc, method strin
 		sendCompressorV1: comp,
 		decompressorV0:   ac.cc.dopts.dc,
 		transport:        t,
+	}
+	if cp != nil || comp != nil {
+		flag := new(bool)
+		*flag = true // enableCompression defaults to true
+		as.ctx = context.WithValue(as.ctx, compressKey{}, flag)
 	}
 
 	// nil stats handler: internal streams like health and ORCA do not support telemetry.
