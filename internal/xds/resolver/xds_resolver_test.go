@@ -45,7 +45,7 @@ import (
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	serverFeature "google.golang.org/grpc/internal/xds/clients/xdsclient"
 	rinternal "google.golang.org/grpc/internal/xds/resolver/internal"
-	utils "google.golang.org/grpc/internal/xds/test/e2e"
+	xdstestutils "google.golang.org/grpc/internal/xds/test/e2e"
 	"google.golang.org/grpc/internal/xds/xdsclient"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource/version"
@@ -1538,11 +1538,11 @@ func (s) TestResolver_XDSConfigInRPCContext(t *testing.T) {
 		t.Fatalf("cs.SelectConfig(): %v", err)
 	}
 
-	wantXDSConfig := utils.MakeXDSConfig(defaultTestServiceName, defaultTestRouteConfigName, defaultTestClusterName, defaultTestEndpointName, "test-host:8080")
+	wantXDSConfig := xdstestutils.MakeXDSConfig(defaultTestServiceName, defaultTestRouteConfigName, defaultTestClusterName, defaultTestEndpointName, "test-host:8080")
 
 	// Verify the XDSConfig.
 	gotConfig := xdsresource.XDSConfigFromContext(res.Context)
-	if err := utils.CompareXDSConfig(gotConfig, wantXDSConfig); err != nil {
+	if err := xdstestutils.CompareXDSConfig(gotConfig, wantXDSConfig); err != nil {
 		t.Fatal(err)
 	}
 }
