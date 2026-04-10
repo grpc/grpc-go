@@ -194,6 +194,10 @@ func (b *bufReadyReader) Read(p []byte) (n int, err error) {
 			panic(errNegativeRead)
 		}
 		if n == 0 {
+			if b.buf != nil {
+				b.pool.Put(b.buf)
+				b.buf = nil
+			}
 			return 0, b.readErr()
 		}
 		b.w += n
