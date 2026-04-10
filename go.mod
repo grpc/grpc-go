@@ -13,11 +13,11 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/spiffe/go-spiffe/v2 v2.6.0
 	go.opentelemetry.io/contrib/detectors/gcp v1.42.0
-	go.opentelemetry.io/otel v1.42.0
-	go.opentelemetry.io/otel/metric v1.42.0
-	go.opentelemetry.io/otel/sdk v1.42.0
-	go.opentelemetry.io/otel/sdk/metric v1.42.0
-	go.opentelemetry.io/otel/trace v1.42.0
+	go.opentelemetry.io/otel v1.43.0
+	go.opentelemetry.io/otel/metric v1.43.0
+	go.opentelemetry.io/otel/sdk v1.43.0
+	go.opentelemetry.io/otel/sdk/metric v1.43.0
+	go.opentelemetry.io/otel/trace v1.43.0
 	golang.org/x/net v0.51.0
 	golang.org/x/oauth2 v0.36.0
 	golang.org/x/sync v0.20.0
