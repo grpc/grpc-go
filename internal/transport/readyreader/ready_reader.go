@@ -116,7 +116,7 @@ func NewNonBlocking(r io.Reader) Reader {
 
 // New detects if [syscall.RawConn] is available for non-memory-pinning reads.
 // If [syscall.RawConn] is unavailable, it falls back to using the simpler
-// [net.Conn] interface for reads.
+// [io.Reader] interface for reads.
 func New(r io.Reader) Reader {
 	if r := NewNonBlocking(r); r != nil {
 		return r
@@ -125,7 +125,7 @@ func New(r io.Reader) Reader {
 }
 
 // bufReadyReader implements buffering for a ReadyReader object.
-// A new bufReadyReader is created by calling [newBufReadyReader].
+// A new bufReadyReader is created by calling [NewBuffered].
 type bufReadyReader struct {
 	buf       *[]byte
 	pool      mem.BufferPool
@@ -136,8 +136,8 @@ type bufReadyReader struct {
 	constPool constBufferPool // stored as a field to avoid heap allocations.
 }
 
-// NewBuffered returns a new [bufferedReadyReader] whose buffer has the
-// specified size. If the argument.
+// NewBuffered returns a new [bufReadyReader] whose buffer has the
+// specified size and is allocated from the provided pool.
 func NewBuffered(rd Reader, size int, pool mem.BufferPool) io.Reader {
 	r := &bufReadyReader{
 		rd:      rd,
