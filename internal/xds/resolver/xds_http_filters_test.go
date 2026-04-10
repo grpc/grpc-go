@@ -1003,11 +1003,9 @@ func (s) TestXDSResolverHTTPFilters_DisabledOverride(t *testing.T) {
 	if _, err := client.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil {
 		t.Fatalf("UnaryCall() failed: %v", err)
 	}
-
 	if got, want := filtersCreated.Load(), int32(0); got != want {
 		t.Fatalf("Created %d filter instances, want: %d", got, want)
 	}
-
 	if got, want := interceptorsCreated.Load(), int32(0); got != want {
 		t.Fatalf("Created %d interceptor instances, want: %d", got, want)
 	}
@@ -1113,7 +1111,6 @@ func (s) TestXDSResolverHTTPFilters_EnabledOverride(t *testing.T) {
 	if _, err := client.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil {
 		t.Fatalf("UnaryCall() failed: %v", err)
 	}
-
 	// Verify that the config received by the interceptor has the override path.
 	val, err := newStreamChan.Receive(ctx)
 	if err != nil {
@@ -1218,11 +1215,9 @@ func (s) TestXDSResolverHTTPFilters_BaseDisabled(t *testing.T) {
 	if _, err := client.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil {
 		t.Fatalf("UnaryCall() failed: %v", err)
 	}
-
 	if got, want := filtersCreated.Load(), int32(0); got != want {
 		t.Fatalf("Created %d filter instances, want: %d", got, want)
 	}
-
 	if got, want := interceptorsCreated.Load(), int32(0); got != want {
 		t.Fatalf("Created %d interceptor instances, want: %d", got, want)
 	}
