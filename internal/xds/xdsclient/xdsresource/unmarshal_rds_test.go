@@ -559,15 +559,9 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 			wantUpdate: goodUpdateWithFilterConfigs(map[string]httpfilter.FilterConfig{"foo": filterConfig{Override: customFilterConfig}}),
 		},
 		{
-			name: "good-route-config-with-disabled-http-filter",
-			rc: goodRouteConfigWithFilterConfigs(map[string]*anypb.Any{
-				"foo": testutils.MarshalAny(t, &v3routepb.FilterConfig{
-					Disabled: true,
-				}),
-			}),
-			wantUpdate: goodUpdateWithFilterConfigs(map[string]httpfilter.FilterConfig{
-				"foo": httpfilter.DisabledFilterConfig{},
-			}),
+			name:                    "good-route-config-with-disabled-http-filter",
+			rc:                      goodRouteConfigWithFilterConfigs(map[string]*anypb.Any{"foo": testutils.MarshalAny(t, &v3routepb.FilterConfig{Disabled: true})}),
+			wantUpdate:              goodUpdateWithFilterConfigs(map[string]httpfilter.FilterConfig{"foo": httpfilter.DisabledFilterConfig{}}),
 			xdsClientExtProcEnabled: true,
 		},
 		{
@@ -725,7 +719,7 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			testutils.SetEnvConfig(t, &envconfig.XDSClientExtProc, test.xdsClientExtProcEnabled)
+			testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, test.xdsClientExtProcEnabled)
 
 			gotUpdate, gotError := generateRDSUpdateFromRouteConfiguration(test.rc, nil)
 			if (gotError != nil) != test.wantError ||

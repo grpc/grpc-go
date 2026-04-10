@@ -922,7 +922,8 @@ WaitForUpdatedConfig:
 // TestXDSResolverHTTPFilters_DisabledOverride tests that a filter is skipped if
 // it is disabled via a route override.
 func (s) TestXDSResolverHTTPFilters_DisabledOverride(t *testing.T) {
-	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProc, true)
+	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
+
 	// Register a custom httpFilter builder for the test.
 	var filtersCreated, interceptorsCreated atomic.Int32
 	testFilterTypeURL := t.Name()
@@ -966,19 +967,9 @@ func (s) TestXDSResolverHTTPFilters_DisabledOverride(t *testing.T) {
 						VirtualHosts: []*v3routepb.VirtualHost{{
 							Domains: []string{testServiceName},
 							Routes: []*v3routepb.Route{{
-								Match: &v3routepb.RouteMatch{
-									PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: ""},
-								},
-								Action: &v3routepb.Route_Route{
-									Route: &v3routepb.RouteAction{
-										ClusterSpecifier: &v3routepb.RouteAction_Cluster{Cluster: "A"},
-									},
-								},
-								TypedPerFilterConfig: map[string]*anypb.Any{
-									"tracker": testutils.MarshalAny(t, &v3routepb.FilterConfig{
-										Disabled: true,
-									}),
-								},
+								Match:                &v3routepb.RouteMatch{PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: ""}},
+								Action:               &v3routepb.Route_Route{Route: &v3routepb.RouteAction{ClusterSpecifier: &v3routepb.RouteAction_Cluster{Cluster: "A"}}},
+								TypedPerFilterConfig: map[string]*anypb.Any{"tracker": testutils.MarshalAny(t, &v3routepb.FilterConfig{Disabled: true})},
 							}},
 						}},
 					},
@@ -1025,7 +1016,8 @@ func (s) TestXDSResolverHTTPFilters_DisabledOverride(t *testing.T) {
 // TestXDSResolverHTTPFilters_EnabledOverride tests that a filter is
 // enabled if it is disabled in base config but enabled via a route override.
 func (s) TestXDSResolverHTTPFilters_EnabledOverride(t *testing.T) {
-	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProc, true)
+	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
+
 	// Register a custom httpFilter builder for the test.
 	testFilterTypeURL := t.Name()
 	newStreamChan := testutils.NewChannel()
@@ -1073,14 +1065,8 @@ func (s) TestXDSResolverHTTPFilters_EnabledOverride(t *testing.T) {
 						VirtualHosts: []*v3routepb.VirtualHost{{
 							Domains: []string{testServiceName},
 							Routes: []*v3routepb.Route{{
-								Match: &v3routepb.RouteMatch{
-									PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: ""},
-								},
-								Action: &v3routepb.Route_Route{
-									Route: &v3routepb.RouteAction{
-										ClusterSpecifier: &v3routepb.RouteAction_Cluster{Cluster: "A"},
-									},
-								},
+								Match:  &v3routepb.RouteMatch{PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: ""}},
+								Action: &v3routepb.Route_Route{Route: &v3routepb.RouteAction{ClusterSpecifier: &v3routepb.RouteAction_Cluster{Cluster: "A"}}},
 								TypedPerFilterConfig: map[string]*anypb.Any{
 									"tracker": testutils.MarshalAny(t, &v3routepb.FilterConfig{
 										Disabled: false, // Enabled in override.
@@ -1142,7 +1128,8 @@ func (s) TestXDSResolverHTTPFilters_EnabledOverride(t *testing.T) {
 // TestXDSResolverHTTPFilters_BaseDisabled tests that a filter is disabled if it
 // is disabled in base config and no override is present.
 func (s) TestXDSResolverHTTPFilters_BaseDisabled(t *testing.T) {
-	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProc, true)
+	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
+
 	// Register a custom httpFilter builder for the test.
 	var filtersCreated, interceptorsCreated atomic.Int32
 	testFilterTypeURL := t.Name()

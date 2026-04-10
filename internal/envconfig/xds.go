@@ -90,8 +90,8 @@ var (
 	// https://github.com/grpc/proposal/blob/master/A85-lrs-custom-metrics-changes.md
 	XDSORCAToLRSPropEnabled = boolFromEnv("GRPC_EXPERIMENTAL_XDS_ORCA_LRS_PROPAGATION", false)
 
-	// XDSClientExtProc indicates whether ExtProc filter is enabled on the client
+	// XDSClientExtProcEnabled indicates whether ExtProc filter is enabled on the client
 	// side. This feature is enabled by setting the environment variable
 	// "GRPC_EXPERIMENTAL_XDS_EXT_PROC_ON_CLIENT" to "true".
-	XDSClientExtProc = boolFromEnv("GRPC_EXPERIMENTAL_XDS_EXT_PROC_ON_CLIENT", false)
+	XDSClientExtProcEnabled = boolFromEnv("GRPC_EXPERIMENTAL_XDS_EXT_PROC_ON_CLIENT", false)
 )

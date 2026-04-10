@@ -187,7 +187,7 @@ func processHTTPFilterOverrides(cfgs map[string]*anypb.Any) (map[string]httpfilt
 			}
 			cfg = s.GetConfig()
 			optional = s.GetIsOptional()
-			if envconfig.XDSClientExtProc {
+			if envconfig.XDSClientExtProcEnabled {
 				disabled = s.GetDisabled()
 			}
 		}
@@ -246,7 +246,7 @@ func processHTTPFilters(filters []*v3httppb.HttpFilter, server bool) ([]HTTPFilt
 		}
 
 		disabled := false
-		if envconfig.XDSClientExtProc {
+		if envconfig.XDSClientExtProcEnabled {
 			disabled = filter.GetDisabled()
 		}
 		// Save name/config

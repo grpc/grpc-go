@@ -662,7 +662,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			testutils.SetEnvConfig(t, &envconfig.XDSClientExtProc, test.xdsClientExtProcEnabled)
+			testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, test.xdsClientExtProcEnabled)
 
 			name, update, err := unmarshalListenerResource(test.resource, nil)
 			if (err != nil) != test.wantErr {

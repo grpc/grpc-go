@@ -597,11 +597,12 @@ func (r *xdsResolver) newInterceptor(filters []xdsresource.HTTPFilter, clusterOv
 			override = virtualHostOverride[filter.Name]
 		}
 
-		// Determine the effective disabled state. The base configuration's disabled
-		// state is used unless an override is present. If an override is present,
-		// the filter is disabled if the override is a DisabledFilterConfig.
+		// Determine the effective disabled state of the filter. The base
+		// configuration's disabled state is used unless an override is present.
+		// If an override is present, the filter is disabled if the override is
+		// a DisabledFilterConfig.
 		disable := false
-		if envconfig.XDSClientExtProc {
+		if envconfig.XDSClientExtProcEnabled {
 			disable = filter.Disabled
 			if override != nil {
 				_, disable = override.(httpfilter.DisabledFilterConfig)
