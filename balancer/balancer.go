@@ -60,7 +60,7 @@ func Register(b Builder) {
 	if !envconfig.CaseSensitiveBalancerRegistries {
 		name = strings.ToLower(name)
 		if name != b.Name() {
-			logger.Warningf("Balancer registered with name %q. grpc-go will be switching to case sensitive balancer registries. After a release, env variable will be removed", b.Name())
+			logger.Warningf("Balancer registered with name %q. grpc-go has switched to case sensitive balancer registries. CaseSensitiveBalancerRegistries env variable will be removed in release v1.81.0", b.Name())
 		}
 	}
 	m[name] = b
