@@ -1768,7 +1768,7 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 // 1. Setting GRPC_EXPERIMENTAL_XDS_GCP_AUTHENTICATION_FILTER env var to true.
 // 2. Registering the audience converter, since this is otherwise done in init.
 func enableGCPAuthenticationFilter(t *testing.T) {
-	testutils.SetEnvConfig(t, &envconfig.XDSGCPAuthenticationFilterEnabled, true)
+	testutils.SetEnvConfig(t, &envconfig.GCPAuthenticationFilterEnabled, true)
 	registerMetadataConverter(audienceTypeURL, audienceConverter{})
 	t.Cleanup(func() {
 		unregisterMetadataConverterForTesting(audienceTypeURL)
@@ -1781,7 +1781,7 @@ func enableGCPAuthenticationFilter(t *testing.T) {
 // 2. Unregistering the audience converter (in case it was registered by init
 // or previous test)
 func disableGCPAuthenticationFilter(t *testing.T) {
-	testutils.SetEnvConfig(t, &envconfig.XDSGCPAuthenticationFilterEnabled, false)
+	testutils.SetEnvConfig(t, &envconfig.GCPAuthenticationFilterEnabled, false)
 	unregisterMetadataConverterForTesting(audienceTypeURL)
 }
 
@@ -1799,7 +1799,7 @@ func (s) TestValidateClusterAndConstructClusterUpdate_GCP_AUTHENTICATION_FILTER_
 		wantUpdate ClusterUpdate
 	}{
 		{
-			name: "typed_filter_metadata_in_endpoint",
+			name: "typed_filter_metadata_in_cluster",
 			cluster: &v3clusterpb.Cluster{
 				Name:                 v3ClusterName,
 				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
@@ -2021,76 +2021,6 @@ func (s) TestValidateClusterAndConstructClusterUpdate_GCP_AUTHENTICATION_FILTER_
 				Metadata: &v3corepb.Metadata{
 					FilterMetadata: map[string]*structpb.Struct{
 						"com.google.grpc.gcp_authn": {
-							Fields: map[string]*structpb.Value{
-								"url": structpb.NewStringValue("https://example.com"),
-							},
-						},
-					},
-				},
-			},
-			wantUpdate: ClusterUpdate{
-				ClusterName:     v3ClusterName,
-				EDSServiceName:  v3Service,
-				TelemetryLabels: xdsinternal.UnknownCSMLabels,
-			},
-		},
-		{
-			name: "typed_filter_metadata_over_filter_metadata_in_cluster",
-			cluster: &v3clusterpb.Cluster{
-				Name:                 v3ClusterName,
-				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
-				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
-					EdsConfig: &v3corepb.ConfigSource{
-						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
-							Ads: &v3corepb.AggregatedConfigSource{},
-						},
-					},
-					ServiceName: v3Service,
-				},
-				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
-				Metadata: &v3corepb.Metadata{
-					TypedFilterMetadata: map[string]*anypb.Any{
-						"com.google.grpc.gcp_authn": testutils.MarshalAny(t, &v3gcpauthnpb.Audience{
-							Url: "https://example.com",
-						}),
-					},
-					FilterMetadata: map[string]*structpb.Struct{
-						"com.google.grpc.gcp_authn": {
-							Fields: map[string]*structpb.Value{
-								"url": structpb.NewStringValue("https://example.com"),
-							},
-						},
-					},
-				},
-			},
-			wantUpdate: ClusterUpdate{
-				ClusterName:     v3ClusterName,
-				EDSServiceName:  v3Service,
-				TelemetryLabels: xdsinternal.UnknownCSMLabels,
-			},
-		},
-		{
-			name: "both_filter_and_typed_filter_metadata_in_cluster",
-			cluster: &v3clusterpb.Cluster{
-				Name:                 v3ClusterName,
-				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
-				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
-					EdsConfig: &v3corepb.ConfigSource{
-						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
-							Ads: &v3corepb.AggregatedConfigSource{},
-						},
-					},
-					ServiceName: v3Service,
-				},
-				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
-				Metadata: &v3corepb.Metadata{
-					TypedFilterMetadata: map[string]*anypb.Any{
-						"com.google.grpc.gcp_authn": testutils.MarshalAny(t, &v3gcpauthnpb.Audience{
-							Url: "https://example.com",
-						}),
-					},
-					FilterMetadata: map[string]*structpb.Struct{
-						"another-test-key": {
 							Fields: map[string]*structpb.Value{
 								"url": structpb.NewStringValue("https://example.com"),
 							},

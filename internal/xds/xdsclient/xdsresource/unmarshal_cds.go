@@ -216,9 +216,9 @@ func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster, serv
 	}
 
 	var metadata map[string]any
-	if envconfig.XDSGCPAuthenticationFilterEnabled {
+	if envconfig.GCPAuthenticationFilterEnabled {
 		var err error
-		if metadata, err = ValidateAndConstructMetadata(cluster.GetMetadata()); err != nil {
+		if metadata, err = validateAndConstructMetadata(cluster.GetMetadata()); err != nil {
 			return ClusterUpdate{}, err
 		}
 	}

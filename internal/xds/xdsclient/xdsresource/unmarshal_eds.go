@@ -152,7 +152,7 @@ func parseEndpoints(lbEndpoints []*v3endpointpb.LbEndpoint, uniqueEndpointAddrs 
 		var hashKey string
 		if envconfig.XDSHTTPConnectEnabled || !envconfig.XDSEndpointHashKeyBackwardCompat {
 			var err error
-			endpointMetadata, err = ValidateAndConstructMetadata(lbEndpoint.GetMetadata())
+			endpointMetadata, err = validateAndConstructMetadata(lbEndpoint.GetMetadata())
 			if err != nil {
 				return nil, err
 			}
@@ -246,7 +246,7 @@ func parseEDSRespProto(m *v3endpointpb.ClusterLoadAssignment) (EndpointsUpdate, 
 		var localityMetadata map[string]any
 		if envconfig.XDSHTTPConnectEnabled {
 			var err error
-			localityMetadata, err = ValidateAndConstructMetadata(locality.GetMetadata())
+			localityMetadata, err = validateAndConstructMetadata(locality.GetMetadata())
 			if err != nil {
 				return EndpointsUpdate{}, err
 			}
@@ -268,9 +268,9 @@ func parseEDSRespProto(m *v3endpointpb.ClusterLoadAssignment) (EndpointsUpdate, 
 	return ret, nil
 }
 
-// ValidateAndConstructMetadata processes the metadata from the xDS resource
+// validateAndConstructMetadata processes the metadata from the xDS resource
 // and returns a map of parsed metadata values.
-func ValidateAndConstructMetadata(metadataProto *v3corepb.Metadata) (map[string]any, error) {
+func validateAndConstructMetadata(metadataProto *v3corepb.Metadata) (map[string]any, error) {
 	if metadataProto == nil {
 		return nil, nil
 	}

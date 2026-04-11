@@ -21,17 +21,18 @@ import (
 	"fmt"
 	"net/netip"
 
-	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
-	v3gcpauthnpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/gcp_authn/v3"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/protobuf/types/known/anypb"
+
+	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	v3gcpauthnpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/gcp_authn/v3"
 )
 
 func init() {
 	if envconfig.XDSHTTPConnectEnabled {
 		registerMetadataConverter("type.googleapis.com/envoy.config.core.v3.Address", proxyAddressConvertor{})
 	}
-	if envconfig.XDSGCPAuthenticationFilterEnabled {
+	if envconfig.GCPAuthenticationFilterEnabled {
 		registerMetadataConverter("type.googleapis.com/envoy.extensions.filters.http.gcp_authn.v3.Audience", audienceConverter{})
 	}
 }
@@ -122,7 +123,7 @@ type audienceConverter struct{}
 func (audienceConverter) convert(anyProto *anypb.Any) (any, error) {
 	audienceProto := &v3gcpauthnpb.Audience{}
 	if err := anyProto.UnmarshalTo(audienceProto); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal resource from Any proto: %v", err)
+		return nil, fmt.Errorf("failed to unmarshal the envoy.extensions.filters.http.gcp_authn.v3.Audience resource from Any proto: %v", err)
 	}
 	if audienceProto.GetUrl() == "" {
 		return nil, fmt.Errorf("empty url field in audience metadata")

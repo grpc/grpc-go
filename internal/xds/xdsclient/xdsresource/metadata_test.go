@@ -19,10 +19,12 @@ package xdsresource
 import (
 	"testing"
 
-	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
-	v3gcpauthnpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/gcp_authn/v3"
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/internal/testutils"
+	"google.golang.org/protobuf/types/known/anypb"
+
+	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	v3gcpauthnpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/gcp_authn/v3"
 )
 
 const (
@@ -56,7 +58,7 @@ func (s) TestProxyAddressConverterSuccess(t *testing.T) {
 		want ProxyAddressMetadataValue
 	}{
 		{
-			name: "valid IPv4 address and port",
+			name: "valid_IPv4_address_and_port",
 			addr: &v3corepb.Address{
 				Address: &v3corepb.Address_SocketAddress{
 					SocketAddress: &v3corepb.SocketAddress{
@@ -72,7 +74,7 @@ func (s) TestProxyAddressConverterSuccess(t *testing.T) {
 			},
 		},
 		{
-			name: "valid full IPv6 address and port",
+			name: "valid_full_IPv6_address_and_port",
 			addr: &v3corepb.Address{
 				Address: &v3corepb.Address_SocketAddress{
 					SocketAddress: &v3corepb.SocketAddress{
@@ -88,7 +90,7 @@ func (s) TestProxyAddressConverterSuccess(t *testing.T) {
 			},
 		},
 		{
-			name: "valid shortened IPv6 address",
+			name: "valid_shortened_IPv6_address",
 			addr: &v3corepb.Address{
 				Address: &v3corepb.Address_SocketAddress{
 					SocketAddress: &v3corepb.SocketAddress{
@@ -104,7 +106,7 @@ func (s) TestProxyAddressConverterSuccess(t *testing.T) {
 			},
 		},
 		{
-			name: "valid link-local IPv6 address",
+			name: "valid_link-local_IPv6_address",
 			addr: &v3corepb.Address{
 				Address: &v3corepb.Address_SocketAddress{
 					SocketAddress: &v3corepb.SocketAddress{
@@ -120,7 +122,7 @@ func (s) TestProxyAddressConverterSuccess(t *testing.T) {
 			},
 		},
 		{
-			name: "valid IPv4-mapped IPv6 address",
+			name: "valid_IPv4-mapped_IPv6_address",
 			addr: &v3corepb.Address{
 				Address: &v3corepb.Address_SocketAddress{
 					SocketAddress: &v3corepb.SocketAddress{
@@ -163,7 +165,7 @@ func (s) TestProxyAddressConverterFailure(t *testing.T) {
 		wantErr string
 	}{
 		{
-			name: "invalid address",
+			name: "invalid_address",
 			addr: &v3corepb.Address{
 				Address: &v3corepb.Address_SocketAddress{
 					SocketAddress: &v3corepb.SocketAddress{
@@ -174,14 +176,14 @@ func (s) TestProxyAddressConverterFailure(t *testing.T) {
 			wantErr: "address field is not a valid IPv4 or IPv6 address: \"invalid-ip\"",
 		},
 		{
-			name: "missing socket_address",
+			name: "missing_socket_address",
 			addr: &v3corepb.Address{
 				// No SocketAddress field set.
 			},
 			wantErr: "no socket_address field in metadata",
 		},
 		{
-			name: "address is not a socket address",
+			name: "address_is_not_a_socket_address",
 			addr: &v3corepb.Address{
 				Address: &v3corepb.Address_EnvoyInternalAddress{
 					EnvoyInternalAddress: &v3corepb.EnvoyInternalAddress{
@@ -194,7 +196,7 @@ func (s) TestProxyAddressConverterFailure(t *testing.T) {
 			wantErr: "no socket_address field in metadata",
 		},
 		{
-			name: "port value not set",
+			name: "port_value_not_set",
 			addr: &v3corepb.Address{
 				Address: &v3corepb.Address_SocketAddress{
 					SocketAddress: &v3corepb.SocketAddress{
@@ -225,56 +227,38 @@ func (s) TestAudienceConverterSuccess(t *testing.T) {
 		t.Fatalf("Converter for %q not found in registry", audienceTypeURL)
 	}
 	tests := []struct {
-		name  string
-		proto *v3gcpauthnpb.Audience
-		want  AudienceMetadataValue
+		name     string
+		audience *anypb.Any
+		want     AudienceMetadataValue
+		wantErr  string
 	}{
 		{
-			name:  "valid audience",
-			proto: &v3gcpauthnpb.Audience{Url: "https://example.com"},
-			want:  AudienceMetadataValue{Audience: "https://example.com"},
+			name:     "valid_audience",
+			audience: testutils.MarshalAny(t, &v3gcpauthnpb.Audience{Url: "https://example.com"}),
+			want:     AudienceMetadataValue{Audience: "https://example.com"},
+		},
+		{
+			name:     "empty_audience",
+			audience: testutils.MarshalAny(t, &v3gcpauthnpb.Audience{Url: ""}),
+			want:     AudienceMetadataValue{Audience: ""},
+			wantErr:  "empty url field in audience metadata",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			anyProto := testutils.MarshalAny(t, tt.proto)
-			got, err := converter.convert(anyProto)
+			got, err := converter.convert(tt.audience)
+			if tt.wantErr != "" {
+				if err == nil || err.Error() != tt.wantErr {
+					t.Errorf("convert() got error = %v, wantErr = %q", err, tt.wantErr)
+				}
+				return
+			}
 			if err != nil {
 				t.Fatalf("convert() failed with error: %v", err)
 			}
 			if diff := cmp.Diff(tt.want, got); diff != "" {
-				t.Errorf("convert(%s) returned unexpected diff (-want +got):\n%s", anyProto.GetTypeUrl(), diff)
-			}
-		})
-	}
-}
-
-func (s) TestAudienceConverterFailure(t *testing.T) {
-	setupAudienceConverter(t)
-	converter := metadataConverterForType(audienceTypeURL)
-	if converter == nil {
-		t.Fatalf("Converter for %q not found in registry", audienceTypeURL)
-	}
-	tests := []struct {
-		name    string
-		proto   *v3gcpauthnpb.Audience
-		want    AudienceMetadataValue
-		wantErr string
-	}{
-		{
-			name:    "empty audience",
-			proto:   &v3gcpauthnpb.Audience{Url: ""},
-			wantErr: "empty url field in audience metadata",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			anyProto := testutils.MarshalAny(t, tt.proto)
-			_, err := converter.convert(anyProto)
-			if err == nil || err.Error() != tt.wantErr {
-				t.Errorf("convert() got error = %v, wantErr = %q", err, tt.wantErr)
+				t.Errorf("convert(%s) returned unexpected diff (-want +got):\n%s", tt.audience.GetTypeUrl(), diff)
 			}
 		})
 	}
