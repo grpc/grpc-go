@@ -317,8 +317,11 @@ func NewHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 	}
 	writeBufSize := opts.WriteBufferSize
 	readBufSize := opts.ReadBufferSize
+	// The default header list size is moving from 16MB to 8KB. The 8KB limit
+	// is only used if Enable8KBDefaultHeaderListSize is true; otherwise, the
+	// old 16MB default is used. User-specified options always take precedence.
 	maxHeaderListSize := defaultClientMaxHeaderListSize
-	if envconfig.DefaultHeaderListSize {
+	if envconfig.Enable8KBDefaultHeaderListSize {
 		maxHeaderListSize = upcomingDefaultHeaderListSize
 	}
 	if opts.MaxHeaderListSize != nil {
@@ -881,7 +884,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr, handler s
 				return false
 			}
 		}
-		if !envconfig.DefaultHeaderListSize && sz > int64(upcomingDefaultHeaderListSize) {
+		if !envconfig.Enable8KBDefaultHeaderListSize && sz > int64(upcomingDefaultHeaderListSize) {
 			t.logger.Warningf("Header list size to send (%d bytes) is larger than the upcoming default limit (%d bytes). In a future release, this will be restricted to %d bytes.", sz, upcomingDefaultHeaderListSize, upcomingDefaultHeaderListSize)
 		}
 		return true

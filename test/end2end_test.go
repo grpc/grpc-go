@@ -56,6 +56,7 @@ import (
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/binarylog"
 	"google.golang.org/grpc/internal/channelz"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/stubserver"
@@ -7182,5 +7183,114 @@ func (s) TestRPCBlockingOnPickerStatsCall(t *testing.T) {
 	}
 	if got, want := delayedPickCompleteCount, 1; got != want {
 		t.Fatalf("sh.delayedPickComplete count: %v, want: %v", got, want)
+	}
+}
+
+// TestEnable8KBDefaultHeaderListSize_ClientSendsLargeHeaders verifies that
+// when the Enable8KBDefaultHeaderListSize env var is enabled, and the client
+// sends metadata with a total size exceeding the 8KB default limit, the server
+// rejects the request and RPC will fail.
+func (s) TestEnable8KBDefaultHeaderListSize_ClientSendsLargeHeaders(t *testing.T) {
+	tests := []struct {
+		name    string
+		enable  bool
+		wantErr bool
+	}{
+		{
+			name:    "env_var_enabled",
+			enable:  true,
+			wantErr: true,
+		},
+		{
+			name:    "env_var_disabled",
+			enable:  false,
+			wantErr: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			testutils.SetEnvConfig(t, &envconfig.Enable8KBDefaultHeaderListSize, tc.enable)
+
+			ss := &stubserver.StubServer{
+				EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
+					return &testpb.Empty{}, nil
+				},
+			}
+			if err := ss.Start(nil); err != nil {
+				t.Fatal("Error starting server:", err)
+			}
+			defer ss.Stop()
+
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+			md := metadata.MD{"large-key": []string{strings.Repeat("a", 9000)}}
+			ctx = metadata.NewOutgoingContext(ctx, md)
+
+			_, err := ss.Client.EmptyCall(ctx, &testpb.Empty{})
+			if tc.wantErr {
+				if err == nil || status.Code(err) != codes.Unavailable {
+					t.Fatalf("EmptyCall() failed with err: %v, want err: %v", err, codes.Unavailable)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("EmptyCall() failed unexpectedly: %v", err)
+			}
+		})
+	}
+}
+
+// TestEnable8KBDefaultHeaderListSize_ServerSendsLargeHeaders verifies that
+// when the Enable8KBDefaultHeaderListSize env var is enabled, and server
+// sends metadata with a total size exceeding the 8KB default limit, the RPC
+// will fail.
+func (s) TestEnable8KBDefaultHeaderListSize_ServerSendsLargeHeaders(t *testing.T) {
+	tests := []struct {
+		name    string
+		enable  bool
+		wantErr bool
+	}{
+		{
+			name:    "env_var_enabled",
+			enable:  true,
+			wantErr: true,
+		},
+		{
+			name:    "env_var_disabled",
+			enable:  false,
+			wantErr: false,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			testutils.SetEnvConfig(t, &envconfig.Enable8KBDefaultHeaderListSize, tc.enable)
+
+			ss := &stubserver.StubServer{
+				EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
+					md := metadata.MD{"large-key": []string{strings.Repeat("a", 9000)}}
+					grpc.SetHeader(ctx, md)
+					return &testpb.Empty{}, nil
+				},
+			}
+			if err := ss.Start(nil); err != nil {
+				t.Fatal("Error starting server:", err)
+			}
+			defer ss.Stop()
+
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+
+			_, err := ss.Client.EmptyCall(ctx, &testpb.Empty{})
+			if tc.wantErr {
+				if err == nil || status.Code(err) != codes.Unavailable {
+					t.Fatalf("EmptyCall() failed with err: %v, want err: %v", err, codes.Unavailable)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("EmptyCall() failed unexpectedly: %v", err)
+			}
+		})
 	}
 }

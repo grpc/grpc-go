@@ -166,8 +166,11 @@ func NewServerTransport(conn net.Conn, config *ServerConfig) (_ ServerTransport,
 	}
 	writeBufSize := config.WriteBufferSize
 	readBufSize := config.ReadBufferSize
+	// The default header list size is moving from 16MB to 8KB. The 8KB limit
+	// is only used if Enable8KBDefaultHeaderListSize is true; otherwise, the
+	// old 16MB default is used. User-specified options always take precedence.
 	maxHeaderListSize := defaultServerMaxHeaderListSize
-	if envconfig.DefaultHeaderListSize {
+	if envconfig.Enable8KBDefaultHeaderListSize {
 		maxHeaderListSize = upcomingDefaultHeaderListSize
 	}
 	if config.MaxHeaderListSize != nil {
@@ -952,7 +955,7 @@ func (t *http2Server) checkForHeaderListSize(hf []hpack.HeaderField) bool {
 			return false
 		}
 	}
-	if !envconfig.DefaultHeaderListSize && sz > int64(upcomingDefaultHeaderListSize) {
+	if !envconfig.Enable8KBDefaultHeaderListSize && sz > int64(upcomingDefaultHeaderListSize) {
 		t.logger.Warningf("Header list size to send (%d bytes) is larger than the upcoming default limit (%d bytes). In a future release, this will be restricted to %d bytes.", sz, upcomingDefaultHeaderListSize, upcomingDefaultHeaderListSize)
 	}
 	return true
@@ -962,6 +965,7 @@ func (t *http2Server) checkForHeaderListSize(hf []hpack.HeaderField) bool {
 // gRPC status. If the header list size exceeds the peer's limit, it sends a
 // RST_STREAM instead.
 func (t *http2Server) writeEarlyAbort(streamID uint32, contentSubtype string, stat *status.Status, httpStatus uint32, rst bool) {
+	fmt.Println("writeEarlyAbort")
 	hf := []hpack.HeaderField{
 		{Name: ":status", Value: strconv.Itoa(int(httpStatus))},
 		{Name: "content-type", Value: grpcutil.ContentType(contentSubtype)},
