@@ -3909,6 +3909,9 @@ func (s) TestUnaryRPC_ServerCallSendMsgTwice(t *testing.T) {
 func (s) TestClientStreaming_ClientCallRecvMsgTwice(t *testing.T) {
 	ss := stubserver.StubServer{
 		StreamingInputCallF: func(stream testgrpc.TestService_StreamingInputCallServer) error {
+			if err := stream.RecvMsg(&testpb.StreamingInputCallRequest{}); err != nil {
+				t.Errorf("stream.RecvMsg() = %v, want <nil>", err)
+			}
 			if err := stream.SendAndClose(&testpb.StreamingInputCallResponse{}); err != nil {
 				t.Errorf("stream.SendAndClose(_) = %v, want <nil>", err)
 			}
