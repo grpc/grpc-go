@@ -21,21 +21,18 @@ package xdsdepmgr_test
 import (
 	"context"
 	"fmt"
-	"regexp"
 	"strings"
 	"testing"
 	"time"
 
-	xxhash "github.com/cespare/xxhash/v2"
 	"github.com/envoyproxy/go-control-plane/pkg/wellknown"
-	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/google/uuid"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/internal/xds/clients"
+	xdstestutils "google.golang.org/grpc/internal/xds/test/e2e"
 	"google.golang.org/grpc/internal/xds/xdsclient"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 	"google.golang.org/grpc/internal/xds/xdsdepmgr"
@@ -140,124 +137,6 @@ func verifyError(ctx context.Context, errCh chan error, wantErr, wantNodeID stri
 		return fmt.Errorf("timeout waiting for error from dependency manager")
 	}
 	return nil
-}
-
-// This function determines the stable, canonical order for any two
-// resolver.Endpoint structs.
-func lessEndpoint(a, b resolver.Endpoint) bool {
-	return getHash(a) < getHash(b)
-}
-
-func getHash(e resolver.Endpoint) uint64 {
-	h := xxhash.New()
-
-	// We iterate through all addresses to ensure the hash represents
-	// the full endpoint identity.
-	for _, addr := range e.Addresses {
-		h.Write([]byte(addr.Addr))
-		h.Write([]byte(addr.ServerName))
-	}
-
-	return h.Sum64()
-}
-
-func verifyXDSConfig(ctx context.Context, xdsCh chan *xdsresource.XDSConfig, errCh chan error, want *xdsresource.XDSConfig) error {
-	select {
-	case <-ctx.Done():
-		return fmt.Errorf("timeout waiting for update from dependency manager")
-	case update := <-xdsCh:
-		cmpOpts := []cmp.Option{
-			cmpopts.EquateEmpty(),
-			cmpopts.IgnoreFields(xdsresource.HTTPFilter{}, "Filter", "Config"),
-			cmpopts.IgnoreFields(xdsresource.ListenerUpdate{}, "Raw"),
-			cmpopts.IgnoreFields(xdsresource.RouteConfigUpdate{}, "Raw"),
-			cmpopts.IgnoreFields(xdsresource.ClusterUpdate{}, "Raw", "LBPolicy", "TelemetryLabels"),
-			cmpopts.IgnoreFields(xdsresource.EndpointsUpdate{}, "Raw"),
-			// Used for EndpointConfig.ResolutionNote and ClusterResult.Err fields.
-			cmp.Transformer("ErrorsToString", func(in error) string {
-				if in == nil {
-					return "" // Treat nil as an empty string
-				}
-				s := in.Error()
-
-				// Replace all sequences of whitespace (including newlines and
-				// tabs) with a single standard space.
-				s = regexp.MustCompile(`\s+`).ReplaceAllString(s, " ")
-
-				// Trim any leading/trailing space that might be left over and
-				// return error as string.
-				return strings.TrimSpace(s)
-			}),
-			cmpopts.SortSlices(lessEndpoint),
-		}
-		if diff := cmp.Diff(update, want, cmpOpts...); diff != "" {
-			return fmt.Errorf("received unexpected update from dependency manager. Diff (-got +want):\n%v", diff)
-		}
-	case err := <-errCh:
-		return fmt.Errorf("received unexpected error from dependency manager: %v", err)
-	}
-	return nil
-}
-
-func makeXDSConfig(routeConfigName, clusterName, edsServiceName, addr string) *xdsresource.XDSConfig {
-	return &xdsresource.XDSConfig{
-		Listener: &xdsresource.ListenerUpdate{
-			APIListener: &xdsresource.HTTPConnectionManagerConfig{
-				RouteConfigName: routeConfigName,
-				HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
-			},
-		},
-		RouteConfig: &xdsresource.RouteConfigUpdate{
-			VirtualHosts: []*xdsresource.VirtualHost{
-				{
-					Domains: []string{defaultTestServiceName},
-					Routes: []*xdsresource.Route{{
-						Prefix:           newStringP("/"),
-						WeightedClusters: []xdsresource.WeightedCluster{{Name: clusterName, Weight: 100}},
-						ActionType:       xdsresource.RouteActionRoute,
-					}},
-				},
-			},
-		},
-		VirtualHost: &xdsresource.VirtualHost{
-			Domains: []string{defaultTestServiceName},
-			Routes: []*xdsresource.Route{{
-				Prefix:           newStringP("/"),
-				WeightedClusters: []xdsresource.WeightedCluster{{Name: clusterName, Weight: 100}},
-				ActionType:       xdsresource.RouteActionRoute},
-			},
-		},
-		Clusters: map[string]*xdsresource.ClusterResult{
-			clusterName: {
-				Config: xdsresource.ClusterConfig{Cluster: &xdsresource.ClusterUpdate{
-					ClusterType:    xdsresource.ClusterTypeEDS,
-					ClusterName:    clusterName,
-					EDSServiceName: edsServiceName,
-				},
-					EndpointConfig: &xdsresource.EndpointConfig{
-						EDSUpdate: &xdsresource.EndpointsUpdate{
-							Localities: []xdsresource.Locality{
-								{ID: clients.Locality{
-									Region:  "region-1",
-									Zone:    "zone-1",
-									SubZone: "subzone-1",
-								},
-									Endpoints: []xdsresource.Endpoint{
-										{
-											ResolverEndpoint: resolver.Endpoint{Addresses: []resolver.Address{{Addr: addr}}},
-											HealthStatus:     xdsresource.EndpointHealthStatusUnknown,
-											Weight:           1,
-										},
-									},
-									Weight: 1,
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-	}
 }
 
 // setupManagementServerAndClient creates a management server, an xds client and
@@ -365,8 +244,8 @@ func (s) TestHappyCase(t *testing.T) {
 
 	dm := xdsdepmgr.New(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
 	defer dm.Close()
-	wantXdsConfig := makeXDSConfig(resources.Routes[0].Name, resources.Clusters[0].Name, resources.Clusters[0].EdsClusterConfig.ServiceName, "localhost:8080")
-	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
+	wantXdsConfig := xdstestutils.MakeXDSConfig(defaultTestServiceName, resources.Routes[0].Name, resources.Clusters[0].Name, resources.Clusters[0].EdsClusterConfig.ServiceName, "localhost:8080")
+	if err := xdstestutils.VerifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -414,11 +293,11 @@ func (s) TestInlineRouteConfig(t *testing.T) {
 	dm := xdsdepmgr.New(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
 	defer dm.Close()
 
-	wantXdsConfig := makeXDSConfig(defaultTestRouteConfigName, defaultTestClusterName, defaultTestEDSServiceName, "localhost:8080")
+	wantXdsConfig := xdstestutils.MakeXDSConfig(defaultTestServiceName, defaultTestRouteConfigName, defaultTestClusterName, defaultTestEDSServiceName, "localhost:8080")
 	wantXdsConfig.Listener.APIListener.InlineRouteConfig = wantXdsConfig.RouteConfig
 	wantXdsConfig.Listener.APIListener.RouteConfigName = ""
 
-	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
+	if err := xdstestutils.VerifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -483,8 +362,8 @@ func (s) TestListenerResourceNotFoundError(t *testing.T) {
 
 	dm := xdsdepmgr.New(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
 	defer dm.Close()
-	wantXdsConfig := makeXDSConfig(resources.Routes[0].Name, resources.Clusters[0].Name, resources.Clusters[0].EdsClusterConfig.ServiceName, "localhost:8080")
-	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
+	wantXdsConfig := xdstestutils.MakeXDSConfig(defaultTestServiceName, resources.Routes[0].Name, resources.Clusters[0].Name, resources.Clusters[0].EdsClusterConfig.ServiceName, "localhost:8080")
+	if err := xdstestutils.VerifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
 		t.Fatal(err)
 	}
 
@@ -604,8 +483,8 @@ func (s) TestNoVirtualHost_ExistingResource(t *testing.T) {
 	defer dm.Close()
 
 	// Verify valid update.
-	wantXdsConfig := makeXDSConfig(resources.Routes[0].Name, resources.Clusters[0].Name, resources.Endpoints[0].ClusterName, "localhost:8080")
-	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
+	wantXdsConfig := xdstestutils.MakeXDSConfig(defaultTestServiceName, resources.Routes[0].Name, resources.Clusters[0].Name, resources.Endpoints[0].ClusterName, "localhost:8080")
+	if err := xdstestutils.VerifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
 		t.Fatal(err)
 	}
 
@@ -655,8 +534,8 @@ func (s) TestAmbientError(t *testing.T) {
 	defer dm.Close()
 
 	// Wait for the initial valid update.
-	wantXdsConfig := makeXDSConfig(resources.Routes[0].Name, resources.Clusters[0].Name, resources.Clusters[0].EdsClusterConfig.ServiceName, "localhost:8080")
-	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
+	wantXdsConfig := xdstestutils.MakeXDSConfig(defaultTestServiceName, resources.Routes[0].Name, resources.Clusters[0].Name, resources.Clusters[0].EdsClusterConfig.ServiceName, "localhost:8080")
+	if err := xdstestutils.VerifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
 		t.Fatal(err)
 	}
 
@@ -707,7 +586,7 @@ func (s) TestAmbientError(t *testing.T) {
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
-	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
+	if err := xdstestutils.VerifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -739,8 +618,8 @@ func (s) TestRouteResourceUpdate(t *testing.T) {
 	defer dm.Close()
 
 	// Wait for the first update.
-	wantXdsConfig := makeXDSConfig(resources.Routes[0].Name, resources.Clusters[0].Name, resources.Clusters[0].EdsClusterConfig.ServiceName, "localhost:8080")
-	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
+	wantXdsConfig := xdstestutils.MakeXDSConfig(defaultTestServiceName, resources.Routes[0].Name, resources.Clusters[0].Name, resources.Clusters[0].EdsClusterConfig.ServiceName, "localhost:8080")
+	if err := xdstestutils.VerifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
 		t.Fatal(err)
 	}
 
@@ -790,7 +669,7 @@ func (s) TestRouteResourceUpdate(t *testing.T) {
 			},
 		},
 	}
-	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
+	if err := xdstestutils.VerifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -824,8 +703,8 @@ func (s) TestRouteResourceChangeToInline(t *testing.T) {
 	defer dm.Close()
 
 	// Wait for the first update.
-	wantXdsConfig := makeXDSConfig(resources.Routes[0].Name, resources.Clusters[0].Name, resources.Clusters[0].EdsClusterConfig.ServiceName, "localhost:8080")
-	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
+	wantXdsConfig := xdstestutils.MakeXDSConfig(defaultTestServiceName, resources.Routes[0].Name, resources.Clusters[0].Name, resources.Clusters[0].EdsClusterConfig.ServiceName, "localhost:8080")
+	if err := xdstestutils.VerifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
 		t.Fatal(err)
 	}
 
@@ -915,7 +794,7 @@ func (s) TestRouteResourceChangeToInline(t *testing.T) {
 			},
 		},
 	}
-	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantInlineXdsConfig); err != nil {
+	if err := xdstestutils.VerifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantInlineXdsConfig); err != nil {
 		t.Fatal(err)
 	}
 
@@ -930,7 +809,7 @@ func (s) TestRouteResourceChangeToInline(t *testing.T) {
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
-	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
+	if err := xdstestutils.VerifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -969,10 +848,10 @@ func (s) TestClusterResourceError(t *testing.T) {
 	// call.
 	defer watcher.close()
 
-	wantXdsConfig := makeXDSConfig(resources.Routes[0].Name, resources.Clusters[0].Name, resources.Clusters[0].EdsClusterConfig.ServiceName, "localhost:8080")
+	wantXdsConfig := xdstestutils.MakeXDSConfig(defaultTestServiceName, resources.Routes[0].Name, resources.Clusters[0].Name, resources.Clusters[0].EdsClusterConfig.ServiceName, "localhost:8080")
 	wantXdsConfig.Clusters[resources.Clusters[0].Name] = &xdsresource.ClusterResult{Err: fmt.Errorf("[xDS node id: %v]: %v", nodeID, fmt.Errorf("unsupported config_source_specifier *corev3.ConfigSource_Ads in lrs_server field"))}
 
-	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
+	if err := xdstestutils.VerifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -1009,8 +888,8 @@ func (s) TestClusterAmbientError(t *testing.T) {
 	dm := xdsdepmgr.New(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
 	defer dm.Close()
 
-	wantXdsConfig := makeXDSConfig(resources.Routes[0].Name, resources.Clusters[0].Name, resources.Clusters[0].EdsClusterConfig.ServiceName, "localhost:8080")
-	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
+	wantXdsConfig := xdstestutils.MakeXDSConfig(defaultTestServiceName, resources.Routes[0].Name, resources.Clusters[0].Name, resources.Clusters[0].EdsClusterConfig.ServiceName, "localhost:8080")
+	if err := xdstestutils.VerifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1041,7 +920,7 @@ func (s) TestClusterAmbientError(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
+	if err := xdstestutils.VerifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -1186,7 +1065,7 @@ func (s) TestAggregateCluster(t *testing.T) {
 		},
 	}
 
-	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
+	if err := xdstestutils.VerifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1307,7 +1186,7 @@ func (s) TestAggregateClusterChildError(t *testing.T) {
 		},
 	}
 
-	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
+	if err := xdstestutils.VerifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -1380,7 +1259,7 @@ func (s) TestAggregateClusterNoLeafCluster(t *testing.T) {
 		},
 	}
 
-	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
+	if err := xdstestutils.VerifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -1461,7 +1340,7 @@ func (s) TestAggregateClusterMaxDepth(t *testing.T) {
 		}
 	}
 
-	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
+	if err := xdstestutils.VerifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -1497,8 +1376,8 @@ func (s) TestEndpointAmbientError(t *testing.T) {
 	dm := xdsdepmgr.New(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
 	defer dm.Close()
 
-	wantXdsConfig := makeXDSConfig(resources.Routes[0].Name, resources.Clusters[0].Name, resources.Clusters[0].EdsClusterConfig.ServiceName, "localhost:8080")
-	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
+	wantXdsConfig := xdstestutils.MakeXDSConfig(defaultTestServiceName, resources.Routes[0].Name, resources.Clusters[0].Name, resources.Clusters[0].EdsClusterConfig.ServiceName, "localhost:8080")
+	if err := xdstestutils.VerifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1536,7 +1415,7 @@ func (s) TestEndpointAmbientError(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
+	if err := xdstestutils.VerifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -1570,8 +1449,8 @@ func (s) TestClusterSubscription_Lifecycle(t *testing.T) {
 	defer dm.Close()
 
 	// Verify initial update.
-	wantXdsConfig := makeXDSConfig(resources.Routes[0].Name, resources.Clusters[0].Name, resources.Clusters[0].EdsClusterConfig.ServiceName, "localhost:8080")
-	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
+	wantXdsConfig := xdstestutils.MakeXDSConfig(defaultTestServiceName, resources.Routes[0].Name, resources.Clusters[0].Name, resources.Clusters[0].EdsClusterConfig.ServiceName, "localhost:8080")
+	if err := xdstestutils.VerifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1685,7 +1564,7 @@ func (s) TestClusterSubscription_Lifecycle(t *testing.T) {
 			},
 		},
 	}
-	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXDSConfig); err != nil {
+	if err := xdstestutils.VerifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXDSConfig); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1706,9 +1585,9 @@ func (s) TestClusterSubscription_Lifecycle(t *testing.T) {
 
 	unsubscribe2()
 	// Now "clusterName" should be removed. "newClusterName" should remain.
-	wantXdsConfig = makeXDSConfig(resources.Routes[0].Name, newClusterName, newEDSServcie, "localhost:8081")
+	wantXdsConfig = xdstestutils.MakeXDSConfig(defaultTestServiceName, resources.Routes[0].Name, newClusterName, newEDSServcie, "localhost:8081")
 
-	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
+	if err := xdstestutils.VerifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -1744,8 +1623,8 @@ func (s) TestUpdateWithUnresolvedDynamicSubscription(t *testing.T) {
 	dm := xdsdepmgr.New(defaultTestServiceName, defaultTestServiceName, xdsClient, watcher)
 	defer dm.Close()
 
-	wantXdsConfig := makeXDSConfig(resources.Routes[0].Name, resources.Clusters[0].Name, resources.Clusters[0].EdsClusterConfig.ServiceName, "localhost:8080")
-	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
+	wantXdsConfig := xdstestutils.MakeXDSConfig(defaultTestServiceName, resources.Routes[0].Name, resources.Clusters[0].Name, resources.Clusters[0].EdsClusterConfig.ServiceName, "localhost:8080")
+	if err := xdstestutils.VerifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1758,7 +1637,7 @@ func (s) TestUpdateWithUnresolvedDynamicSubscription(t *testing.T) {
 	dm.SubscribeToCluster(newClusterName)
 
 	// Verify that update is received since all static clusters are present.
-	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
+	if err := xdstestutils.VerifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1772,8 +1651,8 @@ func (s) TestUpdateWithUnresolvedDynamicSubscription(t *testing.T) {
 
 	// Verify that we get the update even though we have a subscription to
 	// new-cluster-name which has no resources yet.
-	wantXdsConfig = makeXDSConfig(resources.Routes[0].Name, resources.Clusters[0].Name, resources.Clusters[0].EdsClusterConfig.ServiceName, "localhost:9090")
-	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
+	wantXdsConfig = xdstestutils.MakeXDSConfig(defaultTestServiceName, resources.Routes[0].Name, resources.Clusters[0].Name, resources.Clusters[0].EdsClusterConfig.ServiceName, "localhost:9090")
+	if err := xdstestutils.VerifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1790,7 +1669,7 @@ func (s) TestUpdateWithUnresolvedDynamicSubscription(t *testing.T) {
 	// clusters are fully resolved at this point. A subsequent update with both
 	// clusters will be sent when the EDS resource corresponding to the dynamic
 	// cluster is also received.
-	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
+	if err := xdstestutils.VerifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1875,7 +1754,7 @@ func (s) TestUpdateWithUnresolvedDynamicSubscription(t *testing.T) {
 		},
 	}
 	// Verify both clusters are now present.
-	if err := verifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
+	if err := xdstestutils.VerifyXDSConfig(ctx, watcher.updateCh, watcher.errorCh, wantXdsConfig); err != nil {
 		t.Fatal(err)
 	}
 }
