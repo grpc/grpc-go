@@ -454,7 +454,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			},
 		},
 		{
-			name:     "v3_with_disabled_custom_filter",
+			name:     "disabled_custom_filter",
 			resource: v3LisWithFilters(disabledCustomFilter),
 			wantName: v3LDSTarget,
 			wantUpdate: ListenerUpdate{
