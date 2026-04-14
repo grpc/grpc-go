@@ -18,18 +18,18 @@
  *
  */
 
-package transport
+package readyreader
 
 func isRawConnSupported() bool {
 	return false
 }
 
 // sysRead is not implemented. Support can be added in the future if necessary.
-func sysRead(fd uintptr, p []byte) (int, error) {
+func sysRead(uintptr, []byte) (int, error) {
 	panic("RawConn functionality is not implemented for non-unix platforms.")
 }
 
 // wouldBlock is not implemented. Support can be added in the future if necessary.
-func wouldBlock(err error) bool {
+func wouldBlock(error) bool {
 	panic("RawConn functionality is not implemented for non-unix platforms.")
 }
