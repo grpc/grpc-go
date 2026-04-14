@@ -86,23 +86,24 @@ func newNonBlockingReader(r io.Reader) Reader {
 	if !ok {
 		return nil
 	}
-	if raw, err := sysConn.SyscallConn(); err == nil {
-		r := &nonBlockingReader{raw: raw}
-		r.doRead = func(fd uintptr) bool {
-			s := &r.state
-
-			s.buf = s.pool.Get(s.bufSize)
-			s.bytesRead, s.readError = sysRead(fd, *s.buf)
-
-			if s.readError != nil {
-				s.pool.Put(s.buf)
-				s.buf = nil
-			}
-			return !wouldBlock(s.readError)
-		}
-		return r
+	raw, err := sysConn.SyscallConn()
+	if err != nil {
+		return nil
 	}
-	return nil
+	rr := &nonBlockingReader{raw: raw}
+	rr.doRead = func(fd uintptr) bool {
+		s := &rr.state
+
+		s.buf = s.pool.Get(s.bufSize)
+		s.bytesRead, s.readError = sysRead(fd, *s.buf)
+
+		if s.readError != nil {
+			s.pool.Put(s.buf)
+			s.buf = nil
+		}
+		return !wouldBlock(s.readError)
+	}
+	return rr
 }
 
 func (c *nonBlockingReader) ReadOnReady(bufSize int, pool mem.BufferPool) (*[]byte, int, error) {
