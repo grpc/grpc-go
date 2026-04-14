@@ -31,7 +31,12 @@ type FilterConfig interface {
 	isFilterConfig()
 }
 
-// DisabledFilterConfig represents a disabled filter override.
+// DisabledFilterConfig represents a disabled filter override. It implements the
+// FilterConfig interface and can be returned by ParseFilterConfigOverride to
+// indicate that the filter should be disabled. It is not used as a config for
+// any filter, and is only used as a marker in the override configuration. For
+// more information, see
+// envoyproxy.io/docs/envoy/latest/intro/arch_overview/http/http_filters#route-based-filter-chain
 type DisabledFilterConfig struct{}
 
 func (DisabledFilterConfig) isFilterConfig() {}

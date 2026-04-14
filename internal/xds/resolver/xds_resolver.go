@@ -610,6 +610,9 @@ func (r *xdsResolver) newInterceptor(filters []xdsresource.HTTPFilter, clusterOv
 		}
 
 		if disable {
+			if r.logger.V(2) {
+				r.logger.Infof("Filter %q has been disabled.", filter.Name)
+			}
 			continue
 		}
 
