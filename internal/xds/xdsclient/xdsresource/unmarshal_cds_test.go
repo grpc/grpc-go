@@ -1832,41 +1832,6 @@ func (s) TestValidateClusterAndConstructClusterUpdate_GCP_AUTHENTICATION_FILTER_
 			},
 		},
 		{
-			name: "filter_metadata_in_cluster",
-			cluster: &v3clusterpb.Cluster{
-				Name:                 v3ClusterName,
-				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
-				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
-					EdsConfig: &v3corepb.ConfigSource{
-						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
-							Ads: &v3corepb.AggregatedConfigSource{},
-						},
-					},
-					ServiceName: v3Service,
-				},
-				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
-				Metadata: &v3corepb.Metadata{
-					FilterMetadata: map[string]*structpb.Struct{
-						"com.google.grpc.gcp_authn": {
-							Fields: map[string]*structpb.Value{
-								"url": structpb.NewStringValue("https://example.com"),
-							},
-						},
-					},
-				},
-			},
-			wantUpdate: ClusterUpdate{
-				ClusterName:    v3ClusterName,
-				EDSServiceName: v3Service,
-				Metadata: map[string]any{
-					"com.google.grpc.gcp_authn": StructMetadataValue{Data: map[string]any{
-						"url": "https://example.com",
-					}},
-				},
-				TelemetryLabels: xdsinternal.UnknownCSMLabels,
-			},
-		},
-		{
 			name: "typed_filter_metadata_over_filter_metadata_in_cluster",
 			cluster: &v3clusterpb.Cluster{
 				Name:                 v3ClusterName,
@@ -1995,36 +1960,6 @@ func (s) TestValidateClusterAndConstructClusterUpdate_GCP_AUTHENTICATION_FILTER_
 						"com.google.grpc.gcp_authn": testutils.MarshalAny(t, &v3gcpauthnpb.Audience{
 							Url: "https://example.com",
 						}),
-					},
-				},
-			},
-			wantUpdate: ClusterUpdate{
-				ClusterName:     v3ClusterName,
-				EDSServiceName:  v3Service,
-				TelemetryLabels: xdsinternal.UnknownCSMLabels,
-			},
-		},
-		{
-			name: "filter_metadata_in_cluster",
-			cluster: &v3clusterpb.Cluster{
-				Name:                 v3ClusterName,
-				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
-				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
-					EdsConfig: &v3corepb.ConfigSource{
-						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
-							Ads: &v3corepb.AggregatedConfigSource{},
-						},
-					},
-					ServiceName: v3Service,
-				},
-				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
-				Metadata: &v3corepb.Metadata{
-					FilterMetadata: map[string]*structpb.Struct{
-						"com.google.grpc.gcp_authn": {
-							Fields: map[string]*structpb.Value{
-								"url": structpb.NewStringValue("https://example.com"),
-							},
-						},
 					},
 				},
 			},
