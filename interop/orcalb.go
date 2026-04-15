@@ -140,25 +140,23 @@ func (b *orcab) updateSubConnState(sc balancer.SubConn, state balancer.SubConnSt
 
 	if state.ConnectivityState == connectivity.Ready {
 		oldStop := b.stopOOBListeners[sc]
+		defer func() {
+			if oldStop != nil {
+				oldStop()
+			}
+		}()
 		stop := orca.RegisterOOBListener(sc, &orcaOOBListener{subConn: sc, balancer: b}, orca.OOBListenerOptions{ReportInterval: time.Second})
 		b.stopOOBListeners[sc] = stop
 		b.mu.Unlock()
-
-		if oldStop != nil {
-			oldStop()
-		}
 		return
 	}
 
 	stop := b.stopOOBListeners[sc]
 	if stop != nil {
 		delete(b.stopOOBListeners, sc)
+		defer func() { stop() }()
 	}
 	b.mu.Unlock()
-
-	if stop != nil {
-		stop()
-	}
 
 	if state.ConnectivityState == connectivity.Shutdown {
 		b.oobState.mu.Lock()
@@ -188,9 +186,6 @@ type orcaOOBListener struct {
 
 // OnLoadReport implements orca.OOBListener.
 func (l *orcaOOBListener) OnLoadReport(r *v3orcapb.OrcaLoadReport) {
-	if r == nil {
-		return
-	}
 	l.balancer.oobState.mu.Lock()
 	defer l.balancer.oobState.mu.Unlock()
 	l.balancer.oobState.reports[l.subConn] = r
@@ -218,11 +213,7 @@ func (p *orcaPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 	origDone := res.Done
 	res.Done = func(di balancer.DoneInfo) {
 		perRPCLR, _ := di.ServerLoad.(*v3orcapb.OrcaLoadReport)
-		hasMetrics := perRPCLR != nil && (perRPCLR.CpuUtilization != 0 ||
-			perRPCLR.MemUtilization != 0 ||
-			len(perRPCLR.Utilization) > 0 ||
-			len(perRPCLR.RequestCost) > 0)
-		if hasMetrics {
+		if perRPCLR != nil && (perRPCLR.CpuUtilization != 0 || perRPCLR.MemUtilization != 0 || len(perRPCLR.Utilization) > 0 || len(perRPCLR.RequestCost) > 0) {
 			setContextCMR(info.Ctx, perRPCLR)
 		} else if lr != nil {
 			setContextCMR(info.Ctx, lr)

@@ -23,7 +23,6 @@ import (
 	"testing"
 	"time"
 
-	v3orcapb "github.com/cncf/xds/go/xds/data/orca/v3"
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -31,9 +30,12 @@ import (
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/stubserver"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	testpb "google.golang.org/grpc/interop/grpc_testing"
 	"google.golang.org/grpc/orca"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
+
+	v3orcapb "github.com/cncf/xds/go/xds/data/orca/v3"
 	"google.golang.org/protobuf/testing/protocmp"
 )
 
@@ -59,7 +61,7 @@ func startORCAServer(t *testing.T) *orcaServer {
 	ts := NewTestServer(NewTestServerOptions{MetricsRecorder: smr})
 
 	stub := &stubserver.StubServer{
-		UnaryCallF: func(ctx context.Context, in *testgrpc.SimpleRequest) (*testgrpc.SimpleResponse, error) {
+		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			return ts.UnaryCall(ctx, in)
 		},
 		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
@@ -140,13 +142,13 @@ func (s) TestORCAOOBFallback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FullDuplexCall failed: %v", err)
 	}
-	req := &testgrpc.StreamingOutputCallRequest{
-		OrcaOobReport: &testgrpc.TestOrcaReport{
+	req := &testpb.StreamingOutputCallRequest{
+		OrcaOobReport: &testpb.TestOrcaReport{
 			CpuUtilization:    0.73,
 			MemoryUtilization: 0.55,
 			Utilization:       map[string]float64{"util": 0.42},
 		},
-		ResponseParameters: []*testgrpc.ResponseParameters{{Size: 1}},
+		ResponseParameters: []*testpb.ResponseParameters{{Size: 1}},
 	}
 	if err := stream.Send(req); err != nil {
 		t.Fatalf("stream.Send failed: %v", err)
@@ -165,7 +167,7 @@ func (s) TestORCAOOBFallback(t *testing.T) {
 	// OrcaPerQueryReport is nil: per-call report has all-zero fields,
 	// triggering the OOB fallback path in orcaPicker.
 	orcaRes := &v3orcapb.OrcaLoadReport{}
-	if _, err := srv.Client.UnaryCall(contextWithORCAResult(ctx, &orcaRes), &testgrpc.SimpleRequest{}); err != nil {
+	if _, err := srv.Client.UnaryCall(contextWithORCAResult(ctx, &orcaRes), &testpb.SimpleRequest{}); err != nil {
 		t.Fatalf("UnaryCall failed: %v", err)
 	}
 	if diff := cmp.Diff(orcaRes, oobWant, protocmp.Transform()); diff != "" {
@@ -200,8 +202,8 @@ func (s) TestEndpoints_MultipleAddresses(t *testing.T) {
 	want := &v3orcapb.OrcaLoadReport{CpuUtilization: 0.42, MemUtilization: 0.21}
 	for ; ctx.Err() == nil; <-time.After(100 * time.Millisecond) {
 		orcaRes := &v3orcapb.OrcaLoadReport{}
-		req := &testgrpc.SimpleRequest{
-			OrcaPerQueryReport: &testgrpc.TestOrcaReport{
+		req := &testpb.SimpleRequest{
+			OrcaPerQueryReport: &testpb.TestOrcaReport{
 				CpuUtilization:    0.42,
 				MemoryUtilization: 0.21,
 			},
@@ -258,7 +260,7 @@ func (s) TestMultipleEndpoints_OOBListeners(t *testing.T) {
 	seenA, seenB := false, false
 	for ; ctx.Err() == nil && (!seenA || !seenB); <-time.After(100 * time.Millisecond) {
 		orcaRes := &v3orcapb.OrcaLoadReport{}
-		if _, err := tc.UnaryCall(contextWithORCAResult(ctx, &orcaRes), &testgrpc.SimpleRequest{}); err != nil {
+		if _, err := tc.UnaryCall(contextWithORCAResult(ctx, &orcaRes), &testpb.SimpleRequest{}); err != nil {
 			continue
 		}
 		if diff := cmp.Diff(orcaRes, wantA, protocmp.Transform()); diff == "" {
@@ -305,8 +307,8 @@ func (s) TestEndpointUpdate(t *testing.T) {
 	r.UpdateState(state)
 
 	orcaRes := &v3orcapb.OrcaLoadReport{}
-	req := &testgrpc.SimpleRequest{
-		OrcaPerQueryReport: &testgrpc.TestOrcaReport{
+	req := &testpb.SimpleRequest{
+		OrcaPerQueryReport: &testpb.TestOrcaReport{
 			CpuUtilization:    0.11,
 			MemoryUtilization: 0.22,
 		},
@@ -334,7 +336,7 @@ func (s) TestEndpointUpdate(t *testing.T) {
 	wantB := &v3orcapb.OrcaLoadReport{CpuUtilization: 0.77}
 	for ; ctx.Err() == nil; <-time.After(100 * time.Millisecond) {
 		orcaRes := &v3orcapb.OrcaLoadReport{}
-		if _, err := tc.UnaryCall(contextWithORCAResult(ctx, &orcaRes), &testgrpc.SimpleRequest{}); err != nil {
+		if _, err := tc.UnaryCall(contextWithORCAResult(ctx, &orcaRes), &testpb.SimpleRequest{}); err != nil {
 			continue
 		}
 		if diff := cmp.Diff(orcaRes, wantB, protocmp.Transform()); diff == "" {
@@ -349,7 +351,7 @@ func pollORCAResult(ctx context.Context, t *testing.T, tc testgrpc.TestServiceCl
 	t.Helper()
 	for ; ctx.Err() == nil; <-time.After(time.Second) {
 		orcaRes := &v3orcapb.OrcaLoadReport{}
-		if _, err := tc.UnaryCall(contextWithORCAResult(ctx, &orcaRes), &testgrpc.SimpleRequest{}); err != nil {
+		if _, err := tc.UnaryCall(contextWithORCAResult(ctx, &orcaRes), &testpb.SimpleRequest{}); err != nil {
 			t.Fatalf("UnaryCall failed: %v", err)
 		}
 		if diff := cmp.Diff(orcaRes, want, protocmp.Transform()); diff == "" {
