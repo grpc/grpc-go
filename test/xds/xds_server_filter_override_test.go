@@ -266,8 +266,12 @@ func (s) TestServerSideXDS_FilterOverride_Enabled(t *testing.T) {
 			pathCh := make(chan string, 1)
 			testFilterTypeURL := t.Name()
 			fb := &trackingHTTPFilterBuilder{
-				typeURL: testFilterTypeURL,
-				pathCh:  pathCh,
+				typeURL:               testFilterTypeURL,
+				pathCh:                pathCh,
+				filtersCreated:        &atomic.Int32{},
+				interceptorsCreated:   &atomic.Int32{},
+				filtersDestroyed:      &atomic.Int32{},
+				interceptorsDestroyed: &atomic.Int32{},
 			}
 			httpfilter.Register(fb)
 			defer httpfilter.UnregisterForTesting(fb.typeURL)
@@ -382,6 +386,12 @@ func (s) TestServerSideXDS_FilterOverride_Enabled(t *testing.T) {
 				}
 			case <-ctx.Done():
 				t.Fatalf("Timeout waiting for filter to be invoked")
+			}
+			if got, want := fb.filtersCreated.Load(), int32(1); got != want {
+				t.Fatalf("Created %d filter instances, want: %d", got, want)
+			}
+			if got, want := fb.interceptorsCreated.Load(), int32(1); got != want {
+				t.Fatalf("Created %d interceptor instances, want: %d", got, want)
 			}
 		})
 	}
