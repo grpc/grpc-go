@@ -136,7 +136,7 @@ var (
 	// When enabled, RPCs with a total size of headers exceeding 8KB will fail
 	// unless explicitly configured otherwise by the user.
 	//
-	// TODO: After release v1.81.0, we will enable the env var by default.
+	// TODO: In release v1.82.0, env var will be enabled by default.
 	Enable8KBDefaultHeaderListSize = boolFromEnv("GRPC_GO_EXPERIMENTAL_ENABLE_8KB_DEFAULT_HEADER_LIST_SIZE", false)
 )
 

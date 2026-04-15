@@ -7192,19 +7192,19 @@ func (s) TestRPCBlockingOnPickerStatsCall(t *testing.T) {
 // rejects the request and RPC will fail.
 func (s) TestEnable8KBDefaultHeaderListSize_ClientSendsLargeHeaders(t *testing.T) {
 	tests := []struct {
-		name    string
-		enable  bool
-		wantErr bool
+		name     string
+		enable   bool
+		wantCode codes.Code
 	}{
 		{
-			name:    "env_var_enabled",
-			enable:  true,
-			wantErr: true,
+			name:     "env_var_enabled",
+			enable:   true,
+			wantCode: codes.Unavailable,
 		},
 		{
-			name:    "env_var_disabled",
-			enable:  false,
-			wantErr: false,
+			name:     "env_var_disabled",
+			enable:   false,
+			wantCode: codes.OK,
 		},
 	}
 
@@ -7212,13 +7212,9 @@ func (s) TestEnable8KBDefaultHeaderListSize_ClientSendsLargeHeaders(t *testing.T
 		t.Run(tc.name, func(t *testing.T) {
 			testutils.SetEnvConfig(t, &envconfig.Enable8KBDefaultHeaderListSize, tc.enable)
 
-			ss := &stubserver.StubServer{
-				EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
-					return &testpb.Empty{}, nil
-				},
-			}
-			if err := ss.Start(nil); err != nil {
-				t.Fatal("Error starting server:", err)
+			ss := stubserver.StartTestService(t, nil)
+			if err := ss.StartClient(); err != nil {
+				t.Fatal("Failed to create client to stub server:", err)
 			}
 			defer ss.Stop()
 
@@ -7228,14 +7224,8 @@ func (s) TestEnable8KBDefaultHeaderListSize_ClientSendsLargeHeaders(t *testing.T
 			ctx = metadata.NewOutgoingContext(ctx, md)
 
 			_, err := ss.Client.EmptyCall(ctx, &testpb.Empty{})
-			if tc.wantErr {
-				if err == nil || status.Code(err) != codes.Unavailable {
-					t.Fatalf("EmptyCall() failed with err: %v, want err: %v", err, codes.Unavailable)
-				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("EmptyCall() failed unexpectedly: %v", err)
+			if got := status.Code(err); got != tc.wantCode {
+				t.Fatalf("EmptyCall() failed with code: %v, want: %v; full error: %v", got, tc.wantCode, err)
 			}
 		})
 	}
@@ -7246,20 +7236,21 @@ func (s) TestEnable8KBDefaultHeaderListSize_ClientSendsLargeHeaders(t *testing.T
 // sends metadata with a total size exceeding the 8KB default limit, the RPC
 // will fail.
 func (s) TestEnable8KBDefaultHeaderListSize_ServerSendsLargeHeaders(t *testing.T) {
+	const largeHeaderSize = 9000
 	tests := []struct {
-		name    string
-		enable  bool
-		wantErr bool
+		name     string
+		enable   bool
+		wantCode codes.Code
 	}{
 		{
-			name:    "env_var_enabled",
-			enable:  true,
-			wantErr: true,
+			name:     "env_var_enabled",
+			enable:   true,
+			wantCode: codes.Unavailable,
 		},
 		{
-			name:    "env_var_disabled",
-			enable:  false,
-			wantErr: false,
+			name:     "env_var_disabled",
+			enable:   false,
+			wantCode: codes.OK,
 		},
 	}
 	for _, tc := range tests {
@@ -7268,7 +7259,7 @@ func (s) TestEnable8KBDefaultHeaderListSize_ServerSendsLargeHeaders(t *testing.T
 
 			ss := &stubserver.StubServer{
 				EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
-					md := metadata.MD{"large-key": []string{strings.Repeat("a", 9000)}}
+					md := metadata.MD{"large-key": []string{strings.Repeat("a", largeHeaderSize)}}
 					grpc.SetHeader(ctx, md)
 					return &testpb.Empty{}, nil
 				},
@@ -7282,14 +7273,8 @@ func (s) TestEnable8KBDefaultHeaderListSize_ServerSendsLargeHeaders(t *testing.T
 			defer cancel()
 
 			_, err := ss.Client.EmptyCall(ctx, &testpb.Empty{})
-			if tc.wantErr {
-				if err == nil || status.Code(err) != codes.Unavailable {
-					t.Fatalf("EmptyCall() failed with err: %v, want err: %v", err, codes.Unavailable)
-				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("EmptyCall() failed unexpectedly: %v", err)
+			if got := status.Code(err); got != tc.wantCode {
+				t.Fatalf("EmptyCall() failed with code: %v, want: %v; full error: %v", got, tc.wantCode, err)
 			}
 		})
 	}
