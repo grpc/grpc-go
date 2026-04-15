@@ -148,7 +148,7 @@ func (s) TestReadyReader_TCP_Blocking(t *testing.T) {
 		{
 			name: "BufReadyReader",
 			read: func(conn net.Conn, pool *trackingBufferPool, readBufSize int) ([]byte, error) {
-				rr := readyreader.NewNonBlocking(conn)
+				rr := readyreader.New(conn)
 				bufRR := readyreader.NewBuffered(rr, readBufSize, pool)
 				buf := make([]byte, 100)
 				n, err := bufRR.Read(buf)

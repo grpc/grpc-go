@@ -20,7 +20,6 @@
 package readyreader
 
 import (
-	"errors"
 	"io"
 	"net"
 	"syscall"
@@ -64,9 +63,9 @@ type readState struct {
 	buf       *[]byte
 }
 
-// NewNonBlocking returns a ReadyReader if the passed reader supports
+// newNonBlocking returns a ReadyReader if the passed reader supports
 // non-memory-pinning reads, else nil.
-func NewNonBlocking(r io.Reader) Reader {
+func newNonBlocking(r io.Reader) Reader {
 	if rr, ok := r.(Reader); ok {
 		return rr
 	}
@@ -156,7 +155,7 @@ func (c *blockingReader) ReadOnReady(bufSize int, pool mem.BufferPool) (*[]byte,
 // If [syscall.RawConn] is unavailable, it falls back to using the simpler
 // [io.Reader] interface for reads.
 func New(r io.Reader) Reader {
-	if r := NewNonBlocking(r); r != nil {
+	if r := newNonBlocking(r); r != nil {
 		return r
 	}
 	return &blockingReader{reader: r}
@@ -174,18 +173,15 @@ type bufReadyReader struct {
 	constPool constBufferPool // stored as a field to avoid heap allocations.
 }
 
-// NewBuffered returns a new [bufReadyReader] whose buffer has the
-// specified size and is allocated from the provided pool.
+// NewBuffered returns a new [io.Reader] with a buffer of the specified size
+// which is allocated from the provided pool.
 func NewBuffered(rd Reader, size int, pool mem.BufferPool) io.Reader {
-	r := &bufReadyReader{
+	return &bufReadyReader{
 		rd:      rd,
 		pool:    pool,
 		bufSize: size,
 	}
-	return r
 }
-
-var errNegativeRead = errors.New("transport: reader returned negative count from Read")
 
 func (b *bufReadyReader) readErr() error {
 	err := b.err
@@ -195,12 +191,11 @@ func (b *bufReadyReader) readErr() error {
 
 func (b *bufReadyReader) buffered() int { return b.w - b.r }
 
-// Read reads data into p.
-// It returns the number of bytes read into p.
-// The bytes are taken from at most one Read on the underlying [ReadyReader],
-// hence n may be less than len(p).
-// If the underlying [ReadyReader] can return a non-zero count with io.EOF,
-// then this Read method can do so as well; see the [io.Reader] docs.
+// Read reads data into p. It returns the number of bytes read into p. The
+// bytes are taken from at most one Read on the underlying [ReadyReader],
+// hence n may be less than len(p). If the underlying [ReadyReader] can return
+// a non-zero count with io.EOF, then this Read method can do so as well; see
+// the [io.Reader] docs.
 func (b *bufReadyReader) Read(p []byte) (n int, err error) {
 	n = len(p)
 	if n == 0 {
@@ -217,20 +212,13 @@ func (b *bufReadyReader) Read(p []byte) (n int, err error) {
 			// Large read, empty buffer.
 			// Read directly into p to avoid copy.
 			b.constPool.buffer = p
-			_, n, err := b.rd.ReadOnReady(len(p), &b.constPool)
-			b.err = err
-			if n < 0 {
-				panic(errNegativeRead)
-			}
+			_, n, b.err = b.rd.ReadOnReady(len(p), &b.constPool)
 			return n, b.readErr()
 		}
 		// One read.
 		b.r = 0
 		b.w = 0
 		b.buf, n, b.err = b.rd.ReadOnReady(b.bufSize, b.pool)
-		if n < 0 {
-			panic(errNegativeRead)
-		}
 		if n == 0 {
 			if b.buf != nil {
 				b.pool.Put(b.buf)
