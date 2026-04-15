@@ -1454,7 +1454,7 @@ func (s) TestXDSResolverHTTPFilters_EnabledInOverride(t *testing.T) {
 				}
 				return
 			}
-			if got, want := cfg.BasePath, "base-path"; got != want {
+			if got, want := cfg.BasePath, basePath; got != want {
 				t.Fatalf("Unexpected BasePath, got: %q, want: %q", got, want)
 			}
 		})
