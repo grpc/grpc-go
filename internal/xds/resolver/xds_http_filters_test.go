@@ -1286,43 +1286,44 @@ func (s) TestXDSResolverHTTPFilters_DisabledInOverride(t *testing.T) {
 // levels that enable the filter. It verifies that the filter is created and
 // receives the correct configuration.
 func (s) TestXDSResolverHTTPFilters_EnabledInOverride(t *testing.T) {
+	const basePath = "base-path"
 	type overrideInfo struct {
 		disabled bool
 		path     string
 	}
 
 	tests := []struct {
-		name         string
-		baseDisabled bool
-		vhost        *overrideInfo
-		route        *overrideInfo
-		cluster      *overrideInfo
-		wantOverride string
+		name             string
+		baseDisabled     bool
+		vhost            *overrideInfo
+		route            *overrideInfo
+		cluster          *overrideInfo
+		wantOverridePath string
 	}{
 		{
 			name:         "BaseEnabled",
 			baseDisabled: false,
 		},
 		{
-			name:         "VHostEnables",
-			baseDisabled: true,
-			vhost:        &overrideInfo{disabled: false, path: "vhost-value"},
-			wantOverride: "vhost-value",
+			name:             "VHostEnables",
+			baseDisabled:     true,
+			vhost:            &overrideInfo{disabled: false, path: "vhost-value"},
+			wantOverridePath: "vhost-value",
 		},
 		{
-			name:         "RouteEnables",
-			baseDisabled: true,
-			vhost:        &overrideInfo{disabled: true},
-			route:        &overrideInfo{disabled: false, path: "route-value"},
-			wantOverride: "route-value",
+			name:             "RouteEnables",
+			baseDisabled:     true,
+			vhost:            &overrideInfo{disabled: true},
+			route:            &overrideInfo{disabled: false, path: "route-value"},
+			wantOverridePath: "route-value",
 		},
 		{
-			name:         "ClusterEnables",
-			baseDisabled: true,
-			vhost:        &overrideInfo{disabled: true},
-			route:        &overrideInfo{disabled: true},
-			cluster:      &overrideInfo{disabled: false, path: "cluster-value"},
-			wantOverride: "cluster-value",
+			name:             "ClusterEnables",
+			baseDisabled:     true,
+			vhost:            &overrideInfo{disabled: true},
+			route:            &overrideInfo{disabled: true},
+			cluster:          &overrideInfo{disabled: false, path: "cluster-value"},
+			wantOverridePath: "cluster-value",
 		},
 	}
 
@@ -1360,7 +1361,7 @@ func (s) TestXDSResolverHTTPFilters_EnabledInOverride(t *testing.T) {
 			const testServiceName = "service-name"
 			const routeConfigName = "route-config"
 
-			baseFilter := newHTTPFilter(t, "test-filter", testFilterTypeURL, "base-path", "")
+			baseFilter := newHTTPFilter(t, "test-filter", testFilterTypeURL, basePath, "")
 			baseFilter.Disabled = tc.baseDisabled
 
 			makeTypedConfig := func(info *overrideInfo) map[string]*anypb.Any {
@@ -1447,8 +1448,8 @@ func (s) TestXDSResolverHTTPFilters_EnabledInOverride(t *testing.T) {
 				t.Fatalf("Timeout waiting for interceptor to be invoked: %v", err)
 			}
 			cfg := val.(overallFilterConfig)
-			if tc.wantOverride != "" {
-				if got, want := cfg.OverridePath, tc.wantOverride; got != want {
+			if tc.wantOverridePath != "" {
+				if got, want := cfg.OverridePath, tc.wantOverridePath; got != want {
 					t.Fatalf("Unexpected OverridePath, got: %q, want: %q", got, want)
 				}
 				return

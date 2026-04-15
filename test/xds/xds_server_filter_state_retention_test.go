@@ -97,6 +97,10 @@ func (*trackingHTTPFilterBuilder) ParseFilterConfig(cfg proto.Message) (httpfilt
 	return filterConfigFromProto(cfg)
 }
 
+func (*trackingHTTPFilterBuilder) ParseFilterConfigOverride(cfg proto.Message) (httpfilter.FilterConfig, error) {
+	return filterConfigFromProto(cfg)
+}
+
 func (t *trackingHTTPFilterBuilder) BuildServerFilter() httpfilter.ServerFilter {
 	t.filtersCreated.Add(1)
 	return t
@@ -108,18 +112,22 @@ func (t *trackingHTTPFilterBuilder) Close() {
 
 var _ httpfilter.ServerFilterBuilder = &trackingHTTPFilterBuilder{}
 
-func (t *trackingHTTPFilterBuilder) BuildServerInterceptor(config, _ httpfilter.FilterConfig) (resolver.ServerInterceptor, error) {
+func (t *trackingHTTPFilterBuilder) BuildServerInterceptor(config, override httpfilter.FilterConfig) (resolver.ServerInterceptor, error) {
 	t.interceptorsCreated.Add(1)
 
-	if config == nil {
+	var effectiveCfg testFilterCfg
+	if override != nil {
+		effectiveCfg = override.(testFilterCfg)
+	} else if config != nil {
+		effectiveCfg = config.(testFilterCfg)
+	} else {
 		return nil, fmt.Errorf("unexpected missing config")
 	}
-	baseCfg := config.(testFilterCfg)
 
 	interceptor := &trackingInterceptor{
 		parent:   t,
 		pathCh:   t.pathCh,
-		basePath: baseCfg.path,
+		basePath: effectiveCfg.path,
 	}
 	return interceptor, nil
 }
@@ -139,9 +147,10 @@ func (i *trackingInterceptor) Close() {
 	i.parent.interceptorsDestroyed.Add(1)
 }
 
-func newHTTPFilter(t *testing.T, name, typeURL, path string) *v3httppb.HttpFilter {
+func newHTTPFilter(t *testing.T, name, typeURL, path string, disabled bool) *v3httppb.HttpFilter {
 	return &v3httppb.HttpFilter{
-		Name: name,
+		Name:     name,
+		Disabled: disabled,
 		ConfigType: &v3httppb.HttpFilter_TypedConfig{
 			TypedConfig: testutils.MarshalAny(t, &v3xdsxdstypepb.TypedStruct{
 				TypeUrl: typeURL,
@@ -215,7 +224,7 @@ func (s) TestServerSideXDS_FilterStateRetention_AcrossUpdates_FilterConfigChange
 		ConfigType: &v3listenerpb.Filter_TypedConfig{
 			TypedConfig: testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
 				HttpFilters: []*v3httppb.HttpFilter{
-					newHTTPFilter(t, "tracker", testFilterTypeURL, "initial-path"),
+					newHTTPFilter(t, "tracker", testFilterTypeURL, "initial-path", false),
 					e2e.HTTPFilter("router", &v3routerpb.Router{}),
 				},
 				RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
@@ -321,7 +330,7 @@ func (s) TestServerSideXDS_FilterStateRetention_AcrossUpdates_FilterConfigChange
 		ConfigType: &v3listenerpb.Filter_TypedConfig{
 			TypedConfig: testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
 				HttpFilters: []*v3httppb.HttpFilter{
-					newHTTPFilter(t, "tracker", testFilterTypeURL, "final-path"),
+					newHTTPFilter(t, "tracker", testFilterTypeURL, "final-path", false),
 					e2e.HTTPFilter("router", &v3routerpb.Router{}),
 				},
 				RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
@@ -442,7 +451,7 @@ func (s) TestServerSideXDS_FilterStateRetention_AcrossUpdates_FilterChainsChange
 		ConfigType: &v3listenerpb.Filter_TypedConfig{
 			TypedConfig: testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
 				HttpFilters: []*v3httppb.HttpFilter{
-					newHTTPFilter(t, "tracker", testFilterTypeURL, "initial-path"),
+					newHTTPFilter(t, "tracker", testFilterTypeURL, "initial-path", false),
 					e2e.HTTPFilter("router", &v3routerpb.Router{}),
 				},
 				RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
@@ -520,7 +529,7 @@ func (s) TestServerSideXDS_FilterStateRetention_AcrossUpdates_FilterChainsChange
 		ConfigType: &v3listenerpb.Filter_TypedConfig{
 			TypedConfig: testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
 				HttpFilters: []*v3httppb.HttpFilter{
-					newHTTPFilter(t, "tracker-new", testFilterTypeURL, "final-path"),
+					newHTTPFilter(t, "tracker-new", testFilterTypeURL, "final-path", false),
 					e2e.HTTPFilter("router", &v3routerpb.Router{}),
 				},
 				RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{

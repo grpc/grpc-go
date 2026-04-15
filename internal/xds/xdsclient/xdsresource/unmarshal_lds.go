@@ -246,7 +246,7 @@ func processHTTPFilters(filters []*v3httppb.HttpFilter, server bool) ([]HTTPFilt
 		}
 
 		disabled := false
-		if envconfig.XDSClientExtProcEnabled && !server {
+		if envconfig.XDSClientExtProcEnabled {
 			disabled = filter.GetDisabled()
 		}
 		// Save name/config
