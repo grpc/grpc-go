@@ -118,6 +118,10 @@ var (
 	//
 	// A future release will remove this environment variable, enabling strict
 	// path checking behavior unconditionally.
+	//
+	// See
+	// https://github.com/grpc/grpc-go/security/advisories/GHSA-p77j-4mvh-x3m3
+	// for more details.
 	DisableStrictPathChecking = boolFromEnv("GRPC_GO_EXPERIMENTAL_DISABLE_STRICT_PATH_CHECKING", false)
 
 	// EnablePriorityLBChildPolicyCache controls whether the priority balancer
