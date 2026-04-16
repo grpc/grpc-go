@@ -268,6 +268,8 @@ func parseEDSRespProto(m *v3endpointpb.ClusterLoadAssignment) (EndpointsUpdate, 
 	return ret, nil
 }
 
+// validateAndConstructMetadata processes the metadata from the xDS resource
+// and returns a map of parsed metadata values.
 func validateAndConstructMetadata(metadataProto *v3corepb.Metadata) (map[string]any, error) {
 	if metadataProto == nil {
 		return nil, nil
