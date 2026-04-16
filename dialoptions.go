@@ -173,10 +173,8 @@ func newJoinDialOption(opts ...DialOption) DialOption {
 // If this option is set to true every connection will release the buffer after
 // flushing the data on the wire.
 //
-// # Experimental
-//
-// Notice: This API is EXPERIMENTAL and may be changed or removed in a
-// later release.
+// Deprecated: shared write buffer is enabled by default. WithSharedWriteBuffer
+// will be removed in a future release.
 func WithSharedWriteBuffer(val bool) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
 		o.copts.SharedWriteBuffer = val
