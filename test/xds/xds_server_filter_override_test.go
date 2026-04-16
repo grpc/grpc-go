@@ -137,6 +137,9 @@ func (s) TestServerSideXDS_FilterOverride_Disabled(t *testing.T) {
 				SecLevel:   e2e.SecurityLevelNone,
 			})
 
+			baseFilter := newHTTPFilter(t, "test-filter", testFilterTypeURL, "base-path")
+			baseFilter.Disabled = tc.baseDisabled
+
 			var vhOverrideConfig map[string]*anypb.Any
 			if tc.vhost != nil {
 				vhOverrideConfig = map[string]*anypb.Any{"test-filter": makeOverrideConfig(t, testFilterTypeURL, tc.vhost)}
@@ -163,7 +166,7 @@ func (s) TestServerSideXDS_FilterOverride_Disabled(t *testing.T) {
 				ConfigType: &v3listenerpb.Filter_TypedConfig{
 					TypedConfig: testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
 						HttpFilters: []*v3httppb.HttpFilter{
-							newHTTPFilter(t, "test-filter", testFilterTypeURL, "base-path", tc.baseDisabled),
+							baseFilter,
 							e2e.HTTPFilter("router", &v3routerpb.Router{}),
 						},
 						RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
@@ -300,6 +303,9 @@ func (s) TestServerSideXDS_FilterOverride_Enabled(t *testing.T) {
 				SecLevel:   e2e.SecurityLevelNone,
 			})
 
+			baseFilter := newHTTPFilter(t, "test-filter", testFilterTypeURL, basePath)
+			baseFilter.Disabled = tc.baseDisabled
+
 			var vhOverrideConfig map[string]*anypb.Any
 			if tc.vhost != nil {
 				vhOverrideConfig = map[string]*anypb.Any{"test-filter": makeOverrideConfig(t, testFilterTypeURL, tc.vhost)}
@@ -326,7 +332,7 @@ func (s) TestServerSideXDS_FilterOverride_Enabled(t *testing.T) {
 				ConfigType: &v3listenerpb.Filter_TypedConfig{
 					TypedConfig: testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
 						HttpFilters: []*v3httppb.HttpFilter{
-							newHTTPFilter(t, "test-filter", testFilterTypeURL, basePath, tc.baseDisabled),
+							baseFilter,
 							e2e.HTTPFilter("router", &v3routerpb.Router{}),
 						},
 						RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{

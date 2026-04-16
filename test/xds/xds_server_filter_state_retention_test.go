@@ -147,10 +147,9 @@ func (i *trackingInterceptor) Close() {
 	i.parent.interceptorsDestroyed.Add(1)
 }
 
-func newHTTPFilter(t *testing.T, name, typeURL, path string, disabled bool) *v3httppb.HttpFilter {
+func newHTTPFilter(t *testing.T, name, typeURL, path string) *v3httppb.HttpFilter {
 	return &v3httppb.HttpFilter{
-		Name:     name,
-		Disabled: disabled,
+		Name: name,
 		ConfigType: &v3httppb.HttpFilter_TypedConfig{
 			TypedConfig: testutils.MarshalAny(t, &v3xdsxdstypepb.TypedStruct{
 				TypeUrl: typeURL,
@@ -224,7 +223,7 @@ func (s) TestServerSideXDS_FilterStateRetention_AcrossUpdates_FilterConfigChange
 		ConfigType: &v3listenerpb.Filter_TypedConfig{
 			TypedConfig: testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
 				HttpFilters: []*v3httppb.HttpFilter{
-					newHTTPFilter(t, "tracker", testFilterTypeURL, "initial-path", false),
+					newHTTPFilter(t, "tracker", testFilterTypeURL, "initial-path"),
 					e2e.HTTPFilter("router", &v3routerpb.Router{}),
 				},
 				RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
@@ -330,7 +329,7 @@ func (s) TestServerSideXDS_FilterStateRetention_AcrossUpdates_FilterConfigChange
 		ConfigType: &v3listenerpb.Filter_TypedConfig{
 			TypedConfig: testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
 				HttpFilters: []*v3httppb.HttpFilter{
-					newHTTPFilter(t, "tracker", testFilterTypeURL, "final-path", false),
+					newHTTPFilter(t, "tracker", testFilterTypeURL, "final-path"),
 					e2e.HTTPFilter("router", &v3routerpb.Router{}),
 				},
 				RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
@@ -451,7 +450,7 @@ func (s) TestServerSideXDS_FilterStateRetention_AcrossUpdates_FilterChainsChange
 		ConfigType: &v3listenerpb.Filter_TypedConfig{
 			TypedConfig: testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
 				HttpFilters: []*v3httppb.HttpFilter{
-					newHTTPFilter(t, "tracker", testFilterTypeURL, "initial-path", false),
+					newHTTPFilter(t, "tracker", testFilterTypeURL, "initial-path"),
 					e2e.HTTPFilter("router", &v3routerpb.Router{}),
 				},
 				RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
@@ -529,7 +528,7 @@ func (s) TestServerSideXDS_FilterStateRetention_AcrossUpdates_FilterChainsChange
 		ConfigType: &v3listenerpb.Filter_TypedConfig{
 			TypedConfig: testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
 				HttpFilters: []*v3httppb.HttpFilter{
-					newHTTPFilter(t, "tracker-new", testFilterTypeURL, "final-path", false),
+					newHTTPFilter(t, "tracker-new", testFilterTypeURL, "final-path"),
 					e2e.HTTPFilter("router", &v3routerpb.Router{}),
 				},
 				RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{

@@ -27,7 +27,6 @@ import (
 	"sync/atomic"
 
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/xds/httpfilter"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
@@ -479,12 +478,9 @@ func (fc *filterChain) newInterceptor(routeOverride, virtualHostOverride map[str
 			override = virtualHostOverride[filter.Name]
 		}
 
-		disabled := false
-		if envconfig.XDSClientExtProcEnabled {
-			disabled = filter.Disabled
-			if override != nil {
-				_, disabled = override.(httpfilter.DisabledFilterConfig)
-			}
+		disabled := filter.Disabled
+		if override != nil {
+			_, disabled = override.(httpfilter.DisabledFilterConfig)
 		}
 		if disabled {
 			continue
