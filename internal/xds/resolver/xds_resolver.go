@@ -401,6 +401,7 @@ func (r *xdsResolver) newConfigSelector() (_ *configSelector, err error) {
 		clusters:         make(map[string]*clusterInfo),
 		plugins:          make(map[string]*clusterInfo),
 		httpFilterConfig: r.xdsConfig.Listener.APIListener.HTTPFilters,
+		xdsConfig:        r.xdsConfig,
 	}
 
 	defer func() {
