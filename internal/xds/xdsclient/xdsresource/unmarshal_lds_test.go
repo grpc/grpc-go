@@ -25,6 +25,7 @@ import (
 
 	v2xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	"github.com/google/go-cmp/cmp"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
@@ -63,6 +64,11 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 		customFilter = &v3httppb.HttpFilter{
 			Name:       "customFilter",
 			ConfigType: &v3httppb.HttpFilter_TypedConfig{TypedConfig: customFilterConfig},
+		}
+		disabledCustomFilter = &v3httppb.HttpFilter{
+			Name:       "customFilter",
+			ConfigType: &v3httppb.HttpFilter_TypedConfig{TypedConfig: customFilterConfig},
+			Disabled:   true,
 		}
 		oldTypedStructFilter = &v3httppb.HttpFilter{
 			Name:       "customFilter",
@@ -205,11 +211,12 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 	)
 
 	tests := []struct {
-		name       string
-		resource   *anypb.Any
-		wantName   string
-		wantUpdate ListenerUpdate
-		wantErr    bool
+		name                    string
+		resource                *anypb.Any
+		wantName                string
+		wantUpdate              ListenerUpdate
+		wantErr                 bool
+		xdsClientExtProcEnabled bool
 	}{
 		{
 			name:     "non-listener_resource",
@@ -447,6 +454,28 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			},
 		},
 		{
+			name:     "disabled_custom_filter",
+			resource: v3LisWithFilters(disabledCustomFilter),
+			wantName: v3LDSTarget,
+			wantUpdate: ListenerUpdate{
+				APIListener: &HTTPConnectionManagerConfig{
+					RouteConfigName:   v3RouteConfigName,
+					MaxStreamDuration: time.Second,
+					HTTPFilters: []HTTPFilter{
+						{
+							Name:     "customFilter",
+							Filter:   httpFilter{},
+							Config:   filterConfig{Cfg: customFilterConfig},
+							Disabled: true,
+						},
+						makeRouterFilter(t),
+					},
+				},
+				Raw: v3LisWithFilters(disabledCustomFilter),
+			},
+			xdsClientExtProcEnabled: true,
+		},
+		{
 			name:     "v3_with_two_filters_with_same_name",
 			resource: v3LisWithFilters(customFilter, customFilter),
 			wantName: v3LDSTarget,
@@ -633,6 +662,8 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, test.xdsClientExtProcEnabled)
+
 			name, update, err := unmarshalListenerResource(test.resource, nil)
 			if (err != nil) != test.wantErr {
 				t.Errorf("unmarshalListenerResource(%s), got err: %v, wantErr: %v", pretty.ToJSON(test.resource), err, test.wantErr)

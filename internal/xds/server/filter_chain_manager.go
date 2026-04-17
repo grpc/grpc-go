@@ -478,6 +478,14 @@ func (fc *filterChain) newInterceptor(routeOverride, virtualHostOverride map[str
 			override = virtualHostOverride[filter.Name]
 		}
 
+		disabled := filter.Disabled
+		if override != nil {
+			_, disabled = override.(httpfilter.DisabledFilterConfig)
+		}
+		if disabled {
+			continue
+		}
+
 		serverFilter, err := provider(filter)
 		if err != nil {
 			return nil, nil, err
