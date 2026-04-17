@@ -56,7 +56,7 @@ func Hostname(endpoint resolver.Endpoint) string {
 	return h
 }
 
-// HostnameFromAddress returns the hostname attribute from a legacy
+// FromAddress returns the hostname attribute from a legacy
 // resolver.Address. It checks both the modern Attributes field and the
 // deprecated BalancerAttributes field for compatibility.
 //
@@ -64,7 +64,7 @@ func Hostname(endpoint resolver.Endpoint) string {
 //
 // Notice: This API is EXPERIMENTAL and may be changed or removed in a
 // later release.
-func HostnameFromAddress(addr resolver.Address) string {
+func FromAddress(addr resolver.Address) string {
 	if h, ok := addr.Attributes.Value(hostnameKey{}).(string); ok && h != "" {
 		return h
 	}

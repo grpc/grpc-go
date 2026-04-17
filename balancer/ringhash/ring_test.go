@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	xxhash "github.com/cespare/xxhash/v2"
+
 	"google.golang.org/grpc/balancer/weight"
 	"google.golang.org/grpc/resolver"
 )

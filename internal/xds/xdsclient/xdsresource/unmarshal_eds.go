@@ -47,7 +47,7 @@ func SetHostname(endpoint resolver.Endpoint, h string) resolver.Endpoint {
 // Hostname returns the hostname from the given legacy Address.
 // If this attribute is not set, it returns the empty string.
 func Hostname(addr resolver.Address) string {
-	return hostname.HostnameFromAddress(addr)
+	return hostname.FromAddress(addr)
 }
 
 func unmarshalEndpointsResource(r *anypb.Any) (string, EndpointsUpdate, error) {
