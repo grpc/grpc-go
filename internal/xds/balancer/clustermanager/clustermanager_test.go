@@ -26,7 +26,6 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/balancer"
-	"google.golang.org/grpc/balancer/pickfirst"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
@@ -47,8 +46,9 @@ func Test(t *testing.T) {
 }
 
 const (
-	defaultTestTimeout    = 5 * time.Second
-	testBackendAddrsCount = 12
+	defaultTestTimeout      = 5 * time.Second
+	defaultTestShortTimeout = 10 * time.Millisecond
+	testBackendAddrsCount   = 12
 )
 
 var testBackendAddrStrs []string
@@ -585,11 +585,17 @@ func (s) TestInitialIdle(t *testing.T) {
 }
 
 // TestClusterGracefulSwitch tests the graceful switch functionality for a child
-// of the cluster manager. At first, the child is configured as a round robin
-// load balancer, and thus should behave accordingly. The test then gracefully
-// switches this child to a pick first load balancer. Once that balancer updates
-// it's state and completes the graceful switch process the new picker should
-// reflect this change.
+// of the cluster_manager. The test performs the following steps:
+//  1. Configures a single child for the cluster_manager with a round_robin LB
+//     policy. Ensures the child sends a picker update when the subchannel moves
+//     to READY.
+//  2. Updates the exiting child with a different LB policy (pick_first), and a
+//     different endpoint. This should trigger the graceful switch process, and
+//     cluster_manager should not send a picker update until the child has
+//     completed the graceful switch process.
+//  3. The child should complete the graceful switch process once it receives an
+//     update that moves its subchannel to READY. At this point, the cluster_manager
+//     should send a picker update reflecting the new pick_first balancer's picker.
 func (s) TestClusterGracefulSwitch(t *testing.T) {
 	cc := testutils.NewBalancerClientConn(t)
 	builder := balancer.Get(balancerName)
@@ -597,99 +603,115 @@ func (s) TestClusterGracefulSwitch(t *testing.T) {
 	bal := builder.Build(cc, balancer.BuildOptions{})
 	defer bal.Close()
 
-	configJSON1 := `{
-"children": {
-	"csp:cluster":{ "childPolicy": [{"round_robin":""}] }
-}
-}`
-	config1, err := parser.ParseConfig([]byte(configJSON1))
+	// Push round_robin config with one endpoint to the cluster_manager.
+	rrConfigJSON := `
+	{
+		"children": {
+			"csp:cluster":{ "childPolicy": [{"round_robin": {}}] }
+		}
+	}`
+	rrConfig, err := parser.ParseConfig([]byte(rrConfigJSON))
 	if err != nil {
-		t.Fatalf("failed to parse balancer config: %v", err)
+		t.Fatalf("Failed to parse round_robin config: %v", err)
 	}
-	wantAddrs := []resolver.Address{
-		{Addr: testBackendAddrStrs[0], BalancerAttributes: nil},
-		{Addr: testBackendAddrStrs[1], BalancerAttributes: nil},
+	rrEndpoint := hierarchy.SetInEndpoint(resolver.Endpoint{Addresses: []resolver.Address{{Addr: "rr-backend"}}}, []string{"csp:cluster"})
+	ccs := balancer.ClientConnState{
+		ResolverState:  resolver.State{Endpoints: []resolver.Endpoint{rrEndpoint}},
+		BalancerConfig: rrConfig,
 	}
-	if err := bal.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: resolver.State{Endpoints: []resolver.Endpoint{
-			hierarchy.SetInEndpoint(resolver.Endpoint{Addresses: []resolver.Address{wantAddrs[0]}}, []string{"csp:cluster"}),
-		}},
-		BalancerConfig: config1,
-	}); err != nil {
-		t.Fatalf("failed to update ClientConn state: %v", err)
+	if err := bal.UpdateClientConnState(ccs); err != nil {
+		t.Fatalf("Failed to send round_robin config update to cluster_manager: %v", err)
 	}
 
-	sc1 := <-cc.NewSubConnCh
-	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
-	p1 := <-cc.NewPickerCh
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	pi := balancer.PickInfo{
-		Ctx: SetPickedCluster(ctx, "csp:cluster"),
+
+	// Wait for a subchannel to be created.
+	var sc1 *testutils.TestSubConn
+	select {
+	case <-ctx.Done():
+		t.Fatalf("Timeout waiting for subchannel to be created by the round_robin LB policy")
+	case sc1 = <-cc.NewSubConnCh:
 	}
+
+	// Update the subchannel's state to READY, and ensure we get a picker update.
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	var p1 balancer.Picker
+	select {
+	case <-ctx.Done():
+		t.Fatalf("Timeout waiting for picker update from cluster_manager LB policy")
+	case p1 = <-cc.NewPickerCh:
+	}
+
+	// Verify the picker picks the expected subchannel.
+	pi := balancer.PickInfo{Ctx: SetPickedCluster(ctx, "csp:cluster")}
 	testPick(t, p1, pi, sc1, nil)
 
-	childPolicyName := t.Name()
-	stub.Register(childPolicyName, stub.BalancerFuncs{
-		Init: func(bd *stub.BalancerData) {
-			bd.ChildBalancer = balancer.Get(pickfirst.Name).Build(bd.ClientConn, bd.BuildOptions)
-		},
-		Close: func(bd *stub.BalancerData) {
-			bd.ChildBalancer.Close()
-		},
-		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
-			return bd.ChildBalancer.UpdateClientConnState(ccs)
-		},
-	})
-	// Same cluster, different balancer type.
-	configJSON2 := fmt.Sprintf(`{
-"children": {
-	"csp:cluster":{ "childPolicy": [{"%s":""}] }
-}
-}`, childPolicyName)
-	config2, err := parser.ParseConfig([]byte(configJSON2))
+	// Update the config to use pick_first, and a different endpoint.
+	pfConfigJSON := `
+	{
+		"children": {
+			"csp:cluster":{ "childPolicy": [{"pick_first": {}}] }
+		}
+	}`
+	pfConfig, err := parser.ParseConfig([]byte(pfConfigJSON))
 	if err != nil {
-		t.Fatalf("failed to parse balancer config: %v", err)
+		t.Fatalf("Failed to parse pick_first config: %v", err)
 	}
-	if err := bal.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: resolver.State{Endpoints: []resolver.Endpoint{
-			hierarchy.SetInEndpoint(resolver.Endpoint{Addresses: []resolver.Address{wantAddrs[1]}}, []string{"csp:cluster"}),
-		}},
-		BalancerConfig: config2,
-	}); err != nil {
-		t.Fatalf("failed to update ClientConn state: %v", err)
+	pfEndpoint := hierarchy.SetInEndpoint(resolver.Endpoint{Addresses: []resolver.Address{{Addr: "pf-backend"}}}, []string{"csp:cluster"})
+	ccs = balancer.ClientConnState{
+		ResolverState:  resolver.State{Endpoints: []resolver.Endpoint{pfEndpoint}},
+		BalancerConfig: pfConfig,
 	}
-	sc2 := <-cc.NewSubConnCh
-	// Update the pick first balancers SubConn as CONNECTING. This will cause
-	// the pick first balancer to UpdateState() with CONNECTING, which shouldn't send
-	// a Picker update back, as the Graceful Switch process is not complete.
-	sc2.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	select {
-	case <-cc.NewPickerCh:
-		t.Fatalf("No new picker should have been sent due to the Graceful Switch process not completing")
-	case <-ctx.Done():
+	if err := bal.UpdateClientConnState(ccs); err != nil {
+		t.Fatalf("Failed to send pick_first config update to cluster_manager: %v", err)
 	}
 
-	// Update the pick first balancers SubConn as READY. This will cause
-	// the pick first balancer to UpdateState() with READY, which should send a
-	// Picker update back, as the Graceful Switch process is complete. This
-	// Picker should always pick the pick first's created SubConn.
-	sc2.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
-	p2 := <-cc.NewPickerCh
-	testPick(t, p2, pi, sc2, nil)
-	// The Graceful Switch process completing for the child should cause the
-	// SubConns for the balancer being gracefully switched from to get deleted.
-	ctx, cancel = context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
+	// Wait for a subchannel to be created.
+	var sc2 *testutils.TestSubConn
 	select {
 	case <-ctx.Done():
-		t.Fatalf("error waiting for sc.Shutdown()")
+		t.Fatalf("Timeout waiting for subchannel to be created by the pick_first LB policy")
+	case sc2 = <-cc.NewSubConnCh:
+	}
+
+	// Move the pick_first LB policy's subchannel to CONNECTING. This will cause
+	// the pick_first LB policy to send a connecting picker. But this should not
+	// result in the cluster_manager sending a picker update to the channel as
+	// the graceful switch process is not yet complete.
+	sc2.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sCtx, sCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
+	defer sCancel()
+	select {
+	case <-cc.NewPickerCh:
+		t.Fatalf("Received picker from cluster_manager when none expected during graceful switch process")
+	case <-sCtx.Done():
+	}
+
+	// Move the pick_first LB policy's subchannel to READY. This will cause the
+	// pick_first LB policy to send a ready picker and complete the graceful
+	// switch process.
+	sc2.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
+
+	var p2 balancer.Picker
+	select {
+	case <-ctx.Done():
+		t.Fatalf("Timeout waiting for picker update from cluster_manager LB policy")
+	case p2 = <-cc.NewPickerCh:
+	}
+
+	// Verify the picker picks the expected subchannel.
+	testPick(t, p2, pi, sc2, nil)
+
+	// Completion of the graceful switch process should result in the old
+	// subchannel being removed.
+	select {
+	case <-ctx.Done():
+		t.Fatalf("Timeout waiting for subchannels belonging to old child to be deleted")
 	case rsc := <-cc.ShutdownSubConnCh:
-		// The SubConn removed should have been the created SubConn
-		// from the child before switching.
 		if rsc != sc1 {
-			t.Fatalf("Shutdown() got: %v, want %v", rsc, sc1)
+			t.Fatalf("Unexpected subchannel %v being shutdown, want %v", rsc, sc1)
 		}
 	}
 }
