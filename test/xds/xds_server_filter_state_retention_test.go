@@ -97,6 +97,10 @@ func (*trackingHTTPFilterBuilder) ParseFilterConfig(cfg proto.Message) (httpfilt
 	return filterConfigFromProto(cfg)
 }
 
+func (*trackingHTTPFilterBuilder) ParseFilterConfigOverride(cfg proto.Message) (httpfilter.FilterConfig, error) {
+	return filterConfigFromProto(cfg)
+}
+
 func (t *trackingHTTPFilterBuilder) BuildServerFilter() httpfilter.ServerFilter {
 	t.filtersCreated.Add(1)
 	return t
@@ -108,18 +112,22 @@ func (t *trackingHTTPFilterBuilder) Close() {
 
 var _ httpfilter.ServerFilterBuilder = &trackingHTTPFilterBuilder{}
 
-func (t *trackingHTTPFilterBuilder) BuildServerInterceptor(config, _ httpfilter.FilterConfig) (resolver.ServerInterceptor, error) {
+func (t *trackingHTTPFilterBuilder) BuildServerInterceptor(config, override httpfilter.FilterConfig) (resolver.ServerInterceptor, error) {
 	t.interceptorsCreated.Add(1)
 
-	if config == nil {
+	var effectiveCfg testFilterCfg
+	if override != nil {
+		effectiveCfg = override.(testFilterCfg)
+	} else if config != nil {
+		effectiveCfg = config.(testFilterCfg)
+	} else {
 		return nil, fmt.Errorf("unexpected missing config")
 	}
-	baseCfg := config.(testFilterCfg)
 
 	interceptor := &trackingInterceptor{
 		parent:   t,
 		pathCh:   t.pathCh,
-		basePath: baseCfg.path,
+		basePath: effectiveCfg.path,
 	}
 	return interceptor, nil
 }

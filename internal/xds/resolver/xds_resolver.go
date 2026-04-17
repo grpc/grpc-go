@@ -596,6 +596,23 @@ func (r *xdsResolver) newInterceptor(filters []xdsresource.HTTPFilter, clusterOv
 		if override == nil {
 			override = virtualHostOverride[filter.Name]
 		}
+
+		// Determine the effective disabled state of the filter. The base
+		// configuration's disabled state is used unless an override is present.
+		// If an override is present, the filter is disabled if the override is
+		// a DisabledFilterConfig.
+		disabled := filter.Disabled
+		if override != nil {
+			_, disabled = override.(httpfilter.DisabledFilterConfig)
+		}
+
+		if disabled {
+			if r.logger.V(2) {
+				r.logger.Infof("Filter %q has been disabled.", filter.Name)
+			}
+			continue
+		}
+
 		builder, ok := filter.Filter.(httpfilter.ClientFilterBuilder)
 		if !ok {
 			// Should not happen if it passed xdsClient validation.

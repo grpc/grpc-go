@@ -250,10 +250,8 @@ func newJoinServerOption(opts ...ServerOption) ServerOption {
 // If this option is set to true every connection will release the buffer after
 // flushing the data on the wire.
 //
-// # Experimental
-//
-// Notice: This API is EXPERIMENTAL and may be changed or removed in a
-// later release.
+// Deprecated: shared write buffer is enabled by default. SharedWriteBuffer
+// will be removed in a future release.
 func SharedWriteBuffer(val bool) ServerOption {
 	return newFuncServerOption(func(o *serverOptions) {
 		o.sharedWriteBuffer = val
@@ -1809,15 +1807,13 @@ func (s *Server) handleStream(t transport.ServerTransport, stream *transport.Ser
 		return
 	}
 	if sm[0] != '/' {
-		// TODO(easwars): Add a link to the CVE in the below log messages once
-		// published.
 		if envconfig.DisableStrictPathChecking {
 			if old := s.strictPathCheckingLogEmitted.Swap(true); !old {
-				channelz.Warningf(logger, s.channelz, "grpc: Server.handleStream received malformed method name %q. Allowing it because the environment variable GRPC_GO_EXPERIMENTAL_DISABLE_STRICT_PATH_CHECKING is set to true, but this option will be removed in a future release.", sm)
+				channelz.Warningf(logger, s.channelz, "grpc: Server.handleStream received malformed method name %q. Allowing it because the environment variable GRPC_GO_EXPERIMENTAL_DISABLE_STRICT_PATH_CHECKING is set to true, but this option will be removed in a future release. See https://github.com/grpc/grpc-go/security/advisories/GHSA-p77j-4mvh-x3m3 for more information.", sm)
 			}
 		} else {
 			if old := s.strictPathCheckingLogEmitted.Swap(true); !old {
-				channelz.Warningf(logger, s.channelz, "grpc: Server.handleStream rejected malformed method name %q. To temporarily allow such requests, set the environment variable GRPC_GO_EXPERIMENTAL_DISABLE_STRICT_PATH_CHECKING to true. Note that this is not recommended as it may allow requests to bypass security policies.", sm)
+				channelz.Warningf(logger, s.channelz, "grpc: Server.handleStream rejected malformed method name %q. To temporarily allow such requests, set the environment variable GRPC_GO_EXPERIMENTAL_DISABLE_STRICT_PATH_CHECKING to true. Note that this is not recommended as it may allow requests to bypass security policies. See https://github.com/grpc/grpc-go/security/advisories/GHSA-p77j-4mvh-x3m3 for more information.", sm)
 			}
 			s.handleMalformedMethodName(stream, ti)
 			return
