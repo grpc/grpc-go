@@ -22,6 +22,7 @@ package extproc
 import (
 	"fmt"
 
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/xds/httpfilter"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
@@ -30,7 +31,9 @@ import (
 )
 
 func init() {
-	httpfilter.Register(builder{})
+	if envconfig.XDSClientExtProcEnabled {
+		httpfilter.Register(builder{})
+	}
 }
 
 type builder struct{}
