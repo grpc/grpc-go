@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2025 gRPC authors.
+ * Copyright 2026 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@
  *
  */
 
-// Deprecated: use google.golang.org/grpc/balancer/weight instead.
 package weight_test
 
 import (
@@ -24,7 +23,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/attributes"
-	"google.golang.org/grpc/internal/balancer/weight"
+	"google.golang.org/grpc/balancer/weight"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/resolver"
 )

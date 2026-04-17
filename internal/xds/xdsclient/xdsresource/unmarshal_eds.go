@@ -31,32 +31,22 @@ import (
 	xdsinternal "google.golang.org/grpc/internal/xds"
 	"google.golang.org/grpc/internal/xds/clients"
 	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/balancer/hostname"
 	"google.golang.org/grpc/resolver/ringhash"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
-// hostnameKeyType is the key to store the hostname attribute in
-// a resolver.Endpoint.
-type hostnameKeyType struct{}
-
 // SetHostname returns a copy of the given endpoint with hostname added
 // as an attribute.
-func SetHostname(endpoint resolver.Endpoint, hostname string) resolver.Endpoint {
-	// Only set if non-empty; xds_cluster_impl uses this to trigger :authority
-	// rewriting.
-	if hostname == "" {
-		return endpoint
-	}
-	endpoint.Attributes = endpoint.Attributes.WithValue(hostnameKeyType{}, hostname)
-	return endpoint
+func SetHostname(endpoint resolver.Endpoint, h string) resolver.Endpoint {
+	return hostname.Set(endpoint, h)
 }
 
-// Hostname returns the hostname from the BalancerAttributes of the given
-// Address. If this attribute is not set, it returns the empty string.
+// Hostname returns the hostname from the given legacy Address.
+// If this attribute is not set, it returns the empty string.
 func Hostname(addr resolver.Address) string {
-	hostname, _ := addr.BalancerAttributes.Value(hostnameKeyType{}).(string)
-	return hostname
+	return hostname.HostnameFromAddress(addr)
 }
 
 func unmarshalEndpointsResource(r *anypb.Any) (string, EndpointsUpdate, error) {

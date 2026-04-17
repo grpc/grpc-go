@@ -37,7 +37,7 @@ import (
 	"google.golang.org/grpc/connectivity"
 	expstats "google.golang.org/grpc/experimental/stats"
 	"google.golang.org/grpc/grpclog"
-	"google.golang.org/grpc/internal/balancer/weight"
+	"google.golang.org/grpc/balancer/weight"
 	"google.golang.org/grpc/internal/envconfig"
 	internalgrpclog "google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/pretty"
