@@ -45,13 +45,10 @@ func (builder) TypeURLs() []string {
 // validateBodyProcessingMode ensures that the body processing mode is either
 // NONE or GRPC.
 func validateBodyProcessingMode(pMode *fpb.ProcessingMode) error {
-	reqMode := pMode.GetRequestBodyMode()
-	if reqMode != fpb.ProcessingMode_NONE && reqMode != fpb.ProcessingMode_GRPC {
+	if reqMode := pMode.GetRequestBodyMode(); reqMode != fpb.ProcessingMode_NONE && reqMode != fpb.ProcessingMode_GRPC {
 		return fmt.Errorf("ext_proc: invalid request body mode %v: want 'NONE' or 'GRPC'", reqMode)
 	}
-
-	resMode := pMode.GetResponseBodyMode()
-	if resMode != fpb.ProcessingMode_NONE && resMode != fpb.ProcessingMode_GRPC {
+	if resMode := pMode.GetResponseBodyMode(); resMode != fpb.ProcessingMode_NONE && resMode != fpb.ProcessingMode_GRPC {
 		return fmt.Errorf("ext_proc: invalid response body mode %v: want 'NONE' or 'GRPC'", resMode)
 	}
 	return nil

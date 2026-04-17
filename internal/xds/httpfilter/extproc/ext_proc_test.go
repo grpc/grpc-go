@@ -124,9 +124,7 @@ func (s) TestParseFilterConfig(t *testing.T) {
 			name:        "ErrMissingGrpcService",
 			description: "config with missing grpc_service",
 			cfg: func() proto.Message {
-				m, _ := anypb.New(&fpb.ExternalProcessor{
-					ProcessingMode: &fpb.ProcessingMode{},
-				})
+				m, _ := anypb.New(&fpb.ExternalProcessor{ProcessingMode: &fpb.ProcessingMode{}})
 				return m
 			}(),
 			wantErr: "ext_proc: empty grpc_service provided",
@@ -178,9 +176,7 @@ func (s) TestParseFilterConfig(t *testing.T) {
 							},
 						},
 					},
-					ProcessingMode: &fpb.ProcessingMode{
-						RequestBodyMode: fpb.ProcessingMode_STREAMED,
-					},
+					ProcessingMode: &fpb.ProcessingMode{RequestBodyMode: fpb.ProcessingMode_STREAMED},
 				})
 				return m
 			}(),
@@ -198,9 +194,7 @@ func (s) TestParseFilterConfig(t *testing.T) {
 							},
 						},
 					},
-					ProcessingMode: &fpb.ProcessingMode{
-						ResponseBodyMode: fpb.ProcessingMode_STREAMED,
-					},
+					ProcessingMode: &fpb.ProcessingMode{ResponseBodyMode: fpb.ProcessingMode_STREAMED},
 				})
 				return m
 			}(),
@@ -228,7 +222,7 @@ func (s) TestParseFilterConfig(t *testing.T) {
 			}
 			if tt.wantErr == "" {
 				if diff := cmp.Diff(got, tt.wantCfg, cmp.AllowUnexported(baseConfig{}), protocmp.Transform()); diff != "" {
-					t.Errorf("ParseFilterConfig() returned unexpected config (-got +want):\n%s", diff)
+					t.Fatalf("ParseFilterConfig() returned unexpected config (-got +want):\n%s", diff)
 				}
 			}
 		})
@@ -262,7 +256,8 @@ func (s) TestParseFilterConfigOverride(t *testing.T) {
 			override: func() proto.Message {
 				m, _ := anypb.New(&fpb.ExtProcOverrides{
 					ProcessingMode: &fpb.ProcessingMode{
-						RequestBodyMode: fpb.ProcessingMode_GRPC,
+						RequestBodyMode:  fpb.ProcessingMode_GRPC,
+						ResponseBodyMode: fpb.ProcessingMode_GRPC,
 					},
 				})
 				return m
@@ -270,7 +265,8 @@ func (s) TestParseFilterConfigOverride(t *testing.T) {
 			wantOverrideCfg: overrideConfig{
 				config: &fpb.ExtProcOverrides{
 					ProcessingMode: &fpb.ProcessingMode{
-						RequestBodyMode: fpb.ProcessingMode_GRPC,
+						RequestBodyMode:  fpb.ProcessingMode_GRPC,
+						ResponseBodyMode: fpb.ProcessingMode_GRPC,
 					},
 				},
 			},
@@ -297,9 +293,7 @@ func (s) TestParseFilterConfigOverride(t *testing.T) {
 			description: "override with unsupported streamed request body mode",
 			override: func() proto.Message {
 				m, _ := anypb.New(&fpb.ExtProcOverrides{
-					ProcessingMode: &fpb.ProcessingMode{
-						RequestBodyMode: fpb.ProcessingMode_STREAMED,
-					},
+					ProcessingMode: &fpb.ProcessingMode{RequestBodyMode: fpb.ProcessingMode_STREAMED},
 				})
 				return m
 			}(),
