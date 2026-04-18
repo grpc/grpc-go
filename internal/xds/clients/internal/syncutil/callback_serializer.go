@@ -20,6 +20,7 @@ package syncutil
 
 import (
 	"context"
+	"fmt"
 
 	"google.golang.org/grpc/internal/xds/clients/internal/buffer"
 )
@@ -75,6 +76,29 @@ func (cs *CallbackSerializer) ScheduleOr(f func(ctx context.Context), onFailure 
 	if cs.callbacks.Put(f) != nil {
 		onFailure()
 	}
+}
+
+// ScheduleAndWait schedules the provided callback function f and blocks until
+// it is executed. If the serializer's context has been canceled before the
+// callback could be scheduled, an error is returned.
+//
+// Callbacks are expected to honor the context when performing any blocking
+// operations, and should return early when the context is canceled.
+func (cs *CallbackSerializer) ScheduleAndWait(f func(ctx context.Context)) error {
+	done := make(chan struct{})
+	closed := false
+	cs.ScheduleOr(func(ctx context.Context) {
+		defer close(done)
+		f(ctx)
+	}, func() {
+		closed = true
+		close(done)
+	})
+	<-done
+	if closed {
+		return fmt.Errorf("callback serializer is closed")
+	}
+	return nil
 }
 
 func (cs *CallbackSerializer) run(ctx context.Context) {

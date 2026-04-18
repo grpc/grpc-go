@@ -204,3 +204,63 @@ func (s) TestCallbackSerializer_Schedule_Close(t *testing.T) {
 	case <-done:
 	}
 }
+
+// TestCallbackSerializer_ScheduleAndWait verifies that ScheduleAndWait blocks
+// until the callback is executed and returns nil on success.
+func (s) TestCallbackSerializer_ScheduleAndWait(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	cs := NewCallbackSerializer(ctx)
+	defer cancel()
+
+	var executed bool
+	err := cs.ScheduleAndWait(func(context.Context) {
+		executed = true
+	})
+	if err != nil {
+		t.Fatalf("ScheduleAndWait() returned error: %v, want nil", err)
+	}
+	if !executed {
+		t.Fatal("Callback was not executed")
+	}
+}
+
+// TestCallbackSerializer_ScheduleAndWait_Closed verifies that ScheduleAndWait
+// returns an error when the serializer is already closed.
+func (s) TestCallbackSerializer_ScheduleAndWait_Closed(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	serializerCtx, serializerCancel := context.WithCancel(ctx)
+	cs := NewCallbackSerializer(serializerCtx)
+
+	serializerCancel()
+	<-cs.Done()
+
+	err := cs.ScheduleAndWait(func(context.Context) {
+		t.Fatal("Callback should not be executed on a closed serializer")
+	})
+	if err == nil {
+		t.Fatal("ScheduleAndWait() on closed serializer returned nil, want error")
+	}
+}
+
+// TestCallbackSerializer_ScheduleAndWait_FIFO verifies that ScheduleAndWait
+// respects the FIFO ordering with other scheduled callbacks.
+func (s) TestCallbackSerializer_ScheduleAndWait_FIFO(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	cs := NewCallbackSerializer(ctx)
+	defer cancel()
+
+	var order []int
+	cs.TrySchedule(func(context.Context) { order = append(order, 1) })
+	cs.TrySchedule(func(context.Context) { order = append(order, 2) })
+	err := cs.ScheduleAndWait(func(context.Context) { order = append(order, 3) })
+	if err != nil {
+		t.Fatalf("ScheduleAndWait() returned error: %v", err)
+	}
+
+	want := []int{1, 2, 3}
+	if diff := cmp.Diff(want, order); diff != "" {
+		t.Fatalf("Unexpected execution order (-want +got):\n%s", diff)
+	}
+}
