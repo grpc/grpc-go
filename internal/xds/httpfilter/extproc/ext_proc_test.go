@@ -221,6 +221,9 @@ func (s) TestParseFilterConfig(t *testing.T) {
 				t.Fatalf("ParseFilterConfig() returned error = %v, wantErr %v", err, tt.wantErr)
 			}
 			if tt.wantErr == "" {
+				if err != nil {
+					t.Fatalf("ParseFilterConfig() returned unexpected error: %v", err)
+				}
 				if diff := cmp.Diff(got, tt.wantCfg, cmp.AllowUnexported(baseConfig{}), protocmp.Transform()); diff != "" {
 					t.Fatalf("ParseFilterConfig() returned unexpected config (-got +want):\n%s", diff)
 				}
@@ -292,9 +295,7 @@ func (s) TestParseFilterConfigOverride(t *testing.T) {
 			name:        "ErrInvalidProcessingMode_RequestBodyStreamed",
 			description: "override with unsupported streamed request body mode",
 			override: func() proto.Message {
-				m, _ := anypb.New(&fpb.ExtProcOverrides{
-					ProcessingMode: &fpb.ProcessingMode{RequestBodyMode: fpb.ProcessingMode_STREAMED},
-				})
+				m, _ := anypb.New(&fpb.ExtProcOverrides{ProcessingMode: &fpb.ProcessingMode{RequestBodyMode: fpb.ProcessingMode_STREAMED}})
 				return m
 			}(),
 			wantErr: "ext_proc: invalid request body mode STREAMED",
@@ -333,6 +334,9 @@ func (s) TestParseFilterConfigOverride(t *testing.T) {
 				t.Fatalf("ParseFilterConfigOverride() returned error = %v, wantErr %v", err, tt.wantErr)
 			}
 			if tt.wantErr == "" {
+				if err != nil {
+					t.Fatalf("ParseFilterConfigOverride() returned unexpected error: %v", err)
+				}
 				if diff := cmp.Diff(got, tt.wantOverrideCfg, cmp.AllowUnexported(overrideConfig{}), protocmp.Transform()); diff != "" {
 					t.Fatalf("ParseFilterConfigOverride() returned unexpected config (-got +want):\n%s", diff)
 				}
