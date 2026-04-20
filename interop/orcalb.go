@@ -140,11 +140,9 @@ func (b *orcab) updateSubConnState(sc balancer.SubConn, state balancer.SubConnSt
 
 	if state.ConnectivityState == connectivity.Ready {
 		oldStop := b.stopOOBListeners[sc]
-		defer func() {
-			if oldStop != nil {
-				oldStop()
-			}
-		}()
+		if oldStop != nil {
+			oldStop()
+		}
 		stop := orca.RegisterOOBListener(sc, &orcaOOBListener{subConn: sc, balancer: b}, orca.OOBListenerOptions{ReportInterval: time.Second})
 		b.stopOOBListeners[sc] = stop
 		b.mu.Unlock()
