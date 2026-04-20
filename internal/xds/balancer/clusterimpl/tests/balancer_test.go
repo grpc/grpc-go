@@ -960,7 +960,14 @@ func (s) TestReResolutionAfterTransientFailure(t *testing.T) {
 	defer cancel()
 
 	// Replace DNS resolver with a wrapped resolver to capture ResolveNow calls.
-	resolveNowCh := make(chan struct{})
+	// We expect two ResolveNow calls:
+	// 1. When the server goes down and the transport is closed on the client,
+	//    the gRPC channel invokes ResolveNow on the resolver.
+	// 2. Subsequently, the subchannel enters IDLE, reconnection attempt takes
+	//    place and since the server is down, the subchannel eventually moves
+	//    enters TRANSIENT_FAILURE, at which point the clusterimpl policy
+	//    invokes ResolveNow.
+	resolveNowCh := make(chan struct{}, 2)
 	dnsR := manual.NewBuilderWithScheme("dns")
 	dnsResolverBuilder := resolver.Get("dns")
 	resolver.Register(dnsR)
@@ -997,11 +1004,13 @@ func (s) TestReResolutionAfterTransientFailure(t *testing.T) {
 	lis.Stop()
 	testutils.AwaitState(ctx, t, conn, connectivity.TransientFailure)
 
-	// Expect resolver's ResolveNow to be called due to TF state.
-	select {
-	case <-resolveNowCh:
-	case <-ctx.Done():
-		t.Fatalf("Timed out waiting for ResolveNow call after TransientFailure")
+	// Expect two calls to the resolver's ResolveNow method.
+	for range 2 {
+		select {
+		case <-resolveNowCh:
+		case <-ctx.Done():
+			t.Fatalf("Timed out waiting for ResolveNow call after TransientFailure")
+		}
 	}
 
 	// Restart the listener and expected to reconnect on its own and come out
