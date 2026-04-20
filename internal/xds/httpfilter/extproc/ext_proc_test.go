@@ -29,8 +29,10 @@ import (
 	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/anypb"
 
+	mutationpb "github.com/envoyproxy/go-control-plane/envoy/config/common/mutation_rules/v3"
 	corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	fpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/ext_proc/v3"
+	matcherpb "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
 )
 
 type s struct {
@@ -121,6 +123,43 @@ func (s) TestParseFilterConfig(t *testing.T) {
 			},
 		},
 		{
+			name:        "ValidConfig_WithMutationRules",
+			description: "valid config with valid mutation rules",
+			cfg: func() proto.Message {
+				m, _ := anypb.New(&fpb.ExternalProcessor{
+					GrpcService: &corepb.GrpcService{
+						TargetSpecifier: &corepb.GrpcService_GoogleGrpc_{
+							GoogleGrpc: &corepb.GrpcService_GoogleGrpc{
+								TargetUri: "localhost:1234",
+							},
+						},
+					},
+					ProcessingMode: &fpb.ProcessingMode{},
+					MutationRules: &mutationpb.HeaderMutationRules{
+						AllowExpression:    &matcherpb.RegexMatcher{Regex: ".*"},
+						DisallowExpression: &matcherpb.RegexMatcher{Regex: "a"},
+					},
+				})
+				return m
+			}(),
+			wantCfg: baseConfig{
+				config: &fpb.ExternalProcessor{
+					GrpcService: &corepb.GrpcService{
+						TargetSpecifier: &corepb.GrpcService_GoogleGrpc_{
+							GoogleGrpc: &corepb.GrpcService_GoogleGrpc{
+								TargetUri: "localhost:1234",
+							},
+						},
+					},
+					ProcessingMode: &fpb.ProcessingMode{},
+					MutationRules: &mutationpb.HeaderMutationRules{
+						AllowExpression:    &matcherpb.RegexMatcher{Regex: ".*"},
+						DisallowExpression: &matcherpb.RegexMatcher{Regex: "a"},
+					},
+				},
+			},
+		},
+		{
 			name:        "ErrMissingGrpcService",
 			description: "config with missing grpc_service",
 			cfg: func() proto.Message {
@@ -201,6 +240,48 @@ func (s) TestParseFilterConfig(t *testing.T) {
 			wantErr: "ext_proc: invalid response body mode STREAMED",
 		},
 		{
+			name:        "ErrEmptyAllowExpression",
+			description: "config with empty allow expression",
+			cfg: func() proto.Message {
+				m, _ := anypb.New(&fpb.ExternalProcessor{
+					GrpcService: &corepb.GrpcService{
+						TargetSpecifier: &corepb.GrpcService_GoogleGrpc_{
+							GoogleGrpc: &corepb.GrpcService_GoogleGrpc{
+								TargetUri: "localhost:1234",
+							},
+						},
+					},
+					ProcessingMode: &fpb.ProcessingMode{},
+					MutationRules: &mutationpb.HeaderMutationRules{
+						AllowExpression: &matcherpb.RegexMatcher{},
+					},
+				})
+				return m
+			}(),
+			wantErr: "ext_proc: invalid RegexMatcher.Regex: value length must be at least 1",
+		},
+		{
+			name:        "ErrEmptyDisallowExpression",
+			description: "config with empty disallow expression",
+			cfg: func() proto.Message {
+				m, _ := anypb.New(&fpb.ExternalProcessor{
+					GrpcService: &corepb.GrpcService{
+						TargetSpecifier: &corepb.GrpcService_GoogleGrpc_{
+							GoogleGrpc: &corepb.GrpcService_GoogleGrpc{
+								TargetUri: "localhost:1234",
+							},
+						},
+					},
+					ProcessingMode: &fpb.ProcessingMode{},
+					MutationRules: &mutationpb.HeaderMutationRules{
+						DisallowExpression: &matcherpb.RegexMatcher{},
+					},
+				})
+				return m
+			}(),
+			wantErr: "ext_proc: invalid RegexMatcher.Regex: value length must be at least 1",
+		},
+		{
 			name:        "ErrNilConfig",
 			description: "nil config message",
 			cfg:         nil,
@@ -246,23 +327,28 @@ func (s) TestParseFilterConfigOverride(t *testing.T) {
 			name:        "ValidOverride",
 			description: "valid empty override config",
 			override: func() proto.Message {
-				m, _ := anypb.New(&fpb.ExtProcOverrides{})
+				m, _ := anypb.New(&fpb.ExtProcPerRoute{})
 				return m
 			}(),
 			wantOverrideCfg: overrideConfig{
-				config: &fpb.ExtProcOverrides{},
+				config: nil,
 			},
 		},
 		{
 			name:        "ValidOverride_Grpc",
 			description: "valid override with GRPC processing mode",
 			override: func() proto.Message {
-				m, _ := anypb.New(&fpb.ExtProcOverrides{
-					ProcessingMode: &fpb.ProcessingMode{
-						RequestBodyMode:  fpb.ProcessingMode_GRPC,
-						ResponseBodyMode: fpb.ProcessingMode_GRPC,
-					},
-				})
+				m, _ := anypb.New(
+					&fpb.ExtProcPerRoute{
+						Override: &fpb.ExtProcPerRoute_Overrides{
+							Overrides: &fpb.ExtProcOverrides{
+								ProcessingMode: &fpb.ProcessingMode{
+									RequestBodyMode:  fpb.ProcessingMode_GRPC,
+									ResponseBodyMode: fpb.ProcessingMode_GRPC,
+								},
+							},
+						},
+					})
 				return m
 			}(),
 			wantOverrideCfg: overrideConfig{
@@ -278,11 +364,15 @@ func (s) TestParseFilterConfigOverride(t *testing.T) {
 			name:        "ErrUnsupportedGrpcService_EnvoyGrpc",
 			description: "override with unsupported EnvoyGrpc service",
 			override: func() proto.Message {
-				m, _ := anypb.New(&fpb.ExtProcOverrides{
-					GrpcService: &corepb.GrpcService{
-						TargetSpecifier: &corepb.GrpcService_EnvoyGrpc_{
-							EnvoyGrpc: &corepb.GrpcService_EnvoyGrpc{
-								ClusterName: "cluster",
+				m, _ := anypb.New(&fpb.ExtProcPerRoute{
+					Override: &fpb.ExtProcPerRoute_Overrides{
+						Overrides: &fpb.ExtProcOverrides{
+							GrpcService: &corepb.GrpcService{
+								TargetSpecifier: &corepb.GrpcService_EnvoyGrpc_{
+									EnvoyGrpc: &corepb.GrpcService_EnvoyGrpc{
+										ClusterName: "cluster",
+									},
+								},
 							},
 						},
 					},
@@ -295,7 +385,15 @@ func (s) TestParseFilterConfigOverride(t *testing.T) {
 			name:        "ErrInvalidProcessingMode_RequestBodyStreamed",
 			description: "override with unsupported streamed request body mode",
 			override: func() proto.Message {
-				m, _ := anypb.New(&fpb.ExtProcOverrides{ProcessingMode: &fpb.ProcessingMode{RequestBodyMode: fpb.ProcessingMode_STREAMED}})
+				m, _ := anypb.New(&fpb.ExtProcPerRoute{
+					Override: &fpb.ExtProcPerRoute_Overrides{
+						Overrides: &fpb.ExtProcOverrides{
+							ProcessingMode: &fpb.ProcessingMode{
+								RequestBodyMode: fpb.ProcessingMode_STREAMED,
+							},
+						},
+					},
+				})
 				return m
 			}(),
 			wantErr: "ext_proc: invalid request body mode STREAMED",
@@ -304,9 +402,13 @@ func (s) TestParseFilterConfigOverride(t *testing.T) {
 			name:        "ErrInvalidProcessingMode_ResponseBodyStreamed",
 			description: "override with unsupported streamed response body mode",
 			override: func() proto.Message {
-				m, _ := anypb.New(&fpb.ExtProcOverrides{
-					ProcessingMode: &fpb.ProcessingMode{
-						ResponseBodyMode: fpb.ProcessingMode_STREAMED,
+				m, _ := anypb.New(&fpb.ExtProcPerRoute{
+					Override: &fpb.ExtProcPerRoute_Overrides{
+						Overrides: &fpb.ExtProcOverrides{
+							ProcessingMode: &fpb.ProcessingMode{
+								ResponseBodyMode: fpb.ProcessingMode_STREAMED,
+							},
+						},
 					},
 				})
 				return m

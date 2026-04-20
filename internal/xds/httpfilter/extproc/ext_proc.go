@@ -69,7 +69,7 @@ func (builder) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, er
 	if msg.GetGrpcService() == nil {
 		return nil, fmt.Errorf("ext_proc: empty grpc_service provided in config %v", cfg)
 	}
-	if msg.GrpcService.GetGoogleGrpc() == nil {
+	if msg.GetGrpcService().GetGoogleGrpc() == nil {
 		return nil, fmt.Errorf("ext_proc: only google_grpc grpc_service is supported, got %v in config %v", msg.GrpcService.GetTargetSpecifier(), cfg)
 	}
 	if msg.GetProcessingMode() == nil {
@@ -78,32 +78,41 @@ func (builder) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, er
 	if err := validateBodyProcessingMode(msg.GetProcessingMode()); err != nil {
 		return nil, err
 	}
+	if mr := msg.GetMutationRules(); mr != nil {
+		if err := mr.GetAllowExpression().Validate(); err != nil {
+			return nil, fmt.Errorf("ext_proc: %v", err)
+		}
+		if err := mr.GetDisallowExpression().Validate(); err != nil {
+			return nil, fmt.Errorf("ext_proc: %v", err)
+		}
+	}
 	return baseConfig{config: msg}, nil
 }
 
-func (builder) ParseFilterConfigOverride(override proto.Message) (httpfilter.FilterConfig, error) {
-	if override == nil {
+func (builder) ParseFilterConfigOverride(ov proto.Message) (httpfilter.FilterConfig, error) {
+	if ov == nil {
 		return nil, fmt.Errorf("ext_proc: nil override configuration provided")
 	}
-	m, ok := override.(*anypb.Any)
+	m, ok := ov.(*anypb.Any)
 	if !ok {
-		return nil, fmt.Errorf("ext_proc: error parsing override %v: unknown type %T", override, override)
+		return nil, fmt.Errorf("ext_proc: error parsing override %v: unknown type %T", ov, ov)
 	}
-	msg := new(fpb.ExtProcOverrides)
+	msg := new(fpb.ExtProcPerRoute)
 	if err := m.UnmarshalTo(msg); err != nil {
-		return nil, fmt.Errorf("ext_proc: failed to unmarshal override %v: %v", override, err)
+		return nil, fmt.Errorf("ext_proc: failed to unmarshal override %v: %v", ov, err)
 	}
+	override := msg.GetOverrides()
 	// GrpcService can be optionally provided in the override config. If
 	// provided, it must be of type google_grpc.
-	if msg.GetGrpcService() != nil && msg.GrpcService.GetGoogleGrpc() == nil {
-		return nil, fmt.Errorf("ext_proc: only google_grpc grpc_service is supported, got %v in override %v", msg.GrpcService.GetTargetSpecifier(), override)
+	if override.GetGrpcService() != nil && override.GrpcService.GetGoogleGrpc() == nil {
+		return nil, fmt.Errorf("ext_proc: only google_grpc grpc_service is supported, got %v in override %v", override.GrpcService.GetTargetSpecifier(), override)
 	}
-	if pm := msg.GetProcessingMode(); pm != nil {
+	if pm := override.GetProcessingMode(); pm != nil {
 		if err := validateBodyProcessingMode(pm); err != nil {
 			return nil, err
 		}
 	}
-	return overrideConfig{config: msg}, nil
+	return overrideConfig{config: override}, nil
 }
 
 func (builder) IsTerminal() bool {
