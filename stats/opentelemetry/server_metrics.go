@@ -200,7 +200,7 @@ func (h *serverMetricsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInf
 	ai.startTime = time.Now()
 	ai.method = removeLeadingSlash(method)
 
-	return setServerRPCInfo(ctx, &rpcInfo{ai: ai})
+	return ctx
 }
 
 // HandleRPC handles per RPC stats implementation.

@@ -71,7 +71,7 @@ func (h *clientMetricsHandler) initializeMetrics() {
 // or creates and attaches a new one.
 func getOrCreateCallInfo(ctx context.Context, cc *grpc.ClientConn, method string, opts ...grpc.CallOption) (context.Context, *callInfo) {
 	ci := getCallInfo(ctx)
-	if ci == nil || ci.target != cc.CanonicalTarget() {
+	if ci == nil {
 		ci = &callInfo{
 			target: cc.CanonicalTarget(),
 			method: determineMethod(method, opts...),
@@ -181,7 +181,7 @@ func (h *clientMetricsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInf
 	ai.xdsLabels = labels.TelemetryLabels
 	ai.method = removeLeadingSlash(info.FullMethodName)
 
-	return setClientRPCInfo(ctx, &rpcInfo{ai: ai})
+	return ctx
 }
 
 // HandleRPC handles per RPC stats implementation.
