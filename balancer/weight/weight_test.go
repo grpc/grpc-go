@@ -22,7 +22,6 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-
 	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/balancer/weight"
 	"google.golang.org/grpc/internal/grpctest"
