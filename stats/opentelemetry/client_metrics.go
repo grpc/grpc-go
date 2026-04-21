@@ -71,7 +71,7 @@ func (h *clientMetricsHandler) initializeMetrics() {
 // or creates and attaches a new one.
 func getOrCreateCallInfo(ctx context.Context, cc *grpc.ClientConn, method string, opts ...grpc.CallOption) (context.Context, *callInfo) {
 	ci := getCallInfo(ctx)
-	if ci == nil {
+	if ci == nil || ci.target != cc.CanonicalTarget() {
 		ci = &callInfo{
 			target: cc.CanonicalTarget(),
 			method: determineMethod(method, opts...),
@@ -157,17 +157,6 @@ func (h *clientMetricsHandler) TagConn(ctx context.Context, _ *stats.ConnTagInfo
 // HandleConn exists to satisfy stats.Handler.
 func (h *clientMetricsHandler) HandleConn(context.Context, stats.ConnStats) {}
 
-// getOrCreateRPCAttemptInfo retrieves or creates an rpc attemptInfo object
-// and ensures it is set in the context along with the rpcInfo.
-func getOrCreateRPCAttemptInfo(ctx context.Context) (context.Context, *attemptInfo) {
-	ri := getRPCInfo(ctx)
-	if ri != nil {
-		return ctx, ri.ai
-	}
-	ri = &rpcInfo{ai: &attemptInfo{}}
-	return setRPCInfo(ctx, ri), ri.ai
-}
-
 // TagRPC implements per RPC attempt context management for metrics.
 func (h *clientMetricsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo) context.Context {
 	// Numerous stats handlers can be used for the same channel. The cluster
@@ -187,17 +176,17 @@ func (h *clientMetricsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInf
 		}
 		ctx = istats.SetLabels(ctx, labels)
 	}
-	ctx, ai := getOrCreateRPCAttemptInfo(ctx)
+	ctx, ai := getOrCreateClientRPCAttemptInfo(ctx)
 	ai.startTime = time.Now()
 	ai.xdsLabels = labels.TelemetryLabels
 	ai.method = removeLeadingSlash(info.FullMethodName)
 
-	return setRPCInfo(ctx, &rpcInfo{ai: ai})
+	return setClientRPCInfo(ctx, &rpcInfo{ai: ai})
 }
 
 // HandleRPC handles per RPC stats implementation.
 func (h *clientMetricsHandler) HandleRPC(ctx context.Context, rs stats.RPCStats) {
-	ri := getRPCInfo(ctx)
+	ri := getClientRPCInfo(ctx)
 	if ri == nil {
 		logger.Error("ctx passed into client side stats handler metrics event handling has no client attempt data present")
 		return

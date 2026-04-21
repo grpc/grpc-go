@@ -181,16 +181,16 @@ type callInfo struct {
 	nameResolutionEventAdded atomic.Bool
 }
 
-type callInfoKey struct{}
+type clientCallInfoKey struct{}
 
 func setCallInfo(ctx context.Context, ci *callInfo) context.Context {
-	return context.WithValue(ctx, callInfoKey{}, ci)
+	return context.WithValue(ctx, clientCallInfoKey{}, ci)
 }
 
 // getCallInfo returns the callInfo stored in the context, or nil
 // if there isn't one.
 func getCallInfo(ctx context.Context) *callInfo {
-	ci, _ := ctx.Value(callInfoKey{}).(*callInfo)
+	ci, _ := ctx.Value(clientCallInfoKey{}).(*callInfo)
 	return ci
 }
 
@@ -200,17 +200,47 @@ type rpcInfo struct {
 	ai *attemptInfo
 }
 
-type rpcInfoKey struct{}
+type clientRPCInfoKey struct{}
+type serverRPCInfoKey struct{}
 
-func setRPCInfo(ctx context.Context, ri *rpcInfo) context.Context {
-	return context.WithValue(ctx, rpcInfoKey{}, ri)
+func setClientRPCInfo(ctx context.Context, ri *rpcInfo) context.Context {
+	return context.WithValue(ctx, clientRPCInfoKey{}, ri)
 }
 
-// getRPCInfo returns the rpcInfo stored in the context, or nil
+// getClientRPCInfo returns the rpcInfo stored in the context for client, or nil
 // if there isn't one.
-func getRPCInfo(ctx context.Context) *rpcInfo {
-	ri, _ := ctx.Value(rpcInfoKey{}).(*rpcInfo)
+func getClientRPCInfo(ctx context.Context) *rpcInfo {
+	ri, _ := ctx.Value(clientRPCInfoKey{}).(*rpcInfo)
 	return ri
+}
+
+func setServerRPCInfo(ctx context.Context, ri *rpcInfo) context.Context {
+	return context.WithValue(ctx, serverRPCInfoKey{}, ri)
+}
+
+// getServerRPCInfo returns the rpcInfo stored in the context for server, or nil
+// if there isn't one.
+func getServerRPCInfo(ctx context.Context) *rpcInfo {
+	ri, _ := ctx.Value(serverRPCInfoKey{}).(*rpcInfo)
+	return ri
+}
+
+func getOrCreateClientRPCAttemptInfo(ctx context.Context) (context.Context, *attemptInfo) {
+	ri := getClientRPCInfo(ctx)
+	if ri != nil {
+		return ctx, ri.ai
+	}
+	ri = &rpcInfo{ai: &attemptInfo{}}
+	return setClientRPCInfo(ctx, ri), ri.ai
+}
+
+func getOrCreateServerRPCAttemptInfo(ctx context.Context) (context.Context, *attemptInfo) {
+	ri := getServerRPCInfo(ctx)
+	if ri != nil {
+		return ctx, ri.ai
+	}
+	ri = &rpcInfo{ai: &attemptInfo{}}
+	return setServerRPCInfo(ctx, ri), ri.ai
 }
 
 func removeLeadingSlash(mn string) string {

@@ -2204,3 +2204,131 @@ func runDisconnectScenario(t *testing.T, name, wantLabel string, action func(*st
 		t.Fatalf("Metric verification failed for case %s: %v", name, err)
 	}
 }
+
+// TestRelayContextCollision verifies that context used to set RPC info in
+// opentelemetry doesn't cause overwriting when application acts as both
+// server and client.
+func (s) TestRelayContextCollision(t *testing.T) {
+	moC, readerC := defaultMetricsOptions(t, nil)
+	ssC := setupStubServer(t, moC, nil)
+	defer ssC.Stop()
+
+	moB, readerB := defaultMetricsOptions(t, nil)
+	otelOptions := opentelemetry.Options{MetricsOptions: *moB}
+
+	relayCC, err := grpc.NewClient(
+		ssC.Address,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		opentelemetry.DialOption(otelOptions),
+	)
+	if err != nil {
+		t.Fatalf("Failed to create relay client: %v", err)
+	}
+	defer relayCC.Close()
+
+	ssB := &stubserver.StubServer{
+		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			time.Sleep(50 * time.Millisecond)
+
+			err := relayCC.Invoke(ctx, "/grpc.testing.TestService/UnregisteredCall", in, &testpb.SimpleResponse{})
+			if err == nil {
+				t.Error("Expected an error from UnregisteredCall")
+			}
+			return &testpb.SimpleResponse{}, nil
+		},
+	}
+
+	if err := ssB.Start(
+		[]grpc.ServerOption{opentelemetry.ServerOption(otelOptions)},
+		opentelemetry.DialOption(otelOptions),
+	); err != nil {
+		t.Fatalf("Error starting relay server: %v", err)
+	}
+	defer ssB.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	if _, err := ssB.Client.UnaryCall(ctx, &testpb.SimpleRequest{Payload: &testpb.Payload{Body: []byte("hello")}}); err != nil {
+		t.Fatalf("Unexpected error from UnaryCall: %v", err)
+	}
+
+	rmB := &metricdata.ResourceMetrics{}
+	if err := readerB.Collect(ctx, rmB); err != nil {
+		t.Fatalf("Failed to collect metrics from readerB: %v", err)
+	}
+
+	var gotServerStartedB, gotClientStartedB bool
+
+	for _, sm := range rmB.ScopeMetrics {
+		for _, m := range sm.Metrics {
+			sum, ok := m.Data.(metricdata.Sum[int64])
+			if !ok {
+				continue
+			}
+
+			switch m.Name {
+			case "grpc.server.call.started":
+				for _, dp := range sum.DataPoints {
+					gotServerStartedB = true
+					if val, ok := dp.Attributes.Value("grpc.method"); ok && val.AsString() != "grpc.testing.TestService/UnaryCall" {
+						t.Errorf("Expected Server B server metric 'grpc.testing.TestService/UnaryCall', got '%s'", val.AsString())
+					}
+				}
+			case "grpc.client.attempt.started":
+				for _, dp := range sum.DataPoints {
+					val, ok := dp.Attributes.Value("grpc.method")
+					if !ok {
+						continue
+					}
+
+					// Ignore the test framework's initial outbound call to Server B
+					if val.AsString() == "grpc.testing.TestService/UnaryCall" {
+						continue
+					}
+
+					gotClientStartedB = true
+					if val.AsString() != "other" {
+						t.Errorf("Expected Server B client metric 'other', got '%s'", val.AsString())
+					}
+				}
+			}
+		}
+	}
+
+	if !gotServerStartedB {
+		t.Error("Missing metric: grpc.server.call.started on Server B")
+	}
+	if !gotClientStartedB {
+		t.Error("Missing metric: grpc.client.attempt.started on Server B")
+	}
+
+	rmC := &metricdata.ResourceMetrics{}
+	if err := readerC.Collect(ctx, rmC); err != nil {
+		t.Fatalf("Failed to collect metrics from readerC: %v", err)
+	}
+
+	var gotServerStartedC bool
+
+	for _, sm := range rmC.ScopeMetrics {
+		for _, m := range sm.Metrics {
+			sum, ok := m.Data.(metricdata.Sum[int64])
+			if !ok {
+				continue
+			}
+
+			if m.Name == "grpc.server.call.started" {
+				for _, dp := range sum.DataPoints {
+					gotServerStartedC = true
+					if val, ok := dp.Attributes.Value("grpc.method"); ok && val.AsString() != "other" {
+						t.Errorf("Expected Server C server metric 'other', got '%s'", val.AsString())
+					}
+				}
+			}
+		}
+	}
+
+	if !gotServerStartedC {
+		t.Error("Missing metric: grpc.server.call.started on Server C")
+	}
+}
