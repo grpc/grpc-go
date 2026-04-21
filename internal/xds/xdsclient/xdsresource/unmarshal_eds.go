@@ -38,16 +38,11 @@ import (
 	"google.golang.org/grpc/resolver/ringhash"
 )
 
-// SetHostname returns a copy of the given endpoint with hostname added
-// as an attribute.
-func SetHostname(endpoint resolver.Endpoint, h string) resolver.Endpoint {
-	return hostname.Set(endpoint, h)
-}
-
 // Hostname returns the hostname from the given legacy Address.
 // If this attribute is not set, it returns the empty string.
 func Hostname(addr resolver.Address) string {
-	return hostname.FromAddress(addr)
+	ep := resolver.Endpoint{Attributes: addr.BalancerAttributes}
+	return hostname.FromEndpoint(ep)
 }
 
 func unmarshalEndpointsResource(r *anypb.Any) (string, EndpointsUpdate, error) {
@@ -157,7 +152,7 @@ func parseEndpoints(lbEndpoints []*v3endpointpb.LbEndpoint, uniqueEndpointAddrs 
 			}
 		}
 		endpoint := resolver.Endpoint{Addresses: address}
-		endpoint = SetHostname(endpoint, lbEndpoint.GetEndpoint().GetHostname())
+		endpoint = hostname.Set(endpoint, lbEndpoint.GetEndpoint().GetHostname())
 		endpoint = ringhash.SetHashKey(endpoint, hashKey)
 		endpoints = append(endpoints, Endpoint{
 			ResolverEndpoint: endpoint,
