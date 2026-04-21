@@ -29,7 +29,6 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/backoff"
 	"google.golang.org/grpc/balancer"

@@ -44,30 +44,15 @@ func Set(endpoint resolver.Endpoint, hostname string) resolver.Endpoint {
 	return endpoint
 }
 
-// Hostname returns the hostname attribute of endpoint. If this attribute is
+// FromEndpoint returns the hostname attribute of endpoint. If this attribute is
 // not set, it returns the empty string.
 //
 // # Experimental
 //
 // Notice: This API is EXPERIMENTAL and may be changed or removed in a
 // later release.
-func Hostname(endpoint resolver.Endpoint) string {
+func FromEndpoint(endpoint resolver.Endpoint) string {
 	h, _ := endpoint.Attributes.Value(hostnameKey{}).(string)
 	return h
 }
 
-// FromAddress returns the hostname attribute from a legacy
-// resolver.Address. It checks both the modern Attributes field and the
-// deprecated BalancerAttributes field for compatibility.
-//
-// # Experimental
-//
-// Notice: This API is EXPERIMENTAL and may be changed or removed in a
-// later release.
-func FromAddress(addr resolver.Address) string {
-	if h, ok := addr.Attributes.Value(hostnameKey{}).(string); ok && h != "" {
-		return h
-	}
-	h, _ := addr.BalancerAttributes.Value(hostnameKey{}).(string)
-	return h
-}

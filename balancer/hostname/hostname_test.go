@@ -27,18 +27,18 @@ import (
 
 func TestHostname_SetAndGet(t *testing.T) {
 	ep := resolver.Endpoint{}
-	if h := hostname.Hostname(ep); h != "" {
+	if h := hostname.FromEndpoint(ep); h != "" {
 		t.Errorf("empty = %q", h)
 	}
 
 	ep2 := hostname.Set(ep, "myservice.example.com")
-	if h := hostname.Hostname(ep2); h != "myservice.example.com" {
+	if h := hostname.FromEndpoint(ep2); h != "myservice.example.com" {
 		t.Errorf("got %q", h)
 	}
 
 	// empty hostname returns same endpoint
 	ep3 := hostname.Set(ep2, "")
-	if hostname.Hostname(ep3) != "myservice.example.com" {
+	if hostname.FromEndpoint(ep3) != "myservice.example.com" {
 		t.Error("empty should not overwrite")
 	}
 }
