@@ -2205,9 +2205,9 @@ func runDisconnectScenario(t *testing.T, name, wantLabel string, action func(*st
 	}
 }
 
-// TestRelayContextCollisionMetrics verifies that when an application acts as both a
-// server and a client using the same context, the client metrics do not inherit or
-// overwrite the server's telemetry metadata (e.g., grpc.method).
+// TestRelayContextCollisionMetrics verifies that when an application acts as
+// both a server and a client using the same context, the client metrics do not
+// inherit or overwrite the server's telemetry metadata (e.g., grpc.method).
 func (s) TestRelayContextCollisionMetrics(t *testing.T) {
 	moC, _ := defaultMetricsOptions(t, nil)
 	ssC := setupStubServer(t, moC, nil)
@@ -2248,15 +2248,17 @@ func (s) TestRelayContextCollisionMetrics(t *testing.T) {
 	}
 
 	// Verify Server Metric Identity is retained
-	waitForMetricDataPoint(ctx, t, readerB, "grpc.server.call.started", "grpc.testing.TestService/UnaryCall")
+	pollForMetricWithMethod(ctx, t, readerB, "grpc.server.call.started", "grpc.testing.TestService/UnaryCall")
 
-	// Verify Client Metric Identity correctly resolved to "other" (Proves collision is fixed)
-	waitForMetricDataPoint(ctx, t, readerB, "grpc.client.attempt.started", "other")
+	// Verify Client Metric Identity correctly resolved to "other" (Proves
+	// collision is fixed)
+	pollForMetricWithMethod(ctx, t, readerB, "grpc.client.attempt.started", "other")
 }
 
-// TestRelayContextCollisionTracing verifies that span context is correctly propagated
-// from incoming server requests to outgoing client requests without the client span
-// accidentally adopting the server's identity or breaking the trace chain.
+// TestRelayContextCollisionTracing verifies that span context is correctly
+// propagated from incoming server requests to outgoing client requests without
+// the client span accidentally adopting the server's identity or breaking the
+// trace chain.
 func (s) TestRelayContextCollisionTracing(t *testing.T) {
 	toC, _ := defaultTraceOptions(t)
 	ssC := setupStubServer(t, nil, toC)
@@ -2294,26 +2296,43 @@ func (s) TestRelayContextCollisionTracing(t *testing.T) {
 
 	_, _ = ssB.Client.UnaryCall(ctx, &testpb.SimpleRequest{})
 
-	// Retrieve trace IDs directly via the polling helper
-	srvTraceID := waitForSpanTraceID(ctx, t, exporterB, oteltrace.SpanKindServer, "Recv.")
-	cliTraceID := waitForSpanTraceID(ctx, t, exporterB, oteltrace.SpanKindClient, "Sent.grpc.testing.TestService.UnregisteredCall")
+	wantSpans := []traceSpanInfo{
+		{name: "Recv.", spanKind: "server"},
+		{name: "Sent.grpc.testing.TestService.UnregisteredCall", spanKind: "client"},
+	}
+	spans, err := waitForTraceSpans(ctx, exporterB, wantSpans)
+	if err != nil {
+		t.Fatalf("Failed to wait for spans: %v", err)
+	}
 
-	// Ensure the trace chain is unbroken
+	var srvTraceID, cliTraceID oteltrace.TraceID
+	for _, span := range spans {
+		if span.Name == "Recv." && span.SpanKind == oteltrace.SpanKindServer {
+			srvTraceID = span.SpanContext.TraceID()
+		}
+		if span.Name == "Sent.grpc.testing.TestService.UnregisteredCall" && span.SpanKind == oteltrace.SpanKindClient {
+			cliTraceID = span.SpanContext.TraceID()
+		}
+	}
+	if !srvTraceID.IsValid() || !cliTraceID.IsValid() {
+		t.Fatalf("Invalid trace IDs found. Server: %s, Client: %s", srvTraceID, cliTraceID)
+	}
+
 	if srvTraceID != cliTraceID {
 		t.Errorf("Trace continuity broken: Server TraceID %s != Client TraceID %s", srvTraceID, cliTraceID)
 	}
 }
 
-// waitForMetricDataPoint polls the metric reader until it finds a metric with the 
-// specified name that contains a data point matching the target grpc.method.
-func waitForMetricDataPoint(ctx context.Context, t *testing.T, reader metric.Reader, metricName, method string) metricdata.DataPoint[int64] {
+// pollForMetricWithMethod polls the metric reader until it finds a metric with
+// the specified name that contains a data point matching the target grpc.method.
+func pollForMetricWithMethod(ctx context.Context, t *testing.T, reader *metric.ManualReader, metricName, method string) metricdata.DataPoint[int64] {
 	t.Helper()
 	for {
 		if ctx.Err() != nil {
 			t.Fatalf("Timeout waiting for metric %q with method %q", metricName, method)
 		}
 
-		metrics := metricsDataFromReader(ctx, reader.(*metric.ManualReader))
+		metrics := metricsDataFromReader(ctx, reader)
 		if m, ok := metrics[metricName]; ok {
 			if sum, ok := m.Data.(metricdata.Sum[int64]); ok {
 				for _, dp := range sum.DataPoints {
@@ -2321,24 +2340,6 @@ func waitForMetricDataPoint(ctx context.Context, t *testing.T, reader metric.Rea
 						return dp
 					}
 				}
-			}
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-}
-
-// waitForSpanTraceID polls the span exporter until it finds a span of the 
-// specified kind that matches the target span name, returning its TraceID.
-func waitForSpanTraceID(ctx context.Context, t *testing.T, exporter *tracetest.InMemoryExporter, kind oteltrace.SpanKind, name string) oteltrace.TraceID {
-	t.Helper()
-	for {
-		if ctx.Err() != nil {
-			t.Fatalf("Timeout waiting for span kind %v with name %q", kind, name)
-		}
-
-		for _, span := range exporter.GetSpans() {
-			if span.SpanKind == kind && span.Name == name {
-				return span.SpanContext.TraceID()
 			}
 		}
 		time.Sleep(10 * time.Millisecond)
