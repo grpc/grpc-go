@@ -32,10 +32,11 @@ import (
 // Listener implements a net.Listener that creates local, buffered net.Conns
 // via its Accept and Dial method.
 type Listener struct {
-	mu   sync.Mutex
-	sz   int
-	ch   chan net.Conn
-	done chan struct{}
+	mu    sync.Mutex
+	sz    int
+	ch    chan net.Conn
+	done  chan struct{}
+	conns []*conn
 }
 
 // Implementation of net.Error providing timeout
@@ -66,7 +67,7 @@ func (l *Listener) Accept() (net.Conn, error) {
 	}
 }
 
-// Close stops the listener.
+// Close stops the listener and closes all connections that were created by it.
 func (l *Listener) Close() error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -76,7 +77,28 @@ func (l *Listener) Close() error {
 	default:
 		close(l.done)
 	}
+	for _, c := range l.conns {
+		c.Close()
+	}
+	l.conns = nil
 	return nil
+}
+
+func (l *Listener) trackConn(c *conn) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.conns = append(l.conns, c)
+}
+
+func (l *Listener) untrackConn(c *conn) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	for i, conn := range l.conns {
+		if conn == c {
+			l.conns = append(l.conns[:i], l.conns[i+1:]...)
+			return
+		}
+	}
 }
 
 // Addr reports the address of the listener.
@@ -94,12 +116,21 @@ func (l *Listener) Dial() (net.Conn, error) {
 // of the connection.  If ctx is Done, returns ctx.Err()
 func (l *Listener) DialContext(ctx context.Context) (net.Conn, error) {
 	p1, p2 := newPipe(l.sz), newPipe(l.sz)
+	s := &conn{p1, p2}
+	// Track the server half so it will be closed when the listener is closed.
+	// Tracking before the select ensures there is no race between DialContext
+	// and Close: Close always sees every conn in l.conns.
+	l.trackConn(s)
 	select {
 	case <-ctx.Done():
+		// The connection was never handed to Accept, so clean it up to
+		// avoid leaking an unused entry in l.conns.
+		l.untrackConn(s)
 		return nil, ctx.Err()
 	case <-l.done:
+		// No need to untrack; Close will close all tracked conns.
 		return nil, errClosed
-	case l.ch <- &conn{p1, p2}:
+	case l.ch <- s:
 		return &conn{p2, p1}, nil
 	}
 }
