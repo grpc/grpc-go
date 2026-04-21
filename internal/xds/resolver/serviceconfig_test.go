@@ -26,7 +26,6 @@ import (
 
 	xxhash "github.com/cespare/xxhash/v2"
 	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/grpcutil"
 	iresolver "google.golang.org/grpc/internal/resolver"
@@ -46,34 +45,48 @@ func Test(t *testing.T) {
 }
 
 func (s) TestPruneActiveClusters(t *testing.T) {
+	newClusterInfo := func(ref int32, unsubscribe func()) *clusterInfo {
+		ci := &clusterInfo{unsubscribe: unsubscribe}
+		ci.refCount.Store(ref)
+		return ci
+	}
 	r := &xdsResolver{
 		activeClusters: map[string]*clusterInfo{
-			"zero":        {refCount: 0, unsubscribe: func() {}},
-			"one":         {refCount: 1, unsubscribe: func() {}},
-			"two":         {refCount: 2, unsubscribe: func() {}},
-			"anotherzero": {refCount: 0, unsubscribe: func() {}},
+			"zero":        newClusterInfo(0, func() {}),
+			"one":         newClusterInfo(1, func() {}),
+			"two":         newClusterInfo(2, func() {}),
+			"anotherzero": newClusterInfo(0, func() {}),
 		},
 		activePlugins: map[string]*clusterInfo{
-			"zero":        {refCount: 0},
-			"one":         {refCount: 1},
-			"two":         {refCount: 2},
-			"anotherzero": {refCount: 0},
+			"zero":        newClusterInfo(0, nil),
+			"one":         newClusterInfo(1, nil),
+			"two":         newClusterInfo(2, nil),
+			"anotherzero": newClusterInfo(0, nil),
 		},
 	}
 	wantActiveClusters := map[string]*clusterInfo{
-		"one": {refCount: 1},
-		"two": {refCount: 2},
+		"one": newClusterInfo(1, nil),
+		"two": newClusterInfo(2, nil),
 	}
 	wantActivePlugins := map[string]*clusterInfo{
-		"one": {refCount: 1},
-		"two": {refCount: 2},
+		"one": newClusterInfo(1, nil),
+		"two": newClusterInfo(2, nil),
 	}
 	r.pruneActiveClustersAndPlugins()
-	if d := cmp.Diff(r.activeClusters, wantActiveClusters, cmp.AllowUnexported(clusterInfo{}), cmpopts.IgnoreFields(clusterInfo{}, "unsubscribe")); d != "" {
-		t.Errorf("r.activeClusters = %v; want %v\nDiffs: %v", r.activeClusters, wantActiveClusters, d)
+
+	getRefCounts := func(m map[string]*clusterInfo) map[string]int32 {
+		res := make(map[string]int32)
+		for k, v := range m {
+			res[k] = v.refCount.Load()
+		}
+		return res
 	}
-	if d := cmp.Diff(r.activePlugins, wantActivePlugins, cmp.AllowUnexported(clusterInfo{})); d != "" {
-		t.Fatalf("r.activePlugins = %v; want %v\nDiffs: %v", r.activePlugins, wantActivePlugins, d)
+
+	if d := cmp.Diff(getRefCounts(r.activeClusters), getRefCounts(wantActiveClusters)); d != "" {
+		t.Fatalf("r.activeClusters refCounts mismatch (-got +want):\n%s", d)
+	}
+	if d := cmp.Diff(getRefCounts(r.activePlugins), getRefCounts(wantActivePlugins)); d != "" {
+		t.Fatalf("r.activePlugins refCounts mismatch (-got +want):\n%s", d)
 	}
 }
 
