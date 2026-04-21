@@ -2888,7 +2888,9 @@ func (s) TestRingHash_RequestHashKeyConnecting(t *testing.T) {
 	// Connecting state, this should not trigger a connection attempt.
 	var firstConnectedBackend string
 
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		// Give extra time for more connections to be attempted.
 		time.Sleep(defaultTestShortTimeout)
 		nConn = 0
