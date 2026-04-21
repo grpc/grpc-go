@@ -22,7 +22,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"math"
 	"strings"
 	"testing"
 	"time"
@@ -34,6 +33,7 @@ import (
 	"google.golang.org/grpc/internal/grpctest"
 	iserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/internal/testutils"
+	"google.golang.org/grpc/internal/testutils/roundrobin"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 
@@ -151,6 +151,30 @@ func (s) TestCalculateSubset_Simple(t *testing.T) {
 			subsetSize: 5,
 			want:       makeEndpoints(5),
 		},
+		{
+			name:       "SubsetSmallerThanNumberOfEndpoints",
+			endpoints:  makeEndpoints(15),
+			subsetSize: 5,
+			want: []resolver.Endpoint{
+				{Addresses: []resolver.Address{{Addr: "endpoint-13"}}},
+				{Addresses: []resolver.Address{{Addr: "endpoint-10"}}},
+				{Addresses: []resolver.Address{{Addr: "endpoint-12"}}},
+				{Addresses: []resolver.Address{{Addr: "endpoint-6"}}},
+				{Addresses: []resolver.Address{{Addr: "endpoint-0"}}},
+			},
+		},
+		{
+			name:       "SubsetSmallerThanNumberOfEndpoints_Large",
+			endpoints:  makeEndpoints(1000),
+			subsetSize: 5,
+			want: []resolver.Endpoint{
+				{Addresses: []resolver.Address{{Addr: "endpoint-739"}}},
+				{Addresses: []resolver.Address{{Addr: "endpoint-116"}}},
+				{Addresses: []resolver.Address{{Addr: "endpoint-359"}}},
+				{Addresses: []resolver.Address{{Addr: "endpoint-876"}}},
+				{Addresses: []resolver.Address{{Addr: "endpoint-263"}}},
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -261,51 +285,7 @@ func (s) TestSubsettingBalancer_DeterministicSubset(t *testing.T) {
 	}
 }
 
-func (s) TestSubsettingEndpointsSimply(t *testing.T) {
-	testCases := []struct {
-		endpoints  []resolver.Endpoint
-		subsetSize uint32
-		want       uint32
-	}{
-		{
-			endpoints:  makeEndpoints(100),
-			subsetSize: 10,
-			want:       10,
-		},
-		{
-			endpoints:  makeEndpoints(10),
-			subsetSize: 2,
-			want:       2,
-		},
-		{
-			endpoints:  makeEndpoints(150),
-			subsetSize: 50,
-			want:       50,
-		},
-	}
 
-	for _, tc := range testCases {
-		t.Run(fmt.Sprint(tc.subsetSize), func(t *testing.T) {
-			b := &subsettingBalancer{
-				cfg:        &lbConfig{SubsetSize: tc.subsetSize},
-				hashSeed:   0,
-				hashDigest: xxhash.New(),
-			}
-			subsetOfEndpoints := b.calculateSubset(tc.endpoints)
-			got := len(subsetOfEndpoints)
-			if got != int(tc.want) {
-				t.Fatalf("len(subsetOfEndpoints) = %d; want %d", got, tc.want)
-			}
-		})
-	}
-}
-
-type DistributionData struct {
-	cardinality   int
-	mean          float64
-	sigma         float64
-	expectSuccess bool
-}
 
 // TestUniformDistributionOfEndpoints verifies that the random subsetting
 // policy achieves a uniform distribution across backends. From a set of N
@@ -379,8 +359,7 @@ func (s) TestUniformDistributionOfEndpoints(t *testing.T) {
 		K := int(tc.iteration)
 		p := float64(L) / float64(N)         // Probability of x ∈ N being drawn p(x) = L / N
 		E := float64(K) * p                  // Expected Value (Mean) E(N) = K * p
-		variance := float64(K) * p * (1 - p) // Variance σ²(N) = K * p * (1 - p)
-		sigma := math.Sqrt(variance)         // Standard Deviation σ(N) = sqrt(σ²(N))
+
 
 		EndpointCount := make(map[string]int, N)
 		for _, ep := range endpoints {
@@ -401,85 +380,27 @@ func (s) TestUniformDistributionOfEndpoints(t *testing.T) {
 		}
 
 		t.Logf("Test Case: Endpoints=%d, SubsetSize=%d, Iterations=%d", N, L, K)
-		result, msgs := verifyUniformDistribution(EndpointCount, DistributionData{N, E, sigma, tc.positive})
-		if !result {
-			t.Errorf("Distribution check failed:\n%s", msgs.String())
+
+		observedCounts := make(map[string]float64)
+		for k, v := range EndpointCount {
+			observedCounts[k] = float64(v)
+		}
+		expectedCounts := make(map[string]float64)
+		for k := range EndpointCount {
+			expectedCounts[k] = E
+		}
+
+		err := roundrobin.PearsonsChiSquareTest(t, observedCounts, expectedCounts, 0.05)
+		if tc.positive {
+			if err != nil {
+				t.Errorf("Distribution check failed: %v", err)
+			}
 		} else {
-			t.Logf("Distribution check passed:\n%s", msgs.String())
+			if err == nil {
+				t.Errorf("Distribution check expected to fail, but passed")
+			}
 		}
 	}
 }
 
-func verifyUniformDistribution(eps map[string]int, dd DistributionData) (bool, strings.Builder) {
-	// Verify the distribution is uniform within a small diff range.
-	var (
-		chi2          float64
-		reportBuilder strings.Builder
-	)
 
-	testPassed := true
-	reportBuilder.WriteString(fmt.Sprintf("%-12s | %-15s | %-15s | %s\n", "Endpoint", "ExpValue", "Diff from E", "Status"))
-	reportBuilder.WriteString(strings.Repeat("-", 75) + "\n")
-
-	for epAddr, count := range eps {
-		diff := float64(count) - dd.mean
-		absDiff := math.Abs(diff)
-
-		// Chi-Square Statistic Calculation (χ²)
-		chi2 += (diff * diff) / dd.mean
-
-		// Determine Sigma Range Status
-		status := "      E ± σ  (Normal)"
-		if absDiff > 3*dd.sigma {
-			status = "!!! > E ± 3σ (Extreme)"
-		} else if absDiff > 2*dd.sigma {
-			status = "!!  > E ± 2σ (Rare)"
-		} else if absDiff > dd.sigma {
-			status = "!   > E ± σ  (Noticeable)"
-		}
-
-		reportBuilder.WriteString(fmt.Sprintf("%-12s | %-15.2f | %-15.2f | %s\n", epAddr, dd.mean, absDiff, status))
-	}
-	reportBuilder.WriteString(strings.Repeat("-", 75) + "\n")
-
-	// Degrees of Freedom
-	df := float64(dd.cardinality - 1)
-
-	// Critical Value for α = 0.05 and df
-	criticalValue := chiSquareCriticalValue(0.05, df)
-
-	isUniform := chi2 <= criticalValue
-	testPassed = isUniform == dd.expectSuccess
-
-	if isUniform {
-		reportBuilder.WriteString(fmt.Sprintf("Distribution is uniform (χ²=%.2f <= critical value=%.2f)", chi2, criticalValue))
-	} else {
-		reportBuilder.WriteString(fmt.Sprintf("Distribution is not uniform (χ²=%.2f > critical value=%.2f)", chi2, criticalValue))
-	}
-
-	return testPassed, reportBuilder
-}
-
-// ChiSquareCriticalValue calculates the critical value for alpha (e.g., 0.05)
-// and degrees of freedom (df).
-func chiSquareCriticalValue(alpha float64, df float64) float64 {
-	var z, probability float64
-	probability = 1 - alpha
-	switch {
-	case probability >= 0.99:
-		z = 2.326
-	case probability >= 0.975:
-		z = 1.960
-	case probability >= 0.95:
-		z = 1.645
-	case probability >= 0.90:
-		z = 1.282
-	default:
-		z = 1.645 // Default to 95%
-	}
-	fraction := 2.0 / (9.0 * df)
-
-	// Formula: df * (1 - 2/(9df) + z * sqrt(2/(9df)))^3
-	inner := 1.0 - fraction + z*math.Sqrt(fraction)
-	return df * math.Pow(inner, 3)
-}
