@@ -2884,13 +2884,17 @@ func (s) TestRingHash_RequestHashKeyConnecting(t *testing.T) {
 		t.Fatalf("Got %d connection attempts, want at most %d", nConn, wantMaxConn)
 	}
 
+	testutils.AwaitState(ctx, t, cc, connectivity.Connecting)
+
 	// Do a second RPC. Since there should already be a SubChannel in
 	// Connecting state, this should not trigger a connection attempt.
 	var firstConnectedBackend string
+	secondRPCStarted := make(chan struct{})
 
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
+		<-secondRPCStarted
 		// Give extra time for more connections to be attempted.
 		time.Sleep(defaultTestShortTimeout)
 		nConn = 0
@@ -2899,10 +2903,10 @@ func (s) TestRingHash_RequestHashKeyConnecting(t *testing.T) {
 				// Unblock the connection attempt. The SubChannel (and hence the
 				// channel) should transition to Ready. RPCs should succeed and
 				// be routed to this backend.
-				hold.Resume()
 				holds[i] = nil
 				firstConnectedBackend = backends[i]
 				nConn++
+				hold.Resume()
 			}
 		}
 		if wantMaxConn := 1; nConn > wantMaxConn {
@@ -2911,12 +2915,17 @@ func (s) TestRingHash_RequestHashKeyConnecting(t *testing.T) {
 	}()
 
 	// Do a second RPC. Since there should already be a SubChannel in
-	// Connecting state, this should not trigger a connection attempt.
-	// Use WaitForReady to block until the background goroutine resumes the hold.
-	_, err = client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true))
-	if err != nil {
-		t.Fatalf("EmptyCall(): got %v, want success", err)
-	}
+	// Connecting state, this should not trigger a connection attempt
+	// and wait until the background goroutine resumes the hold.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		close(secondRPCStarted)
+		_, err = client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true))
+		if err != nil {
+			t.Errorf("EmptyCall(): got %v, want success", err)
+		}
+	}()
 
 	testutils.AwaitState(ctx, t, cc, connectivity.Ready)
 	wg.Wait() // Make sure we're done with the first RPC.
