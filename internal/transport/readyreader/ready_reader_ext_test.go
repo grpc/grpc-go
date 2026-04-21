@@ -123,7 +123,11 @@ func (s) TestReadyReader_EOF(t *testing.T) {
 	}
 }
 
-func (s) TestReadyReader_TCP_Blocking(t *testing.T) {
+// Tests the behavior of readers wrapping TCP connections. It ensures that read
+// operations do not hold onto an allocated buffer while the connection is idle.
+// Buffers should only be permanently allocated from the pool when data is
+// actually ready on the socket, optimizing memory usage for idle connections.
+func (s) TestReadyReader_TCP(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skip("This test is only applicable for Linux, as RawConn functionality is not implemented for non-linux platforms.")
 	}
@@ -148,7 +152,7 @@ func (s) TestReadyReader_TCP_Blocking(t *testing.T) {
 		{
 			name: "BufReadyReader",
 			read: func(conn net.Conn, pool *trackingBufferPool, readBufSize int) ([]byte, error) {
-				rr := readyreader.NewNonBlocking(conn)
+				rr := readyreader.New(conn)
 				bufRR := readyreader.NewBuffered(rr, readBufSize, pool)
 				buf := make([]byte, 100)
 				n, err := bufRR.Read(buf)
