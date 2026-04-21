@@ -2886,36 +2886,38 @@ func (s) TestRingHash_RequestHashKeyConnecting(t *testing.T) {
 
 	// Do a second RPC. Since there should already be a SubChannel in
 	// Connecting state, this should not trigger a connection attempt.
-	wg.Add(1)
+	var firstConnectedBackend string
+
 	go func() {
-		_, err := client.EmptyCall(ctx, &testpb.Empty{})
-		if err != nil {
-			t.Errorf("EmptyCall(): got %v, want success", err)
+		// Give extra time for more connections to be attempted.
+		time.Sleep(defaultTestShortTimeout)
+		nConn = 0
+		for i, hold := range holds {
+			if hold.IsStarted() {
+				// Unblock the connection attempt. The SubChannel (and hence the
+				// channel) should transition to Ready. RPCs should succeed and
+				// be routed to this backend.
+				hold.Resume()
+				holds[i] = nil
+				firstConnectedBackend = backends[i]
+				nConn++
+			}
 		}
-		wg.Done()
+		if wantMaxConn := 1; nConn > wantMaxConn {
+			t.Errorf("Got %d connection attempts, want at most %d", nConn, wantMaxConn)
+		}
 	}()
 
-	// Give extra time for more connections to be attempted.
-	time.Sleep(defaultTestShortTimeout)
+	// Do a second RPC. Since there should already be a SubChannel in
+	// Connecting state, this should not trigger a connection attempt.
+	// Use WaitForReady to block until the background goroutine resumes the hold.
+	_, err = client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true))
+	if err != nil {
+		t.Fatalf("EmptyCall(): got %v, want success", err)
+	}
 
-	var firstConnectedBackend string
-	nConn = 0
-	for i, hold := range holds {
-		if hold.IsStarted() {
-			// Unblock the connection attempt. The SubChannel (and hence the
-			// channel) should transition to Ready. RPCs should succeed and
-			// be routed to this backend.
-			hold.Resume()
-			holds[i] = nil
-			firstConnectedBackend = backends[i]
-			nConn++
-		}
-	}
-	if wantMaxConn := 1; nConn > wantMaxConn {
-		t.Fatalf("Got %d connection attempts, want at most %d", nConn, wantMaxConn)
-	}
 	testutils.AwaitState(ctx, t, cc, connectivity.Ready)
-	wg.Wait() // Make sure we're done with the 2 previous RPCs.
+	wg.Wait() // Make sure we're done with the first RPC.
 
 	// Now send RPCs until we have at least one more connection attempt, that
 	// is, the random hash did not land on the same backend on every pick (the
