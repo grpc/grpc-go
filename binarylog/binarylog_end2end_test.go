@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/netip"
 	"sort"
 	"sync"
 	"testing"
@@ -138,12 +139,12 @@ type test struct {
 	// ss and srvAddr are set once startServer is called.
 	ss      *stubserver.StubServer
 	srvAddr string // Server IP without port.
-	srvIP   net.IP
+	srvIP   netip.Addr
 	srvPort int
 
 	// Fields for client address. Set by the service handler.
 	clientAddrMu sync.Mutex
-	clientIP     net.IP
+	clientIP     netip.Addr
 	clientPort   int
 }
 
@@ -168,7 +169,7 @@ func (lw *listenerWrapper) Accept() (net.Conn, error) {
 		return nil, err
 	}
 	lw.te.clientAddrMu.Lock()
-	lw.te.clientIP = conn.RemoteAddr().(*net.TCPAddr).IP
+	lw.te.clientIP = conn.RemoteAddr().(*net.TCPAddr).AddrPort().Addr().Unmap()
 	lw.te.clientPort = conn.RemoteAddr().(*net.TCPAddr).Port
 	lw.te.clientAddrMu.Unlock()
 	return conn, nil
@@ -273,7 +274,7 @@ func (te *test) startServer() {
 		te.t.Fatalf("Failed to start server: %v", err)
 	}
 	te.srvAddr = lis.Addr().String()
-	te.srvIP = lis.Addr().(*net.TCPAddr).IP
+	te.srvIP = lis.Addr().(*net.TCPAddr).AddrPort().Addr().Unmap()
 	te.srvPort = lis.Addr().(*net.TCPAddr).Port
 }
 
@@ -447,7 +448,7 @@ func (ed *expectedData) newClientHeaderEntry(client bool, rpcID, inRPCID uint64)
 			Address: ed.te.clientIP.String(),
 			IpPort:  uint32(ed.te.clientPort),
 		}
-		if ed.te.clientIP.To4() != nil {
+		if ed.te.clientIP.Is4() {
 			peer.Type = binlogpb.Address_TYPE_IPV4
 		} else {
 			peer.Type = binlogpb.Address_TYPE_IPV6
@@ -480,7 +481,7 @@ func (ed *expectedData) newServerHeaderEntry(client bool, rpcID, inRPCID uint64)
 			Address: ed.te.srvIP.String(),
 			IpPort:  uint32(ed.te.srvPort),
 		}
-		if ed.te.srvIP.To4() != nil {
+		if ed.te.srvIP.Is4() {
 			peer.Type = binlogpb.Address_TYPE_IPV4
 		} else {
 			peer.Type = binlogpb.Address_TYPE_IPV6
@@ -573,7 +574,7 @@ func (ed *expectedData) newServerTrailerEntry(client bool, rpcID, inRPCID uint64
 			Address: ed.te.srvIP.String(),
 			IpPort:  uint32(ed.te.srvPort),
 		}
-		if ed.te.srvIP.To4() != nil {
+		if ed.te.srvIP.Is4() {
 			peer.Type = binlogpb.Address_TYPE_IPV4
 		} else {
 			peer.Type = binlogpb.Address_TYPE_IPV6
