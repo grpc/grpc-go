@@ -1086,7 +1086,7 @@ func (s) TestSubConn_RegisterHealthListener(t *testing.T) {
 		}
 	}
 
-	// Make the SubConn enter IDLE and verify that health updates are recevied
+	// Make the SubConn enter IDLE and verify that health updates are received
 	// on registering a new listener.
 	backend.S.Stop()
 	backend.S = nil
