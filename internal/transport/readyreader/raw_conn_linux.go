@@ -18,20 +18,22 @@
 
 package readyreader
 
-import (
-	"golang.org/x/sys/unix"
-)
+import "syscall"
 
 func isRawConnSupported() bool {
 	return true
 }
 
-// sysRead uses the modern unix package for Unix-like systems.
+// sysRead uses the standard syscall package rather than the modern unix package
+// to avoid triggering the race detector. Because both packages perform sync
+// operations on a local variable to satisfy the race detector, mixing them
+// for read and write syscalls causes data races. We use syscall here to remain
+// consistent with net.Conn implementations in standard library.
 func sysRead(fd uintptr, p []byte) (int, error) {
-	return unix.Read(int(fd), p)
+	return syscall.Read(int(fd), p)
 }
 
 // wouldBlock checks standard Unix non-blocking errors.
 func wouldBlock(err error) bool {
-	return err == unix.EAGAIN || err == unix.EWOULDBLOCK
+	return err == syscall.EAGAIN || err == syscall.EWOULDBLOCK
 }

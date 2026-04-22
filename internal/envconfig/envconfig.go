@@ -142,6 +142,16 @@ var (
 	//
 	// TODO: In release v1.82.0, env var will be enabled by default.
 	Enable8KBDefaultHeaderListSize = boolFromEnv("GRPC_GO_EXPERIMENTAL_ENABLE_8KB_DEFAULT_HEADER_LIST_SIZE", false)
+
+	// EnableHTTPFramerReadBufferPooling enables the use of the
+	// readyreader.Reader interface to perform non-memory-pinning reads,
+	// provided the underlying net.Conn supports it. This reduces memory usage
+	// when subchannels are idle.
+	//
+	// This environment variable serves as an escape hatch to disable the
+	// feature if unforeseen issues arise, and it will be removed in a future
+	// release.
+	EnableHTTPFramerReadBufferPooling = boolFromEnv("GRPC_GO_EXPERIMENTAL_HTTP_FRAMER_READ_BUFFER_POOLING", true)
 )
 
 func boolFromEnv(envVar string, def bool) bool {
