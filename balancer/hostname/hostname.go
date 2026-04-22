@@ -56,3 +56,14 @@ func FromEndpoint(endpoint resolver.Endpoint) string {
 	return h
 }
 
+// FromAddress returns the hostname attribute from a resolver.Address.
+// It reads from the BalancerAttributes field of the address.
+//
+// # Experimental
+//
+// Notice: This API is EXPERIMENTAL and may be changed or removed in a
+// later release.
+func FromAddress(addr resolver.Address) string {
+	h, _ := addr.BalancerAttributes.Value(hostnameKey{}).(string)
+	return h
+}

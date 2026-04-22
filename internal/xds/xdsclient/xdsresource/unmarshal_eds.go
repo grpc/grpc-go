@@ -28,7 +28,6 @@ import (
 	v3typepb "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
-
 	"google.golang.org/grpc/balancer/hostname"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/pretty"
@@ -37,13 +36,6 @@ import (
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/ringhash"
 )
-
-// Hostname returns the hostname from the given legacy Address.
-// If this attribute is not set, it returns the empty string.
-func Hostname(addr resolver.Address) string {
-	ep := resolver.Endpoint{Attributes: addr.BalancerAttributes}
-	return hostname.FromEndpoint(ep)
-}
 
 func unmarshalEndpointsResource(r *anypb.Any) (string, EndpointsUpdate, error) {
 	r, err := UnwrapResource(r)

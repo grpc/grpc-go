@@ -21,24 +21,61 @@ package hostname_test
 import (
 	"testing"
 
+	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/balancer/hostname"
+	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/resolver"
 )
 
-func TestHostname_SetAndGet(t *testing.T) {
-	ep := resolver.Endpoint{}
-	if h := hostname.FromEndpoint(ep); h != "" {
-		t.Errorf("empty = %q", h)
+type s struct {
+	grpctest.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
+
+func (s) TestHostnameToAndFromEndpoint(t *testing.T) {
+	tests := []struct {
+		desc            string
+		inputHostname   string
+		inputAttributes *attributes.Attributes
+		wantHostname    string
+	}{
+		{
+			desc:            "empty_attributes",
+			inputHostname:   "myservice.example.com",
+			inputAttributes: nil,
+			wantHostname:    "myservice.example.com",
+		},
+		{
+			desc:            "non-empty_attributes",
+			inputHostname:   "myservice.example.com",
+			inputAttributes: attributes.New("foo", "bar"),
+			wantHostname:    "myservice.example.com",
+		},
+		{
+			desc:            "hostname_not_present_in_empty_attributes",
+			inputHostname:   "",
+			inputAttributes: nil,
+			wantHostname:    "",
+		},
+		{
+			desc:            "hostname_not_present_in_non-empty_attributes",
+			inputHostname:   "",
+			inputAttributes: attributes.New("foo", "bar"),
+			wantHostname:    "",
+		},
 	}
 
-	ep2 := hostname.Set(ep, "myservice.example.com")
-	if h := hostname.FromEndpoint(ep2); h != "myservice.example.com" {
-		t.Errorf("got %q", h)
-	}
-
-	// empty hostname returns same endpoint
-	ep3 := hostname.Set(ep2, "")
-	if hostname.FromEndpoint(ep3) != "myservice.example.com" {
-		t.Error("empty should not overwrite")
+	for _, test := range tests {
+		t.Run(test.desc, func(t *testing.T) {
+			endpoint := resolver.Endpoint{Attributes: test.inputAttributes}
+			endpoint = hostname.Set(endpoint, test.inputHostname)
+			gotHostname := hostname.FromEndpoint(endpoint)
+			if gotHostname != test.wantHostname {
+				t.Errorf("gotHostname: %v, wantHostname: %v", gotHostname, test.wantHostname)
+			}
+		})
 	}
 }
