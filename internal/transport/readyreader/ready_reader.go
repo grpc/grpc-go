@@ -63,9 +63,9 @@ type readState struct {
 	buf       *[]byte
 }
 
-// newNonBlocking returns a ReadyReader if the passed reader supports
+// NewNonBlocking returns a ReadyReader if the passed reader supports
 // non-memory-pinning reads, else nil.
-func newNonBlocking(r io.Reader) Reader {
+func NewNonBlocking(r io.Reader) Reader {
 	if rr, ok := r.(Reader); ok {
 		return rr
 	}
@@ -155,7 +155,7 @@ func (c *blockingReader) ReadOnReady(bufSize int, pool mem.BufferPool) (*[]byte,
 // If [syscall.RawConn] is unavailable, it falls back to using the simpler
 // [io.Reader] interface for reads.
 func New(r io.Reader) Reader {
-	if r := newNonBlocking(r); r != nil {
+	if r := NewNonBlocking(r); r != nil {
 		return r
 	}
 	return &blockingReader{reader: r}
