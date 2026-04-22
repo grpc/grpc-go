@@ -59,10 +59,14 @@ var (
 	// unconditionally.
 	XDSEndpointHashKeyBackwardCompat = boolFromEnv("GRPC_XDS_ENDPOINT_HASH_KEY_BACKWARD_COMPAT", false)
 
-	// LabelServerStreamGoroutines controls setting [runtime/pprof.Labels] on the
-	// goroutines spawned to handle incoming requests on the server.
-	// Set "GRPC_SERVER_METHOD_GOROUTINE_LABELS" to "false" to disable.
-	LabelServerStreamGoroutines = boolFromEnv("GRPC_SERVER_METHOD_GOROUTINE_LABELS", true)
+	// LabelServerGoroutines controls setting [runtime/pprof.Labels] on the
+	// goroutines spawned for various reasons.
+	// For now, this is limited to the goroutines spawned to handle incoming requests on the server.
+	// Set "GRPC_GO_SERVER_GOROUTINE_LABELS" to "grpc.method=false" to disable this grpc.method label.
+	// The right-hand-side of the key=value pairs is parsed by
+	// [strconv.ParseBool], so other values are supported including 1, 0, f, and t.
+	// This variable is a bit-field
+	LabelServerGoroutines = goroutineLabelsFromEnv("GRPC_GO_SERVER_GOROUTINE_LABELS", GoroutineLabelServerMethod)
 
 	// RingHashSetRequestHashKey is set if the ring hash balancer can get the
 	// request hash header by setting the "requestHashHeader" field, according
@@ -171,3 +175,47 @@ func uint64FromEnv(envVar string, def, min, max uint64) uint64 {
 	}
 	return v
 }
+
+// GoroutineLabels is a bitfield indicating which goroutine labels are enabled
+type GoroutineLabels uint16
+
+func goroutineLabelsFromEnv(envVar string, def GoroutineLabels) GoroutineLabels {
+	val := def
+	v := os.Getenv(envVar)
+	for s := range strings.SplitSeq(v, ",") {
+		s = strings.TrimSpace(s)
+		if len(s) == 0 {
+			continue
+		}
+		pre, post, ok := strings.Cut(s, "=")
+		if !ok {
+			// no equals sign
+			continue
+		}
+		post = strings.TrimSpace(post)
+		pre = strings.TrimSpace(pre)
+		entVal := GoroutineLabels(0)
+		rhs, parseErr := strconv.ParseBool(post)
+		if parseErr != nil {
+			continue
+		}
+		switch {
+		case strings.EqualFold(pre, "grpc.method"):
+			entVal = GoroutineLabelServerMethod
+		default:
+			// ignore
+		}
+		switch rhs {
+		case false:
+			val &^= entVal
+		case true:
+			val |= entVal
+		}
+	}
+	return val
+}
+
+const (
+	// Set the grpc.method label on new server-side gRPC streams
+	GoroutineLabelServerMethod GoroutineLabels = 1 << iota
+)
