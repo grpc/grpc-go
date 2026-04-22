@@ -26,8 +26,6 @@ import (
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
 	v3typepb "github.com/envoyproxy/go-control-plane/envoy/type/v3"
-	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/grpc/balancer/hostname"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/pretty"
@@ -35,6 +33,8 @@ import (
 	"google.golang.org/grpc/internal/xds/clients"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/ringhash"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/anypb"
 )
 
 func unmarshalEndpointsResource(r *anypb.Any) (string, EndpointsUpdate, error) {
