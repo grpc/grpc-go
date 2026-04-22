@@ -294,6 +294,9 @@ func (s) TestSubsettingBalancer_DeterministicSubset(t *testing.T) {
 // compute the variance and standard deviation, and use a Chi-Square test to
 // check whether the distribution is uniform.
 func (s) TestUniformDistributionOfEndpoints(t *testing.T) {
+	_, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
 	testCases := []struct {
 		eps        int
 		subsetSize uint32
