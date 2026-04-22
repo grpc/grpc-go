@@ -417,12 +417,11 @@ func bufferedReader(r io.Reader, bufSize int) io.Reader {
 	if bufSize <= 0 {
 		return r
 	}
-	if !envconfig.EnableHTTPFramerReadBufferPooling {
-		return bufio.NewReaderSize(r, bufSize)
-	}
-	if rr := readyreader.NewNonBlocking(r); rr != nil {
-		readPool := getIOBufferPool(bufSize)
-		return readyreader.NewBuffered(rr, bufSize, readPool)
+	if envconfig.EnableHTTPFramerReadBufferPooling {
+		if rr := readyreader.NewNonBlocking(r); rr != nil {
+			readPool := ioBufferPool(bufSize)
+			return readyreader.NewBuffered(rr, bufSize, readPool)
+		}
 	}
 	return bufio.NewReaderSize(r, bufSize)
 }
@@ -434,7 +433,7 @@ func newFramer(conn io.ReadWriter, writeBufferSize, readBufferSize int, sharedWr
 	r := bufferedReader(conn, readBufferSize)
 	var writePool *imem.SimpleBufferPool
 	if sharedWriteBuffer {
-		writePool = getIOBufferPool(writeBufferSize)
+		writePool = ioBufferPool(writeBufferSize)
 	}
 	w := newBufWriter(conn, writeBufferSize, writePool)
 	f := &framer{
@@ -592,7 +591,7 @@ func (df *parsedDataFrame) Header() http2.FrameHeader {
 	return df.FrameHeader
 }
 
-func getIOBufferPool(size int) *imem.SimpleBufferPool {
+func ioBufferPool(size int) *imem.SimpleBufferPool {
 	ioBufferMutex.Lock()
 	defer ioBufferMutex.Unlock()
 	pool, ok := ioBufferPoolMap[size]

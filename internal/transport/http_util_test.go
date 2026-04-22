@@ -263,7 +263,7 @@ func (s) TestWriteBadConnection(t *testing.T) {
 	// Configure the bufWriter with a batchsize that results in data being flushed
 	// to the underlying conn, midway through Write().
 	writeBufferSize := (len(data) - 1) / 2
-	writer := newBufWriter(&badNetworkConn{}, writeBufferSize, getIOBufferPool(writeBufferSize))
+	writer := newBufWriter(&badNetworkConn{}, writeBufferSize, ioBufferPool(writeBufferSize))
 
 	errCh := make(chan error, 1)
 	go func() {
