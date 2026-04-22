@@ -122,7 +122,7 @@ func (s) TestIncomingCarrier(t *testing.T) {
 
 // TestOutgoingCarrier verifies that a key-value pair is set in carrier's
 // context metadata using `OutgoingCarrier.Set()`. If key is not present, it
-// verifies that key-value pair is insterted. If key is already present, it
+// verifies that key-value pair is inserted. If key is already present, it
 // verifies that new value is appended at the end of list for the existing key.
 //
 // If key ends with `-bin`, it verifies that a binary value is set for
