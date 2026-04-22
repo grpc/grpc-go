@@ -47,8 +47,8 @@ type overrideConfig struct {
 // interceptorConfig contains the configuration for the external processing
 // client interceptor.
 type interceptorConfig struct {
-	// The following fields can be set either in the filter config or the
-	// override config. If both are set, the override config will be used.
+	// The following fields can be set either in the filter config or the override
+	// config. If both are set, the override config will be used.
 	//
 	// server is the configuration for the external processing server.
 	server serverConfig
@@ -66,14 +66,14 @@ type interceptorConfig struct {
 
 	// The following fields can only be set in the base config.
 	//
-	// allowModeOverride specifies whether to allow the external processing
-	// server to dynamically override the processing mode.
+	// allowModeOverride specifies whether to allow the external processing server
+	// to dynamically override the processing mode.
 	allowModeOverride bool
 	// allowedOverrideModes specifies the processing modes that the external
 	// processing server is allowed to dynamically override to if
 	// allowModeOverride is true. If allowModeOverride is false, this field is
-	// ignored. If allowModeOverride is true and this field is empty, the
-	// external processing server can override to any processing mode.
+	// ignored. If allowModeOverride is true and this field is empty, the external
+	// processing server can override any processing mode.
 	allowedOverrideModes []*v3procfilterpb.ProcessingMode
 	// mutationRules specifies the rules for what modifications an external
 	// processing server may make to headers/trailers sent to it.
@@ -82,8 +82,8 @@ type interceptorConfig struct {
 	// external processing server. If unset, all headers are allowed.
 	allowedHeaders []matcher.StringMatcher
 	// disallowedHeaders specifies the headers that will not be sent to the
-	// external processing server. This overrides the above AllowedHeaders if
-	// a header matches both.
+	// external processing server. This overrides the above AllowedHeaders if a
+	// header matches both.
 	disallowedHeaders []matcher.StringMatcher
 	// disableImmediateResponse specifies whether to disable immediate response
 	// from the external processing server. When true, if the response from
@@ -94,19 +94,19 @@ type interceptorConfig struct {
 	disableImmediateResponse bool
 	// observabilityMode determines if the filter waits for the external
 	// processing server. If true, events are sent to the server in
-	// "observation-only" mode; the filter does not wait for a response. If
-	// false, the filter waits for a response, allowing the server to modify
-	// events before they reach the dataplane.
+	// "observation-only" mode; the filter does not wait for a response. If false,
+	// the filter waits for a response, allowing the server to modify events
+	// before they reach the dataplane.
 	observabilityMode bool
 	// deferredCloseTimeout is the duration the filter waits before closing the
-	// external processing stream after the dataplane RPC completes. This is
-	// only applicable when observabilityMode is true; otherwise, it is ignored.
-	// The default value is 5 seconds.
+	// external processing stream after the dataplane RPC completes. This is only
+	// applicable when observabilityMode is true; otherwise, it is ignored. The
+	// default value is 5 seconds.
 	deferredCloseTimeout time.Duration
 }
 
-// processingMode defines how headers, trailers, and bodies are handled
-// in relation to the external processing server.
+// processingMode defines how headers, trailers, and bodies are handled in
+// relation to the external processing server.
 type processingMode int
 
 const (
@@ -126,19 +126,16 @@ type processingModes struct {
 
 // headerMutationRules specifies the rules for what modifications an external
 // processing server may make to headers sent on the data plane RPC.
-//
-// Methods on this struct are safe to call on a nil pointer receiver, in which
-// case all header mutations are permitted.
 type headerMutationRules struct {
-	// allowExpr specifies a regular expression that matches the headers that
-	// can be mutated.
+	// allowExpr specifies a regular expression that matches the headers that can
+	// be mutated.
 	allowExpr *regexp.Regexp
 	// disallowExpr specifies a regular expression that matches the headers that
 	// cannot be mutated. This overrides the above allowExpr if a header matches
 	// both.
 	disallowExpr *regexp.Regexp
-	// disallowAll specifies that no header mutations are allowed. This
-	// overrides all other settings.
+	// disallowAll specifies that no header mutations are allowed. This overrides
+	// all other settings.
 	disallowAll bool
 	// disallowIsError specifies whether to return an error if a header mutation
 	// is disallowed. If true, the data plane RPC will be failed with a grpc
@@ -150,11 +147,11 @@ type headerMutationRules struct {
 type serverConfig struct {
 	// targetURI is the name of the external server.
 	targetURI string
-	// channelCredentials specifies the transport credentials to use to connect
-	// to the external server. Must not be nil.
+	// channelCredentials specifies the transport credentials to use to connect to
+	// the external server. Must not be nil.
 	channelCredentials credentials.TransportCredentials
-	// callCredentials specifies the per-RPC credentials to use when making
-	// calls to the external server.
+	// callCredentials specifies the per-RPC credentials to use when making calls
+	// to the external server.
 	callCredentials []credentials.PerRPCCredentials
 	// timeout is the RPC timeout for the call to the external server. If unset,
 	// the timeout depends on the usage of this external server. For example,
@@ -190,31 +187,25 @@ func newInterceptorConfig(base *v3procfilterpb.ExternalProcessor, override *v3pr
 	}
 
 	var err error
-	if fr := base.GetForwardRules(); fr != nil {
-		if allowed := fr.GetAllowedHeaders(); allowed != nil {
-			iconfig.allowedHeaders, err = convertStringMatchers(allowed.GetPatterns())
-			if err != nil {
-				return nil, fmt.Errorf("invalid allowed header matcher: %v", err)
-			}
+	if allowed := base.GetForwardRules().GetAllowedHeaders(); allowed != nil {
+		if iconfig.allowedHeaders, err = convertStringMatchers(allowed.GetPatterns()); err != nil {
+			return nil, fmt.Errorf("invalid allowed header matcher: %v", err)
 		}
-		if disallowed := fr.GetDisallowedHeaders(); disallowed != nil {
-			iconfig.disallowedHeaders, err = convertStringMatchers(disallowed.GetPatterns())
-			if err != nil {
-				return nil, fmt.Errorf("invalid disallowed header matcher: %v", err)
-			}
+	}
+	if disallowed := base.GetForwardRules().GetDisallowedHeaders(); disallowed != nil {
+		if iconfig.disallowedHeaders, err = convertStringMatchers(disallowed.GetPatterns()); err != nil {
+			return nil, fmt.Errorf("invalid disallowed header matcher: %v", err)
 		}
 	}
 
 	if mr := base.GetMutationRules(); mr != nil {
 		if allowexp := mr.GetAllowExpression(); allowexp != nil {
-			iconfig.mutationRules.allowExpr, err = regexp.Compile(allowexp.GetRegex())
-			if err != nil {
+			if iconfig.mutationRules.allowExpr, err = regexp.Compile(allowexp.GetRegex()); err != nil {
 				return nil, fmt.Errorf("invalid allow expression: %v", err)
 			}
 		}
 		if disallowexp := mr.GetDisallowExpression(); disallowexp != nil {
-			iconfig.mutationRules.disallowExpr, err = regexp.Compile(disallowexp.GetRegex())
-			if err != nil {
+			if iconfig.mutationRules.disallowExpr, err = regexp.Compile(disallowexp.GetRegex()); err != nil {
 				return nil, fmt.Errorf("invalid disallow expression: %v", err)
 			}
 		}
@@ -233,31 +224,32 @@ func newInterceptorConfig(base *v3procfilterpb.ExternalProcessor, override *v3pr
 		iconfig.processingMode.requestBodyMode = resolveBodyMode(pm.GetRequestBodyMode())
 		iconfig.processingMode.responseBodyMode = resolveBodyMode(pm.GetResponseBodyMode())
 	}
-
-	if override != nil {
-		if gs := override.GetGrpcService(); gs != nil {
-			serverCfg, err := serverConfigFromGrpcService(gs)
-			if err != nil {
-				return nil, err
-			}
-			iconfig.server = serverCfg
+	if override == nil {
+		return iconfig, nil
+	}
+	// Apply overrides if present.
+	if gs := override.GetGrpcService(); gs != nil {
+		serverCfg, err := serverConfigFromGrpcService(gs)
+		if err != nil {
+			return nil, err
 		}
-		if fma := override.GetFailureModeAllow(); fma != nil {
-			iconfig.failureModeAllow = fma.GetValue()
-		}
-		if override.GetRequestAttributes() != nil {
-			iconfig.requestAttributes = override.GetRequestAttributes()
-		}
-		if override.GetResponseAttributes() != nil {
-			iconfig.responseAttributes = override.GetResponseAttributes()
-		}
-		if pm := override.GetProcessingMode(); pm != nil {
-			iconfig.processingMode.requestHeaderMode = resolveHeaderMode(pm.GetRequestHeaderMode(), modeSend)
-			iconfig.processingMode.responseHeaderMode = resolveHeaderMode(pm.GetResponseHeaderMode(), modeSend)
-			iconfig.processingMode.responseTrailerMode = resolveHeaderMode(pm.GetResponseTrailerMode(), modeSkip)
-			iconfig.processingMode.requestBodyMode = resolveBodyMode(pm.GetRequestBodyMode())
-			iconfig.processingMode.responseBodyMode = resolveBodyMode(pm.GetResponseBodyMode())
-		}
+		iconfig.server = serverCfg
+	}
+	if override.GetFailureModeAllow() != nil {
+		iconfig.failureModeAllow = override.GetFailureModeAllow().GetValue()
+	}
+	if override.GetRequestAttributes() != nil {
+		iconfig.requestAttributes = override.GetRequestAttributes()
+	}
+	if override.GetResponseAttributes() != nil {
+		iconfig.responseAttributes = override.GetResponseAttributes()
+	}
+	if pm := override.GetProcessingMode(); pm != nil {
+		iconfig.processingMode.requestHeaderMode = resolveHeaderMode(pm.GetRequestHeaderMode(), modeSend)
+		iconfig.processingMode.responseHeaderMode = resolveHeaderMode(pm.GetResponseHeaderMode(), modeSend)
+		iconfig.processingMode.responseTrailerMode = resolveHeaderMode(pm.GetResponseTrailerMode(), modeSkip)
+		iconfig.processingMode.requestBodyMode = resolveBodyMode(pm.GetRequestBodyMode())
+		iconfig.processingMode.responseBodyMode = resolveBodyMode(pm.GetResponseBodyMode())
 	}
 	return iconfig, nil
 }

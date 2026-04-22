@@ -115,7 +115,7 @@ func (s) TestBuildClientInterceptor(t *testing.T) {
 			},
 		},
 		{
-			name: "CompleteBase",
+			name: "ConfigUsingOnlyBase",
 			cfg: baseConfig{config: &v3procfilterpb.ExternalProcessor{
 				FailureModeAllow:         true,
 				AllowModeOverride:        true,
@@ -173,7 +173,7 @@ func (s) TestBuildClientInterceptor(t *testing.T) {
 			},
 		},
 		{
-			name: "CompleteBaseAndOverride",
+			name: "ConfigUsingBaseAndOverride",
 			cfg: baseConfig{config: &v3procfilterpb.ExternalProcessor{
 				FailureModeAllow:         false,
 				AllowModeOverride:        true,
@@ -198,13 +198,11 @@ func (s) TestBuildClientInterceptor(t *testing.T) {
 				},
 				ForwardRules: &v3procfilterpb.HeaderForwardingRules{
 					AllowedHeaders: &v3matcherpb.ListStringMatcher{
-						Patterns: []*v3matcherpb.StringMatcher{
-							{
-								MatchPattern: &v3matcherpb.StringMatcher_Exact{
-									Exact: "allow-header",
-								},
+						Patterns: []*v3matcherpb.StringMatcher{{
+							MatchPattern: &v3matcherpb.StringMatcher_Exact{
+								Exact: "allow-header",
 							},
-						},
+						}},
 					},
 				},
 			}},
@@ -247,21 +245,18 @@ func (s) TestBuildClientInterceptor(t *testing.T) {
 					channelCredentials: insecure.NewCredentials(),
 					// TODO : Remove these when timeout and metadata are used. Adding zero
 					// values here to satisfy the vet.
-					timeout:            0,
-					initialMetadata:    nil,
+					timeout:         0,
+					initialMetadata: nil,
 				},
 				allowedHeaders: []matcher.StringMatcher{matcher.NewExactStringMatcher("allow-header", false)},
 			},
 		},
 		{
-			name: "GrpcServiceError",
-			cfg: baseConfig{config: &v3procfilterpb.ExternalProcessor{
-				GrpcService: &v3corepb.GrpcService{},
-			}},
+			name:    "GrpcServiceError",
+			cfg:     baseConfig{config: &v3procfilterpb.ExternalProcessor{GrpcService: &v3corepb.GrpcService{}}},
 			wantErr: "failed to parse gRPC service config",
 		},
 	}
-
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			intptr, err := f.BuildClientInterceptor(tc.cfg, tc.override)
@@ -277,13 +272,13 @@ func (s) TestBuildClientInterceptor(t *testing.T) {
 					t.Fatalf("interceptor.config = %+v, want %+v", got.config, tc.wantConfig)
 				}
 				intptr.Close()
-			} else {
-				if err == nil {
-					t.Fatalf("BuildClientInterceptor() expected error %v, got nil", tc.wantErr)
-				}
-				if !strings.Contains(err.Error(), tc.wantErr) {
-					t.Fatalf("BuildClientInterceptor() error = %v, want error containing %q", err, tc.wantErr)
-				}
+				return
+			}
+			if err == nil {
+				t.Fatalf("BuildClientInterceptor() expected error %v, got nil", tc.wantErr)
+			}
+			if !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("BuildClientInterceptor() error = %v, want error containing %q", err, tc.wantErr)
 			}
 		})
 	}
