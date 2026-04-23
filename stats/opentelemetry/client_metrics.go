@@ -76,7 +76,7 @@ func getOrCreateCallInfo(ctx context.Context, cc *grpc.ClientConn, method string
 			target: cc.CanonicalTarget(),
 			method: determineMethod(method, opts...),
 		}
-		ctx = setCallInfo(ctx, ci)
+		ctx = context.WithValue(ctx, callInfoKey{}, ci)
 	}
 	return ctx, ci
 }
@@ -176,7 +176,8 @@ func (h *clientMetricsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInf
 		}
 		ctx = istats.SetLabels(ctx, labels)
 	}
-	ctx, ai := getOrCreateClientRPCAttemptInfo(ctx)
+	ctx, ri := getOrCreateClientRPCInfo(ctx)
+	ai := ri.ai
 	ai.startTime = time.Now()
 	ai.xdsLabels = labels.TelemetryLabels
 	ai.method = removeLeadingSlash(info.FullMethodName)
@@ -186,7 +187,7 @@ func (h *clientMetricsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInf
 
 // HandleRPC handles per RPC stats implementation.
 func (h *clientMetricsHandler) HandleRPC(ctx context.Context, rs stats.RPCStats) {
-	ri := getClientRPCInfo(ctx)
+	ri := clientRPCInfo(ctx)
 	if ri == nil {
 		logger.Error("ctx passed into client side stats handler metrics event handling has no client attempt data present")
 		return

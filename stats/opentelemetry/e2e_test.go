@@ -2209,50 +2209,48 @@ func runDisconnectScenario(t *testing.T, name, wantLabel string, action func(*st
 // both a server and a client using the same context, the client metrics do not
 // inherit or overwrite the server's telemetry metadata (e.g., grpc.method).
 func (s) TestRelayContextCollisionMetrics(t *testing.T) {
-	moC, _ := defaultMetricsOptions(t, nil)
-	ssC := setupStubServer(t, moC, nil)
-	defer ssC.Stop()
+	backendMetricsOpts, _ := defaultMetricsOptions(t, nil)
+	backendServer := setupStubServer(t, backendMetricsOpts, nil)
+	defer backendServer.Stop()
 
-	moB, readerB := defaultMetricsOptions(t, nil)
-	otelOpts := opentelemetry.Options{MetricsOptions: *moB}
+	relayMetricsOpts, relayMetricsReader := defaultMetricsOptions(t, nil)
+	otelOpts := opentelemetry.Options{MetricsOptions: *relayMetricsOpts}
 
-	relayCC, err := grpc.NewClient(
-		ssC.Address,
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		opentelemetry.DialOption(otelOpts),
-	)
-	if err != nil {
-		t.Fatalf("Failed to create relay client: %v", err)
-	}
-	defer relayCC.Close()
-
-	ssB := &stubserver.StubServer{
+	relayServer := &stubserver.StubServer{
 		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
-			err := relayCC.Invoke(ctx, "/grpc.testing.TestService/UnregisteredCall", in, &testpb.SimpleResponse{})
+			relayCC, err := grpc.NewClient(
+				backendServer.Address,
+				grpc.WithTransportCredentials(insecure.NewCredentials()),
+				opentelemetry.DialOption(otelOpts),
+			)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create relay client: %v", err)
+			}
+			defer relayCC.Close()
+			err = relayCC.Invoke(ctx, "/grpc.testing.TestService/UnregisteredCall", in, &testpb.SimpleResponse{})
 			if status.Code(err) != codes.Unimplemented {
 				t.Errorf("Expected Unimplemented error, got: %v", err)
 			}
 			return &testpb.SimpleResponse{}, nil
 		},
 	}
-	if err := ssB.Start([]grpc.ServerOption{opentelemetry.ServerOption(otelOpts)}, opentelemetry.DialOption(otelOpts)); err != nil {
+	if err := relayServer.Start([]grpc.ServerOption{opentelemetry.ServerOption(otelOpts)}, opentelemetry.DialOption(otelOpts)); err != nil {
 		t.Fatalf("Failed to start relay server: %v", err)
 	}
-	defer ssB.Stop()
+	defer relayServer.Stop()
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	if _, err := ssB.Client.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil {
+	if _, err := relayServer.Client.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil {
 		t.Fatalf("Unexpected UnaryCall error: %v", err)
 	}
 
 	// Verify Server Metric Identity is retained
-	pollForMetricWithMethod(ctx, t, readerB, "grpc.server.call.started", "grpc.testing.TestService/UnaryCall")
+	checkMetricWithMethod(ctx, t, relayMetricsReader, "grpc.server.call.started", "grpc.testing.TestService/UnaryCall")
 
-	// Verify Client Metric Identity correctly resolved to "other" (Proves
-	// collision is fixed)
-	pollForMetricWithMethod(ctx, t, readerB, "grpc.client.attempt.started", "other")
+	// Verify Client Metric Identity correctly resolved to "other"
+	checkMetricWithMethod(ctx, t, relayMetricsReader, "grpc.client.attempt.started", "other")
 }
 
 // TestRelayContextCollisionTracing verifies that span context is correctly
@@ -2260,47 +2258,46 @@ func (s) TestRelayContextCollisionMetrics(t *testing.T) {
 // the client span accidentally adopting the server's identity or breaking the
 // trace chain.
 func (s) TestRelayContextCollisionTracing(t *testing.T) {
-	toC, _ := defaultTraceOptions(t)
-	ssC := setupStubServer(t, nil, toC)
-	defer ssC.Stop()
+	backendTraceOpts, _ := defaultTraceOptions(t)
+	backendServer := setupStubServer(t, nil, backendTraceOpts)
+	defer backendServer.Stop()
 
-	toB, exporterB := defaultTraceOptions(t)
-	otelOpts := opentelemetry.Options{TraceOptions: *toB}
+	relayTraceOpts, relayTraceExporter := defaultTraceOptions(t)
+	otelOpts := opentelemetry.Options{TraceOptions: *relayTraceOpts}
 
-	relayCC, err := grpc.NewClient(
-		ssC.Address,
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		opentelemetry.DialOption(otelOpts),
-	)
-	if err != nil {
-		t.Fatalf("Failed to create relay client: %v", err)
-	}
-	defer relayCC.Close()
-
-	ssB := &stubserver.StubServer{
+	relayServer := &stubserver.StubServer{
 		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
-			err := relayCC.Invoke(ctx, "/grpc.testing.TestService/UnregisteredCall", in, &testpb.SimpleResponse{})
+			relayCC, err := grpc.NewClient(
+				backendServer.Address,
+				grpc.WithTransportCredentials(insecure.NewCredentials()),
+				opentelemetry.DialOption(otelOpts),
+			)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create relay client: %v", err)
+			}
+			defer relayCC.Close()
+			err = relayCC.Invoke(ctx, "/grpc.testing.TestService/UnregisteredCall", in, &testpb.SimpleResponse{})
 			if status.Code(err) != codes.Unimplemented {
 				t.Errorf("Expected Unimplemented error, got: %v", err)
 			}
 			return &testpb.SimpleResponse{}, nil
 		},
 	}
-	if err := ssB.Start([]grpc.ServerOption{opentelemetry.ServerOption(otelOpts)}, opentelemetry.DialOption(otelOpts)); err != nil {
+	if err := relayServer.Start([]grpc.ServerOption{opentelemetry.ServerOption(otelOpts)}, opentelemetry.DialOption(otelOpts)); err != nil {
 		t.Fatalf("Failed to start relay server: %v", err)
 	}
-	defer ssB.Stop()
+	defer relayServer.Stop()
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	_, _ = ssB.Client.UnaryCall(ctx, &testpb.SimpleRequest{})
+	_, _ = relayServer.Client.UnaryCall(ctx, &testpb.SimpleRequest{})
 
 	wantSpans := []traceSpanInfo{
 		{name: "Recv.", spanKind: "server"},
 		{name: "Sent.grpc.testing.TestService.UnregisteredCall", spanKind: "client"},
 	}
-	spans, err := waitForTraceSpans(ctx, exporterB, wantSpans)
+	spans, err := waitForTraceSpans(ctx, relayTraceExporter, wantSpans)
 	if err != nil {
 		t.Fatalf("Failed to wait for spans: %v", err)
 	}
@@ -2323,25 +2320,19 @@ func (s) TestRelayContextCollisionTracing(t *testing.T) {
 	}
 }
 
-// pollForMetricWithMethod polls the metric reader until it finds a metric with
-// the specified name that contains a data point matching the target grpc.method.
-func pollForMetricWithMethod(ctx context.Context, t *testing.T, reader *metric.ManualReader, metricName, method string) metricdata.DataPoint[int64] {
+// checkMetricWithMethod verifies that a metric with the specified name contains
+// a data point matching the target grpc.method. It does not poll.
+func checkMetricWithMethod(ctx context.Context, t *testing.T, reader *metric.ManualReader, metricName, method string) {
 	t.Helper()
-	for {
-		if ctx.Err() != nil {
-			t.Fatalf("Timeout waiting for metric %q with method %q", metricName, method)
-		}
-
-		metrics := metricsDataFromReader(ctx, reader)
-		if m, ok := metrics[metricName]; ok {
-			if sum, ok := m.Data.(metricdata.Sum[int64]); ok {
-				for _, dp := range sum.DataPoints {
-					if val, ok := dp.Attributes.Value("grpc.method"); ok && val.AsString() == method {
-						return dp
-					}
+	metrics := metricsDataFromReader(ctx, reader)
+	if m, ok := metrics[metricName]; ok {
+		if sum, ok := m.Data.(metricdata.Sum[int64]); ok {
+			for _, dp := range sum.DataPoints {
+				if val, ok := dp.Attributes.Value("grpc.method"); ok && val.AsString() == method {
+					return // Found
 				}
 			}
 		}
-		time.Sleep(10 * time.Millisecond)
 	}
+	t.Errorf("Metric %q with method %q not found", metricName, method)
 }

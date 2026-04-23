@@ -196,7 +196,8 @@ func (h *serverMetricsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInf
 			method = "other"
 		}
 	}
-	ctx, ai := getOrCreateServerRPCAttemptInfo(ctx)
+	ctx, ri := getOrCreateServerRPCInfo(ctx)
+	ai := ri.ai
 	ai.startTime = time.Now()
 	ai.method = removeLeadingSlash(method)
 
@@ -205,7 +206,7 @@ func (h *serverMetricsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInf
 
 // HandleRPC handles per RPC stats implementation.
 func (h *serverMetricsHandler) HandleRPC(ctx context.Context, rs stats.RPCStats) {
-	ri := getServerRPCInfo(ctx)
+	ri := serverRPCInfo(ctx)
 	if ri == nil {
 		logger.Error("ctx passed into server side stats handler metrics event handling has no server call data present")
 		return

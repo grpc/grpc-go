@@ -181,16 +181,12 @@ type callInfo struct {
 	nameResolutionEventAdded atomic.Bool
 }
 
-type clientCallInfoKey struct{}
-
-func setCallInfo(ctx context.Context, ci *callInfo) context.Context {
-	return context.WithValue(ctx, clientCallInfoKey{}, ci)
-}
+type callInfoKey struct{}
 
 // getCallInfo returns the callInfo stored in the context, or nil
 // if there isn't one.
 func getCallInfo(ctx context.Context) *callInfo {
-	ci, _ := ctx.Value(clientCallInfoKey{}).(*callInfo)
+	ci, _ := ctx.Value(callInfoKey{}).(*callInfo)
 	return ci
 }
 
@@ -203,44 +199,36 @@ type rpcInfo struct {
 type clientRPCInfoKey struct{}
 type serverRPCInfoKey struct{}
 
-func setClientRPCInfo(ctx context.Context, ri *rpcInfo) context.Context {
-	return context.WithValue(ctx, clientRPCInfoKey{}, ri)
-}
-
-// getClientRPCInfo returns the rpcInfo stored in the context for client, or nil
+// clientRPCInfo returns the rpcInfo stored in the context for client, or nil
 // if there isn't one.
-func getClientRPCInfo(ctx context.Context) *rpcInfo {
+func clientRPCInfo(ctx context.Context) *rpcInfo {
 	ri, _ := ctx.Value(clientRPCInfoKey{}).(*rpcInfo)
 	return ri
 }
 
-func setServerRPCInfo(ctx context.Context, ri *rpcInfo) context.Context {
-	return context.WithValue(ctx, serverRPCInfoKey{}, ri)
-}
-
-// getServerRPCInfo returns the rpcInfo stored in the context for server, or nil
+// serverRPCInfo returns the rpcInfo stored in the context for server, or nil
 // if there isn't one.
-func getServerRPCInfo(ctx context.Context) *rpcInfo {
+func serverRPCInfo(ctx context.Context) *rpcInfo {
 	ri, _ := ctx.Value(serverRPCInfoKey{}).(*rpcInfo)
 	return ri
 }
 
-func getOrCreateClientRPCAttemptInfo(ctx context.Context) (context.Context, *attemptInfo) {
-	ri := getClientRPCInfo(ctx)
+func getOrCreateClientRPCInfo(ctx context.Context) (context.Context, *rpcInfo) {
+	ri := clientRPCInfo(ctx)
 	if ri != nil {
-		return ctx, ri.ai
+		return ctx, ri
 	}
 	ri = &rpcInfo{ai: &attemptInfo{}}
-	return setClientRPCInfo(ctx, ri), ri.ai
+	return context.WithValue(ctx, clientRPCInfoKey{}, ri), ri
 }
 
-func getOrCreateServerRPCAttemptInfo(ctx context.Context) (context.Context, *attemptInfo) {
-	ri := getServerRPCInfo(ctx)
+func getOrCreateServerRPCInfo(ctx context.Context) (context.Context, *rpcInfo) {
+	ri := serverRPCInfo(ctx)
 	if ri != nil {
-		return ctx, ri.ai
+		return ctx, ri
 	}
 	ri = &rpcInfo{ai: &attemptInfo{}}
-	return setServerRPCInfo(ctx, ri), ri.ai
+	return context.WithValue(ctx, serverRPCInfoKey{}, ri), ri
 }
 
 func removeLeadingSlash(mn string) string {
