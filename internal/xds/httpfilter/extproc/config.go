@@ -171,7 +171,7 @@ type serverConfig struct {
 // is optional. If a field is set in both the base and override configs, the
 // value from the override config will be used.
 func newInterceptorConfig(base *v3procfilterpb.ExternalProcessor, override *v3procfilterpb.ExtProcOverrides) (*interceptorConfig, error) {
-	iconfig := &interceptorConfig{
+	ic := &interceptorConfig{
 		failureModeAllow:         base.GetFailureModeAllow(),
 		allowModeOverride:        base.GetAllowModeOverride(),
 		requestAttributes:        base.GetRequestAttributes(),
@@ -181,77 +181,78 @@ func newInterceptorConfig(base *v3procfilterpb.ExternalProcessor, override *v3pr
 		disableImmediateResponse: base.GetDisableImmediateResponse(),
 	}
 	if base.GetDeferredCloseTimeout() != nil {
-		iconfig.deferredCloseTimeout = base.GetDeferredCloseTimeout().AsDuration()
+		ic.deferredCloseTimeout = base.GetDeferredCloseTimeout().AsDuration()
 	} else {
-		iconfig.deferredCloseTimeout = defaultDeferredCloseTimeout
+		ic.deferredCloseTimeout = defaultDeferredCloseTimeout
 	}
 
 	var err error
 	if allowed := base.GetForwardRules().GetAllowedHeaders(); allowed != nil {
-		if iconfig.allowedHeaders, err = convertStringMatchers(allowed.GetPatterns()); err != nil {
+		if ic.allowedHeaders, err = convertStringMatchers(allowed.GetPatterns()); err != nil {
 			return nil, fmt.Errorf("invalid allowed header matcher: %v", err)
 		}
 	}
 	if disallowed := base.GetForwardRules().GetDisallowedHeaders(); disallowed != nil {
-		if iconfig.disallowedHeaders, err = convertStringMatchers(disallowed.GetPatterns()); err != nil {
+		if ic.disallowedHeaders, err = convertStringMatchers(disallowed.GetPatterns()); err != nil {
 			return nil, fmt.Errorf("invalid disallowed header matcher: %v", err)
 		}
 	}
 
 	if mr := base.GetMutationRules(); mr != nil {
 		if allowexp := mr.GetAllowExpression(); allowexp != nil {
-			if iconfig.mutationRules.allowExpr, err = regexp.Compile(allowexp.GetRegex()); err != nil {
+			if ic.mutationRules.allowExpr, err = regexp.Compile(allowexp.GetRegex()); err != nil {
 				return nil, fmt.Errorf("invalid allow expression: %v", err)
 			}
 		}
 		if disallowexp := mr.GetDisallowExpression(); disallowexp != nil {
-			if iconfig.mutationRules.disallowExpr, err = regexp.Compile(disallowexp.GetRegex()); err != nil {
+			if ic.mutationRules.disallowExpr, err = regexp.Compile(disallowexp.GetRegex()); err != nil {
 				return nil, fmt.Errorf("invalid disallow expression: %v", err)
 			}
 		}
-		iconfig.mutationRules.disallowAll = mr.GetDisallowAll().GetValue()
-		iconfig.mutationRules.disallowIsError = mr.GetDisallowIsError().GetValue()
+		ic.mutationRules.disallowAll = mr.GetDisallowAll().GetValue()
+		ic.mutationRules.disallowIsError = mr.GetDisallowIsError().GetValue()
 	}
-	if iconfig.server, err = serverConfigFromGrpcService(base.GetGrpcService()); err != nil {
+	if ic.server, err = serverConfigFromGrpcService(base.GetGrpcService()); err != nil {
 		return nil, fmt.Errorf("failed to parse gRPC service config: %v", err)
 	}
-	if pm := base.GetProcessingMode(); pm != nil {
-		// The default processing mode is to send headers and skip body and
-		// trailers.
-		iconfig.processingMode.requestHeaderMode = resolveHeaderMode(pm.GetRequestHeaderMode(), modeSend)
-		iconfig.processingMode.responseHeaderMode = resolveHeaderMode(pm.GetResponseHeaderMode(), modeSend)
-		iconfig.processingMode.responseTrailerMode = resolveHeaderMode(pm.GetResponseTrailerMode(), modeSkip)
-		iconfig.processingMode.requestBodyMode = resolveBodyMode(pm.GetRequestBodyMode())
-		iconfig.processingMode.responseBodyMode = resolveBodyMode(pm.GetResponseBodyMode())
-	}
+	
+	pm := base.GetProcessingMode()
+	// The default processing mode is to send headers and skip body and
+	// trailers.
+	ic.processingMode.requestHeaderMode = resolveHeaderMode(pm.GetRequestHeaderMode(), modeSend)
+	ic.processingMode.responseHeaderMode = resolveHeaderMode(pm.GetResponseHeaderMode(), modeSend)
+	ic.processingMode.responseTrailerMode = resolveHeaderMode(pm.GetResponseTrailerMode(), modeSkip)
+	ic.processingMode.requestBodyMode = resolveBodyMode(pm.GetRequestBodyMode())
+	ic.processingMode.responseBodyMode = resolveBodyMode(pm.GetResponseBodyMode())
+
 	if override == nil {
-		return iconfig, nil
+		return ic, nil
 	}
 	// Apply overrides if present.
 	if gs := override.GetGrpcService(); gs != nil {
-		serverCfg, err := serverConfigFromGrpcService(gs)
+		sc, err := serverConfigFromGrpcService(gs)
 		if err != nil {
 			return nil, err
 		}
-		iconfig.server = serverCfg
+		ic.server = sc
 	}
 	if override.GetFailureModeAllow() != nil {
-		iconfig.failureModeAllow = override.GetFailureModeAllow().GetValue()
+		ic.failureModeAllow = override.GetFailureModeAllow().GetValue()
 	}
 	if override.GetRequestAttributes() != nil {
-		iconfig.requestAttributes = override.GetRequestAttributes()
+		ic.requestAttributes = override.GetRequestAttributes()
 	}
 	if override.GetResponseAttributes() != nil {
-		iconfig.responseAttributes = override.GetResponseAttributes()
+		ic.responseAttributes = override.GetResponseAttributes()
 	}
 	if pm := override.GetProcessingMode(); pm != nil {
-		iconfig.processingMode.requestHeaderMode = resolveHeaderMode(pm.GetRequestHeaderMode(), modeSend)
-		iconfig.processingMode.responseHeaderMode = resolveHeaderMode(pm.GetResponseHeaderMode(), modeSend)
-		iconfig.processingMode.responseTrailerMode = resolveHeaderMode(pm.GetResponseTrailerMode(), modeSkip)
-		iconfig.processingMode.requestBodyMode = resolveBodyMode(pm.GetRequestBodyMode())
-		iconfig.processingMode.responseBodyMode = resolveBodyMode(pm.GetResponseBodyMode())
+		ic.processingMode.requestHeaderMode = resolveHeaderMode(pm.GetRequestHeaderMode(), modeSend)
+		ic.processingMode.responseHeaderMode = resolveHeaderMode(pm.GetResponseHeaderMode(), modeSend)
+		ic.processingMode.responseTrailerMode = resolveHeaderMode(pm.GetResponseTrailerMode(), modeSkip)
+		ic.processingMode.requestBodyMode = resolveBodyMode(pm.GetRequestBodyMode())
+		ic.processingMode.responseBodyMode = resolveBodyMode(pm.GetResponseBodyMode())
 	}
-	return iconfig, nil
+	return ic, nil
 }
 
 // convertStringMatchers converts a slice of protobuf StringMatcher messages to
