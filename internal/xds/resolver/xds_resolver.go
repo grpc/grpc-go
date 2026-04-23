@@ -535,7 +535,7 @@ func (r *xdsResolver) addOrGetActiveClusterInfo(key string, name string) *cluste
 }
 
 type clusterInfo struct {
-	// number of references to this cluster; accessed atomically
+	// refCount is the number of references to this cluster.
 	refCount atomic.Int32
 	// cfg is the child configuration for this cluster, containing either the
 	// csp config or the cds cluster config.

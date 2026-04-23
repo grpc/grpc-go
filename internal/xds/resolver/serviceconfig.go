@@ -195,12 +195,11 @@ func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RP
 		return nil, annotateErrorWithNodeID(status.Errorf(codes.Internal, "error retrieving cluster for match: %v (%T)", cluster, cluster), cs.xdsNodeID)
 	}
 
-	// Add a ref to the selected cluster, as this RPC needs this cluster until
-	// it is committed.
+	// Add a ref to the selected cluster/plugin, as this RPC needs this
+	// cluster/plugin until it is committed.
 	if info, ok := cs.clusters[cluster.name]; ok {
 		info.refCount.Add(1)
-	}
-	if info, ok := cs.plugins[cluster.name]; ok {
+	} else if info, ok := cs.plugins[cluster.name]; ok {
 		info.refCount.Add(1)
 	}
 

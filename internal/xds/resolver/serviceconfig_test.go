@@ -64,13 +64,13 @@ func (s) TestPruneActiveClusters(t *testing.T) {
 			"anotherzero": newClusterInfo(0, nil),
 		},
 	}
-	wantActiveClusters := map[string]*clusterInfo{
-		"one": newClusterInfo(1, nil),
-		"two": newClusterInfo(2, nil),
+	wantActiveClusters := map[string]int32{
+		"one": 1,
+		"two": 2,
 	}
-	wantActivePlugins := map[string]*clusterInfo{
-		"one": newClusterInfo(1, nil),
-		"two": newClusterInfo(2, nil),
+	wantActivePlugins := map[string]int32{
+		"one": 1,
+		"two": 2,
 	}
 	r.pruneActiveClustersAndPlugins()
 
@@ -82,10 +82,10 @@ func (s) TestPruneActiveClusters(t *testing.T) {
 		return res
 	}
 
-	if d := cmp.Diff(getRefCounts(r.activeClusters), getRefCounts(wantActiveClusters)); d != "" {
+	if d := cmp.Diff(getRefCounts(r.activeClusters), wantActiveClusters); d != "" {
 		t.Fatalf("r.activeClusters refCounts mismatch (-got +want):\n%s", d)
 	}
-	if d := cmp.Diff(getRefCounts(r.activePlugins), getRefCounts(wantActivePlugins)); d != "" {
+	if d := cmp.Diff(getRefCounts(r.activePlugins), wantActivePlugins); d != "" {
 		t.Fatalf("r.activePlugins refCounts mismatch (-got +want):\n%s", d)
 	}
 }
