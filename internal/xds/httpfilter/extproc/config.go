@@ -19,16 +19,17 @@
 package extproc
 
 import (
-	pb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/ext_proc/v3"
 	"google.golang.org/grpc/internal/xds/httpfilter"
+
+	v3procfilterpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/ext_proc/v3"
 )
 
 type baseConfig struct {
 	httpfilter.FilterConfig
-	config *pb.ExternalProcessor
+	config *v3procfilterpb.ExternalProcessor
 }
 
 type overrideConfig struct {
 	httpfilter.FilterConfig
-	config *pb.ExtProcOverrides
+	config *v3procfilterpb.ExtProcOverrides
 }

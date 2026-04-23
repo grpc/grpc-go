@@ -166,7 +166,7 @@ func (s) TestParseFilterConfig(t *testing.T) {
 				m, _ := anypb.New(&fpb.ExternalProcessor{ProcessingMode: &fpb.ProcessingMode{}})
 				return m
 			}(),
-			wantErr: "ext_proc: empty grpc_service provided",
+			wantErr: "extproc: empty grpc_service provided",
 		},
 		{
 			name:        "ErrUnsupportedGrpcService_EnvoyGrpc",
@@ -184,7 +184,7 @@ func (s) TestParseFilterConfig(t *testing.T) {
 				})
 				return m
 			}(),
-			wantErr: "ext_proc: only google_grpc grpc_service is supported",
+			wantErr: "extproc: only google_grpc grpc_service is supported",
 		},
 		{
 			name:        "ErrMissingProcessingMode",
@@ -201,7 +201,7 @@ func (s) TestParseFilterConfig(t *testing.T) {
 				})
 				return m
 			}(),
-			wantErr: "ext_proc: missing processing_mode",
+			wantErr: "extproc: missing processing_mode",
 		},
 		{
 			name:        "ErrInvalidProcessingMode_RequestBodyStreamed",
@@ -219,7 +219,7 @@ func (s) TestParseFilterConfig(t *testing.T) {
 				})
 				return m
 			}(),
-			wantErr: "ext_proc: invalid request body mode STREAMED",
+			wantErr: "extproc: invalid request body mode STREAMED",
 		},
 		{
 			name:        "ErrInvalidProcessingMode_ResponseBodyStreamed",
@@ -237,11 +237,11 @@ func (s) TestParseFilterConfig(t *testing.T) {
 				})
 				return m
 			}(),
-			wantErr: "ext_proc: invalid response body mode STREAMED",
+			wantErr: "extproc: invalid response body mode STREAMED",
 		},
 		{
-			name:        "ErrEmptyAllowExpression",
-			description: "config with empty allow expression",
+			name:        "ErrInvalidAllowExpression",
+			description: "config with invalid allow expression",
 			cfg: func() proto.Message {
 				m, _ := anypb.New(&fpb.ExternalProcessor{
 					GrpcService: &corepb.GrpcService{
@@ -253,16 +253,16 @@ func (s) TestParseFilterConfig(t *testing.T) {
 					},
 					ProcessingMode: &fpb.ProcessingMode{},
 					MutationRules: &mutationpb.HeaderMutationRules{
-						AllowExpression: &matcherpb.RegexMatcher{},
+						AllowExpression: &matcherpb.RegexMatcher{Regex: "["},
 					},
 				})
 				return m
 			}(),
-			wantErr: "ext_proc: invalid RegexMatcher.Regex: value length must be at least 1",
+			wantErr: "extproc: error parsing regexp",
 		},
 		{
-			name:        "ErrEmptyDisallowExpression",
-			description: "config with empty disallow expression",
+			name:        "ErrInvalidDisallowExpression",
+			description: "config with invalid disallow expression",
 			cfg: func() proto.Message {
 				m, _ := anypb.New(&fpb.ExternalProcessor{
 					GrpcService: &corepb.GrpcService{
@@ -274,24 +274,24 @@ func (s) TestParseFilterConfig(t *testing.T) {
 					},
 					ProcessingMode: &fpb.ProcessingMode{},
 					MutationRules: &mutationpb.HeaderMutationRules{
-						DisallowExpression: &matcherpb.RegexMatcher{},
+						DisallowExpression: &matcherpb.RegexMatcher{Regex: "["},
 					},
 				})
 				return m
 			}(),
-			wantErr: "ext_proc: invalid RegexMatcher.Regex: value length must be at least 1",
+			wantErr: "extproc: error parsing regexp",
 		},
 		{
 			name:        "ErrNilConfig",
 			description: "nil config message",
 			cfg:         nil,
-			wantErr:     "ext_proc: nil base configuration message provided",
+			wantErr:     "extproc: nil base configuration message provided",
 		},
 		{
 			name:        "ErrInvalidConfigType",
 			description: "config message with invalid type (not Any)",
 			cfg:         &fpb.ExternalProcessor{}, // Not Any
-			wantErr:     "ext_proc: error parsing config",
+			wantErr:     "extproc: error parsing config",
 		},
 	}
 
@@ -379,7 +379,7 @@ func (s) TestParseFilterConfigOverride(t *testing.T) {
 				})
 				return m
 			}(),
-			wantErr: "ext_proc: only google_grpc grpc_service is supported",
+			wantErr: "extproc: only google_grpc grpc_service is supported",
 		},
 		{
 			name:        "ErrInvalidProcessingMode_RequestBodyStreamed",
@@ -396,7 +396,7 @@ func (s) TestParseFilterConfigOverride(t *testing.T) {
 				})
 				return m
 			}(),
-			wantErr: "ext_proc: invalid request body mode STREAMED",
+			wantErr: "extproc: invalid request body mode STREAMED",
 		},
 		{
 			name:        "ErrInvalidProcessingMode_ResponseBodyStreamed",
@@ -413,19 +413,19 @@ func (s) TestParseFilterConfigOverride(t *testing.T) {
 				})
 				return m
 			}(),
-			wantErr: "ext_proc: invalid response body mode STREAMED",
+			wantErr: "extproc: invalid response body mode STREAMED",
 		},
 		{
 			name:        "ErrNilOverride",
 			description: "nil override message",
 			override:    nil,
-			wantErr:     "ext_proc: nil override configuration provided",
+			wantErr:     "extproc: nil override configuration provided",
 		},
 		{
 			name:        "ErrInvalidOverrideType",
 			description: "override message with invalid type (not Any)",
 			override:    &fpb.ExtProcOverrides{}, // Not Any
-			wantErr:     "ext_proc: error parsing override",
+			wantErr:     "extproc: error parsing override",
 		},
 	}
 

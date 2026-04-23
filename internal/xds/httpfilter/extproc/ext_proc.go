@@ -21,13 +21,14 @@ package extproc
 
 import (
 	"fmt"
+	"regexp"
 
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/xds/httpfilter"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 
-	fpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/ext_proc/v3"
+	v3procfilterpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/ext_proc/v3"
 )
 
 func init() {
@@ -44,46 +45,47 @@ func (builder) TypeURLs() []string {
 
 // validateBodyProcessingMode ensures that the body processing mode is either
 // NONE or GRPC.
-func validateBodyProcessingMode(pMode *fpb.ProcessingMode) error {
-	if reqMode := pMode.GetRequestBodyMode(); reqMode != fpb.ProcessingMode_NONE && reqMode != fpb.ProcessingMode_GRPC {
-		return fmt.Errorf("ext_proc: invalid request body mode %v: want 'NONE' or 'GRPC'", reqMode)
+func validateBodyProcessingMode(mode *v3procfilterpb.ProcessingMode) error {
+	if m := mode.GetRequestBodyMode(); m != v3procfilterpb.ProcessingMode_NONE && m != v3procfilterpb.ProcessingMode_GRPC {
+		return fmt.Errorf("extproc: invalid request body mode %v: want %q or %q", m, "NONE", "GRPC")
 	}
-	if resMode := pMode.GetResponseBodyMode(); resMode != fpb.ProcessingMode_NONE && resMode != fpb.ProcessingMode_GRPC {
-		return fmt.Errorf("ext_proc: invalid response body mode %v: want 'NONE' or 'GRPC'", resMode)
+	if m := mode.GetResponseBodyMode(); m != v3procfilterpb.ProcessingMode_NONE && m != v3procfilterpb.ProcessingMode_GRPC {
+		return fmt.Errorf("extproc: invalid response body mode %v: want %q or %q", m, "NONE", "GRPC")
 	}
 	return nil
 }
 
 func (builder) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, error) {
 	if cfg == nil {
-		return nil, fmt.Errorf("ext_proc: nil base configuration message provided")
+		return nil, fmt.Errorf("extproc: nil base configuration message provided")
 	}
 	m, ok := cfg.(*anypb.Any)
 	if !ok {
-		return nil, fmt.Errorf("ext_proc: error parsing config %v: unknown type %T", cfg, cfg)
+		return nil, fmt.Errorf("extproc: error parsing config %v: unknown type %T , want *anypb.Any", cfg, cfg)
 	}
-	msg := new(fpb.ExternalProcessor)
+	msg := new(v3procfilterpb.ExternalProcessor)
 	if err := m.UnmarshalTo(msg); err != nil {
-		return nil, fmt.Errorf("ext_proc: failed to unmarshal config %v: %v", cfg, err)
+		return nil, fmt.Errorf("extproc: failed to unmarshal config %v: %v", cfg, err)
 	}
 	if msg.GetGrpcService() == nil {
-		return nil, fmt.Errorf("ext_proc: empty grpc_service provided in config %v", cfg)
+		return nil, fmt.Errorf("extproc: empty grpc_service provided in config %v", cfg)
 	}
 	if msg.GetGrpcService().GetGoogleGrpc() == nil {
-		return nil, fmt.Errorf("ext_proc: only google_grpc grpc_service is supported, got %v in config %v", msg.GrpcService.GetTargetSpecifier(), cfg)
+		return nil, fmt.Errorf("extproc: only google_grpc grpc_service is supported, got %v in config %v", msg.GrpcService.GetTargetSpecifier(), cfg)
 	}
 	if msg.GetProcessingMode() == nil {
-		return nil, fmt.Errorf("ext_proc: missing processing_mode in config %v", cfg)
+		return nil, fmt.Errorf("extproc: missing processing_mode in config %v", cfg)
 	}
 	if err := validateBodyProcessingMode(msg.GetProcessingMode()); err != nil {
 		return nil, err
 	}
+	// Validate the allow and disallow regexes in mutation rules, if provided.
 	if mr := msg.GetMutationRules(); mr != nil {
-		if err := mr.GetAllowExpression().Validate(); err != nil {
-			return nil, fmt.Errorf("ext_proc: %v", err)
+		if _, err := regexp.Compile(mr.GetAllowExpression().GetRegex()); err != nil {
+			return nil, fmt.Errorf("extproc: %v", err)
 		}
-		if err := mr.GetDisallowExpression().Validate(); err != nil {
-			return nil, fmt.Errorf("ext_proc: %v", err)
+		if _, err := regexp.Compile(mr.GetDisallowExpression().GetRegex()); err != nil {
+			return nil, fmt.Errorf("extproc: %v", err)
 		}
 	}
 	return baseConfig{config: msg}, nil
@@ -91,21 +93,21 @@ func (builder) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, er
 
 func (builder) ParseFilterConfigOverride(ov proto.Message) (httpfilter.FilterConfig, error) {
 	if ov == nil {
-		return nil, fmt.Errorf("ext_proc: nil override configuration provided")
+		return nil, fmt.Errorf("extproc: nil override configuration provided")
 	}
 	m, ok := ov.(*anypb.Any)
 	if !ok {
-		return nil, fmt.Errorf("ext_proc: error parsing override %v: unknown type %T", ov, ov)
+		return nil, fmt.Errorf("extproc: error parsing override %v: unknown type %T, want *anypb.Any", ov, ov)
 	}
-	msg := new(fpb.ExtProcPerRoute)
+	msg := new(v3procfilterpb.ExtProcPerRoute)
 	if err := m.UnmarshalTo(msg); err != nil {
-		return nil, fmt.Errorf("ext_proc: failed to unmarshal override %v: %v", ov, err)
+		return nil, fmt.Errorf("extproc: failed to unmarshal override %v: %v", ov, err)
 	}
 	override := msg.GetOverrides()
 	// GrpcService can be optionally provided in the override config. If
 	// provided, it must be of type google_grpc.
 	if override.GetGrpcService() != nil && override.GrpcService.GetGoogleGrpc() == nil {
-		return nil, fmt.Errorf("ext_proc: only google_grpc grpc_service is supported, got %v in override %v", override.GrpcService.GetTargetSpecifier(), override)
+		return nil, fmt.Errorf("extproc: only google_grpc grpc_service is supported, got %v in override %v", override.GrpcService.GetTargetSpecifier(), override)
 	}
 	if pm := override.GetProcessingMode(); pm != nil {
 		if err := validateBodyProcessingMode(pm); err != nil {
