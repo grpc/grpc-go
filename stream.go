@@ -52,8 +52,6 @@ import (
 
 var metadataFromOutgoingContextRaw = internal.FromOutgoingContextRaw.(func(context.Context) (metadata.MD, [][]string, bool))
 
-type compressKey struct{}
-
 // SetServerStreamMessageCompression enables or disables per-message compression
 // on a server stream. The provided context must be the context passed to the
 // server handler. Compression is enabled by default and is a no-op if no
@@ -75,10 +73,9 @@ func SetServerStreamMessageCompression(ctx context.Context, enable bool) error {
 }
 
 // SetClientStreamMessageCompression enables or disables per-message compression
-// on a client stream. The provided context must be the stream context obtained
-// via ClientStream.Context(). Compression is enabled by default. An error is
-// returned if the context is not a client-stream context or no compressor is
-// configured on the stream (e.g. via UseCompressor).
+// on a client stream. Compression is enabled by default and is a no-op if no
+// compressor is configured on the stream (e.g. via UseCompressor). An error is
+// returned if the provided stream is not a gRPC client stream.
 //
 // This method must not be called concurrently with SendMsg.
 //
@@ -86,13 +83,12 @@ func SetServerStreamMessageCompression(ctx context.Context, enable bool) error {
 //
 // Notice: This API is EXPERIMENTAL and may be changed or removed in a
 // later release.
-func SetClientStreamMessageCompression(ctx context.Context, enable bool) error {
-	// Client side: *bool (enableCompression flag) is stored in context via compressKey.
-	flag, ok := ctx.Value(compressKey{}).(*bool)
-	if !ok || flag == nil {
-		return fmt.Errorf("grpc: SetClientStreamMessageCompression called on a non-client-stream context or a compressor is not configured on the stream")
+func SetClientStreamMessageCompression(cs ClientStream, enable bool) error {
+	s, ok := cs.(*clientStream)
+	if !ok {
+		return fmt.Errorf("grpc: SetClientStreamMessageCompression called on a non-client-stream")
 	}
-	*flag = enable
+	s.enableCompression = enable
 	return nil
 }
 
@@ -410,11 +406,7 @@ func newClientStreamWithParams(ctx context.Context, desc *StreamDesc, cc *Client
 		firstAttempt:        true,
 		onCommit:            onCommit,
 		nameResolutionDelay: nameResolutionDelayed,
-	}
-	if compressorV0 != nil || compressorV1 != nil {
-		flag := new(bool)
-		*flag = true // enableCompression defaults to true
-		cs.ctx = context.WithValue(cs.ctx, compressKey{}, flag)
+		enableCompression:   compressorV0 != nil || compressorV1 != nil,
 	}
 	if !cc.dopts.disableRetry {
 		cs.retryThrottler = cc.retryThrottler.Load().(*retryThrottler)
@@ -673,6 +665,11 @@ type clientStream struct {
 	// nameResolutionDelay indicates if there was a delay in the name resolution.
 	// This field is only valid on client side, it's always false on server side.
 	nameResolutionDelay bool
+
+	// enableCompression controls whether per-message compression is enabled for
+	// this stream. It is accessed serially alongside SendMsg calls, so no mutex
+	// is needed.
+	enableCompression bool
 }
 
 type replayOp struct {
@@ -1005,7 +1002,7 @@ func (cs *clientStream) SendMsg(m any) (err error) {
 
 	// load hdr, payload, data
 	compV0, compV1 := cs.compressorV0, cs.compressorV1
-	if flag, ok := cs.ctx.Value(compressKey{}).(*bool); ok && !*flag {
+	if !cs.enableCompression {
 		compV0, compV1 = nil, nil
 	}
 	hdr, data, payload, pf, err := prepareMsg(m, cs.codec, compV0, compV1, cs.cc.dopts.copts.BufferPool)
@@ -1394,23 +1391,19 @@ func newNonRetryClientStream(ctx context.Context, desc *StreamDesc, method strin
 
 	// Use a special addrConnStream to avoid retry.
 	as := &addrConnStream{
-		callHdr:          callHdr,
-		ac:               ac,
-		ctx:              ctx,
-		cancel:           cancel,
-		opts:             opts,
-		callInfo:         c,
-		desc:             desc,
-		codec:            c.codec,
-		sendCompressorV0: cp,
-		sendCompressorV1: comp,
-		decompressorV0:   ac.cc.dopts.dc,
-		transport:        t,
-	}
-	if cp != nil || comp != nil {
-		flag := new(bool)
-		*flag = true // enableCompression defaults to true
-		as.ctx = context.WithValue(as.ctx, compressKey{}, flag)
+		callHdr:           callHdr,
+		ac:                ac,
+		ctx:               ctx,
+		cancel:            cancel,
+		opts:              opts,
+		callInfo:          c,
+		desc:              desc,
+		codec:             c.codec,
+		sendCompressorV0:  cp,
+		sendCompressorV1:  comp,
+		enableCompression: cp != nil || comp != nil,
+		decompressorV0:    ac.cc.dopts.dc,
+		transport:         t,
 	}
 
 	// nil stats handler: internal streams like health and ORCA do not support telemetry.
@@ -1446,24 +1439,25 @@ func newNonRetryClientStream(ctx context.Context, desc *StreamDesc, method strin
 }
 
 type addrConnStream struct {
-	transportStream  *transport.ClientStream
-	ac               *addrConn
-	callHdr          *transport.CallHdr
-	cancel           context.CancelFunc
-	opts             []CallOption
-	callInfo         *callInfo
-	transport        transport.ClientTransport
-	ctx              context.Context
-	sentLast         bool
-	receivedFirstMsg bool
-	desc             *StreamDesc
-	codec            baseCodec
-	sendCompressorV0 Compressor
-	sendCompressorV1 encoding.Compressor
-	decompressorSet  bool
-	decompressorV0   Decompressor
-	decompressorV1   encoding.Compressor
-	parser           parser
+	transportStream   *transport.ClientStream
+	ac                *addrConn
+	callHdr           *transport.CallHdr
+	cancel            context.CancelFunc
+	opts              []CallOption
+	callInfo          *callInfo
+	transport         transport.ClientTransport
+	ctx               context.Context
+	sentLast          bool
+	receivedFirstMsg  bool
+	desc              *StreamDesc
+	codec             baseCodec
+	sendCompressorV0  Compressor
+	sendCompressorV1  encoding.Compressor
+	enableCompression bool
+	decompressorSet   bool
+	decompressorV0    Decompressor
+	decompressorV1    encoding.Compressor
+	parser            parser
 
 	// mu guards finished and is held for the entire finish method.
 	mu       sync.Mutex
@@ -1521,7 +1515,7 @@ func (as *addrConnStream) SendMsg(m any) (err error) {
 
 	// load hdr, payload, data
 	compV0, compV1 := as.sendCompressorV0, as.sendCompressorV1
-	if flag, ok := as.ctx.Value(compressKey{}).(*bool); ok && !*flag {
+	if !as.enableCompression {
 		compV0, compV1 = nil, nil
 	}
 	hdr, data, payload, pf, err := prepareMsg(m, as.codec, compV0, compV1, as.ac.dopts.copts.BufferPool)

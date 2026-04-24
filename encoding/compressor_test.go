@@ -324,7 +324,7 @@ func (s) TestMessageCompression_StreamToggle(t *testing.T) {
 	}
 
 	// 2. Disable message compression and send second message
-	grpc.SetClientStreamMessageCompression(stream.Context(), false)
+	grpc.SetClientStreamMessageCompression(stream, false)
 	stream.Send(&testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: make([]byte, 1000)}})
 	stream.Recv()
 	if sh.compress.Load() != 1 || sh.decompress.Load() != 1 {
@@ -333,7 +333,7 @@ func (s) TestMessageCompression_StreamToggle(t *testing.T) {
 	}
 
 	// 3. Enable message compression and send third message
-	grpc.SetClientStreamMessageCompression(stream.Context(), true)
+	grpc.SetClientStreamMessageCompression(stream, true)
 	stream.Send(&testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: make([]byte, 1000)}})
 	stream.Recv()
 	if sh.compress.Load() != 2 || sh.decompress.Load() != 2 {
@@ -344,11 +344,8 @@ func (s) TestMessageCompression_StreamToggle(t *testing.T) {
 
 // TestMessageCompression_AmbiguousContext verifies that
 // SetServerStreamMessageCompression and SetClientStreamMessageCompression work
-// independently when called on a context that contains keys for both a server
-// stream and a client stream. This situation arises when a server handler
-// propagates its context to an outbound gRPC call for deadline propagation:
-// the outbound ClientStream.Context() inherits the server-stream key from the
-// parent and also adds its own client-stream compression key.
+// independently when a server handler propagates its context to an outbound
+// gRPC call for deadline propagation.
 func (s) TestMessageCompression_AmbiguousContext(t *testing.T) {
 	backendSH := &statsHandler{}
 	backend := &stubserver.StubServer{
@@ -377,10 +374,7 @@ func (s) TestMessageCompression_AmbiguousContext(t *testing.T) {
 	proxy := &stubserver.StubServer{
 		FullDuplexCallF: func(serverStream testgrpc.TestService_FullDuplexCallServer) error {
 			// Use the server handler's context as the parent for the outbound
-			// call. This is the standard deadline-propagation pattern and is
-			// what makes the resulting context "ambiguous": it inherits
-			// streamKey{} from the server infrastructure, and the gRPC client
-			// stack appends compressKey{} when creating the outbound stream.
+			// call. This is the standard deadline-propagation pattern.
 			backendConn, err := grpc.NewClient(
 				backend.Address,
 				grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -397,15 +391,10 @@ func (s) TestMessageCompression_AmbiguousContext(t *testing.T) {
 				return err
 			}
 
-			// clientStream.Context() now has BOTH:
-			//   - streamKey{}    → the proxy's own server-side transport stream
-			//   - compressKey{}  → the outbound client stream's compression flag
-			ambiguousCtx := clientStream.Context()
-
 			// Must only affect the server stream (proxy → original caller).
-			errCh <- grpc.SetServerStreamMessageCompression(ambiguousCtx, false)
+			errCh <- grpc.SetServerStreamMessageCompression(clientStream.Context(), false)
 			// Must only affect the client stream (proxy → backend).
-			errCh <- grpc.SetClientStreamMessageCompression(ambiguousCtx, false)
+			errCh <- grpc.SetClientStreamMessageCompression(clientStream, false)
 
 			// Forward one request/response pair through the proxy.
 			req, err := serverStream.Recv()
