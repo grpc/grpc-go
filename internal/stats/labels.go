@@ -55,21 +55,20 @@ func RegisterTelemetryLabelCallback(ctx context.Context, callback LabelCallback)
 
 // executeTelemetryLabelCallback runs the registered callbacks in the order they were
 // registered on the context with the provided labels. If no callbacks are registered
-// it does nothing. If any registered callback panics it will be swallowed and logged and
-// continue running any other registered callbacks.
+// it does nothing.
 //
 // To ensure callbacks do not mutate the state of the provided label map it is copied
 // before execution.
 func executeTelemetryLabelCallbacks(ctx context.Context, labels map[string]string) {
-	if ctx == nil {
+	callbacks, ok := ctx.Value(telemetryLabelCallbackKey{}).([]LabelCallback)
+	if !ok {
 		return
 	}
-	if callbacks, ok := ctx.Value(telemetryLabelCallbackKey{}).([]LabelCallback); ok {
-		labelsCopy := map[string]string{}
-		maps.Copy(labelsCopy, labels)
-		for _, callback := range callbacks {
-			callback(labelsCopy)
-		}
 
+	labelsCopy := map[string]string{}
+	maps.Copy(labelsCopy, labels)
+	for _, callback := range callbacks {
+		callback(labelsCopy)
 	}
+
 }

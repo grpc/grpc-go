@@ -33,55 +33,106 @@ import (
 // case constructs a new context with the provided callback registered.
 func (s) TestTelemetryLabels(t *testing.T) {
 	commonLabelValues := map[string]string{"grpc.lb.backend_service": "grpc.lb.backend_service_val", "grpc.lb.locality": "grpc.lb.locality_val"}
-	tracker := map[string]string{}
 
 	tests := map[string]struct {
-		callbacks        []func(map[string]string)
+		callbacks        func(tracker map[string]string) []func(map[string]string)
 		additionalLabels map[string]string
 		wantLabels       map[string]string
 	}{
 		"NilCallback": {
-			callbacks:  []func(map[string]string){nil},
+			callbacks: func(map[string]string) []func(map[string]string) {
+				return []func(map[string]string){nil}
+			},
 			wantLabels: map[string]string{},
 		},
 		"NoOPCallback": {
-			callbacks: []func(map[string]string){
-				func(map[string]string) {},
+			callbacks: func(map[string]string) []func(map[string]string) {
+				return []func(map[string]string){
+					func(map[string]string) {},
+				}
 			},
 			wantLabels: map[string]string{},
 		},
-		"MutatingCallback": {
-			callbacks: []func(u map[string]string){
-				func(u map[string]string) {
-					for key, value := range u {
-						tracker[key] = value
-					}
-				},
+		"TrackingCallback": {
+			callbacks: func(tracker map[string]string) []func(map[string]string) {
+				return []func(map[string]string){
+					func(u map[string]string) {
+						for key, value := range u {
+							tracker[key] = value
+						}
+					},
+				}
 			},
-			wantLabels: map[string]string{"grpc.lb.backend_service": "grpc.lb.backend_service_val", "grpc.lb.locality": "grpc.lb.locality_val"},
+			wantLabels: map[string]string{
+				"grpc.lb.backend_service": "grpc.lb.backend_service_val",
+				"grpc.lb.locality":        "grpc.lb.locality_val",
+			},
 		},
-		"OverrideLabelsWithCallback": {
-			callbacks: []func(u map[string]string){
-				func(u map[string]string) {
-					for key, value := range u {
-						tracker[key] = value
-					}
-				},
+		"MultipleInvocations": {
+			callbacks: func(tracker map[string]string) []func(map[string]string) {
+				return []func(map[string]string){
+					func(u map[string]string) {
+						for key, value := range u {
+							tracker[key] = value
+						}
+					},
+				}
+			},
+			additionalLabels: map[string]string{"grpc.lb.other_label": "grpc.lb.other_val"},
+			wantLabels: map[string]string{
+				"grpc.lb.backend_service": "grpc.lb.backend_service_val",
+				"grpc.lb.locality":        "grpc.lb.locality_val",
+				"grpc.lb.other_label":     "grpc.lb.other_val",
+			},
+		},
+		"MultipleInvocationsWithSameLabel": {
+			callbacks: func(tracker map[string]string) []func(map[string]string) {
+				return []func(map[string]string){
+					func(u map[string]string) {
+						for key, value := range u {
+							tracker[key] = value
+						}
+					},
+				}
 			},
 			additionalLabels: map[string]string{"grpc.lb.backend_service": "grpc.lb.backend_service_other_val"},
-			wantLabels:       map[string]string{"grpc.lb.backend_service": "grpc.lb.backend_service_other_val", "grpc.lb.locality": "grpc.lb.locality_val"},
+			wantLabels: map[string]string{
+				"grpc.lb.backend_service": "grpc.lb.backend_service_other_val",
+				"grpc.lb.locality":        "grpc.lb.locality_val",
+			},
+		},
+		"MultipleCallbacks": {
+			callbacks: func(tracker map[string]string) []func(map[string]string) {
+				return []func(map[string]string){
+					func(u map[string]string) {
+						for key, value := range u {
+							k, v := key+"_first", value+"_first"
+							tracker[k] = v
+						}
+					},
+					func(u map[string]string) {
+						for key, value := range u {
+							k, v := key+"_second", value+"_second"
+							tracker[k] = v
+						}
+					},
+				}
+			},
+			wantLabels: map[string]string{
+				"grpc.lb.backend_service_first":  "grpc.lb.backend_service_val_first",
+				"grpc.lb.locality_first":         "grpc.lb.locality_val_first",
+				"grpc.lb.backend_service_second": "grpc.lb.backend_service_val_second",
+				"grpc.lb.locality_second":        "grpc.lb.locality_val_second",
+			},
 		},
 	}
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
-			// resest the tracker at the end of every test
-			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-			t.Cleanup(func() {
-				tracker = map[string]string{}
-				cancel()
-			})
+			tracker := map[string]string{}
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
 
-			for _, c := range test.callbacks {
+			for _, c := range test.callbacks(tracker) {
 				ctx = stats.RegisterTelemetryLabelCallback(ctx, c)
 			}
 
@@ -89,7 +140,7 @@ func (s) TestTelemetryLabels(t *testing.T) {
 			stats.UpdateLabels(ctx, test.additionalLabels)
 
 			if diff := cmp.Diff(tracker, test.wantLabels); diff != "" {
-				t.Fatalf("tracked labels did not match expcted values (-got, +want): %v", diff)
+				t.Fatalf("tracked labels did not match expected values (-got, +want): %v", diff)
 			}
 		})
 	}
