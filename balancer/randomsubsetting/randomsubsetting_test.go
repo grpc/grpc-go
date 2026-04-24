@@ -298,54 +298,63 @@ func (s) TestUniformDistributionOfEndpoints(t *testing.T) {
 	defer cancel()
 
 	testCases := []struct {
+		name       string
 		eps        int
 		subsetSize uint32
 		iteration  uint32
 		positive   bool
 	}{
 		{
+			name:       "LowIteration_Baseline",
 			eps:        16,
 			subsetSize: 4,
 			iteration:  10,
 			positive:   true,
 		},
 		{
+			name:       "MediumScale_InitialConvergence",
 			eps:        40,
 			subsetSize: 20,
 			iteration:  100,
 			positive:   true,
 		},
 		{
+			name:       "SmallSubset_HighRepetition",
 			eps:        10,
 			subsetSize: 2,
 			iteration:  1000,
 			positive:   true,
 		},
 		{
+			name:       "StandardSubset_ExtendedVerification",
 			eps:        16,
 			subsetSize: 4,
 			iteration:  1600,
 			positive:   true,
 		},
 		{
+			name:       "HighRatio_StatisticalSmoothing",
 			eps:        8,
 			subsetSize: 4,
 			iteration:  3200,
 			positive:   true,
 		},
 		{
+			name:       "FullSet_MaxIteration_Convergence",
 			eps:        4,
 			subsetSize: 4,
 			iteration:  6400,
 			positive:   true,
 		},
 		{
+			name:       "InsufficientIterations_HighVariance",
 			eps:        6,
 			subsetSize: 1,
 			iteration:  30,
 			positive:   false,
 		},
 		{
+			name:       "SmallSubset_TooFewIterations",
 			eps:        17,
 			subsetSize: 2,
 			iteration:  100,
@@ -385,11 +394,9 @@ func (s) TestUniformDistributionOfEndpoints(t *testing.T) {
 		t.Logf("Test Case: Endpoints=%d, SubsetSize=%d, Iterations=%d", N, L, K)
 
 		observedCounts := make(map[string]float64)
+		expectedCounts := make(map[string]float64)
 		for k, v := range EndpointCount {
 			observedCounts[k] = float64(v)
-		}
-		expectedCounts := make(map[string]float64)
-		for k := range EndpointCount {
 			expectedCounts[k] = E
 		}
 
