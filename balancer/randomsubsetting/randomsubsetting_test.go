@@ -285,8 +285,6 @@ func (s) TestSubsettingBalancer_DeterministicSubset(t *testing.T) {
 	}
 }
 
-
-
 // TestUniformDistributionOfEndpoints verifies that the random subsetting
 // policy achieves a uniform distribution across backends. From a set of N
 // numbers, it randomly selects K-times a subset of L numbers, where L < N.
@@ -369,8 +367,8 @@ func (s) TestUniformDistributionOfEndpoints(t *testing.T) {
 		N := len(endpoints)
 		L := int(tc.subsetSize)
 		K := int(tc.iteration)
-		p := float64(L) / float64(N)         // Probability of x ∈ N being drawn p(x) = L / N
-		E := float64(K) * p                  // Expected Value (Mean) E(N) = K * p
+		p := float64(L) / float64(N) // Probability of x ∈ N being drawn p(x) = L / N
+		E := float64(K) * p          // Expected Value (Mean) E(N) = K * p
 
 
 		EndpointCount := make(map[string]int, N)
@@ -412,5 +410,3 @@ func (s) TestUniformDistributionOfEndpoints(t *testing.T) {
 		}
 	}
 }
-
-
