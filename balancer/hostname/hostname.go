@@ -44,8 +44,8 @@ func Set(endpoint resolver.Endpoint, hostname string) resolver.Endpoint {
 	return endpoint
 }
 
-// FromEndpoint returns the hostname attribute of endpoint. If this attribute is
-// not set, it returns the empty string.
+// FromEndpoint returns the hostname attribute of endpoint. If this
+// attribute is not set, it returns the empty string.
 //
 // # Experimental
 //
