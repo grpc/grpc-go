@@ -24,20 +24,31 @@ import (
 )
 
 func TestEncodeDuration(t *testing.T) {
-	for _, test := range []struct {
-		in  string
-		out string
-	}{
-		{"12345678ns", "12345678n"},
-		{"123456789ns", "123457u"},
-		{"12345678us", "12345678u"},
-		{"123456789us", "123457m"},
-		{"12345678ms", "12345678m"},
-		{"123456789ms", "123457S"},
-		{"12345678s", "12345678S"},
-		{"123456789s", "2057614M"},
-		{"12345678m", "12345678M"},
-		{"123456789m", "2057614H"},
+	for _, test := range []struct{ in, out string }{
+		// Exact encoding
+		{"0ns", "0S"},
+		{"1ns", "1n"},
+		{"99999999ns", "99999999n"},
+		{"1us", "1u"},
+		{"99999999us", "99999999u"},
+		{"1ms", "1m"},
+		{"99999999ms", "99999999m"},
+		{"1s", "1S"},
+		{"99999999s", "99999999S"},
+		{"1m", "1M"},
+		{"99999999m", "99999999M"},
+		{"1h", "1H"},
+
+		// Rounding
+		{"100000001ns", "100001u"},
+		{"100000001us", "100001m"},
+		{"100000001ms", "100001S"},
+		{"100000000s", "1666667M"},
+		{"100000000m", "1666667H"},
+
+		// Boundary conditions
+		{"-1ns", "0S"},
+		{"9223372036854775807ns", "2562048H"},
 	} {
 		d, err := time.ParseDuration(test.in)
 		if err != nil {
@@ -45,7 +56,7 @@ func TestEncodeDuration(t *testing.T) {
 		}
 		out := EncodeDuration(d)
 		if out != test.out {
-			t.Fatalf("timeoutEncode(%s) = %s, want %s", test.in, out, test.out)
+			t.Fatalf("EncodeDuration(%s) = %s, want %s", test.in, out, test.out)
 		}
 	}
 }
