@@ -231,7 +231,7 @@ func attemptCounts(wantAddrWeights map[string]int) int {
 	return int(math.Ceil(requiredAttempts))
 }
 
-// pearsonsChiSquareTest checks if the observed counts match the expected
+// PearsonsChiSquareTest checks if the observed counts match the expected
 // counts.
 // Pearson's Chi-Squared Test Formula:
 //
