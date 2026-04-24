@@ -25,6 +25,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/mem"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -32,6 +33,7 @@ import (
 
 // ServerStream implements streaming functionality for a gRPC server.
 type ServerStream struct {
+	internal.EnforceServerTransportStreamEmbedding
 	Stream // Embed for common stream functionality.
 
 	st      internalServerTransport
@@ -50,7 +52,20 @@ type ServerStream struct {
 	headerSent atomic.Bool // atomically set when the headers are sent out.
 
 	headerWireLength int
+
+	// enableCompression controls whether per-message compression is enabled for
+	// this stream. It is accessed serially alongside SendMsg calls, so no mutex
+	// is needed.
+	enableCompression bool
 }
+
+// SetEnableCompression sets whether per-message compression is enabled for
+// subsequent messages sent on this stream.
+func (s *ServerStream) SetEnableCompression(v bool) { s.enableCompression = v }
+
+// IsCompressionEnabled reports whether per-message compression is enabled for
+// this stream.
+func (s *ServerStream) IsCompressionEnabled() bool { return s.enableCompression }
 
 // Read reads an n byte message from the input stream.
 func (s *ServerStream) Read(n int) (mem.BufferSlice, error) {

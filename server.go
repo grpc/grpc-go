@@ -1472,7 +1472,11 @@ func (s *Server) processUnaryRPC(ctx context.Context, stream *transport.ServerSt
 	if stream.SendCompress() != sendCompressorName {
 		comp = encoding.GetCompressor(stream.SendCompress())
 	}
-	if err := s.sendResponse(ctx, stream, reply, cp, opts, comp); err != nil {
+	compV0, compV1 := cp, comp
+	if !stream.IsCompressionEnabled() {
+		compV0, compV1 = nil, nil
+	}
+	if err := s.sendResponse(ctx, stream, reply, compV0, opts, compV1); err != nil {
 		if err == io.EOF {
 			// The entire stream is done (for unary RPC only).
 			return err
@@ -1910,10 +1914,14 @@ func NewContextWithServerTransportStream(ctx context.Context, stream ServerTrans
 // Notice: This type is EXPERIMENTAL and may be changed or removed in a
 // later release.
 type ServerTransportStream interface {
+	internal.EnforceServerTransportStreamEmbedding
 	Method() string
 	SetHeader(md metadata.MD) error
 	SendHeader(md metadata.MD) error
 	SetTrailer(md metadata.MD) error
+	// SetEnableCompression controls whether per-message compression is enabled
+	// for subsequent messages sent on this stream.
+	SetEnableCompression(enable bool)
 }
 
 // ServerTransportStreamFromContext returns the ServerTransportStream saved in

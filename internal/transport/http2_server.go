@@ -403,8 +403,9 @@ func (t *http2Server) operateHeaders(ctx context.Context, frame *http2.MetaHeade
 			id: streamID,
 			fc: inFlow{limit: uint32(t.initialWindowSize)},
 		},
-		st:               t,
-		headerWireLength: int(frame.Header().Length),
+		st:                t,
+		headerWireLength:  int(frame.Header().Length),
+		enableCompression: true, // compression default enabled
 	}
 	s.Stream.buf.init()
 	var (
