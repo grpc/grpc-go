@@ -370,7 +370,6 @@ func (s) TestUniformDistributionOfEndpoints(t *testing.T) {
 		p := float64(L) / float64(N) // Probability of x ∈ N being drawn p(x) = L / N
 		E := float64(K) * p          // Expected Value (Mean) E(N) = K * p
 
-
 		EndpointCount := make(map[string]int, N)
 		for _, ep := range endpoints {
 			EndpointCount[ep.Addresses[0].Addr] = 0
