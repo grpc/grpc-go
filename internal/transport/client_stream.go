@@ -170,8 +170,6 @@ func (s *ClientStream) Header() (metadata.MD, error) {
 	s.waitOnHeader()
 
 	if !s.headerValid || s.noHeaders {
-		s.collectionMu.Lock()
-		defer s.collectionMu.Unlock()
 		return nil, s.status.Err()
 	}
 
