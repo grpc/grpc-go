@@ -936,10 +936,6 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr, handler s
 	return s, nil
 }
 
-func (t *http2Client) closeStreamWithNonGRPCStatus(s *ClientStream) {
-	t.closeStream(s, nil, true, http2.ErrCodeProtocol, nil, nil, true)
-}
-
 func (t *http2Client) closeStream(s *ClientStream, err error, rst bool, rstCode http2.ErrCode, st *status.Status, mdata map[string][]string, eosReceived bool) {
 	// Set stream status to done.
 	if s.swapState(streamDone) == streamDone {
@@ -1244,7 +1240,9 @@ func (t *http2Client) handleData(f *parsedDataFrame) {
 				})
 			}
 			if end {
-				t.closeStreamWithNonGRPCStatus(s)
+				// closeStream will finalize the nonGRPCStatus and nonGRPCDataBuf,
+				// and provide them as err and st.
+				t.closeStream(s, nil, true, http2.ErrCodeProtocol, nil, nil, true)
 			}
 			return
 		}
