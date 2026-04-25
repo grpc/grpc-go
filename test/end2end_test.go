@@ -607,10 +607,10 @@ func (te *test) listenAndServe(ts testgrpc.TestServiceServer, listen func(networ
 		sopts = append(sopts, grpc.UnknownServiceHandler(te.unknownHandler))
 	}
 	if te.serverInitialWindowSize > 0 {
-		sopts = append(sopts, grpc.InitialWindowSize(te.serverInitialWindowSize))
+		sopts = append(sopts, grpc.StaticStreamWindowSize(te.serverInitialWindowSize))
 	}
 	if te.serverInitialConnWindowSize > 0 {
-		sopts = append(sopts, grpc.InitialConnWindowSize(te.serverInitialConnWindowSize))
+		sopts = append(sopts, grpc.StaticConnWindowSize(te.serverInitialConnWindowSize))
 	}
 	la := ":0"
 	if te.e.network == "unix" {
@@ -818,10 +818,10 @@ func (te *test) configDial(opts ...grpc.DialOption) ([]grpc.DialOption, string) 
 		opts = append(opts, grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, te.e.balancer)))
 	}
 	if te.clientInitialWindowSize > 0 {
-		opts = append(opts, grpc.WithInitialWindowSize(te.clientInitialWindowSize))
+		opts = append(opts, grpc.WithStaticStreamWindowSize(te.clientInitialWindowSize))
 	}
 	if te.clientInitialConnWindowSize > 0 {
-		opts = append(opts, grpc.WithInitialConnWindowSize(te.clientInitialConnWindowSize))
+		opts = append(opts, grpc.WithStaticConnWindowSize(te.clientInitialConnWindowSize))
 	}
 	if te.perRPCCreds != nil {
 		opts = append(opts, grpc.WithPerRPCCredentials(te.perRPCCreds))
@@ -5490,6 +5490,7 @@ func testConfigurableWindowSize(t *testing.T, e env, wc windowSizeConfig) {
 	// Set message size to exhaust largest of window sizes.
 	messageSize := max(max(wc.serverStream, wc.serverConn), max(wc.clientStream, wc.clientConn)) / int32(numOfIter-1)
 	messageSize = max(messageSize, 64*1024)
+	t.Logf("easwars: messageSize=%d", messageSize)
 	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, messageSize)
 	if err != nil {
 		t.Fatal(err)
@@ -5505,6 +5506,7 @@ func testConfigurableWindowSize(t *testing.T, e env, wc windowSizeConfig) {
 		Payload:            payload,
 	}
 	for i := 0; i < numOfIter; i++ {
+		t.Logf("easwars: iteration %d", i)
 		if err := stream.Send(req); err != nil {
 			t.Fatalf("%v.Send(%v) = %v, want <nil>", stream, req, err)
 		}
