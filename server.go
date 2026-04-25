@@ -1081,25 +1081,24 @@ var _ http.Handler = (*Server)(nil)
 // interface by responding to the gRPC request r, by looking up
 // the requested gRPC method in the gRPC server s.
 //
-// The provided HTTP request must have arrived on an HTTP/2
-// connection. When using the Go standard library's server,
-// practically this means that the Request must also have arrived
-// over TLS.
+// The provided HTTP request must have arrived on an HTTP/2 or HTTP/3
+// connection. When using the Go standard library's server for HTTP/2,
+// practically this means that the Request must also have arrived over TLS.
 //
 // To share one port (such as 443 for https) between gRPC and an
 // existing http.Handler, use a root http.Handler such as:
 //
-//	if r.ProtoMajor == 2 && strings.HasPrefix(
+//	if (r.ProtoMajor == 2 || r.ProtoMajor == 3) && strings.HasPrefix(
 //		r.Header.Get("Content-Type"), "application/grpc") {
 //		grpcServer.ServeHTTP(w, r)
 //	} else {
 //		yourMux.ServeHTTP(w, r)
 //	}
 //
-// Note that ServeHTTP uses Go's HTTP/2 server implementation which is totally
-// separate from grpc-go's HTTP/2 server. Performance and features may vary
-// between the two paths. ServeHTTP does not support some gRPC features
-// available through grpc-go's HTTP/2 server.
+// Note that ServeHTTP uses the HTTP server implementation that supplied w and
+// r, which is totally separate from grpc-go's HTTP/2 server. Performance and
+// features may vary between the paths. ServeHTTP does not support some gRPC
+// features available through grpc-go's HTTP/2 server.
 //
 // # Experimental
 //

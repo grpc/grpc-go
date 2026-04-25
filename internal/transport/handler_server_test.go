@@ -82,7 +82,7 @@ func (s) TestHandlerTransport_NewServerHandlerTransport(t *testing.T) {
 				Method:     "POST",
 				Header:     http.Header{"Content-Type": []string{"application/grpc"}},
 			},
-			wantErr:     "gRPC requires HTTP/2",
+			wantErr:     "gRPC requires HTTP/2 or HTTP/3",
 			wantErrCode: http.StatusHTTPVersionNotSupported,
 		},
 		{
@@ -108,6 +108,28 @@ func (s) TestHandlerTransport_NewServerHandlerTransport(t *testing.T) {
 			name: "valid",
 			req: &http.Request{
 				ProtoMajor: 2,
+				Method:     "POST",
+				Header: http.Header{
+					"Content-Type": {"application/grpc"},
+				},
+				URL: &url.URL{
+					Path: "/service/foo.bar",
+				},
+			},
+			check: func(t *serverHandlerTransport, tt *testCase) error {
+				if t.req != tt.req {
+					return fmt.Errorf("t.req = %p; want %p", t.req, tt.req)
+				}
+				if t.rw == nil {
+					return errors.New("t.rw = nil; want non-nil")
+				}
+				return nil
+			},
+		},
+		{
+			name: "valid http/3",
+			req: &http.Request{
+				ProtoMajor: 3,
 				Method:     "POST",
 				Header: http.Header{
 					"Content-Type": {"application/grpc"},

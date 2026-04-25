@@ -16,10 +16,9 @@
  *
  */
 
-// This file is the implementation of a gRPC server using HTTP/2 which
-// uses the standard Go http2 Server implementation (via the
-// http.Handler interface), rather than speaking low-level HTTP/2
-// frames itself. It is the implementation of *grpc.Server.ServeHTTP.
+// This file is the implementation of a gRPC server using an http.Handler
+// interface, rather than speaking low-level HTTP frames itself. It is the
+// implementation of *grpc.Server.ServeHTTP.
 
 package transport
 
@@ -47,9 +46,9 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// NewServerHandlerTransport returns a ServerTransport handling gRPC from
-// inside an http.Handler, or writes an HTTP error to w and returns an error.
-// It requires that the http Server supports HTTP/2.
+// NewServerHandlerTransport returns a ServerTransport handling gRPC from inside
+// an http.Handler, or writes an HTTP error to w and returns an error. It
+// requires that the HTTP server supports HTTP/2 or HTTP/3.
 func NewServerHandlerTransport(w http.ResponseWriter, r *http.Request, stats stats.Handler, bufferPool mem.BufferPool) (ServerTransport, error) {
 	if r.Method != http.MethodPost {
 		w.Header().Set("Allow", http.MethodPost)
@@ -65,8 +64,8 @@ func NewServerHandlerTransport(w http.ResponseWriter, r *http.Request, stats sta
 		http.Error(w, msg, http.StatusUnsupportedMediaType)
 		return nil, errors.New(msg)
 	}
-	if r.ProtoMajor != 2 {
-		msg := "gRPC requires HTTP/2"
+	if r.ProtoMajor != 2 && r.ProtoMajor != 3 {
+		msg := "gRPC requires HTTP/2 or HTTP/3"
 		http.Error(w, msg, http.StatusHTTPVersionNotSupported)
 		return nil, errors.New(msg)
 	}
@@ -139,9 +138,8 @@ func NewServerHandlerTransport(w http.ResponseWriter, r *http.Request, stats sta
 
 // serverHandlerTransport is an implementation of ServerTransport
 // which replies to exactly one gRPC request (exactly one HTTP request),
-// using the net/http.Handler interface. This http.Handler is guaranteed
-// at this point to be speaking over HTTP/2, so it's able to speak valid
-// gRPC.
+// using the net/http.Handler interface. This http.Handler is guaranteed at this
+// point to be speaking over HTTP/2 or HTTP/3, so it's able to speak valid gRPC.
 type serverHandlerTransport struct {
 	rw         http.ResponseWriter
 	req        *http.Request
@@ -266,9 +264,9 @@ func (ht *serverHandlerTransport) writeStatus(s *ServerStream, st *status.Status
 					continue
 				}
 				for _, v := range vv {
-					// http2 ResponseWriter mechanism to send undeclared Trailers after
+					// net/http ResponseWriter mechanism to send undeclared Trailers after
 					// the headers have possibly been written.
-					h.Add(http2.TrailerPrefix+k, encodeMetadataHeader(k, v))
+					h.Add(http.TrailerPrefix+k, encodeMetadataHeader(k, v))
 				}
 			}
 		}
