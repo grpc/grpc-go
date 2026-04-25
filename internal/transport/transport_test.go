@@ -2685,6 +2685,7 @@ func (s) TestClientDecodeHeader(t *testing.T) {
 		name            string
 		metaHeaderFrame *http2.MetaHeadersFrame
 		wantStatus      *status.Status
+		isNonGRPCStatus bool
 	}{
 		{
 			name: "valid_header",
@@ -2708,6 +2709,7 @@ func (s) TestClientDecodeHeader(t *testing.T) {
 				codes.Unknown,
 				"unexpected HTTP status code received from server: 200 (OK); malformed header: missing HTTP content-type",
 			),
+			isNonGRPCStatus: true,
 		},
 		{
 			name: "invalid_grpc_status",
@@ -2734,6 +2736,7 @@ func (s) TestClientDecodeHeader(t *testing.T) {
 				codes.Internal,
 				"malformed header: missing HTTP status; transport: received unexpected content-type \"application/json\"",
 			),
+			isNonGRPCStatus: true,
 		},
 		{
 			name: "invalid_content_type_with_http_status_504",
@@ -2747,6 +2750,7 @@ func (s) TestClientDecodeHeader(t *testing.T) {
 				codes.Unavailable,
 				"unexpected HTTP status code received from server: 504 (Gateway Timeout); transport: received unexpected content-type \"application/json\"",
 			),
+			isNonGRPCStatus: true,
 		},
 		{
 			name: "http_fallback_and_invalid_http_status",
@@ -2803,7 +2807,12 @@ func (s) TestClientDecodeHeader(t *testing.T) {
 			}
 
 			s.operateHeaders(tc.metaHeaderFrame)
-			got := cs.status
+			var got *status.Status
+			if tc.isNonGRPCStatus {
+				got = cs.nonGRPCStatus
+			} else {
+				got = cs.status
+			}
 			want := tc.wantStatus
 			if got.Code() != want.Code() || got.Message() != want.Message() {
 				t.Errorf("operateHeaders(%v) got status %q, want %q", tc.metaHeaderFrame, got, want)

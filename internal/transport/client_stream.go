@@ -19,7 +19,6 @@
 package transport
 
 import (
-	"strconv"
 	"sync"
 	"sync/atomic"
 
@@ -56,9 +55,9 @@ type ClientStream struct {
 	// reading its value).
 	headerValid bool
 
-	collectionMu   sync.Mutex // protects collecting, nonGRPCDataBuf, and status during the non-gRPC data collection lifecycle.
-	collecting     bool       // indicates if stream entered the stage of non-gRPC data collection.
-	nonGRPCDataBuf []byte     // stores the data of a non-gRPC response.
+	collectionMu   sync.Mutex     // protects nonGRPCStatus and nonGRPCDataBuf during the non-gRPC data collection lifecycle.
+	nonGRPCStatus  *status.Status // the initial status from the non-gRPC response header, finalized with collected data before closing.
+	nonGRPCDataBuf []byte         // stores the data of a non-gRPC response.
 
 	noHeaders        bool          // set if the client never received headers (set only after the stream is done).
 	headerChanClosed uint32        // set when headerChan is closed. Used to avoid closing headerChan multiple times.
@@ -70,11 +69,12 @@ type ClientStream struct {
 func (s *ClientStream) startNonGRPCDataCollection(st *status.Status) {
 	s.collectionMu.Lock()
 	defer s.collectionMu.Unlock()
-	if s.collecting {
+	if s.nonGRPCStatus != nil {
+		// If nonGRPCStatus is already set, it means the stream is already in
+		// the non-gRPC data collection lifecycle.
 		return
 	}
-	s.status = st
-	s.collecting = true
+	s.nonGRPCStatus = st
 	s.nonGRPCDataBuf = make([]byte, 0, nonGRPCDataMaxLen)
 }
 
@@ -85,7 +85,8 @@ func (s *ClientStream) startNonGRPCDataCollection(st *status.Status) {
 func (s *ClientStream) tryHandleNonGRPCData(f *parsedDataFrame) (handle bool, end bool) {
 	s.collectionMu.Lock()
 	defer s.collectionMu.Unlock()
-	if !s.collecting {
+	if s.nonGRPCStatus == nil {
+		// if is not in the non-gRPC data collection lifecycle, do not handle this frame.
 		return false, false
 	}
 
@@ -95,22 +96,6 @@ func (s *ClientStream) tryHandleNonGRPCData(f *parsedDataFrame) (handle bool, en
 		return true, true
 	}
 	return true, false
-}
-
-// finalizeNonGRPCDataCollectionLocked stops collecting non-gRPC data and
-// appends the collected data to the status message. It returns the finalized
-// status, or nil if the stream was not collecting. It should only be called
-// in closeStream.
-//
-// Must be called with collectionMu held.
-func (s *ClientStream) finalizeNonGRPCDataCollectionLocked() *status.Status {
-	if !s.collecting {
-		return nil
-	}
-	s.collecting = false
-	data := "\ndata: " + strconv.Quote(string(s.nonGRPCDataBuf))
-	s.status = status.New(s.status.Code(), s.status.Message()+data)
-	return s.status
 }
 
 // Read reads an n byte message from the input stream.

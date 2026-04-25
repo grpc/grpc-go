@@ -949,13 +949,15 @@ func (t *http2Client) closeStream(s *ClientStream, err error, rst bool, rstCode 
 		return
 	}
 	s.collectionMu.Lock()
-	// Finalize non-gRPC data collection and use the resulting status if available.
-	if finalized := s.finalizeNonGRPCDataCollectionLocked(); finalized != nil {
-		st = finalized
+	if s.nonGRPCStatus != nil {
+		data := "\ndata: " + strconv.Quote(string(s.nonGRPCDataBuf))
+		st = status.New(s.nonGRPCStatus.Code(), s.nonGRPCStatus.Message()+data)
 		err = st.Err()
+		// Clear the nonGRPCStatus to indicate the non-grpc data collection is done.
+		s.nonGRPCStatus = nil
 	}
-	s.status = st
 	s.collectionMu.Unlock()
+	s.status = st
 	if len(mdata) > 0 {
 		s.trailer = mdata
 	}
