@@ -112,6 +112,7 @@ const (
 	misbehaved
 	encodingRequiredStatus
 	invalidHeaderField
+	malformedHeader
 	delayRead
 	pingpong
 )
@@ -223,6 +224,19 @@ func (h *testStreamHandler) handleStreamEncodingRequiredStatus(s *ServerStream) 
 func (h *testStreamHandler) handleStreamInvalidHeaderField(s *ServerStream) {
 	headerFields := []hpack.HeaderField{}
 	headerFields = append(headerFields, hpack.HeaderField{Name: "content-type", Value: expectedInvalidHeaderField})
+	h.t.controlBuf.put(&headerFrame{
+		streamID:  s.id,
+		hf:        headerFields,
+		endStream: false,
+	})
+}
+
+func (h *testStreamHandler) handleStreamMalformedHeader(s *ServerStream) {
+	headerFields := []hpack.HeaderField{
+		{Name: ":status", Value: "200"},
+		{Name: "content-type", Value: "application/grpc"},
+		{Name: "x-bad-bin", Value: "!!!invalid-base64!!!"},
+	}
 	h.t.controlBuf.put(&headerFrame{
 		streamID:  s.id,
 		hf:        headerFields,
@@ -431,6 +445,17 @@ func (s *server) start(t *testing.T, port int, serverConfig *ServerConfig, ht hT
 					wg.Add(1)
 					go func() {
 						h.handleStreamInvalidHeaderField(s)
+						wg.Done()
+					}()
+				})
+				wg.Done()
+			}()
+		case malformedHeader:
+			go func() {
+				transport.HandleStreams(ctx, func(s *ServerStream) {
+					wg.Add(1)
+					go func() {
+						h.handleStreamMalformedHeader(s)
 						wg.Done()
 					}()
 				})
@@ -1660,8 +1685,32 @@ func (s) TestInvalidHeaderField(t *testing.T) {
 	server.stop()
 }
 
-func (s) TestHeaderChanClosedAfterReceivingAnInvalidHeader(t *testing.T) {
+func (s) TestHeaderChanClosedAfterReceivingNonGRPCResponse(t *testing.T) {
 	server, ct, cancel := setUp(t, 0, invalidHeaderField)
+	defer cancel()
+	defer server.stop()
+	defer ct.Close(fmt.Errorf("closed manually by test"))
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	s, err := ct.NewStream(ctx, &CallHdr{Host: "localhost", Method: "foo"}, nil)
+	if err != nil {
+		t.Fatalf("failed to create the stream")
+	}
+	// The server sends a non-gRPC response without ending the stream, so the
+	// stream enters data collection mode. headerChan is not closed until the
+	// stream itself closes (via context timeout here).
+	if _, err := s.Header(); err == nil {
+		t.Fatalf("Header() succeeded, want error")
+	}
+	select {
+	case <-s.headerChan:
+	default:
+		t.Errorf("s.headerChan: got open, want closed")
+	}
+}
+
+func (s) TestHeaderChanClosedAfterReceivingAnInvalidHeader(t *testing.T) {
+	server, ct, cancel := setUp(t, 0, malformedHeader)
 	defer cancel()
 	defer server.stop()
 	defer ct.Close(fmt.Errorf("closed manually by test"))
