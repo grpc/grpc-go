@@ -951,9 +951,21 @@ func (t *http2Client) closeStream(s *ClientStream, err error, rst bool, rstCode 
 		<-s.done
 		return
 	}
-	// status and trailers can be updated here without any synchronization because the stream goroutine will
-	// only read it after it sees an io.EOF error from read or write and we'll write those errors
-	// only after updating this.
+
+	// If the stream is in the non-gRPC data collection lifecycle, use the
+	// nonGRPCStatus and nonGRPCDataBuf to construct the final status and
+	// error to return to the user. This is to ensure that non-gRPC data
+	// collected is included in the final status message returned to the user.
+	s.collectionMu.Lock()
+	if s.nonGRPCStatus != nil {
+		data := "\ndata: " + strconv.Quote(string(s.nonGRPCDataBuf))
+		st = status.New(s.nonGRPCStatus.Code(), s.nonGRPCStatus.Message()+data)
+		err = st.Err()
+		// Clear the nonGRPCStatus to indicate the non-grpc data collection is done.
+		s.nonGRPCStatus = nil
+	}
+	s.collectionMu.Unlock()
+
 	s.status = st
 	if len(mdata) > 0 {
 		s.trailer = mdata
@@ -1231,6 +1243,23 @@ func (t *http2Client) handleData(f *parsedDataFrame) {
 			t.closeStream(s, io.EOF, true, http2.ErrCodeFlowControl, status.New(codes.Internal, err.Error()), nil, false)
 			return
 		}
+
+		handle, end := s.tryHandleNonGRPCData(f)
+		if handle {
+			if w := s.fc.onRead(size); w > 0 {
+				t.controlBuf.put(&outgoingWindowUpdate{
+					streamID:  s.id,
+					increment: w,
+				})
+			}
+			if end {
+				// Close the stream; closeStream will finalize the nonGRPCStatus and nonGRPCDataBuf,
+				// and provide them as err and st.
+				t.closeStream(s, nil, true, http2.ErrCodeProtocol, nil, nil, true)
+			}
+			return
+		}
+
 		dataLen := f.data.Len()
 		if f.Header().Flags.Has(http2.FlagDataPadded) {
 			if w := s.fc.onRead(size - uint32(dataLen)); w > 0 {
@@ -1575,7 +1604,12 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 		}
 
 		se := status.New(grpcErrorCode, strings.Join(errs, "; "))
-		t.closeStream(s, se.Err(), true, http2.ErrCodeProtocol, se, nil, endStream)
+		if endStream {
+			t.closeStream(s, se.Err(), true, http2.ErrCodeProtocol, se, nil, true)
+			return
+		}
+
+		s.startNonGRPCDataCollection(se)
 		return
 	}
 
