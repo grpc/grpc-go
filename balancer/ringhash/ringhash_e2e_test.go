@@ -2884,38 +2884,44 @@ func (s) TestRingHash_RequestHashKeyConnecting(t *testing.T) {
 		t.Fatalf("Got %d connection attempts, want at most %d", nConn, wantMaxConn)
 	}
 
-	// Do a second RPC. Since there should already be a SubChannel in
-	// Connecting state, this should not trigger a connection attempt.
-	wg.Add(1)
-	go func() {
-		_, err := client.EmptyCall(ctx, &testpb.Empty{})
-		if err != nil {
-			t.Errorf("EmptyCall(): got %v, want success", err)
-		}
-		wg.Done()
-	}()
+	testutils.AwaitState(ctx, t, cc, connectivity.Connecting)
 
-	// Give extra time for more connections to be attempted.
-	time.Sleep(defaultTestShortTimeout)
+	// Do a second RPC with short timeout. Since there should already be a
+	// SubChannel in Connecting state, this should not trigger a connection
+	// attempt.
+	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
+	_, err = client.EmptyCall(sCtx, &testpb.Empty{}, grpc.WaitForReady(true))
+	sCancel()
 
-	var firstConnectedBackend string
+	// It should fail with DeadlineExceeded because the connection is blocked.
+	if status.Code(err) != codes.DeadlineExceeded {
+		t.Fatalf("EmptyCall(): got err %v, want DeadlineExceeded", err)
+	}
+
+	// Check connection counts before resuming any hold.
 	nConn = 0
-	for i, hold := range holds {
-		if hold.IsStarted() {
-			// Unblock the connection attempt. The SubChannel (and hence the
-			// channel) should transition to Ready. RPCs should succeed and
-			// be routed to this backend.
-			hold.Resume()
-			holds[i] = nil
-			firstConnectedBackend = backends[i]
+	for _, hold := range holds {
+		if hold != nil && hold.IsStarted() {
 			nConn++
 		}
 	}
 	if wantMaxConn := 1; nConn > wantMaxConn {
-		t.Fatalf("Got %d connection attempts, want at most %d", nConn, wantMaxConn)
+		t.Errorf("Got %d connection attempts, want at most %d", nConn, wantMaxConn)
 	}
+
+	// Resume the hold in the main thread.
+	var firstConnectedBackend string
+	for i, hold := range holds {
+		if hold != nil && hold.IsStarted() {
+			hold.Resume()
+			firstConnectedBackend = backends[i]
+			holds[i] = nil
+			break
+		}
+	}
+
 	testutils.AwaitState(ctx, t, cc, connectivity.Ready)
-	wg.Wait() // Make sure we're done with the 2 previous RPCs.
+	wg.Wait() // Make sure we're done with the first RPC.
 
 	// Now send RPCs until we have at least one more connection attempt, that
 	// is, the random hash did not land on the same backend on every pick (the
