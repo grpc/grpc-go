@@ -111,7 +111,7 @@ const (
 	notifyCall
 	misbehaved
 	encodingRequiredStatus
-	invalidHeaderField
+	invalidContentType
 	malformedHeader
 	delayRead
 	pingpong
@@ -221,7 +221,7 @@ func (h *testStreamHandler) handleStreamEncodingRequiredStatus(s *ServerStream) 
 	s.Read(math.MaxInt)
 }
 
-func (h *testStreamHandler) handleStreamInvalidHeaderField(s *ServerStream) {
+func (h *testStreamHandler) handleStreamInvalidContentType(s *ServerStream) {
 	headerFields := []hpack.HeaderField{}
 	headerFields = append(headerFields, hpack.HeaderField{Name: "content-type", Value: expectedInvalidHeaderField})
 	h.t.controlBuf.put(&headerFrame{
@@ -439,12 +439,12 @@ func (s *server) start(t *testing.T, port int, serverConfig *ServerConfig, ht hT
 				})
 				wg.Done()
 			}()
-		case invalidHeaderField:
+		case invalidContentType:
 			go func() {
 				transport.HandleStreams(ctx, func(s *ServerStream) {
 					wg.Add(1)
 					go func() {
-						h.handleStreamInvalidHeaderField(s)
+						h.handleStreamInvalidContentType(s)
 						wg.Done()
 					}()
 				})
@@ -1663,8 +1663,8 @@ func (s) TestEncodingRequiredStatus(t *testing.T) {
 	s.Read(math.MaxInt)
 }
 
-func (s) TestInvalidHeaderField(t *testing.T) {
-	server, ct, cancel := setUp(t, 0, invalidHeaderField)
+func (s) TestInvalidContentType(t *testing.T) {
+	server, ct, cancel := setUp(t, 0, invalidContentType)
 	defer cancel()
 	callHdr := &CallHdr{
 		Host:   "localhost",
@@ -1686,7 +1686,7 @@ func (s) TestInvalidHeaderField(t *testing.T) {
 }
 
 func (s) TestHeaderChanClosedAfterReceivingNonGRPCResponse(t *testing.T) {
-	server, ct, cancel := setUp(t, 0, invalidHeaderField)
+	server, ct, cancel := setUp(t, 0, invalidContentType)
 	defer cancel()
 	defer server.stop()
 	defer ct.Close(fmt.Errorf("closed manually by test"))
@@ -1698,7 +1698,7 @@ func (s) TestHeaderChanClosedAfterReceivingNonGRPCResponse(t *testing.T) {
 	}
 	// The server sends a non-gRPC response without ending the stream, so the
 	// stream enters data collection mode. headerChan is not closed until the
-	// stream itself closes (via context timeout here).
+	// stream itself closes.
 	if _, err := s.Header(); err == nil {
 		t.Fatalf("Header() succeeded, want error")
 	}
