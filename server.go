@@ -1170,14 +1170,14 @@ func (s *Server) incrCallsFailed() {
 	s.channelz.ServerMetrics.CallsFailed.Add(1)
 }
 
-func (s *Server) sendResponse(ctx context.Context, stream *transport.ServerStream, msg any, cp Compressor, opts *transport.WriteOptions, comp encoding.Compressor) error {
+func (s *Server) sendResponse(ctx context.Context, stream *transport.ServerStream, msg any, cp Compressor, opts *transport.WriteOptions, comp encoding.Compressor, compressorOptions ...any) error {
 	data, err := encode(s.getCodec(stream.ContentSubtype()), msg)
 	if err != nil {
 		channelz.Error(logger, s.channelz, "grpc: server failed to encode response: ", err)
 		return err
 	}
 
-	compData, pf, err := compress(data, cp, comp, s.opts.bufferPool)
+	compData, pf, err := compress(data, cp, comp, s.opts.bufferPool, compressorOptions...)
 	if err != nil {
 		data.Free()
 		channelz.Error(logger, s.channelz, "grpc: server failed to compress response: ", err)
@@ -1472,7 +1472,7 @@ func (s *Server) processUnaryRPC(ctx context.Context, stream *transport.ServerSt
 	if stream.SendCompress() != sendCompressorName {
 		comp = encoding.GetCompressor(stream.SendCompress())
 	}
-	if err := s.sendResponse(ctx, stream, reply, cp, opts, comp); err != nil {
+	if err := s.sendResponse(ctx, stream, reply, cp, opts, comp, stream.SendCompressOptions()...); err != nil {
 		if err == io.EOF {
 			// The entire stream is done (for unary RPC only).
 			return err
@@ -2142,11 +2142,15 @@ func SendHeader(ctx context.Context, md metadata.MD) error {
 // It is not safe to call SetSendCompressor concurrently with SendHeader and
 // SendMsg.
 //
+// The optional compressorOptions are forwarded to the compressor's Compress
+// method on each SendMsg call, allowing callers to pass additional context
+// such as dictionary IDs for trained compression formats.
+//
 // # Experimental
 //
 // Notice: This function is EXPERIMENTAL and may be changed or removed in a
 // later release.
-func SetSendCompressor(ctx context.Context, name string) error {
+func SetSendCompressor(ctx context.Context, name string, compressorOptions ...any) error {
 	stream, ok := ServerTransportStreamFromContext(ctx).(*transport.ServerStream)
 	if !ok || stream == nil {
 		return fmt.Errorf("failed to fetch the stream from the given context")
@@ -2156,7 +2160,7 @@ func SetSendCompressor(ctx context.Context, name string) error {
 		return fmt.Errorf("unable to set send compressor: %w", err)
 	}
 
-	return stream.SetSendCompress(name)
+	return stream.SetSendCompress(name, compressorOptions...)
 }
 
 // ClientSupportedCompressors returns compressor names advertised by the client

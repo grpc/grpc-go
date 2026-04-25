@@ -375,6 +375,7 @@ func newClientStreamWithParams(ctx context.Context, desc *StreamDesc, cc *Client
 		firstAttempt:        true,
 		onCommit:            onCommit,
 		nameResolutionDelay: nameResolutionDelayed,
+		compressorOptions:   callInfo.compressorOptions,
 	}
 	if !cc.dopts.disableRetry {
 		cs.retryThrottler = cc.retryThrottler.Load().(*retryThrottler)
@@ -633,6 +634,8 @@ type clientStream struct {
 	// nameResolutionDelay indicates if there was a delay in the name resolution.
 	// This field is only valid on client side, it's always false on server side.
 	nameResolutionDelay bool
+
+	compressorOptions []any
 }
 
 type replayOp struct {
@@ -964,7 +967,7 @@ func (cs *clientStream) SendMsg(m any) (err error) {
 	}
 
 	// load hdr, payload, data
-	hdr, data, payload, pf, err := prepareMsg(m, cs.codec, cs.compressorV0, cs.compressorV1, cs.cc.dopts.copts.BufferPool)
+	hdr, data, payload, pf, err := prepareMsg(m, cs.codec, cs.compressorV0, cs.compressorV1, cs.cc.dopts.copts.BufferPool, cs.compressorOptions...)
 	if err != nil {
 		return err
 	}
@@ -1471,7 +1474,7 @@ func (as *addrConnStream) SendMsg(m any) (err error) {
 	}
 
 	// load hdr, payload, data
-	hdr, data, payload, pf, err := prepareMsg(m, as.codec, as.sendCompressorV0, as.sendCompressorV1, as.ac.dopts.copts.BufferPool)
+	hdr, data, payload, pf, err := prepareMsg(m, as.codec, as.sendCompressorV0, as.sendCompressorV1, as.ac.dopts.copts.BufferPool, as.callInfo.compressorOptions...)
 	if err != nil {
 		return err
 	}
@@ -1669,7 +1672,8 @@ type serverStream struct {
 	// synchronized.
 	serverHeaderBinlogged bool
 
-	mu sync.Mutex // protects trInfo.tr after the service handler runs.
+	mu                    sync.Mutex // protects trInfo.tr after the service handler runs.
+	sendCompressorOptions []any
 }
 
 func (ss *serverStream) Context() context.Context {
@@ -1748,10 +1752,11 @@ func (ss *serverStream) SendMsg(m any) (err error) {
 	if sendCompressorsName := ss.s.SendCompress(); sendCompressorsName != ss.sendCompressorName {
 		ss.compressorV1 = encoding.GetCompressor(sendCompressorsName)
 		ss.sendCompressorName = sendCompressorsName
+		ss.sendCompressorOptions = ss.s.SendCompressOptions()
 	}
 
 	// load hdr, payload, data
-	hdr, data, payload, pf, err := prepareMsg(m, ss.codec, ss.compressorV0, ss.compressorV1, ss.p.bufferPool)
+	hdr, data, payload, pf, err := prepareMsg(m, ss.codec, ss.compressorV0, ss.compressorV1, ss.p.bufferPool, ss.sendCompressorOptions...)
 	if err != nil {
 		return err
 	}
@@ -1893,7 +1898,7 @@ func MethodFromServerStream(stream ServerStream) (string, bool) {
 // compression was made and therefore whether the payload needs to be freed in
 // addition to the returned data. Freeing the payload if the returned boolean is
 // false can lead to undefined behavior.
-func prepareMsg(m any, codec baseCodec, cp Compressor, comp encoding.Compressor, pool mem.BufferPool) (hdr []byte, data, payload mem.BufferSlice, pf payloadFormat, err error) {
+func prepareMsg(m any, codec baseCodec, cp Compressor, comp encoding.Compressor, pool mem.BufferPool, compressorOptions ...any) (hdr []byte, data, payload mem.BufferSlice, pf payloadFormat, err error) {
 	if preparedMsg, ok := m.(*PreparedMsg); ok {
 		return preparedMsg.hdr, preparedMsg.encodedData, preparedMsg.payload, preparedMsg.pf, nil
 	}
@@ -1903,7 +1908,7 @@ func prepareMsg(m any, codec baseCodec, cp Compressor, comp encoding.Compressor,
 	if err != nil {
 		return nil, nil, nil, 0, err
 	}
-	compData, pf, err := compress(data, cp, comp, pool)
+	compData, pf, err := compress(data, cp, comp, pool, compressorOptions...)
 	if err != nil {
 		data.Free()
 		return nil, nil, nil, 0, err

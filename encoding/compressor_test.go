@@ -22,6 +22,7 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"sync"
 	"sync/atomic"
 	"testing"
 
@@ -38,16 +39,21 @@ import (
 	_ "google.golang.org/grpc/encoding/gzip"
 )
 
-// wrapCompressor is a wrapper of encoding.Compressor which maintains count of
-// Compressor method invokes.
+// wrapCompressor is a wrapper of encoding.Compressor which records invocation
+// count and the options passed to each Compress call.
 type wrapCompressor struct {
 	encoding.Compressor
 	compressInvokes int32
+	mu              sync.Mutex
+	receivedOpts    [][]any
 }
 
-func (wc *wrapCompressor) Compress(w io.Writer) (io.WriteCloser, error) {
+func (wc *wrapCompressor) Compress(w io.Writer, opts ...any) (io.WriteCloser, error) {
 	atomic.AddInt32(&wc.compressInvokes, 1)
-	return wc.Compressor.Compress(w)
+	wc.mu.Lock()
+	wc.receivedOpts = append(wc.receivedOpts, opts)
+	wc.mu.Unlock()
+	return wc.Compressor.Compress(w, opts...)
 }
 
 func setupGzipWrapCompressor(t *testing.T) *wrapCompressor {
@@ -186,7 +192,7 @@ type fakeCompressor struct {
 	decompressedMessageSize int
 }
 
-func (f *fakeCompressor) Compress(w io.Writer) (io.WriteCloser, error) {
+func (f *fakeCompressor) Compress(w io.Writer, _ ...any) (io.WriteCloser, error) {
 	return nopWriteCloser{w}, nil
 }
 
@@ -235,5 +241,170 @@ func (s) TestDecompressionExceedsMaxMessageSize(t *testing.T) {
 	_, err := ss.Client.UnaryCall(ctx, req, grpc.UseCompressor(compressor.Name()))
 	if got, want := status.Code(err), codes.ResourceExhausted; got != want {
 		t.Errorf("Client.UnaryCall(%+v) returned status %v, want %v", req, got, want)
+	}
+}
+
+// TestSetSendCompressorOptionsPropagate verifies that options passed to
+// SetSendCompressor are forwarded to the compressor's Compress method.
+func (s) TestSetSendCompressorOptionsPropagate(t *testing.T) {
+	wantOpt := "dict-id-42"
+	for _, tc := range []struct {
+		name string
+		run  func(*testing.T, *wrapCompressor)
+	}{
+		{"unary", testUnarySendCompressorOptionsPropagate},
+		{"stream", testStreamSendCompressorOptionsPropagate},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			wc := setupGzipWrapCompressor(t)
+			tc.run(t, wc)
+			wc.mu.Lock()
+			defer wc.mu.Unlock()
+			if len(wc.receivedOpts) == 0 {
+				t.Fatal("Compress was not called")
+			}
+			if got := wc.receivedOpts[0]; len(got) == 0 || got[0] != wantOpt {
+				t.Fatalf("Compress received opts %v, want [%q]", got, wantOpt)
+			}
+		})
+	}
+}
+
+func testUnarySendCompressorOptionsPropagate(t *testing.T, _ *wrapCompressor) {
+	t.Helper()
+	ss := &stubserver.StubServer{
+		UnaryCallF: func(ctx context.Context, _ *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			if err := grpc.SetSendCompressor(ctx, "gzip", "dict-id-42"); err != nil {
+				return nil, err
+			}
+			return &testpb.SimpleResponse{Payload: &testpb.Payload{Body: []byte("payload")}}, nil
+		},
+	}
+	if err := ss.Start(nil); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
+	}
+	defer ss.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	if _, err := ss.Client.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil {
+		t.Fatalf("Unexpected unary call error: %v", err)
+	}
+}
+
+func testStreamSendCompressorOptionsPropagate(t *testing.T, _ *wrapCompressor) {
+	t.Helper()
+	ss := &stubserver.StubServer{
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
+			if _, err := stream.Recv(); err != nil {
+				return err
+			}
+			if err := grpc.SetSendCompressor(stream.Context(), "gzip", "dict-id-42"); err != nil {
+				return err
+			}
+			return stream.Send(&testpb.StreamingOutputCallResponse{
+				Payload: &testpb.Payload{Body: []byte("payload")},
+			})
+		},
+	}
+	if err := ss.Start(nil); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
+	}
+	defer ss.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	s, err := ss.Client.FullDuplexCall(ctx)
+	if err != nil {
+		t.Fatalf("Unexpected full duplex call error: %v", err)
+	}
+	if err := s.Send(&testpb.StreamingOutputCallRequest{}); err != nil {
+		t.Fatalf("Unexpected send error: %v", err)
+	}
+	if _, err := s.Recv(); err != nil {
+		t.Fatalf("Unexpected recv error: %v", err)
+	}
+}
+
+// TestUseCompressorOptionsPropagate verifies that options passed to
+// UseCompressor are forwarded to the compressor's Compress method.
+func (s) TestUseCompressorOptionsPropagate(t *testing.T) {
+	wantOpt := "dict-id-42"
+	for _, tc := range []struct {
+		name string
+		run  func(*testing.T, *wrapCompressor)
+	}{
+		{"unary", testUnaryUseCompressorOptionsPropagate},
+		{"stream", testStreamUseCompressorOptionsPropagate},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			wc := setupGzipWrapCompressor(t)
+			tc.run(t, wc)
+			wc.mu.Lock()
+			defer wc.mu.Unlock()
+			if len(wc.receivedOpts) == 0 {
+				t.Fatal("Compress was not called")
+			}
+			if got := wc.receivedOpts[0]; len(got) == 0 || got[0] != wantOpt {
+				t.Fatalf("Compress received opts %v, want [%q]", got, wantOpt)
+			}
+		})
+	}
+}
+
+func testUnaryUseCompressorOptionsPropagate(t *testing.T, _ *wrapCompressor) {
+	t.Helper()
+	ss := &stubserver.StubServer{
+		UnaryCallF: func(_ context.Context, _ *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			return &testpb.SimpleResponse{Payload: &testpb.Payload{Body: []byte("payload")}}, nil
+		},
+	}
+	if err := ss.Start(nil); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
+	}
+	defer ss.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	if _, err := ss.Client.UnaryCall(ctx, &testpb.SimpleRequest{Payload: &testpb.Payload{Body: []byte("data")}}, grpc.UseCompressor("gzip", "dict-id-42")); err != nil {
+		t.Fatalf("Unexpected unary call error: %v", err)
+	}
+}
+
+func testStreamUseCompressorOptionsPropagate(t *testing.T, _ *wrapCompressor) {
+	t.Helper()
+	ss := &stubserver.StubServer{
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
+			req, err := stream.Recv()
+			if err != nil {
+				return err
+			}
+			return stream.Send(&testpb.StreamingOutputCallResponse{
+				Payload: req.GetPayload(),
+			})
+		},
+	}
+	if err := ss.Start(nil); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
+	}
+	defer ss.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	s, err := ss.Client.FullDuplexCall(ctx, grpc.UseCompressor("gzip", "dict-id-42"))
+	if err != nil {
+		t.Fatalf("Unexpected full duplex call error: %v", err)
+	}
+	if err := s.Send(&testpb.StreamingOutputCallRequest{
+		Payload: &testpb.Payload{Body: []byte("payload")},
+	}); err != nil {
+		t.Fatalf("Unexpected send error: %v", err)
+	}
+	if _, err := s.Recv(); err != nil {
+		t.Fatalf("Unexpected recv error: %v", err)
 	}
 }
