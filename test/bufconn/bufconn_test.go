@@ -19,6 +19,7 @@
 package bufconn
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net"
@@ -205,6 +206,77 @@ func (s) TestCloseWhileAccepting(t *testing.T) {
 	<-done
 	if c != nil || err != errClosed {
 		t.Fatalf("c, err = %v, %v; want nil, %v", c, err, errClosed)
+	}
+}
+
+func (s) TestListenerCloseClosesConns(t *testing.T) {
+	l := Listen(7)
+	const numConns = 5
+	sConns := make([]net.Conn, numConns)
+	cConns := make([]net.Conn, numConns)
+	for i := range numConns {
+		done := make(chan struct{})
+		go func(idx int) {
+			var err error
+			sConns[idx], err = l.Accept()
+			if err != nil {
+				t.Errorf("Accept error: %v", err)
+			}
+			close(done)
+		}(i)
+		var err error
+		cConns[i], err = l.Dial()
+		if err != nil {
+			t.Fatalf("Dial error: %v", err)
+		}
+		<-done
+	}
+
+	// Connections should work before listener close.
+	if _, err := cConns[0].Write([]byte("hello")); err != nil {
+		t.Fatalf("Write before close: %v", err)
+	}
+	buf := make([]byte, 5)
+	if _, err := sConns[0].Read(buf); err != nil {
+		t.Fatalf("Read before close: %v", err)
+	}
+
+	l.Close()
+
+	for i := range numConns {
+		// Server-side conn was closed by listener; reads should fail.
+		if _, err := sConns[i].Read(make([]byte, 1)); err != io.ErrClosedPipe {
+			t.Errorf("sConns[%d].Read = %v; want io.ErrClosedPipe", i, err)
+		}
+		// Client-side writes should fail because the server read pipe is closed.
+		if _, err := cConns[i].Write([]byte("hi")); err != io.ErrClosedPipe {
+			t.Errorf("cConns[%d].Write = %v; want io.ErrClosedPipe", i, err)
+		}
+		// Client-side reads should get EOF because the server write pipe was write-closed.
+		if _, err := cConns[i].Read(make([]byte, 1)); err != io.EOF {
+			t.Errorf("cConns[%d].Read = %v; want io.EOF", i, err)
+		}
+	}
+}
+
+func (s) TestDialContextCancelled(t *testing.T) {
+	l := Listen(7)
+	defer l.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := l.DialContext(ctx)
+	if err != context.Canceled {
+		t.Fatalf("DialContext with cancelled ctx = %v; want %v", err, context.Canceled)
+	}
+
+	// Ensure that the connection gets untracked. Since it's never sent to
+	// Accept, it shouldn't be tracked as an active connection, and the listener
+	// shouldn't hold on to it after DialContext returns.
+	n := len(l.conns)
+	if n != 0 {
+		t.Fatalf("listener has %d tracked conns after cancelled dial; want 0", n)
 	}
 }
 
