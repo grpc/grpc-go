@@ -33,6 +33,7 @@ import (
 	"google.golang.org/grpc/internal/grpctest"
 	iserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/internal/testutils"
+	"google.golang.org/grpc/internal/testutils/roundrobin"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 
@@ -150,6 +151,30 @@ func (s) TestCalculateSubset_Simple(t *testing.T) {
 			subsetSize: 5,
 			want:       makeEndpoints(5),
 		},
+		{
+			name:       "SubsetSmallerThanNumberOfEndpoints",
+			endpoints:  makeEndpoints(15),
+			subsetSize: 5,
+			want: []resolver.Endpoint{
+				{Addresses: []resolver.Address{{Addr: "endpoint-13"}}},
+				{Addresses: []resolver.Address{{Addr: "endpoint-10"}}},
+				{Addresses: []resolver.Address{{Addr: "endpoint-12"}}},
+				{Addresses: []resolver.Address{{Addr: "endpoint-6"}}},
+				{Addresses: []resolver.Address{{Addr: "endpoint-0"}}},
+			},
+		},
+		{
+			name:       "SubsetSmallerThanNumberOfEndpoints_Large",
+			endpoints:  makeEndpoints(1000),
+			subsetSize: 5,
+			want: []resolver.Endpoint{
+				{Addresses: []resolver.Address{{Addr: "endpoint-739"}}},
+				{Addresses: []resolver.Address{{Addr: "endpoint-116"}}},
+				{Addresses: []resolver.Address{{Addr: "endpoint-359"}}},
+				{Addresses: []resolver.Address{{Addr: "endpoint-876"}}},
+				{Addresses: []resolver.Address{{Addr: "endpoint-263"}}},
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -257,5 +282,130 @@ func (s) TestSubsettingBalancer_DeterministicSubset(t *testing.T) {
 		}
 	case <-ctx.Done():
 		t.Fatal("Timed out waiting for second child policy update")
+	}
+}
+
+// TestUniformDistributionOfEndpoints verifies that the random subsetting
+// policy achieves a uniform distribution across backends. From a set of N
+// numbers, it randomly selects K-times a subset of L numbers, where L < N.
+// Then it calculates how many times each number belonging to set N appears,
+// compute the variance and standard deviation, and use a Chi-Square test to
+// check whether the distribution is uniform.
+func (s) TestUniformDistributionOfEndpoints(t *testing.T) {
+	_, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	testCases := []struct {
+		name       string
+		eps        int
+		subsetSize uint32
+		iteration  uint32
+		positive   bool
+	}{
+		{
+			name:       "LowIteration_Baseline",
+			eps:        16,
+			subsetSize: 4,
+			iteration:  10,
+			positive:   true,
+		},
+		{
+			name:       "MediumScale_InitialConvergence",
+			eps:        40,
+			subsetSize: 20,
+			iteration:  100,
+			positive:   true,
+		},
+		{
+			name:       "SmallSubset_HighRepetition",
+			eps:        10,
+			subsetSize: 2,
+			iteration:  1000,
+			positive:   true,
+		},
+		{
+			name:       "StandardSubset_ExtendedVerification",
+			eps:        16,
+			subsetSize: 4,
+			iteration:  1600,
+			positive:   true,
+		},
+		{
+			name:       "HighRatio_StatisticalSmoothing",
+			eps:        8,
+			subsetSize: 4,
+			iteration:  3200,
+			positive:   true,
+		},
+		{
+			name:       "FullSet_MaxIteration_Convergence",
+			eps:        4,
+			subsetSize: 4,
+			iteration:  6400,
+			positive:   true,
+		},
+		{
+			name:       "InsufficientIterations_HighVariance",
+			eps:        6,
+			subsetSize: 1,
+			iteration:  30,
+			positive:   false,
+		},
+		{
+			name:       "SmallSubset_TooFewIterations",
+			eps:        17,
+			subsetSize: 2,
+			iteration:  100,
+			positive:   false,
+		},
+	}
+
+	for _, tc := range testCases {
+		endpoints := makeEndpoints(tc.eps)
+
+		// Theoretical Calculations
+		N := len(endpoints)
+		L := int(tc.subsetSize)
+		K := int(tc.iteration)
+		p := float64(L) / float64(N) // Probability of x ∈ N being drawn p(x) = L / N
+		E := float64(K) * p          // Expected Value (Mean) E(N) = K * p
+
+		EndpointCount := make(map[string]int, N)
+		for _, ep := range endpoints {
+			EndpointCount[ep.Addresses[0].Addr] = 0
+		}
+
+		for i := 0; i < K; i++ {
+			lb := &subsettingBalancer{
+				cfg:        &lbConfig{SubsetSize: uint32(L)},
+				hashSeed:   uint64(i ^ 3 + K*i + L),
+				hashDigest: xxhash.New(),
+			}
+			subsetOfEndpoints := lb.calculateSubset(endpoints)
+
+			for _, ep := range subsetOfEndpoints {
+				EndpointCount[ep.Addresses[0].Addr]++
+			}
+		}
+
+		t.Logf("Test Case: Endpoints=%d, SubsetSize=%d, Iterations=%d", N, L, K)
+
+		observedCounts := make(map[string]float64)
+		expectedCounts := make(map[string]float64)
+		for k, v := range EndpointCount {
+			observedCounts[k] = float64(v)
+			expectedCounts[k] = E
+		}
+
+		err := roundrobin.PearsonsChiSquareTest(t, observedCounts, expectedCounts, 0.05)
+		if tc.positive {
+			if err != nil {
+				t.Errorf("Distribution check failed: %v", err)
+			}
+		} else {
+			if err == nil {
+				t.Errorf("Distribution check expected to fail, but passed")
+			}
+		}
 	}
 }

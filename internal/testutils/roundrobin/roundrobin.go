@@ -194,7 +194,7 @@ func CheckWeightedRoundRobinRPCs(ctx context.Context, t *testing.T, client testg
 				observedCount[peer.Addr.String()]++
 			}
 
-			return pearsonsChiSquareTest(t, observedCount, expectedCount)
+			return PearsonsChiSquareTest(t, observedCount, expectedCount, 1e-6)
 		}
 		<-time.After(time.Millisecond)
 	}
@@ -231,7 +231,7 @@ func attemptCounts(wantAddrWeights map[string]int) int {
 	return int(math.Ceil(requiredAttempts))
 }
 
-// pearsonsChiSquareTest checks if the observed counts match the expected
+// PearsonsChiSquareTest checks if the observed counts match the expected
 // counts.
 // Pearson's Chi-Squared Test Formula:
 //
@@ -250,14 +250,13 @@ func attemptCounts(wantAddrWeights map[string]int) int {
 // df = number of categories - 1
 // See https://en.wikipedia.org/wiki/Pearson%27s_chi-squared_test for more
 // details.
-func pearsonsChiSquareTest(t *testing.T, observedCounts, expectedCounts map[string]float64) error {
+func PearsonsChiSquareTest(t *testing.T, observedCounts, expectedCounts map[string]float64, alpha float64) error {
 	chiSquaredStat := 0.0
 	for addr, want := range expectedCounts {
 		got := observedCounts[addr]
 		chiSquaredStat += (got - want) * (got - want) / want
 	}
 	degreesOfFreedom := len(expectedCounts) - 1
-	const alpha = 1e-6
 	chiSquareDist := distuv.ChiSquared{K: float64(degreesOfFreedom)}
 	pValue := chiSquareDist.Survival(chiSquaredStat)
 	t.Logf("Observed ratio: %v", observedCounts)
