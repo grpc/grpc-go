@@ -26,6 +26,7 @@ import (
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
 	v3typepb "github.com/envoyproxy/go-control-plane/envoy/type/v3"
+	"google.golang.org/grpc/balancer/hostname"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/pretty"
 	xdsinternal "google.golang.org/grpc/internal/xds"
@@ -35,29 +36,6 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 )
-
-// hostnameKeyType is the key to store the hostname attribute in
-// a resolver.Endpoint.
-type hostnameKeyType struct{}
-
-// SetHostname returns a copy of the given endpoint with hostname added
-// as an attribute.
-func SetHostname(endpoint resolver.Endpoint, hostname string) resolver.Endpoint {
-	// Only set if non-empty; xds_cluster_impl uses this to trigger :authority
-	// rewriting.
-	if hostname == "" {
-		return endpoint
-	}
-	endpoint.Attributes = endpoint.Attributes.WithValue(hostnameKeyType{}, hostname)
-	return endpoint
-}
-
-// Hostname returns the hostname from the BalancerAttributes of the given
-// Address. If this attribute is not set, it returns the empty string.
-func Hostname(addr resolver.Address) string {
-	hostname, _ := addr.BalancerAttributes.Value(hostnameKeyType{}).(string)
-	return hostname
-}
 
 func unmarshalEndpointsResource(r *anypb.Any) (string, EndpointsUpdate, error) {
 	r, err := UnwrapResource(r)
@@ -166,7 +144,7 @@ func parseEndpoints(lbEndpoints []*v3endpointpb.LbEndpoint, uniqueEndpointAddrs 
 			}
 		}
 		endpoint := resolver.Endpoint{Addresses: address}
-		endpoint = SetHostname(endpoint, lbEndpoint.GetEndpoint().GetHostname())
+		endpoint = hostname.Set(endpoint, lbEndpoint.GetEndpoint().GetHostname())
 		endpoint = ringhash.SetHashKey(endpoint, hashKey)
 		endpoints = append(endpoints, Endpoint{
 			ResolverEndpoint: endpoint,

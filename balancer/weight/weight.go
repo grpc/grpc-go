@@ -19,6 +19,11 @@
 // Package weight contains utilities to manage endpoint weights. Weights are
 // used by LB policies such as ringhash to distribute load across multiple
 // endpoints.
+//
+// # Experimental
+//
+// Notice: This API is EXPERIMENTAL and may be changed or removed in a
+// later release.
 package weight
 
 import (
@@ -45,6 +50,11 @@ func (a EndpointInfo) Equal(o any) bool {
 
 // Set returns a copy of endpoint in which the Attributes field is updated with
 // EndpointInfo.
+//
+// # Experimental
+//
+// Notice: This API is EXPERIMENTAL and may be changed or removed in a
+// later release.
 func Set(endpoint resolver.Endpoint, epInfo EndpointInfo) resolver.Endpoint {
 	endpoint.Attributes = endpoint.Attributes.WithValue(attributeKey{}, epInfo)
 	return endpoint
@@ -59,6 +69,11 @@ func (a EndpointInfo) String() string {
 
 // FromEndpoint returns the EndpointInfo stored in the Attributes field of an
 // endpoint. It returns an empty EndpointInfo if attribute is not found.
+//
+// # Experimental
+//
+// Notice: This API is EXPERIMENTAL and may be changed or removed in a
+// later release.
 func FromEndpoint(endpoint resolver.Endpoint) EndpointInfo {
 	v := endpoint.Attributes.Value(attributeKey{})
 	ei, _ := v.(EndpointInfo)

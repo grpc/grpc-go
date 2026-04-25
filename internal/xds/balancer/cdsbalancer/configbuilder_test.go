@@ -32,7 +32,7 @@ import (
 	"google.golang.org/grpc/balancer/pickfirst"
 	"google.golang.org/grpc/balancer/ringhash"
 	"google.golang.org/grpc/balancer/roundrobin"
-	"google.golang.org/grpc/internal/balancer/weight"
+	"google.golang.org/grpc/balancer/weight"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/hierarchy"
 	iringhash "google.golang.org/grpc/internal/ringhash"

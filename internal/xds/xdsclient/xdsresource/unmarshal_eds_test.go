@@ -30,6 +30,7 @@ import (
 	v3typepb "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"google.golang.org/grpc/balancer/hostname"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/internal/testutils"
@@ -62,13 +63,13 @@ func disableA86(t *testing.T) {
 	unregisterMetadataConverterForTesting(proxyAddressTypeURL)
 }
 
-func buildResolverEndpoint(addr []string, hostname string) resolver.Endpoint {
+func buildResolverEndpoint(addr []string, host string) resolver.Endpoint {
 	address := []resolver.Address{}
 	for _, a := range addr {
 		address = append(address, resolver.Address{Addr: a})
 	}
 	resolverEndpoint := resolver.Endpoint{Addresses: address}
-	resolverEndpoint = SetHostname(resolverEndpoint, hostname)
+	resolverEndpoint = hostname.Set(resolverEndpoint, host)
 	return resolverEndpoint
 }
 
