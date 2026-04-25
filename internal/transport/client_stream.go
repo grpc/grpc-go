@@ -86,7 +86,7 @@ func (s *ClientStream) tryHandleNonGRPCData(f *parsedDataFrame) (handle bool, en
 	s.collectionMu.Lock()
 	defer s.collectionMu.Unlock()
 	if s.nonGRPCStatus == nil {
-		// if is not in the non-gRPC data collection lifecycle, do not handle this frame.
+		// if not in the non-gRPC data collection lifecycle, do not handle this frame.
 		return false, false
 	}
 
