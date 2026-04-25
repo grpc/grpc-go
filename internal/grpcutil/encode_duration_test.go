@@ -48,7 +48,7 @@ func TestEncodeDuration(t *testing.T) {
 
 		// Boundary conditions
 		{"-1ns", "0S"},
-		{"9223372036854775807ns", "2562048H"},
+		{"9223372036854775807ns", "2562048H"}, // maximum Duration
 	} {
 		d, err := time.ParseDuration(test.in)
 		if err != nil {

@@ -26,15 +26,25 @@ import (
 const maxTimeoutValue = 99_999_999
 
 var units = []struct {
-	duration time.Duration
 	symbol   byte
+	duration time.Duration
 }{
-	{time.Nanosecond, 'n'},
-	{time.Microsecond, 'u'},
-	{time.Millisecond, 'm'},
-	{time.Second, 'S'},
-	{time.Minute, 'M'},
-	{time.Hour, 'H'},
+	{'n', time.Nanosecond},
+	{'u', time.Microsecond},
+	{'m', time.Millisecond},
+	{'S', time.Second},
+	{'M', time.Minute},
+	{'H', time.Hour},
+}
+
+// div does integer division and round-up the result. Note that this is
+// equivalent to (d+r-1)/r but has less chance to overflow.
+func div(d, r time.Duration) int64 {
+	q := (int64)(d / r)
+	if d%r > 0 {
+		q++
+	}
+	return q
 }
 
 // EncodeDuration encodes the duration to the format grpc-timeout header
@@ -52,12 +62,12 @@ func EncodeDuration(t time.Duration) string {
 			break
 		}
 	}
-	value := (int64)(t / units[i].duration)
+	value := div(t, units[i].duration)
 	// Round to larger unit as needed to satisfy value limit.
 	// Note that the maximum value of Duration encodes properly in hours.
 	for value > maxTimeoutValue && i+1 < len(units) {
 		i++
-		value = (int64)(t/units[i].duration + 1)
+		value = div(t, units[i].duration)
 	}
 	return fmt.Sprintf("%d%c", value, units[i].symbol)
 }
