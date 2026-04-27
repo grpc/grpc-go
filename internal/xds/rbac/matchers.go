@@ -31,9 +31,10 @@ import (
 )
 
 // matcher is an interface that takes data about incoming RPC's and returns
-// whether it matches with whatever matcher implements this interface.
+// whether it matches with whatever matcher implements this interface, or an
+// error if the evaluation fails.
 type matcher interface {
-	match(data *rpcData) bool
+	match(data *rpcData) (bool, error)
 }
 
 // policyMatcher helps determine whether an incoming RPC call matches a policy.
@@ -64,11 +65,22 @@ func newPolicyMatcher(policy *v3rbacpb.Policy) (*policyMatcher, error) {
 	}, nil
 }
 
-func (pm *policyMatcher) match(data *rpcData) bool {
+func (pm *policyMatcher) match(data *rpcData) (bool, error) {
 	// A policy matches if and only if at least one of its permissions match the
 	// action taking place AND at least one if its principals match the
 	// downstream peer.
-	return pm.permissions.match(data) && pm.principals.match(data)
+	permissionMatched, err := pm.permissions.match(data)
+	if err != nil {
+		return false, err
+	}
+	if !permissionMatched {
+		return false, nil
+	}
+	principalMatched, err := pm.principals.match(data)
+	if err != nil {
+		return false, err
+	}
+	return principalMatched, nil
 }
 
 // matchersFromPermissions takes a list of permissions (can also be
@@ -213,15 +225,21 @@ type orMatcher struct {
 	matchers []matcher
 }
 
-func (om *orMatcher) match(data *rpcData) bool {
+func (om *orMatcher) match(data *rpcData) (bool, error) {
 	// Range through child matchers and pass in data about incoming RPC, and
 	// only one child matcher has to match to be logically successful.
+	var lastErr error
 	for _, m := range om.matchers {
-		if m.match(data) {
-			return true
+		matched, err := m.match(data)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		if matched {
+			return true, nil
 		}
 	}
-	return false
+	return false, lastErr
 }
 
 // andMatcher is a matcher that is successful if every child matcher
@@ -230,13 +248,17 @@ type andMatcher struct {
 	matchers []matcher
 }
 
-func (am *andMatcher) match(data *rpcData) bool {
+func (am *andMatcher) match(data *rpcData) (bool, error) {
 	for _, m := range am.matchers {
-		if !m.match(data) {
-			return false
+		matched, err := m.match(data)
+		if err != nil {
+			return false, err
+		}
+		if !matched {
+			return false, nil
 		}
 	}
-	return true
+	return true, nil
 }
 
 // alwaysMatcher is a matcher that will always match. This logically
@@ -245,8 +267,8 @@ func (am *andMatcher) match(data *rpcData) bool {
 type alwaysMatcher struct {
 }
 
-func (am *alwaysMatcher) match(*rpcData) bool {
-	return true
+func (am *alwaysMatcher) match(*rpcData) (bool, error) {
+	return true, nil
 }
 
 // notMatcher is a matcher that nots an underlying matcher. notMatcher
@@ -255,8 +277,12 @@ type notMatcher struct {
 	matcherToNot matcher
 }
 
-func (nm *notMatcher) match(data *rpcData) bool {
-	return !nm.matcherToNot.match(data)
+func (nm *notMatcher) match(data *rpcData) (bool, error) {
+	matched, err := nm.matcherToNot.match(data)
+	if err != nil {
+		return false, err
+	}
+	return !matched, nil
 }
 
 // headerMatcher is a matcher that matches on incoming HTTP Headers present
@@ -298,8 +324,8 @@ func newHeaderMatcher(headerMatcherConfig *v3route_componentspb.HeaderMatcher) (
 	return &headerMatcher{matcher: m}, nil
 }
 
-func (hm *headerMatcher) match(data *rpcData) bool {
-	return hm.matcher.Match(data.md)
+func (hm *headerMatcher) match(data *rpcData) (bool, error) {
+	return hm.matcher.Match(data.md), nil
 }
 
 // urlPathMatcher matches on the URL Path of the incoming RPC. In gRPC, this
@@ -317,8 +343,8 @@ func newURLPathMatcher(pathMatcher *v3matcherpb.PathMatcher) (*urlPathMatcher, e
 	return &urlPathMatcher{stringMatcher: stringMatcher}, nil
 }
 
-func (upm *urlPathMatcher) match(data *rpcData) bool {
-	return upm.stringMatcher.Match(data.fullMethod)
+func (upm *urlPathMatcher) match(data *rpcData) (bool, error) {
+	return upm.stringMatcher.Match(data.fullMethod), nil
 }
 
 // remoteIPMatcher and localIPMatcher both are matchers that match against
@@ -344,7 +370,9 @@ func newRemoteIPMatcher(cidrRange *v3corepb.CidrRange) (*remoteIPMatcher, error)
 	return &remoteIPMatcher{ipNet: ipNet.Masked()}, nil
 }
 
-func (sim *remoteIPMatcher) match(data *rpcData) bool {
+// match returns true if the remote IP address falls within the configured
+// CIDR range. It returns an error if the remote IP address cannot be parsed.
+func (sim *remoteIPMatcher) match(data *rpcData) (bool, error) {
 	host, _, err := net.SplitHostPort(data.peerInfo.Addr.String())
 	if err != nil {
 		// Fallback for addresses without a port.
@@ -352,9 +380,9 @@ func (sim *remoteIPMatcher) match(data *rpcData) bool {
 	}
 	ip, err := netip.ParseAddr(host)
 	if err != nil {
-		return false
+		return false, err
 	}
-	return sim.ipNet.Contains(ip)
+	return sim.ipNet.Contains(ip), nil
 }
 
 type localIPMatcher struct {
@@ -370,7 +398,9 @@ func newLocalIPMatcher(cidrRange *v3corepb.CidrRange) (*localIPMatcher, error) {
 	return &localIPMatcher{ipNet: ipNet.Masked()}, nil
 }
 
-func (dim *localIPMatcher) match(data *rpcData) bool {
+// match returns true if the local IP address falls within the configured
+// CIDR range. It returns an error if the local IP address cannot be parsed.
+func (dim *localIPMatcher) match(data *rpcData) (bool, error) {
 	host, _, err := net.SplitHostPort(data.localAddr.String())
 	if err != nil {
 		// Fallback for addresses without a port.
@@ -378,9 +408,9 @@ func (dim *localIPMatcher) match(data *rpcData) bool {
 	}
 	ip, err := netip.ParseAddr(host)
 	if err != nil {
-		return false
+		return false, err
 	}
-	return dim.ipNet.Contains(ip)
+	return dim.ipNet.Contains(ip), nil
 }
 
 // portMatcher matches on whether the destination port of the RPC matches the
@@ -394,8 +424,8 @@ func newPortMatcher(destinationPort uint32) *portMatcher {
 	return &portMatcher{destinationPort: destinationPort}
 }
 
-func (pm *portMatcher) match(data *rpcData) bool {
-	return data.destinationPort == pm.destinationPort
+func (pm *portMatcher) match(data *rpcData) (bool, error) {
+	return data.destinationPort == pm.destinationPort, nil
 }
 
 // authenticatedMatcher matches on the name of the Principal. If set, the URI
@@ -419,33 +449,33 @@ func newAuthenticatedMatcher(authenticatedMatcherConfig *v3rbacpb.Principal_Auth
 	return &authenticatedMatcher{stringMatcher: &stringMatcher}, nil
 }
 
-func (am *authenticatedMatcher) match(data *rpcData) bool {
+func (am *authenticatedMatcher) match(data *rpcData) (bool, error) {
 	if data.authType != "tls" {
 		// Connection is not authenticated.
-		return false
+		return false, nil
 	}
 	if am.stringMatcher == nil {
 		// Allows any authenticated user.
-		return true
+		return true, nil
 	}
 	// "If there is no client certificate (thus no SAN nor Subject), check if ""
 	// (empty string) matches. If it matches, the principal_name is said to
 	// match" - A41
 	if len(data.certs) == 0 {
-		return am.stringMatcher.Match("")
+		return am.stringMatcher.Match(""), nil
 	}
 	cert := data.certs[0]
 	// The order of matching as per the RBAC documentation (see package-level comments)
 	// is as follows: URI SANs, DNS SANs, and then subject name.
 	for _, uriSAN := range cert.URIs {
 		if am.stringMatcher.Match(uriSAN.String()) {
-			return true
+			return true, nil
 		}
 	}
 	for _, dnsSAN := range cert.DNSNames {
 		if am.stringMatcher.Match(dnsSAN) {
-			return true
+			return true, nil
 		}
 	}
-	return am.stringMatcher.Match(cert.Subject.String())
+	return am.stringMatcher.Match(cert.Subject.String()), nil
 }
