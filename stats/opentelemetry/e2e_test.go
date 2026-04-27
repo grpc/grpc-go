@@ -1640,6 +1640,9 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 			setupStub: func() *stubserver.StubServer {
 				return &stubserver.StubServer{
 					FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
+						if _, err := stream.Recv(); err != nil && err != io.EOF {
+							return err
+						}
 						md, _ := metadata.FromIncomingContext(stream.Context())
 						headerAttempts := 0
 						if h := md["grpc-previous-rpc-attempts"]; len(h) > 0 {
@@ -1683,7 +1686,15 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 					spanKind:   oteltrace.SpanKindServer.String(),
 					status:     otelcodes.Error,
 					attributes: nil,
-					events:     nil,
+					events: []trace.Event{
+						{
+							Name: "Inbound message",
+							Attributes: []attribute.KeyValue{
+								attribute.Int("sequence-number", 0),
+								attribute.Int("message-size", 0),
+							},
+						},
+					},
 				},
 				// RPC attempt #1
 				{
@@ -1712,7 +1723,15 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 					spanKind:   oteltrace.SpanKindServer.String(),
 					status:     otelcodes.Error,
 					attributes: nil,
-					events:     nil,
+					events: []trace.Event{
+						{
+							Name: "Inbound message",
+							Attributes: []attribute.KeyValue{
+								attribute.Int("sequence-number", 0),
+								attribute.Int("message-size", 0),
+							},
+						},
+					},
 				},
 				// RPC attempt #2
 				{
