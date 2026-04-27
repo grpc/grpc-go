@@ -218,10 +218,11 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 	)
 
 	tests := []struct {
-		name       string
-		rc         *v3routepb.RouteConfiguration
-		wantUpdate RouteConfigUpdate
-		wantError  bool
+		name                    string
+		rc                      *v3routepb.RouteConfiguration
+		wantUpdate              RouteConfigUpdate
+		wantError               bool
+		xdsClientExtProcEnabled bool
 	}{
 		{
 			name: "default-route-match-field-is-nil",
@@ -558,6 +559,12 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 			wantUpdate: goodUpdateWithFilterConfigs(map[string]httpfilter.FilterConfig{"foo": filterConfig{Override: customFilterConfig}}),
 		},
 		{
+			name:                    "good-route-config-with-disabled-http-filter",
+			rc:                      goodRouteConfigWithFilterConfigs(map[string]*anypb.Any{"foo": testutils.MarshalAny(t, &v3routepb.FilterConfig{Disabled: true})}),
+			wantUpdate:              goodUpdateWithFilterConfigs(map[string]httpfilter.FilterConfig{"foo": httpfilter.DisabledFilterConfig{}}),
+			xdsClientExtProcEnabled: true,
+		},
+		{
 			name:       "good-route-config-with-http-filter-config-in-old-typed-struct",
 			rc:         goodRouteConfigWithFilterConfigs(map[string]*anypb.Any{"foo": testutils.MarshalAny(t, customFilterOldTypedStructConfig)}),
 			wantUpdate: goodUpdateWithFilterConfigs(map[string]httpfilter.FilterConfig{"foo": filterConfig{Override: customFilterOldTypedStructConfig}}),
@@ -712,6 +719,8 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, test.xdsClientExtProcEnabled)
+
 			gotUpdate, gotError := generateRDSUpdateFromRouteConfiguration(test.rc, nil)
 			if (gotError != nil) != test.wantError ||
 				!cmp.Equal(gotUpdate, test.wantUpdate, cmpopts.EquateEmpty(),

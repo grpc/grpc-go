@@ -400,6 +400,7 @@ func (r *xdsResolver) newConfigSelector() (_ *configSelector, err error) {
 		clusters:         make(map[string]*clusterInfo),
 		plugins:          make(map[string]*clusterInfo),
 		httpFilterConfig: r.xdsConfig.Listener.APIListener.HTTPFilters,
+		xdsConfig:        r.xdsConfig,
 	}
 
 	defer func() {
@@ -463,10 +464,10 @@ func (r *xdsResolver) newConfigSelector() (_ *configSelector, err error) {
 	// errors may occur. Note: cs.clusters are pointers to entries in
 	// activeClusters.
 	for _, ci := range cs.clusters {
-		atomic.AddInt32(&ci.refCount, 1)
+		ci.refCount.Add(1)
 	}
 	for _, ci := range cs.plugins {
-		atomic.AddInt32(&ci.refCount, 1)
+		ci.refCount.Add(1)
 	}
 
 	// Cleanup filter instances that are no longer specified in the current
@@ -495,13 +496,13 @@ func (r *xdsResolver) newConfigSelector() (_ *configSelector, err error) {
 // Only executed in the context of a serializer callback.
 func (r *xdsResolver) pruneActiveClustersAndPlugins() {
 	for cluster, ci := range r.activeClusters {
-		if atomic.LoadInt32(&ci.refCount) == 0 {
+		if ci.refCount.Load() == 0 {
 			ci.unsubscribe()
 			delete(r.activeClusters, cluster)
 		}
 	}
 	for cluster, ci := range r.activePlugins {
-		if atomic.LoadInt32(&ci.refCount) == 0 {
+		if ci.refCount.Load() == 0 {
 			delete(r.activePlugins, cluster)
 		}
 	}
@@ -534,8 +535,8 @@ func (r *xdsResolver) addOrGetActiveClusterInfo(key string, name string) *cluste
 }
 
 type clusterInfo struct {
-	// number of references to this cluster; accessed atomically
-	refCount int32
+	// refCount is the number of references to this cluster.
+	refCount atomic.Int32
 	// cfg is the child configuration for this cluster, containing either the
 	// csp config or the cds cluster config.
 	cfg xdsChildConfig
@@ -595,6 +596,23 @@ func (r *xdsResolver) newInterceptor(filters []xdsresource.HTTPFilter, clusterOv
 		if override == nil {
 			override = virtualHostOverride[filter.Name]
 		}
+
+		// Determine the effective disabled state of the filter. The base
+		// configuration's disabled state is used unless an override is present.
+		// If an override is present, the filter is disabled if the override is
+		// a DisabledFilterConfig.
+		disabled := filter.Disabled
+		if override != nil {
+			_, disabled = override.(httpfilter.DisabledFilterConfig)
+		}
+
+		if disabled {
+			if r.logger.V(2) {
+				r.logger.Infof("Filter %q has been disabled.", filter.Name)
+			}
+			continue
+		}
+
 		builder, ok := filter.Filter.(httpfilter.ClientFilterBuilder)
 		if !ok {
 			// Should not happen if it passed xdsClient validation.

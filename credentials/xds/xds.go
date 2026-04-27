@@ -95,14 +95,14 @@ func (c *credsImpl) ClientHandshake(ctx context.Context, authority string, rawCo
 		return nil, nil, errors.New("ClientHandshake() is not supported for server credentials")
 	}
 
-	// The CDS balancer constructs a new HandshakeInfo using a call to
+	// The clusterimpl balancer constructs a new HandshakeInfo using a call to
 	// NewHandshakeInfo(), and then adds it to the attributes field of the
 	// resolver.Address when handling calls to NewSubConn(). The transport layer
 	// takes care of shipping these attributes in the context to this handshake
 	// function. We first read the credentials.ClientHandshakeInfo type from the
-	// context, which contains the attributes added by the CDS balancer. We then
-	// read the HandshakeInfo from the attributes to get to the actual data that
-	// we need here for the handshake.
+	// context, which contains the attributes added by the clusterimpl balancer.
+	// We then read the HandshakeInfo from the attributes to get to the actual
+	// data that we need here for the handshake.
 	chi := credentials.ClientHandshakeInfoFromContext(ctx)
 	// If there are no attributes in the received context or the attributes does
 	// not contain a HandshakeInfo, it could either mean that the user did not
@@ -133,7 +133,8 @@ func (c *credsImpl) ClientHandshake(ctx context.Context, authority string, rawCo
 	// 4. Key usage to match whether client/server usage.
 	// 5. A `VerifyPeerCertificate` function which performs normal peer
 	// 	  cert verification using configured roots, and the custom SAN checks.
-	cfg, err := hi.ClientSideTLSConfig(ctx)
+	hostname := xdsinternal.Hostname(chi.Attributes)
+	cfg, err := hi.ClientSideTLSConfig(ctx, hostname)
 	if err != nil {
 		return nil, nil, err
 	}

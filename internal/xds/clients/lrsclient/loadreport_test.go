@@ -21,6 +21,7 @@ package lrsclient_test
 import (
 	"context"
 	"net"
+	"sync"
 	"testing"
 	"time"
 
@@ -29,7 +30,9 @@ import (
 	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpctest"
+	grpctestutils "google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/xds/clients"
 	"google.golang.org/grpc/internal/xds/clients/grpctransport"
 	"google.golang.org/grpc/internal/xds/clients/internal/testutils"
@@ -267,6 +270,7 @@ func (s) TestReportLoad_ConnectionCreation(t *testing.T) {
 //     cancel functions
 //   - creating new streams after the previous one was closed works
 func (s) TestReportLoad_StreamCreation(t *testing.T) {
+	grpctestutils.SetEnvConfig(t, &envconfig.XDSORCAToLRSPropEnabled, true)
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
@@ -302,6 +306,9 @@ func (s) TestReportLoad_StreamCreation(t *testing.T) {
 	loadStore1.ReporterForCluster("cluster1", "eds1").CallStarted(testLocality1)
 	loadStore1.ReporterForCluster("cluster1", "eds1").CallServerLoad(testLocality1, testKey1, 3.14)
 	loadStore1.ReporterForCluster("cluster1", "eds1").CallServerLoad(testLocality1, testKey1, 2.718)
+	loadStore1.ReporterForCluster("cluster1", "eds1").CallServerLoad(testLocality1, "cpu_utilization", 1.5)
+	loadStore1.ReporterForCluster("cluster1", "eds1").CallServerLoad(testLocality1, "mem_utilization", 2.0)
+	loadStore1.ReporterForCluster("cluster1", "eds1").CallServerLoad(testLocality1, "application_utilization", 3.0)
 	loadStore1.ReporterForCluster("cluster1", "eds1").CallFinished(testLocality1, nil)
 	loadStore1.ReporterForCluster("cluster1", "eds1").CallStarted(testLocality2)
 	loadStore1.ReporterForCluster("cluster1", "eds1").CallServerLoad(testLocality2, testKey2, 1.618)
@@ -359,6 +366,15 @@ func (s) TestReportLoad_StreamCreation(t *testing.T) {
 				LoadMetricStats: []*v3endpointpb.EndpointLoadMetricStats{
 					// TotalMetricValue is the aggregation of 3.14 + 2.718 = 5.858
 					{MetricName: testKey1, NumRequestsFinishedWithMetric: 2, TotalMetricValue: 5.858}},
+				CpuUtilization: &v3endpointpb.UnnamedEndpointLoadMetricStats{
+					NumRequestsFinishedWithMetric: 1, TotalMetricValue: 1.5,
+				},
+				MemUtilization: &v3endpointpb.UnnamedEndpointLoadMetricStats{
+					NumRequestsFinishedWithMetric: 1, TotalMetricValue: 2.0,
+				},
+				ApplicationUtilization: &v3endpointpb.UnnamedEndpointLoadMetricStats{
+					NumRequestsFinishedWithMetric: 1, TotalMetricValue: 3.0,
+				},
 				TotalSuccessfulRequests: 1,
 				TotalIssuedRequests:     1,
 			},
@@ -650,9 +666,12 @@ func (s) TestReportLoad_LoadReportInterval(t *testing.T) {
 		t.Fatalf("Timeout when waiting for LRS stream to be created: %v", err)
 	}
 
+	stateMu := sync.Mutex{}
 	// Initial time for reporter creation
 	currentTime := time.Now()
 	lrsclientinternal.TimeNow = func() time.Time {
+		stateMu.Lock()
+		defer stateMu.Unlock()
 		return currentTime
 	}
 
@@ -661,7 +680,9 @@ func (s) TestReportLoad_LoadReportInterval(t *testing.T) {
 
 	// Update currentTime to simulate the passage of time between the reporter
 	// creation and first stats() call.
+	stateMu.Lock()
 	currentTime = currentTime.Add(5 * time.Second)
+	stateMu.Unlock()
 
 	// Ensure the initial load reporting request is received at the server.
 	req, err := lrsServer.LRSRequestChan.Receive(ctx)

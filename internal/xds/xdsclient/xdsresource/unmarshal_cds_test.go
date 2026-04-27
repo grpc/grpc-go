@@ -37,6 +37,7 @@ import (
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
 	v3aggregateclusterpb "github.com/envoyproxy/go-control-plane/envoy/extensions/clusters/aggregate/v3"
+	v3gcpauthnpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/gcp_authn/v3"
 	v3leastrequestpb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/least_request/v3"
 	v3ringhashpb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/ring_hash/v3"
 	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
@@ -1762,6 +1763,269 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 	}
 }
 
+// enableGCPAuthenticationFilter enables A83 support for the duration of the
+// test by:
+// 1. Setting GRPC_EXPERIMENTAL_XDS_GCP_AUTHENTICATION_FILTER env var to true.
+// 2. Registering the audience converter, since this is otherwise done in init.
+func enableGCPAuthenticationFilter(t *testing.T) {
+	testutils.SetEnvConfig(t, &envconfig.GCPAuthenticationFilterEnabled, true)
+	registerMetadataConverter(audienceTypeURL, audienceConverter{})
+	t.Cleanup(func() {
+		unregisterMetadataConverterForTesting(audienceTypeURL)
+	})
+}
+
+// disableGCPAuthenticationFilter disables A83 support for the duration of the
+// test by:
+// 1. Setting GRPC_EXPERIMENTAL_XDS_GCP_AUTHENTICATION_FILTER env var to false.
+// 2. Unregistering the audience converter (in case it was registered by init
+// or previous test)
+func disableGCPAuthenticationFilter(t *testing.T) {
+	testutils.SetEnvConfig(t, &envconfig.GCPAuthenticationFilterEnabled, false)
+	unregisterMetadataConverterForTesting(audienceTypeURL)
+}
+
+// Tests custom metadata parsing for success cases when the
+// GRPC_EXPERIMENTAL_XDS_GCP_AUTHENTICATION_FILTER env var is set.
+func (s) TestValidateClusterAndConstructClusterUpdate_GCP_AUTHENTICATION_FILTER_EnvVarOn(t *testing.T) {
+	enableGCPAuthenticationFilter(t)
+	const (
+		v3ClusterName = "v3clusterName"
+		v3Service     = "v3Service"
+	)
+	tests := []struct {
+		name       string
+		cluster    *v3clusterpb.Cluster
+		wantUpdate ClusterUpdate
+	}{
+		{
+			name: "typed_filter_metadata_in_cluster",
+			cluster: &v3clusterpb.Cluster{
+				Name:                 v3ClusterName,
+				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
+				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
+					EdsConfig: &v3corepb.ConfigSource{
+						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
+							Ads: &v3corepb.AggregatedConfigSource{},
+						},
+					},
+					ServiceName: v3Service,
+				},
+				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
+				Metadata: &v3corepb.Metadata{
+					TypedFilterMetadata: map[string]*anypb.Any{
+						"com.google.grpc.gcp_authn": testutils.MarshalAny(t, &v3gcpauthnpb.Audience{
+							Url: "https://example.com",
+						}),
+					},
+				},
+			},
+			wantUpdate: ClusterUpdate{
+				ClusterName:    v3ClusterName,
+				EDSServiceName: v3Service,
+				Metadata: map[string]any{
+					"com.google.grpc.gcp_authn": AudienceMetadataValue{
+						Audience: "https://example.com",
+					},
+				},
+				TelemetryLabels: xdsinternal.UnknownCSMLabels,
+			},
+		},
+		{
+			name: "typed_filter_metadata_over_filter_metadata_in_cluster",
+			cluster: &v3clusterpb.Cluster{
+				Name:                 v3ClusterName,
+				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
+				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
+					EdsConfig: &v3corepb.ConfigSource{
+						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
+							Ads: &v3corepb.AggregatedConfigSource{},
+						},
+					},
+					ServiceName: v3Service,
+				},
+				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
+				Metadata: &v3corepb.Metadata{
+					TypedFilterMetadata: map[string]*anypb.Any{
+						"com.google.grpc.gcp_authn": testutils.MarshalAny(t, &v3gcpauthnpb.Audience{
+							Url: "https://example.com",
+						}),
+					},
+					FilterMetadata: map[string]*structpb.Struct{
+						"com.google.grpc.gcp_authn": {
+							Fields: map[string]*structpb.Value{
+								"url": structpb.NewStringValue("https://example.com"),
+							},
+						},
+					},
+				},
+			},
+			wantUpdate: ClusterUpdate{
+				ClusterName:    v3ClusterName,
+				EDSServiceName: v3Service,
+				Metadata: map[string]any{
+					"com.google.grpc.gcp_authn": AudienceMetadataValue{
+						Audience: "https://example.com",
+					},
+				},
+				TelemetryLabels: xdsinternal.UnknownCSMLabels,
+			},
+		},
+		{
+			name: "both_filter_and_typed_filter_metadata_in_cluster",
+			cluster: &v3clusterpb.Cluster{
+				Name:                 v3ClusterName,
+				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
+				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
+					EdsConfig: &v3corepb.ConfigSource{
+						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
+							Ads: &v3corepb.AggregatedConfigSource{},
+						},
+					},
+					ServiceName: v3Service,
+				},
+				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
+				Metadata: &v3corepb.Metadata{
+					TypedFilterMetadata: map[string]*anypb.Any{
+						"com.google.grpc.gcp_authn": testutils.MarshalAny(t, &v3gcpauthnpb.Audience{
+							Url: "https://example.com",
+						}),
+					},
+					FilterMetadata: map[string]*structpb.Struct{
+						"another-test-key": {
+							Fields: map[string]*structpb.Value{
+								"url": structpb.NewStringValue("https://example.com"),
+							},
+						},
+					},
+				},
+			},
+			wantUpdate: ClusterUpdate{
+				ClusterName:    v3ClusterName,
+				EDSServiceName: v3Service,
+				Metadata: map[string]any{
+					"com.google.grpc.gcp_authn": AudienceMetadataValue{
+						Audience: "https://example.com",
+					},
+					"another-test-key": StructMetadataValue{Data: map[string]any{
+						"url": "https://example.com",
+					}},
+				},
+				TelemetryLabels: xdsinternal.UnknownCSMLabels,
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := validateClusterAndConstructClusterUpdate(tt.cluster, nil)
+			if err != nil {
+				t.Fatalf("validateClusterAndConstructClusterUpdate() failed: %v", err)
+			}
+			if diff := cmp.Diff(tt.wantUpdate, got, cmpopts.EquateEmpty(), cmpopts.IgnoreFields(ClusterUpdate{}, "LBPolicy")); diff != "" {
+				t.Errorf("validateClusterAndConstructClusterUpdate() returned unexpected diff (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+// Tests custom metadata parsing for failure cases when the
+// GRPC_EXPERIMENTAL_XDS_GCP_AUTHENTICATION_FILTER env var is not set.
+func (s) TestValidateClusterAndConstructClusterUpdate_GCP_AUTHENTICATION_FILTER_EnvVarOff(t *testing.T) {
+	disableGCPAuthenticationFilter(t)
+	const (
+		v3ClusterName = "v3ClusterName"
+		v3Service     = "v3Service"
+	)
+	tests := []struct {
+		name       string
+		cluster    *v3clusterpb.Cluster
+		wantUpdate ClusterUpdate
+	}{
+		{
+			name: "typed_filter_metadata_in_cluster",
+			cluster: &v3clusterpb.Cluster{
+				Name:                 v3ClusterName,
+				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
+				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
+					EdsConfig: &v3corepb.ConfigSource{
+						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
+							Ads: &v3corepb.AggregatedConfigSource{},
+						},
+					},
+					ServiceName: v3Service,
+				},
+				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
+				Metadata: &v3corepb.Metadata{
+					TypedFilterMetadata: map[string]*anypb.Any{
+						"com.google.grpc.gcp_authn": testutils.MarshalAny(t, &v3gcpauthnpb.Audience{
+							Url: "https://example.com",
+						}),
+					},
+				},
+			},
+			wantUpdate: ClusterUpdate{
+				ClusterName:     v3ClusterName,
+				EDSServiceName:  v3Service,
+				TelemetryLabels: xdsinternal.UnknownCSMLabels,
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := validateClusterAndConstructClusterUpdate(tt.cluster, nil)
+			if err != nil {
+				t.Fatalf("validateClusterAndConstructClusterUpdate() failed: %v", err)
+			}
+			if diff := cmp.Diff(tt.wantUpdate, got, cmpopts.EquateEmpty(), cmpopts.IgnoreFields(ClusterUpdate{}, "LBPolicy")); diff != "" {
+				t.Errorf("validateClusterAndConstructClusterUpdate() returned unexpected diff (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+// Tests custom metadata parsing for converter failure cases when the
+// GRPC_EXPERIMENTAL_XDS_GCP_AUTHENTICATION_FILTER environment variable is set.
+func (s) TestValidateClusterAndConstructClusterUpdate_GCP_AUTHENTICATION_FILTER_ConverterFailure(t *testing.T) {
+	enableGCPAuthenticationFilter(t)
+	tests := []struct {
+		name    string
+		cluster *v3clusterpb.Cluster
+		wantErr string
+	}{
+		{
+			name: "converter_failure_in_cluster",
+			cluster: &v3clusterpb.Cluster{
+				Name:                 "v3clusterName",
+				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
+				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
+					EdsConfig: &v3corepb.ConfigSource{
+						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
+							Ads: &v3corepb.AggregatedConfigSource{},
+						},
+					},
+					ServiceName: "v3Service",
+				},
+				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
+				Metadata: &v3corepb.Metadata{
+					TypedFilterMetadata: map[string]*anypb.Any{
+						"com.google.grpc.gcp_authn": testutils.MarshalAny(t, &v3gcpauthnpb.Audience{
+							Url: "",
+						}),
+					},
+				},
+			},
+			wantErr: "empty url field in audience metadata",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, err := validateClusterAndConstructClusterUpdate(tt.cluster, nil); err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("validateClusterAndConstructClusterUpdate() did not return error when expected: %v", err)
+			}
+		})
+	}
+}
+
 func (s) TestValidateClusterWithOutlierDetection(t *testing.T) {
 	odToClusterProto := func(od *v3clusterpb.OutlierDetection) *v3clusterpb.Cluster {
 		// Cluster parsing doesn't fail with respect to fields orthogonal to
@@ -1979,5 +2243,87 @@ func (s) TestValidateClusterWithSecurityConfig_SNITooLong(t *testing.T) {
 	wantErr := "exceeds max length"
 	if _, err := validateClusterAndConstructClusterUpdate(cluster, nil); err == nil || !strings.Contains(err.Error(), wantErr) {
 		t.Fatalf("validateClusterAndConstructClusterUpdate() returned err: %v, want err containing: %s", err, wantErr)
+	}
+}
+
+// TestValidateCluster_LRSReportEndpointMetrics tests the parsing of CDS
+// lrs_report_endpoint_metrics field and verifies it is correctly ignored when
+// the feature flag is disabled and parsed correctly when enabled, including
+// precedence rules for named_metrics.*.
+func (s) TestValidateCluster_LRSReportEndpointMetrics(t *testing.T) {
+	tests := []struct {
+		desc                     string
+		lrsPropEnabled           bool
+		lrsReportEndpointMetrics []string
+		wantMetrics              *LRSReportEndpointMetricsConfig
+	}{
+		{
+			desc:                     "DisabledByEnvVar",
+			lrsPropEnabled:           false,
+			lrsReportEndpointMetrics: []string{"cpu_utilization", "named_metrics.foo", "named_metrics.*"},
+			wantMetrics:              nil,
+		},
+		{
+			desc:                     "AllValidMetrics",
+			lrsPropEnabled:           true,
+			lrsReportEndpointMetrics: []string{"cpu_utilization", "mem_utilization", "application_utilization", "named_metrics.foo", "named_metrics.bar"},
+			wantMetrics: &LRSReportEndpointMetricsConfig{
+				CPUUtilization:         true,
+				MemUtilization:         true,
+				ApplicationUtilization: true,
+				NamedMetricsAll:        false,
+				NamedMetrics: map[string]struct{}{
+					"foo": {},
+					"bar": {},
+				},
+			},
+		},
+		{
+			desc:                     "EnabledByEnvVar",
+			lrsPropEnabled:           true,
+			lrsReportEndpointMetrics: []string{"named_metrics.*", "named_metrics.foo", "cpu_utilization"},
+			wantMetrics: &LRSReportEndpointMetricsConfig{
+				CPUUtilization:  true,
+				NamedMetricsAll: true,
+				NamedMetrics:    nil,
+			},
+		},
+		{
+			desc:                     "IgnoresInvalidMetrics",
+			lrsPropEnabled:           true,
+			lrsReportEndpointMetrics: []string{"named_metrics.", "invalid_metric", "named_metrics.valid"},
+			wantMetrics: &LRSReportEndpointMetricsConfig{
+				NamedMetricsAll: false,
+				NamedMetrics: map[string]struct{}{
+					"valid": {},
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			testutils.SetEnvConfig(t, &envconfig.XDSORCAToLRSPropEnabled, tt.lrsPropEnabled)
+			cluster := &v3clusterpb.Cluster{
+				Name:                 "test-cluster",
+				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
+				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
+					EdsConfig: &v3corepb.ConfigSource{
+						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
+							Ads: &v3corepb.AggregatedConfigSource{},
+						},
+					},
+					ServiceName: "test-service",
+				},
+				LrsReportEndpointMetrics: tt.lrsReportEndpointMetrics,
+			}
+			update, err := validateClusterAndConstructClusterUpdate(cluster, nil)
+			if err != nil {
+				t.Fatalf("validateClusterAndConstructClusterUpdate() failed: %v", err)
+			}
+			if !update.LRSReportEndpointMetrics.Equal(tt.wantMetrics) {
+				t.Fatalf("LRSReportEndpointMetrics:\n got %+v\nwant %+v", update.LRSReportEndpointMetrics, tt.wantMetrics)
+			}
+		})
 	}
 }

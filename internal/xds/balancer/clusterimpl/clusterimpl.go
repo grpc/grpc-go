@@ -27,6 +27,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"slices"
 	"sync"
 	"sync/atomic"
@@ -81,7 +82,7 @@ func (bb) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Ba
 		loadWrapper:     loadstore.NewWrapper(),
 		requestCountMax: defaultRequestCountMax,
 	}
-	b.xdsHIPtr.Store(xds.NewHandshakeInfo(nil, nil, nil, false, "", false))
+	b.xdsHIPtr.Store(xds.NewHandshakeInfo(nil, nil, nil, false, "", false, false))
 	b.logger = prefixLogger(b)
 	b.child = gracefulswitch.NewBalancer(b, bOpts)
 	b.logger.Infof("Created")
@@ -136,25 +137,33 @@ type clusterImplBalancer struct {
 
 	// The following fields are protected by mu, since they are accessed in
 	// balancer API methods and in methods called from the child policy.
-	mu                    sync.Mutex
-	clusterName           string                            // The cluster name for credentials handshaking.
-	inhibitPickerUpdates  bool                              // Inhibits state updates from child policy when processing an update from the parent.
-	pendingPickerUpdates  bool                              // True if a picker update from the child policy was inhibited when processing an update from the parent.
-	childState            balancer.State                    // Most recent state update from the child policy.
-	drops                 []*dropper                        // Drops implementation.
-	requestCounterCluster string                            // The cluster name for the request counter, from LB config.
-	requestCounterService string                            // The service name for the request counter, from LB config.
-	requestCountMax       uint32                            // Max concurrent requests, from LB config.
-	requestCounter        *xdsclient.ClusterRequestsCounter // Tracks total inflight requests for a given service.
-	telemetryLabels       map[string]string                 // Telemetry labels to set on picks, from LB config.
+	mu                       sync.Mutex
+	clusterName              string                                      // The cluster name for credentials handshaking.
+	inhibitPickerUpdates     bool                                        // Inhibits state updates from child policy when processing an update from the parent.
+	pendingPickerUpdates     bool                                        // True if a picker update from the child policy was inhibited when processing an update from the parent.
+	childState               balancer.State                              // Most recent state update from the child policy.
+	drops                    []*dropper                                  // Drops implementation.
+	requestCounterCluster    string                                      // The cluster name for the request counter, from LB config.
+	requestCounterService    string                                      // The service name for the request counter, from LB config.
+	requestCountMax          uint32                                      // Max concurrent requests, from LB config.
+	requestCounter           *xdsclient.ClusterRequestsCounter           // Tracks total inflight requests for a given service.
+	telemetryLabels          map[string]string                           // Telemetry labels to set on picks, from LB config.
+	lrsReportEndpointMetrics *xdsresource.LRSReportEndpointMetricsConfig // LRS metrics to propagate.
 }
 
-// handleDropAndRequestCountLocked compares drop and request counter in new
-// update with the one currently used by picker, and is protected by b.mu. It
-// returns a boolean indicating if a new picker needs to be generated.
-func (b *clusterImplBalancer) handleDropAndRequestCountLocked(clusterConfig xdsresource.ClusterConfig) bool {
+// handleClusterConfigLocked updates the internal state of the balancer with the
+// new cluster configuration. It returns true if a new picker needs to be
+// generated as a result of these changes. It must be called with b.mu held.
+func (b *clusterImplBalancer) handleClusterConfigLocked(clusterConfig xdsresource.ClusterConfig) bool {
 	clusterUpdate := clusterConfig.Cluster
 	var updatePicker bool
+
+	b.telemetryLabels = clusterUpdate.TelemetryLabels
+
+	if !b.lrsReportEndpointMetrics.Equal(clusterUpdate.LRSReportEndpointMetrics) {
+		b.lrsReportEndpointMetrics = clusterUpdate.LRSReportEndpointMetrics
+		updatePicker = true
+	}
 
 	var newDrops []DropConfig
 	if clusterUpdate.ClusterType == xdsresource.ClusterTypeEDS {
@@ -203,6 +212,7 @@ func (b *clusterImplBalancer) newPickerLocked() *picker {
 		countMax:        b.requestCountMax,
 		telemetryLabels: b.telemetryLabels,
 		clusterName:     b.clusterName,
+		metrics:         b.lrsReportEndpointMetrics,
 	}
 }
 
@@ -322,7 +332,7 @@ func (b *clusterImplBalancer) handleSecurityConfig(config *xdsresource.SecurityC
 		// We need to explicitly set the fields to nil here since this might be
 		// a case of switching from a good security configuration to an empty
 		// one where fallback credentials are to be used.
-		b.xdsHIPtr.Store(xds.NewHandshakeInfo(nil, nil, nil, false, "", false))
+		b.xdsHIPtr.Store(xds.NewHandshakeInfo(nil, nil, nil, false, "", false, false))
 		return nil
 
 	}
@@ -359,7 +369,8 @@ func (b *clusterImplBalancer) handleSecurityConfig(config *xdsresource.SecurityC
 	}
 	b.cachedRoot = rootProvider
 	b.cachedIdentity = identityProvider
-	b.xdsHIPtr.Store(xds.NewHandshakeInfo(rootProvider, identityProvider, config.SubjectAltNameMatchers, false, "", false))
+
+	b.xdsHIPtr.Store(xds.NewHandshakeInfo(rootProvider, identityProvider, config.SubjectAltNameMatchers, false, config.SNI, config.AutoSNISANValidation, config.UseAutoHostSNI))
 	return nil
 }
 
@@ -400,7 +411,6 @@ func (b *clusterImplBalancer) UpdateClientConnState(s balancer.ClientConnState) 
 	}
 	clusterCfg := xdsConfig.Clusters[newConfig.Cluster]
 	clusterUpdate := clusterCfg.Config.Cluster
-
 	if err := b.handleSecurityConfig(clusterUpdate.SecurityCfg); err != nil {
 		// If the security config is invalid, for example, if the provider
 		// instance is not found in the bootstrap config, we need to put the
@@ -433,15 +443,15 @@ func (b *clusterImplBalancer) UpdateClientConnState(s balancer.ClientConnState) 
 	})
 
 	b.mu.Lock()
-	b.telemetryLabels = clusterUpdate.TelemetryLabels
+	updatePicker := b.handleClusterConfigLocked(clusterCfg.Config)
 	// We want to send a picker update to the parent if one of the two
 	// conditions are met:
-	// - drop/request config has changed *and* there is already a picker from
-	//   the child, or
+	// - drop/request count config or LRS metrics config has changed *and* there
+	//   is already a picker from the child, or
 	// - there is a pending picker update from the child (and this covers the
 	//   case where the drop/request config has not changed, but the child sent
 	//   a picker update while we were still processing config from our parent).
-	if (b.handleDropAndRequestCountLocked(clusterCfg.Config) && b.childState.Picker != nil) || b.pendingPickerUpdates {
+	if (updatePicker && b.childState.Picker != nil) || b.pendingPickerUpdates {
 		b.pendingPickerUpdates = false
 		b.ClientConn.UpdateState(balancer.State{
 			ConnectivityState: b.childState.ConnectivityState,
@@ -564,6 +574,19 @@ func (b *clusterImplBalancer) NewSubConn(addrs []resolver.Address, opts balancer
 	for i, addr := range addrs {
 		newAddrs[i] = xdsinternal.SetXDSHandshakeClusterName(addr, clusterName)
 		newAddrs[i] = xds.SetHandshakeInfo(newAddrs[i], &b.xdsHIPtr)
+
+		hostname := xdsresource.Hostname(addr)
+		// If the hostname contains a port, strip it. Per [RFC 6066, Section
+		// 3](https://www.rfc-editor.org/rfc/rfc6066.html#section-3), the SNI
+		// may only contain a qualified DNS hostname, which excludes port
+		// numbers.
+		h, _, err := net.SplitHostPort(hostname)
+		if err == nil {
+			hostname = h
+		}
+		// Store hostname in the address attributes, so that it can be used in
+		// the client handshake.
+		newAddrs[i] = xds.SetAddressHostname(newAddrs[i], hostname)
 	}
 	var sc balancer.SubConn
 	scw := &scWrapper{}

@@ -78,12 +78,12 @@ var (
 	EnableDefaultPortForProxyTarget = boolFromEnv("GRPC_EXPERIMENTAL_ENABLE_DEFAULT_PORT_FOR_PROXY_TARGET", true)
 
 	// CaseSensitiveBalancerRegistries is set if the balancer registry should be
-	// case-sensitive. This is disabled by default, but can be enabled by setting
+	// case-sensitive. This is enabled by default, but can be disabled by setting
 	// the env variable "GRPC_GO_EXPERIMENTAL_CASE_SENSITIVE_BALANCER_REGISTRIES"
-	// to "true".
+	// to "false".
 	//
-	// TODO: After 2 releases, we will enable the env var by default.
-	CaseSensitiveBalancerRegistries = boolFromEnv("GRPC_GO_EXPERIMENTAL_CASE_SENSITIVE_BALANCER_REGISTRIES", false)
+	// This env varible will be removed in release v1.82.0.
+	CaseSensitiveBalancerRegistries = boolFromEnv("GRPC_GO_EXPERIMENTAL_CASE_SENSITIVE_BALANCER_REGISTRIES", true)
 
 	// XDSAuthorityRewrite indicates whether xDS authority rewriting is enabled.
 	// This feature is defined in gRFC A81 and is enabled by setting the
@@ -118,6 +118,10 @@ var (
 	//
 	// A future release will remove this environment variable, enabling strict
 	// path checking behavior unconditionally.
+	//
+	// See
+	// https://github.com/grpc/grpc-go/security/advisories/GHSA-p77j-4mvh-x3m3
+	// for more details.
 	DisableStrictPathChecking = boolFromEnv("GRPC_GO_EXPERIMENTAL_DISABLE_STRICT_PATH_CHECKING", false)
 
 	// EnablePriorityLBChildPolicyCache controls whether the priority balancer
@@ -126,6 +130,28 @@ var (
 	// enabled by setting the env variable
 	// GRPC_EXPERIMENTAL_ENABLE_PRIORITY_LB_CHILD_POLICY_CACHE to true.
 	EnablePriorityLBChildPolicyCache = boolFromEnv("GRPC_EXPERIMENTAL_ENABLE_PRIORITY_LB_CHILD_POLICY_CACHE", false)
+
+	// Enable8KBDefaultHeaderListSize indicates that default maximum header list
+	// size is restricted to 8KB. This is disabled by default, but can be enabled
+	// by setting the environment variable
+	// "GRPC_GO_EXPERIMENTAL_ENABLE_8KB_DEFAULT_HEADER_LIST_SIZE" to "true".
+	// When disabled, the default maximum header list size of 16MB is used.
+	//
+	// When enabled, RPCs with a total size of headers exceeding 8KB will fail
+	// unless explicitly configured otherwise by the user.
+	//
+	// TODO: In release v1.82.0, env var will be enabled by default.
+	Enable8KBDefaultHeaderListSize = boolFromEnv("GRPC_GO_EXPERIMENTAL_ENABLE_8KB_DEFAULT_HEADER_LIST_SIZE", false)
+
+	// EnableHTTPFramerReadBufferPooling enables the use of the
+	// readyreader.Reader interface to perform non-memory-pinning reads,
+	// provided the underlying net.Conn supports it. This reduces memory usage
+	// when subchannels are idle.
+	//
+	// This environment variable serves as an escape hatch to disable the
+	// feature if unforeseen issues arise, and it will be removed in a future
+	// release.
+	EnableHTTPFramerReadBufferPooling = boolFromEnv("GRPC_GO_EXPERIMENTAL_HTTP_FRAMER_READ_BUFFER_POOLING", true)
 )
 
 func boolFromEnv(envVar string, def bool) bool {

@@ -370,16 +370,54 @@ func (s) TestProtectedBuffer(t *testing.T) {
 	}
 }
 
-// BenchmarkMemoryUsage measures the allocations per ALTS connection.
-// Run this with: go test -bench=BenchmarkMemoryUsage -benchmem
-func BenchmarkMemoryUsage(b *testing.B) {
+// BenchmarkWriteMemoryUsage measures the allocations per ALTS connection.
+// Run this with: go test -bench=BenchmarkWriteMemoryUsage -benchmem
+func BenchmarkWriteMemoryUsage(b *testing.B) {
 	b.ReportAllocs()
+	data := []byte(strings.Repeat("d", 256))
+	key := []byte{
+		// 16 arbitrary bytes.
+		0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0xe2, 0xd2, 0x4c, 0xce, 0x4f, 0x49}
+	conn := &noopConn{}
 
-	for i := 0; i < b.N; i++ {
-		c, _ := newConnPair(rekeyRecordProtocol, nil, nil)
+	for b.Loop() {
+		c, err := NewConn(conn, core.ClientSide, rekeyRecordProtocol, key, nil)
+		if err != nil {
+			b.Fatal(err)
+		}
 
-		if _, err := c.Write([]byte("d")); err != nil {
+		if _, err := c.Write(data); err != nil {
 			b.Fatalf("Write failed: %v", err)
 		}
 	}
+}
+
+// BenchmarkReadMemoryUsage measures the allocations per ALTS connection.
+// Run this with: go test -bench=BenchmarkReadMemoryUsage -benchmem
+func BenchmarkReadMemoryUsage(b *testing.B) {
+	b.ReportAllocs()
+	data := []byte(strings.Repeat("d", 257))
+	readBuf := make([]byte, 1024)
+
+	for b.Loop() {
+		clientConn, serverConn := newConnPair(rekeyRecordProtocol, nil, nil)
+		b.StopTimer()
+		clientConn.Write(data)
+		b.StartTimer()
+		if _, err := serverConn.Read(readBuf); err != nil {
+			b.Fatalf("Write failed: %v", err)
+		}
+	}
+}
+
+type noopConn struct {
+	net.Conn
+}
+
+func (c *noopConn) Write(b []byte) (n int, err error) {
+	return len(b), nil
+}
+
+func (c *noopConn) Close() error {
+	return nil
 }
