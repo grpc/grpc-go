@@ -8,6 +8,12 @@ The [Go][] implementation of [gRPC][]: A high performance, open source, general
 RPC framework that puts mobile and HTTP/2 first. For more information see the
 [Go gRPC docs][], or jump directly into the [quick start][].
 
+Transport support:
+
+- [x] HTTP/2 gRPC client and server transports
+- [x] HTTP/3 gRPC server transport through `Server.ServeHTTP`
+- [ ] HTTP/3 gRPC client transport
+
 ## Prerequisites
 
 - **[Go][]**: any one of the **two latest major** [releases][go-releases].
