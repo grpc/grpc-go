@@ -69,18 +69,18 @@ func (pm *policyMatcher) match(data *rpcData) (bool, error) {
 	// A policy matches if and only if at least one of its permissions match the
 	// action taking place AND at least one if its principals match the
 	// downstream peer.
-	permission, err := pm.permissions.match(data)
+	permissionMatched, err := pm.permissions.match(data)
 	if err != nil {
 		return false, err
 	}
-	if !permission {
+	if !permissionMatched {
 		return false, nil
 	}
-	principal, err := pm.principals.match(data)
+	principalMatched, err := pm.principals.match(data)
 	if err != nil {
 		return false, err
 	}
-	return principal, nil
+	return principalMatched, nil
 }
 
 // matchersFromPermissions takes a list of permissions (can also be
@@ -239,10 +239,7 @@ func (om *orMatcher) match(data *rpcData) (bool, error) {
 			return true, nil
 		}
 	}
-	if lastErr != nil {
-		return false, lastErr
-	}
-	return false, nil
+	return false, lastErr
 }
 
 // andMatcher is a matcher that is successful if every child matcher

@@ -205,10 +205,7 @@ func (e *engine) findMatchingPolicy(rpcData *rpcData) (string, bool, error) {
 			return policy, true, nil
 		}
 	}
-	if lastErr != nil {
-		return "", false, lastErr
-	}
-	return "", false, nil
+	return "", false, lastErr
 }
 
 // newRPCData takes an incoming context (should be a context representing state
