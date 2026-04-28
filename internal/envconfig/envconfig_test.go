@@ -182,7 +182,7 @@ func (s) TestGoroutineLabelsFromEnv(t *testing.T) {
 		},
 	}
 	for _, tc := range testCases {
-		t.Run("", func(t *testing.T) {
+		t.Run(tc.name, func(t *testing.T) {
 			const testVar = "testvar"
 			if tc.val == "" {
 				os.Unsetenv(testVar)
