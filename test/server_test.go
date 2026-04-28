@@ -29,6 +29,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/stubserver"
+	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/status"
 
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
@@ -85,9 +86,7 @@ func pprofCtxCollectLabels(ctx context.Context) map[string]string {
 // grpc.method runtime/pprof goroutine label gets set in the context that's
 // passed to the handlers
 func (s) TestServerSetGoroutineLabelsInContext(t *testing.T) {
-	oldGoroutineLabelCfg := envconfig.LabelServerGoroutines
-	defer func() { envconfig.LabelServerGoroutines = oldGoroutineLabelCfg }()
-	envconfig.LabelServerGoroutines = envconfig.GoroutineLabelServerMethod
+	testutils.SetEnvConfig(t, &envconfig.LabelServerGoroutines, envconfig.GoroutineLabelServerMethod)
 	ss := &stubserver.StubServer{
 		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
 			ctxLabels := pprofCtxCollectLabels(ctx)
@@ -134,10 +133,7 @@ func (s) TestServerSetGoroutineLabelsInContext(t *testing.T) {
 // grpc.method runtime/pprof goroutine label does _not_ get set in the context that's
 // passed to the handlers
 func (s) TestServerSetGoroutineLabelsInContextEnvVarDisabled(t *testing.T) {
-	oldGoroutineLabelCfg := envconfig.LabelServerGoroutines
-	defer func() { envconfig.LabelServerGoroutines = oldGoroutineLabelCfg }()
-	// clear the existing value
-	envconfig.LabelServerGoroutines = 0
+	testutils.SetEnvConfig(t, &envconfig.LabelServerGoroutines, 0)
 	ss := &stubserver.StubServer{
 		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
 			ctxLabels := pprofCtxCollectLabels(ctx)
