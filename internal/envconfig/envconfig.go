@@ -194,22 +194,17 @@ func goroutineLabelsFromEnv(envVar string, def GoroutineLabels) GoroutineLabels 
 		}
 		post = strings.TrimSpace(post)
 		pre = strings.TrimSpace(pre)
-		entVal := GoroutineLabels(0)
-		rhs, parseErr := strconv.ParseBool(post)
-		if parseErr != nil {
-			continue
-		}
+		bitDesignator := GoroutineLabels(0)
 		switch {
 		case strings.EqualFold(pre, "grpc.method"):
-			entVal = GoroutineLabelServerMethod
+			bitDesignator = GoroutineLabelServerMethod
 		default:
-			// ignore
+			continue
 		}
-		switch rhs {
-		case false:
-			val &^= entVal
-		case true:
-			val |= entVal
+		if strings.EqualFold(post, "true") {
+			val |= bitDesignator
+		} else if strings.EqualFold(post, "false") {
+			val &^= bitDesignator
 		}
 	}
 	return val

@@ -125,6 +125,11 @@ func (s) TestGoroutineLabelsFromEnv(t *testing.T) {
 			def:  0,
 			want: GoroutineLabelServerMethod,
 		}, {
+			name: "force-enable_zero_default_all_caps",
+			val:  "grpc.method=TRUE",
+			def:  0,
+			want: GoroutineLabelServerMethod,
+		}, {
 			name: "force-enable_zero_default_with_whitespace",
 			val:  " grpc.method\t= true",
 			def:  0,
@@ -135,8 +140,8 @@ func (s) TestGoroutineLabelsFromEnv(t *testing.T) {
 			def:  0,
 			want: GoroutineLabelServerMethod,
 		}, {
-			name: "force-enable_numeric_zero_default_with_other_garbage",
-			val:  "grpc.method=1,foobar",
+			name: "force-enable_mixed_case_zero_default_with_other_garbage",
+			val:  "grpc.method=tRuE,foobar",
 			def:  0,
 			want: GoroutineLabelServerMethod,
 		}, {
@@ -150,8 +155,13 @@ func (s) TestGoroutineLabelsFromEnv(t *testing.T) {
 			def:  GoroutineLabelServerMethod,
 			want: 0,
 		}, {
-			name: "force-disable_non-zero_default_numeric",
-			val:  "grpc.method=0",
+			name: "force-disable_non-zero_default_all_caps",
+			val:  "grpc.method=FALSE",
+			def:  GoroutineLabelServerMethod,
+			want: 0,
+		}, {
+			name: "force-disable_non-zero_default_mixed_case",
+			val:  "grpc.method=fAlSe",
 			def:  GoroutineLabelServerMethod,
 			want: 0,
 		}, {
