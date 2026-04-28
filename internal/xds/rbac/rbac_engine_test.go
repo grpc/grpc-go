@@ -701,7 +701,6 @@ func (s) TestChainEngine(t *testing.T) {
 		rbacConfigs []*v3rbacpb.RBAC
 		rbacQueries []rbacQuery
 		policyName  string
-		expectError string
 	}{
 		// SuccessCaseAnyMatch tests a single RBAC Engine instantiated with
 		// a config with a policy with any rules for both permissions and
@@ -773,68 +772,6 @@ func (s) TestChainEngine(t *testing.T) {
 					rpcData: &rpcData{
 						peerInfo: &peer.Peer{
 							Addr: &addr{ipAddress: "0.0.0.0"},
-						},
-					},
-					wantStatusCode: codes.PermissionDenied,
-				},
-			},
-		},
-		// FailClosedAllow tests that an ALLOW policy denies access if IP parsing fails.
-		{
-			name:        "FailClosed_Allow_Policy	",
-			expectError: "RBAC engine failed for ALLOW policy",
-			rbacConfigs: []*v3rbacpb.RBAC{
-				{
-					Action: v3rbacpb.RBAC_ALLOW,
-					Policies: map[string]*v3rbacpb.Policy{
-						"certain-source-ip": {
-							Permissions: []*v3rbacpb.Permission{
-								{Rule: &v3rbacpb.Permission_Any{Any: true}},
-							},
-							Principals: []*v3rbacpb.Principal{
-								{Identifier: &v3rbacpb.Principal_DirectRemoteIp{DirectRemoteIp: &v3corepb.CidrRange{AddressPrefix: "10.0.0.0", PrefixLen: &wrapperspb.UInt32Value{Value: uint32(8)}}}},
-							},
-						},
-					},
-				},
-			},
-			rbacQueries: []rbacQuery{
-				{
-					rpcData: &rpcData{
-						fullMethod: "some method",
-						peerInfo: &peer.Peer{
-							Addr: &addr{ipAddress: "invalid-ip"},
-						},
-					},
-					wantStatusCode: codes.PermissionDenied,
-				},
-			},
-		},
-		// FailClosedDeny tests that a DENY policy denies access if IP parsing fails.
-		{
-			name:        "FailClosed_Deny_Policy",
-			expectError: "RBAC engine failed for DENY policy",
-			rbacConfigs: []*v3rbacpb.RBAC{
-				{
-					Action: v3rbacpb.RBAC_DENY,
-					Policies: map[string]*v3rbacpb.Policy{
-						"certain-source-ip": {
-							Permissions: []*v3rbacpb.Permission{
-								{Rule: &v3rbacpb.Permission_Any{Any: true}},
-							},
-							Principals: []*v3rbacpb.Principal{
-								{Identifier: &v3rbacpb.Principal_DirectRemoteIp{DirectRemoteIp: &v3corepb.CidrRange{AddressPrefix: "10.0.0.0", PrefixLen: &wrapperspb.UInt32Value{Value: uint32(8)}}}},
-							},
-						},
-					},
-				},
-			},
-			rbacQueries: []rbacQuery{
-				{
-					rpcData: &rpcData{
-						fullMethod: "some method",
-						peerInfo: &peer.Peer{
-							Addr: &addr{ipAddress: "invalid-ip"},
 						},
 					},
 					wantStatusCode: codes.PermissionDenied,
@@ -1795,9 +1732,6 @@ func (s) TestChainEngine(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if test.expectError != "" {
-				grpctest.ExpectError(test.expectError)
-			}
 			b := TestAuditLoggerBufferBuilder{testName: test.name}
 			audit.RegisterLoggerBuilder(&b)
 			b2 := TestAuditLoggerCustomConfigBuilder{testName: test.name}

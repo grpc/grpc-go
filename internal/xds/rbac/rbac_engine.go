@@ -88,16 +88,7 @@ func (cre *ChainEngine) IsAuthorized(ctx context.Context) error {
 		return status.Errorf(codes.Internal, "gRPC RBAC: %v", err)
 	}
 	for _, engine := range cre.chainedEngines {
-		matchingPolicyName, ok, err := engine.findMatchingPolicy(rpcData)
-		if err != nil {
-			if engine.action == v3rbacpb.RBAC_DENY {
-				ok = true
-				logger.Errorf("RBAC engine failed for DENY policy: %v", err)
-			} else {
-				ok = false
-				logger.Errorf("RBAC engine failed for ALLOW policy: %v", err)
-			}
-		}
+		matchingPolicyName, ok := engine.findMatchingPolicy(rpcData)
 		if logger.V(2) && ok {
 			logger.Infof("incoming RPC matched to policy %v in engine with action %v", matchingPolicyName, engine.action)
 		}
@@ -188,24 +179,13 @@ func parseAuditOptions(opts *v3rbacpb.RBAC_AuditLoggingOptions) ([]audit.Logger,
 // successful match, it returns the name of the matching policy and a true bool
 // to specify that there was a matching policy found.  It returns false in
 // the case of not finding a matching policy.
-func (e *engine) findMatchingPolicy(rpcData *rpcData) (string, bool, error) {
-	var lastErr error
+func (e *engine) findMatchingPolicy(rpcData *rpcData) (string, bool) {
 	for policy, matcher := range e.policies {
-		matched, err := matcher.match(rpcData)
-		if err != nil {
-			if e.action == v3rbacpb.RBAC_DENY {
-				// Fail closed immediately for DENY.
-				return policy, true, err
-			}
-			// For ALLOW, we continue searching. If another policy matches, we allow.
-			lastErr = err
-			continue
-		}
-		if matched {
-			return policy, true, nil
+		if matcher.match(rpcData) {
+			return policy, true
 		}
 	}
-	return "", false, lastErr
+	return "", false
 }
 
 // newRPCData takes an incoming context (should be a context representing state
