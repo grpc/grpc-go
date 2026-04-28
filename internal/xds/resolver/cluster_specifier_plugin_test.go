@@ -31,14 +31,17 @@ import (
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/internal/xds/balancer/clustermanager"
 	"google.golang.org/grpc/internal/xds/clusterspecifier"
+	"google.golang.org/grpc/internal/xds/httpfilter"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
+	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
+	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 )
 
 func init() {
@@ -336,4 +339,109 @@ func (s) TestXDSResolverDelayedOnCommittedCSP(t *testing.T) {
 	   ]
  }`
 	verifyUpdateFromResolver(ctx, t, stateCh, wantSC)
+}
+
+// TestResolverClusterSpecifierPlugin_WithFilters tests the case where a route
+// configuration containing cluster specifier plugins is sent by the management
+// server, and HTTP filters are configured. The test verifies that the
+// interceptor chain is built for routes matching cluster specifier plugins.
+func (s) TestResolverClusterSpecifierPlugin_WithFilters(t *testing.T) {
+	// Register a custom httpFilter builder for the test.
+	testFilterTypeURL := "test-filter-type-url-" + uuid.New().String()
+	newStreamChan := testutils.NewChannel()
+	fb := &testHTTPFilterWithRPCMetadata{
+		logger:        t,
+		typeURL:       testFilterTypeURL,
+		newStreamChan: newStreamChan,
+	}
+	httpfilter.Register(fb)
+	defer httpfilter.UnregisterForTesting(fb.typeURL)
+
+	// Spin up an xDS management server.
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	nodeID := uuid.New().String()
+	mgmtServer, _, _, bc := setupManagementServerForTest(t, nodeID)
+
+	// Configure resources on the management server.
+	// We need a listener with the filter, and a route with ClusterSpecifierPlugin.
+	listeners := []*v3listenerpb.Listener{{
+		Name: defaultTestServiceName,
+		ApiListener: &v3listenerpb.ApiListener{
+			ApiListener: testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
+				RouteSpecifier: &v3httppb.HttpConnectionManager_Rds{Rds: &v3httppb.Rds{
+					ConfigSource: &v3corepb.ConfigSource{
+						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{Ads: &v3corepb.AggregatedConfigSource{}},
+					},
+					RouteConfigName: defaultTestRouteConfigName,
+				}},
+				HttpFilters: []*v3httppb.HttpFilter{
+					newHTTPFilter(t, "test-filter", testFilterTypeURL, "filter-path", ""),
+					e2e.RouterHTTPFilter,
+				},
+			}),
+		},
+	}}
+
+	routes := []*v3routepb.RouteConfiguration{e2e.RouteConfigResourceWithOptions(e2e.RouteConfigOptions{
+		RouteConfigName:              defaultTestRouteConfigName,
+		ListenerName:                 defaultTestServiceName,
+		ClusterSpecifierType:         e2e.RouteConfigClusterSpecifierTypeClusterSpecifierPlugin,
+		ClusterSpecifierPluginName:   "cspA",
+		ClusterSpecifierPluginConfig: testutils.MarshalAny(t, &wrapperspb.StringValue{Value: "anything"}),
+	})}
+	configureResources(ctx, t, mgmtServer, nodeID, listeners, routes, nil, nil)
+
+	stateCh, _, _ := buildResolverForTarget(t, resolver.Target{URL: *testutils.MustParseURL("xds:///" + defaultTestServiceName)}, bc)
+
+	// Wait for an update from the resolver, and verify the service config.
+	wantSC := `
+ {
+	 "loadBalancingConfig": [
+		 {
+		   "xds_cluster_manager_experimental": {
+			 "children": {
+			   "cluster_specifier_plugin:cspA": {
+				 "childPolicy": [
+				   {
+					 "csp_experimental": {
+					   "arbitrary_field": "anything"
+					 }
+				   }
+				 ]
+			   }
+			 }
+		   }
+		 }
+	   ]
+ }`
+	cs := verifyUpdateFromResolver(ctx, t, stateCh, wantSC)
+	res, err := cs.SelectConfig(iresolver.RPCInfo{Context: ctx, Method: "/service/method"})
+	if err != nil {
+		t.Fatalf("cs.SelectConfig(): %v", err)
+	}
+
+	// Verify that the interceptor is not nil.
+	if res.Interceptor == nil {
+		t.Fatal("res.Interceptor is nil, want non-nil")
+	}
+
+	newStream := func(context.Context, func()) (iresolver.ClientStream, error) {
+		return nil, nil
+	}
+
+	_, err = res.Interceptor.NewStream(ctx, iresolver.RPCInfo{Method: "/service/method", Context: ctx}, func() {}, newStream)
+	if err != nil {
+		t.Fatalf("res.Interceptor.NewStream() failed: %v", err)
+	}
+
+	// Verify that the filter received the config.
+	cfg, err := newStreamChan.Receive(ctx)
+	if err != nil {
+		t.Fatalf("Timeout waiting for filter to receive config: %v", err)
+	}
+	ofc := cfg.(overallFilterConfig)
+	if ofc.BasePath != "filter-path" {
+		t.Fatalf("Unexpected filter config path, got: %q, want: %q", ofc.BasePath, "filter-path")
+	}
 }
