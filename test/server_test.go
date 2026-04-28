@@ -84,7 +84,7 @@ func pprofCtxCollectLabels(ctx context.Context) map[string]string {
 
 // TestServerSetGoroutineLabelsInContext verifies that when enabled, the
 // grpc.method runtime/pprof goroutine label gets set in the context that's
-// passed to the handlers
+// passed to the handlers.
 func (s) TestServerSetGoroutineLabelsInContext(t *testing.T) {
 	testutils.SetEnvConfig(t, &envconfig.LabelServerGoroutines, envconfig.GoroutineLabelServerMethod)
 	ss := &stubserver.StubServer{
@@ -129,9 +129,9 @@ func (s) TestServerSetGoroutineLabelsInContext(t *testing.T) {
 	}
 }
 
-// TestServerSetGoroutineLabelsInContextEnvVarDisabled verifies that when disable, the
-// grpc.method runtime/pprof goroutine label does _not_ get set in the context that's
-// passed to the handlers
+// TestServerSetGoroutineLabelsInContextEnvVarDisabled verifies that when
+// disable, the grpc.method runtime/pprof goroutine label does _not_ get set in
+// the context that's passed to the handlers.
 func (s) TestServerSetGoroutineLabelsInContextEnvVarDisabled(t *testing.T) {
 	testutils.SetEnvConfig(t, &envconfig.LabelServerGoroutines, 0)
 	ss := &stubserver.StubServer{
