@@ -60,12 +60,12 @@ var (
 	XDSEndpointHashKeyBackwardCompat = boolFromEnv("GRPC_XDS_ENDPOINT_HASH_KEY_BACKWARD_COMPAT", false)
 
 	// LabelServerGoroutines controls setting [runtime/pprof.Labels] on the
-	// goroutines spawned for various reasons.
-	// For now, this is limited to the goroutines spawned to handle incoming requests on the server.
-	// Set "GRPC_GO_SERVER_GOROUTINE_LABELS" to "grpc.method=false" to disable this grpc.method label.
-	// The right-hand-side of the key=value pairs is parsed by
-	// [strconv.ParseBool], so other values are supported including 1, 0, f, and t.
-	// This variable is a bit-field
+	// goroutines spawned by [grpc.Server] type.
+	// For now, this is limited to the goroutines spawned to handle incoming
+	// requests on the server.
+	// Set "GRPC_GO_SERVER_GOROUTINE_LABELS" to "grpc.method=false" to
+	// disable this grpc.method label.
+	// This variable is a bit-field.
 	LabelServerGoroutines = goroutineLabelsFromEnv("GRPC_GO_SERVER_GOROUTINE_LABELS", GoroutineLabelServerMethod)
 
 	// RingHashSetRequestHashKey is set if the ring hash balancer can get the
@@ -176,7 +176,7 @@ func uint64FromEnv(envVar string, def, min, max uint64) uint64 {
 	return v
 }
 
-// GoroutineLabels is a bitfield indicating which goroutine labels are enabled
+// GoroutineLabels is a bitfield indicating which goroutine labels are enabled.
 type GoroutineLabels uint16
 
 func goroutineLabelsFromEnv(envVar string, def GoroutineLabels) GoroutineLabels {
@@ -211,6 +211,7 @@ func goroutineLabelsFromEnv(envVar string, def GoroutineLabels) GoroutineLabels 
 }
 
 const (
-	// Set the grpc.method label on new server-side gRPC streams
+	// GoroutineLabelServerMethod sets the grpc.method label on new
+	// server-side gRPC streams.
 	GoroutineLabelServerMethod GoroutineLabels = 1 << iota
 )
