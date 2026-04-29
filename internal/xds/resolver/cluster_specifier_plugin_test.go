@@ -347,15 +347,23 @@ func (s) TestXDSResolverDelayedOnCommittedCSP(t *testing.T) {
 // interceptor chain is built for routes matching cluster specifier plugins.
 func (s) TestResolverClusterSpecifierPlugin_WithFilters(t *testing.T) {
 	// Register a custom httpFilter builder for the test.
-	testFilterTypeURL := "test-filter-type-url-" + uuid.New().String()
-	newStreamChan := testutils.NewChannel()
-	fb := &testHTTPFilterWithRPCMetadata{
+	testFilterTypeURL1 := "test-filter-type-url-1" + uuid.New().String()
+	testFilterTypeURL2 := "test-filter-type-url-2" + uuid.New().String()
+	newStreamChan := testutils.NewChannelWithSize(2)
+	fb1 := &testHTTPFilterWithRPCMetadata{
 		logger:        t,
-		typeURL:       testFilterTypeURL,
+		typeURL:       testFilterTypeURL1,
 		newStreamChan: newStreamChan,
 	}
-	httpfilter.Register(fb)
-	defer httpfilter.UnregisterForTesting(fb.typeURL)
+	fb2 := &testHTTPFilterWithRPCMetadata{
+		logger:        t,
+		typeURL:       testFilterTypeURL2,
+		newStreamChan: newStreamChan,
+	}
+	httpfilter.Register(fb1)
+	httpfilter.Register(fb2)
+	defer httpfilter.UnregisterForTesting(fb1.typeURL)
+	defer httpfilter.UnregisterForTesting(fb2.typeURL)
 
 	// Spin up an xDS management server.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -376,7 +384,8 @@ func (s) TestResolverClusterSpecifierPlugin_WithFilters(t *testing.T) {
 					RouteConfigName: defaultTestRouteConfigName,
 				}},
 				HttpFilters: []*v3httppb.HttpFilter{
-					newHTTPFilter(t, "test-filter", testFilterTypeURL, "filter-path", ""),
+					newHTTPFilter(t, "test-filter-1", testFilterTypeURL1, "filter-path-1", ""),
+					newHTTPFilter(t, "test-filter-2", testFilterTypeURL2, "filter-path-2", ""),
 					e2e.RouterHTTPFilter,
 				},
 			}),
@@ -390,6 +399,10 @@ func (s) TestResolverClusterSpecifierPlugin_WithFilters(t *testing.T) {
 		ClusterSpecifierPluginName:   "cspA",
 		ClusterSpecifierPluginConfig: testutils.MarshalAny(t, &wrapperspb.StringValue{Value: "anything"}),
 	})}
+	// Override the configuration for "test-filter-1" in the route.
+	routes[0].VirtualHosts[0].Routes[0].TypedPerFilterConfig = map[string]*anypb.Any{
+		"test-filter-1": newHTTPFilter(t, "test-filter-1", testFilterTypeURL1, "override-path-1", "").GetTypedConfig(),
+	}
 	configureResources(ctx, t, mgmtServer, nodeID, listeners, routes, nil, nil)
 
 	stateCh, _, _ := buildResolverForTarget(t, resolver.Target{URL: *testutils.MustParseURL("xds:///" + defaultTestServiceName)}, bc)
@@ -432,16 +445,32 @@ func (s) TestResolverClusterSpecifierPlugin_WithFilters(t *testing.T) {
 
 	_, err = res.Interceptor.NewStream(ctx, iresolver.RPCInfo{Method: "/service/method", Context: ctx}, func() {}, newStream)
 	if err != nil {
-		t.Fatalf("res.Interceptor.NewStream() failed: %v", err)
+		t.Fatalf("RPCInfo does not contain interceptors: %v", err)
 	}
 
-	// Verify that the filter received the config.
+	// Verify that first filter receives the config.
 	cfg, err := newStreamChan.Receive(ctx)
 	if err != nil {
-		t.Fatalf("Timeout waiting for filter to receive config: %v", err)
+		t.Fatalf("Timeout waiting for filter 1 to receive config: %v", err)
 	}
 	ofc := cfg.(overallFilterConfig)
-	if ofc.BasePath != "filter-path" {
-		t.Fatalf("Unexpected filter config path, got: %q, want: %q", ofc.BasePath, "filter-path")
+	if ofc.BasePath != "filter-path-1" {
+		t.Fatalf("Unexpected filter 1 base path, got: %q, want: %q", ofc.BasePath, "filter-path-1")
+	}
+	if ofc.OverridePath != "override-path-1" {
+		t.Fatalf("Unexpected filter 1 override path, got: %q, want: %q", ofc.OverridePath, "override-path-1")
+	}
+
+	// Verify that second filter receives the base path.
+	cfg, err = newStreamChan.Receive(ctx)
+	if err != nil {
+		t.Fatalf("Timeout waiting for filter 2 to receive config: %v", err)
+	}
+	ofc = cfg.(overallFilterConfig)
+	if ofc.BasePath != "filter-path-2" {
+		t.Fatalf("Unexpected filter 2 base path, got: %q, want: %q", ofc.BasePath, "filter-path-2")
+	}
+	if ofc.OverridePath != "" {
+		t.Fatalf("Unexpected filter 2 override path, got: %q, want: %q", ofc.OverridePath, "")
 	}
 }
