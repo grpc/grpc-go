@@ -41,6 +41,7 @@ import (
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/serviceconfig"
+	estats "google.golang.org/grpc/experimental/stats"
 	"google.golang.org/grpc/stats/opentelemetry"
 
 	"go.opentelemetry.io/otel/attribute"
@@ -108,30 +109,22 @@ func (s) TestPickFirstMetrics(t *testing.T) {
 	}
 
 	// Checking for subchannel metrics as well
-	if got, _ := tmr.Metric("grpc.subchannel.connection_attempts_succeeded"); got != 1 {
-		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.subchannel.connection_attempts_succeeded", got, 1)
-	}
+	waitForInt64Count(ctx, t, tmr, "grpc.subchannel.connection_attempts_succeeded", 1)
 	if got, _ := tmr.Metric("grpc.subchannel.connection_attempts_failed"); got != 0 {
 		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.subchannel.connection_attempts_failed", got, 0)
 	}
 	if got, _ := tmr.Metric("grpc.subchannel.disconnections"); got != 0 {
 		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.subchannel.disconnections", got, 0)
 	}
-	if got, _ := tmr.Metric("grpc.subchannel.open_connections"); got != 1 {
-		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.subchannel.open_connections", got, 1)
-	}
+	waitForInt64UpDownCount(ctx, t, tmr, "grpc.subchannel.open_connections", 1)
 
 	ss.Stop()
 	testutils.AwaitState(ctx, t, cc, connectivity.Idle)
 	if got, _ := tmr.Metric("grpc.lb.pick_first.disconnections"); got != 1 {
 		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.lb.pick_first.disconnections", got, 1)
 	}
-	if got, _ := tmr.Metric("grpc.subchannel.disconnections"); got != 1 {
-		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.subchannel.disconnections", got, 1)
-	}
-	if got, _ := tmr.Metric("grpc.subchannel.open_connections"); got != -1 {
-		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.subchannel.open_connections", got, -1)
-	}
+	waitForInt64Count(ctx, t, tmr, "grpc.subchannel.disconnections", 1)
+	waitForInt64UpDownCount(ctx, t, tmr, "grpc.subchannel.open_connections", -1)
 }
 
 // TestPickFirstMetricsFailure tests the connection attempts failed metric. It
@@ -297,6 +290,7 @@ func metricsDataFromReader(ctx context.Context, reader *metric.ManualReader) map
 	return gotMetrics
 }
 
+<<<<<<< HEAD
 // TestDisconnectLabel tests the disconnect label metric plumbing.
 // Separately, e2e tests are more exhaustive and check for all disconnect reasons.
 func (s) TestDisconnectLabel(t *testing.T) {
@@ -452,4 +446,26 @@ func runDisconnectLabelTest(t *testing.T, wantLabel string, triggerFunc func(*st
 	}
 
 	t.Fatalf("Error waiting for metrics grpc.subchannel.disconnections: %v", ctx.Err())
+}
+
+func waitForInt64Count(ctx context.Context, t *testing.T, tmr *stats.TestMetricsRecorder, name string, want int64) {
+	t.Helper()
+	err := tmr.WaitForInt64Count(ctx, stats.MetricsData{
+		Handle:  &estats.MetricDescriptor{Name: name},
+		IntIncr: want,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func waitForInt64UpDownCount(ctx context.Context, t *testing.T, tmr *stats.TestMetricsRecorder, name string, want int64) {
+	t.Helper()
+	err := tmr.WaitForInt64UpDownCount(ctx, stats.MetricsData{
+		Handle:  &estats.MetricDescriptor{Name: name},
+		IntIncr: want,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 }
