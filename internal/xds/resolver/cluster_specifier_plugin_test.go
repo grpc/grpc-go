@@ -436,7 +436,7 @@ func (s) TestResolverClusterSpecifierPlugin_WithFilters(t *testing.T) {
 
 	// Verify that the interceptor is not nil.
 	if res.Interceptor == nil {
-		t.Fatal("res.Interceptor is nil, want non-nil")
+		t.Fatal("RPCInfo does not contain interceptors list")
 	}
 
 	newStream := func(context.Context, func()) (iresolver.ClientStream, error) {
@@ -445,7 +445,7 @@ func (s) TestResolverClusterSpecifierPlugin_WithFilters(t *testing.T) {
 
 	_, err = res.Interceptor.NewStream(ctx, iresolver.RPCInfo{Method: "/service/method", Context: ctx}, func() {}, newStream)
 	if err != nil {
-		t.Fatalf("RPCInfo does not contain interceptors: %v", err)
+		t.Fatalf("NewStream() failed with error: %v", err)
 	}
 
 	// Verify that first filter receives the config.
