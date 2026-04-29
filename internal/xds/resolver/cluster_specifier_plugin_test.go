@@ -346,7 +346,7 @@ func (s) TestXDSResolverDelayedOnCommittedCSP(t *testing.T) {
 // server, and HTTP filters are configured. The test verifies that the
 // interceptor chain is built for routes matching cluster specifier plugins.
 func (s) TestResolverClusterSpecifierPlugin_WithFilters(t *testing.T) {
-	// Register a custom httpFilter builder for the test.
+	// Register custom httpFilter builders for the test.
 	testFilterTypeURL1 := "test-filter-type-url-1" + uuid.New().String()
 	testFilterTypeURL2 := "test-filter-type-url-2" + uuid.New().String()
 	newStreamChan := testutils.NewChannelWithSize(2)
@@ -451,26 +451,26 @@ func (s) TestResolverClusterSpecifierPlugin_WithFilters(t *testing.T) {
 	// Verify that first filter receives the config.
 	cfg, err := newStreamChan.Receive(ctx)
 	if err != nil {
-		t.Fatalf("Timeout waiting for filter 1 to receive config: %v", err)
+		t.Fatalf("Timeout waiting for first filter to receive config: %v", err)
 	}
 	ofc := cfg.(overallFilterConfig)
 	if ofc.BasePath != "filter-path-1" {
-		t.Fatalf("Unexpected filter 1 base path, got: %q, want: %q", ofc.BasePath, "filter-path-1")
+		t.Fatalf("Unexpected base path for first filter, got: %q, want: %q", ofc.BasePath, "filter-path-1")
 	}
 	if ofc.OverridePath != "override-path-1" {
-		t.Fatalf("Unexpected filter 1 override path, got: %q, want: %q", ofc.OverridePath, "override-path-1")
+		t.Fatalf("Unexpected override path for first filter, got: %q, want: %q", ofc.OverridePath, "override-path-1")
 	}
 
 	// Verify that second filter receives the base path.
 	cfg, err = newStreamChan.Receive(ctx)
 	if err != nil {
-		t.Fatalf("Timeout waiting for filter 2 to receive config: %v", err)
+		t.Fatalf("Timeout waiting for second filter to receive config: %v", err)
 	}
 	ofc = cfg.(overallFilterConfig)
 	if ofc.BasePath != "filter-path-2" {
-		t.Fatalf("Unexpected filter 2 base path, got: %q, want: %q", ofc.BasePath, "filter-path-2")
+		t.Fatalf("Unexpected base path for second filter, got: %q, want: %q", ofc.BasePath, "filter-path-2")
 	}
 	if ofc.OverridePath != "" {
-		t.Fatalf("Unexpected filter 2 override path, got: %q, want: %q", ofc.OverridePath, "")
+		t.Fatalf("Unexpected override path for second filter, got: %q, want: %q", ofc.OverridePath, "")
 	}
 }
