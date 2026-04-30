@@ -19,24 +19,17 @@
 package extproc
 
 import (
-	"fmt"
-	"reflect"
 	"regexp"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/xds/httpfilter"
 	"google.golang.org/grpc/internal/xds/matcher"
-	"google.golang.org/protobuf/types/known/durationpb"
-	"google.golang.org/protobuf/types/known/wrapperspb"
-
-	v3mutationrulespb "github.com/envoyproxy/go-control-plane/envoy/config/common/mutation_rules/v3"
-	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
-	v3procfilterpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/ext_proc/v3"
-	v3matcherpb "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
+	"google.golang.org/grpc/metadata"
 )
 
 const testBaseURI = "base-uri"
@@ -57,25 +50,6 @@ func Test(t *testing.T) {
 }
 
 func (s) TestBuildClientInterceptor(t *testing.T) {
-	origServerConfigFromGrpcService := serverConfigFromGrpcService
-	defer func() { serverConfigFromGrpcService = origServerConfigFromGrpcService }()
-
-	// Mocking serverConfigFromGrpcService to return a test target URI and
-	// insecure creds.
-	serverConfigFromGrpcService = func(grpcService *v3corepb.GrpcService) (serverConfig, error) {
-		if grpcService == nil {
-			return serverConfig{}, nil
-		}
-		if grpcService.GetGoogleGrpc() == nil {
-			return serverConfig{}, fmt.Errorf("missing google_grpc")
-		}
-		return serverConfig{
-			targetURI:          grpcService.GetGoogleGrpc().GetTargetUri(),
-			channelCredentials: insecure.NewCredentials(),
-			initialMetadata:    nil,
-			timeout:            0,
-		}, nil
-	}
 
 	b := builder{}
 	f := b.BuildClientFilter()
@@ -100,75 +74,42 @@ func (s) TestBuildClientInterceptor(t *testing.T) {
 		},
 		{
 			name:     "IncorrectOverrideType",
-			cfg:      baseConfig{config: &v3procfilterpb.ExternalProcessor{}},
+			cfg:      baseConfig{config: interceptorConfig{}},
 			override: incorrectFilterConfig{},
 			wantErr:  "extproc: incorrect override config type provided",
 		},
 		{
-			name: "DeferredCloseTimeoutDefault",
-			cfg: baseConfig{config: &v3procfilterpb.ExternalProcessor{
-				GrpcService: &v3corepb.GrpcService{
-					TargetSpecifier: &v3corepb.GrpcService_GoogleGrpc_{
-						GoogleGrpc: &v3corepb.GrpcService_GoogleGrpc{
-							TargetUri: testBaseURI,
-						},
-					},
-				},
-			}},
-			wantConfig: &interceptorConfig{
-				server: serverConfig{
-					targetURI:          testBaseURI,
-					channelCredentials: insecure.NewCredentials(),
-				},
-				processingModes: processingModes{
-					requestHeaderMode:   modeSend,
-					responseHeaderMode:  modeSend,
-					requestBodyMode:     modeSkip,
-					responseBodyMode:    modeSkip,
-					responseTrailerMode: modeSkip,
-				},
-				deferredCloseTimeout: defaultDeferredCloseTimeout,
-			},
-		},
-		{
 			name: "ConfigUsingOnlyBase",
-			cfg: baseConfig{config: &v3procfilterpb.ExternalProcessor{
-				FailureModeAllow:         true,
-				RequestAttributes:        []string{"attr1"},
-				ResponseAttributes:       []string{"attr2"},
-				ObservabilityMode:        true,
-				DisableImmediateResponse: true,
-				DeferredCloseTimeout:     durationpb.New(10 * time.Second),
-				ProcessingMode: &v3procfilterpb.ProcessingMode{
-					RequestHeaderMode:   v3procfilterpb.ProcessingMode_SEND,
-					ResponseHeaderMode:  v3procfilterpb.ProcessingMode_SKIP,
-					ResponseTrailerMode: v3procfilterpb.ProcessingMode_SEND,
-					RequestBodyMode:     v3procfilterpb.ProcessingMode_GRPC,
-					ResponseBodyMode:    v3procfilterpb.ProcessingMode_NONE,
-				},
-				GrpcService: &v3corepb.GrpcService{
-					TargetSpecifier: &v3corepb.GrpcService_GoogleGrpc_{
-						GoogleGrpc: &v3corepb.GrpcService_GoogleGrpc{
-							TargetUri: testBaseURI,
-						},
+			cfg: baseConfig{
+				config: interceptorConfig{
+					failureModeAllow:         func() *bool { b := true; return &b }(),
+					requestAttributes:        []string{"attr1"},
+					responseAttributes:       []string{"attr2"},
+					observabilityMode:        true,
+					disableImmediateResponse: true,
+					deferredCloseTimeout:     10 * time.Second,
+					processingModes: &processingModes{
+						requestHeaderMode:   modeSend,
+						responseHeaderMode:  modeSkip,
+						responseTrailerMode: modeSend,
+						requestBodyMode:     modeSend,
+						responseBodyMode:    modeSkip,
 					},
-				},
-				ForwardRules: &v3procfilterpb.HeaderForwardingRules{
-					AllowedHeaders: &v3matcherpb.ListStringMatcher{
-						Patterns: []*v3matcherpb.StringMatcher{{
-							MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: "allow-header"},
-						}},
+					server: &serverConfig{
+						targetURI:          testBaseURI,
+						channelCredentials: insecure.NewCredentials(),
 					},
+					mutationRules: headerMutationRules{
+						allowExpr:       regexp.MustCompile("allow-.*"),
+						disallowExpr:    regexp.MustCompile("disallow-.*"),
+						disallowAll:     true,
+						disallowIsError: true,
+					},
+					allowedHeaders: []matcher.StringMatcher{matcher.NewExactStringMatcher("allow-header", false)},
 				},
-				MutationRules: &v3mutationrulespb.HeaderMutationRules{
-					AllowExpression:    &v3matcherpb.RegexMatcher{Regex: "allow-.*"},
-					DisallowExpression: &v3matcherpb.RegexMatcher{Regex: "disallow-.*"},
-					DisallowAll:        wrapperspb.Bool(true),
-					DisallowIsError:    wrapperspb.Bool(true),
-				},
-			}},
+			},
 			wantConfig: &interceptorConfig{
-				failureModeAllow:   true,
+				failureModeAllow:   func() *bool { b := true; return &b }(),
 				requestAttributes:  []string{"attr1"},
 				responseAttributes: []string{"attr2"},
 				mutationRules: headerMutationRules{
@@ -180,14 +121,14 @@ func (s) TestBuildClientInterceptor(t *testing.T) {
 				observabilityMode:        true,
 				disableImmediateResponse: true,
 				deferredCloseTimeout:     10 * time.Second,
-				processingModes: processingModes{
+				processingModes: &processingModes{
 					requestHeaderMode:   modeSend,
 					responseHeaderMode:  modeSkip,
 					responseTrailerMode: modeSend,
 					requestBodyMode:     modeSend,
 					responseBodyMode:    modeSkip,
 				},
-				server: serverConfig{
+				server: &serverConfig{
 					targetURI:          testBaseURI,
 					channelCredentials: insecure.NewCredentials(),
 				},
@@ -196,67 +137,57 @@ func (s) TestBuildClientInterceptor(t *testing.T) {
 		},
 		{
 			name: "ConfigUsingBaseAndOverride",
-			cfg: baseConfig{config: &v3procfilterpb.ExternalProcessor{
-				FailureModeAllow:         false,
-				RequestAttributes:        []string{"base-attr1"},
-				ResponseAttributes:       []string{"base-attr2"},
-				ObservabilityMode:        true,
-				DisableImmediateResponse: true,
-				DeferredCloseTimeout:     durationpb.New(10 * time.Second),
-				ProcessingMode: &v3procfilterpb.ProcessingMode{
-					RequestHeaderMode:   v3procfilterpb.ProcessingMode_SEND,
-					ResponseHeaderMode:  v3procfilterpb.ProcessingMode_SKIP,
-					ResponseTrailerMode: v3procfilterpb.ProcessingMode_SEND,
-					RequestBodyMode:     v3procfilterpb.ProcessingMode_GRPC,
-					ResponseBodyMode:    v3procfilterpb.ProcessingMode_NONE,
+			cfg: baseConfig{
+				config: interceptorConfig{
+					failureModeAllow:         func() *bool { b := false; return &b }(),
+					requestAttributes:        []string{"base-attr1"},
+					responseAttributes:       []string{"base-attr2"},
+					observabilityMode:        true,
+					disableImmediateResponse: true,
+					deferredCloseTimeout:     10 * time.Second,
+					processingModes: &processingModes{
+						requestHeaderMode:   modeSend,
+						responseHeaderMode:  modeSkip,
+						responseTrailerMode: modeSend,
+						requestBodyMode:     modeSend,
+						responseBodyMode:    modeSkip,
+					},
+					server: &serverConfig{
+						targetURI:          testBaseURI,
+						channelCredentials: insecure.NewCredentials(),
+						timeout:            time.Second,
+						initialMetadata:    metadata.MD(metadata.Pairs("key1", "value1")),
+					},
+					mutationRules: headerMutationRules{
+						allowExpr:       regexp.MustCompile("allow-.*"),
+						disallowExpr:    regexp.MustCompile("disallow-.*"),
+						disallowAll:     true,
+						disallowIsError: true,
+					},
+					allowedHeaders:    []matcher.StringMatcher{matcher.NewExactStringMatcher("allow-header", false)},
+					disallowedHeaders: []matcher.StringMatcher{matcher.NewExactStringMatcher("disallow-header", false)},
 				},
-				GrpcService: &v3corepb.GrpcService{
-					TargetSpecifier: &v3corepb.GrpcService_GoogleGrpc_{
-						GoogleGrpc: &v3corepb.GrpcService_GoogleGrpc{
-							TargetUri: testBaseURI,
-						},
+			},
+			override: overrideConfig{
+				config: interceptorConfig{
+					failureModeAllow:   func() *bool { b := true; return &b }(),
+					requestAttributes:  []string{"override-attr1"},
+					responseAttributes: []string{"override-attr2"},
+					processingModes: &processingModes{
+						requestHeaderMode:   modeSkip,
+						responseHeaderMode:  modeSend,
+						responseTrailerMode: modeSkip,
+						requestBodyMode:     modeSkip,
+						responseBodyMode:    modeSend,
+					},
+					server: &serverConfig{
+						targetURI:          "override-uri",
+						channelCredentials: insecure.NewCredentials(),
 					},
 				},
-				ForwardRules: &v3procfilterpb.HeaderForwardingRules{
-					AllowedHeaders: &v3matcherpb.ListStringMatcher{
-						Patterns: []*v3matcherpb.StringMatcher{{
-							MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: "allow-header"},
-						}},
-					},
-					DisallowedHeaders: &v3matcherpb.ListStringMatcher{
-						Patterns: []*v3matcherpb.StringMatcher{{
-							MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: "disallow-header"},
-						}},
-					},
-				},
-				MutationRules: &v3mutationrulespb.HeaderMutationRules{
-					AllowExpression:    &v3matcherpb.RegexMatcher{Regex: "allow-.*"},
-					DisallowExpression: &v3matcherpb.RegexMatcher{Regex: "disallow-.*"},
-					DisallowAll:        wrapperspb.Bool(true),
-					DisallowIsError:    wrapperspb.Bool(true),
-				},
-			}},
-			override: overrideConfig{config: &v3procfilterpb.ExtProcOverrides{
-				FailureModeAllow:   wrapperspb.Bool(true),
-				RequestAttributes:  []string{"override-attr1"},
-				ResponseAttributes: []string{"override-attr2"},
-				ProcessingMode: &v3procfilterpb.ProcessingMode{
-					RequestHeaderMode:   v3procfilterpb.ProcessingMode_SKIP,
-					ResponseHeaderMode:  v3procfilterpb.ProcessingMode_SEND,
-					ResponseTrailerMode: v3procfilterpb.ProcessingMode_SKIP,
-					RequestBodyMode:     v3procfilterpb.ProcessingMode_NONE,
-					ResponseBodyMode:    v3procfilterpb.ProcessingMode_GRPC,
-				},
-				GrpcService: &v3corepb.GrpcService{
-					TargetSpecifier: &v3corepb.GrpcService_GoogleGrpc_{
-						GoogleGrpc: &v3corepb.GrpcService_GoogleGrpc{
-							TargetUri: "override-uri",
-						},
-					},
-				},
-			}},
+			},
 			wantConfig: &interceptorConfig{
-				failureModeAllow:   true,
+				failureModeAllow:   func() *bool { b := true; return &b }(),
 				requestAttributes:  []string{"override-attr1"},
 				responseAttributes: []string{"override-attr2"},
 				mutationRules: headerMutationRules{
@@ -268,25 +199,20 @@ func (s) TestBuildClientInterceptor(t *testing.T) {
 				observabilityMode:        true,
 				disableImmediateResponse: true,
 				deferredCloseTimeout:     10 * time.Second,
-				processingModes: processingModes{
+				processingModes: &processingModes{
 					requestHeaderMode:   modeSkip,
 					responseHeaderMode:  modeSend,
 					responseTrailerMode: modeSkip,
 					requestBodyMode:     modeSkip,
 					responseBodyMode:    modeSend,
 				},
-				server: serverConfig{
+				server: &serverConfig{
 					targetURI:          "override-uri",
 					channelCredentials: insecure.NewCredentials(),
 				},
 				allowedHeaders:    []matcher.StringMatcher{matcher.NewExactStringMatcher("allow-header", false)},
 				disallowedHeaders: []matcher.StringMatcher{matcher.NewExactStringMatcher("disallow-header", false)},
 			},
-		},
-		{
-			name:    "GrpcServiceError",
-			cfg:     baseConfig{config: &v3procfilterpb.ExternalProcessor{GrpcService: &v3corepb.GrpcService{}}},
-			wantErr: "failed to parse gRPC service config",
 		},
 	}
 	for _, tc := range tests {
@@ -300,8 +226,20 @@ func (s) TestBuildClientInterceptor(t *testing.T) {
 				if !ok {
 					t.Fatalf("BuildClientInterceptor() returned %T, want *interceptor", intptr)
 				}
-				if !reflect.DeepEqual(ic.config, tc.wantConfig) {
-					t.Fatalf("Interceptor config = %+v, want %+v", ic.config, tc.wantConfig)
+				cmpOpts := []cmp.Option{
+					cmp.AllowUnexported(interceptorConfig{}, serverConfig{}, processingModes{}, headerMutationRules{}),
+					cmp.Transformer("RegexpToString", func(r *regexp.Regexp) string {
+						if r == nil {
+							return ""
+						}
+						return r.String()
+					}),
+					cmp.Comparer(func(x, y matcher.StringMatcher) bool {
+						return x.Equal(y)
+					}),
+				}
+				if diff := cmp.Diff(ic.config, *tc.wantConfig, cmpOpts...); diff != "" {
+					t.Fatalf("Interceptor config returned unexpected diff (-got +want):\n%s", diff)
 				}
 				intptr.Close()
 				return

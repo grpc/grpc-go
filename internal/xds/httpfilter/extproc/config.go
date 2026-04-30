@@ -19,7 +19,6 @@
 package extproc
 
 import (
-	"fmt"
 	"regexp"
 	"time"
 
@@ -27,21 +26,16 @@ import (
 	"google.golang.org/grpc/internal/xds/httpfilter"
 	"google.golang.org/grpc/internal/xds/matcher"
 	"google.golang.org/grpc/metadata"
-
-	v3procfilterpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/ext_proc/v3"
-	v3matcherpb "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
 )
-
-const defaultDeferredCloseTimeout = 5 * time.Second
 
 type baseConfig struct {
 	httpfilter.FilterConfig
-	config *v3procfilterpb.ExternalProcessor
+	config interceptorConfig
 }
 
 type overrideConfig struct {
 	httpfilter.FilterConfig
-	config *v3procfilterpb.ExtProcOverrides
+	config interceptorConfig
 }
 
 // interceptorConfig contains the configuration for the external processing
@@ -51,14 +45,14 @@ type interceptorConfig struct {
 	// config. If both are set, the override config will be used.
 	//
 	// server is the configuration for the external processing server.
-	server serverConfig
+	server *serverConfig
 	// failureModeAllow specifies the behavior when the RPC to the external
 	// processing server fails. If true, the dataplane PRC will be allowed to
 	// continue. If false, the data plane RPC will be failed with a grpc status
 	// code of UNAVAILABLE.
-	failureModeAllow bool
+	failureModeAllow *bool
 	// processingModes specifies the processing mode for each dataplane event.
-	processingModes processingModes
+	processingModes *processingModes
 	// Attributes to be sent to the external processing server along with the
 	// request and response dataplane events.
 	requestAttributes  []string
@@ -161,125 +155,24 @@ type serverConfig struct {
 // override filter configs. The base config is required and the override config
 // is optional. If a field is set in both the base and override configs, the
 // value from the override config will be used.
-func newInterceptorConfig(base *v3procfilterpb.ExternalProcessor, override *v3procfilterpb.ExtProcOverrides) (*interceptorConfig, error) {
-	ic := &interceptorConfig{
-		failureModeAllow:         base.GetFailureModeAllow(),
-		requestAttributes:        base.GetRequestAttributes(),
-		responseAttributes:       base.GetResponseAttributes(),
-		observabilityMode:        base.GetObservabilityMode(),
-		disableImmediateResponse: base.GetDisableImmediateResponse(),
-	}
-	if base.GetDeferredCloseTimeout() != nil {
-		ic.deferredCloseTimeout = base.GetDeferredCloseTimeout().AsDuration()
-	} else {
-		ic.deferredCloseTimeout = defaultDeferredCloseTimeout
-	}
+func newInterceptorConfig(base, override interceptorConfig) interceptorConfig {
+	ic := base
 
-	var err error
-	if allowed := base.GetForwardRules().GetAllowedHeaders(); allowed != nil {
-		if ic.allowedHeaders, err = convertStringMatchers(allowed.GetPatterns()); err != nil {
-			return nil, fmt.Errorf("invalid allowed header matcher: %v", err)
-		}
-	}
-	if disallowed := base.GetForwardRules().GetDisallowedHeaders(); disallowed != nil {
-		if ic.disallowedHeaders, err = convertStringMatchers(disallowed.GetPatterns()); err != nil {
-			return nil, fmt.Errorf("invalid disallowed header matcher: %v", err)
-		}
-	}
-
-	if mr := base.GetMutationRules(); mr != nil {
-		// Ignoring the error here because we have already verified it when
-		// parsing the proto.
-		if allowexp := mr.GetAllowExpression(); allowexp != nil {
-			ic.mutationRules.allowExpr, _ = regexp.Compile(allowexp.GetRegex())
-		}
-		if disallowexp := mr.GetDisallowExpression(); disallowexp != nil {
-			ic.mutationRules.disallowExpr, _ = regexp.Compile(disallowexp.GetRegex())
-		}
-		ic.mutationRules.disallowAll = mr.GetDisallowAll().GetValue()
-		ic.mutationRules.disallowIsError = mr.GetDisallowIsError().GetValue()
-	}
-	if ic.server, err = serverConfigFromGrpcService(base.GetGrpcService()); err != nil {
-		return nil, fmt.Errorf("failed to parse gRPC service config: %v", err)
-	}
-
-	pm := base.GetProcessingMode()
-	// The default processing mode is to send headers and skip body and
-	// trailers.
-	ic.processingModes.requestHeaderMode = resolveHeaderMode(pm.GetRequestHeaderMode(), modeSend)
-	ic.processingModes.responseHeaderMode = resolveHeaderMode(pm.GetResponseHeaderMode(), modeSend)
-	ic.processingModes.responseTrailerMode = resolveHeaderMode(pm.GetResponseTrailerMode(), modeSkip)
-	ic.processingModes.requestBodyMode = resolveBodyMode(pm.GetRequestBodyMode())
-	ic.processingModes.responseBodyMode = resolveBodyMode(pm.GetResponseBodyMode())
-
-	if override == nil {
-		return ic, nil
-	}
 	// Apply overrides if present.
-	if gs := override.GetGrpcService(); gs != nil {
-		sc, err := serverConfigFromGrpcService(gs)
-		if err != nil {
-			return nil, err
-		}
-		ic.server = sc
+	if override.server != nil {
+		ic.server = override.server
 	}
-	if override.GetFailureModeAllow() != nil {
-		ic.failureModeAllow = override.GetFailureModeAllow().GetValue()
+	if override.failureModeAllow != nil {
+		ic.failureModeAllow = override.failureModeAllow
 	}
-	if override.GetRequestAttributes() != nil {
-		ic.requestAttributes = override.GetRequestAttributes()
+	if override.requestAttributes != nil {
+		ic.requestAttributes = override.requestAttributes
 	}
-	if override.GetResponseAttributes() != nil {
-		ic.responseAttributes = override.GetResponseAttributes()
+	if override.responseAttributes != nil {
+		ic.responseAttributes = override.responseAttributes
 	}
-	if pm := override.GetProcessingMode(); pm != nil {
-		ic.processingModes.requestHeaderMode = resolveHeaderMode(pm.GetRequestHeaderMode(), modeSend)
-		ic.processingModes.responseHeaderMode = resolveHeaderMode(pm.GetResponseHeaderMode(), modeSend)
-		ic.processingModes.responseTrailerMode = resolveHeaderMode(pm.GetResponseTrailerMode(), modeSkip)
-		ic.processingModes.requestBodyMode = resolveBodyMode(pm.GetRequestBodyMode())
-		ic.processingModes.responseBodyMode = resolveBodyMode(pm.GetResponseBodyMode())
+	if override.processingModes != nil {
+		ic.processingModes = override.processingModes
 	}
-	return ic, nil
-}
-
-// convertStringMatchers converts a slice of protobuf StringMatcher messages to
-// a slice of matcher.StringMatcher.
-func convertStringMatchers(patterns []*v3matcherpb.StringMatcher) ([]matcher.StringMatcher, error) {
-	var matchers []matcher.StringMatcher
-	for _, p := range patterns {
-		sm, err := matcher.StringMatcherFromProto(p)
-		if err != nil {
-			return nil, err
-		}
-		matchers = append(matchers, sm)
-	}
-	return matchers, nil
-}
-
-// resolveHeaderMode resolves the processing mode for headers based on the
-// protobuf enum value. If the mode is not set or set to Default, it returns the
-// provided defaultMode.
-func resolveHeaderMode(mode v3procfilterpb.ProcessingMode_HeaderSendMode, defaultMode processingMode) processingMode {
-	switch mode {
-	case v3procfilterpb.ProcessingMode_SEND:
-		return modeSend
-	case v3procfilterpb.ProcessingMode_SKIP:
-		return modeSkip
-	default:
-		return defaultMode
-	}
-}
-
-// resolveBodyMode resolves the processing mode for body based on the protobuf
-// enum value. If the mode is not set (i.e., default), it returns modeSkip, as
-// the default for body is to skip.
-func resolveBodyMode(mode v3procfilterpb.ProcessingMode_BodySendMode) processingMode {
-	switch mode {
-	case v3procfilterpb.ProcessingMode_GRPC:
-		return modeSend
-	case v3procfilterpb.ProcessingMode_NONE:
-		return modeSkip
-	default:
-		return modeSkip
-	}
+	return ic
 }

@@ -26,13 +26,8 @@ import (
 	"google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/xds/httpfilter"
 
-	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3procservicepb "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 )
-
-var serverConfigFromGrpcService = func(*v3corepb.GrpcService) (serverConfig, error) {
-	return serverConfig{}, fmt.Errorf("extproc: serverConfigFromGrpcService not implemented")
-}
 
 type builder struct{}
 
@@ -55,6 +50,7 @@ func (clientFilter) BuildClientInterceptor(cfg, override httpfilter.FilterConfig
 	if !ok {
 		return nil, fmt.Errorf("extproc: incorrect config type provided (%T): %v", cfg, cfg)
 	}
+
 	var ov overrideConfig
 	if override != nil {
 		ov, ok = override.(overrideConfig)
@@ -63,11 +59,9 @@ func (clientFilter) BuildClientInterceptor(cfg, override httpfilter.FilterConfig
 		}
 	}
 
-	config, err := newInterceptorConfig(c.config, ov.config)
-	if err != nil {
-		return nil, fmt.Errorf("extproc: %v", err)
-	}
+	config := newInterceptorConfig(c.config, ov.config)
 
+	// Create a channel to the external processing server.
 	dOpts := []grpc.DialOption{grpc.WithTransportCredentials(config.server.channelCredentials)}
 	for _, creds := range config.server.callCredentials {
 		dOpts = append(dOpts, grpc.WithPerRPCCredentials(creds))
@@ -87,7 +81,7 @@ func (clientFilter) BuildClientInterceptor(cfg, override httpfilter.FilterConfig
 
 type interceptor struct {
 	resolver.ClientInterceptor
-	config    *interceptorConfig
+	config    interceptorConfig
 	extClient v3procservicepb.ExternalProcessorClient
 	cc        *grpc.ClientConn
 }
