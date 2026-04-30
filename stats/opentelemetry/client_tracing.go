@@ -124,19 +124,19 @@ func (h *clientTracingHandler) HandleConn(context.Context, stats.ConnStats) {}
 
 // TagRPC implements per RPC attempt context management for traces.
 func (h *clientTracingHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo) context.Context {
-	ctx, ai := getOrCreateRPCAttemptInfo(ctx)
+	ctx, ri := getOrCreateClientRPCInfo(ctx)
 	ci := getCallInfo(ctx)
 	if ci == nil {
 		logger.Error("context passed into client side stats handler (TagRPC) has no call info")
 		return ctx
 	}
-	ctx = h.traceTagRPC(ctx, ai, info.NameResolutionDelay)
-	return setRPCInfo(ctx, &rpcInfo{ai: ai})
+	ctx = h.traceTagRPC(ctx, ri.ai, info.NameResolutionDelay)
+	return ctx
 }
 
 // HandleRPC handles per RPC tracing implementation.
 func (h *clientTracingHandler) HandleRPC(ctx context.Context, rs stats.RPCStats) {
-	ri := getRPCInfo(ctx)
+	ri := clientRPCInfo(ctx)
 	if ri == nil {
 		logger.Error("ctx passed into client side tracing handler trace event handling has no client attempt data present")
 		return
