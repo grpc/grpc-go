@@ -20,7 +20,6 @@ package test
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -576,8 +575,8 @@ func (s) TestMaxCallAttempts(t *testing.T) {
 				t.Fatalf("client: Recv() = %s, %v; want <nil>, error", got, err)
 			} else if status.Code(err) != codes.Unavailable {
 				t.Fatalf("client: Recv() = _, %v; want _, Unavailable", err)
-			} else if !errors.Is(err, grpc.ErrRetriesExhausted) {
-				t.Fatalf("want: ErrRetriesExhausted, got: %v", err)
+			} else if !strings.Contains(err.Error(), "retries exhausted") {
+				t.Fatalf("want: retries exhausted, got: %v", err)
 			}
 
 			serverMu.Lock()
@@ -910,8 +909,8 @@ func (s) TestNoRetry(t *testing.T) {
 			if status.Code(err) != codes.Unavailable {
 				t.Fatalf("client: Recv() = _, %v; want _, Unavailable", err)
 			}
-			if errors.Is(err, grpc.ErrRetriesExhausted) {
-				t.Fatalf("client: Recv() error matches ErrRetriesExhausted, want not match")
+			if strings.Contains(err.Error(), "retries exhausted") {
+				t.Fatalf("client: EmptyCall() failed with an unexpected 'retries exhausted' error: %v", err)
 			}
 
 			// Test unary RPC
@@ -922,8 +921,9 @@ func (s) TestNoRetry(t *testing.T) {
 			if status.Code(err) != codes.Unavailable {
 				t.Fatalf("client: EmptyCall() = _, %v; want _, Unavailable", err)
 			}
-			if errors.Is(err, grpc.ErrRetriesExhausted) {
-				t.Fatalf("client: EmptyCall() error matches ErrRetriesExhausted, want not match")
+
+			if strings.Contains(err.Error(), "retries exhausted") {
+				t.Fatalf("client: EmptyCall() failed with an unexpected 'retries exhausted' error: %v", err)
 			}
 		})
 	}
