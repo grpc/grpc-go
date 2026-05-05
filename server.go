@@ -149,8 +149,6 @@ type Server struct {
 
 	serverWorkerChannel      chan func()
 	serverWorkerChannelClose func()
-
-	strictPathCheckingLogEmitted atomic.Bool
 }
 
 type serverOptions struct {
