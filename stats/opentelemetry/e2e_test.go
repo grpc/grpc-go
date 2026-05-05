@@ -2230,7 +2230,7 @@ func (s) TestRelayContextCollisionMetrics(t *testing.T) {
 				return nil, fmt.Errorf("failed to create relay client: %v", err)
 			}
 			defer relayCC.Close()
-			client := testpb.NewTestServiceClient(relayCC)
+			client := testgrpc.NewTestServiceClient(relayCC)
 			_, err = client.EmptyCall(ctx, &testpb.Empty{})
 			if status.Code(err) != codes.Unimplemented {
 				t.Errorf("Expected Unimplemented error, got: %v", err)
@@ -2287,7 +2287,7 @@ func (s) TestRelayContextCollisionTracing(t *testing.T) {
 				return nil, fmt.Errorf("failed to create relay client: %v", err)
 			}
 			defer relayCC.Close()
-			client := testpb.NewTestServiceClient(relayCC)
+			client := testgrpc.NewTestServiceClient(relayCC)
 			_, err = client.EmptyCall(ctx, &testpb.Empty{})
 			if status.Code(err) != codes.Unimplemented {
 				t.Errorf("Expected Unimplemented error, got: %v", err)
