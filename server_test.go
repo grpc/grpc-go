@@ -48,10 +48,10 @@ func errorDesc(err error) string {
 // testing unwrapServerTransportStream.
 type mockServerTransportStream struct{}
 
-func (s *mockServerTransportStream) Method() string                    { return "" }
-func (s *mockServerTransportStream) SetHeader(metadata.MD) error       { return nil }
-func (s *mockServerTransportStream) SendHeader(metadata.MD) error      { return nil }
-func (s *mockServerTransportStream) SetTrailer(metadata.MD) error      { return nil }
+func (s *mockServerTransportStream) Method() string               { return "" }
+func (s *mockServerTransportStream) SetHeader(metadata.MD) error  { return nil }
+func (s *mockServerTransportStream) SendHeader(metadata.MD) error { return nil }
+func (s *mockServerTransportStream) SetTrailer(metadata.MD) error { return nil }
 
 // wrappingStream wraps a ServerTransportStream and implements the Unwrap pattern.
 type wrappingStream struct {
