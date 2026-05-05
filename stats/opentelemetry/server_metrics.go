@@ -82,6 +82,10 @@ func (s *attachLabelsTransportStream) SetHeader(md metadata.MD) error {
 	return s.ServerTransportStream.SetHeader(md)
 }
 
+func (s *attachLabelsTransportStream) Unwrap() grpc.ServerTransportStream {
+	return s.ServerTransportStream
+}
+
 func (s *attachLabelsTransportStream) SendHeader(md metadata.MD) error {
 	if !s.attachedLabels.Swap(true) {
 		s.ServerTransportStream.SetHeader(s.metadataExchangeLabels)
