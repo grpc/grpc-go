@@ -1448,14 +1448,14 @@ func (t *http2Server) socketMetrics() *channelz.EphemeralSocketMetrics {
 func (t *http2Server) incrMsgSent() {
 	if channelz.IsOn() {
 		t.channelz.SocketMetrics.MessagesSent.Add(1)
-		t.channelz.SocketMetrics.LastMessageSentTimestamp.Add(1)
+		t.channelz.SocketMetrics.LastMessageSentTimestamp.Add(time.Now().UnixNano())
 	}
 }
 
 func (t *http2Server) incrMsgRecv() {
 	if channelz.IsOn() {
 		t.channelz.SocketMetrics.MessagesReceived.Add(1)
-		t.channelz.SocketMetrics.LastMessageReceivedTimestamp.Add(1)
+		t.channelz.SocketMetrics.LastMessageReceivedTimestamp.Add(time.Now().UnixNano())
 	}
 }
 
