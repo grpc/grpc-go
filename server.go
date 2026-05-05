@@ -2123,6 +2123,27 @@ func SendHeader(ctx context.Context, md metadata.MD) error {
 	return nil
 }
 
+// unwrapServerTransportStream traverses wrapper layers to find
+// *transport.ServerStream. It uses the Unwrap pattern (similar to errors.Unwrap)
+// to traverse through wrapper types that embed ServerTransportStream.
+// It tracks visited wrappers to prevent infinite loops from buggy
+// implementations that return themselves from Unwrap.
+func unwrapServerTransportStream(s ServerTransportStream) *transport.ServerStream {
+	seen := map[ServerTransportStream]bool{}
+	for s != nil && !seen[s] {
+		if ts, ok := s.(*transport.ServerStream); ok {
+			return ts
+		}
+		seen[s] = true
+		u, ok := s.(interface{ Unwrap() ServerTransportStream })
+		if !ok {
+			return nil
+		}
+		s = u.Unwrap()
+	}
+	return nil
+}
+
 // SetSendCompressor sets a compressor for outbound messages from the server.
 // It must not be called after any event that causes headers to be sent
 // (see ServerStream.SetHeader for the complete list). Provided compressor is
@@ -2147,8 +2168,8 @@ func SendHeader(ctx context.Context, md metadata.MD) error {
 // Notice: This function is EXPERIMENTAL and may be changed or removed in a
 // later release.
 func SetSendCompressor(ctx context.Context, name string) error {
-	stream, ok := ServerTransportStreamFromContext(ctx).(*transport.ServerStream)
-	if !ok || stream == nil {
+	stream := unwrapServerTransportStream(ServerTransportStreamFromContext(ctx))
+	if stream == nil {
 		return fmt.Errorf("failed to fetch the stream from the given context")
 	}
 
@@ -2169,8 +2190,8 @@ func SetSendCompressor(ctx context.Context, name string) error {
 // Notice: This function is EXPERIMENTAL and may be changed or removed in a
 // later release.
 func ClientSupportedCompressors(ctx context.Context) ([]string, error) {
-	stream, ok := ServerTransportStreamFromContext(ctx).(*transport.ServerStream)
-	if !ok || stream == nil {
+	stream := unwrapServerTransportStream(ServerTransportStreamFromContext(ctx))
+	if stream == nil {
 		return nil, fmt.Errorf("failed to fetch the stream from the given context %v", ctx)
 	}
 
