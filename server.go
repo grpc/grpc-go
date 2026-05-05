@@ -42,7 +42,6 @@ import (
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/binarylog"
 	"google.golang.org/grpc/internal/channelz"
-	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/grpcutil"
 	istats "google.golang.org/grpc/internal/stats"
@@ -1802,25 +1801,11 @@ func (s *Server) handleStream(t transport.ServerTransport, stream *transport.Ser
 	}
 
 	sm := stream.Method()
-	if sm == "" {
+	if sm == "" || sm[0] != '/' {
 		s.handleMalformedMethodName(stream, ti)
 		return
 	}
-	if sm[0] != '/' {
-		if envconfig.DisableStrictPathChecking {
-			if old := s.strictPathCheckingLogEmitted.Swap(true); !old {
-				channelz.Warningf(logger, s.channelz, "grpc: Server.handleStream received malformed method name %q. Allowing it because the environment variable GRPC_GO_EXPERIMENTAL_DISABLE_STRICT_PATH_CHECKING is set to true, but this option will be removed in a future release. See https://github.com/grpc/grpc-go/security/advisories/GHSA-p77j-4mvh-x3m3 for more information.", sm)
-			}
-		} else {
-			if old := s.strictPathCheckingLogEmitted.Swap(true); !old {
-				channelz.Warningf(logger, s.channelz, "grpc: Server.handleStream rejected malformed method name %q. To temporarily allow such requests, set the environment variable GRPC_GO_EXPERIMENTAL_DISABLE_STRICT_PATH_CHECKING to true. Note that this is not recommended as it may allow requests to bypass security policies. See https://github.com/grpc/grpc-go/security/advisories/GHSA-p77j-4mvh-x3m3 for more information.", sm)
-			}
-			s.handleMalformedMethodName(stream, ti)
-			return
-		}
-	} else {
-		sm = sm[1:]
-	}
+	sm = sm[1:]
 	pos := strings.LastIndex(sm, "/")
 	if pos == -1 {
 		s.handleMalformedMethodName(stream, ti)
