@@ -25,6 +25,7 @@ import (
 
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/xds/httpfilter"
+	"google.golang.org/grpc/internal/xds/matcher"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 
@@ -62,31 +63,6 @@ func validateBodyProcessingMode(mode *v3procfilterpb.ProcessingMode) error {
 	return nil
 }
 
-func validateServerConfig(cfg *httpfilter.ServerConfig) error {
-	// TODO(https://github.com/grpc/grpc-go/issues/8747): Once we have a common
-	// way to validate a target URI, switch to that.
-	if cfg.TargetURI == "" {
-		return fmt.Errorf("extproc: targetURI must be a non-empty string")
-	}
-	if cfg.ChannelCredentials == nil {
-		return fmt.Errorf("extproc: channelCredentials must be non-nil")
-	}
-	if cfg.Timeout < 0 {
-		return fmt.Errorf("extproc: timeout must be non-negative")
-	}
-	for k, vals := range cfg.InitialMetadata {
-		if len(k) == 0 || len(k) >= 16384 {
-			return fmt.Errorf("extproc: initialMetadata key %q has invalid length %d; must be in range [1, 16384)", k, len(k))
-		}
-		for _, v := range vals {
-			if len(v) >= 16384 {
-				return fmt.Errorf("extproc: initialMetadata value for key %q has invalid length %d; must be less than 16384", k, len(v))
-			}
-		}
-	}
-	return nil
-}
-
 func (builder) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("extproc: nil base configuration message provided")
@@ -105,52 +81,48 @@ func (builder) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, er
 	if err := validateBodyProcessingMode(msg.GetProcessingMode()); err != nil {
 		return nil, err
 	}
+
+	if msg.GetGrpcService() == nil {
+		return nil, fmt.Errorf("extproc: empty grpc_service provided in config %v", cfg)
+	}
+	server, err := serverConfigFromGrpcService(msg.GetGrpcService())
+	if err != nil {
+		return nil, fmt.Errorf("extproc: %v", err)
+	}
+
+	mr, err := httpfilter.HeaderMutationRulesFromProto(msg.GetMutationRules())
+	if err != nil {
+		return nil, err
+	}
+
+	var allowedHeaders, disallowedHeaders []matcher.StringMatcher
+	if allowed := msg.GetForwardRules().GetAllowedHeaders(); allowed != nil {
+		allowedHeaders, err = httpfilter.ConvertStringMatchers(allowed.GetPatterns())
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if disallowed := msg.GetForwardRules().GetDisallowedHeaders(); disallowed != nil {
+		disallowedHeaders, err = httpfilter.ConvertStringMatchers(disallowed.GetPatterns())
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	failureModeAllow := msg.GetFailureModeAllow()
+
 	iCfg := interceptorConfig{
 		processingModes:          processingModesFromProto(msg.GetProcessingMode()),
 		requestAttributes:        msg.GetRequestAttributes(),
 		responseAttributes:       msg.GetResponseAttributes(),
 		disableImmediateResponse: msg.GetDisableImmediateResponse(),
 		observabilityMode:        msg.GetObservabilityMode(),
-	}
-
-	failureModeAllow := msg.GetFailureModeAllow()
-	iCfg.failureModeAllow = &failureModeAllow
-
-	if msg.GetGrpcService() == nil {
-		return nil, fmt.Errorf("extproc: empty grpc_service provided in config %v", cfg)
-	}
-	if msg.GetGrpcService().GetGoogleGrpc() == nil {
-		return nil, fmt.Errorf("extproc: only google_grpc grpc_service is supported, got %v in config %v", msg.GrpcService.GetTargetSpecifier(), cfg)
-	}
-	server, err := serverConfigFromGrpcService(msg.GetGrpcService())
-	if err != nil {
-		return nil, err
-	}
-	if err := validateServerConfig(server); err != nil {
-		return nil, err
-	}
-	iCfg.server = server
-
-	mr, err := httpfilter.HeaderMutationRulesFromProto(msg.GetMutationRules())
-	if err != nil {
-		return nil, err
-	}
-	iCfg.mutationRules = mr
-
-	if allowed := msg.GetForwardRules().GetAllowedHeaders(); allowed != nil {
-		allowedHeaders, err := httpfilter.ConvertStringMatchers(allowed.GetPatterns())
-		if err != nil {
-			return nil, err
-		}
-		iCfg.allowedHeaders = allowedHeaders
-	}
-
-	if disallowed := msg.GetForwardRules().GetDisallowedHeaders(); disallowed != nil {
-		disallowedHeaders, err := httpfilter.ConvertStringMatchers(disallowed.GetPatterns())
-		if err != nil {
-			return nil, err
-		}
-		iCfg.disallowedHeaders = disallowedHeaders
+		failureModeAllow:         &failureModeAllow,
+		server:                   server,
+		mutationRules:            mr,
+		allowedHeaders:           allowedHeaders,
+		disallowedHeaders:        disallowedHeaders,
 	}
 
 	if msg.GetDeferredCloseTimeout() != nil {
@@ -181,26 +153,20 @@ func (builder) ParseFilterConfigOverride(ov proto.Message) (httpfilter.FilterCon
 			return nil, err
 		}
 	}
+
+	var server *httpfilter.ServerConfig
+	var err error
+	if override.GetGrpcService() != nil {
+		server, err = serverConfigFromGrpcService(override.GetGrpcService())
+		if err != nil {
+			return nil, err
+		}
+	}
 	iCfg := interceptorConfig{
 		processingModes:    processingModesFromProto(override.GetProcessingMode()),
 		requestAttributes:  override.GetRequestAttributes(),
 		responseAttributes: override.GetResponseAttributes(),
-	}
-
-	if override.GetGrpcService() != nil {
-		// GrpcService can be optionally provided in the override config. If
-		// provided, it must be of type google_grpc.
-		if override.GrpcService.GetGoogleGrpc() == nil {
-			return nil, fmt.Errorf("extproc: only google_grpc grpc_service is supported, got %v in override %v", override.GrpcService.GetTargetSpecifier(), override)
-		}
-		server, err := serverConfigFromGrpcService(override.GetGrpcService())
-		if err != nil {
-			return nil, err
-		}
-		if err := validateServerConfig(server); err != nil {
-			return nil, err
-		}
-		iCfg.server = server
+		server:             server,
 	}
 
 	return overrideConfig{config: iCfg}, nil

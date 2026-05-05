@@ -20,6 +20,7 @@ package extproc
 
 import (
 	"encoding/json"
+	"fmt"
 	"regexp"
 	"strings"
 	"testing"
@@ -54,6 +55,13 @@ func (s) TestParseFilterConfig(t *testing.T) {
 		if grpcService == nil {
 			return nil, nil
 		}
+		if grpcService.GetGoogleGrpc() == nil {
+			return nil, fmt.Errorf("only google_grpc grpc_service is supported")
+		}
+		if grpcService.GetGoogleGrpc().GetTargetUri() == "" {
+			return nil, fmt.Errorf("targetURI must be a non-empty string")
+		}
+
 		sc := &httpfilter.ServerConfig{
 			TargetURI:          grpcService.GetGoogleGrpc().GetTargetUri(),
 			ChannelCredentials: jsonBytes,
@@ -342,23 +350,6 @@ func (s) TestParseFilterConfig(t *testing.T) {
 			wantErr: "extproc: targetURI must be a non-empty string",
 		},
 		{
-			name: "ErrInvalidServerConfig_NilCredentials",
-			cfg: func() proto.Message {
-				m, _ := anypb.New(&fpb.ExternalProcessor{
-					GrpcService: &corepb.GrpcService{
-						TargetSpecifier: &corepb.GrpcService_GoogleGrpc_{
-							GoogleGrpc: &corepb.GrpcService_GoogleGrpc{
-								TargetUri: "nil-creds",
-							},
-						},
-					},
-					ProcessingMode: &fpb.ProcessingMode{},
-				})
-				return m
-			}(),
-			wantErr: "extproc: channelCredentials must be non-nil",
-		},
-		{
 			name:    "ErrNilConfig",
 			cfg:     nil,
 			wantErr: "extproc: nil base configuration message provided",
@@ -439,26 +430,6 @@ func (s) TestParseFilterConfigOverride(t *testing.T) {
 					},
 				},
 			},
-		},
-		{
-			name: "ErrUnsupportedGrpcService_EnvoyGrpc",
-			override: func() proto.Message {
-				m, _ := anypb.New(&fpb.ExtProcPerRoute{
-					Override: &fpb.ExtProcPerRoute_Overrides{
-						Overrides: &fpb.ExtProcOverrides{
-							GrpcService: &corepb.GrpcService{
-								TargetSpecifier: &corepb.GrpcService_EnvoyGrpc_{
-									EnvoyGrpc: &corepb.GrpcService_EnvoyGrpc{
-										ClusterName: "cluster",
-									},
-								},
-							},
-						},
-					},
-				})
-				return m
-			}(),
-			wantErr: "extproc: only google_grpc grpc_service is supported",
 		},
 		{
 			name: "ErrInvalidProcessingMode_RequestBodyStreamed",
