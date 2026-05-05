@@ -33,6 +33,17 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+type emptyServiceServer any
+
+type testServer struct{}
+
+func errorDesc(err error) string {
+	if s, ok := status.FromError(err); ok {
+		return s.Message()
+	}
+	return err.Error()
+}
+
 // mockServerTransportStream is a mock implementing ServerTransportStream for
 // testing unwrapServerTransportStream.
 type mockServerTransportStream struct{}
@@ -49,6 +60,16 @@ type wrappingStream struct {
 
 func (w *wrappingStream) Unwrap() ServerTransportStream {
 	return w.ServerTransportStream
+}
+
+// selfWrappingStream is a buggy wrapper that returns itself from Unwrap(),
+// used to test cycle protection.
+type selfWrappingStream struct {
+	ServerTransportStream
+}
+
+func (w *selfWrappingStream) Unwrap() ServerTransportStream {
+	return w
 }
 
 func (s) TestUnwrapServerTransportStream(t *testing.T) {
@@ -90,24 +111,14 @@ func (s) TestUnwrapServerTransportStream(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := unwrapServerTransportStream(tt.s)
-			if got != tt.want {
-				t.Errorf("unwrapServerTransportStream() = %v, want %v", got, tt.want)
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got := unwrapServerTransportStream(test.s)
+			if got != test.want {
+				t.Errorf("unwrapServerTransportStream() = %v, want %v", got, test.want)
 			}
 		})
 	}
-}
-
-// selfWrappingStream is a buggy wrapper that returns itself from Unwrap(),
-// used to test cycle protection.
-type selfWrappingStream struct {
-	ServerTransportStream
-}
-
-func (w *selfWrappingStream) Unwrap() ServerTransportStream {
-	return w
 }
 
 func (s) TestUnwrapServerTransportStreamCycleProtection(t *testing.T) {
@@ -121,13 +132,15 @@ func (s) TestClientSupportedCompressorsWithWrappedContext(t *testing.T) {
 	ts := &transport.ServerStream{}
 	// Put the transport stream into context wrapped by a layer, simulating
 	// what the OpenTelemetry plugin does.
-	ctx := NewContextWithServerTransportStream(context.Background(), &wrappingStream{
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	ctx = NewContextWithServerTransportStream(ctx, &wrappingStream{
 		ServerTransportStream: ts,
 	})
 
 	compressors, err := ClientSupportedCompressors(ctx)
 	if err != nil {
-		t.Fatalf("ClientSupportedCompressors() with wrapped context returned unexpected error: %v", err)
+		t.Fatalf("ClientSupportedCompressors() returned error: %v", err)
 	}
 	// A zero-value ServerStream has an empty clientAdvertisedCompressors
 	// field, so ClientAdvertisedCompressors() returns [""].
@@ -138,26 +151,17 @@ func (s) TestClientSupportedCompressorsWithWrappedContext(t *testing.T) {
 
 func (s) TestSetSendCompressorWithWrappedContext(t *testing.T) {
 	ts := &transport.ServerStream{}
-	ctx := NewContextWithServerTransportStream(context.Background(), &wrappingStream{
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	ctx = NewContextWithServerTransportStream(ctx, &wrappingStream{
 		ServerTransportStream: ts,
 	})
 
 	// "identity" is always valid (skips compressor registration and client
 	// advertised check), so it exercises the full unwrap + SetSendCompress path.
 	if err := SetSendCompressor(ctx, "identity"); err != nil {
-		t.Fatalf("SetSendCompressor() with wrapped context returned unexpected error: %v", err)
+		t.Fatalf("SetSendCompressor() returned error: %v", err)
 	}
-}
-
-type emptyServiceServer any
-
-type testServer struct{}
-
-func errorDesc(err error) string {
-	if s, ok := status.FromError(err); ok {
-		return s.Message()
-	}
-	return err.Error()
 }
 
 func (s) TestStopBeforeServe(t *testing.T) {
