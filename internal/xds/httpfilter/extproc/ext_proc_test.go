@@ -19,6 +19,7 @@
 package extproc
 
 import (
+	"encoding/json"
 	"regexp"
 	"strings"
 	"testing"
@@ -48,18 +49,18 @@ func Test(t *testing.T) {
 func (s) TestParseFilterConfig(t *testing.T) {
 	origServerConfigFromGrpcService := serverConfigFromGrpcService
 	defer func() { serverConfigFromGrpcService = origServerConfigFromGrpcService }()
-
-	serverConfigFromGrpcService = func(grpcService *corepb.GrpcService) (*serverConfig, error) {
+	jsonBytes, _ := json.Marshal(insecure.NewCredentials())
+	serverConfigFromGrpcService = func(grpcService *corepb.GrpcService) (*httpfilter.ServerConfig, error) {
 		if grpcService == nil {
 			return nil, nil
 		}
-		sc := &serverConfig{
-			targetURI:          grpcService.GetGoogleGrpc().GetTargetUri(),
-			channelCredentials: insecure.NewCredentials(),
-			callCredentials:    nil,
+		sc := &httpfilter.ServerConfig{
+			TargetURI:          grpcService.GetGoogleGrpc().GetTargetUri(),
+			ChannelCredentials: jsonBytes,
+			CallCredentials:    nil,
 		}
-		if sc.targetURI == "nil-creds" {
-			sc.channelCredentials = nil
+		if sc.TargetURI == "nil-creds" {
+			sc.ChannelCredentials = nil
 		}
 		return sc, nil
 	}
@@ -89,9 +90,9 @@ func (s) TestParseFilterConfig(t *testing.T) {
 			}(),
 			wantCfg: baseConfig{
 				config: interceptorConfig{
-					server: &serverConfig{
-						targetURI:          "localhost:1234",
-						channelCredentials: insecure.NewCredentials(),
+					server: &httpfilter.ServerConfig{
+						TargetURI:          "localhost:1234",
+						ChannelCredentials: jsonBytes,
 					},
 					processingModes: &processingModes{
 						requestHeaderMode:   modeSend,
@@ -125,9 +126,9 @@ func (s) TestParseFilterConfig(t *testing.T) {
 			}(),
 			wantCfg: baseConfig{
 				config: interceptorConfig{
-					server: &serverConfig{
-						targetURI:          "localhost:1234",
-						channelCredentials: insecure.NewCredentials(),
+					server: &httpfilter.ServerConfig{
+						TargetURI:          "localhost:1234",
+						ChannelCredentials: jsonBytes,
 					},
 					processingModes: &processingModes{
 						requestHeaderMode:   modeSend,
@@ -162,9 +163,9 @@ func (s) TestParseFilterConfig(t *testing.T) {
 			}(),
 			wantCfg: baseConfig{
 				config: interceptorConfig{
-					server: &serverConfig{
-						targetURI:          "localhost:1234",
-						channelCredentials: insecure.NewCredentials(),
+					server: &httpfilter.ServerConfig{
+						TargetURI:          "localhost:1234",
+						ChannelCredentials: jsonBytes,
 					},
 					processingModes: &processingModes{
 						requestHeaderMode:   modeSend,
@@ -174,9 +175,9 @@ func (s) TestParseFilterConfig(t *testing.T) {
 						responseBodyMode:    modeSkip,
 					},
 					failureModeAllow: new(bool),
-					mutationRules: headerMutationRules{
-						allowExpr:    regexp.MustCompile(".*"),
-						disallowExpr: regexp.MustCompile("a"),
+					mutationRules: httpfilter.HeaderMutationRules{
+						AllowExpr:    regexp.MustCompile(".*"),
+						DisallowExpr: regexp.MustCompile("a"),
 					},
 					deferredCloseTimeout: defaultDeferredCloseTimeout,
 				},
@@ -379,7 +380,7 @@ func (s) TestParseFilterConfig(t *testing.T) {
 				if err != nil {
 					t.Fatalf("ParseFilterConfig() returned unexpected error: %v", err)
 				}
-				if diff := cmp.Diff(got, tt.wantCfg, cmp.AllowUnexported(baseConfig{}, interceptorConfig{}, serverConfig{}, processingModes{}, headerMutationRules{}), protocmp.Transform(), cmp.Transformer("RegexpToString", func(r *regexp.Regexp) string {
+				if diff := cmp.Diff(got, tt.wantCfg, cmp.AllowUnexported(baseConfig{}, interceptorConfig{}, httpfilter.ServerConfig{}, processingModes{}, httpfilter.HeaderMutationRules{}), protocmp.Transform(), cmp.Transformer("RegexpToString", func(r *regexp.Regexp) string {
 					if r == nil {
 						return ""
 					}
@@ -513,7 +514,7 @@ func (s) TestParseFilterConfigOverride(t *testing.T) {
 				if err != nil {
 					t.Fatalf("ParseFilterConfigOverride() returned unexpected error: %v", err)
 				}
-				if diff := cmp.Diff(got, tt.wantOverrideCfg, cmp.AllowUnexported(overrideConfig{}, interceptorConfig{}, serverConfig{}, processingModes{}, headerMutationRules{}), protocmp.Transform(), cmp.Transformer("RegexpToString", func(r *regexp.Regexp) string {
+				if diff := cmp.Diff(got, tt.wantOverrideCfg, cmp.AllowUnexported(overrideConfig{}, interceptorConfig{}, httpfilter.ServerConfig{}, processingModes{}, httpfilter.HeaderMutationRules{}), protocmp.Transform(), cmp.Transformer("RegexpToString", func(r *regexp.Regexp) string {
 					if r == nil {
 						return ""
 					}

@@ -38,7 +38,7 @@ func init() {
 	}
 }
 
-var serverConfigFromGrpcService = func(*v3corepb.GrpcService) (*serverConfig, error) {
+var serverConfigFromGrpcService = func(*v3corepb.GrpcService) (*httpfilter.ServerConfig, error) {
 	return nil, fmt.Errorf("extproc: serverConfigFromGrpcService not implemented")
 }
 
@@ -62,19 +62,19 @@ func validateBodyProcessingMode(mode *v3procfilterpb.ProcessingMode) error {
 	return nil
 }
 
-func validateServerConfig(cfg *serverConfig) error {
+func validateServerConfig(cfg *httpfilter.ServerConfig) error {
 	// TODO(https://github.com/grpc/grpc-go/issues/8747): Once we have a common
 	// way to validate a target URI, switch to that.
-	if cfg.targetURI == "" {
+	if cfg.TargetURI == "" {
 		return fmt.Errorf("extproc: targetURI must be a non-empty string")
 	}
-	if cfg.channelCredentials == nil {
+	if cfg.ChannelCredentials == nil {
 		return fmt.Errorf("extproc: channelCredentials must be non-nil")
 	}
-	if cfg.timeout < 0 {
+	if cfg.Timeout < 0 {
 		return fmt.Errorf("extproc: timeout must be non-negative")
 	}
-	for k, vals := range cfg.initialMetadata {
+	for k, vals := range cfg.InitialMetadata {
 		if len(k) == 0 || len(k) >= 16384 {
 			return fmt.Errorf("extproc: initialMetadata key %q has invalid length %d; must be in range [1, 16384)", k, len(k))
 		}
@@ -131,14 +131,14 @@ func (builder) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, er
 	}
 	iCfg.server = server
 
-	mr, err := headerMutationRulesFromProto(msg.GetMutationRules())
+	mr, err := httpfilter.HeaderMutationRulesFromProto(msg.GetMutationRules())
 	if err != nil {
 		return nil, err
 	}
 	iCfg.mutationRules = mr
 
 	if allowed := msg.GetForwardRules().GetAllowedHeaders(); allowed != nil {
-		allowedHeaders, err := convertStringMatchers(allowed.GetPatterns())
+		allowedHeaders, err := httpfilter.ConvertStringMatchers(allowed.GetPatterns())
 		if err != nil {
 			return nil, err
 		}
@@ -146,7 +146,7 @@ func (builder) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, er
 	}
 
 	if disallowed := msg.GetForwardRules().GetDisallowedHeaders(); disallowed != nil {
-		disallowedHeaders, err := convertStringMatchers(disallowed.GetPatterns())
+		disallowedHeaders, err := httpfilter.ConvertStringMatchers(disallowed.GetPatterns())
 		if err != nil {
 			return nil, err
 		}
