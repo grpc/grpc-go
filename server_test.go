@@ -29,8 +29,125 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/internal/transport"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
+
+// mockServerTransportStream is a mock implementing ServerTransportStream for
+// testing unwrapServerTransportStream.
+type mockServerTransportStream struct{}
+
+func (s *mockServerTransportStream) Method() string                    { return "" }
+func (s *mockServerTransportStream) SetHeader(metadata.MD) error       { return nil }
+func (s *mockServerTransportStream) SendHeader(metadata.MD) error      { return nil }
+func (s *mockServerTransportStream) SetTrailer(metadata.MD) error      { return nil }
+
+// wrappingStream wraps a ServerTransportStream and implements the Unwrap pattern.
+type wrappingStream struct {
+	ServerTransportStream
+}
+
+func (w *wrappingStream) Unwrap() ServerTransportStream {
+	return w.ServerTransportStream
+}
+
+func (s) TestUnwrapServerTransportStream(t *testing.T) {
+	ts := &transport.ServerStream{}
+
+	tests := []struct {
+		name string
+		s    ServerTransportStream
+		want *transport.ServerStream
+	}{
+		{
+			name: "direct transport.ServerStream",
+			s:    ts,
+			want: ts,
+		},
+		{
+			name: "single wrapper",
+			s:    &wrappingStream{ServerTransportStream: ts},
+			want: ts,
+		},
+		{
+			name: "nested wrappers",
+			s: &wrappingStream{
+				ServerTransportStream: &wrappingStream{
+					ServerTransportStream: ts,
+				},
+			},
+			want: ts,
+		},
+		{
+			name: "no Unwrap method",
+			s:    &mockServerTransportStream{},
+			want: nil,
+		},
+		{
+			name: "nil input",
+			s:    nil,
+			want: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := unwrapServerTransportStream(tt.s)
+			if got != tt.want {
+				t.Errorf("unwrapServerTransportStream() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// selfWrappingStream is a buggy wrapper that returns itself from Unwrap(),
+// used to test cycle protection.
+type selfWrappingStream struct {
+	ServerTransportStream
+}
+
+func (w *selfWrappingStream) Unwrap() ServerTransportStream {
+	return w
+}
+
+func (s) TestUnwrapServerTransportStreamCycleProtection(t *testing.T) {
+	got := unwrapServerTransportStream(&selfWrappingStream{})
+	if got != nil {
+		t.Errorf("unwrapServerTransportStream() with cycle = %v, want nil", got)
+	}
+}
+
+func (s) TestClientSupportedCompressorsWithWrappedContext(t *testing.T) {
+	ts := &transport.ServerStream{}
+	// Put the transport stream into context wrapped by a layer, simulating
+	// what the OpenTelemetry plugin does.
+	ctx := NewContextWithServerTransportStream(context.Background(), &wrappingStream{
+		ServerTransportStream: ts,
+	})
+
+	compressors, err := ClientSupportedCompressors(ctx)
+	if err != nil {
+		t.Fatalf("ClientSupportedCompressors() with wrapped context returned unexpected error: %v", err)
+	}
+	// A zero-value ServerStream has an empty clientAdvertisedCompressors
+	// field, so ClientAdvertisedCompressors() returns [""].
+	if len(compressors) != 1 || compressors[0] != "" {
+		t.Errorf("ClientSupportedCompressors() = %v, want [\"\"]", compressors)
+	}
+}
+
+func (s) TestSetSendCompressorWithWrappedContext(t *testing.T) {
+	ts := &transport.ServerStream{}
+	ctx := NewContextWithServerTransportStream(context.Background(), &wrappingStream{
+		ServerTransportStream: ts,
+	})
+
+	// "identity" is always valid (skips compressor registration and client
+	// advertised check), so it exercises the full unwrap + SetSendCompress path.
+	if err := SetSendCompressor(ctx, "identity"); err != nil {
+		t.Fatalf("SetSendCompressor() with wrapped context returned unexpected error: %v", err)
+	}
+}
 
 type emptyServiceServer any
 
