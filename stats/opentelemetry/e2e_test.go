@@ -1412,7 +1412,6 @@ const delayedResolutionEventName = "Delayed name resolution complete"
 type testCCWrapper struct {
 	balancer.ClientConn
 	pickInvoked *grpcsync.Event
-	ctx         context.Context
 }
 
 func (t *testCCWrapper) UpdateState(state balancer.State) {
@@ -1424,11 +1423,8 @@ func (t *testCCWrapper) UpdateState(state balancer.State) {
 	// at least once. This ensures the "Delayed LB pick complete" condition.
 	if state.ConnectivityState == connectivity.Ready {
 		go func() {
-			select {
-			case <-t.pickInvoked.Done():
-				t.ClientConn.UpdateState(state)
-			case <-t.ctx.Done():
-			}
+			<-t.pickInvoked.Done()
+			t.ClientConn.UpdateState(state)
 		}()
 		return
 	}
@@ -1449,29 +1445,24 @@ func (p *blockingPicker) Pick(info balancer.PickInfo) (balancer.PickResult, erro
 // pick_first. It wraps the ClientConn to intercept state updates and wraps
 // the picker to detect calls to Pick. This guarantees the "Delayed LB pick
 // complete" event is emitted reliably.
-func registerBlockingBalancer(ctx context.Context, t *testing.T, balancerName string) {
+func registerBlockingBalancer(t *testing.T, balancerName string) {
 	t.Helper()
 	stub.Register(balancerName, stub.BalancerFuncs{
 		Init: func(bd *stub.BalancerData) {
 			cc := &testCCWrapper{
 				ClientConn:  bd.ClientConn,
 				pickInvoked: grpcsync.NewEvent(),
-				ctx:         ctx,
 			}
 			bd.ChildBalancer = balancer.Get(pickfirst.Name).Build(cc, bd.BuildOptions)
 		},
 		Close: func(bd *stub.BalancerData) {
-			if bd.ChildBalancer != nil {
-				bd.ChildBalancer.Close()
-			}
+			bd.ChildBalancer.Close()
 		},
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
 			return bd.ChildBalancer.UpdateClientConnState(ccs)
 		},
 		ExitIdle: func(bd *stub.BalancerData) {
-			if bd.ChildBalancer != nil {
-				bd.ChildBalancer.ExitIdle()
-			}
+			bd.ChildBalancer.ExitIdle()
 		},
 	})
 }
@@ -1812,7 +1803,7 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 			defer func() { internal.NewStreamWaitingForResolver = prevHook }()
 
 			blockingBalancerName := "test_blocking_balancer"
-			registerBlockingBalancer(ctx, t, blockingBalancerName)
+			registerBlockingBalancer(t, blockingBalancerName)
 
 			mo, _ := defaultMetricsOptions(t, nil)
 			to, exporter := defaultTraceOptions(t)
