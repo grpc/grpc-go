@@ -6896,7 +6896,6 @@ data: "hello"`,
 
 			client := testgrpc.NewTestServiceClient(cc)
 			_, err = client.EmptyCall(ctx, &testpb.Empty{})
-
 			if err == nil {
 				t.Fatalf("EmptyCall() = nil; want non-nil error due to non-gRPC response")
 			}
