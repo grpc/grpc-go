@@ -6821,7 +6821,7 @@ func (s) TestHTTPServerSendsNonGRPCHeaderSurfaceFurtherData(t *testing.T) {
 				},
 			},
 			wantCode: codes.Unknown,
-			wantErr: `rpc error: code = Unknown desc = unexpected HTTP status code received from server: 200 (OK); transport: received unexpected content-type "text/html"
+			wantErr: `unexpected HTTP status code received from server: 200 (OK); transport: received unexpected content-type "text/html"
 data: ""`,
 		},
 		{
@@ -6838,7 +6838,7 @@ data: ""`,
 				},
 			},
 			wantCode: codes.Unknown,
-			wantErr: `rpc error: code = Unknown desc = unexpected HTTP status code received from server: 200 (OK); transport: received unexpected content-type "text/html"
+			wantErr: `unexpected HTTP status code received from server: 200 (OK); transport: received unexpected content-type "text/html"
 data: "<html><body>Hello World</body></html>"`,
 		},
 		{
@@ -6855,7 +6855,7 @@ data: "<html><body>Hello World</body></html>"`,
 				},
 			},
 			wantCode: codes.Unknown,
-			wantErr: `rpc error: code = Unknown desc = unexpected HTTP status code received from server: 200 (OK); transport: received unexpected content-type "text/html"
+			wantErr: `unexpected HTTP status code received from server: 200 (OK); transport: received unexpected content-type "text/html"
 data: ` + strconv.Quote(strings.Repeat("a", nonGRPCDataMaxLen)),
 		},
 		{
@@ -6869,7 +6869,7 @@ data: ` + strconv.Quote(strings.Repeat("a", nonGRPCDataMaxLen)),
 				},
 			},
 			wantCode: codes.Unavailable,
-			wantErr: `rpc error: code = Unavailable desc = unexpected HTTP status code received from server: 502 (Bad Gateway); malformed header: missing HTTP content-type
+			wantErr: `unexpected HTTP status code received from server: 502 (Bad Gateway); malformed header: missing HTTP content-type
 data: "hello"`,
 		},
 	}
@@ -6904,8 +6904,8 @@ data: "hello"`,
 				t.Fatalf("Unexpected error code: got %v, want %v\nfull error:\n%v", got, want, err)
 			}
 
-			if err.Error() != test.wantErr {
-				t.Errorf("Unexpected error message: got\n %v, want\n %v", err.Error(), test.wantErr)
+			if got := status.Convert(err).Message(); got != test.wantErr {
+				t.Errorf("Unexpected error message: got\n %v, want\n %v", got, test.wantErr)
 			}
 		})
 	}
