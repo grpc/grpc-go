@@ -6905,7 +6905,7 @@ data: "hello"`,
 			}
 
 			if got := status.Convert(err).Message(); got != test.wantErr {
-				t.Errorf("Unexpected error message: got\n %v, want\n %v", got, test.wantErr)
+				t.Errorf("Unexpected error message: \ngot:\n%v\nwant:\n%v", got, test.wantErr)
 			}
 		})
 	}
