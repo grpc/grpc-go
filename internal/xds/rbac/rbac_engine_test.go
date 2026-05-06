@@ -1157,6 +1157,18 @@ func (s) TestChainEngine(t *testing.T) {
 					},
 					wantStatusCode: codes.PermissionDenied,
 				},
+				{
+					rpcData: &rpcData{
+						fullMethod: "some method",
+						peerInfo: &peer.Peer{
+							Addr: &addr{ipAddress: "0.0.0.0:8080"},
+							AuthInfo: credentials.TLSInfo{
+								State: tls.ConnectionState{},
+							},
+						},
+					},
+					wantStatusCode: codes.OK,
+				},
 			},
 		},
 		// This test tests that an RBAC policy configured with a metadata
@@ -1986,7 +1998,10 @@ func TestAuthenticatedMatcherIdentitySourcePrecedence(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var uriSANs []*url.URL
 			for _, u := range tt.uris {
-				parsed, _ := url.Parse(u)
+				parsed, err := url.Parse(u)
+				if err != nil {
+					t.Fatalf("url.Parse(%q) failed: %v", u, err)
+				}
 				uriSANs = append(uriSANs, parsed)
 			}
 			cert := &x509.Certificate{
