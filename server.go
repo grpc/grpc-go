@@ -300,6 +300,14 @@ func InitialConnWindowSize(s int32) ServerOption {
 // window size to the value provided and disables dynamic flow control.
 // The lower bound for window size is 64K and any value smaller than that
 // will be ignored.
+//
+// Note that this also disables dynamic flow control for the connection,
+// falling back to a default static connection-level window of 64KB. To
+// use a larger connection-level window, you must also use the
+// [StaticConnWindowSize] ServerOption.
+//
+// Most users should not configure static flow control windows unless
+// operating in a memory-constrained environment.
 func StaticStreamWindowSize(s int32) ServerOption {
 	return newFuncServerOption(func(o *serverOptions) {
 		o.initialWindowSize = s
@@ -311,6 +319,14 @@ func StaticStreamWindowSize(s int32) ServerOption {
 // window size to the value provided and disables dynamic flow control.
 // The lower bound for window size is 64K and any value smaller than that
 // will be ignored.
+//
+// Note that this also disables dynamic flow control for individual streams,
+// falling back to a default static connection-level window of 64KB. To
+// explicitly configure the stream-level window size, you must also use the
+// [StaticStreamWindowSize] ServerOption.
+//
+// Most users should not configure static flow control windows unless
+// operating in a memory-constrained environment.
 func StaticConnWindowSize(s int32) ServerOption {
 	return newFuncServerOption(func(o *serverOptions) {
 		o.initialConnWindowSize = s
