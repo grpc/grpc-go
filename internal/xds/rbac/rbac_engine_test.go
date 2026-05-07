@@ -65,7 +65,7 @@ func Test(t *testing.T) {
 // Prior to the fix, the matcher checked data.authType == "tls" and returned
 // false for all ALTS connections, silently rendering every principal-based
 // DENY rule inoperative against ALTS peers.
-func TestAuthenticatedMatcherALTS(t *testing.T) {
+func (s) TestAuthenticatedMatcherALTS(t *testing.T) {
 	tests := []struct {
 		desc          string
 		peerPrincipal string
