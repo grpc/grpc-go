@@ -1798,12 +1798,11 @@ func (s *Server) handleStream(t transport.ServerTransport, stream *transport.Ser
 		}
 	}
 
-	sm := stream.Method()
-	if sm == "" || sm[0] != '/' {
+	sm, found := strings.CutPrefix(stream.Method(), "/")
+	if !found {
 		s.handleMalformedMethodName(stream, ti)
 		return
 	}
-	sm = sm[1:]
 	pos := strings.LastIndex(sm, "/")
 	if pos == -1 {
 		s.handleMalformedMethodName(stream, ti)
