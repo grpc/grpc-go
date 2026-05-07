@@ -971,7 +971,12 @@ func recvAndDecompress(p *parser, s recvCompressor, dc Decompressor, maxReceiveM
 func decompress(compressor encoding.Compressor, d mem.BufferSlice, dc Decompressor, maxReceiveMessageSize int, pool mem.BufferPool) (mem.BufferSlice, error) {
 	if dc != nil {
 		r := d.Reader()
-		uncompressed, err := dc.Do(r)
+		// Limit decompression to maxReceiveMessageSize+1 bytes so that the
+		// size check below fires before io.ReadAll buffers the full payload.
+		// Without this limit a client can send a tiny compressed message that
+		// expands to many gigabytes, exhausting server memory before the size
+		// check is reached.
+		uncompressed, err := dc.Do(io.LimitReader(r, int64(maxReceiveMessageSize)+1))
 		if err != nil {
 			r.Close() // ensure buffers are reused
 			return nil, status.Errorf(codes.Internal, "grpc: failed to decompress the received message: %v", err)
