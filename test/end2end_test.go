@@ -5491,7 +5491,6 @@ func testConfigurableWindowSize(t *testing.T, e env, wc windowSizeConfig) {
 	// Set message size to exhaust largest of window sizes.
 	messageSize := max(max(wc.serverStream, wc.serverConn), max(wc.clientStream, wc.clientConn)) / int32(numOfIter-1)
 	messageSize = max(messageSize, 64*1024)
-	t.Logf("easwars: messageSize=%d", messageSize)
 	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, messageSize)
 	if err != nil {
 		t.Fatal(err)

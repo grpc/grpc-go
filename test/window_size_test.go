@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2024 gRPC authors.
+ * Copyright 2026 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/stubserver"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
@@ -43,6 +44,7 @@ const initialWindowSize = 65535
 // control window grows when BDP estimation is expected to be enabled.
 func (s) TestInitialWindowSize_Server(t *testing.T) {
 	channelz.TurnOn()
+	defer internal.ChannelzTurnOffForTesting()
 
 	tests := []struct {
 		name         string
@@ -184,6 +186,7 @@ func (s) TestInitialWindowSize_Server(t *testing.T) {
 // control window grows when BDP estimation is expected to be enabled.
 func (s) TestInitialWindowSize_Client(t *testing.T) {
 	channelz.TurnOn()
+	defer internal.ChannelzTurnOffForTesting()
 
 	tests := []struct {
 		name       string

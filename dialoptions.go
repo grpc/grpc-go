@@ -212,9 +212,7 @@ func WithReadBufferSize(s int) DialOption {
 // Deprecated: use WithInitialStreamWindowSize instead. Will be supported
 // throughout 1.x.
 func WithInitialWindowSize(s int32) DialOption {
-	return newFuncDialOption(func(o *dialOptions) {
-		o.copts.InitialWindowSize = s
-	})
+	return WithInitialStreamWindowSize(s)
 }
 
 // WithInitialStreamWindowSize returns a DialOption that sets the value for
@@ -222,7 +220,9 @@ func WithInitialWindowSize(s int32) DialOption {
 // any value smaller than that will be ignored. This does not disable dynamic
 // flow control.
 func WithInitialStreamWindowSize(s int32) DialOption {
-	return WithInitialWindowSize(s)
+	return newFuncDialOption(func(o *dialOptions) {
+		o.copts.InitialWindowSize = s
+	})
 }
 
 // WithInitialConnWindowSize returns a DialOption which sets the value for
