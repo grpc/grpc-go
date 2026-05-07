@@ -420,8 +420,18 @@ func newAuthenticatedMatcher(authenticatedMatcherConfig *v3rbacpb.Principal_Auth
 }
 
 func (am *authenticatedMatcher) match(data *rpcData) bool {
-	if data.authType != "tls" {
-		// Connection is not authenticated.
+	switch data.authType {
+	case "tls":
+		// TLS: match against the peer certificate's SANs and Subject.
+	case "alts":
+		// ALTS: the peer identity is the service account returned by the ALTS
+		// handshaker. Match directly against that string.
+		if am.stringMatcher == nil {
+			return true
+		}
+		return am.stringMatcher.Match(data.peerPrincipal)
+	default:
+		// Connection is not authenticated by a recognised transport.
 		return false
 	}
 	if am.stringMatcher == nil {

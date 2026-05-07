@@ -59,6 +59,67 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
+// TestAuthenticatedMatcherALTS verifies that authenticatedMatcher correctly
+// evaluates principal rules for ALTS-authenticated connections.
+//
+// Prior to the fix, the matcher checked data.authType == "tls" and returned
+// false for all ALTS connections, silently rendering every principal-based
+// DENY rule inoperative against ALTS peers.
+func TestAuthenticatedMatcherALTS(t *testing.T) {
+	tests := []struct {
+		desc          string
+		peerPrincipal string
+		matchExact    string // exact principal to match against
+		wantMatch     bool
+	}{
+		{
+			desc:          "matching ALTS service account",
+			peerPrincipal: "attacker@project.iam.gserviceaccount.com",
+			matchExact:    "attacker@project.iam.gserviceaccount.com",
+			wantMatch:     true,
+		},
+		{
+			desc:          "non-matching ALTS service account",
+			peerPrincipal: "other@project.iam.gserviceaccount.com",
+			matchExact:    "attacker@project.iam.gserviceaccount.com",
+			wantMatch:     false,
+		},
+		{
+			desc:          "unauthenticated connection rejected",
+			peerPrincipal: "",
+			matchExact:    "attacker@project.iam.gserviceaccount.com",
+			wantMatch:     false,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			// Build an authenticatedMatcher with an exact string match.
+			authType := "alts"
+			if tc.peerPrincipal == "" {
+				authType = "" // simulate unauthenticated
+			}
+			data := &rpcData{
+				authType:      authType,
+				peerPrincipal: tc.peerPrincipal,
+			}
+			// Construct the matcher via the proto helper so we go through the
+			// same code path as production.
+			m, err := newAuthenticatedMatcher(&v3rbacpb.Principal_Authenticated{
+				PrincipalName: &v3matcherpb.StringMatcher{
+					MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: tc.matchExact},
+				},
+			})
+			if err != nil {
+				t.Fatalf("newAuthenticatedMatcher() failed: %v", err)
+			}
+			if got := m.match(data); got != tc.wantMatch {
+				t.Errorf("authenticatedMatcher.match() = %v, want %v (principal=%q, authType=%q)",
+					got, tc.wantMatch, tc.peerPrincipal, data.authType)
+			}
+		})
+	}
+}
+
 type addr struct {
 	ipAddress string
 }

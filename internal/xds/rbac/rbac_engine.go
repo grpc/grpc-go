@@ -32,6 +32,7 @@ import (
 	"google.golang.org/grpc/authz/audit"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/alts"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/transport"
 	"google.golang.org/grpc/metadata"
@@ -240,9 +241,16 @@ func newRPCData(ctx context.Context) (*rpcData, error) {
 
 	var authType string
 	var peerCertificates []*x509.Certificate
+	var peerPrincipal string
 	if tlsInfo, ok := pi.AuthInfo.(credentials.TLSInfo); ok {
 		authType = pi.AuthInfo.AuthType()
 		peerCertificates = tlsInfo.State.PeerCertificates
+	} else if altsInfo, ok := pi.AuthInfo.(alts.AuthInfo); ok {
+		// ALTS connections are mutually authenticated. Extract the peer
+		// service account so that authenticatedMatcher can evaluate principal
+		// rules against it, just as it would against TLS certificate SANs.
+		authType = pi.AuthInfo.AuthType()
+		peerPrincipal = altsInfo.PeerServiceAccount()
 	}
 
 	return &rpcData{
@@ -253,6 +261,7 @@ func newRPCData(ctx context.Context) (*rpcData, error) {
 		localAddr:       conn.LocalAddr(),
 		authType:        authType,
 		certs:           peerCertificates,
+		peerPrincipal:   peerPrincipal,
 	}, nil
 }
 
@@ -270,11 +279,14 @@ type rpcData struct {
 	destinationPort uint32
 	// localAddr is the address that the RPC is being sent to.
 	localAddr net.Addr
-	// authType is the type of authentication e.g. "tls".
+	// authType is the type of authentication e.g. "tls" or "alts".
 	authType string
 	// certs are the certificates presented by the peer during a TLS
 	// handshake.
 	certs []*x509.Certificate
+	// peerPrincipal is the authenticated peer identity for non-TLS transports
+	// that carry identity directly (e.g. ALTS service accounts).
+	peerPrincipal string
 }
 
 func (e *engine) doAuditLogging(rpcData *rpcData, rule string, authorized bool) {
