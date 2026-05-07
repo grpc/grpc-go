@@ -26,18 +26,19 @@ import (
 	"testing"
 	"time"
 
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/stubserver"
-	"google.golang.org/grpc/internal/transport/internal"
+	transportinternal "google.golang.org/grpc/internal/transport/internal"
 
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
 func overrideTimeNowFunc(t *testing.T, f func() int64) {
-	orig := internal.TimeNowFunc
-	internal.TimeNowFunc = f
-	t.Cleanup(func() { internal.TimeNowFunc = orig })
+	orig := transportinternal.TimeNowFunc
+	transportinternal.TimeNowFunc = f
+	t.Cleanup(func() { transportinternal.TimeNowFunc = orig })
 }
 
 func verifyResultWithDelay(ctx context.Context, f func() (bool, error)) error {
@@ -53,6 +54,7 @@ func verifyResultWithDelay(ctx context.Context, f func() (bool, error)) error {
 
 func (s) TestChannelz_ServerSocketMetricsLastMessageTimestamps(t *testing.T) {
 	channelz.TurnOn()
+	defer internal.ChannelzTurnOffForTesting()
 
 	// Override timeNowFunc for the duration of the test.
 	var curTime atomic.Int64
