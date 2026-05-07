@@ -20,14 +20,18 @@ package google
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
 
 	"cloud.google.com/go/auth"
 	"cloud.google.com/go/auth/credentials/idtoken"
+	"cloud.google.com/go/compute/metadata"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal/backoff"
+	"google.golang.org/grpc/status"
 )
 
 // earlyExpiry matches the hardcoded 5-minute early expiry used by the
@@ -89,7 +93,7 @@ func (c *gcpServiceAccountIdentityCallCreds) GetRequestMetadata(ctx context.Cont
 
 	c.mu.Lock()
 
-	if c.isTokenValid() {
+	if !c.isTokenStale() {
 		defer c.mu.Unlock()
 		return map[string]string{
 			"authorization": "Bearer " + c.token.Value,
@@ -103,23 +107,20 @@ func (c *gcpServiceAccountIdentityCallCreds) GetRequestMetadata(ctx context.Cont
 
 	if c.fetching == nil {
 		c.fetching = make(chan struct{})
-		c.mu.Unlock()
+		go func() {
+			token, err := c.creds.TokenProvider.Token(context.Background())
 
-		token, err := c.creds.TokenProvider.Token(ctx)
+			c.mu.Lock()
+			defer c.mu.Unlock()
 
-		c.mu.Lock()
-		defer c.mu.Unlock()
-
-		close(c.fetching)
-		c.fetching = nil
-		c.setBackoff(err)
-		if err != nil {
-			return nil, err
-		}
-		c.token = token
-		return map[string]string{
-			"authorization": "Bearer " + c.token.Value,
-		}, nil
+			close(c.fetching)
+			c.fetching = nil
+			err = mapFetchError(err)
+			c.setBackoff(err)
+			if err == nil {
+				c.token = token
+			}
+		}()
 	}
 	wait := c.fetching
 	c.mu.Unlock()
@@ -144,12 +145,23 @@ func (c *gcpServiceAccountIdentityCallCreds) RequireTransportSecurity() bool {
 	return true
 }
 
-// isTokenValid checks if the cached token is still valid.
+// isTokenStale checks if the token doesn't exist or falls within the early
+// expiry window.
+func (c *gcpServiceAccountIdentityCallCreds) isTokenStale() bool {
+	if c.token == nil {
+		return true
+	}
+
+	return c.token.Expiry.Round(0).Add(-earlyExpiry).Before(time.Now())
+}
+
+// isTokenValid checks if the token exists and not expired yet.
 func (c *gcpServiceAccountIdentityCallCreds) isTokenValid() bool {
 	if c.token == nil {
 		return false
 	}
-	return !c.token.Expiry.Round(0).Add(-earlyExpiry).Before(time.Now())
+
+	return c.token.Expiry.After(time.Now())
 }
 
 func (c *gcpServiceAccountIdentityCallCreds) setBackoff(err error) {
@@ -163,4 +175,24 @@ func (c *gcpServiceAccountIdentityCallCreds) setBackoff(err error) {
 	backoffDelay := c.backoff.Backoff(c.retryAttempt)
 	c.retryAttempt++
 	c.nextRetryTime = time.Now().Add(backoffDelay)
+}
+
+func mapFetchError(err error) error {
+	if err == nil {
+		return nil
+	}
+
+	var metadataErr *metadata.Error
+	if errors.As(err, &metadataErr) {
+		if metadataErr.Code == 429 || metadataErr.Code == 502 || metadataErr.Code == 503 || metadataErr.Code == 504 {
+			return status.Error(codes.Unavailable, err.Error())
+		}
+		return status.Error(codes.Unauthenticated, err.Error())
+	}
+
+	if _, ok := err.(metadata.NotDefinedError); ok {
+		return status.Error(codes.Unauthenticated, err.Error())
+	}
+
+	return status.Error(codes.Unavailable, err.Error())
 }
