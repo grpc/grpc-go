@@ -976,7 +976,11 @@ func decompress(compressor encoding.Compressor, d mem.BufferSlice, dc Decompress
 		// Without this limit a client can send a tiny compressed message that
 		// expands to many gigabytes, exhausting server memory before the size
 		// check is reached.
-		uncompressed, err := dc.Do(io.LimitReader(r, int64(maxReceiveMessageSize)+1))
+		reader := io.Reader(r)
+		if limit := int64(maxReceiveMessageSize); limit < math.MaxInt64 {
+			reader = io.LimitReader(r, limit+1)
+		}
+		uncompressed, err := dc.Do(reader)
 		if err != nil {
 			r.Close() // ensure buffers are reused
 			return nil, status.Errorf(codes.Internal, "grpc: failed to decompress the received message: %v", err)
