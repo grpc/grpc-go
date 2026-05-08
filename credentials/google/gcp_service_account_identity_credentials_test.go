@@ -192,7 +192,7 @@ func (s) TestGcpServiceAccountIdentity_Backoff(t *testing.T) {
 // completes.
 //
 // The test verifies this behavior in two phases:
-//   - A single fetch is initiated that will fail after a delay. All concurrents
+//   - A single fetch is initiated that will fail after a delay. All concurrent
 //     requests must block until the initial fetch finishes, and all must
 //     return the exact same error.
 //   - After resetting the backoff timer, a new fetch is initiated that will
@@ -358,17 +358,18 @@ func (s) TestGcpServiceAccountIdentity_EarlyExpiry(t *testing.T) {
 	}
 }
 
-// TestGcpServiceAccountIdentity_ContextCanceled verifies that
-// independent timeouts are respected for concurrent RPCs sharing the same fetch.
+// TestGcpServiceAccountIdentity_ContextCanceled verifies that independent
+// timeouts are respected for concurrent RPCs sharing the same fetch.
 //
 // The test simulates the following scenario:
-//   - The first call (initiator) starts an asynchronous fetch but has a very short
-//     timeout. It is expected to fail early due to ctx deadline exceeded.
+//   - The first call (initiator) starts an asynchronous fetch but has a very
+//     short timeout. It is expected to fail early due to ctx deadline
+//     exceeded.
 //   - A second call (waiter) arrives while the fetch is in progress and uses a
 //     default (longer) timeout.
-//   - Even though the first call timed out, the background fetch is not canceled
-//     and is allowed to finish, enabling the second call to eventually succeed and
-//     return the correct token.
+//   - Even though the first call timed out, the background fetch is not
+//     canceled and is allowed to finish, enabling the second call to
+//     eventually succeed and return the correct token.
 func (s) TestGcpServiceAccountIdentity_ContextCanceled(t *testing.T) {
 	creds, _ := newTestCreds(audience, token, defaultTokenExpiry, "", 2*defaultDelay, defaultEarlyExpiry)
 
@@ -402,7 +403,7 @@ func (s) TestGcpServiceAccountIdentity_ContextCanceled(t *testing.T) {
 	select {
 	case err := <-firstErrCh:
 		if err == nil || !strings.Contains(err.Error(), "deadline exceeded") {
-			t.Fatalf("GetRequestedMetadata() failed with err = %v, want error deadline exceeded", err)
+			t.Fatalf("GetRequestMetadata() failed with err = %v, want error deadline exceeded", err)
 		}
 	case <-ctx.Done():
 		t.Fatal("Timeout while waiting for first call to fail")

@@ -22,6 +22,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"sync"
 	"time"
 
@@ -93,7 +94,12 @@ func (c *gcpServiceAccountIdentityCallCreds) GetRequestMetadata(ctx context.Cont
 
 	c.mu.Lock()
 
-	if !c.isTokenStale() {
+	// If token is valid, return it. If it's also stale, trigger a background
+	// refresh if not already running.
+	if c.isTokenValid() {
+		if c.isTokenStale() && c.fetching == nil {
+			c.startFetch()
+		}
 		defer c.mu.Unlock()
 		return map[string]string{
 			"authorization": "Bearer " + c.token.Value,
@@ -106,24 +112,11 @@ func (c *gcpServiceAccountIdentityCallCreds) GetRequestMetadata(ctx context.Cont
 	}
 
 	if c.fetching == nil {
-		c.fetching = make(chan struct{})
-		go func() {
-			token, err := c.creds.TokenProvider.Token(context.Background())
-
-			c.mu.Lock()
-			defer c.mu.Unlock()
-
-			close(c.fetching)
-			c.fetching = nil
-			err = mapFetchError(err)
-			c.setBackoff(err)
-			if err == nil {
-				c.token = token
-			}
-		}()
+		c.startFetch()
 	}
 	wait := c.fetching
 	c.mu.Unlock()
+
 	select {
 	case <-wait:
 		c.mu.Lock()
@@ -133,7 +126,10 @@ func (c *gcpServiceAccountIdentityCallCreds) GetRequestMetadata(ctx context.Cont
 				"authorization": "Bearer " + c.token.Value,
 			}, nil
 		}
-		return nil, c.lastErr
+		if c.lastErr != nil {
+			return nil, c.lastErr
+		}
+		return nil, status.Error(codes.Unauthenticated, "fetched token is expired")
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
@@ -164,6 +160,30 @@ func (c *gcpServiceAccountIdentityCallCreds) isTokenValid() bool {
 	return c.token.Expiry.After(time.Now())
 }
 
+// startFetch initiates an asynchronous token fetch. It creates the 'fetching'
+// channel to allow concurrent callers to wait, and starts a goroutine to
+// perform the fetch and update the credential state upon completion.
+func (c *gcpServiceAccountIdentityCallCreds) startFetch() {
+	c.fetching = make(chan struct{})
+	go func() {
+		token, err := c.creds.TokenProvider.Token(context.Background())
+
+		c.mu.Lock()
+		defer c.mu.Unlock()
+
+		close(c.fetching)
+		c.fetching = nil
+		err = mapFetchError(err)
+		c.setBackoff(err)
+		if err == nil {
+			c.token = token
+		}
+	}()
+}
+
+// setBackoff updates the backoff state based on the result of a fetch attempt.
+// If err is nil, it resets the backoff; otherwise, it calculates the next
+// retry time using the backoff strategy.
 func (c *gcpServiceAccountIdentityCallCreds) setBackoff(err error) {
 	if err == nil {
 		c.lastErr = nil
@@ -184,10 +204,12 @@ func mapFetchError(err error) error {
 
 	var metadataErr *metadata.Error
 	if errors.As(err, &metadataErr) {
-		if metadataErr.Code == 429 || metadataErr.Code == 502 || metadataErr.Code == 503 || metadataErr.Code == 504 {
+		switch metadataErr.Code {
+		case http.StatusTooManyRequests, http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
 			return status.Error(codes.Unavailable, err.Error())
+		default:
+			return status.Error(codes.Unauthenticated, err.Error())
 		}
-		return status.Error(codes.Unauthenticated, err.Error())
 	}
 
 	if _, ok := err.(metadata.NotDefinedError); ok {
