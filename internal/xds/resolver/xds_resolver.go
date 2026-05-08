@@ -379,6 +379,30 @@ func (r *xdsResolver) sendNewServiceConfig(cs stoppableConfigSelector) bool {
 	return true
 }
 
+// addClusterToRoute creates a client interceptor for the given cluster
+// configuration, adds the cluster to the provided WRR picker, and appends the
+// interceptor to the list of interceptors for the current route.
+func (r *xdsResolver) addClusterToRoute(clusters wrr.WRR, clusterName string, weight int64, interceptors *[]iresolver.ClientInterceptor,
+	clusterOverride map[string]httpfilter.FilterConfig, routeOverride map[string]httpfilter.FilterConfig) error {
+	interceptor, err := r.newInterceptor(r.xdsConfig.Listener.APIListener.HTTPFilters, clusterOverride, routeOverride, r.xdsConfig.VirtualHost.HTTPFilterConfigOverride)
+	if err != nil {
+		// Clean up any interceptors that were successfully built
+		// for the current route before this error occurred. Note
+		// that this is not handled by the call to cs.stop() in the
+		// deferred function.
+		for _, i := range *interceptors {
+			i.Close()
+		}
+		return err
+	}
+	clusters.Add(&routeCluster{
+		name:        clusterName,
+		interceptor: interceptor,
+	}, weight)
+	*interceptors = append(*interceptors, interceptor)
+	return nil
+}
+
 // newConfigSelector creates a new config selector using the most recently
 // received listener and route config updates. May add entries to
 // r.activeClusters for previously-unseen clusters.
@@ -417,44 +441,18 @@ func (r *xdsResolver) newConfigSelector() (_ *configSelector, err error) {
 		interceptors := []iresolver.ClientInterceptor{}
 		if rt.ClusterSpecifierPlugin != "" {
 			clusterName := clusterSpecifierPluginPrefix + rt.ClusterSpecifierPlugin
-			interceptor, err := r.newInterceptor(r.xdsConfig.Listener.APIListener.HTTPFilters, nil, rt.HTTPFilterConfigOverride, r.xdsConfig.VirtualHost.HTTPFilterConfigOverride)
-			if err != nil {
-				// Clean up any interceptors that were successfully built
-				// for the current route before this error occurred. Note
-				// that this is not handled by the call to cs.stop() in the
-				// deferred function.
-				for _, i := range interceptors {
-					i.Close()
-				}
+			if err := r.addClusterToRoute(clusters, clusterName, 1, &interceptors, nil, rt.HTTPFilterConfigOverride); err != nil {
 				return nil, err
 			}
-			clusters.Add(&routeCluster{
-				name:        clusterName,
-				interceptor: interceptor,
-			}, 1)
-			interceptors = append(interceptors, interceptor)
 			ci := r.addOrGetActiveClusterInfo(clusterName, "")
 			ci.cfg = xdsChildConfig{ChildPolicy: balancerConfig(r.xdsConfig.RouteConfig.ClusterSpecifierPlugins[rt.ClusterSpecifierPlugin])}
 			cs.plugins[clusterName] = ci
 		} else {
 			for _, wc := range rt.WeightedClusters {
 				clusterName := clusterPrefix + wc.Name
-				interceptor, err := r.newInterceptor(r.xdsConfig.Listener.APIListener.HTTPFilters, wc.HTTPFilterConfigOverride, rt.HTTPFilterConfigOverride, r.xdsConfig.VirtualHost.HTTPFilterConfigOverride)
-				if err != nil {
-					// Clean up any interceptors that were successfully built
-					// for the current route before this error occurred. Note
-					// that this is not handled by the call to cs.stop() in the
-					// deferred function.
-					for _, i := range interceptors {
-						i.Close()
-					}
+				if err := r.addClusterToRoute(clusters, clusterName, int64(wc.Weight), &interceptors, wc.HTTPFilterConfigOverride, rt.HTTPFilterConfigOverride); err != nil {
 					return nil, err
 				}
-				clusters.Add(&routeCluster{
-					name:        clusterName,
-					interceptor: interceptor,
-				}, int64(wc.Weight))
-				interceptors = append(interceptors, interceptor)
 				ci := r.addOrGetActiveClusterInfo(clusterName, wc.Name)
 				ci.cfg = xdsChildConfig{ChildPolicy: newBalancerConfig(cdsName, cdsBalancerConfig{Cluster: wc.Name})}
 				cs.clusters[clusterName] = ci

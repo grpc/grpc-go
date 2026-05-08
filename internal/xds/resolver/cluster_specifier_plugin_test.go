@@ -410,23 +410,23 @@ func (s) TestResolverClusterSpecifierPlugin_WithFilters(t *testing.T) {
 	// Wait for an update from the resolver, and verify the service config.
 	wantSC := `
  {
-	 "loadBalancingConfig": [
-		 {
-		   "xds_cluster_manager_experimental": {
-			 "children": {
-			   "cluster_specifier_plugin:cspA": {
-				 "childPolicy": [
-				   {
-					 "csp_experimental": {
-					   "arbitrary_field": "anything"
-					 }
-				   }
-				 ]
-			   }
-			 }
-		   }
-		 }
-	   ]
+	"loadBalancingConfig": [
+		{
+			"xds_cluster_manager_experimental": {
+			"children": {
+				"cluster_specifier_plugin:cspA": {
+				"childPolicy": [
+					{
+					"csp_experimental": {
+						"arbitrary_field": "anything"
+					}
+					}
+				]
+				}
+			}
+			}
+		}
+	]
  }`
 	cs := verifyUpdateFromResolver(ctx, t, stateCh, wantSC)
 	res, err := cs.SelectConfig(iresolver.RPCInfo{Context: ctx, Method: "/service/method"})
@@ -443,8 +443,7 @@ func (s) TestResolverClusterSpecifierPlugin_WithFilters(t *testing.T) {
 		return nil, nil
 	}
 
-	_, err = res.Interceptor.NewStream(ctx, iresolver.RPCInfo{Method: "/service/method", Context: ctx}, func() {}, newStream)
-	if err != nil {
+	if _, err = res.Interceptor.NewStream(ctx, iresolver.RPCInfo{Method: "/service/method", Context: ctx}, func() {}, newStream); err != nil {
 		t.Fatalf("NewStream() failed with error: %v", err)
 	}
 
