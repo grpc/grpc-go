@@ -830,15 +830,15 @@ func compress(in mem.BufferSlice, cp Compressor, compressor encoding.Compressor,
 	if compressor != nil {
 		z, err := compressor.Compress(w)
 		if err != nil {
-			return nil, 0, wrapErr(err)
+			return nil, compressionNone, wrapErr(err)
 		}
 		for _, b := range in {
 			if _, err := z.Write(b.ReadOnlyData()); err != nil {
-				return nil, 0, wrapErr(err)
+				return nil, compressionNone, wrapErr(err)
 			}
 		}
 		if err := z.Close(); err != nil {
-			return nil, 0, wrapErr(err)
+			return nil, compressionNone, wrapErr(err)
 		}
 	} else {
 		// This is obviously really inefficient since it fully materializes the data, but
@@ -848,7 +848,7 @@ func compress(in mem.BufferSlice, cp Compressor, compressor encoding.Compressor,
 		buf := in.MaterializeToBuffer(pool)
 		defer buf.Free()
 		if err := cp.Do(w, buf.ReadOnlyData()); err != nil {
-			return nil, 0, wrapErr(err)
+			return nil, compressionNone, wrapErr(err)
 		}
 	}
 	return out, compressionMade, nil

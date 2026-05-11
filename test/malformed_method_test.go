@@ -26,9 +26,7 @@ import (
 
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
-	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/stubserver"
-	"google.golang.org/grpc/internal/testutils"
 
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
@@ -40,7 +38,6 @@ func (s) TestMalformedMethodPath(t *testing.T) {
 	tests := []struct {
 		name       string
 		path       string
-		envVar     bool
 		wantStatus string // string representation of codes.Code
 	}{
 		{
@@ -58,32 +55,12 @@ func (s) TestMalformedMethodPath(t *testing.T) {
 			path:       "/",
 			wantStatus: "12", // Unimplemented
 		},
-		{
-			name:       "missing_leading_slash_disableStrictPathChecking_true",
-			path:       "grpc.testing.TestService/UnaryCall",
-			envVar:     true,
-			wantStatus: "0", // OK
-		},
-		{
-			name:       "empty_path_disableStrictPathChecking_true",
-			path:       "",
-			envVar:     true,
-			wantStatus: "12", // Unimplemented
-		},
-		{
-			name:       "just_slash_disableStrictPathChecking_true",
-			path:       "/",
-			envVar:     true,
-			wantStatus: "12", // Unimplemented
-		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
-
-			testutils.SetEnvConfig(t, &envconfig.DisableStrictPathChecking, tc.envVar)
 
 			ss := &stubserver.StubServer{
 				UnaryCallF: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
