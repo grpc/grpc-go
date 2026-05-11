@@ -63,10 +63,10 @@ var (
 	// goroutines spawned by [grpc.Server] type.
 	// For now, this is limited to the goroutines spawned to handle incoming
 	// requests on the server.
-	// Set "GRPC_GO_SERVER_GOROUTINE_LABELS" to "grpc.method=false" to
-	// disable this grpc.method label.
+	// Set "GRPC_GO_SERVER_GOROUTINE_LABELS" to "grpc.method=true" to
+	// enable this grpc.method label, or "all" to enable all valid labels.
 	// This variable is a bit-field.
-	LabelServerGoroutines = goroutineLabelsFromEnv("GRPC_GO_SERVER_GOROUTINE_LABELS", GoroutineLabelServerMethod)
+	LabelServerGoroutines = goroutineLabelsFromEnv("GRPC_GO_SERVER_GOROUTINE_LABELS", 0)
 
 	// RingHashSetRequestHashKey is set if the ring hash balancer can get the
 	// request hash header by setting the "requestHashHeader" field, according
