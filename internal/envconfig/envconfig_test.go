@@ -185,6 +185,16 @@ func (s) TestGoroutineLabelsFromEnv(t *testing.T) {
 			def:  GoroutineLabelServerMethod,
 			want: AllGoroutineLabels,
 		}, {
+			name: "none_with_empty_default",
+			val:  "none",
+			def:  0,
+			want: 0,
+		}, {
+			name: "none_with_server_method_default",
+			val:  "none",
+			def:  GoroutineLabelServerMethod,
+			want: 0,
+		}, {
 			name: "unparseable_rhs",
 			val:  "grpc.method=quux",
 			def:  GoroutineLabelServerMethod,

@@ -184,6 +184,8 @@ func goroutineLabelsFromEnv(envVar string, def GoroutineLabels) GoroutineLabels 
 	v := os.Getenv(envVar)
 	if strings.EqualFold(v, "all") {
 		return AllGoroutineLabels
+	} else if strings.EqualFold(v, "none") {
+		return 0
 	}
 	for s := range strings.SplitSeq(v, ",") {
 		s = strings.TrimSpace(s)
