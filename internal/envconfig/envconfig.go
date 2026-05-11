@@ -182,6 +182,9 @@ type GoroutineLabels uint16
 func goroutineLabelsFromEnv(envVar string, def GoroutineLabels) GoroutineLabels {
 	val := def
 	v := os.Getenv(envVar)
+	if strings.EqualFold(v, "all") {
+		return AllGoroutineLabels
+	}
 	for s := range strings.SplitSeq(v, ",") {
 		s = strings.TrimSpace(s)
 		if len(s) == 0 {
@@ -215,3 +218,7 @@ const (
 	// server-side gRPC streams.
 	GoroutineLabelServerMethod GoroutineLabels = 1 << iota
 )
+
+// AllGoroutineLabels is an or'd together bitfield of all valid GoroutineLabels
+// constant values (above).
+const AllGoroutineLabels = GoroutineLabelServerMethod
