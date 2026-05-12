@@ -25,7 +25,9 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/experimental/optional"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/xds/httpfilter"
 	"google.golang.org/grpc/internal/xds/matcher"
@@ -50,6 +52,11 @@ func Test(t *testing.T) {
 }
 
 func (s) TestBuildClientInterceptor(t *testing.T) {
+	origCreateExtProcChannel := createExtProcChannel
+	defer func() { createExtProcChannel = origCreateExtProcChannel }()
+	createExtProcChannel = func(cfg httpfilter.ServerConfig) (*grpc.ClientConn, error) {
+		return grpc.NewClient(cfg.TargetURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	}
 
 	b := builder{}
 	f := b.BuildClientFilter()
@@ -82,55 +89,55 @@ func (s) TestBuildClientInterceptor(t *testing.T) {
 			name: "ConfigUsingOnlyBase",
 			cfg: baseConfig{
 				config: interceptorConfig{
-					failureModeAllow:         func() *bool { b := true; return &b }(),
+					failureModeAllow:         true,
 					requestAttributes:        []string{"attr1"},
 					responseAttributes:       []string{"attr2"},
 					observabilityMode:        true,
 					disableImmediateResponse: true,
 					deferredCloseTimeout:     10 * time.Second,
-					processingModes: &processingModes{
+					processingModes: processingModes{
 						requestHeaderMode:   modeSend,
 						responseHeaderMode:  modeSkip,
 						responseTrailerMode: modeSend,
 						requestBodyMode:     modeSend,
 						responseBodyMode:    modeSkip,
 					},
-					server: &serverConfig{
-						targetURI:          testBaseURI,
-						channelCredentials: insecure.NewCredentials(),
+					server: httpfilter.ServerConfig{
+						TargetURI:          testBaseURI,
+						ChannelCredentials: []byte("{}"),
 					},
-					mutationRules: headerMutationRules{
-						allowExpr:       regexp.MustCompile("allow-.*"),
-						disallowExpr:    regexp.MustCompile("disallow-.*"),
-						disallowAll:     true,
-						disallowIsError: true,
+					mutationRules: httpfilter.HeaderMutationRules{
+						AllowExpr:       regexp.MustCompile("allow-.*"),
+						DisallowExpr:    regexp.MustCompile("disallow-.*"),
+						DisallowAll:     true,
+						DisallowIsError: true,
 					},
 					allowedHeaders: []matcher.StringMatcher{matcher.NewExactStringMatcher("allow-header", false)},
 				},
 			},
 			wantConfig: &interceptorConfig{
-				failureModeAllow:   func() *bool { b := true; return &b }(),
+				failureModeAllow:   true,
 				requestAttributes:  []string{"attr1"},
 				responseAttributes: []string{"attr2"},
-				mutationRules: headerMutationRules{
-					allowExpr:       regexp.MustCompile("allow-.*"),
-					disallowExpr:    regexp.MustCompile("disallow-.*"),
-					disallowAll:     true,
-					disallowIsError: true,
+				mutationRules: httpfilter.HeaderMutationRules{
+					AllowExpr:       regexp.MustCompile("allow-.*"),
+					DisallowExpr:    regexp.MustCompile("disallow-.*"),
+					DisallowAll:     true,
+					DisallowIsError: true,
 				},
 				observabilityMode:        true,
 				disableImmediateResponse: true,
 				deferredCloseTimeout:     10 * time.Second,
-				processingModes: &processingModes{
+				processingModes: processingModes{
 					requestHeaderMode:   modeSend,
 					responseHeaderMode:  modeSkip,
 					responseTrailerMode: modeSend,
 					requestBodyMode:     modeSend,
 					responseBodyMode:    modeSkip,
 				},
-				server: &serverConfig{
-					targetURI:          testBaseURI,
-					channelCredentials: insecure.NewCredentials(),
+				server: httpfilter.ServerConfig{
+					TargetURI:          testBaseURI,
+					ChannelCredentials: []byte("{}"),
 				},
 				allowedHeaders: []matcher.StringMatcher{matcher.NewExactStringMatcher("allow-header", false)},
 			},
@@ -139,76 +146,144 @@ func (s) TestBuildClientInterceptor(t *testing.T) {
 			name: "ConfigUsingBaseAndOverride",
 			cfg: baseConfig{
 				config: interceptorConfig{
-					failureModeAllow:         func() *bool { b := false; return &b }(),
+					failureModeAllow:         false,
 					requestAttributes:        []string{"base-attr1"},
 					responseAttributes:       []string{"base-attr2"},
 					observabilityMode:        true,
 					disableImmediateResponse: true,
 					deferredCloseTimeout:     10 * time.Second,
-					processingModes: &processingModes{
+					processingModes: processingModes{
 						requestHeaderMode:   modeSend,
 						responseHeaderMode:  modeSkip,
 						responseTrailerMode: modeSend,
 						requestBodyMode:     modeSend,
 						responseBodyMode:    modeSkip,
 					},
-					server: &serverConfig{
-						targetURI:          testBaseURI,
-						channelCredentials: insecure.NewCredentials(),
-						timeout:            time.Second,
-						initialMetadata:    metadata.MD(metadata.Pairs("key1", "value1")),
+					server: httpfilter.ServerConfig{
+						TargetURI:          testBaseURI,
+						ChannelCredentials: []byte("{}"),
+						Timeout:            time.Second,
+						InitialMetadata:    metadata.MD(metadata.Pairs("key1", "value1")),
 					},
-					mutationRules: headerMutationRules{
-						allowExpr:       regexp.MustCompile("allow-.*"),
-						disallowExpr:    regexp.MustCompile("disallow-.*"),
-						disallowAll:     true,
-						disallowIsError: true,
+					mutationRules: httpfilter.HeaderMutationRules{
+						AllowExpr:       regexp.MustCompile("allow-.*"),
+						DisallowExpr:    regexp.MustCompile("disallow-.*"),
+						DisallowAll:     true,
+						DisallowIsError: true,
 					},
 					allowedHeaders:    []matcher.StringMatcher{matcher.NewExactStringMatcher("allow-header", false)},
 					disallowedHeaders: []matcher.StringMatcher{matcher.NewExactStringMatcher("disallow-header", false)},
 				},
 			},
 			override: overrideConfig{
-				config: interceptorConfig{
-					failureModeAllow:   func() *bool { b := true; return &b }(),
+				config: interceptorOverrideConfig{
+					failureModeAllow:   optional.NewValue(true),
 					requestAttributes:  []string{"override-attr1"},
 					responseAttributes: []string{"override-attr2"},
-					processingModes: &processingModes{
+					processingModes: optional.NewValue(processingModes{
 						requestHeaderMode:   modeSkip,
 						responseHeaderMode:  modeSend,
 						responseTrailerMode: modeSkip,
 						requestBodyMode:     modeSkip,
 						responseBodyMode:    modeSend,
-					},
-					server: &serverConfig{
-						targetURI:          "override-uri",
-						channelCredentials: insecure.NewCredentials(),
-					},
+					}),
+					server: optional.NewValue(httpfilter.ServerConfig{
+						TargetURI:          "override-uri",
+						ChannelCredentials: []byte("{}"),
+					}),
 				},
 			},
 			wantConfig: &interceptorConfig{
-				failureModeAllow:   func() *bool { b := true; return &b }(),
+				failureModeAllow:   true,
 				requestAttributes:  []string{"override-attr1"},
 				responseAttributes: []string{"override-attr2"},
-				mutationRules: headerMutationRules{
-					allowExpr:       regexp.MustCompile("allow-.*"),
-					disallowExpr:    regexp.MustCompile("disallow-.*"),
-					disallowAll:     true,
-					disallowIsError: true,
+				mutationRules: httpfilter.HeaderMutationRules{
+					AllowExpr:       regexp.MustCompile("allow-.*"),
+					DisallowExpr:    regexp.MustCompile("disallow-.*"),
+					DisallowAll:     true,
+					DisallowIsError: true,
 				},
 				observabilityMode:        true,
 				disableImmediateResponse: true,
 				deferredCloseTimeout:     10 * time.Second,
-				processingModes: &processingModes{
+				processingModes: processingModes{
 					requestHeaderMode:   modeSkip,
 					responseHeaderMode:  modeSend,
 					responseTrailerMode: modeSkip,
 					requestBodyMode:     modeSkip,
 					responseBodyMode:    modeSend,
 				},
-				server: &serverConfig{
-					targetURI:          "override-uri",
-					channelCredentials: insecure.NewCredentials(),
+				server: httpfilter.ServerConfig{
+					TargetURI:          "override-uri",
+					ChannelCredentials: []byte("{}"),
+				},
+				allowedHeaders:    []matcher.StringMatcher{matcher.NewExactStringMatcher("allow-header", false)},
+				disallowedHeaders: []matcher.StringMatcher{matcher.NewExactStringMatcher("disallow-header", false)},
+			},
+		},
+		{
+			name: "ConfigUsingBaseAndPartialOverride",
+			cfg: baseConfig{
+				config: interceptorConfig{
+					failureModeAllow:         false,
+					requestAttributes:        []string{"base-attr1"},
+					responseAttributes:       []string{"base-attr2"},
+					observabilityMode:        true,
+					disableImmediateResponse: true,
+					deferredCloseTimeout:     10 * time.Second,
+					processingModes: processingModes{
+						requestHeaderMode:   modeSend,
+						responseHeaderMode:  modeSkip,
+						responseTrailerMode: modeSend,
+						requestBodyMode:     modeSend,
+						responseBodyMode:    modeSkip,
+					},
+					server: httpfilter.ServerConfig{
+						TargetURI:          testBaseURI,
+						ChannelCredentials: []byte("{}"),
+						Timeout:            time.Second,
+						InitialMetadata:    metadata.MD(metadata.Pairs("key1", "value1")),
+					},
+					mutationRules: httpfilter.HeaderMutationRules{
+						AllowExpr:       regexp.MustCompile("allow-.*"),
+						DisallowExpr:    regexp.MustCompile("disallow-.*"),
+						DisallowAll:     true,
+						DisallowIsError: true,
+					},
+					allowedHeaders:    []matcher.StringMatcher{matcher.NewExactStringMatcher("allow-header", false)},
+					disallowedHeaders: []matcher.StringMatcher{matcher.NewExactStringMatcher("disallow-header", false)},
+				},
+			},
+			override: overrideConfig{
+				config: interceptorOverrideConfig{
+					failureModeAllow: optional.NewValue(true),
+				},
+			},
+			wantConfig: &interceptorConfig{
+				failureModeAllow:   true,
+				requestAttributes:  []string{"base-attr1"},
+				responseAttributes: []string{"base-attr2"},
+				mutationRules: httpfilter.HeaderMutationRules{
+					AllowExpr:       regexp.MustCompile("allow-.*"),
+					DisallowExpr:    regexp.MustCompile("disallow-.*"),
+					DisallowAll:     true,
+					DisallowIsError: true,
+				},
+				observabilityMode:        true,
+				disableImmediateResponse: true,
+				deferredCloseTimeout:     10 * time.Second,
+				processingModes: processingModes{
+					requestHeaderMode:   modeSend,
+					responseHeaderMode:  modeSkip,
+					responseTrailerMode: modeSend,
+					requestBodyMode:     modeSend,
+					responseBodyMode:    modeSkip,
+				},
+				server: httpfilter.ServerConfig{
+					TargetURI:          testBaseURI,
+					ChannelCredentials: []byte("{}"),
+					Timeout:            time.Second,
+					InitialMetadata:    metadata.MD(metadata.Pairs("key1", "value1")),
 				},
 				allowedHeaders:    []matcher.StringMatcher{matcher.NewExactStringMatcher("allow-header", false)},
 				disallowedHeaders: []matcher.StringMatcher{matcher.NewExactStringMatcher("disallow-header", false)},
@@ -227,7 +302,7 @@ func (s) TestBuildClientInterceptor(t *testing.T) {
 					t.Fatalf("BuildClientInterceptor() returned %T, want *interceptor", intptr)
 				}
 				cmpOpts := []cmp.Option{
-					cmp.AllowUnexported(interceptorConfig{}, serverConfig{}, processingModes{}, headerMutationRules{}),
+					cmp.AllowUnexported(interceptorConfig{}, processingModes{}),
 					cmp.Transformer("RegexpToString", func(r *regexp.Regexp) string {
 						if r == nil {
 							return ""

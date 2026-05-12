@@ -41,6 +41,10 @@ type clientFilter struct{}
 
 func (clientFilter) Close() {}
 
+var createExtProcChannel = func(httpfilter.ServerConfig) (*grpc.ClientConn, error) {
+	return nil, fmt.Errorf("dialing external processing server with raw JSON credentials is not yet supported")
+}
+
 func (clientFilter) BuildClientInterceptor(cfg, override httpfilter.FilterConfig) (resolver.ClientInterceptor, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("extproc: nil config provided")
@@ -62,11 +66,7 @@ func (clientFilter) BuildClientInterceptor(cfg, override httpfilter.FilterConfig
 	config := newInterceptorConfig(c.config, ov.config)
 
 	// Create a channel to the external processing server.
-	dOpts := []grpc.DialOption{grpc.WithTransportCredentials(config.server.channelCredentials)}
-	for _, creds := range config.server.callCredentials {
-		dOpts = append(dOpts, grpc.WithPerRPCCredentials(creds))
-	}
-	cc, err := grpc.NewClient(config.server.targetURI, dOpts...)
+	cc, err := createExtProcChannel(config.server)
 	if err != nil {
 		return nil, fmt.Errorf("extproc: failed to create client: %v", err)
 	}
