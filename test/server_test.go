@@ -92,8 +92,8 @@ func (s) TestServerSetGoroutineLabelsInContext(t *testing.T) {
 			ctxLabels := pprofCtxCollectLabels(ctx)
 			if val, ok := ctxLabels["grpc.method"]; !ok {
 				t.Errorf("missing \"grpc.method\" label; found labels: %v", ctxLabels)
-			} else if expVal := "/grpc.testing.TestService/EmptyCall"; val != expVal {
-				t.Errorf("unexpected value for \"grpc.method\" label %q; want %q", ctxLabels["grpc.method"], expVal)
+			} else if wantVal := "/grpc.testing.TestService/EmptyCall"; val != wantVal {
+				t.Errorf("unexpected value for \"grpc.method\" label %q; want %q", ctxLabels["grpc.method"], wantVal)
 			}
 			return &testpb.Empty{}, nil
 		},
@@ -101,8 +101,8 @@ func (s) TestServerSetGoroutineLabelsInContext(t *testing.T) {
 			ctxLabels := pprofCtxCollectLabels(stream.Context())
 			if val, ok := ctxLabels["grpc.method"]; !ok {
 				t.Errorf("missing \"grpc.method\" label; found labels: %v", ctxLabels)
-			} else if expVal := "/grpc.testing.TestService/FullDuplexCall"; val != expVal {
-				t.Errorf("unexpected value for \"grpc.method\" label %q; want %q", ctxLabels["grpc.method"], expVal)
+			} else if wantVal := "/grpc.testing.TestService/FullDuplexCall"; val != wantVal {
+				t.Errorf("unexpected value for \"grpc.method\" label %q; want %q", ctxLabels["grpc.method"], wantVal)
 			}
 			return nil
 		},
@@ -114,8 +114,7 @@ func (s) TestServerSetGoroutineLabelsInContext(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	_, err := ss.Client.EmptyCall(ctx, &testpb.Empty{})
-	if err != nil {
+	if _, err := ss.Client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("ss.Client.EmptyCall() got error %v; want OK", err)
 	}
 
@@ -123,8 +122,7 @@ func (s) TestServerSetGoroutineLabelsInContext(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error starting the stream: %v", err)
 	}
-	_, err = stream.Recv()
-	if err != io.EOF {
+	if _, err = stream.Recv(); err != io.EOF {
 		t.Fatalf("ss.Client.FullDuplexCall().Recv() got error %v; want io.EOF", err)
 	}
 }
@@ -157,8 +155,7 @@ func (s) TestServerSetGoroutineLabelsInContextEnvVarDisabled(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	_, err := ss.Client.EmptyCall(ctx, &testpb.Empty{})
-	if err != nil {
+	if _, err := ss.Client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("ss.Client.EmptyCall() got error %v; want OK", err)
 	}
 
@@ -166,8 +163,7 @@ func (s) TestServerSetGoroutineLabelsInContextEnvVarDisabled(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error starting the stream: %v", err)
 	}
-	_, err = stream.Recv()
-	if err != io.EOF {
+	if _, err = stream.Recv(); err != io.EOF {
 		t.Fatalf("ss.Client.FullDuplexCall().Recv() got error %v; want io.EOF", err)
 	}
 }
