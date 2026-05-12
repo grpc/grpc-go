@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"time"
 
+	"google.golang.org/grpc/experimental/optional"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/xds/httpfilter"
 	"google.golang.org/grpc/internal/xds/matcher"
@@ -39,8 +40,8 @@ func init() {
 	}
 }
 
-var serverConfigFromGrpcService = func(*v3corepb.GrpcService) (*httpfilter.ServerConfig, error) {
-	return nil, fmt.Errorf("extproc: serverConfigFromGrpcService not implemented")
+var serverConfigFromGrpcService = func(*v3corepb.GrpcService) (httpfilter.ServerConfig, error) {
+	return httpfilter.ServerConfig{}, fmt.Errorf("extproc: serverConfigFromGrpcService not implemented")
 }
 
 const defaultDeferredCloseTimeout = 5 * time.Second
@@ -118,7 +119,7 @@ func (builder) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, er
 		responseAttributes:       msg.GetResponseAttributes(),
 		disableImmediateResponse: msg.GetDisableImmediateResponse(),
 		observabilityMode:        msg.GetObservabilityMode(),
-		failureModeAllow:         &failureModeAllow,
+		failureModeAllow:         failureModeAllow,
 		server:                   server,
 		mutationRules:            mr,
 		allowedHeaders:           allowedHeaders,
@@ -148,28 +149,37 @@ func (builder) ParseFilterConfigOverride(ov proto.Message) (httpfilter.FilterCon
 	}
 	override := msg.GetOverrides()
 
+	var processingModesOpt optional.Option[processingModes]
 	if pm := override.GetProcessingMode(); pm != nil {
 		if err := validateBodyProcessingMode(pm); err != nil {
 			return nil, err
 		}
+		processingModesOpt = optional.NewValue(processingModesFromProto(pm))
 	}
 
-	var server *httpfilter.ServerConfig
-	var err error
+	var serverOpt optional.Option[httpfilter.ServerConfig]
 	if override.GetGrpcService() != nil {
-		server, err = serverConfigFromGrpcService(override.GetGrpcService())
+		server, err := serverConfigFromGrpcService(override.GetGrpcService())
 		if err != nil {
 			return nil, err
 		}
-	}
-	iCfg := interceptorConfig{
-		processingModes:    processingModesFromProto(override.GetProcessingMode()),
-		requestAttributes:  override.GetRequestAttributes(),
-		responseAttributes: override.GetResponseAttributes(),
-		server:             server,
+		serverOpt = optional.NewValue(server)
 	}
 
-	return overrideConfig{config: iCfg}, nil
+	var failureModeAllowOpt optional.Option[bool]
+	if override.GetFailureModeAllow() != nil {
+		failureModeAllowOpt = optional.NewValue(override.GetFailureModeAllow().GetValue())
+	}
+
+	return overrideConfig{
+		config: interceptorOverrideConfig{
+			server:             serverOpt,
+			processingModes:    processingModesOpt,
+			requestAttributes:  override.GetRequestAttributes(),
+			responseAttributes: override.GetResponseAttributes(),
+			failureModeAllow:   failureModeAllowOpt,
+		},
+	}, nil
 }
 
 func (builder) IsTerminal() bool {

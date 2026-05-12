@@ -21,6 +21,7 @@ package extproc
 import (
 	"time"
 
+	"google.golang.org/grpc/experimental/optional"
 	"google.golang.org/grpc/internal/xds/httpfilter"
 	"google.golang.org/grpc/internal/xds/matcher"
 
@@ -34,7 +35,15 @@ type baseConfig struct {
 
 type overrideConfig struct {
 	httpfilter.FilterConfig
-	config interceptorConfig
+	config interceptorOverrideConfig
+}
+
+type interceptorOverrideConfig struct {
+	server             optional.Option[httpfilter.ServerConfig]
+	processingModes    optional.Option[processingModes]
+	requestAttributes  []string
+	responseAttributes []string
+	failureModeAllow   optional.Option[bool]
 }
 
 // interceptorConfig contains the configuration for the external processing
@@ -44,14 +53,14 @@ type interceptorConfig struct {
 	// config. If both are set, the override config will be used.
 	//
 	// server is the configuration for the external processing server.
-	server *httpfilter.ServerConfig
+	server httpfilter.ServerConfig
 	// failureModeAllow specifies the behavior when the RPC to the external
 	// processing server fails. If true, the dataplane RPC will be allowed to
 	// continue. If false, the data plane RPC will be failed with a grpc status
 	// code of UNAVAILABLE.
-	failureModeAllow *bool
+	failureModeAllow bool
 	// processingModes specifies the processing mode for each dataplane event.
-	processingModes *processingModes
+	processingModes processingModes
 	// Attributes to be sent to the external processing server along with the
 	// request and response dataplane events.
 	requestAttributes  []string
@@ -138,11 +147,11 @@ func resolveBodyMode(mode v3procfilterpb.ProcessingMode_BodySendMode) processing
 
 // processingModesFromProto converts a protobuf ProcessingMode message
 // to a processingModes struct.
-func processingModesFromProto(pm *v3procfilterpb.ProcessingMode) *processingModes {
+func processingModesFromProto(pm *v3procfilterpb.ProcessingMode) processingModes {
 	if pm == nil {
-		return nil
+		return processingModes{}
 	}
-	return &processingModes{
+	return processingModes{
 		requestHeaderMode:   resolveHeaderMode(pm.GetRequestHeaderMode(), modeSend),
 		responseHeaderMode:  resolveHeaderMode(pm.GetResponseHeaderMode(), modeSend),
 		responseTrailerMode: resolveHeaderMode(pm.GetResponseTrailerMode(), modeSkip),
