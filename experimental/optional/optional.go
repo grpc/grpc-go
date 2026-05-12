@@ -28,7 +28,7 @@ type Option[T any] struct {
 }
 
 // New creates a new Option that does not have a value set. This can also be
-// done implicitly using a zero-value declaration: `var opt optional.Option[T]“
+// done implicitly using a zero-value declaration: `var opt optional.Option[T]`
 func New[T any]() Option[T] {
 	return Option[T]{}
 }

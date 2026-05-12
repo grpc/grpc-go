@@ -40,13 +40,12 @@ type overrideConfig struct {
 
 // interceptorOverrideConfig contains the configuration for the external
 // processing client interceptor override. This is used for overriding the base
-// config. If a particular field is set , that will be used instead of the base
+// config. If a particular field is set, that will be used instead of the base
 // config.
 type interceptorOverrideConfig struct {
 	// server is the configuration for the external processing server.
 	server optional.Option[httpfilter.ServerConfig]
 	// processingModes specifies the processing mode for each dataplane event.
-
 	processingModes optional.Option[processingModes]
 	// failureModeAllow specifies the behavior when the RPC to the external
 	// processing server fails. If true, the dataplane RPC will be allowed to

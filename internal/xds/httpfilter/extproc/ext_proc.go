@@ -70,7 +70,7 @@ func (builder) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, er
 	}
 	m, ok := cfg.(*anypb.Any)
 	if !ok {
-		return nil, fmt.Errorf("extproc: error parsing config %v: unknown type %T , want *anypb.Any", cfg, cfg)
+		return nil, fmt.Errorf("extproc: error parsing config %v: unknown type %T, want *anypb.Any", cfg, cfg)
 	}
 	msg := new(v3procfilterpb.ExternalProcessor)
 	if err := m.UnmarshalTo(msg); err != nil {
