@@ -39,7 +39,6 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 
-	// gcpauthn "google.golang.org/grpc/internal/xds/httpfilter/gcp_authn"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
@@ -71,16 +70,19 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
-var (
+const (
 	audienceTypeURL       = "type.googleapis.com/envoy.extensions.filters.http.gcp_authn.v3.Audience"
 	tokenValue            = "token"
 	gceMetadataHostEnvVar = "GCE_METADATA_HOST"
-	testServiceName       = "service-name"
-	routeConfigName       = "route-config"
-	clusterName           = "cluster_A"
-	endpointName          = "endpoint_A"
-	filterName            = "com.google.grpc.gcp_authn"
-	url                   = "https://example.com"
+)
+
+var (
+	testServiceName = "service-name"
+	routeConfigName = "route-config"
+	clusterName     = "cluster_A"
+	endpointName    = "endpoint_A"
+	filterName      = "com.google.grpc.gcp_authn"
+	url             = "https://example.com"
 )
 
 func setupGCPAuthnTest(t *testing.T) {

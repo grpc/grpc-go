@@ -133,9 +133,7 @@ func (cf *ClientFilter) BuildClientInterceptor(cfg, _ httpfilter.FilterConfig) (
 		cf.cache = newLRUCache(c.cacheSize)
 	}
 
-	if c.cacheSize != cf.cache.cacheSize {
-		resizeCache(cf.cache, c.cacheSize)
-	}
+	cf.cache.resizeCache(c.cacheSize)
 
 	return &interceptor{
 		filterName: cf.FilterName,
@@ -244,7 +242,15 @@ func newLRUCache(size uint64) *lruCache {
 	}
 }
 
-func resizeCache(c *lruCache, newCacheSize uint64) {
+func (c *lruCache) resizeCache(newCacheSize uint64) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	// If the size hasn't changed, do nothing.
+	if c.cacheSize == newCacheSize {
+		return
+	}
+
 	c.cacheSize = newCacheSize
 	for uint64(len(c.cache)) > c.cacheSize {
 		oldest := c.ll.Back()
@@ -258,17 +264,20 @@ func resizeCache(c *lruCache, newCacheSize uint64) {
 
 func (c *lruCache) getOrCreate(audience string) (credentials.PerRPCCredentials, error) {
 	c.mu.Lock()
-	defer c.mu.Unlock()
 
 	if e, ok := c.cache[audience]; ok {
 		c.ll.MoveToFront(e)
+		c.mu.Unlock()
 		return e.Value.(*gcpAuthnCallCredEntry).value, nil
 	}
 
+	c.mu.Unlock()
 	creds, err := c.credsCreator(audience)
 	if err != nil {
 		return nil, err
 	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
 	if c.cacheSize > 0 {
 		if uint64(len(c.cache)) >= c.cacheSize {
