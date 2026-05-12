@@ -16,7 +16,7 @@
  *
  */
 
-// Package optional adds generic optional types in Go.
+// Package optional adds generic optional types.
 //
 // All APIs in this package are experimental.
 package optional

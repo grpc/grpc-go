@@ -38,12 +38,25 @@ type overrideConfig struct {
 	config interceptorOverrideConfig
 }
 
+// interceptorOverrideConfig contains the configuration for the external
+// processing client interceptor override. This is used for overriding the base
+// config. If a particular field is set , that will be used instead of the base
+// config.
 type interceptorOverrideConfig struct {
-	server             optional.Option[httpfilter.ServerConfig]
-	processingModes    optional.Option[processingModes]
+	// server is the configuration for the external processing server.
+	server optional.Option[httpfilter.ServerConfig]
+	// processingModes specifies the processing mode for each dataplane event.
+
+	processingModes optional.Option[processingModes]
+	// failureModeAllow specifies the behavior when the RPC to the external
+	// processing server fails. If true, the dataplane RPC will be allowed to
+	// continue. If false, the data plane RPC will be failed with a grpc status
+	// code of UNAVAILABLE.
+	failureModeAllow optional.Option[bool]
+	// Attributes to be sent to the external processing server along with the
+	// request and response dataplane events.
 	requestAttributes  []string
 	responseAttributes []string
-	failureModeAllow   optional.Option[bool]
 }
 
 // interceptorConfig contains the configuration for the external processing
@@ -148,9 +161,6 @@ func resolveBodyMode(mode v3procfilterpb.ProcessingMode_BodySendMode) processing
 // processingModesFromProto converts a protobuf ProcessingMode message
 // to a processingModes struct.
 func processingModesFromProto(pm *v3procfilterpb.ProcessingMode) processingModes {
-	if pm == nil {
-		return processingModes{}
-	}
 	return processingModes{
 		requestHeaderMode:   resolveHeaderMode(pm.GetRequestHeaderMode(), modeSend),
 		responseHeaderMode:  resolveHeaderMode(pm.GetResponseHeaderMode(), modeSend),
