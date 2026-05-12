@@ -285,7 +285,7 @@ func (s) TestParseFilterConfig(t *testing.T) {
 				})
 				return m
 			}(),
-			wantErr: "extproc: error parsing regexp",
+			wantErr: "httpfilter: error parsing regexp",
 		},
 		{
 			name: "ErrInvalidDisallowExpression",
@@ -305,7 +305,7 @@ func (s) TestParseFilterConfig(t *testing.T) {
 				})
 				return m
 			}(),
-			wantErr: "extproc: error parsing regexp",
+			wantErr: "httpfilter: error parsing regexp",
 		},
 		{
 			name: "ErrInvalidAllowedHeaders_EmptyPrefix",
