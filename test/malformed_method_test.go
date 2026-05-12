@@ -41,18 +41,23 @@ func (s) TestMalformedMethodPath(t *testing.T) {
 		wantStatus string // string representation of codes.Code
 	}{
 		{
-			name:       "missing_leading_slash_disableStrictPathChecking_false",
+			name:       "missing_leading_slash",
 			path:       "grpc.testing.TestService/UnaryCall",
 			wantStatus: "12", // Unimplemented
 		},
 		{
-			name:       "empty_path_disableStrictPathChecking_false",
+			name:       "empty_path",
 			path:       "",
 			wantStatus: "12", // Unimplemented
 		},
 		{
-			name:       "just_slash_disableStrictPathChecking_false",
+			name:       "just_slash",
 			path:       "/",
+			wantStatus: "12", // Unimplemented
+		},
+		{
+			name:       "double_slash",
+			path:       "//grpc.testing.TestService/UnaryCall",
 			wantStatus: "12", // Unimplemented
 		},
 	}
