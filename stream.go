@@ -52,12 +52,15 @@ import (
 
 var metadataFromOutgoingContextRaw = internal.FromOutgoingContextRaw.(func(context.Context) (metadata.MD, [][]string, bool))
 
+// clientStreamKey is the context key used to store a *clientStream pointer
+// in the stream's context so that SetClientStreamMessageCompression can retrieve
+// it from a generated stream wrapper without a direct type assertion.
+type clientStreamKey struct{}
+
 // SetServerStreamMessageCompression enables or disables per-message compression
 // on a server stream. The provided context must be the context passed to the
 // server handler. Compression is enabled by default and is a no-op if no
 // compressor is configured on the stream (e.g. via SetSendCompressor).
-//
-// This method must not be called concurrently with SendMsg.
 //
 // # Experimental
 //
@@ -68,7 +71,7 @@ func SetServerStreamMessageCompression(ctx context.Context, enable bool) error {
 	if sts == nil {
 		return fmt.Errorf("grpc: SetServerStreamMessageCompression called on a non-server-stream context")
 	}
-	sts.SetEnableCompression(enable)
+	sts.EnableCompression(enable)
 	return nil
 }
 
@@ -84,9 +87,9 @@ func SetServerStreamMessageCompression(ctx context.Context, enable bool) error {
 // Notice: This API is EXPERIMENTAL and may be changed or removed in a
 // later release.
 func SetClientStreamMessageCompression(cs ClientStream, enable bool) error {
-	s, ok := cs.(*clientStream)
+	s, ok := cs.Context().Value(clientStreamKey{}).(*clientStream)
 	if !ok {
-		return fmt.Errorf("grpc: SetClientStreamMessageCompression called on a non-client-stream")
+		return fmt.Errorf("grpc: SetClientStreamMessageCompression called on a non-client-stream context")
 	}
 	s.enableCompression = enable
 	return nil
@@ -407,6 +410,9 @@ func newClientStreamWithParams(ctx context.Context, desc *StreamDesc, cc *Client
 		onCommit:            onCommit,
 		nameResolutionDelay: nameResolutionDelayed,
 		enableCompression:   compressorV0 != nil || compressorV1 != nil,
+	}
+	if compressorV0 != nil || compressorV1 != nil {
+		cs.ctx = context.WithValue(cs.ctx, clientStreamKey{}, cs)
 	}
 	if !cc.dopts.disableRetry {
 		cs.retryThrottler = cc.retryThrottler.Load().(*retryThrottler)

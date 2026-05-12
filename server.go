@@ -1897,9 +1897,9 @@ type ServerTransportStream interface {
 	SetHeader(md metadata.MD) error
 	SendHeader(md metadata.MD) error
 	SetTrailer(md metadata.MD) error
-	// SetEnableCompression controls whether per-message compression is enabled
+	// EnableCompression controls whether per-message compression is enabled
 	// for subsequent messages sent on this stream.
-	SetEnableCompression(enable bool)
+	EnableCompression(enable bool)
 }
 
 // ServerTransportStreamFromContext returns the ServerTransportStream saved in

@@ -54,18 +54,17 @@ type ServerStream struct {
 	headerWireLength int
 
 	// enableCompression controls whether per-message compression is enabled for
-	// this stream. It is accessed serially alongside SendMsg calls, so no mutex
-	// is needed.
-	enableCompression bool
+	// this stream.
+	enableCompression atomic.Bool
 }
 
-// SetEnableCompression sets whether per-message compression is enabled for
+// EnableCompression sets whether per-message compression is enabled for
 // subsequent messages sent on this stream.
-func (s *ServerStream) SetEnableCompression(v bool) { s.enableCompression = v }
+func (s *ServerStream) EnableCompression(v bool) { s.enableCompression.Store(v) }
 
 // IsCompressionEnabled reports whether per-message compression is enabled for
 // this stream.
-func (s *ServerStream) IsCompressionEnabled() bool { return s.enableCompression }
+func (s *ServerStream) IsCompressionEnabled() bool { return s.enableCompression.Load() }
 
 // Read reads an n byte message from the input stream.
 func (s *ServerStream) Read(n int) (mem.BufferSlice, error) {

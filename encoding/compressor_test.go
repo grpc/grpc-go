@@ -319,8 +319,7 @@ func (s) TestMessageCompression_StreamToggle(t *testing.T) {
 	stream.Send(&testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: make([]byte, 1000)}})
 	stream.Recv()
 	if sh.compress.Load() != 1 || sh.decompress.Load() != 1 {
-		t.Fatalf("After call 1 (compression enabled): got compress=%d decompress=%d, want compress=1 decompress=1",
-			sh.compress.Load(), sh.decompress.Load())
+		t.Fatalf("After call 1 (compression enabled): got compress=%d decompress=%d, want compress=1 decompress=1", sh.compress.Load(), sh.decompress.Load())
 	}
 
 	// 2. Disable message compression and send second message
@@ -328,8 +327,7 @@ func (s) TestMessageCompression_StreamToggle(t *testing.T) {
 	stream.Send(&testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: make([]byte, 1000)}})
 	stream.Recv()
 	if sh.compress.Load() != 1 || sh.decompress.Load() != 1 {
-		t.Fatalf("After call 2 (compression disabled): got compress=%d decompress=%d, want compress=1 decompress=1",
-			sh.compress.Load(), sh.decompress.Load())
+		t.Fatalf("After call 2 (compression disabled): got compress=%d decompress=%d, want compress=1 decompress=1", sh.compress.Load(), sh.decompress.Load())
 	}
 
 	// 3. Enable message compression and send third message
@@ -337,8 +335,7 @@ func (s) TestMessageCompression_StreamToggle(t *testing.T) {
 	stream.Send(&testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: make([]byte, 1000)}})
 	stream.Recv()
 	if sh.compress.Load() != 2 || sh.decompress.Load() != 2 {
-		t.Fatalf("After call 3 (compression re-enabled): got compress=%d decompress=%d, want compress=2 decompress=2",
-			sh.compress.Load(), sh.decompress.Load())
+		t.Fatalf("After call 3 (compression re-enabled): got compress=%d decompress=%d, want compress=2 decompress=2", sh.compress.Load(), sh.decompress.Load())
 	}
 }
 
@@ -375,18 +372,13 @@ func (s) TestMessageCompression_AmbiguousContext(t *testing.T) {
 		FullDuplexCallF: func(serverStream testgrpc.TestService_FullDuplexCallServer) error {
 			// Use the server handler's context as the parent for the outbound
 			// call. This is the standard deadline-propagation pattern.
-			backendConn, err := grpc.NewClient(
-				backend.Address,
-				grpc.WithTransportCredentials(insecure.NewCredentials()),
-			)
+			backendConn, err := grpc.NewClient(backend.Address, grpc.WithTransportCredentials(insecure.NewCredentials()))
 			if err != nil {
 				return err
 			}
 			defer backendConn.Close()
 
-			clientStream, err := testgrpc.NewTestServiceClient(backendConn).FullDuplexCall(
-				serverStream.Context(), grpc.UseCompressor("gzip"),
-			)
+			clientStream, err := testgrpc.NewTestServiceClient(backendConn).FullDuplexCall(serverStream.Context(), grpc.UseCompressor("gzip"))
 			if err != nil {
 				return err
 			}

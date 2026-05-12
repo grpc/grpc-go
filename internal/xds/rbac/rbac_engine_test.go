@@ -1825,7 +1825,7 @@ func (sts *ServerTransportStreamWithMethod) SetTrailer(metadata.MD) error {
 	return nil
 }
 
-func (sts *ServerTransportStreamWithMethod) SetEnableCompression(bool) {}
+func (sts *ServerTransportStreamWithMethod) EnableCompression(bool) {}
 
 // An audit logger that will log to the auditEvents slice.
 type TestAuditLoggerBuffer struct {
