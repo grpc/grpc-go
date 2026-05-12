@@ -30,10 +30,10 @@ import (
 
 func init() {
 	if envconfig.XDSHTTPConnectEnabled {
-		registerMetadataConverter("type.googleapis.com/envoy.config.core.v3.Address", proxyAddressConvertor{})
+		RegisterMetadataConverter("type.googleapis.com/envoy.config.core.v3.Address", proxyAddressConvertor{})
 	}
 	if envconfig.GCPAuthenticationFilterEnabled {
-		registerMetadataConverter("type.googleapis.com/envoy.extensions.filters.http.gcp_authn.v3.Audience", audienceConverter{})
+		RegisterMetadataConverter("type.googleapis.com/envoy.extensions.filters.http.gcp_authn.v3.Audience", AudienceConverter{})
 	}
 }
 
@@ -50,9 +50,9 @@ type metadataConverter interface {
 	convert(*anypb.Any) (any, error)
 }
 
-// registerMetadataConverter registers the converter to the map keyed on a proto
+// RegisterMetadataConverter registers the converter to the map keyed on a proto
 // type_url. Must be called at init time. Not thread safe.
-func registerMetadataConverter(protoType string, c metadataConverter) {
+func RegisterMetadataConverter(protoType string, c metadataConverter) {
 	metadataRegistry[protoType] = c
 }
 
@@ -61,9 +61,9 @@ func metadataConverterForType(typeURL string) metadataConverter {
 	return metadataRegistry[typeURL]
 }
 
-// unregisterMetadataConverterForTesting removes a converter from the registry.
+// UnregisterMetadataConverterForTesting removes a converter from the registry.
 // For testing only.
-func unregisterMetadataConverterForTesting(typeURL string) {
+func UnregisterMetadataConverterForTesting(typeURL string) {
 	delete(metadataRegistry, typeURL)
 }
 
@@ -115,12 +115,12 @@ type AudienceMetadataValue struct {
 	Audience string
 }
 
-// audienceConverter implements the metadataConverter interface to
+// AudienceConverter implements the metadataConverter interface to
 // handle the conversion of envoy.extensions.filters.http.gcp_authn.v3.Audience
 // protobuf messages into an internal representation.
-type audienceConverter struct{}
+type AudienceConverter struct{}
 
-func (audienceConverter) convert(anyProto *anypb.Any) (any, error) {
+func (AudienceConverter) convert(anyProto *anypb.Any) (any, error) {
 	audienceProto := &v3gcpauthnpb.Audience{}
 	if err := anyProto.UnmarshalTo(audienceProto); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal the envoy.extensions.filters.http.gcp_authn.v3.Audience resource from Any proto: %v", err)

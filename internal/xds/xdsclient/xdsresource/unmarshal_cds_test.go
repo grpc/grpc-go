@@ -1769,9 +1769,9 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 // 2. Registering the audience converter, since this is otherwise done in init.
 func enableGCPAuthenticationFilter(t *testing.T) {
 	testutils.SetEnvConfig(t, &envconfig.GCPAuthenticationFilterEnabled, true)
-	registerMetadataConverter(audienceTypeURL, audienceConverter{})
+	RegisterMetadataConverter(audienceTypeURL, AudienceConverter{})
 	t.Cleanup(func() {
-		unregisterMetadataConverterForTesting(audienceTypeURL)
+		UnregisterMetadataConverterForTesting(audienceTypeURL)
 	})
 }
 
@@ -1782,7 +1782,7 @@ func enableGCPAuthenticationFilter(t *testing.T) {
 // or previous test)
 func disableGCPAuthenticationFilter(t *testing.T) {
 	testutils.SetEnvConfig(t, &envconfig.GCPAuthenticationFilterEnabled, false)
-	unregisterMetadataConverterForTesting(audienceTypeURL)
+	UnregisterMetadataConverterForTesting(audienceTypeURL)
 }
 
 // Tests custom metadata parsing for success cases when the
