@@ -2081,8 +2081,8 @@ func TestAuthenticatedMatcherEmptyURISAN(t *testing.T) {
 			wantMatch: true,
 		},
 		{
-			name: "mixedEmptyAndValidURISANNoFallthrough",
-			uris: []*url.URL{{}, mustParseURL("spiffe://corp.example/svc/other")},
+			name:     "mixedEmptyAndValidURISANNoFallthrough",
+			uris:     []*url.URL{{}, mustParseURL("spiffe://corp.example/svc/other")},
 			dnsNames: []string{"svc.legitimate.internal"},
 			matcher: &v3matcherpb.StringMatcher{
 				MatchPattern: &v3matcherpb.StringMatcher_Contains{
