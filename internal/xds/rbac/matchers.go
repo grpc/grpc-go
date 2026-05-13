@@ -437,7 +437,16 @@ func (am *authenticatedMatcher) match(data *rpcData) bool {
 	cert := data.certs[0]
 	// Use the first non-empty identity source in priority order:
 	// URI SANs, then DNS SANs, then Subject.
-	if len(cert.URIs) > 0 {
+	// Skip degenerate URI entries (empty url.URL{}) that serialize to ""
+	// to avoid treating them as a present identity source.
+	hasNonEmptyURI := false
+	for _, u := range cert.URIs {
+		if u.String() != "" {
+			hasNonEmptyURI = true
+			break
+		}
+	}
+	if hasNonEmptyURI {
 		for _, uriSAN := range cert.URIs {
 			if am.stringMatcher.Match(uriSAN.String()) {
 				return true

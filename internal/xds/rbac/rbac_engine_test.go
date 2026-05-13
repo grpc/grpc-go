@@ -2035,3 +2035,104 @@ func TestAuthenticatedMatcherIdentitySourcePrecedence(t *testing.T) {
 		})
 	}
 }
+
+// TestAuthenticatedMatcherEmptyURISAN verifies that a certificate containing
+// a degenerate (empty) URI SAN does not prevent fallthrough to DNS SANs.
+// An empty url.URL{} serializes to "" via String(), which should not be
+// treated as a meaningful identity source.
+func TestAuthenticatedMatcherEmptyURISAN(t *testing.T) {
+	tests := []struct {
+		name      string
+		uris      []*url.URL
+		dnsNames  []string
+		subjectCN string
+		matcher   *v3matcherpb.StringMatcher
+		wantMatch bool
+	}{
+		{
+			name:     "emptyURISANFallsThroughToDNS",
+			uris:     []*url.URL{{}},
+			dnsNames: []string{"svc.legitimate.internal"},
+			matcher: &v3matcherpb.StringMatcher{
+				MatchPattern: &v3matcherpb.StringMatcher_Contains{
+					Contains: "svc.legitimate.internal",
+				},
+			},
+			wantMatch: true,
+		},
+		{
+			name: "emptyURISANDoesNotMatchPrefix",
+			uris: []*url.URL{{}},
+			matcher: &v3matcherpb.StringMatcher{
+				MatchPattern: &v3matcherpb.StringMatcher_Prefix{
+					Prefix: "spiffe://corp.example/",
+				},
+			},
+			wantMatch: false,
+		},
+		{
+			name: "mixedEmptyAndValidURISAN",
+			uris: []*url.URL{{}, mustParseURL("spiffe://corp.example/svc/admin")},
+			matcher: &v3matcherpb.StringMatcher{
+				MatchPattern: &v3matcherpb.StringMatcher_Contains{
+					Contains: "spiffe://corp.example/svc/admin",
+				},
+			},
+			wantMatch: true,
+		},
+		{
+			name: "mixedEmptyAndValidURISANNoFallthrough",
+			uris: []*url.URL{{}, mustParseURL("spiffe://corp.example/svc/other")},
+			dnsNames: []string{"svc.legitimate.internal"},
+			matcher: &v3matcherpb.StringMatcher{
+				MatchPattern: &v3matcherpb.StringMatcher_Contains{
+					Contains: "svc.legitimate.internal",
+				},
+			},
+			wantMatch: false,
+		},
+		{
+			name:      "allEmptyURISANsFallThroughToSubject",
+			uris:      []*url.URL{{}, {}},
+			subjectCN: "svc.legitimate.internal",
+			matcher: &v3matcherpb.StringMatcher{
+				MatchPattern: &v3matcherpb.StringMatcher_Contains{
+					Contains: "svc.legitimate.internal",
+				},
+			},
+			wantMatch: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cert := &x509.Certificate{
+				URIs:     tt.uris,
+				DNSNames: tt.dnsNames,
+				Subject:  pkix.Name{CommonName: tt.subjectCN},
+			}
+			amConfig := &v3rbacpb.Principal_Authenticated{
+				PrincipalName: tt.matcher,
+			}
+			matcher, err := newAuthenticatedMatcher(amConfig)
+			if err != nil {
+				t.Fatalf("failed to create matcher: %v", err)
+			}
+			rpcData := &rpcData{
+				authType: "tls",
+				certs:    []*x509.Certificate{cert},
+			}
+			if got := matcher.match(rpcData); got != tt.wantMatch {
+				t.Errorf("match() = %v, want %v", got, tt.wantMatch)
+			}
+		})
+	}
+}
+
+func mustParseURL(s string) *url.URL {
+	u, err := url.Parse(s)
+	if err != nil {
+		panic(err)
+	}
+	return u
+}
