@@ -171,9 +171,9 @@ func (builder) ParseFilterConfigOverride(ov proto.Message) (httpfilter.FilterCon
 	return overrideConfig{
 		server:             serverOpt,
 		processingModes:    processingModesOpt,
+		failureModeAllow:   failureModeAllowOpt,
 		requestAttributes:  override.GetRequestAttributes(),
 		responseAttributes: override.GetResponseAttributes(),
-		failureModeAllow:   failureModeAllowOpt,
 	}, nil
 }
 

@@ -55,9 +55,9 @@ func (s) TestOption_Int(t *testing.T) {
 		t.Fatalf("NewValue(42) = (%v, %v); want (42, true)", v, set)
 	}
 
-	opt = opt.Set(100)
+	opt.Set(100)
 	if v, set := opt.Get(); !set || v != 100 {
-		t.Fatalf("WithValue(100) = (%v, %v); want (100, true)", v, set)
+		t.Fatalf("Set(100) = (%v, %v); want (100, true)", v, set)
 	}
 }
 
@@ -84,9 +84,9 @@ func (s) TestOption_String(t *testing.T) {
 	}
 
 	wantStringNew := "world"
-	opt = opt.Set(wantStringNew)
+	opt.Set(wantStringNew)
 	if v, set := opt.Get(); !set || v != wantStringNew {
-		t.Fatalf("WithValue(%q) = (%q, %v); want (%q, true)", wantStringNew, v, set, wantStringNew)
+		t.Fatalf("Set(%q) = (%q, %v); want (%q, true)", wantStringNew, v, set, wantStringNew)
 	}
 }
 
@@ -111,9 +111,9 @@ func (s) TestOption_Struct(t *testing.T) {
 		t.Fatalf("NewValue(val1) = (%v, %v); want (%v, true)", v, set, val1)
 	}
 
-	opt = opt.Set(val2)
+	opt.Set(val2)
 	if v, set := opt.Get(); !set || v != val2 {
-		t.Fatalf("WithValue(val2) = (%v, %v); want (%v, true)", v, set, val2)
+		t.Fatalf("Set(val2) = (%v, %v); want (%v, true)", v, set, val2)
 	}
 }
 
@@ -134,8 +134,8 @@ func (s) TestOption_Slice(t *testing.T) {
 		t.Fatalf("NewValue(%v) = (%v, %v); want (%v, true)", val1, v, set, val1)
 	}
 
-	opt = opt.Set(val2)
+	opt.Set(val2)
 	if v, set := opt.Get(); !set || !slices.Equal(v, val2) {
-		t.Fatalf("WithValue(%v) = (%v, %v); want (%v, true)", &val2, v, set, &val2)
+		t.Fatalf("Set(%v) = (%v, %v); want (%v, true)", &val2, v, set, &val2)
 	}
 }

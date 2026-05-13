@@ -17,41 +17,38 @@
  */
 
 // Package optional implements a generic optional type.
-//
-// All APIs in this package are experimental.
 package optional
 
 // Optional represents an optional value of type T.
 // This type is not safe for concurrent access.
 type Optional[T any] struct {
-	val   T
-	isSet bool
+	val T
+	set bool
 }
 
-// New creates a new Option that does not have a value set. This can also be
-// done implicitly using a zero-value declaration: `var opt optional.Option[T]`
+// New creates a new Optional type that does not have a value set. This can also
+// be done implicitly using a zero-value declaration: `var opt
+// optional.Optional[T]`
 func New[T any]() Optional[T] {
 	return Optional[T]{}
 }
 
-// NewValue creates a new Option with the provided value.
+// NewValue creates a new Optional type with the provided value.
 func NewValue[T any](value T) Optional[T] {
 	return Optional[T]{
-		val:   value,
-		isSet: true,
+		val: value,
+		set: true,
 	}
 }
 
 // Get returns the underlying value and a boolean indicating if the value is
 // set. If the value is not set, it returns the zero value of T and false.
-func (o Optional[T]) Get() (T, bool) {
-	return o.val, o.isSet
+func (o *Optional[T]) Get() (T, bool) {
+	return o.val, o.set
 }
 
 // Set returns a new Option containing the provided value.
-func (o Optional[T]) Set(value T) Optional[T] {
-	return Optional[T]{
-		val:   value,
-		isSet: true,
-	}
+func (o *Optional[T]) Set(v T) {
+	o.val = v
+	o.set = true
 }

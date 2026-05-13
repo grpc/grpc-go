@@ -75,7 +75,7 @@ func (s) TestParseFilterConfig_Success(t *testing.T) {
 		wantCfg httpfilter.FilterConfig
 	}{
 		{
-			name: "ValidConfig_default",
+			name: "DefaultConfig",
 			cfg: func() proto.Message {
 				m, _ := anypb.New(&fpb.ExternalProcessor{
 					GrpcService: &corepb.GrpcService{
@@ -106,7 +106,7 @@ func (s) TestParseFilterConfig_Success(t *testing.T) {
 			},
 		},
 		{
-			name: "ValidConfig_GrpcMode",
+			name: "ConfigWithGrpcMode",
 			cfg: func() proto.Message {
 				m, _ := anypb.New(&fpb.ExternalProcessor{
 					GrpcService: &corepb.GrpcService{
@@ -140,7 +140,7 @@ func (s) TestParseFilterConfig_Success(t *testing.T) {
 			},
 		},
 		{
-			name: "ValidConfig_WithMutationRules",
+			name: "ConfigWithMutationRules",
 			cfg: func() proto.Message {
 				m, _ := anypb.New(&fpb.ExternalProcessor{
 					GrpcService: &corepb.GrpcService{
@@ -226,7 +226,7 @@ func (s) TestParseFilterConfig_Errors(t *testing.T) {
 		wantErr string
 	}{
 		{
-			name: "ErrMissingGrpcService",
+			name: "MissingGrpcService",
 			cfg: func() proto.Message {
 				m, _ := anypb.New(&fpb.ExternalProcessor{ProcessingMode: &fpb.ProcessingMode{}})
 				return m
@@ -234,7 +234,7 @@ func (s) TestParseFilterConfig_Errors(t *testing.T) {
 			wantErr: "extproc: empty grpc_service provided",
 		},
 		{
-			name: "ErrUnsupportedGrpcService_EnvoyGrpc",
+			name: "UnsupportedGrpcService_EnvoyGrpc",
 			cfg: func() proto.Message {
 				m, _ := anypb.New(&fpb.ExternalProcessor{
 					GrpcService: &corepb.GrpcService{
@@ -251,7 +251,7 @@ func (s) TestParseFilterConfig_Errors(t *testing.T) {
 			wantErr: "extproc: failed to parse grpc_service only google_grpc grpc_service is supported",
 		},
 		{
-			name: "ErrMissingProcessingMode",
+			name: "MissingProcessingMode",
 			cfg: func() proto.Message {
 				m, _ := anypb.New(&fpb.ExternalProcessor{
 					GrpcService: &corepb.GrpcService{
@@ -267,7 +267,7 @@ func (s) TestParseFilterConfig_Errors(t *testing.T) {
 			wantErr: "extproc: missing processing_mode",
 		},
 		{
-			name: "ErrInvalidProcessingMode_RequestBodyStreamed",
+			name: "InvalidProcessingMode_RequestBodyStreamed",
 			cfg: func() proto.Message {
 				m, _ := anypb.New(&fpb.ExternalProcessor{
 					GrpcService: &corepb.GrpcService{
@@ -284,7 +284,7 @@ func (s) TestParseFilterConfig_Errors(t *testing.T) {
 			wantErr: "extproc: invalid request body mode STREAMED",
 		},
 		{
-			name: "ErrInvalidProcessingMode_ResponseBodyStreamed",
+			name: "InvalidProcessingMode_ResponseBodyStreamed",
 			cfg: func() proto.Message {
 				m, _ := anypb.New(&fpb.ExternalProcessor{
 					GrpcService: &corepb.GrpcService{
@@ -301,7 +301,7 @@ func (s) TestParseFilterConfig_Errors(t *testing.T) {
 			wantErr: "extproc: invalid response body mode STREAMED",
 		},
 		{
-			name: "ErrInvalidMutationRules",
+			name: "InvalidMutationRules",
 			cfg: func() proto.Message {
 				m, _ := anypb.New(&fpb.ExternalProcessor{
 					GrpcService: &corepb.GrpcService{
@@ -321,7 +321,7 @@ func (s) TestParseFilterConfig_Errors(t *testing.T) {
 			wantErr: "httpfilter: error parsing regexp",
 		},
 		{
-			name: "ErrInvalidAllowedHeaders_EmptyPrefix",
+			name: "InvalidAllowedHeaders_EmptyPrefix",
 			cfg: func() proto.Message {
 				m, _ := anypb.New(&fpb.ExternalProcessor{
 					GrpcService: &corepb.GrpcService{
@@ -347,7 +347,7 @@ func (s) TestParseFilterConfig_Errors(t *testing.T) {
 			wantErr: "empty prefix is not allowed",
 		},
 		{
-			name: "ErrInvalidServerConfig_EmptyTargetURI",
+			name: "InvalidServerConfig_EmptyTargetURI",
 			cfg: func() proto.Message {
 				m, _ := anypb.New(&fpb.ExternalProcessor{
 					GrpcService: &corepb.GrpcService{
@@ -364,12 +364,12 @@ func (s) TestParseFilterConfig_Errors(t *testing.T) {
 			wantErr: "extproc: failed to parse grpc_service targetURI must be a non-empty string",
 		},
 		{
-			name:    "ErrNilConfig",
+			name:    "NilConfig",
 			cfg:     nil,
 			wantErr: "extproc: nil base configuration message provided",
 		},
 		{
-			name:    "ErrInvalidConfigType",
+			name:    "InvalidConfigType",
 			cfg:     &fpb.ExternalProcessor{}, // Not Any
 			wantErr: "extproc: error parsing config",
 		},
