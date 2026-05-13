@@ -21,7 +21,6 @@
 package httpfilter
 
 import (
-	"encoding/json"
 	"fmt"
 	"regexp"
 	"time"
@@ -58,17 +57,17 @@ type ServerConfig struct {
 	TargetURI string
 	// ChannelCredentials specifies the transport credentials to use to connect to
 	// the external server. Must not be nil.
-	ChannelCredentials json.RawMessage
+	ChannelCredentials string
 	// CallCredentials specifies the per-RPC credentials to use when making calls
 	// to the external server.
-	CallCredentials []json.RawMessage
+	CallCredentials string
 	// Timeout is the RPC Timeout for the call to the external server. If unset,
-	// the Timeout depends on the usage of this external server. For example,
+	// the timeout depends on the usage of this external server. For example,
 	// cases like ext_authz and ext_proc, where there is a 1:1 mapping between the
-	// data plane RPC and the external server call, the Timeout will be capped by
-	// the Timeout on the data plane RPC. For cases like RLQS where there is a
-	// side channel to the external server, an unset Timeout will result in no
-	// Timeout being applied to the external server call.
+	// data plane RPC and the external server call, the timeout will be capped by
+	// the timeout on the data plane RPC. For cases like RLQS where there is a
+	// side channel to the external server, an unset timeout will result in no
+	// timeout being applied to the external server call.
 	Timeout time.Duration
 	// InitialMetadata is the additional metadata to include in all RPCs sent to
 	// the external server.

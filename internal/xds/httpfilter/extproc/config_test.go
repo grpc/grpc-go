@@ -19,20 +19,19 @@
 package extproc
 
 import (
-	"encoding/json"
 	"fmt"
 	"regexp"
 	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/experimental/optional"
 	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/grpc/internal/optional"
 	"google.golang.org/grpc/internal/xds/httpfilter"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/anypb"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	mutationpb "github.com/envoyproxy/go-control-plane/envoy/config/common/mutation_rules/v3"
 	corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -48,10 +47,9 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
-func (s) TestParseFilterConfig(t *testing.T) {
+func (s) TestParseFilterConfig_Success(t *testing.T) {
 	origServerConfigFromGrpcService := serverConfigFromGrpcService
 	defer func() { serverConfigFromGrpcService = origServerConfigFromGrpcService }()
-	jsonBytes, _ := json.Marshal(insecure.NewCredentials())
 	serverConfigFromGrpcService = func(grpcService *corepb.GrpcService) (httpfilter.ServerConfig, error) {
 		if grpcService == nil {
 			return httpfilter.ServerConfig{}, nil
@@ -64,12 +62,7 @@ func (s) TestParseFilterConfig(t *testing.T) {
 		}
 
 		sc := httpfilter.ServerConfig{
-			TargetURI:          grpcService.GetGoogleGrpc().GetTargetUri(),
-			ChannelCredentials: jsonBytes,
-			CallCredentials:    nil,
-		}
-		if sc.TargetURI == "nil-creds" {
-			sc.ChannelCredentials = nil
+			TargetURI: grpcService.GetGoogleGrpc().GetTargetUri(),
 		}
 		return sc, nil
 	}
@@ -80,7 +73,6 @@ func (s) TestParseFilterConfig(t *testing.T) {
 		name    string
 		cfg     proto.Message
 		wantCfg httpfilter.FilterConfig
-		wantErr string
 	}{
 		{
 			name: "ValidConfig_default",
@@ -98,21 +90,19 @@ func (s) TestParseFilterConfig(t *testing.T) {
 				return m
 			}(),
 			wantCfg: baseConfig{
-				config: interceptorConfig{
-					server: httpfilter.ServerConfig{
-						TargetURI:          "localhost:1234",
-						ChannelCredentials: jsonBytes,
-					},
-					processingModes: processingModes{
-						requestHeaderMode:   modeSend,
-						responseHeaderMode:  modeSend,
-						responseTrailerMode: modeSkip,
-						requestBodyMode:     modeSkip,
-						responseBodyMode:    modeSkip,
-					},
-					failureModeAllow:     false,
-					deferredCloseTimeout: defaultDeferredCloseTimeout,
+				server: httpfilter.ServerConfig{
+					TargetURI:          "localhost:1234",
+					ChannelCredentials: "",
 				},
+				processingModes: processingModes{
+					requestHeaderMode:   modeSend,
+					responseHeaderMode:  modeSend,
+					responseTrailerMode: modeSkip,
+					requestBodyMode:     modeSkip,
+					responseBodyMode:    modeSkip,
+				},
+				failureModeAllow:     false,
+				deferredCloseTimeout: defaultDeferredCloseTimeout,
 			},
 		},
 		{
@@ -134,21 +124,19 @@ func (s) TestParseFilterConfig(t *testing.T) {
 				return m
 			}(),
 			wantCfg: baseConfig{
-				config: interceptorConfig{
-					server: httpfilter.ServerConfig{
-						TargetURI:          "localhost:1234",
-						ChannelCredentials: jsonBytes,
-					},
-					processingModes: processingModes{
-						requestHeaderMode:   modeSend,
-						responseHeaderMode:  modeSend,
-						responseTrailerMode: modeSkip,
-						requestBodyMode:     modeSend,
-						responseBodyMode:    modeSend,
-					},
-					failureModeAllow:     false,
-					deferredCloseTimeout: defaultDeferredCloseTimeout,
+				server: httpfilter.ServerConfig{
+					TargetURI:          "localhost:1234",
+					ChannelCredentials: "",
 				},
+				processingModes: processingModes{
+					requestHeaderMode:   modeSend,
+					responseHeaderMode:  modeSend,
+					responseTrailerMode: modeSkip,
+					requestBodyMode:     modeSend,
+					responseBodyMode:    modeSend,
+				},
+				failureModeAllow:     false,
+				deferredCloseTimeout: defaultDeferredCloseTimeout,
 			},
 		},
 		{
@@ -171,27 +159,72 @@ func (s) TestParseFilterConfig(t *testing.T) {
 				return m
 			}(),
 			wantCfg: baseConfig{
-				config: interceptorConfig{
-					server: httpfilter.ServerConfig{
-						TargetURI:          "localhost:1234",
-						ChannelCredentials: jsonBytes,
-					},
-					processingModes: processingModes{
-						requestHeaderMode:   modeSend,
-						responseHeaderMode:  modeSend,
-						responseTrailerMode: modeSkip,
-						requestBodyMode:     modeSkip,
-						responseBodyMode:    modeSkip,
-					},
-					failureModeAllow: false,
-					mutationRules: httpfilter.HeaderMutationRules{
-						AllowExpr:    regexp.MustCompile(".*"),
-						DisallowExpr: regexp.MustCompile("a"),
-					},
-					deferredCloseTimeout: defaultDeferredCloseTimeout,
+				server: httpfilter.ServerConfig{
+					TargetURI:          "localhost:1234",
+					ChannelCredentials: "",
 				},
+				processingModes: processingModes{
+					requestHeaderMode:   modeSend,
+					responseHeaderMode:  modeSend,
+					responseTrailerMode: modeSkip,
+					requestBodyMode:     modeSkip,
+					responseBodyMode:    modeSkip,
+				},
+				failureModeAllow: false,
+				mutationRules: httpfilter.HeaderMutationRules{
+					AllowExpr:    regexp.MustCompile(".*"),
+					DisallowExpr: regexp.MustCompile("a"),
+				},
+				deferredCloseTimeout: defaultDeferredCloseTimeout,
 			},
 		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := b.ParseFilterConfig(tt.cfg)
+			if err != nil {
+				t.Fatalf("ParseFilterConfig() returned unexpected error: %v", err)
+			}
+			if diff := cmp.Diff(got, tt.wantCfg, cmp.AllowUnexported(baseConfig{}, httpfilter.ServerConfig{}, processingModes{}, httpfilter.HeaderMutationRules{}), protocmp.Transform(), cmp.Transformer("RegexpToString", func(r *regexp.Regexp) string {
+				if r == nil {
+					return ""
+				}
+				return r.String()
+			})); diff != "" {
+				t.Fatalf("ParseFilterConfig() returned unexpected config (-got +want):\n%s", diff)
+			}
+		})
+	}
+}
+
+func (s) TestParseFilterConfig_Errors(t *testing.T) {
+	origServerConfigFromGrpcService := serverConfigFromGrpcService
+	defer func() { serverConfigFromGrpcService = origServerConfigFromGrpcService }()
+	serverConfigFromGrpcService = func(grpcService *corepb.GrpcService) (httpfilter.ServerConfig, error) {
+		if grpcService == nil {
+			return httpfilter.ServerConfig{}, nil
+		}
+		if grpcService.GetGoogleGrpc() == nil {
+			return httpfilter.ServerConfig{}, fmt.Errorf("only google_grpc grpc_service is supported")
+		}
+		if grpcService.GetGoogleGrpc().GetTargetUri() == "" {
+			return httpfilter.ServerConfig{}, fmt.Errorf("targetURI must be a non-empty string")
+		}
+
+		sc := httpfilter.ServerConfig{
+			TargetURI: grpcService.GetGoogleGrpc().GetTargetUri(),
+		}
+		return sc, nil
+	}
+
+	b := builder{}
+
+	tests := []struct {
+		name    string
+		cfg     proto.Message
+		wantErr string
+	}{
 		{
 			name: "ErrMissingGrpcService",
 			cfg: func() proto.Message {
@@ -215,7 +248,7 @@ func (s) TestParseFilterConfig(t *testing.T) {
 				})
 				return m
 			}(),
-			wantErr: "extproc: only google_grpc grpc_service is supported",
+			wantErr: "extproc: failed to parse grpc_service only google_grpc grpc_service is supported",
 		},
 		{
 			name: "ErrMissingProcessingMode",
@@ -268,7 +301,7 @@ func (s) TestParseFilterConfig(t *testing.T) {
 			wantErr: "extproc: invalid response body mode STREAMED",
 		},
 		{
-			name: "ErrInvalidAllowExpression",
+			name: "ErrInvalidMutationRules",
 			cfg: func() proto.Message {
 				m, _ := anypb.New(&fpb.ExternalProcessor{
 					GrpcService: &corepb.GrpcService{
@@ -281,26 +314,6 @@ func (s) TestParseFilterConfig(t *testing.T) {
 					ProcessingMode: &fpb.ProcessingMode{},
 					MutationRules: &mutationpb.HeaderMutationRules{
 						AllowExpression: &matcherpb.RegexMatcher{Regex: "["},
-					},
-				})
-				return m
-			}(),
-			wantErr: "httpfilter: error parsing regexp",
-		},
-		{
-			name: "ErrInvalidDisallowExpression",
-			cfg: func() proto.Message {
-				m, _ := anypb.New(&fpb.ExternalProcessor{
-					GrpcService: &corepb.GrpcService{
-						TargetSpecifier: &corepb.GrpcService_GoogleGrpc_{
-							GoogleGrpc: &corepb.GrpcService_GoogleGrpc{
-								TargetUri: "localhost:1234",
-							},
-						},
-					},
-					ProcessingMode: &fpb.ProcessingMode{},
-					MutationRules: &mutationpb.HeaderMutationRules{
-						DisallowExpression: &matcherpb.RegexMatcher{Regex: "["},
 					},
 				})
 				return m
@@ -348,7 +361,7 @@ func (s) TestParseFilterConfig(t *testing.T) {
 				})
 				return m
 			}(),
-			wantErr: "extproc: targetURI must be a non-empty string",
+			wantErr: "extproc: failed to parse grpc_service targetURI must be a non-empty string",
 		},
 		{
 			name:    "ErrNilConfig",
@@ -361,41 +374,26 @@ func (s) TestParseFilterConfig(t *testing.T) {
 			wantErr: "extproc: error parsing config",
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := b.ParseFilterConfig(tt.cfg)
-			if tt.wantErr != "" && !strings.Contains(err.Error(), tt.wantErr) {
+			_, err := b.ParseFilterConfig(tt.cfg)
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
 				t.Fatalf("ParseFilterConfig() returned error = %v, wantErr %v", err, tt.wantErr)
-			}
-			if tt.wantErr == "" {
-				if err != nil {
-					t.Fatalf("ParseFilterConfig() returned unexpected error: %v", err)
-				}
-				if diff := cmp.Diff(got, tt.wantCfg, cmp.AllowUnexported(baseConfig{}, interceptorConfig{}, httpfilter.ServerConfig{}, processingModes{}, httpfilter.HeaderMutationRules{}), protocmp.Transform(), cmp.Transformer("RegexpToString", func(r *regexp.Regexp) string {
-					if r == nil {
-						return ""
-					}
-					return r.String()
-				})); diff != "" {
-					t.Fatalf("ParseFilterConfig() returned unexpected config (-got +want):\n%s", diff)
-				}
 			}
 		})
 	}
 }
 
-func (s) TestParseFilterConfigOverride(t *testing.T) {
+func (s) TestParseFilterConfigOverride_Success(t *testing.T) {
 	b := builder{}
 
 	tests := []struct {
 		name            string
 		override        proto.Message
 		wantOverrideCfg httpfilter.FilterConfig
-		wantErr         string
 	}{
 		{
-			name: "ValidOverride",
+			name: "EmptyOverride",
 			override: func() proto.Message {
 				m, _ := anypb.New(&fpb.ExtProcPerRoute{})
 				return m
@@ -403,7 +401,7 @@ func (s) TestParseFilterConfigOverride(t *testing.T) {
 			wantOverrideCfg: overrideConfig{},
 		},
 		{
-			name: "ValidOverride_Grpc",
+			name: "GrpcProcessingMode",
 			override: func() proto.Message {
 				m, _ := anypb.New(
 					&fpb.ExtProcPerRoute{
@@ -419,19 +417,62 @@ func (s) TestParseFilterConfigOverride(t *testing.T) {
 				return m
 			}(),
 			wantOverrideCfg: overrideConfig{
-				config: interceptorOverrideConfig{
-					processingModes: optional.NewValue(processingModes{
-						requestHeaderMode:   modeSend,
-						responseHeaderMode:  modeSend,
-						responseTrailerMode: modeSkip,
-						requestBodyMode:     modeSend,
-						responseBodyMode:    modeSend,
-					}),
-				},
+				processingModes: optional.NewValue(processingModes{
+					requestHeaderMode:   modeSend,
+					responseHeaderMode:  modeSend,
+					responseTrailerMode: modeSkip,
+					requestBodyMode:     modeSend,
+					responseBodyMode:    modeSend,
+				}),
 			},
 		},
 		{
-			name: "ErrInvalidProcessingMode_RequestBodyStreamed",
+			name: "FailureModeAllow",
+			override: func() proto.Message {
+				m, _ := anypb.New(
+					&fpb.ExtProcPerRoute{
+						Override: &fpb.ExtProcPerRoute_Overrides{
+							Overrides: &fpb.ExtProcOverrides{
+								FailureModeAllow: wrapperspb.Bool(true),
+							},
+						},
+					})
+				return m
+			}(),
+			wantOverrideCfg: overrideConfig{
+				failureModeAllow: optional.NewValue(true),
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := b.ParseFilterConfigOverride(tt.override)
+			if err != nil {
+				t.Fatalf("ParseFilterConfigOverride() returned unexpected error: %v", err)
+			}
+			if diff := cmp.Diff(got, tt.wantOverrideCfg, cmp.AllowUnexported(overrideConfig{}, httpfilter.ServerConfig{}, processingModes{}, httpfilter.HeaderMutationRules{}, optional.Optional[httpfilter.ServerConfig]{}, optional.Optional[processingModes]{}, optional.Optional[bool]{}), protocmp.Transform(), cmp.Transformer("RegexpToString", func(r *regexp.Regexp) string {
+				if r == nil {
+					return ""
+				}
+				return r.String()
+			})); diff != "" {
+				t.Fatalf("ParseFilterConfigOverride() returned unexpected config (-got +want):\n%s", diff)
+			}
+		})
+	}
+}
+
+func (s) TestParseFilterConfigOverride_Errors(t *testing.T) {
+	b := builder{}
+
+	tests := []struct {
+		name     string
+		override proto.Message
+		wantErr  string
+	}{
+		{
+			name: "ProcessingMode_RequestBodyStreamed",
 			override: func() proto.Message {
 				m, _ := anypb.New(&fpb.ExtProcPerRoute{
 					Override: &fpb.ExtProcPerRoute_Overrides{
@@ -447,7 +488,7 @@ func (s) TestParseFilterConfigOverride(t *testing.T) {
 			wantErr: "extproc: invalid request body mode STREAMED",
 		},
 		{
-			name: "ErrInvalidProcessingMode_ResponseBodyStreamed",
+			name: "ProcessingMode_ResponseBodyStreamed",
 			override: func() proto.Message {
 				m, _ := anypb.New(&fpb.ExtProcPerRoute{
 					Override: &fpb.ExtProcPerRoute_Overrides{
@@ -463,12 +504,12 @@ func (s) TestParseFilterConfigOverride(t *testing.T) {
 			wantErr: "extproc: invalid response body mode STREAMED",
 		},
 		{
-			name:     "ErrNilOverride",
+			name:     "NilOverride",
 			override: nil,
 			wantErr:  "extproc: nil override configuration provided",
 		},
 		{
-			name:     "ErrInvalidOverrideType",
+			name:     "InvalidOverrideType",
 			override: &fpb.ExtProcOverrides{}, // Not Any
 			wantErr:  "extproc: error parsing override",
 		},
@@ -476,22 +517,9 @@ func (s) TestParseFilterConfigOverride(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := b.ParseFilterConfigOverride(tt.override)
-			if tt.wantErr != "" && !strings.Contains(err.Error(), tt.wantErr) {
+			_, err := b.ParseFilterConfigOverride(tt.override)
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
 				t.Fatalf("ParseFilterConfigOverride() returned error = %v, wantErr %v", err, tt.wantErr)
-			}
-			if tt.wantErr == "" {
-				if err != nil {
-					t.Fatalf("ParseFilterConfigOverride() returned unexpected error: %v", err)
-				}
-				if diff := cmp.Diff(got, tt.wantOverrideCfg, cmp.AllowUnexported(overrideConfig{}, interceptorConfig{}, httpfilter.ServerConfig{}, processingModes{}, httpfilter.HeaderMutationRules{}, interceptorOverrideConfig{}, optional.Option[httpfilter.ServerConfig]{}, optional.Option[processingModes]{}, optional.Option[bool]{}), protocmp.Transform(), cmp.Transformer("RegexpToString", func(r *regexp.Regexp) string {
-					if r == nil {
-						return ""
-					}
-					return r.String()
-				})); diff != "" {
-					t.Fatalf("ParseFilterConfigOverride() returned unexpected config (-got +want):\n%s", diff)
-				}
 			}
 		})
 	}

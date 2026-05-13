@@ -21,65 +21,36 @@ package extproc
 import (
 	"time"
 
-	"google.golang.org/grpc/experimental/optional"
+	"google.golang.org/grpc/internal/optional"
 	"google.golang.org/grpc/internal/xds/httpfilter"
 	"google.golang.org/grpc/internal/xds/matcher"
 
 	v3procfilterpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/ext_proc/v3"
 )
 
+// baseConfig contains the configuration for the external processing client
+// interceptor.
 type baseConfig struct {
 	httpfilter.FilterConfig
-	config interceptorConfig
-}
-
-type overrideConfig struct {
-	httpfilter.FilterConfig
-	config interceptorOverrideConfig
-}
-
-// interceptorOverrideConfig contains the configuration for the external
-// processing client interceptor override. This is used for overriding the base
-// config. If a particular field is set, that will be used instead of the base
-// config.
-type interceptorOverrideConfig struct {
-	// server is the configuration for the external processing server.
-	server optional.Option[httpfilter.ServerConfig]
-	// processingModes specifies the processing mode for each dataplane event.
-	processingModes optional.Option[processingModes]
-	// failureModeAllow specifies the behavior when the RPC to the external
-	// processing server fails. If true, the dataplane RPC will be allowed to
-	// continue. If false, the data plane RPC will be failed with a grpc status
-	// code of UNAVAILABLE.
-	failureModeAllow optional.Option[bool]
-	// Attributes to be sent to the external processing server along with the
-	// request and response dataplane events.
-	requestAttributes  []string
-	responseAttributes []string
-}
-
-// interceptorConfig contains the configuration for the external processing
-// client interceptor.
-type interceptorConfig struct {
 	// The following fields can be set either in the filter config or the override
 	// config. If both are set, the override config will be used.
-	//
+
 	// server is the configuration for the external processing server.
 	server httpfilter.ServerConfig
+	// processingModes specifies the processing mode for each dataplane event.
+	processingModes processingModes
 	// failureModeAllow specifies the behavior when the RPC to the external
 	// processing server fails. If true, the dataplane RPC will be allowed to
 	// continue. If false, the data plane RPC will be failed with a grpc status
 	// code of UNAVAILABLE.
 	failureModeAllow bool
-	// processingModes specifies the processing mode for each dataplane event.
-	processingModes processingModes
 	// Attributes to be sent to the external processing server along with the
 	// request and response dataplane events.
 	requestAttributes  []string
 	responseAttributes []string
 
 	// The following fields can only be set in the base config.
-	//
+
 	// mutationRules specifies the rules for what modifications an external
 	// processing server may make to headers/trailers sent to it.
 	mutationRules httpfilter.HeaderMutationRules
@@ -110,6 +81,19 @@ type interceptorConfig struct {
 	deferredCloseTimeout time.Duration
 }
 
+// overrideConfig contains the configuration for the external processing client
+// interceptor used for overriding the base config. If a particular field is
+// set, that will be used instead of the base config. The fields are similar to
+// base config.
+type overrideConfig struct {
+	httpfilter.FilterConfig
+	server             optional.Optional[httpfilter.ServerConfig]
+	processingModes    optional.Optional[processingModes]
+	failureModeAllow   optional.Optional[bool]
+	requestAttributes  []string
+	responseAttributes []string
+}
+
 // processingMode defines how headers, trailers, and bodies are handled in
 // relation to the external processing server.
 type processingMode int
@@ -123,9 +107,9 @@ const (
 
 type processingModes struct {
 	requestHeaderMode   processingMode
+	requestBodyMode     processingMode
 	responseHeaderMode  processingMode
 	responseTrailerMode processingMode
-	requestBodyMode     processingMode
 	responseBodyMode    processingMode
 }
 
@@ -162,9 +146,9 @@ func resolveBodyMode(mode v3procfilterpb.ProcessingMode_BodySendMode) processing
 func processingModesFromProto(pm *v3procfilterpb.ProcessingMode) processingModes {
 	return processingModes{
 		requestHeaderMode:   resolveHeaderMode(pm.GetRequestHeaderMode(), modeSend),
-		responseHeaderMode:  resolveHeaderMode(pm.GetResponseHeaderMode(), modeSend),
-		responseTrailerMode: resolveHeaderMode(pm.GetResponseTrailerMode(), modeSkip),
 		requestBodyMode:     resolveBodyMode(pm.GetRequestBodyMode()),
+		responseHeaderMode:  resolveHeaderMode(pm.GetResponseHeaderMode(), modeSend),
 		responseBodyMode:    resolveBodyMode(pm.GetResponseBodyMode()),
+		responseTrailerMode: resolveHeaderMode(pm.GetResponseTrailerMode(), modeSkip),
 	}
 }

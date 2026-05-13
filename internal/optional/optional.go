@@ -16,46 +16,42 @@
  *
  */
 
-// Package optional adds generic optional types.
+// Package optional implements a generic optional type.
 //
 // All APIs in this package are experimental.
 package optional
 
-// Option represents an optional value of type T.
-type Option[T any] struct {
+// Optional represents an optional value of type T.
+// This type is not safe for concurrent access.
+type Optional[T any] struct {
 	val   T
 	isSet bool
 }
 
 // New creates a new Option that does not have a value set. This can also be
 // done implicitly using a zero-value declaration: `var opt optional.Option[T]`
-func New[T any]() Option[T] {
-	return Option[T]{}
+func New[T any]() Optional[T] {
+	return Optional[T]{}
 }
 
 // NewValue creates a new Option with the provided value.
-func NewValue[T any](value T) Option[T] {
-	return Option[T]{
+func NewValue[T any](value T) Optional[T] {
+	return Optional[T]{
 		val:   value,
 		isSet: true,
 	}
 }
 
-// Value returns the underlying value and a boolean indicating if the value is
+// Get returns the underlying value and a boolean indicating if the value is
 // set. If the value is not set, it returns the zero value of T and false.
-func (o Option[T]) Value() (T, bool) {
+func (o Optional[T]) Get() (T, bool) {
 	return o.val, o.isSet
 }
 
-// WithValue returns a new Option containing the provided value.
-func (o Option[T]) WithValue(value T) Option[T] {
-	return Option[T]{
+// Set returns a new Option containing the provided value.
+func (o Optional[T]) Set(value T) Optional[T] {
+	return Optional[T]{
 		val:   value,
 		isSet: true,
 	}
-}
-
-// Clear returns an empty Option.
-func (o Option[T]) Clear() Option[T] {
-	return Option[T]{}
 }
