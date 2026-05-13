@@ -22,7 +22,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/http"
 	"sync"
 	"time"
 
@@ -32,43 +31,46 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal/backoff"
+	"google.golang.org/grpc/internal/transport"
 	"google.golang.org/grpc/status"
 )
 
 // earlyExpiry matches the hardcoded 5-minute early expiry used by the
 // cloud.google.com/go/auth/credentials/idtoken package.
-var earlyExpiry = 5 * time.Minute
+const earlyExpiry = 5 * time.Minute
 
 type gcpServiceAccountIdentityCallCreds struct {
+	// The following fields are initialized at creation time and are read-only
+	// after that.
 	audience string
 	creds    *auth.Credentials
 	backoff  backoff.Strategy
 
-	mu    sync.Mutex
-	token *auth.Token
-
-	fetching      chan struct{} // used to deduplicate concurrent fetches
-	nextRetryTime time.Time     // When we can try next (backoff)
-	retryAttempt  int           // number of consecutive failures used to calculate backoff
-	lastErr       error         // error from last attempt
+	// The following fields are protected by mu.
+	mu            sync.Mutex
+	token         *auth.Token
+	fetching      chan struct{} // used to deduplicate concurrent background token fetches
+	nextRetryTime time.Time     // timestamp after which we can attempt the next token fetch
+	retryAttempt  int           // consecutive fetch failure count used to compute backoff delay
+	lastErr       error         // cached error returned from the most recent token fetch attempt
 }
 
 // NewGcpServiceAccountIdentity creates a PerRPCCredentials that authenticates
 // using a GCP Service Account Identity JWT token for the given audience.
 //
-// It uses the cloud.google.com/go/auth/credentials/idtoken package to
-// automatically fetch ID token from the GCE metadata server. This credential
-// is only valid to use in an environment running on GCP.
+// This credential fetches the ID token from the GCE metadata server and is only
+// valid for use in environments running on GCP. The audience parameter cannot be
+// empty.
 func NewGcpServiceAccountIdentity(audience string) (credentials.PerRPCCredentials, error) {
 	if audience == "" {
-		return nil, fmt.Errorf("audience cannot be empty")
+		return nil, fmt.Errorf("google: audience cannot be empty")
 	}
 
 	creds, err := idtoken.NewCredentials(&idtoken.Options{
 		Audience: audience,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to create auth.Credentials for idtoken: %v", err)
+		return nil, fmt.Errorf("google: failed to create ID token credentials: %v", err)
 	}
 
 	return &gcpServiceAccountIdentityCallCreds{
@@ -89,16 +91,17 @@ func NewGcpServiceAccountIdentity(audience string) (credentials.PerRPCCredential
 func (c *gcpServiceAccountIdentityCallCreds) GetRequestMetadata(ctx context.Context, _ ...string) (map[string]string, error) {
 	ri, _ := credentials.RequestInfoFromContext(ctx)
 	if err := credentials.CheckSecurityLevel(ri.AuthInfo, credentials.PrivacyAndIntegrity); err != nil {
-		return nil, fmt.Errorf("cannot send secure credentials on an insecure connection: %v", err)
+		return nil, fmt.Errorf("google: cannot send secure credentials on an insecure connection: %v", err)
 	}
 
 	c.mu.Lock()
 
 	// If token is valid, return it. If it's also stale, trigger a background
 	// refresh if not already running.
-	if c.isTokenValid() {
-		if c.isTokenStale() && c.fetching == nil {
-			c.startFetch()
+	if c.token != nil && c.isTokenValidLocked() {
+		if c.isTokenStaleLocked() && c.fetching == nil {
+			c.fetching = make(chan struct{})
+			go c.startFetch()
 		}
 		defer c.mu.Unlock()
 		return map[string]string{
@@ -112,7 +115,8 @@ func (c *gcpServiceAccountIdentityCallCreds) GetRequestMetadata(ctx context.Cont
 	}
 
 	if c.fetching == nil {
-		c.startFetch()
+		c.fetching = make(chan struct{})
+		go c.startFetch()
 	}
 	wait := c.fetching
 	c.mu.Unlock()
@@ -121,7 +125,7 @@ func (c *gcpServiceAccountIdentityCallCreds) GetRequestMetadata(ctx context.Cont
 	case <-wait:
 		c.mu.Lock()
 		defer c.mu.Unlock()
-		if c.isTokenValid() {
+		if c.token != nil && c.isTokenValidLocked() {
 			return map[string]string{
 				"authorization": "Bearer " + c.token.Value,
 			}, nil
@@ -141,80 +145,70 @@ func (c *gcpServiceAccountIdentityCallCreds) RequireTransportSecurity() bool {
 	return true
 }
 
-// isTokenStale checks if the token doesn't exist or falls within the early
-// expiry window.
-func (c *gcpServiceAccountIdentityCallCreds) isTokenStale() bool {
-	if c.token == nil {
-		return true
-	}
-
+// isTokenStaleLocked checks if the token falls within the
+// early expiry window. It must be called with mu locked.
+func (c *gcpServiceAccountIdentityCallCreds) isTokenStaleLocked() bool {
 	return c.token.Expiry.Round(0).Add(-earlyExpiry).Before(time.Now())
 }
 
-// isTokenValid checks if the token exists and not expired yet.
-func (c *gcpServiceAccountIdentityCallCreds) isTokenValid() bool {
-	if c.token == nil {
-		return false
-	}
-
+// isTokenValidLocked checks if the token is not expired yet. It must be called
+// with mu locked.
+func (c *gcpServiceAccountIdentityCallCreds) isTokenValidLocked() bool {
 	return c.token.Expiry.After(time.Now())
 }
 
-// startFetch initiates an asynchronous token fetch. It creates the 'fetching'
-// channel to allow concurrent callers to wait, and starts a goroutine to
-// perform the fetch and update the credential state upon completion.
+// startFetch initiates a token fetch and updates the credential
+// state upon completion.
 func (c *gcpServiceAccountIdentityCallCreds) startFetch() {
-	c.fetching = make(chan struct{})
-	go func() {
-		token, err := c.creds.TokenProvider.Token(context.Background())
+	token, err := c.creds.TokenProvider.Token(context.Background())
 
-		c.mu.Lock()
-		defer c.mu.Unlock()
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
-		close(c.fetching)
-		c.fetching = nil
-		err = mapFetchError(err)
-		c.setBackoff(err)
-		if err == nil {
-			c.token = token
-		}
-	}()
+	close(c.fetching)
+	c.fetching = nil
+	c.handleFetchResultLocked(token, err)
 }
 
-// setBackoff updates the backoff state based on the result of a fetch attempt.
-// If err is nil, it resets the backoff; otherwise, it calculates the next
-// retry time using the backoff strategy.
-func (c *gcpServiceAccountIdentityCallCreds) setBackoff(err error) {
-	if err == nil {
-		c.lastErr = nil
-		c.retryAttempt = 0
-		c.nextRetryTime = time.Time{}
+// handleFetchResultLocked updates the credentials local token cache and
+// backoff state based on the outcome of a background fetch attempt.
+//
+// If the fetch succeeded, the cached token is updated, and the backoff timers
+// and error are reset.
+//
+// If the fetch failed, backoff attempts are calculated and the error is mapped
+// to a gRPC status.
+//   - If the HTTP request fails with a status that maps to gRPC UNAVAILABLE
+//     according to HTTP to gRPC status code mappings, it returns UNAVAILABLE.
+//   - All other HTTP error status codes map to UNAUTHENTICATED.
+//   - Non-HTTP request failures are mapped to UNAVAILABLE.
+//
+// It must be called with mu locked.
+func (c *gcpServiceAccountIdentityCallCreds) handleFetchResultLocked(token *auth.Token, err error) {
+	if err != nil {
+		var mappedErr error
+		var metadataErr *metadata.Error
+		if errors.As(err, &metadataErr) {
+			switch transport.HTTPStatusConvTab[metadataErr.Code] {
+			case codes.Unavailable:
+				mappedErr = status.Errorf(codes.Unavailable, "google: failed to fetch token from metadata server: %v", err)
+			default:
+				mappedErr = status.Errorf(codes.Unauthenticated, "google: failed to fetch token from metadata server: %v", err)
+			}
+		} else if _, ok := err.(metadata.NotDefinedError); ok {
+			mappedErr = status.Errorf(codes.Unauthenticated, "google: requested metadata not defined: %v", err)
+		} else {
+			mappedErr = status.Errorf(codes.Unavailable, "google: failed to fetch ID token: %v", err)
+		}
+
+		c.lastErr = mappedErr
+		backoffDelay := c.backoff.Backoff(c.retryAttempt)
+		c.retryAttempt++
+		c.nextRetryTime = time.Now().Add(backoffDelay)
 		return
 	}
-	c.lastErr = err
-	backoffDelay := c.backoff.Backoff(c.retryAttempt)
-	c.retryAttempt++
-	c.nextRetryTime = time.Now().Add(backoffDelay)
-}
-
-func mapFetchError(err error) error {
-	if err == nil {
-		return nil
-	}
-
-	var metadataErr *metadata.Error
-	if errors.As(err, &metadataErr) {
-		switch metadataErr.Code {
-		case http.StatusTooManyRequests, http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
-			return status.Error(codes.Unavailable, err.Error())
-		default:
-			return status.Error(codes.Unauthenticated, err.Error())
-		}
-	}
-
-	if _, ok := err.(metadata.NotDefinedError); ok {
-		return status.Error(codes.Unauthenticated, err.Error())
-	}
-
-	return status.Error(codes.Unavailable, err.Error())
+	c.lastErr = nil
+	c.retryAttempt = 0
+	c.nextRetryTime = time.Time{}
+	c.token = token
 }
