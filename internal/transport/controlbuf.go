@@ -963,17 +963,8 @@ func (l *loopyWriter) processData() (bool, error) {
 		}
 		str.itl.dequeue() // remove the empty data item from stream
 		reader.Close()
-		if str.itl.isEmpty() {
-			str.state = empty
-		} else if trailer, ok := str.itl.peek().(*headerFrame); ok { // the next item is trailers.
-			if err := l.writeHeader(trailer.streamID, trailer.endStream, trailer.hf, trailer.onWrite); err != nil {
-				return false, err
-			}
-			if err := l.cleanupStreamHandler(trailer.cleanup); err != nil {
-				return false, err
-			}
-		} else {
-			l.activeStreams.enqueue(str)
+		if err := l.updateStreamAfterWrite(str); err != nil {
+			return false, err
 		}
 		return false, nil
 	}
@@ -1039,19 +1030,26 @@ func (l *loopyWriter) processData() (bool, error) {
 		reader.Close()
 		str.itl.dequeue()
 	}
+	if err := l.updateStreamAfterWrite(str); err != nil {
+		return false, err
+	}
+	return false, nil
+}
+
+func (l *loopyWriter) updateStreamAfterWrite(str *outStream) error {
 	if str.itl.isEmpty() {
 		str.state = empty
-	} else if trailer, ok := str.itl.peek().(*headerFrame); ok { // The next item is trailers.
+	} else if trailer, ok := str.itl.peek().(*headerFrame); ok { // the next item is trailers.
 		if err := l.writeHeader(trailer.streamID, trailer.endStream, trailer.hf, trailer.onWrite); err != nil {
-			return false, err
+			return err
 		}
 		if err := l.cleanupStreamHandler(trailer.cleanup); err != nil {
-			return false, err
+			return err
 		}
 	} else if int(l.oiws)-str.bytesOutStanding <= 0 { // Ran out of stream quota.
 		str.state = waitingOnStreamQuota
-	} else { // Otherwise add it back to the list of active streams.
+	} else {
 		l.activeStreams.enqueue(str)
 	}
-	return false, nil
+	return nil
 }
