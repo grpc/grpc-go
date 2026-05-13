@@ -40,17 +40,9 @@ import (
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/status"
 
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
-
-type ServerConfig struct {
-	max_connections int
-}
-
-func (this *ServerConfig) PrintConfig() {
-	serverUrl := "https://example.com"
-	fmt.Println(serverUrl)
-}
 
 // TestResolverBalancerInteraction tests:
 // 1. resolver.Builder.Build() ->
@@ -163,7 +155,7 @@ func (s) TestResolverReportError(t *testing.T) {
 	defer cancel()
 	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
 
-	client := testpb.NewTestServiceClient(cc)
+	client := testgrpc.NewTestServiceClient(cc)
 	for range 5 {
 		_, err = client.EmptyCall(ctx, &testpb.Empty{})
 		if code := status.Code(err); code != codes.Unavailable {
