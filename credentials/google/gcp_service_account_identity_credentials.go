@@ -55,6 +55,12 @@ type gcpServiceAccountIdentityCallCreds struct {
 	lastErr       error         // cached error returned from the most recent token fetch attempt
 }
 
+var defaultBackoffStrategy backoff.Strategy = backoff.DefaultExponential
+
+var newIDTokenCredentials = func(opts *idtoken.Options) (*auth.Credentials, error) {
+	return idtoken.NewCredentials(opts)
+}
+
 // NewGcpServiceAccountIdentity creates a PerRPCCredentials that authenticates
 // using a GCP Service Account Identity JWT token for the given audience.
 //
@@ -63,20 +69,20 @@ type gcpServiceAccountIdentityCallCreds struct {
 // empty.
 func NewGcpServiceAccountIdentity(audience string) (credentials.PerRPCCredentials, error) {
 	if audience == "" {
-		return nil, fmt.Errorf("google: audience cannot be empty")
+		return nil, fmt.Errorf("credentials: audience cannot be empty")
 	}
 
-	creds, err := idtoken.NewCredentials(&idtoken.Options{
+	creds, err := newIDTokenCredentials(&idtoken.Options{
 		Audience: audience,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("google: failed to create ID token credentials: %v", err)
+		return nil, fmt.Errorf("credentials: failed to create ID token credentials: %v", err)
 	}
 
 	return &gcpServiceAccountIdentityCallCreds{
 		audience: audience,
 		creds:    creds,
-		backoff:  backoff.DefaultExponential,
+		backoff:  defaultBackoffStrategy,
 	}, nil
 }
 
@@ -91,7 +97,7 @@ func NewGcpServiceAccountIdentity(audience string) (credentials.PerRPCCredential
 func (c *gcpServiceAccountIdentityCallCreds) GetRequestMetadata(ctx context.Context, _ ...string) (map[string]string, error) {
 	ri, _ := credentials.RequestInfoFromContext(ctx)
 	if err := credentials.CheckSecurityLevel(ri.AuthInfo, credentials.PrivacyAndIntegrity); err != nil {
-		return nil, fmt.Errorf("google: cannot send secure credentials on an insecure connection: %v", err)
+		return nil, fmt.Errorf("credentials: cannot send secure credentials on an insecure connection: %v", err)
 	}
 
 	c.mu.Lock()
@@ -191,14 +197,14 @@ func (c *gcpServiceAccountIdentityCallCreds) handleFetchResultLocked(token *auth
 		if errors.As(err, &metadataErr) {
 			switch transport.HTTPStatusConvTab[metadataErr.Code] {
 			case codes.Unavailable:
-				mappedErr = status.Errorf(codes.Unavailable, "google: failed to fetch token from metadata server: %v", err)
+				mappedErr = status.Errorf(codes.Unavailable, "credentials: failed to fetch token from metadata server: %v", err)
 			default:
-				mappedErr = status.Errorf(codes.Unauthenticated, "google: failed to fetch token from metadata server: %v", err)
+				mappedErr = status.Errorf(codes.Unauthenticated, "credentials: failed to fetch token from metadata server: %v", err)
 			}
 		} else if _, ok := err.(metadata.NotDefinedError); ok {
-			mappedErr = status.Errorf(codes.Unauthenticated, "google: requested metadata not defined: %v", err)
+			mappedErr = status.Errorf(codes.Unauthenticated, "credentials: requested metadata not defined: %v", err)
 		} else {
-			mappedErr = status.Errorf(codes.Unavailable, "google: failed to fetch ID token: %v", err)
+			mappedErr = status.Errorf(codes.Unavailable, "credentials: failed to fetch ID token: %v", err)
 		}
 
 		c.lastErr = mappedErr
