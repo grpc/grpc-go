@@ -990,7 +990,7 @@ func (s) TestClusterUpdate_ResourceNotFound(t *testing.T) {
 	}
 }
 
-// Tests that closing the cds LB policy results in the the child policy being
+// Tests that closing the cds LB policy results in the child policy being
 // closed.
 func (s) TestClose(t *testing.T) {
 	_, _, _, childPolicyCloseCh := registerWrappedPriorityPolicy(t)
