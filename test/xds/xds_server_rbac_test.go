@@ -25,6 +25,7 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 
 	v3xdsxdstypepb "github.com/cncf/xds/go/xds/type/v3"
@@ -605,6 +606,48 @@ func (s) TestRBACHTTPFilter(t *testing.T) {
 			wantStatusEmptyCall: codes.PermissionDenied,
 			wantStatusUnaryCall: codes.PermissionDenied,
 		},
+		{
+			name: "match-on-principal-remote-ip",
+			rbacCfg: &rpb.RBAC{
+				Rules: &v3rbacpb.RBAC{
+					Action: v3rbacpb.RBAC_ALLOW,
+					Policies: map[string]*v3rbacpb.Policy{
+						"match-on-principal-remote-ip": {
+							Permissions: []*v3rbacpb.Permission{
+								{
+									Rule: &v3rbacpb.Permission_Header{
+										Header: &v3routepb.HeaderMatcher{
+											Name:                 "host",
+											HeaderMatchSpecifier: &v3routepb.HeaderMatcher_PrefixMatch{PrefixMatch: "my-service-fallback"},
+										},
+									},
+								},
+							},
+							Principals: []*v3rbacpb.Principal{
+								{
+									Identifier: &v3rbacpb.Principal_RemoteIp{
+										RemoteIp: &v3corepb.CidrRange{
+											AddressPrefix: "127.0.0.0",
+											PrefixLen:     &wrapperspb.UInt32Value{Value: 8},
+										},
+									},
+								},
+								{
+									Identifier: &v3rbacpb.Principal_RemoteIp{
+										RemoteIp: &v3corepb.CidrRange{
+											AddressPrefix: "::1",
+											PrefixLen:     &wrapperspb.UInt32Value{Value: 128},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantStatusEmptyCall: codes.OK,
+			wantStatusUnaryCall: codes.OK,
+		},
 		// This test tests that RBAC ignores the TE: trailers header (which is
 		// hardcoded in http2_client.go for every RPC). Since the RBAC
 		// Configuration says to only ALLOW RPC's with a TE: Trailers, every RPC
@@ -707,6 +750,8 @@ func (s) TestRBACHTTPFilter(t *testing.T) {
 					t.Fatalf("UnaryCall() returned err with status: %v, wantStatusUnaryCall: %v", err, test.wantStatusUnaryCall)
 				}
 
+				lb.mu.Lock()
+				defer lb.mu.Unlock()
 				if test.wantAuthzOutcomes != nil {
 					if diff := cmp.Diff(lb.authzDecisionStat, test.wantAuthzOutcomes); diff != "" {
 						t.Fatalf("authorization decision do not match\ndiff (-got +want):\n%s", diff)
@@ -914,28 +959,30 @@ func (s) TestRBAC_WithBadRouteConfiguration(t *testing.T) {
 }
 
 type statAuditLogger struct {
+	builder *loggerBuilder
+}
+
+func (s *statAuditLogger) Log(event *audit.Event) {
+	b := s.builder
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.authzDecisionStat[event.Authorized]++
+	*b.lastEvent = *event
+}
+
+type loggerBuilder struct {
+	mu                sync.Mutex
 	authzDecisionStat map[bool]int // Map to hold counts of authorization decisions
 	lastEvent         *audit.Event // Field to store last received event
 }
 
-func (s *statAuditLogger) Log(event *audit.Event) {
-	s.authzDecisionStat[event.Authorized]++
-	*s.lastEvent = *event
-}
-
-type loggerBuilder struct {
-	authzDecisionStat map[bool]int
-	lastEvent         *audit.Event
-}
-
-func (loggerBuilder) Name() string {
+func (*loggerBuilder) Name() string {
 	return "stat_logger"
 }
 
 func (lb *loggerBuilder) Build(audit.LoggerConfig) audit.Logger {
 	return &statAuditLogger{
-		authzDecisionStat: lb.authzDecisionStat,
-		lastEvent:         lb.lastEvent,
+		builder: lb,
 	}
 }
 

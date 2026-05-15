@@ -33,6 +33,7 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/base"
 	"google.golang.org/grpc/encoding/gzip"
+	estats "google.golang.org/grpc/experimental/stats"
 	istats "google.golang.org/grpc/internal/stats"
 	"google.golang.org/grpc/internal/stubserver"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
@@ -458,7 +459,7 @@ func (s) TestXDSLabels(t *testing.T) {
 		MetricsOptions: opentelemetry.MetricsOptions{
 			MeterProvider:  provider,
 			Metrics:        opentelemetry.DefaultMetrics(),
-			OptionalLabels: []string{"csm.service_name", "csm.service_namespace_name", "grpc.lb.locality", "grpc.lb.backend_service"},
+			OptionalLabels: []string{"csm.service_name", "csm.service_namespace_name", "grpc.lb.locality", "grpc.lb.backend_service", "grpc.client.call.custom"},
 		},
 	}, po), grpc.WithDefaultServiceConfig(sc)}
 	if err := ss.Start(nil, dopts...); err != nil {
@@ -466,7 +467,7 @@ func (s) TestXDSLabels(t *testing.T) {
 	}
 
 	defer ss.Stop()
-	ss.Client.UnaryCall(ctx, &testpb.SimpleRequest{Payload: &testpb.Payload{
+	ss.Client.UnaryCall(estats.NewContextWithCustomLabel(ctx, "my-custom-label"), &testpb.SimpleRequest{Payload: &testpb.Payload{
 		Body: make([]byte, 10000),
 	}}, grpc.UseCompressor(gzip.Name))
 
@@ -492,6 +493,7 @@ func (s) TestXDSLabels(t *testing.T) {
 	workloadCanonicalServiceAttr := attribute.String("csm.workload_canonical_service", "unknown")
 	remoteWorkloadTypeAttr := attribute.String("csm.remote_workload_type", "unknown")
 	remoteWorkloadCanonicalServiceAttr := attribute.String("csm.remote_workload_canonical_service", "unknown")
+	customLabelAttr := attribute.String("grpc.client.call.custom", "my-custom-label")
 
 	unaryMethodClientSideEnd := []attribute.KeyValue{
 		unaryMethodAttr,
@@ -505,6 +507,7 @@ func (s) TestXDSLabels(t *testing.T) {
 		workloadCanonicalServiceAttr,
 		remoteWorkloadTypeAttr,
 		remoteWorkloadCanonicalServiceAttr,
+		customLabelAttr,
 	}
 
 	unaryCompressedBytesSentRecv := int64(57) // Fixed 10000 bytes with gzip assumption.
@@ -518,7 +521,7 @@ func (s) TestXDSLabels(t *testing.T) {
 			Data: metricdata.Sum[int64]{
 				DataPoints: []metricdata.DataPoint[int64]{
 					{
-						Attributes: attribute.NewSet(unaryMethodAttr, targetAttr),
+						Attributes: attribute.NewSet(unaryMethodAttr, targetAttr, customLabelAttr),
 						Value:      1,
 					},
 				},
@@ -586,7 +589,7 @@ func (s) TestXDSLabels(t *testing.T) {
 			Data: metricdata.Histogram[float64]{
 				DataPoints: []metricdata.HistogramDataPoint[float64]{
 					{
-						Attributes: attribute.NewSet(unaryMethodAttr, targetAttr, unaryStatusAttr),
+						Attributes: attribute.NewSet(unaryMethodAttr, targetAttr, unaryStatusAttr, customLabelAttr),
 						Count:      1,
 						Bounds:     itestutils.DefaultLatencyBounds,
 					},

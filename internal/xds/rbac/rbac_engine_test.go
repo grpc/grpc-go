@@ -760,7 +760,7 @@ func (s) TestChainEngine(t *testing.T) {
 					rpcData: &rpcData{
 						fullMethod: "localhost-fan-page",
 						peerInfo: &peer.Peer{
-							Addr: &addr{ipAddress: "0.0.0.0"},
+							Addr: &addr{ipAddress: "0.0.0.0:8080"},
 						},
 					},
 					wantStatusCode: codes.OK,
@@ -823,7 +823,7 @@ func (s) TestChainEngine(t *testing.T) {
 					rpcData: &rpcData{
 						fullMethod: "some method",
 						peerInfo: &peer.Peer{
-							Addr: &addr{ipAddress: "0.0.0.0"},
+							Addr: &addr{ipAddress: "0.0.0.0:8080"},
 							AuthInfo: credentials.TLSInfo{
 								State: tls.ConnectionState{
 									PeerCertificates: []*x509.Certificate{
@@ -855,7 +855,7 @@ func (s) TestChainEngine(t *testing.T) {
 					rpcData: &rpcData{
 						fullMethod: "get-product-list",
 						peerInfo: &peer.Peer{
-							Addr: &addr{ipAddress: "0.0.0.0"},
+							Addr: &addr{ipAddress: "0.0.0.0:8080"},
 						},
 					},
 					wantStatusCode: codes.PermissionDenied,
@@ -907,7 +907,7 @@ func (s) TestChainEngine(t *testing.T) {
 					rpcData: &rpcData{
 						fullMethod: "/regular-content",
 						peerInfo: &peer.Peer{
-							Addr: &addr{ipAddress: "0.0.0.0"},
+							Addr: &addr{ipAddress: "0.0.0.0:8080"},
 						},
 					},
 					wantStatusCode: codes.OK,
@@ -945,7 +945,7 @@ func (s) TestChainEngine(t *testing.T) {
 				{
 					rpcData: &rpcData{
 						peerInfo: &peer.Peer{
-							Addr: &addr{ipAddress: "0.0.0.0"},
+							Addr: &addr{ipAddress: "0.0.0.0:8080"},
 						},
 					},
 					wantStatusCode: codes.OK,
@@ -995,7 +995,7 @@ func (s) TestChainEngine(t *testing.T) {
 				{
 					rpcData: &rpcData{
 						peerInfo: &peer.Peer{
-							Addr: &addr{ipAddress: "10.0.0.0"},
+							Addr: &addr{ipAddress: "10.0.0.0:8080"},
 						},
 					},
 					wantStatusCode: codes.PermissionDenied,
@@ -1072,7 +1072,7 @@ func (s) TestChainEngine(t *testing.T) {
 				{
 					rpcData: &rpcData{
 						peerInfo: &peer.Peer{
-							Addr: &addr{ipAddress: "0.0.0.0"},
+							Addr: &addr{ipAddress: "0.0.0.0:8080"},
 						},
 					},
 					wantStatusCode: codes.OK,
@@ -1093,7 +1093,7 @@ func (s) TestChainEngine(t *testing.T) {
 				{
 					rpcData: &rpcData{
 						peerInfo: &peer.Peer{
-							Addr: &addr{ipAddress: "10.0.0.0"},
+							Addr: &addr{ipAddress: "10.0.0.0:8080"},
 						},
 					},
 					wantStatusCode: codes.PermissionDenied,
@@ -1111,8 +1111,8 @@ func (s) TestChainEngine(t *testing.T) {
 				},
 			},
 		},
-		// This test tests that when there are no SANs or Subject's
-		// distinguished name in incoming RPC's, that authenticated matchers
+		// This test verifies that when there are no SANs or Subject
+		// distinguished name in incoming RPCs, authenticated matchers
 		// match against the empty string.
 		{
 			name: "default-matching-no-credentials",
@@ -1131,15 +1131,14 @@ func (s) TestChainEngine(t *testing.T) {
 				},
 			},
 			rbacQueries: []rbacQuery{
-				// This incoming RPC Call should match with the service admin
-				// policy. No authentication info is provided, so the
-				// authenticated matcher should match to the string matcher on
-				// the empty string, matching to the service-admin policy.
+				// This incoming RPC should match the service admin policy. No
+				// authentication info is provided, so the authenticated matcher
+				// evaluates the empty string.
 				{
 					rpcData: &rpcData{
 						fullMethod: "some method",
 						peerInfo: &peer.Peer{
-							Addr: &addr{ipAddress: "0.0.0.0"},
+							Addr: &addr{ipAddress: "0.0.0.0:8080"},
 							AuthInfo: credentials.TLSInfo{
 								State: tls.ConnectionState{
 									PeerCertificates: []*x509.Certificate{
@@ -1153,6 +1152,18 @@ func (s) TestChainEngine(t *testing.T) {
 										},
 									},
 								},
+							},
+						},
+					},
+					wantStatusCode: codes.PermissionDenied,
+				},
+				{
+					rpcData: &rpcData{
+						fullMethod: "some method",
+						peerInfo: &peer.Peer{
+							Addr: &addr{ipAddress: "0.0.0.0:8080"},
+							AuthInfo: credentials.TLSInfo{
+								State: tls.ConnectionState{},
 							},
 						},
 					},
@@ -1218,7 +1229,7 @@ func (s) TestChainEngine(t *testing.T) {
 					rpcData: &rpcData{
 						fullMethod: "some method",
 						peerInfo: &peer.Peer{
-							Addr: &addr{ipAddress: "0.0.0.0"},
+							Addr: &addr{ipAddress: "0.0.0.0:8080"},
 						},
 					},
 					wantStatusCode: codes.OK,
@@ -1328,7 +1339,7 @@ func (s) TestChainEngine(t *testing.T) {
 					rpcData: &rpcData{
 						fullMethod: "localhost-fan-page",
 						peerInfo: &peer.Peer{
-							Addr: &addr{ipAddress: "0.0.0.0"},
+							Addr: &addr{ipAddress: "0.0.0.0:8080"},
 						},
 					},
 					wantStatusCode: codes.PermissionDenied,
@@ -1338,7 +1349,7 @@ func (s) TestChainEngine(t *testing.T) {
 				{
 					rpcData: &rpcData{
 						peerInfo: &peer.Peer{
-							Addr: &addr{ipAddress: "10.0.0.0"},
+							Addr: &addr{ipAddress: "10.0.0.0:8080"},
 						},
 					},
 					wantStatusCode: codes.PermissionDenied,
@@ -1427,7 +1438,7 @@ func (s) TestChainEngine(t *testing.T) {
 					rpcData: &rpcData{
 						fullMethod: "localhost-fan-page",
 						peerInfo: &peer.Peer{
-							Addr: &addr{ipAddress: "0.0.0.0"},
+							Addr: &addr{ipAddress: "0.0.0.0:8080"},
 							AuthInfo: credentials.TLSInfo{
 								State: tls.ConnectionState{
 									PeerCertificates: []*x509.Certificate{
@@ -1460,7 +1471,7 @@ func (s) TestChainEngine(t *testing.T) {
 				{
 					rpcData: &rpcData{
 						peerInfo: &peer.Peer{
-							Addr: &addr{ipAddress: "10.0.0.0"},
+							Addr: &addr{ipAddress: "10.0.0.0:8080"},
 						},
 					},
 					wantStatusCode: codes.PermissionDenied,
@@ -1566,7 +1577,7 @@ func (s) TestChainEngine(t *testing.T) {
 					rpcData: &rpcData{
 						fullMethod: "localhost-fan-page",
 						peerInfo: &peer.Peer{
-							Addr: &addr{ipAddress: "0.0.0.0"},
+							Addr: &addr{ipAddress: "0.0.0.0:8080"},
 						},
 					},
 					wantStatusCode: codes.PermissionDenied,
@@ -1577,7 +1588,7 @@ func (s) TestChainEngine(t *testing.T) {
 				{
 					rpcData: &rpcData{
 						peerInfo: &peer.Peer{
-							Addr: &addr{ipAddress: "10.0.0.0"},
+							Addr: &addr{ipAddress: "10.0.0.0:8080"},
 						},
 					},
 					wantStatusCode: codes.PermissionDenied,
@@ -1675,7 +1686,7 @@ func (s) TestChainEngine(t *testing.T) {
 					rpcData: &rpcData{
 						fullMethod: "localhost-fan-page",
 						peerInfo: &peer.Peer{
-							Addr: &addr{ipAddress: "0.0.0.0"},
+							Addr: &addr{ipAddress: "0.0.0.0:8080"},
 						},
 					},
 					wantStatusCode: codes.PermissionDenied,
@@ -1694,7 +1705,7 @@ func (s) TestChainEngine(t *testing.T) {
 				{
 					rpcData: &rpcData{
 						peerInfo: &peer.Peer{
-							Addr: &addr{ipAddress: "10.0.0.0"},
+							Addr: &addr{ipAddress: "10.0.0.0:8080"},
 						},
 					},
 					wantStatusCode: codes.PermissionDenied,
@@ -1931,4 +1942,96 @@ func createXDSTypedStruct(t *testing.T, in map[string]any, name string) *anypb.A
 		t.Fatalf("createXDSTypedStructFailed during anypb.New: %v", err)
 	}
 	return customConfig
+}
+
+func TestAuthenticatedMatcherIdentitySourcePrecedence(t *testing.T) {
+	tests := []struct {
+		name            string
+		uris            []string
+		dnsNames        []string
+		subjectCN       string
+		matcherContains string
+		wantMatch       bool
+	}{
+		{
+			name:            "uriSANPresentAndMatches",
+			uris:            []string{"spiffe://corp.example/svc/legitimate"},
+			matcherContains: "spiffe://corp.example/svc/legitimate",
+			wantMatch:       true,
+		},
+		{
+			name:            "uriSANPresentDoesNotFallbackToDNS",
+			uris:            []string{"spiffe://corp.example/svc/other"},
+			dnsNames:        []string{"spiffe://corp.example/svc/legitimate"},
+			matcherContains: "spiffe://corp.example/svc/legitimate",
+			wantMatch:       false,
+		},
+		{
+			name:            "uriSANPresentDoesNotFallbackToSubject",
+			uris:            []string{"spiffe://corp.example/svc/other"},
+			subjectCN:       "spiffe://corp.example/svc/legitimate",
+			matcherContains: "spiffe://corp.example/svc/legitimate",
+			wantMatch:       false,
+		},
+		{
+			name:            "dnsSANPresentAndMatchesWhenNoURI",
+			dnsNames:        []string{"svc.legitimate.internal"},
+			matcherContains: "svc.legitimate.internal",
+			wantMatch:       true,
+		},
+		{
+			name:            "dnsSANPresentDoesNotFallbackToSubject",
+			dnsNames:        []string{"svc.other.internal"},
+			subjectCN:       "svc.legitimate.internal",
+			matcherContains: "svc.legitimate.internal",
+			wantMatch:       false,
+		},
+		{
+			name:            "subjectUsedWhenNoURINorDNS",
+			subjectCN:       "svc.legitimate.internal",
+			matcherContains: "svc.legitimate.internal",
+			wantMatch:       true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var uriSANs []*url.URL
+			for _, u := range tt.uris {
+				parsed, err := url.Parse(u)
+				if err != nil {
+					t.Fatalf("url.Parse(%q) failed: %v", u, err)
+				}
+				uriSANs = append(uriSANs, parsed)
+			}
+			cert := &x509.Certificate{
+				URIs:     uriSANs,
+				DNSNames: tt.dnsNames,
+				Subject: pkix.Name{
+					CommonName: tt.subjectCN,
+				},
+			}
+
+			amConfig := &v3rbacpb.Principal_Authenticated{
+				PrincipalName: &v3matcherpb.StringMatcher{
+					MatchPattern: &v3matcherpb.StringMatcher_Contains{
+						Contains: tt.matcherContains,
+					},
+				},
+			}
+			matcher, err := newAuthenticatedMatcher(amConfig)
+			if err != nil {
+				t.Fatalf("failed to create matcher: %v", err)
+			}
+
+			rpcData := &rpcData{
+				authType: "tls",
+				certs:    []*x509.Certificate{cert},
+			}
+
+			if got := matcher.match(rpcData); got != tt.wantMatch {
+				t.Errorf("match() = %v, want %v", got, tt.wantMatch)
+			}
+		})
+	}
 }

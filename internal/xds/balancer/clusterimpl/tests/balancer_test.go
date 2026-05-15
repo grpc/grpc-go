@@ -69,6 +69,7 @@ import (
 	xdscreds "google.golang.org/grpc/credentials/xds"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
+	"google.golang.org/grpc/orca"
 	"google.golang.org/protobuf/types/known/structpb"
 
 	_ "google.golang.org/grpc/xds"
@@ -955,22 +956,32 @@ func (s) TestReResolutionAfterTransientFailure(t *testing.T) {
 		Clusters:  []*v3clusterpb.Cluster{cluster, ldnsCluster},
 		Endpoints: nil,
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 
 	// Replace DNS resolver with a wrapped resolver to capture ResolveNow calls.
-	resolveNowCh := make(chan struct{}, 1)
+	// We expect two ResolveNow calls:
+	// 1. When the server goes down and the transport is closed on the client,
+	//    the gRPC channel invokes ResolveNow on the resolver.
+	// 2. Subsequently, the subchannel enters IDLE, reconnection attempt takes
+	//    place and since the server is down, the subchannel eventually moves
+	//    enters TRANSIENT_FAILURE, at which point the clusterimpl policy
+	//    invokes ResolveNow.
+	resolveNowCh := make(chan struct{}, 2)
 	dnsR := manual.NewBuilderWithScheme("dns")
 	dnsResolverBuilder := resolver.Get("dns")
 	resolver.Register(dnsR)
 	defer resolver.Register(dnsResolverBuilder)
 	dnsR.ResolveNowCallback = func(resolver.ResolveNowOptions) {
-		close(resolveNowCh)
+		select {
+		case resolveNowCh <- struct{}{}:
+		case <-ctx.Done():
+		}
 	}
 	dnsR.UpdateState(resolver.State{
 		Endpoints: []resolver.Endpoint{{Addresses: []resolver.Address{{Addr: fmt.Sprintf("%s:%d", host, port)}}}},
 	})
 
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	if err := mgmtServer.Update(ctx, updateOpts); err != nil {
 		t.Fatalf("Failed to update xDS resources: %v", err)
 	}
@@ -993,11 +1004,13 @@ func (s) TestReResolutionAfterTransientFailure(t *testing.T) {
 	lis.Stop()
 	testutils.AwaitState(ctx, t, conn, connectivity.TransientFailure)
 
-	// Expect resolver's ResolveNow to be called due to TF state.
-	select {
-	case <-resolveNowCh:
-	case <-ctx.Done():
-		t.Fatalf("Timed out waiting for ResolveNow call after TransientFailure")
+	// Expect two calls to the resolver's ResolveNow method.
+	for range 2 {
+		select {
+		case <-resolveNowCh:
+		case <-ctx.Done():
+			t.Fatalf("Timed out waiting for ResolveNow call after TransientFailure")
+		}
 	}
 
 	// Restart the listener and expected to reconnect on its own and come out
@@ -1368,12 +1381,12 @@ func (s) TestAuthorityOverriding(t *testing.T) {
 			mgmtServer, resolverBuilder, nodeID := setupManagementServerAndResolver(t)
 
 			// Start a server backend exposing the test service.
-			var gotAuthority string
+			gotAuthority := atomic.Pointer[string]{}
 			f := &stubserver.StubServer{
 				EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
 					if md, ok := metadata.FromIncomingContext(ctx); ok {
 						if authVals := md.Get(":authority"); len(authVals) > 0 {
-							gotAuthority = authVals[0]
+							gotAuthority.Store(&authVals[0])
 						}
 					}
 					return &testpb.Empty{}, nil
@@ -1411,8 +1424,8 @@ func (s) TestAuthorityOverriding(t *testing.T) {
 			} else {
 				wantAuthority = server.Address
 			}
-			if gotAuthority != wantAuthority {
-				t.Errorf("invalid authority got: %q, want: %q", gotAuthority, wantAuthority)
+			if got, want := *gotAuthority.Load(), wantAuthority; got != want {
+				t.Errorf("invalid authority got: %q, want: %q", got, want)
 			}
 
 			// The authority specified via the `CallAuthority` CallOption takes the
@@ -1422,8 +1435,8 @@ func (s) TestAuthorityOverriding(t *testing.T) {
 				t.Fatalf("client.EmptyCall() failed: %v", err)
 			}
 
-			if gotAuthority != userAuthorityOverride {
-				t.Errorf("Server received authority %q, want %q (user override)", gotAuthority, userAuthorityOverride)
+			if got, want := *gotAuthority.Load(), userAuthorityOverride; got != want {
+				t.Errorf("Server received authority %q, want %q (user override)", got, want)
 			}
 		})
 	}
@@ -1507,5 +1520,131 @@ func (s) TestAuthorityOverridingWithTLS(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// Tests that configured LRS metrics are successfully propagated from the
+// backend to the LRS server.
+func (s) TestLoadReporting_CustomMetricsPropagation(t *testing.T) {
+	testutils.SetEnvConfig(t, &envconfig.XDSORCAToLRSPropEnabled, true)
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{SupportLoadReportingService: true})
+	nodeID := uuid.New().String()
+	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
+	resolverBuilder, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
+	if err != nil {
+		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
+	}
+	smr := orca.NewServerMetricsRecorder()
+	smr.SetCPUUtilization(0.8)
+
+	f := &stubserver.StubServer{
+		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
+			cmr := orca.CallMetricsRecorderFromContext(ctx)
+			if cmr != nil {
+				cmr.SetNamedMetric("db_cost", 50.0)
+				cmr.SetNamedMetric("ignored_metric", 10.0)
+			}
+			return &testpb.Empty{}, nil
+		},
+	}
+	server := stubserver.StartTestService(t, f, orca.CallMetricsServerOption(smr))
+	defer server.Stop()
+	const serviceName = "my-test-xds-service"
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		DialTarget: serviceName,
+		NodeID:     nodeID,
+		Host:       "localhost",
+		Port:       testutils.ParsePort(t, server.Address),
+		SecLevel:   e2e.SecurityLevelNone,
+	})
+	resources.Clusters[0].LrsServer = &v3corepb.ConfigSource{
+		ConfigSourceSpecifier: &v3corepb.ConfigSource_Self{
+			Self: &v3corepb.SelfConfigSource{},
+		},
+	}
+	resources.Clusters[0].LrsReportEndpointMetrics = []string{
+		"cpu_utilization",
+		"named_metrics.db_cost",
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(resolverBuilder))
+	if err != nil {
+		t.Fatalf("failed to dial local test server: %v", err)
+	}
+	defer cc.Close()
+	client := testgrpc.NewTestServiceClient(cc)
+
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+		t.Fatalf("rpc EmptyCall() failed: %v", err)
+	}
+	if _, err = mgmtServer.LRSServer.LRSStreamOpenChan.Receive(ctx); err != nil {
+		t.Fatalf("Failure when waiting for an LRS stream to be opened: %v", err)
+	}
+	if _, err = mgmtServer.LRSServer.LRSRequestChan.Receive(ctx); err != nil {
+		t.Fatalf("Failure waiting for initial LRS request: %v", err)
+	}
+
+	mgmtServer.LRSServer.LRSResponseChan <- &fakeserver.Response{
+		Resp: &v3lrspb.LoadStatsResponse{
+			SendAllClusters:       true,
+			LoadReportingInterval: durationpb.New(10 * time.Millisecond),
+		},
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			t.Fatalf("Timeout waiting for LRS load report: %v", ctx.Err())
+		case req := <-mgmtServer.LRSServer.LRSRequestChan.C:
+			loadStats := req.(*fakeserver.Request).Req.(*v3lrspb.LoadStatsRequest)
+			for _, load := range loadStats.ClusterStats {
+				for _, locality := range load.UpstreamLocalityStats {
+					if locality.TotalSuccessfulRequests > 0 {
+						foundDBCost := false
+
+						for _, m := range locality.LoadMetricStats {
+							if m.MetricName == "named_metrics.db_cost" {
+								foundDBCost = true
+								if got, want := m.NumRequestsFinishedWithMetric, uint64(1); got != want {
+									t.Errorf("db_cost NumRequestsFinishedWithMetric = %v, want %v", got, want)
+								}
+								if got, want := m.TotalMetricValue, 50.0; got != want {
+									t.Errorf("db_cost TotalMetricValue = %v, want %v", got, want)
+								}
+							}
+							if m.MetricName == "named_metrics.ignored_metric" {
+								t.Errorf("ignored_metric should not have been reported")
+							}
+						}
+
+						if !foundDBCost {
+							t.Errorf("Expected to find named_metrics.db_cost inside load reports")
+						}
+
+						if locality.CpuUtilization == nil {
+							t.Errorf("Expected CpuUtilization to be explicitly set but got nil")
+						} else {
+							if got, want := locality.CpuUtilization.NumRequestsFinishedWithMetric, uint64(1); got != want {
+								t.Errorf("CpuUtilization NumRequestsFinishedWithMetric = %v, want %v", got, want)
+							}
+							if got, want := locality.CpuUtilization.TotalMetricValue, 0.8; got != want {
+								t.Errorf("CpuUtilization TotalMetricValue = %v, want %v", got, want)
+							}
+						}
+
+						if locality.MemUtilization != nil {
+							t.Errorf("MemUtilization metric set to %v when expected to be unset", locality.MemUtilization)
+						}
+
+						return
+					}
+				}
+			}
+		}
 	}
 }

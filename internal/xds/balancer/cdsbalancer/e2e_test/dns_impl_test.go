@@ -37,17 +37,17 @@ import (
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 
-	_ "google.golang.org/grpc/internal/xds/balancer/clusterresolver"
+	_ "google.golang.org/grpc/internal/xds/balancer/priority" // Register priority LB policy.
 )
 
-// TestLogicalDNS_MultipleEndpoints tests the cluster_resolver LB policy
-// using a LOGICAL_DNS discovery mechanism.
+// TestLogicalDNS_MultipleEndpoints tests the priority LB policy using a
+// LOGICAL_DNS discovery mechanism.
 //
 // The test verifies that multiple addresses returned by the DNS resolver are
-// grouped into a single endpoint (as per gRFC A61). Because the round_robin
-// LB policy sees only one endpoint, it should not rotate traffic between the
-// addresses. Instead, the single endpoint is picked, and connects to the
-// first address.
+// grouped into a single endpoint (as per gRFC A61). Because the round_robin LB
+// policy sees only one endpoint, it should not rotate traffic between the
+// addresses. Instead, the single endpoint is picked, and connects to the first
+// address.
 func (s) TestLogicalDNS_MultipleEndpoints(t *testing.T) {
 	// Spin up a management server to receive xDS resources from.
 	managementServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})

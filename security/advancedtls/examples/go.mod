@@ -1,21 +1,21 @@
 module google.golang.org/grpc/security/advancedtls/examples
 
-go 1.24.0
+go 1.25.0
 
 require (
-	google.golang.org/grpc v1.78.0
-	google.golang.org/grpc/examples v0.0.0-20260121091521-3fb101d6650d
+	google.golang.org/grpc v1.80.0
+	google.golang.org/grpc/examples v0.0.0-20260415072711-c5b160eb8cf5
 	google.golang.org/grpc/security/advancedtls v1.0.0
 )
 
 require (
-	github.com/go-jose/go-jose/v4 v4.1.3 // indirect
+	github.com/go-jose/go-jose/v4 v4.1.4 // indirect
 	github.com/spiffe/go-spiffe/v2 v2.6.0 // indirect
-	golang.org/x/crypto v0.47.0 // indirect
-	golang.org/x/net v0.49.0 // indirect
-	golang.org/x/sys v0.40.0 // indirect
-	golang.org/x/text v0.33.0 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20260120221211-b8f7ae30c516 // indirect
+	golang.org/x/crypto v0.50.0 // indirect
+	golang.org/x/net v0.53.0 // indirect
+	golang.org/x/sys v0.43.0 // indirect
+	golang.org/x/text v0.36.0 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20260414002931-afd174a4e478 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 )
 

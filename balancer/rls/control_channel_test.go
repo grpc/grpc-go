@@ -125,7 +125,7 @@ func (s) TestLookupDeadlineExceeded(t *testing.T) {
 	defer ctrlCh.close()
 
 	// Perform the lookup and expect the callback to be invoked with an error.
-	errCh := make(chan error)
+	errCh := make(chan error, 1)
 	ctrlCh.lookup(nil, rlspb.RouteLookupRequest_REASON_MISS, staleHeaderData, func(_ []string, _ string, err error) {
 		if st, ok := status.FromError(err); !ok || st.Code() != codes.DeadlineExceeded {
 			errCh <- fmt.Errorf("rlsClient.lookup() returned error: %v, want %v", err, codes.DeadlineExceeded)
@@ -367,7 +367,7 @@ func testControlChannelCredsFailure(t *testing.T, sopts []grpc.ServerOption, bop
 	defer ctrlCh.close()
 
 	// Perform the lookup and expect the callback to be invoked with an error.
-	errCh := make(chan error)
+	errCh := make(chan error, 1)
 	ctrlCh.lookup(nil, rlspb.RouteLookupRequest_REASON_MISS, staleHeaderData, func(_ []string, _ string, err error) {
 		if st, ok := status.FromError(err); !ok || st.Code() != wantCode || !wantErrRegex.MatchString(st.String()) {
 			errCh <- fmt.Errorf("rlsClient.lookup() returned error: %v, wantCode: %v, wantErr: %s", err, wantCode, wantErrRegex.String())

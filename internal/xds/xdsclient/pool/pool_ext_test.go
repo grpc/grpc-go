@@ -31,7 +31,6 @@ import (
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
-	"google.golang.org/grpc/internal/testutils/stats"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/internal/xds/xdsclient"
@@ -41,6 +40,7 @@ import (
 	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
+	estats "google.golang.org/grpc/experimental/stats"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
@@ -65,7 +65,7 @@ func Test(t *testing.T) {
 // Then it sets the env var XDSBootstrapFileName and retry creating a client
 // in DefaultPool. This should succeed.
 func (s) TestDefaultPool_LazyLoadBootstrapConfig(t *testing.T) {
-	_, closeFunc, err := xdsclient.DefaultPool.NewClient(t.Name(), &stats.NoopMetricsRecorder{})
+	_, closeFunc, err := xdsclient.DefaultPool.NewClient(t.Name(), &estats.UnimplementedMetricsRecorder{})
 	if err == nil {
 		t.Fatalf("xdsclient.DefaultPool.NewClient() succeeded without setting bootstrap config env vars, want failure")
 	}
@@ -93,7 +93,7 @@ func (s) TestDefaultPool_LazyLoadBootstrapConfig(t *testing.T) {
 	// state to make it re-read the env vars during next client creation.
 	xdsclient.DefaultPool.UnsetBootstrapConfigForTesting()
 
-	_, closeFunc, err = xdsclient.DefaultPool.NewClient(t.Name(), &stats.NoopMetricsRecorder{})
+	_, closeFunc, err = xdsclient.DefaultPool.NewClient(t.Name(), &estats.UnimplementedMetricsRecorder{})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}

@@ -45,9 +45,12 @@ import (
 )
 
 func (s) TestRetryUnary(t *testing.T) {
+	serverMu := sync.Mutex{}
 	i := -1
 	ss := &stubserver.StubServer{
 		EmptyCallF: func(context.Context, *testpb.Empty) (r *testpb.Empty, err error) {
+			serverMu.Lock()
+			defer serverMu.Unlock()
 			defer func() { t.Logf("server call %v returning err %v", i, err) }()
 			i++
 			switch i {
@@ -77,8 +80,8 @@ func (s) TestRetryUnary(t *testing.T) {
 	defer ss.Stop()
 
 	testCases := []struct {
-		code  codes.Code
-		count int
+		wantCode  codes.Code
+		wantCount int
 	}{
 		{codes.OK, 0},
 		{codes.OK, 2},
@@ -93,19 +96,26 @@ func (s) TestRetryUnary(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 		_, err := ss.Client.EmptyCall(ctx, &testpb.Empty{})
 		cancel()
-		if status.Code(err) != tc.code {
-			t.Fatalf("EmptyCall(_, _) = _, %v; want _, <Code() = %v>", err, tc.code)
+		if status.Code(err) != tc.wantCode {
+			t.Fatalf("EmptyCall(_, _) = _, %v; want _, <Code() = %v>", err, tc.wantCode)
 		}
-		if i != tc.count {
-			t.Fatalf("i = %v; want %v", i, tc.count)
+		serverMu.Lock()
+		if i != tc.wantCount {
+			serverMu.Unlock()
+			t.Fatalf("i = %v; want %v", i, tc.wantCount)
 		}
+		serverMu.Unlock()
 	}
 }
 
 func (s) TestRetryThrottling(t *testing.T) {
+	serverMu := sync.Mutex{}
 	i := -1
+
 	ss := &stubserver.StubServer{
 		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
+			serverMu.Lock()
+			defer serverMu.Unlock()
 			i++
 			switch i {
 			case 0, 3, 6, 10, 11, 12, 13, 14, 16, 18:
@@ -137,8 +147,8 @@ func (s) TestRetryThrottling(t *testing.T) {
 	defer ss.Stop()
 
 	testCases := []struct {
-		code  codes.Code
-		count int
+		wantCode  codes.Code
+		wantCount int
 	}{
 		{codes.OK, 0},           // tokens = 10
 		{codes.OK, 3},           // tokens = 8.5 (10 - 2 failures + 0.5 success)
@@ -157,12 +167,14 @@ func (s) TestRetryThrottling(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 		_, err := ss.Client.EmptyCall(ctx, &testpb.Empty{})
 		cancel()
-		if status.Code(err) != tc.code {
-			t.Errorf("EmptyCall(_, _) = _, %v; want _, <Code() = %v>", err, tc.code)
+		if status.Code(err) != tc.wantCode {
+			t.Errorf("EmptyCall(_, _) = _, %v; want _, <Code() = %v>", err, tc.wantCode)
 		}
-		if i != tc.count {
-			t.Errorf("i = %v; want %v", i, tc.count)
+		serverMu.Lock()
+		if i != tc.wantCount {
+			t.Errorf("i = %v; want %v", i, tc.wantCount)
 		}
+		serverMu.Unlock()
 	}
 }
 
@@ -275,15 +287,15 @@ func (s) TestRetryStreaming(t *testing.T) {
 	}
 	cErr := func(c codes.Code) clientOp {
 		return func(stream testgrpc.TestService_FullDuplexCallClient) error {
-			want := status.New(c, "this is a test error").Err()
-			if c == codes.OK {
-				want = io.EOF
-			}
 			res, err := stream.Recv()
-			if res != nil ||
-				((err == nil) != (want == nil)) ||
-				(want != nil && err.Error() != want.Error()) {
-				return fmt.Errorf("client: Recv() = %v, %v; want <nil>, %v", res, err, want)
+			var gotCode codes.Code
+			if err == io.EOF {
+				gotCode = codes.OK
+			} else {
+				gotCode = status.Code(err)
+			}
+			if res != nil || gotCode != c {
+				return fmt.Errorf("client: Recv() = %v, %v; want <nil>, %v", res, err, c)
 			}
 			return nil
 		}
@@ -413,10 +425,14 @@ func (s) TestRetryStreaming(t *testing.T) {
 		clientOps: []clientOp{cReqPayload(largePayload), cErr(codes.Unavailable)},
 	}}
 
+	serverMu := sync.Mutex{}
 	var serverOpIter int
 	var serverOps []serverOp
+
 	ss := &stubserver.StubServer{
 		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
+			serverMu.Lock()
+			defer serverMu.Unlock()
 			for serverOpIter < len(serverOps) {
 				op := serverOps[serverOpIter]
 				serverOpIter++
@@ -457,8 +473,10 @@ func (s) TestRetryStreaming(t *testing.T) {
 
 	for i, tc := range testCases {
 		func() {
+			serverMu.Lock()
 			serverOpIter = 0
 			serverOps = tc.serverOps
+			serverMu.Unlock()
 
 			stream, err := ss.Client.FullDuplexCall(ctx)
 			if err != nil {
@@ -470,6 +488,8 @@ func (s) TestRetryStreaming(t *testing.T) {
 					break
 				}
 			}
+			serverMu.Lock()
+			defer serverMu.Unlock()
 			if serverOpIter != len(serverOps) {
 				t.Errorf("%v: serverOpIter = %v; want %v", tc.desc, serverOpIter, len(serverOps))
 			}
@@ -508,15 +528,20 @@ func (s) TestMaxCallAttempts(t *testing.T) {
 			),
 		}
 
+		serverMu := sync.Mutex{}
 		streamCallCount := 0
 		unaryCallCount := 0
 
 		ss := &stubserver.StubServer{
 			FullDuplexCallF: func(testgrpc.TestService_FullDuplexCallServer) error {
+				serverMu.Lock()
+				defer serverMu.Unlock()
 				streamCallCount++
 				return status.New(codes.Unavailable, "this is a test error").Err()
 			},
 			EmptyCallF: func(context.Context, *testpb.Empty) (r *testpb.Empty, err error) {
+				serverMu.Lock()
+				defer serverMu.Unlock()
 				unaryCallCount++
 				return nil, status.New(codes.Unavailable, "this is a test error").Err()
 			},
@@ -550,10 +575,16 @@ func (s) TestMaxCallAttempts(t *testing.T) {
 				t.Fatalf("client: Recv() = %s, %v; want <nil>, error", got, err)
 			} else if status.Code(err) != codes.Unavailable {
 				t.Fatalf("client: Recv() = _, %v; want _, Unavailable", err)
+			} else if !strings.Contains(err.Error(), "retries exhausted") {
+				t.Fatalf("want: retries exhausted, got: %v", err)
 			}
+
+			serverMu.Lock()
 			if streamCallCount != tc.expectedAttempts {
+				serverMu.Unlock()
 				t.Fatalf("stream expectedAttempts = %v; want %v", streamCallCount, tc.expectedAttempts)
 			}
+			serverMu.Unlock()
 
 			// Test unary RPC
 			if ugot, err := ss.Client.EmptyCall(ctx, &testpb.Empty{}); err == nil {
@@ -561,6 +592,8 @@ func (s) TestMaxCallAttempts(t *testing.T) {
 			} else if status.Code(err) != codes.Unavailable {
 				t.Fatalf("client: EmptyCall() = _, %v; want _, Unavailable", err)
 			}
+			serverMu.Lock()
+			defer serverMu.Unlock()
 			if unaryCallCount != tc.expectedAttempts {
 				t.Fatalf("unary expectedAttempts = %v; want %v", unaryCallCount, tc.expectedAttempts)
 			}
@@ -815,4 +848,83 @@ func (s) TestRetryTransparentWhenCommitted(t *testing.T) {
 	stream1.CloseSend()
 	stream1.Recv()
 	stream1.Send(&testpb.StreamingOutputCallRequest{})
+}
+
+func (s) TestNoRetry(t *testing.T) {
+	scJSON := `{
+	"methodConfig": [{
+	  "name": [{"service": "grpc.testing.TestService"}],
+	  "retryPolicy": {
+		"MaxAttempts": 4,
+		"InitialBackoff": ".01s",
+		"MaxBackoff": ".01s",
+		"BackoffMultiplier": 1.0,
+		"RetryableStatusCodes": [ "UNAVAILABLE" ]
+	  }
+	}]}`
+	tests := []struct {
+		name     string
+		dialOpts []grpc.DialOption
+	}{
+		{
+			name: "disabled",
+			dialOpts: []grpc.DialOption{
+				grpc.WithDefaultServiceConfig(scJSON),
+				grpc.WithDisableRetry(),
+			},
+		},
+		{
+			name:     "not_configured",
+			dialOpts: []grpc.DialOption{},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ss := &stubserver.StubServer{
+				FullDuplexCallF: func(testgrpc.TestService_FullDuplexCallServer) error {
+					return status.New(codes.Unavailable, "retryable error").Err()
+				},
+				EmptyCallF: func(context.Context, *testpb.Empty) (r *testpb.Empty, err error) {
+					return nil, status.New(codes.Unavailable, "retryable error").Err()
+				},
+			}
+			if err := ss.Start([]grpc.ServerOption{}, tc.dialOpts...); err != nil {
+				t.Fatalf("Error starting endpoint server: %v", err)
+			}
+			defer ss.Stop()
+
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+
+			// Test streaming RPC
+			stream, err := ss.Client.FullDuplexCall(ctx)
+			if err != nil {
+				t.Fatalf("Error while creating stream: %v", err)
+			}
+			_, err = stream.Recv()
+			if err == nil {
+				t.Fatal("stream.Recv() succeeded when expected to fail")
+			}
+			if status.Code(err) != codes.Unavailable {
+				t.Fatalf("client: Recv() = _, %v; want _, Unavailable", err)
+			}
+			if strings.Contains(err.Error(), "retries exhausted") {
+				t.Fatalf("client: EmptyCall() failed with an unexpected 'retries exhausted' error: %v", err)
+			}
+
+			// Test unary RPC
+			_, err = ss.Client.EmptyCall(ctx, &testpb.Empty{})
+			if err == nil {
+				t.Fatal("EmptyCall() succeeded when expected to fail")
+			}
+			if status.Code(err) != codes.Unavailable {
+				t.Fatalf("client: EmptyCall() = _, %v; want _, Unavailable", err)
+			}
+
+			if strings.Contains(err.Error(), "retries exhausted") {
+				t.Fatalf("client: EmptyCall() failed with an unexpected 'retries exhausted' error: %v", err)
+			}
+		})
+	}
 }
