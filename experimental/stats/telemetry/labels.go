@@ -19,7 +19,10 @@
 // Package telemetry defines stats APIs for interacting with
 // telemetry labels.
 //
-// All APIs in this package are experimental.
+// # Experimental
+//
+// Notice: All APIs in this package are experimental and may be changed or
+// removed in a later release.
 package telemetry
 
 import (
