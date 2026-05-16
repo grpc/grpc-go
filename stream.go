@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"iter"
 	"math"
 	rand "math/rand/v2"
 	"strconv"
@@ -50,7 +51,7 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-var metadataFromOutgoingContextRaw = internal.FromOutgoingContextRaw.(func(context.Context) (metadata.MD, [][]string, bool))
+var metadataFromOutgoingContextRaw = internal.FromOutgoingContextRaw.(func(context.Context) (metadata.MD, iter.Seq2[string, string], bool))
 
 // StreamHandler defines the handler called by gRPC server to complete the
 // execution of a streaming RPC. srv is the service implementation on which the
@@ -227,11 +228,9 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 			return nil, status.Error(codes.Internal, err.Error())
 		}
 		// validate added
-		for _, kvs := range added {
-			for i := 0; i < len(kvs); i += 2 {
-				if err := imetadata.ValidatePair(kvs[i], kvs[i+1]); err != nil {
-					return nil, status.Error(codes.Internal, err.Error())
-				}
+		for k, v := range added {
+			if err := imetadata.ValidatePair(k, v); err != nil {
+				return nil, status.Error(codes.Internal, err.Error())
 			}
 		}
 	}

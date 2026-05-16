@@ -368,6 +368,28 @@ func BenchmarkAppendToOutgoingContext(b *testing.B) {
 	}
 }
 
+// BenchmarkAppendToOutgoingContextN measures the cost of N sequential
+// AppendToOutgoingContext calls on a fresh context each iteration.
+// With the old [][]string implementation each call was O(len(added)),
+// making N calls O(N²) total. The linked-list implementation is O(1)
+// per call and O(N) total.
+func BenchmarkAppendToOutgoingContextN(b *testing.B) {
+	for _, n := range []int{1, 5, 10, 50} {
+		b.Run(strconv.Itoa(n), func(b *testing.B) {
+			b.ReportAllocs()
+			tCtx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+			for iter := 0; iter < b.N; iter++ {
+				ctx := tCtx
+				for i := 0; i < n; i++ {
+					ctx = AppendToOutgoingContext(ctx, "k1", "v1", "k2", "v2")
+				}
+				_ = ctx
+			}
+		})
+	}
+}
+
 func BenchmarkFromOutgoingContext(b *testing.B) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -376,6 +398,25 @@ func BenchmarkFromOutgoingContext(b *testing.B) {
 
 	for n := 0; n < b.N; n++ {
 		FromOutgoingContext(ctx)
+	}
+}
+
+// BenchmarkFromOutgoingContextN measures the read path after N appends.
+func BenchmarkFromOutgoingContextN(b *testing.B) {
+	for _, n := range []int{1, 5, 10, 50} {
+		b.Run(strconv.Itoa(n), func(b *testing.B) {
+			b.ReportAllocs()
+			tCtx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+			ctx := NewOutgoingContext(tCtx, MD{"k-base": {"v-base"}})
+			for i := 0; i < n; i++ {
+				ctx = AppendToOutgoingContext(ctx, "k"+strconv.Itoa(i), "v"+strconv.Itoa(i))
+			}
+			b.ResetTimer()
+			for iter := 0; iter < b.N; iter++ {
+				FromOutgoingContext(ctx)
+			}
+		})
 	}
 }
 
