@@ -129,7 +129,7 @@ func (builder) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, er
 		allowedHeaders:           allowedHeaders,
 		disallowedHeaders:        disallowedHeaders,
 		deferredCloseTimeout:     deferredCloseTimeout,
-	},nil
+	}, nil
 }
 
 func (builder) ParseFilterConfigOverride(ov proto.Message) (httpfilter.FilterConfig, error) {
