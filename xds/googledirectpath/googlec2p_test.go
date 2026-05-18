@@ -655,3 +655,175 @@ func (s) TestCreateMultipleXDSClients(t *testing.T) {
 	c2pXDSTarget := resolver.Target{URL: url.URL{Scheme: xdsName, Host: c2pAuthority, Path: c2pTarget.URL.Path}}
 	verifyXDSClientBootstrapConfig(t, xdsClientPool, c2pXDSTarget.String(), c2pConfig)
 }
+
+// TestBuildXDSClientNotOnGCEWithForceXDS validates that the C2P resolver
+// handles not on GCP (Google Cloud Interconnect) clients correctly when the
+// force-xds query parameter is provided in various valid formats.
+// It verifies that:
+//   - GCE metadata server queries for zone and ipv6 capability are bypassed
+//     to prevent dial timeouts.
+//   - The node ID is formatted using the prefix ("C2P-non-gcp").
+//   - Zone information is completely omitted from the node config.
+//   - Dualstack IPv6 capability (TRAFFICDIRECTOR_DIRECTPATH_C2P_IPV6_CAPABLE)
+//     is set to true.
+func (s) TestBuildXDSClientNotOnGCEWithForceXDS(t *testing.T) {
+	tests := []struct {
+		desc     string
+		rawQuery string
+	}{
+		{
+			desc:     "query_param_key_only",
+			rawQuery: "force-xds",
+		},
+		{
+			desc:     "query_param_trailing_equals_value_empty",
+			rawQuery: "force-xds=",
+		},
+		{
+			desc:     "query_param_value_true",
+			rawQuery: "force-xds=true",
+		},
+		{
+			desc:     "query_param_value_false",
+			rawQuery: "force-xds=false",
+		},
+		{
+			desc:     "query_param_multiple_query_params",
+			rawQuery: "foo=bar&force-xds",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			replaceResolvers(t)
+			simulateRunningOnGCE(t, false)
+			useCleanUniverseDomain(t)
+
+			// Override the random func used in the node ID.
+			origRandInd := randInt
+			randInt = func() int { return 666 }
+			defer func() { randInt = origRandInd }()
+
+			// Override xDS client pool.
+			oldXdsClientPool := xdsClientPool
+			xdsClientPool = xdsclient.NewPool(nil)
+			defer func() { xdsClientPool = oldXdsClientPool }()
+
+			// Target URI with force-xds query parameter.
+			builder := resolver.Get(c2pScheme)
+			target := resolver.Target{URL: url.URL{
+				Scheme:   c2pScheme,
+				Path:     "test-path",
+				RawQuery: tt.rawQuery,
+			}}
+
+			// Build the google-c2p resolver.
+			res, err := builder.Build(target, nil, resolver.BuildOptions{})
+			if err != nil {
+				t.Fatalf("failed to build resolver: %v", err)
+			}
+			defer res.Close()
+
+			// Query parameters are omitted since the downstream xDS target is configured using only active fields.
+			xdsTarget := resolver.Target{URL: url.URL{Scheme: xdsName, Host: c2pAuthority, Path: target.URL.Path}}
+			wantBootstrapConfig := bootstrapConfig(t, bootstrap.ConfigOptionsForTesting{
+				Servers: []byte(`[{
+					"server_uri": "dns:///directpath-pa.googleapis.com",
+					"channel_creds": [{"type": "google_default"}],
+					"server_features": ["ignore_resource_deletion"]
+				}]`),
+				Authorities: map[string]json.RawMessage{
+					"traffic-director-c2p.xds.googleapis.com": []byte(`{
+						"xds_servers": [
+							{
+								"server_uri": "dns:///directpath-pa.googleapis.com",
+								"channel_creds": [{"type": "google_default"}],
+								"server_features": ["ignore_resource_deletion"]
+							}
+						]
+					}`),
+				},
+				Node: []byte(`{
+					"id": "C2P-non-gcp-666",
+					"metadata": {
+						"TRAFFICDIRECTOR_DIRECTPATH_C2P_IPV6_CAPABLE": true
+					}
+				}`),
+			})
+			verifyXDSClientBootstrapConfig(t, xdsClientPool, xdsTarget.String(), wantBootstrapConfig)
+		})
+	}
+}
+
+// TestBuildXDSClientOnGCEWithForceXDS validates that when running on GCE with
+// the force-xds query param, we successfully build an xDS client with standard
+// GCP Node ID format, locality zone, and dualstack capability.
+func (s) TestBuildXDSClientOnGCEWithForceXDS(t *testing.T) {
+	replaceResolvers(t)
+	simulateRunningOnGCE(t, true)
+	useCleanUniverseDomain(t)
+
+	// Override the zone returned by the metadata server.
+	oldGetZone := getZone
+	getZone = func(time.Duration) string { return "test-zone" }
+	defer func() { getZone = oldGetZone }()
+
+	// Override testing random node ID.
+	origRandInd := randInt
+	randInt = func() int { return 777 }
+	defer func() { randInt = origRandInd }()
+
+	// Override IPv6 capability.
+	oldGetIPv6Capable := getIPv6Capable
+	getIPv6Capable = func(time.Duration) bool { return true }
+	defer func() { getIPv6Capable = oldGetIPv6Capable }()
+
+	oldXdsClientPool := xdsClientPool
+	xdsClientPool = xdsclient.NewPool(nil)
+	defer func() { xdsClientPool = oldXdsClientPool }()
+
+	// Target URI with force-xds query parameter.
+	target := resolver.Target{URL: url.URL{
+		Scheme:   c2pScheme,
+		Path:     "test-path",
+		RawQuery: "force-xds",
+	}}
+
+	// Build the google-c2p resolver.
+	builder := resolver.Get(c2pScheme)
+	r, err := builder.Build(target, nil, resolver.BuildOptions{})
+	if err != nil {
+		t.Fatalf("failed to build resolver: %v", err)
+	}
+	defer r.Close()
+
+	xdsTarget := resolver.Target{URL: url.URL{Scheme: xdsName, Host: c2pAuthority, Path: target.URL.Path}}
+	wantBootstrapConfig := bootstrapConfig(t, bootstrap.ConfigOptionsForTesting{
+		Servers: []byte(`[{
+			"server_uri": "dns:///directpath-pa.googleapis.com",
+			"channel_creds": [{"type": "google_default"}],
+			"server_features": ["ignore_resource_deletion"]
+		}]`),
+		Authorities: map[string]json.RawMessage{
+			"traffic-director-c2p.xds.googleapis.com": []byte(`{
+				"xds_servers": [
+					{
+						"server_uri": "dns:///directpath-pa.googleapis.com",
+						"channel_creds": [{"type": "google_default"}],
+						"server_features": ["ignore_resource_deletion"]
+					}
+				]
+			}`),
+		},
+		Node: []byte(`{
+			"id": "C2P-777",
+			"locality": {
+				"zone": "test-zone"
+			},
+			"metadata": {
+				"TRAFFICDIRECTOR_DIRECTPATH_C2P_IPV6_CAPABLE": true
+			}
+		}`),
+	})
+	verifyXDSClientBootstrapConfig(t, xdsClientPool, xdsTarget.String(), wantBootstrapConfig)
+}
