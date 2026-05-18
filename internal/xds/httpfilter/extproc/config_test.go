@@ -28,6 +28,7 @@ import (
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/optional"
 	"google.golang.org/grpc/internal/xds/httpfilter"
+	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/anypb"
@@ -47,25 +48,47 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
-func (s) TestParseFilterConfig_Success(t *testing.T) {
-	origServerConfigFromGrpcService := serverConfigFromGrpcService
-	defer func() { serverConfigFromGrpcService = origServerConfigFromGrpcService }()
-	serverConfigFromGrpcService = func(grpcService *corepb.GrpcService) (httpfilter.ServerConfig, error) {
-		if grpcService == nil {
-			return httpfilter.ServerConfig{}, nil
-		}
-		if grpcService.GetGoogleGrpc() == nil {
-			return httpfilter.ServerConfig{}, fmt.Errorf("only google_grpc grpc_service is supported")
-		}
-		if grpcService.GetGoogleGrpc().GetTargetUri() == "" {
-			return httpfilter.ServerConfig{}, fmt.Errorf("targetURI must be a non-empty string")
-		}
-
-		sc := httpfilter.ServerConfig{
-			TargetURI: grpcService.GetGoogleGrpc().GetTargetUri(),
-		}
-		return sc, nil
+func testParseGRPCServiceConfig(grpcService *corepb.GrpcService) (xdsresource.GRPCServiceConfig, error) {
+	if grpcService == nil {
+		return xdsresource.GRPCServiceConfig{}, nil
 	}
+	if grpcService.GetGoogleGrpc() == nil {
+		return xdsresource.GRPCServiceConfig{}, fmt.Errorf("only google_grpc grpc_service is supported")
+	}
+	if grpcService.GetGoogleGrpc().GetTargetUri() == "" {
+		return xdsresource.GRPCServiceConfig{}, fmt.Errorf("targetURI must be a non-empty string")
+	}
+
+	sc := xdsresource.GRPCServiceConfig{
+		TargetURI: grpcService.GetGoogleGrpc().GetTargetUri(),
+	}
+	return sc, nil
+}
+
+var cmpOpts = []cmp.Option{
+	cmp.AllowUnexported(
+		baseConfig{},
+		overrideConfig{},
+		xdsresource.GRPCServiceConfig{},
+		processingModes{},
+		httpfilter.HeaderMutationRules{},
+		optional.Optional[xdsresource.GRPCServiceConfig]{},
+		optional.Optional[processingModes]{},
+		optional.Optional[bool]{},
+	),
+	protocmp.Transform(),
+	cmp.Transformer("RegexpToString", func(r *regexp.Regexp) string {
+		if r == nil {
+			return ""
+		}
+		return r.String()
+	}),
+}
+
+func (s) TestParseFilterConfig_Success(t *testing.T) {
+	origParseGRPCServiceConfig := parseGRPCServiceConfig
+	defer func() { parseGRPCServiceConfig = origParseGRPCServiceConfig }()
+	parseGRPCServiceConfig = testParseGRPCServiceConfig
 
 	b := builder{}
 
@@ -90,7 +113,7 @@ func (s) TestParseFilterConfig_Success(t *testing.T) {
 				return m
 			}(),
 			wantCfg: baseConfig{
-				server: httpfilter.ServerConfig{
+				server: xdsresource.GRPCServiceConfig{
 					TargetURI:          "localhost:1234",
 					ChannelCredentials: "",
 				},
@@ -124,7 +147,7 @@ func (s) TestParseFilterConfig_Success(t *testing.T) {
 				return m
 			}(),
 			wantCfg: baseConfig{
-				server: httpfilter.ServerConfig{
+				server: xdsresource.GRPCServiceConfig{
 					TargetURI:          "localhost:1234",
 					ChannelCredentials: "",
 				},
@@ -159,7 +182,7 @@ func (s) TestParseFilterConfig_Success(t *testing.T) {
 				return m
 			}(),
 			wantCfg: baseConfig{
-				server: httpfilter.ServerConfig{
+				server: xdsresource.GRPCServiceConfig{
 					TargetURI:          "localhost:1234",
 					ChannelCredentials: "",
 				},
@@ -186,12 +209,7 @@ func (s) TestParseFilterConfig_Success(t *testing.T) {
 			if err != nil {
 				t.Fatalf("ParseFilterConfig() returned unexpected error: %v", err)
 			}
-			if diff := cmp.Diff(got, tt.wantCfg, cmp.AllowUnexported(baseConfig{}, httpfilter.ServerConfig{}, processingModes{}, httpfilter.HeaderMutationRules{}), protocmp.Transform(), cmp.Transformer("RegexpToString", func(r *regexp.Regexp) string {
-				if r == nil {
-					return ""
-				}
-				return r.String()
-			})); diff != "" {
+			if diff := cmp.Diff(got, tt.wantCfg, cmpOpts...); diff != "" {
 				t.Fatalf("ParseFilterConfig() returned unexpected config (-got +want):\n%s", diff)
 			}
 		})
@@ -199,24 +217,9 @@ func (s) TestParseFilterConfig_Success(t *testing.T) {
 }
 
 func (s) TestParseFilterConfig_Errors(t *testing.T) {
-	origServerConfigFromGrpcService := serverConfigFromGrpcService
-	defer func() { serverConfigFromGrpcService = origServerConfigFromGrpcService }()
-	serverConfigFromGrpcService = func(grpcService *corepb.GrpcService) (httpfilter.ServerConfig, error) {
-		if grpcService == nil {
-			return httpfilter.ServerConfig{}, nil
-		}
-		if grpcService.GetGoogleGrpc() == nil {
-			return httpfilter.ServerConfig{}, fmt.Errorf("only google_grpc grpc_service is supported")
-		}
-		if grpcService.GetGoogleGrpc().GetTargetUri() == "" {
-			return httpfilter.ServerConfig{}, fmt.Errorf("targetURI must be a non-empty string")
-		}
-
-		sc := httpfilter.ServerConfig{
-			TargetURI: grpcService.GetGoogleGrpc().GetTargetUri(),
-		}
-		return sc, nil
-	}
+	origParseGRPCServiceConfig := parseGRPCServiceConfig
+	defer func() { parseGRPCServiceConfig = origParseGRPCServiceConfig }()
+	parseGRPCServiceConfig = testParseGRPCServiceConfig
 
 	b := builder{}
 
@@ -364,11 +367,6 @@ func (s) TestParseFilterConfig_Errors(t *testing.T) {
 			wantErr: "extproc: failed to parse grpc_service targetURI must be a non-empty string",
 		},
 		{
-			name:    "NilConfig",
-			cfg:     nil,
-			wantErr: "extproc: nil base configuration message provided",
-		},
-		{
 			name:    "InvalidConfigType",
 			cfg:     &fpb.ExternalProcessor{}, // Not Any
 			wantErr: "extproc: error parsing config",
@@ -417,7 +415,7 @@ func (s) TestParseFilterConfigOverride_Success(t *testing.T) {
 				return m
 			}(),
 			wantOverrideCfg: overrideConfig{
-				processingModes: optional.NewValue(processingModes{
+				processingModes: optional.New(processingModes{
 					requestHeaderMode:   modeSend,
 					responseHeaderMode:  modeSend,
 					responseTrailerMode: modeSkip,
@@ -440,7 +438,7 @@ func (s) TestParseFilterConfigOverride_Success(t *testing.T) {
 				return m
 			}(),
 			wantOverrideCfg: overrideConfig{
-				failureModeAllow: optional.NewValue(true),
+				failureModeAllow: optional.New(true),
 			},
 		},
 	}
@@ -451,12 +449,7 @@ func (s) TestParseFilterConfigOverride_Success(t *testing.T) {
 			if err != nil {
 				t.Fatalf("ParseFilterConfigOverride() returned unexpected error: %v", err)
 			}
-			if diff := cmp.Diff(got, tt.wantOverrideCfg, cmp.AllowUnexported(overrideConfig{}, httpfilter.ServerConfig{}, processingModes{}, httpfilter.HeaderMutationRules{}, optional.Optional[httpfilter.ServerConfig]{}, optional.Optional[processingModes]{}, optional.Optional[bool]{}), protocmp.Transform(), cmp.Transformer("RegexpToString", func(r *regexp.Regexp) string {
-				if r == nil {
-					return ""
-				}
-				return r.String()
-			})); diff != "" {
+			if diff := cmp.Diff(got, tt.wantOverrideCfg, cmpOpts...); diff != "" {
 				t.Fatalf("ParseFilterConfigOverride() returned unexpected config (-got +want):\n%s", diff)
 			}
 		})
@@ -502,11 +495,6 @@ func (s) TestParseFilterConfigOverride_Errors(t *testing.T) {
 				return m
 			}(),
 			wantErr: "extproc: invalid response body mode STREAMED",
-		},
-		{
-			name:     "NilOverride",
-			override: nil,
-			wantErr:  "extproc: nil override configuration provided",
 		},
 		{
 			name:     "InvalidOverrideType",

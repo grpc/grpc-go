@@ -24,19 +24,21 @@ import (
 	"google.golang.org/grpc/internal/optional"
 	"google.golang.org/grpc/internal/xds/httpfilter"
 	"google.golang.org/grpc/internal/xds/matcher"
+	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 
 	v3procfilterpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/ext_proc/v3"
 )
 
-// baseConfig contains the configuration for the external processing client
+// baseConfig contains the configuration for the external processing
 // interceptor.
 type baseConfig struct {
 	httpfilter.FilterConfig
+
 	// The following fields can be set either in the filter config or the override
 	// config. If both are set, the override config will be used.
 
 	// server is the configuration for the external processing server.
-	server httpfilter.ServerConfig
+	server xdsresource.GRPCServiceConfig
 	// processingModes specifies the processing mode for each dataplane event.
 	processingModes processingModes
 	// failureModeAllow specifies the behavior when the RPC to the external
@@ -81,13 +83,13 @@ type baseConfig struct {
 	deferredCloseTimeout time.Duration
 }
 
-// overrideConfig contains the configuration for the external processing client
+// overrideConfig contains the configuration for the external processing
 // interceptor used for overriding the base config. If a particular field is
 // set, that will be used instead of the base config. The fields are similar to
 // base config.
 type overrideConfig struct {
 	httpfilter.FilterConfig
-	server             optional.Optional[httpfilter.ServerConfig]
+	server             optional.Optional[xdsresource.GRPCServiceConfig]
 	processingModes    optional.Optional[processingModes]
 	failureModeAllow   optional.Optional[bool]
 	requestAttributes  []string
@@ -114,14 +116,16 @@ type processingModes struct {
 }
 
 // resolveHeaderMode resolves the processing mode for headers based on the
-// protobuf enum value. If the mode is not set or set to Default, it returns the
-// provided defaultMode.
+// protobuf enum value. If the mode is not set or set to Default processing
+// mode, it returns the provided defaultMode.
 func resolveHeaderMode(mode v3procfilterpb.ProcessingMode_HeaderSendMode, defaultMode processingMode) processingMode {
 	switch mode {
 	case v3procfilterpb.ProcessingMode_SEND:
 		return modeSend
 	case v3procfilterpb.ProcessingMode_SKIP:
 		return modeSkip
+	case v3procfilterpb.ProcessingMode_DEFAULT:
+		return defaultMode
 	default:
 		return defaultMode
 	}

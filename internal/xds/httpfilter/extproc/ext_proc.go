@@ -16,7 +16,7 @@
  *
  */
 
-// Package extproc implements the Envoy external processing filter.
+// Package extproc implements the Envoy external processing HTTP filter.
 package extproc
 
 import (
@@ -27,6 +27,7 @@ import (
 	"google.golang.org/grpc/internal/optional"
 	"google.golang.org/grpc/internal/xds/httpfilter"
 	"google.golang.org/grpc/internal/xds/matcher"
+	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 
@@ -40,8 +41,8 @@ func init() {
 	}
 }
 
-var serverConfigFromGrpcService = func(*v3corepb.GrpcService) (httpfilter.ServerConfig, error) {
-	return httpfilter.ServerConfig{}, fmt.Errorf("serverConfigFromGrpcService not implemented")
+var parseGRPCServiceConfig = func(*v3corepb.GrpcService) (xdsresource.GRPCServiceConfig, error) {
+	return xdsresource.GRPCServiceConfig{}, fmt.Errorf("parseGRPCServiceConfig not implemented")
 }
 
 const defaultDeferredCloseTimeout = 5 * time.Second
@@ -49,7 +50,10 @@ const defaultDeferredCloseTimeout = 5 * time.Second
 type builder struct{}
 
 func (builder) TypeURLs() []string {
-	return []string{"type.googleapis.com/envoy.extensions.filters.http.ext_proc.v3.ExternalProcessor"}
+	return []string{
+		"type.googleapis.com/envoy.extensions.filters.http.ext_proc.v3.ExternalProcessor",
+		"type.googleapis.com/envoy.extensions.filters.http.ext_proc.v3.ExtProcPerRoute",
+	}
 }
 
 // validateBodyProcessingMode ensures that the body processing mode is either
@@ -65,9 +69,6 @@ func validateBodyProcessingMode(mode *v3procfilterpb.ProcessingMode) error {
 }
 
 func (builder) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, error) {
-	if cfg == nil {
-		return nil, fmt.Errorf("extproc: nil base configuration message provided")
-	}
 	m, ok := cfg.(*anypb.Any)
 	if !ok {
 		return nil, fmt.Errorf("extproc: error parsing config %v: unknown type %T, want *anypb.Any", cfg, cfg)
@@ -86,7 +87,7 @@ func (builder) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, er
 	if msg.GetGrpcService() == nil {
 		return nil, fmt.Errorf("extproc: empty grpc_service provided in config %v", cfg)
 	}
-	server, err := serverConfigFromGrpcService(msg.GetGrpcService())
+	server, err := parseGRPCServiceConfig(msg.GetGrpcService())
 	if err != nil {
 		return nil, fmt.Errorf("extproc: failed to parse grpc_service %v", err)
 	}
@@ -116,7 +117,7 @@ func (builder) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, er
 		deferredCloseTimeout = msg.GetDeferredCloseTimeout().AsDuration()
 	}
 
-	iCfg := baseConfig{
+	return baseConfig{
 		processingModes:          processingModesFromProto(msg.GetProcessingMode()),
 		requestAttributes:        msg.GetRequestAttributes(),
 		responseAttributes:       msg.GetResponseAttributes(),
@@ -128,14 +129,10 @@ func (builder) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, er
 		allowedHeaders:           allowedHeaders,
 		disallowedHeaders:        disallowedHeaders,
 		deferredCloseTimeout:     deferredCloseTimeout,
-	}
-	return iCfg, nil
+	},nil
 }
 
 func (builder) ParseFilterConfigOverride(ov proto.Message) (httpfilter.FilterConfig, error) {
-	if ov == nil {
-		return nil, fmt.Errorf("extproc: nil override configuration provided")
-	}
 	m, ok := ov.(*anypb.Any)
 	if !ok {
 		return nil, fmt.Errorf("extproc: error parsing override %v: unknown type %T, want *anypb.Any", ov, ov)
@@ -151,21 +148,21 @@ func (builder) ParseFilterConfigOverride(ov proto.Message) (httpfilter.FilterCon
 		if err := validateBodyProcessingMode(pm); err != nil {
 			return nil, err
 		}
-		processingModesOpt = optional.NewValue(processingModesFromProto(pm))
+		processingModesOpt = optional.New(processingModesFromProto(pm))
 	}
 
-	var serverOpt optional.Optional[httpfilter.ServerConfig]
+	var serverOpt optional.Optional[xdsresource.GRPCServiceConfig]
 	if override.GetGrpcService() != nil {
-		server, err := serverConfigFromGrpcService(override.GetGrpcService())
+		server, err := parseGRPCServiceConfig(override.GetGrpcService())
 		if err != nil {
 			return nil, fmt.Errorf("extproc: failed to parse grpc_service: %v", err)
 		}
-		serverOpt = optional.NewValue(server)
+		serverOpt = optional.New(server)
 	}
 
 	var failureModeAllowOpt optional.Optional[bool]
 	if override.GetFailureModeAllow() != nil {
-		failureModeAllowOpt = optional.NewValue(override.GetFailureModeAllow().GetValue())
+		failureModeAllowOpt = optional.New(override.GetFailureModeAllow().GetValue())
 	}
 
 	return overrideConfig{
