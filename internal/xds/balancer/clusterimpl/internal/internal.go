@@ -1,6 +1,5 @@
 /*
- *
- * Copyright 2019 gRPC authors.
+ * Copyright 2026 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,28 +15,11 @@
  *
  */
 
-package clusterresolver
+// Package internal contains code internal to the clusterimpl package.
+package internal
 
-import (
-	"testing"
-	"time"
+import "crypto/x509"
 
-	"google.golang.org/grpc/internal/grpctest"
-)
-
-const (
-	defaultTestTimeout      = 5 * time.Second
-	defaultTestShortTimeout = 10 * time.Millisecond
-	testEDSService          = "test-eds-service-name"
-	testClusterName         = "test-cluster-name"
-	testClusterName2        = "google_cfe_some-name"
-	testBalancerNameFooBar  = "foo.bar"
-)
-
-type s struct {
-	grpctest.Tester
-}
-
-func Test(t *testing.T) {
-	grpctest.RunSubTests(t, s{})
-}
+// X509SystemCertPoolFunc is used for overriding the system cert pool for
+// tests.
+var X509SystemCertPoolFunc = x509.SystemCertPool

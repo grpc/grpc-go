@@ -161,8 +161,10 @@ func (s) TestADS_ResourcesAreRequestedAfterStreamRestart(t *testing.T) {
 	// Verify the update received by the watcher.
 	wantListenerUpdate := listenerUpdateErrTuple{
 		update: &xdsresource.ListenerUpdate{
-			RouteConfigName: routeConfigName,
-			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+			APIListener: &xdsresource.HTTPConnectionManagerConfig{
+				RouteConfigName: routeConfigName,
+				HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+			},
 		},
 	}
 	if err := verifyListenerUpdate(ctx, lw.updateCh, wantListenerUpdate); err != nil {

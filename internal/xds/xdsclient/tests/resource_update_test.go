@@ -238,8 +238,10 @@ func (s) TestHandleListenerResponseFromManagementServer(t *testing.T) {
 				Resources:   []*anypb.Any{testutils.MarshalAny(t, resource1)},
 			},
 			wantUpdate: &xdsresource.ListenerUpdate{
-				RouteConfigName: "route-configuration-name",
-				HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+				APIListener: &xdsresource.HTTPConnectionManagerConfig{
+					RouteConfigName: "route-configuration-name",
+					HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+				},
 			},
 			wantGenericXDSConfig: []*v3statuspb.ClientConfig_GenericXdsConfig{
 				{
@@ -260,8 +262,10 @@ func (s) TestHandleListenerResponseFromManagementServer(t *testing.T) {
 				Resources:   []*anypb.Any{testutils.MarshalAny(t, resource1), testutils.MarshalAny(t, resource2)},
 			},
 			wantUpdate: &xdsresource.ListenerUpdate{
-				RouteConfigName: "route-configuration-name",
-				HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+				APIListener: &xdsresource.HTTPConnectionManagerConfig{
+					RouteConfigName: "route-configuration-name",
+					HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+				},
 			},
 			wantGenericXDSConfig: []*v3statuspb.ClientConfig_GenericXdsConfig{
 				{
@@ -875,7 +879,7 @@ func (s) TestHandleClusterResponseFromManagementServer(t *testing.T) {
 			// server at that point, hence we do it here before verifying the
 			// received update.
 			if test.wantErr == "" {
-				serverCfg, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{URI: fmt.Sprintf("passthrough:///%s", mgmtServer.Address)})
+				serverCfg, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{URI: fmt.Sprintf("passthrough:///%s", mgmtServer.Address), ServerFeatures: []string{"trusted_xds_server"}})
 				if err != nil {
 					t.Fatalf("Failed to create server config for testing: %v", err)
 				}

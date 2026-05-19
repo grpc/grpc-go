@@ -85,6 +85,7 @@ func main() {
 	s := grpc.NewServer()
 	ss := &server{streamStart: make(chan struct{})}
 	pb.RegisterEchoServer(s, ss)
+	serverStopped := make(chan struct{}, 1)
 
 	go func() {
 		<-ss.streamStart // wait until server streaming starts
@@ -93,13 +94,24 @@ func main() {
 		timer := time.AfterFunc(10*time.Second, func() {
 			log.Println("Server couldn't stop gracefully in time. Doing force stop.")
 			s.Stop()
+			// Unblock the main function.
+			select {
+			case serverStopped <- struct{}{}:
+			default:
+			}
 		})
 		defer timer.Stop()
 		s.GracefulStop() // gracefully stop server after in-flight server streaming rpc finishes
 		log.Println("Server stopped gracefully.")
+		// Unblock the main function.
+		select {
+		case serverStopped <- struct{}{}:
+		default:
+		}
 	}()
 
 	if err := s.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)
 	}
+	<-serverStopped
 }

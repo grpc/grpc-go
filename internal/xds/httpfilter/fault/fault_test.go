@@ -461,9 +461,6 @@ func (s) TestFaultInjection_Unary(t *testing.T) {
 
 	fs, nodeID, port, bc := clientSetup(t)
 	// Create an xDS resolver with the above bootstrap configuration.
-	if internal.NewXDSResolverWithConfigForTesting == nil {
-		t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
-	}
 	xdsResolver, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
 	if err != nil {
 		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
@@ -551,9 +548,6 @@ func (s) TestFaultInjection_Unary(t *testing.T) {
 func (s) TestFaultInjection_MaxActiveFaults(t *testing.T) {
 	fs, nodeID, port, bc := clientSetup(t)
 	// Create an xDS resolver with the above bootstrap configuration.
-	if internal.NewXDSResolverWithConfigForTesting == nil {
-		t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
-	}
 	xdsResolver, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
 	if err != nil {
 		t.Fatalf("Failed to create xDS resolver for testing: %v", err)

@@ -56,6 +56,7 @@ import (
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/binarylog"
 	"google.golang.org/grpc/internal/channelz"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/stubserver"
@@ -2077,14 +2078,14 @@ func (s) TestTap(t *testing.T) {
 }
 
 type myTap struct {
-	cnt int
+	cnt atomic.Int32
 }
 
 func (t *myTap) handle(ctx context.Context, info *tap.Info) (context.Context, error) {
 	if info != nil {
 		switch info.FullMethodName {
 		case "/grpc.testing.TestService/EmptyCall":
-			t.cnt++
+			t.cnt.Add(1)
 
 			if vals := info.Header.Get("return-error"); len(vals) > 0 && vals[0] == "true" {
 				return nil, status.Errorf(codes.Unknown, "tap error")
@@ -2114,22 +2115,22 @@ func testTap(t *testing.T, e env) {
 	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
 	}
-	if ttap.cnt != 1 {
-		t.Fatalf("Get the count in ttap %d, want 1", ttap.cnt)
+	if ttap.cnt.Load() != 1 {
+		t.Fatalf("Get the count in ttap %d, want 1", ttap.cnt.Load())
 	}
 
 	if _, err := tc.EmptyCall(metadata.AppendToOutgoingContext(ctx, "return-error", "false"), &testpb.Empty{}); err != nil {
 		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
 	}
-	if ttap.cnt != 2 {
-		t.Fatalf("Get the count in ttap %d, want 2", ttap.cnt)
+	if ttap.cnt.Load() != 2 {
+		t.Fatalf("Get the count in ttap %d, want 2", ttap.cnt.Load())
 	}
 
 	if _, err := tc.EmptyCall(metadata.AppendToOutgoingContext(ctx, "return-error", "true"), &testpb.Empty{}); status.Code(err) != codes.Unknown {
 		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, %s", err, codes.Unknown)
 	}
-	if ttap.cnt != 3 {
-		t.Fatalf("Get the count in ttap %d, want 3", ttap.cnt)
+	if ttap.cnt.Load() != 3 {
+		t.Fatalf("Get the count in ttap %d, want 3", ttap.cnt.Load())
 	}
 
 	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, 31)
@@ -3909,6 +3910,9 @@ func (s) TestUnaryRPC_ServerCallSendMsgTwice(t *testing.T) {
 func (s) TestClientStreaming_ClientCallRecvMsgTwice(t *testing.T) {
 	ss := stubserver.StubServer{
 		StreamingInputCallF: func(stream testgrpc.TestService_StreamingInputCallServer) error {
+			if err := stream.RecvMsg(&testpb.StreamingInputCallRequest{}); err != nil {
+				t.Errorf("stream.RecvMsg() = %v, want <nil>", err)
+			}
 			if err := stream.SendAndClose(&testpb.StreamingInputCallResponse{}); err != nil {
 				t.Errorf("stream.SendAndClose(_) = %v, want <nil>", err)
 			}
@@ -3960,7 +3964,18 @@ func (s) TestServerStreaming_ClientCallSendMsgTwice(t *testing.T) {
 			// Block until the stream’s context is done. Second call to client.SendMsg
 			// triggers a RST_STREAM which cancels the stream context on the server.
 			<-stream.Context().Done()
-			if err := stream.SendMsg(&testpb.StreamingOutputCallRequest{}); status.Code(err) != codes.Canceled {
+			var err error
+			waitCtx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+			for ; waitCtx.Err() == nil; <-time.After(time.Millisecond) {
+				if err = stream.SendMsg(&testpb.StreamingOutputCallRequest{}); err != nil {
+					break
+				}
+			}
+			if waitCtx.Err() != nil {
+				t.Fatalf("Context timed out waiting for stream.SendMsg() to return an error")
+			}
+			if status.Code(err) != codes.Canceled {
 				t.Errorf("stream.SendMsg() = %v, want error %v", err, codes.Canceled)
 			}
 			close(handlerDone)
@@ -5156,11 +5171,14 @@ func (fw *filterWriter) Write(p []byte) (n int, err error) {
 }
 
 func (s) TestGRPCMethod(t *testing.T) {
+	mu := sync.Mutex{}
 	var method string
 	var ok bool
 
 	ss := &stubserver.StubServer{
 		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
+			mu.Lock()
+			defer mu.Unlock()
 			method, ok = grpc.Method(ctx)
 			return &testpb.Empty{}, nil
 		},
@@ -5177,6 +5195,8 @@ func (s) TestGRPCMethod(t *testing.T) {
 		t.Fatalf("ss.Client.EmptyCall(_, _) = _, %v; want _, nil", err)
 	}
 
+	mu.Lock()
+	defer mu.Unlock()
 	if want := "/grpc.testing.TestService/EmptyCall"; !ok || method != want {
 		t.Fatalf("grpc.Method(_) = %q, %v; want %q, true", method, ok, want)
 	}
@@ -5603,9 +5623,12 @@ func (s) TestMethodFromServerStream(t *testing.T) {
 	const testMethod = "/package.service/method"
 	e := tcpClearRREnv
 	te := newTest(t, e)
+	var mu sync.Mutex
 	var method string
 	var ok bool
 	te.unknownHandler = func(_ any, stream grpc.ServerStream) error {
+		mu.Lock()
+		defer mu.Unlock()
 		method, ok = grpc.MethodFromServerStream(stream)
 		return nil
 	}
@@ -5615,6 +5638,8 @@ func (s) TestMethodFromServerStream(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	_ = te.clientConn().Invoke(ctx, testMethod, nil, nil)
+	mu.Lock()
+	defer mu.Unlock()
 	if !ok || method != testMethod {
 		t.Fatalf("Invoke with method %q, got %q, %v, want %q, true", testMethod, method, ok, testMethod)
 	}
@@ -6134,6 +6159,43 @@ func testClientMaxHeaderListSizeServerIntentionalViolation(t *testing.T, e env) 
 	}
 }
 
+func (s) TestEarlyAbortStreamHeaderListSizeCheck(t *testing.T) {
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Failed to listen: %v", err)
+	}
+	s := grpc.NewServer()
+	defer s.Stop()
+	go s.Serve(lis)
+
+	conn, err := net.DialTimeout("tcp", lis.Addr().String(), defaultTestTimeout)
+	if err != nil {
+		t.Fatalf("Failed to dial: %v", err)
+	}
+	defer conn.Close()
+	st := newServerTesterFromConn(t, conn)
+
+	// Set a very small MaxHeaderListSize that any response headers would violate.
+	st.greetWithSettings(http2.Setting{ID: http2.SettingMaxHeaderListSize, Val: 1})
+
+	// Send a request with an invalid content-type to trigger early abort.
+	st.writeHeaders(http2.HeadersFrameParam{
+		StreamID: 1,
+		BlockFragment: st.encodeHeader(
+			":method", "POST",
+			":path", "/grpc.testing.TestService/UnaryCall",
+			"content-type", "text/plain", // Invalid content-type to trigger early abort
+			"te", "trailers",
+		),
+		EndStream:  true,
+		EndHeaders: true,
+	})
+
+	// We should receive a RST_STREAM with ErrCodeInternal because the response
+	// headers exceed the MaxHeaderListSize limit.
+	st.wantRSTStream(http2.ErrCodeInternal)
+}
+
 func (s) TestNetPipeConn(t *testing.T) {
 	// This test will block indefinitely if grpc writes both client and server
 	// prefaces without either reading from the Conn.
@@ -6165,13 +6227,6 @@ func (s) TestLargeTimeout(t *testing.T) {
 }
 
 func testLargeTimeout(t *testing.T, e env) {
-	te := newTest(t, e)
-	te.declareLogNoise("Server.processUnaryRPC failed to write status")
-
-	ts := &funcServer{}
-	te.startServer(ts)
-	defer te.tearDown()
-	tc := testgrpc.NewTestServiceClient(te.clientConn())
 
 	timeouts := []time.Duration{
 		time.Duration(math.MaxInt64), // will be (correctly) converted to
@@ -6180,23 +6235,33 @@ func testLargeTimeout(t *testing.T, e env) {
 	}
 
 	for i, maxTimeout := range timeouts {
-		ts.unaryCall = func(ctx context.Context, _ *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
-			deadline, ok := ctx.Deadline()
-			timeout := time.Until(deadline)
-			minTimeout := maxTimeout - 5*time.Second
-			if !ok || timeout < minTimeout || timeout > maxTimeout {
-				t.Errorf("ctx.Deadline() = (now+%v), %v; want [%v, %v], true", timeout, ok, minTimeout, maxTimeout)
-				return nil, status.Error(codes.OutOfRange, "deadline error")
+		func() {
+			te := newTest(t, e)
+			te.declareLogNoise("Server.processUnaryRPC failed to write status")
+
+			ts := &funcServer{
+				unaryCall: func(ctx context.Context, _ *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+					deadline, ok := ctx.Deadline()
+					timeout := time.Until(deadline)
+					minTimeout := maxTimeout - 5*time.Second
+					if !ok || timeout < minTimeout || timeout > maxTimeout {
+						t.Errorf("ctx.Deadline() = (now+%v), %v; want [%v, %v], true", timeout, ok, minTimeout, maxTimeout)
+						return nil, status.Error(codes.OutOfRange, "deadline error")
+					}
+					return &testpb.SimpleResponse{}, nil
+				},
 			}
-			return &testpb.SimpleResponse{}, nil
-		}
+			te.startServer(ts)
+			defer te.tearDown()
+			tc := testgrpc.NewTestServiceClient(te.clientConn())
 
-		ctx, cancel := context.WithTimeout(context.Background(), maxTimeout)
-		defer cancel()
+			ctx, cancel := context.WithTimeout(context.Background(), maxTimeout)
+			defer cancel()
 
-		if _, err := tc.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil {
-			t.Errorf("case %v: UnaryCall(_) = _, %v; want _, nil", i, err)
-		}
+			if _, err := tc.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil {
+				t.Errorf("case %v: UnaryCall(_) = _, %v; want _, nil", i, err)
+			}
+		}()
 	}
 }
 
@@ -6912,11 +6977,11 @@ func (mbl *mockBinaryLogger) GetMethodLogger(string) binarylog.MethodLogger {
 }
 
 type mockMethodLogger struct {
-	events uint64
+	events atomic.Uint64
 }
 
 func (mml *mockMethodLogger) Log(context.Context, binarylog.LogEntryConfig) {
-	atomic.AddUint64(&mml.events, 1)
+	mml.events.Add(1)
 }
 
 // TestGlobalBinaryLoggingOptions tests the binary logging options for client
@@ -6960,11 +7025,11 @@ func (s) TestGlobalBinaryLoggingOptions(t *testing.T) {
 	if _, err := ss.Client.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil {
 		t.Fatalf("Unexpected error from UnaryCall: %v", err)
 	}
-	if csbl.mml.events != 5 {
-		t.Fatalf("want 5 client side binary logging events, got %v", csbl.mml.events)
+	if got := csbl.mml.events.Load(); got != 5 {
+		t.Fatalf("want 5 client side binary logging events, got %v", got)
 	}
-	if ssbl.mml.events != 5 {
-		t.Fatalf("want 5 server side binary logging events, got %v", ssbl.mml.events)
+	if got := ssbl.mml.events.Load(); got != 5 {
+		t.Fatalf("want 5 server side binary logging events, got %v", got)
 	}
 
 	// Make a streaming RPC. This should cause Log calls on the MethodLogger.
@@ -6978,11 +7043,11 @@ func (s) TestGlobalBinaryLoggingOptions(t *testing.T) {
 		t.Fatalf("unexpected error: %v, expected an EOF error", err)
 	}
 
-	if csbl.mml.events != 8 {
-		t.Fatalf("want 8 client side binary logging events, got %v", csbl.mml.events)
+	if got := csbl.mml.events.Load(); got != 8 {
+		t.Fatalf("want 8 client side binary logging events, got %v", got)
 	}
-	if ssbl.mml.events != 8 {
-		t.Fatalf("want 8 server side binary logging events, got %v", ssbl.mml.events)
+	if got := ssbl.mml.events.Load(); got != 8 {
+		t.Fatalf("want 8 server side binary logging events, got %v", got)
 	}
 }
 
@@ -7145,5 +7210,99 @@ func (s) TestRPCBlockingOnPickerStatsCall(t *testing.T) {
 	}
 	if got, want := delayedPickCompleteCount, 1; got != want {
 		t.Fatalf("sh.delayedPickComplete count: %v, want: %v", got, want)
+	}
+}
+
+// TestEnable8KBDefaultHeaderListSize_ClientSendsLargeHeaders verifies that
+// when the Enable8KBDefaultHeaderListSize env var is enabled, and the client
+// sends metadata with a total size exceeding the 8KB default limit, the server
+// rejects the request and RPC will fail.
+func (s) TestEnable8KBDefaultHeaderListSize_ClientSendsLargeHeaders(t *testing.T) {
+	tests := []struct {
+		name     string
+		enable   bool
+		wantCode codes.Code
+	}{
+		{
+			name:     "env_var_enabled",
+			enable:   true,
+			wantCode: codes.Unavailable,
+		},
+		{
+			name:     "env_var_disabled",
+			enable:   false,
+			wantCode: codes.OK,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			testutils.SetEnvConfig(t, &envconfig.Enable8KBDefaultHeaderListSize, tc.enable)
+
+			ss := stubserver.StartTestService(t, nil)
+			if err := ss.StartClient(); err != nil {
+				t.Fatal("Failed to create client to stub server:", err)
+			}
+			defer ss.Stop()
+
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+			md := metadata.MD{"large-key": []string{strings.Repeat("a", 9000)}}
+			ctx = metadata.NewOutgoingContext(ctx, md)
+
+			_, err := ss.Client.EmptyCall(ctx, &testpb.Empty{})
+			if got := status.Code(err); got != tc.wantCode {
+				t.Fatalf("EmptyCall() failed with code: %v, want: %v; full error: %v", got, tc.wantCode, err)
+			}
+		})
+	}
+}
+
+// TestEnable8KBDefaultHeaderListSize_ServerSendsLargeHeaders verifies that
+// when the Enable8KBDefaultHeaderListSize env var is enabled, and server
+// sends metadata with a total size exceeding the 8KB default limit, the RPC
+// will fail.
+func (s) TestEnable8KBDefaultHeaderListSize_ServerSendsLargeHeaders(t *testing.T) {
+	const largeHeaderSize = 9000
+	tests := []struct {
+		name     string
+		enable   bool
+		wantCode codes.Code
+	}{
+		{
+			name:     "env_var_enabled",
+			enable:   true,
+			wantCode: codes.Unavailable,
+		},
+		{
+			name:     "env_var_disabled",
+			enable:   false,
+			wantCode: codes.OK,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			testutils.SetEnvConfig(t, &envconfig.Enable8KBDefaultHeaderListSize, tc.enable)
+
+			ss := &stubserver.StubServer{
+				EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
+					md := metadata.MD{"large-key": []string{strings.Repeat("a", largeHeaderSize)}}
+					grpc.SetHeader(ctx, md)
+					return &testpb.Empty{}, nil
+				},
+			}
+			if err := ss.Start(nil); err != nil {
+				t.Fatal("Error starting server:", err)
+			}
+			defer ss.Stop()
+
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+
+			_, err := ss.Client.EmptyCall(ctx, &testpb.Empty{})
+			if got := status.Code(err); got != tc.wantCode {
+				t.Fatalf("EmptyCall() failed with code: %v, want: %v; full error: %v", got, tc.wantCode, err)
+			}
+		})
 	}
 }

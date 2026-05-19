@@ -21,6 +21,7 @@ package test
 import (
 	"context"
 	"io"
+	"sync/atomic"
 	"testing"
 
 	"google.golang.org/grpc"
@@ -230,56 +231,56 @@ func (s) TestChainOnBaseUnaryServerInterceptor(t *testing.T) {
 }
 
 func (s) TestChainStreamServerInterceptor(t *testing.T) {
-	callCounts := make([]int, 4)
+	callCounts := make([]atomic.Int32, 4)
 
 	firstInt := func(srv any, stream grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-		if callCounts[0] != 0 {
-			return status.Errorf(codes.Internal, "callCounts[0] should be 0, but got=%d", callCounts[0])
+		if callCounts[0].Load() != 0 {
+			return status.Errorf(codes.Internal, "callCounts[0] should be 0, but got=%d", callCounts[0].Load())
 		}
-		if callCounts[1] != 0 {
-			return status.Errorf(codes.Internal, "callCounts[1] should be 0, but got=%d", callCounts[1])
+		if callCounts[1].Load() != 0 {
+			return status.Errorf(codes.Internal, "callCounts[1] should be 0, but got=%d", callCounts[1].Load())
 		}
-		if callCounts[2] != 0 {
-			return status.Errorf(codes.Internal, "callCounts[2] should be 0, but got=%d", callCounts[2])
+		if callCounts[2].Load() != 0 {
+			return status.Errorf(codes.Internal, "callCounts[2] should be 0, but got=%d", callCounts[2].Load())
 		}
-		if callCounts[3] != 0 {
-			return status.Errorf(codes.Internal, "callCounts[3] should be 0, but got=%d", callCounts[3])
+		if callCounts[3].Load() != 0 {
+			return status.Errorf(codes.Internal, "callCounts[3] should be 0, but got=%d", callCounts[3].Load())
 		}
-		callCounts[0]++
+		callCounts[0].Add(1)
 		return handler(srv, stream)
 	}
 
 	secondInt := func(srv any, stream grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-		if callCounts[0] != 1 {
-			return status.Errorf(codes.Internal, "callCounts[0] should be 1, but got=%d", callCounts[0])
+		if callCounts[0].Load() != 1 {
+			return status.Errorf(codes.Internal, "callCounts[0] should be 1, but got=%d", callCounts[0].Load())
 		}
-		if callCounts[1] != 0 {
-			return status.Errorf(codes.Internal, "callCounts[1] should be 0, but got=%d", callCounts[1])
+		if callCounts[1].Load() != 0 {
+			return status.Errorf(codes.Internal, "callCounts[1] should be 0, but got=%d", callCounts[1].Load())
 		}
-		if callCounts[2] != 0 {
-			return status.Errorf(codes.Internal, "callCounts[2] should be 0, but got=%d", callCounts[2])
+		if callCounts[2].Load() != 0 {
+			return status.Errorf(codes.Internal, "callCounts[2] should be 0, but got=%d", callCounts[2].Load())
 		}
-		if callCounts[3] != 0 {
-			return status.Errorf(codes.Internal, "callCounts[3] should be 0, but got=%d", callCounts[3])
+		if callCounts[3].Load() != 0 {
+			return status.Errorf(codes.Internal, "callCounts[3] should be 0, but got=%d", callCounts[3].Load())
 		}
-		callCounts[1]++
+		callCounts[1].Add(1)
 		return handler(srv, stream)
 	}
 
 	lastInt := func(srv any, stream grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-		if callCounts[0] != 1 {
-			return status.Errorf(codes.Internal, "callCounts[0] should be 1, but got=%d", callCounts[0])
+		if callCounts[0].Load() != 1 {
+			return status.Errorf(codes.Internal, "callCounts[0] should be 1, but got=%d", callCounts[0].Load())
 		}
-		if callCounts[1] != 1 {
-			return status.Errorf(codes.Internal, "callCounts[1] should be 1, but got=%d", callCounts[1])
+		if callCounts[1].Load() != 1 {
+			return status.Errorf(codes.Internal, "callCounts[1] should be 1, but got=%d", callCounts[1].Load())
 		}
-		if callCounts[2] != 0 {
-			return status.Errorf(codes.Internal, "callCounts[2] should be 0, but got=%d", callCounts[2])
+		if callCounts[2].Load() != 0 {
+			return status.Errorf(codes.Internal, "callCounts[2] should be 0, but got=%d", callCounts[2].Load())
 		}
-		if callCounts[3] != 0 {
-			return status.Errorf(codes.Internal, "callCounts[3] should be 0, but got=%d", callCounts[3])
+		if callCounts[3].Load() != 0 {
+			return status.Errorf(codes.Internal, "callCounts[3] should be 0, but got=%d", callCounts[3].Load())
 		}
-		callCounts[2]++
+		callCounts[2].Add(1)
 		return handler(srv, stream)
 	}
 
@@ -289,19 +290,19 @@ func (s) TestChainStreamServerInterceptor(t *testing.T) {
 
 	ss := &stubserver.StubServer{
 		FullDuplexCallF: func(testgrpc.TestService_FullDuplexCallServer) error {
-			if callCounts[0] != 1 {
-				return status.Errorf(codes.Internal, "callCounts[0] should be 1, but got=%d", callCounts[0])
+			if callCounts[0].Load() != 1 {
+				return status.Errorf(codes.Internal, "callCounts[0] should be 1, but got=%d", callCounts[0].Load())
 			}
-			if callCounts[1] != 1 {
-				return status.Errorf(codes.Internal, "callCounts[1] should be 1, but got=%d", callCounts[1])
+			if callCounts[1].Load() != 1 {
+				return status.Errorf(codes.Internal, "callCounts[1] should be 1, but got=%d", callCounts[1].Load())
 			}
-			if callCounts[2] != 1 {
-				return status.Errorf(codes.Internal, "callCounts[2] should be 0, but got=%d", callCounts[2])
+			if callCounts[2].Load() != 1 {
+				return status.Errorf(codes.Internal, "callCounts[2] should be 0, but got=%d", callCounts[2].Load())
 			}
-			if callCounts[3] != 0 {
-				return status.Errorf(codes.Internal, "callCounts[3] should be 0, but got=%d", callCounts[3])
+			if callCounts[3].Load() != 0 {
+				return status.Errorf(codes.Internal, "callCounts[3] should be 0, but got=%d", callCounts[3].Load())
 			}
-			callCounts[3]++
+			callCounts[3].Add(1)
 			return nil
 		},
 	}
@@ -322,7 +323,7 @@ func (s) TestChainStreamServerInterceptor(t *testing.T) {
 		t.Fatalf("failed to recv from stream: %v", err)
 	}
 
-	if callCounts[3] != 1 {
-		t.Fatalf("callCounts[3] should be 1, but got=%d", callCounts[3])
+	if callCounts[3].Load() != 1 {
+		t.Fatalf("callCounts[3] should be 1, but got=%d", callCounts[3].Load())
 	}
 }

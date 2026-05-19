@@ -45,19 +45,48 @@ func Test(t *testing.T) {
 }
 
 func (s) TestPruneActiveClusters(t *testing.T) {
-	r := &xdsResolver{activeClusters: map[string]*clusterInfo{
-		"zero":        {refCount: 0},
-		"one":         {refCount: 1},
-		"two":         {refCount: 2},
-		"anotherzero": {refCount: 0},
-	}}
-	want := map[string]*clusterInfo{
-		"one": {refCount: 1},
-		"two": {refCount: 2},
+	newClusterInfo := func(ref int32, unsubscribe func()) *clusterInfo {
+		ci := &clusterInfo{unsubscribe: unsubscribe}
+		ci.refCount.Store(ref)
+		return ci
 	}
-	r.pruneActiveClusters()
-	if d := cmp.Diff(r.activeClusters, want, cmp.AllowUnexported(clusterInfo{})); d != "" {
-		t.Fatalf("r.activeClusters = %v; want %v\nDiffs: %v", r.activeClusters, want, d)
+	r := &xdsResolver{
+		activeClusters: map[string]*clusterInfo{
+			"zero":        newClusterInfo(0, func() {}),
+			"one":         newClusterInfo(1, func() {}),
+			"two":         newClusterInfo(2, func() {}),
+			"anotherzero": newClusterInfo(0, func() {}),
+		},
+		activePlugins: map[string]*clusterInfo{
+			"zero":        newClusterInfo(0, nil),
+			"one":         newClusterInfo(1, nil),
+			"two":         newClusterInfo(2, nil),
+			"anotherzero": newClusterInfo(0, nil),
+		},
+	}
+	wantActiveClusters := map[string]int32{
+		"one": 1,
+		"two": 2,
+	}
+	wantActivePlugins := map[string]int32{
+		"one": 1,
+		"two": 2,
+	}
+	r.pruneActiveClustersAndPlugins()
+
+	getRefCounts := func(m map[string]*clusterInfo) map[string]int32 {
+		res := make(map[string]int32)
+		for k, v := range m {
+			res[k] = v.refCount.Load()
+		}
+		return res
+	}
+
+	if d := cmp.Diff(getRefCounts(r.activeClusters), wantActiveClusters); d != "" {
+		t.Fatalf("r.activeClusters refCounts mismatch (-got +want):\n%s", d)
+	}
+	if d := cmp.Diff(getRefCounts(r.activePlugins), wantActivePlugins); d != "" {
+		t.Fatalf("r.activePlugins refCounts mismatch (-got +want):\n%s", d)
 	}
 }
 

@@ -132,3 +132,42 @@ func TestTrackTimers(t *testing.T) {
 	defer cancel()
 	CheckTimers(ctx, t)
 }
+
+func TestLeakChecker_DetectsLeak(t *testing.T) {
+	TrackAsyncReporters()
+	// Safety defer: ensure we restore the default delegate even if the test crashes
+	// before CheckAsyncReporters is called.
+	defer func() {
+		internal.AsyncReporterCleanupDelegate = func(f func()) func() { return f }
+	}()
+
+	// We utilize the internal delegate directly to simulate stats.RegisterAsyncReporter behavior.
+	noOpCleanup := func() {}
+	wrappedCleanup := internal.AsyncReporterCleanupDelegate(noOpCleanup)
+
+	// Create a leak: We discard 'wrappedCleanup' without calling it.
+	_ = wrappedCleanup
+	tl := &testLogger{}
+	CheckAsyncReporters(tl)
+	if tl.errorCount == 0 {
+		t.Error("Expected leak checker to report a leak, but it succeeded silently.")
+	}
+	if asyncReporterTracker != nil {
+		t.Error("Expected CheckAsyncReporters to cleanup global tracker, but it was not nil.")
+	}
+}
+
+func TestLeakChecker_PassesOnCleanup(t *testing.T) {
+	TrackAsyncReporters()
+	defer func() {
+		internal.AsyncReporterCleanupDelegate = func(f func()) func() { return f }
+	}()
+	noOpCleanup := func() {}
+	wrappedCleanup := internal.AsyncReporterCleanupDelegate(noOpCleanup)
+	wrappedCleanup()
+	tl := &testLogger{}
+	CheckAsyncReporters(tl)
+	if tl.errorCount > 0 {
+		t.Errorf("Expected no leaks, but got errors: %v", tl.errors)
+	}
+}

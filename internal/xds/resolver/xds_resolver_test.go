@@ -45,7 +45,9 @@ import (
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	serverFeature "google.golang.org/grpc/internal/xds/clients/xdsclient"
 	rinternal "google.golang.org/grpc/internal/xds/resolver/internal"
+	xdstestutils "google.golang.org/grpc/internal/xds/test/e2e"
 	"google.golang.org/grpc/internal/xds/xdsclient"
+	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource/version"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
@@ -95,9 +97,6 @@ func (s) TestResolverBuilder_AuthorityNotDefinedInBootstrap(t *testing.T) {
 	contents := e2e.DefaultBootstrapContents(t, "node-id", "dummy-management-server")
 
 	// Create an xDS resolver with the above bootstrap configuration.
-	if internal.NewXDSResolverWithConfigForTesting == nil {
-		t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
-	}
 	xdsResolver, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(contents)
 	if err != nil {
 		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
@@ -235,7 +234,7 @@ func (s) TestResolverWatchCallbackAfterClose(t *testing.T) {
 	routes := []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(defaultTestRouteConfigName, defaultTestServiceName, defaultTestClusterName)}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	configureResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, listeners, routes)
+	configureResources(ctx, t, mgmtServer, nodeID, listeners, routes, nil, nil)
 
 	// Wait for a discovery request for a route configuration resource.
 	stateCh, _, r := buildResolverForTarget(t, resolver.Target{URL: *testutils.MustParseURL("xds:///" + defaultTestServiceName)}, contents)
@@ -265,9 +264,6 @@ func (s) TestResolverCloseClosesXDSClient(t *testing.T) {
 			t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
 		}
 		pool := xdsclient.NewPool(config)
-		if err != nil {
-			t.Fatalf("Failed to create an xDS client pool: %v", err)
-		}
 		c, cancel, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
 			Name:               t.Name(),
 			WatchExpiryTimeout: defaultTestTimeout,
@@ -303,17 +299,13 @@ func (s) TestNoMatchingVirtualHost(t *testing.T) {
 	listener := e2e.DefaultClientListener(defaultTestServiceName, defaultTestRouteConfigName)
 	route := e2e.DefaultRouteConfig(defaultTestRouteConfigName, defaultTestServiceName, defaultTestClusterName)
 	route.VirtualHosts = nil
-	configureResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, []*v3listenerpb.Listener{listener}, []*v3routepb.RouteConfiguration{route})
+	configureResources(ctx, t, mgmtServer, nodeID, []*v3listenerpb.Listener{listener}, []*v3routepb.RouteConfiguration{route}, nil, nil)
 
 	// Build the resolver inline (duplicating buildResolverForTarget internals)
 	// to avoid issues with blocked channel writes when NACKs occur.
 	target := resolver.Target{URL: *testutils.MustParseURL("xds:///" + defaultTestServiceName)}
 
 	// Create an xDS resolver with the provided bootstrap configuration.
-	if internal.NewXDSResolverWithConfigForTesting == nil {
-		t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
-	}
-
 	builder, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
 	if err != nil {
 		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
@@ -376,17 +368,13 @@ func (s) TestResolverBadServiceUpdate_NACKedWithoutCache(t *testing.T) {
 			}},
 		}},
 	}
-	configureResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, []*v3listenerpb.Listener{lis}, nil)
+	configureResources(ctx, t, mgmtServer, nodeID, []*v3listenerpb.Listener{lis}, nil, nil, nil)
 
 	// Build the resolver inline (duplicating buildResolverForTarget internals)
 	// to avoid issues with blocked channel writes when NACKs occur.
 	target := resolver.Target{URL: *testutils.MustParseURL("xds:///" + defaultTestServiceName)}
 
 	// Create an xDS resolver with the provided bootstrap configuration.
-	if internal.NewXDSResolverWithConfigForTesting == nil {
-		t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
-	}
-
 	builder, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
 	if err != nil {
 		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
@@ -473,7 +461,7 @@ func (s) TestResolverBadServiceUpdate_NACKedWithCache(t *testing.T) {
 
 	// Since the resource is cached, it should be received as an ambient error
 	// and so the RPCs should continue passing.
-	configureResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, []*v3listenerpb.Listener{lis}, nil)
+	configureResources(ctx, t, mgmtServer, nodeID, []*v3listenerpb.Listener{lis}, nil, nil, nil)
 
 	// "Make an RPC" by invoking the config selector which should succeed by
 	// continuing to use the previously cached resource.
@@ -563,7 +551,7 @@ func (s) TestResolverGoodServiceUpdate(t *testing.T) {
 			// route configuration resource, as specified by the test case.
 			listeners := []*v3listenerpb.Listener{e2e.DefaultClientListener(defaultTestServiceName, defaultTestRouteConfigName)}
 			routes := []*v3routepb.RouteConfiguration{tt.routeConfig}
-			configureAllResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, listeners, routes, tt.clusterConfig, tt.endpointConfig)
+			configureResources(ctx, t, mgmtServer, nodeID, listeners, routes, tt.clusterConfig, tt.endpointConfig)
 
 			stateCh, _, _ := buildResolverForTarget(t, resolver.Target{URL: *testutils.MustParseURL("xds:///" + defaultTestServiceName)}, bc)
 
@@ -632,7 +620,7 @@ func (s) TestResolverRequestHash(t *testing.T) {
 	}}
 	cluster := []*v3clusterpb.Cluster{e2e.DefaultCluster(defaultTestClusterName, defaultTestEndpointName, e2e.SecurityLevelNone)}
 	endpoints := []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(defaultTestEndpointName, defaultTestHostname, defaultTestPort)}
-	configureAllResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, listeners, routes, cluster, endpoints)
+	configureResources(ctx, t, mgmtServer, nodeID, listeners, routes, cluster, endpoints)
 
 	// Build the resolver and read the config selector out of it.
 	stateCh, _, _ := buildResolverForTarget(t, resolver.Target{URL: *testutils.MustParseURL("xds:///" + defaultTestServiceName)}, bc)
@@ -659,8 +647,7 @@ func (s) TestResolverRequestHash(t *testing.T) {
 
 // Tests the case where resources are removed from the management server,
 // causing it to send an empty update to the xDS client, which returns a
-// resource-not-found error to the xDS resolver. The test verifies that an
-// ongoing RPC is handled to completion when this happens.
+// resource-not-found error to the xDS resolver.
 func (s) TestResolverRemovedWithRPCs(t *testing.T) {
 	// Spin up an xDS management server for the test.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -688,28 +675,17 @@ func (s) TestResolverRemovedWithRPCs(t *testing.T) {
 		t.Fatalf("cs.SelectConfig(): %v", err)
 	}
 
-	// Delete the resources on the management server. This should result in a
-	// resource-not-found error from the xDS client.
-	if err := mgmtServer.Update(ctx, e2e.UpdateOptions{NodeID: nodeID}); err != nil {
+	// Delete the listener resource on the management server. This should result
+	// in a resource-not-found error from the xDS client.
+	oldListeners := resources.Listeners
+	resources.Listeners = nil
+	resources.SkipValidation = true
+	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
 
-	// The RPC started earlier is still in progress. So, the xDS resolver will
-	// not produce an empty service config at this point. Instead it will retain
-	// the cluster to which the RPC is ongoing in the service config, but will
-	// return an erroring config selector which will fail new RPCs.
-	cs = verifyUpdateFromResolver(ctx, t, stateCh, wantServiceConfig(resources.Clusters[0].Name))
-	_, err = cs.SelectConfig(iresolver.RPCInfo{Context: ctx, Method: "/service/method"})
-	if err := verifyResolverError(err, codes.Unavailable, "has been removed", nodeID); err != nil {
-		t.Fatal(err)
-	}
-
-	// "Finish the RPC"; this could cause a panic if the resolver doesn't
-	// handle it correctly.
-	res.OnCommitted()
-
-	// Now that the RPC is committed, the xDS resolver is expected to send an
-	// update with an empty service config.
+	// Even though the RPC started earlier is still in progress, the xDS resolver will
+	// produce an empty service config.
 	var state resolver.State
 	select {
 	case <-ctx.Done():
@@ -724,44 +700,23 @@ func (s) TestResolverRemovedWithRPCs(t *testing.T) {
 		}
 	}
 
-	// Workaround for https://github.com/envoyproxy/go-control-plane/issues/431.
-	//
-	// The xDS client can miss route configurations due to a race condition
-	// between resource removal and re-addition. To avoid this, continuously
-	// push new versions of the resources to the server, ensuring the client
-	// eventually receives the configuration.
-	//
-	// TODO(https://github.com/grpc/grpc-go/issues/7807): Remove this workaround
-	// once the issue is fixed.
-waitForStateUpdate:
-	for {
-		sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
-		defer sCancel()
+	// "Finish the RPC"; this could cause a panic if the resolver doesn't
+	// handle it correctly.
+	res.OnCommitted()
 
-		configureResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, resources.Listeners, resources.Routes)
+	// Add the resources back.
+	resources.Listeners = oldListeners
+	mgmtServer.Update(ctx, resources)
 
-		select {
-		case state = <-stateCh:
-			if err := state.ServiceConfig.Err; err != nil {
-				t.Fatalf("Received error in service config: %v", state.ServiceConfig.Err)
-			}
-			wantSCParsed := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(wantServiceConfig(resources.Clusters[0].Name))
-			if !internal.EqualServiceConfigForTesting(state.ServiceConfig.Config, wantSCParsed.Config) {
-				t.Fatalf("Got service config:\n%s \nWant service config:\n%s", cmp.Diff(nil, state.ServiceConfig.Config), cmp.Diff(nil, wantSCParsed.Config))
-			}
-			break waitForStateUpdate
-		case <-sCtx.Done():
-		}
-	}
-	cs = iresolver.GetConfigSelector(state)
-	if cs == nil {
-		t.Fatal("Received nil config selector in update from resolver")
-	}
+	// The resolver should send a service config with the cluster name.
+	cs = verifyUpdateFromResolver(ctx, t, stateCh, wantServiceConfig(resources.Clusters[0].Name))
 
+	// Verify that RPCs pass again.
 	res, err = cs.SelectConfig(iresolver.RPCInfo{Context: ctx, Method: "/service/method"})
 	if err != nil {
 		t.Fatalf("cs.SelectConfig(): %v", err)
 	}
+
 	res.OnCommitted()
 }
 
@@ -799,23 +754,15 @@ func (s) TestResolverRemovedResource(t *testing.T) {
 	// handle it correctly.
 	res.OnCommitted()
 
-	// Delete the resources on the management server, resulting in a
+	// Delete the listener resource on the management server, resulting in a
 	// resource-not-found error from the xDS client.
-	if err := mgmtServer.Update(ctx, e2e.UpdateOptions{NodeID: nodeID}); err != nil {
+	resources.Listeners = nil
+	resources.SkipValidation = true
+	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
 
-	// The channel should receive the existing service config with the original
-	// cluster but with an erroring config selector.
-	cs = verifyUpdateFromResolver(ctx, t, stateCh, wantServiceConfig(resources.Clusters[0].Name))
-
-	// "Make another RPC" by invoking the config selector.
-	_, err = cs.SelectConfig(iresolver.RPCInfo{Context: ctx, Method: "/service/method"})
-	if err := verifyResolverError(err, codes.Unavailable, "has been removed", nodeID); err != nil {
-		t.Fatal(err)
-	}
-
-	// In the meantime, an empty ServiceConfig update should have been sent.
+	// An empty ServiceConfig update should have been sent.
 	var state resolver.State
 	select {
 	case <-ctx.Done():
@@ -945,7 +892,7 @@ func (s) TestResolverMaxStreamDuration(t *testing.T) {
 		e2e.DefaultEndpoint("endpoint_B", defaultTestHostname, defaultTestPort),
 		e2e.DefaultEndpoint("endpoint_C", defaultTestHostname, defaultTestPort),
 	}
-	configureAllResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, listeners, routes, cluster, endpoints)
+	configureResources(ctx, t, mgmtServer, nodeID, listeners, routes, cluster, endpoints)
 
 	// Read the update pushed by the resolver to the ClientConn.
 	cs := verifyUpdateFromResolver(ctx, t, stateCh, "")
@@ -1031,8 +978,10 @@ func (s) TestResolverDelayedOnCommitted(t *testing.T) {
 	newClusterName := "new-" + defaultTestClusterName
 	newEndpointName := "new-" + defaultTestEndpointName
 	resources.Routes = []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(resources.Routes[0].Name, defaultTestServiceName, newClusterName)}
-	resources.Clusters = []*v3clusterpb.Cluster{e2e.DefaultCluster(newClusterName, newEndpointName, e2e.SecurityLevelNone)}
-	resources.Endpoints = []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(newEndpointName, defaultTestHostname, defaultTestPort)}
+	// Appending the new cluster and endpoint resources to avoid getting
+	// resource removed errors.
+	resources.Clusters = append(resources.Clusters, e2e.DefaultCluster(newClusterName, newEndpointName, e2e.SecurityLevelNone))
+	resources.Endpoints = append(resources.Endpoints, e2e.DefaultEndpoint(newEndpointName, defaultTestHostname, defaultTestPort))
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
@@ -1121,7 +1070,7 @@ func (s) TestResolverMultipleLDSUpdates(t *testing.T) {
 	// Configure the management server with a listener resource, but no route
 	// configuration resource.
 	listeners := []*v3listenerpb.Listener{e2e.DefaultClientListener(defaultTestServiceName, defaultTestRouteConfigName)}
-	configureResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, listeners, nil)
+	configureResources(ctx, t, mgmtServer, nodeID, listeners, nil, nil, nil)
 
 	stateCh, _, _ := buildResolverForTarget(t, resolver.Target{URL: *testutils.MustParseURL("xds:///" + defaultTestServiceName)}, bc)
 
@@ -1155,7 +1104,7 @@ func (s) TestResolverMultipleLDSUpdates(t *testing.T) {
 			}},
 		}},
 	}}
-	configureResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, listeners, nil)
+	configureResources(ctx, t, mgmtServer, nodeID, listeners, nil, nil, nil)
 
 	// Ensure that there is no update from the resolver.
 	verifyNoUpdateFromResolver(ctx, t, stateCh)
@@ -1194,7 +1143,7 @@ func (s) TestResolverWRR(t *testing.T) {
 		e2e.DefaultEndpoint("endpoint_A", defaultTestHostname, defaultTestPort),
 		e2e.DefaultEndpoint("endpoint_B", defaultTestHostname, defaultTestPort),
 	}
-	configureAllResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, listeners, routes, clusters, endpoints)
+	configureResources(ctx, t, mgmtServer, nodeID, listeners, routes, clusters, endpoints)
 
 	// Read the update pushed by the resolver to the ClientConn.
 	cs := verifyUpdateFromResolver(ctx, t, stateCh, "")
@@ -1288,7 +1237,7 @@ func (s) TestConfigSelector_FailureCases(t *testing.T) {
 
 			// Update the management server with a listener resource that
 			// contains inline route configuration.
-			configureResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, []*v3listenerpb.Listener{test.listener}, nil)
+			configureResources(ctx, t, mgmtServer, nodeID, []*v3listenerpb.Listener{test.listener}, nil, nil, nil)
 
 			// Ensure that the resolver pushes a state update to the channel.
 			cs := verifyUpdateFromResolver(ctx, t, stateCh, "")
@@ -1410,7 +1359,8 @@ func (s) TestResolver_AutoHostRewrite(t *testing.T) {
 						}},
 					}},
 				}},
-				SkipValidation: true,
+				Clusters:  []*v3clusterpb.Cluster{e2e.DefaultCluster(defaultTestClusterName, defaultTestEndpointName, e2e.SecurityLevelNone)},
+				Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(defaultTestEndpointName, "localhost", []uint32{8080})},
 			}
 
 			if err := mgmtServer.Update(ctx, resources); err != nil {
@@ -1448,10 +1398,151 @@ func (s) TestResolver_AutoHostRewrite(t *testing.T) {
 				t.Fatalf("cs.SelectConfig(): %v", err)
 			}
 
-			gotAutoHostRewrite := clusterimpl.AutoHostRewriteForTesting(res.Context)
+			gotAutoHostRewrite := clusterimpl.AutoHostRewriteEnabledForTesting(res.Context)
 			if gotAutoHostRewrite != tt.wantAutoHostRewrite {
 				t.Fatalf("Got autoHostRewrite: %v, want: %v", gotAutoHostRewrite, tt.wantAutoHostRewrite)
 			}
 		})
+	}
+}
+
+// TestResolverKeepWatchOpen_ActiveRPCs tests that the dependency manager keeps
+// a cluster watch open when there are active RPCs using that cluster, even if
+// the cluster is no longer referenced by the current route configuration.
+func (s) TestResolverKeepWatchOpen_ActiveRPCs(t *testing.T) {
+	clusterA := "cluster-A"
+	clusterB := "cluster-B"
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	cdsResourceRequestedCh := make(chan []string, 2)
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
+		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
+			if req.GetTypeUrl() != version.V3ClusterURL {
+				return nil
+			}
+			if len(req.GetResourceNames()) > 0 {
+				select {
+				case cdsResourceRequestedCh <- req.GetResourceNames():
+				case <-ctx.Done():
+				}
+			}
+			return nil
+		},
+		AllowResourceSubset: true,
+	})
+
+	nodeID := uuid.New().String()
+	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
+
+	// Configure initial resources: Route -> ClusterA.
+	listeners := []*v3listenerpb.Listener{e2e.DefaultClientListener(defaultTestServiceName, defaultTestRouteConfigName)}
+	routes := []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(defaultTestRouteConfigName, defaultTestServiceName, clusterA)}
+	clusters := []*v3clusterpb.Cluster{
+		e2e.DefaultCluster(clusterA, "endpoint-A", e2e.SecurityLevelNone),
+		e2e.DefaultCluster(clusterB, "endpoint-B", e2e.SecurityLevelNone),
+	}
+	endpoints := []*v3endpointpb.ClusterLoadAssignment{
+		e2e.DefaultEndpoint("endpoint-A", "localhost", []uint32{8080}),
+		e2e.DefaultEndpoint("endpoint-B", "localhost", []uint32{8081}),
+	}
+
+	configureResources(ctx, t, mgmtServer, nodeID, listeners, routes, clusters, endpoints)
+
+	stateCh, _, _ := buildResolverForTarget(t, resolver.Target{URL: *testutils.MustParseURL("xds:///" + defaultTestServiceName)}, bc)
+
+	cs := verifyUpdateFromResolver(ctx, t, stateCh, wantServiceConfig(clusterA))
+
+	// Start RPC (Ref Counts ClusterA).
+	res, err := cs.SelectConfig(iresolver.RPCInfo{Context: ctx, Method: "/service/method"})
+	if err != nil {
+		t.Fatalf("cs.SelectConfig(): %v", err)
+	}
+
+	// Switch Configuration to ClusterB.
+	routes[0] = e2e.DefaultRouteConfig(defaultTestRouteConfigName, defaultTestServiceName, clusterB)
+	configureResources(ctx, t, mgmtServer, nodeID, listeners, routes, clusters, endpoints)
+
+	// Resolver should request BOTH A (due to active RPC) and B (due to new
+	// config).
+	wantNames := []string{clusterA, clusterB}
+	waitForResourceNames(ctx, t, cdsResourceRequestedCh, wantNames)
+
+	// Verify Service Config has both clusters.
+	const wantServiceRaw = `{
+      "loadBalancingConfig": [{
+        "xds_cluster_manager_experimental": {
+          "children": {
+            "cluster:cluster-A": {
+              "childPolicy": [{"cds_experimental": {"cluster": "cluster-A"}}]
+            },
+            "cluster:cluster-B": {
+              "childPolicy": [{"cds_experimental": {"cluster": "cluster-B"}}]
+            }
+          }
+        }
+      }]
+    }`
+	verifyUpdateFromResolver(ctx, t, stateCh, wantServiceRaw)
+
+	// Finish RPC (Drops Ref to ClusterA).
+	res.OnCommitted()
+
+	// ONLY cluster B should be requested now that there are no references to
+	// cluster A.
+	wantNames = []string{clusterB}
+	waitForResourceNames(ctx, t, cdsResourceRequestedCh, wantNames)
+
+	// ServiceConfig update should also contain only cluster B.
+	verifyUpdateFromResolver(ctx, t, stateCh, wantServiceConfig(clusterB))
+
+	// Verify that RPCs pass again.
+	res, err = cs.SelectConfig(iresolver.RPCInfo{Context: ctx, Method: "/service/method"})
+	if err != nil {
+		t.Fatalf("cs.SelectConfig(): %v", err)
+	}
+	res.OnCommitted()
+}
+
+// TestResolver_XDSConfigInRPCContext verifies that the xDS resolver's config
+// selector places the complete XDSConfig into the RPC context during config
+// selection, making it available to HTTP filters.
+func (s) TestResolver_XDSConfigInRPCContext(t *testing.T) {
+	// Spin up an xDS management server for the test.
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	nodeID := uuid.New().String()
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
+	defer mgmtServer.Stop()
+
+	// Configure xDS resources on the management server.
+	listeners := []*v3listenerpb.Listener{e2e.DefaultClientListener(defaultTestServiceName, defaultTestRouteConfigName)}
+	routes := []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(defaultTestRouteConfigName, defaultTestServiceName, defaultTestClusterName)}
+	cluster := []*v3clusterpb.Cluster{e2e.DefaultCluster(defaultTestClusterName, defaultTestEndpointName, e2e.SecurityLevelNone)}
+	endpoints := []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(defaultTestEndpointName, defaultTestHostname, defaultTestPort)}
+	configureResources(ctx, t, mgmtServer, nodeID, listeners, routes, cluster, endpoints)
+
+	// Create default bootstrap config.
+	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
+
+	// Build the resolver and read the config selector out of it.
+	stateCh, _, _ := buildResolverForTarget(t, resolver.Target{URL: *testutils.MustParseURL("xds:///" + defaultTestServiceName)}, bc)
+	cs := verifyUpdateFromResolver(ctx, t, stateCh, "")
+
+	// Selecting a config should put the XDSConfig in the config's context.
+	res, err := cs.SelectConfig(iresolver.RPCInfo{
+		Context: ctx,
+		Method:  "/service/method",
+	})
+	if err != nil {
+		t.Fatalf("cs.SelectConfig(): %v", err)
+	}
+
+	wantXDSConfig := xdstestutils.MakeXDSConfig(defaultTestServiceName, defaultTestRouteConfigName, defaultTestClusterName, defaultTestEndpointName, "test-host:8080")
+
+	// Verify the XDSConfig.
+	gotConfig := xdsresource.XDSConfigFromContext(res.Context)
+	if err := xdstestutils.CompareXDSConfig(gotConfig, wantXDSConfig); err != nil {
+		t.Fatal(err)
 	}
 }

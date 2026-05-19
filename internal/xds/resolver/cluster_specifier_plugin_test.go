@@ -126,7 +126,7 @@ func (s) TestResolverClusterSpecifierPlugin(t *testing.T) {
 		ClusterSpecifierPluginName:   "cspA",
 		ClusterSpecifierPluginConfig: testutils.MarshalAny(t, &wrapperspb.StringValue{Value: "anything"}),
 	})}
-	configureResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, listeners, routes)
+	configureResources(ctx, t, mgmtServer, nodeID, listeners, routes, nil, nil)
 
 	stateCh, _, _ := buildResolverForTarget(t, resolver.Target{URL: *testutils.MustParseURL("xds:///" + defaultTestServiceName)}, bc)
 
@@ -171,7 +171,7 @@ func (s) TestResolverClusterSpecifierPlugin(t *testing.T) {
 		ClusterSpecifierPluginName:   "cspA",
 		ClusterSpecifierPluginConfig: testutils.MarshalAny(t, &wrapperspb.StringValue{Value: "changed"}),
 	})}
-	configureResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, listeners, routes)
+	configureResources(ctx, t, mgmtServer, nodeID, listeners, routes, nil, nil)
 
 	// Wait for an update from the resolver, and verify the service config.
 	wantSC = `
@@ -216,7 +216,7 @@ func (s) TestXDSResolverDelayedOnCommittedCSP(t *testing.T) {
 		ClusterSpecifierPluginName:   "cspA",
 		ClusterSpecifierPluginConfig: testutils.MarshalAny(t, &wrapperspb.StringValue{Value: "anythingA"}),
 	})}
-	configureResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, listeners, routes)
+	configureResources(ctx, t, mgmtServer, nodeID, listeners, routes, nil, nil)
 
 	stateCh, _, _ := buildResolverForTarget(t, resolver.Target{URL: *testutils.MustParseURL("xds:///" + defaultTestServiceName)}, bc)
 
@@ -265,7 +265,7 @@ func (s) TestXDSResolverDelayedOnCommittedCSP(t *testing.T) {
 		ClusterSpecifierPluginName:   "cspB",
 		ClusterSpecifierPluginConfig: testutils.MarshalAny(t, &wrapperspb.StringValue{Value: "anythingB"}),
 	})}
-	configureResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, listeners, routes)
+	configureResources(ctx, t, mgmtServer, nodeID, listeners, routes, nil, nil)
 
 	// Wait for an update from the resolver, and verify the service config.
 	wantSC = `

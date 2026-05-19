@@ -101,7 +101,7 @@ func (s) TestServiceWatch_ListenerPointsToNewRouteConfiguration(t *testing.T) {
 
 	// Update the management server with the new route configuration resource.
 	resources.Routes = append(resources.Routes, e2e.DefaultRouteConfig(newTestRouteConfigName, defaultTestServiceName, resources.Clusters[0].Name))
-	configureResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, resources.Listeners, resources.Routes)
+	configureResources(ctx, t, mgmtServer, nodeID, resources.Listeners, resources.Routes, nil, nil)
 
 	// Ensure update from the resolver.
 	verifyUpdateFromResolver(ctx, t, stateCh, wantServiceConfig(resources.Clusters[0].Name))
@@ -169,7 +169,7 @@ func (s) TestServiceWatch_ListenerPointsToInlineRouteConfiguration(t *testing.T)
 			}},
 		}},
 	}}
-	configureResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, resources.Listeners, nil)
+	configureResources(ctx, t, mgmtServer, nodeID, resources.Listeners, nil, nil, nil)
 
 	// Verify that the old route configuration is not requested anymore.
 	waitForResourceNames(ctx, t, routeCfgCh, []string{})
@@ -177,7 +177,7 @@ func (s) TestServiceWatch_ListenerPointsToInlineRouteConfiguration(t *testing.T)
 
 	// Update listener back to contain a route configuration name.
 	resources.Listeners = []*v3listenerpb.Listener{e2e.DefaultClientListener(defaultTestServiceName, resources.Routes[0].Name)}
-	configureResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, resources.Listeners, resources.Routes)
+	configureResources(ctx, t, mgmtServer, nodeID, resources.Listeners, resources.Routes, nil, nil)
 
 	// Verify that that route configuration resource is requested.
 	waitForResourceNames(ctx, t, routeCfgCh, []string{resources.Routes[0].Name})

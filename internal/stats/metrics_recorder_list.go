@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	estats "google.golang.org/grpc/experimental/stats"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/stats"
 )
 
@@ -28,6 +29,7 @@ import (
 // It eats any record calls where the label values provided do not match the
 // number of label keys.
 type MetricsRecorderList struct {
+	internal.EnforceMetricsRecorderEmbedding
 	// metricsRecorders are the metrics recorders this list will forward to.
 	metricsRecorders []estats.MetricsRecorder
 }
@@ -138,6 +140,14 @@ func (l *MetricsRecorderList) RegisterAsyncReporter(reporter estats.AsyncMetricR
 		}
 		unregisterFns = append(unregisterFns, mr.RegisterAsyncReporter(estats.AsyncMetricReporterFunc(wrappedCallback), metrics...))
 	}
+
+	// Wrap the cleanup function using the internal delegate.
+	// In production, this returns realCleanup as-is.
+	// In tests, the leak checker can swap this to track the registration lifetime.
+	return internal.AsyncReporterCleanupDelegate(defaultCleanUp(unregisterFns))
+}
+
+func defaultCleanUp(unregisterFns []func()) func() {
 	return func() {
 		for _, unregister := range unregisterFns {
 			unregister()
@@ -153,7 +163,7 @@ type asyncRecorderWrapper struct {
 // RecordIntAsync64Gauge records the measurement alongside labels on the int
 // gauge associated with the provided handle.
 func (w *asyncRecorderWrapper) RecordInt64AsyncGauge(handle *estats.Int64AsyncGaugeHandle, value int64, labels ...string) {
-	// Ensure only metrics for descriptors passed during callback registeration
+	// Ensure only metrics for descriptors passed during callback registration
 	// are emitted.
 	d := handle.Descriptor()
 	if _, ok := w.descriptors[d]; !ok {

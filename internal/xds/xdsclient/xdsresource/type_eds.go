@@ -49,12 +49,10 @@ const (
 )
 
 // Endpoint contains information of an endpoint.
-// TODO(i/8757) : Replace Endpoint with resolver.Endpoint struct.
 type Endpoint struct {
 	ResolverEndpoint resolver.Endpoint
 	HealthStatus     EndpointHealthStatus
 	Weight           uint32
-	HashKey          string
 	Metadata         map[string]any
 }
 

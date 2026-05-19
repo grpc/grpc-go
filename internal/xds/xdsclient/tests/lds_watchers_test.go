@@ -219,8 +219,10 @@ func (s) TestLDSWatch(t *testing.T) {
 			notWatchedResource:     e2e.DefaultClientListener("unsubscribed-lds-resource", rdsName),
 			wantUpdate: listenerUpdateErrTuple{
 				update: &xdsresource.ListenerUpdate{
-					RouteConfigName: rdsName,
-					HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+					APIListener: &xdsresource.HTTPConnectionManagerConfig{
+						RouteConfigName: rdsName,
+						HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+					},
 				},
 			},
 		},
@@ -232,8 +234,10 @@ func (s) TestLDSWatch(t *testing.T) {
 			notWatchedResource:     e2e.DefaultClientListener("unsubscribed-lds-resource", rdsNameNewStyle),
 			wantUpdate: listenerUpdateErrTuple{
 				update: &xdsresource.ListenerUpdate{
-					RouteConfigName: rdsNameNewStyle,
-					HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+					APIListener: &xdsresource.HTTPConnectionManagerConfig{
+						RouteConfigName: rdsNameNewStyle,
+						HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+					},
 				},
 			},
 		},
@@ -361,14 +365,18 @@ func (s) TestLDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 			updatedWatchedResource: e2e.DefaultClientListener(ldsName, "new-rds-resource"),
 			wantUpdateV1: listenerUpdateErrTuple{
 				update: &xdsresource.ListenerUpdate{
-					RouteConfigName: rdsName,
-					HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+					APIListener: &xdsresource.HTTPConnectionManagerConfig{
+						RouteConfigName: rdsName,
+						HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+					},
 				},
 			},
 			wantUpdateV2: listenerUpdateErrTuple{
 				update: &xdsresource.ListenerUpdate{
-					RouteConfigName: "new-rds-resource",
-					HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+					APIListener: &xdsresource.HTTPConnectionManagerConfig{
+						RouteConfigName: "new-rds-resource",
+						HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+					},
 				},
 			},
 		},
@@ -379,14 +387,18 @@ func (s) TestLDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 			updatedWatchedResource: e2e.DefaultClientListener(ldsNameNewStyle, "new-rds-resource"),
 			wantUpdateV1: listenerUpdateErrTuple{
 				update: &xdsresource.ListenerUpdate{
-					RouteConfigName: rdsNameNewStyle,
-					HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+					APIListener: &xdsresource.HTTPConnectionManagerConfig{
+						RouteConfigName: rdsNameNewStyle,
+						HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+					},
 				},
 			},
 			wantUpdateV2: listenerUpdateErrTuple{
 				update: &xdsresource.ListenerUpdate{
-					RouteConfigName: "new-rds-resource",
-					HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+					APIListener: &xdsresource.HTTPConnectionManagerConfig{
+						RouteConfigName: "new-rds-resource",
+						HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+					},
 				},
 			},
 		},
@@ -573,8 +585,10 @@ func (s) TestLDSWatch_ThreeWatchesForDifferentResourceNames(t *testing.T) {
 	// expected update is the same for all the watchers.
 	wantUpdate := listenerUpdateErrTuple{
 		update: &xdsresource.ListenerUpdate{
-			RouteConfigName: rdsName,
-			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+			APIListener: &xdsresource.HTTPConnectionManagerConfig{
+				RouteConfigName: rdsName,
+				HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+			},
 		},
 	}
 	if err := verifyListenerUpdate(ctx, lw1.updateCh, wantUpdate); err != nil {
@@ -654,8 +668,10 @@ func (s) TestLDSWatch_ResourceCaching(t *testing.T) {
 	// Verify the contents of the received update.
 	wantUpdate := listenerUpdateErrTuple{
 		update: &xdsresource.ListenerUpdate{
-			RouteConfigName: rdsName,
-			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+			APIListener: &xdsresource.HTTPConnectionManagerConfig{
+				RouteConfigName: rdsName,
+				HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+			},
 		},
 	}
 	if err := verifyListenerUpdate(ctx, lw1.updateCh, wantUpdate); err != nil {
@@ -775,8 +791,10 @@ func (s) TestLDSWatch_ValidResponseCancelsExpiryTimerBehavior(t *testing.T) {
 	// Verify the contents of the received update.
 	wantUpdate := listenerUpdateErrTuple{
 		update: &xdsresource.ListenerUpdate{
-			RouteConfigName: rdsName,
-			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+			APIListener: &xdsresource.HTTPConnectionManagerConfig{
+				RouteConfigName: rdsName,
+				HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+			},
 		},
 	}
 	if err := verifyListenerUpdate(ctx, lw.updateCh, wantUpdate); err != nil {
@@ -872,8 +890,10 @@ func (s) TestLDSWatch_ResourceRemoved(t *testing.T) {
 	// expected update is the same for both watchers.
 	wantUpdate := listenerUpdateErrTuple{
 		update: &xdsresource.ListenerUpdate{
-			RouteConfigName: rdsName,
-			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+			APIListener: &xdsresource.HTTPConnectionManagerConfig{
+				RouteConfigName: rdsName,
+				HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+			},
 		},
 	}
 	if err := verifyListenerUpdate(ctx, lw1.updateCh, wantUpdate); err != nil {
@@ -919,8 +939,10 @@ func (s) TestLDSWatch_ResourceRemoved(t *testing.T) {
 	}
 	wantUpdate = listenerUpdateErrTuple{
 		update: &xdsresource.ListenerUpdate{
-			RouteConfigName: "new-rds-resource",
-			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+			APIListener: &xdsresource.HTTPConnectionManagerConfig{
+				RouteConfigName: "new-rds-resource",
+				HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+			},
 		},
 	}
 	if err := verifyListenerUpdate(ctx, lw2.updateCh, wantUpdate); err != nil {
@@ -979,8 +1001,10 @@ func (s) TestLDSWatch_NewWatcherForRemovedResource(t *testing.T) {
 	// Verify the contents of the received update for existing watch.
 	wantUpdate := listenerUpdateErrTuple{
 		update: &xdsresource.ListenerUpdate{
-			RouteConfigName: rdsName,
-			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+			APIListener: &xdsresource.HTTPConnectionManagerConfig{
+				RouteConfigName: rdsName,
+				HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+			},
 		},
 	}
 	if err := verifyListenerUpdate(ctx, lw1.updateCh, wantUpdate); err != nil {
@@ -1117,8 +1141,10 @@ func (s) TestLDSWatch_ResourceCaching_NACKError(t *testing.T) {
 	// Verify the contents of the received update.
 	wantUpdate := listenerUpdateErrTuple{
 		update: &xdsresource.ListenerUpdate{
-			RouteConfigName: rdsName,
-			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+			APIListener: &xdsresource.HTTPConnectionManagerConfig{
+				RouteConfigName: rdsName,
+				HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+			},
 		},
 	}
 	if err := verifyListenerUpdate(ctx, lw1.updateCh, wantUpdate); err != nil {
@@ -1236,8 +1262,10 @@ func (s) TestLDSWatch_PartialValid(t *testing.T) {
 	// update.
 	wantUpdate := listenerUpdateErrTuple{
 		update: &xdsresource.ListenerUpdate{
-			RouteConfigName: rdsName,
-			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+			APIListener: &xdsresource.HTTPConnectionManagerConfig{
+				RouteConfigName: rdsName,
+				HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+			},
 		},
 	}
 	if err := verifyListenerUpdate(ctx, lw2.updateCh, wantUpdate); err != nil {
@@ -1319,8 +1347,10 @@ func (s) TestLDSWatch_PartialResponse(t *testing.T) {
 	// Verify the contents of the received update for first watcher.
 	wantUpdate1 := listenerUpdateErrTuple{
 		update: &xdsresource.ListenerUpdate{
-			RouteConfigName: rdsName,
-			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+			APIListener: &xdsresource.HTTPConnectionManagerConfig{
+				RouteConfigName: rdsName,
+				HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+			},
 		},
 	}
 	if err := verifyListenerUpdate(ctx, lw1.updateCh, wantUpdate1); err != nil {
@@ -1349,8 +1379,10 @@ func (s) TestLDSWatch_PartialResponse(t *testing.T) {
 	// Verify the contents of the received update for the second watcher.
 	wantUpdate2 := listenerUpdateErrTuple{
 		update: &xdsresource.ListenerUpdate{
-			RouteConfigName: rdsName,
-			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+			APIListener: &xdsresource.HTTPConnectionManagerConfig{
+				RouteConfigName: rdsName,
+				HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+			},
 		},
 	}
 	if err := verifyListenerUpdate(ctx, lw2.updateCh, wantUpdate2); err != nil {

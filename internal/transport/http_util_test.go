@@ -19,6 +19,7 @@
 package transport
 
 import (
+	"bufio"
 	"bytes"
 	"errors"
 	"fmt"
@@ -31,6 +32,9 @@ import (
 	"time"
 
 	"golang.org/x/net/http2"
+	"google.golang.org/grpc/internal/envconfig"
+	"google.golang.org/grpc/internal/testutils"
+	"google.golang.org/grpc/internal/transport/readyreader"
 	"google.golang.org/grpc/mem"
 )
 
@@ -259,7 +263,7 @@ func (s) TestWriteBadConnection(t *testing.T) {
 	// Configure the bufWriter with a batchsize that results in data being flushed
 	// to the underlying conn, midway through Write().
 	writeBufferSize := (len(data) - 1) / 2
-	writer := newBufWriter(&badNetworkConn{}, writeBufferSize, getWriteBufferPool(writeBufferSize))
+	writer := newBufWriter(&badNetworkConn{}, writeBufferSize, ioBufferPool(writeBufferSize))
 
 	errCh := make(chan error, 1)
 	go func() {
@@ -410,6 +414,77 @@ func (s) TestFramer_ParseDataFrame(t *testing.T) {
 				t.Fatalf("parsedDataFrame.Data() = %q, want %q", gotData, tc.wantData)
 			}
 			df.data.Free()
+		})
+	}
+}
+
+type testReadyReader struct {
+	readyreader.Reader
+}
+
+func (t *testReadyReader) Read([]byte) (int, error) {
+	return 0, io.EOF
+}
+
+func (s) TestBufferedReader(t *testing.T) {
+	normalReader := bytes.NewReader(nil)
+
+	tests := []struct {
+		name          string
+		reader        io.Reader
+		bufSize       int
+		enablePooling bool
+		wantTypeOf    any
+	}{
+		{
+			name:          "bufSize_0",
+			reader:        normalReader,
+			bufSize:       0,
+			enablePooling: true,
+			wantTypeOf:    (*bytes.Reader)(nil),
+		},
+		{
+			name:          "env_var_disabled_normal_reader",
+			reader:        normalReader,
+			bufSize:       10,
+			enablePooling: false,
+			wantTypeOf:    (*bufio.Reader)(nil),
+		},
+		{
+			name:          "env_var_disabled_ready_reader",
+			reader:        &testReadyReader{},
+			bufSize:       10,
+			enablePooling: false,
+			wantTypeOf:    (*bufio.Reader)(nil),
+		},
+		{
+			name:          "env_var_enabled_normal_reader",
+			reader:        normalReader,
+			bufSize:       10,
+			enablePooling: true,
+			wantTypeOf:    (*bufio.Reader)(nil),
+		},
+		{
+			name:          "env_var_enabled_ready_reader",
+			reader:        &testReadyReader{},
+			bufSize:       10,
+			enablePooling: true,
+			wantTypeOf:    readyreader.NewBuffered(nil, 10, mem.DefaultBufferPool()),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			testutils.SetEnvConfig(t, &envconfig.EnableHTTPFramerReadBufferPooling, tt.enablePooling)
+
+			got := bufferedReader(tt.reader, tt.bufSize)
+
+			gotType := reflect.TypeOf(got)
+			wantType := reflect.TypeOf(tt.wantTypeOf)
+
+			if gotType != wantType {
+				t.Errorf("bufferedReader() type = %v, want %v", gotType, wantType)
+			}
 		})
 	}
 }
