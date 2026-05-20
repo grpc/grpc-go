@@ -48,6 +48,9 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
+// testParseGRPCServiceConfig is a helper function that parses a GrpcService
+// proto message into a GRPCServiceConfig. This is a temporary test
+// implementation that will be removed once gRFC A102 is implemented.
 func testParseGRPCServiceConfig(grpcService *corepb.GrpcService) (xdsresource.GRPCServiceConfig, error) {
 	if grpcService == nil {
 		return xdsresource.GRPCServiceConfig{}, nil
