@@ -415,6 +415,8 @@ func (r *xdsResolver) newConfigSelector() (_ *configSelector, err error) {
 	for i, rt := range r.xdsConfig.VirtualHost.Routes {
 		clusters := rinternal.NewWRR.(func() wrr.WRR)()
 		interceptors := []iresolver.ClientInterceptor{}
+		// TODO: Carve out the common logic between the ClusterSpecifierPlugin
+		// and WeightedClusters.
 		if rt.ClusterSpecifierPlugin != "" {
 			clusterName := clusterSpecifierPluginPrefix + rt.ClusterSpecifierPlugin
 			interceptor, err := r.newInterceptor(r.xdsConfig.Listener.APIListener.HTTPFilters, nil, rt.HTTPFilterConfigOverride, r.xdsConfig.VirtualHost.HTTPFilterConfigOverride)
