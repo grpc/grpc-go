@@ -39,6 +39,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/balancer/stub"
+	"google.golang.org/grpc/internal/buffer"
 	"google.golang.org/grpc/internal/grpcsync"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/internal/testutils"
@@ -980,23 +981,24 @@ func (s) TestDataCachePurging(t *testing.T) {
 // connectivity state updates to both the delegate and a channel for testing.
 type wrappingConnectivityStateSubscriber struct {
 	delegate    grpcsync.Subscriber
-	connStateCh chan connectivity.State
+	connStateCh *buffer.Unbounded
 }
 
 func (w *wrappingConnectivityStateSubscriber) OnMessage(msg any) {
 	w.delegate.OnMessage(msg)
-	w.connStateCh <- msg.(connectivity.State)
+	w.connStateCh.Put(msg.(connectivity.State))
 }
 
 // waitForConnectivityState waits for the specified connectivity state to appear
 // on the channel. It skips intermediate states and fails the test if the
 // context expires before the desired state is reached.
-func waitForConnectivityState(ctx context.Context, t *testing.T, ch <-chan connectivity.State, want connectivity.State) {
+func waitForConnectivityState(ctx context.Context, t *testing.T, ch *buffer.Unbounded, want connectivity.State) {
 	t.Helper()
 	for {
 		select {
-		case gotState := <-ch:
-			if gotState == want {
+		case gotState := <-ch.Get():
+			ch.Load()
+			if gotState.(connectivity.State) == want {
 				return
 			}
 		case <-ctx.Done():
@@ -1040,7 +1042,7 @@ func (s) TestControlChannelConnectivityStateMonitoring(t *testing.T) {
 
 	// Override the connectivity state subscriber to wrap the original and
 	// make connectivity state changes visible to the test.
-	wrappedSubscriber := &wrappingConnectivityStateSubscriber{connStateCh: make(chan connectivity.State, 10)}
+	wrappedSubscriber := &wrappingConnectivityStateSubscriber{connStateCh: buffer.NewUnbounded()}
 	origConnectivityStateSubscriber := newConnectivityStateSubscriber
 	newConnectivityStateSubscriber = func(delegate grpcsync.Subscriber) grpcsync.Subscriber {
 		wrappedSubscriber.delegate = delegate
@@ -1086,8 +1088,9 @@ func (s) TestControlChannelConnectivityStateMonitoring(t *testing.T) {
 	wantStates := []connectivity.State{connectivity.Connecting, connectivity.Ready}
 	for _, wantState := range wantStates {
 		select {
-		case gotState := <-wrappedSubscriber.connStateCh:
-			if gotState != wantState {
+		case gotState := <-wrappedSubscriber.connStateCh.Get():
+			wrappedSubscriber.connStateCh.Load()
+			if gotState.(connectivity.State) != wantState {
 				t.Fatalf("Unexpected connectivity state: got %v, want %v", gotState, wantState)
 			}
 		case <-ctx.Done():
@@ -1188,7 +1191,7 @@ func (s) TestControlChannelIdleTransitionNoBackoffReset(t *testing.T) {
 
 	// Override the connectivity state subscriber to wrap the original and
 	// make connectivity state changes visible to the test.
-	wrappedSubscriber := &wrappingConnectivityStateSubscriber{connStateCh: make(chan connectivity.State, 10)}
+	wrappedSubscriber := &wrappingConnectivityStateSubscriber{connStateCh: buffer.NewUnbounded()}
 	origConnectivityStateSubscriber := newConnectivityStateSubscriber
 	newConnectivityStateSubscriber = func(delegate grpcsync.Subscriber) grpcsync.Subscriber {
 		wrappedSubscriber.delegate = delegate
@@ -1240,9 +1243,10 @@ func (s) TestControlChannelIdleTransitionNoBackoffReset(t *testing.T) {
 	case <-time.After(10 * time.Millisecond):
 	}
 
-	// Stop the RLS server to force the control channel to go IDLE. We use Stop()
-	// which closes connections gracefully, allowing the channel to transition
-	// to IDLE rather than TRANSIENT_FAILURE.
+	// Stop the RLS server to force the control channel to go IDLE. Stop()
+	// closes all existing connections on the listener. Since there are no active
+	// RPCs on the control channel, the subchannel transitions to IDLE instead of
+	// TRANSIENT_FAILURE.
 	lis.Stop()
 
 	// Wait for the control channel to move to IDLE.
