@@ -32,10 +32,7 @@ import (
 	"google.golang.org/grpc/resolver"
 )
 
-var (
-	defaultTestTimeout      = 10 * time.Second
-	defaultTestShortTimeout = 10 * time.Millisecond
-)
+var defaultTestTimeout = 10 * time.Second
 
 type s struct {
 	grpctest.Tester

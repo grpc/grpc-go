@@ -35,9 +35,8 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// earlyExpiry matches the hardcoded 5-minute early expiry used by the
-// cloud.google.com/go/auth/credentials/idtoken package.
-const earlyExpiry = 5 * time.Minute
+// earlyExpiry is 1-minute as mentioned in the gRFC A83.
+const earlyExpiry = 1 * time.Minute
 
 type gcpServiceAccountIdentityCallCreds struct {
 	// The following fields are initialized at creation time and are read-only
@@ -49,15 +48,19 @@ type gcpServiceAccountIdentityCallCreds struct {
 	// The following fields are protected by mu.
 	mu            sync.Mutex
 	token         *auth.Token
-	fetching      chan struct{} // used to deduplicate concurrent background token fetches
-	nextRetryTime time.Time     // timestamp after which we can attempt the next token fetch
-	retryAttempt  int           // consecutive fetch failure count used to compute backoff delay
-	lastErr       error         // cached error returned from the most recent token fetch attempt
+	fetching      bool      // true if a background token fetch is in progress
+	nextRetryTime time.Time // timestamp after which we can attempt the next token fetch
+	retryAttempt  int       // consecutive fetch failure count used to compute backoff delay
+	lastErr       error     // cached error returned from the most recent token fetch attempt
 }
 
-var defaultBackoffStrategy backoff.Strategy = backoff.DefaultExponential
+// DefaultBackoffStrategy is the default exponential backoff strategy to use
+// when token fetch fails. It is exported only to allow overriding in tests.
+var DefaultBackoffStrategy backoff.Strategy = backoff.DefaultExponential
 
-var newIDTokenCredentials = func(opts *idtoken.Options) (*auth.Credentials, error) {
+// NewIDTokenCredentials builds idtoken credentials using specified options.
+// It is exported to allow overriding in tests.
+var NewIDTokenCredentials = func(opts *idtoken.Options) (*auth.Credentials, error) {
 	return idtoken.NewCredentials(opts)
 }
 
@@ -72,9 +75,7 @@ func NewGcpServiceAccountIdentity(audience string) (credentials.PerRPCCredential
 		return nil, fmt.Errorf("credentials: audience cannot be empty")
 	}
 
-	creds, err := newIDTokenCredentials(&idtoken.Options{
-		Audience: audience,
-	})
+	creds, err := NewIDTokenCredentials(&idtoken.Options{Audience: audience})
 	if err != nil {
 		return nil, fmt.Errorf("credentials: failed to create ID token credentials: %v", err)
 	}
@@ -82,7 +83,7 @@ func NewGcpServiceAccountIdentity(audience string) (credentials.PerRPCCredential
 	return &gcpServiceAccountIdentityCallCreds{
 		audience: audience,
 		creds:    creds,
-		backoff:  defaultBackoffStrategy,
+		backoff:  DefaultBackoffStrategy,
 	}, nil
 }
 
@@ -101,48 +102,33 @@ func (c *gcpServiceAccountIdentityCallCreds) GetRequestMetadata(ctx context.Cont
 	}
 
 	c.mu.Lock()
+	defer c.mu.Unlock()
 
 	// If token is valid, return it. If it's also stale, trigger a background
-	// refresh if not already running.
+	// refresh if not already running and return the current token.
 	if c.token != nil && c.isTokenValidLocked() {
-		if c.isTokenStaleLocked() && c.fetching == nil {
-			c.fetching = make(chan struct{})
+		if c.isTokenStaleLocked() && !c.fetching {
+			c.fetching = true
 			go c.startFetch()
 		}
-		defer c.mu.Unlock()
 		return map[string]string{
 			"authorization": "Bearer " + c.token.Value,
 		}, nil
 	}
 
 	if c.lastErr != nil && time.Now().Before(c.nextRetryTime) {
-		c.mu.Unlock()
 		return nil, c.lastErr
 	}
 
-	if c.fetching == nil {
-		c.fetching = make(chan struct{})
-		go c.startFetch()
+	token, err := c.creds.TokenProvider.Token(context.Background())
+	c.handleFetchResultLocked(token, err)
+	if err != nil {
+		return nil, c.lastErr
 	}
-	wait := c.fetching
-	c.mu.Unlock()
 
-	select {
-	case <-wait:
-		c.mu.Lock()
-		defer c.mu.Unlock()
-		if c.token != nil && c.isTokenValidLocked() {
-			return map[string]string{
-				"authorization": "Bearer " + c.token.Value,
-			}, nil
-		}
-		if c.lastErr != nil {
-			return nil, c.lastErr
-		}
-		return nil, status.Error(codes.Unauthenticated, "fetched token is expired")
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	}
+	return map[string]string{
+		"authorization": "Bearer " + c.token.Value,
+	}, nil
 }
 
 // RequireTransportSecurity indicates whether the credentials requires
@@ -154,7 +140,7 @@ func (c *gcpServiceAccountIdentityCallCreds) RequireTransportSecurity() bool {
 // isTokenStaleLocked checks if the token falls within the
 // early expiry window. It must be called with mu locked.
 func (c *gcpServiceAccountIdentityCallCreds) isTokenStaleLocked() bool {
-	return c.token.Expiry.Round(0).Add(-earlyExpiry).Before(time.Now())
+	return c.token.Expiry.Add(-earlyExpiry).Before(time.Now())
 }
 
 // isTokenValidLocked checks if the token is not expired yet. It must be called
@@ -171,8 +157,7 @@ func (c *gcpServiceAccountIdentityCallCreds) startFetch() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	close(c.fetching)
-	c.fetching = nil
+	c.fetching = false
 	c.handleFetchResultLocked(token, err)
 }
 
