@@ -337,7 +337,7 @@ func TestCompileSafeRegex(t *testing.T) {
 		t.Run(test.desc, func(t *testing.T) {
 			re, err := CompileSafeRegex(test.pattern)
 			if (err != nil) != test.wantErr {
-				t.Fatalf("err=%v, wantErr=%v", err, test.wantErr)
+				t.Fatalf("CompileSafeRegex(%q) returned error %q, want %q", test.pattern, err, test.wantErr)
 			}
 			if err == nil {
 				if re.String() != test.wantRegex {

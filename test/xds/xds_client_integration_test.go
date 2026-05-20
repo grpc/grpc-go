@@ -88,6 +88,9 @@ func (s) TestClientSideXDS(t *testing.T) {
 	}
 }
 
+// TestClient_ConcurrentRPC ensures thread safety for xDS clients executing
+// concurrent RPCs, particularly verifying that the regex matchers do not cause
+// data races.
 func (s) TestClient_ConcurrentRPC(t *testing.T) {
 	managementServer, nodeID, _, xdsResolver := setup.ManagementServerAndResolver(t)
 
