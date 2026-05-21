@@ -42,7 +42,6 @@ import (
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/binarylog"
 	"google.golang.org/grpc/internal/channelz"
-	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/grpcutil"
 	istats "google.golang.org/grpc/internal/stats"
@@ -150,8 +149,6 @@ type Server struct {
 
 	serverWorkerChannel      chan func()
 	serverWorkerChannelClose func()
-
-	strictPathCheckingLogEmitted atomic.Bool
 }
 
 type serverOptions struct {
@@ -300,6 +297,14 @@ func InitialConnWindowSize(s int32) ServerOption {
 // window size to the value provided and disables dynamic flow control.
 // The lower bound for window size is 64K and any value smaller than that
 // will be ignored.
+//
+// Note that this also disables dynamic flow control for the connection,
+// falling back to a default static connection-level window of 64KB. To
+// use a larger connection-level window, you must also use the
+// [StaticConnWindowSize] ServerOption.
+//
+// Most users should not configure static flow control windows unless
+// operating in a memory-constrained environment.
 func StaticStreamWindowSize(s int32) ServerOption {
 	return newFuncServerOption(func(o *serverOptions) {
 		o.initialWindowSize = s
@@ -311,6 +316,14 @@ func StaticStreamWindowSize(s int32) ServerOption {
 // window size to the value provided and disables dynamic flow control.
 // The lower bound for window size is 64K and any value smaller than that
 // will be ignored.
+//
+// Note that this also disables dynamic flow control for individual streams,
+// falling back to a default static connection-level window of 64KB. To
+// explicitly configure the stream-level window size, you must also use the
+// [StaticStreamWindowSize] ServerOption.
+//
+// Most users should not configure static flow control windows unless
+// operating in a memory-constrained environment.
 func StaticConnWindowSize(s int32) ServerOption {
 	return newFuncServerOption(func(o *serverOptions) {
 		o.initialConnWindowSize = s
@@ -1801,25 +1814,10 @@ func (s *Server) handleStream(t transport.ServerTransport, stream *transport.Ser
 		}
 	}
 
-	sm := stream.Method()
-	if sm == "" {
+	sm, found := strings.CutPrefix(stream.Method(), "/")
+	if !found {
 		s.handleMalformedMethodName(stream, ti)
 		return
-	}
-	if sm[0] != '/' {
-		if envconfig.DisableStrictPathChecking {
-			if old := s.strictPathCheckingLogEmitted.Swap(true); !old {
-				channelz.Warningf(logger, s.channelz, "grpc: Server.handleStream received malformed method name %q. Allowing it because the environment variable GRPC_GO_EXPERIMENTAL_DISABLE_STRICT_PATH_CHECKING is set to true, but this option will be removed in a future release. See https://github.com/grpc/grpc-go/security/advisories/GHSA-p77j-4mvh-x3m3 for more information.", sm)
-			}
-		} else {
-			if old := s.strictPathCheckingLogEmitted.Swap(true); !old {
-				channelz.Warningf(logger, s.channelz, "grpc: Server.handleStream rejected malformed method name %q. To temporarily allow such requests, set the environment variable GRPC_GO_EXPERIMENTAL_DISABLE_STRICT_PATH_CHECKING to true. Note that this is not recommended as it may allow requests to bypass security policies. See https://github.com/grpc/grpc-go/security/advisories/GHSA-p77j-4mvh-x3m3 for more information.", sm)
-			}
-			s.handleMalformedMethodName(stream, ti)
-			return
-		}
-	} else {
-		sm = sm[1:]
 	}
 	pos := strings.LastIndex(sm, "/")
 	if pos == -1 {

@@ -1156,12 +1156,12 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 				},
 			},
 			wantRoutes: []*Route{{
-				Regex: func() *regexp.Regexp { return regexp.MustCompile("/a/") }(),
+				Regex: func() *regexp.Regexp { return regexp.MustCompile("^(?:/a/)$") }(),
 				Headers: []*HeaderMatcher{
 					{
 						Name:        "th",
 						InvertMatch: newBoolP(false),
-						RegexMatch:  func() *regexp.Regexp { return regexp.MustCompile("tv") }(),
+						RegexMatch:  func() *regexp.Regexp { return regexp.MustCompile("^(?:tv)$") }(),
 					},
 				},
 				Fraction: newUInt32P(10000),
@@ -1204,7 +1204,7 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 				},
 			},
 			wantRoutes: []*Route{{
-				Regex: func() *regexp.Regexp { return regexp.MustCompile("/a/") }(),
+				Regex: func() *regexp.Regexp { return regexp.MustCompile("^(?:/a/)$") }(),
 				Headers: []*HeaderMatcher{
 					{
 						Name:        "th",

@@ -1016,6 +1016,9 @@ func decompress(compressor encoding.Compressor, d mem.BufferSlice, dc Decompress
 			r.Close() // ensure buffers are reused
 			return nil, status.Errorf(codes.Internal, "grpc: failed to decompress the message: %v", err)
 		}
+		if closer, ok := dcReader.(io.Closer); ok {
+			defer closer.Close()
+		}
 
 		// Read at most one byte more than the limit from the decompressor.
 		// Unless the limit is MaxInt64, in which case, that's impossible, so

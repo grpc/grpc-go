@@ -94,6 +94,7 @@ var (
 	// the client side. For more details, see:
 	// https://github.com/grpc/proposal/blob/master/A93-xds-ext-proc.md
 	XDSClientExtProcEnabled = boolFromEnv("GRPC_EXPERIMENTAL_XDS_EXT_PROC_ON_CLIENT", false)
+
 	// GCPAuthenticationFilterEnabled enables the xDS GCP Authentication
 	// filter. For more details, see:
 	// https://github.com/grpc/proposal/blob/master/A83-xds-gcp-authn-filter.md
