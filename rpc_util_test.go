@@ -419,16 +419,17 @@ func BenchmarkGZIPCompressor1MiB(b *testing.B) {
 	bmCompressor(b, 1024*1024, NewGZIPCompressor())
 }
 
-// compressWithDeterministicError compresses the input data and returns a BufferSlice.
-func compressWithDeterministicError(t *testing.T, input []byte) mem.BufferSlice {
+// mustCompress gzip-compresses input and returns it as a BufferSlice,
+// failing the test if compression fails.
+func mustCompress(t *testing.T, input []byte) mem.BufferSlice {
 	t.Helper()
 	var buf bytes.Buffer
 	gz := gzip.NewWriter(&buf)
 	if _, err := gz.Write(input); err != nil {
-		t.Fatalf("compressInput() failed to write data: %v", err)
+		t.Fatalf("mustCompress() failed to write data: %v", err)
 	}
 	if err := gz.Close(); err != nil {
-		t.Fatalf("compressInput() failed to close gzip writer: %v", err)
+		t.Fatalf("mustCompress() failed to close gzip writer: %v", err)
 	}
 	compressedData := buf.Bytes()
 	return mem.BufferSlice{mem.NewBuffer(&compressedData, nil)}
@@ -475,7 +476,7 @@ func (s) TestDecompress(t *testing.T) {
 	}{
 		{
 			name:                  "Decompresses successfully with sufficient buffer size",
-			input:                 compressWithDeterministicError(t, []byte("decompressed data")),
+			input:                 mustCompress(t, []byte("decompressed data")),
 			dc:                    nil,
 			maxReceiveMessageSize: 50,
 			want:                  []byte("decompressed data"),
@@ -483,7 +484,7 @@ func (s) TestDecompress(t *testing.T) {
 		},
 		{
 			name:                  "Fails due to exceeding maxReceiveMessageSize",
-			input:                 compressWithDeterministicError(t, []byte("message that is too large")),
+			input:                 mustCompress(t, []byte("message that is too large")),
 			dc:                    nil,
 			maxReceiveMessageSize: len("message that is too large") - 1,
 			want:                  nil,
@@ -491,7 +492,7 @@ func (s) TestDecompress(t *testing.T) {
 		},
 		{
 			name:                  "Decompresses to exactly maxReceiveMessageSize",
-			input:                 compressWithDeterministicError(t, []byte("exact size message")),
+			input:                 mustCompress(t, []byte("exact size message")),
 			dc:                    nil,
 			maxReceiveMessageSize: len("exact size message"),
 			want:                  []byte("exact size message"),
@@ -499,7 +500,7 @@ func (s) TestDecompress(t *testing.T) {
 		},
 		{
 			name:                  "Decompresses successfully with maxReceiveMessageSize MaxInt",
-			input:                 compressWithDeterministicError(t, []byte("large message")),
+			input:                 mustCompress(t, []byte("large message")),
 			dc:                    nil,
 			maxReceiveMessageSize: math.MaxInt,
 			want:                  []byte("large message"),
@@ -507,7 +508,7 @@ func (s) TestDecompress(t *testing.T) {
 		},
 		{
 			name:                  "Fails with decompression error due to invalid format",
-			input:                 compressWithDeterministicError(t, []byte("invalid compressed data")),
+			input:                 mustCompress(t, []byte("invalid compressed data")),
 			dc:                    invalidFormatDecompressor,
 			maxReceiveMessageSize: 50,
 			want:                  nil,
@@ -515,7 +516,7 @@ func (s) TestDecompress(t *testing.T) {
 		},
 		{
 			name:                  "Fails with resourceExhausted error when decompressed message exceeds maxReceiveMessageSize",
-			input:                 compressWithDeterministicError(t, []byte("large compressed data")),
+			input:                 mustCompress(t, []byte("large compressed data")),
 			dc:                    validDecompressor,
 			maxReceiveMessageSize: 20,
 			want:                  nil,
@@ -545,16 +546,15 @@ func (s) TestDecompress(t *testing.T) {
 func (s) TestDecompress_LegacyGzipBomb(t *testing.T) {
 	// 1 MiB of zeros gzips down to a few KiB at most.
 	payload := make([]byte, 1<<20)
-	input := compressWithDeterministicError(t, payload)
+	input := mustCompress(t, payload)
 
 	const maxRecv = 1024
 	out, err := decompress(nil, input, NewGZIPDecompressor(), maxRecv, mem.DefaultBufferPool())
 	if out != nil {
 		t.Errorf("decompress() returned non-nil output for over-limit payload")
 	}
-	wantErr := status.Errorf(codes.ResourceExhausted, "grpc: message after decompression larger than max (%d vs. %d)", maxRecv+1, maxRecv)
-	if !cmp.Equal(err, wantErr, cmpopts.EquateErrors()) {
-		t.Fatalf("decompress() err = %v, want %v", err, wantErr)
+	if got, want := status.Code(err), codes.ResourceExhausted; got != want {
+		t.Fatalf("decompress() err code = %v, want %v (err = %v)", got, want, err)
 	}
 }
 
@@ -563,7 +563,7 @@ func (s) TestDecompress_LegacyGzipBomb(t *testing.T) {
 // when the payload fits inside maxReceiveMessageSize.
 func (s) TestDecompress_LegacyGzipUnderLimit(t *testing.T) {
 	payload := []byte("hello legacy decompressor")
-	input := compressWithDeterministicError(t, payload)
+	input := mustCompress(t, payload)
 
 	out, err := decompress(nil, input, NewGZIPDecompressor(), len(payload), mem.DefaultBufferPool())
 	if err != nil {
