@@ -104,26 +104,6 @@ var (
 	// to "false".
 	XDSRecoverPanicInResourceParsing = boolFromEnv("GRPC_GO_EXPERIMENTAL_XDS_RESOURCE_PANIC_RECOVERY", true)
 
-	// DisableStrictPathChecking indicates whether strict path checking is
-	// disabled. This feature can be disabled by setting the environment
-	// variable GRPC_GO_EXPERIMENTAL_DISABLE_STRICT_PATH_CHECKING to "true".
-	//
-	// When strict path checking is enabled, gRPC will reject requests with
-	// paths that do not conform to the gRPC over HTTP/2 specification found at
-	// https://github.com/grpc/grpc/blob/master/doc/PROTOCOL-HTTP2.md.
-	//
-	// When disabled, gRPC will allow paths that do not contain a leading slash.
-	// Enabling strict path checking is recommended for security reasons, as it
-	// prevents potential path traversal vulnerabilities.
-	//
-	// A future release will remove this environment variable, enabling strict
-	// path checking behavior unconditionally.
-	//
-	// See
-	// https://github.com/grpc/grpc-go/security/advisories/GHSA-p77j-4mvh-x3m3
-	// for more details.
-	DisableStrictPathChecking = boolFromEnv("GRPC_GO_EXPERIMENTAL_DISABLE_STRICT_PATH_CHECKING", false)
-
 	// EnablePriorityLBChildPolicyCache controls whether the priority balancer
 	// should cache child balancers that are removed from the LB policy config,
 	// for a period of 15 minutes. This is disabled by default, but can be
@@ -142,6 +122,16 @@ var (
 	//
 	// TODO: In release v1.82.0, env var will be enabled by default.
 	Enable8KBDefaultHeaderListSize = boolFromEnv("GRPC_GO_EXPERIMENTAL_ENABLE_8KB_DEFAULT_HEADER_LIST_SIZE", false)
+
+	// EnableHTTPFramerReadBufferPooling enables the use of the
+	// readyreader.Reader interface to perform non-memory-pinning reads,
+	// provided the underlying net.Conn supports it. This reduces memory usage
+	// when subchannels are idle.
+	//
+	// This environment variable serves as an escape hatch to disable the
+	// feature if unforeseen issues arise, and it will be removed in a future
+	// release.
+	EnableHTTPFramerReadBufferPooling = boolFromEnv("GRPC_GO_EXPERIMENTAL_HTTP_FRAMER_READ_BUFFER_POOLING", true)
 )
 
 func boolFromEnv(envVar string, def bool) bool {

@@ -18,6 +18,7 @@ package opentelemetry
 
 import (
 	"context"
+	"maps"
 	"sync/atomic"
 	"time"
 
@@ -76,7 +77,7 @@ func getOrCreateCallInfo(ctx context.Context, cc *grpc.ClientConn, method string
 			target: cc.CanonicalTarget(),
 			method: determineMethod(method, opts...),
 		}
-		ctx = setCallInfo(ctx, ci)
+		ctx = context.WithValue(ctx, callInfoKey{}, ci)
 	}
 	return ctx, ci
 }
@@ -157,47 +158,36 @@ func (h *clientMetricsHandler) TagConn(ctx context.Context, _ *stats.ConnTagInfo
 // HandleConn exists to satisfy stats.Handler.
 func (h *clientMetricsHandler) HandleConn(context.Context, stats.ConnStats) {}
 
-// getOrCreateRPCAttemptInfo retrieves or creates an rpc attemptInfo object
-// and ensures it is set in the context along with the rpcInfo.
-func getOrCreateRPCAttemptInfo(ctx context.Context) (context.Context, *attemptInfo) {
-	ri := getRPCInfo(ctx)
-	if ri != nil {
-		return ctx, ri.ai
-	}
-	ri = &rpcInfo{ai: &attemptInfo{}}
-	return setRPCInfo(ctx, ri), ri.ai
-}
-
 // TagRPC implements per RPC attempt context management for metrics.
 func (h *clientMetricsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo) context.Context {
-	// Numerous stats handlers can be used for the same channel. The cluster
-	// impl balancer which writes to this will only write once, thus have this
-	// stats handler's per attempt scoped context point to the same optional
-	// labels map if set.
-	var labels *istats.Labels
-	if labels = istats.GetLabels(ctx); labels == nil {
-		labels = &istats.Labels{
+	ctx, ri := getOrCreateClientRPCInfo(ctx)
+	ai := ri.ai
+	if ai.xdsLabels == nil {
+		ai.xdsLabels = map[string]string{
 			// The defaults for all the per call labels from a plugin that
 			// executes on the callpath that this OpenTelemetry component
 			// currently supports.
-			TelemetryLabels: map[string]string{
-				"grpc.lb.locality":        "",
-				"grpc.lb.backend_service": "",
-			},
+			"grpc.lb.locality":        "",
+			"grpc.lb.backend_service": "",
 		}
-		ctx = istats.SetLabels(ctx, labels)
 	}
-	ctx, ai := getOrCreateRPCAttemptInfo(ctx)
+
+	// Numerous stats handlers can be used for the same channel. This callback
+	// ensures that all label updates are propagated to the rpc attempt info across
+	// derived contexts.
+	ctx = istats.RegisterTelemetryLabelCallback(ctx, func(labels map[string]string) {
+		maps.Copy(ai.xdsLabels, labels)
+	})
+
 	ai.startTime = time.Now()
-	ai.xdsLabels = labels.TelemetryLabels
 	ai.method = removeLeadingSlash(info.FullMethodName)
 
-	return setRPCInfo(ctx, &rpcInfo{ai: ai})
+	return ctx
 }
 
 // HandleRPC handles per RPC stats implementation.
 func (h *clientMetricsHandler) HandleRPC(ctx context.Context, rs stats.RPCStats) {
-	ri := getRPCInfo(ctx)
+	ri := clientRPCInfo(ctx)
 	if ri == nil {
 		logger.Error("ctx passed into client side stats handler metrics event handling has no client attempt data present")
 		return
