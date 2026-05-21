@@ -16,7 +16,7 @@
  *
  */
 
-// Package extproc implements the Envoy external processing filter.
+// Package extproc implements the Envoy external processing HTTP filter.
 package extproc
 
 import (
