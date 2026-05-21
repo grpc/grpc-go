@@ -675,7 +675,7 @@ func (s) TestDecompress_ClosesReader(t *testing.T) {
 
 			ch := make(chan struct{})
 			compressor := &fakeCloseCompressor{ch: ch}
-			in := compressWithDeterministicError(t, []byte("some data"))
+			in := mustCompress(t, []byte("some data"))
 			out, err := decompress(compressor, in, nil, tc.maxReceiveMessageSize, mem.DefaultBufferPool())
 			if status.Code(err) != tc.wantCode {
 				t.Fatalf("decompress() failed with error code %v, want %v", status.Code(err), tc.wantCode)
