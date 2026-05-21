@@ -37,6 +37,14 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
+// Hostname returns the hostname from the BalancerAttributes of the
+// given Address. If this attribute is not set, it returns the empty
+// string.
+func Hostname(addr resolver.Address) string {
+	ep := resolver.Endpoint{Attributes: addr.BalancerAttributes}
+	return hostname.FromEndpoint(ep)
+}
+
 func unmarshalEndpointsResource(r *anypb.Any) (string, EndpointsUpdate, error) {
 	r, err := UnwrapResource(r)
 	if err != nil {
@@ -154,14 +162,6 @@ func parseEndpoints(lbEndpoints []*v3endpointpb.LbEndpoint, uniqueEndpointAddrs 
 		})
 	}
 	return endpoints, nil
-}
-
-// Hostname returns the hostname from the BalancerAttributes of the
-// given Address. If this attribute is not set, it returns the empty
-// string.
-func Hostname(addr resolver.Address) string {
-	ep := resolver.Endpoint{Attributes: addr.BalancerAttributes}
-	return hostname.FromEndpoint(ep)
 }
 
 // hashKey extracts and returns the hash key from the given endpoint metadata.
