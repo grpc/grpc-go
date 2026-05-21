@@ -128,6 +128,16 @@ func NewGZIPDecompressor() Decompressor {
 }
 
 func (d *gzipDecompressor) Do(r io.Reader) ([]byte, error) {
+	return d.doWithMaxSize(r, math.MaxInt64)
+}
+
+// doWithMaxSize behaves like Do but caps the size of the decompressed
+// payload at maxMessageSize+1 bytes. The Decompressor interface does not
+// allow extra parameters, so callers inside the package type-assert to
+// *gzipDecompressor to invoke this method directly. The +1 byte makes it
+// possible for the caller to detect that the limit was exceeded and
+// return ResourceExhausted instead of materializing an unbounded payload.
+func (d *gzipDecompressor) doWithMaxSize(r io.Reader, maxMessageSize int64) ([]byte, error) {
 	var z *gzip.Reader
 	switch maybeZ := d.pool.Get().(type) {
 	case nil:
@@ -148,7 +158,11 @@ func (d *gzipDecompressor) Do(r io.Reader) ([]byte, error) {
 		z.Close()
 		d.pool.Put(z)
 	}()
-	return io.ReadAll(z)
+	var src io.Reader = z
+	if maxMessageSize < math.MaxInt64 {
+		src = io.LimitReader(z, maxMessageSize+1)
+	}
+	return io.ReadAll(src)
 }
 
 func (d *gzipDecompressor) Type() string {
@@ -971,16 +985,20 @@ func recvAndDecompress(p *parser, s recvCompressor, dc Decompressor, maxReceiveM
 func decompress(compressor encoding.Compressor, d mem.BufferSlice, dc Decompressor, maxReceiveMessageSize int, pool mem.BufferPool) (mem.BufferSlice, error) {
 	if dc != nil {
 		r := d.Reader()
-		// Limit decompression to maxReceiveMessageSize+1 bytes so that the
-		// size check below fires before io.ReadAll buffers the full payload.
-		// Without this limit a client can send a tiny compressed message that
-		// expands to many gigabytes, exhausting server memory before the size
-		// check is reached.
-		reader := io.Reader(r)
-		if limit := int64(maxReceiveMessageSize); limit < math.MaxInt64 {
-			reader = io.LimitReader(r, limit+1)
+		// For the built-in gzip decompressor, bound the decompressed output
+		// at maxReceiveMessageSize+1 so that a small but highly compressed
+		// payload (a "zip bomb") cannot expand to gigabytes in memory before
+		// the post-decompression size check below has a chance to fire. The
+		// Decompressor interface does not accept an extra size parameter,
+		// so we type-assert to invoke a size-aware helper. Third-party
+		// Decompressor implementations keep the original Do behavior.
+		var uncompressed []byte
+		var err error
+		if gd, ok := dc.(*gzipDecompressor); ok {
+			uncompressed, err = gd.doWithMaxSize(r, int64(maxReceiveMessageSize))
+		} else {
+			uncompressed, err = dc.Do(r)
 		}
-		uncompressed, err := dc.Do(reader)
 		if err != nil {
 			r.Close() // ensure buffers are reused
 			return nil, status.Errorf(codes.Internal, "grpc: failed to decompress the received message: %v", err)

@@ -536,6 +536,44 @@ func (s) TestDecompress(t *testing.T) {
 	}
 }
 
+// TestDecompress_LegacyGzipBomb verifies that the legacy gzipDecompressor
+// path bounds the decompressed payload at maxReceiveMessageSize+1 bytes
+// instead of buffering the full expansion in memory. The input here is a
+// small compressed payload that expands to many times the receive limit;
+// without the bound, decompress() would materialize the entire expansion
+// before the size check fires.
+func (s) TestDecompress_LegacyGzipBomb(t *testing.T) {
+	// 1 MiB of zeros gzips down to a few KiB at most.
+	payload := make([]byte, 1<<20)
+	input := compressWithDeterministicError(t, payload)
+
+	const maxRecv = 1024
+	out, err := decompress(nil, input, NewGZIPDecompressor(), maxRecv, mem.DefaultBufferPool())
+	if out != nil {
+		t.Errorf("decompress() returned non-nil output for over-limit payload")
+	}
+	wantErr := status.Errorf(codes.ResourceExhausted, "grpc: message after decompression larger than max (%d vs. %d)", maxRecv+1, maxRecv)
+	if !cmp.Equal(err, wantErr, cmpopts.EquateErrors()) {
+		t.Fatalf("decompress() err = %v, want %v", err, wantErr)
+	}
+}
+
+// TestDecompress_LegacyGzipUnderLimit verifies that legitimate traffic
+// through the legacy gzipDecompressor path still decompresses correctly
+// when the payload fits inside maxReceiveMessageSize.
+func (s) TestDecompress_LegacyGzipUnderLimit(t *testing.T) {
+	payload := []byte("hello legacy decompressor")
+	input := compressWithDeterministicError(t, payload)
+
+	out, err := decompress(nil, input, NewGZIPDecompressor(), len(payload), mem.DefaultBufferPool())
+	if err != nil {
+		t.Fatalf("decompress() err = %v, want nil", err)
+	}
+	if !bytes.Equal(out.Materialize(), payload) {
+		t.Fatalf("decompress() output = %q, want %q", out.Materialize(), payload)
+	}
+}
+
 type mockCompressor struct {
 	// Written to by the io.Reader on every call to Read.
 	ch chan<- struct{}
