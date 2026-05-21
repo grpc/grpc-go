@@ -26,7 +26,7 @@ import (
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
 	v3typepb "github.com/envoyproxy/go-control-plane/envoy/type/v3"
-	"google.golang.org/grpc/balancer/hostname"
+	"google.golang.org/grpc/experimental/balancer/hostname"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/pretty"
 	xdsinternal "google.golang.org/grpc/internal/xds"
@@ -154,6 +154,14 @@ func parseEndpoints(lbEndpoints []*v3endpointpb.LbEndpoint, uniqueEndpointAddrs 
 		})
 	}
 	return endpoints, nil
+}
+
+// Hostname returns the hostname from the BalancerAttributes of the
+// given Address. If this attribute is not set, it returns the empty
+// string.
+func Hostname(addr resolver.Address) string {
+	ep := resolver.Endpoint{Attributes: addr.BalancerAttributes}
+	return hostname.FromEndpoint(ep)
 }
 
 // hashKey extracts and returns the hash key from the given endpoint metadata.

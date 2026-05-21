@@ -24,8 +24,8 @@ import (
 	"maps"
 	"slices"
 
-	"google.golang.org/grpc/balancer/hostname"
-	"google.golang.org/grpc/balancer/weight"
+	"google.golang.org/grpc/experimental/balancer/hostname"
+	"google.golang.org/grpc/experimental/balancer/weight"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/hierarchy"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"

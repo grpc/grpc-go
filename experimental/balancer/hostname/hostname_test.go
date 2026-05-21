@@ -22,7 +22,7 @@ import (
 	"testing"
 
 	"google.golang.org/grpc/attributes"
-	"google.golang.org/grpc/balancer/hostname"
+	"google.golang.org/grpc/experimental/balancer/hostname"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/resolver"
 )
@@ -43,10 +43,9 @@ func (s) TestHostnameToAndFromEndpoint(t *testing.T) {
 		wantHostname    string
 	}{
 		{
-			desc:            "empty_attributes",
-			inputHostname:   "myservice.example.com",
-			inputAttributes: nil,
-			wantHostname:    "myservice.example.com",
+			desc:          "empty_attributes",
+			inputHostname: "myservice.example.com",
+			wantHostname:  "myservice.example.com",
 		},
 		{
 			desc:            "non-empty_attributes",
@@ -55,16 +54,11 @@ func (s) TestHostnameToAndFromEndpoint(t *testing.T) {
 			wantHostname:    "myservice.example.com",
 		},
 		{
-			desc:            "hostname_not_present_in_empty_attributes",
-			inputHostname:   "",
-			inputAttributes: nil,
-			wantHostname:    "",
+			desc: "hostname_not_present_in_empty_attributes",
 		},
 		{
 			desc:            "hostname_not_present_in_non-empty_attributes",
-			inputHostname:   "",
 			inputAttributes: attributes.New("foo", "bar"),
-			wantHostname:    "",
 		},
 	}
 
@@ -74,7 +68,7 @@ func (s) TestHostnameToAndFromEndpoint(t *testing.T) {
 			endpoint = hostname.Set(endpoint, test.inputHostname)
 			gotHostname := hostname.FromEndpoint(endpoint)
 			if gotHostname != test.wantHostname {
-				t.Errorf("gotHostname: %v, wantHostname: %v", gotHostname, test.wantHostname)
+				t.Errorf("hostname.FromEndpoint(%+v) = %q, want %q", endpoint, gotHostname, test.wantHostname)
 			}
 		})
 	}

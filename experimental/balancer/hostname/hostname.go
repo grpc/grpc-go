@@ -21,21 +21,16 @@
 //
 // # Experimental
 //
-// Notice: This API is EXPERIMENTAL and may be changed or removed in a
-// later release.
+// Notice: All APIs in this package are EXPERIMENTAL and may be changed
+// or removed in a later release.
 package hostname
 
 import "google.golang.org/grpc/resolver"
 
 type hostnameKey struct{}
 
-// Set returns a copy of the given endpoint with the hostname attribute set.
-// If hostname is empty the endpoint is returned unmodified.
-//
-// # Experimental
-//
-// Notice: This API is EXPERIMENTAL and may be changed or removed in a
-// later release.
+// Set returns a copy of the given endpoint with the hostname attribute
+// set. If hostname is empty the endpoint is returned unmodified.
 func Set(endpoint resolver.Endpoint, hostname string) resolver.Endpoint {
 	if hostname == "" {
 		return endpoint
@@ -46,24 +41,7 @@ func Set(endpoint resolver.Endpoint, hostname string) resolver.Endpoint {
 
 // FromEndpoint returns the hostname attribute of endpoint. If this
 // attribute is not set, it returns the empty string.
-//
-// # Experimental
-//
-// Notice: This API is EXPERIMENTAL and may be changed or removed in a
-// later release.
 func FromEndpoint(endpoint resolver.Endpoint) string {
 	h, _ := endpoint.Attributes.Value(hostnameKey{}).(string)
-	return h
-}
-
-// FromAddress returns the hostname attribute from a resolver.Address.
-// It reads from the BalancerAttributes field of the address.
-//
-// # Experimental
-//
-// Notice: This API is EXPERIMENTAL and may be changed or removed in a
-// later release.
-func FromAddress(addr resolver.Address) string {
-	h, _ := addr.BalancerAttributes.Value(hostnameKey{}).(string)
 	return h
 }

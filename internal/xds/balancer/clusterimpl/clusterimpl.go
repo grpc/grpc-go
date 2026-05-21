@@ -44,7 +44,6 @@ import (
 	"google.golang.org/grpc/internal/pretty"
 	xdsinternal "google.golang.org/grpc/internal/xds"
 
-	"google.golang.org/grpc/balancer/hostname"
 	"google.golang.org/grpc/internal/xds/balancer/clusterimpl/internal"
 	"google.golang.org/grpc/internal/xds/balancer/loadstore"
 	"google.golang.org/grpc/internal/xds/bootstrap"
@@ -576,7 +575,7 @@ func (b *clusterImplBalancer) NewSubConn(addrs []resolver.Address, opts balancer
 		newAddrs[i] = xdsinternal.SetXDSHandshakeClusterName(addr, clusterName)
 		newAddrs[i] = xds.SetHandshakeInfo(newAddrs[i], &b.xdsHIPtr)
 
-		host := hostname.FromAddress(addr)
+		host := xdsresource.Hostname(addr)
 		// If the hostname contains a port, strip it. Per [RFC 6066, Section
 		// 3](https://www.rfc-editor.org/rfc/rfc6066.html#section-3), the SNI
 		// may only contain a qualified DNS hostname, which excludes port
@@ -592,7 +591,7 @@ func (b *clusterImplBalancer) NewSubConn(addrs []resolver.Address, opts balancer
 	var sc balancer.SubConn
 	scw := &scWrapper{}
 	if len(addrs) > 0 {
-		scw.hostname = hostname.FromAddress(addrs[0])
+		scw.hostname = xdsresource.Hostname(addrs[0])
 		scw.localityID = xdsinternal.GetLocalityID(addrs[0])
 	}
 	oldListener := opts.StateListener
