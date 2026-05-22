@@ -44,6 +44,7 @@ import (
 	"google.golang.org/grpc/internal/pretty"
 	istatus "google.golang.org/grpc/internal/status"
 	"google.golang.org/grpc/internal/syscall"
+	transportinternal "google.golang.org/grpc/internal/transport/internal"
 	"google.golang.org/grpc/mem"
 
 	"google.golang.org/grpc/codes"
@@ -1448,14 +1449,14 @@ func (t *http2Server) socketMetrics() *channelz.EphemeralSocketMetrics {
 func (t *http2Server) incrMsgSent() {
 	if channelz.IsOn() {
 		t.channelz.SocketMetrics.MessagesSent.Add(1)
-		t.channelz.SocketMetrics.LastMessageSentTimestamp.Add(1)
+		t.channelz.SocketMetrics.LastMessageSentTimestamp.Store(transportinternal.TimeNowFunc())
 	}
 }
 
 func (t *http2Server) incrMsgRecv() {
 	if channelz.IsOn() {
 		t.channelz.SocketMetrics.MessagesReceived.Add(1)
-		t.channelz.SocketMetrics.LastMessageReceivedTimestamp.Add(1)
+		t.channelz.SocketMetrics.LastMessageReceivedTimestamp.Store(transportinternal.TimeNowFunc())
 	}
 }
 
