@@ -21,7 +21,6 @@ package rls
 import (
 	"context"
 	"fmt"
-	"sync"
 	"time"
 
 	"google.golang.org/grpc"
@@ -68,8 +67,6 @@ type controlChannel struct {
 	logger      *internalgrpclog.PrefixLogger
 	unsubscribe func()
 
-	// All fields below are guarded by mu.
-	mu                   sync.Mutex
 	seenTransientFailure bool
 }
 
@@ -107,8 +104,6 @@ func (cc *controlChannel) OnMessage(msg any) {
 		panic(fmt.Sprintf("Unexpected message type %T , wanted connectectivity.State type", msg))
 	}
 
-	var callBackToReady bool
-	cc.mu.Lock()
 	switch st {
 	case connectivity.Ready:
 		// Only reset backoff when transitioning from TRANSIENT_FAILURE to READY.
@@ -121,7 +116,9 @@ func (cc *controlChannel) OnMessage(msg any) {
 				cc.logger.Infof("Control channel back to READY after TRANSIENT_FAILURE")
 			}
 			cc.seenTransientFailure = false
-			callBackToReady = true
+			if cc.backToReadyFunc != nil {
+				cc.backToReadyFunc()
+			}
 		} else {
 			if cc.logger.V(2) {
 				cc.logger.Infof("Control channel is READY")
@@ -136,11 +133,6 @@ func (cc *controlChannel) OnMessage(msg any) {
 		if cc.logger.V(2) {
 			cc.logger.Infof("Control channel connectivity state is %s", st)
 		}
-	}
-	cc.mu.Unlock()
-
-	if callBackToReady && cc.backToReadyFunc != nil {
-		cc.backToReadyFunc()
 	}
 }
 

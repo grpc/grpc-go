@@ -1012,8 +1012,7 @@ func waitForConnectivityState(ctx context.Context, t *testing.T, ch *buffer.Unbo
 // state is reset for cache entries in this scenario. It also verifies that:
 //   - Backoff is NOT reset when the control channel first becomes READY (i.e.,
 //     the initial CONNECTING → READY transition should not trigger a backoff reset)
-//   - Backoff is NOT reset for READY → IDLE → READY transitions (benign state changes)
-//   - Backoff IS reset for READY → TRANSIENT_FAILURE → READY transitions
+//   - Backoff is reset for READY → TRANSIENT_FAILURE → READY transitions
 func (s) TestControlChannelConnectivityStateMonitoring(t *testing.T) {
 	// Create a restartable listener which can close existing connections.
 	l, err := testutils.LocalTCPListener()
@@ -1084,19 +1083,9 @@ func (s) TestControlChannelConnectivityStateMonitoring(t *testing.T) {
 	// Make sure an RLS request is sent out.
 	verifyRLSRequest(t, rlsReqCh, true)
 
-	// Verify that the control channel moves to READY.
-	wantStates := []connectivity.State{connectivity.Connecting, connectivity.Ready}
-	for _, wantState := range wantStates {
-		select {
-		case gotState := <-wrappedSubscriber.connStateCh.Get():
-			wrappedSubscriber.connStateCh.Load()
-			if gotState.(connectivity.State) != wantState {
-				t.Fatalf("Unexpected connectivity state: got %v, want %v", gotState, wantState)
-			}
-		case <-ctx.Done():
-			t.Fatalf("Timeout waiting for RLS control channel to become %q", wantState)
-		}
-	}
+	// Wait for the control channel to move to CONNECTING and then to READY.
+	waitForConnectivityState(ctx, t, wrappedSubscriber.connStateCh, connectivity.Connecting)
+	waitForConnectivityState(ctx, t, wrappedSubscriber.connStateCh, connectivity.Ready)
 
 	// Verify that the initial READY state of the control channel did NOT trigger
 	// a backoff reset. The resetBackoffHook should only be called when
@@ -1105,7 +1094,7 @@ func (s) TestControlChannelConnectivityStateMonitoring(t *testing.T) {
 	select {
 	case <-resetBackoffDone:
 		t.Fatal("Backoff reset was triggered for initial READY state, want no reset")
-	case <-time.After(10 * time.Millisecond):
+	case <-time.After(defaultTestShortTimeout):
 	}
 
 	// Stop the RLS server.
@@ -1240,7 +1229,7 @@ func (s) TestControlChannelIdleTransitionNoBackoffReset(t *testing.T) {
 	select {
 	case <-resetBackoffCalled:
 		t.Fatal("Backoff reset was triggered for initial READY state, want no reset")
-	case <-time.After(10 * time.Millisecond):
+	case <-time.After(defaultTestShortTimeout):
 	}
 
 	// Stop the RLS server to force the control channel to go IDLE. Stop()
@@ -1269,7 +1258,7 @@ func (s) TestControlChannelIdleTransitionNoBackoffReset(t *testing.T) {
 	select {
 	case <-resetBackoffCalled:
 		t.Fatal("Backoff reset was triggered for READY → IDLE → READY transition, want no reset")
-	case <-time.After(10 * time.Millisecond):
+	case <-time.After(defaultTestShortTimeout):
 		// Good - no backoff reset was triggered for this benign transition.
 	}
 }
