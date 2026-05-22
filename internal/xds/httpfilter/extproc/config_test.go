@@ -753,11 +753,11 @@ func (s) TestBuildClientInterceptor_Success(t *testing.T) {
 			if err != nil {
 				t.Fatalf("BuildClientInterceptor() returned unexpected error: %v", err)
 			}
+			defer intptr.Close()
 			ic, _ := intptr.(*clientInterceptor)
 			if diff := cmp.Diff(ic.config, tc.wantConfig, cmpOpts...); diff != "" {
 				t.Fatalf("Interceptor config returned unexpected diff (-got +want):\n%s", diff)
 			}
-			intptr.Close()
 		})
 	}
 }
@@ -805,6 +805,20 @@ func (s) TestBuildClientInterceptor_Failure(t *testing.T) {
 				server: xdsresource.GRPCServiceConfig{
 					TargetURI: "error-uri",
 				},
+			},
+			wantErr: "extproc: failed to create client: dial error",
+		},
+		{
+			name: "ChannelCreationFailureInOverride",
+			cfg: baseConfig{
+				server: xdsresource.GRPCServiceConfig{
+					TargetURI: testBaseURI,
+				},
+			},
+			override: overrideConfig{
+				server: optional.New(xdsresource.GRPCServiceConfig{
+					TargetURI: "error-uri",
+				}),
 			},
 			wantErr: "extproc: failed to create client: dial error",
 		},
