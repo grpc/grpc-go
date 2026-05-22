@@ -989,20 +989,24 @@ func (w *wrappingConnectivityStateSubscriber) OnMessage(msg any) {
 	w.connStateCh.Put(msg.(connectivity.State))
 }
 
-// waitForConnectivityState waits for the specified connectivity state to appear
-// on the channel. It skips intermediate states and fails the test if the
-// context expires before the desired state is reached.
-func waitForConnectivityState(ctx context.Context, t *testing.T, ch *buffer.Unbounded, want connectivity.State) {
+// waitForConnectivityState waits for one of the specified connectivity states
+// to appear on the channel, returning the state that matched first. It skips
+// intermediate states that do not match any of the wanted states, and fails
+// the test if the context expires before any of the desired states are reached.
+func waitForConnectivityState(ctx context.Context, t *testing.T, ch *buffer.Unbounded, wants ...connectivity.State) connectivity.State {
 	t.Helper()
 	for {
 		select {
 		case gotState := <-ch.Get():
 			ch.Load()
-			if gotState.(connectivity.State) == want {
-				return
+			got := gotState.(connectivity.State)
+			for _, want := range wants {
+				if got == want {
+					return got
+				}
 			}
 		case <-ctx.Done():
-			t.Fatalf("Timeout waiting for RLS control channel to become %q", want)
+			t.Fatalf("Timeout waiting for RLS control channel to become one of %v", wants)
 		}
 	}
 }
@@ -1100,17 +1104,21 @@ func (s) TestControlChannelConnectivityStateMonitoring(t *testing.T) {
 	// Stop the RLS server.
 	lis.Stop()
 
-	// Make another RPC similar to the first one. Since the above cache entry
-	// would have expired by now, this should trigger another RLS request. And
-	// since the RLS server is down, RLS request will fail and the cache entry
-	// will enter backoff, and we have overridden the default backoff strategy to
-	// return a value which will keep this entry in backoff for the whole duration
-	// of the test.
-	makeTestRPCAndVerifyError(ctx, t, cc, codes.Unavailable, nil)
+	// When the server is stopped, the control channel connection is closed,
+	// causing it to transition to IDLE or TRANSIENT_FAILURE.
+	// If it transitions to IDLE, we need to send a new RLS request to force
+	// it to attempt reconnection, which will fail and move it to TRANSIENT_FAILURE.
+	state := waitForConnectivityState(ctx, t, wrappedSubscriber.connStateCh, connectivity.Idle, connectivity.TransientFailure)
 
-	// Wait for the control channel to move to TRANSIENT_FAILURE. When the server
-	// is stopped, we expect the control channel to go through Connecting and
-	// eventually reach TransientFailure.
+	if state == connectivity.Idle {
+		// Make another RPC with different headers to bypass any cached backoff entries
+		// and force the control channel to attempt a connection, which will fail
+		// and move it to TRANSIENT_FAILURE.
+		ctxFailed := metadata.AppendToOutgoingContext(ctx, "n1", "v1")
+		makeTestRPCAndVerifyError(ctxFailed, t, cc, codes.Unavailable, nil)
+	}
+
+	// Wait for the control channel to move to TRANSIENT_FAILURE.
 	waitForConnectivityState(ctx, t, wrappedSubscriber.connStateCh, connectivity.TransientFailure)
 
 	// Restart the RLS server.
@@ -1127,7 +1135,7 @@ func (s) TestControlChannelConnectivityStateMonitoring(t *testing.T) {
 	// till the control channel comes moves back to READY. So, override the
 	// backoff strategy to perform a small backoff on this entry.
 	defaultBackoffStrategy = &fakeBackoffStrategy{backoff: defaultTestShortTimeout}
-	ctxOutgoing := metadata.AppendToOutgoingContext(ctx, "n1", "v1")
+	ctxOutgoing := metadata.AppendToOutgoingContext(ctx, "n2", "v2")
 	makeTestRPCAndExpectItToReachBackend(ctxOutgoing, t, cc, backendCh)
 
 	// Wait for the control channel to move back to READY.
