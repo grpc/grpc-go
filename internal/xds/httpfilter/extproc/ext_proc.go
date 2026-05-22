@@ -48,8 +48,8 @@ var (
 	parseGRPCServiceConfig = func(*v3corepb.GrpcService) (xdsresource.GRPCServiceConfig, error) {
 		return xdsresource.GRPCServiceConfig{}, fmt.Errorf("parseGRPCServiceConfig not implemented")
 	}
-	createExtProcChannel = func(xdsresource.GRPCServiceConfig) (*grpc.ClientConn, error) {
-		return nil, fmt.Errorf("dialing external processing server not implemented")
+	createExtProcChannel = func(xdsresource.GRPCServiceConfig) (grpc.ClientConnInterface, func() error, error) {
+		return nil, nil, fmt.Errorf("dialing external processing server not implemented")
 	}
 )
 
@@ -213,28 +213,28 @@ func (clientFilter) BuildClientInterceptor(base, override httpfilter.FilterConfi
 	config := newInterceptorConfig(b, ov)
 
 	// Create a channel to the external processing server.
-	cc, err := createExtProcChannel(config.server)
+	cc, cancel, err := createExtProcChannel(config.server)
 	if err != nil {
 		return nil, fmt.Errorf("extproc: failed to create client: %v", err)
 	}
 	extClient := v3procservicepb.NewExternalProcessorClient(cc)
 
-	return &interceptor{
+	return &clientInterceptor{
 		config:    config,
 		extClient: extClient,
-		cc:        cc,
+		cancel:    cancel,
 	}, nil
 }
 
-type interceptor struct {
+type clientInterceptor struct {
 	resolver.ClientInterceptor
 	config    baseConfig
 	extClient v3procservicepb.ExternalProcessorClient
-	cc        *grpc.ClientConn
+	cancel    func() error
 }
 
-func (i *interceptor) Close() {
-	if i.cc != nil {
-		i.cc.Close()
+func (i *clientInterceptor) Close() {
+	if i.cancel != nil {
+		i.cancel()
 	}
 }

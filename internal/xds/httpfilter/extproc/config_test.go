@@ -533,12 +533,13 @@ func (s) TestParseFilterConfigOverride_Errors(t *testing.T) {
 	}
 }
 
-func (s) TestBuildClientInterceptor(t *testing.T) {
+func (s) TestBuildClientInterceptor_Success(t *testing.T) {
 	origCreateExtProcChannel := createExtProcChannel
-	defer func() { createExtProcChannel = origCreateExtProcChannel }()
-	createExtProcChannel = func(cfg xdsresource.GRPCServiceConfig) (*grpc.ClientConn, error) {
-		return grpc.NewClient(cfg.TargetURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	createExtProcChannel = func(cfg xdsresource.GRPCServiceConfig) (grpc.ClientConnInterface, func() error, error) {
+		conn, _ := grpc.NewClient(cfg.TargetURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		return conn, conn.Close, nil
 	}
+	defer func() { createExtProcChannel = origCreateExtProcChannel }()
 
 	b := builder{}
 	f := b.BuildClientFilter()
@@ -549,24 +550,7 @@ func (s) TestBuildClientInterceptor(t *testing.T) {
 		cfg        httpfilter.FilterConfig
 		override   httpfilter.FilterConfig
 		wantConfig baseConfig
-		wantErr    string
 	}{
-		{
-			name:    "NilConfig",
-			cfg:     nil,
-			wantErr: "extproc: incorrect config type provided",
-		},
-		{
-			name:    "IncorrectConfigType",
-			cfg:     incorrectFilterConfig{},
-			wantErr: "extproc: incorrect config type provided",
-		},
-		{
-			name:     "IncorrectOverrideType",
-			cfg:      baseConfig{},
-			override: incorrectFilterConfig{},
-			wantErr:  "extproc: incorrect override config type provided",
-		},
 		{
 			name: "ConfigUsingOnlyBase",
 			cfg: baseConfig{
@@ -766,25 +750,73 @@ func (s) TestBuildClientInterceptor(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			intptr, err := f.BuildClientInterceptor(tc.cfg, tc.override)
-			if tc.wantErr == "" {
-				if err != nil {
-					t.Fatalf("BuildClientInterceptor() returned unexpected error: %v", err)
-				}
-				ic, ok := intptr.(*interceptor)
-				if !ok {
-					t.Fatalf("BuildClientInterceptor() returned %T, want *interceptor", intptr)
-				}
-				if diff := cmp.Diff(ic.config, tc.wantConfig, cmpOpts...); diff != "" {
-					t.Fatalf("Interceptor config returned unexpected diff (-got +want):\n%s", diff)
-				}
-				intptr.Close()
-				return
+			if err != nil {
+				t.Fatalf("BuildClientInterceptor() returned unexpected error: %v", err)
 			}
+			ic, _ := intptr.(*clientInterceptor)
+			if diff := cmp.Diff(ic.config, tc.wantConfig, cmpOpts...); diff != "" {
+				t.Fatalf("Interceptor config returned unexpected diff (-got +want):\n%s", diff)
+			}
+			intptr.Close()
+		})
+	}
+}
+
+func (s) TestBuildClientInterceptor_Failure(t *testing.T) {
+	origCreateExtProcChannel := createExtProcChannel
+	createExtProcChannel = func(cfg xdsresource.GRPCServiceConfig) (grpc.ClientConnInterface, func() error, error) {
+		if cfg.TargetURI == "error-uri" {
+			return nil, nil, fmt.Errorf("dial error")
+		}
+		conn, _ := grpc.NewClient(cfg.TargetURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		return conn, conn.Close, nil
+	}
+	defer func() { createExtProcChannel = origCreateExtProcChannel }()
+
+	b := builder{}
+	f := b.BuildClientFilter()
+	defer f.Close()
+
+	tests := []struct {
+		name     string
+		cfg      httpfilter.FilterConfig
+		override httpfilter.FilterConfig
+		wantErr  string
+	}{
+		{
+			name:    "NilConfig",
+			cfg:     nil,
+			wantErr: "extproc: incorrect config type provided",
+		},
+		{
+			name:    "IncorrectConfigType",
+			cfg:     incorrectFilterConfig{},
+			wantErr: "extproc: incorrect config type provided",
+		},
+		{
+			name:     "IncorrectOverrideType",
+			cfg:      baseConfig{},
+			override: incorrectFilterConfig{},
+			wantErr:  "extproc: incorrect override config type provided",
+		},
+		{
+			name: "ChannelCreationFailure",
+			cfg: baseConfig{
+				server: xdsresource.GRPCServiceConfig{
+					TargetURI: "error-uri",
+				},
+			},
+			wantErr: "extproc: failed to create client: dial error",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := f.BuildClientInterceptor(tc.cfg, tc.override)
 			if err == nil {
-				t.Fatalf("BuildClientInterceptor() returned nil error, want error containing %q", tc.wantErr)
+				t.Fatalf("BuildClientInterceptor() returned nil error, want error")
 			}
 			if !strings.Contains(err.Error(), tc.wantErr) {
-				t.Fatalf("BuildClientInterceptor() error = %v, want error containing %q", err, tc.wantErr)
+				t.Fatalf("BuildClientInterceptor() returned error: %v, want %v", err, tc.wantErr)
 			}
 		})
 	}
