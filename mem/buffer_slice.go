@@ -19,7 +19,7 @@
 package mem
 
 import (
-	"fmt"
+	"errors"
 	"io"
 )
 
@@ -296,12 +296,12 @@ nextBuffer:
 func (r *Reader) Discard(n int) (discarded int, err error) {
 	total := n
 	for n > 0 && r.len > 0 {
-		curData := r.data[0].ReadOnlyData()
-		curSize := min(n, len(curData)-r.bufferIdx)
+		curDataLen := r.data[0].Len()
+		curSize := min(n, curDataLen-r.bufferIdx)
 		n -= curSize
 		r.len -= curSize
 		r.bufferIdx += curSize
-		if r.bufferIdx >= len(curData) {
+		if r.bufferIdx >= curDataLen {
 			r.data[0].Free()
 			r.data = r.data[1:]
 			r.bufferIdx = 0
@@ -309,7 +309,7 @@ func (r *Reader) Discard(n int) (discarded int, err error) {
 	}
 	discarded = total - n
 	if n > 0 {
-		return discarded, fmt.Errorf("insufficient bytes in reader")
+		return discarded, errors.New("insufficient bytes in reader")
 	}
 	return discarded, nil
 }
@@ -339,7 +339,36 @@ func (r *Reader) Peek(n int, res [][]byte) ([][]byte, error) {
 		n -= curSize
 	}
 	if n > 0 {
-		return nil, fmt.Errorf("insufficient bytes in reader")
+		return nil, errors.New("insufficient bytes in reader")
+	}
+	return res, nil
+}
+
+// PeekBuffer returns the next n bytes without advancing the reader.
+//
+// PeekBuffer returns the result as a BufferSlice with its own
+// reference counts on the underlying buffers. The caller must call Free on the
+// returned BufferSlice when done.
+//
+// PeekBuffer returns an error if Reader does not have enough data.
+func (r *Reader) PeekBuffer(n int) (BufferSlice, error) {
+	var res BufferSlice
+	for i := 0; n > 0 && i < len(r.data); i++ {
+		curData := r.data[i]
+		start := 0
+		if i == 0 {
+			start = r.bufferIdx
+		}
+		curSize := min(n, curData.Len()-start)
+		if curSize == 0 {
+			continue
+		}
+		res = append(res, curData.Slice(start, start+curSize))
+		n -= curSize
+	}
+	if n > 0 {
+		res.Free()
+		return nil, errors.New("insufficient bytes in reader")
 	}
 	return res, nil
 }

@@ -501,6 +501,10 @@ func (s) TestBufferSlice_Iteration(t *testing.T) {
 				if err == nil {
 					t.Fatalf("Peek(1) returned error <nil>, want non-nil")
 				}
+				_, err = r.PeekBuffer(1)
+				if err == nil {
+					t.Fatalf("PeekBuffer(1) returned error <nil>, want non-nil")
+				}
 				discarded, err := r.Discard(1)
 				if got, want := discarded, 0; got != want {
 					t.Fatalf("Discard(1) = %d, want %d", got, want)
@@ -532,6 +536,14 @@ func (s) TestBufferSlice_Iteration(t *testing.T) {
 				if cap(res) != 10 {
 					t.Fatalf("Peek(5) did not use the provided slice.")
 				}
+				bufRes, err := r.PeekBuffer(5)
+				if err != nil {
+					t.Fatalf("PeekBuffer(5) returned error %v, want <nil>", err)
+				}
+				if got, want := bufRes.Materialize(), bytes.Join(res, nil); !bytes.Equal(got, want) {
+					t.Fatalf("PeekBuffer(5) = %v, want %v", got, want)
+				}
+				bufRes.Free()
 
 				discarded, err := r.Discard(5)
 				if got, want := discarded, 5; got != want {
@@ -550,6 +562,14 @@ func (s) TestBufferSlice_Iteration(t *testing.T) {
 				if len(res) != 1 || !bytes.Equal(res[0], []byte("56789")) {
 					t.Fatalf("Peek(5) after Discard(5) = %v, want [[56789]]", res)
 				}
+				bufRes, err = r.PeekBuffer(5)
+				if err != nil {
+					t.Fatalf("PeekBuffer(5) after Discard(5) returned error %v, want <nil>", err)
+				}
+				if got, want := bufRes.Materialize(), bytes.Join(res, nil); !bytes.Equal(got, want) {
+					t.Fatalf("PeekBuffer(5) after Discard(5) = %v, want %v", got, want)
+				}
+				bufRes.Free()
 
 				discarded, err = r.Discard(100)
 				if got, want := discarded, 5; got != want {
@@ -578,6 +598,14 @@ func (s) TestBufferSlice_Iteration(t *testing.T) {
 				if len(res) != 2 || !bytes.Equal(res[0], []byte("012")) || !bytes.Equal(res[1], []byte("34")) {
 					t.Fatalf("Peek(5) = %v, want [[012] [34]]", res)
 				}
+				bufRes, err := r.PeekBuffer(5)
+				if err != nil {
+					t.Fatalf("PeekBuffer(5) returned error %v, want <nil>", err)
+				}
+				if got, want := bufRes.Materialize(), bytes.Join(res, nil); !bytes.Equal(got, want) {
+					t.Fatalf("PeekBuffer(5) = %v, want %v", got, want)
+				}
+				bufRes.Free()
 
 				discarded, err := r.Discard(5)
 				if got, want := discarded, 5; got != want {
@@ -597,6 +625,14 @@ func (s) TestBufferSlice_Iteration(t *testing.T) {
 				if len(res) != 2 || !bytes.Equal(res[0], []byte("5")) || !bytes.Equal(res[1], []byte("6789")) {
 					t.Fatalf("Peek(5) after advance = %v, want [[5] [6789]]", res)
 				}
+				bufRes, err = r.PeekBuffer(5)
+				if err != nil {
+					t.Fatalf("PeekBuffer(5) after Discard(5) returned error %v, want <nil>", err)
+				}
+				if got, want := bufRes.Materialize(), bytes.Join(res, nil); !bytes.Equal(got, want) {
+					t.Fatalf("PeekBuffer(5) after Discard(5) = %v, want %v", got, want)
+				}
+				bufRes.Free()
 			},
 		},
 		{
@@ -625,6 +661,14 @@ func (s) TestBufferSlice_Iteration(t *testing.T) {
 				if len(res) != 1 || !bytes.Equal(res[0], []byte("56789")) {
 					t.Fatalf("Peek(5) after Reset = %v, want [[56789]]", res)
 				}
+				bufRes, err := r.PeekBuffer(5)
+				if err != nil {
+					t.Fatalf("PeekBuffer(5) after Reset returned error %v, want <nil>", err)
+				}
+				if got, want := bufRes.Materialize(), bytes.Join(res, nil); !bytes.Equal(got, want) {
+					t.Fatalf("PeekBuffer(5) after Reset = %v, want %v", got, want)
+				}
+				bufRes.Free()
 			},
 		},
 		{
@@ -641,6 +685,14 @@ func (s) TestBufferSlice_Iteration(t *testing.T) {
 				if len(res) != 0 {
 					t.Fatalf("Peek(0) got slices: %v, want empty", res)
 				}
+				bufRes, err := c.PeekBuffer(0)
+				if err != nil {
+					t.Fatalf("PeekBuffer(0) returned error %v, want <nil>", err)
+				}
+				if got := bufRes.Materialize(); len(got) != 0 {
+					t.Fatalf("PeekBuffer(0) = %v, want empty", got)
+				}
+				bufRes.Free()
 				discarded, err := c.Discard(0)
 				if err != nil {
 					t.Fatalf("Discard(0) return error %v, want <nil>", err)
