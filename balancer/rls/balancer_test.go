@@ -1262,12 +1262,10 @@ func (s) TestControlChannelIdleTransitionNoBackoffReset(t *testing.T) {
 	waitForConnectivityState(ctx, t, wrappedSubscriber.connStateCh, connectivity.Ready)
 
 	// Verify that the READY → IDLE → READY transition did NOT trigger a backoff reset.
-	// This is the key assertion of this test.
 	select {
 	case <-resetBackoffCalled:
 		t.Fatal("Backoff reset was triggered for READY → IDLE → READY transition, want no reset")
 	case <-time.After(defaultTestShortTimeout):
-		// Good - no backoff reset was triggered for this benign transition.
 	}
 }
 

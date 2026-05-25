@@ -62,11 +62,10 @@ type controlChannel struct {
 	// hammering the RLS service while it is overloaded or down.
 	throttler adaptiveThrottler
 
-	cc          *grpc.ClientConn
-	client      rlsgrpc.RouteLookupServiceClient
-	logger      *internalgrpclog.PrefixLogger
-	unsubscribe func()
-
+	cc                   *grpc.ClientConn
+	client               rlsgrpc.RouteLookupServiceClient
+	logger               *internalgrpclog.PrefixLogger
+	unsubscribe          func()
 	seenTransientFailure bool
 }
 
