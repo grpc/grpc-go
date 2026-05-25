@@ -415,9 +415,26 @@ func (r *xdsResolver) newConfigSelector() (_ *configSelector, err error) {
 	for i, rt := range r.xdsConfig.VirtualHost.Routes {
 		clusters := rinternal.NewWRR.(func() wrr.WRR)()
 		interceptors := []iresolver.ClientInterceptor{}
+		// TODO: Carve out the common logic between the ClusterSpecifierPlugin
+		// and WeightedClusters.
 		if rt.ClusterSpecifierPlugin != "" {
 			clusterName := clusterSpecifierPluginPrefix + rt.ClusterSpecifierPlugin
-			clusters.Add(&routeCluster{name: clusterName}, 1)
+			interceptor, err := r.newInterceptor(r.xdsConfig.Listener.APIListener.HTTPFilters, nil, rt.HTTPFilterConfigOverride, r.xdsConfig.VirtualHost.HTTPFilterConfigOverride)
+			if err != nil {
+				// Clean up any interceptors that were successfully built
+				// for the current route before this error occurred. Note
+				// that this is not handled by the call to cs.stop() in the
+				// deferred function.
+				for _, i := range interceptors {
+					i.Close()
+				}
+				return nil, err
+			}
+			clusters.Add(&routeCluster{
+				name:        clusterName,
+				interceptor: interceptor,
+			}, 1)
+			interceptors = append(interceptors, interceptor)
 			ci := r.addOrGetActiveClusterInfo(clusterName, "")
 			ci.cfg = xdsChildConfig{ChildPolicy: balancerConfig(r.xdsConfig.RouteConfig.ClusterSpecifierPlugins[rt.ClusterSpecifierPlugin])}
 			cs.plugins[clusterName] = ci
