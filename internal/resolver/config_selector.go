@@ -124,7 +124,7 @@ type ClientInterceptor interface {
 	// interceptor chain, implementations must ensure that the done function
 	// passed to the delegate newStream invokes the done function passed to
 	// NewStream.
-	NewStream(ctx context.Context, ri RPCInfo, done func(), newStream func(ctx context.Context, done func()) (ClientStream, error)) (ClientStream, error)
+	NewStream(ctx context.Context, ri RPCInfo, opts []any, done func(), newStream func(ctx context.Context, done func(), opts []any) (ClientStream, error)) (ClientStream, error)
 	// Close closes the interceptor. Once called, no new calls to NewStream are
 	// accepted. Ongoing calls to NewStream are allowed to complete.
 	Close()

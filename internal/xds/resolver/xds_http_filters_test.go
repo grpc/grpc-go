@@ -182,7 +182,7 @@ type testFilterInterceptor struct {
 	newStreamChan *testutils.Channel // If set, filter config is written to this field from NewStream()
 }
 
-func (fi *testFilterInterceptor) NewStream(ctx context.Context, _ iresolver.RPCInfo, done func(), newStream func(ctx context.Context, done func()) (iresolver.ClientStream, error)) (iresolver.ClientStream, error) {
+func (fi *testFilterInterceptor) NewStream(ctx context.Context, _ iresolver.RPCInfo, opts []any, done func(), newStream func(ctx context.Context, done func(), opts []any) (iresolver.ClientStream, error)) (iresolver.ClientStream, error) {
 	// Write the config to the channel, if set. This allows tests to verify that
 	// the filter was invoked at RPC time. This is useful for tests where the
 	// RPC is expected to fail, and therefore the RPC metadata cannot be
@@ -203,7 +203,7 @@ func (fi *testFilterInterceptor) NewStream(ctx context.Context, _ iresolver.RPCI
 	cfg := string(bytes)
 	fi.logger.Logf("Injecting filter config metadata: %v", cfg)
 
-	return newStream(metadata.AppendToOutgoingContext(ctx, filterCfgMetadataKey, cfg), done)
+	return newStream(metadata.AppendToOutgoingContext(ctx, filterCfgMetadataKey, cfg), done, opts)
 }
 
 func (fi *testFilterInterceptor) Close() {}
@@ -720,9 +720,9 @@ type trackingInterceptor struct {
 	basePath string
 }
 
-func (i *trackingInterceptor) NewStream(ctx context.Context, _ iresolver.RPCInfo, done func(), newStream func(ctx context.Context, done func()) (iresolver.ClientStream, error)) (iresolver.ClientStream, error) {
+func (i *trackingInterceptor) NewStream(ctx context.Context, _ iresolver.RPCInfo, opts []any, done func(), newStream func(ctx context.Context, done func(), opts []any) (iresolver.ClientStream, error)) (iresolver.ClientStream, error) {
 	i.pathCh <- i.basePath
-	return newStream(ctx, done)
+	return newStream(ctx, done, opts)
 }
 
 func (i *trackingInterceptor) Close() {
