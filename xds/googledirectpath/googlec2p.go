@@ -153,7 +153,7 @@ func (c2pResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, opts 
 		// This should be fine in most of the cases. In certain error cases, this
 		// could block Dial() for up to 10 seconds (each blocking call has its own
 		// goroutine).
-		zoneCh, ipv6CapableCh := make(chan string), make(chan bool)
+		zoneCh, ipv6CapableCh := make(chan string, 1), make(chan bool, 1)
 		go func() { zoneCh <- getZone(httpReqTimeout) }()
 		go func() { ipv6CapableCh <- getIPv6Capable(httpReqTimeout) }()
 		zone, ipv6Capable = <-zoneCh, <-ipv6CapableCh

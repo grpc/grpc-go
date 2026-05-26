@@ -657,7 +657,7 @@ func (s) TestCreateMultipleXDSClients(t *testing.T) {
 }
 
 // TestBuildXDSClientNotOnGCEWithForceXDS validates that the C2P resolver
-// handles not on GCP (Google Cloud Interconnect) clients correctly when the
+// handles non-GCP (Google Cloud Interconnect) clients correctly when the
 // force-xds query parameter is provided in various valid formats.
 // It verifies that:
 //   - GCE metadata server queries for zone and ipv6 capability are bypassed
@@ -667,6 +667,30 @@ func (s) TestCreateMultipleXDSClients(t *testing.T) {
 //   - Dualstack IPv6 capability (TRAFFICDIRECTOR_DIRECTPATH_C2P_IPV6_CAPABLE)
 //     is set to true.
 func (s) TestBuildXDSClientNotOnGCEWithForceXDS(t *testing.T) {
+	wantBootstrapConfig := bootstrapConfig(t, bootstrap.ConfigOptionsForTesting{
+		Servers: []byte(`[{
+					"server_uri": "dns:///directpath-pa.googleapis.com",
+					"channel_creds": [{"type": "google_default"}],
+					"server_features": ["ignore_resource_deletion"]
+				}]`),
+		Authorities: map[string]json.RawMessage{
+			"traffic-director-c2p.xds.googleapis.com": []byte(`{
+						"xds_servers": [
+							{
+								"server_uri": "dns:///directpath-pa.googleapis.com",
+								"channel_creds": [{"type": "google_default"}],
+								"server_features": ["ignore_resource_deletion"]
+							}
+						]
+					}`),
+		},
+		Node: []byte(`{
+					"id": "C2P-non-gcp-666",
+					"metadata": {
+						"TRAFFICDIRECTOR_DIRECTPATH_C2P_IPV6_CAPABLE": true
+					}
+				}`),
+	})
 	tests := []struct {
 		desc     string
 		rawQuery string
@@ -726,30 +750,6 @@ func (s) TestBuildXDSClientNotOnGCEWithForceXDS(t *testing.T) {
 
 			// Query parameters are omitted since the downstream xDS target is configured using only active fields.
 			xdsTarget := resolver.Target{URL: url.URL{Scheme: xdsName, Host: c2pAuthority, Path: target.URL.Path}}
-			wantBootstrapConfig := bootstrapConfig(t, bootstrap.ConfigOptionsForTesting{
-				Servers: []byte(`[{
-					"server_uri": "dns:///directpath-pa.googleapis.com",
-					"channel_creds": [{"type": "google_default"}],
-					"server_features": ["ignore_resource_deletion"]
-				}]`),
-				Authorities: map[string]json.RawMessage{
-					"traffic-director-c2p.xds.googleapis.com": []byte(`{
-						"xds_servers": [
-							{
-								"server_uri": "dns:///directpath-pa.googleapis.com",
-								"channel_creds": [{"type": "google_default"}],
-								"server_features": ["ignore_resource_deletion"]
-							}
-						]
-					}`),
-				},
-				Node: []byte(`{
-					"id": "C2P-non-gcp-666",
-					"metadata": {
-						"TRAFFICDIRECTOR_DIRECTPATH_C2P_IPV6_CAPABLE": true
-					}
-				}`),
-			})
 			verifyXDSClientBootstrapConfig(t, xdsClientPool, xdsTarget.String(), wantBootstrapConfig)
 		})
 	}
