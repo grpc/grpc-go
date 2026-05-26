@@ -32,18 +32,14 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/google"
+	"google.golang.org/grpc/credentials/google/internal"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/status"
 )
 
-var (
-	defaultTokenExpiry = time.Now().Add(1 * time.Hour)
-	defaultEarlyExpiry = 1 * time.Minute
-	audience           = "audience"
-	token              = "good-token"
-	defaultDelay       = 100 * time.Millisecond
-	defaultTestTimeout = 10 * time.Second
-)
+const defaultTestTimeout = 10 * time.Second
+
+var defaultTokenExpiry = time.Now().Add(1 * time.Hour)
 
 type s struct {
 	grpctest.Tester
@@ -100,8 +96,23 @@ func (m *stubBackoff) Backoff(int) time.Duration {
 	return m.backoffDelay
 }
 
-// newTestCreds constructs a credentials instance. It returns a
-// credentials.PerRPCCredentials with the injected mockTokenProvider.
+// setupStubTokenProvider initializes and returns a stubTokenProvider
+// configured with the specified token value, token expiry, error and delay.
+func setupStubTokenProvider(token, err string, tokenExpiry time.Time, delay time.Duration) *stubTokenProvider {
+	var e error
+	if err != "" {
+		e = fmt.Errorf("%s", err)
+	}
+	return &stubTokenProvider{
+		err:   e,
+		token: &auth.Token{Value: token, Expiry: tokenExpiry},
+		delay: delay,
+	}
+}
+
+// setupTestGcpServiceAccountIdentityCreds constructs a credentials instance.
+// It returns a credentials.PerRPCCredentials with the injected
+// stubTokenProvider.
 //
 // It overrides:
 //   - newIDTokenCredentials: Injecting a mock ID Token credentials provider.
@@ -110,38 +121,28 @@ func (m *stubBackoff) Backoff(int) time.Duration {
 //
 // All mocked package-level hooks and states are automatically cleaned up and
 // restored after the test finishes using t.Cleanup().
-func newTestCreds(t testing.TB, audience string, token string, tokenExpiry time.Time, err string, delay, earlyExpiry time.Duration) (credentials.PerRPCCredentials, *stubTokenProvider) {
-	var e error
-	if err != "" {
-		e = fmt.Errorf("%s", err)
-	}
-	tp := &stubTokenProvider{
-		err:   e,
-		token: &auth.Token{Value: token, Expiry: tokenExpiry},
-		delay: delay,
-	}
-
+func setupTestGcpServiceAccountIdentityCreds(t *testing.T, tp *stubTokenProvider) credentials.PerRPCCredentials {
 	// Override the ID token credentials to use stub token provider.
-	origNewIDTokenCredentials := google.NewIDTokenCredentials
-	t.Cleanup(func() { google.NewIDTokenCredentials = origNewIDTokenCredentials })
-	google.NewIDTokenCredentials = func(*idtoken.Options) (*auth.Credentials, error) {
+	origNewIDTokenCredentials := internal.NewIDTokenCredentials
+	t.Cleanup(func() { internal.NewIDTokenCredentials = origNewIDTokenCredentials })
+	internal.NewIDTokenCredentials = func(*idtoken.Options) (*auth.Credentials, error) {
 		return auth.NewCredentials(&auth.CredentialsOptions{
 			TokenProvider: auth.NewCachedTokenProvider(tp, &auth.CachedTokenProviderOptions{
-				ExpireEarly: earlyExpiry,
+				ExpireEarly: 1 * time.Minute,
 			})}), nil
 	}
 
 	// Override the backoff to work with a shorter timeout.
-	origBackoff := google.DefaultBackoffStrategy
-	t.Cleanup(func() { google.DefaultBackoffStrategy = origBackoff })
-	google.DefaultBackoffStrategy = &stubBackoff{backoffDelay: 20 * time.Millisecond}
+	origBackoff := internal.DefaultBackoffStrategy
+	t.Cleanup(func() { internal.DefaultBackoffStrategy = origBackoff })
+	internal.DefaultBackoffStrategy = &stubBackoff{backoffDelay: 20 * time.Millisecond}
 
-	creds, cErr := google.NewGcpServiceAccountIdentity(audience)
+	creds, cErr := google.NewGcpServiceAccountIdentity("audience")
 	if cErr != nil {
 		t.Fatalf("NewGcpServiceAccountIdentity() failed: %v", cErr)
 	}
 
-	return creds, tp
+	return creds
 }
 
 // TestNewGcpServiceAccountIdentity_EmptyAudience verifies that
@@ -158,7 +159,9 @@ func (s) TestNewGcpServiceAccountIdentity_EmptyAudience(t *testing.T) {
 // It ensures that a valid token is correctly retrieved and formatted into
 // the required "authorization" metadata header with the "Bearer " prefix.
 func (s) TestGcpServiceAccountIdentityCallCreds_GetRequestMetadata(t *testing.T) {
-	creds, _ := newTestCreds(t, audience, token, defaultTokenExpiry, "", time.Duration(0), defaultEarlyExpiry)
+	token := "token"
+	tp := setupStubTokenProvider(token, "", defaultTokenExpiry, time.Duration(0))
+	creds := setupTestGcpServiceAccountIdentityCreds(t, tp)
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -188,7 +191,9 @@ func (s) TestGcpServiceAccountIdentityCallCreds_GetRequestMetadata(t *testing.T)
 // successful.
 func (s) TestGcpServiceAccountIdentityCallCreds_Backoff(t *testing.T) {
 	wantErr := "failed while fetching idToken"
-	creds, tp := newTestCreds(t, audience, token, defaultTokenExpiry, wantErr, time.Duration(0), defaultEarlyExpiry)
+	token := "token"
+	tp := setupStubTokenProvider(token, wantErr, defaultTokenExpiry, time.Duration(0))
+	creds := setupTestGcpServiceAccountIdentityCreds(t, tp)
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -200,8 +205,8 @@ func (s) TestGcpServiceAccountIdentityCallCreds_Backoff(t *testing.T) {
 		t.Fatalf("GetRequestMetadata() failed with err = %v, want error %q", err, wantErr)
 	}
 
-	// Verify that calls within the backoff window fail immediately with the cached
-	// error without attempting a new token fetch.
+	// Verify that calls within the backoff window fail immediately with the
+	// cached error without attempting a new token fetch.
 	if _, err := creds.GetRequestMetadata(ctx); err == nil || !strings.Contains(err.Error(), wantErr) {
 		t.Fatalf("GetRequestMetadata() failed with err = %v, want error %q", err, wantErr)
 	}
@@ -212,18 +217,22 @@ func (s) TestGcpServiceAccountIdentityCallCreds_Backoff(t *testing.T) {
 	}
 	tp.mu.Unlock()
 
-	// Wait for the backoff delay to expire.
-	time.Sleep(30 * time.Millisecond)
-
-	// Update tokenprovider to return a second failure so we can distinguish the new attempt.
+	// Update tokenprovider to return a second failure so we can distinguish the
+	// new attempt.
 	wantErr2 := "second attempt to fetch token"
 	tp.mu.Lock()
 	tp.err = fmt.Errorf("%s", wantErr2)
 	tp.mu.Unlock()
 
-	// Since backoff timeout is finished, this call should trigger a new fetch.
-	if _, err := creds.GetRequestMetadata(ctx); err == nil || !strings.Contains(err.Error(), wantErr2) {
-		t.Fatalf("GetRequestMetadata() failed with err = %v, want error %q", err, wantErr2)
+	// Wait to receive the next error after backoff timeout expires and a new
+	// fetch request is made.
+	for {
+		if _, err := creds.GetRequestMetadata(ctx); err != nil && strings.Contains(err.Error(), wantErr2) {
+			break
+		}
+		if ctx.Err() != nil {
+			t.Fatalf("timeout while waiting for GetRequestMetadata to fail with new error")
+		}
 	}
 
 	tp.mu.Lock()
@@ -232,18 +241,22 @@ func (s) TestGcpServiceAccountIdentityCallCreds_Backoff(t *testing.T) {
 	}
 	tp.mu.Unlock()
 
-	// Wait for backoff delay to expire.
-	time.Sleep(30 * time.Millisecond)
-
 	// Update token provider to return nil error and a valid token.
 	tp.mu.Lock()
 	tp.err = nil
 	tp.mu.Unlock()
 
-	// This call should succeed and fetch a valid token.
-	md, err3 := creds.GetRequestMetadata(ctx)
-	if err3 != nil {
-		t.Fatalf("GetRequestMetadata() failed: %v", err3)
+	// Wait to receive the token from the successful token fetch after backoff
+	// timer expires.
+	var md map[string]string
+	var err error
+	for {
+		if md, err = creds.GetRequestMetadata(ctx); err == nil {
+			break
+		}
+		if ctx.Err() != nil {
+			t.Fatalf("timeout while waiting for successful token fetch")
+		}
 	}
 	want := "Bearer " + token
 	if got := md["authorization"]; got != want {
@@ -272,7 +285,10 @@ func (s) TestGcpServiceAccountIdentityCallCreds_Backoff(t *testing.T) {
 //     must successfully receive the same valid token.
 func (s) TestGcpServiceAccountIdentityCallCreds_ConcurrentCalls(t *testing.T) {
 	wantErr := "failed while fetching idToken"
-	creds, tp := newTestCreds(t, audience, token, defaultTokenExpiry, wantErr, defaultDelay, defaultEarlyExpiry)
+	defaultDelay := 100 * time.Millisecond
+	token := "token"
+	tp := setupStubTokenProvider(token, wantErr, defaultTokenExpiry, defaultDelay)
+	creds := setupTestGcpServiceAccountIdentityCreds(t, tp)
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -292,19 +308,19 @@ func (s) TestGcpServiceAccountIdentityCallCreds_ConcurrentCalls(t *testing.T) {
 	// Start the first call which will trigger the initial fetch.
 	firstErrCh := runConcurrentCall()
 
-	// Start concurrent calls while the first fetch is still in progress
+	// Start concurrent calls while the first fetch is still in progress.
 	concurrency := 5
 	errChannels := make([]<-chan error, concurrency)
 	for i := 0; i < concurrency; i++ {
 		errChannels[i] = runConcurrentCall()
 	}
 
-	// Verify that the first call failed with the expected error
+	// Verify that the first call failed with the expected error.
 	if err := <-firstErrCh; err == nil || !strings.Contains(err.Error(), wantErr) {
 		t.Fatalf("GetRequestMetadata() failed with err = %v, want error containing %q", err, wantErr)
 	}
 
-	// Verify that all blocked concurrent calls also failed with the exact same error
+	// Verify that all blocked concurrent calls failed with exact same error.
 	for i, ch := range errChannels {
 		if err := <-ch; err == nil || !strings.Contains(err.Error(), wantErr) {
 			t.Fatalf("concurrent call %d to GetRequestMetadata() failed with err = %v, want error containing %q", i, err, wantErr)
@@ -317,17 +333,19 @@ func (s) TestGcpServiceAccountIdentityCallCreds_ConcurrentCalls(t *testing.T) {
 	}
 	tp.err = nil
 	tp.mu.Unlock()
-	time.Sleep(30 * time.Millisecond)
 
-	firstSuccessCh := runConcurrentCall()
+	for {
+		if _, err := creds.GetRequestMetadata(ctx); err == nil {
+			break
+		}
+		if ctx.Err() != nil {
+			t.Fatalf("timeout while waiting for successful token fetch")
+		}
+	}
 
 	successChannels := make([]<-chan error, concurrency)
 	for i := 0; i < concurrency; i++ {
 		successChannels[i] = runConcurrentCall()
-	}
-
-	if err := <-firstSuccessCh; err != nil {
-		t.Fatalf("GetRequestMetadata() failed with err = %v", err)
 	}
 
 	for i, ch := range successChannels {
@@ -341,7 +359,8 @@ func (s) TestGcpServiceAccountIdentityCallCreds_ConcurrentCalls(t *testing.T) {
 // credentials fail to return metadata when the security level of the
 // connection is not secure.
 func (s) TestGcpServiceAccountIdentityCallCreds_SecurityLevelFailure(t *testing.T) {
-	creds, _ := newTestCreds(t, audience, token, defaultTokenExpiry, "", time.Duration(0), defaultEarlyExpiry)
+	tp := setupStubTokenProvider("token", "", defaultTokenExpiry, time.Duration(0))
+	creds := setupTestGcpServiceAccountIdentityCreds(t, tp)
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -372,7 +391,9 @@ func (s) TestGcpServiceAccountIdentityCallCreds_EarlyExpiry(t *testing.T) {
 	tokenExpiry := time.Now().Add(30 * time.Second)
 	firstToken := "token-A"
 	secondToken := "token-B"
-	creds, tp := newTestCreds(t, audience, firstToken, tokenExpiry, "", time.Duration(0), defaultEarlyExpiry)
+	defaultDelay := 100 * time.Millisecond
+	tp := setupStubTokenProvider(firstToken, "", tokenExpiry, time.Duration(0))
+	creds := setupTestGcpServiceAccountIdentityCreds(t, tp)
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -422,7 +443,6 @@ func (s) TestGcpServiceAccountIdentityCallCreds_EarlyExpiry(t *testing.T) {
 		if ctx.Err() != nil {
 			t.Fatal("timed out waiting for background fetch to update token")
 		}
-		time.Sleep(10 * time.Millisecond)
 	}
 }
 
@@ -463,7 +483,8 @@ func (s) TestGcpServiceAccountIdentityCallCreds_ErrorMapping(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			creds, tp := newTestCreds(t, audience, token, defaultTokenExpiry, "", 0, defaultEarlyExpiry)
+			tp := setupStubTokenProvider("token", "", defaultTokenExpiry, 0)
+			creds := setupTestGcpServiceAccountIdentityCreds(t, tp)
 			tp.mu.Lock()
 			tp.err = tc.err
 			tp.mu.Unlock()

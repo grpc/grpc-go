@@ -30,12 +30,16 @@ import (
 	"cloud.google.com/go/compute/metadata"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/google/internal"
 	"google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/transport"
 	"google.golang.org/grpc/status"
 )
 
-// earlyExpiry is 1-minute as mentioned in the gRFC A83.
+// earlyExpiry is the window before a token's actual expiration during which
+// the token is considered stale. Requests using a stale (but still valid)
+// token will trigger a background asynchronous refresh. This avoids blocking
+// the current RPC, preventing periodic latency spikes during token refresh.
 const earlyExpiry = 1 * time.Minute
 
 type gcpServiceAccountIdentityCallCreds struct {
@@ -54,14 +58,11 @@ type gcpServiceAccountIdentityCallCreds struct {
 	lastErr       error     // cached error returned from the most recent token fetch attempt
 }
 
-// DefaultBackoffStrategy is the default exponential backoff strategy to use
-// when token fetch fails. It is exported only to allow overriding in tests.
-var DefaultBackoffStrategy backoff.Strategy = backoff.DefaultExponential
-
-// NewIDTokenCredentials builds idtoken credentials using specified options.
-// It is exported to allow overriding in tests.
-var NewIDTokenCredentials = func(opts *idtoken.Options) (*auth.Credentials, error) {
-	return idtoken.NewCredentials(opts)
+func init() {
+	internal.DefaultBackoffStrategy = backoff.DefaultExponential
+	internal.NewIDTokenCredentials = func(opts *idtoken.Options) (*auth.Credentials, error) {
+		return idtoken.NewCredentials(opts)
+	}
 }
 
 // NewGcpServiceAccountIdentity creates a PerRPCCredentials that authenticates
@@ -70,12 +71,17 @@ var NewIDTokenCredentials = func(opts *idtoken.Options) (*auth.Credentials, erro
 // This credential fetches the ID token from the GCE metadata server and is only
 // valid for use in environments running on GCP. The audience parameter cannot be
 // empty.
+//
+// # Experimental
+//
+// Notice: This API is EXPERIMENTAL and may be changed or removed in a
+// later release.
 func NewGcpServiceAccountIdentity(audience string) (credentials.PerRPCCredentials, error) {
 	if audience == "" {
 		return nil, fmt.Errorf("credentials: audience cannot be empty")
 	}
 
-	creds, err := NewIDTokenCredentials(&idtoken.Options{Audience: audience})
+	creds, err := internal.NewIDTokenCredentials(&idtoken.Options{Audience: audience})
 	if err != nil {
 		return nil, fmt.Errorf("credentials: failed to create ID token credentials: %v", err)
 	}
@@ -83,7 +89,7 @@ func NewGcpServiceAccountIdentity(audience string) (credentials.PerRPCCredential
 	return &gcpServiceAccountIdentityCallCreds{
 		audience: audience,
 		creds:    creds,
-		backoff:  DefaultBackoffStrategy,
+		backoff:  internal.DefaultBackoffStrategy,
 	}, nil
 }
 
@@ -121,7 +127,7 @@ func (c *gcpServiceAccountIdentityCallCreds) GetRequestMetadata(ctx context.Cont
 	}
 
 	token, err := c.creds.TokenProvider.Token(context.Background())
-	c.handleFetchResultLocked(token, err)
+	c.updateStateLocked(token, err)
 	if err != nil {
 		return nil, c.lastErr
 	}
@@ -146,7 +152,7 @@ func (c *gcpServiceAccountIdentityCallCreds) isTokenStaleLocked() bool {
 // isTokenValidLocked checks if the token is not expired yet. It must be called
 // with mu locked.
 func (c *gcpServiceAccountIdentityCallCreds) isTokenValidLocked() bool {
-	return c.token.Expiry.After(time.Now())
+	return c.token.Expiry.Add(-30 * time.Second).After(time.Now())
 }
 
 // startFetch initiates a token fetch and updates the credential
@@ -158,10 +164,10 @@ func (c *gcpServiceAccountIdentityCallCreds) startFetch() {
 	defer c.mu.Unlock()
 
 	c.fetching = false
-	c.handleFetchResultLocked(token, err)
+	c.updateStateLocked(token, err)
 }
 
-// handleFetchResultLocked updates the credentials local token cache and
+// updateStateLocked updates the credentials local token cache and
 // backoff state based on the outcome of a background fetch attempt.
 //
 // If the fetch succeeded, the cached token is updated, and the backoff timers
@@ -175,7 +181,7 @@ func (c *gcpServiceAccountIdentityCallCreds) startFetch() {
 //   - Non-HTTP request failures are mapped to UNAVAILABLE.
 //
 // It must be called with mu locked.
-func (c *gcpServiceAccountIdentityCallCreds) handleFetchResultLocked(token *auth.Token, err error) {
+func (c *gcpServiceAccountIdentityCallCreds) updateStateLocked(token *auth.Token, err error) {
 	if err != nil {
 		var mappedErr error
 		var metadataErr *metadata.Error
