@@ -150,10 +150,10 @@ type interceptor struct {
 	cache      *lruCache
 }
 
-func (i *interceptor) NewStream(ctx context.Context, ri iresolver.RPCInfo, done func(), newStream func(ctx context.Context, done func()) (iresolver.ClientStream, error)) (iresolver.ClientStream, error) {
+func (i *interceptor) NewStream(ctx context.Context, ri iresolver.RPCInfo, opts []any, done func(), newStream func(ctx context.Context, done func(), opts []any) (iresolver.ClientStream, error)) (iresolver.ClientStream, error) {
 	clusterName := clustermanager.GetPickedCluster(ctx)
 	if clusterName == "" || strings.HasPrefix(clusterName, "cluster_specifier_plugin:") {
-		return newStream(ctx, done)
+		return newStream(ctx, done, opts)
 	}
 	clusterName = strings.TrimPrefix(clusterName, "cluster:")
 
@@ -170,7 +170,7 @@ func (i *interceptor) NewStream(ctx context.Context, ri iresolver.RPCInfo, done 
 	m := clusterResult.Config.Cluster.Metadata
 	val, ok := m[i.filterName]
 	if !ok {
-		return newStream(ctx, done) // no-op
+		return newStream(ctx, done, opts) // no-op
 	}
 
 	audienceMetadata, ok := val.(xdsresource.AudienceMetadataValue)
@@ -207,7 +207,7 @@ func (i *interceptor) NewStream(ctx context.Context, ri iresolver.RPCInfo, done 
 		ctx = metadata.AppendToOutgoingContext(ctx, k, v)
 	}
 
-	return newStream(ctx, done)
+	return newStream(ctx, done, opts)
 }
 
 func (i *interceptor) Close() {}

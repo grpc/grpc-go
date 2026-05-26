@@ -622,15 +622,15 @@ type interceptorList struct {
 	interceptors []iresolver.ClientInterceptor
 }
 
-func (il *interceptorList) NewStream(ctx context.Context, ri iresolver.RPCInfo, _ func(), newStream func(ctx context.Context, _ func()) (iresolver.ClientStream, error)) (iresolver.ClientStream, error) {
+func (il *interceptorList) NewStream(ctx context.Context, ri iresolver.RPCInfo, opts []any, _ func(), newStream func(ctx context.Context, done func(), opts []any) (iresolver.ClientStream, error)) (iresolver.ClientStream, error) {
 	for idx := len(il.interceptors) - 1; idx >= 0; idx-- {
 		ns := newStream
 		i := il.interceptors[idx]
-		newStream = func(ctx context.Context, done func()) (iresolver.ClientStream, error) {
-			return i.NewStream(ctx, ri, done, ns)
+		newStream = func(ctx context.Context, done func(), opts []any) (iresolver.ClientStream, error) {
+			return i.NewStream(ctx, ri, opts, done, ns)
 		}
 	}
-	return newStream(ctx, func() {})
+	return newStream(ctx, func() {}, opts)
 }
 
 func (il *interceptorList) Close() {

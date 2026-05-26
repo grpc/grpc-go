@@ -114,7 +114,7 @@ type ClientInterceptor interface {
 	// not be assigned a connection.  RPC operations may still occur on
 	// ClientStream after done is called, since the interceptor is invoked by
 	// application-layer operations.  done must never be nil when called.
-	NewStream(ctx context.Context, ri RPCInfo, done func(), newStream func(ctx context.Context, done func()) (ClientStream, error)) (ClientStream, error)
+	NewStream(ctx context.Context, ri RPCInfo, opts []any, done func(), newStream func(ctx context.Context, done func(), opts []any) (ClientStream, error)) (ClientStream, error)
 	// Close closes the interceptor. Once called, no new calls to NewStream are
 	// accepted. Ongoing calls to NewStream are allowed to complete.
 	Close()
