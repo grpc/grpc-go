@@ -995,7 +995,7 @@ func (l *loopyWriter) processData() (bool, error) {
 	if dataItem.endStream && remainingBytes == 0 {
 		endStream = true
 	}
-	if dataItem.onEachWrite != nil && !isEmpty {
+	if dataItem.onEachWrite != nil {
 		dataItem.onEachWrite()
 	}
 	err := l.framer.writeData(dataItem.streamID, endStream, l.writeBuf)
