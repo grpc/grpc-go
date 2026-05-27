@@ -22,6 +22,8 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -297,4 +299,66 @@ func (s) TestStopAbortsBlockingGRPCCall(t *testing.T) {
 
 	unblockGRPCCall <- struct{}{}
 	<-grpcClientCallReturned
+}
+
+// TestServeHTTP_GracefulStop verifies that calling GracefulStop on a server
+// using ServeHTTP returns properly.
+func (s) TestServeHTTP_GracefulStop(t *testing.T) {
+	gs := grpc.NewServer()
+	defer gs.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	// Register a service that blocks until context is done to make sure the
+	// server is active when GracefulStop is called.
+	callStarted := make(chan struct{})
+	testgrpc.RegisterTestServiceServer(gs, &stubserver.StubServer{
+		FullDuplexCallF: func(testgrpc.TestService_FullDuplexCallServer) error {
+			close(callStarted)
+			<-ctx.Done()
+			return nil
+		},
+	})
+
+	// Create a handler that delegates to ServeHTTP and signals when it returns.
+	serveHTTPDone := make(chan struct{})
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gs.ServeHTTP(w, r)
+		close(serveHTTPDone)
+	})
+
+	// Start an HTTP/2 server with the wrapped handler.
+	ts := httptest.NewUnstartedServer(handler)
+	ts.EnableHTTP2 = true
+	ts.StartTLS()
+	defer ts.Close()
+
+	// Make a new request to the gRPC server via HTTP/2 to ensure HandleStreams is called.
+	req, err := http.NewRequest("POST", ts.URL+"/grpc.testing.TestService/FullDuplexCall", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/grpc")
+
+	client := ts.Client()
+	// Send the request in a goroutine.
+	go func() {
+		resp, err := client.Do(req)
+		if err != nil {
+			return
+		}
+		resp.Body.Close()
+	}()
+
+	<-callStarted
+	// Call GracefulStop in a goroutine to avoid blocking the main thread until the RPC is done.
+	go gs.GracefulStop()
+
+	// Verify that ServeHTTP returned because GracefulStop is called and ensure it doesn't panic.
+	select {
+	case <-serveHTTPDone:
+	case <-ctx.Done():
+		t.Fatal("Context timed out waiting for ServeHTTP to return after GracefulStop")
+	}
 }
