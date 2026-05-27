@@ -23,8 +23,10 @@ import (
 	"fmt"
 	"time"
 
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/optional"
+	"google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/xds/httpfilter"
 	"google.golang.org/grpc/internal/xds/matcher"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
@@ -33,6 +35,7 @@ import (
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3procfilterpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/ext_proc/v3"
+	v3procservicepb "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 )
 
 func init() {
@@ -41,9 +44,14 @@ func init() {
 	}
 }
 
-var parseGRPCServiceConfig = func(*v3corepb.GrpcService) (xdsresource.GRPCServiceConfig, error) {
-	return xdsresource.GRPCServiceConfig{}, fmt.Errorf("parseGRPCServiceConfig not implemented")
-}
+var (
+	parseGRPCServiceConfig = func(*v3corepb.GrpcService) (xdsresource.GRPCServiceConfig, error) {
+		return xdsresource.GRPCServiceConfig{}, fmt.Errorf("parseGRPCServiceConfig not implemented")
+	}
+	createExtProcChannel = func(xdsresource.GRPCServiceConfig) (grpc.ClientConnInterface, func() error, error) {
+		return nil, nil, fmt.Errorf("dialing external processing server not implemented")
+	}
+)
 
 const defaultDeferredCloseTimeout = 5 * time.Second
 
@@ -176,4 +184,53 @@ func (builder) ParseFilterConfigOverride(ov proto.Message) (httpfilter.FilterCon
 
 func (builder) IsTerminal() bool {
 	return false
+}
+
+func (builder) BuildClientFilter() httpfilter.ClientFilter {
+	return clientFilter{}
+}
+
+var _ httpfilter.ClientFilterBuilder = builder{}
+
+type clientFilter struct{}
+
+func (clientFilter) Close() {}
+
+func (clientFilter) BuildClientInterceptor(base, override httpfilter.FilterConfig) (resolver.ClientInterceptor, error) {
+	b, ok := base.(baseConfig)
+	if !ok {
+		return nil, fmt.Errorf("extproc: incorrect config type provided (%T): %v", base, base)
+	}
+
+	var ov overrideConfig
+	if override != nil {
+		ov, ok = override.(overrideConfig)
+		if !ok {
+			return nil, fmt.Errorf("extproc: incorrect override config type provided (%T): %v", override, override)
+		}
+	}
+
+	config := newInterceptorConfig(b, ov)
+
+	// Create a channel to the external processing server.
+	cc, cancel, err := createExtProcChannel(config.server)
+	if err != nil {
+		return nil, fmt.Errorf("extproc: failed to create client: %v", err)
+	}
+	return &clientInterceptor{
+		config:    config,
+		extClient: v3procservicepb.NewExternalProcessorClient(cc),
+		cancel:    cancel,
+	}, nil
+}
+
+type clientInterceptor struct {
+	resolver.ClientInterceptor
+	config    baseConfig
+	extClient v3procservicepb.ExternalProcessorClient
+	cancel    func() error
+}
+
+func (i *clientInterceptor) Close() {
+	i.cancel()
 }

@@ -23,12 +23,17 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/optional"
 	"google.golang.org/grpc/internal/xds/httpfilter"
+	"google.golang.org/grpc/internal/xds/matcher"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/anypb"
@@ -47,6 +52,8 @@ type s struct {
 func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
+
+const testBaseURI = "base-uri"
 
 // testParseGRPCServiceConfig is a helper function that parses a GrpcService
 // proto message into a GRPCServiceConfig. This is a temporary test
@@ -86,14 +93,15 @@ var cmpOpts = []cmp.Option{
 		}
 		return r.String()
 	}),
+	cmp.Comparer(func(x, y matcher.StringMatcher) bool {
+		return x.Equal(y)
+	}),
 }
 
 func (s) TestParseFilterConfig_Success(t *testing.T) {
 	origParseGRPCServiceConfig := parseGRPCServiceConfig
 	defer func() { parseGRPCServiceConfig = origParseGRPCServiceConfig }()
 	parseGRPCServiceConfig = testParseGRPCServiceConfig
-
-	b := builder{}
 
 	tests := []struct {
 		name    string
@@ -208,6 +216,7 @@ func (s) TestParseFilterConfig_Success(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			b := builder{}
 			got, err := b.ParseFilterConfig(tt.cfg)
 			if err != nil {
 				t.Fatalf("ParseFilterConfig() returned unexpected error: %v", err)
@@ -223,8 +232,6 @@ func (s) TestParseFilterConfig_Errors(t *testing.T) {
 	origParseGRPCServiceConfig := parseGRPCServiceConfig
 	defer func() { parseGRPCServiceConfig = origParseGRPCServiceConfig }()
 	parseGRPCServiceConfig = testParseGRPCServiceConfig
-
-	b := builder{}
 
 	tests := []struct {
 		name    string
@@ -377,7 +384,8 @@ func (s) TestParseFilterConfig_Errors(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := b.ParseFilterConfig(tt.cfg)
+			builder := builder{}
+			_, err := builder.ParseFilterConfig(tt.cfg)
 			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
 				t.Fatalf("ParseFilterConfig() returned error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -386,8 +394,6 @@ func (s) TestParseFilterConfig_Errors(t *testing.T) {
 }
 
 func (s) TestParseFilterConfigOverride_Success(t *testing.T) {
-	b := builder{}
-
 	tests := []struct {
 		name            string
 		override        proto.Message
@@ -448,7 +454,8 @@ func (s) TestParseFilterConfigOverride_Success(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := b.ParseFilterConfigOverride(tt.override)
+			builder := builder{}
+			got, err := builder.ParseFilterConfigOverride(tt.override)
 			if err != nil {
 				t.Fatalf("ParseFilterConfigOverride() returned unexpected error: %v", err)
 			}
@@ -460,8 +467,6 @@ func (s) TestParseFilterConfigOverride_Success(t *testing.T) {
 }
 
 func (s) TestParseFilterConfigOverride_Errors(t *testing.T) {
-	b := builder{}
-
 	tests := []struct {
 		name     string
 		override proto.Message
@@ -508,9 +513,320 @@ func (s) TestParseFilterConfigOverride_Errors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := b.ParseFilterConfigOverride(tt.override)
+			builder := builder{}
+			_, err := builder.ParseFilterConfigOverride(tt.override)
 			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
 				t.Fatalf("ParseFilterConfigOverride() returned error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func (s) TestBuildClientInterceptor_Success(t *testing.T) {
+	origCreateExtProcChannel := createExtProcChannel
+	createExtProcChannel = func(cfg xdsresource.GRPCServiceConfig) (grpc.ClientConnInterface, func() error, error) {
+		conn, _ := grpc.NewClient(cfg.TargetURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		return conn, conn.Close, nil
+	}
+	defer func() { createExtProcChannel = origCreateExtProcChannel }()
+
+	tests := []struct {
+		name       string
+		cfg        httpfilter.FilterConfig
+		override   httpfilter.FilterConfig
+		wantConfig baseConfig
+	}{
+		{
+			name: "ConfigUsingOnlyBase",
+			cfg: baseConfig{
+				failureModeAllow:         true,
+				requestAttributes:        []string{"attr1"},
+				responseAttributes:       []string{"attr2"},
+				observabilityMode:        true,
+				disableImmediateResponse: true,
+				deferredCloseTimeout:     10 * time.Second,
+				processingModes: processingModes{
+					requestHeaderMode:   modeSend,
+					responseHeaderMode:  modeSkip,
+					responseTrailerMode: modeSend,
+					requestBodyMode:     modeSend,
+					responseBodyMode:    modeSkip,
+				},
+				server: xdsresource.GRPCServiceConfig{
+					TargetURI:          testBaseURI,
+					ChannelCredentials: "test-channel-creds",
+					CallCredentials:    "test-call-creds",
+					InitialMetadata:    metadata.MD(metadata.Pairs("key1", "value1")),
+					Timeout:            5 * time.Second,
+				},
+				mutationRules: httpfilter.HeaderMutationRules{
+					AllowExpr:       regexp.MustCompile("allow-.*"),
+					DisallowExpr:    regexp.MustCompile("disallow-.*"),
+					DisallowAll:     true,
+					DisallowIsError: true,
+				},
+				allowedHeaders: []matcher.StringMatcher{matcher.NewExactStringMatcher("allow-header", false)},
+			},
+			wantConfig: baseConfig{
+				failureModeAllow:   true,
+				requestAttributes:  []string{"attr1"},
+				responseAttributes: []string{"attr2"},
+				mutationRules: httpfilter.HeaderMutationRules{
+					AllowExpr:       regexp.MustCompile("allow-.*"),
+					DisallowExpr:    regexp.MustCompile("disallow-.*"),
+					DisallowAll:     true,
+					DisallowIsError: true,
+				},
+				observabilityMode:        true,
+				disableImmediateResponse: true,
+				deferredCloseTimeout:     10 * time.Second,
+				processingModes: processingModes{
+					requestHeaderMode:   modeSend,
+					responseHeaderMode:  modeSkip,
+					responseTrailerMode: modeSend,
+					requestBodyMode:     modeSend,
+					responseBodyMode:    modeSkip,
+				},
+				server: xdsresource.GRPCServiceConfig{
+					TargetURI:          testBaseURI,
+					ChannelCredentials: "test-channel-creds",
+					CallCredentials:    "test-call-creds",
+					InitialMetadata:    metadata.MD(metadata.Pairs("key1", "value1")),
+					Timeout:            5 * time.Second,
+				},
+				allowedHeaders: []matcher.StringMatcher{matcher.NewExactStringMatcher("allow-header", false)},
+			},
+		},
+		{
+			name: "ConfigUsingBaseAndOverride",
+			cfg: baseConfig{
+				failureModeAllow:         false,
+				requestAttributes:        []string{"base-attr1"},
+				responseAttributes:       []string{"base-attr2"},
+				observabilityMode:        true,
+				disableImmediateResponse: true,
+				processingModes: processingModes{
+					requestHeaderMode:   modeSend,
+					responseHeaderMode:  modeSkip,
+					responseTrailerMode: modeSend,
+					requestBodyMode:     modeSend,
+					responseBodyMode:    modeSkip,
+				},
+				server: xdsresource.GRPCServiceConfig{
+					TargetURI:       testBaseURI,
+					Timeout:         time.Second,
+					InitialMetadata: metadata.MD(metadata.Pairs("key1", "value1")),
+				},
+				mutationRules: httpfilter.HeaderMutationRules{
+					AllowExpr:       regexp.MustCompile("allow-.*"),
+					DisallowExpr:    regexp.MustCompile("disallow-.*"),
+					DisallowAll:     true,
+					DisallowIsError: true,
+				},
+				allowedHeaders:       []matcher.StringMatcher{matcher.NewExactStringMatcher("allow-header", false)},
+				disallowedHeaders:    []matcher.StringMatcher{matcher.NewExactStringMatcher("disallow-header", false)},
+				deferredCloseTimeout: 10 * time.Second,
+			},
+			override: overrideConfig{
+				failureModeAllow:   optional.New(true),
+				requestAttributes:  []string{"override-attr1"},
+				responseAttributes: []string{"override-attr2"},
+				processingModes: optional.New(processingModes{
+					requestHeaderMode:   modeSkip,
+					responseHeaderMode:  modeSend,
+					responseTrailerMode: modeSkip,
+					requestBodyMode:     modeSkip,
+					responseBodyMode:    modeSend,
+				}),
+				server: optional.New(xdsresource.GRPCServiceConfig{
+					TargetURI: "override-uri",
+				}),
+			},
+			wantConfig: baseConfig{
+				failureModeAllow:   true,
+				requestAttributes:  []string{"override-attr1"},
+				responseAttributes: []string{"override-attr2"},
+				mutationRules: httpfilter.HeaderMutationRules{
+					AllowExpr:       regexp.MustCompile("allow-.*"),
+					DisallowExpr:    regexp.MustCompile("disallow-.*"),
+					DisallowAll:     true,
+					DisallowIsError: true,
+				},
+				observabilityMode:        true,
+				disableImmediateResponse: true,
+				deferredCloseTimeout:     10 * time.Second,
+				processingModes: processingModes{
+					requestHeaderMode:   modeSkip,
+					responseHeaderMode:  modeSend,
+					responseTrailerMode: modeSkip,
+					requestBodyMode:     modeSkip,
+					responseBodyMode:    modeSend,
+				},
+				server: xdsresource.GRPCServiceConfig{
+					TargetURI: "override-uri",
+				},
+				allowedHeaders:    []matcher.StringMatcher{matcher.NewExactStringMatcher("allow-header", false)},
+				disallowedHeaders: []matcher.StringMatcher{matcher.NewExactStringMatcher("disallow-header", false)},
+			},
+		},
+		{
+			name: "ConfigUsingBaseAndPartialOverride",
+			cfg: baseConfig{
+				failureModeAllow:         false,
+				requestAttributes:        []string{"base-attr1"},
+				responseAttributes:       []string{"base-attr2"},
+				observabilityMode:        true,
+				disableImmediateResponse: true,
+				deferredCloseTimeout:     10 * time.Second,
+				processingModes: processingModes{
+					requestHeaderMode:   modeSend,
+					responseHeaderMode:  modeSkip,
+					responseTrailerMode: modeSend,
+					requestBodyMode:     modeSend,
+					responseBodyMode:    modeSkip,
+				},
+				server: xdsresource.GRPCServiceConfig{
+					TargetURI:       testBaseURI,
+					Timeout:         time.Second,
+					InitialMetadata: metadata.MD(metadata.Pairs("key1", "value1")),
+				},
+				mutationRules: httpfilter.HeaderMutationRules{
+					AllowExpr:       regexp.MustCompile("allow-.*"),
+					DisallowExpr:    regexp.MustCompile("disallow-.*"),
+					DisallowAll:     true,
+					DisallowIsError: true,
+				},
+				allowedHeaders:    []matcher.StringMatcher{matcher.NewExactStringMatcher("allow-header", false)},
+				disallowedHeaders: []matcher.StringMatcher{matcher.NewExactStringMatcher("disallow-header", false)},
+			},
+			override: overrideConfig{
+				failureModeAllow: optional.New(true),
+			},
+			wantConfig: baseConfig{
+				failureModeAllow:   true,
+				requestAttributes:  []string{"base-attr1"},
+				responseAttributes: []string{"base-attr2"},
+				mutationRules: httpfilter.HeaderMutationRules{
+					AllowExpr:       regexp.MustCompile("allow-.*"),
+					DisallowExpr:    regexp.MustCompile("disallow-.*"),
+					DisallowAll:     true,
+					DisallowIsError: true,
+				},
+				observabilityMode:        true,
+				disableImmediateResponse: true,
+				deferredCloseTimeout:     10 * time.Second,
+				processingModes: processingModes{
+					requestHeaderMode:   modeSend,
+					responseHeaderMode:  modeSkip,
+					responseTrailerMode: modeSend,
+					requestBodyMode:     modeSend,
+					responseBodyMode:    modeSkip,
+				},
+				server: xdsresource.GRPCServiceConfig{
+					TargetURI:       testBaseURI,
+					Timeout:         time.Second,
+					InitialMetadata: metadata.MD(metadata.Pairs("key1", "value1")),
+				},
+				allowedHeaders:    []matcher.StringMatcher{matcher.NewExactStringMatcher("allow-header", false)},
+				disallowedHeaders: []matcher.StringMatcher{matcher.NewExactStringMatcher("disallow-header", false)},
+			},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			builder := builder{}
+			filter := builder.BuildClientFilter()
+			defer filter.Close()
+
+			intptr, err := filter.BuildClientInterceptor(tc.cfg, tc.override)
+			if err != nil {
+				t.Fatalf("BuildClientInterceptor() returned unexpected error: %v", err)
+			}
+			defer intptr.Close()
+			ic, _ := intptr.(*clientInterceptor)
+			if diff := cmp.Diff(ic.config, tc.wantConfig, cmpOpts...); diff != "" {
+				t.Fatalf("Interceptor config returned unexpected diff (-got +want):\n%s", diff)
+			}
+		})
+	}
+}
+
+func (s) TestBuildClientInterceptor_Failure(t *testing.T) {
+	origCreateExtProcChannel := createExtProcChannel
+	createExtProcChannel = func(cfg xdsresource.GRPCServiceConfig) (grpc.ClientConnInterface, func() error, error) {
+		if cfg.TargetURI == "error-uri" {
+			return nil, nil, fmt.Errorf("dial error")
+		}
+		conn, _ := grpc.NewClient(cfg.TargetURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		return conn, conn.Close, nil
+	}
+	defer func() { createExtProcChannel = origCreateExtProcChannel }()
+
+	// incorrectFilterConfig embeds httpfilter.FilterConfig but is not of type
+	// baseConfig/overrideConfig, and is used to test incorrect config types being
+	// passed to BuildClientInterceptor.
+	type incorrectFilterConfig struct {
+		httpfilter.FilterConfig
+	}
+
+	tests := []struct {
+		name     string
+		cfg      httpfilter.FilterConfig
+		override httpfilter.FilterConfig
+		wantErr  string
+	}{
+		{
+			name:    "NilConfig",
+			cfg:     nil,
+			wantErr: "extproc: incorrect config type provided",
+		},
+		{
+			name:    "IncorrectConfigType",
+			cfg:     incorrectFilterConfig{},
+			wantErr: "extproc: incorrect config type provided",
+		},
+		{
+			name:     "IncorrectOverrideType",
+			cfg:      baseConfig{},
+			override: incorrectFilterConfig{},
+			wantErr:  "extproc: incorrect override config type provided",
+		},
+		{
+			name: "ChannelCreationFailure",
+			cfg: baseConfig{
+				server: xdsresource.GRPCServiceConfig{
+					TargetURI: "error-uri",
+				},
+			},
+			wantErr: "extproc: failed to create client: dial error",
+		},
+		{
+			name: "ChannelCreationFailureInOverride",
+			cfg: baseConfig{
+				server: xdsresource.GRPCServiceConfig{
+					TargetURI: testBaseURI,
+				},
+			},
+			override: overrideConfig{
+				server: optional.New(xdsresource.GRPCServiceConfig{
+					TargetURI: "error-uri",
+				}),
+			},
+			wantErr: "extproc: failed to create client: dial error",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			builder := builder{}
+			filter := builder.BuildClientFilter()
+			defer filter.Close()
+
+			_, err := filter.BuildClientInterceptor(tc.cfg, tc.override)
+			if err == nil {
+				t.Fatalf("BuildClientInterceptor() returned nil error, want error %q", tc.wantErr)
+			}
+			if !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("BuildClientInterceptor() returned error: %v, want %v", err, tc.wantErr)
 			}
 		})
 	}
