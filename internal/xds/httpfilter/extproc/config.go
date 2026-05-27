@@ -156,3 +156,28 @@ func processingModesFromProto(pm *v3procfilterpb.ProcessingMode) processingModes
 		responseTrailerMode: resolveHeaderMode(pm.GetResponseTrailerMode(), modeSkip),
 	}
 }
+
+// newInterceptorConfig creates the interceptor config from the base and
+// override filter configs. If a field is set in both the base and override
+// configs, the value from the override config will be used.
+func newInterceptorConfig(base baseConfig, override overrideConfig) baseConfig {
+	ic := base
+
+	// Apply overrides if present.
+	if val, ok := override.server.Value(); ok {
+		ic.server = val
+	}
+	if val, ok := override.failureModeAllow.Value(); ok {
+		ic.failureModeAllow = val
+	}
+	if override.requestAttributes != nil {
+		ic.requestAttributes = override.requestAttributes
+	}
+	if override.responseAttributes != nil {
+		ic.responseAttributes = override.responseAttributes
+	}
+	if val, ok := override.processingModes.Value(); ok {
+		ic.processingModes = val
+	}
+	return ic
+}
