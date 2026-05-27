@@ -589,3 +589,67 @@ func (s) TestDecompress_NoReadAfterEOF(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+type fakeCloseCompressor struct {
+	encoding.Compressor
+	io.Reader
+	ch chan<- struct{}
+}
+
+func (m *fakeCloseCompressor) Decompress(r io.Reader) (io.Reader, error) {
+	zr, err := gzip.NewReader(r)
+	if err != nil {
+		return nil, err
+	}
+	m.Reader = zr
+	return m, nil
+}
+
+func (m *fakeCloseCompressor) Close() error {
+	close(m.ch)
+	return nil
+}
+
+// TestDecompress_ClosesReader tests that the reader returned by Decompress is
+// closed when decompress returns.
+func (s) TestDecompress_ClosesReader(t *testing.T) {
+	testCases := []struct {
+		name                  string
+		maxReceiveMessageSize int
+		wantCode              codes.Code
+	}{
+		{
+			name:                  "close_on_failure",
+			maxReceiveMessageSize: 1,
+			wantCode:              codes.ResourceExhausted,
+		},
+		{
+			name:                  "close_on_success",
+			maxReceiveMessageSize: 100,
+			wantCode:              codes.OK,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+
+			ch := make(chan struct{})
+			compressor := &fakeCloseCompressor{ch: ch}
+			in := compressWithDeterministicError(t, []byte("some data"))
+			out, err := decompress(compressor, in, nil, tc.maxReceiveMessageSize, mem.DefaultBufferPool())
+			if status.Code(err) != tc.wantCode {
+				t.Fatalf("decompress() failed with error code %v, want %v", status.Code(err), tc.wantCode)
+			}
+
+			out.Free()
+
+			select {
+			case <-ch:
+			case <-ctx.Done():
+				t.Fatalf("Timed out waiting for Close to be called")
+			}
+		})
+	}
+}

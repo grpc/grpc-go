@@ -33,6 +33,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/internal/envconfig"
 	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
@@ -202,7 +203,7 @@ func (fi *testFilterInterceptor) NewStream(ctx context.Context, _ iresolver.RPCI
 	cfg := string(bytes)
 	fi.logger.Logf("Injecting filter config metadata: %v", cfg)
 
-	return newStream(metadata.AppendToOutgoingContext(ctx, filterCfgMetadataKey, fmt.Sprintf("%v", cfg)), done)
+	return newStream(metadata.AppendToOutgoingContext(ctx, filterCfgMetadataKey, cfg), done)
 }
 
 func (fi *testFilterInterceptor) Close() {}
@@ -682,6 +683,10 @@ func (*trackingHTTPFilterBuilder) ParseFilterConfig(cfg proto.Message) (httpfilt
 	return filterConfigFromProto(cfg)
 }
 
+func (*trackingHTTPFilterBuilder) ParseFilterConfigOverride(cfg proto.Message) (httpfilter.FilterConfig, error) {
+	return filterConfigFromProto(cfg)
+}
+
 func (t *trackingHTTPFilterBuilder) BuildClientFilter() httpfilter.ClientFilter {
 	t.filtersCreated.Add(1)
 	return t
@@ -915,5 +920,543 @@ WaitForUpdatedConfig:
 	}
 	if got, want := interceptorsDestroyed.Load(), int32(2); got != want {
 		t.Fatalf("Destroyed %d interceptor instances, want: %d", got, want)
+	}
+}
+
+// TestXDSResolverHTTPFilters_MultiLevelOverride tests that filter overrides at
+// the Virtual Host, Route, and Cluster levels are handled correctly. It
+// verifies that the filter receives configuration and the disable information
+// from the most specific override available. If no override is present, the
+// filter should receive the disable information and configuration from the base
+// config.
+func (s) TestXDSResolverHTTPFilters_MultiLevelOverride(t *testing.T) {
+	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
+
+	// Register two custom httpFilter builders for the test.
+	newStreamChan1 := testutils.NewChannel()
+	fb1 := &testHTTPFilterWithRPCMetadata{
+		logger:        t,
+		typeURL:       "filter1",
+		newStreamChan: newStreamChan1,
+	}
+	httpfilter.Register(fb1)
+	defer httpfilter.UnregisterForTesting(fb1.typeURL)
+
+	newStreamChan2 := testutils.NewChannel()
+	fb2 := &testHTTPFilterWithRPCMetadata{
+		logger:        t,
+		typeURL:       "filter2",
+		newStreamChan: newStreamChan2,
+	}
+	httpfilter.Register(fb2)
+	defer httpfilter.UnregisterForTesting(fb2.typeURL)
+
+	// Spin up an xDS management server.
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
+	defer mgmtServer.Stop()
+
+	// Create an xDS resolver with bootstrap configuration pointing to the above
+	// management server.
+	nodeID := uuid.New().String()
+	bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
+	resolverBuilder, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bootstrapContents)
+	if err != nil {
+		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
+	}
+
+	// Start a test backend.
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	backend := stubserver.StartTestService(t, nil)
+	defer backend.Stop()
+
+	// Configure resources on the management server.
+	const testServiceName = "service-name"
+	const routeConfigName = "route-config"
+
+	// Filter 1: path="filter1-path"
+	baseFilter1 := newHTTPFilter(t, "filter1", "filter1", "filter1-path", "")
+	baseFilter1.Disabled = true // Disabled in base.
+
+	// Filter 2: path="filter2-path"
+	baseFilter2 := newHTTPFilter(t, "filter2", "filter2", "filter2-path", "")
+
+	// Virtual host override for filter 1 that enables it with path =
+	// "vhost-value".
+	vhostOverride := &v3routepb.FilterConfig{
+		Disabled: false,
+		Config: testutils.MarshalAny(t, &v3xdsxdstypepb.TypedStruct{
+			TypeUrl: "filter1",
+			Value: &structpb.Struct{
+				Fields: map[string]*structpb.Value{
+					filterCfgPathFieldName: {Kind: &structpb.Value_StringValue{StringValue: "vhost-value"}},
+				},
+			},
+		}),
+	}
+
+	// Route override for filter 1 that enables it with path = "route-value".
+	routeOverride := &v3routepb.FilterConfig{
+		Disabled: false,
+		Config: testutils.MarshalAny(t, &v3xdsxdstypepb.TypedStruct{
+			TypeUrl: "filter1",
+			Value: &structpb.Struct{
+				Fields: map[string]*structpb.Value{
+					filterCfgPathFieldName: {Kind: &structpb.Value_StringValue{StringValue: "route-value"}},
+				},
+			},
+		}),
+	}
+
+	// Cluster override for filter 1 that enables it with path = "cluster-value".
+	clusterOverride := &v3routepb.FilterConfig{
+		Disabled: false,
+		Config: testutils.MarshalAny(t, &v3xdsxdstypepb.TypedStruct{
+			TypeUrl: "filter1",
+			Value: &structpb.Struct{
+				Fields: map[string]*structpb.Value{
+					filterCfgPathFieldName: {Kind: &structpb.Value_StringValue{StringValue: "cluster-value"}},
+				},
+			},
+		}),
+	}
+
+	listener := &v3listenerpb.Listener{
+		Name: testServiceName,
+		ApiListener: &v3listenerpb.ApiListener{
+			ApiListener: testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
+				RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
+					RouteConfig: &v3routepb.RouteConfiguration{
+						Name: routeConfigName,
+						VirtualHosts: []*v3routepb.VirtualHost{{
+							Domains: []string{testServiceName},
+							Routes: []*v3routepb.Route{{
+								Match: &v3routepb.RouteMatch{PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: ""}},
+								Action: &v3routepb.Route_Route{Route: &v3routepb.RouteAction{
+									ClusterSpecifier: &v3routepb.RouteAction_WeightedClusters{
+										WeightedClusters: &v3routepb.WeightedCluster{
+											Clusters: []*v3routepb.WeightedCluster_ClusterWeight{
+												{
+													Name:                 "A",
+													Weight:               wrapperspb.UInt32(1),
+													TypedPerFilterConfig: map[string]*anypb.Any{"filter1": testutils.MarshalAny(t, clusterOverride)},
+												},
+											},
+										},
+									},
+								}},
+								TypedPerFilterConfig: map[string]*anypb.Any{"filter1": testutils.MarshalAny(t, routeOverride)},
+							}},
+							TypedPerFilterConfig: map[string]*anypb.Any{"filter1": testutils.MarshalAny(t, vhostOverride)},
+						}},
+					},
+				},
+				HttpFilters: []*v3httppb.HttpFilter{
+					baseFilter1,
+					baseFilter2,
+					e2e.RouterHTTPFilter,
+				},
+			}),
+		},
+	}
+
+	resources := e2e.UpdateOptions{
+		NodeID:    nodeID,
+		Listeners: []*v3listenerpb.Listener{listener},
+		Clusters:  []*v3clusterpb.Cluster{e2e.DefaultCluster("A", "endpoint_A", e2e.SecurityLevelNone)},
+		Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint("endpoint_A", "localhost", []uint32{testutils.ParsePort(t, backend.Address)})},
+	}
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a gRPC client using the xDS resolver.
+	cc, err := grpc.NewClient("xds:///"+testServiceName, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(resolverBuilder))
+	if err != nil {
+		t.Fatalf("Failed to create a gRPC client: %v", err)
+	}
+	defer cc.Close()
+
+	// Make an RPC and verify that the filter was invoked with the combined config.
+	client := testgrpc.NewTestServiceClient(cc)
+	if _, err := client.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil {
+		t.Fatalf("UnaryCall() failed: %v", err)
+	}
+
+	// Verify that filter1 receives BasePath="filter1-path" and
+	// OverridePath="cluster-value" because the cluster override has the highest
+	// precedence. This ensures the filter is enabled by the cluster override,
+	// even if it is disabled in the base config.
+	val1, err := newStreamChan1.Receive(ctx)
+	if err != nil {
+		t.Fatalf("Timeout waiting for filter1 to be invoked: %v", err)
+	}
+	cfg1 := val1.(overallFilterConfig)
+	if got, want := cfg1.BasePath, "filter1-path"; got != want {
+		t.Errorf("Unexpected BasePath for filter1, got: %q, want: %q", got, want)
+	}
+	if got, want := cfg1.OverridePath, "cluster-value"; got != want {
+		t.Errorf("Unexpected OverridePath for filter1, got: %q, want: %q", got, want)
+	}
+
+	// Verify that filter2 was also invoked and has base filter config and no
+	// override path.
+	val2, err := newStreamChan2.Receive(ctx)
+	if err != nil {
+		t.Fatalf("Timeout waiting for filter2 to be invoked: %v", err)
+	}
+	cfg2 := val2.(overallFilterConfig)
+	if got, want := cfg2.BasePath, "filter2-path"; got != want {
+		t.Errorf("Unexpected BasePath for filter2, got: %q, want: %q", got, want)
+	}
+	if got, want := cfg2.OverridePath, ""; got != want {
+		t.Errorf("Unexpected OverridePath for filter2, got: %q, want: %q", got, want)
+	}
+}
+
+// TestXDSResolverHTTPFilters_DisabledInOverride tests various combinations of
+// base filter configurations and overrides at Virtual Host, Route, and Cluster
+// levels that disable the filter. It verifies that the filter is not created
+// when disabled.
+func (s) TestXDSResolverHTTPFilters_DisabledInOverride(t *testing.T) {
+	type overrideInfo struct {
+		disabled bool
+		path     string
+	}
+
+	tests := []struct {
+		name         string
+		baseDisabled bool
+		vhost        *overrideInfo
+		route        *overrideInfo
+		cluster      *overrideInfo
+	}{
+		{
+			name:         "BaseDisabled",
+			baseDisabled: true,
+		},
+		{
+			name:         "VHostDisables",
+			baseDisabled: false,
+			vhost:        &overrideInfo{disabled: true},
+		},
+		{
+			name:         "RouteDisables",
+			baseDisabled: false,
+			vhost:        &overrideInfo{disabled: false, path: "vhost-value"},
+			route:        &overrideInfo{disabled: true},
+		},
+		{
+			name:         "ClusterDisables",
+			baseDisabled: false,
+			vhost:        &overrideInfo{disabled: false, path: "vhost-value"},
+			route:        &overrideInfo{disabled: false, path: "route-value"},
+			cluster:      &overrideInfo{disabled: true},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
+
+			// Register a custom httpFilter builder for the test.
+			var filtersCreated, interceptorsCreated atomic.Int32
+			testFilterTypeURL := t.Name()
+			fb := &trackingHTTPFilterBuilder{
+				filtersCreated:      &filtersCreated,
+				interceptorsCreated: &interceptorsCreated,
+				typeURL:             testFilterTypeURL,
+			}
+			httpfilter.Register(fb)
+			defer httpfilter.UnregisterForTesting(fb.typeURL)
+
+			// Spin up an xDS management server.
+			mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
+			defer mgmtServer.Stop()
+
+			nodeID := uuid.New().String()
+			bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
+			resolverBuilder, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bootstrapContents)
+			if err != nil {
+				t.Fatalf("Failed to create xDS resolver for testing: %v", err)
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+			backend := stubserver.StartTestService(t, nil)
+			defer backend.Stop()
+
+			const testServiceName = "service-name"
+			const routeConfigName = "route-config"
+
+			baseFilter := newHTTPFilter(t, "test-filter", testFilterTypeURL, "base-path", "")
+			baseFilter.Disabled = tc.baseDisabled
+
+			makeTypedConfig := func(info *overrideInfo) map[string]*anypb.Any {
+				if info == nil {
+					return nil
+				}
+				cfg := &v3routepb.FilterConfig{Disabled: info.disabled}
+				cfg.Config = testutils.MarshalAny(t, &v3xdsxdstypepb.TypedStruct{
+					TypeUrl: testFilterTypeURL,
+					Value: &structpb.Struct{
+						Fields: map[string]*structpb.Value{
+							filterCfgPathFieldName: {Kind: &structpb.Value_StringValue{StringValue: info.path}},
+						},
+					},
+				})
+				return map[string]*anypb.Any{"test-filter": testutils.MarshalAny(t, cfg)}
+			}
+
+			vhostTypedConfig := makeTypedConfig(tc.vhost)
+			routeTypedConfig := makeTypedConfig(tc.route)
+			clusterTypedConfig := makeTypedConfig(tc.cluster)
+
+			listener := &v3listenerpb.Listener{
+				Name: testServiceName,
+				ApiListener: &v3listenerpb.ApiListener{
+					ApiListener: testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
+						RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
+							RouteConfig: &v3routepb.RouteConfiguration{
+								Name: routeConfigName,
+								VirtualHosts: []*v3routepb.VirtualHost{{
+									Domains:              []string{testServiceName},
+									TypedPerFilterConfig: vhostTypedConfig,
+									Routes: []*v3routepb.Route{{
+										Match: &v3routepb.RouteMatch{PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: ""}},
+										Action: &v3routepb.Route_Route{Route: &v3routepb.RouteAction{
+											ClusterSpecifier: &v3routepb.RouteAction_WeightedClusters{
+												WeightedClusters: &v3routepb.WeightedCluster{
+													Clusters: []*v3routepb.WeightedCluster_ClusterWeight{
+														{
+															Name:                 "A",
+															Weight:               wrapperspb.UInt32(1),
+															TypedPerFilterConfig: clusterTypedConfig,
+														},
+													},
+												},
+											},
+										}},
+										TypedPerFilterConfig: routeTypedConfig,
+									}},
+								}},
+							},
+						},
+						HttpFilters: []*v3httppb.HttpFilter{
+							baseFilter,
+							e2e.RouterHTTPFilter,
+						},
+					}),
+				},
+			}
+
+			resources := e2e.UpdateOptions{
+				NodeID:    nodeID,
+				Listeners: []*v3listenerpb.Listener{listener},
+				Clusters:  []*v3clusterpb.Cluster{e2e.DefaultCluster("A", "endpoint_A", e2e.SecurityLevelNone)},
+				Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint("endpoint_A", "localhost", []uint32{testutils.ParsePort(t, backend.Address)})},
+			}
+			if err := mgmtServer.Update(ctx, resources); err != nil {
+				t.Fatal(err)
+			}
+
+			cc, err := grpc.NewClient("xds:///"+testServiceName, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(resolverBuilder))
+			if err != nil {
+				t.Fatalf("Failed to create a gRPC client: %v", err)
+			}
+			defer cc.Close()
+
+			client := testgrpc.NewTestServiceClient(cc)
+			if _, err := client.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil {
+				t.Fatalf("UnaryCall() failed: %v", err)
+			}
+
+			if got, want := filtersCreated.Load(), int32(0); got != want {
+				t.Fatalf("Created %d filter instances, want: %d", got, want)
+			}
+			if got, want := interceptorsCreated.Load(), int32(0); got != want {
+				t.Fatalf("Created %d interceptor instances, want: %d", got, want)
+			}
+		})
+	}
+}
+
+// TestXDSResolverHTTPFilters_EnabledInOverride tests various combinations of
+// base filter configurations and overrides at Virtual Host, Route, and Cluster
+// levels that enable the filter. It verifies that the filter is created and
+// receives the correct configuration.
+func (s) TestXDSResolverHTTPFilters_EnabledInOverride(t *testing.T) {
+	const basePath = "base-path"
+	type overrideInfo struct {
+		disabled bool
+		path     string
+	}
+
+	tests := []struct {
+		name             string
+		baseDisabled     bool
+		vhost            *overrideInfo
+		route            *overrideInfo
+		cluster          *overrideInfo
+		wantOverridePath string
+	}{
+		{
+			name:         "BaseEnabled",
+			baseDisabled: false,
+		},
+		{
+			name:             "VHostEnables",
+			baseDisabled:     true,
+			vhost:            &overrideInfo{disabled: false, path: "vhost-value"},
+			wantOverridePath: "vhost-value",
+		},
+		{
+			name:             "RouteEnables",
+			baseDisabled:     true,
+			vhost:            &overrideInfo{disabled: true},
+			route:            &overrideInfo{disabled: false, path: "route-value"},
+			wantOverridePath: "route-value",
+		},
+		{
+			name:             "ClusterEnables",
+			baseDisabled:     true,
+			vhost:            &overrideInfo{disabled: true},
+			route:            &overrideInfo{disabled: true},
+			cluster:          &overrideInfo{disabled: false, path: "cluster-value"},
+			wantOverridePath: "cluster-value",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
+
+			// Register a custom httpFilter builder for the test.
+			newStreamChan := testutils.NewChannel()
+			testFilterTypeURL := t.Name()
+			fb := &testHTTPFilterWithRPCMetadata{
+				logger:        t,
+				typeURL:       testFilterTypeURL,
+				newStreamChan: newStreamChan,
+			}
+			httpfilter.Register(fb)
+			defer httpfilter.UnregisterForTesting(fb.typeURL)
+
+			// Spin up an xDS management server.
+			mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
+			defer mgmtServer.Stop()
+
+			nodeID := uuid.New().String()
+			bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
+			resolverBuilder, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bootstrapContents)
+			if err != nil {
+				t.Fatalf("Failed to create xDS resolver for testing: %v", err)
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+			backend := stubserver.StartTestService(t, nil)
+			defer backend.Stop()
+
+			const testServiceName = "service-name"
+			const routeConfigName = "route-config"
+
+			baseFilter := newHTTPFilter(t, "test-filter", testFilterTypeURL, basePath, "")
+			baseFilter.Disabled = tc.baseDisabled
+
+			makeTypedConfig := func(info *overrideInfo) map[string]*anypb.Any {
+				if info == nil {
+					return nil
+				}
+				cfg := &v3routepb.FilterConfig{Disabled: info.disabled}
+				cfg.Config = testutils.MarshalAny(t, &v3xdsxdstypepb.TypedStruct{
+					TypeUrl: testFilterTypeURL,
+					Value: &structpb.Struct{
+						Fields: map[string]*structpb.Value{
+							filterCfgPathFieldName: {Kind: &structpb.Value_StringValue{StringValue: info.path}},
+						},
+					},
+				})
+				return map[string]*anypb.Any{"test-filter": testutils.MarshalAny(t, cfg)}
+			}
+
+			vhostTypedConfig := makeTypedConfig(tc.vhost)
+			routeTypedConfig := makeTypedConfig(tc.route)
+			clusterTypedConfig := makeTypedConfig(tc.cluster)
+
+			listener := &v3listenerpb.Listener{
+				Name: testServiceName,
+				ApiListener: &v3listenerpb.ApiListener{
+					ApiListener: testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
+						RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
+							RouteConfig: &v3routepb.RouteConfiguration{
+								Name: routeConfigName,
+								VirtualHosts: []*v3routepb.VirtualHost{{
+									Domains:              []string{testServiceName},
+									TypedPerFilterConfig: vhostTypedConfig,
+									Routes: []*v3routepb.Route{{
+										Match: &v3routepb.RouteMatch{PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: ""}},
+										Action: &v3routepb.Route_Route{Route: &v3routepb.RouteAction{
+											ClusterSpecifier: &v3routepb.RouteAction_WeightedClusters{
+												WeightedClusters: &v3routepb.WeightedCluster{
+													Clusters: []*v3routepb.WeightedCluster_ClusterWeight{
+														{
+															Name:                 "A",
+															Weight:               wrapperspb.UInt32(1),
+															TypedPerFilterConfig: clusterTypedConfig,
+														},
+													},
+												},
+											},
+										}},
+										TypedPerFilterConfig: routeTypedConfig,
+									}},
+								}},
+							},
+						},
+						HttpFilters: []*v3httppb.HttpFilter{
+							baseFilter,
+							e2e.RouterHTTPFilter,
+						},
+					}),
+				},
+			}
+
+			resources := e2e.UpdateOptions{
+				NodeID:    nodeID,
+				Listeners: []*v3listenerpb.Listener{listener},
+				Clusters:  []*v3clusterpb.Cluster{e2e.DefaultCluster("A", "endpoint_A", e2e.SecurityLevelNone)},
+				Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint("endpoint_A", "localhost", []uint32{testutils.ParsePort(t, backend.Address)})},
+			}
+			if err := mgmtServer.Update(ctx, resources); err != nil {
+				t.Fatal(err)
+			}
+
+			cc, err := grpc.NewClient("xds:///"+testServiceName, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(resolverBuilder))
+			if err != nil {
+				t.Fatalf("Failed to create a gRPC client: %v", err)
+			}
+			defer cc.Close()
+
+			client := testgrpc.NewTestServiceClient(cc)
+			if _, err := client.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil {
+				t.Fatalf("UnaryCall() failed: %v", err)
+			}
+
+			val, err := newStreamChan.Receive(ctx)
+			if err != nil {
+				t.Fatalf("Timeout waiting for interceptor to be invoked: %v", err)
+			}
+			cfg := val.(overallFilterConfig)
+			if tc.wantOverridePath != "" {
+				if got, want := cfg.OverridePath, tc.wantOverridePath; got != want {
+					t.Fatalf("Unexpected OverridePath, got: %q, want: %q", got, want)
+				}
+				return
+			}
+			if got, want := cfg.BasePath, basePath; got != want {
+				t.Fatalf("Unexpected BasePath, got: %q, want: %q", got, want)
+			}
+		})
 	}
 }
