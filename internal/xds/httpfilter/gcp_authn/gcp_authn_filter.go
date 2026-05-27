@@ -26,31 +26,30 @@ import (
 	"strings"
 	"sync"
 
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
-
-	anypb "google.golang.org/protobuf/types/known/anypb"
-
-	v3gcpauthnpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/gcp_authn/v3"
-	grpcgoogle "google.golang.org/grpc/credentials/google"
-	iresolver "google.golang.org/grpc/internal/resolver"
-
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal/xds/balancer/clustermanager"
 	"google.golang.org/grpc/internal/xds/httpfilter"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
-	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
+
+	v3gcpauthnpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/gcp_authn/v3"
+	grpcgoogle "google.golang.org/grpc/credentials/google"
+	iresolver "google.golang.org/grpc/internal/resolver"
+	anypb "google.golang.org/protobuf/types/known/anypb"
 )
 
+// defaultCacheSize is the default capacity of the LRU credentials cache.
+// Per gRFC A83, if cache_config or cache_size is omitted, the default is 10.
 const defaultCacheSize = 10
 
 func init() {
 	httpfilter.Register(builder{})
 }
 
-type builder struct {
-}
+type builder struct{}
 
 type config struct {
 	httpfilter.FilterConfig
@@ -150,7 +149,7 @@ type interceptor struct {
 	cache      *lruCache
 }
 
-func (i *interceptor) NewStream(ctx context.Context, ri iresolver.RPCInfo, opts []any, done func(), newStream func(ctx context.Context, done func(), opts []any) (iresolver.ClientStream, error)) (iresolver.ClientStream, error) {
+func (i *interceptor) NewStream(ctx context.Context, _ iresolver.RPCInfo, opts []any, done func(), newStream func(ctx context.Context, done func(), opts []any) (iresolver.ClientStream, error)) (iresolver.ClientStream, error) {
 	clusterName := clustermanager.GetPickedCluster(ctx)
 	if clusterName == "" || strings.HasPrefix(clusterName, "cluster_specifier_plugin:") {
 		return newStream(ctx, done, opts)
@@ -170,7 +169,7 @@ func (i *interceptor) NewStream(ctx context.Context, ri iresolver.RPCInfo, opts 
 	m := clusterResult.Config.Cluster.Metadata
 	val, ok := m[i.filterName]
 	if !ok {
-		return newStream(ctx, done, opts) // no-op
+		return newStream(ctx, done, opts)
 	}
 
 	audienceMetadata, ok := val.(xdsresource.AudienceMetadataValue)
@@ -183,47 +182,24 @@ func (i *interceptor) NewStream(ctx context.Context, ri iresolver.RPCInfo, opts 
 	if err != nil {
 		return nil, err
 	}
-
-	if creds.RequireTransportSecurity() {
-		if clusterResult.Config.Cluster.SecurityCfg == nil {
-			return nil, status.Error(codes.Unauthenticated, "gcpauthn: cannot send secure credentials on an insecure connection")
-		}
-	}
-
-	riForCreds := credentials.RequestInfo{
-		Method: ri.Method,
-		AuthInfo: mockAuthInfo{
-			CommonAuthInfo: credentials.CommonAuthInfo{SecurityLevel: credentials.PrivacyAndIntegrity},
-		},
-	}
-	ctx = credentials.NewContextWithRequestInfo(ctx, riForCreds)
-
-	md, err := creds.GetRequestMetadata(ctx, ri.Method)
-	if err != nil {
-		return nil, err
-	}
-
-	for k, v := range md {
-		ctx = metadata.AppendToOutgoingContext(ctx, k, v)
-	}
+	opts = append(opts, grpc.PerRPCCredentials(creds))
 
 	return newStream(ctx, done, opts)
 }
 
 func (i *interceptor) Close() {}
 
-type mockAuthInfo struct {
-	credentials.CommonAuthInfo
-}
-
-func (m mockAuthInfo) AuthType() string { return "xds_gcp_authn" }
-
+// gcpAuthnCallCredEntry represents a cached PerRPCCredentials instance
+// indexed by its target audience string.
 type gcpAuthnCallCredEntry struct {
 	key   string
 	value credentials.PerRPCCredentials
 }
 
+// lruCache is a thread-safe LRU cache that stores PerRPCCredentials instances
+// by their target audience string.
 type lruCache struct {
+	// The following fields are protected by mu.
 	mu           sync.Mutex
 	cacheSize    uint64
 	ll           *list.List
@@ -231,17 +207,19 @@ type lruCache struct {
 	credsCreator func(string) (credentials.PerRPCCredentials, error)
 }
 
-var defaultCredsCreator = grpcgoogle.NewGcpServiceAccountIdentity
-
+// newLRUCache instantiates a new lruCache with the specified capacity.
 func newLRUCache(size uint64) *lruCache {
 	return &lruCache{
 		cacheSize:    size,
 		ll:           list.New(),
 		cache:        make(map[string]*list.Element),
-		credsCreator: defaultCredsCreator,
+		credsCreator: grpcgoogle.NewGcpServiceAccountIdentity,
 	}
 }
 
+// resizeCache dynamically updates the capacity of the LRU cache,
+// immediately evicting Least Recently Used entries if the new size is
+// smaller than the current cache size.
 func (c *lruCache) resizeCache(newCacheSize uint64) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -262,6 +240,10 @@ func (c *lruCache) resizeCache(newCacheSize uint64) {
 	}
 }
 
+// getOrCreate retrieves or constructs the PerRPCCredentials for a specified
+// audience. If the audience is not found in the cache, it creates new
+// credentials using the configured creator, adds it to the cache, and evicts
+// the least recently used entry if the cache size is at capacity.
 func (c *lruCache) getOrCreate(audience string) (credentials.PerRPCCredentials, error) {
 	c.mu.Lock()
 

@@ -19,16 +19,20 @@
 package gcpauthn
 
 import (
+	"context"
 	"strings"
 	"testing"
 
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
+	"google.golang.org/grpc/internal/xds/balancer/clustermanager"
 	"google.golang.org/grpc/internal/xds/httpfilter"
+	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 	"google.golang.org/protobuf/proto"
-	wrapperspb "google.golang.org/protobuf/types/known/wrapperspb"
 
 	v3gcpauthnpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/gcp_authn/v3"
+	iresolver "google.golang.org/grpc/internal/resolver"
+	wrapperspb "google.golang.org/protobuf/types/known/wrapperspb"
 )
 
 type s struct {
@@ -179,6 +183,94 @@ func (s) TestBuildClientInterceptor(t *testing.T) {
 
 			if interceptor.cache == nil || interceptor.cache.cacheSize != tc.wantCacheSize {
 				t.Errorf("BuildClientInterceptor() returned interceptor with cacheSize = %d, want %d", interceptor.cache.cacheSize, tc.wantCacheSize)
+			}
+		})
+	}
+}
+
+// TestInterceptor_NewStream_Errors verifies that interceptor.NewStream returns
+// the expected errors under various invalid states, such as a missing xDS config,
+// a cluster not defined in the CDS, or a malformed metadata type.
+func (s) TestInterceptor_NewStream_Errors(t *testing.T) {
+	builder := httpfilter.Get("type.googleapis.com/envoy.extensions.filters.http.gcp_authn.v3.GcpAuthnFilterConfig")
+	cfg := testutils.MarshalAny(t, &v3gcpauthnpb.GcpAuthnFilterConfig{
+		CacheConfig: &v3gcpauthnpb.TokenCacheConfig{
+			CacheSize: &wrapperspb.UInt64Value{Value: 10},
+		},
+	})
+	filterConfig, err := builder.ParseFilterConfig(cfg)
+	if err != nil {
+		t.Fatalf("Failed to parse filter config: %v", err)
+	}
+	clientFilterBuilder, ok := builder.(httpfilter.ClientFilterBuilder)
+	if !ok {
+		t.Fatalf("Filter Builder does not implement ClientFilterBuilder")
+	}
+	clientFilter := clientFilterBuilder.BuildClientFilter().(*ClientFilter)
+	clientFilter.FilterName = "com.google.grpc.gcp_authn"
+	interceptor, err := clientFilter.BuildClientInterceptor(filterConfig, nil)
+	if err != nil {
+		t.Fatalf("Failed to build client interceptor: %v", err)
+	}
+
+	validConfig := &xdsresource.XDSConfig{
+		Clusters: map[string]*xdsresource.ClusterResult{
+			"cluster1": {
+				Config: xdsresource.ClusterConfig{
+					Cluster: &xdsresource.ClusterUpdate{
+						Metadata: map[string]any{
+							"com.google.grpc.gcp_authn": xdsresource.AudienceMetadataValue{Audience: "https://example.com"},
+						},
+					},
+				},
+			},
+			"cluster_wrong_type": {
+				Config: xdsresource.ClusterConfig{
+					Cluster: &xdsresource.ClusterUpdate{
+						Metadata: map[string]any{
+							"com.google.grpc.gcp_authn": "not-audience-metadata",
+						},
+					},
+				},
+			},
+		},
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	tests := []struct {
+		name    string
+		ctx     context.Context
+		wantErr string
+	}{
+		{
+			name:    "missing_xds_config",
+			ctx:     clustermanager.SetPickedCluster(ctx, "cluster1"),
+			wantErr: "xDS config not found in context",
+		},
+		{
+			name:    "cluster_not_found_in_CDS",
+			ctx:     clustermanager.SetPickedCluster(xdsresource.NewContextWithXDSConfig(ctx, validConfig), "cluster_not_found"),
+			wantErr: "not found in CDS",
+		},
+		{
+			name:    "wrong_metadata_type",
+			ctx:     clustermanager.SetPickedCluster(xdsresource.NewContextWithXDSConfig(ctx, validConfig), "cluster_wrong_type"),
+			wantErr: "not of type AudienceMetadataValue",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			newStream := func(_ context.Context, _ func(), _ []any) (iresolver.ClientStream, error) {
+				return nil, nil
+			}
+			_, err := interceptor.NewStream(tc.ctx, iresolver.RPCInfo{}, nil, func() {}, newStream)
+			if err == nil {
+				t.Fatalf("NewStream() succeeded, want error containing %q", tc.wantErr)
+			}
+			if !strings.Contains(err.Error(), tc.wantErr) {
+				t.Errorf("NewStream() err = %v, want error containing %q", err, tc.wantErr)
 			}
 		})
 	}
