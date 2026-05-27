@@ -33,6 +33,7 @@ import (
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/credentials/xds"
 	"google.golang.org/grpc/internal"
@@ -106,7 +107,7 @@ func (s) TestGCPAuthnFilter_SuccessCase(t *testing.T) {
 	t.Setenv(gceMetadataHostEnvVar, strings.TrimPrefix(metadataServer.URL, "http://"))
 
 	// Spin up an xDS management server.
-	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 	defer mgmtServer.Stop()
 
 	// Create an xDS resolver with bootstrap configuration pointing to the above
@@ -249,7 +250,7 @@ func (s) TestGCPAuthnFilter_TokenCaching(t *testing.T) {
 	t.Setenv(gceMetadataHostEnvVar, strings.TrimPrefix(metadataServer.URL, "http://"))
 
 	// Spin up an xDS management server.
-	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 	defer mgmtServer.Stop()
 
 	// Create an xDS resolver with bootstrap configuration pointing to the above
@@ -396,7 +397,7 @@ func (s) TestGCPAuthnFilter_InsecureTransport(t *testing.T) {
 	t.Setenv(gceMetadataHostEnvVar, strings.TrimPrefix(metadataServer.URL, "http://"))
 
 	// Spin up an xDS management server.
-	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 	defer mgmtServer.Stop()
 
 	// Create an xDS resolver with bootstrap configuration pointing to the above
@@ -520,7 +521,7 @@ func (s) TestGCPAuthnFilter_CacheSharingConfigUpdate(t *testing.T) {
 	t.Setenv(gceMetadataHostEnvVar, strings.TrimPrefix(metadataServer.URL, "http://"))
 
 	// Spin up an xDS management server.
-	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 	defer mgmtServer.Stop()
 
 	// Create an xDS resolver with bootstrap configuration pointing to the above
@@ -787,7 +788,7 @@ func (s) TestGCPAuthnFilter_ConcurrentRPCWithShortAndLongContext(t *testing.T) {
 	t.Setenv(gceMetadataHostEnvVar, strings.TrimPrefix(metadataServer.URL, "http://"))
 
 	// Spin up an xDS management server.
-	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 	defer mgmtServer.Stop()
 
 	// Create an xDS resolver with bootstrap configuration pointing to the above
@@ -892,6 +893,9 @@ func (s) TestGCPAuthnFilter_ConcurrentRPCWithShortAndLongContext(t *testing.T) {
 
 	client := testgrpc.NewTestServiceClient(cc)
 
+	cc.Connect()
+	testutils.AwaitState(ctx, t, cc, connectivity.Ready)
+
 	// Create a short context for the first RPC call.
 	shortCtx, shortBufCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
 	defer shortBufCancel()
@@ -994,7 +998,7 @@ func (s) TestGCPAuthnFilter_PreservesUserCallOptions(t *testing.T) {
 	t.Setenv(gceMetadataHostEnvVar, strings.TrimPrefix(metadataServer.URL, "http://"))
 
 	// Spin up an xDS management server.
-	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 	defer mgmtServer.Stop()
 
 	// Create an xDS resolver with bootstrap configuration pointing to the above
