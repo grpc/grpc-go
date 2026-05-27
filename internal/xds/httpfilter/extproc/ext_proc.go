@@ -217,11 +217,9 @@ func (clientFilter) BuildClientInterceptor(base, override httpfilter.FilterConfi
 	if err != nil {
 		return nil, fmt.Errorf("extproc: failed to create client: %v", err)
 	}
-	extClient := v3procservicepb.NewExternalProcessorClient(cc)
-
 	return &clientInterceptor{
 		config:    config,
-		extClient: extClient,
+		extClient: v3procservicepb.NewExternalProcessorClient(cc),
 		cancel:    cancel,
 	}, nil
 }
@@ -234,7 +232,5 @@ type clientInterceptor struct {
 }
 
 func (i *clientInterceptor) Close() {
-	if i.cancel != nil {
-		i.cancel()
-	}
+	i.cancel()
 }

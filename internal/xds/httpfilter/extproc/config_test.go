@@ -55,13 +55,6 @@ func Test(t *testing.T) {
 
 const testBaseURI = "base-uri"
 
-// incorrectFilterConfig embeds httpfilter.FilterConfig but is not of type
-// baseConfig/overrideConfig, and is used to test incorrect config types being
-// passed to BuildClientInterceptor.
-type incorrectFilterConfig struct {
-	httpfilter.FilterConfig
-}
-
 // testParseGRPCServiceConfig is a helper function that parses a GrpcService
 // proto message into a GRPCServiceConfig. This is a temporary test
 // implementation that will be removed once gRFC A102 is implemented.
@@ -109,8 +102,6 @@ func (s) TestParseFilterConfig_Success(t *testing.T) {
 	origParseGRPCServiceConfig := parseGRPCServiceConfig
 	defer func() { parseGRPCServiceConfig = origParseGRPCServiceConfig }()
 	parseGRPCServiceConfig = testParseGRPCServiceConfig
-
-	b := builder{}
 
 	tests := []struct {
 		name    string
@@ -225,6 +216,7 @@ func (s) TestParseFilterConfig_Success(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			b := builder{}
 			got, err := b.ParseFilterConfig(tt.cfg)
 			if err != nil {
 				t.Fatalf("ParseFilterConfig() returned unexpected error: %v", err)
@@ -240,8 +232,6 @@ func (s) TestParseFilterConfig_Errors(t *testing.T) {
 	origParseGRPCServiceConfig := parseGRPCServiceConfig
 	defer func() { parseGRPCServiceConfig = origParseGRPCServiceConfig }()
 	parseGRPCServiceConfig = testParseGRPCServiceConfig
-
-	b := builder{}
 
 	tests := []struct {
 		name    string
@@ -394,7 +384,8 @@ func (s) TestParseFilterConfig_Errors(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := b.ParseFilterConfig(tt.cfg)
+			builder := builder{}
+			_, err := builder.ParseFilterConfig(tt.cfg)
 			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
 				t.Fatalf("ParseFilterConfig() returned error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -403,8 +394,6 @@ func (s) TestParseFilterConfig_Errors(t *testing.T) {
 }
 
 func (s) TestParseFilterConfigOverride_Success(t *testing.T) {
-	b := builder{}
-
 	tests := []struct {
 		name            string
 		override        proto.Message
@@ -465,7 +454,8 @@ func (s) TestParseFilterConfigOverride_Success(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := b.ParseFilterConfigOverride(tt.override)
+			builder := builder{}
+			got, err := builder.ParseFilterConfigOverride(tt.override)
 			if err != nil {
 				t.Fatalf("ParseFilterConfigOverride() returned unexpected error: %v", err)
 			}
@@ -477,8 +467,6 @@ func (s) TestParseFilterConfigOverride_Success(t *testing.T) {
 }
 
 func (s) TestParseFilterConfigOverride_Errors(t *testing.T) {
-	b := builder{}
-
 	tests := []struct {
 		name     string
 		override proto.Message
@@ -525,7 +513,8 @@ func (s) TestParseFilterConfigOverride_Errors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := b.ParseFilterConfigOverride(tt.override)
+			builder := builder{}
+			_, err := builder.ParseFilterConfigOverride(tt.override)
 			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
 				t.Fatalf("ParseFilterConfigOverride() returned error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -540,10 +529,6 @@ func (s) TestBuildClientInterceptor_Success(t *testing.T) {
 		return conn, conn.Close, nil
 	}
 	defer func() { createExtProcChannel = origCreateExtProcChannel }()
-
-	b := builder{}
-	f := b.BuildClientFilter()
-	defer f.Close()
 
 	tests := []struct {
 		name       string
@@ -749,7 +734,11 @@ func (s) TestBuildClientInterceptor_Success(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			intptr, err := f.BuildClientInterceptor(tc.cfg, tc.override)
+			builder := builder{}
+			filter := builder.BuildClientFilter()
+			defer filter.Close()
+
+			intptr, err := filter.BuildClientInterceptor(tc.cfg, tc.override)
 			if err != nil {
 				t.Fatalf("BuildClientInterceptor() returned unexpected error: %v", err)
 			}
@@ -773,9 +762,12 @@ func (s) TestBuildClientInterceptor_Failure(t *testing.T) {
 	}
 	defer func() { createExtProcChannel = origCreateExtProcChannel }()
 
-	b := builder{}
-	f := b.BuildClientFilter()
-	defer f.Close()
+	// incorrectFilterConfig embeds httpfilter.FilterConfig but is not of type
+	// baseConfig/overrideConfig, and is used to test incorrect config types being
+	// passed to BuildClientInterceptor.
+	type incorrectFilterConfig struct {
+		httpfilter.FilterConfig
+	}
 
 	tests := []struct {
 		name     string
@@ -825,9 +817,13 @@ func (s) TestBuildClientInterceptor_Failure(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := f.BuildClientInterceptor(tc.cfg, tc.override)
+			builder := builder{}
+			filter := builder.BuildClientFilter()
+			defer filter.Close()
+
+			_, err := filter.BuildClientInterceptor(tc.cfg, tc.override)
 			if err == nil {
-				t.Fatalf("BuildClientInterceptor() returned nil error, want error")
+				t.Fatalf("BuildClientInterceptor() returned nil error, want error %q", tc.wantErr)
 			}
 			if !strings.Contains(err.Error(), tc.wantErr) {
 				t.Fatalf("BuildClientInterceptor() returned error: %v, want %v", err, tc.wantErr)
