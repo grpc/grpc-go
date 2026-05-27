@@ -439,11 +439,11 @@ func (s) TestResolverClusterSpecifierPlugin_WithFilters(t *testing.T) {
 		t.Fatal("RPCInfo does not contain interceptors list")
 	}
 
-	newStream := func(context.Context, func()) (iresolver.ClientStream, error) {
+	newStream := func(context.Context, func(), []any) (iresolver.ClientStream, error) {
 		return nil, nil
 	}
 
-	if _, err = res.Interceptor.NewStream(ctx, iresolver.RPCInfo{Method: "/service/method", Context: ctx}, func() {}, newStream); err != nil {
+	if _, err = res.Interceptor.NewStream(ctx, iresolver.RPCInfo{Method: "/service/method", Context: ctx}, nil, func() {}, newStream); err != nil {
 		t.Fatalf("NewStream() failed with error: %v", err)
 	}
 
