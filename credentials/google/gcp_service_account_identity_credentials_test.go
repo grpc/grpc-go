@@ -131,17 +131,11 @@ func setupStubTokenProvider(token string, err error) *stubTokenProvider {
 	}
 }
 
-// setupTestGCPServiceAccountIdentityCreds constructs a credentials instance.
-// It returns a credentials.PerRPCCredentials with the injected
-// stubTokenProvider.
+// setupTestGCPServiceAccountIdentityCreds constructs a GCP service account
+// identity credentials instance with an injected stub token provider.
 //
-// It overrides:
-//   - NewIDTokenCredentials: Injecting a mock ID Token credentials provider.
-//   - BackoffStrategy: Injecting a mock backoff strategy with a fast,
-//     deterministic backoff delay.
-//
-// All mocked package-level hooks and states are automatically cleaned up and
-// restored after the test finishes using t.Cleanup().
+// It overrides internal.NewIDTokenCredentials to use the stubTokenProvider,
+// and registers a cleanup function to restore original hook after the test.
 func setupTestGCPServiceAccountIdentityCreds(t *testing.T, tp *stubTokenProvider) credentials.PerRPCCredentials {
 	// Override the ID token credentials to use stub token provider.
 	origNewIDTokenCredentials := internal.NewIDTokenCredentials
