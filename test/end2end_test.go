@@ -6357,8 +6357,8 @@ func (s *httpServer) writeHeader(framer *http2.Framer, sid uint32, headerFields 
 	})
 }
 
-func (s *httpServer) writePayload(framer *http2.Framer, sid uint32, payload []byte) error {
-	return framer.WriteData(sid, false, payload)
+func (s *httpServer) writePayload(framer *http2.Framer, sid uint32, payload []byte, endStream bool) error {
+	return framer.WriteData(sid, endStream, payload)
 }
 
 func (s *httpServer) start(t *testing.T, lis net.Listener) {
@@ -6423,15 +6423,18 @@ func (s *httpServer) start(t *testing.T, lis net.Listener) {
 			}
 
 			response := s.responses[requestNum]
-			for _, header := range response.headers {
-				if err = s.writeHeader(framer, sid, header, false); err != nil {
+			hasPayload := response.payload != nil
+			hasTrailers := len(response.trailers) > 0
+			for i, header := range response.headers {
+				endStream := !hasPayload && !hasTrailers && i == len(response.headers)-1
+				if err = s.writeHeader(framer, sid, header, endStream); err != nil {
 					t.Errorf("Error at server-side while writing headers. Err: %v", err)
 					return
 				}
 				writer.Flush()
 			}
-			if response.payload != nil {
-				if err = s.writePayload(framer, sid, response.payload); err != nil {
+			if hasPayload {
+				if err = s.writePayload(framer, sid, response.payload, !hasTrailers); err != nil {
 					t.Errorf("Error at server-side while writing payload. Err: %v", err)
 					return
 				}
@@ -6821,8 +6824,7 @@ func (s) TestHTTPServerSendsNonGRPCHeaderSurfaceFurtherData(t *testing.T) {
 				},
 			},
 			wantCode: codes.Unknown,
-			wantErr: `unexpected HTTP status code received from server: 200 (OK); transport: received unexpected content-type "text/html"
-data: ""`,
+			wantErr:  `unexpected HTTP status code received from server: 200 (OK); transport: received unexpected content-type "text/html"`,
 		},
 		{
 			name: "non-gRPC content-type with payload",

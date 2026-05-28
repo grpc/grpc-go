@@ -112,6 +112,7 @@ const (
 	misbehaved
 	encodingRequiredStatus
 	invalidContentType
+	invalidContentTypeWithMultipleFrame
 	malformedHeader
 	delayRead
 	pingpong
@@ -227,7 +228,40 @@ func (h *testStreamHandler) handleStreamInvalidContentType(s *ServerStream) {
 	h.t.controlBuf.put(&headerFrame{
 		streamID:  s.id,
 		hf:        headerFields,
+		endStream: true,
+		cleanup: &cleanupStream{
+			streamID: s.id,
+			onWrite:  func() {},
+		},
+	})
+}
+
+func (h *testStreamHandler) handleStreamInvalidContentTypeWithMultipleFrame(s *ServerStream) {
+	headerFields := []hpack.HeaderField{}
+	headerFields = append(headerFields, hpack.HeaderField{Name: "content-type", Value: expectedInvalidHeaderField})
+	h.t.controlBuf.put(&headerFrame{
+		streamID:  s.id,
+		hf:        headerFields,
 		endStream: false,
+	})
+	d1 := newBufferSlice([]byte("first"))
+	d1.Ref()
+	h.t.controlBuf.put(&dataFrame{
+		streamID:    s.id,
+		h:           nil,
+		data:        d1,
+		onEachWrite: func() {},
+	})
+	// Wait for the test to verify the first frame before sending the next frame.
+	<-h.notify
+	d2 := newBufferSlice([]byte(" second"))
+	d2.Ref()
+	h.t.controlBuf.put(&dataFrame{
+		streamID:    s.id,
+		h:           nil,
+		data:        d2,
+		onEachWrite: func() {},
+		endStream:   true,
 	})
 }
 
@@ -445,6 +479,21 @@ func (s *server) start(t *testing.T, port int, serverConfig *ServerConfig, ht hT
 					wg.Add(1)
 					go func() {
 						h.handleStreamInvalidContentType(s)
+						wg.Done()
+					}()
+				})
+				wg.Done()
+			}()
+		case invalidContentTypeWithMultipleFrame:
+			h.notify = make(chan struct{})
+			s.mu.Lock()
+			close(s.ready)
+			s.mu.Unlock()
+			go func() {
+				transport.HandleStreams(ctx, func(s *ServerStream) {
+					wg.Add(1)
+					go func() {
+						h.handleStreamInvalidContentTypeWithMultipleFrame(s)
 						wg.Done()
 					}()
 				})
@@ -1685,27 +1734,48 @@ func (s) TestInvalidContentType(t *testing.T) {
 	server.stop()
 }
 
-func (s) TestHeaderChanClosedAfterReceivingNonGRPCResponse(t *testing.T) {
-	server, ct, cancel := setUp(t, 0, invalidContentType)
+func (s) TestNonGRPCDataCollectionAcrossMultipleFrames(t *testing.T) {
+	server, ct, cancel := setUp(t, 0, invalidContentTypeWithMultipleFrame)
 	defer cancel()
 	defer server.stop()
 	defer ct.Close(fmt.Errorf("closed manually by test"))
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
+
+	select {
+	case <-server.ready:
+	case <-ctx.Done():
+		t.Fatal("timed out waiting for server handler to be initialized")
+	}
+
 	s, err := ct.NewStream(ctx, &CallHdr{Host: "localhost", Method: "foo"}, nil)
 	if err != nil {
 		t.Fatalf("failed to create the stream")
 	}
-	// The server sends a non-gRPC response without ending the stream, so the
-	// stream enters data collection mode. headerChan is not closed until the
-	// stream itself closes.
-	if _, err := s.Header(); err == nil {
-		t.Fatalf("Header() succeeded, want error")
-	}
+
+	// After the first Data frame (without EOS), handleNonGRPCData returns
+	// nil so the stream stays open and continues collecting.
 	select {
-	case <-s.headerChan:
-	default:
-		t.Errorf("s.headerChan: got open, want closed")
+	case <-s.Done():
+		t.Fatal("stream closed after first DATA frame, want it to stay open")
+	case <-time.After(200 * time.Millisecond):
+	}
+
+	// Signal the server to send the second Data frame with EOS.
+	close(server.h.notify)
+
+	_, err = s.readTo(make([]byte, 1))
+	if err == nil {
+		t.Fatal("Read succeeded, want error")
+	}
+	// Both frames should be collected: "first" + " second".
+	wantCode := codes.Internal
+	wantMsg := "first second"
+	if got := status.Code(err); got != wantCode {
+		t.Fatalf("Read error code = %v, want %v\nfull error: %v", got, wantCode, err)
+	}
+	if got := status.Convert(err).Message(); !strings.Contains(got, wantMsg) {
+		t.Fatalf("Read error message = %q, want it to contain %q", got, wantMsg)
 	}
 }
 
