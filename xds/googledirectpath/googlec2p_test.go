@@ -756,8 +756,10 @@ func (s) TestBuildXDSClientNotOnGCEWithForceXDS(t *testing.T) {
 }
 
 // TestBuildXDSClientOnGCEWithForceXDS validates that when running on GCE with
-// the force-xds query param, we successfully build an xDS client with standard
-// GCP Node ID format, locality zone, and dualstack capability.
+// the force-xds query param, the force-xds behavior takes priority (bypassing
+// GCE metadata server queries), so we build an xDS client with standard GCE
+// Node ID format ("C2P-777" since isGCE is true) but without locality zone,
+// and with dualstack capability set to true.
 func (s) TestBuildXDSClientOnGCEWithForceXDS(t *testing.T) {
 	replaceResolvers(t)
 	simulateRunningOnGCE(t, true)
@@ -816,14 +818,11 @@ func (s) TestBuildXDSClientOnGCEWithForceXDS(t *testing.T) {
 			}`),
 		},
 		Node: []byte(`{
-			"id": "C2P-777",
-			"locality": {
-				"zone": "test-zone"
-			},
-			"metadata": {
-				"TRAFFICDIRECTOR_DIRECTPATH_C2P_IPV6_CAPABLE": true
-			}
-		}`),
+					"id": "C2P-777",
+					"metadata": {
+						"TRAFFICDIRECTOR_DIRECTPATH_C2P_IPV6_CAPABLE": true
+					}
+				}`),
 	})
 	verifyXDSClientBootstrapConfig(t, xdsClientPool, xdsTarget.String(), wantBootstrapConfig)
 }

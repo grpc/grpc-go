@@ -137,6 +137,8 @@ func (c2pResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, opts 
 	}
 
 	isGCE := onGCE()
+	// We check only for the presence of the "force-xds" query parameter key,
+	// and do not evaluate its value.
 	_, forceXds := t.URL.Query()["force-xds"]
 	if !forceXds && !isGCE {
 		// If not xDS, fallback to DNS.
@@ -146,7 +148,12 @@ func (c2pResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, opts 
 
 	var zone string
 	var ipv6Capable bool
-	if isGCE {
+	if forceXds {
+		// If the force-xds query parameter is present, GCE metadata server
+		// queries are bypassed.
+		zone = ""
+		ipv6Capable = true
+	} else {
 		// Note that the following calls to getZone() and getIPv6Capable() does I/O,
 		// and has 10 seconds timeout each.
 		//
@@ -157,14 +164,6 @@ func (c2pResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, opts 
 		go func() { zoneCh <- getZone(httpReqTimeout) }()
 		go func() { ipv6CapableCh <- getIPv6Capable(httpReqTimeout) }()
 		zone, ipv6Capable = <-zoneCh, <-ipv6CapableCh
-	} else {
-		// When running off-GCP (for DirectPath over GCI), the GCE metadata
-		// server is not available.
-		// - Set zone to empty.
-		// - Set ipv6Capable to true because DirectPath over GCI supports
-		//   IPv6-capable on-premise clients.
-		zone = ""
-		ipv6Capable = true
 	}
 
 	xdsServerURI := getXdsServerURI()
