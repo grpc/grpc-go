@@ -944,7 +944,9 @@ func (t *http2Client) closeStream(s *ClientStream, err error, rst bool, rstCode 
 		<-s.done
 		return
 	}
-
+	// status and trailers can be updated here without any synchronization because the stream goroutine will
+	// only read it after it sees an io.EOF error from read or write and we'll write those errors
+	// only after updating this.
 	s.status = st
 	if len(mdata) > 0 {
 		s.trailer = mdata
