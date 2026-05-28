@@ -945,20 +945,6 @@ func (t *http2Client) closeStream(s *ClientStream, err error, rst bool, rstCode 
 		return
 	}
 
-	// If the stream is in the non-gRPC data collection lifecycle, use the
-	// nonGRPCStatus and nonGRPCDataBuf to construct the final status and
-	// error to return to the user. This is to ensure that non-gRPC data
-	// collected is included in the final status message returned to the user.
-	s.collectionMu.Lock()
-	if s.nonGRPCStatus != nil {
-		data := "\ndata: " + strconv.Quote(string(s.nonGRPCDataBuf))
-		st = status.New(s.nonGRPCStatus.Code(), s.nonGRPCStatus.Message()+data)
-		err = st.Err()
-		// Clear the nonGRPCStatus to indicate the non-grpc data collection is done.
-		s.nonGRPCStatus = nil
-	}
-	s.collectionMu.Unlock()
-
 	s.status = st
 	if len(mdata) > 0 {
 		s.trailer = mdata
@@ -1237,18 +1223,17 @@ func (t *http2Client) handleData(f *parsedDataFrame) {
 			return
 		}
 
-		handle, end := s.tryHandleNonGRPCData(f)
-		if handle {
+		if s.nonGRPCStatus != nil {
+			// The frame should be handled as a non-gRPC response body
+			st := s.handleNonGRPCData(f)
 			if w := s.fc.onRead(size); w > 0 {
 				t.controlBuf.put(&outgoingWindowUpdate{
 					streamID:  s.id,
 					increment: w,
 				})
 			}
-			if end {
-				// Close the stream; closeStream will finalize the nonGRPCStatus and nonGRPCDataBuf,
-				// and provide them as err and st.
-				t.closeStream(s, nil, true, http2.ErrCodeProtocol, nil, nil, true)
+			if st != nil {
+				t.closeStream(s, st.Err(), true, http2.ErrCodeProtocol, st, nil, true)
 			}
 			return
 		}

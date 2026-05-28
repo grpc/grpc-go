@@ -19,7 +19,7 @@
 package transport
 
 import (
-	"sync"
+	"strconv"
 	"sync/atomic"
 
 	"golang.org/x/net/http2"
@@ -55,7 +55,6 @@ type ClientStream struct {
 	// reading its value).
 	headerValid bool
 
-	collectionMu   sync.Mutex     // protects nonGRPCStatus and nonGRPCDataBuf during the non-gRPC data collection lifecycle.
 	nonGRPCStatus  *status.Status // the initial status from the non-gRPC response header, finalized with collected data before closing.
 	nonGRPCDataBuf []byte         // stores the data of a non-gRPC response.
 
@@ -67,35 +66,20 @@ type ClientStream struct {
 }
 
 func (s *ClientStream) startNonGRPCDataCollection(st *status.Status) {
-	s.collectionMu.Lock()
-	defer s.collectionMu.Unlock()
-	if s.nonGRPCStatus != nil {
-		// If nonGRPCStatus is already set, it means the stream is already in
-		// the non-gRPC data collection lifecycle.
-		return
-	}
 	s.nonGRPCStatus = st
 	s.nonGRPCDataBuf = make([]byte, 0, nonGRPCDataMaxLen)
 }
 
-// tryHandleNonGRPCData tries to collect non-gRPC body from the given data frame.
-// It returns two booleans:
-// handle indicates whether the frame should be handled as a non-gRPC response body,
-// end indicates whether the stream should be closed after handling this frame.
-func (s *ClientStream) tryHandleNonGRPCData(f *parsedDataFrame) (handle bool, end bool) {
-	s.collectionMu.Lock()
-	defer s.collectionMu.Unlock()
-	if s.nonGRPCStatus == nil {
-		// if not in the non-gRPC data collection lifecycle, do not handle this frame.
-		return false, false
-	}
-
+// handleNonGRPCData collects non-gRPC body from the given data frame.
+// It returns non-nil value when the stream should be closed with it.
+func (s *ClientStream) handleNonGRPCData(f *parsedDataFrame) *status.Status {
 	n := min(f.data.Len(), nonGRPCDataMaxLen-len(s.nonGRPCDataBuf))
 	s.nonGRPCDataBuf = append(s.nonGRPCDataBuf, f.data.ReadOnlyData()[0:n]...)
 	if len(s.nonGRPCDataBuf) >= nonGRPCDataMaxLen || f.StreamEnded() {
-		return true, true
+		data := "\ndata: " + strconv.Quote(string(s.nonGRPCDataBuf))
+		return status.New(s.nonGRPCStatus.Code(), s.nonGRPCStatus.Message()+data)
 	}
-	return true, false
+	return nil
 }
 
 // Read reads an n byte message from the input stream.
