@@ -68,6 +68,10 @@ func unmarshalClusterResource(r *anypb.Any, serverCfg *bootstrap.ServerConfig) (
 	if err := proto.Unmarshal(r.GetValue(), cluster); err != nil {
 		return "", ClusterUpdate{}, fmt.Errorf("failed to unmarshal resource: %v", err)
 	}
+
+	if cluster.GetName() == "" {
+		return "", ClusterUpdate{}, fmt.Errorf("empty resource name in Cluster resource")
+	}
 	cu, err := validateClusterAndConstructClusterUpdate(cluster, serverCfg)
 	if err != nil {
 		return cluster.GetName(), ClusterUpdate{}, err
@@ -181,14 +185,53 @@ func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster, serv
 			return ClusterUpdate{}, fmt.Errorf("JSON generated from xDS LB policy registry: %s is invalid: %v", pretty.FormatJSON(lbPolicy), err)
 		}
 	}
+	var lrsReportEndpointMetrics *LRSReportEndpointMetricsConfig
+	if envconfig.XDSORCAToLRSPropEnabled && len(cluster.GetLrsReportEndpointMetrics()) > 0 {
+		lrsReportEndpointMetrics = &LRSReportEndpointMetricsConfig{
+			NamedMetrics: make(map[string]struct{}),
+		}
+		for _, m := range cluster.GetLrsReportEndpointMetrics() {
+			switch m {
+			case "cpu_utilization":
+				lrsReportEndpointMetrics.CPUUtilization = true
+			case "mem_utilization":
+				lrsReportEndpointMetrics.MemUtilization = true
+			case "application_utilization":
+				lrsReportEndpointMetrics.ApplicationUtilization = true
+			case "named_metrics.*":
+				// If "named_metrics.*" is present, it takes precedence over any specific
+				// "named_metrics.foo" fields. Per gRFC A85, specific named metrics are ignored
+				// if NamedMetricsAll is true. We clear the map to save memory.
+				lrsReportEndpointMetrics.NamedMetricsAll = true
+				lrsReportEndpointMetrics.NamedMetrics = nil
+			default:
+				if lrsReportEndpointMetrics.NamedMetricsAll {
+					continue
+				}
+				if name, found := strings.CutPrefix(m, "named_metrics."); found && name != "" {
+					lrsReportEndpointMetrics.NamedMetrics[name] = struct{}{}
+				}
+			}
+		}
+	}
+
+	var metadata map[string]any
+	if envconfig.GCPAuthenticationFilterEnabled {
+		var err error
+		if metadata, err = validateAndConstructMetadata(cluster.GetMetadata()); err != nil {
+			return ClusterUpdate{}, err
+		}
+	}
 
 	ret := ClusterUpdate{
-		ClusterName:      cluster.GetName(),
-		SecurityCfg:      sc,
-		MaxRequests:      circuitBreakersFromCluster(cluster),
-		LBPolicy:         lbPolicy,
-		OutlierDetection: od,
-		TelemetryLabels:  telemetryLabels,
+		ClusterName:              cluster.GetName(),
+		SecurityCfg:              sc,
+		MaxRequests:              circuitBreakersFromCluster(cluster),
+		LBPolicy:                 lbPolicy,
+		OutlierDetection:         od,
+		TelemetryLabels:          telemetryLabels,
+		LRSReportEndpointMetrics: lrsReportEndpointMetrics,
+		Metadata:                 metadata,
 	}
 
 	if lrs := cluster.GetLrsServer(); lrs != nil {

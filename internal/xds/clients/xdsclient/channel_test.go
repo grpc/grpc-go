@@ -793,7 +793,8 @@ func (s) TestDecodeResponse_PanicRecoveryEnabled(t *testing.T) {
 	resp := response{resources: []*anypb.Any{{Value: []byte("test")}}}
 	wantErr := "recovered from panic during resource parsing"
 
-	if _, _, err := decodeResponse(&DecodeOptions{}, rType, resp); err == nil || !strings.Contains(err.Error(), wantErr) {
+	xc := &xdsChannel{}
+	if _, _, err := xc.decodeResponse(rType, resp); err == nil || !strings.Contains(err.Error(), wantErr) {
 		t.Fatalf("decodeResponse() failed with err: %v, want %q", err, wantErr)
 	}
 }
@@ -809,11 +810,12 @@ func (s) TestDecodeResponse_PanicRecoveryDisabled(t *testing.T) {
 	}
 	resp := response{resources: []*anypb.Any{{Value: []byte("test")}}}
 	wantErr := "simulate panic"
+	xc := &xdsChannel{}
 
 	defer func() {
 		if r := recover(); r == nil || !strings.Contains(fmt.Sprint(r), wantErr) {
 			t.Fatalf("Expected panic in decodeResponse, got: %v, want: %q", r, wantErr)
 		}
 	}()
-	decodeResponse(&DecodeOptions{}, rType, resp)
+	xc.decodeResponse(rType, resp)
 }

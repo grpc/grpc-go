@@ -21,11 +21,15 @@ package test
 import (
 	"context"
 	"io"
+	"runtime/pprof"
+	"sync/atomic"
 	"testing"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/stubserver"
+	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/status"
 
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
@@ -67,6 +71,101 @@ func (s) TestServerReturningContextError(t *testing.T) {
 		t.Fatalf("ss.Client.FullDuplexCall().Recv() got error %v; want <status with Code()=DeadlineExceeded>", err)
 	}
 
+}
+
+func pprofCtxCollectLabels(ctx context.Context) map[string]string {
+	seenLabels := map[string]string{}
+	pprof.ForLabels(ctx, func(k, val string) bool {
+		seenLabels[k] = val
+		return true
+	})
+	return seenLabels
+}
+
+// TestServerSetGoroutineLabelsInContext verifies that when enabled, the
+// grpc.method runtime/pprof goroutine label gets set in the context that's
+// passed to the handlers.
+func (s) TestServerSetGoroutineLabelsInContext(t *testing.T) {
+	testutils.SetEnvConfig(t, &envconfig.LabelServerGoroutines, envconfig.GoroutineLabelServerMethod)
+	ss := &stubserver.StubServer{
+		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
+			ctxLabels := pprofCtxCollectLabels(ctx)
+			if val, ok := ctxLabels["grpc.method"]; !ok {
+				t.Errorf("missing \"grpc.method\" label; found labels: %v", ctxLabels)
+			} else if wantVal := "/grpc.testing.TestService/EmptyCall"; val != wantVal {
+				t.Errorf("unexpected value for \"grpc.method\" label %q; want %q", ctxLabels["grpc.method"], wantVal)
+			}
+			return &testpb.Empty{}, nil
+		},
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
+			ctxLabels := pprofCtxCollectLabels(stream.Context())
+			if val, ok := ctxLabels["grpc.method"]; !ok {
+				t.Errorf("missing \"grpc.method\" label; found labels: %v", ctxLabels)
+			} else if wantVal := "/grpc.testing.TestService/FullDuplexCall"; val != wantVal {
+				t.Errorf("unexpected value for \"grpc.method\" label %q; want %q", ctxLabels["grpc.method"], wantVal)
+			}
+			return nil
+		},
+	}
+	if err := ss.Start(nil); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
+	}
+	defer ss.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if _, err := ss.Client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+		t.Fatalf("ss.Client.EmptyCall() got error %v; want OK", err)
+	}
+
+	stream, err := ss.Client.FullDuplexCall(ctx)
+	if err != nil {
+		t.Fatalf("unexpected error starting the stream: %v", err)
+	}
+	if _, err = stream.Recv(); err != io.EOF {
+		t.Fatalf("ss.Client.FullDuplexCall().Recv() got error %v; want io.EOF", err)
+	}
+}
+
+// TestServerSetGoroutineLabelsInContextEnvVarDisabled verifies that when
+// disable, the grpc.method runtime/pprof goroutine label does _not_ get set in
+// the context that's passed to the handlers.
+func (s) TestServerSetGoroutineLabelsInContextEnvVarDisabled(t *testing.T) {
+	testutils.SetEnvConfig(t, &envconfig.LabelServerGoroutines, 0)
+	ss := &stubserver.StubServer{
+		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
+			ctxLabels := pprofCtxCollectLabels(ctx)
+			if val, ok := ctxLabels["grpc.method"]; ok {
+				t.Errorf("\"grpc.method\" label set with value %q; found labels: %v", val, ctxLabels)
+			}
+			return &testpb.Empty{}, nil
+		},
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
+			ctxLabels := pprofCtxCollectLabels(stream.Context())
+			if val, ok := ctxLabels["grpc.method"]; ok {
+				t.Errorf("\"grpc.method\" label set with value %q; found labels: %v", val, ctxLabels)
+			}
+			return nil
+		},
+	}
+	if err := ss.Start(nil); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
+	}
+	defer ss.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if _, err := ss.Client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+		t.Fatalf("ss.Client.EmptyCall() got error %v; want OK", err)
+	}
+
+	stream, err := ss.Client.FullDuplexCall(ctx)
+	if err != nil {
+		t.Fatalf("unexpected error starting the stream: %v", err)
+	}
+	if _, err = stream.Recv(); err != io.EOF {
+		t.Fatalf("ss.Client.FullDuplexCall().Recv() got error %v; want io.EOF", err)
+	}
 }
 
 func (s) TestChainUnaryServerInterceptor(t *testing.T) {
@@ -230,56 +329,56 @@ func (s) TestChainOnBaseUnaryServerInterceptor(t *testing.T) {
 }
 
 func (s) TestChainStreamServerInterceptor(t *testing.T) {
-	callCounts := make([]int, 4)
+	callCounts := make([]atomic.Int32, 4)
 
 	firstInt := func(srv any, stream grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-		if callCounts[0] != 0 {
-			return status.Errorf(codes.Internal, "callCounts[0] should be 0, but got=%d", callCounts[0])
+		if callCounts[0].Load() != 0 {
+			return status.Errorf(codes.Internal, "callCounts[0] should be 0, but got=%d", callCounts[0].Load())
 		}
-		if callCounts[1] != 0 {
-			return status.Errorf(codes.Internal, "callCounts[1] should be 0, but got=%d", callCounts[1])
+		if callCounts[1].Load() != 0 {
+			return status.Errorf(codes.Internal, "callCounts[1] should be 0, but got=%d", callCounts[1].Load())
 		}
-		if callCounts[2] != 0 {
-			return status.Errorf(codes.Internal, "callCounts[2] should be 0, but got=%d", callCounts[2])
+		if callCounts[2].Load() != 0 {
+			return status.Errorf(codes.Internal, "callCounts[2] should be 0, but got=%d", callCounts[2].Load())
 		}
-		if callCounts[3] != 0 {
-			return status.Errorf(codes.Internal, "callCounts[3] should be 0, but got=%d", callCounts[3])
+		if callCounts[3].Load() != 0 {
+			return status.Errorf(codes.Internal, "callCounts[3] should be 0, but got=%d", callCounts[3].Load())
 		}
-		callCounts[0]++
+		callCounts[0].Add(1)
 		return handler(srv, stream)
 	}
 
 	secondInt := func(srv any, stream grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-		if callCounts[0] != 1 {
-			return status.Errorf(codes.Internal, "callCounts[0] should be 1, but got=%d", callCounts[0])
+		if callCounts[0].Load() != 1 {
+			return status.Errorf(codes.Internal, "callCounts[0] should be 1, but got=%d", callCounts[0].Load())
 		}
-		if callCounts[1] != 0 {
-			return status.Errorf(codes.Internal, "callCounts[1] should be 0, but got=%d", callCounts[1])
+		if callCounts[1].Load() != 0 {
+			return status.Errorf(codes.Internal, "callCounts[1] should be 0, but got=%d", callCounts[1].Load())
 		}
-		if callCounts[2] != 0 {
-			return status.Errorf(codes.Internal, "callCounts[2] should be 0, but got=%d", callCounts[2])
+		if callCounts[2].Load() != 0 {
+			return status.Errorf(codes.Internal, "callCounts[2] should be 0, but got=%d", callCounts[2].Load())
 		}
-		if callCounts[3] != 0 {
-			return status.Errorf(codes.Internal, "callCounts[3] should be 0, but got=%d", callCounts[3])
+		if callCounts[3].Load() != 0 {
+			return status.Errorf(codes.Internal, "callCounts[3] should be 0, but got=%d", callCounts[3].Load())
 		}
-		callCounts[1]++
+		callCounts[1].Add(1)
 		return handler(srv, stream)
 	}
 
 	lastInt := func(srv any, stream grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-		if callCounts[0] != 1 {
-			return status.Errorf(codes.Internal, "callCounts[0] should be 1, but got=%d", callCounts[0])
+		if callCounts[0].Load() != 1 {
+			return status.Errorf(codes.Internal, "callCounts[0] should be 1, but got=%d", callCounts[0].Load())
 		}
-		if callCounts[1] != 1 {
-			return status.Errorf(codes.Internal, "callCounts[1] should be 1, but got=%d", callCounts[1])
+		if callCounts[1].Load() != 1 {
+			return status.Errorf(codes.Internal, "callCounts[1] should be 1, but got=%d", callCounts[1].Load())
 		}
-		if callCounts[2] != 0 {
-			return status.Errorf(codes.Internal, "callCounts[2] should be 0, but got=%d", callCounts[2])
+		if callCounts[2].Load() != 0 {
+			return status.Errorf(codes.Internal, "callCounts[2] should be 0, but got=%d", callCounts[2].Load())
 		}
-		if callCounts[3] != 0 {
-			return status.Errorf(codes.Internal, "callCounts[3] should be 0, but got=%d", callCounts[3])
+		if callCounts[3].Load() != 0 {
+			return status.Errorf(codes.Internal, "callCounts[3] should be 0, but got=%d", callCounts[3].Load())
 		}
-		callCounts[2]++
+		callCounts[2].Add(1)
 		return handler(srv, stream)
 	}
 
@@ -289,19 +388,19 @@ func (s) TestChainStreamServerInterceptor(t *testing.T) {
 
 	ss := &stubserver.StubServer{
 		FullDuplexCallF: func(testgrpc.TestService_FullDuplexCallServer) error {
-			if callCounts[0] != 1 {
-				return status.Errorf(codes.Internal, "callCounts[0] should be 1, but got=%d", callCounts[0])
+			if callCounts[0].Load() != 1 {
+				return status.Errorf(codes.Internal, "callCounts[0] should be 1, but got=%d", callCounts[0].Load())
 			}
-			if callCounts[1] != 1 {
-				return status.Errorf(codes.Internal, "callCounts[1] should be 1, but got=%d", callCounts[1])
+			if callCounts[1].Load() != 1 {
+				return status.Errorf(codes.Internal, "callCounts[1] should be 1, but got=%d", callCounts[1].Load())
 			}
-			if callCounts[2] != 1 {
-				return status.Errorf(codes.Internal, "callCounts[2] should be 0, but got=%d", callCounts[2])
+			if callCounts[2].Load() != 1 {
+				return status.Errorf(codes.Internal, "callCounts[2] should be 0, but got=%d", callCounts[2].Load())
 			}
-			if callCounts[3] != 0 {
-				return status.Errorf(codes.Internal, "callCounts[3] should be 0, but got=%d", callCounts[3])
+			if callCounts[3].Load() != 0 {
+				return status.Errorf(codes.Internal, "callCounts[3] should be 0, but got=%d", callCounts[3].Load())
 			}
-			callCounts[3]++
+			callCounts[3].Add(1)
 			return nil
 		},
 	}
@@ -322,7 +421,7 @@ func (s) TestChainStreamServerInterceptor(t *testing.T) {
 		t.Fatalf("failed to recv from stream: %v", err)
 	}
 
-	if callCounts[3] != 1 {
-		t.Fatalf("callCounts[3] should be 1, but got=%d", callCounts[3])
+	if callCounts[3].Load() != 1 {
+		t.Fatalf("callCounts[3] should be 1, but got=%d", callCounts[3].Load())
 	}
 }

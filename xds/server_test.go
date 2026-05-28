@@ -442,6 +442,10 @@ func (s) TestServeSuccess(t *testing.T) {
 	// Update the listener resource on the management server in such a way that
 	// it will be NACKed by our xDS client. The listener_filters field is
 	// unsupported and will be NACKed.
+	resources = e2e.UpdateOptions{
+		NodeID:    nodeID,
+		Listeners: []*v3listenerpb.Listener{e2e.DefaultServerListener(host, port, e2e.SecurityLevelNone, "routeName")},
+	}
 	resources.Listeners[0].ListenerFilters = []*v3listenerpb.ListenerFilter{{Name: "foo"}}
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)

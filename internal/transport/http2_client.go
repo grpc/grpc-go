@@ -39,6 +39,7 @@ import (
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/channelz"
 	icredentials "google.golang.org/grpc/internal/credentials"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/grpcutil"
@@ -134,6 +135,8 @@ type http2Client struct {
 	// goAwayDebugMessage contains a detailed human readable string about a
 	// GoAway frame, useful for error messages.
 	goAwayDebugMessage string
+	// goAwayCode records the http2.ErrCode received with the GoAway frame.
+	goAwayCode http2.ErrCode
 	// A condition variable used to signal when the keepalive goroutine should
 	// go dormant. The condition for dormancy is based on the number of active
 	// streams and the `PermitWithoutStream` keepalive client parameter. And
@@ -147,7 +150,7 @@ type http2Client struct {
 
 	channelz *channelz.Socket
 
-	onClose func(GoAwayReason)
+	onClose OnCloseFunc
 
 	bufferPool mem.BufferPool
 
@@ -204,7 +207,7 @@ func isTemporary(err error) bool {
 // NewHTTP2Client constructs a connected ClientTransport to addr based on HTTP2
 // and starts to receive messages on it. Non-nil error returns if construction
 // fails.
-func NewHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts ConnectOptions, onClose func(GoAwayReason)) (_ ClientTransport, err error) {
+func NewHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts ConnectOptions, onClose OnCloseFunc) (_ ClientTransport, err error) {
 	scheme := "http"
 	ctx, cancel := context.WithCancel(ctx)
 	defer func() {
@@ -316,7 +319,13 @@ func NewHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 	}
 	writeBufSize := opts.WriteBufferSize
 	readBufSize := opts.ReadBufferSize
+	// The default header list size is moving from 16MB to 8KB. The 8KB limit
+	// is only used if Enable8KBDefaultHeaderListSize is true; otherwise, the
+	// old 16MB default is used. User-specified options always take precedence.
 	maxHeaderListSize := defaultClientMaxHeaderListSize
+	if envconfig.Enable8KBDefaultHeaderListSize {
+		maxHeaderListSize = upcomingDefaultHeaderListSize
+	}
 	if opts.MaxHeaderListSize != nil {
 		maxHeaderListSize = *opts.MaxHeaderListSize
 	}
@@ -877,8 +886,8 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr, handler s
 				return false
 			}
 		}
-		if sz > int64(upcomingDefaultHeaderListSize) {
-			t.logger.Warningf("Header list size to send (%d bytes) is larger than the upcoming default limit (%d bytes). In a future release, this will be restricted to %d bytes.", sz, upcomingDefaultHeaderListSize, upcomingDefaultHeaderListSize)
+		if !envconfig.Enable8KBDefaultHeaderListSize && sz > int64(upcomingDefaultHeaderListSize) {
+			t.logger.Warningf("Header list size to send (%d bytes) is larger than the upcoming default limit (%d bytes). In release v1.82.0, GRPC_GO_EXPERIMENTAL_ENABLE_8KB_DEFAULT_HEADER_LIST_SIZE will be enabled by default, enforcing this limit.", sz, upcomingDefaultHeaderListSize)
 		}
 		return true
 	}
@@ -1015,7 +1024,7 @@ func (t *http2Client) Close(err error) {
 	// Call t.onClose ASAP to prevent the client from attempting to create new
 	// streams.
 	if t.state != draining {
-		t.onClose(GoAwayInvalid)
+		t.onClose(GoAwayInfo{Reason: GoAwayInvalid, GoAwayCode: http2.ErrCodeNo, Err: err})
 	}
 	t.state = closing
 	streams := t.activeStreams
@@ -1086,7 +1095,7 @@ func (t *http2Client) GracefulClose() {
 	if t.logger.V(logLevel) {
 		t.logger.Infof("GracefulClose called")
 	}
-	t.onClose(GoAwayInvalid)
+	t.onClose(GoAwayInfo{Reason: GoAwayInvalid, GoAwayCode: http2.ErrCodeNo})
 	t.state = draining
 	active := len(t.activeStreams)
 	t.mu.Unlock()
@@ -1236,7 +1245,10 @@ func (t *http2Client) handleData(f *parsedDataFrame) {
 	// The server has closed the stream without sending trailers.  Record that
 	// the read direction is closed, and set the status appropriately.
 	if f.StreamEnded() {
-		t.closeStream(s, io.EOF, false, http2.ErrCodeNo, status.New(codes.Internal, "server closed the stream without sending trailers"), nil, true)
+		// If client received END_STREAM from server while stream was still
+		// active, send RST_STREAM.
+		rstStream := s.getState() == streamActive
+		t.closeStream(s, io.EOF, rstStream, http2.ErrCodeNo, status.New(codes.Internal, "server closed the stream without sending trailers"), nil, true)
 	}
 }
 
@@ -1372,7 +1384,7 @@ func (t *http2Client) handleGoAway(f *http2.GoAwayFrame) error {
 		// draining, to allow the client to stop attempting to create streams
 		// before disallowing new streams on this connection.
 		if t.state != draining {
-			t.onClose(t.goAwayReason)
+			t.onClose(GoAwayInfo{Reason: t.goAwayReason, GoAwayCode: t.goAwayCode})
 			t.state = draining
 		}
 	}
@@ -1422,6 +1434,7 @@ func (t *http2Client) setGoAwayReason(f *http2.GoAwayFrame) {
 	} else {
 		t.goAwayDebugMessage = fmt.Sprintf("code: %s, debug data: %q", f.ErrCode, string(f.DebugData()))
 	}
+	t.goAwayCode = f.ErrCode
 }
 
 func (t *http2Client) GetGoAwayReason() (GoAwayReason, string) {
