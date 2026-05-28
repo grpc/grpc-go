@@ -486,9 +486,7 @@ func (s *server) start(t *testing.T, port int, serverConfig *ServerConfig, ht hT
 			}()
 		case invalidContentTypeWithMultipleFrame:
 			h.notify = make(chan struct{})
-			s.mu.Lock()
 			close(s.ready)
-			s.mu.Unlock()
 			go func() {
 				transport.HandleStreams(ctx, func(s *ServerStream) {
 					wg.Add(1)
