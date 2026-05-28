@@ -16,7 +16,7 @@
 *
  */
 
-// Package internal contains functionality internal to the credentials/google package.
+// Package internal contains functionality internal to the google package.
 package internal
 
 import (
@@ -27,9 +27,8 @@ import (
 
 // The following variables are overridden in tests.
 var (
-	// DefaultBackoffStrategy is the default exponential backoff strategy to use
-	// when token fetch fails.
-	DefaultBackoffStrategy backoff.Strategy
+	// BackoffStrategy is the backoff strategy to use when token fetch fails.
+	BackoffStrategy backoff.Strategy
 
 	// NewIDTokenCredentials builds idtoken credentials using specified options.
 	NewIDTokenCredentials func(opts *idtoken.Options) (*auth.Credentials, error)
