@@ -475,7 +475,7 @@ func (s) TestGCPServiceAccountIdentityCallCreds_EarlyExpiry(t *testing.T) {
 	tp.setDelay(time.Duration(0))
 	wantSecondToken := "Bearer " + secondToken
 
-	for {
+	for ; ctx.Err() == nil; <-time.After(10 * time.Millisecond) {
 		md, err = creds.GetRequestMetadata(ctx)
 		if err != nil {
 			t.Fatalf("GetRequestMetadata() failed: %v", err)
@@ -483,10 +483,9 @@ func (s) TestGCPServiceAccountIdentityCallCreds_EarlyExpiry(t *testing.T) {
 		if md["authorization"] == wantSecondToken {
 			break
 		}
-
-		if ctx.Err() != nil {
-			t.Fatal("timed out waiting for background fetch to update token")
-		}
+	}
+	if ctx.Err() != nil {
+		t.Fatal("timed out waiting for background fetch to update token")
 	}
 }
 
