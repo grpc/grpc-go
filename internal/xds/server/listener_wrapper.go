@@ -439,6 +439,17 @@ func (lw *ldsWatcher) ResourceChanged(update *xdsresource.ListenerUpdate, onDone
 	}
 	l := lw.parent
 	ilc := update.TCPListener
+	// A server-side listener update must contain inbound listener configuration
+	// (TCPListener). If it is nil, it indicates that a client-side listener (API
+	// Listener) resource was received instead. In this case, we transition the
+	// server to non-serving mode.
+	if ilc == nil {
+		l.mu.Lock()
+		err := fmt.Errorf("[xDS node id: %v]: %w", l.xdsNodeID, fmt.Errorf("received client-side listener resource %q on server-side", lw.name))
+		l.switchModeLocked(connectivity.ServingModeNotServing, err)
+		l.mu.Unlock()
+		return
+	}
 	// Make sure that the socket address on the received Listener resource
 	// matches the address of the net.Listener passed to us by the user. This
 	// check is done here instead of at the XDSClient layer because of the
