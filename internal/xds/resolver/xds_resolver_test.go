@@ -36,6 +36,7 @@ import (
 	estats "google.golang.org/grpc/experimental/stats"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/envconfig"
+	"google.golang.org/grpc/internal/grpctest"
 	iresolver "google.golang.org/grpc/internal/resolver"
 	iringhash "google.golang.org/grpc/internal/ringhash"
 	"google.golang.org/grpc/internal/testutils"
@@ -1546,3 +1547,113 @@ func (s) TestResolver_XDSConfigInRPCContext(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// Tests the case where the resolver receives a server-side listener resource.
+// The resolver should report the mismatch error, put the channel in TRANSIENT_FAILURE
+// (using an empty service config update), and recover when a valid client-side
+// listener update is subsequently received.
+func (s) TestResolverServerSideListenerReceivedOnClient(t *testing.T) {
+	grpctest.ExpectError("does not contain API listener configuration")
+
+	// Spin up an xDS management server for the test.
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	nodeID := uuid.New().String()
+	mgmtServer, _, _, bc := setupManagementServerForTest(t, nodeID)
+
+	// Configure a server-side listener resource on the management server.
+	// We use the client-side dial target as the resource name, but return a
+	// server-side listener resource (meaning it lacks ApiListener).
+	lis := e2e.DefaultServerListener("localhost", 8080, e2e.SecurityLevelNone, defaultTestRouteConfigName)
+	lis.Name = defaultTestServiceName
+	configureResources(ctx, t, mgmtServer, nodeID, []*v3listenerpb.Listener{lis}, nil, nil, nil)
+
+	// Build the resolver.
+	target := resolver.Target{URL: *testutils.MustParseURL("xds:///" + defaultTestServiceName)}
+	builder, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
+	if err != nil {
+		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
+	}
+
+	errCh := testutils.NewChannel()
+	stateCh := testutils.NewChannel()
+	tcc := &testutils.ResolverClientConn{
+		Logger: t,
+		UpdateStateF: func(s resolver.State) error {
+			stateCh.Replace(s)
+			return nil
+		},
+		ReportErrorF: func(err error) {
+			errCh.Replace(err)
+		},
+	}
+	r, err := builder.Build(target, tcc, resolver.BuildOptions{
+		Authority: url.PathEscape(target.Endpoint()),
+	})
+	if err != nil {
+		t.Fatalf("Failed to build xDS resolver for target %q: %v", target, err)
+	}
+	defer r.Close()
+
+	// Wait for and verify the error update from the resolver.
+	select {
+	case <-ctx.Done():
+		t.Fatalf("Timeout waiting for error to be propagated to the ClientConn")
+	case gotErr := <-errCh.C:
+		if gotErr == nil {
+			t.Fatalf("got nil error from resolver, want error containing 'does not contain API listener configuration'")
+		}
+		errStr := fmt.Sprint(gotErr)
+		if !strings.Contains(errStr, "does not contain API listener configuration") {
+			t.Fatalf("got error from resolver %q, want error containing 'does not contain API listener configuration'", errStr)
+		}
+		if !strings.Contains(errStr, nodeID) {
+			t.Fatalf("got error from resolver %q, want nodeID %q", errStr, nodeID)
+		}
+	}
+
+	// Verify that the resolver pushed an empty service config update (putting the channel in TF).
+	select {
+	case <-ctx.Done():
+		t.Fatalf("Timeout waiting for state update containing empty service config")
+	case gotState := <-stateCh.C:
+		state := gotState.(resolver.State)
+		if err := state.ServiceConfig.Err; err != nil {
+			t.Fatalf("Received error in service config: %v", state.ServiceConfig.Err)
+		}
+		wantSCParsed := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)("{}")
+		if !internal.EqualServiceConfigForTesting(state.ServiceConfig.Config, wantSCParsed.Config) {
+			t.Fatalf("Got service config:\n%s \nWant service config:\n%s", cmp.Diff(nil, state.ServiceConfig.Config), cmp.Diff(nil, wantSCParsed.Config))
+		}
+	}
+
+	// Configure valid client-side listener and route config resources.
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		DialTarget: defaultTestServiceName,
+		NodeID:     nodeID,
+		Host:       defaultTestHostname,
+		Port:       defaultTestPort[0],
+		SecLevel:   e2e.SecurityLevelNone,
+	})
+	mgmtServer.Update(ctx, resources)
+
+	// The resolver should recover and send a service config with the cluster name.
+	select {
+	case <-ctx.Done():
+		t.Fatalf("Timeout waiting for state update after recovery")
+	case gotState := <-stateCh.C:
+		state := gotState.(resolver.State)
+		if err := state.ServiceConfig.Err; err != nil {
+			t.Fatalf("Received error in service config: %v", state.ServiceConfig.Err)
+		}
+		wantSCParsed := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(wantServiceConfig(resources.Clusters[0].Name))
+		if !internal.EqualServiceConfigForTesting(state.ServiceConfig.Config, wantSCParsed.Config) {
+			t.Fatalf("Got service config:\n%s \nWant service config:\n%s", cmp.Diff(nil, state.ServiceConfig.Config), cmp.Diff(nil, wantSCParsed.Config))
+		}
+		cs := iresolver.GetConfigSelector(state)
+		if cs == nil {
+			t.Fatal("Received nil config selector in update from resolver")
+		}
+	}
+}
+

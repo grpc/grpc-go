@@ -524,13 +524,26 @@ func (m *DependencyManager) onListenerResourceUpdate(update *xdsresource.Listene
 		return
 	}
 
+	// A client-side listener update must contain API listener configuration. If
+	// it is nil, it indicates that a server-side listener (TCP Listener) resource
+	// was received instead. We report this error to the resolver watcher so it
+	// can transition the channel into TRANSIENT_FAILURE.
+	if update.APIListener == nil {
+		err := fmt.Errorf("xds: client-side listener resource %q does not contain API listener configuration", m.ldsResourceName)
+		m.logger.Errorf("%v", err)
+		if m.routeConfigWatcher != nil {
+			m.routeConfigWatcher.stop()
+		}
+		m.listenerWatcher.setLastError(err)
+		m.rdsResourceName = ""
+		m.routeConfigWatcher = nil
+		m.watcher.Error(err)
+		return
+	}
+
 	// We get here only if there was no inline route configuration. If the route
 	// config name has not changed, send an update with existing route
 	// configuration and the newly received listener configuration.
-	if update.APIListener == nil {
-		m.logger.Errorf("Received a listener resource with no api_listener configuration")
-		return
-	}
 	if m.rdsResourceName == update.APIListener.RouteConfigName {
 		m.maybeSendUpdateLocked()
 		return
