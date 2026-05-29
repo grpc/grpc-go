@@ -1179,10 +1179,21 @@ func (cc *ClientConn) resolveNowLocked(o resolver.ResolveNowOptions) {
 // Notice: This API is EXPERIMENTAL and may be changed or removed in a
 // later release.
 func (cc *ClientConn) ResetConnectBackoff() {
+	// Snapshot the addrConns into a slice while holding cc.mu so the iteration
+	// below cannot race with concurrent writers to cc.conns
+	// (e.g. removeAddrConn / newAddrConnLocked, both invoked from the
+	// balancer wrapper's serializer goroutine). The previous form took only
+	// a reference to the map and iterated it lock-free, which races with
+	// those writers and can trigger a Go runtime "concurrent map iteration
+	// and map write" fatal. Compare ClientConn.Close, which uses the same
+	// "copy out under lock, iterate outside" pattern.
 	cc.mu.Lock()
-	conns := cc.conns
+	conns := make([]*addrConn, 0, len(cc.conns))
+	for ac := range cc.conns {
+		conns = append(conns, ac)
+	}
 	cc.mu.Unlock()
-	for ac := range conns {
+	for _, ac := range conns {
 		ac.resetConnectBackoff()
 	}
 }
