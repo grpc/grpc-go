@@ -61,6 +61,22 @@ func doHTTPConnectHandshake(ctx context.Context, conn net.Conn, grpcUA string, o
 		}
 	}()
 
+	// Wire ctx cancellation into the synchronous Write/Read calls below.
+	// http.Request.Write(conn) and http.ReadResponse(r, req) do not observe
+	// the request's ctx, so without this watchdog a hung proxy would block
+	// the handshake for up to the kernel's TCP retransmit budget (~15min on
+	// Linux), regardless of the caller's deadline. Closing the conn from a
+	// watchdog goroutine is the standard way to unblock these calls.
+	handshakeDone := make(chan struct{})
+	defer close(handshakeDone)
+	go func() {
+		select {
+		case <-ctx.Done():
+			conn.Close()
+		case <-handshakeDone:
+		}
+	}()
+
 	req := &http.Request{
 		Method: http.MethodConnect,
 		URL:    &url.URL{Host: opts.ConnectAddr},
@@ -72,12 +88,18 @@ func doHTTPConnectHandshake(ctx context.Context, conn net.Conn, grpcUA string, o
 		req.Header.Add(proxyAuthHeaderKey, "Basic "+basicAuth(u, p))
 	}
 	if err := sendHTTPRequest(ctx, req, conn); err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return nil, fmt.Errorf("failed to write the HTTP request: %w", ctxErr)
+		}
 		return nil, fmt.Errorf("failed to write the HTTP request: %v", err)
 	}
 
 	r := bufio.NewReader(conn)
 	resp, err := http.ReadResponse(r, req)
 	if err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return nil, fmt.Errorf("reading server HTTP response: %w", ctxErr)
+		}
 		return nil, fmt.Errorf("reading server HTTP response: %v", err)
 	}
 	defer resp.Body.Close()
