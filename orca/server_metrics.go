@@ -19,6 +19,7 @@
 package orca
 
 import (
+	"sync"
 	"sync/atomic"
 
 	v3orcapb "github.com/cncf/xds/go/xds/data/orca/v3"
@@ -141,7 +142,14 @@ type ServerMetricsRecorder interface {
 	DeleteNamedUtilization(name string)
 }
 
+// serverMetricsRecorder serialises writers via mu so that the
+// load/copy/mutate/store sequence inside each Set* / Delete* method is
+// atomic with respect to other writers (atomic.Pointer alone only
+// provides a single-op load and a single-op store, not a transactional
+// read-modify-write — concurrent writers would otherwise lose updates).
+// Readers (ServerMetrics()) remain lock-free via atomic.Pointer.Load.
 type serverMetricsRecorder struct {
+	mu    sync.Mutex
 	state atomic.Pointer[ServerMetrics] // the current metrics
 }
 
@@ -201,6 +209,8 @@ func (s *serverMetricsRecorder) SetCPUUtilization(val float64) {
 		}
 		return
 	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	smCopy := copyServerMetrics(s.state.Load())
 	smCopy.CPUUtilization = val
 	s.state.Store(smCopy)
@@ -209,6 +219,8 @@ func (s *serverMetricsRecorder) SetCPUUtilization(val float64) {
 // DeleteCPUUtilization deletes the relevant server metric to prevent it from
 // being sent.
 func (s *serverMetricsRecorder) DeleteCPUUtilization() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	smCopy := copyServerMetrics(s.state.Load())
 	smCopy.CPUUtilization = -1
 	s.state.Store(smCopy)
@@ -222,6 +234,8 @@ func (s *serverMetricsRecorder) SetMemoryUtilization(val float64) {
 		}
 		return
 	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	smCopy := copyServerMetrics(s.state.Load())
 	smCopy.MemUtilization = val
 	s.state.Store(smCopy)
@@ -230,6 +244,8 @@ func (s *serverMetricsRecorder) SetMemoryUtilization(val float64) {
 // DeleteMemoryUtilization deletes the relevant server metric to prevent it
 // from being sent.
 func (s *serverMetricsRecorder) DeleteMemoryUtilization() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	smCopy := copyServerMetrics(s.state.Load())
 	smCopy.MemUtilization = -1
 	s.state.Store(smCopy)
@@ -244,6 +260,8 @@ func (s *serverMetricsRecorder) SetApplicationUtilization(val float64) {
 		}
 		return
 	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	smCopy := copyServerMetrics(s.state.Load())
 	smCopy.AppUtilization = val
 	s.state.Store(smCopy)
@@ -252,6 +270,8 @@ func (s *serverMetricsRecorder) SetApplicationUtilization(val float64) {
 // DeleteApplicationUtilization deletes the relevant server metric to prevent
 // it from being sent.
 func (s *serverMetricsRecorder) DeleteApplicationUtilization() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	smCopy := copyServerMetrics(s.state.Load())
 	smCopy.AppUtilization = -1
 	s.state.Store(smCopy)
@@ -265,6 +285,8 @@ func (s *serverMetricsRecorder) SetQPS(val float64) {
 		}
 		return
 	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	smCopy := copyServerMetrics(s.state.Load())
 	smCopy.QPS = val
 	s.state.Store(smCopy)
@@ -272,6 +294,8 @@ func (s *serverMetricsRecorder) SetQPS(val float64) {
 
 // DeleteQPS deletes the relevant server metric to prevent it from being sent.
 func (s *serverMetricsRecorder) DeleteQPS() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	smCopy := copyServerMetrics(s.state.Load())
 	smCopy.QPS = -1
 	s.state.Store(smCopy)
@@ -285,6 +309,8 @@ func (s *serverMetricsRecorder) SetEPS(val float64) {
 		}
 		return
 	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	smCopy := copyServerMetrics(s.state.Load())
 	smCopy.EPS = val
 	s.state.Store(smCopy)
@@ -292,6 +318,8 @@ func (s *serverMetricsRecorder) SetEPS(val float64) {
 
 // DeleteEPS deletes the relevant server metric to prevent it from being sent.
 func (s *serverMetricsRecorder) DeleteEPS() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	smCopy := copyServerMetrics(s.state.Load())
 	smCopy.EPS = -1
 	s.state.Store(smCopy)
@@ -306,6 +334,8 @@ func (s *serverMetricsRecorder) SetNamedUtilization(name string, val float64) {
 		}
 		return
 	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	smCopy := copyServerMetrics(s.state.Load())
 	smCopy.Utilization[name] = val
 	s.state.Store(smCopy)
@@ -314,6 +344,8 @@ func (s *serverMetricsRecorder) SetNamedUtilization(name string, val float64) {
 // DeleteNamedUtilization deletes any previously recorded measurement for a
 // utilization metric uniquely identifiable by name.
 func (s *serverMetricsRecorder) DeleteNamedUtilization(name string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	smCopy := copyServerMetrics(s.state.Load())
 	delete(smCopy.Utilization, name)
 	s.state.Store(smCopy)
@@ -322,6 +354,8 @@ func (s *serverMetricsRecorder) DeleteNamedUtilization(name string) {
 // SetRequestCost records a measurement for a utilization metric uniquely
 // identifiable by name.
 func (s *serverMetricsRecorder) SetRequestCost(name string, val float64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	smCopy := copyServerMetrics(s.state.Load())
 	smCopy.RequestCost[name] = val
 	s.state.Store(smCopy)
@@ -330,6 +364,8 @@ func (s *serverMetricsRecorder) SetRequestCost(name string, val float64) {
 // DeleteRequestCost deletes any previously recorded measurement for a
 // utilization metric uniquely identifiable by name.
 func (s *serverMetricsRecorder) DeleteRequestCost(name string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	smCopy := copyServerMetrics(s.state.Load())
 	delete(smCopy.RequestCost, name)
 	s.state.Store(smCopy)
@@ -338,6 +374,8 @@ func (s *serverMetricsRecorder) DeleteRequestCost(name string) {
 // SetNamedMetric records a measurement for a utilization metric uniquely
 // identifiable by name.
 func (s *serverMetricsRecorder) SetNamedMetric(name string, val float64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	smCopy := copyServerMetrics(s.state.Load())
 	smCopy.NamedMetrics[name] = val
 	s.state.Store(smCopy)
@@ -346,6 +384,8 @@ func (s *serverMetricsRecorder) SetNamedMetric(name string, val float64) {
 // DeleteNamedMetric deletes any previously recorded measurement for a
 // utilization metric uniquely identifiable by name.
 func (s *serverMetricsRecorder) DeleteNamedMetric(name string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	smCopy := copyServerMetrics(s.state.Load())
 	delete(smCopy.NamedMetrics, name)
 	s.state.Store(smCopy)
