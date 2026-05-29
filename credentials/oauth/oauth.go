@@ -69,6 +69,12 @@ func removeServiceNameFromJWTURI(uri string) (string, error) {
 
 type jwtAccess struct {
 	jsonKey []byte
+	// tokenSources caches an oauth2.TokenSource per audience. The token source
+	// returned by google.JWTAccessTokenSourceFromJSON is wrapped in
+	// ReuseTokenSource and is safe to reuse for the token's lifetime (1 hour),
+	// so caching it avoids re-parsing the JSON key and re-signing the JWT on
+	// every RPC.
+	tokenSources sync.Map // map[string]oauth2.TokenSource keyed by audience
 }
 
 // NewJWTAccessFromFile creates PerRPCCredentials from the given keyFile.
@@ -82,19 +88,17 @@ func NewJWTAccessFromFile(keyFile string) (credentials.PerRPCCredentials, error)
 
 // NewJWTAccessFromKey creates PerRPCCredentials from the given jsonKey.
 func NewJWTAccessFromKey(jsonKey []byte) (credentials.PerRPCCredentials, error) {
-	return jwtAccess{jsonKey}, nil
+	return &jwtAccess{jsonKey: jsonKey}, nil
 }
 
-func (j jwtAccess) GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) {
+func (j *jwtAccess) GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) {
 	// Remove RPC service name from URI that will be used as audience
 	// in a self-signed JWT token. It follows https://google.aip.dev/auth/4111.
 	aud, err := removeServiceNameFromJWTURI(uri[0])
 	if err != nil {
 		return nil, err
 	}
-	// TODO: the returned TokenSource is reusable. Store it in a sync.Map, with
-	// uri as the key, to avoid recreating for every RPC.
-	ts, err := google.JWTAccessTokenSourceFromJSON(j.jsonKey, aud)
+	ts, err := j.tokenSourceForAudience(aud)
 	if err != nil {
 		return nil, err
 	}
@@ -111,7 +115,22 @@ func (j jwtAccess) GetRequestMetadata(ctx context.Context, uri ...string) (map[s
 	}, nil
 }
 
-func (j jwtAccess) RequireTransportSecurity() bool {
+// tokenSourceForAudience returns a cached oauth2.TokenSource for aud, building
+// one on cache miss. Under a race two callers may both build a TokenSource for
+// the same audience; LoadOrStore ensures only one is retained.
+func (j *jwtAccess) tokenSourceForAudience(aud string) (oauth2.TokenSource, error) {
+	if v, ok := j.tokenSources.Load(aud); ok {
+		return v.(oauth2.TokenSource), nil
+	}
+	ts, err := google.JWTAccessTokenSourceFromJSON(j.jsonKey, aud)
+	if err != nil {
+		return nil, err
+	}
+	actual, _ := j.tokenSources.LoadOrStore(aud, ts)
+	return actual.(oauth2.TokenSource), nil
+}
+
+func (j *jwtAccess) RequireTransportSecurity() bool {
 	return true
 }
 
