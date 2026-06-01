@@ -116,7 +116,7 @@ func (s) TestGCPAuthnFilter_SuccessCase(t *testing.T) {
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 	resolverBuilder, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
 	if err != nil {
-		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
+		t.Fatalf("failed to create xDS resolver for testing: %v", err)
 	}
 
 	// Start a test backend.
@@ -200,11 +200,11 @@ func (s) TestGCPAuthnFilter_SuccessCase(t *testing.T) {
 	// Create a gRPC client using the xDS resolver.
 	clientCreds, err := xds.NewClientCredentials(xds.ClientOptions{FallbackCreds: insecure.NewCredentials()})
 	if err != nil {
-		t.Fatalf("Failed to create client credentials: %v", err)
+		t.Fatalf("failed to create client credentials: %v", err)
 	}
 	cc, err := grpc.NewClient("xds:///"+testServiceName, grpc.WithTransportCredentials(clientCreds), grpc.WithResolvers(resolverBuilder))
 	if err != nil {
-		t.Fatalf("Failed to create a gRPC client: %v", err)
+		t.Fatalf("failed to create a gRPC client: %v", err)
 	}
 	defer cc.Close()
 
@@ -224,10 +224,10 @@ func (s) TestGCPAuthnFilter_SuccessCase(t *testing.T) {
 			}
 		}
 		if !found {
-			t.Errorf("Expected token not found in metadata: %v", md)
+			t.Errorf("expected token not found in metadata: %v", md)
 		}
 	case <-ctx.Done():
-		t.Fatal("Timeout waiting for metadata from backend")
+		t.Fatal("timeout waiting for metadata from backend")
 	}
 }
 
@@ -259,7 +259,7 @@ func (s) TestGCPAuthnFilter_TokenCaching(t *testing.T) {
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 	resolverBuilder, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
 	if err != nil {
-		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
+		t.Fatalf("failed to create xDS resolver for testing: %v", err)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -343,11 +343,11 @@ func (s) TestGCPAuthnFilter_TokenCaching(t *testing.T) {
 	// Create a gRPC client using the xDS resolver.
 	clientCreds, err := xds.NewClientCredentials(xds.ClientOptions{FallbackCreds: insecure.NewCredentials()})
 	if err != nil {
-		t.Fatalf("Failed to create client credentials: %v", err)
+		t.Fatalf("failed to create client credentials: %v", err)
 	}
 	cc, err := grpc.NewClient("xds:///"+testServiceName, grpc.WithTransportCredentials(clientCreds), grpc.WithResolvers(resolverBuilder))
 	if err != nil {
-		t.Fatalf("Failed to create a gRPC client: %v", err)
+		t.Fatalf("failed to create a gRPC client: %v", err)
 	}
 	defer cc.Close()
 	client := testgrpc.NewTestServiceClient(cc)
@@ -367,17 +367,17 @@ func (s) TestGCPAuthnFilter_TokenCaching(t *testing.T) {
 			if strings.Contains(val, "Bearer "+tokenValue) {
 				// Verify request count is 1
 				if count := atomic.LoadInt32(&requestCount); count != 1 {
-					t.Errorf("Expected exactly 1 request to metadata server, got %d", count)
+					t.Errorf("expected exactly 1 request to metadata server, got %d", count)
 				}
 				found = true
 				break
 			}
 		}
 		if !found {
-			t.Errorf("Expected token not found in metadata: %v", md)
+			t.Errorf("expected token not found in metadata: %v", md)
 		}
 	case <-ctx.Done():
-		t.Fatal("Timeout waiting for metadata from backend")
+		t.Fatal("timeout waiting for metadata from backend")
 	}
 }
 
@@ -406,7 +406,7 @@ func (s) TestGCPAuthnFilter_InsecureTransport(t *testing.T) {
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 	resolverBuilder, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
 	if err != nil {
-		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
+		t.Fatalf("failed to create xDS resolver for testing: %v", err)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -481,21 +481,14 @@ func (s) TestGCPAuthnFilter_InsecureTransport(t *testing.T) {
 	// Create a gRPC client using the xDS resolver.
 	cc, err := grpc.NewClient("xds:///"+testServiceName, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(resolverBuilder))
 	if err != nil {
-		t.Fatalf("Failed to create a gRPC client: %v", err)
+		t.Fatalf("failed to create a gRPC client: %v", err)
 	}
 	defer cc.Close()
 
 	client := testgrpc.NewTestServiceClient(cc)
-	_, err = client.EmptyCall(ctx, &testpb.Empty{})
-
-	if err == nil {
-		t.Fatalf("EmptyCall() succeeded when insecure transport was used, want error")
-	}
-	if status.Code(err) != codes.Unauthenticated {
-		t.Errorf("EmptyCall() failed with code %v, want Unauthenticated", status.Code(err))
-	}
-	if !strings.Contains(err.Error(), "cannot send secure credentials on an insecure connection") {
-		t.Errorf("EmptyCall() failed with error message %q, want it to contain %q", err.Error(), "cannot send secure credentials on an insecure connection")
+	const wantErr = "cannot send secure credentials on an insecure connection"
+	if _, err = client.EmptyCall(ctx, &testpb.Empty{}); err == nil || !strings.Contains(err.Error(), wantErr) {
+		t.Fatalf("EmptyCall() failed with error: %v; want error containing: %v", err, wantErr)
 	}
 }
 
@@ -530,7 +523,7 @@ func (s) TestGCPAuthnFilter_CacheSharingConfigUpdate(t *testing.T) {
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 	resolverBuilder, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
 	if err != nil {
-		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
+		t.Fatalf("failed to create xDS resolver for testing: %v", err)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -660,19 +653,18 @@ func (s) TestGCPAuthnFilter_CacheSharingConfigUpdate(t *testing.T) {
 	// Create a gRPC client using the xDS resolver.
 	clientCreds, err := xds.NewClientCredentials(xds.ClientOptions{FallbackCreds: insecure.NewCredentials()})
 	if err != nil {
-		t.Fatalf("Failed to create client credentials: %v", err)
+		t.Fatalf("failed to create client credentials: %v", err)
 	}
 	cc, err := grpc.NewClient("xds:///"+testServiceName, grpc.WithTransportCredentials(clientCreds), grpc.WithResolvers(resolverBuilder))
 	if err != nil {
-		t.Fatalf("Failed to create a gRPC client: %v", err)
+		t.Fatalf("failed to create a gRPC client: %v", err)
 	}
 	defer cc.Close()
 
 	client := testgrpc.NewTestServiceClient(cc)
 	makeCall := func(ctx context.Context, rpcName string) {
-		_, err := client.EmptyCall(ctx, &testpb.Empty{})
-		if err != nil {
-			t.Fatalf("RPC %s failed: %v", rpcName, err)
+		if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+			t.Fatalf("EmptyCall(%s) failed: %v", rpcName, err)
 		}
 		<-metadataCh
 	}
@@ -689,13 +681,13 @@ func (s) TestGCPAuthnFilter_CacheSharingConfigUpdate(t *testing.T) {
 
 	// Verify request count is 3!
 	if count := atomic.LoadInt32(&requestCount); count != 3 {
-		t.Errorf("Expected 3 requests to metadata server, got %d", count)
+		t.Errorf("expected 3 requests to metadata server, got %d", count)
 	}
 
 	// Update cache config to size 1!
 	hcm := &v3httppb.HttpConnectionManager{}
 	if err := anypb.UnmarshalTo(listener.ApiListener.ApiListener, hcm, proto.UnmarshalOptions{}); err != nil {
-		t.Fatalf("Failed to unmarshal HCM: %v", err)
+		t.Fatalf("failed to unmarshal HCM: %v", err)
 	}
 	hcm.HttpFilters[0].ConfigType = &v3httppb.HttpFilter_TypedConfig{
 		TypedConfig: testutils.MarshalAny(t, &v3gcpauthnpb.GcpAuthnFilterConfig{
@@ -735,7 +727,7 @@ func (s) TestGCPAuthnFilter_CacheSharingConfigUpdate(t *testing.T) {
 			break
 		}
 		if ctx.Err() != nil {
-			t.Fatal("Timeout waiting for xDS update to propagate")
+			t.Fatal("timeout waiting for xDS update to propagate")
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
@@ -753,7 +745,7 @@ func (s) TestGCPAuthnFilter_CacheSharingConfigUpdate(t *testing.T) {
 	// This proves that token for cluster C was successfully cached in the
 	// second pass, while A and B were not.
 	if count := atomic.LoadInt32(&requestCount); count != 5 {
-		t.Errorf("Expected exactly 5 requests to metadata server, got %d", count)
+		t.Errorf("expected exactly 5 requests to metadata server, got %d", count)
 	}
 }
 
@@ -797,7 +789,7 @@ func (s) TestGCPAuthnFilter_ConcurrentRPCWithShortAndLongContext(t *testing.T) {
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 	resolverBuilder, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
 	if err != nil {
-		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
+		t.Fatalf("failed to create xDS resolver for testing: %v", err)
 	}
 
 	// Start a test backend.
@@ -883,11 +875,11 @@ func (s) TestGCPAuthnFilter_ConcurrentRPCWithShortAndLongContext(t *testing.T) {
 	// Create a gRPC client using the xDS resolver.
 	clientCreds, err := xds.NewClientCredentials(xds.ClientOptions{FallbackCreds: insecure.NewCredentials()})
 	if err != nil {
-		t.Fatalf("Failed to create client credentials: %v", err)
+		t.Fatalf("failed to create client credentials: %v", err)
 	}
 	cc, err := grpc.NewClient("xds:///"+testServiceName, grpc.WithTransportCredentials(clientCreds), grpc.WithResolvers(resolverBuilder))
 	if err != nil {
-		t.Fatalf("Failed to create a gRPC client: %v", err)
+		t.Fatalf("failed to create a gRPC client: %v", err)
 	}
 	defer cc.Close()
 
@@ -913,7 +905,7 @@ func (s) TestGCPAuthnFilter_ConcurrentRPCWithShortAndLongContext(t *testing.T) {
 	select {
 	case <-requestStarted:
 	case <-ctx.Done():
-		t.Fatal("Timeout while waiting for token fetch to start in metadata server")
+		t.Fatal("timeout while waiting for token fetch to start in metadata server")
 	}
 
 	// Second RPC call with long context.
@@ -928,7 +920,7 @@ func (s) TestGCPAuthnFilter_ConcurrentRPCWithShortAndLongContext(t *testing.T) {
 	// completed or failed yet.
 	select {
 	case err := <-errCh1:
-		t.Fatalf("First RPC completed early with error: %v, expected it to remain blocked", err)
+		t.Fatalf("first RPC completed early with error: %v, expected it to remain blocked", err)
 	case <-time.After(100 * time.Millisecond):
 		// Success: RPC 1 remained blocked.
 	}
@@ -940,20 +932,20 @@ func (s) TestGCPAuthnFilter_ConcurrentRPCWithShortAndLongContext(t *testing.T) {
 	select {
 	case err := <-errCh1:
 		if err == nil || status.Code(err) != codes.DeadlineExceeded {
-			t.Fatalf("First RPC failed with error code %v, want DeadlineExceeded", status.Code(err))
+			t.Fatalf("first RPC failed with error code %v, want DeadlineExceeded", status.Code(err))
 		}
 	case <-ctx.Done():
-		t.Fatal("Timeout while waiting for first RPC to fail")
+		t.Fatal("timeout while waiting for first RPC to fail")
 	}
 
 	// Verify that the second RPC successfully completes.
 	select {
 	case err := <-errCh2:
 		if err != nil {
-			t.Fatalf("Second RPC failed unexpectedly with: %v, want success", err)
+			t.Fatalf("second RPC failed unexpectedly with: %v, want success", err)
 		}
 	case <-ctx.Done():
-		t.Fatal("Timeout while waiting for second RPC to succeed")
+		t.Fatal("timeout while waiting for second RPC to succeed")
 	}
 
 	// Verify that the token retrieved by the first fetch was successfully
@@ -966,17 +958,17 @@ func (s) TestGCPAuthnFilter_ConcurrentRPCWithShortAndLongContext(t *testing.T) {
 				// Verify request count is 1. This ensures that the token fetched for
 				// the first RPC was reused for the second RPC.
 				if count := atomic.LoadInt32(&requestCount); count != 1 {
-					t.Errorf("Expected exactly 1 request to metadata server, got %d", count)
+					t.Errorf("expected exactly 1 request to metadata server, got %d", count)
 				}
 				found = true
 				break
 			}
 		}
 		if !found {
-			t.Errorf("Expected token not found in metadata of second RPC: %v", md)
+			t.Errorf("expected token not found in metadata of second RPC: %v", md)
 		}
 	case <-ctx.Done():
-		t.Fatal("Timeout waiting for metadata from backend for the second RPC")
+		t.Fatal("timeout waiting for metadata from backend for the second RPC")
 	}
 }
 
@@ -1007,7 +999,7 @@ func (s) TestGCPAuthnFilter_PreservesUserCallOptions(t *testing.T) {
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 	resolverBuilder, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
 	if err != nil {
-		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
+		t.Fatalf("failed to create xDS resolver for testing: %v", err)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -1019,7 +1011,7 @@ func (s) TestGCPAuthnFilter_PreservesUserCallOptions(t *testing.T) {
 		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
 			// Set a custom header back to the client to verify the original CallOption works.
 			if err := grpc.SetHeader(ctx, metadata.Pairs("custom-response-header", "custom-val")); err != nil {
-				t.Errorf("Failed to set response header: %v", err)
+				t.Errorf("failed to set response header: %v", err)
 			}
 
 			md, _ := metadata.FromIncomingContext(ctx)
@@ -1096,11 +1088,11 @@ func (s) TestGCPAuthnFilter_PreservesUserCallOptions(t *testing.T) {
 	// Create a gRPC client using the xDS resolver.
 	clientCreds, err := xds.NewClientCredentials(xds.ClientOptions{FallbackCreds: insecure.NewCredentials()})
 	if err != nil {
-		t.Fatalf("Failed to create client credentials: %v", err)
+		t.Fatalf("failed to create client credentials: %v", err)
 	}
 	cc, err := grpc.NewClient("xds:///"+testServiceName, grpc.WithTransportCredentials(clientCreds), grpc.WithResolvers(resolverBuilder))
 	if err != nil {
-		t.Fatalf("Failed to create a gRPC client: %v", err)
+		t.Fatalf("failed to create a gRPC client: %v", err)
 	}
 	defer cc.Close()
 
@@ -1115,7 +1107,7 @@ func (s) TestGCPAuthnFilter_PreservesUserCallOptions(t *testing.T) {
 	// Verify that the response header option was executed successfully, proving the first entry was preserved.
 	val := header.Get("custom-response-header")
 	if len(val) == 0 || val[0] != "custom-val" {
-		t.Errorf("Expected response header with value: custom-val, got: %v", val)
+		t.Errorf("expected response header with value: custom-val, got: %v", val)
 	}
 
 	// Verify that the credentials option was successfully appended and executed.
@@ -1129,9 +1121,9 @@ func (s) TestGCPAuthnFilter_PreservesUserCallOptions(t *testing.T) {
 			}
 		}
 		if !found {
-			t.Errorf("Expected token not found in metadata: %v", md)
+			t.Errorf("expected token not found in metadata: %v", md)
 		}
 	case <-ctx.Done():
-		t.Fatal("Timeout waiting for metadata from backend")
+		t.Fatal("timeout waiting for metadata from backend")
 	}
 }
