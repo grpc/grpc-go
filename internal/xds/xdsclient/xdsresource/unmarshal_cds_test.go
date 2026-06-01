@@ -40,6 +40,7 @@ import (
 	v3gcpauthnpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/gcp_authn/v3"
 	v3leastrequestpb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/least_request/v3"
 	v3ringhashpb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/ring_hash/v3"
+	v3http11proxypb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/http_11_proxy/v3"
 	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
 	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 	v3matcherpb "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
@@ -1769,9 +1770,9 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 // 2. Registering the audience converter, since this is otherwise done in init.
 func enableGCPAuthenticationFilter(t *testing.T) {
 	testutils.SetEnvConfig(t, &envconfig.GCPAuthenticationFilterEnabled, true)
-	registerMetadataConverter(audienceTypeURL, audienceConverter{})
+	RegisterMetadataConverter(audienceTypeURL, audienceConverter{})
 	t.Cleanup(func() {
-		unregisterMetadataConverterForTesting(audienceTypeURL)
+		UnregisterMetadataConverterForTesting(audienceTypeURL)
 	})
 }
 
@@ -1782,7 +1783,7 @@ func enableGCPAuthenticationFilter(t *testing.T) {
 // or previous test)
 func disableGCPAuthenticationFilter(t *testing.T) {
 	testutils.SetEnvConfig(t, &envconfig.GCPAuthenticationFilterEnabled, false)
-	unregisterMetadataConverterForTesting(audienceTypeURL)
+	UnregisterMetadataConverterForTesting(audienceTypeURL)
 }
 
 // Tests custom metadata parsing for success cases when the
@@ -2323,6 +2324,274 @@ func (s) TestValidateCluster_LRSReportEndpointMetrics(t *testing.T) {
 			}
 			if !update.LRSReportEndpointMetrics.Equal(tt.wantMetrics) {
 				t.Fatalf("LRSReportEndpointMetrics:\n got %+v\nwant %+v", update.LRSReportEndpointMetrics, tt.wantMetrics)
+			}
+		})
+	}
+}
+
+// TestValidateCluster_Http11ProxyUpstreamTransport_EnvVarOff tests the validation
+// and unmarshaling of CDS resources containing Http11ProxyUpstreamTransport
+// transport socket wrapper when the env variable is disabled.
+func (s) TestValidateCluster_Http11ProxyUpstreamTransport_EnvVarOff(t *testing.T) {
+	testutils.SetEnvConfig(t, &envconfig.XDSHTTPConnectEnabled, false)
+	const (
+		v3ClusterName = "v3clusterName"
+		v3Service     = "v3Service"
+	)
+
+	tests := []struct {
+		desc    string
+		cluster *v3clusterpb.Cluster
+		wantErr bool
+	}{
+		{
+			desc: "HTTP11ProxyUpstreamTransport_with_UpstreamTLSContext",
+			cluster: &v3clusterpb.Cluster{
+				Name:                 v3ClusterName,
+				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
+				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
+					EdsConfig: &v3corepb.ConfigSource{
+						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
+							Ads: &v3corepb.AggregatedConfigSource{},
+						},
+					},
+					ServiceName: v3Service,
+				},
+				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
+				TransportSocket: &v3corepb.TransportSocket{
+					Name: "envoy.transport_sockets.http_11_proxy",
+					ConfigType: &v3corepb.TransportSocket_TypedConfig{
+						TypedConfig: testutils.MarshalAny(t, &v3http11proxypb.Http11ProxyUpstreamTransport{
+							TransportSocket: &v3corepb.TransportSocket{
+								Name: "envoy.transport_sockets.tls",
+								ConfigType: &v3corepb.TransportSocket_TypedConfig{
+									TypedConfig: testutils.MarshalAny(t, &v3tlspb.UpstreamTlsContext{
+										CommonTlsContext: &v3tlspb.CommonTlsContext{
+											TlsCertificateProviderInstance: &v3tlspb.CertificateProviderPluginInstance{
+												InstanceName: "identity_provider",
+											},
+											ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContext{
+												ValidationContext: &v3tlspb.CertificateValidationContext{
+													CaCertificateProviderInstance: &v3tlspb.CertificateProviderPluginInstance{
+														InstanceName: "root_provider",
+													},
+												},
+											},
+										},
+									}),
+								},
+							},
+						}),
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			desc: "HTTP11ProxyUpstreamTransport_with_plaintext_inner_socket",
+			cluster: &v3clusterpb.Cluster{
+				Name:                 v3ClusterName,
+				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
+				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
+					EdsConfig: &v3corepb.ConfigSource{
+						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
+							Ads: &v3corepb.AggregatedConfigSource{},
+						},
+					},
+					ServiceName: v3Service,
+				},
+				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
+				TransportSocket: &v3corepb.TransportSocket{
+					Name: "envoy.transport_sockets.tls",
+					ConfigType: &v3corepb.TransportSocket_TypedConfig{
+						TypedConfig: testutils.MarshalAny(t, &v3http11proxypb.Http11ProxyUpstreamTransport{
+							TransportSocket: nil,
+						}),
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			desc: "HTTP11ProxyUpstreamTransport_with_unsupported_inner_socket",
+			cluster: &v3clusterpb.Cluster{
+				Name:                 v3ClusterName,
+				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
+				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
+					EdsConfig: &v3corepb.ConfigSource{
+						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
+							Ads: &v3corepb.AggregatedConfigSource{},
+						},
+					},
+					ServiceName: v3Service,
+				},
+				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
+				TransportSocket: &v3corepb.TransportSocket{
+					ConfigType: &v3corepb.TransportSocket_TypedConfig{
+						TypedConfig: &anypb.Any{
+							TypeUrl: version.V3UpstreamTLSContextURL,
+							Value:   []byte{1, 2, 3, 4},
+						},
+					},
+				},
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			if _, err := validateClusterAndConstructClusterUpdate(tt.cluster, nil); err == nil {
+				t.Fatalf("validateClusterAndConstructClusterUpdate() did not return error when expected")
+			}
+		})
+	}
+}
+
+// TestValidateCluster_Http11ProxyUpstreamTransport_EnvVarOn tests the validation
+// and unmarshaling of CDS resources containing Http11ProxyUpstreamTransport
+// transport socket wrapper when the env variable is enabled.
+func (s) TestValidateCluster_Http11ProxyUpstreamTransport_EnvVarOn(t *testing.T) {
+	testutils.SetEnvConfig(t, &envconfig.XDSHTTPConnectEnabled, true)
+	const (
+		v3ClusterName = "v3clusterName"
+		v3Service     = "v3Service"
+	)
+	cmpOpts := []cmp.Option{
+		cmpopts.EquateEmpty(),
+		cmpopts.IgnoreFields(ClusterUpdate{}, "Raw", "LBPolicy", "TelemetryLabels"),
+	}
+
+	tests := []struct {
+		desc       string
+		cluster    *v3clusterpb.Cluster
+		wantUpdate ClusterUpdate
+		wantErr    bool
+	}{
+		{
+			desc: "HTTP11ProxyUpstreamTransport_with_UpstreamTLSContext",
+			cluster: &v3clusterpb.Cluster{
+				Name:                 v3ClusterName,
+				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
+				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
+					EdsConfig: &v3corepb.ConfigSource{
+						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
+							Ads: &v3corepb.AggregatedConfigSource{},
+						},
+					},
+					ServiceName: v3Service,
+				},
+				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
+				TransportSocket: &v3corepb.TransportSocket{
+					Name: "envoy.transport_sockets.http_11_proxy",
+					ConfigType: &v3corepb.TransportSocket_TypedConfig{
+						TypedConfig: testutils.MarshalAny(t, &v3http11proxypb.Http11ProxyUpstreamTransport{
+							TransportSocket: &v3corepb.TransportSocket{
+								Name: "envoy.transport_sockets.tls",
+								ConfigType: &v3corepb.TransportSocket_TypedConfig{
+									TypedConfig: testutils.MarshalAny(t, &v3tlspb.UpstreamTlsContext{
+										CommonTlsContext: &v3tlspb.CommonTlsContext{
+											TlsCertificateProviderInstance: &v3tlspb.CertificateProviderPluginInstance{
+												InstanceName: "identity_provider",
+											},
+											ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContext{
+												ValidationContext: &v3tlspb.CertificateValidationContext{
+													CaCertificateProviderInstance: &v3tlspb.CertificateProviderPluginInstance{
+														InstanceName: "root_provider",
+													},
+												},
+											},
+										},
+									}),
+								},
+							},
+						}),
+					},
+				},
+			},
+			wantUpdate: ClusterUpdate{
+				ClusterName:          v3ClusterName,
+				EDSServiceName:       v3Service,
+				IsHTTP11ProxyEnabled: true,
+				SecurityCfg: &SecurityConfig{
+					IdentityInstanceName: "identity_provider",
+					RootInstanceName:     "root_provider",
+				},
+				TelemetryLabels: xdsinternal.UnknownCSMLabels,
+			},
+		},
+		{
+			desc: "HTTP11ProxyUpstreamTransport_with_plaintext_inner_socket",
+			cluster: &v3clusterpb.Cluster{
+				Name:                 v3ClusterName,
+				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
+				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
+					EdsConfig: &v3corepb.ConfigSource{
+						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
+							Ads: &v3corepb.AggregatedConfigSource{},
+						},
+					},
+					ServiceName: v3Service,
+				},
+				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
+				TransportSocket: &v3corepb.TransportSocket{
+					Name: "envoy.transport_sockets.tls",
+					ConfigType: &v3corepb.TransportSocket_TypedConfig{
+						TypedConfig: testutils.MarshalAny(t, &v3http11proxypb.Http11ProxyUpstreamTransport{
+							TransportSocket: nil,
+						}),
+					},
+				},
+			},
+			wantUpdate: ClusterUpdate{
+				ClusterName:          v3ClusterName,
+				EDSServiceName:       v3Service,
+				IsHTTP11ProxyEnabled: true,
+				SecurityCfg:          nil,
+				TelemetryLabels:      xdsinternal.UnknownCSMLabels,
+			},
+		},
+		{
+			desc: "HTTP11ProxyUpstreamTransport_with_unsupported_inner_socket",
+			cluster: &v3clusterpb.Cluster{
+				Name:                 v3ClusterName,
+				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
+				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
+					EdsConfig: &v3corepb.ConfigSource{
+						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
+							Ads: &v3corepb.AggregatedConfigSource{},
+						},
+					},
+					ServiceName: v3Service,
+				},
+				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
+				TransportSocket: &v3corepb.TransportSocket{
+					ConfigType: &v3corepb.TransportSocket_TypedConfig{
+						TypedConfig: &anypb.Any{
+							TypeUrl: version.V3UpstreamTLSContextURL,
+							Value:   []byte{1, 2, 3, 4},
+						},
+					},
+				},
+			},
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			gotUpdate, err := validateClusterAndConstructClusterUpdate(tt.cluster, nil)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("validateClusterAndConstructClusterUpdate() did not return an error when expected")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("validateClusterAndConstructClusterUpdate() returned an error: %v", err)
+			}
+
+			if diff := cmp.Diff(tt.wantUpdate, gotUpdate, cmpOpts...); diff != "" {
+				t.Errorf("validateClusterAndConstructClusterUpdate() returned unexpected diff (-want, +got):\n%s", diff)
 			}
 		})
 	}

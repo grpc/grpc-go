@@ -69,8 +69,12 @@ var (
 	// https://github.com/grpc/proposal/blob/master/A87-mtls-spiffe-support.md
 	XDSSPIFFEEnabled = boolFromEnv("GRPC_EXPERIMENTAL_XDS_MTLS_SPIFFE", false)
 
-	// XDSHTTPConnectEnabled is true if gRPC should parse custom Metadata
-	// configuring use of an HTTP CONNECT proxy via xDS from cluster resources.
+	// XDSHTTPConnectEnabled controls support for dynamic HTTP CONNECT proxying
+	// configured via the xDS control plane. When enabled, gRPC will:
+	// - Parse the Http11ProxyUpstreamTransport transport socket wrapper in CDS
+	//   resources.
+	// - Parse the proxy address metadata in EDS resources, enabling physical
+	//   connection targets to be dynamically routed through the configured proxy.
 	// For more details, see:
 	// https://github.com/grpc/proposal/blob/master/A86-xds-http-connect.md
 	XDSHTTPConnectEnabled = boolFromEnv("GRPC_EXPERIMENTAL_XDS_HTTP_CONNECT", false)

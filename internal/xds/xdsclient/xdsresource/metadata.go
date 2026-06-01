@@ -30,10 +30,10 @@ import (
 
 func init() {
 	if envconfig.XDSHTTPConnectEnabled {
-		registerMetadataConverter("type.googleapis.com/envoy.config.core.v3.Address", proxyAddressConvertor{})
+		RegisterMetadataConverter("type.googleapis.com/envoy.config.core.v3.Address", ProxyAddressConvertor{})
 	}
 	if envconfig.GCPAuthenticationFilterEnabled {
-		registerMetadataConverter("type.googleapis.com/envoy.extensions.filters.http.gcp_authn.v3.Audience", audienceConverter{})
+		RegisterMetadataConverter("type.googleapis.com/envoy.extensions.filters.http.gcp_authn.v3.Audience", audienceConverter{})
 	}
 }
 
@@ -50,9 +50,9 @@ type metadataConverter interface {
 	convert(*anypb.Any) (any, error)
 }
 
-// registerMetadataConverter registers the converter to the map keyed on a proto
+// RegisterMetadataConverter registers the converter to the map keyed on a proto
 // type_url. Must be called at init time. Not thread safe.
-func registerMetadataConverter(protoType string, c metadataConverter) {
+func RegisterMetadataConverter(protoType string, c metadataConverter) {
 	metadataRegistry[protoType] = c
 }
 
@@ -61,9 +61,9 @@ func metadataConverterForType(typeURL string) metadataConverter {
 	return metadataRegistry[typeURL]
 }
 
-// unregisterMetadataConverterForTesting removes a converter from the registry.
+// UnregisterMetadataConverterForTesting removes a converter from the registry.
 // For testing only.
-func unregisterMetadataConverterForTesting(typeURL string) {
+func UnregisterMetadataConverterForTesting(typeURL string) {
 	delete(metadataRegistry, typeURL)
 }
 
@@ -82,12 +82,12 @@ type ProxyAddressMetadataValue struct {
 	Address string
 }
 
-// proxyAddressConvertor implements the metadataConverter interface to handle
+// ProxyAddressConvertor implements the metadataConverter interface to handle
 // the conversion of envoy.config.core.v3.Address protobuf messages into an
 // internal representation.
-type proxyAddressConvertor struct{}
+type ProxyAddressConvertor struct{}
 
-func (proxyAddressConvertor) convert(anyProto *anypb.Any) (any, error) {
+func (ProxyAddressConvertor) convert(anyProto *anypb.Any) (any, error) {
 	addressProto := &v3corepb.Address{}
 	if err := anyProto.UnmarshalTo(addressProto); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal resource from Any proto: %v", err)

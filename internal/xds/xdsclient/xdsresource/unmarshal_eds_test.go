@@ -48,9 +48,9 @@ import (
 // 2. Registering the proxy address converter, since this is otherwise done in init.
 func enableA86(t *testing.T) {
 	testutils.SetEnvConfig(t, &envconfig.XDSHTTPConnectEnabled, true)
-	registerMetadataConverter(proxyAddressTypeURL, proxyAddressConvertor{})
+	RegisterMetadataConverter(proxyAddressTypeURL, ProxyAddressConvertor{})
 	t.Cleanup(func() {
-		unregisterMetadataConverterForTesting(proxyAddressTypeURL)
+		UnregisterMetadataConverterForTesting(proxyAddressTypeURL)
 	})
 }
 
@@ -59,7 +59,7 @@ func enableA86(t *testing.T) {
 // 2. Unregistering the proxy address converter (in case it was registered by init or previous test)
 func disableA86(t *testing.T) {
 	testutils.SetEnvConfig(t, &envconfig.XDSHTTPConnectEnabled, false)
-	unregisterMetadataConverterForTesting(proxyAddressTypeURL)
+	UnregisterMetadataConverterForTesting(proxyAddressTypeURL)
 }
 
 func buildResolverEndpoint(addr []string, hostname string) resolver.Endpoint {
