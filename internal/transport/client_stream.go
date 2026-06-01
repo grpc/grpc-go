@@ -70,14 +70,20 @@ func (s *ClientStream) startNonGRPCDataCollection(st *status.Status) {
 	s.nonGRPCDataBuf = make([]byte, 0, nonGRPCDataMaxLen)
 }
 
+// finalizeNonGRPCStatus builds the terminal status by appending the collected
+// response body to the original non-gRPC status message.
+func (s *ClientStream) finalizeNonGRPCStatus() *status.Status {
+	msg := fmt.Sprintf("%s\ndata: %q", s.nonGRPCStatus.Message(), s.nonGRPCDataBuf)
+	return status.New(s.nonGRPCStatus.Code(), msg)
+}
+
 // handleNonGRPCData collects non-gRPC body from the given data frame.
 // It returns non-nil value when the stream should be closed with it.
 func (s *ClientStream) handleNonGRPCData(f *parsedDataFrame) *status.Status {
 	n := min(f.data.Len(), nonGRPCDataMaxLen-len(s.nonGRPCDataBuf))
 	s.nonGRPCDataBuf = append(s.nonGRPCDataBuf, f.data.ReadOnlyData()[0:n]...)
 	if len(s.nonGRPCDataBuf) >= nonGRPCDataMaxLen || f.StreamEnded() {
-		msg := fmt.Sprintf("%s\ndata: %q", s.nonGRPCStatus.Message(), s.nonGRPCDataBuf)
-		return status.New(s.nonGRPCStatus.Code(), msg)
+		return s.finalizeNonGRPCStatus()
 	}
 	return nil
 }

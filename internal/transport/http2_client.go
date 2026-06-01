@@ -1485,6 +1485,17 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 		return
 	}
 
+	// If we are collecting non-gRPC response data and receive a trailing
+	// HEADERS frame with END_STREAM, finalize the buffered data and close
+	// the stream.
+	if s.nonGRPCStatus != nil {
+		if endStream {
+			st := s.finalizeNonGRPCStatus()
+			t.closeStream(s, st.Err(), true, http2.ErrCodeProtocol, st, nil, true)
+		}
+		return
+	}
+
 	var (
 		// If a gRPC Response-Headers has already been received, then it means
 		// that the peer is speaking gRPC and we are in gRPC mode.
