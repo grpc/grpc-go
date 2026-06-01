@@ -1710,3 +1710,132 @@ func (s) TestBootstrap_SelectedCallCreds_WhenNotCCNotEnabled(t *testing.T) {
 		t.Errorf("Call creds count = %d, want %d", len(dialOpts), 0)
 	}
 }
+
+func (s) TestBootstrap_AllowedGrpcServices(t *testing.T) {
+	testutils.SetEnvConfig(t, &envconfig.XDSBootstrapCallCredsEnabled, true)
+	bootstrapFileMap := map[string]string{
+		"allowedGrpcServicesGood": `
+		{
+			"node": {
+				"id": "ENVOY_NODE_ID"
+			},
+			"xds_servers" : [{
+				"server_uri": "trafficdirector.googleapis.com:443",
+				"channel_creds": [
+					{ "type": "insecure" }
+				]
+			}],
+			"allowed_grpc_services": {
+				"dns:///sharding-service:443": {
+					"channel_creds": [
+						{ "type": "insecure" }
+					]
+				}
+			}
+		}`,
+		"allowedGrpcServicesWithCallCreds": `
+		{
+			"node": {
+				"id": "ENVOY_NODE_ID"
+			},
+			"xds_servers" : [{
+				"server_uri": "trafficdirector.googleapis.com:443",
+				"channel_creds": [
+					{ "type": "insecure" }
+				]
+			}],
+			"allowed_grpc_services": {
+				"dns:///sharding-service:443": {
+					"channel_creds": [
+						{ "type": "insecure" }
+					],
+					"call_creds": [
+						{ "type": "jwt_token_file", "config": {"jwt_token_file": "/var/run/secrets/tokens/istio-token"} }
+					]
+				}
+			}
+		}`,
+		"allowedGrpcServicesBadCreds": `
+		{
+			"node": {
+				"id": "ENVOY_NODE_ID"
+			},
+			"xds_servers" : [{
+				"server_uri": "trafficdirector.googleapis.com:443",
+				"channel_creds": [
+					{ "type": "insecure" }
+				]
+			}],
+			"allowed_grpc_services": {
+				"dns:///sharding-service:443": {
+					"channel_creds": [
+						{ "type": "unsupported_cred_type" }
+					]
+				}
+			}
+		}`,
+	}
+	cancel := setupBootstrapOverride(bootstrapFileMap)
+	defer cancel()
+
+	t.Run("good allowed_grpc_services", func(t *testing.T) {
+		origBootstrapFileName := envconfig.XDSBootstrapFileName
+		envconfig.XDSBootstrapFileName = "allowedGrpcServicesGood"
+		defer func() { envconfig.XDSBootstrapFileName = origBootstrapFileName }()
+
+		cfg, err := GetConfiguration()
+		if err != nil {
+			t.Fatalf("GetConfiguration() returned error %v, want <nil>", err)
+		}
+		allowed := cfg.AllowedGrpcServices()
+		if len(allowed) != 1 {
+			t.Fatalf("AllowedGrpcServices count = %d, want 1", len(allowed))
+		}
+		svc, ok := allowed["dns:///sharding-service:443"]
+		if !ok {
+			t.Fatalf("AllowedGrpcServices missing key \"dns:///sharding-service:443\"")
+		}
+		if svc.SelectedChannelCreds().Type != "insecure" {
+			t.Errorf("SelectedChannelCreds type = %q, want \"insecure\"", svc.SelectedChannelCreds().Type)
+		}
+	})
+
+	t.Run("allowed_grpc_services with call creds", func(t *testing.T) {
+		origBootstrapFileName := envconfig.XDSBootstrapFileName
+		envconfig.XDSBootstrapFileName = "allowedGrpcServicesWithCallCreds"
+		defer func() { envconfig.XDSBootstrapFileName = origBootstrapFileName }()
+
+		cfg, err := GetConfiguration()
+		if err != nil {
+			t.Fatalf("GetConfiguration() returned error %v, want <nil>", err)
+		}
+		allowed := cfg.AllowedGrpcServices()
+		if len(allowed) != 1 {
+			t.Fatalf("AllowedGrpcServices count = %d, want 1", len(allowed))
+		}
+		svc, ok := allowed["dns:///sharding-service:443"]
+		if !ok {
+			t.Fatalf("AllowedGrpcServices missing key \"dns:///sharding-service:443\"")
+		}
+		if svc.SelectedChannelCreds().Type != "insecure" {
+			t.Errorf("SelectedChannelCreds type = %q, want \"insecure\"", svc.SelectedChannelCreds().Type)
+		}
+		if len(svc.CallCredsConfigs()) != 1 {
+			t.Errorf("CallCredsConfigs count = %d, want 1", len(svc.CallCredsConfigs()))
+		}
+		if svc.CallCredsConfigs()[0].Type != "jwt_token_file" {
+			t.Errorf("CallCredsConfig type = %q, want \"jwt_token_file\"", svc.CallCredsConfigs()[0].Type)
+		}
+	})
+
+	t.Run("bad allowed_grpc_services", func(t *testing.T) {
+		origBootstrapFileName := envconfig.XDSBootstrapFileName
+		envconfig.XDSBootstrapFileName = "allowedGrpcServicesBadCreds"
+		defer func() { envconfig.XDSBootstrapFileName = origBootstrapFileName }()
+
+		_, err := GetConfiguration()
+		if err == nil {
+			t.Fatalf("GetConfiguration() returned <nil> error, want error")
+		}
+	})
+}

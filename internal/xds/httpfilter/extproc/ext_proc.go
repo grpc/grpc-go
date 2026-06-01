@@ -25,11 +25,12 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/internal/envconfig"
+	"google.golang.org/grpc/internal/grpcservice"
 	"google.golang.org/grpc/internal/optional"
 	"google.golang.org/grpc/internal/resolver"
+	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/internal/xds/httpfilter"
 	"google.golang.org/grpc/internal/xds/matcher"
-	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 
@@ -45,10 +46,25 @@ func init() {
 }
 
 var (
-	parseGRPCServiceConfig = func(*v3corepb.GrpcService) (xdsresource.GRPCServiceConfig, error) {
-		return xdsresource.GRPCServiceConfig{}, fmt.Errorf("parseGRPCServiceConfig not implemented")
+	parseGRPCServiceConfig = func(gs *v3corepb.GrpcService) (grpcservice.Config, error) {
+		cfg, err := bootstrap.GetConfiguration()
+		if err != nil {
+			return grpcservice.Config{}, fmt.Errorf("extproc: failed to get bootstrap config: %v", err)
+		}
+		trusted := false
+		var allowed map[string]*bootstrap.AllowedGrpcService
+		if cfg != nil {
+			for _, s := range cfg.XDSServers() {
+				if s.ServerFeaturesTrustedXDSServer() {
+					trusted = true
+					break
+				}
+			}
+			allowed = cfg.AllowedGrpcServices()
+		}
+		return grpcservice.Convert(gs, trusted, allowed)
 	}
-	createExtProcChannel = func(xdsresource.GRPCServiceConfig) (grpc.ClientConnInterface, func() error, error) {
+	createExtProcChannel = func(grpcservice.Config) (grpc.ClientConnInterface, func() error, error) {
 		return nil, nil, fmt.Errorf("dialing external processing server not implemented")
 	}
 )
@@ -159,7 +175,7 @@ func (builder) ParseFilterConfigOverride(ov proto.Message) (httpfilter.FilterCon
 		processingModesOpt = optional.New(processingModesFromProto(pm))
 	}
 
-	var serverOpt optional.Optional[xdsresource.GRPCServiceConfig]
+	var serverOpt optional.Optional[grpcservice.Config]
 	if override.GetGrpcService() != nil {
 		server, err := parseGRPCServiceConfig(override.GetGrpcService())
 		if err != nil {
