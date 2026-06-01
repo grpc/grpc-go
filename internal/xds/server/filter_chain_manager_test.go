@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"net/netip"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -703,8 +704,10 @@ func (s) TestHTTPFilterInstantiation(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			fc := filterChain{
-				httpFilters: test.filters,
+				httpFilters:              test.filters,
+				usableRouteConfiguration: &atomic.Pointer[usableRouteConfiguration]{},
 			}
+			fc.usableRouteConfiguration.Store(&usableRouteConfiguration{})
 
 			filters := make(map[serverFilterKey]*refCountedServerFilter)
 			provider := func(filter xdsresource.HTTPFilter) (httpfilter.ServerFilter, error) {
@@ -714,7 +717,8 @@ func (s) TestHTTPFilterInstantiation(t *testing.T) {
 				}
 				return getOrCreateServerFilterWithMap(filters, builder, newServerFilterKey(&filter)), nil
 			}
-			urc := fc.constructUsableRouteConfiguration(test.routeConfig, provider)
+			fc.updateUsableRouteConfiguration(&test.routeConfig, nil, provider, "node-id")
+			urc := fc.usableRouteConfiguration.Load()
 			if urc.err != nil {
 				t.Fatalf("Error constructing usable route configuration: %v", urc.err)
 			}

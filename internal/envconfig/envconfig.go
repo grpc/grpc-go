@@ -59,6 +59,15 @@ var (
 	// unconditionally.
 	XDSEndpointHashKeyBackwardCompat = boolFromEnv("GRPC_XDS_ENDPOINT_HASH_KEY_BACKWARD_COMPAT", false)
 
+	// LabelServerGoroutines controls setting [runtime/pprof.Labels] on the
+	// goroutines spawned by [grpc.Server] type.
+	// For now, this is limited to the goroutines spawned to handle incoming
+	// requests on the server.
+	// Set "GRPC_GO_SERVER_GOROUTINE_LABELS" to "grpc.method=true" to
+	// enable this grpc.method label, or "all" to enable all valid labels.
+	// This variable is a bit-field.
+	LabelServerGoroutines = goroutineLabelsFromEnv("GRPC_GO_SERVER_GOROUTINE_LABELS", 0)
+
 	// RingHashSetRequestHashKey is set if the ring hash balancer can get the
 	// request hash header by setting the "requestHashHeader" field, according
 	// to gRFC A76. It can be disabled by setting the environment variable
@@ -156,3 +165,52 @@ func uint64FromEnv(envVar string, def, min, max uint64) uint64 {
 	}
 	return v
 }
+
+// GoroutineLabels is a bitfield indicating which goroutine labels are enabled.
+type GoroutineLabels uint16
+
+func goroutineLabelsFromEnv(envVar string, def GoroutineLabels) GoroutineLabels {
+	val := def
+	v := os.Getenv(envVar)
+	if strings.EqualFold(v, "all") {
+		return AllGoroutineLabels
+	} else if strings.EqualFold(v, "none") {
+		return 0
+	}
+	for s := range strings.SplitSeq(v, ",") {
+		s = strings.TrimSpace(s)
+		if len(s) == 0 {
+			continue
+		}
+		pre, post, ok := strings.Cut(s, "=")
+		if !ok {
+			// no equals sign
+			continue
+		}
+		post = strings.TrimSpace(post)
+		pre = strings.TrimSpace(pre)
+		bitDesignator := GoroutineLabels(0)
+		switch {
+		case strings.EqualFold(pre, "grpc.method"):
+			bitDesignator = GoroutineLabelServerMethod
+		default:
+			continue
+		}
+		if strings.EqualFold(post, "true") {
+			val |= bitDesignator
+		} else if strings.EqualFold(post, "false") {
+			val &^= bitDesignator
+		}
+	}
+	return val
+}
+
+const (
+	// GoroutineLabelServerMethod sets the grpc.method label on new
+	// server-side gRPC streams.
+	GoroutineLabelServerMethod GoroutineLabels = 1 << iota
+)
+
+// AllGoroutineLabels is an or'd together bitfield of all valid GoroutineLabels
+// constant values (above).
+const AllGoroutineLabels = GoroutineLabelServerMethod

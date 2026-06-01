@@ -511,7 +511,7 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 		sanContains            = "san-contains"
 		sniString              = "test-sni"
 	)
-	var sanRE = regexp.MustCompile(sanRegexGood)
+	var sanRE = regexp.MustCompile("^(?:san?regex?)$")
 
 	tests := []struct {
 		name                      string
