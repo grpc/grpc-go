@@ -47,8 +47,8 @@ func (s) TestHeaderMutationRulesFromProto_HappyPath(t *testing.T) {
 		DisallowIsError:    wrapperspb.Bool(false),
 	}
 	want := HeaderMutationRules{
-		AllowExpr:       regexp.MustCompile("^allow$"),
-		DisallowExpr:    regexp.MustCompile("^disallow$"),
+		AllowExpr:       regexp.MustCompile("^(?:^allow$)$"),
+		DisallowExpr:    regexp.MustCompile("^(?:^disallow$)$"),
 		DisallowAll:     true,
 		DisallowIsError: false,
 	}
