@@ -270,7 +270,7 @@ func newHeaderMatcher(headerMatcherConfig *v3route_componentspb.HeaderMatcher) (
 	case *v3route_componentspb.HeaderMatcher_ExactMatch:
 		m = internalmatcher.NewHeaderExactMatcher(headerMatcherConfig.Name, headerMatcherConfig.GetExactMatch(), headerMatcherConfig.InvertMatch)
 	case *v3route_componentspb.HeaderMatcher_SafeRegexMatch:
-		regex, err := internalmatcher.CompileSafeRegex(headerMatcherConfig.GetSafeRegexMatch().Regex)
+regex, err := internalmatcher.CompileSafeRegex(headerMatcherConfig.GetSafeRegexMatch().GetRegex())
 		if err != nil {
 			return nil, err
 		}
