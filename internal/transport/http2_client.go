@@ -1228,14 +1228,15 @@ func (t *http2Client) handleData(f *parsedDataFrame) {
 		if s.nonGRPCStatus != nil {
 			// The frame should be handled as a non-gRPC response body
 			st := s.handleNonGRPCData(f)
+			if st != nil {
+				t.closeStream(s, st.Err(), true, http2.ErrCodeProtocol, st, nil, true)
+				return
+			}
 			if w := s.fc.onRead(size); w > 0 {
 				t.controlBuf.put(&outgoingWindowUpdate{
 					streamID:  s.id,
 					increment: w,
 				})
-			}
-			if st != nil {
-				t.closeStream(s, st.Err(), true, http2.ErrCodeProtocol, st, nil, true)
 			}
 			return
 		}
