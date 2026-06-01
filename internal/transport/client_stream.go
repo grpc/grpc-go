@@ -19,7 +19,7 @@
 package transport
 
 import (
-	"strconv"
+	"fmt"
 	"sync/atomic"
 
 	"golang.org/x/net/http2"
@@ -76,8 +76,8 @@ func (s *ClientStream) handleNonGRPCData(f *parsedDataFrame) *status.Status {
 	n := min(f.data.Len(), nonGRPCDataMaxLen-len(s.nonGRPCDataBuf))
 	s.nonGRPCDataBuf = append(s.nonGRPCDataBuf, f.data.ReadOnlyData()[0:n]...)
 	if len(s.nonGRPCDataBuf) >= nonGRPCDataMaxLen || f.StreamEnded() {
-		data := "\ndata: " + strconv.Quote(string(s.nonGRPCDataBuf))
-		return status.New(s.nonGRPCStatus.Code(), s.nonGRPCStatus.Message()+data)
+		msg := fmt.Sprintf("%s\ndata: %q", s.nonGRPCStatus.Message(), s.nonGRPCDataBuf)
+		return status.New(s.nonGRPCStatus.Code(), msg)
 	}
 	return nil
 }
