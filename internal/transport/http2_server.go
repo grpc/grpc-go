@@ -564,6 +564,15 @@ func (t *http2Server) operateHeaders(ctx context.Context, frame *http2.MetaHeade
 		return nil
 	}
 	if t.inTapHandle != nil {
+		if _, _, err := grpcutil.ParseMethod(s.method); err != nil {
+			t.mu.Unlock()
+			if t.logger.V(logLevel) {
+				t.logger.Infof("Aborting the stream early: malformed method name %q", s.method)
+			}
+			t.writeEarlyAbort(streamID, s.contentSubtype, status.Newf(codes.Unimplemented, "malformed method name: %q", s.method), http.StatusOK, !frame.StreamEnded())
+			s.cancel()
+			return nil
+		}
 		var err error
 		if s.ctx, err = t.inTapHandle(s.ctx, &tap.Info{FullMethodName: s.method, Header: mdata}); err != nil {
 			t.mu.Unlock()
