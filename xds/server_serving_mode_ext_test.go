@@ -533,5 +533,3 @@ func (s) TestServer_MismatchedAddressListenerReceivedOnServer(t *testing.T) {
 	defer cc.Close()
 	waitForSuccessfulRPC(ctx, t, cc)
 }
-
-

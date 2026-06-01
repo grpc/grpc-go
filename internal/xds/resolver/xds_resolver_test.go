@@ -1656,4 +1656,3 @@ func (s) TestResolverServerSideListenerReceivedOnClient(t *testing.T) {
 		}
 	}
 }
-
