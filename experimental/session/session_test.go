@@ -101,7 +101,7 @@ func setupTestVirtualServer(t *testing.T, customInnerHandler grpc.StreamHandler)
 
 	innerHandler := customInnerHandler
 	if innerHandler == nil {
-		 innerHandler = func(_ any, stream grpc.ServerStream) error {
+		innerHandler = func(_ any, stream grpc.ServerStream) error {
 			var msg []byte
 			err := stream.RecvMsg(&msg)
 			if err != nil {
