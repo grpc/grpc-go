@@ -458,7 +458,9 @@ func TestStartSessionCall_ClientCancelsSession(t *testing.T) {
 		ClientStreams: true,
 		ServerStreams: true,
 	}
-	innerStream, err := sess.VirtualConn.NewStream(context.Background(), desc, "/TestService/Echo", grpc.CallContentSubtype("rawtest"))
+	vctx, vcancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer vcancel()
+	innerStream, err := sess.VirtualConn.NewStream(vctx, desc, "/TestService/Echo", grpc.CallContentSubtype("rawtest"))
 	if err != nil {
 		t.Fatalf("Virtual stream create failed: %v", err)
 	}
@@ -535,7 +537,7 @@ func TestStartSessionCall_SetupTransportFails(t *testing.T) {
 		ClientStreams: true,
 		ServerStreams: true,
 	}
-	innerStream, err := sess.VirtualConn.NewStream(context.Background(), desc, "/TestService/Echo", grpc.CallContentSubtype("rawtest"))
+	innerStream, err := sess.VirtualConn.NewStream(ctx, desc, "/TestService/Echo", grpc.CallContentSubtype("rawtest"))
 	if err != nil {
 		if status.Code(err) != codes.Unavailable {
 			t.Fatalf("Expected status Unavailable on NewStream, got: %v", err)
