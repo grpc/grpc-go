@@ -303,10 +303,8 @@ func TestStartSessionCall_HandshakeFailure(t *testing.T) {
 
 	// Wait for the server to reject the stream
 	select {
-	case err := <-sess.Done:
-		if status.Code(err) != codes.PermissionDenied {
-			// Ignore exact mapping validation, only care about not hanging.
-		}
+	case <-sess.Done:
+		// Ignore exact mapping validation, only care about not hanging.
 	case <-time.After(time.Second * 2):
 		t.Fatalf("Timeout waiting for Done: channels likely leaked")
 	}
@@ -545,10 +543,8 @@ func TestStartSessionCall_SetupTransportFails(t *testing.T) {
 		return // Test passed!
 	}
 
-	err = innerStream.SendMsg([]byte("hello"))
-	if err != nil {
-		// SendMsg itself might succeed in queuing, but RecvMsg must fail
-	}
+	// SendMsg itself might succeed in queuing, but RecvMsg must fail.
+	_ = innerStream.SendMsg([]byte("hello"))
 
 	var reply []byte
 	err = innerStream.RecvMsg(&reply)
