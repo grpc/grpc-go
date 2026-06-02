@@ -49,8 +49,8 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-// SessionClient represents an active multiplexed session over a physical gRPC stream.
-type SessionClient struct {
+// Client represents an active multiplexed session over a physical gRPC stream.
+type Client struct {
 	// VirtualConn is the fully functional HTTP/2-over-HTTP/2 channel.
 	VirtualConn *grpc.ClientConn
 
@@ -64,7 +64,7 @@ type SessionClient struct {
 // StartSessionCall starts a generic BiDi session RPC and returns the SessionClient.
 // virtualOpts are applied to the inner HTTP/2 virtual channel.
 // opts are applied to the outer session RPC.
-func StartSessionCall(ctx context.Context, cc *grpc.ClientConn, method string, req any, virtualOpts []grpc.DialOption, opts ...grpc.CallOption) (*SessionClient, error) {
+func StartSessionCall(ctx context.Context, cc *grpc.ClientConn, method string, req any, virtualOpts []grpc.DialOption, opts ...grpc.CallOption) (*Client, error) {
 	desc := &grpc.StreamDesc{
 		StreamName:    "Session",
 		ClientStreams: true,
@@ -125,7 +125,7 @@ func StartSessionCall(ctx context.Context, cc *grpc.ClientConn, method string, r
 		close(doneCh)
 	}()
 
-	return &SessionClient{
+	return &Client{
 		VirtualConn: vcc,
 		Ack:         ackCh,
 		Done:        doneCh,
@@ -428,7 +428,7 @@ func createVirtualChannel(adapter *streamConnAdapter, opts ...grpc.DialOption) (
 	var dialed bool
 	var dialMu sync.Mutex
 
-	dialer := func(ctx context.Context, addr string) (net.Conn, error) {
+	dialer := func(_ context.Context, _ string) (net.Conn, error) {
 		dialMu.Lock()
 		defer dialMu.Unlock()
 		if dialed {

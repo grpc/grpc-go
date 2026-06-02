@@ -101,7 +101,7 @@ func setupTestVirtualServer(t *testing.T, customInnerHandler grpc.StreamHandler)
 
 	innerHandler := customInnerHandler
 	if innerHandler == nil {
-		innerHandler = func(srv any, stream grpc.ServerStream) error {
+		 innerHandler = func(_ any, stream grpc.ServerStream) error {
 			var msg []byte
 			err := stream.RecvMsg(&msg)
 			if err != nil {
@@ -115,7 +115,7 @@ func setupTestVirtualServer(t *testing.T, customInnerHandler grpc.StreamHandler)
 	go innerServer.Serve(innerLis)
 
 	outerLis := bufconn.Listen(1024 * 1024)
-	outerServer := grpc.NewServer(grpc.UnknownServiceHandler(func(srv any, stream grpc.ServerStream) error {
+	outerServer := grpc.NewServer(grpc.UnknownServiceHandler(func(_ any, stream grpc.ServerStream) error {
 		var appReq []byte
 		err := stream.RecvMsg(&appReq)
 		if err != nil {
@@ -215,12 +215,12 @@ type fakeClientStream struct {
 	grpc.ClientStream
 }
 
-func (f *fakeClientStream) RecvMsg(m any) error {
+func (f *fakeClientStream) RecvMsg(_ any) error {
 	// Block forever to simulate a quiet connection
 	select {}
 }
 
-func (f *fakeClientStream) SendMsg(m any) error {
+func (f *fakeClientStream) SendMsg(_ any) error {
 	// Block forever to simulate network flow control exhausted
 	select {}
 }
@@ -275,7 +275,7 @@ func TestStreamConnAdapter_CloseCancelsContext(t *testing.T) {
 func TestStartSessionCall_HandshakeFailure(t *testing.T) {
 	// 1. Start an outer server that immediately rejects the connection
 	outerLis := bufconn.Listen(1024 * 1024)
-	outerServer := grpc.NewServer(grpc.UnknownServiceHandler(func(srv any, stream grpc.ServerStream) error {
+	outerServer := grpc.NewServer(grpc.UnknownServiceHandler(func(_ any, stream grpc.ServerStream) error {
 		var msg []byte
 		if err := stream.RecvMsg(&msg); err != nil {
 			return err
@@ -316,7 +316,7 @@ func TestStartSessionCall_ImmediateVirtualRpc(t *testing.T) {
 	innerLis := newSingleListener()
 	virtualRPCReceived := make(chan struct{})
 
-	innerServer := grpc.NewServer(grpc.UnknownServiceHandler(func(srv any, stream grpc.ServerStream) error {
+	innerServer := grpc.NewServer(grpc.UnknownServiceHandler(func(_ any, stream grpc.ServerStream) error {
 		var msg []byte
 		err := stream.RecvMsg(&msg)
 		if err != nil {
@@ -331,7 +331,7 @@ func TestStartSessionCall_ImmediateVirtualRpc(t *testing.T) {
 	defer innerServer.Stop()
 
 	outerLis := bufconn.Listen(1024 * 1024)
-	outerServer := grpc.NewServer(grpc.UnknownServiceHandler(func(srv any, stream grpc.ServerStream) error {
+	outerServer := grpc.NewServer(grpc.UnknownServiceHandler(func(_ any, stream grpc.ServerStream) error {
 		var appReq []byte
 		err := stream.RecvMsg(&appReq)
 		if err != nil {
@@ -422,7 +422,7 @@ func TestStartSessionCall_ImmediateVirtualRpc(t *testing.T) {
 }
 
 func TestStartSessionCall_ClientCancelsSession(t *testing.T) {
-	blockingHandler := func(srv any, stream grpc.ServerStream) error {
+	blockingHandler := func(_ any, stream grpc.ServerStream) error {
 		var msg []byte
 		err := stream.RecvMsg(&msg)
 		if err != nil {
@@ -495,7 +495,7 @@ func TestStartSessionCall_ClientCancelsSession(t *testing.T) {
 func TestStartSessionCall_SetupTransportFails(t *testing.T) {
 	// Spin up a server that will immediately close the stream after handshake, simulating failure
 	outerLis := bufconn.Listen(1024 * 1024)
-	outerServer := grpc.NewServer(grpc.UnknownServiceHandler(func(srv any, stream grpc.ServerStream) error {
+	outerServer := grpc.NewServer(grpc.UnknownServiceHandler(func(_ any, stream grpc.ServerStream) error {
 		var appReq []byte
 		if err := stream.RecvMsg(&appReq); err != nil {
 			return err
@@ -560,7 +560,7 @@ func TestStartSessionCall_SetupTransportFails(t *testing.T) {
 	}
 }
 
-func TestStreamConnAdapter_ConcurrentReads(t *testing.T) {
+func TestStreamConnAdapter_ConcurrentReads(_ *testing.T) {
 	adapter := newStreamConnAdapter(&fakeClientStream{}, func() {})
 
 	// Populate the read channel asynchronously to support a large volume of packets
