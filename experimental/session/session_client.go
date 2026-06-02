@@ -45,8 +45,8 @@ import (
 	"sync"
 	"time"
 
-	"google3/third_party/golang/grpc/credentials/insecure/insecure"
-	"google3/third_party/golang/grpc/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc"
 )
 
 // SessionClient represents an active multiplexed session over a physical gRPC stream.

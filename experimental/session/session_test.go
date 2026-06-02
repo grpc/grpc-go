@@ -29,12 +29,12 @@ import (
 	"testing"
 	"time"
 
-	"google3/third_party/golang/grpc/codes/codes"
-	"google3/third_party/golang/grpc/credentials/insecure/insecure"
-	"google3/third_party/golang/grpc/encoding/encoding"
-	"google3/third_party/golang/grpc/grpc"
-	"google3/third_party/golang/grpc/status/status"
-	"google3/third_party/golang/grpc/test/bufconn/bufconn"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/encoding"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/status"
+	"google.golang.org/grpc/test/bufconn"
 )
 
 type rawCodec struct{}
