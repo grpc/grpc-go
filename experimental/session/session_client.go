@@ -45,8 +45,8 @@ import (
 	"sync"
 	"time"
 
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 // SessionClient represents an active multiplexed session over a physical gRPC stream.
@@ -155,7 +155,7 @@ type streamConnAdapter struct {
 	writeDeadline time.Time
 
 	// readMu serializes concurrent Read invocations to prevent races on currBuf.
-	readMu        sync.Mutex
+	readMu sync.Mutex
 
 	// streamMu serializes outbound gRPC stream operations (SendMsg, CloseSend) to prevent
 	// concurrent write panics. RecvMsg is called exclusively by pumpReads without streamMu.
@@ -449,4 +449,3 @@ func createVirtualChannel(adapter *streamConnAdapter, opts ...grpc.DialOption) (
 
 	return grpc.NewClient("passthrough:///virtual_target", dialOpts...)
 }
-
