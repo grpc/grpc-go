@@ -111,7 +111,9 @@ const (
 	notifyCall
 	misbehaved
 	encodingRequiredStatus
-	invalidHeaderField
+	invalidContentType
+	invalidContentTypeWithMultipleFrame
+	malformedHeader
 	delayRead
 	pingpong
 )
@@ -220,9 +222,55 @@ func (h *testStreamHandler) handleStreamEncodingRequiredStatus(s *ServerStream) 
 	s.Read(math.MaxInt)
 }
 
-func (h *testStreamHandler) handleStreamInvalidHeaderField(s *ServerStream) {
+func (h *testStreamHandler) handleStreamInvalidContentType(s *ServerStream) {
 	headerFields := []hpack.HeaderField{}
 	headerFields = append(headerFields, hpack.HeaderField{Name: "content-type", Value: expectedInvalidHeaderField})
+	h.t.controlBuf.put(&headerFrame{
+		streamID:  s.id,
+		hf:        headerFields,
+		endStream: true,
+		cleanup: &cleanupStream{
+			streamID: s.id,
+			onWrite:  func() {},
+		},
+	})
+}
+
+func (h *testStreamHandler) handleStreamInvalidContentTypeWithMultipleFrame(s *ServerStream) {
+	headerFields := []hpack.HeaderField{}
+	headerFields = append(headerFields, hpack.HeaderField{Name: "content-type", Value: expectedInvalidHeaderField})
+	h.t.controlBuf.put(&headerFrame{
+		streamID:  s.id,
+		hf:        headerFields,
+		endStream: false,
+	})
+	d1 := newBufferSlice([]byte("first"))
+	d1.Ref()
+	h.t.controlBuf.put(&dataFrame{
+		streamID:    s.id,
+		h:           nil,
+		data:        d1,
+		onEachWrite: func() {},
+	})
+	// Wait for the test to verify the first frame before sending the next frame.
+	<-h.notify
+	d2 := newBufferSlice([]byte(" second"))
+	d2.Ref()
+	h.t.controlBuf.put(&dataFrame{
+		streamID:    s.id,
+		h:           nil,
+		data:        d2,
+		onEachWrite: func() {},
+		endStream:   true,
+	})
+}
+
+func (h *testStreamHandler) handleStreamMalformedHeader(s *ServerStream) {
+	headerFields := []hpack.HeaderField{
+		{Name: ":status", Value: "200"},
+		{Name: "content-type", Value: "application/grpc"},
+		{Name: "x-bad-bin", Value: "!!!invalid-base64!!!"},
+	}
 	h.t.controlBuf.put(&headerFrame{
 		streamID:  s.id,
 		hf:        headerFields,
@@ -425,12 +473,36 @@ func (s *server) start(t *testing.T, port int, serverConfig *ServerConfig, ht hT
 				})
 				wg.Done()
 			}()
-		case invalidHeaderField:
+		case invalidContentType:
 			go func() {
 				transport.HandleStreams(ctx, func(s *ServerStream) {
 					wg.Add(1)
 					go func() {
-						h.handleStreamInvalidHeaderField(s)
+						h.handleStreamInvalidContentType(s)
+						wg.Done()
+					}()
+				})
+				wg.Done()
+			}()
+		case invalidContentTypeWithMultipleFrame:
+			h.notify = make(chan struct{})
+			close(s.ready)
+			go func() {
+				transport.HandleStreams(ctx, func(s *ServerStream) {
+					wg.Add(1)
+					go func() {
+						h.handleStreamInvalidContentTypeWithMultipleFrame(s)
+						wg.Done()
+					}()
+				})
+				wg.Done()
+			}()
+		case malformedHeader:
+			go func() {
+				transport.HandleStreams(ctx, func(s *ServerStream) {
+					wg.Add(1)
+					go func() {
+						h.handleStreamMalformedHeader(s)
 						wg.Done()
 					}()
 				})
@@ -1638,8 +1710,8 @@ func (s) TestEncodingRequiredStatus(t *testing.T) {
 	s.Read(math.MaxInt)
 }
 
-func (s) TestInvalidHeaderField(t *testing.T) {
-	server, ct, cancel := setUp(t, 0, invalidHeaderField)
+func (s) TestInvalidContentType(t *testing.T) {
+	server, ct, cancel := setUp(t, 0, invalidContentType)
 	defer cancel()
 	callHdr := &CallHdr{
 		Host:   "localhost",
@@ -1660,8 +1732,53 @@ func (s) TestInvalidHeaderField(t *testing.T) {
 	server.stop()
 }
 
+func (s) TestNonGRPCDataCollectionAcrossMultipleFrames(t *testing.T) {
+	server, ct, cancel := setUp(t, 0, invalidContentTypeWithMultipleFrame)
+	defer cancel()
+	defer server.stop()
+	defer ct.Close(fmt.Errorf("closed manually by test"))
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	select {
+	case <-server.ready:
+	case <-ctx.Done():
+		t.Fatal("timed out waiting for server handler to be initialized")
+	}
+
+	s, err := ct.NewStream(ctx, &CallHdr{Host: "localhost", Method: "foo"}, nil)
+	if err != nil {
+		t.Fatalf("failed to create the stream")
+	}
+
+	// After the first Data frame (without EOS), handleNonGRPCData returns
+	// nil so the stream stays open and continues collecting.
+	select {
+	case <-s.Done():
+		t.Fatal("stream closed after first DATA frame, want it to stay open")
+	case <-time.After(defaultTestShortTimeout):
+	}
+
+	// Signal the server to send the second Data frame with EOS.
+	close(server.h.notify)
+
+	_, err = s.readTo(make([]byte, 1))
+	if err == nil {
+		t.Fatal("Read succeeded, want error")
+	}
+	// Both frames should be collected: "first" + " second".
+	wantCode := codes.Internal
+	wantMsg := "first second"
+	if got := status.Code(err); got != wantCode {
+		t.Fatalf("Read error code = %v, want %v\nfull error: %v", got, wantCode, err)
+	}
+	if got := status.Convert(err).Message(); !strings.Contains(got, wantMsg) {
+		t.Fatalf("Read error message = %q, want it to contain %q", got, wantMsg)
+	}
+}
+
 func (s) TestHeaderChanClosedAfterReceivingAnInvalidHeader(t *testing.T) {
-	server, ct, cancel := setUp(t, 0, invalidHeaderField)
+	server, ct, cancel := setUp(t, 0, malformedHeader)
 	defer cancel()
 	defer server.stop()
 	defer ct.Close(fmt.Errorf("closed manually by test"))
@@ -2685,6 +2802,7 @@ func (s) TestClientDecodeHeader(t *testing.T) {
 		name            string
 		metaHeaderFrame *http2.MetaHeadersFrame
 		wantStatus      *status.Status
+		isNonGRPCStatus bool
 	}{
 		{
 			name: "valid_header",
@@ -2708,6 +2826,7 @@ func (s) TestClientDecodeHeader(t *testing.T) {
 				codes.Unknown,
 				"unexpected HTTP status code received from server: 200 (OK); malformed header: missing HTTP content-type",
 			),
+			isNonGRPCStatus: true,
 		},
 		{
 			name: "invalid_grpc_status",
@@ -2734,6 +2853,7 @@ func (s) TestClientDecodeHeader(t *testing.T) {
 				codes.Internal,
 				"malformed header: missing HTTP status; transport: received unexpected content-type \"application/json\"",
 			),
+			isNonGRPCStatus: true,
 		},
 		{
 			name: "invalid_content_type_with_http_status_504",
@@ -2747,6 +2867,7 @@ func (s) TestClientDecodeHeader(t *testing.T) {
 				codes.Unavailable,
 				"unexpected HTTP status code received from server: 504 (Gateway Timeout); transport: received unexpected content-type \"application/json\"",
 			),
+			isNonGRPCStatus: true,
 		},
 		{
 			name: "http_fallback_and_invalid_http_status",
@@ -2803,7 +2924,12 @@ func (s) TestClientDecodeHeader(t *testing.T) {
 			}
 
 			s.operateHeaders(tc.metaHeaderFrame)
-			got := cs.status
+			var got *status.Status
+			if tc.isNonGRPCStatus {
+				got = cs.nonGRPCStatus
+			} else {
+				got = cs.status
+			}
 			want := tc.wantStatus
 			if got.Code() != want.Code() || got.Message() != want.Message() {
 				t.Errorf("operateHeaders(%v) got status %q, want %q", tc.metaHeaderFrame, got, want)
