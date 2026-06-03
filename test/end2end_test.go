@@ -34,6 +34,7 @@ import (
 	"os"
 	"reflect"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -6373,8 +6374,8 @@ func (s *httpServer) writeHeader(framer *http2.Framer, sid uint32, headerFields 
 	})
 }
 
-func (s *httpServer) writePayload(framer *http2.Framer, sid uint32, payload []byte) error {
-	return framer.WriteData(sid, false, payload)
+func (s *httpServer) writePayload(framer *http2.Framer, sid uint32, payload []byte, endStream bool) error {
+	return framer.WriteData(sid, endStream, payload)
 }
 
 func (s *httpServer) start(t *testing.T, lis net.Listener) {
@@ -6439,15 +6440,18 @@ func (s *httpServer) start(t *testing.T, lis net.Listener) {
 			}
 
 			response := s.responses[requestNum]
-			for _, header := range response.headers {
-				if err = s.writeHeader(framer, sid, header, false); err != nil {
+			hasPayload := response.payload != nil
+			hasTrailers := len(response.trailers) > 0
+			for i, header := range response.headers {
+				endStream := !hasPayload && !hasTrailers && i == len(response.headers)-1
+				if err = s.writeHeader(framer, sid, header, endStream); err != nil {
 					t.Errorf("Error at server-side while writing headers. Err: %v", err)
 					return
 				}
 				writer.Flush()
 			}
-			if response.payload != nil {
-				if err = s.writePayload(framer, sid, response.payload); err != nil {
+			if hasPayload {
+				if err = s.writePayload(framer, sid, response.payload, !hasTrailers); err != nil {
 					t.Errorf("Error at server-side while writing payload. Err: %v", err)
 					return
 				}
@@ -6810,6 +6814,117 @@ func (s) TestAuthorityHeader(t *testing.T) {
 			}
 			if gotAuthority != test.wantAuthority {
 				t.Fatalf("gotAuthority: %v, wantAuthority %v", gotAuthority, test.wantAuthority)
+			}
+		})
+	}
+}
+
+func (s) TestHTTPServerSendsNonGRPCHeaderSurfaceFurtherData(t *testing.T) {
+	const nonGRPCDataMaxLen = 1024
+	tests := []struct {
+		name      string
+		responses []httpServerResponse
+		wantCode  codes.Code
+		wantErr   string
+	}{
+		{
+			name: "non-gRPC content-type without payload",
+			responses: []httpServerResponse{
+				{
+					headers: [][]string{
+						{
+							":status", "200",
+							"content-type", "text/html",
+						},
+					},
+					// payload: nil
+				},
+			},
+			wantCode: codes.Unknown,
+			wantErr:  `unexpected HTTP status code received from server: 200 (OK); transport: received unexpected content-type "text/html"`,
+		},
+		{
+			name: "non-gRPC content-type with payload",
+			responses: []httpServerResponse{
+				{
+					headers: [][]string{
+						{
+							":status", "200",
+							"content-type", "text/html",
+						},
+					},
+					payload: []byte(`<html><body>Hello World</body></html>`),
+				},
+			},
+			wantCode: codes.Unknown,
+			wantErr: `unexpected HTTP status code received from server: 200 (OK); transport: received unexpected content-type "text/html"
+data: "<html><body>Hello World</body></html>"`,
+		},
+		{
+			name: "non-gRPC content-type with bytes payload length more than nonGRPCDataMaxLen",
+			responses: []httpServerResponse{
+				{
+					headers: [][]string{
+						{
+							":status", "200",
+							"content-type", "text/html",
+						},
+					},
+					payload: bytes.Repeat([]byte("a"), nonGRPCDataMaxLen+1),
+				},
+			},
+			wantCode: codes.Unknown,
+			wantErr: `unexpected HTTP status code received from server: 200 (OK); transport: received unexpected content-type "text/html"
+data: ` + strconv.Quote(strings.Repeat("a", nonGRPCDataMaxLen)),
+		},
+		{
+			name: "content-type not provided",
+			responses: []httpServerResponse{
+				{
+					headers: [][]string{{
+						":status", "502",
+					}},
+					payload: []byte("hello"),
+				},
+			},
+			wantCode: codes.Unavailable,
+			wantErr: `unexpected HTTP status code received from server: 502 (Bad Gateway); malformed header: missing HTTP content-type
+data: "hello"`,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			lis, err := net.Listen("tcp", "localhost:0")
+			if err != nil {
+				t.Fatalf("net.Listen() failed: %v", err)
+			}
+			defer lis.Close()
+
+			hs := &httpServer{responses: test.responses}
+			hs.start(t, lis)
+
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+
+			cc, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+			if err != nil {
+				t.Fatalf("grpc.NewClient() failed: %v", err)
+			}
+			defer cc.Close()
+
+			client := testgrpc.NewTestServiceClient(cc)
+			_, err = client.EmptyCall(ctx, &testpb.Empty{})
+			if err == nil {
+				t.Fatalf("EmptyCall() = nil; want non-nil error due to non-gRPC response")
+			}
+
+			if got, want := status.Code(err), test.wantCode; got != want {
+				t.Fatalf("Unexpected error code: got %v, want %v\nfull error:\n%v", got, want, err)
+			}
+
+			if got := status.Convert(err).Message(); got != test.wantErr {
+				t.Errorf("Unexpected error message: \ngot:\n%v\nwant:\n%v", got, test.wantErr)
 			}
 		})
 	}
