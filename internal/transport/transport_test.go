@@ -1756,7 +1756,7 @@ func (s) TestNonGRPCDataCollectionAcrossMultipleFrames(t *testing.T) {
 	select {
 	case <-s.Done():
 		t.Fatal("stream closed after first DATA frame, want it to stay open")
-	case <-time.After(200 * time.Millisecond):
+	case <-time.After(defaultTestShortTimeout):
 	}
 
 	// Signal the server to send the second Data frame with EOS.
