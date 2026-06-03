@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
-	"regexp"
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3rbacpb "github.com/envoyproxy/go-control-plane/envoy/config/rbac/v3"
@@ -271,7 +270,7 @@ func newHeaderMatcher(headerMatcherConfig *v3route_componentspb.HeaderMatcher) (
 	case *v3route_componentspb.HeaderMatcher_ExactMatch:
 		m = internalmatcher.NewHeaderExactMatcher(headerMatcherConfig.Name, headerMatcherConfig.GetExactMatch(), headerMatcherConfig.InvertMatch)
 	case *v3route_componentspb.HeaderMatcher_SafeRegexMatch:
-		regex, err := regexp.Compile(headerMatcherConfig.GetSafeRegexMatch().Regex)
+		regex, err := internalmatcher.CompileSafeRegex(headerMatcherConfig.GetSafeRegexMatch().GetRegex())
 		if err != nil {
 			return nil, err
 		}
@@ -435,17 +434,23 @@ func (am *authenticatedMatcher) match(data *rpcData) bool {
 		return am.stringMatcher.Match("")
 	}
 	cert := data.certs[0]
-	// The order of matching as per the RBAC documentation (see package-level comments)
-	// is as follows: URI SANs, DNS SANs, and then subject name.
-	for _, uriSAN := range cert.URIs {
-		if am.stringMatcher.Match(uriSAN.String()) {
-			return true
+	// Use the first non-empty identity source in priority order:
+	// URI SANs, then DNS SANs, then Subject.
+	if len(cert.URIs) > 0 {
+		for _, uriSAN := range cert.URIs {
+			if am.stringMatcher.Match(uriSAN.String()) {
+				return true
+			}
 		}
+		return false
 	}
-	for _, dnsSAN := range cert.DNSNames {
-		if am.stringMatcher.Match(dnsSAN) {
-			return true
+	if len(cert.DNSNames) > 0 {
+		for _, dnsSAN := range cert.DNSNames {
+			if am.stringMatcher.Match(dnsSAN) {
+				return true
+			}
 		}
+		return false
 	}
 	return am.stringMatcher.Match(cert.Subject.String())
 }

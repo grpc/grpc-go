@@ -1111,8 +1111,8 @@ func (s) TestChainEngine(t *testing.T) {
 				},
 			},
 		},
-		// This test tests that when there are no SANs or Subject's
-		// distinguished name in incoming RPC's, that authenticated matchers
+		// This test verifies that when there are no SANs or Subject
+		// distinguished name in incoming RPCs, authenticated matchers
 		// match against the empty string.
 		{
 			name: "default-matching-no-credentials",
@@ -1131,10 +1131,9 @@ func (s) TestChainEngine(t *testing.T) {
 				},
 			},
 			rbacQueries: []rbacQuery{
-				// This incoming RPC Call should match with the service admin
-				// policy. No authentication info is provided, so the
-				// authenticated matcher should match to the string matcher on
-				// the empty string, matching to the service-admin policy.
+				// This incoming RPC should match the service admin policy. No
+				// authentication info is provided, so the authenticated matcher
+				// evaluates the empty string.
 				{
 					rpcData: &rpcData{
 						fullMethod: "some method",
@@ -1153,6 +1152,18 @@ func (s) TestChainEngine(t *testing.T) {
 										},
 									},
 								},
+							},
+						},
+					},
+					wantStatusCode: codes.PermissionDenied,
+				},
+				{
+					rpcData: &rpcData{
+						fullMethod: "some method",
+						peerInfo: &peer.Peer{
+							Addr: &addr{ipAddress: "0.0.0.0:8080"},
+							AuthInfo: credentials.TLSInfo{
+								State: tls.ConnectionState{},
 							},
 						},
 					},
@@ -1222,6 +1233,125 @@ func (s) TestChainEngine(t *testing.T) {
 						},
 					},
 					wantStatusCode: codes.OK,
+				},
+			},
+		},
+		// This test verifies that SafeRegex header matching is implicitly
+		// anchored at both ends (full string matching).
+		{
+			name: "SafeRegexHeaderMatcherImplicitAnchoring",
+			rbacConfigs: []*v3rbacpb.RBAC{
+				{
+					Action: v3rbacpb.RBAC_ALLOW,
+					Policies: map[string]*v3rbacpb.Policy{
+						"safe-regex-policy": {
+							Permissions: []*v3rbacpb.Permission{
+								{Rule: &v3rbacpb.Permission_Any{Any: true}},
+							},
+							Principals: []*v3rbacpb.Principal{
+								{
+									Identifier: &v3rbacpb.Principal_Header{
+										Header: &v3routepb.HeaderMatcher{
+											Name: "foo",
+											HeaderMatchSpecifier: &v3routepb.HeaderMatcher_SafeRegexMatch{
+												SafeRegexMatch: &v3matcherpb.RegexMatcher{
+													Regex: "abc",
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			rbacQueries: []rbacQuery{
+				// This RPC has header "foo: abc", which matches "abc" exactly, so it should be allowed (OK).
+				{
+					rpcData: &rpcData{
+						md: metadata.MD{
+							"foo": []string{"abc"},
+						},
+						fullMethod: "some method",
+						peerInfo: &peer.Peer{
+							Addr: &addr{ipAddress: "0.0.0.0:8080"},
+						},
+					},
+					wantStatusCode: codes.OK,
+				},
+				// This RPC has header "foo: 123abc456", which contains "abc" but is not an exact match.
+				// Since safe regex is implicitly anchored, it should not match and return PermissionDenied.
+				{
+					rpcData: &rpcData{
+						md: metadata.MD{
+							"foo": []string{"123abc456"},
+						},
+						fullMethod: "some method",
+						peerInfo: &peer.Peer{
+							Addr: &addr{ipAddress: "0.0.0.0:8080"},
+						},
+					},
+					wantStatusCode: codes.PermissionDenied,
+				},
+			},
+		},
+		// This test verifies that SafeRegex header matching with wildcard matching
+		// (e.g. .*abc.*) matches substrings as expected.
+		{
+			name: "SafeRegexHeaderMatcherWildcard",
+			rbacConfigs: []*v3rbacpb.RBAC{
+				{
+					Action: v3rbacpb.RBAC_ALLOW,
+					Policies: map[string]*v3rbacpb.Policy{
+						"safe-regex-wildcard-policy": {
+							Permissions: []*v3rbacpb.Permission{
+								{Rule: &v3rbacpb.Permission_Any{Any: true}},
+							},
+							Principals: []*v3rbacpb.Principal{
+								{
+									Identifier: &v3rbacpb.Principal_Header{
+										Header: &v3routepb.HeaderMatcher{
+											Name: "foo",
+											HeaderMatchSpecifier: &v3routepb.HeaderMatcher_SafeRegexMatch{
+												SafeRegexMatch: &v3matcherpb.RegexMatcher{
+													Regex: ".*abc.*",
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			rbacQueries: []rbacQuery{
+				// This RPC has header "foo: 123abc456", which matches the wildcard safe regex, so it should be allowed (OK).
+				{
+					rpcData: &rpcData{
+						md: metadata.MD{
+							"foo": []string{"123abc456"},
+						},
+						fullMethod: "some method",
+						peerInfo: &peer.Peer{
+							Addr: &addr{ipAddress: "0.0.0.0:8080"},
+						},
+					},
+					wantStatusCode: codes.OK,
+				},
+				// This RPC has header "foo: xyz", which does not contain "abc", so it should return PermissionDenied.
+				{
+					rpcData: &rpcData{
+						md: metadata.MD{
+							"foo": []string{"xyz"},
+						},
+						fullMethod: "some method",
+						peerInfo: &peer.Peer{
+							Addr: &addr{ipAddress: "0.0.0.0:8080"},
+						},
+					},
+					wantStatusCode: codes.PermissionDenied,
 				},
 			},
 		},
@@ -1931,4 +2061,96 @@ func createXDSTypedStruct(t *testing.T, in map[string]any, name string) *anypb.A
 		t.Fatalf("createXDSTypedStructFailed during anypb.New: %v", err)
 	}
 	return customConfig
+}
+
+func TestAuthenticatedMatcherIdentitySourcePrecedence(t *testing.T) {
+	tests := []struct {
+		name            string
+		uris            []string
+		dnsNames        []string
+		subjectCN       string
+		matcherContains string
+		wantMatch       bool
+	}{
+		{
+			name:            "uriSANPresentAndMatches",
+			uris:            []string{"spiffe://corp.example/svc/legitimate"},
+			matcherContains: "spiffe://corp.example/svc/legitimate",
+			wantMatch:       true,
+		},
+		{
+			name:            "uriSANPresentDoesNotFallbackToDNS",
+			uris:            []string{"spiffe://corp.example/svc/other"},
+			dnsNames:        []string{"spiffe://corp.example/svc/legitimate"},
+			matcherContains: "spiffe://corp.example/svc/legitimate",
+			wantMatch:       false,
+		},
+		{
+			name:            "uriSANPresentDoesNotFallbackToSubject",
+			uris:            []string{"spiffe://corp.example/svc/other"},
+			subjectCN:       "spiffe://corp.example/svc/legitimate",
+			matcherContains: "spiffe://corp.example/svc/legitimate",
+			wantMatch:       false,
+		},
+		{
+			name:            "dnsSANPresentAndMatchesWhenNoURI",
+			dnsNames:        []string{"svc.legitimate.internal"},
+			matcherContains: "svc.legitimate.internal",
+			wantMatch:       true,
+		},
+		{
+			name:            "dnsSANPresentDoesNotFallbackToSubject",
+			dnsNames:        []string{"svc.other.internal"},
+			subjectCN:       "svc.legitimate.internal",
+			matcherContains: "svc.legitimate.internal",
+			wantMatch:       false,
+		},
+		{
+			name:            "subjectUsedWhenNoURINorDNS",
+			subjectCN:       "svc.legitimate.internal",
+			matcherContains: "svc.legitimate.internal",
+			wantMatch:       true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var uriSANs []*url.URL
+			for _, u := range tt.uris {
+				parsed, err := url.Parse(u)
+				if err != nil {
+					t.Fatalf("url.Parse(%q) failed: %v", u, err)
+				}
+				uriSANs = append(uriSANs, parsed)
+			}
+			cert := &x509.Certificate{
+				URIs:     uriSANs,
+				DNSNames: tt.dnsNames,
+				Subject: pkix.Name{
+					CommonName: tt.subjectCN,
+				},
+			}
+
+			amConfig := &v3rbacpb.Principal_Authenticated{
+				PrincipalName: &v3matcherpb.StringMatcher{
+					MatchPattern: &v3matcherpb.StringMatcher_Contains{
+						Contains: tt.matcherContains,
+					},
+				},
+			}
+			matcher, err := newAuthenticatedMatcher(amConfig)
+			if err != nil {
+				t.Fatalf("failed to create matcher: %v", err)
+			}
+
+			rpcData := &rpcData{
+				authType: "tls",
+				certs:    []*x509.Certificate{cert},
+			}
+
+			if got := matcher.match(rpcData); got != tt.wantMatch {
+				t.Errorf("match() = %v, want %v", got, tt.wantMatch)
+			}
+		})
+	}
 }

@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/netip"
 	"strconv"
 	"strings"
 	"sync"
@@ -343,7 +344,7 @@ type testServers struct {
 	ls       *remoteBalancer
 	lb       *grpc.Server
 	backends []*grpc.Server
-	beIPs    []net.IP
+	beIPs    []netip.Addr
 	bePorts  []int
 
 	lbListener  net.Listener
@@ -355,7 +356,7 @@ func startBackendsAndRemoteLoadBalancer(t *testing.T, numberOfBackends int, cust
 		beListeners []net.Listener
 		ls          *remoteBalancer
 		lb          *grpc.Server
-		beIPs       []net.IP
+		beIPs       []netip.Addr
 		bePorts     []int
 	)
 	for i := 0; i < numberOfBackends; i++ {
@@ -364,7 +365,7 @@ func startBackendsAndRemoteLoadBalancer(t *testing.T, numberOfBackends int, cust
 			err = fmt.Errorf("failed to listen %v", err)
 			return
 		}
-		beIPs = append(beIPs, beLis.Addr().(*net.TCPAddr).IP)
+		beIPs = append(beIPs, beLis.Addr().(*net.TCPAddr).AddrPort().Addr().Unmap())
 		bePorts = append(bePorts, beLis.Addr().(*net.TCPAddr).Port)
 
 		beListeners = append(beListeners, testutils.NewRestartableListener(beLis))
@@ -422,7 +423,7 @@ func (s) TestGRPCLB_Basic(t *testing.T) {
 	tss.ls.sls <- &lbpb.ServerList{
 		Servers: []*lbpb.Server{
 			{
-				IpAddress:        tss.beIPs[0],
+				IpAddress:        tss.beIPs[0].AsSlice(),
 				Port:             int32(tss.bePorts[0]),
 				LoadBalanceToken: lbToken,
 			},
@@ -478,11 +479,11 @@ func (s) TestGRPCLB_Weighted(t *testing.T) {
 	defer cleanup()
 
 	beServers := []*lbpb.Server{{
-		IpAddress:        tss.beIPs[0],
+		IpAddress:        tss.beIPs[0].AsSlice(),
 		Port:             int32(tss.bePorts[0]),
 		LoadBalanceToken: lbToken,
 	}, {
-		IpAddress:        tss.beIPs[1],
+		IpAddress:        tss.beIPs[1].AsSlice(),
 		Port:             int32(tss.bePorts[1]),
 		LoadBalanceToken: lbToken,
 	}}
@@ -553,12 +554,12 @@ func (s) TestGRPCLB_DropRequest(t *testing.T) {
 	defer cleanup()
 	tss.ls.sls <- &lbpb.ServerList{
 		Servers: []*lbpb.Server{{
-			IpAddress:        tss.beIPs[0],
+			IpAddress:        tss.beIPs[0].AsSlice(),
 			Port:             int32(tss.bePorts[0]),
 			LoadBalanceToken: lbToken,
 			Drop:             false,
 		}, {
-			IpAddress:        tss.beIPs[1],
+			IpAddress:        tss.beIPs[1].AsSlice(),
 			Port:             int32(tss.bePorts[1]),
 			LoadBalanceToken: lbToken,
 			Drop:             false,
@@ -725,7 +726,7 @@ func (s) TestGRPCLB_BalancerDisconnects(t *testing.T) {
 		tss.ls.sls <- &lbpb.ServerList{
 			Servers: []*lbpb.Server{
 				{
-					IpAddress:        tss.beIPs[0],
+					IpAddress:        tss.beIPs[0].AsSlice(),
 					Port:             int32(tss.bePorts[0]),
 					LoadBalanceToken: lbToken,
 				},
@@ -801,7 +802,7 @@ func (s) TestGRPCLB_Fallback(t *testing.T) {
 	sl := &lbpb.ServerList{
 		Servers: []*lbpb.Server{
 			{
-				IpAddress:        tss.beIPs[0],
+				IpAddress:        tss.beIPs[0].AsSlice(),
 				Port:             int32(tss.bePorts[0]),
 				LoadBalanceToken: lbToken,
 			},
@@ -896,7 +897,7 @@ func (s) TestGRPCLB_ExplicitFallback(t *testing.T) {
 	sl := &lbpb.ServerList{
 		Servers: []*lbpb.Server{
 			{
-				IpAddress:        tss.beIPs[0],
+				IpAddress:        tss.beIPs[0].AsSlice(),
 				Port:             int32(tss.bePorts[0]),
 				LoadBalanceToken: lbToken,
 			},
@@ -980,7 +981,7 @@ func (s) TestGRPCLB_FallBackWithNoServerAddress(t *testing.T) {
 	sl := &lbpb.ServerList{
 		Servers: []*lbpb.Server{
 			{
-				IpAddress:        tss.beIPs[0],
+				IpAddress:        tss.beIPs[0].AsSlice(),
 				Port:             int32(tss.bePorts[0]),
 				LoadBalanceToken: lbToken,
 			},
@@ -1072,15 +1073,15 @@ func (s) TestGRPCLB_PickFirst(t *testing.T) {
 	defer cleanup()
 
 	beServers := []*lbpb.Server{{
-		IpAddress:        tss.beIPs[0],
+		IpAddress:        tss.beIPs[0].AsSlice(),
 		Port:             int32(tss.bePorts[0]),
 		LoadBalanceToken: lbToken,
 	}, {
-		IpAddress:        tss.beIPs[1],
+		IpAddress:        tss.beIPs[1].AsSlice(),
 		Port:             int32(tss.bePorts[1]),
 		LoadBalanceToken: lbToken,
 	}, {
-		IpAddress:        tss.beIPs[2],
+		IpAddress:        tss.beIPs[2].AsSlice(),
 		Port:             int32(tss.bePorts[2]),
 		LoadBalanceToken: lbToken,
 	}}
@@ -1223,7 +1224,7 @@ func testGRPCLBEmptyServerList(t *testing.T, svcfg string) {
 	defer cleanup()
 
 	beServers := []*lbpb.Server{{
-		IpAddress:        tss.beIPs[0],
+		IpAddress:        tss.beIPs[0].AsSlice(),
 		Port:             int32(tss.bePorts[0]),
 		LoadBalanceToken: lbToken,
 	}}
@@ -1298,7 +1299,7 @@ func (s) TestGRPCLBWithTargetNameFieldInConfig(t *testing.T) {
 	sl := &lbpb.ServerList{
 		Servers: []*lbpb.Server{
 			{
-				IpAddress:        tss.beIPs[0],
+				IpAddress:        tss.beIPs[0].AsSlice(),
 				Port:             int32(tss.bePorts[0]),
 				LoadBalanceToken: lbToken,
 			},
@@ -1401,7 +1402,7 @@ func runAndCheckStats(t *testing.T, drop bool, statsChan chan *lbpb.ClientStats,
 	}
 	defer cleanup()
 	servers := []*lbpb.Server{{
-		IpAddress:        tss.beIPs[0],
+		IpAddress:        tss.beIPs[0].AsSlice(),
 		Port:             int32(tss.bePorts[0]),
 		LoadBalanceToken: lbToken,
 	}}

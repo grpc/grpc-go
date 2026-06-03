@@ -960,7 +960,14 @@ func (s) TestReResolutionAfterTransientFailure(t *testing.T) {
 	defer cancel()
 
 	// Replace DNS resolver with a wrapped resolver to capture ResolveNow calls.
-	resolveNowCh := make(chan struct{})
+	// We expect two ResolveNow calls:
+	// 1. When the server goes down and the transport is closed on the client,
+	//    the gRPC channel invokes ResolveNow on the resolver.
+	// 2. Subsequently, the subchannel enters IDLE, reconnection attempt takes
+	//    place and since the server is down, the subchannel eventually moves
+	//    enters TRANSIENT_FAILURE, at which point the clusterimpl policy
+	//    invokes ResolveNow.
+	resolveNowCh := make(chan struct{}, 2)
 	dnsR := manual.NewBuilderWithScheme("dns")
 	dnsResolverBuilder := resolver.Get("dns")
 	resolver.Register(dnsR)
@@ -997,11 +1004,13 @@ func (s) TestReResolutionAfterTransientFailure(t *testing.T) {
 	lis.Stop()
 	testutils.AwaitState(ctx, t, conn, connectivity.TransientFailure)
 
-	// Expect resolver's ResolveNow to be called due to TF state.
-	select {
-	case <-resolveNowCh:
-	case <-ctx.Done():
-		t.Fatalf("Timed out waiting for ResolveNow call after TransientFailure")
+	// Expect two calls to the resolver's ResolveNow method.
+	for range 2 {
+		select {
+		case <-resolveNowCh:
+		case <-ctx.Done():
+			t.Fatalf("Timed out waiting for ResolveNow call after TransientFailure")
+		}
 	}
 
 	// Restart the listener and expected to reconnect on its own and come out
@@ -1372,12 +1381,12 @@ func (s) TestAuthorityOverriding(t *testing.T) {
 			mgmtServer, resolverBuilder, nodeID := setupManagementServerAndResolver(t)
 
 			// Start a server backend exposing the test service.
-			var gotAuthority string
+			gotAuthority := atomic.Pointer[string]{}
 			f := &stubserver.StubServer{
 				EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
 					if md, ok := metadata.FromIncomingContext(ctx); ok {
 						if authVals := md.Get(":authority"); len(authVals) > 0 {
-							gotAuthority = authVals[0]
+							gotAuthority.Store(&authVals[0])
 						}
 					}
 					return &testpb.Empty{}, nil
@@ -1415,8 +1424,8 @@ func (s) TestAuthorityOverriding(t *testing.T) {
 			} else {
 				wantAuthority = server.Address
 			}
-			if gotAuthority != wantAuthority {
-				t.Errorf("invalid authority got: %q, want: %q", gotAuthority, wantAuthority)
+			if got, want := *gotAuthority.Load(), wantAuthority; got != want {
+				t.Errorf("invalid authority got: %q, want: %q", got, want)
 			}
 
 			// The authority specified via the `CallAuthority` CallOption takes the
@@ -1426,8 +1435,8 @@ func (s) TestAuthorityOverriding(t *testing.T) {
 				t.Fatalf("client.EmptyCall() failed: %v", err)
 			}
 
-			if gotAuthority != userAuthorityOverride {
-				t.Errorf("Server received authority %q, want %q (user override)", gotAuthority, userAuthorityOverride)
+			if got, want := *gotAuthority.Load(), userAuthorityOverride; got != want {
+				t.Errorf("Server received authority %q, want %q (user override)", got, want)
 			}
 		})
 	}
