@@ -314,9 +314,9 @@ func (s) TestXDSResolverDelayedOnCommittedCSP(t *testing.T) {
 		t.Fatalf("config selector returned cluster: %v, want: %v", gotCluster, wantCluster)
 	}
 
-	// Invoke resOld.OnCommitted; should lead to a service config update that deletes
-	// cspA.
-	resOld.OnCommitted()
+	if err := commitStream(ctx, resOld.Interceptor); err != nil {
+		t.Fatalf("commitStream() failed with error: %v", err)
+	}
 
 	wantSC = `
  {
@@ -439,11 +439,11 @@ func (s) TestResolverClusterSpecifierPlugin_WithFilters(t *testing.T) {
 		t.Fatal("RPCInfo does not contain interceptors list")
 	}
 
-	newStream := func(context.Context, func(), []any) (iresolver.ClientStream, error) {
+	newStream := func(context.Context, func()) (iresolver.ClientStream, error) {
 		return nil, nil
 	}
 
-	if _, err = res.Interceptor.NewStream(ctx, iresolver.RPCInfo{Method: "/service/method", Context: ctx}, nil, func() {}, newStream); err != nil {
+	if _, err = res.Interceptor.NewStream(ctx, iresolver.RPCInfo{Method: "/service/method", Context: ctx}, func() {}, newStream); err != nil {
 		t.Fatalf("NewStream() failed with error: %v", err)
 	}
 
@@ -472,4 +472,31 @@ func (s) TestResolverClusterSpecifierPlugin_WithFilters(t *testing.T) {
 	if ofc.OverridePath != "" {
 		t.Fatalf("Unexpected override path for second filter, got: %q, want: %q", ofc.OverridePath, "")
 	}
+}
+
+// mockClientStream implements iresolver.ClientStream.
+type mockClientStream struct {
+	iresolver.ClientStream
+	ctx context.Context
+}
+
+func (m mockClientStream) Context() context.Context {
+	return m.ctx
+}
+
+// commitStream simulates a client initiating stream I/O. Calling Context() on the
+// returned stream triggers the interceptor's underlying commit callback.
+func commitStream(ctx context.Context, interceptor iresolver.ClientInterceptor) error {
+	if interceptor == nil {
+		return nil
+	}
+	newStream := func(context.Context, func()) (iresolver.ClientStream, error) {
+		return mockClientStream{ctx: ctx}, nil
+	}
+	stream, err := interceptor.NewStream(ctx, iresolver.RPCInfo{Method: "/service/method", Context: ctx}, func() {}, newStream)
+	if err != nil {
+		return err
+	}
+	stream.Context()
+	return nil
 }

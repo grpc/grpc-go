@@ -25,6 +25,7 @@ import (
 	rand "math/rand/v2"
 	"slices"
 	"strings"
+	"sync"
 	"sync/atomic"
 
 	estats "google.golang.org/grpc/experimental/stats"
@@ -39,6 +40,7 @@ import (
 	"google.golang.org/grpc/internal/xds/xdsclient"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 	"google.golang.org/grpc/internal/xds/xdsdepmgr"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
 )
 
@@ -419,7 +421,16 @@ func (r *xdsResolver) newConfigSelector() (_ *configSelector, err error) {
 		// and WeightedClusters.
 		if rt.ClusterSpecifierPlugin != "" {
 			clusterName := clusterSpecifierPluginPrefix + rt.ClusterSpecifierPlugin
-			interceptor, err := r.newInterceptor(r.xdsConfig.Listener.APIListener.HTTPFilters, nil, rt.HTTPFilterConfigOverride, r.xdsConfig.VirtualHost.HTTPFilterConfigOverride)
+			onCommitted := func() {
+				r.serializer.TrySchedule(func(context.Context) {
+					if info, ok := cs.plugins[clusterName]; ok {
+						if v := info.refCount.Add(-1); v == 0 {
+							cs.sendNewServiceConfig()
+						}
+					}
+				})
+			}
+			interceptor, err := r.newInterceptor(r.xdsConfig.Listener.APIListener.HTTPFilters, nil, rt.HTTPFilterConfigOverride, r.xdsConfig.VirtualHost.HTTPFilterConfigOverride, onCommitted)
 			if err != nil {
 				// Clean up any interceptors that were successfully built
 				// for the current route before this error occurred. Note
@@ -441,7 +452,23 @@ func (r *xdsResolver) newConfigSelector() (_ *configSelector, err error) {
 		} else {
 			for _, wc := range rt.WeightedClusters {
 				clusterName := clusterPrefix + wc.Name
-				interceptor, err := r.newInterceptor(r.xdsConfig.Listener.APIListener.HTTPFilters, wc.HTTPFilterConfigOverride, rt.HTTPFilterConfigOverride, r.xdsConfig.VirtualHost.HTTPFilterConfigOverride)
+				wc := wc
+				onCommitted := func() {
+					r.serializer.TrySchedule(func(context.Context) {
+						if info, ok := cs.clusters[clusterName]; ok {
+							if v := info.refCount.Add(-1); v == 0 {
+								// We call unsubscribe rather than sendNewServiceConfig to
+								// prevent redundant updates. If the reference count in the
+								// dependency manager drops to zero, it will automatically
+								// trigger a service config update with this cluster
+								// removed. Calling unsubscribe allows the dependency
+								// manager to handle the update flow once and for all.
+								info.unsubscribe()
+							}
+						}
+					})
+				}
+				interceptor, err := r.newInterceptor(r.xdsConfig.Listener.APIListener.HTTPFilters, wc.HTTPFilterConfigOverride, rt.HTTPFilterConfigOverride, r.xdsConfig.VirtualHost.HTTPFilterConfigOverride, onCommitted)
 				if err != nil {
 					// Clean up any interceptors that were successfully built
 					// for the current route before this error occurred. Note
@@ -594,7 +621,7 @@ func (r *xdsResolver) onResourceError(err error) {
 // followed by the route override, and finally the virtual host override.
 //
 // Only executed in the context of a serializer callback.
-func (r *xdsResolver) newInterceptor(filters []xdsresource.HTTPFilter, clusterOverride, routeOverride, virtualHostOverride map[string]httpfilter.FilterConfig) (_ iresolver.ClientInterceptor, err error) {
+func (r *xdsResolver) newInterceptor(filters []xdsresource.HTTPFilter, clusterOverride, routeOverride, virtualHostOverride map[string]httpfilter.FilterConfig, onCommitted func()) (_ iresolver.ClientInterceptor, err error) {
 	interceptors := make([]iresolver.ClientInterceptor, 0, len(filters))
 	defer func() {
 		// Clean up any interceptors that were successfully built before the
@@ -646,30 +673,86 @@ func (r *xdsResolver) newInterceptor(filters []xdsresource.HTTPFilter, clusterOv
 		}
 	}
 
-	return &interceptorList{interceptors: interceptors}, nil
+	return &interceptorList{
+		interceptors: interceptors,
+		onCommitted:  onCommitted,
+	}, nil
 }
 
 // interceptorList is a client interceptor that contains a list of client
 // interceptors to execute in order.
 type interceptorList struct {
 	interceptors []iresolver.ClientInterceptor
+	onCommitted  func()
 }
 
-func (il *interceptorList) NewStream(ctx context.Context, ri iresolver.RPCInfo, opts []any, _ func(), newStream func(ctx context.Context, done func(), opts []any) (iresolver.ClientStream, error)) (iresolver.ClientStream, error) {
+func (il *interceptorList) NewStream(ctx context.Context, ri iresolver.RPCInfo, _ func(), newStream func(ctx context.Context, done func()) (iresolver.ClientStream, error)) (iresolver.ClientStream, error) {
 	for idx := len(il.interceptors) - 1; idx >= 0; idx-- {
 		ns := newStream
 		i := il.interceptors[idx]
-		newStream = func(ctx context.Context, done func(), opts []any) (iresolver.ClientStream, error) {
-			return i.NewStream(ctx, ri, opts, done, ns)
+		newStream = func(ctx context.Context, done func()) (iresolver.ClientStream, error) {
+			return i.NewStream(ctx, ri, done, ns)
 		}
 	}
-	return newStream(ctx, func() {}, opts)
+	s, err := newStream(ctx, func() {})
+	if err != nil {
+		return nil, err
+	}
+	return &interceptorStream{
+		ClientStream: s,
+		onCommitted:  il.onCommitted,
+	}, nil
 }
 
 func (il *interceptorList) Close() {
 	for _, i := range il.interceptors {
 		i.Close()
 	}
+}
+
+// interceptorStream wraps iresolver.ClientStream to execute onCommitted
+// upon the first client interaction.
+type interceptorStream struct {
+	iresolver.ClientStream
+	onCommitted func()
+	commitOnce  sync.Once
+}
+
+func (s *interceptorStream) commit() {
+	if s.onCommitted != nil {
+		s.commitOnce.Do(s.onCommitted)
+	}
+}
+
+func (s *interceptorStream) Header() (metadata.MD, error) {
+	md, err := s.ClientStream.Header()
+	s.commit()
+	return md, err
+}
+
+func (s *interceptorStream) SendMsg(m any) error {
+	s.commit()
+	return s.ClientStream.SendMsg(m)
+}
+
+func (s *interceptorStream) RecvMsg(m any) error {
+	s.commit()
+	return s.ClientStream.RecvMsg(m)
+}
+
+func (s *interceptorStream) Context() context.Context {
+	s.commit()
+	return s.ClientStream.Context()
+}
+
+func (s *interceptorStream) CloseSend() error {
+	s.commit()
+	return s.ClientStream.CloseSend()
+}
+
+func (s *interceptorStream) Trailer() metadata.MD {
+	s.commit()
+	return s.ClientStream.Trailer()
 }
 
 // getOrCreateClientFilter retrieves an existing client filter from the

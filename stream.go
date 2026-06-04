@@ -244,14 +244,7 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 
 	mc := &emptyMethodConfig
 	var onCommit func()
-	newStream := func(ctx context.Context, done func(), callOpts []any) (iresolver.ClientStream, error) {
-		if callOpts != nil {
-			fOpts := make([]CallOption, len(callOpts))
-			for i, o := range callOpts {
-				fOpts[i] = o.(CallOption)
-			}
-			opts = combine(opts, fOpts)
-		}
+	newStream := func(ctx context.Context, done func()) (iresolver.ClientStream, error) {
 		return newClientStreamWithParams(ctx, desc, cc, method, mc, onCommit, done, nameResolutionDelayed, opts...)
 	}
 
@@ -273,12 +266,11 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 			ctx = rpcConfig.Context
 		}
 		mc = &rpcConfig.MethodConfig
-		onCommit = rpcConfig.OnCommitted
 		if rpcConfig.Interceptor != nil {
 			rpcInfo.Context = nil
 			ns := newStream
-			newStream = func(ctx context.Context, done func(), filterOpts []any) (iresolver.ClientStream, error) {
-				cs, err := rpcConfig.Interceptor.NewStream(ctx, rpcInfo, filterOpts, done, ns)
+			newStream = func(ctx context.Context, done func()) (iresolver.ClientStream, error) {
+				cs, err := rpcConfig.Interceptor.NewStream(ctx, rpcInfo, done, ns)
 				if err != nil {
 					return nil, toRPCErr(err)
 				}
@@ -287,10 +279,10 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		}
 	}
 
-	return newStream(ctx, func() {}, nil)
+	return newStream(ctx, func() {})
 }
 
-func newClientStreamWithParams(ctx context.Context, desc *StreamDesc, cc *ClientConn, method string, mc *serviceconfig.MethodConfig, onCommit, doneFunc func(), nameResolutionDelayed bool, opts ...CallOption) (_ iresolver.ClientStream, err error) {
+func newClientStreamWithParams(ctx context.Context, desc *StreamDesc, cc *ClientConn, method string, mc *serviceconfig.MethodConfig, onCommit, doneFunc func(), nameResolutionDelayed bool, opts ...CallOption) (_ ClientStream, err error) {
 	callInfo := defaultCallInfo()
 	if mc.WaitForReady != nil {
 		callInfo.failFast = !*mc.WaitForReady
