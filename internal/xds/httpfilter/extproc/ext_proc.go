@@ -46,6 +46,8 @@ func init() {
 }
 
 var (
+	// TODO: Remove this once we have code that actually uses messages from this
+	// protobuf package.
 	_ = v3procservicepb.ProcessingRequest{}
 
 	parseGRPCServiceConfig = func(*v3corepb.GrpcService) (xdsresource.GRPCServiceConfig, error) {
