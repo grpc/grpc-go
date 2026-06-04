@@ -203,12 +203,10 @@ func (h *testStreamHandler) handleStreamMisbehave(t *testing.T, s *ServerStream)
 				p = make([]byte, n+1)
 			}
 		}
-		data := newBufferSlice(p)
-		data.Ref()
 		conn.controlBuf.put(&dataFrame{
 			streamID:    s.id,
 			h:           nil,
-			data:        data,
+			data:        newBufferSlice(p),
 			onEachWrite: func() {},
 		})
 		sent += len(p)
@@ -244,22 +242,18 @@ func (h *testStreamHandler) handleStreamInvalidContentTypeWithMultipleFrame(s *S
 		hf:        headerFields,
 		endStream: false,
 	})
-	d1 := newBufferSlice([]byte("first"))
-	d1.Ref()
 	h.t.controlBuf.put(&dataFrame{
 		streamID:    s.id,
 		h:           nil,
-		data:        d1,
+		data:        newBufferSlice([]byte("first")),
 		onEachWrite: func() {},
 	})
 	// Wait for the test to verify the first frame before sending the next frame.
 	<-h.notify
-	d2 := newBufferSlice([]byte(" second"))
-	d2.Ref()
 	h.t.controlBuf.put(&dataFrame{
 		streamID:    s.id,
 		h:           nil,
-		data:        d2,
+		data:        newBufferSlice([]byte(" second")),
 		onEachWrite: func() {},
 		endStream:   true,
 	})
@@ -1217,13 +1211,11 @@ func (s) TestServerContextCanceledOnClosedConnection(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open stream: %v", err)
 	}
-	d := newBufferSlice(make([]byte, http2MaxFrameLen))
-	d.Ref()
 	ct.controlBuf.put(&dataFrame{
 		streamID:    s.id,
 		endStream:   false,
 		h:           nil,
-		data:        d,
+		data:        newBufferSlice(make([]byte, http2MaxFrameLen)),
 		onEachWrite: func() {},
 	})
 	// Loop until the server side stream is created.
