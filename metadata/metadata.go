@@ -250,10 +250,10 @@ func copyOf(v []string) []string {
 func fromOutgoingContextRaw(ctx context.Context) (MD, iter.Seq2[string, string], bool) {
 	raw, ok := ctx.Value(mdOutgoingKey{}).(rawMD)
 	if !ok {
-		return nil, nil, false
+		return nil, emptySeq2, false
 	}
 	if raw.added == nil {
-		return raw.md, nil, true
+		return raw.md, emptySeq2, true
 	}
 	// Count nodes to pre-allocate the reversal slice.
 	n := 0
@@ -276,6 +276,10 @@ func fromOutgoingContextRaw(ctx context.Context) (MD, iter.Seq2[string, string],
 		}
 	}, true
 }
+
+// emptySeq2 is a no-op iterator returned when there are no appended key-value
+// pairs, avoiding nil-function panics at call sites that unconditionally range.
+var emptySeq2 iter.Seq2[string, string] = func(yield func(string, string) bool) {}
 
 // FromOutgoingContext returns the outgoing metadata in ctx if it exists.
 //
