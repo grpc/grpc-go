@@ -41,9 +41,10 @@ import (
 	anypb "google.golang.org/protobuf/types/known/anypb"
 )
 
-// defaultCacheSize is the default capacity of the LRU credentials cache.
-// Per gRFC A83, if cache_config or cache_size is omitted, the default is 10.
-const defaultCacheSize = 10
+const (
+	defaultCacheSize = 10        // default capacity of the LRU credentials cache.
+	maxCacheSize     = 1<<31 - 2 // maxCacheSize is the maximum capacity of the LRU credentials cache.
+)
 
 func init() {
 	httpfilter.Register(builder{})
@@ -53,7 +54,6 @@ type builder struct{}
 
 type config struct {
 	httpfilter.FilterConfig
-	config    *v3gcpauthnpb.GcpAuthnFilterConfig
 	cacheSize uint64
 }
 
@@ -62,9 +62,6 @@ func (builder) TypeURLs() []string {
 }
 
 func (builder) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, error) {
-	if cfg == nil {
-		return nil, fmt.Errorf("gcpauthn: empty filter config")
-	}
 	any, ok := cfg.(*anypb.Any)
 	if !ok {
 		return nil, fmt.Errorf("gcpauthn: invalid filter config type %T", cfg)
@@ -75,28 +72,25 @@ func (builder) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, er
 	}
 
 	cacheSize := uint64(defaultCacheSize)
-	if msg.GetCacheConfig() != nil {
-		cacheConfig := msg.GetCacheConfig()
-		if cacheConfig.GetCacheSize() != nil {
-			cacheSize = cacheConfig.GetCacheSize().GetValue()
-			if cacheSize == 0 {
-				return nil, fmt.Errorf("gcpauthn: cache_config.cache_size must be greater than zero")
-			}
-			const maxCacheSize = 1<<31 - 2
-			if cacheSize > maxCacheSize {
-				cacheSize = maxCacheSize
-			}
+
+	cacheConfig := msg.GetCacheConfig()
+	if cacheConfig.GetCacheSize() != nil {
+		cacheSize = cacheConfig.GetCacheSize().GetValue()
+		if cacheSize == 0 {
+			return nil, fmt.Errorf("gcpauthn: cache_config.cache_size must be greater than zero")
+		}
+		if cacheSize > maxCacheSize {
+			cacheSize = maxCacheSize
 		}
 	}
 
 	return config{
-		config:    msg,
 		cacheSize: cacheSize,
 	}, nil
 }
 
-func (builder) ParseFilterConfigOverride(_ proto.Message) (httpfilter.FilterConfig, error) {
-	return nil, fmt.Errorf("gcpauthn: filter config override not supported")
+func (b builder) ParseFilterConfigOverride(cfg proto.Message) (httpfilter.FilterConfig, error) {
+	return b.ParseFilterConfig(cfg)
 }
 
 func (builder) IsTerminal() bool {
@@ -111,28 +105,22 @@ var _ httpfilter.ClientFilterBuilder = builder{}
 
 // ClientFilter implements the httpfilter.ClientFilter interface.
 type ClientFilter struct {
-	mu         sync.Mutex
 	FilterName string
 	cache      *lruCache
 }
 
 // BuildClientInterceptor builds a client interceptor for the GCP Authentication filter.
 func (cf *ClientFilter) BuildClientInterceptor(cfg, _ httpfilter.FilterConfig) (iresolver.ClientInterceptor, error) {
-	if cfg == nil {
-		return nil, fmt.Errorf("gcpauthn: empty filter config")
-	}
 	c, ok := cfg.(config)
 	if !ok {
 		return nil, fmt.Errorf("gcpauthn: invalid filter config type %T", cfg)
 	}
 
-	cf.mu.Lock()
-	defer cf.mu.Unlock()
 	if cf.cache == nil {
 		cf.cache = newLRUCache(c.cacheSize)
+	} else {
+		cf.cache.resizeCache(c.cacheSize)
 	}
-
-	cf.cache.resizeCache(c.cacheSize)
 
 	return &interceptor{
 		filterName: cf.FilterName,
@@ -260,6 +248,11 @@ func (c *lruCache) getOrCreate(audience string) (credentials.PerRPCCredentials, 
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
+
+	if e, ok := c.cache[audience]; ok {
+		c.ll.MoveToFront(e)
+		return e.Value.(*gcpAuthnCallCredEntry).value, nil
+	}
 
 	if c.cacheSize > 0 {
 		if uint64(len(c.cache)) >= c.cacheSize {

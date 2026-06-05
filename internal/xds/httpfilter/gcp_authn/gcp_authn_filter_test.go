@@ -68,11 +68,6 @@ func (s) TestParseFilterConfig(t *testing.T) {
 			wantCfg: config{cacheSize: defaultCacheSize},
 		},
 		{
-			name:    "empty_config",
-			config:  nil,
-			wantErr: "gcpauthn: empty filter config",
-		},
-		{
 			name: "zero_cache_size",
 			config: testutils.MarshalAny(t, &v3gcpauthnpb.GcpAuthnFilterConfig{
 				CacheConfig: &v3gcpauthnpb.TokenCacheConfig{
@@ -126,12 +121,6 @@ func (s) TestBuildClientInterceptor(t *testing.T) {
 		wantErr       string
 		wantCacheSize uint64
 	}{
-		{
-			name:         "empty_config",
-			cfg:          nil,
-			clientFilter: &ClientFilter{FilterName: "gcp_authn"},
-			wantErr:      "empty filter config",
-		},
 		{
 			name:         "invalid_config_type",
 			cfg:          dummyConfig{},
