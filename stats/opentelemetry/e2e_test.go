@@ -2444,7 +2444,7 @@ func (s) TestRelayContextCollisionTracing(t *testing.T) {
 	_, _ = relayServer.Client.UnaryCall(ctx, &testpb.SimpleRequest{})
 
 	wantSpans := []traceSpanInfo{
-		{name: "Recv.", spanKind: "server"},
+		{name: "Recv.grpc.testing.TestService.UnaryCall", spanKind: "server"},
 		{name: "Sent.grpc.testing.TestService.EmptyCall", spanKind: "client"},
 	}
 	spans, err := waitForTraceSpans(ctx, relayTraceExporter, wantSpans)
@@ -2454,7 +2454,7 @@ func (s) TestRelayContextCollisionTracing(t *testing.T) {
 
 	var srvTraceID, cliTraceID oteltrace.TraceID
 	for _, span := range spans {
-		if span.Name == "Recv." && span.SpanKind == oteltrace.SpanKindServer {
+		if span.Name == "Recv.grpc.testing.TestService.UnaryCall" && span.SpanKind == oteltrace.SpanKindServer {
 			srvTraceID = span.SpanContext.TraceID()
 		}
 		if span.Name == "Sent.grpc.testing.TestService.EmptyCall" && span.SpanKind == oteltrace.SpanKindClient {
