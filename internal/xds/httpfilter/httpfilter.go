@@ -21,6 +21,9 @@
 package httpfilter
 
 import (
+	"context"
+
+	"google.golang.org/grpc"
 	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/protobuf/proto"
 )
@@ -66,6 +69,32 @@ type Builder interface {
 	IsTerminal() bool
 }
 
+// ClientInterceptor is an interceptor for gRPC client streams.
+type ClientInterceptor interface {
+	// NewStream creates a ClientStream for an RPC.
+	//
+	// Implementations must delegate stream creation to the provided newStream
+	// function. To intercept or override stream behavior, implementations
+	// may wrap the ClientStream returned by the delegate.
+	//
+	// Note: RPCInfo.Context is currently unused and will be nil.
+	//
+	// The done function is invoked when the RPC has finished using its
+	// underlying connection or if a connection could not be assigned. Because
+	// interceptors operate at the application layer, RPC operations may
+	// continue on the ClientStream even after done has been called. The
+	// caller must ensure done is non-nil.
+	//
+	// To ensure RPC completion notifications propagate through the entire
+	// interceptor chain, implementations must ensure that the done function
+	// passed to the delegate newStream invokes the done function passed to
+	// NewStream.
+	NewStream(ctx context.Context, ri iresolver.RPCInfo, newStream func(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStream, error), opts ...grpc.CallOption) (grpc.ClientStream, error)
+	// Close closes the interceptor. Once called, no new calls to NewStream are
+	// accepted. Ongoing calls to NewStream are allowed to complete.
+	Close()
+}
+
 // ClientFilterBuilder is an optional interface that a Builder can implement to
 // indicate its capability to build client-side filters.
 type ClientFilterBuilder interface {
@@ -84,7 +113,7 @@ type ClientFilter interface {
 	//
 	// It is valid for this method to return a nil Interceptor and a nil error.
 	// In this case, the RPC will not be intercepted by this filter.
-	BuildClientInterceptor(config, override FilterConfig) (iresolver.ClientInterceptor, error)
+	BuildClientInterceptor(config, override FilterConfig) (ClientInterceptor, error)
 
 	// Close is called when the filter is no longer needed.
 	Close()
