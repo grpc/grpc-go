@@ -731,28 +731,33 @@ func (s *interceptorStream) Header() (metadata.MD, error) {
 }
 
 func (s *interceptorStream) SendMsg(m any) error {
+	err := s.ClientStream.SendMsg(m)
 	s.commit()
-	return s.ClientStream.SendMsg(m)
+	return err
 }
 
 func (s *interceptorStream) RecvMsg(m any) error {
+	err := s.ClientStream.RecvMsg(m)
 	s.commit()
-	return s.ClientStream.RecvMsg(m)
+	return err
 }
 
 func (s *interceptorStream) Context() context.Context {
+	ctx := s.ClientStream.Context()
 	s.commit()
-	return s.ClientStream.Context()
+	return ctx
 }
 
 func (s *interceptorStream) CloseSend() error {
+	err := s.ClientStream.CloseSend()
 	s.commit()
-	return s.ClientStream.CloseSend()
+	return err
 }
 
 func (s *interceptorStream) Trailer() metadata.MD {
+	md := s.ClientStream.Trailer()
 	s.commit()
-	return s.ClientStream.Trailer()
+	return md
 }
 
 // getOrCreateClientFilter retrieves an existing client filter from the
