@@ -279,7 +279,7 @@ func fromOutgoingContextRaw(ctx context.Context) (MD, iter.Seq2[string, string],
 
 // emptySeq2 is a no-op iterator returned when there are no appended key-value
 // pairs, avoiding nil-function panics at call sites that unconditionally range.
-var emptySeq2 iter.Seq2[string, string] = func(yield func(string, string) bool) {}
+var emptySeq2 iter.Seq2[string, string] = func(_ func(string, string) bool) {}
 
 // FromOutgoingContext returns the outgoing metadata in ctx if it exists.
 //
