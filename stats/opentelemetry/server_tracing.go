@@ -39,8 +39,9 @@ func (h *serverTracingHandler) initializeTraces() {
 }
 
 // TagRPC implements per RPC attempt context management for traces.
-func (h *serverTracingHandler) TagRPC(ctx context.Context, _ *stats.RPCTagInfo) context.Context {
+func (h *serverTracingHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo) context.Context {
 	ctx, ri := getOrCreateServerRPCInfo(ctx)
+	ri.ai.method = removeLeadingSlash(info.FullMethodName)
 	ctx, _ = h.traceTagRPC(ctx, ri.ai)
 	return ctx
 }
