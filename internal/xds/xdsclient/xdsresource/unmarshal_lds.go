@@ -238,11 +238,15 @@ func processHTTPFilters(filters []*v3httppb.HttpFilter, server bool) ([]HTTPFilt
 				}
 				return nil, fmt.Errorf("HTTP filter %q not supported server-side", name)
 			}
-		} else if _, ok := httpFilter.(httpfilter.ClientFilterBuilder); !ok {
-			if filter.GetIsOptional() {
-				continue
+		} else {
+			_, ok1 := httpFilter.(httpfilter.ClientFilterBuilder)
+			_, ok2 := httpFilter.(httpfilter.ClientFilterBuilderWithXDSClient)
+			if !ok1 && !ok2 {
+				if filter.GetIsOptional() {
+					continue
+				}
+				return nil, fmt.Errorf("HTTP filter %q not supported client-side", name)
 			}
-			return nil, fmt.Errorf("HTTP filter %q not supported client-side", name)
 		}
 
 		disabled := false

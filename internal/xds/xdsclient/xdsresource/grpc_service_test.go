@@ -65,7 +65,7 @@ func TestParseGRPCServiceConfig_Trusted(t *testing.T) {
 		t.Errorf("Timeout got: %v, want: %v", cfg.Timeout, 5*time.Second)
 	}
 
-	var headers []headerValueOption
+	var headers []HeaderValueOption
 	if err := json.Unmarshal([]byte(cfg.InitialMetadata), &headers); err != nil {
 		t.Fatalf("Failed to unmarshal InitialMetadata: %v", err)
 	}

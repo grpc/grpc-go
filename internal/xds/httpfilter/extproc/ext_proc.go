@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"time"
 
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/optional"
 	"google.golang.org/grpc/internal/resolver"
@@ -68,9 +67,6 @@ var (
 			allowed = cfg.AllowedGrpcServices()
 		}
 		return xdsresource.ParseGRPCServiceConfig(gs, trusted, allowed)
-	}
-	createExtProcChannel = func(xdsresource.GRPCServiceConfig) (grpc.ClientConnInterface, func() error, error) {
-		return nil, nil, fmt.Errorf("dialing external processing server not implemented")
 	}
 )
 
@@ -207,17 +203,19 @@ func (builder) IsTerminal() bool {
 	return false
 }
 
-func (builder) BuildClientFilter() httpfilter.ClientFilter {
-	return clientFilter{}
+func (builder) BuildClientFilter(cl httpfilter.XDSClient) httpfilter.ClientFilter {
+	return &clientFilter{cl: cl}
 }
 
-var _ httpfilter.ClientFilterBuilder = builder{}
+var _ httpfilter.ClientFilterBuilderWithXDSClient = builder{}
 
-type clientFilter struct{}
+type clientFilter struct {
+	cl httpfilter.XDSClient
+}
 
 func (clientFilter) Close() {}
 
-func (clientFilter) BuildClientInterceptor(base, override httpfilter.FilterConfig) (resolver.ClientInterceptor, error) {
+func (f *clientFilter) BuildClientInterceptor(base, override httpfilter.FilterConfig) (resolver.ClientInterceptor, error) {
 	b, ok := base.(baseConfig)
 	if !ok {
 		return nil, fmt.Errorf("extproc: incorrect config type provided (%T): %v", base, base)
@@ -234,7 +232,7 @@ func (clientFilter) BuildClientInterceptor(base, override httpfilter.FilterConfi
 	config := newInterceptorConfig(b, ov)
 
 	// Create a channel to the external processing server.
-	cc, cancel, err := createExtProcChannel(config.server)
+	cc, cancel, err := f.cl.CreateChannel(config.server.TargetURI, config.server.ChannelCredentials)
 	if err != nil {
 		return nil, fmt.Errorf("extproc: failed to create client: %v", err)
 	}

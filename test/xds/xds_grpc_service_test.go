@@ -211,7 +211,7 @@ func runUnmarshalTest(t *testing.T, opts unmarshalTestOptions) {
 	}
 }
 
-func (s) TestUnmarshalListener_TrustedXdsServer(t *testing.T) {
+func (s) TestXDSGrpcService_TrustedServer(t *testing.T) {
 	insecurePlugin := testutils.MarshalAny(t, &v3insecurepb.InsecureCredentials{})
 	runUnmarshalTest(t, unmarshalTestOptions{
 		trusted:       true,
@@ -220,7 +220,7 @@ func (s) TestUnmarshalListener_TrustedXdsServer(t *testing.T) {
 	})
 }
 
-func (s) TestUnmarshalListener_UntrustedServer_Blocked(t *testing.T) {
+func (s) TestXDSGrpcService_UntrustedServer_Blocked(t *testing.T) {
 	insecurePlugin := testutils.MarshalAny(t, &v3insecurepb.InsecureCredentials{})
 	runUnmarshalTest(t, unmarshalTestOptions{
 		expectNACK:    true,
@@ -229,7 +229,7 @@ func (s) TestUnmarshalListener_UntrustedServer_Blocked(t *testing.T) {
 	})
 }
 
-func (s) TestUnmarshalListener_UntrustedServer_Whitelisted(t *testing.T) {
+func (s) TestXDSGrpcService_UntrustedServer_Whitelisted(t *testing.T) {
 	insecurePlugin := testutils.MarshalAny(t, &v3insecurepb.InsecureCredentials{})
 	runUnmarshalTest(t, unmarshalTestOptions{
 		allowedJSON: json.RawMessage(`{
@@ -242,7 +242,7 @@ func (s) TestUnmarshalListener_UntrustedServer_Whitelisted(t *testing.T) {
 	})
 }
 
-func (s) TestUnmarshalListener_UntrustedServer_Whitelisted_InvalidProto(t *testing.T) {
+func (s) TestXDSGrpcService_UntrustedServer_Whitelisted_InvalidProto(t *testing.T) {
 	insecurePlugin := testutils.MarshalAny(t, &v3insecurepb.InsecureCredentials{})
 	runUnmarshalTest(t, unmarshalTestOptions{
 		expectNACK: true,
@@ -257,7 +257,7 @@ func (s) TestUnmarshalListener_UntrustedServer_Whitelisted_InvalidProto(t *testi
 	})
 }
 
-func (s) TestUnmarshalListener_XdsCredentialsFallback(t *testing.T) {
+func (s) TestXDSGrpcService_XdsCredentialsFallback(t *testing.T) {
 	xdsCreds := &v3xdspb.XdsCredentials{
 		FallbackCredentials: testutils.MarshalAny(t, &v3insecurepb.InsecureCredentials{}),
 	}

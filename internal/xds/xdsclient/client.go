@@ -23,6 +23,7 @@ package xdsclient
 import (
 	"context"
 
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/internal/xds/clients/lrsclient"
 	"google.golang.org/grpc/internal/xds/clients/xdsclient"
@@ -53,6 +54,11 @@ type XDSClient interface {
 	ReportLoad(*bootstrap.ServerConfig) (*lrsclient.LoadStore, func(context.Context))
 
 	BootstrapConfig() *bootstrap.Config
+
+	// CreateChannel returns a gRPC client connection to the service target.
+	// The XDSClient manages the lifecycle (sharing and reference counting) of
+	// the connection.
+	CreateChannel(targetURI string, creds bootstrap.ChannelCreds) (grpc.ClientConnInterface, func() error, error)
 }
 
 // DumpResources returns the status and contents of all xDS resources. It uses

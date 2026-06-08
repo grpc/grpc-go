@@ -124,7 +124,7 @@ func ParseGRPCServiceConfig(gs *v3corepb.GrpcService, trusted bool, allowed map[
 	}
 
 	// Initial Metadata
-	var headers []headerValueOption
+	var headers []HeaderValueOption
 	for _, h := range gs.GetInitialMetadata() {
 		key := h.GetKey()
 		var val string
@@ -141,7 +141,7 @@ func ParseGRPCServiceConfig(gs *v3corepb.GrpcService, trusted bool, allowed map[
 			return GRPCServiceConfig{}, fmt.Errorf("xdsresource: invalid header value: %v", err)
 		}
 
-		headers = append(headers, headerValueOption{
+		headers = append(headers, HeaderValueOption{
 			Key:   key,
 			Value: val,
 		})
@@ -163,7 +163,8 @@ func ParseGRPCServiceConfig(gs *v3corepb.GrpcService, trusted bool, allowed map[
 	}, nil
 }
 
-type headerValueOption struct {
+// HeaderValueOption represents a header key-value pair.
+type HeaderValueOption struct {
 	Key   string
 	Value string
 }

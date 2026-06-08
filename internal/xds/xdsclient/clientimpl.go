@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	estats "google.golang.org/grpc/experimental/stats"
 	"google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/grpclog"
@@ -166,6 +167,53 @@ func newClientImpl(config *bootstrap.Config, metricsRecorder estats.MetricsRecor
 // Callers must treat the return value as read-only.
 func (c *clientImpl) BootstrapConfig() *bootstrap.Config {
 	return c.bootstrapConfig
+}
+
+// CreateChannel returns a gRPC client connection to the service target.
+// The XDSClient manages the lifecycle (sharing and reference counting) of
+// the connection.
+func (c *clientImpl) CreateChannel(targetURI string, creds bootstrap.ChannelCreds) (grpc.ClientConnInterface, func() error, error) {
+	var dialOpts []grpc.DialOption
+	var cleanups []func()
+
+	// Check if allowed/whitelisted in bootstrap allowed_grpc_services config.
+	if allowedSvc, ok := c.bootstrapConfig.AllowedGrpcServices()[targetURI]; ok {
+		dialOpts = append(dialOpts, allowedSvc.DialOptions()...)
+	} else {
+		// Use credentials from xds config directly.
+		if creds.Type != "" {
+			cBuilder := xdsbootstrap.GetChannelCredentials(creds.Type)
+			if cBuilder == nil {
+				return nil, nil, fmt.Errorf("xdsclient: unsupported channel credentials type %q", creds.Type)
+			}
+			bundle, cancel, err := cBuilder.Build(creds.Config)
+			if err != nil {
+				return nil, nil, fmt.Errorf("xdsclient: failed to build credentials bundle: %v", err)
+			}
+			dialOpts = append(dialOpts, grpc.WithCredentialsBundle(bundle))
+			cleanups = append(cleanups, func() { cancel() })
+		} else {
+			dialOpts = append(dialOpts, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		}
+	}
+
+	cc, err := grpc.NewClient(targetURI, dialOpts...)
+	if err != nil {
+		for _, f := range cleanups {
+			f()
+		}
+		return nil, nil, err
+	}
+
+	closeFunc := func() error {
+		err := cc.Close()
+		for _, f := range cleanups {
+			f()
+		}
+		return err
+	}
+
+	return cc, closeFunc, nil
 }
 
 func (c *clientImpl) incrRef() int32 {

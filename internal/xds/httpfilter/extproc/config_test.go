@@ -517,12 +517,12 @@ func (s) TestParseFilterConfigOverride_Errors(t *testing.T) {
 }
 
 func (s) TestBuildClientInterceptor_Success(t *testing.T) {
-	origCreateExtProcChannel := createExtProcChannel
-	createExtProcChannel = func(cfg xdsresource.GRPCServiceConfig) (grpc.ClientConnInterface, func() error, error) {
-		conn, _ := grpc.NewClient(cfg.TargetURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
-		return conn, conn.Close, nil
+	fc := &fakeXDSClient{
+		createChannel: func(target string, _ bootstrap.ChannelCreds) (grpc.ClientConnInterface, func() error, error) {
+			conn, _ := grpc.NewClient(target, grpc.WithTransportCredentials(insecure.NewCredentials()))
+			return conn, conn.Close, nil
+		},
 	}
-	defer func() { createExtProcChannel = origCreateExtProcChannel }()
 
 	tests := []struct {
 		name       string
@@ -729,7 +729,7 @@ func (s) TestBuildClientInterceptor_Success(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			builder := builder{}
-			filter := builder.BuildClientFilter()
+			filter := builder.BuildClientFilter(fc)
 			defer filter.Close()
 
 			intptr, err := filter.BuildClientInterceptor(tc.cfg, tc.override)
@@ -746,15 +746,15 @@ func (s) TestBuildClientInterceptor_Success(t *testing.T) {
 }
 
 func (s) TestBuildClientInterceptor_Failure(t *testing.T) {
-	origCreateExtProcChannel := createExtProcChannel
-	createExtProcChannel = func(cfg xdsresource.GRPCServiceConfig) (grpc.ClientConnInterface, func() error, error) {
-		if cfg.TargetURI == "error-uri" {
-			return nil, nil, fmt.Errorf("dial error")
-		}
-		conn, _ := grpc.NewClient(cfg.TargetURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
-		return conn, conn.Close, nil
+	fc := &fakeXDSClient{
+		createChannel: func(target string, _ bootstrap.ChannelCreds) (grpc.ClientConnInterface, func() error, error) {
+			if target == "error-uri" {
+				return nil, nil, fmt.Errorf("dial error")
+			}
+			conn, _ := grpc.NewClient(target, grpc.WithTransportCredentials(insecure.NewCredentials()))
+			return conn, conn.Close, nil
+		},
 	}
-	defer func() { createExtProcChannel = origCreateExtProcChannel }()
 
 	// incorrectFilterConfig embeds httpfilter.FilterConfig but is not of type
 	// baseConfig/overrideConfig, and is used to test incorrect config types being
@@ -812,7 +812,7 @@ func (s) TestBuildClientInterceptor_Failure(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			builder := builder{}
-			filter := builder.BuildClientFilter()
+			filter := builder.BuildClientFilter(fc)
 			defer filter.Close()
 
 			_, err := filter.BuildClientInterceptor(tc.cfg, tc.override)
@@ -824,4 +824,16 @@ func (s) TestBuildClientInterceptor_Failure(t *testing.T) {
 			}
 		})
 	}
+}
+
+type fakeXDSClient struct {
+	httpfilter.XDSClient
+	createChannel func(string, bootstrap.ChannelCreds) (grpc.ClientConnInterface, func() error, error)
+}
+
+func (f *fakeXDSClient) CreateChannel(target string, creds bootstrap.ChannelCreds) (grpc.ClientConnInterface, func() error, error) {
+	if f.createChannel != nil {
+		return f.createChannel(target, creds)
+	}
+	return nil, nil, fmt.Errorf("not implemented")
 }
