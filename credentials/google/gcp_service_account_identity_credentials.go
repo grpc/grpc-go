@@ -212,5 +212,5 @@ func (c *gcpServiceAccountIdentityCallCreds) updateStateLocked(token *auth.Token
 	// Per gRFC A83, the cached token is considered invalid 30 seconds before its
 	// actual expiration time to accommodate for clock skew.
 	c.tokenExpiry = token.Expiry.Add(-30 * time.Second)
-	c.preemptiveTokenRefresh = token.Expiry.Add(-preemptiveRefresh)
+	c.preemptiveTokenRefresh = c.tokenExpiry.Add(-preemptiveRefresh)
 }
