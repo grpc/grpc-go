@@ -385,13 +385,6 @@ func (r *xdsResolver) sendNewServiceConfig(cs stoppableConfigSelector) bool {
 //
 // Only executed in the context of a serializer callback.
 func (r *xdsResolver) newConfigSelector() (_ *configSelector, err error) {
-	// A client-side listener update must contain API listener configuration. If
-	// it is nil, it indicates that a server-side listener (TCP Listener) resource
-	// was received instead. Returning an error here will cause the resolver to
-	// transition the channel into TRANSIENT_FAILURE.
-	if r.xdsConfig.Listener.APIListener == nil {
-		return nil, fmt.Errorf("xds: client-side listener resource %q does not contain API listener configuration", r.ldsResourceName)
-	}
 	cs := &configSelector{
 		channelID: r.channelID,
 		xdsNodeID: r.xdsClient.BootstrapConfig().Node().GetId(),

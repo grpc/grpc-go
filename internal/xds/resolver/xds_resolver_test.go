@@ -1570,36 +1570,13 @@ func (s) TestResolverServerSideListenerReceivedOnClient(t *testing.T) {
 
 	// Build the resolver.
 	target := resolver.Target{URL: *testutils.MustParseURL("xds:///" + defaultTestServiceName)}
-	builder, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
-	if err != nil {
-		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
-	}
-
-	errCh := testutils.NewChannel()
-	stateCh := testutils.NewChannel()
-	tcc := &testutils.ResolverClientConn{
-		Logger: t,
-		UpdateStateF: func(s resolver.State) error {
-			stateCh.Replace(s)
-			return nil
-		},
-		ReportErrorF: func(err error) {
-			errCh.Replace(err)
-		},
-	}
-	r, err := builder.Build(target, tcc, resolver.BuildOptions{
-		Authority: url.PathEscape(target.Endpoint()),
-	})
-	if err != nil {
-		t.Fatalf("Failed to build xDS resolver for target %q: %v", target, err)
-	}
-	defer r.Close()
+	stateCh, errCh, _ := buildResolverForTarget(t, target, bc)
 
 	// Wait for and verify the error update from the resolver.
 	select {
 	case <-ctx.Done():
 		t.Fatalf("Timeout waiting for error to be propagated to the ClientConn")
-	case gotErr := <-errCh.C:
+	case gotErr := <-errCh:
 		if gotErr == nil {
 			t.Fatalf("got nil error from resolver, want error containing 'does not contain API listener configuration'")
 		}
@@ -1616,8 +1593,8 @@ func (s) TestResolverServerSideListenerReceivedOnClient(t *testing.T) {
 	select {
 	case <-ctx.Done():
 		t.Fatalf("Timeout waiting for state update containing empty service config")
-	case gotState := <-stateCh.C:
-		state := gotState.(resolver.State)
+	case gotState := <-stateCh:
+		state := gotState
 		if err := state.ServiceConfig.Err; err != nil {
 			t.Fatalf("Received error in service config: %v", state.ServiceConfig.Err)
 		}
@@ -1641,8 +1618,8 @@ func (s) TestResolverServerSideListenerReceivedOnClient(t *testing.T) {
 	select {
 	case <-ctx.Done():
 		t.Fatalf("Timeout waiting for state update after recovery")
-	case gotState := <-stateCh.C:
-		state := gotState.(resolver.State)
+	case gotState := <-stateCh:
+		state := gotState
 		if err := state.ServiceConfig.Err; err != nil {
 			t.Fatalf("Received error in service config: %v", state.ServiceConfig.Err)
 		}
