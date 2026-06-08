@@ -139,8 +139,8 @@ func (c2pResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, opts 
 	isGCE := onGCE()
 	// We check only for the presence of the "force-xds" query parameter key,
 	// and do not evaluate its value.
-	_, forceXds := t.URL.Query()["force-xds"]
-	if !forceXds && !isGCE {
+	_, forceXDS := t.URL.Query()["force-xds"]
+	if !forceXDS && !isGCE {
 		// If not xDS, fallback to DNS.
 		t.URL.Scheme = dnsName
 		return resolver.Get(dnsName).Build(t, cc, opts)
@@ -148,7 +148,7 @@ func (c2pResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, opts 
 
 	var zone string
 	var ipv6Capable bool
-	if forceXds {
+	if forceXDS {
 		// If the force-xds query parameter is present, GCE metadata server
 		// queries are bypassed.
 		zone = ""
@@ -160,14 +160,12 @@ func (c2pResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, opts 
 		// This should be fine in most of the cases. In certain error cases, this
 		// could block Dial() for up to 10 seconds (each blocking call has its own
 		// goroutine).
-		zoneCh, ipv6CapableCh := make(chan string, 1), make(chan bool, 1)
-		go func() { zoneCh <- getZone(httpReqTimeout) }()
-		go func() { ipv6CapableCh <- getIPv6Capable(httpReqTimeout) }()
-		zone, ipv6Capable = <-zoneCh, <-ipv6CapableCh
+		zone = getZone(httpReqTimeout)
+		ipv6Capable = getIPv6Capable(httpReqTimeout)
 	}
 
 	xdsServerURI := getXdsServerURI()
-	nodeCfg := newNodeConfig(zone, ipv6Capable, isGCE)
+	nodeCfg := newNodeConfig(zone, ipv6Capable, forceXDS)
 	xdsServerCfg := newXdsServerConfig(xdsServerURI)
 	authoritiesCfg := newAuthoritiesConfig(xdsServerCfg)
 
@@ -217,9 +215,9 @@ func (b c2pResolverBuilder) Scheme() string {
 	return c2pScheme
 }
 
-func newNodeConfig(zone string, ipv6Capable bool, isGCE bool) map[string]any {
+func newNodeConfig(zone string, ipv6Capable bool, forceXDS bool) map[string]any {
 	prefix := "C2P"
-	if !isGCE {
+	if forceXDS {
 		prefix = "C2P-non-gcp"
 	}
 	node := map[string]any{
