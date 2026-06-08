@@ -2357,10 +2357,12 @@ func (s) TestFlowControl(t *testing.T) {
 	// and verify it blocks.
 	sendDone := make(chan error, 1)
 	go func() {
-		// Send a large body to fill the HTTP/2 window.
+		// Send large body messages to fill the HTTP/2 window.
 		largeMsg := &testpb.StreamingOutputCallRequest{
-			Payload: &testpb.Payload{Body: make([]byte, 100000*1024)},
+			Payload: &testpb.Payload{Body: make([]byte, 10000*1024)},
 		}
+		stream.Send(largeMsg)
+		stream.Send(largeMsg)
 		err := stream.Send(largeMsg)
 		sendDone <- err
 	}()
