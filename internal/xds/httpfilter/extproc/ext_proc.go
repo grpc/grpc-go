@@ -276,18 +276,18 @@ func (i *clientInterceptor) Close() {
 
 func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, done func(), newStream func(ctx context.Context, done func()) (resolver.ClientStream, error)) (resolver.ClientStream, error) {
 	cs := &clientStream{
-		config:                  i.config,
-		streamFailed:            grpcsync.NewEvent(),
-		mutatedReqBuffer:        buffer.NewUnbounded(),
-		mutatedRespBuffer:       buffer.NewUnbounded(),
-		responseHeaderModified:  grpcsync.NewEvent(),
-		responseTrailerModified: grpcsync.NewEvent(),
-		dataplaneReady:          make(chan struct{}),
-		ctx:                     ctx,
-		extSendCh:               make(chan *v3procservicepb.ProcessingRequest),
-		drainTriggeredCh:        make(chan struct{}),
-		forwardLoopDoneCh:       make(chan struct{}),
-		drained:                 grpcsync.NewEvent(),
+		config:                   i.config,
+		streamFailed:             grpcsync.NewEvent(),
+		mutatedReqBuffer:         buffer.NewUnbounded(),
+		mutatedRespBuffer:        buffer.NewUnbounded(),
+		responseHeaderModified:   grpcsync.NewEvent(),
+		responseTrailerModified:  grpcsync.NewEvent(),
+		dataplaneReady:           make(chan struct{}),
+		ctx:                      ctx,
+		extSendCh:                make(chan *v3procservicepb.ProcessingRequest),
+		drainTriggeredCh:         make(chan struct{}),
+		requestForwardLoopDoneCh: make(chan struct{}),
+		drained:                  grpcsync.NewEvent(),
 	}
 
 	// Create a new context for the RPC to the external processing server. This
@@ -430,19 +430,19 @@ type clientStream struct {
 	responseTrailerOnce     sync.Once       // guards response trailer processing to execute once
 	responseTrailerModified *grpcsync.Event // signals that response trailers are ready for client
 
-	sendToDataplaneStarted   bool
-	recvFromDataplaneStarted bool
-	reqAttrs                 map[string]*structpb.Struct
+	reqForwardingStarted bool
+	responseRecvStarted  bool
+	reqAttrs             map[string]*structpb.Struct
 
 	dataplaneReady chan struct{} // closed once dataplaneStream is fully constructed
 	ctx            context.Context
 	extSendCh      chan *v3procservicepb.ProcessingRequest // bounds concurrent outbound requests to processor server
 
-	drainTriggeredCh  chan struct{}   // closed upon receiving a drain request or bypass signal
-	forwardLoopDoneCh chan struct{}   // closed when request forwarding loop finishes draining
-	drainTriggered    atomic.Bool     // guards against multiple closures of drainTriggeredCh
-	drained           *grpcsync.Event // fires when external processor stream is completely drained
-	responseDrained   atomic.Bool     // indicates consumer loop has fully processed buffered items
+	drainTriggeredCh         chan struct{}   // closed upon receiving a drain request or bypass signal
+	requestForwardLoopDoneCh chan struct{}   // closed when request forwarding loop finishes draining
+	drainTriggered           atomic.Bool     // guards against multiple closures of drainTriggeredCh
+	drained                  *grpcsync.Event // fires when external processor stream is completely drained
+	responseDrained          atomic.Bool     // indicates consumer loop has fully processed buffered items
 
 	trailerSent  atomic.Bool // tracks whether response trailers have been dispatched
 	trailersOnly bool        // indicates a trailers-only response without headers or body
@@ -502,8 +502,8 @@ func (cs *clientStream) CloseSend() error {
 	// If the stream is closed and we had started sending data from the processor
 	// server to the dataplane server, wait for the buffer to finish before
 	// calling CloseSend.
-	if extClosed && cs.sendToDataplaneStarted {
-		if err := cs.waitChannel(cs.forwardLoopDoneCh); err != nil {
+	if extClosed && cs.reqForwardingStarted {
+		if err := cs.waitChannel(cs.requestForwardLoopDoneCh); err != nil {
 			return err
 		}
 	}
@@ -542,7 +542,7 @@ func (cs *clientStream) CloseSend() error {
 	case cs.extSendCh <- req:
 		return nil
 	case <-cs.drainTriggeredCh:
-		if err := cs.waitChannel(cs.forwardLoopDoneCh); err != nil {
+		if err := cs.waitChannel(cs.requestForwardLoopDoneCh); err != nil {
 			return err
 		}
 		s, err := cs.waitForDataplaneStream(cs.ctx)
@@ -571,7 +571,7 @@ func (cs *clientStream) RecvMsg(m any) error {
 		return err
 	}
 
-	if cs.responseDrained.Load() || (cs.extStreamBypass.Load() && !cs.recvFromDataplaneStarted) || cs.config.processingModes.responseBodyMode == modeSkip {
+	if cs.responseDrained.Load() || (cs.extStreamBypass.Load() && !cs.responseRecvStarted) || cs.config.processingModes.responseBodyMode == modeSkip {
 		s, err := cs.waitForDataplaneStream(cs.ctx)
 		if err != nil {
 			return err
@@ -592,9 +592,9 @@ func (cs *clientStream) RecvMsg(m any) error {
 	}
 
 	// Start the background receiving loop on the first RecvMsg call.
-	if !cs.recvFromDataplaneStarted {
-		cs.recvFromDataplaneStarted = true
-		go cs.responseReceivingLoop(msg.ProtoReflect().Type())
+	if !cs.responseRecvStarted {
+		cs.responseRecvStarted = true
+		go cs.responseForwardingToProcServerLoop(msg.ProtoReflect().Type())
 	}
 
 	// Pull from mutatedRespBuffer (which strictly receives mutated
@@ -646,8 +646,8 @@ func (cs *clientStream) SendMsg(m any) error {
 	// If the stream is closed and we started sending messages to the dataplane,
 	// it means the drain has been triggered, and we need to wait for the forward
 	// loop to finish before sending any more messages.
-	if extClosed && cs.sendToDataplaneStarted {
-		if err := cs.waitChannel(cs.forwardLoopDoneCh); err != nil {
+	if extClosed && cs.reqForwardingStarted {
+		if err := cs.waitChannel(cs.requestForwardLoopDoneCh); err != nil {
 			return err
 		}
 	}
@@ -664,16 +664,15 @@ func (cs *clientStream) SendMsg(m any) error {
 		return fmt.Errorf("extproc: message does not implement proto.Message")
 	}
 
-	// 1. Guaranteed launch of request forwarding loop to send the data to the
-	// dataplane server. We start it on the first send because we need the message
+	// Start request forwarding loop on the first send because we need the message
 	// type to send the data to the dataplane server.
-	if !cs.sendToDataplaneStarted {
-		cs.sendToDataplaneStarted = true
-		go cs.requestForwardingToDataplaneServerLoop(msg)
+	if !cs.reqForwardingStarted {
+		cs.reqForwardingStarted = true
+		go cs.requestForwardingToDataplaneLoop(msg.ProtoReflect().Type())
 	}
 
-	// 2. Discard Check: If the ExtProc server has already signaled end_of_stream,
-	// discard any subsequent client messages.
+	// If the ExtProc server has already signaled end_of_stream, discard any
+	// subsequent client messages.
 	if cs.discardRequests.Load() {
 		return nil
 	}
@@ -701,15 +700,15 @@ func (cs *clientStream) SendMsg(m any) error {
 		cs.initMsgSent = true
 	}
 
-	// 3. Bounded Sequence-Safe Handoff
 	select {
 	case cs.extSendCh <- req:
 		return nil
 
 	case <-cs.drainTriggeredCh:
-		// DRAIN RACE CAUGHT: The sender loop is shut down, preventing new handoffs.
-		// Block the application stream thread until all echoes are flushed.
-		if err := cs.waitChannel(cs.forwardLoopDoneCh); err != nil {
+		// When the drain is triggered, wait for all the queued request to be sent
+		// to dataplane server before forwarding current request directly to
+		// dataplane server.
+		if err := cs.waitChannel(cs.requestForwardLoopDoneCh); err != nil {
 			return err
 		}
 		s, err := cs.waitForDataplaneStream(cs.ctx)
@@ -723,7 +722,11 @@ func (cs *clientStream) SendMsg(m any) error {
 	}
 }
 
-func (cs *clientStream) responseReceivingLoop(msgType protoreflect.MessageType) {
+// responseForwardingToProcServerLoop continuously receives raw response
+// messages from the underlying dataplane stream, marshals them, and forwards
+// them as HTTP body processing requests to the external processor server via
+// extSendCh.
+func (cs *clientStream) responseForwardingToProcServerLoop(msgType protoreflect.MessageType) {
 	defer func() {
 		cs.waitChannel(cs.drained.Done())
 		cs.mutatedRespBuffer.Put(nil)
@@ -742,8 +745,6 @@ func (cs *clientStream) responseReceivingLoop(msgType protoreflect.MessageType) 
 			return
 		}
 
-		// Allocate a new message using reflection so we do not overwrite in-flight
-		// buffered messages.
 		newMsg := msgType.New().Interface()
 		if err := s.RecvMsg(newMsg); err != nil {
 			cs.initiateResponseTrailerProcessing()
@@ -783,9 +784,12 @@ func (cs *clientStream) responseReceivingLoop(msgType protoreflect.MessageType) 
 	}
 }
 
-// Loop to pull data out of request buffer and send to dataplane server.
-func (cs *clientStream) requestForwardingToDataplaneServerLoop(reqPrototype proto.Message) {
-	defer close(cs.forwardLoopDoneCh)
+// requestForwardingToDataplaneLoop continuously consumes mutated request body
+// chunks from mutatedReqBuffer (populated by the external processor server),
+// unmarshals them, and forwards the final messages to the backend server via
+// dataplaneStream.
+func (cs *clientStream) requestForwardingToDataplaneLoop(msgType protoreflect.MessageType) {
+	defer close(cs.requestForwardLoopDoneCh)
 	_, err := cs.waitForDataplaneStream(cs.ctx)
 	if err != nil {
 		return
@@ -810,7 +814,7 @@ func (cs *clientStream) requestForwardingToDataplaneServerLoop(reqPrototype prot
 			return
 		}
 
-		newMsg := reqPrototype.ProtoReflect().New().Interface()
+		newMsg := msgType.New().Interface()
 		if err := proto.Unmarshal(streamedResp.GetBody(), newMsg); err != nil {
 			cs.extStreamErr.Store(err)
 			cs.streamFailed.Fire()
@@ -1147,69 +1151,6 @@ func (cs *clientStream) handleImmediateResponse(imm *v3procservicepb.ImmediateRe
 	}
 }
 
-func convertBodyMode(mode processingMode) v3procfilterpb.ProcessingMode_BodySendMode {
-	switch mode {
-	case modeSkip:
-		return v3procfilterpb.ProcessingMode_NONE
-	case modeSend:
-		return v3procfilterpb.ProcessingMode_GRPC
-	default:
-		return v3procfilterpb.ProcessingMode_NONE
-	}
-}
-
-func getHeader(md metadata.MD, key string) string {
-	vs := md.Get(key)
-	return strings.Join(vs, ",")
-}
-
-func constructAttributes(rpcInfo resolver.RPCInfo, md metadata.MD, requestedAttributes []string) (map[string]*structpb.Struct, error) {
-	if len(requestedAttributes) == 0 {
-		return nil, nil
-	}
-
-	reqFields := make(map[string]any)
-	for _, attr := range requestedAttributes {
-		switch attr {
-		case "request.path", "request.url_path":
-			reqFields[attr] = rpcInfo.Method
-		case "request.host":
-			reqFields[attr] = rpcInfo.Authority
-		case "request.method":
-			reqFields[attr] = "POST"
-		case "request.headers":
-			headers := make(map[string]any)
-			for k, values := range md {
-				headers[k] = strings.Join(values, ",")
-			}
-			reqFields[attr] = headers
-		case "request.referer":
-			if val := getHeader(md, "referer"); val != "" {
-				reqFields[attr] = val
-			}
-		case "request.useragent":
-			if val := getHeader(md, "user-agent"); val != "" {
-				reqFields[attr] = val
-			}
-		case "request.id":
-			if val := getHeader(md, "x-request-id"); val != "" {
-				reqFields[attr] = val
-			}
-		case "request.query":
-			reqFields[attr] = ""
-		}
-	}
-
-	reqStruct, err := structpb.NewStruct(reqFields)
-	if err != nil {
-		return nil, err
-	}
-
-	return map[string]*structpb.Struct{
-		"envoy.filters.http.ext_proc": reqStruct,
-	}, nil
-}
-
 func (cs *clientStream) triggerDrain() {
 	if cs.drainTriggered.CompareAndSwap(false, true) {
 		close(cs.drainTriggeredCh)
@@ -1282,7 +1223,8 @@ func (cs *clientStream) initiateResponseHeaderProcessing() error {
 			return
 		}
 		cs.responseHeader = header
-		// A trailers-only response will contain "grpc-status" in the headers.
+		// A trailers-only response will contain "grpc-status" in the headers or
+		// will return nil, nil on s.Header() call.
 		if header == nil || len(header.Get("grpc-status")) > 0 {
 			cs.trailersOnly = true
 		}
@@ -1352,4 +1294,67 @@ func (cs *clientStream) initiateResponseTrailerProcessing() {
 			cs.responseTrailerModified.Fire()
 		}
 	})
+}
+
+func convertBodyMode(mode processingMode) v3procfilterpb.ProcessingMode_BodySendMode {
+	switch mode {
+	case modeSkip:
+		return v3procfilterpb.ProcessingMode_NONE
+	case modeSend:
+		return v3procfilterpb.ProcessingMode_GRPC
+	default:
+		return v3procfilterpb.ProcessingMode_NONE
+	}
+}
+
+func getHeader(md metadata.MD, key string) string {
+	vs := md.Get(key)
+	return strings.Join(vs, ",")
+}
+
+func constructAttributes(rpcInfo resolver.RPCInfo, md metadata.MD, requestedAttributes []string) (map[string]*structpb.Struct, error) {
+	if len(requestedAttributes) == 0 {
+		return nil, nil
+	}
+
+	reqFields := make(map[string]any)
+	for _, attr := range requestedAttributes {
+		switch attr {
+		case "request.path", "request.url_path":
+			reqFields[attr] = rpcInfo.Method
+		case "request.host":
+			reqFields[attr] = rpcInfo.Authority
+		case "request.method":
+			reqFields[attr] = "POST"
+		case "request.headers":
+			headers := make(map[string]any)
+			for k, values := range md {
+				headers[k] = strings.Join(values, ",")
+			}
+			reqFields[attr] = headers
+		case "request.referer":
+			if val := getHeader(md, "referer"); val != "" {
+				reqFields[attr] = val
+			}
+		case "request.useragent":
+			if val := getHeader(md, "user-agent"); val != "" {
+				reqFields[attr] = val
+			}
+		case "request.id":
+			if val := getHeader(md, "x-request-id"); val != "" {
+				reqFields[attr] = val
+			}
+		case "request.query":
+			reqFields[attr] = ""
+		}
+	}
+
+	reqStruct, err := structpb.NewStruct(reqFields)
+	if err != nil {
+		return nil, err
+	}
+
+	return map[string]*structpb.Struct{
+		"envoy.filters.http.ext_proc": reqStruct,
+	}, nil
 }

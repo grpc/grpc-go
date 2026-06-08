@@ -64,8 +64,6 @@ const (
 	defaultTestShortTimeout = 10 * time.Millisecond
 )
 
-// parseGRPCServiceConfigForTesting is a minimal implementation of
-// ParseGRPCServiceConfig for standalone testing.
 func parseGRPCServiceConfigForTesting(gs *v3corepb.GrpcService) (xdsresource.GRPCServiceConfig, error) {
 	if gs == nil {
 		return xdsresource.GRPCServiceConfig{}, fmt.Errorf("nil GrpcService")
@@ -83,8 +81,6 @@ func parseGRPCServiceConfigForTesting(gs *v3corepb.GrpcService) (xdsresource.GRP
 	}, nil
 }
 
-// createExtProcChannelForTesting is a minimal implementation of
-// CreateExtProcChannel for standalone testing.
 func createExtProcChannelForTesting(cfg xdsresource.GRPCServiceConfig) (grpc.ClientConnInterface, func() error, error) {
 	cc, err := grpc.NewClient(cfg.TargetURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
@@ -223,10 +219,10 @@ func (s *mockProcessorServer) Process(stream v3procservicepb.ExternalProcessor_P
 	return nil
 }
 
-// TestAllSendUnary verifies that when the ExtProc filter is configured with all
-// processing modes set to SEND/GRPC, the client correctly routes headers and
-// bodies to the processor, the processor echoes the mutations back, and the
-// client successfully completes a Unary RPC.
+// TestAllSendUnary tests the scenario where the ExtProc filter is configured
+// with all processing modes set to SEND/GRPC. Verifies that the client
+// correctly routes headers and bodies to the processor, the processor echoes
+// the mutations back, and the client successfully completes a Unary RPC.
 func (s) TestAllSendUnary(t *testing.T) {
 	origParse := extproc.ParseGRPCServiceConfig
 	origCreate := extproc.CreateExtProcChannel
@@ -360,12 +356,12 @@ func (s) TestAllSendUnary(t *testing.T) {
 	}
 }
 
-// TestStreamingModifications verifies that when the ExtProc filter is
-// configured with SEND/GRPC processing modes, the client correctly routes
-// headers and bodies of a streaming RPC to the processor, server correctly
-// receives the mutated requests and client receives the correctly mutated
-// responses back. Also verifies that if processing server changes the number of
-// response, correct number of response are received by the client.
+// TestStreamingModifications tests the scenario where the ExtProc filter is
+// configured with SEND/GRPC processing modes for a bidirectional streaming RPC.
+// Verifies that the client correctly routes headers and bodies to the
+// processor, the server receives the mutated requests, and the client receives
+// the correctly mutated responses back, even when the processor changes the
+// response count.
 func (s) TestStreamingModifications(t *testing.T) {
 	origParse := extproc.ParseGRPCServiceConfig
 	origCreate := extproc.CreateExtProcChannel
@@ -641,9 +637,11 @@ func (s) TestStreamingModifications(t *testing.T) {
 	}
 }
 
-// TestProtocolConfigInFirstMessage verifies that the first ProcessingRequest
-// sent to the proc server contains a valid ProtocolConfig populated with the
-// current ProcessingMode, and subsequent requests do not.
+// TestProtocolConfigInFirstMessage tests the scenario where multiple processing
+// requests are sent over an active stream. Verifies that the first
+// ProcessingRequest sent to the processor server contains a valid
+// ProtocolConfig populated with the current ProcessingMode, and subsequent
+// requests do not.
 func (s) TestProtocolConfigInFirstMessage(t *testing.T) {
 	origParse := extproc.ParseGRPCServiceConfig
 	origCreate := extproc.CreateExtProcChannel
@@ -780,8 +778,10 @@ func (s) TestProtocolConfigInFirstMessage(t *testing.T) {
 	}
 }
 
-// TestWaitForDataplane verifies that outbound events do not reach the backend
-// until the processor responds to the request headers.
+// TestWaitForDataplane tests the scenario where an outbound RPC is initiated
+// before the external processor confirms header mutations. Verifies that
+// outbound events do not reach the backend until the processor responds to the
+// request headers.
 func (s) TestWaitForDataplane(t *testing.T) {
 	origParse := extproc.ParseGRPCServiceConfig
 	origCreate := extproc.CreateExtProcChannel
@@ -966,9 +966,9 @@ func (s) TestWaitForDataplane(t *testing.T) {
 	}
 }
 
-// TestTrailersOnly verifies that when the backend sends a Trailers-Only
-// response, it is delivered to the processor as a ResponseHeaders message with
-// end_of_stream true.
+// TestTrailersOnly tests the scenario where the backend sends an immediate
+// Trailers-Only response. Verifies that this is correctly delivered to the
+// processor as a ResponseHeader message with end_of_stream set to true.
 func (s) TestTrailersOnly(t *testing.T) {
 	origParse := extproc.ParseGRPCServiceConfig
 	origCreate := extproc.CreateExtProcChannel
@@ -1102,9 +1102,10 @@ func (s) TestTrailersOnly(t *testing.T) {
 	}
 }
 
-// TestDraining verifies that when the processor signals RequestDrain: true, the
-// filter correctly drains any pending messages and then transitions to bypass
-// mode. Subsequent client messages and server responses bypass the processor.
+// TestDraining tests the scenario where the processor server signals
+// RequestDrain: true. Verifies that the filter correctly drains any pending
+// messages and then transitions to bypass mode, causing all subsequent client
+// messages and server responses to bypass the processor.
 func (s) TestDraining(t *testing.T) {
 	origParse := extproc.ParseGRPCServiceConfig
 	origCreate := extproc.CreateExtProcChannel
@@ -1307,10 +1308,10 @@ func (s) TestDraining(t *testing.T) {
 	}
 }
 
-// TestImmediateResponse_Enabled verifies that when immediate response is
-// enabled (default) and the processor sends an ImmediateResponse, the filter
-// immediately aborts the RPC with the specified status.
-func (s) TestImmediateResponse_Enabled(t *testing.T) {
+// TestImmediateResponseEnabled tests the scenario where immediate response is
+// enabled (default) and the processor sends an ImmediateResponse. Verifies that
+// the filter immediately aborts the RPC with the specified status.
+func (s) TestImmediateResponseEnabled(t *testing.T) {
 	origParse := extproc.ParseGRPCServiceConfig
 	origCreate := extproc.CreateExtProcChannel
 	extproc.ParseGRPCServiceConfig = parseGRPCServiceConfigForTesting
@@ -1412,11 +1413,11 @@ func (s) TestImmediateResponse_Enabled(t *testing.T) {
 	}
 }
 
-// TestImmediateResponse_Disabled verifies that when disable_immediate_response
-// is set to true in the configuration and the processor sends an
-// ImmediateResponse, the filter treats it as a stream error, if
-// failure_mode_allow is false and the RPC fails.
-func (s) TestImmediateResponse_Disabled(t *testing.T) {
+// TestImmediateResponseDisabled tests the scenario where
+// disable_immediate_response is set to true in the configuration and the
+// processor sends an ImmediateResponse while failure_mode_allow is false.
+// Verifies that the filter treats it as a stream error and the RPC fails.
+func (s) TestImmediateResponseDisabled(t *testing.T) {
 	origParse := extproc.ParseGRPCServiceConfig
 	origCreate := extproc.CreateExtProcChannel
 	extproc.ParseGRPCServiceConfig = parseGRPCServiceConfigForTesting
@@ -1522,11 +1523,11 @@ func (s) TestImmediateResponse_Disabled(t *testing.T) {
 	}
 }
 
-// TestImmediateResponse_Disabled_FailureModeAllow verifies that when
-// disable_immediate_response is set to true and failure_mode_allow is true,
-// receiving an ImmediateResponse triggers a bypass, allowing the dataplane RPC
-// to succeed.
-func (s) TestImmediateResponse_Disabled_FailureModeAllow(t *testing.T) {
+// TestImmediateResponseDisabledWithFailureModeAllow tests the scenario where
+// disable_immediate_response is set to true and failure_mode_allow is true when
+// receiving an ImmediateResponse. Verifies that this triggers a bypass,
+// allowing the dataplane RPC to succeed.
+func (s) TestImmediateResponseDisabledWithFailureModeAllow(t *testing.T) {
 	origParse := extproc.ParseGRPCServiceConfig
 	origCreate := extproc.CreateExtProcChannel
 	extproc.ParseGRPCServiceConfig = parseGRPCServiceConfigForTesting
@@ -1684,7 +1685,11 @@ func (s) TestImmediateResponse_Disabled_FailureModeAllow(t *testing.T) {
 	}
 }
 
-func (s) TestStreamFailure_HeaderPhase_Allow(t *testing.T) {
+// TestStreamFailureHeaderPhaseAllow tests the scenario where the external
+// processor stream fails abruptly during the request header phase while
+// failure_mode_allow is set to true. Verifies that the RPC succeeds by
+// bypassing the external processor.
+func (s) TestStreamFailureHeaderPhaseAllow(t *testing.T) {
 	origParse := extproc.ParseGRPCServiceConfig
 	origCreate := extproc.CreateExtProcChannel
 	extproc.ParseGRPCServiceConfig = parseGRPCServiceConfigForTesting
@@ -1769,10 +1774,10 @@ func (s) TestStreamFailure_HeaderPhase_Allow(t *testing.T) {
 	}
 }
 
-// TestStreamFailure_HeaderPhase_Deny verifies that when the ext proc stream fails
-// abruptly during the request header phase and failure_mode_allow is false, the
-// RPC fails.
-func (s) TestStreamFailure_HeaderPhase_Deny(t *testing.T) {
+// TestStreamFailureHeaderPhaseDeny tests the scenario where the external
+// processor stream fails abruptly during the request header phase while
+// failure_mode_allow is false. Verifies that the RPC fails.
+func (s) TestStreamFailureHeaderPhaseDeny(t *testing.T) {
 	origParse := extproc.ParseGRPCServiceConfig
 	origCreate := extproc.CreateExtProcChannel
 	extproc.ParseGRPCServiceConfig = parseGRPCServiceConfigForTesting
@@ -1857,10 +1862,11 @@ func (s) TestStreamFailure_HeaderPhase_Deny(t *testing.T) {
 	}
 }
 
-// TestStreamFailure_BodyPhase_Allow verifies that when the ext proc stream fails
-// abruptly during the request body phase and failure_mode_allow is true, the
-// RPC succeeds by bypassing the external processor.
-func (s) TestStreamFailure_BodyPhase_Allow(t *testing.T) {
+// TestStreamFailureBodyPhaseAllow tests the scenario where the external
+// processor stream fails abruptly during the request body phase while
+// failure_mode_allow is true. Verifies that the RPC succeeds by bypassing the
+// external processor.
+func (s) TestStreamFailureBodyPhaseAllow(t *testing.T) {
 	origParse := extproc.ParseGRPCServiceConfig
 	origCreate := extproc.CreateExtProcChannel
 	extproc.ParseGRPCServiceConfig = parseGRPCServiceConfigForTesting
@@ -2049,10 +2055,10 @@ func (s) TestStreamFailure_BodyPhase_Allow(t *testing.T) {
 	}
 }
 
-// TestStreamFailure_BodyPhase_Deny verifies that when the ext proc stream fails
-// abruptly during the request body phase and failure_mode_allow is false, the
-// RPC fails.
-func (s) TestStreamFailure_BodyPhase_Deny(t *testing.T) {
+// TestStreamFailureBodyPhaseDeny tests the scenario where the external
+// processor stream fails abruptly during the request body phase while
+// failure_mode_allow is false. Verifies that the RPC fails.
+func (s) TestStreamFailureBodyPhaseDeny(t *testing.T) {
 	origParse := extproc.ParseGRPCServiceConfig
 	origCreate := extproc.CreateExtProcChannel
 	extproc.ParseGRPCServiceConfig = parseGRPCServiceConfigForTesting
@@ -2179,9 +2185,10 @@ func (s) TestStreamFailure_BodyPhase_Deny(t *testing.T) {
 	}
 }
 
-// TestFlowControl verifies that if the processor server is blocked and cannot
-// receive, backpressure propagates: the client's Send call blocks, and receiving
-// from the dataplane server also blocks.
+// TestFlowControl tests the scenario where the processor server is blocked and
+// cannot receive. Verifies that backpressure correctly propagates across the
+// filter: the client's Send call blocks, and receiving from the dataplane
+// server also blocks.
 func (s) TestFlowControl(t *testing.T) {
 	origParse := extproc.ParseGRPCServiceConfig
 	origCreate := extproc.CreateExtProcChannel
@@ -2382,10 +2389,12 @@ func (s) TestFlowControl(t *testing.T) {
 	}
 }
 
-// / TestFlowControl_Draining_NoMessageLoss verifies that when a processor server sends
-// RequestDrain: true, subsequent client SendMsg and RecvMsg calls correctly deliver
-// all in-flight and bypassed payloads directly over the data plane without message loss.
-func (s) TestFlowControl_Draining_NoMessageLoss(t *testing.T) {
+// TestDrainingFlowControlNoMessageLoss tests the scenario where a processor
+// server sends RequestDrain: true during active flow control backpressure.
+// Verifies that subsequent client SendMsg and RecvMsg calls correctly deliver
+// all in-flight and bypassed payloads directly over the data plane without
+// message loss.
+func (s) TestDrainingFlowControlNoMessageLoss(t *testing.T) {
 	origParse := extproc.ParseGRPCServiceConfig
 	origCreate := extproc.CreateExtProcChannel
 	extproc.ParseGRPCServiceConfig = parseGRPCServiceConfigForTesting
@@ -2586,9 +2595,11 @@ func (s) TestFlowControl_Draining_NoMessageLoss(t *testing.T) {
 	}
 }
 
-// TestClientTrailer verifies that calling Trailer() prematurely returns nil,
-// and calling it after the stream has finished correctly triggers processor
-// trailer mutation and returns the mutated trailers.
+// TestClientTrailer tests the scenario where client stream trailers are
+// inspected both early and post-stream. Verifies that calling Trailer()
+// prematurely returns nil, and calling it after the stream has finished
+// correctly triggers processor trailer mutation and returns the final mutated
+// metadata.
 func (s) TestClientTrailer(t *testing.T) {
 	origParse := extproc.ParseGRPCServiceConfig
 	origCreate := extproc.CreateExtProcChannel
@@ -2821,11 +2832,11 @@ func (s) TestClientTrailer(t *testing.T) {
 	}
 }
 
-// TestImmediateResponse_Trailers verifies that when immediate response is
-// received in response to a trailers event, it correctly sets the status and
-// merges the headers specified in the ImmediateResponse into the trailers of
-// the stream.
-func (s) TestImmediateResponse_Trailers(t *testing.T) {
+// TestImmediateResponseTrailers tests the scenario where an immediate response
+// is received during the trailers event phase. Verifies that the filter
+// correctly sets the terminal status and merges any specified mutation headers
+// into the stream trailers.
+func (s) TestImmediateResponseTrailers(t *testing.T) {
 	origParse := extproc.ParseGRPCServiceConfig
 	origCreate := extproc.CreateExtProcChannel
 	extproc.ParseGRPCServiceConfig = parseGRPCServiceConfigForTesting
@@ -3019,10 +3030,11 @@ func (s) TestImmediateResponse_Trailers(t *testing.T) {
 	}
 }
 
-// TestStreamFailure_GrpcMessageCompressed_Deny verifies that when the ExtProc server
-// returns GrpcMessageCompressed: true and failureModeAllow is false (default),
-// the stream is cancelled and subsequent data plane RPC calls fail with Internal.
-func (s) TestStreamFailure_GrpcMessageCompressed_Deny(t *testing.T) {
+// TestStreamFailureGrpcMessageCompressedDeny tests the scenario where the
+// external processor server returns GrpcMessageCompressed: true while
+// failure_mode_allow is false. Verifies that the stream is cancelled and
+// subsequent data plane RPC calls fail with Internal.
+func (s) TestStreamFailureGrpcMessageCompressedDeny(t *testing.T) {
 	origParse := extproc.ParseGRPCServiceConfig
 	origCreate := extproc.CreateExtProcChannel
 	extproc.ParseGRPCServiceConfig = parseGRPCServiceConfigForTesting
@@ -3169,10 +3181,11 @@ func (s) TestStreamFailure_GrpcMessageCompressed_Deny(t *testing.T) {
 	}
 }
 
-// TestStreamFailure_GrpcMessageCompressed_Allow verifies that when the ExtProc server
-// returns GrpcMessageCompressed: true and failureModeAllow is true, the error is
-// bypassed and subsequent data plane RPC messages succeed without loss.
-func (s) TestStreamFailure_GrpcMessageCompressed_Allow(t *testing.T) {
+// TestStreamFailureGrpcMessageCompressedAllow tests the scenario where the
+// external processor server returns GrpcMessageCompressed: true while
+// failure_mode_allow is true. Verifies that the error is bypassed and
+// subsequent data plane RPC messages succeed without loss.
+func (s) TestStreamFailureGrpcMessageCompressedAllow(t *testing.T) {
 	origParse := extproc.ParseGRPCServiceConfig
 	origCreate := extproc.CreateExtProcChannel
 	extproc.ParseGRPCServiceConfig = parseGRPCServiceConfigForTesting
@@ -3336,9 +3349,10 @@ func (s) TestStreamFailure_GrpcMessageCompressed_Allow(t *testing.T) {
 	}
 }
 
-// TestRequestAttributes verifies that when request_attributes are configured on
-// the filter, all requested attribute fields are correctly constructed and
-// transmitted in the processing request to the external processor.
+// TestRequestAttributes tests the scenario where request_attributes are
+// configured on the filter. Verifies that all requested attribute fields are
+// correctly constructed and transmitted within the processing request sent to
+// the external processor.
 func (s) TestRequestAttributes(t *testing.T) {
 	origParse := extproc.ParseGRPCServiceConfig
 	origCreate := extproc.CreateExtProcChannel
