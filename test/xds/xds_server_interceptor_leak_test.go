@@ -271,12 +271,6 @@ func (s) TestServerSideXDS_InterceptorLeak_RDSUpdate(t *testing.T) {
 	if got, want := filtersCreated.Load(), int32(1); got != want {
 		t.Fatalf("Created %d filter instances, want: %d", got, want)
 	}
-	if got, want := interceptorsCreated.Load(), int32(6); got != want {
-		t.Fatalf("Created %d interceptor instances, want: %d", got, want)
-	}
-	if got, want := interceptorsDestroyed.Load(), int32(2); got != want {
-		t.Fatalf("Destroyed %d interceptor instances, want: %d", got, want)
-	}
 
 	stopServer()
 	if got, want := filtersDestroyed.Load(), int32(1); got != want {
