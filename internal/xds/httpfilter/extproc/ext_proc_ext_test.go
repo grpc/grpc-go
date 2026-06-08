@@ -232,6 +232,7 @@ func (s) TestAllSendUnary(t *testing.T) {
 		extproc.ParseGRPCServiceConfig = origParse
 		extproc.CreateExtProcChannel = origCreate
 	}()
+
 	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
 	extproc.RegisterForTesting()
 	defer extproc.UnregisterForTesting()
@@ -371,6 +372,7 @@ func (s) TestStreamingModifications(t *testing.T) {
 		extproc.ParseGRPCServiceConfig = origParse
 		extproc.CreateExtProcChannel = origCreate
 	}()
+
 	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
 	extproc.RegisterForTesting()
 	defer extproc.UnregisterForTesting()
