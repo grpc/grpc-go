@@ -25,12 +25,12 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/internal/envconfig"
-	"google.golang.org/grpc/internal/grpcservice"
 	"google.golang.org/grpc/internal/optional"
 	"google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/internal/xds/httpfilter"
 	"google.golang.org/grpc/internal/xds/matcher"
+	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 
@@ -51,10 +51,10 @@ var (
 	// protobuf package.
 	_ = v3procservicepb.ProcessingRequest{}
 
-	parseGRPCServiceConfig = func(gs *v3corepb.GrpcService) (grpcservice.Config, error) {
+	parseGRPCServiceConfig = func(gs *v3corepb.GrpcService) (xdsresource.GRPCServiceConfig, error) {
 		cfg, err := bootstrap.GetConfiguration()
 		if err != nil {
-			return grpcservice.Config{}, fmt.Errorf("extproc: failed to get bootstrap config: %v", err)
+			return xdsresource.GRPCServiceConfig{}, fmt.Errorf("extproc: failed to get bootstrap config: %v", err)
 		}
 		trusted := false
 		var allowed map[string]*bootstrap.AllowedGrpcService
@@ -67,9 +67,9 @@ var (
 			}
 			allowed = cfg.AllowedGrpcServices()
 		}
-		return grpcservice.Convert(gs, trusted, allowed)
+		return xdsresource.ParseGRPCServiceConfig(gs, trusted, allowed)
 	}
-	createExtProcChannel = func(grpcservice.Config) (grpc.ClientConnInterface, func() error, error) {
+	createExtProcChannel = func(xdsresource.GRPCServiceConfig) (grpc.ClientConnInterface, func() error, error) {
 		return nil, nil, fmt.Errorf("dialing external processing server not implemented")
 	}
 )
@@ -180,7 +180,7 @@ func (builder) ParseFilterConfigOverride(ov proto.Message) (httpfilter.FilterCon
 		processingModesOpt = optional.New(processingModesFromProto(pm))
 	}
 
-	var serverOpt optional.Optional[grpcservice.Config]
+	var serverOpt optional.Optional[xdsresource.GRPCServiceConfig]
 	if override.GetGrpcService() != nil {
 		server, err := parseGRPCServiceConfig(override.GetGrpcService())
 		if err != nil {

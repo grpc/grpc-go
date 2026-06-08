@@ -16,7 +16,7 @@
  *
  */
 
-package grpcservice
+package xdsresource
 
 import (
 	"encoding/json"
@@ -35,23 +35,41 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
-// Convert converts GrpcService proto to a comparable Config.
-func Convert(gs *v3corepb.GrpcService, trusted bool, allowed map[string]*bootstrap.AllowedGrpcService) (Config, error) {
+// GRPCServiceConfig represents the parsed and resolved GrpcService configuration.
+type GRPCServiceConfig struct {
+	TargetURI          string
+	ChannelCredentials bootstrap.ChannelCreds
+	CallCredentials    string // JSON-serialized sorted list of bootstrap.CallCredsConfig
+	Timeout            time.Duration
+	InitialMetadata    string // JSON-serialized sorted key-value pairs representing headers
+}
+
+// Equal reports whether c and other are considered equal.
+func (c GRPCServiceConfig) Equal(other GRPCServiceConfig) bool {
+	return c.TargetURI == other.TargetURI &&
+		c.ChannelCredentials.Equal(other.ChannelCredentials) &&
+		c.CallCredentials == other.CallCredentials &&
+		c.Timeout == other.Timeout &&
+		c.InitialMetadata == other.InitialMetadata
+}
+
+// ParseGRPCServiceConfig converts a GrpcService proto message into a GRPCServiceConfig.
+func ParseGRPCServiceConfig(gs *v3corepb.GrpcService, trusted bool, allowed map[string]*bootstrap.AllowedGrpcService) (GRPCServiceConfig, error) {
 	if gs.GetGoogleGrpc() == nil {
-		return Config{}, fmt.Errorf("grpcservice: only google_grpc GrpcService config is supported")
+		return GRPCServiceConfig{}, fmt.Errorf("xdsresource: only google_grpc GrpcService config is supported")
 	}
 	google := gs.GetGoogleGrpc()
 
 	targetURI := google.GetTargetUri()
 	if targetURI == "" {
-		return Config{}, fmt.Errorf("grpcservice: target_uri must be non-empty")
+		return GRPCServiceConfig{}, fmt.Errorf("xdsresource: target_uri must be non-empty")
 	}
 	// Validate scheme
 	var scheme string
 	if strings.Contains(targetURI, "://") {
 		u, err := url.Parse(targetURI)
 		if err != nil {
-			return Config{}, fmt.Errorf("grpcservice: target_uri %q is invalid: %v", targetURI, err)
+			return GRPCServiceConfig{}, fmt.Errorf("xdsresource: target_uri %q is invalid: %v", targetURI, err)
 		}
 		scheme = u.Scheme
 	}
@@ -59,33 +77,25 @@ func Convert(gs *v3corepb.GrpcService, trusted bool, allowed map[string]*bootstr
 		scheme = "passthrough"
 	}
 	if resolver.Get(scheme) == nil {
-		return Config{}, fmt.Errorf("grpcservice: target_uri %q has unregistered resolver scheme %q", targetURI, scheme)
+		return GRPCServiceConfig{}, fmt.Errorf("xdsresource: target_uri %q has unregistered resolver scheme %q", targetURI, scheme)
 	}
 
-	var channelCreds ChannelCreds
+	var channelCreds bootstrap.ChannelCreds
 	var callCreds string
 
 	if !trusted {
 		allowedSvc, ok := allowed[targetURI]
 		if !ok {
-			return Config{}, fmt.Errorf("grpcservice: target_uri %q is not whitelisted in allowed_grpc_services", targetURI)
+			return GRPCServiceConfig{}, fmt.Errorf("xdsresource: target_uri %q is not whitelisted in allowed_grpc_services", targetURI)
 		}
-		channelCreds = ChannelCreds{
-			Type:   allowedSvc.SelectedChannelCreds().Type,
-			Config: string(allowedSvc.SelectedChannelCreds().Config),
-		}
-		var comps []CallCreds
-		for _, cc := range allowedSvc.CallCredsConfigs() {
-			comps = append(comps, CallCreds{
-				Type:   cc.Type,
-				Config: string(cc.Config),
-			})
-		}
+		channelCreds = allowedSvc.SelectedChannelCreds()
+
+		comps := append([]bootstrap.CallCredsConfig(nil), allowedSvc.CallCredsConfigs()...)
 		sort.Slice(comps, func(i, j int) bool {
 			if comps[i].Type != comps[j].Type {
 				return comps[i].Type < comps[j].Type
 			}
-			return comps[i].Config < comps[j].Config
+			return string(comps[i].Config) < string(comps[j].Config)
 		})
 		data, _ := json.Marshal(comps)
 		callCreds = string(data)
@@ -94,12 +104,12 @@ func Convert(gs *v3corepb.GrpcService, trusted bool, allowed map[string]*bootstr
 		var err error
 		channelCreds, err = extractChannelCredentials(google.GetChannelCredentialsPlugin())
 		if err != nil {
-			return Config{}, fmt.Errorf("grpcservice: failed to extract channel credentials: %v", err)
+			return GRPCServiceConfig{}, fmt.Errorf("xdsresource: failed to extract channel credentials: %v", err)
 		}
 
 		callCreds, err = extractCallCredentials(google.GetCallCredentialsPlugin())
 		if err != nil {
-			return Config{}, fmt.Errorf("grpcservice: failed to extract call credentials: %v", err)
+			return GRPCServiceConfig{}, fmt.Errorf("xdsresource: failed to extract call credentials: %v", err)
 		}
 	}
 
@@ -108,7 +118,7 @@ func Convert(gs *v3corepb.GrpcService, trusted bool, allowed map[string]*bootstr
 	if gs.GetTimeout() != nil {
 		t := gs.GetTimeout()
 		if t.GetSeconds() < 0 || t.GetNanos() < 0 || t.GetNanos() >= 1e9 || (t.GetSeconds() == 0 && t.GetNanos() == 0) {
-			return Config{}, fmt.Errorf("grpcservice: timeout must be strictly positive and obey duration limits")
+			return GRPCServiceConfig{}, fmt.Errorf("xdsresource: timeout must be strictly positive and obey duration limits")
 		}
 		timeout = time.Duration(t.GetSeconds())*time.Second + time.Duration(t.GetNanos())*time.Nanosecond
 	}
@@ -117,13 +127,18 @@ func Convert(gs *v3corepb.GrpcService, trusted bool, allowed map[string]*bootstr
 	var headers []headerValueOption
 	for _, h := range gs.GetInitialMetadata() {
 		key := h.GetKey()
-		val := h.GetValue()
+		var val string
+		if len(h.GetRawValue()) > 0 {
+			val = string(h.GetRawValue())
+		} else {
+			val = h.GetValue()
+		}
 
 		if err := validateHeaderKey(key); err != nil {
-			return Config{}, fmt.Errorf("grpcservice: invalid header key %q: %v", key, err)
+			return GRPCServiceConfig{}, fmt.Errorf("xdsresource: invalid header key %q: %v", key, err)
 		}
 		if err := validateHeaderValue(val); err != nil {
-			return Config{}, fmt.Errorf("grpcservice: invalid header value: %v", err)
+			return GRPCServiceConfig{}, fmt.Errorf("xdsresource: invalid header value: %v", err)
 		}
 
 		headers = append(headers, headerValueOption{
@@ -139,7 +154,7 @@ func Convert(gs *v3corepb.GrpcService, trusted bool, allowed map[string]*bootstr
 	})
 	headersJSON, _ := json.Marshal(headers)
 
-	return Config{
+	return GRPCServiceConfig{
 		TargetURI:          targetURI,
 		ChannelCredentials: channelCreds,
 		CallCredentials:    callCreds,
@@ -153,34 +168,34 @@ type headerValueOption struct {
 	Value string
 }
 
-func extractChannelCredentials(plugins []*anypb.Any) (ChannelCreds, error) {
+func extractChannelCredentials(plugins []*anypb.Any) (bootstrap.ChannelCreds, error) {
 	for _, cred := range plugins {
 		switch cred.TypeUrl {
 		case "type.googleapis.com/envoy.extensions.grpc_service.channel_credentials.google_default.v3.GoogleDefaultCredentials":
-			return ChannelCreds{Type: "google_default"}, nil
+			return bootstrap.ChannelCreds{Type: "google_default"}, nil
 		case "type.googleapis.com/envoy.extensions.grpc_service.channel_credentials.insecure.v3.InsecureCredentials":
-			return ChannelCreds{Type: "insecure"}, nil
+			return bootstrap.ChannelCreds{Type: "insecure"}, nil
 		case "type.googleapis.com/envoy.extensions.grpc_service.channel_credentials.xds.v3.XdsCredentials":
 			var xdsConfig xdspb.XdsCredentials
 			if err := anypb.UnmarshalTo(cred, &xdsConfig, proto.UnmarshalOptions{}); err != nil {
-				return ChannelCreds{}, fmt.Errorf("failed to unmarshal XdsCredentials: %v", err)
+				return bootstrap.ChannelCreds{}, fmt.Errorf("failed to unmarshal XdsCredentials: %v", err)
 			}
 			fallback := xdsConfig.GetFallbackCredentials()
 			if fallback == nil {
-				return ChannelCreds{}, fmt.Errorf("xds credentials missing fallback credentials")
+				return bootstrap.ChannelCreds{}, fmt.Errorf("xds credentials missing fallback credentials")
 			}
 			return extractChannelCredentials([]*anypb.Any{fallback})
 		case "type.googleapis.com/envoy.extensions.grpc_service.channel_credentials.tls.v3.TlsCredentials":
-			return ChannelCreds{}, fmt.Errorf("tls credentials not supported")
+			return bootstrap.ChannelCreds{}, fmt.Errorf("tls credentials not supported")
 		case "type.googleapis.com/envoy.extensions.grpc_service.channel_credentials.local.v3.LocalCredentials":
-			return ChannelCreds{}, fmt.Errorf("local credentials not supported")
+			return bootstrap.ChannelCreds{}, fmt.Errorf("local credentials not supported")
 		}
 	}
-	return ChannelCreds{}, fmt.Errorf("no supported channel credentials found in plugins")
+	return bootstrap.ChannelCreds{}, fmt.Errorf("no supported channel credentials found in plugins")
 }
 
 func extractCallCredentials(plugins []*anypb.Any) (string, error) {
-	var comps []CallCreds
+	var comps []bootstrap.CallCredsConfig
 	for _, cred := range plugins {
 		if cred.TypeUrl == "type.googleapis.com/envoy.extensions.grpc_service.call_credentials.access_token.v3.AccessTokenCredentials" {
 			var accessToken access_tokenpb.AccessTokenCredentials
@@ -191,9 +206,9 @@ func extractCallCredentials(plugins []*anypb.Any) (string, error) {
 				return "", fmt.Errorf("access token must be non-empty")
 			}
 			cfgJSON, _ := json.Marshal(map[string]string{"token": accessToken.GetToken()})
-			comps = append(comps, CallCreds{
+			comps = append(comps, bootstrap.CallCredsConfig{
 				Type:   "access_token",
-				Config: string(cfgJSON),
+				Config: json.RawMessage(cfgJSON),
 			})
 		}
 	}
@@ -201,7 +216,7 @@ func extractCallCredentials(plugins []*anypb.Any) (string, error) {
 		if comps[i].Type != comps[j].Type {
 			return comps[i].Type < comps[j].Type
 		}
-		return comps[i].Config < comps[j].Config
+		return string(comps[i].Config) < string(comps[j].Config)
 	})
 	data, err := json.Marshal(comps)
 	if err != nil {
@@ -217,8 +232,10 @@ func validateHeaderKey(key string) error {
 	if len(key) > 16384 {
 		return fmt.Errorf("header key exceeds maximum allowed length of 16384")
 	}
-	if strings.ToLower(key) != key {
-		return fmt.Errorf("header key %q must be lowercase", key)
+	for _, ch := range key {
+		if !((ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '-' || ch == '_' || ch == '.') {
+			return fmt.Errorf("header key %q contains invalid character %q", key, ch)
+		}
 	}
 	if key == "host" {
 		return fmt.Errorf("header key cannot be \"host\"")

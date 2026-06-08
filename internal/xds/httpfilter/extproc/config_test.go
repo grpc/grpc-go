@@ -28,11 +28,12 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/internal/grpcservice"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/optional"
+	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/internal/xds/httpfilter"
 	"google.golang.org/grpc/internal/xds/matcher"
+	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/anypb"
@@ -55,15 +56,15 @@ func Test(t *testing.T) {
 const testBaseURI = "base-uri"
 
 // testParseGRPCServiceConfig is a helper function that parses a GrpcService
-// proto message into a Config.
-func testParseGRPCServiceConfig(grpcService *corepb.GrpcService) (grpcservice.Config, error) {
+// proto message into a GRPCServiceConfig.
+func testParseGRPCServiceConfig(grpcService *corepb.GrpcService) (xdsresource.GRPCServiceConfig, error) {
 	if grpcService.GetGoogleGrpc() == nil {
-		return grpcservice.Config{}, fmt.Errorf("only google_grpc grpc_service is supported")
+		return xdsresource.GRPCServiceConfig{}, fmt.Errorf("only google_grpc grpc_service is supported")
 	}
 	if grpcService.GetGoogleGrpc().GetTargetUri() == "" {
-		return grpcservice.Config{}, fmt.Errorf("targetURI must be a non-empty string")
+		return xdsresource.GRPCServiceConfig{}, fmt.Errorf("targetURI must be a non-empty string")
 	}
-	return grpcservice.Config{
+	return xdsresource.GRPCServiceConfig{
 		TargetURI: grpcService.GetGoogleGrpc().GetTargetUri(),
 	}, nil
 }
@@ -72,10 +73,10 @@ var cmpOpts = []cmp.Option{
 	cmp.AllowUnexported(
 		baseConfig{},
 		overrideConfig{},
-		grpcservice.Config{},
+		xdsresource.GRPCServiceConfig{},
 		processingModes{},
 		httpfilter.HeaderMutationRules{},
-		optional.Optional[grpcservice.Config]{},
+		optional.Optional[xdsresource.GRPCServiceConfig]{},
 		optional.Optional[processingModes]{},
 		optional.Optional[bool]{},
 	),
@@ -117,9 +118,9 @@ func (s) TestParseFilterConfig_Success(t *testing.T) {
 				return m
 			}(),
 			wantCfg: baseConfig{
-				server: grpcservice.Config{
+				server: xdsresource.GRPCServiceConfig{
 					TargetURI:          "localhost:1234",
-					ChannelCredentials: grpcservice.ChannelCreds{},
+					ChannelCredentials: bootstrap.ChannelCreds{},
 				},
 				processingModes: processingModes{
 					requestHeaderMode:   modeSend,
@@ -151,9 +152,9 @@ func (s) TestParseFilterConfig_Success(t *testing.T) {
 				return m
 			}(),
 			wantCfg: baseConfig{
-				server: grpcservice.Config{
+				server: xdsresource.GRPCServiceConfig{
 					TargetURI:          "localhost:1234",
-					ChannelCredentials: grpcservice.ChannelCreds{},
+					ChannelCredentials: bootstrap.ChannelCreds{},
 				},
 				processingModes: processingModes{
 					requestHeaderMode:   modeSend,
@@ -186,9 +187,9 @@ func (s) TestParseFilterConfig_Success(t *testing.T) {
 				return m
 			}(),
 			wantCfg: baseConfig{
-				server: grpcservice.Config{
+				server: xdsresource.GRPCServiceConfig{
 					TargetURI:          "localhost:1234",
-					ChannelCredentials: grpcservice.ChannelCreds{},
+					ChannelCredentials: bootstrap.ChannelCreds{},
 				},
 				processingModes: processingModes{
 					requestHeaderMode:   modeSend,
@@ -517,7 +518,7 @@ func (s) TestParseFilterConfigOverride_Errors(t *testing.T) {
 
 func (s) TestBuildClientInterceptor_Success(t *testing.T) {
 	origCreateExtProcChannel := createExtProcChannel
-	createExtProcChannel = func(cfg grpcservice.Config) (grpc.ClientConnInterface, func() error, error) {
+	createExtProcChannel = func(cfg xdsresource.GRPCServiceConfig) (grpc.ClientConnInterface, func() error, error) {
 		conn, _ := grpc.NewClient(cfg.TargetURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		return conn, conn.Close, nil
 	}
@@ -545,9 +546,9 @@ func (s) TestBuildClientInterceptor_Success(t *testing.T) {
 					requestBodyMode:     modeSend,
 					responseBodyMode:    modeSkip,
 				},
-				server: grpcservice.Config{
+				server: xdsresource.GRPCServiceConfig{
 					TargetURI:          testBaseURI,
-					ChannelCredentials: grpcservice.ChannelCreds{Type: "test-channel-creds"},
+					ChannelCredentials: bootstrap.ChannelCreds{Type: "test-channel-creds"},
 					CallCredentials:    "test-call-creds",
 					InitialMetadata:    `[{"key":"key1","value":"value1"}]`,
 					Timeout:            5 * time.Second,
@@ -580,9 +581,9 @@ func (s) TestBuildClientInterceptor_Success(t *testing.T) {
 					requestBodyMode:     modeSend,
 					responseBodyMode:    modeSkip,
 				},
-				server: grpcservice.Config{
+				server: xdsresource.GRPCServiceConfig{
 					TargetURI:          testBaseURI,
-					ChannelCredentials: grpcservice.ChannelCreds{Type: "test-channel-creds"},
+					ChannelCredentials: bootstrap.ChannelCreds{Type: "test-channel-creds"},
 					CallCredentials:    "test-call-creds",
 					InitialMetadata:    `[{"key":"key1","value":"value1"}]`,
 					Timeout:            5 * time.Second,
@@ -605,7 +606,7 @@ func (s) TestBuildClientInterceptor_Success(t *testing.T) {
 					requestBodyMode:     modeSend,
 					responseBodyMode:    modeSkip,
 				},
-				server: grpcservice.Config{
+				server: xdsresource.GRPCServiceConfig{
 					TargetURI:       testBaseURI,
 					Timeout:         time.Second,
 					InitialMetadata: `[{"key":"key1","value":"value1"}]`,
@@ -631,7 +632,7 @@ func (s) TestBuildClientInterceptor_Success(t *testing.T) {
 					requestBodyMode:     modeSkip,
 					responseBodyMode:    modeSend,
 				}),
-				server: optional.New(grpcservice.Config{
+				server: optional.New(xdsresource.GRPCServiceConfig{
 					TargetURI: "override-uri",
 				}),
 			},
@@ -655,7 +656,7 @@ func (s) TestBuildClientInterceptor_Success(t *testing.T) {
 					requestBodyMode:     modeSkip,
 					responseBodyMode:    modeSend,
 				},
-				server: grpcservice.Config{
+				server: xdsresource.GRPCServiceConfig{
 					TargetURI: "override-uri",
 				},
 				allowedHeaders:    []matcher.StringMatcher{matcher.NewExactStringMatcher("allow-header", false)},
@@ -678,7 +679,7 @@ func (s) TestBuildClientInterceptor_Success(t *testing.T) {
 					requestBodyMode:     modeSend,
 					responseBodyMode:    modeSkip,
 				},
-				server: grpcservice.Config{
+				server: xdsresource.GRPCServiceConfig{
 					TargetURI:       testBaseURI,
 					Timeout:         time.Second,
 					InitialMetadata: `[{"key":"key1","value":"value1"}]`,
@@ -715,7 +716,7 @@ func (s) TestBuildClientInterceptor_Success(t *testing.T) {
 					requestBodyMode:     modeSend,
 					responseBodyMode:    modeSkip,
 				},
-				server: grpcservice.Config{
+				server: xdsresource.GRPCServiceConfig{
 					TargetURI:       testBaseURI,
 					Timeout:         time.Second,
 					InitialMetadata: `[{"key":"key1","value":"value1"}]`,
@@ -746,7 +747,7 @@ func (s) TestBuildClientInterceptor_Success(t *testing.T) {
 
 func (s) TestBuildClientInterceptor_Failure(t *testing.T) {
 	origCreateExtProcChannel := createExtProcChannel
-	createExtProcChannel = func(cfg grpcservice.Config) (grpc.ClientConnInterface, func() error, error) {
+	createExtProcChannel = func(cfg xdsresource.GRPCServiceConfig) (grpc.ClientConnInterface, func() error, error) {
 		if cfg.TargetURI == "error-uri" {
 			return nil, nil, fmt.Errorf("dial error")
 		}
@@ -787,7 +788,7 @@ func (s) TestBuildClientInterceptor_Failure(t *testing.T) {
 		{
 			name: "ChannelCreationFailure",
 			cfg: baseConfig{
-				server: grpcservice.Config{
+				server: xdsresource.GRPCServiceConfig{
 					TargetURI: "error-uri",
 				},
 			},
@@ -796,12 +797,12 @@ func (s) TestBuildClientInterceptor_Failure(t *testing.T) {
 		{
 			name: "ChannelCreationFailureInOverride",
 			cfg: baseConfig{
-				server: grpcservice.Config{
+				server: xdsresource.GRPCServiceConfig{
 					TargetURI: testBaseURI,
 				},
 			},
 			override: overrideConfig{
-				server: optional.New(grpcservice.Config{
+				server: optional.New(xdsresource.GRPCServiceConfig{
 					TargetURI: "error-uri",
 				}),
 			},

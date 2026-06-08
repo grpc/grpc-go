@@ -35,9 +35,6 @@ import (
 	"google.golang.org/grpc/internal/xds/clients/xdsclient"
 	"google.golang.org/grpc/internal/xds/clients/xdsclient/metrics"
 	xdsbootstrap "google.golang.org/grpc/xds/bootstrap"
-
-	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
-	"google.golang.org/grpc/internal/grpcservice"
 )
 
 const (
@@ -169,11 +166,6 @@ func newClientImpl(config *bootstrap.Config, metricsRecorder estats.MetricsRecor
 // Callers must treat the return value as read-only.
 func (c *clientImpl) BootstrapConfig() *bootstrap.Config {
 	return c.bootstrapConfig
-}
-
-// ConvertGrpcService converts GrpcService proto to Config.
-func (c *clientImpl) ConvertGrpcService(grpcService *v3corepb.GrpcService, serverConfig *bootstrap.ServerConfig) (grpcservice.Config, error) {
-	return grpcservice.Convert(grpcService, serverConfig.ServerFeaturesTrustedXDSServer(), c.bootstrapConfig.AllowedGrpcServices())
 }
 
 func (c *clientImpl) incrRef() int32 {

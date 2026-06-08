@@ -103,428 +103,168 @@ func buildLDSWithExtProcessor(t *testing.T, targetURI string, channelPlugin *any
 	}
 }
 
-// TestUnmarshalListener_TrustedXdsServer verifies that an LDS resource
-// containing a GrpcService config is successfully parsed and ACKed when the
-// bootstrap config marks the xDS server as trusted.
+type unmarshalTestOptions struct {
+	trusted       bool
+	allowedJSON   json.RawMessage
+	targetURI     string
+	channelPlugin *anypb.Any
+	timeout       *durationpb.Duration
+	expectNACK    bool
+}
+
+func runUnmarshalTest(t *testing.T, opts unmarshalTestOptions) {
+	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
+
+	event := grpcsync.NewEvent()
+	var finalErr error
+
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
+		AllowResourceSubset: true,
+		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
+			if req.GetTypeUrl() == "type.googleapis.com/envoy.config.listener.v3.Listener" {
+				if errDetail := req.GetErrorDetail(); errDetail != nil {
+					finalErr = fmt.Errorf("LDS NACKed with error: %s", errDetail.GetMessage())
+					if opts.expectNACK {
+						event.Fire()
+					}
+				} else if req.GetVersionInfo() != "" {
+					if !opts.expectNACK {
+						event.Fire()
+					}
+				}
+			}
+			return nil
+		},
+	})
+	nodeID := uuid.New().String()
+
+	var serversStr string
+	if opts.trusted {
+		serversStr = fmt.Sprintf(`[{
+			"server_uri": "passthrough:///%s",
+			"channel_creds": [{"type": "insecure"}],
+			"server_features": ["trusted_xds_server"]
+		}]`, mgmtServer.Address)
+	} else {
+		serversStr = fmt.Sprintf(`[{
+			"server_uri": "passthrough:///%s",
+			"channel_creds": [{"type": "insecure"}]
+		}]`, mgmtServer.Address)
+	}
+
+	bootstrapContents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
+		Servers:             json.RawMessage(serversStr),
+		Node:                json.RawMessage(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
+		AllowedGrpcServices: opts.allowedJSON,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create bootstrap: %v", err)
+	}
+	envconfig.XDSBootstrapFileContent = string(bootstrapContents)
+	t.Cleanup(func() { envconfig.XDSBootstrapFileContent = "" })
+
+	r, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bootstrapContents)
+	if err != nil {
+		t.Fatalf("Failed to create xDS resolver: %v", err)
+	}
+
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		DialTarget: "my-service-client-side-xds",
+		NodeID:     nodeID,
+		Host:       "localhost",
+		Port:       1234,
+		SecLevel:   e2e.SecurityLevelNone,
+	})
+	resources.Listeners = []*v3listenerpb.Listener{
+		buildLDSWithExtProcessor(t, opts.targetURI, opts.channelPlugin, opts.timeout),
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatalf("mgmtServer.Update failed: %v", err)
+	}
+
+	cc, err := grpc.NewClient("xds:///my-service-client-side-xds", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
+	if err != nil {
+		t.Fatalf("grpc.NewClient failed: %v", err)
+	}
+	defer cc.Close()
+
+	cc.Connect()
+
+	select {
+	case <-event.Done():
+		if opts.expectNACK && finalErr == nil {
+			t.Fatal("LDS resource ACKed, want NACK")
+		}
+		if !opts.expectNACK && finalErr != nil {
+			t.Fatalf("LDS resource NACKed: %v", finalErr)
+		}
+	case <-ctx.Done():
+		if opts.expectNACK {
+			t.Fatal("Timeout waiting for LDS resource NACK")
+		} else {
+			t.Fatal("Timeout waiting for LDS resource ACK")
+		}
+	}
+}
+
 func (s) TestUnmarshalListener_TrustedXdsServer(t *testing.T) {
-	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
-
-	// Start management server with LDS stream monitoring.
-	ackEvent := grpcsync.NewEvent()
-	var nackErr error
-	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
-		AllowResourceSubset: true,
-		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
-			if req.GetTypeUrl() == "type.googleapis.com/envoy.config.listener.v3.Listener" {
-				if errDetail := req.GetErrorDetail(); errDetail != nil {
-					nackErr = fmt.Errorf("LDS NACKed with error: %s", errDetail.GetMessage())
-				} else if req.GetVersionInfo() != "" {
-					ackEvent.Fire()
-				}
-			}
-			return nil
-		},
-	})
-	nodeID := uuid.New().String()
-
-	// Generate bootstrap with trusted_xds_server = true.
-	bootstrapContents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
-		Servers: json.RawMessage(fmt.Sprintf(`[{
-			"server_uri": "passthrough:///%s",
-			"channel_creds": [{"type": "insecure"}],
-			"server_features": ["trusted_xds_server"]
-		}]`, mgmtServer.Address)),
-		Node: json.RawMessage(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
-	})
-	if err != nil {
-		t.Fatalf("Failed to create bootstrap: %v", err)
-	}
-	envconfig.XDSBootstrapFileContent = string(bootstrapContents)
-	t.Cleanup(func() { envconfig.XDSBootstrapFileContent = "" })
-
-	// Create custom xDS resolver with our custom bootstrap.
-	r, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bootstrapContents)
-	if err != nil {
-		t.Fatalf("Failed to create xDS resolver: %v", err)
-	}
-
 	insecurePlugin := testutils.MarshalAny(t, &v3insecurepb.InsecureCredentials{})
-	resources := e2e.DefaultClientResources(e2e.ResourceParams{
-		DialTarget: "my-service-client-side-xds",
-		NodeID:     nodeID,
-		Host:       "localhost",
-		Port:       1234,
-		SecLevel:   e2e.SecurityLevelNone,
+	runUnmarshalTest(t, unmarshalTestOptions{
+		trusted:       true,
+		targetURI:     "dns:///trusted-ext-proc:443",
+		channelPlugin: insecurePlugin,
 	})
-	resources.Listeners = []*v3listenerpb.Listener{
-		buildLDSWithExtProcessor(t, "dns:///trusted-ext-proc:443", insecurePlugin, nil),
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-
-	if err := mgmtServer.Update(ctx, resources); err != nil {
-		t.Fatalf("mgmtServer.Update failed: %v", err)
-	}
-
-	// Create client connection to trigger LDS update.
-	cc, err := grpc.NewClient("xds:///my-service-client-side-xds", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
-	if err != nil {
-		t.Fatalf("grpc.NewClient failed: %v", err)
-	}
-	defer cc.Close()
-
-	// Trigger resource resolution by calling Connect.
-	cc.Connect()
-
-	select {
-	case <-ackEvent.Done():
-		if nackErr != nil {
-			t.Fatalf("LDS resource NACKed: %v", nackErr)
-		}
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for LDS resource ACK")
-	}
 }
 
-// TestUnmarshalListener_UntrustedServer_Blocked verifies that an LDS resource
-// containing a GrpcService config is NACKed when the server is untrusted and
-// the target URI is not whitelisted in allowed_grpc_services bootstrap config.
 func (s) TestUnmarshalListener_UntrustedServer_Blocked(t *testing.T) {
-	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
-
-	// Start management server with LDS stream monitoring.
-	nackEvent := grpcsync.NewEvent()
-	var nackErr error
-	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
-		AllowResourceSubset: true,
-		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
-			if req.GetTypeUrl() == "type.googleapis.com/envoy.config.listener.v3.Listener" {
-				if errDetail := req.GetErrorDetail(); errDetail != nil {
-					nackErr = fmt.Errorf("LDS NACKed with error: %s", errDetail.GetMessage())
-					nackEvent.Fire()
-				}
-			}
-			return nil
-		},
-	})
-	nodeID := uuid.New().String()
-
-	// Generate bootstrap with trusted_xds_server = false (no features)
-	// and empty allowed list.
-	bootstrapContents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
-		Servers: json.RawMessage(fmt.Sprintf(`[{
-			"server_uri": "passthrough:///%s",
-			"channel_creds": [{"type": "insecure"}]
-		}]`, mgmtServer.Address)),
-		Node: json.RawMessage(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
-	})
-	if err != nil {
-		t.Fatalf("Failed to create bootstrap: %v", err)
-	}
-	envconfig.XDSBootstrapFileContent = string(bootstrapContents)
-	t.Cleanup(func() { envconfig.XDSBootstrapFileContent = "" })
-
-	r, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bootstrapContents)
-	if err != nil {
-		t.Fatalf("Failed to create xDS resolver: %v", err)
-	}
-
 	insecurePlugin := testutils.MarshalAny(t, &v3insecurepb.InsecureCredentials{})
-	resources := e2e.DefaultClientResources(e2e.ResourceParams{
-		DialTarget: "my-service-client-side-xds",
-		NodeID:     nodeID,
-		Host:       "localhost",
-		Port:       1234,
-		SecLevel:   e2e.SecurityLevelNone,
+	runUnmarshalTest(t, unmarshalTestOptions{
+		expectNACK:    true,
+		targetURI:     "dns:///malicious-ext-proc:443",
+		channelPlugin: insecurePlugin,
 	})
-	resources.Listeners = []*v3listenerpb.Listener{
-		buildLDSWithExtProcessor(t, "dns:///malicious-ext-proc:443", insecurePlugin, nil),
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-
-	if err := mgmtServer.Update(ctx, resources); err != nil {
-		t.Fatalf("mgmtServer.Update failed: %v", err)
-	}
-
-	// Create ClientConn to trigger LDS discovery.
-	cc, err := grpc.NewClient("xds:///my-service-client-side-xds", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
-	if err != nil {
-		t.Fatalf("grpc.NewClient failed: %v", err)
-	}
-	defer cc.Close()
-
-	cc.Connect()
-
-	select {
-	case <-nackEvent.Done():
-		// Expected NACK.
-		t.Logf("Received expected NACK: %v", nackErr)
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for LDS resource NACK")
-	}
 }
 
-// TestUnmarshalListener_UntrustedServer_Whitelisted verifies that an LDS
-// resource containing a GrpcService config is successfully parsed and ACKed
-// when the server is untrusted but the target URI is whitelisted in
-// allowed_grpc_services bootstrap config.
 func (s) TestUnmarshalListener_UntrustedServer_Whitelisted(t *testing.T) {
-	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
-
-	// Start management server with LDS stream monitoring.
-	ackEvent := grpcsync.NewEvent()
-	var nackErr error
-	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
-		AllowResourceSubset: true,
-		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
-			if req.GetTypeUrl() == "type.googleapis.com/envoy.config.listener.v3.Listener" {
-				if errDetail := req.GetErrorDetail(); errDetail != nil {
-					nackErr = fmt.Errorf("LDS NACKed with error: %s", errDetail.GetMessage())
-				} else if req.GetVersionInfo() != "" {
-					ackEvent.Fire()
-				}
-			}
-			return nil
-		},
-	})
-	nodeID := uuid.New().String()
-
-	// Whitelist target URI in bootstrap config.
-	allowedJSON := json.RawMessage(`{
-		"dns:///whitelisted-ext-proc:443": {
-			"channel_creds": [{"type": "insecure"}]
-		}
-	}`)
-
-	bootstrapContents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
-		Servers: json.RawMessage(fmt.Sprintf(`[{
-			"server_uri": "passthrough:///%s",
-			"channel_creds": [{"type": "insecure"}]
-		}]`, mgmtServer.Address)),
-		Node:                json.RawMessage(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
-		AllowedGrpcServices: allowedJSON,
-	})
-	if err != nil {
-		t.Fatalf("Failed to create bootstrap: %v", err)
-	}
-	envconfig.XDSBootstrapFileContent = string(bootstrapContents)
-	t.Cleanup(func() { envconfig.XDSBootstrapFileContent = "" })
-
-	r, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bootstrapContents)
-	if err != nil {
-		t.Fatalf("Failed to create xDS resolver: %v", err)
-	}
-
 	insecurePlugin := testutils.MarshalAny(t, &v3insecurepb.InsecureCredentials{})
-	resources := e2e.DefaultClientResources(e2e.ResourceParams{
-		DialTarget: "my-service-client-side-xds",
-		NodeID:     nodeID,
-		Host:       "localhost",
-		Port:       1234,
-		SecLevel:   e2e.SecurityLevelNone,
+	runUnmarshalTest(t, unmarshalTestOptions{
+		allowedJSON: json.RawMessage(`{
+			"dns:///whitelisted-ext-proc:443": {
+				"channel_creds": [{"type": "insecure"}]
+			}
+		}`),
+		targetURI:     "dns:///whitelisted-ext-proc:443",
+		channelPlugin: insecurePlugin,
 	})
-	resources.Listeners = []*v3listenerpb.Listener{
-		buildLDSWithExtProcessor(t, "dns:///whitelisted-ext-proc:443", insecurePlugin, nil),
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-
-	if err := mgmtServer.Update(ctx, resources); err != nil {
-		t.Fatalf("mgmtServer.Update failed: %v", err)
-	}
-
-	cc, err := grpc.NewClient("xds:///my-service-client-side-xds", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
-	if err != nil {
-		t.Fatalf("grpc.NewClient failed: %v", err)
-	}
-	defer cc.Close()
-
-	cc.Connect()
-
-	select {
-	case <-ackEvent.Done():
-		if nackErr != nil {
-			t.Fatalf("LDS resource NACKed: %v", nackErr)
-		}
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for LDS resource ACK")
-	}
 }
 
-// TestUnmarshalListener_UntrustedServer_Whitelisted_InvalidProto verifies that
-// an LDS resource is NACKed even if the target URI is whitelisted, if other
-// parts of the GrpcService configuration (such as an invalid timeout
-// duration) fail validation.
 func (s) TestUnmarshalListener_UntrustedServer_Whitelisted_InvalidProto(t *testing.T) {
-	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
-
-	// Start management server with LDS stream monitoring.
-	nackEvent := grpcsync.NewEvent()
-	var nackErr error
-	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
-		AllowResourceSubset: true,
-		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
-			if req.GetTypeUrl() == "type.googleapis.com/envoy.config.listener.v3.Listener" {
-				if errDetail := req.GetErrorDetail(); errDetail != nil {
-					nackErr = fmt.Errorf("LDS NACKed with error: %s", errDetail.GetMessage())
-					nackEvent.Fire()
-				}
-			}
-			return nil
-		},
-	})
-	nodeID := uuid.New().String()
-
-	// Whitelist target URI.
-	allowedJSON := json.RawMessage(`{
-		"dns:///whitelisted-ext-proc:443": {
-			"channel_creds": [{"type": "insecure"}]
-		}
-	}`)
-
-	bootstrapContents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
-		Servers: json.RawMessage(fmt.Sprintf(`[{
-			"server_uri": "passthrough:///%s",
-			"channel_creds": [{"type": "insecure"}]
-		}]`, mgmtServer.Address)),
-		Node:                json.RawMessage(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
-		AllowedGrpcServices: allowedJSON,
-	})
-	if err != nil {
-		t.Fatalf("Failed to create bootstrap: %v", err)
-	}
-	envconfig.XDSBootstrapFileContent = string(bootstrapContents)
-	t.Cleanup(func() { envconfig.XDSBootstrapFileContent = "" })
-
-	r, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bootstrapContents)
-	if err != nil {
-		t.Fatalf("Failed to create xDS resolver: %v", err)
-	}
-
 	insecurePlugin := testutils.MarshalAny(t, &v3insecurepb.InsecureCredentials{})
-	resources := e2e.DefaultClientResources(e2e.ResourceParams{
-		DialTarget: "my-service-client-side-xds",
-		NodeID:     nodeID,
-		Host:       "localhost",
-		Port:       1234,
-		SecLevel:   e2e.SecurityLevelNone,
+	runUnmarshalTest(t, unmarshalTestOptions{
+		expectNACK: true,
+		allowedJSON: json.RawMessage(`{
+			"dns:///whitelisted-ext-proc:443": {
+				"channel_creds": [{"type": "insecure"}]
+			}
+		}`),
+		targetURI:     "dns:///whitelisted-ext-proc:443",
+		channelPlugin: insecurePlugin,
+		timeout:       &durationpb.Duration{Seconds: -10, Nanos: -5},
 	})
-	// Configure LDS with whitelisted target, but setting negative/invalid
-	// timeout duration (NACK).
-	invalidTimeout := &durationpb.Duration{Seconds: -10, Nanos: -5}
-	resources.Listeners = []*v3listenerpb.Listener{
-		buildLDSWithExtProcessor(t, "dns:///whitelisted-ext-proc:443", insecurePlugin, invalidTimeout),
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-
-	if err := mgmtServer.Update(ctx, resources); err != nil {
-		t.Fatalf("mgmtServer.Update failed: %v", err)
-	}
-
-	cc, err := grpc.NewClient("xds:///my-service-client-side-xds", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
-	if err != nil {
-		t.Fatalf("grpc.NewClient failed: %v", err)
-	}
-	defer cc.Close()
-
-	cc.Connect()
-
-	select {
-	case <-nackEvent.Done():
-		// Expected NACK.
-		t.Logf("Received expected NACK: %v", nackErr)
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for LDS resource NACK")
-	}
 }
 
-// TestUnmarshalListener_XdsCredentialsFallback verifies that a GrpcService
-// configured with XdsCredentials successfully extracts and parses its fallback
-// credentials plugin.
 func (s) TestUnmarshalListener_XdsCredentialsFallback(t *testing.T) {
-	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
-
-	// Start management server with LDS stream monitoring.
-	ackEvent := grpcsync.NewEvent()
-	var nackErr error
-	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
-		AllowResourceSubset: true,
-		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
-			if req.GetTypeUrl() == "type.googleapis.com/envoy.config.listener.v3.Listener" {
-				if errDetail := req.GetErrorDetail(); errDetail != nil {
-					nackErr = fmt.Errorf("LDS NACKed with error: %s", errDetail.GetMessage())
-				} else if req.GetVersionInfo() != "" {
-					ackEvent.Fire()
-				}
-			}
-			return nil
-		},
-	})
-	nodeID := uuid.New().String()
-
-	bootstrapContents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
-		Servers: json.RawMessage(fmt.Sprintf(`[{
-			"server_uri": "passthrough:///%s",
-			"channel_creds": [{"type": "insecure"}],
-			"server_features": ["trusted_xds_server"]
-		}]`, mgmtServer.Address)),
-		Node: json.RawMessage(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
-	})
-	if err != nil {
-		t.Fatalf("Failed to create bootstrap: %v", err)
-	}
-	envconfig.XDSBootstrapFileContent = string(bootstrapContents)
-	t.Cleanup(func() { envconfig.XDSBootstrapFileContent = "" })
-
-	r, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bootstrapContents)
-	if err != nil {
-		t.Fatalf("Failed to create xDS resolver: %v", err)
-	}
-
-	// Construct XdsCredentials with Insecure fallback.
 	xdsCreds := &v3xdspb.XdsCredentials{
 		FallbackCredentials: testutils.MarshalAny(t, &v3insecurepb.InsecureCredentials{}),
 	}
 	xdsPlugin := testutils.MarshalAny(t, xdsCreds)
-
-	resources := e2e.DefaultClientResources(e2e.ResourceParams{
-		DialTarget: "my-service-client-side-xds",
-		NodeID:     nodeID,
-		Host:       "localhost",
-		Port:       1234,
-		SecLevel:   e2e.SecurityLevelNone,
+	runUnmarshalTest(t, unmarshalTestOptions{
+		trusted:       true,
+		targetURI:     "dns:///trusted-ext-proc:443",
+		channelPlugin: xdsPlugin,
 	})
-	resources.Listeners = []*v3listenerpb.Listener{
-		buildLDSWithExtProcessor(t, "dns:///trusted-ext-proc:443", xdsPlugin, nil),
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-
-	if err := mgmtServer.Update(ctx, resources); err != nil {
-		t.Fatalf("mgmtServer.Update failed: %v", err)
-	}
-
-	cc, err := grpc.NewClient("xds:///my-service-client-side-xds", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
-	if err != nil {
-		t.Fatalf("grpc.NewClient failed: %v", err)
-	}
-	defer cc.Close()
-
-	cc.Connect()
-
-	select {
-	case <-ackEvent.Done():
-		if nackErr != nil {
-			t.Fatalf("LDS resource NACKed: %v", nackErr)
-		}
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for LDS resource ACK")
-	}
 }

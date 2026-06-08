@@ -16,26 +16,16 @@
  *
  */
 
-package grpcservice
+package httpfilter
 
 import (
 	"fmt"
-	"regexp"
 	"strings"
 
 	v3mutationpb "github.com/envoyproxy/go-control-plane/envoy/config/common/mutation_rules/v3"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	"google.golang.org/grpc/metadata"
 )
-
-// HeaderMutationRules specifies the rules for what modifications an external
-// processing server may make to headers sent on the data plane RPC.
-type HeaderMutationRules struct {
-	AllowExpr       *regexp.Regexp
-	DisallowExpr    *regexp.Regexp
-	DisallowAll     bool
-	DisallowIsError bool
-}
 
 // HeaderMutator compiles and applies mutations on gRPC metadata.
 type HeaderMutator struct {
@@ -49,26 +39,10 @@ func NewHeaderMutator(rules HeaderMutationRules) *HeaderMutator {
 
 // NewHeaderMutatorFromProto compiles a HeaderMutator from the proto message.
 func NewHeaderMutatorFromProto(mr *v3mutationpb.HeaderMutationRules) (*HeaderMutator, error) {
-	var rules HeaderMutationRules
-	if mr == nil {
-		return &HeaderMutator{rules: rules}, nil
+	rules, err := HeaderMutationRulesFromProto(mr)
+	if err != nil {
+		return nil, err
 	}
-	if allowExpr := mr.GetAllowExpression(); allowExpr != nil {
-		re, err := regexp.Compile(allowExpr.GetRegex())
-		if err != nil {
-			return nil, fmt.Errorf("grpcservice: %v", err)
-		}
-		rules.AllowExpr = re
-	}
-	if disallowExpr := mr.GetDisallowExpression(); disallowExpr != nil {
-		re, err := regexp.Compile(disallowExpr.GetRegex())
-		if err != nil {
-			return nil, fmt.Errorf("grpcservice: %v", err)
-		}
-		rules.DisallowExpr = re
-	}
-	rules.DisallowAll = mr.GetDisallowAll().GetValue()
-	rules.DisallowIsError = mr.GetDisallowIsError().GetValue()
 	return &HeaderMutator{rules: rules}, nil
 }
 
@@ -84,7 +58,7 @@ func (m *HeaderMutator) isMutationAllowed(key string) (bool, error) {
 
 	if m.rules.DisallowAll {
 		if m.rules.DisallowIsError {
-			return false, fmt.Errorf("grpcservice: all header mutations are disallowed by mutation rules")
+			return false, fmt.Errorf("httpfilter: all header mutations are disallowed by mutation rules")
 		}
 		return false, nil
 	}
@@ -92,7 +66,7 @@ func (m *HeaderMutator) isMutationAllowed(key string) (bool, error) {
 	// DisallowExpr has higher priority and overrides AllowExpr.
 	if m.rules.DisallowExpr != nil && m.rules.DisallowExpr.MatchString(key) {
 		if m.rules.DisallowIsError {
-			return false, fmt.Errorf("grpcservice: header mutation for key %q is disallowed by mutation rules", key)
+			return false, fmt.Errorf("httpfilter: header mutation for key %q is disallowed by mutation rules", key)
 		}
 		return false, nil
 	}
@@ -100,7 +74,7 @@ func (m *HeaderMutator) isMutationAllowed(key string) (bool, error) {
 	if m.rules.AllowExpr != nil {
 		if !m.rules.AllowExpr.MatchString(key) {
 			if m.rules.DisallowIsError {
-				return false, fmt.Errorf("grpcservice: header mutation for key %q is not allowed by mutation rules", key)
+				return false, fmt.Errorf("httpfilter: header mutation for key %q is not allowed by mutation rules", key)
 			}
 			return false, nil
 		}
