@@ -120,7 +120,7 @@ func (ccs CallCredsConfigs) String() string {
 	return strings.Join(creds, ",")
 }
 
-// AllowedGrpcService contains the credentials config for an allowed gRPC service.
+// AllowedGrpcService contains credentials config for an allowed gRPC service.
 type AllowedGrpcService struct {
 	channelCreds         []ChannelCreds
 	callCredsConfigs     []CallCredsConfig
@@ -145,12 +145,12 @@ func (a *AllowedGrpcService) SelectedChannelCreds() ChannelCreds {
 	return a.selectedChannelCreds
 }
 
-// DialOptions returns dial options built from these credentials (e.g. WithCredentialsBundle).
+// DialOptions returns dial options built from these credentials.
 func (a *AllowedGrpcService) DialOptions() []grpc.DialOption {
 	return a.dialOptions
 }
 
-// Cleanups returns cleanups to be run when this allowed service is no longer needed.
+// Cleanups returns cleanups to run when the service is no longer needed.
 func (a *AllowedGrpcService) Cleanups() []func() {
 	return a.cleanups
 }
@@ -175,7 +175,7 @@ type allowedGrpcServiceJSON struct {
 	CallCredsConfigs []CallCredsConfig `json:"call_creds,omitempty"`
 }
 
-// UnmarshalJSON parses the allowed gRPC service JSON and validates its credentials.
+// UnmarshalJSON parses the JSON data and validates its credentials.
 func (a *AllowedGrpcService) UnmarshalJSON(data []byte) error {
 	var jsonS allowedGrpcServiceJSON
 	if err := json.Unmarshal(data, &jsonS); err != nil {
@@ -579,7 +579,7 @@ type Config struct {
 	allowedGrpcServices map[string]*AllowedGrpcService
 }
 
-// AllowedGrpcServices returns the whitelist of allowed gRPC services keyed by target name.
+// AllowedGrpcServices returns the whitelist of allowed gRPC services.
 // Callers must not modify the returned map.
 func (c *Config) AllowedGrpcServices() map[string]*AllowedGrpcService {
 	return c.allowedGrpcServices

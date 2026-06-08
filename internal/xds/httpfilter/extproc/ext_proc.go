@@ -45,7 +45,7 @@ func init() {
 	}
 }
 
-// Register registers the ExternalProcessor HTTP filter builder with the registry.
+// Register registers the ExternalProcessor HTTP filter builder.
 func Register() {
 	httpfilter.Register(builder{})
 }

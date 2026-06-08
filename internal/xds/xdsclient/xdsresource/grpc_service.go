@@ -35,13 +35,15 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
-// GRPCServiceConfig represents the parsed and resolved GrpcService configuration.
+// GRPCServiceConfig represents the parsed GrpcService configuration.
 type GRPCServiceConfig struct {
 	TargetURI          string
 	ChannelCredentials bootstrap.ChannelCreds
-	CallCredentials    string // JSON-serialized sorted list of bootstrap.CallCredsConfig
-	Timeout            time.Duration
-	InitialMetadata    string // JSON-serialized sorted key-value pairs representing headers
+	// CallCredentials is a JSON-serialized list of call creds configs.
+	CallCredentials string
+	Timeout         time.Duration
+	// InitialMetadata is a JSON-serialized list of metadata headers.
+	InitialMetadata string
 }
 
 // Equal reports whether c and other are considered equal.
@@ -53,7 +55,19 @@ func (c GRPCServiceConfig) Equal(other GRPCServiceConfig) bool {
 		c.InitialMetadata == other.InitialMetadata
 }
 
-// ParseGRPCServiceConfig converts a GrpcService proto message into a GRPCServiceConfig.
+// InitialMetadataOptions returns the parsed key-value pairs of metadata.
+func (c GRPCServiceConfig) InitialMetadataOptions() ([]HeaderValueOption, error) {
+	if c.InitialMetadata == "" {
+		return nil, nil
+	}
+	var headers []HeaderValueOption
+	if err := json.Unmarshal([]byte(c.InitialMetadata), &headers); err != nil {
+		return nil, fmt.Errorf("xdsresource: failed to unmarshal initial metadata: %v", err)
+	}
+	return headers, nil
+}
+
+// ParseGRPCServiceConfig parses a GrpcService proto into GRPCServiceConfig.
 func ParseGRPCServiceConfig(gs *v3corepb.GrpcService, trusted bool, allowed map[string]*bootstrap.AllowedGrpcService) (GRPCServiceConfig, error) {
 	if gs.GetGoogleGrpc() == nil {
 		return GRPCServiceConfig{}, fmt.Errorf("xdsresource: only google_grpc GrpcService config is supported")
@@ -64,7 +78,6 @@ func ParseGRPCServiceConfig(gs *v3corepb.GrpcService, trusted bool, allowed map[
 	if targetURI == "" {
 		return GRPCServiceConfig{}, fmt.Errorf("xdsresource: target_uri must be non-empty")
 	}
-	// Validate scheme
 	var scheme string
 	if strings.Contains(targetURI, "://") {
 		u, err := url.Parse(targetURI)
@@ -100,7 +113,6 @@ func ParseGRPCServiceConfig(gs *v3corepb.GrpcService, trusted bool, allowed map[
 		data, _ := json.Marshal(comps)
 		callCreds = string(data)
 	} else {
-		// Extract credentials from plugins
 		var err error
 		channelCreds, err = extractChannelCredentials(google.GetChannelCredentialsPlugin())
 		if err != nil {
@@ -113,7 +125,6 @@ func ParseGRPCServiceConfig(gs *v3corepb.GrpcService, trusted bool, allowed map[
 		}
 	}
 
-	// Timeout
 	var timeout time.Duration
 	if gs.GetTimeout() != nil {
 		t := gs.GetTimeout()
@@ -123,7 +134,6 @@ func ParseGRPCServiceConfig(gs *v3corepb.GrpcService, trusted bool, allowed map[
 		timeout = time.Duration(t.GetSeconds())*time.Second + time.Duration(t.GetNanos())*time.Nanosecond
 	}
 
-	// Initial Metadata
 	var headers []HeaderValueOption
 	for _, h := range gs.GetInitialMetadata() {
 		key := h.GetKey()

@@ -208,3 +208,51 @@ func TestParseGRPCServiceConfig_InvalidHeaderKeyCharacters(t *testing.T) {
 		t.Fatalf("ParseGRPCServiceConfig() returned error: %v, want error with 'contains invalid character'", err)
 	}
 }
+
+func TestGRPCServiceConfig_InitialMetadataOptions(t *testing.T) {
+	t.Run("empty", func(t *testing.T) {
+		cfg := GRPCServiceConfig{}
+		got, err := cfg.InitialMetadataOptions()
+		if err != nil {
+			t.Fatalf("InitialMetadataOptions() returned error: %v", err)
+		}
+		if len(got) != 0 {
+			t.Fatalf("InitialMetadataOptions() returned got: %v, want empty", got)
+		}
+	})
+
+	t.Run("valid", func(t *testing.T) {
+		cfg := GRPCServiceConfig{
+			InitialMetadata: `[` +
+				`{"Key":"key1","Value":"value1"},` +
+				`{"Key":"key2","Value":"value2"}` +
+				`]`,
+		}
+		got, err := cfg.InitialMetadataOptions()
+		if err != nil {
+			t.Fatalf("InitialMetadataOptions() returned error: %v", err)
+		}
+		want := []HeaderValueOption{
+			{Key: "key1", Value: "value1"},
+			{Key: "key2", Value: "value2"},
+		}
+		if len(got) != len(want) {
+			t.Fatalf("InitialMetadataOptions() returned length got: %d, want: %d", len(got), len(want))
+		}
+		for i := range got {
+			if got[i] != want[i] {
+				t.Errorf("InitialMetadataOptions()[%d] got: %+v, want: %+v", i, got[i], want[i])
+			}
+		}
+	})
+
+	t.Run("invalid_json", func(t *testing.T) {
+		cfg := GRPCServiceConfig{
+			InitialMetadata: `{invalid-json}`,
+		}
+		_, err := cfg.InitialMetadataOptions()
+		if err == nil {
+			t.Fatal("InitialMetadataOptions() returned nil error, want error")
+		}
+	})
+}
