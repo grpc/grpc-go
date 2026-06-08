@@ -1,6 +1,6 @@
 module google.golang.org/grpc/security/advancedtls
 
-go 1.25.8
+go 1.25.0
 
 require (
 	github.com/google/go-cmp v0.7.0
