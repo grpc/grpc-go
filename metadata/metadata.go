@@ -290,12 +290,7 @@ func FromOutgoingContext(ctx context.Context) (MD, bool) {
 		return nil, false
 	}
 
-	mdSize := len(raw.md)
-	for d := raw.added; d != nil; d = d.prev {
-		mdSize += len(d.kv) / 2
-	}
-
-	out := make(MD, mdSize)
+	out := make(MD, len(raw.md))
 	for k, v := range raw.md {
 		// We need to manually convert all keys to lower case, because MD is a
 		// map, and there's no guarantee that the MD attached to the context is
