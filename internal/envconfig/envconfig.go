@@ -59,6 +59,15 @@ var (
 	// unconditionally.
 	XDSEndpointHashKeyBackwardCompat = boolFromEnv("GRPC_XDS_ENDPOINT_HASH_KEY_BACKWARD_COMPAT", false)
 
+	// LabelServerGoroutines controls setting [runtime/pprof.Labels] on the
+	// goroutines spawned by [grpc.Server] type.
+	// For now, this is limited to the goroutines spawned to handle incoming
+	// requests on the server.
+	// Set "GRPC_GO_SERVER_GOROUTINE_LABELS" to "grpc.method=true" to
+	// enable this grpc.method label, or "all" to enable all valid labels.
+	// This variable is a bit-field.
+	LabelServerGoroutines = goroutineLabelsFromEnv("GRPC_GO_SERVER_GOROUTINE_LABELS", 0)
+
 	// RingHashSetRequestHashKey is set if the ring hash balancer can get the
 	// request hash header by setting the "requestHashHeader" field, according
 	// to gRFC A76. It can be disabled by setting the environment variable
@@ -103,26 +112,6 @@ var (
 	// environment variable "GRPC_GO_EXPERIMENTAL_XDS_RESOURCE_PANIC_RECOVERY"
 	// to "false".
 	XDSRecoverPanicInResourceParsing = boolFromEnv("GRPC_GO_EXPERIMENTAL_XDS_RESOURCE_PANIC_RECOVERY", true)
-
-	// DisableStrictPathChecking indicates whether strict path checking is
-	// disabled. This feature can be disabled by setting the environment
-	// variable GRPC_GO_EXPERIMENTAL_DISABLE_STRICT_PATH_CHECKING to "true".
-	//
-	// When strict path checking is enabled, gRPC will reject requests with
-	// paths that do not conform to the gRPC over HTTP/2 specification found at
-	// https://github.com/grpc/grpc/blob/master/doc/PROTOCOL-HTTP2.md.
-	//
-	// When disabled, gRPC will allow paths that do not contain a leading slash.
-	// Enabling strict path checking is recommended for security reasons, as it
-	// prevents potential path traversal vulnerabilities.
-	//
-	// A future release will remove this environment variable, enabling strict
-	// path checking behavior unconditionally.
-	//
-	// See
-	// https://github.com/grpc/grpc-go/security/advisories/GHSA-p77j-4mvh-x3m3
-	// for more details.
-	DisableStrictPathChecking = boolFromEnv("GRPC_GO_EXPERIMENTAL_DISABLE_STRICT_PATH_CHECKING", false)
 
 	// EnablePriorityLBChildPolicyCache controls whether the priority balancer
 	// should cache child balancers that are removed from the LB policy config,
@@ -176,3 +165,52 @@ func uint64FromEnv(envVar string, def, min, max uint64) uint64 {
 	}
 	return v
 }
+
+// GoroutineLabels is a bitfield indicating which goroutine labels are enabled.
+type GoroutineLabels uint16
+
+func goroutineLabelsFromEnv(envVar string, def GoroutineLabels) GoroutineLabels {
+	val := def
+	v := os.Getenv(envVar)
+	if strings.EqualFold(v, "all") {
+		return AllGoroutineLabels
+	} else if strings.EqualFold(v, "none") {
+		return 0
+	}
+	for s := range strings.SplitSeq(v, ",") {
+		s = strings.TrimSpace(s)
+		if len(s) == 0 {
+			continue
+		}
+		pre, post, ok := strings.Cut(s, "=")
+		if !ok {
+			// no equals sign
+			continue
+		}
+		post = strings.TrimSpace(post)
+		pre = strings.TrimSpace(pre)
+		bitDesignator := GoroutineLabels(0)
+		switch {
+		case strings.EqualFold(pre, "grpc.method"):
+			bitDesignator = GoroutineLabelServerMethod
+		default:
+			continue
+		}
+		if strings.EqualFold(post, "true") {
+			val |= bitDesignator
+		} else if strings.EqualFold(post, "false") {
+			val &^= bitDesignator
+		}
+	}
+	return val
+}
+
+const (
+	// GoroutineLabelServerMethod sets the grpc.method label on new
+	// server-side gRPC streams.
+	GoroutineLabelServerMethod GoroutineLabels = 1 << iota
+)
+
+// AllGoroutineLabels is an or'd together bitfield of all valid GoroutineLabels
+// constant values (above).
+const AllGoroutineLabels = GoroutineLabelServerMethod

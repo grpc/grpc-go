@@ -49,8 +49,6 @@ type baseConfig struct {
 	// Attributes to be sent to the external processing server along with the
 	// request and response dataplane events.
 	requestAttributes  []string
-	// Attributes to be sent to the external processing server along with the
-	// request and response dataplane events.
 	responseAttributes []string
 
 	// The following fields can only be set in the base config.
@@ -85,8 +83,6 @@ type baseConfig struct {
 	deferredCloseTimeout time.Duration
 }
 
-func (baseConfig) isFilterConfig() {}
-
 // overrideConfig contains the configuration for the external processing
 // interceptor used for overriding the base config. If a particular field is
 // set, that will be used instead of the base config. The fields are similar to
@@ -99,8 +95,6 @@ type overrideConfig struct {
 	requestAttributes  []string
 	responseAttributes []string
 }
-
-func (overrideConfig) isFilterConfig() {}
 
 // processingMode defines how headers, trailers, and bodies are handled in
 // relation to the external processing server.
@@ -170,10 +164,10 @@ func newInterceptorConfig(base baseConfig, override overrideConfig) baseConfig {
 	ic := base
 
 	// Apply overrides if present.
-	if val, ok := override.server.Get(); ok {
+	if val, ok := override.server.Value(); ok {
 		ic.server = val
 	}
-	if val, ok := override.failureModeAllow.Get(); ok {
+	if val, ok := override.failureModeAllow.Value(); ok {
 		ic.failureModeAllow = val
 	}
 	if override.requestAttributes != nil {
@@ -182,7 +176,7 @@ func newInterceptorConfig(base baseConfig, override overrideConfig) baseConfig {
 	if override.responseAttributes != nil {
 		ic.responseAttributes = override.responseAttributes
 	}
-	if val, ok := override.processingModes.Get(); ok {
+	if val, ok := override.processingModes.Value(); ok {
 		ic.processingModes = val
 	}
 	return ic

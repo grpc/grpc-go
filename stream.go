@@ -148,15 +148,6 @@ type ClientStream interface {
 	RecvMsg(m any) error
 }
 
-// ErrRetriesExhausted is returned when an RPC exceeds its configured maximum
-// number of retry attempts.
-//
-// # Experimental
-//
-// Notice: This type is EXPERIMENTAL and may be changed or removed in a
-// later release.
-var ErrRetriesExhausted = errors.New("max retry attempts exhausted")
-
 // NewStream creates a new Stream for the client side. This is typically
 // called by generated code. ctx is used for the lifetime of the stream.
 //
@@ -759,7 +750,7 @@ func (a *csAttempt) shouldRetry(err error) (bool, error) {
 		return false, err
 	}
 	if cs.numRetries+1 >= rp.MaxAttempts {
-		return false, fmt.Errorf("stopped after %d attempts: %w: %w", cs.numRetries+1, ErrRetriesExhausted, err)
+		return false, fmt.Errorf("max retries exhausted: failed after %d attempts: %w", cs.numRetries+1, err)
 	}
 
 	var dur time.Duration
