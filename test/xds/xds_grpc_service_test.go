@@ -41,13 +41,17 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/internal/xds/bootstrap"
-	_ "google.golang.org/grpc/internal/xds/httpfilter/extproc"
+	"google.golang.org/grpc/internal/xds/httpfilter/extproc"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/durationpb"
 
 	_ "google.golang.org/grpc/xds"
 )
+
+func init() {
+	extproc.Register()
+}
 
 func buildLDSWithExtProcessor(t *testing.T, targetURI string, channelPlugin *anypb.Any, timeout *durationpb.Duration) *v3listenerpb.Listener {
 	t.Helper()

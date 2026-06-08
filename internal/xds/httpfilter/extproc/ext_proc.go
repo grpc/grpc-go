@@ -41,8 +41,13 @@ import (
 
 func init() {
 	if envconfig.XDSClientExtProcEnabled {
-		httpfilter.Register(builder{})
+		Register()
 	}
+}
+
+// Register registers the ExternalProcessor HTTP filter builder with the registry.
+func Register() {
+	httpfilter.Register(builder{})
 }
 
 var (
