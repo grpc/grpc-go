@@ -1796,7 +1796,7 @@ func (s) TestStreamFailureHeaderPhaseDeny(t *testing.T) {
 	}
 	extprocServer := grpc.NewServer()
 	mockProc := &mockProcessorServer{
-		processFunc: func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+		processFunc: func(v3procservicepb.ExternalProcessor_ProcessServer) error {
 			// Fail abruptly on first Recv
 			return status.Error(codes.Unavailable, "abrupt stream failure")
 		},
@@ -2359,7 +2359,7 @@ func (s) TestFlowControl(t *testing.T) {
 	go func() {
 		// Send a large body to fill the HTTP/2 window.
 		largeMsg := &testpb.StreamingOutputCallRequest{
-			Payload: &testpb.Payload{Body: make([]byte, 50000*1024)},
+			Payload: &testpb.Payload{Body: make([]byte, 100000*1024)},
 		}
 		err := stream.Send(largeMsg)
 		sendDone <- err
