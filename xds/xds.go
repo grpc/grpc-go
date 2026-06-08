@@ -41,6 +41,7 @@ import (
 	_ "google.golang.org/grpc/internal/xds/balancer"                          // Register the balancers.
 	_ "google.golang.org/grpc/internal/xds/clusterspecifier/rls"              // Register the RLS cluster specifier plugin. Note that this does not register the RLS LB policy.
 	_ "google.golang.org/grpc/internal/xds/httpfilter/fault"                  // Register the fault injection filter.
+	_ "google.golang.org/grpc/internal/xds/httpfilter/extproc"                // Register the extproc filter.
 	_ "google.golang.org/grpc/internal/xds/httpfilter/rbac"                   // Register the RBAC filter.
 	_ "google.golang.org/grpc/internal/xds/httpfilter/router"                 // Register the router filter.
 	_ "google.golang.org/grpc/internal/xds/resolver"                          // Register the xds_resolver.

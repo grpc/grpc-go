@@ -257,7 +257,7 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		return newClientStreamWithParams(ctx, desc, cc, method, mc, onCommit, done, nameResolutionDelayed, opts...)
 	}
 
-	rpcInfo := iresolver.RPCInfo{Context: ctx, Method: method}
+	rpcInfo := iresolver.RPCInfo{Context: ctx, Method: method, Authority: cc.authority}
 	rpcConfig, err := cc.safeConfigSelector.SelectConfig(rpcInfo)
 	if err != nil {
 		if st, ok := status.FromError(err); ok {
