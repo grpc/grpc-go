@@ -184,6 +184,16 @@ func (a *AllowedGrpcService) UnmarshalJSON(data []byte) error {
 	a.channelCreds = jsonS.ChannelCreds
 	a.callCredsConfigs = jsonS.CallCredsConfigs
 
+	cleanups := []func(){}
+	dialOptions := []grpc.DialOption{}
+	selectedCallCreds := []credentials.PerRPCCredentials{}
+
+	runCleanups := func() {
+		for _, f := range cleanups {
+			f()
+		}
+	}
+
 	var credsDialOption grpc.DialOption
 	for _, cc := range jsonS.ChannelCreds {
 		c := bootstrap.GetChannelCredentials(cc.Type)
@@ -192,21 +202,23 @@ func (a *AllowedGrpcService) UnmarshalJSON(data []byte) error {
 		}
 		bundle, cancel, err := c.Build(cc.Config)
 		if err != nil {
+			runCleanups()
 			return fmt.Errorf("failed to build credentials bundle from bootstrap for allowed grpc service: type %q, err: %v", cc.Type, err)
 		}
 		a.selectedChannelCreds = cc
 		credsDialOption = grpc.WithCredentialsBundle(bundle)
 		if d, ok := bundle.(extraDialOptions); ok {
-			a.dialOptions = append(a.dialOptions, d.DialOptions()...)
+			dialOptions = append(dialOptions, d.DialOptions()...)
 		}
-		a.cleanups = append(a.cleanups, cancel)
+		cleanups = append(cleanups, cancel)
 		break
 	}
 
 	if credsDialOption == nil {
+		runCleanups()
 		return fmt.Errorf("xds: no supported channel credentials found for allowed grpc service in config:\n%s", string(data))
 	}
-	a.dialOptions = append(a.dialOptions, credsDialOption)
+	dialOptions = append(dialOptions, credsDialOption)
 
 	if envconfig.XDSBootstrapCallCredsEnabled {
 		for _, cfg := range jsonS.CallCredsConfigs {
@@ -216,13 +228,18 @@ func (a *AllowedGrpcService) UnmarshalJSON(data []byte) error {
 			}
 			callCreds, cancel, err := c.Build(cfg.Config)
 			if err != nil {
+				runCleanups()
 				return fmt.Errorf("failed to build call credentials from bootstrap for allowed grpc service: type %q, err: %v", cfg.Type, err)
 			}
-			a.selectedCallCreds = append(a.selectedCallCreds, callCreds)
-			a.dialOptions = append(a.dialOptions, grpc.WithPerRPCCredentials(callCreds))
-			a.cleanups = append(a.cleanups, cancel)
+			selectedCallCreds = append(selectedCallCreds, callCreds)
+			dialOptions = append(dialOptions, grpc.WithPerRPCCredentials(callCreds))
+			cleanups = append(cleanups, cancel)
 		}
 	}
+
+	a.dialOptions = dialOptions
+	a.selectedCallCreds = selectedCallCreds
+	a.cleanups = cleanups
 	return nil
 }
 

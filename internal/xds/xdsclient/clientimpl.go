@@ -178,6 +178,9 @@ func (c *clientImpl) CreateChannel(targetURI string, creds bootstrap.ChannelCred
 
 	// Check if allowed/whitelisted in bootstrap allowed_grpc_services config.
 	if allowedSvc, ok := c.bootstrapConfig.AllowedGrpcServices()[targetURI]; ok {
+		if allowedSvc == nil {
+			return nil, nil, fmt.Errorf("xdsclient: allowed gRPC service %q has nil configuration", targetURI)
+		}
 		dialOpts = append(dialOpts, allowedSvc.DialOptions()...)
 	} else {
 		// Use credentials from xds config directly.

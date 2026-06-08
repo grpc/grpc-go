@@ -101,6 +101,9 @@ func ParseGRPCServiceConfig(gs *v3corepb.GrpcService, trusted bool, allowed map[
 		if !ok {
 			return GRPCServiceConfig{}, fmt.Errorf("xdsresource: target_uri %q is not whitelisted in allowed_grpc_services", targetURI)
 		}
+		if allowedSvc == nil {
+			return GRPCServiceConfig{}, fmt.Errorf("xdsresource: allowed gRPC service %q has nil configuration", targetURI)
+		}
 		channelCreds = allowedSvc.SelectedChannelCreds()
 
 		comps := append([]bootstrap.CallCredsConfig(nil), allowedSvc.CallCredsConfigs()...)
@@ -181,6 +184,9 @@ type HeaderValueOption struct {
 
 func extractChannelCredentials(plugins []*anypb.Any) (bootstrap.ChannelCreds, error) {
 	for _, cred := range plugins {
+		if cred == nil {
+			continue
+		}
 		switch cred.TypeUrl {
 		case "type.googleapis.com/envoy.extensions.grpc_service.channel_credentials.google_default.v3.GoogleDefaultCredentials":
 			return bootstrap.ChannelCreds{Type: "google_default"}, nil
@@ -208,6 +214,9 @@ func extractChannelCredentials(plugins []*anypb.Any) (bootstrap.ChannelCreds, er
 func extractCallCredentials(plugins []*anypb.Any) (string, error) {
 	var comps []bootstrap.CallCredsConfig
 	for _, cred := range plugins {
+		if cred == nil {
+			continue
+		}
 		if cred.TypeUrl == "type.googleapis.com/envoy.extensions.grpc_service.call_credentials.access_token.v3.AccessTokenCredentials" {
 			var accessToken access_tokenpb.AccessTokenCredentials
 			if err := anypb.UnmarshalTo(cred, &accessToken, proto.UnmarshalOptions{}); err != nil {
