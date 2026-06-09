@@ -73,24 +73,15 @@ type stubTokenProvider struct {
 	mu        sync.Mutex
 	err       error
 	token     *auth.Token
-	delay     time.Duration // Simulates processing delays for testing purposes.
-	callCount int           // tracks fetch attempts to verify caching and backoff behaviors.
+	callCount int // tracks fetch attempts to verify caching and backoff behaviors.
 }
 
-func (c *stubTokenProvider) Token(ctx context.Context) (*auth.Token, error) {
+func (c *stubTokenProvider) Token(context.Context) (*auth.Token, error) {
 	c.mu.Lock()
 	c.callCount++
-	delay := c.delay
 	token := c.token
 	err := c.err
 	c.mu.Unlock()
-
-	select {
-	case <-time.After(delay):
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	}
-
 	return token, err
 }
 
@@ -104,12 +95,6 @@ func (c *stubTokenProvider) setToken(token *auth.Token) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.token = token
-}
-
-func (c *stubTokenProvider) setDelay(delay time.Duration) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.delay = delay
 }
 
 func (c *stubTokenProvider) getCallCount() int {
@@ -127,7 +112,6 @@ func setupStubTokenProvider(token string, err error) *stubTokenProvider {
 			Value:  token,
 			Expiry: time.Now().Add(1 * time.Hour), // idtoken package works with hardcoded 1 hour token expiry.
 		},
-		delay: time.Duration(0),
 	}
 }
 
@@ -334,7 +318,6 @@ func (s) TestGCPServiceAccountIdentityCallCreds_BackoffExpiredRecovery(t *testin
 // receive the same valid token.
 func (s) TestGCPServiceAccountIdentityCallCreds_ConcurrentCalls_Success(t *testing.T) {
 	stubToken := setupStubTokenProvider("token", nil)
-	stubToken.setDelay(100 * time.Millisecond)
 	creds := setupTestGCPServiceAccountIdentityCreds(t, stubToken)
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -372,7 +355,6 @@ func (s) TestGCPServiceAccountIdentityCallCreds_ConcurrentCalls_Success(t *testi
 func (s) TestGCPServiceAccountIdentityCallCreds_ConcurrentCalls_Failure(t *testing.T) {
 	const wantErr = "failed while fetching idToken"
 	stubToken := setupStubTokenProvider("token", errors.New(wantErr))
-	stubToken.setDelay(100 * time.Millisecond)
 	creds := setupTestGCPServiceAccountIdentityCreds(t, stubToken)
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -434,7 +416,13 @@ func (s) TestGCPServiceAccountIdentityCallCreds_EarlyExpiry(t *testing.T) {
 		secondToken = "token-B"
 	)
 	stubToken := setupStubTokenProvider(firstToken, nil)
-	stubToken.setToken(&auth.Token{Value: firstToken, Expiry: time.Now().Add(30 * time.Second)})
+	stubToken.setToken(
+		&auth.Token{
+			Value: firstToken,
+			// Keeping it 1 minute as we subtract 30 seconds from the token expiry.
+			Expiry: time.Now().Add(1 * time.Minute),
+		},
+	)
 	creds := setupTestGCPServiceAccountIdentityCreds(t, stubToken)
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -458,10 +446,11 @@ func (s) TestGCPServiceAccountIdentityCallCreds_EarlyExpiry(t *testing.T) {
 
 	// Update stub token provider to return a new token
 	stubToken.setToken(&auth.Token{Value: secondToken, Expiry: time.Now().Add(1 * time.Hour)})
-	stubToken.setDelay(100 * time.Millisecond)
 
-	// The cached token has not expired yet, so we get the first token to
-	// avoid blocking the RPC while the background refresh is in flight.
+	// The cached token has not expired yet but is stale (the current time is
+	// past the preemptiveTokenRefresh window). GetRequestMetadata should
+	// immediately return the cached first token to avoid blocking the RPC, and
+	// asynchronously trigger a background fetch for the new token.
 	md, err = creds.GetRequestMetadata(ctx)
 	if err != nil {
 		t.Fatalf("GetRequestMetadata() failed: %v", err)
@@ -470,7 +459,6 @@ func (s) TestGCPServiceAccountIdentityCallCreds_EarlyExpiry(t *testing.T) {
 		t.Errorf("GetRequestMetadata() returned %q, want %q", got, wantfirstToken)
 	}
 
-	stubToken.setDelay(time.Duration(0))
 	wantSecondToken := "Bearer " + secondToken
 
 	for ; ctx.Err() == nil; <-time.After(10 * time.Millisecond) {
