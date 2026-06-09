@@ -51,7 +51,7 @@ import (
 	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
 )
 
-// enableXDSHTTPConnect temporarily enables support for xDS HTTP CONNECT
+// enableXDSHTTPConnect temporarily enables support for XDS HTTP CONNECT
 // for the duration of the test. It sets the env variable to true and
 // registers the proxy address metadata converter.
 func enableXDSHTTPConnect(t *testing.T) {
@@ -67,19 +67,19 @@ func splitHostPort(t *testing.T, addr string) (string, int) {
 	t.Helper()
 	host, portStr, err := net.SplitHostPort(addr)
 	if err != nil {
-		t.Fatalf("failed to split host and port for address %q: %v", addr, err)
+		t.Fatalf("Failed to split host and port for address %q: %v", addr, err)
 	}
 	port, err := strconv.Atoi(portStr)
 	if err != nil {
-		t.Fatalf("failed to parse port %q: %v", portStr, err)
+		t.Fatalf("Failed to parse port %q: %v", portStr, err)
 	}
 	return host, port
 }
 
 // Test veifies client-side HTTP CONNECT proxying support where the proxy
 // address is configured via endpoint metadata. It verifies that gRPC requests
-// are successfully routed through the HTTP CONNECT proxy to the correct backend
-// server.
+// are successfully routed through the HTTP CONNECT proxy to the correct
+// backend server.
 func (s) TestClientSideXDSHTTPConnect(t *testing.T) {
 	enableXDSHTTPConnect(t)
 
@@ -91,7 +91,7 @@ func (s) TestClientSideXDSHTTPConnect(t *testing.T) {
 
 	proxyHost, proxyPort := splitHostPort(t, pServer.Addr)
 
-	// Spin up an xDS management server.
+	// Spin up an XDS management server.
 	mgmtServer, nodeID, _, xdsResolver := setup.ManagementServerAndResolver(t)
 	server := stubserver.StartTestService(t, nil)
 	defer server.Stop()
@@ -175,7 +175,7 @@ func (s) TestClientSideXDSHTTPConnect(t *testing.T) {
 	// Create a gRPC client using the xDS resolver.
 	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsResolver))
 	if err != nil {
-		t.Fatalf("failed to create a gRPC client: %v", err)
+		t.Fatalf("Failed to create a gRPC client: %v", err)
 	}
 	defer cc.Close()
 
@@ -184,14 +184,15 @@ func (s) TestClientSideXDSHTTPConnect(t *testing.T) {
 		t.Fatalf("EmptyCall() failed: %v", err)
 	}
 
-	// Verify that the request was routed through the proxy to the expected backend.
+	// Verify that the request was routed through the proxy to the expected
+	// backend.
 	select {
 	case gotTarget := <-connectCh:
 		if gotTarget != server.Address {
-			t.Errorf("unexpected server address from proxy server, want %s, got %s", server.Address, gotTarget)
+			t.Errorf("Unexpected server address from proxy server, got %s want %s", gotTarget, server.Address)
 		}
 	case <-time.After(defaultTestTimeout):
-		t.Fatal("timeout while waiting for server address from proxy server")
+		t.Fatal("Timeout while waiting for server address from proxy server")
 	}
 }
 
@@ -210,7 +211,7 @@ func (s) TestClientSideXDSHTTPConnect_LocalityFallback(t *testing.T) {
 
 	proxyHost, proxyPort := splitHostPort(t, pServer.Addr)
 
-	// Spin up an xDS management server.
+	// Spin up an XDS management server.
 	managementServer, nodeID, _, xdsResolver := setup.ManagementServerAndResolver(t)
 	server := stubserver.StartTestService(t, nil)
 	defer server.Stop()
@@ -292,10 +293,10 @@ func (s) TestClientSideXDSHTTPConnect_LocalityFallback(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create a gRPC client using the xDS resolver.
+	// Create a gRPC client using the XDS resolver.
 	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsResolver))
 	if err != nil {
-		t.Fatalf("failed to create a gRPC client: %v", err)
+		t.Fatalf("Failed to create a gRPC client: %v", err)
 	}
 	defer cc.Close()
 
@@ -304,23 +305,24 @@ func (s) TestClientSideXDSHTTPConnect_LocalityFallback(t *testing.T) {
 		t.Fatalf("EmptyCall() failed: %v", err)
 	}
 
-	// Verify that the request was routed through the proxy to the expected backend.
+	// Verify that the request was routed through the proxy to the expected
+	// backend.
 	select {
 	case gotTarget := <-connectCh:
 		if gotTarget != server.Address {
-			t.Errorf("unexpected server address from proxy server, want %s, got %s", server.Address, gotTarget)
+			t.Errorf("Unexpected server address from proxy server, got %s want %s", gotTarget, server.Address)
 		}
 	case <-time.After(defaultTestTimeout):
-		t.Fatal("timeout while waiting for server address from proxy server")
+		t.Fatal("Timeout while waiting for server address from proxy server")
 	}
 }
 
 // Test verifies client-side HTTP CONNECT proxying support when the client
-// uses xDS credentials. It verifies that when a plaintext Http11Proxy wrapper
-// is present in CDS, the xDS client successfully falls back to insecure
+// uses XDS credentials. It verifies that when a plaintext Http11Proxy wrapper
+// is present in CDS, the XDS client successfully falls back to insecure
 // credentials and establishes a proxy CONNECT tunnel to the correct backend
 // server without security handshaking.
-func (s) TestClientSideXDSHTTPConnect_WithInsecureXdsCredentials(t *testing.T) {
+func (s) TestClientSideXDSHTTPConnect_WithInsecureXDSCredentials(t *testing.T) {
 	enableXDSHTTPConnect(t)
 
 	// Spin up a mock HTTP CONNECT proxy server to capture client connections.
@@ -331,7 +333,7 @@ func (s) TestClientSideXDSHTTPConnect_WithInsecureXdsCredentials(t *testing.T) {
 
 	proxyHost, proxyPort := splitHostPort(t, pServer.Addr)
 
-	// Spin up an xDS management server.
+	// Spin up an XDS management server.
 	mgmtServer, nodeID, _, xdsResolver := setup.ManagementServerAndResolver(t)
 	server := stubserver.StartTestService(t, nil)
 	defer server.Stop()
@@ -412,14 +414,14 @@ func (s) TestClientSideXDSHTTPConnect_WithInsecureXdsCredentials(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create a gRPC client using the xDS resolver.
+	// Create a gRPC client using the XDS resolver.
 	creds, err := xdscreds.NewClientCredentials(xdscreds.ClientOptions{FallbackCreds: insecure.NewCredentials()})
 	if err != nil {
-		t.Fatalf("failed to create client xDS credentials: %v", err)
+		t.Fatalf("Failed to create client XDS credentials: %v", err)
 	}
 	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(creds), grpc.WithResolvers(xdsResolver))
 	if err != nil {
-		t.Fatalf("failed to create a gRPC client: %v", err)
+		t.Fatalf("Failed to create a gRPC client: %v", err)
 	}
 	defer cc.Close()
 
@@ -428,14 +430,15 @@ func (s) TestClientSideXDSHTTPConnect_WithInsecureXdsCredentials(t *testing.T) {
 		t.Fatalf("EmptyCall() failed: %v", err)
 	}
 
-	// Verify that the request was routed through the proxy to the expected backend.
+	// Verify that the request was routed through the proxy to the expected
+	// backend.
 	select {
 	case gotTarget := <-connectCh:
 		if gotTarget != server.Address {
-			t.Errorf("unexpected server address from proxy server, want %s, got %s", server.Address, gotTarget)
+			t.Errorf("Unexpected server address from proxy server, got %s want %s", gotTarget, server.Address)
 		}
 	case <-time.After(defaultTestTimeout):
-		t.Fatal("timeout while waiting for server address from proxy server")
+		t.Fatal("Timeout while waiting for server address from proxy server")
 	}
 }
 
@@ -454,7 +457,7 @@ func (s) TestClientSideXDSHTTPConnect_WithUpstreamTLSContext(t *testing.T) {
 
 	proxyHost, proxyPort := splitHostPort(t, pServer.Addr)
 
-	// Spin up an xDS management server.
+	// Spin up an XDS management server.
 	mgmtServer, nodeID, _, xdsResolver := setup.ManagementServerAndResolver(t)
 	serverCreds := testutils.CreateServerTLSCredentials(t, tls.RequireAndVerifyClientCert)
 	server := stubserver.StartTestService(t, nil, grpc.Creds(serverCreds))
@@ -556,14 +559,14 @@ func (s) TestClientSideXDSHTTPConnect_WithUpstreamTLSContext(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create a gRPC client using the xDS resolver.
+	// Create a gRPC client using the XDS resolver.
 	creds, err := xdscreds.NewClientCredentials(xdscreds.ClientOptions{FallbackCreds: insecure.NewCredentials()})
 	if err != nil {
-		t.Fatalf("failed to create client xDS credentials: %v", err)
+		t.Fatalf("Failed to create client XDS credentials: %v", err)
 	}
 	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(creds), grpc.WithResolvers(xdsResolver))
 	if err != nil {
-		t.Fatalf("failed to create a gRPC client: %v", err)
+		t.Fatalf("Failed to create a gRPC client: %v", err)
 	}
 	defer cc.Close()
 
@@ -572,14 +575,15 @@ func (s) TestClientSideXDSHTTPConnect_WithUpstreamTLSContext(t *testing.T) {
 		t.Fatalf("EmptyCall() failed: %v", err)
 	}
 
-	// Verify that the request was routed through the proxy to the expected backend.
+	// Verify that the request was routed through the proxy to the expected
+	// backend.
 	select {
 	case gotTarget := <-connectCh:
 		if gotTarget != server.Address {
-			t.Errorf("unexpected server address from proxy server, want %s, got %s", server.Address, gotTarget)
+			t.Errorf("Unexpected server address from proxy server, got %s  want %s", gotTarget, server.Address)
 		}
 	case <-time.After(defaultTestTimeout):
-		t.Fatal("timeout while waiting for server address from proxy server")
+		t.Fatal("Timeout while waiting for server address from proxy server")
 	}
 }
 
@@ -631,10 +635,10 @@ func (s) TestClientSideXDSHTTPConnect_NoMetadata(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create a gRPC client using the xDS resolver.
+	// Create a gRPC client using the XDS resolver.
 	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsResolver))
 	if err != nil {
-		t.Fatalf("failed to create a gRPC client: %v", err)
+		t.Fatalf("Failed to create a gRPC client: %v", err)
 	}
 	defer cc.Close()
 

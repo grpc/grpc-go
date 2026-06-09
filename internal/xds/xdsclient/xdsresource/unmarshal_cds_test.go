@@ -2329,9 +2329,9 @@ func (s) TestValidateCluster_LRSReportEndpointMetrics(t *testing.T) {
 	}
 }
 
-// TestValidateCluster_Http11ProxyUpstreamTransport_EnvVarOff tests the validation
-// and unmarshaling of CDS resources containing Http11ProxyUpstreamTransport
-// transport socket wrapper when the env variable is disabled.
+// Test verifies the validation and unmarshaling of CDS resources containing
+// Http11ProxyUpstreamTransport transport socket wrapper when the env var
+// is disabled.
 func (s) TestValidateCluster_Http11ProxyUpstreamTransport_EnvVarOff(t *testing.T) {
 	testutils.SetEnvConfig(t, &envconfig.XDSHTTPConnectEnabled, false)
 	const (
@@ -2448,9 +2448,9 @@ func (s) TestValidateCluster_Http11ProxyUpstreamTransport_EnvVarOff(t *testing.T
 	}
 }
 
-// TestValidateCluster_Http11ProxyUpstreamTransport_EnvVarOn tests the validation
-// and unmarshaling of CDS resources containing Http11ProxyUpstreamTransport
-// transport socket wrapper when the env variable is enabled.
+// Test verifies the validation and unmarshaling of CDS resources containing
+// Http11ProxyUpstreamTransport transport socket wrapper when the env var
+// is enabled.
 func (s) TestValidateCluster_Http11ProxyUpstreamTransport_EnvVarOn(t *testing.T) {
 	testutils.SetEnvConfig(t, &envconfig.XDSHTTPConnectEnabled, true)
 	const (
@@ -2590,8 +2590,8 @@ func (s) TestValidateCluster_Http11ProxyUpstreamTransport_EnvVarOn(t *testing.T)
 				t.Fatalf("validateClusterAndConstructClusterUpdate() returned an error: %v", err)
 			}
 
-			if diff := cmp.Diff(tt.wantUpdate, gotUpdate, cmpOpts...); diff != "" {
-				t.Errorf("validateClusterAndConstructClusterUpdate() returned unexpected diff (-want, +got):\n%s", diff)
+			if diff := cmp.Diff(gotUpdate, tt.wantUpdate, cmpOpts...); diff != "" {
+				t.Errorf("validateClusterAndConstructClusterUpdate() returned unexpected diff (-got +want):\n%s", diff)
 			}
 		})
 	}
