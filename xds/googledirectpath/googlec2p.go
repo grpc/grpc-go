@@ -160,8 +160,18 @@ func (c2pResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, opts 
 		// This should be fine in most of the cases. In certain error cases, this
 		// could block Dial() for up to 10 seconds (each blocking call has its own
 		// goroutine).
-		zone = getZone(httpReqTimeout)
-		ipv6Capable = getIPv6Capable(httpReqTimeout)
+		var wg sync.WaitGroup
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			zone = getZone(httpReqTimeout)
+		}()
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			ipv6Capable = getIPv6Capable(httpReqTimeout)
+		}()
+		wg.Wait()
 	}
 
 	xdsServerURI := getXdsServerURI()
