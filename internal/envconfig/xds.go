@@ -88,7 +88,7 @@ var (
 	// XDSORCAToLRSPropEnabled controls whether ORCA metrics are explicitly
 	// filtered and prefix-propagated to the LRS server. For more details, see:
 	// https://github.com/grpc/proposal/blob/master/A85-lrs-custom-metrics-changes.md
-	XDSORCAToLRSPropEnabled = boolFromEnv("GRPC_EXPERIMENTAL_XDS_ORCA_LRS_PROPAGATION", false)
+	XDSORCAToLRSPropEnabled = boolFromEnv("GRPC_EXPERIMENTAL_XDS_ORCA_LRS_PROPAGATION", true)
 
 	// XDSClientExtProcEnabled indicates whether ExtProc filter is enabled on
 	// the client side. For more details, see:
