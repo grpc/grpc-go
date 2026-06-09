@@ -202,7 +202,7 @@ func newLRUCache(size uint64) *lruCache {
 		cacheSize:    size,
 		ll:           list.New(),
 		cache:        make(map[string]*list.Element),
-		credsCreator: grpcgoogle.NewGcpServiceAccountIdentity,
+		credsCreator: grpcgoogle.NewServiceAccountIdentityCredentials,
 	}
 }
 
