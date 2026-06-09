@@ -46,7 +46,6 @@ func Test(t *testing.T) {
 // TestParseFilterConfig verifies that the filter successfully decodes the
 // raw protobuf configuration into the internal config struct.
 func (s) TestParseFilterConfig(t *testing.T) {
-	b := builder{}
 	testCases := []struct {
 		name    string
 		config  proto.Message
@@ -93,7 +92,7 @@ func (s) TestParseFilterConfig(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := b.ParseFilterConfig(tc.config)
+			got, err := builder{}.ParseFilterConfig(tc.config)
 			if err != nil {
 				if tc.wantErr == "" || !strings.Contains(err.Error(), tc.wantErr) {
 					t.Fatalf("ParseFilterConfig() failed with error = %v; want error  %q", err, tc.wantErr)
@@ -101,7 +100,7 @@ func (s) TestParseFilterConfig(t *testing.T) {
 				return
 			}
 			if got.(config).cacheSize != tc.wantCfg.(config).cacheSize {
-				t.Fatalf("cacheSize = %v, want %v", got.(config).cacheSize, tc.wantCfg.(config).cacheSize)
+				t.Fatalf("ParseFilterConfig() got cacheSize = %v, want %v", got.(config).cacheSize, tc.wantCfg.(config).cacheSize)
 			}
 		})
 	}
@@ -178,8 +177,8 @@ func (s) TestBuildClientInterceptor(t *testing.T) {
 }
 
 // TestInterceptor_NewStream_Errors verifies that interceptor.NewStream returns
-// the expected errors under various invalid states, such as a missing xDS config,
-// a cluster not defined in the CDS, or a malformed metadata type.
+// the expected errors under various invalid states, such as a missing xDS
+// config, a cluster not defined in the CDS, or a malformed metadata type.
 func (s) TestInterceptor_NewStream_Errors(t *testing.T) {
 	builder := httpfilter.Get("type.googleapis.com/envoy.extensions.filters.http.gcp_authn.v3.GcpAuthnFilterConfig")
 	cfg := testutils.MarshalAny(t, &v3gcpauthnpb.GcpAuthnFilterConfig{

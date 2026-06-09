@@ -43,7 +43,7 @@ import (
 
 const (
 	defaultCacheSize = 10        // default capacity of the LRU credentials cache.
-	maxCacheSize     = 1<<31 - 2 // maxCacheSize is the maximum capacity of the LRU credentials cache.
+	maxCacheSize     = 1<<31 - 2 // maximum capacity of the LRU credentials cache.
 )
 
 func init() {
@@ -109,7 +109,8 @@ type ClientFilter struct {
 	cache      *lruCache
 }
 
-// BuildClientInterceptor builds a client interceptor for the GCP Authentication filter.
+// BuildClientInterceptor builds a client interceptor for the GCP
+// Authentication filter.
 func (cf *ClientFilter) BuildClientInterceptor(cfg, _ httpfilter.FilterConfig) (iresolver.ClientInterceptor, error) {
 	c, ok := cfg.(config)
 	if !ok {
@@ -212,7 +213,6 @@ func (c *lruCache) resizeCache(newCacheSize uint64) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	// If the size hasn't changed, do nothing.
 	if c.cacheSize == newCacheSize {
 		return
 	}
