@@ -39,6 +39,7 @@ package session
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net"
 	"os"
@@ -47,7 +48,37 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/protobuf/proto"
 )
+
+// hybridCodec implements encoding.Codec to handle both proto.Message and []byte.
+// It delegates to proto.Marshal/Unmarshal for non-byte-slice types.
+type hybridCodec struct{}
+
+func (c hybridCodec) Marshal(v any) ([]byte, error) {
+	if b, ok := v.([]byte); ok {
+		return b, nil
+	}
+	if msg, ok := v.(proto.Message); ok {
+		return proto.Marshal(msg)
+	}
+	return nil, fmt.Errorf("session: unexpected type %T", v)
+}
+
+func (c hybridCodec) Unmarshal(data []byte, v any) error {
+	if b, ok := v.(*[]byte); ok {
+		*b = append((*b)[:0], data...)
+		return nil
+	}
+	if msg, ok := v.(proto.Message); ok {
+		return proto.Unmarshal(data, msg)
+	}
+	return fmt.Errorf("session: unexpected type %T", v)
+}
+
+func (c hybridCodec) Name() string {
+	return "proto"
+}
 
 // Client represents an active multiplexed session over a physical gRPC stream.
 type Client struct {
@@ -70,6 +101,9 @@ func StartSessionCall(ctx context.Context, cc *grpc.ClientConn, method string, r
 		ClientStreams: true,
 		ServerStreams: true,
 	}
+
+	hc := hybridCodec{}
+	opts = append([]grpc.CallOption{grpc.ForceCodec(hc)}, opts...)
 
 	ctx, cancel := context.WithCancel(ctx)
 	stream, err := cc.NewStream(ctx, desc, method, opts...)
