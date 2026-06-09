@@ -69,14 +69,14 @@ func HeaderMutationRulesFromProto(mr *v3mutationpb.HeaderMutationRules) (HeaderM
 		return rules, nil
 	}
 	if allowExpr := mr.GetAllowExpression(); allowExpr != nil {
-		re, err := regexp.Compile(allowExpr.GetRegex())
+		re, err := matcher.CompileSafeRegex(allowExpr.GetRegex())
 		if err != nil {
 			return rules, fmt.Errorf("httpfilter: %v", err)
 		}
 		rules.AllowExpr = re
 	}
 	if disallowExpr := mr.GetDisallowExpression(); disallowExpr != nil {
-		re, err := regexp.Compile(disallowExpr.GetRegex())
+		re, err := matcher.CompileSafeRegex(disallowExpr.GetRegex())
 		if err != nil {
 			return rules, fmt.Errorf("httpfilter: %v", err)
 		}

@@ -36,11 +36,11 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// earlyExpiry is the window before a token's actual expiration during which
-// the token is considered stale. Requests using a stale (but still valid)
+// preemptiveRefresh is the window before a token's actual expiration during
+// which the token is considered stale. Requests using a stale but still valid
 // token will trigger a background asynchronous refresh. This avoids blocking
 // the current RPC, preventing periodic latency spikes during token refresh.
-const earlyExpiry = 1 * time.Minute
+const preemptiveRefresh = 1 * time.Minute
 
 type gcpServiceAccountIdentityCallCreds struct {
 	// The following fields are initialized at creation time and are read-only
@@ -50,33 +50,36 @@ type gcpServiceAccountIdentityCallCreds struct {
 	backoff  backoff.Strategy
 
 	// The following fields are protected by mu.
-	mu            sync.Mutex
-	token         *auth.Token
-	fetching      bool      // true if a background token fetch is in progress
-	nextRetryTime time.Time // timestamp after which we can attempt the next token fetch
-	retryAttempt  int       // consecutive fetch failure count used to compute backoff delay
-	lastErr       error     // cached error returned from the most recent token fetch attempt
+	mu                     sync.Mutex
+	token                  *auth.Token
+	tokenExpiry            time.Time // timestamp after which the cached token is considered invalid
+	preemptiveTokenRefresh time.Time // timestamp after which background preemptive refresh is triggered
+	fetching               bool      // true if a background token fetch is in progress
+	nextRetryTime          time.Time // timestamp after which we can attempt the next token fetch
+	retryAttempt           int       // consecutive fetch failure count used to compute backoff delay
+	lastErr                error     // cached error returned from the most recent token fetch attempt
 }
 
 func init() {
-	internal.DefaultBackoffStrategy = backoff.DefaultExponential
+	internal.BackoffStrategy = backoff.DefaultExponential
 	internal.NewIDTokenCredentials = func(opts *idtoken.Options) (*auth.Credentials, error) {
 		return idtoken.NewCredentials(opts)
 	}
 }
 
-// NewGcpServiceAccountIdentity creates a PerRPCCredentials that authenticates
-// using a GCP Service Account Identity JWT token for the given audience.
+// NewServiceAccountIdentityCredentials creates a PerRPCCredentials that
+// authenticates using a GCP Service Account Identity JWT token for the given
+// audience.
 //
-// This credential fetches the ID token from the GCE metadata server and is only
-// valid for use in environments running on GCP. The audience parameter cannot be
-// empty.
+// This credential fetches the ID token from the GCE metadata server and is
+// only valid for use in environments running on GCP. The audience parameter
+// cannot be empty.
 //
 // # Experimental
 //
 // Notice: This API is EXPERIMENTAL and may be changed or removed in a
 // later release.
-func NewGcpServiceAccountIdentity(audience string) (credentials.PerRPCCredentials, error) {
+func NewServiceAccountIdentityCredentials(audience string) (credentials.PerRPCCredentials, error) {
 	if audience == "" {
 		return nil, fmt.Errorf("credentials: audience cannot be empty")
 	}
@@ -89,7 +92,7 @@ func NewGcpServiceAccountIdentity(audience string) (credentials.PerRPCCredential
 	return &gcpServiceAccountIdentityCallCreds{
 		audience: audience,
 		creds:    creds,
-		backoff:  internal.DefaultBackoffStrategy,
+		backoff:  internal.BackoffStrategy,
 	}, nil
 }
 
@@ -144,15 +147,15 @@ func (c *gcpServiceAccountIdentityCallCreds) RequireTransportSecurity() bool {
 }
 
 // isTokenStaleLocked checks if the token falls within the
-// early expiry window. It must be called with mu locked.
+// preemptiveRefresh window. It must be called with mu locked.
 func (c *gcpServiceAccountIdentityCallCreds) isTokenStaleLocked() bool {
-	return c.token.Expiry.Add(-earlyExpiry).Before(time.Now())
+	return c.preemptiveTokenRefresh.Before(time.Now())
 }
 
 // isTokenValidLocked checks if the token is not expired yet. It must be called
 // with mu locked.
 func (c *gcpServiceAccountIdentityCallCreds) isTokenValidLocked() bool {
-	return c.token.Expiry.Add(-30 * time.Second).After(time.Now())
+	return c.tokenExpiry.After(time.Now())
 }
 
 // startFetch initiates a token fetch and updates the credential
@@ -192,8 +195,6 @@ func (c *gcpServiceAccountIdentityCallCreds) updateStateLocked(token *auth.Token
 			default:
 				mappedErr = status.Errorf(codes.Unauthenticated, "credentials: failed to fetch token from metadata server: %v", err)
 			}
-		} else if _, ok := err.(metadata.NotDefinedError); ok {
-			mappedErr = status.Errorf(codes.Unauthenticated, "credentials: requested metadata not defined: %v", err)
 		} else {
 			mappedErr = status.Errorf(codes.Unavailable, "credentials: failed to fetch ID token: %v", err)
 		}
@@ -208,4 +209,8 @@ func (c *gcpServiceAccountIdentityCallCreds) updateStateLocked(token *auth.Token
 	c.retryAttempt = 0
 	c.nextRetryTime = time.Time{}
 	c.token = token
+	// Per gRFC A83, the cached token is considered invalid 30 seconds before its
+	// actual expiration time to accommodate for clock skew.
+	c.tokenExpiry = token.Expiry.Add(-30 * time.Second)
+	c.preemptiveTokenRefresh = c.tokenExpiry.Add(-preemptiveRefresh)
 }

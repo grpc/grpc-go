@@ -1236,6 +1236,125 @@ func (s) TestChainEngine(t *testing.T) {
 				},
 			},
 		},
+		// This test verifies that SafeRegex header matching is implicitly
+		// anchored at both ends (full string matching).
+		{
+			name: "SafeRegexHeaderMatcherImplicitAnchoring",
+			rbacConfigs: []*v3rbacpb.RBAC{
+				{
+					Action: v3rbacpb.RBAC_ALLOW,
+					Policies: map[string]*v3rbacpb.Policy{
+						"safe-regex-policy": {
+							Permissions: []*v3rbacpb.Permission{
+								{Rule: &v3rbacpb.Permission_Any{Any: true}},
+							},
+							Principals: []*v3rbacpb.Principal{
+								{
+									Identifier: &v3rbacpb.Principal_Header{
+										Header: &v3routepb.HeaderMatcher{
+											Name: "foo",
+											HeaderMatchSpecifier: &v3routepb.HeaderMatcher_SafeRegexMatch{
+												SafeRegexMatch: &v3matcherpb.RegexMatcher{
+													Regex: "abc",
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			rbacQueries: []rbacQuery{
+				// This RPC has header "foo: abc", which matches "abc" exactly, so it should be allowed (OK).
+				{
+					rpcData: &rpcData{
+						md: metadata.MD{
+							"foo": []string{"abc"},
+						},
+						fullMethod: "some method",
+						peerInfo: &peer.Peer{
+							Addr: &addr{ipAddress: "0.0.0.0:8080"},
+						},
+					},
+					wantStatusCode: codes.OK,
+				},
+				// This RPC has header "foo: 123abc456", which contains "abc" but is not an exact match.
+				// Since safe regex is implicitly anchored, it should not match and return PermissionDenied.
+				{
+					rpcData: &rpcData{
+						md: metadata.MD{
+							"foo": []string{"123abc456"},
+						},
+						fullMethod: "some method",
+						peerInfo: &peer.Peer{
+							Addr: &addr{ipAddress: "0.0.0.0:8080"},
+						},
+					},
+					wantStatusCode: codes.PermissionDenied,
+				},
+			},
+		},
+		// This test verifies that SafeRegex header matching with wildcard matching
+		// (e.g. .*abc.*) matches substrings as expected.
+		{
+			name: "SafeRegexHeaderMatcherWildcard",
+			rbacConfigs: []*v3rbacpb.RBAC{
+				{
+					Action: v3rbacpb.RBAC_ALLOW,
+					Policies: map[string]*v3rbacpb.Policy{
+						"safe-regex-wildcard-policy": {
+							Permissions: []*v3rbacpb.Permission{
+								{Rule: &v3rbacpb.Permission_Any{Any: true}},
+							},
+							Principals: []*v3rbacpb.Principal{
+								{
+									Identifier: &v3rbacpb.Principal_Header{
+										Header: &v3routepb.HeaderMatcher{
+											Name: "foo",
+											HeaderMatchSpecifier: &v3routepb.HeaderMatcher_SafeRegexMatch{
+												SafeRegexMatch: &v3matcherpb.RegexMatcher{
+													Regex: ".*abc.*",
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			rbacQueries: []rbacQuery{
+				// This RPC has header "foo: 123abc456", which matches the wildcard safe regex, so it should be allowed (OK).
+				{
+					rpcData: &rpcData{
+						md: metadata.MD{
+							"foo": []string{"123abc456"},
+						},
+						fullMethod: "some method",
+						peerInfo: &peer.Peer{
+							Addr: &addr{ipAddress: "0.0.0.0:8080"},
+						},
+					},
+					wantStatusCode: codes.OK,
+				},
+				// This RPC has header "foo: xyz", which does not contain "abc", so it should return PermissionDenied.
+				{
+					rpcData: &rpcData{
+						md: metadata.MD{
+							"foo": []string{"xyz"},
+						},
+						fullMethod: "some method",
+						peerInfo: &peer.Peer{
+							Addr: &addr{ipAddress: "0.0.0.0:8080"},
+						},
+					},
+					wantStatusCode: codes.PermissionDenied,
+				},
+			},
+		},
 		// AllowAndDenyPolicy tests a policy with an allow (on path) and
 		// deny (on port) policy chained together. This represents how a user
 		// configured interceptor would use this, and also is a potential
