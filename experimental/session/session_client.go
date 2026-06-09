@@ -328,6 +328,10 @@ func (a *streamConnAdapter) popCurrBuf(b []byte) int {
 }
 
 func (a *streamConnAdapter) Read(b []byte) (n int, err error) {
+	if len(b) == 0 {
+		return 0, nil
+	}
+
 	a.readMu.Lock()
 	defer a.readMu.Unlock()
 
@@ -337,10 +341,14 @@ func (a *streamConnAdapter) Read(b []byte) (n int, err error) {
 	for {
 		a.mu.Lock()
 		closed := a.closed
+		shutdownErr := a.shutdownErr
 		deadline := a.readDeadline
 		a.mu.Unlock()
 
 		if len(a.currBuf) == 0 && closed && len(a.readCh) == 0 {
+			if shutdownErr != nil && shutdownErr != io.EOF && shutdownErr != io.ErrClosedPipe {
+				return 0, shutdownErr
+			}
 			return 0, io.EOF
 		}
 
@@ -356,6 +364,12 @@ func (a *streamConnAdapter) Read(b []byte) (n int, err error) {
 		select {
 		case msg, ok := <-a.readCh:
 			if !ok {
+				a.mu.Lock()
+				shutdownErr := a.shutdownErr
+				a.mu.Unlock()
+				if shutdownErr != nil && shutdownErr != io.EOF && shutdownErr != io.ErrClosedPipe {
+					return 0, shutdownErr
+				}
 				return 0, io.EOF
 			}
 			a.currBuf = msg
@@ -369,6 +383,10 @@ func (a *streamConnAdapter) Read(b []byte) (n int, err error) {
 }
 
 func (a *streamConnAdapter) Write(b []byte) (n int, err error) {
+	if len(b) == 0 {
+		return 0, nil
+	}
+
 	// Asynchronous write pumping requires copying b to the heap. The caller retains ownership
 	// of b and may mutate or reuse its backing array immediately after Write returns.
 	msg := make([]byte, len(b))
@@ -380,10 +398,14 @@ func (a *streamConnAdapter) Write(b []byte) (n int, err error) {
 	for {
 		a.mu.Lock()
 		closed := a.closed
+		shutdownErr := a.shutdownErr
 		deadline := a.writeDeadline
 		a.mu.Unlock()
 
 		if closed {
+			if shutdownErr != nil && shutdownErr != io.ErrClosedPipe && shutdownErr != io.EOF {
+				return 0, shutdownErr
+			}
 			return 0, io.ErrClosedPipe
 		}
 
@@ -398,6 +420,12 @@ func (a *streamConnAdapter) Write(b []byte) (n int, err error) {
 		case <-timerCh:
 			return 0, os.ErrDeadlineExceeded
 		case <-a.closeCh:
+			a.mu.Lock()
+			shutdownErr := a.shutdownErr
+			a.mu.Unlock()
+			if shutdownErr != nil && shutdownErr != io.ErrClosedPipe && shutdownErr != io.EOF {
+				return 0, shutdownErr
+			}
 			return 0, io.ErrClosedPipe
 		case <-a.updateWrite:
 			continue
