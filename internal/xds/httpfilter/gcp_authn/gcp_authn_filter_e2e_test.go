@@ -90,9 +90,9 @@ func setupGCPAuthnTest(t *testing.T) {
 	})
 }
 
-// TestGCPAuthnFilter_SuccessCase verifies the basic end-to-end flow. It
-// ensures that the gcp_authn filter successfully fetches a token from the mock
-// metadata server and attaches it to the outgoing gRPC request metadata.
+// Test verifies the basic end-to-end flow. It ensures that the gcp_authn
+// filter successfully fetches a token from the stub metadata server and
+// attaches it to the outgoing gRPC request metadata.
 func (s) TestGCPAuthnFilter_SuccessCase(t *testing.T) {
 	setupGCPAuthnTest(t)
 	tokenValue := "token"
@@ -186,11 +186,10 @@ func (s) TestGCPAuthnFilter_SuccessCase(t *testing.T) {
 	}
 
 	resources := e2e.UpdateOptions{
-		NodeID:         nodeID,
-		Listeners:      []*v3listenerpb.Listener{listener},
-		Clusters:       []*v3clusterpb.Cluster{cluster},
-		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(endpointName, "localhost", []uint32{testutils.ParsePort(t, backend.Address)})},
-		SkipValidation: true,
+		NodeID:    nodeID,
+		Listeners: []*v3listenerpb.Listener{listener},
+		Clusters:  []*v3clusterpb.Cluster{cluster},
+		Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(endpointName, "localhost", []uint32{testutils.ParsePort(t, backend.Address)})},
 	}
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
@@ -230,9 +229,8 @@ func (s) TestGCPAuthnFilter_SuccessCase(t *testing.T) {
 	}
 }
 
-// TestGCPAuthnFilter_TokenCaching verifies that the filter correctly caches
-// tokens and reuses them for subsequent RPCs, avoiding redundant network
-// calls to the metadata server.
+// Test verifies that the filter correctly caches tokens and reuses them
+// for subsequent RPCs, avoiding redundant network calls to metadata server.
 func (s) TestGCPAuthnFilter_TokenCaching(t *testing.T) {
 	setupGCPAuthnTest(t)
 	tokenValue := "token"
@@ -328,11 +326,10 @@ func (s) TestGCPAuthnFilter_TokenCaching(t *testing.T) {
 	}
 
 	resources := e2e.UpdateOptions{
-		NodeID:         nodeID,
-		Listeners:      []*v3listenerpb.Listener{listener},
-		Clusters:       []*v3clusterpb.Cluster{cluster},
-		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(endpointName, "localhost", []uint32{testutils.ParsePort(t, backend.Address)})},
-		SkipValidation: true,
+		NodeID:    nodeID,
+		Listeners: []*v3listenerpb.Listener{listener},
+		Clusters:  []*v3clusterpb.Cluster{cluster},
+		Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(endpointName, "localhost", []uint32{testutils.ParsePort(t, backend.Address)})},
 	}
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
@@ -379,9 +376,8 @@ func (s) TestGCPAuthnFilter_TokenCaching(t *testing.T) {
 	}
 }
 
-// TestGCPAuthnFilter_InsecureTransport verifies that the filter refuses to
-// attach credentials when the target cluster is configured without transport
-// security.
+// Test verifies that the filter refuses to attach credentials when the target
+// cluster is configured without transport security.
 func (s) TestGCPAuthnFilter_InsecureTransport(t *testing.T) {
 	setupGCPAuthnTest(t)
 
@@ -466,11 +462,10 @@ func (s) TestGCPAuthnFilter_InsecureTransport(t *testing.T) {
 	}
 
 	resources := e2e.UpdateOptions{
-		NodeID:         nodeID,
-		Listeners:      []*v3listenerpb.Listener{listener},
-		Clusters:       []*v3clusterpb.Cluster{cluster},
-		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint("endpoint_A", "localhost", []uint32{testutils.ParsePort(t, backend.Address)})},
-		SkipValidation: true,
+		NodeID:    nodeID,
+		Listeners: []*v3listenerpb.Listener{listener},
+		Clusters:  []*v3clusterpb.Cluster{cluster},
+		Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint("endpoint_A", "localhost", []uint32{testutils.ParsePort(t, backend.Address)})},
 	}
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
@@ -490,13 +485,12 @@ func (s) TestGCPAuthnFilter_InsecureTransport(t *testing.T) {
 	}
 }
 
-// TestGCPAuthnFilter_CacheSharingConfigUpdate verifies that the credential
-// cache of the gcp_authn filter correctly handles cache resizing across xDS
-// updates. It performs RPC calls to 3 different clusters to fill a cache of
-// size 3. Then it updates the xDS configuration to reduce the cache size to 1.
-// Finally, it verifies that only the Most Recently Used element survives
-// in the cache, and making calls to the other two results in cache misses
-// (forcing a new token fetch).
+// Test verifies that the credential cache of the gcp_authn filter correctly
+// handles cache resizing across XDS updates. It performs RPC calls to 3
+// different clusters to fill a cache of size 3. Then it updates the XDS
+// configuration to reduce the cache size to 1. Finally, it verifies that only
+// the most recently used element survives in the cache, and making calls to
+// the other two results in cache misses (forcing a new token fetch).
 func (s) TestGCPAuthnFilter_CacheSharingConfigUpdate(t *testing.T) {
 	setupGCPAuthnTest(t)
 
@@ -641,7 +635,6 @@ func (s) TestGCPAuthnFilter_CacheSharingConfigUpdate(t *testing.T) {
 			e2e.DefaultEndpoint("endpoint_B", "localhost", []uint32{testutils.ParsePort(t, backend.Address)}),
 			e2e.DefaultEndpoint("endpoint_C", "localhost", []uint32{testutils.ParsePort(t, backend.Address)}),
 		},
-		SkipValidation: true,
 	}
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
@@ -748,16 +741,15 @@ func (s) TestGCPAuthnFilter_CacheSharingConfigUpdate(t *testing.T) {
 	}
 }
 
-// TestGCPAuthnFilter_ConcurrentRPCWithShortAndLongContext verifies the
-// scenario where two RPCs are made: the first with a short context which
-// triggers a token fetch but times out (exceeding deadline) while waiting
-// for the metadata server to respond; and the second with a long context,
+// Test verifies the scenario where two RPCs are made: the first with a
+// short context which triggers a token fetch but times out while waiting
+// for the metadata server to respond; and the second RPC with a long context,
 // which blocks waiting for the first token fetch to finish, and then succeeds
 // by using the token fetched by the first.
 func (s) TestGCPAuthnFilter_ConcurrentRPCWithShortAndLongContext(t *testing.T) {
 	setupGCPAuthnTest(t)
 	var once sync.Once
-	tokenValue := "token"
+	const tokenValue = "token"
 	requestStarted := make(chan struct{})
 	proceedCh := make(chan struct{})
 
@@ -860,11 +852,10 @@ func (s) TestGCPAuthnFilter_ConcurrentRPCWithShortAndLongContext(t *testing.T) {
 	}
 
 	resources := e2e.UpdateOptions{
-		NodeID:         nodeID,
-		Listeners:      []*v3listenerpb.Listener{listener},
-		Clusters:       []*v3clusterpb.Cluster{cluster},
-		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(endpointName, "localhost", []uint32{testutils.ParsePort(t, backend.Address)})},
-		SkipValidation: true,
+		NodeID:    nodeID,
+		Listeners: []*v3listenerpb.Listener{listener},
+		Clusters:  []*v3clusterpb.Cluster{cluster},
+		Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(endpointName, "localhost", []uint32{testutils.ParsePort(t, backend.Address)})},
 	}
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
@@ -971,10 +962,9 @@ func (s) TestGCPAuthnFilter_ConcurrentRPCWithShortAndLongContext(t *testing.T) {
 	}
 }
 
-// TestGCPAuthnFilter_PreservesUserCallOptions verifies that when an RPC is
-// made with user-specified call options (e.g., grpc.Header), the filter
-// successfully appends its PerRPCCredentials option without overriding,
-// corrupting or interfering with the existing ones.
+// Test verifies that when an RPC is made with user-specified call options
+// (e.g., grpc.Header), the filter successfully appends its PerRPCCredentials
+// option without overriding, corrupting or interfering with the existing ones.
 func (s) TestGCPAuthnFilter_PreservesUserCallOptions(t *testing.T) {
 	setupGCPAuthnTest(t)
 	tokenValue := "token"
@@ -1074,11 +1064,10 @@ func (s) TestGCPAuthnFilter_PreservesUserCallOptions(t *testing.T) {
 	}
 
 	resources := e2e.UpdateOptions{
-		NodeID:         nodeID,
-		Listeners:      []*v3listenerpb.Listener{listener},
-		Clusters:       []*v3clusterpb.Cluster{cluster},
-		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(endpointName, "localhost", []uint32{testutils.ParsePort(t, backend.Address)})},
-		SkipValidation: true,
+		NodeID:    nodeID,
+		Listeners: []*v3listenerpb.Listener{listener},
+		Clusters:  []*v3clusterpb.Cluster{cluster},
+		Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(endpointName, "localhost", []uint32{testutils.ParsePort(t, backend.Address)})},
 	}
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)

@@ -43,8 +43,8 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
-// TestParseFilterConfig verifies that the filter successfully decodes the
-// raw protobuf configuration into the internal config struct.
+// Test verifies that the filter successfully decodes the raw protobuf
+// configuration into the internal config struct.
 func (s) TestParseFilterConfig(t *testing.T) {
 	testCases := []struct {
 		name    string
@@ -106,9 +106,9 @@ func (s) TestParseFilterConfig(t *testing.T) {
 	}
 }
 
-// TestBuildClientInterceptor verifies that the filter correctly creates
-// the stream interceptor from the parsed config, and correctly handles
-// cache initialization and resizing.
+// Test verifies that the filter correctly creates the stream interceptor
+// from the parsed config, and correctly handles cache initialization and
+// resizing.
 func (s) TestBuildClientInterceptor(t *testing.T) {
 	type dummyConfig struct {
 		httpfilter.FilterConfig
@@ -176,9 +176,9 @@ func (s) TestBuildClientInterceptor(t *testing.T) {
 	}
 }
 
-// TestInterceptor_NewStream_Errors verifies that interceptor.NewStream returns
-// the expected errors under various invalid states, such as a missing xDS
-// config, a cluster not defined in the CDS, or a malformed metadata type.
+// Test verifies that interceptor.NewStream returns the expected errors under
+// various invalid states, such as a missing XDS config, a cluster not defined
+// in the CDS, or a malformed metadata type.
 func (s) TestInterceptor_NewStream_Errors(t *testing.T) {
 	builder := httpfilter.Get("type.googleapis.com/envoy.extensions.filters.http.gcp_authn.v3.GcpAuthnFilterConfig")
 	cfg := testutils.MarshalAny(t, &v3gcpauthnpb.GcpAuthnFilterConfig{
@@ -253,12 +253,8 @@ func (s) TestInterceptor_NewStream_Errors(t *testing.T) {
 			newStream := func(_ context.Context, _ func(), _ []any) (iresolver.ClientStream, error) {
 				return nil, nil
 			}
-			_, err := interceptor.NewStream(tc.ctx, iresolver.RPCInfo{}, nil, func() {}, newStream)
-			if err == nil {
-				t.Fatalf("NewStream() succeeded, want error containing %q", tc.wantErr)
-			}
-			if !strings.Contains(err.Error(), tc.wantErr) {
-				t.Errorf("NewStream() err = %v, want error containing %q", err, tc.wantErr)
+			if _, err := interceptor.NewStream(tc.ctx, iresolver.RPCInfo{}, nil, func() {}, newStream); err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("NewStream() returned unexpected results, got %q , want error containing %q", err, tc.wantErr)
 			}
 		})
 	}
