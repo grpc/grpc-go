@@ -40,8 +40,6 @@ import (
 
 const defaultTestTimeout = 10 * time.Second
 
-var defaultTokenExpiry = time.Now().Add(1 * time.Hour)
-
 type s struct {
 	grpctest.Tester
 }
@@ -124,8 +122,11 @@ func (c *stubTokenProvider) getCallCount() int {
 // configured with the specified token value, token expiry, error and delay.
 func setupStubTokenProvider(token string, err error) *stubTokenProvider {
 	return &stubTokenProvider{
-		err:   err,
-		token: &auth.Token{Value: token, Expiry: defaultTokenExpiry},
+		err: err,
+		token: &auth.Token{
+			Value:  token,
+			Expiry: time.Now().Add(1 * time.Hour), // idtoken package works with hardcoded 1 hour token expiry.
+		},
 		delay: time.Duration(0),
 	}
 }
@@ -194,7 +195,8 @@ func (s) TestGCPServiceAccountIdentityCallCreds_GetRequestMetadata(t *testing.T)
 func (s) TestGCPServiceAccountIdentityCallCreds_Backoff(t *testing.T) {
 	const wantErr = "failed while fetching idToken"
 
-	// Override the backoff strategy with a very large value to guarantee it doesn't expire during this test.
+	// Override the backoff strategy with a very large value to guarantee
+	// it doesn't expire during this test.
 	origBackoff := internal.BackoffStrategy
 	internal.BackoffStrategy = &stubBackoff{backoffDelay: 2 * defaultTestTimeout}
 	t.Cleanup(func() { internal.BackoffStrategy = origBackoff })
@@ -213,8 +215,8 @@ func (s) TestGCPServiceAccountIdentityCallCreds_Backoff(t *testing.T) {
 		t.Fatalf("GetRequestMetadata() failed with err = %v, want error %q", err, wantErr)
 	}
 
-	// Verify that calls within the backoff window fail immediately with the
-	// cached error without attempting a new token fetch.
+	// Verify that calls within the backoff window fail immediately with
+	// the cached error without attempting a new token fetch.
 	const numCalls = 3
 	for i := 0; i < numCalls; i++ {
 		if _, err := creds.GetRequestMetadata(ctx); err == nil || !strings.Contains(err.Error(), wantErr) {
@@ -256,19 +258,20 @@ func (s) TestGCPServiceAccountIdentityCallCreds_BackoffExpired(t *testing.T) {
 	}
 
 	if got := stubToken.getCallCount(); got != 1 {
-		t.Fatalf("Expected 1 call to token provider, got %d", got)
+		t.Fatalf("Unexpected call count to token provider: got %d, want 1", got)
 	}
 
-	// Update token provider with second failure error to distinguish the new attempt.
+	// Update token provider with second failure error to distinguish the
+	// new attempt.
 	stubToken.setErr(errors.New(wantErr2))
 
-	// Since backoff is 0s (already expired), the next request immediately
-	// triggers a new fetch attempt.
+	// Since backoff is 0s (already expired), the next request
+	// immediately triggers a new fetch attempt.
 	if _, err := creds.GetRequestMetadata(ctx); err == nil || !strings.Contains(err.Error(), wantErr2) {
 		t.Fatalf("GetRequestMetadata() failed with err = %v, want error %q", err, wantErr2)
 	}
 
-	// Verify that a second token fetch actually happened (callCount is exactly 2).
+	// Verify that a second token fetch actually happened.
 	if got := stubToken.getCallCount(); got != 2 {
 		t.Fatalf("Unexpected call count to token provider: got %d, want 2", got)
 	}
@@ -302,14 +305,14 @@ func (s) TestGCPServiceAccountIdentityCallCreds_BackoffExpiredRecovery(t *testin
 	}
 
 	if got := stubToken.getCallCount(); got != 1 {
-		t.Fatalf("Expected 1 call to token provider, got %d", got)
+		t.Fatalf("Unexpected call count to token provider: got %d, want 1", got)
 	}
 
 	// Update token provider to return a valid token and nil error.
 	stubToken.setErr(nil)
 
-	// Since backoff is 0s (already expired), the next request triggers a new
-	// fetch which succeeds
+	// Since backoff is 0s (already expired), the next request triggers a
+	// new fetch which succeeds
 	md, err := creds.GetRequestMetadata(ctx)
 	if err != nil {
 		t.Fatalf("GetRequestMetadata() failed unexpectedly: %v", err)
@@ -320,7 +323,7 @@ func (s) TestGCPServiceAccountIdentityCallCreds_BackoffExpiredRecovery(t *testin
 		t.Errorf("GetRequestMetadata() got %q, want %q", got, want)
 	}
 
-	// Verify that the second fetch happened successfully (callCount is exactly 2).
+	// Verify that the second fetch happened successfully.
 	if got := stubToken.getCallCount(); got != 2 {
 		t.Fatalf("Unexpected call count to token provider: got %d, want 2", got)
 	}
@@ -347,8 +350,7 @@ func (s) TestGCPServiceAccountIdentityCallCreds_ConcurrentCalls_Success(t *testi
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
-			_, err := creds.GetRequestMetadata(ctx)
-			errs[idx] = err
+			_, errs[idx] = creds.GetRequestMetadata(ctx)
 		}(i)
 	}
 	wg.Wait()
@@ -360,7 +362,7 @@ func (s) TestGCPServiceAccountIdentityCallCreds_ConcurrentCalls_Success(t *testi
 	}
 
 	if got := stubToken.getCallCount(); got != 1 {
-		t.Fatalf("Expected 1 call to token provider, got %d", got)
+		t.Fatalf("Unexpected call count to token provider: got %d, want 1", got)
 	}
 }
 
@@ -386,8 +388,7 @@ func (s) TestGCPServiceAccountIdentityCallCreds_ConcurrentCalls_Failure(t *testi
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
-			_, err := creds.GetRequestMetadata(ctx)
-			errs[idx] = err
+			_, errs[idx] = creds.GetRequestMetadata(ctx)
 		}(i)
 	}
 	wg.Wait()
@@ -399,7 +400,7 @@ func (s) TestGCPServiceAccountIdentityCallCreds_ConcurrentCalls_Failure(t *testi
 	}
 
 	if got := stubToken.getCallCount(); got != 1 {
-		t.Fatalf("expected 1 call to token provider, got %d", got)
+		t.Fatalf("Unexpected call count to token provider: got %d, want 1", got)
 	}
 }
 
@@ -457,12 +458,16 @@ func (s) TestGCPServiceAccountIdentityCallCreds_EarlyExpiry(t *testing.T) {
 		t.Errorf("GetRequestMetadata() returned %q, want %q", got, wantfirstToken)
 	}
 
+	if got := stubToken.getCallCount(); got != 1 {
+		t.Fatalf("Unexpected call count to token provider: got %d, want 1", got)
+	}
+
 	// Update stub token provider to return a new token
 	stubToken.setToken(&auth.Token{Value: secondToken, Expiry: time.Now().Add(1 * time.Hour)})
 	stubToken.setDelay(100 * time.Millisecond)
 
-	// The cached token has not expired yet, so we get the first token to avoid
-	// blocking the RPC while the background refresh is in flight.
+	// The cached token has not expired yet, so we get the first token to
+	// avoid blocking the RPC while the background refresh is in flight.
 	md, err = creds.GetRequestMetadata(ctx)
 	if err != nil {
 		t.Fatalf("GetRequestMetadata() failed: %v", err)
