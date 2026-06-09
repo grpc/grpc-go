@@ -161,16 +161,8 @@ func (c2pResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, opts 
 		// could block Dial() for up to 10 seconds (each blocking call has its own
 		// goroutine).
 		var wg sync.WaitGroup
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			zone = getZone(httpReqTimeout)
-		}()
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			ipv6Capable = getIPv6Capable(httpReqTimeout)
-		}()
+		wg.Go(func() { zone = getZone(httpReqTimeout) })
+		wg.Go(func() { ipv6Capable = getIPv6Capable(httpReqTimeout) })
 		wg.Wait()
 	}
 
