@@ -115,7 +115,7 @@ func setupTestVirtualServer(t *testing.T, customInnerHandler grpc.StreamHandler)
 	go innerServer.Serve(innerLis)
 
 	outerLis := bufconn.Listen(1024 * 1024)
-	outerServer := grpc.NewServer(grpc.UnknownServiceHandler(func(_ any, stream grpc.ServerStream) error {
+	outerServer := grpc.NewServer(grpc.ForceServerCodec(hybridCodec{}), grpc.UnknownServiceHandler(func(_ any, stream grpc.ServerStream) error {
 		var appReq []byte
 		err := stream.RecvMsg(&appReq)
 		if err != nil {
@@ -158,7 +158,7 @@ func TestStartSessionCall_EndToEnd(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	sess, err := StartSessionCall(ctx, outerConn, "/MyService/Session", []byte("MyInitReq"), nil, grpc.CallContentSubtype("rawtest"))
+	sess, err := StartSessionCall(ctx, outerConn, "/MyService/Session", []byte("MyInitReq"), nil)
 	if err != nil {
 		t.Fatalf("StartSessionCall failed: %v", err)
 	}
@@ -275,7 +275,7 @@ func TestStreamConnAdapter_CloseCancelsContext(t *testing.T) {
 func TestStartSessionCall_HandshakeFailure(t *testing.T) {
 	// 1. Start an outer server that immediately rejects the connection
 	outerLis := bufconn.Listen(1024 * 1024)
-	outerServer := grpc.NewServer(grpc.UnknownServiceHandler(func(_ any, stream grpc.ServerStream) error {
+	outerServer := grpc.NewServer(grpc.ForceServerCodec(hybridCodec{}), grpc.UnknownServiceHandler(func(_ any, stream grpc.ServerStream) error {
 		var msg []byte
 		if err := stream.RecvMsg(&msg); err != nil {
 			return err
@@ -296,7 +296,7 @@ func TestStartSessionCall_HandshakeFailure(t *testing.T) {
 	}
 	defer outerConn.Close()
 
-	sess, err := StartSessionCall(ctx, outerConn, "/MyService/Session", []byte("MyInitReq"), nil, grpc.CallContentSubtype("rawtest"))
+	sess, err := StartSessionCall(ctx, outerConn, "/MyService/Session", []byte("MyInitReq"), nil)
 	if err != nil {
 		t.Fatalf("StartSessionCall failed: %v", err)
 	}
@@ -329,7 +329,7 @@ func TestStartSessionCall_ImmediateVirtualRpc(t *testing.T) {
 	defer innerServer.Stop()
 
 	outerLis := bufconn.Listen(1024 * 1024)
-	outerServer := grpc.NewServer(grpc.UnknownServiceHandler(func(_ any, stream grpc.ServerStream) error {
+	outerServer := grpc.NewServer(grpc.ForceServerCodec(hybridCodec{}), grpc.UnknownServiceHandler(func(_ any, stream grpc.ServerStream) error {
 		var appReq []byte
 		err := stream.RecvMsg(&appReq)
 		if err != nil {
@@ -371,7 +371,7 @@ func TestStartSessionCall_ImmediateVirtualRpc(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	sess, err := StartSessionCall(ctx, outerConn, "/MyService/Session", []byte("MyInitReq"), nil, grpc.CallContentSubtype("rawtest"))
+	sess, err := StartSessionCall(ctx, outerConn, "/MyService/Session", []byte("MyInitReq"), nil)
 	if err != nil {
 		t.Fatalf("StartSessionCall failed: %v", err)
 	}
@@ -436,7 +436,7 @@ func TestStartSessionCall_ClientCancelsSession(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	sess, err := StartSessionCall(ctx, outerConn, "/MyService/Session", []byte("MyInitReq"), nil, grpc.CallContentSubtype("rawtest"))
+	sess, err := StartSessionCall(ctx, outerConn, "/MyService/Session", []byte("MyInitReq"), nil)
 	if err != nil {
 		t.Fatalf("StartSessionCall failed: %v", err)
 	}
@@ -493,7 +493,7 @@ func TestStartSessionCall_ClientCancelsSession(t *testing.T) {
 func TestStartSessionCall_SetupTransportFails(t *testing.T) {
 	// Spin up a server that will immediately close the stream after handshake, simulating failure
 	outerLis := bufconn.Listen(1024 * 1024)
-	outerServer := grpc.NewServer(grpc.UnknownServiceHandler(func(_ any, stream grpc.ServerStream) error {
+	outerServer := grpc.NewServer(grpc.ForceServerCodec(hybridCodec{}), grpc.UnknownServiceHandler(func(_ any, stream grpc.ServerStream) error {
 		var appReq []byte
 		if err := stream.RecvMsg(&appReq); err != nil {
 			return err
@@ -516,7 +516,7 @@ func TestStartSessionCall_SetupTransportFails(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	sess, err := StartSessionCall(ctx, outerConn, "/MyService/Session", []byte("MyInitReq"), nil, grpc.CallContentSubtype("rawtest"))
+	sess, err := StartSessionCall(ctx, outerConn, "/MyService/Session", []byte("MyInitReq"), nil)
 	if err != nil {
 		t.Fatalf("StartSessionCall failed: %v", err)
 	}
