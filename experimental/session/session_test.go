@@ -54,7 +54,7 @@ func (c rawCodec) Unmarshal(data []byte, v any) error {
 	return fmt.Errorf("rawCodec: expected *[]byte, got %T", v)
 }
 
-func (c rawCodec) Name() string { return "rawtest" }
+func (c rawCodec) Name() string { return "session-raw" }
 
 func init() {
 	encoding.RegisterCodec(rawCodec{})
@@ -182,7 +182,7 @@ func TestStartSessionCall_EndToEnd(t *testing.T) {
 		ServerStreams: true,
 	}
 
-	innerStream, err := sess.VirtualConn.NewStream(innerCtx, desc, "/TestService/Echo", grpc.CallContentSubtype("rawtest"))
+	innerStream, err := sess.VirtualConn.NewStream(innerCtx, desc, "/TestService/Echo", grpc.CallContentSubtype("session-raw"))
 	if err != nil {
 		t.Fatalf("Virtual stream create failed: %v", err)
 	}
@@ -386,7 +386,7 @@ func TestStartSessionCall_ImmediateVirtualRpc(t *testing.T) {
 	innerCtx, innerCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer innerCancel()
 
-	innerStream, err := sess.VirtualConn.NewStream(innerCtx, desc, "/TestService/Echo", grpc.CallContentSubtype("rawtest"))
+	innerStream, err := sess.VirtualConn.NewStream(innerCtx, desc, "/TestService/Echo", grpc.CallContentSubtype("session-raw"))
 	if err != nil {
 		t.Fatalf("Virtual stream create failed: %v", err)
 	}
@@ -458,7 +458,7 @@ func TestStartSessionCall_ClientCancelsSession(t *testing.T) {
 	}
 	vctx, vcancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer vcancel()
-	innerStream, err := sess.VirtualConn.NewStream(vctx, desc, "/TestService/Echo", grpc.CallContentSubtype("rawtest"))
+	innerStream, err := sess.VirtualConn.NewStream(vctx, desc, "/TestService/Echo", grpc.CallContentSubtype("session-raw"))
 	if err != nil {
 		t.Fatalf("Virtual stream create failed: %v", err)
 	}
@@ -535,7 +535,7 @@ func TestStartSessionCall_SetupTransportFails(t *testing.T) {
 		ClientStreams: true,
 		ServerStreams: true,
 	}
-	innerStream, err := sess.VirtualConn.NewStream(ctx, desc, "/TestService/Echo", grpc.CallContentSubtype("rawtest"))
+	innerStream, err := sess.VirtualConn.NewStream(ctx, desc, "/TestService/Echo", grpc.CallContentSubtype("session-raw"))
 	if err != nil {
 		if status.Code(err) != codes.Unavailable {
 			t.Fatalf("Expected status Unavailable on NewStream, got: %v", err)
