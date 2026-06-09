@@ -423,17 +423,11 @@ func (s) TestGCPServiceAccountIdentityCallCreds_SecurityLevelFailure(t *testing.
 	}
 }
 
-// Test verifies the asynchronous refresh behavior when a cached token falls
-// within the early expiration window (stale but still valid).
-//
-// The test simulates a scenario where the cached token's remaining lifetime is
-// less than the 1-minute early expiry buffer. It verifies that:
-//   - A call to GetRequestMetadata immediately returns the stale but valid
-//     token to avoid blocking the RPC with network latency.
-//   - Simultaneously, the Auth library triggers an asynchronous fetch for a
-//     new token in the background.
-//   - A subsequent call, after waiting for the background fetch to complete,
-//     returns the newly acquired token.
+// Test verifies that when a cached token is within the early expiration window
+// (stale but still valid), the second call to GetRequestMetadata immediately
+// returns the existing token and triggers an asynchronous background fetch for
+// a new token. A subsequent call, after waiting for the background fetch to
+// complete, returns the newly acquired token.
 func (s) TestGCPServiceAccountIdentityCallCreds_EarlyExpiry(t *testing.T) {
 	const (
 		firstToken  = "token-A"
