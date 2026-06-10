@@ -33,17 +33,11 @@ const (
 )
 
 func setupProxyAddressConverter(t *testing.T) {
-	RegisterMetadataConverter(proxyAddressTypeURL, ProxyAddressConvertor{})
-	t.Cleanup(func() {
-		UnregisterMetadataConverterForTesting(proxyAddressTypeURL)
-	})
+	t.Cleanup(RegisterMetadataConverterForTesting(proxyAddressTypeURL, ProxyAddressConvertor{}))
 }
 
 func setupAudienceConverter(t *testing.T) {
-	RegisterMetadataConverter(audienceTypeURL, audienceConverter{})
-	t.Cleanup(func() {
-		UnregisterMetadataConverterForTesting(audienceTypeURL)
-	})
+	t.Cleanup(RegisterMetadataConverterForTesting(audienceTypeURL, audienceConverter{}))
 }
 
 func (s) TestProxyAddressConverterSuccess(t *testing.T) {

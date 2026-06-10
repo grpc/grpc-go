@@ -30,10 +30,10 @@ import (
 
 func init() {
 	if envconfig.XDSHTTPConnectEnabled {
-		RegisterMetadataConverter("type.googleapis.com/envoy.config.core.v3.Address", ProxyAddressConvertor{})
+		registerMetadataConverter("type.googleapis.com/envoy.config.core.v3.Address", ProxyAddressConvertor{})
 	}
 	if envconfig.GCPAuthenticationFilterEnabled {
-		RegisterMetadataConverter("type.googleapis.com/envoy.extensions.filters.http.gcp_authn.v3.Audience", audienceConverter{})
+		registerMetadataConverter("type.googleapis.com/envoy.extensions.filters.http.gcp_authn.v3.Audience", audienceConverter{})
 	}
 }
 
@@ -50,9 +50,9 @@ type metadataConverter interface {
 	convert(*anypb.Any) (any, error)
 }
 
-// RegisterMetadataConverter registers the converter to the map keyed on a proto
+// registerMetadataConverter registers the converter to the map keyed on a proto
 // type_url. Must be called at init time. Not thread safe.
-func RegisterMetadataConverter(protoType string, c metadataConverter) {
+func registerMetadataConverter(protoType string, c metadataConverter) {
 	metadataRegistry[protoType] = c
 }
 
@@ -61,10 +61,19 @@ func metadataConverterForType(typeURL string) metadataConverter {
 	return metadataRegistry[typeURL]
 }
 
-// UnregisterMetadataConverterForTesting removes a converter from the registry.
-// For testing only.
-func UnregisterMetadataConverterForTesting(typeURL string) {
-	delete(metadataRegistry, typeURL)
+// RegisterMetadataConverterForTesting registers the converter for testing
+// purposes and returns a cleanup function to restore the registry to its
+// previous state.
+func RegisterMetadataConverterForTesting(protoType string, c metadataConverter) func() {
+	curConverter, found := metadataRegistry[protoType]
+	registerMetadataConverter(protoType, c)
+	return func() {
+		if found {
+			metadataRegistry[protoType] = curConverter
+			return
+		}
+		delete(metadataRegistry, protoType)
+	}
 }
 
 // StructMetadataValue stores the values in a google.protobuf.Struct from

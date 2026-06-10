@@ -56,10 +56,7 @@ import (
 // registers the proxy address metadata converter.
 func enableXDSHTTPConnect(t *testing.T) {
 	testutils.SetEnvConfig(t, &envconfig.XDSHTTPConnectEnabled, true)
-	xdsresource.RegisterMetadataConverter("type.googleapis.com/envoy.config.core.v3.Address", xdsresource.ProxyAddressConvertor{})
-	t.Cleanup(func() {
-		xdsresource.UnregisterMetadataConverterForTesting("type.googleapis.com/envoy.config.core.v3.Address")
-	})
+	t.Cleanup(xdsresource.RegisterMetadataConverterForTesting("type.googleapis.com/envoy.config.core.v3.Address", xdsresource.ProxyAddressConvertor{}))
 }
 
 // splitHostPort splits and parses the host and port from the given address.

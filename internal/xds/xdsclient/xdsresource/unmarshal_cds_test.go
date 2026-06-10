@@ -1767,23 +1767,20 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 // enableGCPAuthenticationFilter enables A83 support for the duration of the
 // test by:
 // 1. Setting GRPC_EXPERIMENTAL_XDS_GCP_AUTHENTICATION_FILTER env var to true.
-// 2. Registering the audience converter, since this is otherwise done in init.
+// 2. Registering the audience converter (and restore the original on cleanup).
 func enableGCPAuthenticationFilter(t *testing.T) {
 	testutils.SetEnvConfig(t, &envconfig.GCPAuthenticationFilterEnabled, true)
-	RegisterMetadataConverter(audienceTypeURL, audienceConverter{})
-	t.Cleanup(func() {
-		UnregisterMetadataConverterForTesting(audienceTypeURL)
-	})
+	t.Cleanup(RegisterMetadataConverterForTesting(audienceTypeURL, audienceConverter{}))
 }
 
 // disableGCPAuthenticationFilter disables A83 support for the duration of the
 // test by:
 // 1. Setting GRPC_EXPERIMENTAL_XDS_GCP_AUTHENTICATION_FILTER env var to false.
-// 2. Unregistering the audience converter (in case it was registered by init
-// or previous test)
+// 2. Unregistering the audience converter for the duration of the test
+// (and restoring the original on cleanup).
 func disableGCPAuthenticationFilter(t *testing.T) {
 	testutils.SetEnvConfig(t, &envconfig.GCPAuthenticationFilterEnabled, false)
-	UnregisterMetadataConverterForTesting(audienceTypeURL)
+	t.Cleanup(RegisterMetadataConverterForTesting(audienceTypeURL, nil))
 }
 
 // Tests custom metadata parsing for success cases when the

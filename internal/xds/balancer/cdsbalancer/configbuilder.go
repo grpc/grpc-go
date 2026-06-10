@@ -304,10 +304,10 @@ func priorityLocalitiesToClusterImpl(localities []xdsresource.Locality, priority
 				}
 				if proxyAddrStr != "" {
 					for idx, addr := range resolverEndpoint.Addresses {
-						addrCopy := addr
-						addrCopy.Addr = proxyAddrStr
-						resolverEndpoint.Addresses[idx] = proxyattributes.Set(addrCopy, proxyattributes.Options{
-							ConnectAddr: addr.Addr,
+						connectAddr := addr.Addr
+						addr.Addr = proxyAddrStr
+						resolverEndpoint.Addresses[idx] = proxyattributes.Set(addr, proxyattributes.Options{
+							ConnectAddr: connectAddr,
 						})
 					}
 				}
