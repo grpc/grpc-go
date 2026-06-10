@@ -630,13 +630,10 @@ func (r *xdsResolver) newInterceptor(filters []xdsresource.HTTPFilter, clusterOv
 			continue
 		}
 
-		builder, ok := filter.Filter.(httpfilter.ClientFilterBuilder)
-		if !ok {
-			// Should not happen if it passed xdsClient validation.
-			return nil, fmt.Errorf("filter %q does not support use in client", filter.Name)
+		clientFilter, err := r.clientFilter(filter.Filter, newClientFilterKey(&filter))
+		if err != nil {
+			return nil, fmt.Errorf("failed to build client interceptor for filter %q: %v", filter.Name, err)
 		}
-
-		clientFilter := r.getOrCreateClientFilter(builder, newClientFilterKey(&filter))
 		i, err := clientFilter.BuildClientInterceptor(filter.Config, override)
 		if err != nil {
 			return nil, fmt.Errorf("failed to build client interceptor for filter %q: %v", filter.Name, err)
@@ -678,15 +675,27 @@ func (il *interceptorList) Close() {
 // for future use.
 //
 // Only executed in the context of a serializer callback.
-func (r *xdsResolver) getOrCreateClientFilter(builder httpfilter.ClientFilterBuilder, key clientFilterKey) httpfilter.ClientFilter {
+// clientFilter gets or creates the client filter. If the builder implements
+// ClientFilterBuilderWithXDSClient, it passes the resolver's xdsClient.
+//
+// Only executed in the context of a serializer callback.
+func (r *xdsResolver) clientFilter(builder httpfilter.Builder, key clientFilterKey) (httpfilter.ClientFilter, error) {
 	clientFilter, ok := r.httpFilters[key]
 	if ok {
-		return clientFilter
+		return clientFilter, nil
 	}
 
-	cf := builder.BuildClientFilter()
+	var cf httpfilter.ClientFilter
+	if b, ok := builder.(httpfilter.ClientFilterBuilderWithXDSClient); ok {
+		cf = b.BuildClientFilter(r.xdsClient)
+	} else if b, ok := builder.(httpfilter.ClientFilterBuilder); ok {
+		cf = b.BuildClientFilter()
+	} else {
+		return nil, fmt.Errorf("filter builder does not support use in client")
+	}
+
 	r.httpFilters[key] = cf
-	return cf
+	return cf, nil
 }
 
 // newClientFilterKey generates a key for the given filter using the filter name

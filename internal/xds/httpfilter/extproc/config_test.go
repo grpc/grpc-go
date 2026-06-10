@@ -30,10 +30,10 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/optional"
+	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/internal/xds/httpfilter"
 	"google.golang.org/grpc/internal/xds/matcher"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/anypb"
@@ -56,23 +56,17 @@ func Test(t *testing.T) {
 const testBaseURI = "base-uri"
 
 // testParseGRPCServiceConfig is a helper function that parses a GrpcService
-// proto message into a GRPCServiceConfig. This is a temporary test
-// implementation that will be removed once gRFC A102 is implemented.
+// proto message into a GRPCServiceConfig.
 func testParseGRPCServiceConfig(grpcService *corepb.GrpcService) (xdsresource.GRPCServiceConfig, error) {
-	if grpcService == nil {
-		return xdsresource.GRPCServiceConfig{}, nil
-	}
 	if grpcService.GetGoogleGrpc() == nil {
 		return xdsresource.GRPCServiceConfig{}, fmt.Errorf("only google_grpc grpc_service is supported")
 	}
 	if grpcService.GetGoogleGrpc().GetTargetUri() == "" {
 		return xdsresource.GRPCServiceConfig{}, fmt.Errorf("targetURI must be a non-empty string")
 	}
-
-	sc := xdsresource.GRPCServiceConfig{
+	return xdsresource.GRPCServiceConfig{
 		TargetURI: grpcService.GetGoogleGrpc().GetTargetUri(),
-	}
-	return sc, nil
+	}, nil
 }
 
 var cmpOpts = []cmp.Option{
@@ -126,7 +120,7 @@ func (s) TestParseFilterConfig_Success(t *testing.T) {
 			wantCfg: baseConfig{
 				server: xdsresource.GRPCServiceConfig{
 					TargetURI:          "localhost:1234",
-					ChannelCredentials: "",
+					ChannelCredentials: bootstrap.ChannelCreds{},
 				},
 				processingModes: processingModes{
 					requestHeaderMode:   modeSend,
@@ -160,7 +154,7 @@ func (s) TestParseFilterConfig_Success(t *testing.T) {
 			wantCfg: baseConfig{
 				server: xdsresource.GRPCServiceConfig{
 					TargetURI:          "localhost:1234",
-					ChannelCredentials: "",
+					ChannelCredentials: bootstrap.ChannelCreds{},
 				},
 				processingModes: processingModes{
 					requestHeaderMode:   modeSend,
@@ -195,7 +189,7 @@ func (s) TestParseFilterConfig_Success(t *testing.T) {
 			wantCfg: baseConfig{
 				server: xdsresource.GRPCServiceConfig{
 					TargetURI:          "localhost:1234",
-					ChannelCredentials: "",
+					ChannelCredentials: bootstrap.ChannelCreds{},
 				},
 				processingModes: processingModes{
 					requestHeaderMode:   modeSend,
@@ -523,12 +517,12 @@ func (s) TestParseFilterConfigOverride_Errors(t *testing.T) {
 }
 
 func (s) TestBuildClientInterceptor_Success(t *testing.T) {
-	origCreateExtProcChannel := createExtProcChannel
-	createExtProcChannel = func(cfg xdsresource.GRPCServiceConfig) (grpc.ClientConnInterface, func() error, error) {
-		conn, _ := grpc.NewClient(cfg.TargetURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
-		return conn, conn.Close, nil
+	fc := &fakeXDSClient{
+		createChannel: func(target string, _ bootstrap.ChannelCreds) (grpc.ClientConnInterface, func() error, error) {
+			conn, _ := grpc.NewClient(target, grpc.WithTransportCredentials(insecure.NewCredentials()))
+			return conn, conn.Close, nil
+		},
 	}
-	defer func() { createExtProcChannel = origCreateExtProcChannel }()
 
 	tests := []struct {
 		name       string
@@ -554,9 +548,9 @@ func (s) TestBuildClientInterceptor_Success(t *testing.T) {
 				},
 				server: xdsresource.GRPCServiceConfig{
 					TargetURI:          testBaseURI,
-					ChannelCredentials: "test-channel-creds",
+					ChannelCredentials: bootstrap.ChannelCreds{Type: "test-channel-creds"},
 					CallCredentials:    "test-call-creds",
-					InitialMetadata:    metadata.MD(metadata.Pairs("key1", "value1")),
+					InitialMetadata:    `[{"key":"key1","value":"value1"}]`,
 					Timeout:            5 * time.Second,
 				},
 				mutationRules: httpfilter.HeaderMutationRules{
@@ -589,9 +583,9 @@ func (s) TestBuildClientInterceptor_Success(t *testing.T) {
 				},
 				server: xdsresource.GRPCServiceConfig{
 					TargetURI:          testBaseURI,
-					ChannelCredentials: "test-channel-creds",
+					ChannelCredentials: bootstrap.ChannelCreds{Type: "test-channel-creds"},
 					CallCredentials:    "test-call-creds",
-					InitialMetadata:    metadata.MD(metadata.Pairs("key1", "value1")),
+					InitialMetadata:    `[{"key":"key1","value":"value1"}]`,
 					Timeout:            5 * time.Second,
 				},
 				allowedHeaders: []matcher.StringMatcher{matcher.NewExactStringMatcher("allow-header", false)},
@@ -615,7 +609,7 @@ func (s) TestBuildClientInterceptor_Success(t *testing.T) {
 				server: xdsresource.GRPCServiceConfig{
 					TargetURI:       testBaseURI,
 					Timeout:         time.Second,
-					InitialMetadata: metadata.MD(metadata.Pairs("key1", "value1")),
+					InitialMetadata: `[{"key":"key1","value":"value1"}]`,
 				},
 				mutationRules: httpfilter.HeaderMutationRules{
 					AllowExpr:       regexp.MustCompile("^(?:allow-.*)$"),
@@ -688,7 +682,7 @@ func (s) TestBuildClientInterceptor_Success(t *testing.T) {
 				server: xdsresource.GRPCServiceConfig{
 					TargetURI:       testBaseURI,
 					Timeout:         time.Second,
-					InitialMetadata: metadata.MD(metadata.Pairs("key1", "value1")),
+					InitialMetadata: `[{"key":"key1","value":"value1"}]`,
 				},
 				mutationRules: httpfilter.HeaderMutationRules{
 					AllowExpr:       regexp.MustCompile("^(?:allow-.*)$"),
@@ -725,7 +719,7 @@ func (s) TestBuildClientInterceptor_Success(t *testing.T) {
 				server: xdsresource.GRPCServiceConfig{
 					TargetURI:       testBaseURI,
 					Timeout:         time.Second,
-					InitialMetadata: metadata.MD(metadata.Pairs("key1", "value1")),
+					InitialMetadata: `[{"key":"key1","value":"value1"}]`,
 				},
 				allowedHeaders:    []matcher.StringMatcher{matcher.NewExactStringMatcher("allow-header", false)},
 				disallowedHeaders: []matcher.StringMatcher{matcher.NewExactStringMatcher("disallow-header", false)},
@@ -735,7 +729,7 @@ func (s) TestBuildClientInterceptor_Success(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			builder := builder{}
-			filter := builder.BuildClientFilter()
+			filter := builder.BuildClientFilter(fc)
 			defer filter.Close()
 
 			intptr, err := filter.BuildClientInterceptor(tc.cfg, tc.override)
@@ -752,15 +746,15 @@ func (s) TestBuildClientInterceptor_Success(t *testing.T) {
 }
 
 func (s) TestBuildClientInterceptor_Failure(t *testing.T) {
-	origCreateExtProcChannel := createExtProcChannel
-	createExtProcChannel = func(cfg xdsresource.GRPCServiceConfig) (grpc.ClientConnInterface, func() error, error) {
-		if cfg.TargetURI == "error-uri" {
-			return nil, nil, fmt.Errorf("dial error")
-		}
-		conn, _ := grpc.NewClient(cfg.TargetURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
-		return conn, conn.Close, nil
+	fc := &fakeXDSClient{
+		createChannel: func(target string, _ bootstrap.ChannelCreds) (grpc.ClientConnInterface, func() error, error) {
+			if target == "error-uri" {
+				return nil, nil, fmt.Errorf("dial error")
+			}
+			conn, _ := grpc.NewClient(target, grpc.WithTransportCredentials(insecure.NewCredentials()))
+			return conn, conn.Close, nil
+		},
 	}
-	defer func() { createExtProcChannel = origCreateExtProcChannel }()
 
 	// incorrectFilterConfig embeds httpfilter.FilterConfig but is not of type
 	// baseConfig/overrideConfig, and is used to test incorrect config types being
@@ -818,7 +812,7 @@ func (s) TestBuildClientInterceptor_Failure(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			builder := builder{}
-			filter := builder.BuildClientFilter()
+			filter := builder.BuildClientFilter(fc)
 			defer filter.Close()
 
 			_, err := filter.BuildClientInterceptor(tc.cfg, tc.override)
@@ -830,4 +824,16 @@ func (s) TestBuildClientInterceptor_Failure(t *testing.T) {
 			}
 		})
 	}
+}
+
+type fakeXDSClient struct {
+	httpfilter.XDSClient
+	createChannel func(string, bootstrap.ChannelCreds) (grpc.ClientConnInterface, func() error, error)
+}
+
+func (f *fakeXDSClient) CreateChannel(target string, creds bootstrap.ChannelCreds) (grpc.ClientConnInterface, func() error, error) {
+	if f.createChannel != nil {
+		return f.createChannel(target, creds)
+	}
+	return nil, nil, fmt.Errorf("not implemented")
 }

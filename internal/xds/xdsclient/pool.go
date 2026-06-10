@@ -255,6 +255,14 @@ func (p *Pool) clientRefCountedClose(name string) {
 			}
 		}
 	}
+	for _, a := range client.bootstrapConfig.AllowedGrpcServices() {
+		if a == nil {
+			continue
+		}
+		for _, f := range a.Cleanups() {
+			f()
+		}
+	}
 	p.mu.Unlock()
 
 	// This attempts to close the transport to the management server and could

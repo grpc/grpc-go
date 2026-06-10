@@ -1032,6 +1032,13 @@ func (s) TestGetConfiguration_Federation(t *testing.T) {
 						"server_features" : ["xds_v3"]
 					}]
 				}
+			},
+			"allowed_grpc_services": {
+				"dns:///whitelisted-ext-proc:443": {
+					"channel_creds": [
+						{ "type": "insecure" }
+					]
+				}
 			}
 		}`,
 		// If client_default_listener_resource_name_template is not set, it
@@ -1129,6 +1136,15 @@ func (s) TestGetConfiguration_Federation(t *testing.T) {
 						}},
 					},
 				},
+				allowedGrpcServices: func() map[string]*AllowedGrpcService {
+					var svc AllowedGrpcService
+					if err := json.Unmarshal([]byte(`{"channel_creds": [{"type": "insecure"}]}`), &svc); err != nil {
+						panic(err)
+					}
+					return map[string]*AllowedGrpcService{
+						"dns:///whitelisted-ext-proc:443": &svc,
+					}
+				}(),
 			},
 		},
 		{
@@ -1708,5 +1724,136 @@ func (s) TestBootstrap_SelectedCallCreds_WhenNotCCNotEnabled(t *testing.T) {
 	// because the env variable is not enabled.
 	if len(dialOpts) != 0 {
 		t.Errorf("Call creds count = %d, want %d", len(dialOpts), 0)
+	}
+}
+
+func (s) TestBootstrap_AllowedGrpcServices(t *testing.T) {
+	testutils.SetEnvConfig(t, &envconfig.XDSBootstrapCallCredsEnabled, true)
+	bootstrapFileMap := map[string]string{
+		"allowedGrpcServicesGood": `
+		{
+			"node": {
+				"id": "ENVOY_NODE_ID"
+			},
+			"xds_servers" : [{
+				"server_uri": "trafficdirector.googleapis.com:443",
+				"channel_creds": [
+					{ "type": "insecure" }
+				]
+			}],
+			"allowed_grpc_services": {
+				"dns:///sharding-service:443": {
+					"channel_creds": [
+						{ "type": "insecure" }
+					]
+				}
+			}
+		}`,
+		"allowedGrpcServicesWithCallCreds": `
+		{
+			"node": {
+				"id": "ENVOY_NODE_ID"
+			},
+			"xds_servers" : [{
+				"server_uri": "trafficdirector.googleapis.com:443",
+				"channel_creds": [
+					{ "type": "insecure" }
+				]
+			}],
+			"allowed_grpc_services": {
+				"dns:///sharding-service:443": {
+					"channel_creds": [
+						{ "type": "insecure" }
+					],
+					"call_creds": [
+						{ "type": "jwt_token_file", "config": {"jwt_token_file": "/var/run/secrets/tokens/istio-token"} }
+					]
+				}
+			}
+		}`,
+		"allowedGrpcServicesBadCreds": `
+		{
+			"node": {
+				"id": "ENVOY_NODE_ID"
+			},
+			"xds_servers" : [{
+				"server_uri": "trafficdirector.googleapis.com:443",
+				"channel_creds": [
+					{ "type": "insecure" }
+				]
+			}],
+			"allowed_grpc_services": {
+				"dns:///sharding-service:443": {
+					"channel_creds": [
+						{ "type": "unsupported_cred_type" }
+					]
+				}
+			}
+		}`,
+	}
+	cancel := setupBootstrapOverride(bootstrapFileMap)
+	defer cancel()
+
+	tests := []struct {
+		name                string
+		fileName            string
+		wantErr             bool
+		wantChannelCredType string
+		wantCallCredTypes   []string
+	}{
+		{
+			name:                "good allowed_grpc_services",
+			fileName:            "allowedGrpcServicesGood",
+			wantChannelCredType: "insecure",
+		},
+		{
+			name:                "allowed_grpc_services with call creds",
+			fileName:            "allowedGrpcServicesWithCallCreds",
+			wantChannelCredType: "insecure",
+			wantCallCredTypes:   []string{"jwt_token_file"},
+		},
+		{
+			name:     "bad allowed_grpc_services",
+			fileName: "allowedGrpcServicesBadCreds",
+			wantErr:  true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			origBootstrapFileName := envconfig.XDSBootstrapFileName
+			envconfig.XDSBootstrapFileName = test.fileName
+			defer func() { envconfig.XDSBootstrapFileName = origBootstrapFileName }()
+
+			cfg, err := GetConfiguration()
+			if err != nil && !test.wantErr {
+				t.Fatalf("GetConfiguration() got unexpected error: %v, want: success", err)
+			}
+			if err == nil && test.wantErr {
+				t.Fatalf("GetConfiguration() got: success, want: error")
+			}
+			if test.wantErr {
+				return
+			}
+			allowed := cfg.AllowedGrpcServices()
+			if len(allowed) != 1 {
+				t.Fatalf("AllowedGrpcServices count got: %d, want: 1", len(allowed))
+			}
+			svc, ok := allowed["dns:///sharding-service:443"]
+			if !ok {
+				t.Fatalf("AllowedGrpcServices missing key \"dns:///sharding-service:443\"")
+			}
+			if got := svc.SelectedChannelCreds().Type; got != test.wantChannelCredType {
+				t.Errorf("SelectedChannelCreds type got: %q, want: %q", got, test.wantChannelCredType)
+			}
+			if len(svc.CallCredsConfigs()) != len(test.wantCallCredTypes) {
+				t.Fatalf("CallCredsConfigs count got: %d, want: %d", len(svc.CallCredsConfigs()), len(test.wantCallCredTypes))
+			}
+			for i, wantType := range test.wantCallCredTypes {
+				if got := svc.CallCredsConfigs()[i].Type; got != wantType {
+					t.Errorf("CallCredsConfig[%d] type got: %q, want: %q", i, got, wantType)
+				}
+			}
+		})
 	}
 }
