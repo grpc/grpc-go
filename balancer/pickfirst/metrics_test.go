@@ -32,6 +32,7 @@ import (
 	"google.golang.org/grpc/balancer/pickfirst"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
+	estats "google.golang.org/grpc/experimental/stats"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
@@ -41,7 +42,6 @@ import (
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/serviceconfig"
-	estats "google.golang.org/grpc/experimental/stats"
 	"google.golang.org/grpc/stats/opentelemetry"
 
 	"go.opentelemetry.io/otel/attribute"
@@ -290,7 +290,6 @@ func metricsDataFromReader(ctx context.Context, reader *metric.ManualReader) map
 	return gotMetrics
 }
 
-<<<<<<< HEAD
 // TestDisconnectLabel tests the disconnect label metric plumbing.
 // Separately, e2e tests are more exhaustive and check for all disconnect reasons.
 func (s) TestDisconnectLabel(t *testing.T) {
