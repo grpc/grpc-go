@@ -29,6 +29,7 @@ import (
 	"encoding/json"
 
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/protobuf/proto"
 )
 
 // channelCredsRegistry is a map from channel credential type name to
@@ -38,6 +39,9 @@ var channelCredsRegistry = make(map[string]ChannelCredentials)
 // callCredsRegistry is a map from call credential type name to
 // ChannelCredential builder.
 var callCredsRegistry = make(map[string]CallCredentials)
+
+var channelCredsByProtoURL = make(map[string]ChannelCredentialsWithProto)
+var callCredsByProtoURL = make(map[string]CallCredentialsWithProto)
 
 // ChannelCredentials interface encapsulates a credentials.Bundle builder
 // that can be used for communicating with the xDS Management server.
@@ -50,6 +54,18 @@ type ChannelCredentials interface {
 	Name() string
 }
 
+// ChannelCredentialsWithProto extends ChannelCredentials to support
+// protobuf config.
+type ChannelCredentialsWithProto interface {
+	ChannelCredentials
+	// TypeURL returns the protobuf type URL this builder supports.
+	TypeURL() string
+	// NewProtoConfig returns a new empty proto config message instance.
+	NewProtoConfig() proto.Message
+	// MarshalProtoConfig marshals the protobuf configuration to its JSON format.
+	MarshalProtoConfig(config proto.Message) (json.RawMessage, error)
+}
+
 // RegisterChannelCredentials registers ChannelCredentials used for connecting
 // to the xDS management server.
 //
@@ -58,6 +74,9 @@ type ChannelCredentials interface {
 // registered with the same name, the one registered last will take effect.
 func RegisterChannelCredentials(c ChannelCredentials) {
 	channelCredsRegistry[c.Name()] = c
+	if pc, ok := c.(ChannelCredentialsWithProto); ok {
+		channelCredsByProtoURL[pc.TypeURL()] = pc
+	}
 }
 
 // GetChannelCredentials returns the credentials associated with a given name.
@@ -68,6 +87,12 @@ func GetChannelCredentials(name string) ChannelCredentials {
 	}
 
 	return nil
+}
+
+// GetChannelCredentialsByProtoURL returns the credentials builder associated
+// with a given proto type URL.
+func GetChannelCredentialsByProtoURL(typeURL string) ChannelCredentialsWithProto {
+	return channelCredsByProtoURL[typeURL]
 }
 
 // CallCredentials interface encapsulates a credentials.PerRPCCredentials
@@ -81,6 +106,17 @@ type CallCredentials interface {
 	Name() string
 }
 
+// CallCredentialsWithProto extends CallCredentials to support protobuf config.
+type CallCredentialsWithProto interface {
+	CallCredentials
+	// TypeURL returns the protobuf type URL this builder supports.
+	TypeURL() string
+	// NewProtoConfig returns a new empty proto config message instance.
+	NewProtoConfig() proto.Message
+	// MarshalProtoConfig marshals the protobuf configuration to its JSON format.
+	MarshalProtoConfig(config proto.Message) (json.RawMessage, error)
+}
+
 // RegisterCallCredentials registers CallCredentials used for connecting
 // to the xDS management server.
 //
@@ -89,6 +125,9 @@ type CallCredentials interface {
 // registered with the same name, the one registered last will take effect.
 func RegisterCallCredentials(c CallCredentials) {
 	callCredsRegistry[c.Name()] = c
+	if pc, ok := c.(CallCredentialsWithProto); ok {
+		callCredsByProtoURL[pc.TypeURL()] = pc
+	}
 }
 
 // GetCallCredentials returns the credentials associated with a given name.
@@ -99,4 +138,10 @@ func GetCallCredentials(name string) CallCredentials {
 	}
 
 	return nil
+}
+
+// GetCallCredentialsByProtoURL returns the credentials builder associated
+// with a given proto type URL.
+func GetCallCredentialsByProtoURL(typeURL string) CallCredentialsWithProto {
+	return callCredsByProtoURL[typeURL]
 }
