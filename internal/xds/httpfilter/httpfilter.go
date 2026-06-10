@@ -74,21 +74,12 @@ type ClientInterceptor interface {
 	// NewStream creates a ClientStream for an RPC.
 	//
 	// Implementations must delegate stream creation to the provided newStream
-	// function. To intercept or override stream behavior, implementations
-	// may wrap the ClientStream returned by the delegate.
+	// function, passing the provided CallOption slice along with any new
+	// CallOption instances they wish to add. To intercept or override stream
+	// behavior, implementations may wrap the ClientStream returned by the
+	// delegate.
 	//
 	// Note: RPCInfo.Context is currently unused and will be nil.
-	//
-	// The done function is invoked when the RPC has finished using its
-	// underlying connection or if a connection could not be assigned. Because
-	// interceptors operate at the application layer, RPC operations may
-	// continue on the ClientStream even after done has been called. The
-	// caller must ensure done is non-nil.
-	//
-	// To ensure RPC completion notifications propagate through the entire
-	// interceptor chain, implementations must ensure that the done function
-	// passed to the delegate newStream invokes the done function passed to
-	// NewStream.
 	NewStream(ctx context.Context, ri iresolver.RPCInfo, newStream func(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStream, error), opts ...grpc.CallOption) (grpc.ClientStream, error)
 	// Close closes the interceptor. Once called, no new calls to NewStream are
 	// accepted. Ongoing calls to NewStream are allowed to complete.

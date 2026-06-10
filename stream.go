@@ -257,7 +257,7 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		if filterOpts != nil {
 			opts = combine(opts, filterOpts)
 		}
-		return newClientStreamWithParams(ctx, desc, cc, method, mc, onCommit, func() {}, nameResolutionDelayed, opts...)
+		return newClientStreamWithParams(ctx, desc, cc, method, mc, onCommit, nameResolutionDelayed, opts...)
 	}
 
 	rpcInfo := iresolver.RPCInfo{Context: ctx, Method: method}
@@ -297,7 +297,7 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 	return newStream(ctx)
 }
 
-func newClientStreamWithParams(ctx context.Context, desc *StreamDesc, cc *ClientConn, method string, mc *serviceconfig.MethodConfig, onCommit, doneFunc func(), nameResolutionDelayed bool, opts ...CallOption) (_ ClientStream, err error) {
+func newClientStreamWithParams(ctx context.Context, desc *StreamDesc, cc *ClientConn, method string, mc *serviceconfig.MethodConfig, onCommit func(), nameResolutionDelayed bool, opts ...CallOption) (_ ClientStream, err error) {
 	callInfo := defaultCallInfo()
 	if mc.WaitForReady != nil {
 		callInfo.failFast = !*mc.WaitForReady
@@ -335,7 +335,6 @@ func newClientStreamWithParams(ctx context.Context, desc *StreamDesc, cc *Client
 		Host:           cc.authority,
 		Method:         method,
 		ContentSubtype: callInfo.contentSubtype,
-		DoneFunc:       doneFunc,
 		Authority:      callInfo.authority,
 	}
 	if allowed := callInfo.acceptedResponseCompressors; len(allowed) > 0 {
