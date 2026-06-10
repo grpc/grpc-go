@@ -1936,7 +1936,7 @@ func (s) TestStreamFailureBodyPhaseAllow(t *testing.T) {
 			// Try to receive c2 but we should get error as ext_proc stream failed
 			// after body messages started, overriding failure_mode_allow=true.
 			if _, err = stream.Recv(); err == nil {
-				return fmt.Errorf("Unexpectedly received client messages when expected rpc to fail.")
+				return fmt.Errorf("unexpectedly received client messages when expected rpc to fail")
 			}
 			return nil
 		},
