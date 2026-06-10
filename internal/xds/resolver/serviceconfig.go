@@ -211,7 +211,6 @@ func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RP
 	}
 
 	config := &iresolver.RPCConfig{
-		// Communicate to the LB policy the chosen cluster and request hash, if Ring Hash LB policy.
 		Context:     lbCtx,
 		Interceptor: cluster.interceptor,
 	}

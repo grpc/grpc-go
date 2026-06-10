@@ -422,13 +422,11 @@ func (r *xdsResolver) newConfigSelector() (_ *configSelector, err error) {
 		if rt.ClusterSpecifierPlugin != "" {
 			clusterName := clusterSpecifierPluginPrefix + rt.ClusterSpecifierPlugin
 			onCommitted := func() {
-				r.serializer.TrySchedule(func(context.Context) {
-					if info, ok := cs.plugins[clusterName]; ok {
-						if v := info.refCount.Add(-1); v == 0 {
-							cs.sendNewServiceConfig()
-						}
+				if info, ok := cs.plugins[clusterName]; ok {
+					if v := info.refCount.Add(-1); v == 0 {
+						cs.sendNewServiceConfig()
 					}
-				})
+				}
 			}
 			interceptor, err := r.newInterceptor(r.xdsConfig.Listener.APIListener.HTTPFilters, nil, rt.HTTPFilterConfigOverride, r.xdsConfig.VirtualHost.HTTPFilterConfigOverride, onCommitted)
 			if err != nil {
@@ -454,19 +452,17 @@ func (r *xdsResolver) newConfigSelector() (_ *configSelector, err error) {
 				clusterName := clusterPrefix + wc.Name
 				wc := wc
 				onCommitted := func() {
-					r.serializer.TrySchedule(func(context.Context) {
-						if info, ok := cs.clusters[clusterName]; ok {
-							if v := info.refCount.Add(-1); v == 0 {
-								// We call unsubscribe rather than sendNewServiceConfig to
-								// prevent redundant updates. If the reference count in the
-								// dependency manager drops to zero, it will automatically
-								// trigger a service config update with this cluster
-								// removed. Calling unsubscribe allows the dependency
-								// manager to handle the update flow once and for all.
-								info.unsubscribe()
-							}
+					if info, ok := cs.clusters[clusterName]; ok {
+						if v := info.refCount.Add(-1); v == 0 {
+							// We call unsubscribe rather than sendNewServiceConfig to
+							// prevent redundant updates. If the reference count in the
+							// dependency manager drops to zero, it will automatically
+							// trigger a service config update with this cluster
+							// removed. Calling unsubscribe allows the dependency
+							// manager to handle the update flow once and for all.
+							info.unsubscribe()
 						}
-					})
+					}
 				}
 				interceptor, err := r.newInterceptor(r.xdsConfig.Listener.APIListener.HTTPFilters, wc.HTTPFilterConfigOverride, rt.HTTPFilterConfigOverride, r.xdsConfig.VirtualHost.HTTPFilterConfigOverride, onCommitted)
 				if err != nil {

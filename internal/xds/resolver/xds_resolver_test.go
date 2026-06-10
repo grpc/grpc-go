@@ -569,8 +569,8 @@ func (s) TestResolverGoodServiceUpdate(t *testing.T) {
 				}
 				cluster := clustermanager.GetPickedClusterForTesting(res.Context)
 				pickedClusters[cluster] = true
-				if err := commitStream(ctx, res.Interceptor); err != nil {
-					t.Fatalf("commitStream() failed with error: %v", err)
+				if err := createStreamAndCommit(ctx, res.Interceptor); err != nil {
+					t.Fatalf("createStreamAndCommit() failed with error: %v", err)
 				}
 			}
 			if !cmp.Equal(pickedClusters, tt.wantClusters) {
@@ -704,8 +704,8 @@ func (s) TestResolverRemovedWithRPCs(t *testing.T) {
 
 	// "Finish the RPC"; this could cause a panic if the resolver doesn't
 	// handle it correctly.
-	if err := commitStream(ctx, res.Interceptor); err != nil {
-		t.Fatalf("commitStream() failed with error: %v", err)
+	if err := createStreamAndCommit(ctx, res.Interceptor); err != nil {
+		t.Fatalf("createStreamAndCommit() failed with error: %v", err)
 	}
 
 	// Add the resources back.
@@ -721,8 +721,8 @@ func (s) TestResolverRemovedWithRPCs(t *testing.T) {
 		t.Fatalf("cs.SelectConfig(): %v", err)
 	}
 
-	if err := commitStream(ctx, res.Interceptor); err != nil {
-		t.Fatalf("commitStream() failed with error: %v", err)
+	if err := createStreamAndCommit(ctx, res.Interceptor); err != nil {
+		t.Fatalf("createStreamAndCommit() failed with error: %v", err)
 	}
 }
 
@@ -758,8 +758,8 @@ func (s) TestResolverRemovedResource(t *testing.T) {
 
 	// "Finish the RPC"; this could cause a panic if the resolver doesn't
 	// handle it correctly.
-	if err := commitStream(ctx, res.Interceptor); err != nil {
-		t.Fatalf("commitStream() failed with error: %v", err)
+	if err := createStreamAndCommit(ctx, res.Interceptor); err != nil {
+		t.Fatalf("createStreamAndCommit() failed with error: %v", err)
 	}
 
 	// Delete the listener resource on the management server, resulting in a
@@ -934,8 +934,8 @@ func (s) TestResolverMaxStreamDuration(t *testing.T) {
 				t.Errorf("cs.SelectConfig(%v): %v", req, err)
 				return
 			}
-			if err := commitStream(ctx, res.Interceptor); err != nil {
-				t.Fatalf("commitStream() failed with error: %v", err)
+			if err := createStreamAndCommit(ctx, res.Interceptor); err != nil {
+				t.Fatalf("createStreamAndCommit() failed with error: %v", err)
 			}
 			got := res.MethodConfig.Timeout
 			if !cmp.Equal(got, tc.want) {
@@ -1039,11 +1039,11 @@ func (s) TestResolverDelayedOnCommitted(t *testing.T) {
 		t.Fatalf("Picked cluster is %q, want %q", cluster, wantClusterName)
 	}
 
-	// Invoke OnCommitted on the old RPC; should lead to a service config update
+	// Invoke onCommit on the old RPC; should lead to a service config update
 	// that deletes the old cluster, as the old cluster no longer has any
 	// pending RPCs.
-	if err := commitStream(ctx, resOld.Interceptor); err != nil {
-		t.Fatalf("commitStream() failed with error: %v", err)
+	if err := createStreamAndCommit(ctx, resOld.Interceptor); err != nil {
+		t.Fatalf("createStreamAndCommit() failed with error: %v", err)
 	}
 
 	wantSC = fmt.Sprintf(`
@@ -1168,8 +1168,8 @@ func (s) TestResolverWRR(t *testing.T) {
 			t.Fatalf("cs.SelectConfig(): %v", err)
 		}
 		picks[clustermanager.GetPickedClusterForTesting(res.Context)]++
-		if err := commitStream(ctx, res.Interceptor); err != nil {
-			t.Fatalf("commitStream() failed with error: %v", err)
+		if err := createStreamAndCommit(ctx, res.Interceptor); err != nil {
+			t.Fatalf("createStreamAndCommit() failed with error: %v", err)
 		}
 	}
 	want := map[string]int{"cluster:A": 75, "cluster:B": 25}
@@ -1500,8 +1500,8 @@ func (s) TestResolverKeepWatchOpen_ActiveRPCs(t *testing.T) {
 	verifyUpdateFromResolver(ctx, t, stateCh, wantServiceRaw)
 
 	// Finish RPC (Drops Ref to ClusterA).
-	if err := commitStream(ctx, res.Interceptor); err != nil {
-		t.Fatalf("commitStream() failed with error: %v", err)
+	if err := createStreamAndCommit(ctx, res.Interceptor); err != nil {
+		t.Fatalf("createStreamAndCommit() failed with error: %v", err)
 	}
 
 	// ONLY cluster B should be requested now that there are no references to
@@ -1517,8 +1517,8 @@ func (s) TestResolverKeepWatchOpen_ActiveRPCs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("cs.SelectConfig(): %v", err)
 	}
-	if err := commitStream(ctx, res.Interceptor); err != nil {
-		t.Fatalf("commitStream() failed with error: %v", err)
+	if err := createStreamAndCommit(ctx, res.Interceptor); err != nil {
+		t.Fatalf("createStreamAndCommit() failed with error: %v", err)
 	}
 }
 

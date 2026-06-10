@@ -257,7 +257,7 @@ func (s) TestXDSResolverDelayedOnCommittedCSP(t *testing.T) {
 		t.Fatalf("config selector returned cluster: %v, want: %v", gotCluster, wantCluster)
 	}
 
-	// Delay resOld.OnCommitted(). As long as there are pending RPCs to removed
+	// Delay committing the stream. As long as there are pending RPCs to removed
 	// clusters, they still appear in the service config.
 
 	// Change the cluster specifier plugin configuration.
@@ -314,8 +314,8 @@ func (s) TestXDSResolverDelayedOnCommittedCSP(t *testing.T) {
 		t.Fatalf("config selector returned cluster: %v, want: %v", gotCluster, wantCluster)
 	}
 
-	if err := commitStream(ctx, resOld.Interceptor); err != nil {
-		t.Fatalf("commitStream() failed with error: %v", err)
+	if err := createStreamAndCommit(ctx, resOld.Interceptor); err != nil {
+		t.Fatalf("createStreamAndCommit() failed with error: %v", err)
 	}
 
 	wantSC = `
@@ -484,9 +484,10 @@ func (m mockClientStream) Context() context.Context {
 	return m.ctx
 }
 
-// commitStream simulates a client initiating stream I/O. Calling Context() on the
-// returned stream triggers the interceptor's underlying commit callback.
-func commitStream(ctx context.Context, interceptor iresolver.ClientInterceptor) error {
+// createStreamAndCommit simulates a client initiating stream I/O. Calling
+// Context() on the returned stream triggers the interceptor's underlying
+// commit callback.
+func createStreamAndCommit(ctx context.Context, interceptor iresolver.ClientInterceptor) error {
 	if interceptor == nil {
 		return nil
 	}
