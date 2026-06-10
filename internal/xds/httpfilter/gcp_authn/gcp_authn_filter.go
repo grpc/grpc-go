@@ -105,6 +105,8 @@ var _ httpfilter.ClientFilterBuilder = builder{}
 
 // ClientFilter implements the httpfilter.ClientFilter interface.
 type ClientFilter struct {
+	// FilterName is the name of the HTTP filter instance in the xDS
+	// configuration and is populated by the xDS resolver.
 	FilterName string
 	cache      *lruCache
 }
@@ -189,20 +191,20 @@ type gcpAuthnCallCredEntry struct {
 // by their target audience string.
 type lruCache struct {
 	// The following fields are protected by mu.
-	mu           sync.Mutex
-	cacheSize    uint64
-	ll           *list.List
-	cache        map[string]*list.Element
-	credsCreator func(string) (credentials.PerRPCCredentials, error)
+	mu          sync.Mutex
+	cacheSize   uint64
+	list        *list.List
+	cache       map[string]*list.Element
+	createCreds func(string) (credentials.PerRPCCredentials, error)
 }
 
 // newLRUCache instantiates a new lruCache with the specified capacity.
 func newLRUCache(size uint64) *lruCache {
 	return &lruCache{
-		cacheSize:    size,
-		ll:           list.New(),
-		cache:        make(map[string]*list.Element),
-		credsCreator: grpcgoogle.NewServiceAccountIdentityCredentials,
+		cacheSize:   size,
+		list:        list.New(),
+		cache:       make(map[string]*list.Element),
+		createCreds: grpcgoogle.NewServiceAccountIdentityCredentials,
 	}
 }
 
@@ -219,12 +221,12 @@ func (c *lruCache) resizeCache(newCacheSize uint64) {
 
 	c.cacheSize = newCacheSize
 	for uint64(len(c.cache)) > c.cacheSize {
-		oldest := c.ll.Back()
+		oldest := c.list.Back()
 		if oldest == nil {
 			break
 		}
 		delete(c.cache, oldest.Value.(*gcpAuthnCallCredEntry).key)
-		c.ll.Remove(oldest)
+		c.list.Remove(oldest)
 	}
 }
 
@@ -236,13 +238,13 @@ func (c *lruCache) getOrCreate(audience string) (credentials.PerRPCCredentials, 
 	c.mu.Lock()
 
 	if e, ok := c.cache[audience]; ok {
-		c.ll.MoveToFront(e)
+		c.list.MoveToFront(e)
 		c.mu.Unlock()
 		return e.Value.(*gcpAuthnCallCredEntry).value, nil
 	}
 
 	c.mu.Unlock()
-	creds, err := c.credsCreator(audience)
+	creds, err := c.createCreds(audience)
 	if err != nil {
 		return nil, err
 	}
@@ -250,19 +252,19 @@ func (c *lruCache) getOrCreate(audience string) (credentials.PerRPCCredentials, 
 	defer c.mu.Unlock()
 
 	if e, ok := c.cache[audience]; ok {
-		c.ll.MoveToFront(e)
+		c.list.MoveToFront(e)
 		return e.Value.(*gcpAuthnCallCredEntry).value, nil
 	}
 
 	if c.cacheSize > 0 {
 		if uint64(len(c.cache)) >= c.cacheSize {
-			oldest := c.ll.Back()
+			oldest := c.list.Back()
 			if oldest != nil {
 				delete(c.cache, oldest.Value.(*gcpAuthnCallCredEntry).key)
-				c.ll.Remove(oldest)
+				c.list.Remove(oldest)
 			}
 		}
-		e := c.ll.PushFront(&gcpAuthnCallCredEntry{key: audience, value: creds})
+		e := c.list.PushFront(&gcpAuthnCallCredEntry{key: audience, value: creds})
 		c.cache[audience] = e
 	}
 	return creds, nil

@@ -166,11 +166,11 @@ func (s) TestBuildClientInterceptor(t *testing.T) {
 			interceptor := i.(*interceptor)
 
 			if interceptor.filterName != tc.clientFilter.FilterName {
-				t.Errorf("BuildClientInterceptor() returned interceptor with filtername = %q, want %q", interceptor.filterName, tc.clientFilter.FilterName)
+				t.Fatalf("BuildClientInterceptor() returned interceptor with filtername = %q, want %q", interceptor.filterName, tc.clientFilter.FilterName)
 			}
 
 			if interceptor.cache == nil || interceptor.cache.cacheSize != tc.wantCacheSize {
-				t.Errorf("BuildClientInterceptor() returned interceptor with cacheSize = %d, want %d", interceptor.cache.cacheSize, tc.wantCacheSize)
+				t.Fatalf("BuildClientInterceptor() returned interceptor with cacheSize = %d, want %d", interceptor.cache.cacheSize, tc.wantCacheSize)
 			}
 		})
 	}

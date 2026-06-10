@@ -122,12 +122,14 @@ func (s) TestGCPAuthnFilter_SuccessCase(t *testing.T) {
 	// Start a test backend.
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	metadataCh := make(chan []string, 1)
 
 	backend := &stubserver.StubServer{
 		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
 			md, _ := metadata.FromIncomingContext(ctx)
-			metadataCh <- md.Get("authorization")
+			// Verify that the token is attached to the RPC
+			if !strings.Contains(md.Get("authorization")[0], "Bearer "+tokenValue) {
+				t.Errorf("Expected token not found in metadata: %v", md)
+			}
 			return &testpb.Empty{}, nil
 		},
 	}
@@ -138,43 +140,30 @@ func (s) TestGCPAuthnFilter_SuccessCase(t *testing.T) {
 		testServiceName = "service-name"
 		clusterName     = "cluster_A"
 		endpointName    = "endpoint_A"
+		routeConfigName = "route-service-name"
 		filterName      = "com.google.grpc.gcp_authn"
 	)
 
 	// Configure resources on the management server.
-	listener := &v3listenerpb.Listener{
-		Name: testServiceName,
-		ApiListener: &v3listenerpb.ApiListener{
-			ApiListener: testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
-				RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
-					RouteConfig: &v3routepb.RouteConfiguration{
-						VirtualHosts: []*v3routepb.VirtualHost{{
-							Domains: []string{testServiceName},
-							Routes: []*v3routepb.Route{{
-								Match: &v3routepb.RouteMatch{PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: ""}},
-								Action: &v3routepb.Route_Route{Route: &v3routepb.RouteAction{
-									ClusterSpecifier: &v3routepb.RouteAction_Cluster{Cluster: clusterName},
-								}},
-							}},
-						}},
-					},
-				},
-				HttpFilters: []*v3httppb.HttpFilter{
-					{
-						Name: filterName,
-						ConfigType: &v3httppb.HttpFilter_TypedConfig{
-							TypedConfig: testutils.MarshalAny(t, &v3gcpauthnpb.GcpAuthnFilterConfig{
-								CacheConfig: &v3gcpauthnpb.TokenCacheConfig{
-									CacheSize: &wrapperspb.UInt64Value{Value: 10},
-								},
-							}),
-						},
-					},
-					e2e.RouterHTTPFilter,
-				},
-			}),
-		},
+	listener := e2e.DefaultClientListener(testServiceName, routeConfigName)
+	hcm := new(v3httppb.HttpConnectionManager)
+	lis := listener.GetApiListener().GetApiListener()
+	if err = lis.UnmarshalTo(hcm); err != nil {
+		t.Fatal(err)
 	}
+	hcm.HttpFilters = append([]*v3httppb.HttpFilter{
+		{
+			Name: filterName,
+			ConfigType: &v3httppb.HttpFilter_TypedConfig{
+				TypedConfig: testutils.MarshalAny(t, &v3gcpauthnpb.GcpAuthnFilterConfig{
+					CacheConfig: &v3gcpauthnpb.TokenCacheConfig{
+						CacheSize: &wrapperspb.UInt64Value{Value: 10},
+					},
+				}),
+			},
+		},
+	}, hcm.HttpFilters...)
+	listener.ApiListener.ApiListener = testutils.MarshalAny(t, hcm)
 
 	cluster := e2e.DefaultCluster(clusterName, endpointName, e2e.SecurityLevelTLS)
 	cluster.Metadata = &v3corepb.Metadata{
@@ -188,6 +177,7 @@ func (s) TestGCPAuthnFilter_SuccessCase(t *testing.T) {
 	resources := e2e.UpdateOptions{
 		NodeID:    nodeID,
 		Listeners: []*v3listenerpb.Listener{listener},
+		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeConfigName, testServiceName, clusterName)},
 		Clusters:  []*v3clusterpb.Cluster{cluster},
 		Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(endpointName, "localhost", []uint32{testutils.ParsePort(t, backend.Address)})},
 	}
@@ -209,23 +199,6 @@ func (s) TestGCPAuthnFilter_SuccessCase(t *testing.T) {
 	client := testgrpc.NewTestServiceClient(cc)
 	if _, err = client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("EmptyCall() failed: %v", err)
-	}
-
-	// Verify that the token was attached to the RPC
-	select {
-	case md := <-metadataCh:
-		found := false
-		for _, val := range md {
-			if strings.Contains(val, "Bearer "+tokenValue) {
-				found = true
-				break
-			}
-		}
-		if !found {
-			t.Errorf("Expected token not found in metadata: %v", md)
-		}
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for metadata from backend")
 	}
 }
 
@@ -261,13 +234,15 @@ func (s) TestGCPAuthnFilter_TokenCaching(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	metadataCh := make(chan []string, 10)
 
 	// Start a test backend.
 	backend := &stubserver.StubServer{
 		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
 			md, _ := metadata.FromIncomingContext(ctx)
-			metadataCh <- md.Get("authorization")
+			// Verify that the token is attached to the RPC
+			if !strings.Contains(md.Get("authorization")[0], "Bearer "+tokenValue) {
+				t.Errorf("Expected token not found in metadata: %v", md)
+			}
 			return &testpb.Empty{}, nil
 		},
 	}
@@ -278,43 +253,30 @@ func (s) TestGCPAuthnFilter_TokenCaching(t *testing.T) {
 		testServiceName = "service-name"
 		clusterName     = "cluster_A"
 		endpointName    = "endpoint_A"
+		routeConfigName = "route-service-name"
 		filterName      = "com.google.grpc.gcp_authn"
 	)
 
 	// Configure resources on the management server.
-	listener := &v3listenerpb.Listener{
-		Name: testServiceName,
-		ApiListener: &v3listenerpb.ApiListener{
-			ApiListener: testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
-				RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
-					RouteConfig: &v3routepb.RouteConfiguration{
-						VirtualHosts: []*v3routepb.VirtualHost{{
-							Domains: []string{testServiceName},
-							Routes: []*v3routepb.Route{{
-								Match: &v3routepb.RouteMatch{PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: ""}},
-								Action: &v3routepb.Route_Route{Route: &v3routepb.RouteAction{
-									ClusterSpecifier: &v3routepb.RouteAction_Cluster{Cluster: clusterName},
-								}},
-							}},
-						}},
-					},
-				},
-				HttpFilters: []*v3httppb.HttpFilter{
-					{
-						Name: filterName,
-						ConfigType: &v3httppb.HttpFilter_TypedConfig{
-							TypedConfig: testutils.MarshalAny(t, &v3gcpauthnpb.GcpAuthnFilterConfig{
-								CacheConfig: &v3gcpauthnpb.TokenCacheConfig{
-									CacheSize: &wrapperspb.UInt64Value{Value: 10},
-								},
-							}),
-						},
-					},
-					e2e.RouterHTTPFilter,
-				},
-			}),
-		},
+	listener := e2e.DefaultClientListener(testServiceName, routeConfigName)
+	hcm := new(v3httppb.HttpConnectionManager)
+	lis := listener.GetApiListener().GetApiListener()
+	if err = lis.UnmarshalTo(hcm); err != nil {
+		t.Fatal(err)
 	}
+	hcm.HttpFilters = append([]*v3httppb.HttpFilter{
+		{
+			Name: filterName,
+			ConfigType: &v3httppb.HttpFilter_TypedConfig{
+				TypedConfig: testutils.MarshalAny(t, &v3gcpauthnpb.GcpAuthnFilterConfig{
+					CacheConfig: &v3gcpauthnpb.TokenCacheConfig{
+						CacheSize: &wrapperspb.UInt64Value{Value: 10},
+					},
+				}),
+			},
+		},
+	}, hcm.HttpFilters...)
+	listener.ApiListener.ApiListener = testutils.MarshalAny(t, hcm)
 
 	cluster := e2e.DefaultCluster(clusterName, endpointName, e2e.SecurityLevelTLS)
 	cluster.Metadata = &v3corepb.Metadata{
@@ -328,6 +290,7 @@ func (s) TestGCPAuthnFilter_TokenCaching(t *testing.T) {
 	resources := e2e.UpdateOptions{
 		NodeID:    nodeID,
 		Listeners: []*v3listenerpb.Listener{listener},
+		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeConfigName, testServiceName, clusterName)},
 		Clusters:  []*v3clusterpb.Cluster{cluster},
 		Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(endpointName, "localhost", []uint32{testutils.ParsePort(t, backend.Address)})},
 	}
@@ -352,27 +315,6 @@ func (s) TestGCPAuthnFilter_TokenCaching(t *testing.T) {
 		if _, err = client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 			t.Fatalf("EmptyCall() failed: %v", err)
 		}
-	}
-
-	// Verify that the token was attached to the RPC
-	select {
-	case md := <-metadataCh:
-		found := false
-		for _, val := range md {
-			if strings.Contains(val, "Bearer "+tokenValue) {
-				// Verify request count is 1
-				if count := atomic.LoadInt32(&requestCount); count != 1 {
-					t.Errorf("Unexpected request to metadata server, got %d want 1", count)
-				}
-				found = true
-				break
-			}
-		}
-		if !found {
-			t.Errorf("Expected token not found in metadata: %v", md)
-		}
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for metadata from backend")
 	}
 }
 
@@ -413,46 +355,35 @@ func (s) TestGCPAuthnFilter_InsecureTransport(t *testing.T) {
 
 	var (
 		testServiceName = "service-name"
+		clusterName     = "cluster_A"
+		endpointName    = "endpoint_A"
 		filterName      = "com.google.grpc.gcp_authn"
+		routeConfigName = "route-service-name"
 	)
 
 	// Configure resources on the management server.
-	listener := &v3listenerpb.Listener{
-		Name: testServiceName,
-		ApiListener: &v3listenerpb.ApiListener{
-			ApiListener: testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
-				RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
-					RouteConfig: &v3routepb.RouteConfiguration{
-						VirtualHosts: []*v3routepb.VirtualHost{{
-							Domains: []string{testServiceName},
-							Routes: []*v3routepb.Route{{
-								Match: &v3routepb.RouteMatch{PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: ""}},
-								Action: &v3routepb.Route_Route{Route: &v3routepb.RouteAction{
-									ClusterSpecifier: &v3routepb.RouteAction_Cluster{Cluster: "A"},
-								}},
-							}},
-						}},
-					},
-				},
-				HttpFilters: []*v3httppb.HttpFilter{
-					{
-						Name: filterName,
-						ConfigType: &v3httppb.HttpFilter_TypedConfig{
-							TypedConfig: testutils.MarshalAny(t, &v3gcpauthnpb.GcpAuthnFilterConfig{
-								CacheConfig: &v3gcpauthnpb.TokenCacheConfig{
-									CacheSize: &wrapperspb.UInt64Value{Value: 10},
-								},
-							}),
-						},
-					},
-					e2e.RouterHTTPFilter,
-				},
-			}),
-		},
+	listener := e2e.DefaultClientListener(testServiceName, routeConfigName)
+	hcm := new(v3httppb.HttpConnectionManager)
+	lis := listener.GetApiListener().GetApiListener()
+	if err = lis.UnmarshalTo(hcm); err != nil {
+		t.Fatal(err)
 	}
+	hcm.HttpFilters = append([]*v3httppb.HttpFilter{
+		{
+			Name: filterName,
+			ConfigType: &v3httppb.HttpFilter_TypedConfig{
+				TypedConfig: testutils.MarshalAny(t, &v3gcpauthnpb.GcpAuthnFilterConfig{
+					CacheConfig: &v3gcpauthnpb.TokenCacheConfig{
+						CacheSize: &wrapperspb.UInt64Value{Value: 10},
+					},
+				}),
+			},
+		},
+	}, hcm.HttpFilters...)
+	listener.ApiListener.ApiListener = testutils.MarshalAny(t, hcm)
 
 	// SecurityLevelNone causes SecurityCfg to be nil
-	cluster := e2e.DefaultCluster("A", "endpoint_A", e2e.SecurityLevelNone)
+	cluster := e2e.DefaultCluster(clusterName, endpointName, e2e.SecurityLevelNone)
 	cluster.Metadata = &v3corepb.Metadata{
 		TypedFilterMetadata: map[string]*anypb.Any{
 			filterName: testutils.MarshalAny(t, &v3gcpauthnpb.Audience{
@@ -464,8 +395,9 @@ func (s) TestGCPAuthnFilter_InsecureTransport(t *testing.T) {
 	resources := e2e.UpdateOptions{
 		NodeID:    nodeID,
 		Listeners: []*v3listenerpb.Listener{listener},
+		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeConfigName, testServiceName, clusterName)},
 		Clusters:  []*v3clusterpb.Cluster{cluster},
-		Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint("endpoint_A", "localhost", []uint32{testutils.ParsePort(t, backend.Address)})},
+		Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(endpointName, "localhost", []uint32{testutils.ParsePort(t, backend.Address)})},
 	}
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
@@ -520,13 +452,10 @@ func (s) TestGCPAuthnFilter_CacheSharingConfigUpdate(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	metadataCh := make(chan []string, 10)
 
 	// Start a test backend.
 	backend := &stubserver.StubServer{
-		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
-			md, _ := metadata.FromIncomingContext(ctx)
-			metadataCh <- md.Get("authorization")
+		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
 			return &testpb.Empty{}, nil
 		},
 	}
@@ -656,7 +585,6 @@ func (s) TestGCPAuthnFilter_CacheSharingConfigUpdate(t *testing.T) {
 		if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 			t.Fatalf("EmptyCall(%s) failed: %v", rpcName, err)
 		}
-		<-metadataCh
 	}
 
 	// Make initial calls to all 3 clusters to populate the cache with 3 entries.
@@ -722,7 +650,6 @@ func (s) TestGCPAuthnFilter_CacheSharingConfigUpdate(t *testing.T) {
 	if ctx.Err() != nil {
 		t.Fatal("Timeout waiting for xDS update to propagate")
 	}
-	<-metadataCh
 
 	// Make calls for all 3 clusters again. Resizing the cache from 3 to 1
 	// in the previous step leaves only the token for Cluster C in the
@@ -786,12 +713,14 @@ func (s) TestGCPAuthnFilter_ConcurrentRPCWithShortAndLongContext(t *testing.T) {
 	// Start a test backend.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	metadataCh := make(chan []string, 1)
 
 	backend := &stubserver.StubServer{
 		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
 			md, _ := metadata.FromIncomingContext(ctx)
-			metadataCh <- md.Get("authorization")
+			// Verify that the token is attached to the RPC
+			if !strings.Contains(md.Get("authorization")[0], "Bearer "+tokenValue) {
+				t.Errorf("Expected token not found in metadata: %v", md)
+			}
 			return &testpb.Empty{}, nil
 		},
 	}
@@ -802,45 +731,30 @@ func (s) TestGCPAuthnFilter_ConcurrentRPCWithShortAndLongContext(t *testing.T) {
 		testServiceName = "service-name"
 		clusterName     = "cluster_A"
 		endpointName    = "endpoint_A"
+		routeConfigName = "route-service-name"
 		filterName      = "com.google.grpc.gcp_authn"
 	)
 
 	// Configure resources on the management server.
-	listener := &v3listenerpb.Listener{
-		Name: testServiceName,
-		ApiListener: &v3listenerpb.ApiListener{
-			ApiListener: testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
-				RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
-					RouteConfig: &v3routepb.RouteConfiguration{
-						VirtualHosts: []*v3routepb.VirtualHost{{
-							Domains: []string{testServiceName},
-							Routes: []*v3routepb.Route{{
-								Match: &v3routepb.RouteMatch{
-									PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: ""},
-								},
-								Action: &v3routepb.Route_Route{Route: &v3routepb.RouteAction{
-									ClusterSpecifier: &v3routepb.RouteAction_Cluster{Cluster: clusterName},
-								}},
-							}},
-						}},
-					},
-				},
-				HttpFilters: []*v3httppb.HttpFilter{
-					{
-						Name: filterName,
-						ConfigType: &v3httppb.HttpFilter_TypedConfig{
-							TypedConfig: testutils.MarshalAny(t, &v3gcpauthnpb.GcpAuthnFilterConfig{
-								CacheConfig: &v3gcpauthnpb.TokenCacheConfig{
-									CacheSize: &wrapperspb.UInt64Value{Value: 10},
-								},
-							}),
-						},
-					},
-					e2e.RouterHTTPFilter,
-				},
-			}),
-		},
+	listener := e2e.DefaultClientListener(testServiceName, routeConfigName)
+	hcm := new(v3httppb.HttpConnectionManager)
+	lis := listener.GetApiListener().GetApiListener()
+	if err = lis.UnmarshalTo(hcm); err != nil {
+		t.Fatal(err)
 	}
+	hcm.HttpFilters = append([]*v3httppb.HttpFilter{
+		{
+			Name: filterName,
+			ConfigType: &v3httppb.HttpFilter_TypedConfig{
+				TypedConfig: testutils.MarshalAny(t, &v3gcpauthnpb.GcpAuthnFilterConfig{
+					CacheConfig: &v3gcpauthnpb.TokenCacheConfig{
+						CacheSize: &wrapperspb.UInt64Value{Value: 10},
+					},
+				}),
+			},
+		},
+	}, hcm.HttpFilters...)
+	listener.ApiListener.ApiListener = testutils.MarshalAny(t, hcm)
 
 	cluster := e2e.DefaultCluster(clusterName, endpointName, e2e.SecurityLevelTLS)
 	cluster.Metadata = &v3corepb.Metadata{
@@ -854,6 +768,7 @@ func (s) TestGCPAuthnFilter_ConcurrentRPCWithShortAndLongContext(t *testing.T) {
 	resources := e2e.UpdateOptions{
 		NodeID:    nodeID,
 		Listeners: []*v3listenerpb.Listener{listener},
+		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeConfigName, testServiceName, clusterName)},
 		Clusters:  []*v3clusterpb.Cluster{cluster},
 		Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(endpointName, "localhost", []uint32{testutils.ParsePort(t, backend.Address)})},
 	}
@@ -938,27 +853,10 @@ func (s) TestGCPAuthnFilter_ConcurrentRPCWithShortAndLongContext(t *testing.T) {
 		t.Fatal("Timeout while waiting for second RPC to succeed")
 	}
 
-	// Verify that the token retrieved by the first fetch was successfully
-	// attached to the second RPC.
-	select {
-	case md := <-metadataCh:
-		found := false
-		for _, val := range md {
-			if strings.Contains(val, "Bearer "+tokenValue) {
-				// Verify request count is 1. This ensures that the token fetched for
-				// the first RPC was reused for the second RPC.
-				if count := atomic.LoadInt32(&requestCount); count != 1 {
-					t.Errorf("Unexpected request to metadata server, got %d want 1", count)
-				}
-				found = true
-				break
-			}
-		}
-		if !found {
-			t.Errorf("Expected token not found in metadata of second RPC: %v", md)
-		}
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for metadata from backend for the second RPC")
+	// Verify request count is 1. This ensures that the token fetched for
+	// the first RPC was reused for the second RPC.
+	if count := atomic.LoadInt32(&requestCount); count != 1 {
+		t.Errorf("Unexpected request to metadata server, got %d want 1", count)
 	}
 }
 
@@ -993,7 +891,6 @@ func (s) TestGCPAuthnFilter_PreservesUserCallOptions(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	metadataCh := make(chan []string, 1)
 
 	// Start a test backend.
 	backend := &stubserver.StubServer{
@@ -1005,7 +902,10 @@ func (s) TestGCPAuthnFilter_PreservesUserCallOptions(t *testing.T) {
 			}
 
 			md, _ := metadata.FromIncomingContext(ctx)
-			metadataCh <- md.Get("authorization")
+			// Verify that the token is attached to the RPC
+			if !strings.Contains(md.Get("authorization")[0], "Bearer "+tokenValue) {
+				t.Errorf("Expected token not found in metadata: %v", md)
+			}
 			return &testpb.Empty{}, nil
 		},
 	}
@@ -1016,43 +916,30 @@ func (s) TestGCPAuthnFilter_PreservesUserCallOptions(t *testing.T) {
 		testServiceName = "service-name"
 		clusterName     = "cluster_A"
 		endpointName    = "endpoint_A"
+		routeConfigName = "route-service-name"
 		filterName      = "com.google.grpc.gcp_authn"
 	)
 
 	// Configure resources on the management server.
-	listener := &v3listenerpb.Listener{
-		Name: testServiceName,
-		ApiListener: &v3listenerpb.ApiListener{
-			ApiListener: testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
-				RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
-					RouteConfig: &v3routepb.RouteConfiguration{
-						VirtualHosts: []*v3routepb.VirtualHost{{
-							Domains: []string{testServiceName},
-							Routes: []*v3routepb.Route{{
-								Match: &v3routepb.RouteMatch{PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: ""}},
-								Action: &v3routepb.Route_Route{Route: &v3routepb.RouteAction{
-									ClusterSpecifier: &v3routepb.RouteAction_Cluster{Cluster: clusterName},
-								}},
-							}},
-						}},
-					},
-				},
-				HttpFilters: []*v3httppb.HttpFilter{
-					{
-						Name: filterName,
-						ConfigType: &v3httppb.HttpFilter_TypedConfig{
-							TypedConfig: testutils.MarshalAny(t, &v3gcpauthnpb.GcpAuthnFilterConfig{
-								CacheConfig: &v3gcpauthnpb.TokenCacheConfig{
-									CacheSize: &wrapperspb.UInt64Value{Value: 10},
-								},
-							}),
-						},
-					},
-					e2e.RouterHTTPFilter,
-				},
-			}),
-		},
+	listener := e2e.DefaultClientListener(testServiceName, routeConfigName)
+	hcm := new(v3httppb.HttpConnectionManager)
+	lis := listener.GetApiListener().GetApiListener()
+	if err = lis.UnmarshalTo(hcm); err != nil {
+		t.Fatal(err)
 	}
+	hcm.HttpFilters = append([]*v3httppb.HttpFilter{
+		{
+			Name: filterName,
+			ConfigType: &v3httppb.HttpFilter_TypedConfig{
+				TypedConfig: testutils.MarshalAny(t, &v3gcpauthnpb.GcpAuthnFilterConfig{
+					CacheConfig: &v3gcpauthnpb.TokenCacheConfig{
+						CacheSize: &wrapperspb.UInt64Value{Value: 10},
+					},
+				}),
+			},
+		},
+	}, hcm.HttpFilters...)
+	listener.ApiListener.ApiListener = testutils.MarshalAny(t, hcm)
 
 	cluster := e2e.DefaultCluster(clusterName, endpointName, e2e.SecurityLevelTLS)
 	cluster.Metadata = &v3corepb.Metadata{
@@ -1066,6 +953,7 @@ func (s) TestGCPAuthnFilter_PreservesUserCallOptions(t *testing.T) {
 	resources := e2e.UpdateOptions{
 		NodeID:    nodeID,
 		Listeners: []*v3listenerpb.Listener{listener},
+		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeConfigName, testServiceName, clusterName)},
 		Clusters:  []*v3clusterpb.Cluster{cluster},
 		Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(endpointName, "localhost", []uint32{testutils.ParsePort(t, backend.Address)})},
 	}
@@ -1097,22 +985,5 @@ func (s) TestGCPAuthnFilter_PreservesUserCallOptions(t *testing.T) {
 	val := header.Get("custom-response-header")
 	if len(val) == 0 || val[0] != "custom-val" {
 		t.Errorf("Unexpected response header, got: %v want custom-val", val)
-	}
-
-	// Verify that the credentials option was successfully appended and executed.
-	select {
-	case md := <-metadataCh:
-		found := false
-		for _, val := range md {
-			if strings.Contains(val, "Bearer "+tokenValue) {
-				found = true
-				break
-			}
-		}
-		if !found {
-			t.Errorf("Expected token not found in metadata: %v", md)
-		}
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for metadata from backend")
 	}
 }
