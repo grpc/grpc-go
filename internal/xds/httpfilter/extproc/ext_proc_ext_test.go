@@ -1601,14 +1601,6 @@ func (s) TestImmediateResponseDisabledWithFailureModeAllow(t *testing.T) {
 			}); err != nil {
 				return err
 			}
-			// Read c2 directly over data plane!
-			in, err := stream.Recv()
-			if err != nil {
-				return err
-			}
-			if got, want := string(in.GetPayload().GetBody()), "c2"; got != want {
-				return status.Errorf(codes.FailedPrecondition, "expected body %q, got %q", want, got)
-			}
 			return nil
 		},
 	})
@@ -1668,22 +1660,15 @@ func (s) TestImmediateResponseDisabledWithFailureModeAllow(t *testing.T) {
 		t.Fatalf("FullDuplexCall() failed: %v", err)
 	}
 
-	// Send c1. This triggers request body processing, which returns ImmediateResponse.
-	// Since disable_immediate_response=true and failure_mode_allow=true, the stream is bypassed.
+	// Send c1.
 	stream.Send(&testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: []byte("c1")}})
 
-	// Recv response s1 directly over data plane without sleep!
-	resp, err := stream.Recv()
-	if err != nil {
-		t.Fatalf("stream.Recv() failed: %v", err)
-	}
-	if got, want := string(resp.GetPayload().GetBody()), "s1"; got != want {
-		t.Fatalf("got response %q, want %q", got, want)
-	}
-
-	// Send c2 directly over data plane without sleep!
-	if err := stream.Send(&testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: []byte("c2")}}); err != nil {
-		t.Fatalf("stream.Send(c2) failed: %v", err)
+	// Subsequent Recv should fail with INTERNAL status because immediate response
+	// causes ext_proc stream to fail after body messages started, overriding
+	// failure_mode_allow=true.
+	_, err = stream.Recv()
+	if got, want := status.Code(err), codes.Internal; got != want {
+		t.Fatalf("stream.Recv() returned status code %v, want %v", got, want)
 	}
 }
 
@@ -1866,8 +1851,9 @@ func (s) TestStreamFailureHeaderPhaseDeny(t *testing.T) {
 
 // TestStreamFailureBodyPhaseAllow tests the scenario where the external
 // processor stream fails abruptly during the request body phase while
-// failure_mode_allow is true. Verifies that the RPC succeeds by bypassing the
-// external processor.
+// failure_mode_allow is true. Verifies that the RPC fails since
+// failure_mode_allow is not respected once body has been sent on external
+// processor server.
 func (s) TestStreamFailureBodyPhaseAllow(t *testing.T) {
 	origParse := extproc.ParseGRPCServiceConfig
 	origCreate := extproc.CreateExtProcChannel
@@ -1947,20 +1933,10 @@ func (s) TestStreamFailureBodyPhaseAllow(t *testing.T) {
 				return err
 			}
 
-			// Receive c2 (should not be mutated, bypass processor)
-			in2, err := stream.Recv()
-			if err != nil {
-				return err
-			}
-			if got, want := string(in2.GetPayload().GetBody()), "c2"; got != want {
-				return status.Errorf(codes.FailedPrecondition, "expected body %q, got %q", want, got)
-			}
-
-			// Send s2
-			if err := stream.Send(&testpb.StreamingOutputCallResponse{
-				Payload: &testpb.Payload{Body: []byte("s2")},
-			}); err != nil {
-				return err
+			// Try to receive c2 but we should get error as ext_proc stream failed
+			// after body messages started, overriding failure_mode_allow=true.
+			if _, err = stream.Recv(); err == nil {
+				return fmt.Errorf("Unexpectedly received client messages when expected rpc to fail.")
 			}
 			return nil
 		},
@@ -2020,12 +1996,162 @@ func (s) TestStreamFailureBodyPhaseAllow(t *testing.T) {
 		t.Fatalf("FullDuplexCall() failed: %v", err)
 	}
 
-	// Send c1
+	// Send c1.
 	if err := stream.Send(&testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: []byte("c1")}}); err != nil {
 		t.Fatalf("stream.Send(c1) failed: %v", err)
 	}
 
-	// Receive s1
+	// Subsequent Recv/Send must fail with INTERNAL status because ext_proc stream
+	// failed after body messages started, overriding failure_mode_allow=true.
+	_, err = stream.Recv()
+	if got, want := status.Code(err), codes.Internal; got != want {
+		t.Fatalf("stream.Recv() returned status code %v, want %v", got, want)
+	}
+}
+
+// TestStreamFailureBodyModeNoneAllow tests the scenario where the external
+// processor stream fails abruptly after initial headers while BodySendMode is
+// NONE and failure_mode_allow is true. Verifies that because no body messages
+// were sent to ext_proc, the data plane RPC is allowed to continue unharmed.
+func (s) TestStreamFailureBodyModeNoneAllow(t *testing.T) {
+	origParse := extproc.ParseGRPCServiceConfig
+	origCreate := extproc.CreateExtProcChannel
+	extproc.ParseGRPCServiceConfig = parseGRPCServiceConfigForTesting
+	extproc.CreateExtProcChannel = createExtProcChannelForTesting
+	defer func() {
+		extproc.ParseGRPCServiceConfig = origParse
+		extproc.CreateExtProcChannel = origCreate
+	}()
+	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
+	extproc.RegisterForTesting()
+	defer extproc.UnregisterForTesting()
+
+	lis, err := testutils.LocalTCPListener()
+	if err != nil {
+		t.Fatalf("LocalTCPListener() failed: %v", err)
+	}
+	extprocServer := grpc.NewServer()
+	mockProc := &mockProcessorServer{
+		processFunc: func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+			// Receive initial headers and continue.
+			req, err := stream.Recv()
+			if err != nil {
+				return err
+			}
+			if req.GetRequestHeaders() == nil {
+				return fmt.Errorf("expected request headers, got %v", req)
+			}
+			resp := &v3procservicepb.ProcessingResponse{
+				Response: &v3procservicepb.ProcessingResponse_RequestHeaders{
+					RequestHeaders: &v3procservicepb.HeadersResponse{
+						Response: &v3procservicepb.CommonResponse{
+							Status: v3procservicepb.CommonResponse_CONTINUE,
+						},
+					},
+				},
+			}
+			if err := stream.Send(resp); err != nil {
+				return err
+			}
+			// Fail after sending headers.
+			return status.Error(codes.Unavailable, "abrupt stream failure after headers")
+		},
+	}
+	v3procservicepb.RegisterExternalProcessorServer(extprocServer, mockProc)
+	go extprocServer.Serve(lis)
+	defer extprocServer.Stop()
+
+	stub := stubserver.StartTestService(t, &stubserver.StubServer{
+		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
+			in1, err := stream.Recv()
+			if err != nil {
+				return err
+			}
+			if got, want := string(in1.GetPayload().GetBody()), "c1"; got != want {
+				return status.Errorf(codes.FailedPrecondition, "expected body %q, got %q", want, got)
+			}
+			if err := stream.Send(&testpb.StreamingOutputCallResponse{
+				Payload: &testpb.Payload{Body: []byte("s1")},
+			}); err != nil {
+				return err
+			}
+			in2, err := stream.Recv()
+			if err != nil {
+				return err
+			}
+			if got, want := string(in2.GetPayload().GetBody()), "c2"; got != want {
+				return status.Errorf(codes.FailedPrecondition, "expected body %q, got %q", want, got)
+			}
+			if err := stream.Send(&testpb.StreamingOutputCallResponse{
+				Payload: &testpb.Payload{Body: []byte("s2")},
+			}); err != nil {
+				return err
+			}
+			return nil
+		},
+	})
+	defer stub.Stop()
+
+	managementServer, nodeID, _, xdsResolver := setup.ManagementServerAndResolver(t)
+	const serviceName = "test-service"
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		DialTarget: serviceName,
+		NodeID:     nodeID,
+		Host:       "localhost",
+		Port:       testutils.ParsePort(t, stub.Address),
+		SecLevel:   e2e.SecurityLevelNone,
+	})
+	hcm := new(v3httppb.HttpConnectionManager)
+	apiListener := resources.Listeners[0].GetApiListener().GetApiListener()
+	if err = apiListener.UnmarshalTo(hcm); err != nil {
+		t.Fatal(err)
+	}
+
+	hcm.HttpFilters = append([]*v3httppb.HttpFilter{
+		e2e.HTTPFilter("extproc", &v3procfilterpb.ExternalProcessor{
+			GrpcService: &v3corepb.GrpcService{
+				TargetSpecifier: &v3corepb.GrpcService_GoogleGrpc_{
+					GoogleGrpc: &v3corepb.GrpcService_GoogleGrpc{
+						TargetUri: lis.Addr().String(),
+					},
+				},
+			},
+			ProcessingMode: &v3procfilterpb.ProcessingMode{
+				RequestHeaderMode: v3procfilterpb.ProcessingMode_SEND,
+				RequestBodyMode:   v3procfilterpb.ProcessingMode_NONE,
+				ResponseBodyMode:  v3procfilterpb.ProcessingMode_NONE,
+			},
+			FailureModeAllow: true,
+		})},
+		hcm.HttpFilters...)
+	hcmAny := testutils.MarshalAny(t, hcm)
+	resources.Listeners[0].ApiListener.ApiListener = hcmAny
+	resources.Listeners[0].FilterChains[0].Filters[0].ConfigType = &v3listenerpb.Filter_TypedConfig{TypedConfig: hcmAny}
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := managementServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	cc, err := grpc.NewClient("xds:///"+serviceName, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsResolver))
+	if err != nil {
+		t.Fatalf("failed to dial: %v", err)
+	}
+	defer cc.Close()
+
+	client := testgrpc.NewTestServiceClient(cc)
+	stream, err := client.FullDuplexCall(ctx)
+	if err != nil {
+		t.Fatalf("FullDuplexCall() failed: %v", err)
+	}
+
+	// Send c1.
+	if err := stream.Send(&testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: []byte("c1")}}); err != nil {
+		t.Fatalf("stream.Send(c1) failed: %v", err)
+	}
+
+	// Receive s1.
 	resp1, err := stream.Recv()
 	if err != nil {
 		t.Fatalf("stream.Recv(s1) failed: %v", err)
@@ -2034,12 +2160,12 @@ func (s) TestStreamFailureBodyPhaseAllow(t *testing.T) {
 		t.Fatalf("got response %q, want %q", got, want)
 	}
 
-	// Send c2 (will trigger bypass since the processor stream failed during c1 body processing)
+	// Send c2.
 	if err := stream.Send(&testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: []byte("c2")}}); err != nil {
 		t.Fatalf("stream.Send(c2) failed: %v", err)
 	}
 
-	// Receive s2
+	// Receive s2.
 	resp2, err := stream.Recv()
 	if err != nil {
 		t.Fatalf("stream.Recv(s2) failed: %v", err)
@@ -3335,21 +3461,13 @@ func (s) TestStreamFailureGrpcMessageCompressedAllow(t *testing.T) {
 		t.Fatalf("FullDuplexCall() failed: %v", err)
 	}
 
-	// 1. Send c1 (triggers GrpcMessageCompressed error, switches filter cleanly to bypass mode)
 	stream.Send(&testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: []byte("c1")}})
 
-	// 2. Receive s1 directly over data plane without sleep or message loss!
-	resp1, err := stream.Recv()
-	if err != nil {
-		t.Fatalf("stream.Recv(s1) failed: %v", err)
-	}
-	if got, want := string(resp1.GetPayload().GetBody()), "s1"; got != want {
-		t.Fatalf("got response %q, want %q", got, want)
-	}
-
-	// 3. Send c2 directly over data plane without sleep or message loss!
-	if err := stream.Send(&testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: []byte("c2")}}); err != nil {
-		t.Fatalf("stream.Send(c2) failed: %v", err)
+	// Subsequent Recv should fail with INTERNAL status because ext_proc stream
+	// failed after body messages started, overriding failure_mode_allow=true.
+	_, err = stream.Recv()
+	if got, want := status.Code(err), codes.Internal; got != want {
+		t.Fatalf("stream.Recv() returned status code %v, want %v", got, want)
 	}
 }
 
@@ -3512,5 +3630,170 @@ func (s) TestRequestAttributes(t *testing.T) {
 	callCtx := metadata.AppendToOutgoingContext(ctx, "referer", "http://example.com", "user-agent", "test-user-agent", "x-request-id", "req-12345")
 	if _, err := client.EmptyCall(callCtx, &testpb.Empty{}); err != nil {
 		t.Fatalf("EmptyCall() failed: %v", err)
+	}
+}
+
+// TestStreamFailureOutOfOrderResponse tests the scenario where the external
+// processor server returns responses out of order compared to the events sent
+// by the filter (e.g. responding to ResponseBody before ResponseHeaders when
+// both were queued). Verifies that this protocol error is treated as a stream
+// failure and fails the data plane RPC when failure_mode_allow is false.
+func (s) TestStreamFailureOutOfOrderResponse(t *testing.T) {
+	origParse := extproc.ParseGRPCServiceConfig
+	origCreate := extproc.CreateExtProcChannel
+	extproc.ParseGRPCServiceConfig = parseGRPCServiceConfigForTesting
+	extproc.CreateExtProcChannel = createExtProcChannelForTesting
+	defer func() {
+		extproc.ParseGRPCServiceConfig = origParse
+		extproc.CreateExtProcChannel = origCreate
+	}()
+	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
+	extproc.RegisterForTesting()
+	defer extproc.UnregisterForTesting()
+
+	lis, err := testutils.LocalTCPListener()
+	if err != nil {
+		t.Fatalf("LocalTCPListener() failed: %v", err)
+	}
+	extprocServer := grpc.NewServer()
+	mockProc := &mockProcessorServer{
+		processFunc: func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+			// Receive RequestHeaders and respond correctly
+			req, err := stream.Recv()
+			if err != nil {
+				return err
+			}
+			if req.GetRequestHeaders() == nil {
+				return fmt.Errorf("expected RequestHeaders, got %v", req)
+			}
+			if err := stream.Send(requestHeadersResponse(nil, nil)); err != nil {
+				return err
+			}
+			var respHeadersReq, respBodyReq, reqBodyReq *v3procservicepb.ProcessingRequest
+			r, err := stream.Recv()
+			if err != nil {
+				return err
+			}
+			if r.GetRequestBody() != nil {
+				reqBodyReq = r
+			}
+			// Send request body back.
+			if err := stream.Send(requestBodyResponse(reqBodyReq.GetRequestBody().GetBody())); err != nil {
+				return err
+			}
+
+			// Receive the next requests (ResponseHeaders and ResponseBody).
+			for i := 0; i < 2; i++ {
+				r, err := stream.Recv()
+				if err != nil {
+					return err
+				}
+				switch {
+				case r.GetResponseHeaders() != nil:
+					respHeadersReq = r
+				case r.GetResponseBody() != nil:
+					respBodyReq = r
+				}
+				if respHeadersReq != nil && respBodyReq != nil {
+					break
+				}
+			}
+			if respBodyReq == nil {
+				return fmt.Errorf("missing ResponseBody request")
+			}
+
+			// Respond to ResponseBody FIRST (before responding to ResponseHeaders)
+			// This violates response ordering (ResponseHeaders was queued before
+			// ResponseBody).
+			if err := stream.Send(responseBodyResponse(respBodyReq.GetResponseBody().GetBody())); err != nil {
+				return err
+			}
+			return nil
+		},
+	}
+	v3procservicepb.RegisterExternalProcessorServer(extprocServer, mockProc)
+	go extprocServer.Serve(lis)
+	defer extprocServer.Stop()
+
+	stub := stubserver.StartTestService(t, &stubserver.StubServer{
+		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
+			_, err := stream.Recv()
+			if err != nil {
+				return err
+			}
+			// Send response headers and body without waiting for client
+			if err := stream.SendHeader(metadata.Pairs("backend-header", "present")); err != nil {
+				return err
+			}
+			if err := stream.Send(&testpb.StreamingOutputCallResponse{Payload: &testpb.Payload{Body: []byte("s1")}}); err != nil {
+				return err
+			}
+			return nil
+		},
+	})
+	defer stub.Stop()
+
+	managementServer, nodeID, _, xdsResolver := setup.ManagementServerAndResolver(t)
+	const serviceName = "test-service"
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		DialTarget: serviceName,
+		NodeID:     nodeID,
+		Host:       "localhost",
+		Port:       testutils.ParsePort(t, stub.Address),
+		SecLevel:   e2e.SecurityLevelNone,
+	})
+	hcm := new(v3httppb.HttpConnectionManager)
+	apiListener := resources.Listeners[0].GetApiListener().GetApiListener()
+	if err = apiListener.UnmarshalTo(hcm); err != nil {
+		t.Fatal(err)
+	}
+
+	hcm.HttpFilters = append([]*v3httppb.HttpFilter{
+		e2e.HTTPFilter("extproc", &v3procfilterpb.ExternalProcessor{
+			GrpcService: &v3corepb.GrpcService{
+				TargetSpecifier: &v3corepb.GrpcService_GoogleGrpc_{
+					GoogleGrpc: &v3corepb.GrpcService_GoogleGrpc{
+						TargetUri: lis.Addr().String(),
+					},
+				},
+			},
+			ProcessingMode: &v3procfilterpb.ProcessingMode{
+				RequestHeaderMode:  v3procfilterpb.ProcessingMode_SEND,
+				RequestBodyMode:    v3procfilterpb.ProcessingMode_GRPC,
+				ResponseHeaderMode: v3procfilterpb.ProcessingMode_SEND,
+				ResponseBodyMode:   v3procfilterpb.ProcessingMode_GRPC,
+			},
+			FailureModeAllow: false,
+		})},
+		hcm.HttpFilters...)
+	hcmAny := testutils.MarshalAny(t, hcm)
+	resources.Listeners[0].ApiListener.ApiListener = hcmAny
+	resources.Listeners[0].FilterChains[0].Filters[0].ConfigType = &v3listenerpb.Filter_TypedConfig{TypedConfig: hcmAny}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 50*defaultTestTimeout)
+	defer cancel()
+	if err := managementServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	cc, err := grpc.NewClient("xds:///"+serviceName, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsResolver))
+	if err != nil {
+		t.Fatalf("failed to dial: %v", err)
+	}
+	defer cc.Close()
+
+	client := testgrpc.NewTestServiceClient(cc)
+	stream, err := client.FullDuplexCall(ctx)
+	if err != nil {
+		t.Fatalf("FullDuplexCall() failed: %v", err)
+	}
+
+	if err := stream.Send(&testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: []byte("c1")}}); err != nil {
+		t.Fatalf("stream.Send(c1) failed: %v", err)
+	}
+
+	_, err = stream.Recv()
+	if got, want := status.Code(err), codes.Internal; got != want {
+		t.Fatalf("stream.Recv() returned status code %v, want %v", got, want)
 	}
 }

@@ -379,6 +379,7 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 			if err := cs.createDataplaneStream(newStream, done); err != nil {
 				return nil, err
 			}
+			cs.extStreamBypass.Store(true)
 			return cs, nil
 		}
 		// Mark that the initial message has been sent so as to not add
@@ -417,6 +418,7 @@ type clientStream struct {
 	extStreamErr    atomic.Value                                    // holds the terminal error (error) causing stream failure
 
 	initMsgSent             bool        // tracks whether the initial message has been sent to track if protocol configuration was sent
+	initBodyMsgSent         atomic.Bool // tracks whether first body message is sent to ensure we do not respect FMA after body messages have been sent.
 	discardRequests         atomic.Bool // set when ext_proc server signals end_of_stream to stop client sends
 	responseHeader          metadata.MD
 	responseHeaderOnce      sync.Once       // guards response header processing to execute once
@@ -540,6 +542,9 @@ func (cs *clientStream) CloseSend() error {
 
 	select {
 	case cs.extSendCh <- req:
+		if !cs.initBodyMsgSent.Load() {
+			cs.initBodyMsgSent.Store(true)
+		}
 		return nil
 	case <-cs.drainTriggeredCh:
 		if err := cs.waitChannel(cs.requestForwardLoopDoneCh); err != nil {
@@ -713,6 +718,9 @@ func (cs *clientStream) SendMsg(m any) error {
 
 	select {
 	case cs.extSendCh <- req:
+		if !cs.initBodyMsgSent.Load() {
+			cs.initBodyMsgSent.Store(true)
+		}
 		return nil
 	case <-cs.drainTriggeredCh:
 		// When the drain is triggered, wait for all the queued request to be sent
@@ -761,7 +769,6 @@ func (cs *clientStream) responseForwardingToProcServerLoop(msgType protoreflect.
 		if err := s.RecvMsg(newMsg); err != nil {
 			cs.initiateResponseTrailerProcessing()
 			cs.CloseSend()
-			cs.failStream(err)
 			return
 		}
 
@@ -783,6 +790,9 @@ func (cs *clientStream) responseForwardingToProcServerLoop(msgType protoreflect.
 
 		select {
 		case cs.extSendCh <- req:
+			if !cs.initBodyMsgSent.Load() {
+				cs.initBodyMsgSent.Store(true)
+			}
 		case <-cs.drainTriggeredCh:
 			// If drain is triggered, wait for external processor server to echo all
 			// response messages before pushing this message on the mutatedRespBuffer
@@ -910,6 +920,30 @@ func (cs *clientStream) recvFromProcServerLoop(ctx context.Context, done func(),
 			if cs.config.processingModes.responseBodyMode == modeSkip {
 				cs.failStream(fmt.Errorf("extproc: proc server sent unsolicited response body response when mode is skip"))
 				return
+			}
+
+			// If response headers have been sent, mutated response headers have not
+			// been received before receing the response body message, fail the RPC.
+			if cs.config.processingModes.responseHeaderMode == modeSend {
+				select {
+				case <-cs.responseHeaderModified.Done():
+				default:
+					cs.failStream(fmt.Errorf("extproc: proc server did not send response header before sending response body"))
+					return
+
+				}
+			}
+
+			// If mutataed response trailers have been received before receing the
+			// response body message, fail the RPC.
+			if cs.config.processingModes.responseTrailerMode == modeSend {
+				select {
+				case <-cs.responseTrailerModified.Done():
+					cs.failStream(fmt.Errorf("extproc: proc server sent response body after sending response trailer"))
+					return
+				default:
+
+				}
 			}
 
 			bodyResp := resp.GetResponseBody()
@@ -1042,11 +1076,8 @@ func (cs *clientStream) failStream(err error) {
 	if cs.streamFailed.HasFired() {
 		return
 	}
-	if err != io.EOF && !cs.config.failureModeAllow {
+	if err != io.EOF && (cs.initBodyMsgSent.Load() || !cs.config.failureModeAllow) {
 		cs.extStreamErr.Store(status.Errorf(codes.Internal, "extproc: external processor RPC failed: %v", err))
-		if cs.dataplaneStream != nil {
-			cs.dataplaneStream.CloseSend()
-		}
 		cs.streamFailed.Fire()
 		return
 	}
