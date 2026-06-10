@@ -43,10 +43,12 @@ type TestMetricsRecorder struct {
 	intGaugeCh       *testutils.Channel
 	intUpDownCountCh *testutils.Channel
 
-	// mu protects data.
+	// mu protects data and consumed.
 	mu sync.Mutex
-	// data is the most recent update for each metric name.
-	data map[string]MetricsData
+	// data contains all recorded updates for each metric name in order.
+	data map[string][]MetricsData
+	// consumed tracks the number of updates consumed per metric name.
+	consumed map[string]int
 }
 
 // NewTestMetricsRecorder returns a new TestMetricsRecorder.
@@ -59,7 +61,8 @@ func NewTestMetricsRecorder() *TestMetricsRecorder {
 		intGaugeCh:       testutils.NewChannelWithSize(10),
 		intUpDownCountCh: testutils.NewChannelWithSize(10),
 
-		data: make(map[string]MetricsData),
+		data:     make(map[string][]MetricsData),
+		consumed: make(map[string]int),
 	}
 }
 
@@ -68,10 +71,11 @@ func NewTestMetricsRecorder() *TestMetricsRecorder {
 func (r *TestMetricsRecorder) Metric(name string) (float64, bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	data, ok := r.data[name]
-	if !ok {
+	slice, ok := r.data[name]
+	if !ok || len(slice) == 0 {
 		return 0, false
 	}
+	data := slice[len(slice)-1]
 	switch data.Handle.Type {
 	case estats.MetricTypeIntCount, estats.MetricTypeIntGauge, estats.MetricTypeIntUpDownCount, estats.MetricTypeIntAsyncGauge:
 		return float64(data.IntIncr), true
@@ -86,7 +90,8 @@ func (r *TestMetricsRecorder) Metric(name string) (float64, bool) {
 func (r *TestMetricsRecorder) ClearMetrics() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.data = make(map[string]MetricsData)
+	r.data = make(map[string][]MetricsData)
+	r.consumed = make(map[string]int)
 }
 
 // MetricsData represents data associated with a metric.
@@ -103,72 +108,64 @@ type MetricsData struct {
 }
 
 func (r *TestMetricsRecorder) waitForMetric(ctx context.Context, ch *testutils.Channel, name string) (MetricsData, error) {
-	r.mu.Lock()
-	if data, ok := r.data[name]; ok {
-		r.mu.Unlock()
-		return data, nil
-	}
-	r.mu.Unlock()
-
 	for {
-		got, err := ch.Receive(ctx)
+		r.mu.Lock()
+		if slice, ok := r.data[name]; ok && len(slice) > r.consumed[name] {
+			md := slice[r.consumed[name]]
+			r.consumed[name]++
+			r.mu.Unlock()
+			return md, nil
+		}
+		r.mu.Unlock()
+
+		_, err := ch.Receive(ctx)
 		if err != nil {
 			return MetricsData{}, err
-		}
-		md := got.(MetricsData)
-
-		r.mu.Lock()
-		r.data[md.Handle.Name] = md
-		r.mu.Unlock()
-
-		if md.Handle.Name == name {
-			return md, nil
 		}
 	}
 }
 
-// WaitForInt64Count waits for an int64 count metric to be recorded and verifies
-// that the recorded metrics data matches the expected metricsDataWant. Returns
-// an error if failed to wait or received wrong data.
-func (r *TestMetricsRecorder) WaitForInt64Count(ctx context.Context, metricsDataWant MetricsData) error {
-	got, err := r.waitForMetric(ctx, r.intCountCh, metricsDataWant.Handle.Name)
+// WaitForInt64Count waits for an int64 count metric and verifies that it
+// matches want. Returns an error if failed to wait or received wrong data.
+func (r *TestMetricsRecorder) WaitForInt64Count(ctx context.Context, want MetricsData) error {
+	got, err := r.waitForMetric(ctx, r.intCountCh, want.Handle.Name)
 	if err != nil {
 		return fmt.Errorf("timeout waiting for int64Count")
 	}
-	if got.IntIncr != metricsDataWant.IntIncr {
-		return fmt.Errorf("int64count metricsData received unexpected value: got %v, want %v", got.IntIncr, metricsDataWant.IntIncr)
+	if got.IntIncr != want.IntIncr {
+		return fmt.Errorf("int64count metricsData received unexpected value: got %v, want %v", got.IntIncr, want.IntIncr)
 	}
-	if metricsDataWant.LabelKeys != nil {
-		if diff := cmp.Diff(got.LabelKeys, metricsDataWant.LabelKeys); diff != "" {
+	if want.LabelKeys != nil {
+		if diff := cmp.Diff(got.LabelKeys, want.LabelKeys); diff != "" {
 			return fmt.Errorf("int64count metricsData received unexpected label keys: %v", diff)
 		}
 	}
-	if metricsDataWant.LabelVals != nil {
-		if diff := cmp.Diff(got.LabelVals, metricsDataWant.LabelVals); diff != "" {
+	if want.LabelVals != nil {
+		if diff := cmp.Diff(got.LabelVals, want.LabelVals); diff != "" {
 			return fmt.Errorf("int64count metricsData received unexpected label values: %v", diff)
 		}
 	}
 	return nil
 }
 
-// WaitForInt64UpDownCount waits for an int64 up-down count metric to be recorded and verifies
-// that the recorded metrics data matches the expected metricsDataWant. Returns
-// an error if failed to wait or received wrong data.
-func (r *TestMetricsRecorder) WaitForInt64UpDownCount(ctx context.Context, metricsDataWant MetricsData) error {
-	got, err := r.waitForMetric(ctx, r.intUpDownCountCh, metricsDataWant.Handle.Name)
+// WaitForInt64UpDownCount waits for an int64 up-down count metric and
+// verifies that it matches want. Returns an error if failed to wait or
+// received wrong data.
+func (r *TestMetricsRecorder) WaitForInt64UpDownCount(ctx context.Context, want MetricsData) error {
+	got, err := r.waitForMetric(ctx, r.intUpDownCountCh, want.Handle.Name)
 	if err != nil {
 		return fmt.Errorf("timeout waiting for int64UpDownCount")
 	}
-	if got.IntIncr != metricsDataWant.IntIncr {
-		return fmt.Errorf("int64UpDownCount metricsData received unexpected value: got %v, want %v", got.IntIncr, metricsDataWant.IntIncr)
+	if got.IntIncr != want.IntIncr {
+		return fmt.Errorf("int64UpDownCount metricsData received unexpected value: got %v, want %v", got.IntIncr, want.IntIncr)
 	}
-	if metricsDataWant.LabelKeys != nil {
-		if diff := cmp.Diff(got.LabelKeys, metricsDataWant.LabelKeys); diff != "" {
+	if want.LabelKeys != nil {
+		if diff := cmp.Diff(got.LabelKeys, want.LabelKeys); diff != "" {
 			return fmt.Errorf("int64UpDownCount metricsData received unexpected label keys: %v", diff)
 		}
 	}
-	if metricsDataWant.LabelVals != nil {
-		if diff := cmp.Diff(got.LabelVals, metricsDataWant.LabelVals); diff != "" {
+	if want.LabelVals != nil {
+		if diff := cmp.Diff(got.LabelVals, want.LabelVals); diff != "" {
 			return fmt.Errorf("int64UpDownCount metricsData received unexpected label values: %v", diff)
 		}
 	}
@@ -204,7 +201,7 @@ func (r *TestMetricsRecorder) RecordInt64Count(handle *estats.Int64CountHandle, 
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.data[handle.Name] = md
+	r.data[handle.Name] = append(r.data[handle.Name], md)
 }
 
 // RecordInt64UpDownCount sends the metrics data to the intUpDownCountCh channel and updates
@@ -221,18 +218,17 @@ func (r *TestMetricsRecorder) RecordInt64UpDownCount(handle *estats.Int64UpDownC
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.data[handle.Name] = md
+	r.data[handle.Name] = append(r.data[handle.Name], md)
 }
 
-// WaitForFloat64Count waits for a float count metric to be recorded and
-// verifies that the recorded metrics data matches the expected metricsDataWant.
-// Returns an error if failed to wait or received wrong data.
-func (r *TestMetricsRecorder) WaitForFloat64Count(ctx context.Context, metricsDataWant MetricsData) error {
-	got, err := r.waitForMetric(ctx, r.floatCountCh, metricsDataWant.Handle.Name)
+// WaitForFloat64Count waits for a float count metric and verifies that it
+// matches want. Returns an error if failed to wait or received wrong data.
+func (r *TestMetricsRecorder) WaitForFloat64Count(ctx context.Context, want MetricsData) error {
+	got, err := r.waitForMetric(ctx, r.floatCountCh, want.Handle.Name)
 	if err != nil {
 		return fmt.Errorf("timeout waiting for float64Count")
 	}
-	if diff := cmp.Diff(got, metricsDataWant); diff != "" {
+	if diff := cmp.Diff(got, want); diff != "" {
 		return fmt.Errorf("float64count metricsData received unexpected value (-got, +want): %v", diff)
 	}
 	return nil
@@ -252,18 +248,17 @@ func (r *TestMetricsRecorder) RecordFloat64Count(handle *estats.Float64CountHand
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.data[handle.Name] = md
+	r.data[handle.Name] = append(r.data[handle.Name], md)
 }
 
-// WaitForInt64Histo waits for an int histo metric to be recorded and verifies
-// that the recorded metrics data matches the expected metricsDataWant. Returns
-// an error if failed to wait or received wrong data.
-func (r *TestMetricsRecorder) WaitForInt64Histo(ctx context.Context, metricsDataWant MetricsData) error {
-	got, err := r.waitForMetric(ctx, r.intHistoCh, metricsDataWant.Handle.Name)
+// WaitForInt64Histo waits for an int histo metric and verifies that it matches
+// want. Returns an error if failed to wait or received wrong data.
+func (r *TestMetricsRecorder) WaitForInt64Histo(ctx context.Context, want MetricsData) error {
+	got, err := r.waitForMetric(ctx, r.intHistoCh, want.Handle.Name)
 	if err != nil {
 		return fmt.Errorf("timeout waiting for int64Histo")
 	}
-	if diff := cmp.Diff(got, metricsDataWant); diff != "" {
+	if diff := cmp.Diff(got, want); diff != "" {
 		return fmt.Errorf("int64Histo metricsData received unexpected value (-got, +want): %v", diff)
 	}
 	return nil
@@ -283,18 +278,17 @@ func (r *TestMetricsRecorder) RecordInt64Histo(handle *estats.Int64HistoHandle, 
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.data[handle.Name] = md
+	r.data[handle.Name] = append(r.data[handle.Name], md)
 }
 
-// WaitForFloat64Histo waits for a float histo metric to be recorded and
-// verifies that the recorded metrics data matches the expected metricsDataWant.
-// Returns an error if failed to wait or received wrong data.
-func (r *TestMetricsRecorder) WaitForFloat64Histo(ctx context.Context, metricsDataWant MetricsData) error {
-	got, err := r.waitForMetric(ctx, r.floatHistoCh, metricsDataWant.Handle.Name)
+// WaitForFloat64Histo waits for a float histo metric and verifies that it
+// matches want. Returns an error if failed to wait or received wrong data.
+func (r *TestMetricsRecorder) WaitForFloat64Histo(ctx context.Context, want MetricsData) error {
+	got, err := r.waitForMetric(ctx, r.floatHistoCh, want.Handle.Name)
 	if err != nil {
 		return fmt.Errorf("timeout waiting for float64Histo")
 	}
-	if diff := cmp.Diff(got, metricsDataWant); diff != "" {
+	if diff := cmp.Diff(got, want); diff != "" {
 		return fmt.Errorf("float64Histo metricsData received unexpected value (-got, +want): %v", diff)
 	}
 	return nil
@@ -314,17 +308,17 @@ func (r *TestMetricsRecorder) RecordFloat64Histo(handle *estats.Float64HistoHand
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.data[handle.Name] = md
+	r.data[handle.Name] = append(r.data[handle.Name], md)
 }
 
-// WaitForInt64Gauge waits for a int gauge metric to be recorded and verifies
-// that the recorded metrics data matches the expected metricsDataWant.
-func (r *TestMetricsRecorder) WaitForInt64Gauge(ctx context.Context, metricsDataWant MetricsData) error {
-	got, err := r.waitForMetric(ctx, r.intGaugeCh, metricsDataWant.Handle.Name)
+// WaitForInt64Gauge waits for an int gauge metric and verifies that it matches
+// want.
+func (r *TestMetricsRecorder) WaitForInt64Gauge(ctx context.Context, want MetricsData) error {
+	got, err := r.waitForMetric(ctx, r.intGaugeCh, want.Handle.Name)
 	if err != nil {
 		return fmt.Errorf("timeout waiting for int64Gauge")
 	}
-	if diff := cmp.Diff(got, metricsDataWant); diff != "" {
+	if diff := cmp.Diff(got, want); diff != "" {
 		return fmt.Errorf("int64Gauge metricsData received unexpected value (-got, +want): %v", diff)
 	}
 	return nil
@@ -344,7 +338,7 @@ func (r *TestMetricsRecorder) RecordInt64Gauge(handle *estats.Int64GaugeHandle, 
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.data[handle.Name] = md
+	r.data[handle.Name] = append(r.data[handle.Name], md)
 }
 
 // To implement a estats.AsyncMetricsRecorder, which allows it to be used in async metrics:
@@ -363,7 +357,7 @@ func (r *TestMetricsRecorder) RecordInt64AsyncGauge(handle *estats.Int64AsyncGau
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.data[handle.Name] = md
+	r.data[handle.Name] = append(r.data[handle.Name], md)
 }
 
 // To implement a stats.Handler, which allows it to be set as a dial option:
