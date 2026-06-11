@@ -51,15 +51,11 @@ import (
 	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
 )
 
-// enableXDSHTTPConnect temporarily enables support for XDS HTTP CONNECT
-// for the duration of the test. It sets the env variable to true and
-// registers the proxy address metadata converter.
 func enableXDSHTTPConnect(t *testing.T) {
 	testutils.SetEnvConfig(t, &envconfig.XDSHTTPConnectEnabled, true)
 	t.Cleanup(xdsresource.RegisterMetadataConverterForTesting("type.googleapis.com/envoy.config.core.v3.Address", xdsresource.ProxyAddressConvertor{}))
 }
 
-// splitHostPort splits and parses the host and port from the given address.
 func splitHostPort(t *testing.T, addr string) (string, int) {
 	t.Helper()
 	host, portStr, err := net.SplitHostPort(addr)
@@ -77,7 +73,7 @@ func splitHostPort(t *testing.T, addr string) (string, int) {
 // address is configured via endpoint metadata. It verifies that gRPC requests
 // are successfully routed through the HTTP CONNECT proxy to the correct
 // backend server.
-func (s) TestClientSideXDSHTTPConnect(t *testing.T) {
+func (s) TestXDSHTTPConnect(t *testing.T) {
 	enableXDSHTTPConnect(t)
 
 	// Spin up a mock HTTP CONNECT proxy server to capture client connections.
@@ -88,19 +84,19 @@ func (s) TestClientSideXDSHTTPConnect(t *testing.T) {
 
 	proxyHost, proxyPort := splitHostPort(t, pServer.Addr)
 
-	// Spin up an XDS management server.
 	mgmtServer, nodeID, _, xdsResolver := setup.ManagementServerAndResolver(t)
 	server := stubserver.StartTestService(t, nil)
 	defer server.Stop()
 
 	backendHost, backendPort := splitHostPort(t, server.Address)
 
-	const serviceName = "my-service-xds-http-connect"
-	routeConfigName := "route-" + serviceName
-	clusterName := "cluster-" + serviceName
-	endpointsName := "endpoints-" + serviceName
+	const (
+		serviceName     = "my-service-xds-http-connect"
+		routeConfigName = "route-my-service-xds-http-connect"
+		clusterName     = "cluster-my-service-xds-http-connect"
+		endpointsName   = "endpoints-my-service-xds-http-connect"
+	)
 
-	// Configure resources on the management server.
 	cluster := &v3clusterpb.Cluster{
 		Name:                 clusterName,
 		ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
@@ -169,7 +165,6 @@ func (s) TestClientSideXDSHTTPConnect(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create a gRPC client using the xDS resolver.
 	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsResolver))
 	if err != nil {
 		t.Fatalf("Failed to create a gRPC client: %v", err)
@@ -197,7 +192,7 @@ func (s) TestClientSideXDSHTTPConnect(t *testing.T) {
 // address is configured via metadata at the locality level. It verifies that
 // the client successfully fallback to using the locality-level proxy address
 // if no endpoint-level metadata is present.
-func (s) TestClientSideXDSHTTPConnect_LocalityFallback(t *testing.T) {
+func (s) TestXDSHTTPConnect_LocalityFallback(t *testing.T) {
 	enableXDSHTTPConnect(t)
 
 	// Spin up a mock HTTP CONNECT proxy server to capture client connections.
@@ -208,19 +203,19 @@ func (s) TestClientSideXDSHTTPConnect_LocalityFallback(t *testing.T) {
 
 	proxyHost, proxyPort := splitHostPort(t, pServer.Addr)
 
-	// Spin up an XDS management server.
 	managementServer, nodeID, _, xdsResolver := setup.ManagementServerAndResolver(t)
 	server := stubserver.StartTestService(t, nil)
 	defer server.Stop()
 
 	backendHost, backendPort := splitHostPort(t, server.Address)
 
-	const serviceName = "my-service-xds-http-connect"
-	routeConfigName := "route-" + serviceName
-	clusterName := "cluster-" + serviceName
-	endpointsName := "endpoints-" + serviceName
+	const (
+		serviceName     = "my-service-xds-http-connect"
+		routeConfigName = "route-my-service-xds-http-connect"
+		clusterName     = "cluster-my-service-xds-http-connect"
+		endpointsName   = "endpoints-my-service-xds-http-connect"
+	)
 
-	// Configure resources on the management server.
 	cluster := &v3clusterpb.Cluster{
 		Name:                 clusterName,
 		ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
@@ -241,7 +236,7 @@ func (s) TestClientSideXDSHTTPConnect_LocalityFallback(t *testing.T) {
 			{
 				Locality:            &v3corepb.Locality{SubZone: "locality-1"},
 				LoadBalancingWeight: &wrapperspb.UInt32Value{Value: 1},
-				// Locality-level metadata contains the proxy address
+				// Locality-level metadata contains the proxy address.
 				Metadata: &v3corepb.Metadata{
 					TypedFilterMetadata: map[string]*anypb.Any{
 						"envoy.http11_proxy_transport_socket.proxy_address": testutils.MarshalAny(t, &v3corepb.Address{
@@ -290,7 +285,6 @@ func (s) TestClientSideXDSHTTPConnect_LocalityFallback(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create a gRPC client using the XDS resolver.
 	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsResolver))
 	if err != nil {
 		t.Fatalf("Failed to create a gRPC client: %v", err)
@@ -319,7 +313,7 @@ func (s) TestClientSideXDSHTTPConnect_LocalityFallback(t *testing.T) {
 // is present in CDS, the XDS client successfully falls back to insecure
 // credentials and establishes a proxy CONNECT tunnel to the correct backend
 // server without security handshaking.
-func (s) TestClientSideXDSHTTPConnect_WithInsecureXDSCredentials(t *testing.T) {
+func (s) TestXDSHTTPConnect_WithInsecureXDSCredentials(t *testing.T) {
 	enableXDSHTTPConnect(t)
 
 	// Spin up a mock HTTP CONNECT proxy server to capture client connections.
@@ -330,19 +324,19 @@ func (s) TestClientSideXDSHTTPConnect_WithInsecureXDSCredentials(t *testing.T) {
 
 	proxyHost, proxyPort := splitHostPort(t, pServer.Addr)
 
-	// Spin up an XDS management server.
 	mgmtServer, nodeID, _, xdsResolver := setup.ManagementServerAndResolver(t)
 	server := stubserver.StartTestService(t, nil)
 	defer server.Stop()
 
 	backendHost, backendPort := splitHostPort(t, server.Address)
 
-	const serviceName = "my-service-http-connect-xds-creds"
-	routeConfigName := "route-" + serviceName
-	clusterName := "cluster-" + serviceName
-	endpointsName := "endpoints-" + serviceName
+	const (
+		serviceName     = "my-service-xds-http-connect"
+		routeConfigName = "route-my-service-xds-http-connect"
+		clusterName     = "cluster-my-service-xds-http-connect"
+		endpointsName   = "endpoints-my-service-xds-http-connect"
+	)
 
-	// Configure resources on the management server.
 	cluster := &v3clusterpb.Cluster{
 		Name:                 clusterName,
 		ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
@@ -411,7 +405,6 @@ func (s) TestClientSideXDSHTTPConnect_WithInsecureXDSCredentials(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create a gRPC client using the XDS resolver.
 	creds, err := xdscreds.NewClientCredentials(xdscreds.ClientOptions{FallbackCreds: insecure.NewCredentials()})
 	if err != nil {
 		t.Fatalf("Failed to create client XDS credentials: %v", err)
@@ -443,7 +436,7 @@ func (s) TestClientSideXDSHTTPConnect_WithInsecureXDSCredentials(t *testing.T) {
 // uses an Http11ProxyUpstreamTransport wrapping an inner UpstreamTlsContext.
 // It verifies that a secure TLS session is established with the backend over
 // the HTTP CONNECT proxy connection.
-func (s) TestClientSideXDSHTTPConnect_WithUpstreamTLSContext(t *testing.T) {
+func (s) TestXDSHTTPConnect_WithUpstreamTLSContext(t *testing.T) {
 	enableXDSHTTPConnect(t)
 
 	// Spin up a mock HTTP CONNECT proxy server to capture client connections.
@@ -454,7 +447,6 @@ func (s) TestClientSideXDSHTTPConnect_WithUpstreamTLSContext(t *testing.T) {
 
 	proxyHost, proxyPort := splitHostPort(t, pServer.Addr)
 
-	// Spin up an XDS management server.
 	mgmtServer, nodeID, _, xdsResolver := setup.ManagementServerAndResolver(t)
 	serverCreds := testutils.CreateServerTLSCredentials(t, tls.RequireAndVerifyClientCert)
 	server := stubserver.StartTestService(t, nil, grpc.Creds(serverCreds))
@@ -462,12 +454,13 @@ func (s) TestClientSideXDSHTTPConnect_WithUpstreamTLSContext(t *testing.T) {
 
 	backendHost, backendPort := splitHostPort(t, server.Address)
 
-	const serviceName = "my-service-http-connect-xds-tls"
-	routeConfigName := "route-" + serviceName
-	clusterName := "cluster-" + serviceName
-	endpointsName := "endpoints-" + serviceName
+	const (
+		serviceName     = "my-service-xds-http-connect"
+		routeConfigName = "route-my-service-xds-http-connect"
+		clusterName     = "cluster-my-service-xds-http-connect"
+		endpointsName   = "endpoints-my-service-xds-http-connect"
+	)
 
-	// Configure resources on the management server.
 	cluster := &v3clusterpb.Cluster{
 		Name:                 clusterName,
 		ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
@@ -556,7 +549,6 @@ func (s) TestClientSideXDSHTTPConnect_WithUpstreamTLSContext(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create a gRPC client using the XDS resolver.
 	creds, err := xdscreds.NewClientCredentials(xdscreds.ClientOptions{FallbackCreds: insecure.NewCredentials()})
 	if err != nil {
 		t.Fatalf("Failed to create client XDS credentials: %v", err)
@@ -588,20 +580,20 @@ func (s) TestClientSideXDSHTTPConnect_WithUpstreamTLSContext(t *testing.T) {
 // specifies an HTTP CONNECT proxy transport socket, but no proxy address
 // metadata is supplied. It verifies that the client gracefully fallback
 // to dialing the backend directly.
-func (s) TestClientSideXDSHTTPConnect_NoMetadata(t *testing.T) {
+func (s) TestXDSHTTPConnect_NoMetadata(t *testing.T) {
 	enableXDSHTTPConnect(t)
 
-	// Spin up an xDS management server.
 	mgmtServer, nodeID, _, xdsResolver := setup.ManagementServerAndResolver(t)
 	server := stubserver.StartTestService(t, nil)
 	defer server.Stop()
 
-	const serviceName = "my-service-http-connect-xds-no-metadata"
-	routeConfigName := "route-" + serviceName
-	clusterName := "cluster-" + serviceName
-	endpointsName := "endpoints-" + serviceName
+	const (
+		serviceName     = "my-service-xds-http-connect"
+		routeConfigName = "route-my-service-xds-http-connect"
+		clusterName     = "cluster-my-service-xds-http-connect"
+		endpointsName   = "endpoints-my-service-xds-http-connect"
+	)
 
-	// Configure resources on the management server.
 	cluster := &v3clusterpb.Cluster{
 		Name:                 clusterName,
 		ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
@@ -632,7 +624,6 @@ func (s) TestClientSideXDSHTTPConnect_NoMetadata(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create a gRPC client using the XDS resolver.
 	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsResolver))
 	if err != nil {
 		t.Fatalf("Failed to create a gRPC client: %v", err)
