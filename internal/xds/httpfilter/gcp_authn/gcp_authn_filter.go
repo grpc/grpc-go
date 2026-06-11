@@ -195,7 +195,7 @@ type lruCache struct {
 	// The following fields are protected by mu.
 	mu          sync.Mutex
 	cacheSize   uint64
-	list        *list.List
+	lruList     *list.List
 	cache       map[string]*list.Element
 	createCreds func(string) (credentials.PerRPCCredentials, error)
 }
@@ -204,7 +204,7 @@ type lruCache struct {
 func newLRUCache(size uint64) *lruCache {
 	return &lruCache{
 		cacheSize:   size,
-		list:        list.New(),
+		lruList:     list.New(),
 		cache:       make(map[string]*list.Element),
 		createCreds: grpcgoogle.NewServiceAccountIdentityCredentials,
 	}
@@ -223,12 +223,12 @@ func (c *lruCache) resizeCache(newCacheSize uint64) {
 
 	c.cacheSize = newCacheSize
 	for uint64(len(c.cache)) > c.cacheSize {
-		oldest := c.list.Back()
+		oldest := c.lruList.Back()
 		if oldest == nil {
 			break
 		}
 		delete(c.cache, oldest.Value.(*gcpAuthnCallCredEntry).key)
-		c.list.Remove(oldest)
+		c.lruList.Remove(oldest)
 	}
 }
 
@@ -240,7 +240,7 @@ func (c *lruCache) getOrCreate(audience string) (credentials.PerRPCCredentials, 
 	c.mu.Lock()
 
 	if e, ok := c.cache[audience]; ok {
-		c.list.MoveToFront(e)
+		c.lruList.MoveToFront(e)
 		c.mu.Unlock()
 		return e.Value.(*gcpAuthnCallCredEntry).value, nil
 	}
@@ -254,19 +254,19 @@ func (c *lruCache) getOrCreate(audience string) (credentials.PerRPCCredentials, 
 	defer c.mu.Unlock()
 
 	if e, ok := c.cache[audience]; ok {
-		c.list.MoveToFront(e)
+		c.lruList.MoveToFront(e)
 		return e.Value.(*gcpAuthnCallCredEntry).value, nil
 	}
 
 	if c.cacheSize > 0 {
 		if uint64(len(c.cache)) >= c.cacheSize {
-			oldest := c.list.Back()
+			oldest := c.lruList.Back()
 			if oldest != nil {
 				delete(c.cache, oldest.Value.(*gcpAuthnCallCredEntry).key)
-				c.list.Remove(oldest)
+				c.lruList.Remove(oldest)
 			}
 		}
-		e := c.list.PushFront(&gcpAuthnCallCredEntry{key: audience, value: creds})
+		e := c.lruList.PushFront(&gcpAuthnCallCredEntry{key: audience, value: creds})
 		c.cache[audience] = e
 	}
 	return creds, nil

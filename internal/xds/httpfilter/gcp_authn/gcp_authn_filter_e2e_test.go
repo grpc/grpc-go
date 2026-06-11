@@ -79,15 +79,9 @@ const (
 	defaultTestShortTimeout = 100 * time.Millisecond
 )
 
-// setupGCPAuthnTest enables the GCP authn filter and registers the xDS
-// metadata converter for parsing the Audience configuration.
 func setupGCPAuthnTest(t *testing.T) {
 	testutils.SetEnvConfig(t, &envconfig.GCPAuthenticationFilterEnabled, true)
-	audienceTypeURL := "type.googleapis.com/envoy.extensions.filters.http.gcp_authn.v3.Audience"
-	xdsresource.RegisterMetadataConverter(audienceTypeURL, xdsresource.AudienceConverter{})
-	t.Cleanup(func() {
-		xdsresource.UnregisterMetadataConverterForTesting(audienceTypeURL)
-	})
+	t.Cleanup(xdsresource.RegisterMetadataConverterForTesting("type.googleapis.com/envoy.extensions.filters.http.gcp_authn.v3.Audience", xdsresource.AudienceConverter{}))
 }
 
 // Test verifies the basic end-to-end flow. It ensures that the gcp_authn

@@ -207,7 +207,7 @@ func (s) TestProxyAddressConverterFailure(t *testing.T) {
 }
 
 func (s) TestAudienceConverterSuccess(t *testing.T) {
-	t.Cleanup(RegisterMetadataConverterForTesting(audienceTypeURL, audienceConverter{}))
+	t.Cleanup(RegisterMetadataConverterForTesting(audienceTypeURL, AudienceConverter{}))
 	converter := metadataConverterForType(audienceTypeURL)
 	if converter == nil {
 		t.Fatalf("Converter for %q not found in registry", audienceTypeURL)

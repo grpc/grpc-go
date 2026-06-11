@@ -1770,7 +1770,7 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 // 2. Registering the audience converter (and restore the original on cleanup).
 func enableGCPAuthenticationFilter(t *testing.T) {
 	testutils.SetEnvConfig(t, &envconfig.GCPAuthenticationFilterEnabled, true)
-	t.Cleanup(RegisterMetadataConverterForTesting(audienceTypeURL, audienceConverter{}))
+	t.Cleanup(RegisterMetadataConverterForTesting(audienceTypeURL, AudienceConverter{}))
 }
 
 // disableGCPAuthenticationFilter disables A83 support for the duration of the

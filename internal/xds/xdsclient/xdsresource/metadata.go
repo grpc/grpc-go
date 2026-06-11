@@ -33,7 +33,7 @@ func init() {
 		registerMetadataConverter("type.googleapis.com/envoy.config.core.v3.Address", ProxyAddressConvertor{})
 	}
 	if envconfig.GCPAuthenticationFilterEnabled {
-		RegisterMetadataConverter("type.googleapis.com/envoy.extensions.filters.http.gcp_authn.v3.Audience", AudienceConverter{})
+		registerMetadataConverter("type.googleapis.com/envoy.extensions.filters.http.gcp_authn.v3.Audience", AudienceConverter{})
 	}
 }
 
@@ -50,9 +50,9 @@ type metadataConverter interface {
 	convert(*anypb.Any) (any, error)
 }
 
-// RegisterMetadataConverter registers the converter to the map keyed on a proto
+// registerMetadataConverter registers the converter to the map keyed on a proto
 // type_url. Must be called at init time. Not thread safe.
-func RegisterMetadataConverter(protoType string, c metadataConverter) {
+func registerMetadataConverter(protoType string, c metadataConverter) {
 	metadataRegistry[protoType] = c
 }
 
