@@ -32,22 +32,8 @@ const (
 	audienceTypeURL     = "type.googleapis.com/envoy.extensions.filters.http.gcp_authn.v3.Audience"
 )
 
-func setupProxyAddressConverter(t *testing.T) {
-	registerMetadataConverter(proxyAddressTypeURL, proxyAddressConvertor{})
-	t.Cleanup(func() {
-		unregisterMetadataConverterForTesting(proxyAddressTypeURL)
-	})
-}
-
-func setupAudienceConverter(t *testing.T) {
-	registerMetadataConverter(audienceTypeURL, audienceConverter{})
-	t.Cleanup(func() {
-		unregisterMetadataConverterForTesting(audienceTypeURL)
-	})
-}
-
 func (s) TestProxyAddressConverterSuccess(t *testing.T) {
-	setupProxyAddressConverter(t)
+	t.Cleanup(RegisterMetadataConverterForTesting(proxyAddressTypeURL, ProxyAddressConvertor{}))
 	converter := metadataConverterForType(proxyAddressTypeURL)
 	if converter == nil {
 		t.Fatalf("Converter for %q not found in registry", proxyAddressTypeURL)
@@ -154,7 +140,7 @@ func (s) TestProxyAddressConverterSuccess(t *testing.T) {
 }
 
 func (s) TestProxyAddressConverterFailure(t *testing.T) {
-	setupProxyAddressConverter(t)
+	t.Cleanup(RegisterMetadataConverterForTesting(proxyAddressTypeURL, ProxyAddressConvertor{}))
 	converter := metadataConverterForType(proxyAddressTypeURL)
 	if converter == nil {
 		t.Fatalf("Converter for %q not found in registry", proxyAddressTypeURL)
@@ -221,7 +207,7 @@ func (s) TestProxyAddressConverterFailure(t *testing.T) {
 }
 
 func (s) TestAudienceConverterSuccess(t *testing.T) {
-	setupAudienceConverter(t)
+	t.Cleanup(RegisterMetadataConverterForTesting(audienceTypeURL, audienceConverter{}))
 	converter := metadataConverterForType(audienceTypeURL)
 	if converter == nil {
 		t.Fatalf("Converter for %q not found in registry", audienceTypeURL)
