@@ -84,7 +84,7 @@ func (t *tlsCredsBuilder) Name() string {
 // package `xds/bootstrap` and encapsulates a Google Default credential.
 type googleDefaultCredsBuilder struct{}
 
-func (d *googleDefaultCredsBuilder) Build(config json.RawMessage) (credentials.Bundle, func(), error) {
+func (d *googleDefaultCredsBuilder) Build(json.RawMessage) (credentials.Bundle, func(), error) {
 	return google.NewDefaultCredentials(), func() {}, nil
 }
 
@@ -164,7 +164,7 @@ type accessTokenCreds struct {
 	token string
 }
 
-func (a accessTokenCreds) GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) {
+func (a accessTokenCreds) GetRequestMetadata(context.Context, ...string) (map[string]string, error) {
 	return map[string]string{
 		"authorization": "Bearer " + a.token,
 	}, nil

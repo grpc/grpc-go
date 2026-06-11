@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
 	access_tokenpb "github.com/envoyproxy/go-control-plane/envoy/extensions/grpc_service/call_credentials/access_token/v3"
 	google_defaultpb "github.com/envoyproxy/go-control-plane/envoy/extensions/grpc_service/channel_credentials/google_default/v3"
@@ -125,7 +126,9 @@ func TestAccessTokenCallCredsBuilder(t *testing.T) {
 			t.Error("RequireTransportSecurity() got: false, want: true")
 		}
 
-		meta, err := creds.GetRequestMetadata(context.Background())
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		meta, err := creds.GetRequestMetadata(ctx)
 		if err != nil {
 			t.Fatalf("GetRequestMetadata() returned error: %v", err)
 		}
