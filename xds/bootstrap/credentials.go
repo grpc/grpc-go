@@ -19,20 +19,13 @@
 package bootstrap
 
 import (
-	"context"
 	"encoding/json"
-	"fmt"
 
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/google"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/xds/bootstrap/jwtcreds"
 	"google.golang.org/grpc/internal/xds/bootstrap/tlscreds"
-	"google.golang.org/protobuf/proto"
-
-	access_tokenpb "github.com/envoyproxy/go-control-plane/envoy/extensions/grpc_service/call_credentials/access_token/v3"
-	google_defaultpb "github.com/envoyproxy/go-control-plane/envoy/extensions/grpc_service/channel_credentials/google_default/v3"
-	insecurepb "github.com/envoyproxy/go-control-plane/envoy/extensions/grpc_service/channel_credentials/insecure/v3"
 )
 
 func init() {
@@ -41,7 +34,6 @@ func init() {
 	RegisterChannelCredentials(&tlsCredsBuilder{})
 
 	RegisterCallCredentials(&jwtCallCredsBuilder{})
-	RegisterCallCredentials(&accessTokenCallCredsBuilder{})
 }
 
 // insecureCredsBuilder implements the `ChannelCredentials` interface defined in
@@ -54,18 +46,6 @@ func (i *insecureCredsBuilder) Build(json.RawMessage) (credentials.Bundle, func(
 
 func (i *insecureCredsBuilder) Name() string {
 	return "insecure"
-}
-
-func (i *insecureCredsBuilder) TypeURL() string {
-	return "type.googleapis.com/envoy.extensions.grpc_service.channel_credentials.insecure.v3.InsecureCredentials"
-}
-
-func (i *insecureCredsBuilder) NewProtoConfig() proto.Message {
-	return &insecurepb.InsecureCredentials{}
-}
-
-func (i *insecureCredsBuilder) MarshalProtoConfig(proto.Message) (json.RawMessage, error) {
-	return json.RawMessage("{}"), nil
 }
 
 // tlsCredsBuilder implements the `ChannelCredentials` interface defined in
@@ -92,18 +72,6 @@ func (d *googleDefaultCredsBuilder) Name() string {
 	return "google_default"
 }
 
-func (d *googleDefaultCredsBuilder) TypeURL() string {
-	return "type.googleapis.com/envoy.extensions.grpc_service.channel_credentials.google_default.v3.GoogleDefaultCredentials"
-}
-
-func (d *googleDefaultCredsBuilder) NewProtoConfig() proto.Message {
-	return &google_defaultpb.GoogleDefaultCredentials{}
-}
-
-func (d *googleDefaultCredsBuilder) MarshalProtoConfig(proto.Message) (json.RawMessage, error) {
-	return json.RawMessage("{}"), nil
-}
-
 // jwtCallCredsBuilder implements the `CallCredentials` interface defined in
 // package `xds/bootstrap` and encapsulates JWT call credentials.
 type jwtCallCredsBuilder struct{}
@@ -114,62 +82,4 @@ func (j *jwtCallCredsBuilder) Build(configJSON json.RawMessage) (credentials.Per
 
 func (j *jwtCallCredsBuilder) Name() string {
 	return "jwt_token_file"
-}
-
-// accessTokenCallCredsBuilder implements CallCredentials and
-// CallCredentialsWithProto.
-type accessTokenCallCredsBuilder struct{}
-
-func (a *accessTokenCallCredsBuilder) Build(config json.RawMessage) (credentials.PerRPCCredentials, func(), error) {
-	var cfg struct {
-		Token string `json:"token"`
-	}
-	if err := json.Unmarshal(config, &cfg); err != nil {
-		return nil, nil, err
-	}
-	if cfg.Token == "" {
-		return nil, nil, fmt.Errorf("access token must be non-empty")
-	}
-	return accessTokenCreds{token: cfg.Token}, func() {}, nil
-}
-
-func (a *accessTokenCallCredsBuilder) Name() string {
-	return "access_token"
-}
-
-func (a *accessTokenCallCredsBuilder) TypeURL() string {
-	return "type.googleapis.com/envoy.extensions.grpc_service.call_credentials.access_token.v3.AccessTokenCredentials"
-}
-
-func (a *accessTokenCallCredsBuilder) NewProtoConfig() proto.Message {
-	return &access_tokenpb.AccessTokenCredentials{}
-}
-
-func (a *accessTokenCallCredsBuilder) MarshalProtoConfig(config proto.Message) (json.RawMessage, error) {
-	msg, ok := config.(*access_tokenpb.AccessTokenCredentials)
-	if !ok {
-		return nil, fmt.Errorf("unexpected config type: %T", config)
-	}
-	if msg.GetToken() == "" {
-		return nil, fmt.Errorf("access token must be non-empty")
-	}
-	cfgJSON, err := json.Marshal(map[string]string{"token": msg.GetToken()})
-	if err != nil {
-		return nil, err
-	}
-	return json.RawMessage(cfgJSON), nil
-}
-
-type accessTokenCreds struct {
-	token string
-}
-
-func (a accessTokenCreds) GetRequestMetadata(context.Context, ...string) (map[string]string, error) {
-	return map[string]string{
-		"authorization": "Bearer " + a.token,
-	}, nil
-}
-
-func (a accessTokenCreds) RequireTransportSecurity() bool {
-	return true
 }
