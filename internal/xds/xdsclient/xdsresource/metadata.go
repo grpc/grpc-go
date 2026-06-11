@@ -30,7 +30,7 @@ import (
 
 func init() {
 	if envconfig.XDSHTTPConnectEnabled {
-		RegisterMetadataConverter("type.googleapis.com/envoy.config.core.v3.Address", proxyAddressConvertor{})
+		registerMetadataConverter("type.googleapis.com/envoy.config.core.v3.Address", ProxyAddressConvertor{})
 	}
 	if envconfig.GCPAuthenticationFilterEnabled {
 		RegisterMetadataConverter("type.googleapis.com/envoy.extensions.filters.http.gcp_authn.v3.Audience", AudienceConverter{})
@@ -61,10 +61,19 @@ func metadataConverterForType(typeURL string) metadataConverter {
 	return metadataRegistry[typeURL]
 }
 
-// UnregisterMetadataConverterForTesting removes a converter from the registry.
-// For testing only.
-func UnregisterMetadataConverterForTesting(typeURL string) {
-	delete(metadataRegistry, typeURL)
+// RegisterMetadataConverterForTesting registers the converter for testing
+// purposes and returns a cleanup function to restore the registry to its
+// previous state.
+func RegisterMetadataConverterForTesting(protoType string, c metadataConverter) func() {
+	curConverter, found := metadataRegistry[protoType]
+	registerMetadataConverter(protoType, c)
+	return func() {
+		if found {
+			metadataRegistry[protoType] = curConverter
+			return
+		}
+		delete(metadataRegistry, protoType)
+	}
 }
 
 // StructMetadataValue stores the values in a google.protobuf.Struct from
@@ -82,12 +91,12 @@ type ProxyAddressMetadataValue struct {
 	Address string
 }
 
-// proxyAddressConvertor implements the metadataConverter interface to handle
+// ProxyAddressConvertor implements the metadataConverter interface to handle
 // the conversion of envoy.config.core.v3.Address protobuf messages into an
 // internal representation.
-type proxyAddressConvertor struct{}
+type ProxyAddressConvertor struct{}
 
-func (proxyAddressConvertor) convert(anyProto *anypb.Any) (any, error) {
+func (ProxyAddressConvertor) convert(anyProto *anypb.Any) (any, error) {
 	addressProto := &v3corepb.Address{}
 	if err := anyProto.UnmarshalTo(addressProto); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal resource from Any proto: %v", err)
