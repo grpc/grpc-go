@@ -36,7 +36,6 @@ import (
 	estats "google.golang.org/grpc/experimental/stats"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/envconfig"
-	"google.golang.org/grpc/internal/grpctest"
 	iresolver "google.golang.org/grpc/internal/resolver"
 	iringhash "google.golang.org/grpc/internal/ringhash"
 	"google.golang.org/grpc/internal/testutils"
@@ -1553,8 +1552,6 @@ func (s) TestResolver_XDSConfigInRPCContext(t *testing.T) {
 // (using an empty service config update), and recover when a valid client-side
 // listener update is subsequently received.
 func (s) TestResolverServerSideListenerReceivedOnClient(t *testing.T) {
-	grpctest.ExpectError("does not contain API listener configuration")
-
 	// Spin up an xDS management server for the test.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()

@@ -530,7 +530,6 @@ func (m *DependencyManager) onListenerResourceUpdate(update *xdsresource.Listene
 	// can transition the channel into TRANSIENT_FAILURE.
 	if update.APIListener == nil {
 		err := fmt.Errorf("xds: client-side listener resource %q does not contain API listener configuration", m.ldsResourceName)
-		m.logger.Errorf("%v", err)
 		if m.routeConfigWatcher != nil {
 			m.routeConfigWatcher.stop()
 		}
