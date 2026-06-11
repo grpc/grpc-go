@@ -108,7 +108,9 @@ type ClientFilter struct {
 	// FilterName is the name of the HTTP filter instance in the xDS
 	// configuration and is populated by the xDS resolver.
 	FilterName string
-	cache      *lruCache
+	// cache is the LRU cache of PerRPCCredentials instances, keyed by audience
+	// and is initialized or resized when BuildClientInterceptor is called.
+	cache *lruCache
 }
 
 // BuildClientInterceptor builds a client interceptor for the GCP

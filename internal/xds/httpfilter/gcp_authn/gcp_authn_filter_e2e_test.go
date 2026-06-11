@@ -120,7 +120,7 @@ func (s) TestGCPAuthnFilter_SuccessCase(t *testing.T) {
 	}
 
 	// Start a test backend.
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
 	backend := &stubserver.StubServer{
@@ -128,7 +128,7 @@ func (s) TestGCPAuthnFilter_SuccessCase(t *testing.T) {
 			md, _ := metadata.FromIncomingContext(ctx)
 			// Verify that the token is attached to the RPC
 			if !strings.Contains(md.Get("authorization")[0], "Bearer "+tokenValue) {
-				t.Errorf("Expected token not found in metadata: %v", md)
+				return nil, fmt.Errorf("Expected token not found in metadata: %v", md)
 			}
 			return &testpb.Empty{}, nil
 		},
@@ -232,7 +232,7 @@ func (s) TestGCPAuthnFilter_TokenCaching(t *testing.T) {
 		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
 	// Start a test backend.
@@ -241,7 +241,7 @@ func (s) TestGCPAuthnFilter_TokenCaching(t *testing.T) {
 			md, _ := metadata.FromIncomingContext(ctx)
 			// Verify that the token is attached to the RPC
 			if !strings.Contains(md.Get("authorization")[0], "Bearer "+tokenValue) {
-				t.Errorf("Expected token not found in metadata: %v", md)
+				return nil, fmt.Errorf("Expected token not found in metadata: %v", md)
 			}
 			return &testpb.Empty{}, nil
 		},
@@ -316,6 +316,12 @@ func (s) TestGCPAuthnFilter_TokenCaching(t *testing.T) {
 			t.Fatalf("EmptyCall() failed: %v", err)
 		}
 	}
+
+	// Verify request count is 1. This ensures that the token fetched for
+	// the first RPC was reused for the second RPC.
+	if count := atomic.LoadInt32(&requestCount); count != 1 {
+		t.Errorf("Unexpected request to metadata server, got %d want 1", count)
+	}
 }
 
 // Test verifies that the filter refuses to attach credentials when the target
@@ -345,7 +351,7 @@ func (s) TestGCPAuthnFilter_InsecureTransport(t *testing.T) {
 		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
 	// Start a test backend.
@@ -450,7 +456,7 @@ func (s) TestGCPAuthnFilter_CacheSharingConfigUpdate(t *testing.T) {
 		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
 	// Start a test backend.
@@ -600,7 +606,7 @@ func (s) TestGCPAuthnFilter_CacheSharingConfigUpdate(t *testing.T) {
 
 	// Verify request count is 3!
 	if count := atomic.LoadInt32(&requestCount); count != 3 {
-		t.Errorf("Unexpected requests to metadata server, got %d want 3", count)
+		t.Fatalf("Unexpected requests to metadata server, got %d want 3", count)
 	}
 
 	// Update cache config to size 1!
@@ -719,7 +725,7 @@ func (s) TestGCPAuthnFilter_ConcurrentRPCWithShortAndLongContext(t *testing.T) {
 			md, _ := metadata.FromIncomingContext(ctx)
 			// Verify that the token is attached to the RPC
 			if !strings.Contains(md.Get("authorization")[0], "Bearer "+tokenValue) {
-				t.Errorf("Expected token not found in metadata: %v", md)
+				return nil, fmt.Errorf("Expected token not found in metadata: %v", md)
 			}
 			return &testpb.Empty{}, nil
 		},
@@ -826,7 +832,7 @@ func (s) TestGCPAuthnFilter_ConcurrentRPCWithShortAndLongContext(t *testing.T) {
 	select {
 	case err := <-errCh1:
 		t.Fatalf("First RPC completed early with error: %v, expected it to remain blocked", err)
-	case <-time.After(100 * time.Millisecond):
+	case <-time.After(defaultTestShortTimeout):
 		// Success: RPC 1 remained blocked.
 	}
 
@@ -904,7 +910,7 @@ func (s) TestGCPAuthnFilter_PreservesUserCallOptions(t *testing.T) {
 			md, _ := metadata.FromIncomingContext(ctx)
 			// Verify that the token is attached to the RPC
 			if !strings.Contains(md.Get("authorization")[0], "Bearer "+tokenValue) {
-				t.Errorf("Expected token not found in metadata: %v", md)
+				return nil, fmt.Errorf("Expected token not found in metadata: %v", md)
 			}
 			return &testpb.Empty{}, nil
 		},
