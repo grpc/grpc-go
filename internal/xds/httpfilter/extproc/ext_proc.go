@@ -308,46 +308,13 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 	// Create new RPC to the external processor server.
 	extStream, err := i.extClient.Process(extProcCtx)
 	if err != nil {
-		if cs.extCancel != nil {
-			cs.extCancel()
-		}
-		logger.Warningf("External processor failed to start: %v", err)
-		// If external processor stream creation fails and config does not allow
-		// failure mode, fail the RPC.
-		if !i.config.failureModeAllow {
-			done()
-			return nil, status.Errorf(codes.Internal, "extproc: external processor failed to start: %v", err)
-		}
-		// If failure mode is allowed, create the dataplane stream immediately and
-		// bypass the external processor stream.
-		if err := cs.createDataplaneStream(newStream, done); err != nil {
-			return nil, err
-		}
-		cs.extStreamBypass.Store(true)
-		return cs, nil
+		return cs.handleInitializationFailure(fmt.Errorf("external processor failed to start: %v", err), newStream, done)
 	}
 	cs.extStream = extStream
 
 	// Construct request attributes for the RPC to the external processor server.
-	cs.reqAttrs, err = constructRequestAttributes(ri, outgoingMD, i.config.requestAttributes)
-	if err != nil {
-		if cs.extCancel != nil {
-			cs.extCancel()
-		}
-		// If request attributes construction fails and config does not allow
-		// failure mode, fail the RPC.
-		if !i.config.failureModeAllow {
-			done()
-			return nil, status.Errorf(codes.Internal, "extproc: failed to construct attributes: %v", err)
-		}
-		// If failure mode is allowed, log the error and create the dataplane
-		// stream.
-		logger.Warningf("Failed to construct attributes: %v", err)
-		if err := cs.createDataplaneStream(newStream, done); err != nil {
-			return nil, err
-		}
-		cs.extStreamBypass.Store(true)
-		return cs, nil
+	if cs.reqAttrs, err = constructRequestAttributes(ri, outgoingMD, i.config.requestAttributes); err != nil {
+		return cs.handleInitializationFailure(fmt.Errorf("failed to construct attributes: %v", err), newStream, done)
 	}
 
 	// If the request header processing mode is set to "Send", forward the headers
@@ -368,19 +335,7 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 			Attributes: cs.reqAttrs,
 		}
 		if err = extStream.Send(&headerReq); err != nil {
-			if cs.extCancel != nil {
-				cs.extCancel()
-			}
-			if !i.config.failureModeAllow {
-				done()
-				return nil, status.Errorf(codes.Internal, "extproc: failed to send client headers to external processor server: %v", err)
-			}
-			logger.Warningf("Failed to send client headers to external processor server: %v", err)
-			if err := cs.createDataplaneStream(newStream, done); err != nil {
-				return nil, err
-			}
-			cs.extStreamBypass.Store(true)
-			return cs, nil
+			return cs.handleInitializationFailure(fmt.Errorf("failed to send client headers to external processor server: %v", err), newStream, done)
 		}
 		// Mark that the initial message has been sent so as to not add
 		// ProtocolConfig to any other request message.
@@ -1100,6 +1055,25 @@ func (cs *clientStream) cancelStream(err error) {
 	cs.extStreamBypass.Store(true)
 }
 
+// handleInitializationFailure handles failures during the initialization of the
+// external processor stream in NewStream. It returns a new dataplane stream if
+// failure mode allows, else fails the RPC.
+func (cs *clientStream) handleInitializationFailure(err error, newStream func(context.Context, func()) (resolver.ClientStream, error), done func()) (resolver.ClientStream, error) {
+	if cs.extCancel != nil {
+		cs.extCancel()
+	}
+	logger.Warning(err)
+	if !cs.config.failureModeAllow {
+		done()
+		return nil, status.Errorf(codes.Internal, "extproc: %v", err)
+	}
+	if err := cs.createDataplaneStream(newStream, done); err != nil {
+		return nil, err
+	}
+	cs.extStreamBypass.Store(true)
+	return cs, nil
+}
+
 // handleHeaderError handles failures that occur during the initial request
 // headers phase. If the failure mode allows it, the external processor is
 // bypassed and the direct dataplane stream is created.
@@ -1372,6 +1346,8 @@ func constructRequestAttributes(rpcInfo resolver.RPCInfo, md metadata.MD, reques
 			}
 		case "request.query":
 			reqFields[attr] = ""
+		default:
+			// Unknown/unsupported attributes are ignored.
 		}
 	}
 

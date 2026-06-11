@@ -41,8 +41,11 @@ type RPCInfo struct {
 	// Context is the user's context for the RPC and contains headers and
 	// application timeout.  It is passed for interception purposes and for
 	// efficiency reasons.  SelectConfig should not be blocking.
-	Context   context.Context
-	Method    string // i.e. "/Service/Method"
+	Context context.Context
+	Method  string // i.e. "/Service/Method"
+	// Authority is the target authority (host) name of the RPC. This is required
+	// for HTTP filters (such as external processing) to populate request
+	// attributes.
 	Authority string
 }
 
