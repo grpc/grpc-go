@@ -2512,8 +2512,11 @@ func (s) TestRPC_BaggagePropagation(t *testing.T) {
 		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
 			serverBaggage <- baggageToMap(baggage.FromContext(stream.Context()))
 			for {
-				if _, err := stream.Recv(); err == io.EOF {
-					return nil
+				if _, err := stream.Recv(); err != nil {
+					if err == io.EOF {
+						return nil
+					}
+					return err
 				}
 			}
 		},
