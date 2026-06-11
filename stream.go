@@ -290,6 +290,8 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 					}
 					return cs, nil
 				}
+			} else {
+				return nil, status.Errorf(codes.Internal, "invalid client interceptor type %T", rpcConfig.Interceptor)
 			}
 		}
 	}

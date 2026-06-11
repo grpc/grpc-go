@@ -32,9 +32,8 @@ import (
 type ClientStream struct {
 	Stream // Embed for common stream functionality.
 
-	ct       *http2Client
-	done     chan struct{} // closed at the end of stream to unblock writers.
-	doneFunc func()        // invoked at the end of stream.
+	ct   *http2Client
+	done chan struct{} // closed at the end of stream to unblock writers.
 
 	headerChan chan struct{} // closed to indicate the end of header metadata.
 	header     metadata.MD   // the received header metadata

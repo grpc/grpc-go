@@ -73,7 +73,7 @@ type Builder interface {
 type ClientInterceptor interface {
 	// NewStream creates a ClientStream for an RPC.
 	//
-	// Implementations must delegate stream creation to the provided newStream
+	// Implementations may delegate stream creation to the provided newStream
 	// function, passing the provided CallOption slice along with any new
 	// CallOption instances they wish to add. To intercept or override stream
 	// behavior, implementations may wrap the ClientStream returned by the
@@ -81,6 +81,7 @@ type ClientInterceptor interface {
 	//
 	// Note: RPCInfo.Context is currently unused and will be nil.
 	NewStream(ctx context.Context, ri iresolver.RPCInfo, newStream func(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStream, error), opts ...grpc.CallOption) (grpc.ClientStream, error)
+
 	// Close closes the interceptor. Once called, no new calls to NewStream are
 	// accepted. Ongoing calls to NewStream are allowed to complete.
 	Close()
