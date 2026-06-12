@@ -498,6 +498,16 @@ func (m *DependencyManager) applyRouteConfigUpdateLocked(update *xdsresource.Rou
 }
 
 func (m *DependencyManager) onListenerResourceUpdate(update *xdsresource.ListenerUpdate, onDone func()) {
+	// A client-side listener update must contain API listener configuration. If
+	// it is nil, it indicates that a server-side listener (TCP Listener) resource
+	// was received instead. We report this error to the resolver watcher so it
+	// can transition the channel into TRANSIENT_FAILURE.
+	if update.APIListener == nil {
+		err := fmt.Errorf("client-side listener resource %q does not contain API listener configuration", m.ldsResourceName)
+		m.onListenerResourceError(err, onDone)
+		return
+	}
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -512,7 +522,7 @@ func (m *DependencyManager) onListenerResourceUpdate(update *xdsresource.Listene
 
 	m.listenerWatcher.setLastUpdate(update)
 
-	if update.APIListener != nil && update.APIListener.InlineRouteConfig != nil {
+	if update.APIListener.InlineRouteConfig != nil {
 		// If there was a previous route config watcher because of a non-inline
 		// route configuration, cancel it.
 		m.rdsResourceName = ""
@@ -521,22 +531,6 @@ func (m *DependencyManager) onListenerResourceUpdate(update *xdsresource.Listene
 		}
 		m.routeConfigWatcher = &xdsResourceState[xdsresource.RouteConfigUpdate, routeExtras]{stop: func() {}}
 		m.applyRouteConfigUpdateLocked(update.APIListener.InlineRouteConfig)
-		return
-	}
-
-	// A client-side listener update must contain API listener configuration. If
-	// it is nil, it indicates that a server-side listener (TCP Listener) resource
-	// was received instead. We report this error to the resolver watcher so it
-	// can transition the channel into TRANSIENT_FAILURE.
-	if update.APIListener == nil {
-		err := fmt.Errorf("xds: client-side listener resource %q does not contain API listener configuration", m.ldsResourceName)
-		if m.routeConfigWatcher != nil {
-			m.routeConfigWatcher.stop()
-		}
-		m.listenerWatcher.setLastError(err)
-		m.rdsResourceName = ""
-		m.routeConfigWatcher = nil
-		m.watcher.Error(err)
 		return
 	}
 
