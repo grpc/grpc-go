@@ -260,7 +260,6 @@ func (clientFilter) BuildClientInterceptor(base, override httpfilter.FilterConfi
 }
 
 type clientInterceptor struct {
-	resolver.ClientInterceptor
 	config      baseConfig
 	extClient   v3procservicegrpc.ExternalProcessorClient
 	closeClient func() error
@@ -270,7 +269,7 @@ func (i *clientInterceptor) Close() {
 	i.closeClient()
 }
 
-func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, done func(), newStream func(ctx context.Context, done func()) (resolver.ClientStream, error)) (resolver.ClientStream, error) {
+func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, newStream func(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStream, error), opts ...grpc.CallOption) (grpc.ClientStream, error) {
 	if i.config.observabilityMode {
 		ocs := &observabilityClientStream{
 			ctx:          ctx,
@@ -295,14 +294,14 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 		// Create new stream to the external processor server.
 		extStream, err := i.extClient.Process(extProcCtx)
 		if err != nil {
-			return ocs.handleInitError(fmt.Errorf("external processor failed to start: %v", err), newStream, done)
+			return ocs.handleInitError(fmt.Errorf("external processor failed to start: %v", err), newStream, opts...)
 		}
 		ocs.extStream = extStream
 
 		// Construct request attributes to be sent to the external processor server.
 		ocs.reqAttrs, err = constructRequestAttributes(ri, outgoingMD, i.config.requestAttributes)
 		if err != nil {
-			return ocs.handleInitError(fmt.Errorf("failed to construct attributes: %v", err), newStream, done)
+			return ocs.handleInitError(fmt.Errorf("failed to construct attributes: %v", err), newStream, opts...)
 		}
 		// If the request header processing mode is set to "Send", forward the
 		// headers to the external processor server.
@@ -321,7 +320,7 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 				Attributes: ocs.reqAttrs,
 			}
 			if err = extStream.Send(&headerReq); err != nil {
-				return ocs.handleInitError(fmt.Errorf("failed to send client headers to external processor server: %v", err), newStream, done)
+				return ocs.handleInitError(fmt.Errorf("failed to send client headers to external processor server: %v", err), newStream, opts...)
 			}
 			// Mark that the initial message has been sent to prevent sending
 			// ProtocolConfig on subsequent messages.
@@ -331,7 +330,7 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 			ocs.initClientMsgSent.Store(true)
 		}
 
-		doneFunc := func() {
+		onFinishFunc := func(_ error) {
 			// When the dataplane RPC is done, send end-of-stream to signal no more
 			// client messages will be sent and also send trailers if needed.
 			ocs.initiateRequestEOFProcessing()
@@ -339,9 +338,7 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 			// In observability mode, the dataplane stream may finish before the
 			// external processor has finished reading all data off the stream. To
 			// prevent early stream closure, we defer calling CloseSend on the
-			// external processor stream by the configured deferredCloseTimeout. This
-			// must run in a separate goroutine to avoid blocking the critical done()
-			// callback thread which executes subchannel/balancer updates.
+			// external processor stream by the configured deferredCloseTimeout.
 			go func() {
 				time.Sleep(ocs.config.deferredCloseTimeout)
 				ocs.mu.Lock()
@@ -350,11 +347,12 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 				}
 				ocs.mu.Unlock()
 			}()
-			done()
 		}
+		newOpts := append(opts, grpc.OnFinish(onFinishFunc))
+
 		// If there is no error in creating external processor stream, create the
 		// dataplane stream.
-		if ocs.dataplaneStream, err = newStream(ctx, doneFunc); err != nil {
+		if ocs.dataplaneStream, err = newStream(ctx, newOpts...); err != nil {
 			return nil, err
 		}
 
@@ -374,7 +372,7 @@ type observabilityClientStream struct {
 	ctx                 context.Context
 	extCancel           func()
 	config              baseConfig                                      // parsed configuration for this interceptor
-	dataplaneStream     resolver.ClientStream                           // underlying gRPC stream to the backend
+	dataplaneStream     grpc.ClientStream                               // underlying gRPC stream to the backend
 	extStream           v3procservicepb.ExternalProcessor_ProcessClient // bidirectional stream to external processor
 	streamFailed        *grpcsync.Event                                 // fired when the external processor stream has closed and its final status is processed
 	extStreamBypass     atomic.Bool                                     // set to true when the external processor stream should be bypassed
@@ -731,16 +729,16 @@ func getHeader(md metadata.MD, key string) string {
 // handleInitError handles failures during the initialization of the external
 // processor stream in NewStream. It returns a new dataplane stream if failure
 // mode allows, else returns the error.
-func (o *observabilityClientStream) handleInitError(err error, newStream func(context.Context, func()) (resolver.ClientStream, error), done func()) (resolver.ClientStream, error) {
+func (o *observabilityClientStream) handleInitError(err error, newStream func(context.Context, ...grpc.CallOption) (grpc.ClientStream, error), opts ...grpc.CallOption) (grpc.ClientStream, error) {
 	if o.extCancel != nil {
 		o.extCancel()
 	}
 	if !o.config.failureModeAllow {
-		done()
 		return nil, status.Errorf(codes.Internal, "extproc: %v", err)
 	}
-	if o.dataplaneStream, err = newStream(o.ctx, done); err != nil {
-		return nil, err
+	var newStreamErr error
+	if o.dataplaneStream, newStreamErr = newStream(o.ctx, opts...); newStreamErr != nil {
+		return nil, newStreamErr
 	}
 	o.extStreamBypass.Store(true)
 	return o, nil
