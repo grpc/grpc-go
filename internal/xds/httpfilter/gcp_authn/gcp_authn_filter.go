@@ -72,7 +72,6 @@ func (builder) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, er
 	}
 
 	cacheSize := uint64(defaultCacheSize)
-
 	cacheConfig := msg.GetCacheConfig()
 	if cacheConfig.GetCacheSize() != nil {
 		cacheSize = cacheConfig.GetCacheSize().GetValue()
@@ -108,6 +107,7 @@ type ClientFilter struct {
 	// FilterName is the name of the HTTP filter instance in the xDS
 	// configuration and is populated by the xDS resolver.
 	FilterName string
+
 	// cache is the LRU cache of PerRPCCredentials instances, keyed by audience
 	// and is initialized or resized when BuildClientInterceptor is called.
 	cache *lruCache
@@ -134,8 +134,7 @@ func (cf *ClientFilter) BuildClientInterceptor(cfg, _ httpfilter.FilterConfig) (
 }
 
 // Close closes the client filter.
-func (cf *ClientFilter) Close() {
-}
+func (cf *ClientFilter) Close() {}
 
 type interceptor struct {
 	filterName string
@@ -170,8 +169,7 @@ func (i *interceptor) NewStream(ctx context.Context, _ iresolver.RPCInfo, newStr
 		return nil, status.Errorf(codes.Unavailable, "gcpauthn: cluster metadata for key %q is not of type AudienceMetadataValue", i.filterName)
 	}
 
-	audience := audienceMetadata.Audience
-	creds, err := i.cache.getOrCreate(audience)
+	creds, err := i.cache.getOrCreate(audienceMetadata.Audience)
 	if err != nil {
 		return nil, err
 	}
