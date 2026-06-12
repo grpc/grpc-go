@@ -28,6 +28,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"google.golang.org/grpc"
 	estats "google.golang.org/grpc/experimental/stats"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/grpclog"
@@ -416,7 +417,7 @@ func (r *xdsResolver) newConfigSelector() (_ *configSelector, err error) {
 
 	for i, rt := range r.xdsConfig.VirtualHost.Routes {
 		clusters := rinternal.NewWRR.(func() wrr.WRR)()
-		interceptors := []iresolver.ClientInterceptor{}
+		interceptors := []httpfilter.ClientInterceptor{}
 		// TODO: Carve out the common logic between the ClusterSpecifierPlugin
 		// and WeightedClusters.
 		if rt.ClusterSpecifierPlugin != "" {
@@ -617,8 +618,8 @@ func (r *xdsResolver) onResourceError(err error) {
 // followed by the route override, and finally the virtual host override.
 //
 // Only executed in the context of a serializer callback.
-func (r *xdsResolver) newInterceptor(filters []xdsresource.HTTPFilter, clusterOverride, routeOverride, virtualHostOverride map[string]httpfilter.FilterConfig, onCommitted func()) (_ iresolver.ClientInterceptor, err error) {
-	interceptors := make([]iresolver.ClientInterceptor, 0, len(filters))
+func (r *xdsResolver) newInterceptor(filters []xdsresource.HTTPFilter, clusterOverride, routeOverride, virtualHostOverride map[string]httpfilter.FilterConfig, onCommitted func()) (_ httpfilter.ClientInterceptor, err error) {
+	interceptors := make([]httpfilter.ClientInterceptor, 0, len(filters))
 	defer func() {
 		// Clean up any interceptors that were successfully built before the
 		// error occurred, to avoid leaking resources.
@@ -678,19 +679,19 @@ func (r *xdsResolver) newInterceptor(filters []xdsresource.HTTPFilter, clusterOv
 // interceptorList is a client interceptor that contains a list of client
 // interceptors to execute in order.
 type interceptorList struct {
-	interceptors []iresolver.ClientInterceptor
+	interceptors []httpfilter.ClientInterceptor
 	onCommitted  func()
 }
 
-func (il *interceptorList) NewStream(ctx context.Context, ri iresolver.RPCInfo, _ func(), newStream func(ctx context.Context, done func()) (iresolver.ClientStream, error)) (iresolver.ClientStream, error) {
+func (il *interceptorList) NewStream(ctx context.Context, ri iresolver.RPCInfo, newStream func(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStream, error), opts ...grpc.CallOption) (grpc.ClientStream, error) {
 	for idx := len(il.interceptors) - 1; idx >= 0; idx-- {
 		ns := newStream
 		i := il.interceptors[idx]
-		newStream = func(ctx context.Context, done func()) (iresolver.ClientStream, error) {
-			return i.NewStream(ctx, ri, done, ns)
+		newStream = func(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStream, error) {
+			return i.NewStream(ctx, ri, ns, opts...)
 		}
 	}
-	s, err := newStream(ctx, func() {})
+	s, err := newStream(ctx, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -706,10 +707,10 @@ func (il *interceptorList) Close() {
 	}
 }
 
-// interceptorStream wraps iresolver.ClientStream to execute onCommitted
+// interceptorStream wraps grpc.ClientStream to execute onCommitted
 // upon the first client interaction.
 type interceptorStream struct {
-	iresolver.ClientStream
+	grpc.ClientStream
 	onCommitted func()
 	commitOnce  sync.Once
 }

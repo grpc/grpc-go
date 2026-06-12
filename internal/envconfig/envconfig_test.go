@@ -101,3 +101,118 @@ func (s) TestBoolFromEnv(t *testing.T) {
 		})
 	}
 }
+
+func (s) TestGoroutineLabelsFromEnv(t *testing.T) {
+	var testCases = []struct {
+		name string
+		val  string
+		def  GoroutineLabels
+		want GoroutineLabels
+	}{
+		{
+			name: "unset_env_non-zero_default",
+			val:  "",
+			def:  GoroutineLabelServerMethod,
+			want: GoroutineLabelServerMethod,
+		}, {
+			name: "unset_env_zero_default",
+			val:  "",
+			def:  0,
+			want: 0,
+		}, {
+			name: "force-enable_zero_default",
+			val:  "grpc.method=true",
+			def:  0,
+			want: GoroutineLabelServerMethod,
+		}, {
+			name: "force-enable_zero_default_all_caps",
+			val:  "grpc.method=TRUE",
+			def:  0,
+			want: GoroutineLabelServerMethod,
+		}, {
+			name: "force-enable_zero_default_with_whitespace",
+			val:  " grpc.method\t= true",
+			def:  0,
+			want: GoroutineLabelServerMethod,
+		}, {
+			name: "force-enable_zero_default_with_other_garbage",
+			val:  "grpc.method=true,foobar",
+			def:  0,
+			want: GoroutineLabelServerMethod,
+		}, {
+			name: "force-enable_mixed_case_zero_default_with_other_garbage",
+			val:  "grpc.method=tRuE,foobar",
+			def:  0,
+			want: GoroutineLabelServerMethod,
+		}, {
+			name: "force-disable_zero_default",
+			val:  "grpc.method=false",
+			def:  0,
+			want: 0,
+		}, {
+			name: "force-disable_non-zero_default",
+			val:  "grpc.method=false",
+			def:  GoroutineLabelServerMethod,
+			want: 0,
+		}, {
+			name: "force-disable_non-zero_default_all_caps",
+			val:  "grpc.method=FALSE",
+			def:  GoroutineLabelServerMethod,
+			want: 0,
+		}, {
+			name: "force-disable_non-zero_default_mixed_case",
+			val:  "grpc.method=fAlSe",
+			def:  GoroutineLabelServerMethod,
+			want: 0,
+		}, {
+			name: "unknown_val_no_equal",
+			val:  "grpc.unknown.garbage",
+			def:  GoroutineLabelServerMethod,
+			want: GoroutineLabelServerMethod,
+		}, {
+			name: "unknown_val",
+			val:  "grpc.unknown.garbage=fooble",
+			def:  GoroutineLabelServerMethod,
+			want: GoroutineLabelServerMethod,
+		}, {
+			name: "all_with_empty_default",
+			val:  "all",
+			def:  0,
+			want: AllGoroutineLabels,
+		}, {
+			name: "all_with_server_method_default",
+			val:  "all",
+			def:  GoroutineLabelServerMethod,
+			want: AllGoroutineLabels,
+		}, {
+			name: "none_with_empty_default",
+			val:  "none",
+			def:  0,
+			want: 0,
+		}, {
+			name: "none_with_server_method_default",
+			val:  "none",
+			def:  GoroutineLabelServerMethod,
+			want: 0,
+		}, {
+			name: "unparseable_rhs",
+			val:  "grpc.method=quux",
+			def:  GoroutineLabelServerMethod,
+			want: GoroutineLabelServerMethod,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			const testVar = "testvar"
+			if tc.val == "" {
+				os.Unsetenv(testVar)
+			} else {
+				os.Setenv(testVar, tc.val)
+			}
+			if got := goroutineLabelsFromEnv(testVar, tc.def); got != tc.want {
+				t.Errorf("goroutineLabelsFromEnv(%q(=%q), %v) = %v; want %v", testVar, tc.val, tc.def, got, tc.want)
+			}
+		})
+	}
+
+}

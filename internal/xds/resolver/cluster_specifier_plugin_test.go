@@ -25,6 +25,7 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
 	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/testutils"
@@ -438,13 +439,16 @@ func (s) TestResolverClusterSpecifierPlugin_WithFilters(t *testing.T) {
 	if res.Interceptor == nil {
 		t.Fatal("RPCInfo does not contain interceptors list")
 	}
-
-	newStream := func(context.Context, func()) (iresolver.ClientStream, error) {
+	newStream := func(context.Context, ...grpc.CallOption) (grpc.ClientStream, error) {
 		return nil, nil
 	}
 
-	if _, err = res.Interceptor.NewStream(ctx, iresolver.RPCInfo{Method: "/service/method", Context: ctx}, func() {}, newStream); err != nil {
-		t.Fatalf("NewStream() failed with error: %v", err)
+	if interceptor, ok := res.Interceptor.(httpfilter.ClientInterceptor); ok {
+		if _, err = interceptor.NewStream(ctx, iresolver.RPCInfo{Method: "/service/method", Context: ctx}, newStream); err != nil {
+			t.Fatalf("NewStream() failed with error: %v", err)
+		}
+	} else {
+		t.Fatalf("res.Interceptor is type %T, want httpfilter.ClientInterceptor", res.Interceptor)
 	}
 
 	// Verify that first filter receives the config.
@@ -474,9 +478,9 @@ func (s) TestResolverClusterSpecifierPlugin_WithFilters(t *testing.T) {
 	}
 }
 
-// mockClientStream implements iresolver.ClientStream.
+// mockClientStream implements grpc.ClientStream.
 type mockClientStream struct {
-	iresolver.ClientStream
+	grpc.ClientStream
 	ctx context.Context
 }
 
@@ -487,14 +491,18 @@ func (m mockClientStream) Context() context.Context {
 // createStreamAndCommit simulates a client initiating stream I/O. Calling
 // Context() on the returned stream triggers the interceptor's underlying
 // commit callback.
-func createStreamAndCommit(ctx context.Context, interceptor iresolver.ClientInterceptor) error {
+func createStreamAndCommit(ctx context.Context, interceptor any) error {
 	if interceptor == nil {
 		return nil
 	}
-	newStream := func(context.Context, func()) (iresolver.ClientStream, error) {
+	i, ok := interceptor.(httpfilter.ClientInterceptor)
+	if !ok {
+		return fmt.Errorf("unexpected interceptor type %T, want httpfilter.ClientInterceptor", interceptor)
+	}
+	newStream := func(context.Context, ...grpc.CallOption) (grpc.ClientStream, error) {
 		return mockClientStream{ctx: ctx}, nil
 	}
-	stream, err := interceptor.NewStream(ctx, iresolver.RPCInfo{Method: "/service/method", Context: ctx}, func() {}, newStream)
+	stream, err := i.NewStream(ctx, iresolver.RPCInfo{Method: "/service/method", Context: ctx}, newStream)
 	if err != nil {
 		return err
 	}
