@@ -115,7 +115,7 @@ type ClientFilter struct {
 
 // BuildClientInterceptor builds a client interceptor for the GCP
 // Authentication filter.
-func (cf *ClientFilter) BuildClientInterceptor(cfg, _ httpfilter.FilterConfig) (iresolver.ClientInterceptor, error) {
+func (cf *ClientFilter) BuildClientInterceptor(cfg, _ httpfilter.FilterConfig) (httpfilter.ClientInterceptor, error) {
 	c, ok := cfg.(config)
 	if !ok {
 		return nil, fmt.Errorf("gcpauthn: invalid filter config type %T", cfg)
@@ -142,10 +142,10 @@ type interceptor struct {
 	cache      *lruCache
 }
 
-func (i *interceptor) NewStream(ctx context.Context, _ iresolver.RPCInfo, opts []any, done func(), newStream func(ctx context.Context, done func(), opts []any) (iresolver.ClientStream, error)) (iresolver.ClientStream, error) {
+func (i *interceptor) NewStream(ctx context.Context, _ iresolver.RPCInfo, newStream func(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStream, error), opts ...grpc.CallOption) (grpc.ClientStream, error) {
 	clusterName := clustermanager.GetPickedCluster(ctx)
 	if clusterName == "" || strings.HasPrefix(clusterName, "cluster_specifier_plugin:") {
-		return newStream(ctx, done, opts)
+		return newStream(ctx, opts...)
 	}
 	clusterName = strings.TrimPrefix(clusterName, "cluster:")
 
@@ -162,7 +162,7 @@ func (i *interceptor) NewStream(ctx context.Context, _ iresolver.RPCInfo, opts [
 	m := clusterResult.Config.Cluster.Metadata
 	val, ok := m[i.filterName]
 	if !ok {
-		return newStream(ctx, done, opts)
+		return newStream(ctx, opts...)
 	}
 
 	audienceMetadata, ok := val.(xdsresource.AudienceMetadataValue)
@@ -177,7 +177,7 @@ func (i *interceptor) NewStream(ctx context.Context, _ iresolver.RPCInfo, opts [
 	}
 	opts = append(opts, grpc.PerRPCCredentials(creds))
 
-	return newStream(ctx, done, opts)
+	return newStream(ctx, opts...)
 }
 
 func (i *interceptor) Close() {}

@@ -23,6 +23,7 @@ import (
 	"strings"
 	"testing"
 
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/xds/balancer/clustermanager"
@@ -250,10 +251,10 @@ func (s) TestInterceptor_NewStream_Errors(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			newStream := func(_ context.Context, _ func(), _ []any) (iresolver.ClientStream, error) {
+			newStream := func(_ context.Context, _ ...grpc.CallOption) (grpc.ClientStream, error) {
 				return nil, nil
 			}
-			if _, err := interceptor.NewStream(tc.ctx, iresolver.RPCInfo{}, nil, func() {}, newStream); err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+			if _, err := interceptor.NewStream(tc.ctx, iresolver.RPCInfo{}, newStream); err == nil || !strings.Contains(err.Error(), tc.wantErr) {
 				t.Fatalf("NewStream() returned unexpected results, got %q , want error containing %q", err, tc.wantErr)
 			}
 		})
