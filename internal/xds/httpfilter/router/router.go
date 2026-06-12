@@ -91,7 +91,7 @@ type filter struct{}
 
 func (filter) Close() {}
 
-func (filter) BuildClientInterceptor(cfg, override httpfilter.FilterConfig) (iresolver.ClientInterceptor, error) {
+func (filter) BuildClientInterceptor(cfg, override httpfilter.FilterConfig) (httpfilter.ClientInterceptor, error) {
 	if _, ok := cfg.(config); !ok {
 		return nil, fmt.Errorf("router: incorrect config type provided (%T): %v", cfg, cfg)
 	}
