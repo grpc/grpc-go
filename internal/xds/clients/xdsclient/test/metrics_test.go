@@ -650,12 +650,20 @@ func (s) TestConnectedMetric_Reconnection(t *testing.T) {
 
 	sendResponse := make(chan struct{})
 	streamOpened := make(chan struct{}, 10)
+	requestReceived := make(chan struct{}, 10)
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
 		Listener: lis,
 		OnStreamOpen: func(ctx context.Context, _ int64, _ string) error {
 			select {
 			case streamOpened <- struct{}{}:
 			case <-ctx.Done():
+			}
+			return nil
+		},
+		OnStreamRequest: func(int64, *v3discoverypb.DiscoveryRequest) error {
+			select {
+			case requestReceived <- struct{}{}:
+			default:
 			}
 			return nil
 		},
@@ -768,6 +776,14 @@ func (s) TestConnectedMetric_Reconnection(t *testing.T) {
 	lis.Restart()
 
 	waitForStreamSuccess()
+
+	// Wait for the client's first request to reach the server. This ensures
+	// that the client-side runner has completed stream establishment.
+	select {
+	case <-requestReceived:
+	case <-ctx.Done():
+		t.Fatal("Timeout waiting for stream request")
+	}
 
 	tmr.triggerAsyncMetrics()
 	if err := tmr.waitForSpecificMetric(ctx, &metrics.XDSClientConnected{ServerURI: mgmtServer.Address, Value: 1}); err != nil {
