@@ -17,13 +17,16 @@
 package clusterimpl_test
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"os"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
@@ -37,9 +40,14 @@ import (
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/internal/xds/balancer/clusterimpl"
 	iclusterimpl "google.golang.org/grpc/internal/xds/balancer/clusterimpl/internal"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/peer"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/types/known/durationpb"
+
+	"google.golang.org/grpc/credentials/tls/certprovider/pemfile"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/testdata"
 
@@ -780,4 +788,219 @@ func (s) TestAggregateClusterSecurityConfig(t *testing.T) {
 		t.Fatalf("EmptyCall() failed: %v", err)
 	}
 	verifySecurityInformationFromPeer(t, peer, e2e.SecurityLevelMTLS)
+}
+
+const blockingProviderName = "blocking-cert-provider"
+
+var (
+	muBlockingProviders   sync.Mutex
+	blockingProvidersChan chan *blockingCertProvider
+)
+
+type blockingCertProvider struct {
+	certprovider.Provider
+	mu                      sync.Mutex
+	keyMaterialCalled       chan struct{}
+	keyMaterialCalledClosed bool
+	proceedKeyMaterial      chan struct{}
+}
+
+func (b *blockingCertProvider) KeyMaterial(ctx context.Context) (*certprovider.KeyMaterial, error) {
+	b.mu.Lock()
+	if !b.keyMaterialCalledClosed {
+		close(b.keyMaterialCalled)
+		b.keyMaterialCalledClosed = true
+	}
+	b.mu.Unlock()
+	select {
+	case <-b.proceedKeyMaterial:
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+	return b.Provider.KeyMaterial(ctx)
+}
+
+type blockingProviderBuilder struct{}
+
+func (blockingProviderBuilder) Name() string {
+	return blockingProviderName
+}
+
+func (blockingProviderBuilder) ParseConfig(c any) (*certprovider.BuildableConfig, error) {
+	raw, ok := c.(json.RawMessage)
+	if !ok {
+		return nil, fmt.Errorf("unexpected config type: %T", c)
+	}
+	cfg := &struct {
+		CertificateFile          string          `json:"certificate_file,omitempty"`
+		PrivateKeyFile           string          `json:"private_key_file,omitempty"`
+		CACertificateFile        string          `json:"ca_certificate_file,omitempty"`
+		SPIFFETrustBundleMapFile string          `json:"spiffe_trust_bundle_map_file,omitempty"`
+		RefreshInterval          json.RawMessage `json:"refresh_interval,omitempty"`
+	}{}
+	if err := json.Unmarshal(raw, cfg); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal json: %v", err)
+	}
+
+	opts := pemfile.Options{
+		CertFile:            cfg.CertificateFile,
+		KeyFile:             cfg.PrivateKeyFile,
+		RootFile:            cfg.CACertificateFile,
+		SPIFFEBundleMapFile: cfg.SPIFFETrustBundleMapFile,
+	}
+	if cfg.RefreshInterval != nil {
+		dur := &durationpb.Duration{}
+		if err := protojson.Unmarshal(cfg.RefreshInterval, dur); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal refresh_interval: %v", err)
+		}
+		opts.RefreshDuration = dur.AsDuration()
+	}
+
+	return certprovider.NewBuildableConfig(blockingProviderName, raw, func(_ certprovider.BuildOptions) certprovider.Provider {
+		realProvider, err := pemfile.NewProvider(opts)
+		if err != nil {
+			panic(fmt.Sprintf("failed to build real file_watcher provider: %v", err))
+		}
+		bp := &blockingCertProvider{
+			Provider:           realProvider,
+			keyMaterialCalled:  make(chan struct{}, 1),
+			proceedKeyMaterial: make(chan struct{}),
+		}
+		muBlockingProviders.Lock()
+		ch := blockingProvidersChan
+		muBlockingProviders.Unlock()
+		if ch != nil {
+			ch <- bp
+		}
+		return bp
+	}), nil
+}
+
+func init() {
+	certprovider.Register(blockingProviderBuilder{})
+}
+
+// TestSecurityConfigUpdate_NoRaceOnSameConfig verifies that when the balancer
+// receives a configuration update where the security config remains unchanged,
+// it does not close the active certificate providers. This guarantees that
+// asynchronous connection handshakes in progress can complete successfully.
+func (s) TestSecurityConfigUpdate_NoRaceOnSameConfig(t *testing.T) {
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
+
+	nodeID := uuid.New().String()
+	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
+
+	// Replace "file_watcher" plugin with our "blocking-cert-provider".
+	bc = bytes.ReplaceAll(bc, []byte("file_watcher"), []byte("blocking-cert-provider"))
+	t.Logf("Modified Bootstrap Contents:\n%s", string(bc))
+
+	muBlockingProviders.Lock()
+	blockingProvidersChan = make(chan *blockingCertProvider, 10)
+	muBlockingProviders.Unlock()
+
+	// Override clientConnUpdateHook to notify when client conn update is done.
+	updateCh := make(chan struct{}, 1)
+	clusterimpl.SetClientConnUpdateHookForTesting(func() {
+		select {
+		case updateCh <- struct{}{}:
+		default:
+		}
+	})
+	defer clusterimpl.SetClientConnUpdateHookForTesting(func() {})
+
+	// Create a grpc channel with xDS credentials talking to a TLS server.
+	cc, serverAddress := setupForSecurityTests(t, bc, xdsClientCredsWithInsecureFallback(t), tlsServerCreds(t))
+
+	// Configure default resources in the management server. The cluster
+	// resource is configured to return security configuration.
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		DialTarget: "test.service",
+		NodeID:     nodeID,
+		Host:       "localhost",
+		Port:       testutils.ParsePort(t, serverAddress),
+		SecLevel:   e2e.SecurityLevelMTLS,
+	})
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Make an RPC call in a background goroutine. The client's handshake
+	// will run asynchronously, call KeyMaterial(), and block.
+	errChan := make(chan error, 1)
+	client := testgrpc.NewTestServiceClient(cc)
+	go func() {
+		_, err := client.EmptyCall(ctx, &testpb.Empty{})
+		errChan <- err
+	}()
+
+	// Wait for the first blocking provider (root) to call KeyMaterial.
+	var bpRoot *blockingCertProvider
+	select {
+	case bpRoot = <-blockingProvidersChan:
+	case <-ctx.Done():
+		t.Fatal("Timeout waiting for root blocking provider to be created")
+	}
+
+	select {
+	case <-bpRoot.keyMaterialCalled:
+	case <-ctx.Done():
+		t.Fatal("Timeout waiting for root KeyMaterial to be called")
+	}
+
+	// At this point, the handshake is blocked in KeyMaterial() of the root
+	// provider. Send a configuration update to the balancer with a
+	// different ConnectTimeout but the exact same security config. This
+	// forces xdsClient to propagate the update and trigger
+	// UpdateClientConnState in the balancer.
+	updatedResources := e2e.DefaultClientResources(e2e.ResourceParams{
+		DialTarget: "test.service",
+		NodeID:     nodeID,
+		Host:       "localhost",
+		Port:       testutils.ParsePort(t, serverAddress),
+		SecLevel:   e2e.SecurityLevelMTLS,
+	})
+	updatedResources.Clusters[0].ConnectTimeout = durationpb.New(2 * time.Second)
+
+	if err := mgmtServer.Update(ctx, updatedResources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Wait for the balancer to finish processing the configuration update.
+	select {
+	case <-updateCh:
+	case <-ctx.Done():
+		t.Fatal("Timeout waiting for client conn update to complete")
+	}
+
+	// Now unblock the root KeyMaterial() call.
+	close(bpRoot.proceedKeyMaterial)
+
+	// Wait for the identity provider to call KeyMaterial.
+	var bpIdentity *blockingCertProvider
+	select {
+	case bpIdentity = <-blockingProvidersChan:
+	case <-ctx.Done():
+		t.Fatal("Timeout waiting for identity blocking provider to be created")
+	}
+
+	select {
+	case <-bpIdentity.keyMaterialCalled:
+	case <-ctx.Done():
+		t.Fatal("Timeout waiting for identity KeyMaterial to be called")
+	}
+
+	// Now unblock the identity KeyMaterial() call.
+	close(bpIdentity.proceedKeyMaterial)
+
+	// The RPC should succeed without any error.
+	select {
+	case err := <-errChan:
+		if err != nil {
+			t.Fatalf("EmptyCall() failed: %v", err)
+		}
+	case <-ctx.Done():
+		t.Fatal("Timeout waiting for RPC to complete")
+	}
 }
