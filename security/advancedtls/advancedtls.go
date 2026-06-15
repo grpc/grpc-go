@@ -221,6 +221,9 @@ type Options struct {
 	// ciphersuites. TLS 1.3 ciphersuites are not configurable. If nil, a
 	// safe default list is used.
 	CipherSuites []uint16
+	// CurvePreferences contains the elliptic curves that will be used during the
+	// key exchange, in preference order. If empty, the default will be used.
+	CurvePreferences []tls.CurveID
 	// serverNameOverride is for testing only and only relevant on the client
 	// side. If set to a non-empty string, it will override the virtual host
 	// name of authority (e.g. :authority header field) in requests and the
@@ -262,6 +265,7 @@ func (o *Options) clientConfig() (*tls.Config, error) {
 		MinVersion:         o.MinTLSVersion,
 		MaxVersion:         o.MaxTLSVersion,
 		CipherSuites:       o.CipherSuites,
+		CurvePreferences:   o.CurvePreferences,
 	}
 	// Propagate root-certificate-related fields in tls.Config.
 	switch {
@@ -347,10 +351,11 @@ func (o *Options) serverConfig() (*tls.Config, error) {
 		clientAuth = tls.RequireAnyClientCert
 	}
 	config := &tls.Config{
-		ClientAuth:   clientAuth,
-		MinVersion:   o.MinTLSVersion,
-		MaxVersion:   o.MaxTLSVersion,
-		CipherSuites: o.CipherSuites,
+		ClientAuth:       clientAuth,
+		MinVersion:       o.MinTLSVersion,
+		MaxVersion:       o.MaxTLSVersion,
+		CipherSuites:     o.CipherSuites,
+		CurvePreferences: o.CurvePreferences,
 	}
 	// Propagate root-certificate-related fields in tls.Config.
 	switch {
