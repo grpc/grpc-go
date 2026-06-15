@@ -34,6 +34,7 @@ import (
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/optional"
+	resolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/xds/httpfilter"
 	"google.golang.org/grpc/internal/xds/matcher"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
@@ -260,7 +261,6 @@ func (clientFilter) BuildClientInterceptor(base, override httpfilter.FilterConfi
 }
 
 type clientInterceptor struct {
-	resolver.ClientInterceptor
 	config      baseConfig
 	extClient   v3procservicegrpc.ExternalProcessorClient
 	closeClient func() error
@@ -270,7 +270,7 @@ func (i *clientInterceptor) Close() {
 	i.closeClient()
 }
 
-func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, done func(), newStream func(ctx context.Context, done func()) (resolver.ClientStream, error)) (resolver.ClientStream, error) {
+func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, newStream func(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStream, error), opts ...grpc.CallOption) (grpc.ClientStream, error) {
 	cancelCtx, cancel := context.WithCancel(ctx)
 	cs := &clientStream{
 		config:                   i.config,
@@ -308,13 +308,13 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 	// deferring it.
 	extStream, err := i.extClient.Process(extProcCtx)
 	if err != nil {
-		return cs.handleInitError(fmt.Errorf("external processor failed to start: %v", err), newStream, done)
+		return cs.handleInitError(fmt.Errorf("external processor failed to start: %v", err), newStream, opts)
 	}
 	cs.extStream = extStream
 
 	// Construct request attributes for the RPC to the external processor server.
 	if cs.reqAttrs, err = constructRequestAttributes(ri, outgoingMD, i.config.requestAttributes); err != nil {
-		return cs.handleInitError(fmt.Errorf("failed to construct attributes: %v", err), newStream, done)
+		return cs.handleInitError(fmt.Errorf("failed to construct attributes: %v", err), newStream, opts)
 	}
 
 	// If the request header processing mode is set to "Send", forward the headers
@@ -335,7 +335,7 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 			Attributes: cs.reqAttrs,
 		}
 		if err = extStream.Send(&headerReq); err != nil {
-			return cs.handleInitError(fmt.Errorf("failed to send client headers to external processor server: %v", err), newStream, done)
+			return cs.handleInitError(fmt.Errorf("failed to send client headers to external processor server: %v", err), newStream, opts)
 		}
 		// Mark that the initial message has been sent to prevent sending
 		// ProtocolConfig on subsequent messages.
@@ -344,7 +344,7 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 		// request attributes to any other message.
 		cs.initClientMsgSent.Store(true)
 	} else {
-		if err = cs.createDataplaneStream(newStream, done); err != nil {
+		if err = cs.createDataplaneStream(newStream, opts); err != nil {
 			return nil, err
 		}
 	}
@@ -355,7 +355,7 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 
 	// Start a goroutine to receive messages from the external processor server
 	// and send them to the dataplane stream in either direction.
-	go cs.recvFromProcServerLoop(cs.ctx, done, newStream)
+	go cs.recvFromProcServerLoop(cs.ctx, newStream, opts)
 
 	return cs, nil
 }
@@ -369,7 +369,7 @@ type clientStream struct {
 	extCancel func()
 	config    baseConfig // parsed configuration for this interceptor
 
-	dataplaneStream resolver.ClientStream                           // underlying gRPC stream to the backend
+	dataplaneStream grpc.ClientStream                               // underlying gRPC stream to the backend
 	extStream       v3procservicepb.ExternalProcessor_ProcessClient // bidirectional stream to the external processor
 	streamFailed    *grpcsync.Event                                 // fired when external processor stream has closed and RPC should be failed
 	extStreamBypass atomic.Bool                                     // set to true when the external processor stream should be bypassed
@@ -837,7 +837,7 @@ func (cs *clientStream) requestForwardingToDataplaneLoop(msgType protoreflect.Me
 
 // recvFromProcServerLoop continuously receives messages from the external
 // processor server and redirects them according to the response type.
-func (cs *clientStream) recvFromProcServerLoop(ctx context.Context, done func(), newStream func(context.Context, func()) (resolver.ClientStream, error)) {
+func (cs *clientStream) recvFromProcServerLoop(ctx context.Context, newStream func(context.Context, ...grpc.CallOption) (grpc.ClientStream, error), opts []grpc.CallOption) {
 	defer func() {
 		cs.drained.Fire()
 		// Push nil sentinel to mutatedReqBuffer to indicate completion of receiving
@@ -849,7 +849,7 @@ func (cs *clientStream) recvFromProcServerLoop(ctx context.Context, done func(),
 	// If request header mode is send, the first response should be the mutation
 	// for request header. Create the dataplane stream using the mutated header.
 	if cs.config.processingModes.requestHeaderMode == modeSend {
-		if !cs.processInitialHeaders(ctx, done, newStream) {
+		if !cs.processInitialHeaders(ctx, newStream, opts) {
 			return
 		}
 	}
@@ -1041,9 +1041,9 @@ func (cs *clientStream) waitChannel(ch <-chan struct{}) error {
 
 // createDataplaneStream initializes the underlying gRPC dataplane stream using
 // the provided newStream function.
-func (cs *clientStream) createDataplaneStream(newStream func(context.Context, func()) (resolver.ClientStream, error), done func()) error {
+func (cs *clientStream) createDataplaneStream(newStream func(context.Context, ...grpc.CallOption) (grpc.ClientStream, error), opts []grpc.CallOption) error {
 	var err error
-	if cs.dataplaneStream, err = newStream(cs.ctx, done); err != nil {
+	if cs.dataplaneStream, err = newStream(cs.ctx, opts...); err != nil {
 		return err
 	}
 	close(cs.dataplaneReady)
@@ -1091,15 +1091,14 @@ func (cs *clientStream) cancelStream(err error) {
 // handleInitError handles failures during the initialization of the external
 // processor stream in NewStream. It returns a new dataplane stream if failure
 // mode allows, else returns the error.
-func (cs *clientStream) handleInitError(err error, newStream func(context.Context, func()) (resolver.ClientStream, error), done func()) (resolver.ClientStream, error) {
+func (cs *clientStream) handleInitError(err error, newStream func(context.Context, ...grpc.CallOption) (grpc.ClientStream, error), opts []grpc.CallOption) (grpc.ClientStream, error) {
 	if cs.extCancel != nil {
 		cs.extCancel()
 	}
 	if !cs.config.failureModeAllow {
-		done()
 		return nil, status.Errorf(codes.Internal, "extproc: %v", err)
 	}
-	if err := cs.createDataplaneStream(newStream, done); err != nil {
+	if err := cs.createDataplaneStream(newStream, opts); err != nil {
 		return nil, err
 	}
 	cs.extStreamBypass.Store(true)
@@ -1109,14 +1108,14 @@ func (cs *clientStream) handleInitError(err error, newStream func(context.Contex
 // handleHeaderError handles failures that occur during the initial request
 // headers phase. If the failure mode allows it, the external processor is
 // bypassed and the direct dataplane stream is created.
-func (cs *clientStream) handleHeaderError(err error, done func(), newStream func(context.Context, func()) (resolver.ClientStream, error)) {
+func (cs *clientStream) handleHeaderError(err error, newStream func(context.Context, ...grpc.CallOption) (grpc.ClientStream, error), opts []grpc.CallOption) {
 	if err != io.EOF && !cs.config.failureModeAllow {
 		cs.extStreamErr.Store(status.Errorf(codes.Internal, "extproc: %v", err))
 		cs.streamFailed.Fire()
 		return
 	}
 	cs.triggerDrain()
-	if err := cs.createDataplaneStream(newStream, done); err != nil {
+	if err := cs.createDataplaneStream(newStream, opts); err != nil {
 		cs.extStreamErr.Store(status.Errorf(codes.Internal, "extproc: failed to create dataplane stream during bypass: %v", err))
 		cs.streamFailed.Fire()
 	}
@@ -1127,14 +1126,14 @@ func (cs *clientStream) handleHeaderError(err error, done func(), newStream func
 // context, and initializes the data plane stream. It returns true on success,
 // or false if the stream is aborted due to an error, immediate response, or
 // invalid status.
-func (cs *clientStream) processInitialHeaders(ctx context.Context, done func(), newStream func(context.Context, func()) (resolver.ClientStream, error)) bool {
+func (cs *clientStream) processInitialHeaders(ctx context.Context, newStream func(context.Context, ...grpc.CallOption) (grpc.ClientStream, error), opts []grpc.CallOption) bool {
 	outgoingMD, ok := metadata.FromOutgoingContext(ctx)
 	if !ok {
 		outgoingMD = metadata.MD{}
 	}
 	resp, err := cs.extStream.Recv()
 	if err != nil {
-		cs.handleHeaderError(err, done, newStream)
+		cs.handleHeaderError(err, newStream, opts)
 		return false
 	}
 	if resp.GetRequestDrain() {
@@ -1142,7 +1141,7 @@ func (cs *clientStream) processInitialHeaders(ctx context.Context, done func(), 
 	}
 	if resp.GetImmediateResponse() != nil {
 		if cs.config.disableImmediateResponse {
-			cs.handleHeaderError(status.Errorf(codes.Internal, "external processor sent an immediate response but immediate responses are disabled in configuration"), done, newStream)
+			cs.handleHeaderError(status.Errorf(codes.Internal, "external processor sent an immediate response but immediate responses are disabled in configuration"), newStream, opts)
 		} else {
 			imm := resp.GetImmediateResponse()
 			statusCode := codes.Internal
@@ -1155,27 +1154,27 @@ func (cs *clientStream) processInitialHeaders(ctx context.Context, done func(), 
 	}
 	if resp.GetRequestHeaders() == nil {
 		err := fmt.Errorf("external processor returned an unexpected message type, expected request headers response)")
-		cs.handleHeaderError(err, done, newStream)
+		cs.handleHeaderError(err, newStream, opts)
 		return false
 	}
 	header := resp.GetRequestHeaders()
 	// Check if status in header response is CONTINUE; if not, fail the stream.
 	if header.GetResponse().GetStatus() != v3procservicepb.CommonResponse_CONTINUE {
-		cs.handleHeaderError(fmt.Errorf("external processor returned invalid status instead of CONTINUE for request headers"), done, newStream)
+		cs.handleHeaderError(fmt.Errorf("external processor returned invalid status instead of CONTINUE for request headers"), newStream, opts)
 		return false
 	}
 	// Mutate the outgoing headers with additions and removals received from the
 	// external processor.
 	if err = cs.config.mutationRules.ApplyAdditions(header.GetResponse().GetHeaderMutation().GetSetHeaders(), outgoingMD); err != nil {
-		cs.handleHeaderError(err, done, newStream)
+		cs.handleHeaderError(err, newStream, opts)
 		return false
 	}
 	if err = cs.config.mutationRules.ApplyRemovals(header.GetResponse().GetHeaderMutation().GetRemoveHeaders(), outgoingMD); err != nil {
-		cs.handleHeaderError(err, done, newStream)
+		cs.handleHeaderError(err, newStream, opts)
 		return false
 	}
 	dataplaneCtx := metadata.NewOutgoingContext(ctx, outgoingMD)
-	dataplaneStream, err := newStream(dataplaneCtx, done)
+	dataplaneStream, err := newStream(dataplaneCtx, opts...)
 	if err != nil {
 		cs.extStreamErr.Store(status.Errorf(codes.Internal, "failed to create dataplane stream after header mutation: %v", err))
 		cs.streamFailed.Fire()
@@ -1219,7 +1218,7 @@ func (cs *clientStream) triggerDrain() {
 // waitForDataplaneStream waits for the dataplane stream to be created or for
 // the context to be done. It also checks if the processor stream has not ended
 // abruptly with a non-io.EOF error.
-func (cs *clientStream) waitForDataplaneStream(ctx context.Context) (resolver.ClientStream, error) {
+func (cs *clientStream) waitForDataplaneStream(ctx context.Context) (grpc.ClientStream, error) {
 	select {
 	case <-cs.dataplaneReady:
 		if cs.streamFailed.HasFired() {
