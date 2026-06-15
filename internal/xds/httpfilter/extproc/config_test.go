@@ -798,7 +798,7 @@ func (s) TestBuildClientInterceptor_Failure(t *testing.T) {
 					TargetURI: "error-uri",
 				},
 			},
-			wantErr: "extproc: failed to create client: dial error",
+			wantErr: `extproc: failed to create channel to the external processor server "error-uri": dial error`,
 		},
 		{
 			name: "ChannelCreationFailureInOverride",
@@ -812,7 +812,7 @@ func (s) TestBuildClientInterceptor_Failure(t *testing.T) {
 					TargetURI: "error-uri",
 				}),
 			},
-			wantErr: "extproc: failed to create client: dial error",
+			wantErr: `extproc: failed to create channel to the external processor server "error-uri": dial error`,
 		},
 	}
 	for _, tc := range tests {

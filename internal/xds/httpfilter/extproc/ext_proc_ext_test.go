@@ -1519,8 +1519,8 @@ func (s) TestImmediateResponseDisabled(t *testing.T) {
 	if got, want := status.Code(err), codes.Internal; got != want {
 		t.Fatalf("EmptyCall() returned status code %v, want %v", got, want)
 	}
-	const expectedErr = "extproc: ext_proc server sent immediate_response but immediate_response is disabled"
-	if !strings.Contains(status.Convert(err).Message(), expectedErr) {
+	const expectedErr = "external processor sent an immediate response but immediate responses are disabled in configuration"
+	if !strings.Contains(err.Error(), expectedErr) {
 		t.Fatalf("EmptyCall() returned error message %q, want it to contain %q", status.Convert(err).Message(), expectedErr)
 	}
 }
@@ -2310,6 +2310,131 @@ func (s) TestStreamFailureBodyPhaseDeny(t *testing.T) {
 	_, err = stream.Recv()
 	if got, want := status.Code(err), codes.Internal; got != want {
 		t.Fatalf("stream.Recv returned error: %v (status code %v), want %v", err, got, want)
+	}
+}
+
+// TestUnaryFailureBodyPhaseDeny tests the scenario where the external
+// processor stream fails abruptly during the request body phase of a Unary RPC
+// while failure_mode_allow is false. Verifies that the Unary RPC fails with
+// status code Internal.
+func (s) TestUnaryFailureBodyPhaseDeny(t *testing.T) {
+	origParse := extproc.ParseGRPCServiceConfig
+	origCreate := extproc.CreateExtProcChannel
+	extproc.ParseGRPCServiceConfig = parseGRPCServiceConfigForTesting
+	extproc.CreateExtProcChannel = createExtProcChannelForTesting
+	defer func() {
+		extproc.ParseGRPCServiceConfig = origParse
+		extproc.CreateExtProcChannel = origCreate
+	}()
+
+	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
+	extproc.RegisterForTesting()
+	defer extproc.UnregisterForTesting()
+
+	lis, err := testutils.LocalTCPListener()
+	if err != nil {
+		t.Fatalf("LocalTCPListener() failed: %v", err)
+	}
+	extprocServer := grpc.NewServer()
+	mockProc := &mockProcessorServer{
+		processFunc: func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+			// Receive headers and send back.
+			req, err := stream.Recv()
+			if err != nil {
+				return err
+			}
+			if req.GetRequestHeaders() == nil {
+				return fmt.Errorf("expected request headers, got %v", req)
+			}
+			resp := &v3procservicepb.ProcessingResponse{
+				Response: &v3procservicepb.ProcessingResponse_RequestHeaders{
+					RequestHeaders: &v3procservicepb.HeadersResponse{
+						Response: &v3procservicepb.CommonResponse{
+							Status: v3procservicepb.CommonResponse_CONTINUE,
+						},
+					},
+				},
+			}
+			if err := stream.Send(resp); err != nil {
+				return err
+			}
+
+			_, err = stream.Recv()
+			if err != nil {
+				return err
+			}
+
+			// Fail abruptly with non-EOF error during body phase
+			return status.Error(codes.Unavailable, "abrupt stream failure in body phase")
+		},
+	}
+	v3procservicepb.RegisterExternalProcessorServer(extprocServer, mockProc)
+	go extprocServer.Serve(lis)
+	defer extprocServer.Stop()
+
+	stub := stubserver.StartTestService(t, &stubserver.StubServer{
+		UnaryCallF: func(_ context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			return &testpb.SimpleResponse{Payload: in.GetPayload()}, nil
+		},
+	})
+	defer stub.Stop()
+
+	managementServer, nodeID, _, xdsResolver := setup.ManagementServerAndResolver(t)
+	const serviceName = "test-service"
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		DialTarget: serviceName,
+		NodeID:     nodeID,
+		Host:       "localhost",
+		Port:       testutils.ParsePort(t, stub.Address),
+		SecLevel:   e2e.SecurityLevelNone,
+	})
+	hcm := new(v3httppb.HttpConnectionManager)
+	apiListener := resources.Listeners[0].GetApiListener().GetApiListener()
+	if err = apiListener.UnmarshalTo(hcm); err != nil {
+		t.Fatal(err)
+	}
+
+	hcm.HttpFilters = append([]*v3httppb.HttpFilter{
+		e2e.HTTPFilter("extproc", &v3procfilterpb.ExternalProcessor{
+			GrpcService: &v3corepb.GrpcService{
+				TargetSpecifier: &v3corepb.GrpcService_GoogleGrpc_{
+					GoogleGrpc: &v3corepb.GrpcService_GoogleGrpc{
+						TargetUri: lis.Addr().String(),
+					},
+				},
+			},
+			ProcessingMode: &v3procfilterpb.ProcessingMode{
+				RequestHeaderMode: v3procfilterpb.ProcessingMode_SEND,
+				RequestBodyMode:   v3procfilterpb.ProcessingMode_GRPC,
+			},
+			FailureModeAllow: false,
+		})},
+		hcm.HttpFilters...)
+	hcmAny := testutils.MarshalAny(t, hcm)
+	resources.Listeners[0].ApiListener.ApiListener = hcmAny
+	resources.Listeners[0].FilterChains[0].Filters[0].ConfigType = &v3listenerpb.Filter_TypedConfig{TypedConfig: hcmAny}
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := managementServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	cc, err := grpc.NewClient("xds:///"+serviceName, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsResolver))
+	if err != nil {
+		t.Fatalf("failed to dial: %v", err)
+	}
+	defer cc.Close()
+
+	client := testgrpc.NewTestServiceClient(cc)
+	reqMsg := &testpb.SimpleRequest{
+		Payload: &testpb.Payload{
+			Body: []byte("c1"),
+		},
+	}
+	_, err = client.UnaryCall(ctx, reqMsg)
+	if got, want := status.Code(err), codes.Internal; got != want {
+		t.Fatalf("UnaryCall() returned status code: %v, want %v", got, want)
 	}
 }
 
@@ -3306,8 +3431,9 @@ func (s) TestStreamFailureGrpcMessageCompressedDeny(t *testing.T) {
 	if err == nil {
 		t.Fatalf("stream.Recv() succeeded, want Internal error")
 	}
-	if status.Code(err) != codes.Internal || !strings.Contains(err.Error(), "proc server returned grpc_message_compressed") {
-		t.Fatalf("stream.Recv() returned err %v, want Internal containing 'proc server returned grpc_message_compressed'", err)
+	wantErr := "external processor returned compressed grpc message which is not supported for request body"
+	if status.Code(err) != codes.Internal || !strings.Contains(err.Error(), wantErr) {
+		t.Fatalf("stream.Recv() returned err %v, want %v containing %q", err, codes.Internal, wantErr)
 	}
 }
 
