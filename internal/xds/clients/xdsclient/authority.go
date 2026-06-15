@@ -376,8 +376,20 @@ func (a *authority) handleADSResourceUpdate(serverConfig *ServerConfig, rType Re
 					ServerURI: serverConfig.ServerIdentifier.ServerURI, ResourceType: rType.TypeName,
 				})
 			}
-			state.md.ErrState = md.ErrState
+			isDuplicateErr := state.md.ErrState != nil && state.md.ErrState.Err != nil && state.md.ErrState.Err.Error() == uErr.Err.Error()
+			var errState *xdsresource.UpdateErrorMetadata
+			if md.ErrState != nil {
+				errState = &xdsresource.UpdateErrorMetadata{
+					Version:   md.ErrState.Version,
+					Err:       uErr.Err,
+					Timestamp: md.ErrState.Timestamp,
+				}
+			}
+			state.md.ErrState = errState
 			state.md.Status = md.Status
+			if isDuplicateErr {
+				continue
+			}
 			for watcher := range state.watchers {
 				watcher := watcher
 				err := uErr.Err
