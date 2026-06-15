@@ -196,12 +196,13 @@ func (r *TestMetricsRecorder) RecordInt64Count(handle *estats.Int64CountHandle, 
 		LabelKeys: append(handle.Labels, handle.OptionalLabels...),
 		LabelVals: labels,
 	}
-	r.intCountCh.ReceiveOrFail()
-	r.intCountCh.Send(md)
 
 	r.mu.Lock()
-	defer r.mu.Unlock()
 	r.data[handle.Name] = append(r.data[handle.Name], md)
+	r.mu.Unlock()
+
+	r.intCountCh.ReceiveOrFail()
+	r.intCountCh.Send(md)
 }
 
 // RecordInt64UpDownCount sends the metrics data to the intUpDownCountCh channel and updates
@@ -213,12 +214,13 @@ func (r *TestMetricsRecorder) RecordInt64UpDownCount(handle *estats.Int64UpDownC
 		LabelKeys: append(handle.Labels, handle.OptionalLabels...),
 		LabelVals: labels,
 	}
-	r.intUpDownCountCh.ReceiveOrFail()
-	r.intUpDownCountCh.Send(md)
 
 	r.mu.Lock()
-	defer r.mu.Unlock()
 	r.data[handle.Name] = append(r.data[handle.Name], md)
+	r.mu.Unlock()
+
+	r.intUpDownCountCh.ReceiveOrFail()
+	r.intUpDownCountCh.Send(md)
 }
 
 // WaitForFloat64Count waits for a float count metric and verifies that it
@@ -243,12 +245,13 @@ func (r *TestMetricsRecorder) RecordFloat64Count(handle *estats.Float64CountHand
 		LabelKeys: append(handle.Labels, handle.OptionalLabels...),
 		LabelVals: labels,
 	}
-	r.floatCountCh.ReceiveOrFail()
-	r.floatCountCh.Send(md)
 
 	r.mu.Lock()
-	defer r.mu.Unlock()
 	r.data[handle.Name] = append(r.data[handle.Name], md)
+	r.mu.Unlock()
+
+	r.floatCountCh.ReceiveOrFail()
+	r.floatCountCh.Send(md)
 }
 
 // WaitForInt64Histo waits for an int histo metric and verifies that it matches
@@ -273,12 +276,13 @@ func (r *TestMetricsRecorder) RecordInt64Histo(handle *estats.Int64HistoHandle, 
 		LabelKeys: append(handle.Labels, handle.OptionalLabels...),
 		LabelVals: labels,
 	}
-	r.intHistoCh.ReceiveOrFail()
-	r.intHistoCh.Send(md)
 
 	r.mu.Lock()
-	defer r.mu.Unlock()
 	r.data[handle.Name] = append(r.data[handle.Name], md)
+	r.mu.Unlock()
+
+	r.intHistoCh.ReceiveOrFail()
+	r.intHistoCh.Send(md)
 }
 
 // WaitForFloat64Histo waits for a float histo metric and verifies that it
@@ -303,12 +307,13 @@ func (r *TestMetricsRecorder) RecordFloat64Histo(handle *estats.Float64HistoHand
 		LabelKeys: append(handle.Labels, handle.OptionalLabels...),
 		LabelVals: labels,
 	}
-	r.floatHistoCh.ReceiveOrFail()
-	r.floatHistoCh.Send(md)
 
 	r.mu.Lock()
-	defer r.mu.Unlock()
 	r.data[handle.Name] = append(r.data[handle.Name], md)
+	r.mu.Unlock()
+
+	r.floatHistoCh.ReceiveOrFail()
+	r.floatHistoCh.Send(md)
 }
 
 // WaitForInt64Gauge waits for an int gauge metric and verifies that it matches
@@ -333,12 +338,13 @@ func (r *TestMetricsRecorder) RecordInt64Gauge(handle *estats.Int64GaugeHandle, 
 		LabelKeys: append(handle.Labels, handle.OptionalLabels...),
 		LabelVals: labels,
 	}
-	r.intGaugeCh.ReceiveOrFail()
-	r.intGaugeCh.Send(md)
 
 	r.mu.Lock()
-	defer r.mu.Unlock()
 	r.data[handle.Name] = append(r.data[handle.Name], md)
+	r.mu.Unlock()
+
+	r.intGaugeCh.ReceiveOrFail()
+	r.intGaugeCh.Send(md)
 }
 
 // To implement a estats.AsyncMetricsRecorder, which allows it to be used in async metrics:
@@ -352,12 +358,13 @@ func (r *TestMetricsRecorder) RecordInt64AsyncGauge(handle *estats.Int64AsyncGau
 		LabelKeys: append(handle.Labels, handle.OptionalLabels...),
 		LabelVals: labels,
 	}
-	r.intGaugeCh.ReceiveOrFail()
-	r.intGaugeCh.Send(md)
 
 	r.mu.Lock()
-	defer r.mu.Unlock()
 	r.data[handle.Name] = append(r.data[handle.Name], md)
+	r.mu.Unlock()
+
+	r.intGaugeCh.ReceiveOrFail()
+	r.intGaugeCh.Send(md)
 }
 
 // To implement a stats.Handler, which allows it to be set as a dial option:
