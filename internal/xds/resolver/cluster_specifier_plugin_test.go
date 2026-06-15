@@ -316,6 +316,8 @@ func (s) TestXDSResolverDelayedOnCommittedCSP(t *testing.T) {
 		t.Fatalf("config selector returned cluster: %v, want: %v", gotCluster, wantCluster)
 	}
 
+	// Invoke the onCommit callback; this will decrement the cluster count
+	// and update the service config.
 	if err := createStreamAndCommit(ctx, resOld.Interceptor); err != nil {
 		t.Fatalf("createStreamAndCommit() failed with error: %v", err)
 	}

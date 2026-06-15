@@ -569,6 +569,8 @@ func (s) TestResolverGoodServiceUpdate(t *testing.T) {
 				}
 				cluster := clustermanager.GetPickedClusterForTesting(res.Context)
 				pickedClusters[cluster] = true
+				// Invoke the onCommit callback; this will decrement the cluster count
+				// and update the service config.
 				if err := createStreamAndCommit(ctx, res.Interceptor); err != nil {
 					t.Fatalf("createStreamAndCommit() failed with error: %v", err)
 				}
@@ -702,8 +704,8 @@ func (s) TestResolverRemovedWithRPCs(t *testing.T) {
 		}
 	}
 
-	// "Finish the RPC"; this could cause a panic if the resolver doesn't
-	// handle it correctly.
+	// Invoke the onCommit callback; this will decrement the cluster count
+	// and update the service config.
 	if err := createStreamAndCommit(ctx, res.Interceptor); err != nil {
 		t.Fatalf("createStreamAndCommit() failed with error: %v", err)
 	}
@@ -756,8 +758,8 @@ func (s) TestResolverRemovedResource(t *testing.T) {
 		t.Fatalf("cs.SelectConfig(): %v", err)
 	}
 
-	// "Finish the RPC"; this could cause a panic if the resolver doesn't
-	// handle it correctly.
+	// Invoke the onCommit callback; this will decrement the cluster count
+	// and update the service config.
 	if err := createStreamAndCommit(ctx, res.Interceptor); err != nil {
 		t.Fatalf("createStreamAndCommit() failed with error: %v", err)
 	}
