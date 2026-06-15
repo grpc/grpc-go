@@ -94,7 +94,6 @@ func (s) TestGCPAuthnFilter_SuccessCase(t *testing.T) {
 	// Starts a local HTTP server and sets GCE_METADATA_HOST to spoof the
 	// GCE metadata server and redirect token fetch requests to it.
 	metadataServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(tokenValue))
 	}))
 	defer metadataServer.Close()
@@ -207,7 +206,6 @@ func (s) TestGCPAuthnFilter_TokenCaching(t *testing.T) {
 	var requestCount int32
 	metadataServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		atomic.AddInt32(&requestCount, 1)
-		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(tokenValue))
 	}))
 	defer metadataServer.Close()
@@ -325,10 +323,7 @@ func (s) TestGCPAuthnFilter_InsecureTransport(t *testing.T) {
 
 	// Starts a local HTTP server and sets GCE_METADATA_HOST to spoof the
 	// GCE metadata server and redirect token fetch requests to it.
-	metadataServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("token"))
-	}))
+	metadataServer := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
 	defer metadataServer.Close()
 	t.Setenv(gceMetadataHostEnvVar, strings.TrimPrefix(metadataServer.URL, "http://"))
 
@@ -431,7 +426,6 @@ func (s) TestGCPAuthnFilter_CacheSharingConfigUpdate(t *testing.T) {
 	var requestCount int32
 	metadataServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		count := atomic.AddInt32(&requestCount, 1)
-		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(fmt.Sprintf("token-%d", count)))
 	}))
 	defer metadataServer.Close()
@@ -691,7 +685,6 @@ func (s) TestGCPAuthnFilter_ConcurrentRPCWithShortAndLongContext(t *testing.T) {
 		atomic.AddInt32(&requestCount, 1)
 		// Block until signaled to proceed.
 		<-proceedCh
-		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(tokenValue))
 	}))
 	defer metadataServer.Close()
@@ -870,7 +863,6 @@ func (s) TestGCPAuthnFilter_PreservesUserCallOptions(t *testing.T) {
 	// Starts a local HTTP server and sets GCE_METADATA_HOST to spoof the
 	// GCE metadata server and redirect token fetch requests to it.
 	metadataServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(tokenValue))
 	}))
 	defer metadataServer.Close()
