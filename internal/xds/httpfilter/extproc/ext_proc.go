@@ -34,7 +34,6 @@ import (
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/optional"
-	"google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/xds/httpfilter"
 	"google.golang.org/grpc/internal/xds/matcher"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
@@ -232,7 +231,7 @@ type clientFilter struct{}
 
 func (clientFilter) Close() {}
 
-func (clientFilter) BuildClientInterceptor(base, override httpfilter.FilterConfig) (resolver.ClientInterceptor, error) {
+func (clientFilter) BuildClientInterceptor(base, override httpfilter.FilterConfig) (httpfilter.ClientInterceptor, error) {
 	b, ok := base.(baseConfig)
 	if !ok {
 		return nil, fmt.Errorf("extproc: incorrect config type provided (%T): %v", base, base)

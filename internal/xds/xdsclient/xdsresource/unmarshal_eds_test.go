@@ -45,22 +45,21 @@ import (
 )
 
 // enableA86 enables A86 support for the duration of the test by:
-// 1. Setting the GRPC_EXPERIMENTAL_XDS_HTTP_CONNECT environment variable
-// 2. Registering the proxy address converter, since this is otherwise done in init.
+//  1. Setting the GRPC_EXPERIMENTAL_XDS_HTTP_CONNECT env var to true.
+//  2. Registering the proxy address converter (and restore original
+//     on cleanup).
 func enableA86(t *testing.T) {
 	testutils.SetEnvConfig(t, &envconfig.XDSHTTPConnectEnabled, true)
-	registerMetadataConverter(proxyAddressTypeURL, proxyAddressConvertor{})
-	t.Cleanup(func() {
-		unregisterMetadataConverterForTesting(proxyAddressTypeURL)
-	})
+	t.Cleanup(RegisterMetadataConverterForTesting(proxyAddressTypeURL, ProxyAddressConvertor{}))
 }
 
 // disableA86 disables A86 support for the duration of the test by:
-// 1. Setting the GRPC_EXPERIMENTAL_XDS_HTTP_CONNECT environment variable to false
-// 2. Unregistering the proxy address converter (in case it was registered by init or previous test)
+//  1. Setting the GRPC_EXPERIMENTAL_XDS_HTTP_CONNECT env var to false.
+//  2. Unregistering the proxy address converter for the duration of the test
+//     (and restoring the original on cleanup).
 func disableA86(t *testing.T) {
 	testutils.SetEnvConfig(t, &envconfig.XDSHTTPConnectEnabled, false)
-	unregisterMetadataConverterForTesting(proxyAddressTypeURL)
+	t.Cleanup(RegisterMetadataConverterForTesting(proxyAddressTypeURL, nil))
 }
 
 func buildResolverEndpoint(addr []string, host string) resolver.Endpoint {
