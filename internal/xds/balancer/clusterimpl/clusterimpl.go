@@ -65,14 +65,17 @@ const (
 var (
 	// Below function is no-op in actual code, but can be overridden in
 	// tests to give tests visibility into exactly when certain events happen.
-	clientConnUpdateHook = func() {}
-	pickerUpdateHook     = func() {}
-	buildProvider        = buildProviderFunc
+	clientConnUpdateHookMu sync.Mutex
+	clientConnUpdateHook   = func() {}
+	pickerUpdateHook       = func() {}
+	buildProvider          = buildProviderFunc
 )
 
 // SetClientConnUpdateHookForTesting sets the hook called when a client conn
 // update finishes processing.
 func SetClientConnUpdateHookForTesting(f func()) {
+	clientConnUpdateHookMu.Lock()
+	defer clientConnUpdateHookMu.Unlock()
 	clientConnUpdateHook = f
 }
 
@@ -334,7 +337,7 @@ func (b *clusterImplBalancer) handleSecurityConfig(config *xdsresource.SecurityC
 	if config == nil && b.currentSecCfg == nil {
 		return nil
 	}
-	if config != nil && config.Equal(b.currentSecCfg) {
+	if config != nil && b.currentSecCfg != nil && config.Equal(b.currentSecCfg) {
 		return nil
 	}
 	// Security config being nil is a valid case where the management server has
@@ -396,7 +399,10 @@ func (b *clusterImplBalancer) handleSecurityConfig(config *xdsresource.SecurityC
 }
 
 func (b *clusterImplBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
-	defer clientConnUpdateHook()
+	clientConnUpdateHookMu.Lock()
+	hook := clientConnUpdateHook
+	clientConnUpdateHookMu.Unlock()
+	defer hook()
 
 	b.mu.Lock()
 	b.inhibitPickerUpdates = true

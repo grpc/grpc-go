@@ -896,6 +896,7 @@ func (s) TestSecurityConfigUpdate_NoRaceOnSameConfig(t *testing.T) {
 
 	muBlockingProviders.Lock()
 	blockingProvidersChan = make(chan *blockingCertProvider, 10)
+	ch := blockingProvidersChan
 	muBlockingProviders.Unlock()
 
 	// Override clientConnUpdateHook to notify when client conn update is done.
@@ -938,7 +939,7 @@ func (s) TestSecurityConfigUpdate_NoRaceOnSameConfig(t *testing.T) {
 	// Wait for the first blocking provider (root) to call KeyMaterial.
 	var bpRoot *blockingCertProvider
 	select {
-	case bpRoot = <-blockingProvidersChan:
+	case bpRoot = <-ch:
 	case <-ctx.Done():
 		t.Fatal("Timeout waiting for root blocking provider to be created")
 	}
@@ -980,7 +981,7 @@ func (s) TestSecurityConfigUpdate_NoRaceOnSameConfig(t *testing.T) {
 	// Wait for the identity provider to call KeyMaterial.
 	var bpIdentity *blockingCertProvider
 	select {
-	case bpIdentity = <-blockingProvidersChan:
+	case bpIdentity = <-ch:
 	case <-ctx.Done():
 		t.Fatal("Timeout waiting for identity blocking provider to be created")
 	}
