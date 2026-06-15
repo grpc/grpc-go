@@ -45,6 +45,14 @@ import (
 
 func init() {
 	internal.AcceptCompressors = acceptCompressors
+	internal.OnCommitCallOption = func(f func()) CallOption {
+		return onCommit(f)
+	}
+	internal.TriggerOnCommitForTesting = func(o CallOption) {
+		if co, ok := o.(onCommitCallOption); ok {
+			co.onCommit()
+		}
+	}
 }
 
 // Compressor defines the interface gRPC uses to compress a message.
@@ -180,6 +188,7 @@ type callInfo struct {
 	codec                       baseCodec
 	maxRetryRPCBufferSize       int
 	onFinish                    []func(err error)
+	onCommit                    []func()
 	authority                   string
 	acceptedResponseCompressors []string
 }
@@ -400,6 +409,28 @@ func (o OnFinishCallOption) before(c *callInfo) error {
 }
 
 func (o OnFinishCallOption) after(*callInfo, *csAttempt) {}
+
+// onCommit returns a CallOption that configures a callback to be called when
+// the stream is committed (i.e., when the retry/replay buffer is discarded
+// and the RPC is committed to a single attempt).
+func onCommit(onCommit func()) CallOption {
+	return onCommitCallOption{
+		onCommit: onCommit,
+	}
+}
+
+// onCommitCallOption is a CallOption that configures a callback to be called
+// when the stream is committed.
+type onCommitCallOption struct {
+	onCommit func()
+}
+
+func (o onCommitCallOption) before(c *callInfo) error {
+	c.onCommit = append(c.onCommit, o.onCommit)
+	return nil
+}
+
+func (o onCommitCallOption) after(*callInfo, *csAttempt) {}
 
 // MaxCallRecvMsgSize returns a CallOption which sets the maximum message size
 // in bytes the client can receive. If this is not set, gRPC uses the default

@@ -1069,6 +1069,338 @@ func (s) TestResolverDelayedOnCommitted(t *testing.T) {
 	verifyUpdateFromResolver(ctx, t, stateCh, wantSC)
 }
 
+// Tests that clusters remain in service config if RPCs are in flight, and are
+// cleaned up when the RPC finishes.
+func (s) TestResolverDelayedOnFinished(t *testing.T) {
+	// Spin up an xDS management server for the test.
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	nodeID := uuid.New().String()
+	mgmtServer, _, _, bc := setupManagementServerForTest(t, nodeID)
+
+	// Configure resources on the management server.
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		DialTarget: defaultTestServiceName,
+		NodeID:     nodeID,
+		Host:       defaultTestHostname,
+		Port:       defaultTestPort[0],
+		SecLevel:   e2e.SecurityLevelNone,
+	})
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	stateCh, _, _ := buildResolverForTarget(t, resolver.Target{URL: *testutils.MustParseURL("xds:///" + defaultTestServiceName)}, bc)
+
+	// Read the update pushed by the resolver to the ClientConn.
+	cs := verifyUpdateFromResolver(ctx, t, stateCh, wantServiceConfig(resources.Clusters[0].Name))
+
+	// Make an RPC, but do not finish it yet.
+	resOld, err := cs.SelectConfig(iresolver.RPCInfo{Context: ctx, Method: "/service/method"})
+	if err != nil {
+		t.Fatalf("cs.SelectConfig(): %v", err)
+	}
+	wantClusterName := "cluster:" + resources.Clusters[0].Name
+	if cluster := clustermanager.GetPickedClusterForTesting(resOld.Context); cluster != wantClusterName {
+		t.Fatalf("Picked cluster is %q, want %q", cluster, wantClusterName)
+	}
+
+	// Delay finishing the old RPC. As long as there are pending RPCs to removed
+	// clusters, they still appear in the service config.
+	oldClusterName := resources.Clusters[0].Name
+	// Update the route configuration resource on the management server to
+	// return a new cluster.
+	const (
+		newClusterName  = "new-" + defaultTestClusterName
+		newEndpointName = "new-" + defaultTestEndpointName
+	)
+	resources.Routes = []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(resources.Routes[0].Name, defaultTestServiceName, newClusterName)}
+	resources.Clusters = append(resources.Clusters, e2e.DefaultCluster(newClusterName, newEndpointName, e2e.SecurityLevelNone))
+	resources.Endpoints = append(resources.Endpoints, e2e.DefaultEndpoint(newEndpointName, defaultTestHostname, defaultTestPort))
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Read the update pushed by the resolver to the ClientConn and ensure the
+	// old cluster is present in the service config. Also ensure that the newly
+	// returned config selector does not hold a reference to the old cluster.
+	wantSC := fmt.Sprintf(`
+	{
+		"loadBalancingConfig": [
+			{
+				"xds_cluster_manager_experimental": {
+				"children": {
+					"cluster:%s": {
+					"childPolicy": [
+						{
+						"cds_experimental": {
+							"cluster": "%s"
+						}
+						}
+					]
+					},
+					"cluster:%s": {
+					"childPolicy": [
+						{
+						"cds_experimental": {
+							"cluster": "%s"
+						}
+						}
+					]
+					}
+				}
+				}
+			}
+			]
+	}`, oldClusterName, oldClusterName, newClusterName, newClusterName)
+	cs = verifyUpdateFromResolver(ctx, t, stateCh, wantSC)
+
+	resNew, err := cs.SelectConfig(iresolver.RPCInfo{Context: ctx, Method: "/service/method"})
+	if err != nil {
+		t.Fatalf("cs.SelectConfig() failed: %v", err)
+	}
+	wantClusterName = "cluster:" + newClusterName
+	if cluster := clustermanager.GetPickedClusterForTesting(resNew.Context); cluster != wantClusterName {
+		t.Fatalf("Picked cluster is %q, want %q", cluster, wantClusterName)
+	}
+
+	// Invoke OnFinish on the old RPC; should lead to a service config update
+	// that deletes the old cluster, as the old cluster no longer has any
+	// pending RPCs.
+	if err := createStreamAndFinish(ctx, resOld.Interceptor); err != nil {
+		t.Fatalf("createStreamAndFinish() failed with error: %v", err)
+	}
+
+	wantSC = fmt.Sprintf(`
+	{
+		"loadBalancingConfig": [
+			{
+				"xds_cluster_manager_experimental": {
+				"children": {
+					"cluster:%s": {
+					"childPolicy": [
+						{
+						"cds_experimental": {
+							"cluster": "%s"
+						}
+						}
+					]
+					}
+				}
+				}
+			}
+			]
+	}`, newClusterName, newClusterName)
+	verifyUpdateFromResolver(ctx, t, stateCh, wantSC)
+}
+
+// Tests that when using weighted clusters, in-flight RPCs increment the
+// refcount of the specific cluster they picked, and committing those RPCs
+// decrements the correct cluster's refcount.
+func (s) TestResolverDelayedOnCommitted_WeightedClusters(t *testing.T) {
+	origNewWRR := rinternal.NewWRR
+	rinternal.NewWRR = testutils.NewTestWRR
+	defer func() { rinternal.NewWRR = origNewWRR }()
+
+	// Spin up an xDS management server for the test.
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	nodeID := uuid.New().String()
+	mgmtServer, _, _, bc := setupManagementServerForTest(t, nodeID)
+
+	// Configure the management server with a listener resource and a route
+	// config that specifies weighted clusters A and B with equal weights.
+	listeners := []*v3listenerpb.Listener{e2e.DefaultClientListener(defaultTestServiceName, defaultTestRouteConfigName)}
+	routes := []*v3routepb.RouteConfiguration{{
+		Name: defaultTestRouteConfigName,
+		VirtualHosts: []*v3routepb.VirtualHost{{
+			Domains: []string{defaultTestServiceName},
+			Routes: []*v3routepb.Route{{
+				Match: &v3routepb.RouteMatch{PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"}},
+				Action: &v3routepb.Route_Route{Route: &v3routepb.RouteAction{
+					ClusterSpecifier: &v3routepb.RouteAction_WeightedClusters{
+						WeightedClusters: &v3routepb.WeightedCluster{
+							Clusters: []*v3routepb.WeightedCluster_ClusterWeight{
+								{
+									Name:   "A",
+									Weight: &wrapperspb.UInt32Value{Value: 1},
+								},
+								{
+									Name:   "B",
+									Weight: &wrapperspb.UInt32Value{Value: 1},
+								},
+							},
+						},
+					},
+				}},
+			}},
+		}},
+	}}
+	clusters := []*v3clusterpb.Cluster{
+		e2e.DefaultCluster("A", "endpoint_A", e2e.SecurityLevelNone),
+		e2e.DefaultCluster("B", "endpoint_B", e2e.SecurityLevelNone),
+	}
+	endpoints := []*v3endpointpb.ClusterLoadAssignment{
+		e2e.DefaultEndpoint("endpoint_A", defaultTestHostname, defaultTestPort),
+		e2e.DefaultEndpoint("endpoint_B", defaultTestHostname, defaultTestPort),
+	}
+	configureResources(ctx, t, mgmtServer, nodeID, listeners, routes, clusters, endpoints)
+
+	stateCh, _, _ := buildResolverForTarget(t, resolver.Target{URL: *testutils.MustParseURL("xds:///" + defaultTestServiceName)}, bc)
+
+	// Read the update pushed by the resolver to the ClientConn.
+	cs := verifyUpdateFromResolver(ctx, t, stateCh, "")
+
+	// Make first RPC, but do not commit it yet.
+	resOldA, err := cs.SelectConfig(iresolver.RPCInfo{Context: ctx, Method: "/service/method"})
+	if err != nil {
+		t.Fatalf("cs.SelectConfig() for cluster A failed: %v", err)
+	}
+
+	// Verify that select config pick Cluster A.
+	if cluster := clustermanager.GetPickedClusterForTesting(resOldA.Context); cluster != "cluster:A" {
+		t.Fatalf("Picked cluster is %q, want %q", cluster, "cluster:A")
+	}
+
+	// Make second RPC, but do not commit it yet.
+	resOldB, err := cs.SelectConfig(iresolver.RPCInfo{Context: ctx, Method: "/service/method"})
+	if err != nil {
+		t.Fatalf("cs.SelectConfig() for cluster B failed: %v", err)
+	}
+	if cluster := clustermanager.GetPickedClusterForTesting(resOldB.Context); cluster != "cluster:B" {
+		t.Fatalf("Picked cluster is %q, want %q", cluster, "cluster:A")
+	}
+
+	// Update the route configuration on the management server to route only to a new Cluster C.
+	routes = []*v3routepb.RouteConfiguration{e2e.RouteConfigResourceWithOptions(e2e.RouteConfigOptions{
+		RouteConfigName:      defaultTestRouteConfigName,
+		ListenerName:         defaultTestServiceName,
+		ClusterSpecifierType: e2e.RouteConfigClusterSpecifierTypeWeightedCluster,
+		WeightedClusters:     map[string]int{"C": 1},
+	})}
+	clusters = append(clusters, e2e.DefaultCluster("C", "endpoint_C", e2e.SecurityLevelNone))
+	endpoints = append(endpoints, e2e.DefaultEndpoint("endpoint_C", defaultTestHostname, defaultTestPort))
+	if err := mgmtServer.Update(ctx, e2e.UpdateOptions{
+		NodeID:    nodeID,
+		Listeners: listeners,
+		Routes:    routes,
+		Clusters:  clusters,
+		Endpoints: endpoints,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Read the update pushed by the resolver to the ClientConn and ensure the
+	// old clusters are present in the service config. Also ensure that the newly
+	// returned config selector does not hold a reference to the old cluster.
+	wantSC := `
+	{
+		"loadBalancingConfig": [
+			{
+				"xds_cluster_manager_experimental": {
+				"children": {
+					"cluster:A": {
+					"childPolicy": [
+						{
+						"cds_experimental": {
+							"cluster": "A"
+						}
+						}
+					]
+					},
+					"cluster:B": {
+					"childPolicy": [
+						{
+						"cds_experimental": {
+							"cluster": "B"
+						}
+						}
+					]
+					},
+					"cluster:C": {
+					"childPolicy": [
+						{
+						"cds_experimental": {
+							"cluster": "C"
+						}
+						}
+					]
+					}
+				}
+				}
+			}
+			]
+	}`
+	verifyUpdateFromResolver(ctx, t, stateCh, wantSC)
+
+	// Invoke onCommit on the first RPC; should lead to a service config update
+	// that deletes the first cluster, as it no longer has any pending RPCs.
+	if err := createStreamAndCommit(ctx, resOldA.Interceptor); err != nil {
+		t.Fatalf("createStreamAndCommit() for cluster A failed: %v", err)
+	}
+
+	// Verify that resolver publishes a service config containing only B and C.
+	wantSC = `
+	{
+		"loadBalancingConfig": [
+			{
+				"xds_cluster_manager_experimental": {
+				"children": {
+					"cluster:B": {
+					"childPolicy": [
+						{
+						"cds_experimental": {
+							"cluster": "B"
+						}
+						}
+					]
+					},
+					"cluster:C": {
+					"childPolicy": [
+						{
+						"cds_experimental": {
+							"cluster": "C"
+						}
+						}
+					]
+					}
+				}
+				}
+			}
+			]
+	}`
+	verifyUpdateFromResolver(ctx, t, stateCh, wantSC)
+
+	// Invoke onCommit on the second RPC; should lead to a service config update
+	// that deletes the second cluster, as it no longer has any pending RPCs.
+	if err := createStreamAndCommit(ctx, resOldB.Interceptor); err != nil {
+		t.Fatalf("createStreamAndCommit() for cluster B failed: %v", err)
+	}
+
+	// Verify that resolver publishes a service config containing only C.
+	wantSC = `
+	{
+		"loadBalancingConfig": [
+			{
+				"xds_cluster_manager_experimental": {
+				"children": {
+					"cluster:C": {
+					"childPolicy": [
+						{
+						"cds_experimental": {
+							"cluster": "C"
+						}
+						}
+					]
+					}
+				}
+				}
+			}
+			]
+	}`
+	verifyUpdateFromResolver(ctx, t, stateCh, wantSC)
+}
+
 // Tests the case where two LDS updates with the same RDS name to watch are
 // received without an RDS in between. Those LDS updates shouldn't trigger a
 // service config update.

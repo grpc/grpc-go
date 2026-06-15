@@ -41,7 +41,6 @@ import (
 	"google.golang.org/grpc/internal/xds/xdsclient"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 	"google.golang.org/grpc/internal/xds/xdsdepmgr"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
 )
 
@@ -425,6 +424,8 @@ func (r *xdsResolver) newConfigSelector() (_ *configSelector, err error) {
 			onCommitted := func() {
 				if info, ok := cs.plugins[clusterName]; ok {
 					if v := info.refCount.Add(-1); v == 0 {
+						// This entry will be removed from activePlugins when
+						// producing a new service config update.
 						cs.sendNewServiceConfig()
 					}
 				}
@@ -451,7 +452,6 @@ func (r *xdsResolver) newConfigSelector() (_ *configSelector, err error) {
 		} else {
 			for _, wc := range rt.WeightedClusters {
 				clusterName := clusterPrefix + wc.Name
-				wc := wc
 				onCommitted := func() {
 					if info, ok := cs.clusters[clusterName]; ok {
 						if v := info.refCount.Add(-1); v == 0 {
@@ -618,7 +618,7 @@ func (r *xdsResolver) onResourceError(err error) {
 // followed by the route override, and finally the virtual host override.
 //
 // Only executed in the context of a serializer callback.
-func (r *xdsResolver) newInterceptor(filters []xdsresource.HTTPFilter, clusterOverride, routeOverride, virtualHostOverride map[string]httpfilter.FilterConfig, onCommitted func()) (_ httpfilter.ClientInterceptor, err error) {
+func (r *xdsResolver) newInterceptor(filters []xdsresource.HTTPFilter, clusterOverride, routeOverride, virtualHostOverride map[string]httpfilter.FilterConfig, clusterRefCountCallback func()) (_ httpfilter.ClientInterceptor, err error) {
 	interceptors := make([]httpfilter.ClientInterceptor, 0, len(filters))
 	defer func() {
 		// Clean up any interceptors that were successfully built before the
@@ -671,19 +671,34 @@ func (r *xdsResolver) newInterceptor(filters []xdsresource.HTTPFilter, clusterOv
 	}
 
 	return &interceptorList{
-		interceptors: interceptors,
-		onCommitted:  onCommitted,
+		interceptors:            interceptors,
+		clusterRefCountCallback: clusterRefCountCallback,
 	}, nil
 }
 
 // interceptorList is a client interceptor that contains a list of client
 // interceptors to execute in order.
 type interceptorList struct {
-	interceptors []httpfilter.ClientInterceptor
-	onCommitted  func()
+	interceptors            []httpfilter.ClientInterceptor
+	clusterRefCountCallback func()
 }
 
 func (il *interceptorList) NewStream(ctx context.Context, ri iresolver.RPCInfo, newStream func(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStream, error), opts ...grpc.CallOption) (grpc.ClientStream, error) {
+	var once sync.Once
+	decrementRef := func() {
+		once.Do(il.clusterRefCountCallback)
+	}
+
+	onCommitted := func() {
+		decrementRef()
+	}
+
+	onFinished := func(error) {
+		decrementRef()
+	}
+
+	opts = append(opts, internal.OnCommitCallOption.(func(func()) grpc.CallOption)(onCommitted), grpc.OnFinish(onFinished))
+
 	for idx := len(il.interceptors) - 1; idx >= 0; idx-- {
 		ns := newStream
 		i := il.interceptors[idx]
@@ -695,66 +710,13 @@ func (il *interceptorList) NewStream(ctx context.Context, ri iresolver.RPCInfo, 
 	if err != nil {
 		return nil, err
 	}
-	return &interceptorStream{
-		ClientStream: s,
-		onCommitted:  il.onCommitted,
-	}, nil
+	return s, nil
 }
 
 func (il *interceptorList) Close() {
 	for _, i := range il.interceptors {
 		i.Close()
 	}
-}
-
-// interceptorStream wraps grpc.ClientStream to execute onCommitted
-// upon the first client interaction.
-type interceptorStream struct {
-	grpc.ClientStream
-	onCommitted func()
-	commitOnce  sync.Once
-}
-
-func (s *interceptorStream) commit() {
-	if s.onCommitted != nil {
-		s.commitOnce.Do(s.onCommitted)
-	}
-}
-
-func (s *interceptorStream) Header() (metadata.MD, error) {
-	md, err := s.ClientStream.Header()
-	s.commit()
-	return md, err
-}
-
-func (s *interceptorStream) SendMsg(m any) error {
-	err := s.ClientStream.SendMsg(m)
-	s.commit()
-	return err
-}
-
-func (s *interceptorStream) RecvMsg(m any) error {
-	err := s.ClientStream.RecvMsg(m)
-	s.commit()
-	return err
-}
-
-func (s *interceptorStream) Context() context.Context {
-	ctx := s.ClientStream.Context()
-	s.commit()
-	return ctx
-}
-
-func (s *interceptorStream) CloseSend() error {
-	err := s.ClientStream.CloseSend()
-	s.commit()
-	return err
-}
-
-func (s *interceptorStream) Trailer() metadata.MD {
-	md := s.ClientStream.Trailer()
-	s.commit()
-	return md
 }
 
 // getOrCreateClientFilter retrieves an existing client filter from the

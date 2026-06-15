@@ -27,6 +27,7 @@ import (
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/internal"
 	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
@@ -488,24 +489,49 @@ func (m mockClientStream) Context() context.Context {
 	return m.ctx
 }
 
-// createStreamAndCommit simulates a client initiating stream I/O. Calling
-// Context() on the returned stream triggers the interceptor's underlying
-// commit callback.
-func createStreamAndCommit(ctx context.Context, interceptor any) error {
-	if interceptor == nil {
-		return nil
-	}
-	i, ok := interceptor.(httpfilter.ClientInterceptor)
-	if !ok {
-		return fmt.Errorf("unexpected interceptor type %T, want httpfilter.ClientInterceptor", interceptor)
-	}
-	newStream := func(context.Context, ...grpc.CallOption) (grpc.ClientStream, error) {
+func createStream(ctx context.Context, interceptorVal any) ([]grpc.CallOption, error) {
+	var opts []grpc.CallOption
+	newStream := func(ctx context.Context, o ...grpc.CallOption) (grpc.ClientStream, error) {
+		opts = o
 		return mockClientStream{ctx: ctx}, nil
 	}
-	stream, err := i.NewStream(ctx, iresolver.RPCInfo{Method: "/service/method", Context: ctx}, newStream)
+
+	interceptor, ok := interceptorVal.(httpfilter.ClientInterceptor)
+	if !ok {
+		return nil, fmt.Errorf("interceptor is type %T, want httpfilter.ClientInterceptor", interceptorVal)
+	}
+	if _, err := interceptor.NewStream(ctx, iresolver.RPCInfo{Method: "/service/method", Context: ctx}, newStream); err != nil {
+		return nil, err
+	}
+	return opts, nil
+}
+
+// createStreamAndCommit simulates a client initiating an RPC stream and
+// manually triggering onCommit using the TriggerOnCommitForTesting hook.
+func createStreamAndCommit(ctx context.Context, interceptorVal any) error {
+	opts, err := createStream(ctx, interceptorVal)
 	if err != nil {
 		return err
 	}
-	stream.Context()
+	for _, opt := range opts {
+		if internal.TriggerOnCommitForTesting != nil {
+			internal.TriggerOnCommitForTesting.(func(grpc.CallOption))(opt)
+		}
+	}
+	return nil
+}
+
+// createStreamAndFinish simulates a client initiating an RPC stream and
+// manually triggering OnFinish using the OnFinishCallOption.
+func createStreamAndFinish(ctx context.Context, interceptorVal any) error {
+	opts, err := createStream(ctx, interceptorVal)
+	if err != nil {
+		return err
+	}
+	for _, opt := range opts {
+		if fo, ok := opt.(grpc.OnFinishCallOption); ok {
+			fo.OnFinish(nil)
+		}
+	}
 	return nil
 }

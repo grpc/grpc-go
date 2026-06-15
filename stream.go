@@ -252,12 +252,11 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 	}
 
 	mc := &emptyMethodConfig
-	var onCommit func()
 	newStream := func(ctx context.Context, filterOpts ...CallOption) (ClientStream, error) {
 		if filterOpts != nil {
 			opts = combine(opts, filterOpts)
 		}
-		return newClientStreamWithParams(ctx, desc, cc, method, mc, onCommit, nameResolutionDelayed, opts...)
+		return newClientStreamWithParams(ctx, desc, cc, method, mc, nameResolutionDelayed, opts...)
 	}
 
 	rpcInfo := iresolver.RPCInfo{Context: ctx, Method: method}
@@ -298,7 +297,7 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 	return newStream(ctx)
 }
 
-func newClientStreamWithParams(ctx context.Context, desc *StreamDesc, cc *ClientConn, method string, mc *serviceconfig.MethodConfig, onCommit func(), nameResolutionDelayed bool, opts ...CallOption) (_ ClientStream, err error) {
+func newClientStreamWithParams(ctx context.Context, desc *StreamDesc, cc *ClientConn, method string, mc *serviceconfig.MethodConfig, nameResolutionDelayed bool, opts ...CallOption) (_ ClientStream, err error) {
 	callInfo := defaultCallInfo()
 	if mc.WaitForReady != nil {
 		callInfo.failFast = !*mc.WaitForReady
@@ -378,7 +377,6 @@ func newClientStreamWithParams(ctx context.Context, desc *StreamDesc, cc *Client
 		compressorV1:        compressorV1,
 		cancel:              cancel,
 		firstAttempt:        true,
-		onCommit:            onCommit,
 		nameResolutionDelay: nameResolutionDelayed,
 	}
 	if !cc.dopts.disableRetry {
@@ -631,8 +629,7 @@ type clientStream struct {
 	// place where we need to check if the attempt is nil.
 	attempt *csAttempt
 	// TODO(hedging): hedging will have multiple attempts simultaneously.
-	committed        bool // active attempt committed for retry?
-	onCommit         func()
+	committed        bool       // active attempt committed for retry?
 	replayBuffer     []replayOp // operations to replay on retry
 	replayBufferSize int        // current size of replayBuffer
 	// nameResolutionDelay indicates if there was a delay in the name resolution.
@@ -676,8 +673,12 @@ type csAttempt struct {
 }
 
 func (cs *clientStream) commitAttemptLocked() {
-	if !cs.committed && cs.onCommit != nil {
-		cs.onCommit()
+	if !cs.committed {
+		for _, o := range cs.opts {
+			if o, ok := o.(onCommitCallOption); ok {
+				o.onCommit()
+			}
+		}
 	}
 	cs.committed = true
 	for _, op := range cs.replayBuffer {
