@@ -1891,6 +1891,7 @@ func (s) TestAccountCheckDynamicWindowLargeMessage(t *testing.T) {
 }
 
 func testFlowControlAccountCheck(t *testing.T, msgSize int, wc windowSizeConfig) {
+	const timeout = 30 * time.Second
 	sc := &ServerConfig{
 		InitialWindowSize:     wc.serverStream,
 		InitialConnWindowSize: wc.serverConn,
@@ -1903,7 +1904,7 @@ func testFlowControlAccountCheck(t *testing.T, msgSize int, wc windowSizeConfig)
 		StaticWindowSize:      true,
 		BufferPool:            mem.DefaultBufferPool(),
 	}
-	server, client, cancel := setUpWithOptionsAndTimeout(t, 0, sc, pingpong, co, 30*time.Second)
+	server, client, cancel := setUpWithOptionsAndTimeout(t, 0, sc, pingpong, co, timeout)
 	defer cancel()
 	defer server.stop()
 	defer client.Close(fmt.Errorf("closed manually by test"))
@@ -1922,7 +1923,7 @@ func testFlowControlAccountCheck(t *testing.T, msgSize int, wc windowSizeConfig)
 	}
 	server.mu.Unlock()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	const numStreams = 5
 	clientStreams := make([]*ClientStream, numStreams)
