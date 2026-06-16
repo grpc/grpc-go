@@ -704,7 +704,16 @@ func (il *interceptorList) NewStream(ctx context.Context, ri iresolver.RPCInfo, 
 			return i.NewStream(ctx, ri, ns, opts...)
 		}
 	}
-	return newStream(ctx, opts...)
+	s, err := newStream(ctx, opts...)
+	if err != nil {
+		// Decrement the reference count if stream creation fails early (e.g., due
+		// to an interceptor aborting). This is necessary because onFinished is
+		// registered on the stream options, which are never evaluated if newStream
+		// fails before creating the stream.
+		decrementRef()
+		return nil, err
+	}
+	return s, nil
 }
 
 func (il *interceptorList) Close() {
