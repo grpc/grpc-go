@@ -32,6 +32,7 @@ import (
 	"github.com/envoyproxy/go-control-plane/pkg/wellknown"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	estats "google.golang.org/grpc/experimental/stats"
 	"google.golang.org/grpc/internal"
@@ -44,6 +45,7 @@ import (
 	"google.golang.org/grpc/internal/xds/balancer/clustermanager"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	serverFeature "google.golang.org/grpc/internal/xds/clients/xdsclient"
+	"google.golang.org/grpc/internal/xds/httpfilter"
 	rinternal "google.golang.org/grpc/internal/xds/resolver/internal"
 	xdstestutils "google.golang.org/grpc/internal/xds/test/e2e"
 	"google.golang.org/grpc/internal/xds/xdsclient"
@@ -1071,6 +1073,21 @@ func (s) TestResolverDelayedOnCommitted(t *testing.T) {
 	verifyUpdateFromResolver(ctx, t, stateCh, wantSC)
 }
 
+// createStreamAndFinish simulates a client initiating an RPC stream and
+// manually triggering OnFinish using the OnFinishCallOption.
+func createStreamAndFinish(ctx context.Context, interceptorVal any) error {
+	opts, err := createStream(ctx, interceptorVal)
+	if err != nil {
+		return err
+	}
+	for _, opt := range opts {
+		if fo, ok := opt.(grpc.OnFinishCallOption); ok {
+			fo.OnFinish(nil)
+		}
+	}
+	return nil
+}
+
 // Tests that clusters remain in service config if RPCs are in flight, and are
 // cleaned up when the RPC finishes.
 func (s) TestResolverDelayedOnFinished(t *testing.T) {
@@ -1173,6 +1190,148 @@ func (s) TestResolverDelayedOnFinished(t *testing.T) {
 		t.Fatalf("createStreamAndFinish() failed with error: %v", err)
 	}
 
+	wantSC = fmt.Sprintf(`
+	{
+		"loadBalancingConfig": [
+			{
+				"xds_cluster_manager_experimental": {
+				"children": {
+					"cluster:%s": {
+					"childPolicy": [
+						{
+						"cds_experimental": {
+							"cluster": "%s"
+						}
+						}
+					]
+					}
+				}
+				}
+			}
+			]
+	}`, newClusterName, newClusterName)
+	verifyUpdateFromResolver(ctx, t, stateCh, wantSC)
+}
+
+// createStreamAndReturnError simulates a client initiating an RPC stream
+// where the core newStream callback fails and returns an error.
+func createStreamAndReturnError(ctx context.Context, interceptorVal any, streamErr error) error {
+	newStream := func(context.Context, ...grpc.CallOption) (grpc.ClientStream, error) {
+		return nil, streamErr
+	}
+	interceptor, ok := interceptorVal.(httpfilter.ClientInterceptor)
+	if !ok {
+		return fmt.Errorf("interceptor is type %T, want httpfilter.ClientInterceptor", interceptorVal)
+	}
+	_, err := interceptor.NewStream(ctx, iresolver.RPCInfo{Method: "/service/method", Context: ctx}, newStream)
+	return err
+}
+
+// TestResolverDelayedOnNewStreamError verifies that clusters remain in the
+// service config if RPCs are in flight, and are cleaned up when the stream
+// creation fails early.
+func (s) TestResolverDelayedOnNewStreamError(t *testing.T) {
+	// Spin up an xDS management server for the test.
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	nodeID := uuid.New().String()
+	mgmtServer, _, _, bc := setupManagementServerForTest(t, nodeID)
+
+	// Configure resources on the management server.
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		DialTarget: defaultTestServiceName,
+		NodeID:     nodeID,
+		Host:       defaultTestHostname,
+		Port:       defaultTestPort[0],
+		SecLevel:   e2e.SecurityLevelNone,
+	})
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	stateCh, _, _ := buildResolverForTarget(t, resolver.Target{URL: *testutils.MustParseURL("xds:///" + defaultTestServiceName)}, bc)
+
+	// Read the update pushed by the resolver to the ClientConn.
+	cs := verifyUpdateFromResolver(ctx, t, stateCh, wantServiceConfig(resources.Clusters[0].Name))
+
+	// Make an RPC, but do not finish it yet.
+	resOld, err := cs.SelectConfig(iresolver.RPCInfo{Context: ctx, Method: "/service/method"})
+	if err != nil {
+		t.Fatalf("cs.SelectConfig(): %v", err)
+	}
+	wantClusterName := "cluster:" + resources.Clusters[0].Name
+	if cluster := clustermanager.GetPickedClusterForTesting(resOld.Context); cluster != wantClusterName {
+		t.Fatalf("Picked cluster is %q, want %q", cluster, wantClusterName)
+	}
+
+	// Delay finishing the old RPC. As long as there are pending RPCs to removed
+	// clusters, they still appear in the service config.
+	oldClusterName := resources.Clusters[0].Name
+	// Update the route configuration resource on the management server to
+	// return a new cluster.
+	const (
+		newClusterName  = "new-" + defaultTestClusterName
+		newEndpointName = "new-" + defaultTestEndpointName
+	)
+	resources.Routes = []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(resources.Routes[0].Name, defaultTestServiceName, newClusterName)}
+	resources.Clusters = append(resources.Clusters, e2e.DefaultCluster(newClusterName, newEndpointName, e2e.SecurityLevelNone))
+	resources.Endpoints = append(resources.Endpoints, e2e.DefaultEndpoint(newEndpointName, defaultTestHostname, defaultTestPort))
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Read the update pushed by the resolver to the ClientConn and ensure the
+	// old cluster is present in the service config.
+	wantSC := fmt.Sprintf(`
+	{
+		"loadBalancingConfig": [
+			{
+				"xds_cluster_manager_experimental": {
+				"children": {
+					"cluster:%s": {
+					"childPolicy": [
+						{
+						"cds_experimental": {
+							"cluster": "%s"
+						}
+						}
+					]
+					},
+					"cluster:%s": {
+					"childPolicy": [
+						{
+						"cds_experimental": {
+							"cluster": "%s"
+						}
+						}
+					]
+					}
+				}
+				}
+			}
+			]
+	}`, oldClusterName, oldClusterName, newClusterName, newClusterName)
+	cs = verifyUpdateFromResolver(ctx, t, stateCh, wantSC)
+
+	resNew, err := cs.SelectConfig(iresolver.RPCInfo{Context: ctx, Method: "/service/method"})
+	if err != nil {
+		t.Fatalf("cs.SelectConfig() failed: %v", err)
+	}
+	wantClusterName = "cluster:" + newClusterName
+	if cluster := clustermanager.GetPickedClusterForTesting(resNew.Context); cluster != wantClusterName {
+		t.Fatalf("Picked cluster is %q, want %q", cluster, wantClusterName)
+	}
+
+	// Initiate the stream with error. The core newStream callback will return
+	// an error, which should decrement the refcount on the old cluster.
+	injectedErr := fmt.Errorf("injected stream creation error")
+	err = createStreamAndReturnError(ctx, resOld.Interceptor, injectedErr)
+	if err == nil || !strings.Contains(err.Error(), injectedErr.Error()) {
+		t.Fatalf("createStreamAndReturnError() failed with error: %v, want error containing %q", err, injectedErr)
+	}
+
+	// Once the stream fails, it should lead to a service config update that
+	// deletes the old cluster.
 	wantSC = fmt.Sprintf(`
 	{
 		"loadBalancingConfig": [

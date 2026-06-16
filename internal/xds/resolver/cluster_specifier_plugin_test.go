@@ -522,18 +522,3 @@ func createStreamAndCommit(ctx context.Context, interceptorVal any) error {
 	}
 	return nil
 }
-
-// createStreamAndFinish simulates a client initiating an RPC stream and
-// manually triggering OnFinish using the OnFinishCallOption.
-func createStreamAndFinish(ctx context.Context, interceptorVal any) error {
-	opts, err := createStream(ctx, interceptorVal)
-	if err != nil {
-		return err
-	}
-	for _, opt := range opts {
-		if fo, ok := opt.(grpc.OnFinishCallOption); ok {
-			fo.OnFinish(nil)
-		}
-	}
-	return nil
-}
