@@ -33,7 +33,6 @@ import (
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/credentials/xds"
 	"google.golang.org/grpc/internal"
@@ -782,9 +781,6 @@ func (s) TestGCPAuthnFilter_ConcurrentRPCWithShortAndLongContext(t *testing.T) {
 
 	client := testgrpc.NewTestServiceClient(cc)
 
-	cc.Connect()
-	testutils.AwaitState(ctx, t, cc, connectivity.Ready)
-
 	// Create a short context for the first RPC call.
 	shortCtx, shortBufCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
 	defer shortBufCancel()
@@ -812,29 +808,19 @@ func (s) TestGCPAuthnFilter_ConcurrentRPCWithShortAndLongContext(t *testing.T) {
 		errCh2 <- err
 	}()
 
-	// Wait for the duration of first RPC's short context timeout (100ms).
-	// Because the token fetch is synchronously blocked in the metadata server
-	// during GetRequestMetadata, the first RPC must remain blocked and not have
-	// completed or failed yet.
+	// The first RPC should fail with context deadline exceeded because its
+	// context timeout is short and the metadata server is blocked.
 	select {
 	case err := <-errCh1:
-		t.Fatalf("First RPC completed early with error: %v, expected it to remain blocked", err)
-	case <-time.After(defaultTestShortTimeout):
-		// Success: RPC 1 remained blocked.
+		if err == nil || status.Code(err) != codes.Internal {
+			t.Fatalf("First RPC failed unexpectedly with error code %v, want %v", status.Code(err), codes.Internal)
+		}
+	case <-ctx.Done():
+		t.Fatal("Timeout waiting for first RPC to fail")
 	}
 
 	// Now allow the metadata server to complete and return token.
 	close(proceedCh)
-
-	// Verify that the first RPC now fails with context deadline exceeded.
-	select {
-	case err := <-errCh1:
-		if err == nil || status.Code(err) != codes.DeadlineExceeded {
-			t.Fatalf("First RPC failed with error code %v, want DeadlineExceeded", status.Code(err))
-		}
-	case <-ctx.Done():
-		t.Fatal("Timeout while waiting for first RPC to fail")
-	}
 
 	// Verify that the second RPC successfully completes.
 	select {

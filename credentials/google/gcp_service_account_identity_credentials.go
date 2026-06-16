@@ -36,11 +36,19 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// preemptiveRefresh is the window before a token's actual expiration during
-// which the token is considered stale. Requests using a stale but still valid
-// token will trigger a background asynchronous refresh. This avoids blocking
-// the current RPC, preventing periodic latency spikes during token refresh.
-const preemptiveRefresh = 1 * time.Minute
+const (
+	// preemptiveRefresh is the window before a token's actual expiration during
+	// which the token is considered stale. Requests using a stale but still
+	// valid token will trigger a background asynchronous refresh. This avoids
+	// blocking the current RPC, preventing periodic latency spikes during token
+	// refresh.
+	preemptiveRefresh = 1 * time.Minute
+
+	// metadataTimeout is the timeout for the call to the metadata server to
+	// prevent the background token fetch from hanging indefinitely in case
+	// of connection issues.
+	metadataTimeout = 60 * time.Second
+)
 
 type gcpServiceAccountIdentityCallCreds struct {
 	// The following fields are initialized at creation time and are read-only
@@ -52,12 +60,12 @@ type gcpServiceAccountIdentityCallCreds struct {
 	// The following fields are protected by mu.
 	mu                     sync.Mutex
 	token                  *auth.Token
-	tokenExpiry            time.Time // timestamp after which the cached token is considered invalid
-	preemptiveTokenRefresh time.Time // timestamp after which background preemptive refresh is triggered
-	fetching               bool      // true if a background token fetch is in progress
-	nextRetryTime          time.Time // timestamp after which we can attempt the next token fetch
-	retryAttempt           int       // consecutive fetch failure count used to compute backoff delay
-	lastErr                error     // cached error returned from the most recent token fetch attempt
+	tokenExpiry            time.Time     // timestamp after which the cached token is considered invalid
+	preemptiveTokenRefresh time.Time     // timestamp after which background preemptive refresh is triggered
+	fetching               chan struct{} // used to deduplicate concurrent background token fetches
+	nextRetryTime          time.Time     // timestamp after which we can attempt the next token fetch
+	retryAttempt           int           // consecutive fetch failure count used to compute backoff delay
+	lastErr                error         // cached error returned from the most recent token fetch attempt
 }
 
 func init() {
@@ -111,33 +119,48 @@ func (c *gcpServiceAccountIdentityCallCreds) GetRequestMetadata(ctx context.Cont
 	}
 
 	c.mu.Lock()
-	defer c.mu.Unlock()
 
 	// If token is valid, return it. If it's also stale, trigger a background
 	// refresh if not already running and return the current token.
 	if c.token != nil && c.isTokenValidLocked() {
-		if c.isTokenStaleLocked() && !c.fetching {
-			c.fetching = true
+		if c.isTokenStaleLocked() && c.fetching == nil {
+			c.fetching = make(chan struct{})
 			go c.startFetch()
 		}
+		defer c.mu.Unlock()
 		return map[string]string{
 			"authorization": "Bearer " + c.token.Value,
 		}, nil
 	}
 
 	if c.lastErr != nil && time.Now().Before(c.nextRetryTime) {
+		c.mu.Unlock()
 		return nil, c.lastErr
 	}
 
-	token, err := c.creds.TokenProvider.Token(context.Background())
-	c.updateStateLocked(token, err)
-	if err != nil {
-		return nil, c.lastErr
+	if c.fetching == nil {
+		c.fetching = make(chan struct{})
+		go c.startFetch()
 	}
+	wait := c.fetching
+	c.mu.Unlock()
 
-	return map[string]string{
-		"authorization": "Bearer " + c.token.Value,
-	}, nil
+	select {
+	case <-wait:
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		if c.token != nil && c.isTokenValidLocked() {
+			return map[string]string{
+				"authorization": "Bearer " + c.token.Value,
+			}, nil
+		}
+		if c.lastErr != nil {
+			return nil, c.lastErr
+		}
+		return nil, status.Error(codes.Unavailable, "credentials: fetched token is expired")
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 }
 
 // RequireTransportSecurity indicates whether the credentials requires
@@ -161,12 +184,15 @@ func (c *gcpServiceAccountIdentityCallCreds) isTokenValidLocked() bool {
 // startFetch initiates a token fetch and updates the credential
 // state upon completion.
 func (c *gcpServiceAccountIdentityCallCreds) startFetch() {
-	token, err := c.creds.TokenProvider.Token(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), metadataTimeout)
+	defer cancel()
+	token, err := c.creds.TokenProvider.Token(ctx)
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	c.fetching = false
+	close(c.fetching)
+	c.fetching = nil
 	c.updateStateLocked(token, err)
 }
 
