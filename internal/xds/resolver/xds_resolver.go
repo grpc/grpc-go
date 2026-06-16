@@ -689,9 +689,7 @@ func (il *interceptorList) NewStream(ctx context.Context, ri iresolver.RPCInfo, 
 		once.Do(il.clusterRefCountCallback)
 	}
 
-	onCommitted := func() {
-		decrementRef()
-	}
+	onCommitted := decrementRef
 
 	onFinished := func(error) {
 		decrementRef()
@@ -706,11 +704,7 @@ func (il *interceptorList) NewStream(ctx context.Context, ri iresolver.RPCInfo, 
 			return i.NewStream(ctx, ri, ns, opts...)
 		}
 	}
-	s, err := newStream(ctx, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return s, nil
+	return newStream(ctx, opts...)
 }
 
 func (il *interceptorList) Close() {
