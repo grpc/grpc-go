@@ -25,7 +25,6 @@ import (
 	rand "math/rand/v2"
 	"slices"
 	"strings"
-	"sync"
 	"sync/atomic"
 
 	"google.golang.org/grpc"
@@ -679,18 +678,22 @@ func (r *xdsResolver) newInterceptor(filters []xdsresource.HTTPFilter, clusterOv
 // interceptorList is a client interceptor that contains a list of client
 // interceptors to execute in order.
 type interceptorList struct {
-	interceptors            []httpfilter.ClientInterceptor
+	interceptors []httpfilter.ClientInterceptor
+	// clusterRefCountCallback is a callback function to decrement the reference
+	// count of the associated cluster, invoked (at most once) when a stream
+	// created by this interceptor chain is committed or finished.
 	clusterRefCountCallback func()
 }
 
 func (il *interceptorList) NewStream(ctx context.Context, ri iresolver.RPCInfo, newStream func(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStream, error), opts ...grpc.CallOption) (grpc.ClientStream, error) {
-	var once sync.Once
+	var isCommitted atomic.Bool
 	decrementRef := func() {
-		once.Do(il.clusterRefCountCallback)
+		if !isCommitted.Swap(true) {
+			il.clusterRefCountCallback()
+		}
 	}
 
 	onCommitted := decrementRef
-
 	onFinished := func(error) {
 		decrementRef()
 	}

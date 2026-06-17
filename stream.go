@@ -1075,7 +1075,7 @@ func (cs *clientStream) CloseSend() error {
 		}
 	}
 	// We don't return an error here as we expect users to read all messages
-	// from the stream and get the RPC status from RecvMsg(). Note that
+	// from the stream and get the RPC status from RecvMsg().  Note that
 	// SendMsg() must return an error when one occurs so the application
 	// knows to stop sending messages, but that does not apply here.
 	return nil

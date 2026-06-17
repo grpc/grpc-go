@@ -511,14 +511,24 @@ func createStream(ctx context.Context, interceptorVal any) ([]grpc.CallOption, e
 // createStreamAndCommit simulates a client initiating an RPC stream and
 // manually triggering onCommit using the TriggerOnCommitForTesting hook.
 func createStreamAndCommit(ctx context.Context, interceptorVal any) error {
-	opts, err := createStream(ctx, interceptorVal)
-	if err != nil {
+	var capturedCallback func()
+
+	// Override the hook to capture the onCommit.
+	origOnCommitCallOption := internal.OnCommitCallOption.(func(func()) grpc.CallOption)
+	internal.OnCommitCallOption = func(f func()) grpc.CallOption {
+		capturedCallback = f
+		return origOnCommitCallOption(f)
+	}
+	defer func() { internal.OnCommitCallOption = origOnCommitCallOption }()
+
+	// createStream triggers OnCommitCallOption, which populates capturedCallback
+	if _, err := createStream(ctx, interceptorVal); err != nil {
 		return err
 	}
-	for _, opt := range opts {
-		if internal.TriggerOnCommitForTesting != nil {
-			internal.TriggerOnCommitForTesting.(func(grpc.CallOption))(opt)
-		}
+
+	if capturedCallback != nil {
+		capturedCallback()
 	}
+
 	return nil
 }

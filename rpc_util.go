@@ -48,11 +48,6 @@ func init() {
 	internal.OnCommitCallOption = func(f func()) CallOption {
 		return onCommit(f)
 	}
-	internal.TriggerOnCommitForTesting = func(o CallOption) {
-		if co, ok := o.(onCommitCallOption); ok {
-			co.onCommit()
-		}
-	}
 }
 
 // Compressor defines the interface gRPC uses to compress a message.
@@ -411,11 +406,10 @@ func (o OnFinishCallOption) before(c *callInfo) error {
 func (o OnFinishCallOption) after(*callInfo, *csAttempt) {}
 
 // onCommit returns a CallOption that configures a callback to be called when
-// the stream is committed (i.e., when the retry/replay buffer is discarded
-// and the RPC is committed to a single attempt).
-func onCommit(onCommit func()) CallOption {
+// the stream is committed.
+func onCommit(f func()) CallOption {
 	return onCommitCallOption{
-		onCommit: onCommit,
+		onCommit: f,
 	}
 }
 

@@ -246,13 +246,11 @@ var (
 		return cleanup
 	}
 
-	// OnCommitCallOption returns a CallOption that configures a callback
-	// to decrement the cluster ref count when the stream is committed.
+	// OnCommitCallOption returns a CallOption that configures a callback to
+	// be invoked when the stream is committed. The callback is guaranteed to
+	// be invoked at most once, and may never be invoked if the stream fails
+	// before commitment.
 	OnCommitCallOption any // func(func()) grpc.CallOption
-
-	// TriggerOnCommitForTesting executes the callback stored in the onCommit
-	// CallOption.
-	TriggerOnCommitForTesting any // func(CallOption)
 )
 
 // HealthChecker defines the signature of the client-side LB channel health
