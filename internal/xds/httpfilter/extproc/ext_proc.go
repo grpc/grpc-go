@@ -321,28 +321,15 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 	// to the ext proc server. The dataplane stream will be created upon receiving
 	// the response. Otherwise, create the dataplane stream immediately.
 	if i.config.processingModes.requestHeaderMode == modeSend {
-		headerReq := v3procservicepb.ProcessingRequest{
-			Request: &v3procservicepb.ProcessingRequest_RequestHeaders{
-				RequestHeaders: &v3procservicepb.HttpHeaders{
-					Headers: httpfilter.ConstructHeaderMap(outgoingMD, i.config.allowedHeaders, i.config.disallowedHeaders),
-				},
+		headerReq := cs.newProcessingRequest(true)
+		headerReq.Request = &v3procservicepb.ProcessingRequest_RequestHeaders{
+			RequestHeaders: &v3procservicepb.HttpHeaders{
+				Headers: httpfilter.ConstructHeaderMap(outgoingMD, i.config.allowedHeaders, i.config.disallowedHeaders),
 			},
-			ObservabilityMode: i.config.observabilityMode,
-			ProtocolConfig: &v3procservicepb.ProtocolConfiguration{
-				RequestBodyMode:  convertBodyMode(i.config.processingModes.requestBodyMode),
-				ResponseBodyMode: convertBodyMode(i.config.processingModes.responseBodyMode),
-			},
-			Attributes: cs.reqAttrs,
 		}
-		if err = extStream.Send(&headerReq); err != nil {
+		if err = extStream.Send(headerReq); err != nil {
 			return cs.handleInitError(fmt.Errorf("failed to send client headers to external processor server: %v", err), newStream, opts)
 		}
-		// Mark that the initial message has been sent to prevent sending
-		// ProtocolConfig on subsequent messages.
-		cs.initMsgSent.Store(true)
-		// Mark that the initial client message has been sent to prevent adding
-		// request attributes to any other message.
-		cs.initClientMsgSent.Store(true)
 	} else {
 		if err = cs.createDataplaneStream(newStream, opts); err != nil {
 			return nil, err
@@ -402,6 +389,26 @@ type clientStream struct {
 	requestForwardLoopDoneCh chan struct{}   // closed when request forwarding loop finishes draining
 	drainTriggered           atomic.Bool     // guards against multiple closures of drainTriggeredCh
 	drained                  *grpcsync.Event // fires when external processor stream is completely drained
+}
+
+// newProcessingRequest creates a new ProcessingRequest withObservabilityMode,
+// ProtocolConfig, Attributes fields initialized.
+func (cs *clientStream) newProcessingRequest(isClientMessage bool) *v3procservicepb.ProcessingRequest {
+	req := &v3procservicepb.ProcessingRequest{
+		ObservabilityMode: cs.config.observabilityMode,
+	}
+
+	if cs.initMsgSent.CompareAndSwap(false, true) {
+		req.ProtocolConfig = &v3procservicepb.ProtocolConfiguration{
+			RequestBodyMode:  convertBodyMode(cs.config.processingModes.requestBodyMode),
+			ResponseBodyMode: convertBodyMode(cs.config.processingModes.responseBodyMode),
+		}
+	}
+
+	if isClientMessage && cs.initClientMsgSent.CompareAndSwap(false, true) {
+		req.Attributes = cs.reqAttrs
+	}
+	return req
 }
 
 // Header returns the header metadata received from the server if there
@@ -485,25 +492,11 @@ func (cs *clientStream) CloseSend() error {
 
 	// If external processor stream is active, send to the processor server as
 	// request message with `EndOfStreamWithoutMessage` set.
-	req := &v3procservicepb.ProcessingRequest{
-		Request: &v3procservicepb.ProcessingRequest_RequestBody{
-			RequestBody: &v3procservicepb.HttpBody{
-				EndOfStreamWithoutMessage: true,
-			},
+	req := cs.newProcessingRequest(true)
+	req.Request = &v3procservicepb.ProcessingRequest_RequestBody{
+		RequestBody: &v3procservicepb.HttpBody{
+			EndOfStreamWithoutMessage: true,
 		},
-		Attributes:        cs.reqAttrs,
-		ObservabilityMode: cs.config.observabilityMode,
-	}
-
-	if cs.initMsgSent.CompareAndSwap(false, true) {
-		req.ProtocolConfig = &v3procservicepb.ProtocolConfiguration{
-			RequestBodyMode:  convertBodyMode(cs.config.processingModes.requestBodyMode),
-			ResponseBodyMode: convertBodyMode(cs.config.processingModes.responseBodyMode),
-		}
-	}
-
-	if cs.initClientMsgSent.CompareAndSwap(false, true) {
-		req.Attributes = cs.reqAttrs
 	}
 
 	if !cs.initBodyMsgSent.Load() {
@@ -675,24 +668,13 @@ func (cs *clientStream) SendMsg(m any) error {
 		return err
 	}
 
-	req := &v3procservicepb.ProcessingRequest{
-		Request: &v3procservicepb.ProcessingRequest_RequestBody{
-			RequestBody: &v3procservicepb.HttpBody{
-				Body: bodyBytes,
-			},
+	req := cs.newProcessingRequest(true)
+	req.Request = &v3procservicepb.ProcessingRequest_RequestBody{
+		RequestBody: &v3procservicepb.HttpBody{
+			Body: bodyBytes,
 		},
-		ObservabilityMode: cs.config.observabilityMode,
 	}
 
-	if cs.initMsgSent.CompareAndSwap(false, true) {
-		req.ProtocolConfig = &v3procservicepb.ProtocolConfiguration{
-			RequestBodyMode:  convertBodyMode(cs.config.processingModes.requestBodyMode),
-			ResponseBodyMode: convertBodyMode(cs.config.processingModes.responseBodyMode),
-		}
-	}
-	if cs.initClientMsgSent.CompareAndSwap(false, true) {
-		req.Attributes = cs.reqAttrs
-	}
 	if !cs.initBodyMsgSent.Load() {
 		cs.initBodyMsgSent.Store(true)
 	}
@@ -756,23 +738,15 @@ func (cs *clientStream) responseForwardingToProcServerLoop(msgType protoreflect.
 			return
 		}
 
-		req := &v3procservicepb.ProcessingRequest{
-			Request: &v3procservicepb.ProcessingRequest_ResponseBody{
-				ResponseBody: &v3procservicepb.HttpBody{
-					Body: bodyBytes,
-				},
+		req := cs.newProcessingRequest(false)
+		req.Request = &v3procservicepb.ProcessingRequest_ResponseBody{
+			ResponseBody: &v3procservicepb.HttpBody{
+				Body: bodyBytes,
 			},
-			ObservabilityMode: cs.config.observabilityMode,
 		}
 
 		if !cs.initBodyMsgSent.Load() {
 			cs.initBodyMsgSent.Store(true)
-		}
-		if cs.initMsgSent.CompareAndSwap(false, true) {
-			req.ProtocolConfig = &v3procservicepb.ProtocolConfiguration{
-				RequestBodyMode:  convertBodyMode(cs.config.processingModes.requestBodyMode),
-				ResponseBodyMode: convertBodyMode(cs.config.processingModes.responseBodyMode),
-			}
 		}
 
 		select {
@@ -1153,7 +1127,7 @@ func (cs *clientStream) processInitialHeaders(ctx context.Context, newStream fun
 		return false
 	}
 	if resp.GetRequestHeaders() == nil {
-		err := fmt.Errorf("external processor returned an unexpected message type, expected request headers response)")
+		err := fmt.Errorf("external processor returned an unexpected message type %T, expected request headers response", resp.GetResponse())
 		cs.handleHeaderError(err, newStream, opts)
 		return false
 	}
@@ -1266,19 +1240,11 @@ func (cs *clientStream) initiateResponseHeaderProcessing() error {
 			cs.trailersOnly = true
 		}
 		if cs.config.processingModes.responseHeaderMode == modeSend && !cs.extStreamBypass.Load() {
-			req := &v3procservicepb.ProcessingRequest{
-				Request: &v3procservicepb.ProcessingRequest_ResponseHeaders{ResponseHeaders: &v3procservicepb.HttpHeaders{
-					Headers:     httpfilter.ConstructHeaderMap(header, cs.config.allowedHeaders, cs.config.disallowedHeaders),
-					EndOfStream: cs.trailersOnly,
-				}},
-				ObservabilityMode: cs.config.observabilityMode,
-			}
-			if cs.initMsgSent.CompareAndSwap(false, true) {
-				req.ProtocolConfig = &v3procservicepb.ProtocolConfiguration{
-					RequestBodyMode:  convertBodyMode(cs.config.processingModes.requestBodyMode),
-					ResponseBodyMode: convertBodyMode(cs.config.processingModes.responseBodyMode),
-				}
-			}
+			req := cs.newProcessingRequest(false)
+			req.Request = &v3procservicepb.ProcessingRequest_ResponseHeaders{ResponseHeaders: &v3procservicepb.HttpHeaders{
+				Headers:     httpfilter.ConstructHeaderMap(header, cs.config.allowedHeaders, cs.config.disallowedHeaders),
+				EndOfStream: cs.trailersOnly,
+			}}
 			select {
 			case cs.extSendCh <- req:
 			case <-cs.ctx.Done():
@@ -1310,18 +1276,10 @@ func (cs *clientStream) initiateResponseTrailerProcessing() {
 		}
 		cs.responseTrailers = s.Trailer()
 		if cs.config.processingModes.responseTrailerMode == modeSend && !cs.extStreamBypass.Load() && !cs.trailersOnly {
-			req := &v3procservicepb.ProcessingRequest{
-				Request: &v3procservicepb.ProcessingRequest_ResponseTrailers{ResponseTrailers: &v3procservicepb.HttpTrailers{
-					Trailers: httpfilter.ConstructHeaderMap(cs.responseTrailers, cs.config.allowedHeaders, cs.config.disallowedHeaders),
-				}},
-				ObservabilityMode: cs.config.observabilityMode,
-			}
-			if cs.initMsgSent.CompareAndSwap(false, true) {
-				req.ProtocolConfig = &v3procservicepb.ProtocolConfiguration{
-					RequestBodyMode:  convertBodyMode(cs.config.processingModes.requestBodyMode),
-					ResponseBodyMode: convertBodyMode(cs.config.processingModes.responseBodyMode),
-				}
-			}
+			req := cs.newProcessingRequest(false)
+			req.Request = &v3procservicepb.ProcessingRequest_ResponseTrailers{ResponseTrailers: &v3procservicepb.HttpTrailers{
+				Trailers: httpfilter.ConstructHeaderMap(cs.responseTrailers, cs.config.allowedHeaders, cs.config.disallowedHeaders),
+			}}
 			select {
 			case cs.extSendCh <- req:
 				cs.trailerSent.Store(true)
@@ -1395,6 +1353,9 @@ func constructRequestAttributes(rpcInfo resolver.RPCInfo, md metadata.MD, reques
 		}
 	}
 
+	// structpb.NewStruct could fail if a prior filter in the chain modifies
+	// the metadata and inserts an invalid value that cannot be represented
+	// as a structpb.Value. Therefore, we must handle the potential error here.
 	reqStruct, err := structpb.NewStruct(reqFields)
 	if err != nil {
 		return nil, err
