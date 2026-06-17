@@ -1574,12 +1574,13 @@ func (s) TestResolverServerSideListenerReceivedOnClient(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatalf("Timeout waiting for error to be propagated to the ClientConn")
 	case gotErr := <-errCh:
+		const wantErr = "does not contain API listener configuration"
 		if gotErr == nil {
-			t.Fatalf("Got nil error from resolver, want error containing 'does not contain API listener configuration'")
+			t.Fatalf("Got nil error from resolver, want error containing '%s'", wantErr)
 		}
 		errStr := fmt.Sprint(gotErr)
-		if !strings.Contains(errStr, "does not contain API listener configuration") {
-			t.Fatalf("Got error from resolver %q, want error containing 'does not contain API listener configuration'", errStr)
+		if !strings.Contains(errStr, wantErr) {
+			t.Fatalf("Got error from resolver %q, want error containing '%s'", errStr, wantErr)
 		}
 		if !strings.Contains(errStr, nodeID) {
 			t.Fatalf("Got error from resolver %q, want nodeID %q", errStr, nodeID)

@@ -405,9 +405,10 @@ func (s) TestServer_ClientSideListenerReceivedOnServer(t *testing.T) {
 		if gotMode != connectivity.ServingModeNotServing {
 			t.Fatalf("Mode changed to %v, want %v", gotMode, connectivity.ServingModeNotServing)
 		}
+		const wantErr = "received client-side listener resource"
 		gotErr := <-modeChangeHandler.errCh
-		if gotErr == nil || !strings.Contains(gotErr.Error(), "received client-side listener resource") {
-			t.Fatalf("Unexpected error: %v, want error containing 'received client-side listener resource'", gotErr)
+		if gotErr == nil || !strings.Contains(gotErr.Error(), wantErr) {
+			t.Fatalf("Unexpected error: %v, want error containing '%s'", gotErr, wantErr)
 		}
 	}
 
@@ -496,9 +497,10 @@ func (s) TestServer_MismatchedAddressListenerReceivedOnServer(t *testing.T) {
 		if gotMode != connectivity.ServingModeNotServing {
 			t.Fatalf("Mode changed to %v, want %v", gotMode, connectivity.ServingModeNotServing)
 		}
+		const wantErr = "does not match listening address"
 		gotErr := <-modeChangeHandler.errCh
-		if gotErr == nil || !strings.Contains(gotErr.Error(), "does not match listening address") {
-			t.Fatalf("Unexpected error: %v, want error containing 'does not match listening address'", gotErr)
+		if gotErr == nil || !strings.Contains(gotErr.Error(), wantErr) {
+			t.Fatalf("Unexpected error: %v, want error containing '%s'", gotErr, wantErr)
 		}
 	}
 
