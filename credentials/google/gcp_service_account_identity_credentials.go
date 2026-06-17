@@ -127,9 +127,10 @@ func (c *gcpServiceAccountIdentityCallCreds) GetRequestMetadata(ctx context.Cont
 			c.fetching = make(chan struct{})
 			go c.startFetch()
 		}
-		defer c.mu.Unlock()
+		token := c.token.Value
+		c.mu.Unlock()
 		return map[string]string{
-			"authorization": "Bearer " + c.token.Value,
+			"authorization": "Bearer " + token,
 		}, nil
 	}
 
