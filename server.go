@@ -28,6 +28,7 @@ import (
 	"net/http"
 	"reflect"
 	"runtime"
+	"runtime/pprof"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -42,6 +43,7 @@ import (
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/binarylog"
 	"google.golang.org/grpc/internal/channelz"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/grpcutil"
 	istats "google.golang.org/grpc/internal/stats"
@@ -1798,6 +1800,12 @@ func (s *Server) handleMalformedMethodName(stream *transport.ServerStream, ti *t
 func (s *Server) handleStream(t transport.ServerTransport, stream *transport.ServerStream) {
 	ctx := stream.Context()
 	ctx = contextWithServer(ctx, s)
+	if envconfig.LabelServerGoroutines&envconfig.GoroutineLabelServerMethod != 0 {
+		// This method always runs in its own goroutine, so we can set a
+		// goroutine label without needing to restore a previous context.
+		ctx = pprof.WithLabels(ctx, pprof.Labels("grpc.method", stream.Method()))
+		pprof.SetGoroutineLabels(ctx)
+	}
 	var ti *traceInfo
 	if EnableTracing {
 		tr := newTrace("grpc.Recv."+methodFamily(stream.Method()), stream.Method())

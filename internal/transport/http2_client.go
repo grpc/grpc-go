@@ -498,7 +498,6 @@ func (t *http2Client) newStream(ctx context.Context, callHdr *CallHdr, handler s
 		ct:           t,
 		done:         make(chan struct{}),
 		headerChan:   make(chan struct{}),
-		doneFunc:     callHdr.DoneFunc,
 		statsHandler: handler,
 	}
 	s.Stream.buf.init()
@@ -999,9 +998,6 @@ func (t *http2Client) closeStream(s *ClientStream, err error, rst bool, rstCode 
 	t.controlBuf.executeAndPut(addBackStreamQuota, cleanup)
 	// This will unblock write.
 	close(s.done)
-	if s.doneFunc != nil {
-		s.doneFunc()
-	}
 }
 
 // Close kicks off the shutdown process of the transport. This should be called
@@ -1231,6 +1227,23 @@ func (t *http2Client) handleData(f *parsedDataFrame) {
 			t.closeStream(s, io.EOF, true, http2.ErrCodeFlowControl, status.New(codes.Internal, err.Error()), nil, false)
 			return
 		}
+
+		if s.nonGRPCStatus != nil {
+			// The frame should be handled as a non-gRPC response body
+			st := s.handleNonGRPCData(f)
+			if st != nil {
+				t.closeStream(s, st.Err(), true, http2.ErrCodeProtocol, st, nil, true)
+				return
+			}
+			if w := s.fc.onRead(size); w > 0 {
+				t.controlBuf.put(&outgoingWindowUpdate{
+					streamID:  s.id,
+					increment: w,
+				})
+			}
+			return
+		}
+
 		dataLen := f.data.Len()
 		if f.Header().Flags.Has(http2.FlagDataPadded) {
 			if w := s.fc.onRead(size - uint32(dataLen)); w > 0 {
@@ -1475,6 +1488,17 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 		return
 	}
 
+	// If we are collecting non-gRPC response data and receive a trailing
+	// HEADERS frame with END_STREAM, finalize the buffered data and close
+	// the stream.
+	if s.nonGRPCStatus != nil {
+		if endStream {
+			st := s.finalizeNonGRPCStatus()
+			t.closeStream(s, st.Err(), true, http2.ErrCodeProtocol, st, nil, true)
+		}
+		return
+	}
+
 	var (
 		// If a gRPC Response-Headers has already been received, then it means
 		// that the peer is speaking gRPC and we are in gRPC mode.
@@ -1575,7 +1599,12 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 		}
 
 		se := status.New(grpcErrorCode, strings.Join(errs, "; "))
-		t.closeStream(s, se.Err(), true, http2.ErrCodeProtocol, se, nil, endStream)
+		if endStream {
+			t.closeStream(s, se.Err(), true, http2.ErrCodeProtocol, se, nil, true)
+			return
+		}
+
+		s.startNonGRPCDataCollection(se)
 		return
 	}
 

@@ -26,7 +26,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/optional"
-	"google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/xds/httpfilter"
 	"google.golang.org/grpc/internal/xds/matcher"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
@@ -35,6 +34,7 @@ import (
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3procfilterpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/ext_proc/v3"
+	v3procservicegrpc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	v3procservicepb "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 )
 
@@ -45,6 +45,10 @@ func init() {
 }
 
 var (
+	// TODO: Remove this once we have code that actually uses messages from this
+	// protobuf package.
+	_ = v3procservicepb.ProcessingRequest{}
+
 	parseGRPCServiceConfig = func(*v3corepb.GrpcService) (xdsresource.GRPCServiceConfig, error) {
 		return xdsresource.GRPCServiceConfig{}, fmt.Errorf("parseGRPCServiceConfig not implemented")
 	}
@@ -196,7 +200,7 @@ type clientFilter struct{}
 
 func (clientFilter) Close() {}
 
-func (clientFilter) BuildClientInterceptor(base, override httpfilter.FilterConfig) (resolver.ClientInterceptor, error) {
+func (clientFilter) BuildClientInterceptor(base, override httpfilter.FilterConfig) (httpfilter.ClientInterceptor, error) {
 	b, ok := base.(baseConfig)
 	if !ok {
 		return nil, fmt.Errorf("extproc: incorrect config type provided (%T): %v", base, base)
@@ -219,15 +223,15 @@ func (clientFilter) BuildClientInterceptor(base, override httpfilter.FilterConfi
 	}
 	return &clientInterceptor{
 		config:    config,
-		extClient: v3procservicepb.NewExternalProcessorClient(cc),
+		extClient: v3procservicegrpc.NewExternalProcessorClient(cc),
 		cancel:    cancel,
 	}, nil
 }
 
 type clientInterceptor struct {
-	resolver.ClientInterceptor
+	httpfilter.ClientInterceptor
 	config    baseConfig
-	extClient v3procservicepb.ExternalProcessorClient
+	extClient v3procservicegrpc.ExternalProcessorClient
 	cancel    func() error
 }
 
