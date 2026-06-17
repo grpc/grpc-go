@@ -398,7 +398,11 @@ func BenchmarkFromOutgoingContextRaw(b *testing.B) {
 				ctx = AppendToOutgoingContext(ctx, "k"+strconv.Itoa(i), "v"+strconv.Itoa(i))
 			}
 			for b.Loop() {
-				fromOutgoingContextRaw(ctx)
+				_, added, _ := fromOutgoingContextRaw(ctx)
+				// Drain the lazy iterator so its work is actually measured;
+				// b.Loop() keeps the compiler from eliminating it.
+				for range added {
+				}
 			}
 		})
 	}
