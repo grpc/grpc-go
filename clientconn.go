@@ -905,6 +905,11 @@ func (cc *ClientConn) newAddrConnLocked(addrs []resolver.Address, opts balancer.
 		return nil, ErrClientConnClosing
 	}
 
+	// Check maxSubConns limit if configured.
+	if cc.dopts.maxSubConns > 0 && len(cc.conns) >= cc.dopts.maxSubConns {
+		return nil, fmt.Errorf("grpc: max SubConn limit (%d) reached", cc.dopts.maxSubConns)
+	}
+
 	ac := &addrConn{
 		state:        connectivity.Idle,
 		cc:           cc,

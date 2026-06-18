@@ -96,6 +96,7 @@ type dialOptions struct {
 	maxCallAttempts             int
 	enableLocalDNSResolution    bool // Specifies if target hostnames should be resolved when proxying is enabled.
 	useProxy                    bool // Specifies if a server should be connected via proxy.
+	maxSubConns                 int  // Limits the number of SubConns (connections) created by the ClientConn.
 }
 
 // DialOption configures how we set up the connection.
@@ -802,6 +803,27 @@ func WithMaxCallAttempts(n int) DialOption {
 			n = defaultMaxCallAttempts
 		}
 		o.maxCallAttempts = n
+	})
+}
+
+// WithMaxSubConns returns a DialOption that configures the maximum number
+// of SubConns (connections) that the ClientConn will create. When the limit
+// is reached, the balancer will not be allowed to create new SubConns until
+// existing ones are removed. This helps prevent resource exhaustion when
+// the resolver returns a large number of endpoints.
+//
+// A value of 0 or negative means no limit (default).
+//
+// # Experimental
+//
+// Notice: This API is EXPERIMENTAL and may be changed or removed in a
+// later release.
+func WithMaxSubConns(n int) DialOption {
+	return newFuncDialOption(func(o *dialOptions) {
+		if n < 0 {
+			n = 0
+		}
+		o.maxSubConns = n
 	})
 }
 
