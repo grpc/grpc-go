@@ -129,7 +129,9 @@ func setupTestGCPServiceAccountIdentityCreds(t *testing.T, stubToken *stubTokenP
 	}
 	t.Cleanup(func() { internal.NewIDTokenCredentials = origNewIDTokenCredentials })
 
-	creds, err := google.NewServiceAccountIdentityCredentials("audience")
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	creds, err := google.NewServiceAccountIdentityCredentials(ctx, "audience")
 	if err != nil {
 		t.Fatalf("NewServiceAccountIdentityCredentials() failed: %v", err)
 	}
@@ -141,7 +143,9 @@ func setupTestGCPServiceAccountIdentityCreds(t *testing.T, stubToken *stubTokenP
 // when called with empty audience.
 func (s) TestNewServiceAccountIdentityCredentials_EmptyAudience(t *testing.T) {
 	const wantErr = "credentials: audience cannot be empty"
-	if _, err := google.NewServiceAccountIdentityCredentials(""); err == nil || !strings.Contains(err.Error(), wantErr) {
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	if _, err := google.NewServiceAccountIdentityCredentials(ctx, ""); err == nil || !strings.Contains(err.Error(), wantErr) {
 		t.Fatalf("NewServiceAccountIdentityCredentials() returned error = %v, want error containing %q", err, wantErr)
 	}
 }

@@ -53,6 +53,7 @@ const (
 type gcpServiceAccountIdentityCallCreds struct {
 	// The following fields are initialized at creation time and are read-only
 	// after that.
+	ctx      context.Context
 	audience string
 	creds    *auth.Credentials
 	backoff  backoff.Strategy
@@ -83,11 +84,17 @@ func init() {
 // only valid for use in environments running on GCP. The audience parameter
 // cannot be empty.
 //
+// The credentials object starts asynchronous background token fetches to
+// refresh expired tokens. The provided context propagates cancellation to
+// these background tasks. Users should not pass an RPC-scoped context here,
+// but rather a context that is valid for the entire lifetime of the
+// credentials and should cancel the context when they are done.
+//
 // # Experimental
 //
 // Notice: This API is EXPERIMENTAL and may be changed or removed in a
 // later release.
-func NewServiceAccountIdentityCredentials(audience string) (credentials.PerRPCCredentials, error) {
+func NewServiceAccountIdentityCredentials(ctx context.Context, audience string) (credentials.PerRPCCredentials, error) {
 	if audience == "" {
 		return nil, fmt.Errorf("credentials: audience cannot be empty")
 	}
@@ -98,6 +105,7 @@ func NewServiceAccountIdentityCredentials(audience string) (credentials.PerRPCCr
 	}
 
 	return &gcpServiceAccountIdentityCallCreds{
+		ctx:      ctx,
 		audience: audience,
 		creds:    creds,
 		backoff:  internal.BackoffStrategy,
@@ -185,7 +193,7 @@ func (c *gcpServiceAccountIdentityCallCreds) isTokenValidLocked() bool {
 // startFetch initiates a token fetch and updates the credential
 // state upon completion.
 func (c *gcpServiceAccountIdentityCallCreds) startFetch() {
-	ctx, cancel := context.WithTimeout(context.Background(), metadataTimeout)
+	ctx, cancel := context.WithTimeout(c.ctx, metadataTimeout)
 	defer cancel()
 	token, err := c.creds.TokenProvider.Token(ctx)
 
