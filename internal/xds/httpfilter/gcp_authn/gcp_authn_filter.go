@@ -97,13 +97,20 @@ func (builder) IsTerminal() bool {
 }
 
 func (builder) BuildClientFilter() httpfilter.ClientFilter {
-	return &ClientFilter{}
+	ctx, cancel := context.WithCancel(context.Background())
+	return &ClientFilter{
+		ctx:    ctx,
+		cancel: cancel,
+	}
 }
 
 var _ httpfilter.ClientFilterBuilder = builder{}
 
 // ClientFilter implements the httpfilter.ClientFilter interface.
 type ClientFilter struct {
+	ctx    context.Context    // Initialized using the background context.
+	cancel context.CancelFunc // Cancelled on close.
+
 	// FilterName is the name of the HTTP filter instance in the xDS
 	// configuration and is populated by the xDS resolver.
 	FilterName string
@@ -128,15 +135,19 @@ func (cf *ClientFilter) BuildClientInterceptor(cfg, _ httpfilter.FilterConfig) (
 	}
 
 	return &interceptor{
+		ctx:        cf.ctx,
 		filterName: cf.FilterName,
 		cache:      cf.cache,
 	}, nil
 }
 
 // Close closes the client filter.
-func (cf *ClientFilter) Close() {}
+func (cf *ClientFilter) Close() {
+	cf.cancel()
+}
 
 type interceptor struct {
+	ctx        context.Context
 	filterName string
 	cache      *lruCache
 }
@@ -169,7 +180,7 @@ func (i *interceptor) NewStream(ctx context.Context, _ iresolver.RPCInfo, newStr
 		return nil, status.Errorf(codes.Unavailable, "gcpauthn: cluster metadata for key %q is not of type AudienceMetadataValue", i.filterName)
 	}
 
-	creds, err := i.cache.getOrCreate(audienceMetadata.Audience)
+	creds, err := i.cache.getOrCreate(i.ctx, audienceMetadata.Audience)
 	if err != nil {
 		return nil, err
 	}
@@ -195,7 +206,7 @@ type lruCache struct {
 	cacheSize   uint64
 	lruList     *list.List
 	cache       map[string]*list.Element
-	createCreds func(string) (credentials.PerRPCCredentials, error)
+	createCreds func(context.Context, string) (credentials.PerRPCCredentials, error)
 }
 
 // newLRUCache instantiates a new lruCache with the specified capacity.
@@ -234,7 +245,7 @@ func (c *lruCache) resizeCache(newCacheSize uint64) {
 // audience. If the audience is not found in the cache, it creates new
 // credentials using the configured creator, adds it to the cache, and evicts
 // the least recently used entry if the cache size is at capacity.
-func (c *lruCache) getOrCreate(audience string) (credentials.PerRPCCredentials, error) {
+func (c *lruCache) getOrCreate(ctx context.Context, audience string) (credentials.PerRPCCredentials, error) {
 	c.mu.Lock()
 
 	if e, ok := c.cache[audience]; ok {
@@ -244,7 +255,7 @@ func (c *lruCache) getOrCreate(audience string) (credentials.PerRPCCredentials, 
 	}
 
 	c.mu.Unlock()
-	creds, err := c.createCreds(audience)
+	creds, err := c.createCreds(ctx, audience)
 	if err != nil {
 		return nil, err
 	}
