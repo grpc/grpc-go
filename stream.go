@@ -846,8 +846,14 @@ func (cs *clientStream) withRetry(op func(a *csAttempt) error, onSuccess func())
 			// is created immediately before replaying the ops.
 			var err error
 			if cs.attempt, err = cs.newAttemptLocked(false /* isTransparent */); err != nil {
+				// Commit (releasing any resources held for retries, e.g. the
+				// config selector's OnCommitted callback) but do not call
+				// cs.finish: no attempt was created, and newClientStream's
+				// deferred cleanup finishes the stream on this error return.
+				// Calling cs.finish here too would finish the stream twice. This
+				// mirrors the retryLocked give-up path below.
+				cs.commitAttemptLocked()
 				cs.mu.Unlock()
-				cs.finish(err)
 				return err
 			}
 		}
