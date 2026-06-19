@@ -1093,7 +1093,8 @@ func (cs *clientStream) finish(err error) {
 	}
 	cs.finished = true
 	cs.commitAttemptLocked()
-	if cs.attempt != nil {
+	attemptCreated := cs.attempt != nil
+	if attemptCreated {
 		cs.attempt.finish(err)
 		// after functions all rely upon having a stream.
 		if cs.attempt.transportStream != nil {
@@ -1131,7 +1132,13 @@ func (cs *clientStream) finish(err error) {
 	if err == nil {
 		cs.retryThrottler.successfulRPC()
 	}
-	endOfClientStream(cs.cc, err, cs.opts...)
+	// If no attempt was ever created, stream creation has failed, and the
+	// cleanup is left to newClientStream, whose deferred cleanup invokes
+	// endOfClientStream if the call fails. Invoking it here as well would
+	// run the cleanup twice for the same call.
+	if attemptCreated {
+		endOfClientStream(cs.cc, err, cs.opts...)
+	}
 	cs.cancel()
 }
 
