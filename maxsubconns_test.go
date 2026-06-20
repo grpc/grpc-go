@@ -164,7 +164,7 @@ type testMaxSubConnsBalancer struct {
 	cc balancer.ClientConn
 }
 
-func (b *testMaxSubConnsBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
+func (b *testMaxSubConnsBalancer) UpdateClientConnState(_ balancer.ClientConnState) error {
 	// Create 10 SubConns with different addresses.
 	for i := 0; i < 10; i++ {
 		addr := resolver.Address{Addr: fmt.Sprintf("127.0.0.1:%d", 10000+i)}
