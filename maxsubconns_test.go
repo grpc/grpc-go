@@ -181,10 +181,10 @@ func (b *testMaxSubConnsBalancer) UpdateClientConnState(s balancer.ClientConnSta
 	return nil
 }
 
-func (b *testMaxSubConnsBalancer) ResolverError(_ error)                                         {}
+func (b *testMaxSubConnsBalancer) ResolverError(_ error)                                          {}
 func (b *testMaxSubConnsBalancer) UpdateSubConnState(_ balancer.SubConn, _ balancer.SubConnState) {}
-func (b *testMaxSubConnsBalancer) Close()                                                          {}
-func (b *testMaxSubConnsBalancer) ExitIdle()                                                       {}
+func (b *testMaxSubConnsBalancer) Close()                                                           {}
+func (b *testMaxSubConnsBalancer) ExitIdle()                                                         {}
 
 // testMaxSubConnsPicker is a test picker.
 type testMaxSubConnsPicker struct{}
