@@ -155,7 +155,7 @@ func (b *testMaxSubConnsBalancerBuilder) Name() string {
 	return "test_max_subconns"
 }
 
-func (b *testMaxSubConnsBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
+func (b *testMaxSubConnsBalancerBuilder) Build(cc balancer.ClientConn, _ balancer.BuildOptions) balancer.Balancer {
 	return &testMaxSubConnsBalancer{cc: cc}
 }
 
@@ -181,15 +181,15 @@ func (b *testMaxSubConnsBalancer) UpdateClientConnState(s balancer.ClientConnSta
 	return nil
 }
 
-func (b *testMaxSubConnsBalancer) ResolverError(err error)                                         {}
-func (b *testMaxSubConnsBalancer) UpdateSubConnState(sc balancer.SubConn, s balancer.SubConnState) {}
+func (b *testMaxSubConnsBalancer) ResolverError(_ error)                                         {}
+func (b *testMaxSubConnsBalancer) UpdateSubConnState(_ balancer.SubConn, _ balancer.SubConnState) {}
 func (b *testMaxSubConnsBalancer) Close()                                                          {}
 func (b *testMaxSubConnsBalancer) ExitIdle()                                                       {}
 
 // testMaxSubConnsPicker is a test picker.
 type testMaxSubConnsPicker struct{}
 
-func (p *testMaxSubConnsPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
+func (p *testMaxSubConnsPicker) Pick(_ balancer.PickInfo) (balancer.PickResult, error) {
 	return balancer.PickResult{}, fmt.Errorf("no connection available")
 }
 
@@ -200,7 +200,7 @@ func (b *testMaxSubConnsErrorBalancerBuilder) Name() string {
 	return "test_max_subconns_error"
 }
 
-func (b *testMaxSubConnsErrorBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
+func (b *testMaxSubConnsErrorBalancerBuilder) Build(cc balancer.ClientConn, _ balancer.BuildOptions) balancer.Balancer {
 	return &testMaxSubConnsErrorBalancer{cc: cc}
 }
 
@@ -210,7 +210,7 @@ type testMaxSubConnsErrorBalancer struct {
 	sawErr atomic.Bool
 }
 
-func (b *testMaxSubConnsErrorBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
+func (b *testMaxSubConnsErrorBalancer) UpdateClientConnState(_ balancer.ClientConnState) error {
 	// Try to create 5 SubConns; expect errors after the limit.
 	for i := 0; i < 5; i++ {
 		addr := resolver.Address{Addr: fmt.Sprintf("127.0.0.1:%d", 10000+i)}
@@ -226,8 +226,8 @@ func (b *testMaxSubConnsErrorBalancer) UpdateClientConnState(s balancer.ClientCo
 	return nil
 }
 
-func (b *testMaxSubConnsErrorBalancer) ResolverError(err error) {}
-func (b *testMaxSubConnsErrorBalancer) UpdateSubConnState(sc balancer.SubConn, s balancer.SubConnState) {
+func (b *testMaxSubConnsErrorBalancer) ResolverError(_ error) {}
+func (b *testMaxSubConnsErrorBalancer) UpdateSubConnState(_ balancer.SubConn, _ balancer.SubConnState) {
 }
 func (b *testMaxSubConnsErrorBalancer) Close()    {}
 func (b *testMaxSubConnsErrorBalancer) ExitIdle() {}
