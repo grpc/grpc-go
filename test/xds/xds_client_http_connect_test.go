@@ -37,6 +37,7 @@ import (
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/internal/testutils/xds/e2e/setup"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
+	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource/version"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 	"google.golang.org/protobuf/types/known/anypb"
@@ -53,7 +54,11 @@ import (
 
 func enableXDSHTTPConnect(t *testing.T) {
 	testutils.SetEnvConfig(t, &envconfig.XDSHTTPConnectEnabled, true)
-	t.Cleanup(xdsresource.RegisterMetadataConverterForTesting("type.googleapis.com/envoy.config.core.v3.Address", xdsresource.ProxyAddressConvertor{}))
+	cleanup, err := xdsresource.RegisterMetadataConverterForTesting(version.V3AddressURL)
+	if err != nil {
+		t.Fatalf("RegisterMetadataConverterForTesting(%q) failed: %v", version.V3AddressURL, err)
+	}
+	t.Cleanup(cleanup)
 }
 
 func splitHostPort(t *testing.T, addr string) (string, int) {

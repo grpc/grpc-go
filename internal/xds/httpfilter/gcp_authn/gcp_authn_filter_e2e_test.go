@@ -33,6 +33,7 @@ import (
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/credentials/xds"
 	"google.golang.org/grpc/internal"
@@ -42,6 +43,7 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
+	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource/version"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/status"
@@ -80,7 +82,11 @@ const (
 
 func setupGCPAuthnTest(t *testing.T) {
 	testutils.SetEnvConfig(t, &envconfig.GCPAuthenticationFilterEnabled, true)
-	t.Cleanup(xdsresource.RegisterMetadataConverterForTesting("type.googleapis.com/envoy.extensions.filters.http.gcp_authn.v3.Audience", xdsresource.AudienceConverter{}))
+	cleanup, err := xdsresource.RegisterMetadataConverterForTesting(version.V3AudienceURL)
+	if err != nil {
+		t.Fatalf("RegisterMetadataConverterForTesting(%q) failed: %v", version.V3AudienceURL, err)
+	}
+	t.Cleanup(cleanup)
 }
 
 // Test verifies the basic end-to-end flow. It ensures that the gcp_authn
@@ -311,7 +317,7 @@ func (s) TestGCPAuthnFilter_TokenCaching(t *testing.T) {
 	// Verify request count is 1. This ensures that the token fetched for
 	// the first RPC was reused for the second RPC.
 	if count := atomic.LoadInt32(&requestCount); count != 1 {
-		t.Errorf("Unexpected request to metadata server, got %d want 1", count)
+		t.Fatalf("Unexpected request to metadata server, got %d want 1", count)
 	}
 }
 
@@ -657,7 +663,7 @@ func (s) TestGCPAuthnFilter_CacheSharingConfigUpdate(t *testing.T) {
 	// This proves that token for cluster C was successfully cached in the
 	// second pass, while A and B were not.
 	if count := atomic.LoadInt32(&requestCount); count != 5 {
-		t.Errorf("Unexpected requests to metadata server, got %d want 5", count)
+		t.Fatalf("Unexpected requests to metadata server, got %d want 5", count)
 	}
 }
 
@@ -781,6 +787,9 @@ func (s) TestGCPAuthnFilter_ConcurrentRPCWithShortAndLongContext(t *testing.T) {
 
 	client := testgrpc.NewTestServiceClient(cc)
 
+	cc.Connect()
+	testutils.AwaitState(ctx, t, cc, connectivity.Ready)
+
 	// Create a short context for the first RPC call.
 	shortCtx, shortBufCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
 	defer shortBufCancel()
@@ -835,7 +844,7 @@ func (s) TestGCPAuthnFilter_ConcurrentRPCWithShortAndLongContext(t *testing.T) {
 	// Verify request count is 1. This ensures that the token fetched for
 	// the first RPC was reused for the second RPC.
 	if count := atomic.LoadInt32(&requestCount); count != 1 {
-		t.Errorf("Unexpected request to metadata server, got %d want 1", count)
+		t.Fatalf("Unexpected request to metadata server, got %d want 1", count)
 	}
 }
 
@@ -962,6 +971,6 @@ func (s) TestGCPAuthnFilter_PreservesUserCallOptions(t *testing.T) {
 	// proving the first entry was preserved.
 	val := header.Get("custom-response-header")
 	if len(val) == 0 || val[0] != "custom-val" {
-		t.Errorf("Unexpected response header, got: %v want custom-val", val)
+		t.Fatalf("Unexpected response header, got: %v want custom-val", val)
 	}
 }

@@ -1770,7 +1770,11 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 // 2. Registering the audience converter (and restore the original on cleanup).
 func enableGCPAuthenticationFilter(t *testing.T) {
 	testutils.SetEnvConfig(t, &envconfig.GCPAuthenticationFilterEnabled, true)
-	t.Cleanup(RegisterMetadataConverterForTesting(audienceTypeURL, AudienceConverter{}))
+	cleanup, err := RegisterMetadataConverterForTesting(version.V3AudienceURL)
+	if err != nil {
+		t.Fatalf("RegisterMetadataConverterForTesting(%q) failed: %v", version.V3AudienceURL, err)
+	}
+	t.Cleanup(cleanup)
 }
 
 // disableGCPAuthenticationFilter disables A83 support for the duration of the
@@ -1780,7 +1784,11 @@ func enableGCPAuthenticationFilter(t *testing.T) {
 // (and restoring the original on cleanup).
 func disableGCPAuthenticationFilter(t *testing.T) {
 	testutils.SetEnvConfig(t, &envconfig.GCPAuthenticationFilterEnabled, false)
-	t.Cleanup(RegisterMetadataConverterForTesting(audienceTypeURL, nil))
+	cleanup, err := RegisterMetadataConverterForTesting(version.V3AudienceURL, nil)
+	if err != nil {
+		t.Fatalf("RegisterMetadataConverterForTesting(%q) failed: %v", version.V3AudienceURL, err)
+	}
+	t.Cleanup(cleanup)
 }
 
 // Tests custom metadata parsing for success cases when the

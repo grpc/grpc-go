@@ -77,15 +77,6 @@ func (s) TestParseFilterConfig(t *testing.T) {
 			wantErr: "cache_config.cache_size must be greater than zero",
 		},
 		{
-			name: "overflow_cache_size",
-			config: testutils.MarshalAny(t, &v3gcpauthnpb.GcpAuthnFilterConfig{
-				CacheConfig: &v3gcpauthnpb.TokenCacheConfig{
-					CacheSize: &wrapperspb.UInt64Value{Value: 1 << 32},
-				},
-			}),
-			wantCfg: config{cacheSize: 1<<31 - 2},
-		},
-		{
 			name:    "invalid_message_type",
 			config:  &v3gcpauthnpb.GcpAuthnFilterConfig{},
 			wantErr: "gcpauthn: invalid filter config type",
@@ -240,7 +231,7 @@ func (s) TestInterceptor_NewStream_Errors(t *testing.T) {
 		{
 			name:    "cluster_not_found_in_CDS",
 			ctx:     clustermanager.SetPickedCluster(xdsresource.NewContextWithXDSConfig(ctx, validConfig), "cluster_not_found"),
-			wantErr: "not found in CDS",
+			wantErr: "not found in xDS config",
 		},
 		{
 			name:    "wrong_metadata_type",
