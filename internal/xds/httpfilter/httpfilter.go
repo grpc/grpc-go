@@ -24,9 +24,22 @@ import (
 	"context"
 
 	"google.golang.org/grpc"
+	estats "google.golang.org/grpc/experimental/stats"
 	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/protobuf/proto"
 )
+
+// BuildInterceptorOptions contains options passed to the filter when building interceptors.
+type BuildInterceptorOptions struct {
+	MetricsRecorder estats.MetricsRecorder
+	Target          string
+}
+
+// ClientFilterMetricsSetter is an optional interface that ClientFilter implementations
+// can implement to receive metrics recorder and target from the resolver.
+type ClientFilterMetricsSetter interface {
+	SetMetricsOptions(opts BuildInterceptorOptions)
+}
 
 // FilterConfig represents an opaque data structure holding configuration for a
 // filter.  Embed this interface to implement it.

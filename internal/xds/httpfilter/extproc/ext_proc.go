@@ -30,10 +30,12 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	estats "google.golang.org/grpc/experimental/stats"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/optional"
 	"google.golang.org/grpc/internal/resolver"
+	istats "google.golang.org/grpc/internal/stats"
 	"google.golang.org/grpc/internal/status"
 	"google.golang.org/grpc/internal/xds/httpfilter"
 	"google.golang.org/grpc/internal/xds/matcher"
@@ -221,16 +223,24 @@ func (builder) IsTerminal() bool {
 }
 
 func (builder) BuildClientFilter() httpfilter.ClientFilter {
-	return clientFilter{}
+	return &clientFilter{}
 }
 
 var _ httpfilter.ClientFilterBuilder = builder{}
 
-type clientFilter struct{}
+type clientFilter struct {
+	metricsRecorder estats.MetricsRecorder
+	target          string
+}
+
+func (cf *clientFilter) SetMetricsOptions(opts httpfilter.BuildInterceptorOptions) {
+	cf.metricsRecorder = opts.MetricsRecorder
+	cf.target = opts.Target
+}
 
 func (clientFilter) Close() {}
 
-func (clientFilter) BuildClientInterceptor(base, override httpfilter.FilterConfig) (httpfilter.ClientInterceptor, error) {
+func (cf *clientFilter) BuildClientInterceptor(base, override httpfilter.FilterConfig) (httpfilter.ClientInterceptor, error) {
 	b, ok := base.(baseConfig)
 	if !ok {
 		return nil, fmt.Errorf("extproc: incorrect config type provided (%T): %v", base, base)
@@ -253,16 +263,20 @@ func (clientFilter) BuildClientInterceptor(base, override httpfilter.FilterConfi
 
 	}
 	return &clientInterceptor{
-		config:      config,
-		extClient:   v3procservicegrpc.NewExternalProcessorClient(cc),
-		closeClient: cancel,
+		config:          config,
+		extClient:       v3procservicegrpc.NewExternalProcessorClient(cc),
+		closeClient:     cancel,
+		metricsRecorder: cf.metricsRecorder,
+		target:          cf.target,
 	}, nil
 }
 
 type clientInterceptor struct {
-	config      baseConfig
-	extClient   v3procservicegrpc.ExternalProcessorClient
-	closeClient func() error
+	config          baseConfig
+	extClient       v3procservicegrpc.ExternalProcessorClient
+	closeClient     func() error
+	metricsRecorder estats.MetricsRecorder
+	target          string
 }
 
 func (i *clientInterceptor) Close() {
@@ -272,10 +286,20 @@ func (i *clientInterceptor) Close() {
 func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, newStream func(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStream, error), opts ...grpc.CallOption) (grpc.ClientStream, error) {
 	if i.config.observabilityMode {
 		ocs := &observabilityClientStream{
-			ctx:          ctx,
-			config:       i.config,
-			streamFailed: grpcsync.NewEvent(),
+			ctx:                    ctx,
+			config:                 i.config,
+			streamFailed:           grpcsync.NewEvent(),
+			metricsRecorder:        i.metricsRecorder,
+			target:                 i.target,
+			clientHeadersStartTime: time.Now(),
 		}
+
+		// Register telemetry label callback to capture backend service.
+		ctx = istats.RegisterTelemetryLabelCallback(ctx, func(labels map[string]string) {
+			if bs, ok := labels["grpc.lb.backend_service"]; ok {
+				ocs.backendService.Store(bs)
+			}
+		})
 
 		// Create a new context for the RPC to the external processor server. This
 		// context has a deadline of the timeout specified in the config, if
@@ -355,6 +379,7 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 		if ocs.dataplaneStream, err = newStream(ctx, newOpts...); err != nil {
 			return nil, err
 		}
+		ocs.recordMetric(clientHeadersDurationMetric, time.Since(ocs.clientHeadersStartTime).Seconds())
 
 		// Start background goroutine to receive any messages from the external
 		// processor server and discard them.
@@ -369,24 +394,39 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 // message exchanges between the application client, the external processor, and
 // the backend dataplane.
 type observabilityClientStream struct {
-	ctx                 context.Context
-	extCancel           func()
-	config              baseConfig                                      // parsed configuration for this interceptor
-	dataplaneStream     grpc.ClientStream                               // underlying gRPC stream to the backend
-	extStream           v3procservicepb.ExternalProcessor_ProcessClient // bidirectional stream to external processor
-	streamFailed        *grpcsync.Event                                 // fired when the external processor stream has closed and its final status is processed
-	extStreamBypass     atomic.Bool                                     // set to true when the external processor stream should be bypassed
-	extStreamClosed     atomic.Bool                                     // ensures the stream closure logic is executed exactly once
-	extStreamErr        atomic.Value                                    // holds the terminal error causing the external processor stream to fail
-	initMsgSent         atomic.Bool                                     // tracks whether the first stream message has been sent to ensure ProtocolConfig is sent only once
-	initClientMsgSent   atomic.Bool                                     // tracks whether the first client message has been sent to ensure request attributes are sent only once
-	trailersOnly        bool                                            // tracks whether the backend response is trailers-only
-	responseHeaderOnce  sync.Once                                       // ensures response headers are forwarded to the external processor only once
-	responseTrailerOnce sync.Once                                       // ensures response trailers are forwarded to the external processor only once
-	requestEOFOnce      sync.Once                                       // ensures client request end of stream is sent to the external processor only once
-	responseRecvStarted bool                                            // tracks whether RecvMsg has started processing response messages
-	mu                  sync.Mutex                                      // guards concurrent writes to the external processor stream
-	reqAttrs            map[string]*structpb.Struct                     // holds the request attributes
+	ctx                    context.Context
+	extCancel              func()
+	config                 baseConfig                                      // parsed configuration for this interceptor
+	dataplaneStream        grpc.ClientStream                               // underlying gRPC stream to the backend
+	extStream              v3procservicepb.ExternalProcessor_ProcessClient // bidirectional stream to external processor
+	streamFailed           *grpcsync.Event                                 // fired when the external processor stream has closed and its final status is processed
+	extStreamBypass        atomic.Bool                                     // set to true when the external processor stream should be bypassed
+	extStreamClosed        atomic.Bool                                     // ensures the stream closure logic is executed exactly once
+	extStreamErr           atomic.Value                                    // holds the terminal error causing the external processor stream to fail
+	initMsgSent            atomic.Bool                                     // tracks whether the first stream message has been sent to ensure ProtocolConfig is sent only once
+	initClientMsgSent      atomic.Bool                                     // tracks whether the first client message has been sent to ensure request attributes are sent only once
+	trailersOnly           bool                                            // tracks whether the backend response is trailers-only
+	responseHeaderOnce     sync.Once                                       // ensures response headers are forwarded to the external processor only once
+	responseTrailerOnce    sync.Once                                       // ensures response trailers are forwarded to the external processor only once
+	requestEOFOnce         sync.Once                                       // ensures client request end of stream is sent to the external processor only once
+	responseRecvStarted    bool                                            // tracks whether RecvMsg has started processing response messages
+	mu                     sync.Mutex                                      // guards concurrent writes to the external processor stream
+	reqAttrs               map[string]*structpb.Struct                     // holds the request attributes
+	metricsRecorder        estats.MetricsRecorder
+	target                 string
+	backendService         atomic.Value // stores string (backend service name)
+	clientHeadersStartTime time.Time
+}
+
+func (o *observabilityClientStream) recordMetric(handle *estats.Float64HistoHandle, duration float64) {
+	if o.metricsRecorder == nil {
+		return
+	}
+	bs := ""
+	if v := o.backendService.Load(); v != nil {
+		bs = v.(string)
+	}
+	handle.Record(o.metricsRecorder, duration, o.target, bs)
 }
 
 func (o *observabilityClientStream) Header() (metadata.MD, error) {
@@ -531,6 +571,7 @@ func (o *observabilityClientStream) initiateResponseTrailerProcessing() error {
 	var err error
 	o.responseTrailerOnce.Do(func() {
 		trailers := o.dataplaneStream.Trailer()
+		startTime := time.Now()
 		if o.config.processingModes.responseTrailerMode == modeSend && !o.extStreamBypass.Load() {
 			req := &v3procservicepb.ProcessingRequest{
 				Request: &v3procservicepb.ProcessingRequest_ResponseTrailers{ResponseTrailers: &v3procservicepb.HttpTrailers{
@@ -540,6 +581,7 @@ func (o *observabilityClientStream) initiateResponseTrailerProcessing() error {
 			}
 			err = o.sendToProcessor(req)
 		}
+		o.recordMetric(serverTrailersDurationMetric, time.Since(startTime).Seconds())
 	})
 	return err
 }
@@ -556,6 +598,7 @@ func (o *observabilityClientStream) initiateResponseHeaderProcessing() error {
 		if err != nil {
 			return
 		}
+		startTime := time.Now()
 		// A trailers-only response will contain "grpc-status" in the headers or
 		// will return nil, nil on Header() call on dataplane stream.
 		if header == nil || len(header.Get("grpc-status")) > 0 {
@@ -578,6 +621,7 @@ func (o *observabilityClientStream) initiateResponseHeaderProcessing() error {
 			}
 			err = o.sendToProcessor(req)
 		}
+		o.recordMetric(serverHeadersDurationMetric, time.Since(startTime).Seconds())
 	})
 	return err
 }
@@ -588,6 +632,7 @@ func (o *observabilityClientStream) initiateResponseHeaderProcessing() error {
 func (o *observabilityClientStream) initiateRequestEOFProcessing() error {
 	var err error
 	o.requestEOFOnce.Do(func() {
+		startTime := time.Now()
 		if !o.extStreamBypass.Load() && o.config.processingModes.requestBodyMode == modeSend {
 			req := &v3procservicepb.ProcessingRequest{
 				Request: &v3procservicepb.ProcessingRequest_RequestBody{
@@ -599,6 +644,7 @@ func (o *observabilityClientStream) initiateRequestEOFProcessing() error {
 			}
 			err = o.sendToProcessor(req)
 		}
+		o.recordMetric(clientHalfCloseDurationMetric, time.Since(startTime).Seconds())
 	})
 	return err
 }
@@ -740,6 +786,7 @@ func (o *observabilityClientStream) handleInitError(err error, newStream func(co
 	if o.dataplaneStream, newStreamErr = newStream(o.ctx, opts...); newStreamErr != nil {
 		return nil, newStreamErr
 	}
+	o.recordMetric(clientHeadersDurationMetric, time.Since(o.clientHeadersStartTime).Seconds())
 	o.extStreamBypass.Store(true)
 	return o, nil
 }

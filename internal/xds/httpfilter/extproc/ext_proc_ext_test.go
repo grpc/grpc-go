@@ -32,7 +32,9 @@ import (
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
+	stats "google.golang.org/grpc/internal/testutils/stats"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+
 	"google.golang.org/grpc/internal/testutils/xds/e2e/setup"
 	"google.golang.org/grpc/internal/xds/httpfilter/extproc"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
@@ -1411,5 +1413,355 @@ func (s) TestObservabilityRequestAttributesLifecycle(t *testing.T) {
 	case <-procDone:
 	case <-time.After(defaultTestTimeout):
 		t.Fatal("Timed out waiting for mock processor server assertions")
+	}
+}
+
+// TestObservabilityMetrics tests the client-side ext_proc metrics for a Unary
+// RPC. It verifies that all 4 duration metrics are recorded with the correct
+// labels and that their values are positive.
+func (s) TestObservabilityMetrics(t *testing.T) {
+	origParse := extproc.ParseGRPCServiceConfig
+	origCreate := extproc.CreateExtProcChannel
+	extproc.ParseGRPCServiceConfig = parseGRPCServiceConfigForTesting
+	extproc.CreateExtProcChannel = createExtProcChannelForTesting
+	defer func() {
+		extproc.ParseGRPCServiceConfig = origParse
+		extproc.CreateExtProcChannel = origCreate
+	}()
+
+	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
+	extproc.RegisterForTesting()
+	defer extproc.UnregisterForTesting()
+
+	// Start the mock ExtProc server.
+	lis, err := testutils.LocalTCPListener()
+	if err != nil {
+		t.Fatalf("LocalTCPListener() failed: %v", err)
+	}
+	extprocServer := grpc.NewServer()
+	mockProc := &mockProcessorServer{
+		processFunc: func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+			for {
+				_, err := stream.Recv()
+				if err == io.EOF {
+					return nil
+				}
+				if err != nil {
+					return err
+				}
+			}
+		},
+	}
+	v3procservicepb.RegisterExternalProcessorServer(extprocServer, mockProc)
+	go extprocServer.Serve(lis)
+	defer extprocServer.Stop()
+
+	// Start a test stub service.
+	stub := stubserver.StartTestService(t, &stubserver.StubServer{
+		UnaryCallF: func(_ context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			return &testpb.SimpleResponse{Payload: in.GetPayload()}, nil
+		},
+	})
+	defer stub.Stop()
+
+	// Setup management server and resolver.
+	managementServer, nodeID, _, xdsResolver := setup.ManagementServerAndResolver(t)
+
+	const serviceName = "test-service"
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		DialTarget: serviceName,
+		NodeID:     nodeID,
+		Host:       "localhost",
+		Port:       testutils.ParsePort(t, stub.Address),
+		SecLevel:   e2e.SecurityLevelNone,
+	})
+	hcm := new(v3httppb.HttpConnectionManager)
+	apiListener := resources.Listeners[0].GetApiListener().GetApiListener()
+	if err = apiListener.UnmarshalTo(hcm); err != nil {
+		t.Fatal(err)
+	}
+
+	hcm.HttpFilters = append([]*v3httppb.HttpFilter{
+		e2e.HTTPFilter("extproc", &v3procfilterpb.ExternalProcessor{
+			GrpcService: &v3corepb.GrpcService{
+				TargetSpecifier: &v3corepb.GrpcService_GoogleGrpc_{
+					GoogleGrpc: &v3corepb.GrpcService_GoogleGrpc{
+						TargetUri: lis.Addr().String(),
+					},
+				},
+			},
+			ProcessingMode: &v3procfilterpb.ProcessingMode{
+				RequestHeaderMode:   v3procfilterpb.ProcessingMode_SEND,
+				RequestBodyMode:     v3procfilterpb.ProcessingMode_GRPC,
+				ResponseHeaderMode:  v3procfilterpb.ProcessingMode_SEND,
+				ResponseTrailerMode: v3procfilterpb.ProcessingMode_SEND,
+			},
+			ObservabilityMode:    true,
+			DeferredCloseTimeout: durationpb.New(defaultTestShortTimeout),
+		})},
+		hcm.HttpFilters...)
+	hcmAny := testutils.MarshalAny(t, hcm)
+	resources.Listeners[0].ApiListener.ApiListener = hcmAny
+	resources.Listeners[0].FilterChains[0].Filters[0].ConfigType = &v3listenerpb.Filter_TypedConfig{TypedConfig: hcmAny}
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := managementServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	tmr := stats.NewTestMetricsRecorder()
+	grpcTarget := "xds:///" + serviceName
+	cc, err := grpc.NewClient(grpcTarget, grpc.WithStatsHandler(tmr), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsResolver))
+	if err != nil {
+		t.Fatalf("failed to dial: %v", err)
+	}
+	defer cc.Close()
+
+	client := testgrpc.NewTestServiceClient(cc)
+
+	reqMsg := &testpb.SimpleRequest{Payload: &testpb.Payload{Body: []byte("hello")}}
+	if _, err = client.UnaryCall(ctx, reqMsg); err != nil {
+		t.Fatalf("UnaryCall() failed: %v", err)
+	}
+
+	// Verify values in the map.
+	if got, _ := tmr.Metric("grpc.client_ext_proc.client_headers_duration"); got <= 0 {
+		t.Fatalf("Unexpected data for metric %v, got: %v, want: > 0", "grpc.client_ext_proc.client_headers_duration", got)
+	}
+	if got, _ := tmr.Metric("grpc.client_ext_proc.server_headers_duration"); got <= 0 {
+		t.Fatalf("Unexpected data for metric %v, got: %v, want: > 0", "grpc.client_ext_proc.server_headers_duration", got)
+	}
+	if got, _ := tmr.Metric("grpc.client_ext_proc.client_half_close_duration"); got <= 0 {
+		t.Fatalf("Unexpected data for metric %v, got: %v, want: > 0", "grpc.client_ext_proc.client_half_close_duration", got)
+	}
+	if got, _ := tmr.Metric("grpc.client_ext_proc.server_trailers_duration"); got <= 0 {
+		t.Fatalf("Unexpected data for metric %v, got: %v, want: > 0", "grpc.client_ext_proc.server_trailers_duration", got)
+	}
+
+	// Verify labels for the last metric (server_trailers_duration) from the
+	// channel. Since it is recorded last, it should be the one remaining in the
+	// channel.
+	md, err := tmr.ReadFloat64Histo(ctx)
+	if err != nil {
+		t.Fatalf("Failed to read last metric from channel: %v", err)
+	}
+	if md.Handle.Name != "grpc.client_ext_proc.server_trailers_duration" {
+		t.Fatalf("Got metric %s from channel, want grpc.client_ext_proc.server_trailers_duration", md.Handle.Name)
+	}
+	// Convert parallel slices of label keys and values into a map for easier
+	// lookup.
+	labels := make(map[string]string)
+	for i, k := range md.LabelKeys {
+		if i < len(md.LabelVals) {
+			labels[k] = md.LabelVals[i]
+		}
+	}
+	if gotTarget := labels["grpc.target"]; gotTarget != grpcTarget {
+		t.Fatalf("Metric %s: grpc.target label = %q, want %q", md.Handle.Name, gotTarget, grpcTarget)
+	}
+	expectedCluster := "cluster-" + serviceName
+	if gotBackendService := labels["grpc.lb.backend_service"]; gotBackendService != expectedCluster {
+		t.Fatalf("Metric %s: grpc.lb.backend_service label = %q, want %q", md.Handle.Name, gotBackendService, expectedCluster)
+	}
+}
+
+// TestObservabilityMetricsStreaming tests the client-side ext_proc metrics for
+// a Streaming RPC. It verifies that all 4 duration metrics are recorded
+// synchronously step-by-step with the correct labels and that their values are
+// positive.
+func (s) TestObservabilityMetricsStreaming(t *testing.T) {
+	origParse := extproc.ParseGRPCServiceConfig
+	origCreate := extproc.CreateExtProcChannel
+	extproc.ParseGRPCServiceConfig = parseGRPCServiceConfigForTesting
+	extproc.CreateExtProcChannel = createExtProcChannelForTesting
+	defer func() {
+		extproc.ParseGRPCServiceConfig = origParse
+		extproc.CreateExtProcChannel = origCreate
+	}()
+
+	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
+	extproc.RegisterForTesting()
+	defer extproc.UnregisterForTesting()
+
+	// Start the mock ExtProc server.
+	lis, err := testutils.LocalTCPListener()
+	if err != nil {
+		t.Fatalf("LocalTCPListener() failed: %v", err)
+	}
+	extprocServer := grpc.NewServer()
+	mockProc := &mockProcessorServer{
+		processFunc: func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+			for {
+				_, err := stream.Recv()
+				if err == io.EOF {
+					return nil
+				}
+				if err != nil {
+					return err
+				}
+			}
+		},
+	}
+	v3procservicepb.RegisterExternalProcessorServer(extprocServer, mockProc)
+	go extprocServer.Serve(lis)
+	defer extprocServer.Stop()
+
+	// Start a test stub service.
+	stub := stubserver.StartTestService(t, &stubserver.StubServer{
+		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
+			if err := stream.SendHeader(metadata.Pairs("x-resp-header-from-server", "present")); err != nil {
+				return err
+			}
+			for {
+				in, err := stream.Recv()
+				if err == io.EOF {
+					return nil
+				}
+				if err != nil {
+					return err
+				}
+				if err := stream.Send(&testpb.StreamingOutputCallResponse{
+					Payload: &testpb.Payload{Body: in.GetPayload().GetBody()},
+				}); err != nil {
+					return err
+				}
+			}
+		},
+	})
+	defer stub.Stop()
+
+	// Setup management server and resolver.
+	managementServer, nodeID, _, xdsResolver := setup.ManagementServerAndResolver(t)
+
+	const serviceName = "test-service"
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		DialTarget: serviceName,
+		NodeID:     nodeID,
+		Host:       "localhost",
+		Port:       testutils.ParsePort(t, stub.Address),
+		SecLevel:   e2e.SecurityLevelNone,
+	})
+	hcm := new(v3httppb.HttpConnectionManager)
+	apiListener := resources.Listeners[0].GetApiListener().GetApiListener()
+	if err = apiListener.UnmarshalTo(hcm); err != nil {
+		t.Fatal(err)
+	}
+
+	hcm.HttpFilters = append([]*v3httppb.HttpFilter{
+		e2e.HTTPFilter("extproc", &v3procfilterpb.ExternalProcessor{
+			GrpcService: &v3corepb.GrpcService{
+				TargetSpecifier: &v3corepb.GrpcService_GoogleGrpc_{
+					GoogleGrpc: &v3corepb.GrpcService_GoogleGrpc{
+						TargetUri: lis.Addr().String(),
+					},
+				},
+			},
+			ProcessingMode: &v3procfilterpb.ProcessingMode{
+				RequestHeaderMode:   v3procfilterpb.ProcessingMode_SEND,
+				RequestBodyMode:     v3procfilterpb.ProcessingMode_GRPC,
+				ResponseHeaderMode:  v3procfilterpb.ProcessingMode_SEND,
+				ResponseTrailerMode: v3procfilterpb.ProcessingMode_SEND,
+			},
+			ObservabilityMode:    true,
+			DeferredCloseTimeout: durationpb.New(defaultTestShortTimeout),
+		})},
+		hcm.HttpFilters...)
+	hcmAny := testutils.MarshalAny(t, hcm)
+	resources.Listeners[0].ApiListener.ApiListener = hcmAny
+	resources.Listeners[0].FilterChains[0].Filters[0].ConfigType = &v3listenerpb.Filter_TypedConfig{TypedConfig: hcmAny}
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := managementServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	tmr := stats.NewTestMetricsRecorder()
+	grpcTarget := "xds:///" + serviceName
+	cc, err := grpc.NewClient(grpcTarget, grpc.WithStatsHandler(tmr), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsResolver))
+	if err != nil {
+		t.Fatalf("failed to dial: %v", err)
+	}
+	defer cc.Close()
+
+	client := testgrpc.NewTestServiceClient(cc)
+
+	stream, err := client.FullDuplexCall(ctx)
+	if err != nil {
+		t.Fatalf("FullDuplexCall() failed: %v", err)
+	}
+
+	// Verify client_headers_duration (recorded during NewStream).
+	md, err := tmr.ReadFloat64Histo(ctx)
+	if err != nil {
+		t.Fatalf("Failed to read client_headers_duration: %v", err)
+	}
+	verifyMetric(t, md, "grpc.client_ext_proc.client_headers_duration", grpcTarget, "cluster-"+serviceName)
+
+	// Send one message and receive reply.
+	reqMsg := &testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: []byte("hello")}}
+	if err := stream.Send(reqMsg); err != nil {
+		t.Fatalf("stream.Send() failed: %v", err)
+	}
+	_, err = stream.Recv()
+	if err != nil {
+		t.Fatalf("stream.Recv() failed: %v", err)
+	}
+
+	// Verify server_headers_duration (recorded during first Recv).
+	md, err = tmr.ReadFloat64Histo(ctx)
+	if err != nil {
+		t.Fatalf("Failed to read server_headers_duration: %v", err)
+	}
+	verifyMetric(t, md, "grpc.client_ext_proc.server_headers_duration", grpcTarget, "cluster-"+serviceName)
+
+	// Close send.
+	if err := stream.CloseSend(); err != nil {
+		t.Fatalf("stream.CloseSend() failed: %v", err)
+	}
+
+	// Verify client_half_close_duration (recorded during CloseSend).
+	md, err = tmr.ReadFloat64Histo(ctx)
+	if err != nil {
+		t.Fatalf("Failed to read client_half_close_duration: %v", err)
+	}
+	verifyMetric(t, md, "grpc.client_ext_proc.client_half_close_duration", grpcTarget, "cluster-"+serviceName)
+
+	// Receive EOF.
+	if _, err := stream.Recv(); err != io.EOF {
+		t.Fatalf("stream.Recv() returned error: %v, want EOF", err)
+	}
+
+	// Verify server_trailers_duration (recorded when Recv returns EOF).
+	md, err = tmr.ReadFloat64Histo(ctx)
+	if err != nil {
+		t.Fatalf("Failed to read server_trailers_duration: %v", err)
+	}
+	verifyMetric(t, md, "grpc.client_ext_proc.server_trailers_duration", grpcTarget, "cluster-"+serviceName)
+}
+
+// verifyMetric is a helper function that asserts the properties of a recorded
+// metric. It verifies the metric name, labels (grpc.target and
+// grpc.lb.backend_service), and that the recorded duration is positive.
+func verifyMetric(t *testing.T, md stats.MetricsData, expectedName string, expectedTarget string, expectedBackendService string) {
+	t.Helper()
+	if md.Handle.Name != expectedName {
+		t.Fatalf("Got metric %s, want %s", md.Handle.Name, expectedName)
+	}
+	labels := make(map[string]string)
+	for i, k := range md.LabelKeys {
+		if i < len(md.LabelVals) {
+			labels[k] = md.LabelVals[i]
+		}
+	}
+	if gotTarget := labels["grpc.target"]; gotTarget != expectedTarget {
+		t.Fatalf("Metric %s: grpc.target label = %q, want %q", expectedName, gotTarget, expectedTarget)
+	}
+	if gotBackendService := labels["grpc.lb.backend_service"]; gotBackendService != expectedBackendService {
+		t.Fatalf("Metric %s: grpc.lb.backend_service label = %q, want %q", expectedName, gotBackendService, expectedBackendService)
+	}
+	if md.FloatIncr <= 0 {
+		t.Fatalf("Unexpected data for metric %v, got: %v, want: > 0", expectedName, md.FloatIncr)
 	}
 }

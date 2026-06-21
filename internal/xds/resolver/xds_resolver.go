@@ -142,6 +142,8 @@ func (b *xdsResolverBuilder) Build(target resolver.Target, cc resolver.ClientCon
 		httpFilters:     make(map[clientFilterKey]httpfilter.ClientFilter),
 		channelID:       rand.Uint64(),
 		ldsResourceName: ldsResourceName,
+		target:          target.String(),
+		metricsRecorder: opts.MetricsRecorder,
 
 		// serializer used to synchronize the following:
 		// - updates from the dependency manager. This could lead to generation
@@ -233,6 +235,9 @@ type xdsResolver struct {
 	xdsClient       xdsclient.XDSClient
 	xdsClientClose  func()
 	channelID       uint64 // Unique random ID for the channel owning this resolver.
+	target          string
+	metricsRecorder estats.MetricsRecorder
+
 	// All methods on the xdsResolver type except for the ones invoked by gRPC,
 	// i.e ResolveNow() and Close(), are guaranteed to execute in the context of
 	// this serializer's callback. We use the serializer because these shared
@@ -686,6 +691,12 @@ func (r *xdsResolver) getOrCreateClientFilter(builder httpfilter.ClientFilterBui
 	}
 
 	cf := builder.BuildClientFilter()
+	if setter, ok := cf.(httpfilter.ClientFilterMetricsSetter); ok {
+		setter.SetMetricsOptions(httpfilter.BuildInterceptorOptions{
+			MetricsRecorder: r.metricsRecorder,
+			Target:          r.target,
+		})
+	}
 	r.httpFilters[key] = cf
 	return cf
 }
