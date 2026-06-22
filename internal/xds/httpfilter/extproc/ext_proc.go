@@ -190,7 +190,7 @@ func (builder) IsTerminal() bool {
 	return false
 }
 
-func (builder) BuildClientFilter() httpfilter.ClientFilter {
+func (builder) BuildClientFilter(string) httpfilter.ClientFilter {
 	return clientFilter{}
 }
 

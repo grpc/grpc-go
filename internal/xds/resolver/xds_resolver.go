@@ -36,7 +36,6 @@ import (
 	"google.golang.org/grpc/internal/wrr"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/internal/xds/httpfilter"
-	gcpauthn "google.golang.org/grpc/internal/xds/httpfilter/gcp_authn"
 	rinternal "google.golang.org/grpc/internal/xds/resolver/internal"
 	"google.golang.org/grpc/internal/xds/xdsclient"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
@@ -686,11 +685,7 @@ func (r *xdsResolver) getOrCreateClientFilter(builder httpfilter.ClientFilterBui
 		return clientFilter
 	}
 
-	cf := builder.BuildClientFilter()
-	// Cast to concrete clientFilter to set the configured name dynamically
-	if gcpAuthnFilter, ok := cf.(*gcpauthn.ClientFilter); ok {
-		gcpAuthnFilter.FilterName = key.name
-	}
+	cf := builder.BuildClientFilter(key.name)
 	r.httpFilters[key] = cf
 	return cf
 }

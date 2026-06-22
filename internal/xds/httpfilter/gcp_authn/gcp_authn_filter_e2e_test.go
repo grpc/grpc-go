@@ -30,22 +30,20 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/credentials/xds"
-	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/internal/testutils/xds/e2e/setup"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource/version"
 	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 
@@ -60,10 +58,6 @@ import (
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 	anypb "google.golang.org/protobuf/types/known/anypb"
 	wrapperspb "google.golang.org/protobuf/types/known/wrapperspb"
-
-	_ "google.golang.org/grpc/internal/xds/httpfilter/router" // Register router filter
-	_ "google.golang.org/grpc/internal/xds/resolver"          // Register xDS resolver
-	_ "google.golang.org/grpc/xds"                            // Register all xDS components
 )
 
 type s struct {
@@ -104,18 +98,8 @@ func (s) TestGCPAuthnFilter_SuccessCase(t *testing.T) {
 	defer metadataServer.Close()
 	t.Setenv(gceMetadataHostEnvVar, strings.TrimPrefix(metadataServer.URL, "http://"))
 
-	// Spin up an xDS management server.
-	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
-	defer mgmtServer.Stop()
-
-	// Create an xDS resolver with bootstrap configuration pointing to the above
-	// management server.
-	nodeID := uuid.New().String()
-	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-	resolverBuilder, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
-	if err != nil {
-		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
-	}
+	// Setup management server and resolver.
+	mgmtServer, nodeID, _, resolverBuilder := setup.ManagementServerAndResolver(t)
 
 	// Start a test backend.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -134,7 +118,7 @@ func (s) TestGCPAuthnFilter_SuccessCase(t *testing.T) {
 	stubserver.StartTestService(t, backend, grpc.Creds(testutils.CreateServerTLSCredentials(t, tls.NoClientCert)))
 	defer backend.Stop()
 
-	var (
+	const (
 		testServiceName = "service-name"
 		clusterName     = "cluster_A"
 		endpointName    = "endpoint_A"
@@ -146,7 +130,7 @@ func (s) TestGCPAuthnFilter_SuccessCase(t *testing.T) {
 	listener := e2e.DefaultClientListener(testServiceName, routeConfigName)
 	hcm := new(v3httppb.HttpConnectionManager)
 	lis := listener.GetApiListener().GetApiListener()
-	if err = lis.UnmarshalTo(hcm); err != nil {
+	if err := lis.UnmarshalTo(hcm); err != nil {
 		t.Fatal(err)
 	}
 	hcm.HttpFilters = append([]*v3httppb.HttpFilter{
@@ -216,18 +200,8 @@ func (s) TestGCPAuthnFilter_TokenCaching(t *testing.T) {
 	defer metadataServer.Close()
 	t.Setenv(gceMetadataHostEnvVar, strings.TrimPrefix(metadataServer.URL, "http://"))
 
-	// Spin up an xDS management server.
-	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
-	defer mgmtServer.Stop()
-
-	// Create an xDS resolver with bootstrap configuration pointing to the above
-	// management server.
-	nodeID := uuid.New().String()
-	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-	resolverBuilder, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
-	if err != nil {
-		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
-	}
+	// Setup management server and resolver.
+	mgmtServer, nodeID, _, resolverBuilder := setup.ManagementServerAndResolver(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -246,7 +220,7 @@ func (s) TestGCPAuthnFilter_TokenCaching(t *testing.T) {
 	stubserver.StartTestService(t, backend, grpc.Creds(testutils.CreateServerTLSCredentials(t, tls.NoClientCert)))
 	defer backend.Stop()
 
-	var (
+	const (
 		testServiceName = "service-name"
 		clusterName     = "cluster_A"
 		endpointName    = "endpoint_A"
@@ -258,7 +232,7 @@ func (s) TestGCPAuthnFilter_TokenCaching(t *testing.T) {
 	listener := e2e.DefaultClientListener(testServiceName, routeConfigName)
 	hcm := new(v3httppb.HttpConnectionManager)
 	lis := listener.GetApiListener().GetApiListener()
-	if err = lis.UnmarshalTo(hcm); err != nil {
+	if err := lis.UnmarshalTo(hcm); err != nil {
 		t.Fatal(err)
 	}
 	hcm.HttpFilters = append([]*v3httppb.HttpFilter{
@@ -332,18 +306,8 @@ func (s) TestGCPAuthnFilter_InsecureTransport(t *testing.T) {
 	defer metadataServer.Close()
 	t.Setenv(gceMetadataHostEnvVar, strings.TrimPrefix(metadataServer.URL, "http://"))
 
-	// Spin up an xDS management server.
-	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
-	defer mgmtServer.Stop()
-
-	// Create an xDS resolver with bootstrap configuration pointing to the above
-	// management server.
-	nodeID := uuid.New().String()
-	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-	resolverBuilder, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
-	if err != nil {
-		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
-	}
+	// Setup management server and resolver.
+	mgmtServer, nodeID, _, resolverBuilder := setup.ManagementServerAndResolver(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -353,7 +317,7 @@ func (s) TestGCPAuthnFilter_InsecureTransport(t *testing.T) {
 	stubserver.StartTestService(t, backend)
 	defer backend.Stop()
 
-	var (
+	const (
 		testServiceName = "service-name"
 		clusterName     = "cluster_A"
 		endpointName    = "endpoint_A"
@@ -365,7 +329,7 @@ func (s) TestGCPAuthnFilter_InsecureTransport(t *testing.T) {
 	listener := e2e.DefaultClientListener(testServiceName, routeConfigName)
 	hcm := new(v3httppb.HttpConnectionManager)
 	lis := listener.GetApiListener().GetApiListener()
-	if err = lis.UnmarshalTo(hcm); err != nil {
+	if err := lis.UnmarshalTo(hcm); err != nil {
 		t.Fatal(err)
 	}
 	hcm.HttpFilters = append([]*v3httppb.HttpFilter{
@@ -436,18 +400,8 @@ func (s) TestGCPAuthnFilter_CacheSharingConfigUpdate(t *testing.T) {
 	defer metadataServer.Close()
 	t.Setenv(gceMetadataHostEnvVar, strings.TrimPrefix(metadataServer.URL, "http://"))
 
-	// Spin up an xDS management server.
-	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
-	defer mgmtServer.Stop()
-
-	// Create an xDS resolver with bootstrap configuration pointing to the above
-	// management server.
-	nodeID := uuid.New().String()
-	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-	resolverBuilder, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
-	if err != nil {
-		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
-	}
+	// Setup management server and resolver.
+	mgmtServer, nodeID, _, resolverBuilder := setup.ManagementServerAndResolver(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -461,7 +415,7 @@ func (s) TestGCPAuthnFilter_CacheSharingConfigUpdate(t *testing.T) {
 	stubserver.StartTestService(t, backend, grpc.Creds(testutils.CreateServerTLSCredentials(t, tls.NoClientCert)))
 	defer backend.Stop()
 
-	var (
+	const (
 		testServiceName = "service-name"
 		filterName      = "com.google.grpc.gcp_authn"
 	)
@@ -695,18 +649,8 @@ func (s) TestGCPAuthnFilter_ConcurrentRPCWithShortAndLongContext(t *testing.T) {
 	defer metadataServer.Close()
 	t.Setenv(gceMetadataHostEnvVar, strings.TrimPrefix(metadataServer.URL, "http://"))
 
-	// Spin up an xDS management server.
-	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
-	defer mgmtServer.Stop()
-
-	// Create an xDS resolver with bootstrap configuration pointing to the above
-	// management server.
-	nodeID := uuid.New().String()
-	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-	resolverBuilder, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
-	if err != nil {
-		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
-	}
+	// Setup management server and resolver.
+	mgmtServer, nodeID, _, resolverBuilder := setup.ManagementServerAndResolver(t)
 
 	// Start a test backend.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -725,7 +669,7 @@ func (s) TestGCPAuthnFilter_ConcurrentRPCWithShortAndLongContext(t *testing.T) {
 	stubserver.StartTestService(t, backend, grpc.Creds(testutils.CreateServerTLSCredentials(t, tls.NoClientCert)))
 	defer backend.Stop()
 
-	var (
+	const (
 		testServiceName = "service-name"
 		clusterName     = "cluster_A"
 		endpointName    = "endpoint_A"
@@ -737,7 +681,7 @@ func (s) TestGCPAuthnFilter_ConcurrentRPCWithShortAndLongContext(t *testing.T) {
 	listener := e2e.DefaultClientListener(testServiceName, routeConfigName)
 	hcm := new(v3httppb.HttpConnectionManager)
 	lis := listener.GetApiListener().GetApiListener()
-	if err = lis.UnmarshalTo(hcm); err != nil {
+	if err := lis.UnmarshalTo(hcm); err != nil {
 		t.Fatal(err)
 	}
 	hcm.HttpFilters = append([]*v3httppb.HttpFilter{
@@ -863,18 +807,8 @@ func (s) TestGCPAuthnFilter_PreservesUserCallOptions(t *testing.T) {
 	defer metadataServer.Close()
 	t.Setenv(gceMetadataHostEnvVar, strings.TrimPrefix(metadataServer.URL, "http://"))
 
-	// Spin up an xDS management server.
-	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
-	defer mgmtServer.Stop()
-
-	// Create an xDS resolver with bootstrap configuration pointing to the above
-	// management server.
-	nodeID := uuid.New().String()
-	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-	resolverBuilder, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
-	if err != nil {
-		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
-	}
+	// Setup management server and resolver.
+	mgmtServer, nodeID, _, resolverBuilder := setup.ManagementServerAndResolver(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -899,7 +833,7 @@ func (s) TestGCPAuthnFilter_PreservesUserCallOptions(t *testing.T) {
 	stubserver.StartTestService(t, backend, grpc.Creds(testutils.CreateServerTLSCredentials(t, tls.NoClientCert)))
 	defer backend.Stop()
 
-	var (
+	const (
 		testServiceName = "service-name"
 		clusterName     = "cluster_A"
 		endpointName    = "endpoint_A"
@@ -911,7 +845,7 @@ func (s) TestGCPAuthnFilter_PreservesUserCallOptions(t *testing.T) {
 	listener := e2e.DefaultClientListener(testServiceName, routeConfigName)
 	hcm := new(v3httppb.HttpConnectionManager)
 	lis := listener.GetApiListener().GetApiListener()
-	if err = lis.UnmarshalTo(hcm); err != nil {
+	if err := lis.UnmarshalTo(hcm); err != nil {
 		t.Fatal(err)
 	}
 	hcm.HttpFilters = append([]*v3httppb.HttpFilter{

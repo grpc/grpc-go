@@ -186,8 +186,7 @@ func (s) TestInterceptor_NewStream_Errors(t *testing.T) {
 	if !ok {
 		t.Fatalf("Filter Builder does not implement ClientFilterBuilder")
 	}
-	clientFilter := clientFilterBuilder.BuildClientFilter().(*ClientFilter)
-	clientFilter.FilterName = "com.google.grpc.gcp_authn"
+	clientFilter := clientFilterBuilder.BuildClientFilter("com.google.grpc.gcp_authn").(*ClientFilter)
 	interceptor, err := clientFilter.BuildClientInterceptor(filterConfig, nil)
 	if err != nil {
 		t.Fatalf("Failed to build client interceptor: %v", err)

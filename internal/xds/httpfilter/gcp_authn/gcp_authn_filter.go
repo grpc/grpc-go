@@ -88,11 +88,12 @@ func (builder) IsTerminal() bool {
 	return false
 }
 
-func (builder) BuildClientFilter() httpfilter.ClientFilter {
+func (builder) BuildClientFilter(filterName string) httpfilter.ClientFilter {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &ClientFilter{
-		ctx:    ctx,
-		cancel: cancel,
+		ctx:        ctx,
+		cancel:     cancel,
+		FilterName: filterName,
 	}
 }
 
@@ -156,10 +157,10 @@ func (i *interceptor) NewStream(ctx context.Context, _ iresolver.RPCInfo, newStr
 	// The picked cluster name in the context is formatted by the xDS
 	// resolver with a prefix to distinguish between standard CDS clusters and
 	// cluster_specifier_plugins:
-	// - "cluster_specifier_plugin:": The target cluster is dynamically resolved
-	//   later at the load balancing layer so the final cluster name is not yet
-	//   known at this stage, hence we bypass this filter.
-	// - "cluster:": Standard CDS routing where the destination cluster is
+	// - cluster_specifier_plugin: Since the target cluster is dynamically
+	//   resolved later at the load balancing layer, the final cluster name is
+	//   not yet known at this stage, hence we bypass this filter.
+	// - cluster: Standard CDS routing where the destination cluster is
 	//   known at routing time. We strip the prefix to get the raw cluster name,
 	//   which is used to look up the cluster configuration in the CDS response.
 	if strings.HasPrefix(clusterName, "cluster_specifier_plugin:") {
@@ -199,7 +200,7 @@ func (i *interceptor) NewStream(ctx context.Context, _ iresolver.RPCInfo, newStr
 
 	// We pass the credentials via a PerRPCCredentials call option rather than
 	// directly attaching the token here. Since this filter runs before load
-	// balancing has selected a connection, it cannot check if the connection is
+	// balancer has selected a connection, it cannot check if the connection is
 	// secure. Passing it as a call option defers token retrieval and injection
 	// to the credentials package to the transport layer, which can verify
 	// transport security after the connection has been established.
