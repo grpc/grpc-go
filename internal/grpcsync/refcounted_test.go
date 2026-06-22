@@ -32,9 +32,12 @@ func (s) TestRefCounted(t *testing.T) {
 	val := "test-value"
 	var onZeroCalled atomic.Bool
 
-	rc := NewRefCounted(val, func() {
+	rc, err := NewRefCounted(val, func() {
 		onZeroCalled.Store(true)
 	})
+	if err != nil {
+		t.Fatalf("NewRefCounted() failed: %v", err)
+	}
 
 	if got := rc.Value(); got != val {
 		t.Fatalf("Value() = %v, want %v", got, val)
@@ -59,9 +62,12 @@ func (s) TestRefCounted_IncrementDecrement(t *testing.T) {
 	val := 42
 	var onZeroCount atomic.Int32
 
-	rc := NewRefCounted(val, func() {
+	rc, err := NewRefCounted(val, func() {
 		onZeroCount.Add(1)
 	})
+	if err != nil {
+		t.Fatalf("NewRefCounted() failed: %v", err)
+	}
 
 	rc.Increment()
 	rc.Decrement()
@@ -83,9 +89,12 @@ func (s) TestRefCounted_IncrementDecrement(t *testing.T) {
 // reference count has already dropped to zero.
 func (s) TestRefCounted_TryIncrement(t *testing.T) {
 	var onZeroCount atomic.Int32
-	rc := NewRefCounted("val", func() {
+	rc, err := NewRefCounted("val", func() {
 		onZeroCount.Add(1)
 	})
+	if err != nil {
+		t.Fatalf("NewRefCounted() failed: %v", err)
+	}
 
 	if got := rc.TryIncrement(); !got {
 		t.Fatalf("TryIncrement() on active resource = %v, want true", got)
@@ -111,9 +120,12 @@ func (s) TestRefCounted_Concurrent(t *testing.T) {
 	const numGoroutines = 10
 	var onZeroCount atomic.Int32
 
-	rc := NewRefCounted("concurrent-val", func() {
+	rc, err := NewRefCounted("concurrent-val", func() {
 		onZeroCount.Add(1)
 	})
+	if err != nil {
+		t.Fatalf("NewRefCounted() failed: %v", err)
+	}
 
 	var wg sync.WaitGroup
 	wg.Add(numGoroutines)
@@ -133,5 +145,18 @@ func (s) TestRefCounted_Concurrent(t *testing.T) {
 
 	if got := onZeroCount.Load(); got != 1 {
 		t.Fatalf("After concurrent increments/decrements and final decrement, onZeroCount = %v, want 1", got)
+	}
+}
+
+// TestNilOnZero tests that NewRefCounted returns an error if the provided
+// onZero callback is nil.
+func (s) TestNilOnZero(t *testing.T) {
+	_, err := NewRefCounted("val", nil)
+	if err == nil {
+		t.Fatalf("NewRefCounted(_, nil) succeeded, want error")
+	}
+	expectedErr := "onZero callback cannot be nil"
+	if err.Error() != expectedErr {
+		t.Fatalf("NewRefCounted(_, nil) returned error: %v, want: %v", err, expectedErr)
 	}
 }

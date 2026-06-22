@@ -19,6 +19,7 @@
 package grpcsync
 
 import (
+	"fmt"
 	"sync/atomic"
 )
 
@@ -33,13 +34,16 @@ type RefCounted[V any] struct {
 // NewRefCounted creates a new RefCounted instance wrapping the given value. The
 // provided onZero callback is executed exactly once when the reference count
 // drops to zero.
-func NewRefCounted[V any](val V, onZero func()) *RefCounted[V] {
+func NewRefCounted[V any](val V, onZero func()) (*RefCounted[V], error) {
+	if onZero == nil {
+		return nil, fmt.Errorf("onZero callback cannot be nil")
+	}
 	rc := &RefCounted[V]{
 		val:    val,
 		onZero: onZero,
 	}
 	rc.refCount.Store(1)
-	return rc
+	return rc, nil
 }
 
 // Value returns the encapsulated resource.
