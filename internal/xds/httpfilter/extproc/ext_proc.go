@@ -305,10 +305,11 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 		// context has a deadline of the timeout specified in the config, if
 		// present. It also contains the outgoing context's metadata, merged with
 		// the initial metadata specified in the config.
-		extProcCtx := ctx
+		extProcCtx, cancel := context.WithCancel(ctx)
 		if i.config.server.Timeout != 0 {
-			extProcCtx, ocs.extCancel = context.WithTimeout(ctx, i.config.server.Timeout)
+			extProcCtx, cancel = context.WithTimeout(ctx, i.config.server.Timeout)
 		}
+		ocs.extCancel = cancel
 		outgoingMD, ok := metadata.FromOutgoingContext(ctx)
 		if !ok {
 			outgoingMD = metadata.MD{}
@@ -377,6 +378,7 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 		// If there is no error in creating external processor stream, create the
 		// dataplane stream.
 		if ocs.dataplaneStream, err = newStream(ctx, newOpts...); err != nil {
+			ocs.extCancel()
 			return nil, err
 		}
 		ocs.recordMetric(clientHeadersDurationMetric, time.Since(ocs.clientHeadersStartTime).Seconds())
@@ -408,7 +410,7 @@ type observabilityClientStream struct {
 	trailersOnly           bool                                            // tracks whether the backend response is trailers-only
 	responseHeaderOnce     sync.Once                                       // ensures response headers are forwarded to the external processor only once
 	responseTrailerOnce    sync.Once                                       // ensures response trailers are forwarded to the external processor only once
-	requestEOFOnce         sync.Once                                       // ensures client request end of stream is sent to the external processor only once
+	requestEOF             atomic.Bool                                     // ensures client request end of stream is sent to the external processor only once
 	responseRecvStarted    bool                                            // tracks whether RecvMsg has started processing response messages
 	mu                     sync.Mutex                                      // guards concurrent writes to the external processor stream
 	reqAttrs               map[string]*structpb.Struct                     // holds the request attributes
@@ -628,25 +630,25 @@ func (o *observabilityClientStream) initiateResponseHeaderProcessing() error {
 
 // initiateRequestEOFProcessing sends an end-of-stream indicator to the external
 // processor if request body processing is configured to SEND. It is guarded by
-// requestEOFOnce to run at most once.
+// requestEOF to run at most once.
 func (o *observabilityClientStream) initiateRequestEOFProcessing() error {
-	var err error
-	o.requestEOFOnce.Do(func() {
-		startTime := time.Now()
-		if !o.extStreamBypass.Load() && o.config.processingModes.requestBodyMode == modeSend {
-			req := &v3procservicepb.ProcessingRequest{
-				Request: &v3procservicepb.ProcessingRequest_RequestBody{
-					RequestBody: &v3procservicepb.HttpBody{
-						EndOfStreamWithoutMessage: true,
-					},
+	if !o.requestEOF.CompareAndSwap(false, true) {
+		return nil
+	}
+	startTime := time.Now()
+	if !o.extStreamBypass.Load() && o.config.processingModes.requestBodyMode == modeSend {
+		req := &v3procservicepb.ProcessingRequest{
+			Request: &v3procservicepb.ProcessingRequest_RequestBody{
+				RequestBody: &v3procservicepb.HttpBody{
+					EndOfStreamWithoutMessage: true,
 				},
-				ObservabilityMode: o.config.observabilityMode,
-			}
-			err = o.sendToProcessor(req)
+			},
+			ObservabilityMode: o.config.observabilityMode,
 		}
-		o.recordMetric(clientHalfCloseDurationMetric, time.Since(startTime).Seconds())
-	})
-	return err
+		return o.sendToProcessor(req)
+	}
+	o.recordMetric(clientHalfCloseDurationMetric, time.Since(startTime).Seconds())
+	return nil
 }
 
 // sendToProcessor sends a ProcessingRequest to the external processor stream.
@@ -776,9 +778,8 @@ func getHeader(md metadata.MD, key string) string {
 // processor stream in NewStream. It returns a new dataplane stream if failure
 // mode allows, else returns the error.
 func (o *observabilityClientStream) handleInitError(err error, newStream func(context.Context, ...grpc.CallOption) (grpc.ClientStream, error), opts ...grpc.CallOption) (grpc.ClientStream, error) {
-	if o.extCancel != nil {
-		o.extCancel()
-	}
+	o.extCancel()
+
 	if !o.config.failureModeAllow {
 		return nil, status.Errorf(codes.Internal, "extproc: %v", err)
 	}

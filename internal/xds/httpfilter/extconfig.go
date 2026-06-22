@@ -115,7 +115,9 @@ func (hmr *HeaderMutationRules) ApplyAdditions(hvos []*v3corepb.HeaderValueOptio
 	if hmr == nil {
 		hmr = &HeaderMutationRules{}
 	}
-
+	if input == nil {
+		return fmt.Errorf("extproc: input metadata is nil")
+	}
 	if hmr.DisallowAll {
 		return nil
 	}
@@ -137,7 +139,7 @@ func (hmr *HeaderMutationRules) ApplyAdditions(hvos []*v3corepb.HeaderValueOptio
 
 		if !hmr.allow(key) {
 			if hmr.DisallowIsError {
-				return fmt.Errorf("extauthz: header mutation disallowed by headerMutationRules for header key %q", key)
+				return fmt.Errorf("extproc: header mutation disallowed by headerMutationRules for header key %q", key)
 			}
 			continue
 		}
@@ -175,7 +177,9 @@ func (hmr *HeaderMutationRules) ApplyRemovals(headersToRemove []string, input me
 	if hmr == nil {
 		hmr = &HeaderMutationRules{}
 	}
-
+	if input == nil {
+		return fmt.Errorf("extproc: input metadata is nil")
+	}
 	if hmr.DisallowAll {
 		return nil
 	}
@@ -186,7 +190,7 @@ func (hmr *HeaderMutationRules) ApplyRemovals(headersToRemove []string, input me
 		}
 		if !hmr.allow(header) {
 			if hmr.DisallowIsError {
-				return fmt.Errorf("extauthz: header mutation disallowed by headerMutationRules for header %q", header)
+				return fmt.Errorf("extproc: header mutation disallowed by headerMutationRules for header %q", header)
 			}
 			continue
 		}
