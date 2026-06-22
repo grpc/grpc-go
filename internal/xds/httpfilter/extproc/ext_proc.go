@@ -36,6 +36,7 @@ import (
 	"google.golang.org/grpc/internal/optional"
 	resolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/xds/httpfilter"
+	"google.golang.org/grpc/internal/xds/httpfilter/extproc/internal"
 	"google.golang.org/grpc/internal/xds/matcher"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 	"google.golang.org/grpc/metadata"
@@ -55,23 +56,13 @@ func init() {
 	if envconfig.XDSClientExtProcEnabled {
 		httpfilter.Register(builder{})
 	}
-}
-
-// RegisterForTesting registers the external processor HTTP Filter for testing
-// purposes, regardless of the XDSClientExtProcEnabled environment variable.
-// This is needed because there is no way to set the XDSClientExtProcEnabled
-// environment variable to true in a test before init() in this package is run.
-func RegisterForTesting() {
-	httpfilter.Register(builder{})
-}
-
-// UnregisterForTesting unregisters the external processor HTTP Filter for
-// testing purposes. This is needed because there is no way to unregister the
-// HTTP Filter after registering it solely for testing purposes using
-// RegisterForTesting().
-func UnregisterForTesting() {
-	for _, typeURL := range builder.TypeURLs(builder{}) {
-		httpfilter.UnregisterForTesting(typeURL)
+	internal.RegisterForTesting = func() {
+		httpfilter.Register(builder{})
+	}
+	internal.UnregisterForTesting = func() {
+		for _, typeURL := range builder.TypeURLs(builder{}) {
+			httpfilter.UnregisterForTesting(typeURL)
+		}
 	}
 }
 
@@ -392,7 +383,7 @@ type clientStream struct {
 	drained                  *grpcsync.Event // fires when external processor stream is completely drained
 }
 
-// newProcessingRequest creates a new ProcessingRequest withObservabilityMode,
+// newProcessingRequest creates a new ProcessingRequest with ObservabilityMode,
 // ProtocolConfig, Attributes fields initialized.
 func (cs *clientStream) newProcessingRequest(isClientMessage bool) *v3procservicepb.ProcessingRequest {
 	req := &v3procservicepb.ProcessingRequest{
@@ -519,7 +510,7 @@ func (cs *clientStream) CloseSend() error {
 	case <-cs.streamFailed.Done():
 		return cs.extStreamErr.Load().(error)
 	case <-cs.ctx.Done():
-		// Return an Internal status with error(rather than context.Canceled) if the
+		// Return an Internal status with error (rather than context error) if the
 		// dataplane stream was dropped due to an external processor failure.
 		if val := cs.extStreamErr.Load(); val != nil {
 			return val.(error)
@@ -613,7 +604,7 @@ func (cs *clientStream) RecvMsg(m any) error {
 		return nil
 
 	case <-cs.ctx.Done():
-		// Return an Internal status and error(rather than context.Canceled) if the
+		// Return an Internal status and error (rather than context error) if the
 		// dataplane stream was dropped due to an external processor failure.
 		if cs.streamFailed.HasFired() {
 			return cs.extStreamErr.Load().(error)
@@ -1247,7 +1238,7 @@ func (cs *clientStream) initiateResponseHeaderProcessing() error {
 			select {
 			case cs.extSendCh <- req:
 			case <-cs.ctx.Done():
-				// Return an Internal status and error(rather than context.Canceled) if
+				// Return an Internal status and error (rather than context error) if
 				// the dataplane stream was dropped due to an external processor
 				// failure.
 				if cs.streamFailed.HasFired() {

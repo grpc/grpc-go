@@ -37,6 +37,7 @@ import (
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/internal/testutils/xds/e2e/setup"
 	"google.golang.org/grpc/internal/xds/httpfilter/extproc"
+	"google.golang.org/grpc/internal/xds/httpfilter/extproc/internal"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -254,8 +255,8 @@ func (s) TestAllSendUnary(t *testing.T) {
 	}()
 
 	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
-	extproc.RegisterForTesting()
-	defer extproc.UnregisterForTesting()
+	internal.RegisterForTesting()
+	defer internal.UnregisterForTesting()
 
 	// Start the echo ExtProc server.
 	lis, err := testutils.LocalTCPListener()
@@ -394,8 +395,8 @@ func (s) TestStreamingModifications(t *testing.T) {
 	}()
 
 	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
-	extproc.RegisterForTesting()
-	defer extproc.UnregisterForTesting()
+	internal.RegisterForTesting()
+	defer internal.UnregisterForTesting()
 
 	// Start the ExtProc server.
 	lis, err := testutils.LocalTCPListener()
@@ -674,8 +675,8 @@ func (s) TestProtocolConfigInFirstMessage(t *testing.T) {
 		extproc.CreateExtProcChannel = origCreate
 	}()
 	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
-	extproc.RegisterForTesting()
-	defer extproc.UnregisterForTesting()
+	internal.RegisterForTesting()
+	defer internal.UnregisterForTesting()
 
 	var receivedCall atomic.Bool
 	lis, err := testutils.LocalTCPListener()
@@ -814,8 +815,8 @@ func (s) TestWaitForDataplane(t *testing.T) {
 		extproc.CreateExtProcChannel = origCreate
 	}()
 	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
-	extproc.RegisterForTesting()
-	defer extproc.UnregisterForTesting()
+	internal.RegisterForTesting()
+	defer internal.UnregisterForTesting()
 
 	unblockHeaders := make(chan struct{})
 
@@ -1001,8 +1002,8 @@ func (s) TestTrailersOnly(t *testing.T) {
 		extproc.CreateExtProcChannel = origCreate
 	}()
 	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
-	extproc.RegisterForTesting()
-	defer extproc.UnregisterForTesting()
+	internal.RegisterForTesting()
+	defer internal.UnregisterForTesting()
 
 	receivedHeadersCh := make(chan *v3procservicepb.ProcessingRequest, 1)
 	errCh := make(chan error, 1)
@@ -1139,8 +1140,8 @@ func (s) TestDraining(t *testing.T) {
 	}()
 
 	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
-	extproc.RegisterForTesting()
-	defer extproc.UnregisterForTesting()
+	internal.RegisterForTesting()
+	defer internal.UnregisterForTesting()
 
 	lis, err := testutils.LocalTCPListener()
 	if err != nil {
@@ -1343,8 +1344,8 @@ func (s) TestImmediateResponseEnabled(t *testing.T) {
 		extproc.CreateExtProcChannel = origCreate
 	}()
 	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
-	extproc.RegisterForTesting()
-	defer extproc.UnregisterForTesting()
+	internal.RegisterForTesting()
+	defer internal.UnregisterForTesting()
 
 	lis, err := testutils.LocalTCPListener()
 	if err != nil {
@@ -1449,8 +1450,8 @@ func (s) TestImmediateResponseDisabled(t *testing.T) {
 		extproc.CreateExtProcChannel = origCreate
 	}()
 	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
-	extproc.RegisterForTesting()
-	defer extproc.UnregisterForTesting()
+	internal.RegisterForTesting()
+	defer internal.UnregisterForTesting()
 
 	lis, err := testutils.LocalTCPListener()
 	if err != nil {
@@ -1559,8 +1560,8 @@ func (s) TestImmediateResponseDisabledWithFailureModeAllow(t *testing.T) {
 		extproc.CreateExtProcChannel = origCreate
 	}()
 	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
-	extproc.RegisterForTesting()
-	defer extproc.UnregisterForTesting()
+	internal.RegisterForTesting()
+	defer internal.UnregisterForTesting()
 
 	lis, err := testutils.LocalTCPListener()
 	if err != nil {
@@ -1706,8 +1707,8 @@ func (s) TestStreamFailureHeaderPhaseAllow(t *testing.T) {
 		extproc.CreateExtProcChannel = origCreate
 	}()
 	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
-	extproc.RegisterForTesting()
-	defer extproc.UnregisterForTesting()
+	internal.RegisterForTesting()
+	defer internal.UnregisterForTesting()
 
 	lis, err := testutils.LocalTCPListener()
 	if err != nil {
@@ -1794,8 +1795,8 @@ func (s) TestStreamFailureHeaderPhaseDeny(t *testing.T) {
 		extproc.CreateExtProcChannel = origCreate
 	}()
 	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
-	extproc.RegisterForTesting()
-	defer extproc.UnregisterForTesting()
+	internal.RegisterForTesting()
+	defer internal.UnregisterForTesting()
 
 	lis, err := testutils.LocalTCPListener()
 	if err != nil {
@@ -1884,8 +1885,8 @@ func (s) TestStreamFailureBodyPhaseAllow(t *testing.T) {
 		extproc.CreateExtProcChannel = origCreate
 	}()
 	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
-	extproc.RegisterForTesting()
-	defer extproc.UnregisterForTesting()
+	internal.RegisterForTesting()
+	defer internal.UnregisterForTesting()
 
 	lis, err := testutils.LocalTCPListener()
 	if err != nil {
@@ -2043,8 +2044,8 @@ func (s) TestStreamFailureBodyModeNoneAllow(t *testing.T) {
 		extproc.CreateExtProcChannel = origCreate
 	}()
 	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
-	extproc.RegisterForTesting()
-	defer extproc.UnregisterForTesting()
+	internal.RegisterForTesting()
+	defer internal.UnregisterForTesting()
 
 	lis, err := testutils.LocalTCPListener()
 	if err != nil {
@@ -2216,8 +2217,8 @@ func (s) TestStreamFailureBodyPhaseDeny(t *testing.T) {
 		extproc.CreateExtProcChannel = origCreate
 	}()
 	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
-	extproc.RegisterForTesting()
-	defer extproc.UnregisterForTesting()
+	internal.RegisterForTesting()
+	defer internal.UnregisterForTesting()
 
 	lis, err := testutils.LocalTCPListener()
 	if err != nil {
@@ -2348,8 +2349,8 @@ func (s) TestUnaryFailureBodyPhaseDeny(t *testing.T) {
 	}()
 
 	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
-	extproc.RegisterForTesting()
-	defer extproc.UnregisterForTesting()
+	internal.RegisterForTesting()
+	defer internal.UnregisterForTesting()
 
 	lis, err := testutils.LocalTCPListener()
 	if err != nil {
@@ -2472,8 +2473,8 @@ func (s) TestFlowControl(t *testing.T) {
 		extproc.CreateExtProcChannel = origCreate
 	}()
 	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
-	extproc.RegisterForTesting()
-	defer extproc.UnregisterForTesting()
+	internal.RegisterForTesting()
+	defer internal.UnregisterForTesting()
 
 	procBlocked := make(chan struct{})
 	lis, err := testutils.LocalTCPListener()
@@ -2679,8 +2680,8 @@ func (s) TestDrainingFlowControlNoMessageLoss(t *testing.T) {
 		extproc.CreateExtProcChannel = origCreate
 	}()
 	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
-	extproc.RegisterForTesting()
-	defer extproc.UnregisterForTesting()
+	internal.RegisterForTesting()
+	defer internal.UnregisterForTesting()
 
 	lis, err := testutils.LocalTCPListener()
 	if err != nil {
@@ -2885,8 +2886,8 @@ func (s) TestClientTrailer(t *testing.T) {
 		extproc.CreateExtProcChannel = origCreate
 	}()
 	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
-	extproc.RegisterForTesting()
-	defer extproc.UnregisterForTesting()
+	internal.RegisterForTesting()
+	defer internal.UnregisterForTesting()
 
 	lis, err := testutils.LocalTCPListener()
 	if err != nil {
@@ -3121,8 +3122,8 @@ func (s) TestImmediateResponseTrailers(t *testing.T) {
 		extproc.CreateExtProcChannel = origCreate
 	}()
 	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
-	extproc.RegisterForTesting()
-	defer extproc.UnregisterForTesting()
+	internal.RegisterForTesting()
+	defer internal.UnregisterForTesting()
 
 	lis, err := testutils.LocalTCPListener()
 	if err != nil {
@@ -3319,8 +3320,8 @@ func (s) TestStreamFailureGrpcMessageCompressedDeny(t *testing.T) {
 		extproc.CreateExtProcChannel = origCreate
 	}()
 	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
-	extproc.RegisterForTesting()
-	defer extproc.UnregisterForTesting()
+	internal.RegisterForTesting()
+	defer internal.UnregisterForTesting()
 
 	lis, err := testutils.LocalTCPListener()
 	if err != nil {
@@ -3471,8 +3472,8 @@ func (s) TestStreamFailureGrpcMessageCompressedAllow(t *testing.T) {
 		extproc.CreateExtProcChannel = origCreate
 	}()
 	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
-	extproc.RegisterForTesting()
-	defer extproc.UnregisterForTesting()
+	internal.RegisterForTesting()
+	defer internal.UnregisterForTesting()
 
 	lis, err := testutils.LocalTCPListener()
 	if err != nil {
@@ -3631,8 +3632,8 @@ func (s) TestRequestAttributes(t *testing.T) {
 		extproc.CreateExtProcChannel = origCreate
 	}()
 	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
-	extproc.RegisterForTesting()
-	defer extproc.UnregisterForTesting()
+	internal.RegisterForTesting()
+	defer internal.UnregisterForTesting()
 
 	allAttrs := []string{
 		"request.path",
@@ -3794,8 +3795,8 @@ func (s) TestStreamFailureOutOfOrderResponse(t *testing.T) {
 		extproc.CreateExtProcChannel = origCreate
 	}()
 	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
-	extproc.RegisterForTesting()
-	defer extproc.UnregisterForTesting()
+	internal.RegisterForTesting()
+	defer internal.UnregisterForTesting()
 
 	lis, err := testutils.LocalTCPListener()
 	if err != nil {
