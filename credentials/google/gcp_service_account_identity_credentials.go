@@ -136,15 +136,16 @@ func (c *gcpServiceAccountIdentityCallCreds) GetRequestMetadata(ctx context.Cont
 			go c.startFetch()
 		}
 		token := c.token.Value
-		c.mu.Unlock()
+		defer c.mu.Unlock()
 		return map[string]string{
 			"authorization": "Bearer " + token,
 		}, nil
 	}
 
 	if c.lastErr != nil && time.Now().Before(c.nextRetryTime) {
-		c.mu.Unlock()
-		return nil, c.lastErr
+		lastErr := c.lastErr
+		defer c.mu.Unlock()
+		return nil, lastErr
 	}
 
 	if c.fetching == nil {
@@ -159,12 +160,14 @@ func (c *gcpServiceAccountIdentityCallCreds) GetRequestMetadata(ctx context.Cont
 		c.mu.Lock()
 		defer c.mu.Unlock()
 		if c.token != nil && c.isTokenValidLocked() {
+			token := c.token.Value
 			return map[string]string{
-				"authorization": "Bearer " + c.token.Value,
+				"authorization": "Bearer " + token,
 			}, nil
 		}
 		if c.lastErr != nil {
-			return nil, c.lastErr
+			lastErr := c.lastErr
+			return nil, lastErr
 		}
 		return nil, status.Error(codes.Unavailable, "credentials: fetched token is expired")
 	case <-ctx.Done():

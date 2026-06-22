@@ -120,7 +120,7 @@ func setupStubTokenProvider(token string, err error) *stubTokenProvider {
 //
 // It overrides internal.NewIDTokenCredentials to use the stubTokenProvider,
 // and registers a cleanup function to restore original hook after the test.
-func setupTestGCPServiceAccountIdentityCreds(t *testing.T, stubToken *stubTokenProvider) credentials.PerRPCCredentials {
+func setupTestGCPServiceAccountIdentityCreds(ctx context.Context, t *testing.T, stubToken *stubTokenProvider) credentials.PerRPCCredentials {
 	// Override the ID token credentials to use stub token provider.
 	origNewIDTokenCredentials := internal.NewIDTokenCredentials
 	internal.NewIDTokenCredentials = func(*idtoken.Options) (*auth.Credentials, error) {
@@ -129,8 +129,6 @@ func setupTestGCPServiceAccountIdentityCreds(t *testing.T, stubToken *stubTokenP
 	}
 	t.Cleanup(func() { internal.NewIDTokenCredentials = origNewIDTokenCredentials })
 
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
 	creds, err := google.NewServiceAccountIdentityCredentials(ctx, "audience")
 	if err != nil {
 		t.Fatalf("NewServiceAccountIdentityCredentials() failed: %v", err)
@@ -157,10 +155,10 @@ func (s) TestNewServiceAccountIdentityCredentials_EmptyAudience(t *testing.T) {
 func (s) TestGCPServiceAccountIdentityCallCreds_GetRequestMetadata(t *testing.T) {
 	const token = "token"
 	stubToken := setupStubTokenProvider(token, nil)
-	creds := setupTestGCPServiceAccountIdentityCreds(t, stubToken)
-
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
+	creds := setupTestGCPServiceAccountIdentityCreds(ctx, t, stubToken)
+
 	ctx = credentials.NewContextWithRequestInfo(ctx, credentials.RequestInfo{
 		AuthInfo: &gcpTestAuthInfo{credentials.CommonAuthInfo{SecurityLevel: credentials.PrivacyAndIntegrity}},
 	})
@@ -189,11 +187,11 @@ func (s) TestGCPServiceAccountIdentityCallCreds_Backoff(t *testing.T) {
 	internal.BackoffStrategy = &stubBackoff{backoffDelay: 2 * defaultTestTimeout}
 	t.Cleanup(func() { internal.BackoffStrategy = origBackoff })
 
-	stubToken := setupStubTokenProvider("token", errors.New(wantErr))
-	creds := setupTestGCPServiceAccountIdentityCreds(t, stubToken)
-
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
+	stubToken := setupStubTokenProvider("token", errors.New(wantErr))
+	creds := setupTestGCPServiceAccountIdentityCreds(ctx, t, stubToken)
+
 	ctx = credentials.NewContextWithRequestInfo(ctx, credentials.RequestInfo{
 		AuthInfo: &gcpTestAuthInfo{credentials.CommonAuthInfo{SecurityLevel: credentials.PrivacyAndIntegrity}},
 	})
@@ -231,11 +229,11 @@ func (s) TestGCPServiceAccountIdentityCallCreds_BackoffExpired(t *testing.T) {
 	internal.BackoffStrategy = &stubBackoff{backoffDelay: 0}
 	t.Cleanup(func() { internal.BackoffStrategy = origBackoff })
 
-	stubToken := setupStubTokenProvider("token", errors.New(wantErr))
-	creds := setupTestGCPServiceAccountIdentityCreds(t, stubToken)
-
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
+	stubToken := setupStubTokenProvider("token", errors.New(wantErr))
+	creds := setupTestGCPServiceAccountIdentityCreds(ctx, t, stubToken)
+
 	ctx = credentials.NewContextWithRequestInfo(ctx, credentials.RequestInfo{
 		AuthInfo: &gcpTestAuthInfo{credentials.CommonAuthInfo{SecurityLevel: credentials.PrivacyAndIntegrity}},
 	})
@@ -278,11 +276,11 @@ func (s) TestGCPServiceAccountIdentityCallCreds_BackoffExpiredRecovery(t *testin
 	internal.BackoffStrategy = &stubBackoff{backoffDelay: 0}
 	t.Cleanup(func() { internal.BackoffStrategy = origBackoff })
 
-	stubToken := setupStubTokenProvider(token, errors.New(wantErr))
-	creds := setupTestGCPServiceAccountIdentityCreds(t, stubToken)
-
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
+	stubToken := setupStubTokenProvider(token, errors.New(wantErr))
+	creds := setupTestGCPServiceAccountIdentityCreds(ctx, t, stubToken)
+
 	ctx = credentials.NewContextWithRequestInfo(ctx, credentials.RequestInfo{
 		AuthInfo: &gcpTestAuthInfo{credentials.CommonAuthInfo{SecurityLevel: credentials.PrivacyAndIntegrity}},
 	})
@@ -321,11 +319,11 @@ func (s) TestGCPServiceAccountIdentityCallCreds_BackoffExpiredRecovery(t *testin
 // only a single fetch is executed and all blocked requests successfully
 // receive the same valid token.
 func (s) TestGCPServiceAccountIdentityCallCreds_ConcurrentCalls_Success(t *testing.T) {
-	stubToken := setupStubTokenProvider("token", nil)
-	creds := setupTestGCPServiceAccountIdentityCreds(t, stubToken)
-
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
+	stubToken := setupStubTokenProvider("token", nil)
+	creds := setupTestGCPServiceAccountIdentityCreds(ctx, t, stubToken)
+
 	ctx = credentials.NewContextWithRequestInfo(ctx, credentials.RequestInfo{
 		AuthInfo: &gcpTestAuthInfo{credentials.CommonAuthInfo{SecurityLevel: credentials.PrivacyAndIntegrity}},
 	})
@@ -358,11 +356,11 @@ func (s) TestGCPServiceAccountIdentityCallCreds_ConcurrentCalls_Success(t *testi
 // error after the fetch.
 func (s) TestGCPServiceAccountIdentityCallCreds_ConcurrentCalls_Failure(t *testing.T) {
 	const wantErr = "failed while fetching idToken"
-	stubToken := setupStubTokenProvider("token", errors.New(wantErr))
-	creds := setupTestGCPServiceAccountIdentityCreds(t, stubToken)
-
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
+	stubToken := setupStubTokenProvider("token", errors.New(wantErr))
+	creds := setupTestGCPServiceAccountIdentityCreds(ctx, t, stubToken)
+
 	ctx = credentials.NewContextWithRequestInfo(ctx, credentials.RequestInfo{
 		AuthInfo: &gcpTestAuthInfo{credentials.CommonAuthInfo{SecurityLevel: credentials.PrivacyAndIntegrity}},
 	})
@@ -393,11 +391,11 @@ func (s) TestGCPServiceAccountIdentityCallCreds_ConcurrentCalls_Failure(t *testi
 // Test verifies that credentials fail to return metadata when the security
 // level of the connection is not secure.
 func (s) TestGCPServiceAccountIdentityCallCreds_SecurityLevelFailure(t *testing.T) {
-	stubToken := setupStubTokenProvider("token", nil)
-	creds := setupTestGCPServiceAccountIdentityCreds(t, stubToken)
-
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
+	stubToken := setupStubTokenProvider("token", nil)
+	creds := setupTestGCPServiceAccountIdentityCreds(ctx, t, stubToken)
+
 	ctx = credentials.NewContextWithRequestInfo(ctx, credentials.RequestInfo{
 		AuthInfo: &gcpTestAuthInfo{credentials.CommonAuthInfo{SecurityLevel: credentials.NoSecurity}},
 	})
@@ -427,10 +425,10 @@ func (s) TestGCPServiceAccountIdentityCallCreds_EarlyExpiry(t *testing.T) {
 			Expiry: time.Now().Add(1 * time.Minute),
 		},
 	)
-	creds := setupTestGCPServiceAccountIdentityCreds(t, stubToken)
-
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
+	creds := setupTestGCPServiceAccountIdentityCreds(ctx, t, stubToken)
+
 	ctx = credentials.NewContextWithRequestInfo(ctx, credentials.RequestInfo{
 		AuthInfo: &gcpTestAuthInfo{credentials.CommonAuthInfo{SecurityLevel: credentials.PrivacyAndIntegrity}},
 	})
@@ -515,12 +513,12 @@ func (s) TestGCPServiceAccountIdentityCallCreds_ErrorMapping(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			stubToken := setupStubTokenProvider("token", nil)
-			creds := setupTestGCPServiceAccountIdentityCreds(t, stubToken)
-			stubToken.setErr(tc.err)
-
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
+			stubToken := setupStubTokenProvider("token", nil)
+			creds := setupTestGCPServiceAccountIdentityCreds(ctx, t, stubToken)
+			stubToken.setErr(tc.err)
+
 			ctx = credentials.NewContextWithRequestInfo(ctx, credentials.RequestInfo{
 				AuthInfo: &gcpTestAuthInfo{credentials.CommonAuthInfo{SecurityLevel: credentials.PrivacyAndIntegrity}},
 			})
