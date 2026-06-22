@@ -164,6 +164,26 @@ func requestBodyResponse(body []byte) *v3procservicepb.ProcessingResponse {
 	}
 }
 
+func requestBodyResponseWithEOF(body []byte, endOfStream bool) *v3procservicepb.ProcessingResponse {
+	return &v3procservicepb.ProcessingResponse{
+		Response: &v3procservicepb.ProcessingResponse_RequestBody{
+			RequestBody: &v3procservicepb.BodyResponse{
+				Response: &v3procservicepb.CommonResponse{
+					Status: v3procservicepb.CommonResponse_CONTINUE,
+					BodyMutation: &v3procservicepb.BodyMutation{
+						Mutation: &v3procservicepb.BodyMutation_StreamedResponse{
+							StreamedResponse: &v3procservicepb.StreamedBodyResponse{
+								Body:                      body,
+								EndOfStreamWithoutMessage: endOfStream,
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
 func responseBodyResponse(body []byte) *v3procservicepb.ProcessingResponse {
 	return &v3procservicepb.ProcessingResponse{
 		Response: &v3procservicepb.ProcessingResponse_ResponseBody{
@@ -259,7 +279,7 @@ func (s) TestAllSendUnary(t *testing.T) {
 				case req.GetRequestHeaders() != nil:
 					resp = requestHeadersResponse(nil, nil)
 				case req.GetRequestBody() != nil:
-					resp = requestBodyResponse(req.GetRequestBody().GetBody())
+					resp = requestBodyResponseWithEOF(req.GetRequestBody().GetBody(), req.GetRequestBody().GetEndOfStreamWithoutMessage() || req.GetRequestBody().GetEndOfStream())
 				case req.GetResponseHeaders() != nil:
 					resp = responseHeadersResponse(nil, nil)
 				case req.GetResponseBody() != nil:

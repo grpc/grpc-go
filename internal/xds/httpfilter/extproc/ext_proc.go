@@ -290,16 +290,12 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 
 	// Create a new context for the RPC to the external processor server. This
 	// context has a deadline of the timeout specified in the config, if present.
-	// It also contains the outgoing context's metadata, merged with the initial
-	// metadata specified in the config.
-	extProcCtx := ctx
+	// It also contains the initial metadata specified in the config.
+	extProcCtx, cancel := context.WithCancel(ctx)
 	if i.config.server.Timeout != 0 {
-		extProcCtx, cs.extCancel = context.WithTimeout(ctx, i.config.server.Timeout)
+		extProcCtx, cancel = context.WithTimeout(ctx, i.config.server.Timeout)
 	}
-	outgoingMD, ok := metadata.FromOutgoingContext(ctx)
-	if !ok {
-		outgoingMD = metadata.MD{}
-	}
+	cs.extCancel = cancel
 	extProcCtx = metadata.NewOutgoingContext(extProcCtx, i.config.server.InitialMetadata)
 
 	// In the ClientStream API, outgoing headers are sent immediately when the
@@ -312,6 +308,10 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 	}
 	cs.extStream = extStream
 
+	outgoingMD, ok := metadata.FromOutgoingContext(ctx)
+	if !ok {
+		outgoingMD = metadata.MD{}
+	}
 	// Construct request attributes for the RPC to the external processor server.
 	if cs.reqAttrs, err = constructRequestAttributes(ri, outgoingMD, i.config.requestAttributes); err != nil {
 		return cs.handleInitError(fmt.Errorf("failed to construct attributes: %v", err), newStream, opts)
@@ -332,17 +332,18 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 		}
 	} else {
 		if err = cs.createDataplaneStream(newStream, opts); err != nil {
+			cs.extCancel()
 			return nil, err
 		}
 	}
 
 	// Start a background loop for sending messages to the external processor
 	// server. Use a single goroutine to ensure no concurrent sends.
-	go cs.sendToProcServerLoop(cs.ctx)
+	go cs.sendToProcServerLoop()
 
 	// Start a goroutine to receive messages from the external processor server
 	// and send them to the dataplane stream in either direction.
-	go cs.recvFromProcServerLoop(cs.ctx, newStream, opts)
+	go cs.recvFromProcServerLoop(newStream, opts)
 
 	return cs, nil
 }
@@ -428,7 +429,7 @@ func (cs *clientStream) Header() (metadata.MD, error) {
 		if val := cs.extStreamErr.Load(); val != nil {
 			return nil, val.(error)
 		}
-		return nil, cs.ctx.Err()
+		return nil, status.FromContextError(cs.ctx.Err()).Err()
 	}
 	return cs.responseHeader, nil
 }
@@ -523,7 +524,7 @@ func (cs *clientStream) CloseSend() error {
 		if val := cs.extStreamErr.Load(); val != nil {
 			return val.(error)
 		}
-		return cs.ctx.Err()
+		return status.FromContextError(cs.ctx.Err()).Err()
 	}
 }
 
@@ -617,7 +618,7 @@ func (cs *clientStream) RecvMsg(m any) error {
 		if cs.streamFailed.HasFired() {
 			return cs.extStreamErr.Load().(error)
 		}
-		return cs.ctx.Err()
+		return status.FromContextError(cs.ctx.Err()).Err()
 	case <-cs.streamFailed.Done():
 		return cs.extStreamErr.Load().(error)
 	}
@@ -697,7 +698,7 @@ func (cs *clientStream) SendMsg(m any) error {
 	case <-cs.streamFailed.Done():
 		return cs.extStreamErr.Load().(error)
 	case <-cs.ctx.Done():
-		return cs.ctx.Err()
+		return status.FromContextError(cs.ctx.Err()).Err()
 	}
 }
 
@@ -811,7 +812,7 @@ func (cs *clientStream) requestForwardingToDataplaneLoop(msgType protoreflect.Me
 
 // recvFromProcServerLoop continuously receives messages from the external
 // processor server and redirects them according to the response type.
-func (cs *clientStream) recvFromProcServerLoop(ctx context.Context, newStream func(context.Context, ...grpc.CallOption) (grpc.ClientStream, error), opts []grpc.CallOption) {
+func (cs *clientStream) recvFromProcServerLoop(newStream func(context.Context, ...grpc.CallOption) (grpc.ClientStream, error), opts []grpc.CallOption) {
 	defer func() {
 		cs.drained.Fire()
 		// Push nil sentinel to mutatedReqBuffer to indicate completion of receiving
@@ -823,7 +824,7 @@ func (cs *clientStream) recvFromProcServerLoop(ctx context.Context, newStream fu
 	// If request header mode is send, the first response should be the mutation
 	// for request header. Create the dataplane stream using the mutated header.
 	if cs.config.processingModes.requestHeaderMode == modeSend {
-		if !cs.processInitialHeaders(ctx, newStream, opts) {
+		if !cs.processInitialHeaders(cs.ctx, newStream, opts) {
 			return
 		}
 	}
@@ -977,7 +978,7 @@ func (cs *clientStream) recvFromProcServerLoop(ctx context.Context, newStream fu
 //
 // Any transmission errors immediately trigger failStream to safely abort the
 // data plane RPC.
-func (cs *clientStream) sendToProcServerLoop(ctx context.Context) {
+func (cs *clientStream) sendToProcServerLoop() {
 	defer func() {
 		cs.extStreamBypass.Store(true)
 	}()
@@ -994,7 +995,7 @@ func (cs *clientStream) sendToProcServerLoop(ctx context.Context) {
 			return
 		case <-cs.streamFailed.Done():
 			return
-		case <-ctx.Done():
+		case <-cs.ctx.Done():
 			return
 		}
 	}
@@ -1007,7 +1008,7 @@ func (cs *clientStream) waitChannel(ch <-chan struct{}) error {
 	case <-ch:
 		return nil
 	case <-cs.ctx.Done():
-		return cs.ctx.Err()
+		return status.FromContextError(cs.ctx.Err()).Err()
 	case <-cs.streamFailed.Done():
 		return cs.extStreamErr.Load().(error)
 	}
@@ -1066,9 +1067,7 @@ func (cs *clientStream) cancelStream(err error) {
 // processor stream in NewStream. It returns a new dataplane stream if failure
 // mode allows, else returns the error.
 func (cs *clientStream) handleInitError(err error, newStream func(context.Context, ...grpc.CallOption) (grpc.ClientStream, error), opts []grpc.CallOption) (grpc.ClientStream, error) {
-	if cs.extCancel != nil {
-		cs.extCancel()
-	}
+	cs.extCancel()
 	if !cs.config.failureModeAllow {
 		return nil, status.Errorf(codes.Internal, "extproc: %v", err)
 	}
@@ -1208,7 +1207,7 @@ func (cs *clientStream) waitForDataplaneStream(ctx context.Context) (grpc.Client
 		if cs.streamFailed.HasFired() {
 			return nil, cs.extStreamErr.Load().(error)
 		}
-		return nil, ctx.Err()
+		return nil, status.FromContextError(ctx.Err()).Err()
 	case <-cs.streamFailed.Done():
 		return nil, cs.extStreamErr.Load().(error)
 	}
@@ -1254,7 +1253,7 @@ func (cs *clientStream) initiateResponseHeaderProcessing() error {
 				if cs.streamFailed.HasFired() {
 					err = cs.extStreamErr.Load().(error)
 				} else {
-					err = cs.ctx.Err()
+					err = status.FromContextError(cs.ctx.Err()).Err()
 				}
 			case <-cs.streamFailed.Done():
 				err = cs.extStreamErr.Load().(error)
