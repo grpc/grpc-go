@@ -632,6 +632,7 @@ func (o *observabilityClientStream) initiateResponseHeaderProcessing() error {
 // processor if request body processing is configured to SEND. It is guarded by
 // requestEOF to run at most once.
 func (o *observabilityClientStream) initiateRequestEOFProcessing() error {
+	var err error
 	if !o.requestEOF.CompareAndSwap(false, true) {
 		return nil
 	}
@@ -645,10 +646,10 @@ func (o *observabilityClientStream) initiateRequestEOFProcessing() error {
 			},
 			ObservabilityMode: o.config.observabilityMode,
 		}
-		return o.sendToProcessor(req)
+		err = o.sendToProcessor(req)
 	}
 	o.recordMetric(clientHalfCloseDurationMetric, time.Since(startTime).Seconds())
-	return nil
+	return err
 }
 
 // sendToProcessor sends a ProcessingRequest to the external processor stream.
