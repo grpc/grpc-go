@@ -181,9 +181,9 @@ func (a *AllowedGrpcService) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &jsonS); err != nil {
 		return err
 	}
-	a.channelCreds = jsonS.ChannelCreds
-	a.callCredsConfigs = jsonS.CallCredsConfigs
 
+	// Build into locals and assign the receiver only on success, so a
+	// mid-parse error never leaves the receiver partially mutated.
 	cleanups := []func(){}
 	dialOptions := []grpc.DialOption{}
 	selectedCallCreds := []credentials.PerRPCCredentials{}
@@ -195,6 +195,7 @@ func (a *AllowedGrpcService) UnmarshalJSON(data []byte) error {
 	}
 
 	var credsDialOption grpc.DialOption
+	var selectedChannelCreds ChannelCreds
 	for _, cc := range jsonS.ChannelCreds {
 		c := bootstrap.GetChannelCredentials(cc.Type)
 		if c == nil {
@@ -205,7 +206,7 @@ func (a *AllowedGrpcService) UnmarshalJSON(data []byte) error {
 			runCleanups()
 			return fmt.Errorf("failed to build credentials bundle from bootstrap for allowed grpc service: type %q, err: %v", cc.Type, err)
 		}
-		a.selectedChannelCreds = cc
+		selectedChannelCreds = cc
 		credsDialOption = grpc.WithCredentialsBundle(bundle)
 		if d, ok := bundle.(extraDialOptions); ok {
 			dialOptions = append(dialOptions, d.DialOptions()...)
@@ -237,6 +238,9 @@ func (a *AllowedGrpcService) UnmarshalJSON(data []byte) error {
 		}
 	}
 
+	a.channelCreds = jsonS.ChannelCreds
+	a.callCredsConfigs = jsonS.CallCredsConfigs
+	a.selectedChannelCreds = selectedChannelCreds
 	a.dialOptions = dialOptions
 	a.selectedCallCreds = selectedCallCreds
 	a.cleanups = cleanups
@@ -741,6 +745,33 @@ func (c *Config) UnmarshalJSON(data []byte) error {
 		return fmt.Errorf("xds: json.Unmarshal(%s) failed during bootstrap: %v", string(data), err)
 	}
 
+	// Unmarshaling above eagerly built credentials (bundles, file
+	// watchers) for each server config and allowed gRPC service. If
+	// bootstrap parsing fails after this point, release them: the caller
+	// discards this Config without ever calling their cleanups.
+	parsedSuccessfully := false
+	defer func() {
+		if parsedSuccessfully {
+			return
+		}
+		for _, sc := range config.XDSServers {
+			if sc == nil {
+				continue
+			}
+			for _, cleanup := range sc.Cleanups() {
+				cleanup()
+			}
+		}
+		for _, svc := range config.AllowedGrpcServices {
+			if svc == nil {
+				continue
+			}
+			for _, cleanup := range svc.Cleanups() {
+				cleanup()
+			}
+		}
+	}()
+
 	c.xDSServers = config.XDSServers
 	c.cpcs = config.CertificateProviders
 	c.serverListenerResourceNameTemplate = config.ServerListenerResourceNameTemplate
@@ -788,6 +819,7 @@ func (c *Config) UnmarshalJSON(data []byte) error {
 			return fmt.Errorf("xds: field clientListenerResourceNameTemplate %q of authority %q doesn't start with prefix %q", authority.ClientListenerResourceNameTemplate, name, prefix)
 		}
 	}
+	parsedSuccessfully = true
 	return nil
 }
 

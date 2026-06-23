@@ -29,6 +29,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/credentials/jwt"
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/internal"
@@ -1952,4 +1953,62 @@ func (s) TestBootstrap_AllowedGrpcServices_CredentialIteration(t *testing.T) {
 			t.Errorf("len(CallCredsConfigs()) got: %d, want: 1", got)
 		}
 	})
+}
+
+// observableChannelCreds is a fake bootstrap channel-credentials builder whose
+// teardown is observable, used to verify cleanup-on-error behavior.
+type observableChannelCreds struct{ onCancel func() }
+
+func (o observableChannelCreds) Build(json.RawMessage) (credentials.Bundle, func(), error) {
+	return insecure.NewBundle(), o.onCancel, nil
+}
+
+func (observableChannelCreds) Name() string { return "test_observable_channel_creds" }
+
+// TestBootstrap_CleanupOnUnmarshalError verifies that credentials built while
+// unmarshaling allowed gRPC services (and server configs) are torn down if
+// bootstrap parsing fails afterwards, rather than leaking.
+func (s) TestBootstrap_CleanupOnUnmarshalError(t *testing.T) {
+	cancels := 0
+	bootstrap.RegisterChannelCredentials(observableChannelCreds{onCancel: func() { cancels++ }})
+
+	// allowed_grpc_services builds the observable creds, then parsing fails
+	// because xds_servers is empty. The built creds must be cleaned up.
+	const failCfg = `{
+		"xds_servers": [],
+		"allowed_grpc_services": {
+			"dns:///side-channel:443": {
+				"channel_creds": [{"type": "test_observable_channel_creds"}]
+			}
+		}
+	}`
+	var failed Config
+	if err := failed.UnmarshalJSON([]byte(failCfg)); err == nil {
+		t.Fatal("Config.UnmarshalJSON() succeeded, want error for empty xds_servers")
+	}
+	if cancels != 1 {
+		t.Errorf("cleanup ran %d times after a failed bootstrap parse, want 1", cancels)
+	}
+
+	// On a successful parse, cleanups are retained for the Config's lifetime
+	// and must NOT run during parsing.
+	cancels = 0
+	const okCfg = `{
+		"xds_servers": [{
+			"server_uri": "trafficdirector.googleapis.com:443",
+			"channel_creds": [{"type": "insecure"}]
+		}],
+		"allowed_grpc_services": {
+			"dns:///side-channel:443": {
+				"channel_creds": [{"type": "test_observable_channel_creds"}]
+			}
+		}
+	}`
+	var ok Config
+	if err := ok.UnmarshalJSON([]byte(okCfg)); err != nil {
+		t.Fatalf("Config.UnmarshalJSON() failed: %v", err)
+	}
+	if cancels != 0 {
+		t.Errorf("cleanup ran %d times on a successful parse, want 0", cancels)
+	}
 }
