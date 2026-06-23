@@ -224,9 +224,10 @@ func (s) TestGCPServiceAccountIdentityCallCreds_BackoffExpired(t *testing.T) {
 		wantErr2 = "second attempt to fetch token"
 	)
 
-	// Override the backoff strategy with a 0s delay to expires immediately.
+	// Override the backoff strategy with a short delay.
+	const backoffDelay = 10 * time.Millisecond
 	origBackoff := internal.BackoffStrategy
-	internal.BackoffStrategy = &stubBackoff{backoffDelay: 0}
+	internal.BackoffStrategy = &stubBackoff{backoffDelay: backoffDelay}
 	t.Cleanup(func() { internal.BackoffStrategy = origBackoff })
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -245,6 +246,13 @@ func (s) TestGCPServiceAccountIdentityCallCreds_BackoffExpired(t *testing.T) {
 
 	if got := stubToken.getCallCount(); got != 1 {
 		t.Fatalf("Unexpected call count to token provider: got %d, want 1", got)
+	}
+
+	// Wait for backoff to expire.
+	select {
+	case <-time.After(2 * backoffDelay):
+	case <-ctx.Done():
+		t.Fatal("Timed out waiting for backoff to expire")
 	}
 
 	// Update token provider with second failure error to distinguish the
@@ -271,9 +279,10 @@ func (s) TestGCPServiceAccountIdentityCallCreds_BackoffExpiredRecovery(t *testin
 		token   = "token"
 	)
 
-	// Override the backoff strategy with a 0s delay to expires immediately.
+	// Override the backoff strategy with a short delay.
+	const backoffDelay = 10 * time.Millisecond
 	origBackoff := internal.BackoffStrategy
-	internal.BackoffStrategy = &stubBackoff{backoffDelay: 0}
+	internal.BackoffStrategy = &stubBackoff{backoffDelay: backoffDelay}
 	t.Cleanup(func() { internal.BackoffStrategy = origBackoff })
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -294,11 +303,16 @@ func (s) TestGCPServiceAccountIdentityCallCreds_BackoffExpiredRecovery(t *testin
 		t.Fatalf("Unexpected call count to token provider: got %d, want 1", got)
 	}
 
+	// Wait for backoff to expire.
+	select {
+	case <-time.After(2 * backoffDelay):
+	case <-ctx.Done():
+		t.Fatal("Timed out waiting for backoff to expire")
+	}
+
 	// Update token provider to return a valid token and nil error.
 	stubToken.setErr(nil)
 
-	// Since backoff is 0s (already expired), the next request triggers a
-	// new fetch which succeeds
 	md, err := creds.GetRequestMetadata(ctx)
 	if err != nil {
 		t.Fatalf("GetRequestMetadata() failed unexpectedly: %v", err)

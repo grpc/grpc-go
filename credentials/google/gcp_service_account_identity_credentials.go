@@ -126,28 +126,12 @@ func (c *gcpServiceAccountIdentityCallCreds) GetRequestMetadata(ctx context.Cont
 		return nil, fmt.Errorf("credentials: cannot send secure credentials on an insecure connection: %v", err)
 	}
 
+	md, err := c.cachedRequestMetadata(true)
+	if md != nil || err != nil {
+		return md, err
+	}
+
 	c.mu.Lock()
-
-	// If token is valid, return it. If it's also stale, trigger a background
-	// refresh if not already running and return the current token.
-	if c.token != nil && c.isTokenValidLocked() {
-		if c.isTokenStaleLocked() && c.fetching == nil {
-			c.fetching = make(chan struct{})
-			go c.startFetch()
-		}
-		token := c.token.Value
-		defer c.mu.Unlock()
-		return map[string]string{
-			"authorization": "Bearer " + token,
-		}, nil
-	}
-
-	if c.lastErr != nil && time.Now().Before(c.nextRetryTime) {
-		lastErr := c.lastErr
-		defer c.mu.Unlock()
-		return nil, lastErr
-	}
-
 	if c.fetching == nil {
 		c.fetching = make(chan struct{})
 		go c.startFetch()
@@ -157,22 +141,42 @@ func (c *gcpServiceAccountIdentityCallCreds) GetRequestMetadata(ctx context.Cont
 
 	select {
 	case <-wait:
-		c.mu.Lock()
-		defer c.mu.Unlock()
-		if c.token != nil && c.isTokenValidLocked() {
-			token := c.token.Value
-			return map[string]string{
-				"authorization": "Bearer " + token,
-			}, nil
+		md, err := c.cachedRequestMetadata(false)
+		if md == nil && err == nil {
+			return nil, status.Error(codes.Unavailable, "credentials: fetched token is expired")
 		}
-		if c.lastErr != nil {
-			lastErr := c.lastErr
-			return nil, lastErr
-		}
-		return nil, status.Error(codes.Unavailable, "credentials: fetched token is expired")
+		return md, err
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
+}
+
+// cachedRequestMetadata returns the cached token if it is valid, or nil if it is
+// not. If attemptPreemptiveRefresh is true, it will also trigger a background
+// refresh if the token is stale but still valid. It returns the cached error
+// if the last fetch failed and the backoff interval has not expired.
+//
+// Returns (nil, nil) if the token is not valid and a new fetch is required. The
+// caller is responsible for initiating the fetch or waiting for an in-progress
+// fetch to complete.
+func (c *gcpServiceAccountIdentityCallCreds) cachedRequestMetadata(attemptPreemptiveRefresh bool) (map[string]string, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.token != nil && c.isTokenValidLocked() {
+		if attemptPreemptiveRefresh && c.isTokenStaleLocked() && c.fetching == nil {
+			c.fetching = make(chan struct{})
+			go c.startFetch()
+		}
+
+		return map[string]string{"authorization": "Bearer " + c.token.Value}, nil
+	}
+
+	if c.lastErr != nil && time.Now().Before(c.nextRetryTime) {
+		return nil, c.lastErr
+	}
+
+	return nil, nil
 }
 
 // RequireTransportSecurity indicates whether the credentials requires
