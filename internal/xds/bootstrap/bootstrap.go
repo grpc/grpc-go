@@ -276,6 +276,16 @@ func (scs *ServerConfigs) Equal(other *ServerConfigs) bool {
 func (scs *ServerConfigs) UnmarshalJSON(data []byte) error {
 	servers := []*ServerConfig{}
 	if err := json.Unmarshal(data, &servers); err != nil {
+		// Some servers may have built credentials before the failure;
+		// release them so they don't leak when the slice is dropped.
+		for _, sc := range servers {
+			if sc == nil {
+				continue
+			}
+			for _, cleanup := range sc.Cleanups() {
+				cleanup()
+			}
+		}
 		return fmt.Errorf("xds: failed to JSON unmarshal server configurations during bootstrap: %v, config:\n%s", err, string(data))
 	}
 	*scs = servers
@@ -741,26 +751,33 @@ func (c *Config) UnmarshalJSON(data []byte) error {
 	// even if the bootstrap configuration did not contain the node field, we
 	// will have a node field with client controlled fields alone.
 	config := configJSON{Node: newNode()}
-	if err := json.Unmarshal(data, &config); err != nil {
-		return fmt.Errorf("xds: json.Unmarshal(%s) failed during bootstrap: %v", string(data), err)
-	}
 
-	// Unmarshaling above eagerly built credentials (bundles, file
-	// watchers) for each server config and allowed gRPC service. If
-	// bootstrap parsing fails after this point, release them: the caller
-	// discards this Config without ever calling their cleanups.
+	// json.Unmarshal below eagerly builds credentials (bundles, file
+	// watchers) for server configs (top-level and per-authority) and
+	// allowed gRPC services. Install the cleanup before unmarshaling so
+	// resources built before a mid-way unmarshal failure, or a later
+	// validation error, are released when this Config is discarded.
 	parsedSuccessfully := false
-	defer func() {
-		if parsedSuccessfully {
-			return
-		}
-		for _, sc := range config.XDSServers {
+	releaseServerCreds := func(servers ServerConfigs) {
+		for _, sc := range servers {
 			if sc == nil {
 				continue
 			}
 			for _, cleanup := range sc.Cleanups() {
 				cleanup()
 			}
+		}
+	}
+	defer func() {
+		if parsedSuccessfully {
+			return
+		}
+		releaseServerCreds(config.XDSServers)
+		for _, authority := range config.Authorities {
+			if authority == nil {
+				continue
+			}
+			releaseServerCreds(authority.XDSServers)
 		}
 		for _, svc := range config.AllowedGrpcServices {
 			if svc == nil {
@@ -771,6 +788,10 @@ func (c *Config) UnmarshalJSON(data []byte) error {
 			}
 		}
 	}()
+
+	if err := json.Unmarshal(data, &config); err != nil {
+		return fmt.Errorf("xds: json.Unmarshal(%s) failed during bootstrap: %v", string(data), err)
+	}
 
 	c.xDSServers = config.XDSServers
 	c.cpcs = config.CertificateProviders
@@ -810,6 +831,9 @@ func (c *Config) UnmarshalJSON(data []byte) error {
 	// - if set, it must start with "xdstp://<authority_name>/"
 	// - if not set, it defaults to "xdstp://<authority_name>/envoy.config.listener.v3.Listener/%s"
 	for name, authority := range c.authorities {
+		if authority == nil {
+			return fmt.Errorf("xds: authority %q has no configuration in bootstrap", name)
+		}
 		prefix := fmt.Sprintf("xdstp://%s", url.PathEscape(name))
 		if authority.ClientListenerResourceNameTemplate == "" {
 			authority.ClientListenerResourceNameTemplate = prefix + "/envoy.config.listener.v3.Listener/%s"

@@ -1944,7 +1944,8 @@ func (s) TestBootstrap_AllowedGrpcServices_CredentialIteration(t *testing.T) {
 		testutils.SetEnvConfig(t, &envconfig.XDSBootstrapCallCredsEnabled, false)
 		testutils.SetEnvConfig(t, &envconfig.XDSBootstrapFileName, "withCallCreds")
 		svc := getService(t)
-		// Call creds must not be built, so only the channel-creds option remains.
+		// Call creds must not be built, so only the channel-creds
+		// option remains.
 		if got := len(svc.DialOptions()); got != 1 {
 			t.Errorf("len(DialOptions()) got: %d, want: 1", got)
 		}
@@ -1966,49 +1967,149 @@ func (o observableChannelCreds) Build(json.RawMessage) (credentials.Bundle, func
 func (observableChannelCreds) Name() string { return "test_observable_channel_creds" }
 
 // TestBootstrap_CleanupOnUnmarshalError verifies that credentials built while
-// unmarshaling allowed gRPC services (and server configs) are torn down if
-// bootstrap parsing fails afterwards, rather than leaking.
+// unmarshaling server configs (top-level and per-authority) and allowed gRPC
+// services are released if bootstrap parsing fails, rather than leaking. It
+// covers failures during later validation, in nested authorities, and mid-way
+// through json.Unmarshal itself.
 func (s) TestBootstrap_CleanupOnUnmarshalError(t *testing.T) {
 	cancels := 0
 	bootstrap.RegisterChannelCredentials(observableChannelCreds{onCancel: func() { cancels++ }})
 
-	// allowed_grpc_services builds the observable creds, then parsing fails
-	// because xds_servers is empty. The built creds must be cleaned up.
-	const failCfg = `{
-		"xds_servers": [],
-		"allowed_grpc_services": {
-			"dns:///side-channel:443": {
-				"channel_creds": [{"type": "test_observable_channel_creds"}]
-			}
-		}
-	}`
-	var failed Config
-	if err := failed.UnmarshalJSON([]byte(failCfg)); err == nil {
-		t.Fatal("Config.UnmarshalJSON() succeeded, want error for empty xds_servers")
-	}
-	if cancels != 1 {
-		t.Errorf("cleanup ran %d times after a failed bootstrap parse, want 1", cancels)
+	tests := []struct {
+		name        string
+		cfg         string
+		wantErr     bool
+		wantCancels int
+	}{
+		{
+			// allowed_grpc_services builds creds, then validation
+			// fails on the empty xds_servers list.
+			name: "validation_error_releases_allowed_service_creds",
+			cfg: `{
+				"xds_servers": [],
+				"allowed_grpc_services": {
+					"dns:///side-channel:443": {
+						"channel_creds": [{"type": "test_observable_channel_creds"}]
+					}
+				}
+			}`,
+			wantErr:     true,
+			wantCancels: 1,
+		},
+		{
+			// A per-authority server builds creds, then validation
+			// fails on the invalid authority listener template.
+			name: "validation_error_releases_authority_server_creds",
+			cfg: `{
+				"xds_servers": [{
+					"server_uri": "trafficdirector.googleapis.com:443",
+					"channel_creds": [{"type": "insecure"}]
+				}],
+				"authorities": {
+					"auth1": {
+						"client_listener_resource_name_template": "invalid-no-prefix",
+						"xds_servers": [{
+							"server_uri": "authority-server:443",
+							"channel_creds": [{"type": "test_observable_channel_creds"}]
+						}]
+					}
+				}
+			}`,
+			wantErr:     true,
+			wantCancels: 1,
+		},
+		{
+			// allowed_grpc_services (decoded first) builds creds,
+			// then json.Unmarshal fails on a malformed field.
+			name: "midway_unmarshal_failure_releases_creds",
+			cfg: `{
+				"allowed_grpc_services": {
+					"dns:///side-channel:443": {
+						"channel_creds": [{"type": "test_observable_channel_creds"}]
+					}
+				},
+				"authorities": "should-be-an-object"
+			}`,
+			wantErr:     true,
+			wantCancels: 1,
+		},
+		{
+			// A later server in the list fails to unmarshal; the
+			// earlier server's built creds must be released.
+			name: "intra_list_server_failure_releases_earlier_creds",
+			cfg: `{
+				"xds_servers": [
+					{"server_uri": "s1:443", "channel_creds": [{"type": "test_observable_channel_creds"}]},
+					{"server_uri": "s2:443", "channel_creds": [{"type": "unsupported_cred_type"}]}
+				]
+			}`,
+			wantErr:     true,
+			wantCancels: 1,
+		},
+		{
+			// Same leak, but inside an authority's server list.
+			name: "intra_authority_server_failure_releases_creds",
+			cfg: `{
+				"xds_servers": [{
+					"server_uri": "trafficdirector.googleapis.com:443",
+					"channel_creds": [{"type": "insecure"}]
+				}],
+				"authorities": {
+					"auth1": {
+						"xds_servers": [
+							{"server_uri": "a1:443", "channel_creds": [{"type": "test_observable_channel_creds"}]},
+							{"server_uri": "a2:443", "channel_creds": [{"type": "unsupported_cred_type"}]}
+						]
+					}
+				}
+			}`,
+			wantErr:     true,
+			wantCancels: 1,
+		},
+		{
+			// A null authority must be rejected, not panic.
+			name: "null_authority_is_rejected_without_panic",
+			cfg: `{
+				"xds_servers": [{
+					"server_uri": "trafficdirector.googleapis.com:443",
+					"channel_creds": [{"type": "insecure"}]
+				}],
+				"authorities": {"foo": null}
+			}`,
+			wantErr:     true,
+			wantCancels: 0,
+		},
+		{
+			// On success, cleanups are retained for the Config's
+			// lifetime and must not run during parsing.
+			name: "success_retains_cleanups",
+			cfg: `{
+				"xds_servers": [{
+					"server_uri": "trafficdirector.googleapis.com:443",
+					"channel_creds": [{"type": "insecure"}]
+				}],
+				"allowed_grpc_services": {
+					"dns:///side-channel:443": {
+						"channel_creds": [{"type": "test_observable_channel_creds"}]
+					}
+				}
+			}`,
+			wantErr:     false,
+			wantCancels: 0,
+		},
 	}
 
-	// On a successful parse, cleanups are retained for the Config's lifetime
-	// and must NOT run during parsing.
-	cancels = 0
-	const okCfg = `{
-		"xds_servers": [{
-			"server_uri": "trafficdirector.googleapis.com:443",
-			"channel_creds": [{"type": "insecure"}]
-		}],
-		"allowed_grpc_services": {
-			"dns:///side-channel:443": {
-				"channel_creds": [{"type": "test_observable_channel_creds"}]
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			cancels = 0
+			var c Config
+			err := c.UnmarshalJSON([]byte(test.cfg))
+			if (err != nil) != test.wantErr {
+				t.Fatalf("Config.UnmarshalJSON() error = %v, wantErr %v", err, test.wantErr)
 			}
-		}
-	}`
-	var ok Config
-	if err := ok.UnmarshalJSON([]byte(okCfg)); err != nil {
-		t.Fatalf("Config.UnmarshalJSON() failed: %v", err)
-	}
-	if cancels != 0 {
-		t.Errorf("cleanup ran %d times on a successful parse, want 0", cancels)
+			if cancels != test.wantCancels {
+				t.Errorf("cleanups ran %d times, want %d", cancels, test.wantCancels)
+			}
+		})
 	}
 }
