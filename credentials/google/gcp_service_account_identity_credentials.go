@@ -63,7 +63,7 @@ type gcpServiceAccountIdentityCallCreds struct {
 	token                  *auth.Token
 	tokenExpiry            time.Time     // timestamp after which the cached token is considered invalid
 	preemptiveTokenRefresh time.Time     // timestamp after which background preemptive refresh is triggered
-	fetching               chan struct{} // used to deduplicate concurrent background token fetches
+	fetching               chan struct{} // used to ensure a single in-progress background token fetch
 	nextRetryTime          time.Time     // timestamp after which we can attempt the next token fetch
 	retryAttempt           int           // consecutive fetch failure count used to compute backoff delay
 	lastErr                error         // cached error returned from the most recent token fetch attempt
@@ -126,12 +126,20 @@ func (c *gcpServiceAccountIdentityCallCreds) GetRequestMetadata(ctx context.Cont
 		return nil, fmt.Errorf("credentials: cannot send secure credentials on an insecure connection: %v", err)
 	}
 
-	md, err := c.cachedRequestMetadata(true)
-	if md != nil || err != nil {
+	if md, err := c.cachedRequestMetadata(true); md != nil || err != nil {
 		return md, err
 	}
 
 	c.mu.Lock()
+	// Now that we have the lock, did someone else finish the fetch while we
+	// were waiting for the lock?
+	md, err := c.cachedRequestMetadataLocked(false)
+	if md != nil || err != nil {
+		c.mu.Unlock()
+		return md, err
+	}
+
+	// If no one is fetching, start it.
 	if c.fetching == nil {
 		c.fetching = make(chan struct{})
 		go c.startFetch()
@@ -141,6 +149,7 @@ func (c *gcpServiceAccountIdentityCallCreds) GetRequestMetadata(ctx context.Cont
 
 	select {
 	case <-wait:
+		// Return the new cached result from the most recent fetch.
 		md, err := c.cachedRequestMetadata(false)
 		if md == nil && err == nil {
 			return nil, status.Error(codes.Unavailable, "credentials: fetched token is expired")
@@ -151,18 +160,25 @@ func (c *gcpServiceAccountIdentityCallCreds) GetRequestMetadata(ctx context.Cont
 	}
 }
 
-// cachedRequestMetadata returns the cached token if it is valid, or nil if it is
-// not. If attemptPreemptiveRefresh is true, it will also trigger a background
-// refresh if the token is stale but still valid. It returns the cached error
-// if the last fetch failed and the backoff interval has not expired.
+// cachedRequestMetadata handles its own locking for the "fast path".
+func (c *gcpServiceAccountIdentityCallCreds) cachedRequestMetadata(attemptPreemptiveRefresh bool) (map[string]string, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.cachedRequestMetadataLocked(attemptPreemptiveRefresh)
+}
+
+// cachedRequestMetadataLocked returns the cached token if it is valid, or nil
+// if it is not. If attemptPreemptiveRefresh is true, it will also trigger a
+// background refresh if the token is stale but still valid. It returns the
+// cached error if the last fetch failed and the backoff interval has not
+// expired.
 //
 // Returns (nil, nil) if the token is not valid and a new fetch is required. The
 // caller is responsible for initiating the fetch or waiting for an in-progress
 // fetch to complete.
-func (c *gcpServiceAccountIdentityCallCreds) cachedRequestMetadata(attemptPreemptiveRefresh bool) (map[string]string, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
+//
+// It must be called with mu locked.
+func (c *gcpServiceAccountIdentityCallCreds) cachedRequestMetadataLocked(attemptPreemptiveRefresh bool) (map[string]string, error) {
 	if c.token != nil && c.isTokenValidLocked() {
 		if attemptPreemptiveRefresh && c.isTokenStaleLocked() && c.fetching == nil {
 			c.fetching = make(chan struct{})
