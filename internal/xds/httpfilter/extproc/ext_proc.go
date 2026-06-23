@@ -47,7 +47,6 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/structpb"
 
-	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3procfilterpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/ext_proc/v3"
 	v3procservicegrpc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	v3procservicepb "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
@@ -67,21 +66,7 @@ func init() {
 	}
 }
 
-var (
-	// ParseGRPCServiceConfig parses the gRPC service configuration from the given
-	// protobuf message.
-	ParseGRPCServiceConfig = func(*v3corepb.GrpcService) (xdsresource.GRPCServiceConfig, error) {
-		return xdsresource.GRPCServiceConfig{}, fmt.Errorf("extproc: ParseGRPCServiceConfig not implemented")
-	}
-
-	// CreateExtProcChannel creates a gRPC client channel to the external
-	// processing server.
-	CreateExtProcChannel = func(xdsresource.GRPCServiceConfig) (grpc.ClientConnInterface, func() error, error) {
-		return nil, nil, fmt.Errorf("extproc: dialing external processor server not implemented")
-	}
-
-	metadataFromOutgoingContextRaw = internal.FromOutgoingContextRaw.(func(context.Context) (metadata.MD, [][]string, bool))
-)
+var metadataFromOutgoingContextRaw = internal.FromOutgoingContextRaw.(func(context.Context) (metadata.MD, [][]string, bool))
 
 const defaultDeferredCloseTimeout = 5 * time.Second
 
@@ -125,7 +110,7 @@ func (builder) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, er
 	if msg.GetGrpcService() == nil {
 		return nil, fmt.Errorf("extproc: empty grpc_service provided in config %v", cfg)
 	}
-	server, err := ParseGRPCServiceConfig(msg.GetGrpcService())
+	server, err := iextproc.ParseGRPCServiceConfig(msg.GetGrpcService())
 	if err != nil {
 		return nil, fmt.Errorf("extproc: failed to parse grpc_service %v", err)
 	}
@@ -191,7 +176,7 @@ func (builder) ParseFilterConfigOverride(ov proto.Message) (httpfilter.FilterCon
 
 	var serverOpt optional.Optional[xdsresource.GRPCServiceConfig]
 	if override.GetGrpcService() != nil {
-		server, err := ParseGRPCServiceConfig(override.GetGrpcService())
+		server, err := iextproc.ParseGRPCServiceConfig(override.GetGrpcService())
 		if err != nil {
 			return nil, fmt.Errorf("extproc: failed to parse grpc_service: %v", err)
 		}
@@ -243,7 +228,7 @@ func (clientFilter) BuildClientInterceptor(base, override httpfilter.FilterConfi
 	config := newInterceptorConfig(b, ov)
 
 	// Create a channel to the external processor server.
-	cc, cancel, err := CreateExtProcChannel(config.server)
+	cc, cancel, err := iextproc.CreateExtProcChannel(config.server)
 	if err != nil {
 		return nil, fmt.Errorf("extproc: failed to create channel to the external processor server %q: %v", config.server.TargetURI, err)
 	}

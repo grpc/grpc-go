@@ -36,7 +36,6 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/internal/testutils/xds/e2e/setup"
-	"google.golang.org/grpc/internal/xds/httpfilter/extproc"
 	"google.golang.org/grpc/internal/xds/httpfilter/extproc/internal"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 	"google.golang.org/grpc/metadata"
@@ -245,13 +244,13 @@ func (s *mockProcessorServer) Process(stream v3procservicepb.ExternalProcessor_P
 // correctly routes headers and bodies to the processor, the processor echoes
 // the mutations back, and the client successfully completes a Unary RPC.
 func (s) TestAllSendUnary(t *testing.T) {
-	origParse := extproc.ParseGRPCServiceConfig
-	origCreate := extproc.CreateExtProcChannel
-	extproc.ParseGRPCServiceConfig = parseGRPCServiceConfigForTesting
-	extproc.CreateExtProcChannel = createExtProcChannelForTesting
+	origParse := internal.ParseGRPCServiceConfig
+	origCreate := internal.CreateExtProcChannel
+	internal.ParseGRPCServiceConfig = parseGRPCServiceConfigForTesting
+	internal.CreateExtProcChannel = createExtProcChannelForTesting
 	defer func() {
-		extproc.ParseGRPCServiceConfig = origParse
-		extproc.CreateExtProcChannel = origCreate
+		internal.ParseGRPCServiceConfig = origParse
+		internal.CreateExtProcChannel = origCreate
 	}()
 
 	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
@@ -385,13 +384,13 @@ func (s) TestAllSendUnary(t *testing.T) {
 // the correctly mutated responses back, even when the processor changes the
 // response count.
 func (s) TestStreamingModifications(t *testing.T) {
-	origParse := extproc.ParseGRPCServiceConfig
-	origCreate := extproc.CreateExtProcChannel
-	extproc.ParseGRPCServiceConfig = parseGRPCServiceConfigForTesting
-	extproc.CreateExtProcChannel = createExtProcChannelForTesting
+	origParse := internal.ParseGRPCServiceConfig
+	origCreate := internal.CreateExtProcChannel
+	internal.ParseGRPCServiceConfig = parseGRPCServiceConfigForTesting
+	internal.CreateExtProcChannel = createExtProcChannelForTesting
 	defer func() {
-		extproc.ParseGRPCServiceConfig = origParse
-		extproc.CreateExtProcChannel = origCreate
+		internal.ParseGRPCServiceConfig = origParse
+		internal.CreateExtProcChannel = origCreate
 	}()
 
 	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
@@ -666,13 +665,13 @@ func (s) TestStreamingModifications(t *testing.T) {
 // ProtocolConfig populated with the current ProcessingMode, and subsequent
 // requests do not.
 func (s) TestProtocolConfigInFirstMessage(t *testing.T) {
-	origParse := extproc.ParseGRPCServiceConfig
-	origCreate := extproc.CreateExtProcChannel
-	extproc.ParseGRPCServiceConfig = parseGRPCServiceConfigForTesting
-	extproc.CreateExtProcChannel = createExtProcChannelForTesting
+	origParse := internal.ParseGRPCServiceConfig
+	origCreate := internal.CreateExtProcChannel
+	internal.ParseGRPCServiceConfig = parseGRPCServiceConfigForTesting
+	internal.CreateExtProcChannel = createExtProcChannelForTesting
 	defer func() {
-		extproc.ParseGRPCServiceConfig = origParse
-		extproc.CreateExtProcChannel = origCreate
+		internal.ParseGRPCServiceConfig = origParse
+		internal.CreateExtProcChannel = origCreate
 	}()
 	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
 	internal.RegisterForTesting()
@@ -806,13 +805,13 @@ func (s) TestProtocolConfigInFirstMessage(t *testing.T) {
 // outbound events do not reach the backend until the processor responds to the
 // request headers.
 func (s) TestWaitForDataplane(t *testing.T) {
-	origParse := extproc.ParseGRPCServiceConfig
-	origCreate := extproc.CreateExtProcChannel
-	extproc.ParseGRPCServiceConfig = parseGRPCServiceConfigForTesting
-	extproc.CreateExtProcChannel = createExtProcChannelForTesting
+	origParse := internal.ParseGRPCServiceConfig
+	origCreate := internal.CreateExtProcChannel
+	internal.ParseGRPCServiceConfig = parseGRPCServiceConfigForTesting
+	internal.CreateExtProcChannel = createExtProcChannelForTesting
 	defer func() {
-		extproc.ParseGRPCServiceConfig = origParse
-		extproc.CreateExtProcChannel = origCreate
+		internal.ParseGRPCServiceConfig = origParse
+		internal.CreateExtProcChannel = origCreate
 	}()
 	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
 	internal.RegisterForTesting()
@@ -993,13 +992,13 @@ func (s) TestWaitForDataplane(t *testing.T) {
 // Trailers-Only response. Verifies that this is correctly delivered to the
 // processor as a ResponseHeader message with end_of_stream set to true.
 func (s) TestTrailersOnly(t *testing.T) {
-	origParse := extproc.ParseGRPCServiceConfig
-	origCreate := extproc.CreateExtProcChannel
-	extproc.ParseGRPCServiceConfig = parseGRPCServiceConfigForTesting
-	extproc.CreateExtProcChannel = createExtProcChannelForTesting
+	origParse := internal.ParseGRPCServiceConfig
+	origCreate := internal.CreateExtProcChannel
+	internal.ParseGRPCServiceConfig = parseGRPCServiceConfigForTesting
+	internal.CreateExtProcChannel = createExtProcChannelForTesting
 	defer func() {
-		extproc.ParseGRPCServiceConfig = origParse
-		extproc.CreateExtProcChannel = origCreate
+		internal.ParseGRPCServiceConfig = origParse
+		internal.CreateExtProcChannel = origCreate
 	}()
 	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
 	internal.RegisterForTesting()
@@ -1130,13 +1129,13 @@ func (s) TestTrailersOnly(t *testing.T) {
 // messages and then transitions to bypass mode, causing all subsequent client
 // messages and server responses to bypass the processor.
 func (s) TestDraining(t *testing.T) {
-	origParse := extproc.ParseGRPCServiceConfig
-	origCreate := extproc.CreateExtProcChannel
-	extproc.ParseGRPCServiceConfig = parseGRPCServiceConfigForTesting
-	extproc.CreateExtProcChannel = createExtProcChannelForTesting
+	origParse := internal.ParseGRPCServiceConfig
+	origCreate := internal.CreateExtProcChannel
+	internal.ParseGRPCServiceConfig = parseGRPCServiceConfigForTesting
+	internal.CreateExtProcChannel = createExtProcChannelForTesting
 	defer func() {
-		extproc.ParseGRPCServiceConfig = origParse
-		extproc.CreateExtProcChannel = origCreate
+		internal.ParseGRPCServiceConfig = origParse
+		internal.CreateExtProcChannel = origCreate
 	}()
 
 	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
@@ -1335,13 +1334,13 @@ func (s) TestDraining(t *testing.T) {
 // enabled (default) and the processor sends an ImmediateResponse. Verifies that
 // the filter immediately aborts the RPC with the specified status.
 func (s) TestImmediateResponseEnabled(t *testing.T) {
-	origParse := extproc.ParseGRPCServiceConfig
-	origCreate := extproc.CreateExtProcChannel
-	extproc.ParseGRPCServiceConfig = parseGRPCServiceConfigForTesting
-	extproc.CreateExtProcChannel = createExtProcChannelForTesting
+	origParse := internal.ParseGRPCServiceConfig
+	origCreate := internal.CreateExtProcChannel
+	internal.ParseGRPCServiceConfig = parseGRPCServiceConfigForTesting
+	internal.CreateExtProcChannel = createExtProcChannelForTesting
 	defer func() {
-		extproc.ParseGRPCServiceConfig = origParse
-		extproc.CreateExtProcChannel = origCreate
+		internal.ParseGRPCServiceConfig = origParse
+		internal.CreateExtProcChannel = origCreate
 	}()
 	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
 	internal.RegisterForTesting()
@@ -1441,13 +1440,13 @@ func (s) TestImmediateResponseEnabled(t *testing.T) {
 // processor sends an ImmediateResponse while failure_mode_allow is false.
 // Verifies that the filter treats it as a stream error and the RPC fails.
 func (s) TestImmediateResponseDisabled(t *testing.T) {
-	origParse := extproc.ParseGRPCServiceConfig
-	origCreate := extproc.CreateExtProcChannel
-	extproc.ParseGRPCServiceConfig = parseGRPCServiceConfigForTesting
-	extproc.CreateExtProcChannel = createExtProcChannelForTesting
+	origParse := internal.ParseGRPCServiceConfig
+	origCreate := internal.CreateExtProcChannel
+	internal.ParseGRPCServiceConfig = parseGRPCServiceConfigForTesting
+	internal.CreateExtProcChannel = createExtProcChannelForTesting
 	defer func() {
-		extproc.ParseGRPCServiceConfig = origParse
-		extproc.CreateExtProcChannel = origCreate
+		internal.ParseGRPCServiceConfig = origParse
+		internal.CreateExtProcChannel = origCreate
 	}()
 	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
 	internal.RegisterForTesting()
@@ -1551,13 +1550,13 @@ func (s) TestImmediateResponseDisabled(t *testing.T) {
 // receiving an ImmediateResponse. Verifies that this triggers a bypass,
 // allowing the dataplane RPC to succeed.
 func (s) TestImmediateResponseDisabledWithFailureModeAllow(t *testing.T) {
-	origParse := extproc.ParseGRPCServiceConfig
-	origCreate := extproc.CreateExtProcChannel
-	extproc.ParseGRPCServiceConfig = parseGRPCServiceConfigForTesting
-	extproc.CreateExtProcChannel = createExtProcChannelForTesting
+	origParse := internal.ParseGRPCServiceConfig
+	origCreate := internal.CreateExtProcChannel
+	internal.ParseGRPCServiceConfig = parseGRPCServiceConfigForTesting
+	internal.CreateExtProcChannel = createExtProcChannelForTesting
 	defer func() {
-		extproc.ParseGRPCServiceConfig = origParse
-		extproc.CreateExtProcChannel = origCreate
+		internal.ParseGRPCServiceConfig = origParse
+		internal.CreateExtProcChannel = origCreate
 	}()
 	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
 	internal.RegisterForTesting()
@@ -1698,13 +1697,13 @@ func (s) TestImmediateResponseDisabledWithFailureModeAllow(t *testing.T) {
 // failure_mode_allow is set to true. Verifies that the RPC succeeds by
 // bypassing the external processor.
 func (s) TestStreamFailureHeaderPhaseAllow(t *testing.T) {
-	origParse := extproc.ParseGRPCServiceConfig
-	origCreate := extproc.CreateExtProcChannel
-	extproc.ParseGRPCServiceConfig = parseGRPCServiceConfigForTesting
-	extproc.CreateExtProcChannel = createExtProcChannelForTesting
+	origParse := internal.ParseGRPCServiceConfig
+	origCreate := internal.CreateExtProcChannel
+	internal.ParseGRPCServiceConfig = parseGRPCServiceConfigForTesting
+	internal.CreateExtProcChannel = createExtProcChannelForTesting
 	defer func() {
-		extproc.ParseGRPCServiceConfig = origParse
-		extproc.CreateExtProcChannel = origCreate
+		internal.ParseGRPCServiceConfig = origParse
+		internal.CreateExtProcChannel = origCreate
 	}()
 	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
 	internal.RegisterForTesting()
@@ -1786,13 +1785,13 @@ func (s) TestStreamFailureHeaderPhaseAllow(t *testing.T) {
 // processor stream fails abruptly during the request header phase while
 // failure_mode_allow is false. Verifies that the RPC fails.
 func (s) TestStreamFailureHeaderPhaseDeny(t *testing.T) {
-	origParse := extproc.ParseGRPCServiceConfig
-	origCreate := extproc.CreateExtProcChannel
-	extproc.ParseGRPCServiceConfig = parseGRPCServiceConfigForTesting
-	extproc.CreateExtProcChannel = createExtProcChannelForTesting
+	origParse := internal.ParseGRPCServiceConfig
+	origCreate := internal.CreateExtProcChannel
+	internal.ParseGRPCServiceConfig = parseGRPCServiceConfigForTesting
+	internal.CreateExtProcChannel = createExtProcChannelForTesting
 	defer func() {
-		extproc.ParseGRPCServiceConfig = origParse
-		extproc.CreateExtProcChannel = origCreate
+		internal.ParseGRPCServiceConfig = origParse
+		internal.CreateExtProcChannel = origCreate
 	}()
 	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
 	internal.RegisterForTesting()
@@ -1876,13 +1875,13 @@ func (s) TestStreamFailureHeaderPhaseDeny(t *testing.T) {
 // failure_mode_allow is not respected once body has been sent on external
 // processor server.
 func (s) TestStreamFailureBodyPhaseAllow(t *testing.T) {
-	origParse := extproc.ParseGRPCServiceConfig
-	origCreate := extproc.CreateExtProcChannel
-	extproc.ParseGRPCServiceConfig = parseGRPCServiceConfigForTesting
-	extproc.CreateExtProcChannel = createExtProcChannelForTesting
+	origParse := internal.ParseGRPCServiceConfig
+	origCreate := internal.CreateExtProcChannel
+	internal.ParseGRPCServiceConfig = parseGRPCServiceConfigForTesting
+	internal.CreateExtProcChannel = createExtProcChannelForTesting
 	defer func() {
-		extproc.ParseGRPCServiceConfig = origParse
-		extproc.CreateExtProcChannel = origCreate
+		internal.ParseGRPCServiceConfig = origParse
+		internal.CreateExtProcChannel = origCreate
 	}()
 	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
 	internal.RegisterForTesting()
@@ -2035,13 +2034,13 @@ func (s) TestStreamFailureBodyPhaseAllow(t *testing.T) {
 // NONE and failure_mode_allow is true. Verifies that because no body messages
 // were sent to ext_proc, the data plane RPC is allowed to continue unharmed.
 func (s) TestStreamFailureBodyModeNoneAllow(t *testing.T) {
-	origParse := extproc.ParseGRPCServiceConfig
-	origCreate := extproc.CreateExtProcChannel
-	extproc.ParseGRPCServiceConfig = parseGRPCServiceConfigForTesting
-	extproc.CreateExtProcChannel = createExtProcChannelForTesting
+	origParse := internal.ParseGRPCServiceConfig
+	origCreate := internal.CreateExtProcChannel
+	internal.ParseGRPCServiceConfig = parseGRPCServiceConfigForTesting
+	internal.CreateExtProcChannel = createExtProcChannelForTesting
 	defer func() {
-		extproc.ParseGRPCServiceConfig = origParse
-		extproc.CreateExtProcChannel = origCreate
+		internal.ParseGRPCServiceConfig = origParse
+		internal.CreateExtProcChannel = origCreate
 	}()
 	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
 	internal.RegisterForTesting()
@@ -2208,13 +2207,13 @@ func (s) TestStreamFailureBodyModeNoneAllow(t *testing.T) {
 // processor stream fails abruptly during the request body phase while
 // failure_mode_allow is false. Verifies that the RPC fails.
 func (s) TestStreamFailureBodyPhaseDeny(t *testing.T) {
-	origParse := extproc.ParseGRPCServiceConfig
-	origCreate := extproc.CreateExtProcChannel
-	extproc.ParseGRPCServiceConfig = parseGRPCServiceConfigForTesting
-	extproc.CreateExtProcChannel = createExtProcChannelForTesting
+	origParse := internal.ParseGRPCServiceConfig
+	origCreate := internal.CreateExtProcChannel
+	internal.ParseGRPCServiceConfig = parseGRPCServiceConfigForTesting
+	internal.CreateExtProcChannel = createExtProcChannelForTesting
 	defer func() {
-		extproc.ParseGRPCServiceConfig = origParse
-		extproc.CreateExtProcChannel = origCreate
+		internal.ParseGRPCServiceConfig = origParse
+		internal.CreateExtProcChannel = origCreate
 	}()
 	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
 	internal.RegisterForTesting()
@@ -2339,13 +2338,13 @@ func (s) TestStreamFailureBodyPhaseDeny(t *testing.T) {
 // while failure_mode_allow is false. Verifies that the Unary RPC fails with
 // status code Internal.
 func (s) TestUnaryFailureBodyPhaseDeny(t *testing.T) {
-	origParse := extproc.ParseGRPCServiceConfig
-	origCreate := extproc.CreateExtProcChannel
-	extproc.ParseGRPCServiceConfig = parseGRPCServiceConfigForTesting
-	extproc.CreateExtProcChannel = createExtProcChannelForTesting
+	origParse := internal.ParseGRPCServiceConfig
+	origCreate := internal.CreateExtProcChannel
+	internal.ParseGRPCServiceConfig = parseGRPCServiceConfigForTesting
+	internal.CreateExtProcChannel = createExtProcChannelForTesting
 	defer func() {
-		extproc.ParseGRPCServiceConfig = origParse
-		extproc.CreateExtProcChannel = origCreate
+		internal.ParseGRPCServiceConfig = origParse
+		internal.CreateExtProcChannel = origCreate
 	}()
 
 	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
@@ -2464,13 +2463,13 @@ func (s) TestUnaryFailureBodyPhaseDeny(t *testing.T) {
 // filter: the client's Send call blocks, and receiving from the dataplane
 // server also blocks.
 func (s) TestFlowControl(t *testing.T) {
-	origParse := extproc.ParseGRPCServiceConfig
-	origCreate := extproc.CreateExtProcChannel
-	extproc.ParseGRPCServiceConfig = parseGRPCServiceConfigForTesting
-	extproc.CreateExtProcChannel = createExtProcChannelForTesting
+	origParse := internal.ParseGRPCServiceConfig
+	origCreate := internal.CreateExtProcChannel
+	internal.ParseGRPCServiceConfig = parseGRPCServiceConfigForTesting
+	internal.CreateExtProcChannel = createExtProcChannelForTesting
 	defer func() {
-		extproc.ParseGRPCServiceConfig = origParse
-		extproc.CreateExtProcChannel = origCreate
+		internal.ParseGRPCServiceConfig = origParse
+		internal.CreateExtProcChannel = origCreate
 	}()
 	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
 	internal.RegisterForTesting()
@@ -2671,13 +2670,13 @@ func (s) TestFlowControl(t *testing.T) {
 // all in-flight and bypassed payloads directly over the data plane without
 // message loss.
 func (s) TestDrainingFlowControlNoMessageLoss(t *testing.T) {
-	origParse := extproc.ParseGRPCServiceConfig
-	origCreate := extproc.CreateExtProcChannel
-	extproc.ParseGRPCServiceConfig = parseGRPCServiceConfigForTesting
-	extproc.CreateExtProcChannel = createExtProcChannelForTesting
+	origParse := internal.ParseGRPCServiceConfig
+	origCreate := internal.CreateExtProcChannel
+	internal.ParseGRPCServiceConfig = parseGRPCServiceConfigForTesting
+	internal.CreateExtProcChannel = createExtProcChannelForTesting
 	defer func() {
-		extproc.ParseGRPCServiceConfig = origParse
-		extproc.CreateExtProcChannel = origCreate
+		internal.ParseGRPCServiceConfig = origParse
+		internal.CreateExtProcChannel = origCreate
 	}()
 	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
 	internal.RegisterForTesting()
@@ -2877,13 +2876,13 @@ func (s) TestDrainingFlowControlNoMessageLoss(t *testing.T) {
 // correctly triggers processor trailer mutation and returns the final mutated
 // metadata.
 func (s) TestClientTrailer(t *testing.T) {
-	origParse := extproc.ParseGRPCServiceConfig
-	origCreate := extproc.CreateExtProcChannel
-	extproc.ParseGRPCServiceConfig = parseGRPCServiceConfigForTesting
-	extproc.CreateExtProcChannel = createExtProcChannelForTesting
+	origParse := internal.ParseGRPCServiceConfig
+	origCreate := internal.CreateExtProcChannel
+	internal.ParseGRPCServiceConfig = parseGRPCServiceConfigForTesting
+	internal.CreateExtProcChannel = createExtProcChannelForTesting
 	defer func() {
-		extproc.ParseGRPCServiceConfig = origParse
-		extproc.CreateExtProcChannel = origCreate
+		internal.ParseGRPCServiceConfig = origParse
+		internal.CreateExtProcChannel = origCreate
 	}()
 	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
 	internal.RegisterForTesting()
@@ -3113,13 +3112,13 @@ func (s) TestClientTrailer(t *testing.T) {
 // correctly sets the terminal status and merges any specified mutation headers
 // into the stream trailers.
 func (s) TestImmediateResponseTrailers(t *testing.T) {
-	origParse := extproc.ParseGRPCServiceConfig
-	origCreate := extproc.CreateExtProcChannel
-	extproc.ParseGRPCServiceConfig = parseGRPCServiceConfigForTesting
-	extproc.CreateExtProcChannel = createExtProcChannelForTesting
+	origParse := internal.ParseGRPCServiceConfig
+	origCreate := internal.CreateExtProcChannel
+	internal.ParseGRPCServiceConfig = parseGRPCServiceConfigForTesting
+	internal.CreateExtProcChannel = createExtProcChannelForTesting
 	defer func() {
-		extproc.ParseGRPCServiceConfig = origParse
-		extproc.CreateExtProcChannel = origCreate
+		internal.ParseGRPCServiceConfig = origParse
+		internal.CreateExtProcChannel = origCreate
 	}()
 	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
 	internal.RegisterForTesting()
@@ -3311,13 +3310,13 @@ func (s) TestImmediateResponseTrailers(t *testing.T) {
 // failure_mode_allow is false. Verifies that the stream is cancelled and
 // subsequent data plane RPC calls fail with Internal.
 func (s) TestStreamFailureGrpcMessageCompressedDeny(t *testing.T) {
-	origParse := extproc.ParseGRPCServiceConfig
-	origCreate := extproc.CreateExtProcChannel
-	extproc.ParseGRPCServiceConfig = parseGRPCServiceConfigForTesting
-	extproc.CreateExtProcChannel = createExtProcChannelForTesting
+	origParse := internal.ParseGRPCServiceConfig
+	origCreate := internal.CreateExtProcChannel
+	internal.ParseGRPCServiceConfig = parseGRPCServiceConfigForTesting
+	internal.CreateExtProcChannel = createExtProcChannelForTesting
 	defer func() {
-		extproc.ParseGRPCServiceConfig = origParse
-		extproc.CreateExtProcChannel = origCreate
+		internal.ParseGRPCServiceConfig = origParse
+		internal.CreateExtProcChannel = origCreate
 	}()
 	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
 	internal.RegisterForTesting()
@@ -3463,13 +3462,13 @@ func (s) TestStreamFailureGrpcMessageCompressedDeny(t *testing.T) {
 // failure_mode_allow is true. Verifies that the error is bypassed and
 // subsequent data plane RPC messages succeed without loss.
 func (s) TestStreamFailureGrpcMessageCompressedAllow(t *testing.T) {
-	origParse := extproc.ParseGRPCServiceConfig
-	origCreate := extproc.CreateExtProcChannel
-	extproc.ParseGRPCServiceConfig = parseGRPCServiceConfigForTesting
-	extproc.CreateExtProcChannel = createExtProcChannelForTesting
+	origParse := internal.ParseGRPCServiceConfig
+	origCreate := internal.CreateExtProcChannel
+	internal.ParseGRPCServiceConfig = parseGRPCServiceConfigForTesting
+	internal.CreateExtProcChannel = createExtProcChannelForTesting
 	defer func() {
-		extproc.ParseGRPCServiceConfig = origParse
-		extproc.CreateExtProcChannel = origCreate
+		internal.ParseGRPCServiceConfig = origParse
+		internal.CreateExtProcChannel = origCreate
 	}()
 	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
 	internal.RegisterForTesting()
@@ -3623,13 +3622,13 @@ func (s) TestStreamFailureGrpcMessageCompressedAllow(t *testing.T) {
 // correctly constructed and transmitted within the processing request sent to
 // the external processor.
 func (s) TestRequestAttributes(t *testing.T) {
-	origParse := extproc.ParseGRPCServiceConfig
-	origCreate := extproc.CreateExtProcChannel
-	extproc.ParseGRPCServiceConfig = parseGRPCServiceConfigForTesting
-	extproc.CreateExtProcChannel = createExtProcChannelForTesting
+	origParse := internal.ParseGRPCServiceConfig
+	origCreate := internal.CreateExtProcChannel
+	internal.ParseGRPCServiceConfig = parseGRPCServiceConfigForTesting
+	internal.CreateExtProcChannel = createExtProcChannelForTesting
 	defer func() {
-		extproc.ParseGRPCServiceConfig = origParse
-		extproc.CreateExtProcChannel = origCreate
+		internal.ParseGRPCServiceConfig = origParse
+		internal.CreateExtProcChannel = origCreate
 	}()
 	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
 	internal.RegisterForTesting()
@@ -3786,13 +3785,13 @@ func (s) TestRequestAttributes(t *testing.T) {
 // both were queued). Verifies that this protocol error is treated as a stream
 // failure and fails the data plane RPC when failure_mode_allow is false.
 func (s) TestStreamFailureOutOfOrderResponse(t *testing.T) {
-	origParse := extproc.ParseGRPCServiceConfig
-	origCreate := extproc.CreateExtProcChannel
-	extproc.ParseGRPCServiceConfig = parseGRPCServiceConfigForTesting
-	extproc.CreateExtProcChannel = createExtProcChannelForTesting
+	origParse := internal.ParseGRPCServiceConfig
+	origCreate := internal.CreateExtProcChannel
+	internal.ParseGRPCServiceConfig = parseGRPCServiceConfigForTesting
+	internal.CreateExtProcChannel = createExtProcChannelForTesting
 	defer func() {
-		extproc.ParseGRPCServiceConfig = origParse
-		extproc.CreateExtProcChannel = origCreate
+		internal.ParseGRPCServiceConfig = origParse
+		internal.CreateExtProcChannel = origCreate
 	}()
 	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
 	internal.RegisterForTesting()

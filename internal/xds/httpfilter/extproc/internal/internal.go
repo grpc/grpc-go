@@ -19,6 +19,14 @@
 // Package internal contains functionality internal to the extproc package.
 package internal
 
+import (
+	"fmt"
+
+	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
+)
+
 var (
 	// RegisterForTesting registers the external processor HTTP Filter for testing
 	// purposes.
@@ -27,4 +35,16 @@ var (
 	// UnregisterForTesting unregisters the external processor HTTP Filter for
 	// testing purposes.
 	UnregisterForTesting func()
+
+	// ParseGRPCServiceConfig parses the gRPC service configuration from the given
+	// protobuf message.
+	ParseGRPCServiceConfig = func(*v3corepb.GrpcService) (xdsresource.GRPCServiceConfig, error) {
+		return xdsresource.GRPCServiceConfig{}, fmt.Errorf("extproc: ParseGRPCServiceConfig not implemented")
+	}
+
+	// CreateExtProcChannel creates a gRPC client channel to the external
+	// processing server.
+	CreateExtProcChannel = func(xdsresource.GRPCServiceConfig) (grpc.ClientConnInterface, func() error, error) {
+		return nil, nil, fmt.Errorf("extproc: dialing external processor server not implemented")
+	}
 )
