@@ -286,6 +286,32 @@ func (s) TestFrameTooLarge(t *testing.T) {
 	}
 }
 
+func testFrameTooSmall(t *testing.T, rp string) {
+	buf := new(bytes.Buffer)
+	serverConn := newTestALTSRecordConn(buf, nil, core.ServerSide, rp, nil)
+	// Craft a frame whose length field claims fewer bytes than the message
+	// type field requires. The first payload byte is set to the record
+	// message type so the type check passes and decoding proceeds to slice
+	// out the ciphertext.
+	payload := []byte{byte(altsRecordMsgType & 0xff), 0x00}
+	framedMsg := make([]byte, MsgLenFieldSize+len(payload))
+	binary.LittleEndian.PutUint32(framedMsg[:MsgLenFieldSize], uint32(len(payload)))
+	copy(framedMsg[MsgLenFieldSize:], payload)
+	if _, err := buf.Write(framedMsg); err != nil {
+		t.Fatalf("Unexpected error writing to buffer: %v", err)
+	}
+	b := make([]byte, 1)
+	if n, err := serverConn.Read(b); n != 0 || err == nil {
+		t.Fatalf("Read() = %v, %v; want 0, error", n, err)
+	}
+}
+
+func (s) TestFrameTooSmall(t *testing.T) {
+	for _, rp := range recordProtocols {
+		testFrameTooSmall(t, rp)
+	}
+}
+
 func testWriteLargeData(t *testing.T, rp string) {
 	// Test sending and receiving messages larger than the maximum write
 	// buffer size.
