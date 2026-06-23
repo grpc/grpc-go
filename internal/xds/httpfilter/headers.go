@@ -122,22 +122,26 @@ func (m *HeaderMutator) Mutate(md metadata.MD, mutations []*v3corepb.HeaderValue
 			continue
 		}
 
+		// key is already lower-cased and, after ensureCopy, res is a non-nil
+		// map whose value slices were deep-copied, so we operate on the map
+		// directly to avoid the redundant strings.ToLower scans and the
+		// variadic allocation in metadata.MD's Get/Set/Append helpers.
 		switch opt.GetAppendAction() {
 		case v3corepb.HeaderValueOption_APPEND_IF_EXISTS_OR_ADD:
 			ensureCopy()
-			res.Append(key, val)
+			res[key] = append(res[key], val)
 		case v3corepb.HeaderValueOption_ADD_IF_ABSENT:
-			if len(res.Get(key)) == 0 {
+			if len(res[key]) == 0 {
 				ensureCopy()
-				res.Set(key, val)
+				res[key] = []string{val}
 			}
 		case v3corepb.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD:
 			ensureCopy()
-			res.Set(key, val)
+			res[key] = []string{val}
 		case v3corepb.HeaderValueOption_OVERWRITE_IF_EXISTS:
-			if len(res.Get(key)) > 0 {
+			if len(res[key]) > 0 {
 				ensureCopy()
-				res.Set(key, val)
+				res[key] = []string{val}
 			}
 		}
 
