@@ -240,6 +240,45 @@ func ConstructHeaderMap(md metadata.MD, allowedHeaders, disallowedHeaders []matc
 	return headerMap
 }
 
+// ConstructHeaderMapRaw constructs a HeaderMap from both the base metadata and
+// the raw appended metadata slice.
+func ConstructHeaderMapRaw(md metadata.MD, added [][]string, allowedHeaders, disallowedHeaders []matcher.StringMatcher) *v3corepb.HeaderMap {
+	headerMap := &v3corepb.HeaderMap{}
+	// Process the base metadata map.
+	for key, values := range md {
+		if IsDisallowedHeader(key, disallowedHeaders) {
+			continue
+		}
+		if IsAllowedHeader(key, allowedHeaders) {
+			for _, value := range values {
+				headerMap.Headers = append(headerMap.Headers, &v3corepb.HeaderValue{
+					Key:      key,
+					RawValue: []byte(value),
+				})
+			}
+		}
+	}
+	// Process the raw appended metadata slice.
+	for _, kvs := range added {
+		for i := 0; i < len(kvs); i += 2 {
+			key := strings.ToLower(kvs[i])
+			if IsDisallowedHeader(key, disallowedHeaders) {
+				continue
+			}
+			if IsAllowedHeader(key, allowedHeaders) {
+				headerMap.Headers = append(headerMap.Headers, &v3corepb.HeaderValue{
+					Key:      key,
+					RawValue: []byte(kvs[i+1]),
+				})
+			}
+		}
+	}
+	if len(headerMap.Headers) == 0 {
+		return nil
+	}
+	return headerMap
+}
+
 // IsDisallowedHeader returns true if the given header key matches any of the
 // provided disallowed header matchers.
 func IsDisallowedHeader(key string, matchers []matcher.StringMatcher) bool {
