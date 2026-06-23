@@ -2657,3 +2657,124 @@ func checkMetricWithMethod(ctx context.Context, reader *metric.ManualReader, met
 	}
 	return fmt.Errorf("metric %q with method %q not found", metricName, method)
 }
+
+func (s) TestRetryMetrics(t *testing.T) {
+	mo, reader := defaultMetricsOptions(t, nil)
+	mo.Metrics = mo.Metrics.Add(
+		opentelemetry.ClientCallRetriesMetricName,
+		opentelemetry.ClientCallRetryDelayMetricName,
+	)
+	opts := opentelemetry.Options{MetricsOptions: *mo}
+
+	// Setup stub server.
+	ss := &stubserver.StubServer{
+		UnaryCallF: func(ctx context.Context, _ *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			md, _ := metadata.FromIncomingContext(ctx)
+			headerAttempts := 0
+			if h := md["grpc-previous-rpc-attempts"]; len(h) > 0 {
+				headerAttempts, _ = strconv.Atoi(h[0])
+			}
+			if headerAttempts < 2 {
+				return nil, status.Errorf(codes.Unavailable, "retry (%d)", headerAttempts)
+			}
+			return &testpb.SimpleResponse{}, nil
+		},
+	}
+
+	// Start server with opentelemetry option.
+	if err := ss.Start([]grpc.ServerOption{opentelemetry.ServerOption(opts)}); err != nil {
+		t.Fatalf("failed to start stub server: %v", err)
+	}
+	defer ss.Stop()
+
+	// Dial the client with opentelemetry dial option and retry policy.
+	serviceConfig := `{
+		"methodConfig": [{
+			"name": [{"service": "grpc.testing.TestService"}],
+			"retryPolicy": {
+				"maxAttempts": 3,
+				"initialBackoff": "0.05s",
+				"maxBackoff": "0.2s",
+				"backoffMultiplier": 1.0,
+				"retryableStatusCodes": ["UNAVAILABLE"]
+			}
+		}]
+	}`
+	cc, err := grpc.NewClient(
+		ss.Address,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		opentelemetry.DialOption(opts),
+		grpc.WithDefaultServiceConfig(serviceConfig),
+	)
+	if err != nil {
+		t.Fatalf("failed to create client: %v", err)
+	}
+	defer cc.Close()
+
+	client := testgrpc.NewTestServiceClient(cc)
+
+	testTimeout := 5 * time.Second
+	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
+	defer cancel()
+
+	// Make the unary call. It should succeed after 2 retries (3 attempts).
+	if _, err := client.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil {
+		t.Fatalf("UnaryCall failed: %v", err)
+	}
+
+	// Collect metrics.
+	var rm metricdata.ResourceMetrics
+	if err := reader.Collect(ctx, &rm); err != nil {
+		t.Fatalf("failed to collect metrics: %v", err)
+	}
+
+	gotMetrics := make(map[string]metricdata.Metrics)
+	for _, sm := range rm.ScopeMetrics {
+		for _, m := range sm.Metrics {
+			gotMetrics[m.Name] = m
+		}
+	}
+
+	// Verify grpc.client.call.retries.
+	// We made 2 retries, so retries = 2.
+	retriesMetric, ok := gotMetrics[opentelemetry.ClientCallRetriesMetricName]
+	if !ok {
+		t.Fatalf("metric %q not found", opentelemetry.ClientCallRetriesMetricName)
+	}
+	histo, ok := retriesMetric.Data.(metricdata.Histogram[int64])
+	if !ok {
+		t.Fatalf("retries type got: %T, want: metricdata.Histogram[int64]", retriesMetric.Data)
+	}
+	if len(histo.DataPoints) != 1 {
+		t.Fatalf("data points length got: %d, want: 1", len(histo.DataPoints))
+	}
+	dp := histo.DataPoints[0]
+	if dp.Count != 1 {
+		t.Errorf("retries count got: %d, want: 1", dp.Count)
+	}
+	if dp.Sum != 2 {
+		t.Errorf("retries sum got: %d, want: 2", dp.Sum)
+	}
+
+	// Verify grpc.client.call.retry_delay.
+	// Delay is between Attempt 1 end and Attempt 2 start (around 50ms),
+	// and Attempt 2 end and Attempt 3 start (around 50ms).
+	// So total delay should be around 100ms (0.1s).
+	delayMetric, ok := gotMetrics[opentelemetry.ClientCallRetryDelayMetricName]
+	if !ok {
+		t.Fatalf("metric %q not found", opentelemetry.ClientCallRetryDelayMetricName)
+	}
+	delayHisto, ok := delayMetric.Data.(metricdata.Histogram[float64])
+	if !ok {
+		t.Fatalf("retry_delay type got: %T, want: metricdata.Histogram[float64]", delayMetric.Data)
+	}
+	if len(delayHisto.DataPoints) != 1 {
+		t.Fatalf("data points length got: %d, want: 1", len(delayHisto.DataPoints))
+	}
+	delayDp := delayHisto.DataPoints[0]
+	// Expect total delay to be at least 0.08s (due to 2 backoffs of 0.05s
+	// each).
+	if delayDp.Sum < 0.08 || delayDp.Sum > 0.3 {
+		t.Errorf("retry delay sum got: %v, want: ~0.1s", delayDp.Sum)
+	}
+}
