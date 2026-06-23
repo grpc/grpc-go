@@ -518,6 +518,9 @@ func (cs *clientStream) Context() context.Context {
 }
 
 func (cs *clientStream) RecvMsg(m any) error {
+	if cs.procStreamFailed.HasFired() {
+		return cs.procStreamErr.Load().(error)
+	}
 	// Initiate response header processing because external processor requires the
 	// events to be sent in the correct order, i.e. response header before
 	// response message. And if Header() has not already been called, send the
