@@ -48,11 +48,11 @@ func NewHeaderMutatorFromProto(mr *v3mutationpb.HeaderMutationRules) (*HeaderMut
 
 // isMutationAllowed checks if a specific header key mutation is allowed.
 func (m *HeaderMutator) isMutationAllowed(key string) (bool, error) {
-	// Standard system/envoy headers are ignored and not allowed to be mutated
-	if strings.HasPrefix(key, ":") || strings.HasPrefix(key, "grpc-") {
-		return false, nil
-	}
-	if key == "host" {
+	// Per gRFC A102, gRPC never allows modifying pseudo-headers (keys starting
+	// with ":") or the "host" header, regardless of the configured mutation
+	// rules. Other headers (including "grpc-*") are subject to the
+	// allow/disallow rules below.
+	if strings.HasPrefix(key, ":") || key == "host" {
 		return false, nil
 	}
 
@@ -94,7 +94,11 @@ func (m *HeaderMutator) Mutate(md metadata.MD, mutations []*v3corepb.HeaderValue
 			continue
 		}
 		key := strings.ToLower(h.GetKey())
+		// Per gRFC A102, raw_value takes precedence over the legacy value field.
 		val := h.GetValue()
+		if len(h.GetRawValue()) > 0 {
+			val = string(h.GetRawValue())
+		}
 
 		allowed, err := m.isMutationAllowed(key)
 		if err != nil {
@@ -104,8 +108,7 @@ func (m *HeaderMutator) Mutate(md metadata.MD, mutations []*v3corepb.HeaderValue
 			continue
 		}
 
-		action := opt.GetAppendAction()
-		switch action {
+		switch opt.GetAppendAction() {
 		case v3corepb.HeaderValueOption_APPEND_IF_EXISTS_OR_ADD:
 			res.Append(key, val)
 		case v3corepb.HeaderValueOption_ADD_IF_ABSENT:
@@ -114,21 +117,14 @@ func (m *HeaderMutator) Mutate(md metadata.MD, mutations []*v3corepb.HeaderValue
 			}
 		case v3corepb.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD:
 			res.Set(key, val)
-		}
-
-		// Any header mutation resulting in only empty values causes the key to
-		// be removed.
-		vals := res.Get(key)
-		isEmpty := true
-		for _, v := range vals {
-			if v != "" {
-				isEmpty = false
-				break
+		case v3corepb.HeaderValueOption_OVERWRITE_IF_EXISTS:
+			if len(res.Get(key)) > 0 {
+				res.Set(key, val)
 			}
 		}
-		if isEmpty {
-			delete(res, key)
-		}
+
+		// Per gRFC A102, gRPC keeps headers even if a mutation results in an
+		// empty value; the keep_empty_value field is intentionally unsupported.
 	}
 	return res, nil
 }

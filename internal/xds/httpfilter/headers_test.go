@@ -24,118 +24,253 @@ import (
 	v3mutationpb "github.com/envoyproxy/go-control-plane/envoy/config/common/mutation_rules/v3"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3matcherpb "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
+	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
-func TestHeaderMutator_Mutate(t *testing.T) {
-	mr := &v3mutationpb.HeaderMutationRules{
-		AllowExpression:    &v3matcherpb.RegexMatcher{Regex: "allowed-.*"},
-		DisallowExpression: &v3matcherpb.RegexMatcher{Regex: ".*-blocked"},
-		DisallowIsError:    wrapperspb.Bool(true),
-	}
+const (
+	appendOrAdd = v3corepb.HeaderValueOption_APPEND_IF_EXISTS_OR_ADD
+	addIfAbsent = v3corepb.HeaderValueOption_ADD_IF_ABSENT
+	overwrite   = v3corepb.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD
+	overwriteIf = v3corepb.HeaderValueOption_OVERWRITE_IF_EXISTS
+)
 
-	mutator, err := NewHeaderMutatorFromProto(mr)
-	if err != nil {
-		t.Fatalf("NewHeaderMutatorFromProto() returned error: %v", err)
-	}
-
-	md := metadata.Pairs("existing-key", "existing-val")
-
-	mutations := []*v3corepb.HeaderValueOption{
-		{
-			Header:       &v3corepb.HeaderValue{Key: "allowed-header", Value: "mutated-val"},
-			AppendAction: v3corepb.HeaderValueOption_APPEND_IF_EXISTS_OR_ADD,
-		},
-	}
-
-	res, err := mutator.Mutate(md, mutations)
-	if err != nil {
-		t.Fatalf("Mutate() returned unexpected error: %v", err)
-	}
-
-	if got := res.Get("allowed-header"); len(got) != 1 || got[0] != "mutated-val" {
-		t.Errorf("Mutate() allowed-header got: %v, want: %v", got, []string{"mutated-val"})
-	}
-
-	disallowedMutations := []*v3corepb.HeaderValueOption{
-		{
-			Header: &v3corepb.HeaderValue{Key: "header-blocked", Value: "val"},
-		},
-	}
-	_, err = mutator.Mutate(md, disallowedMutations)
-	if err == nil {
-		t.Fatal("Mutate() succeeded for disallowed header with DisallowIsError=true, want error")
-	}
-
-	systemMutations := []*v3corepb.HeaderValueOption{
-		{
-			Header: &v3corepb.HeaderValue{Key: ":path", Value: "/new/path"},
-		},
-	}
-	res, err = mutator.Mutate(md, systemMutations)
-	if err != nil {
-		t.Fatalf("Mutate() returned unexpected error for system header: %v", err)
-	}
-	if got := res.Get(":path"); len(got) != 0 {
-		t.Errorf("System header mutation applied; got: %v, want: []", got)
+// hvo builds a HeaderValueOption with the legacy value field.
+func hvo(key, val string, action v3corepb.HeaderValueOption_HeaderAppendAction) *v3corepb.HeaderValueOption {
+	return &v3corepb.HeaderValueOption{
+		Header:       &v3corepb.HeaderValue{Key: key, Value: val},
+		AppendAction: action,
 	}
 }
 
-func TestHeaderMutator_KeepEmptyValue(t *testing.T) {
-	mr := &v3mutationpb.HeaderMutationRules{}
-	mutator, err := NewHeaderMutatorFromProto(mr)
-	if err != nil {
-		t.Fatalf("NewHeaderMutatorFromProto() returned error: %v", err)
+func TestHeaderMutator_Mutate(t *testing.T) {
+	tests := []struct {
+		name      string
+		rules     *v3mutationpb.HeaderMutationRules
+		input     metadata.MD
+		mutations []*v3corepb.HeaderValueOption
+		want      metadata.MD
+		wantErr   bool
+	}{
+		{
+			name:      "append_to_absent_adds",
+			input:     metadata.MD{"existing": {"v"}},
+			mutations: []*v3corepb.HeaderValueOption{hvo("new", "a", appendOrAdd)},
+			want:      metadata.MD{"existing": {"v"}, "new": {"a"}},
+		},
+		{
+			name:      "append_to_existing_appends",
+			input:     metadata.MD{"k": {"a"}},
+			mutations: []*v3corepb.HeaderValueOption{hvo("k", "b", appendOrAdd)},
+			want:      metadata.MD{"k": {"a", "b"}},
+		},
+		{
+			name:      "add_if_absent_when_absent_adds",
+			input:     metadata.MD{},
+			mutations: []*v3corepb.HeaderValueOption{hvo("k", "a", addIfAbsent)},
+			want:      metadata.MD{"k": {"a"}},
+		},
+		{
+			name:      "add_if_absent_when_present_noop",
+			input:     metadata.MD{"k": {"a"}},
+			mutations: []*v3corepb.HeaderValueOption{hvo("k", "b", addIfAbsent)},
+			want:      metadata.MD{"k": {"a"}},
+		},
+		{
+			name:      "overwrite_or_add_when_present_overwrites",
+			input:     metadata.MD{"k": {"a", "b"}},
+			mutations: []*v3corepb.HeaderValueOption{hvo("k", "c", overwrite)},
+			want:      metadata.MD{"k": {"c"}},
+		},
+		{
+			name:      "overwrite_or_add_when_absent_adds",
+			input:     metadata.MD{},
+			mutations: []*v3corepb.HeaderValueOption{hvo("k", "c", overwrite)},
+			want:      metadata.MD{"k": {"c"}},
+		},
+		{
+			name:      "overwrite_if_exists_when_present_overwrites",
+			input:     metadata.MD{"k": {"a"}},
+			mutations: []*v3corepb.HeaderValueOption{hvo("k", "c", overwriteIf)},
+			want:      metadata.MD{"k": {"c"}},
+		},
+		{
+			name:      "overwrite_if_exists_when_absent_noop",
+			input:     metadata.MD{},
+			mutations: []*v3corepb.HeaderValueOption{hvo("k", "c", overwriteIf)},
+			want:      metadata.MD{},
+		},
+		{
+			// gRFC A102: headers are kept even when a mutation yields an empty
+			// value; keep_empty_value is intentionally unsupported.
+			name:      "empty_value_is_kept_on_existing_key",
+			input:     metadata.MD{"k": {"a"}},
+			mutations: []*v3corepb.HeaderValueOption{hvo("k", "", overwrite)},
+			want:      metadata.MD{"k": {""}},
+		},
+		{
+			name:      "empty_value_is_kept_on_new_key",
+			input:     metadata.MD{},
+			mutations: []*v3corepb.HeaderValueOption{hvo("new", "", appendOrAdd)},
+			want:      metadata.MD{"new": {""}},
+		},
+		{
+			name:  "keep_empty_value_field_is_ignored",
+			input: metadata.MD{"k": {"a"}},
+			mutations: []*v3corepb.HeaderValueOption{{
+				Header:         &v3corepb.HeaderValue{Key: "k", Value: ""},
+				AppendAction:   overwrite,
+				KeepEmptyValue: true,
+			}},
+			want: metadata.MD{"k": {""}},
+		},
+		{
+			name:  "raw_value_takes_precedence_over_value",
+			input: metadata.MD{},
+			mutations: []*v3corepb.HeaderValueOption{{
+				Header:       &v3corepb.HeaderValue{Key: "k", Value: "legacy", RawValue: []byte("raw")},
+				AppendAction: overwrite,
+			}},
+			want: metadata.MD{"k": {"raw"}},
+		},
+		{
+			name:      "key_is_lowercased",
+			input:     metadata.MD{},
+			mutations: []*v3corepb.HeaderValueOption{hvo("MixedCase", "a", overwrite)},
+			want:      metadata.MD{"mixedcase": {"a"}},
+		},
+		{
+			name:      "nil_header_is_skipped",
+			input:     metadata.MD{"k": {"a"}},
+			mutations: []*v3corepb.HeaderValueOption{{AppendAction: overwrite}},
+			want:      metadata.MD{"k": {"a"}},
+		},
+		{
+			name:      "pseudo_header_never_mutated",
+			input:     metadata.MD{},
+			mutations: []*v3corepb.HeaderValueOption{hvo(":path", "/new", overwrite)},
+			want:      metadata.MD{},
+		},
+		{
+			name:      "host_header_never_mutated",
+			input:     metadata.MD{},
+			mutations: []*v3corepb.HeaderValueOption{hvo("host", "evil", overwrite)},
+			want:      metadata.MD{},
+		},
+		{
+			// gRFC A102 only hard-protects ":"-prefixed and "host"; "grpc-*" is
+			// subject to the allow/disallow rules and may be mutated.
+			name:      "grpc_prefixed_header_is_mutable",
+			input:     metadata.MD{},
+			mutations: []*v3corepb.HeaderValueOption{hvo("grpc-foo", "a", overwrite)},
+			want:      metadata.MD{"grpc-foo": {"a"}},
+		},
+		{
+			name:      "disallow_all_ignored_when_not_error",
+			rules:     &v3mutationpb.HeaderMutationRules{DisallowAll: wrapperspb.Bool(true)},
+			input:     metadata.MD{"k": {"a"}},
+			mutations: []*v3corepb.HeaderValueOption{hvo("k", "b", overwrite)},
+			want:      metadata.MD{"k": {"a"}},
+		},
+		{
+			name:      "disallow_all_errors_when_is_error",
+			rules:     &v3mutationpb.HeaderMutationRules{DisallowAll: wrapperspb.Bool(true), DisallowIsError: wrapperspb.Bool(true)},
+			input:     metadata.MD{"k": {"a"}},
+			mutations: []*v3corepb.HeaderValueOption{hvo("k", "b", overwrite)},
+			wantErr:   true,
+		},
+		{
+			name: "disallow_expr_ignored_when_not_error",
+			rules: &v3mutationpb.HeaderMutationRules{
+				DisallowExpression: &v3matcherpb.RegexMatcher{Regex: ".*-blocked"},
+			},
+			input:     metadata.MD{},
+			mutations: []*v3corepb.HeaderValueOption{hvo("k-blocked", "a", overwrite)},
+			want:      metadata.MD{},
+		},
+		{
+			name: "disallow_expr_errors_when_is_error",
+			rules: &v3mutationpb.HeaderMutationRules{
+				DisallowExpression: &v3matcherpb.RegexMatcher{Regex: ".*-blocked"},
+				DisallowIsError:    wrapperspb.Bool(true),
+			},
+			input:     metadata.MD{},
+			mutations: []*v3corepb.HeaderValueOption{hvo("k-blocked", "a", overwrite)},
+			wantErr:   true,
+		},
+		{
+			name: "allow_expr_blocks_non_matching_when_not_error",
+			rules: &v3mutationpb.HeaderMutationRules{
+				AllowExpression: &v3matcherpb.RegexMatcher{Regex: "allowed-.*"},
+			},
+			input:     metadata.MD{},
+			mutations: []*v3corepb.HeaderValueOption{hvo("other", "a", overwrite)},
+			want:      metadata.MD{},
+		},
+		{
+			name: "allow_expr_permits_matching",
+			rules: &v3mutationpb.HeaderMutationRules{
+				AllowExpression: &v3matcherpb.RegexMatcher{Regex: "allowed-.*"},
+			},
+			input:     metadata.MD{},
+			mutations: []*v3corepb.HeaderValueOption{hvo("allowed-k", "a", overwrite)},
+			want:      metadata.MD{"allowed-k": {"a"}},
+		},
+		{
+			name: "disallow_expr_overrides_allow_expr",
+			rules: &v3mutationpb.HeaderMutationRules{
+				AllowExpression:    &v3matcherpb.RegexMatcher{Regex: "allowed-.*"},
+				DisallowExpression: &v3matcherpb.RegexMatcher{Regex: "allowed-secret"},
+			},
+			input:     metadata.MD{},
+			mutations: []*v3corepb.HeaderValueOption{hvo("allowed-secret", "a", overwrite)},
+			want:      metadata.MD{},
+		},
 	}
 
-	t.Run("KeepEmptyValue = false (default)", func(t *testing.T) {
-		md := metadata.Pairs("existing-key", "existing-val")
-		mutations := []*v3corepb.HeaderValueOption{
-			{
-				Header:       &v3corepb.HeaderValue{Key: "existing-key", Value: ""},
-				AppendAction: v3corepb.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD,
-			},
-			{
-				Header:       &v3corepb.HeaderValue{Key: "new-key", Value: ""},
-				AppendAction: v3corepb.HeaderValueOption_APPEND_IF_EXISTS_OR_ADD,
-			},
-		}
-		res, err := mutator.Mutate(md, mutations)
-		if err != nil {
-			t.Fatalf("Mutate() returned error: %v", err)
-		}
-		if got := res.Get("existing-key"); len(got) != 0 {
-			t.Errorf("existing-key got: %v, want: []", got)
-		}
-		if got := res.Get("new-key"); len(got) != 0 {
-			t.Errorf("new-key got: %v, want: []", got)
-		}
-	})
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			mutator, err := NewHeaderMutatorFromProto(test.rules)
+			if err != nil {
+				t.Fatalf("NewHeaderMutatorFromProto() returned error: %v", err)
+			}
+			got, err := mutator.Mutate(test.input, test.mutations)
+			if (err != nil) != test.wantErr {
+				t.Fatalf("Mutate() error = %v, wantErr = %v", err, test.wantErr)
+			}
+			if test.wantErr {
+				return
+			}
+			if diff := cmp.Diff(test.want, got); diff != "" {
+				t.Errorf("Mutate() result mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
 
-	t.Run("KeepEmptyValue = true (ignored)", func(t *testing.T) {
-		md := metadata.Pairs("existing-key", "existing-val")
-		mutations := []*v3corepb.HeaderValueOption{
-			{
-				Header:         &v3corepb.HeaderValue{Key: "existing-key", Value: ""},
-				AppendAction:   v3corepb.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD,
-				KeepEmptyValue: true,
-			},
-			{
-				Header:         &v3corepb.HeaderValue{Key: "new-key", Value: ""},
-				AppendAction:   v3corepb.HeaderValueOption_APPEND_IF_EXISTS_OR_ADD,
-				KeepEmptyValue: true,
-			},
-		}
-		res, err := mutator.Mutate(md, mutations)
-		if err != nil {
-			t.Fatalf("Mutate() returned error: %v", err)
-		}
-		if got := res.Get("existing-key"); len(got) != 0 {
-			t.Errorf("existing-key got: %v, want: []", got)
-		}
-		if got := res.Get("new-key"); len(got) != 0 {
-			t.Errorf("new-key got: %v, want: []", got)
-		}
+// TestHeaderMutator_DoesNotMutateInput verifies that Mutate operates on a copy
+// and leaves the caller's metadata untouched.
+func TestHeaderMutator_DoesNotMutateInput(t *testing.T) {
+	mutator := NewHeaderMutator(HeaderMutationRules{})
+	input := metadata.MD{"k": {"a"}}
+	if _, err := mutator.Mutate(input, []*v3corepb.HeaderValueOption{
+		hvo("k", "b", appendOrAdd),
+		hvo("new", "c", overwrite),
+	}); err != nil {
+		t.Fatalf("Mutate() returned error: %v", err)
+	}
+	want := metadata.MD{"k": {"a"}}
+	if diff := cmp.Diff(want, input); diff != "" {
+		t.Errorf("Mutate() modified the input metadata (-want +got):\n%s", diff)
+	}
+}
+
+func TestNewHeaderMutatorFromProto_InvalidRegex(t *testing.T) {
+	_, err := NewHeaderMutatorFromProto(&v3mutationpb.HeaderMutationRules{
+		AllowExpression: &v3matcherpb.RegexMatcher{Regex: "("},
 	})
+	if err == nil {
+		t.Fatal("NewHeaderMutatorFromProto() succeeded for invalid regex, want error")
+	}
 }
