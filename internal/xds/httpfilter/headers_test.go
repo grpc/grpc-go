@@ -19,6 +19,7 @@
 package httpfilter
 
 import (
+	"reflect"
 	"testing"
 
 	v3mutationpb "github.com/envoyproxy/go-control-plane/envoy/config/common/mutation_rules/v3"
@@ -133,6 +134,17 @@ func TestHeaderMutator_Mutate(t *testing.T) {
 				AppendAction: overwrite,
 			}},
 			want: metadata.MD{"k": {"raw"}},
+		},
+		{
+			// An explicitly empty raw_value is still set (it is non-nil), and
+			// must not fall back to the legacy value field.
+			name:  "empty_raw_value_overrides_legacy_value",
+			input: metadata.MD{},
+			mutations: []*v3corepb.HeaderValueOption{{
+				Header:       &v3corepb.HeaderValue{Key: "k", Value: "legacy", RawValue: []byte{}},
+				AppendAction: overwrite,
+			}},
+			want: metadata.MD{"k": {""}},
 		},
 		{
 			name:      "key_is_lowercased",
@@ -263,6 +275,30 @@ func TestHeaderMutator_DoesNotMutateInput(t *testing.T) {
 	want := metadata.MD{"k": {"a"}}
 	if diff := cmp.Diff(want, input); diff != "" {
 		t.Errorf("Mutate() modified the input metadata (-want +got):\n%s", diff)
+	}
+}
+
+// TestHeaderMutator_NoOpDoesNotCopy verifies the copy-on-write behavior: a
+// call that applies no mutations returns the input metadata without allocating
+// a copy.
+func TestHeaderMutator_NoOpDoesNotCopy(t *testing.T) {
+	mutator := NewHeaderMutator(HeaderMutationRules{})
+	input := metadata.MD{"k": {"v"}}
+	tests := map[string][]*v3corepb.HeaderValueOption{
+		"no_mutations":      nil,
+		"all_skipped":       {hvo(":path", "/x", overwrite)}, // pseudo-header
+		"nil_header_option": {{AppendAction: overwrite}},
+	}
+	for name, mutations := range tests {
+		t.Run(name, func(t *testing.T) {
+			got, err := mutator.Mutate(input, mutations)
+			if err != nil {
+				t.Fatalf("Mutate() returned error: %v", err)
+			}
+			if reflect.ValueOf(got).Pointer() != reflect.ValueOf(input).Pointer() {
+				t.Errorf("Mutate() copied the metadata for a no-op call; want the input returned without copying")
+			}
+		})
 	}
 }
 

@@ -83,10 +83,22 @@ func (m *HeaderMutator) isMutationAllowed(key string) (bool, error) {
 	return true, nil
 }
 
-// Mutate applies HeaderValueOption mutations to the metadata.
-// It returns a modified copy, leaving the original untouched.
+// Mutate applies HeaderValueOption mutations and returns the result, leaving
+// the original metadata untouched. The metadata is copied lazily (copy-on-
+// write): a call that applies no mutations returns the input as-is without
+// allocating a copy.
 func (m *HeaderMutator) Mutate(md metadata.MD, mutations []*v3corepb.HeaderValueOption) (metadata.MD, error) {
-	res := md.Copy()
+	res := md
+	copied := false
+	// ensureCopy copies the metadata the first time an actual mutation is
+	// applied, so reads before that observe the original and no allocation is
+	// made when nothing changes.
+	ensureCopy := func() {
+		if !copied {
+			res = md.Copy()
+			copied = true
+		}
+	}
 
 	for _, opt := range mutations {
 		h := opt.GetHeader()
@@ -95,8 +107,10 @@ func (m *HeaderMutator) Mutate(md metadata.MD, mutations []*v3corepb.HeaderValue
 		}
 		key := strings.ToLower(h.GetKey())
 		// Per gRFC A102, raw_value takes precedence over the legacy value field.
+		// A non-nil raw_value (including an explicitly empty one) is used; only
+		// an unset raw_value falls back to value.
 		val := h.GetValue()
-		if len(h.GetRawValue()) > 0 {
+		if h.GetRawValue() != nil {
 			val = string(h.GetRawValue())
 		}
 
@@ -110,15 +124,19 @@ func (m *HeaderMutator) Mutate(md metadata.MD, mutations []*v3corepb.HeaderValue
 
 		switch opt.GetAppendAction() {
 		case v3corepb.HeaderValueOption_APPEND_IF_EXISTS_OR_ADD:
+			ensureCopy()
 			res.Append(key, val)
 		case v3corepb.HeaderValueOption_ADD_IF_ABSENT:
 			if len(res.Get(key)) == 0 {
+				ensureCopy()
 				res.Set(key, val)
 			}
 		case v3corepb.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD:
+			ensureCopy()
 			res.Set(key, val)
 		case v3corepb.HeaderValueOption_OVERWRITE_IF_EXISTS:
 			if len(res.Get(key)) > 0 {
+				ensureCopy()
 				res.Set(key, val)
 			}
 		}
