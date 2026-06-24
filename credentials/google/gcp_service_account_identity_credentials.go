@@ -36,15 +36,24 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// preemptiveRefresh is the window before a token's actual expiration during
-// which the token is considered stale. Requests using a stale but still valid
-// token will trigger a background asynchronous refresh. This avoids blocking
-// the current RPC, preventing periodic latency spikes during token refresh.
-const preemptiveRefresh = 1 * time.Minute
+const (
+	// preemptiveRefresh is the window before a token's actual expiration during
+	// which the token is considered stale. Requests using a stale but still
+	// valid token will trigger a background asynchronous refresh. This avoids
+	// blocking the current RPC, preventing periodic latency spikes during token
+	// refresh.
+	preemptiveRefresh = 1 * time.Minute
+
+	// metadataTimeout is the timeout for the call to the metadata server to
+	// prevent the background token fetch from hanging indefinitely in case
+	// of connection issues.
+	metadataTimeout = 60 * time.Second
+)
 
 type gcpServiceAccountIdentityCallCreds struct {
 	// The following fields are initialized at creation time and are read-only
 	// after that.
+	ctx      context.Context
 	audience string
 	creds    *auth.Credentials
 	backoff  backoff.Strategy
@@ -52,12 +61,12 @@ type gcpServiceAccountIdentityCallCreds struct {
 	// The following fields are protected by mu.
 	mu                     sync.Mutex
 	token                  *auth.Token
-	tokenExpiry            time.Time // timestamp after which the cached token is considered invalid
-	preemptiveTokenRefresh time.Time // timestamp after which background preemptive refresh is triggered
-	fetching               bool      // true if a background token fetch is in progress
-	nextRetryTime          time.Time // timestamp after which we can attempt the next token fetch
-	retryAttempt           int       // consecutive fetch failure count used to compute backoff delay
-	lastErr                error     // cached error returned from the most recent token fetch attempt
+	tokenExpiry            time.Time     // timestamp after which the cached token is considered invalid
+	preemptiveTokenRefresh time.Time     // timestamp after which background preemptive refresh is triggered
+	fetching               chan struct{} // used to ensure a single in-progress background token fetch
+	nextRetryTime          time.Time     // timestamp after which we can attempt the next token fetch
+	retryAttempt           int           // consecutive fetch failure count used to compute backoff delay
+	lastErr                error         // cached error returned from the most recent token fetch attempt
 }
 
 func init() {
@@ -72,14 +81,24 @@ func init() {
 // audience.
 //
 // This credential fetches the ID token from the GCE metadata server and is
-// only valid for use in environments running on GCP. The audience parameter
-// cannot be empty.
+// only valid for use in environments running on GCP. The ctx and audience
+// parameters cannot be empty.
+//
+// The credentials object starts asynchronous background token fetches to
+// refresh expired tokens. The provided context propagates cancellation to
+// these background tasks. Users should not pass an RPC-scoped context here,
+// but rather a context that is valid for the entire lifetime of the
+// credentials and should cancel the context when they are done.
 //
 // # Experimental
 //
 // Notice: This API is EXPERIMENTAL and may be changed or removed in a
 // later release.
-func NewServiceAccountIdentityCredentials(audience string) (credentials.PerRPCCredentials, error) {
+func NewServiceAccountIdentityCredentials(ctx context.Context, audience string) (credentials.PerRPCCredentials, error) {
+	if ctx == nil {
+		return nil, fmt.Errorf("credentials: ctx cannot be nil")
+	}
+
 	if audience == "" {
 		return nil, fmt.Errorf("credentials: audience cannot be empty")
 	}
@@ -90,6 +109,7 @@ func NewServiceAccountIdentityCredentials(audience string) (credentials.PerRPCCr
 	}
 
 	return &gcpServiceAccountIdentityCallCreds{
+		ctx:      ctx,
 		audience: audience,
 		creds:    creds,
 		backoff:  internal.BackoffStrategy,
@@ -110,34 +130,73 @@ func (c *gcpServiceAccountIdentityCallCreds) GetRequestMetadata(ctx context.Cont
 		return nil, fmt.Errorf("credentials: cannot send secure credentials on an insecure connection: %v", err)
 	}
 
+	if md, err := c.cachedRequestMetadata(true); md != nil || err != nil {
+		return md, err
+	}
+
+	c.mu.Lock()
+	// Now that we have the lock, did someone else finish the fetch while we
+	// were waiting for the lock?
+	md, err := c.cachedRequestMetadataLocked(false)
+	if md != nil || err != nil {
+		c.mu.Unlock()
+		return md, err
+	}
+
+	// If no one is fetching, start it.
+	if c.fetching == nil {
+		c.fetching = make(chan struct{})
+		go c.startFetch()
+	}
+	wait := c.fetching
+	c.mu.Unlock()
+
+	select {
+	case <-wait:
+		// Return the new cached result from the most recent fetch.
+		md, err := c.cachedRequestMetadata(false)
+		if md == nil && err == nil {
+			return nil, status.Error(codes.Unavailable, "credentials: fetched token is expired")
+		}
+		return md, err
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+// cachedRequestMetadata handles its own locking for the "fast path".
+func (c *gcpServiceAccountIdentityCallCreds) cachedRequestMetadata(attemptPreemptiveRefresh bool) (map[string]string, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	return c.cachedRequestMetadataLocked(attemptPreemptiveRefresh)
+}
 
-	// If token is valid, return it. If it's also stale, trigger a background
-	// refresh if not already running and return the current token.
+// cachedRequestMetadataLocked returns the cached token if it is valid, or nil
+// if it is not. If attemptPreemptiveRefresh is true, it will also trigger a
+// background refresh if the token is stale but still valid. It returns the
+// cached error if the last fetch failed and the backoff interval has not
+// expired.
+//
+// Returns (nil, nil) if the token is not valid and a new fetch is required. The
+// caller is responsible for initiating the fetch or waiting for an in-progress
+// fetch to complete.
+//
+// It must be called with mu locked.
+func (c *gcpServiceAccountIdentityCallCreds) cachedRequestMetadataLocked(attemptPreemptiveRefresh bool) (map[string]string, error) {
 	if c.token != nil && c.isTokenValidLocked() {
-		if c.isTokenStaleLocked() && !c.fetching {
-			c.fetching = true
+		if attemptPreemptiveRefresh && c.isTokenStaleLocked() && c.fetching == nil {
+			c.fetching = make(chan struct{})
 			go c.startFetch()
 		}
-		return map[string]string{
-			"authorization": "Bearer " + c.token.Value,
-		}, nil
+
+		return map[string]string{"authorization": "Bearer " + c.token.Value}, nil
 	}
 
 	if c.lastErr != nil && time.Now().Before(c.nextRetryTime) {
 		return nil, c.lastErr
 	}
 
-	token, err := c.creds.TokenProvider.Token(context.Background())
-	c.updateStateLocked(token, err)
-	if err != nil {
-		return nil, c.lastErr
-	}
-
-	return map[string]string{
-		"authorization": "Bearer " + c.token.Value,
-	}, nil
+	return nil, nil
 }
 
 // RequireTransportSecurity indicates whether the credentials requires
@@ -161,12 +220,15 @@ func (c *gcpServiceAccountIdentityCallCreds) isTokenValidLocked() bool {
 // startFetch initiates a token fetch and updates the credential
 // state upon completion.
 func (c *gcpServiceAccountIdentityCallCreds) startFetch() {
-	token, err := c.creds.TokenProvider.Token(context.Background())
+	ctx, cancel := context.WithTimeout(c.ctx, metadataTimeout)
+	defer cancel()
+	token, err := c.creds.TokenProvider.Token(ctx)
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	c.fetching = false
+	close(c.fetching)
+	c.fetching = nil
 	c.updateStateLocked(token, err)
 }
 
