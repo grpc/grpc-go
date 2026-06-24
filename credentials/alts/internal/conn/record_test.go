@@ -423,8 +423,7 @@ func (c *noopConn) Close() error {
 }
 
 func (s) TestParseFramedMsgVulnerability(t *testing.T) {
-	key := []byte{
-		0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0xe2, 0xd2, 0x4c, 0xce, 0x4f, 0x49}
+	key := []byte{0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0xe2, 0xd2, 0x4c, 0xce, 0x4f, 0x49}
 	tc := testConn{
 		in:  new(bytes.Buffer),
 		out: new(bytes.Buffer),
@@ -443,7 +442,7 @@ func (s) TestParseFramedMsgVulnerability(t *testing.T) {
 	if err == nil {
 		t.Fatal("c.Read(buf) succeeded, but expected a parsing error")
 	}
-	if !strings.Contains(err.Error(), "shorter than message type field size") && !strings.Contains(err.Error(), "incorrect message type") {
+	if !strings.Contains(err.Error(), "shorter than message type field size") {
 		t.Fatalf("c.Read(buf) returned unexpected error: %v", err)
 	}
 }
