@@ -130,6 +130,12 @@ func (h *clientTracingHandler) TagRPC(ctx context.Context, info *stats.RPCTagInf
 		logger.Error("context passed into client side stats handler (TagRPC) has no call info")
 		return ctx
 	}
+	// ai.method may already be set by the metrics handler when both metrics and
+	// tracing are enabled. Only populate it here when tracing-only is used so
+	// that traceTagRPC always has a non-empty method to build the span name.
+	if ri.ai.method == "" {
+		ri.ai.method = removeLeadingSlash(info.FullMethodName)
+	}
 	ctx = h.traceTagRPC(ctx, ri.ai, info.NameResolutionDelay)
 	return ctx
 }
