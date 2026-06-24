@@ -88,7 +88,7 @@ func setupGCPAuthnTest(t *testing.T) {
 // attaches it to the outgoing gRPC request metadata.
 func (s) TestGCPAuthnFilter_SuccessCase(t *testing.T) {
 	setupGCPAuthnTest(t)
-	tokenValue := "token"
+	const tokenValue = "token"
 
 	// Starts a local HTTP server and sets GCE_METADATA_HOST to spoof the
 	// GCE metadata server and redirect token fetch requests to it.
@@ -188,13 +188,13 @@ func (s) TestGCPAuthnFilter_SuccessCase(t *testing.T) {
 // for subsequent RPCs, avoiding redundant network calls to metadata server.
 func (s) TestGCPAuthnFilter_TokenCaching(t *testing.T) {
 	setupGCPAuthnTest(t)
-	tokenValue := "token"
+	const tokenValue = "token"
 
 	// Starts a local HTTP server and sets GCE_METADATA_HOST to spoof the
 	// GCE metadata server and redirect token fetch requests to it.
-	var requestCount int32
+	var requestCount atomic.Int32
 	metadataServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		atomic.AddInt32(&requestCount, 1)
+		requestCount.Add(1)
 		w.Write([]byte(tokenValue))
 	}))
 	defer metadataServer.Close()
@@ -290,7 +290,7 @@ func (s) TestGCPAuthnFilter_TokenCaching(t *testing.T) {
 
 	// Verify request count is 1. This ensures that the token fetched for
 	// the first RPC was reused for the second RPC.
-	if count := atomic.LoadInt32(&requestCount); count != 1 {
+	if count := requestCount.Load(); count != 1 {
 		t.Fatalf("Unexpected request to metadata server, got %d want 1", count)
 	}
 }
@@ -382,8 +382,8 @@ func (s) TestGCPAuthnFilter_InsecureTransport(t *testing.T) {
 }
 
 // Test verifies that the credential cache of the gcp_authn filter correctly
-// handles cache resizing across XDS updates. It performs RPC calls to 3
-// different clusters to fill a cache of size 3. Then it updates the XDS
+// handles cache resizing across xDS updates. It performs RPC calls to 3
+// different clusters to fill a cache of size 3. Then it updates the xDS
 // configuration to reduce the cache size to 1. Finally, it verifies that only
 // the most recently used element survives in the cache, and making calls to
 // the other two results in cache misses (forcing a new token fetch).
@@ -392,10 +392,10 @@ func (s) TestGCPAuthnFilter_CacheSharingConfigUpdate(t *testing.T) {
 
 	// Starts a local HTTP server and sets GCE_METADATA_HOST to spoof the
 	// GCE metadata server and redirect token fetch requests to it.
-	var requestCount int32
+	var requestCount atomic.Int32
 	metadataServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		count := atomic.AddInt32(&requestCount, 1)
-		w.Write([]byte(fmt.Sprintf("token-%d", count)))
+		requestCount.Add(1)
+		w.Write([]byte("token"))
 	}))
 	defer metadataServer.Close()
 	t.Setenv(gceMetadataHostEnvVar, strings.TrimPrefix(metadataServer.URL, "http://"))
@@ -552,7 +552,14 @@ func (s) TestGCPAuthnFilter_CacheSharingConfigUpdate(t *testing.T) {
 	makeCall(ctxC, "C")
 
 	// Verify request count is 3!
-	if count := atomic.LoadInt32(&requestCount); count != 3 {
+	if count := requestCount.Load(); count != 3 {
+		t.Fatalf("Unexpected requests to metadata server, got %d want 3", count)
+	}
+
+	// Make another call to cluster C and verify that it did not increase the
+	// request count.
+	makeCall(ctxC, "C")
+	if count := requestCount.Load(); count != 3 {
 		t.Fatalf("Unexpected requests to metadata server, got %d want 3", count)
 	}
 
@@ -610,20 +617,24 @@ func (s) TestGCPAuthnFilter_CacheSharingConfigUpdate(t *testing.T) {
 	// clusters A and B will miss the cache and trigger new metadata
 	// server fetches, while C will hit.
 	makeCall(ctxC, "C on second pass")
+	if count := requestCount.Load(); count != 3 {
+		t.Fatalf("Unexpected requests to metadata server, got %d want 3", count)
+	}
+
 	makeCall(ctxB, "B on second pass")
 	makeCall(ctxA, "A on second pass")
 
 	// Verify that the total requests to the metadata server is exactly 5
 	// This proves that token for cluster C was successfully cached in the
 	// second pass, while A and B were not.
-	if count := atomic.LoadInt32(&requestCount); count != 5 {
+	if count := requestCount.Load(); count != 5 {
 		t.Fatalf("Unexpected requests to metadata server, got %d want 5", count)
 	}
 }
 
 // Test verifies the scenario where two RPCs are made: the first with a
 // short context which triggers a token fetch but times out while waiting
-// for the metadata server to respond; and the second RPC with a long context,
+// for the metadata server to respond and the second RPC with a long context,
 // which blocks waiting for the first token fetch to finish, and then succeeds
 // by using the token fetched by the first.
 func (s) TestGCPAuthnFilter_ConcurrentRPCWithShortAndLongContext(t *testing.T) {
@@ -635,13 +646,13 @@ func (s) TestGCPAuthnFilter_ConcurrentRPCWithShortAndLongContext(t *testing.T) {
 
 	// Starts a local HTTP server and sets GCE_METADATA_HOST to spoof the
 	// GCE metadata server and redirect token fetch requests to it.
-	var requestCount int32
+	var requestCount atomic.Int32
 	metadataServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		// Close requestStarted channel to signal that a request has started.
 		once.Do(func() {
 			close(requestStarted)
 		})
-		atomic.AddInt32(&requestCount, 1)
+		requestCount.Add(1)
 		// Block until signaled to proceed.
 		<-proceedCh
 		w.Write([]byte(tokenValue))
@@ -738,8 +749,7 @@ func (s) TestGCPAuthnFilter_ConcurrentRPCWithShortAndLongContext(t *testing.T) {
 	shortCtx, shortBufCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
 	defer shortBufCancel()
 
-	errCh1 := make(chan error, 1)
-	errCh2 := make(chan error, 1)
+	errCh1, errCh2 := make(chan error, 1), make(chan error, 1)
 
 	// First RPC call with short context (triggers token fetch request
 	// to metadata server).
@@ -787,7 +797,7 @@ func (s) TestGCPAuthnFilter_ConcurrentRPCWithShortAndLongContext(t *testing.T) {
 
 	// Verify request count is 1. This ensures that the token fetched for
 	// the first RPC was reused for the second RPC.
-	if count := atomic.LoadInt32(&requestCount); count != 1 {
+	if count := requestCount.Load(); count != 1 {
 		t.Fatalf("Unexpected request to metadata server, got %d want 1", count)
 	}
 }
@@ -797,7 +807,7 @@ func (s) TestGCPAuthnFilter_ConcurrentRPCWithShortAndLongContext(t *testing.T) {
 // option without overriding, corrupting or interfering with the existing ones.
 func (s) TestGCPAuthnFilter_PreservesUserCallOptions(t *testing.T) {
 	setupGCPAuthnTest(t)
-	tokenValue := "token"
+	const tokenValue = "token"
 
 	// Starts a local HTTP server and sets GCE_METADATA_HOST to spoof the
 	// GCE metadata server and redirect token fetch requests to it.

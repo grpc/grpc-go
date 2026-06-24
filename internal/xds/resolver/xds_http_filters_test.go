@@ -125,7 +125,7 @@ func (*testHTTPFilterWithRPCMetadata) ParseFilterConfigOverride(override proto.M
 
 func (*testHTTPFilterWithRPCMetadata) IsTerminal() bool { return false }
 
-func (fb *testHTTPFilterWithRPCMetadata) BuildClientFilter(string) httpfilter.ClientFilter {
+func (fb *testHTTPFilterWithRPCMetadata) BuildClientFilter(httpfilter.BuildOptions) httpfilter.ClientFilter {
 	return fb
 }
 
@@ -687,7 +687,7 @@ func (*trackingHTTPFilterBuilder) ParseFilterConfigOverride(cfg proto.Message) (
 	return filterConfigFromProto(cfg)
 }
 
-func (t *trackingHTTPFilterBuilder) BuildClientFilter(string) httpfilter.ClientFilter {
+func (t *trackingHTTPFilterBuilder) BuildClientFilter(httpfilter.BuildOptions) httpfilter.ClientFilter {
 	t.filtersCreated.Add(1)
 	return t
 }

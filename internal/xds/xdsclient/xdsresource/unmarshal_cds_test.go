@@ -1784,10 +1784,7 @@ func enableGCPAuthenticationFilter(t *testing.T) {
 // (and restoring the original on cleanup).
 func disableGCPAuthenticationFilter(t *testing.T) {
 	testutils.SetEnvConfig(t, &envconfig.GCPAuthenticationFilterEnabled, false)
-	cleanup, err := RegisterMetadataConverterForTesting(version.V3AudienceURL, nil)
-	if err != nil {
-		t.Fatalf("RegisterMetadataConverterForTesting(%q) failed: %v", version.V3AudienceURL, err)
-	}
+	cleanup := UnregisterMetadataConverterForTesting(version.V3AudienceURL)
 	t.Cleanup(cleanup)
 }
 

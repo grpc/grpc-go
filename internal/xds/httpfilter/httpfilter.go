@@ -87,12 +87,16 @@ type ClientInterceptor interface {
 	Close()
 }
 
+// BuildOptions contains options for building a filter.
+type BuildOptions struct {
+	FilterName string // FilterName is the filter name from the xDS configuration.
+}
+
 // ClientFilterBuilder is an optional interface that a Builder can implement to
 // indicate its capability to build client-side filters.
 type ClientFilterBuilder interface {
-	// BuildClientFilter constructs a ClientFilter. The name parameter is the
-	// filter name from the xDS configuration.
-	BuildClientFilter(name string) ClientFilter
+	// BuildClientFilter constructs a ClientFilter.
+	BuildClientFilter(opts BuildOptions) ClientFilter
 }
 
 // ClientFilter represents the actual filter implementation on the client side.

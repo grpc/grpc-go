@@ -63,10 +63,7 @@ func enableA86(t *testing.T) {
 //     (and restoring the original on cleanup).
 func disableA86(t *testing.T) {
 	testutils.SetEnvConfig(t, &envconfig.XDSHTTPConnectEnabled, false)
-	cleanup, err := RegisterMetadataConverterForTesting(version.V3AddressURL, nil)
-	if err != nil {
-		t.Fatalf("RegisterMetadataConverterForTesting(%q) failed: %v", version.V3AddressURL, err)
-	}
+	cleanup := UnregisterMetadataConverterForTesting(version.V3AddressURL)
 	t.Cleanup(cleanup)
 }
 

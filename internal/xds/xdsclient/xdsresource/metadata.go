@@ -65,38 +65,38 @@ func metadataConverterForType(typeURL string) metadataConverter {
 // RegisterMetadataConverterForTesting registers the converter for testing
 // purposes and returns a cleanup function to restore the registry to its
 // previous state.
-//
-// If the second argument is nil, it unregisters the converter for testing.
-func RegisterMetadataConverterForTesting(protoType string, c ...metadataConverter) (func(), error) {
-	if len(c) == 1 && c[0] == nil {
-		// Unregister the converter for the duration of the test.
-		curConverter, found := metadataRegistry[protoType]
-		delete(metadataRegistry, protoType)
-		return func() {
-			if found {
-				metadataRegistry[protoType] = curConverter
-			}
-		}, nil
-	}
-
+func RegisterMetadataConverterForTesting(typeURL string) (func(), error) {
 	var conv metadataConverter
-	switch protoType {
+	switch typeURL {
 	case version.V3AddressURL:
 		conv = proxyAddressConverter{}
 	case version.V3AudienceURL:
 		conv = audienceConverter{}
 	default:
-		return nil, fmt.Errorf("unknown typeURL for testing: %s", protoType)
+		return nil, fmt.Errorf("unknown typeURL for testing: %s", typeURL)
 	}
-	curConverter, found := metadataRegistry[protoType]
-	registerMetadataConverter(protoType, conv)
+	curConverter, found := metadataRegistry[typeURL]
+	registerMetadataConverter(typeURL, conv)
 	return func() {
 		if found {
-			metadataRegistry[protoType] = curConverter
+			metadataRegistry[typeURL] = curConverter
 			return
 		}
-		delete(metadataRegistry, protoType)
+		delete(metadataRegistry, typeURL)
 	}, nil
+}
+
+// UnregisterMetadataConverterForTesting unregisters the converter for testing
+// purposes and returns a cleanup function to restore the registry to its
+// previous state.
+func UnregisterMetadataConverterForTesting(typeURL string) func() {
+	curConverter, found := metadataRegistry[typeURL]
+	delete(metadataRegistry, typeURL)
+	return func() {
+		if found {
+			metadataRegistry[typeURL] = curConverter
+		}
+	}
 }
 
 // StructMetadataValue stores the values in a google.protobuf.Struct from
@@ -114,7 +114,7 @@ type ProxyAddressMetadataValue struct {
 	Address string
 }
 
-// ProxyAddressConvertor implements the metadataConverter interface to handle
+// proxyAddressConvertor implements the metadataConverter interface to handle
 // the conversion of envoy.config.core.v3.Address protobuf messages into an
 // internal representation.
 type proxyAddressConverter struct{}
@@ -147,7 +147,7 @@ type AudienceMetadataValue struct {
 	Audience string
 }
 
-// AudienceConverter implements the metadataConverter interface to
+// audienceConverter implements the metadataConverter interface to
 // handle the conversion of envoy.extensions.filters.http.gcp_authn.v3.Audience
 // protobuf messages into an internal representation.
 type audienceConverter struct{}

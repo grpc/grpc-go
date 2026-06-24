@@ -30,6 +30,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/google"
+	"google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/xds/balancer/clustermanager"
 	"google.golang.org/grpc/internal/xds/httpfilter"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
@@ -37,7 +38,6 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	v3gcpauthnpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/gcp_authn/v3"
-	iresolver "google.golang.org/grpc/internal/resolver"
 	anypb "google.golang.org/protobuf/types/known/anypb"
 )
 
@@ -68,8 +68,7 @@ func (builder) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, er
 		return nil, fmt.Errorf("gcpauthn: failed to unmarshal filter config: %v", err)
 	}
 
-	cacheSize := uint64(defaultCacheSize)
-	cacheConfig := msg.GetCacheConfig()
+	cacheSize, cacheConfig := uint64(defaultCacheSize), msg.GetCacheConfig()
 	if cacheConfig.GetCacheSize() != nil {
 		cacheSize = cacheConfig.GetCacheSize().GetValue()
 		if cacheSize == 0 {
@@ -80,6 +79,10 @@ func (builder) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, er
 	return config{cacheSize: cacheSize}, nil
 }
 
+// ParseFilterConfigOverride parses the provided override configuration.
+//
+// Note that we don't support overrides for this filter configuration,
+// but still validate it as part of the normal resource validation.
 func (b builder) ParseFilterConfigOverride(cfg proto.Message) (httpfilter.FilterConfig, error) {
 	return b.ParseFilterConfig(cfg)
 }
@@ -88,19 +91,19 @@ func (builder) IsTerminal() bool {
 	return false
 }
 
-func (builder) BuildClientFilter(filterName string) httpfilter.ClientFilter {
+func (builder) BuildClientFilter(opts httpfilter.BuildOptions) httpfilter.ClientFilter {
 	ctx, cancel := context.WithCancel(context.Background())
-	return &ClientFilter{
+	return &clientFilter{
 		ctx:        ctx,
 		cancel:     cancel,
-		FilterName: filterName,
+		filterName: opts.FilterName,
 	}
 }
 
 var _ httpfilter.ClientFilterBuilder = builder{}
 
-// ClientFilter implements the httpfilter.ClientFilter interface.
-type ClientFilter struct {
+// clientFilter implements the httpfilter.ClientFilter interface.
+type clientFilter struct {
 	// ctx is initialized using context.Background() and is scoped to the
 	// lifetime of the filter. It is used as the parent context for fetching
 	// service account identity credentials, ensuring that token fetch requests
@@ -111,9 +114,9 @@ type ClientFilter struct {
 	// is closed.
 	cancel context.CancelFunc
 
-	// FilterName is the name of the HTTP filter instance in the xDS
-	// configuration and is populated by the xDS resolver.
-	FilterName string
+	// filterName is the name of the HTTP filter instance in the xDS
+	// configuration.
+	filterName string
 
 	// cache is the LRU cache of PerRPCCredentials instances, keyed by audience
 	// and is initialized or resized when BuildClientInterceptor is called.
@@ -122,7 +125,7 @@ type ClientFilter struct {
 
 // BuildClientInterceptor builds a client interceptor for the GCP
 // Authentication filter.
-func (cf *ClientFilter) BuildClientInterceptor(cfg, _ httpfilter.FilterConfig) (httpfilter.ClientInterceptor, error) {
+func (cf *clientFilter) BuildClientInterceptor(cfg, _ httpfilter.FilterConfig) (httpfilter.ClientInterceptor, error) {
 	c, ok := cfg.(config)
 	if !ok {
 		return nil, fmt.Errorf("gcpauthn: invalid filter config type %T", cfg)
@@ -136,13 +139,13 @@ func (cf *ClientFilter) BuildClientInterceptor(cfg, _ httpfilter.FilterConfig) (
 
 	return &interceptor{
 		ctx:        cf.ctx,
-		filterName: cf.FilterName,
+		filterName: cf.filterName,
 		cache:      cf.cache,
 	}, nil
 }
 
 // Close closes the client filter.
-func (cf *ClientFilter) Close() {
+func (cf *clientFilter) Close() {
 	cf.cancel()
 }
 
@@ -152,7 +155,7 @@ type interceptor struct {
 	cache      *lruCache
 }
 
-func (i *interceptor) NewStream(ctx context.Context, _ iresolver.RPCInfo, newStream func(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStream, error), opts ...grpc.CallOption) (grpc.ClientStream, error) {
+func (i *interceptor) NewStream(ctx context.Context, _ resolver.RPCInfo, newStream func(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStream, error), opts ...grpc.CallOption) (grpc.ClientStream, error) {
 	clusterName := clustermanager.PickedCluster(ctx)
 	// The picked cluster name in the context is formatted by the xDS
 	// resolver with a prefix to distinguish between standard CDS clusters and
@@ -190,20 +193,20 @@ func (i *interceptor) NewStream(ctx context.Context, _ iresolver.RPCInfo, newStr
 
 	audienceMetadata, ok := val.(xdsresource.AudienceMetadataValue)
 	if !ok {
-		return nil, status.Errorf(codes.Unavailable, "gcpauthn: cluster metadata for key %q is not of type AudienceMetadataValue", i.filterName)
+		return nil, status.Errorf(codes.Unavailable, "gcpauthn: cluster metadata for key %q is not of type AudienceMetadataValue, got %T", i.filterName, val)
 	}
 
 	creds, err := i.cache.getOrCreate(i.ctx, audienceMetadata.Audience)
 	if err != nil {
-		return nil, err
+		return nil, status.Errorf(codes.Unavailable, "gcpauthn: failed to create credentials: %v", err)
 	}
 
 	// We pass the credentials via a PerRPCCredentials call option rather than
 	// directly attaching the token here. Since this filter runs before load
 	// balancer has selected a connection, it cannot check if the connection is
 	// secure. Passing it as a call option defers token retrieval and injection
-	// to the credentials package to the transport layer, which can verify
-	// transport security after the connection has been established.
+	// to the credentials package, which can verify transport security after
+	// the connection has been established.
 	opts = append(opts, grpc.PerRPCCredentials(creds))
 
 	return newStream(ctx, opts...)
@@ -211,11 +214,11 @@ func (i *interceptor) NewStream(ctx context.Context, _ iresolver.RPCInfo, newStr
 
 func (i *interceptor) Close() {}
 
-// gcpAuthnCallCredEntry represents a cached PerRPCCredentials instance
-// indexed by its target audience string.
-type gcpAuthnCallCredEntry struct {
-	key   string
-	value credentials.PerRPCCredentials
+// cacheEntry represents a cached PerRPCCredentials instance and its position
+// in the LRU list.
+type cacheEntry struct {
+	creds credentials.PerRPCCredentials
+	el    *list.Element
 }
 
 // lruCache is a thread-safe LRU cache that stores PerRPCCredentials instances
@@ -230,12 +233,12 @@ type lruCache struct {
 	// lruList is a doubly linked list tracking access order. The front of the
 	// list holds the most recently used entry, and the back holds the least
 	// recently used entry. Elements in the list store values of type
-	// *gcpAuthnCallCredEntry.
+	// string (representing the target audience).
 	lruList *list.List
 
-	// cache maps audience keys to their corresponding doubly linked list
-	// element pointers (*list.Element), allowing O(1) lookup and promotion.
-	cache map[string]*list.Element
+	// cache maps audience keys to their corresponding cacheEntry pointers,
+	// allowing O(1) lookup and promotion.
+	cache map[string]*cacheEntry
 }
 
 // newLRUCache instantiates a new lruCache with the specified capacity.
@@ -243,7 +246,7 @@ func newLRUCache(size uint64) *lruCache {
 	return &lruCache{
 		cacheSize: size,
 		lruList:   list.New(),
-		cache:     make(map[string]*list.Element),
+		cache:     make(map[string]*cacheEntry),
 	}
 }
 
@@ -270,34 +273,23 @@ func (c *lruCache) resizeCache(newCacheSize uint64) {
 // the least recently used entry if the cache size is at capacity.
 func (c *lruCache) getOrCreate(ctx context.Context, audience string) (credentials.PerRPCCredentials, error) {
 	c.mu.Lock()
+	defer c.mu.Unlock()
 
-	if e, ok := c.cache[audience]; ok {
-		c.lruList.MoveToFront(e)
-		c.mu.Unlock()
-		return e.Value.(*gcpAuthnCallCredEntry).value, nil
+	if entry, ok := c.cache[audience]; ok {
+		c.lruList.MoveToFront(entry.el)
+		return entry.creds, nil
 	}
 
-	c.mu.Unlock()
 	creds, err := google.NewServiceAccountIdentityCredentials(ctx, audience)
 	if err != nil {
 		return nil, err
-	}
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	// Check the cache again since another goroutine could have created and
-	// cached the credentials for this audience while we were unlocked
-	// constructing them above.
-	if e, ok := c.cache[audience]; ok {
-		c.lruList.MoveToFront(e)
-		return e.Value.(*gcpAuthnCallCredEntry).value, nil
 	}
 
 	if uint64(len(c.cache)) >= c.cacheSize {
 		c.removeOldestLocked()
 	}
-	e := c.lruList.PushFront(&gcpAuthnCallCredEntry{key: audience, value: creds})
-	c.cache[audience] = e
+	el := c.lruList.PushFront(audience)
+	c.cache[audience] = &cacheEntry{creds: creds, el: el}
 	return creds, nil
 }
 
@@ -305,6 +297,6 @@ func (c *lruCache) getOrCreate(ctx context.Context, audience string) (credential
 // It must be called with mu locked.
 func (c *lruCache) removeOldestLocked() {
 	oldest := c.lruList.Back()
-	delete(c.cache, oldest.Value.(*gcpAuthnCallCredEntry).key)
+	delete(c.cache, oldest.Value.(string))
 	c.lruList.Remove(oldest)
 }
