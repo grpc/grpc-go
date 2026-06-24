@@ -81,8 +81,8 @@ func init() {
 // audience.
 //
 // This credential fetches the ID token from the GCE metadata server and is
-// only valid for use in environments running on GCP. The audience parameter
-// cannot be empty.
+// only valid for use in environments running on GCP. The ctx and audience
+// parameters cannot be empty.
 //
 // The credentials object starts asynchronous background token fetches to
 // refresh expired tokens. The provided context propagates cancellation to
@@ -95,6 +95,10 @@ func init() {
 // Notice: This API is EXPERIMENTAL and may be changed or removed in a
 // later release.
 func NewServiceAccountIdentityCredentials(ctx context.Context, audience string) (credentials.PerRPCCredentials, error) {
+	if ctx == nil {
+		return nil, fmt.Errorf("credentials: ctx cannot be nil")
+	}
+
 	if audience == "" {
 		return nil, fmt.Errorf("credentials: audience cannot be empty")
 	}
