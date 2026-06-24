@@ -193,7 +193,6 @@ func (c *gcpServiceAccountIdentityCallCreds) cachedRequestMetadataLocked(attempt
 	}
 
 	if c.lastErr != nil && time.Now().Before(c.nextRetryTime) {
-		c.mu.Unlock()
 		return nil, c.lastErr
 	}
 
