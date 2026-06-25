@@ -22,6 +22,7 @@ import (
 	"net/netip"
 
 	"google.golang.org/grpc/internal/envconfig"
+	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource/version"
 	"google.golang.org/protobuf/types/known/anypb"
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -30,10 +31,10 @@ import (
 
 func init() {
 	if envconfig.XDSHTTPConnectEnabled {
-		registerMetadataConverter("type.googleapis.com/envoy.config.core.v3.Address", ProxyAddressConvertor{})
+		registerMetadataConverter(version.V3AddressURL, proxyAddressConverter{})
 	}
 	if envconfig.GCPAuthenticationFilterEnabled {
-		registerMetadataConverter("type.googleapis.com/envoy.extensions.filters.http.gcp_authn.v3.Audience", audienceConverter{})
+		registerMetadataConverter(version.V3AudienceURL, audienceConverter{})
 	}
 }
 
@@ -64,15 +65,37 @@ func metadataConverterForType(typeURL string) metadataConverter {
 // RegisterMetadataConverterForTesting registers the converter for testing
 // purposes and returns a cleanup function to restore the registry to its
 // previous state.
-func RegisterMetadataConverterForTesting(protoType string, c metadataConverter) func() {
-	curConverter, found := metadataRegistry[protoType]
-	registerMetadataConverter(protoType, c)
+func RegisterMetadataConverterForTesting(typeURL string) (func(), error) {
+	var conv metadataConverter
+	switch typeURL {
+	case version.V3AddressURL:
+		conv = proxyAddressConverter{}
+	case version.V3AudienceURL:
+		conv = audienceConverter{}
+	default:
+		return nil, fmt.Errorf("unknown typeURL for testing: %s", typeURL)
+	}
+	curConverter, found := metadataRegistry[typeURL]
+	registerMetadataConverter(typeURL, conv)
 	return func() {
 		if found {
-			metadataRegistry[protoType] = curConverter
+			metadataRegistry[typeURL] = curConverter
 			return
 		}
-		delete(metadataRegistry, protoType)
+		delete(metadataRegistry, typeURL)
+	}, nil
+}
+
+// UnregisterMetadataConverterForTesting unregisters the converter for testing
+// purposes and returns a cleanup function to restore the registry to its
+// previous state.
+func UnregisterMetadataConverterForTesting(typeURL string) func() {
+	curConverter, found := metadataRegistry[typeURL]
+	delete(metadataRegistry, typeURL)
+	return func() {
+		if found {
+			metadataRegistry[typeURL] = curConverter
+		}
 	}
 }
 
@@ -91,12 +114,12 @@ type ProxyAddressMetadataValue struct {
 	Address string
 }
 
-// ProxyAddressConvertor implements the metadataConverter interface to handle
+// proxyAddressConvertor implements the metadataConverter interface to handle
 // the conversion of envoy.config.core.v3.Address protobuf messages into an
 // internal representation.
-type ProxyAddressConvertor struct{}
+type proxyAddressConverter struct{}
 
-func (ProxyAddressConvertor) convert(anyProto *anypb.Any) (any, error) {
+func (proxyAddressConverter) convert(anyProto *anypb.Any) (any, error) {
 	addressProto := &v3corepb.Address{}
 	if err := anyProto.UnmarshalTo(addressProto); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal resource from Any proto: %v", err)

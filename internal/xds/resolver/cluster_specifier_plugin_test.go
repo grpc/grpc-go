@@ -161,7 +161,7 @@ func (s) TestResolverClusterSpecifierPlugin(t *testing.T) {
 		t.Fatalf("cs.SelectConfig(): %v", err)
 	}
 
-	gotCluster := clustermanager.GetPickedClusterForTesting(res.Context)
+	gotCluster := clustermanager.PickedCluster(res.Context)
 	wantCluster := "cluster_specifier_plugin:cspA"
 	if gotCluster != wantCluster {
 		t.Fatalf("config selector returned cluster: %v, want: %v", gotCluster, wantCluster)
@@ -252,7 +252,7 @@ func (s) TestXDSResolverDelayedOnCommittedCSP(t *testing.T) {
 		t.Fatalf("cs.SelectConfig(): %v", err)
 	}
 
-	gotCluster := clustermanager.GetPickedClusterForTesting(resOld.Context)
+	gotCluster := clustermanager.PickedCluster(resOld.Context)
 	wantCluster := "cluster_specifier_plugin:cspA"
 	if gotCluster != wantCluster {
 		t.Fatalf("config selector returned cluster: %v, want: %v", gotCluster, wantCluster)
@@ -309,7 +309,7 @@ func (s) TestXDSResolverDelayedOnCommittedCSP(t *testing.T) {
 		t.Fatalf("cs.SelectConfig(): %v", err)
 	}
 
-	gotCluster = clustermanager.GetPickedClusterForTesting(resNew.Context)
+	gotCluster = clustermanager.PickedCluster(resNew.Context)
 	wantCluster = "cluster_specifier_plugin:cspB"
 	if gotCluster != wantCluster {
 		t.Fatalf("config selector returned cluster: %v, want: %v", gotCluster, wantCluster)
