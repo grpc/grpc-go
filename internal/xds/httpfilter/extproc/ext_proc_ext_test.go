@@ -3752,7 +3752,8 @@ func (s) TestRequestAttributes(t *testing.T) {
 			},
 			RequestAttributes: allAttrs,
 			ProcessingMode: &v3procfilterpb.ProcessingMode{
-				RequestHeaderMode: v3procfilterpb.ProcessingMode_SEND,
+				RequestHeaderMode:  v3procfilterpb.ProcessingMode_SEND,
+				ResponseHeaderMode: v3procfilterpb.ProcessingMode_SKIP,
 			},
 		})},
 		hcm.HttpFilters...)
