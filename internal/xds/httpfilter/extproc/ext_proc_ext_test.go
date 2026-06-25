@@ -3944,3 +3944,183 @@ func (s) TestStreamFailureOutOfOrderResponse(t *testing.T) {
 		t.Fatalf("stream.Recv() returned status code %v, want %v", got, want)
 	}
 }
+
+// TestStreamFailureResponseBodyEndOfStream tests the scenario where the
+// external processor server returns EndOfStream: true in a ResponseBody
+// response and verifies that the RPC fails.
+func (s) TestStreamFailureResponseBodyEndOfStream(t *testing.T) {
+	origParse := internal.ParseGRPCServiceConfig
+	origCreate := internal.CreateExtProcChannel
+	internal.ParseGRPCServiceConfig = parseGRPCServiceConfigForTesting
+	internal.CreateExtProcChannel = createExtProcChannelForTesting
+	defer func() {
+		internal.ParseGRPCServiceConfig = origParse
+		internal.CreateExtProcChannel = origCreate
+	}()
+	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
+	internal.RegisterForTesting()
+	defer internal.UnregisterForTesting()
+
+	lis, err := testutils.LocalTCPListener()
+	if err != nil {
+		t.Fatalf("LocalTCPListener() failed: %v", err)
+	}
+	extprocServer := grpc.NewServer()
+	mockProc := &mockProcessorServer{
+		processFunc: func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+			// Receive RequestHeaders and respond correctly
+			req, err := stream.Recv()
+			if err != nil {
+				return err
+			}
+			if req.GetRequestHeaders() == nil {
+				return fmt.Errorf("Expected RequestHeaders, got %v", req)
+			}
+			if err := stream.Send(requestHeadersResponse(nil, nil)); err != nil {
+				return err
+			}
+
+			reqBodyReq, err := stream.Recv()
+			if err != nil {
+				return err
+			}
+			if reqBodyReq.GetRequestBody() == nil {
+				return fmt.Errorf("Expected RequestBody, got %v", reqBodyReq)
+			}
+			// Send request body back.
+			if err := stream.Send(requestBodyResponse(reqBodyReq.GetRequestBody().GetBody())); err != nil {
+				return err
+			}
+
+			// Receive ResponseHeaders first.
+			respHeadersReq, err := stream.Recv()
+			if err != nil {
+				return err
+			}
+			if respHeadersReq.GetResponseHeaders() == nil {
+				return fmt.Errorf("Expected ResponseHeaders, got %v", respHeadersReq)
+			}
+			if err := stream.Send(responseHeadersResponse(nil, nil)); err != nil {
+				return err
+			}
+
+			// Receive ResponseBody next.
+			respBodyReq, err := stream.Recv()
+			if err != nil {
+				return err
+			}
+			if respBodyReq.GetResponseBody() == nil {
+				return fmt.Errorf("Expected ResponseBody, got %v", respBodyReq)
+			}
+
+			// Respond to ResponseBody but with EndOfStream set to true.
+			bodyBytes := respBodyReq.GetResponseBody().GetBody()
+			resp := &v3procservicepb.ProcessingResponse{
+				Response: &v3procservicepb.ProcessingResponse_ResponseBody{
+					ResponseBody: &v3procservicepb.BodyResponse{
+						Response: &v3procservicepb.CommonResponse{
+							Status: v3procservicepb.CommonResponse_CONTINUE,
+							BodyMutation: &v3procservicepb.BodyMutation{
+								Mutation: &v3procservicepb.BodyMutation_StreamedResponse{
+									StreamedResponse: &v3procservicepb.StreamedBodyResponse{
+										Body:        bodyBytes,
+										EndOfStream: true,
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			return stream.Send(resp)
+		},
+	}
+	v3procservicepb.RegisterExternalProcessorServer(extprocServer, mockProc)
+	go extprocServer.Serve(lis)
+	defer extprocServer.Stop()
+
+	stub := stubserver.StartTestService(t, &stubserver.StubServer{
+		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
+			_, err := stream.Recv()
+			if err != nil {
+				return err
+			}
+			if err := stream.SendHeader(metadata.Pairs("backend-header", "present")); err != nil {
+				return err
+			}
+			if err := stream.Send(&testpb.StreamingOutputCallResponse{Payload: &testpb.Payload{Body: []byte("s1")}}); err != nil {
+				return err
+			}
+			return nil
+		},
+	})
+	defer stub.Stop()
+
+	managementServer, nodeID, _, xdsResolver := setup.ManagementServerAndResolver(t)
+	const serviceName = "test-service"
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		DialTarget: serviceName,
+		NodeID:     nodeID,
+		Host:       "localhost",
+		Port:       testutils.ParsePort(t, stub.Address),
+		SecLevel:   e2e.SecurityLevelNone,
+	})
+	hcm := new(v3httppb.HttpConnectionManager)
+	apiListener := resources.Listeners[0].GetApiListener().GetApiListener()
+	if err = apiListener.UnmarshalTo(hcm); err != nil {
+		t.Fatal(err)
+	}
+
+	hcm.HttpFilters = append([]*v3httppb.HttpFilter{
+		e2e.HTTPFilter("extproc", &v3procfilterpb.ExternalProcessor{
+			GrpcService: &v3corepb.GrpcService{
+				TargetSpecifier: &v3corepb.GrpcService_GoogleGrpc_{
+					GoogleGrpc: &v3corepb.GrpcService_GoogleGrpc{
+						TargetUri: lis.Addr().String(),
+					},
+				},
+			},
+			ProcessingMode: &v3procfilterpb.ProcessingMode{
+				RequestHeaderMode:  v3procfilterpb.ProcessingMode_SEND,
+				RequestBodyMode:    v3procfilterpb.ProcessingMode_GRPC,
+				ResponseHeaderMode: v3procfilterpb.ProcessingMode_SEND,
+				ResponseBodyMode:   v3procfilterpb.ProcessingMode_GRPC,
+			},
+			FailureModeAllow: false,
+		})},
+		hcm.HttpFilters...)
+	hcmAny := testutils.MarshalAny(t, hcm)
+	resources.Listeners[0].ApiListener.ApiListener = hcmAny
+	resources.Listeners[0].FilterChains[0].Filters[0].ConfigType = &v3listenerpb.Filter_TypedConfig{TypedConfig: hcmAny}
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := managementServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	cc, err := grpc.NewClient("xds:///"+serviceName, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsResolver))
+	if err != nil {
+		t.Fatalf("failed to dial: %v", err)
+	}
+	defer cc.Close()
+
+	client := testgrpc.NewTestServiceClient(cc)
+	stream, err := client.FullDuplexCall(ctx)
+	if err != nil {
+		t.Fatalf("FullDuplexCall() failed: %v", err)
+	}
+
+	if err := stream.Send(&testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: []byte("c1")}}); err != nil {
+		t.Fatalf("stream.Send(c1) failed: %v", err)
+	}
+
+	_, err = stream.Recv()
+	if got, want := status.Code(err), codes.Internal; got != want {
+		t.Fatalf("stream.Recv() returned status code %v, want %v", got, want)
+	}
+	wantErr := "external processor unexpectedly set end of stream in response body mutation"
+	if !strings.Contains(err.Error(), wantErr) {
+		t.Fatalf("stream.Recv() returned err %v, want error containing %q", err, wantErr)
+	}
+}
