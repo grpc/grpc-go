@@ -438,11 +438,8 @@ func (s) TestParseFramedMsgVulnerability(t *testing.T) {
 		t.Fatalf("NewConn failed: %v", err)
 	}
 	buf := make([]byte, 1024)
-	_, err = c.Read(buf)
-	if err == nil {
-		t.Fatal("c.Read(buf) succeeded, but expected a parsing error")
-	}
-	if !strings.Contains(err.Error(), "shorter than message type field size") {
-		t.Fatalf("c.Read(buf) returned unexpected error: %v", err)
+	const wantErr = "shorter than message type field size"
+	if _, err := c.Read(buf); err == nil || !strings.Contains(err.Error(), wantErr) {
+		t.Fatal("c.Read(buf) returned error: %v, want error containing %q", err, wantErr)
 	}
 }
