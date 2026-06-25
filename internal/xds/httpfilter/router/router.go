@@ -76,7 +76,7 @@ func (builder) IsTerminal() bool {
 	return true
 }
 
-func (builder) BuildClientFilter(httpfilter.BuildOptions) httpfilter.ClientFilter {
+func (builder) BuildClientFilter(httpfilter.ClientFilterOptions) httpfilter.ClientFilter {
 	return filter{}
 }
 

@@ -85,14 +85,17 @@ func setupGCPAuthnTest(t *testing.T) {
 
 // Test verifies the basic end-to-end flow. It ensures that the gcp_authn
 // filter successfully fetches a token from the stub metadata server and
-// attaches it to the outgoing gRPC request metadata.
+// attaches it to the outgoing gRPC request metadata. Than verify that
+// subsequent RPC calls with same audience reuse the same token.
 func (s) TestGCPAuthnFilter_SuccessCase(t *testing.T) {
 	setupGCPAuthnTest(t)
 	const tokenValue = "token"
 
 	// Starts a local HTTP server and sets GCE_METADATA_HOST to spoof the
 	// GCE metadata server and redirect token fetch requests to it.
+	var requestCount atomic.Int32
 	metadataServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requestCount.Add(1)
 		w.Write([]byte(tokenValue))
 	}))
 	defer metadataServer.Close()
@@ -181,12 +184,31 @@ func (s) TestGCPAuthnFilter_SuccessCase(t *testing.T) {
 	client := testgrpc.NewTestServiceClient(cc)
 	if _, err = client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("EmptyCall() failed: %v", err)
+
+	}
+	// Verify request count is 1.
+	if count := requestCount.Load(); count != 1 {
+		t.Fatalf("Unexpected request to metadata server, got %d want 1", count)
+	}
+
+	const numCalls = 3
+	for i := 0; i < numCalls; i++ {
+		if _, err = client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+			t.Fatalf("EmptyCall() failed: %v", err)
+		}
+	}
+
+	// Verify request count is 1. This ensures that the token fetched for
+	// the first RPC was reused by the subsequent RPCs.
+	if count := requestCount.Load(); count != 1 {
+		t.Fatalf("Unexpected request to metadata server, got %d want 1", count)
 	}
 }
 
-// Test verifies that the filter correctly caches tokens and reuses them
-// for subsequent RPCs, avoiding redundant network calls to metadata server.
-func (s) TestGCPAuthnFilter_TokenCaching(t *testing.T) {
+// Test verifies that the filter correctly handles concurrent RPC calls
+// (thundering herd problem) by fetching the token only once and reusing
+// it across all subsequent RPCs with the same audience.
+func (s) TestGCPAuthnFilter_ConcurrentRequests(t *testing.T) {
 	setupGCPAuthnTest(t)
 	const tokenValue = "token"
 
@@ -281,15 +303,25 @@ func (s) TestGCPAuthnFilter_TokenCaching(t *testing.T) {
 	defer cc.Close()
 	client := testgrpc.NewTestServiceClient(cc)
 
-	const numCalls = 3
+	const numCalls = 100
+	errs := make([]error, numCalls)
+	var wg sync.WaitGroup
 	for i := 0; i < numCalls; i++ {
-		if _, err = client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+		wg.Go(func() {
+			_, errs[i] = client.EmptyCall(ctx, &testpb.Empty{})
+		})
+	}
+	wg.Wait()
+
+	for _, err := range errs {
+		if err != nil {
 			t.Fatalf("EmptyCall() failed: %v", err)
 		}
 	}
 
-	// Verify request count is 1. This ensures that the token fetched for
-	// the first RPC was reused for the second RPC.
+	// Verify request count is 1. This ensures that only one token fetch call was
+	// made to the metadata server and all 100 concurrent RPC calls reused the
+	// same token.
 	if count := requestCount.Load(); count != 1 {
 		t.Fatalf("Unexpected request to metadata server, got %d want 1", count)
 	}

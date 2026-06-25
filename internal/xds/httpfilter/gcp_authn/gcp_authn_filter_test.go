@@ -24,7 +24,6 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/resolver"
@@ -128,7 +127,7 @@ func (s) TestBuildClientInterceptor(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			const filterName = "com.google.grpc.gcp_authn"
-			clientFilter := builder{}.BuildClientFilter(httpfilter.BuildOptions{FilterName: filterName})
+			clientFilter := builder{}.BuildClientFilter(httpfilter.ClientFilterOptions{FilterName: filterName})
 			defer clientFilter.Close()
 
 			i, err := clientFilter.BuildClientInterceptor(tc.cfg, nil)
@@ -139,13 +138,12 @@ func (s) TestBuildClientInterceptor(t *testing.T) {
 				return
 			}
 
-			wantLRUCache := newLRUCache(tc.wantCacheSize)
 			interceptor := i.(*interceptor)
 			if interceptor.filterName != filterName {
 				t.Fatalf("BuildClientInterceptor() returned interceptor with filtername = %q, want %q", interceptor.filterName, filterName)
 			}
-			if diff := cmp.Diff(interceptor.cache, wantLRUCache, cmp.AllowUnexported(lruCache{}), cmpopts.IgnoreFields(lruCache{}, "mu", "lruList", "cache")); diff != "" {
-				t.Fatalf("BuildClientInterceptor() returned unexpected cache (-want +got):\n%s", diff)
+			if interceptor.cache == nil || interceptor.cache.cacheSize != tc.wantCacheSize {
+				t.Fatalf("BuildClientInterceptor() returned interceptor with cacheSize = %d, want %d", interceptor.cache.cacheSize, tc.wantCacheSize)
 			}
 		})
 	}
@@ -173,7 +171,7 @@ func (s) TestBuildClientInterceptor_CacheResizing(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			const filterName = "com.google.grpc.gcp_authn"
-			clientFilter := builder{}.BuildClientFilter(httpfilter.BuildOptions{FilterName: filterName})
+			clientFilter := builder{}.BuildClientFilter(httpfilter.ClientFilterOptions{FilterName: filterName})
 			defer clientFilter.Close()
 
 			for i, cfg := range tc.cfgs {
@@ -181,13 +179,12 @@ func (s) TestBuildClientInterceptor_CacheResizing(t *testing.T) {
 				if err != nil {
 					t.Fatalf("BuildClientInterceptor(%v) returned unexpected error: %v", cfg, err)
 				}
-				wantLRUCache := newLRUCache(tc.wantCacheSize[i])
 				interceptor := intptr.(*interceptor)
 				if interceptor.filterName != filterName {
 					t.Fatalf("BuildClientInterceptor() returned interceptor with filtername = %q, want %q", interceptor.filterName, filterName)
 				}
-				if diff := cmp.Diff(interceptor.cache, wantLRUCache, cmp.AllowUnexported(lruCache{}), cmpopts.IgnoreFields(lruCache{}, "mu", "lruList", "cache")); diff != "" {
-					t.Fatalf("BuildClientInterceptor() returned unexpected cache (-want +got):\n%s", diff)
+				if interceptor.cache == nil || interceptor.cache.cacheSize != tc.wantCacheSize[i] {
+					t.Fatalf("BuildClientInterceptor() returned interceptor with cacheSize = %d, want %d", interceptor.cache.cacheSize, tc.wantCacheSize)
 				}
 			}
 		})
@@ -212,7 +209,7 @@ func (s) TestInterceptor_NewStream_Errors(t *testing.T) {
 	if !ok {
 		t.Fatalf("Filter Builder does not implement ClientFilterBuilder")
 	}
-	clientFilter := clientFilterBuilder.BuildClientFilter(httpfilter.BuildOptions{FilterName: "com.google.grpc.gcp_authn"}).(*clientFilter)
+	clientFilter := clientFilterBuilder.BuildClientFilter(httpfilter.ClientFilterOptions{FilterName: "com.google.grpc.gcp_authn"}).(*clientFilter)
 	interceptor, err := clientFilter.BuildClientInterceptor(filterConfig, nil)
 	if err != nil {
 		t.Fatalf("Failed to build client interceptor: %v", err)

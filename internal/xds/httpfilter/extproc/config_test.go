@@ -735,7 +735,7 @@ func (s) TestBuildClientInterceptor_Success(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			builder := builder{}
-			filter := builder.BuildClientFilter(httpfilter.BuildOptions{})
+			filter := builder.BuildClientFilter(httpfilter.ClientFilterOptions{})
 			defer filter.Close()
 
 			intptr, err := filter.BuildClientInterceptor(tc.cfg, tc.override)
@@ -818,7 +818,7 @@ func (s) TestBuildClientInterceptor_Failure(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			builder := builder{}
-			filter := builder.BuildClientFilter(httpfilter.BuildOptions{})
+			filter := builder.BuildClientFilter(httpfilter.ClientFilterOptions{})
 			defer filter.Close()
 
 			_, err := filter.BuildClientInterceptor(tc.cfg, tc.override)

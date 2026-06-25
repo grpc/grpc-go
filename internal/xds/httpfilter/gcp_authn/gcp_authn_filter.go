@@ -26,6 +26,7 @@ import (
 	"strings"
 	"sync"
 
+	"golang.org/x/sync/singleflight"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
@@ -68,10 +69,9 @@ func (builder) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, er
 		return nil, fmt.Errorf("gcpauthn: failed to unmarshal filter config: %v", err)
 	}
 
-	cacheSize, cacheConfig := uint64(defaultCacheSize), msg.GetCacheConfig()
-	if cacheConfig.GetCacheSize() != nil {
-		cacheSize = cacheConfig.GetCacheSize().GetValue()
-		if cacheSize == 0 {
+	cacheSize := uint64(defaultCacheSize)
+	if cacheSizeConfig := msg.GetCacheConfig().GetCacheSize(); cacheSizeConfig != nil {
+		if cacheSize = cacheSizeConfig.GetValue(); cacheSize == 0 {
 			return nil, fmt.Errorf("gcpauthn: cache_config.cache_size must be greater than zero")
 		}
 	}
@@ -91,7 +91,7 @@ func (builder) IsTerminal() bool {
 	return false
 }
 
-func (builder) BuildClientFilter(opts httpfilter.BuildOptions) httpfilter.ClientFilter {
+func (builder) BuildClientFilter(opts httpfilter.ClientFilterOptions) httpfilter.ClientFilter {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &clientFilter{
 		ctx:        ctx,
@@ -218,7 +218,7 @@ func (i *interceptor) Close() {}
 // in the LRU list.
 type cacheEntry struct {
 	creds credentials.PerRPCCredentials
-	el    *list.Element
+	elem  *list.Element
 }
 
 // lruCache is a thread-safe LRU cache that stores PerRPCCredentials instances
@@ -239,6 +239,9 @@ type lruCache struct {
 	// cache maps audience keys to their corresponding cacheEntry pointers,
 	// allowing O(1) lookup and promotion.
 	cache map[string]*cacheEntry
+
+	// sf is used to deduplicate credential creation for the same audience.
+	sf singleflight.Group
 }
 
 // newLRUCache instantiates a new lruCache with the specified capacity.
@@ -272,25 +275,51 @@ func (c *lruCache) resizeCache(newCacheSize uint64) {
 // credentials using the configured creator, adds it to the cache, and evicts
 // the least recently used entry if the cache size is at capacity.
 func (c *lruCache) getOrCreate(ctx context.Context, audience string) (credentials.PerRPCCredentials, error) {
+	if creds, ok := c.getExisting(audience); ok {
+		return creds, nil
+	}
+
+	val, err, _ := c.sf.Do(audience, func() (any, error) {
+		// Double-check cache inside singleflight callback in case another call
+		// completed the initial check before the current call updates the cache.
+		if creds, ok := c.getExisting(audience); ok {
+			return creds, nil
+		}
+
+		creds, err := google.NewServiceAccountIdentityCredentials(ctx, audience)
+		if err != nil {
+			return nil, err
+		}
+
+		c.mu.Lock()
+		defer c.mu.Unlock()
+
+		if uint64(len(c.cache)) >= c.cacheSize {
+			c.removeOldestLocked()
+		}
+		e := c.lruList.PushFront(audience)
+		c.cache[audience] = &cacheEntry{creds: creds, elem: e}
+		return creds, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return val.(credentials.PerRPCCredentials), nil
+}
+
+// getExisting retrieves the PerRPCCredentials for a specified audience if it
+// already exists in the cache and updates the access order in the LRU list.
+//
+// The boolean return value indicates if an entry was found in the cache.
+func (c *lruCache) getExisting(audience string) (credentials.PerRPCCredentials, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	if entry, ok := c.cache[audience]; ok {
-		c.lruList.MoveToFront(entry.el)
-		return entry.creds, nil
+		c.lruList.MoveToFront(entry.elem)
+		return entry.creds, ok
 	}
-
-	creds, err := google.NewServiceAccountIdentityCredentials(ctx, audience)
-	if err != nil {
-		return nil, err
-	}
-
-	if uint64(len(c.cache)) >= c.cacheSize {
-		c.removeOldestLocked()
-	}
-	el := c.lruList.PushFront(audience)
-	c.cache[audience] = &cacheEntry{creds: creds, el: el}
-	return creds, nil
+	return nil, false
 }
 
 // removeOldestLocked evicts the least recently used entry from the cache.
