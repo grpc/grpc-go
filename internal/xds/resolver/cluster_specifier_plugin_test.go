@@ -27,6 +27,7 @@ import (
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/internal"
 	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
@@ -258,7 +259,7 @@ func (s) TestXDSResolverDelayedOnCommittedCSP(t *testing.T) {
 		t.Fatalf("config selector returned cluster: %v, want: %v", gotCluster, wantCluster)
 	}
 
-	// Delay resOld.OnCommitted(). As long as there are pending RPCs to removed
+	// Delay committing the stream. As long as there are pending RPCs to removed
 	// clusters, they still appear in the service config.
 
 	// Change the cluster specifier plugin configuration.
@@ -315,9 +316,11 @@ func (s) TestXDSResolverDelayedOnCommittedCSP(t *testing.T) {
 		t.Fatalf("config selector returned cluster: %v, want: %v", gotCluster, wantCluster)
 	}
 
-	// Invoke resOld.OnCommitted; should lead to a service config update that deletes
-	// cspA.
-	resOld.OnCommitted()
+	// Invoke the onCommit callback; this will decrement the cluster count
+	// and update the service config.
+	if err := createStreamAndCommit(ctx, resOld.Interceptor); err != nil {
+		t.Fatalf("createStreamAndCommit() failed with error: %v", err)
+	}
 
 	wantSC = `
  {
@@ -476,4 +479,56 @@ func (s) TestResolverClusterSpecifierPlugin_WithFilters(t *testing.T) {
 	if ofc.OverridePath != "" {
 		t.Fatalf("Unexpected override path for second filter, got: %q, want: %q", ofc.OverridePath, "")
 	}
+}
+
+// mockClientStream implements grpc.ClientStream.
+type mockClientStream struct {
+	grpc.ClientStream
+	ctx context.Context
+}
+
+func (m mockClientStream) Context() context.Context {
+	return m.ctx
+}
+
+func createStream(ctx context.Context, interceptorVal any) ([]grpc.CallOption, error) {
+	var opts []grpc.CallOption
+	newStream := func(ctx context.Context, o ...grpc.CallOption) (grpc.ClientStream, error) {
+		opts = o
+		return mockClientStream{ctx: ctx}, nil
+	}
+
+	interceptor, ok := interceptorVal.(httpfilter.ClientInterceptor)
+	if !ok {
+		return nil, fmt.Errorf("interceptor is type %T, want httpfilter.ClientInterceptor", interceptorVal)
+	}
+	if _, err := interceptor.NewStream(ctx, iresolver.RPCInfo{Method: "/service/method", Context: ctx}, newStream); err != nil {
+		return nil, err
+	}
+	return opts, nil
+}
+
+// createStreamAndCommit simulates a client initiating an RPC stream and
+// manually triggering onCommit using the TriggerOnCommitForTesting hook.
+func createStreamAndCommit(ctx context.Context, interceptorVal any) error {
+	var capturedCallback func()
+
+	// Override the hook to capture the onCommit.
+	origOnCommitCallOption := internal.OnCommitCallOption.(func(func()) grpc.CallOption)
+	internal.OnCommitCallOption = func(f func()) grpc.CallOption {
+		capturedCallback = f
+		return origOnCommitCallOption(f)
+	}
+	defer func() { internal.OnCommitCallOption = origOnCommitCallOption }()
+
+	// createStream triggers OnCommitCallOption, which populates capturedCallback
+	if _, err := createStream(ctx, interceptorVal); err != nil {
+		return err
+	}
+
+	if capturedCallback != nil {
+		capturedCallback()
+	}
+
+	return nil
 }

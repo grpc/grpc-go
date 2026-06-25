@@ -420,7 +420,16 @@ func (r *xdsResolver) newConfigSelector() (_ *configSelector, err error) {
 		// and WeightedClusters.
 		if rt.ClusterSpecifierPlugin != "" {
 			clusterName := clusterSpecifierPluginPrefix + rt.ClusterSpecifierPlugin
-			interceptor, err := r.newInterceptor(r.xdsConfig.Listener.APIListener.HTTPFilters, nil, rt.HTTPFilterConfigOverride, r.xdsConfig.VirtualHost.HTTPFilterConfigOverride)
+			onCommitted := func() {
+				if info, ok := cs.plugins[clusterName]; ok {
+					if v := info.refCount.Add(-1); v == 0 {
+						// This entry will be removed from activePlugins when
+						// producing a new service config update.
+						cs.sendNewServiceConfig()
+					}
+				}
+			}
+			interceptor, err := r.newInterceptor(r.xdsConfig.Listener.APIListener.HTTPFilters, nil, rt.HTTPFilterConfigOverride, r.xdsConfig.VirtualHost.HTTPFilterConfigOverride, onCommitted)
 			if err != nil {
 				// Clean up any interceptors that were successfully built
 				// for the current route before this error occurred. Note
@@ -442,7 +451,20 @@ func (r *xdsResolver) newConfigSelector() (_ *configSelector, err error) {
 		} else {
 			for _, wc := range rt.WeightedClusters {
 				clusterName := clusterPrefix + wc.Name
-				interceptor, err := r.newInterceptor(r.xdsConfig.Listener.APIListener.HTTPFilters, wc.HTTPFilterConfigOverride, rt.HTTPFilterConfigOverride, r.xdsConfig.VirtualHost.HTTPFilterConfigOverride)
+				onCommitted := func() {
+					if info, ok := cs.clusters[clusterName]; ok {
+						if v := info.refCount.Add(-1); v == 0 {
+							// We call unsubscribe rather than sendNewServiceConfig to
+							// prevent redundant updates. If the reference count in the
+							// dependency manager drops to zero, it will automatically
+							// trigger a service config update with this cluster
+							// removed. Calling unsubscribe allows the dependency
+							// manager to handle the update flow once and for all.
+							info.unsubscribe()
+						}
+					}
+				}
+				interceptor, err := r.newInterceptor(r.xdsConfig.Listener.APIListener.HTTPFilters, wc.HTTPFilterConfigOverride, rt.HTTPFilterConfigOverride, r.xdsConfig.VirtualHost.HTTPFilterConfigOverride, onCommitted)
 				if err != nil {
 					// Clean up any interceptors that were successfully built
 					// for the current route before this error occurred. Note
@@ -595,7 +617,7 @@ func (r *xdsResolver) onResourceError(err error) {
 // followed by the route override, and finally the virtual host override.
 //
 // Only executed in the context of a serializer callback.
-func (r *xdsResolver) newInterceptor(filters []xdsresource.HTTPFilter, clusterOverride, routeOverride, virtualHostOverride map[string]httpfilter.FilterConfig) (_ httpfilter.ClientInterceptor, err error) {
+func (r *xdsResolver) newInterceptor(filters []xdsresource.HTTPFilter, clusterOverride, routeOverride, virtualHostOverride map[string]httpfilter.FilterConfig, clusterRefCountCallback func()) (_ httpfilter.ClientInterceptor, err error) {
 	interceptors := make([]httpfilter.ClientInterceptor, 0, len(filters))
 	defer func() {
 		// Clean up any interceptors that were successfully built before the
@@ -647,16 +669,37 @@ func (r *xdsResolver) newInterceptor(filters []xdsresource.HTTPFilter, clusterOv
 		}
 	}
 
-	return &interceptorList{interceptors: interceptors}, nil
+	return &interceptorList{
+		interceptors:            interceptors,
+		clusterRefCountCallback: clusterRefCountCallback,
+	}, nil
 }
 
 // interceptorList is a client interceptor that contains a list of client
 // interceptors to execute in order.
 type interceptorList struct {
 	interceptors []httpfilter.ClientInterceptor
+	// clusterRefCountCallback is a callback function to decrement the reference
+	// count of the associated cluster, invoked (at most once) when a stream
+	// created by this interceptor chain is committed or finished.
+	clusterRefCountCallback func()
 }
 
 func (il *interceptorList) NewStream(ctx context.Context, ri iresolver.RPCInfo, newStream func(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStream, error), opts ...grpc.CallOption) (grpc.ClientStream, error) {
+	var isCommitted atomic.Bool
+	decrementRef := func() {
+		if !isCommitted.Swap(true) {
+			il.clusterRefCountCallback()
+		}
+	}
+
+	onCommitted := decrementRef
+	onFinished := func(error) {
+		decrementRef()
+	}
+
+	opts = append(opts, internal.OnCommitCallOption.(func(func()) grpc.CallOption)(onCommitted), grpc.OnFinish(onFinished))
+
 	for idx := len(il.interceptors) - 1; idx >= 0; idx-- {
 		ns := newStream
 		i := il.interceptors[idx]
@@ -664,7 +707,16 @@ func (il *interceptorList) NewStream(ctx context.Context, ri iresolver.RPCInfo, 
 			return i.NewStream(ctx, ri, ns, opts...)
 		}
 	}
-	return newStream(ctx, opts...)
+	s, err := newStream(ctx, opts...)
+	if err != nil {
+		// Decrement the reference count if stream creation fails early (e.g., due
+		// to an interceptor aborting). This is necessary because onFinished is
+		// registered on the stream options, which are never evaluated if newStream
+		// fails before creating the stream.
+		decrementRef()
+		return nil, err
+	}
+	return s, nil
 }
 
 func (il *interceptorList) Close() {

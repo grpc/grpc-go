@@ -212,30 +212,7 @@ func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RP
 	}
 
 	config := &iresolver.RPCConfig{
-		// Communicate to the LB policy the chosen cluster and request hash, if Ring Hash LB policy.
-		Context: lbCtx,
-		OnCommitted: func() {
-			// When the RPC is committed, the cluster is no longer required.
-			// Decrease its ref.
-			if info, ok := cs.clusters[cluster.name]; ok {
-				if v := info.refCount.Add(-1); v == 0 {
-					// We call unsubscribe rather than sendNewServiceConfig to
-					// prevent redundant updates. If the reference count in the
-					// dependency manager drops to zero, it will automatically
-					// trigger a service config update with this cluster
-					// removed. Calling unsubscribe allows the dependency
-					// manager to handle the update flow once and for all.
-					info.unsubscribe()
-				}
-			}
-			if info, ok := cs.plugins[cluster.name]; ok {
-				if v := info.refCount.Add(-1); v == 0 {
-					// This entry will be removed from activePlugins when
-					// producing a new service config update.
-					cs.sendNewServiceConfig()
-				}
-			}
-		},
+		Context:     lbCtx,
 		Interceptor: cluster.interceptor,
 	}
 
