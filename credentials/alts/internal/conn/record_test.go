@@ -440,6 +440,6 @@ func (s) TestParseFramedMsgVulnerability(t *testing.T) {
 	buf := make([]byte, 1024)
 	const wantErr = "shorter than message type field size"
 	if _, err := c.Read(buf); err == nil || !strings.Contains(err.Error(), wantErr) {
-		t.Fatal("c.Read(buf) returned error: %v, want error containing %q", err, wantErr)
+		t.Fatalf("c.Read(buf) returned error: %v, want error containing %q", err, wantErr)
 	}
 }
