@@ -142,7 +142,10 @@ func (s) TestBuildClientInterceptor(t *testing.T) {
 			if interceptor.filterName != filterName {
 				t.Fatalf("BuildClientInterceptor() returned interceptor with filtername = %q, want %q", interceptor.filterName, filterName)
 			}
-			if interceptor.cache == nil || interceptor.cache.cacheSize != tc.wantCacheSize {
+			if interceptor.cache == nil {
+				t.Fatalf("BuildClientInterceptor() returned interceptor with nil cache")
+			}
+			if interceptor.cache.cacheSize != tc.wantCacheSize {
 				t.Fatalf("BuildClientInterceptor() returned interceptor with cacheSize = %d, want %d", interceptor.cache.cacheSize, tc.wantCacheSize)
 			}
 		})
@@ -153,19 +156,19 @@ func (s) TestBuildClientInterceptor(t *testing.T) {
 // different cache sizes dynamically resize the shared credentials cache.
 func (s) TestBuildClientInterceptor_CacheResizing(t *testing.T) {
 	tests := []struct {
-		name          string
-		cfgs          []httpfilter.FilterConfig
-		wantCacheSize []uint64
+		name           string
+		cfgs           []httpfilter.FilterConfig
+		wantCacheSizes []uint64
 	}{
 		{
-			name:          "cache_resize_smaller",
-			cfgs:          []httpfilter.FilterConfig{config{cacheSize: 5}, config{cacheSize: 3}},
-			wantCacheSize: []uint64{5, 3},
+			name:           "cache_resize_smaller",
+			cfgs:           []httpfilter.FilterConfig{config{cacheSize: 5}, config{cacheSize: 3}},
+			wantCacheSizes: []uint64{5, 3},
 		},
 		{
-			name:          "cache_resize_larger",
-			cfgs:          []httpfilter.FilterConfig{config{cacheSize: 5}, config{cacheSize: 15}},
-			wantCacheSize: []uint64{5, 15},
+			name:           "cache_resize_larger",
+			cfgs:           []httpfilter.FilterConfig{config{cacheSize: 5}, config{cacheSize: 15}},
+			wantCacheSizes: []uint64{5, 15},
 		},
 	}
 	for _, tc := range tests {
@@ -183,8 +186,11 @@ func (s) TestBuildClientInterceptor_CacheResizing(t *testing.T) {
 				if interceptor.filterName != filterName {
 					t.Fatalf("BuildClientInterceptor() returned interceptor with filtername = %q, want %q", interceptor.filterName, filterName)
 				}
-				if interceptor.cache == nil || interceptor.cache.cacheSize != tc.wantCacheSize[i] {
-					t.Fatalf("BuildClientInterceptor() returned interceptor with cacheSize = %d, want %d", interceptor.cache.cacheSize, tc.wantCacheSize)
+				if interceptor.cache == nil {
+					t.Fatalf("BuildClientInterceptor() returned interceptor with nil cache")
+				}
+				if interceptor.cache.cacheSize != tc.wantCacheSizes[i] {
+					t.Fatalf("BuildClientInterceptor() returned interceptor with cacheSize = %d, want %d", interceptor.cache.cacheSize, tc.wantCacheSizes[i])
 				}
 			}
 		})

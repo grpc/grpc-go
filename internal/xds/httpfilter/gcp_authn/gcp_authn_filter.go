@@ -115,7 +115,8 @@ type clientFilter struct {
 	cancel context.CancelFunc
 
 	// filterName is the name of the HTTP filter instance in the xDS
-	// configuration.
+	// configuration. It is used as the key in the cluster metadata to look up
+	// the audience value for the cluster to which the RPC is destined.
 	filterName string
 
 	// cache is the LRU cache of PerRPCCredentials instances, keyed by audience
@@ -185,8 +186,7 @@ func (i *interceptor) NewStream(ctx context.Context, _ resolver.RPCInfo, newStre
 		return nil, status.Errorf(codes.Unavailable, "gcpauthn: cluster config for %q is invalid or missing: %v", clusterName, clusterResult.Err)
 	}
 
-	m := clusterResult.Config.Cluster.Metadata
-	val, ok := m[i.filterName]
+	val, ok := clusterResult.Config.Cluster.Metadata[i.filterName]
 	if !ok {
 		return newStream(ctx, opts...)
 	}
@@ -237,7 +237,7 @@ type lruCache struct {
 	lruList *list.List
 
 	// cache maps audience keys to their corresponding cacheEntry pointers,
-	// allowing O(1) lookup and promotion.
+	// allowing O(1) lookups and updates in the LRU list.
 	cache map[string]*cacheEntry
 
 	// sf is used to deduplicate credential creation for the same audience.
@@ -297,8 +297,10 @@ func (c *lruCache) getOrCreate(ctx context.Context, audience string) (credential
 		if uint64(len(c.cache)) >= c.cacheSize {
 			c.removeOldestLocked()
 		}
-		e := c.lruList.PushFront(audience)
-		c.cache[audience] = &cacheEntry{creds: creds, elem: e}
+		c.cache[audience] = &cacheEntry{
+			creds: creds,
+			elem:  c.lruList.PushFront(audience),
+		}
 		return creds, nil
 	})
 	if err != nil {

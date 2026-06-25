@@ -315,7 +315,7 @@ func (s) TestGCPAuthnFilter_ConcurrentRequests(t *testing.T) {
 
 	for _, err := range errs {
 		if err != nil {
-			t.Fatalf("EmptyCall() failed: %v", err)
+			t.Errorf("EmptyCall() failed: %v", err)
 		}
 	}
 
