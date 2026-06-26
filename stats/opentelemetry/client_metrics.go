@@ -182,13 +182,13 @@ func (h *clientMetricsHandler) perCallMetrics(ctx context.Context, err error, st
 			h.clientMetrics.callHedges.Record(ctx, int64(hedges), retryAttrs)
 		}
 	}
+	// Unlike retries/transparent_retries/hedges, retry_delay is recorded
+	// unconditionally (0 for calls with no retries). A96's metric table
+	// deliberately omits the "if there were no X, 0 is not reported" clause
+	// for retry_delay that it applies to the other three metrics.
 	if h.clientMetrics.callRetryDelay != nil {
-		numAttempts := ci.numAttempts.Load()
-		transparentRetries := ci.numTransparentRetries.Load()
-		if numAttempts > 1 || transparentRetries > 0 {
-			delaySec := float64(ci.retryDelay.Load()) / float64(time.Second)
-			h.clientMetrics.callRetryDelay.Record(ctx, delaySec, retryAttrs)
-		}
+		delaySec := float64(ci.retryDelay.Load()) / float64(time.Second)
+		h.clientMetrics.callRetryDelay.Record(ctx, delaySec, retryAttrs)
 	}
 }
 

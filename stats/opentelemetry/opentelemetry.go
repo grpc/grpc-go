@@ -183,7 +183,16 @@ type callInfo struct {
 	// before current attempt. Transparent retries are excluded.
 	previousRPCAttempts atomic.Uint32
 
-	// retry metrics fields:
+	// Retry metrics fields, maintained by the metrics handler from the
+	// call's per-attempt stats events.
+	//
+	// numAttempts is tracked here rather than reusing previousRPCAttempts
+	// (above) because that field is owned by the tracing handler and is
+	// only updated when tracing is enabled.
+	//
+	// activeAttempts and lastAttemptEndTime accumulate retryDelay (time
+	// with no active attempt). They are only race-free for sequential
+	// attempts; revisit if grpc-go gains hedging support.
 	numAttempts           atomic.Uint32
 	numTransparentRetries atomic.Uint32
 	numHedges             atomic.Uint32

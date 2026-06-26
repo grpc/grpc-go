@@ -2772,8 +2772,10 @@ func (s) TestRetryMetrics(t *testing.T) {
 		t.Fatalf("data points length got: %d, want: 1", len(delayHisto.DataPoints))
 	}
 	delayDp := delayHisto.DataPoints[0]
-	// Expect total delay to be at least 0.08s (due to 2 backoffs of 0.05s
-	// each).
+	// Two backoffs of initialBackoff (0.05s), each jittered by a factor in
+	// [0.8, 1.2), so the scheduled delay floors at 2*0.05*0.8 = 0.08s. The
+	// measured wall-clock delay is always >= the scheduled backoff, so 0.08s
+	// is a safe lower bound (do not relax it: that would mask a missing gap).
 	if delayDp.Sum < 0.08 || delayDp.Sum > 0.3 {
 		t.Errorf("retry delay sum got: %v, want: ~0.1s", delayDp.Sum)
 	}
