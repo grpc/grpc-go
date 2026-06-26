@@ -32,7 +32,6 @@ import (
 	"google.golang.org/grpc/balancer/pickfirst"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
-	estats "google.golang.org/grpc/experimental/stats"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
@@ -109,22 +108,30 @@ func (s) TestPickFirstMetrics(t *testing.T) {
 	}
 
 	// Checking for subchannel metrics as well
-	waitForInt64Count(ctx, t, tmr, "grpc.subchannel.connection_attempts_succeeded", 1)
+	if got, _ := tmr.Metric("grpc.subchannel.connection_attempts_succeeded"); got != 1 {
+		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.subchannel.connection_attempts_succeeded", got, 1)
+	}
 	if got, _ := tmr.Metric("grpc.subchannel.connection_attempts_failed"); got != 0 {
 		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.subchannel.connection_attempts_failed", got, 0)
 	}
 	if got, _ := tmr.Metric("grpc.subchannel.disconnections"); got != 0 {
 		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.subchannel.disconnections", got, 0)
 	}
-	waitForInt64UpDownCount(ctx, t, tmr, "grpc.subchannel.open_connections", 1)
+	if got, _ := tmr.Metric("grpc.subchannel.open_connections"); got != 1 {
+		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.subchannel.open_connections", got, 1)
+	}
 
 	ss.Stop()
 	testutils.AwaitState(ctx, t, cc, connectivity.Idle)
 	if got, _ := tmr.Metric("grpc.lb.pick_first.disconnections"); got != 1 {
 		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.lb.pick_first.disconnections", got, 1)
 	}
-	waitForInt64Count(ctx, t, tmr, "grpc.subchannel.disconnections", 1)
-	waitForInt64UpDownCount(ctx, t, tmr, "grpc.subchannel.open_connections", -1)
+	if got, _ := tmr.Metric("grpc.subchannel.disconnections"); got != 1 {
+		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.subchannel.disconnections", got, 1)
+	}
+	if got, _ := tmr.Metric("grpc.subchannel.open_connections"); got != -1 {
+		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.subchannel.open_connections", got, -1)
+	}
 }
 
 // TestPickFirstMetricsFailure tests the connection attempts failed metric. It
@@ -445,26 +452,4 @@ func runDisconnectLabelTest(t *testing.T, wantLabel string, triggerFunc func(*st
 	}
 
 	t.Fatalf("Error waiting for metrics grpc.subchannel.disconnections: %v", ctx.Err())
-}
-
-func waitForInt64Count(ctx context.Context, t *testing.T, tmr *stats.TestMetricsRecorder, name string, want int64) {
-	t.Helper()
-	err := tmr.WaitForInt64Count(ctx, stats.MetricsData{
-		Handle:  &estats.MetricDescriptor{Name: name},
-		IntIncr: want,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-}
-
-func waitForInt64UpDownCount(ctx context.Context, t *testing.T, tmr *stats.TestMetricsRecorder, name string, want int64) {
-	t.Helper()
-	err := tmr.WaitForInt64UpDownCount(ctx, stats.MetricsData{
-		Handle:  &estats.MetricDescriptor{Name: name},
-		IntIncr: want,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
 }
