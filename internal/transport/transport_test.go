@@ -1867,7 +1867,11 @@ func (s) TestAccountCheckWindowSizeWithLargeWindow(t *testing.T) {
 		clientStream: 6 * 1024 * 1024,
 		clientConn:   8 * 1024 * 1024,
 	}
-	testFlowControlAccountCheck(t, 1024*1024, wc)
+	// This test exercises the largest windows and message sizes of the flow
+	// control account checks, so it can be slow under load (e.g. the race
+	// detector on a busy CI machine). Use a longer timeout for just this test
+	// instead of slowing down all of them.
+	testFlowControlAccountCheck(t, 1024*1024, wc, 30*time.Second)
 }
 
 func (s) TestAccountCheckWindowSizeWithSmallWindow(t *testing.T) {
@@ -1879,19 +1883,18 @@ func (s) TestAccountCheckWindowSizeWithSmallWindow(t *testing.T) {
 		clientStream: defaultWindowSize,
 		clientConn:   defaultWindowSize,
 	}
-	testFlowControlAccountCheck(t, 1024*1024, wc)
+	testFlowControlAccountCheck(t, 1024*1024, wc, defaultTestTimeout)
 }
 
 func (s) TestAccountCheckDynamicWindowSmallMessage(t *testing.T) {
-	testFlowControlAccountCheck(t, 1024, windowSizeConfig{})
+	testFlowControlAccountCheck(t, 1024, windowSizeConfig{}, defaultTestTimeout)
 }
 
 func (s) TestAccountCheckDynamicWindowLargeMessage(t *testing.T) {
-	testFlowControlAccountCheck(t, 1024*1024, windowSizeConfig{})
+	testFlowControlAccountCheck(t, 1024*1024, windowSizeConfig{}, defaultTestTimeout)
 }
 
-func testFlowControlAccountCheck(t *testing.T, msgSize int, wc windowSizeConfig) {
-	const timeout = 30 * time.Second
+func testFlowControlAccountCheck(t *testing.T, msgSize int, wc windowSizeConfig, timeout time.Duration) {
 	sc := &ServerConfig{
 		InitialWindowSize:     wc.serverStream,
 		InitialConnWindowSize: wc.serverConn,
