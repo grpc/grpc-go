@@ -691,6 +691,9 @@ func (t *http2Client) getTrAuthData(ctx context.Context, audience string) (map[s
 		for k, v := range data {
 			// Capital header names are illegal in HTTP/2.
 			k = strings.ToLower(k)
+			if err := imetadata.ValidatePair(k, v); err != nil {
+				return nil, status.Error(codes.Internal, err.Error())
+			}
 			authData[k] = v
 		}
 	}
@@ -724,6 +727,9 @@ func (t *http2Client) getCallAuthData(ctx context.Context, audience string, call
 		for k, v := range data {
 			// Capital header names are illegal in HTTP/2
 			k = strings.ToLower(k)
+			if err := imetadata.ValidatePair(k, v); err != nil {
+				return nil, status.Error(codes.Internal, err.Error())
+			}
 			callAuthData[k] = v
 		}
 	}
