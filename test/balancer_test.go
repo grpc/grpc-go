@@ -918,6 +918,69 @@ func (s) TestMetadataInPickResult(t *testing.T) {
 	}
 }
 
+type invalidMetadataCCWrapper struct {
+	balancer.ClientConn
+}
+
+func (t *invalidMetadataCCWrapper) UpdateState(state balancer.State) {
+	state.Picker = &invalidMetadataPicker{p: state.Picker}
+	t.ClientConn.UpdateState(state)
+}
+
+type invalidMetadataPicker struct {
+	p balancer.Picker
+}
+
+func (p *invalidMetadataPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
+	res, err := p.p.Pick(info)
+	if err != nil {
+		return balancer.PickResult{}, err
+	}
+	res.Metadata = metadata.MD{"bad key": {"value"}}
+	return res, nil
+}
+
+func (s) TestInvalidMetadataInPickResult(t *testing.T) {
+	ss := &stubserver.StubServer{EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
+		return &testpb.Empty{}, nil
+	}}
+	if err := ss.StartServer(); err != nil {
+		t.Fatalf("Starting test backend: %v", err)
+	}
+	defer ss.Stop()
+
+	stub.Register(t.Name(), stub.BalancerFuncs{
+		Init: func(bd *stub.BalancerData) {
+			cc := &invalidMetadataCCWrapper{ClientConn: bd.ClientConn}
+			bd.ChildBalancer = balancer.Get(pickfirst.Name).Build(cc, bd.BuildOptions)
+		},
+		Close: func(bd *stub.BalancerData) {
+			bd.ChildBalancer.Close()
+		},
+		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
+			return bd.ChildBalancer.UpdateClientConnState(ccs)
+		},
+	})
+
+	r := manual.NewBuilderWithScheme("whatever")
+	r.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: ss.Address}}})
+	cc, err := grpc.NewClient(r.Scheme()+":///test.server",
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithResolvers(r),
+		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, t.Name())),
+	)
+	if err != nil {
+		t.Fatalf("grpc.NewClient(): %v", err)
+	}
+	defer cc.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if _, err := testgrpc.NewTestServiceClient(cc).EmptyCall(ctx, &testpb.Empty{}); status.Code(err) != codes.Internal {
+		t.Fatalf("EmptyCall() error = %v, want code %v", err, codes.Internal)
+	}
+}
+
 // TestSubConnShutdown confirms that the Shutdown method on subconns and
 // RemoveSubConn method on ClientConn properly initiates subconn shutdown.
 func (s) TestSubConnShutdown(t *testing.T) {
