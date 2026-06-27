@@ -245,7 +245,7 @@ func injectAbort(ctx context.Context, abortCfg *fpb.FaultAbort) error {
 		return nil
 	}
 	if code == codes.OK {
-		return errOKStream
+		return status.Error(codes.Unknown, "RPC terminated due to fault injection with invalid OK status")
 	}
 	return status.Errorf(code, "RPC terminated due to fault injection")
 }

@@ -38,6 +38,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/grpctest"
+	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
@@ -542,6 +543,35 @@ func (s) TestFaultInjection_Unary(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func (s) TestFaultAbortOKDoesNotCreateSuccessfulStream(t *testing.T) {
+	origRandIntn := randIntn
+	randIntn = func(int) int { return 0 }
+	defer func() { randIntn = origRandIntn }()
+
+	i := &interceptor{config: &fpb.HTTPFault{
+		Abort: &fpb.FaultAbort{
+			Percentage: &tpb.FractionalPercent{
+				Numerator:   100,
+				Denominator: tpb.FractionalPercent_HUNDRED,
+			},
+			ErrorType: &fpb.FaultAbort_GrpcStatus{GrpcStatus: uint32(codes.OK)},
+		},
+	}}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	cs, err := i.NewStream(ctx, iresolver.RPCInfo{}, func(context.Context, ...grpc.CallOption) (grpc.ClientStream, error) {
+		t.Fatalf("fault abort should not delegate to the underlying stream")
+		return nil, nil
+	})
+	if err == nil {
+		t.Fatalf("NewStream() returned stream %T with nil error for fault abort status OK, want non-nil error", cs)
+	}
+	if got := status.Code(err); got == codes.OK {
+		t.Fatalf("NewStream() returned error code %v, want non-OK", got)
 	}
 }
 
