@@ -543,6 +543,9 @@ func (a *csAttempt) newStream() error {
 	// maintained in it are local to the attempt. When the attempt has to be
 	// retried, a new instance of csAttempt will be created.
 	if a.pickResult.Metadata != nil {
+		if err := imetadata.Validate(a.pickResult.Metadata); err != nil {
+			return status.Error(codes.Internal, err.Error())
+		}
 		// We currently do not have a function it the metadata package which
 		// merges given metadata with existing metadata in a context. Existing
 		// function `AppendToOutgoingContext()` takes a variadic argument of key

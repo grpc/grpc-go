@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"net"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -915,6 +916,141 @@ func (s) TestMetadataInPickResult(t *testing.T) {
 	gotMDVal = gotMD.Get(metadataHeaderInjectedByBalancer)
 	if !cmp.Equal(gotMDVal, wantMDVal) {
 		t.Fatalf("Mismatch in custom metadata received at test backend, got: %v, want %v", gotMDVal, wantMDVal)
+	}
+}
+
+type invalidMetadataCCWrapper struct {
+	balancer.ClientConn
+}
+
+func (t *invalidMetadataCCWrapper) UpdateState(state balancer.State) {
+	state.Picker = &invalidMetadataPicker{p: state.Picker}
+	t.ClientConn.UpdateState(state)
+}
+
+type invalidMetadataPicker struct {
+	p balancer.Picker
+}
+
+func (p *invalidMetadataPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
+	res, err := p.p.Pick(info)
+	if err != nil {
+		return balancer.PickResult{}, err
+	}
+	res.Metadata = metadata.MD{"bad key": {"value"}}
+	return res, nil
+}
+
+func (s) TestInvalidMetadataInPickResult(t *testing.T) {
+	ss := &stubserver.StubServer{EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
+		return &testpb.Empty{}, nil
+	}}
+	if err := ss.StartServer(); err != nil {
+		t.Fatalf("Starting test backend: %v", err)
+	}
+	defer ss.Stop()
+
+	stub.Register(t.Name(), stub.BalancerFuncs{
+		Init: func(bd *stub.BalancerData) {
+			cc := &invalidMetadataCCWrapper{ClientConn: bd.ClientConn}
+			bd.ChildBalancer = balancer.Get(pickfirst.Name).Build(cc, bd.BuildOptions)
+		},
+		Close: func(bd *stub.BalancerData) {
+			bd.ChildBalancer.Close()
+		},
+		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
+			return bd.ChildBalancer.UpdateClientConnState(ccs)
+		},
+	})
+
+	r := manual.NewBuilderWithScheme("whatever")
+	r.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: ss.Address}}})
+	cc, err := grpc.NewClient(r.Scheme()+":///test.server",
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithResolvers(r),
+		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, t.Name())),
+	)
+	if err != nil {
+		t.Fatalf("grpc.NewClient(): %v", err)
+	}
+	defer cc.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	wantErr := `header key "bad key" contains illegal characters not in [0-9a-z-_.]`
+	if _, err := testgrpc.NewTestServiceClient(cc).EmptyCall(ctx, &testpb.Empty{}); status.Code(err) != codes.Internal || !strings.Contains(err.Error(), wantErr) {
+		t.Fatalf("EmptyCall() error = %v, want code %v and message containing %q", err, codes.Internal, wantErr)
+	}
+}
+
+func (s) TestAddressMetadataValidation(t *testing.T) {
+	tests := []struct {
+		name    string
+		md      metadata.MD
+		wantErr string
+	}{
+		{
+			name: "valid",
+			md:   metadata.Pairs("valid-key", "value"),
+		},
+		{
+			name:    "invalid key",
+			md:      metadata.Pairs("bad key", "value"),
+			wantErr: `header key "bad key" contains illegal characters not in [0-9a-z-_.]`,
+		},
+		{
+			name:    "invalid value",
+			md:      metadata.Pairs("valid-key", "bad\x01value"),
+			wantErr: `header key "valid-key" contains value with non-printable ASCII characters`,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			testAddressMetadataValidation(t, test.md, test.wantErr)
+		})
+	}
+}
+
+func testAddressMetadataValidation(t *testing.T, addrMD metadata.MD, wantErr string) {
+	ss := &stubserver.StubServer{EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
+		if wantErr != "" {
+			return nil, status.Error(codes.Internal, "EmptyCall reached backend with invalid address metadata")
+		}
+		md, _ := metadata.FromIncomingContext(ctx)
+		if got := md.Get("valid-key"); !cmp.Equal(got, []string{"value"}) {
+			return nil, status.Errorf(codes.Internal, "metadata.Get(\"valid-key\") = %v, want [value]", got)
+		}
+		return &testpb.Empty{}, nil
+	}}
+	if err := ss.StartServer(); err != nil {
+		t.Fatalf("Starting test backend: %v", err)
+	}
+	defer ss.Stop()
+
+	r := manual.NewBuilderWithScheme("whatever")
+	addr := imetadata.Set(resolver.Address{Addr: ss.Address}, addrMD)
+	r.InitialState(resolver.State{Addresses: []resolver.Address{addr}})
+	cc, err := grpc.NewClient(r.Scheme()+":///test.server",
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithResolvers(r),
+	)
+	if err != nil {
+		t.Fatalf("grpc.NewClient(): %v", err)
+	}
+	defer cc.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	_, err = testgrpc.NewTestServiceClient(cc).EmptyCall(ctx, &testpb.Empty{})
+	if wantErr == "" {
+		if err != nil {
+			t.Fatalf("EmptyCall() error = %v, want nil", err)
+		}
+		return
+	}
+	if status.Code(err) != codes.Internal || !strings.Contains(err.Error(), wantErr) {
+		t.Fatalf("EmptyCall() error = %v, want code %v and message containing %q", err, codes.Internal, wantErr)
 	}
 }
 
