@@ -3387,6 +3387,60 @@ func (s) TestReadMessageHeaderMultipleBuffers(t *testing.T) {
 	}
 }
 
+func (s) TestReadMessageHeaderPartialHeaderEOF(t *testing.T) {
+	const headerLen = 5
+	bytesRead := 0
+	stream := Stream{
+		readRequester: &fakeReadRequester{},
+	}
+	stream.buf.init()
+	recvBuffer := &stream.buf
+	stream.trReader = transportReader{
+		reader: recvBufferReader{
+			recv: recvBuffer,
+		},
+		windowHandler: &mockWindowUpdater{
+			f: func(i int) {
+				bytesRead += i
+			},
+		},
+	}
+
+	recvBuffer.put(recvMsg{buffer: make(mem.SliceBuffer, 3)})
+	recvBuffer.put(recvMsg{err: io.EOF})
+
+	if err := stream.ReadMessageHeader(make([]byte, headerLen)); !errors.Is(err, io.ErrUnexpectedEOF) {
+		t.Fatalf("ReadMessageHeader() error = %v, want %v", err, io.ErrUnexpectedEOF)
+	}
+	if bytesRead != 3 {
+		t.Fatalf("bytesRead = %d, want 3", bytesRead)
+	}
+}
+
+func (s) TestReadMessageHeaderEOF(t *testing.T) {
+	stream := Stream{
+		readRequester: &fakeReadRequester{},
+	}
+	stream.buf.init()
+	recvBuffer := &stream.buf
+	stream.trReader = transportReader{
+		reader: recvBufferReader{
+			recv: recvBuffer,
+		},
+		windowHandler: &mockWindowUpdater{},
+	}
+
+	recvBuffer.put(recvMsg{err: io.EOF})
+
+	err := stream.ReadMessageHeader(make([]byte, 5))
+	if !errors.Is(err, io.EOF) {
+		t.Fatalf("ReadMessageHeader() error = %v, want %v", err, io.EOF)
+	}
+	if errors.Is(err, io.ErrUnexpectedEOF) {
+		t.Fatalf("ReadMessageHeader() error = %v, want not %v", err, io.ErrUnexpectedEOF)
+	}
+}
+
 // Tests a scenario when the client doesn't send an RST frame when the
 // configured deadline is reached. The test verifies that the server sends an
 // RST stream only after the deadline is reached.
