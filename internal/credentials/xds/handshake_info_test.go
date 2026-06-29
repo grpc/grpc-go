@@ -593,3 +593,23 @@ func (s) TestAutoHostSNI_DNS_SANValidation_Failures(t *testing.T) {
 		t.Fatalf("VerifyPeerCertificate() failed with %v, want error containing 'do not match the SNI'", err)
 	}
 }
+
+func (s) TestVerifyPeerCertificateZeroCerts(t *testing.T) {
+	provider := &testProviderWithRoots{roots: x509.NewCertPool()}
+	hi := NewHandshakeInfo(provider, nil, nil, true, "", false, false)
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+
+	cfg, err := hi.ClientSideTLSConfig(ctx, "")
+	if err != nil {
+		t.Fatalf("hi.ClientSideTLSConfig() failed: %v", err)
+	}
+
+	err = cfg.VerifyPeerCertificate(nil, nil)
+	if err == nil {
+		t.Fatal("VerifyPeerCertificate(nil, nil) succeeded unexpectedly, want error")
+	}
+	if !strings.Contains(err.Error(), "no peer certificates presented") {
+		t.Errorf("VerifyPeerCertificate(nil, nil) = %v, want error containing 'no peer certificates presented'", err)
+	}
+}
