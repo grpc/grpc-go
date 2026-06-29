@@ -37,9 +37,9 @@ import (
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/anypb"
 
 	v3gcpauthnpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/gcp_authn/v3"
-	anypb "google.golang.org/protobuf/types/known/anypb"
 )
 
 const defaultCacheSize = 10 // default capacity of the LRU credentials cache.
