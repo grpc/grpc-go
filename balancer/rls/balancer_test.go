@@ -999,6 +999,9 @@ func waitForConnectivityState(ctx context.Context, t *testing.T, ch *buffer.Unbo
 		select {
 		case gotState := <-ch.Get():
 			ch.Load()
+			if gotState == nil {
+				t.Fatalf("Channel closed while waiting for RLS control channel to become one of %v", wants)
+			}
 			got := gotState.(connectivity.State)
 			for _, want := range wants {
 				if got == want {
@@ -1048,8 +1051,10 @@ func (s) TestControlChannelConnectivityStateMonitoring(t *testing.T) {
 	wrappedSubscriber := &wrappingConnectivityStateSubscriber{connStateCh: buffer.NewUnbounded()}
 	origConnectivityStateSubscriber := newConnectivityStateSubscriber
 	newConnectivityStateSubscriber = func(delegate grpcsync.Subscriber) grpcsync.Subscriber {
-		wrappedSubscriber.delegate = delegate
-		return wrappedSubscriber
+		return &wrappingConnectivityStateSubscriber{
+			delegate:    delegate,
+			connStateCh: wrappedSubscriber.connStateCh,
+		}
 	}
 	defer func() { newConnectivityStateSubscriber = origConnectivityStateSubscriber }()
 
@@ -1116,10 +1121,10 @@ func (s) TestControlChannelConnectivityStateMonitoring(t *testing.T) {
 		// and move it to TRANSIENT_FAILURE.
 		ctxFailed := metadata.AppendToOutgoingContext(ctx, "n1", "v1")
 		makeTestRPCAndVerifyError(ctxFailed, t, cc, codes.Unavailable, nil)
-	}
 
-	// Wait for the control channel to move to TRANSIENT_FAILURE.
-	waitForConnectivityState(ctx, t, wrappedSubscriber.connStateCh, connectivity.TransientFailure)
+		// Wait for the control channel to move to TRANSIENT_FAILURE.
+		waitForConnectivityState(ctx, t, wrappedSubscriber.connStateCh, connectivity.TransientFailure)
+	}
 
 	// Restart the RLS server.
 	lis.Restart()
@@ -1191,8 +1196,10 @@ func (s) TestControlChannelIdleTransitionNoBackoffReset(t *testing.T) {
 	wrappedSubscriber := &wrappingConnectivityStateSubscriber{connStateCh: buffer.NewUnbounded()}
 	origConnectivityStateSubscriber := newConnectivityStateSubscriber
 	newConnectivityStateSubscriber = func(delegate grpcsync.Subscriber) grpcsync.Subscriber {
-		wrappedSubscriber.delegate = delegate
-		return wrappedSubscriber
+		return &wrappingConnectivityStateSubscriber{
+			delegate:    delegate,
+			connStateCh: wrappedSubscriber.connStateCh,
+		}
 	}
 	defer func() { newConnectivityStateSubscriber = origConnectivityStateSubscriber }()
 

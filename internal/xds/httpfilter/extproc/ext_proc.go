@@ -26,7 +26,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/optional"
-	"google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/xds/httpfilter"
 	"google.golang.org/grpc/internal/xds/matcher"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
@@ -191,7 +190,7 @@ func (builder) IsTerminal() bool {
 	return false
 }
 
-func (builder) BuildClientFilter() httpfilter.ClientFilter {
+func (builder) BuildClientFilter(httpfilter.ClientFilterOptions) httpfilter.ClientFilter {
 	return clientFilter{}
 }
 
@@ -201,7 +200,7 @@ type clientFilter struct{}
 
 func (clientFilter) Close() {}
 
-func (clientFilter) BuildClientInterceptor(base, override httpfilter.FilterConfig) (resolver.ClientInterceptor, error) {
+func (clientFilter) BuildClientInterceptor(base, override httpfilter.FilterConfig) (httpfilter.ClientInterceptor, error) {
 	b, ok := base.(baseConfig)
 	if !ok {
 		return nil, fmt.Errorf("extproc: incorrect config type provided (%T): %v", base, base)
@@ -230,7 +229,7 @@ func (clientFilter) BuildClientInterceptor(base, override httpfilter.FilterConfi
 }
 
 type clientInterceptor struct {
-	resolver.ClientInterceptor
+	httpfilter.ClientInterceptor
 	config    baseConfig
 	extClient v3procservicegrpc.ExternalProcessorClient
 	cancel    func() error
