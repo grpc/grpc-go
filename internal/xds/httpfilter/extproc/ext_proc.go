@@ -250,6 +250,8 @@ func (i *clientInterceptor) Close() {
 }
 
 func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, newStream func(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStream, error), opts ...grpc.CallOption) (grpc.ClientStream, error) {
+	// Create a cancellable context to cancel the dataplane stream incase of
+	// error.
 	cancelCtx, cancel := context.WithCancel(ctx)
 	cs := &clientStream{
 		config:                   i.config,
@@ -269,7 +271,10 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 
 	// Create a new context for the RPC to the external processor server. This
 	// context has a deadline of the timeout specified in the config, if present.
-	// It also contains the initial metadata specified in the config.
+	// It also contains the initial metadata specified in the config. Create a new
+	// child context even incase of no timeout to ensure a new child context is
+	// created for the external processor stream to be able to cancel it
+	// independently.
 	procCtx, cancel := context.WithCancel(ctx)
 	if i.config.server.Timeout != 0 {
 		procCtx, cancel = context.WithTimeout(ctx, i.config.server.Timeout)
@@ -449,6 +454,10 @@ func (cs *clientStream) Trailer() metadata.MD {
 }
 
 func (cs *clientStream) CloseSend() error {
+	if cs.procStreamFailed.HasFired() {
+		return cs.procStreamErr.Load().(error)
+	}
+
 	procBypass := cs.procStreamBypass.Load()
 
 	// If the stream is closed and we had started sending data from the processor
@@ -582,13 +591,6 @@ func (cs *clientStream) RecvMsg(m any) error {
 			}
 			if err := s.RecvMsg(m); err != nil {
 				cs.initiateResponseTrailerProcessing()
-				// If we have sent the trailers to the proc stream, send CloseSend()
-				// after that.
-				if err == io.EOF {
-					if cs.config.processingModes.responseTrailerMode == modeSkip {
-						cs.procStream.CloseSend()
-					}
-				}
 				return err
 			}
 			return nil
@@ -966,7 +968,6 @@ func (cs *clientStream) recvFromProcServerLoop(newStream func(context.Context, .
 			// Signal that the response trailer is modified and ready to be sent to
 			// the client.
 			cs.responseTrailerModified.Fire()
-			cs.procStream.CloseSend()
 		}
 	}
 }
@@ -985,6 +986,14 @@ func (cs *clientStream) sendToProcServerLoop() {
 	for {
 		select {
 		case req := <-cs.procSendCh:
+			if req == nil {
+				// A nil request is used as a sentinel message to gracefully half-close
+				// the processor stream from this background thread. This ensures that
+				// CloseSend is called sequentially after all preceding requests in the
+				// channel are successfully sent, avoiding out-of-order data races.
+				cs.procStream.CloseSend()
+				return
+			}
 			if err := cs.procStream.Send(req); err != nil {
 				// Send failed. Do not call failProcStream immediately; the Recv loop
 				// will retrieve the actual status error from the server and propagate
@@ -1056,9 +1065,6 @@ func (cs *clientStream) cancelStream(err error) {
 		return
 	}
 	cs.procStreamErr.Store(err)
-	if cs.dataplaneStream != nil {
-		cs.dataplaneStream.CloseSend()
-	}
 	cs.procStreamFailed.Fire()
 	// Cancel the stream's context to immediately tear down the active
 	// dataplane connection and unblock any pending client I/O.
@@ -1199,7 +1205,11 @@ func (cs *clientStream) waitForDataplaneStream(ctx context.Context) (grpc.Client
 		return cs.dataplaneStream, nil
 	case <-ctx.Done():
 		// Return an Internal status and error (rather than context.Canceled) if the
-		// dataplane stream was dropped due to an external processor failure.
+		// dataplane stream was dropped due to an external processor failure or
+		// dataplane stream creation error.
+		if cs.dataplaneCreationErr != nil {
+			return nil, cs.dataplaneCreationErr
+		}
 		if cs.procStreamFailed.HasFired() {
 			return nil, cs.procStreamErr.Load().(error)
 		}
@@ -1285,6 +1295,16 @@ func (cs *clientStream) initiateResponseTrailerProcessing() {
 			}
 		} else {
 			cs.responseTrailerModified.Fire()
+		}
+		// Send nil sentinel to procSendCh to gracefully half-close the processor
+		// stream. Since this is pushed after trailers are sent, the
+		// background loop will serialize the CloseSend() call safely after all
+		// pending messages are transmitted.
+		select {
+		case cs.procSendCh <- nil:
+		case <-cs.ctx.Done():
+		case <-cs.procStreamFailed.Done():
+		case <-cs.procBypassCh:
 		}
 	})
 }
