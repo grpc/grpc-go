@@ -62,9 +62,8 @@ func init() {
 	}`, pickfirst.Name)
 }
 
-// TestPickFirstMetrics tests pick first metrics. It configures a pick first
-// balancer, causes it to connect and then disconnect, and expects the
-// subsequent metrics to emit from that.
+// TestPickFirstMetrics verifies that a pick_first channel emits the correct
+// subchannel metrics on connect and disconnect.
 func (s) TestPickFirstMetrics(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -97,17 +96,6 @@ func (s) TestPickFirstMetrics(t *testing.T) {
 		t.Fatalf("EmptyCall() failed: %v", err)
 	}
 
-	if got, _ := tmr.Metric("grpc.lb.pick_first.connection_attempts_succeeded"); got != 1 {
-		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.lb.pick_first.connection_attempts_succeeded", got, 1)
-	}
-	if got, _ := tmr.Metric("grpc.lb.pick_first.connection_attempts_failed"); got != 0 {
-		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.lb.pick_first.connection_attempts_failed", got, 0)
-	}
-	if got, _ := tmr.Metric("grpc.lb.pick_first.disconnections"); got != 0 {
-		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.lb.pick_first.disconnections", got, 0)
-	}
-
-	// Checking for subchannel metrics as well
 	if got, _ := tmr.Metric("grpc.subchannel.connection_attempts_succeeded"); got != 1 {
 		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.subchannel.connection_attempts_succeeded", got, 1)
 	}
@@ -123,9 +111,6 @@ func (s) TestPickFirstMetrics(t *testing.T) {
 
 	ss.Stop()
 	testutils.AwaitState(ctx, t, cc, connectivity.Idle)
-	if got, _ := tmr.Metric("grpc.lb.pick_first.disconnections"); got != 1 {
-		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.lb.pick_first.disconnections", got, 1)
-	}
 	if got, _ := tmr.Metric("grpc.subchannel.disconnections"); got != 1 {
 		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.subchannel.disconnections", got, 1)
 	}
@@ -161,20 +146,19 @@ func (s) TestPickFirstMetricsFailure(t *testing.T) {
 		t.Fatalf("EmptyCall() passed when expected to fail")
 	}
 
-	if got, _ := tmr.Metric("grpc.lb.pick_first.connection_attempts_succeeded"); got != 0 {
-		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.lb.pick_first.connection_attempts_succeeded", got, 0)
+	if got, _ := tmr.Metric("grpc.subchannel.connection_attempts_succeeded"); got != 0 {
+		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.subchannel.connection_attempts_succeeded", got, 0)
 	}
-	if got, _ := tmr.Metric("grpc.lb.pick_first.connection_attempts_failed"); got != 1 {
-		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.lb.pick_first.connection_attempts_failed", got, 1)
+	if got, _ := tmr.Metric("grpc.subchannel.connection_attempts_failed"); got != 1 {
+		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.subchannel.connection_attempts_failed", got, 1)
 	}
-	if got, _ := tmr.Metric("grpc.lb.pick_first.disconnections"); got != 0 {
-		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.lb.pick_first.disconnections", got, 0)
+	if got, _ := tmr.Metric("grpc.subchannel.disconnections"); got != 0 {
+		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.subchannel.disconnections", got, 0)
 	}
 }
 
-// TestPickFirstMetricsE2E tests the pick first metrics end to end. It
-// configures a channel with an OpenTelemetry plugin, induces all 3 pick first
-// metrics to emit, and makes sure the correct OpenTelemetry metrics atoms emit.
+// TestPickFirstMetricsE2E tests subchannel metrics emitted during a pickfirst
+// connection lifecycle: failure, success, and disconnection.
 func (s) TestPickFirstMetricsE2E(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -199,7 +183,7 @@ func (s) TestPickFirstMetricsE2E(t *testing.T) {
 	provider := metric.NewMeterProvider(metric.WithReader(reader))
 	mo := opentelemetry.MetricsOptions{
 		MeterProvider: provider,
-		Metrics:       opentelemetry.DefaultMetrics().Add("grpc.lb.pick_first.disconnections", "grpc.lb.pick_first.connection_attempts_succeeded", "grpc.lb.pick_first.connection_attempts_failed"),
+		Metrics:       opentelemetry.DefaultMetrics().Add("grpc.subchannel.disconnections", "grpc.subchannel.connection_attempts_succeeded", "grpc.subchannel.connection_attempts_failed"),
 	}
 
 	cc, err := grpc.NewClient(grpcTarget, opentelemetry.DialOption(opentelemetry.Options{MetricsOptions: mo}), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
@@ -227,7 +211,7 @@ func (s) TestPickFirstMetricsE2E(t *testing.T) {
 	testutils.AwaitState(ctx, t, cc, connectivity.Idle)
 	wantMetrics := []metricdata.Metrics{
 		{
-			Name:        "grpc.lb.pick_first.connection_attempts_succeeded",
+			Name:        "grpc.subchannel.connection_attempts_succeeded",
 			Description: "EXPERIMENTAL. Number of successful connection attempts.",
 			Unit:        "{attempt}",
 			Data: metricdata.Sum[int64]{
@@ -242,7 +226,7 @@ func (s) TestPickFirstMetricsE2E(t *testing.T) {
 			},
 		},
 		{
-			Name:        "grpc.lb.pick_first.connection_attempts_failed",
+			Name:        "grpc.subchannel.connection_attempts_failed",
 			Description: "EXPERIMENTAL. Number of failed connection attempts.",
 			Unit:        "{attempt}",
 			Data: metricdata.Sum[int64]{
@@ -257,7 +241,7 @@ func (s) TestPickFirstMetricsE2E(t *testing.T) {
 			},
 		},
 		{
-			Name:        "grpc.lb.pick_first.disconnections",
+			Name:        "grpc.subchannel.disconnections",
 			Description: "EXPERIMENTAL. Number of times the selected subchannel becomes disconnected.",
 			Unit:        "{disconnection}",
 			Data: metricdata.Sum[int64]{
