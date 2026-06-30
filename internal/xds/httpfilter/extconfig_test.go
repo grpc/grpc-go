@@ -20,12 +20,15 @@ package httpfilter
 
 import (
 	"regexp"
+	"sort"
 	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/grpc/internal/xds/matcher"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	v3mutationpb "github.com/envoyproxy/go-control-plane/envoy/config/common/mutation_rules/v3"
@@ -441,6 +444,169 @@ func (s) TestHeaderMutationRules_ApplyRemovals(t *testing.T) {
 			}
 			if diff := cmp.Diff(tt.wantMD, tt.inputMD); diff != "" {
 				t.Fatalf("ApplyRemovals() returned diff in metadata (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func (s) TestConstructHeaderMap(t *testing.T) {
+	tests := []struct {
+		name              string
+		md                metadata.MD
+		added             [][]string
+		allowedHeaders    []matcher.StringMatcher
+		disallowedHeaders []matcher.StringMatcher
+		wantHeaderMap     *v3corepb.HeaderMap
+	}{
+		{
+			name:          "NoHeaders",
+			md:            metadata.MD{},
+			wantHeaderMap: nil,
+		},
+		{
+			name: "NoAllowedHeaders",
+			md: metadata.MD{
+				"a": {"1"},
+				"b": {"2"},
+			},
+			wantHeaderMap: &v3corepb.HeaderMap{
+				Headers: []*v3corepb.HeaderValue{
+					{Key: "a", RawValue: []byte("1")},
+					{Key: "b", RawValue: []byte("2")},
+				},
+			},
+		},
+		{
+			name: "WithMultipleValues_ForSingleHeader",
+			md: metadata.MD{
+				"a": {"1", "11"},
+				"b": {"2"},
+			},
+			wantHeaderMap: &v3corepb.HeaderMap{
+				Headers: []*v3corepb.HeaderValue{
+					{Key: "a", RawValue: []byte("1")},
+					{Key: "a", RawValue: []byte("11")},
+					{Key: "b", RawValue: []byte("2")},
+				},
+			},
+		},
+		{
+			name: "WithAllowedHeaders",
+			md: metadata.MD{
+				"a": {"1"},
+				"b": {"2"},
+				"c": {"3"},
+			},
+			allowedHeaders: []matcher.StringMatcher{
+				matcher.NewExactStringMatcher("a", false),
+				matcher.NewPrefixStringMatcher("c", false),
+			},
+			wantHeaderMap: &v3corepb.HeaderMap{
+				Headers: []*v3corepb.HeaderValue{
+					{Key: "a", RawValue: []byte("1")},
+					{Key: "c", RawValue: []byte("3")},
+				},
+			},
+		},
+		{
+			name: "WithDisallowedHeaders",
+			md: metadata.MD{
+				"a": {"1"},
+				"b": {"2"},
+				"c": {"3"},
+			},
+			disallowedHeaders: []matcher.StringMatcher{
+				matcher.NewExactStringMatcher("b", false),
+				matcher.NewPrefixStringMatcher("c", false),
+			},
+			wantHeaderMap: &v3corepb.HeaderMap{
+				Headers: []*v3corepb.HeaderValue{
+					{Key: "a", RawValue: []byte("1")},
+				},
+			},
+		},
+		{
+			name: "WithAllowedAndDisallowedHeaders",
+			md: metadata.MD{
+				"a": {"1"},
+				"b": {"2"},
+				"c": {"3"},
+				"d": {"4"},
+			},
+			allowedHeaders: []matcher.StringMatcher{
+				matcher.NewExactStringMatcher("a", false),
+				matcher.NewPrefixStringMatcher("b", false),
+				matcher.NewPrefixStringMatcher("c", false),
+			},
+			disallowedHeaders: []matcher.StringMatcher{
+				matcher.NewExactStringMatcher("b", false),
+				matcher.NewPrefixStringMatcher("c", false),
+			},
+			wantHeaderMap: &v3corepb.HeaderMap{
+				Headers: []*v3corepb.HeaderValue{
+					{Key: "a", RawValue: []byte("1")},
+				},
+			},
+		},
+		{
+			name: "WithAddedHeaders",
+			added: [][]string{
+				{"a", "1", "b", "2"},
+				{"c", "3"},
+			},
+			wantHeaderMap: &v3corepb.HeaderMap{
+				Headers: []*v3corepb.HeaderValue{
+					{Key: "a", RawValue: []byte("1")},
+					{Key: "b", RawValue: []byte("2")},
+					{Key: "c", RawValue: []byte("3")},
+				},
+			},
+		},
+		{
+			name: "WithAddedAndBaseHeaders",
+			md: metadata.MD{
+				"a": {"1"},
+			},
+			added: [][]string{
+				{"B", "2"}, // Lowercase check
+			},
+			wantHeaderMap: &v3corepb.HeaderMap{
+				Headers: []*v3corepb.HeaderValue{
+					{Key: "a", RawValue: []byte("1")},
+					{Key: "b", RawValue: []byte("2")},
+				},
+			},
+		},
+		{
+			name: "WithAddedHeadersAndFiltering",
+			added: [][]string{
+				{"a", "1", "b", "2", "c", "3"},
+			},
+			allowedHeaders: []matcher.StringMatcher{
+				matcher.NewExactStringMatcher("a", false),
+				matcher.NewExactStringMatcher("b", false),
+			},
+			disallowedHeaders: []matcher.StringMatcher{
+				matcher.NewExactStringMatcher("b", false),
+			},
+			wantHeaderMap: &v3corepb.HeaderMap{
+				Headers: []*v3corepb.HeaderValue{
+					{Key: "a", RawValue: []byte("1")},
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotHeaderMap := ConstructHeaderMap(tt.md, tt.added, tt.allowedHeaders, tt.disallowedHeaders)
+			if gotHeaderMap != nil {
+				sort.Slice(gotHeaderMap.Headers, func(i, j int) bool {
+					return gotHeaderMap.Headers[i].Key < gotHeaderMap.Headers[j].Key
+				})
+			}
+			if diff := cmp.Diff(tt.wantHeaderMap, gotHeaderMap, protocmp.Transform()); diff != "" {
+				t.Fatalf("constructHeaderMap() mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}

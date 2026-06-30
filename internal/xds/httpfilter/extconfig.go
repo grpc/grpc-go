@@ -219,30 +219,35 @@ func (hmr *HeaderMutationRules) allow(key string) bool {
 //   - if the allowed_headers config field is unset or matches the header, the
 //     header will be added to the map, otherwise,
 //   - the header will be excluded from the map.
-func ConstructHeaderMap(md metadata.MD, allowedHeaders, disallowedHeaders []matcher.StringMatcher) *v3corepb.HeaderMap {
-	headerMap := &v3corepb.HeaderMap{}
-	for key, values := range md {
-		if IsDisallowedHeader(key, disallowedHeaders) {
-			continue
-		}
-		if IsAllowedHeader(key, allowedHeaders) {
-			for _, value := range values {
-				headerMap.Headers = append(headerMap.Headers, &v3corepb.HeaderValue{
-					Key:      key,
-					RawValue: []byte(value),
-				})
-			}
-		}
-	}
-	if len(headerMap.Headers) == 0 {
-		return nil
-	}
-	return headerMap
-}
+// func ConstructHeaderMap(md metadata.MD, allowedHeaders, disallowedHeaders []matcher.StringMatcher) *v3corepb.HeaderMap {
+// 	headerMap := &v3corepb.HeaderMap{}
+// 	for key, values := range md {
+// 		if IsDisallowedHeader(key, disallowedHeaders) {
+// 			continue
+// 		}
+// 		if IsAllowedHeader(key, allowedHeaders) {
+// 			for _, value := range values {
+// 				headerMap.Headers = append(headerMap.Headers, &v3corepb.HeaderValue{
+// 					Key:      key,
+// 					RawValue: []byte(value),
+// 				})
+// 			}
+// 		}
+// 	}
+// 	if len(headerMap.Headers) == 0 {
+// 		return nil
+// 	}
+// 	return headerMap
+// }
 
-// ConstructHeaderMapRaw constructs a HeaderMap from both the base metadata and
-// the raw appended metadata slice.
-func ConstructHeaderMapRaw(md metadata.MD, added [][]string, allowedHeaders, disallowedHeaders []matcher.StringMatcher) *v3corepb.HeaderMap {
+// ConstructHeaderMap constructs a HeaderMap from the given metadata and raw
+// appended metadata slice, using the following rules:
+//   - if the header is matched by the disallowed_headers config field, it will
+//     not be added to the map, otherwise,
+//   - if the allowed_headers config field is unset or matches the header, the
+//     header will be added to the map, otherwise,
+//   - the header will be excluded from the map.
+func ConstructHeaderMap(md metadata.MD, added [][]string, allowedHeaders, disallowedHeaders []matcher.StringMatcher) *v3corepb.HeaderMap {
 	headerMap := &v3corepb.HeaderMap{}
 	// Process the base metadata map.
 	for key, values := range md {
