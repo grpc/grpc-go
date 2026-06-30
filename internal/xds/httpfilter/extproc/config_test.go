@@ -151,8 +151,9 @@ func (s) TestParseFilterConfig_Success(t *testing.T) {
 						},
 					},
 					ProcessingMode: &fpb.ProcessingMode{
-						RequestBodyMode:  fpb.ProcessingMode_GRPC,
-						ResponseBodyMode: fpb.ProcessingMode_GRPC,
+						RequestBodyMode:     fpb.ProcessingMode_GRPC,
+						ResponseBodyMode:    fpb.ProcessingMode_GRPC,
+						ResponseTrailerMode: fpb.ProcessingMode_SEND,
 					},
 				})
 				return m
@@ -165,7 +166,7 @@ func (s) TestParseFilterConfig_Success(t *testing.T) {
 				processingModes: processingModes{
 					requestHeaderMode:   modeSend,
 					responseHeaderMode:  modeSend,
-					responseTrailerMode: modeSkip,
+					responseTrailerMode: modeSend,
 					requestBodyMode:     modeSend,
 					responseBodyMode:    modeSend,
 				},
@@ -314,6 +315,46 @@ func (s) TestParseFilterConfig_Errors(t *testing.T) {
 			wantErr: "extproc: invalid response body mode STREAMED",
 		},
 		{
+			name: "InvalidProcessingMode_ResponseBodySendTrailerDefault",
+			cfg: func() proto.Message {
+				m, _ := anypb.New(&fpb.ExternalProcessor{
+					GrpcService: &corepb.GrpcService{
+						TargetSpecifier: &corepb.GrpcService_GoogleGrpc_{
+							GoogleGrpc: &corepb.GrpcService_GoogleGrpc{
+								TargetUri: "localhost:1234",
+							},
+						},
+					},
+					ProcessingMode: &fpb.ProcessingMode{
+						ResponseBodyMode:    fpb.ProcessingMode_GRPC,
+						ResponseTrailerMode: fpb.ProcessingMode_DEFAULT,
+					},
+				})
+				return m
+			}(),
+			wantErr: fmt.Sprintf("extproc: invalid response trailer mode DEFAULT: must be %q when response body mode is %q", "SEND", "GRPC"),
+		},
+		{
+			name: "InvalidProcessingMode_ResponseBodySendTrailerSkip",
+			cfg: func() proto.Message {
+				m, _ := anypb.New(&fpb.ExternalProcessor{
+					GrpcService: &corepb.GrpcService{
+						TargetSpecifier: &corepb.GrpcService_GoogleGrpc_{
+							GoogleGrpc: &corepb.GrpcService_GoogleGrpc{
+								TargetUri: "localhost:1234",
+							},
+						},
+					},
+					ProcessingMode: &fpb.ProcessingMode{
+						ResponseBodyMode:    fpb.ProcessingMode_GRPC,
+						ResponseTrailerMode: fpb.ProcessingMode_SKIP,
+					},
+				})
+				return m
+			}(),
+			wantErr: fmt.Sprintf("extproc: invalid response trailer mode SKIP: must be %q when response body mode is %q", "SEND", "GRPC"),
+		},
+		{
 			name: "InvalidMutationRules",
 			cfg: func() proto.Message {
 				m, _ := anypb.New(&fpb.ExternalProcessor{
@@ -415,8 +456,9 @@ func (s) TestParseFilterConfigOverride_Success(t *testing.T) {
 						Override: &fpb.ExtProcPerRoute_Overrides{
 							Overrides: &fpb.ExtProcOverrides{
 								ProcessingMode: &fpb.ProcessingMode{
-									RequestBodyMode:  fpb.ProcessingMode_GRPC,
-									ResponseBodyMode: fpb.ProcessingMode_GRPC,
+									RequestBodyMode:     fpb.ProcessingMode_GRPC,
+									ResponseBodyMode:    fpb.ProcessingMode_GRPC,
+									ResponseTrailerMode: fpb.ProcessingMode_SEND,
 								},
 							},
 						},
@@ -427,7 +469,7 @@ func (s) TestParseFilterConfigOverride_Success(t *testing.T) {
 				processingModes: optional.New(processingModes{
 					requestHeaderMode:   modeSend,
 					responseHeaderMode:  modeSend,
-					responseTrailerMode: modeSkip,
+					responseTrailerMode: modeSend,
 					requestBodyMode:     modeSend,
 					responseBodyMode:    modeSend,
 				}),
@@ -503,6 +545,40 @@ func (s) TestParseFilterConfigOverride_Errors(t *testing.T) {
 				return m
 			}(),
 			wantErr: "extproc: invalid response body mode STREAMED",
+		},
+		{
+			name: "ProcessingMode_ResponseBodySendTrailerDefault",
+			override: func() proto.Message {
+				m, _ := anypb.New(&fpb.ExtProcPerRoute{
+					Override: &fpb.ExtProcPerRoute_Overrides{
+						Overrides: &fpb.ExtProcOverrides{
+							ProcessingMode: &fpb.ProcessingMode{
+								ResponseBodyMode:    fpb.ProcessingMode_GRPC,
+								ResponseTrailerMode: fpb.ProcessingMode_DEFAULT,
+							},
+						},
+					},
+				})
+				return m
+			}(),
+			wantErr: fmt.Sprintf("extproc: invalid response trailer mode DEFAULT: must be %q when response body mode is %q", "SEND", "GRPC"),
+		},
+		{
+			name: "ProcessingMode_ResponseBodySendTrailerSkip",
+			override: func() proto.Message {
+				m, _ := anypb.New(&fpb.ExtProcPerRoute{
+					Override: &fpb.ExtProcPerRoute_Overrides{
+						Overrides: &fpb.ExtProcOverrides{
+							ProcessingMode: &fpb.ProcessingMode{
+								ResponseBodyMode:    fpb.ProcessingMode_GRPC,
+								ResponseTrailerMode: fpb.ProcessingMode_SKIP,
+							},
+						},
+					},
+				})
+				return m
+			}(),
+			wantErr: fmt.Sprintf("extproc: invalid response trailer mode SKIP: must be %q when response body mode is %q", "SEND", "GRPC"),
 		},
 		{
 			name:     "InvalidOverrideType",
