@@ -356,26 +356,55 @@ func Benchmark_AddingMetadata_ContextManipulationApproach(b *testing.B) {
 	}
 }
 
-// Newer/faster approach to adding metadata to context
+// BenchmarkAppendToOutgoingContext measures the cost of N sequential
+// AppendToOutgoingContext calls on a fresh context each iteration.
 func BenchmarkAppendToOutgoingContext(b *testing.B) {
-	const num = 10
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	for n := 0; n < b.N; n++ {
-		for i := 0; i < num; i++ {
-			ctx = AppendToOutgoingContext(ctx, "k1", "v1", "k2", "v2")
-		}
+	for _, n := range []int{1, 5, 10, 50} {
+		b.Run(strconv.Itoa(n), func(b *testing.B) {
+			b.ReportAllocs()
+			for b.Loop() {
+				ctx := context.Background()
+				for i := 0; i < n; i++ {
+					ctx = AppendToOutgoingContext(ctx, "k1", "v1", "k2", "v2")
+				}
+			}
+		})
 	}
 }
 
+// BenchmarkFromOutgoingContext measures the read path after N appends.
 func BenchmarkFromOutgoingContext(b *testing.B) {
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	ctx = NewOutgoingContext(ctx, MD{"k3": {"v3", "v4"}})
-	ctx = AppendToOutgoingContext(ctx, "k1", "v1", "k2", "v2")
+	for _, n := range []int{1, 5, 10, 50} {
+		b.Run(strconv.Itoa(n), func(b *testing.B) {
+			b.ReportAllocs()
+			ctx := NewOutgoingContext(context.Background(), MD{"k-base": {"v-base"}})
+			for i := 0; i < n; i++ {
+				ctx = AppendToOutgoingContext(ctx, "k"+strconv.Itoa(i), "v"+strconv.Itoa(i))
+			}
+			for b.Loop() {
+				FromOutgoingContext(ctx)
+			}
+		})
+	}
+}
 
-	for n := 0; n < b.N; n++ {
-		FromOutgoingContext(ctx)
+// BenchmarkFromOutgoingContextRaw measures the raw iterator path after N appends.
+func BenchmarkFromOutgoingContextRaw(b *testing.B) {
+	for _, n := range []int{1, 5, 10, 50} {
+		b.Run(strconv.Itoa(n), func(b *testing.B) {
+			b.ReportAllocs()
+			ctx := NewOutgoingContext(context.Background(), MD{"k-base": {"v-base"}})
+			for i := 0; i < n; i++ {
+				ctx = AppendToOutgoingContext(ctx, "k"+strconv.Itoa(i), "v"+strconv.Itoa(i))
+			}
+			for b.Loop() {
+				_, added, _ := fromOutgoingContextRaw(ctx)
+				// Drain the lazy iterator so its work is actually measured;
+				// b.Loop() keeps the compiler from eliminating it.
+				for range added {
+				}
+			}
+		})
 	}
 }
 

@@ -22,6 +22,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"iter"
 	"math"
 	"net"
 	"net/http"
@@ -65,7 +66,7 @@ var clientConnectionCounter uint64
 
 var goAwayLoopyWriterTimeout = 5 * time.Second
 
-var metadataFromOutgoingContextRaw = internal.FromOutgoingContextRaw.(func(context.Context) (metadata.MD, [][]string, bool))
+var metadataFromOutgoingContextRaw = internal.FromOutgoingContextRaw.(func(context.Context) (metadata.MD, iter.Seq2[string, string], bool))
 
 // http2Client implements the ClientTransport interface with HTTP2.
 type http2Client struct {
@@ -620,7 +621,6 @@ func (t *http2Client) createHeaderFields(ctx context.Context, callHdr *CallHdr) 
 	}
 
 	if md, added, ok := metadataFromOutgoingContextRaw(ctx); ok {
-		var k string
 		for k, vv := range md {
 			// HTTP doesn't allow you to set pseudoheaders after non pseudoheaders were set.
 			if isReservedHeader(k) {
@@ -630,18 +630,12 @@ func (t *http2Client) createHeaderFields(ctx context.Context, callHdr *CallHdr) 
 				headerFields = append(headerFields, hpack.HeaderField{Name: k, Value: encodeMetadataHeader(k, v)})
 			}
 		}
-		for _, vv := range added {
-			for i, v := range vv {
-				if i%2 == 0 {
-					k = strings.ToLower(v)
-					continue
-				}
-				// HTTP doesn't allow you to set pseudoheaders after non pseudoheaders were set.
-				if isReservedHeader(k) {
-					continue
-				}
-				headerFields = append(headerFields, hpack.HeaderField{Name: k, Value: encodeMetadataHeader(k, v)})
+		for k, v := range added {
+			// HTTP doesn't allow you to set pseudoheaders after non pseudoheaders were set.
+			if isReservedHeader(k) {
+				continue
 			}
+			headerFields = append(headerFields, hpack.HeaderField{Name: k, Value: encodeMetadataHeader(k, v)})
 		}
 	}
 	for k, vv := range t.md {
