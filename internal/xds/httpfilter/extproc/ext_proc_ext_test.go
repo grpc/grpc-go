@@ -940,10 +940,11 @@ func (s) TestDraining(t *testing.T) {
 
 	cc, err := setupClientAndControlPlane(t, lisAddr, &v3procfilterpb.ExternalProcessor{
 		ProcessingMode: &v3procfilterpb.ProcessingMode{
-			RequestHeaderMode:  v3procfilterpb.ProcessingMode_SKIP,
-			RequestBodyMode:    v3procfilterpb.ProcessingMode_GRPC,
-			ResponseHeaderMode: v3procfilterpb.ProcessingMode_SKIP,
-			ResponseBodyMode:   v3procfilterpb.ProcessingMode_GRPC,
+			RequestHeaderMode:   v3procfilterpb.ProcessingMode_SKIP,
+			RequestBodyMode:     v3procfilterpb.ProcessingMode_GRPC,
+			ResponseHeaderMode:  v3procfilterpb.ProcessingMode_SKIP,
+			ResponseBodyMode:    v3procfilterpb.ProcessingMode_GRPC,
+			ResponseTrailerMode: v3procfilterpb.ProcessingMode_SEND,
 		},
 	}, stub.Address)
 	if err != nil {
@@ -1740,11 +1741,11 @@ func (s) TestUnaryFailureBodyPhaseDeny(t *testing.T) {
 	}
 }
 
-// TestDrainingNoMessageLoss tests the scenario where a processor server sends
+// TestDrainingUnderLoad tests the scenario where a processor server sends
 // RequestDrain: true. Verifies that subsequent client SendMsg and RecvMsg calls
 // correctly deliver all in-flight and bypassed payloads directly over the data
 // plane without message loss.
-func (s) TestDrainingNoMessageLoss(t *testing.T) {
+func (s) TestDrainingUnderLoad(t *testing.T) {
 	lisAddr, _ := setupTestEnvAndMockServer(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
 		// 1. Request headers
 		req, err := stream.Recv()
@@ -1853,9 +1854,10 @@ func (s) TestDrainingNoMessageLoss(t *testing.T) {
 
 	cc, err := setupClientAndControlPlane(t, lisAddr, &v3procfilterpb.ExternalProcessor{
 		ProcessingMode: &v3procfilterpb.ProcessingMode{
-			RequestHeaderMode: v3procfilterpb.ProcessingMode_SEND,
-			RequestBodyMode:   v3procfilterpb.ProcessingMode_GRPC,
-			ResponseBodyMode:  v3procfilterpb.ProcessingMode_GRPC,
+			RequestHeaderMode:   v3procfilterpb.ProcessingMode_SEND,
+			RequestBodyMode:     v3procfilterpb.ProcessingMode_GRPC,
+			ResponseBodyMode:    v3procfilterpb.ProcessingMode_GRPC,
+			ResponseTrailerMode: v3procfilterpb.ProcessingMode_SEND,
 		},
 	}, stub.Address)
 	if err != nil {
@@ -2485,10 +2487,11 @@ func (s) TestResponsePhaseValidationFailureDeny(t *testing.T) {
 
 			cc, err := setupClientAndControlPlane(t, lisAddr, &v3procfilterpb.ExternalProcessor{
 				ProcessingMode: &v3procfilterpb.ProcessingMode{
-					RequestHeaderMode:  v3procfilterpb.ProcessingMode_SEND,
-					RequestBodyMode:    v3procfilterpb.ProcessingMode_GRPC,
-					ResponseHeaderMode: v3procfilterpb.ProcessingMode_SEND,
-					ResponseBodyMode:   v3procfilterpb.ProcessingMode_GRPC,
+					RequestHeaderMode:   v3procfilterpb.ProcessingMode_SEND,
+					RequestBodyMode:     v3procfilterpb.ProcessingMode_GRPC,
+					ResponseHeaderMode:  v3procfilterpb.ProcessingMode_SEND,
+					ResponseBodyMode:    v3procfilterpb.ProcessingMode_GRPC,
+					ResponseTrailerMode: v3procfilterpb.ProcessingMode_SEND,
 				},
 				FailureModeAllow: false,
 			}, stub.Address)
