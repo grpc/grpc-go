@@ -65,10 +65,19 @@ const (
 var (
 	// Below function is no-op in actual code, but can be overridden in
 	// tests to give tests visibility into exactly when certain events happen.
-	clientConnUpdateHook = func() {}
-	pickerUpdateHook     = func() {}
-	buildProvider        = buildProviderFunc
+	clientConnUpdateHookMu sync.Mutex
+	clientConnUpdateHook   = func() {}
+	pickerUpdateHook       = func() {}
+	buildProvider          = buildProviderFunc
 )
+
+// SetClientConnUpdateHookForTesting sets the hook called when a client conn
+// update finishes processing.
+func SetClientConnUpdateHookForTesting(f func()) {
+	clientConnUpdateHookMu.Lock()
+	defer clientConnUpdateHookMu.Unlock()
+	clientConnUpdateHook = f
+}
 
 func init() {
 	balancer.Register(bb{})
@@ -134,6 +143,7 @@ type clusterImplBalancer struct {
 	// a new provider is to be created.
 	cachedRoot     certprovider.Provider
 	cachedIdentity certprovider.Provider
+	currentSecCfg  *xdsresource.SecurityConfig
 
 	// The following fields are protected by mu, since they are accessed in
 	// balancer API methods and in methods called from the child policy.
@@ -324,7 +334,12 @@ func (b *clusterImplBalancer) handleSecurityConfig(config *xdsresource.SecurityC
 	if !b.xdsCredsInUse {
 		return nil
 	}
-
+	if config == nil && b.currentSecCfg == nil {
+		return nil
+	}
+	if config != nil && b.currentSecCfg != nil && config.Equal(b.currentSecCfg) {
+		return nil
+	}
 	// Security config being nil is a valid case where the management server has
 	// not sent any security configuration. The xdsCredentials implementation
 	// handles this by delegating to its fallback credentials.
@@ -333,8 +348,16 @@ func (b *clusterImplBalancer) handleSecurityConfig(config *xdsresource.SecurityC
 		// a case of switching from a good security configuration to an empty
 		// one where fallback credentials are to be used.
 		b.xdsHIPtr.Store(xds.NewHandshakeInfo(nil, nil, nil, false, "", false, false))
+		if b.cachedRoot != nil {
+			b.cachedRoot.Close()
+			b.cachedRoot = nil
+		}
+		if b.cachedIdentity != nil {
+			b.cachedIdentity.Close()
+			b.cachedIdentity = nil
+		}
+		b.currentSecCfg = nil
 		return nil
-
 	}
 
 	// A root provider is required whether we are using TLS or mTLS.
@@ -371,11 +394,15 @@ func (b *clusterImplBalancer) handleSecurityConfig(config *xdsresource.SecurityC
 	b.cachedIdentity = identityProvider
 
 	b.xdsHIPtr.Store(xds.NewHandshakeInfo(rootProvider, identityProvider, config.SubjectAltNameMatchers, false, config.SNI, config.AutoSNISANValidation, config.UseAutoHostSNI))
+	b.currentSecCfg = config
 	return nil
 }
 
 func (b *clusterImplBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
-	defer clientConnUpdateHook()
+	clientConnUpdateHookMu.Lock()
+	hook := clientConnUpdateHook
+	clientConnUpdateHookMu.Unlock()
+	defer hook()
 
 	b.mu.Lock()
 	b.inhibitPickerUpdates = true
