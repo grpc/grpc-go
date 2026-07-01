@@ -567,7 +567,7 @@ func (s) TestResolverGoodServiceUpdate(t *testing.T) {
 				if err != nil {
 					t.Fatalf("cs.SelectConfig(): %v", err)
 				}
-				cluster := clustermanager.GetPickedClusterForTesting(res.Context)
+				cluster := clustermanager.PickedCluster(res.Context)
 				pickedClusters[cluster] = true
 				res.OnCommitted()
 			}
@@ -966,7 +966,7 @@ func (s) TestResolverDelayedOnCommitted(t *testing.T) {
 		t.Fatalf("cs.SelectConfig(): %v", err)
 	}
 	wantClusterName := fmt.Sprintf("cluster:%s", resources.Clusters[0].Name)
-	if cluster := clustermanager.GetPickedClusterForTesting(resOld.Context); cluster != wantClusterName {
+	if cluster := clustermanager.PickedCluster(resOld.Context); cluster != wantClusterName {
 		t.Fatalf("Picked cluster is %q, want %q", cluster, wantClusterName)
 	}
 
@@ -1025,7 +1025,7 @@ func (s) TestResolverDelayedOnCommitted(t *testing.T) {
 		t.Fatalf("cs.SelectConfig(): %v", err)
 	}
 	wantClusterName = fmt.Sprintf("cluster:%s", newClusterName)
-	if cluster := clustermanager.GetPickedClusterForTesting(resNew.Context); cluster != wantClusterName {
+	if cluster := clustermanager.PickedCluster(resNew.Context); cluster != wantClusterName {
 		t.Fatalf("Picked cluster is %q, want %q", cluster, wantClusterName)
 	}
 
@@ -1155,7 +1155,7 @@ func (s) TestResolverWRR(t *testing.T) {
 		if err != nil {
 			t.Fatalf("cs.SelectConfig(): %v", err)
 		}
-		picks[clustermanager.GetPickedClusterForTesting(res.Context)]++
+		picks[clustermanager.PickedCluster(res.Context)]++
 		res.OnCommitted()
 	}
 	want := map[string]int{"cluster:A": 75, "cluster:B": 25}
