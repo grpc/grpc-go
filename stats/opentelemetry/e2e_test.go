@@ -52,6 +52,7 @@ import (
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/baggage"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
@@ -2467,6 +2468,96 @@ func (s) TestRelayContextCollisionTracing(t *testing.T) {
 
 	if srvTraceID != cliTraceID {
 		t.Errorf("Trace continuity broken: Server TraceID %s != Client TraceID %s", srvTraceID, cliTraceID)
+	}
+}
+
+// baggageToMap converts the members of an OpenTelemetry baggage into a
+// key/value map for easy comparison in tests.
+func baggageToMap(b baggage.Baggage) map[string]string {
+	m := make(map[string]string, b.Len())
+	for _, member := range b.Members() {
+		m[member.Key()] = member.Value()
+	}
+	return m
+}
+
+// TestRPC_BaggagePropagation verifies that OpenTelemetry baggage set on the
+// client-side context is propagated through the gRPC pipeline and is available
+// in the server handler's context, when the W3C Baggage propagator is
+// configured in the trace options. It exercises both a unary and a streaming
+// RPC.
+func (s) TestRPC_BaggagePropagation(t *testing.T) {
+	member1, err := baggage.NewMember("key1", "value1")
+	if err != nil {
+		t.Fatalf("baggage.NewMember(key1, value1) failed: %v", err)
+	}
+	member2, err := baggage.NewMember("key2", "value2")
+	if err != nil {
+		t.Fatalf("baggage.NewMember(key2, value2) failed: %v", err)
+	}
+	bag, err := baggage.New(member1, member2)
+	if err != nil {
+		t.Fatalf("baggage.New() failed: %v", err)
+	}
+	wantBaggage := map[string]string{"key1": "value1", "key2": "value2"}
+
+	// serverBaggage receives the baggage observed by the server handler for
+	// each RPC (unary and streaming).
+	serverBaggage := make(chan map[string]string, 2)
+	ss := &stubserver.StubServer{
+		UnaryCallF: func(ctx context.Context, _ *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			serverBaggage <- baggageToMap(baggage.FromContext(ctx))
+			return &testpb.SimpleResponse{}, nil
+		},
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
+			serverBaggage <- baggageToMap(baggage.FromContext(stream.Context()))
+			for {
+				if _, err := stream.Recv(); err != nil {
+					if err == io.EOF {
+						return nil
+					}
+					return err
+				}
+			}
+		},
+	}
+
+	to, _ := defaultTraceOptions(t)
+	// Configure the W3C Baggage propagator so baggage is carried in metadata.
+	to.TextMapPropagator = propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{})
+	otelOptions := opentelemetry.Options{TraceOptions: *to}
+	if err := ss.Start([]grpc.ServerOption{opentelemetry.ServerOption(otelOptions)},
+		opentelemetry.DialOption(otelOptions)); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
+	}
+	defer ss.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	ctx = baggage.ContextWithBaggage(ctx, bag)
+
+	if _, err := ss.Client.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil {
+		t.Fatalf("Unexpected error from UnaryCall: %v", err)
+	}
+
+	stream, err := ss.Client.FullDuplexCall(ctx)
+	if err != nil {
+		t.Fatalf("ss.Client.FullDuplexCall failed: %v", err)
+	}
+	stream.CloseSend()
+	if _, err = stream.Recv(); err != io.EOF {
+		t.Fatalf("stream.Recv received an unexpected error: %v, expected an EOF error", err)
+	}
+
+	for _, rpc := range []string{"unary", "streaming"} {
+		select {
+		case got := <-serverBaggage:
+			if diff := cmp.Diff(wantBaggage, got); diff != "" {
+				t.Errorf("baggage received by server for %s RPC mismatch (-want +got):\n%s", rpc, diff)
+			}
+		case <-ctx.Done():
+			t.Fatalf("Timed out waiting for server to receive baggage for %s RPC", rpc)
+		}
 	}
 }
 
