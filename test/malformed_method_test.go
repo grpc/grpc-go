@@ -26,9 +26,11 @@ import (
 
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/internal/stubserver"
 
 	testpb "google.golang.org/grpc/interop/grpc_testing"
+	"google.golang.org/grpc/tap"
 )
 
 // TestMalformedMethodPath tests that the server responds with Unimplemented
@@ -36,24 +38,28 @@ import (
 // route requests with a malformed method path to the application handler.
 func (s) TestMalformedMethodPath(t *testing.T) {
 	tests := []struct {
-		name       string
-		path       string
-		wantStatus string // string representation of codes.Code
+		name              string
+		path              string
+		wantStatus        string // string representation of codes.Code
+		checkTapNotCalled bool
 	}{
 		{
-			name:       "missing_leading_slash",
-			path:       "grpc.testing.TestService/UnaryCall",
-			wantStatus: "12", // Unimplemented
+			name:              "missing_leading_slash",
+			path:              "grpc.testing.TestService/UnaryCall",
+			wantStatus:        "12", // Unimplemented
+			checkTapNotCalled: true,
 		},
 		{
-			name:       "empty_path",
-			path:       "",
-			wantStatus: "12", // Unimplemented
+			name:              "empty_path",
+			path:              "",
+			wantStatus:        "12", // Unimplemented
+			checkTapNotCalled: true,
 		},
 		{
-			name:       "just_slash",
-			path:       "/",
-			wantStatus: "12", // Unimplemented
+			name:              "just_slash",
+			path:              "/",
+			wantStatus:        "12", // Unimplemented
+			checkTapNotCalled: true,
 		},
 		{
 			name:       "double_slash",
@@ -72,7 +78,16 @@ func (s) TestMalformedMethodPath(t *testing.T) {
 					return &testpb.SimpleResponse{Payload: &testpb.Payload{Body: []byte("pwned")}}, nil
 				},
 			}
-			if err := ss.Start(nil); err != nil {
+			tapCalled := make(chan string, 1)
+			if err := ss.Start([]grpc.ServerOption{grpc.InTapHandle(func(ctx context.Context, info *tap.Info) (context.Context, error) {
+				if info != nil {
+					select {
+					case tapCalled <- info.FullMethodName:
+					default:
+					}
+				}
+				return ctx, nil
+			})}); err != nil {
 				t.Fatalf("Error starting endpoint server: %v", err)
 			}
 			defer ss.Stop()
@@ -153,6 +168,13 @@ func (s) TestMalformedMethodPath(t *testing.T) {
 
 			if gotStatus != tc.wantStatus {
 				t.Errorf("Got grpc-status %v, want %v", gotStatus, tc.wantStatus)
+			}
+			if tc.checkTapNotCalled {
+				select {
+				case gotMethod := <-tapCalled:
+					t.Fatalf("InTapHandle called with method %q, want it not called", gotMethod)
+				default:
+				}
 			}
 		})
 	}
