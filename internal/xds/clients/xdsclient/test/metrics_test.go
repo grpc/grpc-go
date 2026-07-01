@@ -22,11 +22,14 @@ import (
 	"context"
 	"errors"
 	"net"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/xds/clients"
 	"google.golang.org/grpc/internal/xds/clients/grpctransport"
@@ -648,21 +651,33 @@ func (s) TestConnectedMetric_Reconnection(t *testing.T) {
 	}
 	lis := testutils.NewRestartableListener(l)
 
-	sendResponse := make(chan struct{})
-	streamOpened := make(chan struct{}, 10)
+	fixture := &reconnectionTestFixture{
+		ctx:         ctx,
+		connectedCh: make(chan int64, 100),
+		tmr:         newTestMetricsReporter(),
+	}
+
+	// Start management server and override callbacks to integrate with our sync events.
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
 		Listener: lis,
-		OnStreamOpen: func(ctx context.Context, _ int64, _ string) error {
-			select {
-			case streamOpened <- struct{}{}:
-			case <-ctx.Done():
+		OnStreamRequest: func(int64, *v3discoverypb.DiscoveryRequest) error {
+			fixture.mu.Lock()
+			rr := fixture.reqRecv
+			fixture.mu.Unlock()
+			if rr != nil {
+				rr.Fire()
 			}
 			return nil
 		},
 		OnStreamResponse: func(ctx context.Context, _ int64, _ *v3discoverypb.DiscoveryRequest, _ *v3discoverypb.DiscoveryResponse) {
-			select {
-			case <-sendResponse:
-			case <-ctx.Done():
+			fixture.mu.Lock()
+			sr := fixture.sendResponse
+			fixture.mu.Unlock()
+			if sr != nil {
+				select {
+				case <-sr:
+				case <-ctx.Done():
+				}
 			}
 		},
 	})
@@ -673,37 +688,24 @@ func (s) TestConnectedMetric_Reconnection(t *testing.T) {
 		ServerURI:  mgmtServer.Address,
 		Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"},
 	}
-	// streamAttemptCh is used by the interceptor to notify the test that a
-	// stream is attempting to open.
-	streamAttemptCh := testutils.NewChannel()
-	// commandCh is used by the test to tell the interceptor whether to block or pass.
-	commandCh := testutils.NewChannel()
-	// blocked is used by the interceptor to signal the test that it has
-	// successfully blocked the stream creation attempt.
-	blocked := make(chan struct{})
-	// unblock is used by the test to release the interceptor and allow the
-	// stream creation to proceed.
-	unblock := make(chan struct{})
 
-	// customGRPCNewClient overrides the gRPC client creation to inject a stream
-	// interceptor that can block ADS stream creation attempts for testing
-	// reconnection behavior.
+	// Dial interceptor allows us to block outgoing stream attempts on demand.
 	customGRPCNewClient := func(target string, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
 		interceptor := func(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, cops ...grpc.CallOption) (grpc.ClientStream, error) {
-			streamAttemptCh.Send(struct{}{}) // Notify test
+			fixture.mu.Lock()
+			b := fixture.blocked
+			ub := fixture.unblock
+			fixture.mu.Unlock()
 
-			cmd, err := commandCh.Receive(ctx) // Wait for command
-			if err != nil {
-				return nil, err
-			}
-
-			if cmd.(string) == "block" {
-				select {
-				case blocked <- struct{}{}:
-				case <-ctx.Done():
+			if ub != nil {
+				if b != nil {
+					b.Fire()
 				}
-				// Pause stream creation until released by the test.
-				<-unblock
+				select {
+				case <-ub.Done():
+				case <-ctx.Done():
+					return nil, ctx.Err()
+				}
 			}
 			return streamer(ctx, desc, cc, method, cops...)
 		}
@@ -711,7 +713,6 @@ func (s) TestConnectedMetric_Reconnection(t *testing.T) {
 		return grpc.NewClient(target, opts...)
 	}
 
-	tmr := newTestMetricsReporter()
 	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle(), GRPCNewClient: customGRPCNewClient}}
 	xdsClientConfig := xdsclient.Config{
 		Servers:          []xdsclient.ServerConfig{{ServerIdentifier: si}},
@@ -721,24 +722,22 @@ func (s) TestConnectedMetric_Reconnection(t *testing.T) {
 		Authorities: map[string]xdsclient.Authority{
 			"": {XDSServers: []xdsclient.ServerConfig{}},
 		},
-		MetricsReporter: tmr,
+		MetricsReporter: fixture.tmr,
 	}
 
-	waitForStreamSuccess := func() {
-		for {
+	// Set up callback on the metrics reporter to track changes to the connected metric.
+	fixture.tmr.onReport = func(m any) {
+		if cm, ok := m.(*metrics.XDSClientConnected); ok {
 			select {
-			case <-streamOpened:
-				return
-			case <-streamAttemptCh.C:
-				commandCh.Send("pass")
-			case <-ctx.Done():
-				t.Fatalf("Timeout waiting for stream success")
+			case fixture.connectedCh <- cm.Value:
+			default:
 			}
 		}
 	}
 
 	// Stop listener to force initial connection failure.
 	lis.Stop()
+	fixture.blockServerResponse()
 
 	client, err := xdsclient.New(xdsClientConfig)
 	if err != nil {
@@ -759,86 +758,156 @@ func (s) TestConnectedMetric_Reconnection(t *testing.T) {
 	// Initiate watch to trigger connection attempt.
 	client.WatchResource(listenerType.TypeURL, listenerName, noopListenerWatcher{})
 
-	tmr.triggerAsyncMetrics()
-	if err := tmr.waitForSpecificMetric(ctx, &metrics.XDSClientConnected{ServerURI: mgmtServer.Address, Value: 0}); err != nil {
+	// 1. Verify that the initial connected state is 0 (disconnected).
+	fixture.tmr.triggerAsyncMetrics()
+	if err := fixture.tmr.waitForSpecificMetric(ctx, &metrics.XDSClientConnected{ServerURI: mgmtServer.Address, Value: 0}); err != nil {
 		t.Fatalf("XDSClientConnected check failed at start - got: %v, want 0", err)
 	}
 
-	// Verify state transitions to connected (Value: 1) when stream succeeds.
+	// 2. Restart listener and verify transition to 1 (connected) when stream succeeds.
 	lis.Restart()
-
-	waitForStreamSuccess()
-
-	tmr.triggerAsyncMetrics()
-	if err := tmr.waitForSpecificMetric(ctx, &metrics.XDSClientConnected{ServerURI: mgmtServer.Address, Value: 1}); err != nil {
-		t.Fatalf("XDSClientConnected check failed after 1st NewStream - got: %v, want 1", err)
+	if err := fixture.waitForConnectedValue(1); err != nil {
+		t.Fatalf("Timeout waiting for connected metric to become 1: %v", err)
 	}
 
 	// Push resource update to confirm the connection is functional.
-	close(sendResponse)
-	if err := tmr.waitForSpecificMetric(ctx, &metrics.ResourceUpdateValid{ServerURI: mgmtServer.Address, ResourceType: "ListenerResource"}); err != nil {
+	fixture.allowServerResponse()
+	if err := fixture.tmr.waitForSpecificMetric(ctx, &metrics.ResourceUpdateValid{ServerURI: mgmtServer.Address, ResourceType: "ListenerResource"}); err != nil {
 		t.Fatal(err)
 	}
 
-	// Verify state remains connected (Value: 1) immediately after failure before
-	// NewStream retry.
+	// 3. Stop listener, verify state remains 1 immediately after failure before NewStream retry.
+	blockedEvent, unblockEvent := fixture.blockStreamAttempts()
 	lis.Stop()
 
-	if _, err := streamAttemptCh.Receive(ctx); err != nil {
-		t.Fatalf("Timeout waiting for 2nd stream attempt (block): %v", err)
+	// Wait for the next stream attempt to get blocked by the interceptor.
+	select {
+	case <-blockedEvent.Done():
+	case <-ctx.Done():
+		t.Fatal("Timeout waiting for stream attempt to be blocked")
 	}
-	commandCh.Send("block")
 
-	<-blocked
-
-	tmr.triggerAsyncMetrics()
-	if err := tmr.waitForSpecificMetric(ctx, &metrics.XDSClientConnected{ServerURI: mgmtServer.Address, Value: 1}); err != nil {
+	// State should still remain connected (Value: 1) during the retry phase.
+	fixture.tmr.triggerAsyncMetrics()
+	if err := fixture.tmr.waitForSpecificMetric(ctx, &metrics.XDSClientConnected{ServerURI: mgmtServer.Address, Value: 1}); err != nil {
 		t.Fatalf("XDSClientConnected check failed while NewStream is blocked - got: %v, want 1", err)
 	}
 
-	// Verify state transitions to disconnected (Value: 0) after NewStream attempt
-	// fails.
-	close(unblock)
-
-	if err := tmr.waitForSpecificMetric(ctx, &metrics.ServerFailure{ServerURI: mgmtServer.Address}); err != nil {
+	// 4. Release blocked attempt, let it fail, and verify transition to 0 (disconnected).
+	unblockEvent.Fire()
+	if err := fixture.tmr.waitForSpecificMetric(ctx, &metrics.ServerFailure{ServerURI: mgmtServer.Address}); err != nil {
 		t.Fatal(err)
 	}
 
-	tmr.triggerAsyncMetrics()
-	if err := tmr.waitForSpecificMetric(ctx, &metrics.XDSClientConnected{ServerURI: mgmtServer.Address, Value: 0}); err != nil {
+	fixture.tmr.triggerAsyncMetrics()
+	if err := fixture.tmr.waitForSpecificMetric(ctx, &metrics.XDSClientConnected{ServerURI: mgmtServer.Address, Value: 0}); err != nil {
 		t.Fatalf("XDSClientConnected check failed after NewStream failure - got: %v, want 0", err)
 	}
 
-	sendResponse = make(chan struct{})
+	// 5. Verify state remains 0 while waiting for first response on new stream.
+	reqRecvEvent := grpcsync.NewEvent()
+	fixture.mu.Lock()
+	fixture.reqRecv = reqRecvEvent
+	fixture.mu.Unlock()
+	fixture.allowStreamAttempts()
+	fixture.blockServerResponse()
 
-	// Verify state remains disconnected (Value: 0) while waiting for the first
-	// response on the new stream.
 	lis.Restart()
 
-	// Clear channels to ensure fresh readings.
-	for len(streamOpened) > 0 {
-		<-streamOpened
+	// Wait for the server to receive the request on the new stream.
+	select {
+	case <-reqRecvEvent.Done():
+	case <-ctx.Done():
+		t.Fatal("Timeout waiting for request on new stream")
 	}
 
-	waitForStreamSuccess()
-
-	tmr.Drain()
-	tmr.triggerAsyncMetrics()
-	if err := tmr.waitForSpecificMetric(ctx, &metrics.XDSClientConnected{ServerURI: mgmtServer.Address, Value: 0}); err != nil {
+	// Metric should still be 0 before the first response.
+	fixture.tmr.triggerAsyncMetrics()
+	if err := fixture.tmr.waitForSpecificMetric(ctx, &metrics.XDSClientConnected{ServerURI: mgmtServer.Address, Value: 0}); err != nil {
 		t.Fatalf("XDSClientConnected check failed after successful NewStream but before response - got: %v, want 0", err)
 	}
 
-	// Verify state returns to connected (Value: 1) after receiving the first
-	// response on the new stream.
-	close(sendResponse)
-
-	if err := tmr.waitForSpecificMetric(ctx, &metrics.ResourceUpdateValid{ServerURI: mgmtServer.Address, ResourceType: "ListenerResource"}); err != nil {
+	// 6. Verify state returns to 1 after receiving response on the new stream.
+	fixture.allowServerResponse()
+	if err := fixture.tmr.waitForSpecificMetric(ctx, &metrics.ResourceUpdateValid{ServerURI: mgmtServer.Address, ResourceType: "ListenerResource"}); err != nil {
 		t.Fatal(err)
 	}
 
-	tmr.triggerAsyncMetrics()
-	if err := tmr.waitForSpecificMetric(ctx, &metrics.XDSClientConnected{ServerURI: mgmtServer.Address, Value: 1}); err != nil {
+	fixture.tmr.triggerAsyncMetrics()
+	if err := fixture.tmr.waitForSpecificMetric(ctx, &metrics.XDSClientConnected{ServerURI: mgmtServer.Address, Value: 1}); err != nil {
 		t.Fatalf("XDSClientConnected check failed after response- got: %v, want 1", err)
+	}
+}
+
+// reconnectionTestFixture encapsulates the shared synchronization state and helper
+// methods used by TestConnectedMetric_Reconnection to simulate flaky network and
+// control connection flows.
+type reconnectionTestFixture struct {
+	ctx context.Context
+	mu  sync.Mutex
+	// reqRecv fires when the management server receives a new request stream attempt.
+	reqRecv *grpcsync.Event
+	// sendResponse blocks the management server's response when non-nil, allowing
+	// us to pause stream updates until allowed by the test.
+	sendResponse chan struct{}
+	// blocked fires when a new client stream connection attempt is blocked by our custom dialer.
+	blocked *grpcsync.Event
+	// unblock is checked by our custom dialer; it waits for this event to be fired before
+	// allowing blocked connection attempts to proceed.
+	unblock *grpcsync.Event
+	// connectedCh receives values representing updates to the 'grpc.xds_client.connected' metric.
+	connectedCh chan int64
+	// tmr is the metrics reporter used to query metric counts and trigger async pulses.
+	tmr *testMetricsReporter
+}
+
+func (f *reconnectionTestFixture) blockServerResponse() {
+	f.mu.Lock()
+	f.sendResponse = make(chan struct{})
+	f.mu.Unlock()
+}
+
+func (f *reconnectionTestFixture) allowServerResponse() {
+	f.mu.Lock()
+	if f.sendResponse != nil {
+		close(f.sendResponse)
+	}
+	f.mu.Unlock()
+}
+
+func (f *reconnectionTestFixture) blockStreamAttempts() (blockedEvent *grpcsync.Event, unblockEvent *grpcsync.Event) {
+	blockedEvent = grpcsync.NewEvent()
+	unblockEvent = grpcsync.NewEvent()
+	f.mu.Lock()
+	f.blocked = blockedEvent
+	f.unblock = unblockEvent
+	f.mu.Unlock()
+	return
+}
+
+func (f *reconnectionTestFixture) allowStreamAttempts() {
+	f.mu.Lock()
+	f.blocked = nil
+	f.unblock = nil
+	f.mu.Unlock()
+}
+
+func (f *reconnectionTestFixture) waitForConnectedValue(want int64) error {
+	// Drain any existing queued metric readings.
+	for len(f.connectedCh) > 0 {
+		<-f.connectedCh
+	}
+	for {
+		f.tmr.triggerAsyncMetrics()
+		select {
+		case val := <-f.connectedCh:
+			if val == want {
+				return nil
+			}
+		case <-time.After(10 * time.Millisecond):
+		case <-f.ctx.Done():
+			return f.ctx.Err()
+		}
 	}
 }
 
