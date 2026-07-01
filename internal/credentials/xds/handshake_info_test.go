@@ -605,11 +605,8 @@ func (s) TestVerifyPeerCertificateZeroCerts(t *testing.T) {
 		t.Fatalf("hi.ClientSideTLSConfig() failed: %v", err)
 	}
 
-	err = cfg.VerifyPeerCertificate(nil, nil)
-	if err == nil {
-		t.Fatal("VerifyPeerCertificate(nil, nil) succeeded unexpectedly, want error")
-	}
-	if !strings.Contains(err.Error(), "no peer certificates presented") {
-		t.Errorf("VerifyPeerCertificate(nil, nil) = %v, want error containing 'no peer certificates presented'", err)
+	const wantErr = "no peer certificates presented"
+	if err := cfg.VerifyPeerCertificate(nil, nil); err == nil || !strings.Contains(err.Error(), wantErr) {
+		t.Errorf("VerifyPeerCertificate(nil, nil) = %v, want error containing %q", err, wantErr)
 	}
 }

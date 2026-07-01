@@ -1099,11 +1099,8 @@ func (s) TestVerifyPeerCertificateZeroCerts(t *testing.T) {
 	}
 	verifyPeerCertificate := buildVerifyFunc(creds, "", nil, &CertificateChains{})
 	// Calling verifyPeerCertificate with zero certificates.
-	err := verifyPeerCertificate(nil, nil)
-	if err == nil {
-		t.Fatal("verifyPeerCertificate(nil, nil) succeeded unexpectedly, want error")
-	}
-	if !strings.Contains(err.Error(), "no peer certificates presented") {
-		t.Errorf("verifyPeerCertificate(nil, nil) = %v, want error containing 'no peer certificates presented'", err)
+	const wantErr = "no peer certificates presented"
+	if err := cfg.VerifyPeerCertificate(nil, nil); err == nil || !strings.Contains(err.Error(), wantErr) {
+		t.Errorf("VerifyPeerCertificate(nil, nil) = %v, want error containing %q", err, wantErr)
 	}
 }
