@@ -648,6 +648,9 @@ func (t *http2Client) createHeaderFields(ctx context.Context, callHdr *CallHdr) 
 		if isReservedHeader(k) {
 			continue
 		}
+		if err := imetadata.ValidatePair(k, vv...); err != nil {
+			return nil, status.Error(codes.Internal, err.Error())
+		}
 		for _, v := range vv {
 			headerFields = append(headerFields, hpack.HeaderField{Name: k, Value: encodeMetadataHeader(k, v)})
 		}
