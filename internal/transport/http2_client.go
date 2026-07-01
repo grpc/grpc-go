@@ -1258,6 +1258,13 @@ func (t *http2Client) handleData(f *parsedDataFrame) {
 	// The server has closed the stream without sending trailers.  Record that
 	// the read direction is closed, and set the status appropriately.
 	if f.StreamEnded() {
+		// If we were collecting non-gRPC response data, finalize that status with
+		// whatever body we've buffered so far instead of discarding it.
+		if s.nonGRPCStatus != nil {
+			st := s.finalizeNonGRPCStatus()
+			t.closeStream(s, st.Err(), true, http2.ErrCodeProtocol, st, nil, true)
+			return
+		}
 		// If client received END_STREAM from server while stream was still
 		// active, send RST_STREAM.
 		rstStream := s.getState() == streamActive
