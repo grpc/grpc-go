@@ -36,23 +36,23 @@ import (
 // critical code paths, using Unbounded is strongly discouraged and defining a
 // new type specific implementation of this buffer is preferred. See
 // internal/transport/transport.go for an example of this.
-type Unbounded struct {
-	c       chan any
+type Unbounded[T any] struct {
+	c       chan T
 	closed  bool
 	closing bool
 	mu      sync.Mutex
-	backlog []any
+	backlog []T
 }
 
 // NewUnbounded returns a new instance of Unbounded.
-func NewUnbounded() *Unbounded {
-	return &Unbounded{c: make(chan any, 1)}
+func NewUnbounded[T any]() *Unbounded[T] {
+	return &Unbounded[T]{c: make(chan T, 1)}
 }
 
 var errBufferClosed = errors.New("Put() called on closed buffer.Unbounded")
 
 // Put adds t to the unbounded buffer.
-func (b *Unbounded) Put(t any) error {
+func (b *Unbounded[T]) Put(t T) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.closing {
@@ -72,13 +72,14 @@ func (b *Unbounded) Put(t any) error {
 // Load sends the earliest buffered data, if any, onto the read channel returned
 // by Get(). Users are expected to call this every time they successfully read a
 // value from the read channel.
-func (b *Unbounded) Load() {
+func (b *Unbounded[T]) Load() {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if len(b.backlog) > 0 {
 		select {
 		case b.c <- b.backlog[0]:
-			b.backlog[0] = nil
+			var zero T
+			b.backlog[0] = zero
 			b.backlog = b.backlog[1:]
 		default:
 		}
@@ -96,14 +97,14 @@ func (b *Unbounded) Load() {
 //
 // If the unbounded buffer is closed, the read channel returned by this method
 // is closed after all data is drained.
-func (b *Unbounded) Get() <-chan any {
+func (b *Unbounded[T]) Get() <-chan T {
 	return b.c
 }
 
 // Close closes the unbounded buffer. No subsequent data may be Put(), and the
 // channel returned from Get() will be closed after all the data is read and
 // Load() is called for the final time.
-func (b *Unbounded) Close() {
+func (b *Unbounded[T]) Close() {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.closing {
