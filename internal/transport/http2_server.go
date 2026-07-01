@@ -407,6 +407,7 @@ func (t *http2Server) operateHeaders(ctx context.Context, frame *http2.MetaHeade
 		st:               t,
 		headerWireLength: int(frame.Header().Length),
 	}
+	s.enableCompression.Store(true) // compression is enabled by default
 	s.Stream.buf.init()
 	var (
 		// if false, content-type was missing or invalid
