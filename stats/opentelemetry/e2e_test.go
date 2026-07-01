@@ -1155,6 +1155,46 @@ func (s) TestSpan(t *testing.T) {
 	validateTraces(t, spans, wantSpanInfos)
 }
 
+// TestSpan_TraceOnlyNoMetricsHandler verifies that the attempt span carries the
+// correct method name when OpenTelemetry is configured with tracing only (no
+// metrics handler). Before the fix in TagRPC, ri.ai.method was never populated
+// in this code path, so the attempt span name would be "Attempt." instead of
+// "Attempt.grpc.testing.TestService.UnaryCall".
+func (s) TestSpan_TraceOnlyNoMetricsHandler(t *testing.T) {
+	to, exporter := defaultTraceOptions(t)
+	ss := setupStubServer(t, nil, to)
+	defer ss.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	if _, err := ss.Client.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil {
+		t.Fatalf("UnaryCall failed: %v", err)
+	}
+
+	wantAttemptSpan := "Attempt.grpc.testing.TestService.UnaryCall"
+	wantSpanInfos := []traceSpanInfo{
+		{name: wantAttemptSpan, spanKind: oteltrace.SpanKindInternal.String()},
+	}
+	spans, err := waitForTraceSpans(ctx, exporter, wantSpanInfos)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.ContainsFunc(spans, func(span tracetest.SpanStub) bool {
+		return span.Name == wantAttemptSpan && span.SpanKind == oteltrace.SpanKindInternal
+	}) {
+		t.Errorf("attempt span %q not found, got spans: %v", wantAttemptSpan, spanNames(spans))
+	}
+}
+
+func spanNames(spans tracetest.SpanStubs) []string {
+	names := make([]string, len(spans))
+	for i, s := range spans {
+		names[i] = s.Name
+	}
+	return names
+}
+
 // TestSpan_WithW3CContextPropagator sets up a stub server with OpenTelemetry tracing
 // enabled, makes a unary and a streaming RPC, and then asserts that the correct
 // number of spans are created with the expected spans.
