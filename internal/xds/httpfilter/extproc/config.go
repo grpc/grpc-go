@@ -63,12 +63,13 @@ type baseConfig struct {
 	// external processing server. This overrides the above allowedHeaders if a
 	// header matches both.
 	disallowedHeaders []matcher.StringMatcher
-	// disableImmediateResponse specifies whether to disable immediate response
-	// from the external processing server. When true, if the response from
-	// external processing server has the `immediate_response` field set, the
-	// dataplane RPC will be failed with `UNAVAILABLE` status code. When false,
-	// the `immediate_response` field in the response from external processing
-	// server will be ignored.
+	// disableImmediateResponse specifies whether to disable immediate responses
+	// from the external processing server. When true, any immediate response
+	// received from the server is treated as an error (causing the stream to fail
+	// with an Internal error, or to be bypassed if failureModeAllow is true).
+	// When false, the immediate response is honored, and the stream is aborted
+	// with the specified status code and details provided by the external
+	// processing server.
 	disableImmediateResponse bool
 	// observabilityMode determines if the filter waits for the external
 	// processing server. If true, events are sent to the server in

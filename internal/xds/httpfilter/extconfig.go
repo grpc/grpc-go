@@ -21,10 +21,13 @@ package httpfilter
 import (
 	"fmt"
 	"regexp"
+	"strings"
 
 	"google.golang.org/grpc/internal/xds/matcher"
+	"google.golang.org/grpc/metadata"
 
 	v3mutationpb "github.com/envoyproxy/go-control-plane/envoy/config/common/mutation_rules/v3"
+	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3matcherpb "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
 )
 
@@ -85,4 +88,223 @@ func HeaderMutationRulesFromProto(mr *v3mutationpb.HeaderMutationRules) (HeaderM
 	rules.DisallowAll = mr.GetDisallowAll().GetValue()
 	rules.DisallowIsError = mr.GetDisallowIsError().GetValue()
 	return rules, nil
+}
+
+// ApplyAdditions takes a set of header mutations (for additions and
+// modifications) received from an external server and applies them to the
+// provided metadata, subject to the rules defined in hmr.
+//
+// If the DisallowAll field is true, no mutations are performed, and the input
+// metadata is returned unmodified.
+//
+// It iterates through each header mutation, performs validation on the header
+// key and value, and checks if the mutation is permitted by the AllowExpr and
+// DisallowExpr regular expressions.
+//
+// The following headers are always ignored:
+// - Pseudo-headers (keys starting with ':').
+// - The 'host' header.
+// - Headers with non-lowercase keys.
+// - Headers with keys or values exceeding 16384 bytes.
+//
+// If a mutation is disallowed and DisallowIsError is true, an error is
+// returned. Otherwise, the disallowed mutation is silently ignored.
+//
+// The input metadata must not be nil.
+func (hmr *HeaderMutationRules) ApplyAdditions(hvos []*v3corepb.HeaderValueOption, input metadata.MD) error {
+	if hmr == nil {
+		hmr = &HeaderMutationRules{}
+	}
+	if input == nil {
+		return fmt.Errorf("extproc: input metadata is nil")
+	}
+	if hmr.DisallowAll {
+		return nil
+	}
+
+	for _, hvo := range hvos {
+		header := hvo.GetHeader()
+		key := header.GetKey()
+		if len(key) == 0 || key[0] == ':' || key == "host" || key != strings.ToLower(key) || len(key) > 16384 {
+			continue
+		}
+
+		value := header.GetValue()
+		if strings.HasSuffix(key, "-bin") {
+			value = string(header.GetRawValue())
+		}
+		if len(value) > 16384 {
+			continue
+		}
+
+		if !hmr.allow(key) {
+			if hmr.DisallowIsError {
+				return fmt.Errorf("extproc: header mutation disallowed by headerMutationRules for header key %q", key)
+			}
+			continue
+		}
+
+		// Perform the mutation on output metadata using the append_action
+		// field from the header value option.
+		switch hvo.GetAppendAction() {
+		case v3corepb.HeaderValueOption_APPEND_IF_EXISTS_OR_ADD:
+			input.Append(key, value)
+		case v3corepb.HeaderValueOption_ADD_IF_ABSENT:
+			if input.Get(key) == nil {
+				input.Set(key, value)
+			}
+		case v3corepb.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD:
+			input.Set(key, value)
+		case v3corepb.HeaderValueOption_OVERWRITE_IF_EXISTS:
+			if input.Get(key) != nil {
+				input.Set(key, value)
+			}
+		}
+	}
+	return nil
+}
+
+// ApplyRemovals takes a set of headers (for removal) received from an external
+// processing server and applies them to the provided metadata, subject to the
+// rules defined in hmr.
+//
+// This method is very similar to ApplyAdditions, except that headers are
+// removed here instead of added or mutated as is the case in the latter. See
+// ApplyAdditions for more details.
+//
+// The input metadata must not be nil.
+func (hmr *HeaderMutationRules) ApplyRemovals(headersToRemove []string, input metadata.MD) error {
+	if hmr == nil {
+		hmr = &HeaderMutationRules{}
+	}
+	if input == nil {
+		return fmt.Errorf("extproc: input metadata is nil")
+	}
+	if hmr.DisallowAll {
+		return nil
+	}
+
+	for _, header := range headersToRemove {
+		if len(header) == 0 || header[0] == ':' || header == "host" || header != strings.ToLower(header) || len(header) > 16384 {
+			continue
+		}
+		if !hmr.allow(header) {
+			if hmr.DisallowIsError {
+				return fmt.Errorf("extproc: header mutation disallowed by headerMutationRules for header %q", header)
+			}
+			continue
+		}
+		input.Delete(header)
+	}
+	return nil
+}
+
+func (hmr *HeaderMutationRules) allow(key string) bool {
+	if hmr.DisallowExpr != nil && hmr.DisallowExpr.MatchString(key) {
+		return false
+	}
+	if hmr.AllowExpr != nil && hmr.AllowExpr.MatchString(key) {
+		return true
+	}
+	if hmr.AllowExpr != nil {
+		return false
+	}
+	return true
+}
+
+// ConstructHeaderMap constructs a HeaderMap from the given metadata, using the
+// following rules:
+//   - if the header is matched by the disallowed_headers config field, it will
+//     not be added to the map, otherwise,
+//   - if the allowed_headers config field is unset or matches the header, the
+//     header will be added to the map, otherwise,
+//   - the header will be excluded from the map.
+// func ConstructHeaderMap(md metadata.MD, allowedHeaders, disallowedHeaders []matcher.StringMatcher) *v3corepb.HeaderMap {
+// 	headerMap := &v3corepb.HeaderMap{}
+// 	for key, values := range md {
+// 		if IsDisallowedHeader(key, disallowedHeaders) {
+// 			continue
+// 		}
+// 		if IsAllowedHeader(key, allowedHeaders) {
+// 			for _, value := range values {
+// 				headerMap.Headers = append(headerMap.Headers, &v3corepb.HeaderValue{
+// 					Key:      key,
+// 					RawValue: []byte(value),
+// 				})
+// 			}
+// 		}
+// 	}
+// 	if len(headerMap.Headers) == 0 {
+// 		return nil
+// 	}
+// 	return headerMap
+// }
+
+// ConstructHeaderMap constructs a HeaderMap from the given metadata and raw
+// appended metadata slice, using the following rules:
+//   - if the header is matched by the disallowed_headers config field, it will
+//     not be added to the map, otherwise,
+//   - if the allowed_headers config field is unset or matches the header, the
+//     header will be added to the map, otherwise,
+//   - the header will be excluded from the map.
+func ConstructHeaderMap(md metadata.MD, added [][]string, allowedHeaders, disallowedHeaders []matcher.StringMatcher) *v3corepb.HeaderMap {
+	headerMap := &v3corepb.HeaderMap{}
+	// Process the base metadata map.
+	for key, values := range md {
+		if IsDisallowedHeader(key, disallowedHeaders) {
+			continue
+		}
+		if IsAllowedHeader(key, allowedHeaders) {
+			for _, value := range values {
+				headerMap.Headers = append(headerMap.Headers, &v3corepb.HeaderValue{
+					Key:      key,
+					RawValue: []byte(value),
+				})
+			}
+		}
+	}
+	// Process the raw appended metadata slice.
+	for _, kvs := range added {
+		for i := 0; i < len(kvs); i += 2 {
+			key := strings.ToLower(kvs[i])
+			if IsDisallowedHeader(key, disallowedHeaders) {
+				continue
+			}
+			if IsAllowedHeader(key, allowedHeaders) {
+				headerMap.Headers = append(headerMap.Headers, &v3corepb.HeaderValue{
+					Key:      key,
+					RawValue: []byte(kvs[i+1]),
+				})
+			}
+		}
+	}
+	if len(headerMap.Headers) == 0 {
+		return nil
+	}
+	return headerMap
+}
+
+// IsDisallowedHeader returns true if the given header key matches any of the
+// provided disallowed header matchers.
+func IsDisallowedHeader(key string, matchers []matcher.StringMatcher) bool {
+	for _, m := range matchers {
+		if m.Match(key) {
+			return true
+		}
+	}
+	return false
+}
+
+// IsAllowedHeader returns true if the allowed header matchers list is empty, or
+// if the given header key matches any of the provided allowed header matchers.
+func IsAllowedHeader(key string, matchers []matcher.StringMatcher) bool {
+	if len(matchers) == 0 {
+		return true
+	}
+	for _, m := range matchers {
+		if m.Match(key) {
+			return true
+		}
+	}
+	return false
 }
