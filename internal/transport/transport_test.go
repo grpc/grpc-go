@@ -1869,8 +1869,7 @@ func (s) TestAccountCheckWindowSizeWithLargeWindow(t *testing.T) {
 	}
 	// This test exercises the largest windows and message sizes of the flow
 	// control account checks, so it can be slow under load (e.g. the race
-	// detector on a busy CI machine). Use a longer timeout for just this test
-	// instead of slowing down all of them.
+	// detector on a busy CI machine).
 	testFlowControlAccountCheck(t, 1024*1024, wc, 30*time.Second)
 }
 
