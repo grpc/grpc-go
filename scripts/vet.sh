@@ -85,7 +85,7 @@ not git grep 'net.ParseIP' -- '*.go'
 
 # - Ensure that direct calls to regexp.Compile are not allowed in xDS production code.
 #   Use CompileSafeRegex instead to ensure full-string matching.
-not git grep -n 'regexp.Compile(' -- 'xds' 'internal/xds' 'credentials/xds' 'internal/credentials/xds' ':(exclude)*_test.go' ':(exclude)internal/xds/matcher/string_matcher.go' ':(exclude)internal/xds/xdsclient/xdsresource/unmarshal_rds.go' || {
+(git grep -n 'regexp.Compile(' -- '*xds*' ':(exclude)*_test.go' ':(exclude)internal/xds/matcher/string_matcher.go' ':(exclude)internal/xds/xdsclient/xdsresource/unmarshal_rds.go' || true) | fail_on_output || {
   echo "Error: direct calls to regexp.Compile are not allowed in xDS production code."
   echo "Please use CompileSafeRegex instead to ensure full-string matching."
   exit 1
