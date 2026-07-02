@@ -20,6 +20,7 @@ package xdsresource
 import (
 	"fmt"
 	"math"
+	"regexp"
 	"strings"
 	"time"
 
@@ -423,7 +424,7 @@ func hashPoliciesProtoToSlice(policies []*v3routepb.RouteAction_HashPolicy) ([]*
 			policy.HeaderName = p.GetHeader().GetHeaderName()
 			if rr := p.GetHeader().GetRegexRewrite(); rr != nil {
 				regex := rr.GetPattern().GetRegex()
-				re, err := matcher.CompileSafeRegex(regex)
+				re, err := regexp.Compile(regex)
 				if err != nil {
 					return nil, fmt.Errorf("hash policy %+v contains an invalid regex %q", p, regex)
 				}

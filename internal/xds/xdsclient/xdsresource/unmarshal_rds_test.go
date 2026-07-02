@@ -1653,7 +1653,7 @@ func (s) TestHashPoliciesProtoToSlice(t *testing.T) {
 				{
 					HashPolicyType:    HashPolicyTypeHeader,
 					HeaderName:        ":path",
-					Regex:             func() *regexp.Regexp { return regexp.MustCompile("^(?:/products)$") }(),
+					Regex:             func() *regexp.Regexp { return regexp.MustCompile("/products") }(),
 					RegexSubstitution: "/products",
 				},
 			},
@@ -1711,7 +1711,7 @@ func (s) TestHashPoliciesProtoToSlice(t *testing.T) {
 				{
 					HashPolicyType:    HashPolicyTypeHeader,
 					HeaderName:        ":path",
-					Regex:             func() *regexp.Regexp { return regexp.MustCompile("^(?:/products)$") }(),
+					Regex:             func() *regexp.Regexp { return regexp.MustCompile("/products)") }(),
 					RegexSubstitution: "/products",
 				},
 				{
