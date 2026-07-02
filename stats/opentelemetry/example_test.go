@@ -137,8 +137,8 @@ func ExampleOptions_addExperimentalMetrics() {
 			// up-to-date list of metrics, see:
 			// https://grpc.io/docs/guides/opentelemetry-metrics/#instruments
 			Metrics: opentelemetry.DefaultMetrics().Add(
-				"grpc.lb.pick_first.connection_attempts_succeeded",
-				"grpc.lb.pick_first.connection_attempts_failed",
+				"grpc.subchannel.connection_attempts_succeeded",
+				"grpc.subchannel.connection_attempts_failed",
 			),
 		},
 	}
