@@ -91,8 +91,6 @@ not git grep 'net.ParseIP' -- '*.go'
   exit 1
 }
 
-
-
 misspell -error .
 
 # Get the absolute path to revive.toml relative to the script location
