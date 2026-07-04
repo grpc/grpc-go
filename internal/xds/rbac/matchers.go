@@ -120,6 +120,9 @@ func matchersFromPermissions(permissions []*v3rbacpb.Permission) ([]matcher, err
 			if err != nil {
 				return nil, err
 			}
+			if len(mList) == 0 {
+				return nil, fmt.Errorf("rbac: not_rule has no supported inner rule: %v", permission.GetNotRule())
+			}
 			matchers = append(matchers, &notMatcher{matcherToNot: mList[0]})
 		case *v3rbacpb.Permission_Metadata:
 			// Never matches - so no-op if not inverted, always match if
@@ -182,6 +185,9 @@ func matchersFromPrincipals(principals []*v3rbacpb.Principal) ([]matcher, error)
 			mList, err := matchersFromPrincipals([]*v3rbacpb.Principal{{Identifier: principal.GetNotId().Identifier}})
 			if err != nil {
 				return nil, err
+			}
+			if len(mList) == 0 {
+				return nil, fmt.Errorf("rbac: not_id has no supported inner id: %v", principal.GetNotId())
 			}
 			matchers = append(matchers, &notMatcher{matcherToNot: mList[0]})
 		case *v3rbacpb.Principal_SourceIp:

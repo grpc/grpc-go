@@ -667,6 +667,50 @@ func (s) TestNewChainEngine(t *testing.T) {
 			},
 			wantErr: true,
 		},
+		// A not_rule wrapping an inner permission that gRPC RBAC does not
+		// translate into a matcher (here an empty inner rule) must be rejected
+		// rather than panic while indexing the empty matcher list.
+		{
+			name: "NotRuleWithoutInnerMatcher",
+			policies: []*v3rbacpb.RBAC{
+				{
+					Action: v3rbacpb.RBAC_ALLOW,
+					Policies: map[string]*v3rbacpb.Policy{
+						"anyone": {
+							Permissions: []*v3rbacpb.Permission{
+								{Rule: &v3rbacpb.Permission_NotRule{NotRule: &v3rbacpb.Permission{}}},
+							},
+							Principals: []*v3rbacpb.Principal{
+								{Identifier: &v3rbacpb.Principal_Any{Any: true}},
+							},
+						},
+					},
+				},
+			},
+			wantErr: true,
+		},
+		// A not_id wrapping an inner principal that gRPC RBAC does not translate
+		// into a matcher (here an empty inner identifier) must be rejected
+		// rather than panic while indexing the empty matcher list.
+		{
+			name: "NotIdWithoutInnerMatcher",
+			policies: []*v3rbacpb.RBAC{
+				{
+					Action: v3rbacpb.RBAC_ALLOW,
+					Policies: map[string]*v3rbacpb.Policy{
+						"anyone": {
+							Permissions: []*v3rbacpb.Permission{
+								{Rule: &v3rbacpb.Permission_Any{Any: true}},
+							},
+							Principals: []*v3rbacpb.Principal{
+								{Identifier: &v3rbacpb.Principal_NotId{NotId: &v3rbacpb.Principal{}}},
+							},
+						},
+					},
+				},
+			},
+			wantErr: true,
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
