@@ -125,7 +125,7 @@ func (*testHTTPFilterWithRPCMetadata) ParseFilterConfigOverride(override proto.M
 
 func (*testHTTPFilterWithRPCMetadata) IsTerminal() bool { return false }
 
-func (fb *testHTTPFilterWithRPCMetadata) BuildClientFilter() httpfilter.ClientFilter {
+func (fb *testHTTPFilterWithRPCMetadata) BuildClientFilter(httpfilter.ClientFilterOptions) httpfilter.ClientFilter {
 	return fb
 }
 
@@ -135,7 +135,7 @@ func (fb *testHTTPFilterWithRPCMetadata) Close() {}
 // compile time check ensures the test filter implements it.
 var _ httpfilter.ClientFilterBuilder = &testHTTPFilterWithRPCMetadata{}
 
-func (fb *testHTTPFilterWithRPCMetadata) BuildClientInterceptor(config, override httpfilter.FilterConfig) (iresolver.ClientInterceptor, error) {
+func (fb *testHTTPFilterWithRPCMetadata) BuildClientInterceptor(config, override httpfilter.FilterConfig) (httpfilter.ClientInterceptor, error) {
 	fb.logger.Logf("BuildClientInterceptor called with config: %+v, override: %+v", config, override)
 
 	if config == nil {
@@ -182,7 +182,7 @@ type testFilterInterceptor struct {
 	newStreamChan *testutils.Channel // If set, filter config is written to this field from NewStream()
 }
 
-func (fi *testFilterInterceptor) NewStream(ctx context.Context, _ iresolver.RPCInfo, done func(), newStream func(ctx context.Context, done func()) (iresolver.ClientStream, error)) (iresolver.ClientStream, error) {
+func (fi *testFilterInterceptor) NewStream(ctx context.Context, _ iresolver.RPCInfo, newStream func(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStream, error), opts ...grpc.CallOption) (grpc.ClientStream, error) {
 	// Write the config to the channel, if set. This allows tests to verify that
 	// the filter was invoked at RPC time. This is useful for tests where the
 	// RPC is expected to fail, and therefore the RPC metadata cannot be
@@ -203,7 +203,7 @@ func (fi *testFilterInterceptor) NewStream(ctx context.Context, _ iresolver.RPCI
 	cfg := string(bytes)
 	fi.logger.Logf("Injecting filter config metadata: %v", cfg)
 
-	return newStream(metadata.AppendToOutgoingContext(ctx, filterCfgMetadataKey, cfg), done)
+	return newStream(metadata.AppendToOutgoingContext(ctx, filterCfgMetadataKey, cfg), opts...)
 }
 
 func (fi *testFilterInterceptor) Close() {}
@@ -687,7 +687,7 @@ func (*trackingHTTPFilterBuilder) ParseFilterConfigOverride(cfg proto.Message) (
 	return filterConfigFromProto(cfg)
 }
 
-func (t *trackingHTTPFilterBuilder) BuildClientFilter() httpfilter.ClientFilter {
+func (t *trackingHTTPFilterBuilder) BuildClientFilter(httpfilter.ClientFilterOptions) httpfilter.ClientFilter {
 	t.filtersCreated.Add(1)
 	return t
 }
@@ -698,7 +698,7 @@ func (t *trackingHTTPFilterBuilder) Close() {
 
 var _ httpfilter.ClientFilterBuilder = &trackingHTTPFilterBuilder{}
 
-func (t *trackingHTTPFilterBuilder) BuildClientInterceptor(config, _ httpfilter.FilterConfig) (iresolver.ClientInterceptor, error) {
+func (t *trackingHTTPFilterBuilder) BuildClientInterceptor(config, _ httpfilter.FilterConfig) (httpfilter.ClientInterceptor, error) {
 	t.interceptorsCreated.Add(1)
 
 	if config == nil {
@@ -720,9 +720,9 @@ type trackingInterceptor struct {
 	basePath string
 }
 
-func (i *trackingInterceptor) NewStream(ctx context.Context, _ iresolver.RPCInfo, done func(), newStream func(ctx context.Context, done func()) (iresolver.ClientStream, error)) (iresolver.ClientStream, error) {
+func (i *trackingInterceptor) NewStream(ctx context.Context, _ iresolver.RPCInfo, newStream func(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStream, error), opts ...grpc.CallOption) (grpc.ClientStream, error) {
 	i.pathCh <- i.basePath
-	return newStream(ctx, done)
+	return newStream(ctx, opts...)
 }
 
 func (i *trackingInterceptor) Close() {

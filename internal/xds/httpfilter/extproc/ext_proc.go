@@ -26,7 +26,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/optional"
-	"google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/xds/httpfilter"
 	"google.golang.org/grpc/internal/xds/matcher"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
@@ -70,13 +69,17 @@ func (builder) TypeURLs() []string {
 }
 
 // validateBodyProcessingMode ensures that the body processing mode is either
-// NONE or GRPC.
+// NONE or GRPC. Also ensures that if response body mode is GRPC then response
+// trailer mode must be SEND.
 func validateBodyProcessingMode(mode *v3procfilterpb.ProcessingMode) error {
 	if m := mode.GetRequestBodyMode(); m != v3procfilterpb.ProcessingMode_NONE && m != v3procfilterpb.ProcessingMode_GRPC {
 		return fmt.Errorf("extproc: invalid request body mode %v: want %q or %q", m, "NONE", "GRPC")
 	}
 	if m := mode.GetResponseBodyMode(); m != v3procfilterpb.ProcessingMode_NONE && m != v3procfilterpb.ProcessingMode_GRPC {
 		return fmt.Errorf("extproc: invalid response body mode %v: want %q or %q", m, "NONE", "GRPC")
+	}
+	if mode.GetResponseBodyMode() == v3procfilterpb.ProcessingMode_GRPC && mode.GetResponseTrailerMode() != v3procfilterpb.ProcessingMode_SEND {
+		return fmt.Errorf("extproc: invalid response trailer mode %v: must be %q when response body mode is %q", mode.GetResponseTrailerMode(), "SEND", "GRPC")
 	}
 	return nil
 }
@@ -191,7 +194,7 @@ func (builder) IsTerminal() bool {
 	return false
 }
 
-func (builder) BuildClientFilter() httpfilter.ClientFilter {
+func (builder) BuildClientFilter(httpfilter.ClientFilterOptions) httpfilter.ClientFilter {
 	return clientFilter{}
 }
 
@@ -201,7 +204,7 @@ type clientFilter struct{}
 
 func (clientFilter) Close() {}
 
-func (clientFilter) BuildClientInterceptor(base, override httpfilter.FilterConfig) (resolver.ClientInterceptor, error) {
+func (clientFilter) BuildClientInterceptor(base, override httpfilter.FilterConfig) (httpfilter.ClientInterceptor, error) {
 	b, ok := base.(baseConfig)
 	if !ok {
 		return nil, fmt.Errorf("extproc: incorrect config type provided (%T): %v", base, base)
@@ -230,7 +233,7 @@ func (clientFilter) BuildClientInterceptor(base, override httpfilter.FilterConfi
 }
 
 type clientInterceptor struct {
-	resolver.ClientInterceptor
+	httpfilter.ClientInterceptor
 	config    baseConfig
 	extClient v3procservicegrpc.ExternalProcessorClient
 	cancel    func() error

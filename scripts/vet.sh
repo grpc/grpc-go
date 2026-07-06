@@ -83,6 +83,14 @@ git grep -e 'context.Background()' --or -e 'context.TODO()' -- "*_test.go" | gre
 # can't parse link local IPv6 addresses.
 not git grep 'net.ParseIP' -- '*.go'
 
+# - Ensure that direct calls to regexp.Compile are not allowed in xDS production code.
+#   Use CompileSafeRegex instead to ensure full-string matching.
+(git grep -n 'regexp.Compile(' -- '*xds*' ':(exclude)*_test.go' ':(exclude)internal/xds/matcher/string_matcher.go' ':(exclude)internal/xds/xdsclient/xdsresource/unmarshal_rds.go' || true) | fail_on_output || {
+  echo "Error: direct calls to regexp.Compile are not allowed in xDS production code."
+  echo "Please use CompileSafeRegex instead to ensure full-string matching."
+  exit 1
+}
+
 misspell -error .
 
 # Get the absolute path to revive.toml relative to the script location
