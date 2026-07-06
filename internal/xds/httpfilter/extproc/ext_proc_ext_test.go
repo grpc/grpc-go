@@ -147,25 +147,19 @@ func responseHeadersResponse(setHeaders map[string]string, removeHeaders []strin
 }
 
 func requestBodyResponse(body []byte) *v3procservicepb.ProcessingResponse {
-	return &v3procservicepb.ProcessingResponse{
-		Response: &v3procservicepb.ProcessingResponse_RequestBody{
-			RequestBody: &v3procservicepb.BodyResponse{
-				Response: &v3procservicepb.CommonResponse{
-					Status: v3procservicepb.CommonResponse_CONTINUE,
-					BodyMutation: &v3procservicepb.BodyMutation{
-						Mutation: &v3procservicepb.BodyMutation_StreamedResponse{
-							StreamedResponse: &v3procservicepb.StreamedBodyResponse{
-								Body: body,
-							},
-						},
-					},
-				},
-			},
-		},
-	}
+	return requestBodyResponseWithEOF(body, false)
 }
 
 func requestBodyResponseWithEOF(body []byte, endOfStream bool) *v3procservicepb.ProcessingResponse {
+	streamedResp := &v3procservicepb.StreamedBodyResponse{
+		Body:        body,
+		EndOfStream: endOfStream,
+	}
+
+	if body == nil && endOfStream {
+		streamedResp.EndOfStreamWithoutMessage = true
+	}
+
 	return &v3procservicepb.ProcessingResponse{
 		Response: &v3procservicepb.ProcessingResponse_RequestBody{
 			RequestBody: &v3procservicepb.BodyResponse{
@@ -173,10 +167,7 @@ func requestBodyResponseWithEOF(body []byte, endOfStream bool) *v3procservicepb.
 					Status: v3procservicepb.CommonResponse_CONTINUE,
 					BodyMutation: &v3procservicepb.BodyMutation{
 						Mutation: &v3procservicepb.BodyMutation_StreamedResponse{
-							StreamedResponse: &v3procservicepb.StreamedBodyResponse{
-								Body:                      body,
-								EndOfStreamWithoutMessage: endOfStream,
-							},
+							StreamedResponse: streamedResp,
 						},
 					},
 				},
@@ -240,12 +231,91 @@ func (s *mockProcessorServer) Process(stream v3procservicepb.ExternalProcessor_P
 	return nil
 }
 
+// startMockProcessor configures extproc environment variables and function
+// hooks, starts a mock external processor server, and registers cleanup.
+func startMockProcessor(t *testing.T, processFunc func(v3procservicepb.ExternalProcessor_ProcessServer) error, opts ...grpc.ServerOption) (string, func()) {
+	t.Helper()
+
+	origParse := internal.ParseGRPCServiceConfig
+	origCreate := internal.CreateExtProcChannel
+	internal.ParseGRPCServiceConfig = parseGRPCServiceConfigForTesting
+	internal.CreateExtProcChannel = createExtProcChannelForTesting
+
+	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
+	internal.RegisterForTesting()
+
+	t.Cleanup(func() {
+		internal.ParseGRPCServiceConfig = origParse
+		internal.CreateExtProcChannel = origCreate
+		internal.UnregisterForTesting()
+	})
+
+	lis, err := testutils.LocalTCPListener()
+	if err != nil {
+		t.Fatalf("LocalTCPListener() failed: %v", err)
+	}
+	extprocServer := grpc.NewServer(opts...)
+	mockProc := &mockProcessorServer{processFunc: processFunc}
+	v3procservicepb.RegisterExternalProcessorServer(extprocServer, mockProc)
+	go extprocServer.Serve(lis)
+
+	t.Cleanup(extprocServer.Stop)
+
+	return lis.Addr().String(), extprocServer.Stop
+}
+
+// setupTestClient configures the management server with xDS resources that
+// include the external processor filter, and creates a new gRPC client.
+func setupTestClient(t *testing.T, extProcAddr string, extProcConfig *v3procfilterpb.ExternalProcessor, serverAddr string) (*grpc.ClientConn, error) {
+	t.Helper()
+	managementServer, nodeID, _, xdsResolver := setup.ManagementServerAndResolver(t)
+
+	const serviceName = "test-service"
+
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		DialTarget: serviceName,
+		NodeID:     nodeID,
+		Host:       "localhost",
+		Port:       testutils.ParsePort(t, serverAddr),
+		SecLevel:   e2e.SecurityLevelNone,
+	})
+	hcm := new(v3httppb.HttpConnectionManager)
+	apiListener := resources.Listeners[0].GetApiListener().GetApiListener()
+	if err := apiListener.UnmarshalTo(hcm); err != nil {
+		return nil, err
+	}
+
+	extProcConfig.GrpcService = &v3corepb.GrpcService{
+		TargetSpecifier: &v3corepb.GrpcService_GoogleGrpc_{
+			GoogleGrpc: &v3corepb.GrpcService_GoogleGrpc{
+				TargetUri: extProcAddr,
+			},
+		},
+	}
+
+	hcm.HttpFilters = append([]*v3httppb.HttpFilter{
+		e2e.HTTPFilter("extproc", extProcConfig)},
+		hcm.HttpFilters...)
+	hcmAny := testutils.MarshalAny(t, hcm)
+	resources.Listeners[0].ApiListener.ApiListener = hcmAny
+	resources.Listeners[0].FilterChains[0].Filters[0].ConfigType = &v3listenerpb.Filter_TypedConfig{TypedConfig: hcmAny}
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := managementServer.Update(ctx, resources); err != nil {
+		return nil, err
+	}
+
+	cc, err := grpc.NewClient("xds:///"+serviceName, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsResolver))
+	return cc, err
+}
+
 // TestAllSendUnary tests the scenario where the ExtProc filter is configured
 // with all processing modes set to SEND/GRPC. Verifies that the client
 // correctly routes headers and bodies to the processor, the processor echoes
 // the mutations back, and the client successfully completes a Unary RPC.
 func (s) TestAllSendUnary(t *testing.T) {
-	lisAddr, _ := setupTestEnvAndMockServer(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+	lisAddr, _ := startMockProcessor(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
 		for {
 			req, err := stream.Recv()
 			if err == io.EOF {
@@ -258,15 +328,52 @@ func (s) TestAllSendUnary(t *testing.T) {
 			var resp *v3procservicepb.ProcessingResponse
 			switch {
 			case req.GetRequestHeaders() != nil:
-				resp = requestHeadersResponse(nil, nil)
+				resp = requestHeadersResponse(map[string]string{"request-mutated": "true"}, []string{"request-to-remove"})
 			case req.GetRequestBody() != nil:
-				resp = requestBodyResponseWithEOF(req.GetRequestBody().GetBody(), req.GetRequestBody().GetEndOfStreamWithoutMessage() || req.GetRequestBody().GetEndOfStream())
+				body := req.GetRequestBody().GetBody()
+				if req.GetRequestBody().GetEndOfStreamWithoutMessage() || req.GetRequestBody().GetEndOfStream() {
+					resp = requestBodyResponseWithEOF(body, true)
+					break
+				}
+				reqMsg := &testpb.SimpleRequest{}
+				if err := proto.Unmarshal(body, reqMsg); err != nil {
+					return fmt.Errorf("failed to unmarshal request body: %v", err)
+				}
+				if bodyStr := string(reqMsg.GetPayload().GetBody()); bodyStr != "hello-request" {
+					return fmt.Errorf("unexpected request body on processor: %q, want: %q", bodyStr, "hello-request")
+				}
+				mutatedProto := &testpb.SimpleRequest{
+					Payload: &testpb.Payload{
+						Body: []byte("hello-request-mutated"),
+					},
+				}
+				mutatedBytes, err := proto.Marshal(mutatedProto)
+				if err != nil {
+					return fmt.Errorf("failed to marshal mutated request: %v", err)
+				}
+				resp = requestBodyResponse(mutatedBytes)
 			case req.GetResponseHeaders() != nil:
-				resp = responseHeadersResponse(nil, nil)
+				resp = responseHeadersResponse(map[string]string{"response-mutated": "true"}, []string{"response-to-remove"})
 			case req.GetResponseBody() != nil:
-				resp = responseBodyResponse(req.GetResponseBody().GetBody())
+				respMsg := &testpb.SimpleResponse{}
+				if err := proto.Unmarshal(req.GetResponseBody().GetBody(), respMsg); err != nil {
+					return fmt.Errorf("failed to unmarshal response body: %v", err)
+				}
+				if body := string(respMsg.GetPayload().GetBody()); body != "hello-response" {
+					return fmt.Errorf("unexpected response body on processor: %q, want: %q", body, "hello-response")
+				}
+				mutatedProto := &testpb.SimpleResponse{
+					Payload: &testpb.Payload{
+						Body: []byte("hello-response-mutated"),
+					},
+				}
+				mutatedBytes, err := proto.Marshal(mutatedProto)
+				if err != nil {
+					return fmt.Errorf("failed to marshal mutated response: %v", err)
+				}
+				resp = responseBodyResponse(mutatedBytes)
 			case req.GetResponseTrailers() != nil:
-				resp = responseTrailersResponse(nil, nil)
+				resp = responseTrailersResponse(map[string]string{"trailer-mutated": "true"}, []string{"trailer-to-remove"})
 			}
 			if err := stream.Send(resp); err != nil {
 				return err
@@ -276,16 +383,39 @@ func (s) TestAllSendUnary(t *testing.T) {
 
 	// Start a test stub service.
 	stub := stubserver.StartTestService(t, &stubserver.StubServer{
-		UnaryCallF: func(_ context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
-			// Just echo the request payload back as the response.
+		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			md, ok := metadata.FromIncomingContext(ctx)
+			if !ok {
+				t.Error("no incoming metadata")
+				return nil, fmt.Errorf("no incoming metadata")
+			}
+			if vals := md.Get("request-mutated"); len(vals) == 0 || vals[0] != "true" {
+				t.Errorf("missing or invalid request-mutated header: %v", vals)
+			}
+			if vals := md.Get("request-to-remove"); len(vals) > 0 {
+				t.Errorf("request-to-remove header was not removed: %v", vals)
+			}
+			if body := string(in.GetPayload().GetBody()); body != "hello-request-mutated" {
+				t.Errorf("unexpected request body: %q, want: %q", body, "hello-request-mutated")
+			}
+
+			if err := grpc.SendHeader(ctx, metadata.Pairs("response-to-remove", "yes")); err != nil {
+				return nil, err
+			}
+			if err := grpc.SetTrailer(ctx, metadata.Pairs("trailer-to-remove", "yes")); err != nil {
+				return nil, err
+			}
+
 			return &testpb.SimpleResponse{
-				Payload: in.GetPayload(),
+				Payload: &testpb.Payload{
+					Body: []byte("hello-response"),
+				},
 			}, nil
 		},
 	})
 	defer stub.Stop()
 
-	cc, err := setupClientAndControlPlane(t, lisAddr, &v3procfilterpb.ExternalProcessor{
+	cc, err := setupTestClient(t, lisAddr, &v3procfilterpb.ExternalProcessor{
 		ProcessingMode: &v3procfilterpb.ProcessingMode{
 			RequestHeaderMode:   v3procfilterpb.ProcessingMode_SEND,
 			RequestBodyMode:     v3procfilterpb.ProcessingMode_GRPC,
@@ -303,18 +433,20 @@ func (s) TestAllSendUnary(t *testing.T) {
 
 	client := testgrpc.NewTestServiceClient(cc)
 
-	// Make the Unary call and verify it succeeds and returns the echoed payload.
 	reqMsg := &testpb.SimpleRequest{
 		Payload: &testpb.Payload{
-			Body: []byte("hello-extproc-echo"),
+			Body: []byte("hello-request"),
 		},
 	}
+	ctx = metadata.NewOutgoingContext(ctx, metadata.Pairs("request-to-remove", "yes"))
+
 	resp, err := client.UnaryCall(ctx, reqMsg)
 	if err != nil {
 		t.Fatalf("UnaryCall() failed: %v", err)
 	}
-	if string(resp.GetPayload().GetBody()) != "hello-extproc-echo" {
-		t.Fatalf("UnaryCall() returned payload: %s, want: %s", resp.GetPayload().GetBody(), "hello-extproc-echo")
+
+	if body := string(resp.GetPayload().GetBody()); body != "hello-response-mutated" {
+		t.Fatalf("UnaryCall() returned payload: %s, want: %s", body, "hello-response-mutated")
 	}
 }
 
@@ -325,7 +457,7 @@ func (s) TestAllSendUnary(t *testing.T) {
 // the correctly mutated responses back, even when the processor changes the
 // response count.
 func (s) TestStreamingModifications(t *testing.T) {
-	lisAddr, _ := setupTestEnvAndMockServer(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+	lisAddr, _ := startMockProcessor(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
 		for {
 			req, err := stream.Recv()
 			if err == io.EOF {
@@ -338,30 +470,14 @@ func (s) TestStreamingModifications(t *testing.T) {
 			var resp *v3procservicepb.ProcessingResponse
 			switch {
 			case req.GetRequestHeaders() != nil:
-				resp = requestHeadersResponse(map[string]string{"x-req-header-modified": "true"}, nil)
+				resp = requestHeadersResponse(map[string]string{"req-header-modified": "true"}, nil)
 			case req.GetRequestBody() != nil:
 				body := req.GetRequestBody()
 				// If the request has EndOfStream or EndOfStreamWithoutMessage, it
 				// indicated CloseSend from client. Send EndOfStream to indicate no
 				// more client responses.
 				if body.GetEndOfStreamWithoutMessage() || body.GetEndOfStream() {
-					resp = &v3procservicepb.ProcessingResponse{
-						Response: &v3procservicepb.ProcessingResponse_RequestBody{
-							RequestBody: &v3procservicepb.BodyResponse{
-								Response: &v3procservicepb.CommonResponse{
-									Status: v3procservicepb.CommonResponse_CONTINUE,
-									BodyMutation: &v3procservicepb.BodyMutation{
-										Mutation: &v3procservicepb.BodyMutation_StreamedResponse{
-											StreamedResponse: &v3procservicepb.StreamedBodyResponse{
-												EndOfStream:               body.GetEndOfStream(),
-												EndOfStreamWithoutMessage: body.GetEndOfStreamWithoutMessage(),
-											},
-										},
-									},
-								},
-							},
-						},
-					}
+					resp = requestBodyResponseWithEOF(body.GetBody(), true)
 				} else {
 					reqMsg := &testpb.StreamingOutputCallRequest{}
 					if err := proto.Unmarshal(body.GetBody(), reqMsg); err != nil {
@@ -375,7 +491,7 @@ func (s) TestStreamingModifications(t *testing.T) {
 					resp = requestBodyResponse(mutated)
 				}
 			case req.GetResponseHeaders() != nil:
-				resp = responseHeadersResponse(map[string]string{"x-resp-header-modified": "true"}, nil)
+				resp = responseHeadersResponse(map[string]string{"resp-header-modified": "true"}, nil)
 			case req.GetResponseBody() != nil:
 				body := req.GetResponseBody()
 				respMsg := &testpb.StreamingOutputCallResponse{}
@@ -401,7 +517,7 @@ func (s) TestStreamingModifications(t *testing.T) {
 				}
 				resp = responseBodyResponse(mutated2)
 			case req.GetResponseTrailers() != nil:
-				resp = responseTrailersResponse(map[string]string{"x-resp-trailer-modified": "true"}, nil)
+				resp = responseTrailersResponse(map[string]string{"resp-trailer-modified": "true"}, nil)
 			}
 			if err := stream.Send(resp); err != nil {
 				return err
@@ -415,15 +531,16 @@ func (s) TestStreamingModifications(t *testing.T) {
 			// Verify if the dataplane server receives the mutated headers.
 			md, ok := metadata.FromIncomingContext(stream.Context())
 			if !ok {
-				return status.Error(codes.InvalidArgument, "missing incoming metadata")
+				t.Error("missing incoming metadata")
+				return fmt.Errorf("missing incoming metadata")
 			}
-			hdr := md.Get("x-req-header-modified")
+			hdr := md.Get("req-header-modified")
 			if len(hdr) != 1 || hdr[0] != "true" {
-				return status.Errorf(codes.FailedPrecondition, "missing or invalid x-req-header-modified: %v", hdr)
+				t.Errorf("missing or invalid req-header-modified: %v", hdr)
 			}
 
 			// Explicitly send response headers to client
-			if err := stream.SendHeader(metadata.Pairs("x-resp-header-from-server", "present")); err != nil {
+			if err := stream.SendHeader(metadata.Pairs("resp-header-from-server", "present")); err != nil {
 				return err
 			}
 
@@ -433,7 +550,7 @@ func (s) TestStreamingModifications(t *testing.T) {
 				// Check the message count once we receive io.EOF
 				if err == io.EOF {
 					if msgCount != 4 {
-						return status.Errorf(codes.FailedPrecondition, "server received %d messages, want 4", msgCount)
+						t.Errorf("server received %d messages, want 4", msgCount)
 					}
 					return nil
 				}
@@ -443,7 +560,7 @@ func (s) TestStreamingModifications(t *testing.T) {
 				msgCount++
 				expectedBody := fmt.Sprintf("c%d_req_body_modified", msgCount)
 				if string(in.GetPayload().GetBody()) != expectedBody {
-					return status.Errorf(codes.FailedPrecondition, "server received unexpected message body: %s, want: %s", string(in.GetPayload().GetBody()), expectedBody)
+					t.Errorf("server received unexpected message body: %s, want: %s", string(in.GetPayload().GetBody()), expectedBody)
 				}
 				// Send one response message for each client request.
 				if err := stream.Send(&testpb.StreamingOutputCallResponse{
@@ -456,7 +573,7 @@ func (s) TestStreamingModifications(t *testing.T) {
 	})
 	defer stub.Stop()
 
-	cc, err := setupClientAndControlPlane(t, lisAddr, &v3procfilterpb.ExternalProcessor{
+	cc, err := setupTestClient(t, lisAddr, &v3procfilterpb.ExternalProcessor{
 		ProcessingMode: &v3procfilterpb.ProcessingMode{
 			RequestHeaderMode:   v3procfilterpb.ProcessingMode_SEND,
 			RequestBodyMode:     v3procfilterpb.ProcessingMode_GRPC,
@@ -526,16 +643,16 @@ func (s) TestStreamingModifications(t *testing.T) {
 	if err != nil {
 		t.Fatalf("stream.Header() failed: %v", err)
 	}
-	gotHdr := headerMetadata.Get("x-resp-header-modified")
+	gotHdr := headerMetadata.Get("resp-header-modified")
 	if len(gotHdr) != 1 || gotHdr[0] != "true" {
-		t.Errorf("client received x-mutated-resp-header = %v, want [true]", gotHdr)
+		t.Fatalf("client received mutated-resp-header = %v, want [true]", gotHdr)
 	}
 
 	// Verify mutated response trailers
 	trailerMetadata := stream.Trailer()
-	gotTrailers := trailerMetadata.Get("x-resp-trailer-modified")
+	gotTrailers := trailerMetadata.Get("resp-trailer-modified")
 	if len(gotTrailers) != 1 || gotTrailers[0] != "true" {
-		t.Errorf("client received x-resp-trailer-modified = %v, want [true]", gotTrailers)
+		t.Fatalf("client received resp-trailer-modified = %v, want [true]", gotTrailers)
 	}
 }
 
@@ -546,7 +663,7 @@ func (s) TestStreamingModifications(t *testing.T) {
 // requests do not.
 func (s) TestProtocolConfigInFirstMessage(t *testing.T) {
 	var receivedCall atomic.Bool
-	lisAddr, _ := setupTestEnvAndMockServer(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+	lisAddr, _ := startMockProcessor(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
 		var callCount int
 		for {
 			req, err := stream.Recv()
@@ -598,7 +715,7 @@ func (s) TestProtocolConfigInFirstMessage(t *testing.T) {
 	})
 	defer stub.Stop()
 
-	cc, err := setupClientAndControlPlane(t, lisAddr, &v3procfilterpb.ExternalProcessor{
+	cc, err := setupTestClient(t, lisAddr, &v3procfilterpb.ExternalProcessor{
 		ProcessingMode: &v3procfilterpb.ProcessingMode{
 			RequestHeaderMode:   v3procfilterpb.ProcessingMode_SEND,
 			RequestBodyMode:     v3procfilterpb.ProcessingMode_GRPC,
@@ -632,7 +749,7 @@ func (s) TestProtocolConfigInFirstMessage(t *testing.T) {
 func (s) TestWaitForDataplane(t *testing.T) {
 	unblockHeaders := make(chan struct{})
 
-	lisAddr, _ := setupTestEnvAndMockServer(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+	lisAddr, _ := startMockProcessor(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
 		for {
 			req, err := stream.Recv()
 			if err == io.EOF {
@@ -650,23 +767,7 @@ func (s) TestWaitForDataplane(t *testing.T) {
 			case req.GetRequestBody() != nil:
 				body := req.GetRequestBody()
 				if body.GetEndOfStreamWithoutMessage() || body.GetEndOfStream() {
-					resp = &v3procservicepb.ProcessingResponse{
-						Response: &v3procservicepb.ProcessingResponse_RequestBody{
-							RequestBody: &v3procservicepb.BodyResponse{
-								Response: &v3procservicepb.CommonResponse{
-									Status: v3procservicepb.CommonResponse_CONTINUE,
-									BodyMutation: &v3procservicepb.BodyMutation{
-										Mutation: &v3procservicepb.BodyMutation_StreamedResponse{
-											StreamedResponse: &v3procservicepb.StreamedBodyResponse{
-												EndOfStream:               body.GetEndOfStream(),
-												EndOfStreamWithoutMessage: body.GetEndOfStreamWithoutMessage(),
-											},
-										},
-									},
-								},
-							},
-						},
-					}
+					resp = requestBodyResponseWithEOF(body.GetBody(), body.EndOfStream)
 				} else {
 					resp = requestBodyResponse(body.GetBody())
 				}
@@ -701,7 +802,7 @@ func (s) TestWaitForDataplane(t *testing.T) {
 	})
 	defer stub.Stop()
 
-	cc, err := setupClientAndControlPlane(t, lisAddr, &v3procfilterpb.ExternalProcessor{
+	cc, err := setupTestClient(t, lisAddr, &v3procfilterpb.ExternalProcessor{
 		ProcessingMode: &v3procfilterpb.ProcessingMode{
 			RequestHeaderMode: v3procfilterpb.ProcessingMode_SEND,
 			RequestBodyMode:   v3procfilterpb.ProcessingMode_GRPC,
@@ -765,7 +866,7 @@ func (s) TestTrailersOnly(t *testing.T) {
 	receivedHeadersCh := make(chan *v3procservicepb.ProcessingRequest, 1)
 	errCh := make(chan error, 1)
 
-	lisAddr, _ := setupTestEnvAndMockServer(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+	lisAddr, _ := startMockProcessor(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
 		req, err := stream.Recv()
 		if err == io.EOF {
 			return nil
@@ -782,7 +883,8 @@ func (s) TestTrailersOnly(t *testing.T) {
 				return err
 			}
 			receivedHeadersCh <- req
-
+			resp := responseHeadersResponse(map[string]string{"resp-header-modified": "true"}, nil)
+			return stream.Send(resp)
 		}
 		return nil
 	})
@@ -800,7 +902,7 @@ func (s) TestTrailersOnly(t *testing.T) {
 	})
 	defer stub.Stop()
 
-	cc, err := setupClientAndControlPlane(t, lisAddr, &v3procfilterpb.ExternalProcessor{
+	cc, err := setupTestClient(t, lisAddr, &v3procfilterpb.ExternalProcessor{
 		ProcessingMode: &v3procfilterpb.ProcessingMode{
 			RequestHeaderMode:  v3procfilterpb.ProcessingMode_SKIP,
 			ResponseHeaderMode: v3procfilterpb.ProcessingMode_SEND,
@@ -837,6 +939,13 @@ func (s) TestTrailersOnly(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatal("Timeout waiting for processing server to receive response headers")
 	}
+
+	// Verify mutated response trailers
+	trailerMetadata := stream.Trailer()
+	gotTrailers := trailerMetadata.Get("resp-header-modified")
+	if len(gotTrailers) != 1 || gotTrailers[0] != "true" {
+		t.Fatalf("client received resp-header-modified = %v, want [true]", gotTrailers)
+	}
 }
 
 // TestDraining tests the scenario where the processor server signals
@@ -844,7 +953,7 @@ func (s) TestTrailersOnly(t *testing.T) {
 // messages and then transitions to bypass mode, causing all subsequent client
 // messages and server responses to bypass the processor.
 func (s) TestDraining(t *testing.T) {
-	lisAddr, _ := setupTestEnvAndMockServer(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+	lisAddr, _ := startMockProcessor(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
 		// Receive the first client message c1.
 		req, err := stream.Recv()
 		if err != nil {
@@ -938,7 +1047,7 @@ func (s) TestDraining(t *testing.T) {
 	})
 	defer stub.Stop()
 
-	cc, err := setupClientAndControlPlane(t, lisAddr, &v3procfilterpb.ExternalProcessor{
+	cc, err := setupTestClient(t, lisAddr, &v3procfilterpb.ExternalProcessor{
 		ProcessingMode: &v3procfilterpb.ProcessingMode{
 			RequestHeaderMode:   v3procfilterpb.ProcessingMode_SKIP,
 			RequestBodyMode:     v3procfilterpb.ProcessingMode_GRPC,
@@ -1030,7 +1139,7 @@ func (s) TestImmediateResponse(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			lisAddr, _ := setupTestEnvAndMockServer(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+			lisAddr, _ := startMockProcessor(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
 				req, err := stream.Recv()
 				if err != nil {
 					return err
@@ -1054,7 +1163,7 @@ func (s) TestImmediateResponse(t *testing.T) {
 			stub := stubserver.StartTestService(t, nil)
 			defer stub.Stop()
 
-			cc, err := setupClientAndControlPlane(t, lisAddr, &v3procfilterpb.ExternalProcessor{
+			cc, err := setupTestClient(t, lisAddr, &v3procfilterpb.ExternalProcessor{
 				ProcessingMode: &v3procfilterpb.ProcessingMode{
 					RequestHeaderMode: v3procfilterpb.ProcessingMode_SEND,
 				},
@@ -1160,12 +1269,12 @@ func (s) TestStreamFailureHeaderPhaseDeny(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			lisAddr, _ := setupTestEnvAndMockServer(t, tc.processFunc)
+			lisAddr, _ := startMockProcessor(t, tc.processFunc)
 
 			stub := stubserver.StartTestService(t, nil)
 			defer stub.Stop()
 
-			cc, err := setupClientAndControlPlane(t, lisAddr, &v3procfilterpb.ExternalProcessor{
+			cc, err := setupTestClient(t, lisAddr, &v3procfilterpb.ExternalProcessor{
 				ProcessingMode: &v3procfilterpb.ProcessingMode{
 					RequestHeaderMode: v3procfilterpb.ProcessingMode_SEND,
 				},
@@ -1259,12 +1368,12 @@ func (s) TestStreamFailureHeaderPhaseAllow(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			lisAddr, _ := setupTestEnvAndMockServer(t, tc.processFunc)
+			lisAddr, _ := startMockProcessor(t, tc.processFunc)
 
 			stub := stubserver.StartTestService(t, nil)
 			defer stub.Stop()
 
-			cc, err := setupClientAndControlPlane(t, lisAddr, &v3procfilterpb.ExternalProcessor{
+			cc, err := setupTestClient(t, lisAddr, &v3procfilterpb.ExternalProcessor{
 				ProcessingMode: &v3procfilterpb.ProcessingMode{
 					RequestHeaderMode: v3procfilterpb.ProcessingMode_SEND,
 				},
@@ -1292,7 +1401,7 @@ func (s) TestStreamFailureHeaderPhaseAllow(t *testing.T) {
 // failure_mode_allow is not respected once body has been sent to the external
 // processor.
 func (s) TestStreamFailureBodyPhaseAllow(t *testing.T) {
-	lisAddr, _ := setupTestEnvAndMockServer(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+	lisAddr, _ := startMockProcessor(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
 		// Receive headers and send back.
 		req, err := stream.Recv()
 		if err != nil {
@@ -1301,15 +1410,7 @@ func (s) TestStreamFailureBodyPhaseAllow(t *testing.T) {
 		if req.GetRequestHeaders() == nil {
 			return fmt.Errorf("expected request headers, got %v", req)
 		}
-		resp := &v3procservicepb.ProcessingResponse{
-			Response: &v3procservicepb.ProcessingResponse_RequestHeaders{
-				RequestHeaders: &v3procservicepb.HeadersResponse{
-					Response: &v3procservicepb.CommonResponse{
-						Status: v3procservicepb.CommonResponse_CONTINUE,
-					},
-				},
-			},
-		}
+		resp := requestHeadersResponse(nil, nil)
 		if err := stream.Send(resp); err != nil {
 			return err
 		}
@@ -1379,7 +1480,7 @@ func (s) TestStreamFailureBodyPhaseAllow(t *testing.T) {
 	})
 	defer stub.Stop()
 
-	cc, err := setupClientAndControlPlane(t, lisAddr, &v3procfilterpb.ExternalProcessor{
+	cc, err := setupTestClient(t, lisAddr, &v3procfilterpb.ExternalProcessor{
 		ProcessingMode: &v3procfilterpb.ProcessingMode{
 			RequestHeaderMode: v3procfilterpb.ProcessingMode_SEND,
 			RequestBodyMode:   v3procfilterpb.ProcessingMode_GRPC,
@@ -1417,7 +1518,7 @@ func (s) TestStreamFailureBodyPhaseAllow(t *testing.T) {
 // NONE and failure_mode_allow is true. Verifies that because no body messages
 // were sent to ext_proc, the data plane RPC is allowed to continue unharmed.
 func (s) TestStreamFailureBodyModeNoneAllow(t *testing.T) {
-	lisAddr, _ := setupTestEnvAndMockServer(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+	lisAddr, _ := startMockProcessor(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
 		// Receive initial headers and continue.
 		req, err := stream.Recv()
 		if err != nil {
@@ -1426,15 +1527,7 @@ func (s) TestStreamFailureBodyModeNoneAllow(t *testing.T) {
 		if req.GetRequestHeaders() == nil {
 			return fmt.Errorf("expected request headers, got %v", req)
 		}
-		resp := &v3procservicepb.ProcessingResponse{
-			Response: &v3procservicepb.ProcessingResponse_RequestHeaders{
-				RequestHeaders: &v3procservicepb.HeadersResponse{
-					Response: &v3procservicepb.CommonResponse{
-						Status: v3procservicepb.CommonResponse_CONTINUE,
-					},
-				},
-			},
-		}
+		resp := requestHeadersResponse(nil, nil)
 		if err := stream.Send(resp); err != nil {
 			return err
 		}
@@ -1473,7 +1566,7 @@ func (s) TestStreamFailureBodyModeNoneAllow(t *testing.T) {
 	})
 	defer stub.Stop()
 
-	cc, err := setupClientAndControlPlane(t, lisAddr, &v3procfilterpb.ExternalProcessor{
+	cc, err := setupTestClient(t, lisAddr, &v3procfilterpb.ExternalProcessor{
 		ProcessingMode: &v3procfilterpb.ProcessingMode{
 			RequestHeaderMode: v3procfilterpb.ProcessingMode_SEND,
 			RequestBodyMode:   v3procfilterpb.ProcessingMode_NONE,
@@ -1551,15 +1644,7 @@ func (s) TestStreamFailureBodyPhaseDeny(t *testing.T) {
 				if req.GetRequestHeaders() == nil {
 					return fmt.Errorf("expected request headers, got %v", req)
 				}
-				resp := &v3procservicepb.ProcessingResponse{
-					Response: &v3procservicepb.ProcessingResponse_RequestHeaders{
-						RequestHeaders: &v3procservicepb.HeadersResponse{
-							Response: &v3procservicepb.CommonResponse{
-								Status: v3procservicepb.CommonResponse_CONTINUE,
-							},
-						},
-					},
-				}
+				resp := requestHeadersResponse(nil, nil)
 				if err := stream.Send(resp); err != nil {
 					return err
 				}
@@ -1583,15 +1668,7 @@ func (s) TestStreamFailureBodyPhaseDeny(t *testing.T) {
 				if req.GetRequestHeaders() == nil {
 					return fmt.Errorf("expected request headers, got %v", req)
 				}
-				resp := &v3procservicepb.ProcessingResponse{
-					Response: &v3procservicepb.ProcessingResponse_RequestHeaders{
-						RequestHeaders: &v3procservicepb.HeadersResponse{
-							Response: &v3procservicepb.CommonResponse{
-								Status: v3procservicepb.CommonResponse_CONTINUE,
-							},
-						},
-					},
-				}
+				resp := requestHeadersResponse(nil, nil)
 				if err := stream.Send(resp); err != nil {
 					return err
 				}
@@ -1627,7 +1704,7 @@ func (s) TestStreamFailureBodyPhaseDeny(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			lisAddr, _ := setupTestEnvAndMockServer(t, tc.processFunc)
+			lisAddr, _ := startMockProcessor(t, tc.processFunc)
 
 			stub := stubserver.StartTestService(t, &stubserver.StubServer{
 				FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
@@ -1637,7 +1714,7 @@ func (s) TestStreamFailureBodyPhaseDeny(t *testing.T) {
 			})
 			defer stub.Stop()
 
-			cc, err := setupClientAndControlPlane(t, lisAddr, &v3procfilterpb.ExternalProcessor{
+			cc, err := setupTestClient(t, lisAddr, &v3procfilterpb.ExternalProcessor{
 				ProcessingMode: &v3procfilterpb.ProcessingMode{
 					RequestHeaderMode: v3procfilterpb.ProcessingMode_SEND,
 					RequestBodyMode:   v3procfilterpb.ProcessingMode_GRPC,
@@ -1677,7 +1754,7 @@ func (s) TestStreamFailureBodyPhaseDeny(t *testing.T) {
 // while failure_mode_allow is false. Verifies that the Unary RPC fails with
 // status code Internal.
 func (s) TestUnaryFailureBodyPhaseDeny(t *testing.T) {
-	lisAddr, _ := setupTestEnvAndMockServer(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+	lisAddr, _ := startMockProcessor(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
 		// Receive headers and send back.
 		req, err := stream.Recv()
 		if err != nil {
@@ -1686,15 +1763,7 @@ func (s) TestUnaryFailureBodyPhaseDeny(t *testing.T) {
 		if req.GetRequestHeaders() == nil {
 			return fmt.Errorf("expected request headers, got %v", req)
 		}
-		resp := &v3procservicepb.ProcessingResponse{
-			Response: &v3procservicepb.ProcessingResponse_RequestHeaders{
-				RequestHeaders: &v3procservicepb.HeadersResponse{
-					Response: &v3procservicepb.CommonResponse{
-						Status: v3procservicepb.CommonResponse_CONTINUE,
-					},
-				},
-			},
-		}
+		resp := requestHeadersResponse(nil, nil)
 		if err := stream.Send(resp); err != nil {
 			return err
 		}
@@ -1715,7 +1784,7 @@ func (s) TestUnaryFailureBodyPhaseDeny(t *testing.T) {
 	})
 	defer stub.Stop()
 
-	cc, err := setupClientAndControlPlane(t, lisAddr, &v3procfilterpb.ExternalProcessor{
+	cc, err := setupTestClient(t, lisAddr, &v3procfilterpb.ExternalProcessor{
 		ProcessingMode: &v3procfilterpb.ProcessingMode{
 			RequestHeaderMode: v3procfilterpb.ProcessingMode_SEND,
 			RequestBodyMode:   v3procfilterpb.ProcessingMode_GRPC,
@@ -1746,7 +1815,7 @@ func (s) TestUnaryFailureBodyPhaseDeny(t *testing.T) {
 // correctly deliver all in-flight and bypassed payloads directly over the data
 // plane without message loss.
 func (s) TestDrainingUnderLoad(t *testing.T) {
-	lisAddr, _ := setupTestEnvAndMockServer(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+	lisAddr, _ := startMockProcessor(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
 		// 1. Request headers
 		req, err := stream.Recv()
 		if err != nil {
@@ -1755,15 +1824,7 @@ func (s) TestDrainingUnderLoad(t *testing.T) {
 		if req.GetRequestHeaders() == nil {
 			return fmt.Errorf("expected request headers, got %v", req)
 		}
-		resp := &v3procservicepb.ProcessingResponse{
-			Response: &v3procservicepb.ProcessingResponse_RequestHeaders{
-				RequestHeaders: &v3procservicepb.HeadersResponse{
-					Response: &v3procservicepb.CommonResponse{
-						Status: v3procservicepb.CommonResponse_CONTINUE,
-					},
-				},
-			},
-		}
+		resp := requestHeadersResponse(nil, nil)
 		if err := stream.Send(resp); err != nil {
 			return err
 		}
@@ -1852,7 +1913,7 @@ func (s) TestDrainingUnderLoad(t *testing.T) {
 	})
 	defer stub.Stop()
 
-	cc, err := setupClientAndControlPlane(t, lisAddr, &v3procfilterpb.ExternalProcessor{
+	cc, err := setupTestClient(t, lisAddr, &v3procfilterpb.ExternalProcessor{
 		ProcessingMode: &v3procfilterpb.ProcessingMode{
 			RequestHeaderMode:   v3procfilterpb.ProcessingMode_SEND,
 			RequestBodyMode:     v3procfilterpb.ProcessingMode_GRPC,
@@ -1898,7 +1959,7 @@ func (s) TestDrainingUnderLoad(t *testing.T) {
 // correctly triggers processor trailer mutation and returns the final mutated
 // metadata.
 func (s) TestClientTrailer(t *testing.T) {
-	lisAddr, _ := setupTestEnvAndMockServer(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+	lisAddr, _ := startMockProcessor(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
 		// 1. Request headers
 		req, err := stream.Recv()
 		if err != nil {
@@ -1907,15 +1968,7 @@ func (s) TestClientTrailer(t *testing.T) {
 		if req.GetRequestHeaders() == nil {
 			return fmt.Errorf("expected request headers, got %v", req)
 		}
-		resp := &v3procservicepb.ProcessingResponse{
-			Response: &v3procservicepb.ProcessingResponse_RequestHeaders{
-				RequestHeaders: &v3procservicepb.HeadersResponse{
-					Response: &v3procservicepb.CommonResponse{
-						Status: v3procservicepb.CommonResponse_CONTINUE,
-					},
-				},
-			},
-		}
+		resp := requestHeadersResponse(nil, nil)
 		if err := stream.Send(resp); err != nil {
 			return err
 		}
@@ -1928,15 +1981,7 @@ func (s) TestClientTrailer(t *testing.T) {
 		if req.GetResponseHeaders() == nil {
 			return fmt.Errorf("expected response headers, got %v", req)
 		}
-		resp = &v3procservicepb.ProcessingResponse{
-			Response: &v3procservicepb.ProcessingResponse_ResponseHeaders{
-				ResponseHeaders: &v3procservicepb.HeadersResponse{
-					Response: &v3procservicepb.CommonResponse{
-						Status: v3procservicepb.CommonResponse_CONTINUE,
-					},
-				},
-			},
-		}
+		resp = responseHeadersResponse(nil, nil)
 		if err := stream.Send(resp); err != nil {
 			return err
 		}
@@ -1999,7 +2044,7 @@ func (s) TestClientTrailer(t *testing.T) {
 	})
 	defer stub.Stop()
 
-	cc, err := setupClientAndControlPlane(t, lisAddr, &v3procfilterpb.ExternalProcessor{
+	cc, err := setupTestClient(t, lisAddr, &v3procfilterpb.ExternalProcessor{
 		ProcessingMode: &v3procfilterpb.ProcessingMode{
 			RequestHeaderMode:   v3procfilterpb.ProcessingMode_SEND,
 			ResponseHeaderMode:  v3procfilterpb.ProcessingMode_SEND,
@@ -2079,7 +2124,7 @@ func (s) TestClientTrailer(t *testing.T) {
 // correctly sets the terminal status and merges any specified mutation headers
 // into the stream trailers.
 func (s) TestImmediateResponseTrailers(t *testing.T) {
-	lisAddr, _ := setupTestEnvAndMockServer(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+	lisAddr, _ := startMockProcessor(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
 		for {
 			req, err := stream.Recv()
 			if err != nil {
@@ -2091,25 +2136,9 @@ func (s) TestImmediateResponseTrailers(t *testing.T) {
 			var resp *v3procservicepb.ProcessingResponse
 			switch {
 			case req.GetRequestHeaders() != nil:
-				resp = &v3procservicepb.ProcessingResponse{
-					Response: &v3procservicepb.ProcessingResponse_RequestHeaders{
-						RequestHeaders: &v3procservicepb.HeadersResponse{
-							Response: &v3procservicepb.CommonResponse{
-								Status: v3procservicepb.CommonResponse_CONTINUE,
-							},
-						},
-					},
-				}
+				resp = requestHeadersResponse(nil, nil)
 			case req.GetResponseHeaders() != nil:
-				resp = &v3procservicepb.ProcessingResponse{
-					Response: &v3procservicepb.ProcessingResponse_ResponseHeaders{
-						ResponseHeaders: &v3procservicepb.HeadersResponse{
-							Response: &v3procservicepb.CommonResponse{
-								Status: v3procservicepb.CommonResponse_CONTINUE,
-							},
-						},
-					},
-				}
+				resp = responseHeadersResponse(nil, nil)
 			case req.GetResponseTrailers() != nil:
 				resp = &v3procservicepb.ProcessingResponse{
 					Response: &v3procservicepb.ProcessingResponse_ImmediateResponse{
@@ -2164,7 +2193,7 @@ func (s) TestImmediateResponseTrailers(t *testing.T) {
 	})
 	defer stub.Stop()
 
-	cc, err := setupClientAndControlPlane(t, lisAddr, &v3procfilterpb.ExternalProcessor{
+	cc, err := setupTestClient(t, lisAddr, &v3procfilterpb.ExternalProcessor{
 		ProcessingMode: &v3procfilterpb.ProcessingMode{
 			RequestHeaderMode:   v3procfilterpb.ProcessingMode_SEND,
 			ResponseTrailerMode: v3procfilterpb.ProcessingMode_SEND,
@@ -2237,7 +2266,7 @@ func (s) TestRequestAttributes(t *testing.T) {
 		"request.query",
 	}
 
-	lisAddr, _ := setupTestEnvAndMockServer(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+	lisAddr, _ := startMockProcessor(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
 		req, err := stream.Recv()
 		if err != nil {
 			return err
@@ -2289,22 +2318,14 @@ func (s) TestRequestAttributes(t *testing.T) {
 			return fmt.Errorf("request.query = %q, want %q", got, want)
 		}
 
-		resp := &v3procservicepb.ProcessingResponse{
-			Response: &v3procservicepb.ProcessingResponse_RequestHeaders{
-				RequestHeaders: &v3procservicepb.HeadersResponse{
-					Response: &v3procservicepb.CommonResponse{
-						Status: v3procservicepb.CommonResponse_CONTINUE,
-					},
-				},
-			},
-		}
+		resp := requestHeadersResponse(nil, nil)
 		return stream.Send(resp)
 	})
 
 	stub := stubserver.StartTestService(t, nil)
 	defer stub.Stop()
 
-	cc, err := setupClientAndControlPlane(t, lisAddr, &v3procfilterpb.ExternalProcessor{
+	cc, err := setupTestClient(t, lisAddr, &v3procfilterpb.ExternalProcessor{
 		RequestAttributes: allAttrs,
 		ProcessingMode: &v3procfilterpb.ProcessingMode{
 			RequestHeaderMode:  v3procfilterpb.ProcessingMode_SEND,
@@ -2459,13 +2480,61 @@ func (s) TestResponsePhaseValidationFailureDeny(t *testing.T) {
 				}
 				return stream.Send(resp)
 			},
-			wantMsgContains: "external processor unexpectedly set end of stream in response body mutation",
+		},
+		{
+			name: "UnexpectedResponseHeaderStatus",
+			processFunc: func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+				// Receive RequestHeaders and respond correctly
+				req, err := stream.Recv()
+				if err != nil {
+					return err
+				}
+				if req.GetRequestHeaders() == nil {
+					return fmt.Errorf("Expected RequestHeaders, got %v", req)
+				}
+				if err := stream.Send(requestHeadersResponse(nil, nil)); err != nil {
+					return err
+				}
+
+				reqBodyReq, err := stream.Recv()
+				if err != nil {
+					return err
+				}
+				if reqBodyReq.GetRequestBody() == nil {
+					return fmt.Errorf("Expected RequestBody, got %v", reqBodyReq)
+				}
+				if err := stream.Send(requestBodyResponse(reqBodyReq.GetRequestBody().GetBody())); err != nil {
+					return err
+				}
+
+				// Receive ResponseHeaders
+				respHeadersReq, err := stream.Recv()
+				if err != nil {
+					return err
+				}
+				if respHeadersReq.GetResponseHeaders() == nil {
+					return fmt.Errorf("Expected ResponseHeaders, got %v", respHeadersReq)
+				}
+
+				// Respond to ResponseHeaders with status: CONTINUE_AND_REPLACE!
+				resp := &v3procservicepb.ProcessingResponse{
+					Response: &v3procservicepb.ProcessingResponse_ResponseHeaders{
+						ResponseHeaders: &v3procservicepb.HeadersResponse{
+							Response: &v3procservicepb.CommonResponse{
+								Status: v3procservicepb.CommonResponse_CONTINUE_AND_REPLACE,
+							},
+						},
+					},
+				}
+				return stream.Send(resp)
+			},
+			wantMsgContains: "external processor returned unexpected status CONTINUE_AND_REPLACE for response headers, expected CONTINUE",
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			lisAddr, _ := setupTestEnvAndMockServer(t, tc.processFunc)
+			lisAddr, _ := startMockProcessor(t, tc.processFunc)
 
 			stub := stubserver.StartTestService(t, &stubserver.StubServer{
 				FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
@@ -2485,7 +2554,7 @@ func (s) TestResponsePhaseValidationFailureDeny(t *testing.T) {
 			})
 			defer stub.Stop()
 
-			cc, err := setupClientAndControlPlane(t, lisAddr, &v3procfilterpb.ExternalProcessor{
+			cc, err := setupTestClient(t, lisAddr, &v3procfilterpb.ExternalProcessor{
 				ProcessingMode: &v3procfilterpb.ProcessingMode{
 					RequestHeaderMode:   v3procfilterpb.ProcessingMode_SEND,
 					RequestBodyMode:     v3procfilterpb.ProcessingMode_GRPC,
@@ -2527,7 +2596,7 @@ func (s) TestResponsePhaseValidationFailureDeny(t *testing.T) {
 // goroutine, while Send, CloseSend, and context cancellation run in separate
 // concurrent goroutines.
 func (s) TestConcurrency(t *testing.T) {
-	lisAddr, stopMockServer := setupTestEnvAndMockServer(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+	lisAddr, stopMockServer := startMockProcessor(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
 		for {
 			req, err := stream.Recv()
 			if err == io.EOF {
@@ -2571,7 +2640,7 @@ func (s) TestConcurrency(t *testing.T) {
 	})
 	defer stub.Stop()
 
-	cc, err := setupClientAndControlPlane(t, lisAddr, &v3procfilterpb.ExternalProcessor{
+	cc, err := setupTestClient(t, lisAddr, &v3procfilterpb.ExternalProcessor{
 		ProcessingMode: &v3procfilterpb.ProcessingMode{
 			RequestHeaderMode:   v3procfilterpb.ProcessingMode_SEND,
 			RequestBodyMode:     v3procfilterpb.ProcessingMode_GRPC,
@@ -2645,84 +2714,4 @@ func (s) TestConcurrency(t *testing.T) {
 		t.Fatalf("stream failed with status code %v, want %v (error: %v)", got, want, recvErr)
 	}
 	wg.Wait()
-}
-
-// setupTestEnvAndMockServer configures extproc environment variables and hooks,
-// starts a mock external processor server, and registers cleanups.
-func setupTestEnvAndMockServer(t *testing.T, processFunc func(v3procservicepb.ExternalProcessor_ProcessServer) error, opts ...grpc.ServerOption) (string, func()) {
-	t.Helper()
-
-	origParse := internal.ParseGRPCServiceConfig
-	origCreate := internal.CreateExtProcChannel
-	internal.ParseGRPCServiceConfig = parseGRPCServiceConfigForTesting
-	internal.CreateExtProcChannel = createExtProcChannelForTesting
-
-	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
-	internal.RegisterForTesting()
-
-	t.Cleanup(func() {
-		internal.ParseGRPCServiceConfig = origParse
-		internal.CreateExtProcChannel = origCreate
-		internal.UnregisterForTesting()
-	})
-
-	lis, err := testutils.LocalTCPListener()
-	if err != nil {
-		t.Fatalf("LocalTCPListener() failed: %v", err)
-	}
-	extprocServer := grpc.NewServer(opts...)
-	mockProc := &mockProcessorServer{processFunc: processFunc}
-	v3procservicepb.RegisterExternalProcessorServer(extprocServer, mockProc)
-	go extprocServer.Serve(lis)
-
-	t.Cleanup(extprocServer.Stop)
-
-	return lis.Addr().String(), extprocServer.Stop
-}
-
-// setupClientAndControlPlane configures the control plane, updates listener
-// resources to inject the external processor filter, and create a new
-// ClientConn.
-func setupClientAndControlPlane(t *testing.T, extProcAddr string, extProcConfig *v3procfilterpb.ExternalProcessor, stubAddr string) (*grpc.ClientConn, error) {
-	t.Helper()
-	managementServer, nodeID, _, xdsResolver := setup.ManagementServerAndResolver(t)
-
-	const serviceName = "test-service"
-
-	resources := e2e.DefaultClientResources(e2e.ResourceParams{
-		DialTarget: serviceName,
-		NodeID:     nodeID,
-		Host:       "localhost",
-		Port:       testutils.ParsePort(t, stubAddr),
-		SecLevel:   e2e.SecurityLevelNone,
-	})
-	hcm := new(v3httppb.HttpConnectionManager)
-	apiListener := resources.Listeners[0].GetApiListener().GetApiListener()
-	if err := apiListener.UnmarshalTo(hcm); err != nil {
-		return nil, err
-	}
-
-	extProcConfig.GrpcService = &v3corepb.GrpcService{
-		TargetSpecifier: &v3corepb.GrpcService_GoogleGrpc_{
-			GoogleGrpc: &v3corepb.GrpcService_GoogleGrpc{
-				TargetUri: extProcAddr,
-			},
-		},
-	}
-
-	hcm.HttpFilters = append([]*v3httppb.HttpFilter{
-		e2e.HTTPFilter("extproc", extProcConfig)},
-		hcm.HttpFilters...)
-	hcmAny := testutils.MarshalAny(t, hcm)
-	resources.Listeners[0].ApiListener.ApiListener = hcmAny
-	resources.Listeners[0].FilterChains[0].Filters[0].ConfigType = &v3listenerpb.Filter_TypedConfig{TypedConfig: hcmAny}
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	if err := managementServer.Update(ctx, resources); err != nil {
-		return nil, err
-	}
-
-	cc, err := grpc.NewClient("xds:///"+serviceName, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsResolver))
-	return cc, err
 }

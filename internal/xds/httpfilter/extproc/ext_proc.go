@@ -278,9 +278,9 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 	// It also contains the initial metadata specified in the config. Create a new
 	// child context for the external processor stream to be able to cancel it
 	// independently.
-	procCtx, cancel := context.WithCancel(ctx)
+	procCtx, cancel := context.WithCancel(cs.ctx)
 	if i.config.server.Timeout != 0 {
-		procCtx, cancel = context.WithTimeout(ctx, i.config.server.Timeout)
+		procCtx, cancel = context.WithTimeout(cs.ctx, i.config.server.Timeout)
 	}
 	cs.procCancel = cancel
 	procCtx = metadata.NewOutgoingContext(procCtx, i.config.server.InitialMetadata)
@@ -1227,6 +1227,20 @@ func (cs *clientStream) initiateResponseHeaderProcessing() error {
 			return
 		}
 		header, headerErr := s.Header()
+		isTrailersOnly := false
+
+		if header == nil {
+			// A trailers-only response returns nil from s.Header().
+			// If s.Header() succeeded, or if we received valid trailers on error,
+			// we treat it as a trailers-only response headers message.
+			trailers := s.Trailer()
+			if headerErr == nil || len(trailers) > 0 {
+				header = trailers
+				headerErr = nil
+				isTrailersOnly = true
+			}
+		}
+
 		if headerErr != nil {
 			// If the external processor fails first, it cancels the dataplane
 			// stream, causing s.Header() to unblock and return a generic connection
@@ -1240,9 +1254,7 @@ func (cs *clientStream) initiateResponseHeaderProcessing() error {
 			return
 		}
 		cs.responseHeader = header
-		// A trailers-only response will contain "grpc-status" in the headers or
-		// will return nil, nil on s.Header() call.
-		if header == nil || len(header.Get("grpc-status")) > 0 {
+		if isTrailersOnly {
 			cs.trailersOnly = true
 		}
 		if cs.config.processingModes.responseHeaderMode == modeSend && !cs.procStreamBypass.Load() {
@@ -1282,8 +1294,21 @@ func (cs *clientStream) initiateResponseTrailerProcessing() {
 		if s == nil {
 			return
 		}
+		if cs.trailersOnly {
+			// For trailers-only response, the trailers metadata map is processed and
+			// mutated during the response header phase. Wait for those mutations to
+			// be received and applied.
+			select {
+			case <-cs.responseHeaderModified.Done():
+			case <-cs.procStreamFailed.Done():
+			case <-cs.ctx.Done():
+			}
+			cs.responseTrailers = cs.responseHeader
+			cs.responseTrailerModified.Fire()
+			return
+		}
 		cs.responseTrailers = s.Trailer()
-		if cs.config.processingModes.responseTrailerMode == modeSend && !cs.procStreamBypass.Load() && !cs.trailersOnly {
+		if cs.config.processingModes.responseTrailerMode == modeSend && !cs.procStreamBypass.Load() {
 			req := cs.newProcessingRequest(false)
 			req.Request = &v3procservicepb.ProcessingRequest_ResponseTrailers{ResponseTrailers: &v3procservicepb.HttpTrailers{
 				Trailers: httpfilter.ConstructHeaderMap(cs.responseTrailers, nil, cs.config.allowedHeaders, cs.config.disallowedHeaders),
@@ -1325,7 +1350,7 @@ func convertBodyMode(mode processingMode) v3procfilterpb.ProcessingMode_BodySend
 	}
 }
 
-func getHeaderRaw(md metadata.MD, added [][]string, key string) string {
+func getHeader(md metadata.MD, added [][]string, key string) string {
 	var vals []string
 	if md != nil {
 		vals = append(vals, md.Get(key)...)
@@ -1374,15 +1399,15 @@ func constructRequestAttributes(rpcInfo resolver.RPCInfo, md metadata.MD, added 
 			}
 			reqFields[attr] = headers
 		case "request.referer":
-			if val := getHeaderRaw(md, added, "referer"); val != "" {
+			if val := getHeader(md, added, "referer"); val != "" {
 				reqFields[attr] = val
 			}
 		case "request.useragent":
-			if val := getHeaderRaw(md, added, "user-agent"); val != "" {
+			if val := getHeader(md, added, "user-agent"); val != "" {
 				reqFields[attr] = val
 			}
 		case "request.id":
-			if val := getHeaderRaw(md, added, "x-request-id"); val != "" {
+			if val := getHeader(md, added, "x-request-id"); val != "" {
 				reqFields[attr] = val
 			}
 		case "request.query":
