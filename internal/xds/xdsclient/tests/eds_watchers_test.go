@@ -23,7 +23,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -37,7 +36,6 @@ import (
 	"google.golang.org/grpc/internal/xds/clients"
 	"google.golang.org/grpc/internal/xds/xdsclient"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
-	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource/version"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
@@ -1046,97 +1044,3 @@ func (s) TestEDSWatch_PartialValid(t *testing.T) {
 	}
 }
 
-// TestEDSWatch_NACKError_DuplicateSuppression verifies that when a duplicate
-// invalid EDS resource is sent by the server, the client suppresses the
-// duplicate error notification to the watcher.
-func (s) TestEDSWatch_NACKError_DuplicateSuppression(t *testing.T) {
-	nackReceivedCh := testutils.NewChannel()
-	var nackCount atomic.Int32
-	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
-		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
-			if req.GetTypeUrl() != version.V3EndpointsURL {
-				return nil
-			}
-			if req.GetErrorDetail() != nil {
-				if count := nackCount.Add(1); count >= 3 {
-					nackReceivedCh.Send(nil)
-				}
-			}
-			return nil
-		},
-	})
-
-	nodeID := uuid.New().String()
-	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-
-	config, err := bootstrap.NewConfigFromContents(bc)
-	if err != nil {
-		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
-	}
-	pool := xdsclient.NewPool(config)
-	client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
-		Name: t.Name(),
-	})
-	if err != nil {
-		t.Fatalf("Failed to create xDS client: %v", err)
-	}
-	defer close()
-
-	// Use a custom watcher that counts invocations.
-	errCh := testutils.NewChannel()
-	watcher := &countingEndpointsWatcher{errCh: errCh}
-	edsCancel := xdsresource.WatchEndpoints(client, edsName, watcher)
-	defer edsCancel()
-
-	resources := e2e.UpdateOptions{
-		NodeID:         nodeID,
-		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{badEndpointsResource(edsName, edsHost1, []uint32{edsPort1})},
-		SkipValidation: true,
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	if err := mgmtServer.Update(ctx, resources); err != nil {
-		t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
-	}
-
-	// Verify that the watcher receives the initial error.
-	v, err := errCh.Receive(ctx)
-	if err != nil {
-		t.Fatalf("timeout when waiting for an endpoints resource error from the management server: %v", err)
-	}
-	gotErr := v.(error)
-	if !strings.Contains(gotErr.Error(), wantEndpointsNACKErr) {
-		t.Fatalf("update received with error: %v, want %q", gotErr, wantEndpointsNACKErr)
-	}
-
-	// Wait for the management server to receive at least 3 NACKs, indicating that
-	// the NACK resend loop has run multiple times.
-	if _, err := nackReceivedCh.Receive(ctx); err != nil {
-		t.Fatalf("timeout waiting for 3 NACKs to be received by the server: %v", err)
-	}
-
-	// Verify that the count of error callbacks is still exactly 1, proving that
-	// subsequent duplicate error updates were suppressed.
-	if count := watcher.errCount.Load(); count != 1 {
-		t.Fatalf("Error callback invoked %d times, want 1", count)
-	}
-}
-
-type countingEndpointsWatcher struct {
-	errCh    *testutils.Channel
-	errCount atomic.Int32
-}
-
-func (*countingEndpointsWatcher) ResourceChanged(_ *xdsresource.EndpointsUpdate, onDone func()) {
-	onDone()
-}
-func (c *countingEndpointsWatcher) ResourceError(err error, onDone func()) {
-	c.errCount.Add(1)
-	c.errCh.Send(err)
-	onDone()
-}
-func (c *countingEndpointsWatcher) AmbientError(err error, onDone func()) {
-	c.errCount.Add(1)
-	c.errCh.Send(err)
-	onDone()
-}

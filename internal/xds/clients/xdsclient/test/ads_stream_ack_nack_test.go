@@ -22,6 +22,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -505,4 +506,98 @@ func (s) TestADS_ACK_NACK_ResourceIsNotRequestedAnymore(t *testing.T) {
 	if err := verifyListenerUpdate(ctx, lw.updateCh, wantUpdate); err != nil {
 		t.Fatal(err)
 	}
+}
+
+// TestADS_NACKError_DuplicateSuppression verifies that when a duplicate
+// invalid LDS resource is sent by the server, the client suppresses the
+// duplicate error notification to the watcher.
+//
+// Note: This behavior (suppress duplicate error notifications to watchers) was
+// originally introduced to handle invalid EDS resources (missing localities) as
+// detailed in https://github.com/grpc/grpc-go/issues/8994. Since the duplicate
+// suppression mechanism is generic and implemented at the authority/resource-independent
+// level, it is verified here using LDS to avoid registering additional mocked
+// resource types.
+func (s) TestADS_NACKError_DuplicateSuppression(t *testing.T) {
+	nackReceivedCh := testutils.NewChannelWithSize(1)
+	var nackCount atomic.Int32
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
+		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
+			if req.GetTypeUrl() != xdsresource.V3ListenerURL {
+				return nil
+			}
+			if req.GetErrorDetail() != nil {
+				if count := nackCount.Add(1); count >= 3 {
+					nackReceivedCh.Send(nil)
+				}
+			}
+			return nil
+		},
+	})
+
+	const listenerName = "listener"
+	nodeID := uuid.New().String()
+
+	// Create an xDS client pointing to the above server.
+	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
+	client := createXDSClient(t, mgmtServer.Address, nodeID, grpctransport.NewBuilder(configs))
+
+	// Use a custom watcher that counts invocations.
+	errCh := testutils.NewChannelWithSize(1)
+	watcher := &countingListenerWatcher{errCh: errCh}
+	ldsCancel := client.WatchResource(xdsresource.V3ListenerURL, listenerName, watcher)
+	defer ldsCancel()
+
+	resources := e2e.UpdateOptions{
+		NodeID:         nodeID,
+		Listeners:      []*v3listenerpb.Listener{badListenerResource(t, listenerName)},
+		SkipValidation: true,
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
+	}
+
+	// Verify that the watcher receives the initial error.
+	v, err := errCh.Receive(ctx)
+	if err != nil {
+		t.Fatalf("timeout when waiting for an endpoints resource error from the management server: %v", err)
+	}
+	gotErr := v.(error)
+	wantNackErr := "no RouteSpecifier"
+	if !strings.Contains(gotErr.Error(), wantNackErr) {
+		t.Fatalf("update received with error: %v, want %q", gotErr, wantNackErr)
+	}
+
+	// Wait for the management server to receive at least 3 NACKs, indicating that
+	// the NACK resend loop has run multiple times.
+	if _, err := nackReceivedCh.Receive(ctx); err != nil {
+		t.Fatalf("timeout waiting for 3 NACKs to be received by the server: %v", err)
+	}
+
+	// Verify that the count of error callbacks is still exactly 1, proving that
+	// subsequent duplicate error updates were suppressed.
+	if count := watcher.errCount.Load(); count != 1 {
+		t.Fatalf("Error callback invoked %d times, want 1", count)
+	}
+}
+
+type countingListenerWatcher struct {
+	errCh    *testutils.Channel
+	errCount atomic.Int32
+}
+
+func (*countingListenerWatcher) ResourceChanged(_ xdsclient.ResourceData, done func()) {
+	done()
+}
+func (c *countingListenerWatcher) ResourceError(err error, done func()) {
+	c.errCount.Add(1)
+	c.errCh.Send(err)
+	done()
+}
+func (c *countingListenerWatcher) AmbientError(err error, done func()) {
+	c.errCount.Add(1)
+	c.errCh.Send(err)
+	done()
 }
