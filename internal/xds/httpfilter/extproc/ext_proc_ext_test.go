@@ -1482,8 +1482,9 @@ func (s) TestStreamFailureBodyPhaseAllow(t *testing.T) {
 
 	cc, err := setupTestClient(t, lisAddr, &v3procfilterpb.ExternalProcessor{
 		ProcessingMode: &v3procfilterpb.ProcessingMode{
-			RequestHeaderMode: v3procfilterpb.ProcessingMode_SEND,
-			RequestBodyMode:   v3procfilterpb.ProcessingMode_GRPC,
+			RequestHeaderMode:  v3procfilterpb.ProcessingMode_SEND,
+			RequestBodyMode:    v3procfilterpb.ProcessingMode_GRPC,
+			ResponseHeaderMode: v3procfilterpb.ProcessingMode_SEND,
 		},
 		FailureModeAllow: true,
 	}, stub.Address)
