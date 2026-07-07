@@ -21,14 +21,19 @@ package advancedtls
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
+	"crypto/x509/pkix"
 	"errors"
 	"fmt"
+	"math/big"
 	"net"
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/credentials"
@@ -1102,5 +1107,148 @@ func (s) TestVerifyPeerCertificateZeroCerts(t *testing.T) {
 	const wantErr = "no peer certificates presented"
 	if err := verifyPeerCertificate(nil, nil); err == nil || !strings.Contains(err.Error(), wantErr) {
 		t.Errorf("verifyPeerCertificate(nil, nil) = %v, want error containing %q", err, wantErr)
+	}
+}
+
+func generateCertificates(t *testing.T, extKeyUsages []x509.ExtKeyUsage) (*x509.CertPool, tls.Certificate) {
+	caKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("Failed to generate CA key: %v", err)
+	}
+	caTemplate := &x509.Certificate{
+		SerialNumber:          big.NewInt(1),
+		Subject:               pkix.Name{CommonName: "Test CA"},
+		NotBefore:             time.Now().Add(-1 * time.Hour),
+		NotAfter:              time.Now().Add(1 * time.Hour),
+		IsCA:                  true,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageAny},
+		BasicConstraintsValid: true,
+	}
+	caDER, err := x509.CreateCertificate(rand.Reader, caTemplate, caTemplate, &caKey.PublicKey, caKey)
+	if err != nil {
+		t.Fatalf("Failed to create CA cert: %v", err)
+	}
+	caCert, err := x509.ParseCertificate(caDER)
+	if err != nil {
+		t.Fatalf("Failed to parse CA cert: %v", err)
+	}
+
+	serverKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("Failed to generate server key: %v", err)
+	}
+	serverTemplate := &x509.Certificate{
+		SerialNumber: big.NewInt(2),
+		Subject:      pkix.Name{CommonName: "localhost"},
+		NotBefore:    time.Now().Add(-1 * time.Hour),
+		NotAfter:     time.Now().Add(1 * time.Hour),
+		ExtKeyUsage:  extKeyUsages,
+		DNSNames:     []string{"localhost"},
+	}
+	serverDER, err := x509.CreateCertificate(rand.Reader, serverTemplate, caCert, &serverKey.PublicKey, caKey)
+	if err != nil {
+		t.Fatalf("Failed to create server cert: %v", err)
+	}
+
+	rootPool := x509.NewCertPool()
+	rootPool.AddCert(caCert)
+
+	serverCert := tls.Certificate{
+		Certificate: [][]byte{serverDER},
+		PrivateKey:  serverKey,
+	}
+
+	return rootPool, serverCert
+}
+
+func (s) TestServerAuthEKUValidation(t *testing.T) {
+	// Generate server cert with ClientAuth EKU (no ServerAuth EKU)
+	rootPool, serverCert := generateCertificates(t, []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth})
+
+	for _, test := range []struct {
+		desc              string
+		skipServerAuthEKU bool
+		expectError       bool
+	}{
+		{
+			desc:              "SkipServerAuthEKU is false (default) -> handshake fails",
+			skipServerAuthEKU: false,
+			expectError:       true,
+		},
+		{
+			desc:              "SkipServerAuthEKU is true -> handshake succeeds",
+			skipServerAuthEKU: true,
+			expectError:       false,
+		},
+	} {
+		t.Run(test.desc, func(t *testing.T) {
+			done := make(chan credentials.AuthInfo, 1)
+			lis, err := net.Listen("tcp", "localhost:0")
+			if err != nil {
+				t.Fatalf("Failed to listen: %v", err)
+			}
+			defer lis.Close()
+
+			serverOptions := &Options{
+				IdentityOptions: IdentityCertificateOptions{
+					Certificates: []tls.Certificate{serverCert},
+				},
+				VerificationType: CertVerification,
+			}
+			go func() {
+				serverRawConn, err := lis.Accept()
+				if err != nil {
+					close(done)
+					return
+				}
+				serverTLS, err := NewServerCreds(serverOptions)
+				if err != nil {
+					serverRawConn.Close()
+					close(done)
+					return
+				}
+				_, serverAuthInfo, err := serverTLS.ServerHandshake(serverRawConn)
+				if err != nil {
+					serverRawConn.Close()
+					close(done)
+					return
+				}
+				done <- serverAuthInfo
+			}()
+
+			lisAddr := lis.Addr().String()
+			conn, err := net.Dial("tcp", lisAddr)
+			if err != nil {
+				t.Fatalf("Client failed to connect to %s. Error: %v", lisAddr, err)
+			}
+			defer conn.Close()
+
+			clientOptions := &Options{
+				RootOptions: RootCertificateOptions{
+					RootCertificates: rootPool,
+				},
+				VerificationType:  CertVerification,
+				SkipServerAuthEKU: test.skipServerAuthEKU,
+			}
+			clientTLS, err := NewClientCreds(clientOptions)
+			if err != nil {
+				t.Fatalf("NewClientCreds failed: %v", err)
+			}
+			// Clone the credentials to ensure the cloned instance also respects SkipServerAuthEKU
+			clientTLS = clientTLS.Clone()
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+			_, _, handshakeErr := clientTLS.ClientHandshake(ctx, lisAddr, conn)
+
+			// wait for server side to finish
+			<-done
+
+			if test.expectError && handshakeErr == nil {
+				t.Fatalf("Expected handshake error but got none")
+			}
+			if !test.expectError && handshakeErr != nil {
+				t.Fatalf("Expected handshake success but got error: %v", handshakeErr)
+			}
+		})
 	}
 }

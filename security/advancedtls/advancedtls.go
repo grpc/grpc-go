@@ -226,6 +226,9 @@ type Options struct {
 	// name of authority (e.g. :authority header field) in requests and the
 	// target hostname used during server cert verification.
 	serverNameOverride string
+	// SkipServerAuthEKU if set to true, skips EKU check during server authentication.
+	// This is useful when the server certificate does not have the Server Auth EKU.
+	SkipServerAuthEKU bool
 }
 
 func (o *Options) clientConfig() (*tls.Config, error) {
@@ -417,6 +420,7 @@ type advancedTLSCreds struct {
 	isClient            bool
 	revocationOptions   *RevocationOptions
 	verificationType    VerificationType
+	skipServerAuthEKU   bool
 }
 
 func (c advancedTLSCreds) Info() credentials.ProtocolInfo {
@@ -489,6 +493,9 @@ func (c *advancedTLSCreds) Clone() credentials.TransportCredentials {
 		verifyFunc:          c.verifyFunc,
 		getRootCertificates: c.getRootCertificates,
 		isClient:            c.isClient,
+		revocationOptions:   c.revocationOptions,
+		verificationType:    c.verificationType,
+		skipServerAuthEKU:   c.skipServerAuthEKU,
 	}
 }
 
@@ -546,7 +553,9 @@ func buildVerifyFunc(c *advancedTLSCreds,
 			}
 			// Verify peers' certificates against RootCAs and get verifiedChains.
 			keyUsages := []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}
-			if !c.isClient {
+			if c.isClient && c.skipServerAuthEKU {
+				keyUsages = []x509.ExtKeyUsage{x509.ExtKeyUsageAny}
+			} else if !c.isClient {
 				keyUsages = []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth}
 			}
 			opts := x509.VerifyOptions{
@@ -616,6 +625,7 @@ func NewClientCreds(o *Options) (credentials.TransportCredentials, error) {
 		verifyFunc:          o.AdditionalPeerVerification,
 		revocationOptions:   o.RevocationOptions,
 		verificationType:    o.VerificationType,
+		skipServerAuthEKU:   o.SkipServerAuthEKU,
 	}
 	tc.config.NextProtos = credinternal.AppendH2ToNextProtos(tc.config.NextProtos)
 	return tc, nil
@@ -635,6 +645,7 @@ func NewServerCreds(o *Options) (credentials.TransportCredentials, error) {
 		verifyFunc:          o.AdditionalPeerVerification,
 		revocationOptions:   o.RevocationOptions,
 		verificationType:    o.VerificationType,
+		skipServerAuthEKU:   o.SkipServerAuthEKU,
 	}
 	tc.config.NextProtos = credinternal.AppendH2ToNextProtos(tc.config.NextProtos)
 	return tc, nil
