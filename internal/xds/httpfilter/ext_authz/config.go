@@ -34,12 +34,12 @@ type baseConfig struct {
 	filterEnabled fraction
 	// denyAtDisabled specifies whether to deny requests when external
 	// authorization is disabled via the filterEnabled configuration. If true,
-	// requests will be denied with a status based on StatusCodeOnError.
+	// requests will be denied with a status based on statusOnError.
 	denyAtDisable bool
 	// failureModeAllow specifies the behavior when the call to the external
 	// authorization server fails. If true, the request will be allowed in such
 	// cases. If false, the request will be denied with a status based on
-	// StatusCodeOnError.
+	// statusOnError.
 	failureModeAllow bool
 	// failureModeAllowHeaderAdd specifies whether to add the
 	// `x-envoy-auth-failure-mode-allowed: true` header to the data plane RPC
@@ -58,7 +58,7 @@ type baseConfig struct {
 	// external authorization server. If unset, all headers are allowed.
 	allowedHeaders []matcher.StringMatcher
 	// disallowedHeaders specifies the headers that will not be sent to the
-	// external authorization server. This overrides the above AllowedHeaders if
+	// external authorization server. This overrides the above allowedHeaders if
 	// a header matches both.
 	disallowedHeaders []matcher.StringMatcher
 	// decoderHeaderMutationRules specifies the rules for what modifications an
