@@ -1308,6 +1308,66 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name: "empty exact_match header specifier",
+			routes: []*v3routepb.Route{
+				{
+					Match: &v3routepb.RouteMatch{
+						PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/a/"},
+						Headers: []*v3routepb.HeaderMatcher{
+							{
+								Name:                 "th",
+								HeaderMatchSpecifier: &v3routepb.HeaderMatcher_ExactMatch{ExactMatch: ""},
+							},
+						},
+					},
+					Action: &v3routepb.Route_Route{
+						Route: &v3routepb.RouteAction{ClusterSpecifier: &v3routepb.RouteAction_Cluster{Cluster: clusterName}},
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "empty prefix_match header specifier",
+			routes: []*v3routepb.Route{
+				{
+					Match: &v3routepb.RouteMatch{
+						PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/a/"},
+						Headers: []*v3routepb.HeaderMatcher{
+							{
+								Name:                 "th",
+								HeaderMatchSpecifier: &v3routepb.HeaderMatcher_PrefixMatch{PrefixMatch: ""},
+							},
+						},
+					},
+					Action: &v3routepb.Route_Route{
+						Route: &v3routepb.RouteAction{ClusterSpecifier: &v3routepb.RouteAction_Cluster{Cluster: clusterName}},
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "empty suffix_match header specifier",
+			routes: []*v3routepb.Route{
+				{
+					Match: &v3routepb.RouteMatch{
+						PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/a/"},
+						Headers: []*v3routepb.HeaderMatcher{
+							{
+								Name:                 "th",
+								HeaderMatchSpecifier: &v3routepb.HeaderMatcher_SuffixMatch{SuffixMatch: ""},
+							},
+						},
+					},
+					Action: &v3routepb.Route_Route{
+						Route: &v3routepb.RouteAction{ClusterSpecifier: &v3routepb.RouteAction_Cluster{Cluster: clusterName}},
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
 			name: "unrecognized header match specifier",
 			routes: []*v3routepb.Route{
 				{

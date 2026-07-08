@@ -258,6 +258,9 @@ func routesProtoToSlice(routes []*v3routepb.Route, csps map[string]clusterspecif
 			var header HeaderMatcher
 			switch ht := h.GetHeaderMatchSpecifier().(type) {
 			case *v3routepb.HeaderMatcher_ExactMatch:
+				if ht.ExactMatch == "" {
+					return nil, nil, fmt.Errorf("route %+v has a header matcher with an empty exact_match", r)
+				}
 				header.ExactMatch = &ht.ExactMatch
 			case *v3routepb.HeaderMatcher_SafeRegexMatch:
 				regex := ht.SafeRegexMatch.GetRegex()
@@ -274,8 +277,14 @@ func routesProtoToSlice(routes []*v3routepb.Route, csps map[string]clusterspecif
 			case *v3routepb.HeaderMatcher_PresentMatch:
 				header.PresentMatch = &ht.PresentMatch
 			case *v3routepb.HeaderMatcher_PrefixMatch:
+				if ht.PrefixMatch == "" {
+					return nil, nil, fmt.Errorf("route %+v has a header matcher with an empty prefix_match", r)
+				}
 				header.PrefixMatch = &ht.PrefixMatch
 			case *v3routepb.HeaderMatcher_SuffixMatch:
+				if ht.SuffixMatch == "" {
+					return nil, nil, fmt.Errorf("route %+v has a header matcher with an empty suffix_match", r)
+				}
 				header.SuffixMatch = &ht.SuffixMatch
 			case *v3routepb.HeaderMatcher_StringMatch:
 				sm, err := matcher.StringMatcherFromProto(ht.StringMatch)
