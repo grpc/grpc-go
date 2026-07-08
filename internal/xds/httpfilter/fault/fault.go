@@ -163,6 +163,11 @@ func (i *interceptor) NewStream(ctx context.Context, _ iresolver.RPCInfo, newStr
 
 	if err := injectAbort(ctx, i.config.GetAbort()); err != nil {
 		if err == errOKStream {
+			for _, o := range opts {
+				if o, ok := o.(grpc.OnFinishCallOption); ok {
+					o.OnFinish(nil)
+				}
+			}
 			return &okStream{ctx: ctx}, nil
 		}
 		return nil, err

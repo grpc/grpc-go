@@ -245,12 +245,6 @@ var (
 	AsyncReporterCleanupDelegate = func(cleanup func()) func() {
 		return cleanup
 	}
-
-	// OnCommitCallOption returns a CallOption that configures a callback to
-	// be invoked when the stream is committed. The callback is guaranteed to
-	// be invoked at most once, and may never be invoked if the stream fails
-	// before commitment.
-	OnCommitCallOption any // func(func()) grpc.CallOption
 )
 
 // HealthChecker defines the signature of the client-side LB channel health

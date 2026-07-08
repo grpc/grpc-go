@@ -45,9 +45,6 @@ import (
 
 func init() {
 	internal.AcceptCompressors = acceptCompressors
-	internal.OnCommitCallOption = func(f func()) CallOption {
-		return onCommit(f)
-	}
 }
 
 // Compressor defines the interface gRPC uses to compress a message.
@@ -404,27 +401,6 @@ func (o OnFinishCallOption) before(c *callInfo) error {
 }
 
 func (o OnFinishCallOption) after(*callInfo, *csAttempt) {}
-
-// onCommit returns a CallOption that configures a callback to be called when
-// the stream is committed.
-func onCommit(f func()) CallOption {
-	return onCommitCallOption{
-		onCommit: f,
-	}
-}
-
-// onCommitCallOption is a CallOption that configures a callback to be called
-// when the stream is committed.
-type onCommitCallOption struct {
-	onCommit func()
-}
-
-func (o onCommitCallOption) before(c *callInfo) error {
-	c.onCommit = append(c.onCommit, o.onCommit)
-	return nil
-}
-
-func (o onCommitCallOption) after(*callInfo, *csAttempt) {}
 
 // MaxCallRecvMsgSize returns a CallOption which sets the maximum message size
 // in bytes the client can receive. If this is not set, gRPC uses the default

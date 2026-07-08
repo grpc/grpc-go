@@ -40,8 +40,10 @@ type RPCInfo struct {
 	// Context is the user's context for the RPC and contains headers and
 	// application timeout.  It is passed for interception purposes and for
 	// efficiency reasons.  SelectConfig should not be blocking.
-	Context context.Context
-	Method  string // i.e. "/Service/Method"
+	Context   context.Context
+	Method    string        // i.e. "/Service/Method"
+	Done      chan struct{} // Closed when the RPC is finished.
+	Committed chan struct{} // Closed when the RPC is committed.
 }
 
 // RPCConfig describes the configuration to use for each RPC.
@@ -51,6 +53,7 @@ type RPCConfig struct {
 	Context      context.Context
 	MethodConfig serviceconfig.MethodConfig // configuration to use for this RPC
 	Interceptor  any
+	OnCommitted  func() // Called when the RPC has been committed.
 }
 
 // ServerInterceptor is an interceptor for incoming RPC's on gRPC server side.
