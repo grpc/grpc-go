@@ -1625,6 +1625,184 @@ func (s) TestStreamFailureBodyModeNoneAllow(t *testing.T) {
 	}
 }
 
+// TestStreamFailureTrailerPhaseAllow tests the scenario where the external
+// processor stream fails abruptly during the response trailer phase while
+// failure_mode_allow is true. Verifies that calling Trailer() does not hang and
+// instead returns the unmutated trailers directly from the data plane stream.
+func (s) TestStreamFailureTrailerPhaseAllow(t *testing.T) {
+	lisAddr, _ := startMockProcessor(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+		// Receive initial headers and continue.
+		req, err := stream.Recv()
+		if err != nil {
+			return err
+		}
+		if req.GetRequestHeaders() == nil {
+			return fmt.Errorf("expected request headers, got %v", req)
+		}
+		resp := requestHeadersResponse(nil, nil)
+		if err := stream.Send(resp); err != nil {
+			return err
+		}
+
+		// Receive trailers request and fail abruptly.
+		req, err = stream.Recv()
+		if err != nil {
+			return err
+		}
+		if req.GetResponseTrailers() == nil {
+			return fmt.Errorf("expected response trailers, got %v", req)
+		}
+		return status.Error(codes.Unavailable, "abrupt stream failure in trailer phase")
+	})
+
+	stub := stubserver.StartTestService(t, &stubserver.StubServer{
+		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
+			in, err := stream.Recv()
+			if err != nil {
+				return err
+			}
+			if got, want := string(in.GetPayload().GetBody()), "c1"; got != want {
+				return status.Errorf(codes.FailedPrecondition, "expected body %q, got %q", want, got)
+			}
+			stream.SetTrailer(metadata.Pairs("test-trailer", "original"))
+			return stream.Send(&testpb.StreamingOutputCallResponse{
+				Payload: &testpb.Payload{Body: []byte("s1")},
+			})
+		},
+	})
+	defer stub.Stop()
+
+	cc, err := setupTestClient(t, lisAddr, &v3procfilterpb.ExternalProcessor{
+		ProcessingMode: &v3procfilterpb.ProcessingMode{
+			RequestHeaderMode:   v3procfilterpb.ProcessingMode_SEND,
+			RequestBodyMode:     v3procfilterpb.ProcessingMode_NONE,
+			ResponseBodyMode:    v3procfilterpb.ProcessingMode_NONE,
+			ResponseTrailerMode: v3procfilterpb.ProcessingMode_SEND,
+		},
+		FailureModeAllow: true,
+	}, stub.Address)
+	if err != nil {
+		t.Fatalf("failed to dial: %v", err)
+	}
+	defer cc.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	client := testgrpc.NewTestServiceClient(cc)
+	stream, err := client.FullDuplexCall(ctx)
+	if err != nil {
+		t.Fatalf("FullDuplexCall() failed: %v", err)
+	}
+
+	if err := stream.Send(&testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: []byte("c1")}}); err != nil {
+		t.Fatalf("stream.Send(c1) failed: %v", err)
+	}
+
+	resp, err := stream.Recv()
+	if err != nil {
+		t.Fatalf("stream.Recv(s1) failed: %v", err)
+	}
+	if got, want := string(resp.GetPayload().GetBody()), "s1"; got != want {
+		t.Fatalf("got response %q, want %q", got, want)
+	}
+
+	if err := stream.CloseSend(); err != nil {
+		t.Fatalf("stream.CloseSend() failed: %v", err)
+	}
+
+	if _, err := stream.Recv(); err != io.EOF {
+		t.Fatalf("stream.Recv() returned error: %v, want io.EOF", err)
+	}
+
+	// Calling Trailer() should not hang and must return the unmutated trailer.
+	got := stream.Trailer()
+	if vals := got.Get("test-trailer"); len(vals) != 1 || vals[0] != "original" {
+		t.Fatalf("Trailer() returned %v, want test-trailer containing 'original'", got)
+	}
+}
+
+// TestStreamFailureResponseHeaderPhaseAllow tests the scenario where the external
+// processor stream fails abruptly during the response header phase while
+// failure_mode_allow is true. Verifies that calling Header() does not hang
+// and instead returns the unmutated response headers from the data plane stream.
+func (s) TestStreamFailureResponseHeaderPhaseAllow(t *testing.T) {
+	lisAddr, _ := startMockProcessor(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+		// Receive initial request headers and continue.
+		req, err := stream.Recv()
+		if err != nil {
+			return err
+		}
+		if req.GetRequestHeaders() == nil {
+			return fmt.Errorf("expected request headers, got %v", req)
+		}
+		resp := requestHeadersResponse(nil, nil)
+		if err := stream.Send(resp); err != nil {
+			return err
+		}
+
+		// Receive response headers request and fail abruptly.
+		req, err = stream.Recv()
+		if err != nil {
+			return err
+		}
+		if req.GetResponseHeaders() == nil {
+			return fmt.Errorf("expected response headers, got %v", req)
+		}
+		return status.Error(codes.Unavailable, "abrupt stream failure in response header phase")
+	})
+
+	stub := stubserver.StartTestService(t, &stubserver.StubServer{
+		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
+			in, err := stream.Recv()
+			if err != nil {
+				return err
+			}
+			if got, want := string(in.GetPayload().GetBody()), "c1"; got != want {
+				return status.Errorf(codes.FailedPrecondition, "expected body %q, got %q", want, got)
+			}
+			stream.SendHeader(metadata.Pairs("test-header", "original"))
+			return stream.Send(&testpb.StreamingOutputCallResponse{
+				Payload: &testpb.Payload{Body: []byte("s1")},
+			})
+		},
+	})
+	defer stub.Stop()
+
+	cc, err := setupTestClient(t, lisAddr, &v3procfilterpb.ExternalProcessor{
+		ProcessingMode: &v3procfilterpb.ProcessingMode{
+			RequestHeaderMode:  v3procfilterpb.ProcessingMode_SEND,
+			RequestBodyMode:    v3procfilterpb.ProcessingMode_NONE,
+			ResponseBodyMode:   v3procfilterpb.ProcessingMode_NONE,
+			ResponseHeaderMode: v3procfilterpb.ProcessingMode_SEND,
+		},
+		FailureModeAllow: true,
+	}, stub.Address)
+	if err != nil {
+		t.Fatalf("failed to dial: %v", err)
+	}
+	defer cc.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	client := testgrpc.NewTestServiceClient(cc)
+	stream, err := client.FullDuplexCall(ctx)
+	if err != nil {
+		t.Fatalf("FullDuplexCall() failed: %v", err)
+	}
+
+	if err := stream.Send(&testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: []byte("c1")}}); err != nil {
+		t.Fatalf("stream.Send(c1) failed: %v", err)
+	}
+
+	got, err := stream.Header()
+	if err != nil {
+		t.Fatalf("Header() failed: %v", err)
+	}
+	if vals := got.Get("test-header"); len(vals) != 1 || vals[0] != "original" {
+		t.Fatalf("Header() returned %v, want test-header containing 'original'", got)
+	}
+}
+
 // TestStreamFailureBodyPhaseDeny tests various external processor failures
 // during the request body phase when failure_mode_allow is false, verifying
 // that the RPC fails.
