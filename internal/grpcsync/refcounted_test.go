@@ -128,15 +128,12 @@ func (s) TestRefCounted_Concurrent(t *testing.T) {
 	}
 
 	var wg sync.WaitGroup
-	wg.Add(numGoroutines)
-
 	for i := 0; i < numGoroutines; i++ {
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			if rc.TryIncrement() {
 				rc.Decrement()
 			}
-		}()
+		})
 	}
 
 	rc.Decrement()
@@ -151,12 +148,8 @@ func (s) TestRefCounted_Concurrent(t *testing.T) {
 // TestNilOnZero tests that NewRefCounted returns an error if the provided
 // onZero callback is nil.
 func (s) TestNilOnZero(t *testing.T) {
-	_, err := NewRefCounted("val", nil)
-	if err == nil {
-		t.Fatalf("NewRefCounted(_, nil) succeeded, want error")
-	}
-	expectedErr := "onZero callback cannot be nil"
-	if err.Error() != expectedErr {
-		t.Fatalf("NewRefCounted(_, nil) returned error: %v, want: %v", err, expectedErr)
+	const wantErr = "grpcsync: onZero callback cannot be nil"
+	if _, err := NewRefCounted("val", nil); err == nil || err.Error() != wantErr {
+		t.Fatalf("NewRefCounted(_, nil) returned error: %v, want: %q", err, wantErr)
 	}
 }

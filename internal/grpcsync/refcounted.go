@@ -31,12 +31,15 @@ type RefCounted[V any] struct {
 	onZero   func()
 }
 
-// NewRefCounted creates a new RefCounted instance wrapping the given value. The
-// provided onZero callback is executed exactly once when the reference count
-// drops to zero.
+// NewRefCounted creates a new RefCounted instance wrapping the given value with
+// initial refcount of one. The provided onZero callback must not be nil, and is
+// executed exactly once when the reference count drops to zero.
+//
+// The value should typically be a pointer, interface, or handle rather than a
+// plain value type (such as a struct or primitive value).
 func NewRefCounted[V any](val V, onZero func()) (*RefCounted[V], error) {
 	if onZero == nil {
-		return nil, fmt.Errorf("onZero callback cannot be nil")
+		return nil, fmt.Errorf("grpcsync: onZero callback cannot be nil")
 	}
 	rc := &RefCounted[V]{
 		val:    val,
@@ -53,13 +56,12 @@ func (rc *RefCounted[V]) Value() V {
 
 // TryIncrement attempts to increment the reference count, returning true if
 // successful. It returns false if the count has already reached 0, indicating
-// the resource has been cleaned up and is no longer usable.
-//
-// This method guarantees safe concurrent access by utilizing a CompareAndSwap
-// loop. This prevents race conditions where a concurrent decrement could drop
-// the count to zero between the read and the increment operation, which would
-// otherwise inadvertently resurrect a closed resource.
+// the resource has been cleaned up and cannot be resurrected.
 func (rc *RefCounted[V]) TryIncrement() bool {
+	// Utilize a CompareAndSwap loop to prevent race conditions where a
+	// concurrent decrement could drop the count to zero between the read and
+	// the increment operation, which would otherwise inadvertently resurrect a
+	// closed resource.
 	for {
 		val := rc.refCount.Load()
 		if val <= 0 {
@@ -80,7 +82,7 @@ func (rc *RefCounted[V]) Increment() {
 }
 
 // Decrement decrements the reference count. If it drops to zero, the onZero
-// callback is executed.
+// callback is executed synchronously before this method returns.
 func (rc *RefCounted[V]) Decrement() {
 	if v := rc.refCount.Add(-1); v == 0 {
 		rc.onZero()
