@@ -21,19 +21,14 @@ package advancedtls
 import (
 	"bytes"
 	"context"
-	"crypto/rand"
-	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
-	"crypto/x509/pkix"
 	"errors"
 	"fmt"
-	"math/big"
 	"net"
 	"os"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/credentials"
@@ -1110,57 +1105,6 @@ func (s) TestVerifyPeerCertificateZeroCerts(t *testing.T) {
 	}
 }
 
-func generateCertificates(t *testing.T, extKeyUsages []x509.ExtKeyUsage) (*x509.CertPool, tls.Certificate) {
-	caKey, err := rsa.GenerateKey(rand.Reader, 2048)
-	if err != nil {
-		t.Fatalf("Failed to generate CA key: %v", err)
-	}
-	caTemplate := &x509.Certificate{
-		SerialNumber:          big.NewInt(1),
-		Subject:               pkix.Name{CommonName: "Test CA"},
-		NotBefore:             time.Now().Add(-1 * time.Hour),
-		NotAfter:              time.Now().Add(1 * time.Hour),
-		IsCA:                  true,
-		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageAny},
-		BasicConstraintsValid: true,
-	}
-	caDER, err := x509.CreateCertificate(rand.Reader, caTemplate, caTemplate, &caKey.PublicKey, caKey)
-	if err != nil {
-		t.Fatalf("Failed to create CA cert: %v", err)
-	}
-	caCert, err := x509.ParseCertificate(caDER)
-	if err != nil {
-		t.Fatalf("Failed to parse CA cert: %v", err)
-	}
-
-	serverKey, err := rsa.GenerateKey(rand.Reader, 2048)
-	if err != nil {
-		t.Fatalf("Failed to generate server key: %v", err)
-	}
-	serverTemplate := &x509.Certificate{
-		SerialNumber: big.NewInt(2),
-		Subject:      pkix.Name{CommonName: "localhost"},
-		NotBefore:    time.Now().Add(-1 * time.Hour),
-		NotAfter:     time.Now().Add(1 * time.Hour),
-		ExtKeyUsage:  extKeyUsages,
-		DNSNames:     []string{"localhost"},
-	}
-	serverDER, err := x509.CreateCertificate(rand.Reader, serverTemplate, caCert, &serverKey.PublicKey, caKey)
-	if err != nil {
-		t.Fatalf("Failed to create server cert: %v", err)
-	}
-
-	rootPool := x509.NewCertPool()
-	rootPool.AddCert(caCert)
-
-	serverCert := tls.Certificate{
-		Certificate: [][]byte{serverDER},
-		PrivateKey:  serverKey,
-	}
-
-	return rootPool, serverCert
-}
-
 func (s) TestServerAuthEKUValidation(t *testing.T) {
 	// Generate server cert with ClientAuth EKU (no ServerAuth EKU)
 	rootPool, serverCert := generateCertificates(t, []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth})
@@ -1243,11 +1187,9 @@ func (s) TestServerAuthEKUValidation(t *testing.T) {
 			// wait for server side to finish
 			<-done
 
-			if test.expectError && handshakeErr == nil {
-				t.Fatalf("Expected handshake error but got none")
-			}
-			if !test.expectError && handshakeErr != nil {
-				t.Fatalf("Expected handshake success but got error: %v", handshakeErr)
+			gotErr := handshakeErr != nil
+			if gotErr != test.expectError {
+				t.Fatalf("ClientHandshake() got error: %v, want error: %v", handshakeErr, test.expectError)
 			}
 		})
 	}

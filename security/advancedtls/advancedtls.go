@@ -226,8 +226,21 @@ type Options struct {
 	// name of authority (e.g. :authority header field) in requests and the
 	// target hostname used during server cert verification.
 	serverNameOverride string
-	// SkipServerAuthEKU if set to true, skips EKU check during server authentication.
-	// This is useful when the server certificate does not have the Server Auth EKU.
+	// SkipServerAuthEKU is an UNSAFE option that, if set to true, skips checking
+	// for the Server Auth Extended Key Usage (EKU) extension in peer
+	// certificates during server authentication.
+	//
+	// Doing so goes against the RFC 5280 specification (Section 4.2.1.12),
+	// which mandates that the certificate key usage should be compatible with
+	// the purpose of the key.
+	// See: https://datatracker.ietf.org/doc/html/rfc5280#section-4.2.1.12
+	//
+	// Behavior:
+	// - Client-side: If set to true, the client will verify the server's
+	//   certificate using x509.ExtKeyUsageAny instead of requiring
+	//   x509.ExtKeyUsageServerAuth. This is useful when the server's certificate
+	//   does not possess the Server Auth EKU.
+	// - Server-side: No-op.
 	SkipServerAuthEKU bool
 }
 
