@@ -19,6 +19,7 @@
 package authz_test
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path"
@@ -27,6 +28,8 @@ import (
 
 	"google.golang.org/grpc/authz"
 )
+
+const defaultTestTimeout = 10 * time.Second
 
 func createTmpPolicyFile(t *testing.T, dirSuffix string, policy []byte) string {
 	t.Helper()
@@ -85,7 +88,7 @@ func (s) TestNewFileWatcher(t *testing.T) {
 	}{
 		"InvalidRefreshDurationFailsToCreateInterceptor": {
 			refreshDuration: time.Duration(0),
-			wantErr:         fmt.Errorf("requires refresh interval(0s) greater than 0s"),
+			wantErr:         fmt.Errorf("authz: requires refresh interval(0s) greater than 0s"),
 		},
 		"InvalidPolicyFailsToCreateInterceptor": {
 			authzPolicy:     `{}`,
@@ -116,5 +119,56 @@ func (s) TestNewFileWatcher(t *testing.T) {
 				i.Close()
 			}
 		})
+	}
+}
+
+func (s) TestOnPolicyUpdate(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	updates := make(chan string, 1)
+	onPolicyUpdate := func(s string) {
+		updates <- s
+	}
+
+	content := `{"name": "foo1", "allow_rules":[{"name":"bar"}]}`
+	file := createTmpPolicyFile(t, "onpolicyupdate", []byte(content))
+	opts := authz.FileWatcherOptions{PolicyFile: file, RefreshDuration: 50 * time.Millisecond, OnPolicyUpdate: onPolicyUpdate}
+	i, err := authz.NewFileWatcherWithOptions(opts)
+	if err != nil {
+		t.Fatalf("NewFileWatcherWithOptions(%v) returned err: %v", opts, err)
+	}
+	defer i.Close()
+
+	select {
+	case <-ctx.Done():
+		t.Fatalf("Timeout waiting for policy update")
+	case update := <-updates:
+		if update != content {
+			t.Fatalf("Unexpected contents on first load of policy file: got=%v, want=%v", update, content)
+		}
+	}
+
+	// Tweak the file, expect an update.
+	content = `{"name": "foo2", "allow_rules":[{"name":"bar"}]}`
+	if err := os.WriteFile(file, []byte(content), os.ModePerm); err != nil {
+		t.Fatalf("os.WriteFile(%q) failed: %v", file, err)
+	}
+
+	select {
+	case <-ctx.Done():
+		t.Fatalf("Timeout waiting for policy update")
+	case update := <-updates:
+		if update != content {
+			t.Fatalf("Unexpected contents after policy file changed: got=%v, want=%v", update, content)
+		}
+	}
+
+	sCtx, sCancel := context.WithTimeout(ctx, 100*time.Millisecond)
+	defer sCancel()
+	select {
+	case <-updates:
+		t.Fatal("OnPolicyUpdate callback invoked more times than expected")
+	case <-sCtx.Done():
 	}
 }
