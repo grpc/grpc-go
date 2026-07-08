@@ -27,6 +27,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -1087,5 +1088,19 @@ func (s) TestGetCertificatesSNI(t *testing.T) {
 				t.Errorf("Common name mismatch, got %v, want %v", parsedCert.Subject.CommonName, test.wantCommonName)
 			}
 		})
+	}
+}
+
+func (s) TestVerifyPeerCertificateZeroCerts(t *testing.T) {
+	creds := &advancedTLSCreds{
+		verificationType: CertVerification,
+		isClient:         true,
+		config:           &tls.Config{},
+	}
+	verifyPeerCertificate := buildVerifyFunc(creds, "", nil, &CertificateChains{})
+	// Calling verifyPeerCertificate with zero certificates.
+	const wantErr = "no peer certificates presented"
+	if err := verifyPeerCertificate(nil, nil); err == nil || !strings.Contains(err.Error(), wantErr) {
+		t.Errorf("verifyPeerCertificate(nil, nil) = %v, want error containing %q", err, wantErr)
 	}
 }
