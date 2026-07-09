@@ -511,15 +511,8 @@ func (s) TestADS_ACK_NACK_ResourceIsNotRequestedAnymore(t *testing.T) {
 // TestADS_NACKError_DuplicateSuppression verifies that when a duplicate
 // invalid LDS resource is sent by the server, the client suppresses the
 // duplicate error notification to the watcher.
-//
-// Note: This behavior (suppress duplicate error notifications to watchers) was
-// originally introduced to handle invalid EDS resources (missing localities) as
-// detailed in https://github.com/grpc/grpc-go/issues/8994. Since the duplicate
-// suppression mechanism is generic and implemented at the authority/resource-independent
-// level, it is verified here using LDS to avoid registering additional mocked
-// resource types.
 func (s) TestADS_NACKError_DuplicateSuppression(t *testing.T) {
-	nackReceivedCh := testutils.NewChannelWithSize(1)
+	nackReceivedCh := make(chan struct{})
 	var nackCount atomic.Int32
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
 		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
@@ -527,8 +520,8 @@ func (s) TestADS_NACKError_DuplicateSuppression(t *testing.T) {
 				return nil
 			}
 			if req.GetErrorDetail() != nil {
-				if count := nackCount.Add(1); count >= 3 {
-					nackReceivedCh.Send(nil)
+				if count := nackCount.Add(1); count == 3 {
+					close(nackReceivedCh)
 				}
 			}
 			return nil
@@ -572,8 +565,10 @@ func (s) TestADS_NACKError_DuplicateSuppression(t *testing.T) {
 
 	// Wait for the management server to receive at least 3 NACKs, indicating that
 	// the NACK resend loop has run multiple times.
-	if _, err := nackReceivedCh.Receive(ctx); err != nil {
-		t.Fatalf("timeout waiting for 3 NACKs to be received by the server: %v", err)
+	select {
+	case <-nackReceivedCh:
+	case <-ctx.Done():
+		t.Fatalf("timeout waiting for 3 NACKs to be received by the server: %v", ctx.Err())
 	}
 
 	// Verify that the count of error callbacks is still exactly 1, proving that
