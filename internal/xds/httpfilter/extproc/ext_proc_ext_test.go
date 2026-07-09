@@ -2410,7 +2410,7 @@ func (s) TestImmediateResponseTrailers(t *testing.T) {
 	}
 	for {
 		req, err := stream.Recv()
-		if err == io.EOF {
+		if status.Code(err) == codes.PermissionDenied {
 			break
 		}
 		if err != nil {
