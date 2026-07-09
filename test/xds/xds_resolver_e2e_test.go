@@ -184,7 +184,7 @@ func compareJSONConfigs(t *testing.T, gotJSON, wantJSON string) {
 // Test verifies that if an RPC is in flight, the old cluster remains in
 // the service config until the stream is committed.
 func (s) TestResolverDelayedOnCommitted(t *testing.T) {
-	testFilterTypeURL := "type.googleapis.com/test.delayingFilter-"
+	testFilterTypeURL := "type.googleapis.com/test.delayingFilter-" + uuid.New().String()
 	blockChan, enteredChan := make(chan struct{}), make(chan struct{})
 	tb := &testFilterBuilder{
 		typeURL:     testFilterTypeURL,
@@ -362,10 +362,8 @@ func (s) TestResolverDelayedOnCommitted(t *testing.T) {
 // executed. This decrements the cluster reference count to 0, allowing the
 // resolver to unsubscribe and prune the old cluster from the service config.
 func (s) TestResolverPrunesCluster_StreamCreationFailure(t *testing.T) {
-	const (
-		testFilterTypeURL = "type.googleapis.com/test.blockingFilter"
-		wantErr           = "blocking filter error"
-	)
+	testFilterTypeURL := "type.googleapis.com/test.blockingFilter" + uuid.New().String()
+	const wantErr = "blocking filter error"
 	blockChan, enteredChan := make(chan struct{}), make(chan struct{})
 	tb := &testFilterBuilder{
 		typeURL:      testFilterTypeURL,
