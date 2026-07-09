@@ -108,6 +108,10 @@ func (tb *testFilterBuilder) BuildClientFilter() httpfilter.ClientFilter { retur
 
 func (tb *testFilterBuilder) Close() {}
 
+// ClientFilterBuilder is an optional interface for filters to implement. This
+// compile time check ensures the test filter implements it.
+var _ httpfilter.ClientFilterBuilder = &testFilterBuilder{}
+
 func (tb *testFilterBuilder) BuildClientInterceptor(httpfilter.FilterConfig, httpfilter.FilterConfig) (httpfilter.ClientInterceptor, error) {
 	return &testInterceptor{
 		blockChan:    tb.blockChan,
