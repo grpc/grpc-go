@@ -22,6 +22,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -376,16 +377,8 @@ func (a *authority) handleADSResourceUpdate(serverConfig *ServerConfig, rType Re
 					ServerURI: serverConfig.ServerIdentifier.ServerURI, ResourceType: rType.TypeName,
 				})
 			}
-			isDuplicateErr := state.md.ErrState != nil && state.md.ErrState.Err != nil && state.md.ErrState.Err.Error() == uErr.Err.Error()
-			var errState *xdsresource.UpdateErrorMetadata
-			if md.ErrState != nil {
-				errState = &xdsresource.UpdateErrorMetadata{
-					Version:   md.ErrState.Version,
-					Err:       uErr.Err,
-					Timestamp: md.ErrState.Timestamp,
-				}
-			}
-			state.md.ErrState = errState
+			isDuplicateErr := isDuplicateResourceErr(state.md.ErrState, uErr.Err)
+			state.md.ErrState = md.ErrState
 			state.md.Status = md.Status
 			if isDuplicateErr {
 				continue
@@ -998,4 +991,11 @@ func cacheState(r *resourceState) string {
 		// Fallback for initialization states
 		return "requested"
 	}
+}
+
+func isDuplicateResourceErr(errState *xdsresource.UpdateErrorMetadata, resourceErr error) bool {
+	if errState == nil || errState.Err == nil || resourceErr == nil {
+		return false
+	}
+	return strings.Contains(errState.Err.Error(), resourceErr.Error())
 }
