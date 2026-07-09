@@ -104,9 +104,11 @@ func (*testFilterBuilder) ParseFilterConfigOverride(proto.Message) (httpfilter.F
 
 func (*testFilterBuilder) IsTerminal() bool { return false }
 
-func (tb *testFilterBuilder) BuildClientFilter() httpfilter.ClientFilter { return tb }
+func (tb *testFilterBuilder) BuildClientFilter(httpfilter.ClientFilterOptions) httpfilter.ClientFilter {
+	return tb
+}
 
-func (tb *testFilterBuilder) Close() {}
+func (*testFilterBuilder) Close() {}
 
 // ClientFilterBuilder is an optional interface for filters to implement. This
 // compile time check ensures the test filter implements it.
