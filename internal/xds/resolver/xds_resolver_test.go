@@ -569,8 +569,6 @@ func (s) TestResolverGoodServiceUpdate(t *testing.T) {
 				}
 				cluster := clustermanager.GetPickedClusterForTesting(res.Context)
 				pickedClusters[cluster] = true
-				// Invoke the onCommit callback; this will decrement the cluster count
-				// and update the service config.
 				res.OnCommitted()
 			}
 			if !cmp.Equal(pickedClusters, tt.wantClusters) {
@@ -702,8 +700,8 @@ func (s) TestResolverRemovedWithRPCs(t *testing.T) {
 		}
 	}
 
-	// Invoke the onCommit callback; this will decrement the cluster count
-	// and update the service config.
+	// "Finish the RPC"; this could cause a panic if the resolver doesn't
+	// handle it correctly.
 	res.OnCommitted()
 
 	// Add the resources back.
@@ -752,8 +750,8 @@ func (s) TestResolverRemovedResource(t *testing.T) {
 		t.Fatalf("cs.SelectConfig(): %v", err)
 	}
 
-	// Invoke the onCommit callback; this will decrement the cluster count
-	// and update the service config.
+	// "Finish the RPC"; this could cause a panic if the resolver doesn't
+	// handle it correctly.
 	res.OnCommitted()
 
 	// Delete the listener resource on the management server, resulting in a
@@ -1031,17 +1029,9 @@ func (s) TestResolverDelayedOnCommitted(t *testing.T) {
 		t.Fatalf("Picked cluster is %q, want %q", cluster, wantClusterName)
 	}
 
-	// Invoke onCommit on the old RPC; this should NOT lead to a service config
-	// update that deletes the old cluster.
-	// Verify that the old cluster remains in the service config by ensuring no
-	// update was sent.
-	select {
-	case state := <-stateCh:
-		t.Fatalf("Received unexpected update from resolver: %v", state)
-	case <-time.After(100 * time.Millisecond):
-	}
-
-	// Now finish the old RPC; this should delete the old cluster.
+	// Invoke OnCommitted on the old RPC; should lead to a service config update
+	// that deletes the old cluster, as the old cluster no longer has any
+	// pending RPCs.
 	resOld.OnCommitted()
 
 	wantSC = fmt.Sprintf(`

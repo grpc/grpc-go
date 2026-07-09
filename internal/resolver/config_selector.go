@@ -40,10 +40,8 @@ type RPCInfo struct {
 	// Context is the user's context for the RPC and contains headers and
 	// application timeout.  It is passed for interception purposes and for
 	// efficiency reasons.  SelectConfig should not be blocking.
-	Context   context.Context
-	Method    string        // i.e. "/Service/Method"
-	Done      chan struct{} // Closed when the RPC is finished.
-	Committed chan struct{} // Closed when the RPC is committed.
+	Context context.Context
+	Method  string // i.e. "/Service/Method"
 }
 
 // RPCConfig describes the configuration to use for each RPC.
