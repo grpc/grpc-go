@@ -50,8 +50,8 @@ type RPCConfig struct {
 	// policy or affect timeout or metadata.
 	Context      context.Context
 	MethodConfig serviceconfig.MethodConfig // configuration to use for this RPC
+	OnCommitted  func()                     // Called when the RPC has been committed (retries no longer possible)
 	Interceptor  any
-	OnCommitted  func() // Called when the RPC has been committed.
 }
 
 // ServerInterceptor is an interceptor for incoming RPC's on gRPC server side.

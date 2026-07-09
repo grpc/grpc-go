@@ -261,7 +261,7 @@ func (s) TestXDSResolverDelayedOnCommittedCSP(t *testing.T) {
 	// Delay resOld.OnCommitted(). As long as there are pending RPCs to removed
 	// clusters, they still appear in the service config.
 
-	// Change the cluster specifie plugin configuration.
+	// Change the cluster specifier plugin configuration.
 	routes = []*v3routepb.RouteConfiguration{e2e.RouteConfigResourceWithOptions(e2e.RouteConfigOptions{
 		RouteConfigName:              defaultTestRouteConfigName,
 		ListenerName:                 defaultTestServiceName,
@@ -315,8 +315,8 @@ func (s) TestXDSResolverDelayedOnCommittedCSP(t *testing.T) {
 		t.Fatalf("config selector returned cluster: %v, want: %v", gotCluster, wantCluster)
 	}
 
-	// Invoke the onCommit callback; this will decrement the cluster count
-	// and update the service config.
+	// Invoke resOld.OnCommitted; should lead to a service config update that deletes
+	// cspA.
 	resOld.OnCommitted()
 
 	wantSC = `
