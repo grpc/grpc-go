@@ -514,6 +514,9 @@ func buildVerifyFunc(c *advancedTLSCreds,
 	rawConn net.Conn,
 	peerVerifiedChains *CertificateChains) func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
 	return func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
+		if len(rawCerts) == 0 {
+			return fmt.Errorf("no peer certificates presented")
+		}
 		chains := verifiedChains
 		var leafCert *x509.Certificate
 		rawCertList := make([]*x509.Certificate, len(rawCerts))

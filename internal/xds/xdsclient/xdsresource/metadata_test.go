@@ -21,22 +21,22 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/internal/testutils"
+	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource/version"
 	"google.golang.org/protobuf/types/known/anypb"
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3gcpauthnpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/gcp_authn/v3"
 )
 
-const (
-	proxyAddressTypeURL = "type.googleapis.com/envoy.config.core.v3.Address"
-	audienceTypeURL     = "type.googleapis.com/envoy.extensions.filters.http.gcp_authn.v3.Audience"
-)
-
 func (s) TestProxyAddressConverterSuccess(t *testing.T) {
-	t.Cleanup(RegisterMetadataConverterForTesting(proxyAddressTypeURL, ProxyAddressConvertor{}))
-	converter := metadataConverterForType(proxyAddressTypeURL)
+	cleanup, err := RegisterMetadataConverterForTesting(version.V3AddressURL)
+	if err != nil {
+		t.Fatalf("RegisterMetadataConverterForTesting(%q) failed: %v", version.V3AddressURL, err)
+	}
+	t.Cleanup(cleanup)
+	converter := metadataConverterForType(version.V3AddressURL)
 	if converter == nil {
-		t.Fatalf("Converter for %q not found in registry", proxyAddressTypeURL)
+		t.Fatalf("Converter for %q not found in registry", version.V3AddressURL)
 	}
 	tests := []struct {
 		name string
@@ -140,10 +140,14 @@ func (s) TestProxyAddressConverterSuccess(t *testing.T) {
 }
 
 func (s) TestProxyAddressConverterFailure(t *testing.T) {
-	t.Cleanup(RegisterMetadataConverterForTesting(proxyAddressTypeURL, ProxyAddressConvertor{}))
-	converter := metadataConverterForType(proxyAddressTypeURL)
+	cleanup, err := RegisterMetadataConverterForTesting(version.V3AddressURL)
+	if err != nil {
+		t.Fatalf("RegisterMetadataConverterForTesting(%q) failed: %v", version.V3AddressURL, err)
+	}
+	t.Cleanup(cleanup)
+	converter := metadataConverterForType(version.V3AddressURL)
 	if converter == nil {
-		t.Fatalf("Converter for %q not found in registry", proxyAddressTypeURL)
+		t.Fatalf("Converter for %q not found in registry", version.V3AddressURL)
 	}
 	tests := []struct {
 		name    string
@@ -207,10 +211,14 @@ func (s) TestProxyAddressConverterFailure(t *testing.T) {
 }
 
 func (s) TestAudienceConverterSuccess(t *testing.T) {
-	t.Cleanup(RegisterMetadataConverterForTesting(audienceTypeURL, audienceConverter{}))
-	converter := metadataConverterForType(audienceTypeURL)
+	cleanup, err := RegisterMetadataConverterForTesting(version.V3AudienceURL)
+	if err != nil {
+		t.Fatalf("RegisterMetadataConverterForTesting(%q) failed: %v", version.V3AudienceURL, err)
+	}
+	t.Cleanup(cleanup)
+	converter := metadataConverterForType(version.V3AudienceURL)
 	if converter == nil {
-		t.Fatalf("Converter for %q not found in registry", audienceTypeURL)
+		t.Fatalf("Converter for %q not found in registry", version.V3AudienceURL)
 	}
 	tests := []struct {
 		name     string
