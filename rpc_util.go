@@ -180,7 +180,6 @@ type callInfo struct {
 	codec                       baseCodec
 	maxRetryRPCBufferSize       int
 	onFinish                    []func(err error)
-	onCommit                    []func()
 	authority                   string
 	acceptedResponseCompressors []string
 }
