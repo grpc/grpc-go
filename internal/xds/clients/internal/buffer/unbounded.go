@@ -27,6 +27,10 @@ import (
 // extra goroutines. This is typically used for passing updates from one entity
 // to another within gRPC.
 //
+// To avoid extra memory allocations and type assertions, using any on
+// performance-critical code paths is discouraged. Use concrete types wherever
+// possible when instantiating Unbounded.
+//
 // All methods on this type are thread-safe and don't block on anything except
 // the underlying mutex used for synchronization.
 type Unbounded[T any] struct {
