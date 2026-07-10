@@ -341,18 +341,25 @@ func (s) TestResolverDelayedClusterRemoval_MultipleInFlightRPCs(t *testing.T) {
 		compareJSONConfigs(t, js, wantServiceConfig(clusterA, clusterB))
 	}
 
-	// Unblock the first RPC and verify it completes successfully.
+	// Unblock one of the RPCs and verify it completes successfully.
 	blockChan <- struct{}{}
+	var remainingRPCErr chan error
 	select {
 	case <-ctx.Done():
-		t.Fatal("Timeout waiting for first RPC to succeed")
+		t.Fatal("Timeout waiting for an RPC to succeed")
 	case err := <-rpc1Err:
 		if err != nil {
-			t.Fatalf("First RPC failed with unexpected error: %v", err)
+			t.Fatalf("RPC failed with unexpected error: %v", err)
 		}
+		remainingRPCErr = rpc2Err
+	case err := <-rpc2Err:
+		if err != nil {
+			t.Fatalf("RPC failed with unexpected error: %v", err)
+		}
+		remainingRPCErr = rpc1Err
 	}
 
-	// Verify that because the second RPC to cluster-A is still in flight, the
+	// Verify that because the other RPC to cluster-A is still in flight, the
 	// cluster reference count does not drop to 0 and no service config update
 	// is produced.
 	select {
@@ -361,14 +368,14 @@ func (s) TestResolverDelayedClusterRemoval_MultipleInFlightRPCs(t *testing.T) {
 	case <-time.After(defaultTestShortTimeout):
 	}
 
-	// Unblock the second RPC and verify it completes successfully.
+	// Unblock the remaining RPC and verify it completes successfully.
 	blockChan <- struct{}{}
 	select {
 	case <-ctx.Done():
-		t.Fatal("Timeout waiting for second RPC to succeed")
-	case err := <-rpc2Err:
+		t.Fatal("Timeout waiting for remaining RPC to succeed")
+	case err := <-remainingRPCErr:
 		if err != nil {
-			t.Fatalf("Second RPC failed with unexpected error: %v", err)
+			t.Fatalf("Remaining RPC failed with unexpected error: %v", err)
 		}
 	}
 
