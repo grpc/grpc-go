@@ -83,10 +83,6 @@ func (icc *interceptingClientConn) ParseServiceConfig(js string) *serviceconfig.
 	return icc.ClientConn.ParseServiceConfig(js)
 }
 
-func (icc *interceptingClientConn) UpdateState(state resolver.State) error {
-	return icc.ClientConn.UpdateState(state)
-}
-
 type dummyFilterCfg struct {
 	httpfilter.FilterConfig
 }
@@ -221,7 +217,7 @@ func (s) TestResolverDelayedClusterRemoval_MultipleInFlightRPCs(t *testing.T) {
 	}
 
 	// Create an intercepting resolver builder.
-	jsonCh := make(chan string, 10)
+	jsonCh := make(chan string, 4)
 	ib := &interceptingBuilder{
 		Builder: r,
 		jsonCh:  jsonCh,
@@ -358,11 +354,10 @@ func (s) TestResolverDelayedClusterRemoval_MultipleInFlightRPCs(t *testing.T) {
 
 	// Verify that because the second RPC to cluster-A is still in flight, the
 	// cluster reference count does not drop to 0 and no service config update
-	// is produced. If an unexpected update arrives, ensure cluster-A has not
-	// been prematurely removed.
+	// is produced.
 	select {
 	case js := <-jsonCh:
-		compareJSONConfigs(t, js, wantServiceConfig(clusterA, clusterB))
+		t.Fatalf("Unexpected service config update received: %s", js)
 	case <-time.After(defaultTestShortTimeout):
 	}
 
@@ -417,7 +412,7 @@ func (s) TestResolverPrunesCluster_StreamCreationFailure(t *testing.T) {
 	}
 
 	// Intercept resolver builder.
-	jsonCh := make(chan string, 10)
+	jsonCh := make(chan string, 3)
 	ib := &interceptingBuilder{
 		Builder: r,
 		jsonCh:  jsonCh,
