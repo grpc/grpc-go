@@ -115,7 +115,8 @@ func (s) TestRefCounted_TryIncrement(t *testing.T) {
 // TestRefCounted_Concurrent tests the scenario where multiple goroutines
 // concurrently increment and decrement the reference count. It verifies that
 // the reference counting is thread-safe and the onZero callback is invoked
-// exactly once.
+// exactly once. It also verifies that once onZero has been called, subsequent
+// increament/decrement return error.
 func (s) TestRefCounted_Concurrent(t *testing.T) {
 	const numGoroutines = 10
 	var onZeroCount atomic.Int32
@@ -135,13 +136,24 @@ func (s) TestRefCounted_Concurrent(t *testing.T) {
 			}
 		})
 	}
-
 	rc.Decrement()
-
 	wg.Wait()
-
 	if got := onZeroCount.Load(); got != 1 {
 		t.Fatalf("After concurrent increments/decrements and final decrement, onZeroCount = %v, want 1", got)
+	}
+
+	wantErr := "grpcsync: refcount cannot be negative"
+	if err := rc.Decrement(); err == nil || err.Error() != wantErr {
+		t.Fatalf("Decrement() on dead resource = %v, want %q", err, wantErr)
+	}
+
+	wantErr = "grpcsync: resource already closed or dead"
+	if err := rc.Increment(); err == nil || err.Error() != wantErr {
+		t.Fatalf("Increment() on dead resource = %v, want %q", err, wantErr)
+	}
+
+	if got := rc.TryIncrement(); got {
+		t.Fatalf("TryIncrement() on dead resource = %v, want false", got)
 	}
 }
 
