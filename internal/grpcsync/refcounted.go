@@ -72,7 +72,7 @@ func (rc *RefCounted[V]) TryIncrement() bool {
 	// operation, which would otherwise inadvertently resurrect a closed resource.
 	for {
 		count := rc.refCount.Load()
-		if count == 0 {
+		if count <= 0 {
 			return false // Already dead or dying
 		}
 		if rc.refCount.CompareAndSwap(count, count+1) {

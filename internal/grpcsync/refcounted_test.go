@@ -24,10 +24,10 @@ import (
 	"testing"
 )
 
-// TestRefCounted_Basic tests the scenario where a RefCounted instance is
-// created and its reference count is decremented. It verifies that the
-// encapsulated value is correctly retrieved and that the onZero callback
-// is invoked when the reference count drops to zero.
+// Test verifies the scenario where a RefCounted instance is created and its
+// reference count is decremented. It verifies that the encapsulated value is
+// correctly retrieved and that the onZero callback is invoked when the
+// reference count drops to zero.
 func (s) TestRefCounted(t *testing.T) {
 	val := "test-value"
 	var onZeroCalled atomic.Bool
@@ -54,10 +54,10 @@ func (s) TestRefCounted(t *testing.T) {
 	}
 }
 
-// TestRefCounted_IncrementDecrement tests the scenario where the reference
-// count of a resource is explicitly incremented and decremented multiple
-// times. It verifies that the onZero callback is only executed when the count
-// drops to zero, and not beforehand.
+// Test verifies the scenario where the reference count of a resource is
+// explicitly incremented and decremented multiple times. It verifies that the
+// onZero callback is only executed when the count drops to zero, and not
+// beforehand.
 func (s) TestRefCounted_IncrementDecrement(t *testing.T) {
 	val := 42
 	var onZeroCount atomic.Int32
@@ -83,10 +83,10 @@ func (s) TestRefCounted_IncrementDecrement(t *testing.T) {
 	}
 }
 
-// TestRefCounted_TryIncrement tests the scenario where TryIncrement is called
-// on both an active and a dead resource. It verifies that TryIncrement
-// successfully increments active resources but fails on resources whose
-// reference count has already dropped to zero.
+// Test verifies the scenario where TryIncrement is called on both an active and
+// a dead resource. It verifies that TryIncrement successfully increments active
+// resources but fails on resources whose reference count has already dropped to
+// zero.
 func (s) TestRefCounted_TryIncrement(t *testing.T) {
 	var onZeroCount atomic.Int32
 	rc, err := NewRefCounted("val", func() {
@@ -112,11 +112,11 @@ func (s) TestRefCounted_TryIncrement(t *testing.T) {
 	}
 }
 
-// TestRefCounted_Concurrent tests the scenario where multiple goroutines
-// concurrently increment and decrement the reference count. It verifies that
-// the reference counting is thread-safe and the onZero callback is invoked
-// exactly once. It also verifies that once onZero has been called, subsequent
-// increament/decrement return error.
+// Test verifies the scenario where multiple goroutines concurrently increment
+// and decrement the reference count. It verifies that the reference counting is
+// thread-safe and the onZero callback is invoked exactly once. It also verifies
+// that once onZero has been called, subsequent increament/decrement return
+// error.
 func (s) TestRefCounted_Concurrent(t *testing.T) {
 	const numGoroutines = 10
 	var onZeroCount atomic.Int32
@@ -157,8 +157,8 @@ func (s) TestRefCounted_Concurrent(t *testing.T) {
 	}
 }
 
-// TestNilOnZero tests that NewRefCounted returns an error if the provided
-// onZero callback is nil.
+// Test verifies that NewRefCounted returns an error if the provided onZero
+// callback is nil.
 func (s) TestNilOnZero(t *testing.T) {
 	const wantErr = "grpcsync: onZero callback cannot be nil"
 	if _, err := NewRefCounted("val", nil); err == nil || err.Error() != wantErr {
