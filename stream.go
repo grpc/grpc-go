@@ -253,8 +253,8 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 
 	mc := &emptyMethodConfig
 	var onCommit func()
-	newStream := func(ctx context.Context, filterOpts ...CallOption) (ClientStream, error) {
-		return newClientStreamWithParams(ctx, desc, cc, method, mc, onCommit, nameResolutionDelayed, filterOpts...)
+	newStream := func(ctx context.Context, opts ...CallOption) (ClientStream, error) {
+		return newClientStreamWithParams(ctx, desc, cc, method, mc, onCommit, nameResolutionDelayed, opts...)
 	}
 
 	rpcInfo := iresolver.RPCInfo{Context: ctx, Method: method}
@@ -278,6 +278,11 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 
 		if rpcConfig.OnCommitted != nil {
 			onCommit = rpcConfig.OnCommitted
+			// Register an OnFinish CallOption with the OnCommitted callback to
+			// ensure it is invoked on stream termination, even if the stream
+			// fails early before committing. Implementations of OnCommitted are
+			// expected to be idempotent (e.g., guarded by sync.Once), since both
+			// onCommit and OnFinish may run for a single RPC.
 			opts = append(opts, OnFinish(func(error) { rpcConfig.OnCommitted() }))
 		}
 
@@ -285,8 +290,8 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 			rpcInfo.Context = nil
 			ns := newStream
 			if interceptor, ok := rpcConfig.Interceptor.(clientInterceptor); ok {
-				newStream = func(ctx context.Context, filterOpts ...CallOption) (ClientStream, error) {
-					cs, err := interceptor.NewStream(ctx, rpcInfo, ns, filterOpts...)
+				newStream = func(ctx context.Context, opts ...CallOption) (ClientStream, error) {
+					cs, err := interceptor.NewStream(ctx, rpcInfo, ns, opts...)
 					if err != nil {
 						return nil, toRPCErr(err)
 					}

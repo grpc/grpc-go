@@ -647,9 +647,7 @@ func (r *xdsResolver) newInterceptor(filters []xdsresource.HTTPFilter, clusterOv
 		}
 	}
 
-	return &interceptorList{
-		interceptors: interceptors,
-	}, nil
+	return &interceptorList{interceptors: interceptors}, nil
 }
 
 // interceptorList is a client interceptor that contains a list of client

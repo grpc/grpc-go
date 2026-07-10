@@ -210,21 +210,33 @@ func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RP
 	}
 
 	if info, ok := cs.clusters[cluster.name]; ok {
+		// Add a ref to the selected cluster, as this RPC needs this
+		// cluster until it is committed.
 		info.refCount.Add(1)
 		var once sync.Once
 		config.OnCommitted = func() {
 			once.Do(func() {
 				if v := info.refCount.Add(-1); v == 0 {
+					// We call unsubscribe rather than sendNewServiceConfig to
+					// prevent redundant updates. If the reference count in the
+					// dependency manager drops to zero, it will automatically
+					// trigger a service config update with this cluster
+					// removed. Calling unsubscribe allows the dependency
+					// manager to handle the update flow once and for all.
 					info.unsubscribe()
 				}
 			})
 		}
 	} else if info, ok := cs.plugins[cluster.name]; ok {
+		// Add a ref to the selected plugin, as this RPC needs this
+		// plugin until it is committed.
 		info.refCount.Add(1)
 		var once sync.Once
 		config.OnCommitted = func() {
 			once.Do(func() {
 				if v := info.refCount.Add(-1); v == 0 {
+					// This entry will be removed from activePlugins when
+					// producing a new service config update.
 					cs.sendNewServiceConfig()
 				}
 			})

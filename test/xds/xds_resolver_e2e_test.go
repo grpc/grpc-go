@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
@@ -50,11 +51,15 @@ import (
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
+// interceptingBuilder wraps a resolver.Builder and intercepts the ClientConn
+// passed to Build by wrapping it with an interceptingClientConn.
 type interceptingBuilder struct {
 	resolver.Builder
 	jsonCh chan string
 }
 
+// Build wraps the provided resolver.ClientConn with an interceptingClientConn
+// before delegating to the underlying resolver.Builder.
 func (ib *interceptingBuilder) Build(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOptions) (resolver.Resolver, error) {
 	icc := &interceptingClientConn{
 		ClientConn: cc,
@@ -63,6 +68,8 @@ func (ib *interceptingBuilder) Build(target resolver.Target, cc resolver.ClientC
 	return ib.Builder.Build(target, icc, opts)
 }
 
+// interceptingClientConn wraps a resolver.ClientConn and intercepts calls to
+// ParseServiceConfig to send the raw JSON service config.
 type interceptingClientConn struct {
 	resolver.ClientConn
 	jsonCh chan string
@@ -130,7 +137,7 @@ type testInterceptor struct {
 
 func (i *testInterceptor) NewStream(ctx context.Context, _ iresolver.RPCInfo, newStream func(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStream, error), opts ...grpc.CallOption) (grpc.ClientStream, error) {
 	// Signal that we have entered the filter
-	close(i.enteredChan)
+	i.enteredChan <- struct{}{}
 
 	select {
 	case <-i.blockChan:
@@ -187,11 +194,12 @@ func compareJSONConfigs(t *testing.T, gotJSON, wantJSON string) {
 	}
 }
 
-// Test verifies that if an RPC is in flight, the old cluster remains in
-// the service config until the stream is committed.
-func (s) TestResolverDelayedOnCommitted(t *testing.T) {
+// Test verifies that when RPCs are in flight holding references to an old
+// cluster, that cluster remains in the service config until all in-flight
+// RPCs finish.
+func (s) TestResolverDelayedClusterRemoval_MultipleInFlightRPCs(t *testing.T) {
 	testFilterTypeURL := t.Name()
-	blockChan, enteredChan := make(chan struct{}), make(chan struct{})
+	blockChan, enteredChan := make(chan struct{}), make(chan struct{}, 2)
 	tb := &testFilterBuilder{
 		typeURL:     testFilterTypeURL,
 		blockChan:   blockChan,
@@ -207,7 +215,7 @@ func (s) TestResolverDelayedOnCommitted(t *testing.T) {
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 
 	// Create the xDS resolver builder.
-	underlyingResolver, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
+	r, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
 	if err != nil {
 		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
 	}
@@ -215,24 +223,14 @@ func (s) TestResolverDelayedOnCommitted(t *testing.T) {
 	// Create an intercepting resolver builder.
 	jsonCh := make(chan string, 10)
 	ib := &interceptingBuilder{
-		Builder: underlyingResolver,
+		Builder: r,
 		jsonCh:  jsonCh,
 	}
 
 	// Start test backends.
-	serverA := stubserver.StartTestService(t, &stubserver.StubServer{
-		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
-			<-stream.Context().Done()
-			return nil
-		},
-	})
+	serverA := stubserver.StartTestService(t, nil)
 	defer serverA.Stop()
-	serverB := stubserver.StartTestService(t, &stubserver.StubServer{
-		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
-			<-stream.Context().Done()
-			return nil
-		},
-	})
+	serverB := stubserver.StartTestService(t, nil)
 	defer serverB.Stop()
 
 	const (
@@ -269,11 +267,10 @@ func (s) TestResolverDelayedOnCommitted(t *testing.T) {
 		},
 	}
 	resources := e2e.UpdateOptions{
-		NodeID:         nodeID,
-		Listeners:      []*v3listenerpb.Listener{{Name: serviceName, ApiListener: &v3listenerpb.ApiListener{ApiListener: testutils.MarshalAny(t, hcm)}}},
-		Clusters:       []*v3clusterpb.Cluster{e2e.DefaultCluster(clusterA, clusterA, e2e.SecurityLevelNone)},
-		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(clusterA, "localhost", []uint32{testutils.ParsePort(t, serverA.Address)})},
-		SkipValidation: true,
+		NodeID:    nodeID,
+		Listeners: []*v3listenerpb.Listener{{Name: serviceName, ApiListener: &v3listenerpb.ApiListener{ApiListener: testutils.MarshalAny(t, hcm)}}},
+		Clusters:  []*v3clusterpb.Cluster{e2e.DefaultCluster(clusterA, clusterA, e2e.SecurityLevelNone)},
+		Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(clusterA, "localhost", []uint32{testutils.ParsePort(t, serverA.Address)})},
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -289,20 +286,23 @@ func (s) TestResolverDelayedOnCommitted(t *testing.T) {
 	}
 	defer cc.Close()
 
-	// Trigger a RPC to cluster A. This RPC should reach our custom HTTP filter,
-	// and get blocked.
 	client := testgrpc.NewTestServiceClient(cc)
-	streamErrCh := make(chan error, 1)
+
+	// Trigger first RPC to cluster A. This RPC should reach our custom HTTP
+	// filter, and get blocked.
+	rpc1Err := make(chan error, 1)
 	go func() {
-		s, err := client.FullDuplexCall(ctx)
-		if err != nil {
-			streamErrCh <- err
-			return
-		}
-		// Force commit by calling Context()
-		s.Context()
-		streamErrCh <- nil
+		_, err := client.EmptyCall(ctx, &testpb.Empty{})
+		rpc1Err <- err
 	}()
+
+	// Verify that first RPC has entered the HTTP filter's NewStream and is
+	// currently blocked.
+	select {
+	case <-enteredChan:
+	case <-ctx.Done():
+		t.Fatal("Timeout waiting for first RPC to reach HTTP filter")
+	}
 
 	// Read the first state update from the intercepting resolver.
 	// This should contain cluster-A.
@@ -313,11 +313,20 @@ func (s) TestResolverDelayedOnCommitted(t *testing.T) {
 		compareJSONConfigs(t, js, wantServiceConfig(clusterA))
 	}
 
-	// Verify that the RPC has reached the filter's NewStream.
+	// Trigger second RPC to cluster A. This RPC should reach our custom HTTP
+	// filter, and get blocked.
+	rpc2Err := make(chan error, 1)
+	go func() {
+		_, err := client.EmptyCall(ctx, &testpb.Empty{})
+		rpc2Err <- err
+	}()
+
+	// Verify that second RPC has entered the HTTP filter's NewStream and is
+	// currently blocked.
 	select {
 	case <-enteredChan:
 	case <-ctx.Done():
-		t.Fatal("Timeout waiting for RPC to reach HTTP filter")
+		t.Fatal("Timeout waiting for second RPC to reach HTTP filter")
 	}
 
 	// Now update the route configuration on the management server to point to cluster B.
@@ -329,9 +338,6 @@ func (s) TestResolverDelayedOnCommitted(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Read the second state update from the intercepting resolver.
-	// This should contain BOTH cluster-A and cluster-B, since the blocked
-	// RPC holds a reference to cluster-A.
 	select {
 	case <-ctx.Done():
 		t.Fatal("Timeout waiting for second resolver state update")
@@ -339,22 +345,40 @@ func (s) TestResolverDelayedOnCommitted(t *testing.T) {
 		compareJSONConfigs(t, js, wantServiceConfig(clusterA, clusterB))
 	}
 
-	// Unblock the filter's NewStream, allowing it to complete successfully.
-	close(blockChan)
-
-	// Wait for the stream to be successfully created.
+	// Unblock the first RPC and verify it completes successfully.
+	blockChan <- struct{}{}
 	select {
 	case <-ctx.Done():
-		t.Fatal("Timeout waiting for stream creation to succeed")
-	case err := <-streamErrCh:
+		t.Fatal("Timeout waiting for first RPC to succeed")
+	case err := <-rpc1Err:
 		if err != nil {
 			t.Fatalf("First RPC failed with unexpected error: %v", err)
 		}
 	}
 
-	// Once the stream is created and committed, the resolver should unsubscribe
-	// from cluster A and trigger a service config update that deletes the old
-	// cluster. Read the third state update and ensure cluster-A is pruned.
+	// Verify that because the second RPC to cluster-A is still in flight, the
+	// cluster reference count does not drop to 0 and no service config update
+	// is produced. If an unexpected update arrives, ensure cluster-A has not
+	// been prematurely removed.
+	select {
+	case js := <-jsonCh:
+		compareJSONConfigs(t, js, wantServiceConfig(clusterA, clusterB))
+	case <-time.After(defaultTestShortTimeout):
+	}
+
+	// Unblock the second RPC and verify it completes successfully.
+	blockChan <- struct{}{}
+	select {
+	case <-ctx.Done():
+		t.Fatal("Timeout waiting for second RPC to succeed")
+	case err := <-rpc2Err:
+		if err != nil {
+			t.Fatalf("Second RPC failed with unexpected error: %v", err)
+		}
+	}
+
+	// Once the second RPC finishes (refCount drops 1 -> 0), cluster-A should be
+	// removed from the service config.
 	select {
 	case <-ctx.Done():
 		t.Fatal("Timeout waiting for third resolver state update")
@@ -387,7 +411,7 @@ func (s) TestResolverPrunesCluster_StreamCreationFailure(t *testing.T) {
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 
 	// Create the underlying xDS resolver builder.
-	underlyingResolver, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
+	r, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
 	if err != nil {
 		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
 	}
@@ -395,7 +419,7 @@ func (s) TestResolverPrunesCluster_StreamCreationFailure(t *testing.T) {
 	// Intercept resolver builder.
 	jsonCh := make(chan string, 10)
 	ib := &interceptingBuilder{
-		Builder: underlyingResolver,
+		Builder: r,
 		jsonCh:  jsonCh,
 	}
 
@@ -439,11 +463,10 @@ func (s) TestResolverPrunesCluster_StreamCreationFailure(t *testing.T) {
 		},
 	}
 	resources := e2e.UpdateOptions{
-		NodeID:         nodeID,
-		Listeners:      []*v3listenerpb.Listener{{Name: serviceName, ApiListener: &v3listenerpb.ApiListener{ApiListener: testutils.MarshalAny(t, hcm)}}},
-		Clusters:       []*v3clusterpb.Cluster{e2e.DefaultCluster(clusterA, clusterA, e2e.SecurityLevelNone)},
-		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(clusterA, "localhost", []uint32{testutils.ParsePort(t, serverA.Address)})},
-		SkipValidation: true,
+		NodeID:    nodeID,
+		Listeners: []*v3listenerpb.Listener{{Name: serviceName, ApiListener: &v3listenerpb.ApiListener{ApiListener: testutils.MarshalAny(t, hcm)}}},
+		Clusters:  []*v3clusterpb.Cluster{e2e.DefaultCluster(clusterA, clusterA, e2e.SecurityLevelNone)},
+		Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(clusterA, "localhost", []uint32{testutils.ParsePort(t, serverA.Address)})},
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
