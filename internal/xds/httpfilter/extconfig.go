@@ -212,15 +212,16 @@ func (hmr *HeaderMutationRules) allow(key string) bool {
 	return true
 }
 
-// ConstructHeaderMap constructs a HeaderMap from the given metadata, using the
-// following rules:
+// ConstructHeaderMap constructs a HeaderMap from the given metadata and raw
+// appended metadata slice, using the following rules:
 //   - if the header is matched by the disallowed_headers config field, it will
 //     not be added to the map, otherwise,
 //   - if the allowed_headers config field is unset or matches the header, the
 //     header will be added to the map, otherwise,
 //   - the header will be excluded from the map.
-func ConstructHeaderMap(md metadata.MD, allowedHeaders, disallowedHeaders []matcher.StringMatcher) *v3corepb.HeaderMap {
+func ConstructHeaderMap(md metadata.MD, added [][]string, allowedHeaders, disallowedHeaders []matcher.StringMatcher) *v3corepb.HeaderMap {
 	headerMap := &v3corepb.HeaderMap{}
+	// Process the base metadata map.
 	for key, values := range md {
 		if IsDisallowedHeader(key, disallowedHeaders) {
 			continue
@@ -230,6 +231,21 @@ func ConstructHeaderMap(md metadata.MD, allowedHeaders, disallowedHeaders []matc
 				headerMap.Headers = append(headerMap.Headers, &v3corepb.HeaderValue{
 					Key:      key,
 					RawValue: []byte(value),
+				})
+			}
+		}
+	}
+	// Process the raw appended metadata slice.
+	for _, kvs := range added {
+		for i := 0; i < len(kvs); i += 2 {
+			key := strings.ToLower(kvs[i])
+			if IsDisallowedHeader(key, disallowedHeaders) {
+				continue
+			}
+			if IsAllowedHeader(key, allowedHeaders) {
+				headerMap.Headers = append(headerMap.Headers, &v3corepb.HeaderValue{
+					Key:      key,
+					RawValue: []byte(kvs[i+1]),
 				})
 			}
 		}

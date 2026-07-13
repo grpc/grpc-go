@@ -31,21 +31,21 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	estats "google.golang.org/grpc/experimental/stats"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/envconfig"
-	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/optional"
 	"google.golang.org/grpc/internal/resolver"
 	istats "google.golang.org/grpc/internal/stats"
-	"google.golang.org/grpc/internal/status"
 	"google.golang.org/grpc/internal/xds/httpfilter"
+	iextproc "google.golang.org/grpc/internal/xds/httpfilter/extproc/internal"
 	"google.golang.org/grpc/internal/xds/matcher"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/structpb"
 
-	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3procfilterpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/ext_proc/v3"
 	v3procservicegrpc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	v3procservicepb "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
@@ -55,39 +55,17 @@ func init() {
 	if envconfig.XDSClientExtProcEnabled {
 		httpfilter.Register(builder{})
 	}
-}
-
-// RegisterForTesting registers the external processor HTTP Filter for testing
-// purposes, regardless of the XDSClientExtProcEnabled environment variable.
-// This is needed because there is no way to set the XDSClientExtProcEnabled
-// environment variable to true in a test before init() in this package is run.
-func RegisterForTesting() {
-	httpfilter.Register(builder{})
-}
-
-// UnregisterForTesting unregisters the external processor HTTP Filter for
-// testing purposes. This is needed because there is no way to unregister the
-// HTTP Filter after registering it solely for testing purposes using
-// RegisterForTesting().
-func UnregisterForTesting() {
-	for _, typeURL := range builder.TypeURLs(builder{}) {
-		httpfilter.UnregisterForTesting(typeURL)
+	iextproc.RegisterForTesting = func() {
+		httpfilter.Register(builder{})
+	}
+	iextproc.UnregisterForTesting = func() {
+		for _, typeURL := range builder.TypeURLs(builder{}) {
+			httpfilter.UnregisterForTesting(typeURL)
+		}
 	}
 }
 
-var (
-	// ParseGRPCServiceConfig parses the gRPC service configuration from the given
-	// protobuf message.
-	ParseGRPCServiceConfig = func(*v3corepb.GrpcService) (xdsresource.GRPCServiceConfig, error) {
-		return xdsresource.GRPCServiceConfig{}, fmt.Errorf("extproc: ParseGRPCServiceConfig not implemented")
-	}
-
-	// CreateExtProcChannel creates a gRPC client channel to the external
-	// processing server.
-	CreateExtProcChannel = func(xdsresource.GRPCServiceConfig) (grpc.ClientConnInterface, func() error, error) {
-		return nil, nil, fmt.Errorf("extproc: dialing external processor server not implemented")
-	}
-)
+var metadataFromOutgoingContextRaw = internal.FromOutgoingContextRaw.(func(context.Context) (metadata.MD, [][]string, bool))
 
 const defaultDeferredCloseTimeout = 5 * time.Second
 
@@ -131,7 +109,7 @@ func (builder) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, er
 	if msg.GetGrpcService() == nil {
 		return nil, fmt.Errorf("extproc: empty grpc_service provided in config %v", cfg)
 	}
-	server, err := ParseGRPCServiceConfig(msg.GetGrpcService())
+	server, err := iextproc.ParseGRPCServiceConfig(msg.GetGrpcService())
 	if err != nil {
 		return nil, fmt.Errorf("extproc: failed to parse grpc_service %v", err)
 	}
@@ -197,7 +175,7 @@ func (builder) ParseFilterConfigOverride(ov proto.Message) (httpfilter.FilterCon
 
 	var serverOpt optional.Optional[xdsresource.GRPCServiceConfig]
 	if override.GetGrpcService() != nil {
-		server, err := ParseGRPCServiceConfig(override.GetGrpcService())
+		server, err := iextproc.ParseGRPCServiceConfig(override.GetGrpcService())
 		if err != nil {
 			return nil, fmt.Errorf("extproc: failed to parse grpc_service: %v", err)
 		}
@@ -257,7 +235,7 @@ func (cf *clientFilter) BuildClientInterceptor(base, override httpfilter.FilterC
 	config := newInterceptorConfig(b, ov)
 
 	// Create a channel to the external processing server.
-	cc, cancel, err := CreateExtProcChannel(config.server)
+	cc, cancel, err := iextproc.CreateExtProcChannel(config.server)
 	if err != nil {
 		return nil, fmt.Errorf("extproc: failed to create channel to the external processor server %q: %v", config.server.TargetURI, err)
 
@@ -286,9 +264,7 @@ func (i *clientInterceptor) Close() {
 func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, newStream func(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStream, error), opts ...grpc.CallOption) (grpc.ClientStream, error) {
 	if i.config.observabilityMode {
 		ocs := &observabilityClientStream{
-			ctx:                    ctx,
 			config:                 i.config,
-			streamFailed:           grpcsync.NewEvent(),
 			metricsRecorder:        i.metricsRecorder,
 			target:                 i.target,
 			clientHeadersStartTime: time.Now(),
@@ -301,84 +277,75 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 			}
 		})
 
+		cancelCtx, cancel := context.WithCancel(ctx)
+		ocs.ctx = cancelCtx
+		ocs.cancel = cancel
+
 		// Create a new context for the RPC to the external processor server. This
 		// context has a deadline of the timeout specified in the config, if
 		// present. It also contains the outgoing context's metadata, merged with
 		// the initial metadata specified in the config.
-		extProcCtx, cancel := context.WithCancel(ctx)
+		extProcCtx, cancel := context.WithCancel(ocs.ctx)
 		if i.config.server.Timeout != 0 {
-			extProcCtx, cancel = context.WithTimeout(ctx, i.config.server.Timeout)
+			extProcCtx, cancel = context.WithTimeout(ocs.ctx, i.config.server.Timeout)
 		}
-		ocs.extCancel = cancel
-		outgoingMD, ok := metadata.FromOutgoingContext(ctx)
-		if !ok {
-			outgoingMD = metadata.MD{}
-		}
-		extProcCtx = metadata.NewOutgoingContext(extProcCtx, metadata.Join(i.config.server.InitialMetadata, outgoingMD))
+		ocs.procCancel = cancel
+		extProcCtx = metadata.NewOutgoingContext(extProcCtx, i.config.server.InitialMetadata)
 
-		// Create new stream to the external processor server.
-		extStream, err := i.extClient.Process(extProcCtx)
+		var err error
+		// In the ClientStream API, outgoing headers are sent immediately when the
+		// stream is created. Because we need to send these headers to the external
+		// processor server before they go over the wire, we must establish the
+		// ext_proc stream now rather than deferring it.
+		ocs.procStream, err = i.extClient.Process(extProcCtx)
 		if err != nil {
-			return ocs.handleInitError(fmt.Errorf("external processor failed to start: %v", err), newStream, opts...)
+			return ocs.handleObservabilityInitError(fmt.Errorf("external processor failed to start: %v", err), newStream, opts...)
 		}
-		ocs.extStream = extStream
 
-		// Construct request attributes to be sent to the external processor server.
-		ocs.reqAttrs, err = constructRequestAttributes(ri, outgoingMD, i.config.requestAttributes)
-		if err != nil {
-			return ocs.handleInitError(fmt.Errorf("failed to construct attributes: %v", err), newStream, opts...)
-		}
+		// Build request attributes upfront to avoid adding protobuf allocation
+		// overhead to the critical RPC data path.
+		outgoingMD, added, _ := metadataFromOutgoingContextRaw(ctx)
+		ocs.reqAttrs = constructRequestAttributes(ri, outgoingMD, added, i.config.requestAttributes)
+
 		// If the request header processing mode is set to "Send", forward the
 		// headers to the external processor server.
 		if i.config.processingModes.requestHeaderMode == modeSend {
-			headerReq := v3procservicepb.ProcessingRequest{
-				Request: &v3procservicepb.ProcessingRequest_RequestHeaders{
-					RequestHeaders: &v3procservicepb.HttpHeaders{
-						Headers: httpfilter.ConstructHeaderMap(outgoingMD, i.config.allowedHeaders, i.config.disallowedHeaders),
-					},
+			headerReq := ocs.newProcessingRequest(true)
+			headerReq.Request = &v3procservicepb.ProcessingRequest_RequestHeaders{
+				RequestHeaders: &v3procservicepb.HttpHeaders{
+					Headers: httpfilter.ConstructHeaderMap(outgoingMD, added, i.config.allowedHeaders, i.config.disallowedHeaders),
 				},
-				ObservabilityMode: i.config.observabilityMode,
-				ProtocolConfig: &v3procservicepb.ProtocolConfiguration{
-					RequestBodyMode:  convertBodyMode(i.config.processingModes.requestBodyMode),
-					ResponseBodyMode: convertBodyMode(i.config.processingModes.responseBodyMode),
-				},
-				Attributes: ocs.reqAttrs,
 			}
-			if err = extStream.Send(&headerReq); err != nil {
-				return ocs.handleInitError(fmt.Errorf("failed to send client headers to external processor server: %v", err), newStream, opts...)
+			if err = ocs.procStream.Send(headerReq); err != nil {
+				return ocs.handleObservabilityInitError(fmt.Errorf("failed to send client headers to external processor server: %v", err), newStream, opts...)
 			}
-			// Mark that the initial message has been sent to prevent sending
-			// ProtocolConfig on subsequent messages.
-			ocs.initMsgSent.Store(true)
-			// Mark that the initial client message has been sent to prevent adding
-			// request attributes to any other message.
-			ocs.initClientMsgSent.Store(true)
 		}
 
-		onFinishFunc := func(_ error) {
+		onFinishFunc := func(err error) {
+			if err != nil {
+				// If the dataplane RPC failed, close the external processor stream
+				// immediately and clean up all context resources.
+				ocs.procCancel()
+				return
+			}
 			// When the dataplane RPC is done, send end-of-stream to signal no more
-			// client messages will be sent and also send trailers if needed.
+			// client messages will be sent.
 			ocs.initiateRequestEOFProcessing()
-			ocs.initiateResponseTrailerProcessing()
-			// In observability mode, the dataplane stream may finish before the
-			// external processor has finished reading all data off the stream. To
-			// prevent early stream closure, we defer calling CloseSend on the
-			// external processor stream by the configured deferredCloseTimeout.
+
 			go func() {
 				time.Sleep(ocs.config.deferredCloseTimeout)
 				ocs.mu.Lock()
-				if !ocs.extStreamBypass.Load() {
-					ocs.extStream.CloseSend()
+				if !ocs.procStreamBypass.Load() {
+					ocs.procStream.CloseSend()
 				}
 				ocs.mu.Unlock()
+				ocs.procCancel()
 			}()
 		}
 		newOpts := append(opts, grpc.OnFinish(onFinishFunc))
 
-		// If there is no error in creating external processor stream, create the
-		// dataplane stream.
-		if ocs.dataplaneStream, err = newStream(ctx, newOpts...); err != nil {
-			ocs.extCancel()
+		if ocs.dataplaneStream, err = newStream(ocs.ctx, newOpts...); err != nil {
+			ocs.cancel()
 			return nil, err
 		}
 		ocs.recordMetric(clientHeadersDurationMetric, time.Since(ocs.clientHeadersStartTime).Seconds())
@@ -396,89 +363,113 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 // message exchanges between the application client, the external processor, and
 // the backend dataplane.
 type observabilityClientStream struct {
-	ctx                    context.Context
-	extCancel              func()
-	config                 baseConfig                                      // parsed configuration for this interceptor
-	dataplaneStream        grpc.ClientStream                               // underlying gRPC stream to the backend
-	extStream              v3procservicepb.ExternalProcessor_ProcessClient // bidirectional stream to external processor
-	streamFailed           *grpcsync.Event                                 // fired when the external processor stream has closed and its final status is processed
-	extStreamBypass        atomic.Bool                                     // set to true when the external processor stream should be bypassed
-	extStreamClosed        atomic.Bool                                     // ensures the stream closure logic is executed exactly once
-	extStreamErr           atomic.Value                                    // holds the terminal error causing the external processor stream to fail
-	initMsgSent            atomic.Bool                                     // tracks whether the first stream message has been sent to ensure ProtocolConfig is sent only once
-	initClientMsgSent      atomic.Bool                                     // tracks whether the first client message has been sent to ensure request attributes are sent only once
-	trailersOnly           bool                                            // tracks whether the backend response is trailers-only
-	responseHeaderOnce     sync.Once                                       // ensures response headers are forwarded to the external processor only once
-	responseTrailerOnce    sync.Once                                       // ensures response trailers are forwarded to the external processor only once
-	requestEOF             atomic.Bool                                     // ensures client request end of stream is sent to the external processor only once
-	responseRecvStarted    bool                                            // tracks whether RecvMsg has started processing response messages
-	mu                     sync.Mutex                                      // guards concurrent writes to the external processor stream
-	reqAttrs               map[string]*structpb.Struct                     // holds the request attributes
+	ctx        context.Context
+	cancel     func()
+	procCancel func()
+	config     baseConfig // parsed configuration for this interceptor
+
+	dataplaneStream  grpc.ClientStream                               // underlying gRPC stream to the backend
+	procStream       v3procservicepb.ExternalProcessor_ProcessClient // bidirectional stream to external processor
+	procStreamBypass atomic.Bool                                     // set to true when the external processor stream should be bypassed
+	procStreamClosed atomic.Bool                                     // ensures the stream closure logic is executed exactly once
+	procStreamErr    atomic.Value                                    // holds the terminal error causing the external processor stream to fail
+
+	protocolConfigSent  atomic.Bool                 // tracks whether the first stream message has been sent to ensure ProtocolConfig is sent only once
+	reqAttrsSent        atomic.Bool                 // tracks whether the first client message has been sent to ensure request attributes are sent only once
+	reqAttrs            map[string]*structpb.Struct // holds the request attributes
+	trailersOnly        bool                        // tracks whether the backend response is trailers-only
+	responseHeaderOnce  sync.Once                   // ensures response headers are forwarded to the external processor only once
+	responseTrailerOnce sync.Once                   // ensures response trailers are forwarded to the external processor only once
+	requestEOF          atomic.Bool                 // ensures client request end of stream is sent to the external processor only once
+	responseRecvStarted bool                        // tracks whether RecvMsg has started processing response messages
+	mu                  sync.Mutex                  // guards concurrent writes to the external processor stream
+
 	metricsRecorder        estats.MetricsRecorder
 	target                 string
-	backendService         atomic.Value // stores string (backend service name)
+	backendService         atomic.Value
 	clientHeadersStartTime time.Time
 }
 
-func (o *observabilityClientStream) recordMetric(handle *estats.Float64HistoHandle, duration float64) {
-	if o.metricsRecorder == nil {
+// newProcessingRequest creates a new ProcessingRequest with ObservabilityMode,
+// ProtocolConfig, Attributes fields initialized.
+func (ocs *observabilityClientStream) newProcessingRequest(isClientMessage bool) *v3procservicepb.ProcessingRequest {
+	req := &v3procservicepb.ProcessingRequest{
+		ObservabilityMode: ocs.config.observabilityMode,
+	}
+
+	if ocs.protocolConfigSent.CompareAndSwap(false, true) {
+		req.ProtocolConfig = &v3procservicepb.ProtocolConfiguration{
+			RequestBodyMode:  convertBodyMode(ocs.config.processingModes.requestBodyMode),
+			ResponseBodyMode: convertBodyMode(ocs.config.processingModes.responseBodyMode),
+		}
+	}
+
+	if isClientMessage && ocs.reqAttrsSent.CompareAndSwap(false, true) {
+		req.Attributes = ocs.reqAttrs
+	}
+	return req
+}
+
+func (ocs *observabilityClientStream) recordMetric(handle *estats.Float64HistoHandle, duration float64) {
+	if ocs.metricsRecorder == nil {
 		return
 	}
 	bs := ""
-	if v := o.backendService.Load(); v != nil {
+	if v := ocs.backendService.Load(); v != nil {
 		bs = v.(string)
 	}
-	handle.Record(o.metricsRecorder, duration, o.target, bs)
+	handle.Record(ocs.metricsRecorder, duration, ocs.target, bs)
 }
 
-func (o *observabilityClientStream) Header() (metadata.MD, error) {
-	if fatalErr, ok := o.extStreamErr.Load().(error); ok {
+// Header returns the header metadata received from the server if there is any.
+// It blocks if the metadata is not ready to read.
+func (ocs *observabilityClientStream) Header() (metadata.MD, error) {
+	// If the external processor has failed and RPC needs to be failed, fail the
+	// RPC with the error received from the external processor stream.
+	if fatalErr, ok := ocs.procStreamErr.Load().(error); ok {
 		return nil, fatalErr
 	}
-	if err := o.initiateResponseHeaderProcessing(); err != nil {
-		o.failStream(err)
+	if err := ocs.initiateResponseHeaderProcessing(); err != nil {
 		return nil, err
 	}
-	return o.dataplaneStream.Header()
+	return ocs.dataplaneStream.Header()
 }
 
-func (o *observabilityClientStream) Trailer() metadata.MD {
-	if _, ok := o.extStreamErr.Load().(error); ok {
+func (ocs *observabilityClientStream) Trailer() metadata.MD {
+	if _, ok := ocs.procStreamErr.Load().(error); ok {
 		return nil
 	}
 
 	// If trailer is not yet ready, return nil. This may happen when Trailer() is
 	// called before the server sends trailers, or before the entire response has
 	// been received.
-	trailer := o.dataplaneStream.Trailer()
+	trailer := ocs.dataplaneStream.Trailer()
 	if trailer == nil {
 		return nil
 	}
-	if err := o.initiateResponseTrailerProcessing(); err != nil {
-		return nil
-	}
+	ocs.initiateResponseTrailerProcessing()
 	return trailer
 }
 
-func (o *observabilityClientStream) CloseSend() error {
-	if fatalErr, ok := o.extStreamErr.Load().(error); ok {
+func (ocs *observabilityClientStream) CloseSend() error {
+	if fatalErr, ok := ocs.procStreamErr.Load().(error); ok {
 		return fatalErr
 	}
-	if err := o.initiateRequestEOFProcessing(); err != nil {
+	if err := ocs.initiateRequestEOFProcessing(); err != nil {
 		return err
 	}
-	return o.dataplaneStream.CloseSend()
+	return ocs.dataplaneStream.CloseSend()
 }
 
-func (o *observabilityClientStream) Context() context.Context {
-	return o.dataplaneStream.Context()
+func (ocs *observabilityClientStream) Context() context.Context {
+	return ocs.dataplaneStream.Context()
 }
 
-func (o *observabilityClientStream) SendMsg(m any) error {
-	if fatalErr, ok := o.extStreamErr.Load().(error); ok {
+func (ocs *observabilityClientStream) SendMsg(m any) error {
+	if fatalErr, ok := ocs.procStreamErr.Load().(error); ok {
 		return fatalErr
 	}
-	if o.config.processingModes.requestBodyMode == modeSend && !o.extStreamBypass.Load() {
+	if ocs.config.processingModes.requestBodyMode == modeSend && !ocs.procStreamBypass.Load() {
 		msg, ok := m.(proto.Message)
 		if !ok {
 			return fmt.Errorf("extproc: request message does not implement proto.Message")
@@ -488,54 +479,40 @@ func (o *observabilityClientStream) SendMsg(m any) error {
 			return err
 		}
 
-		req := &v3procservicepb.ProcessingRequest{
-			Request: &v3procservicepb.ProcessingRequest_RequestBody{
-				RequestBody: &v3procservicepb.HttpBody{
-					Body: bodyBytes,
-				},
+		req := ocs.newProcessingRequest(true)
+		req.Request = &v3procservicepb.ProcessingRequest_RequestBody{
+			RequestBody: &v3procservicepb.HttpBody{
+				Body: bodyBytes,
 			},
-			ObservabilityMode: o.config.observabilityMode,
 		}
-		if o.initMsgSent.CompareAndSwap(false, true) {
-			req.ProtocolConfig = &v3procservicepb.ProtocolConfiguration{
-				RequestBodyMode:  convertBodyMode(o.config.processingModes.requestBodyMode),
-				ResponseBodyMode: convertBodyMode(o.config.processingModes.responseBodyMode),
-			}
-		}
-		if o.initClientMsgSent.CompareAndSwap(false, true) {
-			req.Attributes = o.reqAttrs
-		}
-		if err := o.sendToProcessor(req); err != nil {
+		if err := ocs.sendToProcessor(req); err != nil {
 			return err
 		}
 	}
-	return o.dataplaneStream.SendMsg(m)
+	return ocs.dataplaneStream.SendMsg(m)
 }
 
-func (o *observabilityClientStream) RecvMsg(m any) error {
-	if fatalErr, ok := o.extStreamErr.Load().(error); ok {
+func (ocs *observabilityClientStream) RecvMsg(m any) error {
+	if fatalErr, ok := ocs.procStreamErr.Load().(error); ok {
 		return fatalErr
 	}
 
 	// If this is the first time RecvMsg is called, initiate response header
 	// processing.
-	if !o.responseRecvStarted {
-		o.responseRecvStarted = true
-		if err := o.initiateResponseHeaderProcessing(); err != nil {
-			o.failStream(err)
+	if !ocs.responseRecvStarted {
+		ocs.responseRecvStarted = true
+		if err := ocs.initiateResponseHeaderProcessing(); err != nil {
 			return err
 		}
 	}
 
-	err := o.dataplaneStream.RecvMsg(m)
+	err := ocs.dataplaneStream.RecvMsg(m)
 	if err != nil {
-		if trailerErr := o.initiateResponseTrailerProcessing(); trailerErr != nil {
-			return trailerErr
-		}
+		ocs.initiateResponseTrailerProcessing()
 		return err
 	}
 
-	if o.config.processingModes.responseBodyMode == modeSend && !o.extStreamBypass.Load() {
+	if ocs.config.processingModes.responseBodyMode == modeSend && !ocs.procStreamBypass.Load() {
 		msg, ok := m.(proto.Message)
 		if !ok {
 			return fmt.Errorf("extproc: response message does not implement proto.Message")
@@ -545,21 +522,13 @@ func (o *observabilityClientStream) RecvMsg(m any) error {
 			return err
 		}
 
-		req := &v3procservicepb.ProcessingRequest{
-			Request: &v3procservicepb.ProcessingRequest_ResponseBody{
-				ResponseBody: &v3procservicepb.HttpBody{
-					Body: bodyBytes,
-				},
+		req := ocs.newProcessingRequest(false)
+		req.Request = &v3procservicepb.ProcessingRequest_ResponseBody{
+			ResponseBody: &v3procservicepb.HttpBody{
+				Body: bodyBytes,
 			},
-			ObservabilityMode: o.config.observabilityMode,
 		}
-		if o.initMsgSent.CompareAndSwap(false, true) {
-			req.ProtocolConfig = &v3procservicepb.ProtocolConfiguration{
-				RequestBodyMode:  convertBodyMode(o.config.processingModes.requestBodyMode),
-				ResponseBodyMode: convertBodyMode(o.config.processingModes.responseBodyMode),
-			}
-		}
-		if err = o.sendToProcessor(req); err != nil {
+		if err = ocs.sendToProcessor(req); err != nil {
 			return err
 		}
 	}
@@ -569,61 +538,60 @@ func (o *observabilityClientStream) RecvMsg(m any) error {
 // initiateResponseTrailerProcessing fetches response trailers from the
 // dataplane stream and forwards them to the external processor if configured.
 // It is guarded by responseTrailerOnce to run at most once.
-func (o *observabilityClientStream) initiateResponseTrailerProcessing() error {
-	var err error
-	o.responseTrailerOnce.Do(func() {
-		trailers := o.dataplaneStream.Trailer()
+func (ocs *observabilityClientStream) initiateResponseTrailerProcessing() {
+	ocs.responseTrailerOnce.Do(func() {
+		trailers := ocs.dataplaneStream.Trailer()
 		startTime := time.Now()
-		if o.config.processingModes.responseTrailerMode == modeSend && !o.extStreamBypass.Load() {
-			req := &v3procservicepb.ProcessingRequest{
-				Request: &v3procservicepb.ProcessingRequest_ResponseTrailers{ResponseTrailers: &v3procservicepb.HttpTrailers{
-					Trailers: httpfilter.ConstructHeaderMap(trailers, o.config.allowedHeaders, o.config.disallowedHeaders),
-				}},
-				ObservabilityMode: o.config.observabilityMode,
-			}
-			err = o.sendToProcessor(req)
+		if ocs.config.processingModes.responseTrailerMode == modeSend && !ocs.procStreamBypass.Load() {
+			req := ocs.newProcessingRequest(false)
+			req.Request = &v3procservicepb.ProcessingRequest_ResponseTrailers{ResponseTrailers: &v3procservicepb.HttpTrailers{
+				Trailers: httpfilter.ConstructHeaderMap(trailers, nil, ocs.config.allowedHeaders, ocs.config.disallowedHeaders),
+			}}
+			ocs.sendToProcessor(req)
 		}
-		o.recordMetric(serverTrailersDurationMetric, time.Since(startTime).Seconds())
+		ocs.recordMetric(serverTrailersDurationMetric, time.Since(startTime).Seconds())
+
+		// Half-close the external processor stream immediately so the server
+		// receives the EOF frame and can shut down gracefully.
+		ocs.mu.Lock()
+		if !ocs.procStreamBypass.Load() {
+			ocs.procStream.CloseSend()
+		}
+		ocs.mu.Unlock()
 	})
-	return err
 }
 
 // initiateResponseHeaderProcessing fetches response headers from the dataplane
 // stream, detects if the response is trailers-only, and forwards the response
 // headers to the external processor if configured. It is guarded by
 // responseHeaderOnce to run at most once.
-func (o *observabilityClientStream) initiateResponseHeaderProcessing() error {
+func (ocs *observabilityClientStream) initiateResponseHeaderProcessing() error {
 	var err error
-	o.responseHeaderOnce.Do(func() {
+	ocs.responseHeaderOnce.Do(func() {
 		var header metadata.MD
-		header, err = o.dataplaneStream.Header()
+		header, err = ocs.dataplaneStream.Header()
 		if err != nil {
 			return
 		}
 		startTime := time.Now()
-		// A trailers-only response will contain "grpc-status" in the headers or
-		// will return nil, nil on Header() call on dataplane stream.
-		if header == nil || len(header.Get("grpc-status")) > 0 {
-			o.trailersOnly = true
+		// A trailers-only response returns nil from dataplaneStream.Header().
+		if header == nil {
+			trailers := ocs.dataplaneStream.Trailer()
+			if len(trailers) > 0 {
+				header = trailers
+				ocs.trailersOnly = true
+			}
 		}
 
-		if o.config.processingModes.responseHeaderMode == modeSend && !o.extStreamBypass.Load() {
-			req := &v3procservicepb.ProcessingRequest{
-				Request: &v3procservicepb.ProcessingRequest_ResponseHeaders{ResponseHeaders: &v3procservicepb.HttpHeaders{
-					Headers:     httpfilter.ConstructHeaderMap(header, o.config.allowedHeaders, o.config.disallowedHeaders),
-					EndOfStream: o.trailersOnly,
-				}},
-				ObservabilityMode: o.config.observabilityMode,
-			}
-			if o.initMsgSent.CompareAndSwap(false, true) {
-				req.ProtocolConfig = &v3procservicepb.ProtocolConfiguration{
-					RequestBodyMode:  convertBodyMode(o.config.processingModes.requestBodyMode),
-					ResponseBodyMode: convertBodyMode(o.config.processingModes.responseBodyMode),
-				}
-			}
-			err = o.sendToProcessor(req)
+		if ocs.config.processingModes.responseHeaderMode == modeSend && !ocs.procStreamBypass.Load() {
+			req := ocs.newProcessingRequest(false)
+			req.Request = &v3procservicepb.ProcessingRequest_ResponseHeaders{ResponseHeaders: &v3procservicepb.HttpHeaders{
+				Headers:     httpfilter.ConstructHeaderMap(header, nil, ocs.config.allowedHeaders, ocs.config.disallowedHeaders),
+				EndOfStream: ocs.trailersOnly,
+			}}
+			err = ocs.sendToProcessor(req)
 		}
-		o.recordMetric(serverHeadersDurationMetric, time.Since(startTime).Seconds())
+		ocs.recordMetric(serverHeadersDurationMetric, time.Since(startTime).Seconds())
 	})
 	return err
 }
@@ -631,50 +599,42 @@ func (o *observabilityClientStream) initiateResponseHeaderProcessing() error {
 // initiateRequestEOFProcessing sends an end-of-stream indicator to the external
 // processor if request body processing is configured to SEND. It is guarded by
 // requestEOF to run at most once.
-func (o *observabilityClientStream) initiateRequestEOFProcessing() error {
+func (ocs *observabilityClientStream) initiateRequestEOFProcessing() error {
 	var err error
-	if !o.requestEOF.CompareAndSwap(false, true) {
+	if !ocs.requestEOF.CompareAndSwap(false, true) {
 		return nil
 	}
 	startTime := time.Now()
-	if !o.extStreamBypass.Load() && o.config.processingModes.requestBodyMode == modeSend {
-		req := &v3procservicepb.ProcessingRequest{
-			Request: &v3procservicepb.ProcessingRequest_RequestBody{
-				RequestBody: &v3procservicepb.HttpBody{
-					EndOfStreamWithoutMessage: true,
-				},
+	if !ocs.procStreamBypass.Load() && ocs.config.processingModes.requestBodyMode == modeSend {
+		req := ocs.newProcessingRequest(true)
+		req.Request = &v3procservicepb.ProcessingRequest_RequestBody{
+			RequestBody: &v3procservicepb.HttpBody{
+				EndOfStreamWithoutMessage: true,
+				EndOfStream:               true,
 			},
-			ObservabilityMode: o.config.observabilityMode,
 		}
-		err = o.sendToProcessor(req)
+		err = ocs.sendToProcessor(req)
 	}
-	o.recordMetric(clientHalfCloseDurationMetric, time.Since(startTime).Seconds())
+	ocs.recordMetric(clientHalfCloseDurationMetric, time.Since(startTime).Seconds())
 	return err
 }
 
 // sendToProcessor sends a ProcessingRequest to the external processor stream.
 // If the write fails, it waits for the receive background loop to process the
 // closure and returns the resulting error.
-func (o *observabilityClientStream) sendToProcessor(req *v3procservicepb.ProcessingRequest) error {
-	o.mu.Lock()
-	defer o.mu.Unlock()
-	if o.extStreamBypass.Load() {
-		return nil
-	}
-	err := o.extStream.Send(req)
+func (ocs *observabilityClientStream) sendToProcessor(req *v3procservicepb.ProcessingRequest) error {
+	ocs.mu.Lock()
+	err := ocs.procStream.Send(req)
+	ocs.mu.Unlock()
 	if err != nil {
-		// Send failed (likely due to stream closure). Unlock and wait for the
-		// background loop to retrieve the raw error via Recv() and process it.
-		o.mu.Unlock()
-		<-o.streamFailed.Done()
-		o.mu.Lock()
-		if fatalErr, ok := o.extStreamErr.Load().(error); ok {
+		ocs.failProcStream(err)
+		if fatalErr, ok := ocs.procStreamErr.Load().(error); ok {
 			return fatalErr
 		}
-		if o.extStreamBypass.Load() {
+		if ocs.procStreamBypass.Load() {
 			return nil
 		}
-		return fmt.Errorf("extproc: external processor Send failed: %v", err)
+		return err
 	}
 	return nil
 }
@@ -682,28 +642,29 @@ func (o *observabilityClientStream) sendToProcessor(req *v3procservicepb.Process
 // discardProcessorResponsesLoop runs in a background to continuously read and
 // discard messages from the external processor server, while also monitoring
 // the stream for closure or failure.
-func (o *observabilityClientStream) discardProcessorResponsesLoop() {
+func (ocs *observabilityClientStream) discardProcessorResponsesLoop() {
 	for {
-		if _, err := o.extStream.Recv(); err != nil {
-			o.failStream(err)
+		if _, err := ocs.procStream.Recv(); err != nil {
+			ocs.failProcStream(err)
 			return
 		}
 	}
 }
 
-// failStream handles stream closure or failure by updating the stream state. If
-// the failure is a non-EOF error and failure mode is deny, it stores the error
-// to fail the dataplane RPC. Otherwise, it enables bypass mode.
-func (o *observabilityClientStream) failStream(err error) {
-	if !o.extStreamClosed.CompareAndSwap(false, true) {
+// failProcStream handles stream closure or failure by updating the stream
+// state. If the failure is a non-EOF error and failure mode is deny, it stores
+// the error to fail the dataplane RPC. Otherwise, it enables bypass mode.
+func (ocs *observabilityClientStream) failProcStream(err error) {
+	if !ocs.procStreamClosed.CompareAndSwap(false, true) {
 		return
 	}
-	defer o.streamFailed.Fire()
-	if err != io.EOF && !o.config.failureModeAllow {
-		o.extStreamErr.Store(status.Errorf(codes.Internal, "extproc: external processor RPC failed: %v", err))
+	ocs.procCancel()
+	if err != io.EOF && !ocs.config.failureModeAllow {
+		ocs.procStreamErr.Store(status.Errorf(codes.Internal, "extproc: external processor RPC failed: %v", err))
+		ocs.cancel()
 		return
 	}
-	o.extStreamBypass.Store(true)
+	ocs.procStreamBypass.Store(true)
 }
 
 // convertBodyMode converts the body mode from processingMode to
@@ -721,9 +682,9 @@ func convertBodyMode(mode processingMode) v3procfilterpb.ProcessingMode_BodySend
 
 // constructRequestAttributes builds a map of request attributes specified in
 // the interceptor config.
-func constructRequestAttributes(rpcInfo resolver.RPCInfo, md metadata.MD, requestedAttributes []string) (map[string]*structpb.Struct, error) {
+func constructRequestAttributes(rpcInfo resolver.RPCInfo, md metadata.MD, added [][]string, requestedAttributes []string) map[string]*structpb.Struct {
 	if len(requestedAttributes) == 0 {
-		return nil, nil
+		return nil
 	}
 
 	reqFields := make(map[string]any)
@@ -738,19 +699,30 @@ func constructRequestAttributes(rpcInfo resolver.RPCInfo, md metadata.MD, reques
 		case "request.headers":
 			headers := make(map[string]any)
 			for k, values := range md {
-				headers[k] = strings.Join(values, ",")
+				headers[strings.ToLower(k)] = strings.Join(values, ",")
+			}
+			for _, kvs := range added {
+				for i := 0; i < len(kvs); i += 2 {
+					k := strings.ToLower(kvs[i])
+					v := kvs[i+1]
+					if prev, ok := headers[k].(string); ok {
+						headers[k] = prev + "," + v
+					} else {
+						headers[k] = v
+					}
+				}
 			}
 			reqFields[attr] = headers
 		case "request.referer":
-			if val := getHeader(md, "referer"); val != "" {
+			if val := getHeader(md, added, "referer"); val != "" {
 				reqFields[attr] = val
 			}
 		case "request.useragent":
-			if val := getHeader(md, "user-agent"); val != "" {
+			if val := getHeader(md, added, "user-agent"); val != "" {
 				reqFields[attr] = val
 			}
 		case "request.id":
-			if val := getHeader(md, "x-request-id"); val != "" {
+			if val := getHeader(md, added, "x-request-id"); val != "" {
 				reqFields[attr] = val
 			}
 		case "request.query":
@@ -760,35 +732,57 @@ func constructRequestAttributes(rpcInfo resolver.RPCInfo, md metadata.MD, reques
 		}
 	}
 
-	reqStruct, err := structpb.NewStruct(reqFields)
-	if err != nil {
-		return nil, err
+	reqStruct := &structpb.Struct{Fields: make(map[string]*structpb.Value)}
+	for k, v := range reqFields {
+		val, err := structpb.NewValue(v)
+		if err != nil {
+			// Skip values that cannot be represented in a structpb.Value to
+			// match Envoy's behavior of encoding as many attributes as possible.
+			continue
+		}
+		reqStruct.Fields[k] = val
+	}
+
+	if len(reqStruct.Fields) == 0 {
+		return nil
 	}
 
 	return map[string]*structpb.Struct{
 		"envoy.filters.http.ext_proc": reqStruct,
-	}, nil
+	}
 }
 
-func getHeader(md metadata.MD, key string) string {
-	vs := md.Get(key)
-	return strings.Join(vs, ",")
+func getHeader(md metadata.MD, added [][]string, key string) string {
+	var vals []string
+	if md != nil {
+		vals = append(vals, md.Get(key)...)
+	}
+	for _, kvs := range added {
+		for i := 0; i < len(kvs); i += 2 {
+			if strings.EqualFold(kvs[i], key) {
+				vals = append(vals, kvs[i+1])
+			}
+		}
+	}
+	return strings.Join(vals, ",")
 }
 
-// handleInitError handles failures during the initialization of the external
-// processor stream in NewStream. It returns a new dataplane stream if failure
-// mode allows, else returns the error.
-func (o *observabilityClientStream) handleInitError(err error, newStream func(context.Context, ...grpc.CallOption) (grpc.ClientStream, error), opts ...grpc.CallOption) (grpc.ClientStream, error) {
-	o.extCancel()
+// handleObservabilityInitError handles failures during the initialization of
+// the external processor stream in NewStream. It returns the client stream
+// initialised with dataplane stream if failure mode allows, else returns the
+// error.
+func (ocs *observabilityClientStream) handleObservabilityInitError(err error, newStream func(context.Context, ...grpc.CallOption) (grpc.ClientStream, error), opts ...grpc.CallOption) (grpc.ClientStream, error) {
+	ocs.procCancel()
 
-	if !o.config.failureModeAllow {
+	if !ocs.config.failureModeAllow {
 		return nil, status.Errorf(codes.Internal, "extproc: %v", err)
 	}
+	ocs.procStreamBypass.Store(true)
 	var newStreamErr error
-	if o.dataplaneStream, newStreamErr = newStream(o.ctx, opts...); newStreamErr != nil {
+	if ocs.dataplaneStream, newStreamErr = newStream(ocs.ctx, opts...); newStreamErr != nil {
+		ocs.cancel()
 		return nil, newStreamErr
 	}
-	o.recordMetric(clientHeadersDurationMetric, time.Since(o.clientHeadersStartTime).Seconds())
-	o.extStreamBypass.Store(true)
-	return o, nil
+	ocs.recordMetric(clientHeadersDurationMetric, time.Since(ocs.clientHeadersStartTime).Seconds())
+	return ocs, nil
 }
