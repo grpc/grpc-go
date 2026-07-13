@@ -29,6 +29,7 @@ import (
 )
 
 func generateCertificates(t *testing.T, extKeyUsages []x509.ExtKeyUsage) (*x509.CertPool, tls.Certificate) {
+	t.Helper()
 	caKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		t.Fatalf("Failed to generate CA key: %v", err)

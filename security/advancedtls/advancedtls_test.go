@@ -1112,17 +1112,17 @@ func (s) TestServerAuthEKUValidation(t *testing.T) {
 	for _, test := range []struct {
 		desc              string
 		skipServerAuthEKU bool
-		expectError       bool
+		wantErr           bool
 	}{
 		{
 			desc:              "SkipServerAuthEKU is false (default) -> handshake fails",
 			skipServerAuthEKU: false,
-			expectError:       true,
+			wantErr:           true,
 		},
 		{
 			desc:              "SkipServerAuthEKU is true -> handshake succeeds",
 			skipServerAuthEKU: true,
-			expectError:       false,
+			wantErr:           false,
 		},
 	} {
 		t.Run(test.desc, func(t *testing.T) {
@@ -1188,8 +1188,8 @@ func (s) TestServerAuthEKUValidation(t *testing.T) {
 			<-done
 
 			gotErr := handshakeErr != nil
-			if gotErr != test.expectError {
-				t.Fatalf("ClientHandshake() got error: %v, want error: %v", handshakeErr, test.expectError)
+			if gotErr != test.wantErr {
+				t.Fatalf("ClientHandshake() got error: %v, want error: %v", handshakeErr, test.wantErr)
 			}
 		})
 	}
