@@ -20,6 +20,10 @@ package grpc
 
 import (
 	"context"
+	"io"
+
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // Invoke sends the RPC request on the wire and returns after response is
@@ -67,8 +71,26 @@ func invoke(ctx context.Context, method string, req, reply any, cc *ClientConn, 
 	if err != nil {
 		return err
 	}
-	if err := cs.SendMsg(req); err != nil {
+	// Return nil instead of EOF on error because the generated code requires it.
+	// RecvMsg is called to get the status.
+	if err := cs.SendMsg(req); err != nil && err != io.EOF {
 		return err
 	}
-	return cs.RecvMsg(reply)
+	// CloseSend is a no-op for the underlying transport because SendMsg already
+	// sends Last=true for unary RPCs. This call is solely to signal interceptors.
+	if err := cs.CloseSend(); err != nil && err != io.EOF {
+		return err
+	}
+	if err := cs.RecvMsg(reply); err != nil {
+		return err
+	}
+	// Call RecvMsg again to make sure the RPC has completed successfully.
+	err = cs.RecvMsg(reply)
+	if err == io.EOF {
+		return nil
+	}
+	if err == nil {
+		return status.Error(codes.Internal, "cardinality violation: expected <EOF> for non server-streaming RPCs, but received another message")
+	}
+	return err
 }
