@@ -415,3 +415,110 @@ func BenchmarkValueFromIncomingContext(b *testing.B) {
 		}
 	})
 }
+
+// TestString verifies that String shows keys and values only for keys known to
+// be safe to log, omits every other key (including its name) and reports only
+// the count of omitted keys, and never panics on nil/empty inputs.
+func (s) TestString(t *testing.T) {
+	tests := []struct {
+		name string
+		md   MD
+		want string
+	}{
+		{
+			name: "empty",
+			md:   MD{},
+			want: "map[]",
+		},
+		{
+			name: "nil",
+			md:   nil,
+			want: "map[]",
+		},
+		{
+			name: "safe-key-shown",
+			md:   Pairs("content-type", "application/grpc"),
+			want: "map[content-type:[application/grpc]]",
+		},
+		{
+			// A safe key with multiple values shows all of them.
+			name: "safe-key-multi-value",
+			md:   Pairs("grpc-accept-encoding", "gzip", "grpc-accept-encoding", "snappy"),
+			want: "map[grpc-accept-encoding:[gzip snappy]]",
+		},
+		{
+			// nil/empty value slices must not panic; a safe key shows [].
+			name: "safe-key-nil-value",
+			md:   MD{"content-type": nil},
+			want: "map[content-type:[]]",
+		},
+		{
+			// A redacted key with a nil value slice still redacts, no panic.
+			name: "redacted-key-nil-value",
+			md:   MD{"authorization": nil},
+			want: "map[<1 redacted>]",
+		},
+		{
+			// Bracket characters in a safe value are passed through verbatim.
+			name: "safe-value-with-brackets",
+			md:   MD{"content-type": []string{"a]b ["}},
+			want: "map[content-type:[a]b []]",
+		},
+		{
+			// Keys differing only in case are sorted byte-wise (uppercase
+			// first); both still match the case-insensitive safelist.
+			name: "case-only-collision",
+			md:   MD{"Content-Type": []string{"a"}, "content-type": []string{"b"}},
+			want: "map[Content-Type:[a] content-type:[b]]",
+		},
+		{
+			// A sensitive key is omitted entirely, including its name; only the
+			// count is reported.
+			name: "sensitive-key-redacted",
+			md:   Pairs("authorization", "Bearer super-secret-token"),
+			want: "map[<1 redacted>]",
+		},
+		{
+			// Application-defined keys are omitted; the key name (which may
+			// itself be sensitive) is never shown.
+			name: "custom-key-redacted",
+			md:   Pairs("x-my-app-secret", "hunter2"),
+			want: "map[<1 redacted>]",
+		},
+		{
+			// A single key with multiple values counts as one redacted key, and
+			// the value count is not leaked.
+			name: "multi-value-redacted",
+			md:   Pairs("cookie", "a=1", "cookie", "b=2"),
+			want: "map[<1 redacted>]",
+		},
+		{
+			// Multiple redacted keys are reported by count only.
+			name: "multiple-redacted-keys",
+			md:   Pairs("authorization", "tok", "cookie", "x"),
+			want: "map[<2 redacted>]",
+		},
+		{
+			// Safe keys are shown (sorted) and non-safe keys are summarized by a
+			// trailing count.
+			name: "mixed-safe-and-redacted",
+			md:   Pairs("grpc-encoding", "gzip", "authorization", "tok", "user-agent", "grpc-go/x"),
+			want: "map[grpc-encoding:[gzip] user-agent:[grpc-go/x] <1 redacted>]",
+		},
+		{
+			// Keys built via map literal are not canonicalized to lowercase;
+			// the safelist match is case-insensitive so a safe key is still
+			// shown.
+			name: "uppercase-safe-key-shown",
+			md:   MD{"Content-Type": []string{"application/grpc"}},
+			want: "map[Content-Type:[application/grpc]]",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := test.md.String(); got != test.want {
+				t.Errorf("MD.String() = %q, want %q", got, test.want)
+			}
+		})
+	}
+}
