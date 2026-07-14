@@ -160,49 +160,55 @@ type clientStreamWrapper struct {
 // interceptor hooks.
 func (w *clientStreamWrapper) SendMsg(m any) error {
 	err := w.ClientStream.SendMsg(m)
-	if !w.desc.ClientStreams {
-		if err == io.EOF {
-			// For non-client-streaming RPCs, we return nil instead of EOF on error
-			// because the generated code requires it. finish is not called; RecvMsg()
-			// will call it with the stream's status independently.
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-		// CloseSend is called to signal the interceptors.
-		if err := w.ClientStream.CloseSend(); err != nil && err != io.EOF {
-			return err
-		}
+	if w.desc.ClientStreams {
+		return err
+	}
+	if err == io.EOF {
+		// For non-client-streaming RPCs, we return nil instead of EOF on error
+		// because the generated code requires it. finish is not called; RecvMsg()
+		// will call it with the stream's status independently.
 		return nil
 	}
-	return err
+	if err != nil {
+		return err
+	}
+	// CloseSend is needed to signal streaming interceptors intercepting
+	// non-client streaming RPCs.
+	if err := w.ClientStream.CloseSend(); err != nil && err != io.EOF {
+		return err
+	}
+	return nil
+
 }
 
 // RecvMsg receives message m from the stream. For non-server-streaming RPCs, it
 // calls the underlying RecvMsg a second time after receiving the first message
-// to verify that the stream terminates cleanly with io.EOF and without any
-// cardinality violations.
+// to get the trailers.
 func (w *clientStreamWrapper) RecvMsg(m any) error {
 	err := w.ClientStream.RecvMsg(m)
 	if err != nil {
 		return err
 	}
-	if !w.desc.ServerStreams {
-		err = w.ClientStream.RecvMsg(m)
-		if err == io.EOF {
-			return nil
-		}
-		if err == nil {
-			return status.Error(codes.Internal, "cardinality violation: expected <EOF> for non server-streaming RPCs, but received another message")
-		}
-		return err
+	if w.desc.ServerStreams {
+		return nil
 	}
-	return nil
+	// Call RecvMsg again for non-server streaming RPCs to get the trailers and
+	// ensure RPC has completed successfully.
+	err = w.ClientStream.RecvMsg(m)
+	if err == io.EOF {
+		return nil
+	}
+	if err == nil {
+		return status.Error(codes.Internal, "cardinality violation: expected <EOF> for non server-streaming RPCs, but received another message")
+	}
+	return err
 }
 
 // defaultStreamInterceptor is a StreamClientInterceptor which wraps the
-// ClientStream and is always invoked as the first interceptor.
+// ClientStream and is always invoked as the first interceptor. It consolidates
+// behavior for different RPC types at the level closest to the application,
+// which simplifies the underlying stream implementation and other interceptors
+// by avoiding duplicate or scattered handling.
 func defaultStreamInterceptor(ctx context.Context, desc *StreamDesc, cc *ClientConn, method string, streamer Streamer, opts ...CallOption) (ClientStream, error) {
 	cs, err := streamer(ctx, desc, cc, method, opts...)
 	if err != nil {

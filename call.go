@@ -71,19 +71,19 @@ func invoke(ctx context.Context, method string, req, reply any, cc *ClientConn, 
 	if err != nil {
 		return err
 	}
-	// Return nil instead of EOF on error because the generated code requires it.
-	// RecvMsg is called to get the status.
+	// In case of nil or io.EOF error, call RecvMsg.
 	if err := cs.SendMsg(req); err != nil && err != io.EOF {
 		return err
 	}
-	// CloseSend is called to signal the interceptors.
+	// CloseSend is needed to signal streaming interceptors intercepting unary
+	// RPCs.
 	if err := cs.CloseSend(); err != nil && err != io.EOF {
 		return err
 	}
 	if err := cs.RecvMsg(reply); err != nil {
 		return err
 	}
-	// Call RecvMsg again to make sure the RPC has completed successfully.
+	// Call RecvMsg again to get the trailers.
 	err = cs.RecvMsg(reply)
 	if err == io.EOF {
 		return nil
