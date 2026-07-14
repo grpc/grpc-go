@@ -27,6 +27,10 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
+// maxHeaderLen is the maximum allowed length, in bytes, of a header key or
+// value, per gRFC A102.
+const maxHeaderLen = 16384
+
 // HeaderMutator compiles and applies mutations on gRPC metadata.
 type HeaderMutator struct {
 	rules HeaderMutationRules
@@ -46,47 +50,47 @@ func NewHeaderMutatorFromProto(mr *v3mutationpb.HeaderMutationRules) (*HeaderMut
 	return &HeaderMutator{rules: rules}, nil
 }
 
-// isMutationAllowed checks if a specific header key mutation is allowed.
-func (m *HeaderMutator) isMutationAllowed(key string) (bool, error) {
-	// Per gRFC A102, gRPC never allows modifying pseudo-headers (keys starting
-	// with ":") or the "host" header, regardless of the configured mutation
-	// rules. Other headers (including "grpc-*") are subject to the
-	// allow/disallow rules below.
-	if strings.HasPrefix(key, ":") || key == "host" {
-		return false, nil
+// isDisallowedHeader reports whether a mutation on this header is
+// unconditionally invalid, regardless of the configured mutation rules, per
+// gRFC A102's HeaderValue validation: an empty, over-length, non-lower-case,
+// "grpc-"-prefixed, ":"-prefixed, or "host" key, or an over-length value.
+func isDisallowedHeader(h *v3corepb.HeaderValue) bool {
+	key := h.GetKey()
+	switch {
+	case key == "", len(key) > maxHeaderLen:
+		return true
+	case key != strings.ToLower(key):
+		return true
+	case strings.HasPrefix(key, ":"), key == "host", strings.HasPrefix(key, "grpc-"):
+		return true
+	case len(h.GetValue()) > maxHeaderLen, len(h.GetRawValue()) > maxHeaderLen:
+		return true
 	}
+	return false
+}
 
-	if m.rules.DisallowAll {
-		if m.rules.DisallowIsError {
-			return false, fmt.Errorf("httpfilter: all header mutations are disallowed by mutation rules")
-		}
-		return false, nil
-	}
-
-	// DisallowExpr has higher priority and overrides AllowExpr.
+// isRuleAllowed reports whether the configured mutation rules permit mutating
+// key. A key matching disallow_expression is rejected; a key matching
+// allow_expression is permitted (even under disallow_all); otherwise it is
+// permitted unless disallow_all is set (gRFC A102).
+func (m *HeaderMutator) isRuleAllowed(key string) bool {
 	if m.rules.DisallowExpr != nil && m.rules.DisallowExpr.MatchString(key) {
-		if m.rules.DisallowIsError {
-			return false, fmt.Errorf("httpfilter: header mutation for key %q is disallowed by mutation rules", key)
-		}
-		return false, nil
+		return false
 	}
-
-	if m.rules.AllowExpr != nil {
-		if !m.rules.AllowExpr.MatchString(key) {
-			if m.rules.DisallowIsError {
-				return false, fmt.Errorf("httpfilter: header mutation for key %q is not allowed by mutation rules", key)
-			}
-			return false, nil
-		}
+	if m.rules.AllowExpr != nil && m.rules.AllowExpr.MatchString(key) {
+		return true
 	}
-
-	return true, nil
+	return !m.rules.DisallowAll
 }
 
 // Mutate applies HeaderValueOption mutations and returns the result, leaving
 // the original metadata untouched. The metadata is copied lazily (copy-on-
 // write): a call that applies no mutations returns the input as-is without
 // allocating a copy.
+//
+// A mutation is applied only if the header is valid and permitted by the
+// mutation rules. A disallowed mutation fails the call with an error when
+// disallow_is_error is set, and is silently ignored otherwise (gRFC A102).
 func (m *HeaderMutator) Mutate(md metadata.MD, mutations []*v3corepb.HeaderValueOption) (metadata.MD, error) {
 	res := md
 	copied := false
@@ -105,24 +109,23 @@ func (m *HeaderMutator) Mutate(md metadata.MD, mutations []*v3corepb.HeaderValue
 		if h == nil {
 			continue
 		}
-		key := strings.ToLower(h.GetKey())
-		// Per gRFC A102, raw_value takes precedence over the legacy value field.
-		// A non-nil raw_value (including an explicitly empty one) is used; only
-		// an unset raw_value falls back to value.
+		key := h.GetKey()
+		// Per gRFC A102, raw_value takes precedence over the legacy value
+		// field. A non-nil raw_value (including an explicitly empty one) is
+		// used; only an unset raw_value falls back to value.
 		val := h.GetValue()
 		if h.GetRawValue() != nil {
 			val = string(h.GetRawValue())
 		}
 
-		allowed, err := m.isMutationAllowed(key)
-		if err != nil {
-			return nil, err
-		}
-		if !allowed {
+		if isDisallowedHeader(h) || !m.isRuleAllowed(key) {
+			if m.rules.DisallowIsError {
+				return nil, fmt.Errorf("httpfilter: header mutation for key %q is disallowed by mutation rules", key)
+			}
 			continue
 		}
 
-		// key is already lower-cased and, after ensureCopy, res is a non-nil
+		// key is validated lower-case and, after ensureCopy, res is a non-nil
 		// map whose value slices were deep-copied, so we operate on the map
 		// directly to avoid the redundant strings.ToLower scans and the
 		// variadic allocation in metadata.MD's Get/Set/Append helpers.
@@ -146,7 +149,7 @@ func (m *HeaderMutator) Mutate(md metadata.MD, mutations []*v3corepb.HeaderValue
 		}
 
 		// Per gRFC A102, gRPC keeps headers even if a mutation results in an
-		// empty value; the keep_empty_value field is intentionally unsupported.
+		// empty value; keep_empty_value is intentionally unsupported.
 	}
 	return res, nil
 }

@@ -20,6 +20,7 @@ package httpfilter
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 
 	v3mutationpb "github.com/envoyproxy/go-control-plane/envoy/config/common/mutation_rules/v3"
@@ -45,7 +46,18 @@ func hvo(key, val string, action v3corepb.HeaderValueOption_HeaderAppendAction) 
 	}
 }
 
-func TestHeaderMutator_Mutate(t *testing.T) {
+// hvoRaw builds a HeaderValueOption whose value is carried in raw_value.
+func hvoRaw(key string, raw []byte, action v3corepb.HeaderValueOption_HeaderAppendAction) *v3corepb.HeaderValueOption {
+	return &v3corepb.HeaderValueOption{
+		Header:       &v3corepb.HeaderValue{Key: key, RawValue: raw},
+		AppendAction: action,
+	}
+}
+
+func (s) TestHeaderMutator_Mutate(t *testing.T) {
+	longKey := strings.Repeat("a", maxHeaderLen+1)
+	longVal := strings.Repeat("b", maxHeaderLen+1)
+
 	tests := []struct {
 		name      string
 		rules     *v3mutationpb.HeaderMutationRules
@@ -54,6 +66,7 @@ func TestHeaderMutator_Mutate(t *testing.T) {
 		want      metadata.MD
 		wantErr   bool
 	}{
+		// --- append actions ---
 		{
 			name:      "append_to_absent_adds",
 			input:     metadata.MD{"existing": {"v"}},
@@ -102,9 +115,8 @@ func TestHeaderMutator_Mutate(t *testing.T) {
 			mutations: []*v3corepb.HeaderValueOption{hvo("k", "c", overwriteIf)},
 			want:      metadata.MD{},
 		},
+		// --- empty value retention (keep_empty_value unsupported) ---
 		{
-			// gRFC A102: headers are kept even when a mutation yields an empty
-			// value; keep_empty_value is intentionally unsupported.
 			name:      "empty_value_is_kept_on_existing_key",
 			input:     metadata.MD{"k": {"a"}},
 			mutations: []*v3corepb.HeaderValueOption{hvo("k", "", overwrite)},
@@ -126,6 +138,7 @@ func TestHeaderMutator_Mutate(t *testing.T) {
 			}},
 			want: metadata.MD{"k": {""}},
 		},
+		// --- raw_value handling ---
 		{
 			name:  "raw_value_takes_precedence_over_value",
 			input: metadata.MD{},
@@ -136,8 +149,14 @@ func TestHeaderMutator_Mutate(t *testing.T) {
 			want: metadata.MD{"k": {"raw"}},
 		},
 		{
-			// An explicitly empty raw_value is still set (it is non-nil), and
-			// must not fall back to the legacy value field.
+			name:      "raw_value_applied_for_key",
+			input:     metadata.MD{},
+			mutations: []*v3corepb.HeaderValueOption{hvoRaw("k", []byte("rv"), appendOrAdd)},
+			want:      metadata.MD{"k": {"rv"}},
+		},
+		{
+			// An explicitly empty raw_value is used (it is non-nil) and must
+			// not fall back to the legacy value field.
 			name:  "empty_raw_value_overrides_legacy_value",
 			input: metadata.MD{},
 			mutations: []*v3corepb.HeaderValueOption{{
@@ -147,53 +166,81 @@ func TestHeaderMutator_Mutate(t *testing.T) {
 			want: metadata.MD{"k": {""}},
 		},
 		{
-			name:      "key_is_lowercased",
-			input:     metadata.MD{},
-			mutations: []*v3corepb.HeaderValueOption{hvo("MixedCase", "a", overwrite)},
-			want:      metadata.MD{"mixedcase": {"a"}},
-		},
-		{
 			name:      "nil_header_is_skipped",
 			input:     metadata.MD{"k": {"a"}},
 			mutations: []*v3corepb.HeaderValueOption{{AppendAction: overwrite}},
 			want:      metadata.MD{"k": {"a"}},
 		},
+		// --- unconditionally invalid headers are ignored (gRFC A102) ---
 		{
-			name:      "pseudo_header_never_mutated",
+			name:      "pseudo_header_disallowed",
 			input:     metadata.MD{},
 			mutations: []*v3corepb.HeaderValueOption{hvo(":path", "/new", overwrite)},
 			want:      metadata.MD{},
 		},
 		{
-			name:      "host_header_never_mutated",
+			name:      "host_header_disallowed",
 			input:     metadata.MD{},
 			mutations: []*v3corepb.HeaderValueOption{hvo("host", "evil", overwrite)},
 			want:      metadata.MD{},
 		},
 		{
-			// gRFC A102 only hard-protects ":"-prefixed and "host"; "grpc-*" is
-			// subject to the allow/disallow rules and may be mutated.
-			name:      "grpc_prefixed_header_is_mutable",
+			name:      "grpc_prefixed_header_disallowed",
 			input:     metadata.MD{},
 			mutations: []*v3corepb.HeaderValueOption{hvo("grpc-foo", "a", overwrite)},
-			want:      metadata.MD{"grpc-foo": {"a"}},
+			want:      metadata.MD{},
 		},
 		{
-			name:      "disallow_all_ignored_when_not_error",
+			name:      "uppercase_key_disallowed",
+			input:     metadata.MD{},
+			mutations: []*v3corepb.HeaderValueOption{hvo("MixedCase", "a", overwrite)},
+			want:      metadata.MD{},
+		},
+		{
+			name:      "empty_key_disallowed",
+			input:     metadata.MD{},
+			mutations: []*v3corepb.HeaderValueOption{hvo("", "a", overwrite)},
+			want:      metadata.MD{},
+		},
+		{
+			name:      "overlength_key_disallowed",
+			input:     metadata.MD{},
+			mutations: []*v3corepb.HeaderValueOption{hvo(longKey, "v", overwrite)},
+			want:      metadata.MD{},
+		},
+		{
+			name:      "overlength_value_disallowed",
+			input:     metadata.MD{},
+			mutations: []*v3corepb.HeaderValueOption{hvo("k", longVal, overwrite)},
+			want:      metadata.MD{},
+		},
+		{
+			name:      "overlength_raw_value_disallowed",
+			input:     metadata.MD{},
+			mutations: []*v3corepb.HeaderValueOption{hvoRaw("k", []byte(longVal), overwrite)},
+			want:      metadata.MD{},
+		},
+		// --- mutation rules (allow/disallow/disallow_all) ---
+		{
+			name:      "disallow_all_blocks_unmatched",
 			rules:     &v3mutationpb.HeaderMutationRules{DisallowAll: wrapperspb.Bool(true)},
 			input:     metadata.MD{"k": {"a"}},
 			mutations: []*v3corepb.HeaderValueOption{hvo("k", "b", overwrite)},
 			want:      metadata.MD{"k": {"a"}},
 		},
 		{
-			name:      "disallow_all_errors_when_is_error",
-			rules:     &v3mutationpb.HeaderMutationRules{DisallowAll: wrapperspb.Bool(true), DisallowIsError: wrapperspb.Bool(true)},
-			input:     metadata.MD{"k": {"a"}},
-			mutations: []*v3corepb.HeaderValueOption{hvo("k", "b", overwrite)},
-			wantErr:   true,
+			// allow_expression permits a header even under disallow_all.
+			name: "disallow_all_but_allow_expr_permits",
+			rules: &v3mutationpb.HeaderMutationRules{
+				DisallowAll:     wrapperspb.Bool(true),
+				AllowExpression: &v3matcherpb.RegexMatcher{Regex: "allowed-.*"},
+			},
+			input:     metadata.MD{},
+			mutations: []*v3corepb.HeaderValueOption{hvo("allowed-k", "b", overwrite)},
+			want:      metadata.MD{"allowed-k": {"b"}},
 		},
 		{
-			name: "disallow_expr_ignored_when_not_error",
+			name: "disallow_expr_blocks",
 			rules: &v3mutationpb.HeaderMutationRules{
 				DisallowExpression: &v3matcherpb.RegexMatcher{Regex: ".*-blocked"},
 			},
@@ -202,26 +249,18 @@ func TestHeaderMutator_Mutate(t *testing.T) {
 			want:      metadata.MD{},
 		},
 		{
-			name: "disallow_expr_errors_when_is_error",
-			rules: &v3mutationpb.HeaderMutationRules{
-				DisallowExpression: &v3matcherpb.RegexMatcher{Regex: ".*-blocked"},
-				DisallowIsError:    wrapperspb.Bool(true),
-			},
-			input:     metadata.MD{},
-			mutations: []*v3corepb.HeaderValueOption{hvo("k-blocked", "a", overwrite)},
-			wantErr:   true,
-		},
-		{
-			name: "allow_expr_blocks_non_matching_when_not_error",
+			// A key not matching allow_expression is still allowed when
+			// disallow_all is not set (allow_expression only adds allows).
+			name: "allow_expr_non_matching_still_allowed",
 			rules: &v3mutationpb.HeaderMutationRules{
 				AllowExpression: &v3matcherpb.RegexMatcher{Regex: "allowed-.*"},
 			},
 			input:     metadata.MD{},
 			mutations: []*v3corepb.HeaderValueOption{hvo("other", "a", overwrite)},
-			want:      metadata.MD{},
+			want:      metadata.MD{"other": {"a"}},
 		},
 		{
-			name: "allow_expr_permits_matching",
+			name: "allow_expr_matching_allowed",
 			rules: &v3mutationpb.HeaderMutationRules{
 				AllowExpression: &v3matcherpb.RegexMatcher{Regex: "allowed-.*"},
 			},
@@ -238,6 +277,36 @@ func TestHeaderMutator_Mutate(t *testing.T) {
 			input:     metadata.MD{},
 			mutations: []*v3corepb.HeaderValueOption{hvo("allowed-secret", "a", overwrite)},
 			want:      metadata.MD{},
+		},
+		// --- disallow_is_error: disallowed mutations fail the call ---
+		{
+			name: "disallow_all_errors_when_is_error",
+			rules: &v3mutationpb.HeaderMutationRules{
+				DisallowAll:     wrapperspb.Bool(true),
+				DisallowIsError: wrapperspb.Bool(true),
+			},
+			input:     metadata.MD{"k": {"a"}},
+			mutations: []*v3corepb.HeaderValueOption{hvo("k", "b", overwrite)},
+			wantErr:   true,
+		},
+		{
+			name: "disallow_expr_errors_when_is_error",
+			rules: &v3mutationpb.HeaderMutationRules{
+				DisallowExpression: &v3matcherpb.RegexMatcher{Regex: ".*-blocked"},
+				DisallowIsError:    wrapperspb.Bool(true),
+			},
+			input:     metadata.MD{},
+			mutations: []*v3corepb.HeaderValueOption{hvo("k-blocked", "a", overwrite)},
+			wantErr:   true,
+		},
+		{
+			// An unconditionally invalid header also errors under
+			// disallow_is_error.
+			name:      "invalid_header_errors_when_is_error",
+			rules:     &v3mutationpb.HeaderMutationRules{DisallowIsError: wrapperspb.Bool(true)},
+			input:     metadata.MD{},
+			mutations: []*v3corepb.HeaderValueOption{hvo("grpc-foo", "a", overwrite)},
+			wantErr:   true,
 		},
 	}
 
@@ -263,7 +332,7 @@ func TestHeaderMutator_Mutate(t *testing.T) {
 
 // TestHeaderMutator_DoesNotMutateInput verifies that Mutate operates on a copy
 // and leaves the caller's metadata untouched.
-func TestHeaderMutator_DoesNotMutateInput(t *testing.T) {
+func (s) TestHeaderMutator_DoesNotMutateInput(t *testing.T) {
 	mutator := NewHeaderMutator(HeaderMutationRules{})
 	input := metadata.MD{"k": {"a"}}
 	if _, err := mutator.Mutate(input, []*v3corepb.HeaderValueOption{
@@ -281,12 +350,12 @@ func TestHeaderMutator_DoesNotMutateInput(t *testing.T) {
 // TestHeaderMutator_NoOpDoesNotCopy verifies the copy-on-write behavior: a
 // call that applies no mutations returns the input metadata without allocating
 // a copy.
-func TestHeaderMutator_NoOpDoesNotCopy(t *testing.T) {
+func (s) TestHeaderMutator_NoOpDoesNotCopy(t *testing.T) {
 	mutator := NewHeaderMutator(HeaderMutationRules{})
 	input := metadata.MD{"k": {"v"}}
 	tests := map[string][]*v3corepb.HeaderValueOption{
 		"no_mutations":      nil,
-		"all_skipped":       {hvo(":path", "/x", overwrite)}, // pseudo-header
+		"all_disallowed":    {hvo(":path", "/x", overwrite)}, // pseudo-header
 		"nil_header_option": {{AppendAction: overwrite}},
 	}
 	for name, mutations := range tests {
@@ -302,7 +371,7 @@ func TestHeaderMutator_NoOpDoesNotCopy(t *testing.T) {
 	}
 }
 
-func TestNewHeaderMutatorFromProto_InvalidRegex(t *testing.T) {
+func (s) TestNewHeaderMutatorFromProto_InvalidRegex(t *testing.T) {
 	_, err := NewHeaderMutatorFromProto(&v3mutationpb.HeaderMutationRules{
 		AllowExpression: &v3matcherpb.RegexMatcher{Regex: "("},
 	})
