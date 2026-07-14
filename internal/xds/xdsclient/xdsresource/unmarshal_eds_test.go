@@ -50,7 +50,11 @@ import (
 //     on cleanup).
 func enableA86(t *testing.T) {
 	testutils.SetEnvConfig(t, &envconfig.XDSHTTPConnectEnabled, true)
-	t.Cleanup(RegisterMetadataConverterForTesting(proxyAddressTypeURL, ProxyAddressConvertor{}))
+	cleanup, err := RegisterMetadataConverterForTesting(version.V3AddressURL)
+	if err != nil {
+		t.Fatalf("RegisterMetadataConverterForTesting(%q) failed: %v", version.V3AddressURL, err)
+	}
+	t.Cleanup(cleanup)
 }
 
 // disableA86 disables A86 support for the duration of the test by:
@@ -59,7 +63,8 @@ func enableA86(t *testing.T) {
 //     (and restoring the original on cleanup).
 func disableA86(t *testing.T) {
 	testutils.SetEnvConfig(t, &envconfig.XDSHTTPConnectEnabled, false)
-	t.Cleanup(RegisterMetadataConverterForTesting(proxyAddressTypeURL, nil))
+	cleanup := UnregisterMetadataConverterForTesting(version.V3AddressURL)
+	t.Cleanup(cleanup)
 }
 
 func buildResolverEndpoint(addr []string, host string) resolver.Endpoint {

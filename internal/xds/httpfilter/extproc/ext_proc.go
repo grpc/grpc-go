@@ -79,13 +79,17 @@ func (builder) TypeURLs() []string {
 }
 
 // validateBodyProcessingMode ensures that the body processing mode is either
-// NONE or GRPC.
+// NONE or GRPC. Also ensures that if response body mode is GRPC then response
+// trailer mode must be SEND.
 func validateBodyProcessingMode(mode *v3procfilterpb.ProcessingMode) error {
 	if m := mode.GetRequestBodyMode(); m != v3procfilterpb.ProcessingMode_NONE && m != v3procfilterpb.ProcessingMode_GRPC {
 		return fmt.Errorf("extproc: invalid request body mode %v: want %q or %q", m, "NONE", "GRPC")
 	}
 	if m := mode.GetResponseBodyMode(); m != v3procfilterpb.ProcessingMode_NONE && m != v3procfilterpb.ProcessingMode_GRPC {
 		return fmt.Errorf("extproc: invalid response body mode %v: want %q or %q", m, "NONE", "GRPC")
+	}
+	if mode.GetResponseBodyMode() == v3procfilterpb.ProcessingMode_GRPC && mode.GetResponseTrailerMode() != v3procfilterpb.ProcessingMode_SEND {
+		return fmt.Errorf("extproc: invalid response trailer mode %v: must be %q when response body mode is %q", mode.GetResponseTrailerMode(), "SEND", "GRPC")
 	}
 	return nil
 }
@@ -200,7 +204,7 @@ func (builder) IsTerminal() bool {
 	return false
 }
 
-func (builder) BuildClientFilter() httpfilter.ClientFilter {
+func (builder) BuildClientFilter(httpfilter.ClientFilterOptions) httpfilter.ClientFilter {
 	return &clientFilter{}
 }
 

@@ -690,7 +690,7 @@ func (r *xdsResolver) getOrCreateClientFilter(builder httpfilter.ClientFilterBui
 		return clientFilter
 	}
 
-	cf := builder.BuildClientFilter()
+	cf := builder.BuildClientFilter(httpfilter.ClientFilterOptions{FilterName: key.name})
 	if setter, ok := cf.(httpfilter.ClientFilterMetricsSetter); ok {
 		setter.SetMetricsOptions(httpfilter.BuildInterceptorOptions{
 			MetricsRecorder: r.metricsRecorder,

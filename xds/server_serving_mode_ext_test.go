@@ -20,7 +20,10 @@ package xds_test
 
 import (
 	"context"
+	"fmt"
 	"io"
+	"net"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -37,6 +40,7 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/xds"
 
+	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
@@ -346,4 +350,188 @@ func (s) TestServer_ServingModeChanges_MultipleServers(t *testing.T) {
 	// The clientConns created earlier should be able to make RPCs now.
 	waitForSuccessfulRPC(ctx, t, cc1)
 	waitForSuccessfulRPC(ctx, t, cc2)
+}
+
+// Tests the case where the server receives a client-side listener resource.
+// The server should transition to NotServing mode and reject incoming connections.
+func (s) TestServer_ClientSideListenerReceivedOnServer(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	managementServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
+
+	// Create bootstrap configuration pointing to the above management server.
+	nodeID := uuid.New().String()
+	bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, managementServer.Address)
+
+	// Create a listener on a local port to act as the xDS enabled gRPC server.
+	lis, err := testutils.LocalTCPListener()
+	if err != nil {
+		t.Fatalf("testutils.LocalTCPListener() failed: %v", err)
+	}
+	host, port, err := hostPortFromListener(lis)
+	if err != nil {
+		t.Fatalf("Failed to retrieve host and port of server: %v", err)
+	}
+
+	// Configure a client-side listener resource on the management server.
+	// We use the server-side listening address as the resource name, but return a
+	// client-side listener resource (meaning it has ApiListener and lacks inbound TCP config).
+	listenerName := fmt.Sprintf(e2e.ServerListenerResourceNameTemplate, net.JoinHostPort(host, strconv.Itoa(int(port))))
+	listener := e2e.DefaultClientListener(listenerName, "routeName")
+	resources := e2e.UpdateOptions{
+		NodeID:         nodeID,
+		Listeners:      []*v3listenerpb.Listener{listener},
+		SkipValidation: true,
+	}
+	if err := managementServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Start an xDS-enabled gRPC server with the above bootstrap configuration.
+	config, err := bootstrap.NewConfigFromContents(bootstrapContents)
+	if err != nil {
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
+	}
+	pool := xdsclient.NewPool(config)
+	modeChangeHandler := newServingModeChangeHandler(t)
+	modeChangeOpt := xds.ServingModeCallback(modeChangeHandler.modeChangeCallback)
+	createStubServer(t, lis, modeChangeOpt, xds.ClientPoolForTesting(pool))
+
+	// Ensure the server transitions to NOT_SERVING mode due to client-side listener being sent.
+	select {
+	case <-ctx.Done():
+		t.Fatal("Timeout waiting for the xDS-enabled gRPC server to go NOT_SERVING")
+	case gotMode := <-modeChangeHandler.modeCh:
+		if gotMode != connectivity.ServingModeNotServing {
+			t.Fatalf("Mode changed to %v, want %v", gotMode, connectivity.ServingModeNotServing)
+		}
+		const wantErr = "received client-side listener resource"
+		gotErr := <-modeChangeHandler.errCh
+		if gotErr == nil || !strings.Contains(gotErr.Error(), wantErr) {
+			t.Fatalf("Unexpected error: %v, want error containing '%s'", gotErr, wantErr)
+		}
+	}
+
+	// Update the management server with the expected server-side listener and route config.
+	// This should cause the server to recover and transition back to SERVING mode.
+	listenerServer := e2e.DefaultServerListener(host, port, e2e.SecurityLevelNone, "routeName")
+	routeConfig := e2e.RouteConfigNonForwardingAction("routeName")
+	resources = e2e.UpdateOptions{
+		NodeID:         nodeID,
+		Listeners:      []*v3listenerpb.Listener{listenerServer},
+		Routes:         []*v3routepb.RouteConfiguration{routeConfig},
+		SkipValidation: true,
+	}
+	if err := managementServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	select {
+	case <-ctx.Done():
+		t.Fatal("Timeout waiting for the xDS-enabled gRPC server to go SERVING")
+	case gotMode := <-modeChangeHandler.modeCh:
+		if gotMode != connectivity.ServingModeServing {
+			t.Fatalf("Mode changed to %v, want %v", gotMode, connectivity.ServingModeServing)
+		}
+	}
+
+	// Create a gRPC client to the server and verify that we can make a successful RPC.
+	cc, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("Failed to dial local test server: %v", err)
+	}
+	defer cc.Close()
+	waitForSuccessfulRPC(ctx, t, cc)
+}
+
+// Tests the case where the server receives a listener resource with a mismatched port/address.
+// The server should transition to NotServing mode and reject incoming connections.
+func (s) TestServer_MismatchedAddressListenerReceivedOnServer(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	managementServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
+
+	// Create bootstrap configuration pointing to the above management server.
+	nodeID := uuid.New().String()
+	bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, managementServer.Address)
+
+	// Create a listener on a local port to act as the xDS enabled gRPC server.
+	lis, err := testutils.LocalTCPListener()
+	if err != nil {
+		t.Fatalf("testutils.LocalTCPListener() failed: %v", err)
+	}
+	host, port, err := hostPortFromListener(lis)
+	if err != nil {
+		t.Fatalf("Failed to retrieve host and port of server: %v", err)
+	}
+
+	// Configure a server-side listener with a mismatched port on the management server.
+	listener := e2e.DefaultServerListener(host, port, e2e.SecurityLevelNone, "routeName")
+	listener.Address.GetSocketAddress().PortSpecifier = &v3corepb.SocketAddress_PortValue{
+		PortValue: port + 1,
+	}
+	resources := e2e.UpdateOptions{
+		NodeID:         nodeID,
+		Listeners:      []*v3listenerpb.Listener{listener},
+		SkipValidation: true,
+	}
+	if err := managementServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Start an xDS-enabled gRPC server with the above bootstrap configuration.
+	config, err := bootstrap.NewConfigFromContents(bootstrapContents)
+	if err != nil {
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
+	}
+	pool := xdsclient.NewPool(config)
+	modeChangeHandler := newServingModeChangeHandler(t)
+	modeChangeOpt := xds.ServingModeCallback(modeChangeHandler.modeChangeCallback)
+	createStubServer(t, lis, modeChangeOpt, xds.ClientPoolForTesting(pool))
+
+	// Ensure the server transitions to NOT_SERVING mode due to the address/port mismatch.
+	select {
+	case <-ctx.Done():
+		t.Fatal("Timeout waiting for the xDS-enabled gRPC server to go NOT_SERVING")
+	case gotMode := <-modeChangeHandler.modeCh:
+		if gotMode != connectivity.ServingModeNotServing {
+			t.Fatalf("Mode changed to %v, want %v", gotMode, connectivity.ServingModeNotServing)
+		}
+		const wantErr = "does not match listening address"
+		gotErr := <-modeChangeHandler.errCh
+		if gotErr == nil || !strings.Contains(gotErr.Error(), wantErr) {
+			t.Fatalf("Unexpected error: %v, want error containing '%s'", gotErr, wantErr)
+		}
+	}
+
+	// Update the management server with the expected matching server-side listener and route config.
+	// This should cause the server to recover and transition back to SERVING mode.
+	listenerServer := e2e.DefaultServerListener(host, port, e2e.SecurityLevelNone, "routeName")
+	routeConfig := e2e.RouteConfigNonForwardingAction("routeName")
+	resources = e2e.UpdateOptions{
+		NodeID:         nodeID,
+		Listeners:      []*v3listenerpb.Listener{listenerServer},
+		Routes:         []*v3routepb.RouteConfiguration{routeConfig},
+		SkipValidation: true,
+	}
+	if err := managementServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	select {
+	case <-ctx.Done():
+		t.Fatal("Timeout waiting for the xDS-enabled gRPC server to go SERVING")
+	case gotMode := <-modeChangeHandler.modeCh:
+		if gotMode != connectivity.ServingModeServing {
+			t.Fatalf("Mode changed to %v, want %v", gotMode, connectivity.ServingModeServing)
+		}
+	}
+
+	// Create a gRPC client to the server and verify that we can make a successful RPC.
+	cc, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("Failed to dial local test server: %v", err)
+	}
+	defer cc.Close()
+	waitForSuccessfulRPC(ctx, t, cc)
 }
