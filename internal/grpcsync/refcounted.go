@@ -21,10 +21,14 @@ package grpcsync
 import (
 	"fmt"
 	"sync/atomic"
+
+	"google.golang.org/grpc/grpclog"
 )
 
+var logger = grpclog.Component("grpcsync")
+
 // RefCounted tracks how many consumers hold a value of type V and runs a
-// cleanup when the last reference is released
+// cleanup when the last reference is released.
 type RefCounted[V any] struct {
 	val      V
 	refCount atomic.Int32
@@ -39,7 +43,7 @@ type RefCounted[V any] struct {
 // plain value type (such as a struct or primitive value).
 //
 // WARNING: onZero runs synchronously inside Decrement; it must not acquire
-// locks held by Decrement callers or invert lock ordering.
+// locks held by Decrement callers.
 func NewRefCounted[V any](val V, onZero func()) (*RefCounted[V], error) {
 	if onZero == nil {
 		return nil, fmt.Errorf("grpcsync: onZero callback cannot be nil")
@@ -87,20 +91,18 @@ func (rc *RefCounted[V]) TryIncrement() bool {
 // reference is already present, ensuring the resource is not dead. If there is
 // a possibility that the resource is dead or its reference count might have
 // reached zero, call TryIncrement instead.
-func (rc *RefCounted[V]) Increment() error {
+func (rc *RefCounted[V]) Increment() {
 	if rc.refCount.Add(1) <= 1 {
-		return fmt.Errorf("grpcsync: resource already closed or dead")
+		logger.Errorf("resource already closed or dead")
 	}
-	return nil
 }
 
 // Decrement decrements the reference count. If it drops to zero, the onZero
 // callback is executed synchronously before this method returns.
-func (rc *RefCounted[V]) Decrement() error {
+func (rc *RefCounted[V]) Decrement() {
 	if v := rc.refCount.Add(-1); v < 0 {
-		return fmt.Errorf("grpcsync: refcount cannot be negative")
+		logger.Errorf("refcount cannot be negative")
 	} else if v == 0 {
 		rc.onZero()
 	}
-	return nil
 }

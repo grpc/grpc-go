@@ -22,6 +22,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+
+	"google.golang.org/grpc/internal/grpctest"
 )
 
 // Test verifies the scenario where a RefCounted instance is created and its
@@ -29,7 +31,7 @@ import (
 // correctly retrieved and that the onZero callback is invoked when the
 // reference count drops to zero.
 func (s) TestRefCounted(t *testing.T) {
-	val := "test-value"
+	const val = "test-value"
 	var onZeroCalled atomic.Bool
 
 	rc, err := NewRefCounted(val, func() {
@@ -59,7 +61,7 @@ func (s) TestRefCounted(t *testing.T) {
 // onZero callback is only executed when the count drops to zero, and not
 // beforehand.
 func (s) TestRefCounted_IncrementDecrement(t *testing.T) {
-	val := 42
+	const val = 42
 	var onZeroCount atomic.Int32
 
 	rc, err := NewRefCounted(val, func() {
@@ -114,11 +116,9 @@ func (s) TestRefCounted_TryIncrement(t *testing.T) {
 
 // Test verifies the scenario where multiple goroutines concurrently increment
 // and decrement the reference count. It verifies that the reference counting is
-// thread-safe and the onZero callback is invoked exactly once. It also verifies
-// that once onZero has been called, subsequent increament/decrement return
-// error.
+// thread-safe and the onZero callback is invoked exactly once.
 func (s) TestRefCounted_Concurrent(t *testing.T) {
-	const numGoroutines = 10
+	const numGoroutines = 100
 	var onZeroCount atomic.Int32
 
 	rc, err := NewRefCounted("concurrent-val", func() {
@@ -141,20 +141,32 @@ func (s) TestRefCounted_Concurrent(t *testing.T) {
 	if got := onZeroCount.Load(); got != 1 {
 		t.Fatalf("After concurrent increments/decrements and final decrement, onZeroCount = %v, want 1", got)
 	}
+}
 
-	wantErr := "grpcsync: refcount cannot be negative"
-	if err := rc.Decrement(); err == nil || err.Error() != wantErr {
-		t.Fatalf("Decrement() on dead resource = %v, want %q", err, wantErr)
+// Test verifies that Decrementing a resource whose reference count has already
+// dropped to zero results in a negative refcount log error.
+func (s) TestRefCounted_DecrementNegative(t *testing.T) {
+	rc, err := NewRefCounted("val", func() {})
+	if err != nil {
+		t.Fatalf("NewRefCounted() failed: %v", err)
 	}
+	rc.Decrement()
 
-	wantErr = "grpcsync: resource already closed or dead"
-	if err := rc.Increment(); err == nil || err.Error() != wantErr {
-		t.Fatalf("Increment() on dead resource = %v, want %q", err, wantErr)
-	}
+	grpctest.ExpectError("refcount cannot be negative")
+	rc.Decrement()
+}
 
-	if got := rc.TryIncrement(); got {
-		t.Fatalf("TryIncrement() on dead resource = %v, want false", got)
+// Test verifies that Incrementing a dead resource results in a closed resource
+// log error.
+func (s) TestRefCounted_IncrementDead(t *testing.T) {
+	rc, err := NewRefCounted("val", func() {})
+	if err != nil {
+		t.Fatalf("NewRefCounted() failed: %v", err)
 	}
+	rc.Decrement()
+
+	grpctest.ExpectError("resource already closed or dead")
+	rc.Increment()
 }
 
 // Test verifies that NewRefCounted returns an error if the provided onZero
