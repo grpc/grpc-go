@@ -76,8 +76,7 @@ func invoke(ctx context.Context, method string, req, reply any, cc *ClientConn, 
 	if err := cs.SendMsg(req); err != nil && err != io.EOF {
 		return err
 	}
-	// CloseSend is a no-op for the underlying transport because SendMsg already
-	// sends Last=true for unary RPCs. This call is solely to signal interceptors.
+	// CloseSend is called to signal the interceptors.
 	if err := cs.CloseSend(); err != nil && err != io.EOF {
 		return err
 	}

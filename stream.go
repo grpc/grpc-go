@@ -170,22 +170,10 @@ func (w *clientStreamWrapper) SendMsg(m any) error {
 		if err != nil {
 			return err
 		}
-		// CloseSend is a no-op for the underlying transport because SendMsg already
-		// sent Last=true for non-client-streaming RPCs. This call is solely to
-		// signal interceptors.
-		if err := w.ClientStream.CloseSend(); err != nil {
+		// CloseSend is called to signal the interceptors.
+		if err := w.ClientStream.CloseSend(); err != nil && err != io.EOF {
 			return err
 		}
-		return nil
-	}
-	return err
-}
-
-// CloseSend closes the sending side of the stream. For non-client-streaming
-// RPCs, it converts io.EOF to nil.
-func (w *clientStreamWrapper) CloseSend() error {
-	err := w.ClientStream.CloseSend()
-	if !w.desc.ClientStreams && err == io.EOF {
 		return nil
 	}
 	return err
