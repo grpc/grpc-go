@@ -93,7 +93,7 @@ func (rc *RefCounted[V]) TryIncrement() bool {
 // reached zero, call TryIncrement instead.
 func (rc *RefCounted[V]) Increment() {
 	if rc.refCount.Add(1) <= 1 {
-		logger.Errorf("resource already closed or dead")
+		logger.Errorf("Resource already closed or dead")
 	}
 }
 
@@ -101,7 +101,7 @@ func (rc *RefCounted[V]) Increment() {
 // callback is executed synchronously before this method returns.
 func (rc *RefCounted[V]) Decrement() {
 	if v := rc.refCount.Add(-1); v < 0 {
-		logger.Errorf("refcount cannot be negative")
+		logger.Errorf("Refcount cannot be negative")
 	} else if v == 0 {
 		rc.onZero()
 	}

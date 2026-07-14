@@ -152,7 +152,7 @@ func (s) TestRefCounted_DecrementNegative(t *testing.T) {
 	}
 	rc.Decrement()
 
-	grpctest.ExpectError("refcount cannot be negative")
+	grpctest.ExpectError("Refcount cannot be negative")
 	rc.Decrement()
 }
 
@@ -165,7 +165,7 @@ func (s) TestRefCounted_IncrementDead(t *testing.T) {
 	}
 	rc.Decrement()
 
-	grpctest.ExpectError("resource already closed or dead")
+	grpctest.ExpectError("Resource already closed or dead")
 	rc.Increment()
 }
 
