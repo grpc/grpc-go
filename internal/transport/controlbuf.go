@@ -141,7 +141,6 @@ type serverHeaders struct {
 	hf        []hpack.HeaderField
 	endStream bool
 	onWrite   func()
-	wq        *writeQuota
 	cleanup   *cleanupStream
 }
 
