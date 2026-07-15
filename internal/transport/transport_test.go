@@ -225,7 +225,7 @@ func (h *testStreamHandler) handleStreamEncodingRequiredStatus(s *ServerStream) 
 func (h *testStreamHandler) handleStreamInvalidContentType(s *ServerStream) {
 	headerFields := []hpack.HeaderField{}
 	headerFields = append(headerFields, hpack.HeaderField{Name: "content-type", Value: expectedInvalidHeaderField})
-	h.t.controlBuf.put(&headerFrame{
+	h.t.controlBuf.put(&serverHeaders{
 		streamID:  s.id,
 		hf:        headerFields,
 		endStream: true,
@@ -239,7 +239,7 @@ func (h *testStreamHandler) handleStreamInvalidContentType(s *ServerStream) {
 func (h *testStreamHandler) handleStreamInvalidContentTypeWithMultipleFrame(s *ServerStream) {
 	headerFields := []hpack.HeaderField{}
 	headerFields = append(headerFields, hpack.HeaderField{Name: "content-type", Value: expectedInvalidHeaderField})
-	h.t.controlBuf.put(&headerFrame{
+	h.t.controlBuf.put(&serverHeaders{
 		streamID:  s.id,
 		hf:        headerFields,
 		endStream: false,
@@ -271,7 +271,7 @@ func (h *testStreamHandler) handleStreamMalformedHeader(s *ServerStream) {
 		{Name: "content-type", Value: "application/grpc"},
 		{Name: "x-bad-bin", Value: "!!!invalid-base64!!!"},
 	}
-	h.t.controlBuf.put(&headerFrame{
+	h.t.controlBuf.put(&serverHeaders{
 		streamID:  s.id,
 		hf:        headerFields,
 		endStream: false,
