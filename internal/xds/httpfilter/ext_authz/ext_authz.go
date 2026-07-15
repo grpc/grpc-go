@@ -60,21 +60,22 @@ func parseFilterEnabled(fp *v3corepb.RuntimeFractionalPercent) (fraction, error)
 	if fp == nil {
 		return fraction{numerator: 100, denominator: 100}, nil
 	}
-	pct := fp.GetDefaultValue()
-	if pct == nil {
+	fracPercent := fp.GetDefaultValue()
+	if fracPercent == nil {
 		return fraction{}, fmt.Errorf("extauthz: missing default_value in filter_enabled")
 	}
 
-	num := pct.GetNumerator()
-	switch pct.GetDenominator() {
-	case v3typepb.FractionalPercent_HUNDRED:
-		return fraction{numerator: num, denominator: 100}, nil
+	den := uint32(100)
+	switch fracPercent.GetDenominator() {
 	case v3typepb.FractionalPercent_TEN_THOUSAND:
-		return fraction{numerator: num, denominator: 10000}, nil
+		den = 10000
 	case v3typepb.FractionalPercent_MILLION:
-		return fraction{numerator: num, denominator: 1000000}, nil
+		den = 1000000
 	}
-	return fraction{numerator: num, denominator: 100}, nil
+
+	// If the numerator exceeds the denominator, cap the fractional value at 100%.
+	num := min(fracPercent.GetNumerator(), den)
+	return fraction{numerator: num, denominator: den}, nil
 }
 
 func (builder) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, error) {
@@ -142,6 +143,12 @@ func (builder) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, er
 	}, nil
 }
 
+// ParseFilterConfigOverride parses the provided override configuration.
+//
+// Note that ExtAuthzPerRoute is unmarshaled to verify its syntax during xDS
+// resource validation, no filter configuration object is returned. Per-route
+// disabling is supported via the generic FilterConfig wrapper mechanism rather
+// than the ExtAuthzPerRoute.disabled field directly.
 func (builder) ParseFilterConfigOverride(overrideCfg proto.Message) (httpfilter.FilterConfig, error) {
 	m, ok := overrideCfg.(*anypb.Any)
 	if !ok {

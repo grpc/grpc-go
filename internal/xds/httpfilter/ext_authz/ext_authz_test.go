@@ -157,11 +157,9 @@ func (s) TestParseFilterConfig_Success(t *testing.T) {
 						DisallowExpression: &matcherpb.RegexMatcher{Regex: "a"},
 					},
 					AllowedHeaders: &matcherpb.ListStringMatcher{
-						Patterns: []*matcherpb.StringMatcher{
-							{
-								MatchPattern: &matcherpb.StringMatcher_Exact{Exact: "allow-header"},
-							},
-						},
+						Patterns: []*matcherpb.StringMatcher{{
+							MatchPattern: &matcherpb.StringMatcher_Exact{Exact: "allow-header"},
+						}},
 					},
 					DisallowedHeaders: &matcherpb.ListStringMatcher{
 						Patterns: []*matcherpb.StringMatcher{
@@ -290,6 +288,38 @@ func (s) TestParseFilterConfig_Success(t *testing.T) {
 				},
 				filterEnabled: fraction{
 					numerator:   25,
+					denominator: 100,
+				},
+			},
+		},
+		{
+			name: "FilterEnabled_CappedToHundredPercent",
+			cfg: func() proto.Message {
+				m, _ := anypb.New(&v3extauthzfilterpb.ExtAuthz{
+					Services: &v3extauthzfilterpb.ExtAuthz_GrpcService{
+						GrpcService: &corepb.GrpcService{
+							TargetSpecifier: &corepb.GrpcService_GoogleGrpc_{
+								GoogleGrpc: &corepb.GrpcService_GoogleGrpc{
+									TargetUri: "localhost:1234",
+								},
+							},
+						},
+					},
+					FilterEnabled: &corepb.RuntimeFractionalPercent{
+						DefaultValue: &v3typepb.FractionalPercent{
+							Numerator:   200,
+							Denominator: v3typepb.FractionalPercent_HUNDRED,
+						},
+					},
+				})
+				return m
+			}(),
+			wantCfg: baseConfig{
+				grpcService: xdsresource.GRPCServiceConfig{
+					TargetURI: "localhost:1234",
+				},
+				filterEnabled: fraction{
+					numerator:   100,
 					denominator: 100,
 				},
 			},
