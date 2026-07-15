@@ -260,8 +260,8 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 	cs := &clientStream{
 		config:                   i.config,
 		procStreamFailed:         grpcsync.NewEvent(),
-		mutatedReqBuffer:         buffer.NewUnbounded(),
-		mutatedRespBuffer:        buffer.NewUnbounded(),
+		mutatedReqBuffer:         buffer.NewUnbounded[*v3procservicepb.StreamedBodyResponse](),
+		mutatedRespBuffer:        buffer.NewUnbounded[*v3procservicepb.StreamedBodyResponse](),
 		responseHeaderModified:   grpcsync.NewEvent(),
 		responseTrailerModified:  grpcsync.NewEvent(),
 		dataplaneSetup:           make(chan struct{}),
@@ -353,28 +353,28 @@ type clientStream struct {
 	procStreamClosed atomic.Bool                                     // ensures the stream closure logic is executed exactly once
 	procStreamErr    atomic.Value                                    // holds the terminal error causing the external processor stream to fail
 
-	reqAttrs             map[string]*structpb.Struct             // attributes to be sent to proc server with client message
-	protocolConfigSent   atomic.Bool                             // tracks whether the protocol configuration has been sent to the processor
-	reqAttrsSent         atomic.Bool                             // tracks whether the first client message has been sent to ensure request attributes are sent only once
-	ignoreFailureMode    atomic.Bool                             // tracks whether the failureModeAllow setting should be ignored (e.g. after sending body messages)
-	discardRequests      atomic.Bool                             // set when ext_proc server signals end_of_stream to stop client sends
-	mutatedReqBuffer     *buffer.Unbounded                       // buffers mutated request body messages from the ext_proc server
-	reqForwardingStarted bool                                    // tracks whether request forwarding loop to the dataplane has started
-	procSendCh           chan *v3procservicepb.ProcessingRequest // serializes writes to the external processor stream to ensure thread-safety
+	reqAttrs             map[string]*structpb.Struct                              // attributes to be sent to proc server with client message
+	protocolConfigSent   atomic.Bool                                              // tracks whether the protocol configuration has been sent to the processor
+	reqAttrsSent         atomic.Bool                                              // tracks whether the first client message has been sent to ensure request attributes are sent only once
+	ignoreFailureMode    atomic.Bool                                              // tracks whether the failureModeAllow setting should be ignored (e.g. after sending body messages)
+	discardRequests      atomic.Bool                                              // set when ext_proc server signals end_of_stream to stop client sends
+	mutatedReqBuffer     *buffer.Unbounded[*v3procservicepb.StreamedBodyResponse] // buffers mutated request body messages from the ext_proc server
+	reqForwardingStarted bool                                                     // tracks whether request forwarding loop to the dataplane has started
+	procSendCh           chan *v3procservicepb.ProcessingRequest                  // serializes writes to the external processor stream to ensure thread-safety
 
-	responseHeader          metadata.MD       // stores headers received from the dataplane stream
-	responseHeaderOnce      sync.Once         // ensures response headers are forwarded to the external processor only once
-	responseHeaderModified  *grpcsync.Event   // signals that response headers are ready for client
-	responseTrailers        metadata.MD       // stores trailers received from the dataplane stream
-	responseTrailerOnce     sync.Once         // ensures response trailers are forwarded to the external processor only once
-	responseTrailerModified *grpcsync.Event   // signals that response trailers are ready for client
-	trailerSent             atomic.Bool       // tracks whether response trailers have been dispatched
-	trailersOnly            bool              // tracks whether the backend response is trailers-only
-	mutatedRespBuffer       *buffer.Unbounded // buffers mutated response body messages from the ext_proc server
-	responseDrained         atomic.Bool       // indicates consumer loop has fully processed buffered items
-	dataplaneSetup          chan struct{}     // closed once dataplaneStream creation attempt is complete
-	dataplaneCreationErr    error             // stores the error from the dataplane stream creation attempt
-	responseRecvStarted     bool              // tracks whether response message reading has started
+	responseHeader          metadata.MD                                              // stores headers received from the dataplane stream
+	responseHeaderOnce      sync.Once                                                // ensures response headers are forwarded to the external processor only once
+	responseHeaderModified  *grpcsync.Event                                          // signals that response headers are ready for client
+	responseTrailers        metadata.MD                                              // stores trailers received from the dataplane stream
+	responseTrailerOnce     sync.Once                                                // ensures response trailers are forwarded to the external processor only once
+	responseTrailerModified *grpcsync.Event                                          // signals that response trailers are ready for client
+	trailerSent             atomic.Bool                                              // tracks whether response trailers have been dispatched
+	trailersOnly            bool                                                     // tracks whether the backend response is trailers-only
+	mutatedRespBuffer       *buffer.Unbounded[*v3procservicepb.StreamedBodyResponse] // buffers mutated response body messages from the ext_proc server
+	responseDrained         atomic.Bool                                              // indicates consumer loop has fully processed buffered items
+	dataplaneSetup          chan struct{}                                            // closed once dataplaneStream creation attempt is complete
+	dataplaneCreationErr    error                                                    // stores the error from the dataplane stream creation attempt
+	responseRecvStarted     bool                                                     // tracks whether response message reading has started
 
 	procBypassCh             chan struct{}   // closed upon receiving a drain request or bypass signal
 	requestForwardLoopDoneCh chan struct{}   // closed when request forwarding loop finishes draining
@@ -580,7 +580,7 @@ func (cs *clientStream) RecvMsg(m any) error {
 
 	// Pull response messages from mutatedRespBuffer.
 	select {
-	case item, ok := <-cs.mutatedRespBuffer.Get():
+	case streamedResp, ok := <-cs.mutatedRespBuffer.Get():
 		cs.mutatedRespBuffer.Load()
 		if !ok {
 			// Closed channel implies that all messages from the external processor
@@ -599,7 +599,6 @@ func (cs *clientStream) RecvMsg(m any) error {
 			}
 			return nil
 		}
-		streamedResp := item.(*v3procservicepb.StreamedBodyResponse)
 		if err := proto.Unmarshal(streamedResp.GetBody(), msg); err != nil {
 			return err
 		}
@@ -773,7 +772,7 @@ func (cs *clientStream) requestForwardingToDataplaneLoop(msgType protoreflect.Me
 	}
 	for {
 		select {
-		case item, ok := <-cs.mutatedReqBuffer.Get():
+		case streamedResp, ok := <-cs.mutatedReqBuffer.Get():
 			if !ok {
 				if cs.procStreamFailed.HasFired() && !cs.config.failureModeAllow && cs.dataplaneStream != nil {
 					cs.dataplaneStream.CloseSend()
@@ -781,7 +780,6 @@ func (cs *clientStream) requestForwardingToDataplaneLoop(msgType protoreflect.Me
 				return
 			}
 			cs.mutatedReqBuffer.Load()
-			streamedResp := item.(*v3procservicepb.StreamedBodyResponse)
 
 			if streamedResp.GetEndOfStream() && streamedResp.GetEndOfStreamWithoutMessage() {
 				cs.dataplaneStream.CloseSend()
