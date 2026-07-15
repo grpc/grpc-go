@@ -75,8 +75,10 @@ func invoke(ctx context.Context, method string, req, reply any, cc *ClientConn, 
 	if err := cs.SendMsg(req); err != nil && err != io.EOF {
 		return err
 	}
-	// CloseSend is needed to signal streaming interceptors intercepting unary
-	// RPCs.
+	// CloseSend is needed because in some scenarios (e.g., xDS), the same
+	// interceptors are used to process both unary and streaming RPCs. Calling
+	// CloseSend signals to those interceptors that no more messages are on the
+	// way.
 	if err := cs.CloseSend(); err != nil && err != io.EOF {
 		return err
 	}

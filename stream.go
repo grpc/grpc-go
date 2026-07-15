@@ -155,14 +155,18 @@ type clientStreamWrapper struct {
 	desc *StreamDesc
 }
 
-// SendMsg sends message m across the stream. For non-client-streaming RPCs, it
-// converts io.EOF to nil and immediately calls CloseSend to trigger any
-// interceptor hooks.
+// SendMsg sends message m across the stream. For RPCs where client can call
+// SendMsg only once, i.e. only server-streaming RPCs, it converts io.EOF to nil
+// and immediately calls CloseSend to trigger any interceptor hooks.
 func (w *clientStreamWrapper) SendMsg(m any) error {
 	err := w.ClientStream.SendMsg(m)
+	// If the RPC is a client-streaming RPC, the client can send multiple
+	// messages. In this case, the client should handle any type of
+	// error,including io.EOF and call CloseSend once it is done sending messages.
 	if w.desc.ClientStreams {
 		return err
 	}
+
 	if err == io.EOF {
 		// For non-client-streaming RPCs, we return nil instead of EOF on error
 		// because the generated code requires it. finish is not called; RecvMsg()
@@ -172,8 +176,10 @@ func (w *clientStreamWrapper) SendMsg(m any) error {
 	if err != nil {
 		return err
 	}
-	// CloseSend is needed to signal streaming interceptors intercepting
-	// non-client streaming RPCs.
+	// CloseSend is needed because in some scenarios (e.g., xDS), the same
+	// interceptors are used to process both unary and streaming RPCs. Calling
+	// CloseSend signals to those interceptors that no more messages are on the
+	// way.
 	if err := w.ClientStream.CloseSend(); err != nil && err != io.EOF {
 		return err
 	}
@@ -181,9 +187,9 @@ func (w *clientStreamWrapper) SendMsg(m any) error {
 
 }
 
-// RecvMsg receives message m from the stream. For non-server-streaming RPCs, it
-// calls the underlying RecvMsg a second time after receiving the first message
-// to get the trailers.
+// RecvMsg receives message m from the stream. For RPCs that call RecvMsg only
+// once i.e. only client streaming RPCs, it calls the underlying RecvMsg a
+// second time after receiving the first message to get the trailers.
 func (w *clientStreamWrapper) RecvMsg(m any) error {
 	err := w.ClientStream.RecvMsg(m)
 	if err != nil {
