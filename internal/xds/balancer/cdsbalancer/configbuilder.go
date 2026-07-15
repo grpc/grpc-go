@@ -77,10 +77,106 @@ func hostName(clusterName string, update xdsresource.ClusterUpdate) string {
 	}
 }
 
-// buildPriorityConfigJSON builds balancer config for the passed in
-// priorities.
+// buildSingleClusterConfigJSON builds the balancer config for a single
+// (non-aggregate) cluster according to gRFC A75.
 //
-// The built tree of balancers (see test for the output struct).
+// The built tree of balancers:
+//
+//	     ┌─────────────────┐
+//	     │outlier_detection│
+//	     └────────┬────────┘
+//	              │
+//	     ┌────────▼───────┐
+//	     │  cluster_impl  │
+//	     └────────┬───────┘
+//	              │
+//	          ┌───▼────┐
+//	          │priority│
+//	          └┬──────┬┘
+//	           │      │
+//	┌──────────▼─┐  ┌─▼──────────┐
+//	│xDSLBPolicy │  │xDSLBPolicy │ (Locality and Endpoint picking layer)
+//	└────────────┘  └────────────┘
+func buildSingleClusterConfigJSON(p *priorityConfig, xdsLBPolicy *internalserviceconfig.BalancerConfig) ([]byte, []resolver.Endpoint, error) {
+	odCfg, endpoints, err := buildSingleClusterConfig(p, xdsLBPolicy)
+	if err != nil {
+		return nil, nil, err
+	}
+	ret, err := json.Marshal(odCfg)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to marshal built single cluster config: %v", err)
+	}
+	return ret, endpoints, nil
+}
+
+func buildSingleClusterConfig(p *priorityConfig, xdsLBPolicy *internalserviceconfig.BalancerConfig) (*outlierdetection.LBConfig, []resolver.Endpoint, error) {
+	clusterUpdate := p.clusterConfig.Cluster
+	priorityLBConfig := &priority.LBConfig{
+		Children: make(map[string]*priority.Child),
+	}
+	var retEndpoints []resolver.Endpoint
+
+	switch clusterUpdate.ClusterType {
+	case xdsresource.ClusterTypeEDS:
+		priorities := [][]xdsresource.Locality{{}}
+		edsUpdate := p.clusterConfig.EndpointConfig.EDSUpdate
+		if len(edsUpdate.Localities) != 0 {
+			priorities = groupLocalitiesByPriority(edsUpdate.Localities)
+		}
+		priorityNames := p.childNameGen.generate(priorities)
+		priorityLBConfig.Priorities = priorityNames
+
+		for i, pName := range priorityNames {
+			priorityLocalities := priorities[i]
+			_, endpoints, err := priorityLocalitiesToClusterImpl(priorityLocalities, pName, *p.clusterConfig.Cluster, xdsLBPolicy)
+			if err != nil {
+				return nil, nil, err
+			}
+			retEndpoints = append(retEndpoints, endpoints...)
+			priorityLBConfig.Children[pName] = &priority.Child{
+				Config:                     xdsLBPolicy,
+				IgnoreReresolutionRequests: true,
+			}
+		}
+	case xdsresource.ClusterTypeLogicalDNS:
+		pName := fmt.Sprintf("priority-%v", p.childNameGen.prefix)
+		priorityLBConfig.Priorities = []string{pName}
+		endpoints := p.clusterConfig.EndpointConfig.DNSEndpoints.Endpoints
+		var retEndpoint resolver.Endpoint
+		for _, e := range endpoints {
+			retEndpoint.Addresses = append(retEndpoint.Addresses, e.Addresses...)
+		}
+		localityStr := xdsinternal.LocalityString(clients.Locality{})
+		retEndpoint = hostname.Set(hierarchy.SetInEndpoint(retEndpoint, []string{pName, localityStr}), clusterUpdate.DNSHostName)
+		retEndpoint = wrrlocality.SetAddrInfo(retEndpoint, wrrlocality.AddrInfo{LocalityWeight: 1})
+		retEndpoints = append(retEndpoints, retEndpoint)
+		priorityLBConfig.Children[pName] = &priority.Child{
+			Config:                     xdsLBPolicy,
+			IgnoreReresolutionRequests: false,
+		}
+	}
+
+	ciCfg := &clusterimpl.LBConfig{
+		Cluster: clusterUpdate.ClusterName,
+		ChildPolicy: &internalserviceconfig.BalancerConfig{
+			Name:   priority.Name,
+			Config: priorityLBConfig,
+		},
+	}
+
+	odCfg := p.outlierDetection
+	odCfg.ChildPolicy = &internalserviceconfig.BalancerConfig{
+		Name:   clusterimpl.Name,
+		Config: ciCfg,
+	}
+
+	return &odCfg, retEndpoints, nil
+}
+
+// buildAggregateClusterPriorityConfigJSON builds balancer config for the passed in
+// priorities (legacy / aggregate cluster tree).
+//
+// The built tree of balancers:
 //
 //	          ┌────────┐
 //	          │priority│
@@ -93,8 +189,8 @@ func hostName(clusterName string, update xdsresource.ClusterUpdate) string {
 //	┌──────▼─────┐  ┌─────▼──────┐
 //	│xDSLBPolicy │  │xDSLBPolicy │ (Locality and Endpoint picking layer)
 //	└────────────┘  └────────────┘
-func buildPriorityConfigJSON(priorities []*priorityConfig, xdsLBPolicy *internalserviceconfig.BalancerConfig) ([]byte, []resolver.Endpoint, error) {
-	pc, endpoints, err := buildPriorityConfig(priorities, xdsLBPolicy)
+func buildAggregateClusterPriorityConfigJSON(priorities []*priorityConfig, xdsLBPolicy *internalserviceconfig.BalancerConfig) ([]byte, []resolver.Endpoint, error) {
+	pc, endpoints, err := buildAggregateClusterPriorityConfig(priorities, xdsLBPolicy)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to build priority config: %v", err)
 	}
@@ -105,7 +201,7 @@ func buildPriorityConfigJSON(priorities []*priorityConfig, xdsLBPolicy *internal
 	return ret, endpoints, nil
 }
 
-func buildPriorityConfig(priorities []*priorityConfig, xdsLBPolicy *internalserviceconfig.BalancerConfig) (*priority.LBConfig, []resolver.Endpoint, error) {
+func buildAggregateClusterPriorityConfig(priorities []*priorityConfig, xdsLBPolicy *internalserviceconfig.BalancerConfig) (*priority.LBConfig, []resolver.Endpoint, error) {
 	var (
 		retConfig    = &priority.LBConfig{Children: make(map[string]*priority.Child)}
 		retEndpoints []resolver.Endpoint

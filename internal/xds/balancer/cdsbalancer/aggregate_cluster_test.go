@@ -90,8 +90,8 @@ func verifyDNSResolution(ctx context.Context, t *testing.T, dnsTargetCh chan res
 
 // Tests the case where the cluster resource requested is a leaf cluster. The
 // management server sends two updates for the same leaf cluster resource. The
-// test verifies that the load balancing configuration pushed to the priority LB
-// policy contains the expected discovery mechanism corresponding to the leaf
+// test verifies that the load balancing configuration pushed to the top-level LB
+// policy contains the expected configuration corresponding to the leaf
 // cluster, on both occasions.
 func (s) TestAggregateClusterSuccess_LeafNode(t *testing.T) {
 	tests := []struct {
@@ -105,43 +105,21 @@ func (s) TestAggregateClusterSuccess_LeafNode(t *testing.T) {
 			name:                  "eds",
 			firstClusterResource:  e2e.DefaultCluster(clusterName, serviceName, e2e.SecurityLevelNone),
 			secondClusterResource: e2e.DefaultCluster(clusterName, serviceName+"-new", e2e.SecurityLevelNone),
-			wantFirstChildCfg: &priority.LBConfig{
-				Children: map[string]*priority.Child{
-					"priority-0-0": {
-						Config:                     createPriorityConfig(clusterName),
-						IgnoreReresolutionRequests: true,
-					},
-				},
-				Priorities: []string{"priority-0-0"},
-			},
-			wantSecondChildCfg: &priority.LBConfig{
-				Children: map[string]*priority.Child{
-					"priority-1-0": {
-						Config:                     createPriorityConfig(clusterName),
-						IgnoreReresolutionRequests: true,
-					},
-				},
-				Priorities: []string{"priority-1-0"},
-			},
+			wantFirstChildCfg:     createSingleClusterConfig(clusterName, "priority-0-0", true),
+			wantSecondChildCfg:    createSingleClusterConfig(clusterName, "priority-1-0", true),
 		},
 		{
 			name:                  "dns",
 			firstClusterResource:  makeLogicalDNSClusterResource(clusterName, "dns_host", uint32(port)),
 			secondClusterResource: makeLogicalDNSClusterResource(clusterName, "dns_host_new", uint32(port)),
-			wantFirstChildCfg: &priority.LBConfig{
-				Children:   map[string]*priority.Child{"priority-0": {Config: createPriorityConfig(clusterName)}},
-				Priorities: []string{"priority-0"},
-			},
-			wantSecondChildCfg: &priority.LBConfig{
-				Children:   map[string]*priority.Child{"priority-1": {Config: createPriorityConfig(clusterName)}},
-				Priorities: []string{"priority-1"},
-			},
+			wantFirstChildCfg:     createSingleClusterConfig(clusterName, "priority-0", false),
+			wantSecondChildCfg:    createSingleClusterConfig(clusterName, "priority-1", false),
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			lbCfgCh, _, _, _ := registerWrappedPriorityPolicy(t)
+			lbCfgCh := registerWrappedOutlierDetectionPolicy(t)
 			mgmtServer, nodeID, _ := setupWithManagementServer(t, nil, nil)
 
 			// Push the first cluster resource through the management server and
@@ -281,11 +259,11 @@ func (s) TestAggregateClusterSuccess_ThenUpdateChildClusters(t *testing.T) {
 // the priority LB policy contains the discovery mechanisms for both child
 // clusters. The test then updates the root cluster resource requested by the
 // cds LB policy to a leaf cluster of type EDS and verifies the load balancing
-// configuration pushed to the priority LB policy contains a single discovery
-// mechanism.
+// configuration pushed to the outlier detection LB policy contains the leaf cluster config.
 func (s) TestAggregateClusterSuccess_ThenChangeRootToEDS(t *testing.T) {
 	dnsTargetCh, dnsR := setupDNS(t)
 	lbCfgCh, _, _, _ := registerWrappedPriorityPolicy(t)
+	odCfgCh := registerWrappedOutlierDetectionPolicy(t)
 	mgmtServer, nodeID, _ := setupWithManagementServer(t, nil, nil)
 
 	// Configure the management server with the aggregate cluster resource
@@ -332,21 +310,17 @@ func (s) TestAggregateClusterSuccess_ThenChangeRootToEDS(t *testing.T) {
 		},
 		Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(serviceName, host, []uint32{port})},
 	}
+	// Drain odCfgCh before sending non-aggregate update, as aggregate children pushed outlier configs into odCfgCh.
+	for len(odCfgCh) > 0 {
+		<-odCfgCh
+	}
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
 	// Since the service name of the EDS cluster remains same, same priority name
 	// is used.
-	wantChildCfg = &priority.LBConfig{
-		Children: map[string]*priority.Child{
-			"priority-0-0": {
-				Config:                     createPriorityConfig(clusterName),
-				IgnoreReresolutionRequests: true,
-			},
-		},
-		Priorities: []string{"priority-0-0"},
-	}
-	if err := compareLoadBalancingConfig(ctx, lbCfgCh, wantChildCfg); err != nil {
+	wantSingleChildCfg := createSingleClusterConfig(clusterName, "priority-0-0", true)
+	if err := compareLoadBalancingConfig(ctx, odCfgCh, wantSingleChildCfg); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -354,10 +328,11 @@ func (s) TestAggregateClusterSuccess_ThenChangeRootToEDS(t *testing.T) {
 // Tests the case where a requested cluster resource switches between being a
 // leaf and an aggregate cluster pointing to an EDS and LogicalDNS child
 // cluster. In each of these cases, the test verifies that the load balancing
-// configuration pushed to the priority LB policy contains the expected config.
+// configuration pushed to the top-level child policy contains the expected config.
 func (s) TestAggregatedClusterSuccess_SwitchBetweenLeafAndAggregate(t *testing.T) {
 	dnsTargetCh, dnsR := setupDNS(t)
 	lbCfgCh, _, _, _ := registerWrappedPriorityPolicy(t)
+	odCfgCh := registerWrappedOutlierDetectionPolicy(t)
 	mgmtServer, nodeID, _ := setupWithManagementServer(t, nil, nil)
 
 	// Start off with the requested cluster being a leaf EDS cluster.
@@ -373,16 +348,8 @@ func (s) TestAggregatedClusterSuccess_SwitchBetweenLeafAndAggregate(t *testing.T
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
-	wantChildCfg := &priority.LBConfig{
-		Children: map[string]*priority.Child{
-			"priority-0-0": {
-				Config:                     createPriorityConfig(clusterName),
-				IgnoreReresolutionRequests: true,
-			},
-		},
-		Priorities: []string{"priority-0-0"},
-	}
-	if err := compareLoadBalancingConfig(ctx, lbCfgCh, wantChildCfg); err != nil {
+	wantSingleChildCfg := createSingleClusterConfig(clusterName, "priority-0-0", true)
+	if err := compareLoadBalancingConfig(ctx, odCfgCh, wantSingleChildCfg); err != nil {
 		t.Fatal(err)
 	}
 
@@ -404,7 +371,7 @@ func (s) TestAggregatedClusterSuccess_SwitchBetweenLeafAndAggregate(t *testing.T
 	}
 	verifyDNSResolution(ctx, t, dnsTargetCh, dnsR, dnsHostName, dnsPort)
 
-	wantChildCfg = &priority.LBConfig{
+	wantChildCfg := &priority.LBConfig{
 		Children: map[string]*priority.Child{
 			"priority-0-0": {
 				Config:                     createPriorityConfig(edsClusterName),
@@ -426,19 +393,14 @@ func (s) TestAggregatedClusterSuccess_SwitchBetweenLeafAndAggregate(t *testing.T
 		Clusters:  []*v3clusterpb.Cluster{e2e.DefaultCluster(clusterName, serviceName, e2e.SecurityLevelNone)},
 		Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(serviceName, host, []uint32{port})},
 	}
+	// Drain odCfgCh before sending non-aggregate update, as aggregate children pushed outlier configs into odCfgCh.
+	for len(odCfgCh) > 0 {
+		<-odCfgCh
+	}
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
-	wantChildCfg = &priority.LBConfig{
-		Children: map[string]*priority.Child{
-			"priority-0-0": {
-				Config:                     createPriorityConfig(clusterName),
-				IgnoreReresolutionRequests: true,
-			},
-		},
-		Priorities: []string{"priority-0-0"},
-	}
-	if err := compareLoadBalancingConfig(ctx, lbCfgCh, wantChildCfg); err != nil {
+	if err := compareLoadBalancingConfig(ctx, odCfgCh, wantSingleChildCfg); err != nil {
 		t.Fatal(err)
 	}
 }

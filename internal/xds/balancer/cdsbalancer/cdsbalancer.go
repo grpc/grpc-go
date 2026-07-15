@@ -41,16 +41,20 @@ import (
 const cdsName = "cds_experimental"
 
 var (
-	// newChildBalancer is a helper function to build a new priority balancer
-	// and will be overridden in unittests.
-	newChildBalancer = func(cc balancer.ClientConn, opts balancer.BuildOptions) (balancer.Balancer, error) {
-		builder := balancer.Get(priority.Name)
+	// newChildBalancer is a helper function to build a new child balancer and its
+	// config parser, and will be overridden in unittests.
+	newChildBalancer = func(name string, cc balancer.ClientConn, opts balancer.BuildOptions) (balancer.Balancer, balancer.ConfigParser, error) {
+		builder := balancer.Get(name)
 		if builder == nil {
-			return nil, fmt.Errorf("xds: no balancer builder with name %v", priority.Name)
+			return nil, nil, fmt.Errorf("xds: no balancer builder with name %v", name)
 		}
-		// We directly pass the parent clientConn to the underlying priority
+		parser, ok := builder.(balancer.ConfigParser)
+		if !ok {
+			return nil, nil, fmt.Errorf("xds: balancer builder for %v does not implement ConfigParser", name)
+		}
+		// We directly pass the parent clientConn to the underlying child
 		// balancer because the cdsBalancer does not deal with subConns.
-		return builder.Build(cc, opts), nil
+		return builder.Build(cc, opts), parser, nil
 	}
 )
 
@@ -134,6 +138,7 @@ type cdsBalancer struct {
 	// protect access to these fields.
 	xdsClient         xdsclient.XDSClient
 	childLB           balancer.Balancer                     // Child policy, built upon resolution of the cluster graph.
+	childLBName       string                                // Name of the child policy.
 	clusterConfigs    map[string]*xdsresource.ClusterResult // Cluster name to the last received result for that cluster.
 	priorityConfigs   map[string]*priorityConfig            // Hostname to priority config for that leaf cluster.
 	lbCfg             *lbConfig                             // Current load balancing configuration.
@@ -267,18 +272,45 @@ func (b *cdsBalancer) handleClusterUpdate() error {
 // A child policy is created if one doesn't already exist. The newly built
 // configuration is then pushed to the child policy.
 func (b *cdsBalancer) updateChildConfig() error {
-	if b.childLB == nil {
-		childLB, err := newChildBalancer(b.cc, b.bOpts)
-		if err != nil {
-			return fmt.Errorf("failed to create child policy of type %s: %v", priority.Name, err)
-		}
-		b.childLB = childLB
+	clusterName := b.lbCfg.ClusterName
+	clusterConfig := b.clusterConfigs[clusterName].Config
+	isAggregate := clusterConfig.Cluster.ClusterType == xdsresource.ClusterTypeAggregate
+
+	var topLBName string
+	if isAggregate {
+		topLBName = priority.Name
+	} else {
+		topLBName = outlierdetection.Name
 	}
 
-	childCfgBytes, endpoints, err := buildPriorityConfigJSON(b.priorities, &b.xdsLBPolicy)
+	if b.childLB != nil && b.childLBName != topLBName {
+		b.childLB.Close()
+		b.childLB = nil
+	}
+
+	if b.childLB == nil {
+		childLB, parser, err := newChildBalancer(topLBName, b.cc, b.bOpts)
+		if err != nil {
+			return fmt.Errorf("failed to create child policy of type %s: %v", topLBName, err)
+		}
+		b.childLB = childLB
+		b.childLBName = topLBName
+		b.childConfigParser = parser
+	}
+
+	var childCfgBytes []byte
+	var endpoints []resolver.Endpoint
+	var err error
+
+	if isAggregate {
+		childCfgBytes, endpoints, err = buildAggregateClusterPriorityConfigJSON(b.priorities, &b.xdsLBPolicy)
+	} else {
+		childCfgBytes, endpoints, err = buildSingleClusterConfigJSON(b.priorities[0], &b.xdsLBPolicy)
+	}
 	if err != nil {
 		return fmt.Errorf("failed to build child policy config: %v", err)
 	}
+
 	childCfg, err := b.childConfigParser.ParseConfig(childCfgBytes)
 	if err != nil {
 		return fmt.Errorf("failed to parse child policy config. This should never happen because the config was generated: %v", err)

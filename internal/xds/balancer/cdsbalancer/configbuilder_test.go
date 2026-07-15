@@ -130,9 +130,9 @@ func makeLocality(localityIdx int, localityWeight, priority uint32, endpointCoun
 	}
 }
 
-// TestBuildPriorityConfigJSON is a sanity check that the built balancer config
-// can be parsed. The behavior test is covered by TestBuildPriorityConfig.
-func (s) TestBuildPriorityConfigJSON(t *testing.T) {
+// TestBuildAggregateClusterPriorityConfigJSON is a sanity check that the built balancer config
+// can be parsed. The behavior test is covered by TestBuildAggregateClusterPriorityConfig.
+func (s) TestBuildAggregateClusterPriorityConfigJSON(t *testing.T) {
 	testLRSServerConfig, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{
 		URI:          "trafficdirector.googleapis.com:443",
 		ChannelCreds: []bootstrap.ChannelCreds{{Type: "google_default"}},
@@ -141,7 +141,7 @@ func (s) TestBuildPriorityConfigJSON(t *testing.T) {
 		t.Fatalf("Failed to create LRS server config for testing: %v", err)
 	}
 
-	gotConfig, _, err := buildPriorityConfigJSON([]*priorityConfig{
+	gotConfig, _, err := buildAggregateClusterPriorityConfigJSON([]*priorityConfig{
 		{
 			clusterConfig: &xdsresource.ClusterConfig{
 				Cluster: &xdsresource.ClusterUpdate{
@@ -182,7 +182,7 @@ func (s) TestBuildPriorityConfigJSON(t *testing.T) {
 		},
 	}, nil)
 	if err != nil {
-		t.Fatalf("buildPriorityConfigJSON(...) failed: %v", err)
+		t.Fatalf("buildAggregateClusterPriorityConfigJSON(...) failed: %v", err)
 	}
 
 	var prettyGot bytes.Buffer
@@ -198,11 +198,11 @@ func (s) TestBuildPriorityConfigJSON(t *testing.T) {
 	}
 }
 
-// TestBuildPriorityConfig tests the priority config generation. Each top level
+// TestBuildAggregateClusterPriorityConfig tests the priority config generation. Each top level
 // balancer per priority should be an Outlier Detection balancer, with a Cluster
 // Impl Balancer as a child.
-func (s) TestBuildPriorityConfig(t *testing.T) {
-	gotConfig, _, _ := buildPriorityConfig([]*priorityConfig{
+func (s) TestBuildAggregateClusterPriorityConfig(t *testing.T) {
+	gotConfig, _, _ := buildAggregateClusterPriorityConfig([]*priorityConfig{
 		{
 			// EDS - OD config should be the top level for both of the EDS
 			// priorities balancer This EDS priority will have multiple sub
