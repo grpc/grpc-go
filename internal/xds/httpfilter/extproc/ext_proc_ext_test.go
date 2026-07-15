@@ -940,6 +940,13 @@ func (s) TestTrailersOnly(t *testing.T) {
 		t.Fatal("Timeout waiting for processing server to receive response headers")
 	}
 
+	// Verify that calling Header() on a trailers-only stream returns nil, nil to
+	// be consistent with non-extproc streams.
+	headerMetadata, err := stream.Header()
+	if err != nil || headerMetadata != nil {
+		t.Fatalf("stream.Header() = (%v, %v), want (nil, nil)", headerMetadata, err)
+	}
+
 	// Verify mutated response trailers
 	trailerMetadata := stream.Trailer()
 	gotTrailers := trailerMetadata.Get("resp-header-modified")

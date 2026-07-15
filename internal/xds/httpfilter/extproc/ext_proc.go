@@ -292,7 +292,7 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 	var err error
 	cs.procStream, err = i.procClient.Process(procCtx)
 	if err != nil {
-		return cs.handleInitError(fmt.Errorf("failed to create a stream to external processor server: %v", err), newStream, opts)
+		return cs.handleProcStreamInitError(fmt.Errorf("failed to create a stream to external processor server: %v", err), newStream, opts)
 	}
 
 	// Build request attributes upfront to capture the original un-mutated headers
@@ -314,7 +314,7 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 			},
 		}
 		if err = cs.procStream.Send(headerReq); err != nil {
-			return cs.handleInitError(fmt.Errorf("failed to send client headers to external processor server: %v", err), newStream, opts)
+			return cs.handleProcStreamInitError(fmt.Errorf("failed to send client headers to external processor server: %v", err), newStream, opts)
 		}
 	} else {
 		if err = cs.createDataplaneStream(cs.ctx, newStream, opts); err != nil {
@@ -420,6 +420,9 @@ func (cs *clientStream) Header() (metadata.MD, error) {
 			return nil, val.(error)
 		}
 		return nil, status.FromContextError(cs.ctx.Err()).Err()
+	}
+	if cs.trailersOnly {
+		return nil, nil
 	}
 	return cs.responseHeader, nil
 }
@@ -1063,10 +1066,11 @@ func (cs *clientStream) cancelStream(err error) {
 	cs.cancel()
 }
 
-// handleInitError handles failures during the initialization of the external
-// processor stream in NewStream. It returns the client stream initialised with
-// dataplane stream if failure mode allows, else returns the error.
-func (cs *clientStream) handleInitError(err error, newStream func(context.Context, ...grpc.CallOption) (grpc.ClientStream, error), opts []grpc.CallOption) (grpc.ClientStream, error) {
+// handleProcStreamInitError handles failures during the initialization of the
+// external processor stream in NewStream. It returns the client stream
+// initialised with dataplane stream if failure mode allows, else returns the
+// error.
+func (cs *clientStream) handleProcStreamInitError(err error, newStream func(context.Context, ...grpc.CallOption) (grpc.ClientStream, error), opts []grpc.CallOption) (grpc.ClientStream, error) {
 	cs.procCancel()
 	if !cs.config.failureModeAllow {
 		return nil, status.Errorf(codes.Internal, "extproc: %v", err)
@@ -1075,7 +1079,7 @@ func (cs *clientStream) handleInitError(err error, newStream func(context.Contex
 	if err := cs.createDataplaneStream(cs.ctx, newStream, opts); err != nil {
 		return nil, err
 	}
-	return cs, nil
+	return cs.dataplaneStream, nil
 }
 
 // handleHeaderError handles failures that occur during receiving or processing
@@ -1103,8 +1107,8 @@ func (cs *clientStream) handleHeaderError(err error, newStream func(context.Cont
 // processInitialHeaders waits for the initial header response from the external
 // processor server, applies any requested header mutations to the outgoing
 // context, and initializes the data plane stream. It returns true on success,
-// or false if the stream is aborted due to an error, immediate response, or
-// invalid status.
+// or false if the proc stream is aborted due to an error, immediate response,
+// or invalid status.
 func (cs *clientStream) processInitialHeaders(ctx context.Context, newStream func(context.Context, ...grpc.CallOption) (grpc.ClientStream, error), opts []grpc.CallOption) bool {
 	resp, err := cs.procStream.Recv()
 	if err != nil {
@@ -1295,6 +1299,14 @@ func (cs *clientStream) initiateResponseTrailerProcessing() {
 			}
 			cs.responseTrailers = cs.responseHeader
 			cs.responseTrailerModified.Fire()
+			// Send nil sentinel to procSendCh to gracefully half-close the processor
+			// stream across trailers-only responses once header mutations finish.
+			select {
+			case cs.procSendCh <- nil:
+			case <-cs.ctx.Done():
+			case <-cs.procStreamFailed.Done():
+			case <-cs.procBypassCh:
+			}
 			return
 		}
 		cs.responseTrailers = cs.dataplaneStream.Trailer()
