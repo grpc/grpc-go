@@ -29,6 +29,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/credentials"
@@ -1115,18 +1116,17 @@ func (s) TestServerAuthEKUValidation(t *testing.T) {
 		wantErr           bool
 	}{
 		{
-			desc:              "SkipServerAuthEKU is false (default) -> handshake fails",
+			desc:              "SkipServerAuthEKU_False_HandshakeFails",
 			skipServerAuthEKU: false,
 			wantErr:           true,
 		},
 		{
-			desc:              "SkipServerAuthEKU is true -> handshake succeeds",
+			desc:              "SkipServerAuthEKU_True_HandshakeSucceeds",
 			skipServerAuthEKU: true,
 			wantErr:           false,
 		},
 	} {
 		t.Run(test.desc, func(t *testing.T) {
-			done := make(chan credentials.AuthInfo, 1)
 			lis, err := net.Listen("tcp", "localhost:0")
 			if err != nil {
 				t.Fatalf("Failed to listen: %v", err)
@@ -1139,6 +1139,7 @@ func (s) TestServerAuthEKUValidation(t *testing.T) {
 				},
 				VerificationType: CertVerification,
 			}
+			done := make(chan credentials.AuthInfo, 1)
 			go func() {
 				serverRawConn, err := lis.Accept()
 				if err != nil {
@@ -1185,7 +1186,11 @@ func (s) TestServerAuthEKUValidation(t *testing.T) {
 			_, _, handshakeErr := clientTLS.ClientHandshake(ctx, lisAddr, conn)
 
 			// wait for server side to finish
-			<-done
+			select {
+			case <-done:
+			case <-time.After(defaultTestTimeout):
+				t.Fatalf("timed out waiting for server handshake to finish")
+			}
 
 			gotErr := handshakeErr != nil
 			if gotErr != test.wantErr {

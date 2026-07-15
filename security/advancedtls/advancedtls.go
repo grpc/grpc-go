@@ -565,11 +565,13 @@ func buildVerifyFunc(c *advancedTLSCreds,
 				rootCAs = results.TrustCerts
 			}
 			// Verify peers' certificates against RootCAs and get verifiedChains.
-			keyUsages := []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}
-			if c.isClient && c.skipServerAuthEKU {
-				keyUsages = []x509.ExtKeyUsage{x509.ExtKeyUsageAny}
-			} else if !c.isClient {
-				keyUsages = []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth}
+			keyUsages := []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth}
+			if c.isClient {
+				if c.skipServerAuthEKU {
+					keyUsages = []x509.ExtKeyUsage{x509.ExtKeyUsageAny}
+				} else {
+					keyUsages = []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}
+				}
 			}
 			opts := x509.VerifyOptions{
 				Roots:         rootCAs,
