@@ -65,7 +65,7 @@ func (i *StaticInterceptor) UnaryInterceptor(ctx context.Context, req any, _ *gr
 			if logger.V(2) {
 				logger.Infof("unauthorized RPC request rejected: %v", err)
 			}
-			return nil, status.Errorf(codes.PermissionDenied, "unauthorized RPC request rejected")
+			return nil, status.Errorf(codes.PermissionDenied, "authz: unauthorized RPC request rejected")
 		}
 		return nil, err
 	}
@@ -82,7 +82,7 @@ func (i *StaticInterceptor) StreamInterceptor(srv any, ss grpc.ServerStream, _ *
 			if logger.V(2) {
 				logger.Infof("unauthorized RPC request rejected: %v", err)
 			}
-			return status.Errorf(codes.PermissionDenied, "unauthorized RPC request rejected")
+			return status.Errorf(codes.PermissionDenied, "authz: unauthorized RPC request rejected")
 		}
 		return err
 	}
@@ -92,24 +92,54 @@ func (i *StaticInterceptor) StreamInterceptor(srv any, ss grpc.ServerStream, _ *
 // FileWatcherInterceptor contains details used to make authorization decisions
 // by watching a file path that contains authorization policy in JSON format.
 type FileWatcherInterceptor struct {
+	options             FileWatcherOptions
 	internalInterceptor unsafe.Pointer // *StaticInterceptor
-	policyFile          string
 	policyContents      []byte
-	refreshDuration     time.Duration
 	cancel              context.CancelFunc
+}
+
+// FileWatcherOptions contains configuration options for the
+// FileWatcherInterceptor.
+//
+// # Experimental
+//
+// Notice: This API is EXPERIMENTAL and may be changed or removed in a
+// later release.
+type FileWatcherOptions struct {
+	// PolicyFile contains a JSON string of the authorization policy.
+	PolicyFile string
+	// RefreshDuration is the delay between policy refreshes.
+	RefreshDuration time.Duration
+	// OnPolicyUpdate is a callback to be invoked when a policy is
+	// loaded/updated. The loaded policy string is passed as an argument.
+	//
+	// The callback is executed synchronously, so should complete quickly or
+	// risk blocking future updates.
+	OnPolicyUpdate func(string)
 }
 
 // NewFileWatcher returns a new FileWatcherInterceptor from a policy file
 // that contains JSON string of authorization policy and a refresh duration to
 // specify the amount of time between policy refreshes.
 func NewFileWatcher(file string, duration time.Duration) (*FileWatcherInterceptor, error) {
-	if file == "" {
-		return nil, fmt.Errorf("authorization policy file path is empty")
+	return NewFileWatcherWithOptions(FileWatcherOptions{PolicyFile: file, RefreshDuration: duration, OnPolicyUpdate: nil})
+}
+
+// NewFileWatcherWithOptions returns a new FileWatcherInterceptor from a set of
+// options.
+//
+// # Experimental
+//
+// Notice: This API is EXPERIMENTAL and may be changed or removed in a
+// later release.
+func NewFileWatcherWithOptions(options FileWatcherOptions) (*FileWatcherInterceptor, error) {
+	if options.PolicyFile == "" {
+		return nil, fmt.Errorf("authz: authorization policy file path is empty")
 	}
-	if duration <= time.Duration(0) {
-		return nil, fmt.Errorf("requires refresh interval(%v) greater than 0s", duration)
+	if options.RefreshDuration <= time.Duration(0) {
+		return nil, fmt.Errorf("authz: requires refresh interval(%v) greater than 0s", options.RefreshDuration)
 	}
-	i := &FileWatcherInterceptor{policyFile: file, refreshDuration: duration}
+	i := &FileWatcherInterceptor{options: options}
 	if err := i.updateInternalInterceptor(); err != nil {
 		return nil, err
 	}
@@ -121,7 +151,7 @@ func NewFileWatcher(file string, duration time.Duration) (*FileWatcherIntercepto
 }
 
 func (i *FileWatcherInterceptor) run(ctx context.Context) {
-	ticker := time.NewTicker(i.refreshDuration)
+	ticker := time.NewTicker(i.options.RefreshDuration)
 	for {
 		if err := i.updateInternalInterceptor(); err != nil {
 			logger.Warningf("authorization policy reload status err: %v", err)
@@ -140,9 +170,9 @@ func (i *FileWatcherInterceptor) run(ctx context.Context) {
 // constructor, if there is an error in reading the file or parsing the policy, the
 // previous internalInterceptors will not be replaced.
 func (i *FileWatcherInterceptor) updateInternalInterceptor() error {
-	policyContents, err := os.ReadFile(i.policyFile)
+	policyContents, err := os.ReadFile(i.options.PolicyFile)
 	if err != nil {
-		return fmt.Errorf("policyFile(%s) read failed: %v", i.policyFile, err)
+		return fmt.Errorf("policyFile(%s) read failed: %v", i.options.PolicyFile, err)
 	}
 	if bytes.Equal(i.policyContents, policyContents) {
 		return nil
@@ -155,6 +185,9 @@ func (i *FileWatcherInterceptor) updateInternalInterceptor() error {
 	}
 	atomic.StorePointer(&i.internalInterceptor, unsafe.Pointer(interceptor))
 	logger.Infof("authorization policy reload status: successfully loaded new policy %v", policyContentsString)
+	if i.options.OnPolicyUpdate != nil {
+		i.options.OnPolicyUpdate(policyContentsString)
+	}
 	return nil
 }
 
