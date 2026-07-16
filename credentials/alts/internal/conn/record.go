@@ -67,7 +67,7 @@ const (
 	altsRecordMsgType = uint32(0x06)
 	// The maximum write buffer size. This *must* be multiple of
 	// altsRecordDefaultLength.
-	altsWriteBufferMaxSize = 512 * 1024 // 512KiB
+	altsWriteBufferMaxSize = 1024 * 1024 // 1 MiB
 	// The initial buffer used to read from the network.
 	// It includes an additional 512 Bytes to hold two 16KiB records plus
 	// small framing overheads.
@@ -95,7 +95,8 @@ func init() {
 		15, // 32KB (default buffer size for gRPC)
 		16, // 64KB
 		17, // 128KB
-		19, // 512KB, max write buffer size
+		19, // 512KB
+		20, // 1024KB (1MB), max write buffer size
 	)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to create write buffer pool: %v", err))
@@ -136,7 +137,7 @@ type conn struct {
 
 // NewConn creates a new secure channel instance given the other party role and
 // handshaking result.
-func NewConn(c net.Conn, side core.Side, recordProtocol string, key []byte, protected []byte) (net.Conn, error) {
+func NewConn(c net.Conn, side core.Side, recordProtocol string, key []byte, protected []byte, negotiatedFrameSize int) (net.Conn, error) {
 	newCrypto := protocols[recordProtocol]
 	if newCrypto == nil {
 		return nil, fmt.Errorf("negotiated unknown next_protocol %q", recordProtocol)
@@ -146,7 +147,17 @@ func NewConn(c net.Conn, side core.Side, recordProtocol string, key []byte, prot
 		return nil, fmt.Errorf("protocol %q: %v", recordProtocol, err)
 	}
 	overhead := MsgLenFieldSize + msgTypeFieldSize + crypto.EncryptionOverhead()
-	payloadLengthLimit := altsRecordDefaultLength - overhead
+
+	maxRecordLen := altsRecordDefaultLength
+	if negotiatedFrameSize > altsWriteBufferMaxSize {
+		// Prevent infinite loops during buffer fragmentation
+		maxRecordLen = altsWriteBufferMaxSize
+	} else if negotiatedFrameSize > altsRecordDefaultLength {
+		// Only trust appropriately scaled max frame sizes
+		maxRecordLen = negotiatedFrameSize
+	}
+
+	payloadLengthLimit := maxRecordLen - overhead
 	// We pre-allocate protected to be of size 32KB during initialization.
 	// We increase the size of the buffer by the required amount if it can't
 	// hold a complete encrypted record.
@@ -321,7 +332,7 @@ func (p *conn) Write(b []byte) (n int, err error) {
 	partialBSize := len(b)
 	if size > altsWriteBufferMaxSize {
 		size = altsWriteBufferMaxSize
-		const numOfFramesInMaxWriteBuf = altsWriteBufferMaxSize / altsRecordDefaultLength
+		numOfFramesInMaxWriteBuf := altsWriteBufferMaxSize / (p.payloadLengthLimit + p.overhead)
 		partialBSize = numOfFramesInMaxWriteBuf * p.payloadLengthLimit
 	}
 	// Get a writeBuf of the required length.
@@ -363,7 +374,7 @@ func (p *conn) Write(b []byte) (n int, err error) {
 			// written. This means we need to remove header,
 			// encryption overheads, and any partially-written
 			// frame data.
-			numOfWrittenFrames := int(math.Floor(float64(nn) / float64(altsRecordDefaultLength)))
+			numOfWrittenFrames := int(math.Floor(float64(nn) / float64(p.payloadLengthLimit+p.overhead)))
 			return partialBStart + numOfWrittenFrames*p.payloadLengthLimit, err
 		}
 	}
