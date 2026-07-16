@@ -252,7 +252,7 @@ func main() {
 		logger.Fatal("Invalid creds")
 	}
 	if credsChosen == credsTLS {
-		if *testCase == "compute_engine_creds" {
+		if *testCase == "compute_engine_creds" || *defaultServiceAccount != "" {
 			opts = append(opts, grpc.WithPerRPCCredentials(oauth.NewComputeEngine()))
 		} else if *testCase == "service_account_creds" {
 			jwtCreds, err := oauth.NewServiceAccountFromFile(*serviceAccountKeyFile, *oauthScope)
