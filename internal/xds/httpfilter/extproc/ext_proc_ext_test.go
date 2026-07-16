@@ -2087,9 +2087,8 @@ func (s) TestDrainingUnderLoad(t *testing.T) {
 					return status.Errorf(codes.FailedPrecondition, "expected body %q, got %q", want, got)
 				}
 
-				resp := fmt.Sprintf("s%d", i)
 				if err := stream.Send(&testpb.StreamingOutputCallResponse{
-					Payload: &testpb.Payload{Body: []byte(resp)},
+					Payload: &testpb.Payload{Body: fmt.Appendf(nil, "s%d", i)},
 				}); err != nil {
 					return fmt.Errorf("backend Send(%d) failed: %v", i, err)
 				}
@@ -2121,9 +2120,8 @@ func (s) TestDrainingUnderLoad(t *testing.T) {
 	}
 
 	for i := 1; i <= 50; i++ {
-		req := fmt.Sprintf("c%d", i)
 		if err := stream.Send(&testpb.StreamingOutputCallRequest{
-			Payload: &testpb.Payload{Body: []byte(req)},
+			Payload: &testpb.Payload{Body: fmt.Appendf(nil, "c%d", i)},
 		}); err != nil {
 			t.Fatalf("client Send(%d) failed: %v", i, err)
 		}
@@ -2869,7 +2867,7 @@ func (s) TestConcurrency(t *testing.T) {
 		defer wg.Done()
 		for j := 0; j < 50; j++ {
 			if err := stream.Send(&testpb.StreamingOutputCallRequest{
-				Payload: &testpb.Payload{Body: []byte(fmt.Sprintf("body-%d", j))},
+				Payload: &testpb.Payload{Body: fmt.Appendf(nil, "body-%d", j)},
 			}); err != nil {
 				break
 			}

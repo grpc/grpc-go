@@ -223,10 +223,10 @@ func ConstructHeaderMap(md metadata.MD, added [][]string, allowedHeaders, disall
 	headerMap := &v3corepb.HeaderMap{}
 	// Process the base metadata map.
 	for key, values := range md {
-		if IsDisallowedHeader(key, disallowedHeaders) {
+		if isDisallowedHeader(key, disallowedHeaders) {
 			continue
 		}
-		if IsAllowedHeader(key, allowedHeaders) {
+		if isAllowedHeader(key, allowedHeaders) {
 			for _, value := range values {
 				headerMap.Headers = append(headerMap.Headers, &v3corepb.HeaderValue{
 					Key:      key,
@@ -239,10 +239,10 @@ func ConstructHeaderMap(md metadata.MD, added [][]string, allowedHeaders, disall
 	for _, kvs := range added {
 		for i := 0; i < len(kvs); i += 2 {
 			key := strings.ToLower(kvs[i])
-			if IsDisallowedHeader(key, disallowedHeaders) {
+			if isDisallowedHeader(key, disallowedHeaders) {
 				continue
 			}
-			if IsAllowedHeader(key, allowedHeaders) {
+			if isAllowedHeader(key, allowedHeaders) {
 				headerMap.Headers = append(headerMap.Headers, &v3corepb.HeaderValue{
 					Key:      key,
 					RawValue: []byte(kvs[i+1]),
@@ -256,9 +256,9 @@ func ConstructHeaderMap(md metadata.MD, added [][]string, allowedHeaders, disall
 	return headerMap
 }
 
-// IsDisallowedHeader returns true if the given header key matches any of the
+// isDisallowedHeader returns true if the given header key matches any of the
 // provided disallowed header matchers.
-func IsDisallowedHeader(key string, matchers []matcher.StringMatcher) bool {
+func isDisallowedHeader(key string, matchers []matcher.StringMatcher) bool {
 	for _, m := range matchers {
 		if m.Match(key) {
 			return true
@@ -267,9 +267,9 @@ func IsDisallowedHeader(key string, matchers []matcher.StringMatcher) bool {
 	return false
 }
 
-// IsAllowedHeader returns true if the allowed header matchers list is empty, or
+// isAllowedHeader returns true if the allowed header matchers list is empty, or
 // if the given header key matches any of the provided allowed header matchers.
-func IsAllowedHeader(key string, matchers []matcher.StringMatcher) bool {
+func isAllowedHeader(key string, matchers []matcher.StringMatcher) bool {
 	if len(matchers) == 0 {
 		return true
 	}
