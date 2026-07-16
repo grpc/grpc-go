@@ -595,6 +595,23 @@ func (s) TestConstructHeaderMap(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "WithBinaryHeaders",
+			md: metadata.MD{
+				"a-bin": {"\x00\x01\x02"},
+				"b":     {"1"},
+			},
+			added: [][]string{
+				{"c-bin", "\x03\x04\x05"},
+			},
+			wantHeaderMap: &v3corepb.HeaderMap{
+				Headers: []*v3corepb.HeaderValue{
+					{Key: "a-bin", RawValue: []byte("AAEC")},
+					{Key: "b", RawValue: []byte("1")},
+					{Key: "c-bin", RawValue: []byte("AwQF")},
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {

@@ -19,6 +19,7 @@
 package httpfilter
 
 import (
+	"encoding/base64"
 	"fmt"
 	"regexp"
 	"strings"
@@ -228,9 +229,13 @@ func ConstructHeaderMap(md metadata.MD, added [][]string, allowedHeaders, disall
 		}
 		if isAllowedHeader(key, allowedHeaders) {
 			for _, value := range values {
+				rawValue := []byte(value)
+				if strings.HasSuffix(key, "-bin") {
+					rawValue = []byte(base64.StdEncoding.EncodeToString(rawValue))
+				}
 				headerMap.Headers = append(headerMap.Headers, &v3corepb.HeaderValue{
 					Key:      key,
-					RawValue: []byte(value),
+					RawValue: rawValue,
 				})
 			}
 		}
@@ -243,9 +248,13 @@ func ConstructHeaderMap(md metadata.MD, added [][]string, allowedHeaders, disall
 				continue
 			}
 			if isAllowedHeader(key, allowedHeaders) {
+				rawValue := []byte(kvs[i+1])
+				if strings.HasSuffix(key, "-bin") {
+					rawValue = []byte(base64.StdEncoding.EncodeToString(rawValue))
+				}
 				headerMap.Headers = append(headerMap.Headers, &v3corepb.HeaderValue{
 					Key:      key,
-					RawValue: []byte(kvs[i+1]),
+					RawValue: rawValue,
 				})
 			}
 		}
