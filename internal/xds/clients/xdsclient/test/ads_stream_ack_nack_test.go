@@ -512,16 +512,18 @@ func (s) TestADS_ACK_NACK_ResourceIsNotRequestedAnymore(t *testing.T) {
 // invalid LDS resource is sent by the server, the client suppresses the
 // duplicate error notification to the watcher.
 func (s) TestADS_NACKError_DuplicateSuppression(t *testing.T) {
-	nackReceivedCh := make(chan struct{})
+	nacksReceivedCh := make(chan struct{})
 	var nackCount atomic.Int32
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
 		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
 			if req.GetTypeUrl() != xdsresource.V3ListenerURL {
 				return nil
 			}
+			// Close the NACKS channel when at least three updated errors (duplicate NACKs)
+			// were received to test if they were suppressed.
 			if req.GetErrorDetail() != nil {
 				if count := nackCount.Add(1); count == 3 {
-					close(nackReceivedCh)
+					close(nacksReceivedCh)
 				}
 			}
 			return nil
@@ -566,7 +568,7 @@ func (s) TestADS_NACKError_DuplicateSuppression(t *testing.T) {
 	// Wait for the management server to receive at least 3 NACKs, indicating that
 	// the NACK resend loop has run multiple times.
 	select {
-	case <-nackReceivedCh:
+	case <-nacksReceivedCh:
 	case <-ctx.Done():
 		t.Fatalf("timeout waiting for 3 NACKs to be received by the server: %v", ctx.Err())
 	}
@@ -578,21 +580,119 @@ func (s) TestADS_NACKError_DuplicateSuppression(t *testing.T) {
 	}
 }
 
+// TestADS_NACKError_DuplicateSuppression_ConcatenatedErrorChange verifies that
+// when multiple invalid resources cause a concatenated error stored in metadata,
+// and a subsequent update carries a duplicate error for only a subset of resources
+// (changing the concatenated error string), the client still suppresses the
+// duplicate error notification to the watcher.
+func (s) TestADS_NACKError_DuplicateSuppression_ConcatenatedErrorChange(t *testing.T) {
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
+
+	const listenerName1 = "listener-1"
+	const listenerName2 = "listener-2"
+	nodeID := uuid.New().String()
+
+	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
+	client := createXDSClient(t, mgmtServer.Address, nodeID, grpctransport.NewBuilder(configs))
+
+	errCh1 := testutils.NewChannelWithSize(1)
+	watcher1 := &countingListenerWatcher{errCh: errCh1}
+	ldsCancel1 := client.WatchResource(xdsresource.V3ListenerURL, listenerName1, watcher1)
+	defer ldsCancel1()
+
+	errCh2 := testutils.NewChannelWithSize(1)
+	updateCh2 := testutils.NewChannelWithSize(1)
+	watcher2 := &countingListenerWatcher{errCh: errCh2, updateCh: updateCh2}
+	ldsCancel2 := client.WatchResource(xdsresource.V3ListenerURL, listenerName2, watcher2)
+	defer ldsCancel2()
+
+	// Update 1: Management server sends two invalid listener resources.
+	resources1 := e2e.UpdateOptions{
+		NodeID: nodeID,
+		Listeners: []*v3listenerpb.Listener{
+			badListenerResource(t, listenerName1),
+			badListenerResource(t, listenerName2),
+		},
+		SkipValidation: true,
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	if err := mgmtServer.Update(ctx, resources1); err != nil {
+		t.Fatalf("Failed to update management server with resources: %v, err: %v", resources1, err)
+	}
+
+	// Verify that watcher1 receives the initial error for listener 1.
+	v1, err := errCh1.Receive(ctx)
+	if err != nil {
+		t.Fatalf("timeout waiting for listener 1 error from management server: %v", err)
+	}
+	gotErr1 := v1.(error)
+	wantNackErr := "no RouteSpecifier"
+	if !strings.Contains(gotErr1.Error(), wantNackErr) {
+		t.Fatalf("update 1 listener 1 received with error: %v, want %q", gotErr1, wantNackErr)
+	}
+
+	// Verify that watcher2 receives the initial error for listener 2.
+	v2, err := errCh2.Receive(ctx)
+	if err != nil {
+		t.Fatalf("timeout waiting for listener 2 error from management server: %v", err)
+	}
+	gotErr2 := v2.(error)
+	if !strings.Contains(gotErr2.Error(), wantNackErr) {
+		t.Fatalf("update 1 listener 2 received with error: %v, want %q", gotErr2, wantNackErr)
+	}
+
+	// Update 2: Management server sends listener 1 still invalid, but listener 2 now valid.
+	// This changes the concatenated error stored in metadata (from Error1+Error2 to just Error1).
+	resources2 := e2e.UpdateOptions{
+		NodeID: nodeID,
+		Listeners: []*v3listenerpb.Listener{
+			badListenerResource(t, listenerName1),
+			e2e.DefaultClientListener(listenerName2, "route-config-2"),
+		},
+		SkipValidation: true,
+	}
+
+	if err := mgmtServer.Update(ctx, resources2); err != nil {
+		t.Fatalf("Failed to update management server with resources: %v, err: %v", resources2, err)
+	}
+
+	// Wait for watcher2 to receive the valid resource update for listener 2.
+	if _, err := updateCh2.Receive(ctx); err != nil {
+		t.Fatalf("timeout waiting for listener 2 resource update: %v", err)
+	}
+
+	// Verify that watcher1 error callback count is still 1, proving that the
+	// duplicate error on listener 1 was suppressed despite the concatenated error changing.
+	if count := watcher1.errCount.Load(); count != 1 {
+		t.Fatalf("Watcher 1 error callback invoked %d times, want 1", count)
+	}
+}
+
 type countingListenerWatcher struct {
 	errCh    *testutils.Channel
+	updateCh *testutils.Channel
 	errCount atomic.Int32
 }
 
-func (*countingListenerWatcher) ResourceChanged(_ xdsclient.ResourceData, done func()) {
+func (c *countingListenerWatcher) ResourceChanged(_ xdsclient.ResourceData, done func()) {
+	if c.updateCh != nil {
+		c.updateCh.Send(nil)
+	}
 	done()
 }
 func (c *countingListenerWatcher) ResourceError(err error, done func()) {
 	c.errCount.Add(1)
-	c.errCh.Send(err)
+	if c.errCh != nil {
+		c.errCh.Send(err)
+	}
 	done()
 }
 func (c *countingListenerWatcher) AmbientError(err error, done func()) {
 	c.errCount.Add(1)
-	c.errCh.Send(err)
+	if c.errCh != nil {
+		c.errCh.Send(err)
+	}
 	done()
 }
