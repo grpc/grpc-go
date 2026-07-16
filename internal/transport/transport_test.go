@@ -1885,6 +1885,32 @@ func (s) TestAccountCheckDynamicWindowLargeMessage(t *testing.T) {
 	testFlowControlAccountCheck(t, 1024*1024, windowSizeConfig{}, defaultTestTimeout)
 }
 
+func (t *http2Server) getOutStream(ctx context.Context, id uint32) *outStream {
+	resp := make(chan *outStream, 1)
+	t.controlBuf.put(&outStreamRequestForTesting{streamID: id, resp: resp})
+	select {
+	case s := <-resp:
+		return s
+	case <-t.done:
+		return nil
+	case <-ctx.Done():
+		return nil
+	}
+}
+
+func (t *http2Client) getOutStream(ctx context.Context, id uint32) *outStream {
+	resp := make(chan *outStream, 1)
+	t.controlBuf.put(&outStreamRequestForTesting{streamID: id, resp: resp})
+	select {
+	case s := <-resp:
+		return s
+	case <-t.ctxDone:
+		return nil
+	case <-ctx.Done():
+		return nil
+	}
+}
+
 func testFlowControlAccountCheck(t *testing.T, msgSize int, wc windowSizeConfig, timeout time.Duration) {
 	sc := &ServerConfig{
 		InitialWindowSize:     wc.serverStream,
@@ -1963,21 +1989,28 @@ func testFlowControlAccountCheck(t *testing.T, msgSize int, wc windowSizeConfig,
 		}(stream)
 	}
 	wg.Wait()
+
+	// Fail early if any of the above goroutines failed.
+	if t.Failed() {
+		t.FailNow()
+	}
+
 	serverStreams := map[uint32]*ServerStream{}
 	loopyClientStreams := map[uint32]*outStream{}
 	loopyServerStreams := map[uint32]*outStream{}
-	// Get all the streams from server reader and writer and client writer.
+	// Get all the active streams from the server transport.
 	st.mu.Lock()
-	client.mu.Lock()
 	for _, stream := range clientStreams {
 		id := stream.id
 		serverStreams[id] = st.activeStreams[id]
-		loopyServerStreams[id] = st.loopy.estdStreams[id]
-		loopyClientStreams[id] = client.loopy.estdStreams[id]
-
 	}
-	client.mu.Unlock()
 	st.mu.Unlock()
+
+	for _, stream := range clientStreams {
+		id := stream.id
+		loopyServerStreams[id] = st.getOutStream(ctx, id)
+		loopyClientStreams[id] = client.getOutStream(ctx, id)
+	}
 	// Close all streams
 	for _, stream := range clientStreams {
 		stream.Write(nil, nil, &WriteOptions{Last: true})
@@ -2000,6 +2033,9 @@ func testFlowControlAccountCheck(t *testing.T, msgSize int, wc windowSizeConfig,
 		loopyClientStream := loopyClientStreams[id]
 		if loopyServerStream == nil {
 			t.Fatalf("Unexpected nil loopyServerStream")
+		}
+		if loopyClientStream == nil {
+			t.Fatalf("Unexpected nil loopyClientStream")
 		}
 		// Check stream flow control.
 		if int(cstream.fc.limit+cstream.fc.delta-cstream.fc.pendingData-cstream.fc.pendingUpdate) != int(st.loopy.oiws)-loopyServerStream.bytesOutStanding {
