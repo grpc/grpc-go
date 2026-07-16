@@ -42,6 +42,8 @@ import (
 const (
 	// The maximum byte size of receive frames.
 	frameLimit              = 64 * 1024 // 64 KB
+	// The maximum frame size negotiated natively by ALTS for optimal throughput.
+	maxFrameSize            = 512 * 1024 // 512 KB
 	rekeyRecordProtocolName = "ALTSRP_GCM_AES128_REKEY"
 )
 
@@ -194,6 +196,7 @@ func (h *altsHandshaker) ClientHandshake(ctx context.Context) (net.Conn, credent
 				LocalIdentity:             h.clientOpts.ClientIdentity,
 				TargetName:                h.clientOpts.TargetName,
 				RpcVersions:               h.clientOpts.RPCVersions,
+				MaxFrameSize:              maxFrameSize,
 			},
 		},
 	}
@@ -248,6 +251,7 @@ func (h *altsHandshaker) ServerHandshake(ctx context.Context) (net.Conn, credent
 				HandshakeParameters:  params,
 				InBytes:              p[:n],
 				RpcVersions:          h.serverOpts.RPCVersions,
+				MaxFrameSize:         maxFrameSize,
 			},
 		},
 	}
@@ -289,7 +293,7 @@ func (h *altsHandshaker) doHandshake(req *altspb.HandshakerReq) (net.Conn, *alts
 	if !ok {
 		return nil, nil, fmt.Errorf("unknown resulted record protocol %v", result.RecordProtocol)
 	}
-	sc, err := conn.NewConn(h.conn, h.side, result.GetRecordProtocol(), result.KeyData[:keyLen], extra)
+	sc, err := conn.NewConn(h.conn, h.side, result.GetRecordProtocol(), result.KeyData[:keyLen], extra, int(result.GetMaxFrameSize()))
 	if err != nil {
 		return nil, nil, err
 	}

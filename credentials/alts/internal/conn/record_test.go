@@ -90,7 +90,7 @@ func newTestALTSRecordConn(in, out *bytes.Buffer, side core.Side, rp string, pro
 		in:  in,
 		out: out,
 	}
-	c, err := NewConn(&tc, side, rp, key, protected)
+	c, err := NewConn(&tc, side, rp, key, protected, 0)
 	if err != nil {
 		panic(fmt.Sprintf("Unexpected error creating test ALTS record connection: %v", err))
 	}
@@ -381,7 +381,7 @@ func BenchmarkWriteMemoryUsage(b *testing.B) {
 	conn := &noopConn{}
 
 	for b.Loop() {
-		c, err := NewConn(conn, core.ClientSide, rekeyRecordProtocol, key, nil)
+		c, err := NewConn(conn, core.ClientSide, rekeyRecordProtocol, key, nil, 0)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -433,7 +433,7 @@ func (s) TestParseFramedMsgVulnerability(t *testing.T) {
 	// bytes happen to start with `0x06` (altsRecordMsgType), the vulnerable
 	// code will try to slice `msg[4:]` which panics because len(msg) is 0.
 	malformedProtected := []byte{0x00, 0x00, 0x00, 0x00, 0x06, 0x00, 0x00, 0x00}
-	c, err := NewConn(&tc, core.ServerSide, rekeyRecordProtocol, key, malformedProtected)
+	c, err := NewConn(&tc, core.ServerSide, rekeyRecordProtocol, key, malformedProtected, 0)
 	if err != nil {
 		t.Fatalf("NewConn failed: %v", err)
 	}

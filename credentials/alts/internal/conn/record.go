@@ -136,7 +136,7 @@ type conn struct {
 
 // NewConn creates a new secure channel instance given the other party role and
 // handshaking result.
-func NewConn(c net.Conn, side core.Side, recordProtocol string, key []byte, protected []byte) (net.Conn, error) {
+func NewConn(c net.Conn, side core.Side, recordProtocol string, key []byte, protected []byte, maxFrameSize int) (net.Conn, error) {
 	newCrypto := protocols[recordProtocol]
 	if newCrypto == nil {
 		return nil, fmt.Errorf("negotiated unknown next_protocol %q", recordProtocol)
@@ -146,7 +146,17 @@ func NewConn(c net.Conn, side core.Side, recordProtocol string, key []byte, prot
 		return nil, fmt.Errorf("protocol %q: %v", recordProtocol, err)
 	}
 	overhead := MsgLenFieldSize + msgTypeFieldSize + crypto.EncryptionOverhead()
-	payloadLengthLimit := altsRecordDefaultLength - overhead
+
+	maxRecordLen := altsRecordDefaultLength
+	if maxFrameSize > altsWriteBufferMaxSize {
+		// Prevent infinite loops during buffer fragmentation
+		maxRecordLen = altsWriteBufferMaxSize
+	} else if maxFrameSize > altsRecordDefaultLength {
+		// Only trust appropriately scaled max frame sizes
+		maxRecordLen = maxFrameSize
+	}
+
+	payloadLengthLimit := maxRecordLen - overhead
 	// We pre-allocate protected to be of size 32KB during initialization.
 	// We increase the size of the buffer by the required amount if it can't
 	// hold a complete encrypted record.
@@ -321,7 +331,7 @@ func (p *conn) Write(b []byte) (n int, err error) {
 	partialBSize := len(b)
 	if size > altsWriteBufferMaxSize {
 		size = altsWriteBufferMaxSize
-		const numOfFramesInMaxWriteBuf = altsWriteBufferMaxSize / altsRecordDefaultLength
+		numOfFramesInMaxWriteBuf := altsWriteBufferMaxSize / (p.payloadLengthLimit + p.overhead)
 		partialBSize = numOfFramesInMaxWriteBuf * p.payloadLengthLimit
 	}
 	// Get a writeBuf of the required length.
@@ -363,8 +373,8 @@ func (p *conn) Write(b []byte) (n int, err error) {
 			// written. This means we need to remove header,
 			// encryption overheads, and any partially-written
 			// frame data.
-			numOfWrittenFrames := int(math.Floor(float64(nn) / float64(altsRecordDefaultLength)))
-			return partialBStart + numOfWrittenFrames*p.payloadLengthLimit, err
+			numOfWrittenFrames := nn / (p.payloadLengthLimit + p.overhead)
+			return partialBStart + (numOfWrittenFrames * p.payloadLengthLimit), err
 		}
 	}
 	return n, nil
