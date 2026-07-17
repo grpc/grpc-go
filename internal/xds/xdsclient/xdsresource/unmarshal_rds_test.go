@@ -999,6 +999,9 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 
 func (s) TestRoutesProtoToSlice(t *testing.T) {
 	sm, _ := matcher.StringMatcherFromProto(&v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: "tv"}})
+	prefixSM, _ := matcher.StringMatcherFromProto(&v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Prefix{Prefix: "tv"}})
+	containsSM, _ := matcher.StringMatcherFromProto(&v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Contains{Contains: "tv"}})
+	emptyExactSM, _ := matcher.StringMatcherFromProto(&v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: ""}})
 	var (
 		goodRouteWithFilterConfigs = func(cfgs map[string]*anypb.Any) []*v3routepb.Route {
 			// Sets per-filter config in cluster "B" and in the route.
@@ -1113,7 +1116,7 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 					{
 						Name:        "th",
 						InvertMatch: newBoolP(true),
-						PrefixMatch: newStringP("tv"),
+						StringMatch: &prefixSM,
 					},
 				},
 				Fraction: newUInt32P(10000),
@@ -1308,7 +1311,7 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "empty exact_match header specifier",
+			name: "empty exact_match header specifier is accepted",
 			routes: []*v3routepb.Route{
 				{
 					Match: &v3routepb.RouteMatch{
@@ -1317,6 +1320,70 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 							{
 								Name:                 "th",
 								HeaderMatchSpecifier: &v3routepb.HeaderMatcher_ExactMatch{ExactMatch: ""},
+							},
+						},
+					},
+					Action: &v3routepb.Route_Route{
+						Route: &v3routepb.RouteAction{ClusterSpecifier: &v3routepb.RouteAction_Cluster{Cluster: clusterName}},
+					},
+				},
+			},
+			wantRoutes: []*Route{{
+				Prefix: newStringP("/a/"),
+				Headers: []*HeaderMatcher{
+					{
+						Name:        "th",
+						InvertMatch: newBoolP(false),
+						StringMatch: &emptyExactSM,
+					},
+				},
+				WeightedClusters: []WeightedCluster{{Name: clusterName, Weight: 1}},
+				ActionType:       RouteActionRoute,
+			}},
+			wantErr: false,
+		},
+		{
+			name: "contains_match header specifier",
+			routes: []*v3routepb.Route{
+				{
+					Match: &v3routepb.RouteMatch{
+						PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/a/"},
+						Headers: []*v3routepb.HeaderMatcher{
+							{
+								Name:                 "th",
+								HeaderMatchSpecifier: &v3routepb.HeaderMatcher_ContainsMatch{ContainsMatch: "tv"},
+							},
+						},
+					},
+					Action: &v3routepb.Route_Route{
+						Route: &v3routepb.RouteAction{ClusterSpecifier: &v3routepb.RouteAction_Cluster{Cluster: clusterName}},
+					},
+				},
+			},
+			wantRoutes: []*Route{{
+				Prefix: newStringP("/a/"),
+				Headers: []*HeaderMatcher{
+					{
+						Name:        "th",
+						InvertMatch: newBoolP(false),
+						StringMatch: &containsSM,
+					},
+				},
+				WeightedClusters: []WeightedCluster{{Name: clusterName, Weight: 1}},
+				ActionType:       RouteActionRoute,
+			}},
+			wantErr: false,
+		},
+		{
+			name: "empty contains_match header specifier",
+			routes: []*v3routepb.Route{
+				{
+					Match: &v3routepb.RouteMatch{
+						PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/a/"},
+						Headers: []*v3routepb.HeaderMatcher{
+							{
+								Name:                 "th",
+								HeaderMatchSpecifier: &v3routepb.HeaderMatcher_ContainsMatch{ContainsMatch: ""},
 							},
 						},
 					},
@@ -1368,7 +1435,7 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "unrecognized header match specifier",
+			name: "nil string match header specifier",
 			routes: []*v3routepb.Route{
 				{
 					Match: &v3routepb.RouteMatch{
@@ -1552,7 +1619,7 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 					{
 						Name:        "th",
 						InvertMatch: newBoolP(true),
-						PrefixMatch: newStringP("tv"),
+						StringMatch: &prefixSM,
 					},
 				},
 				Fraction: newUInt32P(10000),
@@ -1612,7 +1679,7 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 					{
 						Name:        "th",
 						InvertMatch: newBoolP(true),
-						PrefixMatch: newStringP("tv"),
+						StringMatch: &prefixSM,
 					},
 				},
 				Fraction: newUInt32P(10000),
