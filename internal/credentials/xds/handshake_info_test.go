@@ -344,19 +344,26 @@ func (hi *HandshakeInfo) Equal(other *HandshakeInfo) bool {
 	if hi == nil || other == nil {
 		return false
 	}
+
 	hi.mu.Lock()
 	r1, i1 := hi.rootProvider, hi.identityProvider
 	hi.mu.Unlock()
 	other.mu.Lock()
 	r2, i2 := other.rootProvider, other.identityProvider
 	other.mu.Unlock()
-	if r1 != r2 ||
-		i1 != i2 ||
-		hi.requireClientCert != other.requireClientCert ||
-		hi.sni != other.sni ||
-		hi.validateSANUsingSNI != other.validateSANUsingSNI ||
-		hi.useAutoHostSNI != other.useAutoHostSNI ||
-		len(hi.sanMatchers) != len(other.sanMatchers) {
+
+	switch {
+	case r1 != r2 || i1 != i2:
+		return false
+	case hi.requireClientCert != other.requireClientCert:
+		return false
+	case hi.sni != other.sni:
+		return false
+	case hi.validateSANUsingSNI != other.validateSANUsingSNI:
+		return false
+	case hi.useAutoHostSNI != other.useAutoHostSNI:
+		return false
+	case len(hi.sanMatchers) != len(other.sanMatchers):
 		return false
 	}
 	for i := range hi.sanMatchers {
