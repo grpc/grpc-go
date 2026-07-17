@@ -26,6 +26,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"sync/atomic"
 
 	"google.golang.org/grpc/attributes"
@@ -66,31 +67,6 @@ func Hostname(attr *attributes.Attributes) string {
 	return hn
 }
 
-// Equal reports whether the handshake info structs are identical.
-func (hi *HandshakeInfo) Equal(other *HandshakeInfo) bool {
-	if hi == nil && other == nil {
-		return true
-	}
-	if hi == nil || other == nil {
-		return false
-	}
-	if hi.rootProvider != other.rootProvider ||
-		hi.identityProvider != other.identityProvider ||
-		hi.requireClientCert != other.requireClientCert ||
-		hi.sni != other.sni ||
-		hi.validateSANUsingSNI != other.validateSANUsingSNI ||
-		hi.useAutoHostSNI != other.useAutoHostSNI ||
-		len(hi.sanMatchers) != len(other.sanMatchers) {
-		return false
-	}
-	for i := range hi.sanMatchers {
-		if !hi.sanMatchers[i].Equal(other.sanMatchers[i]) {
-			return false
-		}
-	}
-	return true
-}
-
 // SetHandshakeInfo returns a copy of addr in which the Attributes field is
 // updated with hiPtr.
 func SetHandshakeInfo(addr resolver.Address, hiPtr *atomic.Pointer[HandshakeInfo]) resolver.Address {
@@ -109,15 +85,20 @@ func HandshakeInfoFromAttributes(attr *attributes.Attributes) *atomic.Pointer[Ha
 // server handshake methods in xds credentials. The xDS implementation will be
 // responsible for populating these fields.
 type HandshakeInfo struct {
-	// All fields written at init time and read only after that, so no
-	// synchronization needed.
-	rootProvider        certprovider.Provider
-	identityProvider    certprovider.Provider
+	// The fields below are initialized when the HandshakeInfo is created, and are
+	// not changed thereafter.
 	sanMatchers         []matcher.StringMatcher // Only on the client side.
 	requireClientCert   bool                    // Only on server side.
 	sni                 string                  // Only on client side, used for Server Name Indication in TLS handshake.
 	validateSANUsingSNI bool                    // Only on client side, indicates whether to perform validation of SANs based on SNI value.
 	useAutoHostSNI      bool                    // Only on client side, indicates whether to use endpoint hostname as SNI.
+
+	// Guards the fields below.
+	mu               sync.Mutex
+	closed           bool
+	activeHandshakes int
+	rootProvider     certprovider.Provider
+	identityProvider certprovider.Provider
 }
 
 // NewHandshakeInfo returns a new handshake info configured with the provided
@@ -134,12 +115,129 @@ func NewHandshakeInfo(rootProvider certprovider.Provider, identityProvider certp
 	}
 }
 
+// use increments the active handshake count on hi, preventing its certificate
+// providers from being closed until Done() is called. Returns false if hi
+// has already been closed via Close().
+func (hi *HandshakeInfo) use() bool {
+	hi.mu.Lock()
+	defer hi.mu.Unlock()
+	if hi.closed {
+		return false
+	}
+	hi.activeHandshakes++
+	return true
+}
+
+// done decrements the active handshake count on hi. If hi has already been
+// closed via hi.Close() and the count drops to zero, the certificate providers
+// are closed.
+func (hi *HandshakeInfo) done() {
+	hi.mu.Lock()
+	if hi.activeHandshakes > 0 {
+		hi.activeHandshakes--
+	}
+
+	// Return early if hi is not closed or if there are still active handshakes.
+	if !hi.closed || hi.activeHandshakes != 0 {
+		hi.mu.Unlock()
+		return
+	}
+
+	r, i := hi.rootProvider, hi.identityProvider
+	hi.rootProvider = nil
+	hi.identityProvider = nil
+	hi.mu.Unlock()
+
+	if r != nil {
+		r.Close()
+	}
+	if i != nil {
+		i.Close()
+	}
+}
+
+// Close marks hi as closed. If no handshakes are currently in progress using hi,
+// its certificate providers are closed immediately. Otherwise, the providers will
+// be closed when the last active handshake calls hi.Done().
+func (hi *HandshakeInfo) Close() {
+	hi.mu.Lock()
+	if hi.closed {
+		hi.mu.Unlock()
+		return
+	}
+	hi.closed = true
+	if hi.activeHandshakes != 0 {
+		hi.mu.Unlock()
+		return
+	}
+	r, i := hi.rootProvider, hi.identityProvider
+	hi.rootProvider = nil
+	hi.identityProvider = nil
+	hi.mu.Unlock()
+
+	if r != nil {
+		r.Close()
+	}
+	if i != nil {
+		i.Close()
+	}
+}
+
+// ClientSideTLSConfig loads the HandshakeInfo from hiPtr, marks it as in-use,
+// and returns the tls.Config along with a done callback that MUST be invoked
+// when the handshake completes. If no HandshakeInfo is stored in hiPtr or if
+// fallback credentials should be used, useFallback returns true.
+func ClientSideTLSConfig(ctx context.Context, hiPtr *atomic.Pointer[HandshakeInfo], hostname string) (cfg *tls.Config, useFallback bool, done func(), err error) {
+	if hiPtr == nil {
+		return nil, true, func() {}, nil
+	}
+	for {
+		hi := hiPtr.Load()
+		if hi == nil || hi.UseFallbackCreds() {
+			return nil, true, func() {}, nil
+		}
+		if !hi.use() {
+			if hiPtr.Load() != hi {
+				continue
+			}
+			return nil, true, func() {}, nil
+		}
+		cfg, err := hi.clientSideTLSConfigInternal(ctx, hostname)
+		if err != nil {
+			hi.done()
+			return nil, false, func() {}, err
+		}
+		return cfg, false, hi.done, nil
+	}
+}
+
+// ServerSideTLSConfig checks if hi is configured and marks it as in-use,
+// returning the tls.Config along with a done callback that MUST be invoked when
+// the handshake completes. If hi is nil or fallback credentials should be used,
+// useFallback returns true.
+func ServerSideTLSConfig(ctx context.Context, hi *HandshakeInfo) (cfg *tls.Config, useFallback bool, done func(), err error) {
+	if hi == nil || hi.UseFallbackCreds() {
+		return nil, true, func() {}, nil
+	}
+	if !hi.use() {
+		return nil, true, func() {}, nil
+	}
+	cfg, err = hi.serverSideTLSConfigInternal(ctx)
+	if err != nil {
+		hi.done()
+		return nil, false, func() {}, err
+	}
+	return cfg, false, hi.done, nil
+}
+
 // UseFallbackCreds returns true when fallback credentials are to be used based
 // on the contents of the HandshakeInfo.
 func (hi *HandshakeInfo) UseFallbackCreds() bool {
 	if hi == nil {
 		return true
 	}
+	hi.mu.Lock()
+	defer hi.mu.Unlock()
 	return hi.identityProvider == nil && hi.rootProvider == nil
 }
 
@@ -149,23 +247,26 @@ func (hi *HandshakeInfo) GetSANMatchersForTesting() []matcher.StringMatcher {
 	return append([]matcher.StringMatcher{}, hi.sanMatchers...)
 }
 
-// ClientSideTLSConfig constructs a tls.Config to be used in a client-side
-// handshake based on the contents of the HandshakeInfo.
+// clientSideTLSConfigInternal constructs a tls.Config to be used in a
+// client-side handshake based on the contents of the HandshakeInfo.
 //
 // hostname is passed as a parameter here instead of being part of the
 // HandshakeInfo because HandshakeInfo contains cluster-level security
 // configuration that applies to all endpoints in the cluster, while hostname is
 // specific to each endpoint. This allows sharing a single HandshakeInfo
 // instance across multiple endpoints in the same cluster.
-func (hi *HandshakeInfo) ClientSideTLSConfig(ctx context.Context, hostname string) (*tls.Config, error) {
+func (hi *HandshakeInfo) clientSideTLSConfigInternal(ctx context.Context, hostname string) (*tls.Config, error) {
 	// On the client side, rootProvider is mandatory. IdentityProvider is
 	// optional based on whether the client is doing TLS or mTLS.
+	hi.mu.Lock()
 	if hi.rootProvider == nil {
+		hi.mu.Unlock()
 		return nil, errors.New("xds: CertificateProvider to fetch trusted roots is missing, cannot perform TLS handshake. Please check configuration on the management server")
 	}
 	// Since the call to KeyMaterial() can block, we read the providers under
 	// the lock but call the actual function after releasing the lock.
 	rootProv, idProv := hi.rootProvider, hi.identityProvider
+	hi.mu.Unlock()
 
 	// InsecureSkipVerify needs to be set to true because we need to perform
 	// custom verification to check the SAN on the received certificate.
@@ -279,21 +380,24 @@ func (hi *HandshakeInfo) buildVerifyFunc(km *certprovider.KeyMaterial, isClient 
 	}
 }
 
-// ServerSideTLSConfig constructs a tls.Config to be used in a server-side
-// handshake based on the contents of the HandshakeInfo.
-func (hi *HandshakeInfo) ServerSideTLSConfig(ctx context.Context) (*tls.Config, error) {
+// serverSideTLSConfigInternal constructs a tls.Config to be used in a
+// server-side handshake based on the contents of the HandshakeInfo.
+func (hi *HandshakeInfo) serverSideTLSConfigInternal(ctx context.Context) (*tls.Config, error) {
 	cfg := &tls.Config{
 		ClientAuth: tls.NoClientCert,
 		NextProtos: []string{"h2"},
 	}
+	hi.mu.Lock()
 	// On the server side, identityProvider is mandatory. RootProvider is
 	// optional based on whether the server is doing TLS or mTLS.
 	if hi.identityProvider == nil {
+		hi.mu.Unlock()
 		return nil, errors.New("xds: CertificateProvider to fetch identity certificate is missing, cannot perform TLS handshake. Please check configuration on the management server")
 	}
 	// Since the call to KeyMaterial() can block, we read the providers under
 	// the lock but call the actual function after releasing the lock.
 	rootProv, idProv := hi.rootProvider, hi.identityProvider
+	hi.mu.Unlock()
 	if hi.requireClientCert {
 		cfg.ClientAuth = tls.RequireAndVerifyClientCert
 	}

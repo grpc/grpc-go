@@ -49,8 +49,8 @@ type connWrapper struct {
 	// A reference to the listenerWrapper on which this connection was accepted.
 	parent *listenerWrapper
 
-	// The certificate providers created for this connection.
-	rootProvider, identityProvider certprovider.Provider
+	// The HandshakeInfo created for this connection.
+	hi *xdsinternal.HandshakeInfo
 
 	// The connection deadline as configured by the grpc.Server on the rawConn
 	// that is returned by a call to Accept(). This is set to the connection
@@ -113,13 +113,13 @@ func (c *connWrapper) XDSHandshakeInfo() (*xdsinternal.HandshakeInfo, error) {
 	if instance, cert := secCfg.RootInstanceName, secCfg.RootCertName; instance != "" {
 		rp, err = buildProviderFunc(cpc, instance, cert, false, true)
 		if err != nil {
+			ip.Close()
 			return nil, err
 		}
 	}
-	c.identityProvider = ip
-	c.rootProvider = rp
 
-	return xdsinternal.NewHandshakeInfo(c.rootProvider, c.identityProvider, nil, secCfg.RequireClientCert, "", false, false), nil
+	c.hi = xdsinternal.NewHandshakeInfo(rp, ip, nil, secCfg.RequireClientCert, "", false, false)
+	return c.hi, nil
 }
 
 // PassServerTransport drains the passed in ServerTransport if draining is set,
@@ -148,11 +148,8 @@ func (c *connWrapper) Drain() {
 
 // Close closes the providers and the underlying connection.
 func (c *connWrapper) Close() error {
-	if c.identityProvider != nil {
-		c.identityProvider.Close()
-	}
-	if c.rootProvider != nil {
-		c.rootProvider.Close()
+	if c.hi != nil {
+		c.hi.Close()
 	}
 	c.parent.removeConn(c)
 	return c.Conn.Close()
