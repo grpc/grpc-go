@@ -226,6 +226,22 @@ type Options struct {
 	// name of authority (e.g. :authority header field) in requests and the
 	// target hostname used during server cert verification.
 	serverNameOverride string
+	// SkipServerAuthEKU is an UNSAFE option that, if set to true, skips checking
+	// for the Server Auth Extended Key Usage (EKU) extension in peer
+	// certificates during server authentication.
+	//
+	// Doing so goes against the RFC 5280 specification (Section 4.2.1.12),
+	// which mandates that the certificate key usage should be compatible with
+	// the purpose of the key.
+	// See: https://datatracker.ietf.org/doc/html/rfc5280#section-4.2.1.12
+	//
+	// Behavior:
+	// - Client-side: If set to true, the client will verify the server's
+	//   certificate using x509.ExtKeyUsageAny instead of requiring
+	//   x509.ExtKeyUsageServerAuth. This is useful when the server's certificate
+	//   does not possess the Server Auth EKU.
+	// - Server-side: No-op.
+	SkipServerAuthEKU bool
 }
 
 func (o *Options) clientConfig() (*tls.Config, error) {
@@ -417,6 +433,7 @@ type advancedTLSCreds struct {
 	isClient            bool
 	revocationOptions   *RevocationOptions
 	verificationType    VerificationType
+	skipServerAuthEKU   bool
 }
 
 func (c advancedTLSCreds) Info() credentials.ProtocolInfo {
@@ -489,6 +506,9 @@ func (c *advancedTLSCreds) Clone() credentials.TransportCredentials {
 		verifyFunc:          c.verifyFunc,
 		getRootCertificates: c.getRootCertificates,
 		isClient:            c.isClient,
+		revocationOptions:   c.revocationOptions,
+		verificationType:    c.verificationType,
+		skipServerAuthEKU:   c.skipServerAuthEKU,
 	}
 }
 
@@ -545,9 +565,13 @@ func buildVerifyFunc(c *advancedTLSCreds,
 				rootCAs = results.TrustCerts
 			}
 			// Verify peers' certificates against RootCAs and get verifiedChains.
-			keyUsages := []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}
-			if !c.isClient {
-				keyUsages = []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth}
+			keyUsages := []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth}
+			if c.isClient {
+				if c.skipServerAuthEKU {
+					keyUsages = []x509.ExtKeyUsage{x509.ExtKeyUsageAny}
+				} else {
+					keyUsages = []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}
+				}
 			}
 			opts := x509.VerifyOptions{
 				Roots:         rootCAs,
@@ -616,6 +640,7 @@ func NewClientCreds(o *Options) (credentials.TransportCredentials, error) {
 		verifyFunc:          o.AdditionalPeerVerification,
 		revocationOptions:   o.RevocationOptions,
 		verificationType:    o.VerificationType,
+		skipServerAuthEKU:   o.SkipServerAuthEKU,
 	}
 	tc.config.NextProtos = credinternal.AppendH2ToNextProtos(tc.config.NextProtos)
 	return tc, nil
@@ -635,6 +660,7 @@ func NewServerCreds(o *Options) (credentials.TransportCredentials, error) {
 		verifyFunc:          o.AdditionalPeerVerification,
 		revocationOptions:   o.RevocationOptions,
 		verificationType:    o.VerificationType,
+		skipServerAuthEKU:   o.SkipServerAuthEKU,
 	}
 	tc.config.NextProtos = credinternal.AppendH2ToNextProtos(tc.config.NextProtos)
 	return tc, nil
