@@ -16,7 +16,7 @@
  *
  */
 
-package grpcutil
+package resolver
 
 import (
 	"fmt"
@@ -43,10 +43,10 @@ import (
 func ValidateTargetURI(target string) error {
 	u, err := url.Parse(target)
 	if err != nil {
-		return fmt.Errorf("grpcutil: invalid target URI %q: %v", target, err)
+		return fmt.Errorf("resolver: invalid target URI %q: %v", target, err)
 	}
 	if resolver.Get(u.Scheme) == nil {
-		return fmt.Errorf("grpcutil: target URI %q uses scheme %q which has no registered resolver", target, u.Scheme)
+		return fmt.Errorf("resolver: target URI %q uses scheme %q which has no registered resolver", target, u.Scheme)
 	}
 	return nil
 }

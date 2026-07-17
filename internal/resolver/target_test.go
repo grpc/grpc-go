@@ -16,7 +16,7 @@
  *
  */
 
-package grpcutil
+package resolver
 
 import (
 	"strings"
@@ -36,7 +36,7 @@ func (b *testResolverBuilder) Build(resolver.Target, resolver.ClientConn, resolv
 func (b *testResolverBuilder) Scheme() string { return b.scheme }
 
 func init() {
-	resolver.Register(&testResolverBuilder{scheme: "grpcutil-test"})
+	resolver.Register(&testResolverBuilder{scheme: "iresolver-test"})
 }
 
 func TestValidateTargetURI(t *testing.T) {
@@ -45,11 +45,11 @@ func TestValidateTargetURI(t *testing.T) {
 		target  string
 		wantErr bool
 	}{
-		{name: "registered scheme with authority and endpoint", target: "grpcutil-test:///endpoint", wantErr: false},
-		{name: "registered scheme opaque form", target: "grpcutil-test:endpoint", wantErr: false},
+		{name: "registered scheme with authority and endpoint", target: "iresolver-test:///endpoint", wantErr: false},
+		{name: "registered scheme opaque form", target: "iresolver-test:endpoint", wantErr: false},
 		// url.Parse canonicalizes the scheme to lowercase (RFC 3986 3.1),
 		// so an uppercase scheme still matches the registered lowercase one.
-		{name: "registered scheme uppercase input", target: "GRPCUTIL-TEST:///endpoint", wantErr: false},
+		{name: "registered scheme uppercase input", target: "IRESOLVER-TEST:///endpoint", wantErr: false},
 		{name: "empty target", target: "", wantErr: true},
 		{name: "host:port without scheme", target: "my-service:50051", wantErr: true},
 		{name: "unregistered scheme", target: "no-such-scheme:///endpoint", wantErr: true},
