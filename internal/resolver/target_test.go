@@ -22,6 +22,7 @@ import (
 	"strings"
 	"testing"
 
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/resolver"
 
 	_ "google.golang.org/grpc/internal/resolver/dns" // Register the default (dns) resolver for fallback tests.
@@ -60,6 +61,12 @@ func TestValidateTargetURI(t *testing.T) {
 		// A string that does not parse as a URI is accepted if it parses
 		// after the default-scheme fallback, matching grpc.NewClient.
 		{name: "unparseable URI accepted via fallback", target: "://bad", wantErr: false},
+		// Parses with an empty scheme (not opaque), so the default scheme is
+		// applied directly.
+		{name: "absolute path without scheme", target: "/var/run/foo.sock", wantErr: false},
+		// An invalid percent-escape fails to parse both as-is and after the
+		// default-scheme fallback.
+		{name: "invalid percent-escape", target: "%zz", wantErr: true},
 		{name: "empty target", target: "", wantErr: true},
 		// Authority-form URIs with an unregistered scheme are rejected, so
 		// that scheme typos in configuration surface as errors.
@@ -75,5 +82,17 @@ func TestValidateTargetURI(t *testing.T) {
 				t.Errorf("ValidateTargetURI(%q) error %q does not mention target", tc.target, err)
 			}
 		})
+	}
+}
+
+func TestValidateTargetURI_UserSetDefaultScheme(t *testing.T) {
+	resolver.SetDefaultScheme("iresolver-test")
+	defer func() {
+		// Reset the default scheme as though it was never set by the user.
+		resolver.SetDefaultScheme("passthrough")
+		internal.UserSetDefaultScheme = false
+	}()
+	if err := ValidateTargetURI("my-service:50051"); err != nil {
+		t.Fatalf("ValidateTargetURI(%q) with user-set default scheme = %v, want nil", "my-service:50051", err)
 	}
 }
