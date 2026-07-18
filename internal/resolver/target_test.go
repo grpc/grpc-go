@@ -23,6 +23,8 @@ import (
 	"testing"
 
 	"google.golang.org/grpc/resolver"
+
+	_ "google.golang.org/grpc/internal/resolver/dns" // Register the default (dns) resolver for fallback tests.
 )
 
 // testResolverBuilder is a minimal resolver.Builder used only to register
@@ -46,14 +48,22 @@ func TestValidateTargetURI(t *testing.T) {
 		wantErr bool
 	}{
 		{name: "registered scheme with authority and endpoint", target: "iresolver-test:///endpoint", wantErr: false},
-		{name: "registered scheme opaque form", target: "iresolver-test:endpoint", wantErr: false},
 		// url.Parse canonicalizes the scheme to lowercase (RFC 3986 3.1),
 		// so an uppercase scheme still matches the registered lowercase one.
 		{name: "registered scheme uppercase input", target: "IRESOLVER-TEST:///endpoint", wantErr: false},
+		// Opaque (host:port) forms fall back to the default scheme, as
+		// grpc.NewClient does.
+		{name: "host:port without scheme", target: "my-service:50051", wantErr: false},
+		{name: "host:port with dotted host", target: "trafficdirector.googleapis.com:443", wantErr: false},
+		{name: "ip:port without scheme", target: "127.0.0.1:443", wantErr: false},
+		{name: "registered scheme opaque form", target: "iresolver-test:endpoint", wantErr: false},
+		// A string that does not parse as a URI is accepted if it parses
+		// after the default-scheme fallback, matching grpc.NewClient.
+		{name: "unparseable URI accepted via fallback", target: "://bad", wantErr: false},
 		{name: "empty target", target: "", wantErr: true},
-		{name: "host:port without scheme", target: "my-service:50051", wantErr: true},
+		// Authority-form URIs with an unregistered scheme are rejected, so
+		// that scheme typos in configuration surface as errors.
 		{name: "unregistered scheme", target: "no-such-scheme:///endpoint", wantErr: true},
-		{name: "unparseable URI", target: "://bad", wantErr: true},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
