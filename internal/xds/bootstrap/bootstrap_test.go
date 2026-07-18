@@ -512,11 +512,24 @@ func (s) TestGetConfiguration_Failure(t *testing.T) {
 				]
 			}]
 		}`,
+		"unregisteredSchemeInServerURI": `
+		{
+			"node": {
+				"id": "ENVOY_NODE_ID",
+				"metadata": {
+				    "TRAFFICDIRECTOR_GRPC_HOSTNAME": "trafficdirector"
+			    }
+			},
+			"xds_servers" : [{
+				"server_uri": "badscheme:///trafficdirector.googleapis.com",
+				"channel_creds": [{ "type": "insecure" }]
+			}]
+		}`,
 	}
 	cancel := setupBootstrapOverride(bootstrapFileMap)
 	defer cancel()
 
-	for _, name := range []string{"nonExistentBootstrapFile", "badJSON", "noBalancerName", "emptyXdsServer"} {
+	for _, name := range []string{"nonExistentBootstrapFile", "badJSON", "noBalancerName", "emptyXdsServer", "unregisteredSchemeInServerURI"} {
 		t.Run(name, func(t *testing.T) {
 			testGetConfigurationWithFileNameEnv(t, name, true, nil)
 			testGetConfigurationWithFileContentEnv(t, name, true, nil)
