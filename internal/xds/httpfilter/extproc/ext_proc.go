@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"io"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -263,8 +262,8 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 		procStreamBypass:         grpcsync.NewEvent(),
 		mutatedReqBuffer:         buffer.NewUnbounded[*v3procservicepb.StreamedBodyResponse](),
 		mutatedRespBuffer:        buffer.NewUnbounded[*v3procservicepb.StreamedBodyResponse](),
-		responseHeaderModified:   grpcsync.NewEvent(),
-		responseTrailerModified:  grpcsync.NewEvent(),
+		responseHeadersReady:     grpcsync.NewEvent(),
+		responseTrailerReady:     grpcsync.NewEvent(),
 		dataplaneSetup:           make(chan struct{}),
 		ctx:                      cancelCtx,
 		cancel:                   cancel,
@@ -354,27 +353,29 @@ type clientStream struct {
 	procStreamErr    atomic.Value                                    // holds the terminal error causing the external processor stream to fail
 
 	reqAttrs             map[string]*structpb.Struct                              // attributes to be sent to proc server with client message
-	protocolConfigSent   atomic.Bool                                              // tracks whether the protocol configuration has been sent to the processor
 	reqAttrsSent         atomic.Bool                                              // tracks whether the first client message has been sent to ensure request attributes are sent only once
+	protocolConfigSent   atomic.Bool                                              // tracks whether the protocol configuration has been sent to the processor
 	ignoreFailureMode    atomic.Bool                                              // tracks whether the failureModeAllow setting should be ignored (e.g. after sending body messages)
 	discardRequests      atomic.Bool                                              // set when ext_proc server signals end_of_stream to stop client sends
 	mutatedReqBuffer     *buffer.Unbounded[*v3procservicepb.StreamedBodyResponse] // buffers mutated request body messages from the ext_proc server
 	reqForwardingStarted bool                                                     // tracks whether request forwarding loop to the dataplane has started
 	procSendCh           chan *v3procservicepb.ProcessingRequest                  // serializes writes to the external processor stream to ensure thread-safety
 
-	responseHeader          metadata.MD                                              // stores headers received from the dataplane stream
-	responseHeaderOnce      sync.Once                                                // ensures response headers are forwarded to the external processor only once
-	responseHeaderModified  *grpcsync.Event                                          // signals that response headers are ready for client
-	responseTrailers        metadata.MD                                              // stores trailers received from the dataplane stream
-	responseTrailerOnce     sync.Once                                                // ensures response trailers are forwarded to the external processor only once
-	responseTrailerModified *grpcsync.Event                                          // signals that response trailers are ready for client
-	trailerSent             atomic.Bool                                              // tracks whether response trailers have been dispatched
-	trailersOnly            bool                                                     // tracks whether the backend response is trailers-only
-	mutatedRespBuffer       *buffer.Unbounded[*v3procservicepb.StreamedBodyResponse] // buffers mutated response body messages from the ext_proc server
-	responseDrained         atomic.Bool                                              // indicates consumer loop has fully processed buffered items
-	dataplaneSetup          chan struct{}                                            // closed once dataplaneStream creation attempt is complete
-	dataplaneCreationErr    error                                                    // stores the error from the dataplane stream creation attempt
-	responseRecvStarted     bool                                                     // tracks whether response message reading has started
+	responseHeader        metadata.MD                                              // stores headers received from the dataplane stream
+	responseHeaderOnce    atomic.Bool                                              // ensures response headers are forwarded to the external processor only once
+	responseHeadersReady  *grpcsync.Event                                          // signals that response headers are ready for client
+	responseHeaderSent    atomic.Bool                                              // tracks whether response headers have been dispatched to external processor
+	responseTrailers      metadata.MD                                              // stores trailers received from the dataplane stream
+	responseTrailerOnce   atomic.Bool                                              // ensures response trailers are forwarded to the external processor only once
+	responseTrailerReady  *grpcsync.Event                                          // signals that response trailers are ready for client
+	trailerSent           atomic.Bool                                              // tracks whether response trailers have been dispatched
+	trailersOnly          bool                                                     // tracks whether the backend response is trailers-only
+	trailerErr            atomic.Value                                             // holds any terminal status returned upon processing response trailers (e.g. ImmediateResponse)
+	mutatedRespBuffer     *buffer.Unbounded[*v3procservicepb.StreamedBodyResponse] // buffers mutated response body messages from the ext_proc server
+	responseDrained       atomic.Bool                                              // tracks whether all buffered response body messages from the ext_proc server have been drained
+	dataplaneSetup        chan struct{}                                            // closed once dataplaneStream creation attempt is complete
+	dataplaneCreationErr  error                                                    // stores the error from the dataplane stream creation attempt
+	respForwardingStarted bool                                                     // tracks whether response forwarding loop to the external processor has started
 
 	requestForwardLoopDoneCh chan struct{}   // closed when request forwarding loop finishes draining
 	procRecvLoopDone         *grpcsync.Event // fires when external processor stream receive loop finishes
@@ -400,31 +401,35 @@ func (cs *clientStream) newProcessingRequest(isClientMessage bool) *v3procservic
 	return req
 }
 
-// Header returns the header metadata received from the server if there is any.
-// It blocks if the metadata is not ready to read.
+// Header returns the response headers received from the backend, potentially
+// modified by the external processor if configured. It blocks until header
+// processing is complete, or returns nil if the response is trailers-only.
 func (cs *clientStream) Header() (metadata.MD, error) {
 	if err := cs.initiateResponseHeaderProcessing(); err != nil {
 		return nil, err
 	}
 	// Wait for the response headers to be modified.
 	select {
-	case <-cs.responseHeaderModified.Done():
+	case <-cs.responseHeadersReady.Done():
+		if cs.trailersOnly {
+			return nil, nil
+		}
+		return cs.responseHeader, nil
 	case <-cs.procStreamFailed.Done():
 		return nil, cs.streamError()
 	case <-cs.ctx.Done():
 		return nil, cs.streamError()
 	}
-	if cs.trailersOnly {
-		return nil, nil
-	}
-	return cs.responseHeader, nil
 }
 
-// Trailer returns the trailer metadata from the server, if there is any. It
-// returns nil or empty map if trailer is not received yet. It is not blocking.
+// Trailer returns the trailer metadata received from the server, potentially
+// modified by the external processor if configured. It returns nil or empty map
+// immediately if trailers are not yet received from the backend. If backend
+// trailers are available, it blocks until any configured trailer processing by
+// the external processor completes.
 func (cs *clientStream) Trailer() metadata.MD {
 	// If trailers are already modified and ready, return them immediately.
-	if cs.responseTrailerModified.HasFired() {
+	if cs.responseTrailerReady.HasFired() {
 		return cs.responseTrailers
 	}
 	// Checking if backend stream has trailers ready now.
@@ -436,21 +441,21 @@ func (cs *clientStream) Trailer() metadata.MD {
 	if err != nil {
 		return nil
 	}
-	// If the backend stream has no trailers, return nil to keep the existing
-	// behavior.
+	// If no backend trailers are ready yet, return nil to preserve standard
+	// non-blocking behaviour.
 	if len(s.Trailer()) == 0 {
 		return nil
 	}
 
 	cs.initiateResponseTrailerProcessing()
 	select {
-	case <-cs.responseTrailerModified.Done():
+	case <-cs.responseTrailerReady.Done():
+		return cs.responseTrailers
 	case <-cs.procStreamFailed.Done():
 		return nil
 	case <-cs.ctx.Done():
 		return nil
 	}
-	return cs.responseTrailers
 }
 
 func (cs *clientStream) CloseSend() error {
@@ -461,8 +466,8 @@ func (cs *clientStream) CloseSend() error {
 	if s != nil {
 		return s.CloseSend()
 	}
-	// If external processor stream is active, send to the processor server as
-	// request message with `EndOfStreamWithoutMessage` set.
+	// If external processor stream is active, client CLoseSend is sent to the
+	// processor server as request message with `EndOfStreamWithoutMessage` set.
 	req := cs.newProcessingRequest(true)
 	req.Request = &v3procservicepb.ProcessingRequest_RequestBody{
 		RequestBody: &v3procservicepb.HttpBody{
@@ -472,13 +477,10 @@ func (cs *clientStream) CloseSend() error {
 	}
 
 	s, err = cs.sendClientReqToProcServer(req)
-	if err != nil {
-		return err
-	}
 	if s != nil {
 		return s.CloseSend()
 	}
-	return nil
+	return err
 }
 
 func (cs *clientStream) Context() context.Context {
@@ -490,9 +492,6 @@ func (cs *clientStream) Context() context.Context {
 }
 
 func (cs *clientStream) RecvMsg(m any) error {
-	if cs.procStreamFailed.HasFired() {
-		return cs.procStreamErr.Load().(error)
-	}
 	// Initiate response header processing because external processor requires the
 	// events to be sent in the correct order, i.e. response header before
 	// response message. And if Header() has not already been called, send the
@@ -501,24 +500,11 @@ func (cs *clientStream) RecvMsg(m any) error {
 		return err
 	}
 
-	// If all the responses from external processor server has been sent or if the
-	// external processor is bypassed, or if the response body mode is skip, then
-	// receive directly from the dataplane stream.
-	if cs.responseDrained.Load() || (cs.procStreamBypass.HasFired() && !cs.responseRecvStarted) || cs.config.processingModes.responseBodyMode == modeSkip {
-		s, err := cs.waitForDataplaneStream(cs.ctx)
-		if err != nil {
-			return err
-		}
-		if err := s.RecvMsg(m); err != nil {
-			// If RecvMsg returns error, fail the RPC incase external processor stream
-			// has failed. Otherwise process the trailers.
-			if val := cs.procStreamErr.Load(); val != nil {
-				return val.(error)
-			}
-			cs.initiateResponseTrailerProcessing()
-			return cs.waitForTrailerProcessing(err)
-		}
-		return nil
+	// If all the responses from external processor server have been drained or if
+	// the external processor is bypassed, or if the response body mode is skip,
+	// then receive directly from the dataplane stream.
+	if cs.responseDrained.Load() || (cs.procStreamBypass.HasFired() && !cs.respForwardingStarted) || cs.config.processingModes.responseBodyMode == modeSkip {
+		return cs.recvFromDataplane(m)
 	}
 
 	msg, ok := m.(proto.Message)
@@ -528,8 +514,8 @@ func (cs *clientStream) RecvMsg(m any) error {
 
 	// Start the background receiving loop on the first RecvMsg call to capture
 	// the type of message to be received.
-	if !cs.responseRecvStarted {
-		cs.responseRecvStarted = true
+	if !cs.respForwardingStarted {
+		cs.respForwardingStarted = true
 		go cs.responseForwardingToProcServerLoop(msg.ProtoReflect().Type())
 	}
 
@@ -541,24 +527,9 @@ func (cs *clientStream) RecvMsg(m any) error {
 			// Closed channel implies that all messages from the external processor
 			// have been received. Start receiving directly from dataplane stream.
 			cs.responseDrained.Store(true)
-			if val := cs.procStreamErr.Load(); val != nil {
-				return val.(error)
-			}
-			s, err := cs.waitForDataplaneStream(cs.ctx)
-			if err != nil {
-				return err
-			}
-			if err := s.RecvMsg(m); err != nil {
-				cs.initiateResponseTrailerProcessing()
-				return cs.waitForTrailerProcessing(err)
-			}
-			return nil
+			return cs.recvFromDataplane(m)
 		}
-		if err := proto.Unmarshal(streamedResp.GetBody(), msg); err != nil {
-			return err
-		}
-		return nil
-
+		return proto.Unmarshal(streamedResp.GetBody(), msg)
 	case <-cs.ctx.Done():
 		return cs.streamError()
 	case <-cs.procStreamFailed.Done():
@@ -597,29 +568,47 @@ func (cs *clientStream) SendMsg(m any) error {
 	if err != nil {
 		return status.Errorf(codes.Internal, "extproc: failed to marshal message: %v", err)
 	}
-
 	req := cs.newProcessingRequest(true)
 	req.Request = &v3procservicepb.ProcessingRequest_RequestBody{
 		RequestBody: &v3procservicepb.HttpBody{
 			Body: bodyBytes,
 		},
 	}
-
 	s, err = cs.sendClientReqToProcServer(req)
+	if s != nil {
+		return s.SendMsg(m)
+	}
+	return err
+}
+
+// recvFromDataplane receives directly from the dataplane stream. If the
+// dataplane stream returns an error, it initiates and waits for response
+// trailers.
+func (cs *clientStream) recvFromDataplane(m any) error {
+	if cs.procStreamFailed.HasFired() {
+		return cs.procStreamErr.Load().(error)
+	}
+	s, err := cs.waitForDataplaneStream(cs.ctx)
 	if err != nil {
 		return err
 	}
-	if s != nil {
-		return s.SendMsg(m)
+	if err := s.RecvMsg(m); err != nil {
+		// If RecvMsg returns error, fail the RPC in case external processor stream
+		// has failed. Otherwise process the trailers.
+		if cs.procStreamFailed.HasFired() {
+			return cs.procStreamErr.Load().(error)
+		}
+		cs.initiateResponseTrailerProcessing()
+		return cs.waitForTrailerProcessing(err)
 	}
 	return nil
 }
 
 // sendClientReqToProcServer attempts to send the given request for client to
 // server msg to the external processor. If the processor stream is bypassed
-// while waiting, it blocks until forwarding is done, and returns the dataplane
-// stream so the caller can send the message directly to the dataplane stream
-// instead.
+// while waiting, it blocks until all queued messages are forwarded, and returns
+// the dataplane stream so the caller can send the message directly to the
+// dataplane stream instead.
 func (cs *clientStream) sendClientReqToProcServer(req *v3procservicepb.ProcessingRequest) (grpc.ClientStream, error) {
 	// Ignoring the failureMode as we will be sending the request to proc server.
 	cs.ignoreFailureMode.CompareAndSwap(false, true)
@@ -674,13 +663,13 @@ func (cs *clientStream) bypassProcStreamForClientMsg() (grpc.ClientStream, error
 	return nil, nil // Do not bypass.
 }
 
-// responseForwardingToProcServerLoop continuously receives raw response
-// messages from the underlying dataplane stream, marshals them, and forwards
-// them to the external processor server via procSendCh.
+// responseForwardingToProcServerLoop continuously receives response messages
+// from the underlying dataplane stream, marshals them, and forwards them to the
+// external processor server via procSendCh.
 func (cs *clientStream) responseForwardingToProcServerLoop(msgType protoreflect.MessageType) {
 	defer func() {
-		// Once the external processor server receive loop finishes, close the buffer to
-		// signal end of processed responses.
+		// Once the external processor server receive loop finishes, close the
+		// buffer to signal end of processed responses.
 		cs.waitChannel(cs.procRecvLoopDone.Done())
 		cs.mutatedRespBuffer.Close()
 	}()
@@ -691,8 +680,8 @@ func (cs *clientStream) responseForwardingToProcServerLoop(msgType protoreflect.
 	}
 
 	for {
-		// If the processor stream has closed or the receive loop finishes, we can stop
-		// receiving messages in the background and Recv should now directly be
+		// If the processor stream has closed or the receive loop finishes, we can
+		// stop receiving messages in the background and Recv should now directly be
 		// called from the cs.RecvMsg() function.
 		if cs.procStreamBypass.HasFired() || cs.procRecvLoopDone.HasFired() {
 			return
@@ -740,26 +729,24 @@ func (cs *clientStream) responseForwardingToProcServerLoop(msgType protoreflect.
 }
 
 // requestForwardingToDataplaneLoop continuously consumes mutated request body
-// chunks from mutatedReqBuffer (populated by the external processor server),
+// from mutatedReqBuffer (populated by the external processor server),
 // unmarshals them, and forwards the final messages to the backend server.
 func (cs *clientStream) requestForwardingToDataplaneLoop(msgType protoreflect.MessageType) {
 	defer close(cs.requestForwardLoopDoneCh)
-	if _, err := cs.waitForDataplaneStream(cs.ctx); err != nil {
+	dataplaneStream, err := cs.waitForDataplaneStream(cs.ctx)
+	if err != nil {
 		return
 	}
 	for {
 		select {
 		case streamedResp, ok := <-cs.mutatedReqBuffer.Get():
 			if !ok {
-				if cs.procStreamFailed.HasFired() && !cs.config.failureModeAllow && cs.dataplaneStream != nil {
-					cs.dataplaneStream.CloseSend()
-				}
 				return
 			}
 			cs.mutatedReqBuffer.Load()
 
 			if streamedResp.GetEndOfStream() && streamedResp.GetEndOfStreamWithoutMessage() {
-				cs.dataplaneStream.CloseSend()
+				dataplaneStream.CloseSend()
 				return
 			}
 
@@ -768,14 +755,13 @@ func (cs *clientStream) requestForwardingToDataplaneLoop(msgType protoreflect.Me
 				cs.failProcStream(err)
 				return
 			}
-
-			if err := cs.dataplaneStream.SendMsg(newMsg); err != nil {
+			if err := dataplaneStream.SendMsg(newMsg); err != nil {
 				cs.cancelStream(err)
 				return
 			}
 
 			if streamedResp.GetEndOfStream() {
-				cs.dataplaneStream.CloseSend()
+				dataplaneStream.CloseSend()
 				return
 			}
 		case <-cs.ctx.Done():
@@ -820,33 +806,23 @@ func (cs *clientStream) recvFromProcServerLoop(newStream func(context.Context, .
 		}
 
 		if resp.GetImmediateResponse() != nil {
-			cs.handleImmediateResponse(resp.GetImmediateResponse())
+			cs.handleImmediateResponse(resp.GetImmediateResponse(), newStream, opts)
 			return
 		}
 
 		switch {
 		case resp.GetRequestBody() != nil:
 			if cs.config.processingModes.requestBodyMode == modeSkip {
-				cs.failProcStream(fmt.Errorf("extproc: external processor unexpectedly sent request body when request body processing is disabled"))
+				cs.failProcStream(fmt.Errorf("external processor unexpectedly sent request body when request body processing is disabled"))
 				return
 			}
 
-			bodyResp := resp.GetRequestBody()
-			if status := bodyResp.GetResponse().GetStatus(); status != v3procservicepb.CommonResponse_CONTINUE {
-				cs.failProcStream(fmt.Errorf("external processor returned unexpected status %v for request body, expected %v", status, v3procservicepb.CommonResponse_CONTINUE))
-				return
-			}
-			streamedResp := bodyResp.GetResponse().GetBodyMutation().GetStreamedResponse()
-			if streamedResp == nil {
-				cs.failProcStream(fmt.Errorf("external processor returned invalid body mutation for request body"))
+			streamedResp, ok := cs.validateBodyResponse(resp.GetRequestBody())
+			if !ok {
 				return
 			}
 			if streamedResp.GetEndOfStream() {
 				cs.discardRequests.Store(true)
-			}
-			if streamedResp.GetGrpcMessageCompressed() {
-				cs.failProcStream(fmt.Errorf("external processor returned compressed grpc message which is not supported"))
-				return
 			}
 			cs.mutatedReqBuffer.Put(streamedResp)
 
@@ -859,34 +835,20 @@ func (cs *clientStream) recvFromProcServerLoop(newStream func(context.Context, .
 			// If response headers have been sent and mutated response headers have
 			// not been received before receiving the response body message, fail the
 			// RPC.
-			if cs.config.processingModes.responseHeaderMode == modeSend {
-				if !cs.responseHeaderModified.HasFired() {
-					cs.failProcStream(fmt.Errorf("external processor sent response body before sending response headers"))
-					return
-				}
+			if cs.config.processingModes.responseHeaderMode == modeSend && !cs.responseHeadersReady.HasFired() {
+				cs.failProcStream(fmt.Errorf("external processor sent response body before sending response headers"))
+				return
 			}
 
 			// If mutated response trailers have been received before receiving the
 			// response body message, fail the RPC.
-			if cs.config.processingModes.responseTrailerMode == modeSend {
-				if cs.responseTrailerModified.HasFired() {
-					cs.failProcStream(fmt.Errorf("external processor sent response body after response trailers were already processed"))
-					return
-				}
+			if cs.config.processingModes.responseTrailerMode == modeSend && cs.responseTrailerReady.HasFired() {
+				cs.failProcStream(fmt.Errorf("external processor sent response body after response trailers were already processed"))
+				return
 			}
 
-			bodyResp := resp.GetResponseBody()
-			if status := bodyResp.GetResponse().GetStatus(); status != v3procservicepb.CommonResponse_CONTINUE {
-				cs.failProcStream(fmt.Errorf("external processor returned unexpected status %v for response body, expected %v", status, v3procservicepb.CommonResponse_CONTINUE))
-				return
-			}
-			streamedResp := bodyResp.GetResponse().GetBodyMutation().GetStreamedResponse()
-			if streamedResp == nil {
-				cs.failProcStream(fmt.Errorf("external processor returned invalid body mutation for response body"))
-				return
-			}
-			if streamedResp.GetGrpcMessageCompressed() {
-				cs.failProcStream(fmt.Errorf("external processor returned compressed grpc message which is not supported"))
+			streamedResp, ok := cs.validateBodyResponse(resp.GetResponseBody())
+			if !ok {
 				return
 			}
 			if streamedResp.GetEndOfStream() {
@@ -900,6 +862,14 @@ func (cs *clientStream) recvFromProcServerLoop(newStream func(context.Context, .
 				cs.failProcStream(fmt.Errorf("external processor unexpectedly sent response headers when response header processing is disabled"))
 				return
 			}
+			if !cs.responseHeaderSent.Load() {
+				cs.failProcStream(fmt.Errorf("external processor sent response headers before response headers were sent to it"))
+				return
+			}
+			if cs.responseHeadersReady.HasFired() {
+				cs.failProcStream(fmt.Errorf("external processor unexpectedly sent duplicate response headers after response headers were already processed"))
+				return
+			}
 
 			header := resp.GetResponseHeaders()
 			// Check if the status in the header response is CONTINUE; if not, fail
@@ -908,37 +878,75 @@ func (cs *clientStream) recvFromProcServerLoop(newStream func(context.Context, .
 				cs.failProcStream(fmt.Errorf("external processor returned unexpected status %v for response headers, expected %v", status, v3procservicepb.CommonResponse_CONTINUE))
 				return
 			}
-			if err = cs.config.mutationRules.ApplyAdditions(header.GetResponse().GetHeaderMutation().GetSetHeaders(), cs.responseHeader); err != nil {
-				cs.failProcStream(err)
-				return
-			}
-			if err = cs.config.mutationRules.ApplyRemovals(header.GetResponse().GetHeaderMutation().GetRemoveHeaders(), cs.responseHeader); err != nil {
+			if err = cs.applyMutations(header.GetResponse().GetHeaderMutation(), cs.responseHeader); err != nil {
 				cs.failProcStream(err)
 				return
 			}
 			// Signal that the response header is modified and ready to be sent to the
 			// client, so that if there is any buffered response body, it can be sent
 			// after the header.
-			cs.responseHeaderModified.Fire()
+			cs.responseHeadersReady.Fire()
 
 		case resp.GetResponseTrailers() != nil:
 			if cs.config.processingModes.responseTrailerMode == modeSkip {
-				cs.failProcStream(fmt.Errorf("extproc: external processor unexpectedly sent response trailers when response trailer processing is disabled"))
+				cs.failProcStream(fmt.Errorf("external processor unexpectedly sent response trailers when response trailer processing is disabled"))
+				return
+			}
+			if !cs.trailerSent.Load() {
+				cs.failProcStream(fmt.Errorf("external processor sent response trailers before response trailers were sent to it"))
+				return
+			}
+			if cs.responseTrailerReady.HasFired() {
+				cs.failProcStream(fmt.Errorf("external processor unexpectedly sent duplicate response trailers after response trailers were already processed"))
 				return
 			}
 			trailer := resp.GetResponseTrailers()
-			if err = cs.config.mutationRules.ApplyAdditions(trailer.GetHeaderMutation().GetSetHeaders(), cs.responseTrailers); err != nil {
-				cs.failProcStream(err)
-				return
-			}
-			if err = cs.config.mutationRules.ApplyRemovals(trailer.GetHeaderMutation().GetRemoveHeaders(), cs.responseTrailers); err != nil {
+			if err = cs.applyMutations(trailer.GetHeaderMutation(), cs.responseTrailers); err != nil {
 				cs.failProcStream(err)
 				return
 			}
 			// Signal that the response trailer is modified and ready to be sent to
 			// the client.
-			cs.responseTrailerModified.Fire()
+			cs.responseTrailerReady.Fire()
 		}
+	}
+}
+
+func (cs *clientStream) validateBodyResponse(bodyResp *v3procservicepb.BodyResponse) (*v3procservicepb.StreamedBodyResponse, bool) {
+	if status := bodyResp.GetResponse().GetStatus(); status != v3procservicepb.CommonResponse_CONTINUE {
+		cs.failProcStream(fmt.Errorf("external processor returned unexpected status %v for body response, expected %v", status, v3procservicepb.CommonResponse_CONTINUE))
+		return nil, false
+	}
+	streamedResp := bodyResp.GetResponse().GetBodyMutation().GetStreamedResponse()
+	if streamedResp == nil {
+		cs.failProcStream(fmt.Errorf("external processor returned invalid body mutation in body response"))
+		return nil, false
+	}
+	if streamedResp.GetGrpcMessageCompressed() {
+		cs.failProcStream(fmt.Errorf("external processor returned compressed grpc message which is not supported"))
+		return nil, false
+	}
+	return streamedResp, true
+}
+
+func (cs *clientStream) applyMutations(mutation *v3procservicepb.HeaderMutation, md metadata.MD) error {
+	if mutation == nil {
+		return nil
+	}
+	if err := cs.config.mutationRules.ApplyAdditions(mutation.GetSetHeaders(), md); err != nil {
+		return err
+	}
+	return cs.config.mutationRules.ApplyRemovals(mutation.GetRemoveHeaders(), md)
+}
+
+// closeProcSend gracefully half-closes the external processor stream across the
+// background send goroutine by pushing a nil sentinel onto procSendCh.
+func (cs *clientStream) closeProcSend() {
+	select {
+	case cs.procSendCh <- nil:
+	case <-cs.ctx.Done():
+	case <-cs.procStreamFailed.Done():
+	case <-cs.procStreamBypass.Done():
 	}
 }
 
@@ -983,8 +991,8 @@ func (cs *clientStream) sendToProcServerLoop() {
 // preempted by a stream failure or context cancellation. It prioritizes the
 // external processor stream's terminal error over the context error.
 func (cs *clientStream) streamError() error {
-	if val := cs.procStreamErr.Load(); val != nil {
-		return val.(error)
+	if cs.procStreamFailed.HasFired() {
+		return cs.procStreamErr.Load().(error)
 	}
 	return status.FromContextError(cs.ctx.Err()).Err()
 }
@@ -1003,16 +1011,16 @@ func (cs *clientStream) waitChannel(ch <-chan struct{}) error {
 }
 
 // createDataplaneStream initializes the underlying gRPC dataplane stream using
-// the provided newStream function.
+// the provided newStream function. If dataplane stream creation fails, the
+// top-level context used by the extproc filter is canceled and thereby all
+// spawned goroutines terminate.
 func (cs *clientStream) createDataplaneStream(ctx context.Context, newStream func(context.Context, ...grpc.CallOption) (grpc.ClientStream, error), opts []grpc.CallOption) error {
 	defer close(cs.dataplaneSetup)
-	var err error
-	if cs.dataplaneStream, err = newStream(ctx, opts...); err != nil {
-		cs.dataplaneCreationErr = err
+	cs.dataplaneStream, cs.dataplaneCreationErr = newStream(ctx, opts...)
+	if cs.dataplaneCreationErr != nil {
 		cs.cancel()
-		return err
 	}
-	return nil
+	return cs.dataplaneCreationErr
 }
 
 // failProcStream handles stream failures, recording errors or bypassing the
@@ -1023,9 +1031,6 @@ func (cs *clientStream) failProcStream(err error) bool {
 		return cs.procStreamBypass.HasFired()
 	}
 	cs.procCancel()
-	if cs.procStreamFailed.HasFired() {
-		return false
-	}
 	if err != io.EOF && (cs.ignoreFailureMode.Load() || !cs.config.failureModeAllow) {
 		cs.procStreamErr.Store(status.Errorf(codes.Internal, "extproc: %v", err))
 		cs.procStreamFailed.Fire()
@@ -1044,7 +1049,6 @@ func (cs *clientStream) cancelStream(err error) {
 	if !cs.procStreamClosed.CompareAndSwap(false, true) {
 		return
 	}
-	cs.procCancel()
 	cs.procStreamErr.Store(err)
 	cs.procStreamFailed.Fire()
 	// Cancel the stream's context to immediately tear down the active
@@ -1053,15 +1057,12 @@ func (cs *clientStream) cancelStream(err error) {
 }
 
 // handleProcStreamInitError handles failures during the initialization of the
-// external processor stream in NewStream. It returns the client stream
-// initialised with dataplane stream if failure mode allows, else returns the
-// error.
+// external processor stream in NewStream. If the failure mode allows it, the
+// external processor is bypassed and the direct dataplane stream is created.
 func (cs *clientStream) handleProcStreamInitError(err error, newStream func(context.Context, ...grpc.CallOption) (grpc.ClientStream, error), opts []grpc.CallOption) (grpc.ClientStream, error) {
-	cs.procCancel()
-	if !cs.config.failureModeAllow {
-		return nil, status.Errorf(codes.Internal, "extproc: %v", err)
+	if !cs.failProcStream(err) {
+		return nil, cs.streamError()
 	}
-	cs.triggerBypass()
 	if err := cs.createDataplaneStream(cs.ctx, newStream, opts); err != nil {
 		return nil, err
 	}
@@ -1093,19 +1094,7 @@ func (cs *clientStream) processInitialHeaders(ctx context.Context, newStream fun
 		cs.triggerBypass()
 	}
 	if resp.GetImmediateResponse() != nil {
-		if cs.config.disableImmediateResponse {
-			cs.handleHeaderError(fmt.Errorf("external processor sent an immediate response but immediate responses are disabled in configuration"), newStream, opts)
-		} else {
-			imm := resp.GetImmediateResponse()
-			statusCode := codes.Internal
-			if imm.GetGrpcStatus() != nil {
-				statusCode = codes.Code(imm.GetGrpcStatus().GetStatus())
-				if statusCode > codes.Code(16) {
-					statusCode = codes.Unknown
-				}
-			}
-			cs.cancelStream(status.Error(statusCode, imm.GetDetails()))
-		}
+		cs.handleImmediateResponse(resp.GetImmediateResponse(), newStream, opts)
 		return false
 	}
 
@@ -1126,11 +1115,7 @@ func (cs *clientStream) processInitialHeaders(ctx context.Context, newStream fun
 	if outgoingMD == nil {
 		outgoingMD = metadata.MD{}
 	}
-	if err = cs.config.mutationRules.ApplyAdditions(header.GetResponse().GetHeaderMutation().GetSetHeaders(), outgoingMD); err != nil {
-		cs.handleHeaderError(err, newStream, opts)
-		return false
-	}
-	if err = cs.config.mutationRules.ApplyRemovals(header.GetResponse().GetHeaderMutation().GetRemoveHeaders(), outgoingMD); err != nil {
+	if err = cs.applyMutations(header.GetResponse().GetHeaderMutation(), outgoingMD); err != nil {
 		cs.handleHeaderError(err, newStream, opts)
 		return false
 	}
@@ -1141,9 +1126,14 @@ func (cs *clientStream) processInitialHeaders(ctx context.Context, newStream fun
 	return true
 }
 
-func (cs *clientStream) handleImmediateResponse(imm *v3procservicepb.ImmediateResponse) {
+func (cs *clientStream) handleImmediateResponse(imm *v3procservicepb.ImmediateResponse, newStream func(context.Context, ...grpc.CallOption) (grpc.ClientStream, error), opts []grpc.CallOption) {
 	if cs.config.disableImmediateResponse {
-		cs.failProcStream(fmt.Errorf("extproc: external processor sent an immediate response but immediate responses are disabled in configuration"))
+		err := fmt.Errorf("external processor sent an immediate response but immediate responses are disabled in configuration")
+		if cs.dataplaneStream == nil {
+			cs.handleHeaderError(err, newStream, opts)
+		} else {
+			cs.failProcStream(err)
+		}
 		return
 	}
 
@@ -1158,11 +1148,10 @@ func (cs *clientStream) handleImmediateResponse(imm *v3procservicepb.ImmediateRe
 
 	if cs.trailerSent.Load() {
 		if mutation := imm.GetHeaders(); mutation != nil {
-			cs.config.mutationRules.ApplyAdditions(mutation.GetSetHeaders(), cs.responseTrailers)
-			cs.config.mutationRules.ApplyRemovals(mutation.GetRemoveHeaders(), cs.responseTrailers)
+			cs.applyMutations(mutation, cs.responseTrailers)
 		}
-		cs.procStreamErr.Store(err)
-		cs.responseTrailerModified.Fire()
+		cs.trailerErr.Store(err)
+		cs.responseTrailerReady.Fire()
 	} else {
 		cs.cancelStream(err)
 	}
@@ -1170,8 +1159,8 @@ func (cs *clientStream) handleImmediateResponse(imm *v3procservicepb.ImmediateRe
 
 func (cs *clientStream) triggerBypass() {
 	if cs.procStreamBypass.Fire() {
-		cs.responseHeaderModified.Fire()
-		cs.responseTrailerModified.Fire()
+		cs.responseHeadersReady.Fire()
+		cs.responseTrailerReady.Fire()
 	}
 }
 
@@ -1201,121 +1190,108 @@ func (cs *clientStream) waitForDataplaneStream(ctx context.Context) (grpc.Client
 // once, forwards them to the external processor if configured, or unblocks
 // readers immediately.
 func (cs *clientStream) initiateResponseHeaderProcessing() error {
-	var err error
-	cs.responseHeaderOnce.Do(func() {
-		dataplaneStream, dpErr := cs.waitForDataplaneStream(cs.ctx)
-		if dpErr != nil {
-			err = dpErr
-			return
+	if cs.procStreamFailed.HasFired() {
+		return cs.procStreamErr.Load().(error)
+	}
+	if !cs.responseHeaderOnce.CompareAndSwap(false, true) {
+		return nil
+	}
+	dataplaneStream, err := cs.waitForDataplaneStream(cs.ctx)
+	if err != nil {
+		return err
+	}
+	header, err := dataplaneStream.Header()
+	if err != nil {
+		// If the processor stream failed first and canceled cs.ctx, prefer
+		// that root error over the secondary dataplaneStream.Header() failure.
+		if cs.procStreamFailed.HasFired() {
+			return cs.procStreamErr.Load().(error)
 		}
-		header, headerErr := dataplaneStream.Header()
-		if headerErr != nil {
-			// If the processor stream failed first and canceled cs.ctx, prefer
-			// that root error over the secondary dataplaneStream.Header() failure.
-			if cs.procStreamFailed.HasFired() {
-				err = cs.procStreamErr.Load().(error)
-			} else {
-				err = headerErr
-			}
-			return
-		}
+		return err
+	}
 
-		if header == nil {
-			// A trailers-only response returns nil from dataplaneStream.Header().
-			trailers := dataplaneStream.Trailer()
-			if len(trailers) > 0 {
-				header = trailers
-				cs.trailersOnly = true
-			}
+	if header == nil {
+		// A trailers-only response returns nil from dataplaneStream.Header().
+		header = dataplaneStream.Trailer()
+		if len(header) > 0 {
+			cs.trailersOnly = true
 		}
-		cs.responseHeader = header
-		if cs.config.processingModes.responseHeaderMode == modeSend && !cs.procStreamBypass.HasFired() {
-			req := cs.newProcessingRequest(false)
-			req.Request = &v3procservicepb.ProcessingRequest_ResponseHeaders{ResponseHeaders: &v3procservicepb.HttpHeaders{
-				Headers:     httpfilter.ConstructHeaderMap(header, nil, cs.config.allowedHeaders, cs.config.disallowedHeaders),
-				EndOfStream: cs.trailersOnly,
-			}}
-			select {
-			case cs.procSendCh <- req:
-			case <-cs.ctx.Done():
-				// Prioritize the underlying processor error over context cancellation,
-				// because stream failures explicitly cancel cs.ctx to unblock I/O.
-				if cs.procStreamFailed.HasFired() {
-					err = cs.procStreamErr.Load().(error)
-				} else {
-					err = status.FromContextError(cs.ctx.Err()).Err()
-				}
-			case <-cs.procStreamFailed.Done():
-				err = cs.procStreamErr.Load().(error)
-			case <-cs.procStreamBypass.Done():
-				cs.responseHeaderModified.Fire()
-			}
-		} else {
-			// If header does not need to be sent to the external processor, unblock
-			// the functions waiting on header modifications.
-			cs.responseHeaderModified.Fire()
-		}
-	})
-	return err
+	}
+	cs.responseHeader = header
+	if cs.config.processingModes.responseHeaderMode != modeSend || cs.procStreamBypass.HasFired() {
+		// If header does not need to be sent to the external processor, unblock
+		// the functions waiting on header modifications.
+		cs.responseHeadersReady.Fire()
+		return nil
+	}
+
+	req := cs.newProcessingRequest(false)
+	req.Request = &v3procservicepb.ProcessingRequest_ResponseHeaders{ResponseHeaders: &v3procservicepb.HttpHeaders{
+		Headers:     httpfilter.ConstructHeaderMap(header, nil, cs.config.allowedHeaders, cs.config.disallowedHeaders),
+		EndOfStream: cs.trailersOnly,
+	}}
+	select {
+	case cs.procSendCh <- req:
+		cs.responseHeaderSent.Store(true)
+		return nil
+	case <-cs.procStreamBypass.Done():
+		return nil
+	case <-cs.procStreamFailed.Done():
+		return cs.streamError()
+	case <-cs.ctx.Done():
+		return cs.streamError()
+	}
 }
 
 func (cs *clientStream) initiateResponseTrailerProcessing() {
-	cs.responseTrailerOnce.Do(func() {
-		if cs.trailersOnly {
-			// For trailers-only response, the trailers metadata map is processed and
-			// mutated during the response header phase. Wait for those mutations to
-			// be received and applied.
-			select {
-			case <-cs.responseHeaderModified.Done():
-			case <-cs.procStreamFailed.Done():
-			case <-cs.ctx.Done():
-			}
-			cs.responseTrailers = cs.responseHeader
-			cs.responseTrailerModified.Fire()
-			// Send nil sentinel to procSendCh to gracefully half-close the processor
-			// stream across trailers-only responses once header mutations finish.
-			select {
-			case cs.procSendCh <- nil:
-			case <-cs.ctx.Done():
-			case <-cs.procStreamFailed.Done():
-			case <-cs.procStreamBypass.Done():
-			}
-			return
-		}
-		cs.responseTrailers = cs.dataplaneStream.Trailer()
-		if cs.config.processingModes.responseTrailerMode == modeSend && !cs.procStreamBypass.HasFired() {
-			req := cs.newProcessingRequest(false)
-			req.Request = &v3procservicepb.ProcessingRequest_ResponseTrailers{ResponseTrailers: &v3procservicepb.HttpTrailers{
-				Trailers: httpfilter.ConstructHeaderMap(cs.responseTrailers, nil, cs.config.allowedHeaders, cs.config.disallowedHeaders),
-			}}
-			select {
-			case cs.procSendCh <- req:
-				cs.trailerSent.Store(true)
-			case <-cs.ctx.Done():
-			case <-cs.procStreamFailed.Done():
-			case <-cs.procStreamBypass.Done():
-			}
-		} else {
-			cs.responseTrailerModified.Fire()
-		}
-		// Send nil sentinel to procSendCh to gracefully half-close the processor
-		// stream. Since this is pushed after trailers are sent, the
-		// background loop will serialize the CloseSend() call safely after all
-		// pending messages are transmitted.
+	if !cs.responseTrailerOnce.CompareAndSwap(false, true) {
+		return
+	}
+	if cs.trailersOnly {
+		// For trailers-only response, the trailers metadata map is processed and
+		// mutated during the response header phase. Wait for those mutations to
+		// be received and applied.
 		select {
-		case cs.procSendCh <- nil:
+		case <-cs.responseHeadersReady.Done():
+		case <-cs.procStreamFailed.Done():
+		case <-cs.ctx.Done():
+		}
+		cs.responseTrailers = cs.responseHeader
+		cs.responseTrailerReady.Fire()
+		// Gracefully half-close the external processor stream for trailers-only
+		// responses once header modifications finish.
+		cs.closeProcSend()
+		return
+	}
+	cs.responseTrailers = cs.dataplaneStream.Trailer()
+	if cs.config.processingModes.responseTrailerMode == modeSend && !cs.procStreamBypass.HasFired() {
+		req := cs.newProcessingRequest(false)
+		req.Request = &v3procservicepb.ProcessingRequest_ResponseTrailers{ResponseTrailers: &v3procservicepb.HttpTrailers{
+			Trailers: httpfilter.ConstructHeaderMap(cs.responseTrailers, nil, cs.config.allowedHeaders, cs.config.disallowedHeaders),
+		}}
+		select {
+		case cs.procSendCh <- req:
+			cs.trailerSent.Store(true)
 		case <-cs.ctx.Done():
 		case <-cs.procStreamFailed.Done():
 		case <-cs.procStreamBypass.Done():
 		}
-	})
+	} else {
+		cs.responseTrailerReady.Fire()
+	}
+	// Gracefully half-close the external processor stream after forwarding response
+	// trailers to signal that all responses have completely processed.
+	cs.closeProcSend()
 }
 
 func (cs *clientStream) waitForTrailerProcessing(recvErr error) error {
 	select {
-	case <-cs.responseTrailerModified.Done():
-		if val := cs.procStreamErr.Load(); val != nil {
+	case <-cs.responseTrailerReady.Done():
+		if val := cs.trailerErr.Load(); val != nil {
 			return val.(error)
+		}
+		if cs.procStreamFailed.HasFired() {
+			return cs.procStreamErr.Load().(error)
 		}
 		return recvErr
 	case <-cs.procStreamBypass.Done():

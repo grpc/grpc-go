@@ -229,14 +229,7 @@ func ConstructHeaderMap(md metadata.MD, added [][]string, allowedHeaders, disall
 		}
 		if isAllowedHeader(key, allowedHeaders) {
 			for _, value := range values {
-				rawValue := []byte(value)
-				if strings.HasSuffix(key, "-bin") {
-					rawValue = []byte(base64.StdEncoding.EncodeToString(rawValue))
-				}
-				headerMap.Headers = append(headerMap.Headers, &v3corepb.HeaderValue{
-					Key:      key,
-					RawValue: rawValue,
-				})
+				headerMap.Headers = append(headerMap.Headers, constructHeader(key, value))
 			}
 		}
 	}
@@ -248,14 +241,7 @@ func ConstructHeaderMap(md metadata.MD, added [][]string, allowedHeaders, disall
 				continue
 			}
 			if isAllowedHeader(key, allowedHeaders) {
-				rawValue := []byte(kvs[i+1])
-				if strings.HasSuffix(key, "-bin") {
-					rawValue = []byte(base64.StdEncoding.EncodeToString(rawValue))
-				}
-				headerMap.Headers = append(headerMap.Headers, &v3corepb.HeaderValue{
-					Key:      key,
-					RawValue: rawValue,
-				})
+				headerMap.Headers = append(headerMap.Headers, constructHeader(key, kvs[i+1]))
 			}
 		}
 	}
@@ -263,6 +249,19 @@ func ConstructHeaderMap(md metadata.MD, added [][]string, allowedHeaders, disall
 		return nil
 	}
 	return headerMap
+}
+
+func constructHeader(key, value string) *v3corepb.HeaderValue {
+	rawValue := []byte(value)
+	if strings.HasSuffix(key, "-bin") {
+		encoded := make([]byte, base64.StdEncoding.EncodedLen(len(rawValue)))
+		base64.StdEncoding.Encode(encoded, rawValue)
+		rawValue = encoded
+	}
+	return &v3corepb.HeaderValue{
+		Key:      key,
+		RawValue: rawValue,
+	}
 }
 
 // isDisallowedHeader returns true if the given header key matches any of the
