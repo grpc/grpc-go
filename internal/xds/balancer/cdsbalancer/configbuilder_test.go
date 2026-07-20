@@ -681,6 +681,88 @@ func (s) TestBuildSingleClusterConfig_EDS_PickFirstWeightedShuffling_Enabled(t *
 	}
 }
 
+func (s) TestBuildSingleClusterConfig_NilChecks(t *testing.T) {
+	tests := []struct {
+		name string
+		p    *priorityConfig
+	}{
+		{
+			name: "nil priorityConfig",
+			p:    nil,
+		},
+		{
+			name: "priorityConfig with nil fields",
+			p:    &priorityConfig{},
+		},
+		{
+			name: "nil clusterConfig",
+			p:    &priorityConfig{childNameGen: newNameGenerator(0)},
+		},
+		{
+			name: "nil childNameGen",
+			p: &priorityConfig{
+				clusterConfig: &xdsresource.ClusterConfig{
+					Cluster: &xdsresource.ClusterUpdate{ClusterType: xdsresource.ClusterTypeEDS},
+				},
+			},
+		},
+		{
+			name: "nil Cluster in clusterConfig",
+			p: &priorityConfig{
+				childNameGen:  newNameGenerator(0),
+				clusterConfig: &xdsresource.ClusterConfig{},
+			},
+		},
+		{
+			name: "EDS with nil EndpointConfig",
+			p: &priorityConfig{
+				childNameGen: newNameGenerator(0),
+				clusterConfig: &xdsresource.ClusterConfig{
+					Cluster: &xdsresource.ClusterUpdate{ClusterType: xdsresource.ClusterTypeEDS},
+				},
+			},
+		},
+		{
+			name: "EDS with nil EDSUpdate",
+			p: &priorityConfig{
+				childNameGen: newNameGenerator(0),
+				clusterConfig: &xdsresource.ClusterConfig{
+					Cluster:        &xdsresource.ClusterUpdate{ClusterType: xdsresource.ClusterTypeEDS},
+					EndpointConfig: &xdsresource.EndpointConfig{},
+				},
+			},
+		},
+		{
+			name: "LogicalDNS with nil EndpointConfig",
+			p: &priorityConfig{
+				childNameGen: newNameGenerator(0),
+				clusterConfig: &xdsresource.ClusterConfig{
+					Cluster: &xdsresource.ClusterUpdate{ClusterType: xdsresource.ClusterTypeLogicalDNS},
+				},
+			},
+		},
+		{
+			name: "LogicalDNS with nil DNSEndpoints",
+			p: &priorityConfig{
+				childNameGen: newNameGenerator(0),
+				clusterConfig: &xdsresource.ClusterConfig{
+					Cluster:        &xdsresource.ClusterUpdate{ClusterType: xdsresource.ClusterTypeLogicalDNS},
+					EndpointConfig: &xdsresource.EndpointConfig{},
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, _, err := buildSingleClusterConfig(tt.p, nil)
+			if err == nil {
+				t.Errorf("buildSingleClusterConfig() succeeded unexpectedly, want error")
+			}
+		})
+	}
+}
+
 func (s) TestBuildClusterImplConfigForDNS(t *testing.T) {
 	for _, tt := range []struct {
 		name        string

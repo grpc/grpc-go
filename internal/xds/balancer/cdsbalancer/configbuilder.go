@@ -110,6 +110,9 @@ func buildSingleClusterConfigJSON(p *priorityConfig, xdsLBPolicy *internalservic
 }
 
 func buildSingleClusterConfig(p *priorityConfig, xdsLBPolicy *internalserviceconfig.BalancerConfig) (*outlierdetection.LBConfig, []resolver.Endpoint, error) {
+	if p == nil || p.clusterConfig == nil || p.clusterConfig.Cluster == nil || p.childNameGen == nil {
+		return nil, nil, fmt.Errorf("cluster config is missing")
+	}
 	clusterUpdate := p.clusterConfig.Cluster
 	priorityLBConfig := &priority.LBConfig{
 		Children: make(map[string]*priority.Child),
@@ -119,6 +122,9 @@ func buildSingleClusterConfig(p *priorityConfig, xdsLBPolicy *internalservicecon
 	switch clusterUpdate.ClusterType {
 	case xdsresource.ClusterTypeEDS:
 		priorities := [][]xdsresource.Locality{{}}
+		if p.clusterConfig.EndpointConfig == nil || p.clusterConfig.EndpointConfig.EDSUpdate == nil {
+			return nil, nil, fmt.Errorf("EDS update is missing for cluster %q", clusterUpdate.ClusterName)
+		}
 		edsUpdate := p.clusterConfig.EndpointConfig.EDSUpdate
 		if len(edsUpdate.Localities) != 0 {
 			priorities = groupLocalitiesByPriority(edsUpdate.Localities)
@@ -141,6 +147,9 @@ func buildSingleClusterConfig(p *priorityConfig, xdsLBPolicy *internalservicecon
 	case xdsresource.ClusterTypeLogicalDNS:
 		pName := fmt.Sprintf("priority-%v", p.childNameGen.prefix)
 		priorityLBConfig.Priorities = []string{pName}
+		if p.clusterConfig.EndpointConfig == nil || p.clusterConfig.EndpointConfig.DNSEndpoints == nil {
+			return nil, nil, fmt.Errorf("DNS endpoints are missing for cluster %q", clusterUpdate.ClusterName)
+		}
 		endpoints := p.clusterConfig.EndpointConfig.DNSEndpoints.Endpoints
 		var retEndpoint resolver.Endpoint
 		for _, e := range endpoints {

@@ -273,7 +273,14 @@ func (b *cdsBalancer) handleClusterUpdate() error {
 // configuration is then pushed to the child policy.
 func (b *cdsBalancer) updateChildConfig() error {
 	clusterName := b.lbCfg.ClusterName
-	clusterConfig := b.clusterConfigs[clusterName].Config
+	clusterResult := b.clusterConfigs[clusterName]
+	if clusterResult == nil {
+		return fmt.Errorf("cluster result for %q is missing", clusterName)
+	}
+	clusterConfig := clusterResult.Config
+	if clusterConfig.Cluster == nil {
+		return fmt.Errorf("cluster update is missing for cluster %q", clusterName)
+	}
 	isAggregate := clusterConfig.Cluster.ClusterType == xdsresource.ClusterTypeAggregate
 
 	var topLBName string
@@ -305,6 +312,9 @@ func (b *cdsBalancer) updateChildConfig() error {
 	if isAggregate {
 		childCfgBytes, endpoints, err = buildAggregateClusterPriorityConfigJSON(b.priorities, &b.xdsLBPolicy)
 	} else {
+		if len(b.priorities) == 0 {
+			return fmt.Errorf("no priorities configured for non-aggregate cluster %q", clusterName)
+		}
 		childCfgBytes, endpoints, err = buildSingleClusterConfigJSON(b.priorities[0], &b.xdsLBPolicy)
 	}
 	if err != nil {
