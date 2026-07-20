@@ -433,7 +433,7 @@ func (s) TestUnarySetSendCompressorAfterHeaderSendFailure(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	wantErr := status.Error(codes.Unknown, "transport: set send compressor called after headers sent or stream done")
+	wantErr := status.Error(codes.Unknown, "transport: set send compressor called after headers sent")
 	if _, err := ss.Client.EmptyCall(ctx, &testpb.Empty{}); !equalError(err, wantErr) {
 		t.Fatalf("Unexpected unary call error, got: %v, want: %v", err, wantErr)
 	}
@@ -459,7 +459,7 @@ func (s) TestStreamSetSendCompressorAfterHeaderSendFailure(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	wantErr := status.Error(codes.Unknown, "transport: set send compressor called after headers sent or stream done")
+	wantErr := status.Error(codes.Unknown, "transport: set send compressor called after headers sent")
 	s, err := ss.Client.FullDuplexCall(ctx)
 	if err != nil {
 		t.Fatalf("Unexpected full duplex call error, got: %v, want: nil", err)

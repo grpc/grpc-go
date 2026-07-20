@@ -30,6 +30,10 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// ErrSetSendCompressOnDoneStream indicates that the send compressor cannot be
+// changed because the stream has finished.
+var ErrSetSendCompressOnDoneStream = errors.New("transport: set send compressor called after stream done")
+
 // ServerStream implements streaming functionality for a gRPC server.
 type ServerStream struct {
 	Stream // Embed for common stream functionality.
@@ -110,8 +114,11 @@ func (s *ServerStream) ContentSubtype() string {
 
 // SetSendCompress sets the compression algorithm to the stream.
 func (s *ServerStream) SetSendCompress(name string) error {
-	if s.isHeaderSent() || s.getState() == streamDone {
-		return errors.New("transport: set send compressor called after headers sent or stream done")
+	if s.isHeaderSent() {
+		return errors.New("transport: set send compressor called after headers sent")
+	}
+	if s.getState() == streamDone {
+		return ErrSetSendCompressOnDoneStream
 	}
 
 	s.sendCompress = name

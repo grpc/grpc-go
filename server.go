@@ -1386,16 +1386,10 @@ func (s *Server) processUnaryRPC(ctx context.Context, stream *transport.ServerSt
 
 	if sendCompressorName != "" {
 		if err := stream.SetSendCompress(sendCompressorName); err != nil {
-			// If conn closed, return DeadlineExceeded instead of Internal. This
-			// prevents a client disconnect race from reporting spurious internal errors.
-			if ctx.Err() != nil {
+			if errors.Is(err, transport.ErrSetSendCompressOnDoneStream) && ctx.Err() != nil {
 				return status.FromContextError(ctx.Err()).Err()
 			}
-			return status.Errorf(
-				codes.Internal,
-				"grpc: failed to set send compressor: %v",
-				err,
-			)
+			return status.Errorf(codes.Internal, "grpc: failed to set send compressor: %v", err)
 		}
 	}
 
@@ -1720,6 +1714,9 @@ func (s *Server) processStreamingRPC(ctx context.Context, stream *transport.Serv
 
 	if ss.sendCompressorName != "" {
 		if err := stream.SetSendCompress(ss.sendCompressorName); err != nil {
+			if errors.Is(err, transport.ErrSetSendCompressOnDoneStream) && ctx.Err() != nil {
+				return status.FromContextError(ctx.Err()).Err()
+			}
 			return status.Errorf(codes.Internal, "grpc: failed to set send compressor: %v", err)
 		}
 	}

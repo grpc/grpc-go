@@ -28,11 +28,47 @@ import (
 	"google.golang.org/grpc/encoding/gzip"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
 
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
+
+type cancelBeforeHandlerStatsHandler struct {
+	cancel context.CancelFunc
+	done   chan struct{}
+	err    error
+	method string
+}
+
+func (h *cancelBeforeHandlerStatsHandler) TagRPC(ctx context.Context, _ *stats.RPCTagInfo) context.Context {
+	return ctx
+}
+
+func (h *cancelBeforeHandlerStatsHandler) HandleRPC(ctx context.Context, stat stats.RPCStats) {
+	switch stat := stat.(type) {
+	case *stats.InHeader:
+		if stat.FullMethod != h.method {
+			return
+		}
+		h.cancel()
+		<-ctx.Done()
+		// Stream cancellation marks the stream done immediately after canceling
+		// the context. Wait for that state transition before allowing request
+		// processing to continue.
+		time.Sleep(10 * time.Millisecond)
+	case *stats.End:
+		h.err = stat.Error
+		close(h.done)
+	}
+}
+
+func (*cancelBeforeHandlerStatsHandler) TagConn(ctx context.Context, _ *stats.ConnTagInfo) context.Context {
+	return ctx
+}
+
+func (*cancelBeforeHandlerStatsHandler) HandleConn(context.Context, stats.ConnStats) {}
 
 func (s) TestContextCanceled(t *testing.T) {
 	ss := &stubserver.StubServer{
@@ -160,5 +196,80 @@ func (s) TestCancelWhileRecvingWithCompression(t *testing.T) {
 	}
 	if err := ss.CC.Close(); err != nil {
 		t.Fatalf("Close failed with %v, want nil", err)
+	}
+}
+
+func (s) TestCancelBeforeHandlerWithCompression(t *testing.T) {
+	for _, test := range []struct {
+		name      string
+		method    string
+		streaming bool
+	}{
+		{
+			name:   "unary",
+			method: testgrpc.TestService_UnaryCall_FullMethodName,
+		},
+		{
+			name:      "streaming",
+			method:    testgrpc.TestService_FullDuplexCall_FullMethodName,
+			streaming: true,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			testCtx, testCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer testCancel()
+			callCtx, callCancel := context.WithCancel(testCtx)
+			defer callCancel()
+
+			statsHandler := &cancelBeforeHandlerStatsHandler{
+				cancel: callCancel,
+				done:   make(chan struct{}),
+				method: test.method,
+			}
+			handlerCalled := false
+			ss := &stubserver.StubServer{
+				UnaryCallF: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+					handlerCalled = true
+					return &testpb.SimpleResponse{}, nil
+				},
+				FullDuplexCallF: func(testgrpc.TestService_FullDuplexCallServer) error {
+					handlerCalled = true
+					return nil
+				},
+			}
+			if err := ss.Start([]grpc.ServerOption{grpc.StatsHandler(statsHandler)}); err != nil {
+				t.Fatalf("Error starting endpoint server: %v", err)
+			}
+			defer ss.Stop()
+
+			var err error
+			if test.streaming {
+				stream, streamErr := ss.Client.FullDuplexCall(callCtx, grpc.UseCompressor(gzip.Name))
+				if streamErr == nil {
+					_, streamErr = stream.Recv()
+				}
+				err = streamErr
+			} else {
+				_, err = ss.Client.UnaryCall(callCtx, &testpb.SimpleRequest{
+					Payload: &testpb.Payload{Body: []byte("payload")},
+				}, grpc.UseCompressor(gzip.Name))
+			}
+			if got, want := status.Code(err), codes.Canceled; got != want {
+				t.Fatalf("RPC returned code %v, want %v", got, want)
+			}
+
+			select {
+			case <-statsHandler.done:
+				if got, want := status.Code(statsHandler.err), codes.Canceled; got != want {
+					t.Fatalf("stats.End error code = %v, want %v; error: %v", got, want, statsHandler.err)
+				}
+			case <-testCtx.Done():
+				t.Fatal("Timeout waiting for server stats.End")
+			}
+
+			if handlerCalled {
+				t.Error("RPC handler unexpectedly called")
+			}
+		})
 	}
 }
