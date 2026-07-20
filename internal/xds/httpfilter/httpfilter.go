@@ -29,18 +29,6 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// BuildInterceptorOptions contains options passed to the filter when building interceptors.
-type BuildInterceptorOptions struct {
-	MetricsRecorder estats.MetricsRecorder
-	Target          string
-}
-
-// ClientFilterMetricsSetter is an optional interface that ClientFilter implementations
-// can implement to receive metrics recorder and target from the resolver.
-type ClientFilterMetricsSetter interface {
-	SetMetricsOptions(opts BuildInterceptorOptions)
-}
-
 // FilterConfig represents an opaque data structure holding configuration for a
 // filter.  Embed this interface to implement it.
 type FilterConfig interface {
@@ -102,7 +90,9 @@ type ClientInterceptor interface {
 
 // ClientFilterOptions contains options for building a client filter.
 type ClientFilterOptions struct {
-	FilterName string // FilterName is the filter name from the xDS configuration.
+	FilterName      string // FilterName is the filter name from the xDS configuration.
+	MetricsRecorder estats.MetricsRecorder
+	Target          string
 }
 
 // ClientFilterBuilder is an optional interface that a Builder can implement to
