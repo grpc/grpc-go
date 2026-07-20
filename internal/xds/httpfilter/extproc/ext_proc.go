@@ -336,7 +336,7 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 
 		if ocs.dataplaneStream, err = newStream(ocs.ctx, newOpts...); err != nil {
 			ocs.cancel()
-			return nil, err
+			return nil, ocs.streamError(err)
 		}
 		ocs.recordMetric(clientHeadersDurationMetric, time.Since(ocs.clientHeadersStartTime).Seconds())
 
@@ -407,8 +407,19 @@ func (ocs *observabilityClientStream) recordMetric(handle *estats.Float64HistoHa
 	handle.Record(ocs.metricsRecorder, duration, ocs.target, bs)
 }
 
-// Header returns the header metadata received from the server if there is any.
-// It blocks if the metadata is not ready to read.
+// streamError returns the appropriate error when a stream operation fails. It
+// prioritizes the external processor stream's terminal error over the context
+// error.
+func (ocs *observabilityClientStream) streamError(err error) error {
+	if err != nil && ocs.ctx.Err() != nil {
+		if fatalErr, ok := ocs.procStreamErr.Load().(error); ok {
+			return fatalErr
+		}
+		return status.FromContextError(ocs.ctx.Err()).Err()
+	}
+	return err
+}
+
 func (ocs *observabilityClientStream) Header() (metadata.MD, error) {
 	// If the external processor has failed and RPC needs to be failed, fail the
 	// RPC with the error received from the external processor stream.
@@ -418,7 +429,8 @@ func (ocs *observabilityClientStream) Header() (metadata.MD, error) {
 	if err := ocs.initiateResponseHeaderProcessing(); err != nil {
 		return nil, err
 	}
-	return ocs.dataplaneStream.Header()
+	md, err := ocs.dataplaneStream.Header()
+	return md, ocs.streamError(err)
 }
 
 func (ocs *observabilityClientStream) Trailer() metadata.MD {
@@ -457,7 +469,7 @@ func (ocs *observabilityClientStream) CloseSend() error {
 	if err != nil {
 		return err
 	}
-	return ocs.dataplaneStream.CloseSend()
+	return ocs.streamError(ocs.dataplaneStream.CloseSend())
 }
 
 func (ocs *observabilityClientStream) Context() context.Context {
@@ -496,7 +508,7 @@ func (ocs *observabilityClientStream) SendMsg(m any) error {
 			return err
 		}
 	}
-	return ocs.dataplaneStream.SendMsg(m)
+	return ocs.streamError(ocs.dataplaneStream.SendMsg(m))
 }
 
 func (ocs *observabilityClientStream) RecvMsg(m any) error {
@@ -516,10 +528,7 @@ func (ocs *observabilityClientStream) RecvMsg(m any) error {
 	err := ocs.dataplaneStream.RecvMsg(m)
 	if err != nil {
 		ocs.initiateResponseTrailerProcessing()
-		if fatalErr, ok := ocs.procStreamErr.Load().(error); ok && err == io.EOF {
-			return fatalErr
-		}
-		return err
+		return ocs.streamError(err)
 	}
 
 	if ocs.config.processingModes.responseBodyMode == modeSend && !ocs.procStreamBypass.Load() {
@@ -567,7 +576,7 @@ func (ocs *observabilityClientStream) initiateResponseHeaderProcessing() error {
 	}
 	header, err := ocs.dataplaneStream.Header()
 	if err != nil {
-		return err
+		return ocs.streamError(err)
 	}
 	startTime := time.Now()
 	// A trailers-only response returns nil from dataplaneStream.Header().
@@ -585,6 +594,9 @@ func (ocs *observabilityClientStream) initiateResponseHeaderProcessing() error {
 			EndOfStream: ocs.trailersOnly,
 		}}
 		err = ocs.sendToProcessor(req)
+		if err != nil {
+			return ocs.streamError(err)
+		}
 	}
 	ocs.recordMetric(serverHeadersDurationMetric, time.Since(startTime).Seconds())
 	return err
