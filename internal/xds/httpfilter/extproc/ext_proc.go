@@ -303,6 +303,10 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 			return ocs.handleProcStreamObsInitError(fmt.Errorf("external processor failed to start: %v", err), newStream, opts...)
 		}
 
+		// Start background goroutine to receive any messages from the external
+		// processor server and discard them.
+		go ocs.discardProcessorResponsesLoop()
+
 		// Build request attributes upfront to avoid adding protobuf allocation
 		// overhead to the critical RPC data path.
 		outgoingMD, added, _ := metadataFromOutgoingContextRaw(ctx)
@@ -317,7 +321,7 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 					Headers: httpfilter.ConstructHeaderMap(outgoingMD, added, i.config.allowedHeaders, i.config.disallowedHeaders),
 				},
 			}
-			if err = ocs.procStream.Send(headerReq); err != nil {
+			if err = ocs.sendToProcessor(headerReq); err != nil {
 				return ocs.handleProcStreamObsInitError(fmt.Errorf("failed to send client headers to external processor server: %v", err), newStream, opts...)
 			}
 		}
@@ -335,10 +339,6 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 			return nil, err
 		}
 		ocs.recordMetric(clientHeadersDurationMetric, time.Since(ocs.clientHeadersStartTime).Seconds())
-
-		// Start background goroutine to receive any messages from the external
-		// processor server and discard them.
-		go ocs.discardProcessorResponsesLoop()
 
 		return ocs, nil
 	}
