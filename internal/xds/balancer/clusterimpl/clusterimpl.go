@@ -172,7 +172,7 @@ func (b *clusterImplBalancer) handleClusterConfigLocked(clusterConfig xdsresourc
 		for _, d := range edsUpdate.Drops {
 			newDrops = append(newDrops, DropConfig{
 				Category:           d.Category,
-				RequestsPerMillion: d.Numerator * million / d.Denominator,
+				RequestsPerMillion: dropRequestsPerMillion(d.Numerator, d.Denominator),
 			})
 		}
 		if !slices.Equal(b.dropCategories, newDrops) {

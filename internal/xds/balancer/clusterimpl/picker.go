@@ -57,6 +57,19 @@ func gcd(a, b uint32) uint32 {
 	return a
 }
 
+// dropRequestsPerMillion scales a drop overload's numerator and denominator to
+// a number of requests to drop per million. numerator can be as large as a
+// million (a 100% drop), so the multiplication is done in uint64 to avoid
+// overflowing a uint32, and the result is capped at a million because a drop
+// ratio above 100% is treated as 100%.
+func dropRequestsPerMillion(numerator, denominator uint32) uint32 {
+	rpm := uint64(numerator) * million / uint64(denominator)
+	if rpm > million {
+		rpm = million
+	}
+	return uint32(rpm)
+}
+
 func newDropper(c DropConfig) *dropper {
 	w := NewRandomWRR()
 	gcdv := gcd(c.RequestsPerMillion, million)
