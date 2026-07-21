@@ -45,7 +45,7 @@ require (
 	github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/google/uuid v1.6.0 // indirect
-	github.com/googleapis/enterprise-certificate-proxy v0.3.16 // indirect
+	github.com/googleapis/enterprise-certificate-proxy v0.3.15 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/planetscale/vtprotobuf v0.5.0 // indirect
 	github.com/prometheus/client_model v0.6.2 // indirect
@@ -64,7 +64,7 @@ require (
 	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/text v0.40.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
-	google.golang.org/api v0.282.0 // indirect
+	google.golang.org/api v0.278.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260706201446-f0a921348800 // indirect
 )
 

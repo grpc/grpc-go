@@ -29,7 +29,7 @@ require (
 	github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/google/uuid v1.6.0 // indirect
-	github.com/googleapis/enterprise-certificate-proxy v0.3.16 // indirect
+	github.com/googleapis/enterprise-certificate-proxy v0.3.15 // indirect
 	go.opencensus.io v0.15.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.69.0 // indirect
@@ -43,7 +43,7 @@ require (
 	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/text v0.40.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
-	google.golang.org/api v0.282.0 // indirect
+	google.golang.org/api v0.278.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260706201446-f0a921348800 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260706201446-f0a921348800 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
