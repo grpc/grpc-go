@@ -22,6 +22,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 	"testing"
 	"time"
 
@@ -870,12 +871,6 @@ func (s) TestObservabilityFailureMode(t *testing.T) {
 		wantCode         codes.Code
 	}{
 		{
-			name:             "deny_on_processor_error",
-			procErr:          status.Error(codes.Internal, "processor stream error"),
-			failureModeAllow: false,
-			wantCode:         codes.Internal,
-		},
-		{
 			name:             "allow_on_processor_error",
 			procErr:          status.Error(codes.Internal, "processor stream error"),
 			failureModeAllow: true,
@@ -928,6 +923,73 @@ func (s) TestObservabilityFailureMode(t *testing.T) {
 				t.Fatalf("UnaryCall() status code = %v, want %v", status.Code(err), tt.wantCode)
 			}
 		})
+	}
+}
+
+func (s) TestStreamFailureBodyPhaseDeny(t *testing.T) {
+	processFunc := func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+		// Receive headers and send back.
+		req, err := stream.Recv()
+		if err != nil {
+			return err
+		}
+		if req.GetRequestHeaders() == nil {
+			return fmt.Errorf("expected request headers, got %v", req)
+		}
+		// Fail abruptly with non-EOF error during body phase
+		return status.Error(codes.Unavailable, "abrupt stream failure in body phase")
+	}
+
+	lisAddr := startMockProcessor(t, processFunc)
+
+	stub := stubserver.StartTestService(t, &stubserver.StubServer{
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
+			for {
+				if _, err := stream.Recv(); err != nil {
+					return err
+				}
+				if err := stream.Send(&testpb.StreamingOutputCallResponse{}); err != nil {
+					return err
+				}
+			}
+		},
+	})
+	defer stub.Stop()
+
+	cc, err := setupTestClient(t, lisAddr, &v3procfilterpb.ExternalProcessor{
+		ProcessingMode: &v3procfilterpb.ProcessingMode{
+			RequestHeaderMode: v3procfilterpb.ProcessingMode_SEND,
+			RequestBodyMode:   v3procfilterpb.ProcessingMode_GRPC,
+		},
+		FailureModeAllow:     false,
+		ObservabilityMode:    true,
+		DeferredCloseTimeout: durationpb.New(defaultTestShortTimeout),
+	}, stub.Address)
+	if err != nil {
+		t.Fatalf("failed to dial: %v", err)
+	}
+	defer cc.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	client := testgrpc.NewTestServiceClient(cc)
+	stream, err := client.FullDuplexCall(ctx)
+	if err != nil {
+		t.Fatalf("FullDuplexCall() failed: %v", err)
+	}
+
+	for {
+		if ctx.Err() != nil {
+			t.Fatalf("timed out waiting for stream to return codes.Internal")
+		}
+		stream.Send(&testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: []byte("c1")}})
+		if _, err := stream.Recv(); err != nil {
+			if status.Code(err) != codes.Internal || !strings.Contains(err.Error(), "abrupt stream failure in body phase") {
+				t.Fatalf("stream returned error code %v, want error code %v, error %v", err, codes.Internal, err)
+			}
+			break
+		}
 	}
 }
 

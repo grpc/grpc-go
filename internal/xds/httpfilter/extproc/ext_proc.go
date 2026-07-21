@@ -303,10 +303,6 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 			return ocs.handleProcStreamObsInitError(fmt.Errorf("external processor failed to start: %v", err), newStream, opts...)
 		}
 
-		// Start background goroutine to receive any messages from the external
-		// processor server and discard them.
-		go ocs.discardProcessorResponsesLoop()
-
 		// Build request attributes upfront to avoid adding protobuf allocation
 		// overhead to the critical RPC data path.
 		outgoingMD, added, _ := metadataFromOutgoingContextRaw(ctx)
@@ -336,9 +332,12 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 
 		if ocs.dataplaneStream, err = newStream(ocs.ctx, newOpts...); err != nil {
 			ocs.cancel()
-			return nil, ocs.streamError(err)
+			return nil, err
 		}
 		ocs.recordMetric(clientHeadersDurationMetric, time.Since(ocs.clientHeadersStartTime).Seconds())
+		// Start background goroutine to receive any messages from the external
+		// processor server and discard them.
+		go ocs.discardProcessorResponsesLoop()
 
 		return ocs, nil
 	}
@@ -407,15 +406,11 @@ func (ocs *observabilityClientStream) recordMetric(handle *estats.Float64HistoHa
 	handle.Record(ocs.metricsRecorder, duration, ocs.target, bs)
 }
 
-// streamError returns the appropriate error when a stream operation fails. It
-// prioritizes the external processor stream's terminal error over the context
-// error.
+// streamError returns the appropriate error when a stream operation fails.
+// It prioritizes the external processor stream's terminal error.
 func (ocs *observabilityClientStream) streamError(err error) error {
-	if err != nil && ocs.ctx.Err() != nil {
-		if fatalErr, ok := ocs.procStreamErr.Load().(error); ok {
-			return fatalErr
-		}
-		return status.FromContextError(ocs.ctx.Err()).Err()
+	if fatalErr, ok := ocs.procStreamErr.Load().(error); ok {
+		return fatalErr
 	}
 	return err
 }
@@ -430,7 +425,10 @@ func (ocs *observabilityClientStream) Header() (metadata.MD, error) {
 		return nil, err
 	}
 	md, err := ocs.dataplaneStream.Header()
-	return md, ocs.streamError(err)
+	if err = ocs.streamError(err); err != nil {
+		return nil, err
+	}
+	return md, nil
 }
 
 func (ocs *observabilityClientStream) Trailer() metadata.MD {
@@ -469,13 +467,60 @@ func (ocs *observabilityClientStream) CloseSend() error {
 	if err != nil {
 		return err
 	}
-	return ocs.streamError(ocs.dataplaneStream.CloseSend())
+	err = ocs.dataplaneStream.CloseSend()
+	return ocs.streamError(err)
 }
 
 func (ocs *observabilityClientStream) Context() context.Context {
 	return ocs.dataplaneStream.Context()
 }
 
+func (ocs *observabilityClientStream) SendMsg(m any) error {
+	if fatalErr, ok := ocs.procStreamErr.Load().(error); ok {
+		return fatalErr
+	}
+	if ocs.config.processingModes.requestBodyMode == modeSend && !ocs.procStreamBypass.Load() {
+		if err := ocs.sendBodyToProcessor(m, true); err != nil {
+			return err
+		}
+	}
+	err := ocs.dataplaneStream.SendMsg(m)
+	return ocs.streamError(err)
+}
+
+func (ocs *observabilityClientStream) RecvMsg(m any) error {
+	if fatalErr, ok := ocs.procStreamErr.Load().(error); ok {
+		return fatalErr
+	}
+
+	// If this is the first time RecvMsg is called, initiate response header
+	// processing.
+	if !ocs.responseRecvStarted {
+		ocs.responseRecvStarted = true
+		if err := ocs.initiateResponseHeaderProcessing(); err != nil {
+			return err
+		}
+	}
+
+	err := ocs.dataplaneStream.RecvMsg(m)
+	if err != nil {
+		trerr := ocs.initiateResponseTrailerProcessing()
+		if trerr != nil {
+			return trerr
+		}
+		return ocs.streamError(err)
+	}
+
+	if ocs.config.processingModes.responseBodyMode == modeSend && !ocs.procStreamBypass.Load() {
+		if err = ocs.sendBodyToProcessor(m, false); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// sendBodyToProcessor marshals the given message and forwards it as a request
+// or response body ProcessingRequest to the external processor stream.
 func (ocs *observabilityClientStream) sendBodyToProcessor(m any, isClientMessage bool) error {
 	msg, ok := m.(proto.Message)
 	if !ok {
@@ -499,52 +544,12 @@ func (ocs *observabilityClientStream) sendBodyToProcessor(m any, isClientMessage
 	return ocs.sendToProcessor(req)
 }
 
-func (ocs *observabilityClientStream) SendMsg(m any) error {
-	if fatalErr, ok := ocs.procStreamErr.Load().(error); ok {
-		return fatalErr
-	}
-	if ocs.config.processingModes.requestBodyMode == modeSend && !ocs.procStreamBypass.Load() {
-		if err := ocs.sendBodyToProcessor(m, true); err != nil {
-			return err
-		}
-	}
-	return ocs.streamError(ocs.dataplaneStream.SendMsg(m))
-}
-
-func (ocs *observabilityClientStream) RecvMsg(m any) error {
-	if fatalErr, ok := ocs.procStreamErr.Load().(error); ok {
-		return fatalErr
-	}
-
-	// If this is the first time RecvMsg is called, initiate response header
-	// processing.
-	if !ocs.responseRecvStarted {
-		ocs.responseRecvStarted = true
-		if err := ocs.initiateResponseHeaderProcessing(); err != nil {
-			return err
-		}
-	}
-
-	err := ocs.dataplaneStream.RecvMsg(m)
-	if err != nil {
-		ocs.initiateResponseTrailerProcessing()
-		return ocs.streamError(err)
-	}
-
-	if ocs.config.processingModes.responseBodyMode == modeSend && !ocs.procStreamBypass.Load() {
-		if err = ocs.sendBodyToProcessor(m, false); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 // initiateResponseTrailerProcessing fetches response trailers from the
 // dataplane stream and forwards them to the external processor if configured.
 // It is guarded by responseTrailerOnce to run at most once.
-func (ocs *observabilityClientStream) initiateResponseTrailerProcessing() {
+func (ocs *observabilityClientStream) initiateResponseTrailerProcessing() error {
 	if !ocs.responseTrailerOnce.CompareAndSwap(false, true) {
-		return
+		return nil
 	}
 	trailers := ocs.dataplaneStream.Trailer()
 	startTime := time.Now()
@@ -553,7 +558,9 @@ func (ocs *observabilityClientStream) initiateResponseTrailerProcessing() {
 		req.Request = &v3procservicepb.ProcessingRequest_ResponseTrailers{ResponseTrailers: &v3procservicepb.HttpTrailers{
 			Trailers: httpfilter.ConstructHeaderMap(trailers, nil, ocs.config.allowedHeaders, ocs.config.disallowedHeaders),
 		}}
-		ocs.sendToProcessor(req)
+		if err := ocs.sendToProcessor(req); err != nil {
+			return err
+		}
 	}
 	ocs.recordMetric(serverTrailersDurationMetric, time.Since(startTime).Seconds())
 
@@ -564,6 +571,7 @@ func (ocs *observabilityClientStream) initiateResponseTrailerProcessing() {
 		ocs.procStream.CloseSend()
 	}
 	ocs.mu.Unlock()
+	return nil
 }
 
 // initiateResponseHeaderProcessing fetches response headers from the dataplane
@@ -593,23 +601,26 @@ func (ocs *observabilityClientStream) initiateResponseHeaderProcessing() error {
 			Headers:     httpfilter.ConstructHeaderMap(header, nil, ocs.config.allowedHeaders, ocs.config.disallowedHeaders),
 			EndOfStream: ocs.trailersOnly,
 		}}
-		err = ocs.sendToProcessor(req)
-		if err != nil {
-			return ocs.streamError(err)
+		if err = ocs.sendToProcessor(req); err != nil {
+			return err
 		}
 	}
 	ocs.recordMetric(serverHeadersDurationMetric, time.Since(startTime).Seconds())
-	return err
+	return nil
 }
 
 // sendToProcessor sends a ProcessingRequest to the external processor stream.
 // If the write fails, it waits for the receive background loop to process the
 // closure and returns the resulting error.
 func (ocs *observabilityClientStream) sendToProcessor(req *v3procservicepb.ProcessingRequest) error {
+	if fatalErr, ok := ocs.procStreamErr.Load().(error); ok {
+		return fatalErr
+	}
 	ocs.mu.Lock()
 	err := ocs.procStream.Send(req)
 	ocs.mu.Unlock()
-	if err != nil {
+	// If error is io.EOF , wait for correct status error from RecvMsg
+	if err == io.EOF {
 		select {
 		case <-ocs.procRecvDone:
 		case <-ocs.ctx.Done():
@@ -617,12 +628,9 @@ func (ocs *observabilityClientStream) sendToProcessor(req *v3procservicepb.Proce
 		if fatalErr, ok := ocs.procStreamErr.Load().(error); ok {
 			return fatalErr
 		}
-		if ocs.procStreamBypass.Load() {
-			return nil
-		}
-		return err
 	}
-	return nil
+	return err
+
 }
 
 // discardProcessorResponsesLoop runs in a background to continuously read and
