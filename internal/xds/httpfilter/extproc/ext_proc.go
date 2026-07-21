@@ -613,9 +613,6 @@ func (ocs *observabilityClientStream) initiateResponseHeaderProcessing() error {
 // If the write fails, it waits for the receive background loop to process the
 // closure and returns the resulting error.
 func (ocs *observabilityClientStream) sendToProcessor(req *v3procservicepb.ProcessingRequest) error {
-	if fatalErr, ok := ocs.procStreamErr.Load().(error); ok {
-		return fatalErr
-	}
 	ocs.mu.Lock()
 	err := ocs.procStream.Send(req)
 	ocs.mu.Unlock()
@@ -627,6 +624,9 @@ func (ocs *observabilityClientStream) sendToProcessor(req *v3procservicepb.Proce
 		}
 		if fatalErr, ok := ocs.procStreamErr.Load().(error); ok {
 			return fatalErr
+		}
+		if ocs.procStreamBypass.Load() {
+			return nil
 		}
 	}
 	return err
