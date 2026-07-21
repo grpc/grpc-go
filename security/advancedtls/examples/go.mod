@@ -1,9 +1,9 @@
 module google.golang.org/grpc/security/advancedtls/examples
 
-go 1.25.0
+go 1.25.8
 
 require (
-	google.golang.org/grpc v1.80.0
+	google.golang.org/grpc v1.82.0
 	google.golang.org/grpc/examples v0.0.0-20250407062114-b368379ef8f6
 	google.golang.org/grpc/security/advancedtls v1.0.0
 )

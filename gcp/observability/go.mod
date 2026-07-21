@@ -3,14 +3,14 @@ module google.golang.org/grpc/gcp/observability
 go 1.25.0
 
 require (
-	cloud.google.com/go/logging v1.13.2
+	cloud.google.com/go/logging v1.18.0
 	contrib.go.opencensus.io/exporter/stackdriver v0.13.15-0.20230702191903-2de6d2748484
 	github.com/google/go-cmp v0.7.0
 	github.com/google/uuid v1.6.0
 	go.opencensus.io v0.24.0
 	golang.org/x/oauth2 v0.36.0
-	google.golang.org/api v0.278.0
-	google.golang.org/grpc v1.80.0
+	google.golang.org/api v0.280.0
+	google.golang.org/grpc v1.82.0
 	google.golang.org/grpc/stats/opencensus v1.0.0
 )
 
@@ -19,7 +19,7 @@ require (
 	cloud.google.com/go/auth v0.20.0 // indirect
 	cloud.google.com/go/auth/oauth2adapt v0.2.8 // indirect
 	cloud.google.com/go/compute/metadata v0.9.0 // indirect
-	cloud.google.com/go/longrunning v0.8.0 // indirect
+	cloud.google.com/go/longrunning v0.9.0 // indirect
 	cloud.google.com/go/monitoring v1.24.3 // indirect
 	cloud.google.com/go/trace v1.11.7 // indirect
 	github.com/aws/aws-sdk-go-v2 v1.42.1 // indirect

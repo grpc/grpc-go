@@ -8,7 +8,7 @@ require (
 	github.com/prometheus/client_golang v1.23.2
 	go.opentelemetry.io/otel/exporters/prometheus v0.66.0
 	go.opentelemetry.io/otel/sdk/metric v1.44.0
-	google.golang.org/grpc v1.80.0
+	google.golang.org/grpc v1.82.0
 )
 
 require (
