@@ -932,7 +932,7 @@ func (s) TestObservabilityFailureMode(t *testing.T) {
 // completes before the async extproc error cancels the stream) or fails with the
 // error returned by the proc server.
 func (s) TestObservabilityProcStreamFailDenyUnary(t *testing.T) {
-	extProcAddr := startMockProcessor(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+	extProcAddr := startMockProcessor(t, func(v3procservicepb.ExternalProcessor_ProcessServer) error {
 		return status.Error(codes.Unavailable, "proc server immediate failure")
 	})
 
