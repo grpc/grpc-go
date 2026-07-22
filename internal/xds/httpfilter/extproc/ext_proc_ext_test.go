@@ -1258,7 +1258,7 @@ func (s) TestObservabilityMetricsUnary(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to read last metric from channel: %v", err)
 	}
-	verifyMetric(t, md, "grpc.client_ext_proc.server_trailers_duration", grpcTarget, "cluster-"+serviceName)
+	verifyMetric(t, md, "grpc.client_ext_proc.server_trailers_duration", grpcTarget)
 }
 
 // TestObservabilityMetricsStreaming tests the client-side ext_proc metrics for
@@ -1342,7 +1342,7 @@ func (s) TestObservabilityMetricsStreaming(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to read client_headers_duration: %v", err)
 	}
-	verifyMetric(t, md, "grpc.client_ext_proc.client_headers_duration", grpcTarget, "cluster-"+serviceName)
+	verifyMetric(t, md, "grpc.client_ext_proc.client_headers_duration", grpcTarget)
 
 	// Send one message and receive reply.
 	reqMsg := &testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: []byte("hello")}}
@@ -1359,7 +1359,7 @@ func (s) TestObservabilityMetricsStreaming(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to read server_headers_duration: %v", err)
 	}
-	verifyMetric(t, md, "grpc.client_ext_proc.server_headers_duration", grpcTarget, "cluster-"+serviceName)
+	verifyMetric(t, md, "grpc.client_ext_proc.server_headers_duration", grpcTarget)
 
 	// Close send.
 	if err := stream.CloseSend(); err != nil {
@@ -1371,7 +1371,7 @@ func (s) TestObservabilityMetricsStreaming(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to read client_half_close_duration: %v", err)
 	}
-	verifyMetric(t, md, "grpc.client_ext_proc.client_half_close_duration", grpcTarget, "cluster-"+serviceName)
+	verifyMetric(t, md, "grpc.client_ext_proc.client_half_close_duration", grpcTarget)
 
 	// Receive EOF.
 	if _, err := stream.Recv(); err != io.EOF {
@@ -1395,7 +1395,7 @@ func (s) TestObservabilityMetricsStreaming(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to read server_trailers_duration: %v", err)
 	}
-	verifyMetric(t, md, "grpc.client_ext_proc.server_trailers_duration", grpcTarget, "cluster-"+serviceName)
+	verifyMetric(t, md, "grpc.client_ext_proc.server_trailers_duration", grpcTarget)
 }
 
 // TestObservabilityTrailersOnly verifies that when the backend service returns
@@ -1495,9 +1495,9 @@ func (s) TestObservabilityTrailersOnly(t *testing.T) {
 }
 
 // verifyMetric is a helper function that asserts the properties of a recorded
-// metric. It verifies the metric name, labels (grpc.target and
-// grpc.lb.backend_service), and that the recorded duration is positive.
-func verifyMetric(t *testing.T, md stats.MetricsData, expectedName string, expectedTarget string, expectedBackendService string) {
+// metric. It verifies the metric name, labels (grpc.target), and that the
+// recorded duration is positive.
+func verifyMetric(t *testing.T, md stats.MetricsData, expectedName string, expectedTarget string) {
 	t.Helper()
 	if md.Handle.Name != expectedName {
 		t.Fatalf("Got metric %s, want %s", md.Handle.Name, expectedName)
@@ -1510,9 +1510,6 @@ func verifyMetric(t *testing.T, md stats.MetricsData, expectedName string, expec
 	}
 	if gotTarget := labels["grpc.target"]; gotTarget != expectedTarget {
 		t.Fatalf("Metric %s: grpc.target label = %q, want %q", expectedName, gotTarget, expectedTarget)
-	}
-	if gotBackendService := labels["grpc.lb.backend_service"]; gotBackendService != expectedBackendService {
-		t.Fatalf("Metric %s: grpc.lb.backend_service label = %q, want %q", expectedName, gotBackendService, expectedBackendService)
 	}
 	if md.FloatIncr <= 0 {
 		t.Fatalf("Unexpected data for metric %v, got: %v, want: > 0", expectedName, md.FloatIncr)

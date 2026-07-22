@@ -24,35 +24,31 @@ import (
 
 var (
 	clientHeadersDurationMetric = estats.RegisterFloat64Histo(estats.MetricDescriptor{
-		Name:           "grpc.client_ext_proc.client_headers_duration",
-		Description:    "Time between when the ext_proc filter sees the client's headers and when it allows those headers to continue on to the next filter.",
-		Unit:           "s",
-		Labels:         []string{"grpc.target"},
-		OptionalLabels: []string{"grpc.lb.backend_service"},
-		Default:        false,
+		Name:        "grpc.client_ext_proc.client_headers_duration",
+		Description: "Time between when the ext_proc filter sees the client's headers and when it allows those headers to continue on to the next filter.",
+		Unit:        "s",
+		Labels:      []string{"grpc.target"},
+		Default:     false,
 	})
 	clientHalfCloseDurationMetric = estats.RegisterFloat64Histo(estats.MetricDescriptor{
-		Name:           "grpc.client_ext_proc.client_half_close_duration",
-		Description:    "Time between when the ext_proc filter sees the client's half-close and when it allows that half-close to continue on to the next filter.",
-		Unit:           "s",
-		Labels:         []string{"grpc.target"},
-		OptionalLabels: []string{"grpc.lb.backend_service"},
-		Default:        false,
+		Name:        "grpc.client_ext_proc.client_half_close_duration",
+		Description: "Time between when the ext_proc filter sees the client's half-close and when it allows that half-close to continue on to the next filter.",
+		Unit:        "s",
+		Labels:      []string{"grpc.target"},
+		Default:     false,
 	})
 	serverHeadersDurationMetric = estats.RegisterFloat64Histo(estats.MetricDescriptor{
-		Name:           "grpc.client_ext_proc.server_headers_duration",
-		Description:    "Time between when the ext_proc filter sees the server's headers and when it allows those headers to continue on to the next filter.",
-		Unit:           "s",
-		Labels:         []string{"grpc.target"},
-		OptionalLabels: []string{"grpc.lb.backend_service"},
-		Default:        false,
+		Name:        "grpc.client_ext_proc.server_headers_duration",
+		Description: "Time between when the ext_proc filter sees the server's headers and when it allows those headers to continue on to the next filter.",
+		Unit:        "s",
+		Labels:      []string{"grpc.target"},
+		Default:     false,
 	})
 	serverTrailersDurationMetric = estats.RegisterFloat64Histo(estats.MetricDescriptor{
-		Name:           "grpc.client_ext_proc.server_trailers_duration",
-		Description:    "Time between when the ext_proc filter sees the server's trailers and when it allows those trailers to continue on to the next filter.",
-		Unit:           "s",
-		Labels:         []string{"grpc.target"},
-		OptionalLabels: []string{"grpc.lb.backend_service"},
-		Default:        false,
+		Name:        "grpc.client_ext_proc.server_trailers_duration",
+		Description: "Time between when the ext_proc filter sees the server's trailers and when it allows those trailers to continue on to the next filter.",
+		Unit:        "s",
+		Labels:      []string{"grpc.target"},
+		Default:     false,
 	})
 )

@@ -35,7 +35,6 @@ import (
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/optional"
 	"google.golang.org/grpc/internal/resolver"
-	istats "google.golang.org/grpc/internal/stats"
 	"google.golang.org/grpc/internal/xds/httpfilter"
 	iextproc "google.golang.org/grpc/internal/xds/httpfilter/extproc/internal"
 	"google.golang.org/grpc/internal/xds/matcher"
@@ -273,12 +272,6 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 			procRecvDone:           make(chan struct{}),
 		}
 
-		// Register telemetry label callback to capture backend service.
-		ctx = istats.RegisterTelemetryLabelCallback(ctx, func(labels map[string]string) {
-			if bs, ok := labels["grpc.lb.backend_service"]; ok {
-				ocs.backendService.Store(bs)
-			}
-		})
 		// Create a cancelable context to cancel the dataplane stream and close any
 		// goroutines in case of error.
 		ocs.ctx, ocs.cancel = context.WithCancel(ctx)
@@ -371,7 +364,6 @@ type observabilityClientStream struct {
 
 	metricsRecorder        estats.MetricsRecorder
 	target                 string
-	backendService         atomic.Value
 	clientHeadersStartTime time.Time
 }
 
@@ -399,11 +391,7 @@ func (ocs *observabilityClientStream) recordMetric(handle *estats.Float64HistoHa
 	if ocs.metricsRecorder == nil {
 		return
 	}
-	bs := ""
-	if v := ocs.backendService.Load(); v != nil {
-		bs = v.(string)
-	}
-	handle.Record(ocs.metricsRecorder, duration, ocs.target, bs)
+	handle.Record(ocs.metricsRecorder, duration, ocs.target)
 }
 
 // streamError returns the appropriate error when a stream operation fails.
