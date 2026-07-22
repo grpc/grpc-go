@@ -120,6 +120,141 @@ func (ccs CallCredsConfigs) String() string {
 	return strings.Join(creds, ",")
 }
 
+// AllowedGrpcService contains credentials config for an allowed gRPC service.
+type AllowedGrpcService struct {
+	channelCreds         []ChannelCreds
+	callCredsConfigs     []CallCredsConfig
+	selectedChannelCreds ChannelCreds
+	selectedCallCreds    []credentials.PerRPCCredentials
+	dialOptions          []grpc.DialOption
+	cleanups             []func()
+}
+
+// ChannelCreds returns the list of parsed channel credentials.
+func (a *AllowedGrpcService) ChannelCreds() []ChannelCreds {
+	return a.channelCreds
+}
+
+// CallCredsConfigs returns the list of call credentials configurations.
+func (a *AllowedGrpcService) CallCredsConfigs() []CallCredsConfig {
+	return a.callCredsConfigs
+}
+
+// SelectedChannelCreds returns the chosen supported channel credentials.
+func (a *AllowedGrpcService) SelectedChannelCreds() ChannelCreds {
+	return a.selectedChannelCreds
+}
+
+// DialOptions returns dial options built from these credentials.
+func (a *AllowedGrpcService) DialOptions() []grpc.DialOption {
+	return a.dialOptions
+}
+
+// Cleanups returns cleanups to run when the service is no longer needed.
+func (a *AllowedGrpcService) Cleanups() []func() {
+	return a.cleanups
+}
+
+// Equal reports whether a and other are considered equal.
+func (a *AllowedGrpcService) Equal(other *AllowedGrpcService) bool {
+	switch {
+	case a == nil && other == nil:
+		return true
+	case (a != nil) != (other != nil):
+		return false
+	case !slices.EqualFunc(a.channelCreds, other.channelCreds, func(x, y ChannelCreds) bool { return x.Equal(y) }):
+		return false
+	case !slices.EqualFunc(a.callCredsConfigs, other.callCredsConfigs, func(x, y CallCredsConfig) bool { return x.Equal(y) }):
+		return false
+	}
+	return true
+}
+
+type allowedGrpcServiceJSON struct {
+	ChannelCreds     []ChannelCreds    `json:"channel_creds,omitempty"`
+	CallCredsConfigs []CallCredsConfig `json:"call_creds,omitempty"`
+}
+
+// UnmarshalJSON parses the JSON data and validates its credentials.
+func (a *AllowedGrpcService) UnmarshalJSON(data []byte) error {
+	var jsonS allowedGrpcServiceJSON
+	if err := json.Unmarshal(data, &jsonS); err != nil {
+		return err
+	}
+
+	// Build into locals and assign the receiver only on success, so a
+	// mid-parse error never leaves the receiver partially mutated.
+	cleanups := []func(){}
+	dialOptions := []grpc.DialOption{}
+	selectedCallCreds := []credentials.PerRPCCredentials{}
+
+	runCleanups := func() {
+		for _, f := range cleanups {
+			f()
+		}
+	}
+
+	var credsDialOption grpc.DialOption
+	var selectedChannelCreds ChannelCreds
+	for _, cc := range jsonS.ChannelCreds {
+		c := bootstrap.GetChannelCredentials(cc.Type)
+		if c == nil {
+			continue
+		}
+		bundle, cancel, err := c.Build(cc.Config)
+		if err != nil {
+			runCleanups()
+			return fmt.Errorf("failed to build credentials bundle from bootstrap for allowed grpc service: type %q, err: %v", cc.Type, err)
+		}
+		selectedChannelCreds = cc
+		credsDialOption = grpc.WithCredentialsBundle(bundle)
+		if d, ok := bundle.(extraDialOptions); ok {
+			dialOptions = append(dialOptions, d.DialOptions()...)
+		}
+		cleanups = append(cleanups, cancel)
+		break
+	}
+
+	if credsDialOption == nil {
+		runCleanups()
+		return fmt.Errorf("xds: no supported channel credentials found for allowed grpc service in config:\n%s", string(data))
+	}
+	dialOptions = append(dialOptions, credsDialOption)
+
+	if envconfig.XDSBootstrapCallCredsEnabled {
+		for _, cfg := range jsonS.CallCredsConfigs {
+			c := bootstrap.GetCallCredentials(cfg.Type)
+			if c == nil {
+				continue
+			}
+			callCreds, cancel, err := c.Build(cfg.Config)
+			if err != nil {
+				runCleanups()
+				return fmt.Errorf("failed to build call credentials from bootstrap for allowed grpc service: type %q, err: %v", cfg.Type, err)
+			}
+			selectedCallCreds = append(selectedCallCreds, callCreds)
+			dialOptions = append(dialOptions, grpc.WithPerRPCCredentials(callCreds))
+			cleanups = append(cleanups, cancel)
+		}
+	}
+
+	a.channelCreds = jsonS.ChannelCreds
+	a.callCredsConfigs = jsonS.CallCredsConfigs
+	a.selectedChannelCreds = selectedChannelCreds
+	a.dialOptions = dialOptions
+	a.selectedCallCreds = selectedCallCreds
+	a.cleanups = cleanups
+	return nil
+}
+
+// MarshalJSON marshals the allowed gRPC service into JSON format.
+func (a *AllowedGrpcService) MarshalJSON() ([]byte, error) {
+	return json.Marshal(allowedGrpcServiceJSON{
+		ChannelCreds:     a.channelCreds,
+		CallCredsConfigs: a.callCredsConfigs,
+	})
+}
+
 // ServerConfigs represents a collection of server configurations.
 type ServerConfigs []*ServerConfig
 
@@ -141,6 +276,16 @@ func (scs *ServerConfigs) Equal(other *ServerConfigs) bool {
 func (scs *ServerConfigs) UnmarshalJSON(data []byte) error {
 	servers := []*ServerConfig{}
 	if err := json.Unmarshal(data, &servers); err != nil {
+		// Some servers may have built credentials before the failure;
+		// release them so they don't leak when the slice is dropped.
+		for _, sc := range servers {
+			if sc == nil {
+				continue
+			}
+			for _, cleanup := range sc.Cleanups() {
+				cleanup()
+			}
+		}
 		return fmt.Errorf("xds: failed to JSON unmarshal server configurations during bootstrap: %v, config:\n%s", err, string(data))
 	}
 	*scs = servers
@@ -461,6 +606,14 @@ type Config struct {
 
 	// A map from certprovider instance names to parsed buildable configs.
 	certProviderConfigs map[string]*certprovider.BuildableConfig
+
+	allowedGrpcServices map[string]*AllowedGrpcService
+}
+
+// AllowedGrpcServices returns the allowlist of gRPC services.
+// Callers must not modify the returned map.
+func (c *Config) AllowedGrpcServices() map[string]*AllowedGrpcService {
+	return c.allowedGrpcServices
 }
 
 // XDSServers returns the top-level list of management servers to connect to,
@@ -552,6 +705,8 @@ func (c *Config) Equal(other *Config) bool {
 		return false
 	case !maps.EqualFunc(c.authorities, other.authorities, func(a, b *Authority) bool { return a.Equal(b) }):
 		return false
+	case !maps.EqualFunc(c.allowedGrpcServices, other.allowedGrpcServices, func(a, b *AllowedGrpcService) bool { return a.Equal(b) }):
+		return false
 	case !c.node.Equal(other.node):
 		return false
 	}
@@ -572,6 +727,7 @@ type configJSON struct {
 	ClientDefaultListenerResourceNameTemplate string                               `json:"client_default_listener_resource_name_template,omitempty"`
 	Authorities                               map[string]*Authority                `json:"authorities,omitempty"`
 	Node                                      node                                 `json:"node,omitempty"`
+	AllowedGrpcServices                       map[string]*AllowedGrpcService       `json:"allowed_grpc_services,omitempty"`
 }
 
 // MarshalJSON returns marshaled JSON bytes corresponding to this config.
@@ -583,6 +739,7 @@ func (c *Config) MarshalJSON() ([]byte, error) {
 		ClientDefaultListenerResourceNameTemplate: c.clientDefaultListenerResourceNameTemplate,
 		Authorities:                               c.authorities,
 		Node:                                      c.node,
+		AllowedGrpcServices:                       c.allowedGrpcServices,
 	}
 	return json.MarshalIndent(config, " ", " ")
 }
@@ -594,6 +751,44 @@ func (c *Config) UnmarshalJSON(data []byte) error {
 	// even if the bootstrap configuration did not contain the node field, we
 	// will have a node field with client controlled fields alone.
 	config := configJSON{Node: newNode()}
+
+	// json.Unmarshal below eagerly builds credentials (bundles, file
+	// watchers) for server configs (top-level and per-authority) and
+	// allowed gRPC services. Install the cleanup before unmarshaling so
+	// resources built before a mid-way unmarshal failure, or a later
+	// validation error, are released when this Config is discarded.
+	parsedSuccessfully := false
+	releaseServerCreds := func(servers ServerConfigs) {
+		for _, sc := range servers {
+			if sc == nil {
+				continue
+			}
+			for _, cleanup := range sc.Cleanups() {
+				cleanup()
+			}
+		}
+	}
+	defer func() {
+		if parsedSuccessfully {
+			return
+		}
+		releaseServerCreds(config.XDSServers)
+		for _, authority := range config.Authorities {
+			if authority == nil {
+				continue
+			}
+			releaseServerCreds(authority.XDSServers)
+		}
+		for _, svc := range config.AllowedGrpcServices {
+			if svc == nil {
+				continue
+			}
+			for _, cleanup := range svc.Cleanups() {
+				cleanup()
+			}
+		}
+	}()
+
 	if err := json.Unmarshal(data, &config); err != nil {
 		return fmt.Errorf("xds: json.Unmarshal(%s) failed during bootstrap: %v", string(data), err)
 	}
@@ -604,6 +799,7 @@ func (c *Config) UnmarshalJSON(data []byte) error {
 	c.clientDefaultListenerResourceNameTemplate = config.ClientDefaultListenerResourceNameTemplate
 	c.authorities = config.Authorities
 	c.node = config.Node
+	c.allowedGrpcServices = config.AllowedGrpcServices
 
 	// Build the certificate providers configuration to ensure that it is valid.
 	cpcCfgs := make(map[string]*certprovider.BuildableConfig)
@@ -635,6 +831,9 @@ func (c *Config) UnmarshalJSON(data []byte) error {
 	// - if set, it must start with "xdstp://<authority_name>/"
 	// - if not set, it defaults to "xdstp://<authority_name>/envoy.config.listener.v3.Listener/%s"
 	for name, authority := range c.authorities {
+		if authority == nil {
+			return fmt.Errorf("xds: authority %q has no configuration in bootstrap", name)
+		}
 		prefix := fmt.Sprintf("xdstp://%s", url.PathEscape(name))
 		if authority.ClientListenerResourceNameTemplate == "" {
 			authority.ClientListenerResourceNameTemplate = prefix + "/envoy.config.listener.v3.Listener/%s"
@@ -644,6 +843,7 @@ func (c *Config) UnmarshalJSON(data []byte) error {
 			return fmt.Errorf("xds: field clientListenerResourceNameTemplate %q of authority %q doesn't start with prefix %q", authority.ClientListenerResourceNameTemplate, name, prefix)
 		}
 	}
+	parsedSuccessfully = true
 	return nil
 }
 
@@ -723,6 +923,8 @@ type ConfigOptionsForTesting struct {
 	// Node identifies the gRPC client/server node in the
 	// proxyless service mesh.
 	Node json.RawMessage
+	// AllowedGrpcServices is the allowlist of gRPC services.
+	AllowedGrpcServices json.RawMessage
 }
 
 // NewContentsForTesting creates a new bootstrap configuration from the passed in
@@ -754,6 +956,12 @@ func NewContentsForTesting(opts ConfigOptionsForTesting) ([]byte, error) {
 	if err := json.Unmarshal(opts.Node, &node); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal node configuration %s: %v", string(opts.Node), err)
 	}
+	allowedGrpcServices := make(map[string]*AllowedGrpcService)
+	if len(opts.AllowedGrpcServices) > 0 {
+		if err := json.Unmarshal(opts.AllowedGrpcServices, &allowedGrpcServices); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal allowed grpc services configuration: %v", err)
+		}
+	}
 	cfgJSON := configJSON{
 		XDSServers:                                servers,
 		CertificateProviders:                      certProviders,
@@ -761,6 +969,7 @@ func NewContentsForTesting(opts ConfigOptionsForTesting) ([]byte, error) {
 		ClientDefaultListenerResourceNameTemplate: opts.ClientDefaultListenerResourceNameTemplate,
 		Authorities:                               authorities,
 		Node:                                      node,
+		AllowedGrpcServices:                       allowedGrpcServices,
 	}
 	contents, err := json.MarshalIndent(cfgJSON, " ", " ")
 	if err != nil {
