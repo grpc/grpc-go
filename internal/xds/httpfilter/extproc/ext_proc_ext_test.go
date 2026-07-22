@@ -32,6 +32,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/envconfig"
+	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
@@ -42,6 +43,7 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/durationpb"
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
@@ -63,22 +65,28 @@ func Test(t *testing.T) {
 const (
 	defaultTestTimeout      = 10 * time.Second
 	defaultTestShortTimeout = 10 * time.Millisecond
+
+	reqBodyC1  = "c1"
+	reqBodyC2  = "c2"
+	respBodyS1 = "s1"
+	respBodyS2 = "s2"
 )
 
 func parseGRPCServiceConfigForTesting(gs *v3corepb.GrpcService) (xdsresource.GRPCServiceConfig, error) {
 	if gs == nil {
-		return xdsresource.GRPCServiceConfig{}, fmt.Errorf("nil GrpcService")
+		return xdsresource.GRPCServiceConfig{}, fmt.Errorf("Expected non-nil GrpcService")
 	}
 	gg := gs.GetGoogleGrpc()
 	if gg == nil {
-		return xdsresource.GRPCServiceConfig{}, fmt.Errorf("only GoogleGrpc is supported in GrpcService")
+		return xdsresource.GRPCServiceConfig{}, fmt.Errorf("Expected non-nil GoogleGrpc")
 	}
 	target := gg.GetTargetUri()
 	if target == "" {
-		return xdsresource.GRPCServiceConfig{}, fmt.Errorf("empty target_uri in GoogleGrpc")
+		return xdsresource.GRPCServiceConfig{}, fmt.Errorf("Empty target_uri in GoogleGrpc")
 	}
 	return xdsresource.GRPCServiceConfig{
 		TargetURI: target,
+		Timeout:   gs.GetTimeout().AsDuration(),
 	}, nil
 }
 
@@ -147,10 +155,10 @@ func responseHeadersResponse(setHeaders map[string]string, removeHeaders []strin
 }
 
 func requestBodyResponse(body []byte) *v3procservicepb.ProcessingResponse {
-	return requestBodyResponseWithEOF(body, false)
+	return requestBodyResponseWithEOS(body, false)
 }
 
-func requestBodyResponseWithEOF(body []byte, endOfStream bool) *v3procservicepb.ProcessingResponse {
+func requestBodyResponseWithEOS(body []byte, endOfStream bool) *v3procservicepb.ProcessingResponse {
 	streamedResp := &v3procservicepb.StreamedBodyResponse{
 		Body:        body,
 		EndOfStream: endOfStream,
@@ -219,21 +227,24 @@ func responseTrailersResponse(setHeaders map[string]string, removeHeaders []stri
 	}
 }
 
-type mockProcessorServer struct {
+type testExtProcServer struct {
 	v3procservicepb.UnimplementedExternalProcessorServer
 	processFunc func(v3procservicepb.ExternalProcessor_ProcessServer) error
 }
 
-func (s *mockProcessorServer) Process(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+func (s *testExtProcServer) Process(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
 	if s.processFunc != nil {
 		return s.processFunc(stream)
 	}
 	return nil
 }
 
-// startMockProcessor configures extproc environment variables and function
-// hooks, starts a mock external processor server, and registers cleanup.
-func startMockProcessor(t *testing.T, processFunc func(v3procservicepb.ExternalProcessor_ProcessServer) error, opts ...grpc.ServerOption) (string, func()) {
+// startTestExtProcessor configures extproc environment variables and function
+// hooks, starts a test external processor server, and registers cleanup. It
+// takes processFunc to handle Process RPC streams and opts as gRPC server
+// options, and returns the server's listener address and a function to stop the
+// server.
+func startTestExtProcessor(t *testing.T, processFunc func(v3procservicepb.ExternalProcessor_ProcessServer) error, opts ...grpc.ServerOption) (string, func()) {
 	t.Helper()
 
 	origParse := internal.ParseGRPCServiceConfig
@@ -255,7 +266,7 @@ func startMockProcessor(t *testing.T, processFunc func(v3procservicepb.ExternalP
 		t.Fatalf("LocalTCPListener() failed: %v", err)
 	}
 	extprocServer := grpc.NewServer(opts...)
-	mockProc := &mockProcessorServer{processFunc: processFunc}
+	mockProc := &testExtProcServer{processFunc: processFunc}
 	v3procservicepb.RegisterExternalProcessorServer(extprocServer, mockProc)
 	go extprocServer.Serve(lis)
 
@@ -285,17 +296,20 @@ func setupTestClient(t *testing.T, extProcAddr string, extProcConfig *v3procfilt
 		return nil, err
 	}
 
+	var timeout *durationpb.Duration
+	if extProcConfig.GrpcService != nil {
+		timeout = extProcConfig.GrpcService.GetTimeout()
+	}
 	extProcConfig.GrpcService = &v3corepb.GrpcService{
 		TargetSpecifier: &v3corepb.GrpcService_GoogleGrpc_{
 			GoogleGrpc: &v3corepb.GrpcService_GoogleGrpc{
 				TargetUri: extProcAddr,
 			},
 		},
+		Timeout: timeout,
 	}
 
-	hcm.HttpFilters = append([]*v3httppb.HttpFilter{
-		e2e.HTTPFilter("extproc", extProcConfig)},
-		hcm.HttpFilters...)
+	hcm.HttpFilters = append([]*v3httppb.HttpFilter{e2e.HTTPFilter("extproc", extProcConfig)}, hcm.HttpFilters...)
 	hcmAny := testutils.MarshalAny(t, hcm)
 	resources.Listeners[0].ApiListener.ApiListener = hcmAny
 	resources.Listeners[0].FilterChains[0].Filters[0].ConfigType = &v3listenerpb.Filter_TypedConfig{TypedConfig: hcmAny}
@@ -312,10 +326,23 @@ func setupTestClient(t *testing.T, extProcAddr string, extProcConfig *v3procfilt
 
 // TestAllSendUnary tests the scenario where the ExtProc filter is configured
 // with all processing modes set to SEND/GRPC. Verifies that the client
-// correctly routes headers and bodies to the processor, the processor echoes
-// the mutations back, and the client successfully completes a Unary RPC.
+// correctly routes headers and bodies to the processor, the processor returns
+// instructions to apply mutations, and the client successfully completes a
+// Unary RPC.
 func (s) TestAllSendUnary(t *testing.T) {
-	lisAddr, _ := startMockProcessor(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+	const (
+		reqHeaderMutated    = "request-mutated"
+		reqHeaderToRemove   = "request-to-remove"
+		respHeaderMutated   = "response-mutated"
+		respHeaderToRemove  = "response-to-remove"
+		respTrailerMutated  = "trailer-mutated"
+		respTrailerToRemove = "trailer-to-remove"
+		reqBody             = "hello-request"
+		reqBodyMutated      = "hello-request-mutated"
+		respBody            = "hello-response"
+		respBodyMutated     = "hello-response-mutated"
+	)
+	lisAddr, _ := startTestExtProcessor(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
 		for {
 			req, err := stream.Recv()
 			if err == io.EOF {
@@ -328,52 +355,53 @@ func (s) TestAllSendUnary(t *testing.T) {
 			var resp *v3procservicepb.ProcessingResponse
 			switch {
 			case req.GetRequestHeaders() != nil:
-				resp = requestHeadersResponse(map[string]string{"request-mutated": "true"}, []string{"request-to-remove"})
+				// Respond to request headers to mutate them by adding "request-mutated:
+				// true" and removing "request-to-remove".
+				resp = requestHeadersResponse(map[string]string{reqHeaderMutated: "true"}, []string{reqHeaderToRemove})
 			case req.GetRequestBody() != nil:
+				// For the request body, if this is an end-of-stream message, echo EOS;
+				// otherwise verify and mutate the body.
 				body := req.GetRequestBody().GetBody()
 				if req.GetRequestBody().GetEndOfStreamWithoutMessage() || req.GetRequestBody().GetEndOfStream() {
-					resp = requestBodyResponseWithEOF(body, true)
+					resp = requestBodyResponseWithEOS(body, true)
 					break
 				}
 				reqMsg := &testpb.SimpleRequest{}
 				if err := proto.Unmarshal(body, reqMsg); err != nil {
-					return fmt.Errorf("failed to unmarshal request body: %v", err)
+					return fmt.Errorf("Failed to unmarshal request body: %v", err)
 				}
-				if bodyStr := string(reqMsg.GetPayload().GetBody()); bodyStr != "hello-request" {
-					return fmt.Errorf("unexpected request body on processor: %q, want: %q", bodyStr, "hello-request")
+				if bodyStr := string(reqMsg.GetPayload().GetBody()); bodyStr != reqBody {
+					return fmt.Errorf("Unexpected request body on processor: %q, want: %q", bodyStr, reqBody)
 				}
-				mutatedProto := &testpb.SimpleRequest{
-					Payload: &testpb.Payload{
-						Body: []byte("hello-request-mutated"),
-					},
-				}
+				mutatedProto := &testpb.SimpleRequest{Payload: &testpb.Payload{Body: []byte(reqBodyMutated)}}
 				mutatedBytes, err := proto.Marshal(mutatedProto)
 				if err != nil {
-					return fmt.Errorf("failed to marshal mutated request: %v", err)
+					return fmt.Errorf("Failed to marshal mutated request: %v", err)
 				}
 				resp = requestBodyResponse(mutatedBytes)
 			case req.GetResponseHeaders() != nil:
-				resp = responseHeadersResponse(map[string]string{"response-mutated": "true"}, []string{"response-to-remove"})
+				// Respond to response headers to mutate them by adding
+				// "response-mutated: true" and removing "response-to-remove".
+				resp = responseHeadersResponse(map[string]string{respHeaderMutated: "true"}, []string{respHeaderToRemove})
 			case req.GetResponseBody() != nil:
+				// For the response body, verify the payload, and mutate the body.
 				respMsg := &testpb.SimpleResponse{}
 				if err := proto.Unmarshal(req.GetResponseBody().GetBody(), respMsg); err != nil {
-					return fmt.Errorf("failed to unmarshal response body: %v", err)
+					return fmt.Errorf("Failed to unmarshal response body: %v", err)
 				}
-				if body := string(respMsg.GetPayload().GetBody()); body != "hello-response" {
-					return fmt.Errorf("unexpected response body on processor: %q, want: %q", body, "hello-response")
+				if body := string(respMsg.GetPayload().GetBody()); body != respBody {
+					return fmt.Errorf("Unexpected response body on processor: %q, want: %q", body, respBody)
 				}
-				mutatedProto := &testpb.SimpleResponse{
-					Payload: &testpb.Payload{
-						Body: []byte("hello-response-mutated"),
-					},
-				}
+				mutatedProto := &testpb.SimpleResponse{Payload: &testpb.Payload{Body: []byte(respBodyMutated)}}
 				mutatedBytes, err := proto.Marshal(mutatedProto)
 				if err != nil {
-					return fmt.Errorf("failed to marshal mutated response: %v", err)
+					return fmt.Errorf("Failed to marshal mutated response: %v", err)
 				}
 				resp = responseBodyResponse(mutatedBytes)
 			case req.GetResponseTrailers() != nil:
-				resp = responseTrailersResponse(map[string]string{"trailer-mutated": "true"}, []string{"trailer-to-remove"})
+				// Respond to response trailers to mutate them by adding
+				// "trailer-mutated: true" and removing "trailer-to-remove".
+				resp = responseTrailersResponse(map[string]string{respTrailerMutated: "true"}, []string{respTrailerToRemove})
 			}
 			if err := stream.Send(resp); err != nil {
 				return err
@@ -381,36 +409,34 @@ func (s) TestAllSendUnary(t *testing.T) {
 		}
 	})
 
-	// Start a test stub service.
+	// Start a test stub service (backend) that verifies the mutated request
+	// metadata and body from the client/filter, and sends headers, trailers,
+	// and a response body back.
 	stub := stubserver.StartTestService(t, &stubserver.StubServer{
 		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			md, ok := metadata.FromIncomingContext(ctx)
 			if !ok {
-				t.Error("no incoming metadata")
-				return nil, fmt.Errorf("no incoming metadata")
+				t.Error("Server did not receive incoming metadata")
+				return nil, fmt.Errorf("Server did not receive incoming metadata")
 			}
-			if vals := md.Get("request-mutated"); len(vals) == 0 || vals[0] != "true" {
-				t.Errorf("missing or invalid request-mutated header: %v", vals)
+			if vals := md.Get(reqHeaderMutated); len(vals) == 0 || vals[0] != "true" {
+				t.Errorf("Missing or invalid request-mutated header: %v", vals)
 			}
-			if vals := md.Get("request-to-remove"); len(vals) > 0 {
-				t.Errorf("request-to-remove header was not removed: %v", vals)
+			if vals := md.Get(reqHeaderToRemove); len(vals) > 0 {
+				t.Errorf("Request-to-remove header was not removed: %v", vals)
 			}
-			if body := string(in.GetPayload().GetBody()); body != "hello-request-mutated" {
-				t.Errorf("unexpected request body: %q, want: %q", body, "hello-request-mutated")
-			}
-
-			if err := grpc.SendHeader(ctx, metadata.Pairs("response-to-remove", "yes")); err != nil {
-				return nil, err
-			}
-			if err := grpc.SetTrailer(ctx, metadata.Pairs("trailer-to-remove", "yes")); err != nil {
-				return nil, err
+			if body := string(in.GetPayload().GetBody()); body != reqBodyMutated {
+				t.Errorf("Unexpected request body: %q, want: %q", body, reqBodyMutated)
 			}
 
-			return &testpb.SimpleResponse{
-				Payload: &testpb.Payload{
-					Body: []byte("hello-response"),
-				},
-			}, nil
+			if err := grpc.SendHeader(ctx, metadata.Pairs(respHeaderToRemove, "true")); err != nil {
+				return nil, err
+			}
+			if err := grpc.SetTrailer(ctx, metadata.Pairs(respTrailerToRemove, "true")); err != nil {
+				return nil, err
+			}
+
+			return &testpb.SimpleResponse{Payload: &testpb.Payload{Body: []byte(respBody)}}, nil
 		},
 	})
 	defer stub.Stop()
@@ -425,7 +451,7 @@ func (s) TestAllSendUnary(t *testing.T) {
 		},
 	}, stub.Address)
 	if err != nil {
-		t.Fatalf("failed to dial: %v", err)
+		t.Fatalf("Failed to dial: %v", err)
 	}
 	defer cc.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -433,20 +459,18 @@ func (s) TestAllSendUnary(t *testing.T) {
 
 	client := testgrpc.NewTestServiceClient(cc)
 
-	reqMsg := &testpb.SimpleRequest{
-		Payload: &testpb.Payload{
-			Body: []byte("hello-request"),
-		},
-	}
-	ctx = metadata.NewOutgoingContext(ctx, metadata.Pairs("request-to-remove", "yes"))
+	// Send a Unary RPC from the client with "hello-request" and header
+	// "request-to-remove", and verify that the final received response body is
+	// "hello-response-mutated".
+	reqMsg := &testpb.SimpleRequest{Payload: &testpb.Payload{Body: []byte(reqBody)}}
+	ctx = metadata.NewOutgoingContext(ctx, metadata.Pairs(reqHeaderToRemove, "true"))
 
 	resp, err := client.UnaryCall(ctx, reqMsg)
 	if err != nil {
 		t.Fatalf("UnaryCall() failed: %v", err)
 	}
-
-	if body := string(resp.GetPayload().GetBody()); body != "hello-response-mutated" {
-		t.Fatalf("UnaryCall() returned payload: %s, want: %s", body, "hello-response-mutated")
+	if body := string(resp.GetPayload().GetBody()); body != respBodyMutated {
+		t.Fatalf("UnaryCall() returned payload: %s, want: %s", body, respBodyMutated)
 	}
 }
 
@@ -457,7 +481,14 @@ func (s) TestAllSendUnary(t *testing.T) {
 // the correctly mutated responses back, even when the processor changes the
 // response count.
 func (s) TestStreamingModifications(t *testing.T) {
-	lisAddr, _ := startMockProcessor(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+	const (
+		reqHeaderModified   = "req-header-modified"
+		respHeaderModified  = "resp-header-modified"
+		respTrailerModified = "resp-trailer-modified"
+		reqBodyC3           = "c3"
+		reqBodyC4           = "c4"
+	)
+	lisAddr, _ := startTestExtProcessor(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
 		for {
 			req, err := stream.Recv()
 			if err == io.EOF {
@@ -467,17 +498,19 @@ func (s) TestStreamingModifications(t *testing.T) {
 				return err
 			}
 
-			var resp *v3procservicepb.ProcessingResponse
+			var resps []*v3procservicepb.ProcessingResponse
 			switch {
 			case req.GetRequestHeaders() != nil:
-				resp = requestHeadersResponse(map[string]string{"req-header-modified": "true"}, nil)
+				// Return a response instructing the filter to mutate request headers by
+				// adding "req-header-modified: true".
+				resps = append(resps, requestHeadersResponse(map[string]string{reqHeaderModified: "true"}, nil))
 			case req.GetRequestBody() != nil:
 				body := req.GetRequestBody()
-				// If the request has EndOfStream or EndOfStreamWithoutMessage, it
-				// indicated CloseSend from client. Send EndOfStream to indicate no
-				// more client responses.
+				// For the request body, if this is an end-of-stream message, echo EOS;
+				// otherwise mutate the request body by adding `_req_body_modified` to
+				// the body.
 				if body.GetEndOfStreamWithoutMessage() || body.GetEndOfStream() {
-					resp = requestBodyResponseWithEOF(body.GetBody(), true)
+					resps = append(resps, requestBodyResponseWithEOS(body.GetBody(), true))
 				} else {
 					reqMsg := &testpb.StreamingOutputCallRequest{}
 					if err := proto.Unmarshal(body.GetBody(), reqMsg); err != nil {
@@ -488,11 +521,16 @@ func (s) TestStreamingModifications(t *testing.T) {
 					if err != nil {
 						return err
 					}
-					resp = requestBodyResponse(mutated)
+					resps = append(resps, requestBodyResponse(mutated))
 				}
 			case req.GetResponseHeaders() != nil:
-				resp = responseHeadersResponse(map[string]string{"resp-header-modified": "true"}, nil)
+				// Return a response instructing the filter to mutate response headers
+				// by adding "resp-header-modified: true".
+				resps = append(resps, responseHeadersResponse(map[string]string{respHeaderModified: "true"}, nil))
 			case req.GetResponseBody() != nil:
+				// For the response body, return 2 body responses, each with a different
+				// appended string, to simulate the server sending 2 messages for the
+				// client's 1 message.
 				body := req.GetResponseBody()
 				respMsg := &testpb.StreamingOutputCallResponse{}
 				if err := proto.Unmarshal(body.GetBody(), respMsg); err != nil {
@@ -505,22 +543,23 @@ func (s) TestStreamingModifications(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				resp1 := responseBodyResponse(mutated1)
-				if err := stream.Send(resp1); err != nil {
-					return err
-				}
+				resps = append(resps, responseBodyResponse(mutated1))
 
 				respMsg.Payload.Body = append(origBody, []byte("_resp_body_modified_2")...)
 				mutated2, err := proto.Marshal(respMsg)
 				if err != nil {
 					return err
 				}
-				resp = responseBodyResponse(mutated2)
+				resps = append(resps, responseBodyResponse(mutated2))
 			case req.GetResponseTrailers() != nil:
-				resp = responseTrailersResponse(map[string]string{"resp-trailer-modified": "true"}, nil)
+				// Return a response instructing the filter to mutate response trailers
+				// by adding "resp-trailer-modified: true".
+				resps = append(resps, responseTrailersResponse(map[string]string{respTrailerModified: "true"}, nil))
 			}
-			if err := stream.Send(resp); err != nil {
-				return err
+			for _, r := range resps {
+				if err := stream.Send(r); err != nil {
+					return err
+				}
 			}
 		}
 	})
@@ -528,18 +567,18 @@ func (s) TestStreamingModifications(t *testing.T) {
 	// Start a test stub service.
 	stub := stubserver.StartTestService(t, &stubserver.StubServer{
 		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
-			// Verify if the dataplane server receives the mutated headers.
+			// Verify if the data plane server receives the mutated headers.
 			md, ok := metadata.FromIncomingContext(stream.Context())
 			if !ok {
-				t.Error("missing incoming metadata")
-				return fmt.Errorf("missing incoming metadata")
+				t.Error("Server did not receive incoming metadata")
+				return fmt.Errorf("Server did not receive incoming metadata")
 			}
-			hdr := md.Get("req-header-modified")
+			hdr := md.Get(reqHeaderModified)
 			if len(hdr) != 1 || hdr[0] != "true" {
-				t.Errorf("missing or invalid req-header-modified: %v", hdr)
+				t.Errorf("Missing or invalid req-header-modified: %v", hdr)
 			}
 
-			// Explicitly send response headers to client
+			// Explicitly send response headers to client.
 			if err := stream.SendHeader(metadata.Pairs("resp-header-from-server", "present")); err != nil {
 				return err
 			}
@@ -547,20 +586,17 @@ func (s) TestStreamingModifications(t *testing.T) {
 			var msgCount int
 			for {
 				in, err := stream.Recv()
-				// Check the message count once we receive io.EOF
+				// Check the message count once we receive io.EOF.
 				if err == io.EOF {
-					if msgCount != 4 {
-						t.Errorf("server received %d messages, want 4", msgCount)
-					}
 					return nil
 				}
 				if err != nil {
 					return err
 				}
 				msgCount++
-				expectedBody := fmt.Sprintf("c%d_req_body_modified", msgCount)
-				if string(in.GetPayload().GetBody()) != expectedBody {
-					t.Errorf("server received unexpected message body: %s, want: %s", string(in.GetPayload().GetBody()), expectedBody)
+				wantBody := fmt.Sprintf("c%d_req_body_modified", msgCount)
+				if string(in.GetPayload().GetBody()) != wantBody {
+					t.Errorf("Server received unexpected message body: %s, want: %s", string(in.GetPayload().GetBody()), wantBody)
 				}
 				// Send one response message for each client request.
 				if err := stream.Send(&testpb.StreamingOutputCallResponse{
@@ -583,7 +619,7 @@ func (s) TestStreamingModifications(t *testing.T) {
 		},
 	}, stub.Address)
 	if err != nil {
-		t.Fatalf("failed to dial: %v", err)
+		t.Fatalf("Failed to dial: %v", err)
 	}
 	defer cc.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -599,10 +635,10 @@ func (s) TestStreamingModifications(t *testing.T) {
 	}
 
 	messages := [][]byte{
-		[]byte("c1"),
-		[]byte("c2"),
-		[]byte("c3"),
-		[]byte("c4"),
+		[]byte(reqBodyC1),
+		[]byte(reqBodyC2),
+		[]byte(reqBodyC3),
+		[]byte(reqBodyC4),
 	}
 
 	for _, msg := range messages {
@@ -615,16 +651,16 @@ func (s) TestStreamingModifications(t *testing.T) {
 			t.Fatalf("stream.Send(%s) failed: %v", string(msg), err)
 		}
 
-		// Verify we receive exactly 2 messages for each client request because proc
-		// server response with 2 messages for every server messages.
+		// Verify we receive exactly 2 messages for each client request because the
+		// processor server responds with 2 messages for every server message.
 		for i := 1; i <= 2; i++ {
 			resp, err := stream.Recv()
 			if err != nil {
 				t.Fatalf("stream.Recv() failed: %v", err)
 			}
-			expectedBody := fmt.Sprintf("%s_req_body_modified_s1_resp_body_modified_%d", string(msg), i)
-			if string(resp.GetPayload().GetBody()) != expectedBody {
-				t.Fatalf("stream.Recv() returned payload: %s, want: %s", resp.GetPayload().GetBody(), expectedBody)
+			wantBody := fmt.Sprintf("%s_req_body_modified_s1_resp_body_modified_%d", string(msg), i)
+			if string(resp.GetPayload().GetBody()) != wantBody {
+				t.Fatalf("stream.Recv() returned payload: %s, want: %s", resp.GetPayload().GetBody(), wantBody)
 			}
 		}
 	}
@@ -643,16 +679,16 @@ func (s) TestStreamingModifications(t *testing.T) {
 	if err != nil {
 		t.Fatalf("stream.Header() failed: %v", err)
 	}
-	gotHdr := headerMetadata.Get("resp-header-modified")
+	gotHdr := headerMetadata.Get(respHeaderModified)
 	if len(gotHdr) != 1 || gotHdr[0] != "true" {
-		t.Fatalf("client received mutated-resp-header = %v, want [true]", gotHdr)
+		t.Fatalf("Client received mutated-resp-header = %v, want [true]", gotHdr)
 	}
 
-	// Verify mutated response trailers
+	// Verify mutated response trailers..
 	trailerMetadata := stream.Trailer()
-	gotTrailers := trailerMetadata.Get("resp-trailer-modified")
+	gotTrailers := trailerMetadata.Get(respTrailerModified)
 	if len(gotTrailers) != 1 || gotTrailers[0] != "true" {
-		t.Fatalf("client received resp-trailer-modified = %v, want [true]", gotTrailers)
+		t.Fatalf("Client received resp-trailer-modified = %v, want [true]", gotTrailers)
 	}
 }
 
@@ -663,8 +699,7 @@ func (s) TestStreamingModifications(t *testing.T) {
 // requests do not.
 func (s) TestProtocolConfigInFirstMessage(t *testing.T) {
 	var receivedCall atomic.Bool
-	lisAddr, _ := startMockProcessor(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
-		var callCount int
+	lisAddr, _ := startTestExtProcessor(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
 		for {
 			req, err := stream.Recv()
 			if err == io.EOF {
@@ -674,32 +709,43 @@ func (s) TestProtocolConfigInFirstMessage(t *testing.T) {
 				return err
 			}
 
-			receivedCall.Store(true)
-			callCount++
-			if callCount == 1 {
+			// For the first message, verify that the protocol config is present and
+			// matches the configured processing modes.
+			if receivedCall.CompareAndSwap(false, true) {
 				pConfig := req.GetProtocolConfig()
 				if pConfig == nil {
 					return fmt.Errorf("Expected ProtocolConfig in first request, got nil")
-				} else if pConfig.GetRequestBodyMode() != v3procfilterpb.ProcessingMode_GRPC {
-					return fmt.Errorf("RequestBodyMode = %v, want GRPC", pConfig.GetRequestBodyMode())
+				}
+				wantConfig := &v3procservicepb.ProtocolConfiguration{
+					RequestBodyMode:  v3procfilterpb.ProcessingMode_GRPC,
+					ResponseBodyMode: v3procfilterpb.ProcessingMode_NONE,
+				}
+				if !proto.Equal(pConfig, wantConfig) {
+					return fmt.Errorf("Received unexpected protocol config: got %v, want %v", pConfig, wantConfig)
 				}
 			} else {
+				// For all subsequent messages, verify that the protocol config is not
+				// populated.
 				if req.GetProtocolConfig() != nil {
-					return fmt.Errorf("Request %d unexpectedly had ProtocolConfig populated", callCount)
+					return fmt.Errorf("Subsequent request unexpectedly had ProtocolConfig populated")
 				}
 			}
 
 			var resp *v3procservicepb.ProcessingResponse
 			switch {
 			case req.GetRequestHeaders() != nil:
+				// Send a response for request header with no mutations.
 				resp = requestHeadersResponse(nil, nil)
 			case req.GetRequestBody() != nil:
+				// Echo the request body back as is.
 				resp = requestBodyResponse(req.GetRequestBody().GetBody())
 			case req.GetResponseHeaders() != nil:
+				// Send a response for response header with no mutations.
 				resp = responseHeadersResponse(nil, nil)
 			case req.GetResponseBody() != nil:
 				return fmt.Errorf("Unexpectedly received ResponseBody in proc server because response body mode was set to skip")
 			case req.GetResponseTrailers() != nil:
+				// Send a response for response trailers with no mutations.
 				resp = responseTrailersResponse(nil, nil)
 			}
 			if err := stream.Send(resp); err != nil {
@@ -708,6 +754,7 @@ func (s) TestProtocolConfigInFirstMessage(t *testing.T) {
 		}
 	})
 
+	// Backend stub service echoes request payload.
 	stub := stubserver.StartTestService(t, &stubserver.StubServer{
 		UnaryCallF: func(_ context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			return &testpb.SimpleResponse{Payload: in.GetPayload()}, nil
@@ -725,20 +772,21 @@ func (s) TestProtocolConfigInFirstMessage(t *testing.T) {
 		},
 	}, stub.Address)
 	if err != nil {
-		t.Fatalf("failed to dial: %v", err)
+		t.Fatalf("Failed to dial: %v", err)
 	}
 	defer cc.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
 	client := testgrpc.NewTestServiceClient(cc)
+	// Send UnaryCall and verify processor received at least one request.
 	reqMsg := &testpb.SimpleRequest{Payload: &testpb.Payload{Body: []byte("hello-extproc")}}
 	if _, err := client.UnaryCall(ctx, reqMsg); err != nil {
 		t.Fatalf("UnaryCall() failed: %v", err)
 	}
 
 	if !receivedCall.Load() {
-		t.Fatal("no requests received by the mock processor")
+		t.Fatal("No requests received by the mock processor")
 	}
 }
 
@@ -749,7 +797,7 @@ func (s) TestProtocolConfigInFirstMessage(t *testing.T) {
 func (s) TestWaitForDataplane(t *testing.T) {
 	unblockHeaders := make(chan struct{})
 
-	lisAddr, _ := startMockProcessor(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+	lisAddr, _ := startTestExtProcessor(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
 		for {
 			req, err := stream.Recv()
 			if err == io.EOF {
@@ -765,9 +813,11 @@ func (s) TestWaitForDataplane(t *testing.T) {
 				<-unblockHeaders
 				resp = requestHeadersResponse(nil, nil)
 			case req.GetRequestBody() != nil:
+				// For the request body, echo the payload back while preserving the
+				// end-of-stream flag.
 				body := req.GetRequestBody()
 				if body.GetEndOfStreamWithoutMessage() || body.GetEndOfStream() {
-					resp = requestBodyResponseWithEOF(body.GetBody(), body.EndOfStream)
+					resp = requestBodyResponseWithEOS(body.GetBody(), body.EndOfStream)
 				} else {
 					resp = requestBodyResponse(body.GetBody())
 				}
@@ -784,6 +834,7 @@ func (s) TestWaitForDataplane(t *testing.T) {
 	var backendMessagesReceived int32
 	backendCloseSendReceived := make(chan struct{})
 
+	// Backend stub records when handler is invoked and counts received messages.
 	stub := stubserver.StartTestService(t, &stubserver.StubServer{
 		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
 			close(backendCalledCh)
@@ -809,7 +860,7 @@ func (s) TestWaitForDataplane(t *testing.T) {
 		},
 	}, stub.Address)
 	if err != nil {
-		t.Fatalf("failed to dial: %v", err)
+		t.Fatalf("Failed to dial: %v", err)
 	}
 	defer cc.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -863,10 +914,9 @@ func (s) TestWaitForDataplane(t *testing.T) {
 // Trailers-Only response. Verifies that this is correctly delivered to the
 // processor as a ResponseHeader message with end_of_stream set to true.
 func (s) TestTrailersOnly(t *testing.T) {
-	receivedHeadersCh := make(chan *v3procservicepb.ProcessingRequest, 1)
-	errCh := make(chan error, 1)
+	const respHeaderModified = "resp-header-modified"
 
-	lisAddr, _ := startMockProcessor(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+	lisAddr, _ := startTestExtProcessor(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
 		req, err := stream.Recv()
 		if err == io.EOF {
 			return nil
@@ -875,20 +925,21 @@ func (s) TestTrailersOnly(t *testing.T) {
 			return err
 		}
 
-		if req.GetResponseHeaders() != nil {
-			respHeaders := req.GetResponseHeaders()
-			if !respHeaders.GetEndOfStream() {
-				err := fmt.Errorf("Expected EndOfStream to be true for Trailers-Only response headers")
-				errCh <- err
-				return err
-			}
-			receivedHeadersCh <- req
-			resp := responseHeadersResponse(map[string]string{"resp-header-modified": "true"}, nil)
-			return stream.Send(resp)
+		if req.GetResponseHeaders() == nil {
+			return fmt.Errorf("Expected ResponseHeaders message, got %v", req)
 		}
-		return nil
+		// When the trailers-only response headers arrive, verify that
+		// end-of-stream is set to true and return a response instructing the
+		// filter to add "resp-header-modified: true".
+		respHeaders := req.GetResponseHeaders()
+		if !respHeaders.GetEndOfStream() {
+			return fmt.Errorf("Expected EndOfStream to be true for Trailers-Only response headers")
+		}
+		resp := responseHeadersResponse(map[string]string{respHeaderModified: "true"}, nil)
+		return stream.Send(resp)
 	})
-
+	// Backend stub service immediately returns an Aborted error to trigger
+	// Trailers-Only.
 	stub := stubserver.StartTestService(t, &stubserver.StubServer{
 		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
 			// Wait for client request message before failing.
@@ -896,7 +947,7 @@ func (s) TestTrailersOnly(t *testing.T) {
 			if err != nil {
 				return err
 			}
-			// Return abort error immediately to trigger Trailers-Only
+			// Return abort error immediately to trigger Trailers-Only.
 			return status.Error(codes.Aborted, "intentional backend failure")
 		},
 	})
@@ -909,7 +960,7 @@ func (s) TestTrailersOnly(t *testing.T) {
 		},
 	}, stub.Address)
 	if err != nil {
-		t.Fatalf("failed to dial: %v", err)
+		t.Fatalf("Failed to dial: %v", err)
 	}
 	defer cc.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -922,7 +973,7 @@ func (s) TestTrailersOnly(t *testing.T) {
 	}
 
 	// Send request message c1 to trigger the server handler.
-	if err := stream.Send(&testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: []byte("c1")}}); err != nil {
+	if err := stream.Send(&testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: []byte(reqBodyC1)}}); err != nil {
 		t.Fatalf("stream.Send() failed: %v", err)
 	}
 
@@ -932,14 +983,6 @@ func (s) TestTrailersOnly(t *testing.T) {
 		t.Fatalf("stream.Recv() returned error: %v, want Aborted", err)
 	}
 
-	select {
-	case <-receivedHeadersCh:
-	case err := <-errCh:
-		t.Fatalf("Processing server received unexpected response header: %v", err)
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for processing server to receive response headers")
-	}
-
 	// Verify that calling Header() on a trailers-only stream returns nil, nil to
 	// be consistent with non-extproc streams.
 	headerMetadata, err := stream.Header()
@@ -947,11 +990,11 @@ func (s) TestTrailersOnly(t *testing.T) {
 		t.Fatalf("stream.Header() = (%v, %v), want (nil, nil)", headerMetadata, err)
 	}
 
-	// Verify mutated response trailers
+	// Verify mutated response trailers.
 	trailerMetadata := stream.Trailer()
-	gotTrailers := trailerMetadata.Get("resp-header-modified")
+	gotTrailers := trailerMetadata.Get(respHeaderModified)
 	if len(gotTrailers) != 1 || gotTrailers[0] != "true" {
-		t.Fatalf("client received resp-header-modified = %v, want [true]", gotTrailers)
+		t.Fatalf("Client received resp-header-modified = %v, want [true]", gotTrailers)
 	}
 }
 
@@ -960,7 +1003,8 @@ func (s) TestTrailersOnly(t *testing.T) {
 // messages and then transitions to bypass mode, causing all subsequent client
 // messages and server responses to bypass the processor.
 func (s) TestDraining(t *testing.T) {
-	lisAddr, _ := startMockProcessor(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+	const reqBodyC1Mutated = "c1_mutated"
+	lisAddr, _ := startTestExtProcessor(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
 		// Receive the first client message c1.
 		req, err := stream.Recv()
 		if err != nil {
@@ -968,7 +1012,7 @@ func (s) TestDraining(t *testing.T) {
 		}
 		body := req.GetRequestBody()
 		if body == nil {
-			return fmt.Errorf("expected RequestBody, got %v", req)
+			return fmt.Errorf("Expected RequestBody, got %v", req)
 		}
 		reqMsg := &testpb.StreamingOutputCallRequest{}
 		if err := proto.Unmarshal(body.GetBody(), reqMsg); err != nil {
@@ -1010,7 +1054,7 @@ func (s) TestDraining(t *testing.T) {
 		if err == io.EOF {
 			return nil
 		}
-		return fmt.Errorf("expected Recv to return io.EOF after RequestDrain, got %v", err)
+		return fmt.Errorf("Expected Recv to return io.EOF after RequestDrain, got %v", err)
 	})
 
 	// Start a test stub service.
@@ -1021,14 +1065,14 @@ func (s) TestDraining(t *testing.T) {
 			if err != nil {
 				return err
 			}
-			if got, want := string(in1.GetPayload().GetBody()), "c1_mutated"; got != want {
+			if got, want := string(in1.GetPayload().GetBody()), reqBodyC1Mutated; got != want {
 				return status.Errorf(codes.FailedPrecondition, "expected body %q, got %q", want, got)
 			}
 
 			// Send the server message s1. This should bypass the processor as we have
 			// set RequestDrain: true.
 			if err := stream.Send(&testpb.StreamingOutputCallResponse{
-				Payload: &testpb.Payload{Body: []byte("s1")},
+				Payload: &testpb.Payload{Body: []byte(respBodyS1)},
 			}); err != nil {
 				return err
 			}
@@ -1038,14 +1082,14 @@ func (s) TestDraining(t *testing.T) {
 			if err != nil {
 				return err
 			}
-			if got, want := string(in2.GetPayload().GetBody()), "c2"; got != want {
+			if got, want := string(in2.GetPayload().GetBody()), reqBodyC2; got != want {
 				return status.Errorf(codes.FailedPrecondition, "expected body %q, got %q", want, got)
 			}
 
 			// Send the second server message s2. This should bypass the processor as
 			// we have set RequestDrain: true.
 			if err := stream.Send(&testpb.StreamingOutputCallResponse{
-				Payload: &testpb.Payload{Body: []byte("s2")},
+				Payload: &testpb.Payload{Body: []byte(respBodyS2)},
 			}); err != nil {
 				return err
 			}
@@ -1064,7 +1108,7 @@ func (s) TestDraining(t *testing.T) {
 		},
 	}, stub.Address)
 	if err != nil {
-		t.Fatalf("failed to dial: %v", err)
+		t.Fatalf("Failed to dial: %v", err)
 	}
 	defer cc.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -1077,7 +1121,7 @@ func (s) TestDraining(t *testing.T) {
 	}
 
 	// Send first request message c1.
-	if err := stream.Send(&testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: []byte("c1")}}); err != nil {
+	if err := stream.Send(&testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: []byte(reqBodyC1)}}); err != nil {
 		t.Fatalf("stream.Send(c1) failed: %v", err)
 	}
 
@@ -1086,12 +1130,12 @@ func (s) TestDraining(t *testing.T) {
 	if err != nil {
 		t.Fatalf("stream.Recv(s1) failed: %v", err)
 	}
-	if got, want := string(resp1.GetPayload().GetBody()), "s1"; got != want {
-		t.Fatalf("got response %q, want %q", got, want)
+	if got, want := string(resp1.GetPayload().GetBody()), respBodyS1; got != want {
+		t.Fatalf("Got response %q, want %q", got, want)
 	}
 
 	// Send second request message c2.
-	if err := stream.Send(&testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: []byte("c2")}}); err != nil {
+	if err := stream.Send(&testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: []byte(reqBodyC2)}}); err != nil {
 		t.Fatalf("stream.Send(c2) failed: %v", err)
 	}
 
@@ -1100,14 +1144,15 @@ func (s) TestDraining(t *testing.T) {
 	if err != nil {
 		t.Fatalf("stream.Recv(s2) failed: %v", err)
 	}
-	if got, want := string(resp2.GetPayload().GetBody()), "s2"; got != want {
-		t.Fatalf("got response %q, want %q", got, want)
+	if got, want := string(resp2.GetPayload().GetBody()), respBodyS2; got != want {
+		t.Fatalf("Got response %q, want %q", got, want)
 	}
 }
 
 // TestImmediateResponse tests filter behavior on receiving an ImmediateResponse
 // under different configurations.
 func (s) TestImmediateResponse(t *testing.T) {
+	const simulatedImmediateResp = "simulated immediate response"
 	tests := []struct {
 		name                     string
 		disableImmediateResponse bool
@@ -1120,14 +1165,14 @@ func (s) TestImmediateResponse(t *testing.T) {
 			disableImmediateResponse: false,
 			failureModeAllow:         false,
 			wantCode:                 codes.Aborted,
-			wantMsgContains:          "simulated immediate response",
+			wantMsgContains:          simulatedImmediateResp,
 		},
 		{
 			name:                     "EnabledWithFailureModeAllow",
 			disableImmediateResponse: false,
 			failureModeAllow:         true,
 			wantCode:                 codes.Aborted,
-			wantMsgContains:          "simulated immediate response",
+			wantMsgContains:          simulatedImmediateResp,
 		},
 		{
 			name:                     "Disabled",
@@ -1146,21 +1191,23 @@ func (s) TestImmediateResponse(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			lisAddr, _ := startMockProcessor(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+			lisAddr, _ := startTestExtProcessor(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
 				req, err := stream.Recv()
 				if err != nil {
 					return err
 				}
 				if req.GetRequestHeaders() == nil {
-					return fmt.Errorf("expected request headers, got %v", req)
+					return fmt.Errorf("Expected request headers, got %v", req)
 				}
+				// When the request headers arrive, respond immediately with an aborted
+				// status and simulated details.
 				resp := &v3procservicepb.ProcessingResponse{
 					Response: &v3procservicepb.ProcessingResponse_ImmediateResponse{
 						ImmediateResponse: &v3procservicepb.ImmediateResponse{
 							GrpcStatus: &v3procservicepb.GrpcStatus{
 								Status: uint32(codes.Aborted),
 							},
-							Details: "simulated immediate response",
+							Details: simulatedImmediateResp,
 						},
 					},
 				}
@@ -1178,7 +1225,7 @@ func (s) TestImmediateResponse(t *testing.T) {
 				FailureModeAllow:         tc.failureModeAllow,
 			}, stub.Address)
 			if err != nil {
-				t.Fatalf("failed to dial: %v", err)
+				t.Fatalf("Failed to dial: %v", err)
 			}
 			defer cc.Close()
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -1186,10 +1233,9 @@ func (s) TestImmediateResponse(t *testing.T) {
 
 			client := testgrpc.NewTestServiceClient(cc)
 			_, err = client.EmptyCall(ctx, &testpb.Empty{})
-
 			if tc.wantCode == codes.OK {
 				if err != nil {
-					t.Fatalf("EmptyCall() failed unexpectedly when failure_mode_allow is true: %v", err)
+					t.Fatalf("EmptyCall() failed unexpectedly %v", err)
 				}
 				return
 			}
@@ -1227,8 +1273,10 @@ func (s) TestStreamFailureHeaderPhaseDeny(t *testing.T) {
 					return err
 				}
 				if req.GetRequestHeaders() == nil {
-					return fmt.Errorf("expected request headers, got %v", req)
+					return fmt.Errorf("Expected request headers, got %v", req)
 				}
+				// When the request headers arrive, respond with an invalid status of
+				// continue and replace.
 				resp := &v3procservicepb.ProcessingResponse{
 					Response: &v3procservicepb.ProcessingResponse_RequestHeaders{
 						RequestHeaders: &v3procservicepb.HeadersResponse{
@@ -1250,8 +1298,10 @@ func (s) TestStreamFailureHeaderPhaseDeny(t *testing.T) {
 					return err
 				}
 				if req.GetRequestHeaders() == nil {
-					return fmt.Errorf("expected request headers, got %v", req)
+					return fmt.Errorf("Expected request headers, got %v", req)
 				}
+				// When the request headers arrive, respond with an unexpected request
+				// body message having the compressed flag set.
 				resp := &v3procservicepb.ProcessingResponse{
 					Response: &v3procservicepb.ProcessingResponse_RequestBody{
 						RequestBody: &v3procservicepb.BodyResponse{
@@ -1276,7 +1326,7 @@ func (s) TestStreamFailureHeaderPhaseDeny(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			lisAddr, _ := startMockProcessor(t, tc.processFunc)
+			lisAddr, _ := startTestExtProcessor(t, tc.processFunc)
 
 			stub := stubserver.StartTestService(t, nil)
 			defer stub.Stop()
@@ -1288,13 +1338,14 @@ func (s) TestStreamFailureHeaderPhaseDeny(t *testing.T) {
 				FailureModeAllow: false,
 			}, stub.Address)
 			if err != nil {
-				t.Fatalf("failed to dial: %v", err)
+				t.Fatalf("Failed to dial: %v", err)
 			}
 			defer cc.Close()
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
 
 			client := testgrpc.NewTestServiceClient(cc)
+			// Verify EmptyCall fails with status Internal and expected error message.
 			_, err = client.EmptyCall(ctx, &testpb.Empty{})
 			if got, want := status.Code(err), codes.Internal; got != want {
 				t.Fatalf("EmptyCall() returned status code %v, want %v", got, want)
@@ -1321,6 +1372,13 @@ func (s) TestStreamFailureHeaderPhaseAllow(t *testing.T) {
 			},
 		},
 		{
+			name: "GracefulStreamClosure",
+			processFunc: func(v3procservicepb.ExternalProcessor_ProcessServer) error {
+				// Immediately close processor stream with io.EOF without replying.
+				return nil
+			},
+		},
+		{
 			name: "UnexpectedHeaderStatus",
 			processFunc: func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
 				req, err := stream.Recv()
@@ -1328,8 +1386,10 @@ func (s) TestStreamFailureHeaderPhaseAllow(t *testing.T) {
 					return err
 				}
 				if req.GetRequestHeaders() == nil {
-					return fmt.Errorf("expected request headers, got %v", req)
+					return fmt.Errorf("Expected request headers, got %v", req)
 				}
+				// When the request headers arrive, respond with an invalid status of
+				// continue and replace.
 				resp := &v3procservicepb.ProcessingResponse{
 					Response: &v3procservicepb.ProcessingResponse_RequestHeaders{
 						RequestHeaders: &v3procservicepb.HeadersResponse{
@@ -1350,8 +1410,10 @@ func (s) TestStreamFailureHeaderPhaseAllow(t *testing.T) {
 					return err
 				}
 				if req.GetRequestHeaders() == nil {
-					return fmt.Errorf("expected request headers, got %v", req)
+					return fmt.Errorf("Expected request headers, got %v", req)
 				}
+				// When the request headers arrive, respond with an unexpected request
+				// body message having the compressed flag set.
 				resp := &v3procservicepb.ProcessingResponse{
 					Response: &v3procservicepb.ProcessingResponse_RequestBody{
 						RequestBody: &v3procservicepb.BodyResponse{
@@ -1375,7 +1437,7 @@ func (s) TestStreamFailureHeaderPhaseAllow(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			lisAddr, _ := startMockProcessor(t, tc.processFunc)
+			lisAddr, _ := startTestExtProcessor(t, tc.processFunc)
 
 			stub := stubserver.StartTestService(t, nil)
 			defer stub.Stop()
@@ -1387,18 +1449,56 @@ func (s) TestStreamFailureHeaderPhaseAllow(t *testing.T) {
 				FailureModeAllow: true,
 			}, stub.Address)
 			if err != nil {
-				t.Fatalf("failed to dial: %v", err)
+				t.Fatalf("Failed to dial: %v", err)
 			}
 			defer cc.Close()
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
 
 			client := testgrpc.NewTestServiceClient(cc)
-			_, err = client.EmptyCall(ctx, &testpb.Empty{})
-			if err != nil {
+			// Verify EmptyCall succeeds when failure_mode_allow is true.
+			if _, err = client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 				t.Fatalf("EmptyCall() failed unexpectedly when failure_mode_allow is true: %v", err)
 			}
 		})
+	}
+}
+
+// TestGracefulStreamClosureDeny verifies that when the external processor
+// stream ends gracefully during the request header phase while
+// failure_mode_allow is false, the filter unblocks via bypass and the RPC
+// cleanly continues and succeeds.
+func (s) TestGracefulStreamClosureDeny(t *testing.T) {
+	lisAddr, _ := startTestExtProcessor(t, func(v3procservicepb.ExternalProcessor_ProcessServer) error {
+		// Immediately close the processor stream completely gracefully without
+		// replying. Verifies that when the client receives io.EOF right during
+		// initial header processing, bypass is triggered and the client RPC
+		// continues regardless of failure_mode_allow.
+		return nil
+	})
+
+	stub := stubserver.StartTestService(t, nil)
+	defer stub.Stop()
+
+	cc, err := setupTestClient(t, lisAddr, &v3procfilterpb.ExternalProcessor{
+		ProcessingMode: &v3procfilterpb.ProcessingMode{
+			RequestHeaderMode: v3procfilterpb.ProcessingMode_SEND,
+		},
+		FailureModeAllow: false,
+	}, stub.Address)
+	if err != nil {
+		t.Fatalf("Failed to dial: %v", err)
+	}
+	defer cc.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	client := testgrpc.NewTestServiceClient(cc)
+	// Verify that even with failure_mode_allow: false, graceful stream closure
+	// allows EmptyCall to succeed.
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+		t.Fatalf("EmptyCall() failed with error %v right when failure_mode_allow is false after graceful stream closure, expected clean continuation", err)
 	}
 }
 
@@ -1408,21 +1508,21 @@ func (s) TestStreamFailureHeaderPhaseAllow(t *testing.T) {
 // failure_mode_allow is not respected once body has been sent to the external
 // processor.
 func (s) TestStreamFailureBodyPhaseAllow(t *testing.T) {
-	lisAddr, _ := startMockProcessor(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
-		// Receive headers and send back.
+	lisAddr, _ := startTestExtProcessor(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+		// Receive request headers and respond with no mutations.
 		req, err := stream.Recv()
 		if err != nil {
 			return err
 		}
 		if req.GetRequestHeaders() == nil {
-			return fmt.Errorf("expected request headers, got %v", req)
+			return fmt.Errorf("Expected request headers, got %v", req)
 		}
 		resp := requestHeadersResponse(nil, nil)
 		if err := stream.Send(resp); err != nil {
 			return err
 		}
 
-		// Receive c1
+		// Receive request message and echo back.
 		req, err = stream.Recv()
 		if err != nil {
 			return err
@@ -1432,10 +1532,10 @@ func (s) TestStreamFailureBodyPhaseAllow(t *testing.T) {
 		if err := proto.Unmarshal(bodyBytes, reqMsg); err != nil {
 			return status.Errorf(codes.Internal, "failed to unmarshal request body: %v", err)
 		}
-		if got, want := string(reqMsg.GetPayload().GetBody()), "c1"; got != want {
+		if got, want := string(reqMsg.GetPayload().GetBody()), reqBodyC1; got != want {
 			return status.Errorf(codes.FailedPrecondition, "expected body %q, got %q", want, got)
 		}
-		// Send response to c1 to keep it going
+		// Send response to c1 to keep it going.
 		resp = &v3procservicepb.ProcessingResponse{
 			Response: &v3procservicepb.ProcessingResponse_RequestBody{
 				RequestBody: &v3procservicepb.BodyResponse{
@@ -1455,24 +1555,25 @@ func (s) TestStreamFailureBodyPhaseAllow(t *testing.T) {
 		if err := stream.Send(resp); err != nil {
 			return err
 		}
-		// Fail abruptly with non-EOF error during body phase
+		// Immediately after replying to body "c1", fail abruptly with Unavailable
+		// error.
 		return status.Error(codes.Unavailable, "abrupt stream failure in body phase")
 	})
 
 	stub := stubserver.StartTestService(t, &stubserver.StubServer{
 		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
-			// Receive c1
+			// Receive c1.
 			in1, err := stream.Recv()
 			if err != nil {
 				return err
 			}
-			if got, want := string(in1.GetPayload().GetBody()), "c1"; got != want {
+			if got, want := string(in1.GetPayload().GetBody()), reqBodyC1; got != want {
 				return status.Errorf(codes.FailedPrecondition, "expected body %q, got %q", want, got)
 			}
 
-			// Send s1
+			// Send s1.
 			if err := stream.Send(&testpb.StreamingOutputCallResponse{
-				Payload: &testpb.Payload{Body: []byte("s1")},
+				Payload: &testpb.Payload{Body: []byte(respBodyS1)},
 			}); err != nil {
 				return err
 			}
@@ -1480,7 +1581,7 @@ func (s) TestStreamFailureBodyPhaseAllow(t *testing.T) {
 			// Try to receive c2 but we should get error as ext_proc stream failed
 			// after body messages started, overriding failure_mode_allow=true.
 			if _, err = stream.Recv(); err == nil {
-				return fmt.Errorf("unexpectedly received client messages when expected rpc to fail")
+				return fmt.Errorf("Unexpectedly received client messages when expected rpc to fail")
 			}
 			return nil
 		},
@@ -1489,14 +1590,16 @@ func (s) TestStreamFailureBodyPhaseAllow(t *testing.T) {
 
 	cc, err := setupTestClient(t, lisAddr, &v3procfilterpb.ExternalProcessor{
 		ProcessingMode: &v3procfilterpb.ProcessingMode{
-			RequestHeaderMode:  v3procfilterpb.ProcessingMode_SEND,
-			RequestBodyMode:    v3procfilterpb.ProcessingMode_GRPC,
-			ResponseHeaderMode: v3procfilterpb.ProcessingMode_SEND,
+			RequestHeaderMode:   v3procfilterpb.ProcessingMode_SEND,
+			RequestBodyMode:     v3procfilterpb.ProcessingMode_GRPC,
+			ResponseHeaderMode:  v3procfilterpb.ProcessingMode_SEND,
+			ResponseBodyMode:    v3procfilterpb.ProcessingMode_GRPC,
+			ResponseTrailerMode: v3procfilterpb.ProcessingMode_SEND,
 		},
 		FailureModeAllow: true,
 	}, stub.Address)
 	if err != nil {
-		t.Fatalf("failed to dial: %v", err)
+		t.Fatalf("Failed to dial: %v", err)
 	}
 	defer cc.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -1509,7 +1612,7 @@ func (s) TestStreamFailureBodyPhaseAllow(t *testing.T) {
 	}
 
 	// Send c1.
-	if err := stream.Send(&testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: []byte("c1")}}); err != nil {
+	if err := stream.Send(&testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: []byte(reqBodyC1)}}); err != nil {
 		t.Fatalf("stream.Send(c1) failed: %v", err)
 	}
 
@@ -1526,50 +1629,41 @@ func (s) TestStreamFailureBodyPhaseAllow(t *testing.T) {
 // NONE and failure_mode_allow is true. Verifies that because no body messages
 // were sent to ext_proc, the data plane RPC is allowed to continue unharmed.
 func (s) TestStreamFailureBodyModeNoneAllow(t *testing.T) {
-	lisAddr, _ := startMockProcessor(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
-		// Receive initial headers and continue.
+	lisAddr, _ := startTestExtProcessor(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+		// Receive request headers and respond with no mutations.
 		req, err := stream.Recv()
 		if err != nil {
 			return err
 		}
 		if req.GetRequestHeaders() == nil {
-			return fmt.Errorf("expected request headers, got %v", req)
+			return fmt.Errorf("Expected request headers, got %v", req)
 		}
 		resp := requestHeadersResponse(nil, nil)
 		if err := stream.Send(resp); err != nil {
 			return err
 		}
-		// Fail after sending headers.
+		// Immediately fail abruptly with Unavailable error after sending header
+		// response.
 		return status.Error(codes.Unavailable, "abrupt stream failure after headers")
 	})
 
+	// Backend stub simply echoes payload it receives.
 	stub := stubserver.StartTestService(t, &stubserver.StubServer{
 		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
-			in1, err := stream.Recv()
-			if err != nil {
-				return err
+			for {
+				req, err := stream.Recv()
+				if err == io.EOF {
+					return nil
+				}
+				if err != nil {
+					return err
+				}
+				if err := stream.Send(&testpb.StreamingOutputCallResponse{
+					Payload: req.GetPayload(),
+				}); err != nil {
+					return err
+				}
 			}
-			if got, want := string(in1.GetPayload().GetBody()), "c1"; got != want {
-				return status.Errorf(codes.FailedPrecondition, "expected body %q, got %q", want, got)
-			}
-			if err := stream.Send(&testpb.StreamingOutputCallResponse{
-				Payload: &testpb.Payload{Body: []byte("s1")},
-			}); err != nil {
-				return err
-			}
-			in2, err := stream.Recv()
-			if err != nil {
-				return err
-			}
-			if got, want := string(in2.GetPayload().GetBody()), "c2"; got != want {
-				return status.Errorf(codes.FailedPrecondition, "expected body %q, got %q", want, got)
-			}
-			if err := stream.Send(&testpb.StreamingOutputCallResponse{
-				Payload: &testpb.Payload{Body: []byte("s2")},
-			}); err != nil {
-				return err
-			}
-			return nil
 		},
 	})
 	defer stub.Stop()
@@ -1583,7 +1677,7 @@ func (s) TestStreamFailureBodyModeNoneAllow(t *testing.T) {
 		FailureModeAllow: true,
 	}, stub.Address)
 	if err != nil {
-		t.Fatalf("failed to dial: %v", err)
+		t.Fatalf("Failed to dial: %v", err)
 	}
 	defer cc.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -1596,31 +1690,31 @@ func (s) TestStreamFailureBodyModeNoneAllow(t *testing.T) {
 	}
 
 	// Send c1.
-	if err := stream.Send(&testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: []byte("c1")}}); err != nil {
+	if err := stream.Send(&testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: []byte(reqBodyC1)}}); err != nil {
 		t.Fatalf("stream.Send(c1) failed: %v", err)
 	}
 
-	// Receive s1.
+	// Receive echo of c1.
 	resp1, err := stream.Recv()
 	if err != nil {
-		t.Fatalf("stream.Recv(s1) failed: %v", err)
+		t.Fatalf("stream.Recv(c1) failed: %v", err)
 	}
-	if got, want := string(resp1.GetPayload().GetBody()), "s1"; got != want {
-		t.Fatalf("got response %q, want %q", got, want)
+	if got, want := string(resp1.GetPayload().GetBody()), reqBodyC1; got != want {
+		t.Fatalf("Got response %q, want %q", got, want)
 	}
 
 	// Send c2.
-	if err := stream.Send(&testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: []byte("c2")}}); err != nil {
+	if err := stream.Send(&testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: []byte(reqBodyC2)}}); err != nil {
 		t.Fatalf("stream.Send(c2) failed: %v", err)
 	}
 
-	// Receive s2.
+	// Receive echo of c2.
 	resp2, err := stream.Recv()
 	if err != nil {
-		t.Fatalf("stream.Recv(s2) failed: %v", err)
+		t.Fatalf("stream.Recv(c2) failed: %v", err)
 	}
-	if got, want := string(resp2.GetPayload().GetBody()), "s2"; got != want {
-		t.Fatalf("got response %q, want %q", got, want)
+	if got, want := string(resp2.GetPayload().GetBody()), reqBodyC2; got != want {
+		t.Fatalf("Got response %q, want %q", got, want)
 	}
 
 	if err := stream.CloseSend(); err != nil {
@@ -1637,43 +1731,46 @@ func (s) TestStreamFailureBodyModeNoneAllow(t *testing.T) {
 // failure_mode_allow is true. Verifies that calling Trailer() does not hang and
 // instead returns the unmutated trailers directly from the data plane stream.
 func (s) TestStreamFailureTrailerPhaseAllow(t *testing.T) {
-	lisAddr, _ := startMockProcessor(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
-		// Receive initial headers and continue.
+	const (
+		testTrailerKey = "test-trailer"
+		originalVal    = "original"
+	)
+	lisAddr, _ := startTestExtProcessor(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+		// Receive request headers and respond with no mutations.
 		req, err := stream.Recv()
 		if err != nil {
 			return err
 		}
 		if req.GetRequestHeaders() == nil {
-			return fmt.Errorf("expected request headers, got %v", req)
+			return fmt.Errorf("Expected request headers, got %v", req)
 		}
 		resp := requestHeadersResponse(nil, nil)
 		if err := stream.Send(resp); err != nil {
 			return err
 		}
 
-		// Receive trailers request and fail abruptly.
+		// When the response trailers request arrives, fail abruptly by returning an
+		// unavailable error.
 		req, err = stream.Recv()
 		if err != nil {
 			return err
 		}
 		if req.GetResponseTrailers() == nil {
-			return fmt.Errorf("expected response trailers, got %v", req)
+			return fmt.Errorf("Expected response trailers, got %v", req)
 		}
 		return status.Error(codes.Unavailable, "abrupt stream failure in trailer phase")
 	})
 
+	// Backend stub sets trailer "test-trailer: original" and echoes payload.
 	stub := stubserver.StartTestService(t, &stubserver.StubServer{
 		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
 			in, err := stream.Recv()
 			if err != nil {
 				return err
 			}
-			if got, want := string(in.GetPayload().GetBody()), "c1"; got != want {
-				return status.Errorf(codes.FailedPrecondition, "expected body %q, got %q", want, got)
-			}
-			stream.SetTrailer(metadata.Pairs("test-trailer", "original"))
+			stream.SetTrailer(metadata.Pairs(testTrailerKey, originalVal))
 			return stream.Send(&testpb.StreamingOutputCallResponse{
-				Payload: &testpb.Payload{Body: []byte("s1")},
+				Payload: in.GetPayload(),
 			})
 		},
 	})
@@ -1689,7 +1786,7 @@ func (s) TestStreamFailureTrailerPhaseAllow(t *testing.T) {
 		FailureModeAllow: true,
 	}, stub.Address)
 	if err != nil {
-		t.Fatalf("failed to dial: %v", err)
+		t.Fatalf("Failed to dial: %v", err)
 	}
 	defer cc.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -1701,16 +1798,16 @@ func (s) TestStreamFailureTrailerPhaseAllow(t *testing.T) {
 		t.Fatalf("FullDuplexCall() failed: %v", err)
 	}
 
-	if err := stream.Send(&testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: []byte("c1")}}); err != nil {
+	if err := stream.Send(&testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: []byte(reqBodyC1)}}); err != nil {
 		t.Fatalf("stream.Send(c1) failed: %v", err)
 	}
 
 	resp, err := stream.Recv()
 	if err != nil {
-		t.Fatalf("stream.Recv(s1) failed: %v", err)
+		t.Fatalf("stream.Recv(c1) failed: %v", err)
 	}
-	if got, want := string(resp.GetPayload().GetBody()), "s1"; got != want {
-		t.Fatalf("got response %q, want %q", got, want)
+	if got, want := string(resp.GetPayload().GetBody()), reqBodyC1; got != want {
+		t.Fatalf("Got response %q, want %q", got, want)
 	}
 
 	if err := stream.CloseSend(); err != nil {
@@ -1723,49 +1820,52 @@ func (s) TestStreamFailureTrailerPhaseAllow(t *testing.T) {
 
 	// Calling Trailer() should not hang and must return the unmutated trailer.
 	got := stream.Trailer()
-	if vals := got.Get("test-trailer"); len(vals) != 1 || vals[0] != "original" {
+	if vals := got.Get(testTrailerKey); len(vals) != 1 || vals[0] != originalVal {
 		t.Fatalf("Trailer() returned %v, want test-trailer containing 'original'", got)
 	}
 }
 
-// TestStreamFailureResponseHeaderPhaseAllow tests the scenario where the external
-// processor stream fails abruptly during the response header phase while
-// failure_mode_allow is true. Verifies that calling Header() does not hang
-// and instead returns the unmutated response headers from the data plane stream.
-func (s) TestStreamFailureResponseHeaderPhaseAllow(t *testing.T) {
-	lisAddr, _ := startMockProcessor(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
-		// Receive initial request headers and continue.
+// TestStreamFailureResponseHeaderPhaseAllow tests the scenario where the
+// external processor stream fails abruptly during the response header phase
+// while failure_mode_allow is true. Verifies that calling Header() does not
+// hang and instead returns the unmutated response headers amd messages from the
+// data plane stream.
+func TestStreamFailureResponseHeaderPhaseAllow(t *testing.T) {
+	const (
+		testHeaderKey = "test-header"
+		originalVal   = "original"
+	)
+	lisAddr, _ := startTestExtProcessor(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+		// Receive request headers and respond with no mutations.
 		req, err := stream.Recv()
 		if err != nil {
 			return err
 		}
 		if req.GetRequestHeaders() == nil {
-			return fmt.Errorf("expected request headers, got %v", req)
+			return fmt.Errorf("Expected request headers, got %v", req)
 		}
 		resp := requestHeadersResponse(nil, nil)
 		if err := stream.Send(resp); err != nil {
 			return err
 		}
 
-		// Receive response headers request and fail abruptly.
+		// When the response headers request arrives, fail abruptly by returning an
+		// unavailable error.
 		req, err = stream.Recv()
 		if err != nil {
 			return err
 		}
 		if req.GetResponseHeaders() == nil {
-			return fmt.Errorf("expected response headers, got %v", req)
+			return fmt.Errorf("Expected response headers, got %v", req)
 		}
 		return status.Error(codes.Unavailable, "abrupt stream failure in response header phase")
 	})
 
+	// Backend stub sends response header "test-header: original".
 	stub := stubserver.StartTestService(t, &stubserver.StubServer{
 		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
-			in, err := stream.Recv()
-			if err != nil {
+			if _, err := stream.Recv(); err != nil {
 				return err
-			}
-			if got, want := string(in.GetPayload().GetBody()), "c1"; got != want {
-				return status.Errorf(codes.FailedPrecondition, "expected body %q, got %q", want, got)
 			}
 			stream.SendHeader(metadata.Pairs("test-header", "original"))
 			return stream.Send(&testpb.StreamingOutputCallResponse{
@@ -1785,7 +1885,7 @@ func (s) TestStreamFailureResponseHeaderPhaseAllow(t *testing.T) {
 		FailureModeAllow: true,
 	}, stub.Address)
 	if err != nil {
-		t.Fatalf("failed to dial: %v", err)
+		t.Fatalf("Failed to dial: %v", err)
 	}
 	defer cc.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -1797,17 +1897,26 @@ func (s) TestStreamFailureResponseHeaderPhaseAllow(t *testing.T) {
 		t.Fatalf("FullDuplexCall() failed: %v", err)
 	}
 
-	if err := stream.Send(&testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: []byte("c1")}}); err != nil {
+	if err := stream.Send(&testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: []byte(reqBodyC1)}}); err != nil {
 		t.Fatalf("stream.Send(c1) failed: %v", err)
 	}
 
+	// Calling Header() should return the unmutated response header.
 	got, err := stream.Header()
 	if err != nil {
 		t.Fatalf("Header() failed: %v", err)
 	}
-	if vals := got.Get("test-header"); len(vals) != 1 || vals[0] != "original" {
+	if vals := got.Get(testHeaderKey); len(vals) != 1 || vals[0] != originalVal {
 		t.Fatalf("Header() returned %v, want test-header containing 'original'", got)
 	}
+	m, err := stream.Recv()
+	if err != nil {
+		t.Fatalf("stream.Recv() failed: %v", err)
+	}
+	if got, want := string(m.GetPayload().GetBody()), "s1"; got != want {
+		t.Fatalf("Got response %q, want %q", got, want)
+	}
+
 }
 
 // TestStreamFailureBodyPhaseDeny tests various external processor failures
@@ -1822,44 +1931,46 @@ func (s) TestStreamFailureBodyPhaseDeny(t *testing.T) {
 		{
 			name: "AbruptStreamFailure",
 			processFunc: func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
-				// Receive headers and send back.
+				// Receive request headers and respond with no mutations.
 				req, err := stream.Recv()
 				if err != nil {
 					return err
 				}
 				if req.GetRequestHeaders() == nil {
-					return fmt.Errorf("expected request headers, got %v", req)
+					return fmt.Errorf("Expected request headers, got %v", req)
 				}
 				resp := requestHeadersResponse(nil, nil)
 				if err := stream.Send(resp); err != nil {
 					return err
 				}
 
+				// When the request body message arrives, fail abruptly by returning an
+				// unavailable error.
 				_, err = stream.Recv()
 				if err != nil {
 					return err
 				}
-				// Fail abruptly with non-EOF error during body phase
 				return status.Error(codes.Unavailable, "abrupt stream failure in body phase")
 			},
 		},
 		{
 			name: "GrpcMessageCompressedUnsupported",
 			processFunc: func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
-				// Receive headers and send back.
+				// Receive request headers and respond with no mutations.
 				req, err := stream.Recv()
 				if err != nil {
 					return err
 				}
 				if req.GetRequestHeaders() == nil {
-					return fmt.Errorf("expected request headers, got %v", req)
+					return fmt.Errorf("Expected request headers, got %v", req)
 				}
 				resp := requestHeadersResponse(nil, nil)
 				if err := stream.Send(resp); err != nil {
 					return err
 				}
 
-				// Receive c1 body. Return GrpcMessageCompressed: true!
+				// For the request body, respond with the unsupported compressed message
+				// flag set to true.
 				req, err = stream.Recv()
 				if err != nil {
 					return err
@@ -1890,8 +2001,10 @@ func (s) TestStreamFailureBodyPhaseDeny(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			lisAddr, _ := startMockProcessor(t, tc.processFunc)
+			lisAddr, _ := startTestExtProcessor(t, tc.processFunc)
 
+			// Backend stub handler simply calls Recv() and returns any error
+			// encountered.
 			stub := stubserver.StartTestService(t, &stubserver.StubServer{
 				FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
 					_, err := stream.Recv()
@@ -1908,7 +2021,7 @@ func (s) TestStreamFailureBodyPhaseDeny(t *testing.T) {
 				FailureModeAllow: false,
 			}, stub.Address)
 			if err != nil {
-				t.Fatalf("failed to dial: %v", err)
+				t.Fatalf("Failed to dial: %v", err)
 			}
 			defer cc.Close()
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -1920,7 +2033,7 @@ func (s) TestStreamFailureBodyPhaseDeny(t *testing.T) {
 				t.Fatalf("FullDuplexCall() failed: %v", err)
 			}
 
-			if err := stream.Send(&testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: []byte("c1")}}); err != nil {
+			if err := stream.Send(&testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: []byte(reqBodyC1)}}); err != nil {
 				t.Fatalf("stream.Send(c1) failed: %v", err)
 			}
 
@@ -1940,26 +2053,27 @@ func (s) TestStreamFailureBodyPhaseDeny(t *testing.T) {
 // while failure_mode_allow is false. Verifies that the Unary RPC fails with
 // status code Internal.
 func (s) TestUnaryFailureBodyPhaseDeny(t *testing.T) {
-	lisAddr, _ := startMockProcessor(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
-		// Receive headers and send back.
+	lisAddr, _ := startTestExtProcessor(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+		// Receive request headers and respond with no mutations.
 		req, err := stream.Recv()
 		if err != nil {
 			return err
 		}
 		if req.GetRequestHeaders() == nil {
-			return fmt.Errorf("expected request headers, got %v", req)
+			return fmt.Errorf("Expected request headers, got %v", req)
 		}
 		resp := requestHeadersResponse(nil, nil)
 		if err := stream.Send(resp); err != nil {
 			return err
 		}
 
+		// When the request body message arrives, fail abruptly by returning an
+		// unavailable error.
 		_, err = stream.Recv()
 		if err != nil {
 			return err
 		}
 
-		// Fail abruptly with non-EOF error during body phase
 		return status.Error(codes.Unavailable, "abrupt stream failure in body phase")
 	})
 
@@ -1978,18 +2092,14 @@ func (s) TestUnaryFailureBodyPhaseDeny(t *testing.T) {
 		FailureModeAllow: false,
 	}, stub.Address)
 	if err != nil {
-		t.Fatalf("failed to dial: %v", err)
+		t.Fatalf("Failed to dial: %v", err)
 	}
 	defer cc.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
 	client := testgrpc.NewTestServiceClient(cc)
-	reqMsg := &testpb.SimpleRequest{
-		Payload: &testpb.Payload{
-			Body: []byte("c1"),
-		},
-	}
+	reqMsg := &testpb.SimpleRequest{Payload: &testpb.Payload{Body: []byte(reqBodyC1)}}
 	_, err = client.UnaryCall(ctx, reqMsg)
 	if got, want := status.Code(err), codes.Internal; got != want {
 		t.Fatalf("UnaryCall() returned status code: %v, want %v", got, want)
@@ -2001,21 +2111,21 @@ func (s) TestUnaryFailureBodyPhaseDeny(t *testing.T) {
 // correctly deliver all in-flight and bypassed payloads directly over the data
 // plane without message loss.
 func (s) TestDrainingUnderLoad(t *testing.T) {
-	lisAddr, _ := startMockProcessor(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
-		// 1. Request headers
+	lisAddr, _ := startTestExtProcessor(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+		// Receive request headers and return with no mutations.
 		req, err := stream.Recv()
 		if err != nil {
 			return err
 		}
 		if req.GetRequestHeaders() == nil {
-			return fmt.Errorf("expected request headers, got %v", req)
+			return fmt.Errorf("Expected request headers, got %v", req)
 		}
 		resp := requestHeadersResponse(nil, nil)
 		if err := stream.Send(resp); err != nil {
 			return err
 		}
 
-		// 2. Request body c1. Respond with RequestDrain: true!
+		// When the first request body message arrives, return a response with request drain set to true.
 		req, err = stream.Recv()
 		if err != nil {
 			return err
@@ -2042,7 +2152,8 @@ func (s) TestDrainingUnderLoad(t *testing.T) {
 			return err
 		}
 
-		// 3. Loop echoing any remaining in-flight requests until CloseSend (EOF)!
+		// Continually receive any remaining in-flight body requests until EOF is
+		// reached and echo them back.
 		for {
 			req, err := stream.Recv()
 			if err == io.EOF {
@@ -2080,7 +2191,7 @@ func (s) TestDrainingUnderLoad(t *testing.T) {
 			for i := 1; i <= 50; i++ {
 				in, err := stream.Recv()
 				if err != nil {
-					return fmt.Errorf("backend Recv(%d) failed: %v", i, err)
+					return fmt.Errorf("Backend Recv(%d) failed: %v", i, err)
 				}
 				want := fmt.Sprintf("c%d", i)
 				if got := string(in.GetPayload().GetBody()); got != want {
@@ -2090,7 +2201,7 @@ func (s) TestDrainingUnderLoad(t *testing.T) {
 				if err := stream.Send(&testpb.StreamingOutputCallResponse{
 					Payload: &testpb.Payload{Body: fmt.Appendf(nil, "s%d", i)},
 				}); err != nil {
-					return fmt.Errorf("backend Send(%d) failed: %v", i, err)
+					return fmt.Errorf("Backend Send(%d) failed: %v", i, err)
 				}
 			}
 			return nil
@@ -2107,7 +2218,7 @@ func (s) TestDrainingUnderLoad(t *testing.T) {
 		},
 	}, stub.Address)
 	if err != nil {
-		t.Fatalf("failed to dial: %v", err)
+		t.Fatalf("Failed to dial: %v", err)
 	}
 	defer cc.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -2123,16 +2234,16 @@ func (s) TestDrainingUnderLoad(t *testing.T) {
 		if err := stream.Send(&testpb.StreamingOutputCallRequest{
 			Payload: &testpb.Payload{Body: fmt.Appendf(nil, "c%d", i)},
 		}); err != nil {
-			t.Fatalf("client Send(%d) failed: %v", i, err)
+			t.Fatalf("Client Send(%d) failed: %v", i, err)
 		}
 
 		resp, err := stream.Recv()
 		if err != nil {
-			t.Fatalf("client Recv(%d) failed: %v", i, err)
+			t.Fatalf("Client Recv(%d) failed: %v", i, err)
 		}
 		want := fmt.Sprintf("s%d", i)
 		if got := string(resp.GetPayload().GetBody()); got != want {
-			t.Fatalf("client expected response %q, got %q", want, got)
+			t.Fatalf("Client expected response %q, got %q", want, got)
 		}
 	}
 }
@@ -2143,40 +2254,46 @@ func (s) TestDrainingUnderLoad(t *testing.T) {
 // correctly triggers processor trailer mutation and returns the final mutated
 // metadata.
 func (s) TestClientTrailer(t *testing.T) {
-	lisAddr, _ := startMockProcessor(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
-		// 1. Request headers
+	const (
+		testTrailerKey = "test-trailer"
+		originalVal    = "original"
+		mutatedVal     = "mutated-val"
+	)
+	lisAddr, _ := startTestExtProcessor(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+		// Receive request header and respond with no mutations.
 		req, err := stream.Recv()
 		if err != nil {
 			return err
 		}
 		if req.GetRequestHeaders() == nil {
-			return fmt.Errorf("expected request headers, got %v", req)
+			return fmt.Errorf("Expected request headers, got %v", req)
 		}
 		resp := requestHeadersResponse(nil, nil)
 		if err := stream.Send(resp); err != nil {
 			return err
 		}
 
-		// 2. Response headers
+		// Receive response header and respond with no mutations.
 		req, err = stream.Recv()
 		if err != nil {
 			return err
 		}
 		if req.GetResponseHeaders() == nil {
-			return fmt.Errorf("expected response headers, got %v", req)
+			return fmt.Errorf("Expected response headers, got %v", req)
 		}
 		resp = responseHeadersResponse(nil, nil)
 		if err := stream.Send(resp); err != nil {
 			return err
 		}
 
-		// 3. Response trailers
+		// When the response trailers arrive, return a response instructing the
+		// filter to set the trailer "test-trailer: mutated-val".
 		req, err = stream.Recv()
 		if err != nil {
 			return err
 		}
 		if req.GetResponseTrailers() == nil {
-			return fmt.Errorf("expected response trailers, got %v", req)
+			return fmt.Errorf("Expected response trailers, got %v", req)
 		}
 		resp = &v3procservicepb.ProcessingResponse{
 			Response: &v3procservicepb.ProcessingResponse_ResponseTrailers{
@@ -2185,8 +2302,8 @@ func (s) TestClientTrailer(t *testing.T) {
 						SetHeaders: []*v3corepb.HeaderValueOption{
 							{
 								Header: &v3corepb.HeaderValue{
-									Key:   "test-trailer",
-									Value: "mutated-val",
+									Key:   testTrailerKey,
+									Value: mutatedVal,
 								},
 							},
 						},
@@ -2199,30 +2316,30 @@ func (s) TestClientTrailer(t *testing.T) {
 
 	stub := stubserver.StartTestService(t, &stubserver.StubServer{
 		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
-			// Read c1
+			// Read c1.
 			req, err := stream.Recv()
 			if err != nil {
 				return err
 			}
-			if string(req.GetPayload().GetBody()) != "c1" {
-				return fmt.Errorf("unexpected request: %q", req.GetPayload().GetBody())
+			if string(req.GetPayload().GetBody()) != reqBodyC1 {
+				return fmt.Errorf("Unexpected request: %q", req.GetPayload().GetBody())
 			}
-			// Send response message s1
+			// Send response message s1.
 			if err := stream.Send(&testpb.StreamingOutputCallResponse{
-				Payload: &testpb.Payload{Body: []byte("s1")},
+				Payload: &testpb.Payload{Body: []byte(respBodyS1)},
 			}); err != nil {
 				return err
 			}
-			// Read c2
+			// Read c2.
 			req, err = stream.Recv()
 			if err != nil {
 				return err
 			}
-			if string(req.GetPayload().GetBody()) != "c2" {
-				return fmt.Errorf("unexpected request: %q", req.GetPayload().GetBody())
+			if string(req.GetPayload().GetBody()) != reqBodyC2 {
+				return fmt.Errorf("Unexpected request: %q", req.GetPayload().GetBody())
 			}
-			// Set trailer
-			stream.SetTrailer(metadata.Pairs("test-trailer", "original"))
+			// Set trailer.
+			stream.SetTrailer(metadata.Pairs(testTrailerKey, originalVal))
 			return nil
 		},
 	})
@@ -2236,7 +2353,7 @@ func (s) TestClientTrailer(t *testing.T) {
 		},
 	}, stub.Address)
 	if err != nil {
-		t.Fatalf("failed to dial: %v", err)
+		t.Fatalf("Failed to dial: %v", err)
 	}
 	defer cc.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -2252,8 +2369,8 @@ func (s) TestClientTrailer(t *testing.T) {
 		t.Fatalf("Trailer() prematurely returned non-nil metadata: %v, want nil", got)
 	}
 
-	// Send request message c1
-	if err := stream.Send(&testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: []byte("c1")}}); err != nil {
+	// Send request message c1.
+	if err := stream.Send(&testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: []byte(reqBodyC1)}}); err != nil {
 		t.Fatalf("stream.Send() failed: %v", err)
 	}
 
@@ -2262,13 +2379,13 @@ func (s) TestClientTrailer(t *testing.T) {
 		t.Fatalf("Trailer() prematurely returned non-nil metadata: %v, want nil", got)
 	}
 
-	// Recv s1 response message
+	// Recv s1 response message.
 	respMsg, err := stream.Recv()
 	if err != nil {
 		t.Fatalf("stream.Recv() failed: %v", err)
 	}
-	if got, want := string(respMsg.GetPayload().GetBody()), "s1"; got != want {
-		t.Fatalf("got response %q, want %q", got, want)
+	if got, want := string(respMsg.GetPayload().GetBody()), respBodyS1; got != want {
+		t.Fatalf("Got response %q, want %q", got, want)
 	}
 
 	// 3. Trailer() call before sending c2 (so server hasn't sent trailers) should return nil.
@@ -2276,8 +2393,8 @@ func (s) TestClientTrailer(t *testing.T) {
 		t.Fatalf("Trailer() prematurely returned non-nil metadata: %v, want nil", got)
 	}
 
-	// Send request message c2
-	if err := stream.Send(&testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: []byte("c2")}}); err != nil {
+	// Send request message c2.
+	if err := stream.Send(&testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: []byte(reqBodyC2)}}); err != nil {
 		t.Fatalf("stream.Send() failed: %v", err)
 	}
 
@@ -2285,7 +2402,7 @@ func (s) TestClientTrailer(t *testing.T) {
 		t.Fatalf("stream.CloseSend() failed: %v", err)
 	}
 
-	// Read until EOF
+	// Read until EOF.
 	for {
 		_, err := stream.Recv()
 		if err == io.EOF {
@@ -2298,7 +2415,7 @@ func (s) TestClientTrailer(t *testing.T) {
 
 	// 3. Calling Trailer() after stream has finished should return the mutated trailers.
 	got := stream.Trailer()
-	if vals := got.Get("test-trailer"); len(vals) != 2 || vals[1] != "mutated-val" {
+	if vals := got.Get(testTrailerKey); len(vals) != 2 || vals[1] != mutatedVal {
 		t.Fatalf("Trailer() returned %v, want test-trailer containing mutated-val", got)
 	}
 }
@@ -2308,7 +2425,12 @@ func (s) TestClientTrailer(t *testing.T) {
 // correctly sets the terminal status and merges any specified mutation headers
 // into the stream trailers.
 func (s) TestImmediateResponseTrailers(t *testing.T) {
-	lisAddr, _ := startMockProcessor(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+	const (
+		testTrailerKey      = "test-trailer"
+		originalVal         = "original"
+		immediateMutatedVal = "mutated-immediate-val"
+	)
+	lisAddr, _ := startTestExtProcessor(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
 		for {
 			req, err := stream.Recv()
 			if err != nil {
@@ -2320,10 +2442,15 @@ func (s) TestImmediateResponseTrailers(t *testing.T) {
 			var resp *v3procservicepb.ProcessingResponse
 			switch {
 			case req.GetRequestHeaders() != nil:
+				// Send a response for request header with no mutations.
 				resp = requestHeadersResponse(nil, nil)
 			case req.GetResponseHeaders() != nil:
+				// Send a response for response header with no mutations.
 				resp = responseHeadersResponse(nil, nil)
 			case req.GetResponseTrailers() != nil:
+				// When the response trailers arrive, return an immediate response with
+				// permission denied status and a header mutation instructing the filter
+				// to set "test-trailer: mutated-immediate-val".
 				resp = &v3procservicepb.ProcessingResponse{
 					Response: &v3procservicepb.ProcessingResponse_ImmediateResponse{
 						ImmediateResponse: &v3procservicepb.ImmediateResponse{
@@ -2335,8 +2462,8 @@ func (s) TestImmediateResponseTrailers(t *testing.T) {
 								SetHeaders: []*v3corepb.HeaderValueOption{
 									{
 										Header: &v3corepb.HeaderValue{
-											Key:   "test-trailer",
-											Value: "mutated-immediate-val",
+											Key:   testTrailerKey,
+											Value: immediateMutatedVal,
 										},
 										AppendAction: v3corepb.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD,
 									},
@@ -2346,7 +2473,7 @@ func (s) TestImmediateResponseTrailers(t *testing.T) {
 					},
 				}
 			default:
-				return fmt.Errorf("unexpected request: %v", req)
+				return fmt.Errorf("Unexpected request: %v", req)
 			}
 			if err := stream.Send(resp); err != nil {
 				return err
@@ -2359,19 +2486,19 @@ func (s) TestImmediateResponseTrailers(t *testing.T) {
 
 	stub := stubserver.StartTestService(t, &stubserver.StubServer{
 		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
-			// Read c1
+			// Read c1.
 			_, err := stream.Recv()
 			if err != nil {
 				return err
 			}
-			// Send response message s1
+			// Send response message s1.
 			if err := stream.Send(&testpb.StreamingOutputCallResponse{
-				Payload: &testpb.Payload{Body: []byte("s1")},
+				Payload: &testpb.Payload{Body: []byte(respBodyS1)},
 			}); err != nil {
 				return err
 			}
-			// Set trailer
-			stream.SetTrailer(metadata.Pairs("test-trailer", "original"))
+			// Set trailer.
+			stream.SetTrailer(metadata.Pairs(testTrailerKey, originalVal))
 			return nil
 		},
 	})
@@ -2384,7 +2511,7 @@ func (s) TestImmediateResponseTrailers(t *testing.T) {
 		},
 	}, stub.Address)
 	if err != nil {
-		t.Fatalf("failed to dial: %v", err)
+		t.Fatalf("Failed to dial: %v", err)
 	}
 	defer cc.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -2396,45 +2523,142 @@ func (s) TestImmediateResponseTrailers(t *testing.T) {
 		t.Fatalf("FullDuplexCall() failed: %v", err)
 	}
 
-	// Send request message c1
-	if err := stream.Send(&testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: []byte("c1")}}); err != nil {
+	// Send request message c1.
+	if err := stream.Send(&testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: []byte(reqBodyC1)}}); err != nil {
 		t.Fatalf("stream.Send() failed: %v", err)
 	}
 
-	// Recv s1 response message
+	// Recv s1 response message.
 	respMsg, err := stream.Recv()
 	if err != nil {
 		t.Fatalf("stream.Recv() failed: %v", err)
 	}
-	if got, want := string(respMsg.GetPayload().GetBody()), "s1"; got != want {
-		t.Fatalf("got response %q, want %q", got, want)
+	if got, want := string(respMsg.GetPayload().GetBody()), respBodyS1; got != want {
+		t.Fatalf("Got response %q, want %q", got, want)
 	}
 
 	if err := stream.CloseSend(); err != nil {
 		t.Fatalf("stream.CloseSend() failed: %v", err)
 	}
 	for {
-		req, err := stream.Recv()
+		_, err := stream.Recv()
 		if status.Code(err) == codes.PermissionDenied {
 			break
 		}
 		if err != nil {
 			t.Fatalf("stream.Recv() failed: %v", err)
 		}
-		fmt.Println("received message:", req.GetPayload().GetBody())
 	}
-	// Trailer() should return the headers included in the ImmediateResponse
+	// Trailer() should return the headers included in the ImmediateResponse.
 	gotTrailer := stream.Trailer()
-	if got := gotTrailer.Get("test-trailer"); len(got) != 1 || got[0] != "mutated-immediate-val" {
+	if got := gotTrailer.Get(testTrailerKey); len(got) != 1 || got[0] != immediateMutatedVal {
 		t.Fatalf("Trailer() returned %v, want test-trailer containing mutated-immediate-val", gotTrailer)
 	}
 }
 
-// TestRequestAttributes tests the scenario where request_attributes are
+// TestImmediateResponseBody tests the scenario where an immediate response
+// is received mid-stream during message body processing. Verifies that the
+// filter correctly terminates the RPC with the specified status and error
+// details.
+func (s) TestImmediateResponseBody(t *testing.T) {
+	lisAddr, _ := startTestExtProcessor(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+		for {
+			req, err := stream.Recv()
+			if err != nil {
+				if err == io.EOF {
+					return nil
+				}
+				return err
+			}
+			var resp *v3procservicepb.ProcessingResponse
+			switch {
+			case req.GetRequestHeaders() != nil:
+				// Send a response for request header with no mutations.
+				resp = requestHeadersResponse(nil, nil)
+			case req.GetRequestBody() != nil:
+				// When the request body arrives, return an immediate response with
+				// permission denied status and a header mutation instructing the filter
+				// to set "test-trailer: mutated-body-val".
+				resp = &v3procservicepb.ProcessingResponse{
+					Response: &v3procservicepb.ProcessingResponse_ImmediateResponse{
+						ImmediateResponse: &v3procservicepb.ImmediateResponse{
+							GrpcStatus: &v3procservicepb.GrpcStatus{
+								Status: uint32(codes.PermissionDenied),
+							},
+							Details: "denied on body",
+						},
+					},
+				}
+			default:
+				return fmt.Errorf("Unexpected request: %v", req)
+			}
+			if err := stream.Send(resp); err != nil {
+				return err
+			}
+		}
+	})
+
+	stub := stubserver.StartTestService(t, &stubserver.StubServer{
+		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
+			// Wait for client request message before returning.
+			_, err := stream.Recv()
+			if err != nil {
+				return err
+			}
+			return nil
+		},
+	})
+	defer stub.Stop()
+
+	cc, err := setupTestClient(t, lisAddr, &v3procfilterpb.ExternalProcessor{
+		ProcessingMode: &v3procfilterpb.ProcessingMode{
+			RequestHeaderMode: v3procfilterpb.ProcessingMode_SEND,
+			RequestBodyMode:   v3procfilterpb.ProcessingMode_GRPC,
+		},
+	}, stub.Address)
+	if err != nil {
+		t.Fatalf("Failed to dial: %v", err)
+	}
+	defer cc.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	client := testgrpc.NewTestServiceClient(cc)
+	stream, err := client.FullDuplexCall(ctx)
+	if err != nil {
+		t.Fatalf("FullDuplexCall() failed: %v", err)
+	}
+
+	// Send request message c1 to trigger body processing.
+	if err := stream.Send(&testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: []byte(reqBodyC1)}}); err != nil {
+		t.Fatalf("stream.Send() failed: %v", err)
+	}
+
+	// Calling Recv() should fail with PermissionDenied and details from the
+	// ImmediateResponse.
+	_, err = stream.Recv()
+	if status.Code(err) != codes.PermissionDenied {
+		t.Fatalf("stream.Recv() returned error: %v, want PermissionDenied", err)
+	}
+	wantErr := "denied on body"
+	if !strings.Contains(err.Error(), wantErr) {
+		t.Fatalf("stream.Recv() returned error %v, want it to contain %q", err, wantErr)
+	}
+}
+
+// TestRequestAttributes tests the scenario where request attributes are
 // configured on the filter. Verifies that all requested attribute fields are
 // correctly constructed and transmitted within the processing request sent to
 // the external processor.
 func (s) TestRequestAttributes(t *testing.T) {
+	const (
+		serviceName   = "test-service"
+		refererAttr   = "http://example.com"
+		userAgentAttr = "test-user-agent"
+		reqIDAttr     = "req-12345"
+		methodAttr    = "POST"
+		pathAttr      = "/grpc.testing.TestService/EmptyCall"
+	)
 	allAttrs := []string{
 		"request.path",
 		"request.url_path",
@@ -2450,24 +2674,28 @@ func (s) TestRequestAttributes(t *testing.T) {
 		"request.query",
 	}
 
-	lisAddr, _ := startMockProcessor(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+	lisAddr, _ := startTestExtProcessor(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+		// When the request headers arrive, inspect the processing request
+		// attributes map.
 		req, err := stream.Recv()
 		if err != nil {
 			return err
 		}
+		// Verify that the attribute map contains the key
+		// "envoy.filters.http.ext_proc" and check its fields.
 		attrs := req.GetAttributes()
 		if attrs == nil {
-			return fmt.Errorf("expected non-nil attributes in ProcessingRequest")
+			return fmt.Errorf("Expected non-nil attributes in ProcessingRequest")
 		}
 		reqStruct, ok := attrs["envoy.filters.http.ext_proc"]
 		if !ok {
-			return fmt.Errorf("missing key 'envoy.filters.http.ext_proc' in attributes map")
+			return fmt.Errorf("Missing key 'envoy.filters.http.ext_proc' in attributes map")
 		}
 
-		// Verify that set attributes ARE present.
 		fields := reqStruct.GetFields()
 
-		// Verify that unset attributes (scheme, time, protocol) are NOT set!
+		// Verify that unset attributes such as scheme, time, and protocol are not
+		// present in the fields.
 		unsetAttrs := []string{
 			"request.scheme",
 			"request.time",
@@ -2475,27 +2703,27 @@ func (s) TestRequestAttributes(t *testing.T) {
 		}
 		for _, attr := range unsetAttrs {
 			if _, exists := fields[attr]; exists {
-				return fmt.Errorf("expected unset attribute %q to NOT be set, but found: %v", attr, fields[attr])
+				return fmt.Errorf("Expected unset attribute %q to NOT be set, but found: %v", attr, fields[attr])
 			}
 		}
 
-		// Verify specific field values
-		if got, want := fields["request.method"].GetStringValue(), "POST"; got != want {
+		// Verify specific field values.
+		if got, want := fields["request.method"].GetStringValue(), methodAttr; got != want {
 			return fmt.Errorf("request.method = %q, want %q", got, want)
 		}
-		if got, want := fields["request.path"].GetStringValue(), "/grpc.testing.TestService/EmptyCall"; got != want {
+		if got, want := fields["request.path"].GetStringValue(), pathAttr; got != want {
 			return fmt.Errorf("request.path = %q, want %q", got, want)
 		}
-		if got, want := fields["request.referer"].GetStringValue(), "http://example.com"; got != want {
+		if got, want := fields["request.referer"].GetStringValue(), refererAttr; got != want {
 			return fmt.Errorf("request.referer = %q, want %q", got, want)
 		}
-		if got, want := fields["request.useragent"].GetStringValue(), "test-user-agent"; got != want {
+		if got, want := fields["request.useragent"].GetStringValue(), userAgentAttr; got != want {
 			return fmt.Errorf("request.useragent = %q, want %q", got, want)
 		}
-		if got, want := fields["request.id"].GetStringValue(), "req-12345"; got != want {
+		if got, want := fields["request.id"].GetStringValue(), reqIDAttr; got != want {
 			return fmt.Errorf("request.id = %q, want %q", got, want)
 		}
-		if got, want := fields["request.host"].GetStringValue(), "test-service"; got != want {
+		if got, want := fields["request.host"].GetStringValue(), serviceName; got != want {
 			return fmt.Errorf("request.host = %q, want %q", got, want)
 		}
 		if got, want := fields["request.query"].GetStringValue(), ""; got != want {
@@ -2517,14 +2745,14 @@ func (s) TestRequestAttributes(t *testing.T) {
 		},
 	}, stub.Address)
 	if err != nil {
-		t.Fatalf("failed to dial: %v", err)
+		t.Fatalf("Failed to dial: %v", err)
 	}
 	defer cc.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
 	client := testgrpc.NewTestServiceClient(cc)
-	callCtx := metadata.AppendToOutgoingContext(ctx, "referer", "http://example.com", "user-agent", "test-user-agent", "x-request-id", "req-12345")
+	callCtx := metadata.AppendToOutgoingContext(ctx, "referer", refererAttr, "user-agent", userAgentAttr, "x-request-id", reqIDAttr)
 	if _, err := client.EmptyCall(callCtx, &testpb.Empty{}); err != nil {
 		t.Fatalf("EmptyCall() failed: %v", err)
 	}
@@ -2542,13 +2770,13 @@ func (s) TestResponsePhaseValidationFailureDeny(t *testing.T) {
 		{
 			name: "OutOfOrderResponse",
 			processFunc: func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
-				// Receive RequestHeaders and respond correctly
+				// Receive RequestHeaders and respond correctly.
 				req, err := stream.Recv()
 				if err != nil {
 					return err
 				}
 				if req.GetRequestHeaders() == nil {
-					return fmt.Errorf("expected RequestHeaders, got %v", req)
+					return fmt.Errorf("Expected RequestHeaders, got %v", req)
 				}
 				if err := stream.Send(requestHeadersResponse(nil, nil)); err != nil {
 					return err
@@ -2583,7 +2811,7 @@ func (s) TestResponsePhaseValidationFailureDeny(t *testing.T) {
 					}
 				}
 				if respBodyReq == nil {
-					return fmt.Errorf("missing ResponseBody request")
+					return fmt.Errorf("Missing ResponseBody request")
 				}
 
 				// Respond to ResponseBody FIRST (before responding to ResponseHeaders)
@@ -2598,7 +2826,7 @@ func (s) TestResponsePhaseValidationFailureDeny(t *testing.T) {
 		{
 			name: "ResponseBodyEndOfStream",
 			processFunc: func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
-				// Receive RequestHeaders and respond correctly
+				// Receive RequestHeaders and respond with no mutations.
 				req, err := stream.Recv()
 				if err != nil {
 					return err
@@ -2622,7 +2850,7 @@ func (s) TestResponsePhaseValidationFailureDeny(t *testing.T) {
 					return err
 				}
 
-				// Receive ResponseHeaders first.
+				// Receive and echo the ResponseHeaders.
 				respHeadersReq, err := stream.Recv()
 				if err != nil {
 					return err
@@ -2668,7 +2896,7 @@ func (s) TestResponsePhaseValidationFailureDeny(t *testing.T) {
 		{
 			name: "UnexpectedResponseHeaderStatus",
 			processFunc: func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
-				// Receive RequestHeaders and respond correctly
+				// Respond to request headers with no mutations.
 				req, err := stream.Recv()
 				if err != nil {
 					return err
@@ -2680,6 +2908,7 @@ func (s) TestResponsePhaseValidationFailureDeny(t *testing.T) {
 					return err
 				}
 
+				// Receive and echo the request body.
 				reqBodyReq, err := stream.Recv()
 				if err != nil {
 					return err
@@ -2691,7 +2920,7 @@ func (s) TestResponsePhaseValidationFailureDeny(t *testing.T) {
 					return err
 				}
 
-				// Receive ResponseHeaders
+				// Receive ResponseHeaders.
 				respHeadersReq, err := stream.Recv()
 				if err != nil {
 					return err
@@ -2700,7 +2929,8 @@ func (s) TestResponsePhaseValidationFailureDeny(t *testing.T) {
 					return fmt.Errorf("Expected ResponseHeaders, got %v", respHeadersReq)
 				}
 
-				// Respond to ResponseHeaders with status: CONTINUE_AND_REPLACE!
+				// Respond to ResponseHeaders with unsupported status
+				// CONTINUE_AND_REPLACE.
 				resp := &v3procservicepb.ProcessingResponse{
 					Response: &v3procservicepb.ProcessingResponse_ResponseHeaders{
 						ResponseHeaders: &v3procservicepb.HeadersResponse{
@@ -2718,19 +2948,21 @@ func (s) TestResponsePhaseValidationFailureDeny(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			lisAddr, _ := startMockProcessor(t, tc.processFunc)
+			lisAddr, _ := startTestExtProcessor(t, tc.processFunc)
 
+			// Backend stub sends response header "backend-header: present" and
+			// response body "s1".
 			stub := stubserver.StartTestService(t, &stubserver.StubServer{
 				FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
 					_, err := stream.Recv()
 					if err != nil {
 						return err
 					}
-					// Send response headers and body without waiting for client
+					// Send response headers and body without waiting for client.
 					if err := stream.SendHeader(metadata.Pairs("backend-header", "present")); err != nil {
 						return err
 					}
-					if err := stream.Send(&testpb.StreamingOutputCallResponse{Payload: &testpb.Payload{Body: []byte("s1")}}); err != nil {
+					if err := stream.Send(&testpb.StreamingOutputCallResponse{Payload: &testpb.Payload{Body: []byte(respBodyS1)}}); err != nil {
 						return err
 					}
 					return nil
@@ -2749,7 +2981,7 @@ func (s) TestResponsePhaseValidationFailureDeny(t *testing.T) {
 				FailureModeAllow: false,
 			}, stub.Address)
 			if err != nil {
-				t.Fatalf("failed to dial: %v", err)
+				t.Fatalf("Failed to dial: %v", err)
 			}
 			defer cc.Close()
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -2761,10 +2993,12 @@ func (s) TestResponsePhaseValidationFailureDeny(t *testing.T) {
 				t.Fatalf("FullDuplexCall() failed: %v", err)
 			}
 
-			if err := stream.Send(&testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: []byte("c1")}}); err != nil {
+			if err := stream.Send(&testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: []byte(reqBodyC1)}}); err != nil {
 				t.Fatalf("stream.Send(c1) failed: %v", err)
 			}
 
+			// Verify Recv fails with status Internal and error message matching
+			// expected validation failure.
 			_, err = stream.Recv()
 			if got, want := status.Code(err), codes.Internal; got != want {
 				t.Fatalf("stream.Recv() returned status code %v, want %v", got, want)
@@ -2780,7 +3014,7 @@ func (s) TestResponsePhaseValidationFailureDeny(t *testing.T) {
 // goroutine, while Send, CloseSend, and context cancellation run in separate
 // concurrent goroutines.
 func (s) TestConcurrency(t *testing.T) {
-	lisAddr, stopMockServer := startMockProcessor(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+	lisAddr, stopMockServer := startTestExtProcessor(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
 		for {
 			req, err := stream.Recv()
 			if err == io.EOF {
@@ -2792,8 +3026,10 @@ func (s) TestConcurrency(t *testing.T) {
 			var resp *v3procservicepb.ProcessingResponse
 			switch {
 			case req.GetRequestHeaders() != nil:
+				// Send a response for request header with no mutations.
 				resp = requestHeadersResponse(nil, nil)
 			case req.GetRequestBody() != nil:
+				// For the request body, echo the payload back unchanged.
 				resp = requestBodyResponse(req.GetRequestBody().GetBody())
 			default:
 				resp = &v3procservicepb.ProcessingResponse{}
@@ -2804,6 +3040,7 @@ func (s) TestConcurrency(t *testing.T) {
 		}
 	})
 
+	// Backend stub continually receives messages and echoes payloads back.
 	stub := stubserver.StartTestService(t, &stubserver.StubServer{
 		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
 			for {
@@ -2834,7 +3071,7 @@ func (s) TestConcurrency(t *testing.T) {
 		},
 	}, stub.Address)
 	if err != nil {
-		t.Fatalf("failed to dial: %v", err)
+		t.Fatalf("Failed to dial: %v", err)
 	}
 	defer cc.Close()
 
@@ -2844,12 +3081,12 @@ func (s) TestConcurrency(t *testing.T) {
 	client := testgrpc.NewTestServiceClient(cc)
 	stream, err := client.FullDuplexCall(ctx)
 	if err != nil {
-		t.Fatalf("failed to start stream: %v", err)
+		t.Fatalf("Failed to start stream: %v", err)
 	}
 
 	// Send initial message to establish the stream and headers.
 	if err := stream.Send(&testpb.StreamingOutputCallRequest{
-		Payload: &testpb.Payload{Body: []byte("c1")},
+		Payload: &testpb.Payload{Body: []byte(reqBodyC1)},
 	}); err != nil {
 		t.Fatalf("Send(c1) failed: %v", err)
 	}
@@ -2892,10 +3129,153 @@ func (s) TestConcurrency(t *testing.T) {
 	}
 
 	if recvErr == io.EOF {
-		t.Fatalf("stream completed gracefully (EOF) but expected it to fail due to server shutdown")
+		t.Fatalf("Stream completed gracefully (EOF) but expected it to fail due to server shutdown")
 	}
 	if got, want := status.Code(recvErr), codes.Internal; got != want {
-		t.Fatalf("stream failed with status code %v, want %v (error: %v)", got, want, recvErr)
+		t.Fatalf("Stream failed with status code %v, want %v (error: %v)", got, want, recvErr)
 	}
 	wg.Wait()
+}
+
+// TestStreamTimeoutBodyPhaseAllow tests the scenario where the external
+// processor becomes unresponsive mid-stream during message body processing and
+// the configured stream timeout is reached. Verifies that even when
+// failure_mode_allow is true, the RPC terminates with an Internal error once
+// body processing has started.
+func (s) TestStreamTimeoutBodyPhaseAllow(t *testing.T) {
+	lisAddr, _ := startTestExtProcessor(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+		for {
+			req, err := stream.Recv()
+			if err != nil {
+				return err
+			}
+			if req.GetRequestHeaders() != nil {
+				if err := stream.Send(requestHeadersResponse(nil, nil)); err != nil {
+					return err
+				}
+			} else if req.GetRequestBody() != nil {
+				// Block until the stream context is canceled or times out.
+				<-stream.Context().Done()
+				return stream.Context().Err()
+			}
+		}
+	})
+
+	stub := stubserver.StartTestService(t, &stubserver.StubServer{
+		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
+			in, err := stream.Recv()
+			if err != nil {
+				return err
+			}
+			return stream.Send(&testpb.StreamingOutputCallResponse{
+				Payload: in.GetPayload(),
+			})
+		},
+	})
+	defer stub.Stop()
+
+	extProcConfig := &v3procfilterpb.ExternalProcessor{
+		GrpcService: &v3corepb.GrpcService{
+			Timeout: durationpb.New(defaultTestShortTimeout),
+		},
+		ProcessingMode: &v3procfilterpb.ProcessingMode{
+			RequestHeaderMode: v3procfilterpb.ProcessingMode_SEND,
+			RequestBodyMode:   v3procfilterpb.ProcessingMode_GRPC,
+		},
+		FailureModeAllow: true,
+	}
+	cc, err := setupTestClient(t, lisAddr, extProcConfig, stub.Address)
+	if err != nil {
+		t.Fatalf("Failed to dial: %v", err)
+	}
+	defer cc.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	client := testgrpc.NewTestServiceClient(cc)
+	stream, err := client.FullDuplexCall(ctx)
+	if err != nil {
+		t.Fatalf("FullDuplexCall() failed: %v", err)
+	}
+
+	if err := stream.Send(&testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: []byte(reqBodyC1)}}); err != nil {
+		t.Fatalf("stream.Send(c1) failed: %v", err)
+	}
+
+	_, err = stream.Recv()
+	if status.Code(err) != codes.Internal {
+		t.Fatalf("stream.Recv() returned error: %v, want Internal", err)
+	}
+	if !strings.Contains(err.Error(), "DeadlineExceeded") {
+		t.Fatalf("stream.Recv() returned error %v, want it to contain 'DeadlineExceeded'", err)
+	}
+}
+
+// TestDataplaneStreamCreationFailure tests the scenario where the external
+// processor handshake (sending and receiving request headers) succeeds, but the
+// subsequent attempt to connect to the backend (data plane stream) fails.
+// Verifies that the data plane RPC fails and the external processor stream is
+// cleanly terminated.
+func (s) TestDataplaneStreamCreationFailure(t *testing.T) {
+	procStreamClosed := grpcsync.NewEvent()
+	lisAddr, _ := startTestExtProcessor(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+		req, err := stream.Recv()
+		if err != nil {
+			return err
+		}
+		if req.GetRequestHeaders() == nil {
+			return fmt.Errorf("Expected request headers, got %v", req)
+		}
+		if err := stream.Send(requestHeadersResponse(nil, nil)); err != nil {
+			return err
+		}
+		// Subsequent Recv should fail when the data plane stream creation fails and
+		// cancels the filter context.
+		_, err = stream.Recv()
+		if err != nil {
+			procStreamClosed.Fire()
+			return nil
+		}
+		return fmt.Errorf("Expected processor stream to close upon backend failure, got nil error")
+	})
+
+	lis, err := testutils.LocalTCPListener()
+	if err != nil {
+		t.Fatalf("testutils.LocalTCPListener() failed: %v", err)
+	}
+	closedBackendAddr := lis.Addr().String()
+	lis.Close()
+
+	extProcConfig := &v3procfilterpb.ExternalProcessor{
+		ProcessingMode: &v3procfilterpb.ProcessingMode{
+			RequestHeaderMode: v3procfilterpb.ProcessingMode_SEND,
+		},
+		FailureModeAllow: true,
+	}
+	cc, err := setupTestClient(t, lisAddr, extProcConfig, closedBackendAddr)
+	if err != nil {
+		t.Fatalf("Failed to dial: %v", err)
+	}
+	defer cc.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	client := testgrpc.NewTestServiceClient(cc)
+	stream, err := client.FullDuplexCall(ctx)
+	if err != nil {
+		t.Fatalf("FullDuplexCall() failed: %v", err)
+	}
+	stream.Send(&testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: []byte(reqBodyC1)}})
+	_, err = stream.Recv()
+	if status.Code(err) != codes.Unavailable {
+		t.Fatalf("stream.Recv() returned error: %v, want Unavailable", err)
+	}
+
+	select {
+	case <-procStreamClosed.Done():
+	case <-ctx.Done():
+		t.Fatal("Timeout waiting for processor stream to close after backend failure")
+	}
 }

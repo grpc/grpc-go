@@ -745,6 +745,8 @@ func (cs *clientStream) requestForwardingToDataplaneLoop(msgType protoreflect.Me
 			}
 			cs.mutatedReqBuffer.Load()
 
+			// As per gRFC A93, ignore `end_of_stream_without_message` if
+			// `end_of_stream` is false.
 			if streamedResp.GetEndOfStream() && streamedResp.GetEndOfStreamWithoutMessage() {
 				dataplaneStream.CloseSend()
 				return
@@ -1306,14 +1308,10 @@ func (cs *clientStream) waitForTrailerProcessing(recvErr error) error {
 // convertBodyMode converts the body mode from processingMode to
 // v3procfilterpb.ProcessingMode_BodySendMode.
 func convertBodyMode(mode processingMode) v3procfilterpb.ProcessingMode_BodySendMode {
-	switch mode {
-	case modeSkip:
-		return v3procfilterpb.ProcessingMode_NONE
-	case modeSend:
+	if mode == modeSend {
 		return v3procfilterpb.ProcessingMode_GRPC
-	default:
-		return v3procfilterpb.ProcessingMode_NONE
 	}
+	return v3procfilterpb.ProcessingMode_NONE
 }
 
 func getHeader(md metadata.MD, added [][]string, key string) string {
