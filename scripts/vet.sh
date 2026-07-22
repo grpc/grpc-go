@@ -206,6 +206,7 @@ GetMatchSubjectAltNames
 GetPrefixMatch
 GetSafeRegexMatch
 GetSuffixMatch
+GetSourceIp
 GetTlsCertificateCertificateProviderInstance
 GetValidationContextCertificateProviderInstance
 XXXXX PleaseIgnoreUnused'
