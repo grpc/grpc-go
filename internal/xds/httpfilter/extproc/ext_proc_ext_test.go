@@ -737,8 +737,13 @@ func (s) TestProtocolConfigInFirstMessage(t *testing.T) {
 				// Send a response for request header with no mutations.
 				resp = requestHeadersResponse(nil, nil)
 			case req.GetRequestBody() != nil:
+				body := req.GetRequestBody()
+				if body.GetEndOfStreamWithoutMessage() || body.GetEndOfStream() {
+					resp = requestBodyResponseWithEOS(body.GetBody(), true)
+					break
+				}
 				// Echo the request body back as is.
-				resp = requestBodyResponse(req.GetRequestBody().GetBody())
+				resp = requestBodyResponse(body.GetBody())
 			case req.GetResponseHeaders() != nil:
 				// Send a response for response header with no mutations.
 				resp = responseHeadersResponse(nil, nil)
