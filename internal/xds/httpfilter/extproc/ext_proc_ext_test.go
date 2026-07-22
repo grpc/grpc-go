@@ -417,7 +417,7 @@ func (s) TestObservabilitySkipProcessingModes(t *testing.T) {
 // correctly forwards headers and bodies to the processor with
 // ObservabilityMode=true, does not expect any responses back, and successfully
 // completes the streaming RPC.
-func (s) TestAllSendStreaming(t *testing.T) {
+func (s) TestObservabilityAllSendStreaming(t *testing.T) {
 	procDone := make(chan struct{})
 	errCh := make(chan error, 1)
 	extProcAddr := startMockProcessor(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
@@ -698,7 +698,7 @@ func (s) TestAllSendStreaming(t *testing.T) {
 // TestDeferredCloseTimeout verifies that in observability mode, the client
 // delays closing the processor stream by the configured DeferredCloseTimeout
 // duration after the data plane RPC has completed.
-func (s) TestDeferredCloseTimeout(t *testing.T) {
+func (s) TestObservabilityDeferredCloseTimeout(t *testing.T) {
 	var procCancelTime time.Time
 	var procCancelErr error
 	procDone := make(chan struct{})
@@ -926,7 +926,63 @@ func (s) TestObservabilityFailureMode(t *testing.T) {
 	}
 }
 
-func (s) TestStreamFailureBodyPhaseDeny(t *testing.T) {
+// TestObservabilityProcStreamFailDenyUnary verifies that when the external
+// processor stream fails immediately with an error (and FailureModeAllow=false),
+// a unary RPC to a correctly working stub server either succeeds (if the RPC
+// completes before the async extproc error cancels the stream) or fails with the
+// error returned by the proc server.
+func (s) TestObservabilityProcStreamFailDenyUnary(t *testing.T) {
+	extProcAddr := startMockProcessor(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+		return status.Error(codes.Unavailable, "proc server immediate failure")
+	})
+
+	stub := stubserver.StartTestService(t, &stubserver.StubServer{
+		UnaryCallF: func(_ context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			return &testpb.SimpleResponse{Payload: in.GetPayload()}, nil
+		},
+	})
+	defer stub.Stop()
+
+	cc, err := setupTestClient(t, extProcAddr, &v3procfilterpb.ExternalProcessor{
+		ProcessingMode: &v3procfilterpb.ProcessingMode{
+			RequestHeaderMode: v3procfilterpb.ProcessingMode_SEND,
+		},
+		ObservabilityMode:    true,
+		FailureModeAllow:     false,
+		DeferredCloseTimeout: durationpb.New(defaultTestShortTimeout),
+	}, stub.Address)
+	if err != nil {
+		t.Fatalf("setupTestClient() failed: %v", err)
+	}
+	defer cc.Close()
+
+	client := testgrpc.NewTestServiceClient(cc)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	// Because external processor stream failure is processed asynchronously in
+	// ObservabilityMode, the fast unary RPC on the data plane may finish before
+	// the background stream cancellation takes effect. Thus, UnaryCall either
+	// succeeds (err == nil) or fails with a wrapped extproc error.
+	_, err = client.UnaryCall(ctx, &testpb.SimpleRequest{Payload: &testpb.Payload{Body: []byte("a")}})
+	if err != nil {
+		// Any error originating from the external processor stream (synchronous
+		// init or asynchronous stream loop) is wrapped in codes.Internal with an
+		// "extproc:" prefix.
+		if code := status.Code(err); code != codes.Internal {
+			t.Fatalf("UnaryCall() status code = %v, want %v (or nil)", code, codes.Internal)
+		}
+		if !strings.Contains(err.Error(), "extproc:") {
+			t.Fatalf("UnaryCall() returned error %v, want error containing extproc:", err)
+		}
+	}
+}
+
+// TestObservabilityStreamFaileDeny verifies that when the external processor
+// stream fails abruptly during the request body phase in observability mode
+// (with FailureModeAllow=false), a bidirectional streaming RPC fails with an
+// internal error originating from the external processor filter.
+func (s) TestObservabilityStreamFailDeny(t *testing.T) {
 	processFunc := func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
 		// Receive headers and send back.
 		req, err := stream.Recv()
