@@ -316,10 +316,7 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 		}
 
 		onFinishFunc := func(error) {
-			go func() {
-				time.Sleep(ocs.config.deferredCloseTimeout)
-				ocs.procCancel()
-			}()
+			time.AfterFunc(ocs.config.deferredCloseTimeout, ocs.procCancel)
 		}
 		newOpts := append(opts, grpc.OnFinish(onFinishFunc))
 
@@ -337,9 +334,9 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 	return newStream(ctx, opts...)
 }
 
-// clientStream implements resolver.ClientStream to coordinate bidirectional
+// observabilityClientStream implements resolver.ClientStream to coordinate
 // message exchanges between the application client, the external processor, and
-// the backend dataplane.
+// the backend dataplane in observability mode.
 type observabilityClientStream struct {
 	ctx        context.Context
 	cancel     func()

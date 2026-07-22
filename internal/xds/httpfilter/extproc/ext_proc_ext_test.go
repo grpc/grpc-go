@@ -35,13 +35,13 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 	stats "google.golang.org/grpc/internal/testutils/stats"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
-
 	"google.golang.org/grpc/internal/testutils/xds/e2e/setup"
-	_ "google.golang.org/grpc/internal/xds/httpfilter/extproc"
 	iextproc "google.golang.org/grpc/internal/xds/httpfilter/extproc/internal"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/durationpb"
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
@@ -50,8 +50,6 @@ import (
 	v3procservicepb "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
-	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/durationpb"
 )
 
 type s struct {
@@ -299,8 +297,8 @@ func (s) TestObservabilityAllSendUnary(t *testing.T) {
 	if err != nil {
 		t.Fatalf("UnaryCall() failed: %v", err)
 	}
-	if string(resp.GetPayload().GetBody()) != "hello-extproc-echo" {
-		t.Fatalf("UnaryCall() returned payload: %s, want: %s", resp.GetPayload().GetBody(), "hello-extproc-echo")
+	if got, want := string(resp.GetPayload().GetBody()), "hello-extproc-echo"; got != want {
+		t.Fatalf("UnaryCall() payload = %q, want %q", got, want)
 	}
 
 	select {
@@ -393,8 +391,8 @@ func (s) TestObservabilitySkipProcessingModes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("UnaryCall() failed: %v", err)
 	}
-	if string(resp.GetPayload().GetBody()) != "hello-skip" {
-		t.Fatalf("UnaryCall() returned payload: %s, want: %s", resp.GetPayload().GetBody(), "hello-skip")
+	if got, want := string(resp.GetPayload().GetBody()), "hello-skip"; got != want {
+		t.Fatalf("UnaryCall() payload = %q, want %q", got, want)
 	}
 
 	select {
@@ -668,8 +666,8 @@ func (s) TestObservabilityAllSendStreaming(t *testing.T) {
 		if err != nil {
 			t.Fatalf("stream.Recv() failed: %v", err)
 		}
-		if string(resp.GetPayload().GetBody()) != string(msg) {
-			t.Fatalf("stream.Recv() returned payload: %s, want: %s", resp.GetPayload().GetBody(), string(msg))
+		if got, want := string(resp.GetPayload().GetBody()), string(msg); got != want {
+			t.Fatalf("stream.Recv() payload = %q, want %q", got, want)
 		}
 	}
 
