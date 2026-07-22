@@ -416,17 +416,16 @@ func (s) TestAllSendUnary(t *testing.T) {
 		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			md, ok := metadata.FromIncomingContext(ctx)
 			if !ok {
-				t.Error("Server did not receive incoming metadata")
 				return nil, fmt.Errorf("Server did not receive incoming metadata")
 			}
 			if vals := md.Get(reqHeaderMutated); len(vals) == 0 || vals[0] != "true" {
-				t.Errorf("Missing or invalid request-mutated header: %v", vals)
+				return nil, fmt.Errorf("Missing or invalid request-mutated header: %v", vals)
 			}
 			if vals := md.Get(reqHeaderToRemove); len(vals) > 0 {
-				t.Errorf("Request-to-remove header was not removed: %v", vals)
+				return nil, fmt.Errorf("Request-to-remove header was not removed: %v", vals)
 			}
 			if body := string(in.GetPayload().GetBody()); body != reqBodyMutated {
-				t.Errorf("Unexpected request body: %q, want: %q", body, reqBodyMutated)
+				return nil, fmt.Errorf("Unexpected request body: %q, want: %q", body, reqBodyMutated)
 			}
 
 			if err := grpc.SendHeader(ctx, metadata.Pairs(respHeaderToRemove, "true")); err != nil {
@@ -570,12 +569,11 @@ func (s) TestStreamingModifications(t *testing.T) {
 			// Verify if the data plane server receives the mutated headers.
 			md, ok := metadata.FromIncomingContext(stream.Context())
 			if !ok {
-				t.Error("Server did not receive incoming metadata")
 				return fmt.Errorf("Server did not receive incoming metadata")
 			}
 			hdr := md.Get(reqHeaderModified)
 			if len(hdr) != 1 || hdr[0] != "true" {
-				t.Errorf("Missing or invalid req-header-modified: %v", hdr)
+				return fmt.Errorf("Missing or invalid req-header-modified: %v", hdr)
 			}
 
 			// Explicitly send response headers to client.
@@ -596,7 +594,7 @@ func (s) TestStreamingModifications(t *testing.T) {
 				msgCount++
 				wantBody := fmt.Sprintf("c%d_req_body_modified", msgCount)
 				if string(in.GetPayload().GetBody()) != wantBody {
-					t.Errorf("Server received unexpected message body: %s, want: %s", string(in.GetPayload().GetBody()), wantBody)
+					return fmt.Errorf("Server received unexpected message body: %s, want: %s", string(in.GetPayload().GetBody()), wantBody)
 				}
 				// Send one response message for each client request.
 				if err := stream.Send(&testpb.StreamingOutputCallResponse{
