@@ -42,6 +42,10 @@ type RPCInfo struct {
 	// efficiency reasons.  SelectConfig should not be blocking.
 	Context context.Context
 	Method  string // i.e. "/Service/Method"
+	// Authority is the target authority (host) name of the RPC. This is required
+	// for HTTP filters (such as external processing) to populate request
+	// attributes.
+	Authority string
 }
 
 // RPCConfig describes the configuration to use for each RPC.
