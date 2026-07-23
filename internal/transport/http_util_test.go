@@ -33,6 +33,7 @@ import (
 
 	"golang.org/x/net/http2"
 	"google.golang.org/grpc/internal/envconfig"
+	imem "google.golang.org/grpc/internal/mem"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/transport/readyreader"
 	"google.golang.org/grpc/mem"
@@ -278,6 +279,156 @@ func (s) TestWriteBadConnection(t *testing.T) {
 		if !errors.Is(err, io.EOF) {
 			t.Fatalf("Write() = %v, want error presence = %v", err, io.EOF)
 		}
+	}
+	if writer.poolHandle != nil || writer.buf != nil {
+		t.Fatalf("failed Write() retained pooled buffer: handle=%p, buf=%p", writer.poolHandle, writer.buf)
+	}
+}
+
+func TestBufWriterSharedFlushAllocations(t *testing.T) {
+	pool := imem.NewDirtySimplePool()
+	writer := newBufWriter(io.Discard, defaultWriteBufSize, pool)
+	payload := make([]byte, 128)
+
+	allocs := testing.AllocsPerRun(1000, func() {
+		if _, err := writer.Write(payload); err != nil {
+			t.Fatalf("Write() failed: %v", err)
+		}
+		if err := writer.Flush(); err != nil {
+			t.Fatalf("Flush() failed: %v", err)
+		}
+	})
+	if allocs != 0 {
+		t.Fatalf("shared Write()+Flush() allocated %v times, want 0", allocs)
+	}
+}
+
+func TestBufWriterSharedBufferOwnership(t *testing.T) {
+	const batchSize = 8
+	pool := imem.NewDirtySimplePool()
+	var conn bytes.Buffer
+	writer := newBufWriter(&conn, batchSize, pool)
+
+	if _, err := writer.Write([]byte("abc")); err != nil {
+		t.Fatalf("Write() failed: %v", err)
+	}
+	if writer.poolHandle == nil {
+		t.Fatal("Write() did not retain the pooled buffer handle")
+	}
+	if err := writer.Flush(); err != nil {
+		t.Fatalf("Flush() failed: %v", err)
+	}
+	if writer.poolHandle != nil || writer.buf != nil {
+		t.Fatalf("Flush() retained pooled buffer: handle=%p, buf=%p", writer.poolHandle, writer.buf)
+	}
+	if got := conn.String(); got != "abc" {
+		t.Fatalf("conn data = %q, want %q", got, "abc")
+	}
+	if err := writer.Flush(); err != nil {
+		t.Fatalf("second Flush() failed: %v", err)
+	}
+
+	if _, err := writer.Write([]byte("12345678")); err != nil {
+		t.Fatalf("full-buffer Write() failed: %v", err)
+	}
+	if writer.poolHandle == nil {
+		t.Fatal("full-buffer Write() released the handle during its internal flush")
+	}
+	if writer.offset != 0 {
+		t.Fatalf("full-buffer Write() offset = %d, want 0", writer.offset)
+	}
+	if err := writer.Flush(); err != nil {
+		t.Fatalf("Flush() after full-buffer Write() failed: %v", err)
+	}
+	if writer.poolHandle != nil || writer.buf != nil {
+		t.Fatalf("Flush() retained pooled buffer: handle=%p, buf=%p", writer.poolHandle, writer.buf)
+	}
+}
+
+func TestBufWriterFlushErrorReleasesSharedBuffer(t *testing.T) {
+	pool := imem.NewDirtySimplePool()
+	writer := newBufWriter(&badNetworkConn{}, 8, pool)
+
+	if _, err := writer.Write([]byte("abc")); err != nil {
+		t.Fatalf("Write() failed before flush: %v", err)
+	}
+	if writer.poolHandle == nil {
+		t.Fatal("Write() did not retain the pooled buffer handle")
+	}
+	if err := writer.Flush(); !errors.Is(err, io.EOF) {
+		t.Fatalf("Flush() error = %v, want %v", err, io.EOF)
+	}
+	if writer.poolHandle != nil || writer.buf != nil {
+		t.Fatalf("failed Flush() retained pooled buffer: handle=%p, buf=%p", writer.poolHandle, writer.buf)
+	}
+	if _, err := writer.Write([]byte("def")); !errors.Is(err, io.EOF) {
+		t.Fatalf("Write() after failed Flush() error = %v, want %v", err, io.EOF)
+	}
+	if writer.poolHandle != nil {
+		t.Fatal("Write() after failed Flush() acquired another pooled buffer")
+	}
+}
+
+var benchmarkBufWriterSink *bufWriter
+
+func BenchmarkBufWriter(b *testing.B) {
+	const payloadSize = 128
+	payload := make([]byte, payloadSize)
+
+	for _, test := range []struct {
+		name string
+		pool *imem.SimpleBufferPool
+	}{
+		{name: "Shared", pool: imem.NewDirtySimplePool()},
+		{name: "Unshared"},
+	} {
+		b.Run(test.name, func(b *testing.B) {
+			b.Run("New", func(b *testing.B) {
+				b.ReportAllocs()
+				for i := 0; i < b.N; i++ {
+					benchmarkBufWriterSink = newBufWriter(io.Discard, defaultWriteBufSize, test.pool)
+				}
+			})
+
+			b.Run("WriteAndFlush", func(b *testing.B) {
+				writer := newBufWriter(io.Discard, defaultWriteBufSize, test.pool)
+				b.ReportAllocs()
+				b.SetBytes(payloadSize)
+				b.ResetTimer()
+				for i := 0; i < b.N; i++ {
+					if _, err := writer.Write(payload); err != nil {
+						b.Fatal(err)
+					}
+					if err := writer.Flush(); err != nil {
+						b.Fatal(err)
+					}
+				}
+			})
+
+			b.Run("EmptyFlush", func(b *testing.B) {
+				writer := newBufWriter(io.Discard, defaultWriteBufSize, test.pool)
+				b.ReportAllocs()
+				b.ResetTimer()
+				for i := 0; i < b.N; i++ {
+					if err := writer.Flush(); err != nil {
+						b.Fatal(err)
+					}
+				}
+			})
+
+			b.Run("FullBufferWrite", func(b *testing.B) {
+				writer := newBufWriter(io.Discard, defaultWriteBufSize, test.pool)
+				fullBuffer := make([]byte, defaultWriteBufSize)
+				b.ReportAllocs()
+				b.SetBytes(defaultWriteBufSize)
+				b.ResetTimer()
+				for i := 0; i < b.N; i++ {
+					if _, err := writer.Write(fullBuffer); err != nil {
+						b.Fatal(err)
+					}
+				}
+			})
+		})
 	}
 }
 

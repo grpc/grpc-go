@@ -299,12 +299,13 @@ func decodeGrpcMessageUnchecked(msg string) string {
 }
 
 type bufWriter struct {
-	pool      *imem.SimpleBufferPool
-	buf       []byte
-	offset    int
-	batchSize int
-	conn      io.Writer
-	err       error
+	pool       *imem.SimpleBufferPool
+	poolHandle *[]byte
+	buf        []byte
+	offset     int
+	batchSize  int
+	conn       io.Writer
+	err        error
 }
 
 func newBufWriter(conn io.Writer, batchSize int, pool *imem.SimpleBufferPool) *bufWriter {
@@ -329,8 +330,8 @@ func (w *bufWriter) Write(b []byte) (int, error) {
 		return n, toIOError(err)
 	}
 	if w.buf == nil {
-		b := w.pool.Get(w.batchSize)
-		w.buf = *b
+		w.poolHandle = w.pool.Get(w.batchSize)
+		w.buf = *w.poolHandle
 	}
 	written := 0
 	for len(b) > 0 {
@@ -350,13 +351,17 @@ func (w *bufWriter) Write(b []byte) (int, error) {
 
 func (w *bufWriter) Flush() error {
 	err := w.flushKeepBuffer()
-	// Only release the buffer if we are in a "shared" mode
-	if w.buf != nil && w.pool != nil {
-		b := w.buf
-		w.pool.Put(&b)
-		w.buf = nil
-	}
+	w.releaseBuffer()
 	return err
+}
+
+func (w *bufWriter) releaseBuffer() {
+	if w.poolHandle != nil {
+		poolHandle := w.poolHandle
+		w.poolHandle = nil
+		w.buf = nil
+		w.pool.Put(poolHandle)
+	}
 }
 
 func (w *bufWriter) flushKeepBuffer() error {
@@ -369,6 +374,9 @@ func (w *bufWriter) flushKeepBuffer() error {
 	_, w.err = w.conn.Write(w.buf[:w.offset])
 	w.err = toIOError(w.err)
 	w.offset = 0
+	if w.err != nil {
+		w.releaseBuffer()
+	}
 	return w.err
 }
 
