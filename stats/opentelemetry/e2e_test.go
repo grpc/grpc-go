@@ -991,6 +991,85 @@ func (s) TestMetricsAndTracesOptionEnabled(t *testing.T) {
 	validateTraces(t, spans, wantSpanInfos)
 }
 
+// TestTracingOnlyOptionEnabled verifies that tracing works correctly when only
+// tracing is enabled (metrics are disabled). It ensures that the method name
+// is correctly populated in both client and server spans.
+func (s) TestTracingOnlyOptionEnabled(t *testing.T) {
+	opts, exporter := defaultTraceOptions(t)
+
+	ss := setupStubServer(t, nil, opts)
+	defer ss.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	if _, err := ss.Client.UnaryCall(ctx, &testpb.SimpleRequest{Payload: &testpb.Payload{
+		Body: make([]byte, 100),
+	}}); err != nil {
+		t.Fatalf("Unexpected error from UnaryCall: %v", err)
+	}
+
+	wantSpanInfos := []traceSpanInfo{
+		{
+			name:     "Recv.grpc.testing.TestService.UnaryCall",
+			spanKind: oteltrace.SpanKindServer.String(),
+			status:   otelcodes.Ok,
+			events: []trace.Event{
+				{
+					Name: "Inbound message",
+					Attributes: []attribute.KeyValue{
+						{Key: "sequence-number", Value: attribute.IntValue(0)},
+						{Key: "message-size", Value: attribute.IntValue(104)},
+					},
+				},
+				{
+					Name: "Outbound message",
+					Attributes: []attribute.KeyValue{
+						{Key: "sequence-number", Value: attribute.IntValue(0)},
+						{Key: "message-size", Value: attribute.IntValue(104)},
+					},
+				},
+			},
+		},
+		{
+			name:     "Attempt.grpc.testing.TestService.UnaryCall",
+			spanKind: oteltrace.SpanKindInternal.String(),
+			status:   otelcodes.Ok,
+			attributes: []attribute.KeyValue{
+				{Key: "previous-rpc-attempts", Value: attribute.IntValue(0)},
+				{Key: "transparent-retry", Value: attribute.BoolValue(false)},
+			},
+			events: []trace.Event{
+				{
+					Name: "Outbound message",
+					Attributes: []attribute.KeyValue{
+						{Key: "sequence-number", Value: attribute.IntValue(0)},
+						{Key: "message-size", Value: attribute.IntValue(104)},
+					},
+				},
+				{
+					Name: "Inbound message",
+					Attributes: []attribute.KeyValue{
+						{Key: "sequence-number", Value: attribute.IntValue(0)},
+						{Key: "message-size", Value: attribute.IntValue(104)},
+					},
+				},
+			},
+		},
+		{
+			name:     "Sent.grpc.testing.TestService.UnaryCall",
+			spanKind: oteltrace.SpanKindClient.String(),
+			status:   otelcodes.Ok,
+		},
+	}
+
+	spans, err := waitForTraceSpans(ctx, exporter, wantSpanInfos)
+	if err != nil {
+		t.Fatal(err)
+	}
+	validateTraces(t, spans, wantSpanInfos)
+}
+
 // TestSpan verifies that the gRPC Trace Binary propagator correctly
 // propagates span context between a client and server using the grpc-
 // trace-bin header. It sets up a stub server with OpenTelemetry tracing
@@ -2444,7 +2523,7 @@ func (s) TestRelayContextCollisionTracing(t *testing.T) {
 	_, _ = relayServer.Client.UnaryCall(ctx, &testpb.SimpleRequest{})
 
 	wantSpans := []traceSpanInfo{
-		{name: "Recv.", spanKind: "server"},
+		{name: "Recv.grpc.testing.TestService.UnaryCall", spanKind: "server"},
 		{name: "Sent.grpc.testing.TestService.EmptyCall", spanKind: "client"},
 	}
 	spans, err := waitForTraceSpans(ctx, relayTraceExporter, wantSpans)
@@ -2454,7 +2533,7 @@ func (s) TestRelayContextCollisionTracing(t *testing.T) {
 
 	var srvTraceID, cliTraceID oteltrace.TraceID
 	for _, span := range spans {
-		if span.Name == "Recv." && span.SpanKind == oteltrace.SpanKindServer {
+		if span.Name == "Recv.grpc.testing.TestService.UnaryCall" && span.SpanKind == oteltrace.SpanKindServer {
 			srvTraceID = span.SpanContext.TraceID()
 		}
 		if span.Name == "Sent.grpc.testing.TestService.EmptyCall" && span.SpanKind == oteltrace.SpanKindClient {
