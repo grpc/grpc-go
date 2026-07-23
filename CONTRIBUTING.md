@@ -75,6 +75,10 @@ smoothly and quickly.
   GitHub, which will trigger a GitHub Actions run that you can use to verify
   everything is passing.
 
+- For changes that affect **performance**, reviewers may ask for benchmark
+  results. See [`benchmark/README.md`](benchmark/README.md) for the commonly
+  used ways to run the benchmarks and compare a change against a baseline.
+
 - Note that there are two GitHub actions checks that need not be green:
 
   1. We test the freshness of the generated proto code we maintain via the
