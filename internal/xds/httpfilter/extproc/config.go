@@ -44,7 +44,7 @@ type baseConfig struct {
 	// failureModeAllow specifies the behavior when the RPC to the external
 	// processing server fails. If true, the dataplane RPC will be allowed to
 	// continue. If false, the data plane RPC will be failed with a grpc status
-	// code of UNAVAILABLE.
+	// code of INTERNAL.
 	failureModeAllow bool
 	// Attributes to be sent to the external processing server along with the
 	// request and response dataplane events.

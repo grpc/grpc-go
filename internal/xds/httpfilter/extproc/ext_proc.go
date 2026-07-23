@@ -599,6 +599,10 @@ func (cs *clientStream) recvFromDataplane(m any) error {
 			return cs.procStreamErr.Load().(error)
 		}
 		cs.initiateResponseTrailerProcessing()
+		// Wait for trailer processing to be done to make sure we are able to return
+		// correct error and fail RPC if the trailer processing fails. This needs to
+		// be done because Trailer() does not return an error. TODO: Verify if the
+		// wait is acceptable.
 		return cs.waitForTrailerProcessing(err)
 	}
 	return nil
@@ -611,7 +615,9 @@ func (cs *clientStream) recvFromDataplane(m any) error {
 // dataplane stream instead.
 func (cs *clientStream) sendClientReqToProcServer(req *v3procservicepb.ProcessingRequest) (grpc.ClientStream, error) {
 	// Ignoring the failureMode as we will be sending the request to proc server.
-	cs.ignoreFailureMode.CompareAndSwap(false, true)
+	if !cs.ignoreFailureMode.Load() {
+		cs.ignoreFailureMode.Store(true)
+	}
 
 	select {
 	case cs.procSendCh <- req:
@@ -706,7 +712,9 @@ func (cs *clientStream) responseForwardingToProcServerLoop(msgType protoreflect.
 			},
 		}
 
-		cs.ignoreFailureMode.CompareAndSwap(false, true)
+		if !cs.ignoreFailureMode.Load() {
+			cs.ignoreFailureMode.Store(true)
+		}
 
 		select {
 		case cs.procSendCh <- req:
@@ -973,8 +981,12 @@ func (cs *clientStream) sendToProcServerLoop() {
 				return
 			}
 			if err := cs.procStream.Send(req); err != nil {
-				// If the send failed, do not call failProcStream immediately. The Recv
-				// loop will retrieve the actual status error from the server and
+				if err != io.EOF {
+					// For non-EOF client-side send errors, fail the stream immediately.
+					cs.failProcStream(err)
+				}
+				// If Send returned io.EOF, the server closed the stream early. Let
+				// the Recv loop retrieve the actual status error from the server and
 				// propagate it.
 				return
 			}
