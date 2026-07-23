@@ -3077,11 +3077,9 @@ func (s) TestConcurrency(t *testing.T) {
 	}
 
 	var wg sync.WaitGroup
-	wg.Add(1)
 
 	// Send concurrently in a background goroutine.
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		for j := 0; j < 50; j++ {
 			if err := stream.Send(&testpb.StreamingOutputCallRequest{
 				Payload: &testpb.Payload{Body: fmt.Appendf(nil, "body-%d", j)},
@@ -3089,15 +3087,13 @@ func (s) TestConcurrency(t *testing.T) {
 				break
 			}
 			if j == 10 {
-				wg.Add(1)
-				go func() {
-					defer wg.Done()
+				wg.Go(func() {
 					stopMockServer()
-				}()
+				})
 			}
 		}
 		_ = stream.CloseSend()
-	}()
+	})
 
 	var recvErr error
 	for {
