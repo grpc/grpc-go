@@ -1267,6 +1267,7 @@ func (s) TestStreamFailureHeaderPhaseDeny(t *testing.T) {
 			processFunc: func(v3procservicepb.ExternalProcessor_ProcessServer) error {
 				return status.Error(codes.Unavailable, "abrupt stream failure")
 			},
+			wantMsgContains: "abrupt stream failure",
 		},
 		{
 			name: "UnexpectedHeaderStatus",
@@ -1533,28 +1534,12 @@ func (s) TestStreamFailureBodyPhaseAllow(t *testing.T) {
 		bodyBytes := req.GetRequestBody().GetBody()
 		reqMsg := new(testpb.StreamingOutputCallRequest)
 		if err := proto.Unmarshal(bodyBytes, reqMsg); err != nil {
-			return status.Errorf(codes.Internal, "failed to unmarshal request body: %v", err)
+			return fmt.Errorf("failed to unmarshal request body: %v", err)
 		}
 		if got, want := string(reqMsg.GetPayload().GetBody()), reqBodyC1; got != want {
-			return status.Errorf(codes.FailedPrecondition, "expected body %q, got %q", want, got)
+			return fmt.Errorf("expected body %q, got %q", want, got)
 		}
-		// Send response to c1 to keep it going.
-		resp = &v3procservicepb.ProcessingResponse{
-			Response: &v3procservicepb.ProcessingResponse_RequestBody{
-				RequestBody: &v3procservicepb.BodyResponse{
-					Response: &v3procservicepb.CommonResponse{
-						Status: v3procservicepb.CommonResponse_CONTINUE,
-						BodyMutation: &v3procservicepb.BodyMutation{
-							Mutation: &v3procservicepb.BodyMutation_StreamedResponse{
-								StreamedResponse: &v3procservicepb.StreamedBodyResponse{
-									Body: bodyBytes,
-								},
-							},
-						},
-					},
-				},
-			},
-		}
+		resp = requestBodyResponse(bodyBytes)
 		if err := stream.Send(resp); err != nil {
 			return err
 		}
@@ -1731,8 +1716,9 @@ func (s) TestStreamFailureBodyModeNoneAllow(t *testing.T) {
 
 // TestStreamFailureTrailerPhaseAllow tests the scenario where the external
 // processor stream fails abruptly during the response trailer phase while
-// failure_mode_allow is true. Verifies that calling Trailer() does not hang and
-// instead returns the unmutated trailers directly from the data plane stream.
+// failure_mode_allow is true and body mode are not send. Verifies that calling
+// Trailer() does not hang and instead returns the unmutated trailers directly
+// from the data plane stream.
 func (s) TestStreamFailureTrailerPhaseAllow(t *testing.T) {
 	const (
 		testTrailerKey = "test-trailer"
@@ -1833,7 +1819,7 @@ func (s) TestStreamFailureTrailerPhaseAllow(t *testing.T) {
 // while failure_mode_allow is true. Verifies that calling Header() does not
 // hang and instead returns the unmutated response headers amd messages from the
 // data plane stream.
-func TestStreamFailureResponseHeaderPhaseAllow(t *testing.T) {
+func (s) TestStreamFailureResponseHeaderPhaseAllow(t *testing.T) {
 	const (
 		testHeaderKey = "test-header"
 		originalVal   = "original"
@@ -1955,6 +1941,7 @@ func (s) TestStreamFailureBodyPhaseDeny(t *testing.T) {
 				}
 				return status.Error(codes.Unavailable, "abrupt stream failure in body phase")
 			},
+			wantMsgContains: "abrupt stream failure in body phase",
 		},
 		{
 			name: "GrpcMessageCompressedUnsupported",
@@ -2166,22 +2153,13 @@ func (s) TestDrainingUnderLoad(t *testing.T) {
 				return err
 			}
 			if req.GetRequestBody() != nil {
-				resp := &v3procservicepb.ProcessingResponse{
-					Response: &v3procservicepb.ProcessingResponse_RequestBody{
-						RequestBody: &v3procservicepb.BodyResponse{
-							Response: &v3procservicepb.CommonResponse{
-								Status: v3procservicepb.CommonResponse_CONTINUE,
-								BodyMutation: &v3procservicepb.BodyMutation{
-									Mutation: &v3procservicepb.BodyMutation_StreamedResponse{
-										StreamedResponse: &v3procservicepb.StreamedBodyResponse{
-											Body: req.GetRequestBody().GetBody(),
-										},
-									},
-								},
-							},
-						},
-					},
+				resp := requestBodyResponse(req.GetRequestBody().GetBody())
+				if err := stream.Send(resp); err != nil {
+					return err
 				}
+			}
+			if req.GetResponseBody() != nil {
+				resp := responseBodyResponse(req.GetRequestBody().GetBody())
 				if err := stream.Send(resp); err != nil {
 					return err
 				}
@@ -2367,7 +2345,7 @@ func (s) TestClientTrailer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FullDuplexCall() failed: %v", err)
 	}
-	// 1. Premature Trailer() call before any Recv should return nil.
+	// Premature Trailer() call before any Recv should return nil.
 	if got := stream.Trailer(); got != nil {
 		t.Fatalf("Trailer() prematurely returned non-nil metadata: %v, want nil", got)
 	}
@@ -2377,7 +2355,7 @@ func (s) TestClientTrailer(t *testing.T) {
 		t.Fatalf("stream.Send() failed: %v", err)
 	}
 
-	// 2. Trailer() call before CloseSend/Recv returns EOF should return nil.
+	// Trailer() call before CloseSend/Recv returns EOF should return nil.
 	if got := stream.Trailer(); got != nil {
 		t.Fatalf("Trailer() prematurely returned non-nil metadata: %v, want nil", got)
 	}
@@ -2391,7 +2369,8 @@ func (s) TestClientTrailer(t *testing.T) {
 		t.Fatalf("Got response %q, want %q", got, want)
 	}
 
-	// 3. Trailer() call before sending c2 (so server hasn't sent trailers) should return nil.
+	// Trailer() call before sending c2 (so server hasn't sent trailers) should
+	// return nil.
 	if got := stream.Trailer(); got != nil {
 		t.Fatalf("Trailer() prematurely returned non-nil metadata: %v, want nil", got)
 	}
@@ -2416,7 +2395,8 @@ func (s) TestClientTrailer(t *testing.T) {
 		}
 	}
 
-	// 3. Calling Trailer() after stream has finished should return the mutated trailers.
+	// Calling Trailer() after stream has finished should return the mutated
+	// trailers.
 	got := stream.Trailer()
 	if vals := got.Get(testTrailerKey); len(vals) != 2 || vals[1] != mutatedVal {
 		t.Fatalf("Trailer() returned %v, want test-trailer containing mutated-val", got)
@@ -2825,6 +2805,7 @@ func (s) TestResponsePhaseValidationFailureDeny(t *testing.T) {
 				}
 				return nil
 			},
+			wantMsgContains: "external processor sent response body before sending response headers",
 		},
 		{
 			name: "ResponseBodyEndOfStream",
@@ -2895,6 +2876,7 @@ func (s) TestResponsePhaseValidationFailureDeny(t *testing.T) {
 				}
 				return stream.Send(resp)
 			},
+			wantMsgContains: "external processor unexpectedly set end of stream in response body mutation",
 		},
 		{
 			name: "UnexpectedResponseHeaderStatus",
