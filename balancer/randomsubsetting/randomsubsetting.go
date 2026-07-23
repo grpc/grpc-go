@@ -151,6 +151,15 @@ func (b *subsettingBalancer) calculateSubset(endpoints []resolver.Endpoint) []re
 		ep   resolver.Endpoint
 	}
 
+	// Empty endpoints cannot be hashed and are ignored by child policies.
+	// Remove them here so they do not count toward the requested subset size.
+	isEmpty := func(endpoint resolver.Endpoint) bool {
+		return len(endpoint.Addresses) == 0
+	}
+	if slices.ContainsFunc(endpoints, isEmpty) {
+		endpoints = slices.DeleteFunc(slices.Clone(endpoints), isEmpty)
+	}
+
 	subsetSize := b.cfg.SubsetSize
 	if len(endpoints) <= int(subsetSize) {
 		return endpoints
