@@ -263,7 +263,7 @@ func (s) TestParseConfigErrors(t *testing.T) {
 						"lookupService": "badScheme:///target"
 					}
 				}`),
-			wantErr: "rls: unregistered scheme in lookup_service",
+			wantErr: "rls: invalid lookup_service",
 		},
 		{
 			desc: "invalid lookup service timeout",

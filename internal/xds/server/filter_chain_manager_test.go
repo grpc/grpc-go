@@ -95,7 +95,7 @@ func newFilterChainManagerForTesting(t *testing.T, lis *v3listenerpb.Listener) *
 	bc, err := bootstrap.NewConfigFromContents([]byte(`{
 		"xds_servers": [
 			{
-				"server_uri": "ipv4:///127.0.0.1:443",
+				"server_uri": "passthrough:///127.0.0.1:443",
 				"channel_creds": [
 					{
 						"type": "insecure"
