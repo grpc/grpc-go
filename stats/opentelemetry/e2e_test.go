@@ -77,6 +77,7 @@ import (
 	"google.golang.org/grpc/orca"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
+	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/stats/opentelemetry"
 	"google.golang.org/grpc/stats/opentelemetry/internal/testutils"
 	"google.golang.org/grpc/status"
@@ -2075,6 +2076,121 @@ func (s) TestSubChannelMetrics(t *testing.T) {
 
 	if err := pollForWantMetrics(ctx, t, reader, disconnectionWantMetrics); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// TestSubChannelMetrics_ConnectionLifecycle verifies the subchannel metrics
+// emitted during a connection lifecycle - a failed connection attempt, a
+// successful connection attempt and a disconnection - on a gRPC channel
+// configured with the pick_first LB policy.
+func (s) TestSubChannelMetrics_ConnectionLifecycle(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	ss := &stubserver.StubServer{
+		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
+			return &testpb.Empty{}, nil
+		},
+	}
+	ss.StartServer()
+	defer ss.Stop()
+
+	pfConfig := fmt.Sprintf(`{"loadBalancingConfig": [{%q: {}}]}`, pickfirst.Name)
+	sc := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(pfConfig)
+	r := manual.NewBuilderWithScheme("whatever")
+	r.InitialState(resolver.State{
+		ServiceConfig: sc,
+		Addresses:     []resolver.Address{{Addr: "bad address"}}},
+	) // Will trigger connection failed.
+
+	grpcTarget := r.Scheme() + ":///"
+	reader := metric.NewManualReader()
+	provider := metric.NewMeterProvider(metric.WithReader(reader))
+	mo := opentelemetry.MetricsOptions{
+		MeterProvider: provider,
+		Metrics:       opentelemetry.DefaultMetrics().Add("grpc.subchannel.disconnections", "grpc.subchannel.connection_attempts_succeeded", "grpc.subchannel.connection_attempts_failed"),
+	}
+
+	cc, err := grpc.NewClient(grpcTarget, opentelemetry.DialOption(opentelemetry.Options{MetricsOptions: mo}), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
+	if err != nil {
+		t.Fatalf("NewClient() failed with error: %v", err)
+	}
+	defer cc.Close()
+
+	tsc := testgrpc.NewTestServiceClient(cc)
+	if _, err := tsc.EmptyCall(ctx, &testpb.Empty{}); err == nil {
+		t.Fatalf("EmptyCall() passed when expected to fail")
+	}
+
+	r.UpdateState(resolver.State{
+		ServiceConfig: sc,
+		Addresses:     []resolver.Address{{Addr: ss.Address}},
+	}) // Will trigger successful connection metric.
+	if _, err := tsc.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
+		t.Fatalf("EmptyCall() failed: %v", err)
+	}
+
+	// Stop the server, that should send signal to disconnect, which will
+	// eventually emit disconnection metric before ClientConn goes IDLE.
+	ss.Stop()
+	itestutils.AwaitState(ctx, t, cc, connectivity.Idle)
+	wantMetrics := []metricdata.Metrics{
+		{
+			Name:        "grpc.subchannel.connection_attempts_succeeded",
+			Description: "EXPERIMENTAL. Number of successful connection attempts.",
+			Unit:        "{attempt}",
+			Data: metricdata.Sum[int64]{
+				DataPoints: []metricdata.DataPoint[int64]{
+					{
+						Attributes: attribute.NewSet(attribute.String("grpc.target", grpcTarget)),
+						Value:      1,
+					},
+				},
+				Temporality: metricdata.CumulativeTemporality,
+				IsMonotonic: true,
+			},
+		},
+		{
+			Name:        "grpc.subchannel.connection_attempts_failed",
+			Description: "EXPERIMENTAL. Number of failed connection attempts.",
+			Unit:        "{attempt}",
+			Data: metricdata.Sum[int64]{
+				DataPoints: []metricdata.DataPoint[int64]{
+					{
+						Attributes: attribute.NewSet(attribute.String("grpc.target", grpcTarget)),
+						Value:      1,
+					},
+				},
+				Temporality: metricdata.CumulativeTemporality,
+				IsMonotonic: true,
+			},
+		},
+		{
+			Name:        "grpc.subchannel.disconnections",
+			Description: "EXPERIMENTAL. Number of times the selected subchannel becomes disconnected.",
+			Unit:        "{disconnection}",
+			Data: metricdata.Sum[int64]{
+				DataPoints: []metricdata.DataPoint[int64]{
+					{
+						Attributes: attribute.NewSet(attribute.String("grpc.target", grpcTarget)),
+						Value:      1,
+					},
+				},
+				Temporality: metricdata.CumulativeTemporality,
+				IsMonotonic: true,
+			},
+		},
+	}
+
+	gotMetrics := metricsDataFromReader(ctx, reader)
+	for _, metric := range wantMetrics {
+		val, ok := gotMetrics[metric.Name]
+		if !ok {
+			t.Fatalf("Metric %v not present in recorded metrics", metric.Name)
+		}
+		if !metricdatatest.AssertEqual(t, metric, val, metricdatatest.IgnoreTimestamp(), metricdatatest.IgnoreExemplars()) {
+			t.Fatalf("Metrics data type not equal for metric: %v", metric.Name)
+		}
 	}
 }
 

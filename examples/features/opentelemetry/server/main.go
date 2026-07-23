@@ -73,14 +73,6 @@ func main() {
 	so := opentelemetry.ServerOption(opentelemetry.Options{
 		MetricsOptions: opentelemetry.MetricsOptions{
 			MeterProvider: meterProvider,
-			// These are example experimental gRPC metrics, which are disabled
-			// by default and must be explicitly enabled. For the full,
-			// up-to-date list of metrics, see:
-			// https://grpc.io/docs/guides/opentelemetry-metrics/#instruments
-			Metrics: opentelemetry.DefaultMetrics().Add(
-				"grpc.lb.pick_first.connection_attempts_succeeded",
-				"grpc.lb.pick_first.connection_attempts_failed",
-			),
 		},
 		TraceOptions: oteltracing.TraceOptions{TracerProvider: traceProvider, TextMapPropagator: textMapPropagator}})
 
