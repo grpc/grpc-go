@@ -307,29 +307,6 @@ func verifyRPCError(gotErr error, wantCode codes.Code, wantErr, wantNodeID strin
 	return nil
 }
 
-// createPriorityConfig creates priority config for both EDS and DNS cluster.
-func createPriorityConfig(cluster string) *iserviceconfig.BalancerConfig {
-	return &iserviceconfig.BalancerConfig{
-		Name: outlierdetection.Name,
-		Config: &outlierdetection.LBConfig{
-			Interval:           iserviceconfig.Duration(10 * time.Second), // default interval
-			BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
-			MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
-			MaxEjectionPercent: 10,
-			ChildPolicy: &iserviceconfig.BalancerConfig{
-				Name: clusterimpl.Name,
-				Config: &clusterimpl.LBConfig{
-					Cluster: cluster,
-					ChildPolicy: &iserviceconfig.BalancerConfig{
-						Name:   wrrlocality.Name,
-						Config: &wrrlocality.LBConfig{ChildPolicy: &iserviceconfig.BalancerConfig{Name: roundrobin.Name}},
-					},
-				},
-			},
-		},
-	}
-}
-
 // createLeafClusterConfig returns the expected LoadBalancingConfig tree for a
 // leaf (non-aggregate) cluster under gRFC A75 topology:
 // outlier_detection -> cluster_impl -> priority -> wrr_locality -> round_robin.
