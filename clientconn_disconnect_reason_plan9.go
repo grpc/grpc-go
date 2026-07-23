@@ -1,5 +1,3 @@
-//go:build plan9
-
 /*
  *
  * Copyright 2026 gRPC authors.
