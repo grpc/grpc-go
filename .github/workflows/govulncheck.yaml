@@ -11,9 +11,6 @@ jobs:
   govulncheck:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-        with:
-          persist-credentials: false
       - name: Run govulncheck
         uses: golang/govulncheck-action@v1
         with:
