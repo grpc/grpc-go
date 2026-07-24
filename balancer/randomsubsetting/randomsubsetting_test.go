@@ -167,6 +167,28 @@ func (s) TestCalculateSubset_Simple(t *testing.T) {
 	}
 }
 
+func (s) TestCalculateSubset_IgnoresEndpointsWithoutAddresses(t *testing.T) {
+	endpoints := append(
+		[]resolver.Endpoint{{}},
+		makeEndpoints(3)...,
+	)
+	b := &subsettingBalancer{
+		cfg:        &lbConfig{SubsetSize: 2},
+		hashSeed:   0,
+		hashDigest: xxhash.New(),
+	}
+
+	got := b.calculateSubset(endpoints)
+	if len(got) != 2 {
+		t.Fatalf("calculateSubset() returned %d endpoints, want 2", len(got))
+	}
+	for _, endpoint := range got {
+		if len(endpoint.Addresses) == 0 {
+			t.Errorf("calculateSubset() returned an endpoint without addresses")
+		}
+	}
+}
+
 func (s) TestCalculateSubset_EndpointsRetainHashValues(t *testing.T) {
 	endpoints := makeEndpoints(10)
 	const subsetSize = 5
