@@ -24,6 +24,7 @@ import (
 	"math/bits"
 	rand "math/rand/v2"
 	"strings"
+	"sync"
 	"time"
 
 	xxhash "github.com/cespare/xxhash/v2"
@@ -196,14 +197,6 @@ func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RP
 		return nil, annotateErrorWithNodeID(status.Errorf(codes.Internal, "error retrieving cluster for match: %v (%T)", cluster, cluster), cs.xdsNodeID)
 	}
 
-	// Add a ref to the selected cluster/plugin, as this RPC needs this
-	// cluster/plugin until it is committed.
-	if info, ok := cs.clusters[cluster.name]; ok {
-		info.refCount.Add(1)
-	} else if info, ok := cs.plugins[cluster.name]; ok {
-		info.refCount.Add(1)
-	}
-
 	lbCtx := clustermanager.SetPickedCluster(rpcInfo.Context, cluster.name)
 	lbCtx = xdsresource.NewContextWithXDSConfig(lbCtx, cs.xdsConfig)
 	lbCtx = iringhash.SetXDSRequestHash(lbCtx, cs.generateHash(rpcInfo, rt.hashPolicies))
@@ -212,12 +205,17 @@ func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RP
 	}
 
 	config := &iresolver.RPCConfig{
-		// Communicate to the LB policy the chosen cluster and request hash, if Ring Hash LB policy.
-		Context: lbCtx,
-		OnCommitted: func() {
-			// When the RPC is committed, the cluster is no longer required.
-			// Decrease its ref.
-			if info, ok := cs.clusters[cluster.name]; ok {
+		Context:     lbCtx,
+		Interceptor: cluster.interceptor,
+	}
+
+	if info, ok := cs.clusters[cluster.name]; ok {
+		// Add a ref to the selected cluster, as this RPC needs this
+		// cluster until it is committed.
+		info.refCount.Add(1)
+		var once sync.Once
+		config.OnCommitted = func() {
+			once.Do(func() {
 				if v := info.refCount.Add(-1); v == 0 {
 					// We call unsubscribe rather than sendNewServiceConfig to
 					// prevent redundant updates. If the reference count in the
@@ -227,16 +225,22 @@ func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RP
 					// manager to handle the update flow once and for all.
 					info.unsubscribe()
 				}
-			}
-			if info, ok := cs.plugins[cluster.name]; ok {
+			})
+		}
+	} else if info, ok := cs.plugins[cluster.name]; ok {
+		// Add a ref to the selected plugin, as this RPC needs this
+		// plugin until it is committed.
+		info.refCount.Add(1)
+		var once sync.Once
+		config.OnCommitted = func() {
+			once.Do(func() {
 				if v := info.refCount.Add(-1); v == 0 {
 					// This entry will be removed from activePlugins when
 					// producing a new service config update.
 					cs.sendNewServiceConfig()
 				}
-			}
-		},
-		Interceptor: cluster.interceptor,
+			})
+		}
 	}
 
 	if rt.maxStreamDuration != 0 {
