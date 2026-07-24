@@ -339,9 +339,113 @@ func (s) TestParseTimeOut(t *testing.T) {
 	runParseTests(t, testcases)
 }
 
+func (s) TestJSONUint32(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		want    jsonUint32
+		wantErr bool
+	}{
+		{
+			name:  "number",
+			input: `42`,
+			want:  42,
+		},
+		{
+			name:  "string",
+			input: `"42"`,
+			want:  42,
+		},
+		{
+			name:  "uint32 maximum",
+			input: `"4294967295"`,
+			want:  4294967295,
+		},
+		{
+			name:  "null",
+			input: `null`,
+			want:  0,
+		},
+		{
+			name:  "fractional leading zeros with exponent",
+			input: `"0.00000000001e11"`,
+			want:  1,
+		},
+		{
+			name:  "negative zero",
+			input: `"-0"`,
+			want:  0,
+		},
+		{
+			name:  "zero with oversized exponent",
+			input: `"0e999999999999999999999"`,
+			want:  0,
+		},
+		{
+			name:    "oversized exponent",
+			input:   `"1e999999999999999999999"`,
+			wantErr: true,
+		},
+		{
+			name:  "quoted exponent",
+			input: `"1e2"`,
+			want:  100,
+		},
+		{
+			name:  "quoted decimal exponent",
+			input: `"1.024e3"`,
+			want:  1024,
+		},
+		{
+			name:    "quoted comma-separated value",
+			input:   `"1,000"`,
+			wantErr: true,
+		},
+		{
+			name:  "quoted zero fraction",
+			input: `"1.0"`,
+			want:  1,
+		},
+		{
+			name:    "negative",
+			input:   `"-1"`,
+			wantErr: true,
+		},
+		{
+			name:    "uint32 overflow",
+			input:   `"4294967296"`,
+			wantErr: true,
+		},
+		{
+			name:    "nonzero fraction",
+			input:   `"1.5"`,
+			wantErr: true,
+		},
+		{
+			name:    "empty string",
+			input:   `""`,
+			wantErr: true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var got jsonUint32
+			err := json.Unmarshal([]byte(test.input), &got)
+			if (err != nil) != test.wantErr {
+				t.Fatalf("json.Unmarshal(%q) error = %v, wantErr %v", test.input, err, test.wantErr)
+			}
+			if err == nil && got != test.want {
+				t.Fatalf("json.Unmarshal(%q) = %d, want %d", test.input, got, test.want)
+			}
+		})
+	}
+}
+
 func (s) TestParseMsgSize(t *testing.T) {
 	testcases := []parseTestCase{
 		{
+			name: "numeric integers",
 			scjs: `{
     "methodConfig": [
         {
@@ -367,6 +471,7 @@ func (s) TestParseMsgSize(t *testing.T) {
 			},
 		},
 		{
+			name: "stringified integers",
 			scjs: `{
     "methodConfig": [
         {
@@ -378,7 +483,23 @@ func (s) TestParseMsgSize(t *testing.T) {
             ],
             "maxRequestMessageBytes": "1024",
             "maxResponseMessageBytes": "2048"
-        },
+        }
+    ]
+}`,
+			wantSC: &ServiceConfig{
+				Methods: map[string]MethodConfig{
+					"/foo/Bar": {
+						MaxReqSize:  newInt(1024),
+						MaxRespSize: newInt(2048),
+					},
+				},
+				lbConfig: lbConfigFor(t, "", nil),
+			},
+		},
+		{
+			name: "stringified exponent",
+			scjs: `{
+    "methodConfig": [
         {
             "name": [
                 {
@@ -386,8 +507,33 @@ func (s) TestParseMsgSize(t *testing.T) {
                     "method": "Bar"
                 }
             ],
-            "maxRequestMessageBytes": 1024,
-            "maxResponseMessageBytes": 2048
+            "maxRequestMessageBytes": "1.024e3",
+            "maxResponseMessageBytes": "2.048e3"
+        }
+    ]
+}`,
+			wantSC: &ServiceConfig{
+				Methods: map[string]MethodConfig{
+					"/foo/Bar": {
+						MaxReqSize:  newInt(1024),
+						MaxRespSize: newInt(2048),
+					},
+				},
+				lbConfig: lbConfigFor(t, "", nil),
+			},
+		},
+		{
+			name: "invalid stringified integer",
+			scjs: `{
+    "methodConfig": [
+        {
+            "name": [
+                {
+                    "service": "foo",
+                    "method": "Bar"
+                }
+            ],
+            "maxRequestMessageBytes": "1024.5"
         }
     ]
 }`,
@@ -397,6 +543,109 @@ func (s) TestParseMsgSize(t *testing.T) {
 
 	runParseTests(t, testcases)
 }
+
+func (s) TestParseRetryMaxAttempts(t *testing.T) {
+	retryPolicy := func() *internalserviceconfig.RetryPolicy {
+		return &internalserviceconfig.RetryPolicy{
+			MaxAttempts:       4,
+			InitialBackoff:    time.Second,
+			MaxBackoff:        2 * time.Second,
+			BackoffMultiplier: 2,
+			RetryableStatusCodes: map[codes.Code]bool{
+				codes.Unavailable: true,
+			},
+		}
+	}
+
+	testcases := []parseTestCase{
+		{
+			name: "numeric integer",
+			scjs: `{
+    "methodConfig": [
+        {
+            "name": [
+                {
+                    "service": "foo",
+                    "method": "Bar"
+                }
+            ],
+            "retryPolicy": {
+                "maxAttempts": 4,
+                "initialBackoff": "1s",
+                "maxBackoff": "2s",
+                "backoffMultiplier": 2,
+                "retryableStatusCodes": ["UNAVAILABLE"]
+            }
+        }
+    ]
+}`,
+			wantSC: &ServiceConfig{
+				Methods: map[string]MethodConfig{
+					"/foo/Bar": {
+						RetryPolicy: retryPolicy(),
+					},
+				},
+				lbConfig: lbConfigFor(t, "", nil),
+			},
+		},
+		{
+			name: "stringified integer",
+			scjs: `{
+    "methodConfig": [
+        {
+            "name": [
+                {
+                    "service": "foo",
+                    "method": "Bar"
+                }
+            ],
+            "retryPolicy": {
+                "maxAttempts": "4",
+                "initialBackoff": "1s",
+                "maxBackoff": "2s",
+                "backoffMultiplier": 2,
+                "retryableStatusCodes": ["UNAVAILABLE"]
+            }
+        }
+    ]
+}`,
+			wantSC: &ServiceConfig{
+				Methods: map[string]MethodConfig{
+					"/foo/Bar": {
+						RetryPolicy: retryPolicy(),
+					},
+				},
+				lbConfig: lbConfigFor(t, "", nil),
+			},
+		},
+		{
+			name: "invalid stringified integer",
+			scjs: `{
+    "methodConfig": [
+        {
+            "name": [
+                {
+                    "service": "foo",
+                    "method": "Bar"
+                }
+            ],
+            "retryPolicy": {
+                "maxAttempts": "4.5",
+                "initialBackoff": "1s",
+                "maxBackoff": "2s",
+                "backoffMultiplier": 2,
+                "retryableStatusCodes": ["UNAVAILABLE"]
+            }
+        }
+    ]
+}`,
+			wantErr: true,
+		},
+	}
+
+	runParseTests(t, testcases)
+}
+
 func (s) TestParseDefaultMethodConfig(t *testing.T) {
 	dc := &ServiceConfig{
 		Methods: map[string]MethodConfig{
