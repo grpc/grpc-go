@@ -24,6 +24,7 @@ import (
 	"context"
 
 	"google.golang.org/grpc"
+	estats "google.golang.org/grpc/experimental/stats"
 	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/protobuf/proto"
 )
@@ -89,7 +90,9 @@ type ClientInterceptor interface {
 
 // ClientFilterOptions contains options for building a client filter.
 type ClientFilterOptions struct {
-	FilterName string // FilterName is the filter name from the xDS configuration.
+	FilterName      string // FilterName is the filter name from the xDS configuration.
+	MetricsRecorder estats.MetricsRecorder
+	Target          string
 }
 
 // ClientFilterBuilder is an optional interface that a Builder can implement to
