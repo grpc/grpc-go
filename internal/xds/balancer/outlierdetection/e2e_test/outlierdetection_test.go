@@ -173,10 +173,7 @@ func (s) TestPickFirstHealthListenerDisabled(t *testing.T) {
 		}
 	  }]
 	}`
-	cc, err := grpc.NewClient(backend.Address,
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithDefaultServiceConfig(serviceConfig),
-	)
+	cc, err := grpc.NewClient(backend.Address, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithDefaultServiceConfig(serviceConfig))
 	if err != nil {
 		t.Fatalf("grpc.NewClient() failed: %v", err)
 	}
