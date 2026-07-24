@@ -4069,10 +4069,11 @@ func (s) TestNonGRPCStatus_EmptyDataEndStream(t *testing.T) {
 					EndHeaders:    true,
 					EndStream:     false,
 				}); err != nil {
-					t.Fatalf("Failed to write headers: %v", err)
+					t.Errorf("Failed to write headers: %v", err)
+					return
 				}
 				if err := framer.WriteData(streamID, true, nil); err != nil {
-					t.Fatalf("Failed to write empty DATA: %v", err)
+					t.Errorf("Failed to write empty DATA: %v", err)
 				}
 			},
 			wantCode:   codes.Unauthenticated,
@@ -4091,13 +4092,15 @@ func (s) TestNonGRPCStatus_EmptyDataEndStream(t *testing.T) {
 					EndHeaders:    true,
 					EndStream:     false,
 				}); err != nil {
-					t.Fatalf("Failed to write headers: %v", err)
+					t.Errorf("Failed to write headers: %v", err)
+					return
 				}
 				if err := framer.WriteData(streamID, false, []byte("<html>bad gateway</html>")); err != nil {
-					t.Fatalf("Failed to write body DATA: %v", err)
+					t.Errorf("Failed to write body DATA: %v", err)
+					return
 				}
 				if err := framer.WriteData(streamID, true, nil); err != nil {
-					t.Fatalf("Failed to write empty DATA: %v", err)
+					t.Errorf("Failed to write empty DATA: %v", err)
 				}
 			},
 			wantCode:   codes.Unavailable,
@@ -4116,7 +4119,6 @@ func (s) TestNonGRPCStatus_EmptyDataEndStream(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
 
-			seenHeaders := make(chan uint32, 1)
 			go func() {
 				conn, err := lis.Accept()
 				if err != nil {
@@ -4154,13 +4156,10 @@ func (s) TestNonGRPCStatus_EmptyDataEndStream(t *testing.T) {
 						return
 					}
 					if hf, ok := frame.(*http2.HeadersFrame); ok {
-						seenHeaders <- hf.StreamID
+						tc.send(t, framer, hf.StreamID)
 						break
 					}
 				}
-
-				streamID := <-seenHeaders
-				tc.send(t, framer, streamID)
 			}()
 
 			copts := ConnectOptions{BufferPool: mem.DefaultBufferPool()}

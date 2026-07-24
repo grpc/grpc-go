@@ -644,7 +644,7 @@ func (s) TestRetryStats(t *testing.T) {
 				":status", "200",
 				"content-type", "application/grpc",
 			}},
-			payload: []byte{0, 0, 0, 0, 0}, // header for 0-byte response message.
+			payloads: [][]byte{{0, 0, 0, 0, 0}}, // header for 0-byte response message.
 			trailers: [][]string{{
 				"grpc-status", "0", // OK
 			}},

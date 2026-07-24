@@ -6340,10 +6340,9 @@ func (s) TestRPCWaitsForResolver(t *testing.T) {
 }
 
 type httpServerResponse struct {
-	headers           [][]string
-	payload           []byte
-	trailers          [][]string
-	separateEndStream bool // send payload without END_STREAM, then an empty DATA with END_STREAM
+	headers  [][]string
+	payloads [][]byte
+	trailers [][]string
 }
 
 type httpServer struct {
@@ -6441,7 +6440,7 @@ func (s *httpServer) start(t *testing.T, lis net.Listener) {
 			}
 
 			response := s.responses[requestNum]
-			hasPayload := response.payload != nil
+			hasPayload := len(response.payloads) > 0
 			hasTrailers := len(response.trailers) > 0
 			for i, header := range response.headers {
 				endStream := !hasPayload && !hasTrailers && i == len(response.headers)-1
@@ -6451,20 +6450,13 @@ func (s *httpServer) start(t *testing.T, lis net.Listener) {
 				}
 				writer.Flush()
 			}
-			if hasPayload {
-				endStream := !hasTrailers && !response.separateEndStream
-				if err = s.writePayload(framer, sid, response.payload, endStream); err != nil {
+			for i, payload := range response.payloads {
+				endStream := !hasTrailers && i == len(response.payloads)-1
+				if err = s.writePayload(framer, sid, payload, endStream); err != nil {
 					t.Errorf("Error at server-side while writing payload. Err: %v", err)
 					return
 				}
 				writer.Flush()
-				if response.separateEndStream && !hasTrailers {
-					if err = s.writePayload(framer, sid, nil, true); err != nil {
-						t.Errorf("Error at server-side while writing empty END_STREAM DATA. Err: %v", err)
-						return
-					}
-					writer.Flush()
-				}
 			}
 			for i, trailer := range response.trailers {
 				if err = s.writeHeader(framer, sid, trailer, i == len(response.trailers)-1); err != nil {
@@ -6847,7 +6839,7 @@ func (s) TestHTTPServerSendsNonGRPCHeaderSurfaceFurtherData(t *testing.T) {
 							"content-type", "text/html",
 						},
 					},
-					// payload: nil
+					// payloads: nil
 				},
 			},
 			wantCode: codes.Unknown,
@@ -6863,7 +6855,7 @@ func (s) TestHTTPServerSendsNonGRPCHeaderSurfaceFurtherData(t *testing.T) {
 							"content-type", "text/html",
 						},
 					},
-					payload: []byte(htmlPayload),
+					payloads: [][]byte{[]byte(htmlPayload)},
 				},
 			},
 			wantCode: codes.Unknown,
@@ -6880,7 +6872,7 @@ data: %q`, htmlPayload),
 							"content-type", "text/html",
 						},
 					},
-					payload: bytes.Repeat([]byte("a"), nonGRPCDataMaxLen+1),
+					payloads: [][]byte{bytes.Repeat([]byte("a"), nonGRPCDataMaxLen+1)},
 				},
 			},
 			wantCode: codes.Unknown,
@@ -6894,7 +6886,7 @@ data: ` + strconv.Quote(strings.Repeat("a", nonGRPCDataMaxLen)),
 					headers: [][]string{{
 						":status", "502",
 					}},
-					payload: []byte("hello"),
+					payloads: [][]byte{[]byte("hello")},
 				},
 			},
 			wantCode: codes.Unavailable,
@@ -6911,7 +6903,7 @@ data: "hello"`,
 							"content-type", "text/html",
 						},
 					},
-					payload: []byte{},
+					payloads: [][]byte{{}},
 				},
 			},
 			wantCode: codes.Unauthenticated,
@@ -6928,8 +6920,7 @@ data: ""`,
 							"content-type", "text/html",
 						},
 					},
-					payload:           []byte(htmlPayload),
-					separateEndStream: true,
+					payloads: [][]byte{[]byte(htmlPayload), {}},
 				},
 			},
 			wantCode: codes.Unauthenticated,

@@ -1227,23 +1227,26 @@ func (t *http2Client) handleData(f *parsedDataFrame) {
 			t.closeStream(s, io.EOF, true, http2.ErrCodeFlowControl, status.New(codes.Internal, err.Error()), nil, false)
 			return
 		}
+	}
 
-		if s.nonGRPCStatus != nil {
-			// The frame should be handled as a non-gRPC response body
-			st := s.handleNonGRPCData(f)
-			if st != nil {
-				t.closeStream(s, st.Err(), true, http2.ErrCodeProtocol, st, nil, true)
-				return
-			}
-			if w := s.fc.onRead(size); w > 0 {
-				t.controlBuf.put(&outgoingWindowUpdate{
-					streamID:  s.id,
-					increment: w,
-				})
-			}
+	if s.nonGRPCStatus != nil {
+		// The frame should be handled as a non-gRPC response body. A non-nil
+		// status also covers END_STREAM, so no separate handling is needed below.
+		st := s.handleNonGRPCData(f)
+		if st != nil {
+			t.closeStream(s, st.Err(), true, http2.ErrCodeProtocol, st, nil, true)
 			return
 		}
+		if w := s.fc.onRead(size); w > 0 {
+			t.controlBuf.put(&outgoingWindowUpdate{
+				streamID:  s.id,
+				increment: w,
+			})
+		}
+		return
+	}
 
+	if size > 0 {
 		dataLen := f.data.Len()
 		if f.Header().Flags.Has(http2.FlagDataPadded) {
 			if w := s.fc.onRead(size - uint32(dataLen)); w > 0 {
@@ -1258,13 +1261,6 @@ func (t *http2Client) handleData(f *parsedDataFrame) {
 	// The server has closed the stream without sending trailers.  Record that
 	// the read direction is closed, and set the status appropriately.
 	if f.StreamEnded() {
-		// If we were collecting non-gRPC response data, finalize that status with
-		// whatever body we've buffered so far instead of discarding it.
-		if s.nonGRPCStatus != nil {
-			st := s.finalizeNonGRPCStatus()
-			t.closeStream(s, st.Err(), true, http2.ErrCodeProtocol, st, nil, true)
-			return
-		}
 		// If client received END_STREAM from server while stream was still
 		// active, send RST_STREAM.
 		rstStream := s.getState() == streamActive
