@@ -161,12 +161,11 @@ func (h *clientMetricsHandler) HandleConn(context.Context, stats.ConnStats) {}
 // TagRPC implements per RPC attempt context management for metrics.
 func (h *clientMetricsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo) context.Context {
 	ctx, ri := getOrCreateClientRPCInfo(ctx, info)
-	ai := ri.ai
 	// Numerous stats handlers can be used for the same channel. This callback
 	// ensures that all label updates are propagated to the rpc attempt info across
 	// derived contexts.
 	ctx = istats.RegisterTelemetryLabelCallback(ctx, func(labels map[string]string) {
-		maps.Copy(ai.xdsLabels, labels)
+		maps.Copy(ri.ai.xdsLabels, labels)
 	})
 
 	return ctx
