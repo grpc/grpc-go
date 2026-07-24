@@ -205,7 +205,7 @@ var (
 
 	// FromOutgoingContextRaw returns the un-merged, intermediary contents of
 	// metadata.rawMD.
-	FromOutgoingContextRaw any // func(context.Context) (metadata.MD, [][]string, bool)
+	FromOutgoingContextRaw any // func(context.Context) (metadata.MD, iter.Seq2[string, string], bool)
 
 	// UserSetDefaultScheme is set to true if the user has overridden the
 	// default resolver scheme.

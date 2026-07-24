@@ -24,6 +24,7 @@ package metadata // import "google.golang.org/grpc/metadata"
 import (
 	"context"
 	"fmt"
+	"iter"
 	"strings"
 
 	"google.golang.org/grpc/internal"
@@ -181,14 +182,15 @@ func AppendToOutgoingContext(ctx context.Context, kv ...string) context.Context 
 		panic(fmt.Sprintf("metadata: AppendToOutgoingContext got an odd number of input pairs for metadata: %d", len(kv)))
 	}
 	md, _ := ctx.Value(mdOutgoingKey{}).(rawMD)
-	added := make([][]string, len(md.added)+1)
-	copy(added, md.added)
-	kvCopy := make([]string, 0, len(kv))
+	kvCopy := make([]string, len(kv))
 	for i := 0; i < len(kv); i += 2 {
-		kvCopy = append(kvCopy, strings.ToLower(kv[i]), kv[i+1])
+		kvCopy[i] = strings.ToLower(kv[i])
+		kvCopy[i+1] = kv[i+1]
 	}
-	added[len(added)-1] = kvCopy
-	return context.WithValue(ctx, mdOutgoingKey{}, rawMD{md: md.md, added: added})
+	return context.WithValue(ctx, mdOutgoingKey{}, rawMD{
+		md:    md.md,
+		added: &deltaKV{kv: kvCopy, prev: md.added},
+	})
 }
 
 // FromIncomingContext returns the incoming metadata in ctx if it exists.
@@ -241,18 +243,43 @@ func copyOf(v []string) []string {
 
 // fromOutgoingContextRaw returns the un-merged, intermediary contents of rawMD.
 //
-// Remember to perform strings.ToLower on the keys, for both the returned MD (MD
-// is a map, there's no guarantee it's created using our helper functions) and
-// the extra kv pairs (AppendToOutgoingContext doesn't turn them into
-// lowercase).
-func fromOutgoingContextRaw(ctx context.Context) (MD, [][]string, bool) {
+// Remember to perform strings.ToLower on the keys in the returned MD (MD is a
+// map, there's no guarantee it's created using our helper functions).
+// Keys yielded by the iterator are already lowercase as AppendToOutgoingContext
+// normalizes them.
+func fromOutgoingContextRaw(ctx context.Context) (MD, iter.Seq2[string, string], bool) {
 	raw, ok := ctx.Value(mdOutgoingKey{}).(rawMD)
 	if !ok {
-		return nil, nil, false
+		return nil, emptySeq2, false
 	}
-
-	return raw.md, raw.added, true
+	if raw.added == nil {
+		return raw.md, emptySeq2, true
+	}
+	// Count nodes to pre-allocate the reversal slice.
+	n := 0
+	for d := raw.added; d != nil; d = d.prev {
+		n++
+	}
+	// Collect newest-first; the iterator yields oldest-first (FIFO order).
+	nodes := make([]*deltaKV, 0, n)
+	for d := raw.added; d != nil; d = d.prev {
+		nodes = append(nodes, d)
+	}
+	return raw.md, func(yield func(string, string) bool) {
+		for i := len(nodes) - 1; i >= 0; i-- {
+			kv := nodes[i].kv
+			for j := 0; j+1 < len(kv); j += 2 {
+				if !yield(kv[j], kv[j+1]) {
+					return
+				}
+			}
+		}
+	}, true
 }
+
+// emptySeq2 is a no-op iterator returned when there are no appended key-value
+// pairs, avoiding nil-function panics at call sites that unconditionally range.
+var emptySeq2 iter.Seq2[string, string] = func(_ func(string, string) bool) {}
 
 // FromOutgoingContext returns the outgoing metadata in ctx if it exists.
 //
@@ -263,12 +290,7 @@ func FromOutgoingContext(ctx context.Context) (MD, bool) {
 		return nil, false
 	}
 
-	mdSize := len(raw.md)
-	for i := range raw.added {
-		mdSize += len(raw.added[i]) / 2
-	}
-
-	out := make(MD, mdSize)
+	out := make(MD, len(raw.md))
 	for k, v := range raw.md {
 		// We need to manually convert all keys to lower case, because MD is a
 		// map, and there's no guarantee that the MD attached to the context is
@@ -276,20 +298,34 @@ func FromOutgoingContext(ctx context.Context) (MD, bool) {
 		key := strings.ToLower(k)
 		out[key] = copyOf(v)
 	}
-	for _, added := range raw.added {
-		if len(added)%2 == 1 {
-			panic(fmt.Sprintf("metadata: FromOutgoingContext got an odd number of input pairs for metadata: %d", len(added)))
-		}
-
-		for i := 0; i < len(added); i += 2 {
-			key := strings.ToLower(added[i])
-			out[key] = append(out[key], added[i+1])
+	// Merge appended kv pairs in FIFO order. Collect nodes newest-first,
+	// then replay oldest-first so later appends override earlier ones.
+	n := 0
+	for d := raw.added; d != nil; d = d.prev {
+		n++
+	}
+	nodes := make([]*deltaKV, 0, n)
+	for d := raw.added; d != nil; d = d.prev {
+		nodes = append(nodes, d)
+	}
+	for i := len(nodes) - 1; i >= 0; i-- {
+		kv := nodes[i].kv
+		for j := 0; j < len(kv); j += 2 {
+			out[kv[j]] = append(out[kv[j]], kv[j+1])
 		}
 	}
 	return out, ok
 }
 
+// deltaKV is a node in a singly-linked list of key-value slices appended
+// via AppendToOutgoingContext.  The list is newest-first: each node's prev
+// field points to the older delta.  Keys in kv are already lowercased.
+type deltaKV struct {
+	kv   []string
+	prev *deltaKV
+}
+
 type rawMD struct {
 	md    MD
-	added [][]string
+	added *deltaKV
 }
