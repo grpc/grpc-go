@@ -561,9 +561,8 @@ func (s) TestADS_NACKError_DuplicateSuppression(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Timeout when waiting for an endpoints resource error from the management server: %v", err)
 	}
-	gotErr := v.(listenerUpdateErrTuple).resourceErr
 	const wantNackErr = "no RouteSpecifier"
-	if nackErr := gotErr.Error(); !strings.Contains(nackErr, wantNackErr) {
+	if gotErr := v.(listenerUpdateErrTuple).resourceErr; !strings.Contains(gotErr.Error(), wantNackErr) {
 		t.Fatalf("Update received with error: %v, want %q", gotErr, wantNackErr)
 	}
 
@@ -628,10 +627,9 @@ func (s) TestADS_NACKError_DuplicateSuppression_ConcatenatedErrorChange(t *testi
 	if err != nil {
 		t.Fatalf("Timeout waiting for listener 1 error from management server: %v", err)
 	}
-	gotErr1 := v1.(listenerUpdateErrTuple).resourceErr
 	const wantNackErr = "no RouteSpecifier"
-	if !strings.Contains(gotErr1.Error(), wantNackErr) {
-		t.Fatalf("Update 1 listener 1 received with error: %v, want %q", gotErr1, wantNackErr)
+	if gotErr := v1.(listenerUpdateErrTuple).resourceErr; !strings.Contains(gotErr.Error(), wantNackErr) {
+		t.Fatalf("Update 1 listener 1 received with error: %v, want %q", gotErr, wantNackErr)
 	}
 
 	// Verify that watcher2 receives the initial error for listener 2.
@@ -639,9 +637,9 @@ func (s) TestADS_NACKError_DuplicateSuppression_ConcatenatedErrorChange(t *testi
 	if err != nil {
 		t.Fatalf("Timeout waiting for listener 2 error from management server: %v", err)
 	}
-	gotErr2 := v2.(listenerUpdateErrTuple).resourceErr
-	if !strings.Contains(gotErr2.Error(), wantNackErr) {
-		t.Fatalf("Update 1 listener 2 received with error: %v, want %q", gotErr2, wantNackErr)
+
+	if gotErr := v2.(listenerUpdateErrTuple).resourceErr; !strings.Contains(gotErr.Error(), wantNackErr) {
+		t.Fatalf("Update 1 listener 2 received with error: %v, want %q", gotErr, wantNackErr)
 	}
 
 	// Update 2: Management server sends listener 1 still invalid, but listener 2 now valid.
