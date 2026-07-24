@@ -99,6 +99,8 @@ func Pairs(kv ...string) MD {
 // The list is intentionally restricted to standardized gRPC and HTTP/2 protocol
 // headers. Everything else, including all application-defined keys, is
 // censored.
+// Note that this list might change as we add/remove support for
+// metadata types.
 var loggableMetadataKeys = map[string]bool{
 	"content-type":               true,
 	"te":                         true,
@@ -112,6 +114,10 @@ var loggableMetadataKeys = map[string]bool{
 	"grpc-retry-pushback-ms":     true,
 }
 
+// # Experimental
+//
+// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+// release.
 // String implements fmt.Stringer to allow metadata to be printed when stored in
 // a context.
 //
