@@ -22,7 +22,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -512,17 +511,22 @@ func (s) TestADS_ACK_NACK_ResourceIsNotRequestedAnymore(t *testing.T) {
 // invalid LDS resource is sent by the server, the client suppresses the
 // duplicate error notification to the watcher.
 func (s) TestADS_NACKError_DuplicateSuppression(t *testing.T) {
+	// The first NACK is expected upon receiving the invalid resource. The second NACK
+	// is a duplicate, sent because the management server resends the invalid resource
+	// in a loop as long as the resource update has not changed to a valid one.
+	// The third NACK is waited for to verify that the duplicated error is still suppressed as expected.
+	const wantNACKCount = 3
+
 	nacksReceivedCh := make(chan struct{})
-	var nackCount atomic.Int32
+	nackCount := 0
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
 		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
 			if req.GetTypeUrl() != xdsresource.V3ListenerURL {
 				return nil
 			}
-			// Close the NACKS channel when at least three updated errors (duplicate NACKs)
-			// were received to test if they were suppressed.
 			if req.GetErrorDetail() != nil {
-				if count := nackCount.Add(1); count == 3 {
+				nackCount++
+				if nackCount == wantNACKCount {
 					close(nacksReceivedCh)
 				}
 			}
@@ -537,9 +541,7 @@ func (s) TestADS_NACKError_DuplicateSuppression(t *testing.T) {
 	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
 	client := createXDSClient(t, mgmtServer.Address, nodeID, grpctransport.NewBuilder(configs))
 
-	// Use a custom watcher that counts invocations.
-	errCh := testutils.NewChannelWithSize(1)
-	watcher := &countingListenerWatcher{errCh: errCh}
+	watcher := newListenerWatcher()
 	ldsCancel := client.WatchResource(xdsresource.V3ListenerURL, listenerName, watcher)
 	defer ldsCancel()
 
@@ -555,28 +557,30 @@ func (s) TestADS_NACKError_DuplicateSuppression(t *testing.T) {
 	}
 
 	// Verify that the watcher receives the initial error.
-	v, err := errCh.Receive(ctx)
+	v, err := watcher.resourceErrCh.Receive(ctx)
 	if err != nil {
-		t.Fatalf("timeout when waiting for an endpoints resource error from the management server: %v", err)
+		t.Fatalf("Timeout when waiting for an endpoints resource error from the management server: %v", err)
 	}
-	gotErr := v.(error)
-	wantNackErr := "no RouteSpecifier"
-	if !strings.Contains(gotErr.Error(), wantNackErr) {
-		t.Fatalf("update received with error: %v, want %q", gotErr, wantNackErr)
+	gotErr := v.(listenerUpdateErrTuple).resourceErr
+	const wantNackErr = "no RouteSpecifier"
+	if nackErr := gotErr.Error(); !strings.Contains(nackErr, wantNackErr) {
+		t.Fatalf("Update received with error: %v, want %q", gotErr, wantNackErr)
 	}
 
-	// Wait for the management server to receive at least 3 NACKs, indicating that
+	// Wait for the management server to receive at least wantNACKCount NACKs, indicating that
 	// the NACK resend loop has run multiple times.
 	select {
 	case <-nacksReceivedCh:
 	case <-ctx.Done():
-		t.Fatalf("timeout waiting for 3 NACKs to be received by the server: %v", ctx.Err())
+		t.Fatalf("Timeout waiting for %d NACKs to be received by the server: %v", wantNACKCount, ctx.Err())
 	}
 
-	// Verify that the count of error callbacks is still exactly 1, proving that
-	// subsequent duplicate error updates were suppressed.
-	if count := watcher.errCount.Load(); count != 1 {
-		t.Fatalf("Error callback invoked %d times, want 1", count)
+	// Verify that no duplicate error update was written to the error channel,
+	// proving that subsequent duplicate error updates were suppressed.
+	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
+	defer sCancel()
+	if v, err := watcher.resourceErrCh.Receive(sCtx); err == nil {
+		t.Fatalf("Unexpected duplicate error received by watcher: %v", v)
 	}
 }
 
@@ -595,14 +599,11 @@ func (s) TestADS_NACKError_DuplicateSuppression_ConcatenatedErrorChange(t *testi
 	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
 	client := createXDSClient(t, mgmtServer.Address, nodeID, grpctransport.NewBuilder(configs))
 
-	errCh1 := testutils.NewChannelWithSize(1)
-	watcher1 := &countingListenerWatcher{errCh: errCh1}
+	watcher1 := newListenerWatcher()
 	ldsCancel1 := client.WatchResource(xdsresource.V3ListenerURL, listenerName1, watcher1)
 	defer ldsCancel1()
 
-	errCh2 := testutils.NewChannelWithSize(1)
-	updateCh2 := testutils.NewChannelWithSize(1)
-	watcher2 := &countingListenerWatcher{errCh: errCh2, updateCh: updateCh2}
+	watcher2 := newListenerWatcher()
 	ldsCancel2 := client.WatchResource(xdsresource.V3ListenerURL, listenerName2, watcher2)
 	defer ldsCancel2()
 
@@ -623,24 +624,24 @@ func (s) TestADS_NACKError_DuplicateSuppression_ConcatenatedErrorChange(t *testi
 	}
 
 	// Verify that watcher1 receives the initial error for listener 1.
-	v1, err := errCh1.Receive(ctx)
+	v1, err := watcher1.resourceErrCh.Receive(ctx)
 	if err != nil {
-		t.Fatalf("timeout waiting for listener 1 error from management server: %v", err)
+		t.Fatalf("Timeout waiting for listener 1 error from management server: %v", err)
 	}
-	gotErr1 := v1.(error)
-	wantNackErr := "no RouteSpecifier"
+	gotErr1 := v1.(listenerUpdateErrTuple).resourceErr
+	const wantNackErr = "no RouteSpecifier"
 	if !strings.Contains(gotErr1.Error(), wantNackErr) {
-		t.Fatalf("update 1 listener 1 received with error: %v, want %q", gotErr1, wantNackErr)
+		t.Fatalf("Update 1 listener 1 received with error: %v, want %q", gotErr1, wantNackErr)
 	}
 
 	// Verify that watcher2 receives the initial error for listener 2.
-	v2, err := errCh2.Receive(ctx)
+	v2, err := watcher2.resourceErrCh.Receive(ctx)
 	if err != nil {
-		t.Fatalf("timeout waiting for listener 2 error from management server: %v", err)
+		t.Fatalf("Timeout waiting for listener 2 error from management server: %v", err)
 	}
-	gotErr2 := v2.(error)
+	gotErr2 := v2.(listenerUpdateErrTuple).resourceErr
 	if !strings.Contains(gotErr2.Error(), wantNackErr) {
-		t.Fatalf("update 1 listener 2 received with error: %v, want %q", gotErr2, wantNackErr)
+		t.Fatalf("Update 1 listener 2 received with error: %v, want %q", gotErr2, wantNackErr)
 	}
 
 	// Update 2: Management server sends listener 1 still invalid, but listener 2 now valid.
@@ -659,40 +660,15 @@ func (s) TestADS_NACKError_DuplicateSuppression_ConcatenatedErrorChange(t *testi
 	}
 
 	// Wait for watcher2 to receive the valid resource update for listener 2.
-	if _, err := updateCh2.Receive(ctx); err != nil {
-		t.Fatalf("timeout waiting for listener 2 resource update: %v", err)
+	if _, err := watcher2.updateCh.Receive(ctx); err != nil {
+		t.Fatalf("Timeout waiting for listener 2 resource update: %v", err)
 	}
 
-	// Verify that watcher1 error callback count is still 1, proving that the
-	// duplicate error on listener 1 was suppressed despite the concatenated error changing.
-	if count := watcher1.errCount.Load(); count != 1 {
-		t.Fatalf("Watcher 1 error callback invoked %d times, want 1", count)
+	// Verify that no duplicate error update was written to watcher 1 error channel,
+	// proving that the duplicate error on listener 1 was suppressed despite the concatenated error changing.
+	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
+	defer sCancel()
+	if v, err := watcher1.resourceErrCh.Receive(sCtx); err == nil {
+		t.Fatalf("Unexpected duplicate error received by watcher 1: %v", v)
 	}
-}
-
-type countingListenerWatcher struct {
-	errCh    *testutils.Channel
-	updateCh *testutils.Channel
-	errCount atomic.Int32
-}
-
-func (c *countingListenerWatcher) ResourceChanged(_ xdsclient.ResourceData, done func()) {
-	if c.updateCh != nil {
-		c.updateCh.Send(nil)
-	}
-	done()
-}
-func (c *countingListenerWatcher) ResourceError(err error, done func()) {
-	c.errCount.Add(1)
-	if c.errCh != nil {
-		c.errCh.Send(err)
-	}
-	done()
-}
-func (c *countingListenerWatcher) AmbientError(err error, done func()) {
-	c.errCount.Add(1)
-	if c.errCh != nil {
-		c.errCh.Send(err)
-	}
-	done()
 }
