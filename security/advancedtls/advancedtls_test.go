@@ -27,7 +27,9 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/credentials"
@@ -1085,6 +1087,114 @@ func (s) TestGetCertificatesSNI(t *testing.T) {
 			}
 			if parsedCert.Subject.CommonName != test.wantCommonName {
 				t.Errorf("Common name mismatch, got %v, want %v", parsedCert.Subject.CommonName, test.wantCommonName)
+			}
+		})
+	}
+}
+
+func (s) TestVerifyPeerCertificateZeroCerts(t *testing.T) {
+	creds := &advancedTLSCreds{
+		verificationType: CertVerification,
+		isClient:         true,
+		config:           &tls.Config{},
+	}
+	verifyPeerCertificate := buildVerifyFunc(creds, "", nil, &CertificateChains{})
+	// Calling verifyPeerCertificate with zero certificates.
+	const wantErr = "no peer certificates presented"
+	if err := verifyPeerCertificate(nil, nil); err == nil || !strings.Contains(err.Error(), wantErr) {
+		t.Errorf("verifyPeerCertificate(nil, nil) = %v, want error containing %q", err, wantErr)
+	}
+}
+
+func (s) TestServerAuthEKUValidation(t *testing.T) {
+	// Generate server cert with ClientAuth EKU (no ServerAuth EKU)
+	rootPool, serverCert := generateCertificates(t, []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth})
+
+	for _, test := range []struct {
+		desc              string
+		skipServerAuthEKU bool
+		wantErr           bool
+	}{
+		{
+			desc:              "SkipServerAuthEKU_False_HandshakeFails",
+			skipServerAuthEKU: false,
+			wantErr:           true,
+		},
+		{
+			desc:              "SkipServerAuthEKU_True_HandshakeSucceeds",
+			skipServerAuthEKU: true,
+			wantErr:           false,
+		},
+	} {
+		t.Run(test.desc, func(t *testing.T) {
+			lis, err := net.Listen("tcp", "localhost:0")
+			if err != nil {
+				t.Fatalf("Failed to listen: %v", err)
+			}
+			defer lis.Close()
+
+			serverOptions := &Options{
+				IdentityOptions: IdentityCertificateOptions{
+					Certificates: []tls.Certificate{serverCert},
+				},
+				VerificationType: CertVerification,
+			}
+			done := make(chan credentials.AuthInfo, 1)
+			go func() {
+				serverRawConn, err := lis.Accept()
+				if err != nil {
+					close(done)
+					return
+				}
+				serverTLS, err := NewServerCreds(serverOptions)
+				if err != nil {
+					serverRawConn.Close()
+					close(done)
+					return
+				}
+				_, serverAuthInfo, err := serverTLS.ServerHandshake(serverRawConn)
+				if err != nil {
+					serverRawConn.Close()
+					close(done)
+					return
+				}
+				done <- serverAuthInfo
+			}()
+
+			lisAddr := lis.Addr().String()
+			conn, err := net.Dial("tcp", lisAddr)
+			if err != nil {
+				t.Fatalf("Client failed to connect to %s. Error: %v", lisAddr, err)
+			}
+			defer conn.Close()
+
+			clientOptions := &Options{
+				RootOptions: RootCertificateOptions{
+					RootCertificates: rootPool,
+				},
+				VerificationType:  CertVerification,
+				SkipServerAuthEKU: test.skipServerAuthEKU,
+			}
+			clientTLS, err := NewClientCreds(clientOptions)
+			if err != nil {
+				t.Fatalf("NewClientCreds failed: %v", err)
+			}
+			// Clone the credentials to ensure the cloned instance also respects SkipServerAuthEKU
+			clientTLS = clientTLS.Clone()
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+			_, _, handshakeErr := clientTLS.ClientHandshake(ctx, lisAddr, conn)
+
+			// wait for server side to finish
+			select {
+			case <-done:
+			case <-time.After(defaultTestTimeout):
+				t.Fatalf("timed out waiting for server handshake to finish")
+			}
+
+			gotErr := handshakeErr != nil
+			if gotErr != test.wantErr {
+				t.Fatalf("ClientHandshake() got error: %v, want error: %v", handshakeErr, test.wantErr)
 			}
 		})
 	}
