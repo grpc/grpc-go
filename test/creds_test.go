@@ -408,6 +408,84 @@ func testPerRPCCredentialsViaDialOptionsAndCallOptions(t *testing.T, e env) {
 	}
 }
 
+func (s) TestPerRPCCredentialMetadataValidationRejectsInvalidDialOptions(t *testing.T) {
+	for _, e := range listTestEnv() {
+		for _, test := range perRPCCredentialMetadataValidationTests() {
+			t.Run(e.name+"/"+test.name, func(t *testing.T) {
+				testPerRPCCredentialMetadataValidationRejectsInvalidDialOptions(t, e, test.authdata, test.wantErr)
+			})
+		}
+	}
+}
+
+func testPerRPCCredentialMetadataValidationRejectsInvalidDialOptions(t *testing.T, e env, authdata map[string]string, wantErr string) {
+	te := newTest(t, e)
+	te.perRPCCreds = testPerRPCCredentials{authdata: authdata}
+	te.startServer(&testServer{security: e.security})
+	defer te.tearDown()
+
+	cc := te.clientConn()
+	tc := testgrpc.NewTestServiceClient(cc)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); status.Code(err) != codes.Internal || !strings.Contains(err.Error(), wantErr) {
+		t.Fatalf("EmptyCall() error = %v, want code %v and message containing %q", err, codes.Internal, wantErr)
+	}
+}
+
+func (s) TestPerRPCCredentialMetadataValidationRejectsInvalidCallOptions(t *testing.T) {
+	for _, e := range listTestEnv() {
+		for _, test := range perRPCCredentialMetadataValidationTests() {
+			t.Run(e.name+"/"+test.name, func(t *testing.T) {
+				testPerRPCCredentialMetadataValidationRejectsInvalidCallOptions(t, e, test.authdata, test.wantErr)
+			})
+		}
+	}
+}
+
+func testPerRPCCredentialMetadataValidationRejectsInvalidCallOptions(t *testing.T, e env, authdata map[string]string, wantErr string) {
+	te := newTest(t, e)
+	te.startServer(&testServer{security: e.security})
+	defer te.tearDown()
+
+	cc := te.clientConn()
+	tc := testgrpc.NewTestServiceClient(cc)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}, grpc.PerRPCCredentials(testPerRPCCredentials{authdata: authdata})); status.Code(err) != codes.Internal || !strings.Contains(err.Error(), wantErr) {
+		t.Fatalf("EmptyCall() error = %v, want code %v and message containing %q", err, codes.Internal, wantErr)
+	}
+}
+
+func (s) TestPerRPCCredentialMetadataValidationAllowsValidDialAndCallOptions(t *testing.T) {
+	for _, e := range listTestEnv() {
+		testPerRPCCredentialsViaDialOptionsAndCallOptions(t, e)
+	}
+}
+
+func perRPCCredentialMetadataValidationTests() []struct {
+	name     string
+	authdata map[string]string
+	wantErr  string
+} {
+	return []struct {
+		name     string
+		authdata map[string]string
+		wantErr  string
+	}{
+		{
+			name:     "invalid key",
+			authdata: map[string]string{"bad key": "value"},
+			wantErr:  `header key "bad key" contains illegal characters not in [0-9a-z-_.]`,
+		},
+		{
+			name:     "invalid value",
+			authdata: map[string]string{"valid-key": "bad\x01value"},
+			wantErr:  `header key "valid-key" contains value with non-printable ASCII characters`,
+		},
+	}
+}
+
 const testAuthority = "test.auth.ori.ty"
 
 type authorityCheckCreds struct {
