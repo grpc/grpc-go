@@ -29,6 +29,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	estats "google.golang.org/grpc/experimental/stats"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/buffer"
 	"google.golang.org/grpc/internal/envconfig"
@@ -68,6 +69,8 @@ func init() {
 var metadataFromOutgoingContextRaw = internal.FromOutgoingContextRaw.(func(context.Context) (metadata.MD, [][]string, bool))
 
 const defaultDeferredCloseTimeout = 5 * time.Second
+
+var baseTime = time.Now()
 
 type builder struct{}
 
@@ -204,17 +207,23 @@ func (builder) IsTerminal() bool {
 	return false
 }
 
-func (builder) BuildClientFilter(httpfilter.ClientFilterOptions) httpfilter.ClientFilter {
-	return clientFilter{}
+func (builder) BuildClientFilter(opts httpfilter.ClientFilterOptions) httpfilter.ClientFilter {
+	return &clientFilter{
+		metricsRecorder: opts.MetricsRecorder,
+		target:          opts.Target,
+	}
 }
 
 var _ httpfilter.ClientFilterBuilder = builder{}
 
-type clientFilter struct{}
+type clientFilter struct {
+	metricsRecorder estats.MetricsRecorder
+	target          string
+}
 
 func (clientFilter) Close() {}
 
-func (clientFilter) BuildClientInterceptor(base, override httpfilter.FilterConfig) (httpfilter.ClientInterceptor, error) {
+func (cf *clientFilter) BuildClientInterceptor(base, override httpfilter.FilterConfig) (httpfilter.ClientInterceptor, error) {
 	b, ok := base.(baseConfig)
 	if !ok {
 		return nil, fmt.Errorf("extproc: incorrect config type provided (%T): %v", base, base)
@@ -236,16 +245,20 @@ func (clientFilter) BuildClientInterceptor(base, override httpfilter.FilterConfi
 		return nil, fmt.Errorf("extproc: failed to create channel to the external processor server %q: %v", config.server.TargetURI, err)
 	}
 	return &clientInterceptor{
-		config:      config,
-		procClient:  v3procservicegrpc.NewExternalProcessorClient(cc),
-		closeClient: cancel,
+		config:          config,
+		procClient:      v3procservicegrpc.NewExternalProcessorClient(cc),
+		closeClient:     cancel,
+		metricsRecorder: cf.metricsRecorder,
+		target:          cf.target,
 	}, nil
 }
 
 type clientInterceptor struct {
-	config      baseConfig
-	procClient  v3procservicegrpc.ExternalProcessorClient
-	closeClient func() error
+	config          baseConfig
+	procClient      v3procservicegrpc.ExternalProcessorClient
+	closeClient     func() error
+	metricsRecorder estats.MetricsRecorder
+	target          string
 }
 
 func (i *clientInterceptor) Close() {
@@ -270,6 +283,9 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 		procSendCh:               make(chan *v3procservicepb.ProcessingRequest),
 		requestForwardLoopDoneCh: make(chan struct{}),
 		procRecvLoopDone:         grpcsync.NewEvent(),
+		metricsRecorder:          i.metricsRecorder,
+		target:                   i.target,
+		clientHeadersStartTime:   time.Now(),
 	}
 
 	// Create a new context for the RPC to the external processor server. This
@@ -379,6 +395,16 @@ type clientStream struct {
 
 	requestForwardLoopDoneCh chan struct{}   // closed when request forwarding loop finishes draining
 	procRecvLoopDone         *grpcsync.Event // fires when external processor stream receive loop finishes
+
+	metricsRecorder        estats.MetricsRecorder
+	target                 string
+	clientHeadersStartTime time.Time
+	// The following start times are accessed concurrently across goroutines
+	// during the stream lifetime. To prevent data races, they are synchronized
+	// using atomic.Int64 (storing the Unix nanoseconds offset from baseTime).
+	clientHalfCloseStartTime atomic.Int64
+	serverHeadersStartTime   atomic.Int64
+	serverTrailersStartTime  atomic.Int64
 }
 
 // newProcessingRequest creates a new ProcessingRequest with ObservabilityMode,
@@ -399,6 +425,41 @@ func (cs *clientStream) newProcessingRequest(isClientMessage bool) *v3procservic
 		req.Attributes = cs.reqAttrs
 	}
 	return req
+}
+
+// recordMetric records the specified histogram metric with the given duration
+// in seconds, tagged with the grpc.target label, if a metrics recorder is configured.
+func (cs *clientStream) recordMetric(handle *estats.Float64HistoHandle, duration float64) {
+	if cs.metricsRecorder == nil {
+		return
+	}
+	handle.Record(cs.metricsRecorder, duration, cs.target)
+}
+
+// recordDuration calculates the elapsed time since the start time offset stored
+// in the atomic.Int64 (relative to baseTime) and records it to the histogram metric.
+// It is a no-op if the start time has not been initialized (value is 0).
+func (cs *clientStream) recordDuration(handle *estats.Float64HistoHandle, val *atomic.Int64) {
+	if offsetNs := val.Load(); offsetNs != 0 {
+		startTime := baseTime.Add(time.Duration(offsetNs))
+		cs.recordMetric(handle, time.Since(startTime).Seconds())
+	}
+}
+
+// fireResponseHeadersReady fires the responseHeadersReady event, and records the
+// server_headers_duration metric exactly once upon firing.
+func (cs *clientStream) fireResponseHeadersReady() {
+	if cs.responseHeadersReady.Fire() {
+		cs.recordDuration(serverHeadersDurationMetric, &cs.serverHeadersStartTime)
+	}
+}
+
+// fireResponseTrailerReady fires the responseTrailerReady event, and records the
+// server_trailers_duration metric exactly once upon firing.
+func (cs *clientStream) fireResponseTrailerReady() {
+	if cs.responseTrailerReady.Fire() {
+		cs.recordDuration(serverTrailersDurationMetric, &cs.serverTrailersStartTime)
+	}
 }
 
 // Header returns the response headers received from the backend, potentially
@@ -459,12 +520,18 @@ func (cs *clientStream) Trailer() metadata.MD {
 }
 
 func (cs *clientStream) CloseSend() error {
+	// Start timing client half-close propagation immediately upon invocation.
+	offset := time.Since(baseTime)
+	cs.clientHalfCloseStartTime.CompareAndSwap(0, int64(offset))
+
 	s, err := cs.bypassProcStreamForClientMsg()
 	if err != nil {
 		return err
 	}
 	if s != nil {
-		return s.CloseSend()
+		err = s.CloseSend()
+		cs.recordDuration(clientHalfCloseDurationMetric, &cs.clientHalfCloseStartTime)
+		return err
 	}
 	// If external processor stream is active, client CLoseSend is sent to the
 	// processor server as request message with `EndOfStreamWithoutMessage` set.
@@ -478,7 +545,9 @@ func (cs *clientStream) CloseSend() error {
 
 	s, err = cs.sendClientReqToProcServer(req)
 	if s != nil {
-		return s.CloseSend()
+		err = s.CloseSend()
+		cs.recordDuration(clientHalfCloseDurationMetric, &cs.clientHalfCloseStartTime)
+		return err
 	}
 	return err
 }
@@ -757,6 +826,7 @@ func (cs *clientStream) requestForwardingToDataplaneLoop(msgType protoreflect.Me
 			// `end_of_stream` is false.
 			if streamedResp.GetEndOfStream() && streamedResp.GetEndOfStreamWithoutMessage() {
 				dataplaneStream.CloseSend()
+				cs.recordDuration(clientHalfCloseDurationMetric, &cs.clientHalfCloseStartTime)
 				return
 			}
 
@@ -772,6 +842,7 @@ func (cs *clientStream) requestForwardingToDataplaneLoop(msgType protoreflect.Me
 
 			if streamedResp.GetEndOfStream() {
 				dataplaneStream.CloseSend()
+				cs.recordDuration(clientHalfCloseDurationMetric, &cs.clientHalfCloseStartTime)
 				return
 			}
 		case <-cs.ctx.Done():
@@ -895,7 +966,7 @@ func (cs *clientStream) recvFromProcServerLoop(newStream func(context.Context, .
 			// Signal that the response header is modified and ready to be sent to the
 			// client, so that if there is any buffered response body, it can be sent
 			// after the header.
-			cs.responseHeadersReady.Fire()
+			cs.fireResponseHeadersReady()
 
 		case resp.GetResponseTrailers() != nil:
 			if cs.config.processingModes.responseTrailerMode == modeSkip {
@@ -917,7 +988,7 @@ func (cs *clientStream) recvFromProcServerLoop(newStream func(context.Context, .
 			}
 			// Signal that the response trailer is modified and ready to be sent to
 			// the client.
-			cs.responseTrailerReady.Fire()
+			cs.fireResponseTrailerReady()
 		}
 	}
 }
@@ -1033,8 +1104,10 @@ func (cs *clientStream) createDataplaneStream(ctx context.Context, newStream fun
 	cs.dataplaneStream, cs.dataplaneCreationErr = newStream(ctx, opts...)
 	if cs.dataplaneCreationErr != nil {
 		cs.cancel()
+		return cs.dataplaneCreationErr
 	}
-	return cs.dataplaneCreationErr
+	cs.recordMetric(clientHeadersDurationMetric, time.Since(cs.clientHeadersStartTime).Seconds())
+	return nil
 }
 
 // failProcStream handles stream failures, recording errors or bypassing the
@@ -1165,7 +1238,7 @@ func (cs *clientStream) handleImmediateResponse(imm *v3procservicepb.ImmediateRe
 			cs.applyMutations(mutation, cs.responseTrailers)
 		}
 		cs.trailerErr.Store(err)
-		cs.responseTrailerReady.Fire()
+		cs.fireResponseTrailerReady()
 	} else {
 		cs.cancelStream(err)
 	}
@@ -1173,8 +1246,8 @@ func (cs *clientStream) handleImmediateResponse(imm *v3procservicepb.ImmediateRe
 
 func (cs *clientStream) triggerBypass() {
 	if cs.procStreamBypass.Fire() {
-		cs.responseHeadersReady.Fire()
-		cs.responseTrailerReady.Fire()
+		cs.fireResponseHeadersReady()
+		cs.fireResponseTrailerReady()
 	}
 }
 
@@ -1223,19 +1296,28 @@ func (cs *clientStream) initiateResponseHeaderProcessing() error {
 		}
 		return err
 	}
+	// Capture the start time for response headers after they have been
+	// successfully retrieved from the dataplane stream.
+	offset := time.Since(baseTime)
+	cs.serverHeadersStartTime.Store(int64(offset))
 
 	if header == nil {
 		// A trailers-only response returns nil from dataplaneStream.Header().
 		header = dataplaneStream.Trailer()
 		if len(header) > 0 {
 			cs.trailersOnly = true
+			// For trailers-only, the trailers are retrieved during the header
+			// phase. Start timing them now since they will be processed as part
+			// of the header phase.
+			offset := time.Since(baseTime)
+			cs.serverTrailersStartTime.Store(int64(offset))
 		}
 	}
 	cs.responseHeader = header
 	if cs.config.processingModes.responseHeaderMode != modeSend || cs.procStreamBypass.HasFired() {
 		// If header does not need to be sent to the external processor, unblock
 		// the functions waiting on header modifications.
-		cs.responseHeadersReady.Fire()
+		cs.fireResponseHeadersReady()
 		return nil
 	}
 
@@ -1271,13 +1353,18 @@ func (cs *clientStream) initiateResponseTrailerProcessing() {
 		case <-cs.ctx.Done():
 		}
 		cs.responseTrailers = cs.responseHeader
-		cs.responseTrailerReady.Fire()
+		cs.fireResponseTrailerReady()
 		// Gracefully half-close the external processor stream for trailers-only
 		// responses once header modifications finish.
 		cs.closeProcSend()
 		return
 	}
 	cs.responseTrailers = cs.dataplaneStream.Trailer()
+	// Capture the start time for response trailers after they have been
+	// successfully retrieved from the dataplane stream.
+	offset := time.Since(baseTime)
+	cs.serverTrailersStartTime.Store(int64(offset))
+
 	if cs.config.processingModes.responseTrailerMode == modeSend && !cs.procStreamBypass.HasFired() {
 		req := cs.newProcessingRequest(false)
 		req.Request = &v3procservicepb.ProcessingRequest_ResponseTrailers{ResponseTrailers: &v3procservicepb.HttpTrailers{
@@ -1291,7 +1378,7 @@ func (cs *clientStream) initiateResponseTrailerProcessing() {
 		case <-cs.procStreamBypass.Done():
 		}
 	} else {
-		cs.responseTrailerReady.Fire()
+		cs.fireResponseTrailerReady()
 	}
 	// Gracefully half-close the external processor stream after forwarding response
 	// trailers to signal that all responses have completely processed.

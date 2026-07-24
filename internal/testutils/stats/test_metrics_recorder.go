@@ -247,6 +247,16 @@ func (r *TestMetricsRecorder) RecordFloat64Histo(handle *estats.Float64HistoHand
 	r.data[handle.Name] = incr
 }
 
+// ReadFloat64Histo waits for a float64 histogram metric to be recorded and
+// returns its data.
+func (r *TestMetricsRecorder) ReadFloat64Histo(ctx context.Context) (MetricsData, error) {
+	got, err := r.floatHistoCh.Receive(ctx)
+	if err != nil {
+		return MetricsData{}, err
+	}
+	return got.(MetricsData), nil
+}
+
 // WaitForInt64Gauge waits for a int gauge metric to be recorded and verifies
 // that the recorded metrics data matches the expected metricsDataWant.
 func (r *TestMetricsRecorder) WaitForInt64Gauge(ctx context.Context, metricsDataWant MetricsData) error {
