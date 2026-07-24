@@ -163,9 +163,6 @@ func (s) TestPickFirstHealthListenerDisabled(t *testing.T) {
 	  "loadBalancingConfig": [{
 		"outlier_detection_experimental": {
 		  "interval": "0.050s",
-		  "baseEjectionTime": "300s",
-		  "maxEjectionTime": "300s",
-		  "maxEjectionPercent": 100,
 		  "failurePercentageEjection": {
 			"threshold": 50,
 			"enforcementPercentage": 100,
