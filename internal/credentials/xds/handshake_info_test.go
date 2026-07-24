@@ -31,6 +31,7 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -335,6 +336,44 @@ func (s) TestMatchingSANExists_Success(t *testing.T) {
 	}
 }
 
+// Equal reports whether the handshake info structs are identical.
+func (hi *HandshakeInfo) Equal(other *HandshakeInfo) bool {
+	if hi == nil && other == nil {
+		return true
+	}
+	if hi == nil || other == nil {
+		return false
+	}
+
+	hi.mu.Lock()
+	r1, i1 := hi.rootProvider, hi.identityProvider
+	hi.mu.Unlock()
+	other.mu.Lock()
+	r2, i2 := other.rootProvider, other.identityProvider
+	other.mu.Unlock()
+
+	switch {
+	case r1 != r2 || i1 != i2:
+		return false
+	case hi.requireClientCert != other.requireClientCert:
+		return false
+	case hi.sni != other.sni:
+		return false
+	case hi.validateSANUsingSNI != other.validateSANUsingSNI:
+		return false
+	case hi.useAutoHostSNI != other.useAutoHostSNI:
+		return false
+	case len(hi.sanMatchers) != len(other.sanMatchers):
+		return false
+	}
+	for i := range hi.sanMatchers {
+		if !hi.sanMatchers[i].Equal(other.sanMatchers[i]) {
+			return false
+		}
+	}
+	return true
+}
+
 func (s) TestEqual(t *testing.T) {
 	tests := []struct {
 		desc      string
@@ -504,10 +543,13 @@ func (s) TestBuildVerifyFuncFailures(t *testing.T) {
 	hi := NewHandshakeInfo(&testProvider, &testProvider, nil, true, "", false, false)
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
-	cfg, err := hi.ClientSideTLSConfig(ctx, "")
+	hiPtr := new(atomic.Pointer[HandshakeInfo])
+	hiPtr.Store(hi)
+	cfg, _, done, err := ClientSideTLSConfig(ctx, hiPtr, "")
 	if err != nil {
-		t.Fatalf("hi.ClientSideTLSConfig() failed with err %v", err)
+		t.Fatalf("GetClientSideTLSConfig() failed with err %v", err)
 	}
+	defer done()
 	for _, tc := range tests {
 		t.Run(tc.desc, func(t *testing.T) {
 			err = cfg.VerifyPeerCertificate(tc.peerCertChain, nil)
@@ -579,11 +621,13 @@ func (s) TestAutoHostSNI_DNS_SANValidation_Failures(t *testing.T) {
 	hi := NewHandshakeInfo(provider, nil, nil, true, "wrong.sni.domain", true, false)
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
-
-	cfg, err := hi.ClientSideTLSConfig(ctx, "")
+	hiPtr := new(atomic.Pointer[HandshakeInfo])
+	hiPtr.Store(hi)
+	cfg, _, done, err := ClientSideTLSConfig(ctx, hiPtr, "")
 	if err != nil {
-		t.Fatalf("hi.ClientSideTLSConfig() failed: %v", err)
+		t.Fatalf("GetClientSideTLSConfig() failed: %v", err)
 	}
+	defer done()
 
 	err = cfg.VerifyPeerCertificate([][]byte{derBytes}, nil)
 	if err == nil {
@@ -599,11 +643,13 @@ func (s) TestVerifyPeerCertificateZeroCerts(t *testing.T) {
 	hi := NewHandshakeInfo(provider, nil, nil, true, "", false, false)
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
-
-	cfg, err := hi.ClientSideTLSConfig(ctx, "")
+	hiPtr := new(atomic.Pointer[HandshakeInfo])
+	hiPtr.Store(hi)
+	cfg, _, done, err := ClientSideTLSConfig(ctx, hiPtr, "")
 	if err != nil {
-		t.Fatalf("hi.ClientSideTLSConfig() failed: %v", err)
+		t.Fatalf("GetClientSideTLSConfig() failed: %v", err)
 	}
+	defer done()
 
 	const wantErr = "no peer certificates presented"
 	if err := cfg.VerifyPeerCertificate(nil, nil); err == nil || !strings.Contains(err.Error(), wantErr) {
