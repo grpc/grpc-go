@@ -313,6 +313,9 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 			},
 		}
 		if err = cs.procStream.Send(headerReq); err != nil {
+			if err == io.EOF {
+				_, err = cs.procStream.Recv()
+			}
 			return cs.handleProcStreamInitError(fmt.Errorf("failed to send client headers to external processor server: %v", err), newStream, opts)
 		}
 	} else {
