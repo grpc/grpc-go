@@ -49,7 +49,9 @@ import (
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	v3procfilterpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/ext_proc/v3"
 	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
+	v3procservicegrpc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	v3procservicepb "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
+
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
@@ -228,11 +230,11 @@ func responseTrailersResponse(setHeaders map[string]string, removeHeaders []stri
 }
 
 type testExtProcServer struct {
-	v3procservicepb.UnimplementedExternalProcessorServer
-	processFunc func(v3procservicepb.ExternalProcessor_ProcessServer) error
+	v3procservicegrpc.UnimplementedExternalProcessorServer
+	processFunc func(v3procservicegrpc.ExternalProcessor_ProcessServer) error
 }
 
-func (s *testExtProcServer) Process(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+func (s *testExtProcServer) Process(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
 	if s.processFunc != nil {
 		return s.processFunc(stream)
 	}
@@ -243,7 +245,7 @@ func (s *testExtProcServer) Process(stream v3procservicepb.ExternalProcessor_Pro
 // hooks, starts a test external processor server, and registers cleanup. It
 // takes processFunc to handle Process RPC streams and returns the server's
 // listener address and a function to stop the server.
-func startTestExtProcessor(t *testing.T, processFunc func(v3procservicepb.ExternalProcessor_ProcessServer) error) (string, func()) {
+func startTestExtProcessor(t *testing.T, processFunc func(v3procservicegrpc.ExternalProcessor_ProcessServer) error) (string, func()) {
 	t.Helper()
 
 	origParse := internal.ParseGRPCServiceConfig
@@ -266,7 +268,7 @@ func startTestExtProcessor(t *testing.T, processFunc func(v3procservicepb.Extern
 	}
 	extprocServer := grpc.NewServer()
 	mockProc := &testExtProcServer{processFunc: processFunc}
-	v3procservicepb.RegisterExternalProcessorServer(extprocServer, mockProc)
+	v3procservicegrpc.RegisterExternalProcessorServer(extprocServer, mockProc)
 	go extprocServer.Serve(lis)
 
 	t.Cleanup(extprocServer.Stop)
@@ -341,7 +343,7 @@ func (s) TestAllSendUnary(t *testing.T) {
 		respBody            = "hello-response"
 		respBodyMutated     = "hello-response-mutated"
 	)
-	lisAddr, _ := startTestExtProcessor(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+	lisAddr, _ := startTestExtProcessor(t, func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
 		for {
 			req, err := stream.Recv()
 			if err == io.EOF {
@@ -486,7 +488,7 @@ func (s) TestStreamingModifications(t *testing.T) {
 		reqBodyC3           = "c3"
 		reqBodyC4           = "c4"
 	)
-	lisAddr, _ := startTestExtProcessor(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+	lisAddr, _ := startTestExtProcessor(t, func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
 		for {
 			req, err := stream.Recv()
 			if err == io.EOF {
@@ -696,7 +698,7 @@ func (s) TestStreamingModifications(t *testing.T) {
 // requests do not.
 func (s) TestProtocolConfigInFirstMessage(t *testing.T) {
 	var receivedCall atomic.Bool
-	lisAddr, _ := startTestExtProcessor(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+	lisAddr, _ := startTestExtProcessor(t, func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
 		for {
 			req, err := stream.Recv()
 			if err == io.EOF {
@@ -799,7 +801,7 @@ func (s) TestProtocolConfigInFirstMessage(t *testing.T) {
 func (s) TestWaitForDataplane(t *testing.T) {
 	unblockHeaders := make(chan struct{})
 
-	lisAddr, _ := startTestExtProcessor(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+	lisAddr, _ := startTestExtProcessor(t, func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
 		for {
 			req, err := stream.Recv()
 			if err == io.EOF {
@@ -918,7 +920,7 @@ func (s) TestWaitForDataplane(t *testing.T) {
 func (s) TestTrailersOnly(t *testing.T) {
 	const respHeaderModified = "resp-header-modified"
 
-	lisAddr, _ := startTestExtProcessor(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+	lisAddr, _ := startTestExtProcessor(t, func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
 		req, err := stream.Recv()
 		if err == io.EOF {
 			return nil
@@ -1005,7 +1007,7 @@ func (s) TestTrailersOnly(t *testing.T) {
 // messages and server responses to bypass the processor.
 func (s) TestDraining(t *testing.T) {
 	const reqBodyC1Mutated = "c1_mutated"
-	lisAddr, _ := startTestExtProcessor(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+	lisAddr, _ := startTestExtProcessor(t, func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
 		// Receive the first client message c1.
 		req, err := stream.Recv()
 		if err != nil {
@@ -1192,7 +1194,7 @@ func (s) TestImmediateResponse(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			lisAddr, _ := startTestExtProcessor(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+			lisAddr, _ := startTestExtProcessor(t, func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
 				req, err := stream.Recv()
 				if err != nil {
 					return err
@@ -1257,19 +1259,19 @@ func (s) TestImmediateResponse(t *testing.T) {
 func (s) TestStreamFailureHeaderPhaseDeny(t *testing.T) {
 	tests := []struct {
 		name            string
-		processFunc     func(v3procservicepb.ExternalProcessor_ProcessServer) error
+		processFunc     func(v3procservicegrpc.ExternalProcessor_ProcessServer) error
 		wantMsgContains string
 	}{
 		{
 			name: "AbruptStreamFailure",
-			processFunc: func(v3procservicepb.ExternalProcessor_ProcessServer) error {
+			processFunc: func(v3procservicegrpc.ExternalProcessor_ProcessServer) error {
 				return status.Error(codes.Unavailable, "abrupt stream failure")
 			},
 			wantMsgContains: "abrupt stream failure",
 		},
 		{
 			name: "UnexpectedHeaderStatus",
-			processFunc: func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+			processFunc: func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
 				req, err := stream.Recv()
 				if err != nil {
 					return err
@@ -1294,7 +1296,7 @@ func (s) TestStreamFailureHeaderPhaseDeny(t *testing.T) {
 		},
 		{
 			name: "UnexpectedCompressedBodyMessage",
-			processFunc: func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+			processFunc: func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
 				req, err := stream.Recv()
 				if err != nil {
 					return err
@@ -1365,24 +1367,24 @@ func (s) TestStreamFailureHeaderPhaseDeny(t *testing.T) {
 func (s) TestStreamFailureHeaderPhaseAllow(t *testing.T) {
 	tests := []struct {
 		name        string
-		processFunc func(v3procservicepb.ExternalProcessor_ProcessServer) error
+		processFunc func(v3procservicegrpc.ExternalProcessor_ProcessServer) error
 	}{
 		{
 			name: "AbruptStreamFailure",
-			processFunc: func(v3procservicepb.ExternalProcessor_ProcessServer) error {
+			processFunc: func(v3procservicegrpc.ExternalProcessor_ProcessServer) error {
 				return status.Error(codes.Unavailable, "abrupt stream failure")
 			},
 		},
 		{
 			name: "GracefulStreamClosure",
-			processFunc: func(v3procservicepb.ExternalProcessor_ProcessServer) error {
+			processFunc: func(v3procservicegrpc.ExternalProcessor_ProcessServer) error {
 				// Immediately close processor stream with io.EOF without replying.
 				return nil
 			},
 		},
 		{
 			name: "UnexpectedHeaderStatus",
-			processFunc: func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+			processFunc: func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
 				req, err := stream.Recv()
 				if err != nil {
 					return err
@@ -1406,7 +1408,7 @@ func (s) TestStreamFailureHeaderPhaseAllow(t *testing.T) {
 		},
 		{
 			name: "UnexpectedCompressedBodyMessage",
-			processFunc: func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+			processFunc: func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
 				req, err := stream.Recv()
 				if err != nil {
 					return err
@@ -1471,7 +1473,7 @@ func (s) TestStreamFailureHeaderPhaseAllow(t *testing.T) {
 // failure_mode_allow is false, the filter unblocks via bypass and the RPC
 // cleanly continues and succeeds.
 func (s) TestGracefulStreamClosureDeny(t *testing.T) {
-	lisAddr, _ := startTestExtProcessor(t, func(v3procservicepb.ExternalProcessor_ProcessServer) error {
+	lisAddr, _ := startTestExtProcessor(t, func(v3procservicegrpc.ExternalProcessor_ProcessServer) error {
 		// Immediately close the processor stream completely gracefully without
 		// replying. Verifies that when the client receives io.EOF right during
 		// initial header processing, bypass is triggered and the client RPC
@@ -1510,7 +1512,7 @@ func (s) TestGracefulStreamClosureDeny(t *testing.T) {
 // failure_mode_allow is not respected once body has been sent to the external
 // processor.
 func (s) TestStreamFailureBodyPhaseAllow(t *testing.T) {
-	lisAddr, _ := startTestExtProcessor(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+	lisAddr, _ := startTestExtProcessor(t, func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
 		// Receive request headers and respond with no mutations.
 		req, err := stream.Recv()
 		if err != nil {
@@ -1615,7 +1617,7 @@ func (s) TestStreamFailureBodyPhaseAllow(t *testing.T) {
 // NONE and failure_mode_allow is true. Verifies that because no body messages
 // were sent to ext_proc, the data plane RPC is allowed to continue unharmed.
 func (s) TestStreamFailureBodyModeNoneAllow(t *testing.T) {
-	lisAddr, _ := startTestExtProcessor(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+	lisAddr, _ := startTestExtProcessor(t, func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
 		// Receive request headers and respond with no mutations.
 		req, err := stream.Recv()
 		if err != nil {
@@ -1722,7 +1724,7 @@ func (s) TestStreamFailureTrailerPhaseAllow(t *testing.T) {
 		testTrailerKey = "test-trailer"
 		originalVal    = "original"
 	)
-	lisAddr, _ := startTestExtProcessor(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+	lisAddr, _ := startTestExtProcessor(t, func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
 		// Receive request headers and respond with no mutations.
 		req, err := stream.Recv()
 		if err != nil {
@@ -1822,7 +1824,7 @@ func (s) TestStreamFailureResponseHeaderPhaseAllow(t *testing.T) {
 		testHeaderKey = "test-header"
 		originalVal   = "original"
 	)
-	lisAddr, _ := startTestExtProcessor(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+	lisAddr, _ := startTestExtProcessor(t, func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
 		// Receive request headers and respond with no mutations.
 		req, err := stream.Recv()
 		if err != nil {
@@ -1912,12 +1914,12 @@ func (s) TestStreamFailureResponseHeaderPhaseAllow(t *testing.T) {
 func (s) TestStreamFailureBodyPhaseDeny(t *testing.T) {
 	tests := []struct {
 		name            string
-		processFunc     func(v3procservicepb.ExternalProcessor_ProcessServer) error
+		processFunc     func(v3procservicegrpc.ExternalProcessor_ProcessServer) error
 		wantMsgContains string
 	}{
 		{
 			name: "AbruptStreamFailure",
-			processFunc: func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+			processFunc: func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
 				// Receive request headers and respond with no mutations.
 				req, err := stream.Recv()
 				if err != nil {
@@ -1942,7 +1944,7 @@ func (s) TestStreamFailureBodyPhaseDeny(t *testing.T) {
 		},
 		{
 			name: "GrpcMessageCompressedUnsupported",
-			processFunc: func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+			processFunc: func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
 				// Receive request headers and respond with no mutations.
 				req, err := stream.Recv()
 				if err != nil {
@@ -2040,7 +2042,7 @@ func (s) TestStreamFailureBodyPhaseDeny(t *testing.T) {
 // failure_mode_allow is false. Verifies that the Unary RPC fails with status
 // code Internal.
 func (s) TestUnaryFailureBodyPhaseDeny(t *testing.T) {
-	lisAddr, _ := startTestExtProcessor(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+	lisAddr, _ := startTestExtProcessor(t, func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
 		// Receive request headers and respond with no mutations.
 		req, err := stream.Recv()
 		if err != nil {
@@ -2097,7 +2099,7 @@ func (s) TestUnaryFailureBodyPhaseDeny(t *testing.T) {
 // correctly deliver all in-flight and bypassed payloads directly over the data
 // plane without message loss.
 func (s) TestDrainingUnderLoad(t *testing.T) {
-	lisAddr, _ := startTestExtProcessor(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+	lisAddr, _ := startTestExtProcessor(t, func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
 		// Receive request headers and return with no mutations.
 		req, err := stream.Recv()
 		if err != nil {
@@ -2238,7 +2240,7 @@ func (s) TestClientTrailer(t *testing.T) {
 		originalVal    = "original"
 		mutatedVal     = "mutated-val"
 	)
-	lisAddr, _ := startTestExtProcessor(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+	lisAddr, _ := startTestExtProcessor(t, func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
 		// Receive request header and respond with no mutations.
 		req, err := stream.Recv()
 		if err != nil {
@@ -2411,7 +2413,7 @@ func (s) TestImmediateResponseTrailers(t *testing.T) {
 		originalVal         = "original"
 		immediateMutatedVal = "mutated-immediate-val"
 	)
-	lisAddr, _ := startTestExtProcessor(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+	lisAddr, _ := startTestExtProcessor(t, func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
 		for {
 			req, err := stream.Recv()
 			if err != nil {
@@ -2541,7 +2543,7 @@ func (s) TestImmediateResponseTrailers(t *testing.T) {
 // filter correctly terminates the RPC with the specified status and error
 // details.
 func (s) TestImmediateResponseBody(t *testing.T) {
-	lisAddr, _ := startTestExtProcessor(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+	lisAddr, _ := startTestExtProcessor(t, func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
 		for {
 			req, err := stream.Recv()
 			if err != nil {
@@ -2653,7 +2655,7 @@ func (s) TestRequestAttributes(t *testing.T) {
 		"request.query",
 	}
 
-	lisAddr, _ := startTestExtProcessor(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+	lisAddr, _ := startTestExtProcessor(t, func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
 		// When the request headers arrive, inspect the processing request
 		// attributes map.
 		req, err := stream.Recv()
@@ -2743,12 +2745,12 @@ func (s) TestRequestAttributes(t *testing.T) {
 func (s) TestResponsePhaseValidationFailureDeny(t *testing.T) {
 	tests := []struct {
 		name            string
-		processFunc     func(v3procservicepb.ExternalProcessor_ProcessServer) error
+		processFunc     func(v3procservicegrpc.ExternalProcessor_ProcessServer) error
 		wantMsgContains string
 	}{
 		{
 			name: "OutOfOrderResponse",
-			processFunc: func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+			processFunc: func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
 				// Receive RequestHeaders and respond correctly.
 				req, err := stream.Recv()
 				if err != nil {
@@ -2805,7 +2807,7 @@ func (s) TestResponsePhaseValidationFailureDeny(t *testing.T) {
 		},
 		{
 			name: "ResponseBodyEndOfStream",
-			processFunc: func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+			processFunc: func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
 				// Receive RequestHeaders and respond with no mutations.
 				req, err := stream.Recv()
 				if err != nil {
@@ -2876,7 +2878,7 @@ func (s) TestResponsePhaseValidationFailureDeny(t *testing.T) {
 		},
 		{
 			name: "UnexpectedResponseHeaderStatus",
-			processFunc: func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+			processFunc: func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
 				// Respond to request headers with no mutations.
 				req, err := stream.Recv()
 				if err != nil {
@@ -2994,7 +2996,7 @@ func (s) TestResponsePhaseValidationFailureDeny(t *testing.T) {
 // goroutine, while Send, CloseSend, and context cancellation run in separate
 // concurrent goroutines.
 func (s) TestConcurrency(t *testing.T) {
-	lisAddr, stopMockServer := startTestExtProcessor(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+	lisAddr, stopMockServer := startTestExtProcessor(t, func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
 		for {
 			req, err := stream.Recv()
 			if err == io.EOF {
@@ -3118,7 +3120,7 @@ func (s) TestConcurrency(t *testing.T) {
 // failure_mode_allow is true, the RPC terminates with an Internal error once
 // body processing has started.
 func (s) TestStreamTimeoutBodyPhaseAllow(t *testing.T) {
-	lisAddr, _ := startTestExtProcessor(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+	lisAddr, _ := startTestExtProcessor(t, func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
 		for {
 			req, err := stream.Recv()
 			if err != nil {
@@ -3194,7 +3196,7 @@ func (s) TestStreamTimeoutBodyPhaseAllow(t *testing.T) {
 // cleanly terminated.
 func (s) TestDataplaneStreamCreationFailure(t *testing.T) {
 	procStreamClosed := grpcsync.NewEvent()
-	lisAddr, _ := startTestExtProcessor(t, func(stream v3procservicepb.ExternalProcessor_ProcessServer) error {
+	lisAddr, _ := startTestExtProcessor(t, func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
 		req, err := stream.Recv()
 		if err != nil {
 			return err
