@@ -30,6 +30,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	credinternal "google.golang.org/grpc/internal/credentials"
 	xdsinternal "google.golang.org/grpc/internal/credentials/xds"
+	"google.golang.org/grpc/internal/grpcsync"
 )
 
 // ClientOptions contains parameters to configure a new client-side xDS
@@ -167,7 +168,7 @@ func (c *credsImpl) ServerHandshake(rawConn net.Conn) (net.Conn, credentials.Aut
 	// `HandshakeInfo` does not contain the information we are looking for, we
 	// delegate the handshake to the fallback credentials.
 	hiConn, ok := rawConn.(interface {
-		XDSHandshakeInfo() (*xdsinternal.HandshakeInfo, error)
+		XDSHandshakeInfo() (*grpcsync.RefCounted[xdsinternal.HandshakeInfo], error)
 	})
 	if !ok {
 		return c.fallback.ServerHandshake(rawConn)

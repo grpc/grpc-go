@@ -26,7 +26,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"sync"
 	"sync/atomic"
 
 	"google.golang.org/grpc/attributes"
@@ -34,6 +33,7 @@ import (
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/credentials/spiffe"
 	"google.golang.org/grpc/internal/envconfig"
+	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/xds/matcher"
 	"google.golang.org/grpc/resolver"
 )
@@ -69,15 +69,15 @@ func Hostname(attr *attributes.Attributes) string {
 
 // SetHandshakeInfo returns a copy of addr in which the Attributes field is
 // updated with hiPtr.
-func SetHandshakeInfo(addr resolver.Address, hiPtr *atomic.Pointer[HandshakeInfo]) resolver.Address {
+func SetHandshakeInfo(addr resolver.Address, hiPtr *atomic.Pointer[grpcsync.RefCounted[HandshakeInfo]]) resolver.Address {
 	addr.Attributes = addr.Attributes.WithValue(handshakeAttrKey{}, hiPtr)
 	return addr
 }
 
 // HandshakeInfoFromAttributes returns a pointer to the *HandshakeInfo stored in attr.
-func HandshakeInfoFromAttributes(attr *attributes.Attributes) *atomic.Pointer[HandshakeInfo] {
+func HandshakeInfoFromAttributes(attr *attributes.Attributes) *atomic.Pointer[grpcsync.RefCounted[HandshakeInfo]] {
 	v := attr.Value(handshakeAttrKey{})
-	hi, _ := v.(*atomic.Pointer[HandshakeInfo])
+	hi, _ := v.(*atomic.Pointer[grpcsync.RefCounted[HandshakeInfo]])
 	return hi
 }
 
@@ -93,93 +93,32 @@ type HandshakeInfo struct {
 	validateSANUsingSNI bool                    // Only on client side, indicates whether to perform validation of SANs based on SNI value.
 	useAutoHostSNI      bool                    // Only on client side, indicates whether to use endpoint hostname as SNI.
 
-	// Guards the fields below.
-	mu               sync.Mutex
-	closed           bool
-	activeHandshakes int
 	rootProvider     certprovider.Provider
 	identityProvider certprovider.Provider
 }
 
-// NewHandshakeInfo returns a new handshake info configured with the provided
-// options.
-func NewHandshakeInfo(rootProvider certprovider.Provider, identityProvider certprovider.Provider, sanMatchers []matcher.StringMatcher, requireClientCert bool, sni string, validateSANUsingSNI bool, useAutoHostSNI bool) *HandshakeInfo {
-	return &HandshakeInfo{
+// NewHandshakeInfo returns a new reference counted HandshakeInfo configured
+// with the provided options.
+func NewHandshakeInfo(rootProvider, identityProvider certprovider.Provider, sanMatchers []matcher.StringMatcher, sni string, requireClientCert, validateSANUsingSNI, useAutoHostSNI bool) *grpcsync.RefCounted[HandshakeInfo] {
+	hi := &HandshakeInfo{
 		rootProvider:        rootProvider,
 		identityProvider:    identityProvider,
 		sanMatchers:         sanMatchers,
-		requireClientCert:   requireClientCert,
 		sni:                 sni,
+		requireClientCert:   requireClientCert,
 		validateSANUsingSNI: validateSANUsingSNI,
 		useAutoHostSNI:      useAutoHostSNI,
 	}
+
+	return grpcsync.NewRefCounted(hi, hi.close)
 }
 
-// use increments the active handshake count on hi, preventing its certificate
-// providers from being closed until Done() is called. Returns false if hi
-// has already been closed via Close().
-func (hi *HandshakeInfo) use() bool {
-	hi.mu.Lock()
-	defer hi.mu.Unlock()
-	if hi.closed {
-		return false
+func (hi *HandshakeInfo) close() {
+	if hi.rootProvider != nil {
+		hi.rootProvider.Close()
 	}
-	hi.activeHandshakes++
-	return true
-}
-
-// done decrements the active handshake count on hi. If hi has already been
-// closed via hi.Close() and the count drops to zero, the certificate providers
-// are closed.
-func (hi *HandshakeInfo) done() {
-	hi.mu.Lock()
-	if hi.activeHandshakes > 0 {
-		hi.activeHandshakes--
-	}
-
-	// Return early if hi is not closed or if there are still active handshakes.
-	if !hi.closed || hi.activeHandshakes != 0 {
-		hi.mu.Unlock()
-		return
-	}
-
-	r, i := hi.rootProvider, hi.identityProvider
-	hi.rootProvider = nil
-	hi.identityProvider = nil
-	hi.mu.Unlock()
-
-	if r != nil {
-		r.Close()
-	}
-	if i != nil {
-		i.Close()
-	}
-}
-
-// Close marks hi as closed. If no handshakes are currently in progress using hi,
-// its certificate providers are closed immediately. Otherwise, the providers will
-// be closed when the last active handshake calls hi.Done().
-func (hi *HandshakeInfo) Close() {
-	hi.mu.Lock()
-	if hi.closed {
-		hi.mu.Unlock()
-		return
-	}
-	hi.closed = true
-	if hi.activeHandshakes != 0 {
-		hi.mu.Unlock()
-		return
-	}
-	r, i := hi.rootProvider, hi.identityProvider
-	hi.rootProvider = nil
-	hi.identityProvider = nil
-	hi.mu.Unlock()
-
-	if r != nil {
-		r.Close()
-	}
-	if i != nil {
-		i.Close()
+	if hi.identityProvider != nil {
+		hi.identityProvider.Close()
 	}
 }
 
@@ -187,27 +126,29 @@ func (hi *HandshakeInfo) Close() {
 // and returns the tls.Config along with a done callback that MUST be invoked
 // when the handshake completes. If no HandshakeInfo is stored in hiPtr or if
 // fallback credentials should be used, useFallback returns true.
-func ClientSideTLSConfig(ctx context.Context, hiPtr *atomic.Pointer[HandshakeInfo], hostname string) (cfg *tls.Config, useFallback bool, done func(), err error) {
+func ClientSideTLSConfig(ctx context.Context, hiPtr *atomic.Pointer[grpcsync.RefCounted[HandshakeInfo]], hostname string) (cfg *tls.Config, useFallback bool, done func(), err error) {
 	if hiPtr == nil {
 		return nil, true, func() {}, nil
 	}
 	for {
-		hi := hiPtr.Load()
-		if hi == nil || hi.UseFallbackCreds() {
-			return nil, true, func() {}, nil
-		}
-		if !hi.use() {
-			if hiPtr.Load() != hi {
+		hiRC := hiPtr.Load()
+		if !hiRC.TryIncrement() {
+			if hiPtr.Load() != hiRC {
 				continue
 			}
 			return nil, true, func() {}, nil
 		}
+
+		hi := hiRC.Value()
+		if hi == nil || hi.UseFallbackCreds() {
+			return nil, true, func() {}, nil
+		}
 		cfg, err := hi.clientSideTLSConfigInternal(ctx, hostname)
 		if err != nil {
-			hi.done()
+			hiRC.Decrement()
 			return nil, false, func() {}, err
 		}
-		return cfg, false, hi.done, nil
+		return cfg, false, hiRC.Decrement, nil
 	}
 }
 
@@ -215,19 +156,20 @@ func ClientSideTLSConfig(ctx context.Context, hiPtr *atomic.Pointer[HandshakeInf
 // returning the tls.Config along with a done callback that MUST be invoked when
 // the handshake completes. If hi is nil or fallback credentials should be used,
 // useFallback returns true.
-func ServerSideTLSConfig(ctx context.Context, hi *HandshakeInfo) (cfg *tls.Config, useFallback bool, done func(), err error) {
+func ServerSideTLSConfig(ctx context.Context, hiRC *grpcsync.RefCounted[HandshakeInfo]) (cfg *tls.Config, useFallback bool, done func(), err error) {
+	hi := hiRC.Value()
 	if hi == nil || hi.UseFallbackCreds() {
 		return nil, true, func() {}, nil
 	}
-	if !hi.use() {
+	if !hiRC.TryIncrement() {
 		return nil, true, func() {}, nil
 	}
 	cfg, err = hi.serverSideTLSConfigInternal(ctx)
 	if err != nil {
-		hi.done()
+		hiRC.Decrement()
 		return nil, false, func() {}, err
 	}
-	return cfg, false, hi.done, nil
+	return cfg, false, hiRC.Decrement, nil
 }
 
 // UseFallbackCreds returns true when fallback credentials are to be used based
@@ -236,8 +178,6 @@ func (hi *HandshakeInfo) UseFallbackCreds() bool {
 	if hi == nil {
 		return true
 	}
-	hi.mu.Lock()
-	defer hi.mu.Unlock()
 	return hi.identityProvider == nil && hi.rootProvider == nil
 }
 
@@ -258,15 +198,9 @@ func (hi *HandshakeInfo) GetSANMatchersForTesting() []matcher.StringMatcher {
 func (hi *HandshakeInfo) clientSideTLSConfigInternal(ctx context.Context, hostname string) (*tls.Config, error) {
 	// On the client side, rootProvider is mandatory. IdentityProvider is
 	// optional based on whether the client is doing TLS or mTLS.
-	hi.mu.Lock()
 	if hi.rootProvider == nil {
-		hi.mu.Unlock()
 		return nil, errors.New("xds: CertificateProvider to fetch trusted roots is missing, cannot perform TLS handshake. Please check configuration on the management server")
 	}
-	// Since the call to KeyMaterial() can block, we read the providers under
-	// the lock but call the actual function after releasing the lock.
-	rootProv, idProv := hi.rootProvider, hi.identityProvider
-	hi.mu.Unlock()
 
 	// InsecureSkipVerify needs to be set to true because we need to perform
 	// custom verification to check the SAN on the received certificate.
@@ -278,7 +212,7 @@ func (hi *HandshakeInfo) clientSideTLSConfigInternal(ctx context.Context, hostna
 		NextProtos:         []string{"h2"},
 	}
 
-	km, err := rootProv.KeyMaterial(ctx)
+	km, err := hi.rootProvider.KeyMaterial(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("xds: fetching trusted roots from CertificateProvider failed: %v", err)
 	}
@@ -295,8 +229,8 @@ func (hi *HandshakeInfo) clientSideTLSConfigInternal(ctx context.Context, hostna
 
 	cfg.VerifyPeerCertificate = hi.buildVerifyFunc(km, true, sni)
 
-	if idProv != nil {
-		km, err := idProv.KeyMaterial(ctx)
+	if hi.identityProvider != nil {
+		km, err := hi.identityProvider.KeyMaterial(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("xds: fetching identity certificates from CertificateProvider failed: %v", err)
 		}
@@ -387,30 +321,24 @@ func (hi *HandshakeInfo) serverSideTLSConfigInternal(ctx context.Context) (*tls.
 		ClientAuth: tls.NoClientCert,
 		NextProtos: []string{"h2"},
 	}
-	hi.mu.Lock()
 	// On the server side, identityProvider is mandatory. RootProvider is
 	// optional based on whether the server is doing TLS or mTLS.
 	if hi.identityProvider == nil {
-		hi.mu.Unlock()
 		return nil, errors.New("xds: CertificateProvider to fetch identity certificate is missing, cannot perform TLS handshake. Please check configuration on the management server")
 	}
-	// Since the call to KeyMaterial() can block, we read the providers under
-	// the lock but call the actual function after releasing the lock.
-	rootProv, idProv := hi.rootProvider, hi.identityProvider
-	hi.mu.Unlock()
 	if hi.requireClientCert {
 		cfg.ClientAuth = tls.RequireAndVerifyClientCert
 	}
 
 	// identityProvider is mandatory on the server side.
-	km, err := idProv.KeyMaterial(ctx)
+	km, err := hi.identityProvider.KeyMaterial(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("xds: fetching identity certificates from CertificateProvider failed: %v", err)
 	}
 	cfg.Certificates = km.Certs
 
-	if rootProv != nil {
-		km, err := rootProv.KeyMaterial(ctx)
+	if hi.rootProvider != nil {
+		km, err := hi.rootProvider.KeyMaterial(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("xds: fetching trusted roots from CertificateProvider failed: %v", err)
 		}

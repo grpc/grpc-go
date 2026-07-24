@@ -41,6 +41,7 @@ import (
 	"google.golang.org/grpc/internal/balancer/gracefulswitch"
 	"google.golang.org/grpc/internal/credentials/xds"
 	"google.golang.org/grpc/internal/grpclog"
+	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/pretty"
 	xdsinternal "google.golang.org/grpc/internal/xds"
 
@@ -82,7 +83,7 @@ func (bb) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Ba
 		loadWrapper:     loadstore.NewWrapper(),
 		requestCountMax: defaultRequestCountMax,
 	}
-	b.xdsHIPtr.Store(xds.NewHandshakeInfo(nil, nil, nil, false, "", false, false))
+	b.xdsHIPtr.Store(xds.NewHandshakeInfo(nil, nil, nil, "", false, false, false))
 	b.logger = prefixLogger(b)
 	b.child = gracefulswitch.NewBalancer(b, bOpts)
 	b.logger.Infof("Created")
@@ -127,7 +128,7 @@ type clusterImplBalancer struct {
 	lrsServer        *bootstrap.ServerConfig // Load reporting server configuration.
 	dropCategories   []DropConfig            // The categories for drops.
 	child            *gracefulswitch.Balancer
-	xdsHIPtr         atomic.Pointer[xds.HandshakeInfo] // Accessed atomically as it is shared between the balancer and the transport.
+	xdsHIPtr         atomic.Pointer[grpcsync.RefCounted[xds.HandshakeInfo]] // Accessed atomically as it is shared between the balancer and the transport.
 	xdsCredsInUse    bool
 
 	// The active security configuration received from the control plane.
@@ -368,9 +369,9 @@ func (b *clusterImplBalancer) handleSecurityConfig(config *xdsresource.SecurityC
 	// handles this by delegating to its fallback credentials.
 	if config == nil {
 		b.securityConfig = nil
-		oldHI := b.xdsHIPtr.Swap(xds.NewHandshakeInfo(nil, nil, nil, false, "", false, false))
+		oldHI := b.xdsHIPtr.Swap(xds.NewHandshakeInfo(nil, nil, nil, "", false, false, false))
 		if oldHI != nil {
-			oldHI.Close()
+			oldHI.Decrement()
 		}
 		return nil
 	}
@@ -380,11 +381,11 @@ func (b *clusterImplBalancer) handleSecurityConfig(config *xdsresource.SecurityC
 		return err
 	}
 
-	newHI := xds.NewHandshakeInfo(rootProvider, identityProvider, config.SubjectAltNameMatchers, false, config.SNI, config.AutoSNISANValidation, config.UseAutoHostSNI)
+	newHI := xds.NewHandshakeInfo(rootProvider, identityProvider, config.SubjectAltNameMatchers, config.SNI, false, config.AutoSNISANValidation, config.UseAutoHostSNI)
 	b.securityConfig = config
 	oldHI := b.xdsHIPtr.Swap(newHI)
 	if oldHI != nil {
-		oldHI.Close()
+		oldHI.Decrement()
 	}
 	return nil
 }
@@ -516,7 +517,7 @@ func (b *clusterImplBalancer) Close() {
 	}
 	oldHI := b.xdsHIPtr.Swap(nil)
 	if oldHI != nil {
-		oldHI.Close()
+		oldHI.Decrement()
 	}
 	b.securityConfig = nil
 	b.logger.Infof("Shutdown")
