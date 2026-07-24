@@ -192,6 +192,7 @@ func (s) TestPickFirstHealthListenerDisabled(t *testing.T) {
 		client.EmptyCall(ctx, &testpb.Empty{})
 	}
 
+	// Wait for three outlier detection intervals to verify that the subchannel is not ejected.
 	shortCtx, shortCancel := context.WithTimeout(ctx, 150*time.Millisecond)
 	defer shortCancel()
 	testutils.AwaitNoStateChange(shortCtx, t, cc, connectivity.Ready)
