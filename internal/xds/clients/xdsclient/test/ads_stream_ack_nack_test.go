@@ -506,3 +506,167 @@ func (s) TestADS_ACK_NACK_ResourceIsNotRequestedAnymore(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// TestADS_NACKError_DuplicateSuppression verifies that when a duplicate
+// invalid LDS resource is sent by the server, the client suppresses the
+// duplicate error notification to the watcher.
+func (s) TestADS_NACKError_DuplicateSuppression(t *testing.T) {
+	// The first NACK is expected upon receiving the invalid resource. The second NACK
+	// is a duplicate, sent because the management server resends the invalid resource
+	// in a loop as long as the resource update has not changed to a valid one.
+	// The third NACK is waited for to verify that the duplicated error is still suppressed as expected.
+	const wantNACKCount = 3
+
+	nacksReceivedCh := make(chan struct{})
+	nackCount := 0
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
+		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
+			if req.GetTypeUrl() != xdsresource.V3ListenerURL {
+				return nil
+			}
+			if req.GetErrorDetail() != nil {
+				nackCount++
+				if nackCount == wantNACKCount {
+					close(nacksReceivedCh)
+				}
+			}
+			return nil
+		},
+	})
+
+	const listenerName = "listener"
+	nodeID := uuid.New().String()
+
+	// Create an xDS client pointing to the above server.
+	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
+	client := createXDSClient(t, mgmtServer.Address, nodeID, grpctransport.NewBuilder(configs))
+
+	watcher := newListenerWatcher()
+	ldsCancel := client.WatchResource(xdsresource.V3ListenerURL, listenerName, watcher)
+	defer ldsCancel()
+
+	resources := e2e.UpdateOptions{
+		NodeID:         nodeID,
+		Listeners:      []*v3listenerpb.Listener{badListenerResource(t, listenerName)},
+		SkipValidation: true,
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
+	}
+
+	// Verify that the watcher receives the initial error.
+	v, err := watcher.resourceErrCh.Receive(ctx)
+	if err != nil {
+		t.Fatalf("Timeout when waiting for an endpoints resource error from the management server: %v", err)
+	}
+	const wantNackErr = "no RouteSpecifier"
+	if gotErr := v.(listenerUpdateErrTuple).resourceErr; !strings.Contains(gotErr.Error(), wantNackErr) {
+		t.Fatalf("Update received with error: %v, want %q", gotErr, wantNackErr)
+	}
+
+	// Wait for the management server to receive at least wantNACKCount NACKs, indicating that
+	// the NACK resend loop has run multiple times.
+	select {
+	case <-nacksReceivedCh:
+	case <-ctx.Done():
+		t.Fatalf("Timeout waiting for %d NACKs to be received by the server: %v", wantNACKCount, ctx.Err())
+	}
+
+	// Verify that no duplicate error update was written to the error channel,
+	// proving that subsequent duplicate error updates were suppressed.
+	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
+	defer sCancel()
+	if v, err := watcher.resourceErrCh.Receive(sCtx); err == nil {
+		t.Fatalf("Unexpected duplicate error received by watcher: %v", v)
+	}
+}
+
+// TestADS_NACKError_DuplicateSuppression_ConcatenatedErrorChange verifies that
+// when multiple invalid resources cause a concatenated error stored in metadata,
+// and a subsequent update carries a duplicate error for only a subset of resources
+// (changing the concatenated error string), the client still suppresses the
+// duplicate error notification to the watcher.
+func (s) TestADS_NACKError_DuplicateSuppression_ConcatenatedErrorChange(t *testing.T) {
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
+
+	const listenerName1 = "listener-1"
+	const listenerName2 = "listener-2"
+	nodeID := uuid.New().String()
+
+	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
+	client := createXDSClient(t, mgmtServer.Address, nodeID, grpctransport.NewBuilder(configs))
+
+	watcher1 := newListenerWatcher()
+	ldsCancel1 := client.WatchResource(xdsresource.V3ListenerURL, listenerName1, watcher1)
+	defer ldsCancel1()
+
+	watcher2 := newListenerWatcher()
+	ldsCancel2 := client.WatchResource(xdsresource.V3ListenerURL, listenerName2, watcher2)
+	defer ldsCancel2()
+
+	// Update 1: Management server sends two invalid listener resources.
+	resources1 := e2e.UpdateOptions{
+		NodeID: nodeID,
+		Listeners: []*v3listenerpb.Listener{
+			badListenerResource(t, listenerName1),
+			badListenerResource(t, listenerName2),
+		},
+		SkipValidation: true,
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	if err := mgmtServer.Update(ctx, resources1); err != nil {
+		t.Fatalf("Failed to update management server with resources: %v, err: %v", resources1, err)
+	}
+
+	// Verify that watcher1 receives the initial error for listener 1.
+	v1, err := watcher1.resourceErrCh.Receive(ctx)
+	if err != nil {
+		t.Fatalf("Timeout waiting for listener 1 error from management server: %v", err)
+	}
+	const wantNackErr = "no RouteSpecifier"
+	if gotErr := v1.(listenerUpdateErrTuple).resourceErr; !strings.Contains(gotErr.Error(), wantNackErr) {
+		t.Fatalf("Update 1 listener 1 received with error: %v, want %q", gotErr, wantNackErr)
+	}
+
+	// Verify that watcher2 receives the initial error for listener 2.
+	v2, err := watcher2.resourceErrCh.Receive(ctx)
+	if err != nil {
+		t.Fatalf("Timeout waiting for listener 2 error from management server: %v", err)
+	}
+
+	if gotErr := v2.(listenerUpdateErrTuple).resourceErr; !strings.Contains(gotErr.Error(), wantNackErr) {
+		t.Fatalf("Update 1 listener 2 received with error: %v, want %q", gotErr, wantNackErr)
+	}
+
+	// Update 2: Management server sends listener 1 still invalid, but listener 2 now valid.
+	// This changes the concatenated error stored in metadata (from Error1+Error2 to just Error1).
+	resources2 := e2e.UpdateOptions{
+		NodeID: nodeID,
+		Listeners: []*v3listenerpb.Listener{
+			badListenerResource(t, listenerName1),
+			e2e.DefaultClientListener(listenerName2, "route-config-2"),
+		},
+		SkipValidation: true,
+	}
+
+	if err := mgmtServer.Update(ctx, resources2); err != nil {
+		t.Fatalf("Failed to update management server with resources: %v, err: %v", resources2, err)
+	}
+
+	// Wait for watcher2 to receive the valid resource update for listener 2.
+	if _, err := watcher2.updateCh.Receive(ctx); err != nil {
+		t.Fatalf("Timeout waiting for listener 2 resource update: %v", err)
+	}
+
+	// Verify that no duplicate error update was written to watcher 1 error channel,
+	// proving that the duplicate error on listener 1 was suppressed despite the concatenated error changing.
+	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
+	defer sCancel()
+	if v, err := watcher1.resourceErrCh.Receive(sCtx); err == nil {
+		t.Fatalf("Unexpected duplicate error received by watcher 1: %v", v)
+	}
+}
