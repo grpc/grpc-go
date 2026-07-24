@@ -345,12 +345,12 @@ type clientStream struct {
 	procCancel context.CancelFunc
 	config     baseConfig
 
-	dataplaneStream  grpc.ClientStream                               // underlying gRPC stream to the backend
-	procStream       v3procservicepb.ExternalProcessor_ProcessClient // bidirectional stream to the external processor
-	procStreamFailed *grpcsync.Event                                 // fired when external processor stream has closed and RPC should be failed
-	procStreamBypass *grpcsync.Event                                 // fired when the external processor stream should be bypassed or drained
-	procStreamClosed atomic.Bool                                     // ensures the stream closure logic is executed exactly once
-	procStreamErr    atomic.Value                                    // holds the terminal error causing the external processor stream to fail
+	dataplaneStream  grpc.ClientStream                                 // underlying gRPC stream to the backend
+	procStream       v3procservicegrpc.ExternalProcessor_ProcessClient // bidirectional stream to the external processor
+	procStreamFailed *grpcsync.Event                                   // fired when external processor stream has closed and RPC should be failed
+	procStreamBypass *grpcsync.Event                                   // fired when the external processor stream should be bypassed or drained
+	procStreamClosed atomic.Bool                                       // ensures the stream closure logic is executed exactly once
+	procStreamErr    atomic.Value                                      // holds the terminal error causing the external processor stream to fail
 
 	reqAttrs             map[string]*structpb.Struct                              // attributes to be sent to proc server with client message
 	reqAttrsSent         atomic.Bool                                              // tracks whether the first client message has been sent to ensure request attributes are sent only once
