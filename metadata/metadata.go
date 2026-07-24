@@ -114,10 +114,6 @@ var loggableMetadataKeys = map[string]bool{
 	"grpc-retry-pushback-ms":     true,
 }
 
-// # Experimental
-//
-// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-// release.
 // String implements fmt.Stringer to allow metadata to be printed when stored in
 // a context.
 //
@@ -133,6 +129,11 @@ var loggableMetadataKeys = map[string]bool{
 //
 // Note that this only affects verbs that use the Stringer, such as %v and %s.
 // The %#v verb prints the underlying map with all values and is not redacted.
+// Users should not rely on the output of this method to be stable
+// # Experimental
+//
+// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+// release.
 func (md MD) String() string {
 	keys := make([]string, 0, len(md))
 	for k := range md {
