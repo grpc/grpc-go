@@ -566,7 +566,7 @@ func (s) TestStreamingModifications(t *testing.T) {
 
 	// Start a test stub service.
 	stub := stubserver.StartTestService(t, &stubserver.StubServer{
-		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
 			// Verify if the data plane server receives the mutated headers.
 			md, ok := metadata.FromIncomingContext(stream.Context())
 			if !ok {
@@ -840,7 +840,7 @@ func (s) TestWaitForDataplane(t *testing.T) {
 
 	// Backend stub records when handler is invoked and counts received messages.
 	stub := stubserver.StartTestService(t, &stubserver.StubServer{
-		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
 			close(backendCalledCh)
 			for {
 				_, err := stream.Recv()
@@ -945,7 +945,7 @@ func (s) TestTrailersOnly(t *testing.T) {
 	// Backend stub service immediately returns an Aborted error to trigger
 	// Trailers-Only.
 	stub := stubserver.StartTestService(t, &stubserver.StubServer{
-		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
 			// Wait for client request message before failing.
 			if _, err := stream.Recv(); err != nil {
 				return err
@@ -1062,7 +1062,7 @@ func (s) TestDraining(t *testing.T) {
 
 	// Start a test stub service.
 	stub := stubserver.StartTestService(t, &stubserver.StubServer{
-		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
 			// Receive first client message. Verify that it is the mutated message.
 			in1, err := stream.Recv()
 			if err != nil {
@@ -1549,7 +1549,7 @@ func (s) TestStreamFailureBodyPhaseAllow(t *testing.T) {
 	})
 
 	stub := stubserver.StartTestService(t, &stubserver.StubServer{
-		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
 			// Receive c1.
 			in1, err := stream.Recv()
 			if err != nil {
@@ -1637,7 +1637,7 @@ func (s) TestStreamFailureBodyModeNoneAllow(t *testing.T) {
 
 	// Backend stub simply echoes payload it receives.
 	stub := stubserver.StartTestService(t, &stubserver.StubServer{
-		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
 			for {
 				req, err := stream.Recv()
 				if err == io.EOF {
@@ -1752,7 +1752,7 @@ func (s) TestStreamFailureTrailerPhaseAllow(t *testing.T) {
 
 	// Backend stub sets trailer "test-trailer: original" and echoes payload.
 	stub := stubserver.StartTestService(t, &stubserver.StubServer{
-		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
 			in, err := stream.Recv()
 			if err != nil {
 				return err
@@ -1852,7 +1852,7 @@ func (s) TestStreamFailureResponseHeaderPhaseAllow(t *testing.T) {
 
 	// Backend stub sends response header "test-header: original".
 	stub := stubserver.StartTestService(t, &stubserver.StubServer{
-		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
 			if _, err := stream.Recv(); err != nil {
 				return err
 			}
@@ -1995,7 +1995,7 @@ func (s) TestStreamFailureBodyPhaseDeny(t *testing.T) {
 			// Backend stub handler simply calls Recv() and returns any error
 			// encountered.
 			stub := stubserver.StartTestService(t, &stubserver.StubServer{
-				FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
+				FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
 					_, err := stream.Recv()
 					return err
 				},
@@ -2168,7 +2168,7 @@ func (s) TestDrainingUnderLoad(t *testing.T) {
 
 	const numMessages = 50
 	stub := stubserver.StartTestService(t, &stubserver.StubServer{
-		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
 			for i := 1; i <= numMessages; i++ {
 				in, err := stream.Recv()
 				if err != nil {
@@ -2296,7 +2296,7 @@ func (s) TestClientTrailer(t *testing.T) {
 	})
 
 	stub := stubserver.StartTestService(t, &stubserver.StubServer{
-		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
 			// Read c1.
 			req, err := stream.Recv()
 			if err != nil {
@@ -2468,7 +2468,7 @@ func (s) TestImmediateResponseTrailers(t *testing.T) {
 	})
 
 	stub := stubserver.StartTestService(t, &stubserver.StubServer{
-		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
 			// Read c1.
 			if _, err := stream.Recv(); err != nil {
 				return err
@@ -2581,7 +2581,7 @@ func (s) TestImmediateResponseBody(t *testing.T) {
 	})
 
 	stub := stubserver.StartTestService(t, &stubserver.StubServer{
-		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
 			// Wait for client request message before returning.
 			if _, err := stream.Recv(); err != nil {
 				return err
@@ -2936,7 +2936,7 @@ func (s) TestResponsePhaseValidationFailureDeny(t *testing.T) {
 			// Backend stub sends response header "backend-header: present" and
 			// response body "s1".
 			stub := stubserver.StartTestService(t, &stubserver.StubServer{
-				FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
+				FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
 					if _, err := stream.Recv(); err != nil {
 						return err
 					}
@@ -3024,7 +3024,7 @@ func (s) TestConcurrency(t *testing.T) {
 
 	// Backend stub continually receives messages and echoes payloads back.
 	stub := stubserver.StartTestService(t, &stubserver.StubServer{
-		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
 			for {
 				in, err := stream.Recv()
 				if err == io.EOF {
@@ -3139,7 +3139,7 @@ func (s) TestStreamTimeoutBodyPhaseAllow(t *testing.T) {
 	})
 
 	stub := stubserver.StartTestService(t, &stubserver.StubServer{
-		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
 			in, err := stream.Recv()
 			if err != nil {
 				return err
