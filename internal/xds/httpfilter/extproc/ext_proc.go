@@ -360,6 +360,9 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 	// dataplane stream immediately.
 	if i.config.processingModes.requestHeaderMode == modeSend {
 		if err = cs.procStream.Send(cs.newRequestHeadersReq(outgoingMD, added)); err != nil {
+			if err == io.EOF {
+				_, err = cs.procStream.Recv()
+			}
 			return cs.handleInitError(fmt.Errorf("failed to send client headers to external processor server: %v", err), newStream, opts...)
 		}
 	} else {

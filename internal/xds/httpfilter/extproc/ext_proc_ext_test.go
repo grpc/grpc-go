@@ -3296,7 +3296,7 @@ func (s) TestObservabilityAllSendUnary(t *testing.T) {
 						errCh <- err
 						return err
 					} else if string(reqMsg.GetPayload().GetBody()) != "hello-extproc-echo" {
-						err = fmt.Errorf("expected body 'hello-extproc-echo', got %s", reqMsg.GetPayload().GetBody())
+						err = fmt.Errorf("got body %s, want 'hello-extproc-echo'", reqMsg.GetPayload().GetBody())
 						errCh <- err
 						return err
 					}
@@ -3314,7 +3314,7 @@ func (s) TestObservabilityAllSendUnary(t *testing.T) {
 				gotEvents["ResponseTrailers"] = true
 			}
 		}
-		expected := []string{
+		wantEvents := []string{
 			"RequestHeaders",
 			"RequestBodyMessage",
 			"RequestBodyEOF",
@@ -3322,7 +3322,7 @@ func (s) TestObservabilityAllSendUnary(t *testing.T) {
 			"ResponseBody",
 			"ResponseTrailers",
 		}
-		for _, k := range expected {
+		for _, k := range wantEvents {
 			if !gotEvents[k] {
 				err := fmt.Errorf("proc server did not receive %q", k)
 				errCh <- err
@@ -3424,12 +3424,12 @@ func (s) TestObservabilitySkipProcessingModes(t *testing.T) {
 		}
 
 		if !gotEvents["RequestHeaders"] {
-			err := fmt.Errorf("External proccessor server did not receive RequestHeaders")
+			err := fmt.Errorf("external processor server did not receive RequestHeaders")
 			errCh <- err
 			return err
 		}
 		if gotEvents["RequestBody"] || gotEvents["ResponseHeaders"] || gotEvents["ResponseTrailers"] {
-			err := fmt.Errorf("External proccessor server received unexpected skipped messages: %+v", gotEvents)
+			err := fmt.Errorf("external processor server received unexpected skipped messages: %+v", gotEvents)
 			errCh <- err
 			return err
 		}
@@ -4065,7 +4065,7 @@ func (s) TestObservabilityStreamFailDeny(t *testing.T) {
 			return err
 		}
 		if req.GetRequestHeaders() == nil {
-			return fmt.Errorf("expected request headers, got %v", req)
+			return fmt.Errorf("got %v, want request headers", req)
 		}
 		// Fail abruptly with non-EOF error during body phase
 		return status.Error(codes.Unavailable, "abrupt stream failure in body phase")
@@ -4549,7 +4549,7 @@ func (s) TestObservabilityTrailersOnly(t *testing.T) {
 		if req.GetResponseHeaders() != nil {
 			respHeaders := req.GetResponseHeaders()
 			if !respHeaders.GetEndOfStream() {
-				err := fmt.Errorf("Expected EndOfStream to be true for Trailers-Only response headers")
+				err := fmt.Errorf("got EndOfStream = false, want true for Trailers-Only response headers")
 				errCh <- err
 				return err
 			}
