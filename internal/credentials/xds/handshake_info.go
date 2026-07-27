@@ -169,7 +169,7 @@ func ServerSideTLSConfig(ctx context.Context, hiRC *grpcsync.RefCounted[Handshak
 		return nil, true, func() {}, nil
 	}
 	if !hiRC.TryIncrement() {
-		return nil, true, func() {}, nil
+		return nil, false, func() {}, errors.New("xds: connection closed or HandshakeInfo dead")
 	}
 	cfg, err = hi.serverSideTLSConfigInternal(ctx)
 	if err != nil {
