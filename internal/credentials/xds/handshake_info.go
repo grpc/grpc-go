@@ -132,6 +132,9 @@ func ClientSideTLSConfig(ctx context.Context, hiPtr *atomic.Pointer[grpcsync.Ref
 	}
 	for {
 		hiRC := hiPtr.Load()
+		if hiRC == nil {
+			return nil, true, func() {}, nil
+		}
 		if !hiRC.TryIncrement() {
 			if hiPtr.Load() != hiRC {
 				continue
@@ -141,6 +144,7 @@ func ClientSideTLSConfig(ctx context.Context, hiPtr *atomic.Pointer[grpcsync.Ref
 
 		hi := hiRC.Value()
 		if hi == nil || hi.UseFallbackCreds() {
+			hiRC.Decrement()
 			return nil, true, func() {}, nil
 		}
 		cfg, err := hi.clientSideTLSConfigInternal(ctx, hostname)
@@ -157,6 +161,9 @@ func ClientSideTLSConfig(ctx context.Context, hiPtr *atomic.Pointer[grpcsync.Ref
 // the handshake completes. If hi is nil or fallback credentials should be used,
 // useFallback returns true.
 func ServerSideTLSConfig(ctx context.Context, hiRC *grpcsync.RefCounted[HandshakeInfo]) (cfg *tls.Config, useFallback bool, done func(), err error) {
+	if hiRC == nil {
+		return nil, true, func() {}, nil
+	}
 	hi := hiRC.Value()
 	if hi == nil || hi.UseFallbackCreds() {
 		return nil, true, func() {}, nil
