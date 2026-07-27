@@ -51,16 +51,16 @@ import (
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
-// interceptingBuilder wraps a resolver.Builder and intercepts the ClientConn
+// wrappingBuilder wraps a resolver.Builder and intercepts the ClientConn
 // passed to Build by wrapping it with an interceptingClientConn.
-type interceptingBuilder struct {
+type wrappingBuilder struct {
 	resolver.Builder
 	jsonCh chan string
 }
 
 // Build wraps the provided resolver.ClientConn with an interceptingClientConn
 // before delegating to the underlying resolver.Builder.
-func (ib *interceptingBuilder) Build(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOptions) (resolver.Resolver, error) {
+func (ib *wrappingBuilder) Build(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOptions) (resolver.Resolver, error) {
 	icc := &interceptingClientConn{
 		ClientConn: cc,
 		jsonCh:     ib.jsonCh,
@@ -149,6 +149,19 @@ func (i *testInterceptor) NewStream(ctx context.Context, _ iresolver.RPCInfo, ne
 
 func (i *testInterceptor) Close() {}
 
+func newTestFilterBuilder(t testing.TB, typeURL string) *testFilterBuilder {
+	tb := &testFilterBuilder{
+		typeURL:     typeURL,
+		blockChan:   make(chan struct{}),
+		enteredChan: make(chan struct{}, 1),
+	}
+	httpfilter.Register(tb)
+	t.Cleanup(func() {
+		httpfilter.UnregisterForTesting(typeURL)
+	})
+	return tb
+}
+
 // wantServiceConfig returns a JSON representation of a service config with
 // xds_cluster_manager_experimental LB policy with child policies of
 // cds_experimental for the provided cluster names.
@@ -190,19 +203,23 @@ func compareJSONConfigs(t *testing.T, gotJSON, wantJSON string) {
 	}
 }
 
+func verifyServiceConfig(ctx context.Context, t *testing.T, jsonCh chan string, wantClusters ...string) {
+	t.Helper()
+	select {
+	case <-ctx.Done():
+		t.Fatal("Timeout waiting for resolver state update")
+	case js := <-jsonCh:
+		compareJSONConfigs(t, js, wantServiceConfig(wantClusters...))
+	}
+}
+
 // Test verifies that when RPCs are in flight holding references to an old
 // cluster, that cluster remains in the service config until all in-flight
 // RPCs finish.
 func (s) TestResolverDelayedClusterRemoval_MultipleInFlightRPCs(t *testing.T) {
 	testFilterTypeURL := t.Name()
-	blockChan, enteredChan := make(chan struct{}), make(chan struct{}, 2)
-	tb := &testFilterBuilder{
-		typeURL:     testFilterTypeURL,
-		blockChan:   blockChan,
-		enteredChan: enteredChan,
-	}
-	httpfilter.Register(tb)
-	defer httpfilter.UnregisterForTesting(tb.typeURL)
+	tb := newTestFilterBuilder(t, testFilterTypeURL)
+	blockChan, enteredChan := tb.blockChan, tb.enteredChan
 
 	// Start an xDS management server.
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
@@ -217,8 +234,8 @@ func (s) TestResolverDelayedClusterRemoval_MultipleInFlightRPCs(t *testing.T) {
 	}
 
 	// Create an intercepting resolver builder.
-	jsonCh := make(chan string, 4)
-	ib := &interceptingBuilder{
+	jsonCh := make(chan string, 3)
+	ib := &wrappingBuilder{
 		Builder: r,
 		jsonCh:  jsonCh,
 	}
@@ -286,10 +303,10 @@ func (s) TestResolverDelayedClusterRemoval_MultipleInFlightRPCs(t *testing.T) {
 
 	// Trigger first RPC to cluster A. This RPC should reach our custom HTTP
 	// filter, and get blocked.
-	rpc1Err := make(chan error, 1)
+	errCh := make(chan error, 2)
 	go func() {
 		_, err := client.EmptyCall(ctx, &testpb.Empty{})
-		rpc1Err <- err
+		errCh <- err
 	}()
 
 	// Verify that first RPC has entered the HTTP filter's NewStream and is
@@ -302,19 +319,13 @@ func (s) TestResolverDelayedClusterRemoval_MultipleInFlightRPCs(t *testing.T) {
 
 	// Read the first state update from the intercepting resolver.
 	// This should contain cluster-A.
-	select {
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for first resolver state update")
-	case js := <-jsonCh:
-		compareJSONConfigs(t, js, wantServiceConfig(clusterA))
-	}
+	verifyServiceConfig(ctx, t, jsonCh, clusterA)
 
 	// Trigger second RPC to cluster A. This RPC should reach our custom HTTP
 	// filter, and get blocked.
-	rpc2Err := make(chan error, 1)
 	go func() {
 		_, err := client.EmptyCall(ctx, &testpb.Empty{})
-		rpc2Err <- err
+		errCh <- err
 	}()
 
 	// Verify that second RPC has entered the HTTP filter's NewStream and is
@@ -334,29 +345,17 @@ func (s) TestResolverDelayedClusterRemoval_MultipleInFlightRPCs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	select {
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for second resolver state update")
-	case js := <-jsonCh:
-		compareJSONConfigs(t, js, wantServiceConfig(clusterA, clusterB))
-	}
+	verifyServiceConfig(ctx, t, jsonCh, clusterA, clusterB)
 
 	// Unblock one of the RPCs and verify it completes successfully.
 	blockChan <- struct{}{}
-	var remainingRPCErr chan error
 	select {
 	case <-ctx.Done():
 		t.Fatal("Timeout waiting for an RPC to succeed")
-	case err := <-rpc1Err:
+	case err := <-errCh:
 		if err != nil {
 			t.Fatalf("RPC failed with unexpected error: %v", err)
 		}
-		remainingRPCErr = rpc2Err
-	case err := <-rpc2Err:
-		if err != nil {
-			t.Fatalf("RPC failed with unexpected error: %v", err)
-		}
-		remainingRPCErr = rpc1Err
 	}
 
 	// Verify that because the other RPC to cluster-A is still in flight, the
@@ -373,7 +372,7 @@ func (s) TestResolverDelayedClusterRemoval_MultipleInFlightRPCs(t *testing.T) {
 	select {
 	case <-ctx.Done():
 		t.Fatal("Timeout waiting for remaining RPC to succeed")
-	case err := <-remainingRPCErr:
+	case err := <-errCh:
 		if err != nil {
 			t.Fatalf("Remaining RPC failed with unexpected error: %v", err)
 		}
@@ -381,12 +380,7 @@ func (s) TestResolverDelayedClusterRemoval_MultipleInFlightRPCs(t *testing.T) {
 
 	// Once the second RPC finishes (refCount drops 1 -> 0), cluster-A should be
 	// removed from the service config.
-	select {
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for third resolver state update")
-	case js := <-jsonCh:
-		compareJSONConfigs(t, js, wantServiceConfig(clusterB))
-	}
+	verifyServiceConfig(ctx, t, jsonCh, clusterB)
 }
 
 // Test verifies that if stream creation fails early inside an HTTP filter or
@@ -396,15 +390,9 @@ func (s) TestResolverDelayedClusterRemoval_MultipleInFlightRPCs(t *testing.T) {
 func (s) TestResolverPrunesCluster_StreamCreationFailure(t *testing.T) {
 	testFilterTypeURL := t.Name()
 	const wantErr = "blocking filter error"
-	blockChan, enteredChan := make(chan struct{}), make(chan struct{})
-	tb := &testFilterBuilder{
-		typeURL:      testFilterTypeURL,
-		blockChan:    blockChan,
-		enteredChan:  enteredChan,
-		newStreamErr: status.Error(codes.Unavailable, wantErr),
-	}
-	httpfilter.Register(tb)
-	defer httpfilter.UnregisterForTesting(tb.typeURL)
+	tb := newTestFilterBuilder(t, testFilterTypeURL)
+	tb.newStreamErr = status.Error(codes.Unavailable, wantErr)
+	close(tb.blockChan) // Close blockChan immediately so that the RPC fails without blocking
 
 	// Start an xDS management server.
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
@@ -420,7 +408,7 @@ func (s) TestResolverPrunesCluster_StreamCreationFailure(t *testing.T) {
 
 	// Intercept resolver builder.
 	jsonCh := make(chan string, 3)
-	ib := &interceptingBuilder{
+	ib := &wrappingBuilder{
 		Builder: r,
 		jsonCh:  jsonCh,
 	}
@@ -480,34 +468,20 @@ func (s) TestResolverPrunesCluster_StreamCreationFailure(t *testing.T) {
 	// Create a gRPC client using the xDS resolver.
 	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(ib))
 	if err != nil {
-		t.Fatalf("Failed to dial: %v", err)
+		t.Fatalf("Failed to create a gRPC client: %v", err)
 	}
 	defer cc.Close()
-
-	// Trigger a RPC to cluster A. This RPC should reach our custom HTTP filter,
-	// and get blocked.
-	client := testgrpc.NewTestServiceClient(cc)
-	rpcErrCh := make(chan error, 1)
-	go func() {
-		_, err := client.EmptyCall(ctx, &testpb.Empty{})
-		rpcErrCh <- err
-	}()
+	cc.Connect()
 
 	// Read the first state update from the intercepting resolver.
 	// This should contain cluster-A.
-	select {
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for first resolver state update")
-	case js := <-jsonCh:
-		compareJSONConfigs(t, js, wantServiceConfig(clusterA))
-	}
+	verifyServiceConfig(ctx, t, jsonCh, clusterA)
 
-	// Verify that the RPC has entered the HTTP filter's NewStream and is
-	// currently blocked.
-	select {
-	case <-enteredChan:
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for RPC to reach HTTP filter")
+	// Make an RPC. Since the filter immediately fails, this should fail with
+	// the expected error.
+	client := testgrpc.NewTestServiceClient(cc)
+	if _, err = client.EmptyCall(ctx, &testpb.Empty{}); status.Code(err) != codes.Unavailable || !strings.Contains(err.Error(), wantErr) {
+		t.Fatalf("RPC failed with error %v, want code %v with desc containing %q", err, codes.Unavailable, wantErr)
 	}
 
 	// Update the route configuration on the management server to point
@@ -520,36 +494,12 @@ func (s) TestResolverPrunesCluster_StreamCreationFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Read the second state update from the intercepting resolver.
-	// This should contain both cluster-A and cluster-B, since the blocked
-	// RPC holds a reference to cluster-A.
-	select {
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for second resolver state update")
-	case js := <-jsonCh:
-		compareJSONConfigs(t, js, wantServiceConfig(clusterA, clusterB))
-	}
+	// Read the second state update from the intercepting resolver. This should
+	// contain both cluster-A and cluster-B.
+	verifyServiceConfig(ctx, t, jsonCh, clusterA, clusterB)
 
-	// Unblock the filter's NewStream.
-	close(blockChan)
-
-	// Verify the RPC returns the expected blocking filter error.
-	select {
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for RPC to fail")
-	case err := <-rpcErrCh:
-		if status.Code(err) != codes.Unavailable || !strings.Contains(err.Error(), wantErr) {
-			t.Fatalf("RPC failed with error %v, want code %v with desc containing %q", err, codes.Unavailable, wantErr)
-		}
-	}
-
-	// Once the stream fails early, the resolver should unsubscribe from
-	// cluster A and trigger a service config update that deletes the old
-	// cluster. Read the third state update and ensure cluster-A is pruned.
-	select {
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for third resolver state update")
-	case js := <-jsonCh:
-		compareJSONConfigs(t, js, wantServiceConfig(clusterB))
-	}
+	// Read the third state update from the intercepting resolver. Cluster-A's
+	// reference count drops to 0, causing the resolver to unsubscribe and
+	// prune it.
+	verifyServiceConfig(ctx, t, jsonCh, clusterB)
 }
