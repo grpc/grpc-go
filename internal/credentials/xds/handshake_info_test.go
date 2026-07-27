@@ -577,7 +577,6 @@ func loadCert(t *testing.T, certPath, keyPath string) [][]byte {
 }
 
 type testProviderWithRoots struct {
-	certprovider.Provider
 	roots *x509.CertPool
 }
 
@@ -586,6 +585,8 @@ func (m *testProviderWithRoots) KeyMaterial(context.Context) (*certprovider.KeyM
 		Roots: m.roots,
 	}, nil
 }
+
+func (m *testProviderWithRoots) Close() {}
 
 // Tests the scenario where the SNI provided by the xDS server is only present
 // in the URI SAN of the certificate presented by the server, and not in the DNS
