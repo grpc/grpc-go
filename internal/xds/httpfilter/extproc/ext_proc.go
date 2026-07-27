@@ -1356,6 +1356,12 @@ func (cs *clientStream) sendToProcServerLoop() {
 				cs.procStream.CloseSend()
 				return
 			}
+			if req.GetResponseHeaders() != nil {
+				cs.responseHeaderSent.Store(true)
+			}
+			if req.GetResponseTrailers() != nil {
+				cs.trailerSent.Store(true)
+			}
 			if err := cs.procStream.Send(req); err != nil {
 				if err != io.EOF {
 					// For non-EOF client-side send errors, fail the stream immediately.
@@ -1604,7 +1610,6 @@ func (cs *clientStream) initiateResponseHeaderProcessing() error {
 
 	select {
 	case cs.procSendCh <- cs.newResponseHeadersReq(header):
-		cs.responseHeaderSent.Store(true)
 		return nil
 	case <-cs.procStreamBypass.Done():
 		return nil
@@ -1639,7 +1644,6 @@ func (cs *clientStream) initiateResponseTrailerProcessing() {
 	if cs.config.processingModes.responseTrailerMode == modeSend && !cs.procStreamBypass.HasFired() {
 		select {
 		case cs.procSendCh <- cs.newResponseTrailersReq(cs.responseTrailers):
-			cs.trailerSent.Store(true)
 		case <-cs.ctx.Done():
 		case <-cs.procStreamFailed.Done():
 		case <-cs.procStreamBypass.Done():
