@@ -161,12 +161,12 @@ func (c *connWrapper) Close() error {
 		return nil
 	}
 	c.closed = true
-	if c.hi != nil {
-		if hi := c.hi.Value(); hi != nil {
-			c.hi.Decrement()
-		}
-	}
+	hi := c.hi
 	c.mu.Unlock()
+
+	if hi != nil {
+		hi.Decrement()
+	}
 
 	c.parent.removeConn(c)
 	return c.Conn.Close()

@@ -626,6 +626,7 @@ func (s) TestAutoHostSNI_DNS_SANValidation_Failures(t *testing.T) {
 
 	provider := &testProviderWithRoots{roots: roots}
 	hi := NewHandshakeInfo(provider, nil, nil, "wrong.sni.domain", true, true, false)
+	defer hi.Decrement()
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 	hiPtr := new(atomic.Pointer[grpcsync.RefCounted[HandshakeInfo]])
@@ -648,6 +649,7 @@ func (s) TestAutoHostSNI_DNS_SANValidation_Failures(t *testing.T) {
 func (s) TestVerifyPeerCertificateZeroCerts(t *testing.T) {
 	provider := &testProviderWithRoots{roots: x509.NewCertPool()}
 	hi := NewHandshakeInfo(provider, nil, nil, "", true, false, false)
+	defer hi.Decrement()
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 	hiPtr := new(atomic.Pointer[grpcsync.RefCounted[HandshakeInfo]])
