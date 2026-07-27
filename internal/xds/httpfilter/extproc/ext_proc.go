@@ -322,6 +322,8 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 			}
 		}
 
+		// Defer the closing of ext proc stream by the defined defferred close
+		// timeout to allow the servre to read all messages from the proc stream.
 		onFinishFunc := func(error) {
 			time.AfterFunc(ocs.config.deferredCloseTimeout, ocs.procCancel)
 		}
@@ -385,6 +387,10 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 // commonStream contains state and synchronization primitives shared between the
 // normal and observability mode client stream implementations.
 type commonStream struct {
+	// ctx is stored to allow blocking ClientStream interface methods (which do
+	// not accept context parameters) to respect context cancellation/timeout and
+	// retrieve ctx.Err() for returning the correct gRPC status error. This
+	// context is directly derived from the dataplane RPC's context.
 	ctx        context.Context
 	cancel     context.CancelFunc
 	procCancel context.CancelFunc
@@ -416,12 +422,13 @@ func (cs *commonStream) recordMetric(handle *estats.Float64HistoHandle, duration
 
 // handleInitError handles failures during the initialization of the external
 // processor stream in NewStream. In deny mode, it returns an internal error. In
-// allow mode, it bypasses the external processor and creates the dataplane
-// stream directly.
+// allow mode, it bypasses the external processor and creates and returns the
+// dataplane stream directly.
 func (cs *commonStream) handleInitError(err error, newStream func(context.Context, ...grpc.CallOption) (grpc.ClientStream, error), opts ...grpc.CallOption) (grpc.ClientStream, error) {
 	cs.procCancel()
 
 	if !cs.config.failureModeAllow {
+		cs.cancel()
 		return nil, status.Errorf(codes.Internal, "extproc: %v", err)
 	}
 	var newStreamErr error
@@ -464,7 +471,8 @@ func (cs *commonStream) newRequestHeadersReq(md metadata.MD, added [][]string) *
 	return req
 }
 
-// newResponseHeadersReq creates a ProcessingRequest for sending response headers.
+// newResponseHeadersReq creates a ProcessingRequest for sending response
+// headers.
 func (cs *commonStream) newResponseHeadersReq(header metadata.MD) *v3procservicepb.ProcessingRequest {
 	req := cs.newProcessingRequest(false)
 	req.Request = &v3procservicepb.ProcessingRequest_ResponseHeaders{ResponseHeaders: &v3procservicepb.HttpHeaders{
@@ -474,7 +482,8 @@ func (cs *commonStream) newResponseHeadersReq(header metadata.MD) *v3procservice
 	return req
 }
 
-// newResponseTrailersReq creates a ProcessingRequest for sending response trailers.
+// newResponseTrailersReq creates a ProcessingRequest for sending response
+// trailers.
 func (cs *commonStream) newResponseTrailersReq(trailers metadata.MD) *v3procservicepb.ProcessingRequest {
 	req := cs.newProcessingRequest(false)
 	req.Request = &v3procservicepb.ProcessingRequest_ResponseTrailers{ResponseTrailers: &v3procservicepb.HttpTrailers{
@@ -483,7 +492,8 @@ func (cs *commonStream) newResponseTrailersReq(trailers metadata.MD) *v3procserv
 	return req
 }
 
-// newHalfCloseReq creates a ProcessingRequest indicating end of stream without a message body.
+// newHalfCloseReq creates a ProcessingRequest indicating end of stream without
+// a message body.
 func (cs *commonStream) newHalfCloseReq() *v3procservicepb.ProcessingRequest {
 	req := cs.newProcessingRequest(true)
 	req.Request = &v3procservicepb.ProcessingRequest_RequestBody{
@@ -495,16 +505,12 @@ func (cs *commonStream) newHalfCloseReq() *v3procservicepb.ProcessingRequest {
 	return req
 }
 
-// marshalAndCreateBodyReq marshals the message and wraps it in a
-// ProcessingRequest.
+// marshalAndCreateBodyReq marshals the message and creates a request or
+// response body ProcessingRequest.
 func (cs *commonStream) marshalAndCreateBodyReq(m any, isClientMessage bool) (*v3procservicepb.ProcessingRequest, error) {
 	msg, ok := m.(proto.Message)
 	if !ok {
-		code := codes.Internal
-		if !isClientMessage {
-			code = codes.InvalidArgument
-		}
-		return nil, status.Errorf(code, "extproc: message does not implement proto.Message (%T)", m)
+		return nil, status.Errorf(codes.Internal, "extproc: message does not implement proto.Message")
 	}
 	bodyBytes, err := proto.Marshal(msg)
 	if err != nil {
@@ -516,10 +522,10 @@ func (cs *commonStream) marshalAndCreateBodyReq(m any, isClientMessage bool) (*v
 		req.Request = &v3procservicepb.ProcessingRequest_RequestBody{
 			RequestBody: &v3procservicepb.HttpBody{Body: bodyBytes},
 		}
-	} else {
-		req.Request = &v3procservicepb.ProcessingRequest_ResponseBody{
-			ResponseBody: &v3procservicepb.HttpBody{Body: bodyBytes},
-		}
+		return req, nil
+	}
+	req.Request = &v3procservicepb.ProcessingRequest_ResponseBody{
+		ResponseBody: &v3procservicepb.HttpBody{Body: bodyBytes},
 	}
 	return req, nil
 }
@@ -716,7 +722,7 @@ func (ocs *observabilityClientStream) sendToProcessor(req *v3procservicepb.Proce
 	ocs.mu.Lock()
 	err := ocs.procStream.Send(req)
 	ocs.mu.Unlock()
-	// If error is io.EOF , wait for correct status error from RecvMsg
+	// If error is io.EOF, wait for correct status error from RecvMsg.
 	if err == io.EOF {
 		select {
 		case <-ocs.procRecvDone:

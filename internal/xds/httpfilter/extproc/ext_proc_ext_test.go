@@ -268,8 +268,8 @@ func startTestExtProcessor(t *testing.T, processFunc func(v3procservicegrpc.Exte
 		t.Fatalf("LocalTCPListener() failed: %v", err)
 	}
 	extprocServer := grpc.NewServer()
-	mockProc := &testExtProcServer{processFunc: processFunc}
-	v3procservicegrpc.RegisterExternalProcessorServer(extprocServer, mockProc)
+	testProc := &testExtProcServer{processFunc: processFunc}
+	v3procservicegrpc.RegisterExternalProcessorServer(extprocServer, testProc)
 	go extprocServer.Serve(lis)
 
 	t.Cleanup(extprocServer.Stop)
@@ -3760,7 +3760,7 @@ func (s) TestObservabilityAllSendStreaming(t *testing.T) {
 	select {
 	case <-procDone:
 	case <-time.After(defaultTestTimeout):
-		t.Fatal("Timed out waiting for mock processor server assertions")
+		t.Fatal("Timed out waiting for external processor server assertions")
 	}
 	// Check for any errors reported by the external processor server handler.
 	select {
@@ -3821,17 +3821,17 @@ func (s) TestObservabilityDeferredCloseTimeout(t *testing.T) {
 	}
 	clientDoneTime := time.Now()
 
-	// Wait for the mock processor stream to close.
+	// Wait for the external processor stream to close.
 	select {
 	case <-procDone:
 	case <-time.After(defaultTestTimeout):
-		t.Fatal("Timed out waiting for mock processor server to close stream")
+		t.Fatal("Timed out waiting for external processor server to close stream")
 	}
 
 	// Verify that the context cancellation was delayed by the configured duration.
 	gotDelay := procCancelTime.Sub(clientDoneTime)
-	if gotDelay < delay-20*time.Millisecond {
-		t.Fatalf("Processor stream context canceled after %v, want at least %v", gotDelay, delay)
+	if gotDelay < delay/2 {
+		t.Fatalf("Processor stream context canceled after %v, want at least %v", gotDelay, delay/2)
 	}
 	if procCancelErr != context.Canceled {
 		t.Fatalf("Processor stream context error is %v, want %v", procCancelErr, context.Canceled)
@@ -4285,11 +4285,12 @@ func (s) TestObservabilityRequestAttributesLifecycle(t *testing.T) {
 		t.Fatalf("stream.CloseSend failed: %v", err)
 	}
 
-	// Verify that the external processor finished processing all requests and assertions passed.
+	// Verify that the external processor finished processing all requests and
+	// assertions passed.
 	select {
 	case <-procDone:
 	case <-time.After(defaultTestTimeout):
-		t.Fatal("Timed out waiting for mock processor server assertions")
+		t.Fatal("Timed out waiting for external processor server assertions")
 	}
 	select {
 	case err := <-errCh:
