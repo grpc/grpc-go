@@ -133,13 +133,13 @@ func ClientSideTLSConfig(ctx context.Context, hiPtr *atomic.Pointer[grpcsync.Ref
 	for {
 		hiRC := hiPtr.Load()
 		if hiRC == nil {
-			return nil, true, func() {}, nil
+			return nil, false, func() {}, errors.New("xds: connection closed or HandshakeInfo dead")
 		}
 		if !hiRC.TryIncrement() {
 			if hiPtr.Load() != hiRC {
 				continue
 			}
-			return nil, true, func() {}, nil
+			return nil, false, func() {}, errors.New("xds: connection closed or HandshakeInfo dead")
 		}
 
 		hi := hiRC.Value()

@@ -125,6 +125,13 @@ func (c *connWrapper) XDSHandshakeInfo() (*grpcsync.RefCounted[xds.HandshakeInfo
 	// The reference count will be decremented when the connection is closed.
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if c.closed {
+		if rp != nil {
+			rp.Close()
+		}
+		ip.Close()
+		return nil, fmt.Errorf("xds: connection closed")
+	}
 	c.hi = xds.NewHandshakeInfo(rp, ip, nil, "", secCfg.RequireClientCert, false, false)
 	return c.hi, nil
 }
