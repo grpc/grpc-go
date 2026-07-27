@@ -365,7 +365,7 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 			if err == io.EOF {
 				_, err = cs.procStream.Recv()
 			}
-			return cs.handleInitError(fmt.Errorf("failed to send client headers to external processor server: %v", err), newStream, opts...)
+			return cs.handleInitError(err, newStream, opts...)
 		}
 	} else {
 		if err = cs.createDataplaneStream(cs.ctx, newStream, opts); err != nil {
@@ -427,7 +427,7 @@ func (cs *commonStream) recordMetric(handle *estats.Float64HistoHandle, duration
 func (cs *commonStream) handleInitError(err error, newStream func(context.Context, ...grpc.CallOption) (grpc.ClientStream, error), opts ...grpc.CallOption) (grpc.ClientStream, error) {
 	cs.procCancel()
 
-	if !cs.config.failureModeAllow {
+	if err != io.EOF && !cs.config.failureModeAllow {
 		cs.cancel()
 		return nil, status.Errorf(codes.Internal, "extproc: %v", err)
 	}
