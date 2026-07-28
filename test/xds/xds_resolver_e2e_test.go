@@ -234,7 +234,7 @@ func (s) TestResolverDelayedClusterRemoval_MultipleInFlightRPCs(t *testing.T) {
 	}
 
 	// Create an intercepting resolver builder.
-	jsonCh := make(chan string, 3)
+	jsonCh := make(chan string, 1)
 	ib := &wrappingBuilder{
 		Builder: r,
 		jsonCh:  jsonCh,
@@ -407,7 +407,7 @@ func (s) TestResolverPrunesCluster_StreamCreationFailure(t *testing.T) {
 	}
 
 	// Intercept resolver builder.
-	jsonCh := make(chan string, 3)
+	jsonCh := make(chan string, 1)
 	ib := &wrappingBuilder{
 		Builder: r,
 		jsonCh:  jsonCh,
