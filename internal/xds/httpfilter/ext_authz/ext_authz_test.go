@@ -25,7 +25,9 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/xds/httpfilter"
 	"google.golang.org/grpc/internal/xds/matcher"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
@@ -36,7 +38,7 @@ import (
 
 	mutationpb "github.com/envoyproxy/go-control-plane/envoy/config/common/mutation_rules/v3"
 	corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
-	v3extauthzfilterpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/ext_authz/v3"
+	v3authzfitlerpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/ext_authz/v3"
 	matcherpb "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
 	v3typepb "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 )
@@ -101,20 +103,17 @@ func (s) TestParseFilterConfig_Success(t *testing.T) {
 	}{
 		{
 			name: "DefaultConfig",
-			cfg: func() proto.Message {
-				m, _ := anypb.New(&v3extauthzfilterpb.ExtAuthz{
-					Services: &v3extauthzfilterpb.ExtAuthz_GrpcService{
-						GrpcService: &corepb.GrpcService{
-							TargetSpecifier: &corepb.GrpcService_GoogleGrpc_{
-								GoogleGrpc: &corepb.GrpcService_GoogleGrpc{
-									TargetUri: "localhost:1234",
-								},
+			cfg: testutils.MarshalAny(t, &v3authzfitlerpb.ExtAuthz{
+				Services: &v3authzfitlerpb.ExtAuthz_GrpcService{
+					GrpcService: &corepb.GrpcService{
+						TargetSpecifier: &corepb.GrpcService_GoogleGrpc_{
+							GoogleGrpc: &corepb.GrpcService_GoogleGrpc{
+								TargetUri: "localhost:1234",
 							},
 						},
 					},
-				})
-				return m
-			}(),
+				},
+			}),
 			wantCfg: baseConfig{
 				grpcService: xdsresource.GRPCServiceConfig{
 					TargetURI: "localhost:1234",
@@ -123,55 +122,53 @@ func (s) TestParseFilterConfig_Success(t *testing.T) {
 					numerator:   100,
 					denominator: 100,
 				},
+				statusOnError: codes.PermissionDenied,
 			},
 		},
 		{
 			name: "FullConfig",
-			cfg: func() proto.Message {
-				m, _ := anypb.New(&v3extauthzfilterpb.ExtAuthz{
-					Services: &v3extauthzfilterpb.ExtAuthz_GrpcService{
-						GrpcService: &corepb.GrpcService{
-							TargetSpecifier: &corepb.GrpcService_GoogleGrpc_{
-								GoogleGrpc: &corepb.GrpcService_GoogleGrpc{
-									TargetUri: "localhost:5678",
-								},
+			cfg: testutils.MarshalAny(t, &v3authzfitlerpb.ExtAuthz{
+				Services: &v3authzfitlerpb.ExtAuthz_GrpcService{
+					GrpcService: &corepb.GrpcService{
+						TargetSpecifier: &corepb.GrpcService_GoogleGrpc_{
+							GoogleGrpc: &corepb.GrpcService_GoogleGrpc{
+								TargetUri: "localhost:5678",
 							},
 						},
 					},
-					FilterEnabled: &corepb.RuntimeFractionalPercent{
-						DefaultValue: &v3typepb.FractionalPercent{
-							Numerator:   50,
-							Denominator: v3typepb.FractionalPercent_TEN_THOUSAND,
+				},
+				FilterEnabled: &corepb.RuntimeFractionalPercent{
+					DefaultValue: &v3typepb.FractionalPercent{
+						Numerator:   50,
+						Denominator: v3typepb.FractionalPercent_TEN_THOUSAND,
+					},
+				},
+				DenyAtDisable: &corepb.RuntimeFeatureFlag{
+					DefaultValue: wrapperspb.Bool(true),
+				},
+				FailureModeAllow:          true,
+				FailureModeAllowHeaderAdd: true,
+				StatusOnError: &v3typepb.HttpStatus{
+					Code: v3typepb.StatusCode_Unauthorized,
+				},
+				DecoderHeaderMutationRules: &mutationpb.HeaderMutationRules{
+					AllowExpression:    &matcherpb.RegexMatcher{Regex: ".*"},
+					DisallowExpression: &matcherpb.RegexMatcher{Regex: "a"},
+				},
+				AllowedHeaders: &matcherpb.ListStringMatcher{
+					Patterns: []*matcherpb.StringMatcher{{
+						MatchPattern: &matcherpb.StringMatcher_Exact{Exact: "allow-header"},
+					}},
+				},
+				DisallowedHeaders: &matcherpb.ListStringMatcher{
+					Patterns: []*matcherpb.StringMatcher{
+						{
+							MatchPattern: &matcherpb.StringMatcher_Exact{Exact: "disallow-header"},
 						},
 					},
-					DenyAtDisable: &corepb.RuntimeFeatureFlag{
-						DefaultValue: wrapperspb.Bool(true),
-					},
-					FailureModeAllow:          true,
-					FailureModeAllowHeaderAdd: true,
-					StatusOnError: &v3typepb.HttpStatus{
-						Code: v3typepb.StatusCode_Forbidden,
-					},
-					DecoderHeaderMutationRules: &mutationpb.HeaderMutationRules{
-						AllowExpression:    &matcherpb.RegexMatcher{Regex: ".*"},
-						DisallowExpression: &matcherpb.RegexMatcher{Regex: "a"},
-					},
-					AllowedHeaders: &matcherpb.ListStringMatcher{
-						Patterns: []*matcherpb.StringMatcher{{
-							MatchPattern: &matcherpb.StringMatcher_Exact{Exact: "allow-header"},
-						}},
-					},
-					DisallowedHeaders: &matcherpb.ListStringMatcher{
-						Patterns: []*matcherpb.StringMatcher{
-							{
-								MatchPattern: &matcherpb.StringMatcher_Exact{Exact: "disallow-header"},
-							},
-						},
-					},
-					IncludePeerCertificate: true,
-				})
-				return m
-			}(),
+				},
+				IncludePeerCertificate: true,
+			}),
 			wantCfg: baseConfig{
 				grpcService: xdsresource.GRPCServiceConfig{
 					TargetURI: "localhost:5678",
@@ -183,7 +180,7 @@ func (s) TestParseFilterConfig_Success(t *testing.T) {
 				denyAtDisable:             true,
 				failureModeAllow:          true,
 				failureModeAllowHeaderAdd: true,
-				statusOnError:             int32(v3typepb.StatusCode_Forbidden),
+				statusOnError:             codes.Unauthenticated,
 				decoderHeaderMutationRules: httpfilter.HeaderMutationRules{
 					AllowExpr:    regexp.MustCompile("^(?:.*)$"),
 					DisallowExpr: regexp.MustCompile("^(?:a)$"),
@@ -199,26 +196,23 @@ func (s) TestParseFilterConfig_Success(t *testing.T) {
 		},
 		{
 			name: "FilterEnabled_DenominatorHundred",
-			cfg: func() proto.Message {
-				m, _ := anypb.New(&v3extauthzfilterpb.ExtAuthz{
-					Services: &v3extauthzfilterpb.ExtAuthz_GrpcService{
-						GrpcService: &corepb.GrpcService{
-							TargetSpecifier: &corepb.GrpcService_GoogleGrpc_{
-								GoogleGrpc: &corepb.GrpcService_GoogleGrpc{
-									TargetUri: "localhost:1234",
-								},
+			cfg: testutils.MarshalAny(t, &v3authzfitlerpb.ExtAuthz{
+				Services: &v3authzfitlerpb.ExtAuthz_GrpcService{
+					GrpcService: &corepb.GrpcService{
+						TargetSpecifier: &corepb.GrpcService_GoogleGrpc_{
+							GoogleGrpc: &corepb.GrpcService_GoogleGrpc{
+								TargetUri: "localhost:1234",
 							},
 						},
 					},
-					FilterEnabled: &corepb.RuntimeFractionalPercent{
-						DefaultValue: &v3typepb.FractionalPercent{
-							Numerator:   10,
-							Denominator: v3typepb.FractionalPercent_HUNDRED,
-						},
+				},
+				FilterEnabled: &corepb.RuntimeFractionalPercent{
+					DefaultValue: &v3typepb.FractionalPercent{
+						Numerator:   10,
+						Denominator: v3typepb.FractionalPercent_HUNDRED,
 					},
-				})
-				return m
-			}(),
+				},
+			}),
 			wantCfg: baseConfig{
 				grpcService: xdsresource.GRPCServiceConfig{
 					TargetURI: "localhost:1234",
@@ -227,30 +221,28 @@ func (s) TestParseFilterConfig_Success(t *testing.T) {
 					numerator:   10,
 					denominator: 100,
 				},
+				statusOnError: codes.PermissionDenied,
 			},
 		},
 		{
 			name: "FilterEnabled_DenominatorMillion",
-			cfg: func() proto.Message {
-				m, _ := anypb.New(&v3extauthzfilterpb.ExtAuthz{
-					Services: &v3extauthzfilterpb.ExtAuthz_GrpcService{
-						GrpcService: &corepb.GrpcService{
-							TargetSpecifier: &corepb.GrpcService_GoogleGrpc_{
-								GoogleGrpc: &corepb.GrpcService_GoogleGrpc{
-									TargetUri: "localhost:1234",
-								},
+			cfg: testutils.MarshalAny(t, &v3authzfitlerpb.ExtAuthz{
+				Services: &v3authzfitlerpb.ExtAuthz_GrpcService{
+					GrpcService: &corepb.GrpcService{
+						TargetSpecifier: &corepb.GrpcService_GoogleGrpc_{
+							GoogleGrpc: &corepb.GrpcService_GoogleGrpc{
+								TargetUri: "localhost:1234",
 							},
 						},
 					},
-					FilterEnabled: &corepb.RuntimeFractionalPercent{
-						DefaultValue: &v3typepb.FractionalPercent{
-							Numerator:   5,
-							Denominator: v3typepb.FractionalPercent_MILLION,
-						},
+				},
+				FilterEnabled: &corepb.RuntimeFractionalPercent{
+					DefaultValue: &v3typepb.FractionalPercent{
+						Numerator:   5,
+						Denominator: v3typepb.FractionalPercent_MILLION,
 					},
-				})
-				return m
-			}(),
+				},
+			}),
 			wantCfg: baseConfig{
 				grpcService: xdsresource.GRPCServiceConfig{
 					TargetURI: "localhost:1234",
@@ -259,29 +251,27 @@ func (s) TestParseFilterConfig_Success(t *testing.T) {
 					numerator:   5,
 					denominator: 1000000,
 				},
+				statusOnError: codes.PermissionDenied,
 			},
 		},
 		{
 			name: "FilterEnabled_DefaultDenominator",
-			cfg: func() proto.Message {
-				m, _ := anypb.New(&v3extauthzfilterpb.ExtAuthz{
-					Services: &v3extauthzfilterpb.ExtAuthz_GrpcService{
-						GrpcService: &corepb.GrpcService{
-							TargetSpecifier: &corepb.GrpcService_GoogleGrpc_{
-								GoogleGrpc: &corepb.GrpcService_GoogleGrpc{
-									TargetUri: "localhost:1234",
-								},
+			cfg: testutils.MarshalAny(t, &v3authzfitlerpb.ExtAuthz{
+				Services: &v3authzfitlerpb.ExtAuthz_GrpcService{
+					GrpcService: &corepb.GrpcService{
+						TargetSpecifier: &corepb.GrpcService_GoogleGrpc_{
+							GoogleGrpc: &corepb.GrpcService_GoogleGrpc{
+								TargetUri: "localhost:1234",
 							},
 						},
 					},
-					FilterEnabled: &corepb.RuntimeFractionalPercent{
-						DefaultValue: &v3typepb.FractionalPercent{
-							Numerator: 25,
-						},
+				},
+				FilterEnabled: &corepb.RuntimeFractionalPercent{
+					DefaultValue: &v3typepb.FractionalPercent{
+						Numerator: 25,
 					},
-				})
-				return m
-			}(),
+				},
+			}),
 			wantCfg: baseConfig{
 				grpcService: xdsresource.GRPCServiceConfig{
 					TargetURI: "localhost:1234",
@@ -290,30 +280,28 @@ func (s) TestParseFilterConfig_Success(t *testing.T) {
 					numerator:   25,
 					denominator: 100,
 				},
+				statusOnError: codes.PermissionDenied,
 			},
 		},
 		{
 			name: "FilterEnabled_CappedToHundredPercent",
-			cfg: func() proto.Message {
-				m, _ := anypb.New(&v3extauthzfilterpb.ExtAuthz{
-					Services: &v3extauthzfilterpb.ExtAuthz_GrpcService{
-						GrpcService: &corepb.GrpcService{
-							TargetSpecifier: &corepb.GrpcService_GoogleGrpc_{
-								GoogleGrpc: &corepb.GrpcService_GoogleGrpc{
-									TargetUri: "localhost:1234",
-								},
+			cfg: testutils.MarshalAny(t, &v3authzfitlerpb.ExtAuthz{
+				Services: &v3authzfitlerpb.ExtAuthz_GrpcService{
+					GrpcService: &corepb.GrpcService{
+						TargetSpecifier: &corepb.GrpcService_GoogleGrpc_{
+							GoogleGrpc: &corepb.GrpcService_GoogleGrpc{
+								TargetUri: "localhost:1234",
 							},
 						},
 					},
-					FilterEnabled: &corepb.RuntimeFractionalPercent{
-						DefaultValue: &v3typepb.FractionalPercent{
-							Numerator:   200,
-							Denominator: v3typepb.FractionalPercent_HUNDRED,
-						},
+				},
+				FilterEnabled: &corepb.RuntimeFractionalPercent{
+					DefaultValue: &v3typepb.FractionalPercent{
+						Numerator:   200,
+						Denominator: v3typepb.FractionalPercent_HUNDRED,
 					},
-				})
-				return m
-			}(),
+				},
+			}),
 			wantCfg: baseConfig{
 				grpcService: xdsresource.GRPCServiceConfig{
 					TargetURI: "localhost:1234",
@@ -322,6 +310,7 @@ func (s) TestParseFilterConfig_Success(t *testing.T) {
 					numerator:   100,
 					denominator: 100,
 				},
+				statusOnError: codes.PermissionDenied,
 			},
 		},
 	}
@@ -332,8 +321,8 @@ func (s) TestParseFilterConfig_Success(t *testing.T) {
 			if err != nil {
 				t.Fatalf("ParseFilterConfig() failed with unexpected error: %v", err)
 			}
-			if diff := cmp.Diff(got, tt.wantCfg, cmpOpts...); diff != "" {
-				t.Fatalf("ParseFilterConfig() returned unexpected config (-got +want):\n%s", diff)
+			if diff := cmp.Diff(tt.wantCfg, got, cmpOpts...); diff != "" {
+				t.Fatalf("ParseFilterConfig() returned unexpected config (-want, +got):\n%s", diff)
 			}
 		})
 	}
@@ -353,7 +342,7 @@ func (s) TestParseFilterConfig_Failure(t *testing.T) {
 	}{
 		{
 			name:    "InvalidConfigType",
-			cfg:     &v3extauthzfilterpb.ExtAuthz{},
+			cfg:     &v3authzfitlerpb.ExtAuthz{},
 			wantErr: "extauthz: error parsing config",
 		},
 		{
@@ -365,85 +354,70 @@ func (s) TestParseFilterConfig_Failure(t *testing.T) {
 			wantErr: "extauthz: failed to unmarshal config",
 		},
 		{
-			name: "MissingGrpcService",
-			cfg: func() proto.Message {
-				m, _ := anypb.New(&v3extauthzfilterpb.ExtAuthz{})
-				return m
-			}(),
+			name:    "MissingGrpcService",
+			cfg:     testutils.MarshalAny(t, &v3authzfitlerpb.ExtAuthz{}),
 			wantErr: "extauthz: empty grpc_service provided",
 		},
 		{
 			name: "UnsupportedGrpcService_EnvoyGrpc",
-			cfg: func() proto.Message {
-				m, _ := anypb.New(&v3extauthzfilterpb.ExtAuthz{
-					Services: &v3extauthzfilterpb.ExtAuthz_GrpcService{
-						GrpcService: &corepb.GrpcService{
-							TargetSpecifier: &corepb.GrpcService_EnvoyGrpc_{
-								EnvoyGrpc: &corepb.GrpcService_EnvoyGrpc{
-									ClusterName: "cluster",
-								},
+			cfg: testutils.MarshalAny(t, &v3authzfitlerpb.ExtAuthz{
+				Services: &v3authzfitlerpb.ExtAuthz_GrpcService{
+					GrpcService: &corepb.GrpcService{
+						TargetSpecifier: &corepb.GrpcService_EnvoyGrpc_{
+							EnvoyGrpc: &corepb.GrpcService_EnvoyGrpc{
+								ClusterName: "cluster",
 							},
 						},
 					},
-				})
-				return m
-			}(),
+				},
+			}),
 			wantErr: "extauthz: failed to parse grpc_service: only google_grpc grpc_service is supported",
 		},
 		{
 			name: "InvalidServerConfig_EmptyTargetURI",
-			cfg: func() proto.Message {
-				m, _ := anypb.New(&v3extauthzfilterpb.ExtAuthz{
-					Services: &v3extauthzfilterpb.ExtAuthz_GrpcService{
-						GrpcService: &corepb.GrpcService{
-							TargetSpecifier: &corepb.GrpcService_GoogleGrpc_{
-								GoogleGrpc: &corepb.GrpcService_GoogleGrpc{
-									TargetUri: "",
-								},
+			cfg: testutils.MarshalAny(t, &v3authzfitlerpb.ExtAuthz{
+				Services: &v3authzfitlerpb.ExtAuthz_GrpcService{
+					GrpcService: &corepb.GrpcService{
+						TargetSpecifier: &corepb.GrpcService_GoogleGrpc_{
+							GoogleGrpc: &corepb.GrpcService_GoogleGrpc{
+								TargetUri: "",
 							},
 						},
 					},
-				})
-				return m
-			}(),
+				},
+			}),
 			wantErr: "extauthz: failed to parse grpc_service: targetURI must be a non-empty string",
 		},
 		{
 			name: "MissingDefaultValueInFilterEnabled",
-			cfg: func() proto.Message {
-				m, _ := anypb.New(&v3extauthzfilterpb.ExtAuthz{
-					Services: &v3extauthzfilterpb.ExtAuthz_GrpcService{
-						GrpcService: &corepb.GrpcService{
-							TargetSpecifier: &corepb.GrpcService_GoogleGrpc_{
-								GoogleGrpc: &corepb.GrpcService_GoogleGrpc{
-									TargetUri: "localhost:1234",
-								},
+			cfg: testutils.MarshalAny(t, &v3authzfitlerpb.ExtAuthz{
+				Services: &v3authzfitlerpb.ExtAuthz_GrpcService{
+					GrpcService: &corepb.GrpcService{
+						TargetSpecifier: &corepb.GrpcService_GoogleGrpc_{
+							GoogleGrpc: &corepb.GrpcService_GoogleGrpc{
+								TargetUri: "localhost:1234",
 							},
 						},
 					},
-					FilterEnabled: &corepb.RuntimeFractionalPercent{},
-				})
-				return m
-			}(),
+				},
+				FilterEnabled: &corepb.RuntimeFractionalPercent{},
+			}),
 			wantErr: "extauthz: missing default_value in filter_enabled",
 		},
 		{
 			name: "MissingDefaultValueInDenyAtDisable",
-			cfg: func() proto.Message {
-				m, _ := anypb.New(&v3extauthzfilterpb.ExtAuthz{
-					Services: &v3extauthzfilterpb.ExtAuthz_GrpcService{
-						GrpcService: &corepb.GrpcService{
-							TargetSpecifier: &corepb.GrpcService_GoogleGrpc_{
-								GoogleGrpc: &corepb.GrpcService_GoogleGrpc{
-									TargetUri: "localhost:1234",
-								},
+			cfg: testutils.MarshalAny(t, &v3authzfitlerpb.ExtAuthz{
+				Services: &v3authzfitlerpb.ExtAuthz_GrpcService{
+					GrpcService: &corepb.GrpcService{
+						TargetSpecifier: &corepb.GrpcService_GoogleGrpc_{
+							GoogleGrpc: &corepb.GrpcService_GoogleGrpc{
+								TargetUri: "localhost:1234",
 							},
 						},
 					},
-					DenyAtDisable: &corepb.RuntimeFeatureFlag{},
-				})
-				return m
-			}(),
+				},
+				DenyAtDisable: &corepb.RuntimeFeatureFlag{},
+			}),
 			wantErr: "extauthz: missing default_value in deny_at_disable",
 		},
 	}
@@ -460,14 +434,11 @@ func (s) TestParseFilterConfig_Failure(t *testing.T) {
 // Test verifies that ParseFilterConfigOverride successfully unmarshals valid
 // per-route override configurations.
 func (s) TestParseFilterConfigOverride_Success(t *testing.T) {
-	override, err := anypb.New(&v3extauthzfilterpb.ExtAuthzPerRoute{
-		Override: &v3extauthzfilterpb.ExtAuthzPerRoute_Disabled{
+	override := testutils.MarshalAny(t, &v3authzfitlerpb.ExtAuthzPerRoute{
+		Override: &v3authzfitlerpb.ExtAuthzPerRoute_Disabled{
 			Disabled: true,
 		},
 	})
-	if err != nil {
-		t.Fatalf("Failed to marshal ExtAuthzPerRoute to anypb.Any: %v", err)
-	}
 
 	b := builder{}
 	got, err := b.ParseFilterConfigOverride(override)
@@ -489,7 +460,7 @@ func (s) TestParseFilterConfigOverride_Failure(t *testing.T) {
 	}{
 		{
 			name:     "InvalidOverrideType",
-			override: &v3extauthzfilterpb.ExtAuthzPerRoute{},
+			override: &v3authzfitlerpb.ExtAuthzPerRoute{},
 			wantErr:  "extauthz: error parsing override config",
 		},
 		{

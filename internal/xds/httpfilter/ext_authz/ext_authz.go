@@ -22,7 +22,9 @@ package extauthz
 import (
 	"fmt"
 
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal/envconfig"
+	"google.golang.org/grpc/internal/transport"
 	"google.golang.org/grpc/internal/xds/httpfilter"
 	"google.golang.org/grpc/internal/xds/matcher"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
@@ -78,6 +80,14 @@ func parseFilterEnabled(fp *v3corepb.RuntimeFractionalPercent) (fraction, error)
 	return fraction{numerator: num, denominator: den}, nil
 }
 
+// grpcStatusCode converts an HTTP status code to a gRPC status code.
+func grpcStatusCode(httpStatus int32) codes.Code {
+	if code, ok := transport.HTTPStatusConvTab[int(httpStatus)]; ok {
+		return code
+	}
+	return codes.Unknown
+}
+
 func (builder) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, error) {
 	m, ok := cfg.(*anypb.Any)
 	if !ok {
@@ -109,6 +119,12 @@ func (builder) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, er
 		denyAtDisable = df.GetDefaultValue().GetValue()
 	}
 
+	httpStatus := int32(403)
+	if st := msg.GetStatusOnError().GetCode(); st != 0 {
+		httpStatus = int32(st)
+	}
+	statusOnError := grpcStatusCode(httpStatus)
+
 	mutationRules, err := httpfilter.HeaderMutationRulesFromProto(msg.GetDecoderHeaderMutationRules())
 	if err != nil {
 		return nil, err
@@ -135,7 +151,7 @@ func (builder) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, er
 		denyAtDisable:              denyAtDisable,
 		failureModeAllow:           msg.GetFailureModeAllow(),
 		failureModeAllowHeaderAdd:  msg.GetFailureModeAllowHeaderAdd(),
-		statusOnError:              int32(msg.GetStatusOnError().GetCode()),
+		statusOnError:              statusOnError,
 		allowedHeaders:             allowedHeaders,
 		disallowedHeaders:          disallowedHeaders,
 		decoderHeaderMutationRules: mutationRules,
