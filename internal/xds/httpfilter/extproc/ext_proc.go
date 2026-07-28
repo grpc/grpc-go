@@ -268,12 +268,14 @@ func (i *clientInterceptor) Close() {
 // processor server to be able to cancel it independently. This context has a
 // deadline of the timeout specified in the config, if present, and contains the
 // initial metadata specified in the config.
-func createProcContext(ctx context.Context, server xdsresource.GRPCServiceConfig) (context.Context, context.CancelFunc) {
-	procCtx, cancel := context.WithCancel(ctx)
+func createProcContext(ctx context.Context, server xdsresource.GRPCServiceConfig) (procCtx context.Context, cancel context.CancelFunc) {
 	if server.Timeout != 0 {
 		procCtx, cancel = context.WithTimeout(ctx, server.Timeout)
+	} else {
+		procCtx, cancel = context.WithCancel(ctx)
 	}
-	return metadata.NewOutgoingContext(procCtx, server.InitialMetadata), cancel
+	procCtx = metadata.NewOutgoingContext(procCtx, server.InitialMetadata)
+	return procCtx, cancel
 }
 
 func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, newStream func(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStream, error), opts ...grpc.CallOption) (grpc.ClientStream, error) {
@@ -304,7 +306,7 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 	// than deferring it.
 	var err error
 	if csCommon.procStream, err = i.procClient.Process(procCtx); err != nil {
-		return csCommon.handleInitError(fmt.Errorf("failed to create a stream to external processor server: %v", err), newStream, opts...)
+		return csCommon.handleInitError(fmt.Errorf("failed to create a stream to external processor: %v", err), newStream, opts...)
 	}
 
 	// Observability mode.
@@ -340,6 +342,7 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 
 		return ocs, nil
 	}
+
 	// Normal mode.
 	cs := &clientStream{
 		commonStream:             csCommon,
@@ -553,19 +556,10 @@ func (ocs *observabilityClientStream) streamError(err error) error {
 }
 
 func (ocs *observabilityClientStream) Header() (metadata.MD, error) {
-	// If the external processor has failed and RPC needs to be failed, fail the
-	// RPC with the error received from the external processor stream.
 	if fatalErr, ok := ocs.procStreamErr.Load().(error); ok {
 		return nil, fatalErr
 	}
-	if err := ocs.initiateResponseHeaderProcessing(); err != nil {
-		return nil, err
-	}
-	md, err := ocs.dataplaneStream.Header()
-	if err = ocs.streamError(err); err != nil {
-		return nil, err
-	}
-	return md, nil
+	return ocs.initiateResponseHeaderProcessing()
 }
 
 func (ocs *observabilityClientStream) Trailer() metadata.MD {
@@ -580,7 +574,7 @@ func (ocs *observabilityClientStream) Trailer() metadata.MD {
 	if trailer == nil {
 		return nil
 	}
-	ocs.initiateResponseTrailerProcessing()
+	ocs.initiateResponseTrailerProcessing(trailer)
 	return trailer
 }
 
@@ -593,11 +587,11 @@ func (ocs *observabilityClientStream) CloseSend() error {
 	if !ocs.procStreamBypass.Load() && ocs.config.processingModes.requestBodyMode == modeSend {
 		err = ocs.sendToProcessor(ocs.newHalfCloseReq())
 	}
-	ocs.recordMetric(clientHalfCloseDurationMetric, time.Since(startTime).Seconds())
 	if err != nil {
 		return err
 	}
 	err = ocs.dataplaneStream.CloseSend()
+	ocs.recordMetric(clientHalfCloseDurationMetric, time.Since(startTime).Seconds())
 	return ocs.streamError(err)
 }
 
@@ -627,14 +621,14 @@ func (ocs *observabilityClientStream) RecvMsg(m any) error {
 	// processing.
 	if !ocs.responseRecvStarted {
 		ocs.responseRecvStarted = true
-		if err := ocs.initiateResponseHeaderProcessing(); err != nil {
+		if _, err := ocs.initiateResponseHeaderProcessing(); err != nil {
 			return err
 		}
 	}
 
 	err := ocs.dataplaneStream.RecvMsg(m)
 	if err != nil {
-		trerr := ocs.initiateResponseTrailerProcessing()
+		trerr := ocs.initiateResponseTrailerProcessing(ocs.dataplaneStream.Trailer())
 		if trerr != nil {
 			return trerr
 		}
@@ -662,11 +656,10 @@ func (ocs *observabilityClientStream) sendBodyToProcessor(m any, isClientMessage
 // initiateResponseTrailerProcessing fetches response trailers from the
 // dataplane stream and forwards them to the external processor if configured.
 // It is guarded by responseTrailerOnce to run at most once.
-func (ocs *observabilityClientStream) initiateResponseTrailerProcessing() error {
+func (ocs *observabilityClientStream) initiateResponseTrailerProcessing(trailers metadata.MD) error {
 	if !ocs.responseTrailerOnce.CompareAndSwap(false, true) {
 		return nil
 	}
-	trailers := ocs.dataplaneStream.Trailer()
 	startTime := time.Now()
 	if ocs.config.processingModes.responseTrailerMode == modeSend && !ocs.procStreamBypass.Load() && !ocs.trailersOnly {
 		if err := ocs.sendToProcessor(ocs.newResponseTrailersReq(trailers)); err != nil {
@@ -677,11 +670,11 @@ func (ocs *observabilityClientStream) initiateResponseTrailerProcessing() error 
 
 	// Half-close the external processor stream immediately so the server can
 	// shut down gracefully.
-	ocs.mu.Lock()
 	if !ocs.procStreamBypass.Load() {
+		ocs.mu.Lock()
 		ocs.procStream.CloseSend()
+		ocs.mu.Unlock()
 	}
-	ocs.mu.Unlock()
 	return nil
 }
 
@@ -689,14 +682,18 @@ func (ocs *observabilityClientStream) initiateResponseTrailerProcessing() error 
 // stream, detects if the response is trailers-only, and forwards the response
 // headers to the external processor if configured. It is guarded by
 // responseHeaderOnce to run at most once.
-func (ocs *observabilityClientStream) initiateResponseHeaderProcessing() error {
+func (ocs *observabilityClientStream) initiateResponseHeaderProcessing() (metadata.MD, error) {
 	if !ocs.responseHeaderOnce.CompareAndSwap(false, true) {
-		return nil
+		md, err := ocs.dataplaneStream.Header()
+		return md, ocs.streamError(err)
 	}
 	header, err := ocs.dataplaneStream.Header()
 	if err != nil {
-		return ocs.streamError(err)
+		return nil, ocs.streamError(err)
 	}
+	// rawHeader stores the actual header to make sure we return correct header
+	// even in case of trailers only.
+	rawHeader := header
 	startTime := time.Now()
 	// A trailers-only response returns nil from dataplaneStream.Header().
 	if header == nil {
@@ -708,11 +705,11 @@ func (ocs *observabilityClientStream) initiateResponseHeaderProcessing() error {
 
 	if ocs.config.processingModes.responseHeaderMode == modeSend && !ocs.procStreamBypass.Load() {
 		if err = ocs.sendToProcessor(ocs.newResponseHeadersReq(header)); err != nil {
-			return err
+			return nil, err
 		}
 	}
 	ocs.recordMetric(serverHeadersDurationMetric, time.Since(startTime).Seconds())
-	return nil
+	return rawHeader, nil
 }
 
 // sendToProcessor sends a ProcessingRequest to the external processor stream.

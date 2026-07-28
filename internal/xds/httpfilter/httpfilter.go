@@ -90,9 +90,9 @@ type ClientInterceptor interface {
 
 // ClientFilterOptions contains options for building a client filter.
 type ClientFilterOptions struct {
-	FilterName      string // FilterName is the filter name from the xDS configuration.
-	MetricsRecorder estats.MetricsRecorder
-	Target          string
+	FilterName      string                 // FilterName is the filter name from the xDS configuration.
+	MetricsRecorder estats.MetricsRecorder // MetricsRecorder is the metrics recorder to capture metrics for the filter.
+	Target          string                 // Target is the target string of the channel.
 }
 
 // ClientFilterBuilder is an optional interface that a Builder can implement to
