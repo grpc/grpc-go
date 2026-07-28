@@ -75,6 +75,10 @@ smoothly and quickly.
   GitHub, which will trigger a GitHub Actions run that you can use to verify
   everything is passing.
 
+- If your PR is focused on **performance**, see the
+  [benchmark directory's README](benchmark/README.md) for how to run the
+  benchmarks and compare results before/after your change.
+
 - Note that there are two GitHub actions checks that need not be green:
 
   1. We test the freshness of the generated proto code we maintain via the
