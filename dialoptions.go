@@ -96,6 +96,7 @@ type dialOptions struct {
 	maxCallAttempts             int
 	enableLocalDNSResolution    bool // Specifies if target hostnames should be resolved when proxying is enabled.
 	useProxy                    bool // Specifies if a server should be connected via proxy.
+	childDialOpts               []DialOption
 }
 
 // DialOption configures how we set up the connection.
@@ -808,5 +809,18 @@ func WithMaxCallAttempts(n int) DialOption {
 func withBufferPool(bufferPool mem.BufferPool) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
 		o.copts.BufferPool = bufferPool
+	})
+}
+
+// WithChildDialOptions returns a DialOption that specifies the dial options
+// to be applied to any child channels created by components on this channel.
+//
+// # Experimental
+//
+// Notice: This API is EXPERIMENTAL and may be changed or removed in a
+// later release.
+func WithChildDialOptions(opts ...DialOption) DialOption {
+	return newFuncDialOption(func(o *dialOptions) {
+		o.childDialOpts = append(o.childDialOpts, opts...)
 	})
 }

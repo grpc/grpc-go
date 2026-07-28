@@ -89,6 +89,16 @@ func init() {
 	internal.MetricsRecorderForServer = func(srv *Server) estats.MetricsRecorder {
 		return istats.NewMetricsRecorderList(srv.opts.statsHandlers)
 	}
+	internal.GetServerChildDialOptions = func(srv *Server) []any {
+		if len(srv.opts.childDialOpts) == 0 {
+			return nil
+		}
+		opts := make([]any, len(srv.opts.childDialOpts))
+		for i, opt := range srv.opts.childDialOpts {
+			opts[i] = opt
+		}
+		return opts
+	}
 }
 
 var statusOK = status.New(codes.OK, "")
@@ -183,6 +193,7 @@ type serverOptions struct {
 	bufferPool            mem.BufferPool
 	waitForHandlers       bool
 	staticWindowSize      bool
+	childDialOpts         []DialOption
 }
 
 var defaultServerOptions = serverOptions{
@@ -660,6 +671,19 @@ func WaitForHandlers(w bool) ServerOption {
 func bufferPool(bufferPool mem.BufferPool) ServerOption {
 	return newFuncServerOption(func(o *serverOptions) {
 		o.bufferPool = bufferPool
+	})
+}
+
+// ChildDialOptions returns a ServerOption that specifies the dial options
+// to be applied to any child channels created by components on this server.
+//
+// # Experimental
+//
+// Notice: This API is EXPERIMENTAL and may be changed or removed in a
+// later release.
+func ChildDialOptions(opts ...DialOption) ServerOption {
+	return newFuncServerOption(func(o *serverOptions) {
+		o.childDialOpts = append(o.childDialOpts, opts...)
 	})
 }
 

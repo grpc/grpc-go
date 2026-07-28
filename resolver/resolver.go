@@ -178,6 +178,10 @@ type BuildOptions struct {
 	Authority string
 	// MetricsRecorder is the metrics recorder to do recording.
 	MetricsRecorder stats.MetricsRecorder
+	// ChildDialOpts specifies the dial options to be applied to any child
+	// channels created by components on this channel. These are passed as
+	// []any (unexported/empty interfaces) to avoid circular imports.
+	ChildDialOpts []any
 }
 
 // An Endpoint is one network endpoint, or server, which may have multiple

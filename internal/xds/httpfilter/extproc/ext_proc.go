@@ -52,7 +52,7 @@ var (
 	parseGRPCServiceConfig = func(*v3corepb.GrpcService) (xdsresource.GRPCServiceConfig, error) {
 		return xdsresource.GRPCServiceConfig{}, fmt.Errorf("parseGRPCServiceConfig not implemented")
 	}
-	createExtProcChannel = func(xdsresource.GRPCServiceConfig) (grpc.ClientConnInterface, func() error, error) {
+	createExtProcChannel = func(xdsresource.GRPCServiceConfig, ...grpc.DialOption) (grpc.ClientConnInterface, func() error, error) {
 		return nil, nil, fmt.Errorf("dialing external processing server not implemented")
 	}
 )
@@ -194,17 +194,19 @@ func (builder) IsTerminal() bool {
 	return false
 }
 
-func (builder) BuildClientFilter(httpfilter.ClientFilterOptions) httpfilter.ClientFilter {
-	return clientFilter{}
+func (builder) BuildClientFilter(opts httpfilter.ClientFilterOptions) httpfilter.ClientFilter {
+	return clientFilter{childDialOpts: opts.ChildDialOpts}
 }
 
 var _ httpfilter.ClientFilterBuilder = builder{}
 
-type clientFilter struct{}
+type clientFilter struct {
+	childDialOpts []grpc.DialOption
+}
 
 func (clientFilter) Close() {}
 
-func (clientFilter) BuildClientInterceptor(base, override httpfilter.FilterConfig) (httpfilter.ClientInterceptor, error) {
+func (cf clientFilter) BuildClientInterceptor(base, override httpfilter.FilterConfig) (httpfilter.ClientInterceptor, error) {
 	b, ok := base.(baseConfig)
 	if !ok {
 		return nil, fmt.Errorf("extproc: incorrect config type provided (%T): %v", base, base)
@@ -221,7 +223,12 @@ func (clientFilter) BuildClientInterceptor(base, override httpfilter.FilterConfi
 	config := newInterceptorConfig(b, ov)
 
 	// Create a channel to the external processing server.
-	cc, cancel, err := createExtProcChannel(config.server)
+	combinedOpts := make([]grpc.DialOption, 0, len(cf.childDialOpts)*2)
+	combinedOpts = append(combinedOpts, cf.childDialOpts...)
+	if len(cf.childDialOpts) > 0 {
+		combinedOpts = append(combinedOpts, grpc.WithChildDialOptions(cf.childDialOpts...))
+	}
+	cc, cancel, err := createExtProcChannel(config.server, combinedOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("extproc: failed to create client: %v", err)
 	}

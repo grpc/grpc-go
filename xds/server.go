@@ -86,8 +86,17 @@ func NewGRPCServer(opts ...grpc.ServerOption) (*GRPCServer, error) {
 
 	var mrl estats.MetricsRecorder
 	mrl = istats.NewMetricsRecorderList(nil)
+	var childDialOpts []grpc.DialOption
 	if srv, ok := s.gs.(*grpc.Server); ok { // Will hit in prod but not for testing.
 		mrl = internal.MetricsRecorderForServer.(func(*grpc.Server) estats.MetricsRecorder)(srv)
+		if internal.GetServerChildDialOptions != nil {
+			if rawOpts := internal.GetServerChildDialOptions.(func(*grpc.Server) []any)(srv); len(rawOpts) > 0 {
+				childDialOpts = make([]grpc.DialOption, len(rawOpts))
+				for i, opt := range rawOpts {
+					childDialOpts[i] = opt.(grpc.DialOption)
+				}
+			}
+		}
 	}
 
 	// Initializing the xDS client upfront (instead of at serving time)
@@ -97,7 +106,7 @@ func NewGRPCServer(opts ...grpc.ServerOption) (*GRPCServer, error) {
 	if s.opts.clientPoolForTesting != nil {
 		pool = s.opts.clientPoolForTesting
 	}
-	xdsClient, xdsClientClose, err := pool.NewClient(xdsclient.NameForServer, mrl)
+	xdsClient, xdsClientClose, err := pool.NewClient(xdsclient.NameForServer, mrl, childDialOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("xDS client creation failed: %v", err)
 	}

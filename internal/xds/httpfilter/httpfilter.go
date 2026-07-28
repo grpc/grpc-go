@@ -90,6 +90,9 @@ type ClientInterceptor interface {
 // ClientFilterOptions contains options for building a client filter.
 type ClientFilterOptions struct {
 	FilterName string // FilterName is the filter name from the xDS configuration.
+	// ChildDialOpts specifies the dial options to be applied to any child
+	// channels created by components on this channel.
+	ChildDialOpts []grpc.DialOption
 }
 
 // ClientFilterBuilder is an optional interface that a Builder can implement to
