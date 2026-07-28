@@ -674,3 +674,41 @@ func (s) TestDecompress_ClosesReader(t *testing.T) {
 		})
 	}
 }
+
+// TestOnFinishCallOptionCalledOnce verifies that the callback passed to
+// OnFinish is invoked at most once, matching its documented guarantee
+// ("the onFinish callback provided will only be called once by gRPC"),
+// even if the callback registered via before() is invoked multiple times.
+func TestOnFinishCallOptionCalledOnce(t *testing.T) {
+	var count int
+	var mu sync.Mutex
+	opt := OnFinish(func(error) {
+		mu.Lock()
+		count++
+		mu.Unlock()
+	})
+
+	ci := &callInfo{}
+	if err := opt.before(ci); err != nil {
+		t.Fatalf("before() returned unexpected error: %v", err)
+	}
+	if len(ci.onFinish) != 1 {
+		t.Fatalf("len(ci.onFinish) = %d, want 1", len(ci.onFinish))
+	}
+
+	var wg sync.WaitGroup
+	for i := 0; i < 5; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			ci.onFinish[0](nil)
+		}()
+	}
+	wg.Wait()
+
+	mu.Lock()
+	defer mu.Unlock()
+	if count != 1 {
+		t.Fatalf("onFinish callback invoked %d times, want 1", count)
+	}
+}

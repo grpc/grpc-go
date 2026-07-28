@@ -395,7 +395,11 @@ type OnFinishCallOption struct {
 }
 
 func (o OnFinishCallOption) before(c *callInfo) error {
-	c.onFinish = append(c.onFinish, o.OnFinish)
+	var once sync.Once
+	wrapped := func(err error) {
+		once.Do(func() { o.OnFinish(err) })
+	}
+	c.onFinish = append(c.onFinish, wrapped)
 	return nil
 }
 
