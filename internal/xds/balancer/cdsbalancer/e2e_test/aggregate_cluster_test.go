@@ -1355,9 +1355,9 @@ func (s) TestAggregateCluster_LRS_PrimaryLeafOnly(t *testing.T) {
 		},
 	}
 
-	const wantRpcCount = 10
+	const wantRPCCount = 10
 	// Make RPC calls and verify every call reaches the primary cluster (clusterName1).
-	for i := 0; i < wantRpcCount; i++ {
+	for i := 0; i < wantRPCCount; i++ {
 		peer := &peer.Peer{}
 		if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(peer), grpc.WaitForReady(true)); err != nil {
 			t.Fatalf("EmptyCall() failed: %v", err)
@@ -1389,7 +1389,7 @@ func (s) TestAggregateCluster_LRS_PrimaryLeafOnly(t *testing.T) {
 					if len(load.UpstreamLocalityStats) != 1 {
 						t.Fatalf("UpstreamLocalityStats length = %d, want 1", len(load.UpstreamLocalityStats))
 					}
-					if load.UpstreamLocalityStats[0].TotalSuccessfulRequests == wantRpcCount {
+					if load.UpstreamLocalityStats[0].TotalSuccessfulRequests == wantRPCCount {
 						return
 					}
 				}
@@ -1478,7 +1478,7 @@ func (s) TestAggregateCluster_LRS_FailoverToSecondaryLeaf(t *testing.T) {
 		t.Fatalf("EmptyCall() routed to %q, want %q", got, want)
 	}
 
-	const wantRpcCount = 1
+	const wantRPCCount = 1
 
 	// Verify LRS report includes load for primary cluster (clusterName1).
 	for gotCluster1Report := false; !gotCluster1Report; {
@@ -1492,10 +1492,10 @@ func (s) TestAggregateCluster_LRS_FailoverToSecondaryLeaf(t *testing.T) {
 					if len(load.UpstreamLocalityStats) != 1 {
 						t.Fatalf("UpstreamLocalityStats length = %d, want 1", len(load.UpstreamLocalityStats))
 					}
-					if load.UpstreamLocalityStats[0].TotalSuccessfulRequests == wantRpcCount {
+					if load.UpstreamLocalityStats[0].TotalSuccessfulRequests == wantRPCCount {
 						gotCluster1Report = true
 					}
-					if load.UpstreamLocalityStats[0].TotalSuccessfulRequests > wantRpcCount {
+					if load.UpstreamLocalityStats[0].TotalSuccessfulRequests > wantRPCCount {
 						t.Fatalf("Too many RPCs to primary cluster %q", clusterName1)
 					}
 				}
@@ -1545,10 +1545,10 @@ func (s) TestAggregateCluster_LRS_FailoverToSecondaryLeaf(t *testing.T) {
 					if len(load.UpstreamLocalityStats) != 1 {
 						t.Fatalf("UpstreamLocalityStats length = %d, want 1", len(load.UpstreamLocalityStats))
 					}
-					if load.UpstreamLocalityStats[0].TotalSuccessfulRequests == wantRpcCount {
+					if load.UpstreamLocalityStats[0].TotalSuccessfulRequests == wantRPCCount {
 						return
 					}
-					if load.UpstreamLocalityStats[0].TotalSuccessfulRequests > wantRpcCount {
+					if load.UpstreamLocalityStats[0].TotalSuccessfulRequests > wantRPCCount {
 						t.Fatalf("Too many RPCs to secondary cluster %q", clusterName2)
 					}
 				}
@@ -1631,9 +1631,9 @@ func (s) TestAggregateCluster_LRS_DropsAndLoadReporting(t *testing.T) {
 		},
 	}
 
-	const wantRpcCount = 5
+	const wantRPCCount = 5
 	// Make RPC calls; all should be dropped locally by xDS overload drop.
-	for i := 0; i < wantRpcCount; i++ {
+	for i := 0; i < wantRPCCount; i++ {
 		_, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true))
 		if status.Code(err) != codes.Unavailable || !strings.Contains(err.Error(), "RPC is dropped") {
 			t.Fatalf("EmptyCall() error = %v, want Unavailable with message 'RPC is dropped'", err)
@@ -1650,10 +1650,10 @@ func (s) TestAggregateCluster_LRS_DropsAndLoadReporting(t *testing.T) {
 			for _, load := range loadStats.ClusterStats {
 				if load.ClusterName == clusterName1 {
 					for _, drop := range load.DroppedRequests {
-						if drop.Category == dropCategory && drop.DroppedCount == wantRpcCount {
+						if drop.Category == dropCategory && drop.DroppedCount == wantRPCCount {
 							return
 						}
-						if drop.Category == dropCategory && drop.DroppedCount > wantRpcCount {
+						if drop.Category == dropCategory && drop.DroppedCount > wantRPCCount {
 							t.Fatalf("Too many RPCs dropped for category %q", dropCategory)
 						}
 						if drop.Category != dropCategory {
