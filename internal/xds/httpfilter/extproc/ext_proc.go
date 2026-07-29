@@ -637,7 +637,7 @@ func (ocs *observabilityClientStream) RecvMsg(m any) error {
 			return err
 		}
 	}
-	return nil
+	return ocs.streamError(nil)
 }
 
 // sendBodyToProcessor marshals the given message and forwards it as a request
