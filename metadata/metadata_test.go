@@ -20,6 +20,7 @@ package metadata
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 	"strconv"
 	"testing"
@@ -342,6 +343,93 @@ func (s) TestAppendToOutgoingContext_FromKVSlice(t *testing.T) {
 	}
 }
 
+func (s) TestValueFromOutgoingContext(t *testing.T) {
+	tCtx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	md := Pairs(
+		"X-My-Header-1", "42",
+		"x-my-header-3", "44",
+	)
+	// Verify that we match case-insensitively even if callers directly
+	// modify md.
+	md["X-INCORRECT-UPPERCASE"] = []string{"foo"}
+	ctx := NewOutgoingContext(tCtx, md)
+	ctx = AppendToOutgoingContext(ctx, "x-my-header-2", "43-1")
+	ctx = AppendToOutgoingContext(ctx, "X-My-Header-2", "43-2")
+
+	for _, test := range []struct {
+		key  string
+		want []string
+	}{
+		{
+			key:  "x-my-header-1",
+			want: []string{"42"},
+		},
+		{
+			// Split across raw.md (none here) and two AppendToOutgoingContext
+			// calls (raw.added) — must accumulate across all of them, in
+			// call order, same as FromOutgoingContext.
+			key:  "x-my-header-2",
+			want: []string{"43-1", "43-2"},
+		},
+		{
+			key:  "x-my-header-3",
+			want: []string{"44"},
+		},
+		{
+			key:  "x-unknown",
+			want: nil,
+		},
+		{
+			key:  "x-incorrect-uppercase",
+			want: []string{"foo"},
+		},
+	} {
+		v := ValueFromOutgoingContext(ctx, test.key)
+		if !reflect.DeepEqual(v, test.want) {
+			t.Errorf("ValueFromOutgoingContext(ctx, %q) = %v, want %v", test.key, v, test.want)
+		}
+	}
+
+	// Accumulate raw.md with later appends, in order.
+	mergeCtx := NewOutgoingContext(tCtx, Pairs("k1", "v1", "k2", "v2"))
+	mergeCtx = AppendToOutgoingContext(mergeCtx, "k1", "v3")
+	mergeCtx = AppendToOutgoingContext(mergeCtx, "k1", "v4")
+	if v, want := ValueFromOutgoingContext(mergeCtx, "k1"), []string{"v1", "v3", "v4"}; !reflect.DeepEqual(v, want) {
+		t.Errorf("ValueFromOutgoingContext(ctx, \"k1\") = %v, want %v", v, want)
+	}
+
+	// No outgoing metadata at all.
+	if v := ValueFromOutgoingContext(tCtx, "x-my-header-1"); v != nil {
+		t.Errorf("ValueFromOutgoingContext on context with no outgoing metadata = %v, want nil", v)
+	}
+}
+
+func (s) TestValueFromOutgoingContext_AddedCaseInsensitive(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	ctx = context.WithValue(ctx, mdOutgoingKey{}, rawMD{added: [][]string{{"X-My-Header", "42"}}})
+
+	if v, want := ValueFromOutgoingContext(ctx, "x-my-header"), []string{"42"}; !reflect.DeepEqual(v, want) {
+		t.Errorf("ValueFromOutgoingContext(ctx, \"x-my-header\") = %v, want %v", v, want)
+	}
+}
+
+func (s) TestValueFromOutgoingContext_PanicsOnOddPairs(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatal("ValueFromOutgoingContext did not panic on an odd number of pairs in added")
+		}
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	ctx = context.WithValue(ctx, mdOutgoingKey{}, rawMD{added: [][]string{{"key-without-a-value"}}})
+
+	ValueFromOutgoingContext(ctx, "key-without-a-value")
+}
+
 // Old/slow approach to adding metadata to context
 func Benchmark_AddingMetadata_ContextManipulationApproach(b *testing.B) {
 	// TODO: Add in N=1-100 tests once Go1.6 support is removed.
@@ -379,6 +467,38 @@ func BenchmarkFromOutgoingContext(b *testing.B) {
 	}
 }
 
+// Reading one key out of many staged headers
+func BenchmarkValueFromOutgoingContextVsFromOutgoingContext(b *testing.B) {
+	for _, numHeaders := range []int{1, 10, 50} {
+		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+		defer cancel()
+		md := MD{}
+		for i := 0; i < numHeaders; i++ {
+			md[strconv.Itoa(i)] = []string{strconv.Itoa(i)}
+		}
+		ctx = NewOutgoingContext(ctx, md)
+		ctx = AppendToOutgoingContext(ctx, "target-key", "target-value")
+
+		b.Run(fmt.Sprintf("FromOutgoingContext/n=%d", numHeaders), func(b *testing.B) {
+			for n := 0; n < b.N; n++ {
+				out, _ := FromOutgoingContext(ctx)
+				if len(out["target-key"]) != 1 {
+					b.Fatal("ensures not optimized away")
+				}
+			}
+		})
+
+		b.Run(fmt.Sprintf("ValueFromOutgoingContext/n=%d", numHeaders), func(b *testing.B) {
+			for n := 0; n < b.N; n++ {
+				result := ValueFromOutgoingContext(ctx, "target-key")
+				if len(result) != 1 {
+					b.Fatal("ensures not optimized away")
+				}
+			}
+		})
+	}
+}
+
 func BenchmarkFromIncomingContext(b *testing.B) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -409,6 +529,31 @@ func BenchmarkValueFromIncomingContext(b *testing.B) {
 	b.Run("key-not-found", func(b *testing.B) {
 		for n := 0; n < b.N; n++ {
 			result := ValueFromIncomingContext(ctx, "key-not-found")
+			if len(result) != 0 {
+				b.Fatal("ensures not optimized away")
+			}
+		}
+	})
+}
+
+func BenchmarkValueFromOutgoingContext(b *testing.B) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	ctx = NewOutgoingContext(ctx, MD{"k3": {"v3", "v4"}})
+	ctx = AppendToOutgoingContext(ctx, "k1", "v1", "k2", "v2")
+
+	b.Run("key-found", func(b *testing.B) {
+		for n := 0; n < b.N; n++ {
+			result := ValueFromOutgoingContext(ctx, "k1")
+			if len(result) != 1 {
+				b.Fatal("ensures not optimized away")
+			}
+		}
+	})
+
+	b.Run("key-not-found", func(b *testing.B) {
+		for n := 0; n < b.N; n++ {
+			result := ValueFromOutgoingContext(ctx, "key-not-found")
 			if len(result) != 0 {
 				b.Fatal("ensures not optimized away")
 			}

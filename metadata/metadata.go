@@ -360,6 +360,49 @@ func FromOutgoingContext(ctx context.Context) (MD, bool) {
 	return out, ok
 }
 
+// ValueFromOutgoingContext returns the metadata value corresponding to the
+// metadata key from the outgoing metadata if it exists. Keys are matched in a
+// case-insensitive manner.
+//
+// Unlike FromOutgoingContext, this does not copy the entire outgoing metadata.
+func ValueFromOutgoingContext(ctx context.Context, key string) []string {
+	raw, ok := ctx.Value(mdOutgoingKey{}).(rawMD)
+	if !ok {
+		return nil
+	}
+
+	key = strings.ToLower(key)
+	var vals []string
+	if v, ok := raw.md[key]; ok {
+		vals = copyOf(v)
+	} else {
+		for k, v := range raw.md {
+			// Case insensitive comparison: MD is a map, and there's no
+			// guarantee that the MD attached to the context is created using
+			// our helper functions.
+			if strings.EqualFold(k, key) {
+				vals = copyOf(v)
+				break
+			}
+		}
+	}
+
+	for _, added := range raw.added {
+		if len(added)%2 == 1 {
+			panic(fmt.Sprintf("metadata: ValueFromOutgoingContext got an odd number of input pairs for metadata: %d", len(added)))
+		}
+
+		// Case insensitive, like FromOutgoingContext: added isn't guaranteed lowercase.
+		for i := 0; i < len(added); i += 2 {
+			if strings.EqualFold(added[i], key) {
+				vals = append(vals, added[i+1])
+			}
+		}
+	}
+
+	return vals
+}
+
 type rawMD struct {
 	md    MD
 	added [][]string
