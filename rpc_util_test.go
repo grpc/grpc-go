@@ -679,7 +679,7 @@ func (s) TestDecompress_ClosesReader(t *testing.T) {
 // OnFinish is invoked at most once, matching its documented guarantee
 // ("the onFinish callback provided will only be called once by gRPC"),
 // even if the callback registered via before() is invoked multiple times.
-func TestOnFinishCallOptionCalledOnce(t *testing.T) {
+func (s) TestOnFinishCallOptionCalledOnce(t *testing.T) {
 	var count int
 	var mu sync.Mutex
 	opt := OnFinish(func(error) {
