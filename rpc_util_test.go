@@ -27,6 +27,7 @@ import (
 	"math"
 	"reflect"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -710,5 +711,37 @@ func (s) TestOnFinishCallOptionCalledOnce(t *testing.T) {
 	defer mu.Unlock()
 	if count != 1 {
 		t.Fatalf("onFinish callback invoked %d times, want 1", count)
+	}
+}
+
+// TestOnFinishCallOptionCalledOnceAcrossRetries verifies that the callback
+// passed to OnFinish is invoked at most once even when before() is called
+// multiple times on the same OnFinishCallOption value, which happens when a
+// CallOption is reused across multiple RPC attempts (retries): each before()
+// call currently wraps o.OnFinish in its own independent sync.Once, so the
+// underlying user callback could still fire once per attempt rather than
+// once per RPC.
+func (s) TestOnFinishCallOptionCalledOnceAcrossRetries(t *testing.T) {
+	var count int32
+	opt := OnFinish(func(error) {
+		atomic.AddInt32(&count, 1)
+	})
+
+	// Simulate 3 separate attempts, each calling before() on the same opt
+	// and then invoking the resulting wrapped callback once, as csAttempt
+	// finish handling does per attempt.
+	for i := 0; i < 3; i++ {
+		ci := &callInfo{}
+		if err := opt.before(ci); err != nil {
+			t.Fatalf("before() attempt %d returned unexpected error: %v", i, err)
+		}
+		if len(ci.onFinish) != 1 {
+			t.Fatalf("attempt %d: len(ci.onFinish) = %d, want 1", i, len(ci.onFinish))
+		}
+		ci.onFinish[0](nil)
+	}
+
+	if got := atomic.LoadInt32(&count); got != 1 {
+		t.Fatalf("onFinish callback invoked %d times across retries, want 1", got)
 	}
 }

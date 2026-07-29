@@ -378,8 +378,11 @@ func (o FailFastCallOption) after(*callInfo, *csAttempt) {}
 // Notice: This API is EXPERIMENTAL and may be changed or removed in a
 // later release.
 func OnFinish(onFinish func(err error)) CallOption {
+	once := sync.Once{}
 	return OnFinishCallOption{
-		OnFinish: onFinish,
+		OnFinish: func(err error) {
+			once.Do(func() { onFinish(err) })
+		},
 	}
 }
 
