@@ -618,7 +618,12 @@ func (a *csAttempt) getTransport() error {
 
 func (a *csAttempt) newStream() error {
 	cs := a.cs
-	cs.callHdr.PreviousAttempts = cs.numRetries
+	// The header is copied because the fields set below, notably the authority
+	// override taken from the pick result, describe the endpoint picked for
+	// this attempt only. Mutating the clientStream's header would carry them
+	// into a later attempt.
+	callHdr := *cs.callHdr
+	callHdr.PreviousAttempts = cs.numRetries
 
 	// Merge metadata stored in PickResult, if any, with existing call metadata.
 	// It is safe to overwrite the csAttempt's context here, since all state
@@ -642,11 +647,11 @@ func (a *csAttempt) newStream() error {
 		// apply it, as specified in gRFC A81.
 		if cs.callInfo.authority == "" {
 			if authMD := a.pickResult.Metadata.Get(":authority"); len(authMD) > 0 {
-				cs.callHdr.Authority = authMD[0]
+				callHdr.Authority = authMD[0]
 			}
 		}
 	}
-	s, err := a.transport.NewStream(a.ctx, cs.callHdr, a.statsHandler)
+	s, err := a.transport.NewStream(a.ctx, &callHdr, a.statsHandler)
 	if err != nil {
 		nse, ok := err.(*transport.NewStreamError)
 		if !ok {
