@@ -3480,8 +3480,7 @@ func (s) TestObservabilityAllSendStreaming(t *testing.T) {
 	stub := stubserver.StartTestService(t, &stubserver.StubServer{
 		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
 			// Read client headers
-			_, ok := metadata.FromIncomingContext(stream.Context())
-			if !ok {
+			if _, ok := metadata.FromIncomingContext(stream.Context()); !ok {
 				return status.Error(codes.InvalidArgument, "missing incoming metadata")
 			}
 			// Send response headers
@@ -3647,7 +3646,6 @@ func (s) TestObservabilityAllSendStreaming(t *testing.T) {
 // delays closing the processor stream by the configured DeferredCloseTimeout
 // duration after the data plane RPC has completed.
 func (s) TestObservabilityDeferredCloseTimeout(t *testing.T) {
-	var procCancelTime time.Time
 	var procCancelErr error
 	procDone := make(chan struct{})
 	extProcAddr, _ := startTestExtProcessor(t, func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
@@ -3656,7 +3654,6 @@ func (s) TestObservabilityDeferredCloseTimeout(t *testing.T) {
 			_, err := stream.Recv()
 			if err != nil {
 				<-stream.Context().Done()
-				procCancelTime = time.Now()
 				procCancelErr = stream.Context().Err()
 				return nil
 			}
@@ -3692,20 +3689,21 @@ func (s) TestObservabilityDeferredCloseTimeout(t *testing.T) {
 	if err != nil {
 		t.Fatalf("UnaryCall() failed: %v", err)
 	}
-	clientDoneTime := time.Now()
 
-	// Wait for the external processor stream to close.
+	// Verify that the external processor stream was not closed immediately.
+	select {
+	case <-procDone:
+		t.Fatal("Processor stream closed immediately upon RPC completion; expected deferred close delay")
+	case <-time.After(defaultTestShortTimeout):
+	}
+
+	// Wait for the external processor stream to close upon timeout expiration.
 	select {
 	case <-procDone:
 	case <-time.After(defaultTestTimeout):
 		t.Fatal("Timed out waiting for external processor server to close stream")
 	}
 
-	// Verify that the context cancellation was delayed by the configured duration.
-	gotDelay := procCancelTime.Sub(clientDoneTime)
-	if gotDelay < delay/2 {
-		t.Fatalf("Processor stream cancellation delay = %v, want at least %v", gotDelay, delay/2)
-	}
 	if procCancelErr != context.Canceled {
 		t.Fatalf("Processor stream context error is %v, want %v", procCancelErr, context.Canceled)
 	}
@@ -3975,6 +3973,191 @@ func (s) TestObservabilityStreamFailDeny(t *testing.T) {
 			}
 			break
 		}
+	}
+}
+
+// TestObservabilityMidStreamFailAllow verifies behavior when an external
+// processor disconnects abruptly after receiving the first request body message
+// with FailureModeAllow = true. It verifies that all messages pass and the RPC
+// works correctly.
+func (s) TestObservabilityMidStreamFailAllow(t *testing.T) {
+	extProcAddr, _ := startTestExtProcessor(t, func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
+		// Receive RequestHeaders.
+		req, err := stream.Recv()
+		if err != nil {
+			return err
+		}
+		if req.GetRequestHeaders() == nil {
+			return fmt.Errorf("got %v, want request headers", req)
+		}
+		// Receive the first RequestBody message.
+		req2, err := stream.Recv()
+		if err != nil {
+			return err
+		}
+		if req2.GetRequestBody() == nil {
+			return fmt.Errorf("got %v, want request body", req2)
+		}
+		// Abruptly disconnect after the first request body message.
+		return status.Error(codes.Unavailable, "abrupt mid-stream disconnect")
+	})
+
+	stub := stubserver.StartTestService(t, &stubserver.StubServer{
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
+			for {
+				in, err := stream.Recv()
+				if err == io.EOF {
+					return nil
+				}
+				if err != nil {
+					return err
+				}
+				if err := stream.Send(&testpb.StreamingOutputCallResponse{Payload: in.GetPayload()}); err != nil {
+					return err
+				}
+			}
+		},
+	})
+	defer stub.Stop()
+
+	cc, err := setupTestClient(t, extProcAddr, &v3procfilterpb.ExternalProcessor{
+		ProcessingMode: &v3procfilterpb.ProcessingMode{
+			RequestHeaderMode: v3procfilterpb.ProcessingMode_SEND,
+			RequestBodyMode:   v3procfilterpb.ProcessingMode_GRPC,
+		},
+		FailureModeAllow:     true,
+		ObservabilityMode:    true,
+		DeferredCloseTimeout: durationpb.New(defaultTestShortTimeout),
+	}, stub.Address)
+	if err != nil {
+		t.Fatalf("setupTestClient() failed: %v", err)
+	}
+	defer cc.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	client := testgrpc.NewTestServiceClient(cc)
+	stream, err := client.FullDuplexCall(ctx)
+	if err != nil {
+		t.Fatalf("FullDuplexCall() failed: %v", err)
+	}
+
+	const numMessages = 10
+	// Send 10 messages, ensure that all SendMsg calls continue to succeed by
+	// silently bypassing the processor.
+	for i := 0; i < numMessages; i++ {
+		req := &testpb.StreamingOutputCallRequest{
+			Payload: &testpb.Payload{Body: []byte(fmt.Sprintf("msg-%d", i))},
+		}
+		if err := stream.Send(req); err != nil {
+			t.Fatalf("stream.Send() failed unexpectedly with FailureModeAllow=true: %v", err)
+		}
+	}
+	if err := stream.CloseSend(); err != nil {
+		t.Fatalf("stream.CloseSend() failed with FailureModeAllow=true: %v", err)
+	}
+	// Recv all 10 messages.
+	for i := 0; i < numMessages; i++ {
+		if _, err := stream.Recv(); err != nil {
+			t.Fatalf("stream.Recv() failed unexpectedly with FailureModeAllow=true: %v", err)
+		}
+	}
+}
+
+// TestObservabilityMidStreamFailDeny verifies behavior when an external
+// processor disconnects abruptly after receiving the first request body message
+// with FailureModeAllow = false. Verifies that the stream encounters an
+// Internal status error containing the processor's disconnect error.
+func (s) TestObservabilityMidStreamFailDeny(t *testing.T) {
+	extProcAddr, _ := startTestExtProcessor(t, func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
+		// Receive RequestHeaders.
+		req, err := stream.Recv()
+		if err != nil {
+			return err
+		}
+		if req.GetRequestHeaders() == nil {
+			return fmt.Errorf("got %v, want request headers", req)
+		}
+		// Receive the first RequestBody message.
+		req2, err := stream.Recv()
+		if err != nil {
+			return err
+		}
+		if req2.GetRequestBody() == nil {
+			return fmt.Errorf("got %v, want request body", req2)
+		}
+		// Abruptly disconnect after the first request body message.
+		return status.Error(codes.Unavailable, "abrupt mid-stream disconnect")
+	})
+
+	stub := stubserver.StartTestService(t, &stubserver.StubServer{
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
+			for {
+				in, err := stream.Recv()
+				if err == io.EOF {
+					return nil
+				}
+				if err != nil {
+					return err
+				}
+				if err := stream.Send(&testpb.StreamingOutputCallResponse{Payload: in.GetPayload()}); err != nil {
+					return err
+				}
+			}
+		},
+	})
+	defer stub.Stop()
+
+	cc, err := setupTestClient(t, extProcAddr, &v3procfilterpb.ExternalProcessor{
+		ProcessingMode: &v3procfilterpb.ProcessingMode{
+			RequestHeaderMode: v3procfilterpb.ProcessingMode_SEND,
+			RequestBodyMode:   v3procfilterpb.ProcessingMode_GRPC,
+		},
+		FailureModeAllow:     false,
+		ObservabilityMode:    true,
+		DeferredCloseTimeout: durationpb.New(defaultTestShortTimeout),
+	}, stub.Address)
+	if err != nil {
+		t.Fatalf("setupTestClient() failed: %v", err)
+	}
+	defer cc.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	client := testgrpc.NewTestServiceClient(cc)
+	stream, err := client.FullDuplexCall(ctx)
+	if err != nil {
+		t.Fatalf("FullDuplexCall() failed: %v", err)
+	}
+
+	const numMessages = 10
+	var gotErr error
+	// Send and recv 10 messages and verify that the RPC fails with correct error.
+	for i := 0; i < numMessages; i++ {
+		req := &testpb.StreamingOutputCallRequest{
+			Payload: &testpb.Payload{Body: []byte(fmt.Sprintf("msg-%d", i))},
+		}
+		if err := stream.Send(req); err != nil {
+			gotErr = err
+			break
+		}
+		if _, err := stream.Recv(); err != nil {
+			gotErr = err
+			break
+		}
+	}
+
+	if gotErr == nil {
+		t.Fatalf("Expected error from processor stream failure, got none after %d messages", numMessages)
+	}
+	if code := status.Code(gotErr); code != codes.Internal {
+		t.Fatalf("Stream returned status code %v (error: %v), want %v", code, gotErr, codes.Internal)
+	}
+	wantSubstring := "abrupt mid-stream disconnect"
+	if !strings.Contains(gotErr.Error(), wantSubstring) {
+		t.Fatalf("Stream returned error %v, want it to contain %q", gotErr, wantSubstring)
 	}
 }
 
@@ -4409,14 +4592,12 @@ func (s) TestObservabilityTrailersOnly(t *testing.T) {
 
 	// Verify that calling Header() on a trailers-only stream returns nil, nil to
 	// be consistent with non-extproc streams.
-	headerMetadata, err := stream.Header()
-	if err != nil || headerMetadata != nil {
+	if headerMetadata, err := stream.Header(); err != nil || headerMetadata != nil {
 		t.Fatalf("stream.Header() = (%v, %v), want (nil, nil)", headerMetadata, err)
 	}
 
 	// Verify response trailers were received from backend.
-	trailerMetadata := stream.Trailer()
-	if trailerMetadata == nil {
+	if trailerMetadata := stream.Trailer(); trailerMetadata == nil {
 		t.Fatalf("stream.Trailer() = nil, want metadata")
 	}
 }
