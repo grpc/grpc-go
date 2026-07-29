@@ -459,29 +459,26 @@ func countALTSFrames(data []byte) int {
 	return count
 }
 
-func (s) TestNewConnPeerMaxFrameSize(t *testing.T) {
+func (s) TestNewConnNegotiatedMaxFrameSize(t *testing.T) {
 	key := make([]byte, 32)
+
 	for _, tc := range []struct {
-		name             string
-		peerMaxFrameSize int
-		wantMaxRecordLen int
-		wantErr          bool
+		name                   string
+		negotiatedMaxFrameSize int
+		wantMaxRecordLen       int
 	}{
-		{"not advertised", 0, altsRecordDefaultLength, false},
-		{"larger than our default", altsRecordDefaultLength + 1024, altsRecordDefaultLength, false},
-		{"equal to our default", altsRecordDefaultLength, altsRecordDefaultLength, false},
-		{"smaller than our default", 16 * 1024, 16 * 1024, false},
-		{"invalid smaller than overhead", 10, 0, true},
-		{"invalid equal to overhead", 24, 0, true},
+		{"not negotiated (0)", 0, altsRecordDefaultLength},
+		{"smaller than default (10)", 10, altsRecordDefaultLength},
+		{"smaller than default (1024)", 1024, altsRecordDefaultLength},
+		{"negotiated 4KB", 4 * 1024, 4 * 1024},
+		{"negotiated 16KB", 16 * 1024, 16 * 1024},
+		{"negotiated 64KB", 64 * 1024, 64 * 1024},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			tcConn := testConn{}
-			c, err := NewConn(&tcConn, core.ClientSide, rekeyRecordProtocol, key, nil, tc.peerMaxFrameSize)
-			if (err != nil) != tc.wantErr {
-				t.Fatalf("NewConn() err = %v, wantErr %v", err, tc.wantErr)
-			}
-			if tc.wantErr {
-				return
+			c, err := NewConn(&tcConn, core.ClientSide, rekeyRecordProtocol, key, nil, tc.negotiatedMaxFrameSize)
+			if err != nil {
+				t.Fatalf("NewConn() err = %v, want nil", err)
 			}
 			altsC := c.(*conn)
 			wantPayloadLimit := tc.wantMaxRecordLen - altsC.overhead
@@ -492,22 +489,21 @@ func (s) TestNewConnPeerMaxFrameSize(t *testing.T) {
 	}
 }
 
-// TestWriteHonorsPeerMaxFrameSize verifies that Write clamps its frame size to a
-// peer-advertised max_frame_size smaller than altsRecordDefaultLength, so we never
-// send a frame the peer said it can't accept.
-func (s) TestWriteHonorsPeerMaxFrameSize(t *testing.T) {
+// TestWriteHonorsNegotiatedMaxFrameSize verifies that Write uses the negotiated
+// max_frame_size so we never send a frame larger than negotiated.
+func (s) TestWriteHonorsNegotiatedMaxFrameSize(t *testing.T) {
 	key := make([]byte, 16)
-	const peerMaxFrameSize = 16 * 1024
+	const negotiatedMaxFrameSize = 16 * 1024
 	out := new(bytes.Buffer)
-	c, err := NewConn(&testConn{in: new(bytes.Buffer), out: out}, core.ClientSide, rekeyRecordProtocol, key, nil, peerMaxFrameSize)
+	c, err := NewConn(&testConn{in: new(bytes.Buffer), out: out}, core.ClientSide, rekeyRecordProtocol, key, nil, negotiatedMaxFrameSize)
 	if err != nil {
 		t.Fatalf("NewConn failed: %v", err)
 	}
 	altsC := c.(*conn)
-	if got, want := altsC.payloadLengthLimit+altsC.overhead, peerMaxFrameSize; got != want {
+	if got, want := altsC.payloadLengthLimit+altsC.overhead, negotiatedMaxFrameSize; got != want {
 		t.Fatalf("frame size = %v, want %v", got, want)
 	}
-	// Two peerMaxFrameSize-worth of plaintext should split into exactly two frames.
+	// Two negotiatedMaxFrameSize-worth of plaintext should split into exactly two frames.
 	payload := make([]byte, 2*altsC.payloadLengthLimit)
 	if _, err := c.Write(payload); err != nil {
 		t.Fatalf("Write failed: %v", err)
@@ -533,20 +529,20 @@ func (c *partialWriteTestConn) Write(b []byte) (int, error) {
 	return len(b), nil
 }
 
-// TestWritePartialWriteErrorWithPeerMaxFrameSize verifies that when a partial Write error occurs,
-// the number of written bytes returned correctly accounts for the negotiated peerMaxFrameSize.
-func (s) TestWritePartialWriteErrorWithPeerMaxFrameSize(t *testing.T) {
+// TestWritePartialWriteErrorWithNegotiatedMaxFrameSize verifies that when a partial Write error occurs,
+// the number of written bytes returned correctly accounts for the negotiated max_frame_size.
+func (s) TestWritePartialWriteErrorWithNegotiatedMaxFrameSize(t *testing.T) {
 	key := make([]byte, 16)
-	const peerMaxFrameSize = 16 * 1024
+	const negotiatedMaxFrameSize = 16 * 1024
 
 	// Allow writing 1.5 frames (16384 + 8192 = 24576 bytes) before returning io.ErrUnexpectedEOF.
-	writeLimit := peerMaxFrameSize + peerMaxFrameSize/2
+	writeLimit := negotiatedMaxFrameSize + negotiatedMaxFrameSize/2
 	errConn := &partialWriteTestConn{
 		maxWriteBytes: writeLimit,
 		err:           io.ErrUnexpectedEOF,
 	}
 
-	c, err := NewConn(errConn, core.ClientSide, rekeyRecordProtocol, key, nil, peerMaxFrameSize)
+	c, err := NewConn(errConn, core.ClientSide, rekeyRecordProtocol, key, nil, negotiatedMaxFrameSize)
 	if err != nil {
 		t.Fatalf("NewConn failed: %v", err)
 	}

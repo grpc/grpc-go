@@ -62,11 +62,10 @@ const (
 	// The bytes size limit for a ALTS record message.
 	altsRecordLengthLimit = 1024 * 1024 // 1 MiB
 	// The default bytes size of a ALTS record message.
-	altsRecordDefaultLength = 64 * 1024 // 64KiB
+	altsRecordDefaultLength = 4 * 1024 // 4KiB
 	// Message type value included in ALTS record framing.
 	altsRecordMsgType = uint32(0x06)
-	// The maximum write buffer size. This *must* be multiple of
-	// altsRecordDefaultLength.
+	// The maximum write buffer size, which can hold multiple ALTS frames.
 	altsWriteBufferMaxSize = 512 * 1024 // 512KiB
 	// The initial buffer used to read from the network.
 	// It includes an additional 512 Bytes to hold two 16KiB records plus
@@ -136,7 +135,7 @@ type conn struct {
 
 // NewConn creates a new secure channel instance given the other party role and
 // handshaking result.
-func NewConn(c net.Conn, side core.Side, recordProtocol string, key []byte, protected []byte, peerMaxFrameSize int) (net.Conn, error) {
+func NewConn(c net.Conn, side core.Side, recordProtocol string, key []byte, protected []byte, negotiatedMaxFrameSize int) (net.Conn, error) {
 	newCrypto := protocols[recordProtocol]
 	if newCrypto == nil {
 		return nil, fmt.Errorf("negotiated unknown next_protocol %q", recordProtocol)
@@ -147,19 +146,8 @@ func NewConn(c net.Conn, side core.Side, recordProtocol string, key []byte, prot
 	}
 	overhead := MsgLenFieldSize + msgTypeFieldSize + crypto.EncryptionOverhead()
 
-	// peerMaxFrameSize is the max_frame_size the peer advertised in the
-	// handshake result, or 0 if it did not advertise one. If it's smaller
-	// than altsRecordDefaultLength, honor it so that this side never writes
-	// frames larger than the peer said it can accept.
-	maxRecordLen := altsRecordDefaultLength
-	if peerMaxFrameSize > 0 {
-		if peerMaxFrameSize <= overhead {
-			return nil, fmt.Errorf("invalid peer max_frame_size %d: must be greater than frame overhead %d", peerMaxFrameSize, overhead)
-		}
-		if peerMaxFrameSize < maxRecordLen {
-			maxRecordLen = peerMaxFrameSize
-		}
-	}
+	// Clamp maxRecordLen to be at least altsRecordDefaultLength.
+	maxRecordLen := max(altsRecordDefaultLength, negotiatedMaxFrameSize)
 	payloadLengthLimit := maxRecordLen - overhead
 	// We pre-allocate protected to be of size 32KB during initialization.
 	// We increase the size of the buffer by the required amount if it can't

@@ -78,6 +78,8 @@ type testRPCStream struct {
 	// The minimum expected value of the network_latency_ms field in a
 	// NextHandshakeMessageReq.
 	minExpectedNetworkLatency time.Duration
+	// peerMaxFrameSize is the max_frame_size in the HandshakerResult.
+	peerMaxFrameSize uint32
 }
 
 func (t *testRPCStream) Recv() (*altspb.HandshakerResp, error) {
@@ -127,6 +129,7 @@ func (t *testRPCStream) Send(req *altspb.HandshakerReq) error {
 		result := &altspb.HandshakerResult{
 			RecordProtocol: testRecordProtocol,
 			KeyData:        testKey,
+			MaxFrameSize:   t.peerMaxFrameSize,
 		}
 		resp = &altspb.HandshakerResp{
 			Result: result,
@@ -371,4 +374,39 @@ func (s) TestNewServerHandshaker(t *testing.T) {
 		t.Errorf("NewServerHandshaker() returned handshaker with unexpected clientConn")
 	}
 	hs.Close()
+}
+
+func (s) TestHandshakeMaxFrameSizeNegotiation(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	stream := &testRPCStream{
+		t:                t,
+		isClient:         true,
+		peerMaxFrameSize: 16 * 1024,
+	}
+	f1 := testutil.MakeFrame("ServerInit")
+	f2 := testutil.MakeFrame("ServerFinished")
+	in := bytes.NewBuffer(f1)
+	in.Write(f2)
+	out := new(bytes.Buffer)
+	tc := testutil.NewTestConn(in, out)
+	chs := &altsHandshaker{
+		stream: stream,
+		conn:   tc,
+		clientOpts: &ClientHandshakerOptions{
+			TargetServiceAccounts: testTargetServiceAccounts,
+			ClientIdentity:        testClientIdentity,
+		},
+		side: core.ClientSide,
+	}
+	defer chs.Close()
+
+	sc, _, err := chs.ClientHandshake(ctx)
+	if err != nil {
+		t.Fatalf("ClientHandshake() failed: %v", err)
+	}
+	if sc == nil {
+		t.Fatalf("expected non-nil secure conn")
+	}
 }
