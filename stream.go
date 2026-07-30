@@ -328,10 +328,7 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 
 	mc := &emptyMethodConfig
 	var onCommit func()
-	newStream := func(ctx context.Context, filterOpts ...CallOption) (ClientStream, error) {
-		if filterOpts != nil {
-			opts = combine(opts, filterOpts)
-		}
+	newStream := func(ctx context.Context, opts ...CallOption) (ClientStream, error) {
 		return newClientStreamWithParams(ctx, desc, cc, method, mc, onCommit, nameResolutionDelayed, opts...)
 	}
 
@@ -353,13 +350,23 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 			ctx = rpcConfig.Context
 		}
 		mc = &rpcConfig.MethodConfig
-		onCommit = rpcConfig.OnCommitted
+
+		if rpcConfig.OnCommitted != nil {
+			onCommit = rpcConfig.OnCommitted
+			// Register an OnFinish CallOption with the OnCommitted callback to
+			// ensure it is invoked on stream termination, even if the stream
+			// fails early before committing. Implementations of OnCommitted are
+			// expected to be idempotent (e.g., guarded by sync.Once), since both
+			// onCommit and OnFinish may run for a single RPC.
+			opts = append(opts, OnFinish(func(error) { rpcConfig.OnCommitted() }))
+		}
+
 		if rpcConfig.Interceptor != nil {
 			rpcInfo.Context = nil
 			ns := newStream
 			if interceptor, ok := rpcConfig.Interceptor.(clientInterceptor); ok {
-				newStream = func(ctx context.Context, filterOpts ...CallOption) (ClientStream, error) {
-					cs, err := interceptor.NewStream(ctx, rpcInfo, ns, filterOpts...)
+				newStream = func(ctx context.Context, opts ...CallOption) (ClientStream, error) {
+					cs, err := interceptor.NewStream(ctx, rpcInfo, ns, opts...)
 					if err != nil {
 						return nil, toRPCErr(err)
 					}
@@ -371,7 +378,7 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		}
 	}
 
-	return newStream(ctx)
+	return newStream(ctx, opts...)
 }
 
 func newClientStreamWithParams(ctx context.Context, desc *StreamDesc, cc *ClientConn, method string, mc *serviceconfig.MethodConfig, onCommit func(), nameResolutionDelayed bool, opts ...CallOption) (_ ClientStream, err error) {

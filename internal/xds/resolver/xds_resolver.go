@@ -237,6 +237,7 @@ type xdsResolver struct {
 	channelID       uint64 // Unique random ID for the channel owning this resolver.
 	target          string
 	metricsRecorder estats.MetricsRecorder
+
 	// All methods on the xdsResolver type except for the ones invoked by gRPC,
 	// i.e ResolveNow() and Close(), are guaranteed to execute in the context of
 	// this serializer's callback. We use the serializer because these shared
