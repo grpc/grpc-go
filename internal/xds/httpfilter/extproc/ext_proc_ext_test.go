@@ -4322,94 +4322,6 @@ func (s) TestObservabilityRequestAttributesLifecycle(t *testing.T) {
 	}
 }
 
-// TestObservabilityTrailersOnly verifies that when the backend service returns
-// a trailers-only response (metadata in trailers without sending headers or body),
-// the ExtProc filter sends ResponseHeaders with EndOfStream=true containing the
-// trailer metadata.
-func (s) TestObservabilityTrailersOnly(t *testing.T) {
-	reqCh := make(chan *v3procservicepb.ProcessingRequest, 1)
-
-	lisAddr, _ := startTestExtProcessor(t, func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
-		defer close(reqCh)
-		req, err := stream.Recv()
-		if err == io.EOF {
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-		reqCh <- req
-		return nil
-	})
-
-	stub := stubserver.StartTestService(t, &stubserver.StubServer{
-		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
-			// Wait for client request message before failing.
-			_, err := stream.Recv()
-			if err != nil {
-				return err
-			}
-			// Return abort error immediately to trigger Trailers-Only
-			return status.Error(codes.Aborted, "intentional backend failure")
-		},
-	})
-	defer stub.Stop()
-
-	cc, err := setupTestClient(t, lisAddr, &v3procfilterpb.ExternalProcessor{
-		ProcessingMode: &v3procfilterpb.ProcessingMode{
-			RequestHeaderMode:  v3procfilterpb.ProcessingMode_SKIP,
-			ResponseHeaderMode: v3procfilterpb.ProcessingMode_SEND,
-		},
-		ObservabilityMode:    true,
-		DeferredCloseTimeout: durationpb.New(defaultTestShortTimeout),
-	}, stub.Address)
-	if err != nil {
-		t.Fatalf("failed to dial: %v", err)
-	}
-	defer cc.Close()
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-
-	client := testgrpc.NewTestServiceClient(cc)
-	stream, err := client.FullDuplexCall(ctx)
-	if err != nil {
-		t.Fatalf("FullDuplexCall() failed: %v", err)
-	}
-
-	// Send request message c1 to trigger the server handler.
-	if err := stream.Send(&testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: []byte("c1")}}); err != nil {
-		t.Fatalf("stream.Send() failed: %v", err)
-	}
-
-	// Recv should return Aborted (trailers-only)
-	_, err = stream.Recv()
-	if status.Code(err) != codes.Aborted {
-		t.Fatalf("stream.Recv() returned error: %v, want Aborted", err)
-	}
-
-	select {
-	case req := <-reqCh:
-		if got := req.GetResponseHeaders(); got == nil {
-			t.Fatalf("ResponseHeaders = nil, want non-nil ResponseHeaders")
-		} else if got.GetEndOfStream() != true {
-			t.Fatal("GetResponseHeaders().GetEndOfStream() = false, want true")
-		}
-	case <-ctx.Done():
-		t.Fatal("Timed out waiting for external processor server to receive response headers")
-	}
-
-	// Verify that calling Header() on a trailers-only stream returns nil, nil to
-	// be consistent with non-extproc streams.
-	if headerMetadata, err := stream.Header(); err != nil || headerMetadata != nil {
-		t.Fatalf("stream.Header() = (%v, %v), want (nil, nil)", headerMetadata, err)
-	}
-
-	// Verify response trailers were received from backend.
-	if trailerMetadata := stream.Trailer(); trailerMetadata == nil {
-		t.Fatalf("stream.Trailer() = nil, want metadata")
-	}
-}
-
 // TestUnaryMetrics tests the client-side ext_proc metrics for a Unary RPC in
 // both normal mode and observability mode. It verifies that all 4 duration
 // metrics are recorded with the correct labels and that their values are
@@ -4689,6 +4601,94 @@ func (s) TestStreamingMetrics(t *testing.T) {
 			}
 			verifyMetric(t, md, "grpc.client_ext_proc.server_trailers_duration", grpcTarget)
 		})
+	}
+}
+
+// TestObservabilityTrailersOnly verifies that when the backend service returns
+// a trailers-only response (metadata in trailers without sending headers or body),
+// the ExtProc filter sends ResponseHeaders with EndOfStream=true containing the
+// trailer metadata.
+func (s) TestObservabilityTrailersOnly(t *testing.T) {
+	reqCh := make(chan *v3procservicepb.ProcessingRequest, 1)
+
+	lisAddr, _ := startTestExtProcessor(t, func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
+		defer close(reqCh)
+		req, err := stream.Recv()
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		reqCh <- req
+		return nil
+	})
+
+	stub := stubserver.StartTestService(t, &stubserver.StubServer{
+		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
+			// Wait for client request message before failing.
+			_, err := stream.Recv()
+			if err != nil {
+				return err
+			}
+			// Return abort error immediately to trigger Trailers-Only
+			return status.Error(codes.Aborted, "intentional backend failure")
+		},
+	})
+	defer stub.Stop()
+
+	cc, err := setupTestClient(t, lisAddr, &v3procfilterpb.ExternalProcessor{
+		ProcessingMode: &v3procfilterpb.ProcessingMode{
+			RequestHeaderMode:  v3procfilterpb.ProcessingMode_SKIP,
+			ResponseHeaderMode: v3procfilterpb.ProcessingMode_SEND,
+		},
+		ObservabilityMode:    true,
+		DeferredCloseTimeout: durationpb.New(defaultTestShortTimeout),
+	}, stub.Address)
+	if err != nil {
+		t.Fatalf("failed to dial: %v", err)
+	}
+	defer cc.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	client := testgrpc.NewTestServiceClient(cc)
+	stream, err := client.FullDuplexCall(ctx)
+	if err != nil {
+		t.Fatalf("FullDuplexCall() failed: %v", err)
+	}
+
+	// Send request message c1 to trigger the server handler.
+	if err := stream.Send(&testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: []byte("c1")}}); err != nil {
+		t.Fatalf("stream.Send() failed: %v", err)
+	}
+
+	// Recv should return Aborted (trailers-only)
+	_, err = stream.Recv()
+	if status.Code(err) != codes.Aborted {
+		t.Fatalf("stream.Recv() returned error: %v, want Aborted", err)
+	}
+
+	select {
+	case req := <-reqCh:
+		if got := req.GetResponseHeaders(); got == nil {
+			t.Fatalf("ResponseHeaders = nil, want non-nil ResponseHeaders")
+		} else if got.GetEndOfStream() != true {
+			t.Fatal("GetResponseHeaders().GetEndOfStream() = false, want true")
+		}
+	case <-ctx.Done():
+		t.Fatal("Timed out waiting for external processor server to receive response headers")
+	}
+
+	// Verify that calling Header() on a trailers-only stream returns nil, nil to
+	// be consistent with non-extproc streams.
+	if headerMetadata, err := stream.Header(); err != nil || headerMetadata != nil {
+		t.Fatalf("stream.Header() = (%v, %v), want (nil, nil)", headerMetadata, err)
+	}
+
+	// Verify response trailers were received from backend.
+	if trailerMetadata := stream.Trailer(); trailerMetadata == nil {
+		t.Fatalf("stream.Trailer() = nil, want metadata")
 	}
 }
 
