@@ -796,9 +796,6 @@ type clientStream struct {
 	requestForwardLoopDoneCh chan struct{}   // closed when request forwarding loop finishes draining
 	procRecvLoopDone         *grpcsync.Event // fires when external processor stream receive loop finishes
 
-	metricsRecorder        estats.MetricsRecorder
-	target                 string
-	clientHeadersStartTime time.Time
 	// The following start times are accessed concurrently across goroutines
 	// during the stream lifetime. To prevent data races, they are synchronized
 	// using atomic.Int64 (storing the Unix nanoseconds offset from baseTime).
@@ -807,8 +804,8 @@ type clientStream struct {
 	serverTrailersStartTime  atomic.Int64
 }
 
-// recordDuration calculates the elapsed time since the start time offset stored
-// in the atomic.Int64 (relative to baseTime) and records it to the histogram metric.
+// recordDuration calculates the elapsed time since the start time stored in the
+// atomic.Int64 (relative to baseTime) and records it to the histogram metric.
 // It is a no-op if the start time has not been initialized (value is 0).
 func (cs *clientStream) recordDuration(handle *estats.Float64HistoHandle, val *atomic.Int64) {
 	if offsetNs := val.Load(); offsetNs != 0 {
@@ -817,16 +814,16 @@ func (cs *clientStream) recordDuration(handle *estats.Float64HistoHandle, val *a
 	}
 }
 
-// fireResponseHeadersReady fires the responseHeadersReady event, and records the
-// server_headers_duration metric exactly once upon firing.
+// fireResponseHeadersReady fires the responseHeadersReady event, and records
+// the server_headers_duration metric exactly once upon firing.
 func (cs *clientStream) fireResponseHeadersReady() {
 	if cs.responseHeadersReady.Fire() {
 		cs.recordDuration(serverHeadersDurationMetric, &cs.serverHeadersStartTime)
 	}
 }
 
-// fireResponseTrailerReady fires the responseTrailerReady event, and records the
-// server_trailers_duration metric exactly once upon firing.
+// fireResponseTrailerReady fires the responseTrailerReady event, and records
+// the server_trailers_duration metric exactly once upon firing.
 func (cs *clientStream) fireResponseTrailerReady() {
 	if cs.responseTrailerReady.Fire() {
 		cs.recordDuration(serverTrailersDurationMetric, &cs.serverTrailersStartTime)
@@ -891,9 +888,10 @@ func (cs *clientStream) Trailer() metadata.MD {
 }
 
 func (cs *clientStream) CloseSend() error {
-	// Start timing client half-close propagation immediately upon invocation.
-	offset := time.Since(baseTime)
-	cs.clientHalfCloseStartTime.CompareAndSwap(0, int64(offset))
+	if cs.clientHalfCloseStartTime.Load() == 0 {
+		offset := time.Since(baseTime)
+		cs.clientHalfCloseStartTime.CompareAndSwap(0, int64(offset))
+	}
 
 	s, err := cs.bypassProcStreamForClientMsg()
 	if err != nil {
