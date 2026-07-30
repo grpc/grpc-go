@@ -1885,9 +1885,11 @@ func (s) TestAccountCheckDynamicWindowLargeMessage(t *testing.T) {
 	testFlowControlAccountCheck(t, 1024*1024, windowSizeConfig{}, defaultTestTimeout)
 }
 
-func (t *http2Server) getOutStream(ctx context.Context, id uint32) *outStream {
-	resp := make(chan *outStream, 1)
-	t.controlBuf.put(&outStreamRequestForTesting{streamID: id, resp: resp})
+func (t *http2Server) getOutStreamForTesting(ctx context.Context, id uint32) *outStream {
+	resp := make(chan *outStream)
+	if err := t.controlBuf.put(&outStreamRequestForTesting{streamID: id, resp: resp}); err != nil {
+		return nil
+	}
 	select {
 	case s := <-resp:
 		return s
@@ -1898,9 +1900,11 @@ func (t *http2Server) getOutStream(ctx context.Context, id uint32) *outStream {
 	}
 }
 
-func (t *http2Client) getOutStream(ctx context.Context, id uint32) *outStream {
-	resp := make(chan *outStream, 1)
-	t.controlBuf.put(&outStreamRequestForTesting{streamID: id, resp: resp})
+func (t *http2Client) getOutStreamForTesting(ctx context.Context, id uint32) *outStream {
+	resp := make(chan *outStream)
+	if err := t.controlBuf.put(&outStreamRequestForTesting{streamID: id, resp: resp}); err != nil {
+		return nil
+	}
 	select {
 	case s := <-resp:
 		return s
@@ -2008,8 +2012,8 @@ func testFlowControlAccountCheck(t *testing.T, msgSize int, wc windowSizeConfig,
 
 	for _, stream := range clientStreams {
 		id := stream.id
-		loopyServerStreams[id] = st.getOutStream(ctx, id)
-		loopyClientStreams[id] = client.getOutStream(ctx, id)
+		loopyServerStreams[id] = st.getOutStreamForTesting(ctx, id)
+		loopyClientStreams[id] = client.getOutStreamForTesting(ctx, id)
 	}
 	// Close all streams
 	for _, stream := range clientStreams {
