@@ -4111,8 +4111,11 @@ func (s) TestObservabilityMidStreamFailDeny(t *testing.T) {
 
 	cc, err := setupTestClient(t, extProcAddr, &v3procfilterpb.ExternalProcessor{
 		ProcessingMode: &v3procfilterpb.ProcessingMode{
-			RequestHeaderMode: v3procfilterpb.ProcessingMode_SEND,
-			RequestBodyMode:   v3procfilterpb.ProcessingMode_GRPC,
+			RequestHeaderMode:   v3procfilterpb.ProcessingMode_SEND,
+			RequestBodyMode:     v3procfilterpb.ProcessingMode_GRPC,
+			ResponseHeaderMode:  v3procfilterpb.ProcessingMode_SEND,
+			ResponseBodyMode:    v3procfilterpb.ProcessingMode_GRPC,
+			ResponseTrailerMode: v3procfilterpb.ProcessingMode_SEND,
 		},
 		FailureModeAllow:     false,
 		ObservabilityMode:    true,
