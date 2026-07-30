@@ -36,6 +36,7 @@ import (
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
+	"google.golang.org/grpc/internal/testutils/stats"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/internal/testutils/xds/e2e/setup"
 	"google.golang.org/grpc/internal/xds/httpfilter/extproc/internal"
@@ -267,8 +268,8 @@ func startTestExtProcessor(t *testing.T, processFunc func(v3procservicegrpc.Exte
 		t.Fatalf("LocalTCPListener() failed: %v", err)
 	}
 	extprocServer := grpc.NewServer()
-	mockProc := &testExtProcServer{processFunc: processFunc}
-	v3procservicegrpc.RegisterExternalProcessorServer(extprocServer, mockProc)
+	testProc := &testExtProcServer{processFunc: processFunc}
+	v3procservicegrpc.RegisterExternalProcessorServer(extprocServer, testProc)
 	go extprocServer.Serve(lis)
 
 	t.Cleanup(extprocServer.Stop)
@@ -278,7 +279,7 @@ func startTestExtProcessor(t *testing.T, processFunc func(v3procservicegrpc.Exte
 
 // setupTestClient configures the management server with xDS resources that
 // include the external processor filter, and creates a new gRPC client.
-func setupTestClient(t *testing.T, extProcAddr string, extProcConfig *v3procfilterpb.ExternalProcessor, serverAddr string) (*grpc.ClientConn, error) {
+func setupTestClient(t *testing.T, extProcAddr string, extProcConfig *v3procfilterpb.ExternalProcessor, serverAddr string, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
 	t.Helper()
 	managementServer, nodeID, _, xdsResolver := setup.ManagementServerAndResolver(t)
 
@@ -321,7 +322,8 @@ func setupTestClient(t *testing.T, extProcAddr string, extProcConfig *v3procfilt
 		return nil, err
 	}
 
-	cc, err := grpc.NewClient("xds:///"+serviceName, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsResolver))
+	dialOpts := append([]grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsResolver)}, opts...)
+	cc, err := grpc.NewClient("xds:///"+serviceName, dialOpts...)
 	return cc, err
 }
 
@@ -3253,5 +3255,1371 @@ func (s) TestDataplaneStreamCreationFailure(t *testing.T) {
 	case <-procStreamClosed.Done():
 	case <-ctx.Done():
 		t.Fatal("Timeout waiting for processor stream to close after backend failure")
+	}
+}
+
+// TestObservabilityAllSendUnary tests the scenario where the ExtProc filter is
+// configured with all processing modes set to SEND/GRPC and ObservabilityMode
+// is true. Verifies that the client correctly forwards headers and bodies to
+// the processor with ObservabilityMode=true, does not expect any responses
+// back, and successfully completes the Unary RPC.
+func (s) TestObservabilityAllSendUnary(t *testing.T) {
+	reqCh := make(chan *v3procservicepb.ProcessingRequest, 6)
+	extProcAddr, _ := startTestExtProcessor(t, func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
+		defer close(reqCh)
+		for {
+			req, err := stream.Recv()
+			if err == io.EOF {
+				return nil
+			}
+			if err != nil {
+				return err
+			}
+			reqCh <- req
+		}
+	})
+
+	// Start a test stub service.
+	stub := stubserver.StartTestService(t, &stubserver.StubServer{
+		UnaryCallF: func(_ context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			// Just echo the request payload back as the response.
+			return &testpb.SimpleResponse{
+				Payload: in.GetPayload(),
+			}, nil
+		},
+	})
+	defer stub.Stop()
+
+	cc, err := setupTestClient(t, extProcAddr, &v3procfilterpb.ExternalProcessor{
+		ProcessingMode: &v3procfilterpb.ProcessingMode{
+			RequestHeaderMode:   v3procfilterpb.ProcessingMode_SEND,
+			RequestBodyMode:     v3procfilterpb.ProcessingMode_GRPC,
+			ResponseHeaderMode:  v3procfilterpb.ProcessingMode_SEND,
+			ResponseBodyMode:    v3procfilterpb.ProcessingMode_GRPC,
+			ResponseTrailerMode: v3procfilterpb.ProcessingMode_SEND,
+		},
+		ObservabilityMode:    true,
+		DeferredCloseTimeout: durationpb.New(defaultTestShortTimeout),
+	}, stub.Address)
+	if err != nil {
+		t.Fatalf("setupTestClient() failed: %v", err)
+	}
+	defer cc.Close()
+
+	client := testgrpc.NewTestServiceClient(cc)
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	// Make the Unary call and verify it succeeds and returns the echoed payload.
+	reqMsg := &testpb.SimpleRequest{
+		Payload: &testpb.Payload{
+			Body: []byte("hello-extproc-echo"),
+		},
+	}
+	resp, err := client.UnaryCall(ctx, reqMsg)
+	if err != nil {
+		t.Fatalf("UnaryCall() failed: %v", err)
+	}
+	if got, want := string(resp.GetPayload().GetBody()), "hello-extproc-echo"; got != want {
+		t.Fatalf("UnaryCall() payload = %q, want %q", got, want)
+	}
+
+	gotEvents := make(map[string]bool)
+	for req := range reqCh {
+		if got, want := req.ObservabilityMode, true; got != want {
+			t.Fatalf("req.ObservabilityMode = %v, want %v", got, want)
+		}
+
+		switch {
+		case req.GetRequestHeaders() != nil:
+			gotEvents["RequestHeaders"] = true
+		case req.GetRequestBody() != nil:
+			body := req.GetRequestBody()
+			if body.GetEndOfStreamWithoutMessage() {
+				gotEvents["RequestBodyEOF"] = true
+			} else {
+				gotEvents["RequestBodyMessage"] = true
+				reqPayload := &testpb.SimpleRequest{}
+				if err := proto.Unmarshal(body.GetBody(), reqPayload); err != nil {
+					t.Fatalf("proto.Unmarshal(%v) failed: %v", body.GetBody(), err)
+				}
+				if got, want := string(reqPayload.GetPayload().GetBody()), "hello-extproc-echo"; got != want {
+					t.Fatalf("RequestBody payload = %q, want %q", got, want)
+				}
+			}
+		case req.GetResponseHeaders() != nil:
+			gotEvents["ResponseHeaders"] = true
+		case req.GetResponseBody() != nil:
+			gotEvents["ResponseBody"] = true
+			if got := len(req.GetResponseBody().GetBody()); got == 0 {
+				t.Fatalf("len(ResponseBody) = 0, want > 0")
+			}
+		case req.GetResponseTrailers() != nil:
+			gotEvents["ResponseTrailers"] = true
+		}
+	}
+
+	wantEvents := []string{
+		"RequestHeaders",
+		"RequestBodyMessage",
+		"RequestBodyEOF",
+		"ResponseHeaders",
+		"ResponseBody",
+		"ResponseTrailers",
+	}
+	for _, k := range wantEvents {
+		if !gotEvents[k] {
+			t.Fatalf("Proc server did not receive event %q", k)
+		}
+	}
+}
+
+// TestObservabilitySkipProcessingModes verifies that when processing modes are
+// set to NONE, the ExtProc filter in observability mode suppresses sending
+// those respective request messages to the external processor.
+func (s) TestObservabilitySkipProcessingModes(t *testing.T) {
+	reqCh := make(chan *v3procservicepb.ProcessingRequest, 1)
+	extProcAddr, _ := startTestExtProcessor(t, func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
+		defer close(reqCh)
+		for {
+			req, err := stream.Recv()
+			if err == io.EOF {
+				return nil
+			}
+			if err != nil {
+				return err
+			}
+			reqCh <- req
+		}
+	})
+
+	stub := stubserver.StartTestService(t, &stubserver.StubServer{
+		UnaryCallF: func(_ context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			return &testpb.SimpleResponse{Payload: in.GetPayload()}, nil
+		},
+	})
+	defer stub.Stop()
+
+	cc, err := setupTestClient(t, extProcAddr, &v3procfilterpb.ExternalProcessor{
+		ProcessingMode: &v3procfilterpb.ProcessingMode{
+			RequestHeaderMode:   v3procfilterpb.ProcessingMode_SEND,
+			RequestBodyMode:     v3procfilterpb.ProcessingMode_NONE,
+			ResponseHeaderMode:  v3procfilterpb.ProcessingMode_SKIP,
+			ResponseBodyMode:    v3procfilterpb.ProcessingMode_NONE,
+			ResponseTrailerMode: v3procfilterpb.ProcessingMode_SKIP,
+		},
+		ObservabilityMode:    true,
+		DeferredCloseTimeout: durationpb.New(defaultTestShortTimeout),
+	}, stub.Address)
+	if err != nil {
+		t.Fatalf("setupTestClient() failed: %v", err)
+	}
+	defer cc.Close()
+
+	client := testgrpc.NewTestServiceClient(cc)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	reqMsg := &testpb.SimpleRequest{Payload: &testpb.Payload{Body: []byte("hello-skip")}}
+	resp, err := client.UnaryCall(ctx, reqMsg)
+	if err != nil {
+		t.Fatalf("UnaryCall() failed: %v", err)
+	}
+	if got, want := string(resp.GetPayload().GetBody()), "hello-skip"; got != want {
+		t.Fatalf("UnaryCall() payload = %q, want %q", got, want)
+	}
+
+	gotEvents := make(map[string]bool)
+	for req := range reqCh {
+		switch {
+		case req.GetRequestHeaders() != nil:
+			gotEvents["RequestHeaders"] = true
+		case req.GetRequestBody() != nil:
+			gotEvents["RequestBody"] = true
+		case req.GetResponseHeaders() != nil:
+			gotEvents["ResponseHeaders"] = true
+		case req.GetResponseBody() != nil:
+			gotEvents["ResponseBody"] = true
+		case req.GetResponseTrailers() != nil:
+			gotEvents["ResponseTrailers"] = true
+		}
+	}
+
+	if !gotEvents["RequestHeaders"] {
+		t.Fatalf("Proc server did not receive RequestHeaders")
+	}
+	if gotEvents["RequestBody"] || gotEvents["ResponseHeaders"] || gotEvents["ResponseBody"] || gotEvents["ResponseTrailers"] {
+		t.Fatalf("Proc server received unexpected skipped messages = %+v", gotEvents)
+	}
+}
+
+// TestAllSendStreaming tests the scenario where the ExtProc filter is
+// configured with all processing modes set to SEND/GRPC and ObservabilityMode
+// is true, for a bidirectional streaming RPC. Verifies that the client
+// correctly forwards headers and bodies to the processor with
+// ObservabilityMode=true, does not expect any responses back, and successfully
+// completes the streaming RPC.
+func (s) TestObservabilityAllSendStreaming(t *testing.T) {
+	reqCh := make(chan *v3procservicepb.ProcessingRequest, 8)
+	extProcAddr, _ := startTestExtProcessor(t, func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
+		defer close(reqCh)
+		for {
+			req, err := stream.Recv()
+			if err == io.EOF {
+				return nil
+			}
+			if err != nil {
+				return err
+			}
+			reqCh <- req
+		}
+	})
+
+	// Start a test stub service.
+	stub := stubserver.StartTestService(t, &stubserver.StubServer{
+		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
+			// Read client headers
+			if _, ok := metadata.FromIncomingContext(stream.Context()); !ok {
+				return status.Error(codes.InvalidArgument, "missing incoming metadata")
+			}
+			// Send response headers
+			if err := stream.SendHeader(metadata.Pairs("x-resp-header-from-server", "present")); err != nil {
+				return err
+			}
+			for {
+				req, err := stream.Recv()
+				if err == io.EOF {
+					return nil
+				}
+				if err != nil {
+					return err
+				}
+				if err := stream.Send(&testpb.StreamingOutputCallResponse{
+					Payload: req.GetPayload(),
+				}); err != nil {
+					return err
+				}
+			}
+		},
+	})
+	defer stub.Stop()
+
+	cc, err := setupTestClient(t, extProcAddr, &v3procfilterpb.ExternalProcessor{
+		ProcessingMode: &v3procfilterpb.ProcessingMode{
+			RequestHeaderMode:   v3procfilterpb.ProcessingMode_SEND,
+			RequestBodyMode:     v3procfilterpb.ProcessingMode_GRPC,
+			ResponseHeaderMode:  v3procfilterpb.ProcessingMode_SEND,
+			ResponseBodyMode:    v3procfilterpb.ProcessingMode_GRPC,
+			ResponseTrailerMode: v3procfilterpb.ProcessingMode_SEND,
+		},
+		ObservabilityMode:    true,
+		DeferredCloseTimeout: durationpb.New(defaultTestShortTimeout),
+	}, stub.Address)
+	if err != nil {
+		t.Fatalf("setupTestClient() failed: %v", err)
+	}
+	defer cc.Close()
+
+	client := testgrpc.NewTestServiceClient(cc)
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	stream, err := client.FullDuplexCall(ctx)
+	if err != nil {
+		t.Fatalf("FullDuplexCall() failed: %v", err)
+	}
+
+	messages := [][]byte{
+		[]byte("c1"),
+		[]byte("c2"),
+	}
+
+	for _, msg := range messages {
+		reqMsg := &testpb.StreamingOutputCallRequest{
+			Payload: &testpb.Payload{
+				Body: msg,
+			},
+		}
+		if err := stream.Send(reqMsg); err != nil {
+			t.Fatalf("stream.Send(%q) = %v, want nil", string(msg), err)
+		}
+
+		resp, err := stream.Recv()
+		if err != nil {
+			t.Fatalf("stream.Recv() failed: %v", err)
+		}
+		if got, want := string(resp.GetPayload().GetBody()), string(msg); got != want {
+			t.Fatalf("stream.Recv() payload = %q, want %q", got, want)
+		}
+	}
+
+	if err := stream.CloseSend(); err != nil {
+		t.Fatalf("stream.CloseSend() = %v, want nil", err)
+	}
+
+	if _, err := stream.Recv(); err != io.EOF {
+		t.Fatalf("stream.Recv() returned error: %v, want EOF", err)
+	}
+
+	// Collect all processing requests received by the external processor server.
+	var reqs []*v3procservicepb.ProcessingRequest
+	for req := range reqCh {
+		reqs = append(reqs, req)
+	}
+
+	if got, want := len(reqs), 8; got != want {
+		t.Fatalf("len(reqs) = %v, want %v", got, want)
+	}
+
+	for _, req := range reqs {
+		if got, want := req.ObservabilityMode, true; got != want {
+			t.Fatalf("req.ObservabilityMode = %v, want %v", got, want)
+		}
+	}
+
+	// Request headers.
+	if got := reqs[0].GetRequestHeaders(); got == nil {
+		t.Fatalf("RequestHeaders = nil, want non-nil RequestHeaders")
+	}
+
+	// First request body message (c1).
+	if got := reqs[1].GetRequestBody(); got == nil {
+		t.Fatalf("First RequestBody = nil, want non-nil RequestBody")
+	} else {
+		reqMsg := &testpb.StreamingOutputCallRequest{}
+		if err := proto.Unmarshal(got.GetBody(), reqMsg); err != nil {
+			t.Fatalf("proto.Unmarshal(%v) failed: %v", got.GetBody(), err)
+		}
+		if gotPayload, wantPayload := string(reqMsg.GetPayload().GetBody()), "c1"; gotPayload != wantPayload {
+			t.Fatalf("First RequestBody payload = %q, want %q", gotPayload, wantPayload)
+		}
+	}
+
+	// Response headers.
+	if got := reqs[2].GetResponseHeaders(); got == nil {
+		t.Fatalf("ResponseHeaders = nil, want non-nil ResponseHeaders")
+	}
+
+	// First response body message (c1).
+	if got := reqs[3].GetResponseBody(); got == nil {
+		t.Fatalf("First ResponseBody = nil, want non-nil ResponseBody")
+	} else if gotLen := len(got.GetBody()); gotLen == 0 {
+		t.Fatal("len(First ResponseBody.GetBody()) = 0, want > 0")
+	}
+
+	// Second request body message (c2).
+	if got := reqs[4].GetRequestBody(); got == nil {
+		t.Fatalf("Second RequestBody = nil, want non-nil RequestBody")
+	} else {
+		reqMsg := &testpb.StreamingOutputCallRequest{}
+		if err := proto.Unmarshal(got.GetBody(), reqMsg); err != nil {
+			t.Fatalf("proto.Unmarshal(%v) failed: %v", got.GetBody(), err)
+		}
+		if gotPayload, wantPayload := string(reqMsg.GetPayload().GetBody()), "c2"; gotPayload != wantPayload {
+			t.Fatalf("Second RequestBody payload = %q, want %q", gotPayload, wantPayload)
+		}
+	}
+
+	// Second response body message (c2).
+	if got := reqs[5].GetResponseBody(); got == nil {
+		t.Fatalf("Second ResponseBody = nil, want non-nil ResponseBody")
+	} else if gotLen := len(got.GetBody()); gotLen == 0 {
+		t.Fatal("len(Second ResponseBody.GetBody()) = 0, want > 0")
+	}
+
+	// Request body EOF.
+	if got := reqs[6].GetRequestBody(); got == nil {
+		t.Fatalf("RequestBody EOF = nil, want non-nil RequestBody")
+	} else if gotEOS, wantEOS := got.GetEndOfStreamWithoutMessage(), true; gotEOS != wantEOS {
+		t.Fatalf("RequestBody EndOfStreamWithoutMessage = %v, want %v", gotEOS, wantEOS)
+	}
+
+	// Response trailers.
+	if got := reqs[7].GetResponseTrailers(); got == nil {
+		t.Fatalf("ResponseTrailers = nil, want non-nil ResponseTrailers")
+	}
+}
+
+// TestDeferredCloseTimeout verifies that in observability mode, the client
+// delays closing the processor stream by the configured DeferredCloseTimeout
+// duration after the data plane RPC has completed.
+func (s) TestObservabilityDeferredCloseTimeout(t *testing.T) {
+	var procCancelErr error
+	procDone := make(chan struct{})
+	extProcAddr, _ := startTestExtProcessor(t, func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
+		defer close(procDone)
+		for {
+			_, err := stream.Recv()
+			if err != nil {
+				<-stream.Context().Done()
+				procCancelErr = stream.Context().Err()
+				return nil
+			}
+		}
+	})
+
+	stub := stubserver.StartTestService(t, &stubserver.StubServer{
+		UnaryCallF: func(_ context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			return &testpb.SimpleResponse{Payload: in.GetPayload()}, nil
+		},
+	})
+	defer stub.Stop()
+
+	const delay = 200 * time.Millisecond
+	cc, err := setupTestClient(t, extProcAddr, &v3procfilterpb.ExternalProcessor{
+		ProcessingMode: &v3procfilterpb.ProcessingMode{
+			RequestHeaderMode: v3procfilterpb.ProcessingMode_SEND,
+		},
+		ObservabilityMode:    true,
+		DeferredCloseTimeout: durationpb.New(delay),
+	}, stub.Address)
+	if err != nil {
+		t.Fatalf("Failed to dial: %v", err)
+	}
+	defer cc.Close()
+
+	client := testgrpc.NewTestServiceClient(cc)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	// Perform the UnaryCall and verify it succeeds.
+	_, err = client.UnaryCall(ctx, &testpb.SimpleRequest{Payload: &testpb.Payload{Body: []byte("a")}})
+	if err != nil {
+		t.Fatalf("UnaryCall() failed: %v", err)
+	}
+
+	// Verify that the external processor stream was not closed immediately.
+	select {
+	case <-procDone:
+		t.Fatal("Processor stream closed immediately upon RPC completion; expected deferred close delay")
+	case <-time.After(defaultTestShortTimeout):
+	}
+
+	// Wait for the external processor stream to close upon timeout expiration.
+	select {
+	case <-procDone:
+	case <-time.After(defaultTestTimeout):
+		t.Fatal("Timed out waiting for external processor server to close stream")
+	}
+
+	if procCancelErr != context.Canceled {
+		t.Fatalf("Processor stream context error is %v, want %v", procCancelErr, context.Canceled)
+	}
+}
+
+// TestObservabilityMutationsIgnored verifies that in observability mode, any
+// mutations returned by the external processor server are completely ignored,
+// and the data plane RPC proceeds with the original unmodified headers.
+func (s) TestObservabilityMutationsIgnored(t *testing.T) {
+	extProcAddr, _ := startTestExtProcessor(t, func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
+		for {
+			req, err := stream.Recv()
+			if err == io.EOF {
+				return nil
+			}
+			if err != nil {
+				return err
+			}
+			if req.GetRequestHeaders() != nil {
+				// Attempt to mutate a request header.
+				resp := &v3procservicepb.ProcessingResponse{
+					Response: &v3procservicepb.ProcessingResponse_RequestHeaders{
+						RequestHeaders: &v3procservicepb.HeadersResponse{
+							Response: &v3procservicepb.CommonResponse{
+								HeaderMutation: &v3procservicepb.HeaderMutation{
+									SetHeaders: []*v3corepb.HeaderValueOption{
+										{
+											Header: &v3corepb.HeaderValue{
+												Key:   "x-req-header-modified",
+												Value: "true",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				}
+				if err := stream.Send(resp); err != nil {
+					return err
+				}
+			}
+		}
+	})
+
+	// Start a test stub service.
+	stub := stubserver.StartTestService(t, &stubserver.StubServer{
+		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			// Verify that the mutated header was NOT received by the server.
+			md, ok := metadata.FromIncomingContext(ctx)
+			if !ok {
+				return nil, status.Error(codes.InvalidArgument, "missing incoming metadata")
+			}
+			if len(md.Get("x-req-header-modified")) > 0 {
+				return nil, status.Error(codes.FailedPrecondition, "observability mode failed: mutated header was received by backend")
+			}
+			return &testpb.SimpleResponse{Payload: in.GetPayload()}, nil
+		},
+	})
+	defer stub.Stop()
+
+	cc, err := setupTestClient(t, extProcAddr, &v3procfilterpb.ExternalProcessor{
+		ProcessingMode: &v3procfilterpb.ProcessingMode{
+			RequestHeaderMode: v3procfilterpb.ProcessingMode_SEND,
+		},
+		ObservabilityMode:    true,
+		DeferredCloseTimeout: durationpb.New(defaultTestShortTimeout),
+	}, stub.Address)
+	if err != nil {
+		t.Fatalf("setupTestClient() failed: %v", err)
+	}
+	defer cc.Close()
+
+	client := testgrpc.NewTestServiceClient(cc)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	// Perform the UnaryCall and verify it succeeds.
+	_, err = client.UnaryCall(ctx, &testpb.SimpleRequest{Payload: &testpb.Payload{Body: []byte("a")}})
+	if err != nil {
+		t.Fatalf("UnaryCall() failed: %v", err)
+	}
+}
+
+// TestObservabilityFailureMode verifies client behavior under various external
+// processor stream failure scenarios (deny, allow, and graceful EOF).
+func (s) TestObservabilityFailureMode(t *testing.T) {
+	tests := []struct {
+		name             string
+		procErr          error
+		failureModeAllow bool
+		wantCode         codes.Code
+	}{
+		{
+			name:             "allow_on_processor_error",
+			procErr:          status.Error(codes.Internal, "processor stream error"),
+			failureModeAllow: true,
+			wantCode:         codes.OK,
+		},
+		{
+			name:             "graceful_eof_succeeds_even_when_deny",
+			procErr:          nil,
+			failureModeAllow: false,
+			wantCode:         codes.OK,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			extProcAddr, _ := startTestExtProcessor(t, func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
+				if tt.procErr != nil {
+					return tt.procErr
+				}
+				_, err := stream.Recv()
+				return err
+			})
+
+			stub := stubserver.StartTestService(t, &stubserver.StubServer{
+				UnaryCallF: func(_ context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+					return &testpb.SimpleResponse{Payload: in.GetPayload()}, nil
+				},
+			})
+			defer stub.Stop()
+
+			cc, err := setupTestClient(t, extProcAddr, &v3procfilterpb.ExternalProcessor{
+				ProcessingMode: &v3procfilterpb.ProcessingMode{
+					RequestHeaderMode: v3procfilterpb.ProcessingMode_SEND,
+				},
+				ObservabilityMode:    true,
+				FailureModeAllow:     tt.failureModeAllow,
+				DeferredCloseTimeout: durationpb.New(defaultTestShortTimeout),
+			}, stub.Address)
+			if err != nil {
+				t.Fatalf("setupTestClient() failed: %v", err)
+			}
+			defer cc.Close()
+
+			client := testgrpc.NewTestServiceClient(cc)
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+
+			_, err = client.UnaryCall(ctx, &testpb.SimpleRequest{Payload: &testpb.Payload{Body: []byte("a")}})
+			if status.Code(err) != tt.wantCode {
+				t.Fatalf("UnaryCall() status code = %v, want %v", status.Code(err), tt.wantCode)
+			}
+		})
+	}
+}
+
+// TestObservabilityProcStreamFailDenyUnary verifies that when the external
+// processor stream fails immediately with an error (and
+// FailureModeAllow=false), a unary RPC to a correctly working stub server
+// either succeeds (if the RPC completes before the async extproc error cancels
+// the stream) or fails with the error returned by the proc server.
+func (s) TestObservabilityProcStreamFailDenyUnary(t *testing.T) {
+	extProcAddr, _ := startTestExtProcessor(t, func(v3procservicegrpc.ExternalProcessor_ProcessServer) error {
+		return status.Error(codes.Unavailable, "proc server immediate failure")
+	})
+
+	stub := stubserver.StartTestService(t, &stubserver.StubServer{
+		UnaryCallF: func(_ context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			return &testpb.SimpleResponse{Payload: in.GetPayload()}, nil
+		},
+	})
+	defer stub.Stop()
+
+	cc, err := setupTestClient(t, extProcAddr, &v3procfilterpb.ExternalProcessor{
+		ProcessingMode: &v3procfilterpb.ProcessingMode{
+			RequestHeaderMode: v3procfilterpb.ProcessingMode_SEND,
+		},
+		ObservabilityMode:    true,
+		FailureModeAllow:     false,
+		DeferredCloseTimeout: durationpb.New(defaultTestShortTimeout),
+	}, stub.Address)
+	if err != nil {
+		t.Fatalf("setupTestClient() failed: %v", err)
+	}
+	defer cc.Close()
+
+	client := testgrpc.NewTestServiceClient(cc)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	// Because external processor stream failure is processed asynchronously in
+	// ObservabilityMode, the fast unary RPC on the data plane may finish before
+	// the background stream cancellation takes effect. Thus, UnaryCall either
+	// succeeds (err == nil) or fails with a wrapped extproc error.
+	_, err = client.UnaryCall(ctx, &testpb.SimpleRequest{Payload: &testpb.Payload{Body: []byte("a")}})
+	if err != nil {
+		// Any error originating from the external processor stream (synchronous
+		// init or asynchronous stream loop) is wrapped in codes.Internal with an
+		// "extproc:" prefix.
+		if code := status.Code(err); code != codes.Internal {
+			t.Fatalf("UnaryCall() status code = %v, want %v (or nil)", code, codes.Internal)
+		}
+		if !strings.Contains(err.Error(), "extproc:") {
+			t.Fatalf("UnaryCall() returned error %v, want error containing extproc:", err)
+		}
+	}
+}
+
+// TestObservabilityStreamFailDeny verifies that when the external processor
+// stream fails abruptly during the request body phase in observability mode
+// (with FailureModeAllow=false), a bidirectional streaming RPC fails with an
+// internal error originating from the external processor filter.
+func (s) TestObservabilityStreamFailDeny(t *testing.T) {
+	processFunc := func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
+		// Receive headers and send back.
+		req, err := stream.Recv()
+		if err != nil {
+			return err
+		}
+		if req.GetRequestHeaders() == nil {
+			return fmt.Errorf("got %v, want request headers", req)
+		}
+		// Fail abruptly with non-EOF error during body phase
+		return status.Error(codes.Unavailable, "abrupt stream failure in body phase")
+	}
+
+	lisAddr, _ := startTestExtProcessor(t, processFunc)
+
+	stub := stubserver.StartTestService(t, &stubserver.StubServer{
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
+			for {
+				if _, err := stream.Recv(); err != nil {
+					return err
+				}
+				if err := stream.Send(&testpb.StreamingOutputCallResponse{}); err != nil {
+					return err
+				}
+			}
+		},
+	})
+	defer stub.Stop()
+
+	cc, err := setupTestClient(t, lisAddr, &v3procfilterpb.ExternalProcessor{
+		ProcessingMode: &v3procfilterpb.ProcessingMode{
+			RequestHeaderMode: v3procfilterpb.ProcessingMode_SEND,
+			RequestBodyMode:   v3procfilterpb.ProcessingMode_GRPC,
+		},
+		FailureModeAllow:     false,
+		ObservabilityMode:    true,
+		DeferredCloseTimeout: durationpb.New(defaultTestShortTimeout),
+	}, stub.Address)
+	if err != nil {
+		t.Fatalf("failed to dial: %v", err)
+	}
+	defer cc.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	client := testgrpc.NewTestServiceClient(cc)
+	stream, err := client.FullDuplexCall(ctx)
+	if err != nil {
+		t.Fatalf("FullDuplexCall() failed: %v", err)
+	}
+
+	for {
+		if ctx.Err() != nil {
+			t.Fatalf("Timed out waiting for stream to return status code Internal")
+		}
+		stream.Send(&testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: []byte("c1")}})
+		if _, err := stream.Recv(); err != nil {
+			if status.Code(err) != codes.Internal || !strings.Contains(err.Error(), "abrupt stream failure in body phase") {
+				t.Fatalf("stream.Recv() status code = %v, want %v (error: %v)", status.Code(err), codes.Internal, err)
+			}
+			break
+		}
+	}
+}
+
+// TestObservabilityMidStreamFailAllow verifies behavior when an external
+// processor disconnects abruptly after receiving the first request body message
+// with FailureModeAllow = true. It verifies that all messages pass and the RPC
+// works correctly.
+func (s) TestObservabilityMidStreamFailAllow(t *testing.T) {
+	extProcAddr, _ := startTestExtProcessor(t, func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
+		// Receive RequestHeaders.
+		req, err := stream.Recv()
+		if err != nil {
+			return err
+		}
+		if req.GetRequestHeaders() == nil {
+			return fmt.Errorf("got %v, want request headers", req)
+		}
+		// Receive the first RequestBody message.
+		req2, err := stream.Recv()
+		if err != nil {
+			return err
+		}
+		if req2.GetRequestBody() == nil {
+			return fmt.Errorf("got %v, want request body", req2)
+		}
+		// Abruptly disconnect after the first request body message.
+		return status.Error(codes.Unavailable, "abrupt mid-stream disconnect")
+	})
+
+	stub := stubserver.StartTestService(t, &stubserver.StubServer{
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
+			for {
+				in, err := stream.Recv()
+				if err == io.EOF {
+					return nil
+				}
+				if err != nil {
+					return err
+				}
+				if err := stream.Send(&testpb.StreamingOutputCallResponse{Payload: in.GetPayload()}); err != nil {
+					return err
+				}
+			}
+		},
+	})
+	defer stub.Stop()
+
+	cc, err := setupTestClient(t, extProcAddr, &v3procfilterpb.ExternalProcessor{
+		ProcessingMode: &v3procfilterpb.ProcessingMode{
+			RequestHeaderMode: v3procfilterpb.ProcessingMode_SEND,
+			RequestBodyMode:   v3procfilterpb.ProcessingMode_GRPC,
+		},
+		FailureModeAllow:     true,
+		ObservabilityMode:    true,
+		DeferredCloseTimeout: durationpb.New(defaultTestShortTimeout),
+	}, stub.Address)
+	if err != nil {
+		t.Fatalf("setupTestClient() failed: %v", err)
+	}
+	defer cc.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	client := testgrpc.NewTestServiceClient(cc)
+	stream, err := client.FullDuplexCall(ctx)
+	if err != nil {
+		t.Fatalf("FullDuplexCall() failed: %v", err)
+	}
+
+	const numMessages = 10
+	// Send 10 messages, ensure that all SendMsg calls continue to succeed by
+	// silently bypassing the processor.
+	for i := 0; i < numMessages; i++ {
+		req := &testpb.StreamingOutputCallRequest{
+			Payload: &testpb.Payload{Body: []byte(fmt.Sprintf("msg-%d", i))},
+		}
+		if err := stream.Send(req); err != nil {
+			t.Fatalf("stream.Send() failed unexpectedly with FailureModeAllow=true: %v", err)
+		}
+	}
+	if err := stream.CloseSend(); err != nil {
+		t.Fatalf("stream.CloseSend() failed with FailureModeAllow=true: %v", err)
+	}
+	// Recv all 10 messages.
+	for i := 0; i < numMessages; i++ {
+		if _, err := stream.Recv(); err != nil {
+			t.Fatalf("stream.Recv() failed unexpectedly with FailureModeAllow=true: %v", err)
+		}
+	}
+}
+
+// TestObservabilityMidStreamFailDeny verifies behavior when an external
+// processor disconnects abruptly after receiving the first request body message
+// with FailureModeAllow = false. Verifies that the stream encounters an
+// Internal status error containing the processor's disconnect error.
+func (s) TestObservabilityMidStreamFailDeny(t *testing.T) {
+	extProcAddr, _ := startTestExtProcessor(t, func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
+		// Receive RequestHeaders.
+		req, err := stream.Recv()
+		if err != nil {
+			return err
+		}
+		if req.GetRequestHeaders() == nil {
+			return fmt.Errorf("got %v, want request headers", req)
+		}
+		// Receive the first RequestBody message.
+		req2, err := stream.Recv()
+		if err != nil {
+			return err
+		}
+		if req2.GetRequestBody() == nil {
+			return fmt.Errorf("got %v, want request body", req2)
+		}
+		// Abruptly disconnect after the first request body message.
+		return status.Error(codes.Unavailable, "abrupt mid-stream disconnect")
+	})
+
+	stub := stubserver.StartTestService(t, &stubserver.StubServer{
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
+			for {
+				in, err := stream.Recv()
+				if err == io.EOF {
+					return nil
+				}
+				if err != nil {
+					return err
+				}
+				if err := stream.Send(&testpb.StreamingOutputCallResponse{Payload: in.GetPayload()}); err != nil {
+					return err
+				}
+			}
+		},
+	})
+	defer stub.Stop()
+
+	cc, err := setupTestClient(t, extProcAddr, &v3procfilterpb.ExternalProcessor{
+		ProcessingMode: &v3procfilterpb.ProcessingMode{
+			RequestHeaderMode: v3procfilterpb.ProcessingMode_SEND,
+			RequestBodyMode:   v3procfilterpb.ProcessingMode_GRPC,
+		},
+		FailureModeAllow:     false,
+		ObservabilityMode:    true,
+		DeferredCloseTimeout: durationpb.New(defaultTestShortTimeout),
+	}, stub.Address)
+	if err != nil {
+		t.Fatalf("setupTestClient() failed: %v", err)
+	}
+	defer cc.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	client := testgrpc.NewTestServiceClient(cc)
+	stream, err := client.FullDuplexCall(ctx)
+	if err != nil {
+		t.Fatalf("FullDuplexCall() failed: %v", err)
+	}
+
+	const numMessages = 10
+	var gotErr error
+	// Send and recv 10 messages and verify that the RPC fails with correct error.
+	for i := 0; i < numMessages; i++ {
+		req := &testpb.StreamingOutputCallRequest{
+			Payload: &testpb.Payload{Body: []byte(fmt.Sprintf("msg-%d", i))},
+		}
+		if err := stream.Send(req); err != nil {
+			gotErr = err
+			break
+		}
+		if _, err := stream.Recv(); err != nil {
+			gotErr = err
+			break
+		}
+	}
+
+	if gotErr == nil {
+		t.Fatalf("Expected error from processor stream failure, got none after %d messages", numMessages)
+	}
+	if code := status.Code(gotErr); code != codes.Internal {
+		t.Fatalf("Stream returned status code %v (error: %v), want %v", code, gotErr, codes.Internal)
+	}
+	wantSubstring := "abrupt mid-stream disconnect"
+	if !strings.Contains(gotErr.Error(), wantSubstring) {
+		t.Fatalf("Stream returned error %v, want it to contain %q", gotErr, wantSubstring)
+	}
+}
+
+// TestObservabilityRequestAttributesLifecycle verifies that request attributes
+// are sent only in the first client message (RequestHeaders) and are not
+// populated in subsequent client messages (RequestBody) or any response
+// messages (ResponseHeaders, ResponseBody).
+func (s) TestObservabilityRequestAttributesLifecycle(t *testing.T) {
+	reqCh := make(chan *v3procservicepb.ProcessingRequest, 6)
+	extProcAddr, _ := startTestExtProcessor(t, func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
+		defer close(reqCh)
+		for {
+			req, err := stream.Recv()
+			if err == io.EOF {
+				return nil
+			}
+			if err != nil {
+				return err
+			}
+			reqCh <- req
+		}
+	})
+
+	// Start a test stub service.
+	stub := stubserver.StartTestService(t, &stubserver.StubServer{
+		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
+			if _, ok := metadata.FromIncomingContext(stream.Context()); !ok {
+				return status.Error(codes.InvalidArgument, "missing incoming metadata")
+			}
+			if err := stream.SendHeader(metadata.Pairs("x-resp-header-from-server", "present")); err != nil {
+				return err
+			}
+			for {
+				in, err := stream.Recv()
+				if err == io.EOF {
+					return nil
+				}
+				if err != nil {
+					return err
+				}
+				if err := stream.Send(&testpb.StreamingOutputCallResponse{
+					Payload: &testpb.Payload{Body: in.GetPayload().GetBody()},
+				}); err != nil {
+					return err
+				}
+			}
+		},
+	})
+	defer stub.Stop()
+
+	cc, err := setupTestClient(t, extProcAddr, &v3procfilterpb.ExternalProcessor{
+		RequestAttributes: []string{"request.path"},
+		ProcessingMode: &v3procfilterpb.ProcessingMode{
+			RequestHeaderMode:   v3procfilterpb.ProcessingMode_SEND,
+			RequestBodyMode:     v3procfilterpb.ProcessingMode_GRPC,
+			ResponseHeaderMode:  v3procfilterpb.ProcessingMode_SEND,
+			ResponseBodyMode:    v3procfilterpb.ProcessingMode_GRPC,
+			ResponseTrailerMode: v3procfilterpb.ProcessingMode_SEND,
+		},
+		ObservabilityMode:    true,
+		DeferredCloseTimeout: durationpb.New(defaultTestShortTimeout),
+	}, stub.Address)
+	if err != nil {
+		t.Fatalf("setupTestClient() failed: %v", err)
+	}
+	defer cc.Close()
+
+	client := testgrpc.NewTestServiceClient(cc)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	// Make the FullDuplexCall and verify it succeeds and returns the echoed payloads.
+	stream, err := client.FullDuplexCall(ctx)
+	if err != nil {
+		t.Fatalf("FullDuplexCall() failed: %v", err)
+	}
+
+	reqMsg := &testpb.StreamingOutputCallRequest{
+		Payload: &testpb.Payload{Body: []byte("c1")},
+	}
+	if err := stream.Send(reqMsg); err != nil {
+		t.Fatalf("stream.Send() = %v, want nil", err)
+	}
+
+	_, err = stream.Recv()
+	if err != nil {
+		t.Fatalf("stream.Recv() failed: %v", err)
+	}
+
+	if err := stream.CloseSend(); err != nil {
+		t.Fatalf("stream.CloseSend() = %v, want nil", err)
+	}
+	if _, err := stream.Recv(); err != io.EOF {
+		t.Fatalf("stream.Recv() = %v, want EOF", err)
+	}
+
+	var reqs []*v3procservicepb.ProcessingRequest
+	for req := range reqCh {
+		reqs = append(reqs, req)
+	}
+
+	if got, want := len(reqs), 6; got != want {
+		t.Fatalf("len(reqs) = %v, want %v", got, want)
+	}
+
+	// Request headers (attributes present on first client message).
+	if got := reqs[0].GetRequestHeaders(); got == nil {
+		t.Fatalf("RequestHeaders = nil, want non-nil RequestHeaders")
+	}
+	attrs := reqs[0].GetAttributes()
+	if attrs == nil {
+		t.Fatalf("RequestHeaders Attributes = nil, want non-nil Attributes")
+	}
+	reqStruct, ok := attrs["envoy.filters.http.ext_proc"]
+	if !ok || reqStruct == nil {
+		t.Fatalf("RequestHeaders Attributes missing key %q", "envoy.filters.http.ext_proc")
+	}
+	if got, want := reqStruct.GetFields()["request.path"].GetStringValue(), "/grpc.testing.TestService/FullDuplexCall"; got != want {
+		t.Fatalf("request.path attribute = %q, want %q", got, want)
+	}
+
+	// Request body chunk (attributes absent on subsequent client messages).
+	if got := reqs[1].GetRequestBody(); got == nil {
+		t.Fatalf("First RequestBody = nil, want non-nil RequestBody")
+	}
+	if got := reqs[1].GetAttributes(); got != nil {
+		t.Fatalf("First RequestBody Attributes = %+v, want nil Attributes", got)
+	}
+
+	// Response headers (attributes absent on response messages).
+	if got := reqs[2].GetResponseHeaders(); got == nil {
+		t.Fatalf("ResponseHeaders = nil, want non-nil ResponseHeaders")
+	}
+	if got := reqs[2].GetAttributes(); got != nil {
+		t.Fatalf("ResponseHeaders Attributes = %+v, want nil Attributes", got)
+	}
+
+	// Response body (attributes absent on response messages).
+	if got := reqs[3].GetResponseBody(); got == nil {
+		t.Fatalf("First ResponseBody = nil, want non-nil ResponseBody")
+	}
+	if got := reqs[3].GetAttributes(); got != nil {
+		t.Fatalf("First ResponseBody Attributes = %+v, want nil Attributes", got)
+	}
+
+	// Request body EOF (attributes absent on subsequent client messages).
+	if got := reqs[4].GetRequestBody(); got == nil {
+		t.Fatalf("RequestBody EOF = nil, want non-nil RequestBody")
+	} else if gotEOS, wantEOS := got.GetEndOfStreamWithoutMessage(), true; gotEOS != wantEOS {
+		t.Fatalf("RequestBody EndOfStreamWithoutMessage = %v, want %v", gotEOS, wantEOS)
+	}
+	if got := reqs[4].GetAttributes(); got != nil {
+		t.Fatalf("RequestBody EOF Attributes = %+v, want nil Attributes", got)
+	}
+
+	// Response trailers (attributes absent on response messages).
+	if got := reqs[5].GetResponseTrailers(); got == nil {
+		t.Fatalf("ResponseTrailers = nil, want non-nil ResponseTrailers")
+	}
+	if got := reqs[5].GetAttributes(); got != nil {
+		t.Fatalf("ResponseTrailers Attributes = %+v, want nil Attributes", got)
+	}
+}
+
+// TestObservabilityMetricsUnary tests the client-side ext_proc metrics for a
+// Unary RPC. It verifies that all 4 duration metrics are recorded with the
+// correct labels and that their values are positive.
+func (s) TestObservabilityMetricsUnary(t *testing.T) {
+	extProcAddr, _ := startTestExtProcessor(t, func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
+		for {
+			_, err := stream.Recv()
+			if err == io.EOF {
+				return nil
+			}
+			if err != nil {
+				return err
+			}
+		}
+	})
+
+	// Start a test stub service.
+	stub := stubserver.StartTestService(t, &stubserver.StubServer{
+		UnaryCallF: func(_ context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			return &testpb.SimpleResponse{Payload: in.GetPayload()}, nil
+		},
+	})
+	defer stub.Stop()
+
+	const serviceName = "test-service"
+	tmr := stats.NewTestMetricsRecorder()
+	grpcTarget := "xds:///" + serviceName
+	cc, err := setupTestClient(t, extProcAddr, &v3procfilterpb.ExternalProcessor{
+		ProcessingMode: &v3procfilterpb.ProcessingMode{
+			RequestHeaderMode:   v3procfilterpb.ProcessingMode_SEND,
+			RequestBodyMode:     v3procfilterpb.ProcessingMode_GRPC,
+			ResponseHeaderMode:  v3procfilterpb.ProcessingMode_SEND,
+			ResponseTrailerMode: v3procfilterpb.ProcessingMode_SEND,
+		},
+		ObservabilityMode:    true,
+		DeferredCloseTimeout: durationpb.New(defaultTestShortTimeout),
+	}, stub.Address, grpc.WithStatsHandler(tmr))
+	if err != nil {
+		t.Fatalf("setupTestClient() failed: %v", err)
+	}
+	defer cc.Close()
+
+	client := testgrpc.NewTestServiceClient(cc)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	reqMsg := &testpb.SimpleRequest{Payload: &testpb.Payload{Body: []byte("hello")}}
+	if _, err = client.UnaryCall(ctx, reqMsg); err != nil {
+		t.Fatalf("UnaryCall() failed: %v", err)
+	}
+
+	// Verify values in the map.
+	if got, _ := tmr.Metric("grpc.client_ext_proc.client_headers_duration"); got <= 0 {
+		t.Fatalf("Unexpected data for metric %v, got: %v, want: > 0", "grpc.client_ext_proc.client_headers_duration", got)
+	}
+	if got, _ := tmr.Metric("grpc.client_ext_proc.server_headers_duration"); got <= 0 {
+		t.Fatalf("Unexpected data for metric %v, got: %v, want: > 0", "grpc.client_ext_proc.server_headers_duration", got)
+	}
+	if got, _ := tmr.Metric("grpc.client_ext_proc.client_half_close_duration"); got <= 0 {
+		t.Fatalf("Unexpected data for metric %v, got: %v, want: > 0", "grpc.client_ext_proc.client_half_close_duration", got)
+	}
+	if got, _ := tmr.Metric("grpc.client_ext_proc.server_trailers_duration"); got <= 0 {
+		t.Fatalf("Unexpected data for metric %v, got: %v, want: > 0", "grpc.client_ext_proc.server_trailers_duration", got)
+	}
+
+	// Verify labels for the last metric (server_trailers_duration) from the
+	// channel. Since it is recorded last, it should be the one remaining in the
+	// channel.
+	md, err := tmr.ReadFloat64Histo(ctx)
+	if err != nil {
+		t.Fatalf("Failed to read last metric from channel: %v", err)
+	}
+	verifyMetric(t, md, "grpc.client_ext_proc.server_trailers_duration", grpcTarget)
+}
+
+// TestObservabilityMetricsStreaming tests the client-side ext_proc metrics for
+// a Streaming RPC. It verifies that all 4 duration metrics are recorded
+// synchronously step-by-step with the correct labels and that their values are
+// positive.
+func (s) TestObservabilityMetricsStreaming(t *testing.T) {
+	extProcAddr, _ := startTestExtProcessor(t, func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
+		for {
+			_, err := stream.Recv()
+			if err == io.EOF {
+				return nil
+			}
+			if err != nil {
+				return err
+			}
+		}
+	})
+
+	// Start a test stub service.
+	stub := stubserver.StartTestService(t, &stubserver.StubServer{
+		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
+			if err := stream.SendHeader(metadata.Pairs("x-resp-header-from-server", "present")); err != nil {
+				return err
+			}
+			for {
+				in, err := stream.Recv()
+				if err == io.EOF {
+					return nil
+				}
+				if err != nil {
+					return err
+				}
+				if err := stream.Send(&testpb.StreamingOutputCallResponse{
+					Payload: &testpb.Payload{Body: in.GetPayload().GetBody()},
+				}); err != nil {
+					return err
+				}
+			}
+		},
+	})
+	defer stub.Stop()
+
+	const serviceName = "test-service"
+	tmr := stats.NewTestMetricsRecorder()
+	grpcTarget := "xds:///" + serviceName
+	cc, err := setupTestClient(t, extProcAddr, &v3procfilterpb.ExternalProcessor{
+		ProcessingMode: &v3procfilterpb.ProcessingMode{
+			RequestHeaderMode:   v3procfilterpb.ProcessingMode_SEND,
+			RequestBodyMode:     v3procfilterpb.ProcessingMode_GRPC,
+			ResponseHeaderMode:  v3procfilterpb.ProcessingMode_SEND,
+			ResponseTrailerMode: v3procfilterpb.ProcessingMode_SEND,
+		},
+		ObservabilityMode:    true,
+		DeferredCloseTimeout: durationpb.New(defaultTestShortTimeout),
+	}, stub.Address, grpc.WithStatsHandler(tmr))
+	if err != nil {
+		t.Fatalf("setupTestClient() failed: %v", err)
+	}
+	defer cc.Close()
+
+	client := testgrpc.NewTestServiceClient(cc)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	stream, err := client.FullDuplexCall(ctx)
+	if err != nil {
+		t.Fatalf("FullDuplexCall() failed: %v", err)
+	}
+
+	// Verify client_headers_duration (recorded during NewStream).
+	md, err := tmr.ReadFloat64Histo(ctx)
+	if err != nil {
+		t.Fatalf("Failed to read client_headers_duration: %v", err)
+	}
+	verifyMetric(t, md, "grpc.client_ext_proc.client_headers_duration", grpcTarget)
+
+	// Send one message and receive reply.
+	reqMsg := &testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: []byte("hello")}}
+	if err := stream.Send(reqMsg); err != nil {
+		t.Fatalf("stream.Send() failed: %v", err)
+	}
+	_, err = stream.Recv()
+	if err != nil {
+		t.Fatalf("stream.Recv() failed: %v", err)
+	}
+
+	// Verify server_headers_duration (recorded during first Recv).
+	md, err = tmr.ReadFloat64Histo(ctx)
+	if err != nil {
+		t.Fatalf("Failed to read server_headers_duration: %v", err)
+	}
+	verifyMetric(t, md, "grpc.client_ext_proc.server_headers_duration", grpcTarget)
+
+	// Close send.
+	if err := stream.CloseSend(); err != nil {
+		t.Fatalf("stream.CloseSend() failed: %v", err)
+	}
+
+	// Verify client_half_close_duration (recorded during CloseSend).
+	md, err = tmr.ReadFloat64Histo(ctx)
+	if err != nil {
+		t.Fatalf("Failed to read client_half_close_duration: %v", err)
+	}
+	verifyMetric(t, md, "grpc.client_ext_proc.client_half_close_duration", grpcTarget)
+
+	// Receive EOF.
+	if _, err := stream.Recv(); err != io.EOF {
+		t.Fatalf("stream.Recv() returned error: %v, want EOF", err)
+	}
+
+	// Verify server_trailers_duration (recorded when Recv returns EOF).
+	md, err = tmr.ReadFloat64Histo(ctx)
+	if err != nil {
+		t.Fatalf("Failed to read server_trailers_duration: %v", err)
+	}
+	verifyMetric(t, md, "grpc.client_ext_proc.server_trailers_duration", grpcTarget)
+}
+
+// TestObservabilityTrailersOnly verifies that when the backend service returns
+// a trailers-only response (metadata in trailers without sending headers or body),
+// the ExtProc filter sends ResponseHeaders with EndOfStream=true containing the
+// trailer metadata.
+func (s) TestObservabilityTrailersOnly(t *testing.T) {
+	reqCh := make(chan *v3procservicepb.ProcessingRequest, 1)
+
+	lisAddr, _ := startTestExtProcessor(t, func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
+		defer close(reqCh)
+		req, err := stream.Recv()
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		reqCh <- req
+		return nil
+	})
+
+	stub := stubserver.StartTestService(t, &stubserver.StubServer{
+		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
+			// Wait for client request message before failing.
+			_, err := stream.Recv()
+			if err != nil {
+				return err
+			}
+			// Return abort error immediately to trigger Trailers-Only
+			return status.Error(codes.Aborted, "intentional backend failure")
+		},
+	})
+	defer stub.Stop()
+
+	cc, err := setupTestClient(t, lisAddr, &v3procfilterpb.ExternalProcessor{
+		ProcessingMode: &v3procfilterpb.ProcessingMode{
+			RequestHeaderMode:  v3procfilterpb.ProcessingMode_SKIP,
+			ResponseHeaderMode: v3procfilterpb.ProcessingMode_SEND,
+		},
+		ObservabilityMode:    true,
+		DeferredCloseTimeout: durationpb.New(defaultTestShortTimeout),
+	}, stub.Address)
+	if err != nil {
+		t.Fatalf("failed to dial: %v", err)
+	}
+	defer cc.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	client := testgrpc.NewTestServiceClient(cc)
+	stream, err := client.FullDuplexCall(ctx)
+	if err != nil {
+		t.Fatalf("FullDuplexCall() failed: %v", err)
+	}
+
+	// Send request message c1 to trigger the server handler.
+	if err := stream.Send(&testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: []byte("c1")}}); err != nil {
+		t.Fatalf("stream.Send() failed: %v", err)
+	}
+
+	// Recv should return Aborted (trailers-only)
+	_, err = stream.Recv()
+	if status.Code(err) != codes.Aborted {
+		t.Fatalf("stream.Recv() returned error: %v, want Aborted", err)
+	}
+
+	select {
+	case req := <-reqCh:
+		if got := req.GetResponseHeaders(); got == nil {
+			t.Fatalf("ResponseHeaders = nil, want non-nil ResponseHeaders")
+		} else if got.GetEndOfStream() != true {
+			t.Fatal("GetResponseHeaders().GetEndOfStream() = false, want true")
+		}
+	case <-ctx.Done():
+		t.Fatal("Timed out waiting for external processor server to receive response headers")
+	}
+
+	// Verify that calling Header() on a trailers-only stream returns nil, nil to
+	// be consistent with non-extproc streams.
+	if headerMetadata, err := stream.Header(); err != nil || headerMetadata != nil {
+		t.Fatalf("stream.Header() = (%v, %v), want (nil, nil)", headerMetadata, err)
+	}
+
+	// Verify response trailers were received from backend.
+	if trailerMetadata := stream.Trailer(); trailerMetadata == nil {
+		t.Fatalf("stream.Trailer() = nil, want metadata")
+	}
+}
+
+// verifyMetric is a helper function that asserts the properties of a recorded
+// metric. It verifies the metric name, labels (grpc.target), and that the
+// recorded duration is positive.
+func verifyMetric(t *testing.T, md stats.MetricsData, expectedName string, expectedTarget string) {
+	t.Helper()
+	if md.Handle.Name != expectedName {
+		t.Fatalf("Got metric %s, want %s", md.Handle.Name, expectedName)
+	}
+	labels := make(map[string]string)
+	for i, k := range md.LabelKeys {
+		if i < len(md.LabelVals) {
+			labels[k] = md.LabelVals[i]
+		}
+	}
+	if gotTarget := labels["grpc.target"]; gotTarget != expectedTarget {
+		t.Fatalf("Metric %s: grpc.target label = %q, want %q", expectedName, gotTarget, expectedTarget)
+	}
+	if md.FloatIncr <= 0 {
+		t.Fatalf("Unexpected data for metric %v, got: %v, want: > 0", expectedName, md.FloatIncr)
 	}
 }
