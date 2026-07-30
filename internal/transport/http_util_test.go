@@ -280,8 +280,8 @@ func (s) TestWriteBadConnection(t *testing.T) {
 			t.Fatalf("Write() = %v, want error presence = %v", err, io.EOF)
 		}
 	}
-	if writer.poolHandle != nil || writer.buf != nil {
-		t.Fatalf("failed Write() retained pooled buffer: handle=%p, buf=%p", writer.poolHandle, writer.buf)
+	if writer.bufHandle != nil {
+		t.Fatalf("failed Write() retained pooled buffer: handle=%p", writer.bufHandle)
 	}
 }
 
@@ -312,14 +312,14 @@ func TestBufWriterSharedBufferOwnership(t *testing.T) {
 	if _, err := writer.Write([]byte("abc")); err != nil {
 		t.Fatalf("Write() failed: %v", err)
 	}
-	if writer.poolHandle == nil {
+	if writer.bufHandle == nil {
 		t.Fatal("Write() did not retain the pooled buffer handle")
 	}
 	if err := writer.Flush(); err != nil {
 		t.Fatalf("Flush() failed: %v", err)
 	}
-	if writer.poolHandle != nil || writer.buf != nil {
-		t.Fatalf("Flush() retained pooled buffer: handle=%p, buf=%p", writer.poolHandle, writer.buf)
+	if writer.bufHandle != nil {
+		t.Fatalf("Flush() retained pooled buffer: handle=%p", writer.bufHandle)
 	}
 	if got := conn.String(); got != "abc" {
 		t.Fatalf("conn data = %q, want %q", got, "abc")
@@ -331,7 +331,7 @@ func TestBufWriterSharedBufferOwnership(t *testing.T) {
 	if _, err := writer.Write([]byte("12345678")); err != nil {
 		t.Fatalf("full-buffer Write() failed: %v", err)
 	}
-	if writer.poolHandle == nil {
+	if writer.bufHandle == nil {
 		t.Fatal("full-buffer Write() released the handle during its internal flush")
 	}
 	if writer.offset != 0 {
@@ -340,8 +340,8 @@ func TestBufWriterSharedBufferOwnership(t *testing.T) {
 	if err := writer.Flush(); err != nil {
 		t.Fatalf("Flush() after full-buffer Write() failed: %v", err)
 	}
-	if writer.poolHandle != nil || writer.buf != nil {
-		t.Fatalf("Flush() retained pooled buffer: handle=%p, buf=%p", writer.poolHandle, writer.buf)
+	if writer.bufHandle != nil {
+		t.Fatalf("Flush() retained pooled buffer: handle=%p", writer.bufHandle)
 	}
 }
 
@@ -352,19 +352,19 @@ func TestBufWriterFlushErrorReleasesSharedBuffer(t *testing.T) {
 	if _, err := writer.Write([]byte("abc")); err != nil {
 		t.Fatalf("Write() failed before flush: %v", err)
 	}
-	if writer.poolHandle == nil {
+	if writer.bufHandle == nil {
 		t.Fatal("Write() did not retain the pooled buffer handle")
 	}
 	if err := writer.Flush(); !errors.Is(err, io.EOF) {
 		t.Fatalf("Flush() error = %v, want %v", err, io.EOF)
 	}
-	if writer.poolHandle != nil || writer.buf != nil {
-		t.Fatalf("failed Flush() retained pooled buffer: handle=%p, buf=%p", writer.poolHandle, writer.buf)
+	if writer.bufHandle != nil {
+		t.Fatalf("failed Flush() retained pooled buffer: handle=%p", writer.bufHandle)
 	}
 	if _, err := writer.Write([]byte("def")); !errors.Is(err, io.EOF) {
 		t.Fatalf("Write() after failed Flush() error = %v, want %v", err, io.EOF)
 	}
-	if writer.poolHandle != nil {
+	if writer.bufHandle != nil {
 		t.Fatal("Write() after failed Flush() acquired another pooled buffer")
 	}
 }
