@@ -135,7 +135,13 @@ type conn struct {
 
 // NewConn creates a new secure channel instance given the other party role and
 // handshaking result.
-func NewConn(c net.Conn, side core.Side, recordProtocol string, key []byte, protected []byte, negotiatedMaxFrameSize int) (net.Conn, error) {
+func NewConn(c net.Conn, side core.Side, recordProtocol string, key []byte, protected []byte) (net.Conn, error) {
+	return NewConnWithMaxFrameSize(c, side, recordProtocol, key, protected, 0)
+}
+
+// NewConnWithMaxFrameSize creates a new secure channel instance given the
+// other party role, handshaking result, and negotiated maximum frame size.
+func NewConnWithMaxFrameSize(c net.Conn, side core.Side, recordProtocol string, key []byte, protected []byte, negotiatedMaxFrameSize int) (net.Conn, error) {
 	newCrypto := protocols[recordProtocol]
 	if newCrypto == nil {
 		return nil, fmt.Errorf("negotiated unknown next_protocol %q", recordProtocol)

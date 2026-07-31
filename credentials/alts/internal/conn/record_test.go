@@ -90,7 +90,7 @@ func newTestALTSRecordConn(in, out *bytes.Buffer, side core.Side, rp string, pro
 		in:  in,
 		out: out,
 	}
-	c, err := NewConn(&tc, side, rp, key, protected, 0)
+	c, err := NewConn(&tc, side, rp, key, protected)
 	if err != nil {
 		panic(fmt.Sprintf("Unexpected error creating test ALTS record connection: %v", err))
 	}
@@ -381,7 +381,7 @@ func BenchmarkWriteMemoryUsage(b *testing.B) {
 	conn := &noopConn{}
 
 	for b.Loop() {
-		c, err := NewConn(conn, core.ClientSide, rekeyRecordProtocol, key, nil, 0)
+		c, err := NewConn(conn, core.ClientSide, rekeyRecordProtocol, key, nil)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -433,7 +433,7 @@ func (s) TestParseFramedMsgVulnerability(t *testing.T) {
 	// bytes happen to start with `0x06` (altsRecordMsgType), the vulnerable
 	// code will try to slice `msg[4:]` which panics because len(msg) is 0.
 	malformedProtected := []byte{0x00, 0x00, 0x00, 0x00, 0x06, 0x00, 0x00, 0x00}
-	c, err := NewConn(&tc, core.ServerSide, rekeyRecordProtocol, key, malformedProtected, 0)
+	c, err := NewConn(&tc, core.ServerSide, rekeyRecordProtocol, key, malformedProtected)
 	if err != nil {
 		t.Fatalf("NewConn failed: %v", err)
 	}
@@ -476,7 +476,7 @@ func (s) TestNewConnNegotiatedMaxFrameSize(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			tcConn := testConn{}
-			c, err := NewConn(&tcConn, core.ClientSide, rekeyRecordProtocol, key, nil, tc.negotiatedMaxFrameSize)
+			c, err := NewConnWithMaxFrameSize(&tcConn, core.ClientSide, rekeyRecordProtocol, key, nil, tc.negotiatedMaxFrameSize)
 			if err != nil {
 				t.Fatalf("NewConn() err = %v, want nil", err)
 			}
@@ -495,7 +495,7 @@ func (s) TestWriteHonorsNegotiatedMaxFrameSize(t *testing.T) {
 	key := make([]byte, 16)
 	const negotiatedMaxFrameSize = 16 * 1024
 	out := new(bytes.Buffer)
-	c, err := NewConn(&testConn{in: new(bytes.Buffer), out: out}, core.ClientSide, rekeyRecordProtocol, key, nil, negotiatedMaxFrameSize)
+	c, err := NewConnWithMaxFrameSize(&testConn{in: new(bytes.Buffer), out: out}, core.ClientSide, rekeyRecordProtocol, key, nil, negotiatedMaxFrameSize)
 	if err != nil {
 		t.Fatalf("NewConn failed: %v", err)
 	}
@@ -542,7 +542,7 @@ func (s) TestWritePartialWriteErrorWithNegotiatedMaxFrameSize(t *testing.T) {
 		err:           io.ErrUnexpectedEOF,
 	}
 
-	c, err := NewConn(errConn, core.ClientSide, rekeyRecordProtocol, key, nil, negotiatedMaxFrameSize)
+	c, err := NewConnWithMaxFrameSize(errConn, core.ClientSide, rekeyRecordProtocol, key, nil, negotiatedMaxFrameSize)
 	if err != nil {
 		t.Fatalf("NewConn failed: %v", err)
 	}
