@@ -2502,8 +2502,8 @@ func (s) TestRPC_BaggagePropagation(t *testing.T) {
 	wantBaggage := map[string]string{"key1": "value1", "key2": "value2"}
 
 	// serverBaggage receives the baggage observed by the server handler for
-	// each RPC (unary and streaming).
-	serverBaggage := make(chan map[string]string, 2)
+	// each RPC. It is verified after each RPC, so a buffer of one suffices.
+	serverBaggage := make(chan map[string]string, 1)
 	ss := &stubserver.StubServer{
 		UnaryCallF: func(ctx context.Context, _ *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			serverBaggage <- baggageToMap(baggage.FromContext(ctx))
@@ -2526,8 +2526,7 @@ func (s) TestRPC_BaggagePropagation(t *testing.T) {
 	// Configure the W3C Baggage propagator so baggage is carried in metadata.
 	to.TextMapPropagator = propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{})
 	otelOptions := opentelemetry.Options{TraceOptions: *to}
-	if err := ss.Start([]grpc.ServerOption{opentelemetry.ServerOption(otelOptions)},
-		opentelemetry.DialOption(otelOptions)); err != nil {
+	if err := ss.Start([]grpc.ServerOption{opentelemetry.ServerOption(otelOptions)}, opentelemetry.DialOption(otelOptions)); err != nil {
 		t.Fatalf("Error starting endpoint server: %v", err)
 	}
 	defer ss.Stop()
@@ -2536,9 +2535,22 @@ func (s) TestRPC_BaggagePropagation(t *testing.T) {
 	defer cancel()
 	ctx = baggage.ContextWithBaggage(ctx, bag)
 
+	verifyServerBaggage := func(rpc string) {
+		t.Helper()
+		select {
+		case got := <-serverBaggage:
+			if diff := cmp.Diff(wantBaggage, got); diff != "" {
+				t.Errorf("Baggage received by server for %s RPC mismatch (-want +got):\n%s", rpc, diff)
+			}
+		case <-ctx.Done():
+			t.Fatalf("Timed out waiting for server to receive baggage for %s RPC", rpc)
+		}
+	}
+
 	if _, err := ss.Client.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil {
 		t.Fatalf("Unexpected error from UnaryCall: %v", err)
 	}
+	verifyServerBaggage("unary")
 
 	stream, err := ss.Client.FullDuplexCall(ctx)
 	if err != nil {
@@ -2548,17 +2560,7 @@ func (s) TestRPC_BaggagePropagation(t *testing.T) {
 	if _, err = stream.Recv(); err != io.EOF {
 		t.Fatalf("stream.Recv received an unexpected error: %v, expected an EOF error", err)
 	}
-
-	for _, rpc := range []string{"unary", "streaming"} {
-		select {
-		case got := <-serverBaggage:
-			if diff := cmp.Diff(wantBaggage, got); diff != "" {
-				t.Errorf("baggage received by server for %s RPC mismatch (-want +got):\n%s", rpc, diff)
-			}
-		case <-ctx.Done():
-			t.Fatalf("Timed out waiting for server to receive baggage for %s RPC", rpc)
-		}
-	}
+	verifyServerBaggage("streaming")
 }
 
 // checkMetricWithMethod verifies that a metric with the specified name contains
