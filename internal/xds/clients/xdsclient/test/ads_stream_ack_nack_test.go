@@ -507,14 +507,15 @@ func (s) TestADS_ACK_NACK_ResourceIsNotRequestedAnymore(t *testing.T) {
 	}
 }
 
-// TestADS_NACKError_DuplicateSuppression verifies that when a duplicate
-// invalid LDS resource is sent by the server, the client suppresses the
-// duplicate error notification to the watcher.
+// TestADS_NACKError_DuplicateSuppression verifies that when a duplicate invalid
+// LDS resource is sent by the server, the client suppresses the duplicate error
+// notification to the watcher.
 func (s) TestADS_NACKError_DuplicateSuppression(t *testing.T) {
-	// The first NACK is expected upon receiving the invalid resource. The second NACK
-	// is a duplicate, sent because the management server resends the invalid resource
-	// in a loop as long as the resource update has not changed to a valid one.
-	// The third NACK is waited for to verify that the duplicated error is still suppressed as expected.
+	// The first NACK is expected upon receiving the invalid resource. The
+	// second NACK is a duplicate, sent because the management server resends
+	// the invalid resource in a loop as long as the resource update has not
+	// changed to a valid one.  The third NACK is waited for to verify that the
+	// duplicated error is still suppressed as expected.
 	const wantNACKCount = 3
 
 	nacksReceivedCh := make(chan struct{})
@@ -566,8 +567,8 @@ func (s) TestADS_NACKError_DuplicateSuppression(t *testing.T) {
 		t.Fatalf("Update received with error: %v, want %q", gotErr, wantNackErr)
 	}
 
-	// Wait for the management server to receive at least wantNACKCount NACKs, indicating that
-	// the NACK resend loop has run multiple times.
+	// Wait for the management server to receive at least wantNACKCount NACKs,
+	// indicating that the NACK resend loop has run multiple times.
 	select {
 	case <-nacksReceivedCh:
 	case <-ctx.Done():
@@ -584,10 +585,10 @@ func (s) TestADS_NACKError_DuplicateSuppression(t *testing.T) {
 }
 
 // TestADS_NACKError_DuplicateSuppression_ConcatenatedErrorChange verifies that
-// when multiple invalid resources cause a concatenated error stored in metadata,
-// and a subsequent update carries a duplicate error for only a subset of resources
-// (changing the concatenated error string), the client still suppresses the
-// duplicate error notification to the watcher.
+// when multiple invalid resources cause a concatenated error stored in
+// metadata, and a subsequent update carries a duplicate error for only a subset
+// of resources (changing the concatenated error string), the client still
+// suppresses the duplicate error notification to the watcher.
 func (s) TestADS_NACKError_DuplicateSuppression_ConcatenatedErrorChange(t *testing.T) {
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 
@@ -642,8 +643,9 @@ func (s) TestADS_NACKError_DuplicateSuppression_ConcatenatedErrorChange(t *testi
 		t.Fatalf("Update 1 listener 2 received with error: %v, want %q", gotErr, wantNackErr)
 	}
 
-	// Update 2: Management server sends listener 1 still invalid, but listener 2 now valid.
-	// This changes the concatenated error stored in metadata (from Error1+Error2 to just Error1).
+	// Update 2: Management server sends listener 1 still invalid, but listener
+	// 2 now valid.  This changes the concatenated error stored in metadata
+	// (from Error1+Error2 to just Error1).
 	resources2 := e2e.UpdateOptions{
 		NodeID: nodeID,
 		Listeners: []*v3listenerpb.Listener{
@@ -662,8 +664,9 @@ func (s) TestADS_NACKError_DuplicateSuppression_ConcatenatedErrorChange(t *testi
 		t.Fatalf("Timeout waiting for listener 2 resource update: %v", err)
 	}
 
-	// Verify that no duplicate error update was written to watcher 1 error channel,
-	// proving that the duplicate error on listener 1 was suppressed despite the concatenated error changing.
+	// Verify that no duplicate error update was written to watcher 1 error
+	// channel, proving that the duplicate error on listener 1 was suppressed
+	// despite the concatenated error changing.
 	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
 	if v, err := watcher1.resourceErrCh.Receive(sCtx); err == nil {
