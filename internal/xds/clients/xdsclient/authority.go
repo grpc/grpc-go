@@ -22,6 +22,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -370,24 +371,29 @@ func (a *authority) handleADSResourceUpdate(serverConfig *ServerConfig, rType Re
 
 		// On error, keep previous version of the resource. But update status
 		// and error.
-		if uErr.Err != nil {
+		if err := uErr.Err; err != nil {
 			if a.metricsReporter != nil {
 				a.metricsReporter.ReportMetric(&metrics.ResourceUpdateInvalid{
 					ServerURI: serverConfig.ServerIdentifier.ServerURI, ResourceType: rType.TypeName,
 				})
 			}
-			state.md.ErrState = md.ErrState
-			state.md.Status = md.Status
-			for watcher := range state.watchers {
-				watcher := watcher
-				err := uErr.Err
-				watcherCnt.Add(1)
-				if state.cache == nil {
-					funcsToSchedule = append(funcsToSchedule, func(context.Context) { watcher.ResourceError(err, done) })
-				} else {
-					funcsToSchedule = append(funcsToSchedule, func(context.Context) { watcher.AmbientError(err, done) })
+
+			// Notify watchers only if this is not a duplicated error from the previous update.
+			if errState := state.md.ErrState; errState == nil || errState.Err == nil || !strings.Contains(state.md.ErrState.Err.Error(), err.Error()) {
+				for watcher := range state.watchers {
+					watcherCnt.Add(1)
+					if state.cache == nil {
+						funcsToSchedule = append(funcsToSchedule, func(context.Context) { watcher.ResourceError(err, done) })
+					} else {
+						funcsToSchedule = append(funcsToSchedule, func(context.Context) { watcher.AmbientError(err, done) })
+					}
 				}
 			}
+
+			// Update error state.
+			state.md.ErrState = md.ErrState
+			state.md.Status = md.Status
+
 			continue
 		}
 
