@@ -21,6 +21,7 @@ package internal
 
 import (
 	"fmt"
+	"time"
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	"google.golang.org/grpc"
@@ -47,4 +48,12 @@ var (
 	CreateExtProcChannel = func(xdsresource.GRPCServiceConfig) (grpc.ClientConnInterface, func() error, error) {
 		return nil, nil, fmt.Errorf("extproc: dialing external processor server not implemented")
 	}
+
+	// TimeNowFunc returns the current time.Time, and can be overridden for
+	// testing purposes.
+	TimeNowFunc = time.Now
+
+	// TimeSinceFunc returns the time elapsed, and can be overridden for testing
+	// purposes.
+	TimeSinceFunc = time.Since
 )

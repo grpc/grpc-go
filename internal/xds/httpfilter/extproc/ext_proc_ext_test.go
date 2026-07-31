@@ -4413,11 +4413,49 @@ func (s) TestObservabilityTrailersOnly(t *testing.T) {
 	}
 }
 
+// overrideTimeForMetricsTesting overrides internal time functions to return a
+// deterministic duration for metrics tests, validating start timestamps.
+func overrideTimeForMetricsTesting(t *testing.T) {
+	t.Helper()
+	origNow, origSince := internal.TimeNowFunc, internal.TimeSinceFunc
+	// A mutex is required because TimeNowFunc and TimeSinceFunc may be called
+	// concurrently from different stream goroutines, and time.Time is a
+	// multi-word struct that is not safe for concurrent reads and writes.
+	var mu sync.Mutex
+	curTime := time.Unix(1000, 0)
+	step := 125 * time.Millisecond
+
+	// TimeNowFunc returns the current mock time without advancing it, ensuring
+	// that any start timestamp captured during a stream phase is recorded as
+	// curTime.
+	internal.TimeNowFunc = func() time.Time {
+		mu.Lock()
+		defer mu.Unlock()
+		return curTime
+	}
+
+	// TimeSinceFunc advances curTime by step relative to the provided start
+	// timestamp and returns curTime.Sub(start). This validates that the correct
+	// start timestamp was passed while returning a deterministic duration (step).
+	internal.TimeSinceFunc = func(start time.Time) time.Duration {
+		mu.Lock()
+		defer mu.Unlock()
+		curTime = start.Add(step)
+		return curTime.Sub(start)
+	}
+	t.Cleanup(func() {
+		internal.TimeNowFunc, internal.TimeSinceFunc = origNow, origSince
+	})
+}
+
 // TestUnaryMetrics tests the client-side ext_proc metrics for a Unary RPC in
 // both normal mode and observability mode. It verifies that all 4 duration
-// metrics are recorded with the correct labels and that their values are
-// positive.
+// metrics are recorded with the correct labels and that their values match
+// the expected duration.
 func (s) TestUnaryMetrics(t *testing.T) {
+	const wantDurationSeconds = 0.125
+	overrideTimeForMetricsTesting(t)
+
 	tests := []struct {
 		name              string
 		observabilityMode bool
@@ -4509,17 +4547,17 @@ func (s) TestUnaryMetrics(t *testing.T) {
 			}
 
 			// Verify values in the map.
-			if got, _ := tmr.Metric("grpc.client_ext_proc.client_headers_duration"); got <= 0 {
-				t.Fatalf("Unexpected data for metric %v, got: %v, want: > 0", "grpc.client_ext_proc.client_headers_duration", got)
+			if got, _ := tmr.Metric("grpc.client_ext_proc.client_headers_duration"); got != wantDurationSeconds {
+				t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", "grpc.client_ext_proc.client_headers_duration", got, wantDurationSeconds)
 			}
-			if got, _ := tmr.Metric("grpc.client_ext_proc.server_headers_duration"); got <= 0 {
-				t.Fatalf("Unexpected data for metric %v, got: %v, want: > 0", "grpc.client_ext_proc.server_headers_duration", got)
+			if got, _ := tmr.Metric("grpc.client_ext_proc.server_headers_duration"); got != wantDurationSeconds {
+				t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", "grpc.client_ext_proc.server_headers_duration", got, wantDurationSeconds)
 			}
-			if got, _ := tmr.Metric("grpc.client_ext_proc.client_half_close_duration"); got <= 0 {
-				t.Fatalf("Unexpected data for metric %v, got: %v, want: > 0", "grpc.client_ext_proc.client_half_close_duration", got)
+			if got, _ := tmr.Metric("grpc.client_ext_proc.client_half_close_duration"); got != wantDurationSeconds {
+				t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", "grpc.client_ext_proc.client_half_close_duration", got, wantDurationSeconds)
 			}
-			if got, _ := tmr.Metric("grpc.client_ext_proc.server_trailers_duration"); got <= 0 {
-				t.Fatalf("Unexpected data for metric %v, got: %v, want: > 0", "grpc.client_ext_proc.server_trailers_duration", got)
+			if got, _ := tmr.Metric("grpc.client_ext_proc.server_trailers_duration"); got != wantDurationSeconds {
+				t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", "grpc.client_ext_proc.server_trailers_duration", got, wantDurationSeconds)
 			}
 
 			// Verify labels for the last metric (server_trailers_duration) from the
@@ -4529,7 +4567,7 @@ func (s) TestUnaryMetrics(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to read last metric from channel: %v", err)
 			}
-			verifyMetric(t, md, "grpc.client_ext_proc.server_trailers_duration", grpcTarget)
+			verifyMetric(t, md, "grpc.client_ext_proc.server_trailers_duration", grpcTarget, wantDurationSeconds)
 		})
 	}
 }
@@ -4537,8 +4575,11 @@ func (s) TestUnaryMetrics(t *testing.T) {
 // TestStreamingMetrics tests the client-side ext_proc metrics for a Streaming
 // RPC in both normal mode and observability mode. It verifies that all 4
 // duration metrics are recorded synchronously step-by-step with the correct
-// labels and that their values are positive.
+// labels and that their values match the expected duration.
 func (s) TestStreamingMetrics(t *testing.T) {
+	const wantDurationSeconds = 0.125
+	overrideTimeForMetricsTesting(t)
+
 	tests := []struct {
 		name              string
 		observabilityMode bool
@@ -4650,7 +4691,7 @@ func (s) TestStreamingMetrics(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to read client_headers_duration: %v", err)
 			}
-			verifyMetric(t, md, "grpc.client_ext_proc.client_headers_duration", grpcTarget)
+			verifyMetric(t, md, "grpc.client_ext_proc.client_headers_duration", grpcTarget, wantDurationSeconds)
 
 			// Send one message and receive reply.
 			reqMsg := &testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: []byte("hello")}}
@@ -4666,7 +4707,7 @@ func (s) TestStreamingMetrics(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to read server_headers_duration: %v", err)
 			}
-			verifyMetric(t, md, "grpc.client_ext_proc.server_headers_duration", grpcTarget)
+			verifyMetric(t, md, "grpc.client_ext_proc.server_headers_duration", grpcTarget, wantDurationSeconds)
 
 			// Close send.
 			if err := stream.CloseSend(); err != nil {
@@ -4678,7 +4719,7 @@ func (s) TestStreamingMetrics(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to read client_half_close_duration: %v", err)
 			}
-			verifyMetric(t, md, "grpc.client_ext_proc.client_half_close_duration", grpcTarget)
+			verifyMetric(t, md, "grpc.client_ext_proc.client_half_close_duration", grpcTarget, wantDurationSeconds)
 
 			// Receive EOF.
 			if _, err := stream.Recv(); err != io.EOF {
@@ -4690,15 +4731,15 @@ func (s) TestStreamingMetrics(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to read server_trailers_duration: %v", err)
 			}
-			verifyMetric(t, md, "grpc.client_ext_proc.server_trailers_duration", grpcTarget)
+			verifyMetric(t, md, "grpc.client_ext_proc.server_trailers_duration", grpcTarget, wantDurationSeconds)
 		})
 	}
 }
 
 // verifyMetric is a helper function that asserts the properties of a recorded
 // metric. It verifies the metric name, labels (grpc.target), and that the
-// recorded duration is positive.
-func verifyMetric(t *testing.T, md stats.MetricsData, expectedName string, expectedTarget string) {
+// recorded duration matches expectedDuration.
+func verifyMetric(t *testing.T, md stats.MetricsData, expectedName string, expectedTarget string, expectedDuration float64) {
 	t.Helper()
 	if md.Handle.Name != expectedName {
 		t.Fatalf("Got metric %s, want %s", md.Handle.Name, expectedName)
@@ -4712,7 +4753,7 @@ func verifyMetric(t *testing.T, md stats.MetricsData, expectedName string, expec
 	if gotTarget := labels["grpc.target"]; gotTarget != expectedTarget {
 		t.Fatalf("Metric %s: grpc.target label = %q, want %q", expectedName, gotTarget, expectedTarget)
 	}
-	if md.FloatIncr <= 0 {
-		t.Fatalf("Unexpected data for metric %v, got: %v, want: > 0", expectedName, md.FloatIncr)
+	if md.FloatIncr != expectedDuration {
+		t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", expectedName, md.FloatIncr, expectedDuration)
 	}
 }

@@ -71,7 +71,13 @@ var metadataFromOutgoingContextRaw = internal.FromOutgoingContextRaw.(func(conte
 
 const defaultDeferredCloseTimeout = 5 * time.Second
 
-var baseTime = time.Now()
+func timeNow() time.Time {
+	return iextproc.TimeNowFunc()
+}
+
+func timeSince(t time.Time) time.Duration {
+	return iextproc.TimeSinceFunc(t)
+}
 
 type builder struct{}
 
@@ -294,7 +300,7 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 		config:                 i.config,
 		metricsRecorder:        i.metricsRecorder,
 		target:                 i.target,
-		clientHeadersStartTime: time.Now(),
+		clientHeadersStartTime: timeNow(),
 		// Construct request attributes once during stream initialization to capture
 		// the original, unmutated request metadata and RPC info. For streaming
 		// RPCs, where stream creation and message transmission are separable,
@@ -338,7 +344,7 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 			ocs.cancel()
 			return nil, err
 		}
-		ocs.recordMetric(clientHeadersDurationMetric, time.Since(ocs.clientHeadersStartTime).Seconds())
+		ocs.recordMetric(clientHeadersDurationMetric, timeSince(ocs.clientHeadersStartTime).Seconds())
 		// Start background goroutine to receive any messages from the external
 		// processor server and discard them.
 		go ocs.discardProcessorResponsesLoop()
@@ -441,7 +447,7 @@ func (cs *commonStream) handleInitError(err error, newStream func(context.Contex
 		cs.cancel()
 		return nil, err
 	}
-	cs.recordMetric(clientHeadersDurationMetric, time.Since(cs.clientHeadersStartTime).Seconds())
+	cs.recordMetric(clientHeadersDurationMetric, timeSince(cs.clientHeadersStartTime).Seconds())
 	return cs.dataplaneStream, nil
 }
 
@@ -585,14 +591,14 @@ func (ocs *observabilityClientStream) CloseSend() error {
 	if fatalErr, ok := ocs.procStreamErr.Load().(error); ok {
 		return fatalErr
 	}
-	startTime := time.Now()
+	startTime := timeNow()
 	if !ocs.procStreamBypass.Load() && ocs.config.processingModes.requestBodyMode == modeSend {
 		if err := ocs.sendToProcessor(ocs.halfClose()); err != nil {
 			return err
 		}
 	}
 	err := ocs.dataplaneStream.CloseSend()
-	ocs.recordMetric(clientHalfCloseDurationMetric, time.Since(startTime).Seconds())
+	ocs.recordMetric(clientHalfCloseDurationMetric, timeSince(startTime).Seconds())
 	return ocs.streamError(err)
 }
 
@@ -659,13 +665,13 @@ func (ocs *observabilityClientStream) initiateResponseTrailerProcessing(trailers
 	if ocs.responseTrailerOnce.Load() || !ocs.responseTrailerOnce.CompareAndSwap(false, true) {
 		return nil
 	}
-	startTime := time.Now()
+	startTime := timeNow()
 	if ocs.config.processingModes.responseTrailerMode == modeSend && !ocs.procStreamBypass.Load() && !ocs.trailersOnly {
 		if err := ocs.sendToProcessor(ocs.responseTrailers(trailers)); err != nil {
 			return err
 		}
 	}
-	ocs.recordMetric(serverTrailersDurationMetric, time.Since(startTime).Seconds())
+	ocs.recordMetric(serverTrailersDurationMetric, timeSince(startTime).Seconds())
 
 	// Half-close the external processor stream immediately so the server can
 	// shut down gracefully.
@@ -689,7 +695,7 @@ func (ocs *observabilityClientStream) initiateResponseHeaderProcessing() (metada
 	if ocs.responseHeaderErr != nil {
 		return nil, ocs.streamError(ocs.responseHeaderErr)
 	}
-	startTime := time.Now()
+	startTime := timeNow()
 	// A trailers-only response returns nil from dataplaneStream.Header().
 	procHeader := ocs.responseHeader
 	if ocs.responseHeader == nil {
@@ -704,7 +710,7 @@ func (ocs *observabilityClientStream) initiateResponseHeaderProcessing() (metada
 			return nil, err
 		}
 	}
-	ocs.recordMetric(serverHeadersDurationMetric, time.Since(startTime).Seconds())
+	ocs.recordMetric(serverHeadersDurationMetric, timeSince(startTime).Seconds())
 	return ocs.responseHeader, nil
 }
 
@@ -797,20 +803,23 @@ type clientStream struct {
 	procRecvLoopDone         *grpcsync.Event // fires when external processor stream receive loop finishes
 
 	// The following start times are accessed concurrently across goroutines
-	// during the stream lifetime. To prevent data races, they are synchronized
-	// using atomic.Int64 (storing the Unix nanoseconds offset from baseTime).
+	// during the stream lifetime. We store them as atomic.Int64 nanosecond
+	// offsets from clientHeadersStartTime instead of time.Time because time.Time
+	// cannot be accessed atomically without a mutex and atomic.Int64 provides
+	// lock-free atomic operations.
 	clientHalfCloseStartTime atomic.Int64
 	serverHeadersStartTime   atomic.Int64
 	serverTrailersStartTime  atomic.Int64
 }
 
-// recordDuration calculates the elapsed time since the start time stored in the
-// atomic.Int64 (relative to baseTime) and records it to the histogram metric.
-// It is a no-op if the start time has not been initialized (value is 0).
+// recordDuration records the elapsed time since the event start timestamp
+// stored in val to the histogram metric. val holds the start timestamp as a
+// nanosecond offset from cs.clientHeadersStartTime. It is a no-op if val has
+// not been set (value is 0).
 func (cs *clientStream) recordDuration(handle *estats.Float64HistoHandle, val *atomic.Int64) {
 	if offsetNs := val.Load(); offsetNs != 0 {
-		startTime := baseTime.Add(time.Duration(offsetNs))
-		cs.recordMetric(handle, time.Since(startTime).Seconds())
+		startTime := cs.clientHeadersStartTime.Add(time.Duration(offsetNs))
+		cs.recordMetric(handle, timeSince(startTime).Seconds())
 	}
 }
 
@@ -888,8 +897,11 @@ func (cs *clientStream) Trailer() metadata.MD {
 }
 
 func (cs *clientStream) CloseSend() error {
+	if cs.discardRequests.Load() {
+		return nil
+	}
 	if cs.clientHalfCloseStartTime.Load() == 0 {
-		offset := time.Since(baseTime)
+		offset := timeSince(cs.clientHeadersStartTime)
 		cs.clientHalfCloseStartTime.CompareAndSwap(0, int64(offset))
 	}
 
@@ -1457,7 +1469,7 @@ func (cs *clientStream) createDataplaneStream(ctx context.Context, newStream fun
 		cs.cancel()
 		return cs.dataplaneCreationErr
 	}
-	cs.recordMetric(clientHeadersDurationMetric, time.Since(cs.clientHeadersStartTime).Seconds())
+	cs.recordMetric(clientHeadersDurationMetric, timeSince(cs.clientHeadersStartTime).Seconds())
 	return nil
 }
 
@@ -1636,8 +1648,7 @@ func (cs *clientStream) initiateResponseHeaderProcessing() error {
 	}
 	// Capture the start time for response headers after they have been
 	// successfully retrieved from the dataplane stream.
-	offset := time.Since(baseTime)
-	cs.serverHeadersStartTime.Store(int64(offset))
+	cs.serverHeadersStartTime.Store(int64(timeSince(cs.clientHeadersStartTime)))
 
 	if header == nil {
 		// A trailers-only response returns nil from dataplaneStream.Header().
@@ -1647,8 +1658,7 @@ func (cs *clientStream) initiateResponseHeaderProcessing() error {
 			// For trailers-only, the trailers are retrieved during the header
 			// phase. Start timing them now since they will be processed as part
 			// of the header phase.
-			offset := time.Since(baseTime)
-			cs.serverTrailersStartTime.Store(int64(offset))
+			cs.serverTrailersStartTime.Store(int64(timeSince(cs.clientHeadersStartTime)))
 		}
 	}
 	cs.responseHeader = header
@@ -1694,7 +1704,7 @@ func (cs *clientStream) initiateResponseTrailerProcessing() {
 	cs.responseTrailers = cs.dataplaneStream.Trailer()
 	// Capture the start time for response trailers after they have been
 	// successfully retrieved from the dataplane stream.
-	offset := time.Since(baseTime)
+	offset := timeSince(cs.clientHeadersStartTime)
 	cs.serverTrailersStartTime.Store(int64(offset))
 
 	if cs.config.processingModes.responseTrailerMode == modeSend && !cs.procStreamBypass.HasFired() {
