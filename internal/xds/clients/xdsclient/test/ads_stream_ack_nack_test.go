@@ -584,12 +584,11 @@ func (s) TestADS_NACKError_DuplicateSuppression(t *testing.T) {
 	}
 }
 
-// TestADS_NACKError_DuplicateSuppression_ConcatenatedErrorChange verifies that
-// when multiple invalid resources cause a concatenated error stored in
-// metadata, and a subsequent update carries a duplicate error for only a subset
-// of resources (changing the concatenated error string), the client still
-// suppresses the duplicate error notification to the watcher.
-func (s) TestADS_NACKError_DuplicateSuppression_ConcatenatedErrorChange(t *testing.T) {
+// TestADS_NACKError_DuplicateSuppression_MultipleResources verifies that
+// when multiple invalid resources cause errors, and a subsequent update carries
+// a duplicate error for only a subset of resources, the client still suppresses
+// the duplicate error notification to the watcher of the affected resource(s).
+func (s) TestADS_NACKError_DuplicateSuppression_MultipleResources(t *testing.T) {
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 
 	const listenerName1 = "listener-1"
@@ -644,8 +643,7 @@ func (s) TestADS_NACKError_DuplicateSuppression_ConcatenatedErrorChange(t *testi
 	}
 
 	// Update 2: Management server sends listener 1 still invalid, but listener
-	// 2 now valid.  This changes the concatenated error stored in metadata
-	// (from Error1+Error2 to just Error1).
+	// 2 now valid.
 	resources2 := e2e.UpdateOptions{
 		NodeID: nodeID,
 		Listeners: []*v3listenerpb.Listener{
@@ -664,9 +662,7 @@ func (s) TestADS_NACKError_DuplicateSuppression_ConcatenatedErrorChange(t *testi
 		t.Fatalf("Timeout waiting for listener 2 resource update: %v", err)
 	}
 
-	// Verify that no duplicate error update was written to watcher 1 error
-	// channel, proving that the duplicate error on listener 1 was suppressed
-	// despite the concatenated error changing.
+	// Verify that no duplicate error update was written to watcher 1.
 	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
 	if v, err := watcher1.resourceErrCh.Receive(sCtx); err == nil {
