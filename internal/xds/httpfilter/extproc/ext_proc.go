@@ -910,16 +910,16 @@ func (cs *clientStream) CloseSend() error {
 		return err
 	}
 	if s != nil {
-		err = s.CloseSend()
 		cs.recordDuration(clientHalfCloseDurationMetric, &cs.clientHalfCloseStartTime)
+		err = s.CloseSend()
 		return err
 	}
 	// If external processor stream is active, client CloseSend is sent to the
 	// processor server as request message with `EndOfStreamWithoutMessage` set.
 	s, err = cs.sendClientReqToProcServer(cs.halfClose())
 	if s != nil {
-		err = s.CloseSend()
 		cs.recordDuration(clientHalfCloseDurationMetric, &cs.clientHalfCloseStartTime)
+		err = s.CloseSend()
 		return err
 	}
 	return err
@@ -1182,8 +1182,8 @@ func (cs *clientStream) requestForwardingToDataplaneLoop(msgType protoreflect.Me
 			// As per gRFC A93, ignore `end_of_stream_without_message` if
 			// `end_of_stream` is false.
 			if streamedResp.GetEndOfStream() && streamedResp.GetEndOfStreamWithoutMessage() {
-				dataplaneStream.CloseSend()
 				cs.recordDuration(clientHalfCloseDurationMetric, &cs.clientHalfCloseStartTime)
+				dataplaneStream.CloseSend()
 				return
 			}
 
@@ -1198,8 +1198,8 @@ func (cs *clientStream) requestForwardingToDataplaneLoop(msgType protoreflect.Me
 			}
 
 			if streamedResp.GetEndOfStream() {
-				dataplaneStream.CloseSend()
 				cs.recordDuration(clientHalfCloseDurationMetric, &cs.clientHalfCloseStartTime)
+				dataplaneStream.CloseSend()
 				return
 			}
 		case <-cs.ctx.Done():
