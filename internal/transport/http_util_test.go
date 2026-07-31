@@ -285,7 +285,7 @@ func (s) TestWriteBadConnection(t *testing.T) {
 	}
 }
 
-func TestBufWriterSharedFlushAllocations(t *testing.T) {
+func (s) TestBufWriterSharedFlushAllocations(t *testing.T) {
 	pool := imem.NewDirtySimplePool()
 	writer := newBufWriter(io.Discard, defaultWriteBufSize, pool)
 	payload := make([]byte, 128)
@@ -303,7 +303,7 @@ func TestBufWriterSharedFlushAllocations(t *testing.T) {
 	}
 }
 
-func TestBufWriterSharedBufferOwnership(t *testing.T) {
+func (s) TestBufWriterSharedBufferOwnership(t *testing.T) {
 	const batchSize = 8
 	pool := imem.NewDirtySimplePool()
 	var conn bytes.Buffer
@@ -345,7 +345,7 @@ func TestBufWriterSharedBufferOwnership(t *testing.T) {
 	}
 }
 
-func TestBufWriterFlushErrorReleasesSharedBuffer(t *testing.T) {
+func (s) TestBufWriterFlushErrorReleasesSharedBuffer(t *testing.T) {
 	pool := imem.NewDirtySimplePool()
 	writer := newBufWriter(&badNetworkConn{}, 8, pool)
 
@@ -369,8 +369,6 @@ func TestBufWriterFlushErrorReleasesSharedBuffer(t *testing.T) {
 	}
 }
 
-var benchmarkBufWriterSink *bufWriter
-
 func BenchmarkBufWriter(b *testing.B) {
 	const payloadSize = 128
 	payload := make([]byte, payloadSize)
@@ -385,8 +383,9 @@ func BenchmarkBufWriter(b *testing.B) {
 		b.Run(test.name, func(b *testing.B) {
 			b.Run("New", func(b *testing.B) {
 				b.ReportAllocs()
-				for i := 0; i < b.N; i++ {
-					benchmarkBufWriterSink = newBufWriter(io.Discard, defaultWriteBufSize, test.pool)
+				for b.Loop() {
+					writer := newBufWriter(io.Discard, defaultWriteBufSize, test.pool)
+					_ = writer
 				}
 			})
 
@@ -394,8 +393,7 @@ func BenchmarkBufWriter(b *testing.B) {
 				writer := newBufWriter(io.Discard, defaultWriteBufSize, test.pool)
 				b.ReportAllocs()
 				b.SetBytes(payloadSize)
-				b.ResetTimer()
-				for i := 0; i < b.N; i++ {
+				for b.Loop() {
 					if _, err := writer.Write(payload); err != nil {
 						b.Fatal(err)
 					}
@@ -408,8 +406,7 @@ func BenchmarkBufWriter(b *testing.B) {
 			b.Run("EmptyFlush", func(b *testing.B) {
 				writer := newBufWriter(io.Discard, defaultWriteBufSize, test.pool)
 				b.ReportAllocs()
-				b.ResetTimer()
-				for i := 0; i < b.N; i++ {
+				for b.Loop() {
 					if err := writer.Flush(); err != nil {
 						b.Fatal(err)
 					}
@@ -421,8 +418,7 @@ func BenchmarkBufWriter(b *testing.B) {
 				fullBuffer := make([]byte, defaultWriteBufSize)
 				b.ReportAllocs()
 				b.SetBytes(defaultWriteBufSize)
-				b.ResetTimer()
-				for i := 0; i < b.N; i++ {
+				for b.Loop() {
 					if _, err := writer.Write(fullBuffer); err != nil {
 						b.Fatal(err)
 					}
