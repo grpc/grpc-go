@@ -21,6 +21,7 @@ package handshaker
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"testing"
@@ -377,13 +378,17 @@ func (s) TestNewServerHandshaker(t *testing.T) {
 }
 
 func (s) TestHandshakeMaxFrameSizeNegotiation(t *testing.T) {
+	old := envconfig.ALTSMaxFrameSize
+	envconfig.ALTSMaxFrameSize = 64 * 1024
+	defer func() { envconfig.ALTSMaxFrameSize = old }()
+
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
 	stream := &testRPCStream{
 		t:                t,
 		isClient:         true,
-		peerMaxFrameSize: 16 * 1024,
+		peerMaxFrameSize: 1024 * 1024,
 	}
 	f1 := testutil.MakeFrame("ServerInit")
 	f2 := testutil.MakeFrame("ServerFinished")
@@ -408,5 +413,25 @@ func (s) TestHandshakeMaxFrameSizeNegotiation(t *testing.T) {
 	}
 	if sc == nil {
 		t.Fatalf("expected non-nil secure conn")
+	}
+
+	// Clear any handshake frames written to out during ClientHandshake.
+	out.Reset()
+
+	// Write a payload large enough to produce a full ALTS frame.
+	payload := make([]byte, 128*1024)
+	if _, err := sc.Write(payload); err != nil {
+		t.Fatalf("sc.Write() failed: %v", err)
+	}
+	// In ALTS wire format, the first 4 bytes of a frame contain the little-endian
+	// frame length (frameLen). Writing a large payload splits it into frames of
+	// the maximum calculated size. We verify the connection's max frame size by
+	// asserting that the total wire frame length (4 + frameLen) equals 64 * 1024.
+	if len(out.Bytes()) < 4 {
+		t.Fatalf("output buffer too small: %d bytes", len(out.Bytes()))
+	}
+	frameLen := int(binary.LittleEndian.Uint32(out.Bytes()[:4]))
+	if got, want := 4+frameLen, 64*1024; got != want {
+		t.Errorf("wire frame size = %v, want %v", got, want)
 	}
 }
