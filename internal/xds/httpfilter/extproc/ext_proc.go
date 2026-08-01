@@ -443,6 +443,7 @@ func (cs *commonStream) handleInitError(err error, newStream func(context.Contex
 		cs.cancel()
 		return nil, status.Errorf(codes.Internal, "extproc: %v", err)
 	}
+	cs.recordMetric(clientHeadersDurationMetric, timeSince(cs.clientHeadersStartTime).Seconds())
 	if cs.dataplaneStream, err = newStream(cs.ctx, opts...); err != nil {
 		cs.cancel()
 		return nil, err
