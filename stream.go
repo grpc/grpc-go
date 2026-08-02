@@ -690,8 +690,8 @@ type clientStream struct {
 	binlogs []binarylog.MethodLogger
 
 	mu                      sync.Mutex
-	numRetries              int  // exclusive of transparent retry attempt(s)
-	numRetriesSincePushback int  // retries since pushback; to reset backoff
+	numRetries              int // exclusive of transparent retry attempt(s)
+	numRetriesSincePushback int // retries since pushback; to reset backoff
 	// attempt is the active client stream attempt.
 	// The only place where it is written is the newAttemptLocked method and this method never writes nil.
 	// So, attempt can be nil only inside newClientStream function when clientStream is first created.
