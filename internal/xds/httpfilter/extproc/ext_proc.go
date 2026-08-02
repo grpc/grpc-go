@@ -247,15 +247,15 @@ func (cf *clientFilter) getOrCreateExtProcChannel(server xdsresource.GRPCService
 	}
 
 	cf.mu.Lock()
-	defer cf.mu.Unlock()
-
 	// If the channel for the key is present in the map and its refcount is
 	// greater than 0, increment the refcount and return the channel.
 	if rc, ok := cf.procChannels[key]; ok && rc.TryIncrement() {
+		cf.mu.Unlock()
 		return rc, nil
 	}
+	cf.mu.Unlock()
 
-	// Create the external processor channel.
+	// Create the external processor channel without holding the lock.
 	cc, cancel, err := iextproc.CreateExtProcChannel(server)
 	if err != nil {
 		return nil, fmt.Errorf("extproc: failed to create channel to the external processor server %q: %v", server.TargetURI, err)
@@ -264,9 +264,12 @@ func (cf *clientFilter) getOrCreateExtProcChannel(server xdsresource.GRPCService
 	client := v3procservicegrpc.NewExternalProcessorClient(cc)
 	// Create a new refcounted client. The onZero cleanup function will remove the
 	// client from the map and close the underlying channel.
-	rc, err := grpcsync.NewRefCounted(client, func() {
+	var rc *grpcsync.RefCounted[v3procservicegrpc.ExternalProcessorClient]
+	rc, err = grpcsync.NewRefCounted(client, func() {
 		cf.mu.Lock()
-		delete(cf.procChannels, key)
+		if cf.procChannels[key] == rc {
+			delete(cf.procChannels, key)
+		}
 		cf.mu.Unlock()
 		cancel()
 	})
@@ -274,7 +277,17 @@ func (cf *clientFilter) getOrCreateExtProcChannel(server xdsresource.GRPCService
 		cancel()
 		return nil, err
 	}
+
+	cf.mu.Lock()
+	// Double-check if another goroutine created and stored a channel for this
+	// key while we were unlocked.
+	if existing, ok := cf.procChannels[key]; ok && existing.TryIncrement() {
+		cf.mu.Unlock()
+		rc.Decrement()
+		return existing, nil
+	}
 	cf.procChannels[key] = rc
+	cf.mu.Unlock()
 	return rc, nil
 }
 
@@ -539,7 +552,7 @@ func (cs *commonStream) callOnFinish(err error) {
 func (cs *commonStream) cleanupDataplane() {
 	cs.cancel()
 	if cs.dataplaneStream != nil && !cs.dataplaneRecvCalled.Load() {
-		cs.dataplaneStream.RecvMsg(new(v3procservicepb.ProcessingResponse))
+		cs.dataplaneStream.RecvMsg(new(any))
 	}
 }
 
