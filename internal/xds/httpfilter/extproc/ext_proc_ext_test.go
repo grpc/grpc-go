@@ -4735,7 +4735,6 @@ func (s) TestExtProcChannelRetention(t *testing.T) {
 // external processor channel remains open until any ongoing RPCs on that old
 // channel have completed.
 func (s) TestExtProcChannelRetention_XDSConfigUpdate(t *testing.T) {
-	blockChan := make(chan struct{})
 	processFunc1 := func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
 		// Receive response header and respond with no mutations.
 		req, err := stream.Recv()
@@ -4758,12 +4757,6 @@ func (s) TestExtProcChannelRetention_XDSConfigUpdate(t *testing.T) {
 		}
 		if err := stream.Send(responseTrailersResponse(nil, nil)); err != nil {
 			return err
-		}
-		// Block here so that the external processor RPC on server 1 remains open
-		// after the dataplane RPC completes.
-		select {
-		case <-blockChan:
-		case <-stream.Context().Done():
 		}
 		return nil
 	}
@@ -4799,7 +4792,19 @@ func (s) TestExtProcChannelRetention_XDSConfigUpdate(t *testing.T) {
 		internal.CreateExtProcChannel = origCreate
 	})
 
-	stub := stubserver.StartTestService(t, nil)
+	blockChan := make(chan struct{})
+	enteredChan := make(chan struct{})
+	stub := stubserver.StartTestService(t, &stubserver.StubServer{
+		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
+			close(enteredChan)
+			select {
+			case <-blockChan:
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			}
+			return &testpb.Empty{}, nil
+		},
+	})
 	defer stub.Stop()
 
 	managementServer, nodeID, _, xdsResolver := setup.ManagementServerAndResolver(t)
@@ -4860,14 +4865,19 @@ func (s) TestExtProcChannelRetention_XDSConfigUpdate(t *testing.T) {
 
 	client := testgrpc.NewTestServiceClient(cc)
 
-	// Make the first RPC using extproc server 1. The dataplane RPC will finish,
-	// but the extproc Process RPC remains open because processFunc1 is blocked on
-	// blockChan.
-	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
-		t.Fatalf("First EmptyCall() failed: %v", err)
-	}
+	rpcDone := make(chan struct{})
+	// Make the first RPC using extproc server 1 in a background goroutine.
+	// The RPC remains in flight because the backend is blocked on blockChan.
+	go func() {
+		defer close(rpcDone)
+		if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+			t.Errorf("First EmptyCall() failed: %v", err)
+		}
+	}()
 
-	// Verify that the proc channel is not closed yet because the proc RPC has not
+	<-enteredChan
+
+	// Verify that the proc channel is not closed yet because the RPC has not
 	// completed.
 	select {
 	case <-closeChan:
@@ -4879,7 +4889,7 @@ func (s) TestExtProcChannelRetention_XDSConfigUpdate(t *testing.T) {
 	// This will close the old interceptor for server 1.
 	updateExtProc(lisAddr2)
 
-	// Verify that the proc channel is not closed yet because the proc RPC has not
+	// Verify that the proc channel is not closed yet because the RPC has not
 	// completed.
 	select {
 	case <-closeChan:
@@ -4887,8 +4897,10 @@ func (s) TestExtProcChannelRetention_XDSConfigUpdate(t *testing.T) {
 	case <-time.After(defaultTestShortTimeout):
 	}
 
-	// Unblock proc RPC so that it completes and invokes OnFinish.
+	// Unblock RPC so that it completes and invokes OnFinish.
 	close(blockChan)
+
+	<-rpcDone
 
 	// Verify that proc channel is now closed.
 	select {
