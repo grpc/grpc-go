@@ -436,11 +436,13 @@ func (r *xdsResolver) newConfigSelector() (_ *configSelector, err error) {
 				}
 				return nil, err
 			}
-			clusters.Add(&routeCluster{
+			rc := &routeCluster{
 				name:        clusterName,
 				interceptor: interceptor,
-			}, 1)
-			interceptors = append(interceptors, interceptor)
+			}
+			rc.refcount.Add(1)
+			cs.routes[i].routeClusters = append(cs.routes[i].routeClusters, rc)
+			clusters.Add(rc, 1)
 			ci := r.addOrGetActiveClusterInfo(clusterName, "")
 			ci.cfg = xdsChildConfig{ChildPolicy: balancerConfig(r.xdsConfig.RouteConfig.ClusterSpecifierPlugins[rt.ClusterSpecifierPlugin])}
 			cs.plugins[clusterName] = ci
@@ -458,18 +460,19 @@ func (r *xdsResolver) newConfigSelector() (_ *configSelector, err error) {
 					}
 					return nil, err
 				}
-				clusters.Add(&routeCluster{
+				rc := &routeCluster{
 					name:        clusterName,
 					interceptor: interceptor,
-				}, int64(wc.Weight))
-				interceptors = append(interceptors, interceptor)
+				}
+				rc.refcount.Add(1)
+				cs.routes[i].routeClusters = append(cs.routes[i].routeClusters, rc)
+				clusters.Add(rc, int64(wc.Weight))
 				ci := r.addOrGetActiveClusterInfo(clusterName, wc.Name)
 				ci.cfg = xdsChildConfig{ChildPolicy: newBalancerConfig(cdsName, cdsBalancerConfig{Cluster: wc.Name})}
 				cs.clusters[clusterName] = ci
 			}
 		}
 		cs.routes[i].clusters = clusters
-		cs.routes[i].interceptors = interceptors
 		cs.routes[i].m = xdsresource.RouteToMatcher(rt)
 		cs.routes[i].actionType = rt.ActionType
 		if rt.MaxStreamDuration == nil {

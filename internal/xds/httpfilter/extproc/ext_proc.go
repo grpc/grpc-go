@@ -210,17 +210,73 @@ func (builder) BuildClientFilter(opts httpfilter.ClientFilterOptions) httpfilter
 	return &clientFilter{
 		metricsRecorder: opts.MetricsRecorder,
 		target:          opts.Target,
+		procChannels:    make(map[grpcServiceKey]*grpcsync.RefCounted[v3procservicegrpc.ExternalProcessorClient]),
 	}
 }
 
 var _ httpfilter.ClientFilterBuilder = builder{}
 
+// grpcServiceKey uniquely identifies an external processor server configuration
+// by its target URI, channel credentials, and call credentials. It is used as a
+// map key in clientFilter to share and reuse the external processor channels.
+type grpcServiceKey struct {
+	TargetURI          string
+	ChannelCredentials string
+	CallCredentials    string
+}
+
 type clientFilter struct {
 	metricsRecorder estats.MetricsRecorder
 	target          string
+
+	mu           sync.Mutex
+	procChannels map[grpcServiceKey]*grpcsync.RefCounted[v3procservicegrpc.ExternalProcessorClient]
 }
 
-func (clientFilter) Close() {}
+func (*clientFilter) Close() {}
+
+// getOrCreateExtProcChannel retrieves an existing refcounted external processor
+// client from the procChannels map and increases its refcount or creates a new
+// one if it doesn't exist.
+func (cf *clientFilter) getOrCreateExtProcChannel(server xdsresource.GRPCServiceConfig) (*grpcsync.RefCounted[v3procservicegrpc.ExternalProcessorClient], error) {
+	// Create the grpcServiceKey.
+	key := grpcServiceKey{
+		TargetURI:          server.TargetURI,
+		ChannelCredentials: server.ChannelCredentials,
+		CallCredentials:    server.CallCredentials,
+	}
+
+	cf.mu.Lock()
+	defer cf.mu.Unlock()
+
+	// If the channel for the key is present in the map and its refcount is
+	// greater than 0, increment the refcount and return the channel.
+	if rc, ok := cf.procChannels[key]; ok && rc.TryIncrement() {
+		return rc, nil
+	}
+
+	// Create the external processor channel.
+	cc, cancel, err := iextproc.CreateExtProcChannel(server)
+	if err != nil {
+		return nil, fmt.Errorf("extproc: failed to create channel to the external processor server %q: %v", server.TargetURI, err)
+	}
+
+	client := v3procservicegrpc.NewExternalProcessorClient(cc)
+	// Create a new refcounted client. The onZero cleanup function will remove the
+	// client from the map and close the underlying channel.
+	rc, err := grpcsync.NewRefCounted(client, func() {
+		cf.mu.Lock()
+		delete(cf.procChannels, key)
+		cf.mu.Unlock()
+		cancel()
+	})
+	if err != nil {
+		cancel()
+		return nil, err
+	}
+	cf.procChannels[key] = rc
+	return rc, nil
+}
 
 func (cf *clientFilter) BuildClientInterceptor(base, override httpfilter.FilterConfig) (httpfilter.ClientInterceptor, error) {
 	b, ok := base.(baseConfig)
@@ -238,15 +294,14 @@ func (cf *clientFilter) BuildClientInterceptor(base, override httpfilter.FilterC
 
 	config := newInterceptorConfig(b, ov)
 
-	// Create a channel to the external processor server.
-	cc, cancel, err := iextproc.CreateExtProcChannel(config.server)
+	// Create or reuse a refcounted channel to the external processor server.
+	rc, err := cf.getOrCreateExtProcChannel(config.server)
 	if err != nil {
-		return nil, fmt.Errorf("extproc: failed to create channel to the external processor server %q: %v", config.server.TargetURI, err)
+		return nil, err
 	}
 	return &clientInterceptor{
 		config:          config,
-		procClient:      v3procservicegrpc.NewExternalProcessorClient(cc),
-		closeClient:     cancel,
+		procClient:      rc,
 		metricsRecorder: cf.metricsRecorder,
 		target:          cf.target,
 	}, nil
@@ -254,14 +309,13 @@ func (cf *clientFilter) BuildClientInterceptor(base, override httpfilter.FilterC
 
 type clientInterceptor struct {
 	config          baseConfig
-	procClient      v3procservicegrpc.ExternalProcessorClient
-	closeClient     func() error
+	procClient      *grpcsync.RefCounted[v3procservicegrpc.ExternalProcessorClient]
 	metricsRecorder estats.MetricsRecorder
 	target          string
 }
 
 func (i *clientInterceptor) Close() {
-	i.closeClient()
+	i.procClient.Decrement()
 }
 
 // createProcContext creates a new child context for the RPC to the external
@@ -279,11 +333,20 @@ func createProcContext(ctx context.Context, server xdsresource.GRPCServiceConfig
 }
 
 func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, newStream func(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStream, error), opts ...grpc.CallOption) (grpc.ClientStream, error) {
+	i.procClient.Increment()
 	outgoingMD, added, _ := metadataFromOutgoingContextRaw(ctx)
 	// Create a cancelable context to cancel the dataplane stream and close any
 	// goroutines in case of error.
 	cancelCtx, cancel := context.WithCancel(ctx)
 	procCtx, procCancel := createProcContext(cancelCtx, i.config.server)
+
+	// Collect OnFinishCallOption functions from the call options.
+	var onFinish []func(error)
+	for _, o := range opts {
+		if onFinishOpt, ok := o.(grpc.OnFinishCallOption); ok && onFinishOpt.OnFinish != nil {
+			onFinish = append(onFinish, onFinishOpt.OnFinish)
+		}
+	}
 
 	csCommon := &commonStream{
 		ctx:                    cancelCtx,
@@ -299,6 +362,7 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 		// initializing attributes upfront avoids repeated protobuf construction on
 		// subsequent SendMsg and RecvMsg calls.
 		reqAttrs: constructRequestAttributes(ri, outgoingMD, added, i.config.requestAttributes),
+		onFinish: onFinish,
 	}
 
 	// In the ClientStream API, outgoing headers are sent immediately when the
@@ -306,7 +370,10 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 	// they go over the wire, we must establish the ext_proc stream now rather
 	// than deferring it.
 	var err error
-	if csCommon.procStream, err = i.procClient.Process(procCtx); err != nil {
+	if csCommon.procStream, err = i.procClient.Value().Process(procCtx, grpc.OnFinish(func(error) {
+		i.procClient.Decrement()
+	})); err != nil {
+		i.procClient.Decrement()
 		return csCommon.handleInitError(fmt.Errorf("failed to create a stream to external processor: %v", err), newStream, opts...)
 	}
 
@@ -325,7 +392,7 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 			}
 		}
 
-		// Defer the closing of ext proc stream by the defined defferred close
+		// Defer the closing of ext proc stream by the defined deferred close
 		// timeout to allow the server to read all messages from the proc stream.
 		onFinishFunc := func(error) {
 			time.AfterFunc(ocs.config.deferredCloseTimeout, ocs.procCancel)
@@ -415,6 +482,9 @@ type commonStream struct {
 	metricsRecorder        estats.MetricsRecorder
 	target                 string
 	clientHeadersStartTime time.Time
+
+	onFinish            []func(err error) // stores the finish callbacks from the call options
+	dataplaneRecvCalled atomic.Bool       // tracks if RecvMsg has been called on dataplaneStream by the application
 }
 
 func (cs *commonStream) recordMetric(handle *estats.Float64HistoHandle, duration float64) {
@@ -441,6 +511,36 @@ func (cs *commonStream) handleInitError(err error, newStream func(context.Contex
 	}
 	cs.recordMetric(clientHeadersDurationMetric, time.Since(cs.clientHeadersStartTime).Seconds())
 	return cs.dataplaneStream, nil
+}
+
+// callOnFinish executes all registered OnFinish CallOption callbacks.
+func (cs *commonStream) callOnFinish(err error) {
+	for _, of := range cs.onFinish {
+		of(err)
+	}
+}
+
+// cleanupDataplane cancels the stream's context to immediately tear down the
+// active dataplane connection and unblock any pending client I/O.
+//
+// Additionally, after context cancellation, if the application has not called
+// RecvMsg on the dataplane stream, it invokes a dummy RecvMsg on it.
+// In gRPC-Go, unary RPCs do not start a background goroutine waiting for context
+// expiration to call cs.finish(err). If an application or interceptor layer
+// abandons an RPC after NewStream without calling SendMsg, CloseSend, or RecvMsg
+// on the dataplane stream, calling RecvMsg on the canceled stream forces
+// gRPC-Go's internal clientStream to encounter context.Canceled and execute
+// cleanup. This guarantees that all registered OnFinish CallOption callbacks are
+// executed and reference counts are decremented so that channels do not leak.
+//
+// For streaming RPCs where RecvMsg has already been called by the application,
+// we avoid invoking a dummy RecvMsg because ClientStream.RecvMsg is not safe for
+// concurrent calls by multiple goroutines on the same stream.
+func (cs *commonStream) cleanupDataplane() {
+	cs.cancel()
+	if cs.dataplaneStream != nil && !cs.dataplaneRecvCalled.Load() {
+		cs.dataplaneStream.RecvMsg(new(v3procservicepb.ProcessingResponse))
+	}
 }
 
 // newProcessingRequest creates a new ProcessingRequest with ObservabilityMode,
@@ -625,6 +725,7 @@ func (ocs *observabilityClientStream) RecvMsg(m any) error {
 		}
 	}
 
+	ocs.dataplaneRecvCalled.Store(true)
 	if err := ocs.dataplaneStream.RecvMsg(m); err != nil {
 		if trerr := ocs.initiateResponseTrailerProcessing(ocs.dataplaneStream.Trailer()); trerr != nil {
 			return trerr
@@ -757,7 +858,7 @@ func (ocs *observabilityClientStream) failObsProcStream(err error) {
 	ocs.procCancel()
 	if err != io.EOF && !ocs.config.failureModeAllow {
 		ocs.procStreamErr.Store(status.Errorf(codes.Internal, "extproc: external processor RPC failed: %v", err))
-		ocs.cancel()
+		ocs.cleanupDataplane()
 		return
 	}
 	ocs.procStreamBypass.Store(true)
@@ -969,6 +1070,7 @@ func (cs *clientStream) recvFromDataplane(m any) error {
 	if err != nil {
 		return err
 	}
+	cs.dataplaneRecvCalled.Store(true)
 	if err := s.RecvMsg(m); err != nil {
 		// If RecvMsg returns error, fail the RPC in case external processor stream
 		// has failed. Otherwise process the trailers.
@@ -1408,6 +1510,8 @@ func (cs *clientStream) createDataplaneStream(ctx context.Context, newStream fun
 	defer close(cs.dataplaneSetup)
 	cs.dataplaneStream, cs.dataplaneCreationErr = newStream(ctx, opts...)
 	if cs.dataplaneCreationErr != nil {
+		// Execute the OnFinish call options if the delegate failed.
+		cs.callOnFinish(cs.dataplaneCreationErr)
 		cs.cancel()
 	}
 	return cs.dataplaneCreationErr
@@ -1422,11 +1526,13 @@ func (cs *clientStream) failProcStream(err error) bool {
 	}
 	cs.procCancel()
 	if err != io.EOF && (cs.ignoreFailureMode.Load() || !cs.config.failureModeAllow) {
+		// Execute the OnFinish call options if the delegate is never called.
+		if cs.dataplaneStream == nil {
+			cs.callOnFinish(err)
+		}
 		cs.procStreamErr.Store(status.Errorf(codes.Internal, "extproc: %v", err))
 		cs.procStreamFailed.Fire()
-		// Cancel the stream's context to immediately tear down the active dataplane
-		// connection and unblock any pending client I/O.
-		cs.cancel()
+		cs.cleanupDataplane()
 		return false
 	}
 	cs.triggerBypass()
@@ -1439,11 +1545,13 @@ func (cs *clientStream) cancelStream(err error) {
 	if !cs.procStreamClosed.CompareAndSwap(false, true) {
 		return
 	}
+	// Execute the OnFinish call options if the delegate is never called.
+	if cs.dataplaneStream == nil {
+		cs.callOnFinish(err)
+	}
 	cs.procStreamErr.Store(err)
 	cs.procStreamFailed.Fire()
-	// Cancel the stream's context to immediately tear down the active
-	// dataplane connection and unblock any pending client I/O.
-	cs.cancel()
+	cs.cleanupDataplane()
 }
 
 // handleHeaderError handles failures that occur during receiving or processing

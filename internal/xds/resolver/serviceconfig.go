@@ -25,6 +25,7 @@ import (
 	rand "math/rand/v2"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	xxhash "github.com/cespare/xxhash/v2"
@@ -108,13 +109,14 @@ type virtualHost struct {
 type routeCluster struct {
 	name        string                       // Name of the cluster.
 	interceptor httpfilter.ClientInterceptor // HTTP filters to run for RPCs matching this route.
+	refcount    atomic.Int32                 // Refcount for this cluster.
 }
 
 type route struct {
-	m                 *xdsresource.CompositeMatcher  // converted from route matchers
-	actionType        xdsresource.RouteActionType    // holds route action type
-	clusters          wrr.WRR                        // holds *routeCluster entries
-	interceptors      []httpfilter.ClientInterceptor // Interceptors across clusters belonging to this route
+	m                 *xdsresource.CompositeMatcher // converted from route matchers
+	actionType        xdsresource.RouteActionType   // holds route action type
+	clusters          wrr.WRR                       // holds *routeCluster entries
+	routeClusters     []*routeCluster               // Route clusters belonging to this route
 	maxStreamDuration time.Duration
 	retryConfig       *xdsresource.RetryConfig
 	hashPolicies      []*xdsresource.HashPolicy
@@ -208,7 +210,9 @@ func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RP
 		Context:     lbCtx,
 		Interceptor: cluster.interceptor,
 	}
-
+	// Add a ref to the selected cluster to keep the interceptors alive until RPC
+	// is committed.
+	cluster.refcount.Add(1)
 	if info, ok := cs.clusters[cluster.name]; ok {
 		// Add a ref to the selected cluster, as this RPC needs this
 		// cluster until it is committed.
@@ -223,6 +227,11 @@ func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RP
 				// manager to handle the update flow once and for all.
 				info.unsubscribe()
 			}
+			// Decrement the refcount of the route cluster and close the interceptor
+			// if refcount goes to zero.
+			if v := cluster.refcount.Add(-1); v == 0 {
+				cluster.interceptor.Close()
+			}
 		})
 	} else if info, ok := cs.plugins[cluster.name]; ok {
 		// Add a ref to the selected plugin, as this RPC needs this
@@ -233,6 +242,11 @@ func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RP
 				// This entry will be removed from activePlugins when
 				// producing a new service config update.
 				cs.sendNewServiceConfig()
+			}
+			// Decrement the refcount of the route cluster and close the interceptor
+			// if refcount goes to zero.
+			if v := cluster.refcount.Add(-1); v == 0 {
+				cluster.interceptor.Close()
 			}
 		})
 	}
@@ -331,10 +345,14 @@ func (cs *configSelector) stop() {
 		return
 	}
 
-	// Stop all interceptors associated with this config selector.
+	// Decrement the refcount of all the route clusters associated with this
+	// config selector and close the interceptors of the route cluster if it's
+	// refcount goes to zero.
 	for _, r := range cs.routes {
-		for _, i := range r.interceptors {
-			i.Close()
+		for _, rc := range r.routeClusters {
+			if v := rc.refcount.Add(-1); v == 0 {
+				rc.interceptor.Close()
+			}
 		}
 	}
 
