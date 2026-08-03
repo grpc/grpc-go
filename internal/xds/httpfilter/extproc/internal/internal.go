@@ -44,7 +44,7 @@ var (
 
 	// CreateExtProcChannel creates a gRPC client channel to the external
 	// processing server.
-	CreateExtProcChannel = func(xdsresource.GRPCServiceConfig) (grpc.ClientConnInterface, func() error, error) {
+	CreateExtProcChannel = func(xdsresource.GRPCServiceConfig, ...grpc.DialOption) (grpc.ClientConnInterface, func() error, error) {
 		return nil, nil, fmt.Errorf("extproc: dialing external processor server not implemented")
 	}
 )

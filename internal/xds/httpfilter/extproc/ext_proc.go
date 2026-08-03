@@ -210,6 +210,7 @@ func (builder) BuildClientFilter(opts httpfilter.ClientFilterOptions) httpfilter
 	return &clientFilter{
 		metricsRecorder: opts.MetricsRecorder,
 		target:          opts.Target,
+		childDialOpts:   opts.ChildDialOpts,
 	}
 }
 
@@ -218,6 +219,7 @@ var _ httpfilter.ClientFilterBuilder = builder{}
 type clientFilter struct {
 	metricsRecorder estats.MetricsRecorder
 	target          string
+	childDialOpts   []grpc.DialOption
 }
 
 func (clientFilter) Close() {}
@@ -238,8 +240,13 @@ func (cf *clientFilter) BuildClientInterceptor(base, override httpfilter.FilterC
 
 	config := newInterceptorConfig(b, ov)
 
-	// Create a channel to the external processor server.
-	cc, cancel, err := iextproc.CreateExtProcChannel(config.server)
+	// Create a channel to the external processing server.
+	combinedOpts := make([]grpc.DialOption, 0, len(cf.childDialOpts)*2)
+	combinedOpts = append(combinedOpts, cf.childDialOpts...)
+	if len(cf.childDialOpts) > 0 {
+		combinedOpts = append(combinedOpts, grpc.WithChildDialOptions(cf.childDialOpts...))
+	}
+	cc, cancel, err := iextproc.CreateExtProcChannel(config.server, combinedOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("extproc: failed to create channel to the external processor server %q: %v", config.server.TargetURI, err)
 	}

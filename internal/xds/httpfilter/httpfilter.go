@@ -93,6 +93,9 @@ type ClientFilterOptions struct {
 	FilterName      string                 // FilterName is the filter name from the xDS configuration.
 	MetricsRecorder estats.MetricsRecorder // MetricsRecorder is the metrics recorder to capture metrics for the filter.
 	Target          string                 // Target is the target string of the channel.
+	// ChildDialOpts specifies the dial options to be applied to any child
+	// channels created by components on this channel.
+	ChildDialOpts []grpc.DialOption
 }
 
 // ClientFilterBuilder is an optional interface that a Builder can implement to
