@@ -25,8 +25,8 @@ import (
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 )
 
-// baseConfig contains the configuration for the external authorization filter.
-type baseConfig struct {
+// config contains the configuration for the external authorization filter.
+type config struct {
 	httpfilter.FilterConfig
 	// grpcService is the configuration for the external authorization server.
 	grpcService xdsresource.GRPCServiceConfig
@@ -50,14 +50,14 @@ type baseConfig struct {
 	// authorization is disabled or when the call to the external authorization
 	// server fails.
 	//
-	// If unset, it defaults to PERMISSION_DENIED.
+	// The default value is PERMISSION_DENIED.
 	statusOnError codes.Code
 	// allowedHeaders specifies the headers that are allowed to be sent to the
 	// external authorization server. If unset, all headers are allowed.
 	allowedHeaders []matcher.StringMatcher
 	// disallowedHeaders specifies the headers that will not be sent to the
-	// external authorization server. This overrides the above allowedHeaders if
-	// a header matches both.
+	// external authorization server. This takes precedence over the
+	// allowedHeaders field.
 	disallowedHeaders []matcher.StringMatcher
 	// decoderHeaderMutationRules specifies the rules for what modifications an
 	// external authorization server may make to headers sent on the data plane

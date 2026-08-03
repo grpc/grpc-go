@@ -32,13 +32,12 @@ import (
 	"google.golang.org/grpc/internal/xds/matcher"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	mutationpb "github.com/envoyproxy/go-control-plane/envoy/config/common/mutation_rules/v3"
 	corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
-	v3authzfitlerpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/ext_authz/v3"
+	v3extauthzpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/ext_authz/v3"
 	matcherpb "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
 	v3typepb "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 )
@@ -73,11 +72,10 @@ func testParseGRPCServiceConfig(grpcService *corepb.GrpcService) (xdsresource.GR
 
 var cmpOpts = []cmp.Option{
 	cmp.AllowUnexported(
-		baseConfig{},
+		config{},
 		xdsresource.GRPCServiceConfig{},
 		fraction{},
 	),
-	protocmp.Transform(),
 	cmp.Transformer("RegexpToString", func(r *regexp.Regexp) string {
 		if r == nil {
 			return ""
@@ -98,13 +96,15 @@ func (s) TestParseFilterConfig_Success(t *testing.T) {
 
 	tests := []struct {
 		name    string
+		desc    string
 		cfg     proto.Message
 		wantCfg httpfilter.FilterConfig
 	}{
 		{
 			name: "DefaultConfig",
-			cfg: testutils.MarshalAny(t, &v3authzfitlerpb.ExtAuthz{
-				Services: &v3authzfitlerpb.ExtAuthz_GrpcService{
+			desc: "verifies default fallback values when only grpc_service is provided",
+			cfg: testutils.MarshalAny(t, &v3extauthzpb.ExtAuthz{
+				Services: &v3extauthzpb.ExtAuthz_GrpcService{
 					GrpcService: &corepb.GrpcService{
 						TargetSpecifier: &corepb.GrpcService_GoogleGrpc_{
 							GoogleGrpc: &corepb.GrpcService_GoogleGrpc{
@@ -114,7 +114,7 @@ func (s) TestParseFilterConfig_Success(t *testing.T) {
 					},
 				},
 			}),
-			wantCfg: baseConfig{
+			wantCfg: config{
 				grpcService: xdsresource.GRPCServiceConfig{
 					TargetURI: "localhost:1234",
 				},
@@ -127,8 +127,9 @@ func (s) TestParseFilterConfig_Success(t *testing.T) {
 		},
 		{
 			name: "FullConfig",
-			cfg: testutils.MarshalAny(t, &v3authzfitlerpb.ExtAuthz{
-				Services: &v3authzfitlerpb.ExtAuthz_GrpcService{
+			desc: "verifies all config fields are parsed and mapped correctly when explicitly configured",
+			cfg: testutils.MarshalAny(t, &v3extauthzpb.ExtAuthz{
+				Services: &v3extauthzpb.ExtAuthz_GrpcService{
 					GrpcService: &corepb.GrpcService{
 						TargetSpecifier: &corepb.GrpcService_GoogleGrpc_{
 							GoogleGrpc: &corepb.GrpcService_GoogleGrpc{
@@ -169,7 +170,7 @@ func (s) TestParseFilterConfig_Success(t *testing.T) {
 				},
 				IncludePeerCertificate: true,
 			}),
-			wantCfg: baseConfig{
+			wantCfg: config{
 				grpcService: xdsresource.GRPCServiceConfig{
 					TargetURI: "localhost:5678",
 				},
@@ -194,134 +195,17 @@ func (s) TestParseFilterConfig_Success(t *testing.T) {
 				includePeerCertificate: true,
 			},
 		},
-		{
-			name: "FilterEnabled_DenominatorHundred",
-			cfg: testutils.MarshalAny(t, &v3authzfitlerpb.ExtAuthz{
-				Services: &v3authzfitlerpb.ExtAuthz_GrpcService{
-					GrpcService: &corepb.GrpcService{
-						TargetSpecifier: &corepb.GrpcService_GoogleGrpc_{
-							GoogleGrpc: &corepb.GrpcService_GoogleGrpc{
-								TargetUri: "localhost:1234",
-							},
-						},
-					},
-				},
-				FilterEnabled: &corepb.RuntimeFractionalPercent{
-					DefaultValue: &v3typepb.FractionalPercent{
-						Numerator:   10,
-						Denominator: v3typepb.FractionalPercent_HUNDRED,
-					},
-				},
-			}),
-			wantCfg: baseConfig{
-				grpcService: xdsresource.GRPCServiceConfig{
-					TargetURI: "localhost:1234",
-				},
-				filterEnabled: fraction{
-					numerator:   10,
-					denominator: 100,
-				},
-				statusOnError: codes.PermissionDenied,
-			},
-		},
-		{
-			name: "FilterEnabled_DenominatorMillion",
-			cfg: testutils.MarshalAny(t, &v3authzfitlerpb.ExtAuthz{
-				Services: &v3authzfitlerpb.ExtAuthz_GrpcService{
-					GrpcService: &corepb.GrpcService{
-						TargetSpecifier: &corepb.GrpcService_GoogleGrpc_{
-							GoogleGrpc: &corepb.GrpcService_GoogleGrpc{
-								TargetUri: "localhost:1234",
-							},
-						},
-					},
-				},
-				FilterEnabled: &corepb.RuntimeFractionalPercent{
-					DefaultValue: &v3typepb.FractionalPercent{
-						Numerator:   5,
-						Denominator: v3typepb.FractionalPercent_MILLION,
-					},
-				},
-			}),
-			wantCfg: baseConfig{
-				grpcService: xdsresource.GRPCServiceConfig{
-					TargetURI: "localhost:1234",
-				},
-				filterEnabled: fraction{
-					numerator:   5,
-					denominator: 1000000,
-				},
-				statusOnError: codes.PermissionDenied,
-			},
-		},
-		{
-			name: "FilterEnabled_DefaultDenominator",
-			cfg: testutils.MarshalAny(t, &v3authzfitlerpb.ExtAuthz{
-				Services: &v3authzfitlerpb.ExtAuthz_GrpcService{
-					GrpcService: &corepb.GrpcService{
-						TargetSpecifier: &corepb.GrpcService_GoogleGrpc_{
-							GoogleGrpc: &corepb.GrpcService_GoogleGrpc{
-								TargetUri: "localhost:1234",
-							},
-						},
-					},
-				},
-				FilterEnabled: &corepb.RuntimeFractionalPercent{
-					DefaultValue: &v3typepb.FractionalPercent{
-						Numerator: 25,
-					},
-				},
-			}),
-			wantCfg: baseConfig{
-				grpcService: xdsresource.GRPCServiceConfig{
-					TargetURI: "localhost:1234",
-				},
-				filterEnabled: fraction{
-					numerator:   25,
-					denominator: 100,
-				},
-				statusOnError: codes.PermissionDenied,
-			},
-		},
-		{
-			name: "FilterEnabled_CappedToHundredPercent",
-			cfg: testutils.MarshalAny(t, &v3authzfitlerpb.ExtAuthz{
-				Services: &v3authzfitlerpb.ExtAuthz_GrpcService{
-					GrpcService: &corepb.GrpcService{
-						TargetSpecifier: &corepb.GrpcService_GoogleGrpc_{
-							GoogleGrpc: &corepb.GrpcService_GoogleGrpc{
-								TargetUri: "localhost:1234",
-							},
-						},
-					},
-				},
-				FilterEnabled: &corepb.RuntimeFractionalPercent{
-					DefaultValue: &v3typepb.FractionalPercent{
-						Numerator:   200,
-						Denominator: v3typepb.FractionalPercent_HUNDRED,
-					},
-				},
-			}),
-			wantCfg: baseConfig{
-				grpcService: xdsresource.GRPCServiceConfig{
-					TargetURI: "localhost:1234",
-				},
-				filterEnabled: fraction{
-					numerator:   100,
-					denominator: 100,
-				},
-				statusOnError: codes.PermissionDenied,
-			},
-		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			b := builder{}
 			got, err := b.ParseFilterConfig(tt.cfg)
 			if err != nil {
+				t.Log(tt.desc)
 				t.Fatalf("ParseFilterConfig() failed with unexpected error: %v", err)
 			}
 			if diff := cmp.Diff(tt.wantCfg, got, cmpOpts...); diff != "" {
+				t.Log(tt.desc)
 				t.Fatalf("ParseFilterConfig() returned unexpected config (-want, +got):\n%s", diff)
 			}
 		})
@@ -337,16 +221,19 @@ func (s) TestParseFilterConfig_Failure(t *testing.T) {
 
 	tests := []struct {
 		name    string
+		desc    string
 		cfg     proto.Message
 		wantErr string
 	}{
 		{
 			name:    "InvalidConfigType",
-			cfg:     &v3authzfitlerpb.ExtAuthz{},
+			desc:    "verifies error when input message is not a valid proto message",
+			cfg:     &v3extauthzpb.ExtAuthz{},
 			wantErr: "extauthz: error parsing config",
 		},
 		{
 			name: "Config_Unmarshaling_Failed",
+			desc: "verifies error when input proto message cannot be unmarshaled into an ExtAuthz message",
 			cfg: &anypb.Any{
 				TypeUrl: "type.googleapis.com/invalid",
 				Value:   []byte("invalid"),
@@ -355,13 +242,15 @@ func (s) TestParseFilterConfig_Failure(t *testing.T) {
 		},
 		{
 			name:    "MissingGrpcService",
-			cfg:     testutils.MarshalAny(t, &v3authzfitlerpb.ExtAuthz{}),
+			desc:    "verifies error when required grpc_service is missing",
+			cfg:     testutils.MarshalAny(t, &v3extauthzpb.ExtAuthz{}),
 			wantErr: "extauthz: empty grpc_service provided",
 		},
 		{
 			name: "UnsupportedGrpcService_EnvoyGrpc",
-			cfg: testutils.MarshalAny(t, &v3authzfitlerpb.ExtAuthz{
-				Services: &v3authzfitlerpb.ExtAuthz_GrpcService{
+			desc: "verifies error when unsupported envoy_grpc service is used",
+			cfg: testutils.MarshalAny(t, &v3extauthzpb.ExtAuthz{
+				Services: &v3extauthzpb.ExtAuthz_GrpcService{
 					GrpcService: &corepb.GrpcService{
 						TargetSpecifier: &corepb.GrpcService_EnvoyGrpc_{
 							EnvoyGrpc: &corepb.GrpcService_EnvoyGrpc{
@@ -375,8 +264,9 @@ func (s) TestParseFilterConfig_Failure(t *testing.T) {
 		},
 		{
 			name: "InvalidServerConfig_EmptyTargetURI",
-			cfg: testutils.MarshalAny(t, &v3authzfitlerpb.ExtAuthz{
-				Services: &v3authzfitlerpb.ExtAuthz_GrpcService{
+			desc: "verifies error when google_grpc has empty target URI",
+			cfg: testutils.MarshalAny(t, &v3extauthzpb.ExtAuthz{
+				Services: &v3extauthzpb.ExtAuthz_GrpcService{
 					GrpcService: &corepb.GrpcService{
 						TargetSpecifier: &corepb.GrpcService_GoogleGrpc_{
 							GoogleGrpc: &corepb.GrpcService_GoogleGrpc{
@@ -390,8 +280,9 @@ func (s) TestParseFilterConfig_Failure(t *testing.T) {
 		},
 		{
 			name: "MissingDefaultValueInFilterEnabled",
-			cfg: testutils.MarshalAny(t, &v3authzfitlerpb.ExtAuthz{
-				Services: &v3authzfitlerpb.ExtAuthz_GrpcService{
+			desc: "verifies error when filter_enabled lacks default value",
+			cfg: testutils.MarshalAny(t, &v3extauthzpb.ExtAuthz{
+				Services: &v3extauthzpb.ExtAuthz_GrpcService{
 					GrpcService: &corepb.GrpcService{
 						TargetSpecifier: &corepb.GrpcService_GoogleGrpc_{
 							GoogleGrpc: &corepb.GrpcService_GoogleGrpc{
@@ -406,8 +297,9 @@ func (s) TestParseFilterConfig_Failure(t *testing.T) {
 		},
 		{
 			name: "MissingDefaultValueInDenyAtDisable",
-			cfg: testutils.MarshalAny(t, &v3authzfitlerpb.ExtAuthz{
-				Services: &v3authzfitlerpb.ExtAuthz_GrpcService{
+			desc: "verifies error when deny_at_disable lacks default value",
+			cfg: testutils.MarshalAny(t, &v3extauthzpb.ExtAuthz{
+				Services: &v3extauthzpb.ExtAuthz_GrpcService{
 					GrpcService: &corepb.GrpcService{
 						TargetSpecifier: &corepb.GrpcService_GoogleGrpc_{
 							GoogleGrpc: &corepb.GrpcService_GoogleGrpc{
@@ -425,6 +317,7 @@ func (s) TestParseFilterConfig_Failure(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			b := builder{}
 			if _, err := b.ParseFilterConfig(tt.cfg); err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Log(tt.desc)
 				t.Fatalf("ParseFilterConfig() returned error = %v, wantErr containing %v", err, tt.wantErr)
 			}
 		})
@@ -434,8 +327,8 @@ func (s) TestParseFilterConfig_Failure(t *testing.T) {
 // Test verifies that ParseFilterConfigOverride successfully unmarshals valid
 // per-route override configurations.
 func (s) TestParseFilterConfigOverride_Success(t *testing.T) {
-	override := testutils.MarshalAny(t, &v3authzfitlerpb.ExtAuthzPerRoute{
-		Override: &v3authzfitlerpb.ExtAuthzPerRoute_Disabled{
+	override := testutils.MarshalAny(t, &v3extauthzpb.ExtAuthzPerRoute{
+		Override: &v3extauthzpb.ExtAuthzPerRoute_Disabled{
 			Disabled: true,
 		},
 	})
@@ -455,16 +348,19 @@ func (s) TestParseFilterConfigOverride_Success(t *testing.T) {
 func (s) TestParseFilterConfigOverride_Failure(t *testing.T) {
 	tests := []struct {
 		name     string
+		desc     string
 		override proto.Message
 		wantErr  string
 	}{
 		{
 			name:     "InvalidOverrideType",
-			override: &v3authzfitlerpb.ExtAuthzPerRoute{},
+			desc:     "verifies error when input override is not an Any message",
+			override: &v3extauthzpb.ExtAuthzPerRoute{},
 			wantErr:  "extauthz: error parsing override config",
 		},
 		{
 			name: "Unmarshal_Failed",
+			desc: "verifies error when Any message unmarshal to ExtAuthzPerRoute fails",
 			override: &anypb.Any{
 				TypeUrl: "type.googleapis.com/invalid",
 				Value:   []byte("invalid"),
@@ -476,7 +372,74 @@ func (s) TestParseFilterConfigOverride_Failure(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			b := builder{}
 			if _, err := b.ParseFilterConfigOverride(tt.override); err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Log(tt.desc)
 				t.Fatalf("ParseFilterConfigOverride() returned error = %v, wantErr containing %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// Test verifies that parseFilterEnabled correctly parses the
+// RuntimeFractionalPercent configuration into its internal representation.
+func (s) TestParseFilterEnabled(t *testing.T) {
+	tests := []struct {
+		name string
+		fp   *corepb.RuntimeFractionalPercent
+		want fraction
+	}{
+		{
+			name: "NilFraction",
+			fp:   nil,
+			want: fraction{numerator: 100, denominator: 100},
+		},
+		{
+			name: "DenominatorHundred",
+			fp: &corepb.RuntimeFractionalPercent{
+				DefaultValue: &v3typepb.FractionalPercent{
+					Numerator:   10,
+					Denominator: v3typepb.FractionalPercent_HUNDRED,
+				},
+			},
+			want: fraction{numerator: 10, denominator: 100},
+		},
+		{
+			name: "DenominatorMillion",
+			fp: &corepb.RuntimeFractionalPercent{
+				DefaultValue: &v3typepb.FractionalPercent{
+					Numerator:   5,
+					Denominator: v3typepb.FractionalPercent_MILLION,
+				},
+			},
+			want: fraction{numerator: 5, denominator: 1000000},
+		},
+		{
+			name: "DefaultDenominator",
+			fp: &corepb.RuntimeFractionalPercent{
+				DefaultValue: &v3typepb.FractionalPercent{
+					Numerator: 25,
+				},
+			},
+			want: fraction{numerator: 25, denominator: 100},
+		},
+		{
+			name: "CappedToHundredPercent",
+			fp: &corepb.RuntimeFractionalPercent{
+				DefaultValue: &v3typepb.FractionalPercent{
+					Numerator:   200,
+					Denominator: v3typepb.FractionalPercent_HUNDRED,
+				},
+			},
+			want: fraction{numerator: 100, denominator: 100},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := parseFilterEnabled(tt.fp)
+			if err != nil {
+				t.Fatalf("parseFilterEnabled(%v) failed: %v", tt.fp, err)
+			}
+			if diff := cmp.Diff(tt.want, got, cmp.AllowUnexported(fraction{})); diff != "" {
+				t.Fatalf("parseFilterEnabled(%v) returned unexpected fraction (-want, +got):\n%s", tt.fp, diff)
 			}
 		})
 	}

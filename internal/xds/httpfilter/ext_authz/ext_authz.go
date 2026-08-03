@@ -21,6 +21,7 @@ package extauthz
 
 import (
 	"fmt"
+	"net/http"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal/envconfig"
@@ -112,14 +113,14 @@ func (builder) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, er
 	}
 
 	var denyAtDisable bool
-	if df := msg.GetDenyAtDisable(); df != nil {
-		if df.GetDefaultValue() == nil {
+	if denyAtDisableFlag := msg.GetDenyAtDisable(); denyAtDisableFlag != nil {
+		if denyAtDisableFlag.GetDefaultValue() == nil {
 			return nil, fmt.Errorf("extauthz: missing default_value in deny_at_disable")
 		}
-		denyAtDisable = df.GetDefaultValue().GetValue()
+		denyAtDisable = denyAtDisableFlag.GetDefaultValue().GetValue()
 	}
 
-	httpStatus := int32(403)
+	httpStatus := int32(http.StatusForbidden)
 	if st := msg.GetStatusOnError().GetCode(); st != 0 {
 		httpStatus = int32(st)
 	}
@@ -145,7 +146,7 @@ func (builder) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, er
 		}
 	}
 
-	return baseConfig{
+	return config{
 		grpcService:                server,
 		filterEnabled:              filterEnabled,
 		denyAtDisable:              denyAtDisable,
