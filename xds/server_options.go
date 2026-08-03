@@ -30,6 +30,7 @@ import (
 type serverOptions struct {
 	modeCallback         ServingModeCallbackFunc
 	clientPoolForTesting *xdsclient.Pool
+	resourceNameFunc     func(net.Addr) string
 }
 
 type serverOption struct {
@@ -41,6 +42,22 @@ type serverOption struct {
 // register a callback to get notified about serving mode changes.
 func ServingModeCallback(cb ServingModeCallbackFunc) grpc.ServerOption {
 	return &serverOption{apply: func(o *serverOptions) { o.modeCallback = cb }}
+}
+
+// ResourceNameFunc returns a grpc.ServerOption which allows users to override
+// the LDS listener resource name that the xDS-enabled server subscribes to.
+// When set, this takes precedence over the
+// server_listener_resource_name_template in the bootstrap configuration.
+//
+// The provided function is called at Serve() time with the listener's address
+// and must return the full xDS listener resource name to watch.
+//
+// # Experimental
+//
+// Notice: This API is EXPERIMENTAL and may be changed or removed in a
+// later release.
+func ResourceNameFunc(f func(net.Addr) string) grpc.ServerOption {
+	return &serverOption{apply: func(o *serverOptions) { o.resourceNameFunc = f }}
 }
 
 // ServingModeCallbackFunc is the callback that users can register to get

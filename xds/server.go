@@ -104,11 +104,13 @@ func NewGRPCServer(opts ...grpc.ServerOption) (*GRPCServer, error) {
 
 	// Validate the bootstrap configuration for server specific fields.
 
-	// Listener resource name template is mandatory on the server side.
-	cfg := xdsClient.BootstrapConfig()
-	if cfg.ServerListenerResourceNameTemplate() == "" {
-		xdsClientClose()
-		return nil, errors.New("missing server_listener_resource_name_template in the bootstrap configuration")
+	// Listener resource name template is mandatory on the server side unless resourceNameFunc is provided.
+	if s.opts.resourceNameFunc == nil {
+		cfg := xdsClient.BootstrapConfig()
+		if cfg.ServerListenerResourceNameTemplate() == "" {
+			xdsClientClose()
+			return nil, errors.New("missing server_listener_resource_name_template in the bootstrap configuration")
+		}
 	}
 
 	s.xdsC = xdsClient
@@ -188,8 +190,14 @@ func (s *GRPCServer) Serve(lis net.Listener) error {
 	// to subscribe to for a gRPC server. If the token `%s` is present in the
 	// string, it will be replaced with the server's listening "IP:port" (e.g.,
 	// "0.0.0.0:8080", "[::]:8080").
-	cfg := s.xdsC.BootstrapConfig()
-	name := bootstrap.PopulateResourceTemplate(cfg.ServerListenerResourceNameTemplate(), lis.Addr().String())
+	var name string
+	if s.opts.resourceNameFunc != nil {
+		name = s.opts.resourceNameFunc(lis.Addr())
+	} else {
+		cfg := s.xdsC.BootstrapConfig()
+		name = cfg.ServerListenerResourceNameTemplate()
+		name = bootstrap.PopulateResourceTemplate(name, lis.Addr().String())
+	}
 
 	// Create a listenerWrapper which handles all functionality required by
 	// this particular instance of Serve().
@@ -228,6 +236,24 @@ func (s *GRPCServer) GracefulStop() {
 	if s.xdsC != nil {
 		s.xdsClientClose()
 	}
+}
+
+// UnderlyingServer returns the underlying gRPC server. This is useful for
+// wrappers that need access to the concrete *grpc.Server, for example, to
+// use with grpcweb.
+//
+// It returns nil if the underlying server is not a *grpc.Server (e.g., in
+// unit tests where the server is faked).
+//
+// # Experimental
+//
+// Notice: This API is EXPERIMENTAL and may be changed or removed in a
+// later release.
+func (s *GRPCServer) UnderlyingServer() *grpc.Server {
+	if srv, ok := s.gs.(*grpc.Server); ok {
+		return srv
+	}
+	return nil
 }
 
 // xdsUnaryInterceptor is the unary interceptor added to the gRPC server to
