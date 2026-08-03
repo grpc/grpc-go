@@ -209,7 +209,7 @@ func (a *AllowedGrpcService) UnmarshalJSON(data []byte) error {
 		bundle, cancel, err := c.Build(cc.Config)
 		if err != nil {
 			runCleanups()
-			return fmt.Errorf("failed to build credentials bundle from bootstrap for allowed grpc service: type %q, err: %v", cc.Type, err)
+			return fmt.Errorf("xds: failed to build credentials bundle from bootstrap for allowed grpc service: type %q, err: %v", cc.Type, err)
 		}
 		selectedChannelCreds = cc
 		credsDialOption = grpc.WithCredentialsBundle(bundle)
@@ -220,6 +220,9 @@ func (a *AllowedGrpcService) UnmarshalJSON(data []byte) error {
 		break
 	}
 
+	// If no channel-creds type in the list was supported, credsDialOption is
+	// still nil after the loop; that is a validation error (mirrors
+	// ServerConfig.UnmarshalJSON).
 	if credsDialOption == nil {
 		runCleanups()
 		return fmt.Errorf("xds: no supported channel credentials found for allowed grpc service in config:\n%s", string(data))
@@ -235,7 +238,7 @@ func (a *AllowedGrpcService) UnmarshalJSON(data []byte) error {
 			callCreds, cancel, err := c.Build(cfg.Config)
 			if err != nil {
 				runCleanups()
-				return fmt.Errorf("failed to build call credentials from bootstrap for allowed grpc service: type %q, err: %v", cfg.Type, err)
+				return fmt.Errorf("xds: failed to build call credentials from bootstrap for allowed grpc service: type %q, err: %v", cfg.Type, err)
 			}
 			dialOptions = append(dialOptions, grpc.WithPerRPCCredentials(callCreds))
 			cleanups = append(cleanups, cancel)
@@ -618,7 +621,7 @@ type Config struct {
 	// A map from certprovider instance names to parsed buildable configs.
 	certProviderConfigs map[string]*certprovider.BuildableConfig
 
-	// allowedGrpcServices maps a fully-qualified target URI to the
+	// allowedGrpcServices maps a target URI to the
 	// credentials gRPC may use for that side channel when the xDS server
 	// that configured it is untrusted (gRFC A102).
 	allowedGrpcServices map[string]*AllowedGrpcService
@@ -805,16 +808,12 @@ func (c *Config) UnmarshalJSON(data []byte) error {
 	c.node = config.Node
 	c.allowedGrpcServices = config.AllowedGrpcServices
 
-	// A null allowed_grpc_services entry (e.g. {"target": null}) is decoded by
-	// encoding/json as a nil value without invoking UnmarshalJSON, which would
-	// bypass the required-channel-creds validation and leave a nil entry that
-	// consumers could dereference. gRFC A102 requires channel_creds on every
-	// entry, so reject nil entries here.
+	// A JSON null decodes to a nil entry without calling UnmarshalJSON; reject
+	// it since channel_creds is required, and stamp the target on each service.
 	for target, svc := range c.allowedGrpcServices {
 		if svc == nil {
 			return fmt.Errorf("xds: allowed_grpc_services entry %q has no configuration in bootstrap config", target)
 		}
-		// Copy the map key into the service so it is self-describing.
 		svc.targetURI = target
 	}
 

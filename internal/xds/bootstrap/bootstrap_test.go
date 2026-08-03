@@ -1800,18 +1800,18 @@ func (s) TestBootstrap_AllowedGrpcServices(t *testing.T) {
 		wantCallCredTypes   []string
 	}{
 		{
-			name:                "good allowed_grpc_services",
+			name:                "good_allowed_grpc_services",
 			fileName:            "allowedGrpcServicesGood",
 			wantChannelCredType: "insecure",
 		},
 		{
-			name:                "allowed_grpc_services with call creds",
+			name:                "allowed_grpc_services_with_call_creds",
 			fileName:            "allowedGrpcServicesWithCallCreds",
 			wantChannelCredType: "insecure",
 			wantCallCredTypes:   []string{"jwt_token_file"},
 		},
 		{
-			name:     "bad allowed_grpc_services",
+			name:     "bad_allowed_grpc_services",
 			fileName: "allowedGrpcServicesBadCreds",
 			wantErr:  true,
 		},
@@ -2117,8 +2117,7 @@ func (s) TestBootstrap_CleanupOnUnmarshalError(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			cancels = 0
 			var c Config
-			err := c.UnmarshalJSON([]byte(test.cfg))
-			if (err != nil) != test.wantErr {
+			if err := c.UnmarshalJSON([]byte(test.cfg)); (err != nil) != test.wantErr {
 				t.Fatalf("Config.UnmarshalJSON() error = %v, wantErr %v", err, test.wantErr)
 			}
 			if cancels != test.wantCancels {
