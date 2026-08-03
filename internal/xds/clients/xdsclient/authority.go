@@ -22,7 +22,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -348,7 +347,7 @@ func (a *authority) handleADSResourceUpdate(serverConfig *ServerConfig, rType Re
 			onDone()
 		}
 	}
-	funcsToSchedule := []func(context.Context){}
+	var funcsToSchedule []func(context.Context)
 	defer func() {
 		if len(funcsToSchedule) == 0 {
 			// When there are no watchers for the resources received as part of
@@ -369,8 +368,6 @@ func (a *authority) handleADSResourceUpdate(serverConfig *ServerConfig, rType Re
 			continue
 		}
 
-		// On error, keep previous version of the resource. But update status
-		// and error.
 		if err := uErr.Err; err != nil {
 			if a.metricsReporter != nil {
 				a.metricsReporter.ReportMetric(&metrics.ResourceUpdateInvalid{
@@ -379,7 +376,7 @@ func (a *authority) handleADSResourceUpdate(serverConfig *ServerConfig, rType Re
 			}
 
 			// Notify watchers only if this is not a duplicated error from the previous update.
-			if errState := state.md.ErrState; errState == nil || errState.Err == nil || !strings.Contains(state.md.ErrState.Err.Error(), err.Error()) {
+			if errState := state.md.ErrState; errState == nil || errState.Err == nil || state.md.ErrState.Err.Error() != err.Error() {
 				for watcher := range state.watchers {
 					watcherCnt.Add(1)
 					if state.cache == nil {
@@ -390,9 +387,15 @@ func (a *authority) handleADSResourceUpdate(serverConfig *ServerConfig, rType Re
 				}
 			}
 
-			// Update error state.
-			state.md.ErrState = md.ErrState
-			state.md.Status = md.Status
+			// On error, keep previous version of the resource. But update
+			// status to NACKed and capture the specific per-resource error (and
+			// not the overall error for the update) in the ErrState field.
+			state.md.Status = xdsresource.ServiceStatusNACKed
+			state.md.ErrState = &xdsresource.UpdateErrorMetadata{
+				Version:   md.ErrState.Version,
+				Err:       err,
+				Timestamp: md.ErrState.Timestamp,
+			}
 
 			continue
 		}
@@ -420,7 +423,6 @@ func (a *authority) handleADSResourceUpdate(serverConfig *ServerConfig, rType Re
 			state.cache = uErr.Resource
 
 			for watcher := range state.watchers {
-				watcher := watcher
 				resource := uErr.Resource
 				watcherCnt.Add(1)
 				funcsToSchedule = append(funcsToSchedule, func(context.Context) { watcher.ResourceChanged(resource, done) })
@@ -498,7 +500,6 @@ func (a *authority) handleADSResourceUpdate(serverConfig *ServerConfig, rType Re
 		state.cache = nil
 		state.md = xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusNotExist}
 		for watcher := range state.watchers {
-			watcher := watcher
 			watcherCnt.Add(1)
 			funcsToSchedule = append(funcsToSchedule, func(context.Context) {
 				watcher.ResourceError(xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "xds: resource %q of type %q has been removed", name, rType.TypeName), done)
