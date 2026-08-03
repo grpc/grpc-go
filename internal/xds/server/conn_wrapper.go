@@ -95,9 +95,9 @@ func (c *connWrapper) XDSHandshakeInfo() (*grpcsync.RefCounted[xds.HandshakeInfo
 	if c.filterChain.securityCfg == nil {
 		// If the security config is empty, this means that the control plane
 		// did not provide any security configuration and therefore we should
-		// return an empty HandshakeInfo here so that the xdsCreds can use the
-		// configured fallback credentials.
-		return xds.NewHandshakeInfo(nil, nil, nil, "", false, false, false), nil
+		// return nil here so that the xdsCreds can use the configured fallback
+		// credentials.
+		return nil, nil
 	}
 
 	cpc := c.parent.xdsC.BootstrapConfig().CertProviderConfigs()
