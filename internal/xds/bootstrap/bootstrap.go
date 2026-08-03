@@ -274,6 +274,21 @@ func (scs *ServerConfigs) Equal(other *ServerConfigs) bool {
 	return true
 }
 
+// releaseServerConfigsCleanups releases the credential cleanups built for each
+// server config in servers, skipping nil entries. It is used to free
+// credentials (bundles, file watchers) eagerly built during unmarshaling when
+// the resulting configuration is discarded.
+func releaseServerConfigsCleanups(servers ServerConfigs) {
+	for _, sc := range servers {
+		if sc == nil {
+			continue
+		}
+		for _, cleanup := range sc.Cleanups() {
+			cleanup()
+		}
+	}
+}
+
 // UnmarshalJSON takes the json data (a list of server configurations) and
 // unmarshals it to the struct.
 func (scs *ServerConfigs) UnmarshalJSON(data []byte) error {
@@ -281,14 +296,7 @@ func (scs *ServerConfigs) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &servers); err != nil {
 		// Some servers may have built credentials before the failure;
 		// release them so they don't leak when the slice is dropped.
-		for _, sc := range servers {
-			if sc == nil {
-				continue
-			}
-			for _, cleanup := range sc.Cleanups() {
-				cleanup()
-			}
-		}
+		releaseServerConfigsCleanups(servers)
 		return fmt.Errorf("xds: failed to JSON unmarshal server configurations during bootstrap: %v, config:\n%s", err, string(data))
 	}
 	*scs = servers
@@ -764,26 +772,16 @@ func (c *Config) UnmarshalJSON(data []byte) error {
 	// resources built before a mid-way unmarshal failure, or a later
 	// validation error, are released when this Config is discarded.
 	parsedSuccessfully := false
-	releaseServerCreds := func(servers ServerConfigs) {
-		for _, sc := range servers {
-			if sc == nil {
-				continue
-			}
-			for _, cleanup := range sc.Cleanups() {
-				cleanup()
-			}
-		}
-	}
 	defer func() {
 		if parsedSuccessfully {
 			return
 		}
-		releaseServerCreds(config.XDSServers)
+		releaseServerConfigsCleanups(config.XDSServers)
 		for _, authority := range config.Authorities {
 			if authority == nil {
 				continue
 			}
-			releaseServerCreds(authority.XDSServers)
+			releaseServerConfigsCleanups(authority.XDSServers)
 		}
 		for _, svc := range config.AllowedGrpcServices {
 			if svc == nil {
