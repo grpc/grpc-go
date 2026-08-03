@@ -1769,7 +1769,7 @@ func (s) TestBootstrap_AllowedGrpcServices(t *testing.T) {
 				}
 			}
 		}`,
-		"allowedGrpcServicesBadCreds": `
+		"allowedGrpcServicesTLS": `
 		{
 			"node": {
 				"id": "ENVOY_NODE_ID"
@@ -1783,7 +1783,7 @@ func (s) TestBootstrap_AllowedGrpcServices(t *testing.T) {
 			"allowed_grpc_services": {
 				"dns:///sharding-service:443": {
 					"channel_creds": [
-						{ "type": "unsupported_cred_type" }
+						{ "type": "tls", "config": {} }
 					]
 				}
 			}
@@ -1795,7 +1795,6 @@ func (s) TestBootstrap_AllowedGrpcServices(t *testing.T) {
 	tests := []struct {
 		name                string
 		fileName            string
-		wantErr             bool
 		wantChannelCredType string
 		wantCallCredTypes   []string
 	}{
@@ -1811,9 +1810,9 @@ func (s) TestBootstrap_AllowedGrpcServices(t *testing.T) {
 			wantCallCredTypes:   []string{"jwt_token_file"},
 		},
 		{
-			name:     "bad_allowed_grpc_services",
-			fileName: "allowedGrpcServicesBadCreds",
-			wantErr:  true,
+			name:                "tls_channel_creds",
+			fileName:            "allowedGrpcServicesTLS",
+			wantChannelCredType: "tls",
 		},
 	}
 
@@ -1824,14 +1823,8 @@ func (s) TestBootstrap_AllowedGrpcServices(t *testing.T) {
 			defer func() { envconfig.XDSBootstrapFileName = origBootstrapFileName }()
 
 			cfg, err := GetConfiguration()
-			if err != nil && !test.wantErr {
-				t.Fatalf("GetConfiguration() got unexpected error: %v, want: success", err)
-			}
-			if err == nil && test.wantErr {
-				t.Fatalf("GetConfiguration() got: success, want: error")
-			}
-			if test.wantErr {
-				return
+			if err != nil {
+				t.Fatalf("GetConfiguration() failed: %v", err)
 			}
 			allowed := cfg.AllowedGrpcServices()
 			if len(allowed) != 1 {
@@ -1839,7 +1832,7 @@ func (s) TestBootstrap_AllowedGrpcServices(t *testing.T) {
 			}
 			svc, ok := allowed["dns:///sharding-service:443"]
 			if !ok {
-				t.Fatalf("AllowedGrpcServices missing key \"dns:///sharding-service:443\"")
+				t.Fatalf("AllowedGrpcServices missing key %q", "dns:///sharding-service:443")
 			}
 			if got := svc.selectedChannelCreds.Type; got != test.wantChannelCredType {
 				t.Errorf("SelectedChannelCreds type got: %q, want: %q", got, test.wantChannelCredType)
@@ -1853,6 +1846,31 @@ func (s) TestBootstrap_AllowedGrpcServices(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestBootstrap_AllowedGrpcServices_UnsupportedChannelCreds verifies that a
+// bootstrap fails to load when an allowed_grpc_services entry has no supported
+// channel-creds type.
+func (s) TestBootstrap_AllowedGrpcServices_UnsupportedChannelCreds(t *testing.T) {
+	cfg := `{
+		"node": { "id": "ENVOY_NODE_ID" },
+		"xds_servers": [{
+			"server_uri": "trafficdirector.googleapis.com:443",
+			"channel_creds": [{ "type": "insecure" }]
+		}],
+		"allowed_grpc_services": {
+			"dns:///sharding-service:443": {
+				"channel_creds": [{ "type": "unsupported_cred_type" }]
+			}
+		}
+	}`
+	cancel := setupBootstrapOverride(map[string]string{"config": cfg})
+	defer cancel()
+	testutils.SetEnvConfig(t, &envconfig.XDSBootstrapFileName, "config")
+
+	if _, err := GetConfiguration(); err == nil {
+		t.Fatal("GetConfiguration() succeeded; want error for unsupported channel creds")
 	}
 }
 
@@ -1991,14 +2009,14 @@ func (s) TestBootstrap_CleanupOnUnmarshalError(t *testing.T) {
 
 	tests := []struct {
 		name        string
+		desc        string
 		cfg         string
 		wantErr     bool
 		wantCancels int
 	}{
 		{
-			// allowed_grpc_services builds creds, then validation
-			// fails on the empty xds_servers list.
 			name: "validation_error_releases_allowed_service_creds",
+			desc: "allowed_grpc_services builds creds, then validation fails on the empty xds_servers list",
 			cfg: `{
 				"xds_servers": [],
 				"allowed_grpc_services": {
@@ -2011,9 +2029,8 @@ func (s) TestBootstrap_CleanupOnUnmarshalError(t *testing.T) {
 			wantCancels: 1,
 		},
 		{
-			// A per-authority server builds creds, then validation
-			// fails on the invalid authority listener template.
 			name: "validation_error_releases_authority_server_creds",
+			desc: "a per-authority server builds creds, then validation fails on the invalid authority listener template",
 			cfg: `{
 				"xds_servers": [{
 					"server_uri": "trafficdirector.googleapis.com:443",
@@ -2033,9 +2050,8 @@ func (s) TestBootstrap_CleanupOnUnmarshalError(t *testing.T) {
 			wantCancels: 1,
 		},
 		{
-			// allowed_grpc_services (decoded first) builds creds,
-			// then json.Unmarshal fails on a malformed field.
 			name: "midway_unmarshal_failure_releases_creds",
+			desc: "allowed_grpc_services (decoded first) builds creds, then json.Unmarshal fails on a malformed field",
 			cfg: `{
 				"allowed_grpc_services": {
 					"dns:///side-channel:443": {
@@ -2048,9 +2064,8 @@ func (s) TestBootstrap_CleanupOnUnmarshalError(t *testing.T) {
 			wantCancels: 1,
 		},
 		{
-			// A later server in the list fails to unmarshal; the
-			// earlier server's built creds must be released.
 			name: "intra_list_server_failure_releases_earlier_creds",
+			desc: "a later server in the list fails to unmarshal; the earlier server's built creds must be released",
 			cfg: `{
 				"xds_servers": [
 					{"server_uri": "s1:443", "channel_creds": [{"type": "test_observable_channel_creds"}]},
@@ -2061,8 +2076,8 @@ func (s) TestBootstrap_CleanupOnUnmarshalError(t *testing.T) {
 			wantCancels: 1,
 		},
 		{
-			// Same leak, but inside an authority's server list.
 			name: "intra_authority_server_failure_releases_creds",
+			desc: "same credential release as the intra-list case, but inside an authority's server list",
 			cfg: `{
 				"xds_servers": [{
 					"server_uri": "trafficdirector.googleapis.com:443",
@@ -2081,8 +2096,8 @@ func (s) TestBootstrap_CleanupOnUnmarshalError(t *testing.T) {
 			wantCancels: 1,
 		},
 		{
-			// A null authority must be rejected, not panic.
 			name: "null_authority_is_rejected_without_panic",
+			desc: "a null authority must be rejected, not panic",
 			cfg: `{
 				"xds_servers": [{
 					"server_uri": "trafficdirector.googleapis.com:443",
@@ -2094,9 +2109,8 @@ func (s) TestBootstrap_CleanupOnUnmarshalError(t *testing.T) {
 			wantCancels: 0,
 		},
 		{
-			// On success, cleanups are retained for the Config's
-			// lifetime and must not run during parsing.
 			name: "success_retains_cleanups",
+			desc: "on success, cleanups are retained for the Config's lifetime and must not run during parsing",
 			cfg: `{
 				"xds_servers": [{
 					"server_uri": "trafficdirector.googleapis.com:443",
@@ -2118,10 +2132,10 @@ func (s) TestBootstrap_CleanupOnUnmarshalError(t *testing.T) {
 			cancels = 0
 			var c Config
 			if err := c.UnmarshalJSON([]byte(test.cfg)); (err != nil) != test.wantErr {
-				t.Fatalf("Config.UnmarshalJSON() error = %v, wantErr %v", err, test.wantErr)
+				t.Fatalf("%s: Config.UnmarshalJSON() error = %v, wantErr %v", test.desc, err, test.wantErr)
 			}
 			if cancels != test.wantCancels {
-				t.Errorf("cleanups ran %d times, want %d", cancels, test.wantCancels)
+				t.Errorf("%s: cleanups ran %d times, want %d", test.desc, cancels, test.wantCancels)
 			}
 		})
 	}
