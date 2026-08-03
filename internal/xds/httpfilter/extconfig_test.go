@@ -217,6 +217,35 @@ func (s) TestHeaderMutationRules_ApplyAdditons(t *testing.T) {
 			wantMD:  metadata.MD{},
 		},
 		{
+			name: "InvalidHeaderKeyGRPCPrefix",
+			hmr:  &HeaderMutationRules{},
+			hvos: []*v3corepb.HeaderValueOption{
+				{Header: &v3corepb.HeaderValue{Key: "grpc-accept-encoding", Value: "identity"}, AppendAction: v3corepb.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD},
+			},
+			inputMD: metadata.MD{},
+			wantMD:  metadata.MD{},
+		},
+		{
+			name: "InvalidHeaderKeyIllegalCharacters",
+			hmr:  &HeaderMutationRules{},
+			hvos: []*v3corepb.HeaderValueOption{
+				{Header: &v3corepb.HeaderValue{Key: "x-user\r\nauthorization", Value: "1"}, AppendAction: v3corepb.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD},
+				{Header: &v3corepb.HeaderValue{Key: "x user", Value: "1"}, AppendAction: v3corepb.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD},
+			},
+			inputMD: metadata.MD{},
+			wantMD:  metadata.MD{},
+		},
+		{
+			name: "InvalidHeaderValueNonPrintable",
+			hmr:  &HeaderMutationRules{},
+			hvos: []*v3corepb.HeaderValueOption{
+				{Header: &v3corepb.HeaderValue{Key: "x-user", Value: "alice\r\nauthorization: Bearer token"}, AppendAction: v3corepb.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD},
+				{Header: &v3corepb.HeaderValue{Key: "x-nul", Value: "a\x00b"}, AppendAction: v3corepb.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD},
+			},
+			inputMD: metadata.MD{},
+			wantMD:  metadata.MD{},
+		},
+		{
 			name: "InvalidHeaderValueTooLong",
 			hmr:  &HeaderMutationRules{},
 			hvos: []*v3corepb.HeaderValueOption{
@@ -417,6 +446,20 @@ func (s) TestHeaderMutationRules_ApplyRemovals(t *testing.T) {
 			headersToRemove: []string{strings.Repeat("a", 16385)},
 			inputMD:         metadata.MD{strings.Repeat("a", 16385): []string{"1"}},
 			wantMD:          metadata.MD{strings.Repeat("a", 16385): []string{"1"}},
+		},
+		{
+			name:            "InvalidHeaderKeyGRPCPrefix",
+			hmr:             &HeaderMutationRules{},
+			headersToRemove: []string{"grpc-accept-encoding"},
+			inputMD:         metadata.MD{"grpc-accept-encoding": []string{"gzip"}},
+			wantMD:          metadata.MD{"grpc-accept-encoding": []string{"gzip"}},
+		},
+		{
+			name:            "InvalidHeaderKeyIllegalCharacters",
+			hmr:             &HeaderMutationRules{},
+			headersToRemove: []string{"x user"},
+			inputMD:         metadata.MD{"x user": []string{"1"}},
+			wantMD:          metadata.MD{"x user": []string{"1"}},
 		},
 		{
 			name:            "HeaderExists",

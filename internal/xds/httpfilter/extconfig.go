@@ -24,6 +24,7 @@ import (
 	"regexp"
 	"strings"
 
+	imetadata "google.golang.org/grpc/internal/metadata"
 	"google.golang.org/grpc/internal/xds/matcher"
 	"google.golang.org/grpc/metadata"
 
@@ -105,8 +106,10 @@ func HeaderMutationRulesFromProto(mr *v3mutationpb.HeaderMutationRules) (HeaderM
 // The following headers are always ignored:
 // - Pseudo-headers (keys starting with ':').
 // - The 'host' header.
+// - Headers with keys in the reserved 'grpc-' space.
 // - Headers with non-lowercase keys.
 // - Headers with keys or values exceeding 16384 bytes.
+// - Headers with an invalid gRPC header name or header value.
 //
 // If a mutation is disallowed and DisallowIsError is true, an error is
 // returned. Otherwise, the disallowed mutation is silently ignored.
@@ -126,7 +129,7 @@ func (hmr *HeaderMutationRules) ApplyAdditions(hvos []*v3corepb.HeaderValueOptio
 	for _, hvo := range hvos {
 		header := hvo.GetHeader()
 		key := header.GetKey()
-		if len(key) == 0 || key[0] == ':' || key == "host" || key != strings.ToLower(key) || len(key) > 16384 {
+		if len(key) == 0 || key[0] == ':' || key == "host" || strings.HasPrefix(key, "grpc-") || key != strings.ToLower(key) || len(key) > 16384 {
 			continue
 		}
 
@@ -135,6 +138,12 @@ func (hmr *HeaderMutationRules) ApplyAdditions(hvos []*v3corepb.HeaderValueOptio
 			value = string(header.GetRawValue())
 		}
 		if len(value) > 16384 {
+			continue
+		}
+		// ValidatePair rejects keys outside the gRPC header name charset and
+		// values carrying bytes outside %x20-%x7E. It skips the value check
+		// for "-bin" keys, whose values the transport base64 encodes.
+		if imetadata.ValidatePair(key, value) != nil {
 			continue
 		}
 
@@ -186,7 +195,10 @@ func (hmr *HeaderMutationRules) ApplyRemovals(headersToRemove []string, input me
 	}
 
 	for _, header := range headersToRemove {
-		if len(header) == 0 || header[0] == ':' || header == "host" || header != strings.ToLower(header) || len(header) > 16384 {
+		if len(header) == 0 || header[0] == ':' || header == "host" || strings.HasPrefix(header, "grpc-") || header != strings.ToLower(header) || len(header) > 16384 {
+			continue
+		}
+		if imetadata.ValidateKey(header) != nil {
 			continue
 		}
 		if !hmr.allow(header) {
