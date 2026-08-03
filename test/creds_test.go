@@ -418,12 +418,12 @@ func (s) TestPerRPCCredentialMetadataValidationRejectsInvalidDialOptions(t *test
 			{
 				name:     "invalid key",
 				authdata: map[string]string{"bad key": "value"},
-				wantErr:  `header key "bad key" contains illegal characters not in [0-9a-z-_.]`,
+				wantErr:  fmt.Sprintf("header key %q contains illegal characters not in [0-9a-z-_.]", "bad key"),
 			},
 			{
 				name:     "invalid value",
 				authdata: map[string]string{"valid-key": "bad\x01value"},
-				wantErr:  `header key "valid-key" contains value with non-printable ASCII characters`,
+				wantErr:  fmt.Sprintf("header key %q contains value with non-printable ASCII characters", "valid-key"),
 			},
 		} {
 			t.Run(e.name+"/"+test.name, func(t *testing.T) {
@@ -458,12 +458,12 @@ func (s) TestPerRPCCredentialMetadataValidationRejectsInvalidCallOptions(t *test
 			{
 				name:     "invalid key",
 				authdata: map[string]string{"bad key": "value"},
-				wantErr:  `header key "bad key" contains illegal characters not in [0-9a-z-_.]`,
+				wantErr:  fmt.Sprintf("header key %q contains illegal characters not in [0-9a-z-_.]", "bad key"),
 			},
 			{
 				name:     "invalid value",
 				authdata: map[string]string{"valid-key": "bad\x01value"},
-				wantErr:  `header key "valid-key" contains value with non-printable ASCII characters`,
+				wantErr:  fmt.Sprintf("header key %q contains value with non-printable ASCII characters", "valid-key"),
 			},
 		} {
 			t.Run(e.name+"/"+test.name, func(t *testing.T) {
