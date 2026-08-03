@@ -227,6 +227,36 @@ func (s) TestNewServer_Failure(t *testing.T) {
 	}
 }
 
+func (s) TestNewServer_ResourceNameFuncOverridesMissingTemplate(t *testing.T) {
+	xdsCreds, err := xds.NewServerCredentials(xds.ServerOptions{FallbackCreds: insecure.NewCredentials()})
+	if err != nil {
+		t.Fatalf("failed to create xds server credentials: %v", err)
+	}
+	bs, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
+		Servers: []byte(fmt.Sprintf(`[{
+			"server_uri": %q,
+			"channel_creds": [{"type": "insecure"}]
+		}]`, nonExistentManagementServer)),
+		Node: []byte(fmt.Sprintf(`{"id": "%s"}`, uuid.New().String())),
+		CertificateProviders: map[string]json.RawMessage{
+			"cert-provider-instance": json.RawMessage("{}"),
+		},
+	})
+	if err != nil {
+		t.Fatalf("Failed to create bootstrap configuration: %v", err)
+	}
+
+	srv, err := NewGRPCServer(
+		grpc.Creds(xdsCreds),
+		ResourceNameFunc(func(_ net.Addr) string { return "xdstp://foo/bar" }),
+		BootstrapContentsForTesting(bs),
+	)
+	if err != nil {
+		t.Fatalf("NewGRPCServer() failed: %v", err)
+	}
+	srv.Stop()
+}
+
 func (s) TestRegisterService(t *testing.T) {
 	fs := newFakeGRPCServer()
 
