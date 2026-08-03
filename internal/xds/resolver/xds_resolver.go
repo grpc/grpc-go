@@ -151,6 +151,7 @@ func (b *xdsResolverBuilder) Build(target resolver.Target, cc resolver.ClientCon
 		activePlugins:   make(map[string]*clusterInfo),
 		httpFilters:     make(map[clientFilterKey]httpfilter.ClientFilter),
 		channelID:       rand.Uint64(),
+		ldsResourceName: ldsResourceName,
 		target:          target.String(),
 		metricsRecorder: opts.MetricsRecorder,
 		childDialOpts:   childDialOpts,
