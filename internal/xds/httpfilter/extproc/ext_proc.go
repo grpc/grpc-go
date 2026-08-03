@@ -220,9 +220,9 @@ var _ httpfilter.ClientFilterBuilder = builder{}
 // by its target URI, channel credentials, and call credentials. It is used as a
 // map key in clientFilter to share and reuse the external processor channels.
 type grpcServiceKey struct {
-	TargetURI          string
-	ChannelCredentials string
-	CallCredentials    string
+	targetURI          string
+	channelCredentials string
+	callCredentials    string
 }
 
 type clientFilter struct {
@@ -241,9 +241,9 @@ func (*clientFilter) Close() {}
 func (cf *clientFilter) getOrCreateExtProcChannel(server xdsresource.GRPCServiceConfig) (*grpcsync.RefCounted[v3procservicegrpc.ExternalProcessorClient], error) {
 	// Create the grpcServiceKey.
 	key := grpcServiceKey{
-		TargetURI:          server.TargetURI,
-		ChannelCredentials: server.ChannelCredentials,
-		CallCredentials:    server.CallCredentials,
+		targetURI:          server.TargetURI,
+		channelCredentials: server.ChannelCredentials,
+		callCredentials:    server.CallCredentials,
 	}
 
 	cf.mu.Lock()
@@ -533,22 +533,23 @@ func (cs *commonStream) callOnFinish(err error) {
 	}
 }
 
-// cleanupDataplane cancels the stream's context to immediately tear down the
-// active dataplane connection and unblock any pending client I/O.
+// cleanupDataplane cancels the dataplane stream's context to immediately tear
+// down the active dataplane connection and unblock any pending client I/O.
 //
 // Additionally, after context cancellation, if the application has not called
-// RecvMsg on the dataplane stream, it invokes a dummy RecvMsg on it.
-// In gRPC-Go, unary RPCs do not start a background goroutine waiting for context
+// RecvMsg on the dataplane stream, it invokes a dummy RecvMsg on it. In
+// gRPC-Go, unary RPCs do not start a background goroutine waiting for context
 // expiration to call cs.finish(err). If an application or interceptor layer
-// abandons an RPC after NewStream without calling SendMsg, CloseSend, or RecvMsg
-// on the dataplane stream, calling RecvMsg on the canceled stream forces
-// gRPC-Go's internal clientStream to encounter context.Canceled and execute
-// cleanup. This guarantees that all registered OnFinish CallOption callbacks are
-// executed and reference counts are decremented so that channels do not leak.
+// abandons an RPC after NewStream without calling SendMsg, CloseSend, or
+// RecvMsg on the dataplane stream, calling RecvMsg on the canceled stream
+// forces gRPC-Go's internal clientStream to encounter context.Canceled and
+// execute cleanup. This guarantees that all registered OnFinish CallOption
+// callbacks are executed and reference counts are decremented so that channels
+// do not leak.
 //
 // For streaming RPCs where RecvMsg has already been called by the application,
-// we avoid invoking a dummy RecvMsg because ClientStream.RecvMsg is not safe for
-// concurrent calls by multiple goroutines on the same stream.
+// we avoid invoking a dummy RecvMsg because ClientStream.RecvMsg is not safe
+// for concurrent calls by multiple goroutines on the same stream.
 func (cs *commonStream) cleanupDataplane() {
 	cs.cancel()
 	if cs.dataplaneStream != nil && !cs.dataplaneRecvCalled.Load() {
@@ -738,7 +739,9 @@ func (ocs *observabilityClientStream) RecvMsg(m any) error {
 		}
 	}
 
-	ocs.dataplaneRecvCalled.Store(true)
+	if !ocs.dataplaneRecvCalled.Load() {
+		ocs.dataplaneRecvCalled.Store(true)
+	}
 	if err := ocs.dataplaneStream.RecvMsg(m); err != nil {
 		if trerr := ocs.initiateResponseTrailerProcessing(ocs.dataplaneStream.Trailer()); trerr != nil {
 			return trerr
@@ -1083,7 +1086,9 @@ func (cs *clientStream) recvFromDataplane(m any) error {
 	if err != nil {
 		return err
 	}
-	cs.dataplaneRecvCalled.Store(true)
+	if !cs.dataplaneRecvCalled.Load() {
+		cs.dataplaneRecvCalled.Store(true)
+	}
 	if err := s.RecvMsg(m); err != nil {
 		// If RecvMsg returns error, fail the RPC in case external processor stream
 		// has failed. Otherwise process the trailers.

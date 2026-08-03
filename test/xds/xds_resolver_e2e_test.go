@@ -529,12 +529,14 @@ func (s) TestResolverDelayedInterceptorClose_ActiveRPCs(t *testing.T) {
 		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
 	}
 
+	// Intercept resolver builder.
 	jsonCh := make(chan string, 1)
 	ib := &wrappingBuilder{
 		Builder: r,
 		jsonCh:  jsonCh,
 	}
 
+	// Start test backend.
 	server := stubserver.StartTestService(t, nil)
 	defer server.Stop()
 
@@ -662,12 +664,14 @@ func (s) TestResolverImmediateInterceptorClose_NoActiveRPCs(t *testing.T) {
 		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
 	}
 
+	// Intercept resolver builder.
 	jsonCh := make(chan string, 1)
 	ib := &wrappingBuilder{
 		Builder: r,
 		jsonCh:  jsonCh,
 	}
 
+	// Start test backends.
 	server := stubserver.StartTestService(t, nil)
 	defer server.Stop()
 
