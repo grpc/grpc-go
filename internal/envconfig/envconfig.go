@@ -155,10 +155,10 @@ var (
 
 	// ALTSMaxFrameSize is the maximum frame size for ALTS in bytes.
 	// This can be overridden by setting the environment variable
-	// "GRPC_ALTS_MAX_FRAME_SIZE" (min: 4096, max: 512*1024, capped at
+	// "GRPC_GO_EXPERIMENTAL_ALTS_MAX_FRAME_SIZE" (min: 4096, max: 512*1024, capped at
 	// 512KiB to match altsWriteBufferMaxSize in
 	// credentials/alts/internal/conn/record.go).
-	ALTSMaxFrameSize = uint64FromEnv("GRPC_ALTS_MAX_FRAME_SIZE", 4096, 4096, 512*1024)
+	ALTSMaxFrameSize = uint64FromEnv("GRPC_GO_EXPERIMENTAL_ALTS_MAX_FRAME_SIZE", 4096, 4096, 512*1024)
 )
 
 func boolFromEnv(envVar string, def bool) bool {
