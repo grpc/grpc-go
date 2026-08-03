@@ -122,30 +122,34 @@ func (ccs CallCredsConfigs) String() string {
 
 // AllowedGrpcService contains credentials config for an allowed gRPC service.
 type AllowedGrpcService struct {
-	channelCreds         []ChannelCreds
-	callCredsConfigs     []CallCredsConfig
+	// targetURI is the fully-qualified side-channel target this entry
+	// applies to. It is the map key under which the service is stored,
+	// copied in during parsing so the service is self-describing.
+	targetURI string
+	// channelCreds is the list of channel-credential configs from the
+	// bootstrap JSON. Retained for Equal and JSON round-tripping.
+	channelCreds []ChannelCreds
+	// callCredsConfigs is the list of call-credential configs from the
+	// bootstrap JSON. Retained for Equal and JSON round-tripping.
+	callCredsConfigs []CallCredsConfig
+	// selectedChannelCreds is the first channel-creds entry whose type the
+	// client supports; it is the one used to build the side channel.
 	selectedChannelCreds ChannelCreds
-	selectedCallCreds    []credentials.PerRPCCredentials
-	dialOptions          []grpc.DialOption
-	cleanups             []func()
+	// dialOptions are built from the selected channel and call credentials
+	// and passed to grpc.NewClient when creating the side channel.
+	dialOptions []grpc.DialOption
+	// cleanups release resources (credential bundles, file watchers) built
+	// for this service; run when the owning Config is no longer needed.
+	cleanups []func()
 }
 
-// ChannelCreds returns the list of parsed channel credentials.
-func (a *AllowedGrpcService) ChannelCreds() []ChannelCreds {
-	return a.channelCreds
+// TargetURI returns the fully-qualified target URI this service applies to.
+func (a *AllowedGrpcService) TargetURI() string {
+	return a.targetURI
 }
 
-// CallCredsConfigs returns the list of call credentials configurations.
-func (a *AllowedGrpcService) CallCredsConfigs() []CallCredsConfig {
-	return a.callCredsConfigs
-}
-
-// SelectedChannelCreds returns the chosen supported channel credentials.
-func (a *AllowedGrpcService) SelectedChannelCreds() ChannelCreds {
-	return a.selectedChannelCreds
-}
-
-// DialOptions returns dial options built from these credentials.
+// DialOptions returns the dial options built from this service's selected
+// channel and call credentials, for use when creating the side channel.
 func (a *AllowedGrpcService) DialOptions() []grpc.DialOption {
 	return a.dialOptions
 }
@@ -157,17 +161,19 @@ func (a *AllowedGrpcService) Cleanups() []func() {
 
 // Equal reports whether a and other are considered equal.
 func (a *AllowedGrpcService) Equal(other *AllowedGrpcService) bool {
-	switch {
-	case a == nil && other == nil:
+	if a == nil && other == nil {
 		return true
-	case (a != nil) != (other != nil):
-		return false
-	case !slices.EqualFunc(a.channelCreds, other.channelCreds, func(x, y ChannelCreds) bool { return x.Equal(y) }):
-		return false
-	case !slices.EqualFunc(a.callCredsConfigs, other.callCredsConfigs, func(x, y CallCredsConfig) bool { return x.Equal(y) }):
+	}
+	if a == nil || other == nil {
 		return false
 	}
-	return true
+	if a.targetURI != other.targetURI {
+		return false
+	}
+	if !slices.EqualFunc(a.channelCreds, other.channelCreds, ChannelCreds.Equal) {
+		return false
+	}
+	return slices.EqualFunc(a.callCredsConfigs, other.callCredsConfigs, CallCredsConfig.Equal)
 }
 
 type allowedGrpcServiceJSON struct {
@@ -184,9 +190,8 @@ func (a *AllowedGrpcService) UnmarshalJSON(data []byte) error {
 
 	// Build into locals and assign the receiver only on success, so a
 	// mid-parse error never leaves the receiver partially mutated.
-	cleanups := []func(){}
-	dialOptions := []grpc.DialOption{}
-	selectedCallCreds := []credentials.PerRPCCredentials{}
+	var cleanups []func()
+	var dialOptions []grpc.DialOption
 
 	runCleanups := func() {
 		for _, f := range cleanups {
@@ -232,7 +237,6 @@ func (a *AllowedGrpcService) UnmarshalJSON(data []byte) error {
 				runCleanups()
 				return fmt.Errorf("failed to build call credentials from bootstrap for allowed grpc service: type %q, err: %v", cfg.Type, err)
 			}
-			selectedCallCreds = append(selectedCallCreds, callCreds)
 			dialOptions = append(dialOptions, grpc.WithPerRPCCredentials(callCreds))
 			cleanups = append(cleanups, cancel)
 		}
@@ -242,7 +246,6 @@ func (a *AllowedGrpcService) UnmarshalJSON(data []byte) error {
 	a.callCredsConfigs = jsonS.CallCredsConfigs
 	a.selectedChannelCreds = selectedChannelCreds
 	a.dialOptions = dialOptions
-	a.selectedCallCreds = selectedCallCreds
 	a.cleanups = cleanups
 	return nil
 }
@@ -607,6 +610,9 @@ type Config struct {
 	// A map from certprovider instance names to parsed buildable configs.
 	certProviderConfigs map[string]*certprovider.BuildableConfig
 
+	// allowedGrpcServices maps a fully-qualified target URI to the
+	// credentials gRPC may use for that side channel when the xDS server
+	// that configured it is untrusted (gRFC A102).
 	allowedGrpcServices map[string]*AllowedGrpcService
 }
 
@@ -703,9 +709,9 @@ func (c *Config) Equal(other *Config) bool {
 		return false
 	case c.clientDefaultListenerResourceNameTemplate != other.clientDefaultListenerResourceNameTemplate:
 		return false
-	case !maps.EqualFunc(c.authorities, other.authorities, func(a, b *Authority) bool { return a.Equal(b) }):
+	case !maps.EqualFunc(c.authorities, other.authorities, (*Authority).Equal):
 		return false
-	case !maps.EqualFunc(c.allowedGrpcServices, other.allowedGrpcServices, func(a, b *AllowedGrpcService) bool { return a.Equal(b) }):
+	case !maps.EqualFunc(c.allowedGrpcServices, other.allowedGrpcServices, (*AllowedGrpcService).Equal):
 		return false
 	case !c.node.Equal(other.node):
 		return false
@@ -800,6 +806,19 @@ func (c *Config) UnmarshalJSON(data []byte) error {
 	c.authorities = config.Authorities
 	c.node = config.Node
 	c.allowedGrpcServices = config.AllowedGrpcServices
+
+	// A null allowed_grpc_services entry (e.g. {"target": null}) is decoded by
+	// encoding/json as a nil value without invoking UnmarshalJSON, which would
+	// bypass the required-channel-creds validation and leave a nil entry that
+	// consumers could dereference. gRFC A102 requires channel_creds on every
+	// entry, so reject nil entries here.
+	for target, svc := range c.allowedGrpcServices {
+		if svc == nil {
+			return fmt.Errorf("xds: allowed_grpc_services entry %q has no configuration in bootstrap config", target)
+		}
+		// Copy the map key into the service so it is self-describing.
+		svc.targetURI = target
+	}
 
 	// Build the certificate providers configuration to ensure that it is valid.
 	cpcCfgs := make(map[string]*certprovider.BuildableConfig)
@@ -960,6 +979,17 @@ func NewContentsForTesting(opts ConfigOptionsForTesting) ([]byte, error) {
 	if len(opts.AllowedGrpcServices) > 0 {
 		if err := json.Unmarshal(opts.AllowedGrpcServices, &allowedGrpcServices); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal allowed grpc services configuration: %v", err)
+		}
+		// Only the parsed config is needed to marshal the bootstrap JSON below;
+		// release the credentials built during unmarshal so this test helper
+		// does not leak file watchers.
+		for _, svc := range allowedGrpcServices {
+			if svc == nil {
+				continue
+			}
+			for _, cleanup := range svc.Cleanups() {
+				cleanup()
+			}
 		}
 	}
 	cfgJSON := configJSON{
