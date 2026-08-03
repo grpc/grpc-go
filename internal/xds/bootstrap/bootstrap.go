@@ -127,10 +127,10 @@ type AllowedGrpcService struct {
 	// copied in during parsing so the service is self-describing.
 	targetURI string
 	// channelCreds is the list of channel-credential configs from the
-	// bootstrap JSON. Retained for Equal and JSON round-tripping.
+	// bootstrap JSON. Kept for Equal and MarshalJSON.
 	channelCreds []ChannelCreds
 	// callCredsConfigs is the list of call-credential configs from the
-	// bootstrap JSON. Retained for Equal and JSON round-tripping.
+	// bootstrap JSON. Kept for Equal and MarshalJSON.
 	callCredsConfigs []CallCredsConfig
 	// selectedChannelCreds is the first channel-creds entry whose type the
 	// client supports; it is the one used to build the side channel.

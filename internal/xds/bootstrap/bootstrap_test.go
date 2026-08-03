@@ -1960,7 +1960,7 @@ func (s) TestBootstrap_AllowedGrpcServices_CallCredsIgnoredWhenDisabled(t *testi
 	if got := len(svc.DialOptions()); got != 1 {
 		t.Errorf("len(DialOptions()) = %d, want 1", got)
 	}
-	// The parsed call-creds config is still retained for round-tripping.
+	// The parsed call-creds config is still kept.
 	if got := len(svc.callCredsConfigs); got != 1 {
 		t.Errorf("len(callCredsConfigs) = %d, want 1", got)
 	}
