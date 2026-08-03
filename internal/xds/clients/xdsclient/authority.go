@@ -22,7 +22,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -377,7 +376,7 @@ func (a *authority) handleADSResourceUpdate(serverConfig *ServerConfig, rType Re
 			}
 
 			// Notify watchers only if this is not a duplicated error from the previous update.
-			if errState := state.md.ErrState; errState == nil || errState.Err == nil || !strings.Contains(state.md.ErrState.Err.Error(), err.Error()) {
+			if errState := state.md.ErrState; errState == nil || errState.Err == nil || state.md.ErrState.Err.Error() != err.Error() {
 				for watcher := range state.watchers {
 					watcherCnt.Add(1)
 					if state.cache == nil {
