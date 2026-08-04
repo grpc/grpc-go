@@ -337,10 +337,10 @@ func createPriorityConfig(cluster string) *iserviceconfig.BalancerConfig {
 	}
 }
 
-// createSingleClusterConfig returns the expected LoadBalancingConfig tree for a
-// single (non-aggregate) cluster under gRFC A75 topology:
+// createLeafClusterConfig returns the expected LoadBalancingConfig tree for a
+// leaf (non-aggregate) cluster under gRFC A75 topology:
 // outlier_detection -> cluster_impl -> priority -> wrr_locality -> round_robin.
-func createSingleClusterConfig(cluster string, pName string, ignoreReresolution bool) *outlierdetection.LBConfig {
+func createLeafClusterConfig(cluster string, pName string, ignoreReresolution bool) *outlierdetection.LBConfig {
 	return &outlierdetection.LBConfig{
 		Interval:           iserviceconfig.Duration(10 * time.Second),
 		BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),

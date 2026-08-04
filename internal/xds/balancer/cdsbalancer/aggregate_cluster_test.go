@@ -105,15 +105,15 @@ func (s) TestAggregateClusterSuccess_LeafNode(t *testing.T) {
 			name:                  "eds",
 			firstClusterResource:  e2e.DefaultCluster(clusterName, serviceName, e2e.SecurityLevelNone),
 			secondClusterResource: e2e.DefaultCluster(clusterName, serviceName+"-new", e2e.SecurityLevelNone),
-			wantFirstChildCfg:     createSingleClusterConfig(clusterName, "priority-0-0", true),
-			wantSecondChildCfg:    createSingleClusterConfig(clusterName, "priority-1-0", true),
+			wantFirstChildCfg:     createLeafClusterConfig(clusterName, "priority-0-0", true),
+			wantSecondChildCfg:    createLeafClusterConfig(clusterName, "priority-1-0", true),
 		},
 		{
 			name:                  "dns",
 			firstClusterResource:  makeLogicalDNSClusterResource(clusterName, "dns_host", uint32(port)),
 			secondClusterResource: makeLogicalDNSClusterResource(clusterName, "dns_host_new", uint32(port)),
-			wantFirstChildCfg:     createSingleClusterConfig(clusterName, "priority-0", false),
-			wantSecondChildCfg:    createSingleClusterConfig(clusterName, "priority-1", false),
+			wantFirstChildCfg:     createLeafClusterConfig(clusterName, "priority-0", false),
+			wantSecondChildCfg:    createLeafClusterConfig(clusterName, "priority-1", false),
 		},
 	}
 
@@ -319,8 +319,8 @@ func (s) TestAggregateClusterSuccess_ThenChangeRootToEDS(t *testing.T) {
 	}
 	// Since the service name of the EDS cluster remains same, same priority name
 	// is used.
-	wantSingleChildCfg := createSingleClusterConfig(clusterName, "priority-0-0", true)
-	if err := compareLoadBalancingConfig(ctx, odCfgCh, wantSingleChildCfg); err != nil {
+	wantLeafChildCfg := createLeafClusterConfig(clusterName, "priority-0-0", true)
+	if err := compareLoadBalancingConfig(ctx, odCfgCh, wantLeafChildCfg); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -348,8 +348,8 @@ func (s) TestAggregatedClusterSuccess_SwitchBetweenLeafAndAggregate(t *testing.T
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
-	wantSingleChildCfg := createSingleClusterConfig(clusterName, "priority-0-0", true)
-	if err := compareLoadBalancingConfig(ctx, odCfgCh, wantSingleChildCfg); err != nil {
+	wantLeafChildCfg := createLeafClusterConfig(clusterName, "priority-0-0", true)
+	if err := compareLoadBalancingConfig(ctx, odCfgCh, wantLeafChildCfg); err != nil {
 		t.Fatal(err)
 	}
 
@@ -400,7 +400,7 @@ func (s) TestAggregatedClusterSuccess_SwitchBetweenLeafAndAggregate(t *testing.T
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
-	if err := compareLoadBalancingConfig(ctx, odCfgCh, wantSingleChildCfg); err != nil {
+	if err := compareLoadBalancingConfig(ctx, odCfgCh, wantLeafChildCfg); err != nil {
 		t.Fatal(err)
 	}
 }

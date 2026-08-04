@@ -258,9 +258,9 @@ func (b *cdsBalancer) updateChildConfig() error {
 	var err error
 
 	if isAggregate {
-		childCfgBytes, endpoints, err = buildAggregateClusterPriorityConfigJSON(b.priorities, &b.xdsLBPolicy)
+		childCfgBytes, endpoints, err = buildAggregateClusterConfigJSON(b.priorities, &b.xdsLBPolicy)
 	} else {
-		childCfgBytes, endpoints, err = buildSingleClusterConfigJSON(b.priorities[0], &b.xdsLBPolicy)
+		childCfgBytes, endpoints, err = buildLeafClusterConfigJSON(b.priorities[0], &b.xdsLBPolicy)
 	}
 	if err != nil {
 		return fmt.Errorf("failed to build child policy config: %v", err)

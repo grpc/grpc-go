@@ -130,9 +130,9 @@ func makeLocality(localityIdx int, localityWeight, priority uint32, endpointCoun
 	}
 }
 
-// TestBuildAggregateClusterPriorityConfigJSON is a sanity check that the built balancer config
-// can be parsed. The behavior test is covered by TestBuildAggregateClusterPriorityConfig.
-func (s) TestBuildAggregateClusterPriorityConfigJSON(t *testing.T) {
+// TestBuildAggregateClusterConfigJSON is a sanity check that the built balancer config
+// can be parsed. The behavior test is covered by TestBuildAggregateClusterConfig.
+func (s) TestBuildAggregateClusterConfigJSON(t *testing.T) {
 	testLRSServerConfig, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{
 		URI:          "trafficdirector.googleapis.com:443",
 		ChannelCreds: []bootstrap.ChannelCreds{{Type: "google_default"}},
@@ -141,7 +141,7 @@ func (s) TestBuildAggregateClusterPriorityConfigJSON(t *testing.T) {
 		t.Fatalf("Failed to create LRS server config for testing: %v", err)
 	}
 
-	gotConfig, _, err := buildAggregateClusterPriorityConfigJSON([]*priorityConfig{
+	gotConfig, _, err := buildAggregateClusterConfigJSON([]*priorityConfig{
 		{
 			clusterConfig: &xdsresource.ClusterConfig{
 				Cluster: &xdsresource.ClusterUpdate{
@@ -182,7 +182,7 @@ func (s) TestBuildAggregateClusterPriorityConfigJSON(t *testing.T) {
 		},
 	}, nil)
 	if err != nil {
-		t.Fatalf("buildAggregateClusterPriorityConfigJSON(...) failed: %v", err)
+		t.Fatalf("buildAggregateClusterConfigJSON(...) failed: %v", err)
 	}
 
 	var prettyGot bytes.Buffer
@@ -198,11 +198,11 @@ func (s) TestBuildAggregateClusterPriorityConfigJSON(t *testing.T) {
 	}
 }
 
-// TestBuildAggregateClusterPriorityConfig tests the priority config generation. Each top level
+// TestBuildAggregateClusterConfig tests the priority config generation. Each top level
 // balancer per priority should be an Outlier Detection balancer, with a Cluster
 // Impl Balancer as a child.
-func (s) TestBuildAggregateClusterPriorityConfig(t *testing.T) {
-	gotConfig, _, _ := buildAggregateClusterPriorityConfig([]*priorityConfig{
+func (s) TestBuildAggregateClusterConfig(t *testing.T) {
+	gotConfig, _, _ := buildAggregateClusterConfig([]*priorityConfig{
 		{
 			// EDS - OD config should be the top level for both of the EDS
 			// priorities balancer This EDS priority will have multiple sub
@@ -317,7 +317,7 @@ func testEndpointForDNS(endpoints []resolver.Endpoint, localityWeight uint32, pa
 	return retEndpoint
 }
 
-func (s) TestBuildSingleClusterConfigJSON(t *testing.T) {
+func (s) TestBuildLeafClusterConfigJSON(t *testing.T) {
 	testLRSServerConfig, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{
 		URI:          "trafficdirector.googleapis.com:443",
 		ChannelCreds: []bootstrap.ChannelCreds{{Type: "google_default"}},
@@ -326,7 +326,7 @@ func (s) TestBuildSingleClusterConfigJSON(t *testing.T) {
 		t.Fatalf("Failed to create LRS server config for testing: %v", err)
 	}
 
-	gotConfig, _, err := buildSingleClusterConfigJSON(&priorityConfig{
+	gotConfig, _, err := buildLeafClusterConfigJSON(&priorityConfig{
 		clusterConfig: &xdsresource.ClusterConfig{
 			Cluster: &xdsresource.ClusterUpdate{
 				ClusterName:     testClusterName,
@@ -355,7 +355,7 @@ func (s) TestBuildSingleClusterConfigJSON(t *testing.T) {
 		childNameGen:     newNameGenerator(0),
 	}, &iserviceconfig.BalancerConfig{Name: roundrobin.Name})
 	if err != nil {
-		t.Fatalf("buildSingleClusterConfigJSON(...) failed: %v", err)
+		t.Fatalf("buildLeafClusterConfigJSON(...) failed: %v", err)
 	}
 
 	var prettyGot bytes.Buffer
@@ -370,7 +370,7 @@ func (s) TestBuildSingleClusterConfigJSON(t *testing.T) {
 	}
 }
 
-func (s) TestBuildSingleClusterConfig_DNS(t *testing.T) {
+func (s) TestBuildLeafClusterConfig_DNS(t *testing.T) {
 	for _, tt := range []struct {
 		name        string
 		endpoints   []resolver.Endpoint
@@ -413,7 +413,7 @@ func (s) TestBuildSingleClusterConfig_DNS(t *testing.T) {
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			gotODConfig, gotEndpoints, err := buildSingleClusterConfig(
+			gotODConfig, gotEndpoints, err := buildLeafClusterConfig(
 				&priorityConfig{
 					clusterConfig: &xdsresource.ClusterConfig{
 						Cluster: &xdsresource.ClusterUpdate{
@@ -427,7 +427,7 @@ func (s) TestBuildSingleClusterConfig_DNS(t *testing.T) {
 				},
 				tt.xdsLBPolicy)
 			if err != nil {
-				t.Fatalf("buildSingleClusterConfig() failed: %v", err)
+				t.Fatalf("buildLeafClusterConfig() failed: %v", err)
 			}
 
 			wantODConfig := &outlierdetection.LBConfig{
@@ -455,18 +455,18 @@ func (s) TestBuildSingleClusterConfig_DNS(t *testing.T) {
 				},
 			}
 			if diff := cmp.Diff(wantODConfig, gotODConfig); diff != "" {
-				t.Errorf("buildSingleClusterConfig() config diff (-want +got) %v", diff)
+				t.Errorf("buildLeafClusterConfig() config diff (-want +got) %v", diff)
 			}
 
 			wantEndpoints := []resolver.Endpoint{testEndpointForDNS(tt.endpoints, 1, []string{"priority-3", xdsinternal.LocalityString(clients.Locality{})})}
 			if diff := cmp.Diff(wantEndpoints, gotEndpoints, endpointCmpOpts); diff != "" {
-				t.Errorf("buildSingleClusterConfig() endpoints diff (-want +got) %v", diff)
+				t.Errorf("buildLeafClusterConfig() endpoints diff (-want +got) %v", diff)
 			}
 		})
 	}
 }
 
-func (s) TestBuildSingleClusterConfig_EDS_PickFirstWeightedShuffling_Disabled(t *testing.T) {
+func (s) TestBuildLeafClusterConfig_EDS_PickFirstWeightedShuffling_Disabled(t *testing.T) {
 	testutils.SetEnvConfig(t, &envconfig.PickFirstWeightedShuffling, false)
 
 	testLRSServerConfig, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{
@@ -484,7 +484,7 @@ func (s) TestBuildSingleClusterConfig_EDS_PickFirstWeightedShuffling_Disabled(t 
 	loc2 := makeLocality(2, 20, 1, 2)
 	loc3 := makeLocality(3, 80, 1, 2)
 
-	gotODConfig, gotEndpoints, err := buildSingleClusterConfig(
+	gotODConfig, gotEndpoints, err := buildLeafClusterConfig(
 		&priorityConfig{
 			clusterConfig: &xdsresource.ClusterConfig{
 				Cluster: &xdsresource.ClusterUpdate{
@@ -516,7 +516,7 @@ func (s) TestBuildSingleClusterConfig_EDS_PickFirstWeightedShuffling_Disabled(t 
 		nil,
 	)
 	if err != nil {
-		t.Fatalf("buildSingleClusterConfig() failed: %v", err)
+		t.Fatalf("buildLeafClusterConfig() failed: %v", err)
 	}
 
 	wantODConfig := &outlierdetection.LBConfig{
@@ -558,14 +558,14 @@ func (s) TestBuildSingleClusterConfig_EDS_PickFirstWeightedShuffling_Disabled(t 
 	}
 
 	if diff := cmp.Diff(wantODConfig, gotODConfig); diff != "" {
-		t.Errorf("buildSingleClusterConfig() config diff (-want +got) %v", diff)
+		t.Errorf("buildLeafClusterConfig() config diff (-want +got) %v", diff)
 	}
 	if diff := cmp.Diff(wantEndpoints, gotEndpoints, endpointCmpOpts); diff != "" {
-		t.Errorf("buildSingleClusterConfig() endpoints diff (-want +got) %v", diff)
+		t.Errorf("buildLeafClusterConfig() endpoints diff (-want +got) %v", diff)
 	}
 }
 
-func (s) TestBuildSingleClusterConfig_EDS_PickFirstWeightedShuffling_Enabled(t *testing.T) {
+func (s) TestBuildLeafClusterConfig_EDS_PickFirstWeightedShuffling_Enabled(t *testing.T) {
 	testutils.SetEnvConfig(t, &envconfig.PickFirstWeightedShuffling, true)
 
 	testLRSServerConfig, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{
@@ -583,7 +583,7 @@ func (s) TestBuildSingleClusterConfig_EDS_PickFirstWeightedShuffling_Enabled(t *
 	loc2 := makeLocality(2, 20, 1, 2)
 	loc3 := makeLocality(3, 80, 1, 2)
 
-	gotODConfig, gotEndpoints, err := buildSingleClusterConfig(
+	gotODConfig, gotEndpoints, err := buildLeafClusterConfig(
 		&priorityConfig{
 			clusterConfig: &xdsresource.ClusterConfig{
 				Cluster: &xdsresource.ClusterUpdate{
@@ -615,7 +615,7 @@ func (s) TestBuildSingleClusterConfig_EDS_PickFirstWeightedShuffling_Enabled(t *
 		nil,
 	)
 	if err != nil {
-		t.Fatalf("buildSingleClusterConfig() failed: %v", err)
+		t.Fatalf("buildLeafClusterConfig() failed: %v", err)
 	}
 
 	wantODConfig := &outlierdetection.LBConfig{
@@ -674,10 +674,10 @@ func (s) TestBuildSingleClusterConfig_EDS_PickFirstWeightedShuffling_Enabled(t *
 	}
 
 	if diff := cmp.Diff(wantODConfig, gotODConfig); diff != "" {
-		t.Errorf("buildSingleClusterConfig() config diff (-want +got) %v", diff)
+		t.Errorf("buildLeafClusterConfig() config diff (-want +got) %v", diff)
 	}
 	if diff := cmp.Diff(wantEndpoints, gotEndpoints, endpointCmpOpts); diff != "" {
-		t.Errorf("buildSingleClusterConfig() endpoints diff (-want +got) %v", diff)
+		t.Errorf("buildLeafClusterConfig() endpoints diff (-want +got) %v", diff)
 	}
 }
 
