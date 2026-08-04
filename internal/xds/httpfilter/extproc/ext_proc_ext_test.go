@@ -4111,8 +4111,11 @@ func (s) TestObservabilityMidStreamFailDeny(t *testing.T) {
 
 	cc, err := setupTestClient(t, extProcAddr, &v3procfilterpb.ExternalProcessor{
 		ProcessingMode: &v3procfilterpb.ProcessingMode{
-			RequestHeaderMode: v3procfilterpb.ProcessingMode_SEND,
-			RequestBodyMode:   v3procfilterpb.ProcessingMode_GRPC,
+			RequestHeaderMode:   v3procfilterpb.ProcessingMode_SEND,
+			RequestBodyMode:     v3procfilterpb.ProcessingMode_GRPC,
+			ResponseHeaderMode:  v3procfilterpb.ProcessingMode_SEND,
+			ResponseBodyMode:    v3procfilterpb.ProcessingMode_GRPC,
+			ResponseTrailerMode: v3procfilterpb.ProcessingMode_SEND,
 		},
 		FailureModeAllow:     false,
 		ObservabilityMode:    true,
@@ -4322,198 +4325,6 @@ func (s) TestObservabilityRequestAttributesLifecycle(t *testing.T) {
 	}
 }
 
-// TestObservabilityMetricsUnary tests the client-side ext_proc metrics for a
-// Unary RPC. It verifies that all 4 duration metrics are recorded with the
-// correct labels and that their values are positive.
-func (s) TestObservabilityMetricsUnary(t *testing.T) {
-	extProcAddr, _ := startTestExtProcessor(t, func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
-		for {
-			_, err := stream.Recv()
-			if err == io.EOF {
-				return nil
-			}
-			if err != nil {
-				return err
-			}
-		}
-	})
-
-	// Start a test stub service.
-	stub := stubserver.StartTestService(t, &stubserver.StubServer{
-		UnaryCallF: func(_ context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
-			return &testpb.SimpleResponse{Payload: in.GetPayload()}, nil
-		},
-	})
-	defer stub.Stop()
-
-	const serviceName = "test-service"
-	tmr := stats.NewTestMetricsRecorder()
-	grpcTarget := "xds:///" + serviceName
-	cc, err := setupTestClient(t, extProcAddr, &v3procfilterpb.ExternalProcessor{
-		ProcessingMode: &v3procfilterpb.ProcessingMode{
-			RequestHeaderMode:   v3procfilterpb.ProcessingMode_SEND,
-			RequestBodyMode:     v3procfilterpb.ProcessingMode_GRPC,
-			ResponseHeaderMode:  v3procfilterpb.ProcessingMode_SEND,
-			ResponseTrailerMode: v3procfilterpb.ProcessingMode_SEND,
-		},
-		ObservabilityMode:    true,
-		DeferredCloseTimeout: durationpb.New(defaultTestShortTimeout),
-	}, stub.Address, grpc.WithStatsHandler(tmr))
-	if err != nil {
-		t.Fatalf("setupTestClient() failed: %v", err)
-	}
-	defer cc.Close()
-
-	client := testgrpc.NewTestServiceClient(cc)
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-
-	reqMsg := &testpb.SimpleRequest{Payload: &testpb.Payload{Body: []byte("hello")}}
-	if _, err = client.UnaryCall(ctx, reqMsg); err != nil {
-		t.Fatalf("UnaryCall() failed: %v", err)
-	}
-
-	// Verify values in the map.
-	if got, _ := tmr.Metric("grpc.client_ext_proc.client_headers_duration"); got <= 0 {
-		t.Fatalf("Unexpected data for metric %v, got: %v, want: > 0", "grpc.client_ext_proc.client_headers_duration", got)
-	}
-	if got, _ := tmr.Metric("grpc.client_ext_proc.server_headers_duration"); got <= 0 {
-		t.Fatalf("Unexpected data for metric %v, got: %v, want: > 0", "grpc.client_ext_proc.server_headers_duration", got)
-	}
-	if got, _ := tmr.Metric("grpc.client_ext_proc.client_half_close_duration"); got <= 0 {
-		t.Fatalf("Unexpected data for metric %v, got: %v, want: > 0", "grpc.client_ext_proc.client_half_close_duration", got)
-	}
-	if got, _ := tmr.Metric("grpc.client_ext_proc.server_trailers_duration"); got <= 0 {
-		t.Fatalf("Unexpected data for metric %v, got: %v, want: > 0", "grpc.client_ext_proc.server_trailers_duration", got)
-	}
-
-	// Verify labels for the last metric (server_trailers_duration) from the
-	// channel. Since it is recorded last, it should be the one remaining in the
-	// channel.
-	md, err := tmr.ReadFloat64Histo(ctx)
-	if err != nil {
-		t.Fatalf("Failed to read last metric from channel: %v", err)
-	}
-	verifyMetric(t, md, "grpc.client_ext_proc.server_trailers_duration", grpcTarget)
-}
-
-// TestObservabilityMetricsStreaming tests the client-side ext_proc metrics for
-// a Streaming RPC. It verifies that all 4 duration metrics are recorded
-// synchronously step-by-step with the correct labels and that their values are
-// positive.
-func (s) TestObservabilityMetricsStreaming(t *testing.T) {
-	extProcAddr, _ := startTestExtProcessor(t, func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
-		for {
-			_, err := stream.Recv()
-			if err == io.EOF {
-				return nil
-			}
-			if err != nil {
-				return err
-			}
-		}
-	})
-
-	// Start a test stub service.
-	stub := stubserver.StartTestService(t, &stubserver.StubServer{
-		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
-			if err := stream.SendHeader(metadata.Pairs("x-resp-header-from-server", "present")); err != nil {
-				return err
-			}
-			for {
-				in, err := stream.Recv()
-				if err == io.EOF {
-					return nil
-				}
-				if err != nil {
-					return err
-				}
-				if err := stream.Send(&testpb.StreamingOutputCallResponse{
-					Payload: &testpb.Payload{Body: in.GetPayload().GetBody()},
-				}); err != nil {
-					return err
-				}
-			}
-		},
-	})
-	defer stub.Stop()
-
-	const serviceName = "test-service"
-	tmr := stats.NewTestMetricsRecorder()
-	grpcTarget := "xds:///" + serviceName
-	cc, err := setupTestClient(t, extProcAddr, &v3procfilterpb.ExternalProcessor{
-		ProcessingMode: &v3procfilterpb.ProcessingMode{
-			RequestHeaderMode:   v3procfilterpb.ProcessingMode_SEND,
-			RequestBodyMode:     v3procfilterpb.ProcessingMode_GRPC,
-			ResponseHeaderMode:  v3procfilterpb.ProcessingMode_SEND,
-			ResponseTrailerMode: v3procfilterpb.ProcessingMode_SEND,
-		},
-		ObservabilityMode:    true,
-		DeferredCloseTimeout: durationpb.New(defaultTestShortTimeout),
-	}, stub.Address, grpc.WithStatsHandler(tmr))
-	if err != nil {
-		t.Fatalf("setupTestClient() failed: %v", err)
-	}
-	defer cc.Close()
-
-	client := testgrpc.NewTestServiceClient(cc)
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-
-	stream, err := client.FullDuplexCall(ctx)
-	if err != nil {
-		t.Fatalf("FullDuplexCall() failed: %v", err)
-	}
-
-	// Verify client_headers_duration (recorded during NewStream).
-	md, err := tmr.ReadFloat64Histo(ctx)
-	if err != nil {
-		t.Fatalf("Failed to read client_headers_duration: %v", err)
-	}
-	verifyMetric(t, md, "grpc.client_ext_proc.client_headers_duration", grpcTarget)
-
-	// Send one message and receive reply.
-	reqMsg := &testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: []byte("hello")}}
-	if err := stream.Send(reqMsg); err != nil {
-		t.Fatalf("stream.Send() failed: %v", err)
-	}
-	_, err = stream.Recv()
-	if err != nil {
-		t.Fatalf("stream.Recv() failed: %v", err)
-	}
-
-	// Verify server_headers_duration (recorded during first Recv).
-	md, err = tmr.ReadFloat64Histo(ctx)
-	if err != nil {
-		t.Fatalf("Failed to read server_headers_duration: %v", err)
-	}
-	verifyMetric(t, md, "grpc.client_ext_proc.server_headers_duration", grpcTarget)
-
-	// Close send.
-	if err := stream.CloseSend(); err != nil {
-		t.Fatalf("stream.CloseSend() failed: %v", err)
-	}
-
-	// Verify client_half_close_duration (recorded during CloseSend).
-	md, err = tmr.ReadFloat64Histo(ctx)
-	if err != nil {
-		t.Fatalf("Failed to read client_half_close_duration: %v", err)
-	}
-	verifyMetric(t, md, "grpc.client_ext_proc.client_half_close_duration", grpcTarget)
-
-	// Receive EOF.
-	if _, err := stream.Recv(); err != io.EOF {
-		t.Fatalf("stream.Recv() returned error: %v, want EOF", err)
-	}
-
-	// Verify server_trailers_duration (recorded when Recv returns EOF).
-	md, err = tmr.ReadFloat64Histo(ctx)
-	if err != nil {
-		t.Fatalf("Failed to read server_trailers_duration: %v", err)
-	}
-	verifyMetric(t, md, "grpc.client_ext_proc.server_trailers_duration", grpcTarget)
-}
-
 // TestObservabilityTrailersOnly verifies that when the backend service returns
 // a trailers-only response (metadata in trailers without sending headers or body),
 // the ExtProc filter sends ResponseHeaders with EndOfStream=true containing the
@@ -4602,13 +4413,336 @@ func (s) TestObservabilityTrailersOnly(t *testing.T) {
 	}
 }
 
+// overrideTimeForMetricsTesting overrides internal time functions to return a
+// deterministic duration for metrics tests, validating start timestamps.
+func overrideTimeForMetricsTesting(t *testing.T) {
+	t.Helper()
+	origNow, origSince := internal.TimeNowFunc, internal.TimeSinceFunc
+	// A mutex is required because TimeNowFunc and TimeSinceFunc may be called
+	// concurrently from different stream goroutines, and time.Time is a
+	// multi-word struct that is not safe for concurrent reads and writes.
+	var mu sync.Mutex
+	curTime := time.Unix(1000, 0)
+	step := 125 * time.Millisecond
+
+	// TimeNowFunc returns the current fake time without advancing it, ensuring
+	// that any start timestamp captured during a stream phase is recorded as
+	// curTime.
+	internal.TimeNowFunc = func() time.Time {
+		mu.Lock()
+		defer mu.Unlock()
+		return curTime
+	}
+
+	// TimeSinceFunc advances curTime by step relative to the provided start
+	// timestamp and returns curTime.Sub(start). This validates that the correct
+	// start timestamp was passed while returning a deterministic duration (step).
+	internal.TimeSinceFunc = func(start time.Time) time.Duration {
+		mu.Lock()
+		defer mu.Unlock()
+		curTime = start.Add(step)
+		return curTime.Sub(start)
+	}
+	t.Cleanup(func() {
+		internal.TimeNowFunc, internal.TimeSinceFunc = origNow, origSince
+	})
+}
+
+// TestUnaryMetrics tests the client-side ext_proc metrics for a Unary RPC in
+// both normal mode and observability mode. It verifies that all 4 duration
+// metrics are recorded with the correct labels and that their values match
+// the expected duration.
+func (s) TestUnaryMetrics(t *testing.T) {
+	const wantDurationSeconds = 0.125
+	overrideTimeForMetricsTesting(t)
+
+	tests := []struct {
+		name              string
+		observabilityMode bool
+	}{
+		{
+			name:              "normal_mode",
+			observabilityMode: false,
+		},
+		{
+			name:              "observability_mode",
+			observabilityMode: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			extProcAddr, _ := startTestExtProcessor(t, func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
+				for {
+					req, err := stream.Recv()
+					if err == io.EOF {
+						return nil
+					}
+					if err != nil {
+						return err
+					}
+
+					if tc.observabilityMode {
+						continue
+					}
+
+					var resp *v3procservicepb.ProcessingResponse
+					switch {
+					case req.GetRequestHeaders() != nil:
+						resp = requestHeadersResponse(nil, nil)
+					case req.GetRequestBody() != nil:
+						body := req.GetRequestBody().GetBody()
+						if req.GetRequestBody().GetEndOfStreamWithoutMessage() || req.GetRequestBody().GetEndOfStream() {
+							resp = requestBodyResponseWithEOS(body, true)
+							break
+						}
+						resp = requestBodyResponse(body)
+					case req.GetResponseHeaders() != nil:
+						resp = responseHeadersResponse(nil, nil)
+					case req.GetResponseBody() != nil:
+						resp = responseBodyResponse(req.GetResponseBody().GetBody())
+					case req.GetResponseTrailers() != nil:
+						resp = responseTrailersResponse(nil, nil)
+					}
+					if err := stream.Send(resp); err != nil {
+						return err
+					}
+				}
+			})
+
+			// Start a test stub service.
+			stub := stubserver.StartTestService(t, &stubserver.StubServer{
+				UnaryCallF: func(_ context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+					return &testpb.SimpleResponse{Payload: in.GetPayload()}, nil
+				},
+			})
+			defer stub.Stop()
+
+			const serviceName = "test-service"
+			tmr := stats.NewTestMetricsRecorder()
+			grpcTarget := "xds:///" + serviceName
+			cc, err := setupTestClient(t, extProcAddr, &v3procfilterpb.ExternalProcessor{
+				ProcessingMode: &v3procfilterpb.ProcessingMode{
+					RequestHeaderMode:   v3procfilterpb.ProcessingMode_SEND,
+					RequestBodyMode:     v3procfilterpb.ProcessingMode_GRPC,
+					ResponseHeaderMode:  v3procfilterpb.ProcessingMode_SEND,
+					ResponseBodyMode:    v3procfilterpb.ProcessingMode_GRPC,
+					ResponseTrailerMode: v3procfilterpb.ProcessingMode_SEND,
+				},
+				ObservabilityMode:    tc.observabilityMode,
+				DeferredCloseTimeout: durationpb.New(defaultTestShortTimeout),
+			}, stub.Address, grpc.WithStatsHandler(tmr))
+			if err != nil {
+				t.Fatalf("setupTestClient() failed: %v", err)
+			}
+			defer cc.Close()
+
+			client := testgrpc.NewTestServiceClient(cc)
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+
+			reqMsg := &testpb.SimpleRequest{Payload: &testpb.Payload{Body: []byte("hello")}}
+			if _, err = client.UnaryCall(ctx, reqMsg); err != nil {
+				t.Fatalf("UnaryCall() failed: %v", err)
+			}
+
+			// Verify values in the map.
+			if got, _ := tmr.Metric("grpc.client_ext_proc.client_headers_duration"); got != wantDurationSeconds {
+				t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", "grpc.client_ext_proc.client_headers_duration", got, wantDurationSeconds)
+			}
+			if got, _ := tmr.Metric("grpc.client_ext_proc.server_headers_duration"); got != wantDurationSeconds {
+				t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", "grpc.client_ext_proc.server_headers_duration", got, wantDurationSeconds)
+			}
+			if got, _ := tmr.Metric("grpc.client_ext_proc.client_half_close_duration"); got != wantDurationSeconds {
+				t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", "grpc.client_ext_proc.client_half_close_duration", got, wantDurationSeconds)
+			}
+			if got, _ := tmr.Metric("grpc.client_ext_proc.server_trailers_duration"); got != wantDurationSeconds {
+				t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", "grpc.client_ext_proc.server_trailers_duration", got, wantDurationSeconds)
+			}
+
+			// Verify labels for the last metric (server_trailers_duration) from the
+			// channel. Since it is recorded last, it should be the one remaining in
+			// the channel.
+			md, err := tmr.ReadFloat64Histo(ctx)
+			if err != nil {
+				t.Fatalf("Failed to read last metric from channel: %v", err)
+			}
+			verifyMetric(t, md, "grpc.client_ext_proc.server_trailers_duration", grpcTarget, wantDurationSeconds)
+		})
+	}
+}
+
+// TestStreamingMetrics tests the client-side ext_proc metrics for a Streaming
+// RPC in both normal mode and observability mode. It verifies that all 4
+// duration metrics are recorded synchronously step-by-step with the correct
+// labels and that their values match the expected duration.
+func (s) TestStreamingMetrics(t *testing.T) {
+	const wantDurationSeconds = 0.125
+	overrideTimeForMetricsTesting(t)
+
+	tests := []struct {
+		name              string
+		observabilityMode bool
+	}{
+		{
+			name:              "normal_mode",
+			observabilityMode: false,
+		},
+		{
+			name:              "observability_mode",
+			observabilityMode: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			extProcAddr, _ := startTestExtProcessor(t, func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
+				for {
+					req, err := stream.Recv()
+					if err == io.EOF {
+						return nil
+					}
+					if err != nil {
+						return err
+					}
+
+					if tc.observabilityMode {
+						continue
+					}
+
+					var resp *v3procservicepb.ProcessingResponse
+					switch {
+					case req.GetRequestHeaders() != nil:
+						resp = requestHeadersResponse(nil, nil)
+					case req.GetRequestBody() != nil:
+						body := req.GetRequestBody().GetBody()
+						if req.GetRequestBody().GetEndOfStreamWithoutMessage() || req.GetRequestBody().GetEndOfStream() {
+							resp = requestBodyResponseWithEOS(body, true)
+							break
+						}
+						resp = requestBodyResponse(body)
+					case req.GetResponseHeaders() != nil:
+						resp = responseHeadersResponse(nil, nil)
+					case req.GetResponseBody() != nil:
+						resp = responseBodyResponse(req.GetResponseBody().GetBody())
+					case req.GetResponseTrailers() != nil:
+						resp = responseTrailersResponse(nil, nil)
+					}
+					if err := stream.Send(resp); err != nil {
+						return err
+					}
+				}
+			})
+
+			// Start a test stub service.
+			stub := stubserver.StartTestService(t, &stubserver.StubServer{
+				FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
+					if err := stream.SendHeader(metadata.Pairs("x-resp-header-from-server", "present")); err != nil {
+						return err
+					}
+					for {
+						in, err := stream.Recv()
+						if err == io.EOF {
+							return nil
+						}
+						if err != nil {
+							return err
+						}
+						if err := stream.Send(&testpb.StreamingOutputCallResponse{
+							Payload: &testpb.Payload{Body: in.GetPayload().GetBody()},
+						}); err != nil {
+							return err
+						}
+					}
+				},
+			})
+			defer stub.Stop()
+
+			const serviceName = "test-service"
+			tmr := stats.NewTestMetricsRecorder()
+			grpcTarget := "xds:///" + serviceName
+			cc, err := setupTestClient(t, extProcAddr, &v3procfilterpb.ExternalProcessor{
+				ProcessingMode: &v3procfilterpb.ProcessingMode{
+					RequestHeaderMode:   v3procfilterpb.ProcessingMode_SEND,
+					RequestBodyMode:     v3procfilterpb.ProcessingMode_GRPC,
+					ResponseHeaderMode:  v3procfilterpb.ProcessingMode_SEND,
+					ResponseBodyMode:    v3procfilterpb.ProcessingMode_GRPC,
+					ResponseTrailerMode: v3procfilterpb.ProcessingMode_SEND,
+				},
+				ObservabilityMode:    tc.observabilityMode,
+				DeferredCloseTimeout: durationpb.New(defaultTestShortTimeout),
+			}, stub.Address, grpc.WithStatsHandler(tmr))
+			if err != nil {
+				t.Fatalf("setupTestClient() failed: %v", err)
+			}
+			defer cc.Close()
+
+			client := testgrpc.NewTestServiceClient(cc)
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+
+			stream, err := client.FullDuplexCall(ctx)
+			if err != nil {
+				t.Fatalf("FullDuplexCall() failed: %v", err)
+			}
+
+			// Verify client_headers_duration (recorded during NewStream).
+			md, err := tmr.ReadFloat64Histo(ctx)
+			if err != nil {
+				t.Fatalf("Failed to read client_headers_duration: %v", err)
+			}
+			verifyMetric(t, md, "grpc.client_ext_proc.client_headers_duration", grpcTarget, wantDurationSeconds)
+
+			// Send one message and receive reply.
+			reqMsg := &testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: []byte("hello")}}
+			if err := stream.Send(reqMsg); err != nil {
+				t.Fatalf("stream.Send() failed: %v", err)
+			}
+			if _, err = stream.Recv(); err != nil {
+				t.Fatalf("stream.Recv() failed: %v", err)
+			}
+
+			// Verify server_headers_duration (recorded during first Recv).
+			md, err = tmr.ReadFloat64Histo(ctx)
+			if err != nil {
+				t.Fatalf("Failed to read server_headers_duration: %v", err)
+			}
+			verifyMetric(t, md, "grpc.client_ext_proc.server_headers_duration", grpcTarget, wantDurationSeconds)
+
+			// Close send.
+			if err := stream.CloseSend(); err != nil {
+				t.Fatalf("stream.CloseSend() failed: %v", err)
+			}
+
+			// Verify client_half_close_duration (recorded during CloseSend).
+			md, err = tmr.ReadFloat64Histo(ctx)
+			if err != nil {
+				t.Fatalf("Failed to read client_half_close_duration: %v", err)
+			}
+			verifyMetric(t, md, "grpc.client_ext_proc.client_half_close_duration", grpcTarget, wantDurationSeconds)
+
+			// Receive EOF.
+			if _, err := stream.Recv(); err != io.EOF {
+				t.Fatalf("stream.Recv() returned error: %v, want EOF", err)
+			}
+
+			// Verify server_trailers_duration (recorded when Recv returns EOF).
+			md, err = tmr.ReadFloat64Histo(ctx)
+			if err != nil {
+				t.Fatalf("Failed to read server_trailers_duration: %v", err)
+			}
+			verifyMetric(t, md, "grpc.client_ext_proc.server_trailers_duration", grpcTarget, wantDurationSeconds)
+		})
+	}
+}
+
 // verifyMetric is a helper function that asserts the properties of a recorded
 // metric. It verifies the metric name, labels (grpc.target), and that the
-// recorded duration is positive.
-func verifyMetric(t *testing.T, md stats.MetricsData, expectedName string, expectedTarget string) {
+// recorded duration matches wantDuration.
+func verifyMetric(t *testing.T, md stats.MetricsData, wantName string, wantTarget string, wantDuration float64) {
 	t.Helper()
-	if md.Handle.Name != expectedName {
-		t.Fatalf("Got metric %s, want %s", md.Handle.Name, expectedName)
+	if md.Handle.Name != wantName {
+		t.Fatalf("Got metric %s, want %s", md.Handle.Name, wantName)
 	}
 	labels := make(map[string]string)
 	for i, k := range md.LabelKeys {
@@ -4616,10 +4750,10 @@ func verifyMetric(t *testing.T, md stats.MetricsData, expectedName string, expec
 			labels[k] = md.LabelVals[i]
 		}
 	}
-	if gotTarget := labels["grpc.target"]; gotTarget != expectedTarget {
-		t.Fatalf("Metric %s: grpc.target label = %q, want %q", expectedName, gotTarget, expectedTarget)
+	if gotTarget := labels["grpc.target"]; gotTarget != wantTarget {
+		t.Fatalf("Metric %s: grpc.target label = %q, want %q", wantName, gotTarget, wantTarget)
 	}
-	if md.FloatIncr <= 0 {
-		t.Fatalf("Unexpected data for metric %v, got: %v, want: > 0", expectedName, md.FloatIncr)
+	if md.FloatIncr != wantDuration {
+		t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", wantName, md.FloatIncr, wantDuration)
 	}
 }

@@ -65,11 +65,21 @@ func init() {
 			httpfilter.UnregisterForTesting(typeURL)
 		}
 	}
+	iextproc.TimeNowFunc = time.Now
+	iextproc.TimeSinceFunc = time.Since
 }
 
 var metadataFromOutgoingContextRaw = internal.FromOutgoingContextRaw.(func(context.Context) (metadata.MD, [][]string, bool))
 
 const defaultDeferredCloseTimeout = 5 * time.Second
+
+func timeNow() time.Time {
+	return iextproc.TimeNowFunc()
+}
+
+func timeSince(t time.Time) time.Duration {
+	return iextproc.TimeSinceFunc(t)
+}
 
 type builder struct{}
 
@@ -292,7 +302,7 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 		config:                 i.config,
 		metricsRecorder:        i.metricsRecorder,
 		target:                 i.target,
-		clientHeadersStartTime: time.Now(),
+		clientHeadersStartTime: timeNow(),
 		// Construct request attributes once during stream initialization to capture
 		// the original, unmutated request metadata and RPC info. For streaming
 		// RPCs, where stream creation and message transmission are separable,
@@ -336,7 +346,7 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 			ocs.cancel()
 			return nil, err
 		}
-		ocs.recordMetric(clientHeadersDurationMetric, time.Since(ocs.clientHeadersStartTime).Seconds())
+		ocs.recordMetric(clientHeadersDurationMetric, timeSince(ocs.clientHeadersStartTime).Seconds())
 		// Start background goroutine to receive any messages from the external
 		// processor server and discard them.
 		go ocs.discardProcessorResponsesLoop()
@@ -414,7 +424,7 @@ type commonStream struct {
 
 	metricsRecorder        estats.MetricsRecorder
 	target                 string
-	clientHeadersStartTime time.Time
+	clientHeadersStartTime time.Time // holds the start time of client headers processing for metrics and relative timestamp calculations
 }
 
 func (cs *commonStream) recordMetric(handle *estats.Float64HistoHandle, duration float64) {
@@ -435,11 +445,12 @@ func (cs *commonStream) handleInitError(err error, newStream func(context.Contex
 		cs.cancel()
 		return nil, status.Errorf(codes.Internal, "extproc: %v", err)
 	}
+	cs.recordMetric(clientHeadersDurationMetric, timeSince(cs.clientHeadersStartTime).Seconds())
 	if cs.dataplaneStream, err = newStream(cs.ctx, opts...); err != nil {
 		cs.cancel()
 		return nil, err
 	}
-	cs.recordMetric(clientHeadersDurationMetric, time.Since(cs.clientHeadersStartTime).Seconds())
+	cs.recordMetric(clientHeadersDurationMetric, timeSince(cs.clientHeadersStartTime).Seconds())
 	return cs.dataplaneStream, nil
 }
 
@@ -583,14 +594,14 @@ func (ocs *observabilityClientStream) CloseSend() error {
 	if fatalErr, ok := ocs.procStreamErr.Load().(error); ok {
 		return fatalErr
 	}
-	startTime := time.Now()
+	startTime := timeNow()
 	if !ocs.procStreamBypass.Load() && ocs.config.processingModes.requestBodyMode == modeSend {
 		if err := ocs.sendToProcessor(ocs.halfClose()); err != nil {
 			return err
 		}
 	}
 	err := ocs.dataplaneStream.CloseSend()
-	ocs.recordMetric(clientHalfCloseDurationMetric, time.Since(startTime).Seconds())
+	ocs.recordMetric(clientHalfCloseDurationMetric, timeSince(startTime).Seconds())
 	return ocs.streamError(err)
 }
 
@@ -657,13 +668,13 @@ func (ocs *observabilityClientStream) initiateResponseTrailerProcessing(trailers
 	if ocs.responseTrailerOnce.Load() || !ocs.responseTrailerOnce.CompareAndSwap(false, true) {
 		return nil
 	}
-	startTime := time.Now()
+	startTime := timeNow()
 	if ocs.config.processingModes.responseTrailerMode == modeSend && !ocs.procStreamBypass.Load() && !ocs.trailersOnly {
 		if err := ocs.sendToProcessor(ocs.responseTrailers(trailers)); err != nil {
 			return err
 		}
 	}
-	ocs.recordMetric(serverTrailersDurationMetric, time.Since(startTime).Seconds())
+	ocs.recordMetric(serverTrailersDurationMetric, timeSince(startTime).Seconds())
 
 	// Half-close the external processor stream immediately so the server can
 	// shut down gracefully.
@@ -687,7 +698,7 @@ func (ocs *observabilityClientStream) initiateResponseHeaderProcessing() (metada
 	if ocs.responseHeaderErr != nil {
 		return nil, ocs.streamError(ocs.responseHeaderErr)
 	}
-	startTime := time.Now()
+	startTime := timeNow()
 	// A trailers-only response returns nil from dataplaneStream.Header().
 	procHeader := ocs.responseHeader
 	if ocs.responseHeader == nil {
@@ -702,7 +713,7 @@ func (ocs *observabilityClientStream) initiateResponseHeaderProcessing() (metada
 			return nil, err
 		}
 	}
-	ocs.recordMetric(serverHeadersDurationMetric, time.Since(startTime).Seconds())
+	ocs.recordMetric(serverHeadersDurationMetric, timeSince(startTime).Seconds())
 	return ocs.responseHeader, nil
 }
 
@@ -793,6 +804,42 @@ type clientStream struct {
 
 	requestForwardLoopDoneCh chan struct{}   // closed when request forwarding loop finishes draining
 	procRecvLoopDone         *grpcsync.Event // fires when external processor stream receive loop finishes
+
+	// The following start times are accessed concurrently across goroutines
+	// during the stream lifetime. We store them as atomic.Int64 nanosecond
+	// offsets from clientHeadersStartTime instead of time.Time because time.Time
+	// cannot be accessed atomically without a mutex and atomic.Int64 provides
+	// lock-free atomic operations.
+	clientHalfCloseStartTime atomic.Int64
+	serverHeadersStartTime   atomic.Int64
+	serverTrailersStartTime  atomic.Int64
+}
+
+// recordDuration records the elapsed time since the event start timestamp
+// stored in val to the histogram metric. val holds the start timestamp as a
+// nanosecond offset from cs.clientHeadersStartTime. It is a no-op if val has
+// not been set (value is 0).
+func (cs *clientStream) recordDuration(handle *estats.Float64HistoHandle, val *atomic.Int64) {
+	if offsetNs := val.Load(); offsetNs != 0 {
+		startTime := cs.clientHeadersStartTime.Add(time.Duration(offsetNs))
+		cs.recordMetric(handle, timeSince(startTime).Seconds())
+	}
+}
+
+// fireResponseHeadersReady fires the responseHeadersReady event, and records
+// the server_headers_duration metric exactly once upon firing.
+func (cs *clientStream) fireResponseHeadersReady() {
+	if cs.responseHeadersReady.Fire() {
+		cs.recordDuration(serverHeadersDurationMetric, &cs.serverHeadersStartTime)
+	}
+}
+
+// fireResponseTrailerReady fires the responseTrailerReady event, and records
+// the server_trailers_duration metric exactly once upon firing.
+func (cs *clientStream) fireResponseTrailerReady() {
+	if cs.responseTrailerReady.Fire() {
+		cs.recordDuration(serverTrailersDurationMetric, &cs.serverTrailersStartTime)
+	}
 }
 
 // Header returns the response headers received from the backend, potentially
@@ -853,18 +900,30 @@ func (cs *clientStream) Trailer() metadata.MD {
 }
 
 func (cs *clientStream) CloseSend() error {
+	if cs.discardRequests.Load() {
+		return nil
+	}
+	if cs.clientHalfCloseStartTime.Load() == 0 {
+		offset := timeSince(cs.clientHeadersStartTime)
+		cs.clientHalfCloseStartTime.CompareAndSwap(0, int64(offset))
+	}
+
 	s, err := cs.bypassProcStreamForClientMsg()
 	if err != nil {
 		return err
 	}
 	if s != nil {
-		return s.CloseSend()
+		cs.recordDuration(clientHalfCloseDurationMetric, &cs.clientHalfCloseStartTime)
+		err = s.CloseSend()
+		return err
 	}
 	// If external processor stream is active, client CloseSend is sent to the
 	// processor server as request message with `EndOfStreamWithoutMessage` set.
 	s, err = cs.sendClientReqToProcServer(cs.halfClose())
 	if s != nil {
-		return s.CloseSend()
+		cs.recordDuration(clientHalfCloseDurationMetric, &cs.clientHalfCloseStartTime)
+		err = s.CloseSend()
+		return err
 	}
 	return err
 }
@@ -1126,6 +1185,7 @@ func (cs *clientStream) requestForwardingToDataplaneLoop(msgType protoreflect.Me
 			// As per gRFC A93, ignore `end_of_stream_without_message` if
 			// `end_of_stream` is false.
 			if streamedResp.GetEndOfStream() && streamedResp.GetEndOfStreamWithoutMessage() {
+				cs.recordDuration(clientHalfCloseDurationMetric, &cs.clientHalfCloseStartTime)
 				dataplaneStream.CloseSend()
 				return
 			}
@@ -1141,6 +1201,7 @@ func (cs *clientStream) requestForwardingToDataplaneLoop(msgType protoreflect.Me
 			}
 
 			if streamedResp.GetEndOfStream() {
+				cs.recordDuration(clientHalfCloseDurationMetric, &cs.clientHalfCloseStartTime)
 				dataplaneStream.CloseSend()
 				return
 			}
@@ -1265,7 +1326,7 @@ func (cs *clientStream) recvFromProcServerLoop(newStream func(context.Context, .
 			// Signal that the response header is modified and ready to be sent to the
 			// client, so that if there is any buffered response body, it can be sent
 			// after the header.
-			cs.responseHeadersReady.Fire()
+			cs.fireResponseHeadersReady()
 
 		case resp.GetResponseTrailers() != nil:
 			if cs.config.processingModes.responseTrailerMode == modeSkip {
@@ -1287,7 +1348,7 @@ func (cs *clientStream) recvFromProcServerLoop(newStream func(context.Context, .
 			}
 			// Signal that the response trailer is modified and ready to be sent to
 			// the client.
-			cs.responseTrailerReady.Fire()
+			cs.fireResponseTrailerReady()
 		}
 	}
 }
@@ -1409,8 +1470,10 @@ func (cs *clientStream) createDataplaneStream(ctx context.Context, newStream fun
 	cs.dataplaneStream, cs.dataplaneCreationErr = newStream(ctx, opts...)
 	if cs.dataplaneCreationErr != nil {
 		cs.cancel()
+		return cs.dataplaneCreationErr
 	}
-	return cs.dataplaneCreationErr
+	cs.recordMetric(clientHeadersDurationMetric, timeSince(cs.clientHeadersStartTime).Seconds())
+	return nil
 }
 
 // failProcStream handles stream failures, recording errors or bypassing the
@@ -1528,7 +1591,7 @@ func (cs *clientStream) handleImmediateResponse(imm *v3procservicepb.ImmediateRe
 			cs.applyMutations(mutation, cs.responseTrailers)
 		}
 		cs.trailerErr.Store(err)
-		cs.responseTrailerReady.Fire()
+		cs.fireResponseTrailerReady()
 	} else {
 		cs.cancelStream(err)
 	}
@@ -1536,8 +1599,8 @@ func (cs *clientStream) handleImmediateResponse(imm *v3procservicepb.ImmediateRe
 
 func (cs *clientStream) triggerBypass() {
 	if cs.procStreamBypass.Fire() {
-		cs.responseHeadersReady.Fire()
-		cs.responseTrailerReady.Fire()
+		cs.fireResponseHeadersReady()
+		cs.fireResponseTrailerReady()
 	}
 }
 
@@ -1586,19 +1649,26 @@ func (cs *clientStream) initiateResponseHeaderProcessing() error {
 		}
 		return err
 	}
+	// Capture the start time for response headers after they have been
+	// successfully retrieved from the dataplane stream.
+	cs.serverHeadersStartTime.Store(int64(timeSince(cs.clientHeadersStartTime)))
 
 	if header == nil {
 		// A trailers-only response returns nil from dataplaneStream.Header().
 		header = dataplaneStream.Trailer()
 		if len(header) > 0 {
 			cs.trailersOnly = true
+			// For trailers-only, the trailers are retrieved during the header
+			// phase. Start timing them now since they will be processed as part
+			// of the header phase.
+			cs.serverTrailersStartTime.Store(int64(timeSince(cs.clientHeadersStartTime)))
 		}
 	}
 	cs.responseHeader = header
 	if cs.config.processingModes.responseHeaderMode != modeSend || cs.procStreamBypass.HasFired() {
 		// If header does not need to be sent to the external processor, unblock
 		// the functions waiting on header modifications.
-		cs.responseHeadersReady.Fire()
+		cs.fireResponseHeadersReady()
 		return nil
 	}
 
@@ -1628,13 +1698,18 @@ func (cs *clientStream) initiateResponseTrailerProcessing() {
 		case <-cs.ctx.Done():
 		}
 		cs.responseTrailers = cs.responseHeader
-		cs.responseTrailerReady.Fire()
+		cs.fireResponseTrailerReady()
 		// Gracefully half-close the external processor stream for trailers-only
 		// responses once header modifications finish.
 		cs.closeProcSend()
 		return
 	}
 	cs.responseTrailers = cs.dataplaneStream.Trailer()
+	// Capture the start time for response trailers after they have been
+	// successfully retrieved from the dataplane stream.
+	offset := timeSince(cs.clientHeadersStartTime)
+	cs.serverTrailersStartTime.Store(int64(offset))
+
 	if cs.config.processingModes.responseTrailerMode == modeSend && !cs.procStreamBypass.HasFired() {
 		select {
 		case cs.procSendCh <- cs.commonStream.responseTrailers(cs.responseTrailers):
@@ -1643,7 +1718,7 @@ func (cs *clientStream) initiateResponseTrailerProcessing() {
 		case <-cs.procStreamBypass.Done():
 		}
 	} else {
-		cs.responseTrailerReady.Fire()
+		cs.fireResponseTrailerReady()
 	}
 	// Gracefully half-close the external processor stream after forwarding response
 	// trailers to signal that all responses have completely processed.
