@@ -20,6 +20,7 @@ package grpc_test
 
 import (
 	"context"
+	"io"
 	"strings"
 	"testing"
 	"time"
@@ -143,5 +144,94 @@ func (s) TestUnaryClient_ServerStreamingMismatch(t *testing.T) {
 				t.Errorf("Unexpected error message: got %v, want %v", err.Error(), test.wantErrorContains)
 			}
 		})
+	}
+}
+
+// interceptorStream wraps a ClientStream to record invocations of RecvMsg and
+// CloseSend hooks across downstream interceptors.
+type interceptorStream struct {
+	grpc.ClientStream
+	recvMsgCount int
+	closeSend    bool
+}
+
+func (s *interceptorStream) RecvMsg(m any) error {
+	s.recvMsgCount++
+	return s.ClientStream.RecvMsg(m)
+}
+
+func (s *interceptorStream) CloseSend() error {
+	s.closeSend = true
+	return s.ClientStream.CloseSend()
+}
+
+// TestDefaultStreamInterceptor verifies that defaultStreamInterceptor
+// automatically triggers CloseSend on non-client-streaming RPCs right after
+// SendMsg, and calls RecvMsg a second time on non-server-streaming RPCs to
+// consume trailers and io.EOF.
+func (s) TestDefaultStreamInterceptor(t *testing.T) {
+	var iStream *interceptorStream
+	// Define a client-side stream interceptor that wraps the ClientStream to
+	// monitor hook invocations across RPC calls.
+	clientInt := func(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
+		cs, err := streamer(ctx, desc, cc, method, opts...)
+		if err != nil {
+			return nil, err
+		}
+		iStream = &interceptorStream{ClientStream: cs}
+		return iStream, nil
+	}
+
+	// Setup a service implementing both a client-streaming RPC and a
+	// server-streaming RPC.
+	ss := &stubserver.StubServer{
+		StreamingOutputCallF: func(_ *testpb.StreamingOutputCallRequest, stream testgrpc.TestService_StreamingOutputCallServer) error {
+			return stream.Send(&testpb.StreamingOutputCallResponse{})
+		},
+		StreamingInputCallF: func(stream testgrpc.TestService_StreamingInputCallServer) error {
+			for {
+				if _, err := stream.Recv(); err != nil {
+					if err == io.EOF {
+						return stream.SendAndClose(&testpb.StreamingInputCallResponse{})
+					}
+					return err
+				}
+			}
+		},
+	}
+	if err := ss.Start(nil, grpc.WithStreamInterceptor(clientInt)); err != nil {
+		t.Fatal("Error starting server:", err)
+	}
+	defer ss.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	// Make a client-streaming RPC. When CloseAndRecv invokes RecvMsg once to get
+	// the single reply message on a non-server-streaming RPC,
+	// defaultStreamInterceptor automatically calls a second RecvMsg on the
+	// underlying client stream to consume io.EOF and receive trailers.
+	stream, err := ss.Client.StreamingInputCall(ctx)
+	if err != nil {
+		t.Fatal("Error calling StreamingInputCall:", err)
+	}
+	if err := stream.Send(&testpb.StreamingInputCallRequest{}); err != nil {
+		t.Fatal("Error sending request:", err)
+	}
+	if _, err := stream.CloseAndRecv(); err != nil {
+		t.Fatal("Error running CloseAndRecv:", err)
+	}
+	if iStream.recvMsgCount != 2 {
+		t.Fatalf("StreamingInputCall RecvMsg was called %v times, want 2 times", iStream.recvMsgCount)
+	}
+
+	// Make a server-streaming RPC. Since StreamingOutputCall is not
+	// client-streaming, defaultStreamInterceptor immediately invokes CloseSend
+	// right after sending the request message to signal downstream interceptors.
+	if _, err := ss.Client.StreamingOutputCall(ctx, &testpb.StreamingOutputCallRequest{}); err != nil {
+		t.Fatal("Error calling StreamingOutputCall:", err)
+	}
+	if !iStream.closeSend {
+		t.Fatal("CloseSend not called after SendMsg on non-client-streaming RPC")
 	}
 }

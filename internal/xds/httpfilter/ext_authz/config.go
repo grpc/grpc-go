@@ -19,13 +19,14 @@
 package extauthz
 
 import (
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal/xds/httpfilter"
 	"google.golang.org/grpc/internal/xds/matcher"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 )
 
-// baseConfig contains the configuration for the external authorization filter.
-type baseConfig struct {
+// config contains the configuration for the external authorization filter.
+type config struct {
 	httpfilter.FilterConfig
 	// grpcService is the configuration for the external authorization server.
 	grpcService xdsresource.GRPCServiceConfig
@@ -45,21 +46,18 @@ type baseConfig struct {
 	// `x-envoy-auth-failure-mode-allowed: true` header to the data plane RPC
 	// when the call to the external authorization server fails.
 	failureModeAllowHeaderAdd bool
-	// statusOnError is a HTTP status code to use when the external
+	// statusOnError is the gRPC status code to use when the external
 	// authorization is disabled or when the call to the external authorization
-	// server fails. The HTTP status code will be converted to a gRPC status
-	// code using the mapping defined in
-	// https://github.com/grpc/grpc/blob/master/doc/http-grpc-status-mapping.md.
+	// server fails.
 	//
-	// If unset, it defaults to 403 (Forbidden), which translates to gRPC status
-	// PERMISSION_DENIED.
-	statusOnError int32
+	// The default value is PERMISSION_DENIED.
+	statusOnError codes.Code
 	// allowedHeaders specifies the headers that are allowed to be sent to the
 	// external authorization server. If unset, all headers are allowed.
 	allowedHeaders []matcher.StringMatcher
 	// disallowedHeaders specifies the headers that will not be sent to the
-	// external authorization server. This overrides the above allowedHeaders if
-	// a header matches both.
+	// external authorization server. This takes precedence over the
+	// allowedHeaders field.
 	disallowedHeaders []matcher.StringMatcher
 	// decoderHeaderMutationRules specifies the rules for what modifications an
 	// external authorization server may make to headers sent on the data plane
@@ -76,7 +74,6 @@ type baseConfig struct {
 type fraction struct {
 	// numerator is the numerator of the fraction.
 	numerator uint32
-	// denominator is the denominator of the fraction. If unset, it defaults
-	// to 100.
+	// denominator is the denominator of the fraction.
 	denominator uint32
 }

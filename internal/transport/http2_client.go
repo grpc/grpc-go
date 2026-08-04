@@ -554,8 +554,6 @@ func (t *http2Client) createHeaderFields(ctx context.Context, callHdr *CallHdr) 
 	if err != nil {
 		return nil, err
 	}
-	// TODO(mmukhi): Benchmark if the performance gets better if count the metadata and other header fields
-	// first and create a slice of that exact size.
 	// Make the slice of certain predictable size to reduce allocations made by append.
 	hfLen := 7 // :method, :scheme, :path, :authority, content-type, user-agent, te
 	hfLen += len(authData) + len(callAuthData)
@@ -574,6 +572,21 @@ func (t *http2Client) createHeaderFields(ctx context.Context, callHdr *CallHdr) 
 	}
 	if _, ok := ctx.Deadline(); ok {
 		hfLen++
+	}
+	// Count the metadata header fields as well so the slice is not reallocated
+	// while they are appended below. Reserved headers are dropped when writing,
+	// so this may slightly over-count, which is preferable to growing the slice.
+	md, added, mdOK := metadataFromOutgoingContextRaw(ctx)
+	if mdOK {
+		for _, vv := range md {
+			hfLen += len(vv)
+		}
+		for _, vv := range added {
+			hfLen += len(vv) / 2
+		}
+	}
+	for _, vv := range t.md {
+		hfLen += len(vv)
 	}
 	headerFields := make([]hpack.HeaderField, 0, hfLen)
 	headerFields = append(headerFields, hpack.HeaderField{Name: ":method", Value: "POST"})
@@ -619,7 +632,7 @@ func (t *http2Client) createHeaderFields(ctx context.Context, callHdr *CallHdr) 
 		headerFields = append(headerFields, hpack.HeaderField{Name: k, Value: encodeMetadataHeader(k, v)})
 	}
 
-	if md, added, ok := metadataFromOutgoingContextRaw(ctx); ok {
+	if mdOK {
 		var k string
 		for k, vv := range md {
 			// HTTP doesn't allow you to set pseudoheaders after non pseudoheaders were set.
@@ -805,9 +818,8 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr, handler s
 			close(s.headerChan)
 		}
 	}
-	hdr := &headerFrame{
-		hf:        headerFields,
-		endStream: false,
+	hdr := &clientHeaders{
+		hf: headerFields,
 		initStream: func(uint32) error {
 			t.mu.Lock()
 			// TODO: handle transport closure in loopy instead and remove this
@@ -1227,27 +1239,33 @@ func (t *http2Client) handleData(f *parsedDataFrame) {
 			t.closeStream(s, io.EOF, true, http2.ErrCodeFlowControl, status.New(codes.Internal, err.Error()), nil, false)
 			return
 		}
+	}
 
-		if s.nonGRPCStatus != nil {
-			// The frame should be handled as a non-gRPC response body
-			st := s.handleNonGRPCData(f)
-			if st != nil {
-				t.closeStream(s, st.Err(), true, http2.ErrCodeProtocol, st, nil, true)
-				return
-			}
-			if w := s.fc.onRead(size); w > 0 {
+	if s.nonGRPCStatus != nil {
+		// The frame should be handled as a non-gRPC response body. A non-nil
+		// status also covers END_STREAM, so no separate handling is needed below.
+		st := s.handleNonGRPCData(f)
+		if st != nil {
+			t.closeStream(s, st.Err(), true, http2.ErrCodeProtocol, st, nil, true)
+			return
+		}
+		if w := s.fc.onRead(size); w > 0 {
+			t.controlBuf.put(&outgoingWindowUpdate{
+				streamID:  s.id,
+				increment: w,
+			})
+		}
+		return
+	}
+
+	if size > 0 {
+		dataLen := f.data.Len()
+		if f.Header().Flags.Has(http2.FlagDataPadded) {
+			if w := s.fc.onRead(size - uint32(dataLen)); w > 0 {
 				t.controlBuf.put(&outgoingWindowUpdate{
 					streamID:  s.id,
 					increment: w,
 				})
-			}
-			return
-		}
-
-		dataLen := f.data.Len()
-		if f.Header().Flags.Has(http2.FlagDataPadded) {
-			if w := s.fc.onRead(size - uint32(dataLen)); w > 0 {
-				t.controlBuf.put(&outgoingWindowUpdate{s.id, w})
 			}
 		}
 		if dataLen > 0 {
@@ -1875,7 +1893,7 @@ func (t *http2Client) getOutFlowWindow() int64 {
 	resp := make(chan uint32, 1)
 	timer := time.NewTimer(time.Second)
 	defer timer.Stop()
-	t.controlBuf.put(&outFlowControlSizeRequest{resp})
+	t.controlBuf.put(&outFlowControlSizeRequest{resp: resp})
 	select {
 	case sz := <-resp:
 		return int64(sz)

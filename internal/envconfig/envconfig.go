@@ -141,6 +141,24 @@ var (
 	// feature if unforeseen issues arise, and it will be removed in a future
 	// release.
 	EnableHTTPFramerReadBufferPooling = boolFromEnv("GRPC_GO_EXPERIMENTAL_HTTP_FRAMER_READ_BUFFER_POOLING", true)
+
+	// ControlBufferThrottleLimit is the maximum number of control frames that can
+	// be queued in the control buffer before throttling is applied. The value
+	// must be between 1 and 10,000, and is set to 100 by default.
+	//
+	// This environment variable serves as an escape hatch to increase the
+	// throttling limit if unforeseen issues arise, and it will be removed in a
+	// future release.
+	//
+	// TODO: Remove this env var once v1.83.0 is release.
+	ControlBufferThrottleLimit = uint64FromEnv("GRPC_GO_EXPERIMENTAL_CONTROL_BUFFER_THROTTLE_LIMIT", 100, 1, 10000)
+
+	// ALTSMaxFrameSize is the maximum frame size for ALTS in bytes.
+	// This can be overridden by setting the environment variable
+	// "GRPC_GO_EXPERIMENTAL_ALTS_MAX_FRAME_SIZE" (min: 4096, max: 512*1024, capped at
+	// 512KiB to match altsWriteBufferMaxSize in
+	// credentials/alts/internal/conn/record.go).
+	ALTSMaxFrameSize = uint64FromEnv("GRPC_GO_EXPERIMENTAL_ALTS_MAX_FRAME_SIZE", 4096, 4096, 512*1024)
 )
 
 func boolFromEnv(envVar string, def bool) bool {

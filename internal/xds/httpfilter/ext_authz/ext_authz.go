@@ -21,8 +21,11 @@ package extauthz
 
 import (
 	"fmt"
+	"net/http"
 
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal/envconfig"
+	"google.golang.org/grpc/internal/transport"
 	"google.golang.org/grpc/internal/xds/httpfilter"
 	"google.golang.org/grpc/internal/xds/matcher"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
@@ -30,7 +33,7 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
-	v3extauthzfilterpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/ext_authz/v3"
+	v3extauthzpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/ext_authz/v3"
 	v3typepb "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 )
 
@@ -60,21 +63,30 @@ func parseFilterEnabled(fp *v3corepb.RuntimeFractionalPercent) (fraction, error)
 	if fp == nil {
 		return fraction{numerator: 100, denominator: 100}, nil
 	}
-	pct := fp.GetDefaultValue()
-	if pct == nil {
+	fracPercent := fp.GetDefaultValue()
+	if fracPercent == nil {
 		return fraction{}, fmt.Errorf("extauthz: missing default_value in filter_enabled")
 	}
 
-	num := pct.GetNumerator()
-	switch pct.GetDenominator() {
-	case v3typepb.FractionalPercent_HUNDRED:
-		return fraction{numerator: num, denominator: 100}, nil
+	den := uint32(100)
+	switch fracPercent.GetDenominator() {
 	case v3typepb.FractionalPercent_TEN_THOUSAND:
-		return fraction{numerator: num, denominator: 10000}, nil
+		den = 10000
 	case v3typepb.FractionalPercent_MILLION:
-		return fraction{numerator: num, denominator: 1000000}, nil
+		den = 1000000
 	}
-	return fraction{numerator: num, denominator: 100}, nil
+
+	// If the numerator exceeds the denominator, cap the fractional value at 100%.
+	num := min(fracPercent.GetNumerator(), den)
+	return fraction{numerator: num, denominator: den}, nil
+}
+
+// grpcStatusCode converts an HTTP status code to a gRPC status code.
+func grpcStatusCode(httpStatus int32) codes.Code {
+	if code, ok := transport.HTTPStatusConvTab[int(httpStatus)]; ok {
+		return code
+	}
+	return codes.Unknown
 }
 
 func (builder) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, error) {
@@ -82,7 +94,7 @@ func (builder) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, er
 	if !ok {
 		return nil, fmt.Errorf("extauthz: error parsing config %v: unknown type %T, want *anypb.Any", cfg, cfg)
 	}
-	msg := new(v3extauthzfilterpb.ExtAuthz)
+	msg := new(v3extauthzpb.ExtAuthz)
 	if err := m.UnmarshalTo(msg); err != nil {
 		return nil, fmt.Errorf("extauthz: failed to unmarshal config: %v", err)
 	}
@@ -101,12 +113,18 @@ func (builder) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, er
 	}
 
 	var denyAtDisable bool
-	if df := msg.GetDenyAtDisable(); df != nil {
-		if df.GetDefaultValue() == nil {
+	if denyAtDisableFlag := msg.GetDenyAtDisable(); denyAtDisableFlag != nil {
+		if denyAtDisableFlag.GetDefaultValue() == nil {
 			return nil, fmt.Errorf("extauthz: missing default_value in deny_at_disable")
 		}
-		denyAtDisable = df.GetDefaultValue().GetValue()
+		denyAtDisable = denyAtDisableFlag.GetDefaultValue().GetValue()
 	}
+
+	httpStatus := int32(http.StatusForbidden)
+	if st := msg.GetStatusOnError().GetCode(); st != 0 {
+		httpStatus = int32(st)
+	}
+	statusOnError := grpcStatusCode(httpStatus)
 
 	mutationRules, err := httpfilter.HeaderMutationRulesFromProto(msg.GetDecoderHeaderMutationRules())
 	if err != nil {
@@ -128,13 +146,13 @@ func (builder) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, er
 		}
 	}
 
-	return baseConfig{
+	return config{
 		grpcService:                server,
 		filterEnabled:              filterEnabled,
 		denyAtDisable:              denyAtDisable,
 		failureModeAllow:           msg.GetFailureModeAllow(),
 		failureModeAllowHeaderAdd:  msg.GetFailureModeAllowHeaderAdd(),
-		statusOnError:              int32(msg.GetStatusOnError().GetCode()),
+		statusOnError:              statusOnError,
 		allowedHeaders:             allowedHeaders,
 		disallowedHeaders:          disallowedHeaders,
 		decoderHeaderMutationRules: mutationRules,
@@ -142,12 +160,18 @@ func (builder) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, er
 	}, nil
 }
 
+// ParseFilterConfigOverride parses the provided override configuration.
+//
+// Note that ExtAuthzPerRoute is unmarshaled to verify its syntax during xDS
+// resource validation, no filter configuration object is returned. Per-route
+// disabling is supported via the generic FilterConfig wrapper mechanism rather
+// than the ExtAuthzPerRoute.disabled field directly.
 func (builder) ParseFilterConfigOverride(overrideCfg proto.Message) (httpfilter.FilterConfig, error) {
 	m, ok := overrideCfg.(*anypb.Any)
 	if !ok {
 		return nil, fmt.Errorf("extauthz: error parsing override config %v: unknown type %T, want *anypb.Any", overrideCfg, overrideCfg)
 	}
-	msg := new(v3extauthzfilterpb.ExtAuthzPerRoute)
+	msg := new(v3extauthzpb.ExtAuthzPerRoute)
 	if err := m.UnmarshalTo(msg); err != nil {
 		return nil, fmt.Errorf("extauthz: failed to unmarshal override config %v: %v", overrideCfg, err)
 	}
