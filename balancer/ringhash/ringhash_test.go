@@ -60,6 +60,8 @@ func setupTest(t *testing.T, endpoints []resolver.Endpoint) (*testutils.Balancer
 	if b == nil {
 		t.Fatalf("builder.Build(%s) failed and returned nil", Name)
 	}
+	t.Cleanup(func() { b.Close() })
+
 	if err := b.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState:  resolver.State{Endpoints: endpoints},
 		BalancerConfig: testConfig,
