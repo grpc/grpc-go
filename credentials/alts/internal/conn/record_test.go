@@ -467,12 +467,12 @@ func (s) TestNewConnNegotiatedMaxFrameSize(t *testing.T) {
 		negotiatedMaxFrameSize int
 		wantMaxRecordLen       int
 	}{
-		{"not negotiated (0)", 0, altsRecordDefaultLength},
-		{"smaller than default (10)", 10, altsRecordDefaultLength},
-		{"smaller than default (1024)", 1024, altsRecordDefaultLength},
-		{"negotiated 4KB", 4 * 1024, 4 * 1024},
-		{"negotiated 16KB", 16 * 1024, 16 * 1024},
-		{"negotiated 64KB", 64 * 1024, 64 * 1024},
+		{"NotNegotiated", 0, altsRecordDefaultLength},
+		{"SmallerThanDefault_10B", 10, altsRecordDefaultLength},
+		{"SmallerThanDefault_1024B", 1024, altsRecordDefaultLength},
+		{"Negotiated_4KB", 4 * 1024, 4 * 1024},
+		{"Negotiated_16KB", 16 * 1024, 16 * 1024},
+		{"Negotiated_64KB", 64 * 1024, 64 * 1024},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			tcConn := testConn{}

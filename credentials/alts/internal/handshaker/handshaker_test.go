@@ -412,7 +412,7 @@ func (s) TestHandshakeMaxFrameSizeNegotiation(t *testing.T) {
 		t.Fatalf("ClientHandshake() failed: %v", err)
 	}
 	if sc == nil {
-		t.Fatalf("expected non-nil secure conn")
+		t.Fatal("ClientHandshake() returned nil conn, want non-nil")
 	}
 
 	// Clear any handshake frames written to out during ClientHandshake.
@@ -421,17 +421,17 @@ func (s) TestHandshakeMaxFrameSizeNegotiation(t *testing.T) {
 	// Write a payload large enough to produce a full ALTS frame.
 	payload := make([]byte, 128*1024)
 	if _, err := sc.Write(payload); err != nil {
-		t.Fatalf("sc.Write() failed: %v", err)
+		t.Fatalf("Secure conn Write() failed: %v", err)
 	}
 	// In ALTS wire format, the first 4 bytes of a frame contain the little-endian
 	// frame length (frameLen). Writing a large payload splits it into frames of
 	// the maximum calculated size. We verify the connection's max frame size by
 	// asserting that the total wire frame length (4 + frameLen) equals 64 * 1024.
 	if len(out.Bytes()) < 4 {
-		t.Fatalf("output buffer too small: %d bytes", len(out.Bytes()))
+		t.Fatalf("Output buffer too small: %d bytes", len(out.Bytes()))
 	}
 	frameLen := int(binary.LittleEndian.Uint32(out.Bytes()[:4]))
 	if got, want := 4+frameLen, 64*1024; got != want {
-		t.Errorf("wire frame size = %v, want %v", got, want)
+		t.Errorf("Wire frame size = %v, want %v", got, want)
 	}
 }
