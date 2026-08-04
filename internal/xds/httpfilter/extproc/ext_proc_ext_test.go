@@ -3478,7 +3478,7 @@ func (s) TestObservabilityAllSendStreaming(t *testing.T) {
 
 	// Start a test stub service.
 	stub := stubserver.StartTestService(t, &stubserver.StubServer{
-		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
 			// Read client headers
 			if _, ok := metadata.FromIncomingContext(stream.Context()); !ok {
 				return status.Error(codes.InvalidArgument, "missing incoming metadata")
@@ -4183,7 +4183,7 @@ func (s) TestObservabilityRequestAttributesLifecycle(t *testing.T) {
 
 	// Start a test stub service.
 	stub := stubserver.StartTestService(t, &stubserver.StubServer{
-		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
 			if _, ok := metadata.FromIncomingContext(stream.Context()); !ok {
 				return status.Error(codes.InvalidArgument, "missing incoming metadata")
 			}
@@ -4416,7 +4416,7 @@ func (s) TestObservabilityMetricsStreaming(t *testing.T) {
 
 	// Start a test stub service.
 	stub := stubserver.StartTestService(t, &stubserver.StubServer{
-		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
 			if err := stream.SendHeader(metadata.Pairs("x-resp-header-from-server", "present")); err != nil {
 				return err
 			}
@@ -4535,7 +4535,7 @@ func (s) TestObservabilityTrailersOnly(t *testing.T) {
 	})
 
 	stub := stubserver.StartTestService(t, &stubserver.StubServer{
-		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
 			// Wait for client request message before failing.
 			_, err := stream.Recv()
 			if err != nil {
