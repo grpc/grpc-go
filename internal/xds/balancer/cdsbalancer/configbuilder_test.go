@@ -326,7 +326,7 @@ func (s) TestBuildLeafClusterConfigJSON(t *testing.T) {
 		t.Fatalf("Failed to create LRS server config for testing: %v", err)
 	}
 
-	gotConfig, _, err := buildLeafClusterConfigJSON(&priorityConfig{
+	gotConfig, _, err := buildLeafClusterConfigJSON([]*priorityConfig{{
 		clusterConfig: &xdsresource.ClusterConfig{
 			Cluster: &xdsresource.ClusterUpdate{
 				ClusterName:     testClusterName,
@@ -353,7 +353,7 @@ func (s) TestBuildLeafClusterConfigJSON(t *testing.T) {
 		},
 		outlierDetection: noopODCfg,
 		childNameGen:     newNameGenerator(0),
-	}, &iserviceconfig.BalancerConfig{Name: roundrobin.Name})
+	}}, &iserviceconfig.BalancerConfig{Name: roundrobin.Name})
 	if err != nil {
 		t.Fatalf("buildLeafClusterConfigJSON(...) failed: %v", err)
 	}
