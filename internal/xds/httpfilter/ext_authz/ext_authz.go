@@ -33,7 +33,7 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
-	v3extauthzfilterpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/ext_authz/v3"
+	v3extauthzpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/ext_authz/v3"
 	v3typepb "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 )
 
@@ -94,7 +94,7 @@ func (builder) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, er
 	if !ok {
 		return nil, fmt.Errorf("extauthz: error parsing config %v: unknown type %T, want *anypb.Any", cfg, cfg)
 	}
-	msg := new(v3extauthzfilterpb.ExtAuthz)
+	msg := new(v3extauthzpb.ExtAuthz)
 	if err := m.UnmarshalTo(msg); err != nil {
 		return nil, fmt.Errorf("extauthz: failed to unmarshal config: %v", err)
 	}
@@ -171,7 +171,7 @@ func (builder) ParseFilterConfigOverride(overrideCfg proto.Message) (httpfilter.
 	if !ok {
 		return nil, fmt.Errorf("extauthz: error parsing override config %v: unknown type %T, want *anypb.Any", overrideCfg, overrideCfg)
 	}
-	msg := new(v3extauthzfilterpb.ExtAuthzPerRoute)
+	msg := new(v3extauthzpb.ExtAuthzPerRoute)
 	if err := m.UnmarshalTo(msg); err != nil {
 		return nil, fmt.Errorf("extauthz: failed to unmarshal override config %v: %v", overrideCfg, err)
 	}
