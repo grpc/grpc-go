@@ -25,7 +25,6 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/base"
 	"google.golang.org/grpc/connectivity"
-	"google.golang.org/grpc/internal/balancer/nop"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/pretty"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
@@ -41,8 +40,8 @@ import (
 const cdsName = "cds_experimental"
 
 var (
-	// newChildBalancer is a helper function to build a new child balancer and its
-	// config parser, and will be overridden in unittests.
+	// newChildBalancer is a helper function to build a new child balancer
+	// and its config parser, and will be overridden in unittests.
 	newChildBalancer = func(name string, cc balancer.ClientConn, opts balancer.BuildOptions) (balancer.Balancer, balancer.ConfigParser, error) {
 		builder := balancer.Get(name)
 		if builder == nil {
@@ -69,26 +68,11 @@ type bb struct{}
 
 // Build creates a new CDS balancer with the ClientConn.
 func (bb) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
-	builder := balancer.Get(priority.Name)
-	if builder == nil {
-		// Shouldn't happen, registered through imported Priority builder. Still,
-		// defensive programming.
-		logger.Errorf("%q LB policy is needed but not registered", priority.Name)
-		return nop.NewBalancer(cc, fmt.Errorf("%q LB policy is needed but not registered", priority.Name))
-	}
-	parser, ok := builder.(balancer.ConfigParser)
-	if !ok {
-		// Shouldn't happen, imported Priority builder has this method.
-		logger.Errorf("%q LB policy does not implement a config parser", priority.Name)
-		return nop.NewBalancer(cc, fmt.Errorf("%q LB policy does not implement a config parser", priority.Name))
-	}
-
 	b := &cdsBalancer{
-		bOpts:             opts,
-		childConfigParser: parser,
-		clusterConfigs:    make(map[string]*xdsresource.ClusterResult),
-		priorityConfigs:   make(map[string]*priorityConfig),
-		cc:                cc,
+		bOpts:           opts,
+		clusterConfigs:  make(map[string]*xdsresource.ClusterResult),
+		priorityConfigs: make(map[string]*priorityConfig),
+		cc:              cc,
 	}
 	b.logger = prefixLogger(b)
 	b.logger.Infof("Created")
