@@ -51,9 +51,9 @@ var (
 
 	// TimeNowFunc returns the current time.Time, and can be overridden for
 	// testing purposes.
-	TimeNowFunc = time.Now
+	TimeNowFunc func() time.Time
 
 	// TimeSinceFunc returns the time elapsed, and can be overridden for testing
 	// purposes.
-	TimeSinceFunc = time.Since
+	TimeSinceFunc func(t time.Time) time.Duration
 )

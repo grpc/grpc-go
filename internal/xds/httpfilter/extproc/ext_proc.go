@@ -65,6 +65,8 @@ func init() {
 			httpfilter.UnregisterForTesting(typeURL)
 		}
 	}
+	iextproc.TimeNowFunc = time.Now
+	iextproc.TimeSinceFunc = time.Since
 }
 
 var metadataFromOutgoingContextRaw = internal.FromOutgoingContextRaw.(func(context.Context) (metadata.MD, [][]string, bool))
@@ -422,7 +424,7 @@ type commonStream struct {
 
 	metricsRecorder        estats.MetricsRecorder
 	target                 string
-	clientHeadersStartTime time.Time
+	clientHeadersStartTime time.Time // holds the start time of client headers processing for metrics and relative timestamp calculations
 }
 
 func (cs *commonStream) recordMetric(handle *estats.Float64HistoHandle, duration float64) {

@@ -4425,7 +4425,7 @@ func overrideTimeForMetricsTesting(t *testing.T) {
 	curTime := time.Unix(1000, 0)
 	step := 125 * time.Millisecond
 
-	// TimeNowFunc returns the current mock time without advancing it, ensuring
+	// TimeNowFunc returns the current fake time without advancing it, ensuring
 	// that any start timestamp captured during a stream phase is recorded as
 	// curTime.
 	internal.TimeNowFunc = func() time.Time {
@@ -4738,11 +4738,11 @@ func (s) TestStreamingMetrics(t *testing.T) {
 
 // verifyMetric is a helper function that asserts the properties of a recorded
 // metric. It verifies the metric name, labels (grpc.target), and that the
-// recorded duration matches expectedDuration.
-func verifyMetric(t *testing.T, md stats.MetricsData, expectedName string, expectedTarget string, expectedDuration float64) {
+// recorded duration matches wantDuration.
+func verifyMetric(t *testing.T, md stats.MetricsData, wantName string, wantTarget string, wantDuration float64) {
 	t.Helper()
-	if md.Handle.Name != expectedName {
-		t.Fatalf("Got metric %s, want %s", md.Handle.Name, expectedName)
+	if md.Handle.Name != wantName {
+		t.Fatalf("Got metric %s, want %s", md.Handle.Name, wantName)
 	}
 	labels := make(map[string]string)
 	for i, k := range md.LabelKeys {
@@ -4750,10 +4750,10 @@ func verifyMetric(t *testing.T, md stats.MetricsData, expectedName string, expec
 			labels[k] = md.LabelVals[i]
 		}
 	}
-	if gotTarget := labels["grpc.target"]; gotTarget != expectedTarget {
-		t.Fatalf("Metric %s: grpc.target label = %q, want %q", expectedName, gotTarget, expectedTarget)
+	if gotTarget := labels["grpc.target"]; gotTarget != wantTarget {
+		t.Fatalf("Metric %s: grpc.target label = %q, want %q", wantName, gotTarget, wantTarget)
 	}
-	if md.FloatIncr != expectedDuration {
-		t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", expectedName, md.FloatIncr, expectedDuration)
+	if md.FloatIncr != wantDuration {
+		t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", wantName, md.FloatIncr, wantDuration)
 	}
 }
