@@ -31,6 +31,7 @@ import (
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/optional"
 	"google.golang.org/grpc/internal/xds/httpfilter"
+	iextproc "google.golang.org/grpc/internal/xds/httpfilter/extproc/internal"
 	"google.golang.org/grpc/internal/xds/matcher"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 	"google.golang.org/grpc/metadata"
@@ -99,9 +100,9 @@ var cmpOpts = []cmp.Option{
 }
 
 func (s) TestParseFilterConfig_Success(t *testing.T) {
-	origParseGRPCServiceConfig := parseGRPCServiceConfig
-	defer func() { parseGRPCServiceConfig = origParseGRPCServiceConfig }()
-	parseGRPCServiceConfig = testParseGRPCServiceConfig
+	origParseGRPCServiceConfig := iextproc.ParseGRPCServiceConfig
+	defer func() { iextproc.ParseGRPCServiceConfig = origParseGRPCServiceConfig }()
+	iextproc.ParseGRPCServiceConfig = testParseGRPCServiceConfig
 
 	tests := []struct {
 		name    string
@@ -230,9 +231,9 @@ func (s) TestParseFilterConfig_Success(t *testing.T) {
 }
 
 func (s) TestParseFilterConfig_Errors(t *testing.T) {
-	origParseGRPCServiceConfig := parseGRPCServiceConfig
-	defer func() { parseGRPCServiceConfig = origParseGRPCServiceConfig }()
-	parseGRPCServiceConfig = testParseGRPCServiceConfig
+	origParseGRPCServiceConfig := iextproc.ParseGRPCServiceConfig
+	defer func() { iextproc.ParseGRPCServiceConfig = origParseGRPCServiceConfig }()
+	iextproc.ParseGRPCServiceConfig = testParseGRPCServiceConfig
 
 	tests := []struct {
 		name    string
@@ -599,12 +600,12 @@ func (s) TestParseFilterConfigOverride_Errors(t *testing.T) {
 }
 
 func (s) TestBuildClientInterceptor_Success(t *testing.T) {
-	origCreateExtProcChannel := createExtProcChannel
-	createExtProcChannel = func(cfg xdsresource.GRPCServiceConfig) (grpc.ClientConnInterface, func() error, error) {
+	origCreateExtProcChannel := iextproc.CreateExtProcChannel
+	iextproc.CreateExtProcChannel = func(cfg xdsresource.GRPCServiceConfig) (grpc.ClientConnInterface, func() error, error) {
 		conn, _ := grpc.NewClient(cfg.TargetURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		return conn, conn.Close, nil
 	}
-	defer func() { createExtProcChannel = origCreateExtProcChannel }()
+	defer func() { iextproc.CreateExtProcChannel = origCreateExtProcChannel }()
 
 	tests := []struct {
 		name       string
@@ -828,15 +829,15 @@ func (s) TestBuildClientInterceptor_Success(t *testing.T) {
 }
 
 func (s) TestBuildClientInterceptor_Failure(t *testing.T) {
-	origCreateExtProcChannel := createExtProcChannel
-	createExtProcChannel = func(cfg xdsresource.GRPCServiceConfig) (grpc.ClientConnInterface, func() error, error) {
+	origCreateExtProcChannel := iextproc.CreateExtProcChannel
+	iextproc.CreateExtProcChannel = func(cfg xdsresource.GRPCServiceConfig) (grpc.ClientConnInterface, func() error, error) {
 		if cfg.TargetURI == "error-uri" {
 			return nil, nil, fmt.Errorf("dial error")
 		}
 		conn, _ := grpc.NewClient(cfg.TargetURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		return conn, conn.Close, nil
 	}
-	defer func() { createExtProcChannel = origCreateExtProcChannel }()
+	defer func() { iextproc.CreateExtProcChannel = origCreateExtProcChannel }()
 
 	// incorrectFilterConfig embeds httpfilter.FilterConfig but is not of type
 	// baseConfig/overrideConfig, and is used to test incorrect config types being
@@ -874,7 +875,7 @@ func (s) TestBuildClientInterceptor_Failure(t *testing.T) {
 					TargetURI: "error-uri",
 				},
 			},
-			wantErr: "extproc: failed to create client: dial error",
+			wantErr: fmt.Sprintf("extproc: failed to create channel to the external processor server %q: dial error", "error-uri"),
 		},
 		{
 			name: "ChannelCreationFailureInOverride",
@@ -888,7 +889,7 @@ func (s) TestBuildClientInterceptor_Failure(t *testing.T) {
 					TargetURI: "error-uri",
 				}),
 			},
-			wantErr: "extproc: failed to create client: dial error",
+			wantErr: fmt.Sprintf("extproc: failed to create channel to the external processor server %q: dial error", "error-uri"),
 		},
 	}
 	for _, tc := range tests {
