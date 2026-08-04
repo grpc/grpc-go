@@ -235,6 +235,50 @@ type clientFilter struct {
 
 func (*clientFilter) Close() {}
 
+// getProcChannel returns an existing refcounted client from the map if present
+// and its refcount is incremented successfully.
+func (cf *clientFilter) getProcChannel(key grpcServiceKey) *grpcsync.RefCounted[v3procservicegrpc.ExternalProcessorClient] {
+	cf.mu.Lock()
+	defer cf.mu.Unlock()
+	if rc, ok := cf.procChannels[key]; ok && rc.TryIncrement() {
+		return rc
+	}
+	return nil
+}
+
+// storeProcChannel stores the created channel in the map if no valid channel
+// exists for the key. If another goroutine already stored a channel while
+// unlocked, it increments the existing channel's refcount and returns it.
+func (cf *clientFilter) storeProcChannel(key grpcServiceKey, rc *grpcsync.RefCounted[v3procservicegrpc.ExternalProcessorClient]) *grpcsync.RefCounted[v3procservicegrpc.ExternalProcessorClient] {
+	cf.mu.Lock()
+	defer cf.mu.Unlock()
+	if existing, ok := cf.procChannels[key]; ok && existing.TryIncrement() {
+		return existing
+	}
+	cf.procChannels[key] = rc
+	return rc
+}
+
+// removeProcChannel removes rc from the map if it is still associated with key.
+//
+// We check (cf.procChannels[key] == rc) before deleting because:
+//  1. When a channel's reference count drops to 0, this cleanup callback runs
+//     asynchronously on a background goroutine.
+//  2. Before this callback acquires cf.mu, a subsequent call to
+//     getOrCreateExtProcChannel could see that the old channel has refcount 0,
+//     ignore it, and store a newly created channel in cf.procChannels[key].
+//  3. The equality check ensures we only delete from the map if it still points
+//     to this expiring channel, preventing us from accidentally deleting a new
+//     replacement channel.
+func (cf *clientFilter) removeProcChannel(key grpcServiceKey, rc *grpcsync.RefCounted[v3procservicegrpc.ExternalProcessorClient]) {
+	cf.mu.Lock()
+	defer cf.mu.Unlock()
+	// Only delete from the map if it hasn't already been replaced by a newer channel.
+	if cf.procChannels[key] == rc {
+		delete(cf.procChannels, key)
+	}
+}
+
 // getOrCreateExtProcChannel retrieves an existing refcounted external processor
 // client from the procChannels map and increases its refcount or creates a new
 // one if it doesn't exist.
@@ -246,14 +290,11 @@ func (cf *clientFilter) getOrCreateExtProcChannel(server xdsresource.GRPCService
 		callCredentials:    server.CallCredentials,
 	}
 
-	cf.mu.Lock()
 	// If the channel for the key is present in the map and its refcount is
 	// greater than 0, increment the refcount and return the channel.
-	if rc, ok := cf.procChannels[key]; ok && rc.TryIncrement() {
-		cf.mu.Unlock()
+	if rc := cf.getProcChannel(key); rc != nil {
 		return rc, nil
 	}
-	cf.mu.Unlock()
 
 	// Create the external processor channel without holding the lock.
 	cc, cancel, err := iextproc.CreateExtProcChannel(server)
@@ -266,11 +307,7 @@ func (cf *clientFilter) getOrCreateExtProcChannel(server xdsresource.GRPCService
 	// client from the map and close the underlying channel.
 	var rc *grpcsync.RefCounted[v3procservicegrpc.ExternalProcessorClient]
 	rc, err = grpcsync.NewRefCounted(client, func() {
-		cf.mu.Lock()
-		if cf.procChannels[key] == rc {
-			delete(cf.procChannels, key)
-		}
-		cf.mu.Unlock()
+		cf.removeProcChannel(key, rc)
 		cancel()
 	})
 	if err != nil {
@@ -278,16 +315,12 @@ func (cf *clientFilter) getOrCreateExtProcChannel(server xdsresource.GRPCService
 		return nil, err
 	}
 
-	cf.mu.Lock()
 	// Double-check if another goroutine created and stored a channel for this
 	// key while we were unlocked.
-	if existing, ok := cf.procChannels[key]; ok && existing.TryIncrement() {
-		cf.mu.Unlock()
+	if existing := cf.storeProcChannel(key, rc); existing != rc {
 		rc.Decrement()
 		return existing, nil
 	}
-	cf.procChannels[key] = rc
-	cf.mu.Unlock()
 	return rc, nil
 }
 
@@ -346,6 +379,9 @@ func createProcContext(ctx context.Context, server xdsresource.GRPCServiceConfig
 }
 
 func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, newStream func(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStream, error), opts ...grpc.CallOption) (grpc.ClientStream, error) {
+	// Increment procClient's refcount so this RPC stream keeps the connection
+	// open even if the interceptor is closed. Decremented when the Process
+	// stream finishes (via grpc.OnFinish) or fails to start.
 	i.procClient.Increment()
 	outgoingMD, added, _ := metadataFromOutgoingContextRaw(ctx)
 	// Create a cancelable context to cancel the dataplane stream and close any
@@ -496,8 +532,10 @@ type commonStream struct {
 	target                 string
 	clientHeadersStartTime time.Time
 
-	onFinish            []func(err error) // stores the finish callbacks from the call options
-	dataplaneRecvCalled atomic.Bool       // tracks if RecvMsg has been called on dataplaneStream by the application
+	// onFinish stores OnFinishCallOption callbacks to execute if calling the
+	// delegate (newStream) fails or if the RPC fails before delegating.
+	onFinish            []func(err error)
+	dataplaneRecvCalled atomic.Bool // tracks if RecvMsg has been called on dataplaneStream by the application
 }
 
 func (cs *commonStream) recordMetric(handle *estats.Float64HistoHandle, duration float64) {
@@ -528,8 +566,8 @@ func (cs *commonStream) handleInitError(err error, newStream func(context.Contex
 
 // callOnFinish executes all registered OnFinish CallOption callbacks.
 func (cs *commonStream) callOnFinish(err error) {
-	for _, of := range cs.onFinish {
-		of(err)
+	for _, f := range cs.onFinish {
+		f(err)
 	}
 }
 
@@ -549,7 +587,10 @@ func (cs *commonStream) callOnFinish(err error) {
 //
 // For streaming RPCs where RecvMsg has already been called by the application,
 // we avoid invoking a dummy RecvMsg because ClientStream.RecvMsg is not safe
-// for concurrent calls by multiple goroutines on the same stream.
+// for concurrent calls by multiple goroutines on the same stream. Multiple
+// goroutines may enter here concurrently; mutual exclusion is not required
+// because cs.cancel() makes subsequent RecvMsg calls after context cancellation
+// are idempotent.
 func (cs *commonStream) cleanupDataplane() {
 	cs.cancel()
 	if cs.dataplaneStream != nil && !cs.dataplaneRecvCalled.Load() {

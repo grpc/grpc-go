@@ -249,6 +249,10 @@ func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RP
 				cluster.interceptor.Close()
 			}
 		})
+	} else {
+		// This should be unreachable because all route clusters are normalized
+		// into cs.clusters or cs.plugins during config selector creation.
+		panic(fmt.Sprintf("matched cluster %q not found in ConfigSelector", cluster.name))
 	}
 
 	if rt.maxStreamDuration != 0 {
