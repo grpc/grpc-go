@@ -852,10 +852,10 @@ func (s) TestClientServerHandshake(t *testing.T) {
 			serverExpectError:       true,
 		},
 		{
-			desc:                   "Client and server set CurvePreferences to CurveP256",
-			clientCert:             []tls.Certificate{cs.ClientCert1},
-			clientGetRoot:          getRootCertificatesForClient,
-			clientVerifyFunc:       func(params *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
+			desc:          "Client and server set CurvePreferences to CurveP256",
+			clientCert:    []tls.Certificate{cs.ClientCert1},
+			clientGetRoot: getRootCertificatesForClient,
+			clientVerifyFunc: func(params *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
 				if params.ConnectionState.CurveID != tls.CurveP256 {
 					return nil, fmt.Errorf("client got CurveID %v, want %v", params.ConnectionState.CurveID, tls.CurveP256)
 				}
@@ -866,7 +866,7 @@ func (s) TestClientServerHandshake(t *testing.T) {
 			serverMutualTLS:        true,
 			serverCert:             []tls.Certificate{cs.ServerCert1},
 			serverRoot:             cs.ServerTrust1,
-			serverVerifyFunc:       func(params *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
+			serverVerifyFunc: func(params *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
 				if params.ConnectionState.CurveID != tls.CurveP256 {
 					return nil, fmt.Errorf("server got CurveID %v, want %v", params.ConnectionState.CurveID, tls.CurveP256)
 				}
@@ -876,10 +876,10 @@ func (s) TestClientServerHandshake(t *testing.T) {
 			serverCurvePreferences: []tls.CurveID{tls.CurveP256},
 		},
 		{
-			desc:                   "Client and server set CurvePreferences to X25519",
-			clientCert:             []tls.Certificate{cs.ClientCert1},
-			clientGetRoot:          getRootCertificatesForClient,
-			clientVerifyFunc:       func(params *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
+			desc:          "Client and server set CurvePreferences to X25519",
+			clientCert:    []tls.Certificate{cs.ClientCert1},
+			clientGetRoot: getRootCertificatesForClient,
+			clientVerifyFunc: func(params *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
 				if params.ConnectionState.CurveID != tls.X25519 {
 					return nil, fmt.Errorf("client got CurveID %v, want %v", params.ConnectionState.CurveID, tls.X25519)
 				}
@@ -890,7 +890,7 @@ func (s) TestClientServerHandshake(t *testing.T) {
 			serverMutualTLS:        true,
 			serverCert:             []tls.Certificate{cs.ServerCert1},
 			serverRoot:             cs.ServerTrust1,
-			serverVerifyFunc:       func(params *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
+			serverVerifyFunc: func(params *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
 				if params.ConnectionState.CurveID != tls.X25519 {
 					return nil, fmt.Errorf("server got CurveID %v, want %v", params.ConnectionState.CurveID, tls.X25519)
 				}
@@ -900,10 +900,10 @@ func (s) TestClientServerHandshake(t *testing.T) {
 			serverCurvePreferences: []tls.CurveID{tls.X25519},
 		},
 		{
-			desc:                   "Client and server set CurvePreferences to X25519MLKEM768",
-			clientCert:             []tls.Certificate{cs.ClientCert1},
-			clientGetRoot:          getRootCertificatesForClient,
-			clientVerifyFunc:       func(params *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
+			desc:          "Client and server set CurvePreferences to X25519MLKEM768",
+			clientCert:    []tls.Certificate{cs.ClientCert1},
+			clientGetRoot: getRootCertificatesForClient,
+			clientVerifyFunc: func(params *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
 				if params.ConnectionState.CurveID != tls.X25519MLKEM768 {
 					return nil, fmt.Errorf("client got CurveID %v, want %v", params.ConnectionState.CurveID, tls.X25519MLKEM768)
 				}
@@ -914,7 +914,7 @@ func (s) TestClientServerHandshake(t *testing.T) {
 			serverMutualTLS:        true,
 			serverCert:             []tls.Certificate{cs.ServerCert1},
 			serverRoot:             cs.ServerTrust1,
-			serverVerifyFunc:       func(params *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
+			serverVerifyFunc: func(params *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
 				if params.ConnectionState.CurveID != tls.X25519MLKEM768 {
 					return nil, fmt.Errorf("server got CurveID %v, want %v", params.ConnectionState.CurveID, tls.X25519MLKEM768)
 				}
