@@ -28,10 +28,12 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/stubserver"
+	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
@@ -140,6 +142,57 @@ func checkRoundRobinRPCs(ctx context.Context, client testgrpc.TestServiceClient,
 		return nil
 	}
 	return fmt.Errorf("timeout when waiting for roundrobin distribution of RPCs across addresses: %v; got: %v", addrs, gotAddrCount)
+}
+
+// TestPickFirstHealthListenerDisabled verifies that outlier detection doesn't
+// eject subchannels created by pick_first when it is not under a petiole
+// policy. In that configuration, pick_first does not register a health
+// listener and ejection updates must not affect connectivity.
+func (s) TestPickFirstHealthListenerDisabled(t *testing.T) {
+	backend := &stubserver.StubServer{
+		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
+			return nil, errors.New("some error")
+		},
+	}
+	if err := backend.StartServer(); err != nil {
+		t.Fatalf("Failed to start backend: %v", err)
+	}
+	defer backend.Stop()
+
+	const serviceConfig = `{
+	  "loadBalancingConfig": [{
+		"outlier_detection_experimental": {
+		  "interval": "0.050s",
+		  "failurePercentageEjection": {
+			"threshold": 50,
+			"enforcementPercentage": 100,
+			"minimumHosts": 0,
+			"requestVolume": 2
+		  },
+		  "childPolicy": [{"pick_first": {}}]
+		}
+	  }]
+	}`
+	cc, err := grpc.NewClient(backend.Address, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithDefaultServiceConfig(serviceConfig))
+	if err != nil {
+		t.Fatalf("grpc.NewClient() failed: %v", err)
+	}
+	defer cc.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	client := testgrpc.NewTestServiceClient(cc)
+	client.EmptyCall(ctx, &testpb.Empty{})
+	testutils.AwaitState(ctx, t, cc, connectivity.Ready)
+
+	for range 10 {
+		client.EmptyCall(ctx, &testpb.Empty{})
+	}
+
+	// Wait for three outlier detection intervals to verify that the subchannel is not ejected.
+	sCtx, sCancel := context.WithTimeout(ctx, 150*time.Millisecond)
+	defer sCancel()
+	testutils.AwaitNoStateChange(sCtx, t, cc, connectivity.Ready)
 }
 
 // TestOutlierDetectionAlgorithmsE2E tests the Outlier Detection Success Rate

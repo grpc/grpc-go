@@ -36,6 +36,7 @@ import (
 	icredentials "google.golang.org/grpc/internal/credentials"
 	xdsinternal "google.golang.org/grpc/internal/credentials/xds"
 	"google.golang.org/grpc/internal/envconfig"
+	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/xds/matcher"
@@ -228,8 +229,8 @@ func newTestContextWithHandshakeInfo(parent context.Context, root, identity cert
 	if sanExactMatch != "" {
 		sms = []matcher.StringMatcher{matcher.NewExactStringMatcher(sanExactMatch, false)}
 	}
-	var hiPtr atomic.Pointer[xdsinternal.HandshakeInfo]
-	info := xdsinternal.NewHandshakeInfo(root, identity, sms, false, sni, validateSANUsingSNI, false)
+	var hiPtr atomic.Pointer[grpcsync.RefCounted[xdsinternal.HandshakeInfo]]
+	info := xdsinternal.NewHandshakeInfo(root, identity, sms, sni, false, validateSANUsingSNI, false)
 	hiPtr.Store(info)
 	addr := xdsinternal.SetHandshakeInfo(resolver.Address{}, &hiPtr)
 
@@ -618,11 +619,11 @@ func (s) TestClientCredsProviderSwitch(t *testing.T) {
 	// Create a root provider which will fail the handshake because it does not
 	// use the correct trust roots.
 	root1 := makeRootProvider(t, "x509/client_ca_cert.pem")
-	handshakeInfo := xdsinternal.NewHandshakeInfo(root1, nil, []matcher.StringMatcher{matcher.NewExactStringMatcher(defaultTestCertSAN, false)}, false, "", false, false)
+	handshakeInfo := xdsinternal.NewHandshakeInfo(root1, nil, []matcher.StringMatcher{matcher.NewExactStringMatcher(defaultTestCertSAN, false)}, "", false, false, false)
 	// We need to repeat most of what newTestContextWithHandshakeInfo() does
 	// here because we need access to the underlying HandshakeInfo so that we
 	// can update it before the next call to ClientHandshake().
-	var hiPtr atomic.Pointer[xdsinternal.HandshakeInfo]
+	var hiPtr atomic.Pointer[grpcsync.RefCounted[xdsinternal.HandshakeInfo]]
 	hiPtr.Store(handshakeInfo)
 	addr := xdsinternal.SetHandshakeInfo(resolver.Address{}, &hiPtr)
 	ctx = icredentials.NewClientHandshakeInfoContext(ctx, credentials.ClientHandshakeInfo{Attributes: addr.Attributes})
@@ -645,7 +646,7 @@ func (s) TestClientCredsProviderSwitch(t *testing.T) {
 	// Create a new root provider which uses the correct trust roots. And update
 	// the HandshakeInfo with the new provider.
 	root2 := makeRootProvider(t, "x509/server_ca_cert.pem")
-	handshakeInfo = xdsinternal.NewHandshakeInfo(root2, nil, []matcher.StringMatcher{matcher.NewExactStringMatcher(defaultTestCertSAN, false)}, false, "", false, false)
+	handshakeInfo = xdsinternal.NewHandshakeInfo(root2, nil, []matcher.StringMatcher{matcher.NewExactStringMatcher(defaultTestCertSAN, false)}, "", false, false, false)
 	// Update the existing pointer, which address attribute will continue to
 	// point to.
 	hiPtr.Store(handshakeInfo)
