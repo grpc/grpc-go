@@ -176,9 +176,20 @@ func annotateErrorWithNodeID(err error, nodeID string) error {
 
 func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RPCConfig, error) {
 	var rt *route
+	md, _ := metadata.FromOutgoingContext(rpcInfo.Context)
+	if extraMD, ok := grpcutil.ExtraMetadata(rpcInfo.Context); ok {
+		md = metadata.Join(md, extraMD)
+		// Remove all binary headers. They are hard to match with. May need
+		// to add back if asked by users.
+		for k := range md {
+			if strings.HasSuffix(k, "-bin") {
+				delete(md, k)
+			}
+		}
+	}
 	// Loop through routes in order and select first match.
 	for _, r := range cs.routes {
-		if r.m.Match(rpcInfo) {
+		if r.m.Match(rpcInfo.Method, md) {
 			rt = &r
 			break
 		}
