@@ -1292,6 +1292,9 @@ func (cs *clientStream) responseForwardingToProcServerLoop(msgType protoreflect.
 		}
 
 		newMsg := msgType.New().Interface()
+		if !cs.dataplaneRecvCalled.Load() {
+			cs.dataplaneRecvCalled.Store(true)
+		}
 		if err := dataplaneStream.RecvMsg(newMsg); err != nil {
 			cs.initiateResponseTrailerProcessing()
 			return
