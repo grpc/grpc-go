@@ -410,6 +410,9 @@ func (s) TestClientServerHandshake(t *testing.T) {
 		if params.ServerName == "" {
 			return nil, errors.New("client side server name should have a value")
 		}
+		if params.ConnectionState.CurveID == 0 {
+			return nil, errors.New("client side key exchange algorithm should not be zero")
+		}
 		// "foo.bar.com" is the common name on server certificate server_cert_1.pem.
 		if len(params.VerifiedChains) > 0 && (params.Leaf == nil || params.Leaf.Subject.CommonName != "foo.bar.com") {
 			return nil, errors.New("client side params parsing error")
@@ -426,6 +429,9 @@ func (s) TestClientServerHandshake(t *testing.T) {
 	serverVerifyFunc := func(params *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
 		if params.ServerName != "" {
 			return nil, errors.New("server side server name should not have a value")
+		}
+		if params.ConnectionState.CurveID == 0 {
+			return nil, errors.New("server side key exchange algorithm should not be zero")
 		}
 		// "foo.bar.hoo.com" is the common name on client certificate client_cert_1.pem.
 		if len(params.VerifiedChains) > 0 && (params.Leaf == nil || params.Leaf.Subject.CommonName != "foo.bar.hoo.com") {
