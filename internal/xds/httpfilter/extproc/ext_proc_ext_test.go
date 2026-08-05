@@ -4636,7 +4636,7 @@ func (s) TestStreamingMetrics(t *testing.T) {
 
 			// Start a test stub service.
 			stub := stubserver.StartTestService(t, &stubserver.StubServer{
-				FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
+				FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
 					if err := stream.SendHeader(metadata.Pairs("x-resp-header-from-server", "present")); err != nil {
 						return err
 					}
