@@ -35,6 +35,7 @@ import (
 	"google.golang.org/grpc/experimental/balancer/weight"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/hierarchy"
+	"google.golang.org/grpc/internal/proxyattributes"
 	iringhash "google.golang.org/grpc/internal/ringhash"
 	iserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/internal/testutils"
@@ -1022,6 +1023,422 @@ func (s) TestConvertClusterImplMapToOutlierDetection(t *testing.T) {
 			got := convertClusterImplMapToOutlierDetection(test.ciCfgsMap, test.odCfg)
 			if diff := cmp.Diff(test.wantODCfgs, got); diff != "" {
 				t.Fatalf("convertClusterImplMapToOutlierDetection() diff(-want +got) %v", diff)
+			}
+		})
+	}
+}
+
+// Test tests that when HTTP11Proxy is enabled, endpoints are rewritten to
+// the proxy address with the original address preserved in proxyattributes,
+// validating fallback and precedence rules.
+func (s) TestPriorityLocalitiesToClusterImpl_HTTP11Proxy(t *testing.T) {
+	tests := []struct {
+		name            string
+		localities      []xdsresource.Locality
+		clusterUpdate   xdsresource.ClusterUpdate
+		wantEndpoints   []resolver.Endpoint
+		wantConnectAddr []string
+	}{
+		{
+			name: "endpoint_metadata_only",
+			localities: []xdsresource.Locality{
+				{
+					Endpoints: []xdsresource.Endpoint{
+						{
+							ResolverEndpoint: resolver.Endpoint{
+								Addresses: []resolver.Address{{Addr: "10.0.0.5:443"}},
+							},
+							HealthStatus: xdsresource.EndpointHealthStatusHealthy,
+							Weight:       1,
+							Metadata: map[string]any{
+								"envoy.http11_proxy_transport_socket.proxy_address": xdsresource.ProxyAddressMetadataValue{
+									Address: "192.168.1.1:8080",
+								},
+							},
+						},
+					},
+					ID:     clients.Locality{SubZone: "testzone-1"},
+					Weight: 1,
+				},
+			},
+			clusterUpdate: xdsresource.ClusterUpdate{
+				ClusterName:          "test-cluster",
+				IsHTTP11ProxyEnabled: true,
+			},
+			wantEndpoints: []resolver.Endpoint{
+				testEndpointWithAttrs(
+					resolver.Endpoint{
+						Addresses: []resolver.Address{
+							proxyattributes.Set(resolver.Address{Addr: "192.168.1.1:8080"}, proxyattributes.Options{ConnectAddr: "10.0.0.5:443"}),
+						},
+					},
+					1, 2147483648, "priority-0", &clients.Locality{SubZone: "testzone-1"},
+				),
+			},
+			wantConnectAddr: []string{"10.0.0.5:443"},
+		},
+		{
+			name: "locality_metadata_fallback",
+			localities: []xdsresource.Locality{
+				{
+					Endpoints: []xdsresource.Endpoint{
+						{
+							ResolverEndpoint: resolver.Endpoint{
+								Addresses: []resolver.Address{{Addr: "10.0.0.5:443"}},
+							},
+							HealthStatus: xdsresource.EndpointHealthStatusHealthy,
+							Weight:       1,
+						},
+					},
+					ID:     clients.Locality{SubZone: "subzone-1"},
+					Weight: 1,
+					Metadata: map[string]any{
+						"envoy.http11_proxy_transport_socket.proxy_address": xdsresource.ProxyAddressMetadataValue{
+							Address: "192.168.1.1:8080",
+						},
+					},
+				},
+			},
+			clusterUpdate: xdsresource.ClusterUpdate{
+				ClusterName:          "test-cluster",
+				IsHTTP11ProxyEnabled: true,
+			},
+			wantEndpoints: []resolver.Endpoint{
+				testEndpointWithAttrs(
+					resolver.Endpoint{
+						Addresses: []resolver.Address{
+							proxyattributes.Set(resolver.Address{Addr: "192.168.1.1:8080"}, proxyattributes.Options{ConnectAddr: "10.0.0.5:443"}),
+						},
+					},
+					1, 2147483648, "priority-0", &clients.Locality{SubZone: "subzone-1"},
+				),
+			},
+			wantConnectAddr: []string{"10.0.0.5:443"},
+		},
+		{
+			name: "endpoint_metadata_precedence_over_locality_metadata",
+			localities: []xdsresource.Locality{
+				{
+					Endpoints: []xdsresource.Endpoint{
+						{
+							ResolverEndpoint: resolver.Endpoint{
+								Addresses: []resolver.Address{{Addr: "10.0.0.5:443"}},
+							},
+							HealthStatus: xdsresource.EndpointHealthStatusHealthy,
+							Weight:       1,
+							Metadata: map[string]any{
+								"envoy.http11_proxy_transport_socket.proxy_address": xdsresource.ProxyAddressMetadataValue{
+									Address: "192.168.1.1:8080",
+								},
+							},
+						},
+					},
+					ID:     clients.Locality{SubZone: "subzone-1"},
+					Weight: 1,
+					Metadata: map[string]any{
+						"envoy.http11_proxy_transport_socket.proxy_address": xdsresource.ProxyAddressMetadataValue{
+							Address: "192.168.1.99:8080",
+						},
+					},
+				},
+			},
+			clusterUpdate: xdsresource.ClusterUpdate{
+				ClusterName:          "test-cluster",
+				IsHTTP11ProxyEnabled: true,
+			},
+			wantEndpoints: []resolver.Endpoint{
+				testEndpointWithAttrs(
+					resolver.Endpoint{
+						Addresses: []resolver.Address{proxyattributes.Set(resolver.Address{Addr: "192.168.1.1:8080"}, proxyattributes.Options{ConnectAddr: "10.0.0.5:443"})},
+					},
+					1, 2147483648, "priority-0", &clients.Locality{SubZone: "subzone-1"}),
+			},
+			wantConnectAddr: []string{"10.0.0.5:443"},
+		},
+		{
+			name: "multiple_localities_each_having_one_endpoint",
+			localities: []xdsresource.Locality{
+				{
+					Endpoints: []xdsresource.Endpoint{
+						{
+							ResolverEndpoint: resolver.Endpoint{
+								Addresses: []resolver.Address{{Addr: "10.0.0.5:443"}},
+							},
+							HealthStatus: xdsresource.EndpointHealthStatusHealthy,
+							Weight:       1,
+						},
+					},
+					ID:     clients.Locality{SubZone: "subzone-1"},
+					Weight: 1,
+					Metadata: map[string]any{
+						"envoy.http11_proxy_transport_socket.proxy_address": xdsresource.ProxyAddressMetadataValue{
+							Address: "192.168.1.1:8080",
+						},
+					},
+				},
+				{
+					Endpoints: []xdsresource.Endpoint{
+						{
+							ResolverEndpoint: resolver.Endpoint{
+								Addresses: []resolver.Address{{Addr: "10.0.0.6:443"}},
+							},
+							HealthStatus: xdsresource.EndpointHealthStatusHealthy,
+							Weight:       1,
+						},
+					},
+					ID:     clients.Locality{SubZone: "subzone-2"},
+					Weight: 1,
+					Metadata: map[string]any{
+						"envoy.http11_proxy_transport_socket.proxy_address": xdsresource.ProxyAddressMetadataValue{
+							Address: "192.168.1.2:8080",
+						},
+					},
+				},
+			},
+			clusterUpdate: xdsresource.ClusterUpdate{
+				ClusterName:          "test-cluster",
+				IsHTTP11ProxyEnabled: true,
+			},
+			wantEndpoints: []resolver.Endpoint{
+				testEndpointWithAttrs(
+					resolver.Endpoint{
+						Addresses: []resolver.Address{proxyattributes.Set(resolver.Address{Addr: "192.168.1.1:8080"}, proxyattributes.Options{ConnectAddr: "10.0.0.5:443"})},
+					},
+					1, 1073741824, "priority-0", &clients.Locality{SubZone: "subzone-1"},
+				),
+				testEndpointWithAttrs(
+					resolver.Endpoint{
+						Addresses: []resolver.Address{proxyattributes.Set(resolver.Address{Addr: "192.168.1.2:8080"}, proxyattributes.Options{ConnectAddr: "10.0.0.6:443"})},
+					},
+					1, 1073741824, "priority-0", &clients.Locality{SubZone: "subzone-2"},
+				),
+			},
+			wantConnectAddr: []string{"10.0.0.5:443", "10.0.0.6:443"},
+		},
+		{
+			name: "	multiple_localities_each_having_multiple_endpoints",
+			localities: []xdsresource.Locality{
+				{
+					Endpoints: []xdsresource.Endpoint{
+						{
+							ResolverEndpoint: resolver.Endpoint{
+								Addresses: []resolver.Address{{Addr: "10.0.0.5:443"}},
+							},
+							HealthStatus: xdsresource.EndpointHealthStatusHealthy,
+							Weight:       1,
+						},
+						{
+							ResolverEndpoint: resolver.Endpoint{
+								Addresses: []resolver.Address{{Addr: "10.0.0.6:443"}},
+							},
+							HealthStatus: xdsresource.EndpointHealthStatusHealthy,
+							Weight:       1,
+							Metadata: map[string]any{
+								"envoy.http11_proxy_transport_socket.proxy_address": xdsresource.ProxyAddressMetadataValue{
+									Address: "192.168.1.2:8080",
+								},
+							},
+						},
+					},
+					ID:     clients.Locality{SubZone: "subzone-1"},
+					Weight: 1,
+					Metadata: map[string]any{
+						"envoy.http11_proxy_transport_socket.proxy_address": xdsresource.ProxyAddressMetadataValue{
+							Address: "192.168.1.1:8080",
+						},
+					},
+				},
+				{
+					Endpoints: []xdsresource.Endpoint{
+						{
+							ResolverEndpoint: resolver.Endpoint{
+								Addresses: []resolver.Address{{Addr: "10.0.0.7:443"}},
+							},
+							HealthStatus: xdsresource.EndpointHealthStatusHealthy,
+							Weight:       1,
+							Metadata: map[string]any{
+								"envoy.http11_proxy_transport_socket.proxy_address": xdsresource.ProxyAddressMetadataValue{
+									Address: "192.168.1.3:8080",
+								},
+							},
+						},
+						{
+							ResolverEndpoint: resolver.Endpoint{
+								Addresses: []resolver.Address{{Addr: "10.0.0.8:443"}},
+							},
+							HealthStatus: xdsresource.EndpointHealthStatusHealthy,
+							Weight:       1,
+							Metadata: map[string]any{
+								"envoy.http11_proxy_transport_socket.proxy_address": xdsresource.ProxyAddressMetadataValue{
+									Address: "192.168.1.4:8080",
+								},
+							},
+						},
+					},
+					ID:     clients.Locality{SubZone: "subzone-2"},
+					Weight: 1,
+				},
+			},
+			clusterUpdate: xdsresource.ClusterUpdate{
+				ClusterName:          "test-cluster",
+				IsHTTP11ProxyEnabled: true,
+			},
+			wantEndpoints: []resolver.Endpoint{
+				testEndpointWithAttrs(
+					resolver.Endpoint{
+						Addresses: []resolver.Address{
+							proxyattributes.Set(resolver.Address{Addr: "192.168.1.1:8080"}, proxyattributes.Options{ConnectAddr: "10.0.0.5:443"}),
+						},
+					},
+					1, 536870912, "priority-0", &clients.Locality{SubZone: "subzone-1"},
+				),
+				testEndpointWithAttrs(
+					resolver.Endpoint{
+						Addresses: []resolver.Address{
+							proxyattributes.Set(resolver.Address{Addr: "192.168.1.2:8080"}, proxyattributes.Options{ConnectAddr: "10.0.0.6:443"}),
+						},
+					},
+					1, 536870912, "priority-0", &clients.Locality{SubZone: "subzone-1"},
+				),
+				testEndpointWithAttrs(
+					resolver.Endpoint{
+						Addresses: []resolver.Address{
+							proxyattributes.Set(resolver.Address{Addr: "192.168.1.3:8080"}, proxyattributes.Options{ConnectAddr: "10.0.0.7:443"}),
+						},
+					},
+					1, 536870912, "priority-0", &clients.Locality{SubZone: "subzone-2"},
+				),
+				testEndpointWithAttrs(
+					resolver.Endpoint{
+						Addresses: []resolver.Address{
+							proxyattributes.Set(resolver.Address{Addr: "192.168.1.4:8080"}, proxyattributes.Options{ConnectAddr: "10.0.0.8:443"}),
+						},
+					},
+					1, 536870912, "priority-0", &clients.Locality{SubZone: "subzone-2"},
+				),
+			},
+			wantConnectAddr: []string{"10.0.0.5:443", "10.0.0.6:443", "10.0.0.7:443", "10.0.0.8:443"},
+		},
+		{
+			name: "missing_proxy_address_metadata",
+			localities: []xdsresource.Locality{
+				{
+					Endpoints: []xdsresource.Endpoint{
+						{
+							ResolverEndpoint: resolver.Endpoint{
+								Addresses: []resolver.Address{{Addr: "10.0.0.5:443"}},
+							},
+							HealthStatus: xdsresource.EndpointHealthStatusHealthy,
+							Weight:       1,
+						},
+					},
+					ID:     clients.Locality{SubZone: "subzone-1"},
+					Weight: 1,
+				},
+			},
+			clusterUpdate: xdsresource.ClusterUpdate{
+				ClusterName:          "test-cluster",
+				IsHTTP11ProxyEnabled: true,
+			},
+			wantEndpoints: []resolver.Endpoint{
+				testEndpointWithAttrs(
+					resolver.Endpoint{
+						Addresses: []resolver.Address{{Addr: "10.0.0.5:443"}},
+					},
+					1, 2147483648, "priority-0", &clients.Locality{SubZone: "subzone-1"},
+				),
+			},
+			wantConnectAddr: []string{},
+		},
+		{
+			name: "invalid_proxy_address_metadata_type",
+			localities: []xdsresource.Locality{
+				{
+					Endpoints: []xdsresource.Endpoint{
+						{
+							ResolverEndpoint: resolver.Endpoint{
+								Addresses: []resolver.Address{{Addr: "10.0.0.5:443"}},
+							},
+							HealthStatus: xdsresource.EndpointHealthStatusHealthy,
+							Weight:       1,
+							Metadata: map[string]any{
+								"envoy.http11_proxy_transport_socket.proxy_address": "192.168.1.1:8080", // string type instead of ProxyAddressMetadataValue struct
+							},
+						},
+					},
+					ID:     clients.Locality{SubZone: "subzone-1"},
+					Weight: 1,
+				},
+			},
+			clusterUpdate: xdsresource.ClusterUpdate{
+				ClusterName:          "test-cluster",
+				IsHTTP11ProxyEnabled: true,
+			},
+			wantEndpoints: []resolver.Endpoint{
+				testEndpointWithAttrs(
+					resolver.Endpoint{
+						Addresses: []resolver.Address{{Addr: "10.0.0.5:443"}},
+					},
+					1, 2147483648, "priority-0", &clients.Locality{SubZone: "subzone-1"},
+				),
+			},
+		},
+		{
+			name: "http11proxy_disabled",
+			localities: []xdsresource.Locality{
+				{
+					Endpoints: []xdsresource.Endpoint{
+						{
+							ResolverEndpoint: resolver.Endpoint{
+								Addresses: []resolver.Address{{Addr: "10.0.0.5:443"}},
+							},
+							HealthStatus: xdsresource.EndpointHealthStatusHealthy,
+							Weight:       1,
+							Metadata: map[string]any{
+								"envoy.http11_proxy_transport_socket.proxy_address": xdsresource.ProxyAddressMetadataValue{
+									Address: "192.168.1.1:8080",
+								},
+							},
+						},
+					},
+					ID:     clients.Locality{SubZone: "testzone-1"},
+					Weight: 1,
+				},
+			},
+			clusterUpdate: xdsresource.ClusterUpdate{
+				ClusterName:          "test-cluster",
+				IsHTTP11ProxyEnabled: false,
+			},
+			wantEndpoints: []resolver.Endpoint{
+				testEndpointWithAttrs(
+					resolver.Endpoint{
+						Addresses: []resolver.Address{{Addr: "10.0.0.5:443"}},
+					},
+					1, 2147483648, "priority-0", &clients.Locality{SubZone: "testzone-1"},
+				),
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, retEndpoints, err := priorityLocalitiesToClusterImpl(tt.localities, "priority-0", tt.clusterUpdate, nil)
+			if err != nil {
+				t.Fatalf("priorityLocalitiesToClusterImpl() failed: %v", err)
+			}
+
+			if diff := cmp.Diff(retEndpoints, tt.wantEndpoints, cmp.AllowUnexported(attributes.Attributes{})); diff != "" {
+				t.Fatalf("priorityLocalitiesToClusterImpl() diff (-got +want) %v", diff)
+			}
+
+			for idx, addr := range tt.wantConnectAddr {
+				ep := retEndpoints[idx].Addresses[0]
+				opts, ok := proxyattributes.Get(ep)
+				if !ok {
+					t.Fatalf("Expected proxyattributes to be set")
+				}
+				if opts.ConnectAddr != addr {
+					t.Fatalf("Unexpected ConnectAddr in proxyattributes, got: %s want: %s", opts.ConnectAddr, addr)
+				}
 			}
 		})
 	}

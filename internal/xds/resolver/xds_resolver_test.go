@@ -567,7 +567,7 @@ func (s) TestResolverGoodServiceUpdate(t *testing.T) {
 				if err != nil {
 					t.Fatalf("cs.SelectConfig(): %v", err)
 				}
-				cluster := clustermanager.GetPickedClusterForTesting(res.Context)
+				cluster := clustermanager.PickedCluster(res.Context)
 				pickedClusters[cluster] = true
 				res.OnCommitted()
 			}
@@ -935,128 +935,6 @@ func (s) TestResolverMaxStreamDuration(t *testing.T) {
 	}
 }
 
-// Tests that clusters remain in service config if RPCs are in flight.
-func (s) TestResolverDelayedOnCommitted(t *testing.T) {
-	// Spin up an xDS management server for the test.
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	nodeID := uuid.New().String()
-	mgmtServer, _, _, bc := setupManagementServerForTest(t, nodeID)
-
-	// Configure resources on the management server.
-	resources := e2e.DefaultClientResources(e2e.ResourceParams{
-		DialTarget: defaultTestServiceName,
-		NodeID:     nodeID,
-		Host:       defaultTestHostname,
-		Port:       defaultTestPort[0],
-		SecLevel:   e2e.SecurityLevelNone,
-	})
-	if err := mgmtServer.Update(ctx, resources); err != nil {
-		t.Fatal(err)
-	}
-
-	stateCh, _, _ := buildResolverForTarget(t, resolver.Target{URL: *testutils.MustParseURL("xds:///" + defaultTestServiceName)}, bc)
-
-	// Read the update pushed by the resolver to the ClientConn.
-	cs := verifyUpdateFromResolver(ctx, t, stateCh, wantServiceConfig(resources.Clusters[0].Name))
-
-	// Make an RPC, but do not commit it yet.
-	resOld, err := cs.SelectConfig(iresolver.RPCInfo{Context: ctx, Method: "/service/method"})
-	if err != nil {
-		t.Fatalf("cs.SelectConfig(): %v", err)
-	}
-	wantClusterName := fmt.Sprintf("cluster:%s", resources.Clusters[0].Name)
-	if cluster := clustermanager.GetPickedClusterForTesting(resOld.Context); cluster != wantClusterName {
-		t.Fatalf("Picked cluster is %q, want %q", cluster, wantClusterName)
-	}
-
-	// Delay resOld.OnCommitted(). As long as there are pending RPCs to removed
-	// clusters, they still appear in the service config.
-	oldClusterName := resources.Clusters[0].Name
-	// Update the route configuration resource on the management server to
-	// return a new cluster.
-	newClusterName := "new-" + defaultTestClusterName
-	newEndpointName := "new-" + defaultTestEndpointName
-	resources.Routes = []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(resources.Routes[0].Name, defaultTestServiceName, newClusterName)}
-	// Appending the new cluster and endpoint resources to avoid getting
-	// resource removed errors.
-	resources.Clusters = append(resources.Clusters, e2e.DefaultCluster(newClusterName, newEndpointName, e2e.SecurityLevelNone))
-	resources.Endpoints = append(resources.Endpoints, e2e.DefaultEndpoint(newEndpointName, defaultTestHostname, defaultTestPort))
-	if err := mgmtServer.Update(ctx, resources); err != nil {
-		t.Fatal(err)
-	}
-
-	// Read the update pushed by the resolver to the ClientConn and ensure the
-	// old cluster is present in the service config. Also ensure that the newly
-	// returned config selector does not hold a reference to the old cluster.
-	wantSC := fmt.Sprintf(`
-{
-	"loadBalancingConfig": [
-		{
-		  "xds_cluster_manager_experimental": {
-			"children": {
-			  "cluster:%s": {
-				"childPolicy": [
-				  {
-					"cds_experimental": {
-					  "cluster": "%s"
-					}
-				  }
-				]
-			  },
-			  "cluster:%s": {
-				"childPolicy": [
-				  {
-					"cds_experimental": {
-					  "cluster": "%s"
-					}
-				  }
-				]
-			  }
-			}
-		  }
-		}
-	  ]
-}`, oldClusterName, oldClusterName, newClusterName, newClusterName)
-	cs = verifyUpdateFromResolver(ctx, t, stateCh, wantSC)
-
-	resNew, err := cs.SelectConfig(iresolver.RPCInfo{Context: ctx, Method: "/service/method"})
-	if err != nil {
-		t.Fatalf("cs.SelectConfig(): %v", err)
-	}
-	wantClusterName = fmt.Sprintf("cluster:%s", newClusterName)
-	if cluster := clustermanager.GetPickedClusterForTesting(resNew.Context); cluster != wantClusterName {
-		t.Fatalf("Picked cluster is %q, want %q", cluster, wantClusterName)
-	}
-
-	// Invoke OnCommitted on the old RPC; should lead to a service config update
-	// that deletes the old cluster, as the old cluster no longer has any
-	// pending RPCs.
-	resOld.OnCommitted()
-
-	wantSC = fmt.Sprintf(`
-{
-	"loadBalancingConfig": [
-		{
-		  "xds_cluster_manager_experimental": {
-			"children": {
-			  "cluster:%s": {
-				"childPolicy": [
-				  {
-					"cds_experimental": {
-					  "cluster": "%s"
-					}
-				  }
-				]
-			  }
-			}
-		  }
-		}
-	  ]
-}`, newClusterName, newClusterName)
-	verifyUpdateFromResolver(ctx, t, stateCh, wantSC)
-}
-
 // Tests the case where two LDS updates with the same RDS name to watch are
 // received without an RDS in between. Those LDS updates shouldn't trigger a
 // service config update.
@@ -1155,7 +1033,7 @@ func (s) TestResolverWRR(t *testing.T) {
 		if err != nil {
 			t.Fatalf("cs.SelectConfig(): %v", err)
 		}
-		picks[clustermanager.GetPickedClusterForTesting(res.Context)]++
+		picks[clustermanager.PickedCluster(res.Context)]++
 		res.OnCommitted()
 	}
 	want := map[string]int{"cluster:A": 75, "cluster:B": 25}
@@ -1544,5 +1422,90 @@ func (s) TestResolver_XDSConfigInRPCContext(t *testing.T) {
 	gotConfig := xdsresource.XDSConfigFromContext(res.Context)
 	if err := xdstestutils.CompareXDSConfig(gotConfig, wantXDSConfig); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// Tests the case where the resolver receives a server-side listener resource.
+// The resolver should report the mismatch error, put the channel in TRANSIENT_FAILURE
+// (using an empty service config update), and recover when a valid client-side
+// listener update is subsequently received.
+func (s) TestResolverServerSideListenerReceivedOnClient(t *testing.T) {
+	// Spin up an xDS management server for the test.
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	nodeID := uuid.New().String()
+	mgmtServer, _, _, bc := setupManagementServerForTest(t, nodeID)
+
+	// Configure a server-side listener resource on the management server.
+	// We use the client-side dial target as the resource name, but return a
+	// server-side listener resource (meaning it lacks ApiListener).
+	lis := e2e.DefaultServerListener("localhost", 8080, e2e.SecurityLevelNone, defaultTestRouteConfigName)
+	lis.Name = defaultTestServiceName
+	configureResources(ctx, t, mgmtServer, nodeID, []*v3listenerpb.Listener{lis}, nil, nil, nil)
+
+	// Build the resolver.
+	target := resolver.Target{URL: *testutils.MustParseURL("xds:///" + defaultTestServiceName)}
+	stateCh, errCh, _ := buildResolverForTarget(t, target, bc)
+
+	// Wait for and verify the error update from the resolver.
+	select {
+	case <-ctx.Done():
+		t.Fatalf("Timeout waiting for error to be propagated to the ClientConn")
+	case gotErr := <-errCh:
+		const wantErr = "does not contain API listener configuration"
+		if gotErr == nil {
+			t.Fatalf("Got nil error from resolver, want error containing '%s'", wantErr)
+		}
+		errStr := fmt.Sprint(gotErr)
+		if !strings.Contains(errStr, wantErr) {
+			t.Fatalf("Got error from resolver %q, want error containing '%s'", errStr, wantErr)
+		}
+		if !strings.Contains(errStr, nodeID) {
+			t.Fatalf("Got error from resolver %q, want nodeID %q", errStr, nodeID)
+		}
+	}
+
+	// Verify that the resolver pushed an empty service config update (putting the channel in TF).
+	select {
+	case <-ctx.Done():
+		t.Fatalf("Timeout waiting for state update containing empty service config")
+	case gotState := <-stateCh:
+		state := gotState
+		if err := state.ServiceConfig.Err; err != nil {
+			t.Fatalf("Received error in service config: %v", state.ServiceConfig.Err)
+		}
+		wantSCParsed := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)("{}")
+		if !internal.EqualServiceConfigForTesting(state.ServiceConfig.Config, wantSCParsed.Config) {
+			t.Fatalf("Got service config:\n%s \nWant service config:\n%s", cmp.Diff(nil, state.ServiceConfig.Config), cmp.Diff(nil, wantSCParsed.Config))
+		}
+	}
+
+	// Configure valid client-side listener and route config resources.
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		DialTarget: defaultTestServiceName,
+		NodeID:     nodeID,
+		Host:       defaultTestHostname,
+		Port:       defaultTestPort[0],
+		SecLevel:   e2e.SecurityLevelNone,
+	})
+	mgmtServer.Update(ctx, resources)
+
+	// The resolver should recover and send a service config with the cluster name.
+	select {
+	case <-ctx.Done():
+		t.Fatalf("Timeout waiting for state update after recovery")
+	case gotState := <-stateCh:
+		state := gotState
+		if err := state.ServiceConfig.Err; err != nil {
+			t.Fatalf("Received error in service config: %v", state.ServiceConfig.Err)
+		}
+		wantSCParsed := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(wantServiceConfig(resources.Clusters[0].Name))
+		if !internal.EqualServiceConfigForTesting(state.ServiceConfig.Config, wantSCParsed.Config) {
+			t.Fatalf("Got service config:\n%s \nWant service config:\n%s", cmp.Diff(nil, state.ServiceConfig.Config), cmp.Diff(nil, wantSCParsed.Config))
+		}
+		cs := iresolver.GetConfigSelector(state)
+		if cs == nil {
+			t.Fatal("Received nil config selector in update from resolver")
+		}
 	}
 }

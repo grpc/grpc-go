@@ -245,7 +245,11 @@ func (s) TestServerSideXDS_InterceptorLeak_RDSUpdate(t *testing.T) {
 
 	// Wait for the updated config to be applied. Since the new configuration has
 	// two routes, we expect two interceptor instances to be created for each
-	// filter chain, for a total of 6 interceptor instances.
+	// filter chain, for a total of 6 interceptor instances. We also wait for
+	// the old interceptors (one per filter chain, two total) to be destroyed,
+	// since destruction happens after the new interceptors are created within
+	// the same RDS update callback. Breaking only on interceptorsCreated==6
+	// would race with the subsequent interceptorsDestroyed increment.
 	for ; ctx.Err() == nil; <-time.After(defaultTestShortTimeout) {
 		if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 			t.Fatalf("EmptyCall() failed: %v", err)
@@ -254,7 +258,7 @@ func (s) TestServerSideXDS_InterceptorLeak_RDSUpdate(t *testing.T) {
 		case <-pathCh:
 		default:
 		}
-		if interceptorsCreated.Load() == 6 {
+		if interceptorsCreated.Load() == 6 && interceptorsDestroyed.Load() == 2 {
 			break
 		}
 	}
@@ -266,12 +270,6 @@ func (s) TestServerSideXDS_InterceptorLeak_RDSUpdate(t *testing.T) {
 	// are replaced with the updated config.
 	if got, want := filtersCreated.Load(), int32(1); got != want {
 		t.Fatalf("Created %d filter instances, want: %d", got, want)
-	}
-	if got, want := interceptorsCreated.Load(), int32(6); got != want {
-		t.Fatalf("Created %d interceptor instances, want: %d", got, want)
-	}
-	if got, want := interceptorsDestroyed.Load(), int32(2); got != want {
-		t.Fatalf("Destroyed %d interceptor instances, want: %d", got, want)
 	}
 
 	stopServer()

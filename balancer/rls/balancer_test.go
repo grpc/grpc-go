@@ -981,7 +981,7 @@ func (s) TestDataCachePurging(t *testing.T) {
 // connectivity state updates to both the delegate and a channel for testing.
 type wrappingConnectivityStateSubscriber struct {
 	delegate    grpcsync.Subscriber
-	connStateCh *buffer.Unbounded
+	connStateCh *buffer.Unbounded[connectivity.State]
 }
 
 func (w *wrappingConnectivityStateSubscriber) OnMessage(msg any) {
@@ -993,16 +993,18 @@ func (w *wrappingConnectivityStateSubscriber) OnMessage(msg any) {
 // to appear on the channel, returning the state that matched first. It skips
 // intermediate states that do not match any of the wanted states, and fails
 // the test if the context expires before any of the desired states are reached.
-func waitForConnectivityState(ctx context.Context, t *testing.T, ch *buffer.Unbounded, wants ...connectivity.State) connectivity.State {
+func waitForConnectivityState(ctx context.Context, t *testing.T, ch *buffer.Unbounded[connectivity.State], wants ...connectivity.State) connectivity.State {
 	t.Helper()
 	for {
 		select {
-		case gotState := <-ch.Get():
+		case gotState, ok := <-ch.Get():
 			ch.Load()
-			got := gotState.(connectivity.State)
+			if !ok {
+				t.Fatalf("Channel closed while waiting for RLS control channel to become one of %v", wants)
+			}
 			for _, want := range wants {
-				if got == want {
-					return got
+				if gotState == want {
+					return gotState
 				}
 			}
 		case <-ctx.Done():
@@ -1045,11 +1047,13 @@ func (s) TestControlChannelConnectivityStateMonitoring(t *testing.T) {
 
 	// Override the connectivity state subscriber to wrap the original and
 	// make connectivity state changes visible to the test.
-	wrappedSubscriber := &wrappingConnectivityStateSubscriber{connStateCh: buffer.NewUnbounded()}
+	wrappedSubscriber := &wrappingConnectivityStateSubscriber{connStateCh: buffer.NewUnbounded[connectivity.State]()}
 	origConnectivityStateSubscriber := newConnectivityStateSubscriber
 	newConnectivityStateSubscriber = func(delegate grpcsync.Subscriber) grpcsync.Subscriber {
-		wrappedSubscriber.delegate = delegate
-		return wrappedSubscriber
+		return &wrappingConnectivityStateSubscriber{
+			delegate:    delegate,
+			connStateCh: wrappedSubscriber.connStateCh,
+		}
 	}
 	defer func() { newConnectivityStateSubscriber = origConnectivityStateSubscriber }()
 
@@ -1116,10 +1120,10 @@ func (s) TestControlChannelConnectivityStateMonitoring(t *testing.T) {
 		// and move it to TRANSIENT_FAILURE.
 		ctxFailed := metadata.AppendToOutgoingContext(ctx, "n1", "v1")
 		makeTestRPCAndVerifyError(ctxFailed, t, cc, codes.Unavailable, nil)
-	}
 
-	// Wait for the control channel to move to TRANSIENT_FAILURE.
-	waitForConnectivityState(ctx, t, wrappedSubscriber.connStateCh, connectivity.TransientFailure)
+		// Wait for the control channel to move to TRANSIENT_FAILURE.
+		waitForConnectivityState(ctx, t, wrappedSubscriber.connStateCh, connectivity.TransientFailure)
+	}
 
 	// Restart the RLS server.
 	lis.Restart()
@@ -1188,11 +1192,13 @@ func (s) TestControlChannelIdleTransitionNoBackoffReset(t *testing.T) {
 
 	// Override the connectivity state subscriber to wrap the original and
 	// make connectivity state changes visible to the test.
-	wrappedSubscriber := &wrappingConnectivityStateSubscriber{connStateCh: buffer.NewUnbounded()}
+	wrappedSubscriber := &wrappingConnectivityStateSubscriber{connStateCh: buffer.NewUnbounded[connectivity.State]()}
 	origConnectivityStateSubscriber := newConnectivityStateSubscriber
 	newConnectivityStateSubscriber = func(delegate grpcsync.Subscriber) grpcsync.Subscriber {
-		wrappedSubscriber.delegate = delegate
-		return wrappedSubscriber
+		return &wrappingConnectivityStateSubscriber{
+			delegate:    delegate,
+			connStateCh: wrappedSubscriber.connStateCh,
+		}
 	}
 	defer func() { newConnectivityStateSubscriber = origConnectivityStateSubscriber }()
 

@@ -62,11 +62,11 @@ type controlChannel struct {
 	// hammering the RLS service while it is overloaded or down.
 	throttler adaptiveThrottler
 
-	cc                   *grpc.ClientConn
-	client               rlsgrpc.RouteLookupServiceClient
-	logger               *internalgrpclog.PrefixLogger
-	unsubscribe          func()
-	seenTransientFailure bool
+	cc                      *grpc.ClientConn
+	client                  rlsgrpc.RouteLookupServiceClient
+	logger                  *internalgrpclog.PrefixLogger
+	dropConnStateSubscriber func()
+	seenTransientFailure    bool
 }
 
 // newControlChannel creates a controlChannel to rlsServerName and uses
@@ -90,7 +90,8 @@ func newControlChannel(rlsServerName, serviceConfig string, rpcTimeout time.Dura
 	}
 	// Subscribe to connectivity state before connecting to avoid missing initial
 	// updates, which are only delivered to active subscribers.
-	ctrlCh.unsubscribe = internal.SubscribeToConnectivityStateChanges.(func(cc *grpc.ClientConn, s grpcsync.Subscriber) func())(ctrlCh.cc, newConnectivityStateSubscriber(ctrlCh))
+	subscribe := internal.SubscribeToConnectivityStateChanges.(func(cc *grpc.ClientConn, s grpcsync.Subscriber) func())
+	ctrlCh.dropConnStateSubscriber = subscribe(ctrlCh.cc, newConnectivityStateSubscriber(ctrlCh))
 	ctrlCh.cc.Connect()
 	ctrlCh.client = rlsgrpc.NewRouteLookupServiceClient(ctrlCh.cc)
 	ctrlCh.logger.Infof("Control channel created to RLS server at: %v", rlsServerName)
@@ -180,7 +181,7 @@ func (cc *controlChannel) dialOpts(bOpts balancer.BuildOptions, serviceConfig st
 }
 
 func (cc *controlChannel) close() {
-	cc.unsubscribe()
+	cc.dropConnStateSubscriber()
 	cc.cc.Close()
 	cc.logger.Infof("Shutdown")
 }
