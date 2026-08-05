@@ -1210,7 +1210,7 @@ func (s) TestVerifyPeerCertificateZeroCerts(t *testing.T) {
 		isClient:         true,
 		config:           &tls.Config{},
 	}
-	verifyPeerCertificate := buildVerifyFunc(creds, "", nil, &CertificateChains{})
+	verifyPeerCertificate, _ := buildVerifyFunc(creds, "", nil, &CertificateChains{})
 	// Calling verifyPeerCertificate with zero certificates.
 	const wantErr = "no peer certificates presented"
 	if err := verifyPeerCertificate(nil, nil); err == nil || !strings.Contains(err.Error(), wantErr) {

@@ -546,7 +546,6 @@ func (c *advancedTLSCreds) OverrideServerName(serverNameOverride string) error {
 func buildVerifyFunc(c *advancedTLSCreds,
 	serverName string,
 	rawConn net.Conn,
-<<<<<<< HEAD
 	peerVerifiedChains *CertificateChains) (func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error, func(cs tls.ConnectionState) error) {
 	var (
 		chains   CertificateChains
@@ -554,17 +553,11 @@ func buildVerifyFunc(c *advancedTLSCreds,
 		rawCerts [][]byte
 	)
 	verifyPeerCertFunc := func(rc [][]byte, verifiedChains [][]*x509.Certificate) error {
-		rawCerts = rc
-		chains = verifiedChains
-=======
-	peerVerifiedChains *CertificateChains) func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
-	return func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
-		if len(rawCerts) == 0 {
+		if len(rc) == 0 {
 			return fmt.Errorf("no peer certificates presented")
 		}
-		chains := verifiedChains
-		var leafCert *x509.Certificate
->>>>>>> key_exchange_group
+		rawCerts = rc
+		chains = verifiedChains
 		rawCertList := make([]*x509.Certificate, len(rawCerts))
 		for i, asn1Data := range rawCerts {
 			cert, err := x509.ParseCertificate(asn1Data)
