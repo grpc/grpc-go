@@ -33,6 +33,10 @@ import (
 	v3matcherpb "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
 )
 
+// maxHeaderSize is the maximum length, in bytes, of a header key or value in a
+// mutation received from an external processing server.
+const maxHeaderSize = 16384
+
 // HeaderMutationRules specifies the rules for what modifications an external
 // processing server may make to headers sent on the data plane RPC.
 type HeaderMutationRules struct {
@@ -103,7 +107,8 @@ func HeaderMutationRulesFromProto(mr *v3mutationpb.HeaderMutationRules) (HeaderM
 // key and value, and checks if the mutation is permitted by the AllowExpr and
 // DisallowExpr regular expressions.
 //
-// The following headers are always ignored:
+// A mutation for any of the following headers fails validation and an error is
+// returned:
 // - Pseudo-headers (keys starting with ':').
 // - The 'host' header.
 // - Headers with keys in the reserved 'grpc-' space.
@@ -111,8 +116,9 @@ func HeaderMutationRulesFromProto(mr *v3mutationpb.HeaderMutationRules) (HeaderM
 // - Headers with keys or values exceeding 16384 bytes.
 // - Headers with an invalid gRPC header name or header value.
 //
-// If a mutation is disallowed and DisallowIsError is true, an error is
-// returned. Otherwise, the disallowed mutation is silently ignored.
+// If a mutation is disallowed by the mutation rules and DisallowIsError is
+// true, an error is returned. Otherwise, the disallowed mutation is silently
+// ignored.
 //
 // The input metadata must not be nil.
 func (hmr *HeaderMutationRules) ApplyAdditions(hvos []*v3corepb.HeaderValueOption, input metadata.MD) error {
@@ -129,22 +135,22 @@ func (hmr *HeaderMutationRules) ApplyAdditions(hvos []*v3corepb.HeaderValueOptio
 	for _, hvo := range hvos {
 		header := hvo.GetHeader()
 		key := header.GetKey()
-		if len(key) == 0 || key[0] == ':' || key == "host" || strings.HasPrefix(key, "grpc-") || key != strings.ToLower(key) || len(key) > 16384 {
-			continue
+		if err := validateHeaderKey(key); err != nil {
+			return fmt.Errorf("extproc: invalid header mutation: %v", err)
 		}
 
 		value := header.GetValue()
 		if strings.HasSuffix(key, "-bin") {
 			value = string(header.GetRawValue())
 		}
-		if len(value) > 16384 {
-			continue
+		if len(value) > maxHeaderSize {
+			return fmt.Errorf("extproc: invalid header mutation: value for header key %q exceeds the maximum length of %d bytes", key, maxHeaderSize)
 		}
-		// ValidatePair rejects keys outside the gRPC header name charset and
-		// values carrying bytes outside %x20-%x7E. It skips the value check
-		// for "-bin" keys, whose values the transport base64 encodes.
-		if imetadata.ValidatePair(key, value) != nil {
-			continue
+		// ValidatePair rejects values carrying bytes outside %x20-%x7E. It
+		// skips the value check for "-bin" keys, whose values the transport
+		// base64 encodes.
+		if err := imetadata.ValidatePair(key, value); err != nil {
+			return fmt.Errorf("extproc: invalid header mutation: %v", err)
 		}
 
 		if !hmr.allow(key) {
@@ -195,11 +201,8 @@ func (hmr *HeaderMutationRules) ApplyRemovals(headersToRemove []string, input me
 	}
 
 	for _, header := range headersToRemove {
-		if len(header) == 0 || header[0] == ':' || header == "host" || strings.HasPrefix(header, "grpc-") || header != strings.ToLower(header) || len(header) > 16384 {
-			continue
-		}
-		if imetadata.ValidateKey(header) != nil {
-			continue
+		if err := validateHeaderKey(header); err != nil {
+			return fmt.Errorf("extproc: invalid header mutation: %v", err)
 		}
 		if !hmr.allow(header) {
 			if hmr.DisallowIsError {
@@ -210,6 +213,27 @@ func (hmr *HeaderMutationRules) ApplyRemovals(headersToRemove []string, input me
 		input.Delete(header)
 	}
 	return nil
+}
+
+// validateHeaderKey returns a non-nil error if key may not be mutated by an
+// external processing server, either because the key is reserved or because it
+// is not a valid gRPC header name.
+func validateHeaderKey(key string) error {
+	switch {
+	case len(key) == 0:
+		return fmt.Errorf("header key is empty")
+	case key[0] == ':':
+		return fmt.Errorf("header key %q is a pseudo-header", key)
+	case key == "host":
+		return fmt.Errorf("header key %q is reserved", key)
+	case strings.HasPrefix(key, "grpc-"):
+		return fmt.Errorf("header key %q is in the reserved 'grpc-' space", key)
+	case key != strings.ToLower(key):
+		return fmt.Errorf("header key %q is not lowercase", key)
+	case len(key) > maxHeaderSize:
+		return fmt.Errorf("header key exceeds the maximum length of %d bytes", maxHeaderSize)
+	}
+	return imetadata.ValidateKey(key)
 }
 
 func (hmr *HeaderMutationRules) allow(key string) bool {
