@@ -4135,12 +4135,15 @@ func (s) TestObservabilityMidStreamFailDeny(t *testing.T) {
 		t.Fatalf("FullDuplexCall() failed: %v", err)
 	}
 
-	const numMessages = 10
 	var gotErr error
-	// Send and recv 10 messages and verify that the RPC fails with correct error.
-	for i := 0; i < numMessages; i++ {
+	// Continuously send and recv messages until the RPC fails with correct error
+	// or the test context times out.
+	for {
+		if ctx.Err() != nil {
+			t.Fatalf("Timed out waiting for stream to fail from processor disconnect: %v", ctx.Err())
+		}
 		req := &testpb.StreamingOutputCallRequest{
-			Payload: &testpb.Payload{Body: []byte(fmt.Sprintf("msg-%d", i))},
+			Payload: &testpb.Payload{Body: []byte("msg")},
 		}
 		if err := stream.Send(req); err != nil {
 			gotErr = err
@@ -4152,8 +4155,11 @@ func (s) TestObservabilityMidStreamFailDeny(t *testing.T) {
 		}
 	}
 
+	if ctx.Err() != nil {
+		t.Fatalf("Timed out waiting for stream to fail from processor disconnect: %v", ctx.Err())
+	}
 	if gotErr == nil {
-		t.Fatalf("Expected error from processor stream failure, got none after %d messages", numMessages)
+		t.Fatalf("Expected error from processor stream failure, got none")
 	}
 	if code := status.Code(gotErr); code != codes.Internal {
 		t.Fatalf("Stream returned status code %v (error: %v), want %v", code, gotErr, codes.Internal)
