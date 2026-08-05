@@ -376,12 +376,7 @@ func (r *xdsResolver) sendNewServiceConfig(cs stoppableConfigSelector) bool {
 	}, cs)
 	state = xdsresource.SetXDSConfig(state, r.xdsConfig)
 	state = xdsdepmgr.SetXDSClusterSubscriber(state, r.dm)
-	if err := r.cc.UpdateState(xdsclient.SetClient(state, r.xdsClient)); err != nil {
-		if r.logger.V(2) {
-			r.logger.Infof("Channel rejected new state: %+v with error: %v", state, err)
-		}
-		return false
-	}
+	r.cc.UpdateState(xdsclient.SetClient(state, r.xdsClient))
 	return true
 }
 
@@ -436,11 +431,12 @@ func (r *xdsResolver) newConfigSelector() (_ *configSelector, err error) {
 				}
 				return nil, err
 			}
-			rc := &routeCluster{
+			rc := grpcsync.NewRefCounted(&routeCluster{
 				name:        clusterName,
 				interceptor: interceptor,
-			}
-			rc.refcount.Add(1)
+			}, func() {
+				interceptor.Close()
+			})
 			cs.routes[i].routeClusters = append(cs.routes[i].routeClusters, rc)
 			clusters.Add(rc, 1)
 			ci := r.addOrGetActiveClusterInfo(clusterName, "")
@@ -460,11 +456,12 @@ func (r *xdsResolver) newConfigSelector() (_ *configSelector, err error) {
 					}
 					return nil, err
 				}
-				rc := &routeCluster{
+				rc := grpcsync.NewRefCounted(&routeCluster{
 					name:        clusterName,
 					interceptor: interceptor,
-				}
-				rc.refcount.Add(1)
+				}, func() {
+					interceptor.Close()
+				})
 				cs.routes[i].routeClusters = append(cs.routes[i].routeClusters, rc)
 				clusters.Add(rc, int64(wc.Weight))
 				ci := r.addOrGetActiveClusterInfo(clusterName, wc.Name)
