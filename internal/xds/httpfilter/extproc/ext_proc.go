@@ -320,10 +320,6 @@ func (cf *clientFilter) getOrCreateExtProcChannel(server xdsresource.GRPCService
 		cf.removeProcChannel(key, rc)
 		cancel()
 	})
-	if err != nil {
-		cancel()
-		return nil, err
-	}
 
 	// Double-check if another goroutine created and stored a channel for this
 	// key while we were unlocked.

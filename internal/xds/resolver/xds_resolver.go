@@ -317,13 +317,7 @@ func (r *xdsResolver) Update(config *xdsresource.XDSConfig) {
 			r.onResourceError(err)
 			return
 		}
-		if !r.sendNewServiceConfig(cs) {
-			// Channel didn't like the update we provided (unexpected); erase
-			// this config selector and ignore this update, continuing with
-			// the previous config selector.
-			cs.stop()
-			return
-		}
+		r.sendNewServiceConfig(cs)
 
 		if r.curConfigSelector != nil {
 			r.curConfigSelector.stop()
@@ -344,7 +338,7 @@ func (r *xdsResolver) Error(err error) {
 // false if an error occurs while sending an update to the channel.
 //
 // Only executed in the context of a serializer callback.
-func (r *xdsResolver) sendNewServiceConfig(cs stoppableConfigSelector) bool {
+func (r *xdsResolver) sendNewServiceConfig(cs stoppableConfigSelector) {
 	// Delete entries from r.activeClusters with zero references;
 	// otherwise serviceConfigJSON will generate a config including
 	// them.
@@ -362,7 +356,7 @@ func (r *xdsResolver) sendNewServiceConfig(cs stoppableConfigSelector) bool {
 		// more meaningful error, as opposed to one that says that pick_first
 		// received no addresses.
 		r.cc.ReportError(errCS.err)
-		return true
+		return
 	}
 
 	sc := serviceConfigJSON(r.activeClusters, r.activePlugins)
@@ -377,7 +371,6 @@ func (r *xdsResolver) sendNewServiceConfig(cs stoppableConfigSelector) bool {
 	state = xdsresource.SetXDSConfig(state, r.xdsConfig)
 	state = xdsdepmgr.SetXDSClusterSubscriber(state, r.dm)
 	r.cc.UpdateState(xdsclient.SetClient(state, r.xdsClient))
-	return true
 }
 
 // newConfigSelector creates a new config selector using the most recently

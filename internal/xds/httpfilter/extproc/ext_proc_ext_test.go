@@ -5074,11 +5074,11 @@ func (s) TestExtProcChannelRetention_XDSConfigUpdate(t *testing.T) {
 	}
 }
 
-// TestExtProcChannelRetention_UnaryRPCFail verifies that when ext proc is
+// TestExtProcChannelRetention_UnaryRPC verifies that when ext proc is
 // configured for a unary RPC and the RPC fails after successfully establishing
 // the dataplane stream but before invoking any Send/Recv functions on it, the
 // channel is closed on failure.
-func (s) TestExtProcChannelRetention_UnaryRPCFail(t *testing.T) {
+func (s) TestExtProcChannelRetention_UnaryRPC(t *testing.T) {
 	tests := []struct {
 		name              string
 		observabilityMode bool
@@ -5130,11 +5130,11 @@ func (s) TestExtProcChannelRetention_UnaryRPCFail(t *testing.T) {
 
 			cc, err := setupTestClient(t, extProcAddr, &v3procfilterpb.ExternalProcessor{
 				ProcessingMode: &v3procfilterpb.ProcessingMode{
-					RequestHeaderMode:   v3procfilterpb.ProcessingMode_SKIP,
+					RequestHeaderMode:   v3procfilterpb.ProcessingMode_SEND,
 					ResponseHeaderMode:  v3procfilterpb.ProcessingMode_SEND,
 					RequestBodyMode:     v3procfilterpb.ProcessingMode_GRPC,
-					ResponseBodyMode:    v3procfilterpb.ProcessingMode_NONE,
-					ResponseTrailerMode: v3procfilterpb.ProcessingMode_SKIP,
+					ResponseBodyMode:    v3procfilterpb.ProcessingMode_GRPC,
+					ResponseTrailerMode: v3procfilterpb.ProcessingMode_SEND,
 				},
 				FailureModeAllow:  false,
 				ObservabilityMode: test.observabilityMode,
@@ -5149,10 +5149,10 @@ func (s) TestExtProcChannelRetention_UnaryRPCFail(t *testing.T) {
 			// Expect the unary RPC to fail because the proc server fails immediately.
 			client := testgrpc.NewTestServiceClient(cc)
 			reqMsg := &testpb.SimpleRequest{Payload: &testpb.Payload{Body: []byte(reqBodyC1)}}
-			if _, err = client.UnaryCall(ctx, reqMsg); status.Code(err) != codes.Internal || !strings.Contains(err.Error(), "proc server immediate failure") {
-				t.Fatalf("UnaryCall() status code = %v ,err %v, want %v , error %v", status.Code(err), err, codes.Internal, "proc server immediate failure")
-			}
-
+			// Do not check the error because for observability mode, in some cases
+			// the RPC could succeed before the proc server has a chance to fail the
+			// RPC. But in that case too, the interceptor should be closed.
+			client.UnaryCall(ctx, reqMsg)
 			// Close the client channel so that interceptor.Close() is called.
 			cc.Close()
 
