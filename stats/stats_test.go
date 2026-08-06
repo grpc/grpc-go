@@ -294,11 +294,11 @@ const (
 )
 
 type rpcConfig struct {
-	count    int  // Number of requests and responses for streaming RPCs.
-	success  bool // Whether the RPC should succeed or return error.
-	failfast bool
-	authority string // Authority override for the RPC.
-	callType rpcType // Type of RPC.
+	count     int  // Number of requests and responses for streaming RPCs.
+	success   bool // Whether the RPC should succeed or return error.
+	failfast  bool
+	authority string  // Authority override for the RPC.
+	callType  rpcType // Type of RPC.
 }
 
 func (te *test) doUnaryCall(c *rpcConfig) (*testpb.SimpleRequest, *testpb.SimpleResponse, error) {
