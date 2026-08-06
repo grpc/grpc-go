@@ -946,6 +946,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr, handler s
 			LocalAddr:   t.localAddr,
 			Compression: callHdr.SendCompress,
 			Header:      header,
+			Authority:   callHdr.Host,
 		})
 	}
 	if transportDrainRequired {
