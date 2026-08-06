@@ -440,6 +440,10 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 			procRecvDone: make(chan struct{}),
 		}
 
+		// Start background goroutine to receive any messages from the external
+		// processor server and discard them.
+		go ocs.discardProcessorResponsesLoop()
+
 		// If the request header processing mode is set to "Send", forward the
 		// headers to the external processor server.
 		if i.config.processingModes.requestHeaderMode == modeSend {
@@ -460,9 +464,6 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 			return nil, err
 		}
 		ocs.recordMetric(clientHeadersDurationMetric, timeSince(ocs.clientHeadersStartTime).Seconds())
-		// Start background goroutine to receive any messages from the external
-		// processor server and discard them.
-		go ocs.discardProcessorResponsesLoop()
 
 		return ocs, nil
 	}
