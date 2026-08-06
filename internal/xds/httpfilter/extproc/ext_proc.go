@@ -440,6 +440,18 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 			procRecvDone: make(chan struct{}),
 		}
 
+		// Defer the closing of ext proc stream by the defined deferred close
+		// timeout to allow the server to read all messages from the proc stream.
+		onFinishFunc := func(error) {
+			time.AfterFunc(ocs.config.deferredCloseTimeout, ocs.procCancel)
+		}
+		newOpts := append(opts, grpc.OnFinish(onFinishFunc))
+
+		if ocs.dataplaneStream, err = newStream(ocs.ctx, newOpts...); err != nil {
+			ocs.cancel()
+			return nil, ocs.streamError(err)
+		}
+		ocs.recordMetric(clientHeadersDurationMetric, timeSince(ocs.clientHeadersStartTime).Seconds())
 		// Start background goroutine to receive any messages from the external
 		// processor server and discard them.
 		go ocs.discardProcessorResponsesLoop()
@@ -451,19 +463,6 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 				return ocs.handleInitError(fmt.Errorf("failed to send client headers to external processor server: %v", err), newStream, opts...)
 			}
 		}
-
-		// Defer the closing of ext proc stream by the defined deferred close
-		// timeout to allow the server to read all messages from the proc stream.
-		onFinishFunc := func(error) {
-			time.AfterFunc(ocs.config.deferredCloseTimeout, ocs.procCancel)
-		}
-		newOpts := append(opts, grpc.OnFinish(onFinishFunc))
-
-		if ocs.dataplaneStream, err = newStream(ocs.ctx, newOpts...); err != nil {
-			ocs.cancel()
-			return nil, err
-		}
-		ocs.recordMetric(clientHeadersDurationMetric, timeSince(ocs.clientHeadersStartTime).Seconds())
 
 		return ocs, nil
 	}
