@@ -372,6 +372,10 @@ func ValueFromOutgoingContext(ctx context.Context, key string) []string {
 	}
 
 	key = strings.ToLower(key)
+	// Unlike ValueFromIncomingContext, this can't return as soon as raw.md is
+	// checked: raw.added still needs to be walked and accumulated regardless.
+	// The else below prevents that from overwriting an exact match with an
+	// unrelated case-insensitive one.
 	var vals []string
 	if v, ok := raw.md[key]; ok {
 		vals = copyOf(v)

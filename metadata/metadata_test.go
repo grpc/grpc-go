@@ -26,6 +26,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/internal/grpctest"
 )
 
@@ -344,19 +345,23 @@ func (s) TestAppendToOutgoingContext_FromKVSlice(t *testing.T) {
 }
 
 func (s) TestValueFromOutgoingContext(t *testing.T) {
-	tCtx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
 	md := Pairs(
 		"X-My-Header-1", "42",
 		"x-my-header-3", "44",
+		"k1", "v1",
+		"k2", "v2",
 	)
 	// Verify that we match case-insensitively even if callers directly
 	// modify md.
 	md["X-INCORRECT-UPPERCASE"] = []string{"foo"}
-	ctx := NewOutgoingContext(tCtx, md)
+	ctx = NewOutgoingContext(ctx, md)
 	ctx = AppendToOutgoingContext(ctx, "x-my-header-2", "43-1")
 	ctx = AppendToOutgoingContext(ctx, "X-My-Header-2", "43-2")
+	ctx = AppendToOutgoingContext(ctx, "k1", "v3")
+	ctx = AppendToOutgoingContext(ctx, "k1", "v4")
 
 	for _, test := range []struct {
 		key  string
@@ -367,9 +372,8 @@ func (s) TestValueFromOutgoingContext(t *testing.T) {
 			want: []string{"42"},
 		},
 		{
-			// Split across raw.md (none here) and two AppendToOutgoingContext
-			// calls (raw.added) — must accumulate across all of them, in
-			// call order, same as FromOutgoingContext.
+			// Split across two AppendToOutgoingContext calls (raw.added) —
+			// must accumulate across both, in call order.
 			key:  "x-my-header-2",
 			want: []string{"43-1", "43-2"},
 		},
@@ -385,23 +389,25 @@ func (s) TestValueFromOutgoingContext(t *testing.T) {
 			key:  "x-incorrect-uppercase",
 			want: []string{"foo"},
 		},
+		{
+			// Present in both raw.md and two later AppendToOutgoingContext
+			// calls — must accumulate across all three, in order.
+			key:  "k1",
+			want: []string{"v1", "v3", "v4"},
+		},
 	} {
 		v := ValueFromOutgoingContext(ctx, test.key)
-		if !reflect.DeepEqual(v, test.want) {
-			t.Errorf("ValueFromOutgoingContext(ctx, %q) = %v, want %v", test.key, v, test.want)
+		if diff := cmp.Diff(test.want, v); diff != "" {
+			t.Errorf("ValueFromOutgoingContext(ctx, %q) returned unexpected diff (-want +got):\n%s", test.key, diff)
 		}
 	}
+}
 
-	// Accumulate raw.md with later appends, in order.
-	mergeCtx := NewOutgoingContext(tCtx, Pairs("k1", "v1", "k2", "v2"))
-	mergeCtx = AppendToOutgoingContext(mergeCtx, "k1", "v3")
-	mergeCtx = AppendToOutgoingContext(mergeCtx, "k1", "v4")
-	if v, want := ValueFromOutgoingContext(mergeCtx, "k1"), []string{"v1", "v3", "v4"}; !reflect.DeepEqual(v, want) {
-		t.Errorf("ValueFromOutgoingContext(ctx, \"k1\") = %v, want %v", v, want)
-	}
+func (s) TestValueFromOutgoingContext_NoMetadata(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 
-	// No outgoing metadata at all.
-	if v := ValueFromOutgoingContext(tCtx, "x-my-header-1"); v != nil {
+	if v := ValueFromOutgoingContext(ctx, "x-my-header-1"); v != nil {
 		t.Errorf("ValueFromOutgoingContext on context with no outgoing metadata = %v, want nil", v)
 	}
 }
@@ -411,8 +417,9 @@ func (s) TestValueFromOutgoingContext_AddedCaseInsensitive(t *testing.T) {
 	defer cancel()
 	ctx = context.WithValue(ctx, mdOutgoingKey{}, rawMD{added: [][]string{{"X-My-Header", "42"}}})
 
-	if v, want := ValueFromOutgoingContext(ctx, "x-my-header"), []string{"42"}; !reflect.DeepEqual(v, want) {
-		t.Errorf("ValueFromOutgoingContext(ctx, \"x-my-header\") = %v, want %v", v, want)
+	v := ValueFromOutgoingContext(ctx, "x-my-header")
+	if diff := cmp.Diff([]string{"42"}, v); diff != "" {
+		t.Errorf("ValueFromOutgoingContext(ctx, \"x-my-header\") returned unexpected diff (-want +got):\n%s", diff)
 	}
 }
 
