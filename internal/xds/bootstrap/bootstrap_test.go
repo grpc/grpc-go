@@ -29,6 +29,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/credentials/jwt"
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/internal"
@@ -1032,6 +1033,13 @@ func (s) TestGetConfiguration_Federation(t *testing.T) {
 						"server_features" : ["xds_v3"]
 					}]
 				}
+			},
+			"allowed_grpc_services": {
+				"dns:///whitelisted-ext-proc:443": {
+					"channel_creds": [
+						{ "type": "insecure" }
+					]
+				}
 			}
 		}`,
 		// If client_default_listener_resource_name_template is not set, it
@@ -1127,6 +1135,12 @@ func (s) TestGetConfiguration_Federation(t *testing.T) {
 							serverFeatures:       []string{"xds_v3"},
 							selectedChannelCreds: ChannelCreds{Type: "google_default"},
 						}},
+					},
+				},
+				allowedGrpcServices: map[string]*AllowedGrpcService{
+					"dns:///whitelisted-ext-proc:443": {
+						targetURI:    "dns:///whitelisted-ext-proc:443",
+						channelCreds: []ChannelCreds{{Type: "insecure"}},
 					},
 				},
 			},
@@ -1708,5 +1722,493 @@ func (s) TestBootstrap_SelectedCallCreds_WhenNotCCNotEnabled(t *testing.T) {
 	// because the env variable is not enabled.
 	if len(dialOpts) != 0 {
 		t.Errorf("Call creds count = %d, want %d", len(dialOpts), 0)
+	}
+}
+
+func (s) TestBootstrap_AllowedGrpcServices(t *testing.T) {
+	testutils.SetEnvConfig(t, &envconfig.XDSBootstrapCallCredsEnabled, true)
+	bootstrapFileMap := map[string]string{
+		"allowedGrpcServicesGood": `
+		{
+			"node": {
+				"id": "ENVOY_NODE_ID"
+			},
+			"xds_servers" : [{
+				"server_uri": "trafficdirector.googleapis.com:443",
+				"channel_creds": [
+					{ "type": "insecure" }
+				]
+			}],
+			"allowed_grpc_services": {
+				"dns:///sharding-service:443": {
+					"channel_creds": [
+						{ "type": "insecure" }
+					]
+				}
+			}
+		}`,
+		"allowedGrpcServicesWithCallCreds": `
+		{
+			"node": {
+				"id": "ENVOY_NODE_ID"
+			},
+			"xds_servers" : [{
+				"server_uri": "trafficdirector.googleapis.com:443",
+				"channel_creds": [
+					{ "type": "insecure" }
+				]
+			}],
+			"allowed_grpc_services": {
+				"dns:///sharding-service:443": {
+					"channel_creds": [
+						{ "type": "insecure" }
+					],
+					"call_creds": [
+						{ "type": "jwt_token_file", "config": {"jwt_token_file": "/var/run/secrets/tokens/istio-token"} }
+					]
+				}
+			}
+		}`,
+		"allowedGrpcServicesTLS": `
+		{
+			"node": {
+				"id": "ENVOY_NODE_ID"
+			},
+			"xds_servers" : [{
+				"server_uri": "trafficdirector.googleapis.com:443",
+				"channel_creds": [
+					{ "type": "insecure" }
+				]
+			}],
+			"allowed_grpc_services": {
+				"dns:///sharding-service:443": {
+					"channel_creds": [
+						{ "type": "tls", "config": {} }
+					]
+				}
+			}
+		}`,
+	}
+	cancel := setupBootstrapOverride(bootstrapFileMap)
+	defer cancel()
+
+	tests := []struct {
+		name                string
+		fileName            string
+		wantChannelCredType string
+		wantCallCredTypes   []string
+	}{
+		{
+			name:                "good_allowed_grpc_services",
+			fileName:            "allowedGrpcServicesGood",
+			wantChannelCredType: "insecure",
+		},
+		{
+			name:                "allowed_grpc_services_with_call_creds",
+			fileName:            "allowedGrpcServicesWithCallCreds",
+			wantChannelCredType: "insecure",
+			wantCallCredTypes:   []string{"jwt_token_file"},
+		},
+		{
+			name:                "tls_channel_creds",
+			fileName:            "allowedGrpcServicesTLS",
+			wantChannelCredType: "tls",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			origBootstrapFileName := envconfig.XDSBootstrapFileName
+			envconfig.XDSBootstrapFileName = test.fileName
+			defer func() { envconfig.XDSBootstrapFileName = origBootstrapFileName }()
+
+			cfg, err := GetConfiguration()
+			if err != nil {
+				t.Fatalf("GetConfiguration() failed: %v", err)
+			}
+			allowed := cfg.AllowedGrpcServices()
+			if len(allowed) != 1 {
+				t.Fatalf("AllowedGrpcServices count got: %d, want: 1", len(allowed))
+			}
+			svc, ok := allowed["dns:///sharding-service:443"]
+			if !ok {
+				t.Fatalf("AllowedGrpcServices missing key %q", "dns:///sharding-service:443")
+			}
+			if got := svc.selectedChannelCreds.Type; got != test.wantChannelCredType {
+				t.Errorf("SelectedChannelCreds type got: %q, want: %q", got, test.wantChannelCredType)
+			}
+			if len(svc.callCredsConfigs) != len(test.wantCallCredTypes) {
+				t.Fatalf("CallCredsConfigs count got: %d, want: %d", len(svc.callCredsConfigs), len(test.wantCallCredTypes))
+			}
+			for i, wantType := range test.wantCallCredTypes {
+				if got := svc.callCredsConfigs[i].Type; got != wantType {
+					t.Errorf("CallCredsConfig[%d] type got: %q, want: %q", i, got, wantType)
+				}
+			}
+		})
+	}
+}
+
+// TestBootstrap_AllowedGrpcServices_UnsupportedChannelCreds verifies that a
+// bootstrap fails to load when an allowed_grpc_services entry has no supported
+// channel-creds type.
+func (s) TestBootstrap_AllowedGrpcServices_UnsupportedChannelCreds(t *testing.T) {
+	cfg := `{
+		"node": { "id": "ENVOY_NODE_ID" },
+		"xds_servers": [{
+			"server_uri": "trafficdirector.googleapis.com:443",
+			"channel_creds": [{ "type": "insecure" }]
+		}],
+		"allowed_grpc_services": {
+			"dns:///sharding-service:443": {
+				"channel_creds": [{ "type": "unsupported_cred_type" }]
+			}
+		}
+	}`
+	cancel := setupBootstrapOverride(map[string]string{"config": cfg})
+	defer cancel()
+	testutils.SetEnvConfig(t, &envconfig.XDSBootstrapFileName, "config")
+
+	if _, err := GetConfiguration(); err == nil {
+		t.Fatal("GetConfiguration() succeeded; want error for unsupported channel creds")
+	}
+}
+
+// allowedGrpcServiceForTarget parses the bootstrap config and returns the
+// AllowedGrpcService for the given target URI, failing the test if absent.
+func allowedGrpcServiceForTarget(t *testing.T, target string) *AllowedGrpcService {
+	t.Helper()
+	cfg, err := GetConfiguration()
+	if err != nil {
+		t.Fatalf("GetConfiguration() failed: %v", err)
+	}
+	svc, ok := cfg.AllowedGrpcServices()[target]
+	if !ok {
+		t.Fatalf("AllowedGrpcServices() missing key %q", target)
+	}
+	return svc
+}
+
+// allowedGrpcServiceWithCallCreds is a bootstrap config whose allowed gRPC
+// service has both a channel-creds and a call-creds entry.
+const allowedGrpcServiceWithCallCreds = `
+{
+	"node": { "id": "ENVOY_NODE_ID" },
+	"xds_servers" : [{
+		"server_uri": "trafficdirector.googleapis.com:443",
+		"channel_creds": [{ "type": "insecure" }]
+	}],
+	"allowed_grpc_services": {
+		"dns:///sharding-service:443": {
+			"channel_creds": [{ "type": "insecure" }],
+			"call_creds": [
+				{ "type": "jwt_token_file", "config": {"jwt_token_file": "/var/run/secrets/tokens/istio-token"} }
+			]
+		}
+	}
+}`
+
+// TestBootstrap_AllowedGrpcServices_ChannelCredsSkipsUnsupported verifies that
+// channel-credential selection skips unsupported types and stops at the first
+// supported one.
+func (s) TestBootstrap_AllowedGrpcServices_ChannelCredsSkipsUnsupported(t *testing.T) {
+	const target = "dns:///sharding-service:443"
+	cancel := setupBootstrapOverride(map[string]string{
+		// First channel-creds entry is an unsupported type; the supported
+		// "insecure" entry follows and must be selected.
+		"config": `
+		{
+			"node": { "id": "ENVOY_NODE_ID" },
+			"xds_servers" : [{
+				"server_uri": "trafficdirector.googleapis.com:443",
+				"channel_creds": [{ "type": "insecure" }]
+			}],
+			"allowed_grpc_services": {
+				"dns:///sharding-service:443": {
+					"channel_creds": [
+						{ "type": "unsupported_cred_type" },
+						{ "type": "insecure" }
+					]
+				}
+			}
+		}`,
+	})
+	defer cancel()
+	testutils.SetEnvConfig(t, &envconfig.XDSBootstrapFileName, "config")
+
+	svc := allowedGrpcServiceForTarget(t, target)
+	if got := svc.selectedChannelCreds.Type; got != "insecure" {
+		t.Errorf("selectedChannelCreds.Type = %q, want %q", got, "insecure")
+	}
+	// Only the channel-creds dial option is expected (no call creds).
+	if got := len(svc.DialOptions()); got != 1 {
+		t.Errorf("len(DialOptions()) = %d, want 1", got)
+	}
+}
+
+// TestBootstrap_AllowedGrpcServices_CallCredsAppliedWhenEnabled verifies that
+// call credentials are built and added as a dial option when the call-creds
+// env var is enabled.
+func (s) TestBootstrap_AllowedGrpcServices_CallCredsAppliedWhenEnabled(t *testing.T) {
+	const target = "dns:///sharding-service:443"
+	testutils.SetEnvConfig(t, &envconfig.XDSBootstrapCallCredsEnabled, true)
+	cancel := setupBootstrapOverride(map[string]string{"config": allowedGrpcServiceWithCallCreds})
+	defer cancel()
+	testutils.SetEnvConfig(t, &envconfig.XDSBootstrapFileName, "config")
+
+	svc := allowedGrpcServiceForTarget(t, target)
+	// One channel-creds dial option plus one per-RPC call-creds option.
+	if got := len(svc.DialOptions()); got != 2 {
+		t.Errorf("len(DialOptions()) = %d, want 2", got)
+	}
+}
+
+// TestBootstrap_AllowedGrpcServices_CallCredsIgnoredWhenDisabled verifies that
+// call credentials are not built when the call-creds env var is disabled, while
+// the parsed config is still retained.
+func (s) TestBootstrap_AllowedGrpcServices_CallCredsIgnoredWhenDisabled(t *testing.T) {
+	const target = "dns:///sharding-service:443"
+	testutils.SetEnvConfig(t, &envconfig.XDSBootstrapCallCredsEnabled, false)
+	cancel := setupBootstrapOverride(map[string]string{"config": allowedGrpcServiceWithCallCreds})
+	defer cancel()
+	testutils.SetEnvConfig(t, &envconfig.XDSBootstrapFileName, "config")
+
+	svc := allowedGrpcServiceForTarget(t, target)
+	// Call creds must not be built, so only the channel-creds option remains.
+	if got := len(svc.DialOptions()); got != 1 {
+		t.Errorf("len(DialOptions()) = %d, want 1", got)
+	}
+	// The parsed call-creds config is still kept.
+	if got := len(svc.callCredsConfigs); got != 1 {
+		t.Errorf("len(callCredsConfigs) = %d, want 1", got)
+	}
+}
+
+// observableChannelCreds is a fake bootstrap channel-credentials builder whose
+// teardown is observable, used to verify cleanup-on-error behavior.
+type observableChannelCreds struct{ onCancel func() }
+
+func (o observableChannelCreds) Build(json.RawMessage) (credentials.Bundle, func(), error) {
+	return insecure.NewBundle(), o.onCancel, nil
+}
+
+func (observableChannelCreds) Name() string { return "test_observable_channel_creds" }
+
+// TestBootstrap_CleanupOnUnmarshalError verifies that credentials built while
+// unmarshaling server configs (top-level and per-authority) and allowed gRPC
+// services are released if bootstrap parsing fails, rather than leaking. It
+// covers failures during later validation, in nested authorities, and mid-way
+// through json.Unmarshal itself.
+func (s) TestBootstrap_CleanupOnUnmarshalError(t *testing.T) {
+	cancels := 0
+	// Registers a test-only channel-creds type in the process-global registry
+	// (there is no unregister API). The unique type name avoids colliding with
+	// real credentials, and the shared cancels counter is safe because the
+	// subtests below run sequentially.
+	bootstrap.RegisterChannelCredentials(observableChannelCreds{onCancel: func() { cancels++ }})
+
+	tests := []struct {
+		name        string
+		desc        string
+		cfg         string
+		wantErr     bool
+		wantCancels int
+	}{
+		{
+			name: "validation_error_releases_allowed_service_creds",
+			desc: "allowed_grpc_services builds creds, then validation fails on the empty xds_servers list",
+			cfg: `{
+				"xds_servers": [],
+				"allowed_grpc_services": {
+					"dns:///side-channel:443": {
+						"channel_creds": [{"type": "test_observable_channel_creds"}]
+					}
+				}
+			}`,
+			wantErr:     true,
+			wantCancels: 1,
+		},
+		{
+			name: "validation_error_releases_authority_server_creds",
+			desc: "a per-authority server builds creds, then validation fails on the invalid authority listener template",
+			cfg: `{
+				"xds_servers": [{
+					"server_uri": "trafficdirector.googleapis.com:443",
+					"channel_creds": [{"type": "insecure"}]
+				}],
+				"authorities": {
+					"auth1": {
+						"client_listener_resource_name_template": "invalid-no-prefix",
+						"xds_servers": [{
+							"server_uri": "authority-server:443",
+							"channel_creds": [{"type": "test_observable_channel_creds"}]
+						}]
+					}
+				}
+			}`,
+			wantErr:     true,
+			wantCancels: 1,
+		},
+		{
+			name: "midway_unmarshal_failure_releases_creds",
+			desc: "allowed_grpc_services (decoded first) builds creds, then json.Unmarshal fails on a malformed field",
+			cfg: `{
+				"allowed_grpc_services": {
+					"dns:///side-channel:443": {
+						"channel_creds": [{"type": "test_observable_channel_creds"}]
+					}
+				},
+				"authorities": "should-be-an-object"
+			}`,
+			wantErr:     true,
+			wantCancels: 1,
+		},
+		{
+			name: "intra_list_server_failure_releases_earlier_creds",
+			desc: "a later server in the list fails to unmarshal; the earlier server's built creds must be released",
+			cfg: `{
+				"xds_servers": [
+					{"server_uri": "s1:443", "channel_creds": [{"type": "test_observable_channel_creds"}]},
+					{"server_uri": "s2:443", "channel_creds": [{"type": "unsupported_cred_type"}]}
+				]
+			}`,
+			wantErr:     true,
+			wantCancels: 1,
+		},
+		{
+			name: "intra_authority_server_failure_releases_creds",
+			desc: "same credential release as the intra-list case, but inside an authority's server list",
+			cfg: `{
+				"xds_servers": [{
+					"server_uri": "trafficdirector.googleapis.com:443",
+					"channel_creds": [{"type": "insecure"}]
+				}],
+				"authorities": {
+					"auth1": {
+						"xds_servers": [
+							{"server_uri": "a1:443", "channel_creds": [{"type": "test_observable_channel_creds"}]},
+							{"server_uri": "a2:443", "channel_creds": [{"type": "unsupported_cred_type"}]}
+						]
+					}
+				}
+			}`,
+			wantErr:     true,
+			wantCancels: 1,
+		},
+		{
+			name: "null_authority_is_rejected_without_panic",
+			desc: "a null authority must be rejected, not panic",
+			cfg: `{
+				"xds_servers": [{
+					"server_uri": "trafficdirector.googleapis.com:443",
+					"channel_creds": [{"type": "insecure"}]
+				}],
+				"authorities": {"foo": null}
+			}`,
+			wantErr:     true,
+			wantCancels: 0,
+		},
+		{
+			name: "success_retains_cleanups",
+			desc: "on success, cleanups are retained for the Config's lifetime and must not run during parsing",
+			cfg: `{
+				"xds_servers": [{
+					"server_uri": "trafficdirector.googleapis.com:443",
+					"channel_creds": [{"type": "insecure"}]
+				}],
+				"allowed_grpc_services": {
+					"dns:///side-channel:443": {
+						"channel_creds": [{"type": "test_observable_channel_creds"}]
+					}
+				}
+			}`,
+			wantErr:     false,
+			wantCancels: 0,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			cancels = 0
+			var c Config
+			if err := c.UnmarshalJSON([]byte(test.cfg)); (err != nil) != test.wantErr {
+				t.Fatalf("%s: Config.UnmarshalJSON() error = %v, wantErr %v", test.desc, err, test.wantErr)
+			}
+			if cancels != test.wantCancels {
+				t.Errorf("%s: cleanups ran %d times, want %d", test.desc, cancels, test.wantCancels)
+			}
+		})
+	}
+}
+
+// TestBootstrap_AllowedGrpcServices_NullEntryRejected verifies that a null
+// allowed_grpc_services entry is rejected rather than silently accepted as a
+// credential-less allowlisted target. gRFC A102 requires channel_creds on
+// every entry, but a JSON null map value is decoded without invoking
+// UnmarshalJSON, so it would otherwise bypass that validation.
+func (s) TestBootstrap_AllowedGrpcServices_NullEntryRejected(t *testing.T) {
+	cfg := `{
+		"xds_servers": [{
+			"server_uri": "trafficdirector.googleapis.com:443",
+			"channel_creds": [{"type": "insecure"}]
+		}],
+		"allowed_grpc_services": {"dns:///side-channel:443": null}
+	}`
+	var c Config
+	if err := c.UnmarshalJSON([]byte(cfg)); err == nil {
+		t.Fatalf("Config.UnmarshalJSON() succeeded; want error for null allowed_grpc_services entry")
+	}
+}
+
+// TestBootstrap_AllowedGrpcService_Accessors exercises TargetURI, MarshalJSON,
+// and Equal, including inequality when only the target URI differs.
+func (s) TestBootstrap_AllowedGrpcService_Accessors(t *testing.T) {
+	testutils.SetEnvConfig(t, &envconfig.XDSBootstrapCallCredsEnabled, true)
+	const target = "dns:///sharding-service:443"
+	cfg := `{
+		"node": { "id": "ENVOY_NODE_ID" },
+		"xds_servers": [{
+			"server_uri": "trafficdirector.googleapis.com:443",
+			"channel_creds": [{ "type": "insecure" }]
+		}],
+		"allowed_grpc_services": {
+			"dns:///sharding-service:443": {
+				"channel_creds": [{ "type": "insecure" }],
+				"call_creds": [
+					{ "type": "jwt_token_file", "config": {"jwt_token_file": "/tmp/token"} }
+				]
+			}
+		}
+	}`
+	var c1, c2 Config
+	if err := c1.UnmarshalJSON([]byte(cfg)); err != nil {
+		t.Fatalf("Config.UnmarshalJSON() failed: %v", err)
+	}
+	if err := c2.UnmarshalJSON([]byte(cfg)); err != nil {
+		t.Fatalf("Config.UnmarshalJSON() failed: %v", err)
+	}
+	svc := c1.AllowedGrpcServices()[target]
+	if svc == nil {
+		t.Fatalf("AllowedGrpcServices() missing %q", target)
+	}
+	if got := svc.TargetURI(); got != target {
+		t.Errorf("TargetURI() = %q, want %q", got, target)
+	}
+
+	// Two independent parses of the same config must compare equal.
+	if !svc.Equal(c2.AllowedGrpcServices()[target]) {
+		t.Errorf("Equal() = false for identical configs, want true")
+	}
+
+	// MarshalJSON must succeed and produce non-empty output.
+	if data, err := c1.MarshalJSON(); err != nil || len(data) == 0 {
+		t.Errorf("MarshalJSON() = (%d bytes, %v), want (non-empty, nil)", len(data), err)
+	}
+
+	// Two services identical except for target URI must not be equal.
+	diff := *svc
+	diff.targetURI = "dns:///different:443"
+	if svc.Equal(&diff) {
+		t.Errorf("Equal() = true for services with different target URIs, want false")
 	}
 }
