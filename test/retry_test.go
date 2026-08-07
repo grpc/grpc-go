@@ -726,6 +726,15 @@ func (s) TestRetryStats(t *testing.T) {
 		handler.s[pIdx], handler.s[tIdx] = handler.s[tIdx], handler.s[pIdx]
 	}
 
+	// The same race can reorder the OutPayload and InTrailer of the
+	// transparent retry attempt (positions 6 and 7).
+	const tIdx2, pIdx2 = 6, 7
+	_, okT2 := handler.s[tIdx2].(*stats.InTrailer)
+	_, okP2 := handler.s[pIdx2].(*stats.OutPayload)
+	if okT2 && okP2 {
+		handler.s[pIdx2], handler.s[tIdx2] = handler.s[tIdx2], handler.s[pIdx2]
+	}
+
 	for i := range handler.s {
 		w, s := want[i], handler.s[i]
 
