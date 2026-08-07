@@ -601,7 +601,7 @@ func (s) TestParseFilterConfigOverride_Errors(t *testing.T) {
 
 func (s) TestBuildClientInterceptor_Success(t *testing.T) {
 	origCreateExtProcChannel := iextproc.CreateExtProcChannel
-	iextproc.CreateExtProcChannel = func(cfg xdsresource.GRPCServiceConfig) (grpc.ClientConnInterface, func() error, error) {
+	iextproc.CreateExtProcChannel = func(cfg xdsresource.GRPCServiceConfig, opts ...grpc.DialOption) (grpc.ClientConnInterface, func() error, error) {
 		conn, _ := grpc.NewClient(cfg.TargetURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		return conn, conn.Close, nil
 	}
@@ -830,7 +830,7 @@ func (s) TestBuildClientInterceptor_Success(t *testing.T) {
 
 func (s) TestBuildClientInterceptor_Failure(t *testing.T) {
 	origCreateExtProcChannel := iextproc.CreateExtProcChannel
-	iextproc.CreateExtProcChannel = func(cfg xdsresource.GRPCServiceConfig) (grpc.ClientConnInterface, func() error, error) {
+	iextproc.CreateExtProcChannel = func(cfg xdsresource.GRPCServiceConfig, opts ...grpc.DialOption) (grpc.ClientConnInterface, func() error, error) {
 		if cfg.TargetURI == "error-uri" {
 			return nil, nil, fmt.Errorf("dial error")
 		}
