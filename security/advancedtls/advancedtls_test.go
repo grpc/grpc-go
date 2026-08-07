@@ -161,6 +161,7 @@ func (s) TestClientOptionsConfigSuccessCases(t *testing.T) {
 		MinVersion             uint16
 		MaxVersion             uint16
 		cipherSuites           []uint16
+		curvePreferences       []tls.CurveID
 	}{
 		{
 			desc:                   "Use system default if no fields in RootCertificateOptions is specified",
@@ -187,6 +188,13 @@ func (s) TestClientOptionsConfigSuccessCases(t *testing.T) {
 				tls.TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,
 			},
 		},
+		{
+			desc: "CurvePreferences plumbing through client options",
+			curvePreferences: []tls.CurveID{
+				tls.X25519,
+				tls.CurveP256,
+			},
+		},
 	}
 	for _, test := range tests {
 		test := test
@@ -198,6 +206,7 @@ func (s) TestClientOptionsConfigSuccessCases(t *testing.T) {
 				MinTLSVersion:    test.MinVersion,
 				MaxTLSVersion:    test.MaxVersion,
 				CipherSuites:     test.cipherSuites,
+				CurvePreferences: test.curvePreferences,
 			}
 			clientConfig, err := clientOptions.clientConfig()
 			if err != nil {
@@ -231,6 +240,9 @@ func (s) TestClientOptionsConfigSuccessCases(t *testing.T) {
 			}
 			if diff := cmp.Diff(clientConfig.CipherSuites, test.cipherSuites); diff != "" {
 				t.Errorf("cipherSuites diff (-want +got):\n%s", diff)
+			}
+			if diff := cmp.Diff(clientConfig.CurvePreferences, test.curvePreferences); diff != "" {
+				t.Errorf("curvePreferences diff (-want +got):\n%s", diff)
 			}
 		})
 	}
@@ -317,6 +329,7 @@ func (s) TestServerOptionsConfigSuccessCases(t *testing.T) {
 		MinVersion             uint16
 		MaxVersion             uint16
 		cipherSuites           []uint16
+		curvePreferences       []tls.CurveID
 	}{
 		{
 			desc:                   "Use system default if no fields in RootCertificateOptions is specified",
@@ -367,6 +380,19 @@ func (s) TestServerOptionsConfigSuccessCases(t *testing.T) {
 			},
 			MinVersion: tls.VersionTLS12,
 		},
+		{
+			desc: "CurvePreferences plumbing through server options",
+			IdentityOptions: IdentityCertificateOptions{
+				Certificates: []tls.Certificate{},
+			},
+			RootOptions: RootCertificateOptions{
+				RootCertificates: x509.NewCertPool(),
+			},
+			curvePreferences: []tls.CurveID{
+				tls.X25519,
+				tls.CurveP256,
+			},
+		},
 	}
 	for _, test := range tests {
 		test := test
@@ -379,6 +405,7 @@ func (s) TestServerOptionsConfigSuccessCases(t *testing.T) {
 				MinTLSVersion:     test.MinVersion,
 				MaxTLSVersion:     test.MaxVersion,
 				CipherSuites:      test.cipherSuites,
+				CurvePreferences:  test.curvePreferences,
 			}
 			serverConfig, err := serverOptions.serverConfig()
 			if err != nil {
@@ -394,6 +421,9 @@ func (s) TestServerOptionsConfigSuccessCases(t *testing.T) {
 			}
 			if diff := cmp.Diff(serverConfig.CipherSuites, test.cipherSuites); diff != "" {
 				t.Errorf("cipherSuites diff (-want +got):\n%s", diff)
+			}
+			if diff := cmp.Diff(serverConfig.CurvePreferences, test.curvePreferences); diff != "" {
+				t.Errorf("curvePreferences diff (-want +got):\n%s", diff)
 			}
 		})
 	}
