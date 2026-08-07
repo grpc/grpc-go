@@ -2300,6 +2300,7 @@ func (s) TestChainEngine(t *testing.T) {
 }
 
 type ServerTransportStreamWithMethod struct {
+	grpc.ServerTransportStream
 	method string
 }
 
@@ -2318,6 +2319,8 @@ func (sts *ServerTransportStreamWithMethod) SendHeader(metadata.MD) error {
 func (sts *ServerTransportStreamWithMethod) SetTrailer(metadata.MD) error {
 	return nil
 }
+
+func (sts *ServerTransportStreamWithMethod) EnableCompression(bool) {}
 
 // An audit logger that will log to the auditEvents slice.
 type TestAuditLoggerBuffer struct {
