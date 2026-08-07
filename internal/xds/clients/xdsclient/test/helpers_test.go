@@ -284,6 +284,7 @@ type testMetricsReporter struct {
 
 	mu             sync.Mutex
 	asyncReporters map[clients.AsyncReporter]struct{}
+	onReport       func(any)
 }
 
 // newTestMetricsReporter returns a new testMetricsReporter.
@@ -359,6 +360,12 @@ func (r *testMetricsReporter) Drain() {
 // ReportMetric sends the metrics data to the metricsCh channel.
 func (r *testMetricsReporter) ReportMetric(m any) {
 	r.metricsCh.Put(m)
+	r.mu.Lock()
+	cb := r.onReport
+	r.mu.Unlock()
+	if cb != nil {
+		cb(m)
+	}
 }
 
 func (r *testMetricsReporter) RegisterAsyncReporter(reporter clients.AsyncReporter) func() {
@@ -377,8 +384,12 @@ func (r *testMetricsReporter) RegisterAsyncReporter(reporter clients.AsyncReport
 // async gauge metrics at specific precise points in time for verification.
 func (r *testMetricsReporter) triggerAsyncMetrics() {
 	r.mu.Lock()
-	defer r.mu.Unlock()
+	reporters := make([]clients.AsyncReporter, 0, len(r.asyncReporters))
 	for reporter := range r.asyncReporters {
+		reporters = append(reporters, reporter)
+	}
+	r.mu.Unlock()
+	for _, reporter := range reporters {
 		reporter.Report(r)
 	}
 }
