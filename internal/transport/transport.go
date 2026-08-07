@@ -368,14 +368,16 @@ func (s *Stream) ReadMessageHeader(header []byte) (err error) {
 		return er
 	}
 	s.readRequester.requestRead(len(header))
+	bytesRead := 0
 	for len(header) != 0 {
 		n, err := s.trReader.ReadMessageHeader(header)
+		bytesRead += n
 		header = header[n:]
 		if len(header) == 0 {
 			err = nil
 		}
 		if err != nil {
-			if n > 0 && err == io.EOF {
+			if bytesRead > 0 && err == io.EOF {
 				err = io.ErrUnexpectedEOF
 			}
 			return err
