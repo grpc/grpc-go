@@ -181,13 +181,22 @@ func (s) TestHeaderMutationRules_ApplyAdditons(t *testing.T) {
 			wantMD:  metadata.MD{"b": []string{"2"}},
 		},
 		{
+			name: "InvalidHeaderKeyEmpty",
+			hmr:  &HeaderMutationRules{},
+			hvos: []*v3corepb.HeaderValueOption{
+				{Header: &v3corepb.HeaderValue{Key: "", Value: "1"}, AppendAction: v3corepb.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD},
+			},
+			inputMD: metadata.MD{},
+			wantErr: true,
+		},
+		{
 			name: "InvalidHeaderKeyPseudoHeader",
 			hmr:  &HeaderMutationRules{},
 			hvos: []*v3corepb.HeaderValueOption{
 				{Header: &v3corepb.HeaderValue{Key: ":path", Value: "/"}, AppendAction: v3corepb.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD},
 			},
 			inputMD: metadata.MD{},
-			wantMD:  metadata.MD{},
+			wantErr: true,
 		},
 		{
 			name: "InvalidHeaderKeyHost",
@@ -196,7 +205,7 @@ func (s) TestHeaderMutationRules_ApplyAdditons(t *testing.T) {
 				{Header: &v3corepb.HeaderValue{Key: "host", Value: "example.com"}, AppendAction: v3corepb.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD},
 			},
 			inputMD: metadata.MD{},
-			wantMD:  metadata.MD{},
+			wantErr: true,
 		},
 		{
 			name: "InvalidHeaderKeyNotLowercase",
@@ -205,7 +214,7 @@ func (s) TestHeaderMutationRules_ApplyAdditons(t *testing.T) {
 				{Header: &v3corepb.HeaderValue{Key: "A", Value: "1"}, AppendAction: v3corepb.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD},
 			},
 			inputMD: metadata.MD{},
-			wantMD:  metadata.MD{},
+			wantErr: true,
 		},
 		{
 			name: "InvalidHeaderKeyTooLong",
@@ -214,7 +223,52 @@ func (s) TestHeaderMutationRules_ApplyAdditons(t *testing.T) {
 				{Header: &v3corepb.HeaderValue{Key: strings.Repeat("a", 16385), Value: "1"}, AppendAction: v3corepb.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD},
 			},
 			inputMD: metadata.MD{},
-			wantMD:  metadata.MD{},
+			wantErr: true,
+		},
+		{
+			name: "InvalidHeaderKeyGRPCPrefix",
+			hmr:  &HeaderMutationRules{},
+			hvos: []*v3corepb.HeaderValueOption{
+				{Header: &v3corepb.HeaderValue{Key: "grpc-accept-encoding", Value: "identity"}, AppendAction: v3corepb.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD},
+			},
+			inputMD: metadata.MD{},
+			wantErr: true,
+		},
+		{
+			name: "InvalidHeaderKeyCRLF",
+			hmr:  &HeaderMutationRules{},
+			hvos: []*v3corepb.HeaderValueOption{
+				{Header: &v3corepb.HeaderValue{Key: "x-user\r\nauthorization", Value: "1"}, AppendAction: v3corepb.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD},
+			},
+			inputMD: metadata.MD{},
+			wantErr: true,
+		},
+		{
+			name: "InvalidHeaderKeyWithSpace",
+			hmr:  &HeaderMutationRules{},
+			hvos: []*v3corepb.HeaderValueOption{
+				{Header: &v3corepb.HeaderValue{Key: "x user", Value: "1"}, AppendAction: v3corepb.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD},
+			},
+			inputMD: metadata.MD{},
+			wantErr: true,
+		},
+		{
+			name: "InvalidHeaderValueCRLF",
+			hmr:  &HeaderMutationRules{},
+			hvos: []*v3corepb.HeaderValueOption{
+				{Header: &v3corepb.HeaderValue{Key: "x-user", Value: "alice\r\nauthorization: Bearer token"}, AppendAction: v3corepb.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD},
+			},
+			inputMD: metadata.MD{},
+			wantErr: true,
+		},
+		{
+			name: "InvalidHeaderValueNonPrintable",
+			hmr:  &HeaderMutationRules{},
+			hvos: []*v3corepb.HeaderValueOption{
+				{Header: &v3corepb.HeaderValue{Key: "x-nul", Value: "a\x00b"}, AppendAction: v3corepb.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD},
+			},
+			inputMD: metadata.MD{},
+			wantErr: true,
 		},
 		{
 			name: "InvalidHeaderValueTooLong",
@@ -223,7 +277,7 @@ func (s) TestHeaderMutationRules_ApplyAdditons(t *testing.T) {
 				{Header: &v3corepb.HeaderValue{Key: "a", Value: strings.Repeat("1", 16385)}, AppendAction: v3corepb.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD},
 			},
 			inputMD: metadata.MD{},
-			wantMD:  metadata.MD{},
+			wantErr: true,
 		},
 		{
 			name: "InvalidBinaryHeaderValueTooLong",
@@ -232,7 +286,7 @@ func (s) TestHeaderMutationRules_ApplyAdditons(t *testing.T) {
 				{Header: &v3corepb.HeaderValue{Key: "a-bin", RawValue: make([]byte, 16385)}, AppendAction: v3corepb.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD},
 			},
 			inputMD: metadata.MD{},
-			wantMD:  metadata.MD{},
+			wantErr: true,
 		},
 		{
 			name: "BinaryHeaderValue",
@@ -391,32 +445,60 @@ func (s) TestHeaderMutationRules_ApplyRemovals(t *testing.T) {
 			wantMD:          metadata.MD{"a": []string{"1"}},
 		},
 		{
+			name:            "InvalidHeaderKeyEmpty",
+			hmr:             &HeaderMutationRules{},
+			headersToRemove: []string{""},
+			inputMD:         metadata.MD{"a": []string{"1"}},
+			wantErr:         true,
+		},
+		{
 			name:            "InvalidHeaderKeyPseudoHeader",
 			hmr:             &HeaderMutationRules{},
 			headersToRemove: []string{":path"},
 			inputMD:         metadata.MD{":path": []string{"/"}},
-			wantMD:          metadata.MD{":path": []string{"/"}},
+			wantErr:         true,
 		},
 		{
 			name:            "InvalidHeaderKeyHost",
 			hmr:             &HeaderMutationRules{},
 			headersToRemove: []string{"host"},
 			inputMD:         metadata.MD{"host": []string{"example.com"}},
-			wantMD:          metadata.MD{"host": []string{"example.com"}},
+			wantErr:         true,
 		},
 		{
 			name:            "InvalidHeaderKeyNotLowercase",
 			hmr:             &HeaderMutationRules{},
 			headersToRemove: []string{"A"},
 			inputMD:         metadata.MD{"A": []string{"1"}},
-			wantMD:          metadata.MD{"A": []string{"1"}},
+			wantErr:         true,
 		},
 		{
 			name:            "InvalidHeaderKeyTooLong",
 			hmr:             &HeaderMutationRules{},
 			headersToRemove: []string{strings.Repeat("a", 16385)},
 			inputMD:         metadata.MD{strings.Repeat("a", 16385): []string{"1"}},
-			wantMD:          metadata.MD{strings.Repeat("a", 16385): []string{"1"}},
+			wantErr:         true,
+		},
+		{
+			name:            "InvalidHeaderKeyGRPCPrefix",
+			hmr:             &HeaderMutationRules{},
+			headersToRemove: []string{"grpc-accept-encoding"},
+			inputMD:         metadata.MD{"grpc-accept-encoding": []string{"gzip"}},
+			wantErr:         true,
+		},
+		{
+			name:            "InvalidHeaderKeyCRLF",
+			hmr:             &HeaderMutationRules{},
+			headersToRemove: []string{"x-user\r\nauthorization"},
+			inputMD:         metadata.MD{"x-user": []string{"1"}},
+			wantErr:         true,
+		},
+		{
+			name:            "InvalidHeaderKeyWithSpace",
+			hmr:             &HeaderMutationRules{},
+			headersToRemove: []string{"x user"},
+			inputMD:         metadata.MD{"x user": []string{"1"}},
+			wantErr:         true,
 		},
 		{
 			name:            "HeaderExists",
