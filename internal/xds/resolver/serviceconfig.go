@@ -29,6 +29,7 @@ import (
 
 	xxhash "github.com/cespare/xxhash/v2"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/grpcutil"
 	iresolver "google.golang.org/grpc/internal/resolver"
 	iringhash "google.golang.org/grpc/internal/ringhash"
@@ -111,10 +112,10 @@ type routeCluster struct {
 }
 
 type route struct {
-	m                 *xdsresource.CompositeMatcher  // converted from route matchers
-	actionType        xdsresource.RouteActionType    // holds route action type
-	clusters          wrr.WRR                        // holds *routeCluster entries
-	interceptors      []httpfilter.ClientInterceptor // Interceptors across clusters belonging to this route
+	m                 *xdsresource.CompositeMatcher        // converted from route matchers
+	actionType        xdsresource.RouteActionType          // holds route action type
+	clusters          wrr.WRR                              // holds *routeCluster entries
+	routeClusters     []*grpcsync.RefCounted[routeCluster] // Route clusters belonging to this route
 	maxStreamDuration time.Duration
 	retryConfig       *xdsresource.RetryConfig
 	hashPolicies      []*xdsresource.HashPolicy
@@ -203,11 +204,11 @@ func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RP
 		return nil, annotateErrorWithNodeID(errUnsupportedClientRouteAction, cs.xdsNodeID)
 	}
 
-	cluster, ok := rt.clusters.Next().(*routeCluster)
+	rc, ok := rt.clusters.Next().(*grpcsync.RefCounted[routeCluster])
 	if !ok {
-		return nil, annotateErrorWithNodeID(status.Errorf(codes.Internal, "error retrieving cluster for match: %v (%T)", cluster, cluster), cs.xdsNodeID)
+		return nil, annotateErrorWithNodeID(status.Errorf(codes.Internal, "error retrieving cluster for match: %v (%T)", rc, rc), cs.xdsNodeID)
 	}
-
+	cluster := *rc.Value()
 	lbCtx := clustermanager.SetPickedCluster(rpcInfo.Context, cluster.name)
 	lbCtx = xdsresource.NewContextWithXDSConfig(lbCtx, cs.xdsConfig)
 	lbCtx = iringhash.SetXDSRequestHash(lbCtx, cs.generateHash(rpcInfo, rt.hashPolicies))
@@ -219,7 +220,9 @@ func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RP
 		Context:     lbCtx,
 		Interceptor: cluster.interceptor,
 	}
-
+	// Add a ref to the selected cluster to keep the interceptors alive until RPC
+	// is committed.
+	rc.Increment()
 	if info, ok := cs.clusters[cluster.name]; ok {
 		// Add a ref to the selected cluster, as this RPC needs this
 		// cluster until it is committed.
@@ -234,6 +237,10 @@ func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RP
 				// manager to handle the update flow once and for all.
 				info.unsubscribe()
 			}
+			// Decrement the refcount of the route cluster and close the interceptor
+			// if refcount goes to zero.
+			//
+			rc.Decrement()
 		})
 	} else if info, ok := cs.plugins[cluster.name]; ok {
 		// Add a ref to the selected plugin, as this RPC needs this
@@ -245,7 +252,14 @@ func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RP
 				// producing a new service config update.
 				cs.sendNewServiceConfig()
 			}
+			// Decrement the refcount of the route cluster and close the interceptor
+			// if refcount goes to zero.
+			rc.Decrement()
 		})
+	} else {
+		// This should be unreachable because all route clusters are normalized
+		// into cs.clusters or cs.plugins during config selector creation.
+		panic(fmt.Sprintf("matched cluster %q not found in ConfigSelector", cluster.name))
 	}
 
 	if rt.maxStreamDuration != 0 {
@@ -342,10 +356,12 @@ func (cs *configSelector) stop() {
 		return
 	}
 
-	// Stop all interceptors associated with this config selector.
+	// Decrement the refcount of all the route clusters associated with this
+	// config selector and close the interceptors of the route cluster if it's
+	// refcount goes to zero.
 	for _, r := range cs.routes {
-		for _, i := range r.interceptors {
-			i.Close()
+		for _, rc := range r.routeClusters {
+			rc.Decrement()
 		}
 	}
 

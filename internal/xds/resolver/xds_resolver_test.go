@@ -1287,7 +1287,7 @@ func (s) TestResolver_AutoHostRewrite(t *testing.T) {
 // TestResolverKeepWatchOpen_ActiveRPCs tests that the dependency manager keeps
 // a cluster watch open when there are active RPCs using that cluster, even if
 // the cluster is no longer referenced by the current route configuration.
-func (s) TestResolverKeepWatchOpen_ActiveRPCs(t *testing.T) {
+func TestResolverKeepWatchOpen_ActiveRPCs(t *testing.T) {
 	clusterA := "cluster-A"
 	clusterB := "cluster-B"
 
@@ -1372,7 +1372,7 @@ func (s) TestResolverKeepWatchOpen_ActiveRPCs(t *testing.T) {
 	waitForResourceNames(ctx, t, cdsResourceRequestedCh, wantNames)
 
 	// ServiceConfig update should also contain only cluster B.
-	verifyUpdateFromResolver(ctx, t, stateCh, wantServiceConfig(clusterB))
+	cs = verifyUpdateFromResolver(ctx, t, stateCh, wantServiceConfig(clusterB))
 
 	// Verify that RPCs pass again.
 	res, err = cs.SelectConfig(iresolver.RPCInfo{Context: ctx, Method: "/service/method"})
