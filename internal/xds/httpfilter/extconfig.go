@@ -126,7 +126,7 @@ func (hmr *HeaderMutationRules) ApplyAdditions(hvos []*v3corepb.HeaderValueOptio
 		hmr = &HeaderMutationRules{}
 	}
 	if input == nil {
-		return fmt.Errorf("extproc: input metadata is nil")
+		return fmt.Errorf("input metadata is nil")
 	}
 	if hmr.DisallowAll {
 		return nil
@@ -136,7 +136,7 @@ func (hmr *HeaderMutationRules) ApplyAdditions(hvos []*v3corepb.HeaderValueOptio
 		header := hvo.GetHeader()
 		key := header.GetKey()
 		if err := validateHeaderKey(key); err != nil {
-			return fmt.Errorf("extproc: invalid header mutation: %v", err)
+			return fmt.Errorf("invalid header mutation: %v", err)
 		}
 
 		value := header.GetValue()
@@ -144,18 +144,18 @@ func (hmr *HeaderMutationRules) ApplyAdditions(hvos []*v3corepb.HeaderValueOptio
 			value = string(header.GetRawValue())
 		}
 		if len(value) > maxHeaderSize {
-			return fmt.Errorf("extproc: invalid header mutation: value for header key %q exceeds the maximum length of %d bytes", key, maxHeaderSize)
+			return fmt.Errorf("invalid header mutation: value for header key %q exceeds the maximum length of %d bytes", key, maxHeaderSize)
 		}
 		// ValidatePair rejects values carrying bytes outside %x20-%x7E. It
 		// skips the value check for "-bin" keys, whose values the transport
 		// base64 encodes.
 		if err := imetadata.ValidatePair(key, value); err != nil {
-			return fmt.Errorf("extproc: invalid header mutation: %v", err)
+			return fmt.Errorf("invalid header mutation: %v", err)
 		}
 
 		if !hmr.allow(key) {
 			if hmr.DisallowIsError {
-				return fmt.Errorf("extproc: header mutation disallowed by headerMutationRules for header key %q", key)
+				return fmt.Errorf("header mutation disallowed by headerMutationRules for header key %q", key)
 			}
 			continue
 		}
@@ -194,7 +194,7 @@ func (hmr *HeaderMutationRules) ApplyRemovals(headersToRemove []string, input me
 		hmr = &HeaderMutationRules{}
 	}
 	if input == nil {
-		return fmt.Errorf("extproc: input metadata is nil")
+		return fmt.Errorf("input metadata is nil")
 	}
 	if hmr.DisallowAll {
 		return nil
@@ -202,11 +202,11 @@ func (hmr *HeaderMutationRules) ApplyRemovals(headersToRemove []string, input me
 
 	for _, header := range headersToRemove {
 		if err := validateHeaderKey(header); err != nil {
-			return fmt.Errorf("extproc: invalid header mutation: %v", err)
+			return fmt.Errorf("invalid header mutation: %v", err)
 		}
 		if !hmr.allow(header) {
 			if hmr.DisallowIsError {
-				return fmt.Errorf("extproc: header mutation disallowed by headerMutationRules for header %q", header)
+				return fmt.Errorf("header mutation disallowed by headerMutationRules for header %q", header)
 			}
 			continue
 		}
