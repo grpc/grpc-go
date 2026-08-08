@@ -170,8 +170,11 @@ func normalizePrincipalHeaders(principal *v3rbacpb.Principal) error {
 // grpc- prefixed name) and rewrites a "host" matcher to ":authority".
 func normalizeHeaderMatcher(header *v3routepb.HeaderMatcher) error {
 	name := header.GetName()
-	if name == ":scheme" || strings.HasPrefix(name, "grpc-") {
-		return fmt.Errorf("rbac: header matcher for %v is :scheme or starts with grpc", name)
+	if name == ":scheme" {
+		return fmt.Errorf("rbac: header matcher for %q is %q", name, ":scheme")
+	}
+	if strings.HasPrefix(name, "grpc-") {
+		return fmt.Errorf("rbac: header matcher for %q starts with %q", name, "grpc-")
 	}
 	if name == "host" {
 		header.Name = ":authority"

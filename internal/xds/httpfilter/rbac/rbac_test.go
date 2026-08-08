@@ -118,10 +118,10 @@ func (s) TestNestedHostHeaderAliasing(t *testing.T) {
 
 	gotPerm := perm.GetRule().(*v3rbacpb.Permission_NotRule).NotRule.GetRule().(*v3rbacpb.Permission_Header).Header.GetName()
 	if gotPerm != ":authority" {
-		t.Errorf("nested permission host matcher name = %q, want %q", gotPerm, ":authority")
+		t.Errorf("Nested permission host matcher name = %q, want %q", gotPerm, ":authority")
 	}
 	gotPrincipal := principal.GetIdentifier().(*v3rbacpb.Principal_AndIds).AndIds.GetIds()[0].GetIdentifier().(*v3rbacpb.Principal_Header).Header.GetName()
 	if gotPrincipal != ":authority" {
-		t.Errorf("nested principal host matcher name = %q, want %q", gotPrincipal, ":authority")
+		t.Errorf("Nested principal host matcher name = %q, want %q", gotPrincipal, ":authority")
 	}
 }
