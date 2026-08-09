@@ -2167,12 +2167,7 @@ func (s) TestSubChannelMetrics_ConnectionLifecycle(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	ss := &stubserver.StubServer{
-		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
-			return &testpb.Empty{}, nil
-		},
-	}
-	ss.StartServer()
+	ss := stubserver.StartTestService(t, nil)
 	defer ss.Stop()
 
 	pfConfig := fmt.Sprintf(`{"loadBalancingConfig": [{%q: {}}]}`, pickfirst.Name)
