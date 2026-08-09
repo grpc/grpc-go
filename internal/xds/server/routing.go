@@ -26,7 +26,6 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/transport"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 	"google.golang.org/grpc/metadata"
@@ -73,12 +72,8 @@ func RouteAndProcess(ctx context.Context) error {
 	}
 
 	var rwi *routeWithInterceptors
-	rpcInfo := iresolver.RPCInfo{
-		Context: ctx,
-		Method:  mn,
-	}
 	for _, r := range vh.routes {
-		if r.matcher.Match(rpcInfo) {
+		if r.matcher.Match(mn, md) {
 			// "NonForwardingAction is expected for all Routes used on
 			// server-side; a route with an inappropriate action causes RPCs
 			// matching that route to fail with UNAVAILABLE." - A36

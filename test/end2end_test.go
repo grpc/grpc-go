@@ -6341,7 +6341,7 @@ func (s) TestRPCWaitsForResolver(t *testing.T) {
 
 type httpServerResponse struct {
 	headers  [][]string
-	payload  []byte
+	payloads [][]byte
 	trailers [][]string
 }
 
@@ -6440,7 +6440,7 @@ func (s *httpServer) start(t *testing.T, lis net.Listener) {
 			}
 
 			response := s.responses[requestNum]
-			hasPayload := response.payload != nil
+			hasPayload := len(response.payloads) > 0
 			hasTrailers := len(response.trailers) > 0
 			for i, header := range response.headers {
 				endStream := !hasPayload && !hasTrailers && i == len(response.headers)-1
@@ -6450,8 +6450,9 @@ func (s *httpServer) start(t *testing.T, lis net.Listener) {
 				}
 				writer.Flush()
 			}
-			if hasPayload {
-				if err = s.writePayload(framer, sid, response.payload, !hasTrailers); err != nil {
+			for i, payload := range response.payloads {
+				endStream := !hasTrailers && i == len(response.payloads)-1
+				if err = s.writePayload(framer, sid, payload, endStream); err != nil {
 					t.Errorf("Error at server-side while writing payload. Err: %v", err)
 					return
 				}
@@ -6820,6 +6821,7 @@ func (s) TestAuthorityHeader(t *testing.T) {
 }
 
 func (s) TestHTTPServerSendsNonGRPCHeaderSurfaceFurtherData(t *testing.T) {
+	const htmlPayload = `<html><body>Hello World</body></html>`
 	const nonGRPCDataMaxLen = 1024
 	tests := []struct {
 		name      string
@@ -6837,7 +6839,7 @@ func (s) TestHTTPServerSendsNonGRPCHeaderSurfaceFurtherData(t *testing.T) {
 							"content-type", "text/html",
 						},
 					},
-					// payload: nil
+					// payloads: nil
 				},
 			},
 			wantCode: codes.Unknown,
@@ -6853,12 +6855,12 @@ func (s) TestHTTPServerSendsNonGRPCHeaderSurfaceFurtherData(t *testing.T) {
 							"content-type", "text/html",
 						},
 					},
-					payload: []byte(`<html><body>Hello World</body></html>`),
+					payloads: [][]byte{[]byte(htmlPayload)},
 				},
 			},
 			wantCode: codes.Unknown,
-			wantErr: `unexpected HTTP status code received from server: 200 (OK); transport: received unexpected content-type "text/html"
-data: "<html><body>Hello World</body></html>"`,
+			wantErr: fmt.Sprintf(`unexpected HTTP status code received from server: 200 (OK); transport: received unexpected content-type "text/html"
+data: %q`, htmlPayload),
 		},
 		{
 			name: "non-gRPC content-type with bytes payload length more than nonGRPCDataMaxLen",
@@ -6870,7 +6872,7 @@ data: "<html><body>Hello World</body></html>"`,
 							"content-type", "text/html",
 						},
 					},
-					payload: bytes.Repeat([]byte("a"), nonGRPCDataMaxLen+1),
+					payloads: [][]byte{bytes.Repeat([]byte("a"), nonGRPCDataMaxLen+1)},
 				},
 			},
 			wantCode: codes.Unknown,
@@ -6884,12 +6886,46 @@ data: ` + strconv.Quote(strings.Repeat("a", nonGRPCDataMaxLen)),
 					headers: [][]string{{
 						":status", "502",
 					}},
-					payload: []byte("hello"),
+					payloads: [][]byte{[]byte("hello")},
 				},
 			},
 			wantCode: codes.Unavailable,
 			wantErr: `unexpected HTTP status code received from server: 502 (Bad Gateway); malformed header: missing HTTP content-type
 data: "hello"`,
+		},
+		{
+			name: "non-gRPC content-type with empty DATA END_STREAM",
+			responses: []httpServerResponse{
+				{
+					headers: [][]string{
+						{
+							":status", "401",
+							"content-type", "text/html",
+						},
+					},
+					payloads: [][]byte{{}},
+				},
+			},
+			wantCode: codes.Unauthenticated,
+			wantErr: `unexpected HTTP status code received from server: 401 (Unauthorized); transport: received unexpected content-type "text/html"
+data: ""`,
+		},
+		{
+			name: "non-gRPC content-type with payload and separate END_STREAM",
+			responses: []httpServerResponse{
+				{
+					headers: [][]string{
+						{
+							":status", "401",
+							"content-type", "text/html",
+						},
+					},
+					payloads: [][]byte{[]byte(htmlPayload), {}},
+				},
+			},
+			wantCode: codes.Unauthenticated,
+			wantErr: fmt.Sprintf(`unexpected HTTP status code received from server: 401 (Unauthorized); transport: received unexpected content-type "text/html"
+data: %q`, htmlPayload),
 		},
 	}
 
