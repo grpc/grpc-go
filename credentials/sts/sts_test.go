@@ -27,6 +27,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"net/http/httputil"
 	"strings"
 	"testing"
@@ -700,6 +701,42 @@ func (s) TestSendRequest(t *testing.T) {
 				t.Errorf("sendRequest(%v) = %v, wantErr: %v", req, err, test.wantErr)
 			}
 		})
+	}
+}
+
+func (s) TestSendRequestDoesNotFollowRedirects(t *testing.T) {
+	// Stands in for a redirect target that must never receive the token
+	// exchange request. It records the body of any request it does get.
+	leaked := make(chan string, 1)
+	redirectTarget := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		select {
+		case leaked <- string(body):
+		default:
+		}
+	}))
+	defer redirectTarget.Close()
+
+	// The configured token exchange endpoint redirects the POST, whose body
+	// carries the subject token, to another host.
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, redirectTarget.URL, http.StatusTemporaryRedirect)
+	}))
+	defer server.Close()
+
+	req, err := http.NewRequest(http.MethodPost, server.URL, bytes.NewBufferString(`{"subject_token":"secret"}`))
+	if err != nil {
+		t.Fatalf("http.NewRequest() failed: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	if _, err := sendRequest(makeHTTPClient(nil), req); err == nil {
+		t.Error("sendRequest() succeeded across a redirect; want a non-nil error")
+	}
+	select {
+	case body := <-leaked:
+		t.Errorf("redirect target received request body %q; the subject token must not be replayed to another host", body)
+	default:
 	}
 }
 
