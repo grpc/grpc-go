@@ -197,7 +197,7 @@ func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RP
 	if !ok {
 		return nil, annotateErrorWithNodeID(status.Errorf(codes.Internal, "error retrieving cluster for match: %v (%T)", rc, rc), cs.xdsNodeID)
 	}
-	cluster := *rc.Value()
+	cluster := rc.Value()
 	lbCtx := clustermanager.SetPickedCluster(rpcInfo.Context, cluster.name)
 	lbCtx = xdsresource.NewContextWithXDSConfig(lbCtx, cs.xdsConfig)
 	lbCtx = iringhash.SetXDSRequestHash(lbCtx, cs.generateHash(rpcInfo, rt.hashPolicies))
@@ -228,7 +228,6 @@ func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RP
 			}
 			// Decrement the refcount of the route cluster and close the interceptor
 			// if refcount goes to zero.
-			//
 			rc.Decrement()
 		})
 	} else if info, ok := cs.plugins[cluster.name]; ok {

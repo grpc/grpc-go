@@ -1287,7 +1287,7 @@ func (s) TestResolver_AutoHostRewrite(t *testing.T) {
 // TestResolverKeepWatchOpen_ActiveRPCs tests that the dependency manager keeps
 // a cluster watch open when there are active RPCs using that cluster, even if
 // the cluster is no longer referenced by the current route configuration.
-func TestResolverKeepWatchOpen_ActiveRPCs(t *testing.T) {
+func (s) TestResolverKeepWatchOpen_ActiveRPCs(t *testing.T) {
 	clusterA := "cluster-A"
 	clusterB := "cluster-B"
 

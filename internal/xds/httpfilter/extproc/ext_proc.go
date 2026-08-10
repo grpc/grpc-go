@@ -429,6 +429,11 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 	if csCommon.procStream, err = procClient.Process(procCtx, grpc.OnFinish(func(error) {
 		i.procClient.Decrement()
 	})); err != nil {
+		// Since Process failed to create the stream, its OnFinish callback will
+		// not be called, so we must manually decrement the procClient refcount.
+		// We do not invoke other registered OnFinish call options here because
+		// NewStream might return an error directly, and it is the caller's
+		// responsibility to handle cleanup if NewStream fails or returns an error.
 		i.procClient.Decrement()
 		return csCommon.handleInitError(fmt.Errorf("failed to create a stream to external processor: %v", err), newStream, opts...)
 	}

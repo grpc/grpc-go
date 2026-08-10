@@ -4886,7 +4886,7 @@ func (s) TestExtProcChannelRetention(t *testing.T) {
 // processor channel remains open until any ongoing RPCs on that old channel
 // have completed.
 func (s) TestExtProcChannelRetention_XDSConfigUpdate(t *testing.T) {
-	processFunc1 := func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
+	processFunc := func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
 		// Receive response header and respond with no mutations.
 		req, err := stream.Recv()
 		if err != nil {
@@ -4912,10 +4912,6 @@ func (s) TestExtProcChannelRetention_XDSConfigUpdate(t *testing.T) {
 		return nil
 	}
 
-	processFunc2 := func(v3procservicegrpc.ExternalProcessor_ProcessServer) error {
-		return nil
-	}
-
 	tests := []struct {
 		name              string
 		observabilityMode bool
@@ -4931,12 +4927,12 @@ func (s) TestExtProcChannelRetention_XDSConfigUpdate(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			extProcAddr1, _ := startTestExtProcessor(t, processFunc1)
-			extProcAddr2, _ := startTestExtProcessor(t, processFunc2)
+			extProcAddr1, _ := startTestExtProcessor(t, processFunc)
+			extProcAddr2, _ := startTestExtProcessor(t, processFunc)
 
-			closeChan := make(chan struct{})
+			closeChan := make(chan string, 1)
 
-			// Override CreateExtProcChannel to signal when the channel is closed and
+			// Override CreateExtProcChannel to signal when a channel is closed and
 			// dial to correct proc server.
 			origCreate := internal.CreateExtProcChannel
 			internal.CreateExtProcChannel = func(cfg xdsresource.GRPCServiceConfig) (grpc.ClientConnInterface, func() error, error) {
@@ -4945,13 +4941,8 @@ func (s) TestExtProcChannelRetention_XDSConfigUpdate(t *testing.T) {
 					return nil, nil, err
 				}
 				closeFunc := func() error {
+					closeChan <- cfg.TargetURI
 					return cc.Close()
-				}
-				if cfg.TargetURI == extProcAddr1 {
-					closeFunc = func() error {
-						close(closeChan)
-						return cc.Close()
-					}
 				}
 				return cc, closeFunc, nil
 			}
@@ -4968,6 +4959,9 @@ func (s) TestExtProcChannelRetention_XDSConfigUpdate(t *testing.T) {
 						return nil, ctx.Err()
 					}
 					return &testpb.Empty{}, nil
+				},
+				UnaryCallF: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+					return &testpb.SimpleResponse{}, nil
 				},
 			})
 			defer stub.Stop()
@@ -5041,11 +5035,11 @@ func (s) TestExtProcChannelRetention_XDSConfigUpdate(t *testing.T) {
 
 			<-enteredChan
 
-			// Verify that the proc channel is not closed yet because the RPC has not
-			// completed.
+			// Verify that no proc channel has closed yet because the first RPC has
+			// not completed.
 			select {
-			case <-closeChan:
-				t.Fatalf("Expected extproc channel to NOT close immediately")
+			case addr := <-closeChan:
+				t.Fatalf("Unexpected close of extproc channel %s", addr)
 			case <-time.After(defaultTestShortTimeout):
 			}
 
@@ -5053,20 +5047,28 @@ func (s) TestExtProcChannelRetention_XDSConfigUpdate(t *testing.T) {
 			// This will close the old interceptor for server 1.
 			updateExtProc(extProcAddr2)
 
-			// Verify that the proc channel is not closed yet because the RPC has not
-			// completed.
+			// Make a second RPC and verify that it succeeds.
+			if _, err := client.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil {
+				t.Fatalf("UnaryCall() failed: %v", err)
+			}
+
+			// Verify that the first extproc channel is still not closed because the
+			// first RPC on that channel has not completed yet.
 			select {
-			case <-closeChan:
-				t.Fatalf("Expected extproc channel to NOT close immediately after XDS update")
+			case addr := <-closeChan:
+				t.Fatalf("Unexpected close of extproc channel %s while first RPC is in flight", addr)
 			case <-time.After(defaultTestShortTimeout):
 			}
 
-			// Unblock RPC so that it completes and invokes OnFinish.
+			// Unblock the first RPC so that it completes and invokes OnFinish.
 			close(blockChan)
 
-			// Verify that proc channel is now closed.
+			// Verify that proc channel 1 is now closed.
 			select {
-			case <-closeChan:
+			case addr := <-closeChan:
+				if addr != extProcAddr1 {
+					t.Fatalf("Closed extproc channel = %s, want %s", addr, extProcAddr1)
+				}
 			case <-time.After(defaultTestTimeout):
 				t.Fatalf("Timeout waiting for extproc channel to close after RPC completed")
 			}

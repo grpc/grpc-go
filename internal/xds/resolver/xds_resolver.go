@@ -334,8 +334,9 @@ func (r *xdsResolver) Error(err error) {
 
 // sendNewServiceConfig prunes active clusters, generates a new service config
 // based on the current set of active clusters, and sends an update to the
-// channel with that service config and the provided config selector.  Returns
-// false if an error occurs while sending an update to the channel.
+// channel with that service config and the provided config selector. It is safe
+// to ignore the error from `cc.UpdateState` because the clientconn uses the
+// given configSelector even if it returns an error.
 //
 // Only executed in the context of a serializer callback.
 func (r *xdsResolver) sendNewServiceConfig(cs stoppableConfigSelector) {
@@ -424,12 +425,11 @@ func (r *xdsResolver) newConfigSelector() (_ *configSelector, err error) {
 				}
 				return nil, err
 			}
-			rc := grpcsync.NewRefCounted(&routeCluster{
+			routeCluster := &routeCluster{
 				name:        clusterName,
 				interceptor: interceptor,
-			}, func() {
-				interceptor.Close()
-			})
+			}
+			rc := grpcsync.NewRefCounted(routeCluster, func() { interceptor.Close() })
 			cs.routes[i].routeClusters = append(cs.routes[i].routeClusters, rc)
 			clusters.Add(rc, 1)
 			ci := r.addOrGetActiveClusterInfo(clusterName, "")
@@ -449,12 +449,11 @@ func (r *xdsResolver) newConfigSelector() (_ *configSelector, err error) {
 					}
 					return nil, err
 				}
-				rc := grpcsync.NewRefCounted(&routeCluster{
+				routeCluster := &routeCluster{
 					name:        clusterName,
 					interceptor: interceptor,
-				}, func() {
-					interceptor.Close()
-				})
+				}
+				rc := grpcsync.NewRefCounted(routeCluster, func() { interceptor.Close() })
 				cs.routes[i].routeClusters = append(cs.routes[i].routeClusters, rc)
 				clusters.Add(rc, int64(wc.Weight))
 				ci := r.addOrGetActiveClusterInfo(clusterName, wc.Name)
