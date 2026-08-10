@@ -524,6 +524,9 @@ func (c *advancedTLSCreds) OverrideServerName(serverNameOverride string) error {
 	return nil
 }
 
+type verifyPeerCertificateFunc func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error
+type verifyConnectionFunc func(cs tls.ConnectionState) error
+
 // The function buildVerifyFunc constructs the verification callbacks used when
 // users want root cert reloading, certificate revocation checking, and custom
 // verification checks.
@@ -546,7 +549,7 @@ func (c *advancedTLSCreds) OverrideServerName(serverNameOverride string) error {
 func buildVerifyFunc(c *advancedTLSCreds,
 	serverName string,
 	rawConn net.Conn,
-	peerVerifiedChains *CertificateChains) (func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error, func(cs tls.ConnectionState) error) {
+	peerVerifiedChains *CertificateChains) (verifyPeerCertificateFunc, verifyConnectionFunc) {
 	var (
 		chains   CertificateChains
 		leafCert *x509.Certificate
@@ -631,20 +634,19 @@ func buildVerifyFunc(c *advancedTLSCreds,
 		*peerVerifiedChains = chains
 		return nil
 	}
-	var verifyConnFunc func(cs tls.ConnectionState) error
-	if c.verifyFunc != nil {
-		verifyConnFunc = func(cs tls.ConnectionState) error {
-			_, err := c.verifyFunc(&HandshakeVerificationInfo{
-				ServerName:      serverName,
-				RawCerts:        rawCerts,
-				VerifiedChains:  chains,
-				Leaf:            leafCert,
-				ConnectionState: cs,
-			})
-			return err
-		}
+	if c.verifyFunc == nil {
+		return verifyPeerCertFunc, nil
 	}
-	return verifyPeerCertFunc, verifyConnFunc
+	return verifyPeerCertFunc, func(cs tls.ConnectionState) error {
+		_, err := c.verifyFunc(&HandshakeVerificationInfo{
+			ServerName:      serverName,
+			RawCerts:        rawCerts,
+			VerifiedChains:  chains,
+			Leaf:            leafCert,
+			ConnectionState: cs,
+		})
+		return err
+	}
 }
 
 // NewClientCreds uses ClientOptions to construct a TransportCredentials based
