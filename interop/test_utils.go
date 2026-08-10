@@ -36,7 +36,10 @@ import (
 	"golang.org/x/oauth2/google"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/encoding"
+	"google.golang.org/grpc/encoding/gzip"
 	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/internal/transport"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/orca"
 	"google.golang.org/grpc/status"
@@ -100,6 +103,95 @@ func DoLargeUnaryCall(ctx context.Context, tc testgrpc.TestServiceClient, args .
 	}
 	t := reply.GetPayload().GetType()
 	s := len(reply.GetPayload().GetBody())
+	if t != testpb.PayloadType_COMPRESSABLE || s != largeRespSize {
+		logger.Fatalf("Got the reply with type %d len %d; want %d, %d", t, s, testpb.PayloadType_COMPRESSABLE, largeRespSize)
+	}
+}
+
+// DoClientCompressedUnaryCall performs a unary RPC with a compressed request
+// and verifies the server rejects a request whose ExpectCompressed flag
+// doesn't match how the message was actually sent on the wire.
+func DoClientCompressedUnaryCall(ctx context.Context, tc testgrpc.TestServiceClient, args ...grpc.CallOption) {
+	pl := ClientNewPayload(testpb.PayloadType_COMPRESSABLE, largeReqSize)
+
+	// Probe: claim the message will be compressed while actually sending it
+	// uncompressed. The server must detect the mismatch and reject it.
+	probeReq := &testpb.SimpleRequest{
+		ResponseType:     testpb.PayloadType_COMPRESSABLE,
+		ResponseSize:     int32(largeRespSize),
+		ExpectCompressed: &testpb.BoolValue{Value: true},
+		Payload:          pl,
+	}
+	if _, err := tc.UnaryCall(ctx, probeReq, append(args, grpc.UseCompressor(encoding.Identity))...); status.Code(err) != codes.InvalidArgument {
+		logger.Fatalf("/TestService/UnaryCall probe RPC got error %v; want code %v", err, codes.InvalidArgument)
+	}
+
+	// Compressed request, matching the ExpectCompressed flag.
+	compressedReq := &testpb.SimpleRequest{
+		ResponseType:     testpb.PayloadType_COMPRESSABLE,
+		ResponseSize:     int32(largeRespSize),
+		ExpectCompressed: &testpb.BoolValue{Value: true},
+		Payload:          pl,
+	}
+	compressedReply, err := tc.UnaryCall(ctx, compressedReq, append(args, grpc.UseCompressor(gzip.Name))...)
+	if err != nil {
+		logger.Fatal("/TestService/UnaryCall compressed RPC failed: ", err)
+	}
+	checkLargePayload(compressedReply.GetPayload())
+
+	// Uncompressed request, matching the ExpectCompressed flag.
+	uncompressedReq := &testpb.SimpleRequest{
+		ResponseType:     testpb.PayloadType_COMPRESSABLE,
+		ResponseSize:     int32(largeRespSize),
+		ExpectCompressed: &testpb.BoolValue{Value: false},
+		Payload:          pl,
+	}
+	uncompressedReply, err := tc.UnaryCall(ctx, uncompressedReq, append(args, grpc.UseCompressor(encoding.Identity))...)
+	if err != nil {
+		logger.Fatal("/TestService/UnaryCall uncompressed RPC failed: ", err)
+	}
+	checkLargePayload(uncompressedReply.GetPayload())
+}
+
+// DoServerCompressedUnaryCall verifies the server can be told whether to
+// compress its unary response.
+//
+// Note: this does not verify the actual wire-level compressed flag on the
+// response, since gRPC-Go does not expose a public, per-RPC API on the
+// client side to inspect it (see the discussion on #8662). Both calls are
+// verified to succeed and return the expected payload.
+func DoServerCompressedUnaryCall(ctx context.Context, tc testgrpc.TestServiceClient, args ...grpc.CallOption) {
+	pl := ClientNewPayload(testpb.PayloadType_COMPRESSABLE, largeReqSize)
+
+	compressedReq := &testpb.SimpleRequest{
+		ResponseType:       testpb.PayloadType_COMPRESSABLE,
+		ResponseSize:       int32(largeRespSize),
+		ResponseCompressed: &testpb.BoolValue{Value: true},
+		Payload:            pl,
+	}
+	compressedReply, err := tc.UnaryCall(ctx, compressedReq, args...)
+	if err != nil {
+		logger.Fatal("/TestService/UnaryCall response_compressed=true RPC failed: ", err)
+	}
+	checkLargePayload(compressedReply.GetPayload())
+
+	uncompressedReq := &testpb.SimpleRequest{
+		ResponseType:       testpb.PayloadType_COMPRESSABLE,
+		ResponseSize:       int32(largeRespSize),
+		ResponseCompressed: &testpb.BoolValue{Value: false},
+		Payload:            pl,
+	}
+	uncompressedReply, err := tc.UnaryCall(ctx, uncompressedReq, args...)
+	if err != nil {
+		logger.Fatal("/TestService/UnaryCall response_compressed=false RPC failed: ", err)
+	}
+	checkLargePayload(uncompressedReply.GetPayload())
+}
+
+// checkLargePayload verifies p is a COMPRESSABLE payload of largeRespSize bytes.
+func checkLargePayload(p *testpb.Payload) {
+	t := p.GetType()
+	s := len(p.GetBody())
 	if t != testpb.PayloadType_COMPRESSABLE || s != largeRespSize {
 		logger.Fatalf("Got the reply with type %d len %d; want %d, %d", t, s, testpb.PayloadType_COMPRESSABLE, largeRespSize)
 	}
@@ -724,6 +816,17 @@ func serverNewPayload(t testpb.PayloadType, size int32) (*testpb.Payload, error)
 	}, nil
 }
 
+// recvCompressUsed reports whether the request associated with ctx was
+// actually received compressed on the wire.
+func recvCompressUsed(ctx context.Context) bool {
+	stream, ok := grpc.ServerTransportStreamFromContext(ctx).(*transport.ServerStream)
+	if !ok || stream == nil {
+		return false
+	}
+	c := stream.RecvCompress()
+	return c != "" && c != encoding.Identity
+}
+
 func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 	st := in.GetResponseStatus()
 	if md, ok := metadata.FromIncomingContext(ctx); ok {
@@ -738,6 +841,18 @@ func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*
 	}
 	if st != nil && st.Code != 0 {
 		return nil, status.Error(codes.Code(st.Code), st.Message)
+	}
+	if ec := in.GetExpectCompressed(); ec != nil && ec.GetValue() != recvCompressUsed(ctx) {
+		return nil, status.Errorf(codes.InvalidArgument, "request expected_compressed=%v did not match actual compression on the wire", ec.GetValue())
+	}
+	if rc := in.GetResponseCompressed(); rc != nil {
+		name := encoding.Identity
+		if rc.GetValue() {
+			name = gzip.Name
+		}
+		if err := grpc.SetSendCompressor(ctx, name); err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to set send compressor %q: %v", name, err)
+		}
 	}
 	pl, err := serverNewPayload(in.GetResponseType(), in.GetResponseSize())
 	if err != nil {
