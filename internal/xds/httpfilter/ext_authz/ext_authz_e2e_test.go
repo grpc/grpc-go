@@ -628,7 +628,7 @@ func (s) TestExtAuthz_Allowed_WithHeaders(t *testing.T) {
 						{Header: &corepb.HeaderValue{Key: "k2-bin", Value: "v2", RawValue: []byte{0, 1, 2, 3}}}, // Allowed binary header.
 						{Header: &corepb.HeaderValue{Key: "a1", Value: "v1"}},                                   // Disallowed.
 					},
-					HeadersToRemove: []string{":authority", "k-test-header-to-be-removed"},
+					HeadersToRemove: []string{"k-test-header-to-be-removed"},
 				},
 			},
 		}, nil
@@ -696,7 +696,7 @@ func (s) TestExtAuthz_Allowed_WithHeaders_MutationFails(t *testing.T) {
 						{Header: &corepb.HeaderValue{Key: "k2-bin", Value: "v2", RawValue: []byte{0, 1, 2, 3}}}, // Allowed binary header.
 						{Header: &corepb.HeaderValue{Key: "a1", Value: "v1"}},                                   // Disallowed.
 					},
-					HeadersToRemove: []string{":authority", "k-test-header-to-be-removed"},
+					HeadersToRemove: []string{"k-test-header-to-be-removed"},
 				},
 			},
 		}, nil
@@ -765,7 +765,7 @@ func (s) TestExtAuthz_Allowed_WithHeaders_MutationFails_FailureModeAllow(t *test
 						{Header: &corepb.HeaderValue{Key: "k2-bin", Value: "v2", RawValue: []byte{0, 1, 2, 3}}}, // Allowed binary header.
 						{Header: &corepb.HeaderValue{Key: "a1", Value: "v1"}},                                   // Disallowed.
 					},
-					HeadersToRemove: []string{":authority", "k-test-header-to-be-removed"},
+					HeadersToRemove: []string{"k-test-header-to-be-removed"},
 				},
 			},
 		}, nil
@@ -832,7 +832,7 @@ func (s) TestExtAuthz_Allowed_WithTrailers(t *testing.T) {
 						{Header: &corepb.HeaderValue{Key: "k2-bin", Value: "v2", RawValue: []byte{0, 1, 2, 3}}}, // Allowed binary header.
 						{Header: &corepb.HeaderValue{Key: "a1", Value: "v1"}},                                   // Disallowed.
 					},
-					HeadersToRemove: []string{":authority", "k-test-header-to-be-removed"},
+					HeadersToRemove: []string{"k-test-header-to-be-removed"},
 				},
 			},
 		}, nil
@@ -917,7 +917,7 @@ func (s) TestExtAuthz_Allowed_WithTrailers_MutationFails(t *testing.T) {
 						{Header: &corepb.HeaderValue{Key: "k2-bin", Value: "v2", RawValue: []byte{0, 1, 2, 3}}}, // Allowed binary header.
 						{Header: &corepb.HeaderValue{Key: "a1", Value: "v1"}},                                   // Disallowed.
 					},
-					HeadersToRemove: []string{":authority", "k-test-header-to-be-removed"},
+					HeadersToRemove: []string{"k-test-header-to-be-removed"},
 				},
 			},
 		}, nil
@@ -985,7 +985,7 @@ func (s) TestExtAuthz_Allowed_WithHeadersAndTrailers(t *testing.T) {
 					ResponseHeadersToAdd: []*corepb.HeaderValueOption{
 						{Header: &corepb.HeaderValue{Key: "k2-bin", Value: "v2", RawValue: []byte{0, 1, 2, 3}}}, // Allowed binary header.
 					},
-					HeadersToRemove: []string{":authority", "k-test-header-to-be-removed"},
+					HeadersToRemove: []string{"k-test-header-to-be-removed"},
 				},
 			},
 		}, nil
