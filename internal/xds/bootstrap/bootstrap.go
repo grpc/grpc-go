@@ -643,6 +643,13 @@ func (c *Config) AllowedGRPCServices() AllowedGRPCServices {
 	return c.allowedGRPCServices
 }
 
+// AllowedGrpcService returns the allowed gRPC service configured for the
+// given target URI, if any.
+func (c *Config) AllowedGrpcService(targetURI string) (*AllowedGrpcService, bool) {
+	svc, ok := c.allowedGrpcServices[targetURI]
+	return svc, ok
+}
+
 // XDSServers returns the top-level list of management servers to connect to,
 // ordered by priority.
 func (c *Config) XDSServers() ServerConfigs {
