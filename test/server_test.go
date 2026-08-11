@@ -431,11 +431,11 @@ func (s) TestChainStreamServerInterceptor(t *testing.T) {
 func (s) TestInterceptorSegregation(t *testing.T) {
 	var unaryCalled, streamCalled atomic.Bool
 
-	unaryInt := func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+	unaryInt := func(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		unaryCalled.Store(true)
 		return handler(ctx, req)
 	}
-	streamInt := func(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+	streamInt := func(srv any, ss grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		streamCalled.Store(true)
 		return handler(srv, ss)
 	}
@@ -444,7 +444,7 @@ func (s) TestInterceptorSegregation(t *testing.T) {
 		UnaryCallF: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			return &testpb.SimpleResponse{}, nil
 		},
-		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
+		FullDuplexCallF: func(testgrpc.TestService_FullDuplexCallServer) error {
 			return nil
 		},
 	}
