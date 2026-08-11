@@ -432,7 +432,7 @@ func (s) TestServerRPCEventsLogAll(t *testing.T) {
 			Authority:   ss.Address,
 			SequenceID:  4,
 			Payload: payload{
-				Message: []uint8{},
+				Message: nil,
 			},
 		},
 		{
