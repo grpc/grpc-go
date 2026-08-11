@@ -4950,6 +4950,8 @@ func (s) TestExtProcChannelRetention_XDSConfigUpdate(t *testing.T) {
 
 			blockChan := make(chan struct{})
 			enteredChan := make(chan struct{})
+			// EmptyCallF is expected to block until the test unblocks it (by
+			// closing blockChan), while UnaryCallF completes immediately.
 			stub := stubserver.StartTestService(t, &stubserver.StubServer{
 				EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
 					close(enteredChan)
@@ -5118,21 +5120,15 @@ func (s) TestExtProcChannelRetention_UnaryRPC(t *testing.T) {
 			defer func() { internal.CreateExtProcChannel = origCreate }()
 
 			stub := stubserver.StartTestService(t, &stubserver.StubServer{
-				UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
-					if body := string(in.GetPayload().GetBody()); body != reqBodyC1 {
-						return nil, fmt.Errorf("unexpected request body: %q, want %q", body, reqBodyC1)
-					}
-					if err := grpc.SendHeader(ctx, metadata.Pairs("test-header", "test-val")); err != nil {
-						return nil, err
-					}
-					return &testpb.SimpleResponse{Payload: in.GetPayload()}, nil
+				EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
+					return &testpb.Empty{}, nil
 				},
 			})
 			defer stub.Stop()
 
 			cc, err := setupTestClient(t, extProcAddr, &v3procfilterpb.ExternalProcessor{
 				ProcessingMode: &v3procfilterpb.ProcessingMode{
-					RequestHeaderMode:   v3procfilterpb.ProcessingMode_SEND,
+					RequestHeaderMode:   v3procfilterpb.ProcessingMode_SKIP,
 					ResponseHeaderMode:  v3procfilterpb.ProcessingMode_SEND,
 					RequestBodyMode:     v3procfilterpb.ProcessingMode_GRPC,
 					ResponseBodyMode:    v3procfilterpb.ProcessingMode_GRPC,
@@ -5150,11 +5146,10 @@ func (s) TestExtProcChannelRetention_UnaryRPC(t *testing.T) {
 
 			// Expect the unary RPC to fail because the proc server fails immediately.
 			client := testgrpc.NewTestServiceClient(cc)
-			reqMsg := &testpb.SimpleRequest{Payload: &testpb.Payload{Body: []byte(reqBodyC1)}}
 			// Do not check the error because for observability mode, in some cases
 			// the RPC could succeed before the proc server has a chance to fail the
 			// RPC. But in that case too, the interceptor should be closed.
-			client.UnaryCall(ctx, reqMsg)
+			client.EmptyCall(ctx, &testpb.Empty{})
 			// Close the client channel so that interceptor.Close() is called.
 			cc.Close()
 
