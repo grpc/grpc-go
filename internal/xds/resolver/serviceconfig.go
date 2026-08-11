@@ -112,10 +112,10 @@ type routeCluster struct {
 }
 
 type route struct {
-	m                 *xdsresource.CompositeMatcher        // converted from route matchers
-	actionType        xdsresource.RouteActionType          // holds route action type
-	clusters          wrr.WRR                              // holds *routeCluster entries
-	routeClusters     []*grpcsync.RefCounted[routeCluster] // Route clusters belonging to this route
+	m                 *xdsresource.CompositeMatcher         // converted from route matchers
+	actionType        xdsresource.RouteActionType           // holds route action type
+	clusters          wrr.WRR                               // holds *routeCluster entries
+	routeClusters     []*grpcsync.RefCounted[*routeCluster] // Route clusters belonging to this route
 	maxStreamDuration time.Duration
 	retryConfig       *xdsresource.RetryConfig
 	hashPolicies      []*xdsresource.HashPolicy
@@ -204,7 +204,7 @@ func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RP
 		return nil, annotateErrorWithNodeID(errUnsupportedClientRouteAction, cs.xdsNodeID)
 	}
 
-	rc, ok := rt.clusters.Next().(*grpcsync.RefCounted[routeCluster])
+	rc, ok := rt.clusters.Next().(*grpcsync.RefCounted[*routeCluster])
 	if !ok {
 		return nil, annotateErrorWithNodeID(status.Errorf(codes.Internal, "error retrieving cluster for match: %v (%T)", rc, rc), cs.xdsNodeID)
 	}

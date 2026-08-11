@@ -26,7 +26,7 @@ import (
 
 var logger = grpclog.Component("grpcsync")
 
-// RefCounted is a reference counted pointer of type T. It tracks the number of
+// RefCounted is a reference counted wrapper of type T. It tracks the number of
 // active references and runs a cleanup when the last reference is released.
 type RefCounted[T any] struct {
 	val      T

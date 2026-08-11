@@ -74,7 +74,8 @@ func SetHandshakeInfo(addr resolver.Address, hiPtr *atomic.Pointer[grpcsync.RefC
 	return addr
 }
 
-// HandshakeInfoFromAttributes returns a pointer to the *HandshakeInfo stored in attr.
+// HandshakeInfoFromAttributes returns the atomic pointer to the
+// reference-counted HandshakeInfo stored in attr.
 func HandshakeInfoFromAttributes(attr *attributes.Attributes) *atomic.Pointer[grpcsync.RefCounted[*HandshakeInfo]] {
 	v := attr.Value(handshakeAttrKey{})
 	hi, _ := v.(*atomic.Pointer[grpcsync.RefCounted[*HandshakeInfo]])
