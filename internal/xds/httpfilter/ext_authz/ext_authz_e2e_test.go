@@ -31,10 +31,12 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	estats "google.golang.org/grpc/experimental/stats"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
+	teststats "google.golang.org/grpc/internal/testutils/stats"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/internal/testutils/xds/e2e/setup"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
@@ -129,7 +131,7 @@ func startTestAuthServer(t *testing.T, checkFunc func(context.Context, *v3authpb
 
 // setupTestClient configures the management server with xDS resources that
 // include the ext_authz filter, and creates a new gRPC client.
-func setupTestClient(t *testing.T, authServerAddr string, extAuthzConfig *v3extauthzfilterpb.ExtAuthz, serverAddr string) (*grpc.ClientConn, error) {
+func setupTestClient(t *testing.T, authServerAddr string, extAuthzConfig *v3extauthzfilterpb.ExtAuthz, serverAddr string, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
 	t.Helper()
 	mgmtServer, nodeID, _, resolverBuilder := setup.ManagementServerAndResolver(t)
 
@@ -169,7 +171,8 @@ func setupTestClient(t *testing.T, authServerAddr string, extAuthzConfig *v3exta
 		return nil, err
 	}
 
-	cc, err := grpc.NewClient("xds:///"+serviceName, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(resolverBuilder))
+	dopts := append([]grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(resolverBuilder)}, opts...)
+	cc, err := grpc.NewClient("xds:///"+serviceName, dopts...)
 	if err != nil {
 		t.Fatalf("Failed to create a gRPC client: %v", err)
 	}
@@ -1116,5 +1119,122 @@ func (s) TestExtAuthz_RequestHeaderFiltering(t *testing.T) {
 
 	if _, err := client.EmptyCall(outgoingCtx, &testpb.Empty{}); err != nil {
 		t.Fatalf("EmptyCall() failed: %v", err)
+	}
+}
+
+// Test verifies that client-side metrics are emitted correctly during RPC
+// execution across different authorization outcomes.
+func (s) TestExtAuthz_ClientMetrics(t *testing.T) {
+	backend := &stubserver.StubServer{
+		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
+			return &testpb.Empty{}, nil
+		},
+	}
+	stubserver.StartTestService(t, backend)
+	defer backend.Stop()
+
+	tests := []struct {
+		name          string
+		checkFunc     func(context.Context, *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error)
+		filterEnabled *corepb.RuntimeFractionalPercent
+		wantMetric    string
+	}{
+		{
+			name: "Allowed_RPCs",
+			filterEnabled: &corepb.RuntimeFractionalPercent{
+				DefaultValue: &v3typepb.FractionalPercent{
+					Numerator:   100,
+					Denominator: v3typepb.FractionalPercent_HUNDRED,
+				},
+			},
+			checkFunc: func(context.Context, *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error) {
+				return &v3authpb.CheckResponse{
+					Status: &statuspb.Status{Code: int32(codes.OK)},
+				}, nil
+			},
+			wantMetric: "grpc.client_ext_authz.allowed_rpcs",
+		},
+		{
+			name: "Denied_RPCs",
+			filterEnabled: &corepb.RuntimeFractionalPercent{
+				DefaultValue: &v3typepb.FractionalPercent{
+					Numerator:   100,
+					Denominator: v3typepb.FractionalPercent_HUNDRED,
+				},
+			},
+			checkFunc: func(context.Context, *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error) {
+				return &v3authpb.CheckResponse{
+					Status: &statuspb.Status{Code: int32(codes.PermissionDenied)},
+				}, nil
+			},
+			wantMetric: "grpc.client_ext_authz.denied_rpcs",
+		},
+		{
+			name: "FilterDisabled_RPCs",
+			filterEnabled: &corepb.RuntimeFractionalPercent{
+				DefaultValue: &v3typepb.FractionalPercent{
+					Numerator:   0,
+					Denominator: v3typepb.FractionalPercent_HUNDRED,
+				},
+			},
+			wantMetric: "grpc.client_ext_authz.filter_disabled_rpcs",
+		},
+		{
+			name: "Failed_RPCs",
+			filterEnabled: &corepb.RuntimeFractionalPercent{
+				DefaultValue: &v3typepb.FractionalPercent{
+					Numerator:   100,
+					Denominator: v3typepb.FractionalPercent_HUNDRED,
+				},
+			},
+			checkFunc: func(context.Context, *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error) {
+				return nil, status.Error(codes.Internal, "internal server error")
+			},
+			wantMetric: "grpc.client_ext_authz.failed_rpcs",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			authAddr, stop := startTestAuthServer(t, test.checkFunc)
+			defer stop()
+
+			extAuthzCfg := &v3extauthzfilterpb.ExtAuthz{
+				FilterEnabled: test.filterEnabled,
+			}
+
+			tmr := teststats.NewTestMetricsRecorder()
+			cc, err := setupTestClient(t, authAddr, extAuthzCfg, backend.Address, grpc.WithStatsHandler(tmr))
+			if err != nil {
+				t.Fatalf("setupTestClient() failed: %v", err)
+			}
+			defer cc.Close()
+
+			client := testgrpc.NewTestServiceClient(cc)
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+
+			client.EmptyCall(ctx, &testpb.Empty{})
+
+			wantData := teststats.MetricsData{
+				Handle:    estats.DescriptorForMetric(test.wantMetric),
+				IntIncr:   1,
+				LabelKeys: []string{"grpc.target", "grpc.lb.backend_service"},
+				LabelVals: []string{"xds:///service-name", ""},
+			}
+			// Poll until the specific metric is recorded, then assert ALL fields with cmp.Diff
+			for {
+				if got, ok := tmr.MetricsData(test.wantMetric); ok {
+					if diff := cmp.Diff(wantData, got); diff != "" {
+						t.Fatalf("MetricsData mismatch (-want, +got):\n%s", diff)
+					}
+					break
+				}
+				select {
+				case <-ctx.Done():
+					t.Fatalf("Timed out waiting for metric %q: %v", test.wantMetric, ctx.Err())
+				case <-time.After(10 * time.Millisecond):
+				}
+			}
+		})
 	}
 }
