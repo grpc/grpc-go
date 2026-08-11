@@ -3155,10 +3155,10 @@ func (s) TestStreamTimeoutBodyPhaseAllow(t *testing.T) {
 
 	extProcConfig := &v3procfilterpb.ExternalProcessor{
 		GrpcService: &v3corepb.GrpcService{
-			Timeout: durationpb.New(defaultTestShortTimeout),
+			Timeout: durationpb.New(100 * time.Millisecond),
 		},
 		ProcessingMode: &v3procfilterpb.ProcessingMode{
-			RequestHeaderMode: v3procfilterpb.ProcessingMode_SEND,
+			RequestHeaderMode: v3procfilterpb.ProcessingMode_SKIP,
 			RequestBodyMode:   v3procfilterpb.ProcessingMode_GRPC,
 		},
 		FailureModeAllow: true,
