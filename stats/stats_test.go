@@ -626,8 +626,12 @@ func checkOutHeader(t *testing.T, d *gotData, e *expectedData) {
 		if st.RemoteAddr.String() != e.serverAddr {
 			t.Fatalf("st.RemoteAddr = %v, want %v", st.RemoteAddr, e.serverAddr)
 		}
-		if e.authority != "" && st.Authority != e.authority {
-			t.Fatalf("st.Authority = %s, want %s", st.Authority, e.authority)
+		wantAuthority := e.authority
+		if wantAuthority == "" {
+			wantAuthority = e.serverAddr
+		}
+		if st.Authority != wantAuthority {
+			t.Fatalf("st.Authority = %s, want %s", st.Authority, wantAuthority)
 		}
 		// additional headers might be injected so instead of testing equality, test that all the
 		// expected headers keys have the expected header values.
