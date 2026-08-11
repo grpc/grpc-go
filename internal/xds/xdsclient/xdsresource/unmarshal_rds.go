@@ -307,14 +307,22 @@ func routesProtoToSlice(routes []*v3routepb.Route, csps map[string]clusterspecif
 
 		if fr := match.GetRuntimeFraction(); fr != nil {
 			d := fr.GetDefaultValue()
-			n := d.GetNumerator()
+			// Scale the numerator to parts-per-million for the fraction matcher.
+			// The numerator comes from the control plane, so a large value would
+			// overflow the uint32 during scaling and wrap around to a small
+			// fraction. Compute in uint64 and cap at 1000000 (100%).
+			frac := uint64(d.GetNumerator())
 			switch d.GetDenominator() {
 			case v3typepb.FractionalPercent_HUNDRED:
-				n *= 10000
+				frac *= 10000
 			case v3typepb.FractionalPercent_TEN_THOUSAND:
-				n *= 100
+				frac *= 100
 			case v3typepb.FractionalPercent_MILLION:
 			}
+			if frac > 1000000 {
+				frac = 1000000
+			}
+			n := uint32(frac)
 			route.Fraction = &n
 		}
 
