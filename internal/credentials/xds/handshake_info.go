@@ -69,15 +69,15 @@ func Hostname(attr *attributes.Attributes) string {
 
 // SetHandshakeInfo returns a copy of addr in which the Attributes field is
 // updated with hiPtr.
-func SetHandshakeInfo(addr resolver.Address, hiPtr *atomic.Pointer[grpcsync.RefCounted[HandshakeInfo]]) resolver.Address {
+func SetHandshakeInfo(addr resolver.Address, hiPtr *atomic.Pointer[grpcsync.RefCounted[*HandshakeInfo]]) resolver.Address {
 	addr.Attributes = addr.Attributes.WithValue(handshakeAttrKey{}, hiPtr)
 	return addr
 }
 
 // HandshakeInfoFromAttributes returns a pointer to the *HandshakeInfo stored in attr.
-func HandshakeInfoFromAttributes(attr *attributes.Attributes) *atomic.Pointer[grpcsync.RefCounted[HandshakeInfo]] {
+func HandshakeInfoFromAttributes(attr *attributes.Attributes) *atomic.Pointer[grpcsync.RefCounted[*HandshakeInfo]] {
 	v := attr.Value(handshakeAttrKey{})
-	hi, _ := v.(*atomic.Pointer[grpcsync.RefCounted[HandshakeInfo]])
+	hi, _ := v.(*atomic.Pointer[grpcsync.RefCounted[*HandshakeInfo]])
 	return hi
 }
 
@@ -99,7 +99,7 @@ type HandshakeInfo struct {
 
 // NewHandshakeInfo returns a new reference counted HandshakeInfo configured
 // with the provided options.
-func NewHandshakeInfo(rootProvider, identityProvider certprovider.Provider, sanMatchers []matcher.StringMatcher, sni string, requireClientCert, validateSANUsingSNI, useAutoHostSNI bool) *grpcsync.RefCounted[HandshakeInfo] {
+func NewHandshakeInfo(rootProvider, identityProvider certprovider.Provider, sanMatchers []matcher.StringMatcher, sni string, requireClientCert, validateSANUsingSNI, useAutoHostSNI bool) *grpcsync.RefCounted[*HandshakeInfo] {
 	hi := &HandshakeInfo{
 		rootProvider:        rootProvider,
 		identityProvider:    identityProvider,
@@ -126,7 +126,7 @@ func (hi *HandshakeInfo) close() {
 // and returns the tls.Config along with a done callback that MUST be invoked
 // when the handshake completes. If no HandshakeInfo is stored in hiPtr or if
 // fallback credentials should be used, useFallback returns true.
-func ClientSideTLSConfig(ctx context.Context, hiPtr *atomic.Pointer[grpcsync.RefCounted[HandshakeInfo]], hostname string) (cfg *tls.Config, useFallback bool, done func(), err error) {
+func ClientSideTLSConfig(ctx context.Context, hiPtr *atomic.Pointer[grpcsync.RefCounted[*HandshakeInfo]], hostname string) (cfg *tls.Config, useFallback bool, done func(), err error) {
 	if hiPtr == nil {
 		return nil, true, func() {}, nil
 	}
@@ -160,7 +160,7 @@ func ClientSideTLSConfig(ctx context.Context, hiPtr *atomic.Pointer[grpcsync.Ref
 // returning the tls.Config along with a done callback that MUST be invoked when
 // the handshake completes. If hi is nil or fallback credentials should be used,
 // useFallback returns true.
-func ServerSideTLSConfig(ctx context.Context, hiRC *grpcsync.RefCounted[HandshakeInfo]) (cfg *tls.Config, useFallback bool, done func(), err error) {
+func ServerSideTLSConfig(ctx context.Context, hiRC *grpcsync.RefCounted[*HandshakeInfo]) (cfg *tls.Config, useFallback bool, done func(), err error) {
 	if hiRC == nil {
 		return nil, true, func() {}, nil
 	}

@@ -168,7 +168,7 @@ func (c *credsImpl) ServerHandshake(rawConn net.Conn) (net.Conn, credentials.Aut
 	// `HandshakeInfo` does not contain the information we are looking for, we
 	// delegate the handshake to the fallback credentials.
 	hiConn, ok := rawConn.(interface {
-		XDSHandshakeInfo() (*grpcsync.RefCounted[xdsinternal.HandshakeInfo], error)
+		XDSHandshakeInfo() (*grpcsync.RefCounted[*xdsinternal.HandshakeInfo], error)
 	})
 	if !ok {
 		return c.fallback.ServerHandshake(rawConn)
