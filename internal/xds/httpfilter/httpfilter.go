@@ -26,6 +26,7 @@ import (
 	"google.golang.org/grpc"
 	estats "google.golang.org/grpc/experimental/stats"
 	iresolver "google.golang.org/grpc/internal/resolver"
+	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -33,6 +34,14 @@ import (
 // filter.  Embed this interface to implement it.
 type FilterConfig interface {
 	isFilterConfig()
+}
+
+// FilterConfigParseContext carries the bootstrap and server context that is
+// available at resource-decode time into a filter's config parsing. It is
+// consumed by filters that implement FilterConfigParserWithContext.
+type FilterConfigParseContext struct {
+	BootstrapConfig *bootstrap.Config
+	ServerConfig    *bootstrap.ServerConfig
 }
 
 // DisabledFilterConfig represents a disabled filter override. It implements the
@@ -68,6 +77,20 @@ type Builder interface {
 	// IsTerminal returns whether this Filter is terminal or not (i.e. it must
 	// be last filter in the filter chain).
 	IsTerminal() bool
+}
+
+// FilterConfigParserWithContext is an optional interface that a Builder may
+// implement to receive the FilterConfigParseContext available at
+// resource-decode time. When a Builder implements it, the xDS resource
+// decoders call these methods instead of the base Builder parse methods.
+type FilterConfigParserWithContext interface {
+	// ParseFilterConfigWithContext is like Builder.ParseFilterConfig, but
+	// is additionally passed the FilterConfigParseContext.
+	ParseFilterConfigWithContext(proto.Message, FilterConfigParseContext) (FilterConfig, error)
+	// ParseFilterConfigOverrideWithContext is like
+	// Builder.ParseFilterConfigOverride, but is additionally passed the
+	// FilterConfigParseContext.
+	ParseFilterConfigOverrideWithContext(proto.Message, FilterConfigParseContext) (FilterConfig, error)
 }
 
 // ClientInterceptor is an interceptor for gRPC client streams.

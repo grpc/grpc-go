@@ -212,6 +212,20 @@ func (builder) ParseFilterConfigOverride(ov proto.Message) (httpfilter.FilterCon
 	}, nil
 }
 
+// ParseFilterConfigWithContext parses the filter configuration. The
+// FilterConfigParseContext is currently ignored; its consumption is added in a
+// later change.
+func (b builder) ParseFilterConfigWithContext(cfg proto.Message, _ httpfilter.FilterConfigParseContext) (httpfilter.FilterConfig, error) {
+	return b.ParseFilterConfig(cfg)
+}
+
+// ParseFilterConfigOverrideWithContext parses the override filter
+// configuration. The FilterConfigParseContext is currently ignored; its
+// consumption is added in a later change.
+func (b builder) ParseFilterConfigOverrideWithContext(ov proto.Message, _ httpfilter.FilterConfigParseContext) (httpfilter.FilterConfig, error) {
+	return b.ParseFilterConfigOverride(ov)
+}
+
 func (builder) IsTerminal() bool {
 	return false
 }
@@ -225,6 +239,7 @@ func (builder) BuildClientFilter(opts httpfilter.ClientFilterOptions) httpfilter
 }
 
 var _ httpfilter.ClientFilterBuilder = builder{}
+var _ httpfilter.FilterConfigParserWithContext = builder{}
 
 // grpcServiceKey uniquely identifies an external processor server configuration
 // by its target URI, channel credentials, and call credentials. It is used as a
