@@ -735,7 +735,7 @@ func (s) TestSendRequestDoesNotFollowRedirects(t *testing.T) {
 	}
 	select {
 	case body := <-leaked:
-		t.Errorf("redirect target received request body %q; the subject token must not be replayed to another host", body)
+		t.Errorf("Redirect target received request body %q; the subject token must not be replayed to another host", body)
 	default:
 	}
 }
