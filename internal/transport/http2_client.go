@@ -661,6 +661,9 @@ func (t *http2Client) createHeaderFields(ctx context.Context, callHdr *CallHdr) 
 		if isReservedHeader(k) {
 			continue
 		}
+		if err := imetadata.ValidatePair(k, vv...); err != nil {
+			return nil, status.Error(codes.Internal, err.Error())
+		}
 		for _, v := range vv {
 			headerFields = append(headerFields, hpack.HeaderField{Name: k, Value: encodeMetadataHeader(k, v)})
 		}
@@ -704,6 +707,9 @@ func (t *http2Client) getTrAuthData(ctx context.Context, audience string) (map[s
 		for k, v := range data {
 			// Capital header names are illegal in HTTP/2.
 			k = strings.ToLower(k)
+			if err := imetadata.ValidatePair(k, v); err != nil {
+				return nil, status.Error(codes.Internal, err.Error())
+			}
 			authData[k] = v
 		}
 	}
@@ -737,6 +743,9 @@ func (t *http2Client) getCallAuthData(ctx context.Context, audience string, call
 		for k, v := range data {
 			// Capital header names are illegal in HTTP/2
 			k = strings.ToLower(k)
+			if err := imetadata.ValidatePair(k, v); err != nil {
+				return nil, status.Error(codes.Internal, err.Error())
+			}
 			callAuthData[k] = v
 		}
 	}
