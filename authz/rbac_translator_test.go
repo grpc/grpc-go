@@ -948,6 +948,30 @@ func TestTranslatePolicy(t *testing.T) {
 			}`,
 			wantErr: `"allow_rules" 0: "headers" 0: unsupported "key" :method`,
 		},
+		"duplicate deny rule name": {
+			authzPolicy: `{
+				"name": "authz",
+				"deny_rules": [
+					{"name": "block", "request": {"paths": ["/admin.Admin/*"]}},
+					{"name": "block", "request": {"paths": ["/debug.Debug/*"]}}
+				],
+				"allow_rules": [{
+					"name": "allow_policy_1",
+					"request": {"paths": ["*"]}
+				}]
+			}`,
+			wantErr: `"deny_rules" 1: "name" "block" is duplicated`,
+		},
+		"duplicate allow rule name": {
+			authzPolicy: `{
+				"name": "authz",
+				"allow_rules": [
+					{"name": "allow_policy_1", "request": {"paths": ["/foo.Foo/*"]}},
+					{"name": "allow_policy_1", "request": {"paths": ["/bar.Bar/*"]}}
+				]
+			}`,
+			wantErr: `"allow_rules" 1: "name" "allow_policy_1" is duplicated`,
+		},
 		"bad audit condition": {
 			authzPolicy: `{
 				"name": "authz",

@@ -278,6 +278,9 @@ func parseRules(rules []rule, prefixName string) (map[string]*v3rbacpb.Policy, e
 			return nil, fmt.Errorf("%d: %v", i, err)
 		}
 		policyName := prefixName + "_" + rule.Name
+		if _, ok := policies[policyName]; ok {
+			return nil, fmt.Errorf(`%d: "name" %q is duplicated`, i, rule.Name)
+		}
 		policies[policyName] = &v3rbacpb.Policy{
 			Principals:  []*v3rbacpb.Principal{parsePeer(rule.Source)},
 			Permissions: []*v3rbacpb.Permission{permission},
