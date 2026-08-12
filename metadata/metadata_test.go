@@ -538,29 +538,33 @@ func BenchmarkValueFromIncomingContext(b *testing.B) {
 }
 
 func BenchmarkValueFromOutgoingContext(b *testing.B) {
+	// Realistic-length gRPC metadata keys, not "k1"/"k2"/"k3": short keys
+	// understate the cost of strings.EqualFold relative to a cheap exact
+	// match, which matters for the key-found cases below.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	ctx = NewOutgoingContext(ctx, MD{"k3": {"v3", "v4"}})
-	ctx = AppendToOutgoingContext(ctx, "k1", "v1", "k2", "v2")
+	ctx = NewOutgoingContext(ctx, MD{"content-type": {"application/grpc"}})
+	ctx = AppendToOutgoingContext(ctx, "grpc-timeout", "10S", "x-request-id", "abc-def-123")
 
 	b.Run("key-found", func(b *testing.B) {
 		for b.Loop() {
-			ValueFromOutgoingContext(ctx, "k1")
+			ValueFromOutgoingContext(ctx, "grpc-timeout")
 		}
 	})
 
 	b.Run("key-not-found", func(b *testing.B) {
 		for b.Loop() {
-			ValueFromOutgoingContext(ctx, "key-not-found")
+			ValueFromOutgoingContext(ctx, "x-does-not-exist")
 		}
 	})
 
-	// Key present in both raw.md ("k3") and raw.added (appended below) —
-	// exercises the accumulate-across-both path, not just append-to-nil.
-	bothCtx := AppendToOutgoingContext(ctx, "k3", "v5")
+	// Key present in both raw.md ("content-type") and raw.added (appended
+	// below) — exercises the accumulate-across-both path, not just
+	// append-to-nil.
+	bothCtx := AppendToOutgoingContext(ctx, "content-type", "application/grpc+proto")
 	b.Run("key-found-in-md-and-added", func(b *testing.B) {
 		for b.Loop() {
-			ValueFromOutgoingContext(bothCtx, "k3")
+			ValueFromOutgoingContext(bothCtx, "content-type")
 		}
 	})
 }

@@ -400,9 +400,11 @@ func ValueFromOutgoingContext(ctx context.Context, key string) []string {
 			panic(fmt.Sprintf("metadata: ValueFromOutgoingContext got an odd number of input pairs for metadata: %d", len(added)))
 		}
 
-		// Case insensitive, like FromOutgoingContext: added isn't guaranteed lowercase.
+		// Case insensitive, like FromOutgoingContext: added isn't guaranteed
+		// lowercase, though AppendToOutgoingContext already lowercases it in
+		// practice, so try the cheap exact match first.
 		for i := 0; i < len(added); i += 2 {
-			if strings.EqualFold(added[i], key) {
+			if added[i] == key || strings.EqualFold(added[i], key) {
 				if vals == nil {
 					vals = make([]string, 0, len(matchedMD)+1)
 					vals = append(vals, matchedMD...)
