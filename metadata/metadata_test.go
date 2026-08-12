@@ -554,6 +554,15 @@ func BenchmarkValueFromOutgoingContext(b *testing.B) {
 			ValueFromOutgoingContext(ctx, "key-not-found")
 		}
 	})
+
+	// Key present in both raw.md ("k3") and raw.added (appended below) —
+	// exercises the accumulate-across-both path, not just append-to-nil.
+	bothCtx := AppendToOutgoingContext(ctx, "k3", "v5")
+	b.Run("key-found-in-md-and-added", func(b *testing.B) {
+		for b.Loop() {
+			ValueFromOutgoingContext(bothCtx, "k3")
+		}
+	})
 }
 
 // TestString verifies that String shows keys and values only for keys known to

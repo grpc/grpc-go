@@ -376,21 +376,25 @@ func ValueFromOutgoingContext(ctx context.Context, key string) []string {
 	// checked: raw.added still needs to be walked and accumulated regardless.
 	// The else below prevents that from overwriting an exact match with an
 	// unrelated case-insensitive one.
-	var vals []string
+	var matchedMD []string
 	if v, ok := raw.md[key]; ok {
-		vals = copyOf(v)
+		matchedMD = v
 	} else {
 		for k, v := range raw.md {
 			// Case insensitive comparison: MD is a map, and there's no
 			// guarantee that the MD attached to the context is created using
 			// our helper functions.
 			if strings.EqualFold(k, key) {
-				vals = copyOf(v)
+				matchedMD = v
 				break
 			}
 		}
 	}
 
+	// Defer allocating vals until raw.added actually has a match, so a match
+	// found only in raw.md doesn't pay for both a copyOf and a growing
+	// append.
+	var vals []string
 	for _, added := range raw.added {
 		if len(added)%2 == 1 {
 			panic(fmt.Sprintf("metadata: ValueFromOutgoingContext got an odd number of input pairs for metadata: %d", len(added)))
@@ -399,11 +403,18 @@ func ValueFromOutgoingContext(ctx context.Context, key string) []string {
 		// Case insensitive, like FromOutgoingContext: added isn't guaranteed lowercase.
 		for i := 0; i < len(added); i += 2 {
 			if strings.EqualFold(added[i], key) {
+				if vals == nil {
+					vals = make([]string, 0, len(matchedMD)+1)
+					vals = append(vals, matchedMD...)
+				}
 				vals = append(vals, added[i+1])
 			}
 		}
 	}
 
+	if vals == nil && matchedMD != nil {
+		return copyOf(matchedMD)
+	}
 	return vals
 }
 
