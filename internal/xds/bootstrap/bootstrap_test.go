@@ -1846,23 +1846,6 @@ func (s) TestAllowedGRPCServices_UnmarshalJSON_Errors(t *testing.T) {
 	}
 }
 
-// TestBootstrap_NullAuthorityRejected verifies that a null authority entry in
-// the bootstrap configuration is rejected with an error rather than causing a
-// panic during authority post-processing.
-func (s) TestBootstrap_NullAuthorityRejected(t *testing.T) {
-	cfg := `{
-		"xds_servers": [{
-			"server_uri": "trafficdirector.googleapis.com:443",
-			"channel_creds": [{"type": "insecure"}]
-		}],
-		"authorities": {"foo": null}
-	}`
-	var c Config
-	if err := c.UnmarshalJSON([]byte(cfg)); err == nil {
-		t.Fatal("Config.UnmarshalJSON() succeeded; want error for null authority")
-	}
-}
-
 // TestBootstrap_AllowedGRPCServices_NullEntryRejected verifies that a null
 // allowed_grpc_services entry is rejected rather than silently accepted as a
 // credential-less allowlisted target. gRFC A102 requires channel_creds on

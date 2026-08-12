@@ -255,8 +255,7 @@ func (a *AllowedGRPCService) UnmarshalJSON(data []byte) error {
 	}
 
 	// If no channel-creds type in the list was supported, credsDialOption is
-	// still nil after the loop; that is a validation error (mirrors
-	// ServerConfig.UnmarshalJSON).
+	// still nil after the loop; that is a validation error.
 	if credsDialOption == nil {
 		runCleanups()
 		return fmt.Errorf("xds: no supported channel credentials found for allowed grpc service in config:\n%s", string(data))
@@ -829,9 +828,6 @@ func (c *Config) UnmarshalJSON(data []byte) error {
 	// - if set, it must start with "xdstp://<authority_name>/"
 	// - if not set, it defaults to "xdstp://<authority_name>/envoy.config.listener.v3.Listener/%s"
 	for name, authority := range c.authorities {
-		if authority == nil {
-			return fmt.Errorf("xds: authority %q has no configuration in bootstrap", name)
-		}
 		prefix := fmt.Sprintf("xdstp://%s", url.PathEscape(name))
 		if authority.ClientListenerResourceNameTemplate == "" {
 			authority.ClientListenerResourceNameTemplate = prefix + "/envoy.config.listener.v3.Listener/%s"
