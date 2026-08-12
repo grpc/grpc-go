@@ -435,7 +435,7 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 		// NewStream might return an error directly, and it is the caller's
 		// responsibility to handle cleanup if NewStream fails or returns an error.
 		i.procClient.Decrement()
-		return csCommon.handleInitError(fmt.Errorf("failed to create a stream to external processor: %v", err), newStream, opts...)
+		return csCommon.handleInitError(err, newStream, opts...)
 	}
 
 	// Observability mode.
@@ -465,7 +465,7 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 		// headers to the external processor server.
 		if i.config.processingModes.requestHeaderMode == modeSend {
 			if err = ocs.sendToProcessor(ocs.requestHeaders(outgoingMD, added)); err != nil {
-				return ocs.handleInitError(fmt.Errorf("failed to send client headers to external processor server: %v", err), newStream, opts...)
+				return ocs.handleInitError(err, newStream, opts...)
 			}
 		}
 

@@ -5033,12 +5033,12 @@ func (s) TestExtProcChannelRetention_XDSConfigUpdate(t *testing.T) {
 
 			client := testgrpc.NewTestServiceClient(cc)
 
+			errChan := make(chan error, 1)
 			// Make the first RPC using extproc server 1 in a background goroutine.
 			// The RPC remains in flight because the backend is blocked on blockChan.
 			go func() {
-				if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
-					t.Errorf("First EmptyCall() failed: %v", err)
-				}
+				_, err := client.EmptyCall(ctx, &testpb.Empty{})
+				errChan <- err
 			}()
 
 			<-enteredChan
@@ -5071,6 +5071,15 @@ func (s) TestExtProcChannelRetention_XDSConfigUpdate(t *testing.T) {
 			// Unblock the first RPC so that it completes and invokes OnFinish.
 			close(blockChan)
 
+			// Wait for the first RPC to complete.
+			select {
+			case err := <-errChan:
+				if err != nil {
+					t.Errorf("First EmptyCall() failed: %v", err)
+				}
+			case <-time.After(defaultTestTimeout):
+				t.Fatalf("Timeout waiting for first RPC to complete")
+			}
 			// Verify that proc channel 1 is now closed.
 			select {
 			case addr := <-closeChan:
