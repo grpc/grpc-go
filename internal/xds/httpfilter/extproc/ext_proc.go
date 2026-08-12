@@ -316,7 +316,7 @@ func (cf *clientFilter) getOrCreateExtProcChannel(server xdsresource.GRPCService
 	// Create a new refcounted client. The onZero cleanup function will remove the
 	// client from the map and close the underlying channel.
 	var rc *grpcsync.RefCounted[v3procservicegrpc.ExternalProcessorClient]
-	rc = grpcsync.NewRefCounted(&client, func() {
+	rc = grpcsync.NewRefCounted(client, func() {
 		cf.removeProcChannel(key, rc)
 		cancel()
 	})
@@ -425,7 +425,7 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 	// they go over the wire, we must establish the ext_proc stream now rather
 	// than deferring it.
 	var err error
-	procClient := *i.procClient.Value()
+	procClient := i.procClient.Value()
 	if csCommon.procStream, err = procClient.Process(procCtx, grpc.OnFinish(func(error) {
 		i.procClient.Decrement()
 	})); err != nil {

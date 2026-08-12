@@ -128,7 +128,7 @@ type clusterImplBalancer struct {
 	lrsServer        *bootstrap.ServerConfig // Load reporting server configuration.
 	dropCategories   []DropConfig            // The categories for drops.
 	child            *gracefulswitch.Balancer
-	xdsHIPtr         atomic.Pointer[grpcsync.RefCounted[xds.HandshakeInfo]] // Accessed atomically as it is shared between the balancer and the transport.
+	xdsHIPtr         atomic.Pointer[grpcsync.RefCounted[*xds.HandshakeInfo]] // Accessed atomically as it is shared between the balancer and the transport.
 	xdsCredsInUse    bool
 
 	// The active security configuration received from the control plane.

@@ -26,23 +26,26 @@ import (
 
 var logger = grpclog.Component("grpcsync")
 
-// RefCounted is a reference counted pointer of type *T. It tracks the number of
+// RefCounted is a reference counted wrapper of type T. It tracks the number of
 // active references and runs a cleanup when the last reference is released.
 type RefCounted[T any] struct {
-	val      *T
+	val      T
 	refCount atomic.Int32
 	onZero   func()
 }
 
-// NewRefCounted creates a new RefCounted instance wrapping the given pointer
-// with initial refcount of one.
+// NewRefCounted creates a new RefCounted instance wrapping the given value with
+// initial refcount of one.
+//
+// The value should typically be a pointer, interface, or handle rather than a
+// plain value type (such as a struct or primitive value).
 //
 // The provided onZero callback must not be nil, and is executed exactly once
 // when the reference count drops to zero.  Panics if onZero is nil.
 //
 // WARNING: onZero runs synchronously inside Decrement; it must not acquire
 // locks held by Decrement callers.
-func NewRefCounted[T any](val *T, onZero func()) *RefCounted[T] {
+func NewRefCounted[T any](val T, onZero func()) *RefCounted[T] {
 	if onZero == nil {
 		panic("grpcsync: onZero callback cannot be nil")
 	}
@@ -55,7 +58,7 @@ func NewRefCounted[T any](val *T, onZero func()) *RefCounted[T] {
 }
 
 // Value returns the encapsulated resource.
-func (rc *RefCounted[T]) Value() *T {
+func (rc *RefCounted[T]) Value() T {
 	return rc.val
 }
 

@@ -62,7 +62,7 @@ type connWrapper struct {
 	st       transport.ServerTransport
 	draining bool
 	closed   bool
-	hi       *grpcsync.RefCounted[xds.HandshakeInfo]
+	hi       *grpcsync.RefCounted[*xds.HandshakeInfo]
 
 	// The virtual hosts with matchable routes and instantiated HTTP Filters per
 	// route, or an error.
@@ -91,7 +91,7 @@ func (c *connWrapper) GetDeadline() time.Time {
 // XDSHandshakeInfo returns a HandshakeInfo with appropriate security
 // configuration for this connection. This method is invoked by the
 // ServerHandshake() method of the XdsCredentials.
-func (c *connWrapper) XDSHandshakeInfo() (*grpcsync.RefCounted[xds.HandshakeInfo], error) {
+func (c *connWrapper) XDSHandshakeInfo() (*grpcsync.RefCounted[*xds.HandshakeInfo], error) {
 	if c.filterChain.securityCfg == nil {
 		// If the security config is empty, this means that the control plane
 		// did not provide any security configuration and therefore we should

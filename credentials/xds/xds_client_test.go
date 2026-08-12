@@ -229,7 +229,7 @@ func newTestContextWithHandshakeInfo(parent context.Context, root, identity cert
 	if sanExactMatch != "" {
 		sms = []matcher.StringMatcher{matcher.NewExactStringMatcher(sanExactMatch, false)}
 	}
-	var hiPtr atomic.Pointer[grpcsync.RefCounted[xdsinternal.HandshakeInfo]]
+	var hiPtr atomic.Pointer[grpcsync.RefCounted[*xdsinternal.HandshakeInfo]]
 	info := xdsinternal.NewHandshakeInfo(root, identity, sms, sni, false, validateSANUsingSNI, false)
 	hiPtr.Store(info)
 	addr := xdsinternal.SetHandshakeInfo(resolver.Address{}, &hiPtr)
@@ -623,7 +623,7 @@ func (s) TestClientCredsProviderSwitch(t *testing.T) {
 	// We need to repeat most of what newTestContextWithHandshakeInfo() does
 	// here because we need access to the underlying HandshakeInfo so that we
 	// can update it before the next call to ClientHandshake().
-	var hiPtr atomic.Pointer[grpcsync.RefCounted[xdsinternal.HandshakeInfo]]
+	var hiPtr atomic.Pointer[grpcsync.RefCounted[*xdsinternal.HandshakeInfo]]
 	hiPtr.Store(handshakeInfo)
 	addr := xdsinternal.SetHandshakeInfo(resolver.Address{}, &hiPtr)
 	ctx = icredentials.NewClientHandshakeInfoContext(ctx, credentials.ClientHandshakeInfo{Attributes: addr.Attributes})
