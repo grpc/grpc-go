@@ -3155,10 +3155,14 @@ func (s) TestStreamTimeoutBodyPhaseAllow(t *testing.T) {
 
 	extProcConfig := &v3procfilterpb.ExternalProcessor{
 		GrpcService: &v3corepb.GrpcService{
-			Timeout: durationpb.New(defaultTestShortTimeout),
+			// Use 100ms instead of defaultTestShortTimeout (10ms) to protect against
+			// slow connections, for example where the processor RPC fails before the
+			// data plane stream is even connected, which would cause the test to fail
+			// in the header phase itself.
+			Timeout: durationpb.New(100 * time.Millisecond),
 		},
 		ProcessingMode: &v3procfilterpb.ProcessingMode{
-			RequestHeaderMode: v3procfilterpb.ProcessingMode_SEND,
+			RequestHeaderMode: v3procfilterpb.ProcessingMode_SKIP,
 			RequestBodyMode:   v3procfilterpb.ProcessingMode_GRPC,
 		},
 		FailureModeAllow: true,
