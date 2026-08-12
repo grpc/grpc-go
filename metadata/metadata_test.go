@@ -487,20 +487,14 @@ func BenchmarkValueFromOutgoingContextVsFromOutgoingContext(b *testing.B) {
 		ctx = AppendToOutgoingContext(ctx, "target-key", "target-value")
 
 		b.Run(fmt.Sprintf("FromOutgoingContext/n=%d", numHeaders), func(b *testing.B) {
-			for n := 0; n < b.N; n++ {
-				out, _ := FromOutgoingContext(ctx)
-				if len(out["target-key"]) != 1 {
-					b.Fatal("ensures not optimized away")
-				}
+			for b.Loop() {
+				FromOutgoingContext(ctx)
 			}
 		})
 
 		b.Run(fmt.Sprintf("ValueFromOutgoingContext/n=%d", numHeaders), func(b *testing.B) {
-			for n := 0; n < b.N; n++ {
-				result := ValueFromOutgoingContext(ctx, "target-key")
-				if len(result) != 1 {
-					b.Fatal("ensures not optimized away")
-				}
+			for b.Loop() {
+				ValueFromOutgoingContext(ctx, "target-key")
 			}
 		})
 	}
@@ -550,20 +544,14 @@ func BenchmarkValueFromOutgoingContext(b *testing.B) {
 	ctx = AppendToOutgoingContext(ctx, "k1", "v1", "k2", "v2")
 
 	b.Run("key-found", func(b *testing.B) {
-		for n := 0; n < b.N; n++ {
-			result := ValueFromOutgoingContext(ctx, "k1")
-			if len(result) != 1 {
-				b.Fatal("ensures not optimized away")
-			}
+		for b.Loop() {
+			ValueFromOutgoingContext(ctx, "k1")
 		}
 	})
 
 	b.Run("key-not-found", func(b *testing.B) {
-		for n := 0; n < b.N; n++ {
-			result := ValueFromOutgoingContext(ctx, "key-not-found")
-			if len(result) != 0 {
-				b.Fatal("ensures not optimized away")
-			}
+		for b.Loop() {
+			ValueFromOutgoingContext(ctx, "key-not-found")
 		}
 	})
 }
