@@ -424,6 +424,7 @@ func (ht *serverHandlerTransport) HandleStreams(ctx context.Context, startStream
 		st:               ht,
 		headerWireLength: 0, // won't have access to header wire length until golang/go#18997.
 	}
+	s.enableCompression.Store(true) // compression is enabled by default
 	s.Stream.buf.init()
 	s.readRequester = s
 	s.trReader = transportReader{
