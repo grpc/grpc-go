@@ -1891,10 +1891,7 @@ func (ss *serverStream) RecvMsg(m any) (err error) {
 		}
 		if err != nil && err != io.EOF {
 			st, _ := status.FromError(toRPCErr(err))
-			if ss.desc.ClientStreams || ss.desc.ServerStreams {
-				// For unary RPCs, status is written from processRPC.
-				ss.writeStatus(st)
-			}
+			ss.writeStatus(st)
 			// Non-user specified status was sent out. This should be an error
 			// case (as a server side Cancel maybe).
 			//
