@@ -25,6 +25,8 @@ import (
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	"github.com/google/go-cmp/cmp"
+	"google.golang.org/grpc/internal/envconfig"
+	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/types/known/anypb"
@@ -40,7 +42,7 @@ func bootstrapConfig(t *testing.T, allowed string) *bootstrap.Config {
 	contents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
 		Servers:             json.RawMessage(`[{"server_uri":"td.googleapis.com:443","channel_creds":[{"type":"insecure"}]}]`),
 		Node:                json.RawMessage(`{}`),
-		AllowedGrpcServices: json.RawMessage(allowed),
+		AllowedGRPCServices: json.RawMessage(allowed),
 	})
 	if err != nil {
 		t.Fatalf("NewContentsForTesting() failed: %v", err)
@@ -65,6 +67,10 @@ func googleGrpcService(target string, channelPlugins []*anypb.Any, timeout *dura
 }
 
 func TestParse(t *testing.T) {
+	// The allowed_grpc_services bootstrap field is parsed only when a
+	// consuming feature is enabled.
+	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
+
 	insecurePlugin := &anypb.Any{TypeUrl: insecureCredsTypeURL}
 	allowedInsecure := `{"dns:///my-service:443":{"channel_creds":[{"type":"insecure"}]}}`
 

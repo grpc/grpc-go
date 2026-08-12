@@ -116,7 +116,7 @@ func (g *GrpcService) Parse(gs *v3corepb.GrpcService) (Config, error) {
 		// allowlist, but the credentials themselves are resolved later,
 		// at channel creation time; they are left empty in the parsed
 		// config here.
-		allowedSvc, ok := g.config.AllowedGrpcService(targetURI)
+		allowedSvc, ok := g.config.AllowedGRPCService(targetURI)
 		if !ok {
 			return Config{}, fmt.Errorf("grpcservice: target_uri %q is not present in allowed_grpc_services", targetURI)
 		}

@@ -643,10 +643,10 @@ func (c *Config) AllowedGRPCServices() AllowedGRPCServices {
 	return c.allowedGRPCServices
 }
 
-// AllowedGrpcService returns the allowed gRPC service configured for the
+// AllowedGRPCService returns the allowed gRPC service configured for the
 // given target URI, if any.
-func (c *Config) AllowedGrpcService(targetURI string) (*AllowedGrpcService, bool) {
-	svc, ok := c.allowedGrpcServices[targetURI]
+func (c *Config) AllowedGRPCService(targetURI string) (*AllowedGRPCService, bool) {
+	svc, ok := c.allowedGRPCServices[targetURI]
 	return svc, ok
 }
 
