@@ -242,13 +242,6 @@ func (b *cdsBalancer) updateChildConfig() error {
 	clusterConfig := b.clusterConfigs[clusterName].Config
 	isAggregate := clusterConfig.Cluster.ClusterType == xdsresource.ClusterTypeAggregate
 
-	var topLBName string
-	if isAggregate {
-		topLBName = priority.Name
-	} else {
-		topLBName = outlierdetection.Name
-	}
-
 	if b.childLB == nil {
 		b.childLB = gracefulswitch.NewBalancer(b.cc, b.bOpts)
 	}
@@ -256,10 +249,13 @@ func (b *cdsBalancer) updateChildConfig() error {
 	var childCfgBytes []byte
 	var endpoints []resolver.Endpoint
 	var err error
+	var topLBName string
 
 	if isAggregate {
+		topLBName = priority.Name
 		childCfgBytes, endpoints, err = buildAggregateClusterConfigJSON(b.priorities, &b.xdsLBPolicy)
 	} else {
+		topLBName = outlierdetection.Name
 		childCfgBytes, endpoints, err = buildLeafClusterConfigJSON(b.priorities, &b.xdsLBPolicy)
 	}
 	if err != nil {

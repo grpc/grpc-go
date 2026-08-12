@@ -90,8 +90,8 @@ func verifyDNSResolution(ctx context.Context, t *testing.T, dnsTargetCh chan res
 
 // Tests the case where the cluster resource requested is a leaf cluster. The
 // management server sends two updates for the same leaf cluster resource. The
-// test verifies that the load balancing configuration pushed to the top-level LB
-// policy contains the expected configuration corresponding to the leaf
+// test verifies that the load balancing configuration pushed to the top-level
+// LB policy contains the expected configuration corresponding to the leaf
 // cluster, on both occasions.
 func (s) TestAggregateClusterSuccess_LeafNode(t *testing.T) {
 	tests := []struct {
@@ -255,11 +255,12 @@ func (s) TestAggregateClusterSuccess_ThenUpdateChildClusters(t *testing.T) {
 
 // Tests the case where the cluster resource requested is an aggregate cluster
 // root pointing to two child clusters, one of type EDS and the other of type
-// LogicalDNS. The test verifies that the load balancing configuration pushed to
-// the priority LB policy contains the discovery mechanisms for both child
+// LogicalDNS. The test verifies that the load balancing configuration pushed
+// to the priority LB policy contains the discovery mechanisms for both child
 // clusters. The test then updates the root cluster resource requested by the
 // cds LB policy to a leaf cluster of type EDS and verifies the load balancing
-// configuration pushed to the outlier detection LB policy contains the leaf cluster config.
+// configuration pushed to the outlier detection LB policy contains the leaf
+// cluster config.
 func (s) TestAggregateClusterSuccess_ThenChangeRootToEDS(t *testing.T) {
 	dnsTargetCh, dnsR := setupDNS(t)
 	lbCfgCh, _, _, _ := registerWrappedPriorityPolicy(t)

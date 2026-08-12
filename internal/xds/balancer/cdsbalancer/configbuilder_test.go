@@ -130,9 +130,10 @@ func makeLocality(localityIdx int, localityWeight, priority uint32, endpointCoun
 	}
 }
 
-// TestBuildAggregateClusterConfigJSON is a sanity check that the built balancer config
-// can be parsed. The behavior test is covered by TestBuildAggregateClusterConfig.
-func (s) TestBuildAggregateClusterConfigJSON(t *testing.T) {
+// TestBuildClusterConfigJSON is a sanity check that built balancer configs
+// for aggregate and leaf clusters can be parsed by their respective policy
+// parsers.
+func (s) TestBuildClusterConfigJSON(t *testing.T) {
 	testLRSServerConfig, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{
 		URI:          "trafficdirector.googleapis.com:443",
 		ChannelCreds: []bootstrap.ChannelCreds{{Type: "google_default"}},
@@ -141,60 +142,113 @@ func (s) TestBuildAggregateClusterConfigJSON(t *testing.T) {
 		t.Fatalf("Failed to create LRS server config for testing: %v", err)
 	}
 
-	gotConfig, _, err := buildAggregateClusterConfigJSON([]*priorityConfig{
+	tests := []struct {
+		name        string
+		buildFunc   func([]*priorityConfig, *iserviceconfig.BalancerConfig) ([]byte, []resolver.Endpoint, error)
+		priorities  []*priorityConfig
+		xdsLBPolicy *iserviceconfig.BalancerConfig
+		policyName  string
+	}{
 		{
-			clusterConfig: &xdsresource.ClusterConfig{
-				Cluster: &xdsresource.ClusterUpdate{
-					ClusterName:     testClusterName,
-					ClusterType:     xdsresource.ClusterTypeEDS,
-					EDSServiceName:  testEDSServiceName,
-					MaxRequests:     newUint32(testMaxRequests),
-					LRSServerConfig: testLRSServerConfig,
+			name:      "aggregate",
+			buildFunc: buildAggregateClusterConfigJSON,
+			priorities: []*priorityConfig{
+				{
+					clusterConfig: &xdsresource.ClusterConfig{
+						Cluster: &xdsresource.ClusterUpdate{
+							ClusterName:     testClusterName,
+							ClusterType:     xdsresource.ClusterTypeEDS,
+							EDSServiceName:  testEDSServiceName,
+							MaxRequests:     newUint32(testMaxRequests),
+							LRSServerConfig: testLRSServerConfig,
+						},
+						EndpointConfig: &xdsresource.EndpointConfig{
+							EDSUpdate: &xdsresource.EndpointsUpdate{
+								Drops: []xdsresource.OverloadDropConfig{{
+									Category:    testDropCategory,
+									Numerator:   testDropOverMillion,
+									Denominator: million,
+								}},
+								Localities: []xdsresource.Locality{
+									makeLocality(0, 20, 0, 2),
+									makeLocality(1, 80, 0, 2),
+									makeLocality(2, 20, 1, 2),
+									makeLocality(3, 80, 1, 2),
+								},
+							},
+						},
+					},
+					childNameGen: newNameGenerator(0),
 				},
-				EndpointConfig: &xdsresource.EndpointConfig{
-					EDSUpdate: &xdsresource.EndpointsUpdate{
-						Drops: []xdsresource.OverloadDropConfig{{
-							Category:    testDropCategory,
-							Numerator:   testDropOverMillion,
-							Denominator: million,
-						}},
-						Localities: []xdsresource.Locality{
-							makeLocality(0, 20, 0, 2),
-							makeLocality(1, 80, 0, 2),
-							makeLocality(2, 20, 1, 2),
-							makeLocality(3, 80, 1, 2),
+				{
+					clusterConfig: &xdsresource.ClusterConfig{
+						Cluster: &xdsresource.ClusterUpdate{
+							ClusterType: xdsresource.ClusterTypeLogicalDNS,
+						},
+						EndpointConfig: &xdsresource.EndpointConfig{
+							DNSEndpoints: &xdsresource.DNSUpdate{Endpoints: []resolver.Endpoint{makeResolverEndpoint(4, 0), makeResolverEndpoint(4, 1)}},
+						},
+					},
+					childNameGen: newNameGenerator(1),
+				},
+			},
+			xdsLBPolicy: nil,
+			policyName:  priority.Name,
+		},
+		{
+			name:      "leaf",
+			buildFunc: buildLeafClusterConfigJSON,
+			priorities: []*priorityConfig{{
+				clusterConfig: &xdsresource.ClusterConfig{
+					Cluster: &xdsresource.ClusterUpdate{
+						ClusterName:     testClusterName,
+						ClusterType:     xdsresource.ClusterTypeEDS,
+						EDSServiceName:  testEDSServiceName,
+						MaxRequests:     newUint32(testMaxRequests),
+						LRSServerConfig: testLRSServerConfig,
+					},
+					EndpointConfig: &xdsresource.EndpointConfig{
+						EDSUpdate: &xdsresource.EndpointsUpdate{
+							Drops: []xdsresource.OverloadDropConfig{{
+								Category:    testDropCategory,
+								Numerator:   testDropOverMillion,
+								Denominator: million,
+							}},
+							Localities: []xdsresource.Locality{
+								makeLocality(0, 20, 0, 2),
+								makeLocality(1, 80, 0, 2),
+								makeLocality(2, 20, 1, 2),
+								makeLocality(3, 80, 1, 2),
+							},
 						},
 					},
 				},
-			},
-			childNameGen: newNameGenerator(0),
+				outlierDetection: noopODCfg,
+				childNameGen:     newNameGenerator(0),
+			}},
+			xdsLBPolicy: &iserviceconfig.BalancerConfig{Name: roundrobin.Name},
+			policyName:  outlierdetection.Name,
 		},
-		{
-			clusterConfig: &xdsresource.ClusterConfig{
-				Cluster: &xdsresource.ClusterUpdate{
-					ClusterType: xdsresource.ClusterTypeLogicalDNS,
-				},
-				EndpointConfig: &xdsresource.EndpointConfig{
-					DNSEndpoints: &xdsresource.DNSUpdate{Endpoints: []resolver.Endpoint{makeResolverEndpoint(4, 0), makeResolverEndpoint(4, 1)}},
-				},
-			},
-			childNameGen: newNameGenerator(1),
-		},
-	}, nil)
-	if err != nil {
-		t.Fatalf("buildAggregateClusterConfigJSON(...) failed: %v", err)
 	}
 
-	var prettyGot bytes.Buffer
-	if err := json.Indent(&prettyGot, gotConfig, ">>> ", "  "); err != nil {
-		t.Fatalf("json.Indent() failed: %v", err)
-	}
-	// Print the indented json if this test fails.
-	t.Log(prettyGot.String())
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotConfig, _, err := tt.buildFunc(tt.priorities, tt.xdsLBPolicy)
+			if err != nil {
+				t.Fatalf("%s(...) failed: %v", tt.name, err)
+			}
 
-	priorityB := balancer.Get(priority.Name)
-	if _, err = priorityB.(balancer.ConfigParser).ParseConfig(gotConfig); err != nil {
-		t.Fatalf("ParseConfig(%+v) failed: %v", gotConfig, err)
+			var prettyGot bytes.Buffer
+			if err := json.Indent(&prettyGot, gotConfig, ">>> ", "  "); err != nil {
+				t.Fatalf("json.Indent() failed: %v", err)
+			}
+			t.Log(prettyGot.String())
+
+			b := balancer.Get(tt.policyName)
+			if _, err = b.(balancer.ConfigParser).ParseConfig(gotConfig); err != nil {
+				t.Fatalf("ParseConfig(%+v) failed: %v", gotConfig, err)
+			}
+		})
 	}
 }
 
@@ -317,59 +371,9 @@ func testEndpointForDNS(endpoints []resolver.Endpoint, localityWeight uint32, pa
 	return retEndpoint
 }
 
-func (s) TestBuildLeafClusterConfigJSON(t *testing.T) {
-	testLRSServerConfig, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{
-		URI:          "trafficdirector.googleapis.com:443",
-		ChannelCreds: []bootstrap.ChannelCreds{{Type: "google_default"}},
-	})
-	if err != nil {
-		t.Fatalf("Failed to create LRS server config for testing: %v", err)
-	}
-
-	gotConfig, _, err := buildLeafClusterConfigJSON([]*priorityConfig{{
-		clusterConfig: &xdsresource.ClusterConfig{
-			Cluster: &xdsresource.ClusterUpdate{
-				ClusterName:     testClusterName,
-				ClusterType:     xdsresource.ClusterTypeEDS,
-				EDSServiceName:  testEDSServiceName,
-				MaxRequests:     newUint32(testMaxRequests),
-				LRSServerConfig: testLRSServerConfig,
-			},
-			EndpointConfig: &xdsresource.EndpointConfig{
-				EDSUpdate: &xdsresource.EndpointsUpdate{
-					Drops: []xdsresource.OverloadDropConfig{{
-						Category:    testDropCategory,
-						Numerator:   testDropOverMillion,
-						Denominator: million,
-					}},
-					Localities: []xdsresource.Locality{
-						makeLocality(0, 20, 0, 2),
-						makeLocality(1, 80, 0, 2),
-						makeLocality(2, 20, 1, 2),
-						makeLocality(3, 80, 1, 2),
-					},
-				},
-			},
-		},
-		outlierDetection: noopODCfg,
-		childNameGen:     newNameGenerator(0),
-	}}, &iserviceconfig.BalancerConfig{Name: roundrobin.Name})
-	if err != nil {
-		t.Fatalf("buildLeafClusterConfigJSON(...) failed: %v", err)
-	}
-
-	var prettyGot bytes.Buffer
-	if err := json.Indent(&prettyGot, gotConfig, ">>> ", "  "); err != nil {
-		t.Fatalf("json.Indent() failed: %v", err)
-	}
-	t.Log(prettyGot.String())
-
-	odB := balancer.Get(outlierdetection.Name)
-	if _, err = odB.(balancer.ConfigParser).ParseConfig(gotConfig); err != nil {
-		t.Fatalf("ParseConfig(%+v) failed: %v", gotConfig, err)
-	}
-}
-
+// TestBuildLeafClusterConfig_DNS tests buildLeafClusterConfig with a
+// LOGICAL_DNS cluster configuration, verifying the expected policy hierarchy
+// and endpoints.
 func (s) TestBuildLeafClusterConfig_DNS(t *testing.T) {
 	for _, tt := range []struct {
 		name        string
@@ -466,6 +470,9 @@ func (s) TestBuildLeafClusterConfig_DNS(t *testing.T) {
 	}
 }
 
+// TestBuildLeafClusterConfig_EDS_PickFirstWeightedShuffling_Disabled tests
+// buildLeafClusterConfig with an EDS cluster configuration when pick_first
+// weighted shuffling is disabled.
 func (s) TestBuildLeafClusterConfig_EDS_PickFirstWeightedShuffling_Disabled(t *testing.T) {
 	testutils.SetEnvConfig(t, &envconfig.PickFirstWeightedShuffling, false)
 
@@ -565,6 +572,9 @@ func (s) TestBuildLeafClusterConfig_EDS_PickFirstWeightedShuffling_Disabled(t *t
 	}
 }
 
+// TestBuildLeafClusterConfig_EDS_PickFirstWeightedShuffling_Enabled tests
+// buildLeafClusterConfig with an EDS cluster configuration when pick_first
+// weighted shuffling is enabled.
 func (s) TestBuildLeafClusterConfig_EDS_PickFirstWeightedShuffling_Enabled(t *testing.T) {
 	testutils.SetEnvConfig(t, &envconfig.PickFirstWeightedShuffling, true)
 
@@ -681,6 +691,9 @@ func (s) TestBuildLeafClusterConfig_EDS_PickFirstWeightedShuffling_Enabled(t *te
 	}
 }
 
+// TestBuildClusterImplConfigForDNS tests buildClusterImplConfigForDNS
+// to verify the generated clusterimpl config and endpoint attributes
+// for LOGICAL_DNS clusters.
 func (s) TestBuildClusterImplConfigForDNS(t *testing.T) {
 	for _, tt := range []struct {
 		name        string
@@ -754,6 +767,8 @@ func (s) TestBuildClusterImplConfigForDNS(t *testing.T) {
 	}
 }
 
+// TestBuildClusterImplConfigForEDS_PickFirstWeightedShuffling_Disabled tests
+// buildClusterImplConfigForEDS when pick_first weighted shuffling is disabled.
 func (s) TestBuildClusterImplConfigForEDS_PickFirstWeightedShuffling_Disabled(t *testing.T) {
 	testutils.SetEnvConfig(t, &envconfig.PickFirstWeightedShuffling, false)
 
@@ -829,6 +844,8 @@ func (s) TestBuildClusterImplConfigForEDS_PickFirstWeightedShuffling_Disabled(t 
 	}
 }
 
+// TestBuildClusterImplConfigForEDS_PickFirstWeightedShuffling_Enabled tests
+// buildClusterImplConfigForEDS when pick_first weighted shuffling is enabled.
 func (s) TestBuildClusterImplConfigForEDS_PickFirstWeightedShuffling_Enabled(t *testing.T) {
 	testutils.SetEnvConfig(t, &envconfig.PickFirstWeightedShuffling, true)
 
@@ -921,6 +938,8 @@ func (s) TestBuildClusterImplConfigForEDS_PickFirstWeightedShuffling_Enabled(t *
 	}
 }
 
+// TestGroupLocalitiesByPriority tests groupLocalitiesByPriority to ensure
+// localities are properly grouped and ordered by priority.
 func (s) TestGroupLocalitiesByPriority(t *testing.T) {
 	// Create localities for two priorities (p0 and p1).
 	p0Loc0 := makeLocality(0, 20, 0, 2)
@@ -989,6 +1008,9 @@ func (s) TestGroupLocalitiesByPriority(t *testing.T) {
 	}
 }
 
+// TestPriorityLocalitiesToClusterImpl_PickFirstWeightedShuffling_Disabled
+// tests priorityLocalitiesToClusterImpl when pick_first weighted shuffling is
+// disabled.
 func (s) TestPriorityLocalitiesToClusterImpl_PickFirstWeightedShuffling_Disabled(t *testing.T) {
 	testutils.SetEnvConfig(t, &envconfig.PickFirstWeightedShuffling, false)
 	tests := []struct {
@@ -1127,6 +1149,9 @@ func (s) TestPriorityLocalitiesToClusterImpl_PickFirstWeightedShuffling_Disabled
 	}
 }
 
+// TestPriorityLocalitiesToClusterImpl_PickFirstWeightedShuffling_Enabled tests
+// priorityLocalitiesToClusterImpl when pick_first weighted shuffling is
+// enabled.
 func (s) TestPriorityLocalitiesToClusterImpl_PickFirstWeightedShuffling_Enabled(t *testing.T) {
 	testutils.SetEnvConfig(t, &envconfig.PickFirstWeightedShuffling, true)
 	tests := []struct {
@@ -1318,6 +1343,9 @@ func testEndpointWithAttrs(endpoint resolver.Endpoint, localityWeight, endpointW
 	return endpoint
 }
 
+// TestConvertClusterImplMapToOutlierDetection tests
+// convertClusterImplMapToOutlierDetection to ensure clusterimpl configs are
+// properly wrapped in outlier detection configs.
 func (s) TestConvertClusterImplMapToOutlierDetection(t *testing.T) {
 	tests := []struct {
 		name       string
