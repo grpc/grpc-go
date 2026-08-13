@@ -3,10 +3,13 @@
 This document lists the environment variables supported by the grpc-go
 implementation.
 
-Variables whose names contain `EXPERIMENTAL` are intentionally not documented
-here: they guard features that are still in development, and they may change
-behavior, change defaults, or be removed entirely in any release without
-notice.
+This list is intended to be exhaustive, with two deliberate exclusions:
+
+*   Variables whose names contain `EXPERIMENTAL`. They guard features that are
+    still in development, and they may change behavior, change defaults, or be
+    removed entirely in any release without notice.
+*   Variables whose names contain `TEST_ONLY`. They exist to support gRPC's own
+    tests and are not intended for use by applications.
 
 Unless stated otherwise, boolean variables are case-insensitive and only the
 values `true` and `false` are recognized; any other value leaves the default
@@ -24,6 +27,12 @@ severities and how they are used.
     warning and error logs). Defaults to `ERROR`. Has no effect if the
     application replaces the default logger via
     [`grpclog.SetLoggerV2`](https://pkg.go.dev/google.golang.org/grpc/grpclog#SetLoggerV2).
+
+    Note that unlike the boolean variables above, an unrecognized value here
+    does not leave the default in effect: it silences the default logger
+    entirely, so that no message of any severity is written. `FATAL` is not a
+    recognized value and has this effect. Fatal-severity logging still
+    terminates the process in that case; only the log output is suppressed.
 
 *   `GRPC_GO_LOG_VERBOSITY_LEVEL`
 
@@ -133,3 +142,28 @@ package; see its documentation for the configuration schema.
 
     The observability configuration itself, in JSON format. Used only if
     `GRPC_GCP_OBSERVABILITY_CONFIG_FILE` is unset.
+
+*   `GOOGLE_CLOUD_PROJECT`
+
+    The GCP project ID to report observability data against. If unset, the
+    project ID is taken from the default credentials.
+
+## CSM observability
+
+Used by the [stats/opentelemetry/csm](https://pkg.go.dev/google.golang.org/grpc/stats/opentelemetry/csm)
+package to label telemetry for Cloud Service Mesh. Each defaults to the literal
+string `unknown` when unset.
+
+*   `CSM_CANONICAL_SERVICE_NAME`
+
+    The canonical service name of the workload, recorded as the
+    `csm.workload_canonical_service` label and sent in metadata exchange.
+
+*   `CSM_WORKLOAD_NAME`
+
+    The name of the workload, sent in metadata exchange. Only used when running
+    on GCE or GKE.
+
+*   `CSM_MESH_ID`
+
+    The mesh ID, recorded as the `csm.mesh_id` label.
