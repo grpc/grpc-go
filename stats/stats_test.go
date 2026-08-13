@@ -1223,12 +1223,12 @@ func testClientStats(t *testing.T, tc *testConfig, cc *rpcConfig, checkFuncs map
 		err:            err,
 		isClientStream: isClientStream,
 		isServerStream: isServerStream,
+		authority:      cc.authority,
 	}
 
 	h.mu.Lock()
 	checkConnStats(t, h.gotConn)
 	h.mu.Unlock()
-	expect.authority = cc.authority
 	checkClientStats(t, h.gotRPC, expect, checkFuncs)
 }
 
