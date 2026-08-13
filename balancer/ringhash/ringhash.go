@@ -270,19 +270,19 @@ func (b *ringhashBalancer) updatePickerLocked() {
 		})
 
 		// Store the function to ExitIdle on the first IDLE endpoint.
-		var requestConnection func()
+		var exitIdle func()
 		for _, es := range endpointStates {
 			connState := es.state.ConnectivityState
 			if connState == connectivity.Connecting {
-				requestConnection = nil
+				exitIdle = nil
 				break
 			}
-			if requestConnection == nil && connState == connectivity.Idle {
-				requestConnection = es.exitIdle
+			if exitIdle == nil && connState == connectivity.Idle {
+				exitIdle = es.exitIdle
 			}
 		}
-		if requestConnection != nil {
-			requestConnection()
+		if exitIdle != nil {
+			exitIdle()
 		}
 	}
 
