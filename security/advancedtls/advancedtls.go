@@ -404,6 +404,9 @@ func (o *Options) serverConfig() (*tls.Config, error) {
 	switch {
 	case o.IdentityOptions.Certificates != nil:
 		config.Certificates = o.IdentityOptions.Certificates
+		config.GetCertificate = func(clientHello *tls.ClientHelloInfo) (*tls.Certificate, error) {
+			return buildGetCertificates(clientHello, o)
+		}
 	case o.IdentityOptions.GetIdentityCertificatesForServer != nil:
 		config.GetCertificate = func(clientHello *tls.ClientHelloInfo) (*tls.Certificate, error) {
 			return buildGetCertificates(clientHello, o)

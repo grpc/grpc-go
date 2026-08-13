@@ -147,5 +147,47 @@ openssl x509 -req                              \
   -sha256
 openssl verify -verbose -CAfile client_with_spiffe_cert.pem
 
+# Generate ECDSA server cert.
+openssl ecparam -genkey -name prime256v1 -out server_ecdsa_key.pem
+openssl req -new                                          \
+  -key server_ecdsa_key.pem                               \
+  -days 3650                                              \
+  -out server_ecdsa_csr.pem                               \
+  -subj /C=US/ST=CA/L=SVL/O=gRPC/CN=test-server-ecdsa/   \
+  -config ./openssl.cnf                                   \
+  -reqexts test_server
+openssl x509 -req                 \
+  -in server_ecdsa_csr.pem        \
+  -CAkey server_ca_key.pem        \
+  -CA server_ca_cert.pem          \
+  -days 3650                      \
+  -set_serial 1002                \
+  -out server_ecdsa_cert.pem      \
+  -extfile ./openssl.cnf          \
+  -extensions test_server         \
+  -sha256
+openssl verify -verbose -CAfile server_ca_cert.pem server_ecdsa_cert.pem
+
+# Generate ECDSA client cert.
+openssl ecparam -genkey -name prime256v1 -out client_ecdsa_key.pem
+openssl req -new                                          \
+  -key client_ecdsa_key.pem                               \
+  -days 3650                                              \
+  -out client_ecdsa_csr.pem                               \
+  -subj /C=US/ST=CA/L=SVL/O=gRPC/CN=test-client-ecdsa/   \
+  -config ./openssl.cnf                                   \
+  -reqexts test_client
+openssl x509 -req                 \
+  -in client_ecdsa_csr.pem        \
+  -CAkey client_ca_key.pem        \
+  -CA client_ca_cert.pem          \
+  -days 3650                      \
+  -set_serial 1002                \
+  -out client_ecdsa_cert.pem      \
+  -extfile ./openssl.cnf          \
+  -extensions test_client         \
+  -sha256
+openssl verify -verbose -CAfile client_ca_cert.pem client_ecdsa_cert.pem
+
 # Cleanup the CSRs.
 rm *_csr.pem
