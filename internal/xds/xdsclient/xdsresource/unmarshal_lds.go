@@ -38,7 +38,7 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
-func unmarshalListenerResource(r *anypb.Any, opts *xdsclient.DecodeOptions, pctx httpfilter.FilterConfigParseContext) (string, ListenerUpdate, error) {
+func unmarshalListenerResource(r *anypb.Any, opts *xdsclient.DecodeOptions, parseOpts httpfilter.ParseOptions) (string, ListenerUpdate, error) {
 	r, err := UnwrapResource(r)
 	if err != nil {
 		return "", ListenerUpdate{}, fmt.Errorf("failed to unwrap resource: %v", err)
@@ -56,7 +56,7 @@ func unmarshalListenerResource(r *anypb.Any, opts *xdsclient.DecodeOptions, pctx
 		return "", ListenerUpdate{}, fmt.Errorf("empty resource name in listener resource")
 	}
 
-	lu, err := processListener(lis, opts, pctx)
+	lu, err := processListener(lis, opts, parseOpts)
 	if err != nil {
 		return lis.GetName(), ListenerUpdate{}, err
 	}
@@ -65,16 +65,16 @@ func unmarshalListenerResource(r *anypb.Any, opts *xdsclient.DecodeOptions, pctx
 	return lis.GetName(), *lu, nil
 }
 
-func processListener(lis *v3listenerpb.Listener, opts *xdsclient.DecodeOptions, pctx httpfilter.FilterConfigParseContext) (*ListenerUpdate, error) {
+func processListener(lis *v3listenerpb.Listener, opts *xdsclient.DecodeOptions, parseOpts httpfilter.ParseOptions) (*ListenerUpdate, error) {
 	if lis.GetApiListener() != nil {
-		return processClientSideListener(lis, opts, pctx)
+		return processClientSideListener(lis, opts, parseOpts)
 	}
 	return processServerSideListener(lis)
 }
 
 // processClientSideListener checks if the provided Listener proto meets
 // the expected criteria. If so, it returns a non-empty routeConfigName.
-func processClientSideListener(lis *v3listenerpb.Listener, opts *xdsclient.DecodeOptions, pctx httpfilter.FilterConfigParseContext) (*ListenerUpdate, error) {
+func processClientSideListener(lis *v3listenerpb.Listener, opts *xdsclient.DecodeOptions, parseOpts httpfilter.ParseOptions) (*ListenerUpdate, error) {
 	apiLisAny := lis.GetApiListener().GetApiListener()
 	if !IsHTTPConnManagerResource(apiLisAny.GetTypeUrl()) {
 		return nil, fmt.Errorf("unexpected http connection manager resource type: %q", apiLisAny.GetTypeUrl())
@@ -105,7 +105,7 @@ func processClientSideListener(lis *v3listenerpb.Listener, opts *xdsclient.Decod
 		}
 		hcm.RouteConfigName = name
 	case *v3httppb.HttpConnectionManager_RouteConfig:
-		routeU, err := generateRDSUpdateFromRouteConfiguration(apiLis.GetRouteConfig(), opts, pctx)
+		routeU, err := generateRDSUpdateFromRouteConfiguration(apiLis.GetRouteConfig(), opts, parseOpts)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse inline RDS resp: %v", err)
 		}
@@ -121,7 +121,7 @@ func processClientSideListener(lis *v3listenerpb.Listener, opts *xdsclient.Decod
 	hcm.MaxStreamDuration = apiLis.GetCommonHttpProtocolOptions().GetMaxStreamDuration().AsDuration()
 
 	var err error
-	if hcm.HTTPFilters, err = processHTTPFilters(apiLis.GetHttpFilters(), false, pctx); err != nil {
+	if hcm.HTTPFilters, err = processHTTPFilters(apiLis.GetHttpFilters(), false, parseOpts); err != nil {
 		return nil, err
 	}
 
@@ -149,7 +149,7 @@ func unwrapHTTPFilterConfig(config *anypb.Any) (proto.Message, string, error) {
 	}
 }
 
-func validateHTTPFilterConfig(cfg *anypb.Any, lds, optional bool, pctx httpfilter.FilterConfigParseContext) (httpfilter.Builder, httpfilter.FilterConfig, error) {
+func validateHTTPFilterConfig(cfg *anypb.Any, lds, optional bool, parseOpts httpfilter.ParseOptions) (httpfilter.Builder, httpfilter.FilterConfig, error) {
 	config, typeURL, err := unwrapHTTPFilterConfig(cfg)
 	if err != nil {
 		return nil, nil, err
@@ -161,30 +161,18 @@ func validateHTTPFilterConfig(cfg *anypb.Any, lds, optional bool, pctx httpfilte
 		}
 		return nil, nil, fmt.Errorf("no filter implementation found for %q", typeURL)
 	}
-	var filterConfig httpfilter.FilterConfig
-	// Filters that implement FilterConfigParserWithContext receive the
-	// FilterConfigParseContext available at resource-decode time; all
-	// others fall back to the base Builder parse methods.
-	if cb, ok := filterBuilder.(httpfilter.FilterConfigParserWithContext); ok {
-		if lds {
-			filterConfig, err = cb.ParseFilterConfigWithContext(config, pctx)
-		} else {
-			filterConfig, err = cb.ParseFilterConfigOverrideWithContext(config, pctx)
-		}
-	} else {
-		if lds {
-			filterConfig, err = filterBuilder.ParseFilterConfig(config)
-		} else {
-			filterConfig, err = filterBuilder.ParseFilterConfigOverride(config)
-		}
+	parseFunc := filterBuilder.ParseFilterConfig
+	if !lds {
+		parseFunc = filterBuilder.ParseFilterConfigOverride
 	}
+	filterConfig, err := parseFunc(config, parseOpts)
 	if err != nil {
 		return nil, nil, fmt.Errorf("error parsing config for filter %q: %v", typeURL, err)
 	}
 	return filterBuilder, filterConfig, nil
 }
 
-func processHTTPFilterOverrides(cfgs map[string]*anypb.Any, pctx httpfilter.FilterConfigParseContext) (map[string]httpfilter.FilterConfig, error) {
+func processHTTPFilterOverrides(cfgs map[string]*anypb.Any, parseOpts httpfilter.ParseOptions) (map[string]httpfilter.FilterConfig, error) {
 	if len(cfgs) == 0 {
 		return nil, nil
 	}
@@ -209,7 +197,7 @@ func processHTTPFilterOverrides(cfgs map[string]*anypb.Any, pctx httpfilter.Filt
 			continue
 		}
 
-		httpFilter, config, err := validateHTTPFilterConfig(cfg, false, optional, pctx)
+		httpFilter, config, err := validateHTTPFilterConfig(cfg, false, optional, parseOpts)
 		if err != nil {
 			return nil, fmt.Errorf("filter override %q: %v", name, err)
 		}
@@ -222,7 +210,7 @@ func processHTTPFilterOverrides(cfgs map[string]*anypb.Any, pctx httpfilter.Filt
 	return m, nil
 }
 
-func processHTTPFilters(filters []*v3httppb.HttpFilter, server bool, pctx httpfilter.FilterConfigParseContext) ([]HTTPFilter, error) {
+func processHTTPFilters(filters []*v3httppb.HttpFilter, server bool, parseOpts httpfilter.ParseOptions) ([]HTTPFilter, error) {
 	ret := make([]HTTPFilter, 0, len(filters))
 	seenNames := make(map[string]bool, len(filters))
 	for _, filter := range filters {
@@ -235,7 +223,7 @@ func processHTTPFilters(filters []*v3httppb.HttpFilter, server bool, pctx httpfi
 		}
 		seenNames[name] = true
 
-		httpFilter, config, err := validateHTTPFilterConfig(filter.GetTypedConfig(), true, filter.GetIsOptional(), pctx)
+		httpFilter, config, err := validateHTTPFilterConfig(filter.GetTypedConfig(), true, filter.GetIsOptional(), parseOpts)
 		if err != nil {
 			return nil, err
 		}

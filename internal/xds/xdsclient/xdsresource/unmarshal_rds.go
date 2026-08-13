@@ -38,7 +38,7 @@ import (
 	v3typepb "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 )
 
-func unmarshalRouteConfigResource(r *anypb.Any, opts *xdsclient.DecodeOptions, pctx httpfilter.FilterConfigParseContext) (string, RouteConfigUpdate, error) {
+func unmarshalRouteConfigResource(r *anypb.Any, opts *xdsclient.DecodeOptions, parseOpts httpfilter.ParseOptions) (string, RouteConfigUpdate, error) {
 	r, err := UnwrapResource(r)
 	if err != nil {
 		return "", RouteConfigUpdate{}, fmt.Errorf("failed to unwrap resource: %v", err)
@@ -56,7 +56,7 @@ func unmarshalRouteConfigResource(r *anypb.Any, opts *xdsclient.DecodeOptions, p
 		return "", RouteConfigUpdate{}, fmt.Errorf("empty resource name in route config resource")
 	}
 
-	u, err := generateRDSUpdateFromRouteConfiguration(rc, opts, pctx)
+	u, err := generateRDSUpdateFromRouteConfiguration(rc, opts, parseOpts)
 	if err != nil {
 		return rc.GetName(), RouteConfigUpdate{}, err
 	}
@@ -81,7 +81,7 @@ func unmarshalRouteConfigResource(r *anypb.Any, opts *xdsclient.DecodeOptions, p
 // field must be empty and whose route field must be set. Inside that route
 // message, the cluster field will contain the clusterName or weighted clusters
 // we are looking for.
-func generateRDSUpdateFromRouteConfiguration(rc *v3routepb.RouteConfiguration, opts *xdsclient.DecodeOptions, pctx httpfilter.FilterConfigParseContext) (RouteConfigUpdate, error) {
+func generateRDSUpdateFromRouteConfiguration(rc *v3routepb.RouteConfiguration, opts *xdsclient.DecodeOptions, parseOpts httpfilter.ParseOptions) (RouteConfigUpdate, error) {
 	vhs := make([]*VirtualHost, 0, len(rc.GetVirtualHosts()))
 	csps, err := processClusterSpecifierPlugins(rc.ClusterSpecifierPlugins)
 	if err != nil {
@@ -92,7 +92,7 @@ func generateRDSUpdateFromRouteConfiguration(rc *v3routepb.RouteConfiguration, o
 	// ignored and not emitted by the xdsclient.
 	var cspNames = make(map[string]bool)
 	for _, vh := range rc.GetVirtualHosts() {
-		routes, cspNs, err := routesProtoToSlice(vh.Routes, csps, opts, pctx)
+		routes, cspNs, err := routesProtoToSlice(vh.Routes, csps, opts, parseOpts)
 		if err != nil {
 			return RouteConfigUpdate{}, fmt.Errorf("received route is invalid: %v", err)
 		}
@@ -108,7 +108,7 @@ func generateRDSUpdateFromRouteConfiguration(rc *v3routepb.RouteConfiguration, o
 			Routes:      routes,
 			RetryConfig: rc,
 		}
-		cfgs, err := processHTTPFilterOverrides(vh.GetTypedPerFilterConfig(), pctx)
+		cfgs, err := processHTTPFilterOverrides(vh.GetTypedPerFilterConfig(), parseOpts)
 		if err != nil {
 			return RouteConfigUpdate{}, fmt.Errorf("virtual host %+v: %v", vh, err)
 		}
@@ -215,7 +215,7 @@ func generateRetryConfig(rp *v3routepb.RetryPolicy) (*RetryConfig, error) {
 	return cfg, nil
 }
 
-func routesProtoToSlice(routes []*v3routepb.Route, csps map[string]clusterspecifier.BalancerConfig, opts *xdsclient.DecodeOptions, pctx httpfilter.FilterConfigParseContext) ([]*Route, map[string]bool, error) {
+func routesProtoToSlice(routes []*v3routepb.Route, csps map[string]clusterspecifier.BalancerConfig, opts *xdsclient.DecodeOptions, parseOpts httpfilter.ParseOptions) ([]*Route, map[string]bool, error) {
 	var routesRet []*Route
 	var cspNames = make(map[string]bool)
 	for _, r := range routes {
@@ -352,7 +352,7 @@ func routesProtoToSlice(routes []*v3routepb.Route, csps map[string]clusterspecif
 						return nil, nil, fmt.Errorf("xds: total weight of clusters exceeds MaxUint32")
 					}
 					wc := WeightedCluster{Name: c.GetName(), Weight: w}
-					cfgs, err := processHTTPFilterOverrides(c.GetTypedPerFilterConfig(), pctx)
+					cfgs, err := processHTTPFilterOverrides(c.GetTypedPerFilterConfig(), parseOpts)
 					if err != nil {
 						return nil, nil, fmt.Errorf("route %+v, action %+v: %v", r, a, err)
 					}
@@ -418,7 +418,7 @@ func routesProtoToSlice(routes []*v3routepb.Route, csps map[string]clusterspecif
 			route.ActionType = RouteActionUnsupported
 		}
 
-		cfgs, err := processHTTPFilterOverrides(r.GetTypedPerFilterConfig(), pctx)
+		cfgs, err := processHTTPFilterOverrides(r.GetTypedPerFilterConfig(), parseOpts)
 		if err != nil {
 			return nil, nil, fmt.Errorf("route %+v: %v", r, err)
 		}

@@ -192,7 +192,7 @@ func newStringP(s string) *string {
 
 func makeRouterFilterList(t *testing.T) []xdsresource.HTTPFilter {
 	routerBuilder := httpfilter.Get(router.TypeURL)
-	routerConfig, _ := routerBuilder.ParseFilterConfig(testutils.MarshalAny(t, &v3routerpb.Router{}))
+	routerConfig, _ := routerBuilder.ParseFilterConfig(testutils.MarshalAny(t, &v3routerpb.Router{}), httpfilter.ParseOptions{})
 	return []xdsresource.HTTPFilter{{
 		Name:   "router",
 		Filter: routerBuilder,

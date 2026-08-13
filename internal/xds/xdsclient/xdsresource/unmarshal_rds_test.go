@@ -721,7 +721,7 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, test.xdsClientExtProcEnabled)
 
-			gotUpdate, gotError := generateRDSUpdateFromRouteConfiguration(test.rc, nil, httpfilter.FilterConfigParseContext{})
+			gotUpdate, gotError := generateRDSUpdateFromRouteConfiguration(test.rc, nil, httpfilter.ParseOptions{})
 			if (gotError != nil) != test.wantError ||
 				!cmp.Equal(gotUpdate, test.wantUpdate, cmpopts.EquateEmpty(),
 					cmp.Transformer("FilterConfig", func(fc httpfilter.FilterConfig) string {
@@ -807,7 +807,7 @@ func (s) TestGenerateRDSUpdateFromRouteConfigurationWithAutoHostRewrite(t *testi
 				}},
 			}
 
-			update, err := generateRDSUpdateFromRouteConfiguration(routeConfig, opts, httpfilter.FilterConfigParseContext{})
+			update, err := generateRDSUpdateFromRouteConfiguration(routeConfig, opts, httpfilter.ParseOptions{})
 			if err != nil {
 				t.Errorf("generateRDSUpdateFromRouteConfiguration() failed, got : %v, want: <nil>", err)
 			}
@@ -983,7 +983,7 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			name, update, err := unmarshalRouteConfigResource(test.resource, nil, httpfilter.FilterConfigParseContext{})
+			name, update, err := unmarshalRouteConfigResource(test.resource, nil, httpfilter.ParseOptions{})
 			if (err != nil) != test.wantErr {
 				t.Errorf("unmarshalRouteConfigResource(%s), got err: %v, wantErr: %v", pretty.ToJSON(test.resource), err, test.wantErr)
 			}
@@ -1740,7 +1740,7 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, _, err := routesProtoToSlice(tt.routes, nil, nil, httpfilter.FilterConfigParseContext{})
+			got, _, err := routesProtoToSlice(tt.routes, nil, nil, httpfilter.ParseOptions{})
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("routesProtoToSlice() error = %v, wantErr %v", err, tt.wantErr)
 			}

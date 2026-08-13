@@ -36,10 +36,10 @@ type FilterConfig interface {
 	isFilterConfig()
 }
 
-// FilterConfigParseContext carries the bootstrap and server context that is
-// available at resource-decode time into a filter's config parsing. It is
-// consumed by filters that implement FilterConfigParserWithContext.
-type FilterConfigParseContext struct {
+// ParseOptions contains the bootstrap and server configuration that is
+// available at resource-decode time and is passed to a filter's config
+// parsing methods.
+type ParseOptions struct {
 	BootstrapConfig *bootstrap.Config
 	ServerConfig    *bootstrap.ServerConfig
 }
@@ -65,32 +65,21 @@ type Builder interface {
 	// ParseFilterConfig parses the provided configuration proto.Message from
 	// the LDS configuration of this filter.  This may be an anypb.Any, a
 	// udpa.type.v1.TypedStruct, or an xds.type.v3.TypedStruct for filters that
-	// do not accept a custom type. The resulting FilterConfig will later be
-	// passed to Build.
-	ParseFilterConfig(proto.Message) (FilterConfig, error)
+	// do not accept a custom type. The provided ParseOptions contain the
+	// bootstrap and server configuration available at resource-decode
+	// time. The resulting FilterConfig will later be passed to Build.
+	ParseFilterConfig(proto.Message, ParseOptions) (FilterConfig, error)
 	// ParseFilterConfigOverride parses the provided override configuration
 	// proto.Message from the RDS override configuration of this filter.  This
 	// may be an anypb.Any, a udpa.type.v1.TypedStruct, or an
 	// xds.type.v3.TypedStruct for filters that do not accept a custom type.
-	// The resulting FilterConfig will later be passed to Build.
-	ParseFilterConfigOverride(proto.Message) (FilterConfig, error)
+	// The provided ParseOptions contain the bootstrap and server
+	// configuration available at resource-decode time. The resulting
+	// FilterConfig will later be passed to Build.
+	ParseFilterConfigOverride(proto.Message, ParseOptions) (FilterConfig, error)
 	// IsTerminal returns whether this Filter is terminal or not (i.e. it must
 	// be last filter in the filter chain).
 	IsTerminal() bool
-}
-
-// FilterConfigParserWithContext is an optional interface that a Builder may
-// implement to receive the FilterConfigParseContext available at
-// resource-decode time. When a Builder implements it, the xDS resource
-// decoders call these methods instead of the base Builder parse methods.
-type FilterConfigParserWithContext interface {
-	// ParseFilterConfigWithContext is like Builder.ParseFilterConfig, but
-	// is additionally passed the FilterConfigParseContext.
-	ParseFilterConfigWithContext(proto.Message, FilterConfigParseContext) (FilterConfig, error)
-	// ParseFilterConfigOverrideWithContext is like
-	// Builder.ParseFilterConfigOverride, but is additionally passed the
-	// FilterConfigParseContext.
-	ParseFilterConfigOverrideWithContext(proto.Message, FilterConfigParseContext) (FilterConfig, error)
 }
 
 // ClientInterceptor is an interceptor for gRPC client streams.

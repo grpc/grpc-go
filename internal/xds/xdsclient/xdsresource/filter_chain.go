@@ -122,9 +122,9 @@ func processNetworkFilters(filters []*v3listenerpb.Filter) (*HTTPConnectionManag
 			// connection processing but still be considered for validity.
 			// HTTPConnectionManager must have valid http_filters." - A36
 			// The server-side HTTP filter processing does not
-			// consume the parse context yet, so an empty one is
+			// consume the parse options yet, so empty options are
 			// passed here.
-			filters, err := processHTTPFilters(hcm.GetHttpFilters(), true, httpfilter.FilterConfigParseContext{})
+			filters, err := processHTTPFilters(hcm.GetHttpFilters(), true, httpfilter.ParseOptions{})
 			if err != nil {
 				return nil, fmt.Errorf("network filters {%+v} had invalid server side HTTP Filters {%+v}: %v", filters, hcm.GetHttpFilters(), err)
 			}
@@ -161,7 +161,7 @@ func processNetworkFilters(filters []*v3listenerpb.Filter) (*HTTPConnectionManag
 					// server-side." - A36
 					// Can specify v3 here, as will never get to this function
 					// if v2.
-					routeU, err := generateRDSUpdateFromRouteConfiguration(hcm.GetRouteConfig(), nil, httpfilter.FilterConfigParseContext{})
+					routeU, err := generateRDSUpdateFromRouteConfiguration(hcm.GetRouteConfig(), nil, httpfilter.ParseOptions{})
 					if err != nil {
 						return nil, fmt.Errorf("failed to parse inline RDS resp: %v", err)
 					}

@@ -182,7 +182,7 @@ func normalizeHeaderMatcher(header *v3routepb.HeaderMatcher) error {
 	return nil
 }
 
-func (builder) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, error) {
+func (builder) ParseFilterConfig(cfg proto.Message, _ httpfilter.ParseOptions) (httpfilter.FilterConfig, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("rbac: nil configuration message provided")
 	}
@@ -197,7 +197,7 @@ func (builder) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, er
 	return parseConfig(msg)
 }
 
-func (builder) ParseFilterConfigOverride(override proto.Message) (httpfilter.FilterConfig, error) {
+func (builder) ParseFilterConfigOverride(override proto.Message, _ httpfilter.ParseOptions) (httpfilter.FilterConfig, error) {
 	if override == nil {
 		return nil, fmt.Errorf("rbac: nil configuration message provided")
 	}

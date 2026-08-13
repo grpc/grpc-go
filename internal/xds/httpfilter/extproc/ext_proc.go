@@ -106,7 +106,7 @@ func validateBodyProcessingMode(mode *v3procfilterpb.ProcessingMode) error {
 	return nil
 }
 
-func (builder) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, error) {
+func (builder) ParseFilterConfig(cfg proto.Message, _ httpfilter.ParseOptions) (httpfilter.FilterConfig, error) {
 	m, ok := cfg.(*anypb.Any)
 	if !ok {
 		return nil, fmt.Errorf("extproc: error parsing config %v: unknown type %T, want *anypb.Any", cfg, cfg)
@@ -170,7 +170,7 @@ func (builder) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, er
 	}, nil
 }
 
-func (builder) ParseFilterConfigOverride(ov proto.Message) (httpfilter.FilterConfig, error) {
+func (builder) ParseFilterConfigOverride(ov proto.Message, _ httpfilter.ParseOptions) (httpfilter.FilterConfig, error) {
 	m, ok := ov.(*anypb.Any)
 	if !ok {
 		return nil, fmt.Errorf("extproc: error parsing override %v: unknown type %T, want *anypb.Any", ov, ov)
@@ -212,20 +212,6 @@ func (builder) ParseFilterConfigOverride(ov proto.Message) (httpfilter.FilterCon
 	}, nil
 }
 
-// ParseFilterConfigWithContext parses the filter configuration. The
-// FilterConfigParseContext is currently ignored; its consumption is added in a
-// later change.
-func (b builder) ParseFilterConfigWithContext(cfg proto.Message, _ httpfilter.FilterConfigParseContext) (httpfilter.FilterConfig, error) {
-	return b.ParseFilterConfig(cfg)
-}
-
-// ParseFilterConfigOverrideWithContext parses the override filter
-// configuration. The FilterConfigParseContext is currently ignored; its
-// consumption is added in a later change.
-func (b builder) ParseFilterConfigOverrideWithContext(ov proto.Message, _ httpfilter.FilterConfigParseContext) (httpfilter.FilterConfig, error) {
-	return b.ParseFilterConfigOverride(ov)
-}
-
 func (builder) IsTerminal() bool {
 	return false
 }
@@ -239,7 +225,6 @@ func (builder) BuildClientFilter(opts httpfilter.ClientFilterOptions) httpfilter
 }
 
 var _ httpfilter.ClientFilterBuilder = builder{}
-var _ httpfilter.FilterConfigParserWithContext = builder{}
 
 // grpcServiceKey uniquely identifies an external processor server configuration
 // by its target URI, channel credentials, and call credentials. It is used as a

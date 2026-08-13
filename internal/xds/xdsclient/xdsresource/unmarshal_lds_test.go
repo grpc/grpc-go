@@ -665,7 +665,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, test.xdsClientExtProcEnabled)
 
-			name, update, err := unmarshalListenerResource(test.resource, nil, httpfilter.FilterConfigParseContext{})
+			name, update, err := unmarshalListenerResource(test.resource, nil, httpfilter.ParseOptions{})
 			if (err != nil) != test.wantErr {
 				t.Errorf("unmarshalListenerResource(%s), got err: %v, wantErr: %v", pretty.ToJSON(test.resource), err, test.wantErr)
 			}
@@ -1761,7 +1761,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			name, update, err := unmarshalListenerResource(test.resource, nil, httpfilter.FilterConfigParseContext{})
+			name, update, err := unmarshalListenerResource(test.resource, nil, httpfilter.ParseOptions{})
 			if err != nil && !strings.Contains(err.Error(), test.wantErr) {
 				t.Errorf("unmarshalListenerResource(%s) = %v wantErr: %q", pretty.ToJSON(test.resource), err, test.wantErr)
 			}
@@ -1789,11 +1789,11 @@ type httpFilter struct {
 
 func (httpFilter) TypeURLs() []string { return []string{"custom.filter"} }
 
-func (httpFilter) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, error) {
+func (httpFilter) ParseFilterConfig(cfg proto.Message, _ httpfilter.ParseOptions) (httpfilter.FilterConfig, error) {
 	return filterConfig{Cfg: cfg}, nil
 }
 
-func (httpFilter) ParseFilterConfigOverride(override proto.Message) (httpfilter.FilterConfig, error) {
+func (httpFilter) ParseFilterConfigOverride(override proto.Message, _ httpfilter.ParseOptions) (httpfilter.FilterConfig, error) {
 	return filterConfig{Override: override}, nil
 }
 
@@ -1808,11 +1808,11 @@ type errHTTPFilter struct {
 
 func (errHTTPFilter) TypeURLs() []string { return []string{"err.custom.filter"} }
 
-func (errHTTPFilter) ParseFilterConfig(proto.Message) (httpfilter.FilterConfig, error) {
+func (errHTTPFilter) ParseFilterConfig(proto.Message, httpfilter.ParseOptions) (httpfilter.FilterConfig, error) {
 	return nil, fmt.Errorf("error from ParseFilterConfig")
 }
 
-func (errHTTPFilter) ParseFilterConfigOverride(proto.Message) (httpfilter.FilterConfig, error) {
+func (errHTTPFilter) ParseFilterConfigOverride(proto.Message, httpfilter.ParseOptions) (httpfilter.FilterConfig, error) {
 	return nil, fmt.Errorf("error from ParseFilterConfigOverride")
 }
 
@@ -1834,11 +1834,11 @@ type serverOnlyHTTPFilter struct {
 
 func (serverOnlyHTTPFilter) TypeURLs() []string { return []string{"serverOnly.custom.filter"} }
 
-func (serverOnlyHTTPFilter) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, error) {
+func (serverOnlyHTTPFilter) ParseFilterConfig(cfg proto.Message, _ httpfilter.ParseOptions) (httpfilter.FilterConfig, error) {
 	return filterConfig{Cfg: cfg}, nil
 }
 
-func (serverOnlyHTTPFilter) ParseFilterConfigOverride(override proto.Message) (httpfilter.FilterConfig, error) {
+func (serverOnlyHTTPFilter) ParseFilterConfigOverride(override proto.Message, _ httpfilter.ParseOptions) (httpfilter.FilterConfig, error) {
 	return filterConfig{Override: override}, nil
 }
 
@@ -1853,11 +1853,11 @@ type clientOnlyHTTPFilter struct {
 
 func (clientOnlyHTTPFilter) TypeURLs() []string { return []string{"clientOnly.custom.filter"} }
 
-func (clientOnlyHTTPFilter) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, error) {
+func (clientOnlyHTTPFilter) ParseFilterConfig(cfg proto.Message, _ httpfilter.ParseOptions) (httpfilter.FilterConfig, error) {
 	return filterConfig{Cfg: cfg}, nil
 }
 
-func (clientOnlyHTTPFilter) ParseFilterConfigOverride(override proto.Message) (httpfilter.FilterConfig, error) {
+func (clientOnlyHTTPFilter) ParseFilterConfigOverride(override proto.Message, _ httpfilter.ParseOptions) (httpfilter.FilterConfig, error) {
 	return filterConfig{Override: override}, nil
 }
 
@@ -1920,52 +1920,45 @@ func wrappedOptionalFilter(t *testing.T, name string) *anypb.Any {
 	})
 }
 
-// ctxCapturingFilterBuilder is a test HTTP filter that opts into the
-// FilterConfigParserWithContext interface and records the
-// FilterConfigParseContext passed to its parse methods.
-type ctxCapturingFilterBuilder struct {
+// parseOptsCapturingFilterBuilder is a test HTTP filter that records the
+// ParseOptions passed to its parse methods.
+type parseOptsCapturingFilterBuilder struct {
 	httpfilter.ClientFilterBuilder
-	configCtx   *httpfilter.FilterConfigParseContext
-	overrideCtx *httpfilter.FilterConfigParseContext
+	configOpts   *httpfilter.ParseOptions
+	overrideOpts *httpfilter.ParseOptions
 }
 
-func (*ctxCapturingFilterBuilder) TypeURLs() []string { return []string{"ctx.capturing.filter"} }
+func (*parseOptsCapturingFilterBuilder) TypeURLs() []string {
+	return []string{"opts.capturing.filter"}
+}
 
-func (*ctxCapturingFilterBuilder) ParseFilterConfig(proto.Message) (httpfilter.FilterConfig, error) {
+func (b *parseOptsCapturingFilterBuilder) ParseFilterConfig(_ proto.Message, opts httpfilter.ParseOptions) (httpfilter.FilterConfig, error) {
+	b.configOpts = &opts
 	return filterConfig{}, nil
 }
 
-func (*ctxCapturingFilterBuilder) ParseFilterConfigOverride(proto.Message) (httpfilter.FilterConfig, error) {
+func (b *parseOptsCapturingFilterBuilder) ParseFilterConfigOverride(_ proto.Message, opts httpfilter.ParseOptions) (httpfilter.FilterConfig, error) {
+	b.overrideOpts = &opts
 	return filterConfig{}, nil
 }
 
-func (b *ctxCapturingFilterBuilder) ParseFilterConfigWithContext(_ proto.Message, pctx httpfilter.FilterConfigParseContext) (httpfilter.FilterConfig, error) {
-	b.configCtx = &pctx
-	return filterConfig{}, nil
-}
+func (*parseOptsCapturingFilterBuilder) IsTerminal() bool { return false }
 
-func (b *ctxCapturingFilterBuilder) ParseFilterConfigOverrideWithContext(_ proto.Message, pctx httpfilter.FilterConfigParseContext) (httpfilter.FilterConfig, error) {
-	b.overrideCtx = &pctx
-	return filterConfig{}, nil
-}
+// TestHTTPFilterParseOptions verifies that the ParseOptions populated at
+// resource-decode time are threaded through to a filter's ParseFilterConfig
+// (via LDS http_filters) and ParseFilterConfigOverride (via RDS
+// typed_per_filter_config).
+func (s) TestHTTPFilterParseOptions(t *testing.T) {
+	const filterName = "optsFilter"
+	const filterTypeURL = "opts.capturing.filter"
 
-func (*ctxCapturingFilterBuilder) IsTerminal() bool { return false }
-
-// TestHTTPFilterConfigParseContext verifies that the FilterConfigParseContext
-// populated at resource-decode time is threaded through to a filter's
-// ParseFilterConfig (via LDS http_filters) and ParseFilterConfigOverride (via
-// RDS typed_per_filter_config).
-func (s) TestHTTPFilterConfigParseContext(t *testing.T) {
-	const filterName = "ctxFilter"
-	const filterTypeURL = "ctx.capturing.filter"
-
-	fb := &ctxCapturingFilterBuilder{}
+	fb := &parseOptsCapturingFilterBuilder{}
 	httpfilter.Register(fb)
 	defer httpfilter.UnregisterForTesting(filterTypeURL)
 
 	wantBC := &bootstrap.Config{}
 	wantSC := &bootstrap.ServerConfig{}
-	pctx := httpfilter.FilterConfigParseContext{BootstrapConfig: wantBC, ServerConfig: wantSC}
+	parseOpts := httpfilter.ParseOptions{BootstrapConfig: wantBC, ServerConfig: wantSC}
 	filterCfg := &anypb.Any{TypeUrl: filterTypeURL}
 
 	// LDS path: a client-side listener whose http_filters reference the
@@ -1989,14 +1982,14 @@ func (s) TestHTTPFilterConfigParseContext(t *testing.T) {
 			}),
 		},
 	})
-	if _, _, err := unmarshalListenerResource(lis, nil, pctx); err != nil {
+	if _, _, err := unmarshalListenerResource(lis, nil, parseOpts); err != nil {
 		t.Fatalf("unmarshalListenerResource() failed: %v", err)
 	}
-	if fb.configCtx == nil {
+	if fb.configOpts == nil {
 		t.Fatalf("ParseFilterConfig() was not called")
 	}
-	if fb.configCtx.BootstrapConfig != wantBC || fb.configCtx.ServerConfig != wantSC {
-		t.Errorf("ParseFilterConfig() got context %+v, want {BootstrapConfig: %p, ServerConfig: %p}", fb.configCtx, wantBC, wantSC)
+	if fb.configOpts.BootstrapConfig != wantBC || fb.configOpts.ServerConfig != wantSC {
+		t.Errorf("ParseFilterConfig() got options %+v, want {BootstrapConfig: %p, ServerConfig: %p}", fb.configOpts, wantBC, wantSC)
 	}
 
 	// RDS override path: a route configuration whose virtual host carries a
@@ -2008,13 +2001,13 @@ func (s) TestHTTPFilterConfigParseContext(t *testing.T) {
 			TypedPerFilterConfig: map[string]*anypb.Any{filterName: filterCfg},
 		}},
 	}
-	if _, err := generateRDSUpdateFromRouteConfiguration(rc, nil, pctx); err != nil {
+	if _, err := generateRDSUpdateFromRouteConfiguration(rc, nil, parseOpts); err != nil {
 		t.Fatalf("generateRDSUpdateFromRouteConfiguration() failed: %v", err)
 	}
-	if fb.overrideCtx == nil {
+	if fb.overrideOpts == nil {
 		t.Fatalf("ParseFilterConfigOverride() was not called")
 	}
-	if fb.overrideCtx.BootstrapConfig != wantBC || fb.overrideCtx.ServerConfig != wantSC {
-		t.Errorf("ParseFilterConfigOverride() got context %+v, want {BootstrapConfig: %p, ServerConfig: %p}", fb.overrideCtx, wantBC, wantSC)
+	if fb.overrideOpts.BootstrapConfig != wantBC || fb.overrideOpts.ServerConfig != wantSC {
+		t.Errorf("ParseFilterConfigOverride() got options %+v, want {BootstrapConfig: %p, ServerConfig: %p}", fb.overrideOpts, wantBC, wantSC)
 	}
 }
