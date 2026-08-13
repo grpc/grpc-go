@@ -4659,7 +4659,7 @@ func (s) TestInvalidStreamIDSmallerThanPrevious(t *testing.T) {
 
 func testClientRequestBodyErrorCloseAfterLength(t *testing.T, e env) {
 	te := newTest(t, e)
-	te.declareLogNoise("Server.processUnaryRPC failed to write status")
+	te.declareLogNoise("Server.processRPC failed to write status")
 	ts := &funcServer{unaryCall: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 		errUnexpectedCall := errors.New("unexpected call func server method")
 		t.Error(errUnexpectedCall)
@@ -6238,7 +6238,7 @@ func testLargeTimeout(t *testing.T, e env) {
 	for i, maxTimeout := range timeouts {
 		func() {
 			te := newTest(t, e)
-			te.declareLogNoise("Server.processUnaryRPC failed to write status")
+			te.declareLogNoise("Server.processRPC failed to write status")
 
 			ts := &funcServer{
 				unaryCall: func(ctx context.Context, _ *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
