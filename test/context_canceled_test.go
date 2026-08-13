@@ -27,7 +27,9 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/encoding/gzip"
 	"google.golang.org/grpc/internal/stubserver"
+	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
 
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
@@ -160,5 +162,124 @@ func (s) TestCancelWhileRecvingWithCompression(t *testing.T) {
 	}
 	if err := ss.CC.Close(); err != nil {
 		t.Fatalf("Close failed with %v, want nil", err)
+	}
+}
+
+// TestSendCompressorSetupAfterStreamDone verifies that a compressed RPC whose
+// stream finishes before response compressor setup reports the context error
+// when present, and otherwise preserves the Internal compressor setup error.
+func (s) TestSendCompressorSetupAfterStreamDone(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		call func(context.Context, testgrpc.TestServiceClient) error
+	}{
+		{
+			name: "unary",
+			call: func(ctx context.Context, client testgrpc.TestServiceClient) error {
+				_, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.UseCompressor(gzip.Name))
+				return err
+			},
+		},
+		{
+			name: "stream",
+			call: func(ctx context.Context, client testgrpc.TestServiceClient) error {
+				stream, err := client.FullDuplexCall(ctx, grpc.UseCompressor(gzip.Name))
+				if err != nil {
+					return err
+				}
+				if err := stream.Send(&testpb.StreamingOutputCallRequest{}); err != nil {
+					return err
+				}
+				_, err = stream.Recv()
+				return err
+			},
+		},
+	} {
+		for _, contextTest := range []struct {
+			name          string
+			detachContext bool
+			wantCode      codes.Code
+		}{
+			{name: "canceled_context", wantCode: codes.Canceled},
+			{name: "active_context", detachContext: true, wantCode: codes.Internal},
+		} {
+			t.Run(test.name+"/"+contextTest.name, func(t *testing.T) {
+				headerSeen := make(chan struct{})
+				serverDone := make(chan error, 1)
+				handlerCalled := make(chan struct{}, 1)
+				var transportCtx context.Context
+				statsHandler := &testutils.StubStatsHandler{
+					TagRPCF: func(ctx context.Context, _ *stats.RPCTagInfo) context.Context {
+						transportCtx = ctx
+						if contextTest.detachContext {
+							// Keep processing active after the transport stream is canceled.
+							return context.WithoutCancel(ctx)
+						}
+						return ctx
+					},
+					HandleRPCF: func(_ context.Context, stat stats.RPCStats) {
+						switch stat := stat.(type) {
+						case *stats.InHeader:
+							// Pause before send compressor setup until the stream is done.
+							close(headerSeen)
+							<-transportCtx.Done()
+						case *stats.End:
+							// Capture the server-side status observed by telemetry.
+							serverDone <- stat.Error
+						}
+					},
+				}
+
+				ss := &stubserver.StubServer{
+					EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
+						handlerCalled <- struct{}{}
+						return &testpb.Empty{}, nil
+					},
+					FullDuplexCallF: func(testgrpc.TestService_FullDuplexCallServer) error {
+						handlerCalled <- struct{}{}
+						return nil
+					},
+				}
+				if err := ss.Start([]grpc.ServerOption{grpc.StatsHandler(statsHandler)}); err != nil {
+					t.Fatalf("Error starting endpoint server: %v", err)
+				}
+				defer ss.Stop()
+
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
+				callDone := make(chan error, 1)
+				go func() {
+					callDone <- test.call(ctx, ss.Client)
+				}()
+
+				select {
+				case <-headerSeen:
+				case <-time.After(defaultTestTimeout):
+					t.Fatal("Timed out waiting for server to receive request headers")
+				}
+				cancel()
+
+				select {
+				case <-callDone:
+				case <-time.After(defaultTestTimeout):
+					t.Fatal("Timed out waiting for RPC to finish")
+				}
+
+				select {
+				case err := <-serverDone:
+					if got, want := status.Code(err), contextTest.wantCode; got != want {
+						t.Fatalf("Server stats ended with code %v, want %v: %v", got, want, err)
+					}
+				case <-time.After(defaultTestTimeout):
+					t.Fatal("Timed out waiting for server stats")
+				}
+
+				select {
+				case <-handlerCalled:
+					t.Fatal("RPC handler was called after the request was canceled")
+				default:
+				}
+			})
+		}
 	}
 }

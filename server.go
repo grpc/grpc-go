@@ -1412,6 +1412,9 @@ func (s *Server) processRPC(ctx context.Context, stream *transport.ServerStream,
 
 	if ss.sendCompressorName != "" {
 		if err := stream.SetSendCompress(ss.sendCompressorName); err != nil {
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				return status.FromContextError(ctxErr).Err()
+			}
 			return status.Errorf(codes.Internal, "grpc: failed to set send compressor: %v", err)
 		}
 	}
