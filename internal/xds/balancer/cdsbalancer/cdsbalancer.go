@@ -25,7 +25,6 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/base"
 	"google.golang.org/grpc/connectivity"
-	"google.golang.org/grpc/internal/balancer/gracefulswitch"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/pretty"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
@@ -40,6 +39,24 @@ import (
 
 const cdsName = "cds_experimental"
 
+var (
+	// newChildBalancer is a helper function to build a new child balancer
+	// and its config parser, and will be overridden in unittests.
+	newChildBalancer = func(name string, cc balancer.ClientConn, opts balancer.BuildOptions) (balancer.Balancer, balancer.ConfigParser, error) {
+		builder := balancer.Get(name)
+		if builder == nil {
+			return nil, nil, fmt.Errorf("xds: no balancer builder with name %v", name)
+		}
+		parser, ok := builder.(balancer.ConfigParser)
+		if !ok {
+			return nil, nil, fmt.Errorf("xds: balancer builder for %v does not implement ConfigParser", name)
+		}
+		// We directly pass the parent clientConn to the underlying child
+		// balancer because the cdsBalancer does not deal with subConns.
+		return builder.Build(cc, opts), parser, nil
+	}
+)
+
 func init() {
 	balancer.Register(bb{})
 }
@@ -53,7 +70,6 @@ type bb struct{}
 func (bb) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
 	b := &cdsBalancer{
 		bOpts:           opts,
-		childLB:         gracefulswitch.NewBalancer(cc, opts),
 		clusterConfigs:  make(map[string]*xdsresource.ClusterResult),
 		priorityConfigs: make(map[string]*priorityConfig),
 		cc:              cc,
@@ -95,16 +111,18 @@ type cdsBalancer struct {
 	// The following fields are initialized at build time and are either
 	// read-only after that or provide their own synchronization, and therefore
 	// do not need to be guarded by a mutex.
-	cc     balancer.ClientConn   // ClientConn interface passed to child LB.
-	bOpts  balancer.BuildOptions // BuildOptions passed to child LB.
-	logger *grpclog.PrefixLogger // Prefix logger for all logging.
+	cc                balancer.ClientConn   // ClientConn interface passed to child LB.
+	bOpts             balancer.BuildOptions // BuildOptions passed to child LB.
+	childConfigParser balancer.ConfigParser // Config parser for cluster_resolver LB policy.
+	logger            *grpclog.PrefixLogger // Prefix logger for all logging.
 
 	// All fields below are accessed only from methods implementing the
 	// balancer.Balancer interface. Since gRPC guarantees that these methods are
 	// never invoked concurrently, no additional synchronization is required to
 	// protect access to these fields.
 	xdsClient         xdsclient.XDSClient
-	childLB           *gracefulswitch.Balancer              // Graceful switch child policy.
+	childLB           balancer.Balancer                     // Child policy, built upon resolution of the cluster graph.
+	childLBName       string                                // Name of the child policy.
 	clusterConfigs    map[string]*xdsresource.ClusterResult // Cluster name to the last received result for that cluster.
 	priorityConfigs   map[string]*priorityConfig            // Hostname to priority config for that leaf cluster.
 	lbCfg             *lbConfig                             // Current load balancing configuration.
@@ -242,34 +260,44 @@ func (b *cdsBalancer) updateChildConfig() error {
 	clusterConfig := b.clusterConfigs[clusterName].Config
 	isAggregate := clusterConfig.Cluster.ClusterType == xdsresource.ClusterTypeAggregate
 
+	var topLBName string
+	if isAggregate {
+		topLBName = priority.Name
+	} else {
+		topLBName = outlierdetection.Name
+	}
+
+	if b.childLB != nil && b.childLBName != topLBName {
+		b.childLB.Close()
+		b.childLB = nil
+	}
+
 	if b.childLB == nil {
-		b.childLB = gracefulswitch.NewBalancer(b.cc, b.bOpts)
+		childLB, parser, err := newChildBalancer(topLBName, b.cc, b.bOpts)
+		if err != nil {
+			return fmt.Errorf("failed to create child policy of type %s: %v", topLBName, err)
+		}
+		b.childLB = childLB
+		b.childLBName = topLBName
+		b.childConfigParser = parser
 	}
 
 	var childCfgBytes []byte
 	var endpoints []resolver.Endpoint
 	var err error
-	var topLBName string
 
 	if isAggregate {
-		topLBName = priority.Name
 		childCfgBytes, endpoints, err = buildAggregateClusterConfigJSON(b.priorities, &b.xdsLBPolicy)
 	} else {
-		topLBName = outlierdetection.Name
 		childCfgBytes, endpoints, err = buildLeafClusterConfigJSON(b.priorities, &b.xdsLBPolicy)
 	}
 	if err != nil {
 		return fmt.Errorf("failed to build child policy config: %v", err)
 	}
 
-	cfgJSON, err := json.Marshal([]map[string]json.RawMessage{{topLBName: childCfgBytes}})
+	childCfg, err := b.childConfigParser.ParseConfig(childCfgBytes)
 	if err != nil {
-		return fmt.Errorf("failed to marshal child policy config wrapper: %v", err)
-	}
-
-	childCfg, err := gracefulswitch.ParseConfig(cfgJSON)
-	if err != nil {
-		return fmt.Errorf("failed to parse child policy config: %v", err)
+		return fmt.Errorf("failed to parse child policy config. This should never happen because the config was generated: %v", err)
 	}
 	if b.logger.V(2) {
 		b.logger.Infof("Built child policy config: %s", pretty.ToJSON(childCfg))
