@@ -24,6 +24,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/google"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/internal/xds/bootstrap/accesstokencreds"
 	"google.golang.org/grpc/internal/xds/bootstrap/jwtcreds"
 	"google.golang.org/grpc/internal/xds/bootstrap/tlscreds"
 )
@@ -34,6 +35,7 @@ func init() {
 	RegisterChannelCredentials(&tlsCredsBuilder{})
 
 	RegisterCallCredentials(&jwtCallCredsBuilder{})
+	RegisterCallCredentials(&accessTokenCallCredsBuilder{})
 }
 
 // insecureCredsBuilder implements the `ChannelCredentials` interface defined in
@@ -82,4 +84,17 @@ func (j *jwtCallCredsBuilder) Build(configJSON json.RawMessage) (credentials.Per
 
 func (j *jwtCallCredsBuilder) Name() string {
 	return "jwt_token_file"
+}
+
+// accessTokenCallCredsBuilder implements the `CallCredentials` interface
+// defined in package `xds/bootstrap` and encapsulates static access token
+// call credentials (gRFC A102).
+type accessTokenCallCredsBuilder struct{}
+
+func (a *accessTokenCallCredsBuilder) Build(configJSON json.RawMessage) (credentials.PerRPCCredentials, func(), error) {
+	return accesstokencreds.NewCallCredentials(configJSON)
+}
+
+func (a *accessTokenCallCredsBuilder) Name() string {
+	return "access_token"
 }

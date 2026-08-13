@@ -38,10 +38,11 @@ import (
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/optional"
 	"google.golang.org/grpc/internal/resolver"
+	"google.golang.org/grpc/internal/xds/bootstrap"
+	"google.golang.org/grpc/internal/xds/grpcservice"
 	"google.golang.org/grpc/internal/xds/httpfilter"
 	iextproc "google.golang.org/grpc/internal/xds/httpfilter/extproc/internal"
 	"google.golang.org/grpc/internal/xds/matcher"
-	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
@@ -107,7 +108,19 @@ func validateBodyProcessingMode(mode *v3procfilterpb.ProcessingMode) error {
 	return nil
 }
 
-func (builder) ParseFilterConfig(cfg proto.Message, _ httpfilter.ParseOptions) (httpfilter.FilterConfig, error) {
+// grpcServiceParser returns a GrpcService parser for the given parse options.
+// Credentials from the proto are honored only when the delivering xDS server
+// is configured with the trusted_xds_server feature; a nil ServerConfig means
+// the delivering server is unknown and is treated as untrusted (gRFC A102).
+func grpcServiceParser(opts httpfilter.ParseOptions) *grpcservice.GrpcService {
+	trusted := opts.ServerConfig != nil && opts.ServerConfig.ServerFeaturesTrustedXDSServer()
+	return grpcservice.New(opts.BootstrapConfig, trusted)
+}
+
+// ParseFilterConfig parses the provided filter configuration. The GrpcService
+// identifying the external processor server is validated against the provided
+// parse options, as per gRFC A102.
+func (builder) ParseFilterConfig(cfg proto.Message, opts httpfilter.ParseOptions) (httpfilter.FilterConfig, error) {
 	m, ok := cfg.(*anypb.Any)
 	if !ok {
 		return nil, fmt.Errorf("extproc: error parsing config %v: unknown type %T, want *anypb.Any", cfg, cfg)
@@ -126,9 +139,9 @@ func (builder) ParseFilterConfig(cfg proto.Message, _ httpfilter.ParseOptions) (
 	if msg.GetGrpcService() == nil {
 		return nil, fmt.Errorf("extproc: empty grpc_service provided in config %v", cfg)
 	}
-	server, err := iextproc.ParseGRPCServiceConfig(msg.GetGrpcService())
+	server, err := grpcServiceParser(opts).Parse(msg.GetGrpcService())
 	if err != nil {
-		return nil, fmt.Errorf("extproc: failed to parse grpc_service %v", err)
+		return nil, fmt.Errorf("extproc: failed to parse grpc_service: %v", err)
 	}
 
 	mutationRules, err := httpfilter.HeaderMutationRulesFromProto(msg.GetMutationRules())
@@ -171,7 +184,10 @@ func (builder) ParseFilterConfig(cfg proto.Message, _ httpfilter.ParseOptions) (
 	}, nil
 }
 
-func (builder) ParseFilterConfigOverride(ov proto.Message, _ httpfilter.ParseOptions) (httpfilter.FilterConfig, error) {
+// ParseFilterConfigOverride parses the provided override filter
+// configuration. The GrpcService identifying the external processor server is
+// validated against the provided parse options, as per gRFC A102.
+func (builder) ParseFilterConfigOverride(ov proto.Message, opts httpfilter.ParseOptions) (httpfilter.FilterConfig, error) {
 	m, ok := ov.(*anypb.Any)
 	if !ok {
 		return nil, fmt.Errorf("extproc: error parsing override %v: unknown type %T, want *anypb.Any", ov, ov)
@@ -190,9 +206,9 @@ func (builder) ParseFilterConfigOverride(ov proto.Message, _ httpfilter.ParseOpt
 		processingModesOpt = optional.New(processingModesFromProto(pm))
 	}
 
-	var serverOpt optional.Optional[xdsresource.GRPCServiceConfig]
+	var serverOpt optional.Optional[grpcservice.Config]
 	if override.GetGrpcService() != nil {
-		server, err := iextproc.ParseGRPCServiceConfig(override.GetGrpcService())
+		server, err := grpcServiceParser(opts).Parse(override.GetGrpcService())
 		if err != nil {
 			return nil, fmt.Errorf("extproc: failed to parse grpc_service: %v", err)
 		}
@@ -221,6 +237,7 @@ func (builder) BuildClientFilter(opts httpfilter.ClientFilterOptions) httpfilter
 	return &clientFilter{
 		metricsRecorder: opts.MetricsRecorder,
 		target:          opts.Target,
+		factory:         opts.SideChannelFactory,
 		procChannels:    make(map[grpcServiceKey]*grpcsync.RefCounted[v3procservicegrpc.ExternalProcessorClient]),
 	}
 }
@@ -239,6 +256,7 @@ type grpcServiceKey struct {
 type clientFilter struct {
 	metricsRecorder estats.MetricsRecorder
 	target          string
+	factory         httpfilter.SideChannelFactory
 
 	mu           sync.Mutex
 	procChannels map[grpcServiceKey]*grpcsync.RefCounted[v3procservicegrpc.ExternalProcessorClient]
@@ -293,12 +311,12 @@ func (cf *clientFilter) removeProcChannel(key grpcServiceKey, rc *grpcsync.RefCo
 // getOrCreateExtProcChannel retrieves an existing refcounted external processor
 // client from the procChannels map and increases its refcount or creates a new
 // one if it doesn't exist.
-func (cf *clientFilter) getOrCreateExtProcChannel(server xdsresource.GRPCServiceConfig) (*grpcsync.RefCounted[v3procservicegrpc.ExternalProcessorClient], error) {
+func (cf *clientFilter) getOrCreateExtProcChannel(server grpcservice.Config) (*grpcsync.RefCounted[v3procservicegrpc.ExternalProcessorClient], error) {
 	// Create the grpcServiceKey.
 	key := grpcServiceKey{
 		targetURI:          server.TargetURI,
-		channelCredentials: server.ChannelCredentials,
-		callCredentials:    server.CallCredentials,
+		channelCredentials: server.ChannelCredentials.String(),
+		callCredentials:    bootstrap.CallCredsConfigs(server.CallCredentials).String(),
 	}
 
 	// If the channel for the key is present in the map and its refcount is
@@ -307,19 +325,21 @@ func (cf *clientFilter) getOrCreateExtProcChannel(server xdsresource.GRPCService
 		return rc, nil
 	}
 
-	// Create the external processor channel without holding the lock.
-	cc, cancel, err := iextproc.CreateExtProcChannel(server)
+	// Create the external processor channel without holding the lock. The
+	// channel is shared with other consumers via the xDS client; the release
+	// function drops this filter's reference to it.
+	cc, release, err := iextproc.CreateExtProcChannel(cf.factory, server)
 	if err != nil {
 		return nil, fmt.Errorf("extproc: failed to create channel to the external processor server %q: %v", server.TargetURI, err)
 	}
 
 	client := v3procservicegrpc.NewExternalProcessorClient(cc)
 	// Create a new refcounted client. The onZero cleanup function will remove the
-	// client from the map and close the underlying channel.
+	// client from the map and release the underlying channel.
 	var rc *grpcsync.RefCounted[v3procservicegrpc.ExternalProcessorClient]
 	rc = grpcsync.NewRefCounted(client, func() {
 		cf.removeProcChannel(key, rc)
-		cancel()
+		release()
 	})
 
 	// Double-check if another goroutine created and stored a channel for this
@@ -347,6 +367,9 @@ func (cf *clientFilter) BuildClientInterceptor(base, override httpfilter.FilterC
 
 	config := newInterceptorConfig(b, ov)
 
+	if cf.factory == nil {
+		return nil, fmt.Errorf("extproc: no side-channel factory provided to create a channel to the external processor server")
+	}
 	// Create or reuse a refcounted channel to the external processor server.
 	rc, err := cf.getOrCreateExtProcChannel(config.server)
 	if err != nil {
@@ -375,7 +398,7 @@ func (i *clientInterceptor) Close() {
 // processor server to be able to cancel it independently. This context has a
 // deadline of the timeout specified in the config, if present, and contains the
 // initial metadata specified in the config.
-func createProcContext(ctx context.Context, server xdsresource.GRPCServiceConfig) (procCtx context.Context, cancel context.CancelFunc) {
+func createProcContext(ctx context.Context, server grpcservice.Config) (procCtx context.Context, cancel context.CancelFunc) {
 	if server.Timeout != 0 {
 		procCtx, cancel = context.WithTimeout(ctx, server.Timeout)
 	} else {

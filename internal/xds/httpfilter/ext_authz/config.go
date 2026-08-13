@@ -20,16 +20,16 @@ package extauthz
 
 import (
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/internal/xds/grpcservice"
 	"google.golang.org/grpc/internal/xds/httpfilter"
 	"google.golang.org/grpc/internal/xds/matcher"
-	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 )
 
 // config contains the configuration for the external authorization filter.
 type config struct {
 	httpfilter.FilterConfig
 	// grpcService is the configuration for the external authorization server.
-	grpcService xdsresource.GRPCServiceConfig
+	grpcService grpcservice.Config
 	// filterEnabled specifies the percentage of requests to be authorized by
 	// the external authorization server.
 	filterEnabled fraction

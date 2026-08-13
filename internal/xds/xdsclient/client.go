@@ -23,6 +23,7 @@ package xdsclient
 import (
 	"context"
 
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/internal/xds/clients/lrsclient"
 	"google.golang.org/grpc/internal/xds/clients/xdsclient"
@@ -53,6 +54,17 @@ type XDSClient interface {
 	ReportLoad(*bootstrap.ServerConfig) (*lrsclient.LoadStore, func(context.Context))
 
 	BootstrapConfig() *bootstrap.Config
+
+	// CreateChannel returns a shared gRPC channel to the given side-channel
+	// target, creating it on first use. The returned release function must be
+	// called when the caller is done with the channel; the channel is closed
+	// when the last user releases it.
+	//
+	// An empty chanCreds.Type indicates that the side channel was configured
+	// by an untrusted xDS server, and the credentials configured for the
+	// target in the bootstrap allowed_grpc_services map are used instead of
+	// the provided configs (gRFC A102).
+	CreateChannel(targetURI string, chanCreds bootstrap.ChannelCreds, callCreds []bootstrap.CallCredsConfig) (grpc.ClientConnInterface, func() error, error)
 }
 
 // DumpResources returns the status and contents of all xDS resources. It uses

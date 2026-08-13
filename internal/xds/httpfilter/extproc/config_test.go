@@ -19,6 +19,7 @@
 package extproc
 
 import (
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"strings"
@@ -28,12 +29,14 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/optional"
+	"google.golang.org/grpc/internal/testutils"
+	"google.golang.org/grpc/internal/xds/bootstrap"
+	"google.golang.org/grpc/internal/xds/grpcservice"
 	"google.golang.org/grpc/internal/xds/httpfilter"
-	iextproc "google.golang.org/grpc/internal/xds/httpfilter/extproc/internal"
 	"google.golang.org/grpc/internal/xds/matcher"
-	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/testing/protocmp"
@@ -56,34 +59,65 @@ func Test(t *testing.T) {
 
 const testBaseURI = "base-uri"
 
-// testParseGRPCServiceConfig is a helper function that parses a GrpcService
-// proto message into a GRPCServiceConfig. This is a temporary test
-// implementation that will be removed once gRFC A102 is implemented.
-func testParseGRPCServiceConfig(grpcService *corepb.GrpcService) (xdsresource.GRPCServiceConfig, error) {
-	if grpcService == nil {
-		return xdsresource.GRPCServiceConfig{}, nil
-	}
-	if grpcService.GetGoogleGrpc() == nil {
-		return xdsresource.GRPCServiceConfig{}, fmt.Errorf("only google_grpc grpc_service is supported")
-	}
-	if grpcService.GetGoogleGrpc().GetTargetUri() == "" {
-		return xdsresource.GRPCServiceConfig{}, fmt.Errorf("targetURI must be a non-empty string")
-	}
+// testParseOptions returns ParseOptions whose bootstrap
+// configuration allowlists the given side-channel targets with insecure
+// channel credentials. The returned options carry no ServerConfig, so the
+// delivering server is treated as untrusted and GrpcService parsing takes the
+// allowed_grpc_services path.
+func testParseOptions(t *testing.T, targets ...string) httpfilter.ParseOptions {
+	t.Helper()
 
-	sc := xdsresource.GRPCServiceConfig{
-		TargetURI: grpcService.GetGoogleGrpc().GetTargetUri(),
+	// The allowed_grpc_services bootstrap field is parsed only when a
+	// consuming feature is enabled.
+	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
+
+	allowed := make(map[string]json.RawMessage, len(targets))
+	for _, target := range targets {
+		allowed[target] = json.RawMessage(`{"channel_creds": [{"type": "insecure"}]}`)
 	}
-	return sc, nil
+	allowedJSON, err := json.Marshal(allowed)
+	if err != nil {
+		t.Fatalf("Failed to marshal allowed_grpc_services: %v", err)
+	}
+	contents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
+		Servers:             []byte(`[{"server_uri": "passthrough:///unused", "channel_creds": [{"type": "insecure"}]}]`),
+		Node:                []byte(`{"id": "test-node"}`),
+		AllowedGRPCServices: allowedJSON,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create bootstrap contents: %v", err)
+	}
+	config, err := bootstrap.NewConfigFromContents(contents)
+	if err != nil {
+		t.Fatalf("Failed to parse bootstrap contents: %v", err)
+	}
+	return httpfilter.ParseOptions{BootstrapConfig: config}
+}
+
+// fakeSideChannelFactory implements httpfilter.SideChannelFactory. It creates
+// insecure channels, and fails channel creation for failTarget.
+type fakeSideChannelFactory struct {
+	failTarget string
+}
+
+func (f *fakeSideChannelFactory) CreateChannel(targetURI string, _ bootstrap.ChannelCreds, _ []bootstrap.CallCredsConfig) (grpc.ClientConnInterface, func() error, error) {
+	if f.failTarget != "" && targetURI == f.failTarget {
+		return nil, nil, fmt.Errorf("dial error")
+	}
+	cc, err := grpc.NewClient(targetURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		return nil, nil, err
+	}
+	return cc, cc.Close, nil
 }
 
 var cmpOpts = []cmp.Option{
 	cmp.AllowUnexported(
 		baseConfig{},
 		overrideConfig{},
-		xdsresource.GRPCServiceConfig{},
 		processingModes{},
 		httpfilter.HeaderMutationRules{},
-		optional.Optional[xdsresource.GRPCServiceConfig]{},
+		optional.Optional[grpcservice.Config]{},
 		optional.Optional[processingModes]{},
 		optional.Optional[bool]{},
 	),
@@ -100,9 +134,7 @@ var cmpOpts = []cmp.Option{
 }
 
 func (s) TestParseFilterConfig_Success(t *testing.T) {
-	origParseGRPCServiceConfig := iextproc.ParseGRPCServiceConfig
-	defer func() { iextproc.ParseGRPCServiceConfig = origParseGRPCServiceConfig }()
-	iextproc.ParseGRPCServiceConfig = testParseGRPCServiceConfig
+	opts := testParseOptions(t, "localhost:1234")
 
 	tests := []struct {
 		name    string
@@ -125,10 +157,7 @@ func (s) TestParseFilterConfig_Success(t *testing.T) {
 				return m
 			}(),
 			wantCfg: baseConfig{
-				server: xdsresource.GRPCServiceConfig{
-					TargetURI:          "localhost:1234",
-					ChannelCredentials: "",
-				},
+				server: grpcservice.Config{TargetURI: "localhost:1234"},
 				processingModes: processingModes{
 					requestHeaderMode:   modeSend,
 					responseHeaderMode:  modeSend,
@@ -160,10 +189,7 @@ func (s) TestParseFilterConfig_Success(t *testing.T) {
 				return m
 			}(),
 			wantCfg: baseConfig{
-				server: xdsresource.GRPCServiceConfig{
-					TargetURI:          "localhost:1234",
-					ChannelCredentials: "",
-				},
+				server: grpcservice.Config{TargetURI: "localhost:1234"},
 				processingModes: processingModes{
 					requestHeaderMode:   modeSend,
 					responseHeaderMode:  modeSend,
@@ -195,10 +221,7 @@ func (s) TestParseFilterConfig_Success(t *testing.T) {
 				return m
 			}(),
 			wantCfg: baseConfig{
-				server: xdsresource.GRPCServiceConfig{
-					TargetURI:          "localhost:1234",
-					ChannelCredentials: "",
-				},
+				server: grpcservice.Config{TargetURI: "localhost:1234"},
 				processingModes: processingModes{
 					requestHeaderMode:   modeSend,
 					responseHeaderMode:  modeSend,
@@ -219,7 +242,7 @@ func (s) TestParseFilterConfig_Success(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			b := builder{}
-			got, err := b.ParseFilterConfig(tt.cfg, httpfilter.ParseOptions{})
+			got, err := b.ParseFilterConfig(tt.cfg, opts)
 			if err != nil {
 				t.Fatalf("ParseFilterConfig() returned unexpected error: %v", err)
 			}
@@ -231,9 +254,7 @@ func (s) TestParseFilterConfig_Success(t *testing.T) {
 }
 
 func (s) TestParseFilterConfig_Errors(t *testing.T) {
-	origParseGRPCServiceConfig := iextproc.ParseGRPCServiceConfig
-	defer func() { iextproc.ParseGRPCServiceConfig = origParseGRPCServiceConfig }()
-	iextproc.ParseGRPCServiceConfig = testParseGRPCServiceConfig
+	opts := testParseOptions(t, "localhost:1234")
 
 	tests := []struct {
 		name    string
@@ -263,7 +284,7 @@ func (s) TestParseFilterConfig_Errors(t *testing.T) {
 				})
 				return m
 			}(),
-			wantErr: "extproc: failed to parse grpc_service only google_grpc grpc_service is supported",
+			wantErr: "only google_grpc GrpcService config is supported",
 		},
 		{
 			name: "MissingProcessingMode",
@@ -416,7 +437,7 @@ func (s) TestParseFilterConfig_Errors(t *testing.T) {
 				})
 				return m
 			}(),
-			wantErr: "extproc: failed to parse grpc_service targetURI must be a non-empty string",
+			wantErr: "target_uri must be non-empty",
 		},
 		{
 			name:    "InvalidConfigType",
@@ -427,7 +448,7 @@ func (s) TestParseFilterConfig_Errors(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			builder := builder{}
-			_, err := builder.ParseFilterConfig(tt.cfg, httpfilter.ParseOptions{})
+			_, err := builder.ParseFilterConfig(tt.cfg, opts)
 			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
 				t.Fatalf("ParseFilterConfig() returned error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -600,13 +621,6 @@ func (s) TestParseFilterConfigOverride_Errors(t *testing.T) {
 }
 
 func (s) TestBuildClientInterceptor_Success(t *testing.T) {
-	origCreateExtProcChannel := iextproc.CreateExtProcChannel
-	iextproc.CreateExtProcChannel = func(cfg xdsresource.GRPCServiceConfig) (grpc.ClientConnInterface, func() error, error) {
-		conn, _ := grpc.NewClient(cfg.TargetURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
-		return conn, conn.Close, nil
-	}
-	defer func() { iextproc.CreateExtProcChannel = origCreateExtProcChannel }()
-
 	tests := []struct {
 		name       string
 		cfg        httpfilter.FilterConfig
@@ -629,10 +643,10 @@ func (s) TestBuildClientInterceptor_Success(t *testing.T) {
 					requestBodyMode:     modeSend,
 					responseBodyMode:    modeSkip,
 				},
-				server: xdsresource.GRPCServiceConfig{
+				server: grpcservice.Config{
 					TargetURI:          testBaseURI,
-					ChannelCredentials: "test-channel-creds",
-					CallCredentials:    "test-call-creds",
+					ChannelCredentials: bootstrap.ChannelCreds{Type: "test-channel-creds"},
+					CallCredentials:    []bootstrap.CallCredsConfig{{Type: "test-call-creds"}},
 					InitialMetadata:    metadata.MD(metadata.Pairs("key1", "value1")),
 					Timeout:            5 * time.Second,
 				},
@@ -664,10 +678,10 @@ func (s) TestBuildClientInterceptor_Success(t *testing.T) {
 					requestBodyMode:     modeSend,
 					responseBodyMode:    modeSkip,
 				},
-				server: xdsresource.GRPCServiceConfig{
+				server: grpcservice.Config{
 					TargetURI:          testBaseURI,
-					ChannelCredentials: "test-channel-creds",
-					CallCredentials:    "test-call-creds",
+					ChannelCredentials: bootstrap.ChannelCreds{Type: "test-channel-creds"},
+					CallCredentials:    []bootstrap.CallCredsConfig{{Type: "test-call-creds"}},
 					InitialMetadata:    metadata.MD(metadata.Pairs("key1", "value1")),
 					Timeout:            5 * time.Second,
 				},
@@ -689,7 +703,7 @@ func (s) TestBuildClientInterceptor_Success(t *testing.T) {
 					requestBodyMode:     modeSend,
 					responseBodyMode:    modeSkip,
 				},
-				server: xdsresource.GRPCServiceConfig{
+				server: grpcservice.Config{
 					TargetURI:       testBaseURI,
 					Timeout:         time.Second,
 					InitialMetadata: metadata.MD(metadata.Pairs("key1", "value1")),
@@ -715,7 +729,7 @@ func (s) TestBuildClientInterceptor_Success(t *testing.T) {
 					requestBodyMode:     modeSkip,
 					responseBodyMode:    modeSend,
 				}),
-				server: optional.New(xdsresource.GRPCServiceConfig{
+				server: optional.New(grpcservice.Config{
 					TargetURI: "override-uri",
 				}),
 			},
@@ -739,7 +753,7 @@ func (s) TestBuildClientInterceptor_Success(t *testing.T) {
 					requestBodyMode:     modeSkip,
 					responseBodyMode:    modeSend,
 				},
-				server: xdsresource.GRPCServiceConfig{
+				server: grpcservice.Config{
 					TargetURI: "override-uri",
 				},
 				allowedHeaders:    []matcher.StringMatcher{matcher.NewExactStringMatcher("allow-header", false)},
@@ -762,7 +776,7 @@ func (s) TestBuildClientInterceptor_Success(t *testing.T) {
 					requestBodyMode:     modeSend,
 					responseBodyMode:    modeSkip,
 				},
-				server: xdsresource.GRPCServiceConfig{
+				server: grpcservice.Config{
 					TargetURI:       testBaseURI,
 					Timeout:         time.Second,
 					InitialMetadata: metadata.MD(metadata.Pairs("key1", "value1")),
@@ -799,7 +813,7 @@ func (s) TestBuildClientInterceptor_Success(t *testing.T) {
 					requestBodyMode:     modeSend,
 					responseBodyMode:    modeSkip,
 				},
-				server: xdsresource.GRPCServiceConfig{
+				server: grpcservice.Config{
 					TargetURI:       testBaseURI,
 					Timeout:         time.Second,
 					InitialMetadata: metadata.MD(metadata.Pairs("key1", "value1")),
@@ -812,7 +826,7 @@ func (s) TestBuildClientInterceptor_Success(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			builder := builder{}
-			filter := builder.BuildClientFilter(httpfilter.ClientFilterOptions{})
+			filter := builder.BuildClientFilter(httpfilter.ClientFilterOptions{SideChannelFactory: &fakeSideChannelFactory{}})
 			defer filter.Close()
 
 			intptr, err := filter.BuildClientInterceptor(tc.cfg, tc.override)
@@ -829,16 +843,6 @@ func (s) TestBuildClientInterceptor_Success(t *testing.T) {
 }
 
 func (s) TestBuildClientInterceptor_Failure(t *testing.T) {
-	origCreateExtProcChannel := iextproc.CreateExtProcChannel
-	iextproc.CreateExtProcChannel = func(cfg xdsresource.GRPCServiceConfig) (grpc.ClientConnInterface, func() error, error) {
-		if cfg.TargetURI == "error-uri" {
-			return nil, nil, fmt.Errorf("dial error")
-		}
-		conn, _ := grpc.NewClient(cfg.TargetURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
-		return conn, conn.Close, nil
-	}
-	defer func() { iextproc.CreateExtProcChannel = origCreateExtProcChannel }()
-
 	// incorrectFilterConfig embeds httpfilter.FilterConfig but is not of type
 	// baseConfig/overrideConfig, and is used to test incorrect config types being
 	// passed to BuildClientInterceptor.
@@ -871,7 +875,7 @@ func (s) TestBuildClientInterceptor_Failure(t *testing.T) {
 		{
 			name: "ChannelCreationFailure",
 			cfg: baseConfig{
-				server: xdsresource.GRPCServiceConfig{
+				server: grpcservice.Config{
 					TargetURI: "error-uri",
 				},
 			},
@@ -880,12 +884,12 @@ func (s) TestBuildClientInterceptor_Failure(t *testing.T) {
 		{
 			name: "ChannelCreationFailureInOverride",
 			cfg: baseConfig{
-				server: xdsresource.GRPCServiceConfig{
+				server: grpcservice.Config{
 					TargetURI: testBaseURI,
 				},
 			},
 			override: overrideConfig{
-				server: optional.New(xdsresource.GRPCServiceConfig{
+				server: optional.New(grpcservice.Config{
 					TargetURI: "error-uri",
 				}),
 			},
@@ -895,7 +899,7 @@ func (s) TestBuildClientInterceptor_Failure(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			builder := builder{}
-			filter := builder.BuildClientFilter(httpfilter.ClientFilterOptions{})
+			filter := builder.BuildClientFilter(httpfilter.ClientFilterOptions{SideChannelFactory: &fakeSideChannelFactory{failTarget: "error-uri"}})
 			defer filter.Close()
 
 			_, err := filter.BuildClientInterceptor(tc.cfg, tc.override)

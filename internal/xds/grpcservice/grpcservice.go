@@ -115,8 +115,13 @@ func (g *GrpcService) Parse(gs *v3corepb.GrpcService) (Config, error) {
 		// The target must be present in the allowed_grpc_services
 		// allowlist, but the credentials themselves are resolved later,
 		// at channel creation time; they are left empty in the parsed
-		// config here.
-		allowedSvc, ok := g.config.AllowedGRPCService(targetURI)
+		// config here. A nil bootstrap config has no allowlist, so all
+		// targets are rejected.
+		var allowedSvc *bootstrap.AllowedGRPCService
+		var ok bool
+		if g.config != nil {
+			allowedSvc, ok = g.config.AllowedGRPCService(targetURI)
+		}
 		if !ok {
 			return Config{}, fmt.Errorf("grpcservice: target_uri %q is not present in allowed_grpc_services", targetURI)
 		}

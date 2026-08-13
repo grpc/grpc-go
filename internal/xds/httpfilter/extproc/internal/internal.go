@@ -20,15 +20,21 @@
 package internal
 
 import (
-	"fmt"
 	"time"
 
-	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
+	"google.golang.org/grpc/internal/xds/grpcservice"
+	"google.golang.org/grpc/internal/xds/httpfilter"
 )
 
 var (
+	// CreateExtProcChannel creates the channel to the external processing
+	// server via the provided side-channel factory. It is a variable so that
+	// tests can intercept channel creation and observe its release.
+	CreateExtProcChannel = func(factory httpfilter.SideChannelFactory, server grpcservice.Config) (grpc.ClientConnInterface, func() error, error) {
+		return factory.CreateChannel(server.TargetURI, server.ChannelCredentials, server.CallCredentials)
+	}
+
 	// RegisterForTesting registers the external processor HTTP Filter for testing
 	// purposes.
 	RegisterForTesting func()
@@ -36,18 +42,6 @@ var (
 	// UnregisterForTesting unregisters the external processor HTTP Filter for
 	// testing purposes.
 	UnregisterForTesting func()
-
-	// ParseGRPCServiceConfig parses the gRPC service configuration from the given
-	// protobuf message.
-	ParseGRPCServiceConfig = func(*v3corepb.GrpcService) (xdsresource.GRPCServiceConfig, error) {
-		return xdsresource.GRPCServiceConfig{}, fmt.Errorf("extproc: ParseGRPCServiceConfig not implemented")
-	}
-
-	// CreateExtProcChannel creates a gRPC client channel to the external
-	// processing server.
-	CreateExtProcChannel = func(xdsresource.GRPCServiceConfig) (grpc.ClientConnInterface, func() error, error) {
-		return nil, nil, fmt.Errorf("extproc: dialing external processor server not implemented")
-	}
 
 	// TimeNowFunc returns the current time.Time, and can be overridden for
 	// testing purposes.
