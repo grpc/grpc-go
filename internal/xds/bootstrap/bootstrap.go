@@ -219,22 +219,23 @@ func (s *AllowedGRPCServices) UnmarshalJSON(data []byte) error {
 }
 
 // UnmarshalJSON parses the JSON data and validates its credentials.
-func (a *AllowedGRPCService) UnmarshalJSON(data []byte) error {
+func (a *AllowedGRPCService) UnmarshalJSON(data []byte) (err error) {
 	var jsonS allowedGRPCServiceJSON
 	if err := json.Unmarshal(data, &jsonS); err != nil {
 		return err
 	}
 
 	// Build into locals and assign the receiver only on success, so a
-	// mid-parse error never leaves the receiver partially mutated.
+	// mid-parse error never leaves the receiver partially mutated. Credentials
+	// built before a failure are released by this deferred cleanup.
 	var cleanups []func()
-	var dialOptions []grpc.DialOption
-
-	runCleanups := func() {
-		for _, f := range cleanups {
-			f()
+	defer func() {
+		if err != nil {
+			for _, f := range cleanups {
+				f()
+			}
 		}
-	}
+	}()
 
 	var credsDialOption grpc.DialOption
 	var selectedChannelCreds ChannelCreds
@@ -245,7 +246,6 @@ func (a *AllowedGRPCService) UnmarshalJSON(data []byte) error {
 		}
 		bundle, cancel, err := c.Build(cc.Config)
 		if err != nil {
-			runCleanups()
 			return fmt.Errorf("xds: failed to build credentials bundle from bootstrap for allowed grpc service: type %q, err: %v", cc.Type, err)
 		}
 		selectedChannelCreds = cc
@@ -257,10 +257,9 @@ func (a *AllowedGRPCService) UnmarshalJSON(data []byte) error {
 	// If no channel-creds type in the list was supported, credsDialOption is
 	// still nil after the loop; that is a validation error.
 	if credsDialOption == nil {
-		runCleanups()
 		return fmt.Errorf("xds: no supported channel credentials found for allowed grpc service in config:\n%s", string(data))
 	}
-	dialOptions = append(dialOptions, credsDialOption)
+	dialOptions := []grpc.DialOption{credsDialOption}
 
 	for _, cfg := range jsonS.CallCredsConfigs {
 		c := bootstrap.GetCallCredentials(cfg.Type)
@@ -269,7 +268,6 @@ func (a *AllowedGRPCService) UnmarshalJSON(data []byte) error {
 		}
 		callCreds, cancel, err := c.Build(cfg.Config)
 		if err != nil {
-			runCleanups()
 			return fmt.Errorf("xds: failed to build call credentials from bootstrap for allowed grpc service: type %q, err: %v", cfg.Type, err)
 		}
 		dialOptions = append(dialOptions, grpc.WithPerRPCCredentials(callCreds))

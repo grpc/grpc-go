@@ -1774,6 +1774,43 @@ func (s) TestAllowedGRPCServices_UnmarshalJSON(t *testing.T) {
 			wantDialOptions: 2,
 		},
 		{
+			name: "unsupported_call_creds_skipped",
+			json: `{"dns:///sharding-service:443": {"channel_creds": [{"type": "insecure"}], "call_creds": [{"type": "unsupported_call_creds_type"}]}}`,
+			want: &AllowedGRPCService{
+				targetURI:    target,
+				channelCreds: []ChannelCreds{{Type: "insecure"}},
+				callCredsConfigs: []CallCredsConfig{{
+					Type: "unsupported_call_creds_type",
+				}},
+			},
+			wantSelectedChannelCredsType: "insecure",
+			// Unsupported call-creds types are skipped without error, so
+			// only the channel-creds dial option is built.
+			wantDialOptions: 1,
+		},
+		{
+			name: "multiple_supported_call_creds",
+			json: `{"dns:///sharding-service:443": {"channel_creds": [{"type": "insecure"}], "call_creds": [{"type": "jwt_token_file", "config": {"jwt_token_file": "/tokens/token-one"}}, {"type": "jwt_token_file", "config": {"jwt_token_file": "/tokens/token-two"}}]}}`,
+			want: &AllowedGRPCService{
+				targetURI:    target,
+				channelCreds: []ChannelCreds{{Type: "insecure"}},
+				callCredsConfigs: []CallCredsConfig{
+					{
+						Type:   "jwt_token_file",
+						Config: json.RawMessage(`{"jwt_token_file": "/tokens/token-one"}`),
+					},
+					{
+						Type:   "jwt_token_file",
+						Config: json.RawMessage(`{"jwt_token_file": "/tokens/token-two"}`),
+					},
+				},
+			},
+			wantSelectedChannelCredsType: "insecure",
+			// One channel-creds dial option plus one per-RPC option for
+			// each supported call credential.
+			wantDialOptions: 3,
+		},
+		{
 			name: "tls_channel_creds",
 			json: `{"dns:///sharding-service:443": {"channel_creds": [{"type": "tls", "config": {}}]}}`,
 			want: &AllowedGRPCService{
