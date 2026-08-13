@@ -1385,6 +1385,95 @@ func (s) TestResolverKeepWatchOpen_ActiveRPCs(t *testing.T) {
 // TestResolver_XDSConfigInRPCContext verifies that the xDS resolver's config
 // selector places the complete XDSConfig into the RPC context during config
 // selection, making it available to HTTP filters.
+// TestResolverClusterSharedByMultipleRoutes verifies the reference accounting
+// for a cluster that more than one route points at. A config selector takes a
+// single reference per distinct cluster, however many routes name it, and
+// releases exactly that one reference when it is stopped.
+//
+// If a reference were taken per route instead, the counts would not balance:
+// configSelector.stop() decrements once per entry in its cluster map, so the
+// surplus references would keep the cluster in activeClusters and in the
+// service config forever, with its CDS watch open.
+func (s) TestResolverClusterSharedByMultipleRoutes(t *testing.T) {
+	clusterA := "cluster-A"
+	clusterB := "cluster-B"
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
+
+	nodeID := uuid.New().String()
+	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
+
+	// A route configuration whose two distinct routes both send traffic to the
+	// same cluster, so the config selector encounters that cluster twice.
+	routeToCluster := func(prefix, cluster string) *v3routepb.Route {
+		return &v3routepb.Route{
+			Match: &v3routepb.RouteMatch{PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: prefix}},
+			Action: &v3routepb.Route_Route{Route: &v3routepb.RouteAction{
+				ClusterSpecifier: &v3routepb.RouteAction_WeightedClusters{WeightedClusters: &v3routepb.WeightedCluster{
+					Clusters: []*v3routepb.WeightedCluster_ClusterWeight{{
+						Name:   cluster,
+						Weight: &wrapperspb.UInt32Value{Value: 100},
+					}},
+				}},
+			}},
+		}
+	}
+	routeConfigForCluster := func(cluster string) *v3routepb.RouteConfiguration {
+		return &v3routepb.RouteConfiguration{
+			Name: defaultTestRouteConfigName,
+			VirtualHosts: []*v3routepb.VirtualHost{{
+				Domains: []string{defaultTestServiceName},
+				Routes: []*v3routepb.Route{
+					routeToCluster("/service/first", cluster),
+					routeToCluster("/", cluster),
+				},
+			}},
+		}
+	}
+
+	listeners := []*v3listenerpb.Listener{e2e.DefaultClientListener(defaultTestServiceName, defaultTestRouteConfigName)}
+	clusters := []*v3clusterpb.Cluster{
+		e2e.DefaultCluster(clusterA, "endpoint-A", e2e.SecurityLevelNone),
+		e2e.DefaultCluster(clusterB, "endpoint-B", e2e.SecurityLevelNone),
+	}
+	endpoints := []*v3endpointpb.ClusterLoadAssignment{
+		e2e.DefaultEndpoint("endpoint-A", "localhost", []uint32{8080}),
+		e2e.DefaultEndpoint("endpoint-B", "localhost", []uint32{8081}),
+	}
+	configureResources(ctx, t, mgmtServer, nodeID, listeners, []*v3routepb.RouteConfiguration{routeConfigForCluster(clusterA)}, clusters, endpoints)
+
+	stateCh, _, _ := buildResolverForTarget(t, resolver.Target{URL: *testutils.MustParseURL("xds:///" + defaultTestServiceName)}, bc)
+
+	// Both routes name cluster-A, so it appears once in the service config.
+	verifyUpdateFromResolver(ctx, t, stateCh, wantServiceConfig(clusterA))
+
+	// Move both routes to cluster-B. With no RPCs in flight, stopping the
+	// outgoing config selector releases cluster-A's only reference.
+	configureResources(ctx, t, mgmtServer, nodeID, listeners, []*v3routepb.RouteConfiguration{routeConfigForCluster(clusterB)}, clusters, endpoints)
+
+	// The resolver first republishes with both clusters present, because that
+	// update is generated before the outgoing config selector is stopped. Once
+	// cluster-A's reference count reaches zero it is dropped, so wait for the
+	// service config that names cluster-B alone. A surplus reference on
+	// cluster-A would keep it in every subsequent update and time out here.
+	wantFinal := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(wantServiceConfig(clusterB))
+	for {
+		select {
+		case <-ctx.Done():
+			t.Fatal("Timeout waiting for cluster-A to be dropped from the service config")
+		case state := <-stateCh:
+			if err := state.ServiceConfig.Err; err != nil {
+				t.Fatalf("Received error in service config: %v", err)
+			}
+			if internal.EqualServiceConfigForTesting(state.ServiceConfig.Config, wantFinal.Config) {
+				return
+			}
+		}
+	}
+}
+
 func (s) TestResolver_XDSConfigInRPCContext(t *testing.T) {
 	// Spin up an xDS management server for the test.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
