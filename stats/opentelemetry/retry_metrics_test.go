@@ -57,22 +57,32 @@ func TestRetryMetrics_Unit(t *testing.T) {
 	}
 	ctx = context.WithValue(ctx, callInfoKey{}, ci)
 
+	now := time.Now()
+	t1Start := now
+	t1End := t1Start.Add(10 * time.Millisecond)
+
+	t2Start := t1End.Add(50 * time.Millisecond) // 50ms delay
+	t2End := t2Start.Add(10 * time.Millisecond)
+
+	t3Start := t2End.Add(60 * time.Millisecond) // 60ms delay
+	t3End := t3Start.Add(10 * time.Millisecond)
+
 	// Regular attempt.
 	ctx1 := h.TagRPC(ctx, &stats.RPCTagInfo{FullMethodName: "test-method"})
-	h.HandleRPC(ctx1, &stats.Begin{Client: true, BeginTime: time.Now()})
-	h.HandleRPC(ctx1, &stats.End{Client: true, BeginTime: time.Now(), EndTime: time.Now(), Error: status.Error(codes.Unavailable, "unavailable")})
+	h.HandleRPC(ctx1, &stats.Begin{Client: true, BeginTime: t1Start})
+	h.HandleRPC(ctx1, &stats.End{Client: true, BeginTime: t1Start, EndTime: t1End, Error: status.Error(codes.Unavailable, "unavailable")})
 
 	// Transparent retry.
 	ctx2 := h.TagRPC(ctx, &stats.RPCTagInfo{FullMethodName: "test-method"})
-	h.HandleRPC(ctx2, &stats.Begin{Client: true, BeginTime: time.Now(), IsTransparentRetryAttempt: true})
-	h.HandleRPC(ctx2, &stats.End{Client: true, BeginTime: time.Now(), EndTime: time.Now(), Error: status.Error(codes.Unavailable, "unavailable")})
+	h.HandleRPC(ctx2, &stats.Begin{Client: true, BeginTime: t2Start, IsTransparentRetryAttempt: true})
+	h.HandleRPC(ctx2, &stats.End{Client: true, BeginTime: t2Start, EndTime: t2End, Error: status.Error(codes.Unavailable, "unavailable")})
 
 	// Regular retry.
 	ctx3 := h.TagRPC(ctx, &stats.RPCTagInfo{FullMethodName: "test-method"})
-	h.HandleRPC(ctx3, &stats.Begin{Client: true, BeginTime: time.Now()})
-	h.HandleRPC(ctx3, &stats.End{Client: true, BeginTime: time.Now(), EndTime: time.Now(), Error: nil})
+	h.HandleRPC(ctx3, &stats.Begin{Client: true, BeginTime: t3Start})
+	h.HandleRPC(ctx3, &stats.End{Client: true, BeginTime: t3Start, EndTime: t3End, Error: nil})
 
-	h.perCallMetrics(ctx, nil, time.Now(), ci)
+	h.perCallMetrics(ctx, nil, now, ci)
 
 	var rm metricdata.ResourceMetrics
 	if err := reader.Collect(ctx, &rm); err != nil {
@@ -142,8 +152,9 @@ func TestRetryMetrics_Unit(t *testing.T) {
 	metricdatatest.AssertEqual(t, wantTransRetries, transRetriesMetric, metricdatatest.IgnoreTimestamp())
 
 	// Verify grpc.client.call.retry_delay.
-	// Delay is accumulated but will be very small since there is no sleep.
-	// We just check that the metric is present and Sum is >= 0.
+	// Delay is between Attempt 1 end and Attempt 2 start (50ms),
+	// and Attempt 2 end and Attempt 3 start (60ms).
+	// So total delay should be 110ms (0.11s).
 	delayMetric, ok := gotMetrics[ClientCallRetryDelayMetricName]
 	if !ok {
 		t.Fatalf("metric %q not found", ClientCallRetryDelayMetricName)
@@ -156,7 +167,8 @@ func TestRetryMetrics_Unit(t *testing.T) {
 		t.Fatalf("data points length got: %d, want: 1", len(histo.DataPoints))
 	}
 	dp := histo.DataPoints[0]
-	if dp.Sum < 0 {
-		t.Errorf("retry delay sum got: %v, want: >= 0", dp.Sum)
+	// Floating point math might make it 0.110000001
+	if dp.Sum < 0.109 || dp.Sum > 0.111 {
+		t.Errorf("retry delay sum got: %v, want: ~0.11s", dp.Sum)
 	}
 }

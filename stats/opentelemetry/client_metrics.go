@@ -243,8 +243,10 @@ func (h *clientMetricsHandler) processRPCEvent(ctx context.Context, s stats.RPCS
 		if active == 1 {
 			lastEndTime := ci.lastAttemptEndTime.Swap(0)
 			if lastEndTime > 0 {
-				delay := time.Since(time.Unix(0, lastEndTime))
-				ci.retryDelay.Add(int64(delay))
+				delay := st.BeginTime.Sub(time.Unix(0, lastEndTime))
+				if delay > 0 {
+					ci.retryDelay.Add(int64(delay))
+				}
 			}
 		}
 
@@ -274,7 +276,7 @@ func (h *clientMetricsHandler) processRPCEvent(ctx context.Context, s stats.RPCS
 		if ci != nil {
 			active := ci.activeAttempts.Add(-1)
 			if active == 0 {
-				ci.lastAttemptEndTime.Store(time.Now().UnixNano())
+				ci.lastAttemptEndTime.Store(st.EndTime.UnixNano())
 			}
 		}
 		h.processRPCEnd(ctx, ai, st)
