@@ -28,7 +28,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"google.golang.org/grpc/balancer"
@@ -1732,8 +1731,6 @@ type serverStream struct {
 	// synchronized.
 	serverHeaderBinlogged bool
 
-	statusWritten atomic.Bool // True if status has been written to the transport.
-
 	mu sync.Mutex // protects trInfo.tr after the service handler runs.
 }
 
@@ -1782,16 +1779,6 @@ func (ss *serverStream) SetTrailer(md metadata.MD) {
 	ss.s.SetTrailer(md)
 }
 
-// writeStatus sends the status of a stream to the client. It uses an atomic
-// CAS to guarantee that the status is written to the transport exactly once,
-// even if called concurrently.
-func (ss *serverStream) writeStatus(st *status.Status) error {
-	if !ss.statusWritten.CompareAndSwap(false, true) {
-		return nil
-	}
-	return ss.s.WriteStatus(st)
-}
-
 func (ss *serverStream) SendMsg(m any) (err error) {
 	defer func() {
 		if ss.trInfo != nil {
@@ -1808,7 +1795,7 @@ func (ss *serverStream) SendMsg(m any) (err error) {
 		}
 		if err != nil && err != io.EOF {
 			st, _ := status.FromError(toRPCErr(err))
-			ss.writeStatus(st)
+			ss.s.WriteStatus(st)
 			// Non-user specified status was sent out. This should be an error
 			// case (as a server side Cancel maybe).
 			//
@@ -1891,7 +1878,7 @@ func (ss *serverStream) RecvMsg(m any) (err error) {
 		}
 		if err != nil && err != io.EOF {
 			st, _ := status.FromError(toRPCErr(err))
-			ss.writeStatus(st)
+			ss.s.WriteStatus(st)
 			// Non-user specified status was sent out. This should be an error
 			// case (as a server side Cancel maybe).
 			//

@@ -1390,7 +1390,7 @@ func (s *Server) processRPC(ctx context.Context, stream *transport.ServerStream,
 		ss.decompressorV1 = encoding.GetCompressor(rc)
 		if ss.decompressorV1 == nil {
 			st := status.Newf(codes.Unimplemented, "grpc: Decompressor is not installed for grpc-encoding %q", rc)
-			ss.writeStatus(st)
+			ss.s.WriteStatus(st)
 			return st.Err()
 		}
 	}
@@ -1473,7 +1473,7 @@ func (s *Server) processRPC(ctx context.Context, stream *transport.ServerStream,
 				binlog.Log(ctx, st)
 			}
 		}
-		if err := ss.writeStatus(appStatus); err != nil {
+		if err := ss.s.WriteStatus(appStatus); err != nil {
 			channelz.Warningf(logger, s.channelz, "grpc: Server.processRPC failed to write status: %v", err)
 		}
 		return appErr
@@ -1492,7 +1492,7 @@ func (s *Server) processRPC(ctx context.Context, stream *transport.ServerStream,
 			binlog.Log(ctx, st)
 		}
 	}
-	if err := ss.writeStatus(statusOK); err != nil {
+	if err := ss.s.WriteStatus(statusOK); err != nil {
 		channelz.Warningf(logger, s.channelz, "grpc: Server.processRPC failed to write status: %v", err)
 	}
 	return err
