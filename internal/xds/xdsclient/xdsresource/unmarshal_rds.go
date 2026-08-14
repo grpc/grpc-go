@@ -34,7 +34,6 @@ import (
 
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	v3matcherpb "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
-	v3typepb "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 )
 
 func unmarshalRouteConfigResource(r *anypb.Any, opts *xdsclient.DecodeOptions) (string, RouteConfigUpdate, error) {
@@ -306,24 +305,11 @@ func routesProtoToSlice(routes []*v3routepb.Route, csps map[string]clusterspecif
 		}
 
 		if fr := match.GetRuntimeFraction(); fr != nil {
-			d := fr.GetDefaultValue()
-			// Scale the numerator to parts-per-million for the fraction matcher.
-			// The numerator comes from the control plane, so a large value would
-			// overflow the uint32 during scaling and wrap around to a small
-			// fraction. Compute in uint64 and cap at 1000000 (100%).
-			frac := uint64(d.GetNumerator())
-			switch d.GetDenominator() {
-			case v3typepb.FractionalPercent_HUNDRED:
-				frac *= 10000
-			case v3typepb.FractionalPercent_TEN_THOUSAND:
-				frac *= 100
-			case v3typepb.FractionalPercent_MILLION:
+			fp, err := NewFractionalPercent(fr.GetDefaultValue())
+			if err != nil {
+				return nil, nil, fmt.Errorf("route %+v has an invalid runtime_fraction: %v", r, err)
 			}
-			if frac > 1000000 {
-				frac = 1000000
-			}
-			n := uint32(frac)
-			route.Fraction = &n
+			route.Fraction = &fp.PPM
 		}
 
 		switch r.GetAction().(type) {
