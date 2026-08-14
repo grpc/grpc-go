@@ -241,7 +241,8 @@ func (es *endpointSharding) allowUpdatesFromChildren() {
 
 // updateStateLocked updates this component's state. It sends the aggregated
 // state, and a picker with round robin behavior with all the child states
-// present if needed.
+// present if needed. This method must only be called when inhibitChildUpdates
+// is false.
 //
 // Caller must hold es.mu.
 func (es *endpointSharding) updateStateLocked() {
