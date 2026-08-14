@@ -23,7 +23,6 @@ import (
 
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/internal/xds/clients/xdsclient"
-	"google.golang.org/grpc/internal/xds/httpfilter"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource/version"
 )
 
@@ -42,8 +41,7 @@ func (d *listenerResourceDecoder) Decode(resource *xdsclient.AnyProto, opts xdsc
 	if opts.ServerConfig != nil {
 		serverCfg = d.serverConfigs[*opts.ServerConfig]
 	}
-	parseOpts := httpfilter.ParseOptions{BootstrapConfig: d.bootstrapConfig, ServerConfig: serverCfg}
-	name, listener, err := unmarshalListenerResource(resource.ToAny(), &opts, parseOpts)
+	name, listener, err := unmarshalListenerResource(resource.ToAny(), d.bootstrapConfig, serverCfg)
 	if name == "" {
 		// Name is unset only when protobuf deserialization fails.
 		return nil, err
