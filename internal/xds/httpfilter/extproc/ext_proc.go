@@ -21,6 +21,7 @@ package extproc
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -429,7 +430,7 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 	if csCommon.procStream, err = procClient.Process(procCtx, grpc.OnFinish(func(error) {
 		i.procClient.Decrement()
 	})); err != nil {
-		return csCommon.handleInitError(fmt.Errorf("failed to create a stream to external processor: %v", err), newStream, opts...)
+		return csCommon.handleInitError(fmt.Errorf("failed to create a stream to external processor: %w", err), newStream, opts...)
 	}
 
 	// Observability mode.
@@ -459,7 +460,7 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 		// headers to the external processor server.
 		if i.config.processingModes.requestHeaderMode == modeSend {
 			if err = ocs.sendToProcessor(ocs.requestHeaders(outgoingMD, added)); err != nil {
-				return ocs.handleInitError(fmt.Errorf("failed to send client headers to external processor server: %v", err), newStream, opts...)
+				return ocs.handleInitError(fmt.Errorf("failed to send client headers to external processor server: %w", err), newStream, opts...)
 			}
 		}
 
@@ -491,7 +492,7 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 			if err == io.EOF {
 				_, err = cs.procStream.Recv()
 			}
-			return cs.handleInitError(err, newStream, opts...)
+			return cs.handleInitError(fmt.Errorf("failed to send client headers to external processor server: %w", err), newStream, opts...)
 		}
 	} else {
 		if err = cs.createDataplaneStream(cs.ctx, newStream, opts); err != nil {
@@ -555,10 +556,14 @@ func (cs *commonStream) recordMetric(handle *estats.Float64HistoHandle, duration
 // processor stream in NewStream. In deny mode, it returns an internal error. In
 // allow mode, it bypasses the external processor and creates and returns the
 // dataplane stream directly.
+//
+// The error passed into handleInitError is a wrapped error and must not be
+// returned directly to the caller to avoid exposing it as part of the public
+// API.
 func (cs *commonStream) handleInitError(err error, newStream func(context.Context, ...grpc.CallOption) (grpc.ClientStream, error), opts ...grpc.CallOption) (grpc.ClientStream, error) {
 	cs.procCancel()
 
-	if err != io.EOF && !cs.config.failureModeAllow {
+	if !errors.Is(err, io.EOF) && !cs.config.failureModeAllow {
 		cs.cancel()
 		return nil, status.Errorf(codes.Internal, "extproc: %v", err)
 	}
