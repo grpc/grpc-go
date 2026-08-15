@@ -107,7 +107,7 @@ func validateBodyProcessingMode(mode *v3procfilterpb.ProcessingMode) error {
 	return nil
 }
 
-func (builder) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, error) {
+func (builder) ParseFilterConfig(cfg proto.Message, _ httpfilter.ParseOptions) (httpfilter.FilterConfig, error) {
 	m, ok := cfg.(*anypb.Any)
 	if !ok {
 		return nil, fmt.Errorf("extproc: error parsing config %v: unknown type %T, want *anypb.Any", cfg, cfg)
@@ -171,7 +171,7 @@ func (builder) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, er
 	}, nil
 }
 
-func (builder) ParseFilterConfigOverride(ov proto.Message) (httpfilter.FilterConfig, error) {
+func (builder) ParseFilterConfigOverride(ov proto.Message, _ httpfilter.ParseOptions) (httpfilter.FilterConfig, error) {
 	m, ok := ov.(*anypb.Any)
 	if !ok {
 		return nil, fmt.Errorf("extproc: error parsing override %v: unknown type %T, want *anypb.Any", ov, ov)

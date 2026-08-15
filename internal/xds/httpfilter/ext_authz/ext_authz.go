@@ -89,7 +89,7 @@ func grpcStatusCode(httpStatus int32) codes.Code {
 	return codes.Unknown
 }
 
-func (builder) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, error) {
+func (builder) ParseFilterConfig(cfg proto.Message, _ httpfilter.ParseOptions) (httpfilter.FilterConfig, error) {
 	m, ok := cfg.(*anypb.Any)
 	if !ok {
 		return nil, fmt.Errorf("extauthz: error parsing config %v: unknown type %T, want *anypb.Any", cfg, cfg)
@@ -166,7 +166,7 @@ func (builder) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, er
 // resource validation, no filter configuration object is returned. Per-route
 // disabling is supported via the generic FilterConfig wrapper mechanism rather
 // than the ExtAuthzPerRoute.disabled field directly.
-func (builder) ParseFilterConfigOverride(overrideCfg proto.Message) (httpfilter.FilterConfig, error) {
+func (builder) ParseFilterConfigOverride(overrideCfg proto.Message, _ httpfilter.ParseOptions) (httpfilter.FilterConfig, error) {
 	m, ok := overrideCfg.(*anypb.Any)
 	if !ok {
 		return nil, fmt.Errorf("extauthz: error parsing override config %v: unknown type %T, want *anypb.Any", overrideCfg, overrideCfg)
