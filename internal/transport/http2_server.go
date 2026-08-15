@@ -599,7 +599,7 @@ func (t *http2Server) operateHeaders(ctx context.Context, frame *http2.MetaHeade
 		cancelUpdated := make(chan struct{})
 		timer := internal.TimeAfterFunc(timeout, func() {
 			<-cancelUpdated
-			t.closeStream(s, true, http2.ErrCodeCancel, false)
+			t.closeStream(s, true, http2.ErrCodeCancel, false, status.New(codes.DeadlineExceeded, context.DeadlineExceeded.Error()))
 		})
 		oldCancel := s.cancel
 		s.cancel = func() {
@@ -654,7 +654,7 @@ func (t *http2Server) HandleStreams(ctx context.Context, handle func(*ServerStre
 				s := t.activeStreams[se.StreamID]
 				t.mu.Unlock()
 				if s != nil {
-					t.closeStream(s, true, se.Code, false)
+					t.closeStream(s, true, se.Code, false, statusFromHTTP2Error(se.Code, se.Error()))
 				} else {
 					t.controlBuf.put(&cleanupStream{
 						streamID: se.StreamID,
@@ -799,12 +799,12 @@ func (t *http2Server) handleData(f *parsedDataFrame) {
 		return
 	}
 	if s.getState() == streamReadDone {
-		t.closeStream(s, true, http2.ErrCodeStreamClosed, false)
+		t.closeStream(s, true, http2.ErrCodeStreamClosed, false, status.New(codes.Internal, "transport: received data after the stream was closed"))
 		return
 	}
 	if size > 0 {
 		if err := s.fc.onData(size); err != nil {
-			t.closeStream(s, true, http2.ErrCodeFlowControl, false)
+			t.closeStream(s, true, http2.ErrCodeFlowControl, false, statusFromHTTP2Error(http2.ErrCodeFlowControl, err.Error()))
 			return
 		}
 		dataLen := f.data.Len()
@@ -831,7 +831,8 @@ func (t *http2Server) handleData(f *parsedDataFrame) {
 func (t *http2Server) handleRSTStream(f *http2.RSTStreamFrame) {
 	// If the stream is not deleted from the transport's active streams map, then do a regular close stream.
 	if s, ok := t.getStream(f); ok {
-		t.closeStream(s, false, 0, false)
+		st := statusFromHTTP2Error(f.ErrCode, fmt.Sprintf("stream terminated by RST_STREAM with error code: %v", f.ErrCode))
+		t.closeStream(s, false, 0, false, st)
 		return
 	}
 	// If the stream is already deleted from the active streams map, then put a cleanupStream item into controlbuf to delete the stream from loopy writer's established streams map.
@@ -1061,7 +1062,7 @@ func (t *http2Server) writeHeaderLocked(s *ServerStream) error {
 		if err != nil {
 			return err
 		}
-		t.closeStream(s, true, http2.ErrCodeInternal, false)
+		t.closeStream(s, true, http2.ErrCodeInternal, false, status.Convert(ErrHeaderListSizeLimitViolation))
 		return ErrHeaderListSizeLimitViolation
 	}
 	if t.stats != nil {
@@ -1132,7 +1133,7 @@ func (t *http2Server) writeStatus(s *ServerStream, st *status.Status) error {
 		if err != nil {
 			return err
 		}
-		t.closeStream(s, true, http2.ErrCodeInternal, false)
+		t.closeStream(s, true, http2.ErrCodeInternal, false, status.Convert(ErrHeaderListSizeLimitViolation))
 		return ErrHeaderListSizeLimitViolation
 	}
 	// Send a RST_STREAM after the trailers if the client has not already half-closed.
@@ -1352,7 +1353,10 @@ func (t *http2Server) finishStream(s *ServerStream, rst bool, rstCode http2.ErrC
 }
 
 // closeStream clears the footprint of a stream when the stream is not needed any more.
-func (t *http2Server) closeStream(s *ServerStream, rst bool, rstCode http2.ErrCode, eosReceived bool) {
+func (t *http2Server) closeStream(s *ServerStream, rst bool, rstCode http2.ErrCode, eosReceived bool, st *status.Status) {
+	// Record the status first so streamDone cannot be observed without its
+	// corresponding close status.
+	s.setCloseStatus(st)
 	// In case stream sending and receiving are invoked in separate
 	// goroutines (e.g., bi-directional streaming), cancel needs to be
 	// called to interrupt the potential blocking on other goroutines.

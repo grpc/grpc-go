@@ -165,10 +165,9 @@ func (s) TestCancelWhileRecvingWithCompression(t *testing.T) {
 	}
 }
 
-// TestSendCompressorSetupAfterStreamDone verifies that a compressed RPC whose
-// stream finishes before response compressor setup reports the context error
-// when present, and otherwise preserves the Internal compressor setup error.
-func (s) TestSendCompressorSetupAfterStreamDone(t *testing.T) {
+// TestSendCompressorSetupDuringStreamClose verifies the status reported when
+// response compressor setup races with the end of a compressed RPC.
+func (s) TestSendCompressorSetupDuringStreamClose(t *testing.T) {
 	for _, test := range []struct {
 		name string
 		call func(context.Context, testgrpc.TestServiceClient) error
@@ -195,15 +194,19 @@ func (s) TestSendCompressorSetupAfterStreamDone(t *testing.T) {
 			},
 		},
 	} {
-		for _, contextTest := range []struct {
+		for _, setupTest := range []struct {
 			name          string
 			detachContext bool
-			wantCode      codes.Code
 		}{
-			{name: "canceled_context", wantCode: codes.Canceled},
-			{name: "active_context", detachContext: true, wantCode: codes.Internal},
+			{
+				name: "canceled_before_setup",
+			},
+			{
+				name:          "canceled_before_setup_with_detached_context",
+				detachContext: true,
+			},
 		} {
-			t.Run(test.name+"/"+contextTest.name, func(t *testing.T) {
+			t.Run(test.name+"/"+setupTest.name, func(t *testing.T) {
 				headerSeen := make(chan struct{})
 				serverDone := make(chan error, 1)
 				handlerCalled := make(chan struct{}, 1)
@@ -211,8 +214,7 @@ func (s) TestSendCompressorSetupAfterStreamDone(t *testing.T) {
 				statsHandler := &testutils.StubStatsHandler{
 					TagRPCF: func(ctx context.Context, _ *stats.RPCTagInfo) context.Context {
 						transportCtx = ctx
-						if contextTest.detachContext {
-							// Keep processing active after the transport stream is canceled.
+						if setupTest.detachContext {
 							return context.WithoutCancel(ctx)
 						}
 						return ctx
@@ -267,7 +269,7 @@ func (s) TestSendCompressorSetupAfterStreamDone(t *testing.T) {
 
 				select {
 				case err := <-serverDone:
-					if got, want := status.Code(err), contextTest.wantCode; got != want {
+					if got, want := status.Code(err), codes.Canceled; got != want {
 						t.Fatalf("Server stats ended with code %v, want %v: %v", got, want, err)
 					}
 				case <-time.After(defaultTestTimeout):

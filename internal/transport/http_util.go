@@ -40,6 +40,7 @@ import (
 	imem "google.golang.org/grpc/internal/mem"
 	"google.golang.org/grpc/internal/transport/readyreader"
 	"google.golang.org/grpc/mem"
+	"google.golang.org/grpc/status"
 )
 
 const (
@@ -87,6 +88,14 @@ var (
 		http.StatusGatewayTimeout: codes.Unavailable,
 	}
 )
+
+func statusFromHTTP2Error(code http2.ErrCode, msg string) *status.Status {
+	statusCode, ok := http2ErrConvTab[code]
+	if !ok {
+		statusCode = codes.Unknown
+	}
+	return status.New(statusCode, msg)
+}
 
 var grpcStatusDetailsBinHeader = "grpc-status-details-bin"
 
