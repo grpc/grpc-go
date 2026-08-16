@@ -42,6 +42,7 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/internal/xds/bootstrap"
+	internalserver "google.golang.org/grpc/internal/xds/server"
 	"google.golang.org/grpc/internal/xds/xdsclient"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource/version"
 
@@ -227,34 +228,92 @@ func (s) TestNewServer_Failure(t *testing.T) {
 	}
 }
 
-func (s) TestNewServer_ResourceNameFuncOverridesMissingTemplate(t *testing.T) {
-	xdsCreds, err := xds.NewServerCredentials(xds.ServerOptions{FallbackCreds: insecure.NewCredentials()})
-	if err != nil {
-		t.Fatalf("failed to create xds server credentials: %v", err)
-	}
+func (s) TestServer_ResourceNameFuncOverridesMissingTemplate(t *testing.T) {
+	const wantResourceName = "xdstp://foo/bar"
+	ldsRequestCh := make(chan []string, 1)
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
+		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
+			if req.GetTypeUrl() == version.V3ListenerURL {
+				select {
+				case ldsRequestCh <- req.GetResourceNames():
+				default:
+				}
+			}
+			return nil
+		},
+	})
+
 	bs, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
 		Servers: []byte(fmt.Sprintf(`[{
 			"server_uri": %q,
 			"channel_creds": [{"type": "insecure"}]
-		}]`, nonExistentManagementServer)),
+		}]`, mgmtServer.Address)),
 		Node: []byte(fmt.Sprintf(`{"id": "%s"}`, uuid.New().String())),
-		CertificateProviders: map[string]json.RawMessage{
-			"cert-provider-instance": json.RawMessage("{}"),
-		},
 	})
 	if err != nil {
 		t.Fatalf("Failed to create bootstrap configuration: %v", err)
 	}
 
+	fs := newFakeGRPCServer()
+	origNewGRPCServer := newGRPCServer
+	newGRPCServer = func(...grpc.ServerOption) grpcServer { return fs }
+	defer func() { newGRPCServer = origNewGRPCServer }()
+
+	addrCh := make(chan net.Addr, 1)
 	srv, err := NewGRPCServer(
-		grpc.Creds(xdsCreds),
-		ResourceNameFunc(func(_ net.Addr) string { return "xdstp://foo/bar" }),
+		internalserver.ResourceNameFunc(func(addr net.Addr) string {
+			addrCh <- addr
+			return wantResourceName
+		}),
 		BootstrapContentsForTesting(bs),
 	)
 	if err != nil {
 		t.Fatalf("NewGRPCServer() failed: %v", err)
 	}
+	stopped := false
+	defer func() {
+		if !stopped {
+			srv.Stop()
+		}
+	}()
+
+	lis, err := testutils.LocalTCPListener()
+	if err != nil {
+		t.Fatalf("testutils.LocalTCPListener() failed: %v", err)
+	}
+	serveErrCh := make(chan error, 1)
+	go func() { serveErrCh <- srv.Serve(lis) }()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	select {
+	case gotAddr := <-addrCh:
+		if gotAddr.String() != lis.Addr().String() {
+			t.Fatalf("ResourceNameFunc() called with address %q, want %q", gotAddr, lis.Addr())
+		}
+	case <-ctx.Done():
+		t.Fatal("Timeout waiting for ResourceNameFunc to be called")
+	}
+
+	select {
+	case gotNames := <-ldsRequestCh:
+		if diff := cmp.Diff([]string{wantResourceName}, gotNames); diff != "" {
+			t.Fatalf("LDS resource names mismatch (-want +got):\n%s", diff)
+		}
+	case <-ctx.Done():
+		t.Fatal("Timeout waiting for an LDS request")
+	}
+
 	srv.Stop()
+	stopped = true
+	select {
+	case err := <-serveErrCh:
+		if err != nil {
+			t.Fatalf("Serve() returned error: %v", err)
+		}
+	case <-ctx.Done():
+		t.Fatal("Timeout waiting for Serve() to return")
+	}
 }
 
 func (s) TestRegisterService(t *testing.T) {

@@ -129,6 +129,10 @@ func (s *GRPCServer) handleServerOptions(opts []grpc.ServerOption) {
 	for _, opt := range opts {
 		if o, ok := opt.(*serverOption); ok {
 			o.apply(so)
+			continue
+		}
+		if f, ok := server.ResourceNameFuncFromServerOption(opt); ok {
+			so.resourceNameFunc = f
 		}
 	}
 	s.opts = so
