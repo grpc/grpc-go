@@ -242,24 +242,6 @@ func (s *GRPCServer) GracefulStop() {
 	}
 }
 
-// UnderlyingServer returns the underlying gRPC server. This is useful for
-// wrappers that need access to the concrete *grpc.Server, for example, to
-// use with grpcweb.
-//
-// It returns nil if the underlying server is not a *grpc.Server (e.g., in
-// unit tests where the server is faked).
-//
-// # Experimental
-//
-// Notice: This API is EXPERIMENTAL and may be changed or removed in a
-// later release.
-func (s *GRPCServer) UnderlyingServer() *grpc.Server {
-	if srv, ok := s.gs.(*grpc.Server); ok {
-		return srv
-	}
-	return nil
-}
-
 // xdsUnaryInterceptor is the unary interceptor added to the gRPC server to
 // perform any xDS specific functionality on unary RPCs.
 func xdsUnaryInterceptor(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp any, err error) {
