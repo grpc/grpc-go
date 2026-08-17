@@ -30,6 +30,7 @@ import (
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	access_tokenpb "github.com/envoyproxy/go-control-plane/envoy/extensions/grpc_service/call_credentials/access_token/v3"
 	xdspb "github.com/envoyproxy/go-control-plane/envoy/extensions/grpc_service/channel_credentials/xds/v3"
+	imetadata "google.golang.org/grpc/internal/metadata"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
@@ -149,20 +150,22 @@ func (g *GrpcService) Parse(gs *v3corepb.GrpcService) (Config, error) {
 	}, nil
 }
 
-// validateTargetURI verifies that the target URI uses a registered resolver
-// scheme. A target with an explicit "scheme://" prefix must use a registered
-// scheme; otherwise the default resolver scheme is assumed.
+// validateTargetURI verifies that the target URI can be handled by a
+// registered resolver.
 func validateTargetURI(targetURI string) error {
-	scheme := resolver.GetDefaultScheme()
-	if strings.Contains(targetURI, "://") {
-		u, err := url.Parse(targetURI)
-		if err != nil {
-			return fmt.Errorf("grpcservice: target_uri %q is invalid: %v", targetURI, err)
-		}
-		scheme = u.Scheme
+	// Mirror the scheme resolution performed by grpc.NewClient: use the
+	// target's scheme if it parses and is registered; otherwise fall back
+	// to the default scheme with the whole target as the endpoint.
+	if u, err := url.Parse(targetURI); err == nil && resolver.Get(u.Scheme) != nil {
+		return nil
 	}
-	if resolver.Get(scheme) == nil {
-		return fmt.Errorf("grpcservice: target_uri %q uses unregistered resolver scheme %q", targetURI, scheme)
+	canonicalTarget := resolver.GetDefaultScheme() + ":///" + targetURI
+	u, err := url.Parse(canonicalTarget)
+	if err != nil {
+		return fmt.Errorf("grpcservice: target_uri %q is invalid: %v", targetURI, err)
+	}
+	if resolver.Get(u.Scheme) == nil {
+		return fmt.Errorf("grpcservice: no resolver for default scheme %q", u.Scheme)
 	}
 	return nil
 }
@@ -201,7 +204,7 @@ func parseInitialMetadata(headers []*v3corepb.HeaderValue) (metadata.MD, error) 
 		if err := validateHeaderKey(key); err != nil {
 			return nil, fmt.Errorf("grpcservice: invalid header key %q: %v", key, err)
 		}
-		if err := validateHeaderValue(val); err != nil {
+		if err := validateHeaderValue(key, val); err != nil {
 			return nil, fmt.Errorf("grpcservice: invalid value for header key %q: %v", key, err)
 		}
 		md.Append(key, val)
@@ -283,33 +286,25 @@ func extractCallCredentials(plugins []*anypb.Any) ([]bootstrap.CallCredsConfig, 
 
 func validateHeaderKey(key string) error {
 	switch {
-	case key == "":
-		return fmt.Errorf("header key cannot be empty")
 	case len(key) > maxHeaderKeyLen:
 		return fmt.Errorf("header key exceeds maximum allowed length of %d", maxHeaderKeyLen)
 	case key == "host":
 		return fmt.Errorf("header key cannot be %q", "host")
 	case strings.HasPrefix(key, ":"):
+		// imetadata.ValidateKey ignores pseudo-headers, but gRFC A102
+		// requires them to be rejected.
 		return fmt.Errorf("header key cannot start with %q", ":")
 	case strings.HasPrefix(key, "grpc-"):
 		return fmt.Errorf("header key cannot start with %q", "grpc-")
 	}
-	for _, ch := range key {
-		if !((ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '-' || ch == '_' || ch == '.') {
-			return fmt.Errorf("header key contains invalid character %q", ch)
-		}
-	}
-	return nil
+	return imetadata.ValidateKey(key)
 }
 
-func validateHeaderValue(val string) error {
+func validateHeaderValue(key, val string) error {
 	if len(val) > maxHeaderValueLen {
 		return fmt.Errorf("header value exceeds maximum allowed length of %d", maxHeaderValueLen)
 	}
-	for _, ch := range val {
-		if ch != '\t' && (ch < 32 || ch > 126) {
-			return fmt.Errorf("header value contains invalid character %q", ch)
-		}
-	}
-	return nil
+	// ValidatePair skips value validation for "-bin" keys, which may carry
+	// arbitrary bytes.
+	return imetadata.ValidatePair(key, val)
 }
