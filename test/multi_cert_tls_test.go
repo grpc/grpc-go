@@ -287,7 +287,7 @@ func (s) TestServerMultipleCerts_TLS13_MutualTLS(t *testing.T) {
 
 	var lastClientCertAlgo x509.PublicKeyAlgorithm
 	var lastTLSVersion uint16
-	unaryInterceptor := func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+	unaryInterceptor := func(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		if p, ok := peer.FromContext(ctx); ok {
 			if tlsInfo, ok := p.AuthInfo.(credentials.TLSInfo); ok && len(tlsInfo.State.PeerCertificates) > 0 {
 				lastClientCertAlgo = tlsInfo.State.PeerCertificates[0].PublicKeyAlgorithm
@@ -402,7 +402,7 @@ func (s) TestServerMultipleCerts_TLS12_MutualTLS(t *testing.T) {
 	ecdsaClientCert := loadTestCert(t, "x509/client_ecdsa_cert.pem", "x509/client_ecdsa_key.pem")
 
 	var lastClientCertAlgo x509.PublicKeyAlgorithm
-	unaryInterceptor := func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+	unaryInterceptor := func(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		if p, ok := peer.FromContext(ctx); ok {
 			if tlsInfo, ok := p.AuthInfo.(credentials.TLSInfo); ok && len(tlsInfo.State.PeerCertificates) > 0 {
 				lastClientCertAlgo = tlsInfo.State.PeerCertificates[0].PublicKeyAlgorithm
