@@ -24,6 +24,8 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -231,5 +233,45 @@ func BenchmarkChainStreamInterceptor(b *testing.B) {
 				}
 			}
 		})
+	}
+}
+
+// Test verifies that writeStatus writes the status exactly once.
+func (s) TestServerStream_WriteStatus_Concurrency(t *testing.T) {
+	// To avoid setting up a heavy transport layer, this test leaves
+	// serverStream.s as nil. The first goroutine to successfully CAS will
+	// attempt to call WriteStatus on the nil stream, triggering a panic. This
+	// serves as our signal that the CAS check was bypassed. All subsequent or
+	// concurrent calls must fail the CAS and return without panicking.
+	ss := &serverStream{}
+
+	const numGoroutines = 100
+	var panicCount, successCount atomic.Int32
+	start := make(chan struct{})
+	var wg sync.WaitGroup
+	for range numGoroutines {
+		wg.Go(func() {
+			<-start // synchronize start
+
+			defer func() {
+				if r := recover(); r != nil {
+					panicCount.Add(1)
+				}
+			}()
+
+			if err := ss.writeStatus(nil); err == nil {
+				successCount.Add(1)
+			}
+		})
+	}
+
+	close(start) // start all goroutines
+	wg.Wait()
+
+	if panicCount.Load() != 1 {
+		t.Fatalf("Got %d panics, want exactly 1", panicCount.Load())
+	}
+	if successCount.Load() != numGoroutines-1 {
+		t.Fatalf("Got %d successful calls, want %d", successCount.Load(), numGoroutines-1)
 	}
 }

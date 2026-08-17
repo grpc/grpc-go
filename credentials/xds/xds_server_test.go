@@ -97,12 +97,12 @@ func (s) TestServerCredsWithoutFallback(t *testing.T) {
 
 type wrapperConn struct {
 	net.Conn
-	xdsHI            *grpcsync.RefCounted[xdsinternal.HandshakeInfo]
+	xdsHI            *grpcsync.RefCounted[*xdsinternal.HandshakeInfo]
 	deadline         time.Time
 	handshakeInfoErr error
 }
 
-func (wc *wrapperConn) XDSHandshakeInfo() (*grpcsync.RefCounted[xdsinternal.HandshakeInfo], error) {
+func (wc *wrapperConn) XDSHandshakeInfo() (*grpcsync.RefCounted[*xdsinternal.HandshakeInfo], error) {
 	return wc.xdsHI, wc.handshakeInfoErr
 }
 
@@ -110,7 +110,7 @@ func (wc *wrapperConn) GetDeadline() time.Time {
 	return wc.deadline
 }
 
-func newWrappedConn(conn net.Conn, xdsHI *grpcsync.RefCounted[xdsinternal.HandshakeInfo], deadline time.Time) *wrapperConn {
+func newWrappedConn(conn net.Conn, xdsHI *grpcsync.RefCounted[*xdsinternal.HandshakeInfo], deadline time.Time) *wrapperConn {
 	return &wrapperConn{Conn: conn, xdsHI: xdsHI, deadline: deadline}
 }
 
@@ -445,7 +445,7 @@ func (s) TestServerCredsProviderSwitch(t *testing.T) {
 	// to perform TLS handshake on incoming connections.
 	ts := newTestServerWithHandshakeFunc(ctx, func(rawConn net.Conn) handshakeResult {
 		cnt++
-		var hi *grpcsync.RefCounted[xdsinternal.HandshakeInfo]
+		var hi *grpcsync.RefCounted[*xdsinternal.HandshakeInfo]
 		if cnt == 1 {
 			// Create a HandshakeInfo which has a root provider which does not match
 			// the certificate sent by the client.

@@ -726,6 +726,18 @@ func (s) TestRetryStats(t *testing.T) {
 		handler.s[pIdx], handler.s[tIdx] = handler.s[tIdx], handler.s[pIdx]
 	}
 
+	// The transparent retry attempt has a similar race, but between sending
+	// the payload and receiving the trailer.  OutPayload is reported once the
+	// data frame is queued on the transport, not once it is written, so the
+	// server can respond and the trailer can be reported first.  Adjust the
+	// received stats accordingly if necessary.
+	const tIdx2, pIdx2 = 6, 7
+	_, okT2 := handler.s[tIdx2].(*stats.InTrailer)
+	_, okP2 := handler.s[pIdx2].(*stats.OutPayload)
+	if okT2 && okP2 {
+		handler.s[pIdx2], handler.s[tIdx2] = handler.s[tIdx2], handler.s[pIdx2]
+	}
+
 	for i := range handler.s {
 		w, s := want[i], handler.s[i]
 

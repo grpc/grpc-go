@@ -442,6 +442,9 @@ func (s) TestClientServerHandshake(t *testing.T) {
 		if params.ServerName == "" {
 			return nil, errors.New("client side server name should have a value")
 		}
+		if params.ConnectionState.CurveID == 0 {
+			return nil, errors.New("client side key exchange algorithm should not be zero")
+		}
 		// "foo.bar.com" is the common name on server certificate server_cert_1.pem.
 		if len(params.VerifiedChains) > 0 && (params.Leaf == nil || params.Leaf.Subject.CommonName != "foo.bar.com") {
 			return nil, errors.New("client side params parsing error")
@@ -458,6 +461,9 @@ func (s) TestClientServerHandshake(t *testing.T) {
 	serverVerifyFunc := func(params *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
 		if params.ServerName != "" {
 			return nil, errors.New("server side server name should not have a value")
+		}
+		if params.ConnectionState.CurveID == 0 {
+			return nil, errors.New("server side key exchange algorithm should not be zero")
 		}
 		// "foo.bar.hoo.com" is the common name on client certificate client_cert_1.pem.
 		if len(params.VerifiedChains) > 0 && (params.Leaf == nil || params.Leaf.Subject.CommonName != "foo.bar.hoo.com") {
@@ -501,6 +507,7 @@ func (s) TestClientServerHandshake(t *testing.T) {
 		clientRootProvider         certprovider.Provider
 		clientIdentityProvider     certprovider.Provider
 		clientRevocationOptions    *RevocationOptions
+		clientCurvePreferences     []tls.CurveID
 		clientExpectHandshakeError bool
 		serverMutualTLS            bool
 		serverCert                 []tls.Certificate
@@ -512,6 +519,7 @@ func (s) TestClientServerHandshake(t *testing.T) {
 		serverRootProvider         certprovider.Provider
 		serverIdentityProvider     certprovider.Provider
 		serverRevocationOptions    *RevocationOptions
+		serverCurvePreferences     []tls.CurveID
 		serverExpectError          bool
 	}{
 		// Client: nil setting except verifyFuncGood
@@ -843,6 +851,78 @@ func (s) TestClientServerHandshake(t *testing.T) {
 			serverVerificationType:  CertVerification,
 			serverExpectError:       true,
 		},
+		{
+			desc:          "Client and server set CurvePreferences to CurveP256",
+			clientCert:    []tls.Certificate{cs.ClientCert1},
+			clientGetRoot: getRootCertificatesForClient,
+			clientVerifyFunc: func(params *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
+				if params.ConnectionState.CurveID != tls.CurveP256 {
+					return nil, fmt.Errorf("client got CurveID %v, want %v", params.ConnectionState.CurveID, tls.CurveP256)
+				}
+				return &PostHandshakeVerificationResults{}, nil
+			},
+			clientVerificationType: CertVerification,
+			clientCurvePreferences: []tls.CurveID{tls.CurveP256},
+			serverMutualTLS:        true,
+			serverCert:             []tls.Certificate{cs.ServerCert1},
+			serverRoot:             cs.ServerTrust1,
+			serverVerifyFunc: func(params *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
+				if params.ConnectionState.CurveID != tls.CurveP256 {
+					return nil, fmt.Errorf("server got CurveID %v, want %v", params.ConnectionState.CurveID, tls.CurveP256)
+				}
+				return &PostHandshakeVerificationResults{}, nil
+			},
+			serverVerificationType: CertVerification,
+			serverCurvePreferences: []tls.CurveID{tls.CurveP256},
+		},
+		{
+			desc:          "Client and server set CurvePreferences to X25519",
+			clientCert:    []tls.Certificate{cs.ClientCert1},
+			clientGetRoot: getRootCertificatesForClient,
+			clientVerifyFunc: func(params *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
+				if params.ConnectionState.CurveID != tls.X25519 {
+					return nil, fmt.Errorf("client got CurveID %v, want %v", params.ConnectionState.CurveID, tls.X25519)
+				}
+				return &PostHandshakeVerificationResults{}, nil
+			},
+			clientVerificationType: CertVerification,
+			clientCurvePreferences: []tls.CurveID{tls.X25519},
+			serverMutualTLS:        true,
+			serverCert:             []tls.Certificate{cs.ServerCert1},
+			serverRoot:             cs.ServerTrust1,
+			serverVerifyFunc: func(params *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
+				if params.ConnectionState.CurveID != tls.X25519 {
+					return nil, fmt.Errorf("server got CurveID %v, want %v", params.ConnectionState.CurveID, tls.X25519)
+				}
+				return &PostHandshakeVerificationResults{}, nil
+			},
+			serverVerificationType: CertVerification,
+			serverCurvePreferences: []tls.CurveID{tls.X25519},
+		},
+		{
+			desc:          "Client and server set CurvePreferences to X25519MLKEM768",
+			clientCert:    []tls.Certificate{cs.ClientCert1},
+			clientGetRoot: getRootCertificatesForClient,
+			clientVerifyFunc: func(params *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
+				if params.ConnectionState.CurveID != tls.X25519MLKEM768 {
+					return nil, fmt.Errorf("client got CurveID %v, want %v", params.ConnectionState.CurveID, tls.X25519MLKEM768)
+				}
+				return &PostHandshakeVerificationResults{}, nil
+			},
+			clientVerificationType: CertVerification,
+			clientCurvePreferences: []tls.CurveID{tls.X25519MLKEM768},
+			serverMutualTLS:        true,
+			serverCert:             []tls.Certificate{cs.ServerCert1},
+			serverRoot:             cs.ServerTrust1,
+			serverVerifyFunc: func(params *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
+				if params.ConnectionState.CurveID != tls.X25519MLKEM768 {
+					return nil, fmt.Errorf("server got CurveID %v, want %v", params.ConnectionState.CurveID, tls.X25519MLKEM768)
+				}
+				return &PostHandshakeVerificationResults{}, nil
+			},
+			serverVerificationType: CertVerification,
+			serverCurvePreferences: []tls.CurveID{tls.X25519MLKEM768},
+		},
 	} {
 		test := test
 		t.Run(test.desc, func(t *testing.T) {
@@ -867,6 +947,7 @@ func (s) TestClientServerHandshake(t *testing.T) {
 				AdditionalPeerVerification: test.serverVerifyFunc,
 				VerificationType:           test.serverVerificationType,
 				RevocationOptions:          test.serverRevocationOptions,
+				CurvePreferences:           test.serverCurvePreferences,
 			}
 			go func(done chan credentials.AuthInfo, lis net.Listener, serverOptions *Options) {
 				serverRawConn, err := lis.Accept()
@@ -910,6 +991,7 @@ func (s) TestClientServerHandshake(t *testing.T) {
 				},
 				VerificationType:  test.clientVerificationType,
 				RevocationOptions: test.clientRevocationOptions,
+				CurvePreferences:  test.clientCurvePreferences,
 			}
 			clientTLS, err := NewClientCreds(clientOptions)
 			if err != nil {
@@ -1128,7 +1210,7 @@ func (s) TestVerifyPeerCertificateZeroCerts(t *testing.T) {
 		isClient:         true,
 		config:           &tls.Config{},
 	}
-	verifyPeerCertificate := buildVerifyFunc(creds, "", nil, &CertificateChains{})
+	verifyPeerCertificate, _ := buildVerifyFunc(creds, "", nil, &CertificateChains{})
 	// Calling verifyPeerCertificate with zero certificates.
 	const wantErr = "no peer certificates presented"
 	if err := verifyPeerCertificate(nil, nil); err == nil || !strings.Contains(err.Error(), wantErr) {

@@ -3155,10 +3155,14 @@ func (s) TestStreamTimeoutBodyPhaseAllow(t *testing.T) {
 
 	extProcConfig := &v3procfilterpb.ExternalProcessor{
 		GrpcService: &v3corepb.GrpcService{
-			Timeout: durationpb.New(defaultTestShortTimeout),
+			// Use 100ms instead of defaultTestShortTimeout (10ms) to protect against
+			// slow connections, for example where the processor RPC fails before the
+			// data plane stream is even connected, which would cause the test to fail
+			// in the header phase itself.
+			Timeout: durationpb.New(100 * time.Millisecond),
 		},
 		ProcessingMode: &v3procfilterpb.ProcessingMode{
-			RequestHeaderMode: v3procfilterpb.ProcessingMode_SEND,
+			RequestHeaderMode: v3procfilterpb.ProcessingMode_SKIP,
 			RequestBodyMode:   v3procfilterpb.ProcessingMode_GRPC,
 		},
 		FailureModeAllow: true,
@@ -4761,5 +4765,419 @@ func verifyMetric(t *testing.T, md stats.MetricsData, wantName string, wantTarge
 	}
 	if md.FloatIncr != wantDuration {
 		t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", wantName, md.FloatIncr, wantDuration)
+	}
+}
+
+// TestExtProcChannelRetention verifies that the refcounted external processor
+// channel remains open while an external processor RPC (Process) is still in
+// flight—even after the dataplane RPC has completed and its channel is closed.
+// Only when the external processor RPC finishes does its OnFinish CallOption
+// drop the reference count to 0 and close the external processor channel.
+func (s) TestExtProcChannelRetention(t *testing.T) {
+	tests := []struct {
+		name              string
+		observabilityMode bool
+	}{
+		{
+			name:              "observability_mode_disabled",
+			observabilityMode: false,
+		},
+		{
+			name:              "observability_mode_enabled",
+			observabilityMode: true,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			blockChan := make(chan struct{})
+			processFunc := func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
+				// Receive response header and respond with no mutations.
+				req, err := stream.Recv()
+				if err != nil {
+					return err
+				}
+				if req.GetRequestHeaders() == nil {
+					return fmt.Errorf("proc server got %v, want response headers", req)
+				}
+				if err := stream.Send(requestHeadersResponse(nil, nil)); err != nil {
+					return err
+				}
+				// Receive response trailers and respond with no mutations.
+				req, err = stream.Recv()
+				if err != nil {
+					return err
+				}
+				if req.GetResponseTrailers() == nil {
+					return fmt.Errorf("proc server got %v, want response trailers", req)
+				}
+				if err := stream.Send(responseTrailersResponse(nil, nil)); err != nil {
+					return err
+				}
+				// Block here so that the external processor RPC remains open after
+				// the dataplane RPC completes.
+				select {
+				case <-blockChan:
+				case <-stream.Context().Done():
+				}
+				return nil
+			}
+			extProcAddr, _ := startTestExtProcessor(t, processFunc)
+
+			closeChan := make(chan struct{})
+
+			// Override CreateExtProcChannel to signal when the channel is closed.
+			origCreate := internal.CreateExtProcChannel
+			internal.CreateExtProcChannel = func(cfg xdsresource.GRPCServiceConfig) (grpc.ClientConnInterface, func() error, error) {
+				cc, err := grpc.NewClient(cfg.TargetURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
+				if err != nil {
+					return nil, nil, err
+				}
+				closeFunc := func() error {
+					close(closeChan)
+					return cc.Close()
+				}
+				return cc, closeFunc, nil
+			}
+			defer func() { internal.CreateExtProcChannel = origCreate }()
+
+			stub := stubserver.StartTestService(t, nil)
+			defer stub.Stop()
+
+			cc, err := setupTestClient(t, extProcAddr, &v3procfilterpb.ExternalProcessor{
+				ProcessingMode: &v3procfilterpb.ProcessingMode{
+					RequestHeaderMode:   v3procfilterpb.ProcessingMode_SEND,
+					ResponseHeaderMode:  v3procfilterpb.ProcessingMode_SKIP,
+					ResponseTrailerMode: v3procfilterpb.ProcessingMode_SEND,
+				},
+				FailureModeAllow:  false,
+				ObservabilityMode: test.observabilityMode,
+			}, stub.Address)
+			if err != nil {
+				t.Fatalf("Failed to dial: %v", err)
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+
+			client := testgrpc.NewTestServiceClient(cc)
+			if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+				t.Fatalf("EmptyCall() failed: %v", err)
+			}
+
+			// The dataplane RPC has completed. Now close the client channel so that
+			// interceptor.Close() is called.
+			cc.Close()
+
+			// Verify that the external processor channel has NOT been closed yet, because
+			// the Process RPC is still blocked in processFunc.
+			select {
+			case <-closeChan:
+				t.Fatalf("Extproc channel closed before Process RPC completed")
+			case <-time.After(defaultTestShortTimeout):
+			}
+
+			// Unblock processFunc so that the Process RPC completes and invokes its
+			// OnFinish CallOption callback.
+			close(blockChan)
+
+			// Verify that the extproc channel is now closed.
+			select {
+			case <-closeChan:
+			case <-time.After(defaultTestTimeout):
+				t.Fatalf("Timeout waiting for extproc channel to close after Process RPC completed")
+			}
+		})
+	}
+}
+
+// TestExtProcChannelRetention_XDSConfigUpdate verifies that when an xDS config
+// update changes the external processor configuration to refer to a different
+// gRPC service (thereby closing the old interceptor), the old external
+// processor channel remains open until any ongoing RPCs on that old channel
+// have completed.
+func (s) TestExtProcChannelRetention_XDSConfigUpdate(t *testing.T) {
+	processFunc := func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
+		// Receive response header and respond with no mutations.
+		req, err := stream.Recv()
+		if err != nil {
+			return err
+		}
+		if req.GetRequestHeaders() == nil {
+			return fmt.Errorf("proc server got %v, want response headers", req)
+		}
+		if err := stream.Send(requestHeadersResponse(nil, nil)); err != nil {
+			return err
+		}
+		// Receive response trailers and respond with no mutations.
+		req, err = stream.Recv()
+		if err != nil {
+			return err
+		}
+		if req.GetResponseTrailers() == nil {
+			return fmt.Errorf("proc server got %v, want response trailers", req)
+		}
+		if err := stream.Send(responseTrailersResponse(nil, nil)); err != nil {
+			return err
+		}
+		return nil
+	}
+
+	tests := []struct {
+		name              string
+		observabilityMode bool
+	}{
+		{
+			name:              "observability_mode_disabled",
+			observabilityMode: false,
+		},
+		{
+			name:              "observability_mode_enabled",
+			observabilityMode: true,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			extProcAddr1, _ := startTestExtProcessor(t, processFunc)
+			extProcAddr2, _ := startTestExtProcessor(t, processFunc)
+
+			closeChan := make(chan string, 1)
+
+			// Override CreateExtProcChannel to signal when a channel is closed and
+			// dial to correct proc server.
+			origCreate := internal.CreateExtProcChannel
+			internal.CreateExtProcChannel = func(cfg xdsresource.GRPCServiceConfig) (grpc.ClientConnInterface, func() error, error) {
+				cc, err := grpc.NewClient(cfg.TargetURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
+				if err != nil {
+					return nil, nil, err
+				}
+				closeFunc := func() error {
+					closeChan <- cfg.TargetURI
+					return cc.Close()
+				}
+				return cc, closeFunc, nil
+			}
+			defer func() { internal.CreateExtProcChannel = origCreate }()
+
+			blockChan := make(chan struct{})
+			enteredChan := make(chan struct{})
+			// EmptyCallF is expected to block until the test unblocks it (by
+			// closing blockChan), while UnaryCallF completes immediately.
+			stub := stubserver.StartTestService(t, &stubserver.StubServer{
+				EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
+					close(enteredChan)
+					select {
+					case <-blockChan:
+					case <-ctx.Done():
+						return nil, ctx.Err()
+					}
+					return &testpb.Empty{}, nil
+				},
+				UnaryCallF: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+					return &testpb.SimpleResponse{}, nil
+				},
+			})
+			defer stub.Stop()
+
+			managementServer, nodeID, _, xdsResolver := setup.ManagementServerAndResolver(t)
+			const serviceName = "test-service"
+
+			updateExtProc := func(extProcAddr string) {
+				resources := e2e.DefaultClientResources(e2e.ResourceParams{
+					DialTarget: serviceName,
+					NodeID:     nodeID,
+					Host:       "localhost",
+					Port:       testutils.ParsePort(t, stub.Address),
+					SecLevel:   e2e.SecurityLevelNone,
+				})
+				hcm := new(v3httppb.HttpConnectionManager)
+				apiListener := resources.Listeners[0].GetApiListener().GetApiListener()
+				if err := apiListener.UnmarshalTo(hcm); err != nil {
+					t.Fatalf("Failed to unmarshal apiListener: %v", err)
+				}
+				extProcConfig := &v3procfilterpb.ExternalProcessor{
+					ProcessingMode: &v3procfilterpb.ProcessingMode{
+						RequestHeaderMode:   v3procfilterpb.ProcessingMode_SEND,
+						ResponseHeaderMode:  v3procfilterpb.ProcessingMode_SKIP,
+						ResponseTrailerMode: v3procfilterpb.ProcessingMode_SEND,
+					},
+					FailureModeAllow:  false,
+					ObservabilityMode: test.observabilityMode,
+					GrpcService: &v3corepb.GrpcService{
+						TargetSpecifier: &v3corepb.GrpcService_GoogleGrpc_{
+							GoogleGrpc: &v3corepb.GrpcService_GoogleGrpc{
+								TargetUri: extProcAddr,
+							},
+						},
+					},
+				}
+				hcm.HttpFilters = append([]*v3httppb.HttpFilter{e2e.HTTPFilter("extproc", extProcConfig)}, hcm.HttpFilters...)
+				hcmAny := testutils.MarshalAny(t, hcm)
+				resources.Listeners[0].ApiListener.ApiListener = hcmAny
+				resources.Listeners[0].FilterChains[0].Filters[0].ConfigType = &v3listenerpb.Filter_TypedConfig{TypedConfig: hcmAny}
+
+				ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+				defer cancel()
+				if err := managementServer.Update(ctx, resources); err != nil {
+					t.Fatalf("Failed to update management server: %v", err)
+				}
+			}
+
+			// Configure initial xDS resource pointing to extproc server 1.
+			updateExtProc(extProcAddr1)
+
+			dialOpts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsResolver)}
+			cc, err := grpc.NewClient("xds:///"+serviceName, dialOpts...)
+			if err != nil {
+				t.Fatalf("Failed to dial: %v", err)
+			}
+			defer cc.Close()
+
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+
+			client := testgrpc.NewTestServiceClient(cc)
+
+			errChan := make(chan error, 1)
+			// Make the first RPC using extproc server 1 in a background goroutine.
+			// The RPC remains in flight because the backend is blocked on blockChan.
+			go func() {
+				_, err := client.EmptyCall(ctx, &testpb.Empty{})
+				errChan <- err
+			}()
+
+			<-enteredChan
+
+			// Verify that no proc channel has closed yet because the first RPC has
+			// not completed.
+			select {
+			case addr := <-closeChan:
+				t.Fatalf("Unexpected close of extproc channel %s", addr)
+			case <-time.After(defaultTestShortTimeout):
+			}
+
+			// Send an xDS config update changing the external processor to server 2.
+			// This will close the old interceptor for server 1.
+			updateExtProc(extProcAddr2)
+
+			// Make a second RPC and verify that it succeeds.
+			if _, err := client.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil {
+				t.Fatalf("UnaryCall() failed: %v", err)
+			}
+
+			// Verify that the first extproc channel is still not closed because the
+			// first RPC on that channel has not completed yet.
+			select {
+			case addr := <-closeChan:
+				t.Fatalf("Unexpected close of extproc channel %s while first RPC is in flight", addr)
+			case <-time.After(defaultTestShortTimeout):
+			}
+
+			// Unblock the first RPC so that it completes and invokes OnFinish.
+			close(blockChan)
+
+			// Wait for the first RPC to complete.
+			select {
+			case err := <-errChan:
+				if err != nil {
+					t.Errorf("First EmptyCall() failed: %v", err)
+				}
+			case <-time.After(defaultTestTimeout):
+				t.Fatalf("Timeout waiting for first RPC to complete")
+			}
+			// Verify that proc channel 1 is now closed.
+			select {
+			case addr := <-closeChan:
+				if addr != extProcAddr1 {
+					t.Fatalf("Closed extproc channel = %s, want %s", addr, extProcAddr1)
+				}
+			case <-time.After(defaultTestTimeout):
+				t.Fatalf("Timeout waiting for extproc channel to close after RPC completed")
+			}
+		})
+	}
+}
+
+// TestExtProcChannelRetention_UnaryRPC verifies that when ext proc is
+// configured for a unary RPC and the RPC fails after successfully establishing
+// the dataplane stream but before invoking any Send/Recv functions on it, the
+// channel is closed on failure.
+func (s) TestExtProcChannelRetention_UnaryRPC(t *testing.T) {
+	tests := []struct {
+		name              string
+		observabilityMode bool
+	}{
+		{
+			name:              "observability_mode_disabled",
+			observabilityMode: false,
+		},
+		{
+			name:              "observability_mode_enabled",
+			observabilityMode: true,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			extProcAddr, _ := startTestExtProcessor(t, func(v3procservicegrpc.ExternalProcessor_ProcessServer) error {
+				return status.Error(codes.Unavailable, "proc server immediate failure")
+			})
+
+			closeChan := make(chan struct{})
+
+			// Override CreateExtProcChannel to signal when the channel is closed.
+			origCreate := internal.CreateExtProcChannel
+			internal.CreateExtProcChannel = func(cfg xdsresource.GRPCServiceConfig) (grpc.ClientConnInterface, func() error, error) {
+				cc, err := grpc.NewClient(cfg.TargetURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
+				if err != nil {
+					return nil, nil, err
+				}
+				closeFunc := func() error {
+					close(closeChan)
+					return cc.Close()
+				}
+				return cc, closeFunc, nil
+			}
+			defer func() { internal.CreateExtProcChannel = origCreate }()
+
+			stub := stubserver.StartTestService(t, &stubserver.StubServer{
+				EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
+					return &testpb.Empty{}, nil
+				},
+			})
+			defer stub.Stop()
+
+			cc, err := setupTestClient(t, extProcAddr, &v3procfilterpb.ExternalProcessor{
+				ProcessingMode: &v3procfilterpb.ProcessingMode{
+					RequestHeaderMode:   v3procfilterpb.ProcessingMode_SKIP,
+					ResponseHeaderMode:  v3procfilterpb.ProcessingMode_SEND,
+					RequestBodyMode:     v3procfilterpb.ProcessingMode_GRPC,
+					ResponseBodyMode:    v3procfilterpb.ProcessingMode_GRPC,
+					ResponseTrailerMode: v3procfilterpb.ProcessingMode_SEND,
+				},
+				FailureModeAllow:  false,
+				ObservabilityMode: test.observabilityMode,
+			}, stub.Address)
+			if err != nil {
+				t.Fatalf("Failed to dial: %v", err)
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+
+			// Expect the unary RPC to fail because the proc server fails immediately.
+			client := testgrpc.NewTestServiceClient(cc)
+			// Do not check the error because for observability mode, in some cases
+			// the RPC could succeed before the proc server has a chance to fail the
+			// RPC. But in that case too, the interceptor should be closed.
+			client.EmptyCall(ctx, &testpb.Empty{})
+			// Close the client channel so that interceptor.Close() is called.
+			cc.Close()
+
+			// Verify that the extproc channel is closed.
+			select {
+			case <-closeChan:
+			case <-time.After(defaultTestTimeout):
+				t.Fatalf("Timeout waiting for extproc channel to close after interceptor is closed")
+			}
+		})
 	}
 }

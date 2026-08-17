@@ -219,7 +219,7 @@ func (s) TestParseFilterConfig_Success(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			b := builder{}
-			got, err := b.ParseFilterConfig(tt.cfg)
+			got, err := b.ParseFilterConfig(tt.cfg, httpfilter.ParseOptions{})
 			if err != nil {
 				t.Fatalf("ParseFilterConfig() returned unexpected error: %v", err)
 			}
@@ -427,7 +427,7 @@ func (s) TestParseFilterConfig_Errors(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			builder := builder{}
-			_, err := builder.ParseFilterConfig(tt.cfg)
+			_, err := builder.ParseFilterConfig(tt.cfg, httpfilter.ParseOptions{})
 			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
 				t.Fatalf("ParseFilterConfig() returned error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -498,7 +498,7 @@ func (s) TestParseFilterConfigOverride_Success(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			builder := builder{}
-			got, err := builder.ParseFilterConfigOverride(tt.override)
+			got, err := builder.ParseFilterConfigOverride(tt.override, httpfilter.ParseOptions{})
 			if err != nil {
 				t.Fatalf("ParseFilterConfigOverride() returned unexpected error: %v", err)
 			}
@@ -591,7 +591,7 @@ func (s) TestParseFilterConfigOverride_Errors(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			builder := builder{}
-			_, err := builder.ParseFilterConfigOverride(tt.override)
+			_, err := builder.ParseFilterConfigOverride(tt.override, httpfilter.ParseOptions{})
 			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
 				t.Fatalf("ParseFilterConfigOverride() returned error = %v, wantErr %v", err, tt.wantErr)
 			}
