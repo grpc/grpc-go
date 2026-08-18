@@ -751,7 +751,8 @@ func (s) TestExtAuthz_Allowed_WithHeaders_MutationFails(t *testing.T) {
 // and specifies headers to be added and removed from the data plane RPC. One
 // of the specified header mutations is not allowed by the configuration, but
 // failure_mode_allow is set to true. Verifies that the header mutation error is
-// ignored and that the data plane RPC succeeds.
+// ignored, no partial header mutations are applied, and that the data plane
+// RPC succeeds with unmutated headers.
 func (s) TestExtAuthz_Allowed_WithHeaders_MutationFails_FailureModeAllow(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -778,7 +779,7 @@ func (s) TestExtAuthz_Allowed_WithHeaders_MutationFails_FailureModeAllow(t *test
 	backend := &stubserver.StubServer{
 		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
 			gotMD, _ := metadata.FromIncomingContext(ctx)
-			wantHeaders := metadata.Pairs(":authority", "service-name", "k1", "v1", "k2-bin", "\x00\x01\x02\x03")
+			wantHeaders := metadata.Pairs(":authority", "service-name")
 			if err := compareMetadata(gotMD, wantHeaders); err != nil {
 				return nil, status.Errorf(codes.Internal, "Unexpected headers metadata received by the server: %v", err)
 			}
@@ -897,6 +898,68 @@ func (s) TestExtAuthz_Allowed_WithTrailers(t *testing.T) {
 	)
 	if err := compareMetadata(gotHeaders, wantRespHeaders); err != nil {
 		t.Fatalf("Unexpected headers metadata received by the client: %v", err)
+	}
+}
+
+// Test verifies the case where the ext_authz server allows the data plane RPC
+// and specifies response headers to add, but the backend sends a Trailers-Only
+// response (no response headers). Verifies that stream.Header() returns
+// (nil, nil) and response header mutations are safely ignored without error.
+func (s) TestExtAuthz_Allowed_WithTrailersOnly(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	authAddr, stopAuth := startTestAuthServer(t, func(context.Context, *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error) {
+		st := &statuspb.Status{Code: int32(codes.OK)}
+		return &v3authpb.CheckResponse{
+			Status: st,
+			HttpResponse: &v3authpb.CheckResponse_OkResponse{
+				OkResponse: &v3authpb.OkHttpResponse{
+					ResponseHeadersToAdd: []*corepb.HeaderValueOption{
+						{Header: &corepb.HeaderValue{Key: "k1", Value: "v1"}},
+					},
+				},
+			},
+		}, nil
+	})
+	defer stopAuth()
+
+	// Backend returns without sending initial headers (trailers-only response).
+	backend := &stubserver.StubServer{
+		FullDuplexCallF: func(testgrpc.TestService_FullDuplexCallServer) error {
+			return nil
+		},
+	}
+	stubserver.StartTestService(t, backend)
+	defer backend.Stop()
+
+	extAuthzCfg := &v3extauthzfilterpb.ExtAuthz{
+		FilterEnabled: &corepb.RuntimeFractionalPercent{
+			DefaultValue: &v3typepb.FractionalPercent{
+				Numerator:   100,
+				Denominator: v3typepb.FractionalPercent_HUNDRED,
+			},
+		},
+	}
+
+	cc, err := setupTestClient(t, authAddr, extAuthzCfg, backend.Address)
+	if err != nil {
+		t.Fatalf("setupTestClient() failed: %v", err)
+	}
+	defer cc.Close()
+
+	client := testgrpc.NewTestServiceClient(cc)
+	stream, err := client.FullDuplexCall(ctx)
+	if err != nil {
+		t.Fatalf("FullDuplexCall() failed: %v", err)
+	}
+
+	gotHeaders, err := stream.Header()
+	if err != nil {
+		t.Fatalf("stream.Header() failed: %v", err)
+	}
+	if gotHeaders != nil {
+		t.Fatalf("stream.Header() = %v, want nil for trailers-only response", gotHeaders)
 	}
 }
 

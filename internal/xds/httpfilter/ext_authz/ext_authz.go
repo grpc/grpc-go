@@ -294,7 +294,7 @@ func (cf *clientFilter) BuildClientInterceptor(cfg, _ httpfilter.FilterConfig) (
 	// Create a new refcounted client. The onZero cleanup function will remove
 	// the client from the map and close the underlying channel.
 	var rc *grpcsync.RefCounted[v3authgrpc.AuthorizationClient]
-	rc = grpcsync.NewRefCounted(&client, func() {
+	rc = grpcsync.NewRefCounted(client, func() {
 		cf.removeAuthzChannel(key, rc)
 		cancel()
 	})
@@ -381,7 +381,7 @@ func (i *clientInterceptor) check(ctx context.Context, ri resolver.RPCInfo, outg
 	// context used for the Check RPC.
 	extAuthzCtx = metadata.NewOutgoingContext(extAuthzCtx, i.config.grpcService.InitialMetadata)
 
-	authClient := *i.authzClient.Value()
+	authClient := i.authzClient.Value()
 	return authClient.Check(extAuthzCtx, req)
 }
 
@@ -520,7 +520,7 @@ type clientStream struct {
 // is any. It blocks if the metadata is not ready to read.
 func (s *clientStream) Header() (metadata.MD, error) {
 	md, err := s.ClientStream.Header()
-	if err != nil {
+	if err != nil || md == nil {
 		return nil, err
 	}
 	if err := s.mutationRules.ApplyAdditions(s.headersToAdd, md); err != nil {
