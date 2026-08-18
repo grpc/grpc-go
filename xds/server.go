@@ -104,7 +104,8 @@ func NewGRPCServer(opts ...grpc.ServerOption) (*GRPCServer, error) {
 
 	// Validate the bootstrap configuration for server specific fields.
 
-	// Listener resource name template is mandatory on the server side unless resourceNameFunc is provided.
+	// Listener resource name template is mandatory on the server side unless a
+	// listener resource name override is provided.
 	if s.opts.resourceNameFunc == nil {
 		cfg := xdsClient.BootstrapConfig()
 		if cfg.ServerListenerResourceNameTemplate() == "" {
@@ -131,7 +132,7 @@ func (s *GRPCServer) handleServerOptions(opts []grpc.ServerOption) {
 			o.apply(so)
 			continue
 		}
-		if f, ok := server.ResourceNameFuncFromServerOption(opt); ok {
+		if f, ok := server.OverrideListenerResourceNameFromServerOption(opt); ok {
 			so.resourceNameFunc = f
 		}
 	}

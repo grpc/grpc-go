@@ -23,21 +23,21 @@ import (
 	"google.golang.org/grpc"
 )
 
-type resourceNameOption struct {
+type overrideListenerResourceNameOption struct {
 	grpc.EmptyServerOption
 	f func(net.Addr) string
 }
 
-// ResourceNameFunc returns a server option that overrides the LDS resource
-// name selected for an xDS server listener.
-func ResourceNameFunc(f func(net.Addr) string) grpc.ServerOption {
-	return &resourceNameOption{f: f}
+// OverrideListenerResourceName returns a server option that overrides the LDS
+// resource name selected for an xDS server listener.
+func OverrideListenerResourceName(f func(net.Addr) string) grpc.ServerOption {
+	return &overrideListenerResourceNameOption{f: f}
 }
 
-// ResourceNameFuncFromServerOption returns the resource name function carried
-// by opt, if opt was created by ResourceNameFunc.
-func ResourceNameFuncFromServerOption(opt grpc.ServerOption) (func(net.Addr) string, bool) {
-	o, ok := opt.(*resourceNameOption)
+// OverrideListenerResourceNameFromServerOption returns the resource name
+// function carried by opt, if opt was created by OverrideListenerResourceName.
+func OverrideListenerResourceNameFromServerOption(opt grpc.ServerOption) (func(net.Addr) string, bool) {
+	o, ok := opt.(*overrideListenerResourceNameOption)
 	if !ok {
 		return nil, false
 	}
