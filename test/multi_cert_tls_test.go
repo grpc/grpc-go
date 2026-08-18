@@ -69,8 +69,9 @@ func (s) TestServerMultipleCerts_TLS13_Negotiation(t *testing.T) {
 	caPool := loadCertPool(t, "x509/server_ca_cert.pem")
 
 	testCases := []struct {
-		desc         string
-		serverConfig *tls.Config
+		desc                    string
+		serverConfig            *tls.Config
+		wantNegotiatedAlgorithm x509.PublicKeyAlgorithm
 	}{
 		{
 			desc: "Server configured with [RSA, ECDSA] certificates in TLS 1.3",
@@ -79,6 +80,7 @@ func (s) TestServerMultipleCerts_TLS13_Negotiation(t *testing.T) {
 				MinVersion:   tls.VersionTLS13,
 				MaxVersion:   tls.VersionTLS13,
 			},
+			wantNegotiatedAlgorithm: x509.RSA,
 		},
 		{
 			desc: "Server configured with reversed [ECDSA, RSA] certificates in TLS 1.3",
@@ -87,9 +89,10 @@ func (s) TestServerMultipleCerts_TLS13_Negotiation(t *testing.T) {
 				MinVersion:   tls.VersionTLS13,
 				MaxVersion:   tls.VersionTLS13,
 			},
+			wantNegotiatedAlgorithm: x509.ECDSA,
 		},
 		{
-			desc: "Server configured with GetCertificate callback evaluating SupportsCertificate in TLS 1.3",
+			desc: "Server configured with GetCertificate callback preferring ECDSA in TLS 1.3",
 			serverConfig: &tls.Config{
 				MinVersion: tls.VersionTLS13,
 				MaxVersion: tls.VersionTLS13,
@@ -102,6 +105,23 @@ func (s) TestServerMultipleCerts_TLS13_Negotiation(t *testing.T) {
 					return &rsaCert, nil
 				},
 			},
+			wantNegotiatedAlgorithm: x509.ECDSA,
+		},
+		{
+			desc: "Server configured with GetCertificate callback preferring RSA in TLS 1.3",
+			serverConfig: &tls.Config{
+				MinVersion: tls.VersionTLS13,
+				MaxVersion: tls.VersionTLS13,
+				GetCertificate: func(chi *tls.ClientHelloInfo) (*tls.Certificate, error) {
+					for _, c := range []*tls.Certificate{&rsaCert, &ecdsaCert} {
+						if err := chi.SupportsCertificate(c); err == nil {
+							return c, nil
+						}
+					}
+					return &ecdsaCert, nil
+				},
+			},
+			wantNegotiatedAlgorithm: x509.RSA,
 		},
 	}
 
@@ -150,8 +170,8 @@ func (s) TestServerMultipleCerts_TLS13_Negotiation(t *testing.T) {
 				t.Errorf("negotiated TLS version = %x, want %x (TLS 1.3)", tlsInfo.State.Version, tls.VersionTLS13)
 			}
 			negotiatedAlgo := tlsInfo.State.PeerCertificates[0].PublicKeyAlgorithm
-			if negotiatedAlgo != x509.RSA && negotiatedAlgo != x509.ECDSA {
-				t.Errorf("negotiated certificate algorithm = %v, want RSA or ECDSA", negotiatedAlgo)
+			if negotiatedAlgo != tc.wantNegotiatedAlgorithm {
+				t.Errorf("negotiated certificate algorithm = %v, want %v", negotiatedAlgo, tc.wantNegotiatedAlgorithm)
 			}
 		})
 	}
@@ -297,96 +317,123 @@ func (s) TestServerMultipleCerts_TLS13_MutualTLS(t *testing.T) {
 		return handler(ctx, req)
 	}
 
-	serverCreds := credentials.NewTLS(&tls.Config{
-		Certificates: []tls.Certificate{rsaServerCert, ecdsaServerCert},
-		ClientCAs:    clientCAPool,
-		ClientAuth:   tls.RequireAndVerifyClientCert,
-		MinVersion:   tls.VersionTLS13,
-		MaxVersion:   tls.VersionTLS13,
-	})
-	s := grpc.NewServer(grpc.Creds(serverCreds), grpc.UnaryInterceptor(unaryInterceptor))
-	defer s.Stop()
-
-	testgrpc.RegisterTestServiceServer(s, &testServer{})
-	lis, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("net.Listen failed: %v", err)
-	}
-	defer lis.Close()
-	go s.Serve(lis)
-
-	addr := lis.Addr().String()
-
-	// 1. RSA client in TLS 1.3
-	{
-		clientCreds := credentials.NewTLS(&tls.Config{
-			Certificates: []tls.Certificate{rsaClientCert},
-			RootCAs:      serverCAPool,
-			ServerName:   "x.test.example.com",
-			MinVersion:   tls.VersionTLS13,
-			MaxVersion:   tls.VersionTLS13,
-		})
-		conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(clientCreds), grpc.WithAuthority("x.test.example.com"), grpc.WithDisableServiceConfig())
-		if err != nil {
-			t.Fatalf("grpc.NewClient failed: %v", err)
-		}
-		defer conn.Close()
-
-		client := testgrpc.NewTestServiceClient(conn)
-		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-		defer cancel()
-
-		var p peer.Peer
-		if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(&p)); err != nil {
-			t.Fatalf("RSA client EmptyCall failed in TLS 1.3: %v", err)
-		}
-
-		tlsInfo := p.AuthInfo.(credentials.TLSInfo)
-		if tlsInfo.State.Version != tls.VersionTLS13 {
-			t.Errorf("negotiated TLS version = %x, want %x (TLS 1.3)", tlsInfo.State.Version, tls.VersionTLS13)
-		}
-		if lastTLSVersion != tls.VersionTLS13 {
-			t.Errorf("server observed TLS version = %x, want %x (TLS 1.3)", lastTLSVersion, tls.VersionTLS13)
-		}
-		if lastClientCertAlgo != x509.RSA {
-			t.Errorf("client certificate algorithm verified by server = %v, want %v (x509.RSA)", lastClientCertAlgo, x509.RSA)
-		}
+	testCases := []struct {
+		desc                    string
+		serverCerts             []tls.Certificate
+		wantServerCertAlgorithm x509.PublicKeyAlgorithm
+	}{
+		{
+			desc:                    "Server configured with [RSA, ECDSA] in TLS 1.3 mTLS",
+			serverCerts:             []tls.Certificate{rsaServerCert, ecdsaServerCert},
+			wantServerCertAlgorithm: x509.RSA,
+		},
+		{
+			desc:                    "Server configured with reversed [ECDSA, RSA] in TLS 1.3 mTLS",
+			serverCerts:             []tls.Certificate{ecdsaServerCert, rsaServerCert},
+			wantServerCertAlgorithm: x509.ECDSA,
+		},
 	}
 
-	// 2. ECDSA client in TLS 1.3
-	{
-		clientCreds := credentials.NewTLS(&tls.Config{
-			Certificates: []tls.Certificate{ecdsaClientCert},
-			RootCAs:      serverCAPool,
-			ServerName:   "x.test.example.com",
-			MinVersion:   tls.VersionTLS13,
-			MaxVersion:   tls.VersionTLS13,
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			serverCreds := credentials.NewTLS(&tls.Config{
+				Certificates: tc.serverCerts,
+				ClientCAs:    clientCAPool,
+				ClientAuth:   tls.RequireAndVerifyClientCert,
+				MinVersion:   tls.VersionTLS13,
+				MaxVersion:   tls.VersionTLS13,
+			})
+			s := grpc.NewServer(grpc.Creds(serverCreds), grpc.UnaryInterceptor(unaryInterceptor))
+			defer s.Stop()
+
+			testgrpc.RegisterTestServiceServer(s, &testServer{})
+			lis, err := net.Listen("tcp", "127.0.0.1:0")
+			if err != nil {
+				t.Fatalf("net.Listen failed: %v", err)
+			}
+			defer lis.Close()
+			go s.Serve(lis)
+
+			addr := lis.Addr().String()
+
+			// 1. RSA client in TLS 1.3
+			{
+				clientCreds := credentials.NewTLS(&tls.Config{
+					Certificates: []tls.Certificate{rsaClientCert},
+					RootCAs:      serverCAPool,
+					ServerName:   "x.test.example.com",
+					MinVersion:   tls.VersionTLS13,
+					MaxVersion:   tls.VersionTLS13,
+				})
+				conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(clientCreds), grpc.WithAuthority("x.test.example.com"), grpc.WithDisableServiceConfig())
+				if err != nil {
+					t.Fatalf("grpc.NewClient failed: %v", err)
+				}
+				defer conn.Close()
+
+				client := testgrpc.NewTestServiceClient(conn)
+				ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+				defer cancel()
+
+				var p peer.Peer
+				if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(&p)); err != nil {
+					t.Fatalf("RSA client EmptyCall failed in TLS 1.3: %v", err)
+				}
+
+				tlsInfo := p.AuthInfo.(credentials.TLSInfo)
+				if tlsInfo.State.Version != tls.VersionTLS13 {
+					t.Errorf("negotiated TLS version = %x, want %x (TLS 1.3)", tlsInfo.State.Version, tls.VersionTLS13)
+				}
+				if lastTLSVersion != tls.VersionTLS13 {
+					t.Errorf("server observed TLS version = %x, want %x (TLS 1.3)", lastTLSVersion, tls.VersionTLS13)
+				}
+				if lastClientCertAlgo != x509.RSA {
+					t.Errorf("client certificate algorithm verified by server = %v, want %v (x509.RSA)", lastClientCertAlgo, x509.RSA)
+				}
+				if serverAlgo := tlsInfo.State.PeerCertificates[0].PublicKeyAlgorithm; serverAlgo != tc.wantServerCertAlgorithm {
+					t.Errorf("server certificate algorithm = %v, want %v", serverAlgo, tc.wantServerCertAlgorithm)
+				}
+			}
+
+			// 2. ECDSA client in TLS 1.3
+			{
+				clientCreds := credentials.NewTLS(&tls.Config{
+					Certificates: []tls.Certificate{ecdsaClientCert},
+					RootCAs:      serverCAPool,
+					ServerName:   "x.test.example.com",
+					MinVersion:   tls.VersionTLS13,
+					MaxVersion:   tls.VersionTLS13,
+				})
+				conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(clientCreds), grpc.WithAuthority("x.test.example.com"), grpc.WithDisableServiceConfig())
+				if err != nil {
+					t.Fatalf("grpc.NewClient failed: %v", err)
+				}
+				defer conn.Close()
+
+				client := testgrpc.NewTestServiceClient(conn)
+				ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+				defer cancel()
+
+				var p peer.Peer
+				if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(&p)); err != nil {
+					t.Fatalf("ECDSA client EmptyCall failed in TLS 1.3: %v", err)
+				}
+
+				tlsInfo := p.AuthInfo.(credentials.TLSInfo)
+				if tlsInfo.State.Version != tls.VersionTLS13 {
+					t.Errorf("negotiated TLS version = %x, want %x (TLS 1.3)", tlsInfo.State.Version, tls.VersionTLS13)
+				}
+				if lastTLSVersion != tls.VersionTLS13 {
+					t.Errorf("server observed TLS version = %x, want %x (TLS 1.3)", lastTLSVersion, tls.VersionTLS13)
+				}
+				if lastClientCertAlgo != x509.ECDSA {
+					t.Errorf("client certificate algorithm verified by server = %v, want %v (x509.ECDSA)", lastClientCertAlgo, x509.ECDSA)
+				}
+				if serverAlgo := tlsInfo.State.PeerCertificates[0].PublicKeyAlgorithm; serverAlgo != tc.wantServerCertAlgorithm {
+					t.Errorf("server certificate algorithm = %v, want %v", serverAlgo, tc.wantServerCertAlgorithm)
+				}
+			}
 		})
-		conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(clientCreds), grpc.WithAuthority("x.test.example.com"), grpc.WithDisableServiceConfig())
-		if err != nil {
-			t.Fatalf("grpc.NewClient failed: %v", err)
-		}
-		defer conn.Close()
-
-		client := testgrpc.NewTestServiceClient(conn)
-		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-		defer cancel()
-
-		var p peer.Peer
-		if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(&p)); err != nil {
-			t.Fatalf("ECDSA client EmptyCall failed in TLS 1.3: %v", err)
-		}
-
-		tlsInfo := p.AuthInfo.(credentials.TLSInfo)
-		if tlsInfo.State.Version != tls.VersionTLS13 {
-			t.Errorf("negotiated TLS version = %x, want %x (TLS 1.3)", tlsInfo.State.Version, tls.VersionTLS13)
-		}
-		if lastTLSVersion != tls.VersionTLS13 {
-			t.Errorf("server observed TLS version = %x, want %x (TLS 1.3)", lastTLSVersion, tls.VersionTLS13)
-		}
-		if lastClientCertAlgo != x509.ECDSA {
-			t.Errorf("client certificate algorithm verified by server = %v, want %v (x509.ECDSA)", lastClientCertAlgo, x509.ECDSA)
-		}
 	}
 }
 

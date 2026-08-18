@@ -242,8 +242,9 @@ func (s) TestServerMultipleCerts_TLS13_Negotiation(t *testing.T) {
 	}
 
 	testCases := []struct {
-		desc          string
-		serverOptions func() *Options
+		desc                    string
+		serverOptions           func() *Options
+		wantNegotiatedAlgorithm x509.PublicKeyAlgorithm
 	}{
 		{
 			desc: "Server configured with direct Certificates slice [RSA, ECDSA] in TLS 1.3",
@@ -261,6 +262,7 @@ func (s) TestServerMultipleCerts_TLS13_Negotiation(t *testing.T) {
 					VerificationType:  CertVerification,
 				}
 			},
+			wantNegotiatedAlgorithm: x509.RSA,
 		},
 		{
 			desc: "Server configured with reversed Certificates slice [ECDSA, RSA] in TLS 1.3",
@@ -278,9 +280,30 @@ func (s) TestServerMultipleCerts_TLS13_Negotiation(t *testing.T) {
 					VerificationType:  CertVerification,
 				}
 			},
+			wantNegotiatedAlgorithm: x509.ECDSA,
 		},
 		{
-			desc: "Server configured with GetIdentityCertificatesForServer callback in TLS 1.3",
+			desc: "Server configured with GetIdentityCertificatesForServer returning [ECDSA, RSA] in TLS 1.3",
+			serverOptions: func() *Options {
+				return &Options{
+					IdentityOptions: IdentityCertificateOptions{
+						GetIdentityCertificatesForServer: func(*tls.ClientHelloInfo) ([]*tls.Certificate, error) {
+							return []*tls.Certificate{&cs.ServerPeerECDSALocalhost1, &cs.ServerPeerLocalhost1}, nil
+						},
+					},
+					RootOptions: RootCertificateOptions{
+						RootCertificates: cs.ServerTrust1,
+					},
+					MinTLSVersion:     tls.VersionTLS13,
+					MaxTLSVersion:     tls.VersionTLS13,
+					RequireClientCert: false,
+					VerificationType:  CertVerification,
+				}
+			},
+			wantNegotiatedAlgorithm: x509.ECDSA,
+		},
+		{
+			desc: "Server configured with GetIdentityCertificatesForServer returning [RSA, ECDSA] in TLS 1.3",
 			serverOptions: func() *Options {
 				return &Options{
 					IdentityOptions: IdentityCertificateOptions{
@@ -297,9 +320,10 @@ func (s) TestServerMultipleCerts_TLS13_Negotiation(t *testing.T) {
 					VerificationType:  CertVerification,
 				}
 			},
+			wantNegotiatedAlgorithm: x509.RSA,
 		},
 		{
-			desc: "Server configured with IdentityProvider in TLS 1.3",
+			desc: "Server configured with IdentityProvider supplying [RSA, ECDSA] in TLS 1.3",
 			serverOptions: func() *Options {
 				return &Options{
 					IdentityOptions: IdentityCertificateOptions{
@@ -316,6 +340,27 @@ func (s) TestServerMultipleCerts_TLS13_Negotiation(t *testing.T) {
 					VerificationType:  CertVerification,
 				}
 			},
+			wantNegotiatedAlgorithm: x509.RSA,
+		},
+		{
+			desc: "Server configured with IdentityProvider supplying [ECDSA, RSA] in TLS 1.3",
+			serverOptions: func() *Options {
+				return &Options{
+					IdentityOptions: IdentityCertificateOptions{
+						IdentityProvider: &staticIdentityProvider{
+							certs: []tls.Certificate{cs.ServerPeerECDSALocalhost1, cs.ServerPeerLocalhost1},
+						},
+					},
+					RootOptions: RootCertificateOptions{
+						RootCertificates: cs.ServerTrust1,
+					},
+					MinTLSVersion:     tls.VersionTLS13,
+					MaxTLSVersion:     tls.VersionTLS13,
+					RequireClientCert: false,
+					VerificationType:  CertVerification,
+				}
+			},
+			wantNegotiatedAlgorithm: x509.ECDSA,
 		},
 	}
 
@@ -372,8 +417,8 @@ func (s) TestServerMultipleCerts_TLS13_Negotiation(t *testing.T) {
 			}
 			conn.Close()
 
-			if negotiatedAlgo != x509.RSA && negotiatedAlgo != x509.ECDSA {
-				t.Errorf("negotiated certificate algorithm = %v, want RSA or ECDSA", negotiatedAlgo)
+			if negotiatedAlgo != tc.wantNegotiatedAlgorithm {
+				t.Errorf("negotiated certificate algorithm = %v, want %v", negotiatedAlgo, tc.wantNegotiatedAlgorithm)
 			}
 		})
 	}
@@ -553,123 +598,144 @@ func (s) TestServerMultipleCerts_TLS12_Negotiation(t *testing.T) {
 }
 
 // TestServerMultipleCerts_TLS13_MutualTLS tests mTLS end-to-end strictly in TLS 1.3
-// where the server has both RSA and ECDSA certificate chains and requires client certs.
+// where the server has dual RSA and ECDSA certificates and requires client certs.
 func (s) TestServerMultipleCerts_TLS13_MutualTLS(t *testing.T) {
 	cs := &testutils.CertStore{}
 	if err := cs.LoadCerts(); err != nil {
 		t.Fatalf("cs.LoadCerts() failed, err: %v", err)
 	}
 
-	serverOptions := &Options{
-		IdentityOptions: IdentityCertificateOptions{
-			Certificates: []tls.Certificate{cs.ServerPeerLocalhost1, cs.ServerPeerECDSALocalhost1},
+	testCases := []struct {
+		desc                    string
+		serverCerts             []tls.Certificate
+		wantServerCertAlgorithm x509.PublicKeyAlgorithm
+	}{
+		{
+			desc:                    "Server configured with [RSA, ECDSA] in TLS 1.3 mTLS",
+			serverCerts:             []tls.Certificate{cs.ServerPeerLocalhost1, cs.ServerPeerECDSALocalhost1},
+			wantServerCertAlgorithm: x509.RSA,
 		},
-		RootOptions: RootCertificateOptions{
-			RootCertificates: cs.ServerTrust1,
+		{
+			desc:                    "Server configured with reversed [ECDSA, RSA] in TLS 1.3 mTLS",
+			serverCerts:             []tls.Certificate{cs.ServerPeerECDSALocalhost1, cs.ServerPeerLocalhost1},
+			wantServerCertAlgorithm: x509.ECDSA,
 		},
-		MinTLSVersion:     tls.VersionTLS13,
-		MaxTLSVersion:     tls.VersionTLS13,
-		RequireClientCert: true,
-		VerificationType:  CertVerification,
 	}
-	serverTLSCreds, err := NewServerCreds(serverOptions)
-	if err != nil {
-		t.Fatalf("NewServerCreds failed: %v", err)
-	}
-	s := grpc.NewServer(grpc.Creds(serverTLSCreds))
-	defer s.Stop()
 
-	lis, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("net.Listen failed: %v", err)
-	}
-	defer lis.Close()
-	addr := lis.Addr().String()
-	pb.RegisterGreeterServer(s, greeterServer{})
-	go s.Serve(lis)
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			serverOptions := &Options{
+				IdentityOptions: IdentityCertificateOptions{
+					Certificates: tc.serverCerts,
+				},
+				RootOptions: RootCertificateOptions{
+					RootCertificates: cs.ServerTrust1,
+				},
+				MinTLSVersion:     tls.VersionTLS13,
+				MaxTLSVersion:     tls.VersionTLS13,
+				RequireClientCert: true,
+				VerificationType:  CertVerification,
+			}
+			serverTLSCreds, err := NewServerCreds(serverOptions)
+			if err != nil {
+				t.Fatalf("NewServerCreds failed: %v", err)
+			}
+			s := grpc.NewServer(grpc.Creds(serverTLSCreds))
+			defer s.Stop()
 
-	// 1. RSA client with RSA client certificate in TLS 1.3
-	{
-		var serverCertAlgo x509.PublicKeyAlgorithm
-		clientOpts := &Options{
-			IdentityOptions: IdentityCertificateOptions{
-				Certificates: []tls.Certificate{cs.ClientCert1},
-			},
-			RootOptions: RootCertificateOptions{
-				RootCertificates: cs.ClientTrust1,
-			},
-			MinTLSVersion:    tls.VersionTLS13,
-			MaxTLSVersion:    tls.VersionTLS13,
-			VerificationType: CertAndHostVerification,
-			AdditionalPeerVerification: func(params *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
-				if params.Leaf != nil {
-					serverCertAlgo = params.Leaf.PublicKeyAlgorithm
-				} else if len(params.RawCerts) > 0 {
-					cert, err := x509.ParseCertificate(params.RawCerts[0])
-					if err != nil {
-						return nil, err
-					}
-					serverCertAlgo = cert.PublicKeyAlgorithm
+			lis, err := net.Listen("tcp", "127.0.0.1:0")
+			if err != nil {
+				t.Fatalf("net.Listen failed: %v", err)
+			}
+			defer lis.Close()
+			addr := lis.Addr().String()
+			pb.RegisterGreeterServer(s, greeterServer{})
+			go s.Serve(lis)
+
+			// 1. RSA client with RSA client certificate in TLS 1.3
+			{
+				var serverCertAlgo x509.PublicKeyAlgorithm
+				clientOpts := &Options{
+					IdentityOptions: IdentityCertificateOptions{
+						Certificates: []tls.Certificate{cs.ClientCert1},
+					},
+					RootOptions: RootCertificateOptions{
+						RootCertificates: cs.ClientTrust1,
+					},
+					MinTLSVersion:    tls.VersionTLS13,
+					MaxTLSVersion:    tls.VersionTLS13,
+					VerificationType: CertAndHostVerification,
+					AdditionalPeerVerification: func(params *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
+						if params.Leaf != nil {
+							serverCertAlgo = params.Leaf.PublicKeyAlgorithm
+						} else if len(params.RawCerts) > 0 {
+							cert, err := x509.ParseCertificate(params.RawCerts[0])
+							if err != nil {
+								return nil, err
+							}
+							serverCertAlgo = cert.PublicKeyAlgorithm
+						}
+						return &PostHandshakeVerificationResults{}, nil
+					},
 				}
-				return &PostHandshakeVerificationResults{}, nil
-			},
-		}
-		clientCreds, err := NewClientCreds(clientOpts)
-		if err != nil {
-			t.Fatalf("NewClientCreds failed: %v", err)
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-		defer cancel()
-		conn, err := dialAndCall(ctx, addr, "localhost", clientCreds, false)
-		if err != nil {
-			t.Fatalf("RSA mTLS TLS 1.3 call failed: %v", err)
-		}
-		conn.Close()
-		if serverCertAlgo != x509.RSA && serverCertAlgo != x509.ECDSA {
-			t.Errorf("serverCertAlgo = %v, want RSA or ECDSA", serverCertAlgo)
-		}
-	}
-
-	// 2. ECDSA client with ECDSA client certificate in TLS 1.3
-	{
-		var serverCertAlgo x509.PublicKeyAlgorithm
-		clientOpts := &Options{
-			IdentityOptions: IdentityCertificateOptions{
-				Certificates: []tls.Certificate{cs.ClientPeerECDSALocalhost1},
-			},
-			RootOptions: RootCertificateOptions{
-				RootCertificates: cs.ClientTrust1,
-			},
-			MinTLSVersion:    tls.VersionTLS13,
-			MaxTLSVersion:    tls.VersionTLS13,
-			VerificationType: CertAndHostVerification,
-			AdditionalPeerVerification: func(params *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
-				if params.Leaf != nil {
-					serverCertAlgo = params.Leaf.PublicKeyAlgorithm
-				} else if len(params.RawCerts) > 0 {
-					cert, err := x509.ParseCertificate(params.RawCerts[0])
-					if err != nil {
-						return nil, err
-					}
-					serverCertAlgo = cert.PublicKeyAlgorithm
+				clientCreds, err := NewClientCreds(clientOpts)
+				if err != nil {
+					t.Fatalf("NewClientCreds failed: %v", err)
 				}
-				return &PostHandshakeVerificationResults{}, nil
-			},
-		}
-		clientCreds, err := NewClientCreds(clientOpts)
-		if err != nil {
-			t.Fatalf("NewClientCreds failed: %v", err)
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-		defer cancel()
-		conn, err := dialAndCall(ctx, addr, "localhost", clientCreds, false)
-		if err != nil {
-			t.Fatalf("ECDSA mTLS TLS 1.3 call failed: %v", err)
-		}
-		conn.Close()
-		if serverCertAlgo != x509.RSA && serverCertAlgo != x509.ECDSA {
-			t.Errorf("serverCertAlgo = %v, want RSA or ECDSA", serverCertAlgo)
-		}
+				ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+				defer cancel()
+				conn, err := dialAndCall(ctx, addr, "localhost", clientCreds, false)
+				if err != nil {
+					t.Fatalf("RSA mTLS TLS 1.3 call failed: %v", err)
+				}
+				conn.Close()
+				if serverCertAlgo != tc.wantServerCertAlgorithm {
+					t.Errorf("serverCertAlgo = %v, want %v", serverCertAlgo, tc.wantServerCertAlgorithm)
+				}
+			}
+
+			// 2. ECDSA client with ECDSA client certificate in TLS 1.3
+			{
+				var serverCertAlgo x509.PublicKeyAlgorithm
+				clientOpts := &Options{
+					IdentityOptions: IdentityCertificateOptions{
+						Certificates: []tls.Certificate{cs.ClientPeerECDSALocalhost1},
+					},
+					RootOptions: RootCertificateOptions{
+						RootCertificates: cs.ClientTrust1,
+					},
+					MinTLSVersion:    tls.VersionTLS13,
+					MaxTLSVersion:    tls.VersionTLS13,
+					VerificationType: CertAndHostVerification,
+					AdditionalPeerVerification: func(params *HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
+						if params.Leaf != nil {
+							serverCertAlgo = params.Leaf.PublicKeyAlgorithm
+						} else if len(params.RawCerts) > 0 {
+							cert, err := x509.ParseCertificate(params.RawCerts[0])
+							if err != nil {
+								return nil, err
+							}
+							serverCertAlgo = cert.PublicKeyAlgorithm
+						}
+						return &PostHandshakeVerificationResults{}, nil
+					},
+				}
+				clientCreds, err := NewClientCreds(clientOpts)
+				if err != nil {
+					t.Fatalf("NewClientCreds failed: %v", err)
+				}
+				ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+				defer cancel()
+				conn, err := dialAndCall(ctx, addr, "localhost", clientCreds, false)
+				if err != nil {
+					t.Fatalf("ECDSA mTLS TLS 1.3 call failed: %v", err)
+				}
+				conn.Close()
+				if serverCertAlgo != tc.wantServerCertAlgorithm {
+					t.Errorf("serverCertAlgo = %v, want %v", serverCertAlgo, tc.wantServerCertAlgorithm)
+				}
+			}
+		})
 	}
 }
 
