@@ -26,7 +26,6 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/stubserver"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
@@ -43,9 +42,6 @@ const initialWindowSize = 65535
 // The test sends large payloads from the client and checks if the server's flow
 // control window grows when BDP estimation is expected to be enabled.
 func (s) TestInitialWindowSize_Server(t *testing.T) {
-	channelz.TurnOn()
-	defer internal.ChannelzTurnOffForTesting()
-
 	tests := []struct {
 		name         string
 		serverOption grpc.ServerOption
@@ -185,9 +181,6 @@ func (s) TestInitialWindowSize_Server(t *testing.T) {
 // The test sends large payloads from the server and checks if the client's flow
 // control window grows when BDP estimation is expected to be enabled.
 func (s) TestInitialWindowSize_Client(t *testing.T) {
-	channelz.TurnOn()
-	defer internal.ChannelzTurnOffForTesting()
-
 	tests := []struct {
 		name       string
 		dialOption grpc.DialOption

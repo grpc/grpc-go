@@ -5506,7 +5506,6 @@ func testConfigurableWindowSize(t *testing.T, e env, wc windowSizeConfig) {
 		Payload:            payload,
 	}
 	for i := 0; i < numOfIter; i++ {
-		t.Logf("easwars: iteration %d", i)
 		if err := stream.Send(req); err != nil {
 			t.Fatalf("%v.Send(%v) = %v, want <nil>", stream, req, err)
 		}
