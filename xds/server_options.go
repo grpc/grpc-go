@@ -28,9 +28,9 @@ import (
 )
 
 type serverOptions struct {
-	modeCallback         ServingModeCallbackFunc
-	clientPoolForTesting *xdsclient.Pool
-	resourceNameFunc     func(net.Addr) string
+	modeCallback                 ServingModeCallbackFunc
+	clientPoolForTesting         *xdsclient.Pool
+	overrideListenerResourceName func(net.Addr) string
 }
 
 type serverOption struct {

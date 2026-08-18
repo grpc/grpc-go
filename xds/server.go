@@ -106,7 +106,7 @@ func NewGRPCServer(opts ...grpc.ServerOption) (*GRPCServer, error) {
 
 	// Listener resource name template is mandatory on the server side unless a
 	// listener resource name override is provided.
-	if s.opts.resourceNameFunc == nil {
+	if s.opts.overrideListenerResourceName == nil {
 		cfg := xdsClient.BootstrapConfig()
 		if cfg.ServerListenerResourceNameTemplate() == "" {
 			xdsClientClose()
@@ -132,8 +132,8 @@ func (s *GRPCServer) handleServerOptions(opts []grpc.ServerOption) {
 			o.apply(so)
 			continue
 		}
-		if f, ok := server.OverrideListenerResourceNameFromServerOption(opt); ok {
-			so.resourceNameFunc = f
+		if f := server.OverrideListenerResourceNameFromServerOption(opt); f != nil {
+			so.overrideListenerResourceName = f
 		}
 	}
 	s.opts = so
@@ -196,8 +196,8 @@ func (s *GRPCServer) Serve(lis net.Listener) error {
 	// string, it will be replaced with the server's listening "IP:port" (e.g.,
 	// "0.0.0.0:8080", "[::]:8080").
 	var name string
-	if s.opts.resourceNameFunc != nil {
-		name = s.opts.resourceNameFunc(lis.Addr())
+	if s.opts.overrideListenerResourceName != nil {
+		name = s.opts.overrideListenerResourceName(lis.Addr())
 	} else {
 		cfg := s.xdsC.BootstrapConfig()
 		name = cfg.ServerListenerResourceNameTemplate()

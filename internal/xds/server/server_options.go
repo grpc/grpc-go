@@ -35,11 +35,11 @@ func OverrideListenerResourceName(f func(net.Addr) string) grpc.ServerOption {
 }
 
 // OverrideListenerResourceNameFromServerOption returns the resource name
-// function carried by opt, if opt was created by OverrideListenerResourceName.
-func OverrideListenerResourceNameFromServerOption(opt grpc.ServerOption) (func(net.Addr) string, bool) {
+// function carried by opt, or nil if opt does not contain one.
+func OverrideListenerResourceNameFromServerOption(opt grpc.ServerOption) func(net.Addr) string {
 	o, ok := opt.(*overrideListenerResourceNameOption)
 	if !ok {
-		return nil, false
+		return nil
 	}
-	return o.f, true
+	return o.f
 }
