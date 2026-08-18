@@ -27,6 +27,7 @@ import (
 	"google.golang.org/grpc"
 	estats "google.golang.org/grpc/experimental/stats"
 	istats "google.golang.org/grpc/internal/stats"
+	"google.golang.org/grpc/internal/transport"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
@@ -155,8 +156,41 @@ func (h *clientMetricsHandler) TagConn(ctx context.Context, _ *stats.ConnTagInfo
 	return ctx
 }
 
-// HandleConn exists to satisfy stats.Handler.
-func (h *clientMetricsHandler) HandleConn(context.Context, stats.ConnStats) {}
+// HandleConn handles connection events (ConnBegin and ConnEnd).
+func (h *clientMetricsHandler) HandleConn(ctx context.Context, s stats.ConnStats) {
+	if h.MetricsRecorder == nil {
+		return
+	}
+	switch s.(type) {
+	case *stats.ConnBegin:
+		h.RecordInt64Count(TCPConnectionsCreatedHandle, 1)
+		h.RecordInt64UpDownCount(TCPConnectionCountHandle, 1)
+	case *stats.ConnEnd:
+		h.RecordInt64UpDownCount(TCPConnectionCountHandle, -1)
+		if conn := transport.GetConnection(ctx); conn != nil {
+			if ts := getTCPStats(conn); ts != nil {
+				if ts.minRTT > 0 {
+					h.RecordFloat64Histo(TCPMinRTTHandle, ts.minRTT)
+				}
+				if ts.packetsRetransmitted > 0 {
+					h.RecordInt64Count(TCPPacketsRetransmittedHandle, ts.packetsRetransmitted)
+				}
+				if ts.recurringRetransmits > 0 {
+					h.RecordInt64Count(TCPRecurringRetransmitsHandle, ts.recurringRetransmits)
+				}
+				if ts.bytesSent > 0 {
+					h.RecordInt64Count(TCPBytesSentHandle, ts.bytesSent)
+				}
+				if ts.syscallWrites > 0 {
+					h.RecordInt64Count(TCPSyscallWritesHandle, ts.syscallWrites)
+				}
+				if ts.syscallReads > 0 {
+					h.RecordInt64Count(TCPSyscallReadsHandle, ts.syscallReads)
+				}
+			}
+		}
+	}
+}
 
 // TagRPC implements per RPC attempt context management for metrics.
 func (h *clientMetricsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo) context.Context {

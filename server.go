@@ -1051,21 +1051,25 @@ func (s *Server) newHTTP2Transport(c net.Conn) transport.ServerTransport {
 }
 
 func (s *Server) serveStreams(ctx context.Context, st transport.ServerTransport, rawConn net.Conn) {
-	ctx = transport.SetConnection(ctx, rawConn)
-	ctx = peer.NewContext(ctx, st.Peer())
 	if s.statsHandler != nil {
+		rawConn = transport.NewStatsConn(rawConn)
+		ctx = transport.SetConnection(ctx, rawConn)
+		ctx = peer.NewContext(ctx, st.Peer())
 		ctx = s.statsHandler.TagConn(ctx, &stats.ConnTagInfo{
 			RemoteAddr: st.Peer().Addr,
 			LocalAddr:  st.Peer().LocalAddr,
 		})
 		s.statsHandler.HandleConn(ctx, &stats.ConnBegin{})
+	} else {
+		ctx = transport.SetConnection(ctx, rawConn)
+		ctx = peer.NewContext(ctx, st.Peer())
 	}
 
 	defer func() {
-		st.Close(errors.New("finished serving streams for the server transport"))
 		if s.statsHandler != nil {
 			s.statsHandler.HandleConn(ctx, &stats.ConnEnd{})
 		}
+		st.Close(errors.New("finished serving streams for the server transport"))
 	}()
 
 	streamQuota := newHandlerQuota(s.opts.maxConcurrentStreams)

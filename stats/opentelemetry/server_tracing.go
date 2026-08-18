@@ -18,7 +18,6 @@ package opentelemetry
 
 import (
 	"context"
-	"log"
 	"strings"
 
 	"go.opentelemetry.io/otel/trace"
@@ -33,7 +32,7 @@ type serverTracingHandler struct {
 
 func (h *serverTracingHandler) initializeTraces() {
 	if h.options.TraceOptions.TracerProvider == nil {
-		log.Printf("TracerProvider is not provided in server TraceOptions")
+		logger.Warning("TracerProvider is not provided in server TraceOptions")
 		return
 	}
 }

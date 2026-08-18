@@ -331,7 +331,7 @@ func NewHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 	}
 
 	t := &http2Client{
-		ctx:                   ctx,
+		ctx:                   SetConnection(ctx, conn),
 		ctxDone:               ctx.Done(), // Cache Done chan.
 		cancel:                cancel,
 		userAgent:             opts.UserAgent,
@@ -397,6 +397,8 @@ func NewHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 		}
 	}
 	if t.statsHandler != nil {
+		t.conn = NewStatsConn(t.conn)
+		t.ctx = SetConnection(t.ctx, t.conn)
 		t.ctx = t.statsHandler.TagConn(t.ctx, &stats.ConnTagInfo{
 			RemoteAddr: t.remoteAddr,
 			LocalAddr:  t.localAddr,
@@ -1064,6 +1066,11 @@ func (t *http2Client) Close(err error) {
 		t.logger.Infof("Failed to write a GOAWAY frame as part of connection close after %s. Giving up and closing the transport.", goAwayLoopyWriterTimeout)
 	}
 	t.cancel()
+	if t.statsHandler != nil {
+		t.statsHandler.HandleConn(t.ctx, &stats.ConnEnd{
+			Client: true,
+		})
+	}
 	t.conn.Close()
 	// Waits for the reader and keepalive goroutines to exit before returning to
 	// ensure all resources are cleaned up before Close can return.
@@ -1083,11 +1090,6 @@ func (t *http2Client) Close(err error) {
 	// Notify all active streams.
 	for _, s := range streams {
 		t.closeStream(s, err, false, http2.ErrCodeNo, st, nil, false)
-	}
-	if t.statsHandler != nil {
-		t.statsHandler.HandleConn(t.ctx, &stats.ConnEnd{
-			Client: true,
-		})
 	}
 }
 

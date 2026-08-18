@@ -37,8 +37,8 @@ var validSpanContext = oteltrace.SpanContext{}.WithTraceID(
 // correctly injects a valid OpenTelemetry span context as `grpc-trace-bin`
 // header in the provided carrier's context metadata.
 //
-// It verifies that if a valid span context is injected, same span context can
-// can be retreived from the carrier's context metadata.
+// It verifies that if a valid span context is injected, same span context
+// can be retrieved from the carrier's context metadata.
 func (s) TestInject_ValidSpanContext(t *testing.T) {
 	p := GRPCTraceBinPropagator{}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -57,8 +57,8 @@ func (s) TestInject_ValidSpanContext(t *testing.T) {
 	if !ok {
 		t.Fatalf("got invalid span context %v from Carrier's context metadata grpc-trace-bin header, want valid span context: %v", gotSC, validSpanContext)
 	}
-	if cmp.Equal(validSpanContext, gotSC) {
-		t.Fatalf("got span context = %v, want span contexts %v", gotSC, validSpanContext)
+	if !gotSC.Equal(validSpanContext.WithRemote(true)) {
+		t.Fatalf("got span context = %v, want span context = %v", gotSC, validSpanContext.WithRemote(true))
 	}
 }
 
