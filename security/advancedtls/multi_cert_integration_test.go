@@ -157,6 +157,43 @@ func (s) TestBuildGetCertificates_SignatureAlgorithmsExtension_TLS13(t *testing.
 	if !bytes.Equal(selectedRSAFromReversed.Certificate[0], cs.ServerPeerLocalhost1.Certificate[0]) {
 		t.Errorf("buildGetCertificates(chiRSA) selected unexpected cert from reversed list, want RSA cert")
 	}
+
+	// 5. Dual support with client preference: ClientHello offers [ECDSA, RSA] (prefers ECDSA over RSA).
+	// When server is configured with [RSA, ECDSA]: server's certificate slice order controls preference -> selects RSA.
+	// When server is configured with [ECDSA, RSA]: server's certificate slice order controls preference -> selects ECDSA.
+	chiDualECDSAPreferred := &tls.ClientHelloInfo{
+		ServerName: "localhost",
+		SignatureSchemes: []tls.SignatureScheme{
+			tls.ECDSAWithP256AndSHA256,
+			tls.PSSWithSHA256,
+		},
+		SupportedCurves:   []tls.CurveID{tls.X25519, tls.CurveP256},
+		SupportedVersions: []uint16{tls.VersionTLS13},
+	}
+	if err := chiDualECDSAPreferred.SupportsCertificate(&cs.ServerPeerLocalhost1); err != nil {
+		t.Fatalf("chiDualECDSAPreferred.SupportsCertificate(RSA) failed unexpectedly: %v", err)
+	}
+	if err := chiDualECDSAPreferred.SupportsCertificate(&cs.ServerPeerECDSALocalhost1); err != nil {
+		t.Fatalf("chiDualECDSAPreferred.SupportsCertificate(ECDSA) failed unexpectedly: %v", err)
+	}
+
+	// Server configured with [RSA, ECDSA] -> selects RSA (server certificate order controls)
+	selectedFromRSAFirst, err := buildGetCertificates(chiDualECDSAPreferred, opts)
+	if err != nil {
+		t.Fatalf("buildGetCertificates(chiDualECDSAPreferred, [RSA, ECDSA]) failed: %v", err)
+	}
+	if !bytes.Equal(selectedFromRSAFirst.Certificate[0], cs.ServerPeerLocalhost1.Certificate[0]) {
+		t.Errorf("buildGetCertificates(chiDualECDSAPreferred, [RSA, ECDSA]) selected unexpected cert, want RSA cert")
+	}
+
+	// Server configured with [ECDSA, RSA] -> selects ECDSA (server certificate order controls)
+	selectedFromECDSAFirst, err := buildGetCertificates(chiDualECDSAPreferred, optsReversed)
+	if err != nil {
+		t.Fatalf("buildGetCertificates(chiDualECDSAPreferred, [ECDSA, RSA]) failed: %v", err)
+	}
+	if !bytes.Equal(selectedFromECDSAFirst.Certificate[0], cs.ServerPeerECDSALocalhost1.Certificate[0]) {
+		t.Errorf("buildGetCertificates(chiDualECDSAPreferred, [ECDSA, RSA]) selected unexpected cert, want ECDSA cert")
+	}
 }
 
 // TestBuildGetCertificates_SignatureAlgorithmsAndCipherSuites_TLS12 verifies that
