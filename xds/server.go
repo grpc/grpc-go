@@ -64,7 +64,7 @@ type GRPCServer struct {
 	gs             grpcServer
 	quit           *grpcsync.Event
 	logger         *internalgrpclog.PrefixLogger
-	opts           *server.ServerOptions
+	opts           *server.Options
 	xdsC           xdsclient.XDSClient
 	xdsClientClose func()
 }
@@ -131,8 +131,8 @@ func (s *GRPCServer) handleServerOptions(opts []grpc.ServerOption) {
 	s.opts = so
 }
 
-func (s *GRPCServer) defaultServerOptions() *server.ServerOptions {
-	return &server.ServerOptions{
+func (s *GRPCServer) defaultServerOptions() *server.Options {
+	return &server.Options{
 		// A default serving mode change callback which simply logs at the
 		// default-visible log level. This will be used if the application does not
 		// register a mode change callback.

@@ -31,7 +31,7 @@ import (
 // ServingModeCallback returns a grpc.ServerOption which allows users to
 // register a callback to get notified about serving mode changes.
 func ServingModeCallback(cb ServingModeCallbackFunc) grpc.ServerOption {
-	return internalserver.NewServerOption(func(o *internalserver.ServerOptions) {
+	return internalserver.NewServerOption(func(o *internalserver.Options) {
 		o.ModeCallback = func(addr net.Addr, mode connectivity.ServingMode, err error) {
 			cb(addr, ServingModeChangeArgs{
 				Mode: mode,
@@ -75,7 +75,7 @@ func BootstrapContentsForTesting(bootstrapContents []byte) grpc.ServerOption {
 	config, err := bootstrap.NewConfigFromContents(bootstrapContents)
 	if err != nil {
 		logger.Warningf("Failed to parse bootstrap contents %s for server options: %v", string(bootstrapContents), err)
-		return internalserver.NewServerOption(func(o *internalserver.ServerOptions) {
+		return internalserver.NewServerOption(func(o *internalserver.Options) {
 			o.ClientPoolForTesting = nil
 		})
 	}
@@ -96,7 +96,7 @@ func BootstrapContentsForTesting(bootstrapContents []byte) grpc.ServerOption {
 // Notice: This API is EXPERIMENTAL and may be changed or removed in a
 // later release.
 func ClientPoolForTesting(pool *xdsclient.Pool) grpc.ServerOption {
-	return internalserver.NewServerOption(func(o *internalserver.ServerOptions) {
+	return internalserver.NewServerOption(func(o *internalserver.Options) {
 		o.ClientPoolForTesting = pool
 	})
 }
