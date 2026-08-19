@@ -100,7 +100,7 @@ type fakeSideChannelFactory struct {
 	failTarget string
 }
 
-func (f *fakeSideChannelFactory) CreateChannel(targetURI string, _ bootstrap.ChannelCreds, _ []bootstrap.CallCredsConfig) (grpc.ClientConnInterface, func() error, error) {
+func (f *fakeSideChannelFactory) CreateChannel(targetURI string, _ bootstrap.ChannelCreds, _ []bootstrap.CallCredsConfig) (grpc.ClientConnInterface, func(), error) {
 	if f.failTarget != "" && targetURI == f.failTarget {
 		return nil, nil, fmt.Errorf("dial error")
 	}
@@ -108,7 +108,7 @@ func (f *fakeSideChannelFactory) CreateChannel(targetURI string, _ bootstrap.Cha
 	if err != nil {
 		return nil, nil, err
 	}
-	return cc, cc.Close, nil
+	return cc, func() { cc.Close() }, nil
 }
 
 var cmpOpts = []cmp.Option{
@@ -248,6 +248,92 @@ func (s) TestParseFilterConfig_Success(t *testing.T) {
 			}
 			if diff := cmp.Diff(got, tt.wantCfg, cmpOpts...); diff != "" {
 				t.Fatalf("ParseFilterConfig() returned unexpected config (-got +want):\n%s", diff)
+			}
+		})
+	}
+}
+
+// Tests the gRFC A102 trust policy applied when parsing the grpc_service:
+// credentials from the proto are honored only when the xDS management server
+// that delivered the resource is trusted; for untrusted management servers
+// the target must be present in the bootstrap allowed_grpc_services map and
+// the parsed credentials are cleared.
+func (s) TestParseFilterConfig_TrustPolicy(t *testing.T) {
+	const insecureCredsTypeURL = "type.googleapis.com/envoy.extensions.grpc_service.channel_credentials.insecure.v3.InsecureCredentials"
+	trustedServer, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{
+		URI:            "trusted-server:1234",
+		ServerFeatures: []string{"trusted_xds_server"},
+	})
+	if err != nil {
+		t.Fatalf("ServerConfigForTesting() failed: %v", err)
+	}
+	untrustedOpts := testParseOptions(t, "localhost:1234")
+	trustedOpts := httpfilter.ParseOptions{BootstrapConfig: untrustedOpts.BootstrapConfig, ServerConfig: trustedServer}
+
+	extProcConfig := func(targetURI string, channelPlugins ...*anypb.Any) proto.Message {
+		m, _ := anypb.New(&fpb.ExternalProcessor{
+			GrpcService: &corepb.GrpcService{
+				TargetSpecifier: &corepb.GrpcService_GoogleGrpc_{
+					GoogleGrpc: &corepb.GrpcService_GoogleGrpc{
+						TargetUri:                targetURI,
+						ChannelCredentialsPlugin: channelPlugins,
+					},
+				},
+			},
+			ProcessingMode: &fpb.ProcessingMode{},
+		})
+		return m
+	}
+	insecurePlugin := &anypb.Any{TypeUrl: insecureCredsTypeURL}
+
+	tests := []struct {
+		name      string
+		cfg       proto.Message
+		opts      httpfilter.ParseOptions
+		wantCreds bootstrap.ChannelCreds
+		wantErr   string
+	}{
+		{
+			name:      "trusted_uses_proto_creds",
+			cfg:       extProcConfig("localhost:1234", insecurePlugin),
+			opts:      trustedOpts,
+			wantCreds: bootstrap.ChannelCreds{Type: "insecure"},
+		},
+		{
+			name:    "trusted_requires_supported_creds",
+			cfg:     extProcConfig("localhost:1234"),
+			opts:    trustedOpts,
+			wantErr: "no supported channel credentials found",
+		},
+		{
+			name: "untrusted_allowlisted_clears_creds",
+			cfg:  extProcConfig("localhost:1234", insecurePlugin),
+			opts: untrustedOpts,
+			// The proto's credentials must be ignored: empty credentials
+			// instruct CreateChannel to use the allowlisted ones.
+			wantCreds: bootstrap.ChannelCreds{},
+		},
+		{
+			name:    "untrusted_not_allowlisted",
+			cfg:     extProcConfig("other-target:1234", insecurePlugin),
+			opts:    untrustedOpts,
+			wantErr: "not present in allowed_grpc_services",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := builder{}.ParseFilterConfig(tt.cfg, tt.opts)
+			if tt.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("ParseFilterConfig() returned error = %v, wantErr %v", err, tt.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("ParseFilterConfig() returned unexpected error: %v", err)
+			}
+			if gotCreds := got.(baseConfig).server.ChannelCredentials; !gotCreds.Equal(tt.wantCreds) {
+				t.Fatalf("ParseFilterConfig() returned channel credentials %+v, want %+v", gotCreds, tt.wantCreds)
 			}
 		})
 	}

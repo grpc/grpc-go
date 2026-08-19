@@ -101,7 +101,8 @@ func (s) TestGetRequestMetadata(t *testing.T) {
 		t.Fatalf("GetRequestMetadata() on a secure connection returned authorization header %q, want %q", got, want)
 	}
 
-	// The token must be withheld, without error, on an insecure connection.
+	// The token must be withheld, without error, on a connection that does
+	// not provide privacy and integrity.
 	insecureCtx := credentials.NewContextWithRequestInfo(ctx, credentials.RequestInfo{
 		AuthInfo: &testAuthInfo{secLevel: credentials.NoSecurity},
 	})

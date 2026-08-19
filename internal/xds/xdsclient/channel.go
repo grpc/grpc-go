@@ -51,18 +51,18 @@ func sideChannelKey(targetURI string, chanCreds bootstrap.ChannelCreds, callCred
 // bootstrap allowed_grpc_services map are used. Otherwise the provided
 // credential configs, which come from a trusted server's GrpcService proto,
 // are used as provided (gRFC A102).
-func (c *clientImpl) CreateChannel(targetURI string, chanCreds bootstrap.ChannelCreds, callCreds []bootstrap.CallCredsConfig) (grpc.ClientConnInterface, func() error, error) {
+func (c *clientImpl) CreateChannel(targetURI string, chanCreds bootstrap.ChannelCreds, callCreds []bootstrap.CallCredsConfig) (grpc.ClientConnInterface, func(), error) {
 	key := sideChannelKey(targetURI, chanCreds, callCreds)
 	c.sideChannelsMu.Lock()
 	defer c.sideChannelsMu.Unlock()
-	if rc, ok := c.sideChannels[key]; ok {
-		if rc.TryIncrement() {
-			return rc.Value(), sideChannelRelease(rc), nil
-		}
-		// The entry's refcount already dropped to zero and it is being
-		// cleaned up; remove it and create a fresh channel below.
-		delete(c.sideChannels, key)
+	if rc, ok := c.sideChannels[key]; ok && rc.TryIncrement() {
+		return rc.Value(), sideChannelRelease(rc), nil
 	}
+	// If TryIncrement failed, the entry's refcount already dropped to zero
+	// and it is being cleaned up: a fresh channel is created below. There is
+	// no need to delete the dying entry here; it is either overwritten when
+	// the fresh channel is stored, or removed by its own cleanup, which
+	// deletes the map entry only if it still points to the dying channel.
 
 	dialOpts, cleanups, err := c.sideChannelDialOptions(targetURI, chanCreds, callCreds)
 	if err != nil {
@@ -101,11 +101,8 @@ func (c *clientImpl) CreateChannel(targetURI string, chanCreds bootstrap.Channel
 // sideChannelRelease returns an idempotent release function for the given
 // channel entry. It must be called without holding sideChannelsMu, since the
 // last release runs the cleanup synchronously, which acquires the mutex.
-func sideChannelRelease(rc *grpcsync.RefCounted[*grpc.ClientConn]) func() error {
-	return sync.OnceValue(func() error {
-		rc.Decrement()
-		return nil
-	})
+func sideChannelRelease(rc *grpcsync.RefCounted[*grpc.ClientConn]) func() {
+	return sync.OnceFunc(rc.Decrement)
 }
 
 // sideChannelDialOptions resolves the dial options to use for a side channel

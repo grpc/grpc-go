@@ -24,9 +24,9 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/google"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/internal/xds/bootstrap/accesstokencreds"
 	"google.golang.org/grpc/internal/xds/bootstrap/jwtcreds"
 	"google.golang.org/grpc/internal/xds/bootstrap/tlscreds"
+	"google.golang.org/grpc/internal/xds/grpcservice/accesstokencreds"
 )
 
 func init() {

@@ -112,7 +112,7 @@ type SideChannelFactory interface {
 	// by an untrusted xDS server, and the credentials configured for the
 	// target in the bootstrap allowed_grpc_services map are used instead of
 	// the provided configs (gRFC A102).
-	CreateChannel(targetURI string, chanCreds bootstrap.ChannelCreds, callCreds []bootstrap.CallCredsConfig) (grpc.ClientConnInterface, func() error, error)
+	CreateChannel(targetURI string, chanCreds bootstrap.ChannelCreds, callCreds []bootstrap.CallCredsConfig) (grpc.ClientConnInterface, func(), error)
 }
 
 // ClientFilterOptions contains options for building a client filter.

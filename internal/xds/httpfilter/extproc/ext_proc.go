@@ -50,6 +50,7 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/structpb"
 
+	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3procfilterpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/ext_proc/v3"
 	v3procservicegrpc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	v3procservicepb "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
@@ -108,13 +109,45 @@ func validateBodyProcessingMode(mode *v3procfilterpb.ProcessingMode) error {
 	return nil
 }
 
-// grpcServiceParser returns a GrpcService parser for the given parse options.
-// Credentials from the proto are honored only when the delivering xDS server
-// is configured with the trusted_xds_server feature; a nil ServerConfig means
-// the delivering server is unknown and is treated as untrusted (gRFC A102).
-func grpcServiceParser(opts httpfilter.ParseOptions) *grpcservice.GrpcService {
+// parseGrpcService parses the GrpcService proto identifying the external
+// processor server and applies the gRFC A102 trust policy.
+//
+// Credentials from the proto are honored only when the xDS management server
+// that delivered the resource is trusted, i.e. configured with the
+// trusted_xds_server server feature; a nil ServerConfig means the delivering
+// management server is unknown and is treated as untrusted. For untrusted
+// management servers, the target must be present in the bootstrap
+// allowed_grpc_services map, and the credentials parsed from the proto are
+// cleared: empty credentials are the sentinel instructing the xDS client's
+// CreateChannel to use the allowlisted credentials instead.
+func parseGrpcService(gs *v3corepb.GrpcService, opts httpfilter.ParseOptions) (grpcservice.Config, error) {
+	cfg, err := grpcservice.Parse(gs)
+	if err != nil {
+		return grpcservice.Config{}, err
+	}
+
 	trusted := opts.ServerConfig != nil && opts.ServerConfig.ServerFeaturesTrustedXDSServer()
-	return grpcservice.New(opts.BootstrapConfig, trusted)
+	if trusted {
+		// The channel to the external processor server is created with the
+		// credentials from the proto, so they must be usable. This also
+		// keeps the empty-credentials sentinel unambiguous.
+		if cfg.ChannelCredentials.Type == "" {
+			return grpcservice.Config{}, fmt.Errorf("no supported channel credentials found in grpc_service for %q", cfg.TargetURI)
+		}
+		return *cfg, nil
+	}
+
+	// A nil bootstrap config has no allowlist, so all targets are rejected.
+	var allowlisted bool
+	if opts.BootstrapConfig != nil {
+		_, allowlisted = opts.BootstrapConfig.AllowedGRPCService(cfg.TargetURI)
+	}
+	if !allowlisted {
+		return grpcservice.Config{}, fmt.Errorf("target_uri %q is not present in allowed_grpc_services", cfg.TargetURI)
+	}
+	cfg.ChannelCredentials = bootstrap.ChannelCreds{}
+	cfg.CallCredentials = nil
+	return *cfg, nil
 }
 
 // ParseFilterConfig parses the provided filter configuration. The GrpcService
@@ -139,7 +172,7 @@ func (builder) ParseFilterConfig(cfg proto.Message, opts httpfilter.ParseOptions
 	if msg.GetGrpcService() == nil {
 		return nil, fmt.Errorf("extproc: empty grpc_service provided in config %v", cfg)
 	}
-	server, err := grpcServiceParser(opts).Parse(msg.GetGrpcService())
+	server, err := parseGrpcService(msg.GetGrpcService(), opts)
 	if err != nil {
 		return nil, fmt.Errorf("extproc: failed to parse grpc_service: %v", err)
 	}
@@ -208,7 +241,7 @@ func (builder) ParseFilterConfigOverride(ov proto.Message, opts httpfilter.Parse
 
 	var serverOpt optional.Optional[grpcservice.Config]
 	if override.GetGrpcService() != nil {
-		server, err := grpcServiceParser(opts).Parse(override.GetGrpcService())
+		server, err := parseGrpcService(override.GetGrpcService(), opts)
 		if err != nil {
 			return nil, fmt.Errorf("extproc: failed to parse grpc_service: %v", err)
 		}

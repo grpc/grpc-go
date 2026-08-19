@@ -27,13 +27,14 @@ import (
 	"strings"
 	"time"
 
-	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
-	access_tokenpb "github.com/envoyproxy/go-control-plane/envoy/extensions/grpc_service/call_credentials/access_token/v3"
-	xdspb "github.com/envoyproxy/go-control-plane/envoy/extensions/grpc_service/channel_credentials/xds/v3"
 	imetadata "google.golang.org/grpc/internal/metadata"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
+
+	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	accesstokenpb "github.com/envoyproxy/go-control-plane/envoy/extensions/grpc_service/call_credentials/access_token/v3"
+	xdspb "github.com/envoyproxy/go-control-plane/envoy/extensions/grpc_service/channel_credentials/xds/v3"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 )
@@ -49,21 +50,6 @@ const (
 	maxHeaderValueLen = 16384
 )
 
-// GrpcService parses GrpcService protos in the context of a bootstrap
-// configuration and a trust level for the delivering xDS server.
-type GrpcService struct {
-	config  *bootstrap.Config
-	trusted bool
-}
-
-// New returns a GrpcService that parses GrpcService protos against the given
-// bootstrap configuration. The trusted argument indicates whether the xDS
-// server that delivered the resource is configured with the trusted_xds_server
-// server feature.
-func New(config *bootstrap.Config, trusted bool) *GrpcService {
-	return &GrpcService{config: config, trusted: trusted}
-}
-
 // Config is the parsed form of a GrpcService proto.
 type Config struct {
 	// TargetURI is the gRPC target URI of the side-channel service.
@@ -73,75 +59,55 @@ type Config struct {
 	Timeout time.Duration
 	// InitialMetadata is the metadata to add to RPCs on the side channel.
 	InitialMetadata metadata.MD
-	// ChannelCredentials are the channel credentials used to create the
-	// side channel. Set only on the trusted path.
+	// ChannelCredentials are the channel credentials extracted from the
+	// proto's channel credentials plugins. Empty if the proto configures no
+	// supported channel credentials.
 	ChannelCredentials bootstrap.ChannelCreds
-	// CallCredentials are the call credentials to apply to RPCs sent on the
-	// side channel. Set only on the trusted path.
+	// CallCredentials are the call credentials extracted from the proto's
+	// call credentials plugins, preserving order.
 	CallCredentials []bootstrap.CallCredsConfig
 }
 
 // Parse parses and validates a GrpcService proto into a Config.
 //
-// When the delivering server is trusted, the credentials are taken from the
-// proto; otherwise the target URI must be present in the allowed_grpc_services
-// map, and the credentials are resolved later at channel creation time and left
-// empty here.
-func (g *GrpcService) Parse(gs *v3corepb.GrpcService) (Config, error) {
+// Parsing is independent of the trust status of the xDS server that delivered
+// the proto: the credentials configured in the proto are always extracted
+// into the returned Config, and it is up to the caller to decide whether they
+// may be used.
+func Parse(gs *v3corepb.GrpcService) (*Config, error) {
 	googleGrpc := gs.GetGoogleGrpc()
 	if googleGrpc == nil {
-		return Config{}, fmt.Errorf("grpcservice: only google_grpc GrpcService config is supported")
+		return nil, fmt.Errorf("grpcservice: only google_grpc GrpcService config is supported")
 	}
 
 	targetURI := googleGrpc.GetTargetUri()
 	if targetURI == "" {
-		return Config{}, fmt.Errorf("grpcservice: target_uri must be non-empty")
+		return nil, fmt.Errorf("grpcservice: target_uri must be non-empty")
 	}
 	if err := validateTargetURI(targetURI); err != nil {
-		return Config{}, err
+		return nil, err
 	}
 
-	var channelCreds bootstrap.ChannelCreds
-	var callCreds []bootstrap.CallCredsConfig
-	if g.trusted {
-		var err error
-		if channelCreds, err = extractChannelCredentials(googleGrpc.GetChannelCredentialsPlugin()); err != nil {
-			return Config{}, fmt.Errorf("grpcservice: failed to extract channel credentials: %v", err)
-		}
-		if callCreds, err = extractCallCredentials(googleGrpc.GetCallCredentialsPlugin()); err != nil {
-			return Config{}, fmt.Errorf("grpcservice: failed to extract call credentials: %v", err)
-		}
-	} else {
-		// For untrusted servers we ignore the credentials in the proto.
-		// The target must be present in the allowed_grpc_services
-		// allowlist, but the credentials themselves are resolved later,
-		// at channel creation time; they are left empty in the parsed
-		// config here. A nil bootstrap config has no allowlist, so all
-		// targets are rejected.
-		var allowedSvc *bootstrap.AllowedGRPCService
-		var ok bool
-		if g.config != nil {
-			allowedSvc, ok = g.config.AllowedGRPCService(targetURI)
-		}
-		if !ok {
-			return Config{}, fmt.Errorf("grpcservice: target_uri %q is not present in allowed_grpc_services", targetURI)
-		}
-		if allowedSvc == nil {
-			return Config{}, fmt.Errorf("grpcservice: allowed gRPC service %q has nil configuration", targetURI)
-		}
+	channelCreds, err := extractChannelCredentials(googleGrpc.GetChannelCredentialsPlugin())
+	if err != nil {
+		return nil, fmt.Errorf("grpcservice: failed to extract channel credentials: %v", err)
+	}
+	callCreds, err := extractCallCredentials(googleGrpc.GetCallCredentialsPlugin())
+	if err != nil {
+		return nil, fmt.Errorf("grpcservice: failed to extract call credentials: %v", err)
 	}
 
 	timeout, err := parseTimeout(gs)
 	if err != nil {
-		return Config{}, err
+		return nil, err
 	}
 
 	initialMetadata, err := parseInitialMetadata(gs.GetInitialMetadata())
 	if err != nil {
-		return Config{}, err
+		return nil, err
 	}
 
-	return Config{
+	return &Config{
 		TargetURI:          targetURI,
 		Timeout:            timeout,
 		InitialMetadata:    initialMetadata,
@@ -212,9 +178,10 @@ func parseInitialMetadata(headers []*v3corepb.HeaderValue) (metadata.MD, error) 
 	return md, nil
 }
 
-// extractChannelCredentials returns the first supported channel credential from
-// the plugin list. It is an error if none of the configured plugins are
-// supported.
+// extractChannelCredentials returns the first supported channel credential
+// from the plugin list. If none of the configured plugins are supported, it
+// returns empty credentials without error; whether credentials are required
+// is a policy decision left to the caller.
 func extractChannelCredentials(plugins []*anypb.Any) (bootstrap.ChannelCreds, error) {
 	for _, cred := range plugins {
 		if cred == nil {
@@ -250,7 +217,7 @@ func extractChannelCredentials(plugins []*anypb.Any) (bootstrap.ChannelCreds, er
 			continue
 		}
 	}
-	return bootstrap.ChannelCreds{}, fmt.Errorf("no supported channel credentials found in plugins")
+	return bootstrap.ChannelCreds{}, nil
 }
 
 // extractCallCredentials returns the supported call credentials from the plugin
@@ -265,7 +232,7 @@ func extractCallCredentials(plugins []*anypb.Any) ([]bootstrap.CallCredsConfig, 
 		if cred.GetTypeUrl() != accessTokenCredsTypeURL {
 			continue
 		}
-		var accessToken access_tokenpb.AccessTokenCredentials
+		var accessToken accesstokenpb.AccessTokenCredentials
 		if err := anypb.UnmarshalTo(cred, &accessToken, proto.UnmarshalOptions{}); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal AccessTokenCredentials: %v", err)
 		}

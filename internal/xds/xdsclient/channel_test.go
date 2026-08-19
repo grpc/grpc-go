@@ -148,13 +148,34 @@ func (s) TestCreateChannel_AllowedGRPCServices(t *testing.T) {
 func (s) TestCreateChannel_Errors(t *testing.T) {
 	c := newTestClientForSideChannels(t, "")
 
-	if _, _, err := c.CreateChannel("passthrough:///target", bootstrap.ChannelCreds{Type: "unsupported-type"}, nil); err == nil || !strings.Contains(err.Error(), "unsupported channel credentials type") {
-		t.Fatalf("CreateChannel() with unsupported credentials returned error %v, want unsupported channel credentials type error", err)
+	tests := []struct {
+		name      string
+		chanCreds bootstrap.ChannelCreds
+		callCreds []bootstrap.CallCredsConfig
+		wantErr   string
+	}{
+		{
+			name:      "unsupported_channel_creds",
+			chanCreds: bootstrap.ChannelCreds{Type: "unsupported-type"},
+			wantErr:   "unsupported channel credentials type",
+		},
+		{
+			name:    "no_creds_and_not_allowlisted",
+			wantErr: "no credentials available",
+		},
+		{
+			name:      "unsupported_call_creds",
+			chanCreds: bootstrap.ChannelCreds{Type: "insecure"},
+			callCreds: []bootstrap.CallCredsConfig{{Type: "unsupported-type"}},
+			wantErr:   "unsupported call credentials type",
+		},
 	}
-	if _, _, err := c.CreateChannel("passthrough:///target", bootstrap.ChannelCreds{}, nil); err == nil || !strings.Contains(err.Error(), "no credentials available") {
-		t.Fatalf("CreateChannel() without credentials returned error %v, want no credentials available error", err)
-	}
-	if _, _, err := c.CreateChannel("passthrough:///target", bootstrap.ChannelCreds{Type: "insecure"}, []bootstrap.CallCredsConfig{{Type: "unsupported-type"}}); err == nil || !strings.Contains(err.Error(), "unsupported call credentials type") {
-		t.Fatalf("CreateChannel() with unsupported call credentials returned error %v, want unsupported call credentials type error", err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, _, err := c.CreateChannel("passthrough:///target", tt.chanCreds, tt.callCreds)
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("CreateChannel() returned error %v, want error containing %q", err, tt.wantErr)
+			}
+		})
 	}
 }

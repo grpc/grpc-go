@@ -4815,14 +4815,14 @@ func (s) TestExtProcChannelRetention(t *testing.T) {
 
 			// Override CreateExtProcChannel to signal when the channel is closed.
 			origCreate := internal.CreateExtProcChannel
-			internal.CreateExtProcChannel = func(_ httpfilter.SideChannelFactory, cfg grpcservice.Config) (grpc.ClientConnInterface, func() error, error) {
+			internal.CreateExtProcChannel = func(_ httpfilter.SideChannelFactory, cfg grpcservice.Config) (grpc.ClientConnInterface, func(), error) {
 				cc, err := grpc.NewClient(cfg.TargetURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
 				if err != nil {
 					return nil, nil, err
 				}
-				closeFunc := func() error {
+				closeFunc := func() {
 					close(closeChan)
-					return cc.Close()
+					cc.Close()
 				}
 				return cc, closeFunc, nil
 			}
@@ -4933,14 +4933,14 @@ func (s) TestExtProcChannelRetention_XDSConfigUpdate(t *testing.T) {
 			// Override CreateExtProcChannel to signal when a channel is closed and
 			// dial to correct proc server.
 			origCreate := internal.CreateExtProcChannel
-			internal.CreateExtProcChannel = func(_ httpfilter.SideChannelFactory, cfg grpcservice.Config) (grpc.ClientConnInterface, func() error, error) {
+			internal.CreateExtProcChannel = func(_ httpfilter.SideChannelFactory, cfg grpcservice.Config) (grpc.ClientConnInterface, func(), error) {
 				cc, err := grpc.NewClient(cfg.TargetURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
 				if err != nil {
 					return nil, nil, err
 				}
-				closeFunc := func() error {
+				closeFunc := func() {
 					closeChan <- cfg.TargetURI
-					return cc.Close()
+					cc.Close()
 				}
 				return cc, closeFunc, nil
 			}
@@ -5114,14 +5114,14 @@ func (s) TestExtProcChannelRetention_UnaryRPC(t *testing.T) {
 
 			// Override CreateExtProcChannel to signal when the channel is closed.
 			origCreate := internal.CreateExtProcChannel
-			internal.CreateExtProcChannel = func(_ httpfilter.SideChannelFactory, cfg grpcservice.Config) (grpc.ClientConnInterface, func() error, error) {
+			internal.CreateExtProcChannel = func(_ httpfilter.SideChannelFactory, cfg grpcservice.Config) (grpc.ClientConnInterface, func(), error) {
 				cc, err := grpc.NewClient(cfg.TargetURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
 				if err != nil {
 					return nil, nil, err
 				}
-				closeFunc := func() error {
+				closeFunc := func() {
 					close(closeChan)
-					return cc.Close()
+					cc.Close()
 				}
 				return cc, closeFunc, nil
 			}

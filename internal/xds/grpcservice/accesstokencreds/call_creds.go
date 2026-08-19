@@ -32,8 +32,12 @@ import (
 // token to outgoing RPCs. The config must be a JSON object of the form
 // {"token": <non-empty string>}.
 //
-// The caller is expected to invoke the cancel function when they are done
-// using the returned call creds. This cancel function is idempotent.
+// The token is only ever sent on connections that provide privacy and
+// integrity; on weaker connections it is withheld without failing the RPC.
+//
+// The returned cleanup function is a no-op since these credentials hold no
+// resources; it exists to satisfy the registry's CallCredentials Build
+// contract, and is idempotent.
 func NewCallCredentials(configJSON json.RawMessage) (credentials.PerRPCCredentials, func(), error) {
 	var cfg struct {
 		Token string `json:"token"`
@@ -57,7 +61,7 @@ type callCreds struct {
 
 // GetRequestMetadata returns the token as an authorization header, but only
 // when the connection provides privacy and integrity. On weaker connections
-// the token is withheld without failing the RPC, as per gRFC A102.
+// the token is withheld without failing the RPC.
 func (c *callCreds) GetRequestMetadata(ctx context.Context, _ ...string) (map[string]string, error) {
 	ri, ok := credentials.RequestInfoFromContext(ctx)
 	if !ok || credentials.CheckSecurityLevel(ri.AuthInfo, credentials.PrivacyAndIntegrity) != nil {
@@ -66,9 +70,10 @@ func (c *callCreds) GetRequestMetadata(ctx context.Context, _ ...string) (map[st
 	return map[string]string{"authorization": "Bearer " + c.token}, nil
 }
 
-// RequireTransportSecurity returns false. The credentials may be used on any
-// connection, but GetRequestMetadata withholds the token on connections that
-// do not provide privacy and integrity.
+// RequireTransportSecurity indicates whether the credentials requires
+// transport security. It returns false: the credentials may be added to any
+// connection, but the token is withheld (not sent) on connections that do
+// not provide privacy and integrity.
 func (c *callCreds) RequireTransportSecurity() bool {
 	return false
 }
