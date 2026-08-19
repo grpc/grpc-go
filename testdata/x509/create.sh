@@ -190,4 +190,4 @@ openssl x509 -req                 \
 openssl verify -verbose -CAfile client_ca_cert.pem client_ecdsa_cert.pem
 
 # Cleanup the CSRs.
-rm *_csr.pem
+rm -f *_csr.pem
