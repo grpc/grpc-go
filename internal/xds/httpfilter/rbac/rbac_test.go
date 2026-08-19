@@ -36,18 +36,19 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
-func headerPermission(name string) *v3rbacpb.Permission {
-	return &v3rbacpb.Permission{Rule: &v3rbacpb.Permission_Header{Header: &v3routepb.HeaderMatcher{
+func headerMatcher(name string) *v3routepb.HeaderMatcher {
+	return &v3routepb.HeaderMatcher{
 		Name:                 name,
 		HeaderMatchSpecifier: &v3routepb.HeaderMatcher_PresentMatch{PresentMatch: true},
-	}}}
+	}
+}
+
+func headerPermission(name string) *v3rbacpb.Permission {
+	return &v3rbacpb.Permission{Rule: &v3rbacpb.Permission_Header{Header: headerMatcher(name)}}
 }
 
 func headerPrincipal(name string) *v3rbacpb.Principal {
-	return &v3rbacpb.Principal{Identifier: &v3rbacpb.Principal_Header{Header: &v3routepb.HeaderMatcher{
-		Name:                 name,
-		HeaderMatchSpecifier: &v3routepb.HeaderMatcher_PresentMatch{PresentMatch: true},
-	}}}
+	return &v3rbacpb.Principal{Identifier: &v3rbacpb.Principal_Header{Header: headerMatcher(name)}}
 }
 
 func rbacConfig(perm *v3rbacpb.Permission, principal *v3rbacpb.Principal) *rpb.RBAC {
@@ -123,5 +124,62 @@ func (s) TestNestedHostHeaderAliasing(t *testing.T) {
 	gotPrincipal := principal.GetIdentifier().(*v3rbacpb.Principal_AndIds).AndIds.GetIds()[0].GetIdentifier().(*v3rbacpb.Principal_Header).Header.GetName()
 	if gotPrincipal != ":authority" {
 		t.Errorf("Nested principal host matcher name = %q, want %q", gotPrincipal, ":authority")
+	}
+}
+
+// TestHeaderMatcherNameIsLowercased checks that a header matcher name is
+// lowercased before it reaches the matching engine. gRPC lowercases every
+// metadata key, so a name that carries an uppercase character matches no
+// header at all, and a DENY policy using one fails open.
+func (s) TestHeaderMatcherNameIsLowercased(t *testing.T) {
+	tests := []struct {
+		name     string
+		wantName string
+	}{
+		{name: "X-Role", wantName: "x-role"},
+		{name: "USER-AGENT", wantName: "user-agent"},
+		// The host to :authority alias must not depend on the case either.
+		{name: "Host", wantName: ":authority"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			// The permission matcher is nested and the principal matcher is at
+			// the top level, so both the recursive walk and the top level are
+			// covered.
+			permHeader, principalHeader := headerMatcher(test.name), headerMatcher(test.name)
+			perm := &v3rbacpb.Permission{Rule: &v3rbacpb.Permission_NotRule{
+				NotRule: &v3rbacpb.Permission{Rule: &v3rbacpb.Permission_Header{Header: permHeader}},
+			}}
+			principal := &v3rbacpb.Principal{Identifier: &v3rbacpb.Principal_Header{Header: principalHeader}}
+
+			if _, err := parseConfig(rbacConfig(perm, principal)); err != nil {
+				t.Fatalf("parseConfig() failed: %v", err)
+			}
+			if got := permHeader.GetName(); got != test.wantName {
+				t.Errorf("Permission header matcher name = %q, want %q", got, test.wantName)
+			}
+			if got := principalHeader.GetName(); got != test.wantName {
+				t.Errorf("Principal header matcher name = %q, want %q", got, test.wantName)
+			}
+		})
+	}
+}
+
+// TestHeaderMatcherValidationIsCaseInsensitive checks that the A41 rejection of
+// :scheme and grpc- prefixed header matchers cannot be evaded by spelling the
+// name in another case.
+func (s) TestHeaderMatcherValidationIsCaseInsensitive(t *testing.T) {
+	anyPermission := &v3rbacpb.Permission{Rule: &v3rbacpb.Permission_Any{Any: true}}
+	anyPrincipal := &v3rbacpb.Principal{Identifier: &v3rbacpb.Principal_Any{Any: true}}
+
+	for _, name := range []string{":Scheme", "Grpc-Timeout", "GRPC-STATUS"} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := parseConfig(rbacConfig(headerPermission(name), anyPrincipal)); err == nil {
+				t.Errorf("parseConfig() succeeded for permission header matcher %q; want error rejecting a :scheme/grpc- header matcher", name)
+			}
+			if _, err := parseConfig(rbacConfig(anyPermission, headerPrincipal(name))); err == nil {
+				t.Errorf("parseConfig() succeeded for principal header matcher %q; want error rejecting a :scheme/grpc- header matcher", name)
+			}
+		})
 	}
 }
