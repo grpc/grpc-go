@@ -69,9 +69,9 @@ func (s) TestServerMultipleCerts_TLS13_Negotiation(t *testing.T) {
 	caPool := loadCertPool(t, "x509/server_ca_cert.pem")
 
 	testCases := []struct {
-		desc                    string
-		serverConfig            *tls.Config
-		wantNegotiatedAlgorithm x509.PublicKeyAlgorithm
+		desc               string
+		serverConfig       *tls.Config
+		wantNegotiatedAlgo x509.PublicKeyAlgorithm
 	}{
 		{
 			desc: "Server configured with [RSA, ECDSA] certificates in TLS 1.3",
@@ -80,7 +80,7 @@ func (s) TestServerMultipleCerts_TLS13_Negotiation(t *testing.T) {
 				MinVersion:   tls.VersionTLS13,
 				MaxVersion:   tls.VersionTLS13,
 			},
-			wantNegotiatedAlgorithm: x509.RSA,
+			wantNegotiatedAlgo: x509.RSA,
 		},
 		{
 			desc: "Server configured with reversed [ECDSA, RSA] certificates in TLS 1.3",
@@ -89,7 +89,7 @@ func (s) TestServerMultipleCerts_TLS13_Negotiation(t *testing.T) {
 				MinVersion:   tls.VersionTLS13,
 				MaxVersion:   tls.VersionTLS13,
 			},
-			wantNegotiatedAlgorithm: x509.ECDSA,
+			wantNegotiatedAlgo: x509.ECDSA,
 		},
 		{
 			desc: "Server configured with GetCertificate callback preferring ECDSA in TLS 1.3",
@@ -105,7 +105,7 @@ func (s) TestServerMultipleCerts_TLS13_Negotiation(t *testing.T) {
 					return &rsaCert, nil
 				},
 			},
-			wantNegotiatedAlgorithm: x509.ECDSA,
+			wantNegotiatedAlgo: x509.ECDSA,
 		},
 		{
 			desc: "Server configured with GetCertificate callback preferring RSA in TLS 1.3",
@@ -121,7 +121,7 @@ func (s) TestServerMultipleCerts_TLS13_Negotiation(t *testing.T) {
 					return &ecdsaCert, nil
 				},
 			},
-			wantNegotiatedAlgorithm: x509.RSA,
+			wantNegotiatedAlgo: x509.RSA,
 		},
 	}
 
@@ -170,8 +170,8 @@ func (s) TestServerMultipleCerts_TLS13_Negotiation(t *testing.T) {
 				t.Errorf("negotiated TLS version = %x, want %x (TLS 1.3)", tlsInfo.State.Version, tls.VersionTLS13)
 			}
 			negotiatedAlgo := tlsInfo.State.PeerCertificates[0].PublicKeyAlgorithm
-			if negotiatedAlgo != tc.wantNegotiatedAlgorithm {
-				t.Errorf("negotiated certificate algorithm = %v, want %v", negotiatedAlgo, tc.wantNegotiatedAlgorithm)
+			if negotiatedAlgo != tc.wantNegotiatedAlgo {
+				t.Errorf("negotiated certificate algorithm = %v, want %v", negotiatedAlgo, tc.wantNegotiatedAlgo)
 			}
 		})
 	}
@@ -186,24 +186,70 @@ func (s) TestServerMultipleCerts_TLS12_Negotiation(t *testing.T) {
 	caPool := loadCertPool(t, "x509/server_ca_cert.pem")
 
 	testCases := []struct {
-		desc         string
-		serverConfig *tls.Config
+		desc               string
+		serverConfig       *tls.Config
+		clientCipherSuites []uint16
+		wantNegotiatedAlgo x509.PublicKeyAlgorithm
 	}{
 		{
-			desc: "Server configured with [RSA, ECDSA] certificates in TLS 1.2",
+			desc: "Server configured with [RSA, ECDSA], RSA client in TLS 1.2",
 			serverConfig: &tls.Config{
 				Certificates: []tls.Certificate{rsaCert, ecdsaCert},
 				MinVersion:   tls.VersionTLS12,
 				MaxVersion:   tls.VersionTLS12,
 			},
+			clientCipherSuites: []uint16{tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256},
+			wantNegotiatedAlgo: x509.RSA,
 		},
 		{
-			desc: "Server configured with reversed [ECDSA, RSA] certificates in TLS 1.2",
+			desc: "Server configured with [RSA, ECDSA], ECDSA client in TLS 1.2",
+			serverConfig: &tls.Config{
+				Certificates: []tls.Certificate{rsaCert, ecdsaCert},
+				MinVersion:   tls.VersionTLS12,
+				MaxVersion:   tls.VersionTLS12,
+			},
+			clientCipherSuites: []uint16{tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256},
+			wantNegotiatedAlgo: x509.ECDSA,
+		},
+		{
+			desc: "Server configured with reversed [ECDSA, RSA], RSA client in TLS 1.2",
 			serverConfig: &tls.Config{
 				Certificates: []tls.Certificate{ecdsaCert, rsaCert},
 				MinVersion:   tls.VersionTLS12,
 				MaxVersion:   tls.VersionTLS12,
 			},
+			clientCipherSuites: []uint16{tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256},
+			wantNegotiatedAlgo: x509.RSA,
+		},
+		{
+			desc: "Server configured with reversed [ECDSA, RSA], ECDSA client in TLS 1.2",
+			serverConfig: &tls.Config{
+				Certificates: []tls.Certificate{ecdsaCert, rsaCert},
+				MinVersion:   tls.VersionTLS12,
+				MaxVersion:   tls.VersionTLS12,
+			},
+			clientCipherSuites: []uint16{tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256},
+			wantNegotiatedAlgo: x509.ECDSA,
+		},
+		{
+			desc: "Server configured with [RSA, ECDSA], client supporting both [RSA, ECDSA] in TLS 1.2",
+			serverConfig: &tls.Config{
+				Certificates: []tls.Certificate{rsaCert, ecdsaCert},
+				MinVersion:   tls.VersionTLS12,
+				MaxVersion:   tls.VersionTLS12,
+			},
+			clientCipherSuites: []uint16{tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256, tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256},
+			wantNegotiatedAlgo: x509.RSA,
+		},
+		{
+			desc: "Server configured with reversed [ECDSA, RSA], client supporting both [ECDSA, RSA] in TLS 1.2",
+			serverConfig: &tls.Config{
+				Certificates: []tls.Certificate{ecdsaCert, rsaCert},
+				MinVersion:   tls.VersionTLS12,
+				MaxVersion:   tls.VersionTLS12,
+			},
+			clientCipherSuites: []uint16{tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256, tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256},
+			wantNegotiatedAlgo: x509.ECDSA,
 		},
 	}
 
@@ -223,72 +269,35 @@ func (s) TestServerMultipleCerts_TLS12_Negotiation(t *testing.T) {
 
 			addr := lis.Addr().String()
 
-			// 1. RSA-only client in TLS 1.2
-			{
-				clientCreds := credentials.NewTLS(&tls.Config{
-					RootCAs:      caPool,
-					ServerName:   "x.test.example.com",
-					CipherSuites: []uint16{tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256},
-					MinVersion:   tls.VersionTLS12,
-					MaxVersion:   tls.VersionTLS12,
-				})
-				conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(clientCreds), grpc.WithAuthority("x.test.example.com"), grpc.WithDisableServiceConfig())
-				if err != nil {
-					t.Fatalf("grpc.NewClient failed: %v", err)
-				}
-				defer conn.Close()
+			clientCreds := credentials.NewTLS(&tls.Config{
+				RootCAs:      caPool,
+				ServerName:   "x.test.example.com",
+				CipherSuites: tc.clientCipherSuites,
+				MinVersion:   tls.VersionTLS12,
+				MaxVersion:   tls.VersionTLS12,
+			})
+			conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(clientCreds), grpc.WithAuthority("x.test.example.com"), grpc.WithDisableServiceConfig())
+			if err != nil {
+				t.Fatalf("grpc.NewClient failed: %v", err)
+			}
+			defer conn.Close()
 
-				client := testgrpc.NewTestServiceClient(conn)
-				ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-				defer cancel()
+			client := testgrpc.NewTestServiceClient(conn)
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
 
-				var p peer.Peer
-				if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(&p)); err != nil {
-					t.Fatalf("RSA client EmptyCall failed: %v", err)
-				}
-
-				tlsInfo, ok := p.AuthInfo.(credentials.TLSInfo)
-				if !ok || len(tlsInfo.State.PeerCertificates) == 0 {
-					t.Fatalf("Failed to retrieve TLSInfo or peer certificates: %v", p.AuthInfo)
-				}
-				negotiatedAlgo := tlsInfo.State.PeerCertificates[0].PublicKeyAlgorithm
-				if negotiatedAlgo != x509.RSA {
-					t.Errorf("RSA client negotiated certificate algorithm = %v, want %v (x509.RSA)", negotiatedAlgo, x509.RSA)
-				}
+			var p peer.Peer
+			if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(&p)); err != nil {
+				t.Fatalf("client EmptyCall failed: %v", err)
 			}
 
-			// 2. ECDSA-only client in TLS 1.2
-			{
-				clientCreds := credentials.NewTLS(&tls.Config{
-					RootCAs:      caPool,
-					ServerName:   "x.test.example.com",
-					CipherSuites: []uint16{tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256},
-					MinVersion:   tls.VersionTLS12,
-					MaxVersion:   tls.VersionTLS12,
-				})
-				conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(clientCreds), grpc.WithAuthority("x.test.example.com"), grpc.WithDisableServiceConfig())
-				if err != nil {
-					t.Fatalf("grpc.NewClient failed: %v", err)
-				}
-				defer conn.Close()
-
-				client := testgrpc.NewTestServiceClient(conn)
-				ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-				defer cancel()
-
-				var p peer.Peer
-				if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(&p)); err != nil {
-					t.Fatalf("ECDSA client EmptyCall failed: %v", err)
-				}
-
-				tlsInfo, ok := p.AuthInfo.(credentials.TLSInfo)
-				if !ok || len(tlsInfo.State.PeerCertificates) == 0 {
-					t.Fatalf("Failed to retrieve TLSInfo or peer certificates: %v", p.AuthInfo)
-				}
-				negotiatedAlgo := tlsInfo.State.PeerCertificates[0].PublicKeyAlgorithm
-				if negotiatedAlgo != x509.ECDSA {
-					t.Errorf("ECDSA client negotiated certificate algorithm = %v, want %v (x509.ECDSA)", negotiatedAlgo, x509.ECDSA)
-				}
+			tlsInfo, ok := p.AuthInfo.(credentials.TLSInfo)
+			if !ok || len(tlsInfo.State.PeerCertificates) == 0 {
+				t.Fatalf("Failed to retrieve TLSInfo or peer certificates: %v", p.AuthInfo)
+			}
+			negotiatedAlgo := tlsInfo.State.PeerCertificates[0].PublicKeyAlgorithm
+			if negotiatedAlgo != tc.wantNegotiatedAlgo {
+				t.Errorf("negotiated certificate algorithm = %v, want %v", negotiatedAlgo, tc.wantNegotiatedAlgo)
 			}
 		})
 	}
@@ -318,19 +327,39 @@ func (s) TestServerMultipleCerts_TLS13_MutualTLS(t *testing.T) {
 	}
 
 	testCases := []struct {
-		desc                    string
-		serverCerts             []tls.Certificate
-		wantServerCertAlgorithm x509.PublicKeyAlgorithm
+		desc               string
+		serverCerts        []tls.Certificate
+		clientCert         tls.Certificate
+		wantClientAlgo     x509.PublicKeyAlgorithm
+		wantNegotiatedAlgo x509.PublicKeyAlgorithm
 	}{
 		{
-			desc:                    "Server configured with [RSA, ECDSA] in TLS 1.3 mTLS",
-			serverCerts:             []tls.Certificate{rsaServerCert, ecdsaServerCert},
-			wantServerCertAlgorithm: x509.RSA,
+			desc:               "Server configured with [RSA, ECDSA], RSA client in TLS 1.3 mTLS",
+			serverCerts:        []tls.Certificate{rsaServerCert, ecdsaServerCert},
+			clientCert:         rsaClientCert,
+			wantClientAlgo:     x509.RSA,
+			wantNegotiatedAlgo: x509.RSA,
 		},
 		{
-			desc:                    "Server configured with reversed [ECDSA, RSA] in TLS 1.3 mTLS",
-			serverCerts:             []tls.Certificate{ecdsaServerCert, rsaServerCert},
-			wantServerCertAlgorithm: x509.ECDSA,
+			desc:               "Server configured with [RSA, ECDSA], ECDSA client in TLS 1.3 mTLS",
+			serverCerts:        []tls.Certificate{rsaServerCert, ecdsaServerCert},
+			clientCert:         ecdsaClientCert,
+			wantClientAlgo:     x509.ECDSA,
+			wantNegotiatedAlgo: x509.RSA,
+		},
+		{
+			desc:               "Server configured with reversed [ECDSA, RSA], RSA client in TLS 1.3 mTLS",
+			serverCerts:        []tls.Certificate{ecdsaServerCert, rsaServerCert},
+			clientCert:         rsaClientCert,
+			wantClientAlgo:     x509.RSA,
+			wantNegotiatedAlgo: x509.ECDSA,
+		},
+		{
+			desc:               "Server configured with reversed [ECDSA, RSA], ECDSA client in TLS 1.3 mTLS",
+			serverCerts:        []tls.Certificate{ecdsaServerCert, rsaServerCert},
+			clientCert:         ecdsaClientCert,
+			wantClientAlgo:     x509.ECDSA,
+			wantNegotiatedAlgo: x509.ECDSA,
 		},
 	}
 
@@ -356,82 +385,40 @@ func (s) TestServerMultipleCerts_TLS13_MutualTLS(t *testing.T) {
 
 			addr := lis.Addr().String()
 
-			// 1. RSA client in TLS 1.3
-			{
-				clientCreds := credentials.NewTLS(&tls.Config{
-					Certificates: []tls.Certificate{rsaClientCert},
-					RootCAs:      serverCAPool,
-					ServerName:   "x.test.example.com",
-					MinVersion:   tls.VersionTLS13,
-					MaxVersion:   tls.VersionTLS13,
-				})
-				conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(clientCreds), grpc.WithAuthority("x.test.example.com"), grpc.WithDisableServiceConfig())
-				if err != nil {
-					t.Fatalf("grpc.NewClient failed: %v", err)
-				}
-				defer conn.Close()
+			clientCreds := credentials.NewTLS(&tls.Config{
+				Certificates: []tls.Certificate{tc.clientCert},
+				RootCAs:      serverCAPool,
+				ServerName:   "x.test.example.com",
+				MinVersion:   tls.VersionTLS13,
+				MaxVersion:   tls.VersionTLS13,
+			})
+			conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(clientCreds), grpc.WithAuthority("x.test.example.com"), grpc.WithDisableServiceConfig())
+			if err != nil {
+				t.Fatalf("grpc.NewClient failed: %v", err)
+			}
+			defer conn.Close()
 
-				client := testgrpc.NewTestServiceClient(conn)
-				ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-				defer cancel()
+			client := testgrpc.NewTestServiceClient(conn)
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
 
-				var p peer.Peer
-				if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(&p)); err != nil {
-					t.Fatalf("RSA client EmptyCall failed in TLS 1.3: %v", err)
-				}
-
-				tlsInfo := p.AuthInfo.(credentials.TLSInfo)
-				if tlsInfo.State.Version != tls.VersionTLS13 {
-					t.Errorf("negotiated TLS version = %x, want %x (TLS 1.3)", tlsInfo.State.Version, tls.VersionTLS13)
-				}
-				if lastTLSVersion != tls.VersionTLS13 {
-					t.Errorf("server observed TLS version = %x, want %x (TLS 1.3)", lastTLSVersion, tls.VersionTLS13)
-				}
-				if lastClientCertAlgo != x509.RSA {
-					t.Errorf("client certificate algorithm verified by server = %v, want %v (x509.RSA)", lastClientCertAlgo, x509.RSA)
-				}
-				if serverAlgo := tlsInfo.State.PeerCertificates[0].PublicKeyAlgorithm; serverAlgo != tc.wantServerCertAlgorithm {
-					t.Errorf("server certificate algorithm = %v, want %v", serverAlgo, tc.wantServerCertAlgorithm)
-				}
+			var p peer.Peer
+			if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(&p)); err != nil {
+				t.Fatalf("client EmptyCall failed in TLS 1.3 mTLS: %v", err)
 			}
 
-			// 2. ECDSA client in TLS 1.3
-			{
-				clientCreds := credentials.NewTLS(&tls.Config{
-					Certificates: []tls.Certificate{ecdsaClientCert},
-					RootCAs:      serverCAPool,
-					ServerName:   "x.test.example.com",
-					MinVersion:   tls.VersionTLS13,
-					MaxVersion:   tls.VersionTLS13,
-				})
-				conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(clientCreds), grpc.WithAuthority("x.test.example.com"), grpc.WithDisableServiceConfig())
-				if err != nil {
-					t.Fatalf("grpc.NewClient failed: %v", err)
-				}
-				defer conn.Close()
-
-				client := testgrpc.NewTestServiceClient(conn)
-				ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-				defer cancel()
-
-				var p peer.Peer
-				if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(&p)); err != nil {
-					t.Fatalf("ECDSA client EmptyCall failed in TLS 1.3: %v", err)
-				}
-
-				tlsInfo := p.AuthInfo.(credentials.TLSInfo)
-				if tlsInfo.State.Version != tls.VersionTLS13 {
-					t.Errorf("negotiated TLS version = %x, want %x (TLS 1.3)", tlsInfo.State.Version, tls.VersionTLS13)
-				}
-				if lastTLSVersion != tls.VersionTLS13 {
-					t.Errorf("server observed TLS version = %x, want %x (TLS 1.3)", lastTLSVersion, tls.VersionTLS13)
-				}
-				if lastClientCertAlgo != x509.ECDSA {
-					t.Errorf("client certificate algorithm verified by server = %v, want %v (x509.ECDSA)", lastClientCertAlgo, x509.ECDSA)
-				}
-				if serverAlgo := tlsInfo.State.PeerCertificates[0].PublicKeyAlgorithm; serverAlgo != tc.wantServerCertAlgorithm {
-					t.Errorf("server certificate algorithm = %v, want %v", serverAlgo, tc.wantServerCertAlgorithm)
-				}
+			tlsInfo := p.AuthInfo.(credentials.TLSInfo)
+			if tlsInfo.State.Version != tls.VersionTLS13 {
+				t.Errorf("negotiated TLS version = %x, want %x (TLS 1.3)", tlsInfo.State.Version, tls.VersionTLS13)
+			}
+			if lastTLSVersion != tls.VersionTLS13 {
+				t.Errorf("server observed TLS version = %x, want %x (TLS 1.3)", lastTLSVersion, tls.VersionTLS13)
+			}
+			if lastClientCertAlgo != tc.wantClientAlgo {
+				t.Errorf("client certificate algorithm verified by server = %v, want %v", lastClientCertAlgo, tc.wantClientAlgo)
+			}
+			if serverAlgo := tlsInfo.State.PeerCertificates[0].PublicKeyAlgorithm; serverAlgo != tc.wantNegotiatedAlgo {
+				t.Errorf("server certificate algorithm = %v, want %v", serverAlgo, tc.wantNegotiatedAlgo)
 			}
 		})
 	}
@@ -458,92 +445,101 @@ func (s) TestServerMultipleCerts_TLS12_MutualTLS(t *testing.T) {
 		return handler(ctx, req)
 	}
 
-	serverCreds := credentials.NewTLS(&tls.Config{
-		Certificates: []tls.Certificate{rsaServerCert, ecdsaServerCert},
-		ClientCAs:    clientCAPool,
-		ClientAuth:   tls.RequireAndVerifyClientCert,
-		MinVersion:   tls.VersionTLS12,
-		MaxVersion:   tls.VersionTLS12,
-	})
-	s := grpc.NewServer(grpc.Creds(serverCreds), grpc.UnaryInterceptor(unaryInterceptor))
-	defer s.Stop()
-
-	testgrpc.RegisterTestServiceServer(s, &testServer{})
-	lis, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("net.Listen failed: %v", err)
-	}
-	defer lis.Close()
-	go s.Serve(lis)
-
-	addr := lis.Addr().String()
-
-	// 1. RSA client in TLS 1.2
-	{
-		clientCreds := credentials.NewTLS(&tls.Config{
-			Certificates: []tls.Certificate{rsaClientCert},
-			RootCAs:      serverCAPool,
-			ServerName:   "x.test.example.com",
-			CipherSuites: []uint16{tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256},
-			MinVersion:   tls.VersionTLS12,
-			MaxVersion:   tls.VersionTLS12,
-		})
-		conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(clientCreds), grpc.WithAuthority("x.test.example.com"), grpc.WithDisableServiceConfig())
-		if err != nil {
-			t.Fatalf("grpc.NewClient failed: %v", err)
-		}
-		defer conn.Close()
-
-		client := testgrpc.NewTestServiceClient(conn)
-		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-		defer cancel()
-
-		var p peer.Peer
-		if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(&p)); err != nil {
-			t.Fatalf("RSA client EmptyCall failed in TLS 1.2: %v", err)
-		}
-
-		tlsInfo := p.AuthInfo.(credentials.TLSInfo)
-		if serverAlgo := tlsInfo.State.PeerCertificates[0].PublicKeyAlgorithm; serverAlgo != x509.RSA {
-			t.Errorf("server certificate algorithm = %v, want %v (x509.RSA)", serverAlgo, x509.RSA)
-		}
-		if lastClientCertAlgo != x509.RSA {
-			t.Errorf("client certificate algorithm verified by server = %v, want %v (x509.RSA)", lastClientCertAlgo, x509.RSA)
-		}
+	testCases := []struct {
+		desc               string
+		serverCerts        []tls.Certificate
+		clientCert         tls.Certificate
+		clientCipherSuites []uint16
+		wantClientAlgo     x509.PublicKeyAlgorithm
+		wantNegotiatedAlgo x509.PublicKeyAlgorithm
+	}{
+		{
+			desc:               "Server [RSA, ECDSA], RSA client in TLS 1.2 mTLS",
+			serverCerts:        []tls.Certificate{rsaServerCert, ecdsaServerCert},
+			clientCert:         rsaClientCert,
+			clientCipherSuites: []uint16{tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256},
+			wantClientAlgo:     x509.RSA,
+			wantNegotiatedAlgo: x509.RSA,
+		},
+		{
+			desc:               "Server [RSA, ECDSA], ECDSA client in TLS 1.2 mTLS",
+			serverCerts:        []tls.Certificate{rsaServerCert, ecdsaServerCert},
+			clientCert:         ecdsaClientCert,
+			clientCipherSuites: []uint16{tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256},
+			wantClientAlgo:     x509.ECDSA,
+			wantNegotiatedAlgo: x509.ECDSA,
+		},
+		{
+			desc:               "Server reversed [ECDSA, RSA], RSA client in TLS 1.2 mTLS",
+			serverCerts:        []tls.Certificate{ecdsaServerCert, rsaServerCert},
+			clientCert:         rsaClientCert,
+			clientCipherSuites: []uint16{tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256},
+			wantClientAlgo:     x509.RSA,
+			wantNegotiatedAlgo: x509.RSA,
+		},
+		{
+			desc:               "Server reversed [ECDSA, RSA], ECDSA client in TLS 1.2 mTLS",
+			serverCerts:        []tls.Certificate{ecdsaServerCert, rsaServerCert},
+			clientCert:         ecdsaClientCert,
+			clientCipherSuites: []uint16{tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256},
+			wantClientAlgo:     x509.ECDSA,
+			wantNegotiatedAlgo: x509.ECDSA,
+		},
 	}
 
-	// 2. ECDSA client in TLS 1.2
-	{
-		clientCreds := credentials.NewTLS(&tls.Config{
-			Certificates: []tls.Certificate{ecdsaClientCert},
-			RootCAs:      serverCAPool,
-			ServerName:   "x.test.example.com",
-			CipherSuites: []uint16{tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256},
-			MinVersion:   tls.VersionTLS12,
-			MaxVersion:   tls.VersionTLS12,
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			serverCreds := credentials.NewTLS(&tls.Config{
+				Certificates: tc.serverCerts,
+				ClientCAs:    clientCAPool,
+				ClientAuth:   tls.RequireAndVerifyClientCert,
+				MinVersion:   tls.VersionTLS12,
+				MaxVersion:   tls.VersionTLS12,
+			})
+			s := grpc.NewServer(grpc.Creds(serverCreds), grpc.UnaryInterceptor(unaryInterceptor))
+			defer s.Stop()
+
+			testgrpc.RegisterTestServiceServer(s, &testServer{})
+			lis, err := net.Listen("tcp", "127.0.0.1:0")
+			if err != nil {
+				t.Fatalf("net.Listen failed: %v", err)
+			}
+			defer lis.Close()
+			go s.Serve(lis)
+
+			addr := lis.Addr().String()
+
+			clientCreds := credentials.NewTLS(&tls.Config{
+				Certificates: []tls.Certificate{tc.clientCert},
+				RootCAs:      serverCAPool,
+				ServerName:   "x.test.example.com",
+				CipherSuites: tc.clientCipherSuites,
+				MinVersion:   tls.VersionTLS12,
+				MaxVersion:   tls.VersionTLS12,
+			})
+			conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(clientCreds), grpc.WithAuthority("x.test.example.com"), grpc.WithDisableServiceConfig())
+			if err != nil {
+				t.Fatalf("grpc.NewClient failed: %v", err)
+			}
+			defer conn.Close()
+
+			client := testgrpc.NewTestServiceClient(conn)
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+
+			var p peer.Peer
+			if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(&p)); err != nil {
+				t.Fatalf("client EmptyCall failed in TLS 1.2 mTLS: %v", err)
+			}
+
+			tlsInfo := p.AuthInfo.(credentials.TLSInfo)
+			if serverAlgo := tlsInfo.State.PeerCertificates[0].PublicKeyAlgorithm; serverAlgo != tc.wantNegotiatedAlgo {
+				t.Errorf("server certificate algorithm = %v, want %v", serverAlgo, tc.wantNegotiatedAlgo)
+			}
+			if lastClientCertAlgo != tc.wantClientAlgo {
+				t.Errorf("client certificate algorithm verified by server = %v, want %v", lastClientCertAlgo, tc.wantClientAlgo)
+			}
 		})
-		conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(clientCreds), grpc.WithAuthority("x.test.example.com"), grpc.WithDisableServiceConfig())
-		if err != nil {
-			t.Fatalf("grpc.NewClient failed: %v", err)
-		}
-		defer conn.Close()
-
-		client := testgrpc.NewTestServiceClient(conn)
-		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-		defer cancel()
-
-		var p peer.Peer
-		if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(&p)); err != nil {
-			t.Fatalf("ECDSA client EmptyCall failed in TLS 1.2: %v", err)
-		}
-
-		tlsInfo := p.AuthInfo.(credentials.TLSInfo)
-		if serverAlgo := tlsInfo.State.PeerCertificates[0].PublicKeyAlgorithm; serverAlgo != x509.ECDSA {
-			t.Errorf("server certificate algorithm = %v, want %v (x509.ECDSA)", serverAlgo, x509.ECDSA)
-		}
-		if lastClientCertAlgo != x509.ECDSA {
-			t.Errorf("client certificate algorithm verified by server = %v, want %v (x509.ECDSA)", lastClientCertAlgo, x509.ECDSA)
-		}
 	}
 }
 
@@ -551,44 +547,66 @@ func (s) TestServerMultipleCerts_TLS12_MutualTLS(t *testing.T) {
 // only RSA certificates, a client offering only ECDSA cipher suites fails to handshake in TLS 1.2.
 func (s) TestServerMultipleCerts_IncompatibleAlgorithm(t *testing.T) {
 	rsaCert := loadTestCert(t, "x509/server1_cert.pem", "x509/server1_key.pem")
+	ecdsaCert := loadTestCert(t, "x509/server_ecdsa_cert.pem", "x509/server_ecdsa_key.pem")
 	caPool := loadCertPool(t, "x509/server_ca_cert.pem")
 
-	serverCreds := credentials.NewTLS(&tls.Config{
-		Certificates: []tls.Certificate{rsaCert},
-		MinVersion:   tls.VersionTLS12,
-		MaxVersion:   tls.VersionTLS12,
-	})
-	s := grpc.NewServer(grpc.Creds(serverCreds))
-	defer s.Stop()
-
-	testgrpc.RegisterTestServiceServer(s, &testServer{})
-	lis, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("net.Listen failed: %v", err)
+	testCases := []struct {
+		desc               string
+		serverCerts        []tls.Certificate
+		clientCipherSuites []uint16
+	}{
+		{
+			desc:               "Server RSA-only, client ECDSA-only in TLS 1.2 fails",
+			serverCerts:        []tls.Certificate{rsaCert},
+			clientCipherSuites: []uint16{tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256},
+		},
+		{
+			desc:               "Server ECDSA-only, client RSA-only in TLS 1.2 fails",
+			serverCerts:        []tls.Certificate{ecdsaCert},
+			clientCipherSuites: []uint16{tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256},
+		},
 	}
-	defer lis.Close()
-	go s.Serve(lis)
 
-	addr := lis.Addr().String()
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			serverCreds := credentials.NewTLS(&tls.Config{
+				Certificates: tc.serverCerts,
+				MinVersion:   tls.VersionTLS12,
+				MaxVersion:   tls.VersionTLS12,
+			})
+			s := grpc.NewServer(grpc.Creds(serverCreds))
+			defer s.Stop()
 
-	clientCreds := credentials.NewTLS(&tls.Config{
-		RootCAs:      caPool,
-		ServerName:   "x.test.example.com",
-		CipherSuites: []uint16{tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256},
-		MinVersion:   tls.VersionTLS12,
-		MaxVersion:   tls.VersionTLS12,
-	})
-	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(clientCreds), grpc.WithAuthority("x.test.example.com"), grpc.WithDisableServiceConfig())
-	if err != nil {
-		t.Fatalf("grpc.NewClient failed: %v", err)
-	}
-	defer conn.Close()
+			testgrpc.RegisterTestServiceServer(s, &testServer{})
+			lis, err := net.Listen("tcp", "127.0.0.1:0")
+			if err != nil {
+				t.Fatalf("net.Listen failed: %v", err)
+			}
+			defer lis.Close()
+			go s.Serve(lis)
 
-	client := testgrpc.NewTestServiceClient(conn)
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
+			addr := lis.Addr().String()
 
-	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err == nil {
-		t.Fatalf("EmptyCall succeeded unexpectedly when client offered only incompatible cipher suites")
+			clientCreds := credentials.NewTLS(&tls.Config{
+				RootCAs:      caPool,
+				ServerName:   "x.test.example.com",
+				CipherSuites: tc.clientCipherSuites,
+				MinVersion:   tls.VersionTLS12,
+				MaxVersion:   tls.VersionTLS12,
+			})
+			conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(clientCreds), grpc.WithAuthority("x.test.example.com"), grpc.WithDisableServiceConfig())
+			if err != nil {
+				t.Fatalf("grpc.NewClient failed: %v", err)
+			}
+			defer conn.Close()
+
+			client := testgrpc.NewTestServiceClient(conn)
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+
+			if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err == nil {
+				t.Fatalf("EmptyCall succeeded unexpectedly when client offered only incompatible cipher suites")
+			}
+		})
 	}
 }
