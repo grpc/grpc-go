@@ -761,8 +761,7 @@ func (s) TestServerMultipleCerts_TLS13_MutualTLS(t *testing.T) {
 			// TODO(gtcooke94): Client default shows support for RSA and ECDSA - when
 			// knobs are added to advancedtls.go to control signature algorithms,
 			// modify this test
-			desc:               "Server configured with [RSA, ECDSA], ECDSA client in
-			TLS 1.3 mTLS",
+			desc:               "Server configured with [RSA, ECDSA], ECDSA client in TLS 1.3 mTLS",
 			serverCerts:        []tls.Certificate{cs.ServerPeerLocalhost1, cs.ServerPeerECDSALocalhost1},
 			clientCert:         cs.ClientPeerECDSALocalhost1,
 			wantNegotiatedAlgo: x509.RSA,
