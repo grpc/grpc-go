@@ -21,25 +21,43 @@ import (
 	"net"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/internal/xds/xdsclient"
 )
 
-type overrideListenerResourceNameOption struct {
+// ServerOptions contains options used by an xDS-enabled gRPC server.
+//
+// This type is internal so that the public xds package can expose server
+// options without also owning their application and storage.
+type ServerOptions struct {
+	ModeCallback                 ServingModeCallback
+	ClientPoolForTesting         *xdsclient.Pool
+	OverrideListenerResourceName func(net.Addr) string
+}
+
+type serverOption struct {
 	grpc.EmptyServerOption
-	f func(net.Addr) string
+	apply func(*ServerOptions)
+}
+
+// NewServerOption returns a grpc.ServerOption which applies f to the internal
+// xDS server options.
+func NewServerOption(f func(*ServerOptions)) grpc.ServerOption {
+	return &serverOption{apply: f}
+}
+
+// ApplyServerOptions applies all internal xDS server options in opts to so.
+func ApplyServerOptions(opts []grpc.ServerOption, so *ServerOptions) {
+	for _, opt := range opts {
+		if o, ok := opt.(*serverOption); ok {
+			o.apply(so)
+		}
+	}
 }
 
 // OverrideListenerResourceName returns a server option that overrides the LDS
 // resource name selected for an xDS server listener.
 func OverrideListenerResourceName(f func(net.Addr) string) grpc.ServerOption {
-	return &overrideListenerResourceNameOption{f: f}
-}
-
-// OverrideListenerResourceNameFromServerOption returns the resource name
-// function carried by opt, or nil if opt does not contain one.
-func OverrideListenerResourceNameFromServerOption(opt grpc.ServerOption) func(net.Addr) string {
-	o, ok := opt.(*overrideListenerResourceNameOption)
-	if !ok {
-		return nil
-	}
-	return o.f
+	return NewServerOption(func(o *ServerOptions) {
+		o.OverrideListenerResourceName = f
+	})
 }

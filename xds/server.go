@@ -64,7 +64,7 @@ type GRPCServer struct {
 	gs             grpcServer
 	quit           *grpcsync.Event
 	logger         *internalgrpclog.PrefixLogger
-	opts           *serverOptions
+	opts           *server.ServerOptions
 	xdsC           xdsclient.XDSClient
 	xdsClientClose func()
 }
@@ -94,8 +94,8 @@ func NewGRPCServer(opts ...grpc.ServerOption) (*GRPCServer, error) {
 	// simplifies the code by eliminating the need for a mutex to protect the
 	// xdsC and xdsClientClose fields.
 	pool := xdsClientPool
-	if s.opts.clientPoolForTesting != nil {
-		pool = s.opts.clientPoolForTesting
+	if s.opts.ClientPoolForTesting != nil {
+		pool = s.opts.ClientPoolForTesting
 	}
 	xdsClient, xdsClientClose, err := pool.NewClient(xdsclient.NameForServer, mrl)
 	if err != nil {
@@ -106,7 +106,7 @@ func NewGRPCServer(opts ...grpc.ServerOption) (*GRPCServer, error) {
 
 	// Listener resource name template is mandatory on the server side unless a
 	// listener resource name override is provided.
-	if s.opts.overrideListenerResourceName == nil {
+	if s.opts.OverrideListenerResourceName == nil {
 		cfg := xdsClient.BootstrapConfig()
 		if cfg.ServerListenerResourceNameTemplate() == "" {
 			xdsClientClose()
@@ -127,36 +127,28 @@ func NewGRPCServer(opts ...grpc.ServerOption) (*GRPCServer, error) {
 // the user, and handles the xDS server specific options.
 func (s *GRPCServer) handleServerOptions(opts []grpc.ServerOption) {
 	so := s.defaultServerOptions()
-	for _, opt := range opts {
-		if o, ok := opt.(*serverOption); ok {
-			o.apply(so)
-			continue
-		}
-		if f := server.OverrideListenerResourceNameFromServerOption(opt); f != nil {
-			so.overrideListenerResourceName = f
-		}
-	}
+	server.ApplyServerOptions(opts, so)
 	s.opts = so
 }
 
-func (s *GRPCServer) defaultServerOptions() *serverOptions {
-	return &serverOptions{
+func (s *GRPCServer) defaultServerOptions() *server.ServerOptions {
+	return &server.ServerOptions{
 		// A default serving mode change callback which simply logs at the
 		// default-visible log level. This will be used if the application does not
 		// register a mode change callback.
 		//
-		// Note that this means that `s.opts.modeCallback` will never be nil and can
+		// Note that this means that `s.opts.ModeCallback` will never be nil and can
 		// safely be invoked directly from `handleServingModeChanges`.
-		modeCallback: s.loggingServerModeChangeCallback,
+		ModeCallback: s.loggingServerModeChangeCallback,
 	}
 }
 
-func (s *GRPCServer) loggingServerModeChangeCallback(addr net.Addr, args ServingModeChangeArgs) {
-	switch args.Mode {
+func (s *GRPCServer) loggingServerModeChangeCallback(addr net.Addr, mode connectivity.ServingMode, err error) {
+	switch mode {
 	case connectivity.ServingModeServing:
-		s.logger.Errorf("Listener %q entering mode: %q", addr.String(), args.Mode)
+		s.logger.Errorf("Listener %q entering mode: %q", addr.String(), mode)
 	case connectivity.ServingModeNotServing:
-		s.logger.Errorf("Listener %q entering mode: %q due to error: %v", addr.String(), args.Mode, args.Err)
+		s.logger.Errorf("Listener %q entering mode: %q due to error: %v", addr.String(), mode, err)
 	}
 }
 
@@ -196,8 +188,8 @@ func (s *GRPCServer) Serve(lis net.Listener) error {
 	// string, it will be replaced with the server's listening "IP:port" (e.g.,
 	// "0.0.0.0:8080", "[::]:8080").
 	var name string
-	if s.opts.overrideListenerResourceName != nil {
-		name = s.opts.overrideListenerResourceName(lis.Addr())
+	if s.opts.OverrideListenerResourceName != nil {
+		name = s.opts.OverrideListenerResourceName(lis.Addr())
 	} else {
 		cfg := s.xdsC.BootstrapConfig()
 		name = cfg.ServerListenerResourceNameTemplate()
@@ -210,12 +202,7 @@ func (s *GRPCServer) Serve(lis net.Listener) error {
 		Listener:             lis,
 		ListenerResourceName: name,
 		XDSClient:            s.xdsC,
-		ModeCallback: func(addr net.Addr, mode connectivity.ServingMode, err error) {
-			s.opts.modeCallback(addr, ServingModeChangeArgs{
-				Mode: mode,
-				Err:  err,
-			})
-		},
+		ModeCallback:         s.opts.ModeCallback,
 	})
 	return s.gs.Serve(lw)
 }
