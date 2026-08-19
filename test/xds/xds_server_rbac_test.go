@@ -583,6 +583,52 @@ func (s) TestRBACHTTPFilter(t *testing.T) {
 			wantStatusEmptyCall: codes.OK,
 			wantStatusUnaryCall: codes.OK,
 		},
+		// This test tests that a "Host" header matcher behaves the same as a
+		// "host" one. gRPC lowercases every metadata key, so the alias to
+		// :authority must not depend on how the control plane spells the name.
+		{
+			name: "match-on-host-canonical-case",
+			rbacCfg: &rpb.RBAC{
+				Rules: &v3rbacpb.RBAC{
+					Action: v3rbacpb.RBAC_ALLOW,
+					Policies: map[string]*v3rbacpb.Policy{
+						"match-on-authority": {
+							Permissions: []*v3rbacpb.Permission{
+								{Rule: &v3rbacpb.Permission_Header{Header: &v3routepb.HeaderMatcher{Name: "Host", HeaderMatchSpecifier: &v3routepb.HeaderMatcher_PrefixMatch{PrefixMatch: "my-service-fallback"}}}},
+							},
+							Principals: []*v3rbacpb.Principal{
+								{Identifier: &v3rbacpb.Principal_Any{Any: true}},
+							},
+						},
+					},
+				},
+			},
+			wantStatusEmptyCall: codes.OK,
+			wantStatusUnaryCall: codes.OK,
+		},
+		// This test tests that a header matcher whose name is not lowercase
+		// still matches the header. Every RPC carries a user agent, so the
+		// RBAC Configuration below denies every RPC tried.
+		{
+			name: "deny-header-name-in-canonical-case",
+			rbacCfg: &rpb.RBAC{
+				Rules: &v3rbacpb.RBAC{
+					Action: v3rbacpb.RBAC_DENY,
+					Policies: map[string]*v3rbacpb.Policy{
+						"user-agent": {
+							Permissions: []*v3rbacpb.Permission{
+								{Rule: &v3rbacpb.Permission_Header{Header: &v3routepb.HeaderMatcher{Name: "User-Agent", HeaderMatchSpecifier: &v3routepb.HeaderMatcher_PresentMatch{PresentMatch: true}}}},
+							},
+							Principals: []*v3rbacpb.Principal{
+								{Identifier: &v3rbacpb.Principal_Any{Any: true}},
+							},
+						},
+					},
+				},
+			},
+			wantStatusEmptyCall: codes.PermissionDenied,
+			wantStatusUnaryCall: codes.PermissionDenied,
+		},
 		// This test tests that the RBAC HTTP Filter hard codes the :method
 		// header to POST. Since the RBAC Configuration says to deny every RPC
 		// with a method :POST, every RPC tried should be denied.
