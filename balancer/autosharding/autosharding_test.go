@@ -24,11 +24,20 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"google.golang.org/grpc/internal/grpctest"
 	iserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/serviceconfig"
 )
 
-func TestParseConfig_Success(t *testing.T) {
+type s struct {
+	grpctest.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
+
+func (s) TestParseConfig_Success(t *testing.T) {
 	parser := bb{}
 	tests := []struct {
 		name    string
@@ -80,7 +89,7 @@ func TestParseConfig_Success(t *testing.T) {
 	}
 }
 
-func TestParseConfig_Failure(t *testing.T) {
+func (s) TestParseConfig_Failure(t *testing.T) {
 	parser := bb{}
 	tests := []struct {
 		name  string
