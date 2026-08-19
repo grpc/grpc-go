@@ -738,8 +738,8 @@ func (s) TestExtAuthz_Allowed_WithHeaders_MutationFails(t *testing.T) {
 
 	client := testgrpc.NewTestServiceClient(cc)
 	outgoingCtx := metadata.NewOutgoingContext(ctx, metadata.Pairs("k-test-header-to-be-removed", "true"))
-	if _, err := client.EmptyCall(outgoingCtx, &testpb.Empty{}); status.Code(err) != codes.Unknown {
-		t.Fatalf("EmptyCall() failed with status code = %v, want %v (error: %v)", status.Code(err), codes.Unknown, err)
+	if _, err := client.EmptyCall(outgoingCtx, &testpb.Empty{}); status.Code(err) != codes.PermissionDenied {
+		t.Fatalf("EmptyCall() failed with status code = %v, want %v (error: %v)", status.Code(err), codes.PermissionDenied, err)
 	}
 
 	if backendCalled.Load() {
@@ -754,73 +754,122 @@ func (s) TestExtAuthz_Allowed_WithHeaders_MutationFails(t *testing.T) {
 // ignored, no partial header mutations are applied, and that the data plane
 // RPC succeeds with unmutated headers.
 func (s) TestExtAuthz_Allowed_WithHeaders_MutationFails_FailureModeAllow(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
+	allowedHeaders := []*corepb.HeaderValueOption{
+		{Header: &corepb.HeaderValue{Key: "k1", Value: "v1"}},
+		{Header: &corepb.HeaderValue{Key: "k2-bin", Value: "v2", RawValue: []byte{0, 1, 2, 3}}},
+	}
+	disallowedHeader := &corepb.HeaderValueOption{
+		Header: &corepb.HeaderValue{Key: "a1", Value: "v1"},
+	}
 
-	// Start a test ext_authz server that allows the data plane RPC.
-	authAddr, stopAuth := startTestAuthServer(t, func(context.Context, *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error) {
-		st := &statuspb.Status{Code: int32(codes.OK)}
-		return &v3authpb.CheckResponse{
-			Status: st,
-			HttpResponse: &v3authpb.CheckResponse_OkResponse{
-				OkResponse: &v3authpb.OkHttpResponse{
-					Headers: []*corepb.HeaderValueOption{
-						{Header: &corepb.HeaderValue{Key: "k1", Value: "v1"}},                                   // Allowed.
-						{Header: &corepb.HeaderValue{Key: "k2-bin", Value: "v2", RawValue: []byte{0, 1, 2, 3}}}, // Allowed binary header.
-						{Header: &corepb.HeaderValue{Key: "a1", Value: "v1"}},                                   // Disallowed.
+	tests := []struct {
+		name                      string
+		failureModeAllowHeaderAdd bool
+		headersToAdd              []*corepb.HeaderValueOption
+		headersToRemove           []string
+		outgoingHeaders           metadata.MD
+		wantHeaders               metadata.MD
+	}{
+		{
+			name:                      "OnlyHeaderAddFails_HeaderAdd_False",
+			failureModeAllowHeaderAdd: false,
+			headersToAdd:              append(allowedHeaders, disallowedHeader),
+			headersToRemove:           []string{"k-test-header-to-be-removed"},
+			outgoingHeaders:           metadata.Pairs("k-test-header-to-be-removed", "true"),
+			wantHeaders:               metadata.Pairs(":authority", "service-name"),
+		},
+		{
+			name:                      "OnlyHeaderAddFails_HeaderAdd_True",
+			failureModeAllowHeaderAdd: true,
+			headersToAdd:              append(allowedHeaders, disallowedHeader),
+			headersToRemove:           []string{"k-test-header-to-be-removed"},
+			outgoingHeaders:           metadata.Pairs("k-test-header-to-be-removed", "true"),
+			wantHeaders:               metadata.Pairs(":authority", "service-name", "x-envoy-auth-failure-mode-allowed", "true"),
+		},
+		{
+			name:                      "OnlyHeaderRemoveFails_HeaderAdd_True",
+			failureModeAllowHeaderAdd: true,
+			headersToAdd:              allowedHeaders,
+			headersToRemove:           []string{"a2-header-to-be-removed"},
+			outgoingHeaders:           metadata.Pairs("a2-header-to-be-removed", "true"),
+			wantHeaders:               metadata.Pairs(":authority", "service-name", "k1", "v1", "k2-bin", "\x00\x01\x02\x03", "a2-header-to-be-removed", "true", "x-envoy-auth-failure-mode-allowed", "true"),
+		},
+		{
+			name:                      "BothMutationsFail_HeaderAdd_True",
+			failureModeAllowHeaderAdd: true,
+			headersToAdd:              append(allowedHeaders, disallowedHeader),
+			headersToRemove:           []string{"a2-header-to-be-removed"},
+			outgoingHeaders:           metadata.Pairs("a2-header-to-be-removed", "true"),
+			wantHeaders:               metadata.Pairs(":authority", "service-name", "a2-header-to-be-removed", "true", "x-envoy-auth-failure-mode-allowed", "true"),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+
+			// Start a test ext_authz server that allows the data plane RPC.
+			authAddr, stopAuth := startTestAuthServer(t, func(context.Context, *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error) {
+				st := &statuspb.Status{Code: int32(codes.OK)}
+				return &v3authpb.CheckResponse{
+					Status: st,
+					HttpResponse: &v3authpb.CheckResponse_OkResponse{
+						OkResponse: &v3authpb.OkHttpResponse{
+							Headers:         tt.headersToAdd,
+							HeadersToRemove: tt.headersToRemove,
+						},
 					},
-					HeadersToRemove: []string{"k-test-header-to-be-removed"},
+				}, nil
+			})
+			defer stopAuth()
+
+			backend := &stubserver.StubServer{
+				EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
+					gotMD, _ := metadata.FromIncomingContext(ctx)
+					if err := compareMetadata(gotMD, tt.wantHeaders); err != nil {
+						return nil, status.Errorf(codes.Internal, "Unexpected headers metadata received by the server: %v", err)
+					}
+					return &testpb.Empty{}, nil
 				},
-			},
-		}, nil
-	})
-	defer stopAuth()
-
-	backend := &stubserver.StubServer{
-		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
-			gotMD, _ := metadata.FromIncomingContext(ctx)
-			wantHeaders := metadata.Pairs(":authority", "service-name")
-			if err := compareMetadata(gotMD, wantHeaders); err != nil {
-				return nil, status.Errorf(codes.Internal, "Unexpected headers metadata received by the server: %v", err)
 			}
-			return &testpb.Empty{}, nil
-		},
-	}
-	stubserver.StartTestService(t, backend)
-	defer backend.Stop()
+			stubserver.StartTestService(t, backend)
+			defer backend.Stop()
 
-	extAuthzCfg := &v3extauthzfilterpb.ExtAuthz{
-		FailureModeAllow: true,
-		FilterEnabled: &corepb.RuntimeFractionalPercent{
-			DefaultValue: &v3typepb.FractionalPercent{
-				Numerator:   100,
-				Denominator: v3typepb.FractionalPercent_HUNDRED,
-			},
-		},
-		DecoderHeaderMutationRules: &mutationpb.HeaderMutationRules{
-			AllowExpression:    &matcherpb.RegexMatcher{Regex: "^k.*"},
-			DisallowExpression: &matcherpb.RegexMatcher{Regex: "^a1$"},
-			DisallowIsError:    wrapperspb.Bool(true), // Disallowed header mutations result in RPC failures.
-		},
-	}
+			extAuthzCfg := &v3extauthzfilterpb.ExtAuthz{
+				FailureModeAllow:          true,
+				FailureModeAllowHeaderAdd: tt.failureModeAllowHeaderAdd,
+				FilterEnabled: &corepb.RuntimeFractionalPercent{
+					DefaultValue: &v3typepb.FractionalPercent{
+						Numerator:   100,
+						Denominator: v3typepb.FractionalPercent_HUNDRED,
+					},
+				},
+				DecoderHeaderMutationRules: &mutationpb.HeaderMutationRules{
+					AllowExpression:    &matcherpb.RegexMatcher{Regex: "^k.*"},
+					DisallowExpression: &matcherpb.RegexMatcher{Regex: "^a[0-9].*"},
+					DisallowIsError:    wrapperspb.Bool(true), // Disallowed header mutations result in RPC failures.
+				},
+			}
 
-	cc, err := setupTestClient(t, authAddr, extAuthzCfg, backend.Address)
-	if err != nil {
-		t.Fatalf("setupTestClient() failed: %v", err)
-	}
-	defer cc.Close()
+			cc, err := setupTestClient(t, authAddr, extAuthzCfg, backend.Address)
+			if err != nil {
+				t.Fatalf("setupTestClient() failed: %v", err)
+			}
+			defer cc.Close()
 
-	client := testgrpc.NewTestServiceClient(cc)
-	outgoingCtx := metadata.NewOutgoingContext(ctx, metadata.Pairs("k-test-header-to-be-removed", "true"))
-	if _, err := client.EmptyCall(outgoingCtx, &testpb.Empty{}); err != nil {
-		t.Fatalf("EmptyCall() failed: %v", err)
+			client := testgrpc.NewTestServiceClient(cc)
+			outgoingCtx := metadata.NewOutgoingContext(ctx, tt.outgoingHeaders)
+			if _, err := client.EmptyCall(outgoingCtx, &testpb.Empty{}); err != nil {
+				t.Fatalf("EmptyCall() failed: %v", err)
+			}
+		})
 	}
 }
 
 // Test verifies the case where the ext_authz server allows the data plane RPC
 // and specifies response headers to be added and removed from the data plane
 // RPC. Verifies that data plane RPC succeeds with expected response headers.
-func (s) TestExtAuthz_Allowed_WithTrailers(t *testing.T) {
+func (s) TestExtAuthz_Allowed_WithResponseHeadersMutations(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
@@ -905,7 +954,7 @@ func (s) TestExtAuthz_Allowed_WithTrailers(t *testing.T) {
 // and specifies response headers to add, but the backend sends a Trailers-Only
 // response (no response headers). Verifies that stream.Header() returns
 // (nil, nil) and response header mutations are safely ignored without error.
-func (s) TestExtAuthz_Allowed_WithTrailersOnly(t *testing.T) {
+func (s) TestExtAuthz_Allowed_TrailersOnlyResponse_HeaderMutationSkipped(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
@@ -966,8 +1015,8 @@ func (s) TestExtAuthz_Allowed_WithTrailersOnly(t *testing.T) {
 // Test verifies the case where the ext_authz server allows the data plane RPC
 // and specifies response headers to be added and removed from the data plane
 // RPC. One of the response header mutations is not allowed by the
-// configuration. Verifies that retrieving headers fails with code Unknown.
-func (s) TestExtAuthz_Allowed_WithTrailers_MutationFails(t *testing.T) {
+// configuration. Verifies that retrieving headers fails.
+func (s) TestExtAuthz_Allowed_ResponseHeaderMutationFailed(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
@@ -1026,15 +1075,15 @@ func (s) TestExtAuthz_Allowed_WithTrailers_MutationFails(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FullDuplexCall() failed: %v", err)
 	}
-	if _, err := stream.Header(); status.Code(err) != codes.Unknown {
-		t.Fatalf("stream.Header() failed with status code = %v, want %v (error: %v)", status.Code(err), codes.Unknown, err)
+	if _, err := stream.Header(); status.Code(err) != codes.PermissionDenied {
+		t.Fatalf("stream.Header() failed with status code = %v, want %v (error: %v)", status.Code(err), codes.PermissionDenied, err)
 	}
 }
 
 // Test verifies the case where the ext_authz server allows the data plane RPC
 // and specifies both header and response header mutations that are expected to
 // succeed. Verifies that the data plane RPC succeeds.
-func (s) TestExtAuthz_Allowed_WithHeadersAndTrailers(t *testing.T) {
+func (s) TestExtAuthz_Allowed_WithRequestAndResponseHeadersMutations(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 

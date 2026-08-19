@@ -470,14 +470,20 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 	// authorization server.
 	if err := i.config.decoderHeaderMutationRules.ApplyAdditions(allowedResp.OkResponse.GetHeaders(), outgoingMD); err != nil {
 		if !i.config.failureModeAllow {
-			return nil, status.Errorf(codes.Unknown, "extauthz: error applying header mutation rules: %v", err)
+			return nil, status.Errorf(i.config.statusOnError, "extauthz: error applying header mutation rules: %v", err)
+		}
+		if i.config.failureModeAllowHeaderAdd {
+			outgoingMD.Append("x-envoy-auth-failure-mode-allowed", "true")
 		}
 	}
 	// Update outgoing metadata with headers_to_remove specified by the external
 	// authorization server.
 	if err := i.config.decoderHeaderMutationRules.ApplyRemovals(allowedResp.OkResponse.GetHeadersToRemove(), outgoingMD); err != nil {
 		if !i.config.failureModeAllow {
-			return nil, status.Errorf(codes.Unknown, "extauthz: error applying header mutation rules: %v", err)
+			return nil, status.Errorf(i.config.statusOnError, "extauthz: error applying header mutation rules: %v", err)
+		}
+		if i.config.failureModeAllowHeaderAdd && len(outgoingMD.Get("x-envoy-auth-failure-mode-allowed")) == 0 {
+			outgoingMD.Append("x-envoy-auth-failure-mode-allowed", "true")
 		}
 	}
 	// Create a new context with the mutated outgoing metadata. All subsequent
@@ -498,6 +504,7 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 			ClientStream:  stream,
 			headersToAdd:  allowedResp.OkResponse.GetResponseHeadersToAdd(),
 			mutationRules: i.config.decoderHeaderMutationRules,
+			statusOnError: i.config.statusOnError,
 		}, nil
 	}
 	return stream, nil
@@ -514,17 +521,22 @@ type clientStream struct {
 	// mutationRules defines the rules governing which headers may be added or
 	// modified.
 	mutationRules httpfilter.HeaderMutationRules
+	// statusOnError is the gRPC status code to return when mutation fails.
+	statusOnError codes.Code
 }
 
 // Header returns the header metadata received from the server if there
 // is any. It blocks if the metadata is not ready to read.
 func (s *clientStream) Header() (metadata.MD, error) {
 	md, err := s.ClientStream.Header()
-	if err != nil || md == nil {
+	if err != nil {
 		return nil, err
 	}
+	if md == nil {
+		return nil, nil
+	}
 	if err := s.mutationRules.ApplyAdditions(s.headersToAdd, md); err != nil {
-		return nil, status.Errorf(codes.Unknown, "extauthz: error applying header mutation rules to response headers: %v", err)
+		return nil, status.Errorf(s.statusOnError, "extauthz: error applying header mutation rules to response headers: %v", err)
 	}
 	return md, nil
 }
