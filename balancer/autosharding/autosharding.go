@@ -59,13 +59,13 @@ func (bb) ParseConfig(s json.RawMessage) (serviceconfig.LoadBalancingConfig, err
 		return nil, fmt.Errorf("autosharding: unable to unmarshal LBConfig: %v", err)
 	}
 	if lbConfig.ChannelFactoryKey == "" {
-		return nil, fmt.Errorf("autosharding: channel_factory_key field is required")
+		return nil, fmt.Errorf("autosharding: channelFactoryKey field is required")
 	}
 	if lbConfig.AutoShardingTarget == "" {
-		return nil, fmt.Errorf("autosharding: autosharding_target field is required")
+		return nil, fmt.Errorf("autosharding: autoshardingTarget field is required")
 	}
 	if lbConfig.KeyHeaderName == "" {
-		return nil, fmt.Errorf("autosharding: key_header_name field is required")
+		return nil, fmt.Errorf("autosharding: keyHeaderName field is required")
 	}
 	return lbConfig, nil
 }
