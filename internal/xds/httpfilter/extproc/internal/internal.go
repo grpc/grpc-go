@@ -31,8 +31,8 @@ var (
 	// CreateExtProcChannel creates the channel to the external processing
 	// server via the provided side-channel factory. It is a variable so that
 	// tests can intercept channel creation and observe its release.
-	CreateExtProcChannel = func(factory httpfilter.SideChannelFactory, server grpcservice.Config) (grpc.ClientConnInterface, func(), error) {
-		return factory.CreateChannel(server.TargetURI, server.ChannelCredentials, server.CallCredentials)
+	CreateExtProcChannel = func(factory httpfilter.SideChannelFactory, server *grpcservice.Config) (grpc.ClientConnInterface, func(), error) {
+		return factory.CreateChannel(server)
 	}
 
 	// RegisterForTesting registers the external processor HTTP Filter for testing

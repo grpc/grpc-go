@@ -35,6 +35,7 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/internal/xds/grpcservice"
+	"google.golang.org/grpc/internal/xds/grpcservice/creds"
 	"google.golang.org/grpc/internal/xds/httpfilter"
 	"google.golang.org/grpc/internal/xds/matcher"
 	"google.golang.org/grpc/metadata"
@@ -57,7 +58,16 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
-const testBaseURI = "base-uri"
+const (
+	testBaseURI = "base-uri"
+
+	insecureCredsTypeURL = "type.googleapis.com/envoy.extensions.grpc_service.channel_credentials.insecure.v3.InsecureCredentials"
+)
+
+// allowlistInsecureCreds carries the identity of the insecure channel
+// credentials configured for allowlisted targets by testParseOptions; want
+// configs compare against it by identity.
+var allowlistInsecureCreds = creds.NewChannelCreds(nil, creds.NewJSONIdentity("insecure", nil), nil)
 
 // testParseOptions returns ParseOptions whose bootstrap
 // configuration allowlists the given side-channel targets with insecure
@@ -100,11 +110,11 @@ type fakeSideChannelFactory struct {
 	failTarget string
 }
 
-func (f *fakeSideChannelFactory) CreateChannel(targetURI string, _ bootstrap.ChannelCreds, _ []bootstrap.CallCredsConfig) (grpc.ClientConnInterface, func(), error) {
-	if f.failTarget != "" && targetURI == f.failTarget {
+func (f *fakeSideChannelFactory) CreateChannel(cfg *grpcservice.Config) (grpc.ClientConnInterface, func(), error) {
+	if f.failTarget != "" && cfg.TargetURI == f.failTarget {
 		return nil, nil, fmt.Errorf("dial error")
 	}
-	cc, err := grpc.NewClient(targetURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	cc, err := grpc.NewClient(cfg.TargetURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -121,6 +131,8 @@ var cmpOpts = []cmp.Option{
 		optional.Optional[processingModes]{},
 		optional.Optional[bool]{},
 	),
+	cmp.Comparer((*creds.ChannelCreds).Equal),
+	cmp.Comparer((*creds.CallCreds).Equal),
 	protocmp.Transform(),
 	cmp.Transformer("RegexpToString", func(r *regexp.Regexp) string {
 		if r == nil {
@@ -157,7 +169,7 @@ func (s) TestParseFilterConfig_Success(t *testing.T) {
 				return m
 			}(),
 			wantCfg: baseConfig{
-				server: grpcservice.Config{TargetURI: "localhost:1234"},
+				server: grpcservice.Config{TargetURI: "localhost:1234", ChannelCredentials: allowlistInsecureCreds},
 				processingModes: processingModes{
 					requestHeaderMode:   modeSend,
 					responseHeaderMode:  modeSend,
@@ -189,7 +201,7 @@ func (s) TestParseFilterConfig_Success(t *testing.T) {
 				return m
 			}(),
 			wantCfg: baseConfig{
-				server: grpcservice.Config{TargetURI: "localhost:1234"},
+				server: grpcservice.Config{TargetURI: "localhost:1234", ChannelCredentials: allowlistInsecureCreds},
 				processingModes: processingModes{
 					requestHeaderMode:   modeSend,
 					responseHeaderMode:  modeSend,
@@ -221,7 +233,7 @@ func (s) TestParseFilterConfig_Success(t *testing.T) {
 				return m
 			}(),
 			wantCfg: baseConfig{
-				server: grpcservice.Config{TargetURI: "localhost:1234"},
+				server: grpcservice.Config{TargetURI: "localhost:1234", ChannelCredentials: allowlistInsecureCreds},
 				processingModes: processingModes{
 					requestHeaderMode:   modeSend,
 					responseHeaderMode:  modeSend,
@@ -256,10 +268,9 @@ func (s) TestParseFilterConfig_Success(t *testing.T) {
 // Tests the gRFC A102 trust policy applied when parsing the grpc_service:
 // credentials from the proto are honored only when the xDS management server
 // that delivered the resource is trusted; for untrusted management servers
-// the target must be present in the bootstrap allowed_grpc_services map and
-// the parsed credentials are cleared.
+// the target must be present in the bootstrap allowed_grpc_services map,
+// whose credentials are used instead.
 func (s) TestParseFilterConfig_TrustPolicy(t *testing.T) {
-	const insecureCredsTypeURL = "type.googleapis.com/envoy.extensions.grpc_service.channel_credentials.insecure.v3.InsecureCredentials"
 	trustedServer, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{
 		URI:            "trusted-server:1234",
 		ServerFeatures: []string{"trusted_xds_server"},
@@ -287,17 +298,19 @@ func (s) TestParseFilterConfig_TrustPolicy(t *testing.T) {
 	insecurePlugin := &anypb.Any{TypeUrl: insecureCredsTypeURL}
 
 	tests := []struct {
-		name      string
-		cfg       proto.Message
-		opts      httpfilter.ParseOptions
-		wantCreds bootstrap.ChannelCreds
+		name string
+		cfg  proto.Message
+		opts httpfilter.ParseOptions
+		// wantCreds carries only the expected credentials identity;
+		// comparisons use Equal, which compares identities.
+		wantCreds *creds.ChannelCreds
 		wantErr   string
 	}{
 		{
 			name:      "trusted_uses_proto_creds",
 			cfg:       extProcConfig("localhost:1234", insecurePlugin),
 			opts:      trustedOpts,
-			wantCreds: bootstrap.ChannelCreds{Type: "insecure"},
+			wantCreds: creds.NewChannelCreds(nil, creds.NewProtoIdentity(insecurePlugin), nil),
 		},
 		{
 			name:    "trusted_requires_supported_creds",
@@ -306,12 +319,12 @@ func (s) TestParseFilterConfig_TrustPolicy(t *testing.T) {
 			wantErr: "no supported channel credentials found",
 		},
 		{
-			name: "untrusted_allowlisted_clears_creds",
+			name: "untrusted_allowlisted_uses_allowlist_creds",
 			cfg:  extProcConfig("localhost:1234", insecurePlugin),
 			opts: untrustedOpts,
-			// The proto's credentials must be ignored: empty credentials
-			// instruct CreateChannel to use the allowlisted ones.
-			wantCreds: bootstrap.ChannelCreds{},
+			// The proto's credentials must be ignored in favor of the
+			// allowlisted (bootstrap JSON) ones.
+			wantCreds: allowlistInsecureCreds,
 		},
 		{
 			name:    "untrusted_not_allowlisted",
@@ -731,8 +744,8 @@ func (s) TestBuildClientInterceptor_Success(t *testing.T) {
 				},
 				server: grpcservice.Config{
 					TargetURI:          testBaseURI,
-					ChannelCredentials: bootstrap.ChannelCreds{Type: "test-channel-creds"},
-					CallCredentials:    []bootstrap.CallCredsConfig{{Type: "test-call-creds"}},
+					ChannelCredentials: creds.NewChannelCreds(nil, creds.NewJSONIdentity("test-channel-creds", nil), nil),
+					CallCredentials:    []*creds.CallCreds{creds.NewCallCreds(nil, creds.NewJSONIdentity("test-call-creds", nil), nil)},
 					InitialMetadata:    metadata.MD(metadata.Pairs("key1", "value1")),
 					Timeout:            5 * time.Second,
 				},
@@ -766,8 +779,8 @@ func (s) TestBuildClientInterceptor_Success(t *testing.T) {
 				},
 				server: grpcservice.Config{
 					TargetURI:          testBaseURI,
-					ChannelCredentials: bootstrap.ChannelCreds{Type: "test-channel-creds"},
-					CallCredentials:    []bootstrap.CallCredsConfig{{Type: "test-call-creds"}},
+					ChannelCredentials: creds.NewChannelCreds(nil, creds.NewJSONIdentity("test-channel-creds", nil), nil),
+					CallCredentials:    []*creds.CallCreds{creds.NewCallCreds(nil, creds.NewJSONIdentity("test-call-creds", nil), nil)},
 					InitialMetadata:    metadata.MD(metadata.Pairs("key1", "value1")),
 					Timeout:            5 * time.Second,
 				},

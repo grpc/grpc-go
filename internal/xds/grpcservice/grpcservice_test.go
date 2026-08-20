@@ -24,12 +24,16 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/xds/bootstrap"
+	"google.golang.org/grpc/internal/xds/grpcservice/creds"
 	"google.golang.org/grpc/metadata"
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	accesstokenpb "github.com/envoyproxy/go-control-plane/envoy/extensions/grpc_service/call_credentials/access_token/v3"
+	xdscredspb "github.com/envoyproxy/go-control-plane/envoy/extensions/grpc_service/channel_credentials/xds/v3"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/durationpb"
 )
@@ -42,7 +46,47 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
-const target = "dns:///my-service:443"
+const (
+	target = "dns:///my-service:443"
+
+	insecureCredsTypeURL = "type.googleapis.com/envoy.extensions.grpc_service.channel_credentials.insecure.v3.InsecureCredentials"
+)
+
+// bootstrapConfig builds a bootstrap Config whose allowed_grpc_services is set
+// to the provided JSON (a map from target URI to allowed service config).
+func bootstrapConfig(t *testing.T, allowed string) *bootstrap.Config {
+	t.Helper()
+	// The allowed_grpc_services bootstrap field is parsed only when a
+	// consuming feature is enabled.
+	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
+	contents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
+		Servers:             json.RawMessage(`[{"server_uri":"td.googleapis.com:443","channel_creds":[{"type":"insecure"}]}]`),
+		Node:                json.RawMessage(`{}`),
+		AllowedGRPCServices: json.RawMessage(allowed),
+	})
+	if err != nil {
+		t.Fatalf("NewContentsForTesting() failed: %v", err)
+	}
+	cfg, err := bootstrap.NewConfigFromContents(contents)
+	if err != nil {
+		t.Fatalf("NewConfigFromContents() failed: %v", err)
+	}
+	return cfg
+}
+
+// trustedServerConfig returns a server config carrying the trusted_xds_server
+// server feature.
+func trustedServerConfig(t *testing.T) *bootstrap.ServerConfig {
+	t.Helper()
+	sc, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{
+		URI:            "trusted-server:443",
+		ServerFeatures: []string{"trusted_xds_server"},
+	})
+	if err != nil {
+		t.Fatalf("ServerConfigForTesting() failed: %v", err)
+	}
+	return sc
+}
 
 func googleGrpcService(target string, channelPlugins []*anypb.Any, timeout *durationpb.Duration) *v3corepb.GrpcService {
 	return &v3corepb.GrpcService{
@@ -67,48 +111,87 @@ func accessTokenPlugin(t *testing.T, token string) *anypb.Any {
 
 func (s) TestParse(t *testing.T) {
 	insecurePlugin := &anypb.Any{TypeUrl: insecureCredsTypeURL}
+	xdsWithInsecureFallback, err := anypb.New(&xdscredspb.XdsCredentials{FallbackCredentials: insecurePlugin})
+	if err != nil {
+		t.Fatalf("Failed to marshal XdsCredentials: %v", err)
+	}
+	allowedInsecure := `{"dns:///my-service:443":{"channel_creds":[{"type":"insecure"}]}}`
 
 	tests := []struct {
-		name    string
-		gs      *v3corepb.GrpcService
-		want    *Config
-		wantErr string
+		name   string
+		gs     *v3corepb.GrpcService
+		sc     *bootstrap.ServerConfig
+		config *bootstrap.Config
+		// wantChannelCreds carries only the expected credentials identity;
+		// comparisons use Equal, which compares identities.
+		wantChannelCreds *creds.ChannelCreds
+		wantErr          string
 	}{
 		{
-			name: "insecure_channel_creds",
-			gs:   googleGrpcService(target, []*anypb.Any{insecurePlugin}, nil),
-			want: &Config{TargetURI: target, ChannelCredentials: bootstrap.ChannelCreds{Type: "insecure"}},
+			name:             "trusted_insecure_channel_creds",
+			gs:               googleGrpcService(target, []*anypb.Any{insecurePlugin}, nil),
+			sc:               trustedServerConfig(t),
+			config:           bootstrapConfig(t, "{}"),
+			wantChannelCreds: creds.NewChannelCreds(nil, creds.NewProtoIdentity(insecurePlugin), nil),
 		},
 		{
-			name: "no_channel_creds_left_empty",
-			gs:   googleGrpcService(target, nil, nil),
-			want: &Config{TargetURI: target},
+			name:             "trusted_xds_creds_resolve_to_fallback",
+			gs:               googleGrpcService(target, []*anypb.Any{xdsWithInsecureFallback}, nil),
+			sc:               trustedServerConfig(t),
+			config:           bootstrapConfig(t, "{}"),
+			wantChannelCreds: creds.NewChannelCreds(nil, creds.NewProtoIdentity(xdsWithInsecureFallback), nil),
 		},
 		{
-			name: "unsupported_channel_creds_left_empty",
-			gs:   googleGrpcService(target, []*anypb.Any{{TypeUrl: "type.googleapis.com/unsupported.Credentials"}}, nil),
-			want: &Config{TargetURI: target},
+			name:    "trusted_no_supported_channel_creds",
+			gs:      googleGrpcService(target, nil, nil),
+			sc:      trustedServerConfig(t),
+			config:  bootstrapConfig(t, "{}"),
+			wantErr: "no supported channel credentials",
+		},
+		{
+			name:             "untrusted_allowlisted_uses_allowlist_creds",
+			gs:               googleGrpcService(target, []*anypb.Any{insecurePlugin}, nil),
+			config:           bootstrapConfig(t, allowedInsecure),
+			wantChannelCreds: creds.NewChannelCreds(nil, creds.NewJSONIdentity("insecure", nil), nil),
+		},
+		{
+			name:    "untrusted_not_allowlisted",
+			gs:      googleGrpcService(target, nil, nil),
+			config:  bootstrapConfig(t, "{}"),
+			wantErr: "not present in allowed_grpc_services",
+		},
+		{
+			name:    "untrusted_nil_bootstrap_config",
+			gs:      googleGrpcService(target, []*anypb.Any{insecurePlugin}, nil),
+			config:  nil,
+			wantErr: "not present in allowed_grpc_services",
 		},
 		{
 			name:    "missing_google_grpc",
 			gs:      &v3corepb.GrpcService{},
+			sc:      trustedServerConfig(t),
+			config:  bootstrapConfig(t, "{}"),
 			wantErr: "only google_grpc",
 		},
 		{
 			name:    "empty_target_uri",
 			gs:      googleGrpcService("", nil, nil),
+			sc:      trustedServerConfig(t),
+			config:  bootstrapConfig(t, "{}"),
 			wantErr: "target_uri must be non-empty",
 		},
 		{
 			name:    "zero_timeout_rejected",
 			gs:      googleGrpcService(target, []*anypb.Any{insecurePlugin}, durationpb.New(0)),
+			sc:      trustedServerConfig(t),
+			config:  bootstrapConfig(t, "{}"),
 			wantErr: "timeout must be strictly positive",
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			got, err := Parse(test.gs)
+			got, err := Parse(test.gs, test.config, test.sc)
 			if test.wantErr != "" {
 				if err == nil || !strings.Contains(err.Error(), test.wantErr) {
 					t.Fatalf("Parse() error = %v, want substring %q", err, test.wantErr)
@@ -118,28 +201,48 @@ func (s) TestParse(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Parse() returned unexpected error: %v", err)
 			}
-			if diff := cmp.Diff(test.want, got); diff != "" {
-				t.Errorf("Parse() mismatch (-want +got):\n%s", diff)
+			if got.TargetURI != target {
+				t.Errorf("Parse() TargetURI = %q, want %q", got.TargetURI, target)
+			}
+			if got.ChannelCredentials.Bundle() == nil {
+				t.Error("Parse() returned channel credentials without a built bundle")
+			}
+			if !got.ChannelCredentials.Equal(test.wantChannelCreds) {
+				t.Errorf("Parse() ChannelCredentials identity mismatch, got %+v", got.ChannelCredentials)
 			}
 		})
 	}
 }
 
 func (s) TestParseCallCredentials(t *testing.T) {
-	gs := googleGrpcService(target, []*anypb.Any{{TypeUrl: insecureCredsTypeURL}}, nil)
-	gs.GetGoogleGrpc().CallCredentialsPlugin = []*anypb.Any{accessTokenPlugin(t, "test-token")}
-	got, err := Parse(gs)
+	insecurePlugin := &anypb.Any{TypeUrl: insecureCredsTypeURL}
+	tokenPlugin := accessTokenPlugin(t, "test-token")
+	sc := trustedServerConfig(t)
+	bc := bootstrapConfig(t, "{}")
+
+	gs := googleGrpcService(target, []*anypb.Any{insecurePlugin}, nil)
+	gs.GetGoogleGrpc().CallCredentialsPlugin = []*anypb.Any{
+		tokenPlugin,
+		// Plugins of unsupported types are skipped.
+		{TypeUrl: "type.googleapis.com/unsupported.CallCredentials"},
+	}
+	got, err := Parse(gs, bc, sc)
 	if err != nil {
 		t.Fatalf("Parse() returned unexpected error: %v", err)
 	}
-	want := []bootstrap.CallCredsConfig{{Type: "access_token", Config: json.RawMessage(`{"token":"test-token"}`)}}
-	if diff := cmp.Diff(want, got.CallCredentials); diff != "" {
-		t.Errorf("Parse() CallCredentials mismatch (-want +got):\n%s", diff)
+	if len(got.CallCredentials) != 1 {
+		t.Fatalf("Parse() returned %d call credentials, want 1", len(got.CallCredentials))
+	}
+	if got.CallCredentials[0].Credentials() == nil {
+		t.Error("Parse() returned call credentials without built credentials")
+	}
+	if want := creds.NewCallCreds(nil, creds.NewProtoIdentity(tokenPlugin), nil); !got.CallCredentials[0].Equal(want) {
+		t.Errorf("Parse() CallCredentials identity mismatch, got %+v", got.CallCredentials[0])
 	}
 
 	// An empty token must be rejected.
 	gs.GetGoogleGrpc().CallCredentialsPlugin = []*anypb.Any{accessTokenPlugin(t, "")}
-	if _, err := Parse(gs); err == nil || !strings.Contains(err.Error(), "access token must be non-empty") {
+	if _, err := Parse(gs, bc, sc); err == nil || !strings.Contains(err.Error(), "access token must be non-empty") {
 		t.Fatalf("Parse() error = %v, want substring %q", err, "access token must be non-empty")
 	}
 }
@@ -150,12 +253,64 @@ func (s) TestParseInitialMetadata(t *testing.T) {
 		{Key: "key-b", Value: "b"},
 		{Key: "key-a", Value: "legacy", RawValue: []byte("raw-a")},
 	}
-	got, err := Parse(gs)
+	got, err := Parse(gs, bootstrapConfig(t, "{}"), trustedServerConfig(t))
 	if err != nil {
 		t.Fatalf("Parse() returned unexpected error: %v", err)
 	}
 	want := metadata.MD{"key-b": []string{"b"}, "key-a": []string{"raw-a"}}
 	if diff := cmp.Diff(want, got.InitialMetadata); diff != "" {
 		t.Errorf("Parse() InitialMetadata mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func (s) TestConfigEqual(t *testing.T) {
+	insecurePlugin := &anypb.Any{TypeUrl: insecureCredsTypeURL}
+	protoInsecure := creds.NewChannelCreds(nil, creds.NewProtoIdentity(insecurePlugin), nil)
+	jsonInsecure := creds.NewChannelCreds(nil, creds.NewJSONIdentity("insecure", nil), nil)
+
+	tests := []struct {
+		name string
+		a, b *Config
+		want bool
+	}{
+		{
+			name: "equal_identities_share",
+			a:    &Config{TargetURI: target, ChannelCredentials: protoInsecure},
+			b:    &Config{TargetURI: target, ChannelCredentials: creds.NewChannelCreds(nil, creds.NewProtoIdentity(insecurePlugin), nil)},
+			want: true,
+		},
+		{
+			name: "timeout_and_metadata_do_not_affect_sharing",
+			a:    &Config{TargetURI: target, ChannelCredentials: protoInsecure, Timeout: 1},
+			b:    &Config{TargetURI: target, ChannelCredentials: protoInsecure, InitialMetadata: metadata.Pairs("k", "v")},
+			want: true,
+		},
+		{
+			name: "different_targets",
+			a:    &Config{TargetURI: target, ChannelCredentials: protoInsecure},
+			b:    &Config{TargetURI: "dns:///other:443", ChannelCredentials: protoInsecure},
+			want: false,
+		},
+		{
+			name: "different_identity_flavors",
+			a:    &Config{TargetURI: target, ChannelCredentials: protoInsecure},
+			b:    &Config{TargetURI: target, ChannelCredentials: jsonInsecure},
+			want: false,
+		},
+		{
+			name: "different_call_creds",
+			a:    &Config{TargetURI: target, ChannelCredentials: protoInsecure},
+			b: &Config{TargetURI: target, ChannelCredentials: protoInsecure, CallCredentials: []*creds.CallCreds{
+				creds.NewCallCreds(nil, creds.NewJSONIdentity("access_token", nil), nil),
+			}},
+			want: false,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := test.a.Equal(test.b); got != test.want {
+				t.Errorf("Equal() = %v, want %v", got, test.want)
+			}
+		})
 	}
 }

@@ -32,25 +32,20 @@ import (
 // token to outgoing RPCs. The config must be a JSON object of the form
 // {"token": <non-empty string>}.
 //
-// The token is only ever sent on connections that provide privacy and
-// integrity; on weaker connections it is withheld without failing the RPC.
-//
-// The returned cleanup function is a no-op since these credentials hold no
-// resources; it exists to satisfy the registry's CallCredentials Build
-// contract, and is idempotent.
-func NewCallCredentials(configJSON json.RawMessage) (credentials.PerRPCCredentials, func(), error) {
+// The credentials require transport security: the token is only ever sent on
+// connections that provide privacy and integrity, and RPCs on weaker
+// connections fail.
+func NewCallCredentials(configJSON json.RawMessage) (credentials.PerRPCCredentials, error) {
 	var cfg struct {
 		Token string `json:"token"`
 	}
-	emptyFn := func() {}
-
 	if err := json.Unmarshal(configJSON, &cfg); err != nil {
-		return nil, emptyFn, fmt.Errorf("failed to unmarshal access token call credentials config: %v", err)
+		return nil, fmt.Errorf("failed to unmarshal access token call credentials config: %v", err)
 	}
 	if cfg.Token == "" {
-		return nil, emptyFn, fmt.Errorf("token is required in access token call credentials config")
+		return nil, fmt.Errorf("token is required in access token call credentials config")
 	}
-	return &callCreds{token: cfg.Token}, emptyFn, nil
+	return &callCreds{token: cfg.Token}, nil
 }
 
 // callCreds implements credentials.PerRPCCredentials by attaching a static
@@ -59,21 +54,18 @@ type callCreds struct {
 	token string
 }
 
-// GetRequestMetadata returns the token as an authorization header, but only
-// when the connection provides privacy and integrity. On weaker connections
-// the token is withheld without failing the RPC.
+// GetRequestMetadata returns the token as an authorization header. It fails
+// if the connection does not provide privacy and integrity.
 func (c *callCreds) GetRequestMetadata(ctx context.Context, _ ...string) (map[string]string, error) {
-	ri, ok := credentials.RequestInfoFromContext(ctx)
-	if !ok || credentials.CheckSecurityLevel(ri.AuthInfo, credentials.PrivacyAndIntegrity) != nil {
-		return nil, nil
+	ri, _ := credentials.RequestInfoFromContext(ctx)
+	if err := credentials.CheckSecurityLevel(ri.AuthInfo, credentials.PrivacyAndIntegrity); err != nil {
+		return nil, fmt.Errorf("unable to transfer access token PerRPCCredentials: %v", err)
 	}
 	return map[string]string{"authorization": "Bearer " + c.token}, nil
 }
 
 // RequireTransportSecurity indicates whether the credentials requires
-// transport security. It returns false: the credentials may be added to any
-// connection, but the token is withheld (not sent) on connections that do
-// not provide privacy and integrity.
+// transport security.
 func (c *callCreds) RequireTransportSecurity() bool {
-	return false
+	return true
 }

@@ -25,52 +25,43 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
-	"google.golang.org/grpc/internal/envconfig"
-	"google.golang.org/grpc/internal/testutils"
-	"google.golang.org/grpc/internal/xds/bootstrap"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/internal/xds/grpcservice"
+	"google.golang.org/grpc/internal/xds/grpcservice/accesstokencreds"
+	"google.golang.org/grpc/internal/xds/grpcservice/creds"
 )
 
-// newTestClientForSideChannels builds a clientImpl with a bootstrap
-// configuration whose allowed_grpc_services field is set to the provided
-// JSON, if non-empty.
-func newTestClientForSideChannels(t *testing.T, allowedServices string) *clientImpl {
-	t.Helper()
-
-	opts := bootstrap.ConfigOptionsForTesting{
-		Servers: []byte(`[{"server_uri": "passthrough:///unused", "channel_creds": [{"type": "insecure"}]}]`),
-		Node:    []byte(`{"id": "test-node"}`),
-	}
-	if allowedServices != "" {
-		opts.AllowedGRPCServices = json.RawMessage(allowedServices)
-	}
-	contents, err := bootstrap.NewContentsForTesting(opts)
-	if err != nil {
-		t.Fatalf("Failed to create bootstrap contents: %v", err)
-	}
-	config, err := bootstrap.NewConfigFromContents(contents)
-	if err != nil {
-		t.Fatalf("Failed to parse bootstrap contents: %v", err)
-	}
-	return &clientImpl{bootstrapConfig: config}
+// testChannelCreds returns paired insecure channel credentials whose identity
+// is the given JSON credentials type name. cleanup may be nil.
+func testChannelCreds(typ string, cleanup func()) *creds.ChannelCreds {
+	return creds.NewChannelCreds(insecure.NewBundle(), creds.NewJSONIdentity(typ, nil), cleanup)
 }
 
-// Tests that CreateChannel returns the same shared channel for the same
-// target and credentials, and that the channel is closed only when all users
-// have released it.
+// Tests that CreateChannel returns the same shared channel for configs with
+// equal credential identities, releases duplicate credential builds, and
+// closes the channel only when all users have released it.
 func (s) TestCreateChannel_Sharing(t *testing.T) {
-	c := newTestClientForSideChannels(t, "")
-	creds := bootstrap.ChannelCreds{Type: "insecure"}
+	c := &clientImpl{}
 
-	cc1, release1, err := c.CreateChannel("passthrough:///target", creds, nil)
+	cfg1 := &grpcservice.Config{TargetURI: "passthrough:///target", ChannelCredentials: testChannelCreds("insecure", nil)}
+	cc1, release1, err := c.CreateChannel(cfg1)
 	if err != nil {
 		t.Fatalf("CreateChannel() failed: %v", err)
 	}
-	cc2, release2, err := c.CreateChannel("passthrough:///target", creds, nil)
+
+	// An Equal config with a different credentials build must share the
+	// channel, and the duplicate build must be released immediately.
+	duplicateReleased := false
+	cfg2 := &grpcservice.Config{TargetURI: "passthrough:///target", ChannelCredentials: testChannelCreds("insecure", func() { duplicateReleased = true })}
+	cc2, release2, err := c.CreateChannel(cfg2)
 	if err != nil {
 		t.Fatalf("CreateChannel() failed: %v", err)
 	}
 	if cc1 != cc2 {
-		t.Fatalf("CreateChannel() returned different channels for the same target and credentials")
+		t.Fatalf("CreateChannel() returned different channels for equal configs")
+	}
+	if !duplicateReleased {
+		t.Fatalf("CreateChannel() did not release the duplicate credentials build on a shared channel")
 	}
 
 	conn := cc1.(*grpc.ClientConn)
@@ -84,8 +75,9 @@ func (s) TestCreateChannel_Sharing(t *testing.T) {
 		t.Fatalf("Channel state after releasing all references: %v, want %v", got, connectivity.Shutdown)
 	}
 
-	// A new call for the same key must create a fresh channel.
-	cc3, release3, err := c.CreateChannel("passthrough:///target", creds, nil)
+	// A new call with an equal config must create a fresh channel.
+	cfg3 := &grpcservice.Config{TargetURI: "passthrough:///target", ChannelCredentials: testChannelCreds("insecure", nil)}
+	cc3, release3, err := c.CreateChannel(cfg3)
 	if err != nil {
 		t.Fatalf("CreateChannel() failed: %v", err)
 	}
@@ -95,87 +87,99 @@ func (s) TestCreateChannel_Sharing(t *testing.T) {
 	}
 }
 
-// Tests that CreateChannel returns different channels for the same target
-// when the credentials differ.
-func (s) TestCreateChannel_DifferentCreds(t *testing.T) {
-	c := newTestClientForSideChannels(t, "")
+// Tests that credentials owned by the config are released when the channel is
+// closed.
+func (s) TestCreateChannel_OwnershipTransfer(t *testing.T) {
+	c := &clientImpl{}
 
-	cc1, release1, err := c.CreateChannel("passthrough:///target", bootstrap.ChannelCreds{Type: "insecure"}, nil)
+	released := false
+	cfg := &grpcservice.Config{TargetURI: "passthrough:///target", ChannelCredentials: testChannelCreds("insecure", func() { released = true })}
+	_, release, err := c.CreateChannel(cfg)
+	if err != nil {
+		t.Fatalf("CreateChannel() failed: %v", err)
+	}
+	if released {
+		t.Fatalf("CreateChannel() released the config's credentials while the channel is in use")
+	}
+	release()
+	if !released {
+		t.Fatalf("CreateChannel() did not release the config's credentials when the channel was closed")
+	}
+}
+
+// Tests that CreateChannel returns different channels for the same target
+// when the credential identities differ.
+func (s) TestCreateChannel_DifferentCreds(t *testing.T) {
+	c := &clientImpl{}
+
+	cc1, release1, err := c.CreateChannel(&grpcservice.Config{TargetURI: "passthrough:///target", ChannelCredentials: testChannelCreds("insecure", nil)})
 	if err != nil {
 		t.Fatalf("CreateChannel() failed: %v", err)
 	}
 	defer release1()
-	cc2, release2, err := c.CreateChannel("passthrough:///target", bootstrap.ChannelCreds{Type: "google_default"}, nil)
+	cc2, release2, err := c.CreateChannel(&grpcservice.Config{TargetURI: "passthrough:///target", ChannelCredentials: testChannelCreds("other", nil)})
 	if err != nil {
 		t.Fatalf("CreateChannel() failed: %v", err)
 	}
 	defer release2()
 	if cc1 == cc2 {
-		t.Fatalf("CreateChannel() returned the same channel for different credentials")
+		t.Fatalf("CreateChannel() returned the same channel for different credential identities")
 	}
 }
 
-// Tests that CreateChannel uses the credentials from the bootstrap
-// allowed_grpc_services map only on the untrusted path, i.e. when the
-// provided channel credentials are empty; credentials from a trusted server
-// take precedence over the allowlist.
-func (s) TestCreateChannel_AllowedGRPCServices(t *testing.T) {
-	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
-	c := newTestClientForSideChannels(t, `{"passthrough:///allowed": {"channel_creds": [{"type": "insecure"}]}}`)
-
-	// No credentials are provided here; channel creation succeeds only if
-	// the allowlisted credentials are used.
-	cc, release, err := c.CreateChannel("passthrough:///allowed", bootstrap.ChannelCreds{}, nil)
-	if err != nil {
-		t.Fatalf("CreateChannel() failed for allowlisted target: %v", err)
-	}
-	release()
-	if got := cc.(*grpc.ClientConn).GetState(); got != connectivity.Shutdown {
-		t.Fatalf("Channel state after releasing all references: %v, want %v", got, connectivity.Shutdown)
-	}
-
-	// Credentials provided by a trusted server must be used even when the
-	// target is allowlisted: an unsupported type must fail instead of
-	// falling back to the allowlisted credentials.
-	if _, _, err := c.CreateChannel("passthrough:///allowed", bootstrap.ChannelCreds{Type: "unsupported-type"}, nil); err == nil || !strings.Contains(err.Error(), "unsupported channel credentials type") {
-		t.Fatalf("CreateChannel() with unsupported credentials for allowlisted target returned error %v, want unsupported channel credentials type error", err)
-	}
-}
-
-// Tests that CreateChannel fails when the target is not allowlisted and the
-// provided channel credentials are missing or unsupported, and when a call
-// credentials type is not registered.
+// Tests that CreateChannel fails on configs without channel credentials, and
+// that a failure to create the channel releases the config's credentials.
 func (s) TestCreateChannel_Errors(t *testing.T) {
-	c := newTestClientForSideChannels(t, "")
+	c := &clientImpl{}
 
 	tests := []struct {
-		name      string
-		chanCreds bootstrap.ChannelCreds
-		callCreds []bootstrap.CallCredsConfig
-		wantErr   string
+		name    string
+		cfg     *grpcservice.Config
+		wantErr string
 	}{
 		{
-			name:      "unsupported_channel_creds",
-			chanCreds: bootstrap.ChannelCreds{Type: "unsupported-type"},
-			wantErr:   "unsupported channel credentials type",
+			name:    "nil_config",
+			cfg:     nil,
+			wantErr: "no channel credentials",
 		},
 		{
-			name:    "no_creds_and_not_allowlisted",
-			wantErr: "no credentials available",
-		},
-		{
-			name:      "unsupported_call_creds",
-			chanCreds: bootstrap.ChannelCreds{Type: "insecure"},
-			callCreds: []bootstrap.CallCredsConfig{{Type: "unsupported-type"}},
-			wantErr:   "unsupported call credentials type",
+			name:    "no_channel_creds",
+			cfg:     &grpcservice.Config{TargetURI: "passthrough:///target"},
+			wantErr: "no channel credentials",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, _, err := c.CreateChannel("passthrough:///target", tt.chanCreds, tt.callCreds)
+			_, _, err := c.CreateChannel(tt.cfg)
 			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
 				t.Fatalf("CreateChannel() returned error %v, want error containing %q", err, tt.wantErr)
 			}
 		})
+	}
+}
+
+// Tests that a channel creation failure — here, call credentials requiring
+// transport security combined with insecure channel credentials — fails
+// CreateChannel and releases the config's owned credentials.
+func (s) TestCreateChannel_DialError(t *testing.T) {
+	c := &clientImpl{}
+
+	tokenCreds, err := accesstokencreds.NewCallCredentials(json.RawMessage(`{"token": "test-token"}`))
+	if err != nil {
+		t.Fatalf("NewCallCredentials() failed: %v", err)
+	}
+	released := false
+	cfg := &grpcservice.Config{
+		TargetURI:          "passthrough:///target",
+		ChannelCredentials: testChannelCreds("insecure", func() { released = true }),
+		CallCredentials: []*creds.CallCreds{
+			creds.NewCallCreds(tokenCreds, creds.NewJSONIdentity("access_token", nil), func() {}),
+		},
+	}
+	if _, _, err := c.CreateChannel(cfg); err == nil || !strings.Contains(err.Error(), "transport level security") {
+		t.Fatalf("CreateChannel() returned error %v, want transport security error", err)
+	}
+	if !released {
+		t.Fatal("CreateChannel() did not release the config's credentials on failure")
 	}
 }

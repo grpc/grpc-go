@@ -92,7 +92,13 @@ func (j *jwtCallCredsBuilder) Name() string {
 type accessTokenCallCredsBuilder struct{}
 
 func (a *accessTokenCallCredsBuilder) Build(configJSON json.RawMessage) (credentials.PerRPCCredentials, func(), error) {
-	return accesstokencreds.NewCallCredentials(configJSON)
+	cc, err := accesstokencreds.NewCallCredentials(configJSON)
+	if err != nil {
+		return nil, nil, err
+	}
+	// These credentials hold no resources; the no-op cleanup satisfies the
+	// registry's Build contract.
+	return cc, func() {}, nil
 }
 
 func (a *accessTokenCallCredsBuilder) Name() string {

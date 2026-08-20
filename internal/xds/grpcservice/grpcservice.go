@@ -21,36 +21,30 @@
 package grpcservice
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
 	imetadata "google.golang.org/grpc/internal/metadata"
 	"google.golang.org/grpc/internal/xds/bootstrap"
+	"google.golang.org/grpc/internal/xds/grpcservice/creds"
+	"google.golang.org/grpc/internal/xds/grpcservice/credsregistry"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
-	accesstokenpb "github.com/envoyproxy/go-control-plane/envoy/extensions/grpc_service/call_credentials/access_token/v3"
-	xdspb "github.com/envoyproxy/go-control-plane/envoy/extensions/grpc_service/channel_credentials/xds/v3"
-	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
 const (
-	insecureCredsTypeURL      = "type.googleapis.com/envoy.extensions.grpc_service.channel_credentials.insecure.v3.InsecureCredentials"
-	googleDefaultCredsTypeURL = "type.googleapis.com/envoy.extensions.grpc_service.channel_credentials.google_default.v3.GoogleDefaultCredentials"
-	tlsCredsTypeURL           = "type.googleapis.com/envoy.extensions.grpc_service.channel_credentials.tls.v3.TlsCredentials"
-	xdsCredsTypeURL           = "type.googleapis.com/envoy.extensions.grpc_service.channel_credentials.xds.v3.XdsCredentials"
-	accessTokenCredsTypeURL   = "type.googleapis.com/envoy.extensions.grpc_service.call_credentials.access_token.v3.AccessTokenCredentials"
-
 	maxHeaderKeyLen   = 16384
 	maxHeaderValueLen = 16384
 )
 
-// Config is the parsed form of a GrpcService proto.
+// Config is the parsed form of a GrpcService proto. It carries the built,
+// ready-to-use credentials for the side channel.
 type Config struct {
 	// TargetURI is the gRPC target URI of the side-channel service.
 	TargetURI string
@@ -59,22 +53,56 @@ type Config struct {
 	Timeout time.Duration
 	// InitialMetadata is the metadata to add to RPCs on the side channel.
 	InitialMetadata metadata.MD
-	// ChannelCredentials are the channel credentials extracted from the
-	// proto's channel credentials plugins. Empty if the proto configures no
-	// supported channel credentials.
-	ChannelCredentials bootstrap.ChannelCreds
-	// CallCredentials are the call credentials extracted from the proto's
-	// call credentials plugins, preserving order.
-	CallCredentials []bootstrap.CallCredsConfig
+	// ChannelCredentials are the channel credentials to create the side
+	// channel with, paired with the identity of their source configuration.
+	ChannelCredentials *creds.ChannelCreds
+	// CallCredentials are the call credentials to apply to RPCs sent on the
+	// side channel, paired with the identities of their source
+	// configurations, preserving order.
+	CallCredentials []*creds.CallCreds
 }
 
-// Parse parses and validates a GrpcService proto into a Config.
+// Equal reports whether c and other describe the same side channel: the same
+// target with the same channel and call credential identities. Timeout and
+// initial metadata are applied per-RPC and intentionally do not affect
+// channel sharing.
+func (c *Config) Equal(other *Config) bool {
+	if c == nil || other == nil {
+		return c == other
+	}
+	return c.TargetURI == other.TargetURI &&
+		c.ChannelCredentials.Equal(other.ChannelCredentials) &&
+		slices.EqualFunc(c.CallCredentials, other.CallCredentials, (*creds.CallCreds).Equal)
+}
+
+// Close releases the credentials owned by the config. It is idempotent, and a
+// no-op for credentials owned by another component (e.g. the allowlisted
+// credentials owned by the bootstrap config).
+func (c *Config) Close() {
+	if c == nil {
+		return
+	}
+	c.ChannelCredentials.Close()
+	for _, cc := range c.CallCredentials {
+		cc.Close()
+	}
+}
+
+// Parse parses and validates a GrpcService proto into a Config, applying the
+// gRFC A102 trust policy.
 //
-// Parsing is independent of the trust status of the xDS server that delivered
-// the proto: the credentials configured in the proto are always extracted
-// into the returned Config, and it is up to the caller to decide whether they
-// may be used.
-func Parse(gs *v3corepb.GrpcService) (*Config, error) {
+// Credentials configured in the proto are honored only when the xDS
+// management server that delivered it is trusted, i.e. configured with the
+// trusted_xds_server server feature; a nil server config means the delivering
+// management server is unknown and is treated as untrusted. For untrusted
+// management servers the target must be present in the bootstrap
+// allowed_grpc_services map, and the returned Config carries the credentials
+// configured there.
+//
+// The credentials in the returned Config are built and ready to use. Owned
+// credentials are released by Config.Close; the xDS client's CreateChannel
+// takes over that responsibility when a channel is created from the Config.
+func Parse(gs *v3corepb.GrpcService, bc *bootstrap.Config, sc *bootstrap.ServerConfig) (_ *Config, err error) {
 	googleGrpc := gs.GetGoogleGrpc()
 	if googleGrpc == nil {
 		return nil, fmt.Errorf("grpcservice: only google_grpc GrpcService config is supported")
@@ -88,32 +116,96 @@ func Parse(gs *v3corepb.GrpcService) (*Config, error) {
 		return nil, err
 	}
 
-	channelCreds, err := extractChannelCredentials(googleGrpc.GetChannelCredentialsPlugin())
-	if err != nil {
-		return nil, fmt.Errorf("grpcservice: failed to extract channel credentials: %v", err)
-	}
-	callCreds, err := extractCallCredentials(googleGrpc.GetCallCredentialsPlugin())
-	if err != nil {
-		return nil, fmt.Errorf("grpcservice: failed to extract call credentials: %v", err)
+	cfg := &Config{TargetURI: targetURI}
+	// Release any credentials built before a mid-parse failure.
+	defer func() {
+		if err != nil {
+			cfg.Close()
+		}
+	}()
+
+	if trusted := sc != nil && sc.ServerFeaturesTrustedXDSServer(); trusted {
+		if cfg.ChannelCredentials, err = buildChannelCredentials(googleGrpc.GetChannelCredentialsPlugin(), bc); err != nil {
+			return nil, fmt.Errorf("grpcservice: %v", err)
+		}
+		if cfg.CallCredentials, err = buildCallCredentials(googleGrpc.GetCallCredentialsPlugin()); err != nil {
+			return nil, fmt.Errorf("grpcservice: %v", err)
+		}
+	} else {
+		// A nil bootstrap config has no allowlist, so all targets are
+		// rejected.
+		var svc *bootstrap.AllowedGRPCService
+		if bc != nil {
+			svc = bc.AllowedGRPCService(targetURI)
+		}
+		if svc == nil {
+			return nil, fmt.Errorf("grpcservice: target_uri %q is not present in allowed_grpc_services", targetURI)
+		}
+		// The allowlisted credentials are owned by the bootstrap config:
+		// their pairs carry no cleanup, so Config.Close does not affect
+		// them.
+		cfg.ChannelCredentials, cfg.CallCredentials = svc.SideChannelCredentials()
 	}
 
-	timeout, err := parseTimeout(gs)
-	if err != nil {
+	if cfg.Timeout, err = parseTimeout(gs); err != nil {
 		return nil, err
 	}
-
-	initialMetadata, err := parseInitialMetadata(gs.GetInitialMetadata())
-	if err != nil {
+	if cfg.InitialMetadata, err = parseInitialMetadata(gs.GetInitialMetadata()); err != nil {
 		return nil, err
 	}
+	return cfg, nil
+}
 
-	return &Config{
-		TargetURI:          targetURI,
-		Timeout:            timeout,
-		InitialMetadata:    initialMetadata,
-		ChannelCredentials: channelCreds,
-		CallCredentials:    callCreds,
-	}, nil
+// buildChannelCredentials builds the first channel credential from the plugin
+// list whose proto type has a registered builder. It is an error if none of
+// the configured plugins are supported, or if building the selected plugin
+// fails.
+func buildChannelCredentials(plugins []*anypb.Any, bc *bootstrap.Config) (*creds.ChannelCreds, error) {
+	for _, p := range plugins {
+		if p == nil {
+			continue
+		}
+		b := credsregistry.GetChannelCredsBuilder(p.GetTypeUrl())
+		if b == nil {
+			continue
+		}
+		bundle, cleanup, err := b.Build(p, bc)
+		if err != nil {
+			return nil, fmt.Errorf("failed to build channel credentials %q: %v", p.GetTypeUrl(), err)
+		}
+		return creds.NewChannelCreds(bundle, creds.NewProtoIdentity(p), cleanup), nil
+	}
+	return nil, fmt.Errorf("no supported channel credentials found in grpc_service")
+}
+
+// buildCallCredentials builds the call credentials from the plugin list,
+// preserving order. Plugins whose proto type has no registered builder are
+// skipped; call credentials are optional, so an empty result is not an error.
+func buildCallCredentials(plugins []*anypb.Any) (_ []*creds.CallCreds, err error) {
+	var out []*creds.CallCreds
+	// Release any credentials built before a mid-iteration failure.
+	defer func() {
+		if err != nil {
+			for _, cc := range out {
+				cc.Close()
+			}
+		}
+	}()
+	for _, p := range plugins {
+		if p == nil {
+			continue
+		}
+		b := credsregistry.GetCallCredsBuilder(p.GetTypeUrl())
+		if b == nil {
+			continue
+		}
+		cc, cleanup, err := b.Build(p)
+		if err != nil {
+			return nil, fmt.Errorf("failed to build call credentials %q: %v", p.GetTypeUrl(), err)
+		}
+		out = append(out, creds.NewCallCreds(cc, creds.NewProtoIdentity(p), cleanup))
+	}
+	return out, nil
 }
 
 // validateTargetURI verifies that the target URI can be handled by a
@@ -176,79 +268,6 @@ func parseInitialMetadata(headers []*v3corepb.HeaderValue) (metadata.MD, error) 
 		md.Append(key, val)
 	}
 	return md, nil
-}
-
-// extractChannelCredentials returns the first supported channel credential
-// from the plugin list. If none of the configured plugins are supported, it
-// returns empty credentials without error; whether credentials are required
-// is a policy decision left to the caller.
-func extractChannelCredentials(plugins []*anypb.Any) (bootstrap.ChannelCreds, error) {
-	for _, cred := range plugins {
-		if cred == nil {
-			continue
-		}
-		switch cred.GetTypeUrl() {
-		case insecureCredsTypeURL:
-			return bootstrap.ChannelCreds{Type: "insecure"}, nil
-		case googleDefaultCredsTypeURL:
-			return bootstrap.ChannelCreds{Type: "google_default"}, nil
-		case xdsCredsTypeURL:
-			// A side-channel target is not an xDS cluster, so
-			// there is no xDS security configuration for it; the
-			// xds credential therefore resolves to its required
-			// fallback credential.
-			var xdsCfg xdspb.XdsCredentials
-			if err := anypb.UnmarshalTo(cred, &xdsCfg, proto.UnmarshalOptions{}); err != nil {
-				return bootstrap.ChannelCreds{}, fmt.Errorf("failed to unmarshal XdsCredentials: %v", err)
-			}
-			fallback := xdsCfg.GetFallbackCredentials()
-			if fallback == nil {
-				return bootstrap.ChannelCreds{}, fmt.Errorf("xds credentials missing required fallback credentials")
-			}
-			return extractChannelCredentials([]*anypb.Any{fallback})
-		case tlsCredsTypeURL:
-			// TODO: Support TLS channel credentials. This requires
-			// a certificate-provider-backed channel credentials
-			// builder, since the A102 TlsCredentials message
-			// references certificate provider instances rather than
-			// file paths. Until then it is treated as an
-			// unsupported type and skipped, so iteration falls
-			// through to any supported fallback in the list.
-			continue
-		}
-	}
-	return bootstrap.ChannelCreds{}, nil
-}
-
-// extractCallCredentials returns the supported call credentials from the plugin
-// list, preserving order. Unsupported types are ignored; call credentials are
-// optional, so an empty result is not an error.
-func extractCallCredentials(plugins []*anypb.Any) ([]bootstrap.CallCredsConfig, error) {
-	var out []bootstrap.CallCredsConfig
-	for _, cred := range plugins {
-		if cred == nil {
-			continue
-		}
-		if cred.GetTypeUrl() != accessTokenCredsTypeURL {
-			continue
-		}
-		var accessToken accesstokenpb.AccessTokenCredentials
-		if err := anypb.UnmarshalTo(cred, &accessToken, proto.UnmarshalOptions{}); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal AccessTokenCredentials: %v", err)
-		}
-		if accessToken.GetToken() == "" {
-			return nil, fmt.Errorf("access token must be non-empty")
-		}
-		cfgJSON, err := json.Marshal(map[string]string{"token": accessToken.GetToken()})
-		if err != nil {
-			return nil, fmt.Errorf("failed to marshal access token config: %v", err)
-		}
-		out = append(out, bootstrap.CallCredsConfig{
-			Type:   "access_token",
-			Config: json.RawMessage(cfgJSON),
-		})
-	}
-	return out, nil
 }
 
 func validateHeaderKey(key string) error {

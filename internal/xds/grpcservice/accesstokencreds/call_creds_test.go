@@ -57,33 +57,29 @@ func (s) TestNewCallCredentialsWithInvalidConfig(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			callCreds, cleanup, err := NewCallCredentials(json.RawMessage(tt.config))
+			callCreds, err := NewCallCredentials(json.RawMessage(tt.config))
 			if err == nil {
 				t.Fatalf("NewCallCredentials(%s): got nil, want error", tt.config)
 			}
 			if callCreds != nil {
 				t.Errorf("NewCallCredentials(%s): returned non-nil call credentials", tt.config)
 			}
-			if cleanup == nil {
-				t.Errorf("NewCallCredentials(%s): returned nil cleanup function", tt.config)
-			}
 		})
 	}
 }
 
 // Tests that the token is attached as a bearer authorization header on
-// connections providing privacy and integrity, and is withheld without error
+// connections providing privacy and integrity, and that an error is returned
 // on weaker connections.
 func (s) TestGetRequestMetadata(t *testing.T) {
 	const config = `{"token": "test-token"}`
-	callCreds, cleanup, err := NewCallCredentials(json.RawMessage(config))
+	callCreds, err := NewCallCredentials(json.RawMessage(config))
 	if err != nil {
 		t.Fatalf("NewCallCredentials(%s) failed: %v", config, err)
 	}
-	defer cleanup()
 
-	if callCreds.RequireTransportSecurity() {
-		t.Error("RequireTransportSecurity() = true, want false")
+	if !callCreds.RequireTransportSecurity() {
+		t.Error("RequireTransportSecurity() = false, want true")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -101,17 +97,13 @@ func (s) TestGetRequestMetadata(t *testing.T) {
 		t.Fatalf("GetRequestMetadata() on a secure connection returned authorization header %q, want %q", got, want)
 	}
 
-	// The token must be withheld, without error, on a connection that does
-	// not provide privacy and integrity.
+	// An error must be returned on a connection that does not provide
+	// privacy and integrity.
 	insecureCtx := credentials.NewContextWithRequestInfo(ctx, credentials.RequestInfo{
 		AuthInfo: &testAuthInfo{secLevel: credentials.NoSecurity},
 	})
-	md, err = callCreds.GetRequestMetadata(insecureCtx)
-	if err != nil {
-		t.Fatalf("GetRequestMetadata() on an insecure connection failed: %v", err)
-	}
-	if len(md) != 0 {
-		t.Fatalf("GetRequestMetadata() on an insecure connection returned metadata %v, want none", md)
+	if md, err := callCreds.GetRequestMetadata(insecureCtx); err == nil {
+		t.Fatalf("GetRequestMetadata() on an insecure connection returned metadata %v, want error", md)
 	}
 }
 

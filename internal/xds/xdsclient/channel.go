@@ -20,82 +20,78 @@ package xdsclient
 
 import (
 	"fmt"
-	"strings"
+	"slices"
 	"sync"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/internal/grpcsync"
-	"google.golang.org/grpc/internal/xds/bootstrap"
-	xdsbootstrap "google.golang.org/grpc/xds/bootstrap"
+	"google.golang.org/grpc/internal/xds/grpcservice"
 )
 
-// sideChannelKey returns the key under which a shared side channel is stored
-// in the pool. Channels are shared only when both the target and all
-// credential configs match.
-func sideChannelKey(targetURI string, chanCreds bootstrap.ChannelCreds, callCreds []bootstrap.CallCredsConfig) string {
-	parts := []string{targetURI, chanCreds.String()}
-	for _, cc := range callCreds {
-		parts = append(parts, cc.String())
-	}
-	return strings.Join(parts, "|")
+// sideChannelEntry is a shared side channel in the pool, together with the
+// config it was created from. The config is used only for equality
+// comparisons when deciding whether a channel can be shared.
+type sideChannelEntry struct {
+	cfg *grpcservice.Config
+	rc  *grpcsync.RefCounted[*grpc.ClientConn]
 }
 
-// CreateChannel returns a shared gRPC channel to the given side-channel
-// target, creating it on first use. The returned release function must be
-// called when the caller is done with the channel; the channel is closed
-// when the last user releases it.
+// CreateChannel returns a shared gRPC channel to the side-channel service
+// described by the given config, creating it on first use. A channel is
+// shared between configs that compare Equal, i.e. same target and same
+// credential identities. The returned release function must be called when
+// the caller is done with the channel; the channel is closed when the last
+// user releases it.
 //
-// An empty chanCreds.Type indicates that the side channel was configured by
-// an untrusted xDS server, whose GrpcService protos are parsed with empty
-// credentials; on that path the credentials configured for the target in the
-// bootstrap allowed_grpc_services map are used. Otherwise the provided
-// credential configs, which come from a trusted server's GrpcService proto,
-// are used as provided (gRFC A102).
-func (c *clientImpl) CreateChannel(targetURI string, chanCreds bootstrap.ChannelCreds, callCreds []bootstrap.CallCredsConfig) (grpc.ClientConnInterface, func(), error) {
-	key := sideChannelKey(targetURI, chanCreds, callCreds)
+// Credentials owned by the config are released when the channel is closed;
+// the caller must not use them afterwards. If an Equal channel already
+// exists and the config's credentials are a different build than the ones the
+// channel was created with, the duplicates are released immediately.
+func (c *clientImpl) CreateChannel(cfg *grpcservice.Config) (grpc.ClientConnInterface, func(), error) {
+	if cfg == nil || cfg.ChannelCredentials == nil {
+		return nil, nil, fmt.Errorf("xds: no channel credentials in side channel config %v", cfg)
+	}
+
 	c.sideChannelsMu.Lock()
 	defer c.sideChannelsMu.Unlock()
-	if rc, ok := c.sideChannels[key]; ok && rc.TryIncrement() {
-		return rc.Value(), sideChannelRelease(rc), nil
-	}
-	// If TryIncrement failed, the entry's refcount already dropped to zero
-	// and it is being cleaned up: a fresh channel is created below. There is
-	// no need to delete the dying entry here; it is either overwritten when
-	// the fresh channel is stored, or removed by its own cleanup, which
-	// deletes the map entry only if it still points to the dying channel.
-
-	dialOpts, cleanups, err := c.sideChannelDialOptions(targetURI, chanCreds, callCreds)
-	if err != nil {
-		return nil, nil, err
-	}
-	runCleanups := func() {
-		for _, f := range cleanups {
-			f()
+	for _, e := range c.sideChannels {
+		if e.cfg.Equal(cfg) && e.rc.TryIncrement() {
+			// Share the existing channel. If the caller's credentials are a
+			// different build than the ones the channel holds, release the
+			// duplicates; credential cleanups are idempotent, so this is a
+			// no-op when the caller passed the very same credentials again.
+			if e.cfg.ChannelCredentials != cfg.ChannelCredentials {
+				cfg.Close()
+			}
+			return e.rc.Value(), sideChannelRelease(e.rc), nil
 		}
+		// If TryIncrement failed, the entry's refcount already dropped to
+		// zero and it is being cleaned up: it is removed by its own cleanup,
+		// and a fresh channel is created below.
 	}
 
-	conn, err := grpc.NewClient(targetURI, dialOpts...)
-	if err != nil {
-		runCleanups()
-		return nil, nil, fmt.Errorf("xds: failed to create side channel to %q: %v", targetURI, err)
+	dialOpts := []grpc.DialOption{grpc.WithCredentialsBundle(cfg.ChannelCredentials.Bundle())}
+	for _, cc := range cfg.CallCredentials {
+		dialOpts = append(dialOpts, grpc.WithPerRPCCredentials(cc.Credentials()))
 	}
-	var rc *grpcsync.RefCounted[*grpc.ClientConn]
-	rc = grpcsync.NewRefCounted(conn, func() {
+	conn, err := grpc.NewClient(cfg.TargetURI, dialOpts...)
+	if err != nil {
+		cfg.Close()
+		return nil, nil, fmt.Errorf("xds: failed to create side channel to %q: %v", cfg.TargetURI, err)
+	}
+	// Ownership of the config's credentials transfers to the entry: they are
+	// released when the channel is closed. Credentials borrowed from the
+	// bootstrap config carry no cleanup and are unaffected.
+	entry := &sideChannelEntry{cfg: cfg}
+	entry.rc = grpcsync.NewRefCounted(conn, func() {
 		c.sideChannelsMu.Lock()
-		// Only delete the map entry if it still points to this channel; a
-		// dying entry may already have been replaced by a fresh one.
-		if c.sideChannels[key] == rc {
-			delete(c.sideChannels, key)
-		}
+		c.sideChannels = slices.DeleteFunc(c.sideChannels, func(e *sideChannelEntry) bool { return e == entry })
 		c.sideChannelsMu.Unlock()
 		conn.Close()
-		runCleanups()
+		cfg.Close()
 	})
-	if c.sideChannels == nil {
-		c.sideChannels = make(map[string]*grpcsync.RefCounted[*grpc.ClientConn])
-	}
-	c.sideChannels[key] = rc
-	return conn, sideChannelRelease(rc), nil
+	c.sideChannels = append(c.sideChannels, entry)
+	return conn, sideChannelRelease(entry.rc), nil
 }
 
 // sideChannelRelease returns an idempotent release function for the given
@@ -103,56 +99,4 @@ func (c *clientImpl) CreateChannel(targetURI string, chanCreds bootstrap.Channel
 // last release runs the cleanup synchronously, which acquires the mutex.
 func sideChannelRelease(rc *grpcsync.RefCounted[*grpc.ClientConn]) func() {
 	return sync.OnceFunc(rc.Decrement)
-}
-
-// sideChannelDialOptions resolves the dial options to use for a side channel
-// to targetURI. An empty chanCreds.Type is the untrusted-path sentinel: the
-// GrpcService was delivered by an untrusted xDS server, which leaves the
-// parsed credentials empty, so the credentials configured for the target in
-// the bootstrap allowed_grpc_services map are used (gRFC A102). Otherwise,
-// dial options are built from the provided credential configs, and the
-// returned cleanup functions release the built credentials when the channel
-// is closed.
-func (c *clientImpl) sideChannelDialOptions(targetURI string, chanCreds bootstrap.ChannelCreds, callCreds []bootstrap.CallCredsConfig) ([]grpc.DialOption, []func(), error) {
-	if chanCreds.Type == "" {
-		if svc, ok := c.bootstrapConfig.AllowedGRPCService(targetURI); ok {
-			return svc.DialOptions(), nil, nil
-		}
-		return nil, nil, fmt.Errorf("xds: no credentials available for side channel to %q: target is not present in allowed_grpc_services and no channel credentials were provided", targetURI)
-	}
-
-	cb := xdsbootstrap.GetChannelCredentials(chanCreds.Type)
-	if cb == nil {
-		return nil, nil, fmt.Errorf("xds: unsupported channel credentials type %q for side channel to %q", chanCreds.Type, targetURI)
-	}
-	bundle, cancel, err := cb.Build(chanCreds.Config)
-	if err != nil {
-		return nil, nil, fmt.Errorf("xds: failed to build channel credentials of type %q for side channel to %q: %v", chanCreds.Type, targetURI, err)
-	}
-	dialOpts := []grpc.DialOption{grpc.WithCredentialsBundle(bundle)}
-	cleanups := []func(){cancel}
-	runCleanups := func() {
-		for _, f := range cleanups {
-			f()
-		}
-	}
-
-	for _, cc := range callCreds {
-		ccb := xdsbootstrap.GetCallCredentials(cc.Type)
-		if ccb == nil {
-			// Call credentials types were already vetted when the
-			// GrpcService proto was parsed, so a registry miss here is a
-			// bug rather than a config to be skipped.
-			runCleanups()
-			return nil, nil, fmt.Errorf("xds: unsupported call credentials type %q for side channel to %q", cc.Type, targetURI)
-		}
-		creds, cancel, err := ccb.Build(cc.Config)
-		if err != nil {
-			runCleanups()
-			return nil, nil, fmt.Errorf("xds: failed to build call credentials of type %q for side channel to %q: %v", cc.Type, targetURI, err)
-		}
-		dialOpts = append(dialOpts, grpc.WithPerRPCCredentials(creds))
-		cleanups = append(cleanups, cancel)
-	}
-	return dialOpts, cleanups, nil
 }

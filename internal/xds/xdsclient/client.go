@@ -27,6 +27,7 @@ import (
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/internal/xds/clients/lrsclient"
 	"google.golang.org/grpc/internal/xds/clients/xdsclient"
+	"google.golang.org/grpc/internal/xds/grpcservice"
 
 	v3statuspb "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
 )
@@ -55,16 +56,14 @@ type XDSClient interface {
 
 	BootstrapConfig() *bootstrap.Config
 
-	// CreateChannel returns a shared gRPC channel to the given side-channel
-	// target, creating it on first use. The returned release function must be
-	// called when the caller is done with the channel; the channel is closed
-	// when the last user releases it.
-	//
-	// An empty chanCreds.Type indicates that the side channel was configured
-	// by an untrusted xDS server, and the credentials configured for the
-	// target in the bootstrap allowed_grpc_services map are used instead of
-	// the provided configs (gRFC A102).
-	CreateChannel(targetURI string, chanCreds bootstrap.ChannelCreds, callCreds []bootstrap.CallCredsConfig) (grpc.ClientConnInterface, func(), error)
+	// CreateChannel returns a shared gRPC channel to the side-channel service
+	// described by the given config, creating it on first use. A channel is
+	// shared between configs with the same target and credential identities.
+	// The returned release function must be called when the caller is done
+	// with the channel; the channel is closed when the last user releases it.
+	// Credentials owned by the config are released when the channel is
+	// closed, or immediately if an equivalent channel already exists.
+	CreateChannel(cfg *grpcservice.Config) (grpc.ClientConnInterface, func(), error)
 }
 
 // DumpResources returns the status and contents of all xDS resources. It uses

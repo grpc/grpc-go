@@ -28,7 +28,6 @@ import (
 	estats "google.golang.org/grpc/experimental/stats"
 	"google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/grpclog"
-	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 
 	"google.golang.org/grpc/internal/xds/clients"
@@ -110,10 +109,11 @@ type clientImpl struct {
 	// Accessed atomically
 	refCount int32
 
-	// Pool of shared side channels created via CreateChannel (gRFC A102),
-	// keyed by target URI and credential configs.
+	// Pool of shared side channels created via CreateChannel (gRFC A102).
+	// Lookups compare the entries' configs for equality; configs are never
+	// used as map keys.
 	sideChannelsMu sync.Mutex
-	sideChannels   map[string]*grpcsync.RefCounted[*grpc.ClientConn]
+	sideChannels   []*sideChannelEntry
 }
 
 // metricsReporter implements the clients.MetricsReporter interface and uses an
