@@ -147,7 +147,6 @@ func (s) TestCloseRedialDoesNotRetainXDSState(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s: grpc.NewClient failed: %v", label, err)
 		}
-		cc.Connect()
 		client := testgrpc.NewTestServiceClient(cc)
 		if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
 			cc.Close()
@@ -231,7 +230,7 @@ func (s) TestCloseRedialDoesNotRetainXDSState(t *testing.T) {
 	// comfortably below the ~60 KB / iter observed in the standalone repro.
 	const maxBytesPerIter = 20 * 1024
 	if perIterInuse > maxBytesPerIter {
-		t.Errorf("close+redial retained %d bytes/iter of HeapInuse over %d iterations (limit %d) — see googleapis/google-cloud-go#14582",
+		t.Errorf("close+redial retained %d bytes/iter of HeapInuse over %d iterations (limit %d)",
 			perIterInuse, iterations, maxBytesPerIter)
 	}
 }
