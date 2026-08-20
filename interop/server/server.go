@@ -41,11 +41,11 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/alts"
+	oteltracing "google.golang.org/grpc/experimental/opentelemetry"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/interop"
 	"google.golang.org/grpc/orca"
-	oteltracing "google.golang.org/grpc/experimental/opentelemetry"
 	grpcotel "google.golang.org/grpc/stats/opentelemetry"
 	"google.golang.org/grpc/testdata"
 
