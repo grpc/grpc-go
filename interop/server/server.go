@@ -77,14 +77,11 @@ func main() {
 	}
 	logger.Infof("interop server listening on %v", lis.Addr())
 	opts := []grpc.ServerOption{orca.CallMetricsServerOption(nil)}
-	if *enableOpenTelemetry || *otelCollectorAddress != "" || os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT") != "" {
+	if *enableOpenTelemetry || *otelCollectorAddress != "" {
 		ctx := context.Background()
 		var exporterOpts []otlptracegrpc.Option
-		addr := *otelCollectorAddress
-		if addr == "" {
-			addr = os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
-		}
-		if addr != "" {
+		if *otelCollectorAddress != "" {
+			addr := *otelCollectorAddress
 			addr = strings.TrimPrefix(addr, "http://")
 			addr = strings.TrimPrefix(addr, "https://")
 			exporterOpts = append(exporterOpts, otlptracegrpc.WithEndpoint(addr))

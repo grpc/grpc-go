@@ -292,13 +292,10 @@ func main() {
 		}
 		opts = append(opts, grpc.WithUnaryInterceptor(unaryAddMd), grpc.WithStreamInterceptor(streamingAddMd))
 	}
-	if *enableOpenTelemetry || *otelCollectorAddress != "" || os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT") != "" {
+	if *enableOpenTelemetry || *otelCollectorAddress != "" {
 		var exporterOpts []otlptracegrpc.Option
-		addr := *otelCollectorAddress
-		if addr == "" {
-			addr = os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
-		}
-		if addr != "" {
+		if *otelCollectorAddress != "" {
+			addr := *otelCollectorAddress
 			addr = strings.TrimPrefix(addr, "http://")
 			addr = strings.TrimPrefix(addr, "https://")
 			exporterOpts = append(exporterOpts, otlptracegrpc.WithEndpoint(addr))
