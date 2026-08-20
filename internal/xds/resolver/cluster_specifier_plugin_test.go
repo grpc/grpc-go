@@ -393,8 +393,26 @@ func (s) TestResolverClusterSpecifierPluginRefCountRace(t *testing.T) {
 		t.Fatalf("Config selector returned cluster %q, want %q", got, want)
 	}
 
-	// Move the route to cspB. cspA is now held only by the in-flight RPC.
+	// Move the route to cspB. cspA is now held only by the in-flight RPC, so
+	// both plugins stay in the service config. Waiting for that config matters:
+	// it confirms the client processed this update before the race below, and
+	// without it the next update could coalesce with this one and leave the
+	// route config unchanged from the client's point of view.
 	configureResources(ctx, t, mgmtServer, nodeID, listeners, routeConfigForPlugin("cspB", "anythingB"), nil, nil)
+	verifyUpdateFromResolver(ctx, t, stateCh, `{
+		"loadBalancingConfig": [{
+			"xds_cluster_manager_experimental": {
+				"children": {
+					"cluster_specifier_plugin:cspA": {
+						"childPolicy": [{"csp_experimental": {"arbitrary_field": "anythingA"}}]
+					},
+					"cluster_specifier_plugin:cspB": {
+						"childPolicy": [{"csp_experimental": {"arbitrary_field": "anythingB"}}]
+					}
+				}
+			}
+		}]
+	}`)
 
 	// Commit the RPC, dropping cspA's last reference, while an update naming
 	// cspA again is pushed concurrently. The two orderings exercise different
