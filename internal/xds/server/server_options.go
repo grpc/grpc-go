@@ -55,7 +55,13 @@ func ApplyServerOptions(opts []grpc.ServerOption, so *Options) {
 }
 
 // OverrideListenerResourceName returns a server option that overrides the LDS
-// resource name selected for an xDS server listener.
+// resource name selected for an xDS server listener. The supplied function is
+// called by Serve with the address returned by the listener's Addr method, and
+// its return value is used as-is as the LDS listener resource name.
+//
+// The function is called once for each Serve invocation that gets past listener
+// validation and the server-stopped check. If Serve is called concurrently, the
+// function may be called concurrently and must be safe for concurrent use.
 func OverrideListenerResourceName(f func(net.Addr) string) grpc.ServerOption {
 	return NewServerOption(func(o *Options) {
 		o.OverrideListenerResourceName = f

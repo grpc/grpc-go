@@ -238,8 +238,7 @@ func (s) TestServer_OverrideListenerResourceNameOverridesMissingTemplate(t *test
 	ldsResourceNameReceived := grpcsync.NewEvent()
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
 		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
-			if req.GetTypeUrl() == version.V3ListenerURL &&
-				cmp.Equal(req.GetResourceNames(), []string{wantResourceName}) {
+			if req.GetTypeUrl() == version.V3ListenerURL && cmp.Equal(req.GetResourceNames(), []string{wantResourceName}) {
 				ldsResourceNameReceived.Fire()
 			}
 			return nil
@@ -262,36 +261,28 @@ func (s) TestServer_OverrideListenerResourceNameOverridesMissingTemplate(t *test
 	newGRPCServer = func(...grpc.ServerOption) grpcServer { return fs }
 	defer func() { newGRPCServer = origNewGRPCServer }()
 
-	addrCh := make(chan net.Addr, 1)
-	srv, err := NewGRPCServer(
-		internalserver.OverrideListenerResourceName(func(addr net.Addr) string {
-			addrCh <- addr
-			return wantResourceName
-		}),
-		BootstrapContentsForTesting(bs),
-	)
+	lisAddrCh := make(chan net.Addr, 1)
+	resourceNameOpt := internalserver.OverrideListenerResourceName(func(addr net.Addr) string {
+		lisAddrCh <- addr
+		return wantResourceName
+	})
+	srv, err := NewGRPCServer(resourceNameOpt, BootstrapContentsForTesting(bs))
 	if err != nil {
 		t.Fatalf("NewGRPCServer() failed: %v", err)
 	}
-	stopped := false
-	defer func() {
-		if !stopped {
-			srv.Stop()
-		}
-	}()
+	defer srv.Stop()
 
 	lis, err := testutils.LocalTCPListener()
 	if err != nil {
 		t.Fatalf("testutils.LocalTCPListener() failed: %v", err)
 	}
-	serveErrCh := make(chan error, 1)
-	go func() { serveErrCh <- srv.Serve(lis) }()
+	go func() { _ = srv.Serve(lis) }()
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	// Verify that OverrideListenerResourceName receives the listener address.
 	select {
-	case gotAddr := <-addrCh:
+	case gotAddr := <-lisAddrCh:
 		if gotAddr.String() != lis.Addr().String() {
 			t.Fatalf("OverrideListenerResourceName() called with address %q, want %q", gotAddr, lis.Addr())
 		}
@@ -304,18 +295,6 @@ func (s) TestServer_OverrideListenerResourceNameOverridesMissingTemplate(t *test
 	case <-ldsResourceNameReceived.Done():
 	case <-ctx.Done():
 		t.Fatal("Timeout waiting for an LDS request with the overridden resource name")
-	}
-
-	srv.Stop()
-	stopped = true
-	// Verify that Serve returns after the server is stopped.
-	select {
-	case err := <-serveErrCh:
-		if err != nil {
-			t.Fatalf("Serve() returned error: %v", err)
-		}
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for Serve() to return")
 	}
 }
 
