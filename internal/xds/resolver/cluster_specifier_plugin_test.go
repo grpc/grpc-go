@@ -22,6 +22,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 	"testing"
 
 	"github.com/google/uuid"
@@ -340,6 +341,85 @@ func (s) TestXDSResolverDelayedOnCommittedCSP(t *testing.T) {
 	   ]
  }`
 	verifyUpdateFromResolver(ctx, t, stateCh, wantSC)
+}
+
+// TestResolverClusterSpecifierPluginRefCountRace verifies that a cluster
+// specifier plugin is handled correctly when its last in-flight RPC is
+// committed at the same time as an xDS update that names it again. Whichever
+// happens first, the plugin must end up present in the service config: if the
+// commit lands first the entry is torn down and a fresh one replaces it, and if
+// the update lands first the existing entry is simply reused.
+func (s) TestResolverClusterSpecifierPluginRefCountRace(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	nodeID := uuid.New().String()
+	mgmtServer, _, _, bc := setupManagementServerForTest(t, nodeID)
+
+	routeConfigForPlugin := func(name, value string) []*v3routepb.RouteConfiguration {
+		return []*v3routepb.RouteConfiguration{e2e.RouteConfigResourceWithOptions(e2e.RouteConfigOptions{
+			RouteConfigName:              defaultTestRouteConfigName,
+			ListenerName:                 defaultTestServiceName,
+			ClusterSpecifierType:         e2e.RouteConfigClusterSpecifierTypeClusterSpecifierPlugin,
+			ClusterSpecifierPluginName:   name,
+			ClusterSpecifierPluginConfig: testutils.MarshalAny(t, &wrapperspb.StringValue{Value: value}),
+		})}
+	}
+	wantConfigForPlugin := func(name, value string) string {
+		return fmt.Sprintf(`{
+			"loadBalancingConfig": [{
+				"xds_cluster_manager_experimental": {
+					"children": {
+						"cluster_specifier_plugin:%s": {
+							"childPolicy": [{"csp_experimental": {"arbitrary_field": "%s"}}]
+						}
+					}
+				}
+			}]
+		}`, name, value)
+	}
+
+	listeners := []*v3listenerpb.Listener{e2e.DefaultClientListener(defaultTestServiceName, defaultTestRouteConfigName)}
+	configureResources(ctx, t, mgmtServer, nodeID, listeners, routeConfigForPlugin("cspA", "anythingA"), nil, nil)
+
+	stateCh, _, _ := buildResolverForTarget(t, resolver.Target{URL: *testutils.MustParseURL("xds:///" + defaultTestServiceName)}, bc)
+	cs := verifyUpdateFromResolver(ctx, t, stateCh, wantConfigForPlugin("cspA", "anythingA"))
+
+	// Start an RPC on cspA and leave it uncommitted, so cspA stays referenced.
+	res, err := cs.SelectConfig(iresolver.RPCInfo{Context: ctx, Method: "/service/method"})
+	if err != nil {
+		t.Fatalf("cs.SelectConfig(): %v", err)
+	}
+	if got, want := clustermanager.PickedCluster(res.Context), "cluster_specifier_plugin:cspA"; got != want {
+		t.Fatalf("Config selector returned cluster %q, want %q", got, want)
+	}
+
+	// Move the route to cspB. cspA is now held only by the in-flight RPC.
+	configureResources(ctx, t, mgmtServer, nodeID, listeners, routeConfigForPlugin("cspB", "anythingB"), nil, nil)
+
+	// Commit the RPC, dropping cspA's last reference, while an update naming
+	// cspA again is pushed concurrently. The two orderings exercise different
+	// paths through the refcounted entry, and both must converge on cspA being
+	// in the service config.
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		res.OnCommitted()
+	}()
+	configureResources(ctx, t, mgmtServer, nodeID, listeners, routeConfigForPlugin("cspA", "anythingA"), nil, nil)
+	wg.Wait()
+
+	cs = waitForServiceConfig(ctx, t, stateCh, wantConfigForPlugin("cspA", "anythingA"))
+
+	// The surviving entry must still be usable for new RPCs.
+	res, err = cs.SelectConfig(iresolver.RPCInfo{Context: ctx, Method: "/service/method"})
+	if err != nil {
+		t.Fatalf("cs.SelectConfig() after the race: %v", err)
+	}
+	if got, want := clustermanager.PickedCluster(res.Context), "cluster_specifier_plugin:cspA"; got != want {
+		t.Fatalf("Config selector returned cluster %q, want %q", got, want)
+	}
+	res.OnCommitted()
 }
 
 // TestResolverClusterSpecifierPlugin_WithFilters tests the case where a route

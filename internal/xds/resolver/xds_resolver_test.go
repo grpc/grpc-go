@@ -1382,18 +1382,10 @@ func (s) TestResolverKeepWatchOpen_ActiveRPCs(t *testing.T) {
 	res.OnCommitted()
 }
 
-// TestResolver_XDSConfigInRPCContext verifies that the xDS resolver's config
-// selector places the complete XDSConfig into the RPC context during config
-// selection, making it available to HTTP filters.
 // TestResolverClusterSharedByMultipleRoutes verifies the reference accounting
 // for a cluster that more than one route points at. A config selector takes a
 // single reference per distinct cluster, however many routes name it, and
 // releases exactly that one reference when it is stopped.
-//
-// If a reference were taken per route instead, the counts would not balance:
-// configSelector.stop() decrements once per entry in its cluster map, so the
-// surplus references would keep the cluster in activeClusters and in the
-// service config forever, with its CDS watch open.
 func (s) TestResolverClusterSharedByMultipleRoutes(t *testing.T) {
 	clusterA := "cluster-A"
 	clusterB := "cluster-B"
@@ -1458,22 +1450,12 @@ func (s) TestResolverClusterSharedByMultipleRoutes(t *testing.T) {
 	// cluster-A's reference count reaches zero it is dropped, so wait for the
 	// service config that names cluster-B alone. A surplus reference on
 	// cluster-A would keep it in every subsequent update and time out here.
-	wantFinal := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(wantServiceConfig(clusterB))
-	for {
-		select {
-		case <-ctx.Done():
-			t.Fatal("Timeout waiting for cluster-A to be dropped from the service config")
-		case state := <-stateCh:
-			if err := state.ServiceConfig.Err; err != nil {
-				t.Fatalf("Received error in service config: %v", err)
-			}
-			if internal.EqualServiceConfigForTesting(state.ServiceConfig.Config, wantFinal.Config) {
-				return
-			}
-		}
-	}
+	waitForServiceConfig(ctx, t, stateCh, wantServiceConfig(clusterB))
 }
 
+// TestResolver_XDSConfigInRPCContext verifies that the xDS resolver's config
+// selector places the complete XDSConfig into the RPC context during config
+// selection, making it available to HTTP filters.
 func (s) TestResolver_XDSConfigInRPCContext(t *testing.T) {
 	// Spin up an xDS management server for the test.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
