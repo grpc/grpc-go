@@ -38,7 +38,6 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/credentials/xds"
-	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
@@ -235,11 +234,17 @@ func (s) TestNewServer_Failure(t *testing.T) {
 // template is absent, and that its returned name is used for the LDS watch.
 func (s) TestServer_OverrideListenerResourceNameOverridesMissingTemplate(t *testing.T) {
 	const wantResourceName = "xdstp://foo/bar"
-	ldsResourceNameReceived := grpcsync.NewEvent()
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	ldsResourceNamesCh := make(chan []string, 1)
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
 		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
-			if req.GetTypeUrl() == version.V3ListenerURL && cmp.Equal(req.GetResourceNames(), []string{wantResourceName}) {
-				ldsResourceNameReceived.Fire()
+			if req.GetTypeUrl() == version.V3ListenerURL {
+				select {
+				case ldsResourceNamesCh <- req.GetResourceNames():
+				case <-ctx.Done():
+				}
 			}
 			return nil
 		},
@@ -278,8 +283,6 @@ func (s) TestServer_OverrideListenerResourceNameOverridesMissingTemplate(t *test
 	}
 	go func() { _ = srv.Serve(lis) }()
 
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	// Verify that OverrideListenerResourceName receives the listener address.
 	select {
 	case gotAddr := <-lisAddrCh:
@@ -291,10 +294,15 @@ func (s) TestServer_OverrideListenerResourceNameOverridesMissingTemplate(t *test
 	}
 
 	// Verify that the LDS watch uses the resource name returned by the override.
+	var gotResourceNames []string
 	select {
-	case <-ldsResourceNameReceived.Done():
+	case gotResourceNames = <-ldsResourceNamesCh:
 	case <-ctx.Done():
-		t.Fatal("Timeout waiting for an LDS request with the overridden resource name")
+		t.Fatal("Timeout waiting for an LDS request")
+	}
+	wantResourceNames := []string{wantResourceName}
+	if !cmp.Equal(gotResourceNames, wantResourceNames) {
+		t.Fatalf("LDS watch registered for names %v, want %v", gotResourceNames, wantResourceNames)
 	}
 }
 
