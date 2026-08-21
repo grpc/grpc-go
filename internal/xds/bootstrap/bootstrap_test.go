@@ -35,6 +35,7 @@ import (
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
+	"google.golang.org/grpc/internal/xds/grpcservice/creds"
 	"google.golang.org/grpc/xds/bootstrap"
 	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/structpb"
@@ -1742,10 +1743,10 @@ func (s) TestAllowedGRPCServices_UnmarshalJSON(t *testing.T) {
 		name string
 		json string
 		want *AllowedGRPCService
-		// Fields deliberately excluded from Equal: the selected channel
-		// creds and the dial options built from the credentials.
+		// The built credentials are deliberately excluded from Equal; verify
+		// them via SideChannelCredentials instead.
 		wantSelectedChannelCredsType string
-		wantDialOptions              int
+		wantSideCallCreds            int
 	}{
 		{
 			name: "insecure_channel_creds",
@@ -1755,7 +1756,7 @@ func (s) TestAllowedGRPCServices_UnmarshalJSON(t *testing.T) {
 				channelCreds: []ChannelCreds{{Type: "insecure"}},
 			},
 			wantSelectedChannelCredsType: "insecure",
-			wantDialOptions:              1,
+			wantSideCallCreds:            0,
 		},
 		{
 			name: "with_call_creds",
@@ -1769,9 +1770,9 @@ func (s) TestAllowedGRPCServices_UnmarshalJSON(t *testing.T) {
 				}},
 			},
 			wantSelectedChannelCredsType: "insecure",
-			// One channel-creds dial option plus one per-RPC call-creds
-			// option.
-			wantDialOptions: 2,
+			// One call credential is built for the supported call-creds
+			// config.
+			wantSideCallCreds: 1,
 		},
 		{
 			name: "unsupported_call_creds_skipped",
@@ -1785,8 +1786,8 @@ func (s) TestAllowedGRPCServices_UnmarshalJSON(t *testing.T) {
 			},
 			wantSelectedChannelCredsType: "insecure",
 			// Unsupported call-creds types are skipped without error, so
-			// only the channel-creds dial option is built.
-			wantDialOptions: 1,
+			// no call credentials are built.
+			wantSideCallCreds: 0,
 		},
 		{
 			name: "multiple_supported_call_creds",
@@ -1806,9 +1807,9 @@ func (s) TestAllowedGRPCServices_UnmarshalJSON(t *testing.T) {
 				},
 			},
 			wantSelectedChannelCredsType: "insecure",
-			// One channel-creds dial option plus one per-RPC option for
-			// each supported call credential.
-			wantDialOptions: 3,
+			// One call credential is built for each supported call-creds
+			// config.
+			wantSideCallCreds: 2,
 		},
 		{
 			name: "tls_channel_creds",
@@ -1818,7 +1819,7 @@ func (s) TestAllowedGRPCServices_UnmarshalJSON(t *testing.T) {
 				channelCreds: []ChannelCreds{{Type: "tls", Config: json.RawMessage("{}")}},
 			},
 			wantSelectedChannelCredsType: "tls",
-			wantDialOptions:              1,
+			wantSideCallCreds:            0,
 		},
 		{
 			name: "skips_unsupported_channel_creds",
@@ -1828,7 +1829,7 @@ func (s) TestAllowedGRPCServices_UnmarshalJSON(t *testing.T) {
 				channelCreds: []ChannelCreds{{Type: "unsupported_cred_type"}, {Type: "insecure"}},
 			},
 			wantSelectedChannelCredsType: "insecure",
-			wantDialOptions:              1,
+			wantSideCallCreds:            0,
 		},
 	}
 
@@ -1845,11 +1846,25 @@ func (s) TestAllowedGRPCServices_UnmarshalJSON(t *testing.T) {
 			if !svc.Equal(test.want) {
 				t.Errorf("parsed service = %+v, want %+v", svc, test.want)
 			}
-			if got := svc.selectedChannelCreds.Type; got != test.wantSelectedChannelCredsType {
-				t.Errorf("selectedChannelCreds.Type = %q, want %q", got, test.wantSelectedChannelCredsType)
+			chanCreds, callCreds := svc.SideChannelCredentials()
+			if chanCreds == nil || chanCreds.Bundle() == nil {
+				t.Error("SideChannelCredentials() returned no built channel credentials")
 			}
-			if got := len(svc.DialOptions()); got != test.wantDialOptions {
-				t.Errorf("len(DialOptions()) = %d, want %d", got, test.wantDialOptions)
+			// The identity of the built channel credentials must match the
+			// first supported channel-creds entry from the bootstrap JSON.
+			var wantConfig json.RawMessage
+			for _, cc := range test.want.channelCreds {
+				if cc.Type == test.wantSelectedChannelCredsType {
+					wantConfig = cc.Config
+					break
+				}
+			}
+			wantIdentity := creds.NewChannelCreds(nil, creds.NewJSONIdentity(test.wantSelectedChannelCredsType, wantConfig), nil)
+			if !chanCreds.Equal(wantIdentity) {
+				t.Errorf("SideChannelCredentials() channel credentials identity = %+v, want type %q", chanCreds, test.wantSelectedChannelCredsType)
+			}
+			if got := len(callCreds); got != test.wantSideCallCreds {
+				t.Errorf("len(SideChannelCredentials() call creds) = %d, want %d", got, test.wantSideCallCreds)
 			}
 		})
 	}

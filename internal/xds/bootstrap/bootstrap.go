@@ -35,6 +35,7 @@ import (
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/envconfig"
+	"google.golang.org/grpc/internal/xds/grpcservice/creds"
 	"google.golang.org/grpc/xds/bootstrap"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/structpb"
@@ -132,12 +133,13 @@ type AllowedGRPCService struct {
 	// callCredsConfigs is the list of call-credential configs from the
 	// bootstrap JSON. Kept for Equal and MarshalJSON.
 	callCredsConfigs []CallCredsConfig
-	// selectedChannelCreds is the first channel-creds entry whose type the
-	// client supports; it is the one used to build the side channel.
-	selectedChannelCreds ChannelCreds
-	// dialOptions are built from the selected channel and call credentials
-	// and passed to grpc.NewClient when creating the side channel.
-	dialOptions []grpc.DialOption
+	// sideChannelCreds is the credentials bundle built from the first
+	// channel-creds entry whose type the client supports, paired with its
+	// identity.
+	sideChannelCreds *creds.ChannelCreds
+	// sideCallCreds are the call credentials built from the supported
+	// call-creds configs, paired with their identities, preserving order.
+	sideCallCreds []*creds.CallCreds
 	// cleanups release resources (credential bundles, file watchers) built
 	// for this service; run when the owning Config is no longer needed.
 	cleanups []func()
@@ -148,10 +150,13 @@ func (a *AllowedGRPCService) TargetURI() string {
 	return a.targetURI
 }
 
-// DialOptions returns the dial options built from this service's selected
-// channel and call credentials, for use when creating the side channel.
-func (a *AllowedGRPCService) DialOptions() []grpc.DialOption {
-	return a.dialOptions
+// SideChannelCredentials returns the channel and call credentials configured
+// for this service, paired with their identities, for use when creating the
+// side channel to it. The returned credentials are owned by the bootstrap
+// config: their cleanups are nil, and the underlying resources are released
+// via Cleanups when the config is no longer needed.
+func (a *AllowedGRPCService) SideChannelCredentials() (*creds.ChannelCreds, []*creds.CallCreds) {
+	return a.sideChannelCreds, a.sideCallCreds
 }
 
 // Cleanups returns cleanups to run when the service is no longer needed.
@@ -237,8 +242,10 @@ func (a *AllowedGRPCService) UnmarshalJSON(data []byte) (err error) {
 		}
 	}()
 
-	var credsDialOption grpc.DialOption
-	var selectedChannelCreds ChannelCreds
+	// The built credentials are paired with their (JSON) identities but the
+	// pairs carry no cleanups: the resources built here are owned by the
+	// bootstrap config and released via the cleanups collected below.
+	var sideChannelCreds *creds.ChannelCreds
 	for _, cc := range jsonS.ChannelCreds {
 		c := bootstrap.GetChannelCredentials(cc.Type)
 		if c == nil {
@@ -248,19 +255,18 @@ func (a *AllowedGRPCService) UnmarshalJSON(data []byte) (err error) {
 		if err != nil {
 			return fmt.Errorf("xds: failed to build credentials bundle from bootstrap for allowed grpc service: type %q, err: %v", cc.Type, err)
 		}
-		selectedChannelCreds = cc
-		credsDialOption = grpc.WithCredentialsBundle(bundle)
+		sideChannelCreds = creds.NewChannelCreds(bundle, creds.NewJSONIdentity(cc.Type, cc.Config), nil)
 		cleanups = append(cleanups, cancel)
 		break
 	}
 
-	// If no channel-creds type in the list was supported, credsDialOption is
+	// If no channel-creds type in the list was supported, sideChannelCreds is
 	// still nil after the loop; that is a validation error.
-	if credsDialOption == nil {
+	if sideChannelCreds == nil {
 		return fmt.Errorf("xds: no supported channel credentials found for allowed grpc service in config:\n%s", string(data))
 	}
-	dialOptions := []grpc.DialOption{credsDialOption}
 
+	var sideCallCreds []*creds.CallCreds
 	for _, cfg := range jsonS.CallCredsConfigs {
 		c := bootstrap.GetCallCredentials(cfg.Type)
 		if c == nil {
@@ -270,14 +276,14 @@ func (a *AllowedGRPCService) UnmarshalJSON(data []byte) (err error) {
 		if err != nil {
 			return fmt.Errorf("xds: failed to build call credentials from bootstrap for allowed grpc service: type %q, err: %v", cfg.Type, err)
 		}
-		dialOptions = append(dialOptions, grpc.WithPerRPCCredentials(callCreds))
+		sideCallCreds = append(sideCallCreds, creds.NewCallCreds(callCreds, creds.NewJSONIdentity(cfg.Type, cfg.Config), nil))
 		cleanups = append(cleanups, cancel)
 	}
 
 	a.channelCreds = jsonS.ChannelCreds
 	a.callCredsConfigs = jsonS.CallCredsConfigs
-	a.selectedChannelCreds = selectedChannelCreds
-	a.dialOptions = dialOptions
+	a.sideChannelCreds = sideChannelCreds
+	a.sideCallCreds = sideCallCreds
 	a.cleanups = cleanups
 	return nil
 }
@@ -641,6 +647,12 @@ type Config struct {
 // Callers must not modify the returned map.
 func (c *Config) AllowedGRPCServices() AllowedGRPCServices {
 	return c.allowedGRPCServices
+}
+
+// AllowedGRPCService returns the allowed gRPC service configured for the
+// given target URI, or nil if there is none.
+func (c *Config) AllowedGRPCService(targetURI string) *AllowedGRPCService {
+	return c.allowedGRPCServices[targetURI]
 }
 
 // XDSServers returns the top-level list of management servers to connect to,

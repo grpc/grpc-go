@@ -289,14 +289,18 @@ func (r *xdsResolver) Close() {
 	if r.dm != nil {
 		r.dm.Close()
 	}
-	if r.xdsClientClose != nil {
-		r.xdsClientClose()
-	}
 	if r.curConfigSelector != nil {
 		r.curConfigSelector.stop()
 	}
 	for _, cf := range r.httpFilters {
 		cf.Close()
+	}
+	// Release the xDS client only after the filters are torn down: filters
+	// may hold side channels whose credentials are owned by the client's
+	// bootstrap config and are released when the last reference to the
+	// client is dropped.
+	if r.xdsClientClose != nil {
+		r.xdsClientClose()
 	}
 	r.logger.Infof("Shutdown")
 }
@@ -683,9 +687,10 @@ func (r *xdsResolver) getOrCreateClientFilter(builder httpfilter.ClientFilterBui
 	}
 
 	cf := builder.BuildClientFilter(httpfilter.ClientFilterOptions{
-		FilterName:      key.name,
-		MetricsRecorder: r.metricsRecorder,
-		Target:          r.target,
+		FilterName:         key.name,
+		MetricsRecorder:    r.metricsRecorder,
+		Target:             r.target,
+		SideChannelFactory: r.xdsClient,
 	})
 	r.httpFilters[key] = cf
 	return cf

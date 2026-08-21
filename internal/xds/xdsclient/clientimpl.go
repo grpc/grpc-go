@@ -20,6 +20,7 @@ package xdsclient
 
 import (
 	"fmt"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -107,6 +108,12 @@ type clientImpl struct {
 
 	// Accessed atomically
 	refCount int32
+
+	// Pool of shared side channels created via CreateChannel (gRFC A102).
+	// Lookups compare the entries' configs for equality; configs are never
+	// used as map keys.
+	sideChannelsMu sync.Mutex
+	sideChannels   []*sideChannelEntry
 }
 
 // metricsReporter implements the clients.MetricsReporter interface and uses an

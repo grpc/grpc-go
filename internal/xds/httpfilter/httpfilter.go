@@ -27,6 +27,7 @@ import (
 	estats "google.golang.org/grpc/experimental/stats"
 	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/xds/bootstrap"
+	"google.golang.org/grpc/internal/xds/grpcservice"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -100,11 +101,25 @@ type ClientInterceptor interface {
 	Close()
 }
 
+// SideChannelFactory creates shared channels to xDS-configured side-channel
+// services (gRFC A102). It is implemented by the xDS client.
+type SideChannelFactory interface {
+	// CreateChannel returns a shared gRPC channel to the side-channel service
+	// described by the given config, creating it on first use. A channel is
+	// shared between configs with the same target and credential identities.
+	// The returned release function must be called when the caller is done
+	// with the channel; the channel is closed when the last user releases it.
+	// Credentials owned by the config are released when the channel is
+	// closed, or immediately if an equivalent channel already exists.
+	CreateChannel(cfg *grpcservice.Config) (grpc.ClientConnInterface, func(), error)
+}
+
 // ClientFilterOptions contains options for building a client filter.
 type ClientFilterOptions struct {
-	FilterName      string                 // FilterName is the filter name from the xDS configuration.
-	MetricsRecorder estats.MetricsRecorder // MetricsRecorder is the metrics recorder to capture metrics for the filter.
-	Target          string                 // Target is the target string of the channel.
+	FilterName         string                 // FilterName is the filter name from the xDS configuration.
+	MetricsRecorder    estats.MetricsRecorder // MetricsRecorder is the metrics recorder to capture metrics for the filter.
+	Target             string                 // Target is the target string of the channel.
+	SideChannelFactory SideChannelFactory     // SideChannelFactory creates channels to side-channel services.
 }
 
 // ClientFilterBuilder is an optional interface that a Builder can implement to

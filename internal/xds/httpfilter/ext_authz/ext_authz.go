@@ -26,9 +26,9 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/transport"
+	"google.golang.org/grpc/internal/xds/grpcservice"
 	"google.golang.org/grpc/internal/xds/httpfilter"
 	"google.golang.org/grpc/internal/xds/matcher"
-	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 
@@ -44,9 +44,10 @@ func init() {
 }
 
 var (
-	// TODO: Remove this once gRFC A102 is implemented.
-	parseGRPCServiceConfig = func(*v3corepb.GrpcService) (xdsresource.GRPCServiceConfig, error) {
-		return xdsresource.GRPCServiceConfig{}, fmt.Errorf("parseGRPCServiceConfig not implemented")
+	// TODO: Parse via grpcservice.Parse with the filter parse options,
+	// as ext_proc does, when ext_authz is wired up for gRFC A102.
+	parseGRPCServiceConfig = func(*v3corepb.GrpcService) (grpcservice.Config, error) {
+		return grpcservice.Config{}, fmt.Errorf("parseGRPCServiceConfig not implemented")
 	}
 )
 
