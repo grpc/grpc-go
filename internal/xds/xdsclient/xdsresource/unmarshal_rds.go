@@ -34,7 +34,6 @@ import (
 
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	v3matcherpb "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
-	v3typepb "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 )
 
 func unmarshalRouteConfigResource(r *anypb.Any, bc *bootstrap.Config, sc *bootstrap.ServerConfig) (string, RouteConfigUpdate, error) {
@@ -306,16 +305,11 @@ func routesProtoToSlice(routes []*v3routepb.Route, csps map[string]clusterspecif
 		}
 
 		if fr := match.GetRuntimeFraction(); fr != nil {
-			d := fr.GetDefaultValue()
-			n := d.GetNumerator()
-			switch d.GetDenominator() {
-			case v3typepb.FractionalPercent_HUNDRED:
-				n *= 10000
-			case v3typepb.FractionalPercent_TEN_THOUSAND:
-				n *= 100
-			case v3typepb.FractionalPercent_MILLION:
+			fp, err := NewFractionalPercent(fr.GetDefaultValue())
+			if err != nil {
+				return nil, nil, fmt.Errorf("route %+v has an invalid runtime_fraction: %v", r, err)
 			}
-			route.Fraction = &n
+			route.Fraction = &fp.PPM
 		}
 
 		switch r.GetAction().(type) {
