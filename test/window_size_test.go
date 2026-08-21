@@ -254,7 +254,11 @@ func (s) TestInitialWindowSize_Client(t *testing.T) {
 				t.Fatalf("Send() failed: %v", err)
 			}
 
-			// Goroutine to keep receiving large payloads from server.
+			// Start a goroutine to keep receiving large payloads from the
+			// server. This will help us monitor the client's flow control
+			// window growth. The doneCh channel is used to signal when to stop
+			// receiving messages, and errCh is used to capture any errors that
+			// occur during the receive operation.
 			doneCh := make(chan struct{})
 			errCh := make(chan error, 1)
 			go func() {
