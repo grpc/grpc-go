@@ -23,6 +23,8 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strconv"
+	"strings"
 	"time"
 
 	"google.golang.org/grpc/balancer"
@@ -35,6 +37,115 @@ import (
 )
 
 const maxInt = int(^uint(0) >> 1)
+
+// jsonUint32 accepts numeric, string, and null forms allowed by ProtoJSON.
+type jsonUint32 uint32
+
+func (j *jsonUint32) UnmarshalJSON(data []byte) error {
+	if strings.TrimSpace(string(data)) == "null" {
+		*j = 0
+		return nil
+	}
+
+	var number json.Number
+	if err := json.Unmarshal(data, &number); err != nil {
+		return err
+	}
+
+	value, err := parseJSONUint32(number.String())
+	if err != nil {
+		return err
+	}
+	*j = jsonUint32(value)
+	return nil
+}
+
+func parseJSONUint32(number string) (uint32, error) {
+	raw := number
+	if number == "" {
+		return 0, fmt.Errorf("invalid uint32 value %q", raw)
+	}
+
+	negative := number[0] == '-'
+	if negative {
+		number = number[1:]
+	}
+
+	exponentText := ""
+	if i := strings.IndexAny(number, "eE"); i >= 0 {
+		exponentText = number[i+1:]
+		number = number[:i]
+	}
+
+	integerPart := number
+	fractionalPart := ""
+	if i := strings.IndexByte(number, '.'); i >= 0 {
+		integerPart = number[:i]
+		fractionalPart = strings.TrimRight(number[i+1:], "0")
+	}
+
+	// Match ProtoJSON handling of zero, including negative zero and zero with
+	// an exponent that is too large to fit in an integer.
+	if integerPart == "0" {
+		integerPart = ""
+	}
+	if integerPart == "" && fractionalPart == "" {
+		return 0, nil
+	}
+
+	exponent := 0
+	if exponentText != "" {
+		parsed, err := strconv.ParseInt(exponentText, 10, 32)
+		if err != nil {
+			return 0, fmt.Errorf("invalid uint32 value %q", raw)
+		}
+		exponent = int(parsed)
+	}
+
+	var digits string
+	if exponent >= 0 {
+		// Match ProtoJSON's bounded normalization before applying the final
+		// uint32 range check.
+		const maxDigits = 20
+		if len(fractionalPart) > exponent ||
+			len(integerPart) > maxDigits ||
+			exponent > maxDigits-len(integerPart) {
+			return 0, fmt.Errorf("invalid uint32 value %q", raw)
+		}
+
+		digits = integerPart + fractionalPart +
+			strings.Repeat("0", exponent-len(fractionalPart))
+	} else {
+		if len(fractionalPart) > 0 {
+			return 0, fmt.Errorf("invalid uint32 value %q", raw)
+		}
+
+		decimalPoint := len(integerPart) + exponent
+		if decimalPoint < 0 {
+			return 0, fmt.Errorf("invalid uint32 value %q", raw)
+		}
+
+		for _, digit := range integerPart[decimalPoint:] {
+			if digit != '0' {
+				return 0, fmt.Errorf("invalid uint32 value %q", raw)
+			}
+		}
+		digits = integerPart[:decimalPoint]
+	}
+
+	if digits == "" {
+		return 0, nil
+	}
+	if negative {
+		return 0, fmt.Errorf("invalid uint32 value %q", raw)
+	}
+
+	value, err := strconv.ParseUint(digits, 10, 32)
+	if err != nil {
+		return 0, fmt.Errorf("invalid uint32 value %q", raw)
+	}
+	return uint32(value), nil
+}
 
 // MethodConfig defines the configuration recommended by the service providers for a
 // particular method.
@@ -96,7 +207,7 @@ type healthCheckConfig struct {
 }
 
 type jsonRetryPolicy struct {
-	MaxAttempts          int
+	MaxAttempts          jsonUint32
 	InitialBackoff       internalserviceconfig.Duration
 	MaxBackoff           internalserviceconfig.Duration
 	BackoffMultiplier    float64
@@ -149,8 +260,8 @@ type jsonMC struct {
 	Name                    *[]jsonName
 	WaitForReady            *bool
 	Timeout                 *internalserviceconfig.Duration
-	MaxRequestMessageBytes  *int64
-	MaxResponseMessageBytes *int64
+	MaxRequestMessageBytes  *jsonUint32
+	MaxResponseMessageBytes *jsonUint32
 	RetryPolicy             *jsonRetryPolicy
 }
 
@@ -227,14 +338,14 @@ func parseServiceConfig(js string, maxAttempts int) *serviceconfig.ParseResult {
 			return &serviceconfig.ParseResult{Err: err}
 		}
 		if m.MaxRequestMessageBytes != nil {
-			if *m.MaxRequestMessageBytes > int64(maxInt) {
+			if uint64(*m.MaxRequestMessageBytes) > uint64(maxInt) {
 				mc.MaxReqSize = newInt(maxInt)
 			} else {
 				mc.MaxReqSize = newInt(int(*m.MaxRequestMessageBytes))
 			}
 		}
 		if m.MaxResponseMessageBytes != nil {
-			if *m.MaxResponseMessageBytes > int64(maxInt) {
+			if uint64(*m.MaxResponseMessageBytes) > uint64(maxInt) {
 				mc.MaxRespSize = newInt(maxInt)
 			} else {
 				mc.MaxRespSize = newInt(int(*m.MaxResponseMessageBytes))
@@ -285,8 +396,8 @@ func convertRetryPolicy(jrp *jsonRetryPolicy, maxAttempts int) (p *internalservi
 		return nil, fmt.Errorf("invalid retry policy (%+v): ", jrp)
 	}
 
-	if jrp.MaxAttempts < maxAttempts {
-		maxAttempts = jrp.MaxAttempts
+	if int64(jrp.MaxAttempts) < int64(maxAttempts) {
+		maxAttempts = int(jrp.MaxAttempts)
 	}
 	rp := &internalserviceconfig.RetryPolicy{
 		MaxAttempts:          maxAttempts,
