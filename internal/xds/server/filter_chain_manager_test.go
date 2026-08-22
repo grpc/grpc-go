@@ -28,8 +28,8 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/tls/certprovider"
-	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/internal/xds/bootstrap"
@@ -569,7 +569,7 @@ func (fb *filterBuilder) Close() {}
 
 var _ httpfilter.ServerFilterBuilder = &filterBuilder{}
 
-func (fb *filterBuilder) BuildServerInterceptor(config httpfilter.FilterConfig, override httpfilter.FilterConfig) (iresolver.ServerInterceptor, error) {
+func (fb *filterBuilder) BuildServerInterceptor(config httpfilter.FilterConfig, override httpfilter.FilterConfig) (httpfilter.ServerInterceptor, error) {
 	var level string
 	level = config.(filterCfg).level
 
@@ -583,8 +583,8 @@ type serverInterceptor struct {
 	level string
 }
 
-func (si *serverInterceptor) AllowRPC(context.Context) error {
-	return errors.New(si.level)
+func (si *serverInterceptor) InterceptRPC(context.Context, grpc.ServerStream) (grpc.ServerStream, error) {
+	return nil, errors.New(si.level)
 }
 
 func (si *serverInterceptor) Close() {}
@@ -727,7 +727,8 @@ func (s) TestHTTPFilterInstantiation(t *testing.T) {
 			var errs []string
 			for _, vh := range urc.vhs {
 				for _, r := range vh.routes {
-					errs = append(errs, r.interceptor.AllowRPC(ctx).Error())
+					_, err := r.interceptor.InterceptRPC(ctx, nil)
+					errs = append(errs, err.Error())
 				}
 			}
 			if !cmp.Equal(errs, test.wantErrs) {

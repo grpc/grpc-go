@@ -25,7 +25,7 @@ import (
 	"fmt"
 	"strings"
 
-	"google.golang.org/grpc/internal/resolver"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/internal/xds/httpfilter"
 	"google.golang.org/grpc/internal/xds/rbac"
 	"google.golang.org/protobuf/proto"
@@ -236,7 +236,7 @@ type serverFilter struct{}
 
 func (serverFilter) Close() {}
 
-func (serverFilter) BuildServerInterceptor(cfg httpfilter.FilterConfig, override httpfilter.FilterConfig) (resolver.ServerInterceptor, error) {
+func (serverFilter) BuildServerInterceptor(cfg httpfilter.FilterConfig, override httpfilter.FilterConfig) (httpfilter.ServerInterceptor, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("rbac: nil config provided")
 	}
@@ -270,8 +270,11 @@ type interceptor struct {
 	chainEngine *rbac.ChainEngine
 }
 
-func (i *interceptor) AllowRPC(ctx context.Context) error {
-	return i.chainEngine.IsAuthorized(ctx)
+func (i *interceptor) InterceptRPC(ctx context.Context, ss grpc.ServerStream) (grpc.ServerStream, error) {
+	if err := i.chainEngine.IsAuthorized(ctx); err != nil {
+		return nil, err
+	}
+	return ss, nil
 }
 
 func (i *interceptor) Close() {}

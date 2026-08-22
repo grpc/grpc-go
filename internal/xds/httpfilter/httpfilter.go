@@ -131,6 +131,21 @@ type ClientFilter interface {
 	Close()
 }
 
+// ServerInterceptor is an interceptor for incoming RPC's on gRPC server side.
+type ServerInterceptor interface {
+	// InterceptRPC intercepts an incoming RPC on the server side.
+	//
+	// Implementations check if the incoming RPC is allowed to proceed based on
+	// information in the Context. To intercept or override stream behavior,
+	// implementations may return a wrapped ServerStream. Returning a non-nil
+	// error will terminate the RPC with that status error.
+	InterceptRPC(ctx context.Context, ss grpc.ServerStream) (grpc.ServerStream, error)
+
+	// Close closes the interceptor. Once called, no new calls to InterceptRPC are
+	// accepted. Ongoing calls to InterceptRPC are allowed to complete.
+	Close()
+}
+
 // ServerFilterBuilder is an optional interface that a Builder can implement to
 // indicate its capability to build server-side filters.
 type ServerFilterBuilder interface {
@@ -149,7 +164,7 @@ type ServerFilter interface {
 	//
 	// It is valid for this method to return a nil Interceptor and a nil error.
 	// In this case, the RPC will not be intercepted by this filter.
-	BuildServerInterceptor(config, override FilterConfig) (iresolver.ServerInterceptor, error)
+	BuildServerInterceptor(config, override FilterConfig) (ServerInterceptor, error)
 
 	// Close is called when the filter is no longer needed.
 	Close()

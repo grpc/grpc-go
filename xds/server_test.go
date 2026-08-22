@@ -136,9 +136,9 @@ func (s) TestNewServer_Success(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			// The xds package adds a couple of server options (unary and stream
-			// interceptors) to the server options passed in by the user.
-			wantServerOpts := len(test.serverOpts) + 2
+			// The xds package adds 1 server option (stream wrapper) to the server
+			// options passed in by the user.
+			wantServerOpts := len(test.serverOpts) + 1
 
 			origNewGRPCServer := newGRPCServer
 			newGRPCServer = func(opts ...grpc.ServerOption) grpcServer {
@@ -146,8 +146,8 @@ func (s) TestNewServer_Success(t *testing.T) {
 					t.Fatalf("%d ServerOptions passed to grpc.Server, want %d", got, wantServerOpts)
 				}
 				// Verify that the user passed ServerOptions are forwarded as is.
-				if !reflect.DeepEqual(opts[2:], test.serverOpts) {
-					t.Fatalf("got ServerOptions %v, want %v", opts[2:], test.serverOpts)
+				if !reflect.DeepEqual(opts[:len(test.serverOpts)], test.serverOpts) {
+					t.Fatalf("got ServerOptions %v, want %v", opts[:len(test.serverOpts)], test.serverOpts)
 				}
 				return grpc.NewServer(opts...)
 			}

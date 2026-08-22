@@ -245,6 +245,10 @@ var (
 	AsyncReporterCleanupDelegate = func(cleanup func()) func() {
 		return cleanup
 	}
+
+	// WithServerStreamWrapper returns a ServerOption that sets the internal
+	// stream wrapper used for HTTP filters.
+	WithServerStreamWrapper any // func(func(any) (any, error)) grpc.ServerOption
 )
 
 // HealthChecker defines the signature of the client-side LB channel health

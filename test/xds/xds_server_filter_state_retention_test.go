@@ -30,7 +30,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/internal/testutils/xds/e2e/setup"
@@ -112,7 +111,7 @@ func (t *trackingHTTPFilterBuilder) Close() {
 
 var _ httpfilter.ServerFilterBuilder = &trackingHTTPFilterBuilder{}
 
-func (t *trackingHTTPFilterBuilder) BuildServerInterceptor(config, override httpfilter.FilterConfig) (resolver.ServerInterceptor, error) {
+func (t *trackingHTTPFilterBuilder) BuildServerInterceptor(config, override httpfilter.FilterConfig) (httpfilter.ServerInterceptor, error) {
 	t.interceptorsCreated.Add(1)
 
 	var effectiveCfg testFilterCfg
@@ -138,9 +137,9 @@ type trackingInterceptor struct {
 	basePath string
 }
 
-func (i *trackingInterceptor) AllowRPC(context.Context) error {
+func (i *trackingInterceptor) InterceptRPC(_ context.Context, ss grpc.ServerStream) (grpc.ServerStream, error) {
 	i.pathCh <- i.basePath
-	return nil
+	return ss, nil
 }
 
 func (i *trackingInterceptor) Close() {
