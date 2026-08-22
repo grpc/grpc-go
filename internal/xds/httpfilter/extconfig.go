@@ -128,10 +128,11 @@ func (hmr *HeaderMutationRules) ApplyAdditions(hvos []*v3corepb.HeaderValueOptio
 	if input == nil {
 		return fmt.Errorf("input metadata is nil")
 	}
-	if hmr.DisallowAll {
+	if hmr.DisallowAll || len(hvos) == 0 {
 		return nil
 	}
 
+	// Validate all mutations without modifying input metadata.
 	for _, hvo := range hvos {
 		header := hvo.GetHeader()
 		key := header.GetKey()
@@ -157,11 +158,22 @@ func (hmr *HeaderMutationRules) ApplyAdditions(hvos []*v3corepb.HeaderValueOptio
 			if hmr.DisallowIsError {
 				return fmt.Errorf("header mutation disallowed by headerMutationRules for header key %q", key)
 			}
-			continue
+		}
+	}
+
+	// All items are valid; apply mutations to input metadata.
+	for _, hvo := range hvos {
+		header := hvo.GetHeader()
+		key := header.GetKey()
+		if !hmr.allow(key) {
+			continue // Silently ignore if DisallowIsError is false
 		}
 
-		// Perform the mutation on output metadata using the append_action
-		// field from the header value option.
+		value := header.GetValue()
+		if strings.HasSuffix(key, "-bin") {
+			value = string(header.GetRawValue())
+		}
+
 		switch hvo.GetAppendAction() {
 		case v3corepb.HeaderValueOption_APPEND_IF_EXISTS_OR_ADD:
 			input.Append(key, value)
@@ -196,10 +208,11 @@ func (hmr *HeaderMutationRules) ApplyRemovals(headersToRemove []string, input me
 	if input == nil {
 		return fmt.Errorf("input metadata is nil")
 	}
-	if hmr.DisallowAll {
+	if hmr.DisallowAll || len(headersToRemove) == 0 {
 		return nil
 	}
 
+	// Validate all removals without modifying input metadata.
 	for _, header := range headersToRemove {
 		if err := validateHeaderKey(header); err != nil {
 			return fmt.Errorf("invalid header mutation: %v", err)
@@ -208,6 +221,12 @@ func (hmr *HeaderMutationRules) ApplyRemovals(headersToRemove []string, input me
 			if hmr.DisallowIsError {
 				return fmt.Errorf("header mutation disallowed by headerMutationRules for header %q", header)
 			}
+		}
+	}
+
+	// Perform removals on input metadata.
+	for _, header := range headersToRemove {
+		if !hmr.allow(header) {
 			continue
 		}
 		input.Delete(header)
