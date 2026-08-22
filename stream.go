@@ -746,10 +746,8 @@ type csAttempt struct {
 	parser          parser
 	pickResult      balancer.PickResult
 
-	finished        bool
-	decompressorV0  Decompressor
-	decompressorV1  encoding.Compressor
-	decompressorSet bool
+	decompressorV0 Decompressor
+	decompressorV1 encoding.Compressor
 
 	mu sync.Mutex // guards trInfo.tr
 	// trInfo may be nil (if EnableTracing is false).
@@ -760,10 +758,18 @@ type csAttempt struct {
 	statsHandler stats.Handler
 	beginTime    time.Time
 
-	// set for newStream errors that may be transparently retried
-	allowTransparentRetry bool
-	// set for pick errors that are returned as a status
-	drop bool
+	// Bool fields are grouped at the tail to eliminate the alignment padding
+	// that would otherwise follow each bool when the next field is pointer- or
+	// int-sized. See https://github.com/grpc/grpc-go/issues/9280 for benchmarks.
+	// Add new bool fields here, not inline above.
+
+	// Not guarded by mu.
+	decompressorSet bool
+
+	// Guarded by mu.
+	finished               bool
+	allowTransparentRetry  bool
+	drop                   bool
 }
 
 func (cs *clientStream) commitAttemptLocked() {
@@ -1491,19 +1497,28 @@ type addrConnStream struct {
 	callInfo         *callInfo
 	transport        transport.ClientTransport
 	ctx              context.Context
-	sentLast         bool
-	receivedFirstMsg bool
 	desc             *StreamDesc
 	codec            baseCodec
 	sendCompressorV0 Compressor
 	sendCompressorV1 encoding.Compressor
-	decompressorSet  bool
 	decompressorV0   Decompressor
 	decompressorV1   encoding.Compressor
 	parser           parser
 
 	// mu guards finished and is held for the entire finish method.
-	mu       sync.Mutex
+	mu sync.Mutex
+
+	// Bool fields are grouped at the tail to eliminate the alignment padding
+	// that would otherwise follow each bool when the next field is pointer- or
+	// int-sized. See https://github.com/grpc/grpc-go/issues/9280 for benchmarks.
+	// Add new bool fields here, not inline above.
+
+	// Not guarded by mu.
+	sentLast         bool
+	receivedFirstMsg bool
+	decompressorSet  bool
+
+	// Guarded by mu.
 	finished bool
 }
 
@@ -1719,8 +1734,6 @@ type serverStream struct {
 
 	sendCompressorName string
 
-	recvFirstMsg bool // set after the first message is received
-
 	maxReceiveMessageSize int
 	maxSendMessageSize    int
 	trInfo                *traceInfo
@@ -1728,6 +1741,16 @@ type serverStream struct {
 	statsHandler stats.Handler
 
 	binlogs []binarylog.MethodLogger
+
+	mu sync.Mutex // protects trInfo.tr after the service handler runs.
+
+	// Bool fields are grouped at the tail to eliminate the alignment padding
+	// that would otherwise follow each bool when the next field is pointer- or
+	// int-sized. See https://github.com/grpc/grpc-go/issues/9280 for benchmarks.
+	// Add new bool fields here, not inline above.
+
+	// Not guarded by mu.
+	recvFirstMsg bool // set after the first message is received
 	// serverHeaderBinlogged indicates whether server header has been logged. It
 	// will happen when one of the following two happens: stream.SendHeader(),
 	// stream.Send().
@@ -1735,8 +1758,6 @@ type serverStream struct {
 	// It's only checked in send and sendHeader, doesn't need to be
 	// synchronized.
 	serverHeaderBinlogged bool
-
-	mu sync.Mutex // protects trInfo.tr after the service handler runs.
 }
 
 func (ss *serverStream) Context() context.Context {

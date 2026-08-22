@@ -24,6 +24,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unsafe"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -233,5 +234,32 @@ func (s) TestDefaultStreamInterceptor(t *testing.T) {
 	}
 	if !iStream.closeSend {
 		t.Fatal("CloseSend not called after SendMsg on non-client-streaming RPC")
+	}
+}
+
+// TestServerStreamSize verifies that serverStream's bool fields are grouped at
+// the tail of the struct to avoid alignment padding. If this test fails, add
+// new bool fields in the grouped section, not inline.
+func (s) TestServerStreamSize(t *testing.T) {
+	if sz := unsafe.Sizeof(serverStream{}); sz > 256 {
+		t.Fatalf("serverStream size = %d, want <= 256 (add new bool fields to the grouped section in stream.go)", sz)
+	}
+}
+
+// TestCsAttemptSize verifies that csAttempt's bool fields are grouped at the
+// tail of the struct to avoid alignment padding. If this test fails, add new
+// bool fields in the grouped section, not inline.
+func (s) TestCsAttemptSize(t *testing.T) {
+	if sz := unsafe.Sizeof(csAttempt{}); sz > 232 {
+		t.Fatalf("csAttempt size = %d, want <= 232 (add new bool fields to the grouped section in stream.go)", sz)
+	}
+}
+
+// TestAddrConnStreamSize verifies that addrConnStream's bool fields are grouped
+// at the tail of the struct to avoid alignment padding. If this test fails, add
+// new bool fields in the grouped section, not inline.
+func (s) TestAddrConnStreamSize(t *testing.T) {
+	if sz := unsafe.Sizeof(addrConnStream{}); sz > 256 {
+		t.Fatalf("addrConnStream size = %d, want <= 256 (add new bool fields to the grouped section in stream.go)", sz)
 	}
 }
