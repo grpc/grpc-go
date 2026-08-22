@@ -379,8 +379,15 @@ func (i *clientInterceptor) check(ctx context.Context, ri resolver.RPCInfo, outg
 	}
 	// Append the initial metadata from the grpc_service configuration to the
 	// context used for the Check RPC.
-	extAuthzCtx = metadata.NewOutgoingContext(extAuthzCtx, i.config.grpcService.InitialMetadata)
-
+	if len(i.config.grpcService.InitialMetadata) > 0 {
+		var kv []string
+		for k, vs := range i.config.grpcService.InitialMetadata {
+			for _, v := range vs {
+				kv = append(kv, k, v)
+			}
+		}
+		extAuthzCtx = metadata.AppendToOutgoingContext(extAuthzCtx, kv...)
+	}
 	authClient := i.authzClient.Value()
 	return authClient.Check(extAuthzCtx, req)
 }

@@ -668,6 +668,6 @@ func (s) TestClientInterceptor_Closed(t *testing.T) {
 		return nil, nil
 	}
 	if _, err := intptr.NewStream(ctx, resolver.RPCInfo{}, newStream); err == nil || !strings.Contains(err.Error(), wantErr) {
-		t.Fatalf("NewStream() returned unexpected results, got %q , want error containing %q", err, wantErr)
+		t.Fatalf("NewStream() returned unexpected results, got %q, want error containing %q", err, wantErr)
 	}
 }
