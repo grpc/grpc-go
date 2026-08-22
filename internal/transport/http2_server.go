@@ -945,6 +945,19 @@ func appendHeaderFieldsFromMD(headerFields []hpack.HeaderField, md metadata.MD) 
 	return headerFields
 }
 
+// headerFieldsCountFromMD returns the total number of header fields that
+// appendHeaderFieldsFromMD will produce from md. Reserved headers are dropped
+// by appendHeaderFieldsFromMD, so this may slightly over-count, which is
+// preferable to growing the slice.
+func headerFieldsCountFromMD(md metadata.MD) int {
+	n := 0
+	for _, vv := range md {
+		n += len(vv)
+	}
+
+	return n
+}
+
 func (t *http2Server) checkForHeaderListSize(hf []hpack.HeaderField) bool {
 	if t.maxSendHeaderListSize == nil {
 		return true
@@ -1041,9 +1054,14 @@ func (t *http2Server) writeHeader(s *ServerStream, md metadata.MD) error {
 }
 
 func (t *http2Server) writeHeaderLocked(s *ServerStream) error {
-	// TODO(mmukhi): Benchmark if the performance gets better if count the metadata and other header fields
-	// first and create a slice of that exact size.
-	headerFields := make([]hpack.HeaderField, 0, 2) // at least :status, content-type will be there if none else.
+	// Count the metadata header fields as well so the slice is not reallocated
+	// while they are appended below.
+	headerFieldCount := 2 // :status, content-type
+	headerFieldCount += headerFieldsCountFromMD(s.header)
+	if s.sendCompress != "" {
+		headerFieldCount++
+	}
+	headerFields := make([]hpack.HeaderField, 0, headerFieldCount)
 	headerFields = append(headerFields, hpack.HeaderField{Name: ":status", Value: "200"})
 	headerFields = append(headerFields, hpack.HeaderField{Name: "content-type", Value: grpcutil.ContentType(s.contentSubtype)})
 	if s.sendCompress != "" {
@@ -1087,10 +1105,18 @@ func (t *http2Server) writeStatus(s *ServerStream, st *status.Status) error {
 		return nil
 	}
 
-	// TODO(mmukhi): Benchmark if the performance gets better if count the metadata and other header fields
-	// first and create a slice of that exact size.
-	headerFields := make([]hpack.HeaderField, 0, 2) // grpc-status and grpc-message will be there if none else.
-	if !s.updateHeaderSent() {                      // No headers have been sent.
+	// Count the metadata header fields as well so the slice is not reallocated
+	// while they are appended below.
+	headersAlreadySent := s.updateHeaderSent()
+	headerFieldCount := 2 // grpc-status, grpc-message
+	headerFieldCount += headerFieldsCountFromMD(s.trailer)
+	if !headersAlreadySent && len(s.header) == 0 {
+		// Trailer only response gets :status and content-type as well.
+		headerFieldCount += 2
+	}
+	// +1 for optional grpc-status-details-bin
+	headerFields := make([]hpack.HeaderField, 0, headerFieldCount+1)
+	if !headersAlreadySent { // No headers have been sent.
 		if len(s.header) > 0 { // Send a separate header frame.
 			if err := t.writeHeaderLocked(s); err != nil {
 				return err
