@@ -35,6 +35,10 @@ import (
 	"strings"
 	"time"
 
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
+	"go.opentelemetry.io/otel/propagation"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"golang.org/x/oauth2"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -42,10 +46,12 @@ import (
 	"google.golang.org/grpc/credentials/google"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/credentials/oauth"
+	oteltracing "google.golang.org/grpc/experimental/opentelemetry"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/interop"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
+	grpcotel "google.golang.org/grpc/stats/opentelemetry"
 	"google.golang.org/grpc/testdata"
 
 	_ "google.golang.org/grpc/balancer/grpclb"    // Register the grpclb load balancing policy.
@@ -84,6 +90,8 @@ var (
 	soakNumThreads                         = flag.Int("soak_num_threads", 1, "The number of threads for concurrent execution of the soak tests (rpc_soak or channel_soak). The default value is set based on the interop large unary test case.")
 	tlsServerName                          = flag.String("server_host_override", "", "The server name used to verify the hostname returned by TLS handshake if it is not empty. Otherwise, --server_host is used.")
 	additionalMetadata                     = flag.String("additional_metadata", "", "Additional metadata to send in each request, as a semicolon-separated list of key:value pairs.")
+	enableOpenTelemetry                    = flag.Bool("enable_opentelemetry", false, "Whether to enable OpenTelemetry")
+	otelCollectorAddress                   = flag.String("otel_collector_address", "", "The OpenTelemetry collector address")
 	testCase                               = flag.String("test_case", "large_unary",
 		`Configure different test cases. Valid options are:
         empty_unary : empty (zero bytes) request and response;
@@ -283,6 +291,38 @@ func main() {
 			return streamer(ctx, desc, cc, method, opts...)
 		}
 		opts = append(opts, grpc.WithUnaryInterceptor(unaryAddMd), grpc.WithStreamInterceptor(streamingAddMd))
+	}
+	if *enableOpenTelemetry || *otelCollectorAddress != "" {
+		var exporterOpts []otlptracegrpc.Option
+		if *otelCollectorAddress != "" {
+			addr := *otelCollectorAddress
+			addr = strings.TrimPrefix(addr, "http://")
+			addr = strings.TrimPrefix(addr, "https://")
+			exporterOpts = append(exporterOpts, otlptracegrpc.WithEndpoint(addr))
+		}
+		exporterOpts = append(exporterOpts, otlptracegrpc.WithInsecure())
+		exp, err := otlptracegrpc.New(ctx, exporterOpts...)
+		if err != nil {
+			logger.Fatalf("Failed to create OTLP trace exporter: %v", err)
+		}
+		tp := sdktrace.NewTracerProvider(
+			sdktrace.WithBatcher(exp),
+			sdktrace.WithSampler(sdktrace.AlwaysSample()),
+		)
+		propagator := propagation.TraceContext{}
+		otel.SetTracerProvider(tp)
+		otel.SetTextMapPropagator(propagator)
+		defer func() {
+			if err := tp.Shutdown(context.Background()); err != nil {
+				logger.Errorf("Failed to shutdown TracerProvider: %v", err)
+			}
+		}()
+		opts = append(opts, grpcotel.DialOption(grpcotel.Options{
+			TraceOptions: oteltracing.TraceOptions{
+				TracerProvider:    tp,
+				TextMapPropagator: propagator,
+			},
+		}))
 	}
 	conn, err := grpc.NewClient(serverAddr, opts...)
 	if err != nil {
