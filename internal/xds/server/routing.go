@@ -61,12 +61,16 @@ func RouteAndProcess(ctx context.Context) error {
 	if !ok {
 		return errors.New("missing metadata in incoming context")
 	}
-	// A41 added logic to the core grpc implementation to guarantee that once
-	// the RPC gets to this point, there will be a single, unambiguous authority
-	// present in the header map.
-	authority := md.Get(":authority")
-	// authority[0] is safe because of the guarantee mentioned above.
-	vh := findBestMatchingVirtualHostServer(authority[0], rc.vhs)
+	// A41 renames a "host" header to ":authority" when ":authority" is absent,
+	// but a request that carries neither is still dispatched with no authority
+	// present (see the transport's handleData path), so this slice can be empty.
+	// Treat a missing authority as the empty string rather than indexing blindly,
+	// which would panic and take down the server.
+	var authority string
+	if a := md.Get(":authority"); len(a) > 0 {
+		authority = a[0]
+	}
+	vh := findBestMatchingVirtualHostServer(authority, rc.vhs)
 	if vh == nil {
 		return rc.statusErrWithNodeID(codes.Unavailable, "the incoming RPC did not match a configured Virtual Host")
 	}

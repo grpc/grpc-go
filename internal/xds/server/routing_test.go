@@ -19,9 +19,15 @@
 package server
 
 import (
+	"sync/atomic"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/internal/transport"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 )
 
 func (s) TestMatchTypeForDomain(t *testing.T) {
@@ -105,5 +111,45 @@ func (s) TestFindBestMatchingVirtualHost(t *testing.T) {
 				t.Errorf("findBestMatchingVirtualHostServer() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+// stubServerTransportStream is a minimal ServerTransportStream so that
+// grpc.Method(ctx) returns a method name inside RouteAndProcess.
+type stubServerTransportStream struct {
+	method string
+}
+
+func (s *stubServerTransportStream) Method() string               { return s.method }
+func (s *stubServerTransportStream) SetHeader(metadata.MD) error  { return nil }
+func (s *stubServerTransportStream) SendHeader(metadata.MD) error { return nil }
+func (s *stubServerTransportStream) SetTrailer(metadata.MD) error { return nil }
+
+// TestRouteAndProcessMissingAuthority verifies that a request whose metadata
+// carries no ":authority" header (which the transport permits when neither
+// ":authority" nor "host" is present) does not panic the server. Before the
+// fix, RouteAndProcess indexed md.Get(":authority")[0] on an empty slice and
+// crashed the whole process.
+func (s) TestRouteAndProcessMissingAuthority(t *testing.T) {
+	urc := &atomic.Pointer[usableRouteConfiguration]{}
+	urc.Store(&usableRouteConfiguration{
+		vhs: []virtualHostWithInterceptors{{
+			domains: []string{"example.com"},
+			routes:  []routeWithInterceptors{},
+		}},
+	})
+	cw := &connWrapper{urc: urc}
+
+	ctx := transport.SetConnection(t.Context(), cw)
+	ctx = grpc.NewContextWithServerTransportStream(ctx, &stubServerTransportStream{method: "/foo.Service/Method"})
+	// Metadata with no ":authority" key — the case the transport allows through.
+	ctx = metadata.NewIncomingContext(ctx, metadata.MD{})
+
+	// Must not panic. No virtual host matches an empty authority, so we expect
+	// the "did not match a configured Virtual Host" Unavailable error rather
+	// than a crash.
+	err := RouteAndProcess(ctx)
+	if status.Code(err) != codes.Unavailable {
+		t.Errorf("RouteAndProcess() with no :authority = %v; want an Unavailable status (and no panic)", err)
 	}
 }
