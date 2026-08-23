@@ -37,6 +37,7 @@ import (
 	"google.golang.org/grpc/internal/xds/httpfilter"
 	"google.golang.org/grpc/internal/xds/matcher"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource/version"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/durationpb"
@@ -1344,6 +1345,32 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name: "header specifier with a name that is not lowercase",
+			routes: []*v3routepb.Route{{
+				Match: &v3routepb.RouteMatch{
+					PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/a/"},
+					Headers: []*v3routepb.HeaderMatcher{{
+						Name:                 "X-Role",
+						HeaderMatchSpecifier: &v3routepb.HeaderMatcher_ExactMatch{ExactMatch: "tv"},
+					}},
+				},
+				Action: &v3routepb.Route_Route{
+					Route: &v3routepb.RouteAction{ClusterSpecifier: &v3routepb.RouteAction_Cluster{Cluster: clusterName}},
+				},
+			}},
+			wantRoutes: []*Route{{
+				Prefix: newStringP("/a/"),
+				Headers: []*HeaderMatcher{{
+					Name:        "x-role",
+					InvertMatch: newBoolP(false),
+					StringMatch: &sm,
+				}},
+				WeightedClusters: []WeightedCluster{{Name: clusterName, Weight: 1}},
+				ActionType:       RouteActionRoute,
+			}},
+			wantErr: false,
+		},
+		{
 			name: "suffix_match header specifier",
 			routes: []*v3routepb.Route{{
 				Match: &v3routepb.RouteMatch{
@@ -1754,6 +1781,41 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 				t.Fatalf("routesProtoToSlice() returned unexpected diff (-got +want):\n%s", diff)
 			}
 		})
+	}
+}
+
+// TestRoutesProtoToSliceHeaderMatcherNameCase verifies that a route whose
+// header matcher name is not lowercase still matches an RPC carrying that
+// header. Metadata keys are always lowercase, so the name has to be
+// normalized when the route configuration is parsed.
+func (s) TestRoutesProtoToSliceHeaderMatcherNameCase(t *testing.T) {
+	routes := []*v3routepb.Route{{
+		Match: &v3routepb.RouteMatch{
+			PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"},
+			Headers: []*v3routepb.HeaderMatcher{{
+				Name:                 "X-Role",
+				HeaderMatchSpecifier: &v3routepb.HeaderMatcher_ExactMatch{ExactMatch: "admin"},
+			}},
+		},
+		Action: &v3routepb.Route_Route{
+			Route: &v3routepb.RouteAction{ClusterSpecifier: &v3routepb.RouteAction_Cluster{Cluster: clusterName}},
+		},
+	}}
+
+	got, _, err := routesProtoToSlice(routes, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("routesProtoToSlice() failed: %v", err)
+	}
+	if len(got) != 1 || len(got[0].Headers) != 1 {
+		t.Fatalf("routesProtoToSlice() = %v, want one route holding one header matcher", got)
+	}
+	if gotName, wantName := got[0].Headers[0].Name, "x-role"; gotName != wantName {
+		t.Errorf("Parsed header matcher name = %q, want %q", gotName, wantName)
+	}
+
+	md := metadata.Pairs("x-role", "admin")
+	if !RouteToMatcher(got[0]).Match("/some.Service/Method", md) {
+		t.Errorf("RouteToMatcher(...).Match(%v) = false, want true", md)
 	}
 }
 
