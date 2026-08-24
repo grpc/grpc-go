@@ -753,10 +753,8 @@ type csAttempt struct {
 	parser          parser
 	pickResult      balancer.PickResult
 
-	finished        bool
-	decompressorV0  Decompressor
-	decompressorV1  encoding.Compressor
-	decompressorSet bool
+	decompressorV0 Decompressor
+	decompressorV1 encoding.Compressor
 
 	mu sync.Mutex // guards trInfo.tr
 	// trInfo may be nil (if EnableTracing is false).
@@ -767,10 +765,18 @@ type csAttempt struct {
 	statsHandler stats.Handler
 	beginTime    time.Time
 
-	// set for newStream errors that may be transparently retried
-	allowTransparentRetry bool
-	// set for pick errors that are returned as a status
-	drop bool
+	// Bool fields are grouped at the tail to eliminate the alignment padding
+	// that would otherwise follow each bool when the next field is pointer- or
+	// int-sized. See https://github.com/grpc/grpc-go/issues/9347 for benchmarks.
+	// Add new bool fields here, not inline above.
+
+	// Not guarded by mu.
+	decompressorSet       bool
+	allowTransparentRetry bool // set for newStream errors that may be transparently retried
+	drop                  bool // set for pick errors that are returned as a status
+
+	// Guarded by mu.
+	finished bool
 }
 
 func (cs *clientStream) commitAttemptLocked() {
