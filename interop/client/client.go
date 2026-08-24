@@ -310,10 +310,15 @@ func main() {
 			sdktrace.WithSampler(sdktrace.AlwaysSample()),
 		)
 		propagator := propagation.TraceContext{}
+		otel.SetErrorHandler(otel.ErrorHandlerFunc(func(err error) {
+			logger.Errorf("OpenTelemetry error: %v", err)
+		}))
 		otel.SetTracerProvider(tp)
 		otel.SetTextMapPropagator(propagator)
 		defer func() {
-			if err := tp.Shutdown(context.Background()); err != nil {
+			ctxShutdown, cancelShutdown := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancelShutdown()
+			if err := tp.Shutdown(ctxShutdown); err != nil {
 				logger.Errorf("Failed to shutdown TracerProvider: %v", err)
 			}
 		}()
