@@ -76,6 +76,38 @@ func (s) TestRingNew(t *testing.T) {
 	}
 }
 
+// TestRingNewWeightSumOverflow checks that endpoint weights whose sum exceeds
+// math.MaxUint32 do not wrap the weight accumulator to zero. A zero sum used to
+// make normalizeWeights divide by zero, producing +Inf normalized weights and
+// an unbounded ring-build loop in newRing.
+func (s) TestRingNewWeightSumOverflow(t *testing.T) {
+	endpoints := []resolver.Endpoint{
+		testEndpoint("a", 1<<31),
+		testEndpoint("b", 1<<31), // sum is exactly 2^32, wraps a uint32 to 0.
+	}
+	m := resolver.NewEndpointMap[*endpointState]()
+	m.Set(endpoints[0], &endpointState{hashKey: "a", weight: 1 << 31})
+	m.Set(endpoints[1], &endpointState{hashKey: "b", weight: 1 << 31})
+
+	const min, max uint64 = 1024, 4096
+	r := newRing(m, min, max, nil)
+	if got := uint64(len(r.items)); got < min || got > max {
+		t.Fatalf("newRing built a ring of size %d, want within [%d, %d]", got, min, max)
+	}
+	for _, e := range endpoints {
+		var count int
+		for _, ii := range r.items {
+			if ii.hashKey == hashKey(e) {
+				count++
+			}
+		}
+		got := float64(count) / float64(len(r.items))
+		if !equalApproximately(got, 0.5) {
+			t.Fatalf("endpoint %q occupies %v of the ring, want ~0.5", hashKey(e), got)
+		}
+	}
+}
+
 func equalApproximately(x, y float64) bool {
 	delta := math.Abs(x - y)
 	mean := math.Abs(x+y) / 2.0

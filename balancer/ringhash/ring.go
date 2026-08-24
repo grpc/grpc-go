@@ -137,12 +137,16 @@ func newRing(endpoints *resolver.EndpointMap[*endpointState], minRingSize, maxRi
 //
 // Must be called with a non-empty endpoints map.
 func normalizeWeights(endpoints *resolver.EndpointMap[*endpointState]) ([]endpointInfo, float64) {
-	var weightSum uint32
+	// Accumulate in a uint64 so the sum cannot wrap: each weight is a uint32
+	// and control-plane supplied localities/endpoints can make the total exceed
+	// math.MaxUint32. A wrapped uint32 sum can land on zero, which would turn the
+	// division below into +Inf and make newRing spin forever building the ring.
+	var weightSum uint64
 	// Since attributes are explicitly ignored in the EndpointMap key, we need
 	// to iterate over the values to get the weights.
 	endpointVals := endpoints.Values()
 	for _, epState := range endpointVals {
-		weightSum += epState.weight
+		weightSum += uint64(epState.weight)
 	}
 	ret := make([]endpointInfo, 0, endpoints.Len())
 	min := 1.0
