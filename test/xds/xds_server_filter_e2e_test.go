@@ -157,20 +157,13 @@ func makeRPC(ctx context.Context, client testgrpc.TestServiceClient, rType rpcTy
 	return nil
 }
 
-// Test verifies that the xDS server-side HTTP filter chain correctly executes
-// InterceptRPC and wraps grpc.ServerStream for both Unary and Streaming RPCs.
-func (s) TestServerSideXDSHTTPFilter_InterceptRPC(t *testing.T) {
-	dummyTypeURL := t.Name()
-
-	fb := &dummyFilterBuilder{
-		typeURL:           dummyTypeURL,
-		interceptRPCCount: &atomic.Int32{},
-		recvMsgCount:      &atomic.Int32{},
-		sendMsgCount:      &atomic.Int32{},
-	}
-	httpfilter.Register(fb)
-	defer httpfilter.UnregisterForTesting(fb.typeURL)
-
+// setupXDSListenerAndClient starts an xDS management server and a gRPC server,
+// configures the management server with an inbound listener containing the
+// specified httpFilters, dials the server using xDS, waits for the server to
+// enter SERVING mode, and returns a TestServiceClient.
+func setupXDSListenerAndClient(t *testing.T, httpFilters ...*v3httppb.HttpFilter) testgrpc.TestServiceClient {
+	t.Helper()
+	const serviceName = "my-service"
 	managementServer, nodeID, bootstrapContents, xdsResolver := setup.ManagementServerAndResolver(t)
 
 	// Wait for the server to enter SERVING mode before making RPCs to avoid
@@ -182,13 +175,13 @@ func (s) TestServerSideXDSHTTPFilter_InterceptRPC(t *testing.T) {
 		}
 	})
 	lis, stopServer := setupGRPCServer(t, bootstrapContents, opt)
-	defer stopServer()
+	t.Cleanup(stopServer)
 
 	host, port, err := hostPortFromListener(lis)
 	if err != nil {
 		t.Fatalf("Failed to retrieve host and port of server: %v", err)
 	}
-	const serviceName = "my-service"
+
 	resources := e2e.DefaultClientResources(e2e.ResourceParams{
 		DialTarget: serviceName,
 		NodeID:     nodeID,
@@ -196,8 +189,6 @@ func (s) TestServerSideXDSHTTPFilter_InterceptRPC(t *testing.T) {
 		Port:       port,
 		SecLevel:   e2e.SecurityLevelNone,
 	})
-
-	dummyFilter := newHTTPFilter(t, "dummy-filter", dummyTypeURL, "")
 
 	vhs := []*v3routepb.VirtualHost{{
 		Domains: []string{"*"},
@@ -209,14 +200,14 @@ func (s) TestServerSideXDSHTTPFilter_InterceptRPC(t *testing.T) {
 		}},
 	}}
 
+	filters := append([]*v3httppb.HttpFilter{}, httpFilters...)
+	filters = append(filters, e2e.HTTPFilter("router", &v3routerpb.Router{}))
+
 	networkFilters := []*v3listenerpb.Filter{{
 		Name: "hcm",
 		ConfigType: &v3listenerpb.Filter_TypedConfig{
 			TypedConfig: testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
-				HttpFilters: []*v3httppb.HttpFilter{
-					dummyFilter,
-					e2e.HTTPFilter("router", &v3routerpb.Router{}),
-				},
+				HttpFilters: filters,
 				RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
 					RouteConfig: &v3routepb.RouteConfiguration{
 						Name:         "routeName",
@@ -246,14 +237,14 @@ func (s) TestServerSideXDSHTTPFilter_InterceptRPC(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if err := managementServer.Update(ctx, resources); err != nil {
-		t.Fatal(err)
+		t.Fatalf("managementServer.Update() failed: %v", err)
 	}
 
 	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsResolver))
 	if err != nil {
 		t.Fatalf("grpc.NewClient() failed: %v", err)
 	}
-	defer cc.Close()
+	t.Cleanup(func() { cc.Close() })
 
 	select {
 	case <-servingCh:
@@ -261,7 +252,27 @@ func (s) TestServerSideXDSHTTPFilter_InterceptRPC(t *testing.T) {
 		t.Fatalf("Timeout waiting for server to enter SERVING mode")
 	}
 
-	client := testgrpc.NewTestServiceClient(cc)
+	return testgrpc.NewTestServiceClient(cc)
+}
+
+// Test verifies that the xDS server-side HTTP filter chain correctly executes
+// InterceptRPC and wraps grpc.ServerStream for both Unary and Streaming RPCs.
+func (s) TestServerSideXDSHTTPFilter_InterceptRPC(t *testing.T) {
+	dummyTypeURL := t.Name()
+	fb := &dummyFilterBuilder{
+		typeURL:           dummyTypeURL,
+		interceptRPCCount: &atomic.Int32{},
+		recvMsgCount:      &atomic.Int32{},
+		sendMsgCount:      &atomic.Int32{},
+	}
+	httpfilter.Register(fb)
+	defer httpfilter.UnregisterForTesting(fb.typeURL)
+
+	dummyFilter := newHTTPFilter(t, "dummy-filter", dummyTypeURL, "")
+	client := setupXDSListenerAndClient(t, dummyFilter)
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 
 	// Verify Unary RPC execution.
 	if err := makeRPC(ctx, client, rpcTypeUnary); err != nil {
@@ -270,10 +281,10 @@ func (s) TestServerSideXDSHTTPFilter_InterceptRPC(t *testing.T) {
 	if got := fb.interceptRPCCount.Load(); got != 1 {
 		t.Fatalf("Unexpected interceptRPCCount for unary RPC, got %d, want 1", got)
 	}
-	if got := fb.recvMsgCount.Load(); got < 1 {
+	if got := fb.recvMsgCount.Load(); got != 1 {
 		t.Fatalf("Unexpected recvMsgCount for unary RPC, got %d, want 1", got)
 	}
-	if got := fb.sendMsgCount.Load(); got < 1 {
+	if got := fb.sendMsgCount.Load(); got != 1 {
 		t.Fatalf("Unexpected sendMsgCount for unary RPC, got %d, want 1", got)
 	}
 
@@ -282,14 +293,14 @@ func (s) TestServerSideXDSHTTPFilter_InterceptRPC(t *testing.T) {
 	fb.recvMsgCount.Store(0)
 	fb.sendMsgCount.Store(0)
 
-	// Verify Streaming RPC execution
+	// Verify Streaming RPC execution.
 	if err := makeRPC(ctx, client, rpcTypeStreaming); err != nil {
 		t.Fatalf("makeRPC() failed: %v", err)
 	}
 	if got := fb.interceptRPCCount.Load(); got != 1 {
 		t.Fatalf("Unexpected interceptRPCCount for streaming RPC, got %d, want 1", got)
 	}
-	if got := fb.recvMsgCount.Load(); got < 1 {
+	if got := fb.recvMsgCount.Load(); got != 1 {
 		t.Fatalf("Unexpected recvMsgCount for streaming RPC, got %d, want 1", got)
 	}
 }
@@ -310,98 +321,14 @@ func (s) TestServerSideXDSHTTPFilter_InterceptRPCEarlyRejection(t *testing.T) {
 	httpfilter.Register(fb)
 	defer httpfilter.UnregisterForTesting(fb.typeURL)
 
-	managementServer, nodeID, bootstrapContents, xdsResolver := setup.ManagementServerAndResolver(t)
-
-	servingCh := make(chan struct{})
-	opt := xds.ServingModeCallback(func(_ net.Addr, args xds.ServingModeChangeArgs) {
-		if args.Mode == connectivity.ServingModeServing {
-			close(servingCh)
-		}
-	})
-	lis, stopServer := setupGRPCServer(t, bootstrapContents, opt)
-	defer stopServer()
-
-	host, port, err := hostPortFromListener(lis)
-	if err != nil {
-		t.Fatalf("Failed to retrieve host and port of server: %v", err)
-	}
-	const serviceName = "my-service"
-	resources := e2e.DefaultClientResources(e2e.ResourceParams{
-		DialTarget: serviceName,
-		NodeID:     nodeID,
-		Host:       host,
-		Port:       port,
-		SecLevel:   e2e.SecurityLevelNone,
-	})
-
 	rejectFilter := newHTTPFilter(t, "reject-filter", typeURL, "")
-
-	vhs := []*v3routepb.VirtualHost{{
-		Domains: []string{"*"},
-		Routes: []*v3routepb.Route{{
-			Match: &v3routepb.RouteMatch{
-				PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"},
-			},
-			Action: &v3routepb.Route_NonForwardingAction{},
-		}},
-	}}
-
-	networkFilters := []*v3listenerpb.Filter{{
-		Name: "hcm",
-		ConfigType: &v3listenerpb.Filter_TypedConfig{
-			TypedConfig: testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
-				HttpFilters: []*v3httppb.HttpFilter{
-					rejectFilter,
-					e2e.HTTPFilter("router", &v3routerpb.Router{}),
-				},
-				RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
-					RouteConfig: &v3routepb.RouteConfiguration{
-						Name:         "routeName",
-						VirtualHosts: vhs,
-					},
-				},
-			}),
-		},
-	}}
-
-	inboundLis := &v3listenerpb.Listener{
-		Name: fmt.Sprintf(e2e.ServerListenerResourceNameTemplate, net.JoinHostPort(host, strconv.Itoa(int(port)))),
-		Address: &v3corepb.Address{
-			Address: &v3corepb.Address_SocketAddress{
-				SocketAddress: &v3corepb.SocketAddress{
-					Address: host,
-					PortSpecifier: &v3corepb.SocketAddress_PortValue{
-						PortValue: port,
-					},
-				},
-			},
-		},
-		DefaultFilterChain: &v3listenerpb.FilterChain{Filters: networkFilters},
-	}
-	resources.Listeners = append(resources.Listeners, inboundLis)
+	client := setupXDSListenerAndClient(t, rejectFilter)
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	if err := managementServer.Update(ctx, resources); err != nil {
-		t.Fatal(err)
-	}
-
-	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsResolver))
-	if err != nil {
-		t.Fatalf("grpc.NewClient() failed: %v", err)
-	}
-	defer cc.Close()
-
-	select {
-	case <-servingCh:
-	case <-ctx.Done():
-		t.Fatalf("Timeout waiting for server to enter SERVING mode")
-	}
-
-	client := testgrpc.NewTestServiceClient(cc)
 
 	// Verify Unary RPC rejection.
-	if err = makeRPC(ctx, client, rpcTypeUnary); err == nil || !strings.Contains(err.Error(), wantErr) {
+	if err := makeRPC(ctx, client, rpcTypeUnary); err == nil || !strings.Contains(err.Error(), wantErr) {
 		t.Fatalf("makeRPC() returned error = %v, want error containing %q", err, wantErr)
 	}
 	if got := fb.interceptRPCCount.Load(); got != 1 {
@@ -410,7 +337,7 @@ func (s) TestServerSideXDSHTTPFilter_InterceptRPCEarlyRejection(t *testing.T) {
 
 	// Verify Streaming RPC rejection.
 	fb.interceptRPCCount.Store(0) // reset counter for streaming rpc
-	if err = makeRPC(ctx, client, rpcTypeStreaming); err == nil || !strings.Contains(err.Error(), wantErr) {
+	if err := makeRPC(ctx, client, rpcTypeStreaming); err == nil || !strings.Contains(err.Error(), wantErr) {
 		t.Fatalf("makeRPC() returned error = %v, want error containing %q", err, wantErr)
 	}
 	if got := fb.interceptRPCCount.Load(); got != 1 {
@@ -446,97 +373,13 @@ func (s) TestServerSideXDS_InterceptRPCMultiFilterChaining(t *testing.T) {
 	httpfilter.Register(fb2)
 	defer httpfilter.UnregisterForTesting(fb2.typeURL)
 
-	managementServer, nodeID, bootstrapContents, xdsResolver := setup.ManagementServerAndResolver(t)
-
-	servingCh := make(chan struct{})
-	opt := xds.ServingModeCallback(func(_ net.Addr, args xds.ServingModeChangeArgs) {
-		if args.Mode == connectivity.ServingModeServing {
-			close(servingCh)
-		}
-	})
-	lis, stopServer := setupGRPCServer(t, bootstrapContents, opt)
-	defer stopServer()
-
-	host, port, err := hostPortFromListener(lis)
-	if err != nil {
-		t.Fatalf("Failed to retrieve host and port of server: %v", err)
-	}
-	const serviceName = "my-service"
-	resources := e2e.DefaultClientResources(e2e.ResourceParams{
-		DialTarget: serviceName,
-		NodeID:     nodeID,
-		Host:       host,
-		Port:       port,
-		SecLevel:   e2e.SecurityLevelNone,
-	})
-
 	f1 := newHTTPFilter(t, "filter-1", typeURL1, "")
 	f2 := newHTTPFilter(t, "filter-2", typeURL2, "")
 
-	vhs := []*v3routepb.VirtualHost{{
-		Domains: []string{"*"},
-		Routes: []*v3routepb.Route{{
-			Match: &v3routepb.RouteMatch{
-				PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"},
-			},
-			Action: &v3routepb.Route_NonForwardingAction{},
-		}},
-	}}
-
-	networkFilters := []*v3listenerpb.Filter{{
-		Name: "hcm",
-		ConfigType: &v3listenerpb.Filter_TypedConfig{
-			TypedConfig: testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
-				HttpFilters: []*v3httppb.HttpFilter{
-					f1,
-					f2,
-					e2e.HTTPFilter("router", &v3routerpb.Router{}),
-				},
-				RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
-					RouteConfig: &v3routepb.RouteConfiguration{
-						Name:         "routeName",
-						VirtualHosts: vhs,
-					},
-				},
-			}),
-		},
-	}}
-
-	inboundLis := &v3listenerpb.Listener{
-		Name: fmt.Sprintf(e2e.ServerListenerResourceNameTemplate, net.JoinHostPort(host, strconv.Itoa(int(port)))),
-		Address: &v3corepb.Address{
-			Address: &v3corepb.Address_SocketAddress{
-				SocketAddress: &v3corepb.SocketAddress{
-					Address: host,
-					PortSpecifier: &v3corepb.SocketAddress_PortValue{
-						PortValue: port,
-					},
-				},
-			},
-		},
-		DefaultFilterChain: &v3listenerpb.FilterChain{Filters: networkFilters},
-	}
-	resources.Listeners = append(resources.Listeners, inboundLis)
+	client := setupXDSListenerAndClient(t, f1, f2)
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	if err := managementServer.Update(ctx, resources); err != nil {
-		t.Fatal(err)
-	}
-
-	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsResolver))
-	if err != nil {
-		t.Fatalf("grpc.NewClient() failed: %v", err)
-	}
-	defer cc.Close()
-
-	select {
-	case <-servingCh:
-	case <-ctx.Done():
-		t.Fatalf("Timeout waiting for server to enter SERVING mode")
-	}
-
-	client := testgrpc.NewTestServiceClient(cc)
 
 	// Verify Unary RPC filter chaining.
 	if err := makeRPC(ctx, client, rpcTypeUnary); err != nil {
@@ -585,12 +428,12 @@ func (s) TestServerSideXDS_InterceptRPCMultiFilterChaining(t *testing.T) {
 
 type errorWrappedStream struct {
 	grpc.ServerStream
-	recvErr error
+	recvErr string
 }
 
 func (w *errorWrappedStream) RecvMsg(m any) error {
-	if w.recvErr != nil {
-		return w.recvErr
+	if w.recvErr != "" {
+		return status.Error(codes.Internal, w.recvErr)
 	}
 	return w.ServerStream.RecvMsg(m)
 }
@@ -608,8 +451,7 @@ func (s) TestServerSideXDS_InterceptRPCMultiFilterErrorPropagation(t *testing.T)
 		},
 	}
 
-	const errorMsg = "recvMsg failed in filter 2"
-	wantErr := status.Error(codes.ResourceExhausted, errorMsg)
+	wantErr := "recvMsg failed in filter 2"
 	fb2 := &dummyFilterBuilder{
 		typeURL: typeURL2,
 		interceptRPCFunc: func(_ context.Context, ss grpc.ServerStream) (grpc.ServerStream, error) {
@@ -622,97 +464,13 @@ func (s) TestServerSideXDS_InterceptRPCMultiFilterErrorPropagation(t *testing.T)
 	httpfilter.Register(fb2)
 	defer httpfilter.UnregisterForTesting(fb2.typeURL)
 
-	managementServer, nodeID, bootstrapContents, xdsResolver := setup.ManagementServerAndResolver(t)
-
-	servingCh := make(chan struct{})
-	opt := xds.ServingModeCallback(func(_ net.Addr, args xds.ServingModeChangeArgs) {
-		if args.Mode == connectivity.ServingModeServing {
-			close(servingCh)
-		}
-	})
-	lis, stopServer := setupGRPCServer(t, bootstrapContents, opt)
-	defer stopServer()
-
-	host, port, err := hostPortFromListener(lis)
-	if err != nil {
-		t.Fatalf("Failed to retrieve host and port of server: %v", err)
-	}
-	const serviceName = "my-service-recv-err-e2e"
-	resources := e2e.DefaultClientResources(e2e.ResourceParams{
-		DialTarget: serviceName,
-		NodeID:     nodeID,
-		Host:       host,
-		Port:       port,
-		SecLevel:   e2e.SecurityLevelNone,
-	})
-
 	filter1 := newHTTPFilter(t, "filter-1", typeURL1, "")
 	filter2 := newHTTPFilter(t, "filter-2", typeURL2, "")
 
-	vhs := []*v3routepb.VirtualHost{{
-		Domains: []string{"*"},
-		Routes: []*v3routepb.Route{{
-			Match: &v3routepb.RouteMatch{
-				PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"},
-			},
-			Action: &v3routepb.Route_NonForwardingAction{},
-		}},
-	}}
-
-	networkFilters := []*v3listenerpb.Filter{{
-		Name: "hcm",
-		ConfigType: &v3listenerpb.Filter_TypedConfig{
-			TypedConfig: testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
-				HttpFilters: []*v3httppb.HttpFilter{
-					filter1,
-					filter2,
-					e2e.HTTPFilter("router", &v3routerpb.Router{}),
-				},
-				RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
-					RouteConfig: &v3routepb.RouteConfiguration{
-						Name:         "routeName",
-						VirtualHosts: vhs,
-					},
-				},
-			}),
-		},
-	}}
-
-	inboundLis := &v3listenerpb.Listener{
-		Name: fmt.Sprintf(e2e.ServerListenerResourceNameTemplate, net.JoinHostPort(host, strconv.Itoa(int(port)))),
-		Address: &v3corepb.Address{
-			Address: &v3corepb.Address_SocketAddress{
-				SocketAddress: &v3corepb.SocketAddress{
-					Address: host,
-					PortSpecifier: &v3corepb.SocketAddress_PortValue{
-						PortValue: port,
-					},
-				},
-			},
-		},
-		DefaultFilterChain: &v3listenerpb.FilterChain{Filters: networkFilters},
-	}
-	resources.Listeners = append(resources.Listeners, inboundLis)
+	client := setupXDSListenerAndClient(t, filter1, filter2)
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	if err := managementServer.Update(ctx, resources); err != nil {
-		t.Fatal(err)
-	}
-
-	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsResolver))
-	if err != nil {
-		t.Fatalf("grpc.NewClient() failed: %v", err)
-	}
-	defer cc.Close()
-
-	select {
-	case <-servingCh:
-	case <-ctx.Done():
-		t.Fatalf("Timeout waiting for server to enter SERVING mode")
-	}
-
-	client := testgrpc.NewTestServiceClient(cc)
 
 	stream, err := client.FullDuplexCall(ctx)
 	if err != nil {
@@ -722,11 +480,7 @@ func (s) TestServerSideXDS_InterceptRPCMultiFilterErrorPropagation(t *testing.T)
 	if err := stream.Send(&testpb.StreamingOutputCallRequest{}); err != nil {
 		t.Fatalf("stream.Send() failed: %v", err)
 	}
-	if err := stream.CloseSend(); err != nil {
-		t.Fatalf("stream.CloseSend() failed: %v", err)
-	}
-
-	if _, err := stream.Recv(); err == nil || !strings.Contains(err.Error(), errorMsg) {
-		t.Fatalf("stream.Recv() returned error = %v, want error containing %q", err, errorMsg)
+	if _, err := stream.Recv(); err == nil || !strings.Contains(err.Error(), wantErr) {
+		t.Fatalf("stream.Recv() returned error = %v, want error containing %q", err, wantErr)
 	}
 }

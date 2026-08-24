@@ -135,10 +135,11 @@ type ClientFilter interface {
 type ServerInterceptor interface {
 	// InterceptRPC intercepts an incoming RPC on the server side.
 	//
-	// Implementations check if the incoming RPC is allowed to proceed based on
-	// information in the Context. To intercept or override stream behavior,
-	// implementations may return a wrapped ServerStream. Returning a non-nil
-	// error will terminate the RPC with that status error.
+	// On success, implementations must return either the original ServerStream or
+	// a wrapped ServerStream, with a nil error.
+	//
+	// Returning a non-nil error will terminate the RPC with that status error.
+	// Implementations should never return (nil, nil).
 	InterceptRPC(ctx context.Context, ss grpc.ServerStream) (grpc.ServerStream, error)
 
 	// Close closes the interceptor. Once called, no new calls to InterceptRPC are
