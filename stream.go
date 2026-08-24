@@ -1726,8 +1726,6 @@ type serverStream struct {
 
 	sendCompressorName string
 
-	recvFirstMsg bool // set after the first message is received
-
 	maxReceiveMessageSize int
 	maxSendMessageSize    int
 	trInfo                *traceInfo
@@ -1735,6 +1733,16 @@ type serverStream struct {
 	statsHandler stats.Handler
 
 	binlogs []binarylog.MethodLogger
+
+	mu sync.Mutex // protects trInfo.tr after the service handler runs.
+
+	// Bool fields are grouped at the tail to eliminate the alignment padding
+	// that would otherwise follow each bool when the next field is pointer- or
+	// int-sized. See https://github.com/grpc/grpc-go/issues/9349 for benchmarks.
+	// Add new bool fields here, not inline above.
+
+	// Not guarded by mu.
+	recvFirstMsg bool // set after the first message is received
 	// serverHeaderBinlogged indicates whether server header has been logged. It
 	// will happen when one of the following two happens: stream.SendHeader(),
 	// stream.Send().
@@ -1742,8 +1750,6 @@ type serverStream struct {
 	// It's only checked in send and sendHeader, doesn't need to be
 	// synchronized.
 	serverHeaderBinlogged bool
-
-	mu sync.Mutex // protects trInfo.tr after the service handler runs.
 }
 
 func (ss *serverStream) Context() context.Context {
