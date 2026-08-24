@@ -56,4 +56,8 @@ var (
 	// TimeSinceFunc returns the time elapsed, and can be overridden for testing
 	// purposes.
 	TimeSinceFunc func(t time.Time) time.Duration
+
+	// DefaultFlowControlWindowSize is the initial flow control window size for
+	// the external processor filter and can be overridden for testing purposes.
+	DefaultFlowControlWindowSize int64 = 64 * 1024
 )

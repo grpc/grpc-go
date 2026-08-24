@@ -286,6 +286,17 @@ func startTestExtProcessor(t *testing.T, processFunc func(v3procservicegrpc.Exte
 	return lis.Addr().String(), extprocServer.Stop
 }
 
+// overrideDefaultFlowControlWindow overrides the default window size for the
+// duration of the test and restores it upon test cleanup.
+func overrideDefaultFlowControlWindow(t *testing.T, size int64) {
+	t.Helper()
+	orig := internal.DefaultFlowControlWindowSize
+	internal.DefaultFlowControlWindowSize = size
+	t.Cleanup(func() {
+		internal.DefaultFlowControlWindowSize = orig
+	})
+}
+
 // setupTestClient configures the management server with xDS resources that
 // include the external processor filter, and creates a new gRPC client.
 func setupTestClient(t *testing.T, extProcAddr string, extProcConfig *v3procfilterpb.ExternalProcessor, serverAddr string, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
@@ -4061,7 +4072,7 @@ func (s) TestObservabilityMidStreamFailAllow(t *testing.T) {
 	// silently bypassing the processor.
 	for i := 0; i < numMessages; i++ {
 		req := &testpb.StreamingOutputCallRequest{
-			Payload: &testpb.Payload{Body: []byte(fmt.Sprintf("msg-%d", i))},
+			Payload: &testpb.Payload{Body: fmt.Appendf(nil, "msg-%d", i)},
 		}
 		if err := stream.Send(req); err != nil {
 			t.Fatalf("stream.Send() failed unexpectedly with FailureModeAllow=true: %v", err)
@@ -5198,7 +5209,9 @@ func (s) TestExtProcChannelRetention_UnaryRPC(t *testing.T) {
 // depleted, and unblock once a ServerWindowUpdate is delivered by the external
 // processor.
 func (s) TestFlowControl_DownstreamToSidestream_OverdraftAndUnblock(t *testing.T) {
-	const defaultWindowSize = 64 * 1024
+	const defaultWindowSize = 100
+	overrideDefaultFlowControlWindow(t, defaultWindowSize)
+
 	sendWindowUpdate := make(chan struct{})
 
 	extProcAddr, _ := startTestExtProcessor(t, func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
@@ -5217,7 +5230,7 @@ func (s) TestFlowControl_DownstreamToSidestream_OverdraftAndUnblock(t *testing.T
 			return err
 		}
 
-		// Receive first large message (70,000 bytes, overdrafts 65,535 window).
+		// Receive first large message (120 bytes, overdrafts 100 window).
 		req, err = stream.Recv()
 		if err != nil {
 			return err
@@ -5231,7 +5244,7 @@ func (s) TestFlowControl_DownstreamToSidestream_OverdraftAndUnblock(t *testing.T
 
 		// Wait for signal from test to send window update.
 		<-sendWindowUpdate
-		if err := stream.Send(serverWindowUpdateResponse(80000, 0)); err != nil {
+		if err := stream.Send(serverWindowUpdateResponse(150, 0)); err != nil {
 			return err
 		}
 
@@ -5304,9 +5317,8 @@ func (s) TestFlowControl_DownstreamToSidestream_OverdraftAndUnblock(t *testing.T
 		t.Fatalf("FullDuplexCall() failed: %v", err)
 	}
 
-	// Send first message of size 70,000 bytes (overdrafts defaultWindowSize
-	// 65,535).
-	largePayload := make([]byte, 70000)
+	// Send first message of size 120 bytes (overdrafts defaultWindowSize 100).
+	largePayload := make([]byte, 120)
 	if err := stream.Send(&testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: largePayload}}); err != nil {
 		t.Fatalf("stream.Send(largePayload) failed: %v", err)
 	}
@@ -5329,7 +5341,7 @@ func (s) TestFlowControl_DownstreamToSidestream_OverdraftAndUnblock(t *testing.T
 	// Trigger window update on processor stream.
 	close(sendWindowUpdate)
 
-	// Verify second message now successfully unblocks and arrives at processor.
+	// Verify second message now successfully unblocks.
 	select {
 	case err := <-sendDone:
 		if err != nil {
@@ -5360,6 +5372,9 @@ func (s) TestFlowControl_DownstreamToSidestream_OverdraftAndUnblock(t *testing.T
 // while the cumulative window quota remains <= 0, and unblocks only after a
 // subsequent window update restores a positive window size.
 func (s) TestFlowControl_DownstreamToSidestream_PartialWindowUpdate(t *testing.T) {
+	const defaultWindowSize = 100
+	overrideDefaultFlowControlWindow(t, defaultWindowSize)
+
 	sendPartialUpdate := make(chan struct{})
 	sendFinalUpdate := make(chan struct{})
 
@@ -5376,8 +5391,7 @@ func (s) TestFlowControl_DownstreamToSidestream_PartialWindowUpdate(t *testing.T
 			return err
 		}
 
-		// Receive first large message (70,000 bytes, overdrafts 65,535 window to
-		// -4,465).
+		// Receive first large message (120 bytes, overdrafts 100 window).
 		req, err = stream.Recv()
 		if err != nil {
 			return err
@@ -5389,15 +5403,15 @@ func (s) TestFlowControl_DownstreamToSidestream_PartialWindowUpdate(t *testing.T
 			return err
 		}
 
-		// Partial window update (+2,000 bytes, window remains negative at -2,465).
+		// Partial window update (+10 bytes, window remains negative at -10).
 		<-sendPartialUpdate
-		if err := stream.Send(serverWindowUpdateResponse(2000, 0)); err != nil {
+		if err := stream.Send(serverWindowUpdateResponse(10, 0)); err != nil {
 			return err
 		}
 
-		// Final window update (+10,000 bytes, window becomes positive at +7,535).
+		// Final window update (+50 bytes, window becomes positive at +40).
 		<-sendFinalUpdate
-		if err := stream.Send(serverWindowUpdateResponse(10000, 0)); err != nil {
+		if err := stream.Send(serverWindowUpdateResponse(50, 0)); err != nil {
 			return err
 		}
 
@@ -5470,8 +5484,8 @@ func (s) TestFlowControl_DownstreamToSidestream_PartialWindowUpdate(t *testing.T
 		t.Fatalf("FullDuplexCall() failed: %v", err)
 	}
 
-	// Send first message of 70,000 bytes.
-	if err := stream.Send(&testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: make([]byte, 70000)}}); err != nil {
+	// Send first message of 120 bytes (overdrafts 100 window).
+	if err := stream.Send(&testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: make([]byte, 120)}}); err != nil {
 		t.Fatalf("stream.Send() failed: %v", err)
 	}
 
@@ -5488,7 +5502,7 @@ func (s) TestFlowControl_DownstreamToSidestream_PartialWindowUpdate(t *testing.T
 	case <-time.After(defaultTestShortTimeout):
 	}
 
-	// Deliver partial update (+2,000). Send must remain blocked.
+	// Deliver partial update (+10). Send must remain blocked.
 	close(sendPartialUpdate)
 	select {
 	case <-sendDone:
@@ -5496,7 +5510,7 @@ func (s) TestFlowControl_DownstreamToSidestream_PartialWindowUpdate(t *testing.T
 	case <-time.After(defaultTestShortTimeout):
 	}
 
-	// Deliver final update (+10,000). Send must unblock.
+	// Deliver final update (+50). Send must unblock.
 	close(sendFinalUpdate)
 	select {
 	case err := <-sendDone:
@@ -5523,11 +5537,14 @@ func (s) TestFlowControl_DownstreamToSidestream_PartialWindowUpdate(t *testing.T
 }
 
 // TestFlowControl_DownstreamToSidestream_BypassUnblocks tests the scenario
-// where flow control bypass (RequestDrain) is triggered while a downstream send
-// is blocked on window depletion. Verifies that the blocked send immediately
-// unblocks and subsequent messages bypass the external processor directly to
-// the data plane server.
+// where bypass (RequestDrain) is triggered while a downstream send is blocked
+// on window depletion. Verifies that the blocked send immediately unblocks and
+// subsequent messages bypass the external processor directly to the data plane
+// server.
 func (s) TestFlowControl_DownstreamToSidestream_BypassUnblocks(t *testing.T) {
+	const defaultWindowSize = 100
+	overrideDefaultFlowControlWindow(t, defaultWindowSize)
+
 	sendDrain := make(chan struct{})
 
 	extProcAddr, _ := startTestExtProcessor(t, func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
@@ -5606,8 +5623,8 @@ func (s) TestFlowControl_DownstreamToSidestream_BypassUnblocks(t *testing.T) {
 		t.Fatalf("FullDuplexCall() failed: %v", err)
 	}
 
-	// Send first message of size 70,000 bytes.
-	if err := stream.Send(&testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: make([]byte, 70000)}}); err != nil {
+	// Send first message of size 120 bytes (overdrafts 100 window).
+	if err := stream.Send(&testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: make([]byte, 120)}}); err != nil {
 		t.Fatalf("stream.Send() failed: %v", err)
 	}
 
@@ -5657,6 +5674,9 @@ func (s) TestFlowControl_DownstreamToSidestream_BypassUnblocks(t *testing.T) {
 // blocked on flow control window depletion. Verifies that the blocked send
 // unblocks and fails with the appropriate status error code.
 func (s) TestFlowControl_DownstreamToSidestream_StreamFailure(t *testing.T) {
+	const defaultWindowSize = 100
+	overrideDefaultFlowControlWindow(t, defaultWindowSize)
+
 	failStream := make(chan struct{})
 
 	extProcAddr, _ := startTestExtProcessor(t, func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
@@ -5733,8 +5753,8 @@ func (s) TestFlowControl_DownstreamToSidestream_StreamFailure(t *testing.T) {
 		t.Fatalf("FullDuplexCall() failed: %v", err)
 	}
 
-	// Send first message of size 70,000 bytes.
-	if err := stream.Send(&testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: make([]byte, 70000)}}); err != nil {
+	// Send first message of size 120 bytes (overdrafts 100 window).
+	if err := stream.Send(&testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: make([]byte, 120)}}); err != nil {
 		t.Fatalf("stream.Send() failed: %v", err)
 	}
 
@@ -5757,8 +5777,8 @@ func (s) TestFlowControl_DownstreamToSidestream_StreamFailure(t *testing.T) {
 	// Verify second message unblocks with Internal error.
 	select {
 	case err := <-sendDone:
-		if status.Code(err) != codes.Internal {
-			t.Fatalf("stream.Send() got error code %v, want %v: %v", status.Code(err), codes.Internal, err)
+		if status.Code(err) != codes.Internal || !strings.Contains(err.Error(), "simulated processor stream failure") {
+			t.Fatalf("stream.Send() got error %v, want code %v containing 'simulated processor stream failure'", err, codes.Internal)
 		}
 	case <-time.After(defaultTestTimeout):
 		t.Fatalf("Timed out waiting for second message to return error after stream failure")
@@ -5771,8 +5791,10 @@ func (s) TestFlowControl_DownstreamToSidestream_StreamFailure(t *testing.T) {
 // forwarding blocks while the window is depleted, and unblocks once a
 // ServerWindowUpdate for upstream to sidestream is delivered.
 func (s) TestFlowControl_UpstreamToSidestream_OverdraftAndUnblock(t *testing.T) {
+	const defaultWindowSize = 100
+	overrideDefaultFlowControlWindow(t, defaultWindowSize)
+
 	sendWindowUpdate := make(chan struct{})
-	unblockServerResp2 := make(chan struct{})
 
 	extProcAddr, _ := startTestExtProcessor(t, func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
 		// Receive request header and respond with no mutations.
@@ -5782,6 +5804,9 @@ func (s) TestFlowControl_UpstreamToSidestream_OverdraftAndUnblock(t *testing.T) 
 		}
 		if req.GetRequestHeaders() == nil {
 			return fmt.Errorf("expected request headers, got %v", req)
+		}
+		if req.GetFlowControlInit() == nil || req.GetFlowControlInit().GetInitialWindowUpstreamToSidestream() != defaultWindowSize {
+			return fmt.Errorf("expected initial flow control window %v, got %v", defaultWindowSize, req.GetFlowControlInit())
 		}
 		if err := stream.Send(requestHeadersResponse(nil, nil)); err != nil {
 			return err
@@ -5799,7 +5824,7 @@ func (s) TestFlowControl_UpstreamToSidestream_OverdraftAndUnblock(t *testing.T) 
 			return err
 		}
 
-		// First large response body (70,000 bytes, overdrafts 65,535
+		// First large response body (120 bytes, overdrafts 100
 		// upstream-to-sidestream window).
 		req, err = stream.Recv()
 		if err != nil {
@@ -5814,7 +5839,7 @@ func (s) TestFlowControl_UpstreamToSidestream_OverdraftAndUnblock(t *testing.T) 
 
 		// Wait for signal from test to send window update.
 		<-sendWindowUpdate
-		if err := stream.Send(serverWindowUpdateResponse(0, 80000)); err != nil {
+		if err := stream.Send(serverWindowUpdateResponse(0, 150)); err != nil {
 			return err
 		}
 
@@ -5849,15 +5874,13 @@ func (s) TestFlowControl_UpstreamToSidestream_OverdraftAndUnblock(t *testing.T) 
 			if _, err := stream.Recv(); err != nil {
 				return err
 			}
-			// Send first large response (70,000 bytes).
+			// Send first large response (120 bytes).
 			if err := stream.Send(&testpb.StreamingOutputCallResponse{
-				Payload: &testpb.Payload{Body: make([]byte, 70000)},
+				Payload: &testpb.Payload{Body: make([]byte, 120)},
 			}); err != nil {
 				return err
 			}
-			// Wait for test signal before attempting to send second response
-			<-unblockServerResp2
-			// Send second response
+			// Send second response (will block in filter until window is replenished).
 			if err := stream.Send(&testpb.StreamingOutputCallResponse{
 				Payload: &testpb.Payload{Body: []byte("second-resp")},
 			}); err != nil {
@@ -5900,14 +5923,10 @@ func (s) TestFlowControl_UpstreamToSidestream_OverdraftAndUnblock(t *testing.T) 
 		t.Fatalf("stream.CloseSend() failed: %v", err)
 	}
 
-	// Receive first response of 70,000 bytes
+	// Receive first response of 120 bytes.
 	if _, err := stream.Recv(); err != nil {
 		t.Fatalf("stream.Recv() 1 failed: %v", err)
 	}
-
-	// Trigger server to send response 2 (which should block on filter window
-	// check)
-	close(unblockServerResp2)
 
 	recvDone := make(chan error, 1)
 	go func() {
@@ -5940,13 +5959,458 @@ func (s) TestFlowControl_UpstreamToSidestream_OverdraftAndUnblock(t *testing.T) 
 	}
 }
 
+// TestFlowControl_UpstreamToSidestream_PartialWindowUpdate tests the scenario
+// where a partial window increment is received while the upstream to sidestream
+// window is overdrafted. Verifies that server response forwarding remains
+// blocked while the cumulative window quota remains <= 0, and unblocks only
+// after a subsequent window update restores a positive window size.
+func (s) TestFlowControl_UpstreamToSidestream_PartialWindowUpdate(t *testing.T) {
+	const defaultWindowSize = 100
+	overrideDefaultFlowControlWindow(t, defaultWindowSize)
+
+	sendPartialUpdate := make(chan struct{})
+	sendFinalUpdate := make(chan struct{})
+
+	extProcAddr, _ := startTestExtProcessor(t, func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
+		// Receive response header and respond with no mutations.
+		req, err := stream.Recv()
+		if err != nil {
+			return err
+		}
+		if req.GetResponseHeaders() == nil {
+			return fmt.Errorf("expected response headers, got %v", req)
+		}
+		if err := stream.Send(responseHeadersResponse(nil, nil)); err != nil {
+			return err
+		}
+
+		// First large response body (120 bytes, overdrafts 100
+		// upstream-to-sidestream window).
+		req, err = stream.Recv()
+		if err != nil {
+			return err
+		}
+		if req.GetResponseBody() == nil {
+			return fmt.Errorf("expected response body, got %v", req)
+		}
+		if err := stream.Send(responseBodyResponse(nil)); err != nil {
+			return err
+		}
+
+		// Partial window update (+10 bytes, window remains negative).
+		<-sendPartialUpdate
+		if err := stream.Send(serverWindowUpdateResponse(0, 10)); err != nil {
+			return err
+		}
+
+		// Final window update (+50 bytes, window becomes positive).
+		<-sendFinalUpdate
+		if err := stream.Send(serverWindowUpdateResponse(0, 50)); err != nil {
+			return err
+		}
+
+		// Receive second response body (unblocked after final window update).
+		req, err = stream.Recv()
+		if err != nil {
+			return err
+		}
+		if req.GetResponseBody() == nil {
+			return fmt.Errorf("expected response body, got %v", req)
+		}
+		if err := stream.Send(responseBodyResponse(nil)); err != nil {
+			return err
+		}
+
+		// Receive trailers and respond with no mutations.
+		req, err = stream.Recv()
+		if err != nil {
+			return err
+		}
+		if req.GetResponseTrailers() == nil {
+			return fmt.Errorf("expected response trailers, got %v", req)
+		}
+		if err := stream.Send(responseTrailersResponse(nil, nil)); err != nil {
+			return err
+		}
+		return nil
+	})
+
+	stub := stubserver.StartTestService(t, &stubserver.StubServer{
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
+			if _, err := stream.Recv(); err != nil {
+				return err
+			}
+			// Send first large response (120 bytes).
+			if err := stream.Send(&testpb.StreamingOutputCallResponse{
+				Payload: &testpb.Payload{Body: make([]byte, 120)},
+			}); err != nil {
+				return err
+			}
+			// Send second response (will block in filter until window is replenished).
+			if err := stream.Send(&testpb.StreamingOutputCallResponse{
+				Payload: &testpb.Payload{Body: []byte("second-resp")},
+			}); err != nil {
+				return err
+			}
+			return nil
+		},
+	})
+	defer stub.Stop()
+
+	cc, err := setupTestClient(t, extProcAddr, &v3procfilterpb.ExternalProcessor{
+		ProcessingMode: &v3procfilterpb.ProcessingMode{
+			RequestHeaderMode:   v3procfilterpb.ProcessingMode_SKIP,
+			RequestBodyMode:     v3procfilterpb.ProcessingMode_NONE,
+			ResponseHeaderMode:  v3procfilterpb.ProcessingMode_SEND,
+			ResponseBodyMode:    v3procfilterpb.ProcessingMode_GRPC,
+			ResponseTrailerMode: v3procfilterpb.ProcessingMode_SEND,
+		},
+	}, stub.Address)
+	if err != nil {
+		t.Fatalf("setupTestClient() failed: %v", err)
+	}
+	defer cc.Close()
+
+	client := testgrpc.NewTestServiceClient(cc)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	stream, err := client.FullDuplexCall(ctx)
+	if err != nil {
+		t.Fatalf("FullDuplexCall() failed: %v", err)
+	}
+
+	if err := stream.Send(&testpb.StreamingOutputCallRequest{
+		Payload: &testpb.Payload{Body: []byte("c1")},
+	}); err != nil {
+		t.Fatalf("stream.Send() failed: %v", err)
+	}
+	if err := stream.CloseSend(); err != nil {
+		t.Fatalf("stream.CloseSend() failed: %v", err)
+	}
+
+	// Receive first response of 120 bytes.
+	if _, err := stream.Recv(); err != nil {
+		t.Fatalf("stream.Recv() 1 failed: %v", err)
+	}
+
+	recvDone := make(chan error, 1)
+	go func() {
+		_, err := stream.Recv()
+		recvDone <- err
+	}()
+
+	// Expect recv to be blocked since window is negative.
+	select {
+	case <-recvDone:
+		t.Fatalf("Second response was received unexpectedly when window was negative")
+	case <-time.After(defaultTestShortTimeout):
+	}
+
+	// Deliver partial update (+10). Recv must remain blocked.
+	close(sendPartialUpdate)
+	select {
+	case <-recvDone:
+		t.Fatalf("Second response was received unexpectedly after partial window update")
+	case <-time.After(defaultTestShortTimeout):
+	}
+
+	// Deliver final update (+50). Recv must unblock.
+	close(sendFinalUpdate)
+	select {
+	case err := <-recvDone:
+		if err != nil {
+			t.Fatalf("stream.Recv() failed after final window update: %v", err)
+		}
+	case <-time.After(defaultTestTimeout):
+		t.Fatalf("Timed out waiting for response after final window update")
+	}
+
+	if _, err := stream.Recv(); err != io.EOF {
+		t.Fatalf("stream.Recv() expected EOF, got %v", err)
+	}
+}
+
+// TestFlowControl_UpstreamToSidestream_BypassUnblocks tests the scenario
+// where flow control bypass (RequestDrain) is triggered while server response
+// forwarding is blocked on upstream to sidestream window depletion. Verifies
+// that the blocked response immediately unblocks and bypasses the external
+// processor to the downstream client.
+func (s) TestFlowControl_UpstreamToSidestream_BypassUnblocks(t *testing.T) {
+	const defaultWindowSize = 100
+	overrideDefaultFlowControlWindow(t, defaultWindowSize)
+
+	sendDrain := make(chan struct{})
+
+	extProcAddr, _ := startTestExtProcessor(t, func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
+		// Receive response header and respond with no mutations.
+		req, err := stream.Recv()
+		if err != nil {
+			return err
+		}
+		if req.GetResponseHeaders() == nil {
+			return fmt.Errorf("expected response headers, got %v", req)
+		}
+		if err := stream.Send(responseHeadersResponse(nil, nil)); err != nil {
+			return err
+		}
+
+		// Receive first large response body (120 bytes, overdrafts 100 window).
+		req, err = stream.Recv()
+		if err != nil {
+			return err
+		}
+		if req.GetResponseBody() == nil {
+			return fmt.Errorf("expected response body, got %v", req)
+		}
+		if err := stream.Send(responseBodyResponse(req.GetResponseBody().GetBody())); err != nil {
+			return err
+		}
+
+		// Wait for signal to trigger bypass via RequestDrain: true.
+		<-sendDrain
+		if err := stream.Send(&v3procservicepb.ProcessingResponse{RequestDrain: true}); err != nil {
+			return err
+		}
+		return nil
+	})
+
+	stub := stubserver.StartTestService(t, &stubserver.StubServer{
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
+			if _, err := stream.Recv(); err != nil {
+				return err
+			}
+			// Send first large response (120 bytes).
+			if err := stream.Send(&testpb.StreamingOutputCallResponse{
+				Payload: &testpb.Payload{Body: make([]byte, 120)},
+			}); err != nil {
+				return err
+			}
+			// Send second response (will block in filter until bypass is triggered).
+			if err := stream.Send(&testpb.StreamingOutputCallResponse{
+				Payload: &testpb.Payload{Body: []byte("second-resp")},
+			}); err != nil {
+				return err
+			}
+			return nil
+		},
+	})
+	defer stub.Stop()
+
+	cc, err := setupTestClient(t, extProcAddr, &v3procfilterpb.ExternalProcessor{
+		ProcessingMode: &v3procfilterpb.ProcessingMode{
+			RequestHeaderMode:   v3procfilterpb.ProcessingMode_SKIP,
+			RequestBodyMode:     v3procfilterpb.ProcessingMode_NONE,
+			ResponseHeaderMode:  v3procfilterpb.ProcessingMode_SEND,
+			ResponseBodyMode:    v3procfilterpb.ProcessingMode_GRPC,
+			ResponseTrailerMode: v3procfilterpb.ProcessingMode_SEND,
+		},
+	}, stub.Address)
+	if err != nil {
+		t.Fatalf("setupTestClient() failed: %v", err)
+	}
+	defer cc.Close()
+
+	client := testgrpc.NewTestServiceClient(cc)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	stream, err := client.FullDuplexCall(ctx)
+	if err != nil {
+		t.Fatalf("FullDuplexCall() failed: %v", err)
+	}
+
+	if err := stream.Send(&testpb.StreamingOutputCallRequest{
+		Payload: &testpb.Payload{Body: []byte("c1")},
+	}); err != nil {
+		t.Fatalf("stream.Send() failed: %v", err)
+	}
+	if err := stream.CloseSend(); err != nil {
+		t.Fatalf("stream.CloseSend() failed: %v", err)
+	}
+
+	// Receive first response of 120 bytes.
+	if _, err := stream.Recv(); err != nil {
+		t.Fatalf("stream.Recv() 1 failed: %v", err)
+	}
+
+	recvDone := make(chan error, 1)
+	go func() {
+		_, err := stream.Recv()
+		recvDone <- err
+	}()
+
+	// Expect recv to be blocked since window is negative.
+	select {
+	case <-recvDone:
+		t.Fatalf("Second response was received unexpectedly when window was negative")
+	case <-time.After(defaultTestShortTimeout):
+	}
+
+	// Trigger bypass.
+	close(sendDrain)
+
+	// Verify second response now unblocks.
+	select {
+	case err := <-recvDone:
+		if err != nil {
+			t.Fatalf("stream.Recv() failed after bypass: %v", err)
+		}
+	case <-time.After(defaultTestTimeout):
+		t.Fatalf("Timed out waiting for second response after bypass")
+	}
+
+	if _, err := stream.Recv(); err != io.EOF {
+		t.Fatalf("stream.Recv() expected EOF, got %v", err)
+	}
+}
+
+// TestFlowControl_UpstreamToSidestream_StreamFailure tests the scenario where
+// the external processor stream encounters a failure while server response
+// forwarding is blocked on upstream to sidestream window depletion. Verifies
+// that the blocked response unblocks and fails with the appropriate status
+// error code.
+func (s) TestFlowControl_UpstreamToSidestream_StreamFailure(t *testing.T) {
+	const defaultWindowSize = 100
+	overrideDefaultFlowControlWindow(t, defaultWindowSize)
+
+	failStream := make(chan struct{})
+
+	extProcAddr, _ := startTestExtProcessor(t, func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
+		// Receive response header and respond with no mutations.
+		req, err := stream.Recv()
+		if err != nil {
+			return err
+		}
+		if req.GetResponseHeaders() == nil {
+			return fmt.Errorf("expected response headers, got %v", req)
+		}
+		if err := stream.Send(responseHeadersResponse(nil, nil)); err != nil {
+			return err
+		}
+
+		// Receive first large response body (120 bytes, overdrafts 100 window).
+		req, err = stream.Recv()
+		if err != nil {
+			return err
+		}
+		if req.GetResponseBody() == nil {
+			return fmt.Errorf("expected response body, got %v", req)
+		}
+		if err := stream.Send(responseBodyResponse(req.GetResponseBody().GetBody())); err != nil {
+			return err
+		}
+
+		// Wait for signal to fail the stream.
+		<-failStream
+		return status.Error(codes.Unavailable, "simulated processor stream failure")
+	})
+
+	stub := stubserver.StartTestService(t, &stubserver.StubServer{
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
+			if _, err := stream.Recv(); err != nil {
+				return err
+			}
+			// Send first large response (120 bytes).
+			if err := stream.Send(&testpb.StreamingOutputCallResponse{
+				Payload: &testpb.Payload{Body: make([]byte, 120)},
+			}); err != nil {
+				return err
+			}
+			// Send second response (will block in filter until stream fails).
+			if err := stream.Send(&testpb.StreamingOutputCallResponse{
+				Payload: &testpb.Payload{Body: []byte("second-resp")},
+			}); err != nil {
+				return err
+			}
+			return nil
+		},
+	})
+	defer stub.Stop()
+
+	cc, err := setupTestClient(t, extProcAddr, &v3procfilterpb.ExternalProcessor{
+		ProcessingMode: &v3procfilterpb.ProcessingMode{
+			RequestHeaderMode:   v3procfilterpb.ProcessingMode_SKIP,
+			RequestBodyMode:     v3procfilterpb.ProcessingMode_NONE,
+			ResponseHeaderMode:  v3procfilterpb.ProcessingMode_SEND,
+			ResponseBodyMode:    v3procfilterpb.ProcessingMode_GRPC,
+			ResponseTrailerMode: v3procfilterpb.ProcessingMode_SEND,
+		},
+		FailureModeAllow: false,
+	}, stub.Address)
+	if err != nil {
+		t.Fatalf("setupTestClient() failed: %v", err)
+	}
+	defer cc.Close()
+
+	client := testgrpc.NewTestServiceClient(cc)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	stream, err := client.FullDuplexCall(ctx)
+	if err != nil {
+		t.Fatalf("FullDuplexCall() failed: %v", err)
+	}
+
+	if err := stream.Send(&testpb.StreamingOutputCallRequest{
+		Payload: &testpb.Payload{Body: []byte("c1")},
+	}); err != nil {
+		t.Fatalf("stream.Send() failed: %v", err)
+	}
+	if err := stream.CloseSend(); err != nil {
+		t.Fatalf("stream.CloseSend() failed: %v", err)
+	}
+
+	// Receive first response of 120 bytes.
+	if _, err := stream.Recv(); err != nil {
+		t.Fatalf("stream.Recv() 1 failed: %v", err)
+	}
+
+	recvDone := make(chan error, 1)
+	go func() {
+		_, err := stream.Recv()
+		recvDone <- err
+	}()
+
+	// Expect recv to be blocked since window is negative.
+	select {
+	case <-recvDone:
+		t.Fatalf("Second response was received unexpectedly when window was negative")
+	case <-time.After(defaultTestShortTimeout):
+	}
+
+	// Trigger processor failure.
+	close(failStream)
+
+	// Verify second response unblocks with Internal error.
+	select {
+	case err := <-recvDone:
+		if status.Code(err) != codes.Internal || !strings.Contains(err.Error(), "simulated processor stream failure") {
+			t.Fatalf("stream.Recv() got error %v, want code %v containing 'simulated processor stream failure'", err, codes.Internal)
+		}
+	case <-time.After(defaultTestTimeout):
+		t.Fatalf("Timed out waiting for response to return error after stream failure")
+	}
+}
+
 // TestFlowControl_SidestreamToDownstream_WindowUpdate tests the scenario where
 // mutated response bodies received from the external processor are read by the
 // downstream client application. Verifies that reading a response body of size
 // greater than or equal to defaultWindowSize/2 triggers a standalone
 // ClientWindowUpdate for sidestream to downstream.
 func (s) TestFlowControl_SidestreamToDownstream_WindowUpdate(t *testing.T) {
+	const defaultWindowSize = 100
+	overrideDefaultFlowControlWindow(t, defaultWindowSize)
+
 	windowUpdateReceived := make(chan struct{})
+
+	// Response body: send a body >= defaultWindowSize/2 (60 bytes >= 50).
+	resp60 := &testpb.StreamingOutputCallResponse{Payload: &testpb.Payload{Body: make([]byte, 60)}}
+	respBytes, err := proto.Marshal(resp60)
+	if err != nil {
+		t.Fatalf("proto.Marshal failed: %v", err)
+	}
+	expectedInc := int64(len(respBytes))
 
 	extProcAddr, _ := startTestExtProcessor(t, func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
 		for {
@@ -5967,20 +6431,14 @@ func (s) TestFlowControl_SidestreamToDownstream_WindowUpdate(t *testing.T) {
 					return err
 				}
 			case req.GetResponseBody() != nil:
-				// Response body: send a body >= defaultWindowSize/2 (40,000 bytes)
-				resp40k := &testpb.StreamingOutputCallResponse{Payload: &testpb.Payload{Body: make([]byte, 40000)}}
-				respBytes, err := proto.Marshal(resp40k)
-				if err != nil {
-					return err
-				}
 				if err := stream.Send(responseBodyResponse(respBytes)); err != nil {
 					return err
 				}
 			case req.GetClientWindowUpdate() != nil:
 				// Expect standalone ClientWindowUpdate from client when application
-				// reads the 40k body.
+				// reads the 60-byte body.
 				inc := req.GetClientWindowUpdate().GetWindowIncrementSidestreamToDownstream()
-				if inc >= 40000 {
+				if inc >= expectedInc {
 					close(windowUpdateReceived)
 				}
 			case req.GetResponseTrailers() != nil:
@@ -6068,7 +6526,19 @@ func (s) TestFlowControl_SidestreamToDownstream_WindowUpdate(t *testing.T) {
 // greater than or equal to defaultWindowSize/2 triggers a standalone
 // ClientWindowUpdate for sidestream to upstream.
 func (s) TestFlowControl_SidestreamToUpstream_WindowUpdate(t *testing.T) {
+	const defaultWindowSize = 100
+	overrideDefaultFlowControlWindow(t, defaultWindowSize)
+
 	windowUpdateReceived := make(chan struct{})
+
+	// Request body: client sends small body, extproc returns mutated body >= 50
+	// bytes (60 bytes).
+	req60 := &testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: make([]byte, 60)}}
+	reqBytes, err := proto.Marshal(req60)
+	if err != nil {
+		t.Fatalf("proto.Marshal failed: %v", err)
+	}
+	expectedInc := int64(len(reqBytes))
 
 	extProcAddr, _ := startTestExtProcessor(t, func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
 		for {
@@ -6085,27 +6555,20 @@ func (s) TestFlowControl_SidestreamToUpstream_WindowUpdate(t *testing.T) {
 					return err
 				}
 			case req.GetRequestBody() != nil:
-				// Request body: client sends small body, extproc returns mutated body
-				// >= 40,000 bytes
 				if req.GetRequestBody().GetEndOfStreamWithoutMessage() {
 					if err := stream.Send(requestBodyResponseWithEOS(nil, true)); err != nil {
 						return err
 					}
 				} else {
-					req40k := &testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: make([]byte, 40000)}}
-					reqBytes, err := proto.Marshal(req40k)
-					if err != nil {
-						return err
-					}
 					if err := stream.Send(requestBodyResponse(reqBytes)); err != nil {
 						return err
 					}
 				}
 			case req.GetClientWindowUpdate() != nil:
-				// Expect standalone ClientWindowUpdate when filter pulls 40k body from
-				// buffer and forwards to dataplane.
+				// Expect standalone ClientWindowUpdate when filter pulls 60-byte body
+				// from buffer and forwards to dataplane.
 				inc := req.GetClientWindowUpdate().GetWindowIncrementSidestreamToUpstream()
-				if inc >= 40000 {
+				if inc >= expectedInc {
 					close(windowUpdateReceived)
 				}
 			}
@@ -6187,17 +6650,20 @@ func (s) TestFlowControl_SidestreamToUpstream_WindowUpdate(t *testing.T) {
 // and sidestream to downstream window increments are piggybacked onto
 // subsequent processing requests.
 func (s) TestFlowControl_PiggybackedWindowUpdates(t *testing.T) {
+	const defaultWindowSize = 100
+	overrideDefaultFlowControlWindow(t, defaultWindowSize)
+
 	downstreamPiggybackedReceived := make(chan struct{})
 	upstreamPiggybackedReceived := make(chan struct{})
 
-	mutatedResp := &testpb.StreamingOutputCallResponse{Payload: &testpb.Payload{Body: make([]byte, 15000)}}
+	mutatedResp := &testpb.StreamingOutputCallResponse{Payload: &testpb.Payload{Body: make([]byte, 15)}}
 	mutatedRespBytes, err := proto.Marshal(mutatedResp)
 	if err != nil {
 		t.Fatalf("proto.Marshal failed: %v", err)
 	}
 	expectedRespInc := int64(len(mutatedRespBytes))
 
-	mutatedReq := &testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: make([]byte, 20000)}}
+	mutatedReq := &testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: make([]byte, 20)}}
 	mutatedReqBytes, err := proto.Marshal(mutatedReq)
 	if err != nil {
 		t.Fatalf("proto.Marshal failed: %v", err)
