@@ -306,7 +306,7 @@ func main() {
 			logger.Fatalf("Failed to create OTLP trace exporter: %v", err)
 		}
 		tp := sdktrace.NewTracerProvider(
-			sdktrace.WithBatcher(exp),
+			sdktrace.WithSyncer(exp),
 			sdktrace.WithSampler(sdktrace.AlwaysSample()),
 		)
 		propagator := propagation.TraceContext{}
