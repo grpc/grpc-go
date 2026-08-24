@@ -95,7 +95,7 @@ func main() {
 			sdktrace.WithSyncer(exp),
 			sdktrace.WithSampler(sdktrace.AlwaysSample()),
 		)
-		propagator := propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, grpcotel.GRPCTraceBinPropagator{})
+		propagator := propagation.TraceContext{}
 		otel.SetTracerProvider(tp)
 		otel.SetTextMapPropagator(propagator)
 		defer func() {
