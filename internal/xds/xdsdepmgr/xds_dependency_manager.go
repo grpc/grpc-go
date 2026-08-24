@@ -203,6 +203,12 @@ func (m *DependencyManager) Close() {
 		dnsResolver.stop()
 		delete(m.dnsResolvers, name)
 	}
+
+	// Drop references to externally-owned collaborators so the dependency
+	// manager itself doesn't retain them once Close returns. All in-flight
+	// callbacks re-check m.stopped under m.mu before touching these fields.
+	m.watcher = nil
+	m.xdsClient = nil
 }
 
 // annotateErrorWithNodeID annotates the given error with the provided xDS node
