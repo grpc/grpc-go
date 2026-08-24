@@ -337,7 +337,7 @@ func (i *clientInterceptor) recordMetric(handle *estats.Int64CountHandle) {
 	if i.metricsRecorder == nil {
 		return
 	}
-	handle.Record(i.metricsRecorder, 1, i.target, "")
+	handle.Record(i.metricsRecorder, 1, i.target)
 }
 
 // isExtAuthzEnabled checks if external authorization is enabled for this RPC.
@@ -379,15 +379,7 @@ func (i *clientInterceptor) check(ctx context.Context, ri resolver.RPCInfo, outg
 	}
 	// Append the initial metadata from the grpc_service configuration to the
 	// context used for the Check RPC.
-	if len(i.config.grpcService.InitialMetadata) > 0 {
-		var kv []string
-		for k, vs := range i.config.grpcService.InitialMetadata {
-			for _, v := range vs {
-				kv = append(kv, k, v)
-			}
-		}
-		extAuthzCtx = metadata.AppendToOutgoingContext(extAuthzCtx, kv...)
-	}
+	extAuthzCtx = metadata.NewOutgoingContext(extAuthzCtx, i.config.grpcService.InitialMetadata)
 	authClient := i.authzClient.Value()
 	return authClient.Check(extAuthzCtx, req)
 }
@@ -409,10 +401,14 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 		return newStream(ctx, opts...)
 	}
 
-	// Increment authzClient's refcount so the Check RPC keeps the connection
-	// open even if the interceptor is closed concurrently. Decrement is deferred
-	// to release the reference when NewStream completes.
-	i.authzClient.Increment()
+	// Try to increment authzClient's refcount so the Check RPC keeps the
+	// connection open even if the interceptor is closed concurrently. Decrement
+	// is deferred to release the reference when NewStream completes. If
+	// TryIncrement returns false, the underlying authz client is closed, so
+	// we fail the RPC with an Unavailable status.
+	if !i.authzClient.TryIncrement() {
+		return nil, status.Errorf(codes.Unavailable, "extauthz: authz client is closed")
+	}
 	defer i.authzClient.Decrement()
 
 	outgoingMD, ok := metadata.FromOutgoingContext(ctx)
@@ -483,6 +479,7 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 			outgoingMD.Append("x-envoy-auth-failure-mode-allowed", "true")
 		}
 	}
+
 	// Update outgoing metadata with headers_to_remove specified by the external
 	// authorization server.
 	if err := i.config.decoderHeaderMutationRules.ApplyRemovals(allowedResp.OkResponse.GetHeadersToRemove(), outgoingMD); err != nil {
@@ -493,6 +490,19 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 			outgoingMD.Append("x-envoy-auth-failure-mode-allowed", "true")
 		}
 	}
+
+	// Validate response headers specified by the external authorization server
+	// against header mutation rules before creating the data plane stream.
+	responseHeadersToAdd := allowedResp.OkResponse.GetResponseHeadersToAdd()
+	if err := i.config.decoderHeaderMutationRules.ApplyAdditions(responseHeadersToAdd, metadata.MD{}); err != nil {
+		if !i.config.failureModeAllow {
+			return nil, status.Errorf(i.config.statusOnError, "extauthz: header validation fails for response headers: %v", err)
+		}
+		if i.config.failureModeAllowHeaderAdd && len(outgoingMD.Get("x-envoy-auth-failure-mode-allowed")) == 0 {
+			outgoingMD.Append("x-envoy-auth-failure-mode-allowed", "true")
+		}
+	}
+
 	// Create a new context with the mutated outgoing metadata. All subsequent
 	// Filters in the chain and the final RPC call will see this new context.
 	ctx = metadata.NewOutgoingContext(ctx, outgoingMD)
@@ -503,15 +513,14 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 		return nil, err
 	}
 
-	// If the external authorization server specified response headers to add,
-	// wrap the stream to intercept and modify the response headers received
-	// from the server.
-	if len(allowedResp.OkResponse.GetResponseHeadersToAdd()) > 0 {
+	// If valid response headers to add were specified by the external
+	// authorization server, wrap the stream to intercept and append them to the
+	// response headers received from the server.
+	if len(responseHeadersToAdd) > 0 {
 		return &clientStream{
 			ClientStream:  stream,
 			headersToAdd:  allowedResp.OkResponse.GetResponseHeadersToAdd(),
 			mutationRules: i.config.decoderHeaderMutationRules,
-			statusOnError: i.config.statusOnError,
 		}, nil
 	}
 	return stream, nil
@@ -528,8 +537,6 @@ type clientStream struct {
 	// mutationRules defines the rules governing which headers may be added or
 	// modified.
 	mutationRules httpfilter.HeaderMutationRules
-	// statusOnError is the gRPC status code to return when mutation fails.
-	statusOnError codes.Code
 }
 
 // Header returns the header metadata received from the server if there
@@ -542,9 +549,9 @@ func (s *clientStream) Header() (metadata.MD, error) {
 	if md == nil {
 		return nil, nil
 	}
-	if err := s.mutationRules.ApplyAdditions(s.headersToAdd, md); err != nil {
-		return nil, status.Errorf(s.statusOnError, "extauthz: error applying header mutation rules to response headers: %v", err)
-	}
+	// Since response headers to add were validated in NewStream before
+	// wrapping the stream, ApplyAdditions will not fail here.
+	s.mutationRules.ApplyAdditions(s.headersToAdd, md)
 	return md, nil
 }
 

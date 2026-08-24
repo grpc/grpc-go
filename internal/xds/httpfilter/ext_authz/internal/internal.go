@@ -54,9 +54,6 @@ var (
 // proto message into a GRPCServiceConfig. This is a temporary test
 // implementation that will be removed once gRFC A102 is implemented.
 func ParseGRPCServiceConfigForTesting(grpcService *v3corepb.GrpcService) (xdsresource.GRPCServiceConfig, error) {
-	if grpcService == nil {
-		return xdsresource.GRPCServiceConfig{}, nil
-	}
 	if grpcService.GetGoogleGrpc() == nil {
 		return xdsresource.GRPCServiceConfig{}, fmt.Errorf("only google_grpc grpc_service is supported")
 	}

@@ -1071,12 +1071,82 @@ func (s) TestExtAuthz_Allowed_ResponseHeaderMutationFailed(t *testing.T) {
 
 	client := testgrpc.NewTestServiceClient(cc)
 	outgoingCtx := metadata.NewOutgoingContext(ctx, metadata.Pairs("k-test-header-to-be-removed", "true"))
-	stream, err := client.FullDuplexCall(outgoingCtx)
+	if _, err := client.FullDuplexCall(outgoingCtx); status.Code(err) != codes.PermissionDenied {
+		t.Fatalf("FullDuplexCall() failed with status code = %v, want %v (error: %v)", status.Code(err), codes.PermissionDenied, err)
+	}
+}
+
+// Test verifies the case where the ext_authz server specifies a response
+// header mutation that fails validation, but failure_mode_allow is set to
+// true. Verifies that the data plane RPC succeeds and the invalid response
+// header is not added.
+func (s) TestExtAuthz_Allowed_ResponseHeaderMutationFailed_FailureModeAllow(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	authAddr, stopAuth := startTestAuthServer(t, func(context.Context, *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error) {
+		st := &statuspb.Status{Code: int32(codes.OK)}
+		return &v3authpb.CheckResponse{
+			Status: st,
+			HttpResponse: &v3authpb.CheckResponse_OkResponse{
+				OkResponse: &v3authpb.OkHttpResponse{
+					ResponseHeadersToAdd: []*corepb.HeaderValueOption{
+						{Header: &corepb.HeaderValue{Key: "a1", Value: "v1"}}, // Disallowed response header.
+					},
+				},
+			},
+		}, nil
+	})
+	defer stopAuth()
+
+	wantIncomingHeaders := metadata.Pairs(":authority", "service-name", "x-envoy-auth-failure-mode-allowed", "true")
+	respHeaders := metadata.Pairs("test-header-key", "test-header-value")
+	backend := &stubserver.StubServer{
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
+			gotMD, _ := metadata.FromIncomingContext(stream.Context())
+			if err := compareMetadata(gotMD, wantIncomingHeaders); err != nil {
+				return status.Errorf(codes.Internal, "Unexpected headers metadata received by the server: %v", err)
+			}
+			return stream.SendHeader(respHeaders)
+		},
+	}
+	stubserver.StartTestService(t, backend)
+	defer backend.Stop()
+
+	extAuthzCfg := &v3extauthzfilterpb.ExtAuthz{
+		FailureModeAllow:          true,
+		FailureModeAllowHeaderAdd: true,
+		FilterEnabled: &corepb.RuntimeFractionalPercent{
+			DefaultValue: &v3typepb.FractionalPercent{
+				Numerator:   100,
+				Denominator: v3typepb.FractionalPercent_HUNDRED,
+			},
+		},
+		DecoderHeaderMutationRules: &mutationpb.HeaderMutationRules{
+			AllowExpression:    &matcherpb.RegexMatcher{Regex: "^k.*"},
+			DisallowExpression: &matcherpb.RegexMatcher{Regex: "^a1$"},
+			DisallowIsError:    wrapperspb.Bool(true),
+		},
+	}
+
+	cc, err := setupTestClient(t, authAddr, extAuthzCfg, backend.Address)
+	if err != nil {
+		t.Fatalf("setupTestClient() failed: %v", err)
+	}
+	defer cc.Close()
+
+	client := testgrpc.NewTestServiceClient(cc)
+	stream, err := client.FullDuplexCall(ctx)
 	if err != nil {
 		t.Fatalf("FullDuplexCall() failed: %v", err)
 	}
-	if _, err := stream.Header(); status.Code(err) != codes.PermissionDenied {
-		t.Fatalf("stream.Header() failed with status code = %v, want %v (error: %v)", status.Code(err), codes.PermissionDenied, err)
+	hdr, err := stream.Header()
+	if err != nil {
+		t.Fatalf("stream.Header() failed: %v", err)
+	}
+	wantRespHeaders := metadata.Pairs("test-header-key", "test-header-value")
+	if err := compareMetadata(hdr, wantRespHeaders); err != nil {
+		t.Fatalf("Response header mismatch: %v", err)
 	}
 }
 
@@ -1330,8 +1400,8 @@ func (s) TestExtAuthz_ClientMetrics(t *testing.T) {
 			wantData := teststats.MetricsData{
 				Handle:    estats.DescriptorForMetric(test.wantMetric),
 				IntIncr:   1,
-				LabelKeys: []string{"grpc.target", "grpc.lb.backend_service"},
-				LabelVals: []string{"xds:///service-name", ""},
+				LabelKeys: []string{"grpc.target"},
+				LabelVals: []string{"xds:///service-name"},
 			}
 			// Poll until the specific metric is recorded, then assert ALL fields with cmp.Diff
 			for {

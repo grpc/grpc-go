@@ -24,35 +24,31 @@ import (
 
 var (
 	extAuthzClientAllowedRPCsMetric = estats.RegisterInt64Count(estats.MetricDescriptor{
-		Name:           "grpc.client_ext_authz.allowed_rpcs",
-		Description:    "Number of RPCs that were allowed by the ext_authz server.",
-		Unit:           "{RPCs}",
-		Labels:         []string{"grpc.target"},
-		OptionalLabels: []string{"grpc.lb.backend_service"},
-		Default:        false,
+		Name:        "grpc.client_ext_authz.allowed_rpcs",
+		Description: "Number of RPCs that were allowed by the ext_authz server.",
+		Unit:        "{RPCs}",
+		Labels:      []string{"grpc.target"},
+		Default:     false,
 	})
 	extAuthzClientDeniedRPCsMetric = estats.RegisterInt64Count(estats.MetricDescriptor{
-		Name:           "grpc.client_ext_authz.denied_rpcs",
-		Description:    "Number of RPCs that were denied by the ext_authz server.",
-		Unit:           "{RPCs}",
-		Labels:         []string{"grpc.target"},
-		OptionalLabels: []string{"grpc.lb.backend_service"},
-		Default:        false,
+		Name:        "grpc.client_ext_authz.denied_rpcs",
+		Description: "Number of RPCs that were denied by the ext_authz server.",
+		Unit:        "{RPCs}",
+		Labels:      []string{"grpc.target"},
+		Default:     false,
 	})
 	extAuthzClientFilterDisabledRPCsMetric = estats.RegisterInt64Count(estats.MetricDescriptor{
-		Name:           "grpc.client_ext_authz.filter_disabled_rpcs",
-		Description:    "Number of RPCs for which the filter was disabled.",
-		Unit:           "{RPCs}",
-		Labels:         []string{"grpc.target"},
-		OptionalLabels: []string{"grpc.lb.backend_service"},
-		Default:        false,
+		Name:        "grpc.client_ext_authz.filter_disabled_rpcs",
+		Description: "Number of RPCs for which the filter was disabled.",
+		Unit:        "{RPCs}",
+		Labels:      []string{"grpc.target"},
+		Default:     false,
 	})
 	extAuthzClientFailedRPCsMetric = estats.RegisterInt64Count(estats.MetricDescriptor{
-		Name:           "grpc.client_ext_authz.failed_rpcs",
-		Description:    "Number of RPCs for which the ext_authz call-out failed.",
-		Unit:           "{RPCs}",
-		Labels:         []string{"grpc.target"},
-		OptionalLabels: []string{"grpc.lb.backend_service"},
-		Default:        false,
+		Name:        "grpc.client_ext_authz.failed_rpcs",
+		Description: "Number of RPCs for which the ext_authz call-out failed.",
+		Unit:        "{RPCs}",
+		Labels:      []string{"grpc.target"},
+		Default:     false,
 	})
 )
