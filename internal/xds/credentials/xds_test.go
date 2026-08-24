@@ -16,16 +16,19 @@
  *
  */
 
-package credsregistry
+package credentials_test
 
 import (
 	"strings"
 	"testing"
 
+	xdscreds "google.golang.org/grpc/internal/xds/credentials"
 	"google.golang.org/protobuf/types/known/anypb"
 
 	xdscredspb "github.com/envoyproxy/go-control-plane/envoy/extensions/grpc_service/channel_credentials/xds/v3"
 )
+
+const xdsCredsTypeURL = "type.googleapis.com/envoy.extensions.grpc_service.channel_credentials.xds.v3.XdsCredentials"
 
 // Tests that building xds channel credentials fails on malformed configs and
 // on missing or unsupported fallback credentials.
@@ -64,9 +67,9 @@ func (s) TestXDSCredsBuild_Errors(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, _, err := GetChannelCredsBuilder(xdsCredsTypeURL).Build(tt.config, nil)
+			_, _, err := xdscreds.GetChannelCredsBuilder(xdsCredsTypeURL)(tt.config, nil)
 			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
-				t.Fatalf("Build() returned error %v, want error containing %q", err, tt.wantErr)
+				t.Fatalf("Build returned error %v, want error containing %q", err, tt.wantErr)
 			}
 		})
 	}

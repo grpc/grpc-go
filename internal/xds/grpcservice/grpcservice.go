@@ -29,8 +29,7 @@ import (
 
 	imetadata "google.golang.org/grpc/internal/metadata"
 	"google.golang.org/grpc/internal/xds/bootstrap"
-	"google.golang.org/grpc/internal/xds/grpcservice/creds"
-	"google.golang.org/grpc/internal/xds/grpcservice/credsregistry"
+	xdscreds "google.golang.org/grpc/internal/xds/credentials"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
 
@@ -55,11 +54,11 @@ type Config struct {
 	InitialMetadata metadata.MD
 	// ChannelCredentials are the channel credentials to create the side
 	// channel with, paired with the identity of their source configuration.
-	ChannelCredentials *creds.ChannelCreds
+	ChannelCredentials *xdscreds.ChannelCreds
 	// CallCredentials are the call credentials to apply to RPCs sent on the
 	// side channel, paired with the identities of their source
 	// configurations, preserving order.
-	CallCredentials []*creds.CallCreds
+	CallCredentials []*xdscreds.CallCreds
 }
 
 // Equal reports whether c and other describe the same side channel: the same
@@ -71,8 +70,10 @@ func (c *Config) Equal(other *Config) bool {
 		return c == other
 	}
 	return c.TargetURI == other.TargetURI &&
-		c.ChannelCredentials.Equal(other.ChannelCredentials) &&
-		slices.EqualFunc(c.CallCredentials, other.CallCredentials, (*creds.CallCreds).Equal)
+		c.ChannelCredentials.Identity() == other.ChannelCredentials.Identity() &&
+		slices.EqualFunc(c.CallCredentials, other.CallCredentials, func(a, b *xdscreds.CallCreds) bool {
+			return a.Identity() == b.Identity()
+		})
 }
 
 // Close releases the credentials owned by the config. It is idempotent, and a
@@ -160,20 +161,26 @@ func Parse(gs *v3corepb.GrpcService, bc *bootstrap.Config, sc *bootstrap.ServerC
 // list whose proto type has a registered builder. It is an error if none of
 // the configured plugins are supported, or if building the selected plugin
 // fails.
-func buildChannelCredentials(plugins []*anypb.Any, bc *bootstrap.Config) (*creds.ChannelCreds, error) {
+func buildChannelCredentials(plugins []*anypb.Any, bc *bootstrap.Config) (*xdscreds.ChannelCreds, error) {
+	// A nil *bootstrap.Config must become a nil interface, not a typed nil.
+	var resolver xdscreds.CertProviderConfigResolver
+	if bc != nil {
+		resolver = bc
+	}
 	for _, p := range plugins {
 		if p == nil {
 			continue
 		}
-		b := credsregistry.GetChannelCredsBuilder(p.GetTypeUrl())
+		b := xdscreds.GetChannelCredsBuilder(p.GetTypeUrl())
 		if b == nil {
 			continue
 		}
-		bundle, cleanup, err := b.Build(p, bc)
+		bundle, cleanup, err := b(p, resolver)
 		if err != nil {
 			return nil, fmt.Errorf("failed to build channel credentials %q: %v", p.GetTypeUrl(), err)
 		}
-		return creds.NewChannelCreds(bundle, creds.NewProtoIdentity(p), cleanup), nil
+		identity := xdscreds.Identity{Type: p.GetTypeUrl(), Data: string(p.GetValue())}
+		return xdscreds.NewChannelCreds(bundle, identity, cleanup), nil
 	}
 	return nil, fmt.Errorf("no supported channel credentials found in grpc_service")
 }
@@ -181,8 +188,8 @@ func buildChannelCredentials(plugins []*anypb.Any, bc *bootstrap.Config) (*creds
 // buildCallCredentials builds the call credentials from the plugin list,
 // preserving order. Plugins whose proto type has no registered builder are
 // skipped; call credentials are optional, so an empty result is not an error.
-func buildCallCredentials(plugins []*anypb.Any) (_ []*creds.CallCreds, err error) {
-	var out []*creds.CallCreds
+func buildCallCredentials(plugins []*anypb.Any) (_ []*xdscreds.CallCreds, err error) {
+	var out []*xdscreds.CallCreds
 	// Release any credentials built before a mid-iteration failure.
 	defer func() {
 		if err != nil {
@@ -195,15 +202,16 @@ func buildCallCredentials(plugins []*anypb.Any) (_ []*creds.CallCreds, err error
 		if p == nil {
 			continue
 		}
-		b := credsregistry.GetCallCredsBuilder(p.GetTypeUrl())
+		b := xdscreds.GetCallCredsBuilder(p.GetTypeUrl())
 		if b == nil {
 			continue
 		}
-		cc, cleanup, err := b.Build(p)
+		cc, cleanup, err := b(p)
 		if err != nil {
 			return nil, fmt.Errorf("failed to build call credentials %q: %v", p.GetTypeUrl(), err)
 		}
-		out = append(out, creds.NewCallCreds(cc, creds.NewProtoIdentity(p), cleanup))
+		identity := xdscreds.Identity{Type: p.GetTypeUrl(), Data: string(p.GetValue())}
+		out = append(out, xdscreds.NewCallCreds(cc, identity, cleanup))
 	}
 	return out, nil
 }

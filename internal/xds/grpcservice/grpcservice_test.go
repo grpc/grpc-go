@@ -28,7 +28,7 @@ import (
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/xds/bootstrap"
-	"google.golang.org/grpc/internal/xds/grpcservice/creds"
+	xdscreds "google.golang.org/grpc/internal/xds/credentials"
 	"google.golang.org/grpc/metadata"
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -100,6 +100,11 @@ func googleGrpcService(target string, channelPlugins []*anypb.Any, timeout *dura
 	}
 }
 
+// protoIdentity returns the identity of a proto plugin config.
+func protoIdentity(a *anypb.Any) xdscreds.Identity {
+	return xdscreds.Identity{Type: a.GetTypeUrl(), Data: string(a.GetValue())}
+}
+
 func accessTokenPlugin(t *testing.T, token string) *anypb.Any {
 	t.Helper()
 	a, err := anypb.New(&accesstokenpb.AccessTokenCredentials{Token: token})
@@ -123,8 +128,8 @@ func (s) TestParse(t *testing.T) {
 		sc     *bootstrap.ServerConfig
 		config *bootstrap.Config
 		// wantChannelCreds carries only the expected credentials identity;
-		// comparisons use Equal, which compares identities.
-		wantChannelCreds *creds.ChannelCreds
+		// comparisons use Identity().
+		wantChannelCreds *xdscreds.ChannelCreds
 		wantErr          string
 	}{
 		{
@@ -132,14 +137,14 @@ func (s) TestParse(t *testing.T) {
 			gs:               googleGrpcService(target, []*anypb.Any{insecurePlugin}, nil),
 			sc:               trustedServerConfig(t),
 			config:           bootstrapConfig(t, "{}"),
-			wantChannelCreds: creds.NewChannelCreds(nil, creds.NewProtoIdentity(insecurePlugin), nil),
+			wantChannelCreds: xdscreds.NewChannelCreds(nil, protoIdentity(insecurePlugin), nil),
 		},
 		{
 			name:             "trusted_xds_creds_resolve_to_fallback",
 			gs:               googleGrpcService(target, []*anypb.Any{xdsWithInsecureFallback}, nil),
 			sc:               trustedServerConfig(t),
 			config:           bootstrapConfig(t, "{}"),
-			wantChannelCreds: creds.NewChannelCreds(nil, creds.NewProtoIdentity(xdsWithInsecureFallback), nil),
+			wantChannelCreds: xdscreds.NewChannelCreds(nil, protoIdentity(xdsWithInsecureFallback), nil),
 		},
 		{
 			name:    "trusted_no_supported_channel_creds",
@@ -152,7 +157,7 @@ func (s) TestParse(t *testing.T) {
 			name:             "untrusted_allowlisted_uses_allowlist_creds",
 			gs:               googleGrpcService(target, []*anypb.Any{insecurePlugin}, nil),
 			config:           bootstrapConfig(t, allowedInsecure),
-			wantChannelCreds: creds.NewChannelCreds(nil, creds.NewJSONIdentity("insecure", nil), nil),
+			wantChannelCreds: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "insecure"}, nil),
 		},
 		{
 			name:    "untrusted_not_allowlisted",
@@ -207,8 +212,8 @@ func (s) TestParse(t *testing.T) {
 			if got.ChannelCredentials.Bundle() == nil {
 				t.Error("Parse() returned channel credentials without a built bundle")
 			}
-			if !got.ChannelCredentials.Equal(test.wantChannelCreds) {
-				t.Errorf("Parse() ChannelCredentials identity mismatch, got %+v", got.ChannelCredentials)
+			if got.ChannelCredentials.Identity() != test.wantChannelCreds.Identity() {
+				t.Errorf("Parse() ChannelCredentials identity = %+v, want %+v", got.ChannelCredentials.Identity(), test.wantChannelCreds.Identity())
 			}
 		})
 	}
@@ -236,8 +241,8 @@ func (s) TestParseCallCredentials(t *testing.T) {
 	if got.CallCredentials[0].Credentials() == nil {
 		t.Error("Parse() returned call credentials without built credentials")
 	}
-	if want := creds.NewCallCreds(nil, creds.NewProtoIdentity(tokenPlugin), nil); !got.CallCredentials[0].Equal(want) {
-		t.Errorf("Parse() CallCredentials identity mismatch, got %+v", got.CallCredentials[0])
+	if want := protoIdentity(tokenPlugin); got.CallCredentials[0].Identity() != want {
+		t.Errorf("Parse() CallCredentials identity = %+v, want %+v", got.CallCredentials[0].Identity(), want)
 	}
 
 	// An empty token must be rejected.
@@ -265,8 +270,8 @@ func (s) TestParseInitialMetadata(t *testing.T) {
 
 func (s) TestConfigEqual(t *testing.T) {
 	insecurePlugin := &anypb.Any{TypeUrl: insecureCredsTypeURL}
-	protoInsecure := creds.NewChannelCreds(nil, creds.NewProtoIdentity(insecurePlugin), nil)
-	jsonInsecure := creds.NewChannelCreds(nil, creds.NewJSONIdentity("insecure", nil), nil)
+	protoInsecure := xdscreds.NewChannelCreds(nil, protoIdentity(insecurePlugin), nil)
+	jsonInsecure := xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "insecure"}, nil)
 
 	tests := []struct {
 		name string
@@ -276,7 +281,7 @@ func (s) TestConfigEqual(t *testing.T) {
 		{
 			name: "equal_identities_share",
 			a:    &Config{TargetURI: target, ChannelCredentials: protoInsecure},
-			b:    &Config{TargetURI: target, ChannelCredentials: creds.NewChannelCreds(nil, creds.NewProtoIdentity(insecurePlugin), nil)},
+			b:    &Config{TargetURI: target, ChannelCredentials: xdscreds.NewChannelCreds(nil, protoIdentity(insecurePlugin), nil)},
 			want: true,
 		},
 		{
@@ -300,8 +305,8 @@ func (s) TestConfigEqual(t *testing.T) {
 		{
 			name: "different_call_creds",
 			a:    &Config{TargetURI: target, ChannelCredentials: protoInsecure},
-			b: &Config{TargetURI: target, ChannelCredentials: protoInsecure, CallCredentials: []*creds.CallCreds{
-				creds.NewCallCreds(nil, creds.NewJSONIdentity("access_token", nil), nil),
+			b: &Config{TargetURI: target, ChannelCredentials: protoInsecure, CallCredentials: []*xdscreds.CallCreds{
+				xdscreds.NewCallCreds(nil, xdscreds.Identity{Type: "access_token"}, nil),
 			}},
 			want: false,
 		},

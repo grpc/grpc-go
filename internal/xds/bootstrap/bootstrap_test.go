@@ -35,7 +35,7 @@ import (
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
-	"google.golang.org/grpc/internal/xds/grpcservice/creds"
+	xdscreds "google.golang.org/grpc/internal/xds/credentials"
 	"google.golang.org/grpc/xds/bootstrap"
 	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/structpb"
@@ -1859,9 +1859,9 @@ func (s) TestAllowedGRPCServices_UnmarshalJSON(t *testing.T) {
 					break
 				}
 			}
-			wantIdentity := creds.NewChannelCreds(nil, creds.NewJSONIdentity(test.wantSelectedChannelCredsType, wantConfig), nil)
-			if !chanCreds.Equal(wantIdentity) {
-				t.Errorf("SideChannelCredentials() channel credentials identity = %+v, want type %q", chanCreds, test.wantSelectedChannelCredsType)
+			wantIdentity := xdscreds.Identity{Type: test.wantSelectedChannelCredsType, Data: string(wantConfig)}
+			if chanCreds.Identity() != wantIdentity {
+				t.Errorf("SideChannelCredentials() channel credentials identity = %+v, want %+v", chanCreds.Identity(), wantIdentity)
 			}
 			if got := len(callCreds); got != test.wantSideCallCreds {
 				t.Errorf("len(SideChannelCredentials() call creds) = %d, want %d", got, test.wantSideCallCreds)

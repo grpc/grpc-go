@@ -34,8 +34,8 @@ import (
 	"google.golang.org/grpc/internal/optional"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/xds/bootstrap"
+	xdscreds "google.golang.org/grpc/internal/xds/credentials"
 	"google.golang.org/grpc/internal/xds/grpcservice"
-	"google.golang.org/grpc/internal/xds/grpcservice/creds"
 	"google.golang.org/grpc/internal/xds/httpfilter"
 	"google.golang.org/grpc/internal/xds/matcher"
 	"google.golang.org/grpc/metadata"
@@ -67,7 +67,7 @@ const (
 // allowlistInsecureCreds carries the identity of the insecure channel
 // credentials configured for allowlisted targets by testParseOptions; want
 // configs compare against it by identity.
-var allowlistInsecureCreds = creds.NewChannelCreds(nil, creds.NewJSONIdentity("insecure", nil), nil)
+var allowlistInsecureCreds = xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "insecure"}, nil)
 
 // testParseOptions returns ParseOptions whose bootstrap
 // configuration allowlists the given side-channel targets with insecure
@@ -131,8 +131,8 @@ var cmpOpts = []cmp.Option{
 		optional.Optional[processingModes]{},
 		optional.Optional[bool]{},
 	),
-	cmp.Comparer((*creds.ChannelCreds).Equal),
-	cmp.Comparer((*creds.CallCreds).Equal),
+	cmp.Comparer(func(a, b *xdscreds.ChannelCreds) bool { return a.Identity() == b.Identity() }),
+	cmp.Comparer(func(a, b *xdscreds.CallCreds) bool { return a.Identity() == b.Identity() }),
 	protocmp.Transform(),
 	cmp.Transformer("RegexpToString", func(r *regexp.Regexp) string {
 		if r == nil {
@@ -302,15 +302,15 @@ func (s) TestParseFilterConfig_TrustPolicy(t *testing.T) {
 		cfg  proto.Message
 		opts httpfilter.ParseOptions
 		// wantCreds carries only the expected credentials identity;
-		// comparisons use Equal, which compares identities.
-		wantCreds *creds.ChannelCreds
+		// comparisons use Identity().
+		wantCreds *xdscreds.ChannelCreds
 		wantErr   string
 	}{
 		{
 			name:      "trusted_uses_proto_creds",
 			cfg:       extProcConfig("localhost:1234", insecurePlugin),
 			opts:      trustedOpts,
-			wantCreds: creds.NewChannelCreds(nil, creds.NewProtoIdentity(insecurePlugin), nil),
+			wantCreds: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: insecurePlugin.GetTypeUrl(), Data: string(insecurePlugin.GetValue())}, nil),
 		},
 		{
 			name:    "trusted_requires_supported_creds",
@@ -345,7 +345,7 @@ func (s) TestParseFilterConfig_TrustPolicy(t *testing.T) {
 			if err != nil {
 				t.Fatalf("ParseFilterConfig() returned unexpected error: %v", err)
 			}
-			if gotCreds := got.(baseConfig).server.ChannelCredentials; !gotCreds.Equal(tt.wantCreds) {
+			if gotCreds := got.(baseConfig).server.ChannelCredentials; gotCreds.Identity() != tt.wantCreds.Identity() {
 				t.Fatalf("ParseFilterConfig() returned channel credentials %+v, want %+v", gotCreds, tt.wantCreds)
 			}
 		})
@@ -744,8 +744,8 @@ func (s) TestBuildClientInterceptor_Success(t *testing.T) {
 				},
 				server: grpcservice.Config{
 					TargetURI:          testBaseURI,
-					ChannelCredentials: creds.NewChannelCreds(nil, creds.NewJSONIdentity("test-channel-creds", nil), nil),
-					CallCredentials:    []*creds.CallCreds{creds.NewCallCreds(nil, creds.NewJSONIdentity("test-call-creds", nil), nil)},
+					ChannelCredentials: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "test-channel-creds"}, nil),
+					CallCredentials:    []*xdscreds.CallCreds{xdscreds.NewCallCreds(nil, xdscreds.Identity{Type: "test-call-creds"}, nil)},
 					InitialMetadata:    metadata.MD(metadata.Pairs("key1", "value1")),
 					Timeout:            5 * time.Second,
 				},
@@ -779,8 +779,8 @@ func (s) TestBuildClientInterceptor_Success(t *testing.T) {
 				},
 				server: grpcservice.Config{
 					TargetURI:          testBaseURI,
-					ChannelCredentials: creds.NewChannelCreds(nil, creds.NewJSONIdentity("test-channel-creds", nil), nil),
-					CallCredentials:    []*creds.CallCreds{creds.NewCallCreds(nil, creds.NewJSONIdentity("test-call-creds", nil), nil)},
+					ChannelCredentials: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "test-channel-creds"}, nil),
+					CallCredentials:    []*xdscreds.CallCreds{xdscreds.NewCallCreds(nil, xdscreds.Identity{Type: "test-call-creds"}, nil)},
 					InitialMetadata:    metadata.MD(metadata.Pairs("key1", "value1")),
 					Timeout:            5 * time.Second,
 				},

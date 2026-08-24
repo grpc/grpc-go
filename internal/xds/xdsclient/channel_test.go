@@ -19,23 +19,33 @@
 package xdsclient
 
 import (
-	"encoding/json"
+	"context"
 	"strings"
 	"testing"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
+	xdscreds "google.golang.org/grpc/internal/xds/credentials"
 	"google.golang.org/grpc/internal/xds/grpcservice"
-	"google.golang.org/grpc/internal/xds/grpcservice/accesstokencreds"
-	"google.golang.org/grpc/internal/xds/grpcservice/creds"
 )
 
 // testChannelCreds returns paired insecure channel credentials whose identity
 // is the given JSON credentials type name. cleanup may be nil.
-func testChannelCreds(typ string, cleanup func()) *creds.ChannelCreds {
-	return creds.NewChannelCreds(insecure.NewBundle(), creds.NewJSONIdentity(typ, nil), cleanup)
+func testChannelCreds(typ string, cleanup func()) *xdscreds.ChannelCreds {
+	return xdscreds.NewChannelCreds(insecure.NewBundle(), xdscreds.Identity{Type: typ}, cleanup)
 }
+
+// requireTLSCallCreds is a call credentials stub that requires transport
+// security, used to force a channel creation failure when combined with
+// insecure channel credentials.
+type requireTLSCallCreds struct{}
+
+func (requireTLSCallCreds) GetRequestMetadata(context.Context, ...string) (map[string]string, error) {
+	return nil, nil
+}
+
+func (requireTLSCallCreds) RequireTransportSecurity() bool { return true }
 
 // Tests that CreateChannel returns the same shared channel for configs with
 // equal credential identities, releases duplicate credential builds, and
@@ -164,16 +174,12 @@ func (s) TestCreateChannel_Errors(t *testing.T) {
 func (s) TestCreateChannel_DialError(t *testing.T) {
 	c := &clientImpl{}
 
-	tokenCreds, err := accesstokencreds.NewCallCredentials(json.RawMessage(`{"token": "test-token"}`))
-	if err != nil {
-		t.Fatalf("NewCallCredentials() failed: %v", err)
-	}
 	released := false
 	cfg := &grpcservice.Config{
 		TargetURI:          "passthrough:///target",
 		ChannelCredentials: testChannelCreds("insecure", func() { released = true }),
-		CallCredentials: []*creds.CallCreds{
-			creds.NewCallCreds(tokenCreds, creds.NewJSONIdentity("access_token", nil), func() {}),
+		CallCredentials: []*xdscreds.CallCreds{
+			xdscreds.NewCallCreds(requireTLSCallCreds{}, xdscreds.Identity{Type: "test-require-transport-security"}, func() {}),
 		},
 	}
 	if _, _, err := c.CreateChannel(cfg); err == nil || !strings.Contains(err.Error(), "transport level security") {

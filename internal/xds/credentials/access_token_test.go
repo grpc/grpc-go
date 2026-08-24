@@ -16,53 +16,58 @@
  *
  */
 
-package accesstokencreds
+package credentials_test
 
 import (
 	"context"
-	"encoding/json"
+	"strings"
 	"testing"
-	"time"
 
 	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/internal/grpctest"
+	xdscreds "google.golang.org/grpc/internal/xds/credentials"
+	"google.golang.org/protobuf/types/known/anypb"
+
+	accesstokenpb "github.com/envoyproxy/go-control-plane/envoy/extensions/grpc_service/call_credentials/access_token/v3"
 )
 
-type s struct {
-	grpctest.Tester
+const accessTokenCredsTypeURL = "type.googleapis.com/envoy.extensions.grpc_service.call_credentials.access_token.v3.AccessTokenCredentials"
+
+func accessTokenConfig(t *testing.T, token string) *anypb.Any {
+	t.Helper()
+	a, err := anypb.New(&accesstokenpb.AccessTokenCredentials{Token: token})
+	if err != nil {
+		t.Fatalf("Failed to marshal AccessTokenCredentials: %v", err)
+	}
+	return a
 }
 
-func Test(t *testing.T) {
-	grpctest.RunSubTests(t, s{})
-}
-
-func (s) TestNewCallCredentialsWithInvalidConfig(t *testing.T) {
+// Tests that building access token call credentials fails on malformed
+// configs and on an empty token.
+func (s) TestAccessTokenCredsBuild_Errors(t *testing.T) {
 	tests := []struct {
-		name   string
-		config string
+		name    string
+		config  *anypb.Any
+		wantErr string
 	}{
 		{
-			name:   "not_an_object",
-			config: `""`,
+			name:    "unmarshal_failure",
+			config:  &anypb.Any{TypeUrl: accessTokenCredsTypeURL, Value: []byte{0xff}},
+			wantErr: "failed to unmarshal AccessTokenCredentials",
 		},
 		{
-			name:   "empty_config",
-			config: `{}`,
-		},
-		{
-			name:   "empty_token",
-			config: `{"token": ""}`,
+			name:    "empty_token",
+			config:  accessTokenConfig(t, ""),
+			wantErr: "access token must be non-empty",
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			callCreds, err := NewCallCredentials(json.RawMessage(tt.config))
-			if err == nil {
-				t.Fatalf("NewCallCredentials(%s): got nil, want error", tt.config)
+			callCreds, _, err := xdscreds.GetCallCredsBuilder(accessTokenCredsTypeURL)(tt.config)
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("Build returned error %v, want error containing %q", err, tt.wantErr)
 			}
 			if callCreds != nil {
-				t.Errorf("NewCallCredentials(%s): returned non-nil call credentials", tt.config)
+				t.Errorf("Build returned non-nil call credentials alongside error")
 			}
 		})
 	}
@@ -71,18 +76,18 @@ func (s) TestNewCallCredentialsWithInvalidConfig(t *testing.T) {
 // Tests that the token is attached as a bearer authorization header on
 // connections providing privacy and integrity, and that an error is returned
 // on weaker connections.
-func (s) TestGetRequestMetadata(t *testing.T) {
-	const config = `{"token": "test-token"}`
-	callCreds, err := NewCallCredentials(json.RawMessage(config))
+func (s) TestAccessTokenCredsGetRequestMetadata(t *testing.T) {
+	callCreds, cleanup, err := xdscreds.GetCallCredsBuilder(accessTokenCredsTypeURL)(accessTokenConfig(t, "test-token"))
 	if err != nil {
-		t.Fatalf("NewCallCredentials(%s) failed: %v", config, err)
+		t.Fatalf("Build failed: %v", err)
 	}
+	defer cleanup()
 
 	if !callCreds.RequireTransportSecurity() {
 		t.Error("RequireTransportSecurity() = false, want true")
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
 	// The token must be attached on a connection with privacy and integrity.
@@ -97,13 +102,13 @@ func (s) TestGetRequestMetadata(t *testing.T) {
 		t.Fatalf("GetRequestMetadata() on a secure connection returned authorization header %q, want %q", got, want)
 	}
 
-	// An error must be returned on a connection that does not provide
-	// privacy and integrity.
+	// RPCs on a connection that does not provide privacy and integrity must
+	// fail.
 	insecureCtx := credentials.NewContextWithRequestInfo(ctx, credentials.RequestInfo{
 		AuthInfo: &testAuthInfo{secLevel: credentials.NoSecurity},
 	})
-	if md, err := callCreds.GetRequestMetadata(insecureCtx); err == nil {
-		t.Fatalf("GetRequestMetadata() on an insecure connection returned metadata %v, want error", md)
+	if _, err := callCreds.GetRequestMetadata(insecureCtx); err == nil {
+		t.Fatal("GetRequestMetadata() on an insecure connection succeeded, want error")
 	}
 }
 

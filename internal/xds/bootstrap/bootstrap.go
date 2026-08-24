@@ -35,7 +35,7 @@ import (
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/envconfig"
-	"google.golang.org/grpc/internal/xds/grpcservice/creds"
+	xdscreds "google.golang.org/grpc/internal/xds/credentials"
 	"google.golang.org/grpc/xds/bootstrap"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/structpb"
@@ -136,10 +136,10 @@ type AllowedGRPCService struct {
 	// sideChannelCreds is the credentials bundle built from the first
 	// channel-creds entry whose type the client supports, paired with its
 	// identity.
-	sideChannelCreds *creds.ChannelCreds
+	sideChannelCreds *xdscreds.ChannelCreds
 	// sideCallCreds are the call credentials built from the supported
 	// call-creds configs, paired with their identities, preserving order.
-	sideCallCreds []*creds.CallCreds
+	sideCallCreds []*xdscreds.CallCreds
 	// cleanups release resources (credential bundles, file watchers) built
 	// for this service; run when the owning Config is no longer needed.
 	cleanups []func()
@@ -155,7 +155,7 @@ func (a *AllowedGRPCService) TargetURI() string {
 // side channel to it. The returned credentials are owned by the bootstrap
 // config: their cleanups are nil, and the underlying resources are released
 // via Cleanups when the config is no longer needed.
-func (a *AllowedGRPCService) SideChannelCredentials() (*creds.ChannelCreds, []*creds.CallCreds) {
+func (a *AllowedGRPCService) SideChannelCredentials() (*xdscreds.ChannelCreds, []*xdscreds.CallCreds) {
 	return a.sideChannelCreds, a.sideCallCreds
 }
 
@@ -245,7 +245,7 @@ func (a *AllowedGRPCService) UnmarshalJSON(data []byte) (err error) {
 	// The built credentials are paired with their (JSON) identities but the
 	// pairs carry no cleanups: the resources built here are owned by the
 	// bootstrap config and released via the cleanups collected below.
-	var sideChannelCreds *creds.ChannelCreds
+	var sideChannelCreds *xdscreds.ChannelCreds
 	for _, cc := range jsonS.ChannelCreds {
 		c := bootstrap.GetChannelCredentials(cc.Type)
 		if c == nil {
@@ -255,7 +255,8 @@ func (a *AllowedGRPCService) UnmarshalJSON(data []byte) (err error) {
 		if err != nil {
 			return fmt.Errorf("xds: failed to build credentials bundle from bootstrap for allowed grpc service: type %q, err: %v", cc.Type, err)
 		}
-		sideChannelCreds = creds.NewChannelCreds(bundle, creds.NewJSONIdentity(cc.Type, cc.Config), nil)
+		identity := xdscreds.Identity{Type: cc.Type, Data: string(cc.Config)}
+		sideChannelCreds = xdscreds.NewChannelCreds(bundle, identity, nil)
 		cleanups = append(cleanups, cancel)
 		break
 	}
@@ -266,7 +267,7 @@ func (a *AllowedGRPCService) UnmarshalJSON(data []byte) (err error) {
 		return fmt.Errorf("xds: no supported channel credentials found for allowed grpc service in config:\n%s", string(data))
 	}
 
-	var sideCallCreds []*creds.CallCreds
+	var sideCallCreds []*xdscreds.CallCreds
 	for _, cfg := range jsonS.CallCredsConfigs {
 		c := bootstrap.GetCallCredentials(cfg.Type)
 		if c == nil {
@@ -276,7 +277,8 @@ func (a *AllowedGRPCService) UnmarshalJSON(data []byte) (err error) {
 		if err != nil {
 			return fmt.Errorf("xds: failed to build call credentials from bootstrap for allowed grpc service: type %q, err: %v", cfg.Type, err)
 		}
-		sideCallCreds = append(sideCallCreds, creds.NewCallCreds(callCreds, creds.NewJSONIdentity(cfg.Type, cfg.Config), nil))
+		identity := xdscreds.Identity{Type: cfg.Type, Data: string(cfg.Config)}
+		sideCallCreds = append(sideCallCreds, xdscreds.NewCallCreds(callCreds, identity, nil))
 		cleanups = append(cleanups, cancel)
 	}
 

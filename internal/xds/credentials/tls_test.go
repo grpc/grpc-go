@@ -16,7 +16,7 @@
  *
  */
 
-package credsregistry
+package credentials_test
 
 import (
 	"context"
@@ -33,6 +33,7 @@ import (
 
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/xds/bootstrap"
+	xdscreds "google.golang.org/grpc/internal/xds/credentials"
 	"google.golang.org/grpc/testdata"
 	"google.golang.org/protobuf/types/known/anypb"
 
@@ -48,7 +49,11 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
-const defaultTestTimeout = 10 * time.Second
+const (
+	defaultTestTimeout = 10 * time.Second
+
+	tlsCredsTypeURL = "type.googleapis.com/envoy.extensions.grpc_service.channel_credentials.tls.v3.TlsCredentials"
+)
 
 // testBootstrapConfig returns a bootstrap config with two certificate
 // provider instances: "root-instance" watching the CA certificate that signed
@@ -121,53 +126,53 @@ func (s) TestTLSCredsBuild_Errors(t *testing.T) {
 	}
 
 	tests := []struct {
-		name    string
-		config  *anypb.Any
-		bc      *bootstrap.Config
-		wantErr string
+		name     string
+		config   *anypb.Any
+		resolver xdscreds.CertProviderConfigResolver
+		wantErr  string
 	}{
 		{
-			name:    "unmarshal_failure",
-			config:  &anypb.Any{TypeUrl: tlsCredsTypeURL, Value: []byte{0xff}},
-			bc:      bc,
-			wantErr: "failed to unmarshal TlsCredentials",
+			name:     "unmarshal_failure",
+			config:   &anypb.Any{TypeUrl: tlsCredsTypeURL, Value: []byte{0xff}},
+			resolver: bc,
+			wantErr:  "failed to unmarshal TlsCredentials",
 		},
 		{
-			name:    "missing_root_certificate_provider",
-			config:  tlsCredsConfig(t, "", "identity-instance"),
-			bc:      bc,
-			wantErr: "must specify root_certificate_provider",
+			name:     "missing_root_certificate_provider",
+			config:   tlsCredsConfig(t, "", "identity-instance"),
+			resolver: bc,
+			wantErr:  "must specify root_certificate_provider",
 		},
 		{
-			name:    "empty_identity_instance_name",
-			config:  emptyIdentityInstance,
-			bc:      bc,
-			wantErr: "identity_certificate_provider must specify an instance_name",
+			name:     "empty_identity_instance_name",
+			config:   emptyIdentityInstance,
+			resolver: bc,
+			wantErr:  "identity_certificate_provider must specify an instance_name",
 		},
 		{
-			name:    "unknown_root_instance",
-			config:  tlsCredsConfig(t, "unknown-instance", ""),
-			bc:      bc,
-			wantErr: `"unknown-instance" missing in bootstrap`,
+			name:     "unknown_root_instance",
+			config:   tlsCredsConfig(t, "unknown-instance", ""),
+			resolver: bc,
+			wantErr:  `"unknown-instance" missing in bootstrap`,
 		},
 		{
-			name:    "unknown_identity_instance",
-			config:  tlsCredsConfig(t, "root-instance", "unknown-instance"),
-			bc:      bc,
-			wantErr: `"unknown-instance" missing in bootstrap`,
+			name:     "unknown_identity_instance",
+			config:   tlsCredsConfig(t, "root-instance", "unknown-instance"),
+			resolver: bc,
+			wantErr:  `"unknown-instance" missing in bootstrap`,
 		},
 		{
-			name:    "nil_bootstrap_config",
-			config:  tlsCredsConfig(t, "root-instance", ""),
-			bc:      nil,
-			wantErr: "no bootstrap configuration",
+			name:     "nil_resolver",
+			config:   tlsCredsConfig(t, "root-instance", ""),
+			resolver: nil,
+			wantErr:  "no bootstrap configuration",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, _, err := GetChannelCredsBuilder(tlsCredsTypeURL).Build(tt.config, tt.bc)
+			_, _, err := xdscreds.GetChannelCredsBuilder(tlsCredsTypeURL)(tt.config, tt.resolver)
 			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
-				t.Fatalf("Build() returned error %v, want error containing %q", err, tt.wantErr)
+				t.Fatalf("Build returned error %v, want error containing %q", err, tt.wantErr)
 			}
 		})
 	}
@@ -223,9 +228,9 @@ func startTestTLSServer(t *testing.T, mTLS bool) net.Listener {
 func clientHandshake(t *testing.T, config *anypb.Any, bc *bootstrap.Config) error {
 	t.Helper()
 
-	bundle, cleanup, err := GetChannelCredsBuilder(tlsCredsTypeURL).Build(config, bc)
+	bundle, cleanup, err := xdscreds.GetChannelCredsBuilder(tlsCredsTypeURL)(config, bc)
 	if err != nil {
-		t.Fatalf("Build() failed: %v", err)
+		t.Fatalf("Build failed: %v", err)
 	}
 	defer cleanup()
 
@@ -269,9 +274,9 @@ func (s) TestTLSCredsClose(t *testing.T) {
 
 	// Closing credentials whose providers were never instantiated must be a
 	// no-op.
-	bundle, cleanup, err := GetChannelCredsBuilder(tlsCredsTypeURL).Build(tlsCredsConfig(t, "root-instance", ""), bc)
+	bundle, cleanup, err := xdscreds.GetChannelCredsBuilder(tlsCredsTypeURL)(tlsCredsConfig(t, "root-instance", ""), bc)
 	if err != nil {
-		t.Fatalf("Build() failed: %v", err)
+		t.Fatalf("Build failed: %v", err)
 	}
 	cleanup()
 

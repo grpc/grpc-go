@@ -16,7 +16,7 @@
  *
  */
 
-package credsregistry
+package credentials
 
 import (
 	"context"
@@ -28,7 +28,6 @@ import (
 
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/tls/certprovider"
-	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 
@@ -39,15 +38,13 @@ import (
 const tlsCredsTypeURL = "type.googleapis.com/envoy.extensions.grpc_service.channel_credentials.tls.v3.TlsCredentials"
 
 func init() {
-	RegisterChannelCredsBuilder(tlsCredsTypeURL, tlsCredsBuilder{})
+	RegisterChannelCredsBuilder(tlsCredsTypeURL, buildTLSCredentials)
 }
 
-// tlsCredsBuilder builds TLS channel credentials from a TlsCredentials plugin
-// config, whose root and identity certificates are sourced from certificate
-// provider instances configured in the bootstrap config.
-type tlsCredsBuilder struct{}
-
-func (tlsCredsBuilder) Build(config *anypb.Any, bc *bootstrap.Config) (credentials.Bundle, func(), error) {
+// buildTLSCredentials builds TLS channel credentials from a TlsCredentials
+// plugin config, whose root and identity certificates are sourced from
+// certificate provider instances configured in the bootstrap config.
+func buildTLSCredentials(config *anypb.Any, resolver CertProviderConfigResolver) (credentials.Bundle, func(), error) {
 	var tlsCfg tlscredspb.TlsCredentials
 	if err := anypb.UnmarshalTo(config, &tlsCfg, proto.UnmarshalOptions{}); err != nil {
 		return nil, nil, fmt.Errorf("failed to unmarshal TlsCredentials: %v", err)
@@ -63,7 +60,7 @@ func (tlsCredsBuilder) Build(config *anypb.Any, bc *bootstrap.Config) (credentia
 	if root.GetInstanceName() == "" {
 		return nil, nil, fmt.Errorf("tls credentials must specify root_certificate_provider with an instance_name")
 	}
-	rootCfg, err := certProviderConfig(bc, root)
+	rootCfg, err := certProviderConfig(resolver, root)
 	if err != nil {
 		return nil, nil, fmt.Errorf("tls credentials root certificate provider: %v", err)
 	}
@@ -75,7 +72,7 @@ func (tlsCredsBuilder) Build(config *anypb.Any, bc *bootstrap.Config) (credentia
 		if identity.GetInstanceName() == "" {
 			return nil, nil, fmt.Errorf("tls credentials identity_certificate_provider must specify an instance_name")
 		}
-		identityCfg, err := certProviderConfig(bc, identity)
+		identityCfg, err := certProviderConfig(resolver, identity)
 		if err != nil {
 			return nil, nil, fmt.Errorf("tls credentials identity certificate provider: %v", err)
 		}
@@ -86,12 +83,12 @@ func (tlsCredsBuilder) Build(config *anypb.Any, bc *bootstrap.Config) (credentia
 }
 
 // certProviderConfig looks up the certificate provider instance referenced by
-// the given proto in the bootstrap config.
-func certProviderConfig(bc *bootstrap.Config, instance *v3tlspb.CommonTlsContext_CertificateProviderInstance) (*certprovider.BuildableConfig, error) {
-	if bc == nil {
+// the given proto via the resolver.
+func certProviderConfig(resolver CertProviderConfigResolver, instance *v3tlspb.CommonTlsContext_CertificateProviderInstance) (*certprovider.BuildableConfig, error) {
+	if resolver == nil {
 		return nil, fmt.Errorf("no bootstrap configuration available to resolve certificate provider instances")
 	}
-	cfg, ok := bc.CertProviderConfigs()[instance.GetInstanceName()]
+	cfg, ok := resolver.CertProviderConfigs()[instance.GetInstanceName()]
 	if !ok {
 		return nil, fmt.Errorf("certificate provider instance name %q missing in bootstrap configuration", instance.GetInstanceName())
 	}
