@@ -1005,6 +1005,13 @@ func (m *DependencyManager) SubscribeToCluster(name string) func() {
 func (m *DependencyManager) unsubscribeFromCluster(name string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	// Balancers can invoke the unsubscribe closure returned by
+	// SubscribeToCluster after Close has already torn down all watchers and
+	// dropped m.watcher / m.xdsClient. Match the m.stopped guard used by
+	// every other post-Close callback in this file.
+	if m.stopped {
+		return
+	}
 	c := m.clusterSubscriptions[name]
 	c.dynamicRefCount--
 	// This should not happen as unsubscribe returned from the
