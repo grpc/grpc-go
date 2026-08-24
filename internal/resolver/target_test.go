@@ -44,36 +44,68 @@ func init() {
 
 func TestValidateTargetURI(t *testing.T) {
 	tests := []struct {
-		name    string
+		desc    string
 		target  string
 		wantErr bool
 	}{
-		{name: "registered scheme with authority and endpoint", target: "iresolver-test:///endpoint", wantErr: false},
-		// url.Parse canonicalizes the scheme to lowercase (RFC 3986 3.1),
-		// so an uppercase scheme still matches the registered lowercase one.
-		{name: "registered scheme uppercase input", target: "IRESOLVER-TEST:///endpoint", wantErr: false},
-		// Opaque (host:port) forms fall back to the default scheme, as
-		// grpc.NewClient does.
-		{name: "host:port without scheme", target: "my-service:50051", wantErr: false},
-		{name: "host:port with dotted host", target: "trafficdirector.googleapis.com:443", wantErr: false},
-		{name: "ip:port without scheme", target: "127.0.0.1:443", wantErr: false},
-		{name: "registered scheme opaque form", target: "iresolver-test:endpoint", wantErr: false},
-		// A string that does not parse as a URI is accepted if it parses
-		// after the default-scheme fallback, matching grpc.NewClient.
-		{name: "unparseable URI accepted via fallback", target: "://bad", wantErr: false},
-		// Parses with an empty scheme (not opaque), so the default scheme is
-		// applied directly.
-		{name: "absolute path without scheme", target: "/var/run/foo.sock", wantErr: false},
-		// An invalid percent-escape fails to parse both as-is and after the
-		// default-scheme fallback.
-		{name: "invalid percent-escape", target: "%zz", wantErr: true},
-		{name: "empty target", target: "", wantErr: true},
-		// Authority-form URIs with an unregistered scheme are rejected, so
-		// that scheme typos in configuration surface as errors.
-		{name: "unregistered scheme", target: "no-such-scheme:///endpoint", wantErr: true},
+		{
+			desc:    "registered scheme with authority and endpoint",
+			target:  "iresolver-test:///endpoint",
+			wantErr: false,
+		},
+		{
+			desc:    "uppercase registered scheme is canonicalized to lowercase",
+			target:  "IRESOLVER-TEST:///endpoint",
+			wantErr: false,
+		},
+		{
+			desc:    "host:port without scheme falls back to default scheme",
+			target:  "my-service:50051",
+			wantErr: false,
+		},
+		{
+			desc:    "dotted host:port without scheme falls back to default scheme",
+			target:  "trafficdirector.googleapis.com:443",
+			wantErr: false,
+		},
+		{
+			desc:    "IP:port without scheme falls back to default scheme",
+			target:  "127.0.0.1:443",
+			wantErr: false,
+		},
+		{
+			desc:    "registered-scheme opaque form falls back to default scheme",
+			target:  "iresolver-test:endpoint",
+			wantErr: false,
+		},
+		{
+			desc:    "unparseable URI is accepted after default-scheme fallback",
+			target:  "://bad",
+			wantErr: false,
+		},
+		{
+			desc:    "absolute path with empty scheme uses default scheme",
+			target:  "/var/run/foo.sock",
+			wantErr: false,
+		},
+		{
+			desc:    "invalid percent-escape fails initial and fallback parsing",
+			target:  "%zz",
+			wantErr: true,
+		},
+		{
+			desc:    "empty target is rejected",
+			target:  "",
+			wantErr: true,
+		},
+		{
+			desc:    "authority-form URI with unregistered scheme is rejected to surface typos",
+			target:  "no-such-scheme:///endpoint",
+			wantErr: true,
+		},
 	}
 	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
+		t.Run(tc.desc, func(t *testing.T) {
 			err := ValidateTargetURI(tc.target)
 			if (err != nil) != tc.wantErr {
 				t.Fatalf("ValidateTargetURI(%q) = %v, wantErr %v", tc.target, err, tc.wantErr)
