@@ -1504,10 +1504,10 @@ type addrConnStream struct {
 	sendCompressorV1 encoding.Compressor
 	decompressorV0   Decompressor
 	decompressorV1   encoding.Compressor
-	parser           parser
 
 	// mu guards finished and is held for the entire finish method.
-	mu sync.Mutex
+	mu     sync.Mutex
+	parser parser
 
 	// Bool fields are grouped at the tail to eliminate the alignment padding
 	// that would otherwise follow each bool when the next field is pointer- or
@@ -1519,8 +1519,7 @@ type addrConnStream struct {
 	receivedFirstMsg bool
 	decompressorSet  bool
 
-	// Guarded by mu.
-	finished bool
+	finished bool // guarded by mu
 }
 
 func (as *addrConnStream) Header() (metadata.MD, error) {
