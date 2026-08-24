@@ -72,9 +72,7 @@ func init() {
 
 var metadataFromOutgoingContextRaw = internal.FromOutgoingContextRaw.(func(context.Context) (metadata.MD, [][]string, bool))
 
-const (
-	defaultDeferredCloseTimeout = 5 * time.Second
-)
+const defaultDeferredCloseTimeout = 5 * time.Second
 
 func timeNow() time.Time {
 	return iextproc.TimeNowFunc()
