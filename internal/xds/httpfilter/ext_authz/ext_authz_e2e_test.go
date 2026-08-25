@@ -1316,10 +1316,13 @@ func (s) TestExtAuthz_ClientMetrics(t *testing.T) {
 	defer backend.Stop()
 
 	tests := []struct {
-		name          string
-		checkFunc     func(context.Context, *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error)
-		filterEnabled *corepb.RuntimeFractionalPercent
-		wantMetric    string
+		name                       string
+		checkFunc                  func(context.Context, *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error)
+		filterEnabled              *corepb.RuntimeFractionalPercent
+		decoderHeaderMutationRules *mutationpb.HeaderMutationRules
+		failureModeAllow           bool
+		wantMetric                 string
+		wantNotMetric              string
 	}{
 		{
 			name: "Allowed_RPCs",
@@ -1374,6 +1377,88 @@ func (s) TestExtAuthz_ClientMetrics(t *testing.T) {
 			},
 			wantMetric: "grpc.client_ext_authz.failed_rpcs",
 		},
+		{
+			name: "Failed_RPCs_HeaderMutationFailed",
+			filterEnabled: &corepb.RuntimeFractionalPercent{
+				DefaultValue: &v3typepb.FractionalPercent{
+					Numerator:   100,
+					Denominator: v3typepb.FractionalPercent_HUNDRED,
+				},
+			},
+			checkFunc: func(context.Context, *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error) {
+				return &v3authpb.CheckResponse{
+					Status: &statuspb.Status{Code: int32(codes.OK)},
+					HttpResponse: &v3authpb.CheckResponse_OkResponse{
+						OkResponse: &v3authpb.OkHttpResponse{
+							Headers: []*corepb.HeaderValueOption{
+								{Header: &corepb.HeaderValue{Key: "a1", Value: "v1"}},
+							},
+						},
+					},
+				}, nil
+			},
+			decoderHeaderMutationRules: &mutationpb.HeaderMutationRules{
+				DisallowExpression: &matcherpb.RegexMatcher{Regex: "^a1$"},
+				DisallowIsError:    wrapperspb.Bool(true),
+			},
+			wantMetric:    "grpc.client_ext_authz.failed_rpcs",
+			wantNotMetric: "grpc.client_ext_authz.allowed_rpcs",
+		},
+		{
+			name: "Failed_RPCs_HeaderMutationFailed_FailureModeAllow",
+			filterEnabled: &corepb.RuntimeFractionalPercent{
+				DefaultValue: &v3typepb.FractionalPercent{
+					Numerator:   100,
+					Denominator: v3typepb.FractionalPercent_HUNDRED,
+				},
+			},
+			checkFunc: func(context.Context, *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error) {
+				return &v3authpb.CheckResponse{
+					Status: &statuspb.Status{Code: int32(codes.OK)},
+					HttpResponse: &v3authpb.CheckResponse_OkResponse{
+						OkResponse: &v3authpb.OkHttpResponse{
+							Headers: []*corepb.HeaderValueOption{
+								{Header: &corepb.HeaderValue{Key: "a1", Value: "v1"}},
+							},
+						},
+					},
+				}, nil
+			},
+			decoderHeaderMutationRules: &mutationpb.HeaderMutationRules{
+				DisallowExpression: &matcherpb.RegexMatcher{Regex: "^a1$"},
+				DisallowIsError:    wrapperspb.Bool(true),
+			},
+			failureModeAllow: true,
+			wantMetric:       "grpc.client_ext_authz.failed_rpcs",
+			wantNotMetric:    "grpc.client_ext_authz.allowed_rpcs",
+		},
+		{
+			name: "Failed_RPCs_ResponseHeaderMutationFailed",
+			filterEnabled: &corepb.RuntimeFractionalPercent{
+				DefaultValue: &v3typepb.FractionalPercent{
+					Numerator:   100,
+					Denominator: v3typepb.FractionalPercent_HUNDRED,
+				},
+			},
+			checkFunc: func(context.Context, *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error) {
+				return &v3authpb.CheckResponse{
+					Status: &statuspb.Status{Code: int32(codes.OK)},
+					HttpResponse: &v3authpb.CheckResponse_OkResponse{
+						OkResponse: &v3authpb.OkHttpResponse{
+							ResponseHeadersToAdd: []*corepb.HeaderValueOption{
+								{Header: &corepb.HeaderValue{Key: "a1", Value: "v1"}},
+							},
+						},
+					},
+				}, nil
+			},
+			decoderHeaderMutationRules: &mutationpb.HeaderMutationRules{
+				DisallowExpression: &matcherpb.RegexMatcher{Regex: "^a1$"},
+				DisallowIsError:    wrapperspb.Bool(true),
+			},
+			wantMetric:    "grpc.client_ext_authz.failed_rpcs",
+			wantNotMetric: "grpc.client_ext_authz.allowed_rpcs",
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -1381,7 +1466,9 @@ func (s) TestExtAuthz_ClientMetrics(t *testing.T) {
 			defer stop()
 
 			extAuthzCfg := &v3extauthzfilterpb.ExtAuthz{
-				FilterEnabled: test.filterEnabled,
+				FilterEnabled:              test.filterEnabled,
+				DecoderHeaderMutationRules: test.decoderHeaderMutationRules,
+				FailureModeAllow:           test.failureModeAllow,
 			}
 
 			tmr := teststats.NewTestMetricsRecorder()
@@ -1415,6 +1502,12 @@ func (s) TestExtAuthz_ClientMetrics(t *testing.T) {
 				case <-ctx.Done():
 					t.Fatalf("Timed out waiting for metric %q: %v", test.wantMetric, ctx.Err())
 				case <-time.After(10 * time.Millisecond):
+				}
+			}
+
+			if test.wantNotMetric != "" {
+				if got, ok := tmr.MetricsData(test.wantNotMetric); ok {
+					t.Fatalf("Unexpected metric recorded %q: %v", test.wantNotMetric, got)
 				}
 			}
 		})

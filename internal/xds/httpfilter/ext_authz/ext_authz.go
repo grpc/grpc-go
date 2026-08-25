@@ -384,6 +384,63 @@ func (i *clientInterceptor) check(ctx context.Context, ri resolver.RPCInfo, outg
 	return authClient.Check(extAuthzCtx, req)
 }
 
+// appendFailureModeHeader appends the x-envoy-auth-failure-mode-allowed: true
+// header to md if failure_mode_allow_header_add is configured and the header
+// is not already present.
+func (i *clientInterceptor) appendFailureModeHeader(md metadata.MD) {
+	if i.config.failureModeAllowHeaderAdd && len(md.Get("x-envoy-auth-failure-mode-allowed")) == 0 {
+		md.Append("x-envoy-auth-failure-mode-allowed", "true")
+	}
+}
+
+// applyHeaderMutations applies request header additions and removals from the
+// OkHttpResponse to outgoingMD and validates response headers against the
+// configured header mutation rules. It records the appropriate metrics and
+// returns the validated response headers to add.
+func (i *clientInterceptor) applyHeaderMutations(okResp *v3authpb.OkHttpResponse, outgoingMD metadata.MD) ([]*v3corepb.HeaderValueOption, error) {
+	var mutationFailed bool
+	handleErr := func(err error, desc string) error {
+		if !mutationFailed {
+			i.recordMetric(extAuthzClientFailedRPCsMetric)
+			mutationFailed = true
+		}
+		if !i.config.failureModeAllow {
+			return status.Errorf(i.config.statusOnError, "extauthz: %s: %v", desc, err)
+		}
+		i.appendFailureModeHeader(outgoingMD)
+		return nil
+	}
+
+	// Update outgoing metadata with headers specified by the external
+	// authorization server.
+	if err := i.config.decoderHeaderMutationRules.ApplyAdditions(okResp.GetHeaders(), outgoingMD); err != nil {
+		if err := handleErr(err, "error applying header mutation rules"); err != nil {
+			return nil, err
+		}
+	}
+
+	// Update outgoing metadata with headers_to_remove specified by the external
+	// authorization server.
+	if err := i.config.decoderHeaderMutationRules.ApplyRemovals(okResp.GetHeadersToRemove(), outgoingMD); err != nil {
+		if err := handleErr(err, "error applying header mutation rules"); err != nil {
+			return nil, err
+		}
+	}
+
+	// Validate response headers specified by the external authorization server
+	// against header mutation rules before creating the data plane stream.
+	if err := i.config.decoderHeaderMutationRules.ApplyAdditions(okResp.GetResponseHeadersToAdd(), metadata.MD{}); err != nil {
+		if err := handleErr(err, "header validation fails for response headers"); err != nil {
+			return nil, err
+		}
+	}
+
+	if !mutationFailed {
+		i.recordMetric(extAuthzClientAllowedRPCsMetric)
+	}
+	return okResp.GetResponseHeadersToAdd(), nil
+}
+
 func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, newStream func(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStream, error), opts ...grpc.CallOption) (grpc.ClientStream, error) {
 	// If the interceptor is already closed, no new streams should be created.
 	if i.closed.Load() {
@@ -430,10 +487,8 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 		// failure_mode_allow_header_add config field is true, then the filter
 		// will add a x-envoy-auth-failure-mode-allowed: true header to the data
 		// plane RPC.
-		if i.config.failureModeAllowHeaderAdd {
-			outgoingMD.Append("x-envoy-auth-failure-mode-allowed", "true")
-			ctx = metadata.NewOutgoingContext(ctx, outgoingMD)
-		}
+		i.appendFailureModeHeader(outgoingMD)
+		ctx = metadata.NewOutgoingContext(ctx, outgoingMD)
 		return newStream(ctx, opts...)
 	}
 
@@ -459,48 +514,19 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 		return nil, status.Errorf(code, "extauthz: RPC denied by external authorization server")
 	}
 
-	// We get here only if the external authorization server allowed the RPC.
-	i.recordMetric(extAuthzClientAllowedRPCsMetric)
-	allowedResp, ok := resp.GetHttpResponse().(*v3authpb.CheckResponse_OkResponse)
-	if !ok {
+	var responseHeadersToAdd []*v3corepb.HeaderValueOption
+	okResp, _ := resp.GetHttpResponse().(*v3authpb.CheckResponse_OkResponse)
+	if okResp != nil {
+		var err error
+		responseHeadersToAdd, err = i.applyHeaderMutations(okResp.OkResponse, outgoingMD)
+		if err != nil {
+			return nil, err
+		}
+	} else {
 		// If the response does not contain an OkResponse message despite having
 		// an OK status, we proceed to create the stream without making any header
 		// mutations.
-		return newStream(ctx, opts...)
-	}
-
-	// Update outgoing metadata with headers specified by the external
-	// authorization server.
-	if err := i.config.decoderHeaderMutationRules.ApplyAdditions(allowedResp.OkResponse.GetHeaders(), outgoingMD); err != nil {
-		if !i.config.failureModeAllow {
-			return nil, status.Errorf(i.config.statusOnError, "extauthz: error applying header mutation rules: %v", err)
-		}
-		if i.config.failureModeAllowHeaderAdd {
-			outgoingMD.Append("x-envoy-auth-failure-mode-allowed", "true")
-		}
-	}
-
-	// Update outgoing metadata with headers_to_remove specified by the external
-	// authorization server.
-	if err := i.config.decoderHeaderMutationRules.ApplyRemovals(allowedResp.OkResponse.GetHeadersToRemove(), outgoingMD); err != nil {
-		if !i.config.failureModeAllow {
-			return nil, status.Errorf(i.config.statusOnError, "extauthz: error applying header mutation rules: %v", err)
-		}
-		if i.config.failureModeAllowHeaderAdd && len(outgoingMD.Get("x-envoy-auth-failure-mode-allowed")) == 0 {
-			outgoingMD.Append("x-envoy-auth-failure-mode-allowed", "true")
-		}
-	}
-
-	// Validate response headers specified by the external authorization server
-	// against header mutation rules before creating the data plane stream.
-	responseHeadersToAdd := allowedResp.OkResponse.GetResponseHeadersToAdd()
-	if err := i.config.decoderHeaderMutationRules.ApplyAdditions(responseHeadersToAdd, metadata.MD{}); err != nil {
-		if !i.config.failureModeAllow {
-			return nil, status.Errorf(i.config.statusOnError, "extauthz: header validation fails for response headers: %v", err)
-		}
-		if i.config.failureModeAllowHeaderAdd && len(outgoingMD.Get("x-envoy-auth-failure-mode-allowed")) == 0 {
-			outgoingMD.Append("x-envoy-auth-failure-mode-allowed", "true")
-		}
+		i.recordMetric(extAuthzClientAllowedRPCsMetric)
 	}
 
 	// Create a new context with the mutated outgoing metadata. All subsequent
@@ -519,7 +545,7 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 	if len(responseHeadersToAdd) > 0 {
 		return &clientStream{
 			ClientStream:  stream,
-			headersToAdd:  allowedResp.OkResponse.GetResponseHeadersToAdd(),
+			headersToAdd:  responseHeadersToAdd,
 			mutationRules: i.config.decoderHeaderMutationRules,
 		}, nil
 	}
