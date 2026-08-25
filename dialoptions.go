@@ -96,6 +96,12 @@ type dialOptions struct {
 	maxCallAttempts             int
 	enableLocalDNSResolution    bool // Specifies if target hostnames should be resolved when proxying is enabled.
 	useProxy                    bool // Specifies if a server should be connected via proxy.
+
+	// childChannelOptions are DialOptions that the parent ClientConn does not
+	// apply to itself, but that must be plumbed onto any internal child
+	// channels the parent (or its LB policies/resolvers) creates. See gRFC
+	// A110: Child Channel Options.
+	childChannelOptions []DialOption
 }
 
 // DialOption configures how we set up the connection.
@@ -627,6 +633,28 @@ func WithStreamInterceptor(f StreamClientInterceptor) DialOption {
 func WithChainStreamInterceptor(interceptors ...StreamClientInterceptor) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
 		o.chainStreamInts = append(o.chainStreamInts, interceptors...)
+	})
+}
+
+// WithChildChannelOptions returns a DialOption that specifies DialOptions to
+// be applied to any internal child channels created by this ClientConn or by
+// its resolvers and LB policies (for example, the RLS balancer's control
+// channel or an xDS resolver's control-plane channel).
+//
+// The options are opaque to the parent ClientConn — they are not applied to
+// the parent channel itself. Child channels are also configured to propagate
+// these options to their own child channels, so a StatsHandler or
+// interceptor set here applies to any depth of nested internal channels.
+//
+// This implements the Go section of gRFC A110: Child Channel Options.
+//
+// # Experimental
+//
+// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+// release.
+func WithChildChannelOptions(opts ...DialOption) DialOption {
+	return newFuncDialOption(func(o *dialOptions) {
+		o.childChannelOptions = opts
 	})
 }
 
