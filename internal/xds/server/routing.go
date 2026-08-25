@@ -67,7 +67,7 @@ func RouteAndProcess(ss grpc.ServerStream) (grpc.ServerStream, error) {
 	// header is present.
 	authority := md.Get(":authority")
 	if len(authority) == 0 {
-		return rc.statusErrWithNodeID(codes.Internal, "no :authority header present")
+		return nil, rc.statusErrWithNodeID(codes.Internal, "no :authority header present")
 	}
 	vh := findBestMatchingVirtualHostServer(authority[0], rc.vhs)
 	if vh == nil {
