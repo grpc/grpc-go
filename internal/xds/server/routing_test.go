@@ -139,7 +139,7 @@ func (s) TestRouteAndProcess_MissingAuthority(t *testing.T) {
 	if status.Code(err) != codes.Internal {
 		t.Fatalf("RouteAndProcess() returned error code %v, want %v", status.Code(err), codes.Internal)
 	}
-	if !strings.Contains(status.Convert(err).Message(), "no :authority header present") {
-		t.Fatalf("RouteAndProcess() returned error message %q, want %q", status.Convert(err).Message(), "no :authority header present")
+	if !strings.Contains(err.Error(), "no :authority header present") {
+		t.Fatalf("RouteAndProcess() returned error message %q, want %q", err.Error(), "no :authority header present")
 	}
 }
