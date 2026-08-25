@@ -2275,6 +2275,22 @@ func (s) TestHeadersHTTPStatusGRPCStatus(t *testing.T) {
 			grpcStatusWant:  "13",
 			grpcMessageWant: "both must only have 1 value as per HTTP/2 spec",
 		},
+		// If neither :authority nor host header is present on a gRPC request, the
+		// request should be rejected with HTTP Status 400 and gRPC status Internal.
+		{
+			name: "Missing authority and host header grpc",
+			headers: []struct {
+				name   string
+				values []string
+			}{
+				{name: ":method", values: []string{"POST"}},
+				{name: ":path", values: []string{"foo"}},
+				{name: "content-type", values: []string{"application/grpc"}},
+			},
+			httpStatusWant:  "400",
+			grpcStatusWant:  "13",
+			grpcMessageWant: "no host or :authority header present",
+		},
 		// If the client sends an HTTP/2 request with a :method header with a
 		// value other than POST, as specified in the gRPC over HTTP/2
 		// specification, the server should fail the RPC.
