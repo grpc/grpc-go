@@ -72,7 +72,14 @@ type controlChannel struct {
 // newControlChannel creates a controlChannel to rlsServerName and uses
 // serviceConfig, if non-empty, as the default service config for the underlying
 // gRPC channel.
-func newControlChannel(rlsServerName, serviceConfig string, rpcTimeout time.Duration, bOpts balancer.BuildOptions, backToReadyFunc func()) (*controlChannel, error) {
+//
+// parentCC is the balancer.ClientConn passed to Balancer.Build. It is used to
+// inherit the parent channel's stats handlers and client interceptors so that
+// per-attempt telemetry configured on the parent channel also covers
+// RouteLookup RPCs. A nil parentCC is tolerated (control channel is created
+// without inheriting parent telemetry) for tests that construct the control
+// channel directly.
+func newControlChannel(parentCC balancer.ClientConn, rlsServerName, serviceConfig string, rpcTimeout time.Duration, bOpts balancer.BuildOptions, backToReadyFunc func()) (*controlChannel, error) {
 	ctrlCh := &controlChannel{
 		rpcTimeout:      rpcTimeout,
 		backToReadyFunc: backToReadyFunc,
@@ -84,7 +91,8 @@ func newControlChannel(rlsServerName, serviceConfig string, rpcTimeout time.Dura
 	if err != nil {
 		return nil, err
 	}
-	ctrlCh.cc, err = grpc.NewClient(rlsServerName, dopts...)
+	newChan := internal.NewChannelForBalancer.(func(balancer.ClientConn, string, ...grpc.DialOption) (*grpc.ClientConn, error))
+	ctrlCh.cc, err = newChan(parentCC, rlsServerName, dopts...)
 	if err != nil {
 		return nil, err
 	}

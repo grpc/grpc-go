@@ -367,7 +367,7 @@ func (b *rlsBalancer) handleControlChannelUpdate(newCfg *lbConfig) {
 	backToReadyFn := func() {
 		b.updateCh.Put(controlChannelReady{})
 	}
-	ctrlCh, err := newControlChannel(newCfg.lookupService, newCfg.controlChannelServiceConfig, newCfg.lookupServiceTimeout, b.bopts, backToReadyFn)
+	ctrlCh, err := newControlChannel(b.cc, newCfg.lookupService, newCfg.controlChannelServiceConfig, newCfg.lookupServiceTimeout, b.bopts, backToReadyFn)
 	if err != nil {
 		// This is very uncommon and usually represents a non-transient error.
 		// There is not much we can do here other than wait for another update

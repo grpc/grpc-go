@@ -373,3 +373,63 @@ func (s) TestRLSFailedRPCMetric(t *testing.T) {
 		}
 	}
 }
+
+// TestRLSControlChannelAttemptDurationMetric verifies that per-attempt
+// telemetry configured on the parent channel (grpc.client.attempt.duration)
+// also covers the RouteLookup RPC issued by the RLS balancer's control
+// channel. Regression test for the plumbing that inherits parent stats
+// handlers and interceptors onto balancer-owned control channels.
+func (s) TestRLSControlChannelAttemptDurationMetric(t *testing.T) {
+	rlsServer, _ := rlstest.SetupFakeRLSServer(t, nil)
+	rlsConfig := buildBasicRLSConfigWithChildPolicy(t, t.Name(), rlsServer.Address)
+	backend := &stubserver.StubServer{
+		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
+			return &testpb.Empty{}, nil
+		},
+	}
+	if err := backend.StartServer(); err != nil {
+		t.Fatalf("Failed to start backend: %v", err)
+	}
+	defer backend.Stop()
+	rlsConfig.RouteLookupConfig.DefaultTarget = backend.Address
+
+	r := startManualResolverWithConfig(t, rlsConfig)
+	reader := metric.NewManualReader()
+	provider := metric.NewMeterProvider(metric.WithReader(reader))
+	mo := opentelemetry.MetricsOptions{MeterProvider: provider}
+	cc, err := grpc.NewClient(r.Scheme()+":///", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()), opentelemetry.DialOption(opentelemetry.Options{MetricsOptions: mo}))
+	if err != nil {
+		t.Fatalf("Failed to dial local test server: %v", err)
+	}
+	defer cc.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if _, err := testgrpc.NewTestServiceClient(cc).EmptyCall(ctx, &testpb.Empty{}); err != nil {
+		t.Fatalf("client.EmptyCall failed: %v", err)
+	}
+
+	const rlsMethod = "grpc.lookup.v1.RouteLookupService/RouteLookup"
+	md, ok := metricsDataFromReader(ctx, reader)["grpc.client.attempt.duration"]
+	if !ok {
+		t.Fatal("grpc.client.attempt.duration metric not recorded")
+	}
+	hist, ok := md.Data.(metricdata.Histogram[float64])
+	if !ok {
+		t.Fatalf("grpc.client.attempt.duration has unexpected data type %T, want Histogram[float64]", md.Data)
+	}
+	for _, dp := range hist.DataPoints {
+		if v, ok := dp.Attributes.Value("grpc.method"); ok && v.AsString() == rlsMethod {
+			return
+		}
+	}
+	t.Fatalf("grpc.client.attempt.duration did not record a data point for method %q; got attribute sets %v", rlsMethod, attributeSets(hist.DataPoints))
+}
+
+func attributeSets(dps []metricdata.HistogramDataPoint[float64]) []attribute.Set {
+	out := make([]attribute.Set, 0, len(dps))
+	for _, dp := range dps {
+		out = append(out, dp.Attributes)
+	}
+	return out
+}

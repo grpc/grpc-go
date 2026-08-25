@@ -143,6 +143,14 @@ var (
 	// provided grpc.ClientConn.
 	SubscribeToConnectivityStateChanges any // func(*grpc.ClientConn, grpcsync.Subscriber)
 
+	// NewChannelForBalancer creates a new grpc.ClientConn that inherits the
+	// parent ClientConn's stats handlers and client interceptors. It is meant
+	// to be used by LB policies that open their own control-plane channels
+	// (for example, RLS) so that per-attempt telemetry configured on the
+	// parent channel also covers those control-plane RPCs. The parent argument
+	// must be the balancer.ClientConn that gRPC passed to Balancer.Build.
+	NewChannelForBalancer any // func(parent balancer.ClientConn, target string, opts ...grpc.DialOption) (*grpc.ClientConn, error)
+
 	// NewXDSResolverWithConfigForTesting creates a new xds resolver builder using
 	// the provided xds bootstrap config instead of the global configuration from
 	// the supported environment variables.  The resolver.Builder is meant to be

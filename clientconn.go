@@ -790,6 +790,67 @@ func init() {
 	internal.ExitIdleModeForTesting = func(cc *ClientConn) {
 		cc.idlenessMgr.ExitIdleMode()
 	}
+	internal.NewChannelForBalancer = newChannelForBalancer
+}
+
+// newChannelForBalancer creates a new ClientConn that inherits parent's stats
+// handlers and client interceptors. Used by LB policies that open their own
+// control-plane channels (e.g. RLS) so per-attempt telemetry configured on the
+// parent channel also covers those control-plane RPCs. Inherited options are
+// prepended to opts, so callers may still override them by passing their own
+// stats handlers or interceptors in opts.
+//
+// The balancer.ClientConn handed to Balancer.Build is often wrapped several
+// layers deep in xDS/DirectPath configs (gracefulswitch, balancer group,
+// cluster_impl, outlier_detection, ...). Every wrapping layer exposes its
+// delegate via Unwrap() balancer.ClientConn (see the same-named methods on
+// those types); walk that chain until we find the underlying
+// *ccBalancerWrapper that holds the parent *ClientConn. If none is found,
+// fall back to a plain NewClient so the caller still gets a working channel.
+func newChannelForBalancer(parent balancer.ClientConn, target string, opts ...DialOption) (*ClientConn, error) {
+	type unwrapper interface{ Unwrap() balancer.ClientConn }
+	var ccb *ccBalancerWrapper
+	seen := make(map[balancer.ClientConn]struct{})
+	for cur := parent; cur != nil; {
+		if c, ok := cur.(*ccBalancerWrapper); ok {
+			ccb = c
+			break
+		}
+		if _, dup := seen[cur]; dup {
+			break
+		}
+		seen[cur] = struct{}{}
+		u, ok := cur.(unwrapper)
+		if !ok {
+			break
+		}
+		next := u.Unwrap()
+		if next == nil || next == cur {
+			break
+		}
+		cur = next
+	}
+	if ccb == nil || ccb.cc == nil {
+		return NewClient(target, opts...)
+	}
+	pd := ccb.cc.dopts
+	inherited := make([]DialOption, 0, len(pd.copts.StatsHandlers)+4)
+	for _, sh := range pd.copts.StatsHandlers {
+		inherited = append(inherited, WithStatsHandler(sh))
+	}
+	if pd.unaryInt != nil {
+		inherited = append(inherited, WithUnaryInterceptor(pd.unaryInt))
+	}
+	if len(pd.chainUnaryInts) > 0 {
+		inherited = append(inherited, WithChainUnaryInterceptor(pd.chainUnaryInts...))
+	}
+	if pd.streamInt != nil {
+		inherited = append(inherited, WithStreamInterceptor(pd.streamInt))
+	}
+	if len(pd.chainStreamInts) > 0 {
+		inherited = append(inherited, WithChainStreamInterceptor(pd.chainStreamInts...))
+	}
+	return NewClient(target, append(inherited, opts...)...)
 }
 
 func (cc *ClientConn) maybeApplyDefaultServiceConfig() {
