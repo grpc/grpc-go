@@ -101,11 +101,7 @@ func DoLargeUnaryCall(ctx context.Context, tc testgrpc.TestServiceClient, args .
 	if err != nil {
 		logger.Fatal("/TestService/UnaryCall RPC failed: ", err)
 	}
-	t := reply.GetPayload().GetType()
-	s := len(reply.GetPayload().GetBody())
-	if t != testpb.PayloadType_COMPRESSABLE || s != largeRespSize {
-		logger.Fatalf("Got the reply with type %d len %d; want %d, %d", t, s, testpb.PayloadType_COMPRESSABLE, largeRespSize)
-	}
+	checkLargePayload(reply.GetPayload())
 }
 
 // DoClientCompressedUnaryCall performs a unary RPC with a compressed request
@@ -154,12 +150,10 @@ func DoClientCompressedUnaryCall(ctx context.Context, tc testgrpc.TestServiceCli
 }
 
 // DoServerCompressedUnaryCall verifies the server can be told whether to
-// compress its unary response.
-//
-// Note: this does not verify the actual wire-level compressed flag on the
-// response, since gRPC-Go does not expose a public, per-RPC API on the
-// client side to inspect it (see the discussion on #8662). Both calls are
-// verified to succeed and return the expected payload.
+// compress its unary response. Both calls are verified to succeed and
+// return the expected payload; verifying the actual wire-level compression
+// requires a stats.Handler (see compression_test.go), since that isn't
+// observable from a plain TestServiceClient.
 func DoServerCompressedUnaryCall(ctx context.Context, tc testgrpc.TestServiceClient, args ...grpc.CallOption) {
 	pl := ClientNewPayload(testpb.PayloadType_COMPRESSABLE, largeReqSize)
 
@@ -818,18 +812,24 @@ func serverNewPayload(t testpb.PayloadType, size int32) (*testpb.Payload, error)
 
 // recvCompressUsed reports whether the request associated with ctx was
 // actually received compressed on the wire.
-func recvCompressUsed(ctx context.Context) bool {
+func recvCompressUsed(ctx context.Context) (bool, error) {
 	stream, ok := grpc.ServerTransportStreamFromContext(ctx).(*transport.ServerStream)
 	if !ok || stream == nil {
-		return false
+		return false, fmt.Errorf("failed to fetch the stream from the given context")
 	}
 	c := stream.RecvCompress()
-	return c != "" && c != encoding.Identity
+	return c != "" && c != encoding.Identity, nil
 }
 
 func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
-	if ec := in.GetExpectCompressed(); ec != nil && ec.GetValue() != recvCompressUsed(ctx) {
-		return nil, status.Errorf(codes.InvalidArgument, "request expected_compressed=%v did not match actual compression on the wire", ec.GetValue())
+	if ec := in.GetExpectCompressed(); ec != nil {
+		used, err := recvCompressUsed(ctx)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to determine received compression: %v", err)
+		}
+		if ec.GetValue() != used {
+			return nil, status.Errorf(codes.InvalidArgument, "request expected_compressed=%v did not match actual compression on the wire", ec.GetValue())
+		}
 	}
 	// SetSendCompressor must be called before headers are sent, so this has
 	// to happen before the SendHeader call below (triggered by
