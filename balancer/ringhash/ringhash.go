@@ -178,6 +178,13 @@ func (b *ringhashBalancer) UpdateState(state balancer.State) {
 	b.updatePickerLocked()
 }
 
+// Unwrap returns the ClientConn that this wrapper delegates to. It lets
+// gRPC-internal callers walk past the ring-hash layer to reach the underlying
+// parent ClientConn.
+func (b *ringhashBalancer) Unwrap() balancer.ClientConn {
+	return b.ClientConn
+}
+
 func (b *ringhashBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error {
 	if b.logger.V(2) {
 		b.logger.Infof("Received update from resolver, balancer config: %+v", pretty.ToJSON(ccs.BalancerConfig))

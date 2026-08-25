@@ -91,6 +91,13 @@ func (ccc *lbCacheClientConn) RemoveSubConn(sc balancer.SubConn) {
 	logger.Errorf("RemoveSubConn(%v) called unexpectedly", sc)
 }
 
+// Unwrap returns the ClientConn that this wrapper delegates to. It lets
+// gRPC-internal callers walk past the grpclb subconn-cache layer to reach the
+// underlying parent ClientConn.
+func (ccc *lbCacheClientConn) Unwrap() balancer.ClientConn {
+	return ccc.ClientConn
+}
+
 type lbCacheSubConn struct {
 	balancer.SubConn
 	ccc *lbCacheClientConn

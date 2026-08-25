@@ -233,6 +233,13 @@ type outlierDetectionBalancer struct {
 	pickerUpdateCh *buffer.Unbounded[any]
 }
 
+// Unwrap returns the ClientConn that this wrapper delegates to. It lets
+// gRPC-internal callers walk past the outlier-detection layer to reach the
+// underlying parent ClientConn.
+func (b *outlierDetectionBalancer) Unwrap() balancer.ClientConn {
+	return b.ClientConn
+}
+
 // noopConfig returns whether this balancer is configured with a logical no-op
 // configuration or not.
 //

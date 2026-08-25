@@ -73,6 +73,13 @@ type subBalancerWrapper struct {
 	balancer *gracefulswitch.Balancer
 }
 
+// Unwrap returns the ClientConn that this wrapper delegates to. It lets
+// gRPC-internal callers walk past the balancer-group layer to reach the
+// underlying parent ClientConn.
+func (sbc *subBalancerWrapper) Unwrap() balancer.ClientConn {
+	return sbc.ClientConn
+}
+
 // UpdateState overrides balancer.ClientConn, to keep state and picker.
 func (sbc *subBalancerWrapper) UpdateState(state balancer.State) {
 	sbc.mu.Lock()

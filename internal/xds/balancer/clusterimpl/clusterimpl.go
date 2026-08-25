@@ -390,6 +390,13 @@ func (b *clusterImplBalancer) handleSecurityConfig(config *xdsresource.SecurityC
 	return nil
 }
 
+// Unwrap returns the ClientConn that this wrapper delegates to. It lets
+// gRPC-internal callers walk past the cluster_impl layer to reach the
+// underlying parent ClientConn.
+func (b *clusterImplBalancer) Unwrap() balancer.ClientConn {
+	return b.ClientConn
+}
+
 func (b *clusterImplBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
 	defer clientConnUpdateHook()
 

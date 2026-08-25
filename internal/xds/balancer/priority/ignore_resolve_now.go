@@ -48,3 +48,10 @@ func (i *ignoreResolveNowClientConn) ResolveNow(o resolver.ResolveNowOptions) {
 	}
 	i.ClientConn.ResolveNow(o)
 }
+
+// Unwrap returns the ClientConn that this wrapper delegates to. It lets
+// gRPC-internal callers walk past the priority layer to reach the underlying
+// parent ClientConn.
+func (i *ignoreResolveNowClientConn) Unwrap() balancer.ClientConn {
+	return i.ClientConn
+}

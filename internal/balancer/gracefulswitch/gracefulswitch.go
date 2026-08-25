@@ -302,6 +302,13 @@ type balancerWrapper struct {
 	subconns  map[balancer.SubConn]bool // subconns created by this balancer
 }
 
+// Unwrap returns the ClientConn that this wrapper delegates to. It lets
+// gRPC-internal callers walk past the graceful-switch layer to reach the
+// underlying parent ClientConn.
+func (bw *balancerWrapper) Unwrap() balancer.ClientConn {
+	return bw.ClientConn
+}
+
 // Close closes the underlying LB policy and shuts down the subconns it
 // created. bw must not be referenced via balancerCurrent or balancerPending in
 // gsb when called. gsb.mu must not be held.  Does not panic with a nil
