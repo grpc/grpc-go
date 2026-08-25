@@ -828,6 +828,21 @@ func recvCompressUsed(ctx context.Context) bool {
 }
 
 func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+	if ec := in.GetExpectCompressed(); ec != nil && ec.GetValue() != recvCompressUsed(ctx) {
+		return nil, status.Errorf(codes.InvalidArgument, "request expected_compressed=%v did not match actual compression on the wire", ec.GetValue())
+	}
+	// SetSendCompressor must be called before headers are sent, so this has
+	// to happen before the SendHeader call below (triggered by
+	// initialMetadataKey).
+	if rc := in.GetResponseCompressed(); rc != nil {
+		name := encoding.Identity
+		if rc.GetValue() {
+			name = gzip.Name
+		}
+		if err := grpc.SetSendCompressor(ctx, name); err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to set send compressor %q: %v", name, err)
+		}
+	}
 	st := in.GetResponseStatus()
 	if md, ok := metadata.FromIncomingContext(ctx); ok {
 		if initialMetadata, ok := md[initialMetadataKey]; ok {
@@ -841,18 +856,6 @@ func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*
 	}
 	if st != nil && st.Code != 0 {
 		return nil, status.Error(codes.Code(st.Code), st.Message)
-	}
-	if ec := in.GetExpectCompressed(); ec != nil && ec.GetValue() != recvCompressUsed(ctx) {
-		return nil, status.Errorf(codes.InvalidArgument, "request expected_compressed=%v did not match actual compression on the wire", ec.GetValue())
-	}
-	if rc := in.GetResponseCompressed(); rc != nil {
-		name := encoding.Identity
-		if rc.GetValue() {
-			name = gzip.Name
-		}
-		if err := grpc.SetSendCompressor(ctx, name); err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to set send compressor %q: %v", name, err)
-		}
 	}
 	pl, err := serverNewPayload(in.GetResponseType(), in.GetResponseSize())
 	if err != nil {
