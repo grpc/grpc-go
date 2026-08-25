@@ -55,7 +55,7 @@ type dummyFilterBuilder struct {
 	interceptRPCCount *atomic.Int32
 	recvMsgCount      *atomic.Int32
 	sendMsgCount      *atomic.Int32
-	interceptRPCFunc  func(ctx context.Context, ss grpc.ServerStream) (grpc.ServerStream, error)
+	interceptRPCFunc  func(ss grpc.ServerStream) (grpc.ServerStream, error)
 }
 
 func (b *dummyFilterBuilder) IsTerminal() bool   { return false }
@@ -85,12 +85,12 @@ type dummyInterceptor struct {
 	builder *dummyFilterBuilder
 }
 
-func (i *dummyInterceptor) InterceptRPC(ctx context.Context, ss grpc.ServerStream) (grpc.ServerStream, error) {
+func (i *dummyInterceptor) InterceptRPC(ss grpc.ServerStream) (grpc.ServerStream, error) {
 	if i.builder.interceptRPCCount != nil {
 		i.builder.interceptRPCCount.Add(1)
 	}
 	if i.builder.interceptRPCFunc != nil {
-		return i.builder.interceptRPCFunc(ctx, ss)
+		return i.builder.interceptRPCFunc(ss)
 	}
 	return &wrappedServerStream{
 		ServerStream: ss,
@@ -314,7 +314,7 @@ func (s) TestServerSideXDSHTTPFilter_InterceptRPCEarlyRejection(t *testing.T) {
 	fb := &dummyFilterBuilder{
 		typeURL:           typeURL,
 		interceptRPCCount: &atomic.Int32{},
-		interceptRPCFunc: func(context.Context, grpc.ServerStream) (grpc.ServerStream, error) {
+		interceptRPCFunc: func(grpc.ServerStream) (grpc.ServerStream, error) {
 			return nil, status.Error(codes.PermissionDenied, wantErr)
 		},
 	}
@@ -355,14 +355,14 @@ func (s) TestServerSideXDS_InterceptRPCMultiFilterChaining(t *testing.T) {
 
 	fb1 := &dummyFilterBuilder{
 		typeURL: typeURL1,
-		interceptRPCFunc: func(_ context.Context, ss grpc.ServerStream) (grpc.ServerStream, error) {
+		interceptRPCFunc: func(ss grpc.ServerStream) (grpc.ServerStream, error) {
 			eventsCh <- filter1
 			return ss, nil
 		},
 	}
 	fb2 := &dummyFilterBuilder{
 		typeURL: typeURL2,
-		interceptRPCFunc: func(_ context.Context, ss grpc.ServerStream) (grpc.ServerStream, error) {
+		interceptRPCFunc: func(ss grpc.ServerStream) (grpc.ServerStream, error) {
 			eventsCh <- filter2
 			return ss, nil
 		},
@@ -446,7 +446,7 @@ func (s) TestServerSideXDS_InterceptRPCMultiFilterErrorPropagation(t *testing.T)
 
 	fb1 := &dummyFilterBuilder{
 		typeURL: typeURL1,
-		interceptRPCFunc: func(_ context.Context, ss grpc.ServerStream) (grpc.ServerStream, error) {
+		interceptRPCFunc: func(ss grpc.ServerStream) (grpc.ServerStream, error) {
 			return &wrappedServerStream{ServerStream: ss}, nil
 		},
 	}
@@ -454,7 +454,7 @@ func (s) TestServerSideXDS_InterceptRPCMultiFilterErrorPropagation(t *testing.T)
 	wantErr := "recvMsg failed in filter 2"
 	fb2 := &dummyFilterBuilder{
 		typeURL: typeURL2,
-		interceptRPCFunc: func(_ context.Context, ss grpc.ServerStream) (grpc.ServerStream, error) {
+		interceptRPCFunc: func(ss grpc.ServerStream) (grpc.ServerStream, error) {
 			return &errorWrappedStream{ServerStream: ss, recvErr: wantErr}, nil
 		},
 	}

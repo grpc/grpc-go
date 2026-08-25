@@ -246,9 +246,9 @@ var (
 		return cleanup
 	}
 
-	// WithServerStreamWrapper returns a ServerOption that sets the internal
+	// ServerStreamWrapper returns a ServerOption that sets the internal
 	// stream wrapper used for HTTP filters.
-	WithServerStreamWrapper any // func(func(any) (any, error)) grpc.ServerOption
+	ServerStreamWrapper any // func(func(any) (any, error)) grpc.ServerOption
 )
 
 // HealthChecker defines the signature of the client-side LB channel health

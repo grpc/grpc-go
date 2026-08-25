@@ -18,7 +18,6 @@
 package server
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"net/netip"
@@ -583,7 +582,7 @@ type serverInterceptor struct {
 	level string
 }
 
-func (si *serverInterceptor) InterceptRPC(context.Context, grpc.ServerStream) (grpc.ServerStream, error) {
+func (si *serverInterceptor) InterceptRPC(grpc.ServerStream) (grpc.ServerStream, error) {
 	return nil, errors.New(si.level)
 }
 
@@ -699,8 +698,6 @@ func (s) TestHTTPFilterInstantiation(t *testing.T) {
 			wantErrs: []string{topLevel, vhLevel, rLevel},
 		},
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			fc := filterChain{
@@ -727,7 +724,7 @@ func (s) TestHTTPFilterInstantiation(t *testing.T) {
 			var errs []string
 			for _, vh := range urc.vhs {
 				for _, r := range vh.routes {
-					_, err := r.interceptor.InterceptRPC(ctx, nil)
+					_, err := r.interceptor.InterceptRPC(nil)
 					errs = append(errs, err.Error())
 				}
 			}

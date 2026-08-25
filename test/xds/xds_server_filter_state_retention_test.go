@@ -137,7 +137,7 @@ type trackingInterceptor struct {
 	basePath string
 }
 
-func (i *trackingInterceptor) InterceptRPC(_ context.Context, ss grpc.ServerStream) (grpc.ServerStream, error) {
+func (i *trackingInterceptor) InterceptRPC(ss grpc.ServerStream) (grpc.ServerStream, error) {
 	i.pathCh <- i.basePath
 	return ss, nil
 }

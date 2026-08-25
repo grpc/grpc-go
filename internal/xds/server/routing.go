@@ -88,7 +88,7 @@ func RouteAndProcess(ss grpc.ServerStream) (grpc.ServerStream, error) {
 		return nil, rc.statusErrWithNodeID(codes.Unavailable, "the incoming RPC did not match a configured Route")
 	}
 	if rwi.interceptor != nil {
-		return rwi.interceptor.InterceptRPC(ctx, ss)
+		return rwi.interceptor.InterceptRPC(ss)
 	}
 	return ss, nil
 }

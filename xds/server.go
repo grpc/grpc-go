@@ -80,7 +80,7 @@ func NewGRPCServer(opts ...grpc.ServerOption) (*GRPCServer, error) {
 	}
 	// Construct a grpc.ServerOption that registers xdsFilterWrapper on
 	// the server.
-	xdsInternalOpt := internal.WithServerStreamWrapper.(func(func(any) (any, error)) any)(xdsFilterWrapper).(grpc.ServerOption)
+	xdsInternalOpt := internal.ServerStreamWrapper.(func(func(any) (any, error)) any)(xdsFilterWrapper).(grpc.ServerOption)
 	opts = append(opts, xdsInternalOpt)
 	s := &GRPCServer{
 		gs:   newGRPCServer(opts...),

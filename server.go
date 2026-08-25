@@ -89,8 +89,8 @@ func init() {
 	internal.MetricsRecorderForServer = func(srv *Server) estats.MetricsRecorder {
 		return istats.NewMetricsRecorderList(srv.opts.statsHandlers)
 	}
-	internal.WithServerStreamWrapper = func(w func(any) (any, error)) any {
-		return withServerStreamWrapper(func(ss ServerStream) (ServerStream, error) {
+	internal.ServerStreamWrapper = func(w func(any) (any, error)) any {
+		return serverStreamWrapper(func(ss ServerStream) (ServerStream, error) {
 			res, err := w(ss)
 			if err != nil || res == nil {
 				return nil, err
@@ -671,9 +671,9 @@ func bufferPool(bufferPool mem.BufferPool) ServerOption {
 	})
 }
 
-// withServerStreamWrapper returns a ServerOption that sets the server-level
+// serverStreamWrapper returns a ServerOption that sets the server-level
 // stream wrapper (used internally by xDS server filters).
-func withServerStreamWrapper(w func(ServerStream) (ServerStream, error)) ServerOption {
+func serverStreamWrapper(w func(ServerStream) (ServerStream, error)) ServerOption {
 	return newFuncServerOption(func(o *serverOptions) {
 		o.streamWrapper = w
 	})

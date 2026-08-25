@@ -493,7 +493,7 @@ type wrappedTestStream struct {
 // Test verifies that an internal stream wrapper option configured on the
 // server gets invoked and can wrap the ServerStream for both Unary and
 // Streaming RPCs.
-func (s) TestWithServerStreamWrapper(t *testing.T) {
+func (s) TestServerStreamWrapper(t *testing.T) {
 	var wrapperCalled atomic.Bool
 	wrapper := func(ss any) (any, error) {
 		wrapperCalled.Store(true)
@@ -503,7 +503,7 @@ func (s) TestWithServerStreamWrapper(t *testing.T) {
 		return nil, nil
 	}
 
-	opt := internal.WithServerStreamWrapper.(func(func(any) (any, error)) any)(wrapper).(grpc.ServerOption)
+	opt := internal.ServerStreamWrapper.(func(func(any) (any, error)) any)(wrapper).(grpc.ServerOption)
 
 	ss := &stubserver.StubServer{
 		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
@@ -524,7 +524,7 @@ func (s) TestWithServerStreamWrapper(t *testing.T) {
 		t.Fatalf("EmptyCall failed: %v", err)
 	}
 	if !wrapperCalled.Load() {
-		t.Fatal("WithServerStreamWrapper callback was not called for Unary RPC")
+		t.Fatal("ServerStreamWrapper callback was not called for Unary RPC")
 	}
 
 	wrapperCalled.Store(false)
@@ -536,19 +536,19 @@ func (s) TestWithServerStreamWrapper(t *testing.T) {
 		t.Fatalf("Recv failed: %v", err)
 	}
 	if !wrapperCalled.Load() {
-		t.Fatal("WithServerStreamWrapper callback was not called for Streaming RPC")
+		t.Fatal("ServerStreamWrapper callback was not called for Streaming RPC")
 	}
 }
 
 // Test verifies that if an internal stream wrapper returns an error,
 // the RPC is rejected early with that status error before executing
 // handlers.
-func (s) TestWithServerStreamWrapper_EarlyRejection(t *testing.T) {
+func (s) TestServerStreamWrapper_EarlyRejection(t *testing.T) {
 	wrapper := func(any) (any, error) {
 		return nil, status.Error(codes.PermissionDenied, "early rejection by internal wrapper")
 	}
 
-	opt := internal.WithServerStreamWrapper.(func(func(any) (any, error)) any)(wrapper).(grpc.ServerOption)
+	opt := internal.ServerStreamWrapper.(func(func(any) (any, error)) any)(wrapper).(grpc.ServerOption)
 
 	ss := &stubserver.StubServer{
 		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {

@@ -140,7 +140,7 @@ type ServerInterceptor interface {
 	//
 	// Returning a non-nil error will terminate the RPC with that status error.
 	// Implementations should never return (nil, nil).
-	InterceptRPC(ctx context.Context, ss grpc.ServerStream) (grpc.ServerStream, error)
+	InterceptRPC(ss grpc.ServerStream) (grpc.ServerStream, error)
 
 	// Close closes the interceptor. Once called, no new calls to InterceptRPC are
 	// accepted. Ongoing calls to InterceptRPC are allowed to complete.

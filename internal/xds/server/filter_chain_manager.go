@@ -18,7 +18,6 @@
 package server
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"net/netip"
@@ -552,10 +551,10 @@ type interceptorList struct {
 	interceptors []httpfilter.ServerInterceptor
 }
 
-func (il *interceptorList) InterceptRPC(ctx context.Context, ss grpc.ServerStream) (grpc.ServerStream, error) {
+func (il *interceptorList) InterceptRPC(ss grpc.ServerStream) (grpc.ServerStream, error) {
 	var err error
 	for _, i := range il.interceptors {
-		ss, err = i.InterceptRPC(ctx, ss)
+		ss, err = i.InterceptRPC(ss)
 		if err != nil {
 			return nil, err
 		}
