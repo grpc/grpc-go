@@ -77,29 +77,30 @@ func (c *Config) Equal(other *Config) bool {
 // no-op for credentials owned by another component (e.g. the allowlisted
 // credentials owned by the bootstrap config).
 func (c *Config) Close() {
-	// ChannelCredentials is nil only when a mid-parse failure closes a
-	// partially populated config.
-	if c.ChannelCredentials != nil {
-		c.ChannelCredentials.Close()
-	}
+	c.ChannelCredentials.Close()
 	for _, cc := range c.CallCredentials {
 		cc.Close()
 	}
 }
 
 // Dial creates a channel to the side-channel service, using the channel and
-// call credentials from the config along with the provided dial options.
+// call credentials from the config along with the provided dial options. The
+// call credentials are attached to the channel; since they are part of the
+// config's identity, configs whose call credentials differ do not share a
+// channel.
 //
 // Dial does not take ownership of the config: the caller releases the
 // config's credentials via Close when the config is no longer needed, after
 // closing any channel created from it.
 func (c *Config) Dial(opts ...grpc.DialOption) (*grpc.ClientConn, error) {
+	// The credentials are appended after the provided options so that they
+	// cannot be overridden.
 	dialOpts := make([]grpc.DialOption, 0, len(opts)+len(c.CallCredentials)+1)
+	dialOpts = append(dialOpts, opts...)
 	dialOpts = append(dialOpts, grpc.WithCredentialsBundle(c.ChannelCredentials.Bundle()))
 	for _, cc := range c.CallCredentials {
 		dialOpts = append(dialOpts, grpc.WithPerRPCCredentials(cc.Credentials()))
 	}
-	dialOpts = append(dialOpts, opts...)
 	return grpc.NewClient(c.TargetURI, dialOpts...)
 }
 
@@ -117,7 +118,7 @@ func (c *Config) Dial(opts ...grpc.DialOption) (*grpc.ClientConn, error) {
 // The credentials in the returned Config are built and ready to use. The
 // caller owns the Config and releases its credentials via Close when it is no
 // longer needed, after closing any channel dialed from it.
-func Parse(gs *v3corepb.GrpcService, bc *bootstrap.Config, sc *bootstrap.ServerConfig) (_ *Config, err error) {
+func Parse(gs *v3corepb.GrpcService, bc *bootstrap.Config, sc *bootstrap.ServerConfig) (*Config, error) {
 	googleGrpc := gs.GetGoogleGrpc()
 	if googleGrpc == nil {
 		return nil, fmt.Errorf("grpcservice: only google_grpc GrpcService config is supported")
@@ -132,18 +133,22 @@ func Parse(gs *v3corepb.GrpcService, bc *bootstrap.Config, sc *bootstrap.ServerC
 	}
 
 	cfg := &Config{TargetURI: targetURI}
-	// Release any credentials built before a mid-parse failure.
-	defer func() {
-		if err != nil {
-			cfg.Close()
-		}
-	}()
+	var err error
+	if cfg.Timeout, err = parseTimeout(gs); err != nil {
+		return nil, err
+	}
+	if cfg.InitialMetadata, err = parseInitialMetadata(gs.GetInitialMetadata()); err != nil {
+		return nil, err
+	}
 
+	// Credentials are built last, so that no error path can drop built
+	// credentials.
 	if sc.ServerFeaturesTrustedXDSServer() {
 		if cfg.ChannelCredentials, err = buildChannelCredentials(googleGrpc.GetChannelCredentialsPlugin(), bc); err != nil {
 			return nil, err
 		}
 		if cfg.CallCredentials, err = buildCallCredentials(googleGrpc.GetCallCredentialsPlugin()); err != nil {
+			cfg.ChannelCredentials.Close()
 			return nil, err
 		}
 	} else {
@@ -155,13 +160,6 @@ func Parse(gs *v3corepb.GrpcService, bc *bootstrap.Config, sc *bootstrap.ServerC
 		// their pairs carry no cleanup, so Config.Close does not affect
 		// them.
 		cfg.ChannelCredentials, cfg.CallCredentials = svc.SideChannelCredentials()
-	}
-
-	if cfg.Timeout, err = parseTimeout(gs); err != nil {
-		return nil, err
-	}
-	if cfg.InitialMetadata, err = parseInitialMetadata(gs.GetInitialMetadata()); err != nil {
-		return nil, err
 	}
 	return cfg, nil
 }

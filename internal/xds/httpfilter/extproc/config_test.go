@@ -139,8 +139,18 @@ var cmpOpts = []cmp.Option{
 		optional.Optional[processingModes]{},
 		optional.Optional[bool]{},
 	),
-	cmp.Comparer((*xdscreds.ChannelCreds).Equal),
-	cmp.Comparer((*xdscreds.CallCreds).Equal),
+	cmp.Comparer(func(a, b *xdscreds.ChannelCreds) bool {
+		if a == nil || b == nil {
+			return a == b
+		}
+		return a.Equal(b)
+	}),
+	cmp.Comparer(func(a, b *xdscreds.CallCreds) bool {
+		if a == nil || b == nil {
+			return a == b
+		}
+		return a.Equal(b)
+	}),
 	protocmp.Transform(),
 	cmp.Transformer("RegexpToString", func(r *regexp.Regexp) string {
 		if r == nil {
@@ -811,9 +821,10 @@ func (s) TestBuildClientInterceptor_Success(t *testing.T) {
 					responseBodyMode:    modeSkip,
 				},
 				server: grpcservice.Config{
-					TargetURI:       testBaseURI,
-					Timeout:         time.Second,
-					InitialMetadata: metadata.MD(metadata.Pairs("key1", "value1")),
+					TargetURI:          testBaseURI,
+					ChannelCredentials: allowlistInsecureCreds,
+					Timeout:            time.Second,
+					InitialMetadata:    metadata.MD(metadata.Pairs("key1", "value1")),
 				},
 				mutationRules: httpfilter.HeaderMutationRules{
 					AllowExpr:       regexp.MustCompile("^(?:allow-.*)$"),
@@ -837,7 +848,8 @@ func (s) TestBuildClientInterceptor_Success(t *testing.T) {
 					responseBodyMode:    modeSend,
 				}),
 				server: optional.New(grpcservice.Config{
-					TargetURI: "override-uri",
+					TargetURI:          "override-uri",
+					ChannelCredentials: allowlistInsecureCreds,
 				}),
 			},
 			wantConfig: baseConfig{
@@ -861,7 +873,8 @@ func (s) TestBuildClientInterceptor_Success(t *testing.T) {
 					responseBodyMode:    modeSend,
 				},
 				server: grpcservice.Config{
-					TargetURI: "override-uri",
+					TargetURI:          "override-uri",
+					ChannelCredentials: allowlistInsecureCreds,
 				},
 				allowedHeaders:    []matcher.StringMatcher{matcher.NewExactStringMatcher("allow-header", false)},
 				disallowedHeaders: []matcher.StringMatcher{matcher.NewExactStringMatcher("disallow-header", false)},
@@ -884,9 +897,10 @@ func (s) TestBuildClientInterceptor_Success(t *testing.T) {
 					responseBodyMode:    modeSkip,
 				},
 				server: grpcservice.Config{
-					TargetURI:       testBaseURI,
-					Timeout:         time.Second,
-					InitialMetadata: metadata.MD(metadata.Pairs("key1", "value1")),
+					TargetURI:          testBaseURI,
+					ChannelCredentials: allowlistInsecureCreds,
+					Timeout:            time.Second,
+					InitialMetadata:    metadata.MD(metadata.Pairs("key1", "value1")),
 				},
 				mutationRules: httpfilter.HeaderMutationRules{
 					AllowExpr:       regexp.MustCompile("^(?:allow-.*)$"),
@@ -921,9 +935,10 @@ func (s) TestBuildClientInterceptor_Success(t *testing.T) {
 					responseBodyMode:    modeSkip,
 				},
 				server: grpcservice.Config{
-					TargetURI:       testBaseURI,
-					Timeout:         time.Second,
-					InitialMetadata: metadata.MD(metadata.Pairs("key1", "value1")),
+					TargetURI:          testBaseURI,
+					ChannelCredentials: allowlistInsecureCreds,
+					Timeout:            time.Second,
+					InitialMetadata:    metadata.MD(metadata.Pairs("key1", "value1")),
 				},
 				allowedHeaders:    []matcher.StringMatcher{matcher.NewExactStringMatcher("allow-header", false)},
 				disallowedHeaders: []matcher.StringMatcher{matcher.NewExactStringMatcher("disallow-header", false)},

@@ -171,9 +171,6 @@ func (c *ChannelCreds) Bundle() credentials.Bundle {
 
 // Equal reports whether c and other were built from the same configuration.
 func (c *ChannelCreds) Equal(other *ChannelCreds) bool {
-	if c == nil || other == nil {
-		return c == other
-	}
 	return c.identity.Equal(other.identity)
 }
 
@@ -211,9 +208,6 @@ func (c *CallCreds) Credentials() credentials.PerRPCCredentials {
 
 // Equal reports whether c and other were built from the same configuration.
 func (c *CallCreds) Equal(other *CallCreds) bool {
-	if c == nil || other == nil {
-		return c == other
-	}
 	return c.identity.Equal(other.identity)
 }
 
