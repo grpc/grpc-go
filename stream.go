@@ -1498,20 +1498,28 @@ type addrConnStream struct {
 	callInfo         *callInfo
 	transport        transport.ClientTransport
 	ctx              context.Context
-	sentLast         bool
-	receivedFirstMsg bool
 	desc             *StreamDesc
 	codec            baseCodec
 	sendCompressorV0 Compressor
 	sendCompressorV1 encoding.Compressor
-	decompressorSet  bool
 	decompressorV0   Decompressor
 	decompressorV1   encoding.Compressor
-	parser           parser
 
 	// mu guards finished and is held for the entire finish method.
-	mu       sync.Mutex
-	finished bool
+	mu     sync.Mutex
+	parser parser
+
+	// Bool fields are grouped at the tail to eliminate the alignment padding
+	// that would otherwise follow each bool when the next field is pointer- or
+	// int-sized. See https://github.com/grpc/grpc-go/issues/9348 for benchmarks.
+	// Add new bool fields here, not inline above.
+
+	// Not guarded by mu.
+	sentLast         bool
+	receivedFirstMsg bool
+	decompressorSet  bool
+
+	finished bool // guarded by mu
 }
 
 func (as *addrConnStream) Header() (metadata.MD, error) {
