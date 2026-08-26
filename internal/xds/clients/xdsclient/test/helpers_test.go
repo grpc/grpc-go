@@ -284,7 +284,6 @@ type testMetricsReporter struct {
 
 	mu             sync.Mutex
 	asyncReporters map[clients.AsyncReporter]struct{}
-	onReport       func(any)
 }
 
 // newTestMetricsReporter returns a new testMetricsReporter.
@@ -345,6 +344,19 @@ func (r *testMetricsReporter) Receive(ctx context.Context) (any, error) {
 	}
 }
 
+// receiveNonBlocking returns the next recorded metric, if one is immediately
+// available, without blocking. The second return value is false if no metric
+// is buffered.
+func (r *testMetricsReporter) receiveNonBlocking() (any, bool) {
+	select {
+	case got := <-r.metricsCh.Get():
+		r.metricsCh.Load()
+		return got, true
+	default:
+		return nil, false
+	}
+}
+
 // Drain clears all accumulated metrics from the channel.
 func (r *testMetricsReporter) Drain() {
 	for {
@@ -360,12 +372,6 @@ func (r *testMetricsReporter) Drain() {
 // ReportMetric sends the metrics data to the metricsCh channel.
 func (r *testMetricsReporter) ReportMetric(m any) {
 	r.metricsCh.Put(m)
-	r.mu.Lock()
-	cb := r.onReport
-	r.mu.Unlock()
-	if cb != nil {
-		cb(m)
-	}
 }
 
 func (r *testMetricsReporter) RegisterAsyncReporter(reporter clients.AsyncReporter) func() {
@@ -384,12 +390,8 @@ func (r *testMetricsReporter) RegisterAsyncReporter(reporter clients.AsyncReport
 // async gauge metrics at specific precise points in time for verification.
 func (r *testMetricsReporter) triggerAsyncMetrics() {
 	r.mu.Lock()
-	reporters := make([]clients.AsyncReporter, 0, len(r.asyncReporters))
+	defer r.mu.Unlock()
 	for reporter := range r.asyncReporters {
-		reporters = append(reporters, reporter)
-	}
-	r.mu.Unlock()
-	for _, reporter := range reporters {
 		reporter.Report(r)
 	}
 }
