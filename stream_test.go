@@ -295,7 +295,7 @@ func (s) TestClientStreaming_MultipleMessages(t *testing.T) {
 func (s) TestServerStreaming_MultipleMessages(t *testing.T) {
 	const numResponses = 5
 	ss := &stubserver.StubServer{
-		StreamingOutputCallF: func(req *testpb.StreamingOutputCallRequest, stream testgrpc.TestService_StreamingOutputCallServer) error {
+		StreamingOutputCallF: func(_ *testpb.StreamingOutputCallRequest, stream testgrpc.TestService_StreamingOutputCallServer) error {
 			for i := 0; i < numResponses; i++ {
 				if err := stream.Send(&testpb.StreamingOutputCallResponse{
 					Payload: &testpb.Payload{Body: make([]byte, i+1)},
