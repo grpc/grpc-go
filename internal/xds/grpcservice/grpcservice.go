@@ -27,6 +27,7 @@ import (
 	"strings"
 	"time"
 
+	"google.golang.org/grpc"
 	imetadata "google.golang.org/grpc/internal/metadata"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	xdscreds "google.golang.org/grpc/internal/xds/credentials"
@@ -66,43 +67,56 @@ type Config struct {
 // initial metadata are applied per-RPC and intentionally do not affect
 // channel sharing.
 func (c *Config) Equal(other *Config) bool {
-	if c == nil || other == nil {
-		return c == other
-	}
-	return c.TargetURI == other.TargetURI &&
-		c.ChannelCredentials.Identity() == other.ChannelCredentials.Identity() &&
-		slices.EqualFunc(c.CallCredentials, other.CallCredentials, func(a, b *xdscreds.CallCreds) bool {
-			return a.Identity() == b.Identity()
-		})
+	targetEqual := c.TargetURI == other.TargetURI
+	channelCredsEqual := c.ChannelCredentials.Equal(other.ChannelCredentials)
+	callCredsEqual := slices.EqualFunc(c.CallCredentials, other.CallCredentials, (*xdscreds.CallCreds).Equal)
+	return targetEqual && channelCredsEqual && callCredsEqual
 }
 
 // Close releases the credentials owned by the config. It is idempotent, and a
 // no-op for credentials owned by another component (e.g. the allowlisted
 // credentials owned by the bootstrap config).
 func (c *Config) Close() {
-	if c == nil {
-		return
+	// ChannelCredentials is nil only when a mid-parse failure closes a
+	// partially populated config.
+	if c.ChannelCredentials != nil {
+		c.ChannelCredentials.Close()
 	}
-	c.ChannelCredentials.Close()
 	for _, cc := range c.CallCredentials {
 		cc.Close()
 	}
 }
 
+// Dial creates a channel to the side-channel service, using the channel and
+// call credentials from the config along with the provided dial options.
+//
+// Dial does not take ownership of the config: the caller releases the
+// config's credentials via Close when the config is no longer needed, after
+// closing any channel created from it.
+func (c *Config) Dial(opts ...grpc.DialOption) (*grpc.ClientConn, error) {
+	dialOpts := make([]grpc.DialOption, 0, len(opts)+len(c.CallCredentials)+1)
+	dialOpts = append(dialOpts, grpc.WithCredentialsBundle(c.ChannelCredentials.Bundle()))
+	for _, cc := range c.CallCredentials {
+		dialOpts = append(dialOpts, grpc.WithPerRPCCredentials(cc.Credentials()))
+	}
+	dialOpts = append(dialOpts, opts...)
+	return grpc.NewClient(c.TargetURI, dialOpts...)
+}
+
 // Parse parses and validates a GrpcService proto into a Config, applying the
-// gRFC A102 trust policy.
+// gRFC A102 trust policy. bc is the bootstrap configuration of the xDS client
+// that received the resource, and sc is the configuration of the management
+// server that sent it; both must be non-nil.
 //
-// Credentials configured in the proto are honored only when the xDS
-// management server that delivered it is trusted, i.e. configured with the
-// trusted_xds_server server feature; a nil server config means the delivering
-// management server is unknown and is treated as untrusted. For untrusted
-// management servers the target must be present in the bootstrap
-// allowed_grpc_services map, and the returned Config carries the credentials
-// configured there.
+// Credentials configured in the proto are honored only when the delivering
+// management server is trusted, i.e. configured with the trusted_xds_server
+// server feature. For untrusted management servers the target must be present
+// in the bootstrap allowed_grpc_services map, and the returned Config carries
+// the credentials configured there.
 //
-// The credentials in the returned Config are built and ready to use. Owned
-// credentials are released by Config.Close; the xDS client's CreateChannel
-// takes over that responsibility when a channel is created from the Config.
+// The credentials in the returned Config are built and ready to use. The
+// caller owns the Config and releases its credentials via Close when it is no
+// longer needed, after closing any channel dialed from it.
 func Parse(gs *v3corepb.GrpcService, bc *bootstrap.Config, sc *bootstrap.ServerConfig) (_ *Config, err error) {
 	googleGrpc := gs.GetGoogleGrpc()
 	if googleGrpc == nil {
@@ -125,20 +139,15 @@ func Parse(gs *v3corepb.GrpcService, bc *bootstrap.Config, sc *bootstrap.ServerC
 		}
 	}()
 
-	if trusted := sc != nil && sc.ServerFeaturesTrustedXDSServer(); trusted {
+	if sc.ServerFeaturesTrustedXDSServer() {
 		if cfg.ChannelCredentials, err = buildChannelCredentials(googleGrpc.GetChannelCredentialsPlugin(), bc); err != nil {
-			return nil, fmt.Errorf("grpcservice: %v", err)
+			return nil, err
 		}
 		if cfg.CallCredentials, err = buildCallCredentials(googleGrpc.GetCallCredentialsPlugin()); err != nil {
-			return nil, fmt.Errorf("grpcservice: %v", err)
+			return nil, err
 		}
 	} else {
-		// A nil bootstrap config has no allowlist, so all targets are
-		// rejected.
-		var svc *bootstrap.AllowedGRPCService
-		if bc != nil {
-			svc = bc.AllowedGRPCService(targetURI)
-		}
+		svc := bc.AllowedGRPCService(targetURI)
 		if svc == nil {
 			return nil, fmt.Errorf("grpcservice: target_uri %q is not present in allowed_grpc_services", targetURI)
 		}
@@ -159,14 +168,9 @@ func Parse(gs *v3corepb.GrpcService, bc *bootstrap.Config, sc *bootstrap.ServerC
 
 // buildChannelCredentials builds the first channel credential from the plugin
 // list whose proto type has a registered builder. It is an error if none of
-// the configured plugins are supported, or if building the selected plugin
+// the configured plugins are supported, or if building the supported plugin
 // fails.
 func buildChannelCredentials(plugins []*anypb.Any, bc *bootstrap.Config) (*xdscreds.ChannelCreds, error) {
-	// A nil *bootstrap.Config must become a nil interface, not a typed nil.
-	var resolver xdscreds.CertProviderConfigResolver
-	if bc != nil {
-		resolver = bc
-	}
 	for _, p := range plugins {
 		if p == nil {
 			continue
@@ -175,14 +179,14 @@ func buildChannelCredentials(plugins []*anypb.Any, bc *bootstrap.Config) (*xdscr
 		if b == nil {
 			continue
 		}
-		bundle, cleanup, err := b(p, resolver)
+		bundle, cleanup, err := b(p, bc)
 		if err != nil {
-			return nil, fmt.Errorf("failed to build channel credentials %q: %v", p.GetTypeUrl(), err)
+			return nil, fmt.Errorf("grpcservice: failed to build channel credentials %q: %v", p.GetTypeUrl(), err)
 		}
-		identity := xdscreds.Identity{Type: p.GetTypeUrl(), Data: string(p.GetValue())}
+		identity := xdscreds.Identity{Type: p.GetTypeUrl(), Data: p.GetValue()}
 		return xdscreds.NewChannelCreds(bundle, identity, cleanup), nil
 	}
-	return nil, fmt.Errorf("no supported channel credentials found in grpc_service")
+	return nil, fmt.Errorf("grpcservice: no supported channel credentials found in grpc_service")
 }
 
 // buildCallCredentials builds the call credentials from the plugin list,
@@ -208,9 +212,9 @@ func buildCallCredentials(plugins []*anypb.Any) (_ []*xdscreds.CallCreds, err er
 		}
 		cc, cleanup, err := b(p)
 		if err != nil {
-			return nil, fmt.Errorf("failed to build call credentials %q: %v", p.GetTypeUrl(), err)
+			return nil, fmt.Errorf("grpcservice: failed to build call credentials %q: %v", p.GetTypeUrl(), err)
 		}
-		identity := xdscreds.Identity{Type: p.GetTypeUrl(), Data: string(p.GetValue())}
+		identity := xdscreds.Identity{Type: p.GetTypeUrl(), Data: p.GetValue()}
 		out = append(out, xdscreds.NewCallCreds(cc, identity, cleanup))
 	}
 	return out, nil

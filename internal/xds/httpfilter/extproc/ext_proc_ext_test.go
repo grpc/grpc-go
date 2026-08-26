@@ -43,7 +43,6 @@ import (
 	"google.golang.org/grpc/internal/testutils/xds/e2e/setup"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/internal/xds/grpcservice"
-	"google.golang.org/grpc/internal/xds/httpfilter"
 	"google.golang.org/grpc/internal/xds/httpfilter/extproc/internal"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
@@ -4815,7 +4814,7 @@ func (s) TestExtProcChannelRetention(t *testing.T) {
 
 			// Override CreateExtProcChannel to signal when the channel is closed.
 			origCreate := internal.CreateExtProcChannel
-			internal.CreateExtProcChannel = func(_ httpfilter.SideChannelFactory, cfg *grpcservice.Config) (grpc.ClientConnInterface, func(), error) {
+			internal.CreateExtProcChannel = func(cfg *grpcservice.Config) (grpc.ClientConnInterface, func(), error) {
 				cc, err := grpc.NewClient(cfg.TargetURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
 				if err != nil {
 					return nil, nil, err
@@ -4933,7 +4932,7 @@ func (s) TestExtProcChannelRetention_XDSConfigUpdate(t *testing.T) {
 			// Override CreateExtProcChannel to signal when a channel is closed and
 			// dial to correct proc server.
 			origCreate := internal.CreateExtProcChannel
-			internal.CreateExtProcChannel = func(_ httpfilter.SideChannelFactory, cfg *grpcservice.Config) (grpc.ClientConnInterface, func(), error) {
+			internal.CreateExtProcChannel = func(cfg *grpcservice.Config) (grpc.ClientConnInterface, func(), error) {
 				cc, err := grpc.NewClient(cfg.TargetURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
 				if err != nil {
 					return nil, nil, err
@@ -5114,7 +5113,7 @@ func (s) TestExtProcChannelRetention_UnaryRPC(t *testing.T) {
 
 			// Override CreateExtProcChannel to signal when the channel is closed.
 			origCreate := internal.CreateExtProcChannel
-			internal.CreateExtProcChannel = func(_ httpfilter.SideChannelFactory, cfg *grpcservice.Config) (grpc.ClientConnInterface, func(), error) {
+			internal.CreateExtProcChannel = func(cfg *grpcservice.Config) (grpc.ClientConnInterface, func(), error) {
 				cc, err := grpc.NewClient(cfg.TargetURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
 				if err != nil {
 					return nil, nil, err

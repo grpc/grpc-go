@@ -37,6 +37,7 @@ import (
 	xdscreds "google.golang.org/grpc/internal/xds/credentials"
 	"google.golang.org/grpc/internal/xds/grpcservice"
 	"google.golang.org/grpc/internal/xds/httpfilter"
+	iextproc "google.golang.org/grpc/internal/xds/httpfilter/extproc/internal"
 	"google.golang.org/grpc/internal/xds/matcher"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/proto"
@@ -71,9 +72,9 @@ var allowlistInsecureCreds = xdscreds.NewChannelCreds(nil, xdscreds.Identity{Typ
 
 // testParseOptions returns ParseOptions whose bootstrap
 // configuration allowlists the given side-channel targets with insecure
-// channel credentials. The returned options carry no ServerConfig, so the
-// delivering server is treated as untrusted and GrpcService parsing takes the
-// allowed_grpc_services path.
+// channel credentials. The returned options carry a ServerConfig without the
+// trusted_xds_server feature, so the delivering server is untrusted and
+// GrpcService parsing takes the allowed_grpc_services path.
 func testParseOptions(t *testing.T, targets ...string) httpfilter.ParseOptions {
 	t.Helper()
 
@@ -101,24 +102,31 @@ func testParseOptions(t *testing.T, targets ...string) httpfilter.ParseOptions {
 	if err != nil {
 		t.Fatalf("Failed to parse bootstrap contents: %v", err)
 	}
-	return httpfilter.ParseOptions{BootstrapConfig: config}
-}
-
-// fakeSideChannelFactory implements httpfilter.SideChannelFactory. It creates
-// insecure channels, and fails channel creation for failTarget.
-type fakeSideChannelFactory struct {
-	failTarget string
-}
-
-func (f *fakeSideChannelFactory) CreateChannel(cfg *grpcservice.Config) (grpc.ClientConnInterface, func(), error) {
-	if f.failTarget != "" && cfg.TargetURI == f.failTarget {
-		return nil, nil, fmt.Errorf("dial error")
-	}
-	cc, err := grpc.NewClient(cfg.TargetURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	untrustedServer, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{URI: "untrusted-server:1234"})
 	if err != nil {
-		return nil, nil, err
+		t.Fatalf("ServerConfigForTesting() failed: %v", err)
 	}
-	return cc, func() { cc.Close() }, nil
+	return httpfilter.ParseOptions{BootstrapConfig: config, ServerConfig: untrustedServer}
+}
+
+// overrideCreateExtProcChannel overrides the channel creation seam to create
+// insecure channels regardless of the config's credentials, and to fail
+// channel creation for failTarget. The override is restored when the test
+// ends.
+func overrideCreateExtProcChannel(t *testing.T, failTarget string) {
+	t.Helper()
+	origCreateExtProcChannel := iextproc.CreateExtProcChannel
+	iextproc.CreateExtProcChannel = func(cfg *grpcservice.Config) (grpc.ClientConnInterface, func(), error) {
+		if failTarget != "" && cfg.TargetURI == failTarget {
+			return nil, nil, fmt.Errorf("dial error")
+		}
+		cc, err := grpc.NewClient(cfg.TargetURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		if err != nil {
+			return nil, nil, err
+		}
+		return cc, func() { cc.Close() }, nil
+	}
+	t.Cleanup(func() { iextproc.CreateExtProcChannel = origCreateExtProcChannel })
 }
 
 var cmpOpts = []cmp.Option{
@@ -131,8 +139,8 @@ var cmpOpts = []cmp.Option{
 		optional.Optional[processingModes]{},
 		optional.Optional[bool]{},
 	),
-	cmp.Comparer(func(a, b *xdscreds.ChannelCreds) bool { return a.Identity() == b.Identity() }),
-	cmp.Comparer(func(a, b *xdscreds.CallCreds) bool { return a.Identity() == b.Identity() }),
+	cmp.Comparer((*xdscreds.ChannelCreds).Equal),
+	cmp.Comparer((*xdscreds.CallCreds).Equal),
 	protocmp.Transform(),
 	cmp.Transformer("RegexpToString", func(r *regexp.Regexp) string {
 		if r == nil {
@@ -310,7 +318,7 @@ func (s) TestParseFilterConfig_TrustPolicy(t *testing.T) {
 			name:      "trusted_uses_proto_creds",
 			cfg:       extProcConfig("localhost:1234", insecurePlugin),
 			opts:      trustedOpts,
-			wantCreds: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: insecurePlugin.GetTypeUrl(), Data: string(insecurePlugin.GetValue())}, nil),
+			wantCreds: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: insecurePlugin.GetTypeUrl(), Data: insecurePlugin.GetValue()}, nil),
 		},
 		{
 			name:    "trusted_requires_supported_creds",
@@ -345,7 +353,7 @@ func (s) TestParseFilterConfig_TrustPolicy(t *testing.T) {
 			if err != nil {
 				t.Fatalf("ParseFilterConfig() returned unexpected error: %v", err)
 			}
-			if gotCreds := got.(baseConfig).server.ChannelCredentials; gotCreds.Identity() != tt.wantCreds.Identity() {
+			if gotCreds := got.(baseConfig).server.ChannelCredentials; !gotCreds.Equal(tt.wantCreds) {
 				t.Fatalf("ParseFilterConfig() returned channel credentials %+v, want %+v", gotCreds, tt.wantCreds)
 			}
 		})
@@ -924,8 +932,9 @@ func (s) TestBuildClientInterceptor_Success(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
+			overrideCreateExtProcChannel(t, "")
 			builder := builder{}
-			filter := builder.BuildClientFilter(httpfilter.ClientFilterOptions{SideChannelFactory: &fakeSideChannelFactory{}})
+			filter := builder.BuildClientFilter(httpfilter.ClientFilterOptions{})
 			defer filter.Close()
 
 			intptr, err := filter.BuildClientInterceptor(tc.cfg, tc.override)
@@ -997,8 +1006,9 @@ func (s) TestBuildClientInterceptor_Failure(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
+			overrideCreateExtProcChannel(t, "error-uri")
 			builder := builder{}
-			filter := builder.BuildClientFilter(httpfilter.ClientFilterOptions{SideChannelFactory: &fakeSideChannelFactory{failTarget: "error-uri"}})
+			filter := builder.BuildClientFilter(httpfilter.ClientFilterOptions{})
 			defer filter.Close()
 
 			_, err := filter.BuildClientInterceptor(tc.cfg, tc.override)

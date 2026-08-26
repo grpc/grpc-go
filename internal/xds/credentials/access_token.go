@@ -35,10 +35,10 @@ func init() {
 	RegisterCallCredsBuilder(accessTokenCredsTypeURL, func(config *anypb.Any) (credentials.PerRPCCredentials, func(), error) {
 		var accessToken accesstokenpb.AccessTokenCredentials
 		if err := anypb.UnmarshalTo(config, &accessToken, proto.UnmarshalOptions{}); err != nil {
-			return nil, nil, fmt.Errorf("failed to unmarshal AccessTokenCredentials: %v", err)
+			return nil, nil, fmt.Errorf("credentials: failed to unmarshal AccessTokenCredentials: %v", err)
 		}
 		if accessToken.GetToken() == "" {
-			return nil, nil, fmt.Errorf("access token must be non-empty")
+			return nil, nil, fmt.Errorf("credentials: access token must be non-empty")
 		}
 		// These credentials hold no resources; the no-op cleanup satisfies
 		// the registry contract.
@@ -59,7 +59,7 @@ type accessTokenCallCreds struct {
 func (c *accessTokenCallCreds) GetRequestMetadata(ctx context.Context, _ ...string) (map[string]string, error) {
 	ri, _ := credentials.RequestInfoFromContext(ctx)
 	if err := credentials.CheckSecurityLevel(ri.AuthInfo, credentials.PrivacyAndIntegrity); err != nil {
-		return nil, fmt.Errorf("unable to transfer access token PerRPCCredentials: %v", err)
+		return nil, fmt.Errorf("credentials: unable to transfer access token PerRPCCredentials: %v", err)
 	}
 	return map[string]string{"authorization": "Bearer " + c.token}, nil
 }

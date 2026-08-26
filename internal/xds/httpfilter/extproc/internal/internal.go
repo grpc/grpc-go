@@ -20,19 +20,24 @@
 package internal
 
 import (
+	"sync"
 	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/internal/xds/grpcservice"
-	"google.golang.org/grpc/internal/xds/httpfilter"
 )
 
 var (
 	// CreateExtProcChannel creates the channel to the external processing
-	// server via the provided side-channel factory. It is a variable so that
-	// tests can intercept channel creation and observe its release.
-	CreateExtProcChannel = func(factory httpfilter.SideChannelFactory, server *grpcservice.Config) (grpc.ClientConnInterface, func(), error) {
-		return factory.CreateChannel(server)
+	// server described by the given config. The returned function closes the
+	// channel; it is idempotent. It is a variable so that tests can intercept
+	// channel creation and observe its release.
+	CreateExtProcChannel = func(server *grpcservice.Config) (grpc.ClientConnInterface, func(), error) {
+		conn, err := server.Dial()
+		if err != nil {
+			return nil, nil, err
+		}
+		return conn, sync.OnceFunc(func() { conn.Close() }), nil
 	}
 
 	// RegisterForTesting registers the external processor HTTP Filter for testing

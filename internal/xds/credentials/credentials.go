@@ -29,6 +29,7 @@
 package credentials
 
 import (
+	"bytes"
 	"fmt"
 	"sync"
 
@@ -61,15 +62,15 @@ func init() {
 	RegisterChannelCredsBuilder(xdsCredsTypeURL, func(config *anypb.Any, resolver CertProviderConfigResolver) (credentials.Bundle, func(), error) {
 		var xdsCfg xdscredspb.XdsCredentials
 		if err := anypb.UnmarshalTo(config, &xdsCfg, proto.UnmarshalOptions{}); err != nil {
-			return nil, nil, fmt.Errorf("failed to unmarshal XdsCredentials: %v", err)
+			return nil, nil, fmt.Errorf("credentials: failed to unmarshal XdsCredentials: %v", err)
 		}
 		fallback := xdsCfg.GetFallbackCredentials()
 		if fallback == nil {
-			return nil, nil, fmt.Errorf("xds credentials missing required fallback credentials")
+			return nil, nil, fmt.Errorf("credentials: xds credentials missing required fallback credentials")
 		}
 		b := GetChannelCredsBuilder(fallback.GetTypeUrl())
 		if b == nil {
-			return nil, nil, fmt.Errorf("unsupported fallback credentials type %q in xds credentials", fallback.GetTypeUrl())
+			return nil, nil, fmt.Errorf("credentials: unsupported fallback credentials type %q in xds credentials", fallback.GetTypeUrl())
 		}
 		return b(fallback, resolver)
 	})
@@ -86,9 +87,8 @@ type CertProviderConfigResolver interface {
 // ChannelCredsBuilder builds a channel credentials bundle from a GrpcService
 // channel credentials plugin config. The resolver gives access to the
 // certificate provider instances configured in the bootstrap config; builders
-// that do not reference them ignore it, and it may be nil. The returned
-// function releases the resources held by the bundle when it is no longer
-// needed.
+// that do not reference them ignore it. The returned function releases the
+// resources held by the bundle when it is no longer needed.
 type ChannelCredsBuilder func(config *anypb.Any, resolver CertProviderConfigResolver) (credentials.Bundle, func(), error)
 
 // CallCredsBuilder builds per-RPC credentials from a GrpcService call
@@ -129,16 +129,20 @@ func GetCallCredsBuilder(typeURL string) CallCredsBuilder {
 }
 
 // Identity identifies the configuration a credential was built from. It is
-// comparable via the standard == operator, and is used only for equality
-// decisions when sharing side channels, never as a map key.
+// used only for equality decisions when sharing side channels, never as a map
+// key.
 type Identity struct {
 	// Type is the bootstrap credential type name for JSON-sourced
 	// credentials, or the proto type URL for proto-sourced ones. The two
 	// namespaces cannot collide: proto type URLs contain dots and slashes.
 	Type string
-	// Data is the raw JSON configuration, or the proto config value bytes,
-	// as a string.
-	Data string
+	// Data is the raw JSON configuration, or the proto config value bytes.
+	Data []byte
+}
+
+// Equal reports whether i and other describe the same configuration.
+func (i Identity) Equal(other Identity) bool {
+	return i.Type == other.Type && bytes.Equal(i.Data, other.Data)
 }
 
 // ChannelCreds pairs a built credentials bundle with the identity of the
@@ -165,19 +169,18 @@ func (c *ChannelCreds) Bundle() credentials.Bundle {
 	return c.bundle
 }
 
-// Identity returns the identity of the configuration the bundle was built
-// from. It is the zero Identity for a nil ChannelCreds.
-func (c *ChannelCreds) Identity() Identity {
-	if c == nil {
-		return Identity{}
+// Equal reports whether c and other were built from the same configuration.
+func (c *ChannelCreds) Equal(other *ChannelCreds) bool {
+	if c == nil || other == nil {
+		return c == other
 	}
-	return c.identity
+	return c.identity.Equal(other.identity)
 }
 
 // Close releases the resources held by the bundle, if owned. It is
 // idempotent.
 func (c *ChannelCreds) Close() {
-	if c != nil && c.cleanup != nil {
+	if c.cleanup != nil {
 		c.cleanup()
 	}
 }
@@ -206,19 +209,18 @@ func (c *CallCreds) Credentials() credentials.PerRPCCredentials {
 	return c.creds
 }
 
-// Identity returns the identity of the configuration the credentials were
-// built from. It is the zero Identity for a nil CallCreds.
-func (c *CallCreds) Identity() Identity {
-	if c == nil {
-		return Identity{}
+// Equal reports whether c and other were built from the same configuration.
+func (c *CallCreds) Equal(other *CallCreds) bool {
+	if c == nil || other == nil {
+		return c == other
 	}
-	return c.identity
+	return c.identity.Equal(other.identity)
 }
 
 // Close releases the resources held by the credentials, if owned. It is
 // idempotent.
 func (c *CallCreds) Close() {
-	if c != nil && c.cleanup != nil {
+	if c.cleanup != nil {
 		c.cleanup()
 	}
 }

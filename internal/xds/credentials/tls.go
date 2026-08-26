@@ -24,7 +24,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"sync"
 
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/tls/certprovider"
@@ -32,7 +31,6 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 
 	tlscredspb "github.com/envoyproxy/go-control-plane/envoy/extensions/grpc_service/channel_credentials/tls/v3"
-	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
 )
 
 const tlsCredsTypeURL = "type.googleapis.com/envoy.extensions.grpc_service.channel_credentials.tls.v3.TlsCredentials"
@@ -43,66 +41,82 @@ func init() {
 
 // buildTLSCredentials builds TLS channel credentials from a TlsCredentials
 // plugin config, whose root and identity certificates are sourced from
-// certificate provider instances configured in the bootstrap config.
+// certificate provider instances configured in the bootstrap config. Unknown
+// instance names and provider build failures are errors, resulting in the
+// resource being NACKed, the same way CommonTlsContext instances are handled
+// (gRFC A29). The returned cleanup closes the certificate providers.
 func buildTLSCredentials(config *anypb.Any, resolver CertProviderConfigResolver) (credentials.Bundle, func(), error) {
 	var tlsCfg tlscredspb.TlsCredentials
 	if err := anypb.UnmarshalTo(config, &tlsCfg, proto.UnmarshalOptions{}); err != nil {
-		return nil, nil, fmt.Errorf("failed to unmarshal TlsCredentials: %v", err)
+		return nil, nil, fmt.Errorf("credentials: failed to unmarshal TlsCredentials: %v", err)
+	}
+	if resolver == nil {
+		return nil, nil, fmt.Errorf("credentials: no bootstrap configuration available to resolve certificate provider instances")
 	}
 
-	// The certificate provider instance names are validated against the
-	// bootstrap config here, at parse time, the same way CommonTlsContext
-	// instances are (gRFC A29): an unknown instance name is a NACK. The
-	// providers themselves are instantiated lazily, on the first handshake,
-	// so that a parsed-but-never-dialed config does not start certificate
-	// watchers.
-	root := tlsCfg.GetRootCertificateProvider()
-	if root.GetInstanceName() == "" {
-		return nil, nil, fmt.Errorf("tls credentials must specify root_certificate_provider with an instance_name")
+	rootInstanceName := tlsCfg.GetRootCertificateProvider().GetInstanceName()
+	if rootInstanceName == "" {
+		return nil, nil, fmt.Errorf("credentials: tls credentials must specify root_certificate_provider with an instance_name")
 	}
-	rootCfg, err := certProviderConfig(resolver, root)
+	rootCfg, err := certProviderConfig(resolver, rootInstanceName)
 	if err != nil {
-		return nil, nil, fmt.Errorf("tls credentials root certificate provider: %v", err)
+		return nil, nil, fmt.Errorf("credentials: tls credentials root certificate provider: %v", err)
 	}
-	creds := &providerTLSCreds{
-		rootConfig:   rootCfg,
-		rootCertName: root.GetCertificateName(),
+	rootProvider, err := rootCfg.Build(certprovider.BuildOptions{
+		CertName: tlsCfg.GetRootCertificateProvider().GetCertificateName(),
+		WantRoot: true,
+	})
+	if err != nil {
+		return nil, nil, fmt.Errorf("credentials: failed to build root certificate provider: %v", err)
 	}
+
+	b := &tlsBundle{rootProvider: rootProvider}
 	if identity := tlsCfg.GetIdentityCertificateProvider(); identity != nil {
-		if identity.GetInstanceName() == "" {
-			return nil, nil, fmt.Errorf("tls credentials identity_certificate_provider must specify an instance_name")
+		identityInstanceName := identity.GetInstanceName()
+		if identityInstanceName == "" {
+			rootProvider.Close()
+			return nil, nil, fmt.Errorf("credentials: tls credentials identity_certificate_provider must specify an instance_name")
 		}
-		identityCfg, err := certProviderConfig(resolver, identity)
+		identityCfg, err := certProviderConfig(resolver, identityInstanceName)
 		if err != nil {
-			return nil, nil, fmt.Errorf("tls credentials identity certificate provider: %v", err)
+			rootProvider.Close()
+			return nil, nil, fmt.Errorf("credentials: tls credentials identity certificate provider: %v", err)
 		}
-		creds.identityConfig = identityCfg
-		creds.identityCertName = identity.GetCertificateName()
+		identityProvider, err := identityCfg.Build(certprovider.BuildOptions{
+			CertName:     identity.GetCertificateName(),
+			WantIdentity: true,
+		})
+		if err != nil {
+			rootProvider.Close()
+			return nil, nil, fmt.Errorf("credentials: failed to build identity certificate provider: %v", err)
+		}
+		b.identityProvider = identityProvider
 	}
-	return &tlsBundle{creds: creds}, creds.close, nil
+	return b, b.close, nil
 }
 
-// certProviderConfig looks up the certificate provider instance referenced by
-// the given proto via the resolver.
-func certProviderConfig(resolver CertProviderConfigResolver, instance *v3tlspb.CommonTlsContext_CertificateProviderInstance) (*certprovider.BuildableConfig, error) {
-	if resolver == nil {
-		return nil, fmt.Errorf("no bootstrap configuration available to resolve certificate provider instances")
-	}
-	cfg, ok := resolver.CertProviderConfigs()[instance.GetInstanceName()]
+// certProviderConfig looks up the certificate provider instance with the
+// given name via the resolver.
+func certProviderConfig(resolver CertProviderConfigResolver, instanceName string) (*certprovider.BuildableConfig, error) {
+	cfg, ok := resolver.CertProviderConfigs()[instanceName]
 	if !ok {
-		return nil, fmt.Errorf("certificate provider instance name %q missing in bootstrap configuration", instance.GetInstanceName())
+		return nil, fmt.Errorf("certificate provider instance name %q missing in bootstrap configuration", instanceName)
 	}
 	return cfg, nil
 }
 
-// tlsBundle is a credentials.Bundle wrapping provider-backed TLS transport
-// credentials. It carries no per-RPC credentials.
+// tlsBundle is a credentials.Bundle providing client-side TLS transport
+// credentials whose server root CA certificates, and optionally client
+// identity certificates, come from certificate provider instances. The key
+// material is fetched from the providers on every handshake, so certificate
+// reloads are picked up. It carries no per-RPC credentials.
 type tlsBundle struct {
-	creds *providerTLSCreds
+	rootProvider     certprovider.Provider
+	identityProvider certprovider.Provider // nil when no identity certificate is configured
 }
 
 func (b *tlsBundle) TransportCredentials() credentials.TransportCredentials {
-	return b.creds
+	return b
 }
 
 func (b *tlsBundle) PerRPCCredentials() credentials.PerRPCCredentials {
@@ -110,108 +124,48 @@ func (b *tlsBundle) PerRPCCredentials() credentials.PerRPCCredentials {
 }
 
 func (b *tlsBundle) NewWithMode(string) (credentials.Bundle, error) {
-	return nil, fmt.Errorf("xDS TLS channel credentials only support one mode")
+	return nil, fmt.Errorf("credentials: xDS TLS channel credentials only support one mode")
 }
 
-// providerTLSCreds is a client-side credentials.TransportCredentials that
-// sources the server root CA certificates, and optionally the client identity
-// certificates, from certificate provider instances. The key material is
-// fetched from the providers on every handshake, so certificate reloads are
-// picked up; the providers themselves are instantiated on the first
-// handshake.
-type providerTLSCreds struct {
-	rootConfig       *certprovider.BuildableConfig
-	rootCertName     string
-	identityConfig   *certprovider.BuildableConfig // nil when no identity certificate is configured
-	identityCertName string
-
-	mu               sync.Mutex
-	closed           bool
-	rootProvider     certprovider.Provider
-	identityProvider certprovider.Provider
-}
-
-// providers instantiates the certificate providers on first use and returns
-// them. It fails if the credentials have already been closed.
-func (c *providerTLSCreds) providers() (root, identity certprovider.Provider, err error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.closed {
-		return nil, nil, errors.New("xDS TLS channel credentials have been closed")
-	}
-	if c.rootProvider == nil {
-		p, err := c.rootConfig.Build(certprovider.BuildOptions{CertName: c.rootCertName, WantRoot: true})
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to build root certificate provider: %v", err)
-		}
-		c.rootProvider = p
-	}
-	if c.identityConfig != nil && c.identityProvider == nil {
-		p, err := c.identityConfig.Build(certprovider.BuildOptions{CertName: c.identityCertName, WantIdentity: true})
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to build identity certificate provider: %v", err)
-		}
-		c.identityProvider = p
-	}
-	return c.rootProvider, c.identityProvider, nil
-}
-
-// close releases the certificate providers, if they were instantiated.
-// Subsequent handshakes fail.
-func (c *providerTLSCreds) close() {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.closed = true
-	if c.rootProvider != nil {
-		c.rootProvider.Close()
-		c.rootProvider = nil
-	}
-	if c.identityProvider != nil {
-		c.identityProvider.Close()
-		c.identityProvider = nil
+// close closes the certificate providers. Subsequent handshakes fail.
+func (b *tlsBundle) close() {
+	b.rootProvider.Close()
+	if b.identityProvider != nil {
+		b.identityProvider.Close()
 	}
 }
 
-func (c *providerTLSCreds) ClientHandshake(ctx context.Context, authority string, rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
-	root, identity, err := c.providers()
+func (b *tlsBundle) ClientHandshake(ctx context.Context, authority string, rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
+	rootKM, err := b.rootProvider.KeyMaterial(ctx)
 	if err != nil {
-		return nil, nil, err
-	}
-	rootKM, err := root.KeyMaterial(ctx)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to get root certificates: %v", err)
+		return nil, nil, fmt.Errorf("credentials: failed to get root certificates: %v", err)
 	}
 	if rootKM.Roots == nil {
-		return nil, nil, errors.New("root certificate provider returned no root certificates")
+		return nil, nil, errors.New("credentials: root certificate provider returned no root certificates")
 	}
 	cfg := &tls.Config{RootCAs: rootKM.Roots}
-	if identity != nil {
-		identityKM, err := identity.KeyMaterial(ctx)
+	if b.identityProvider != nil {
+		identityKM, err := b.identityProvider.KeyMaterial(ctx)
 		if err != nil {
-			return nil, nil, fmt.Errorf("failed to get identity certificates: %v", err)
+			return nil, nil, fmt.Errorf("credentials: failed to get identity certificates: %v", err)
 		}
 		cfg.Certificates = identityKM.Certs
 	}
 	return credentials.NewTLS(cfg).ClientHandshake(ctx, authority, rawConn)
 }
 
-func (c *providerTLSCreds) ServerHandshake(net.Conn) (net.Conn, credentials.AuthInfo, error) {
-	return nil, nil, errors.New("server handshake is not supported by xDS TLS channel credentials")
+func (b *tlsBundle) ServerHandshake(net.Conn) (net.Conn, credentials.AuthInfo, error) {
+	return nil, nil, errors.New("credentials: server handshake is not supported by xDS TLS channel credentials")
 }
 
-func (c *providerTLSCreds) Info() credentials.ProtocolInfo {
+func (b *tlsBundle) Info() credentials.ProtocolInfo {
 	return credentials.ProtocolInfo{SecurityProtocol: "tls"}
 }
 
-func (c *providerTLSCreds) Clone() credentials.TransportCredentials {
-	return &providerTLSCreds{
-		rootConfig:       c.rootConfig,
-		rootCertName:     c.rootCertName,
-		identityConfig:   c.identityConfig,
-		identityCertName: c.identityCertName,
-	}
+func (b *tlsBundle) Clone() credentials.TransportCredentials {
+	return &tlsBundle{rootProvider: b.rootProvider, identityProvider: b.identityProvider}
 }
 
-func (c *providerTLSCreds) OverrideServerName(string) error {
-	return errors.New("overriding server name is not supported by xDS TLS channel credentials")
+func (b *tlsBundle) OverrideServerName(string) error {
+	return errors.New("credentials: overriding server name is not supported by xDS TLS channel credentials")
 }

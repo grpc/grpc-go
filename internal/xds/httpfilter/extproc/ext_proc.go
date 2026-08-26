@@ -141,14 +141,6 @@ func (builder) ParseFilterConfig(cfg proto.Message, opts httpfilter.ParseOptions
 		return nil, err
 	}
 
-	if msg.GetGrpcService() == nil {
-		return nil, fmt.Errorf("extproc: empty grpc_service provided in config %v", cfg)
-	}
-	server, err := parseGrpcService(msg.GetGrpcService(), opts)
-	if err != nil {
-		return nil, fmt.Errorf("extproc: failed to parse grpc_service: %v", err)
-	}
-
 	mutationRules, err := httpfilter.HeaderMutationRulesFromProto(msg.GetMutationRules())
 	if err != nil {
 		return nil, err
@@ -172,6 +164,16 @@ func (builder) ParseFilterConfig(cfg proto.Message, opts httpfilter.ParseOptions
 	deferredCloseTimeout := defaultDeferredCloseTimeout
 	if msg.GetDeferredCloseTimeout() != nil {
 		deferredCloseTimeout = msg.GetDeferredCloseTimeout().AsDuration()
+	}
+
+	// Parse the GrpcService last, so that no error path can drop the built
+	// credentials: the caller owns them from here on.
+	if msg.GetGrpcService() == nil {
+		return nil, fmt.Errorf("extproc: empty grpc_service provided in config %v", cfg)
+	}
+	server, err := parseGrpcService(msg.GetGrpcService(), opts)
+	if err != nil {
+		return nil, fmt.Errorf("extproc: failed to parse grpc_service: %v", err)
 	}
 
 	return baseConfig{
@@ -211,6 +213,13 @@ func (builder) ParseFilterConfigOverride(ov proto.Message, opts httpfilter.Parse
 		processingModesOpt = optional.New(processingModesFromProto(pm))
 	}
 
+	var failureModeAllowOpt optional.Optional[bool]
+	if override.GetFailureModeAllow() != nil {
+		failureModeAllowOpt = optional.New(override.GetFailureModeAllow().GetValue())
+	}
+
+	// Parse the GrpcService last, so that no error path can drop the built
+	// credentials: the caller owns them from here on.
 	var serverOpt optional.Optional[grpcservice.Config]
 	if override.GetGrpcService() != nil {
 		server, err := parseGrpcService(override.GetGrpcService(), opts)
@@ -218,11 +227,6 @@ func (builder) ParseFilterConfigOverride(ov proto.Message, opts httpfilter.Parse
 			return nil, fmt.Errorf("extproc: failed to parse grpc_service: %v", err)
 		}
 		serverOpt = optional.New(server)
-	}
-
-	var failureModeAllowOpt optional.Optional[bool]
-	if override.GetFailureModeAllow() != nil {
-		failureModeAllowOpt = optional.New(override.GetFailureModeAllow().GetValue())
 	}
 
 	return overrideConfig{
@@ -242,15 +246,15 @@ func (builder) BuildClientFilter(opts httpfilter.ClientFilterOptions) httpfilter
 	return &clientFilter{
 		metricsRecorder: opts.MetricsRecorder,
 		target:          opts.Target,
-		factory:         opts.SideChannelFactory,
 	}
 }
 
 var _ httpfilter.ClientFilterBuilder = builder{}
 
 // procChannelEntry is a shared external processor channel, together with the
-// server config it was created from. The config is used only for equality
-// comparisons when deciding whether the channel can be reused.
+// server config it was created from. The config is used for equality
+// comparisons when deciding whether the channel can be reused, and its
+// credentials are released when the channel is closed.
 type procChannelEntry struct {
 	server grpcservice.Config
 	rc     *grpcsync.RefCounted[v3procservicegrpc.ExternalProcessorClient]
@@ -259,7 +263,6 @@ type procChannelEntry struct {
 type clientFilter struct {
 	metricsRecorder estats.MetricsRecorder
 	target          string
-	factory         httpfilter.SideChannelFactory
 
 	mu           sync.Mutex
 	procChannels []*procChannelEntry
@@ -317,20 +320,21 @@ func (cf *clientFilter) getOrCreateExtProcChannel(server grpcservice.Config) (*g
 	}
 
 	// Create the external processor channel without holding the lock. The
-	// channel is shared with other consumers via the xDS client; the release
-	// function drops this filter's reference to it.
-	cc, release, err := iextproc.CreateExtProcChannel(cf.factory, &server)
+	// release function closes the channel.
+	cc, release, err := iextproc.CreateExtProcChannel(&server)
 	if err != nil {
 		return nil, fmt.Errorf("extproc: failed to create channel to the external processor server %q: %v", server.TargetURI, err)
 	}
 
 	client := v3procservicegrpc.NewExternalProcessorClient(cc)
-	// Create a new refcounted client. The onZero cleanup function will remove
-	// the entry from the list and release the underlying channel.
+	// Create a new refcounted client. The onZero cleanup function removes the
+	// entry from the list, closes the underlying channel, and releases the
+	// credentials of the config generation the channel was created from.
 	entry := &procChannelEntry{server: server}
 	entry.rc = grpcsync.NewRefCounted(client, func() {
 		cf.removeProcChannel(entry)
 		release()
+		entry.server.Close()
 	})
 
 	// Double-check if another goroutine created and stored a channel for an
@@ -358,9 +362,6 @@ func (cf *clientFilter) BuildClientInterceptor(base, override httpfilter.FilterC
 
 	config := newInterceptorConfig(b, ov)
 
-	if cf.factory == nil {
-		return nil, fmt.Errorf("extproc: no side-channel factory provided to create a channel to the external processor server")
-	}
 	// Create or reuse a refcounted channel to the external processor server.
 	rc, err := cf.getOrCreateExtProcChannel(config.server)
 	if err != nil {

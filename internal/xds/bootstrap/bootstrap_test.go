@@ -1149,6 +1149,13 @@ func (s) TestGetConfiguration_Federation(t *testing.T) {
 							Type:   "jwt_token_file",
 							Config: json.RawMessage("{\n\"jwt_token_file\": \"/var/run/secrets/tokens/istio-token\"\n}"),
 						}},
+						// Equal compares the built credentials by identity, so
+						// the fixture carries identity-only pairs.
+						sideChannelCreds: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "insecure"}, nil),
+						sideCallCreds: []*xdscreds.CallCreds{xdscreds.NewCallCreds(nil, xdscreds.Identity{
+							Type: "jwt_token_file",
+							Data: json.RawMessage("{\n\"jwt_token_file\": \"/var/run/secrets/tokens/istio-token\"\n}"),
+						}, nil)},
 					},
 				},
 			},
@@ -1742,92 +1749,52 @@ func (s) TestAllowedGRPCServices_UnmarshalJSON(t *testing.T) {
 	tests := []struct {
 		name string
 		json string
-		want *AllowedGRPCService
-		// The built credentials are deliberately excluded from Equal; verify
-		// them via SideChannelCredentials instead.
-		wantSelectedChannelCredsType string
-		wantSideCallCreds            int
+		// The identity of the built channel credentials must match the first
+		// supported channel-creds entry from the bootstrap JSON.
+		wantSelectedChannelCredsType   string
+		wantSelectedChannelCredsConfig json.RawMessage
+		wantSideCallCreds              int
 	}{
 		{
-			name: "insecure_channel_creds",
-			json: `{"dns:///sharding-service:443": {"channel_creds": [{"type": "insecure"}]}}`,
-			want: &AllowedGRPCService{
-				targetURI:    target,
-				channelCreds: []ChannelCreds{{Type: "insecure"}},
-			},
+			name:                         "insecure_channel_creds",
+			json:                         `{"dns:///sharding-service:443": {"channel_creds": [{"type": "insecure"}]}}`,
 			wantSelectedChannelCredsType: "insecure",
 			wantSideCallCreds:            0,
 		},
 		{
-			name: "with_call_creds",
-			json: `{"dns:///sharding-service:443": {"channel_creds": [{"type": "insecure"}], "call_creds": [{"type": "jwt_token_file", "config": {"jwt_token_file": "/var/run/secrets/tokens/istio-token"}}]}}`,
-			want: &AllowedGRPCService{
-				targetURI:    target,
-				channelCreds: []ChannelCreds{{Type: "insecure"}},
-				callCredsConfigs: []CallCredsConfig{{
-					Type:   "jwt_token_file",
-					Config: json.RawMessage(`{"jwt_token_file": "/var/run/secrets/tokens/istio-token"}`),
-				}},
-			},
+			name:                         "with_call_creds",
+			json:                         `{"dns:///sharding-service:443": {"channel_creds": [{"type": "insecure"}], "call_creds": [{"type": "jwt_token_file", "config": {"jwt_token_file": "/var/run/secrets/tokens/istio-token"}}]}}`,
 			wantSelectedChannelCredsType: "insecure",
 			// One call credential is built for the supported call-creds
 			// config.
 			wantSideCallCreds: 1,
 		},
 		{
-			name: "unsupported_call_creds_skipped",
-			json: `{"dns:///sharding-service:443": {"channel_creds": [{"type": "insecure"}], "call_creds": [{"type": "unsupported_call_creds_type"}]}}`,
-			want: &AllowedGRPCService{
-				targetURI:    target,
-				channelCreds: []ChannelCreds{{Type: "insecure"}},
-				callCredsConfigs: []CallCredsConfig{{
-					Type: "unsupported_call_creds_type",
-				}},
-			},
+			name:                         "unsupported_call_creds_skipped",
+			json:                         `{"dns:///sharding-service:443": {"channel_creds": [{"type": "insecure"}], "call_creds": [{"type": "unsupported_call_creds_type"}]}}`,
 			wantSelectedChannelCredsType: "insecure",
 			// Unsupported call-creds types are skipped without error, so
 			// no call credentials are built.
 			wantSideCallCreds: 0,
 		},
 		{
-			name: "multiple_supported_call_creds",
-			json: `{"dns:///sharding-service:443": {"channel_creds": [{"type": "insecure"}], "call_creds": [{"type": "jwt_token_file", "config": {"jwt_token_file": "/tokens/token-one"}}, {"type": "jwt_token_file", "config": {"jwt_token_file": "/tokens/token-two"}}]}}`,
-			want: &AllowedGRPCService{
-				targetURI:    target,
-				channelCreds: []ChannelCreds{{Type: "insecure"}},
-				callCredsConfigs: []CallCredsConfig{
-					{
-						Type:   "jwt_token_file",
-						Config: json.RawMessage(`{"jwt_token_file": "/tokens/token-one"}`),
-					},
-					{
-						Type:   "jwt_token_file",
-						Config: json.RawMessage(`{"jwt_token_file": "/tokens/token-two"}`),
-					},
-				},
-			},
+			name:                         "multiple_supported_call_creds",
+			json:                         `{"dns:///sharding-service:443": {"channel_creds": [{"type": "insecure"}], "call_creds": [{"type": "jwt_token_file", "config": {"jwt_token_file": "/tokens/token-one"}}, {"type": "jwt_token_file", "config": {"jwt_token_file": "/tokens/token-two"}}]}}`,
 			wantSelectedChannelCredsType: "insecure",
 			// One call credential is built for each supported call-creds
 			// config.
 			wantSideCallCreds: 2,
 		},
 		{
-			name: "tls_channel_creds",
-			json: `{"dns:///sharding-service:443": {"channel_creds": [{"type": "tls", "config": {}}]}}`,
-			want: &AllowedGRPCService{
-				targetURI:    target,
-				channelCreds: []ChannelCreds{{Type: "tls", Config: json.RawMessage("{}")}},
-			},
-			wantSelectedChannelCredsType: "tls",
-			wantSideCallCreds:            0,
+			name:                           "tls_channel_creds",
+			json:                           `{"dns:///sharding-service:443": {"channel_creds": [{"type": "tls", "config": {}}]}}`,
+			wantSelectedChannelCredsType:   "tls",
+			wantSelectedChannelCredsConfig: json.RawMessage("{}"),
+			wantSideCallCreds:              0,
 		},
 		{
-			name: "skips_unsupported_channel_creds",
-			json: `{"dns:///sharding-service:443": {"channel_creds": [{"type": "unsupported_cred_type"}, {"type": "insecure"}]}}`,
-			want: &AllowedGRPCService{
-				targetURI:    target,
-				channelCreds: []ChannelCreds{{Type: "unsupported_cred_type"}, {Type: "insecure"}},
-			},
+			name:                         "skips_unsupported_channel_creds",
+			json:                         `{"dns:///sharding-service:443": {"channel_creds": [{"type": "unsupported_cred_type"}, {"type": "insecure"}]}}`,
 			wantSelectedChannelCredsType: "insecure",
 			wantSideCallCreds:            0,
 		},
@@ -1843,25 +1810,16 @@ func (s) TestAllowedGRPCServices_UnmarshalJSON(t *testing.T) {
 			if !ok {
 				t.Fatalf("AllowedGRPCServices missing key %q", target)
 			}
-			if !svc.Equal(test.want) {
-				t.Errorf("parsed service = %+v, want %+v", svc, test.want)
+			if svc.TargetURI() != target {
+				t.Errorf("TargetURI() = %q, want %q", svc.TargetURI(), target)
 			}
 			chanCreds, callCreds := svc.SideChannelCredentials()
 			if chanCreds == nil || chanCreds.Bundle() == nil {
 				t.Error("SideChannelCredentials() returned no built channel credentials")
 			}
-			// The identity of the built channel credentials must match the
-			// first supported channel-creds entry from the bootstrap JSON.
-			var wantConfig json.RawMessage
-			for _, cc := range test.want.channelCreds {
-				if cc.Type == test.wantSelectedChannelCredsType {
-					wantConfig = cc.Config
-					break
-				}
-			}
-			wantIdentity := xdscreds.Identity{Type: test.wantSelectedChannelCredsType, Data: string(wantConfig)}
-			if chanCreds.Identity() != wantIdentity {
-				t.Errorf("SideChannelCredentials() channel credentials identity = %+v, want %+v", chanCreds.Identity(), wantIdentity)
+			wantIdentity := xdscreds.Identity{Type: test.wantSelectedChannelCredsType, Data: test.wantSelectedChannelCredsConfig}
+			if wantChanCreds := xdscreds.NewChannelCreds(nil, wantIdentity, nil); !chanCreds.Equal(wantChanCreds) {
+				t.Errorf("SideChannelCredentials() channel credentials = %+v, want identity %+v", chanCreds, wantIdentity)
 			}
 			if got := len(callCreds); got != test.wantSideCallCreds {
 				t.Errorf("len(SideChannelCredentials() call creds) = %d, want %d", got, test.wantSideCallCreds)

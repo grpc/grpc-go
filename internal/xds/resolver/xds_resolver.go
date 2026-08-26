@@ -687,10 +687,9 @@ func (r *xdsResolver) getOrCreateClientFilter(builder httpfilter.ClientFilterBui
 	}
 
 	cf := builder.BuildClientFilter(httpfilter.ClientFilterOptions{
-		FilterName:         key.name,
-		MetricsRecorder:    r.metricsRecorder,
-		Target:             r.target,
-		SideChannelFactory: r.xdsClient,
+		FilterName:      key.name,
+		MetricsRecorder: r.metricsRecorder,
+		Target:          r.target,
 	})
 	r.httpFilters[key] = cf
 	return cf

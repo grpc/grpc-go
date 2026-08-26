@@ -128,10 +128,10 @@ type AllowedGRPCService struct {
 	// copied in during parsing so the service is self-describing.
 	targetURI string
 	// channelCreds is the list of channel-credential configs from the
-	// bootstrap JSON. Kept for Equal and MarshalJSON.
+	// bootstrap JSON. Kept for MarshalJSON.
 	channelCreds []ChannelCreds
 	// callCredsConfigs is the list of call-credential configs from the
-	// bootstrap JSON. Kept for Equal and MarshalJSON.
+	// bootstrap JSON. Kept for MarshalJSON.
 	callCredsConfigs []CallCredsConfig
 	// sideChannelCreds is the credentials bundle built from the first
 	// channel-creds entry whose type the client supports, paired with its
@@ -164,7 +164,8 @@ func (a *AllowedGRPCService) Cleanups() []func() {
 	return a.cleanups
 }
 
-// Equal reports whether a and other are considered equal.
+// Equal reports whether a and other are considered equal: the same target
+// with the same built channel and call credential identities.
 func (a *AllowedGRPCService) Equal(other *AllowedGRPCService) bool {
 	if a == nil && other == nil {
 		return true
@@ -175,10 +176,10 @@ func (a *AllowedGRPCService) Equal(other *AllowedGRPCService) bool {
 	if a.targetURI != other.targetURI {
 		return false
 	}
-	if !slices.EqualFunc(a.channelCreds, other.channelCreds, ChannelCreds.Equal) {
+	if !a.sideChannelCreds.Equal(other.sideChannelCreds) {
 		return false
 	}
-	return slices.EqualFunc(a.callCredsConfigs, other.callCredsConfigs, CallCredsConfig.Equal)
+	return slices.EqualFunc(a.sideCallCreds, other.sideCallCreds, (*xdscreds.CallCreds).Equal)
 }
 
 type allowedGRPCServiceJSON struct {
@@ -255,7 +256,7 @@ func (a *AllowedGRPCService) UnmarshalJSON(data []byte) (err error) {
 		if err != nil {
 			return fmt.Errorf("xds: failed to build credentials bundle from bootstrap for allowed grpc service: type %q, err: %v", cc.Type, err)
 		}
-		identity := xdscreds.Identity{Type: cc.Type, Data: string(cc.Config)}
+		identity := xdscreds.Identity{Type: cc.Type, Data: cc.Config}
 		sideChannelCreds = xdscreds.NewChannelCreds(bundle, identity, nil)
 		cleanups = append(cleanups, cancel)
 		break
@@ -277,7 +278,7 @@ func (a *AllowedGRPCService) UnmarshalJSON(data []byte) (err error) {
 		if err != nil {
 			return fmt.Errorf("xds: failed to build call credentials from bootstrap for allowed grpc service: type %q, err: %v", cfg.Type, err)
 		}
-		identity := xdscreds.Identity{Type: cfg.Type, Data: string(cfg.Config)}
+		identity := xdscreds.Identity{Type: cfg.Type, Data: cfg.Config}
 		sideCallCreds = append(sideCallCreds, xdscreds.NewCallCreds(callCreds, identity, nil))
 		cleanups = append(cleanups, cancel)
 	}

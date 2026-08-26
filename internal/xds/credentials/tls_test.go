@@ -26,7 +26,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -62,10 +61,9 @@ const (
 func testBootstrapConfig(t *testing.T) *bootstrap.Config {
 	t.Helper()
 
-	// Use forward slashes so the paths survive JSON encoding on Windows.
-	rootCert := filepath.ToSlash(testdata.Path("x509/server_ca_cert.pem"))
-	clientCert := filepath.ToSlash(testdata.Path("x509/client1_cert.pem"))
-	clientKey := filepath.ToSlash(testdata.Path("x509/client1_key.pem"))
+	rootCert := testdata.Path("x509/server_ca_cert.pem")
+	clientCert := testdata.Path("x509/client1_cert.pem")
+	clientKey := testdata.Path("x509/client1_key.pem")
 
 	contents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
 		Servers: json.RawMessage(`[{"server_uri": "passthrough:///unused", "channel_creds": [{"type": "insecure"}]}]`),
@@ -267,13 +265,10 @@ func (s) TestTLSCredsHandshake(t *testing.T) {
 	}
 }
 
-// Tests that closed TLS channel credentials fail handshakes, and that closing
-// credentials that never performed a handshake is safe.
+// Tests that closed TLS channel credentials fail handshakes.
 func (s) TestTLSCredsClose(t *testing.T) {
 	bc := testBootstrapConfig(t)
 
-	// Closing credentials whose providers were never instantiated must be a
-	// no-op.
 	bundle, cleanup, err := xdscreds.GetChannelCredsBuilder(tlsCredsTypeURL)(tlsCredsConfig(t, "root-instance", ""), bc)
 	if err != nil {
 		t.Fatalf("Build failed: %v", err)
