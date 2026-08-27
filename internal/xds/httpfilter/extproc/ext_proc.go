@@ -485,18 +485,22 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 
 	// Normal mode.
 	cs := &clientStream{
-		commonStream:             csCommon,
-		procStreamFailed:         grpcsync.NewEvent(),
-		procStreamBypass:         grpcsync.NewEvent(),
-		mutatedReqBuffer:         buffer.NewUnbounded[*v3procservicepb.StreamedBodyResponse](),
-		mutatedRespBuffer:        buffer.NewUnbounded[*v3procservicepb.StreamedBodyResponse](),
-		responseHeadersReady:     grpcsync.NewEvent(),
-		responseTrailerReady:     grpcsync.NewEvent(),
-		dataplaneSetup:           make(chan struct{}),
-		procSendCh:               make(chan *v3procservicepb.ProcessingRequest),
-		requestForwardLoopDoneCh: make(chan struct{}),
-		procRecvLoopDone:         grpcsync.NewEvent(),
+		commonStream:                           csCommon,
+		procStreamFailed:                       grpcsync.NewEvent(),
+		procStreamBypass:                       grpcsync.NewEvent(),
+		mutatedReqBuffer:                       buffer.NewUnbounded[*v3procservicepb.StreamedBodyResponse](),
+		mutatedRespBuffer:                      buffer.NewUnbounded[*v3procservicepb.StreamedBodyResponse](),
+		responseHeadersReady:                   grpcsync.NewEvent(),
+		responseTrailerReady:                   grpcsync.NewEvent(),
+		dataplaneSetup:                         make(chan struct{}),
+		procSendCh:                             make(chan *v3procservicepb.ProcessingRequest),
+		requestForwardLoopDoneCh:               make(chan struct{}),
+		procRecvLoopDone:                       grpcsync.NewEvent(),
+		downstreamToSidestreamPositiveUpdateCh: make(chan struct{}, 1),
+		upstreamToSidestreamPositiveUpdateCh:   make(chan struct{}, 1),
 	}
+	cs.downstreamToSidestreamWindow.Store(iextproc.DefaultFlowControlWindowSize)
+	cs.upstreamToSidestreamWindow.Store(iextproc.DefaultFlowControlWindowSize)
 
 	// When request header processing is "Send", defer creating the dataplane
 	// stream until the external processor responds, because gRPC transmits
@@ -546,7 +550,7 @@ type commonStream struct {
 
 	reqAttrs            map[string]*structpb.Struct // attributes to be sent to proc server with client message
 	reqAttrsSent        atomic.Bool                 // tracks whether the first client message has been sent to ensure request attributes are sent only once
-	protocolConfigSent  atomic.Bool                 // tracks whether the protocol configuration has been sent to the processor
+	firstProcReqSent    atomic.Bool                 // tracks whether the first proc req has been sent
 	trailersOnly        bool                        // tracks whether the backend response is trailers-only
 	responseHeaderOnce  atomic.Bool                 // ensures response headers are forwarded to the external processor only once
 	responseTrailerOnce atomic.Bool                 // ensures response trailers are forwarded to the external processor only once
@@ -627,16 +631,24 @@ func (cs *commonStream) cleanupDataplane() {
 }
 
 // newProcessingRequest creates a new ProcessingRequest with ObservabilityMode,
-// ProtocolConfig, and Attributes fields initialized.
+// ProtocolConfig, FlowControlInit and Attributes fields initialized.
 func (cs *commonStream) newProcessingRequest(isClientMessage bool) *v3procservicepb.ProcessingRequest {
 	req := &v3procservicepb.ProcessingRequest{
 		ObservabilityMode: cs.config.observabilityMode,
 	}
 
-	if cs.protocolConfigSent.CompareAndSwap(false, true) {
+	if cs.firstProcReqSent.CompareAndSwap(false, true) {
 		req.ProtocolConfig = &v3procservicepb.ProtocolConfiguration{
 			RequestBodyMode:  convertBodyMode(cs.config.processingModes.requestBodyMode),
 			ResponseBodyMode: convertBodyMode(cs.config.processingModes.responseBodyMode),
+		}
+		if !cs.config.observabilityMode {
+			req.FlowControlInit = &v3procservicepb.ProcessingRequest_FlowControlInit{
+				InitialWindowDownstreamToSidestream: iextproc.DefaultFlowControlWindowSize,
+				InitialWindowUpstreamToSidestream:   iextproc.DefaultFlowControlWindowSize,
+				InitialWindowSidestreamToUpstream:   iextproc.DefaultFlowControlWindowSize,
+				InitialWindowSidestreamToDownstream: iextproc.DefaultFlowControlWindowSize,
+			}
 		}
 	}
 
@@ -988,6 +1000,15 @@ type clientStream struct {
 	clientHalfCloseStartTime atomic.Int64
 	serverHeadersStartTime   atomic.Int64
 	serverTrailersStartTime  atomic.Int64
+
+	downstreamToSidestreamWindow           atomic.Int64  // downstream to sidestream window size remaining
+	downstreamToSidestreamPositiveUpdateCh chan struct{} // signals the downstream to sidestream window becoming positive
+
+	upstreamToSidestreamWindow           atomic.Int64  // upstream to sidestream window size remaining
+	upstreamToSidestreamPositiveUpdateCh chan struct{} // signals the upstream to sidestream window becoming positive
+
+	pendingRespWindowUpdate atomic.Int64
+	pendingReqWindowUpdate  atomic.Int64
 }
 
 // recordDuration records the elapsed time since the event start timestamp
@@ -1149,6 +1170,17 @@ func (cs *clientStream) RecvMsg(m any) error {
 			cs.responseDrained.Store(true)
 			return cs.recvFromDataplane(m)
 		}
+		// Update the pending window update after pulling from the buffer. If the
+		// pending update exceeds the threshold of defaultWindowSize/2, send a
+		// standalone processing request with window update and clear the pending
+		// update.
+		if bodySize := int64(len(streamedResp.GetBody())); bodySize > 0 {
+			if cs.pendingRespWindowUpdate.Add(bodySize) >= iextproc.DefaultFlowControlWindowSize/2 {
+				if err := cs.sendClientWindowUpdate(); err != nil {
+					return err
+				}
+			}
+		}
 		return proto.Unmarshal(streamedResp.GetBody(), msg)
 	case <-cs.ctx.Done():
 		return cs.streamError()
@@ -1233,10 +1265,33 @@ func (cs *clientStream) sendClientReqToProcServer(req *v3procservicepb.Processin
 		cs.ignoreFailureMode.Store(true)
 	}
 
+	// Acquire flow control window for downstream to sidestream only if request
+	// body is present.
+	if bodysize := len(req.GetRequestBody().GetBody()); bodysize > 0 {
+		if !cs.acquireDownstreamToSidestreamWindow(int64(bodysize)) {
+			return cs.handleClientReqProcStreamFallback()
+		}
+	}
+
 	select {
 	case cs.procSendCh <- req:
 		return nil, nil
 	case <-cs.procStreamBypass.Done():
+		return cs.handleClientReqProcStreamFallback()
+	case <-cs.procStreamFailed.Done():
+		return nil, cs.streamError()
+	case <-cs.ctx.Done():
+		return nil, cs.streamError()
+	}
+}
+
+// handleClientReqProcStreamFallback handles processor stream bypass during
+// client request processing. If the processor stream is bypassed, it blocks
+// until all queued client messages are forwarded, and returns the dataplane
+// stream so the caller can send directly to the dataplane stream. Otherwise, it
+// returns the stream error.
+func (cs *clientStream) handleClientReqProcStreamFallback() (grpc.ClientStream, error) {
+	if cs.procStreamBypass.HasFired() {
 		if cs.reqForwardingStarted {
 			// When the drain is triggered, wait for all the queued requests to be sent
 			// to dataplane server before forwarding current request directly to
@@ -1246,11 +1301,8 @@ func (cs *clientStream) sendClientReqToProcServer(req *v3procservicepb.Processin
 			}
 		}
 		return cs.waitForDataplaneStream(cs.ctx)
-	case <-cs.procStreamFailed.Done():
-		return nil, cs.streamError()
-	case <-cs.ctx.Done():
-		return nil, cs.streamError()
 	}
+	return nil, cs.streamError()
 }
 
 // bypassProcStreamForClientMsg checks if the external processor should be
@@ -1326,6 +1378,24 @@ func (cs *clientStream) responseForwardingToProcServerLoop(msgType protoreflect.
 			cs.ignoreFailureMode.Store(true)
 		}
 
+		// Acquire upstream to sidestream window before sending the response body to
+		// proc server.
+		if bodySize := int64(len(req.GetResponseBody().GetBody())); bodySize > 0 {
+			if !cs.acquireUpstreamToSidestreamWindow(bodySize) {
+				// If proc stream is bypassed before acquiring positive window, wait for
+				// external processor server receive loop to finish before pushing this
+				// message on the mutatedRespBuffer to ensure correct order of messages.
+				if cs.procStreamBypass.HasFired() {
+					if err := cs.waitChannel(cs.procRecvLoopDone.Done()); err != nil {
+						return
+					}
+					resp := &v3procservicepb.StreamedBodyResponse{Body: req.GetResponseBody().GetBody()}
+					cs.mutatedRespBuffer.Put(resp)
+				}
+				return
+			}
+		}
+
 		select {
 		case cs.procSendCh <- req:
 		case <-cs.procStreamBypass.Done():
@@ -1380,7 +1450,17 @@ func (cs *clientStream) requestForwardingToDataplaneLoop(msgType protoreflect.Me
 				cs.cancelStream(err)
 				return
 			}
-
+			// Update the pending window update after pulling from the buffer. If the
+			// pending update exceeds the threshold of defaultWindowSize/2, send a
+			// standalone processing request with window update and clear the pending
+			// update.
+			if bodySize := int64(len(streamedResp.GetBody())); bodySize > 0 {
+				if cs.pendingReqWindowUpdate.Add(bodySize) >= iextproc.DefaultFlowControlWindowSize/2 {
+					if err := cs.sendClientWindowUpdate(); err != nil {
+						return
+					}
+				}
+			}
 			if streamedResp.GetEndOfStream() {
 				cs.recordDuration(clientHalfCloseDurationMetric, &cs.clientHalfCloseStartTime)
 				dataplaneStream.CloseSend()
@@ -1430,6 +1510,37 @@ func (cs *clientStream) recvFromProcServerLoop(newStream func(context.Context, .
 		if resp.GetImmediateResponse() != nil {
 			cs.handleImmediateResponse(resp.GetImmediateResponse(), newStream, opts)
 			return
+		}
+
+		if windowUpdate := resp.GetServerWindowUpdate(); windowUpdate != nil {
+			deltaDownstreamToSidestream := windowUpdate.GetWindowIncrementDownstreamToSidestream()
+			if deltaDownstreamToSidestream != 0 {
+				// Add the window update to the existing window.
+				newQuota := cs.downstreamToSidestreamWindow.Add(deltaDownstreamToSidestream)
+				previousQuota := newQuota - deltaDownstreamToSidestream
+				// If the window turned from negative to positive, send a signal to the
+				// `acquireDownstreamToSidestreamWindow` function to wake it up.
+				if previousQuota <= 0 && newQuota > 0 {
+					select {
+					case cs.downstreamToSidestreamPositiveUpdateCh <- struct{}{}:
+					default:
+					}
+				}
+			}
+			deltaUpstreamToSidestream := windowUpdate.GetWindowIncrementUpstreamToSidestream()
+			if deltaUpstreamToSidestream != 0 {
+				// Add the window update to the existing window.
+				newQuota := cs.upstreamToSidestreamWindow.Add(deltaUpstreamToSidestream)
+				previousQuota := newQuota - deltaUpstreamToSidestream
+				// If the window turned from negative to positive, send a signal to the
+				// `acquireUpstreamToSidestreamWindow` function to wake it up.
+				if previousQuota <= 0 && newQuota > 0 {
+					select {
+					case cs.upstreamToSidestreamPositiveUpdateCh <- struct{}{}:
+					default:
+					}
+				}
+			}
 		}
 
 		switch {
@@ -1598,6 +1709,21 @@ func (cs *clientStream) sendToProcServerLoop() {
 			if req.GetResponseTrailers() != nil {
 				cs.trailerSent.Store(true)
 			}
+
+			// Merge any pending window updates into the outgoing request. If the
+			// request is already a standalone ClientWindowUpdate, we must accumulate
+			// (add) the newly drained increments to any existing increments rather
+			// than replacing the struct, ensuring no pending window quota is dropped.
+			respInc := cs.pendingRespWindowUpdate.Swap(0)
+			reqInc := cs.pendingReqWindowUpdate.Swap(0)
+			if respInc > 0 || reqInc > 0 {
+				if req.ClientWindowUpdate == nil {
+					req.ClientWindowUpdate = &v3procservicepb.ProcessingRequest_ClientWindowUpdate{}
+				}
+				req.ClientWindowUpdate.WindowIncrementSidestreamToDownstream += respInc
+				req.ClientWindowUpdate.WindowIncrementSidestreamToUpstream += reqInc
+			}
+
 			if err := cs.procStream.Send(req); err != nil {
 				if err != io.EOF {
 					// For non-EOF client-side send errors, fail the stream immediately.
@@ -1924,6 +2050,92 @@ func (cs *clientStream) waitForTrailerProcessing(recvErr error) error {
 		return recvErr
 	case <-cs.procStreamBypass.Done():
 		return recvErr
+	case <-cs.procStreamFailed.Done():
+		return cs.streamError()
+	case <-cs.ctx.Done():
+		return cs.streamError()
+	}
+}
+
+// acquireDownstreamToSidestreamWindow checks available flow control window for
+// downstream to sidestream. If window is positive, it deducts bodySize and
+// returns true immediately. If window is <= 0, it blocks until a positive
+// window update is received, or returns false if bypassed, failed, or context
+// is done.
+func (cs *clientStream) acquireDownstreamToSidestreamWindow(bodySize int64) bool {
+	// Re-check the window in a loop. A signal on the buffered channel may be
+	// stale if a previous caller acquired the positive window on the fast path
+	// without draining the channel.
+	for {
+		// If enough window is available, deduct body size and return immediately.
+		if cs.downstreamToSidestreamWindow.Load() > 0 {
+			cs.downstreamToSidestreamWindow.Add(-bodySize)
+			return true
+		}
+		// If window is not available, wait for the window to become positive or
+		// return false if bypassed, failed, or context is done.
+		select {
+		case <-cs.downstreamToSidestreamPositiveUpdateCh:
+			continue
+		case <-cs.procStreamBypass.Done():
+			return false
+		case <-cs.procStreamFailed.Done():
+			return false
+		case <-cs.ctx.Done():
+			return false
+		}
+	}
+}
+
+// acquireUpstreamToSidestreamWindow checks available flow control window for
+// upstream to sidestream. If window is positive, it deducts bodySize and
+// returns true immediately. If window is <= 0, it blocks until a positive
+// window update is received, or returns false if bypassed, failed, or context
+// is done.
+func (cs *clientStream) acquireUpstreamToSidestreamWindow(bodySize int64) bool {
+	// Re-check the window in a loop. A signal on the buffered channel may be
+	// stale if a previous caller acquired the positive window on the fast path
+	// without draining the channel.
+	for {
+		if cs.upstreamToSidestreamWindow.Load() > 0 {
+			cs.upstreamToSidestreamWindow.Add(-bodySize)
+			return true
+		}
+		select {
+		case <-cs.upstreamToSidestreamPositiveUpdateCh:
+			continue
+		case <-cs.procStreamBypass.Done():
+			return false
+		case <-cs.procStreamFailed.Done():
+			return false
+		case <-cs.ctx.Done():
+			return false
+		}
+	}
+}
+
+// sendClientWindowUpdate pushes a standalone ClientWindowUpdate
+// ProcessingRequest to procSendCh to replenish the sidestream to downstream and
+// sidestream to upstream flow control windows.
+func (cs *clientStream) sendClientWindowUpdate() error {
+	respInc := cs.pendingRespWindowUpdate.Swap(0)
+	reqInc := cs.pendingReqWindowUpdate.Swap(0)
+	if respInc == 0 && reqInc == 0 {
+		return nil
+	}
+
+	req := &v3procservicepb.ProcessingRequest{
+		ClientWindowUpdate: &v3procservicepb.ProcessingRequest_ClientWindowUpdate{
+			WindowIncrementSidestreamToDownstream: respInc,
+			WindowIncrementSidestreamToUpstream:   reqInc,
+		},
+	}
+
+	select {
+	case cs.procSendCh <- req:
+		return nil
+	case <-cs.procStreamBypass.Done():
+		return nil
 	case <-cs.procStreamFailed.Done():
 		return cs.streamError()
 	case <-cs.ctx.Done():
