@@ -39,6 +39,7 @@ import (
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/optional"
 	"google.golang.org/grpc/internal/resolver"
+	xdscreds "google.golang.org/grpc/internal/xds/credentials"
 	"google.golang.org/grpc/internal/xds/grpcservice"
 	"google.golang.org/grpc/internal/xds/httpfilter"
 	iextproc "google.golang.org/grpc/internal/xds/httpfilter/extproc/internal"
@@ -270,13 +271,26 @@ type clientFilter struct {
 
 func (*clientFilter) Close() {}
 
-// getProcChannel returns an existing refcounted client for an equal server
-// config if present and its refcount is incremented successfully.
+// sharesChannel reports whether two GrpcService configs may share a channel
+// to the external processor server: the same target with the same channel
+// and call credential identities. Timeout and initial metadata are applied
+// per-RPC and do not affect sharing; call credentials do, because Dial
+// attaches them to the channel.
+func sharesChannel(a, b *grpcservice.Config) bool {
+	targetEqual := a.TargetURI == b.TargetURI
+	channelCredsEqual := a.ChannelCredentials.Equal(b.ChannelCredentials)
+	callCredsEqual := slices.EqualFunc(a.CallCredentials, b.CallCredentials, (*xdscreds.CallCreds).Equal)
+	return targetEqual && channelCredsEqual && callCredsEqual
+}
+
+// getProcChannel returns an existing refcounted client for a channel-sharing
+// compatible server config if present and its refcount is incremented
+// successfully.
 func (cf *clientFilter) getProcChannel(server *grpcservice.Config) *grpcsync.RefCounted[v3procservicegrpc.ExternalProcessorClient] {
 	cf.mu.Lock()
 	defer cf.mu.Unlock()
 	for _, e := range cf.procChannels {
-		if e.server.Equal(server) && e.rc.TryIncrement() {
+		if sharesChannel(&e.server, server) && e.rc.TryIncrement() {
 			return e.rc
 		}
 	}
@@ -284,14 +298,14 @@ func (cf *clientFilter) getProcChannel(server *grpcservice.Config) *grpcsync.Ref
 }
 
 // storeProcChannel stores the created channel entry if no valid channel
-// exists for an equal server config. If another goroutine already stored one
-// while unlocked, it increments the existing channel's refcount and returns
-// it.
+// exists for a channel-sharing compatible server config. If another goroutine
+// already stored one while unlocked, it increments the existing channel's
+// refcount and returns it.
 func (cf *clientFilter) storeProcChannel(entry *procChannelEntry) *grpcsync.RefCounted[v3procservicegrpc.ExternalProcessorClient] {
 	cf.mu.Lock()
 	defer cf.mu.Unlock()
 	for _, e := range cf.procChannels {
-		if e.server.Equal(&entry.server) && e.rc.TryIncrement() {
+		if sharesChannel(&e.server, &entry.server) && e.rc.TryIncrement() {
 			return e.rc
 		}
 	}

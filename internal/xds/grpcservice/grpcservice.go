@@ -22,6 +22,7 @@ package grpcservice
 
 import (
 	"fmt"
+	"maps"
 	"net/url"
 	"slices"
 	"strings"
@@ -62,15 +63,14 @@ type Config struct {
 	CallCredentials []*xdscreds.CallCreds
 }
 
-// Equal reports whether c and other describe the same side channel: the same
-// target with the same channel and call credential identities. Timeout and
-// initial metadata are applied per-RPC and intentionally do not affect
-// channel sharing.
+// Equal reports whether c and other are equal.
 func (c *Config) Equal(other *Config) bool {
 	targetEqual := c.TargetURI == other.TargetURI
+	timeoutEqual := c.Timeout == other.Timeout
+	metadataEqual := maps.EqualFunc(c.InitialMetadata, other.InitialMetadata, slices.Equal)
 	channelCredsEqual := c.ChannelCredentials.Equal(other.ChannelCredentials)
 	callCredsEqual := slices.EqualFunc(c.CallCredentials, other.CallCredentials, (*xdscreds.CallCreds).Equal)
-	return targetEqual && channelCredsEqual && callCredsEqual
+	return targetEqual && timeoutEqual && metadataEqual && channelCredsEqual && callCredsEqual
 }
 
 // Close releases the credentials owned by the config. It is idempotent, and a
@@ -84,10 +84,7 @@ func (c *Config) Close() {
 }
 
 // Dial creates a channel to the side-channel service, using the channel and
-// call credentials from the config along with the provided dial options. The
-// call credentials are attached to the channel; since they are part of the
-// config's identity, configs whose call credentials differ do not share a
-// channel.
+// call credentials from the config along with the provided dial options.
 //
 // Dial does not take ownership of the config: the caller releases the
 // config's credentials via Close when the config is no longer needed, after

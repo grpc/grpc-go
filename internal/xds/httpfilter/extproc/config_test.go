@@ -129,6 +129,55 @@ func overrideCreateExtProcChannel(t *testing.T, failTarget string) {
 	t.Cleanup(func() { iextproc.CreateExtProcChannel = origCreateExtProcChannel })
 }
 
+// Tests that channel sharing considers the target and the credential
+// identities, and ignores the per-RPC timeout and initial metadata.
+func (s) TestSharesChannel(t *testing.T) {
+	insecureCreds := func() *xdscreds.ChannelCreds {
+		return xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "insecure"}, nil)
+	}
+	const target = "dns:///proc-server:443"
+
+	tests := []struct {
+		name string
+		a, b *grpcservice.Config
+		want bool
+	}{
+		{
+			name: "equal_identities_share_despite_timeout_and_metadata",
+			a:    &grpcservice.Config{TargetURI: target, ChannelCredentials: insecureCreds(), Timeout: time.Second},
+			b:    &grpcservice.Config{TargetURI: target, ChannelCredentials: insecureCreds(), InitialMetadata: metadata.Pairs("k", "v")},
+			want: true,
+		},
+		{
+			name: "different_targets",
+			a:    &grpcservice.Config{TargetURI: target, ChannelCredentials: insecureCreds()},
+			b:    &grpcservice.Config{TargetURI: "dns:///other:443", ChannelCredentials: insecureCreds()},
+			want: false,
+		},
+		{
+			name: "different_channel_creds",
+			a:    &grpcservice.Config{TargetURI: target, ChannelCredentials: insecureCreds()},
+			b:    &grpcservice.Config{TargetURI: target, ChannelCredentials: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "other"}, nil)},
+			want: false,
+		},
+		{
+			name: "different_call_creds",
+			a:    &grpcservice.Config{TargetURI: target, ChannelCredentials: insecureCreds()},
+			b: &grpcservice.Config{TargetURI: target, ChannelCredentials: insecureCreds(), CallCredentials: []*xdscreds.CallCreds{
+				xdscreds.NewCallCreds(nil, xdscreds.Identity{Type: "access_token"}, nil),
+			}},
+			want: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := sharesChannel(tt.a, tt.b); got != tt.want {
+				t.Errorf("sharesChannel() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 var cmpOpts = []cmp.Option{
 	cmp.AllowUnexported(
 		baseConfig{},

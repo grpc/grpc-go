@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/internal/envconfig"
@@ -216,11 +217,41 @@ func (s) TestParse(t *testing.T) {
 			wantErr: "target_uri must be non-empty",
 		},
 		{
+			name:   "valid_timeout",
+			gs:     googleGrpcService(target, []*anypb.Any{insecurePlugin}, nil, durationpb.New(10*time.Second)),
+			sc:     trustedServerConfig(t),
+			config: bootstrapConfig(t, "{}"),
+			want: &Config{
+				TargetURI:          target,
+				Timeout:            10 * time.Second,
+				ChannelCredentials: xdscreds.NewChannelCreds(nil, protoIdentity(insecurePlugin), nil),
+			},
+		},
+		{
 			name:    "zero_timeout_rejected",
 			gs:      googleGrpcService(target, []*anypb.Any{insecurePlugin}, nil, durationpb.New(0)),
 			sc:      trustedServerConfig(t),
 			config:  bootstrapConfig(t, "{}"),
 			wantErr: "timeout must be strictly positive",
+		},
+		{
+			name: "initial_metadata",
+			gs: func() *v3corepb.GrpcService {
+				gs := googleGrpcService(target, []*anypb.Any{insecurePlugin}, nil, nil)
+				gs.InitialMetadata = []*v3corepb.HeaderValue{
+					{Key: "key-b", Value: "b"},
+					// raw_value takes precedence over the legacy value field.
+					{Key: "key-a", Value: "legacy", RawValue: []byte("raw-a")},
+				}
+				return gs
+			}(),
+			sc:     trustedServerConfig(t),
+			config: bootstrapConfig(t, "{}"),
+			want: &Config{
+				TargetURI:          target,
+				InitialMetadata:    metadata.MD{"key-b": {"b"}, "key-a": {"raw-a"}},
+				ChannelCredentials: xdscreds.NewChannelCreds(nil, protoIdentity(insecurePlugin), nil),
+			},
 		},
 	}
 
@@ -266,22 +297,6 @@ func (s) TestConfigDial(t *testing.T) {
 	}
 }
 
-func (s) TestParseInitialMetadata(t *testing.T) {
-	gs := googleGrpcService(target, []*anypb.Any{{TypeUrl: insecureCredsTypeURL}}, nil, nil)
-	gs.InitialMetadata = []*v3corepb.HeaderValue{
-		{Key: "key-b", Value: "b"},
-		{Key: "key-a", Value: "legacy", RawValue: []byte("raw-a")},
-	}
-	got, err := Parse(gs, bootstrapConfig(t, "{}"), trustedServerConfig(t))
-	if err != nil {
-		t.Fatalf("Parse() returned unexpected error: %v", err)
-	}
-	want := metadata.MD{"key-b": []string{"b"}, "key-a": []string{"raw-a"}}
-	if diff := cmp.Diff(want, got.InitialMetadata); diff != "" {
-		t.Errorf("Parse() InitialMetadata mismatch (-want +got):\n%s", diff)
-	}
-}
-
 func (s) TestConfigEqual(t *testing.T) {
 	insecurePlugin := &anypb.Any{TypeUrl: insecureCredsTypeURL}
 	protoInsecure := xdscreds.NewChannelCreds(nil, protoIdentity(insecurePlugin), nil)
@@ -293,16 +308,22 @@ func (s) TestConfigEqual(t *testing.T) {
 		want bool
 	}{
 		{
-			name: "equal_identities_share",
-			a:    &Config{TargetURI: target, ChannelCredentials: protoInsecure},
-			b:    &Config{TargetURI: target, ChannelCredentials: xdscreds.NewChannelCreds(nil, protoIdentity(insecurePlugin), nil)},
+			name: "equal",
+			a:    &Config{TargetURI: target, ChannelCredentials: protoInsecure, Timeout: 1, InitialMetadata: metadata.Pairs("k", "v")},
+			b:    &Config{TargetURI: target, ChannelCredentials: xdscreds.NewChannelCreds(nil, protoIdentity(insecurePlugin), nil), Timeout: 1, InitialMetadata: metadata.Pairs("k", "v")},
 			want: true,
 		},
 		{
-			name: "timeout_and_metadata_do_not_affect_sharing",
+			name: "different_timeouts",
 			a:    &Config{TargetURI: target, ChannelCredentials: protoInsecure, Timeout: 1},
+			b:    &Config{TargetURI: target, ChannelCredentials: protoInsecure, Timeout: 2},
+			want: false,
+		},
+		{
+			name: "different_initial_metadata",
+			a:    &Config{TargetURI: target, ChannelCredentials: protoInsecure},
 			b:    &Config{TargetURI: target, ChannelCredentials: protoInsecure, InitialMetadata: metadata.Pairs("k", "v")},
-			want: true,
+			want: false,
 		},
 		{
 			name: "different_targets",
