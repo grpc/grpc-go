@@ -3,13 +3,16 @@
 This document lists the environment variables supported by the grpc-go
 implementation.
 
-This list is intended to be exhaustive, with two deliberate exclusions:
+This list is intended to be exhaustive, with three deliberate exclusions:
 
 *   Variables whose names contain `EXPERIMENTAL`. They guard features that are
     still in development, and they may change behavior, change defaults, or be
     removed entirely in any release without notice.
 *   Variables whose names contain `TEST_ONLY`. They exist to support gRPC's own
     tests and are not intended for use by applications.
+*   Variables whose semantics are defined outside gRPC and are only read
+    indirectly through a dependency, such as `GOOGLE_APPLICATION_CREDENTIALS`
+    and the `OTEL_*` variables consulted by the observability plugins.
 
 Unless stated otherwise, boolean variables are case-insensitive and only the
 values `true` and `false` are recognized; any other value leaves the default
@@ -20,19 +23,22 @@ in effect.
 See [Log Levels](Documentation/log_levels.md) for a description of the log
 severities and how they are used.
 
+The variables in this section configure the default logger, and none of them
+have any effect if the application installs its own logger via
+[`grpclog.SetLoggerV2`](https://pkg.go.dev/google.golang.org/grpc/grpclog#SetLoggerV2).
+They are read once, when the `grpclog` package is initialized.
+
 *   `GRPC_GO_LOG_SEVERITY_LEVEL`
 
-    The minimum severity of log messages written to stderr by the default
-    logger. One of `ERROR`, `WARNING` or `INFO` (e.g. `INFO` enables info,
-    warning and error logs). Defaults to `ERROR`. Has no effect if the
-    application replaces the default logger via
-    [`grpclog.SetLoggerV2`](https://pkg.go.dev/google.golang.org/grpc/grpclog#SetLoggerV2).
+    The minimum severity of log messages written to stderr. One of `ERROR`,
+    `WARNING` or `INFO` (e.g. `INFO` enables info, warning and error logs).
+    Defaults to `ERROR` when unset.
 
-    Note that unlike the boolean variables above, an unrecognized value here
-    does not leave the default in effect: it silences the default logger
-    entirely, so that no message of any severity is written. `FATAL` is not a
-    recognized value and has this effect. Fatal-severity logging still
-    terminates the process in that case; only the log output is suppressed.
+    There is no fallback for an unrecognized value: rather than leaving the
+    default in effect, it silences the logger entirely, so that no message of
+    any severity is written. `FATAL` is not a recognized value and has this
+    effect. Fatal-severity logging still terminates the process in that case;
+    only the log output is suppressed.
 
 *   `GRPC_GO_LOG_VERBOSITY_LEVEL`
 
@@ -42,8 +48,8 @@ severities and how they are used.
 
 *   `GRPC_GO_LOG_FORMATTER`
 
-    Set to `json` to make the default logger emit log messages as JSON
-    objects. Any other value uses the default plain-text format.
+    Set to `json` (case-insensitive) to emit log messages as JSON objects. Any
+    other value uses the default plain-text format.
 
 ## Binary logging
 
@@ -69,9 +75,28 @@ severities and how they are used.
 *   `GRPC_GO_IGNORE_TXT_ERRORS`
 
     Whether the DNS resolver ignores errors from TXT record lookups. When
-    `true`, TXT lookup failures are logged but resolution proceeds without a
-    service config; when `false`, the error is reported to the channel.
-    Defaults to `true`.
+    `true` (the default), TXT lookup errors are silently ignored and resolution
+    proceeds without a service config. When `false`, transient errors (timeouts
+    and temporary failures) are logged and reported to the channel, and
+    resolution is retried with backoff; permanent DNS errors, such as a missing
+    TXT record, are still silently treated as "no service config".
+
+## Proxy
+
+See [Proxy](Documentation/proxy.md) for how proxies are used by gRPC-Go.
+
+*   `HTTPS_PROXY`
+
+    The address of the HTTP CONNECT proxy to tunnel through. The variable name
+    is matched case-insensitively. The proxy lookup is performed with an
+    `https`-scheme request, so `HTTP_PROXY` is never consulted.
+
+*   `NO_PROXY`
+
+    A comma-separated list of hosts that are connected to directly, bypassing
+    the proxy. The variable name is matched case-insensitively. A target whose
+    host is `localhost`, with or without a port, bypasses the proxy whether or
+    not it is listed here.
 
 ## xDS
 
@@ -116,7 +141,9 @@ severities and how they are used.
 *   `GRPC_ALTS_MAX_CONCURRENT_HANDSHAKES`
 
     The maximum number of concurrent ALTS handshakes. Defaults to `100`;
-    values are clamped to the range `[1, 100]`.
+    values are clamped to the range `[1, 100]`. The limit is enforced per
+    direction, with separate client-side and server-side counters, so a process
+    acting as both can have up to twice this many handshakes in flight.
 
 ## Server
 
@@ -145,8 +172,10 @@ package; see its documentation for the configuration schema.
 
 *   `GOOGLE_CLOUD_PROJECT`
 
-    The GCP project ID to report observability data against. If unset, the
-    project ID is taken from the default credentials.
+    The GCP project ID to report observability data against. Only consulted
+    when the observability configuration does not specify `project_id`. If this
+    variable is also unset, the project ID is taken from the default
+    credentials.
 
 ## CSM observability
 
