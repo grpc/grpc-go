@@ -181,6 +181,23 @@ func (s) TestEDSParseRespProto(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name: "unsupported-drop-denominator",
+			m: &v3endpointpb.ClusterLoadAssignment{
+				ClusterName: "test",
+				Policy: &v3endpointpb.ClusterLoadAssignment_Policy{
+					DropOverloads: []*v3endpointpb.ClusterLoadAssignment_Policy_DropOverload{{
+						Category: "test-drop",
+						DropPercentage: &v3typepb.FractionalPercent{
+							Numerator:   1,
+							Denominator: v3typepb.FractionalPercent_DenominatorType(7),
+						},
+					}},
+				},
+			},
+			want:    EndpointsUpdate{},
+			wantErr: true,
+		},
+		{
 			name: "good",
 			m: func() *v3endpointpb.ClusterLoadAssignment {
 				clab0 := newClaBuilder("test", nil)

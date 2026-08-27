@@ -32,7 +32,7 @@ import (
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/internal/testutils"
-	"google.golang.org/grpc/internal/xds/clients/xdsclient"
+	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/internal/xds/clusterspecifier"
 	"google.golang.org/grpc/internal/xds/httpfilter"
 	"google.golang.org/grpc/internal/xds/matcher"
@@ -721,7 +721,7 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, test.xdsClientExtProcEnabled)
 
-			gotUpdate, gotError := generateRDSUpdateFromRouteConfiguration(test.rc, nil)
+			gotUpdate, gotError := generateRDSUpdateFromRouteConfiguration(test.rc, nil, nil)
 			if (gotError != nil) != test.wantError ||
 				!cmp.Equal(gotUpdate, test.wantUpdate, cmpopts.EquateEmpty(),
 					cmp.Transformer("FilterConfig", func(fc httpfilter.FilterConfig) string {
@@ -741,28 +741,28 @@ func (s) TestGenerateRDSUpdateFromRouteConfigurationWithAutoHostRewrite(t *testi
 
 	tests := []struct {
 		name             string
-		isTrusted        xdsclient.ServerFeature // Corresponds to ServerConfig
-		envConfigRewrite bool                    // Corresponds to envconfig.XDSAuthorityRewrite
+		isTrusted        bool // Whether the xDS server is trusted.
+		envConfigRewrite bool // envconfig.XDSAuthorityRewrite value.
 		autoHostRewrite  bool
 		wantResult       bool
 	}{
 		{
 			name:             "envConfigOn_Trusted",
-			isTrusted:        xdsclient.ServerFeatureTrustedXDSServer,
+			isTrusted:        true,
 			envConfigRewrite: true,
 			autoHostRewrite:  true,
 			wantResult:       true,
 		},
 		{
 			name:             "envConfigOn_Trusted_AutoHostRewriteFalse",
-			isTrusted:        xdsclient.ServerFeatureTrustedXDSServer,
+			isTrusted:        true,
 			envConfigRewrite: true,
 			autoHostRewrite:  false,
 			wantResult:       false,
 		},
 		{
 			name:             "envConfigOff_Trusted",
-			isTrusted:        xdsclient.ServerFeatureTrustedXDSServer,
+			isTrusted:        true,
 			envConfigRewrite: false,
 			autoHostRewrite:  true,
 			wantResult:       false,
@@ -785,10 +785,16 @@ func (s) TestGenerateRDSUpdateFromRouteConfigurationWithAutoHostRewrite(t *testi
 		t.Run(test.name, func(t *testing.T) {
 			testutils.SetEnvConfig(t, &envconfig.XDSAuthorityRewrite, test.envConfigRewrite)
 
-			opts := &xdsclient.DecodeOptions{
-				ServerConfig: &xdsclient.ServerConfig{
-					ServerFeature: test.isTrusted,
-				},
+			var serverFeatures []string
+			if test.isTrusted {
+				serverFeatures = []string{"trusted_xds_server"}
+			}
+			sc, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{
+				URI:            "trafficdirector.googleapis.com:443",
+				ServerFeatures: serverFeatures,
+			})
+			if err != nil {
+				t.Fatalf("Failed to create server config for testing: %v", err)
 			}
 
 			routeConfig := &v3routepb.RouteConfiguration{
@@ -807,7 +813,7 @@ func (s) TestGenerateRDSUpdateFromRouteConfigurationWithAutoHostRewrite(t *testi
 				}},
 			}
 
-			update, err := generateRDSUpdateFromRouteConfiguration(routeConfig, opts)
+			update, err := generateRDSUpdateFromRouteConfiguration(routeConfig, nil, sc)
 			if err != nil {
 				t.Errorf("generateRDSUpdateFromRouteConfiguration() failed, got : %v, want: <nil>", err)
 			}
@@ -983,7 +989,7 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			name, update, err := unmarshalRouteConfigResource(test.resource, nil)
+			name, update, err := unmarshalRouteConfigResource(test.resource, nil, nil)
 			if (err != nil) != test.wantErr {
 				t.Errorf("unmarshalRouteConfigResource(%s), got err: %v, wantErr: %v", pretty.ToJSON(test.resource), err, test.wantErr)
 			}
@@ -999,6 +1005,10 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 
 func (s) TestRoutesProtoToSlice(t *testing.T) {
 	sm, _ := matcher.StringMatcherFromProto(&v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: "tv"}})
+	prefixSM, _ := matcher.StringMatcherFromProto(&v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Prefix{Prefix: "tv"}})
+	suffixSM, _ := matcher.StringMatcherFromProto(&v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Suffix{Suffix: "tv"}})
+	containsSM, _ := matcher.StringMatcherFromProto(&v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Contains{Contains: "tv"}})
+	emptyExactSM, _ := matcher.StringMatcherFromProto(&v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: ""}})
 	var (
 		goodRouteWithFilterConfigs = func(cfgs map[string]*anypb.Any) []*v3routepb.Route {
 			// Sets per-filter config in cluster "B" and in the route.
@@ -1113,7 +1123,7 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 					{
 						Name:        "th",
 						InvertMatch: newBoolP(true),
-						PrefixMatch: newStringP("tv"),
+						StringMatch: &prefixSM,
 					},
 				},
 				Fraction: newUInt32P(10000),
@@ -1308,20 +1318,142 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "unrecognized header match specifier",
-			routes: []*v3routepb.Route{
-				{
-					Match: &v3routepb.RouteMatch{
-						PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/a/"},
-						Headers: []*v3routepb.HeaderMatcher{
-							{
-								Name:                 "th",
-								HeaderMatchSpecifier: &v3routepb.HeaderMatcher_StringMatch{},
-							},
-						},
-					},
+			name: "empty exact_match header specifier is accepted",
+			routes: []*v3routepb.Route{{
+				Match: &v3routepb.RouteMatch{
+					PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/a/"},
+					Headers: []*v3routepb.HeaderMatcher{{
+						Name:                 "th",
+						HeaderMatchSpecifier: &v3routepb.HeaderMatcher_ExactMatch{ExactMatch: ""},
+					}},
 				},
-			},
+				Action: &v3routepb.Route_Route{
+					Route: &v3routepb.RouteAction{ClusterSpecifier: &v3routepb.RouteAction_Cluster{Cluster: clusterName}},
+				},
+			}},
+			wantRoutes: []*Route{{
+				Prefix: newStringP("/a/"),
+				Headers: []*HeaderMatcher{{
+					Name:        "th",
+					InvertMatch: newBoolP(false),
+					StringMatch: &emptyExactSM,
+				}},
+				WeightedClusters: []WeightedCluster{{Name: clusterName, Weight: 1}},
+				ActionType:       RouteActionRoute,
+			}},
+			wantErr: false,
+		},
+		{
+			name: "suffix_match header specifier",
+			routes: []*v3routepb.Route{{
+				Match: &v3routepb.RouteMatch{
+					PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/a/"},
+					Headers: []*v3routepb.HeaderMatcher{{
+						Name:                 "th",
+						HeaderMatchSpecifier: &v3routepb.HeaderMatcher_SuffixMatch{SuffixMatch: "tv"},
+					}},
+				},
+				Action: &v3routepb.Route_Route{
+					Route: &v3routepb.RouteAction{ClusterSpecifier: &v3routepb.RouteAction_Cluster{Cluster: clusterName}},
+				},
+			}},
+			wantRoutes: []*Route{{
+				Prefix: newStringP("/a/"),
+				Headers: []*HeaderMatcher{{
+					Name:        "th",
+					InvertMatch: newBoolP(false),
+					StringMatch: &suffixSM,
+				}},
+				WeightedClusters: []WeightedCluster{{Name: clusterName, Weight: 1}},
+				ActionType:       RouteActionRoute,
+			}},
+			wantErr: false,
+		},
+		{
+			name: "contains_match header specifier",
+			routes: []*v3routepb.Route{{
+				Match: &v3routepb.RouteMatch{
+					PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/a/"},
+					Headers: []*v3routepb.HeaderMatcher{{
+						Name:                 "th",
+						HeaderMatchSpecifier: &v3routepb.HeaderMatcher_ContainsMatch{ContainsMatch: "tv"},
+					}},
+				},
+				Action: &v3routepb.Route_Route{
+					Route: &v3routepb.RouteAction{ClusterSpecifier: &v3routepb.RouteAction_Cluster{Cluster: clusterName}},
+				},
+			}},
+			wantRoutes: []*Route{{
+				Prefix: newStringP("/a/"),
+				Headers: []*HeaderMatcher{{
+					Name:        "th",
+					InvertMatch: newBoolP(false),
+					StringMatch: &containsSM,
+				}},
+				WeightedClusters: []WeightedCluster{{Name: clusterName, Weight: 1}},
+				ActionType:       RouteActionRoute,
+			}},
+			wantErr: false,
+		},
+		{
+			name: "empty contains_match header specifier",
+			routes: []*v3routepb.Route{{
+				Match: &v3routepb.RouteMatch{
+					PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/a/"},
+					Headers: []*v3routepb.HeaderMatcher{{
+						Name:                 "th",
+						HeaderMatchSpecifier: &v3routepb.HeaderMatcher_ContainsMatch{ContainsMatch: ""},
+					}},
+				},
+				Action: &v3routepb.Route_Route{
+					Route: &v3routepb.RouteAction{ClusterSpecifier: &v3routepb.RouteAction_Cluster{Cluster: clusterName}},
+				},
+			}},
+			wantErr: true,
+		},
+		{
+			name: "empty prefix_match header specifier",
+			routes: []*v3routepb.Route{{
+				Match: &v3routepb.RouteMatch{
+					PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/a/"},
+					Headers: []*v3routepb.HeaderMatcher{{
+						Name:                 "th",
+						HeaderMatchSpecifier: &v3routepb.HeaderMatcher_PrefixMatch{PrefixMatch: ""},
+					}},
+				},
+				Action: &v3routepb.Route_Route{
+					Route: &v3routepb.RouteAction{ClusterSpecifier: &v3routepb.RouteAction_Cluster{Cluster: clusterName}},
+				},
+			}},
+			wantErr: true,
+		},
+		{
+			name: "empty suffix_match header specifier",
+			routes: []*v3routepb.Route{{
+				Match: &v3routepb.RouteMatch{
+					PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/a/"},
+					Headers: []*v3routepb.HeaderMatcher{{
+						Name:                 "th",
+						HeaderMatchSpecifier: &v3routepb.HeaderMatcher_SuffixMatch{SuffixMatch: ""},
+					}},
+				},
+				Action: &v3routepb.Route_Route{
+					Route: &v3routepb.RouteAction{ClusterSpecifier: &v3routepb.RouteAction_Cluster{Cluster: clusterName}},
+				},
+			}},
+			wantErr: true,
+		},
+		{
+			name: "nil string match header specifier",
+			routes: []*v3routepb.Route{{
+				Match: &v3routepb.RouteMatch{
+					PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/a/"},
+					Headers: []*v3routepb.HeaderMatcher{{
+						Name:                 "th",
+						HeaderMatchSpecifier: &v3routepb.HeaderMatcher_StringMatch{},
+					}},
+				},
+			}},
 			wantErr: true,
 		},
 		{
@@ -1492,7 +1624,7 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 					{
 						Name:        "th",
 						InvertMatch: newBoolP(true),
-						PrefixMatch: newStringP("tv"),
+						StringMatch: &prefixSM,
 					},
 				},
 				Fraction: newUInt32P(10000),
@@ -1552,7 +1684,7 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 					{
 						Name:        "th",
 						InvertMatch: newBoolP(true),
-						PrefixMatch: newStringP("tv"),
+						StringMatch: &prefixSM,
 					},
 				},
 				Fraction: newUInt32P(10000),
@@ -1614,7 +1746,7 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, _, err := routesProtoToSlice(tt.routes, nil, nil)
+			got, _, err := routesProtoToSlice(tt.routes, nil, nil, nil)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("routesProtoToSlice() error = %v, wantErr %v", err, tt.wantErr)
 			}

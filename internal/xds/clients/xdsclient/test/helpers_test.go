@@ -280,7 +280,7 @@ func buildResourceName(typeName, auth, id string, ctxParams map[string]string) s
 // recording events on channels and provides helpers to check if certain events
 // have taken place.
 type testMetricsReporter struct {
-	metricsCh *buffer.Unbounded
+	metricsCh *buffer.Unbounded[any]
 
 	mu             sync.Mutex
 	asyncReporters map[clients.AsyncReporter]struct{}
@@ -289,7 +289,7 @@ type testMetricsReporter struct {
 // newTestMetricsReporter returns a new testMetricsReporter.
 func newTestMetricsReporter() *testMetricsReporter {
 	return &testMetricsReporter{
-		metricsCh:      buffer.NewUnbounded(),
+		metricsCh:      buffer.NewUnbounded[any](),
 		asyncReporters: make(map[clients.AsyncReporter]struct{}),
 	}
 }

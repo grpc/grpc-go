@@ -45,8 +45,10 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/channelz"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/leakcheck"
+	imem "google.golang.org/grpc/internal/mem"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/mem"
 	"google.golang.org/grpc/metadata"
@@ -223,7 +225,7 @@ func (h *testStreamHandler) handleStreamEncodingRequiredStatus(s *ServerStream) 
 func (h *testStreamHandler) handleStreamInvalidContentType(s *ServerStream) {
 	headerFields := []hpack.HeaderField{}
 	headerFields = append(headerFields, hpack.HeaderField{Name: "content-type", Value: expectedInvalidHeaderField})
-	h.t.controlBuf.put(&headerFrame{
+	h.t.controlBuf.put(&serverHeaders{
 		streamID:  s.id,
 		hf:        headerFields,
 		endStream: true,
@@ -237,7 +239,7 @@ func (h *testStreamHandler) handleStreamInvalidContentType(s *ServerStream) {
 func (h *testStreamHandler) handleStreamInvalidContentTypeWithMultipleFrame(s *ServerStream) {
 	headerFields := []hpack.HeaderField{}
 	headerFields = append(headerFields, hpack.HeaderField{Name: "content-type", Value: expectedInvalidHeaderField})
-	h.t.controlBuf.put(&headerFrame{
+	h.t.controlBuf.put(&serverHeaders{
 		streamID:  s.id,
 		hf:        headerFields,
 		endStream: false,
@@ -265,7 +267,7 @@ func (h *testStreamHandler) handleStreamMalformedHeader(s *ServerStream) {
 		{Name: "content-type", Value: "application/grpc"},
 		{Name: "x-bad-bin", Value: "!!!invalid-base64!!!"},
 	}
-	h.t.controlBuf.put(&headerFrame{
+	h.t.controlBuf.put(&serverHeaders{
 		streamID:  s.id,
 		hf:        headerFields,
 		endStream: false,
@@ -1885,6 +1887,36 @@ func (s) TestAccountCheckDynamicWindowLargeMessage(t *testing.T) {
 	testFlowControlAccountCheck(t, 1024*1024, windowSizeConfig{}, defaultTestTimeout)
 }
 
+func (t *http2Server) getOutStreamForTesting(ctx context.Context, id uint32) *outStream {
+	resp := make(chan *outStream)
+	if err := t.controlBuf.put(&outStreamRequestForTesting{streamID: id, resp: resp}); err != nil {
+		return nil
+	}
+	select {
+	case s := <-resp:
+		return s
+	case <-t.done:
+		return nil
+	case <-ctx.Done():
+		return nil
+	}
+}
+
+func (t *http2Client) getOutStreamForTesting(ctx context.Context, id uint32) *outStream {
+	resp := make(chan *outStream)
+	if err := t.controlBuf.put(&outStreamRequestForTesting{streamID: id, resp: resp}); err != nil {
+		return nil
+	}
+	select {
+	case s := <-resp:
+		return s
+	case <-t.ctxDone:
+		return nil
+	case <-ctx.Done():
+		return nil
+	}
+}
+
 func testFlowControlAccountCheck(t *testing.T, msgSize int, wc windowSizeConfig, timeout time.Duration) {
 	sc := &ServerConfig{
 		InitialWindowSize:     wc.serverStream,
@@ -1963,21 +1995,28 @@ func testFlowControlAccountCheck(t *testing.T, msgSize int, wc windowSizeConfig,
 		}(stream)
 	}
 	wg.Wait()
+
+	// Fail early if any of the above goroutines failed.
+	if t.Failed() {
+		t.FailNow()
+	}
+
 	serverStreams := map[uint32]*ServerStream{}
 	loopyClientStreams := map[uint32]*outStream{}
 	loopyServerStreams := map[uint32]*outStream{}
-	// Get all the streams from server reader and writer and client writer.
+	// Get all the active streams from the server transport.
 	st.mu.Lock()
-	client.mu.Lock()
 	for _, stream := range clientStreams {
 		id := stream.id
 		serverStreams[id] = st.activeStreams[id]
-		loopyServerStreams[id] = st.loopy.estdStreams[id]
-		loopyClientStreams[id] = client.loopy.estdStreams[id]
-
 	}
-	client.mu.Unlock()
 	st.mu.Unlock()
+
+	for _, stream := range clientStreams {
+		id := stream.id
+		loopyServerStreams[id] = st.getOutStreamForTesting(ctx, id)
+		loopyClientStreams[id] = client.getOutStreamForTesting(ctx, id)
+	}
 	// Close all streams
 	for _, stream := range clientStreams {
 		stream.Write(nil, nil, &WriteOptions{Last: true})
@@ -2000,6 +2039,9 @@ func testFlowControlAccountCheck(t *testing.T, msgSize int, wc windowSizeConfig,
 		loopyClientStream := loopyClientStreams[id]
 		if loopyServerStream == nil {
 			t.Fatalf("Unexpected nil loopyServerStream")
+		}
+		if loopyClientStream == nil {
+			t.Fatalf("Unexpected nil loopyClientStream")
 		}
 		// Check stream flow control.
 		if int(cstream.fc.limit+cstream.fc.delta-cstream.fc.pendingData-cstream.fc.pendingUpdate) != int(st.loopy.oiws)-loopyServerStream.bytesOutStanding {
@@ -2051,7 +2093,7 @@ func (s) TestReadGivesSameErrorAfterAnyErrorOccurs(t *testing.T) {
 		ctx:           ctx,
 		readRequester: &fakeReadRequester{},
 	}
-	s.buf.init()
+	s.buf.init(mem.DefaultBufferPool())
 	s.trReader = transportReader{
 		reader: recvBufferReader{
 			ctx:     s.ctx,
@@ -2272,6 +2314,22 @@ func (s) TestHeadersHTTPStatusGRPCStatus(t *testing.T) {
 			httpStatusWant:  "400",
 			grpcStatusWant:  "13",
 			grpcMessageWant: "both must only have 1 value as per HTTP/2 spec",
+		},
+		// If neither :authority nor host header is present on a gRPC request, the
+		// request should be rejected with HTTP Status 400 and gRPC status Internal.
+		{
+			name: "Missing authority and host header grpc",
+			headers: []struct {
+				name   string
+				values []string
+			}{
+				{name: ":method", values: []string{"POST"}},
+				{name: ":path", values: []string{"foo"}},
+				{name: "content-type", values: []string{"application/grpc"}},
+			},
+			httpStatusWant:  "400",
+			grpcStatusWant:  "13",
+			grpcMessageWant: "no host or :authority header present",
 		},
 		// If the client sends an HTTP/2 request with a :method header with a
 		// value other than POST, as specified in the gRPC over HTTP/2
@@ -3378,7 +3436,7 @@ func (s) TestReadMessageHeaderMultipleBuffers(t *testing.T) {
 	s := Stream{
 		readRequester: &fakeReadRequester{},
 	}
-	s.buf.init()
+	s.buf.init(mem.DefaultBufferPool())
 	recvBuffer := &s.buf
 	s.trReader = transportReader{
 		reader: recvBufferReader{
@@ -4045,6 +4103,147 @@ func (s) TestDeleteStreamMetricsIncrementedOnlyOnce(t *testing.T) {
 	}
 }
 
+// Tests that when a non-gRPC response is followed by an empty DATA frame with
+// END_STREAM, the client surfaces the original non-gRPC error instead of discard
+// the buffer we collected and returning an internal error with "server closed the
+// stream without sending trailers".
+func (s) TestNonGRPCStatus_EmptyDataEndStream(t *testing.T) {
+	tests := []struct {
+		name       string
+		send       func(t *testing.T, framer *http2.Framer, streamID uint32)
+		wantCode   codes.Code
+		wantSubstr string
+	}{
+		{
+			name: "headers then empty DATA END_STREAM",
+			send: func(t *testing.T, framer *http2.Framer, streamID uint32) {
+				var buf bytes.Buffer
+				henc := hpack.NewEncoder(&buf)
+				henc.WriteField(hpack.HeaderField{Name: ":status", Value: "401"})
+				henc.WriteField(hpack.HeaderField{Name: "content-type", Value: "text/html"})
+				if err := framer.WriteHeaders(http2.HeadersFrameParam{
+					StreamID:      streamID,
+					BlockFragment: buf.Bytes(),
+					EndHeaders:    true,
+					EndStream:     false,
+				}); err != nil {
+					t.Errorf("Failed to write headers: %v", err)
+					return
+				}
+				if err := framer.WriteData(streamID, true, nil); err != nil {
+					t.Errorf("Failed to write empty DATA: %v", err)
+				}
+			},
+			wantCode:   codes.Unauthenticated,
+			wantSubstr: "unexpected HTTP status code received from server: 401",
+		},
+		{
+			name: "headers then body DATA then empty DATA END_STREAM",
+			send: func(t *testing.T, framer *http2.Framer, streamID uint32) {
+				var buf bytes.Buffer
+				henc := hpack.NewEncoder(&buf)
+				henc.WriteField(hpack.HeaderField{Name: ":status", Value: "502"})
+				henc.WriteField(hpack.HeaderField{Name: "content-type", Value: "text/html"})
+				if err := framer.WriteHeaders(http2.HeadersFrameParam{
+					StreamID:      streamID,
+					BlockFragment: buf.Bytes(),
+					EndHeaders:    true,
+					EndStream:     false,
+				}); err != nil {
+					t.Errorf("Failed to write headers: %v", err)
+					return
+				}
+				if err := framer.WriteData(streamID, false, []byte("<html>bad gateway</html>")); err != nil {
+					t.Errorf("Failed to write body DATA: %v", err)
+					return
+				}
+				if err := framer.WriteData(streamID, true, nil); err != nil {
+					t.Errorf("Failed to write empty DATA: %v", err)
+				}
+			},
+			wantCode:   codes.Unavailable,
+			wantSubstr: "<html>bad gateway</html>",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			lis, err := net.Listen("tcp", "localhost:0")
+			if err != nil {
+				t.Fatalf("Failed to listen: %v", err)
+			}
+			t.Cleanup(func() { lis.Close() })
+
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+
+			go func() {
+				conn, err := lis.Accept()
+				if err != nil {
+					t.Errorf("Failed to accept: %v", err)
+					return
+				}
+				defer conn.Close()
+
+				if _, err := io.ReadFull(conn, make([]byte, len(clientPreface))); err != nil {
+					t.Errorf("Failed to read client preface: %v", err)
+					return
+				}
+				framer := http2.NewFramer(conn, conn)
+				frame, err := framer.ReadFrame()
+				if err != nil {
+					t.Errorf("Failed to read SETTINGS: %v", err)
+					return
+				}
+				if _, ok := frame.(*http2.SettingsFrame); !ok {
+					t.Errorf("Want SETTINGS, got %T", frame)
+					return
+				}
+				if err := framer.WriteSettings(); err != nil {
+					t.Errorf("Failed to write SETTINGS: %v", err)
+					return
+				}
+				if err := framer.WriteSettingsAck(); err != nil {
+					t.Errorf("Failed to write SETTINGS ACK: %v", err)
+					return
+				}
+
+				for {
+					frame, err = framer.ReadFrame()
+					if err != nil {
+						return
+					}
+					if hf, ok := frame.(*http2.HeadersFrame); ok {
+						tc.send(t, framer, hf.StreamID)
+						break
+					}
+				}
+			}()
+
+			copts := ConnectOptions{BufferPool: mem.DefaultBufferPool()}
+			ct, err := NewHTTP2Client(ctx, ctx, resolver.Address{Addr: lis.Addr().String()}, copts, func(GoAwayInfo) {})
+			if err != nil {
+				t.Fatalf("NewHTTP2Client: %v", err)
+			}
+			t.Cleanup(func() { ct.Close(errors.New("test done")) })
+
+			stream, err := ct.NewStream(ctx, &CallHdr{}, nil)
+			if err != nil {
+				t.Fatalf("NewStream: %v", err)
+			}
+
+			<-stream.Done()
+			st := stream.Status()
+			if st.Code() != tc.wantCode {
+				t.Errorf("Status code = %v, want %v (message: %v)", st.Code(), tc.wantCode, st.Message())
+			}
+			if !strings.Contains(st.Message(), tc.wantSubstr) {
+				t.Errorf("Status message = %q, want substring %q", st.Message(), tc.wantSubstr)
+			}
+		})
+	}
+}
+
 type fakeReadRequester struct {
 }
 
@@ -4056,4 +4255,236 @@ type mockWindowUpdater struct {
 
 func (m *mockWindowUpdater) updateWindow(n int) {
 	m.f(n)
+}
+
+func (s) TestRecvBufferCompaction(t *testing.T) {
+	pool := mem.DefaultBufferPool()
+	b := &recvBuffer{}
+	b.init(pool)
+
+	// We want to trigger compaction.
+	// Compaction triggers when:
+	// 1. backlogHeapSize > compactionThreshold
+	// 2. backlogHeapSize / b.uncompactedBytes > utilizationFactor
+	//
+	// For N messages in backlog, each of 1 byte:
+	// b.uncompactedSuffixLen = N
+	// b.uncompactedBytes = N
+	// backlogHeapSize = N * recvMsgSize + N = N * (recvMsgSize + 1)
+	//
+	// To trigger compaction:
+	// N * (recvMsgSize + 1) > compactionThreshold
+	// Since compactionThreshold = BufferPoolingThreshold * (recvMsgSize + 1),
+	// this simplifies to:
+	// N > BufferPoolingThreshold
+	//
+	// So we need N = BufferPoolingThreshold + 1 messages in the backlog.
+	// The first message put into the recvBuffer goes directly to the channel b.c,
+	// and subsequent messages go to the backlog.
+	// Therefore, we need to put a total of 1 (for channel) + (BufferPoolingThreshold + 1) messages.
+	numMessages := imem.BufferPoolingThreshold + 2
+	payload := []byte{0x0a}
+
+	for i := 0; i < numMessages-1; i++ {
+		b.put(recvMsg{buffer: mem.Copy(payload, pool)})
+	}
+
+	// Verify no compaction occurred.
+	if got, want := len(b.backlog), numMessages-2; got != want {
+		t.Fatalf("Got backlog length %d, want %d", got, want)
+	}
+
+	b.put(recvMsg{buffer: mem.Copy(payload, pool)})
+
+	// Verify that compaction occurred.
+	// The first message is in the channel.
+	// The remaining (BufferPoolingThreshold + 1) messages went to the backlog and should have
+	// been compacted into 1 message. So the backlog length should be exactly 1.
+	if got, want := len(b.backlog), 1; got != want {
+		t.Fatalf("Got backlog length %d after compaction, want %d", got, want)
+	}
+	if b.uncompactedSuffixLen != 0 {
+		t.Fatalf("Got uncompactedSuffixLen %d, want %d", b.uncompactedSuffixLen, 0)
+	}
+	if b.uncompactedBytes != 0 {
+		t.Fatalf("Got uncompactedBytes %d, want %d", b.uncompactedBytes, 0)
+	}
+
+	// Verify the contents of the first message (not compacted, in channel).
+	select {
+	case msg1 := <-b.c:
+		if !bytes.Equal(msg1.buffer.ReadOnlyData(), payload) {
+			t.Errorf("Unexpected first message: %v", msg1)
+		}
+		msg1.buffer.Free()
+	default:
+		t.Fatal("Expected first message to be in the channel")
+	}
+
+	b.load()
+
+	// Verify the compacted message.
+	select {
+	case msgCompacted := <-b.c:
+		wantLen := numMessages - 1
+		if msgCompacted.buffer.Len() != wantLen {
+			t.Errorf("Got compacted buffer length %d, want %d", msgCompacted.buffer.Len(), wantLen)
+		}
+		wantPayload := bytes.Repeat(payload, wantLen)
+		if !bytes.Equal(msgCompacted.buffer.ReadOnlyData(), wantPayload) {
+			t.Errorf("Compacted payload mismatch")
+		}
+		msgCompacted.buffer.Free()
+	default:
+		t.Fatal("Expected compacted message to be loaded into the channel")
+	}
+}
+
+func (s) TestRecvBufferErrorResetsCounters(t *testing.T) {
+	pool := mem.DefaultBufferPool()
+	b := &recvBuffer{}
+	b.init(pool)
+
+	payload := []byte{0x0a}
+	// Push 3 messages. First goes to channel, second and third to backlog.
+	b.put(recvMsg{buffer: mem.Copy(payload, pool)})
+	b.put(recvMsg{buffer: mem.Copy(payload, pool)})
+	b.put(recvMsg{buffer: mem.Copy(payload, pool)})
+
+	// Check for suffix len and size.
+	if got, want := b.uncompactedSuffixLen, 2; got != want {
+		t.Fatalf("Got uncompactedSuffixLen %d, want %d", got, want)
+	}
+	if got, want := b.uncompactedBytes, 2; got != want {
+		t.Fatalf("Got uncompactedBytes %d, want %d", got, want)
+	}
+
+	// Read one message.
+	select {
+	case msg1 := <-b.c:
+		if !bytes.Equal(msg1.buffer.ReadOnlyData(), payload) {
+			t.Errorf("Unexpected first message: %v", msg1)
+		}
+		msg1.buffer.Free()
+	default:
+		t.Fatal("Expected first message to be in the channel")
+	}
+	b.load()
+	if got, want := b.uncompactedSuffixLen, 1; got != want {
+		t.Fatalf("Got uncompactedSuffixLen %d, want %d", got, want)
+	}
+	if got, want := b.uncompactedBytes, 1; got != want {
+		t.Fatalf("Got uncompactedBytes %d, want %d", got, want)
+	}
+
+	// Push error.
+	b.put(recvMsg{err: io.EOF})
+
+	// Check that both counters are set to 0.
+	if got, want := b.uncompactedSuffixLen, 0; got != want {
+		t.Fatalf("Got uncompactedSuffixLen %d, want %d", got, want)
+	}
+	if got, want := b.uncompactedBytes, 0; got != want {
+		t.Fatalf("Got uncompactedBytes %d, want %d", got, want)
+	}
+
+	// Cleanup.
+	select {
+	case msg1 := <-b.c:
+		msg1.buffer.Free()
+	default:
+	}
+	for _, msg := range b.backlog {
+		if msg.buffer != nil {
+			msg.buffer.Free()
+		}
+	}
+}
+
+func (s) TestRecvBufferCompactionSkippedLargeBuffer(t *testing.T) {
+	pool := mem.DefaultBufferPool()
+	b := &recvBuffer{}
+	b.init(pool)
+
+	// We want to test that compaction is skipped when a large buffer is sent
+	// just before reaching the threshold, because the usage threshold
+	// (utilization factor) is met.
+	//
+	// We put N = BufferPoolingThreshold messages of 1 byte each into the backlog.
+	// Total messages put
+	// = 1 (for channel) + BufferPoolingThreshold (for backlog) = BufferPoolingThreshold + 1.
+	numSmallMessages := imem.BufferPoolingThreshold + 1
+	payload := []byte{0x0a}
+
+	for i := 0; i < numSmallMessages; i++ {
+		b.put(recvMsg{buffer: mem.Copy(payload, pool)})
+	}
+
+	// Verify no compaction occurred and backlog length is BufferPoolingThreshold.
+	if got, want := len(b.backlog), imem.BufferPoolingThreshold; got != want {
+		t.Fatalf("Got backlog length %d, want %d", got, want)
+	}
+
+	// Send a large buffer. We choose a buffer size that satisfies the utilization factor check.
+	threshold := imem.BufferPoolingThreshold*(recvMsgSize-1) + recvMsgSize
+	largePayload := make([]byte, threshold)
+	b.put(recvMsg{buffer: mem.Copy(largePayload, pool)})
+
+	// Verify that compaction was skipped.
+	// Backlog length should be BufferPoolingThreshold + 1.
+	if got, want := len(b.backlog), imem.BufferPoolingThreshold+1; got != want {
+		t.Fatalf("Got backlog length %d after large buffer (compaction skipped), want %d", got, want)
+	}
+	if b.uncompactedSuffixLen != 0 {
+		t.Fatalf("Got uncompactedSuffixLen %d, want %d", b.uncompactedSuffixLen, 0)
+	}
+	if b.uncompactedBytes != 0 {
+		t.Fatalf("Got uncompactedBytes %d, want %d", b.uncompactedBytes, 0)
+	}
+
+	select {
+	case msg1 := <-b.c:
+		msg1.buffer.Free()
+	default:
+		t.Fatal("Expected first message to be in the channel, but channel is empty")
+	}
+	for _, msg := range b.backlog {
+		if msg.buffer != nil {
+			msg.buffer.Free()
+		}
+	}
+}
+
+func (s) TestRecvBufferCompactionDisabled(t *testing.T) {
+	testutils.SetEnvConfig(t, &envconfig.EnableReceiveBufferCompaction, false)
+
+	pool := mem.DefaultBufferPool()
+	b := &recvBuffer{}
+	b.init(pool)
+
+	numMessages := imem.BufferPoolingThreshold + 2
+	payload := []byte{0x0a}
+
+	for i := 0; i < numMessages; i++ {
+		b.put(recvMsg{buffer: mem.Copy(payload, pool)})
+	}
+
+	// Verify no compaction occurred.
+	// The first message is in the channel.
+	// The remaining (numMessages - 1) messages should be in the backlog.
+	if got, want := len(b.backlog), numMessages-1; got != want {
+		t.Fatalf("Got backlog length %d, want %d", got, want)
+	}
+
+	select {
+	case msg1 := <-b.c:
+		msg1.buffer.Free()
+	default:
+		t.Fatal("Expected first message to be in the channel, but channel is empty")
+	}
+	for _, msg := range b.backlog {
+		if msg.buffer != nil {
+			msg.buffer.Free()
+		}
+	}
 }
