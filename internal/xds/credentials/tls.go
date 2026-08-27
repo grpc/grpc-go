@@ -58,9 +58,9 @@ func buildTLSCredentials(config *anypb.Any, resolver CertProviderConfigResolver)
 	if rootInstanceName == "" {
 		return nil, nil, fmt.Errorf("credentials: tls credentials must specify root_certificate_provider with an instance_name")
 	}
-	rootCfg, err := certProviderConfig(resolver, rootInstanceName)
+	rootCfg, err := certProviderConfig(resolver, rootInstanceName, "root")
 	if err != nil {
-		return nil, nil, fmt.Errorf("credentials: tls credentials root certificate provider: %v", err)
+		return nil, nil, err
 	}
 	rootProvider, err := rootCfg.Build(certprovider.BuildOptions{
 		CertName: tlsCfg.GetRootCertificateProvider().GetCertificateName(),
@@ -79,10 +79,10 @@ func buildTLSCredentials(config *anypb.Any, resolver CertProviderConfigResolver)
 			rootProvider.Close()
 			return nil, nil, fmt.Errorf("credentials: tls credentials identity_certificate_provider must specify an instance_name")
 		}
-		identityCfg, err := certProviderConfig(resolver, identityInstanceName)
+		identityCfg, err := certProviderConfig(resolver, identityInstanceName, "identity")
 		if err != nil {
 			rootProvider.Close()
-			return nil, nil, fmt.Errorf("credentials: tls credentials identity certificate provider: %v", err)
+			return nil, nil, err
 		}
 		identityProvider, err := identityCfg.Build(certprovider.BuildOptions{
 			CertName:     identity.GetCertificateName(),
@@ -98,11 +98,12 @@ func buildTLSCredentials(config *anypb.Any, resolver CertProviderConfigResolver)
 }
 
 // certProviderConfig looks up the certificate provider instance with the
-// given name via the resolver.
-func certProviderConfig(resolver CertProviderConfigResolver, instanceName string) (*certprovider.BuildableConfig, error) {
+// given name via the resolver. kind names the certificate the provider is
+// used for (root or identity), for error messages.
+func certProviderConfig(resolver CertProviderConfigResolver, instanceName, kind string) (*certprovider.BuildableConfig, error) {
 	cfg, ok := resolver.CertProviderConfigs()[instanceName]
 	if !ok {
-		return nil, fmt.Errorf("certificate provider instance name %q missing in bootstrap configuration", instanceName)
+		return nil, fmt.Errorf("credentials: tls credentials %s certificate provider: instance name %q missing in bootstrap configuration", kind, instanceName)
 	}
 	return cfg, nil
 }

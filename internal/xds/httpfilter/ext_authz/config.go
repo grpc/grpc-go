@@ -29,7 +29,7 @@ import (
 type config struct {
 	httpfilter.FilterConfig
 	// grpcService is the configuration for the external authorization server.
-	grpcService grpcservice.Config
+	grpcService *grpcservice.Config
 	// filterEnabled specifies the percentage of requests to be authorized by
 	// the external authorization server.
 	filterEnabled fraction

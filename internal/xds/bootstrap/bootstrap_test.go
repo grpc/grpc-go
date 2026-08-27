@@ -1752,6 +1752,9 @@ func (s) TestAllowedGRPCServices_UnmarshalJSON(t *testing.T) {
 		// want carries the expected target and credential identities;
 		// comparisons use the Equal methods via cmp.Diff.
 		want AllowedGRPCServices
+		// wantCallCreds is the number of call credentials expected to be
+		// built for the target.
+		wantCallCreds int
 	}{
 		{
 			name: "insecure_channel_creds",
@@ -1772,6 +1775,7 @@ func (s) TestAllowedGRPCServices_UnmarshalJSON(t *testing.T) {
 					Data: json.RawMessage(`{"jwt_token_file": "/var/run/secrets/tokens/istio-token"}`),
 				}, nil)},
 			}},
+			wantCallCreds: 1,
 		},
 		{
 			// Unsupported call-creds types are skipped without error, so no
@@ -1802,6 +1806,7 @@ func (s) TestAllowedGRPCServices_UnmarshalJSON(t *testing.T) {
 					}, nil),
 				},
 			}},
+			wantCallCreds: 2,
 		},
 		{
 			name: "tls_channel_creds",
@@ -1831,10 +1836,19 @@ func (s) TestAllowedGRPCServices_UnmarshalJSON(t *testing.T) {
 				t.Errorf("AllowedGRPCServices unmarshal returned unexpected diff (-want +got):\n%s", diff)
 			}
 			// Equal compares credentials by identity only, so it cannot tell
-			// a built bundle from a nil one; verify the bundle was built.
-			chanCreds, _ := got[target].SideChannelCredentials()
+			// a built credential from a nil one; verify the credentials were
+			// built.
+			chanCreds, callCreds := got[target].SideChannelCredentials()
 			if chanCreds == nil || chanCreds.Bundle() == nil {
 				t.Error("SideChannelCredentials() returned no built channel credentials")
+			}
+			if len(callCreds) != test.wantCallCreds {
+				t.Errorf("SideChannelCredentials() returned %d call credentials, want %d", len(callCreds), test.wantCallCreds)
+			}
+			for i, cc := range callCreds {
+				if cc.Credentials() == nil {
+					t.Errorf("SideChannelCredentials() call credentials[%d] have no built credentials", i)
+				}
 			}
 		})
 	}

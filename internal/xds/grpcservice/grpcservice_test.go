@@ -208,6 +208,25 @@ func (s) TestParse(t *testing.T) {
 			want:   &Config{TargetURI: target, ChannelCredentials: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "insecure"}, nil)},
 		},
 		{
+			// The proto's call-creds plugins are ignored along with its
+			// channel-creds plugins: the allowlist's call creds are used.
+			name:   "untrusted_allowlisted_uses_allowlist_call_creds",
+			gs:     googleGrpcService(target, []*anypb.Any{insecurePlugin}, []*anypb.Any{tokenPlugin}, nil),
+			sc:     untrustedServerConfig(t),
+			config: bootstrapConfig(t, `{"dns:///my-service:443":{"channel_creds":[{"type":"insecure"}],"call_creds":[{"type":"jwt_token_file","config":{"jwt_token_file":"/tokens/token"}}]}}`),
+			want: &Config{
+				TargetURI:          target,
+				ChannelCredentials: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "insecure"}, nil),
+				CallCredentials: []*xdscreds.CallCreds{xdscreds.NewCallCreds(nil, xdscreds.Identity{
+					Type: "jwt_token_file",
+					// Bootstrap parsing normalizes the configuration JSON
+					// via json.Indent, and the identity carries the
+					// normalized bytes.
+					Data: json.RawMessage("{\n\"jwt_token_file\": \"/tokens/token\"\n}"),
+				}, nil)},
+			},
+		},
+		{
 			name:    "untrusted_not_allowlisted",
 			gs:      googleGrpcService(target, nil, nil, nil),
 			sc:      untrustedServerConfig(t),
@@ -279,6 +298,9 @@ func (s) TestParse(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Parse() returned unexpected error: %v", err)
 			}
+			// The cmp.Diff below compares credentials by identity only, so it
+			// cannot tell a built credential from a nil one; verify the
+			// credentials were built.
 			if got.ChannelCredentials.Bundle() == nil {
 				t.Error("Parse() returned channel credentials without a built bundle")
 			}

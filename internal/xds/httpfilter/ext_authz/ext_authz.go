@@ -46,8 +46,8 @@ func init() {
 var (
 	// TODO: Parse via grpcservice.Parse with the filter parse options,
 	// as ext_proc does, when ext_authz is wired up for gRFC A102.
-	parseGRPCServiceConfig = func(*v3corepb.GrpcService) (grpcservice.Config, error) {
-		return grpcservice.Config{}, fmt.Errorf("parseGRPCServiceConfig not implemented")
+	parseGRPCServiceConfig = func(*v3corepb.GrpcService) (*grpcservice.Config, error) {
+		return nil, fmt.Errorf("parseGRPCServiceConfig not implemented")
 	}
 )
 

@@ -53,21 +53,16 @@ func Test(t *testing.T) {
 // testParseGRPCServiceConfig is a helper function that parses a GrpcService
 // proto message into a GRPCServiceConfig. This is a temporary test
 // implementation that will be removed once gRFC A102 is implemented.
-func testParseGRPCServiceConfig(grpcService *corepb.GrpcService) (grpcservice.Config, error) {
-	if grpcService == nil {
-		return grpcservice.Config{}, nil
-	}
+func testParseGRPCServiceConfig(grpcService *corepb.GrpcService) (*grpcservice.Config, error) {
 	if grpcService.GetGoogleGrpc() == nil {
-		return grpcservice.Config{}, fmt.Errorf("only google_grpc grpc_service is supported")
+		return nil, fmt.Errorf("only google_grpc grpc_service is supported")
 	}
 	if grpcService.GetGoogleGrpc().GetTargetUri() == "" {
-		return grpcservice.Config{}, fmt.Errorf("targetURI must be a non-empty string")
+		return nil, fmt.Errorf("targetURI must be a non-empty string")
 	}
-
-	sc := grpcservice.Config{
+	return &grpcservice.Config{
 		TargetURI: grpcService.GetGoogleGrpc().GetTargetUri(),
-	}
-	return sc, nil
+	}, nil
 }
 
 var cmpOpts = []cmp.Option{
@@ -114,7 +109,7 @@ func (s) TestParseFilterConfig_Success(t *testing.T) {
 				},
 			}),
 			wantCfg: config{
-				grpcService: grpcservice.Config{
+				grpcService: &grpcservice.Config{
 					TargetURI: "localhost:1234",
 				},
 				filterEnabled: fraction{
@@ -170,7 +165,7 @@ func (s) TestParseFilterConfig_Success(t *testing.T) {
 				IncludePeerCertificate: true,
 			}),
 			wantCfg: config{
-				grpcService: grpcservice.Config{
+				grpcService: &grpcservice.Config{
 					TargetURI: "localhost:5678",
 				},
 				filterEnabled: fraction{

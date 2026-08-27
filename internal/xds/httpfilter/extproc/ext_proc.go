@@ -51,7 +51,6 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/structpb"
 
-	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3procfilterpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/ext_proc/v3"
 	v3procservicegrpc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	v3procservicepb "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
@@ -110,15 +109,6 @@ func validateBodyProcessingMode(mode *v3procfilterpb.ProcessingMode) error {
 	return nil
 }
 
-// parseGRPCService parses the GrpcService proto identifying the external
-// processor server. The gRFC A102 trust policy — honoring the proto's
-// credentials only when the delivering xDS management server is trusted, and
-// requiring an untrusted server's target to be present in the bootstrap
-// allowed_grpc_services map — is applied by grpcservice.Parse.
-func parseGRPCService(gs *v3corepb.GrpcService, opts httpfilter.ParseOptions) (*grpcservice.Config, error) {
-	return grpcservice.Parse(gs, opts.BootstrapConfig, opts.ServerConfig)
-}
-
 // ParseFilterConfig parses the provided filter configuration. The GrpcService
 // identifying the external processor server is validated against the provided
 // parse options, as per gRFC A102.
@@ -168,7 +158,7 @@ func (builder) ParseFilterConfig(cfg proto.Message, opts httpfilter.ParseOptions
 	if msg.GetGrpcService() == nil {
 		return nil, fmt.Errorf("extproc: empty grpc_service provided in config %v", cfg)
 	}
-	server, err := parseGRPCService(msg.GetGrpcService(), opts)
+	server, err := grpcservice.Parse(msg.GetGrpcService(), opts.BootstrapConfig, opts.ServerConfig)
 	if err != nil {
 		return nil, fmt.Errorf("extproc: failed to parse grpc_service: %v", err)
 	}
@@ -218,8 +208,8 @@ func (builder) ParseFilterConfigOverride(ov proto.Message, opts httpfilter.Parse
 	// Parse the GrpcService last, so that no error path can drop the built
 	// credentials: the caller owns them from here on.
 	var serverOpt optional.Optional[*grpcservice.Config]
-	if override.GetGrpcService() != nil {
-		server, err := parseGRPCService(override.GetGrpcService(), opts)
+	if gs := override.GetGrpcService(); gs != nil {
+		server, err := grpcservice.Parse(gs, opts.BootstrapConfig, opts.ServerConfig)
 		if err != nil {
 			return nil, fmt.Errorf("extproc: failed to parse grpc_service: %v", err)
 		}
