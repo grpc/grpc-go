@@ -535,3 +535,72 @@ func (s) TestServer_MismatchedAddressListenerReceivedOnServer(t *testing.T) {
 	defer cc.Close()
 	waitForSuccessfulRPC(ctx, t, cc)
 }
+
+// Tests the case where the server receives a listener resource with a wildcard
+// port. The server should match the listener address and transition to Serving
+// mode regardless of the port on which it is listening.
+func (s) TestServer_ListenerMatchWithWildcardPort(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	managementServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
+
+	// Create bootstrap configuration pointing to the above management server.
+	nodeID := uuid.New().String()
+	bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, managementServer.Address)
+
+	// Create a listener on a local port to act as the xDS enabled gRPC server.
+	lis, err := testutils.LocalTCPListener()
+	if err != nil {
+		t.Fatalf("testutils.LocalTCPListener() failed: %v", err)
+	}
+	host, port, err := hostPortFromListener(lis)
+	if err != nil {
+		t.Fatalf("Failed to retrieve host and port of server: %v", err)
+	}
+
+	// Configure a server-side listener with a wildcard port on the management
+	// server. Construct the listener with the actual port first so its resource
+	// name matches the server's default watch name, then replace only the port
+	// value in the socket address with zero.
+	listener := e2e.DefaultServerListener(host, port, e2e.SecurityLevelNone, "routeName")
+	listener.Address.GetSocketAddress().PortSpecifier = &v3corepb.SocketAddress_PortValue{
+		PortValue: 0,
+	}
+	resources := e2e.UpdateOptions{
+		NodeID:         nodeID,
+		Listeners:      []*v3listenerpb.Listener{listener},
+		SkipValidation: true,
+	}
+	if err := managementServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Start an xDS-enabled gRPC server with the above bootstrap configuration.
+	config, err := bootstrap.NewConfigFromContents(bootstrapContents)
+	if err != nil {
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
+	}
+	pool := xdsclient.NewPool(config)
+	modeChangeHandler := newServingModeChangeHandler(t)
+	modeChangeOpt := xds.ServingModeCallback(modeChangeHandler.modeChangeCallback)
+	createStubServer(t, lis, modeChangeOpt, xds.ClientPoolForTesting(pool))
+
+	// Ensure the server transitions to SERVING mode despite the wildcard port.
+	select {
+	case <-ctx.Done():
+		t.Fatal("Timeout waiting for the xDS-enabled gRPC server to go SERVING")
+	case gotMode := <-modeChangeHandler.modeCh:
+		if gotMode != connectivity.ServingModeServing {
+			t.Fatalf("Mode changed to %v, want %v", gotMode, connectivity.ServingModeServing)
+		}
+	}
+
+	// Create a gRPC client to the server and verify that we can make a
+	// successful RPC.
+	cc, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("Failed to dial local test server: %v", err)
+	}
+	defer cc.Close()
+	waitForSuccessfulRPC(ctx, t, cc)
+}

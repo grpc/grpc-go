@@ -166,23 +166,33 @@ func normalizePrincipalHeaders(principal *v3rbacpb.Principal) error {
 	return nil
 }
 
-// normalizeHeaderMatcher rejects header matchers that A41 forbids (:scheme or a
-// grpc- prefixed name) and rewrites a "host" matcher to ":authority".
+// normalizeHeaderMatcher lowercases the name of a header matcher, rejects the
+// names that A41 forbids (:scheme or a grpc- prefixed name) and rewrites a
+// "host" matcher to ":authority".
 func normalizeHeaderMatcher(header *v3routepb.HeaderMatcher) error {
+	// The keys of the metadata the matchers run against are always lowercase,
+	// so a name that contains an uppercase character matches no header at all
+	// and the rule using it never fires. Lowercase the name, as Envoy and
+	// grpc-java do, both to make it match and to keep the checks below from
+	// being evaded by the case of the name.
 	name := header.GetName()
-	if name == ":scheme" {
+	lowerName := strings.ToLower(name)
+	if lowerName != name {
+		header.Name = lowerName
+	}
+	if lowerName == ":scheme" {
 		return fmt.Errorf("rbac: header matcher for %q is %q", name, ":scheme")
 	}
-	if strings.HasPrefix(name, "grpc-") {
+	if strings.HasPrefix(lowerName, "grpc-") {
 		return fmt.Errorf("rbac: header matcher for %q starts with %q", name, "grpc-")
 	}
-	if name == "host" {
+	if lowerName == "host" {
 		header.Name = ":authority"
 	}
 	return nil
 }
 
-func (builder) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, error) {
+func (builder) ParseFilterConfig(cfg proto.Message, _ httpfilter.ParseOptions) (httpfilter.FilterConfig, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("rbac: nil configuration message provided")
 	}
@@ -197,7 +207,7 @@ func (builder) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, er
 	return parseConfig(msg)
 }
 
-func (builder) ParseFilterConfigOverride(override proto.Message) (httpfilter.FilterConfig, error) {
+func (builder) ParseFilterConfigOverride(override proto.Message, _ httpfilter.ParseOptions) (httpfilter.FilterConfig, error) {
 	if override == nil {
 		return nil, fmt.Errorf("rbac: nil configuration message provided")
 	}
