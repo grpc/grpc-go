@@ -6410,7 +6410,7 @@ func (s) TestFlowControl_SidestreamToDownstream_WindowUpdate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("proto.Marshal failed: %v", err)
 	}
-	expectedInc := int64(len(respBytes))
+	wantInc := int64(len(respBytes))
 
 	extProcAddr, _ := startTestExtProcessor(t, func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
 		for {
@@ -6438,7 +6438,7 @@ func (s) TestFlowControl_SidestreamToDownstream_WindowUpdate(t *testing.T) {
 				// Expect standalone ClientWindowUpdate from client when application
 				// reads the 60-byte body.
 				inc := req.GetClientWindowUpdate().GetWindowIncrementSidestreamToDownstream()
-				if inc >= expectedInc {
+				if inc >= wantInc {
 					close(windowUpdateReceived)
 				}
 			case req.GetResponseTrailers() != nil:
@@ -6538,7 +6538,7 @@ func (s) TestFlowControl_SidestreamToUpstream_WindowUpdate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("proto.Marshal failed: %v", err)
 	}
-	expectedInc := int64(len(reqBytes))
+	wantInc := int64(len(reqBytes))
 
 	extProcAddr, _ := startTestExtProcessor(t, func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
 		for {
@@ -6568,7 +6568,7 @@ func (s) TestFlowControl_SidestreamToUpstream_WindowUpdate(t *testing.T) {
 				// Expect standalone ClientWindowUpdate when filter pulls 60-byte body
 				// from buffer and forwards to dataplane.
 				inc := req.GetClientWindowUpdate().GetWindowIncrementSidestreamToUpstream()
-				if inc >= expectedInc {
+				if inc >= wantInc {
 					close(windowUpdateReceived)
 				}
 			}
@@ -6661,14 +6661,14 @@ func (s) TestFlowControl_PiggybackedWindowUpdates(t *testing.T) {
 	if err != nil {
 		t.Fatalf("proto.Marshal failed: %v", err)
 	}
-	expectedRespInc := int64(len(mutatedRespBytes))
+	wantRespInc := int64(len(mutatedRespBytes))
 
 	mutatedReq := &testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: make([]byte, 20)}}
 	mutatedReqBytes, err := proto.Marshal(mutatedReq)
 	if err != nil {
 		t.Fatalf("proto.Marshal failed: %v", err)
 	}
-	expectedReqInc := int64(len(mutatedReqBytes))
+	wantReqInc := int64(len(mutatedReqBytes))
 
 	extProcAddr, _ := startTestExtProcessor(t, func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
 		for {
@@ -6682,10 +6682,10 @@ func (s) TestFlowControl_PiggybackedWindowUpdates(t *testing.T) {
 
 			// Check for piggybacked window updates on ProcessingRequests.
 			if update := req.GetClientWindowUpdate(); update != nil {
-				if update.GetWindowIncrementSidestreamToDownstream() >= expectedRespInc {
+				if update.GetWindowIncrementSidestreamToDownstream() >= wantRespInc {
 					close(downstreamPiggybackedReceived)
 				}
-				if update.GetWindowIncrementSidestreamToUpstream() >= expectedReqInc {
+				if update.GetWindowIncrementSidestreamToUpstream() >= wantReqInc {
 					close(upstreamPiggybackedReceived)
 				}
 			}

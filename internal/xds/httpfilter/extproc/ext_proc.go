@@ -469,22 +469,22 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 
 	// Normal mode.
 	cs := &clientStream{
-		commonStream:             csCommon,
-		procStreamFailed:         grpcsync.NewEvent(),
-		procStreamBypass:         grpcsync.NewEvent(),
-		mutatedReqBuffer:         buffer.NewUnbounded[*v3procservicepb.StreamedBodyResponse](),
-		mutatedRespBuffer:        buffer.NewUnbounded[*v3procservicepb.StreamedBodyResponse](),
-		responseHeadersReady:     grpcsync.NewEvent(),
-		responseTrailerReady:     grpcsync.NewEvent(),
-		dataplaneSetup:           make(chan struct{}),
-		procSendCh:               make(chan *v3procservicepb.ProcessingRequest),
-		requestForwardLoopDoneCh: make(chan struct{}),
-		procRecvLoopDone:         grpcsync.NewEvent(),
-		d2SPositiveUpdateCh:      make(chan struct{}, 1),
-		u2SPositiveUpdateCh:      make(chan struct{}, 1),
+		commonStream:                           csCommon,
+		procStreamFailed:                       grpcsync.NewEvent(),
+		procStreamBypass:                       grpcsync.NewEvent(),
+		mutatedReqBuffer:                       buffer.NewUnbounded[*v3procservicepb.StreamedBodyResponse](),
+		mutatedRespBuffer:                      buffer.NewUnbounded[*v3procservicepb.StreamedBodyResponse](),
+		responseHeadersReady:                   grpcsync.NewEvent(),
+		responseTrailerReady:                   grpcsync.NewEvent(),
+		dataplaneSetup:                         make(chan struct{}),
+		procSendCh:                             make(chan *v3procservicepb.ProcessingRequest),
+		requestForwardLoopDoneCh:               make(chan struct{}),
+		procRecvLoopDone:                       grpcsync.NewEvent(),
+		downstreamToSidestreamPositiveUpdateCh: make(chan struct{}, 1),
+		upstreamToSidestreamPositiveUpdateCh:   make(chan struct{}, 1),
 	}
-	cs.d2SWindow.Store(iextproc.DefaultFlowControlWindowSize)
-	cs.u2SWindow.Store(iextproc.DefaultFlowControlWindowSize)
+	cs.downstreamToSidestreamWindow.Store(iextproc.DefaultFlowControlWindowSize)
+	cs.upstreamToSidestreamWindow.Store(iextproc.DefaultFlowControlWindowSize)
 
 	// When request header processing is "Send", defer creating the dataplane
 	// stream until the external processor responds, because gRPC transmits
@@ -985,11 +985,11 @@ type clientStream struct {
 	serverHeadersStartTime   atomic.Int64
 	serverTrailersStartTime  atomic.Int64
 
-	d2SWindow           atomic.Int64  // downstream to sidestream window size remaining
-	d2SPositiveUpdateCh chan struct{} // signals the downstream to sidestream window becoming positive
+	downstreamToSidestreamWindow           atomic.Int64  // downstream to sidestream window size remaining
+	downstreamToSidestreamPositiveUpdateCh chan struct{} // signals the downstream to sidestream window becoming positive
 
-	u2SWindow           atomic.Int64  // upstream to sidestream window size remaining
-	u2SPositiveUpdateCh chan struct{} // signals the upstream to sidestream window becoming positive
+	upstreamToSidestreamWindow           atomic.Int64  // upstream to sidestream window size remaining
+	upstreamToSidestreamPositiveUpdateCh chan struct{} // signals the upstream to sidestream window becoming positive
 
 	pendingRespWindowUpdate atomic.Int64
 	pendingReqWindowUpdate  atomic.Int64
@@ -1500,13 +1500,13 @@ func (cs *clientStream) recvFromProcServerLoop(newStream func(context.Context, .
 			deltaDownstreamToSidestream := windowUpdate.GetWindowIncrementDownstreamToSidestream()
 			if deltaDownstreamToSidestream != 0 {
 				// Add the window update to the existing window.
-				newQuota := cs.d2SWindow.Add(deltaDownstreamToSidestream)
+				newQuota := cs.downstreamToSidestreamWindow.Add(deltaDownstreamToSidestream)
 				previousQuota := newQuota - deltaDownstreamToSidestream
 				// If the window turned from negative to positive, send a signal to the
 				// `acquireDownstreamToSidestreamWindow` function to wake it up.
 				if previousQuota <= 0 && newQuota > 0 {
 					select {
-					case cs.d2SPositiveUpdateCh <- struct{}{}:
+					case cs.downstreamToSidestreamPositiveUpdateCh <- struct{}{}:
 					default:
 					}
 				}
@@ -1514,13 +1514,13 @@ func (cs *clientStream) recvFromProcServerLoop(newStream func(context.Context, .
 			deltaUpstreamToSidestream := windowUpdate.GetWindowIncrementUpstreamToSidestream()
 			if deltaUpstreamToSidestream != 0 {
 				// Add the window update to the existing window.
-				newQuota := cs.u2SWindow.Add(deltaUpstreamToSidestream)
+				newQuota := cs.upstreamToSidestreamWindow.Add(deltaUpstreamToSidestream)
 				previousQuota := newQuota - deltaUpstreamToSidestream
 				// If the window turned from negative to positive, send a signal to the
 				// `acquireUpstreamToSidestreamWindow` function to wake it up.
 				if previousQuota <= 0 && newQuota > 0 {
 					select {
-					case cs.u2SPositiveUpdateCh <- struct{}{}:
+					case cs.upstreamToSidestreamPositiveUpdateCh <- struct{}{}:
 					default:
 					}
 				}
@@ -2052,14 +2052,14 @@ func (cs *clientStream) acquireDownstreamToSidestreamWindow(bodySize int64) bool
 	// without draining the channel.
 	for {
 		// If enough window is available, deduct body size and return immediately.
-		if cs.d2SWindow.Load() > 0 {
-			cs.d2SWindow.Add(-bodySize)
+		if cs.downstreamToSidestreamWindow.Load() > 0 {
+			cs.downstreamToSidestreamWindow.Add(-bodySize)
 			return true
 		}
 		// If window is not available, wait for the window to become positive or
 		// return false if bypassed, failed, or context is done.
 		select {
-		case <-cs.d2SPositiveUpdateCh:
+		case <-cs.downstreamToSidestreamPositiveUpdateCh:
 			continue
 		case <-cs.procStreamBypass.Done():
 			return false
@@ -2081,12 +2081,12 @@ func (cs *clientStream) acquireUpstreamToSidestreamWindow(bodySize int64) bool {
 	// stale if a previous caller acquired the positive window on the fast path
 	// without draining the channel.
 	for {
-		if cs.u2SWindow.Load() > 0 {
-			cs.u2SWindow.Add(-bodySize)
+		if cs.upstreamToSidestreamWindow.Load() > 0 {
+			cs.upstreamToSidestreamWindow.Add(-bodySize)
 			return true
 		}
 		select {
-		case <-cs.u2SPositiveUpdateCh:
+		case <-cs.upstreamToSidestreamPositiveUpdateCh:
 			continue
 		case <-cs.procStreamBypass.Done():
 			return false
