@@ -19,22 +19,32 @@
 package grpcservice
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	xdscreds "google.golang.org/grpc/internal/xds/credentials"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/testdata"
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	accesstokenpb "github.com/envoyproxy/go-control-plane/envoy/extensions/grpc_service/call_credentials/access_token/v3"
+	tlscredspb "github.com/envoyproxy/go-control-plane/envoy/extensions/grpc_service/channel_credentials/tls/v3"
 	xdscredspb "github.com/envoyproxy/go-control-plane/envoy/extensions/grpc_service/channel_credentials/xds/v3"
+	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	testpb "google.golang.org/grpc/interop/grpc_testing"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/durationpb"
 )
@@ -51,6 +61,8 @@ const (
 	target = "dns:///my-service:443"
 
 	insecureCredsTypeURL = "type.googleapis.com/envoy.extensions.grpc_service.channel_credentials.insecure.v3.InsecureCredentials"
+
+	defaultTestTimeout = 10 * time.Second
 )
 
 // bootstrapConfig builds a bootstrap Config whose allowed_grpc_services is set
@@ -294,6 +306,78 @@ func (s) TestConfigDial(t *testing.T) {
 	defer cfg.Close()
 	if _, err := cfg.Dial(); err == nil || !strings.Contains(err.Error(), "transport level security") {
 		t.Fatalf("Dial() returned error %v, want transport security error", err)
+	}
+}
+
+// Tests that a Config carrying TLS channel credentials and access token call
+// credentials, built from a trusted server's GrpcService proto, can dial a
+// TLS-serving backend, and that RPCs on the resulting channel succeed and
+// carry the token.
+func (s) TestConfigDialTLS(t *testing.T) {
+	// Start a TLS-serving backend that verifies the access token arrives.
+	const wantAuthorization = "Bearer test-token"
+	serverCreds, err := credentials.NewServerTLSFromFile(testdata.Path("x509/server1_cert.pem"), testdata.Path("x509/server1_key.pem"))
+	if err != nil {
+		t.Fatalf("Failed to create server TLS credentials: %v", err)
+	}
+	backend := stubserver.StartTestService(t, &stubserver.StubServer{
+		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
+			md, ok := metadata.FromIncomingContext(ctx)
+			if !ok {
+				return nil, fmt.Errorf("no incoming metadata")
+			}
+			if got := md.Get("authorization"); len(got) != 1 || got[0] != wantAuthorization {
+				return nil, fmt.Errorf("authorization metadata = %v, want [%q]", got, wantAuthorization)
+			}
+			return &testpb.Empty{}, nil
+		},
+	}, grpc.Creds(serverCreds))
+	defer backend.Stop()
+
+	// Bootstrap configuration with a certificate provider instance watching
+	// the CA certificate that signed the backend's certificate.
+	contents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
+		Servers: json.RawMessage(`[{"server_uri":"td.googleapis.com:443","channel_creds":[{"type":"insecure"}]}]`),
+		Node:    json.RawMessage(`{}`),
+		CertificateProviders: map[string]json.RawMessage{
+			"root-instance": json.RawMessage(fmt.Sprintf(`{
+				"plugin_name": "file_watcher",
+				"config": {"ca_certificate_file": %q}
+			}`, testdata.Path("x509/server_ca_cert.pem"))),
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewContentsForTesting() failed: %v", err)
+	}
+	bc, err := bootstrap.NewConfigFromContents(contents)
+	if err != nil {
+		t.Fatalf("NewConfigFromContents() failed: %v", err)
+	}
+
+	tlsPlugin, err := anypb.New(&tlscredspb.TlsCredentials{
+		RootCertificateProvider: &v3tlspb.CommonTlsContext_CertificateProviderInstance{InstanceName: "root-instance"},
+	})
+	if err != nil {
+		t.Fatalf("Failed to marshal TlsCredentials: %v", err)
+	}
+	gs := googleGrpcService(backend.Address, []*anypb.Any{tlsPlugin}, []*anypb.Any{accessTokenPlugin(t, "test-token")}, nil)
+	cfg, err := Parse(gs, bc, trustedServerConfig(t))
+	if err != nil {
+		t.Fatalf("Parse() returned unexpected error: %v", err)
+	}
+	defer cfg.Close()
+
+	// The backend certificate's SANs cover x.test.example.com.
+	cc, err := cfg.Dial(grpc.WithAuthority("x.test.example.com"))
+	if err != nil {
+		t.Fatalf("Dial() returned unexpected error: %v", err)
+	}
+	defer cc.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if _, err := testgrpc.NewTestServiceClient(cc).EmptyCall(ctx, &testpb.Empty{}); err != nil {
+		t.Fatalf("EmptyCall() failed: %v", err)
 	}
 }
 

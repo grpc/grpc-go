@@ -19,6 +19,7 @@
 package extproc
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"regexp"
@@ -41,7 +42,6 @@ import (
 	"google.golang.org/grpc/internal/xds/matcher"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
@@ -59,16 +59,23 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
-const (
-	testBaseURI = "base-uri"
-
-	insecureCredsTypeURL = "type.googleapis.com/envoy.extensions.grpc_service.channel_credentials.insecure.v3.InsecureCredentials"
-)
+const testBaseURI = "base-uri"
 
 // allowlistInsecureCreds carries the identity of the insecure channel
 // credentials configured for allowlisted targets by testParseOptions; want
-// configs compare against it by identity.
-var allowlistInsecureCreds = xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "insecure"}, nil)
+// configs compare against it by identity. It carries a real insecure bundle
+// so that configs built from it can be dialed.
+var allowlistInsecureCreds = xdscreds.NewChannelCreds(insecure.NewBundle(), xdscreds.Identity{Type: "insecure"}, nil)
+
+// testPerRPCCreds is a no-op PerRPCCredentials for fixtures whose configs are
+// dialed for real.
+type testPerRPCCreds struct{}
+
+func (testPerRPCCreds) GetRequestMetadata(context.Context, ...string) (map[string]string, error) {
+	return nil, nil
+}
+
+func (testPerRPCCreds) RequireTransportSecurity() bool { return false }
 
 // testParseOptions returns ParseOptions whose bootstrap
 // configuration allowlists the given side-channel targets with insecure
@@ -109,22 +116,13 @@ func testParseOptions(t *testing.T, targets ...string) httpfilter.ParseOptions {
 	return httpfilter.ParseOptions{BootstrapConfig: config, ServerConfig: untrustedServer}
 }
 
-// overrideCreateExtProcChannel overrides the channel creation seam to create
-// insecure channels regardless of the config's credentials, and to fail
-// channel creation for failTarget. The override is restored when the test
-// ends.
-func overrideCreateExtProcChannel(t *testing.T, failTarget string) {
+// overrideCreateExtProcChannelWithError overrides the channel creation seam
+// to fail channel creation. The override is restored when the test ends.
+func overrideCreateExtProcChannelWithError(t *testing.T) {
 	t.Helper()
 	origCreateExtProcChannel := iextproc.CreateExtProcChannel
-	iextproc.CreateExtProcChannel = func(cfg *grpcservice.Config) (grpc.ClientConnInterface, func(), error) {
-		if failTarget != "" && cfg.TargetURI == failTarget {
-			return nil, nil, fmt.Errorf("dial error")
-		}
-		cc, err := grpc.NewClient(cfg.TargetURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
-		if err != nil {
-			return nil, nil, err
-		}
-		return cc, func() { cc.Close() }, nil
+	iextproc.CreateExtProcChannel = func(*grpcservice.Config) (grpc.ClientConnInterface, func(), error) {
+		return nil, nil, fmt.Errorf("dial error")
 	}
 	t.Cleanup(func() { iextproc.CreateExtProcChannel = origCreateExtProcChannel })
 }
@@ -183,32 +181,15 @@ var cmpOpts = []cmp.Option{
 		baseConfig{},
 		overrideConfig{},
 		processingModes{},
-		httpfilter.HeaderMutationRules{},
-		optional.Optional[grpcservice.Config]{},
+		optional.Optional[*grpcservice.Config]{},
 		optional.Optional[processingModes]{},
 		optional.Optional[bool]{},
 	),
-	cmp.Comparer(func(a, b *xdscreds.ChannelCreds) bool {
-		if a == nil || b == nil {
-			return a == b
-		}
-		return a.Equal(b)
-	}),
-	cmp.Comparer(func(a, b *xdscreds.CallCreds) bool {
-		if a == nil || b == nil {
-			return a == b
-		}
-		return a.Equal(b)
-	}),
-	protocmp.Transform(),
 	cmp.Transformer("RegexpToString", func(r *regexp.Regexp) string {
 		if r == nil {
 			return ""
 		}
 		return r.String()
-	}),
-	cmp.Comparer(func(x, y matcher.StringMatcher) bool {
-		return x.Equal(y)
 	}),
 }
 
@@ -236,7 +217,7 @@ func (s) TestParseFilterConfig_Success(t *testing.T) {
 				return m
 			}(),
 			wantCfg: baseConfig{
-				server: grpcservice.Config{TargetURI: "localhost:1234", ChannelCredentials: allowlistInsecureCreds},
+				server: &grpcservice.Config{TargetURI: "localhost:1234", ChannelCredentials: allowlistInsecureCreds},
 				processingModes: processingModes{
 					requestHeaderMode:   modeSend,
 					responseHeaderMode:  modeSend,
@@ -268,7 +249,7 @@ func (s) TestParseFilterConfig_Success(t *testing.T) {
 				return m
 			}(),
 			wantCfg: baseConfig{
-				server: grpcservice.Config{TargetURI: "localhost:1234", ChannelCredentials: allowlistInsecureCreds},
+				server: &grpcservice.Config{TargetURI: "localhost:1234", ChannelCredentials: allowlistInsecureCreds},
 				processingModes: processingModes{
 					requestHeaderMode:   modeSend,
 					responseHeaderMode:  modeSend,
@@ -300,7 +281,7 @@ func (s) TestParseFilterConfig_Success(t *testing.T) {
 				return m
 			}(),
 			wantCfg: baseConfig{
-				server: grpcservice.Config{TargetURI: "localhost:1234", ChannelCredentials: allowlistInsecureCreds},
+				server: &grpcservice.Config{TargetURI: "localhost:1234", ChannelCredentials: allowlistInsecureCreds},
 				processingModes: processingModes{
 					requestHeaderMode:   modeSend,
 					responseHeaderMode:  modeSend,
@@ -327,93 +308,6 @@ func (s) TestParseFilterConfig_Success(t *testing.T) {
 			}
 			if diff := cmp.Diff(got, tt.wantCfg, cmpOpts...); diff != "" {
 				t.Fatalf("ParseFilterConfig() returned unexpected config (-got +want):\n%s", diff)
-			}
-		})
-	}
-}
-
-// Tests the gRFC A102 trust policy applied when parsing the grpc_service:
-// credentials from the proto are honored only when the xDS management server
-// that delivered the resource is trusted; for untrusted management servers
-// the target must be present in the bootstrap allowed_grpc_services map,
-// whose credentials are used instead.
-func (s) TestParseFilterConfig_TrustPolicy(t *testing.T) {
-	trustedServer, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{
-		URI:            "trusted-server:1234",
-		ServerFeatures: []string{"trusted_xds_server"},
-	})
-	if err != nil {
-		t.Fatalf("ServerConfigForTesting() failed: %v", err)
-	}
-	untrustedOpts := testParseOptions(t, "localhost:1234")
-	trustedOpts := httpfilter.ParseOptions{BootstrapConfig: untrustedOpts.BootstrapConfig, ServerConfig: trustedServer}
-
-	extProcConfig := func(targetURI string, channelPlugins ...*anypb.Any) proto.Message {
-		m, _ := anypb.New(&fpb.ExternalProcessor{
-			GrpcService: &corepb.GrpcService{
-				TargetSpecifier: &corepb.GrpcService_GoogleGrpc_{
-					GoogleGrpc: &corepb.GrpcService_GoogleGrpc{
-						TargetUri:                targetURI,
-						ChannelCredentialsPlugin: channelPlugins,
-					},
-				},
-			},
-			ProcessingMode: &fpb.ProcessingMode{},
-		})
-		return m
-	}
-	insecurePlugin := &anypb.Any{TypeUrl: insecureCredsTypeURL}
-
-	tests := []struct {
-		name string
-		cfg  proto.Message
-		opts httpfilter.ParseOptions
-		// wantCreds carries only the expected credentials identity;
-		// comparisons use Identity().
-		wantCreds *xdscreds.ChannelCreds
-		wantErr   string
-	}{
-		{
-			name:      "trusted_uses_proto_creds",
-			cfg:       extProcConfig("localhost:1234", insecurePlugin),
-			opts:      trustedOpts,
-			wantCreds: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: insecurePlugin.GetTypeUrl(), Data: insecurePlugin.GetValue()}, nil),
-		},
-		{
-			name:    "trusted_requires_supported_creds",
-			cfg:     extProcConfig("localhost:1234"),
-			opts:    trustedOpts,
-			wantErr: "no supported channel credentials found",
-		},
-		{
-			name: "untrusted_allowlisted_uses_allowlist_creds",
-			cfg:  extProcConfig("localhost:1234", insecurePlugin),
-			opts: untrustedOpts,
-			// The proto's credentials must be ignored in favor of the
-			// allowlisted (bootstrap JSON) ones.
-			wantCreds: allowlistInsecureCreds,
-		},
-		{
-			name:    "untrusted_not_allowlisted",
-			cfg:     extProcConfig("other-target:1234", insecurePlugin),
-			opts:    untrustedOpts,
-			wantErr: "not present in allowed_grpc_services",
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := builder{}.ParseFilterConfig(tt.cfg, tt.opts)
-			if tt.wantErr != "" {
-				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
-					t.Fatalf("ParseFilterConfig() returned error = %v, wantErr %v", err, tt.wantErr)
-				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("ParseFilterConfig() returned unexpected error: %v", err)
-			}
-			if gotCreds := got.(baseConfig).server.ChannelCredentials; !gotCreds.Equal(tt.wantCreds) {
-				t.Fatalf("ParseFilterConfig() returned channel credentials %+v, want %+v", gotCreds, tt.wantCreds)
 			}
 		})
 	}
@@ -809,10 +703,10 @@ func (s) TestBuildClientInterceptor_Success(t *testing.T) {
 					requestBodyMode:     modeSend,
 					responseBodyMode:    modeSkip,
 				},
-				server: grpcservice.Config{
+				server: &grpcservice.Config{
 					TargetURI:          testBaseURI,
-					ChannelCredentials: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "test-channel-creds"}, nil),
-					CallCredentials:    []*xdscreds.CallCreds{xdscreds.NewCallCreds(nil, xdscreds.Identity{Type: "test-call-creds"}, nil)},
+					ChannelCredentials: xdscreds.NewChannelCreds(insecure.NewBundle(), xdscreds.Identity{Type: "test-channel-creds"}, nil),
+					CallCredentials:    []*xdscreds.CallCreds{xdscreds.NewCallCreds(testPerRPCCreds{}, xdscreds.Identity{Type: "test-call-creds"}, nil)},
 					InitialMetadata:    metadata.MD(metadata.Pairs("key1", "value1")),
 					Timeout:            5 * time.Second,
 				},
@@ -844,10 +738,10 @@ func (s) TestBuildClientInterceptor_Success(t *testing.T) {
 					requestBodyMode:     modeSend,
 					responseBodyMode:    modeSkip,
 				},
-				server: grpcservice.Config{
+				server: &grpcservice.Config{
 					TargetURI:          testBaseURI,
-					ChannelCredentials: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "test-channel-creds"}, nil),
-					CallCredentials:    []*xdscreds.CallCreds{xdscreds.NewCallCreds(nil, xdscreds.Identity{Type: "test-call-creds"}, nil)},
+					ChannelCredentials: xdscreds.NewChannelCreds(insecure.NewBundle(), xdscreds.Identity{Type: "test-channel-creds"}, nil),
+					CallCredentials:    []*xdscreds.CallCreds{xdscreds.NewCallCreds(testPerRPCCreds{}, xdscreds.Identity{Type: "test-call-creds"}, nil)},
 					InitialMetadata:    metadata.MD(metadata.Pairs("key1", "value1")),
 					Timeout:            5 * time.Second,
 				},
@@ -869,7 +763,7 @@ func (s) TestBuildClientInterceptor_Success(t *testing.T) {
 					requestBodyMode:     modeSend,
 					responseBodyMode:    modeSkip,
 				},
-				server: grpcservice.Config{
+				server: &grpcservice.Config{
 					TargetURI:          testBaseURI,
 					ChannelCredentials: allowlistInsecureCreds,
 					Timeout:            time.Second,
@@ -896,7 +790,7 @@ func (s) TestBuildClientInterceptor_Success(t *testing.T) {
 					requestBodyMode:     modeSkip,
 					responseBodyMode:    modeSend,
 				}),
-				server: optional.New(grpcservice.Config{
+				server: optional.New(&grpcservice.Config{
 					TargetURI:          "override-uri",
 					ChannelCredentials: allowlistInsecureCreds,
 				}),
@@ -921,7 +815,7 @@ func (s) TestBuildClientInterceptor_Success(t *testing.T) {
 					requestBodyMode:     modeSkip,
 					responseBodyMode:    modeSend,
 				},
-				server: grpcservice.Config{
+				server: &grpcservice.Config{
 					TargetURI:          "override-uri",
 					ChannelCredentials: allowlistInsecureCreds,
 				},
@@ -945,7 +839,7 @@ func (s) TestBuildClientInterceptor_Success(t *testing.T) {
 					requestBodyMode:     modeSend,
 					responseBodyMode:    modeSkip,
 				},
-				server: grpcservice.Config{
+				server: &grpcservice.Config{
 					TargetURI:          testBaseURI,
 					ChannelCredentials: allowlistInsecureCreds,
 					Timeout:            time.Second,
@@ -983,7 +877,7 @@ func (s) TestBuildClientInterceptor_Success(t *testing.T) {
 					requestBodyMode:     modeSend,
 					responseBodyMode:    modeSkip,
 				},
-				server: grpcservice.Config{
+				server: &grpcservice.Config{
 					TargetURI:          testBaseURI,
 					ChannelCredentials: allowlistInsecureCreds,
 					Timeout:            time.Second,
@@ -996,7 +890,6 @@ func (s) TestBuildClientInterceptor_Success(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			overrideCreateExtProcChannel(t, "")
 			builder := builder{}
 			filter := builder.BuildClientFilter(httpfilter.ClientFilterOptions{})
 			defer filter.Close()
@@ -1047,7 +940,7 @@ func (s) TestBuildClientInterceptor_Failure(t *testing.T) {
 		{
 			name: "ChannelCreationFailure",
 			cfg: baseConfig{
-				server: grpcservice.Config{
+				server: &grpcservice.Config{
 					TargetURI: "error-uri",
 				},
 			},
@@ -1056,12 +949,12 @@ func (s) TestBuildClientInterceptor_Failure(t *testing.T) {
 		{
 			name: "ChannelCreationFailureInOverride",
 			cfg: baseConfig{
-				server: grpcservice.Config{
+				server: &grpcservice.Config{
 					TargetURI: testBaseURI,
 				},
 			},
 			override: overrideConfig{
-				server: optional.New(grpcservice.Config{
+				server: optional.New(&grpcservice.Config{
 					TargetURI: "error-uri",
 				}),
 			},
@@ -1070,7 +963,7 @@ func (s) TestBuildClientInterceptor_Failure(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			overrideCreateExtProcChannel(t, "error-uri")
+			overrideCreateExtProcChannelWithError(t)
 			builder := builder{}
 			filter := builder.BuildClientFilter(httpfilter.ClientFilterOptions{})
 			defer filter.Close()

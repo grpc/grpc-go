@@ -110,17 +110,13 @@ func validateBodyProcessingMode(mode *v3procfilterpb.ProcessingMode) error {
 	return nil
 }
 
-// parseGrpcService parses the GrpcService proto identifying the external
+// parseGRPCService parses the GrpcService proto identifying the external
 // processor server. The gRFC A102 trust policy — honoring the proto's
 // credentials only when the delivering xDS management server is trusted, and
 // requiring an untrusted server's target to be present in the bootstrap
 // allowed_grpc_services map — is applied by grpcservice.Parse.
-func parseGrpcService(gs *v3corepb.GrpcService, opts httpfilter.ParseOptions) (grpcservice.Config, error) {
-	cfg, err := grpcservice.Parse(gs, opts.BootstrapConfig, opts.ServerConfig)
-	if err != nil {
-		return grpcservice.Config{}, err
-	}
-	return *cfg, nil
+func parseGRPCService(gs *v3corepb.GrpcService, opts httpfilter.ParseOptions) (*grpcservice.Config, error) {
+	return grpcservice.Parse(gs, opts.BootstrapConfig, opts.ServerConfig)
 }
 
 // ParseFilterConfig parses the provided filter configuration. The GrpcService
@@ -172,7 +168,7 @@ func (builder) ParseFilterConfig(cfg proto.Message, opts httpfilter.ParseOptions
 	if msg.GetGrpcService() == nil {
 		return nil, fmt.Errorf("extproc: empty grpc_service provided in config %v", cfg)
 	}
-	server, err := parseGrpcService(msg.GetGrpcService(), opts)
+	server, err := parseGRPCService(msg.GetGrpcService(), opts)
 	if err != nil {
 		return nil, fmt.Errorf("extproc: failed to parse grpc_service: %v", err)
 	}
@@ -221,9 +217,9 @@ func (builder) ParseFilterConfigOverride(ov proto.Message, opts httpfilter.Parse
 
 	// Parse the GrpcService last, so that no error path can drop the built
 	// credentials: the caller owns them from here on.
-	var serverOpt optional.Optional[grpcservice.Config]
+	var serverOpt optional.Optional[*grpcservice.Config]
 	if override.GetGrpcService() != nil {
-		server, err := parseGrpcService(override.GetGrpcService(), opts)
+		server, err := parseGRPCService(override.GetGrpcService(), opts)
 		if err != nil {
 			return nil, fmt.Errorf("extproc: failed to parse grpc_service: %v", err)
 		}
@@ -253,11 +249,11 @@ func (builder) BuildClientFilter(opts httpfilter.ClientFilterOptions) httpfilter
 var _ httpfilter.ClientFilterBuilder = builder{}
 
 // procChannelEntry is a shared external processor channel, together with the
-// server config it was created from. The config is used for equality
-// comparisons when deciding whether the channel can be reused, and its
-// credentials are released when the channel is closed.
+// GrpcService config it was created from. The config is used for channel
+// sharing comparisons when deciding whether the channel can be reused, and
+// its credentials are released when the channel is closed.
 type procChannelEntry struct {
-	server grpcservice.Config
+	server *grpcservice.Config
 	rc     *grpcsync.RefCounted[v3procservicegrpc.ExternalProcessorClient]
 }
 
@@ -284,30 +280,30 @@ func sharesChannel(a, b *grpcservice.Config) bool {
 }
 
 // getProcChannel returns an existing refcounted client for a channel-sharing
-// compatible server config if present and its refcount is incremented
+// compatible GrpcService config if present and its refcount is incremented
 // successfully.
 func (cf *clientFilter) getProcChannel(server *grpcservice.Config) *grpcsync.RefCounted[v3procservicegrpc.ExternalProcessorClient] {
 	cf.mu.Lock()
 	defer cf.mu.Unlock()
-	for _, e := range cf.procChannels {
-		if sharesChannel(&e.server, server) && e.rc.TryIncrement() {
-			return e.rc
-		}
+	if i := slices.IndexFunc(cf.procChannels, func(e *procChannelEntry) bool {
+		return sharesChannel(e.server, server) && e.rc.TryIncrement()
+	}); i != -1 {
+		return cf.procChannels[i].rc
 	}
 	return nil
 }
 
 // storeProcChannel stores the created channel entry if no valid channel
-// exists for a channel-sharing compatible server config. If another goroutine
-// already stored one while unlocked, it increments the existing channel's
-// refcount and returns it.
+// exists for a channel-sharing compatible GrpcService config. If another
+// goroutine already stored one while unlocked, it increments the existing
+// channel's refcount and returns it.
 func (cf *clientFilter) storeProcChannel(entry *procChannelEntry) *grpcsync.RefCounted[v3procservicegrpc.ExternalProcessorClient] {
 	cf.mu.Lock()
 	defer cf.mu.Unlock()
-	for _, e := range cf.procChannels {
-		if sharesChannel(&e.server, &entry.server) && e.rc.TryIncrement() {
-			return e.rc
-		}
+	if i := slices.IndexFunc(cf.procChannels, func(e *procChannelEntry) bool {
+		return sharesChannel(e.server, entry.server) && e.rc.TryIncrement()
+	}); i != -1 {
+		return cf.procChannels[i].rc
 	}
 	cf.procChannels = append(cf.procChannels, entry)
 	return entry.rc
@@ -326,16 +322,17 @@ func (cf *clientFilter) removeProcChannel(entry *procChannelEntry) {
 // getOrCreateExtProcChannel retrieves an existing refcounted external processor
 // client for an equal server config and increases its refcount, or creates a
 // new one if there is none.
-func (cf *clientFilter) getOrCreateExtProcChannel(server grpcservice.Config) (*grpcsync.RefCounted[v3procservicegrpc.ExternalProcessorClient], error) {
-	// If a channel for an equal server config is present and its refcount is
-	// greater than 0, increment the refcount and return the channel.
-	if rc := cf.getProcChannel(&server); rc != nil {
+func (cf *clientFilter) getOrCreateExtProcChannel(server *grpcservice.Config) (*grpcsync.RefCounted[v3procservicegrpc.ExternalProcessorClient], error) {
+	// If a channel for a sharing-compatible GrpcService config is present and
+	// its refcount is greater than 0, increment the refcount and return the
+	// channel.
+	if rc := cf.getProcChannel(server); rc != nil {
 		return rc, nil
 	}
 
 	// Create the external processor channel without holding the lock. The
 	// release function closes the channel.
-	cc, release, err := iextproc.CreateExtProcChannel(&server)
+	cc, release, err := iextproc.CreateExtProcChannel(server)
 	if err != nil {
 		return nil, fmt.Errorf("extproc: failed to create channel to the external processor server %q: %v", server.TargetURI, err)
 	}
@@ -404,7 +401,7 @@ func (i *clientInterceptor) Close() {
 // processor server to be able to cancel it independently. This context has a
 // deadline of the timeout specified in the config, if present, and contains the
 // initial metadata specified in the config.
-func createProcContext(ctx context.Context, server grpcservice.Config) (procCtx context.Context, cancel context.CancelFunc) {
+func createProcContext(ctx context.Context, server *grpcservice.Config) (procCtx context.Context, cancel context.CancelFunc) {
 	if server.Timeout != 0 {
 		procCtx, cancel = context.WithTimeout(ctx, server.Timeout)
 	} else {

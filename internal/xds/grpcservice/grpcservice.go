@@ -65,6 +65,9 @@ type Config struct {
 
 // Equal reports whether c and other are equal.
 func (c *Config) Equal(other *Config) bool {
+	if c == nil || other == nil {
+		return c == other
+	}
 	targetEqual := c.TargetURI == other.TargetURI
 	timeoutEqual := c.Timeout == other.Timeout
 	metadataEqual := maps.EqualFunc(c.InitialMetadata, other.InitialMetadata, slices.Equal)

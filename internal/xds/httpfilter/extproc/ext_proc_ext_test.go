@@ -4039,7 +4039,7 @@ func (s) TestObservabilityMidStreamFailAllow(t *testing.T) {
 	// silently bypassing the processor.
 	for i := 0; i < numMessages; i++ {
 		req := &testpb.StreamingOutputCallRequest{
-			Payload: &testpb.Payload{Body: []byte(fmt.Sprintf("msg-%d", i))},
+			Payload: &testpb.Payload{Body: fmt.Appendf(nil, "msg-%d", i)},
 		}
 		if err := stream.Send(req); err != nil {
 			t.Fatalf("stream.Send() failed unexpectedly with FailureModeAllow=true: %v", err)
@@ -5219,9 +5219,9 @@ func (s) TestUntrustedServerAllowedGRPCServices(t *testing.T) {
 	managementServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
 	nodeID := uuid.New().String()
 	bc, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
-		Servers:             []byte(fmt.Sprintf(`[{"server_uri": "passthrough:///%s", "channel_creds": [{"type": "insecure"}]}]`, managementServer.Address)),
-		Node:                []byte(fmt.Sprintf(`{"id": %q}`, nodeID)),
-		AllowedGRPCServices: []byte(fmt.Sprintf(`{%q: {"channel_creds": [{"type": "insecure"}]}}`, lisAddr)),
+		Servers:             fmt.Appendf(nil, `[{"server_uri": "passthrough:///%s", "channel_creds": [{"type": "insecure"}]}]`, managementServer.Address),
+		Node:                fmt.Appendf(nil, `{"id": %q}`, nodeID),
+		AllowedGRPCServices: fmt.Appendf(nil, `{%q: {"channel_creds": [{"type": "insecure"}]}}`, lisAddr),
 	})
 	if err != nil {
 		t.Fatalf("Failed to create bootstrap contents: %v", err)

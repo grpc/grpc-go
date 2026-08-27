@@ -71,11 +71,11 @@ func testBootstrapConfig(t *testing.T) *bootstrap.Config {
 		CertificateProviders: map[string]json.RawMessage{
 			"root-instance": json.RawMessage(fmt.Sprintf(`{
 				"plugin_name": "file_watcher",
-				"config": {"ca_certificate_file": %q, "refresh_interval": "600s"}
+				"config": {"ca_certificate_file": %q}
 			}`, rootCert)),
 			"identity-instance": json.RawMessage(fmt.Sprintf(`{
 				"plugin_name": "file_watcher",
-				"config": {"certificate_file": %q, "private_key_file": %q, "refresh_interval": "600s"}
+				"config": {"certificate_file": %q, "private_key_file": %q}
 			}`, clientCert, clientKey)),
 		},
 	})

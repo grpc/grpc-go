@@ -19,13 +19,7 @@
 // Package credentials provides the credentials used for xDS-configured side
 // channels (gRFC A102): built channel and call credentials paired with the
 // identity of the configuration they were built from, and registries of
-// credential builders keyed by the proto type URL of their GrpcService
-// plugin configuration.
-//
-// Credentials may be sourced from the bootstrap file (JSON) or from a
-// GrpcService proto delivered by a trusted xDS server; the identity captures
-// which, and is used to decide whether two configurations may share a
-// channel.
+// credential builders keyed by proto type URL.
 package credentials
 
 import (
@@ -68,11 +62,10 @@ func init() {
 		if fallback == nil {
 			return nil, nil, fmt.Errorf("credentials: xds credentials missing required fallback credentials")
 		}
-		b := GetChannelCredsBuilder(fallback.GetTypeUrl())
-		if b == nil {
-			return nil, nil, fmt.Errorf("credentials: unsupported fallback credentials type %q in xds credentials", fallback.GetTypeUrl())
+		if b := GetChannelCredsBuilder(fallback.GetTypeUrl()); b != nil {
+			return b(fallback, resolver)
 		}
-		return b(fallback, resolver)
+		return nil, nil, fmt.Errorf("credentials: unsupported fallback credentials type %q in xds credentials", fallback.GetTypeUrl())
 	})
 }
 
@@ -128,9 +121,7 @@ func GetCallCredsBuilder(typeURL string) CallCredsBuilder {
 	return callCredsBuilders[typeURL]
 }
 
-// Identity identifies the configuration a credential was built from. It is
-// used only for equality decisions when sharing side channels, never as a map
-// key.
+// Identity identifies the configuration a credential was built from.
 type Identity struct {
 	// Type is the bootstrap credential type name for JSON-sourced
 	// credentials, or the proto type URL for proto-sourced ones. The two
@@ -171,6 +162,9 @@ func (c *ChannelCreds) Bundle() credentials.Bundle {
 
 // Equal reports whether c and other were built from the same configuration.
 func (c *ChannelCreds) Equal(other *ChannelCreds) bool {
+	if c == nil || other == nil {
+		return c == other
+	}
 	return c.identity.Equal(other.identity)
 }
 
@@ -208,6 +202,9 @@ func (c *CallCreds) Credentials() credentials.PerRPCCredentials {
 
 // Equal reports whether c and other were built from the same configuration.
 func (c *CallCreds) Equal(other *CallCreds) bool {
+	if c == nil || other == nil {
+		return c == other
+	}
 	return c.identity.Equal(other.identity)
 }
 

@@ -71,6 +71,8 @@ func buildTLSCredentials(config *anypb.Any, resolver CertProviderConfigResolver)
 	}
 
 	b := &tlsBundle{rootProvider: rootProvider}
+	// The identity certificate provider is optional, and is configured only
+	// for mTLS. When the field is set, it must name a provider instance.
 	if identity := tlsCfg.GetIdentityCertificateProvider(); identity != nil {
 		identityInstanceName := identity.GetInstanceName()
 		if identityInstanceName == "" {

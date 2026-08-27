@@ -38,7 +38,7 @@ type baseConfig struct {
 	// config. If both are set, the override config will be used.
 
 	// server is the configuration for the external processing server.
-	server grpcservice.Config
+	server *grpcservice.Config
 	// processingModes specifies the processing mode for each dataplane event.
 	processingModes processingModes
 	// failureModeAllow specifies the behavior when the RPC to the external
@@ -90,7 +90,7 @@ type baseConfig struct {
 // base config.
 type overrideConfig struct {
 	httpfilter.FilterConfig
-	server             optional.Optional[grpcservice.Config]
+	server             optional.Optional[*grpcservice.Config]
 	processingModes    optional.Optional[processingModes]
 	failureModeAllow   optional.Optional[bool]
 	requestAttributes  []string

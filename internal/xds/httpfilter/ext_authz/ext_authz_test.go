@@ -28,7 +28,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
-	xdscreds "google.golang.org/grpc/internal/xds/credentials"
 	"google.golang.org/grpc/internal/xds/grpcservice"
 	"google.golang.org/grpc/internal/xds/httpfilter"
 	"google.golang.org/grpc/internal/xds/matcher"
@@ -74,21 +73,8 @@ func testParseGRPCServiceConfig(grpcService *corepb.GrpcService) (grpcservice.Co
 var cmpOpts = []cmp.Option{
 	cmp.AllowUnexported(
 		config{},
-		grpcservice.Config{},
 		fraction{},
 	),
-	cmp.Comparer(func(a, b *xdscreds.ChannelCreds) bool {
-		if a == nil || b == nil {
-			return a == b
-		}
-		return a.Equal(b)
-	}),
-	cmp.Comparer(func(a, b *xdscreds.CallCreds) bool {
-		if a == nil || b == nil {
-			return a == b
-		}
-		return a.Equal(b)
-	}),
 	cmp.Transformer("RegexpToString", func(r *regexp.Regexp) string {
 		if r == nil {
 			return ""
