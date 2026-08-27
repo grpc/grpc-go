@@ -28,9 +28,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	grpcinternal "google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/grpctest"
@@ -39,11 +41,14 @@ import (
 	"google.golang.org/grpc/internal/testutils/stats"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/internal/testutils/xds/e2e/setup"
+	"google.golang.org/grpc/internal/xds/bootstrap"
+	"google.golang.org/grpc/internal/xds/grpcservice"
 	"google.golang.org/grpc/internal/xds/httpfilter/extproc/internal"
-	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/durationpb"
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -73,33 +78,11 @@ const (
 	reqBodyC2  = "c2"
 	respBodyS1 = "s1"
 	respBodyS2 = "s2"
+
+	// insecureCredsTypeURL identifies the insecure channel credentials
+	// plugin in a GrpcService proto (gRFC A102).
+	insecureCredsTypeURL = "type.googleapis.com/envoy.extensions.grpc_service.channel_credentials.insecure.v3.InsecureCredentials"
 )
-
-func parseGRPCServiceConfigForTesting(gs *v3corepb.GrpcService) (xdsresource.GRPCServiceConfig, error) {
-	if gs == nil {
-		return xdsresource.GRPCServiceConfig{}, fmt.Errorf("expected non-nil GrpcService")
-	}
-	gg := gs.GetGoogleGrpc()
-	if gg == nil {
-		return xdsresource.GRPCServiceConfig{}, fmt.Errorf("expected non-nil GoogleGrpc")
-	}
-	target := gg.GetTargetUri()
-	if target == "" {
-		return xdsresource.GRPCServiceConfig{}, fmt.Errorf("empty target_uri in GoogleGrpc")
-	}
-	return xdsresource.GRPCServiceConfig{
-		TargetURI: target,
-		Timeout:   gs.GetTimeout().AsDuration(),
-	}, nil
-}
-
-func createExtProcChannelForTesting(cfg xdsresource.GRPCServiceConfig) (grpc.ClientConnInterface, func() error, error) {
-	cc, err := grpc.NewClient(cfg.TargetURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		return nil, nil, err
-	}
-	return cc, cc.Close, nil
-}
 
 func requestHeadersResponse(setHeaders map[string]string, removeHeaders []string) *v3procservicepb.ProcessingResponse {
 	var setOptions []*v3corepb.HeaderValueOption
@@ -249,19 +232,9 @@ func (s *testExtProcServer) Process(stream v3procservicegrpc.ExternalProcessor_P
 func startTestExtProcessor(t *testing.T, processFunc func(v3procservicegrpc.ExternalProcessor_ProcessServer) error) (string, func()) {
 	t.Helper()
 
-	origParse := internal.ParseGRPCServiceConfig
-	origCreate := internal.CreateExtProcChannel
-	internal.ParseGRPCServiceConfig = parseGRPCServiceConfigForTesting
-	internal.CreateExtProcChannel = createExtProcChannelForTesting
-
 	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
 	internal.RegisterForTesting()
-
-	t.Cleanup(func() {
-		internal.ParseGRPCServiceConfig = origParse
-		internal.CreateExtProcChannel = origCreate
-		internal.UnregisterForTesting()
-	})
+	t.Cleanup(internal.UnregisterForTesting)
 
 	lis, err := testutils.LocalTCPListener()
 	if err != nil {
@@ -282,6 +255,14 @@ func startTestExtProcessor(t *testing.T, processFunc func(v3procservicegrpc.Exte
 func setupTestClient(t *testing.T, extProcAddr string, extProcConfig *v3procfilterpb.ExternalProcessor, serverAddr string, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
 	t.Helper()
 	managementServer, nodeID, _, xdsResolver := setup.ManagementServerAndResolver(t)
+	return setupTestClientWithResolver(t, managementServer, nodeID, xdsResolver, extProcAddr, extProcConfig, serverAddr, opts...)
+}
+
+// setupTestClientWithResolver is like setupTestClient, but uses the provided
+// management server and xDS resolver instead of the default trusted-server
+// setup.
+func setupTestClientWithResolver(t *testing.T, managementServer *e2e.ManagementServer, nodeID string, xdsResolver resolver.Builder, extProcAddr string, extProcConfig *v3procfilterpb.ExternalProcessor, serverAddr string, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
+	t.Helper()
 
 	const serviceName = "test-service"
 
@@ -302,10 +283,16 @@ func setupTestClient(t *testing.T, extProcAddr string, extProcConfig *v3procfilt
 	if extProcConfig.GrpcService != nil {
 		timeout = extProcConfig.GrpcService.GetTimeout()
 	}
+	// The GrpcService proto carries insecure channel credentials: they are
+	// used when the delivering management server is trusted (the default
+	// e2e bootstrap carries the trusted_xds_server feature), and are ignored
+	// in favor of the bootstrap allowed_grpc_services credentials when it is
+	// not.
 	extProcConfig.GrpcService = &v3corepb.GrpcService{
 		TargetSpecifier: &v3corepb.GrpcService_GoogleGrpc_{
 			GoogleGrpc: &v3corepb.GrpcService_GoogleGrpc{
-				TargetUri: extProcAddr,
+				TargetUri:                extProcAddr,
+				ChannelCredentialsPlugin: []*anypb.Any{{TypeUrl: insecureCredsTypeURL}},
 			},
 		},
 		Timeout: timeout,
@@ -4052,7 +4039,7 @@ func (s) TestObservabilityMidStreamFailAllow(t *testing.T) {
 	// silently bypassing the processor.
 	for i := 0; i < numMessages; i++ {
 		req := &testpb.StreamingOutputCallRequest{
-			Payload: &testpb.Payload{Body: []byte(fmt.Sprintf("msg-%d", i))},
+			Payload: &testpb.Payload{Body: fmt.Appendf(nil, "msg-%d", i)},
 		}
 		if err := stream.Send(req); err != nil {
 			t.Fatalf("stream.Send() failed unexpectedly with FailureModeAllow=true: %v", err)
@@ -4827,14 +4814,14 @@ func (s) TestExtProcChannelRetention(t *testing.T) {
 
 			// Override CreateExtProcChannel to signal when the channel is closed.
 			origCreate := internal.CreateExtProcChannel
-			internal.CreateExtProcChannel = func(cfg xdsresource.GRPCServiceConfig) (grpc.ClientConnInterface, func() error, error) {
+			internal.CreateExtProcChannel = func(cfg *grpcservice.Config) (grpc.ClientConnInterface, func(), error) {
 				cc, err := grpc.NewClient(cfg.TargetURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
 				if err != nil {
 					return nil, nil, err
 				}
-				closeFunc := func() error {
+				closeFunc := func() {
 					close(closeChan)
-					return cc.Close()
+					cc.Close()
 				}
 				return cc, closeFunc, nil
 			}
@@ -4945,14 +4932,14 @@ func (s) TestExtProcChannelRetention_XDSConfigUpdate(t *testing.T) {
 			// Override CreateExtProcChannel to signal when a channel is closed and
 			// dial to correct proc server.
 			origCreate := internal.CreateExtProcChannel
-			internal.CreateExtProcChannel = func(cfg xdsresource.GRPCServiceConfig) (grpc.ClientConnInterface, func() error, error) {
+			internal.CreateExtProcChannel = func(cfg *grpcservice.Config) (grpc.ClientConnInterface, func(), error) {
 				cc, err := grpc.NewClient(cfg.TargetURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
 				if err != nil {
 					return nil, nil, err
 				}
-				closeFunc := func() error {
+				closeFunc := func() {
 					closeChan <- cfg.TargetURI
-					return cc.Close()
+					cc.Close()
 				}
 				return cc, closeFunc, nil
 			}
@@ -5005,7 +4992,8 @@ func (s) TestExtProcChannelRetention_XDSConfigUpdate(t *testing.T) {
 					GrpcService: &v3corepb.GrpcService{
 						TargetSpecifier: &v3corepb.GrpcService_GoogleGrpc_{
 							GoogleGrpc: &v3corepb.GrpcService_GoogleGrpc{
-								TargetUri: extProcAddr,
+								TargetUri:                extProcAddr,
+								ChannelCredentialsPlugin: []*anypb.Any{{TypeUrl: insecureCredsTypeURL}},
 							},
 						},
 					},
@@ -5125,14 +5113,14 @@ func (s) TestExtProcChannelRetention_UnaryRPC(t *testing.T) {
 
 			// Override CreateExtProcChannel to signal when the channel is closed.
 			origCreate := internal.CreateExtProcChannel
-			internal.CreateExtProcChannel = func(cfg xdsresource.GRPCServiceConfig) (grpc.ClientConnInterface, func() error, error) {
+			internal.CreateExtProcChannel = func(cfg *grpcservice.Config) (grpc.ClientConnInterface, func(), error) {
 				cc, err := grpc.NewClient(cfg.TargetURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
 				if err != nil {
 					return nil, nil, err
 				}
-				closeFunc := func() error {
+				closeFunc := func() {
 					close(closeChan)
-					return cc.Close()
+					cc.Close()
 				}
 				return cc, closeFunc, nil
 			}
@@ -5179,5 +5167,85 @@ func (s) TestExtProcChannelRetention_UnaryRPC(t *testing.T) {
 				t.Fatalf("Timeout waiting for extproc channel to close after interceptor is closed")
 			}
 		})
+	}
+}
+
+// TestUntrustedServerAllowedGRPCServices tests the ext_proc filter when the
+// xDS server is not configured with the trusted_xds_server feature. On this
+// path the credentials in the GrpcService proto are ignored, and the filter
+// config is accepted only because the external processor's target is present
+// in the bootstrap allowed_grpc_services map, whose credentials are used for
+// the side channel (gRFC A102). Verifies that a data-plane RPC flows through
+// the external processor end-to-end.
+func (s) TestUntrustedServerAllowedGRPCServices(t *testing.T) {
+	const mutatedHeader = "request-mutated"
+	lisAddr, _ := startTestExtProcessor(t, func(stream v3procservicegrpc.ExternalProcessor_ProcessServer) error {
+		for {
+			req, err := stream.Recv()
+			if err == io.EOF {
+				return nil
+			}
+			if err != nil {
+				return err
+			}
+			if req.GetRequestHeaders() == nil {
+				return fmt.Errorf("unexpected message from client: %v", req)
+			}
+			if err := stream.Send(requestHeadersResponse(map[string]string{mutatedHeader: "true"}, nil)); err != nil {
+				return err
+			}
+		}
+	})
+
+	// Start a test backend that verifies the header mutation performed by the
+	// external processor.
+	stub := stubserver.StartTestService(t, &stubserver.StubServer{
+		UnaryCallF: func(ctx context.Context, _ *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			md, ok := metadata.FromIncomingContext(ctx)
+			if !ok {
+				return nil, fmt.Errorf("server did not receive incoming metadata")
+			}
+			if vals := md.Get(mutatedHeader); len(vals) == 0 || vals[0] != "true" {
+				return nil, fmt.Errorf("missing or invalid %q header: %v", mutatedHeader, vals)
+			}
+			return &testpb.SimpleResponse{}, nil
+		},
+	})
+	defer stub.Stop()
+
+	// Create bootstrap configuration without the trusted_xds_server server
+	// feature, and with the external processor's target present in the
+	// allowed_grpc_services map.
+	managementServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
+	nodeID := uuid.New().String()
+	bc, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
+		Servers:             fmt.Appendf(nil, `[{"server_uri": "passthrough:///%s", "channel_creds": [{"type": "insecure"}]}]`, managementServer.Address),
+		Node:                fmt.Appendf(nil, `{"id": %q}`, nodeID),
+		AllowedGRPCServices: fmt.Appendf(nil, `{%q: {"channel_creds": [{"type": "insecure"}]}}`, lisAddr),
+	})
+	if err != nil {
+		t.Fatalf("Failed to create bootstrap contents: %v", err)
+	}
+	xdsResolver, err := grpcinternal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
+	if err != nil {
+		t.Fatalf("Failed to create xDS resolver: %v", err)
+	}
+
+	cc, err := setupTestClientWithResolver(t, managementServer, nodeID, xdsResolver, lisAddr, &v3procfilterpb.ExternalProcessor{
+		ProcessingMode: &v3procfilterpb.ProcessingMode{
+			RequestHeaderMode:  v3procfilterpb.ProcessingMode_SEND,
+			ResponseHeaderMode: v3procfilterpb.ProcessingMode_SKIP,
+		},
+	}, stub.Address)
+	if err != nil {
+		t.Fatalf("Failed to dial: %v", err)
+	}
+	defer cc.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	client := testgrpc.NewTestServiceClient(cc)
+	if _, err := client.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil {
+		t.Fatalf("UnaryCall() failed: %v", err)
 	}
 }
