@@ -22,25 +22,25 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	telemetry "google.golang.org/grpc/experimental/stats/telemetry"
+	"google.golang.org/grpc/experimental/stats/telemetry"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/internal/testutils/xds/e2e/setup"
-	testgrpc "google.golang.org/grpc/interop/grpc_testing"
-	testpb "google.golang.org/grpc/interop/grpc_testing"
+	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/stats"
+	"google.golang.org/protobuf/types/known/structpb"
 
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
-	"github.com/google/go-cmp/cmp"
-	"google.golang.org/grpc/peer"
-	"google.golang.org/protobuf/types/known/structpb"
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
 const serviceNameKey = "service_name"
@@ -107,19 +107,14 @@ func (s) TestTelemetryLabels(t *testing.T) {
 	}
 }
 
-// TestTelemetryLabels_AggregateCluster tests that telemetry labels for an
-// aggregate cluster hierarchy reflect the active leaf cluster receiving traffic,
-// and correctly switch labels when failing over to a secondary leaf cluster.
+// Tests that telemetry labels for an aggregate cluster hierarchy reflect the
+// active leaf cluster receiving traffic, and correctly switch labels when
+// failing over to a secondary leaf cluster.
 func (s) TestTelemetryLabels_AggregateCluster(t *testing.T) {
 	managementServer, nodeID, _, xdsResolver := setup.ManagementServerAndResolver(t)
 
-	servers := make([]*stubserver.StubServer, 2)
-	for i := 0; i < 2; i++ {
-		servers[i] = stubserver.StartTestService(t, nil)
-		defer servers[i].Stop()
-	}
-
 	const (
+		numServers     = 2
 		xdsServiceName = "my-service-client-side-xds"
 		cluster1Name   = "cluster-1"
 		cluster2Name   = "cluster-2"
@@ -129,6 +124,12 @@ func (s) TestTelemetryLabels_AggregateCluster(t *testing.T) {
 		csmName2 = "service-2"
 		csmNs2   = "namespace-2"
 	)
+
+	servers := make([]*stubserver.StubServer, numServers)
+	for i := 0; i < numServers; i++ {
+		servers[i] = stubserver.StartTestService(t, nil)
+		defer servers[i].Stop()
+	}
 
 	resources := e2e.UpdateOptions{
 		NodeID:    nodeID,
@@ -147,7 +148,6 @@ func (s) TestTelemetryLabels_AggregateCluster(t *testing.T) {
 			e2e.DefaultEndpoint(cluster1Name, "localhost", []uint32{uint32(testutils.ParsePort(t, servers[0].Address))}),
 			e2e.DefaultEndpoint(cluster2Name, "localhost", []uint32{uint32(testutils.ParsePort(t, servers[1].Address))}),
 		},
-		SkipValidation: true,
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -194,7 +194,8 @@ func (s) TestTelemetryLabels_AggregateCluster(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Make RPCs until traffic switches to secondary cluster and capture secondary labels.
+	// Make RPCs until traffic switches to secondary cluster and capture
+	// secondary labels.
 	var cluster2Labels map[string]string
 	for ctx.Err() == nil {
 		callCtx2 := telemetry.NewContextWithLabelCallback(ctx, func(l map[string]string) {
