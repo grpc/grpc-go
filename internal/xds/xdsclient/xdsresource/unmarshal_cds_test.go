@@ -166,10 +166,43 @@ func (s) TestValidateCluster_Failure(t *testing.T) {
 		{
 			name: "ring-hash-max-bound-greater-than-upper-bound",
 			cluster: &v3clusterpb.Cluster{
+				Name:                 clusterName,
+				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
+				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
+					EdsConfig: &v3corepb.ConfigSource{
+						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
+							Ads: &v3corepb.AggregatedConfigSource{},
+						},
+					},
+					ServiceName: serviceName,
+				},
 				LbPolicy: v3clusterpb.Cluster_RING_HASH,
 				LbConfig: &v3clusterpb.Cluster_RingHashLbConfig_{
 					RingHashLbConfig: &v3clusterpb.Cluster_RingHashLbConfig{
 						MaximumRingSize: wrapperspb.UInt64(ringHashSizeUpperBound + 1),
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "ring-hash-min-greater-than-max",
+			cluster: &v3clusterpb.Cluster{
+				Name:                 clusterName,
+				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
+				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
+					EdsConfig: &v3corepb.ConfigSource{
+						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
+							Ads: &v3corepb.AggregatedConfigSource{},
+						},
+					},
+					ServiceName: serviceName,
+				},
+				LbPolicy: v3clusterpb.Cluster_RING_HASH,
+				LbConfig: &v3clusterpb.Cluster_RingHashLbConfig_{
+					RingHashLbConfig: &v3clusterpb.Cluster_RingHashLbConfig{
+						MinimumRingSize: wrapperspb.UInt64(5000),
+						MaximumRingSize: wrapperspb.UInt64(100),
 					},
 				},
 			},
