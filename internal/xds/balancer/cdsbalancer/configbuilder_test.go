@@ -470,9 +470,8 @@ func (s) TestBuildLeafClusterConfig_DNS(t *testing.T) {
 	}
 }
 
-// TestBuildLeafClusterConfig_EDS_PickFirstWeightedShuffling_Disabled tests
-// buildLeafClusterConfig with an EDS cluster configuration when pick_first
-// weighted shuffling is disabled.
+// Test verifies buildLeafClusterConfig with an EDS cluster configuration
+// when pick_first weighted shuffling is disabled.
 func (s) TestBuildLeafClusterConfig_EDS_PickFirstWeightedShuffling_Disabled(t *testing.T) {
 	testutils.SetEnvConfig(t, &envconfig.PickFirstWeightedShuffling, false)
 
@@ -509,10 +508,10 @@ func (s) TestBuildLeafClusterConfig_EDS_PickFirstWeightedShuffling_Disabled(t *t
 							Denominator: million,
 						}},
 						Localities: []xdsresource.Locality{
-							makeLocality(3, 80, 1, 2),
-							makeLocality(1, 80, 0, 2),
-							makeLocality(2, 20, 1, 2),
-							makeLocality(0, 20, 0, 2),
+							loc3,
+							loc1,
+							loc2,
+							loc0,
 						},
 					},
 				},
@@ -611,10 +610,10 @@ func (s) TestBuildLeafClusterConfig_EDS_PickFirstWeightedShuffling_Enabled(t *te
 							Denominator: million,
 						}},
 						Localities: []xdsresource.Locality{
-							makeLocality(3, 80, 1, 2),
-							makeLocality(1, 80, 0, 2),
-							makeLocality(2, 20, 1, 2),
-							makeLocality(0, 20, 0, 2),
+							loc3,
+							loc1,
+							loc2,
+							loc0,
 						},
 					},
 				},
@@ -805,10 +804,10 @@ func (s) TestBuildClusterImplConfigForEDS_PickFirstWeightedShuffling_Disabled(t 
 						Denominator: million,
 					}},
 					Localities: []xdsresource.Locality{
-						makeLocality(3, 80, 1, 2),
-						makeLocality(1, 80, 0, 2),
-						makeLocality(2, 20, 1, 2),
-						makeLocality(0, 20, 0, 2),
+						loc3,
+						loc1,
+						loc2,
+						loc0,
 					},
 				},
 			},
@@ -882,10 +881,10 @@ func (s) TestBuildClusterImplConfigForEDS_PickFirstWeightedShuffling_Enabled(t *
 						Denominator: million,
 					}},
 					Localities: []xdsresource.Locality{
-						makeLocality(3, 80, 1, 2),
-						makeLocality(1, 80, 0, 2),
-						makeLocality(2, 20, 1, 2),
-						makeLocality(0, 20, 0, 2),
+						loc3,
+						loc1,
+						loc2,
+						loc0,
 					},
 				},
 			},
