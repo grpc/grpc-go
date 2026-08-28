@@ -500,7 +500,7 @@ func (t *http2Client) newStream(ctx context.Context, callHdr *CallHdr, handler s
 		headerChan:   make(chan struct{}),
 		statsHandler: handler,
 	}
-	s.Stream.buf.init()
+	s.Stream.buf.init(t.bufferPool)
 	s.Stream.wq.init(defaultWriteQuota, s.done)
 	s.readRequester = s
 	// The client side stream context should have exactly the same life cycle with the user provided context.
@@ -952,6 +952,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr, handler s
 			LocalAddr:   t.localAddr,
 			Compression: callHdr.SendCompress,
 			Header:      header,
+			Authority:   callHdr.Host,
 		})
 	}
 	if transportDrainRequired {
