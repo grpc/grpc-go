@@ -490,20 +490,17 @@ type wrappedTestStream struct {
 	grpc.ServerStream
 }
 
-// Test verifies that an internal stream wrapper option configured on the
+// Test verifies that an internal xDS filter wrapper option configured on the
 // server gets invoked and can wrap the ServerStream for both Unary and
 // Streaming RPCs.
-func (s) TestServerStreamWrapper(t *testing.T) {
+func (s) TestXDSFilterWrapperOption(t *testing.T) {
 	var wrapperCalled atomic.Bool
-	wrapper := func(ss any) (any, error) {
+	wrapper := func(ss grpc.ServerStream) (grpc.ServerStream, error) {
 		wrapperCalled.Store(true)
-		if sstream, ok := ss.(grpc.ServerStream); ok && sstream != nil {
-			return &wrappedTestStream{ServerStream: sstream}, nil
-		}
-		return nil, nil
+		return &wrappedTestStream{ServerStream: ss}, nil
 	}
 
-	opt := internal.ServerStreamWrapper.(func(func(any) (any, error)) any)(wrapper).(grpc.ServerOption)
+	opt := internal.XDSFilterWrapperOption.(func(func(grpc.ServerStream) (grpc.ServerStream, error)) grpc.ServerOption)(wrapper)
 
 	ss := &stubserver.StubServer{
 		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
@@ -524,7 +521,7 @@ func (s) TestServerStreamWrapper(t *testing.T) {
 		t.Fatalf("EmptyCall failed: %v", err)
 	}
 	if !wrapperCalled.Load() {
-		t.Fatal("ServerStreamWrapper callback was not called for Unary RPC")
+		t.Fatal("XDSFilterWrapperOption callback was not called for Unary RPC")
 	}
 
 	wrapperCalled.Store(false)
@@ -536,19 +533,19 @@ func (s) TestServerStreamWrapper(t *testing.T) {
 		t.Fatalf("Recv failed: %v", err)
 	}
 	if !wrapperCalled.Load() {
-		t.Fatal("ServerStreamWrapper callback was not called for Streaming RPC")
+		t.Fatal("XDSFilterWrapperOption callback was not called for Streaming RPC")
 	}
 }
 
-// Test verifies that if an internal stream wrapper returns an error,
+// Test verifies that if an internal xDS filter wrapper returns an error,
 // the RPC is rejected early with that status error before executing
 // handlers.
-func (s) TestServerStreamWrapper_EarlyRejection(t *testing.T) {
-	wrapper := func(any) (any, error) {
+func (s) TestXDSFilterWrapperOption_EarlyRejection(t *testing.T) {
+	wrapper := func(grpc.ServerStream) (grpc.ServerStream, error) {
 		return nil, status.Error(codes.PermissionDenied, "early rejection by internal wrapper")
 	}
 
-	opt := internal.ServerStreamWrapper.(func(func(any) (any, error)) any)(wrapper).(grpc.ServerOption)
+	opt := internal.XDSFilterWrapperOption.(func(func(grpc.ServerStream) (grpc.ServerStream, error)) grpc.ServerOption)(wrapper)
 
 	ss := &stubserver.StubServer{
 		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {

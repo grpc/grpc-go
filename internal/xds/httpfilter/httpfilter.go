@@ -95,8 +95,8 @@ type ClientInterceptor interface {
 	// Note: RPCInfo.Context is currently unused and will be nil.
 	NewStream(ctx context.Context, ri iresolver.RPCInfo, newStream func(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStream, error), opts ...grpc.CallOption) (grpc.ClientStream, error)
 
-	// Close closes the interceptor. Once called, no new calls to NewStream are
-	// accepted. Ongoing calls to NewStream are allowed to complete.
+	// Close closes the interceptor. No new RPCs will be dispatched to this
+	// interceptor, but ongoing calls to NewStream are allowed to complete.
 	Close()
 }
 
@@ -142,8 +142,8 @@ type ServerInterceptor interface {
 	// Implementations should never return (nil, nil).
 	InterceptRPC(ss grpc.ServerStream) (grpc.ServerStream, error)
 
-	// Close closes the interceptor. Once called, no new calls to InterceptRPC are
-	// accepted. Ongoing calls to InterceptRPC are allowed to complete.
+	// Close closes the interceptor. No new RPCs will be dispatched to this
+	// interceptor, but ongoing calls to InterceptRPC are allowed to complete.
 	Close()
 }
 

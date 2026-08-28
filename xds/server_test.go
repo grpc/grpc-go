@@ -147,7 +147,7 @@ func (s) TestNewServer_Success(t *testing.T) {
 					t.Fatalf("%d ServerOptions passed to grpc.Server, want %d", got, wantServerOpts)
 				}
 				// Verify that the user passed ServerOptions are forwarded as is.
-				if !reflect.DeepEqual(opts[:len(test.serverOpts)], test.serverOpts) {
+				if !reflect.DeepEqual(opts[1:], test.serverOpts) {
 					t.Fatalf("got ServerOptions %v, want %v", opts[:len(test.serverOpts)], test.serverOpts)
 				}
 				return grpc.NewServer(opts...)

@@ -20,7 +20,6 @@ package server
 
 import (
 	"errors"
-	"fmt"
 	"strings"
 
 	"google.golang.org/grpc"
@@ -28,7 +27,6 @@ import (
 	"google.golang.org/grpc/internal/transport"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/status"
 )
 
 // RouteAndProcess routes the incoming RPC to a configured route in the route
@@ -50,16 +48,16 @@ func RouteAndProcess(ss grpc.ServerStream) (grpc.ServerStream, error) {
 		if logger.V(2) {
 			logger.Infof("RPC on connection with xDS Configuration error: %v", rc.err)
 		}
-		return nil, status.Error(codes.Unavailable, fmt.Sprintf("error from xDS configuration for matched route configuration: %v", rc.err))
+		return nil, rc.statusErrWithNodeID(codes.Unavailable, "error from xDS configuration for matched route configuration: %v", rc.err)
 	}
 
 	mn, ok := grpc.Method(ctx)
 	if !ok {
-		return nil, errors.New("missing method name in incoming context")
+		return nil, rc.statusErrWithNodeID(codes.Internal, "missing method name in incoming context")
 	}
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
-		return nil, errors.New("missing metadata in incoming context")
+		return nil, rc.statusErrWithNodeID(codes.Internal, "missing metadata in incoming context")
 	}
 	// A41 added logic to the core grpc implementation to guarantee that once the
 	// RPC gets to this point, there will be a single, unambiguous authority

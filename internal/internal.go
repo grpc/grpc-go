@@ -246,9 +246,9 @@ var (
 		return cleanup
 	}
 
-	// ServerStreamWrapper returns a ServerOption that sets the internal
-	// stream wrapper used for HTTP filters.
-	ServerStreamWrapper any // func(func(any) (any, error)) grpc.ServerOption
+	// XDSFilterWrapperOption returns a ServerOption that sets the internal
+	// stream wrapper used for server-side xDS HTTP filters.
+	XDSFilterWrapperOption any // func(func(grpc.ServerStream) (grpc.ServerStream, error)) grpc.ServerOption
 )
 
 // HealthChecker defines the signature of the client-side LB channel health

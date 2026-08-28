@@ -75,15 +75,18 @@ func NewGRPCServer(opts ...grpc.ServerOption) (*GRPCServer, error) {
 	// xdsFilterWrapper is a callback passed to the underlying gRPC server.
 	// It adapts the generic stream parameter and delegates to RouteAndProcess
 	// to execute xDS HTTP filter interceptors for each incoming RPC.
-	xdsFilterWrapper := func(ss any) (any, error) {
-		return server.RouteAndProcess(ss.(grpc.ServerStream))
+	xDSFilterWrapper := func(ss grpc.ServerStream) (grpc.ServerStream, error) {
+		return server.RouteAndProcess(ss)
 	}
-	// Construct a grpc.ServerOption that registers xdsFilterWrapper on
+	// Construct a grpc.ServerOption that registers xDSFilterWrapper on
 	// the server.
-	xdsInternalOpt := internal.ServerStreamWrapper.(func(func(any) (any, error)) any)(xdsFilterWrapper).(grpc.ServerOption)
-	opts = append(opts, xdsInternalOpt)
+	xDSFilterWrapperOption := internal.XDSFilterWrapperOption.(func(func(grpc.ServerStream) (grpc.ServerStream, error)) grpc.ServerOption)
+	newOpts := []grpc.ServerOption{
+		xDSFilterWrapperOption(xDSFilterWrapper),
+	}
+	newOpts = append(newOpts, opts...)
 	s := &GRPCServer{
-		gs:   newGRPCServer(opts...),
+		gs:   newGRPCServer(newOpts...),
 		quit: grpcsync.NewEvent(),
 	}
 	s.handleServerOptions(opts)

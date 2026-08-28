@@ -89,15 +89,7 @@ func init() {
 	internal.MetricsRecorderForServer = func(srv *Server) estats.MetricsRecorder {
 		return istats.NewMetricsRecorderList(srv.opts.statsHandlers)
 	}
-	internal.ServerStreamWrapper = func(w func(any) (any, error)) any {
-		return serverStreamWrapper(func(ss ServerStream) (ServerStream, error) {
-			res, err := w(ss)
-			if err != nil || res == nil {
-				return nil, err
-			}
-			return res.(ServerStream), nil
-		})
-	}
+	internal.XDSFilterWrapperOption = xdsFilterWrapperOption
 }
 
 var statusOK = status.New(codes.OK, "")
@@ -681,9 +673,9 @@ func bufferPool(bufferPool mem.BufferPool) ServerOption {
 	})
 }
 
-// serverStreamWrapper returns a ServerOption that sets the server-level
+// xdsFilterWrapperOption returns a ServerOption that sets the server-level
 // stream wrapper (used internally by xDS server filters).
-func serverStreamWrapper(w func(ServerStream) (ServerStream, error)) ServerOption {
+func xdsFilterWrapperOption(w func(ServerStream) (ServerStream, error)) ServerOption {
 	return newFuncServerOption(func(o *serverOptions) {
 		o.streamWrapper = w
 	})
@@ -1450,12 +1442,7 @@ func (s *Server) processRPC(ctx context.Context, stream *transport.ServerStream,
 	var appErr error
 	var wrappedStream ServerStream = ss
 	if s.opts.streamWrapper != nil {
-		ws, err := s.opts.streamWrapper(ss)
-		if err != nil {
-			appErr = err
-		} else if ws != nil {
-			wrappedStream = ws
-		}
+		wrappedStream, appErr = s.opts.streamWrapper(ss)
 	}
 
 	if appErr == nil {
