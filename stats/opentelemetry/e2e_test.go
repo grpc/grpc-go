@@ -52,6 +52,7 @@ import (
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/baggage"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
@@ -77,6 +78,7 @@ import (
 	"google.golang.org/grpc/orca"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
+	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/stats/opentelemetry"
 	"google.golang.org/grpc/stats/opentelemetry/internal/testutils"
 	"google.golang.org/grpc/status"
@@ -441,9 +443,10 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 		}
 	}
 
+	compressedSize := testutils.GzipCompressedMessageSize(t, &testpb.SimpleRequest{Payload: &testpb.Payload{Body: make([]byte, 10000)}})
 	wantMetrics := testutils.MetricData(testutils.MetricDataOptions{
 		Target:                     ss.Target,
-		UnaryCompressedMessageSize: float64(57),
+		UnaryCompressedMessageSize: float64(compressedSize),
 	})
 	gotMetrics = testutils.WaitForServerMetrics(ctx, t, reader, gotMetrics, wantMetrics)
 	testutils.CompareMetrics(t, gotMetrics, wantMetrics)
@@ -844,9 +847,10 @@ func (s) TestMetricsAndTracesOptionEnabled(t *testing.T) {
 		}
 	}
 
+	compressedSize := testutils.GzipCompressedMessageSize(t, &testpb.SimpleRequest{Payload: &testpb.Payload{Body: make([]byte, 10000)}})
 	wantMetrics := testutils.MetricData(testutils.MetricDataOptions{
 		Target:                     ss.Target,
-		UnaryCompressedMessageSize: float64(57),
+		UnaryCompressedMessageSize: float64(compressedSize),
 	})
 	gotMetrics = testutils.WaitForServerMetrics(ctx, t, reader, gotMetrics, wantMetrics)
 	testutils.CompareMetrics(t, gotMetrics, wantMetrics)
@@ -871,7 +875,7 @@ func (s) TestMetricsAndTracesOptionEnabled(t *testing.T) {
 						},
 						{
 							Key:   "message-size-compressed",
-							Value: attribute.IntValue(57),
+							Value: attribute.IntValue(compressedSize),
 						},
 					},
 				},
@@ -888,7 +892,7 @@ func (s) TestMetricsAndTracesOptionEnabled(t *testing.T) {
 						},
 						{
 							Key:   "message-size-compressed",
-							Value: attribute.IntValue(57),
+							Value: attribute.IntValue(compressedSize),
 						},
 					},
 				},
@@ -922,7 +926,7 @@ func (s) TestMetricsAndTracesOptionEnabled(t *testing.T) {
 						},
 						{
 							Key:   "message-size-compressed",
-							Value: attribute.IntValue(57),
+							Value: attribute.IntValue(compressedSize),
 						},
 					},
 				},
@@ -939,7 +943,7 @@ func (s) TestMetricsAndTracesOptionEnabled(t *testing.T) {
 						},
 						{
 							Key:   "message-size-compressed",
-							Value: attribute.IntValue(57),
+							Value: attribute.IntValue(compressedSize),
 						},
 					},
 				},
@@ -2157,6 +2161,116 @@ func (s) TestSubChannelMetrics(t *testing.T) {
 	}
 }
 
+// TestSubChannelMetrics_ConnectionLifecycle verifies the subchannel metrics
+// emitted during a connection lifecycle - a failed connection attempt, a
+// successful connection attempt and a disconnection - on a gRPC channel
+// configured with the pick_first LB policy.
+func (s) TestSubChannelMetrics_ConnectionLifecycle(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	ss := stubserver.StartTestService(t, nil)
+	defer ss.Stop()
+
+	pfConfig := fmt.Sprintf(`{"loadBalancingConfig": [{%q: {}}]}`, pickfirst.Name)
+	sc := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(pfConfig)
+	r := manual.NewBuilderWithScheme("whatever")
+	r.InitialState(resolver.State{
+		ServiceConfig: sc,
+		Addresses:     []resolver.Address{{Addr: "bad address"}}},
+	) // Will trigger connection failed.
+
+	grpcTarget := r.Scheme() + ":///"
+	reader := metric.NewManualReader()
+	provider := metric.NewMeterProvider(metric.WithReader(reader))
+	mo := opentelemetry.MetricsOptions{
+		MeterProvider: provider,
+		Metrics:       opentelemetry.DefaultMetrics().Add("grpc.subchannel.disconnections", "grpc.subchannel.connection_attempts_succeeded", "grpc.subchannel.connection_attempts_failed"),
+	}
+
+	cc, err := grpc.NewClient(grpcTarget, opentelemetry.DialOption(opentelemetry.Options{MetricsOptions: mo}), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
+	if err != nil {
+		t.Fatalf("NewClient() failed with error: %v", err)
+	}
+	defer cc.Close()
+
+	tsc := testgrpc.NewTestServiceClient(cc)
+	if _, err := tsc.EmptyCall(ctx, &testpb.Empty{}); err == nil {
+		t.Fatalf("EmptyCall() passed when expected to fail")
+	}
+
+	r.UpdateState(resolver.State{
+		ServiceConfig: sc,
+		Addresses:     []resolver.Address{{Addr: ss.Address}},
+	}) // Will trigger successful connection metric.
+	if _, err := tsc.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
+		t.Fatalf("EmptyCall() failed: %v", err)
+	}
+
+	// Stop the server, that should send signal to disconnect, which will
+	// eventually emit disconnection metric before ClientConn goes IDLE.
+	ss.Stop()
+	itestutils.AwaitState(ctx, t, cc, connectivity.Idle)
+	wantMetrics := []metricdata.Metrics{
+		{
+			Name:        "grpc.subchannel.connection_attempts_succeeded",
+			Description: "EXPERIMENTAL. Number of successful connection attempts.",
+			Unit:        "{attempt}",
+			Data: metricdata.Sum[int64]{
+				DataPoints: []metricdata.DataPoint[int64]{
+					{
+						Attributes: attribute.NewSet(attribute.String("grpc.target", grpcTarget)),
+						Value:      1,
+					},
+				},
+				Temporality: metricdata.CumulativeTemporality,
+				IsMonotonic: true,
+			},
+		},
+		{
+			Name:        "grpc.subchannel.connection_attempts_failed",
+			Description: "EXPERIMENTAL. Number of failed connection attempts.",
+			Unit:        "{attempt}",
+			Data: metricdata.Sum[int64]{
+				DataPoints: []metricdata.DataPoint[int64]{
+					{
+						Attributes: attribute.NewSet(attribute.String("grpc.target", grpcTarget)),
+						Value:      1,
+					},
+				},
+				Temporality: metricdata.CumulativeTemporality,
+				IsMonotonic: true,
+			},
+		},
+		{
+			Name:        "grpc.subchannel.disconnections",
+			Description: "EXPERIMENTAL. Number of times the selected subchannel becomes disconnected.",
+			Unit:        "{disconnection}",
+			Data: metricdata.Sum[int64]{
+				DataPoints: []metricdata.DataPoint[int64]{
+					{
+						Attributes: attribute.NewSet(attribute.String("grpc.target", grpcTarget)),
+						Value:      1,
+					},
+				},
+				Temporality: metricdata.CumulativeTemporality,
+				IsMonotonic: true,
+			},
+		},
+	}
+
+	gotMetrics := metricsDataFromReader(ctx, reader)
+	for _, metric := range wantMetrics {
+		val, ok := gotMetrics[metric.Name]
+		if !ok {
+			t.Fatalf("Metric %v not present in recorded metrics", metric.Name)
+		}
+		if !metricdatatest.AssertEqual(t, metric, val, metricdatatest.IgnoreTimestamp(), metricdatatest.IgnoreExemplars()) {
+			t.Fatalf("Metrics data type not equal for metric: %v", metric.Name)
+		}
+	}
+}
+
 func (s) TestHealthStreamNoOtelErrorLog(t *testing.T) {
 	mo, _ := defaultMetricsOptions(t, nil)
 	to, _ := defaultTraceOptions(t)
@@ -2547,6 +2661,98 @@ func (s) TestRelayContextCollisionTracing(t *testing.T) {
 	if srvTraceID != cliTraceID {
 		t.Errorf("Trace continuity broken: Server TraceID %s != Client TraceID %s", srvTraceID, cliTraceID)
 	}
+}
+
+// baggageToMap converts the members of an OpenTelemetry baggage into a
+// key/value map for easy comparison in tests.
+func baggageToMap(b baggage.Baggage) map[string]string {
+	m := make(map[string]string, b.Len())
+	for _, member := range b.Members() {
+		m[member.Key()] = member.Value()
+	}
+	return m
+}
+
+// TestRPC_BaggagePropagation verifies that OpenTelemetry baggage set on the
+// client-side context is propagated through the gRPC pipeline and is available
+// in the server handler's context, when the W3C Baggage propagator is
+// configured in the trace options. It exercises both a unary and a streaming
+// RPC.
+func (s) TestRPC_BaggagePropagation(t *testing.T) {
+	member1, err := baggage.NewMember("key1", "value1")
+	if err != nil {
+		t.Fatalf("baggage.NewMember(key1, value1) failed: %v", err)
+	}
+	member2, err := baggage.NewMember("key2", "value2")
+	if err != nil {
+		t.Fatalf("baggage.NewMember(key2, value2) failed: %v", err)
+	}
+	bag, err := baggage.New(member1, member2)
+	if err != nil {
+		t.Fatalf("baggage.New() failed: %v", err)
+	}
+	wantBaggage := map[string]string{"key1": "value1", "key2": "value2"}
+
+	// serverBaggage receives the baggage observed by the server handler for
+	// each RPC. It is verified after each RPC, so a buffer of one suffices.
+	serverBaggage := make(chan map[string]string, 1)
+	ss := &stubserver.StubServer{
+		UnaryCallF: func(ctx context.Context, _ *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			serverBaggage <- baggageToMap(baggage.FromContext(ctx))
+			return &testpb.SimpleResponse{}, nil
+		},
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
+			serverBaggage <- baggageToMap(baggage.FromContext(stream.Context()))
+			for {
+				if _, err := stream.Recv(); err != nil {
+					if err == io.EOF {
+						return nil
+					}
+					return err
+				}
+			}
+		},
+	}
+
+	to, _ := defaultTraceOptions(t)
+	// Configure the W3C Baggage propagator so baggage is carried in metadata.
+	to.TextMapPropagator = propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{})
+	otelOptions := opentelemetry.Options{TraceOptions: *to}
+	if err := ss.Start([]grpc.ServerOption{opentelemetry.ServerOption(otelOptions)}, opentelemetry.DialOption(otelOptions)); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
+	}
+	defer ss.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	ctx = baggage.ContextWithBaggage(ctx, bag)
+
+	verifyServerBaggage := func(rpc string) {
+		t.Helper()
+		select {
+		case got := <-serverBaggage:
+			if diff := cmp.Diff(wantBaggage, got); diff != "" {
+				t.Errorf("Baggage received by server for %s RPC mismatch (-want +got):\n%s", rpc, diff)
+			}
+		case <-ctx.Done():
+			t.Fatalf("Timed out waiting for server to receive baggage for %s RPC", rpc)
+		}
+	}
+
+	if _, err := ss.Client.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil {
+		t.Fatalf("Unexpected error from UnaryCall: %v", err)
+	}
+	verifyServerBaggage("unary")
+
+	stream, err := ss.Client.FullDuplexCall(ctx)
+	if err != nil {
+		t.Fatalf("ss.Client.FullDuplexCall failed: %v", err)
+	}
+	stream.CloseSend()
+	if _, err = stream.Recv(); err != io.EOF {
+		t.Fatalf("stream.Recv received an unexpected error: %v, expected an EOF error", err)
+	}
+	verifyServerBaggage("streaming")
 }
 
 // checkMetricWithMethod verifies that a metric with the specified name contains

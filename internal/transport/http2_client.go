@@ -500,7 +500,7 @@ func (t *http2Client) newStream(ctx context.Context, callHdr *CallHdr, handler s
 		headerChan:   make(chan struct{}),
 		statsHandler: handler,
 	}
-	s.Stream.buf.init()
+	s.Stream.buf.init(t.bufferPool)
 	s.Stream.wq.init(defaultWriteQuota, s.done)
 	s.readRequester = s
 	// The client side stream context should have exactly the same life cycle with the user provided context.
@@ -661,6 +661,9 @@ func (t *http2Client) createHeaderFields(ctx context.Context, callHdr *CallHdr) 
 		if isReservedHeader(k) {
 			continue
 		}
+		if err := imetadata.ValidatePair(k, vv...); err != nil {
+			return nil, status.Error(codes.Internal, err.Error())
+		}
 		for _, v := range vv {
 			headerFields = append(headerFields, hpack.HeaderField{Name: k, Value: encodeMetadataHeader(k, v)})
 		}
@@ -704,6 +707,9 @@ func (t *http2Client) getTrAuthData(ctx context.Context, audience string) (map[s
 		for k, v := range data {
 			// Capital header names are illegal in HTTP/2.
 			k = strings.ToLower(k)
+			if err := imetadata.ValidatePair(k, v); err != nil {
+				return nil, status.Error(codes.Internal, err.Error())
+			}
 			authData[k] = v
 		}
 	}
@@ -737,6 +743,9 @@ func (t *http2Client) getCallAuthData(ctx context.Context, audience string, call
 		for k, v := range data {
 			// Capital header names are illegal in HTTP/2
 			k = strings.ToLower(k)
+			if err := imetadata.ValidatePair(k, v); err != nil {
+				return nil, status.Error(codes.Internal, err.Error())
+			}
 			callAuthData[k] = v
 		}
 	}
@@ -943,6 +952,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr, handler s
 			LocalAddr:   t.localAddr,
 			Compression: callHdr.SendCompress,
 			Header:      header,
+			Authority:   callHdr.Host,
 		})
 	}
 	if transportDrainRequired {
@@ -1239,23 +1249,26 @@ func (t *http2Client) handleData(f *parsedDataFrame) {
 			t.closeStream(s, io.EOF, true, http2.ErrCodeFlowControl, status.New(codes.Internal, err.Error()), nil, false)
 			return
 		}
+	}
 
-		if s.nonGRPCStatus != nil {
-			// The frame should be handled as a non-gRPC response body
-			st := s.handleNonGRPCData(f)
-			if st != nil {
-				t.closeStream(s, st.Err(), true, http2.ErrCodeProtocol, st, nil, true)
-				return
-			}
-			if w := s.fc.onRead(size); w > 0 {
-				t.controlBuf.put(&outgoingWindowUpdate{
-					streamID:  s.id,
-					increment: w,
-				})
-			}
+	if s.nonGRPCStatus != nil {
+		// The frame should be handled as a non-gRPC response body. A non-nil
+		// status also covers END_STREAM, so no separate handling is needed below.
+		st := s.handleNonGRPCData(f)
+		if st != nil {
+			t.closeStream(s, st.Err(), true, http2.ErrCodeProtocol, st, nil, true)
 			return
 		}
+		if w := s.fc.onRead(size); w > 0 {
+			t.controlBuf.put(&outgoingWindowUpdate{
+				streamID:  s.id,
+				increment: w,
+			})
+		}
+		return
+	}
 
+	if size > 0 {
 		dataLen := f.data.Len()
 		if f.Header().Flags.Has(http2.FlagDataPadded) {
 			if w := s.fc.onRead(size - uint32(dataLen)); w > 0 {

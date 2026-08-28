@@ -32,7 +32,7 @@ import (
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/internal/testutils"
-	"google.golang.org/grpc/internal/xds/clients/xdsclient"
+	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/internal/xds/clusterspecifier"
 	"google.golang.org/grpc/internal/xds/httpfilter"
 	"google.golang.org/grpc/internal/xds/matcher"
@@ -721,7 +721,7 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, test.xdsClientExtProcEnabled)
 
-			gotUpdate, gotError := generateRDSUpdateFromRouteConfiguration(test.rc, nil)
+			gotUpdate, gotError := generateRDSUpdateFromRouteConfiguration(test.rc, nil, nil)
 			if (gotError != nil) != test.wantError ||
 				!cmp.Equal(gotUpdate, test.wantUpdate, cmpopts.EquateEmpty(),
 					cmp.Transformer("FilterConfig", func(fc httpfilter.FilterConfig) string {
@@ -741,28 +741,28 @@ func (s) TestGenerateRDSUpdateFromRouteConfigurationWithAutoHostRewrite(t *testi
 
 	tests := []struct {
 		name             string
-		isTrusted        xdsclient.ServerFeature // Corresponds to ServerConfig
-		envConfigRewrite bool                    // Corresponds to envconfig.XDSAuthorityRewrite
+		isTrusted        bool // Whether the xDS server is trusted.
+		envConfigRewrite bool // envconfig.XDSAuthorityRewrite value.
 		autoHostRewrite  bool
 		wantResult       bool
 	}{
 		{
 			name:             "envConfigOn_Trusted",
-			isTrusted:        xdsclient.ServerFeatureTrustedXDSServer,
+			isTrusted:        true,
 			envConfigRewrite: true,
 			autoHostRewrite:  true,
 			wantResult:       true,
 		},
 		{
 			name:             "envConfigOn_Trusted_AutoHostRewriteFalse",
-			isTrusted:        xdsclient.ServerFeatureTrustedXDSServer,
+			isTrusted:        true,
 			envConfigRewrite: true,
 			autoHostRewrite:  false,
 			wantResult:       false,
 		},
 		{
 			name:             "envConfigOff_Trusted",
-			isTrusted:        xdsclient.ServerFeatureTrustedXDSServer,
+			isTrusted:        true,
 			envConfigRewrite: false,
 			autoHostRewrite:  true,
 			wantResult:       false,
@@ -785,10 +785,16 @@ func (s) TestGenerateRDSUpdateFromRouteConfigurationWithAutoHostRewrite(t *testi
 		t.Run(test.name, func(t *testing.T) {
 			testutils.SetEnvConfig(t, &envconfig.XDSAuthorityRewrite, test.envConfigRewrite)
 
-			opts := &xdsclient.DecodeOptions{
-				ServerConfig: &xdsclient.ServerConfig{
-					ServerFeature: test.isTrusted,
-				},
+			var serverFeatures []string
+			if test.isTrusted {
+				serverFeatures = []string{"trusted_xds_server"}
+			}
+			sc, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{
+				URI:            "trafficdirector.googleapis.com:443",
+				ServerFeatures: serverFeatures,
+			})
+			if err != nil {
+				t.Fatalf("Failed to create server config for testing: %v", err)
 			}
 
 			routeConfig := &v3routepb.RouteConfiguration{
@@ -807,7 +813,7 @@ func (s) TestGenerateRDSUpdateFromRouteConfigurationWithAutoHostRewrite(t *testi
 				}},
 			}
 
-			update, err := generateRDSUpdateFromRouteConfiguration(routeConfig, opts)
+			update, err := generateRDSUpdateFromRouteConfiguration(routeConfig, nil, sc)
 			if err != nil {
 				t.Errorf("generateRDSUpdateFromRouteConfiguration() failed, got : %v, want: <nil>", err)
 			}
@@ -983,7 +989,7 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			name, update, err := unmarshalRouteConfigResource(test.resource, nil)
+			name, update, err := unmarshalRouteConfigResource(test.resource, nil, nil)
 			if (err != nil) != test.wantErr {
 				t.Errorf("unmarshalRouteConfigResource(%s), got err: %v, wantErr: %v", pretty.ToJSON(test.resource), err, test.wantErr)
 			}
@@ -1740,7 +1746,7 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, _, err := routesProtoToSlice(tt.routes, nil, nil)
+			got, _, err := routesProtoToSlice(tt.routes, nil, nil, nil)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("routesProtoToSlice() error = %v, wantErr %v", err, tt.wantErr)
 			}

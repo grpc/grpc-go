@@ -24,6 +24,7 @@ import (
 	"regexp"
 	"strings"
 
+	imetadata "google.golang.org/grpc/internal/metadata"
 	"google.golang.org/grpc/internal/xds/matcher"
 	"google.golang.org/grpc/metadata"
 
@@ -31,6 +32,10 @@ import (
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3matcherpb "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
 )
+
+// maxHeaderSize is the maximum length, in bytes, of a header key or value in a
+// mutation received from an external processing server.
+const maxHeaderSize = 16384
 
 // HeaderMutationRules specifies the rules for what modifications an external
 // processing server may make to headers sent on the data plane RPC.
@@ -102,14 +107,18 @@ func HeaderMutationRulesFromProto(mr *v3mutationpb.HeaderMutationRules) (HeaderM
 // key and value, and checks if the mutation is permitted by the AllowExpr and
 // DisallowExpr regular expressions.
 //
-// The following headers are always ignored:
+// A mutation for any of the following headers fails validation and an error is
+// returned:
 // - Pseudo-headers (keys starting with ':').
 // - The 'host' header.
+// - Headers with keys in the reserved 'grpc-' space.
 // - Headers with non-lowercase keys.
 // - Headers with keys or values exceeding 16384 bytes.
+// - Headers with an invalid gRPC header name or header value.
 //
-// If a mutation is disallowed and DisallowIsError is true, an error is
-// returned. Otherwise, the disallowed mutation is silently ignored.
+// If a mutation is disallowed by the mutation rules and DisallowIsError is
+// true, an error is returned. Otherwise, the disallowed mutation is silently
+// ignored.
 //
 // The input metadata must not be nil.
 func (hmr *HeaderMutationRules) ApplyAdditions(hvos []*v3corepb.HeaderValueOption, input metadata.MD) error {
@@ -117,7 +126,7 @@ func (hmr *HeaderMutationRules) ApplyAdditions(hvos []*v3corepb.HeaderValueOptio
 		hmr = &HeaderMutationRules{}
 	}
 	if input == nil {
-		return fmt.Errorf("extproc: input metadata is nil")
+		return fmt.Errorf("input metadata is nil")
 	}
 	if hmr.DisallowAll {
 		return nil
@@ -126,21 +135,27 @@ func (hmr *HeaderMutationRules) ApplyAdditions(hvos []*v3corepb.HeaderValueOptio
 	for _, hvo := range hvos {
 		header := hvo.GetHeader()
 		key := header.GetKey()
-		if len(key) == 0 || key[0] == ':' || key == "host" || key != strings.ToLower(key) || len(key) > 16384 {
-			continue
+		if err := validateHeaderKey(key); err != nil {
+			return fmt.Errorf("invalid header mutation: %v", err)
 		}
 
 		value := header.GetValue()
 		if strings.HasSuffix(key, "-bin") {
 			value = string(header.GetRawValue())
 		}
-		if len(value) > 16384 {
-			continue
+		if len(value) > maxHeaderSize {
+			return fmt.Errorf("invalid header mutation: value for header key %q exceeds the maximum length of %d bytes", key, maxHeaderSize)
+		}
+		// ValidatePair rejects values carrying bytes outside %x20-%x7E. It
+		// skips the value check for "-bin" keys, whose values the transport
+		// base64 encodes.
+		if err := imetadata.ValidatePair(key, value); err != nil {
+			return fmt.Errorf("invalid header mutation: %v", err)
 		}
 
 		if !hmr.allow(key) {
 			if hmr.DisallowIsError {
-				return fmt.Errorf("extproc: header mutation disallowed by headerMutationRules for header key %q", key)
+				return fmt.Errorf("header mutation disallowed by headerMutationRules for header key %q", key)
 			}
 			continue
 		}
@@ -179,25 +194,46 @@ func (hmr *HeaderMutationRules) ApplyRemovals(headersToRemove []string, input me
 		hmr = &HeaderMutationRules{}
 	}
 	if input == nil {
-		return fmt.Errorf("extproc: input metadata is nil")
+		return fmt.Errorf("input metadata is nil")
 	}
 	if hmr.DisallowAll {
 		return nil
 	}
 
 	for _, header := range headersToRemove {
-		if len(header) == 0 || header[0] == ':' || header == "host" || header != strings.ToLower(header) || len(header) > 16384 {
-			continue
+		if err := validateHeaderKey(header); err != nil {
+			return fmt.Errorf("invalid header mutation: %v", err)
 		}
 		if !hmr.allow(header) {
 			if hmr.DisallowIsError {
-				return fmt.Errorf("extproc: header mutation disallowed by headerMutationRules for header %q", header)
+				return fmt.Errorf("header mutation disallowed by headerMutationRules for header %q", header)
 			}
 			continue
 		}
 		input.Delete(header)
 	}
 	return nil
+}
+
+// validateHeaderKey returns a non-nil error if key may not be mutated by an
+// external processing server, either because the key is reserved or because it
+// is not a valid gRPC header name.
+func validateHeaderKey(key string) error {
+	switch {
+	case len(key) == 0:
+		return fmt.Errorf("header key is empty")
+	case key[0] == ':':
+		return fmt.Errorf("header key %q is a pseudo-header", key)
+	case key == "host":
+		return fmt.Errorf("header key %q is reserved", key)
+	case strings.HasPrefix(key, "grpc-"):
+		return fmt.Errorf("header key %q is in the reserved 'grpc-' space", key)
+	case key != strings.ToLower(key):
+		return fmt.Errorf("header key %q is not lowercase", key)
+	case len(key) > maxHeaderSize:
+		return fmt.Errorf("header key exceeds the maximum length of %d bytes", maxHeaderSize)
+	}
+	return imetadata.ValidateKey(key)
 }
 
 func (hmr *HeaderMutationRules) allow(key string) bool {

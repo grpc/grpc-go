@@ -475,3 +475,83 @@ func (s) TestDumpResources_ManyToMany(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// Tests that when a resource update is NACKed by the xDS client, the resource
+// dump mentions that the xDS client is using the old good version of the
+// resource, but contains the error state for the most recent bad update.
+func (s) TestDumpResources_ACK_NACK(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	// Spin up an xDS management server on a local port.
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
+
+	nodeID := uuid.New().String()
+	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
+	client := createXDSClient(t, mgmtServer.Address, nodeID, grpctransport.NewBuilder(configs))
+
+	// Start watching a listener resource.
+	client.WatchResource(xdsresource.V3ListenerURL, ldsName, noopListenerWatcher{})
+
+	// Configure the management server with a good version of the listener resource.
+	goodListener := e2e.DefaultClientListener(ldsName, rdsName)
+	if err := mgmtServer.Update(ctx, e2e.UpdateOptions{
+		NodeID:         nodeID,
+		Listeners:      []*v3listenerpb.Listener{goodListener},
+		SkipValidation: true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Dump resources and expect ACK config with version "1".
+	wantNode := &v3corepb.Node{
+		Id:                   nodeID,
+		UserAgentName:        "user-agent",
+		UserAgentVersionType: &v3corepb.Node_UserAgentVersion{UserAgentVersion: "0.0.0.0"},
+		ClientFeatures:       []string{"envoy.lb.does_not_support_overprovisioning", "xds.config.resource-in-sotw"},
+	}
+	goodListenerAny := testutils.MarshalAny(t, goodListener)
+	wantConfigs := []*v3statuspb.ClientConfig_GenericXdsConfig{
+		makeGenericXdsConfig("type.googleapis.com/envoy.config.listener.v3.Listener", ldsName, "1", v3adminpb.ClientResourceStatus_ACKED, goodListenerAny, nil),
+	}
+	wantResp := &v3statuspb.ClientStatusResponse{
+		Config: []*v3statuspb.ClientConfig{
+			{
+				Node:              wantNode,
+				GenericXdsConfigs: wantConfigs,
+			},
+		},
+	}
+	if err := checkResourceDump(ctx, wantResp, client); err != nil {
+		t.Fatal(err)
+	}
+
+	// Update the management server with a bad version of the listener resource
+	// which is expected to be NACKed by the xDS client.
+	badListener := badListenerResource(t, ldsName)
+	if err := mgmtServer.Update(ctx, e2e.UpdateOptions{
+		NodeID:         nodeID,
+		Listeners:      []*v3listenerpb.Listener{badListener},
+		SkipValidation: true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Dump resources and verify that the xDS client is using the old good
+	// version of the resource ("1"), but contains the error state for the most
+	// recent bad update ("2").
+	wantConfigs = []*v3statuspb.ClientConfig_GenericXdsConfig{
+		makeGenericXdsConfig("type.googleapis.com/envoy.config.listener.v3.Listener", ldsName, "1", v3adminpb.ClientResourceStatus_NACKED, goodListenerAny, &v3adminpb.UpdateFailureState{VersionInfo: "2"}),
+	}
+	wantResp = &v3statuspb.ClientStatusResponse{
+		Config: []*v3statuspb.ClientConfig{
+			{
+				Node:              wantNode,
+				GenericXdsConfigs: wantConfigs,
+			},
+		},
+	}
+	if err := checkResourceDump(ctx, wantResp, client); err != nil {
+		t.Fatal(err)
+	}
+}

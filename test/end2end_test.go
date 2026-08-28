@@ -608,10 +608,10 @@ func (te *test) listenAndServe(ts testgrpc.TestServiceServer, listen func(networ
 		sopts = append(sopts, grpc.UnknownServiceHandler(te.unknownHandler))
 	}
 	if te.serverInitialWindowSize > 0 {
-		sopts = append(sopts, grpc.InitialWindowSize(te.serverInitialWindowSize))
+		sopts = append(sopts, grpc.StaticStreamWindowSize(te.serverInitialWindowSize))
 	}
 	if te.serverInitialConnWindowSize > 0 {
-		sopts = append(sopts, grpc.InitialConnWindowSize(te.serverInitialConnWindowSize))
+		sopts = append(sopts, grpc.StaticConnWindowSize(te.serverInitialConnWindowSize))
 	}
 	la := ":0"
 	if te.e.network == "unix" {
@@ -819,10 +819,10 @@ func (te *test) configDial(opts ...grpc.DialOption) ([]grpc.DialOption, string) 
 		opts = append(opts, grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, te.e.balancer)))
 	}
 	if te.clientInitialWindowSize > 0 {
-		opts = append(opts, grpc.WithInitialWindowSize(te.clientInitialWindowSize))
+		opts = append(opts, grpc.WithStaticStreamWindowSize(te.clientInitialWindowSize))
 	}
 	if te.clientInitialConnWindowSize > 0 {
-		opts = append(opts, grpc.WithInitialConnWindowSize(te.clientInitialConnWindowSize))
+		opts = append(opts, grpc.WithStaticConnWindowSize(te.clientInitialConnWindowSize))
 	}
 	if te.perRPCCreds != nil {
 		opts = append(opts, grpc.WithPerRPCCredentials(te.perRPCCreds))
@@ -4602,6 +4602,7 @@ func (s) TestZeroSecondTimeout(t *testing.T) {
 		BlockFragment: st.encodeHeader(
 			":method", "POST",
 			":path", "/grpc.testing.TestService/StreamingInputCall",
+			":authority", "localhost",
 			"content-type", "application/grpc",
 			"te", "trailers",
 			"grpc-timeout", "0n",
@@ -4659,7 +4660,7 @@ func (s) TestInvalidStreamIDSmallerThanPrevious(t *testing.T) {
 
 func testClientRequestBodyErrorCloseAfterLength(t *testing.T, e env) {
 	te := newTest(t, e)
-	te.declareLogNoise("Server.processUnaryRPC failed to write status")
+	te.declareLogNoise("Server.processRPC failed to write status")
 	ts := &funcServer{unaryCall: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 		errUnexpectedCall := errors.New("unexpected call func server method")
 		t.Error(errUnexpectedCall)
@@ -6238,7 +6239,7 @@ func testLargeTimeout(t *testing.T, e env) {
 	for i, maxTimeout := range timeouts {
 		func() {
 			te := newTest(t, e)
-			te.declareLogNoise("Server.processUnaryRPC failed to write status")
+			te.declareLogNoise("Server.processRPC failed to write status")
 
 			ts := &funcServer{
 				unaryCall: func(ctx context.Context, _ *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
@@ -6341,7 +6342,7 @@ func (s) TestRPCWaitsForResolver(t *testing.T) {
 
 type httpServerResponse struct {
 	headers  [][]string
-	payload  []byte
+	payloads [][]byte
 	trailers [][]string
 }
 
@@ -6440,7 +6441,7 @@ func (s *httpServer) start(t *testing.T, lis net.Listener) {
 			}
 
 			response := s.responses[requestNum]
-			hasPayload := response.payload != nil
+			hasPayload := len(response.payloads) > 0
 			hasTrailers := len(response.trailers) > 0
 			for i, header := range response.headers {
 				endStream := !hasPayload && !hasTrailers && i == len(response.headers)-1
@@ -6450,8 +6451,9 @@ func (s *httpServer) start(t *testing.T, lis net.Listener) {
 				}
 				writer.Flush()
 			}
-			if hasPayload {
-				if err = s.writePayload(framer, sid, response.payload, !hasTrailers); err != nil {
+			for i, payload := range response.payloads {
+				endStream := !hasTrailers && i == len(response.payloads)-1
+				if err = s.writePayload(framer, sid, payload, endStream); err != nil {
 					t.Errorf("Error at server-side while writing payload. Err: %v", err)
 					return
 				}
@@ -6745,18 +6747,6 @@ func (s) TestAuthorityHeader(t *testing.T) {
 			},
 			wantAuthority: "localhost",
 		},
-		{
-			name: "Missing :authority and host",
-			// Codepath triggered by incoming headers with no :authority and no
-			// host.
-			headers: []string{
-				":method", "POST",
-				":path", "/grpc.testing.TestService/UnaryCall",
-				"content-type", "application/grpc",
-				"te", "trailers",
-			},
-			wantAuthority: "",
-		},
 		// "If :authority is present, Host must be discarded." - A41
 		{
 			name: ":authority and host present",
@@ -6819,7 +6809,75 @@ func (s) TestAuthorityHeader(t *testing.T) {
 	}
 }
 
+// TestMissingAuthorityAndHostHeader tests that an incoming HTTP/2 request with
+// neither :authority nor host header is rejected with HTTP status 400 and gRPC
+// status Internal.
+func (s) TestMissingAuthorityAndHostHeader(t *testing.T) {
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Failed to listen: %v", err)
+	}
+	defer lis.Close()
+	s := grpc.NewServer()
+	defer s.Stop()
+	go s.Serve(lis)
+
+	conn, err := net.DialTimeout("tcp", lis.Addr().String(), defaultTestTimeout)
+	if err != nil {
+		t.Fatalf("Failed to dial server: %v", err)
+	}
+	defer conn.Close()
+
+	st := newServerTesterFromConn(t, conn)
+	st.greet()
+
+	st.writeHeaders(http2.HeadersFrameParam{
+		StreamID: 1,
+		BlockFragment: st.encodeHeader(
+			":method", "POST",
+			":path", "/grpc.testing.TestService/UnaryCall",
+			"content-type", "application/grpc",
+			"te", "trailers",
+		),
+		EndStream:  false,
+		EndHeaders: true,
+	})
+
+	for {
+		frame, err := st.readFrame()
+		if err != nil {
+			t.Fatalf("Error reading frame: %v", err)
+		}
+		hf, ok := frame.(*http2.MetaHeadersFrame)
+		if !ok {
+			continue
+		}
+		var httpStatus, grpcStatus, grpcMessage string
+		for _, h := range hf.Fields {
+			switch h.Name {
+			case ":status":
+				httpStatus = h.Value
+			case "grpc-status":
+				grpcStatus = h.Value
+			case "grpc-message":
+				grpcMessage = h.Value
+			}
+		}
+		if httpStatus != "400" {
+			t.Fatalf("Got HTTP status %v, want 400", httpStatus)
+		}
+		if grpcStatus != "13" {
+			t.Fatalf("Got gRPC status %v, want 13 (Internal)", grpcStatus)
+		}
+		if !strings.Contains(grpcMessage, "no host or :authority header present") {
+			t.Fatalf("Got gRPC message %q, want 'no host or :authority header present'", grpcMessage)
+		}
+		return
+	}
+}
+
 func (s) TestHTTPServerSendsNonGRPCHeaderSurfaceFurtherData(t *testing.T) {
+	const htmlPayload = `<html><body>Hello World</body></html>`
 	const nonGRPCDataMaxLen = 1024
 	tests := []struct {
 		name      string
@@ -6837,7 +6895,7 @@ func (s) TestHTTPServerSendsNonGRPCHeaderSurfaceFurtherData(t *testing.T) {
 							"content-type", "text/html",
 						},
 					},
-					// payload: nil
+					// payloads: nil
 				},
 			},
 			wantCode: codes.Unknown,
@@ -6853,12 +6911,12 @@ func (s) TestHTTPServerSendsNonGRPCHeaderSurfaceFurtherData(t *testing.T) {
 							"content-type", "text/html",
 						},
 					},
-					payload: []byte(`<html><body>Hello World</body></html>`),
+					payloads: [][]byte{[]byte(htmlPayload)},
 				},
 			},
 			wantCode: codes.Unknown,
-			wantErr: `unexpected HTTP status code received from server: 200 (OK); transport: received unexpected content-type "text/html"
-data: "<html><body>Hello World</body></html>"`,
+			wantErr: fmt.Sprintf(`unexpected HTTP status code received from server: 200 (OK); transport: received unexpected content-type "text/html"
+data: %q`, htmlPayload),
 		},
 		{
 			name: "non-gRPC content-type with bytes payload length more than nonGRPCDataMaxLen",
@@ -6870,7 +6928,7 @@ data: "<html><body>Hello World</body></html>"`,
 							"content-type", "text/html",
 						},
 					},
-					payload: bytes.Repeat([]byte("a"), nonGRPCDataMaxLen+1),
+					payloads: [][]byte{bytes.Repeat([]byte("a"), nonGRPCDataMaxLen+1)},
 				},
 			},
 			wantCode: codes.Unknown,
@@ -6884,12 +6942,46 @@ data: ` + strconv.Quote(strings.Repeat("a", nonGRPCDataMaxLen)),
 					headers: [][]string{{
 						":status", "502",
 					}},
-					payload: []byte("hello"),
+					payloads: [][]byte{[]byte("hello")},
 				},
 			},
 			wantCode: codes.Unavailable,
 			wantErr: `unexpected HTTP status code received from server: 502 (Bad Gateway); malformed header: missing HTTP content-type
 data: "hello"`,
+		},
+		{
+			name: "non-gRPC content-type with empty DATA END_STREAM",
+			responses: []httpServerResponse{
+				{
+					headers: [][]string{
+						{
+							":status", "401",
+							"content-type", "text/html",
+						},
+					},
+					payloads: [][]byte{{}},
+				},
+			},
+			wantCode: codes.Unauthenticated,
+			wantErr: `unexpected HTTP status code received from server: 401 (Unauthorized); transport: received unexpected content-type "text/html"
+data: ""`,
+		},
+		{
+			name: "non-gRPC content-type with payload and separate END_STREAM",
+			responses: []httpServerResponse{
+				{
+					headers: [][]string{
+						{
+							":status", "401",
+							"content-type", "text/html",
+						},
+					},
+					payloads: [][]byte{[]byte(htmlPayload), {}},
+				},
+			},
+			wantCode: codes.Unauthenticated,
+			wantErr: fmt.Sprintf(`unexpected HTTP status code received from server: 401 (Unauthorized); transport: received unexpected content-type "text/html"
+data: %q`, htmlPayload),
 		},
 	}
 

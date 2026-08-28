@@ -31,18 +31,11 @@ import (
 // correctly retrieved and that the onZero callback is invoked when the
 // reference count drops to zero.
 func (s) TestRefCounted(t *testing.T) {
-	const val = "test-value"
+	val := 666
 	var onZeroCalled atomic.Bool
-
-	rc, err := NewRefCounted(val, func() {
-		onZeroCalled.Store(true)
-	})
-	if err != nil {
-		t.Fatalf("NewRefCounted() failed: %v", err)
-	}
-
-	if got := rc.Value(); got != val {
-		t.Fatalf("Value() = %v, want %v", got, val)
+	rc := NewRefCounted(&val, func() { onZeroCalled.Store(true) })
+	if got := rc.Value(); *got != val {
+		t.Fatalf("Value() = %v, want %v", *got, val)
 	}
 
 	if got := onZeroCalled.Load(); got {
@@ -61,16 +54,9 @@ func (s) TestRefCounted(t *testing.T) {
 // onZero callback is only executed when the count drops to zero, and not
 // beforehand.
 func (s) TestRefCounted_IncrementDecrement(t *testing.T) {
-	const val = 42
+	val := 666
 	var onZeroCount atomic.Int32
-
-	rc, err := NewRefCounted(val, func() {
-		onZeroCount.Add(1)
-	})
-	if err != nil {
-		t.Fatalf("NewRefCounted() failed: %v", err)
-	}
-
+	rc := NewRefCounted(&val, func() { onZeroCount.Add(1) })
 	rc.Increment()
 	rc.Decrement()
 
@@ -90,14 +76,9 @@ func (s) TestRefCounted_IncrementDecrement(t *testing.T) {
 // resources but fails on resources whose reference count has already dropped to
 // zero.
 func (s) TestRefCounted_TryIncrement(t *testing.T) {
+	val := 666
 	var onZeroCount atomic.Int32
-	rc, err := NewRefCounted("val", func() {
-		onZeroCount.Add(1)
-	})
-	if err != nil {
-		t.Fatalf("NewRefCounted() failed: %v", err)
-	}
-
+	rc := NewRefCounted(&val, func() { onZeroCount.Add(1) })
 	if got := rc.TryIncrement(); !got {
 		t.Fatalf("TryIncrement() on active resource = %v, want true", got)
 	}
@@ -118,17 +99,12 @@ func (s) TestRefCounted_TryIncrement(t *testing.T) {
 // and decrement the reference count. It verifies that the reference counting is
 // thread-safe and the onZero callback is invoked exactly once.
 func (s) TestRefCounted_Concurrent(t *testing.T) {
-	const numGoroutines = 100
+	val := 666
 	var onZeroCount atomic.Int32
-
-	rc, err := NewRefCounted("concurrent-val", func() {
-		onZeroCount.Add(1)
-	})
-	if err != nil {
-		t.Fatalf("NewRefCounted() failed: %v", err)
-	}
+	rc := NewRefCounted(&val, func() { onZeroCount.Add(1) })
 
 	var wg sync.WaitGroup
+	const numGoroutines = 100
 	for i := 0; i < numGoroutines; i++ {
 		wg.Go(func() {
 			if rc.TryIncrement() {
@@ -145,11 +121,9 @@ func (s) TestRefCounted_Concurrent(t *testing.T) {
 
 // Test verifies that Decrementing a resource whose reference count has already
 // dropped to zero results in a negative refcount log error.
-func (s) TestRefCounted_DecrementNegative(t *testing.T) {
-	rc, err := NewRefCounted("val", func() {})
-	if err != nil {
-		t.Fatalf("NewRefCounted() failed: %v", err)
-	}
+func (s) TestRefCounted_DecrementNegative(_ *testing.T) {
+	val := 666
+	rc := NewRefCounted(&val, func() {})
 	rc.Decrement()
 
 	grpctest.ExpectError("Refcount cannot be negative")
@@ -158,11 +132,9 @@ func (s) TestRefCounted_DecrementNegative(t *testing.T) {
 
 // Test verifies that Incrementing a dead resource results in a closed resource
 // log error.
-func (s) TestRefCounted_IncrementDead(t *testing.T) {
-	rc, err := NewRefCounted("val", func() {})
-	if err != nil {
-		t.Fatalf("NewRefCounted() failed: %v", err)
-	}
+func (s) TestRefCounted_IncrementDead(_ *testing.T) {
+	val := 666
+	rc := NewRefCounted(&val, func() {})
 	rc.Decrement()
 
 	grpctest.ExpectError("Resource already closed or dead")
@@ -173,7 +145,11 @@ func (s) TestRefCounted_IncrementDead(t *testing.T) {
 // callback is nil.
 func (s) TestNilOnZero(t *testing.T) {
 	const wantErr = "grpcsync: onZero callback cannot be nil"
-	if _, err := NewRefCounted("val", nil); err == nil || err.Error() != wantErr {
-		t.Fatalf("NewRefCounted(_, nil) returned error: %v, want: %q", err, wantErr)
-	}
+	defer func() {
+		if r := recover(); r == nil || r != wantErr {
+			t.Fatalf("NewRefCounted(_, nil) panic = %v, want: %q", r, wantErr)
+		}
+	}()
+	val := 666
+	NewRefCounted(&val, nil)
 }
