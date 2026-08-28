@@ -301,8 +301,7 @@ func routesProtoToSlice(routes []*v3routepb.Route, csps map[string]clusterspecif
 			}
 			// The metadata the matchers run against always has lowercase keys,
 			// so a name that contains an uppercase character matches no header
-			// and the route holding it never fires. Lowercase the name, as
-			// Envoy and the RBAC filter do.
+			// and the route holding it never fires.
 			header.Name = strings.ToLower(h.GetName())
 			invert := h.GetInvertMatch()
 			header.InvertMatch = &invert
