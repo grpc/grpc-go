@@ -115,11 +115,11 @@ type testHTTPFilterWithRPCMetadata struct {
 
 func (fb *testHTTPFilterWithRPCMetadata) TypeURLs() []string { return []string{fb.typeURL} }
 
-func (*testHTTPFilterWithRPCMetadata) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, error) {
+func (*testHTTPFilterWithRPCMetadata) ParseFilterConfig(cfg proto.Message, _ httpfilter.ParseOptions) (httpfilter.FilterConfig, error) {
 	return filterConfigFromProto(cfg)
 }
 
-func (*testHTTPFilterWithRPCMetadata) ParseFilterConfigOverride(override proto.Message) (httpfilter.FilterConfig, error) {
+func (*testHTTPFilterWithRPCMetadata) ParseFilterConfigOverride(override proto.Message, _ httpfilter.ParseOptions) (httpfilter.FilterConfig, error) {
 	return filterConfigFromProto(override)
 }
 
@@ -679,11 +679,11 @@ func (t *trackingHTTPFilterBuilder) IsTerminal() bool { return false }
 
 func (t *trackingHTTPFilterBuilder) TypeURLs() []string { return []string{t.typeURL} }
 
-func (*trackingHTTPFilterBuilder) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, error) {
+func (*trackingHTTPFilterBuilder) ParseFilterConfig(cfg proto.Message, _ httpfilter.ParseOptions) (httpfilter.FilterConfig, error) {
 	return filterConfigFromProto(cfg)
 }
 
-func (*trackingHTTPFilterBuilder) ParseFilterConfigOverride(cfg proto.Message) (httpfilter.FilterConfig, error) {
+func (*trackingHTTPFilterBuilder) ParseFilterConfigOverride(cfg proto.Message, _ httpfilter.ParseOptions) (httpfilter.FilterConfig, error) {
 	return filterConfigFromProto(cfg)
 }
 

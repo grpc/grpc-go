@@ -425,3 +425,62 @@ func (s) TestChainStreamServerInterceptor(t *testing.T) {
 		t.Fatalf("callCounts[3] should be 1, but got=%d", callCounts[3].Load())
 	}
 }
+
+// Test verifies that only unary interceptors are invoked for unary RPCs and
+// only streaming interceptors are invoked for streaming RPCs.
+func (s) TestInterceptorSegregation(t *testing.T) {
+	var unaryCalled, streamCalled atomic.Bool
+
+	unaryInt := func(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+		unaryCalled.Store(true)
+		return handler(ctx, req)
+	}
+	streamInt := func(srv any, ss grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+		streamCalled.Store(true)
+		return handler(srv, ss)
+	}
+	sopts := []grpc.ServerOption{grpc.UnaryInterceptor(unaryInt), grpc.StreamInterceptor(streamInt)}
+	ss := &stubserver.StubServer{
+		UnaryCallF: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			return &testpb.SimpleResponse{}, nil
+		},
+		FullDuplexCallF: func(testgrpc.TestService_FullDuplexCallServer) error {
+			return nil
+		},
+	}
+	if err := ss.Start(sopts); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
+	}
+	defer ss.Stop()
+
+	// Make a unary RPC and ensure that only the unary interceptor was invoked.
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if _, err := ss.Client.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil {
+		t.Fatalf("ss.Client.UnaryCall failed: %v", err)
+	}
+	if !unaryCalled.Load() {
+		t.Error("Unary interceptor was not called for Unary RPC")
+	}
+	if streamCalled.Load() {
+		t.Error("Stream interceptor was called for Unary RPC")
+	}
+
+	// Make a streaming RPC and ensure that only the streaming interceptor was
+	// invoked.
+	unaryCalled.Store(false)
+	streamCalled.Store(false)
+	stream, err := ss.Client.FullDuplexCall(ctx)
+	if err != nil {
+		t.Fatalf("ss.Client.FullDuplexCall failed: %v", err)
+	}
+	if _, err := stream.Recv(); err != io.EOF {
+		t.Fatalf("stream.Recv() returned %v, want io.EOF", err)
+	}
+	if unaryCalled.Load() {
+		t.Error("Unary interceptor was called for Streaming RPC")
+	}
+	if !streamCalled.Load() {
+		t.Error("Stream interceptor was not called for Streaming RPC")
+	}
+}
