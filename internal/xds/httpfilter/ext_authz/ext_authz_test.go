@@ -20,6 +20,7 @@ package extauthz
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"strings"
@@ -29,16 +30,19 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/testutils"
+	"google.golang.org/grpc/internal/xds/bootstrap"
+	"google.golang.org/grpc/internal/xds/grpcservice"
 	"google.golang.org/grpc/internal/xds/httpfilter"
 	"google.golang.org/grpc/internal/xds/matcher"
-	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
+	xdscreds "google.golang.org/grpc/internal/xds/credentials"
 	iextauthz "google.golang.org/grpc/internal/xds/httpfilter/ext_authz/internal"
 
 	mutationpb "github.com/envoyproxy/go-control-plane/envoy/config/common/mutation_rules/v3"
@@ -56,10 +60,62 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
+// allowlistInsecureCreds carries the identity of the insecure channel
+// credentials configured for allowlisted targets by testParseOptions; want
+// configs compare against it by identity. It carries a real insecure bundle
+// so that configs built from it can be dialed.
+var allowlistInsecureCreds = xdscreds.NewChannelCreds(insecure.NewBundle(), xdscreds.Identity{Type: "insecure"}, nil)
+
+// testPerRPCCreds is a no-op PerRPCCredentials for fixtures whose configs are
+// dialed for real.
+type testPerRPCCreds struct{}
+
+func (testPerRPCCreds) GetRequestMetadata(context.Context, ...string) (map[string]string, error) {
+	return nil, nil
+}
+
+func (testPerRPCCreds) RequireTransportSecurity() bool { return false }
+
+// testParseOptions returns ParseOptions whose bootstrap
+// configuration allowlists the given side-channel targets with insecure
+// channel credentials. The returned options carry a ServerConfig without the
+// trusted_xds_server feature, so the delivering server is untrusted and
+// GrpcService parsing takes the allowed_grpc_services path.
+func testParseOptions(t *testing.T, targets ...string) httpfilter.ParseOptions {
+	t.Helper()
+
+	testutils.SetEnvConfig(t, &envconfig.XDSClientExtAuthzEnabled, true)
+
+	allowed := make(map[string]json.RawMessage, len(targets))
+	for _, target := range targets {
+		allowed[target] = json.RawMessage(`{"channel_creds": [{"type": "insecure"}]}`)
+	}
+	allowedJSON, err := json.Marshal(allowed)
+	if err != nil {
+		t.Fatalf("Failed to marshal allowed_grpc_services: %v", err)
+	}
+	contents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
+		Servers:             []byte(`[{"server_uri": "passthrough:///unused", "channel_creds": [{"type": "insecure"}]}]`),
+		Node:                []byte(`{"id": "test-node"}`),
+		AllowedGRPCServices: allowedJSON,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create bootstrap contents: %v", err)
+	}
+	config, err := bootstrap.NewConfigFromContents(contents)
+	if err != nil {
+		t.Fatalf("Failed to parse bootstrap contents: %v", err)
+	}
+	untrustedServer, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{URI: "untrusted-server:1234"})
+	if err != nil {
+		t.Fatalf("ServerConfigForTesting() failed: %v", err)
+	}
+	return httpfilter.ParseOptions{BootstrapConfig: config, ServerConfig: untrustedServer}
+}
+
 var cmpOpts = []cmp.Option{
 	cmp.AllowUnexported(
 		config{},
-		xdsresource.GRPCServiceConfig{},
 		fraction{},
 	),
 	cmp.Transformer("RegexpToString", func(r *regexp.Regexp) string {
@@ -76,9 +132,7 @@ var cmpOpts = []cmp.Option{
 // Test verifies that ParseFilterConfig successfully parses valid external
 // authorization filter configurations into their internal representation.
 func (s) TestParseFilterConfig_Success(t *testing.T) {
-	origParseGRPCServiceConfig := iextauthz.ParseGRPCServiceConfig
-	defer func() { iextauthz.ParseGRPCServiceConfig = origParseGRPCServiceConfig }()
-	iextauthz.ParseGRPCServiceConfig = iextauthz.ParseGRPCServiceConfigForTesting
+	opts := testParseOptions(t, "localhost:1234", "localhost:5678")
 
 	tests := []struct {
 		name    string
@@ -101,8 +155,9 @@ func (s) TestParseFilterConfig_Success(t *testing.T) {
 				},
 			}),
 			wantCfg: config{
-				grpcService: xdsresource.GRPCServiceConfig{
-					TargetURI: "localhost:1234",
+				grpcService: &grpcservice.Config{
+					TargetURI:          "localhost:1234",
+					ChannelCredentials: allowlistInsecureCreds,
 				},
 				filterEnabled: fraction{
 					numerator:   100,
@@ -157,8 +212,9 @@ func (s) TestParseFilterConfig_Success(t *testing.T) {
 				IncludePeerCertificate: true,
 			}),
 			wantCfg: config{
-				grpcService: xdsresource.GRPCServiceConfig{
-					TargetURI: "localhost:5678",
+				grpcService: &grpcservice.Config{
+					TargetURI:          "localhost:5678",
+					ChannelCredentials: allowlistInsecureCreds,
 				},
 				filterEnabled: fraction{
 					numerator:   50,
@@ -186,7 +242,7 @@ func (s) TestParseFilterConfig_Success(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Log(tt.desc)
 			b := builder{}
-			got, err := b.ParseFilterConfig(tt.cfg, httpfilter.ParseOptions{})
+			got, err := b.ParseFilterConfig(tt.cfg, opts)
 			if err != nil {
 				t.Fatalf("ParseFilterConfig() failed with unexpected error: %v", err)
 			}
@@ -200,9 +256,7 @@ func (s) TestParseFilterConfig_Success(t *testing.T) {
 // Test verifies that ParseFilterConfig returns an error when provided with
 // invalid or unsupported configurations.
 func (s) TestParseFilterConfig_Failure(t *testing.T) {
-	origParseGRPCServiceConfig := iextauthz.ParseGRPCServiceConfig
-	defer func() { iextauthz.ParseGRPCServiceConfig = origParseGRPCServiceConfig }()
-	iextauthz.ParseGRPCServiceConfig = iextauthz.ParseGRPCServiceConfigForTesting
+	opts := testParseOptions(t, "localhost:1234")
 
 	tests := []struct {
 		name    string
@@ -245,7 +299,7 @@ func (s) TestParseFilterConfig_Failure(t *testing.T) {
 					},
 				},
 			}),
-			wantErr: "extauthz: failed to parse grpc_service: only google_grpc grpc_service is supported",
+			wantErr: "extauthz: failed to parse grpc_service: grpcservice: only google_grpc GrpcService config is supported",
 		},
 		{
 			name: "InvalidServerConfig_EmptyTargetURI",
@@ -261,7 +315,7 @@ func (s) TestParseFilterConfig_Failure(t *testing.T) {
 					},
 				},
 			}),
-			wantErr: "extauthz: failed to parse grpc_service: targetURI must be a non-empty string",
+			wantErr: "extauthz: failed to parse grpc_service: grpcservice: target_uri must be non-empty",
 		},
 		{
 			name: "MissingDefaultValueInFilterEnabled",
@@ -302,7 +356,7 @@ func (s) TestParseFilterConfig_Failure(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Log(tt.desc)
 			b := builder{}
-			if _, err := b.ParseFilterConfig(tt.cfg, httpfilter.ParseOptions{}); err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+			if _, err := b.ParseFilterConfig(tt.cfg, opts); err == nil || !strings.Contains(err.Error(), tt.wantErr) {
 				t.Fatalf("ParseFilterConfig() returned error = %v, wantErr containing %v", err, tt.wantErr)
 			}
 		})
@@ -446,7 +500,7 @@ func (s) TestBuildClientInterceptor_Failure(t *testing.T) {
 		{
 			name: "ChannelCreationFailure",
 			cfg: config{
-				grpcService: xdsresource.GRPCServiceConfig{TargetURI: "localhost:1234"},
+				grpcService: &grpcservice.Config{TargetURI: "localhost:1234"},
 			},
 			wantErrStr: "extauthz: failed to create channel to the external authorization server",
 		},
@@ -455,7 +509,7 @@ func (s) TestBuildClientInterceptor_Failure(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			orig := iextauthz.CreateExtAuthzChannel
-			iextauthz.CreateExtAuthzChannel = func(xdsresource.GRPCServiceConfig) (grpc.ClientConnInterface, func() error, error) {
+			iextauthz.CreateExtAuthzChannel = func(*grpcservice.Config) (grpc.ClientConnInterface, func(), error) {
 				return nil, nil, fmt.Errorf("injected error")
 			}
 			t.Cleanup(func() { iextauthz.CreateExtAuthzChannel = orig })
@@ -487,43 +541,47 @@ func (s) TestBuildClientInterceptor_ChannelSharingAndIsolation(t *testing.T) {
 	// channel is dialed.
 	origCreateExtAuthzChannel := iextauthz.CreateExtAuthzChannel
 	var dialCount int
-	iextauthz.CreateExtAuthzChannel = func(cfg xdsresource.GRPCServiceConfig) (grpc.ClientConnInterface, func() error, error) {
+	iextauthz.CreateExtAuthzChannel = func(cfg *grpcservice.Config) (grpc.ClientConnInterface, func(), error) {
 		dialCount++
 		conn, err := grpc.NewClient(cfg.TargetURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		if err != nil {
 			return nil, nil, err
 		}
-		return conn, conn.Close, nil
+		return conn, func() { conn.Close() }, nil
 	}
 	defer func() { iextauthz.CreateExtAuthzChannel = origCreateExtAuthzChannel }()
 
 	cf := builder{}.BuildClientFilter(httpfilter.ClientFilterOptions{})
 	defer cf.Close()
 
+	creds1 := xdscreds.NewChannelCreds(insecure.NewBundle(), xdscreds.Identity{Type: "creds1"}, nil)
+	creds2 := xdscreds.NewChannelCreds(insecure.NewBundle(), xdscreds.Identity{Type: "creds2"}, nil)
+	callCreds1 := xdscreds.NewCallCreds(testPerRPCCreds{}, xdscreds.Identity{Type: "callCreds1"}, nil)
+
 	cfg1 := config{
-		grpcService: xdsresource.GRPCServiceConfig{
+		grpcService: &grpcservice.Config{
 			TargetURI:          "localhost:1234",
-			ChannelCredentials: "creds1",
-			CallCredentials:    "callCreds1",
+			ChannelCredentials: creds1,
+			CallCredentials:    []*xdscreds.CallCreds{callCreds1},
 		},
 	}
 	cfg2 := cfg1
 
 	// cfg3 has a different TargetURI than cfg1 and cfg2.
 	cfg3 := config{
-		grpcService: xdsresource.GRPCServiceConfig{
+		grpcService: &grpcservice.Config{
 			TargetURI:          "localhost:5678",
-			ChannelCredentials: "creds1",
-			CallCredentials:    "callCreds1",
+			ChannelCredentials: creds1,
+			CallCredentials:    []*xdscreds.CallCreds{callCreds1},
 		},
 	}
 
 	// cfg4 has a different ChannelCredentials than cfg1 and cfg2.
 	cfg4 := config{
-		grpcService: xdsresource.GRPCServiceConfig{
+		grpcService: &grpcservice.Config{
 			TargetURI:          "localhost:1234",
-			ChannelCredentials: "creds2",
-			CallCredentials:    "callCreds1",
+			ChannelCredentials: creds2,
+			CallCredentials:    []*xdscreds.CallCreds{callCreds1},
 		},
 	}
 
@@ -574,15 +632,15 @@ func (s) TestBuildClientInterceptor_ChannelCleanup(t *testing.T) {
 
 	var dialCount int
 	var closeCount int
-	iextauthz.CreateExtAuthzChannel = func(cfg xdsresource.GRPCServiceConfig) (grpc.ClientConnInterface, func() error, error) {
+	iextauthz.CreateExtAuthzChannel = func(cfg *grpcservice.Config) (grpc.ClientConnInterface, func(), error) {
 		dialCount++
 		conn, err := grpc.NewClient(cfg.TargetURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		if err != nil {
 			return nil, nil, err
 		}
-		return conn, func() error {
+		return conn, func() {
 			closeCount++
-			return conn.Close()
+			conn.Close()
 		}, nil
 	}
 
@@ -590,10 +648,10 @@ func (s) TestBuildClientInterceptor_ChannelCleanup(t *testing.T) {
 	defer cf.Close()
 
 	cfg := config{
-		grpcService: xdsresource.GRPCServiceConfig{
+		grpcService: &grpcservice.Config{
 			TargetURI:          "localhost:1234",
-			ChannelCredentials: "creds1",
-			CallCredentials:    "callCreds1",
+			ChannelCredentials: xdscreds.NewChannelCreds(insecure.NewBundle(), xdscreds.Identity{Type: "creds1"}, nil),
+			CallCredentials:    []*xdscreds.CallCreds{xdscreds.NewCallCreds(testPerRPCCreds{}, xdscreds.Identity{Type: "callCreds1"}, nil)},
 		},
 	}
 
@@ -639,12 +697,12 @@ func (s) TestBuildClientInterceptor_ChannelCleanup(t *testing.T) {
 // Test verifies that NewStream returns an error when the interceptor is closed.
 func (s) TestClientInterceptor_Closed(t *testing.T) {
 	origCreateExtAuthzChannel := iextauthz.CreateExtAuthzChannel
-	iextauthz.CreateExtAuthzChannel = func(cfg xdsresource.GRPCServiceConfig) (grpc.ClientConnInterface, func() error, error) {
+	iextauthz.CreateExtAuthzChannel = func(cfg *grpcservice.Config) (grpc.ClientConnInterface, func(), error) {
 		conn, err := grpc.NewClient(cfg.TargetURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		if err != nil {
 			return nil, nil, err
 		}
-		return conn, conn.Close, nil
+		return conn, func() { conn.Close() }, nil
 	}
 	defer func() { iextauthz.CreateExtAuthzChannel = origCreateExtAuthzChannel }()
 
@@ -652,8 +710,9 @@ func (s) TestClientInterceptor_Closed(t *testing.T) {
 	defer cf.Close()
 
 	cfg := config{
-		grpcService: xdsresource.GRPCServiceConfig{
-			TargetURI: "localhost:1234",
+		grpcService: &grpcservice.Config{
+			TargetURI:          "localhost:1234",
+			ChannelCredentials: allowlistInsecureCreds,
 		},
 	}
 
@@ -676,12 +735,12 @@ func (s) TestClientInterceptor_Closed(t *testing.T) {
 // (refcount reached 0) even if the interceptor closed flag is false.
 func (s) TestClientInterceptor_AuthzClientClosed(t *testing.T) {
 	origCreateExtAuthzChannel := iextauthz.CreateExtAuthzChannel
-	iextauthz.CreateExtAuthzChannel = func(cfg xdsresource.GRPCServiceConfig) (grpc.ClientConnInterface, func() error, error) {
+	iextauthz.CreateExtAuthzChannel = func(cfg *grpcservice.Config) (grpc.ClientConnInterface, func(), error) {
 		conn, err := grpc.NewClient(cfg.TargetURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		if err != nil {
 			return nil, nil, err
 		}
-		return conn, conn.Close, nil
+		return conn, func() { conn.Close() }, nil
 	}
 	defer func() { iextauthz.CreateExtAuthzChannel = origCreateExtAuthzChannel }()
 
@@ -693,8 +752,9 @@ func (s) TestClientInterceptor_AuthzClientClosed(t *testing.T) {
 			numerator:   100,
 			denominator: 100,
 		},
-		grpcService: xdsresource.GRPCServiceConfig{
-			TargetURI: "localhost:1234",
+		grpcService: &grpcservice.Config{
+			TargetURI:          "localhost:1234",
+			ChannelCredentials: allowlistInsecureCreds,
 		},
 	}
 

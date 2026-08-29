@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"net/http"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -36,6 +37,7 @@ import (
 	"google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/status"
 	"google.golang.org/grpc/internal/transport"
+	"google.golang.org/grpc/internal/xds/grpcservice"
 	"google.golang.org/grpc/internal/xds/httpfilter"
 	"google.golang.org/grpc/internal/xds/matcher"
 	"google.golang.org/grpc/metadata"
@@ -97,7 +99,8 @@ func parseFilterEnabled(fp *v3corepb.RuntimeFractionalPercent) (fraction, error)
 	return fraction{numerator: num, denominator: den}, nil
 }
 
-func (builder) ParseFilterConfig(cfg proto.Message, _ httpfilter.ParseOptions) (httpfilter.FilterConfig, error) {
+// ParseFilterConfig parses the provided filter configuration.
+func (builder) ParseFilterConfig(cfg proto.Message, opts httpfilter.ParseOptions) (httpfilter.FilterConfig, error) {
 	m, ok := cfg.(*anypb.Any)
 	if !ok {
 		return nil, fmt.Errorf("extauthz: error parsing config %v: unknown type %T, want *anypb.Any", cfg, cfg)
@@ -105,14 +108,6 @@ func (builder) ParseFilterConfig(cfg proto.Message, _ httpfilter.ParseOptions) (
 	msg := new(v3extauthzpb.ExtAuthz)
 	if err := m.UnmarshalTo(msg); err != nil {
 		return nil, fmt.Errorf("extauthz: failed to unmarshal config: %v", err)
-	}
-
-	if msg.GetGrpcService() == nil {
-		return nil, fmt.Errorf("extauthz: empty grpc_service provided in config %v", cfg)
-	}
-	server, err := iextauthz.ParseGRPCServiceConfig(msg.GetGrpcService())
-	if err != nil {
-		return nil, fmt.Errorf("extauthz: failed to parse grpc_service: %v", err)
 	}
 
 	filterEnabled, err := parseFilterEnabled(msg.GetFilterEnabled())
@@ -154,6 +149,16 @@ func (builder) ParseFilterConfig(cfg proto.Message, _ httpfilter.ParseOptions) (
 		}
 	}
 
+	// Parse the GrpcService last, so that no error path can drop the built
+	// credentials: the caller owns them from here on.
+	if msg.GetGrpcService() == nil {
+		return nil, fmt.Errorf("extauthz: empty grpc_service provided in config %v", cfg)
+	}
+	server, err := grpcservice.Parse(msg.GetGrpcService(), opts.BootstrapConfig, opts.ServerConfig)
+	if err != nil {
+		return nil, fmt.Errorf("extauthz: failed to parse grpc_service: %v", err)
+	}
+
 	return config{
 		grpcService:                server,
 		filterEnabled:              filterEnabled,
@@ -192,7 +197,6 @@ func (builder) IsTerminal() bool {
 
 func (builder) BuildClientFilter(opts httpfilter.ClientFilterOptions) httpfilter.ClientFilter {
 	return &clientFilter{
-		channels:        make(map[authzClientKey]*grpcsync.RefCounted[v3authgrpc.AuthorizationClient]),
 		metricsRecorder: opts.MetricsRecorder,
 		target:          opts.Target,
 	}
@@ -200,14 +204,13 @@ func (builder) BuildClientFilter(opts httpfilter.ClientFilterOptions) httpfilter
 
 var _ httpfilter.ClientFilterBuilder = builder{}
 
-// authzClientKey uniquely identifies an external authorization server
-// configuration by its target URI, channel credentials, and call credentials.
-// It is used as a map key in clientFilter to share and reuse the external
-// authorization server channels.
-type authzClientKey struct {
-	targetURI          string
-	channelCredentials string
-	callCredentials    string
+// authzChannelEntry holds a refcounted client to an external authorization
+// server along with the GrpcService config used to create it. The config is
+// used to determine if the channel can be shared across interceptors, and to
+// release credentials when the channel is closed.
+type authzChannelEntry struct {
+	server *grpcservice.Config
+	rc     *grpcsync.RefCounted[v3authgrpc.AuthorizationClient]
 }
 
 type clientFilter struct {
@@ -216,47 +219,88 @@ type clientFilter struct {
 	// target is the target URI of the channel, used as a metric label.
 	target string
 
-	// mu protects channels.
+	// mu protects authzChannels.
 	mu sync.Mutex
-	// channels maps external authorization server configuration keys to their
-	// ref-counted gRPC clients, enabling connection sharing across interceptors.
-	channels map[authzClientKey]*grpcsync.RefCounted[v3authgrpc.AuthorizationClient]
+	// authzChannels holds external authorization server channels, enabling
+	// connection sharing across interceptors.
+	authzChannels []*authzChannelEntry
 }
 
-func (cf *clientFilter) Close() {}
+func (*clientFilter) Close() {}
 
-// getAuthzChannel returns an existing authz client from the map if present
-// and its refcount is incremented.
-func (cf *clientFilter) getAuthzChannel(key authzClientKey) *grpcsync.RefCounted[v3authgrpc.AuthorizationClient] {
+// getAuthzChannel returns an existing refcounted client for grpcService config
+// if present and its refcount is incremented successfully.
+func (cf *clientFilter) getAuthzChannel(server *grpcservice.Config) *grpcsync.RefCounted[v3authgrpc.AuthorizationClient] {
 	cf.mu.Lock()
 	defer cf.mu.Unlock()
-	if rc, ok := cf.channels[key]; ok && rc.TryIncrement() {
-		return rc
+	if i := slices.IndexFunc(cf.authzChannels, func(e *authzChannelEntry) bool {
+		return httpfilter.SharesChannel(e.server, server) && e.rc.TryIncrement()
+	}); i != -1 {
+		return cf.authzChannels[i].rc
 	}
 	return nil
 }
 
-// storeAuthzChannel stores the created channel in the map if no valid channel
-// exists for the key. If another goroutine already stored a channel while
-// unlocked, it increments the existing channel's refcount and returns it.
-func (cf *clientFilter) storeAuthzChannel(key authzClientKey, rc *grpcsync.RefCounted[v3authgrpc.AuthorizationClient]) *grpcsync.RefCounted[v3authgrpc.AuthorizationClient] {
+// storeAuthzChannel stores the created channel entry if no valid channel
+// exists for the GrpcService config. If another goroutine already stored a
+// channe while unlocked, it increments the existing channel's refcount and
+// returns it.
+func (cf *clientFilter) storeAuthzChannel(entry *authzChannelEntry) *grpcsync.RefCounted[v3authgrpc.AuthorizationClient] {
 	cf.mu.Lock()
 	defer cf.mu.Unlock()
-	if existing, ok := cf.channels[key]; ok && existing.TryIncrement() {
-		return existing
+	if i := slices.IndexFunc(cf.authzChannels, func(e *authzChannelEntry) bool {
+		return httpfilter.SharesChannel(e.server, entry.server) && e.rc.TryIncrement()
+	}); i != -1 {
+		return cf.authzChannels[i].rc
 	}
-	cf.channels[key] = rc
-	return rc
+	cf.authzChannels = append(cf.authzChannels, entry)
+	return entry.rc
 }
 
-// removeAuthzChannel removes rc from the map if it is still associated with
-// key, avoiding deleting a newly created replacement channel.
-func (cf *clientFilter) removeAuthzChannel(key authzClientKey, rc *grpcsync.RefCounted[v3authgrpc.AuthorizationClient]) {
+// removeAuthzChannel removes entry from authzChannels. Pointer comparison
+// ensures only this specific expiring instance is removed if a replacement
+// channel for the same config was created concurrently.
+func (cf *clientFilter) removeAuthzChannel(entry *authzChannelEntry) {
 	cf.mu.Lock()
 	defer cf.mu.Unlock()
-	if cf.channels[key] == rc {
-		delete(cf.channels, key)
+	cf.authzChannels = slices.DeleteFunc(cf.authzChannels, func(e *authzChannelEntry) bool { return e == entry })
+}
+
+// getOrCreateAuthzChannel retrieves an existing refcounted external
+// authorization client for an equal server config and increases its refcount,
+// or creates a new one if there is none.
+func (cf *clientFilter) getOrCreateAuthzChannel(server *grpcservice.Config) (*grpcsync.RefCounted[v3authgrpc.AuthorizationClient], error) {
+	// If a channel for the GrpcService config is present and its refcount is
+	// greater than 0, increment the refcount and return the channel.
+	if rc := cf.getAuthzChannel(server); rc != nil {
+		return rc, nil
 	}
+
+	// Create the external authorization channel without holding the lock. The
+	// release function closes the channel.
+	cc, release, err := iextauthz.CreateExtAuthzChannel(server)
+	if err != nil {
+		return nil, fmt.Errorf("extauthz: failed to create channel to the external authorization server %q: %v", server.TargetURI, err)
+	}
+
+	client := v3authgrpc.NewAuthorizationClient(cc)
+	// Create a new refcounted client. The onZero cleanup function removes the
+	// entry from the list, closes the underlying channel, and releases the
+	// credentials of the config generation the channel was created from.
+	entry := &authzChannelEntry{server: server}
+	entry.rc = grpcsync.NewRefCounted(client, func() {
+		cf.removeAuthzChannel(entry)
+		release()
+		entry.server.Close()
+	})
+
+	// Double-check if another goroutine created and stored a channel for an
+	// equal config while we were unlocked.
+	if existing := cf.storeAuthzChannel(entry); existing != entry.rc {
+		entry.rc.Decrement()
+		return existing, nil
+	}
+	return entry.rc, nil
 }
 
 // BuildClientInterceptor builds a client interceptor for the external
@@ -267,48 +311,10 @@ func (cf *clientFilter) BuildClientInterceptor(cfg, _ httpfilter.FilterConfig) (
 		return nil, fmt.Errorf("extauthz: incorrect config type provided (%T): %v", cfg, cfg)
 	}
 
-	key := authzClientKey{
-		targetURI:          c.grpcService.TargetURI,
-		channelCredentials: c.grpcService.ChannelCredentials,
-		callCredentials:    c.grpcService.CallCredentials,
-	}
-
-	// If the channel for the key is present in the map and its refcount is
-	// greater than 0, increment the refcount and return the interceptor.
-	if rc := cf.getAuthzChannel(key); rc != nil {
-		return &clientInterceptor{
-			config:          c,
-			authzClient:     rc,
-			metricsRecorder: cf.metricsRecorder,
-			target:          cf.target,
-		}, nil
-	}
-
-	// Create the external authorization channel without holding the lock.
-	cc, cancel, err := iextauthz.CreateExtAuthzChannel(c.grpcService)
+	// Create or reuse a refcounted channel to the external authorization server.
+	rc, err := cf.getOrCreateAuthzChannel(c.grpcService)
 	if err != nil {
-		return nil, fmt.Errorf("extauthz: failed to create channel to the external authorization server %q: %v", c.grpcService.TargetURI, err)
-	}
-
-	client := v3authgrpc.NewAuthorizationClient(cc)
-	// Create a new refcounted client. The onZero cleanup function will remove
-	// the client from the map and close the underlying channel.
-	var rc *grpcsync.RefCounted[v3authgrpc.AuthorizationClient]
-	rc = grpcsync.NewRefCounted(client, func() {
-		cf.removeAuthzChannel(key, rc)
-		cancel()
-	})
-
-	// Double-check if another goroutine created and stored a channel for this
-	// key while we were unlocked.
-	if existingRC := cf.storeAuthzChannel(key, rc); existingRC != rc {
-		rc.Decrement()
-		return &clientInterceptor{
-			config:          c,
-			authzClient:     existingRC,
-			metricsRecorder: cf.metricsRecorder,
-			target:          cf.target,
-		}, nil
+		return nil, err
 	}
 
 	return &clientInterceptor{
@@ -437,8 +443,11 @@ func (i *clientInterceptor) applyHeaderMutations(okResp *v3authpb.OkHttpResponse
 
 	if !mutationFailed {
 		i.recordMetric(extAuthzClientAllowedRPCsMetric)
+		return okResp.GetResponseHeadersToAdd(), nil
 	}
-	return okResp.GetResponseHeadersToAdd(), nil
+	// If any mutation failed and failure_mode_allow is true, do not apply
+	// any response header mutations from the failed ext_authz response.
+	return nil, nil
 }
 
 func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, newStream func(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStream, error), opts ...grpc.CallOption) (grpc.ClientStream, error) {
@@ -492,18 +501,34 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 		return newStream(ctx, opts...)
 	}
 
-	// When the external authorization server denies the RPC, we fail the RPC
-	// immediately without creating a stream, and return a status error based
-	// on the denied response.
+	// When the external authorization server denies the RPC, we do not create
+	// a dataplane stream to the backend. Instead, we return a denied client
+	// stream wrapper that returns the denied error on stream operations.
 	if resp.GetStatus().GetCode() != int32(codes.OK) {
-		i.recordMetric(extAuthzClientDeniedRPCsMetric)
 		deniedResp, ok := resp.GetHttpResponse().(*v3authpb.CheckResponse_DeniedResponse)
 		if !ok {
-			// If the status in the respose is not OK, and the response does not
-			// contain a DeniedResponse message, we just fail the RPC with
+			i.recordMetric(extAuthzClientDeniedRPCsMetric)
+			// If the status in the response is not OK, and the response does not
+			// contain a DeniedResponse message, we fail the RPC with
 			// PERMISSION_DENIED.
 			return nil, status.Errorf(codes.PermissionDenied, "extauthz: RPC denied by external authorization server")
 		}
+
+		// Validate denied response headers.
+		trailers := metadata.MD{}
+		if headers := deniedResp.DeniedResponse.GetHeaders(); len(headers) > 0 {
+			if err := i.config.decoderHeaderMutationRules.ApplyAdditions(headers, trailers); err != nil {
+				i.recordMetric(extAuthzClientFailedRPCsMetric)
+				if !i.config.failureModeAllow {
+					return nil, status.Errorf(i.config.statusOnError, "extauthz: error applying header mutation rules on denied response: %v", err)
+				}
+				i.appendFailureModeHeader(outgoingMD)
+				ctx = metadata.NewOutgoingContext(ctx, outgoingMD)
+				return newStream(ctx, opts...)
+			}
+		}
+
+		i.recordMetric(extAuthzClientDeniedRPCsMetric)
 
 		// Compute the status to return to the caller based on the status returned
 		// by the external authorization server.
@@ -511,7 +536,11 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 		if st := deniedResp.DeniedResponse.GetStatus(); st != nil {
 			code = grpcStatusCode(int32(st.GetCode()))
 		}
-		return nil, status.Errorf(code, "extauthz: RPC denied by external authorization server")
+		msg := "extauthz: RPC denied by external authorization server"
+		if text := resp.GetStatus().GetMessage(); text != "" {
+			msg = fmt.Sprintf("extauthz: RPC denied by external authorization server: %s", text)
+		}
+		return newDeniedClientStream(ctx, status.Errorf(code, "%s", msg), trailers, opts), nil
 	}
 
 	var responseHeadersToAdd []*v3corepb.HeaderValueOption
@@ -579,6 +608,91 @@ func (s *clientStream) Header() (metadata.MD, error) {
 	// wrapping the stream, ApplyAdditions will not fail here.
 	s.mutationRules.ApplyAdditions(s.headersToAdd, md)
 	return md, nil
+}
+
+// newDeniedClientStream returns a synthetic ClientStream that immediately fails
+// stream operations with err and returns the specified trailers on Trailer(). It
+// extracts and executes OnFinishCallOption callbacks when the stream completes
+// or when ctx is canceled.
+func newDeniedClientStream(ctx context.Context, err error, trailers metadata.MD, opts []grpc.CallOption) *deniedClientStream {
+	// Collect OnFinishCallOption functions from the call options.
+	var onFinish []func(error)
+	for _, o := range opts {
+		if onFinishOpt, ok := o.(grpc.OnFinishCallOption); ok && onFinishOpt.OnFinish != nil {
+			onFinish = append(onFinish, onFinishOpt.OnFinish)
+		}
+	}
+
+	s := &deniedClientStream{
+		ctx:             ctx,
+		err:             err,
+		mutatedTrailers: trailers,
+		onFinish:        onFinish,
+	}
+
+	// Ensure onFinish callbacks are executed when the context is canceled or
+	// expires, even if the caller abandons the stream without invoking any
+	// stream methods.
+	go func() {
+		<-ctx.Done()
+		s.finish()
+	}()
+	return s
+}
+
+// deniedClientStream is a synthetic ClientStream returned when the external
+// authorization server denies the RPC. It intercepts the stream operations
+// to return error without creating a dataplane stream to the backend.
+type deniedClientStream struct {
+	// ctx is the context of the RPC call.
+	ctx context.Context
+	// err is the status error to return on stream operations.
+	err error
+	// mutatedTrailers holds response trailers specified by the external
+	// authorization server in the denied response.
+	mutatedTrailers metadata.MD
+	// onFinish stores OnFinishCallOption callbacks to execute when the stream
+	// finishes.
+	onFinish []func(error)
+	// once ensures onFinish callbacks are executed at most once.
+	once sync.Once
+}
+
+func (s *deniedClientStream) finish() {
+	s.once.Do(func() {
+		for _, f := range s.onFinish {
+			f(s.err)
+		}
+	})
+}
+
+func (s *deniedClientStream) Header() (metadata.MD, error) {
+	s.finish()
+	return nil, s.err
+}
+
+func (s *deniedClientStream) Trailer() metadata.MD {
+	s.finish()
+	return s.mutatedTrailers
+}
+
+func (s *deniedClientStream) CloseSend() error {
+	s.finish()
+	return nil
+}
+
+func (s *deniedClientStream) Context() context.Context {
+	return s.ctx
+}
+
+func (s *deniedClientStream) SendMsg(any) error {
+	s.finish()
+	return s.err
+}
+
+func (s *deniedClientStream) RecvMsg(any) error {
+	s.finish()
+	return s.err
 }
 
 // grpcStatusCode converts an HTTP status code to a gRPC status code using the

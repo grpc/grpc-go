@@ -169,8 +169,8 @@ func (s) TestSharesChannel(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := sharesChannel(tt.a, tt.b); got != tt.want {
-				t.Errorf("sharesChannel() = %v, want %v", got, tt.want)
+			if got := httpfilter.SharesChannel(tt.a, tt.b); got != tt.want {
+				t.Errorf("httpfilter.SharesChannel() = %v, want %v", got, tt.want)
 			}
 		})
 	}

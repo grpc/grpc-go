@@ -23,13 +23,17 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/grpc/internal/xds/grpcservice"
 	"google.golang.org/grpc/internal/xds/matcher"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/wrapperspb"
+
+	xdscreds "google.golang.org/grpc/internal/xds/credentials"
 
 	v3mutationpb "github.com/envoyproxy/go-control-plane/envoy/config/common/mutation_rules/v3"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -725,6 +729,55 @@ func (s) TestConstructHeaderMap(t *testing.T) {
 			}
 			if diff := cmp.Diff(tt.wantHeaderMap, gotHeaderMap, protocmp.Transform()); diff != "" {
 				t.Fatalf("constructHeaderMap() mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+// Tests that channel sharing considers the target and the credential
+// identities, and ignores the per-RPC timeout and initial metadata.
+func (s) TestSharesChannel(t *testing.T) {
+	insecureCreds := func() *xdscreds.ChannelCreds {
+		return xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "insecure"}, nil)
+	}
+	const target = "dns:///side-channel:443"
+
+	tests := []struct {
+		name string
+		a, b *grpcservice.Config
+		want bool
+	}{
+		{
+			name: "equal_identities_share_despite_timeout_and_metadata",
+			a:    &grpcservice.Config{TargetURI: target, ChannelCredentials: insecureCreds(), Timeout: time.Second},
+			b:    &grpcservice.Config{TargetURI: target, ChannelCredentials: insecureCreds(), InitialMetadata: metadata.Pairs("k", "v")},
+			want: true,
+		},
+		{
+			name: "different_targets",
+			a:    &grpcservice.Config{TargetURI: target, ChannelCredentials: insecureCreds()},
+			b:    &grpcservice.Config{TargetURI: "dns:///other:443", ChannelCredentials: insecureCreds()},
+			want: false,
+		},
+		{
+			name: "different_channel_creds",
+			a:    &grpcservice.Config{TargetURI: target, ChannelCredentials: insecureCreds()},
+			b:    &grpcservice.Config{TargetURI: target, ChannelCredentials: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "other"}, nil)},
+			want: false,
+		},
+		{
+			name: "different_call_creds",
+			a:    &grpcservice.Config{TargetURI: target, ChannelCredentials: insecureCreds()},
+			b: &grpcservice.Config{TargetURI: target, ChannelCredentials: insecureCreds(), CallCredentials: []*xdscreds.CallCreds{
+				xdscreds.NewCallCreds(nil, xdscreds.Identity{Type: "access_token"}, nil),
+			}},
+			want: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := SharesChannel(tt.a, tt.b); got != tt.want {
+				t.Errorf("SharesChannel() = %v, want %v", got, tt.want)
 			}
 		})
 	}
