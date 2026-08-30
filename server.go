@@ -276,20 +276,30 @@ func ReadBufferSize(s int) ServerOption {
 }
 
 // InitialWindowSize returns a ServerOption that sets window size for stream.
-// The lower bound for window size is 64K and any value smaller than that will be ignored.
+// The lower bound for window size is 64K and any value smaller than that will
+// be ignored. This does not disable dynamic flow control.
+//
+// Deprecated: use InitialStreamWindowSize instead. Will be supported
+// throughout 1.x.
 func InitialWindowSize(s int32) ServerOption {
+	return InitialStreamWindowSize(s)
+}
+
+// InitialStreamWindowSize returns a ServerOption that sets window size for
+// stream.  The lower bound for window size is 64K and any value smaller than
+// that will be ignored. This does not disable dynamic flow control.
+func InitialStreamWindowSize(s int32) ServerOption {
 	return newFuncServerOption(func(o *serverOptions) {
 		o.initialWindowSize = s
-		o.staticWindowSize = true
 	})
 }
 
-// InitialConnWindowSize returns a ServerOption that sets window size for a connection.
-// The lower bound for window size is 64K and any value smaller than that will be ignored.
+// InitialConnWindowSize returns a ServerOption that sets window size for a
+// connection. The lower bound for window size is 64K and any value smaller than
+// that will be ignored. This does not disable dynamic flow control.
 func InitialConnWindowSize(s int32) ServerOption {
 	return newFuncServerOption(func(o *serverOptions) {
 		o.initialConnWindowSize = s
-		o.staticWindowSize = true
 	})
 }
 
@@ -1390,7 +1400,7 @@ func (s *Server) processRPC(ctx context.Context, stream *transport.ServerStream,
 		ss.decompressorV1 = encoding.GetCompressor(rc)
 		if ss.decompressorV1 == nil {
 			st := status.Newf(codes.Unimplemented, "grpc: Decompressor is not installed for grpc-encoding %q", rc)
-			ss.writeStatus(st)
+			ss.s.WriteStatus(st)
 			return st.Err()
 		}
 	}
@@ -1473,7 +1483,7 @@ func (s *Server) processRPC(ctx context.Context, stream *transport.ServerStream,
 				binlog.Log(ctx, st)
 			}
 		}
-		if err := ss.writeStatus(appStatus); err != nil {
+		if err := ss.s.WriteStatus(appStatus); err != nil {
 			channelz.Warningf(logger, s.channelz, "grpc: Server.processRPC failed to write status: %v", err)
 		}
 		return appErr
@@ -1492,7 +1502,7 @@ func (s *Server) processRPC(ctx context.Context, stream *transport.ServerStream,
 			binlog.Log(ctx, st)
 		}
 	}
-	if err := ss.writeStatus(statusOK); err != nil {
+	if err := ss.s.WriteStatus(statusOK); err != nil {
 		channelz.Warningf(logger, s.channelz, "grpc: Server.processRPC failed to write status: %v", err)
 	}
 	return err

@@ -28,9 +28,9 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
+	"google.golang.org/grpc/internal/xds/grpcservice"
 	"google.golang.org/grpc/internal/xds/httpfilter"
 	"google.golang.org/grpc/internal/xds/matcher"
-	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
@@ -53,27 +53,21 @@ func Test(t *testing.T) {
 // testParseGRPCServiceConfig is a helper function that parses a GrpcService
 // proto message into a GRPCServiceConfig. This is a temporary test
 // implementation that will be removed once gRFC A102 is implemented.
-func testParseGRPCServiceConfig(grpcService *corepb.GrpcService) (xdsresource.GRPCServiceConfig, error) {
-	if grpcService == nil {
-		return xdsresource.GRPCServiceConfig{}, nil
-	}
+func testParseGRPCServiceConfig(grpcService *corepb.GrpcService) (*grpcservice.Config, error) {
 	if grpcService.GetGoogleGrpc() == nil {
-		return xdsresource.GRPCServiceConfig{}, fmt.Errorf("only google_grpc grpc_service is supported")
+		return nil, fmt.Errorf("only google_grpc grpc_service is supported")
 	}
 	if grpcService.GetGoogleGrpc().GetTargetUri() == "" {
-		return xdsresource.GRPCServiceConfig{}, fmt.Errorf("targetURI must be a non-empty string")
+		return nil, fmt.Errorf("targetURI must be a non-empty string")
 	}
-
-	sc := xdsresource.GRPCServiceConfig{
+	return &grpcservice.Config{
 		TargetURI: grpcService.GetGoogleGrpc().GetTargetUri(),
-	}
-	return sc, nil
+	}, nil
 }
 
 var cmpOpts = []cmp.Option{
 	cmp.AllowUnexported(
 		config{},
-		xdsresource.GRPCServiceConfig{},
 		fraction{},
 	),
 	cmp.Transformer("RegexpToString", func(r *regexp.Regexp) string {
@@ -115,7 +109,7 @@ func (s) TestParseFilterConfig_Success(t *testing.T) {
 				},
 			}),
 			wantCfg: config{
-				grpcService: xdsresource.GRPCServiceConfig{
+				grpcService: &grpcservice.Config{
 					TargetURI: "localhost:1234",
 				},
 				filterEnabled: fraction{
@@ -171,7 +165,7 @@ func (s) TestParseFilterConfig_Success(t *testing.T) {
 				IncludePeerCertificate: true,
 			}),
 			wantCfg: config{
-				grpcService: xdsresource.GRPCServiceConfig{
+				grpcService: &grpcservice.Config{
 					TargetURI: "localhost:5678",
 				},
 				filterEnabled: fraction{
