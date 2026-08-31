@@ -22,9 +22,9 @@ import (
 	"time"
 
 	"google.golang.org/grpc/internal/optional"
+	"google.golang.org/grpc/internal/xds/grpcservice"
 	"google.golang.org/grpc/internal/xds/httpfilter"
 	"google.golang.org/grpc/internal/xds/matcher"
-	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 
 	v3procfilterpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/ext_proc/v3"
 )
@@ -38,13 +38,13 @@ type baseConfig struct {
 	// config. If both are set, the override config will be used.
 
 	// server is the configuration for the external processing server.
-	server xdsresource.GRPCServiceConfig
+	server *grpcservice.Config
 	// processingModes specifies the processing mode for each dataplane event.
 	processingModes processingModes
 	// failureModeAllow specifies the behavior when the RPC to the external
 	// processing server fails. If true, the dataplane RPC will be allowed to
 	// continue. If false, the data plane RPC will be failed with a grpc status
-	// code of UNAVAILABLE.
+	// code of INTERNAL.
 	failureModeAllow bool
 	// Attributes to be sent to the external processing server along with the
 	// request and response dataplane events.
@@ -63,12 +63,13 @@ type baseConfig struct {
 	// external processing server. This overrides the above allowedHeaders if a
 	// header matches both.
 	disallowedHeaders []matcher.StringMatcher
-	// disableImmediateResponse specifies whether to disable immediate response
-	// from the external processing server. When true, if the response from
-	// external processing server has the `immediate_response` field set, the
-	// dataplane RPC will be failed with `UNAVAILABLE` status code. When false,
-	// the `immediate_response` field in the response from external processing
-	// server will be ignored.
+	// disableImmediateResponse specifies whether to disable immediate responses
+	// from the external processing server. When true, any immediate response
+	// received from the server is treated as an error (causing the stream to fail
+	// with an Internal error, or to be bypassed if failureModeAllow is true).
+	// When false, the immediate response is honored, and the stream is aborted
+	// with the specified status code and details provided by the external
+	// processing server.
 	disableImmediateResponse bool
 	// observabilityMode determines if the filter waits for the external
 	// processing server. If true, events are sent to the server in
@@ -89,7 +90,7 @@ type baseConfig struct {
 // base config.
 type overrideConfig struct {
 	httpfilter.FilterConfig
-	server             optional.Optional[xdsresource.GRPCServiceConfig]
+	server             optional.Optional[*grpcservice.Config]
 	processingModes    optional.Optional[processingModes]
 	failureModeAllow   optional.Optional[bool]
 	requestAttributes  []string

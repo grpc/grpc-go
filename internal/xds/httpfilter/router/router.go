@@ -48,7 +48,7 @@ type builder struct {
 
 func (builder) TypeURLs() []string { return []string{TypeURL} }
 
-func (builder) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, error) {
+func (builder) ParseFilterConfig(cfg proto.Message, _ httpfilter.ParseOptions) (httpfilter.FilterConfig, error) {
 	// The gRPC router filter does not currently use any fields from the
 	// config.  Verify type only.
 	if cfg == nil {
@@ -65,7 +65,7 @@ func (builder) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, er
 	return config{}, nil
 }
 
-func (builder) ParseFilterConfigOverride(override proto.Message) (httpfilter.FilterConfig, error) {
+func (builder) ParseFilterConfigOverride(override proto.Message, _ httpfilter.ParseOptions) (httpfilter.FilterConfig, error) {
 	if override != nil {
 		return nil, fmt.Errorf("router: unexpected config override specified: %v", override)
 	}

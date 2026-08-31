@@ -24,7 +24,9 @@ import (
 	"context"
 
 	"google.golang.org/grpc"
+	estats "google.golang.org/grpc/experimental/stats"
 	iresolver "google.golang.org/grpc/internal/resolver"
+	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -32,6 +34,17 @@ import (
 // filter.  Embed this interface to implement it.
 type FilterConfig interface {
 	isFilterConfig()
+}
+
+// ParseOptions contains additional information passed to the HTTP filter's
+// config parsing methods.
+type ParseOptions struct {
+	// BootstrapConfig contains the complete bootstrap configuration used by the
+	// xDS client that received the resource being parsed.
+	BootstrapConfig *bootstrap.Config
+	// ServerConfig contains the configuration of the xDS management server that
+	// sent the resource being parsed.
+	ServerConfig *bootstrap.ServerConfig
 }
 
 // DisabledFilterConfig represents a disabled filter override. It implements the
@@ -57,13 +70,13 @@ type Builder interface {
 	// udpa.type.v1.TypedStruct, or an xds.type.v3.TypedStruct for filters that
 	// do not accept a custom type. The resulting FilterConfig will later be
 	// passed to Build.
-	ParseFilterConfig(proto.Message) (FilterConfig, error)
+	ParseFilterConfig(proto.Message, ParseOptions) (FilterConfig, error)
 	// ParseFilterConfigOverride parses the provided override configuration
 	// proto.Message from the RDS override configuration of this filter.  This
 	// may be an anypb.Any, a udpa.type.v1.TypedStruct, or an
 	// xds.type.v3.TypedStruct for filters that do not accept a custom type.
 	// The resulting FilterConfig will later be passed to Build.
-	ParseFilterConfigOverride(proto.Message) (FilterConfig, error)
+	ParseFilterConfigOverride(proto.Message, ParseOptions) (FilterConfig, error)
 	// IsTerminal returns whether this Filter is terminal or not (i.e. it must
 	// be last filter in the filter chain).
 	IsTerminal() bool
@@ -89,7 +102,9 @@ type ClientInterceptor interface {
 
 // ClientFilterOptions contains options for building a client filter.
 type ClientFilterOptions struct {
-	FilterName string // FilterName is the filter name from the xDS configuration.
+	FilterName      string                 // FilterName is the filter name from the xDS configuration.
+	MetricsRecorder estats.MetricsRecorder // MetricsRecorder is the metrics recorder to capture metrics for the filter.
+	Target          string                 // Target is the target string of the channel.
 }
 
 // ClientFilterBuilder is an optional interface that a Builder can implement to
