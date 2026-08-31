@@ -949,6 +949,8 @@ func appendHeaderFieldsFromMD(headerFields []hpack.HeaderField, md metadata.MD) 
 // appendHeaderFieldsFromMD will produce from md. Reserved headers are dropped
 // by appendHeaderFieldsFromMD, so this may slightly over-count, which is
 // preferable to growing the slice.
+// returns an upper bound on the number of header fields that
+// appendHeaderFieldsFromMD will produce from md
 func headerFieldsCountFromMD(md metadata.MD) int {
 	n := 0
 	for _, vv := range md {
@@ -1056,7 +1058,7 @@ func (t *http2Server) writeHeader(s *ServerStream, md metadata.MD) error {
 func (t *http2Server) writeHeaderLocked(s *ServerStream) error {
 	// Count the metadata header fields as well so the slice is not reallocated
 	// while they are appended below.
-	headerFieldCount := 2 // :status, content-type
+	headerFieldCount := 2 // :status, content-type. Keep in sync with the appends below
 	headerFieldCount += headerFieldsCountFromMD(s.header)
 	if s.sendCompress != "" {
 		headerFieldCount++
@@ -1110,7 +1112,7 @@ func (t *http2Server) writeStatus(s *ServerStream, st *status.Status) error {
 	// Count the metadata header fields as well so the slice is not reallocated
 	// while they are appended below.
 	headersAlreadySent := s.updateHeaderSent()
-	headerFieldCount := 2 // grpc-status, grpc-message
+	headerFieldCount := 2 // grpc-status, grpc-message. Keep in sync with the appends below
 	if hasStatusDetails {
 		// Do not use the user's grpc-status-details-bin (if present) if we are
 		// even attempting to set our own.
