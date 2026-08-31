@@ -32,74 +32,81 @@ import (
 
 func TestValidateTargetURI(t *testing.T) {
 	tests := []struct {
-		desc    string
-		target  string
-		wantErr bool
+		desc   string
+		target string
 	}{
 		{
-			desc:    "registered scheme with authority and endpoint",
-			target:  "dns:///endpoint",
-			wantErr: false,
+			desc:   "registered scheme with authority and endpoint",
+			target: "dns:///endpoint",
 		},
 		{
-			desc:    "uppercase registered scheme is canonicalized to lowercase",
-			target:  "DNS:///endpoint",
-			wantErr: false,
+			desc:   "uppercase registered scheme is canonicalized to lowercase",
+			target: "DNS:///endpoint",
 		},
 		{
-			desc:    "host:port without scheme falls back to default scheme",
-			target:  "my-service:50051",
-			wantErr: false,
+			desc:   "host:port without scheme falls back to default scheme",
+			target: "my-service:50051",
 		},
 		{
-			desc:    "dotted host:port without scheme falls back to default scheme",
-			target:  "trafficdirector.googleapis.com:443",
-			wantErr: false,
+			desc:   "dotted host:port without scheme falls back to default scheme",
+			target: "trafficdirector.googleapis.com:443",
 		},
 		{
-			desc:    "IP:port without scheme falls back to default scheme",
-			target:  "127.0.0.1:443",
-			wantErr: false,
+			desc:   "IP:port without scheme falls back to default scheme",
+			target: "127.0.0.1:443",
 		},
 		{
-			desc:    "registered-scheme opaque form falls back to default scheme",
-			target:  "dns:endpoint",
-			wantErr: false,
+			desc:   "registered-scheme opaque form falls back to default scheme",
+			target: "dns:endpoint",
 		},
 		{
-			desc:    "unparseable URI is accepted after default-scheme fallback",
-			target:  "://bad",
-			wantErr: false,
+			desc:   "unparseable URI is accepted after default-scheme fallback",
+			target: "://bad",
 		},
 		{
-			desc:    "absolute path with empty scheme uses default scheme",
-			target:  "/var/run/foo.sock",
-			wantErr: false,
+			desc:   "absolute path with empty scheme uses default scheme",
+			target: "/var/run/foo.sock",
 		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			if err := ValidateTargetURI(tc.target); err != nil {
+				t.Fatalf("ValidateTargetURI(%q) = %v, want nil", tc.target, err)
+			}
+		})
+	}
+}
+
+func TestValidateTargetURI_Error(t *testing.T) {
+	tests := []struct {
+		desc    string
+		target  string
+		wantErr string
+	}{
 		{
 			desc:    "invalid percent-escape fails initial and fallback parsing",
 			target:  "%zz",
-			wantErr: true,
+			wantErr: "invalid URL escape",
 		},
 		{
 			desc:    "empty target is rejected",
 			target:  "",
-			wantErr: true,
+			wantErr: "target URI cannot be empty",
 		},
 		{
 			desc:    "authority-form URI with unregistered scheme is rejected to surface typos",
 			target:  "no-such-scheme:///endpoint",
-			wantErr: true,
+			wantErr: `uses scheme "no-such-scheme" which has no registered resolver`,
 		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.desc, func(t *testing.T) {
 			err := ValidateTargetURI(tc.target)
-			if (err != nil) != tc.wantErr {
-				t.Fatalf("ValidateTargetURI(%q) = %v, wantErr %v", tc.target, err, tc.wantErr)
+			if err == nil {
+				t.Fatalf("ValidateTargetURI(%q) succeeded, want error containing %q", tc.target, tc.wantErr)
 			}
-			if err != nil && !strings.Contains(err.Error(), tc.target) && tc.target != "" {
-				t.Errorf("ValidateTargetURI(%q) error %q does not mention target", tc.target, err)
+			if !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("ValidateTargetURI(%q) = %v, want error containing %q", tc.target, err, tc.wantErr)
 			}
 		})
 	}
