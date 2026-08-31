@@ -92,16 +92,17 @@ type testFilterBuilder struct {
 	typeURL      string
 	blockChan    chan struct{}
 	enteredChan  chan struct{}
+	closeChan    chan struct{}
 	newStreamErr error
 }
 
 func (tb *testFilterBuilder) TypeURLs() []string { return []string{tb.typeURL} }
 
-func (*testFilterBuilder) ParseFilterConfig(proto.Message) (httpfilter.FilterConfig, error) {
+func (*testFilterBuilder) ParseFilterConfig(proto.Message, httpfilter.ParseOptions) (httpfilter.FilterConfig, error) {
 	return dummyFilterCfg{}, nil
 }
 
-func (*testFilterBuilder) ParseFilterConfigOverride(proto.Message) (httpfilter.FilterConfig, error) {
+func (*testFilterBuilder) ParseFilterConfigOverride(proto.Message, httpfilter.ParseOptions) (httpfilter.FilterConfig, error) {
 	return dummyFilterCfg{}, nil
 }
 
@@ -121,6 +122,7 @@ func (tb *testFilterBuilder) BuildClientInterceptor(httpfilter.FilterConfig, htt
 	return &testInterceptor{
 		blockChan:    tb.blockChan,
 		enteredChan:  tb.enteredChan,
+		closeChan:    tb.closeChan,
 		newStreamErr: tb.newStreamErr,
 	}, nil
 }
@@ -128,6 +130,7 @@ func (tb *testFilterBuilder) BuildClientInterceptor(httpfilter.FilterConfig, htt
 type testInterceptor struct {
 	blockChan    chan struct{}
 	enteredChan  chan struct{}
+	closeChan    chan struct{}
 	newStreamErr error
 }
 
@@ -147,13 +150,16 @@ func (i *testInterceptor) NewStream(ctx context.Context, _ iresolver.RPCInfo, ne
 	return newStream(ctx, opts...)
 }
 
-func (i *testInterceptor) Close() {}
+func (i *testInterceptor) Close() {
+	i.closeChan <- struct{}{}
+}
 
 func newTestFilterBuilder(t testing.TB, typeURL string) *testFilterBuilder {
 	tb := &testFilterBuilder{
 		typeURL:     typeURL,
 		blockChan:   make(chan struct{}),
 		enteredChan: make(chan struct{}, 1),
+		closeChan:   make(chan struct{}, 3),
 	}
 	httpfilter.Register(tb)
 	t.Cleanup(func() {
@@ -501,5 +507,248 @@ func (s) TestResolverPrunesCluster_StreamCreationFailure(t *testing.T) {
 	// Read the third state update from the intercepting resolver. Cluster-A's
 	// reference count drops to 0, causing the resolver to unsubscribe and
 	// prune it.
+	verifyServiceConfig(ctx, t, jsonCh, clusterB)
+}
+
+// TestResolverDelayedInterceptorClose_ActiveRPCs verifies that when a route
+// configuration is updated (causing the old config selector to stop), an HTTP
+// filter interceptor for a route/cluster with an active in-flight RPC is not
+// closed immediately. It remains active until all active RPCs to that cluster
+// in that route complete and its refcount drops to 0.
+func (s) TestResolverDelayedInterceptorClose_ActiveRPCs(t *testing.T) {
+	testFilterTypeURL := t.Name()
+	tb := newTestFilterBuilder(t, testFilterTypeURL)
+	blockChan, enteredChan, closeChan := tb.blockChan, tb.enteredChan, tb.closeChan
+
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
+	nodeID := uuid.New().String()
+	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
+
+	r, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
+	if err != nil {
+		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
+	}
+
+	// Intercept resolver builder.
+	jsonCh := make(chan string, 1)
+	ib := &wrappingBuilder{
+		Builder: r,
+		jsonCh:  jsonCh,
+	}
+
+	// Start test backend.
+	server := stubserver.StartTestService(t, nil)
+	defer server.Stop()
+
+	const (
+		serviceName = "my-service-xds"
+		clusterA    = "cluster-A"
+		clusterB    = "cluster-B"
+	)
+	hcm := &v3httppb.HttpConnectionManager{
+		RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
+			RouteConfig: &v3routepb.RouteConfiguration{
+				Name: "route-" + serviceName,
+				VirtualHosts: []*v3routepb.VirtualHost{{
+					Domains: []string{serviceName},
+					Routes: []*v3routepb.Route{{
+						Match:  &v3routepb.RouteMatch{PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: ""}},
+						Action: &v3routepb.Route_Route{Route: &v3routepb.RouteAction{ClusterSpecifier: &v3routepb.RouteAction_Cluster{Cluster: clusterA}}},
+					}},
+				}},
+			},
+		},
+		HttpFilters: []*v3httppb.HttpFilter{
+			{
+				Name: "delaying-filter",
+				ConfigType: &v3httppb.HttpFilter_TypedConfig{
+					TypedConfig: testutils.MarshalAny(t, &v3xdsxdstypepb.TypedStruct{
+						TypeUrl: testFilterTypeURL,
+					}),
+				},
+			},
+			e2e.RouterHTTPFilter,
+		},
+	}
+	resources := e2e.UpdateOptions{
+		NodeID:    nodeID,
+		Listeners: []*v3listenerpb.Listener{{Name: serviceName, ApiListener: &v3listenerpb.ApiListener{ApiListener: testutils.MarshalAny(t, hcm)}}},
+		Clusters:  []*v3clusterpb.Cluster{e2e.DefaultCluster(clusterA, clusterA, e2e.SecurityLevelNone)},
+		Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(clusterA, "localhost", []uint32{testutils.ParsePort(t, server.Address)})},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(ib))
+	if err != nil {
+		t.Fatalf("Failed to create a gRPC client: %v", err)
+	}
+	defer cc.Close()
+
+	client := testgrpc.NewTestServiceClient(cc)
+
+	errCh := make(chan error, 1)
+	go func() {
+		_, err := client.EmptyCall(ctx, &testpb.Empty{})
+		errCh <- err
+	}()
+
+	select {
+	case <-enteredChan:
+	case <-ctx.Done():
+		t.Fatal("Timeout waiting for RPC to reach HTTP filter")
+	}
+
+	verifyServiceConfig(ctx, t, jsonCh, clusterA)
+
+	// Update route configuration on the management server to point to cluster B.
+	hcm.GetRouteConfig().VirtualHosts[0].Routes[0].Action = &v3routepb.Route_Route{Route: &v3routepb.RouteAction{ClusterSpecifier: &v3routepb.RouteAction_Cluster{Cluster: clusterB}}}
+	resources.Listeners = []*v3listenerpb.Listener{{Name: serviceName, ApiListener: &v3listenerpb.ApiListener{ApiListener: testutils.MarshalAny(t, hcm)}}}
+	resources.Clusters = append(resources.Clusters, e2e.DefaultCluster(clusterB, clusterB, e2e.SecurityLevelNone))
+	resources.Endpoints = append(resources.Endpoints, e2e.DefaultEndpoint(clusterB, "localhost", []uint32{testutils.ParsePort(t, server.Address)}))
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	verifyServiceConfig(ctx, t, jsonCh, clusterA, clusterB)
+
+	// Verify that because an RPC is still in flight on cluster-A, the interceptor
+	// is NOT closed prematurely when the old config selector is stopped.
+	select {
+	case <-closeChan:
+		t.Fatal("Unexpected interceptor Close() called while RPC is still active")
+	case <-time.After(defaultTestShortTimeout):
+	}
+
+	// Unblock the active RPC and verify it completes successfully.
+	blockChan <- struct{}{}
+	select {
+	case <-ctx.Done():
+		t.Fatal("Timeout waiting for RPC to succeed")
+	case err := <-errCh:
+		if err != nil {
+			t.Fatalf("RPC failed with unexpected error: %v", err)
+		}
+	}
+
+	// Once the RPC finishes, its OnFinish CallOption decrements the refcount
+	// of cluster-A to 0. Verifies that interceptor.Close() is now called.
+	select {
+	case <-closeChan:
+	case <-ctx.Done():
+		t.Fatal("Timeout waiting for interceptor Close() after RPC finished")
+	}
+
+	verifyServiceConfig(ctx, t, jsonCh, clusterB)
+}
+
+// Test verifies that when a route configuration is updated and there are no
+// active in-flight RPCs on a route/cluster, the HTTP filter interceptor is
+// closed immediately when the old config selector is stopped.
+func (s) TestResolverImmediateInterceptorClose_NoActiveRPCs(t *testing.T) {
+	testFilterTypeURL := t.Name()
+	tb := newTestFilterBuilder(t, testFilterTypeURL)
+	closeChan := tb.closeChan
+	close(tb.blockChan) // Do not block RPCs in the filter
+
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
+	nodeID := uuid.New().String()
+	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
+
+	r, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
+	if err != nil {
+		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
+	}
+
+	// Intercept resolver builder.
+	jsonCh := make(chan string, 1)
+	ib := &wrappingBuilder{
+		Builder: r,
+		jsonCh:  jsonCh,
+	}
+
+	// Start test backends.
+	server := stubserver.StartTestService(t, nil)
+	defer server.Stop()
+
+	const (
+		serviceName = "my-service-xds"
+		clusterA    = "cluster-A"
+		clusterB    = "cluster-B"
+	)
+	hcm := &v3httppb.HttpConnectionManager{
+		RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
+			RouteConfig: &v3routepb.RouteConfiguration{
+				Name: "route-" + serviceName,
+				VirtualHosts: []*v3routepb.VirtualHost{{
+					Domains: []string{serviceName},
+					Routes: []*v3routepb.Route{{
+						Match:  &v3routepb.RouteMatch{PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: ""}},
+						Action: &v3routepb.Route_Route{Route: &v3routepb.RouteAction{ClusterSpecifier: &v3routepb.RouteAction_Cluster{Cluster: clusterA}}},
+					}},
+				}},
+			},
+		},
+		HttpFilters: []*v3httppb.HttpFilter{
+			{
+				Name: "closing-filter",
+				ConfigType: &v3httppb.HttpFilter_TypedConfig{
+					TypedConfig: testutils.MarshalAny(t, &v3xdsxdstypepb.TypedStruct{
+						TypeUrl: testFilterTypeURL,
+					}),
+				},
+			},
+			e2e.RouterHTTPFilter,
+		},
+	}
+	resources := e2e.UpdateOptions{
+		NodeID:    nodeID,
+		Listeners: []*v3listenerpb.Listener{{Name: serviceName, ApiListener: &v3listenerpb.ApiListener{ApiListener: testutils.MarshalAny(t, hcm)}}},
+		Clusters:  []*v3clusterpb.Cluster{e2e.DefaultCluster(clusterA, clusterA, e2e.SecurityLevelNone)},
+		Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(clusterA, "localhost", []uint32{testutils.ParsePort(t, server.Address)})},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(ib))
+	if err != nil {
+		t.Fatalf("Failed to create a gRPC client: %v", err)
+	}
+	defer cc.Close()
+
+	client := testgrpc.NewTestServiceClient(cc)
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+		t.Fatalf("EmptyCall() failed: %v", err)
+	}
+
+	verifyServiceConfig(ctx, t, jsonCh, clusterA)
+
+	// Update route configuration on the management server to point to cluster B.
+	hcm.GetRouteConfig().VirtualHosts[0].Routes[0].Action = &v3routepb.Route_Route{Route: &v3routepb.RouteAction{ClusterSpecifier: &v3routepb.RouteAction_Cluster{Cluster: clusterB}}}
+	resources.Listeners = []*v3listenerpb.Listener{{Name: serviceName, ApiListener: &v3listenerpb.ApiListener{ApiListener: testutils.MarshalAny(t, hcm)}}}
+	resources.Clusters = append(resources.Clusters, e2e.DefaultCluster(clusterB, clusterB, e2e.SecurityLevelNone))
+	resources.Endpoints = append(resources.Endpoints, e2e.DefaultEndpoint(clusterB, "localhost", []uint32{testutils.ParsePort(t, server.Address)}))
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	verifyServiceConfig(ctx, t, jsonCh, clusterA, clusterB)
+
+	// Because there are no active RPCs on cluster-A, interceptor.Close() should
+	// be invoked immediately when the old config selector is stopped.
+	select {
+	case <-closeChan:
+	case <-ctx.Done():
+		t.Fatal("Timeout waiting for interceptor Close() when no active RPCs exist")
+	}
+
 	verifyServiceConfig(ctx, t, jsonCh, clusterB)
 }

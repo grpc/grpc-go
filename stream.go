@@ -618,7 +618,12 @@ func (a *csAttempt) getTransport() error {
 
 func (a *csAttempt) newStream() error {
 	cs := a.cs
-	cs.callHdr.PreviousAttempts = cs.numRetries
+	// The header is copied because the fields set below, notably the authority
+	// override taken from the pick result, describe the endpoint picked for
+	// this attempt only. Mutating the clientStream's header would carry them
+	// into a later attempt.
+	callHdr := *cs.callHdr
+	callHdr.PreviousAttempts = cs.numRetries
 
 	// Merge metadata stored in PickResult, if any, with existing call metadata.
 	// It is safe to overwrite the csAttempt's context here, since all state
@@ -645,11 +650,11 @@ func (a *csAttempt) newStream() error {
 		// apply it, as specified in gRFC A81.
 		if cs.callInfo.authority == "" {
 			if authMD := a.pickResult.Metadata.Get(":authority"); len(authMD) > 0 {
-				cs.callHdr.Authority = authMD[0]
+				callHdr.Authority = authMD[0]
 			}
 		}
 	}
-	s, err := a.transport.NewStream(a.ctx, cs.callHdr, a.statsHandler)
+	s, err := a.transport.NewStream(a.ctx, &callHdr, a.statsHandler)
 	if err != nil {
 		nse, ok := err.(*transport.NewStreamError)
 		if !ok {
@@ -684,10 +689,6 @@ type clientStream struct {
 
 	cancel context.CancelFunc // cancels all attempts
 
-	sentLast bool // sent an end stream
-
-	receivedFirstMsg bool // set after the first message is received
-
 	methodConfig *MethodConfig
 
 	ctx context.Context // the application's context, wrapped by stats/tracing
@@ -695,19 +696,10 @@ type clientStream struct {
 	retryThrottler *retryThrottler // The throttler active when the RPC began.
 
 	binlogs []binarylog.MethodLogger
-	// serverHeaderBinlogged is a boolean for whether server header has been
-	// logged. Server header will be logged when the first time one of those
-	// happens: stream.Header(), stream.Recv().
-	//
-	// It's only read and used by Recv() and Header(), so it doesn't need to be
-	// synchronized.
-	serverHeaderBinlogged bool
 
 	mu                      sync.Mutex
-	firstAttempt            bool // if true, transparent retry is valid
-	numRetries              int  // exclusive of transparent retry attempt(s)
-	numRetriesSincePushback int  // retries since pushback; to reset backoff
-	finished                bool // TODO: replace with atomic cmpxchg or sync.Once?
+	numRetries              int // exclusive of transparent retry attempt(s)
+	numRetriesSincePushback int // retries since pushback; to reset backoff
 	// attempt is the active client stream attempt.
 	// The only place where it is written is the newAttemptLocked method and this method never writes nil.
 	// So, attempt can be nil only inside newClientStream function when clientStream is first created.
@@ -717,13 +709,33 @@ type clientStream struct {
 	// place where we need to check if the attempt is nil.
 	attempt *csAttempt
 	// TODO(hedging): hedging will have multiple attempts simultaneously.
-	committed        bool // active attempt committed for retry?
 	onCommit         func()
 	replayBuffer     []replayOp // operations to replay on retry
 	replayBufferSize int        // current size of replayBuffer
+
+	// Bool fields are grouped at the tail to eliminate the alignment padding
+	// that would otherwise follow each bool when the next field is pointer- or
+	// int-sized. See https://github.com/grpc/grpc-go/issues/9280 for benchmarks.
+	// Add new bool fields here, not inline above.
+
+	// Not guarded by mu.
+	sentLast         bool // sent an end stream
+	receivedFirstMsg bool // set after the first message is received
+	// serverHeaderBinlogged is a boolean for whether server header has been
+	// logged. Server header will be logged when the first time one of those
+	// happens: stream.Header(), stream.Recv().
+	//
+	// It's only read and used by Recv() and Header(), so it doesn't need to be
+	// synchronized.
+	serverHeaderBinlogged bool
 	// nameResolutionDelay indicates if there was a delay in the name resolution.
 	// This field is only valid on client side, it's always false on server side.
 	nameResolutionDelay bool
+
+	// Guarded by mu.
+	firstAttempt bool // if true, transparent retry is valid
+	finished     bool // TODO: replace with atomic cmpxchg or sync.Once?
+	committed    bool // active attempt committed for retry?
 }
 
 type replayOp struct {
@@ -741,10 +753,8 @@ type csAttempt struct {
 	parser          parser
 	pickResult      balancer.PickResult
 
-	finished        bool
-	decompressorV0  Decompressor
-	decompressorV1  encoding.Compressor
-	decompressorSet bool
+	decompressorV0 Decompressor
+	decompressorV1 encoding.Compressor
 
 	mu sync.Mutex // guards trInfo.tr
 	// trInfo may be nil (if EnableTracing is false).
@@ -755,10 +765,18 @@ type csAttempt struct {
 	statsHandler stats.Handler
 	beginTime    time.Time
 
-	// set for newStream errors that may be transparently retried
-	allowTransparentRetry bool
-	// set for pick errors that are returned as a status
-	drop bool
+	// Bool fields are grouped at the tail to eliminate the alignment padding
+	// that would otherwise follow each bool when the next field is pointer- or
+	// int-sized. See https://github.com/grpc/grpc-go/issues/9347 for benchmarks.
+	// Add new bool fields here, not inline above.
+
+	// Not guarded by mu.
+	decompressorSet       bool
+	allowTransparentRetry bool // set for newStream errors that may be transparently retried
+	drop                  bool // set for pick errors that are returned as a status
+
+	// Guarded by mu.
+	finished bool
 }
 
 func (cs *clientStream) commitAttemptLocked() {
@@ -1486,20 +1504,28 @@ type addrConnStream struct {
 	callInfo         *callInfo
 	transport        transport.ClientTransport
 	ctx              context.Context
-	sentLast         bool
-	receivedFirstMsg bool
 	desc             *StreamDesc
 	codec            baseCodec
 	sendCompressorV0 Compressor
 	sendCompressorV1 encoding.Compressor
-	decompressorSet  bool
 	decompressorV0   Decompressor
 	decompressorV1   encoding.Compressor
-	parser           parser
 
 	// mu guards finished and is held for the entire finish method.
-	mu       sync.Mutex
-	finished bool
+	mu     sync.Mutex
+	parser parser
+
+	// Bool fields are grouped at the tail to eliminate the alignment padding
+	// that would otherwise follow each bool when the next field is pointer- or
+	// int-sized. See https://github.com/grpc/grpc-go/issues/9348 for benchmarks.
+	// Add new bool fields here, not inline above.
+
+	// Not guarded by mu.
+	sentLast         bool
+	receivedFirstMsg bool
+	decompressorSet  bool
+
+	finished bool // guarded by mu
 }
 
 func (as *addrConnStream) Header() (metadata.MD, error) {
@@ -1714,15 +1740,23 @@ type serverStream struct {
 
 	sendCompressorName string
 
-	recvFirstMsg bool // set after the first message is received
-
 	maxReceiveMessageSize int
 	maxSendMessageSize    int
-	trInfo                *traceInfo
+
+	// mu guards trInfo.tr after the service handler runs.
+	mu     sync.Mutex
+	trInfo *traceInfo
 
 	statsHandler stats.Handler
 
 	binlogs []binarylog.MethodLogger
+
+	// Bool fields are grouped at the tail to eliminate the alignment padding
+	// that would otherwise follow each bool when the next field is pointer- or
+	// int-sized. See https://github.com/grpc/grpc-go/issues/9349 for benchmarks.
+	// Add new bool fields here, not inline above.
+
+	recvFirstMsg bool // set after the first message is received
 	// serverHeaderBinlogged indicates whether server header has been logged. It
 	// will happen when one of the following two happens: stream.SendHeader(),
 	// stream.Send().
@@ -1730,8 +1764,6 @@ type serverStream struct {
 	// It's only checked in send and sendHeader, doesn't need to be
 	// synchronized.
 	serverHeaderBinlogged bool
-
-	mu sync.Mutex // protects trInfo.tr after the service handler runs.
 }
 
 func (ss *serverStream) Context() context.Context {

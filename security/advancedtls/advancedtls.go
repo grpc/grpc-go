@@ -63,6 +63,8 @@ type HandshakeVerificationInfo struct {
 	// certificate(s) and that verification passed. This field would be nil if
 	// either user chose not to verify or the verification failed.
 	Leaf *x509.Certificate
+	// ConnectionState is the TLS connection state for the connection.
+	ConnectionState tls.ConnectionState
 }
 
 // PostHandshakeVerificationResults contains the information about results of
@@ -457,7 +459,7 @@ func (c *advancedTLSCreds) ClientHandshake(ctx context.Context, authority string
 	cfg.ServerName = authority
 
 	peerVerifiedChains := CertificateChains{}
-	cfg.VerifyPeerCertificate = buildVerifyFunc(c, cfg.ServerName, rawConn, &peerVerifiedChains)
+	cfg.VerifyPeerCertificate, cfg.VerifyConnection = buildVerifyFunc(c, cfg.ServerName, rawConn, &peerVerifiedChains)
 	conn := tls.Client(rawConn, cfg)
 	errChannel := make(chan error, 1)
 	go func() {
@@ -488,7 +490,7 @@ func (c *advancedTLSCreds) ClientHandshake(ctx context.Context, authority string
 func (c *advancedTLSCreds) ServerHandshake(rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
 	cfg := credinternal.CloneTLSConfig(c.config)
 	peerVerifiedChains := CertificateChains{}
-	cfg.VerifyPeerCertificate = buildVerifyFunc(c, "", rawConn, &peerVerifiedChains)
+	cfg.VerifyPeerCertificate, cfg.VerifyConnection = buildVerifyFunc(c, "", rawConn, &peerVerifiedChains)
 	conn := tls.Server(rawConn, cfg)
 	if err := conn.Handshake(); err != nil {
 		conn.Close()
@@ -522,13 +524,23 @@ func (c *advancedTLSCreds) OverrideServerName(serverNameOverride string) error {
 	return nil
 }
 
-// The function buildVerifyFunc is used when users want root cert reloading,
-// and possibly custom verification check.
-// We have to build our own verification function here because current
-// tls module:
-//  1. does not have a good support on root cert reloading.
-//  2. will ignore basic certificate check when setting InsecureSkipVerify
-//     to true.
+type verifyPeerCertificateFunc func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error
+type verifyConnectionFunc func(cs tls.ConnectionState) error
+
+// The function buildVerifyFunc constructs the verification callbacks used when
+// users want root cert reloading, certificate revocation checking, and custom
+// verification checks.
+// We build custom verification callbacks because the standard library tls module:
+//  1. does not have native support for dynamic root cert reloading.
+//  2. ignores basic certificate verification when InsecureSkipVerify is true.
+//
+// It returns two callbacks that work together during the TLS handshake:
+//  1. VerifyPeerCertificate: performs root CA reloading, peer certificate chain
+//     verification, and revocation checking, storing the verified chains and
+//     leaf cert in shared closure variables.
+//  2. VerifyConnection: invoked after certificate verification and key exchange
+//     complete, providing access to tls.ConnectionState and invoking the user's
+//     custom verification function (verifyFunc).
 //
 // peerVerifiedChains(output param): verified chain of certs from leaf to the
 // trust cert that the peer trusts.
@@ -537,13 +549,18 @@ func (c *advancedTLSCreds) OverrideServerName(serverNameOverride string) error {
 func buildVerifyFunc(c *advancedTLSCreds,
 	serverName string,
 	rawConn net.Conn,
-	peerVerifiedChains *CertificateChains) func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
-	return func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
-		if len(rawCerts) == 0 {
+	peerVerifiedChains *CertificateChains) (verifyPeerCertificateFunc, verifyConnectionFunc) {
+	var (
+		chains   CertificateChains
+		leafCert *x509.Certificate
+		rawCerts [][]byte
+	)
+	verifyPeerCertFunc := func(rc [][]byte, verifiedChains [][]*x509.Certificate) error {
+		if len(rc) == 0 {
 			return fmt.Errorf("no peer certificates presented")
 		}
-		chains := verifiedChains
-		var leafCert *x509.Certificate
+		rawCerts = rc
+		chains = verifiedChains
 		rawCertList := make([]*x509.Certificate, len(rawCerts))
 		for i, asn1Data := range rawCerts {
 			cert, err := x509.ParseCertificate(asn1Data)
@@ -614,20 +631,21 @@ func buildVerifyFunc(c *advancedTLSCreds,
 				return err
 			}
 		}
-		// Perform custom verification check if specified.
-		if c.verifyFunc != nil {
-			_, err := c.verifyFunc(&HandshakeVerificationInfo{
-				ServerName:     serverName,
-				RawCerts:       rawCerts,
-				VerifiedChains: chains,
-				Leaf:           leafCert,
-			})
-			if err != nil {
-				return err
-			}
-		}
 		*peerVerifiedChains = chains
 		return nil
+	}
+	if c.verifyFunc == nil {
+		return verifyPeerCertFunc, nil
+	}
+	return verifyPeerCertFunc, func(cs tls.ConnectionState) error {
+		_, err := c.verifyFunc(&HandshakeVerificationInfo{
+			ServerName:      serverName,
+			RawCerts:        rawCerts,
+			VerifiedChains:  chains,
+			Leaf:            leafCert,
+			ConnectionState: cs,
+		})
+		return err
 	}
 }
 

@@ -1372,7 +1372,7 @@ func (s) TestResolverKeepWatchOpen_ActiveRPCs(t *testing.T) {
 	waitForResourceNames(ctx, t, cdsResourceRequestedCh, wantNames)
 
 	// ServiceConfig update should also contain only cluster B.
-	verifyUpdateFromResolver(ctx, t, stateCh, wantServiceConfig(clusterB))
+	cs = verifyUpdateFromResolver(ctx, t, stateCh, wantServiceConfig(clusterB))
 
 	// Verify that RPCs pass again.
 	res, err = cs.SelectConfig(iresolver.RPCInfo{Context: ctx, Method: "/service/method"})

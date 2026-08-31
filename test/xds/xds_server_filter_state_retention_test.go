@@ -93,11 +93,11 @@ func (t *trackingHTTPFilterBuilder) IsTerminal() bool { return false }
 
 func (t *trackingHTTPFilterBuilder) TypeURLs() []string { return []string{t.typeURL} }
 
-func (*trackingHTTPFilterBuilder) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, error) {
+func (*trackingHTTPFilterBuilder) ParseFilterConfig(cfg proto.Message, _ httpfilter.ParseOptions) (httpfilter.FilterConfig, error) {
 	return filterConfigFromProto(cfg)
 }
 
-func (*trackingHTTPFilterBuilder) ParseFilterConfigOverride(cfg proto.Message) (httpfilter.FilterConfig, error) {
+func (*trackingHTTPFilterBuilder) ParseFilterConfigOverride(cfg proto.Message, _ httpfilter.ParseOptions) (httpfilter.FilterConfig, error) {
 	return filterConfigFromProto(cfg)
 }
 

@@ -372,23 +372,23 @@ type testCertProvider struct {
 func (s) TestEqual(t *testing.T) {
 	tests := []struct {
 		desc      string
-		hi1       *grpcsync.RefCounted[HandshakeInfo]
-		hi2       *grpcsync.RefCounted[HandshakeInfo]
+		hi1       *grpcsync.RefCounted[*HandshakeInfo]
+		hi2       *grpcsync.RefCounted[*HandshakeInfo]
 		wantMatch bool
 	}{
 		{
 			desc: "both HandshakeInfo are nil",
-			hi1: func() *grpcsync.RefCounted[HandshakeInfo] {
+			hi1: func() *grpcsync.RefCounted[*HandshakeInfo] {
 				return grpcsync.NewRefCounted((*HandshakeInfo)(nil), func() {})
 			}(),
-			hi2: func() *grpcsync.RefCounted[HandshakeInfo] {
+			hi2: func() *grpcsync.RefCounted[*HandshakeInfo] {
 				return grpcsync.NewRefCounted((*HandshakeInfo)(nil), func() {})
 			}(),
 			wantMatch: true,
 		},
 		{
 			desc: "one HandshakeInfo is nil",
-			hi1: func() *grpcsync.RefCounted[HandshakeInfo] {
+			hi1: func() *grpcsync.RefCounted[*HandshakeInfo] {
 				return grpcsync.NewRefCounted((*HandshakeInfo)(nil), func() {})
 			}(),
 			hi2:       NewHandshakeInfo(&testCertProvider{}, nil, nil, "", false, false, false),
@@ -550,7 +550,7 @@ func (s) TestBuildVerifyFuncFailures(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
-	hiPtr := new(atomic.Pointer[grpcsync.RefCounted[HandshakeInfo]])
+	hiPtr := new(atomic.Pointer[grpcsync.RefCounted[*HandshakeInfo]])
 	hiPtr.Store(hi)
 	cfg, _, done, err := ClientSideTLSConfig(ctx, hiPtr, "")
 	if err != nil {
@@ -630,7 +630,7 @@ func (s) TestAutoHostSNI_DNS_SANValidation_Failures(t *testing.T) {
 	defer hi.Decrement()
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
-	hiPtr := new(atomic.Pointer[grpcsync.RefCounted[HandshakeInfo]])
+	hiPtr := new(atomic.Pointer[grpcsync.RefCounted[*HandshakeInfo]])
 	hiPtr.Store(hi)
 	cfg, _, done, err := ClientSideTLSConfig(ctx, hiPtr, "")
 	if err != nil {
@@ -653,7 +653,7 @@ func (s) TestVerifyPeerCertificateZeroCerts(t *testing.T) {
 	defer hi.Decrement()
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
-	hiPtr := new(atomic.Pointer[grpcsync.RefCounted[HandshakeInfo]])
+	hiPtr := new(atomic.Pointer[grpcsync.RefCounted[*HandshakeInfo]])
 	hiPtr.Store(hi)
 	cfg, _, done, err := ClientSideTLSConfig(ctx, hiPtr, "")
 	if err != nil {
