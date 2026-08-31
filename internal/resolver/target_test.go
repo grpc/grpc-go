@@ -118,10 +118,11 @@ func TestValidateTargetURI(t *testing.T) {
 }
 
 func TestValidateTargetURI_UserSetDefaultScheme(t *testing.T) {
+	oldDefaultScheme := resolver.GetDefaultScheme()
 	resolver.SetDefaultScheme("iresolver-test")
 	defer func() {
 		// Reset the default scheme as though it was never set by the user.
-		resolver.SetDefaultScheme("passthrough")
+		resolver.SetDefaultScheme(oldDefaultScheme)
 		internal.UserSetDefaultScheme = false
 	}()
 	if err := ValidateTargetURI("my-service:50051"); err != nil {
