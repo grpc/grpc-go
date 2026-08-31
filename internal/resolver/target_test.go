@@ -56,7 +56,7 @@ func TestValidateTargetURI(t *testing.T) {
 			target: "127.0.0.1:443",
 		},
 		{
-			desc:   "registered-scheme opaque form falls back to default scheme",
+			desc:   "registered-scheme opaque form uses registered scheme",
 			target: "dns:endpoint",
 		},
 		{
@@ -114,13 +114,39 @@ func TestValidateTargetURI_Error(t *testing.T) {
 
 func TestValidateTargetURI_UserSetDefaultScheme(t *testing.T) {
 	oldDefaultScheme := resolver.GetDefaultScheme()
-	resolver.SetDefaultScheme("passthrough")
 	defer func() {
 		// Reset the default scheme as though it was never set by the user.
 		resolver.SetDefaultScheme(oldDefaultScheme)
 		internal.UserSetDefaultScheme = false
 	}()
-	if err := ValidateTargetURI("my-service:50051"); err != nil {
-		t.Fatalf("ValidateTargetURI(%q) with user-set default scheme = %v, want nil", "my-service:50051", err)
+
+	tests := []struct {
+		desc          string
+		defaultScheme string
+		target        string
+	}{
+		{
+			desc:          "host:port uses user-set default scheme",
+			defaultScheme: "passthrough",
+			target:        "my-service:50051",
+		},
+		{
+			desc:          "registered opaque scheme takes precedence over default scheme",
+			defaultScheme: "no-such-scheme",
+			target:        "dns:endpoint",
+		},
+		{
+			desc:          "uppercase default scheme is canonicalized to lowercase",
+			defaultScheme: "DNS",
+			target:        "endpoint",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			resolver.SetDefaultScheme(tc.defaultScheme)
+			if err := ValidateTargetURI(tc.target); err != nil {
+				t.Fatalf("ValidateTargetURI(%q) with default scheme %q = %v, want nil", tc.target, tc.defaultScheme, err)
+			}
+		})
 	}
 }
