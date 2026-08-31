@@ -25,22 +25,10 @@ import (
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/resolver"
 
-	_ "google.golang.org/grpc/internal/resolver/dns" // Register the default (dns) resolver for fallback tests.
+	// Register resolvers used by the validation tests.
+	_ "google.golang.org/grpc/internal/resolver/dns"
+	_ "google.golang.org/grpc/internal/resolver/passthrough"
 )
-
-// testResolverBuilder is a minimal resolver.Builder used only to register
-// schemes for ValidateTargetURI tests.
-type testResolverBuilder struct{ scheme string }
-
-func (b *testResolverBuilder) Build(resolver.Target, resolver.ClientConn, resolver.BuildOptions) (resolver.Resolver, error) {
-	return nil, nil
-}
-
-func (b *testResolverBuilder) Scheme() string { return b.scheme }
-
-func init() {
-	resolver.Register(&testResolverBuilder{scheme: "iresolver-test"})
-}
 
 func TestValidateTargetURI(t *testing.T) {
 	tests := []struct {
@@ -50,12 +38,12 @@ func TestValidateTargetURI(t *testing.T) {
 	}{
 		{
 			desc:    "registered scheme with authority and endpoint",
-			target:  "iresolver-test:///endpoint",
+			target:  "dns:///endpoint",
 			wantErr: false,
 		},
 		{
 			desc:    "uppercase registered scheme is canonicalized to lowercase",
-			target:  "IRESOLVER-TEST:///endpoint",
+			target:  "DNS:///endpoint",
 			wantErr: false,
 		},
 		{
@@ -75,7 +63,7 @@ func TestValidateTargetURI(t *testing.T) {
 		},
 		{
 			desc:    "registered-scheme opaque form falls back to default scheme",
-			target:  "iresolver-test:endpoint",
+			target:  "dns:endpoint",
 			wantErr: false,
 		},
 		{
@@ -119,7 +107,7 @@ func TestValidateTargetURI(t *testing.T) {
 
 func TestValidateTargetURI_UserSetDefaultScheme(t *testing.T) {
 	oldDefaultScheme := resolver.GetDefaultScheme()
-	resolver.SetDefaultScheme("iresolver-test")
+	resolver.SetDefaultScheme("passthrough")
 	defer func() {
 		// Reset the default scheme as though it was never set by the user.
 		resolver.SetDefaultScheme(oldDefaultScheme)
