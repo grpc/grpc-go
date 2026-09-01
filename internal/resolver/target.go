@@ -52,8 +52,6 @@ func ValidateTargetURI(target string) error {
 	}
 	u, err := url.Parse(target)
 	if err == nil && u.Scheme != "" {
-		// The original target already names a registered resolver, so no
-		// fallback is needed.
 		if resolver.Get(u.Scheme) != nil {
 			return nil
 		}
@@ -70,8 +68,6 @@ func ValidateTargetURI(target string) error {
 	if internal.UserSetDefaultScheme {
 		defScheme = resolver.GetDefaultScheme()
 	}
-	// Apply the default scheme to parse errors, schemeless targets, and opaque
-	// targets whose schemes are not registered, as grpc.NewClient does.
 	if u, err = url.Parse(defScheme + ":///" + target); err != nil {
 		return fmt.Errorf("resolver: invalid target URI %q: %v", target, err)
 	}
