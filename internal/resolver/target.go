@@ -50,20 +50,30 @@ func ValidateTargetURI(target string) error {
 	if target == "" {
 		return fmt.Errorf("resolver: target URI cannot be empty")
 	}
+	u, err := url.Parse(target)
+	if err == nil && u.Scheme != "" {
+		// The original target already names a registered resolver, so no
+		// fallback is needed.
+		if resolver.Get(u.Scheme) != nil {
+			return nil
+		}
+		// Reject an unregistered non-opaque scheme instead of silently
+		// falling back, so that scheme typos surface as errors.
+		if u.Opaque == "" {
+			return fmt.Errorf("resolver: target URI %q uses scheme %q which has no registered resolver", target, u.Scheme)
+		}
+	}
+
 	// Mirror grpc.NewClient's choice of default scheme: "dns", unless the
 	// user overrode it via resolver.SetDefaultScheme.
 	defScheme := "dns"
 	if internal.UserSetDefaultScheme {
 		defScheme = resolver.GetDefaultScheme()
 	}
-	u, err := url.Parse(target)
-	if err != nil || u.Scheme == "" || (u.Opaque != "" && resolver.Get(u.Scheme) == nil) {
-		// The target does not specify a registered scheme and is not an
-		// authority-form URI. Apply the default scheme, as grpc.NewClient
-		// does.
-		if u, err = url.Parse(defScheme + ":///" + target); err != nil {
-			return fmt.Errorf("resolver: invalid target URI %q: %v", target, err)
-		}
+	// Apply the default scheme to parse errors, schemeless targets, and opaque
+	// targets whose schemes are not registered, as grpc.NewClient does.
+	if u, err = url.Parse(defScheme + ":///" + target); err != nil {
+		return fmt.Errorf("resolver: invalid target URI %q: %v", target, err)
 	}
 	if resolver.Get(u.Scheme) == nil {
 		return fmt.Errorf("resolver: target URI %q uses scheme %q which has no registered resolver", target, u.Scheme)
