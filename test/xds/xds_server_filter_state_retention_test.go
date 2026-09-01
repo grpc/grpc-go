@@ -61,9 +61,6 @@ type testFilterCfg struct {
 // filterConfigFromProto parses filter config specified as a v3.TypedStruct into
 // a testFilterCfg.
 func filterConfigFromProto(cfg proto.Message) (httpfilter.FilterConfig, error) {
-	// if cfg == nil {
-	// 	return testFilterCfg{}, nil
-	// }
 	ts, ok := cfg.(*v3xdsxdstypepb.TypedStruct)
 	if !ok {
 		return nil, fmt.Errorf("unsupported filter config type: %T, want %T", cfg, &v3xdsxdstypepb.TypedStruct{})
