@@ -20,12 +20,12 @@ package xds_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
 	"strconv"
 	"strings"
-	"sync/atomic"
 	"testing"
 
 	"google.golang.org/grpc"
@@ -38,7 +38,6 @@ import (
 	"google.golang.org/grpc/internal/xds/httpfilter"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/xds"
-	"google.golang.org/protobuf/proto"
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
@@ -49,110 +48,26 @@ import (
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
-type dummyFilterBuilder struct {
-	httpfilter.Builder
-	typeURL           string
-	interceptRPCCount *atomic.Int32
-	recvMsgCount      *atomic.Int32
-	sendMsgCount      *atomic.Int32
-	interceptRPCFunc  func(ss grpc.ServerStream) (grpc.ServerStream, error)
-}
-
-func (b *dummyFilterBuilder) IsTerminal() bool   { return false }
-func (b *dummyFilterBuilder) TypeURLs() []string { return []string{b.typeURL} }
-func (b *dummyFilterBuilder) ParseFilterConfig(proto.Message, httpfilter.ParseOptions) (httpfilter.FilterConfig, error) {
-	return dummyFilterConfig{}, nil
-}
-func (b *dummyFilterBuilder) ParseFilterConfigOverride(proto.Message, httpfilter.ParseOptions) (httpfilter.FilterConfig, error) {
-	return dummyFilterConfig{}, nil
-}
-func (b *dummyFilterBuilder) BuildServerFilter() httpfilter.ServerFilter {
-	return b
-}
-func (b *dummyFilterBuilder) Close() {}
-
-type dummyFilterConfig struct {
-	httpfilter.FilterConfig
-}
-
-func (b *dummyFilterBuilder) BuildServerInterceptor(httpfilter.FilterConfig, httpfilter.FilterConfig) (httpfilter.ServerInterceptor, error) {
-	return &dummyInterceptor{
-		builder: b,
-	}, nil
-}
-
-type dummyInterceptor struct {
-	builder *dummyFilterBuilder
-}
-
-func (i *dummyInterceptor) InterceptRPC(ss grpc.ServerStream) (grpc.ServerStream, error) {
-	if i.builder.interceptRPCCount != nil {
-		i.builder.interceptRPCCount.Add(1)
+func makeUnaryRPC(ctx context.Context, client testgrpc.TestServiceClient) error {
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+		return fmt.Errorf("EmptyCall() failed: %w", err)
 	}
-	if i.builder.interceptRPCFunc != nil {
-		return i.builder.interceptRPCFunc(ss)
+	return nil
+}
+
+func makeStreamingRPC(ctx context.Context, client testgrpc.TestServiceClient) error {
+	stream, err := client.FullDuplexCall(ctx)
+	if err != nil {
+		return fmt.Errorf("FullDuplexCall() failed: %w", err)
 	}
-	return &wrappedServerStream{
-		ServerStream: ss,
-		builder:      i.builder,
-	}, nil
-}
-
-func (i *dummyInterceptor) Close() {}
-
-// wrappedServerStream wraps grpc.ServerStream to intercept and count
-// RecvMsg and SendMsg invocations for testing.
-type wrappedServerStream struct {
-	grpc.ServerStream
-	builder *dummyFilterBuilder
-}
-
-func (w *wrappedServerStream) RecvMsg(m any) error {
-	err := w.ServerStream.RecvMsg(m)
-	if err == nil && w.builder.recvMsgCount != nil {
-		w.builder.recvMsgCount.Add(1)
+	if err := stream.Send(&testpb.StreamingOutputCallRequest{}); err != nil {
+		return fmt.Errorf("stream.Send() failed: %w", err)
 	}
-	return err
-}
-
-func (w *wrappedServerStream) SendMsg(m any) error {
-	err := w.ServerStream.SendMsg(m)
-	if err == nil && w.builder.sendMsgCount != nil {
-		w.builder.sendMsgCount.Add(1)
+	if err := stream.CloseSend(); err != nil {
+		return fmt.Errorf("stream.CloseSend() failed: %w", err)
 	}
-	return err
-}
-
-type rpcType int
-
-const (
-	rpcTypeUnary rpcType = iota
-	rpcTypeStreaming
-)
-
-func makeRPC(ctx context.Context, client testgrpc.TestServiceClient, rType rpcType) error {
-	switch rType {
-	case rpcTypeUnary:
-		_, err := client.EmptyCall(ctx, &testpb.Empty{})
-		if err != nil {
-			return fmt.Errorf("EmptyCall() failed: %w", err)
-		}
-		return nil
-	case rpcTypeStreaming:
-		stream, err := client.FullDuplexCall(ctx)
-		if err != nil {
-			return fmt.Errorf("FullDuplexCall() failed: %w", err)
-		}
-		if err := stream.Send(&testpb.StreamingOutputCallRequest{}); err != nil {
-			return fmt.Errorf("stream.Send() failed: %w", err)
-		}
-		if err := stream.CloseSend(); err != nil {
-			return fmt.Errorf("stream.CloseSend() failed: %w", err)
-		}
-		if _, err := stream.Recv(); err != io.EOF {
-			return err
-		}
-		return nil
+	if _, err := stream.Recv(); err != io.EOF {
+		return err
 	}
 	return nil
 }
@@ -259,12 +174,7 @@ func setupXDSListenerAndClient(t *testing.T, httpFilters ...*v3httppb.HttpFilter
 // InterceptRPC and wraps grpc.ServerStream for both Unary and Streaming RPCs.
 func (s) TestServerSideXDSHTTPFilter_InterceptRPC(t *testing.T) {
 	dummyTypeURL := t.Name()
-	fb := &dummyFilterBuilder{
-		typeURL:           dummyTypeURL,
-		interceptRPCCount: &atomic.Int32{},
-		recvMsgCount:      &atomic.Int32{},
-		sendMsgCount:      &atomic.Int32{},
-	}
+	fb := newTrackingHTTPFilterBuilder(dummyTypeURL)
 	httpfilter.Register(fb)
 	defer httpfilter.UnregisterForTesting(fb.typeURL)
 
@@ -275,8 +185,8 @@ func (s) TestServerSideXDSHTTPFilter_InterceptRPC(t *testing.T) {
 	defer cancel()
 
 	// Verify Unary RPC execution.
-	if err := makeRPC(ctx, client, rpcTypeUnary); err != nil {
-		t.Fatalf("makeRPC() failed: %v", err)
+	if err := makeUnaryRPC(ctx, client); err != nil {
+		t.Fatalf("makeUnaryRPC() failed: %v", err)
 	}
 	if got := fb.interceptRPCCount.Load(); got != 1 {
 		t.Fatalf("Unexpected interceptRPCCount for unary RPC, got %d, want 1", got)
@@ -288,60 +198,74 @@ func (s) TestServerSideXDSHTTPFilter_InterceptRPC(t *testing.T) {
 		t.Fatalf("Unexpected sendMsgCount for unary RPC, got %d, want 1", got)
 	}
 
-	// Reset counters for streaming rpc.
-	fb.interceptRPCCount.Store(0)
-	fb.recvMsgCount.Store(0)
-	fb.sendMsgCount.Store(0)
-
 	// Verify Streaming RPC execution.
-	if err := makeRPC(ctx, client, rpcTypeStreaming); err != nil {
-		t.Fatalf("makeRPC() failed: %v", err)
+	if err := makeStreamingRPC(ctx, client); err != nil {
+		t.Fatalf("makeStreamingRPC() failed: %v", err)
 	}
-	if got := fb.interceptRPCCount.Load(); got != 1 {
-		t.Fatalf("Unexpected interceptRPCCount for streaming RPC, got %d, want 1", got)
+	if got := fb.interceptRPCCount.Load(); got != 2 {
+		t.Fatalf("Unexpected interceptRPCCount for streaming RPC, got %d, want 2", got)
 	}
-	if got := fb.recvMsgCount.Load(); got != 1 {
-		t.Fatalf("Unexpected recvMsgCount for streaming RPC, got %d, want 1", got)
+	if got := fb.recvMsgCount.Load(); got != 2 {
+		t.Fatalf("Unexpected recvMsgCount for streaming RPC, got %d, want 2", got)
 	}
 }
 
 // Test verifies that when a server-side xDS HTTP filter returns an error from
-// InterceptRPC, the RPC is rejected early with the expected error for both
-// Unary and Streaming RPCs.
+// InterceptRPC, the RPC is rejected early with the expected error code and
+// message for both Unary and Streaming RPCs.
 func (s) TestServerSideXDSHTTPFilter_InterceptRPCEarlyRejection(t *testing.T) {
-	typeURL := t.Name()
-	const wantErr = "access denied by xDS server filter"
-	fb := &dummyFilterBuilder{
-		typeURL:           typeURL,
-		interceptRPCCount: &atomic.Int32{},
-		interceptRPCFunc: func(grpc.ServerStream) (grpc.ServerStream, error) {
-			return nil, status.Error(codes.PermissionDenied, wantErr)
+	tests := []struct {
+		name       string
+		errToRet   error
+		wantCode   codes.Code
+		wantErrMsg string
+	}{
+		{
+			name:       "InterceptRPC_FailsWithStatusError",
+			errToRet:   status.Error(codes.PermissionDenied, "access denied by xDS server filter"),
+			wantCode:   codes.PermissionDenied,
+			wantErrMsg: "access denied by xDS server filter",
+		},
+		{
+			name:       "InterceptRPC_FailsWithNonStatusError",
+			errToRet:   errors.New("non-status error from xDS filter"),
+			wantCode:   codes.Unknown,
+			wantErrMsg: "non-status error from xDS filter",
 		},
 	}
-	httpfilter.Register(fb)
-	defer httpfilter.UnregisterForTesting(fb.typeURL)
 
-	rejectFilter := newHTTPFilter(t, "reject-filter", typeURL, "")
-	client := setupXDSListenerAndClient(t, rejectFilter)
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			typeURL := t.Name()
+			fb := newTrackingHTTPFilterBuilder(typeURL)
+			fb.interceptRPCFunc = func(grpc.ServerStream) (grpc.ServerStream, error) {
+				return nil, test.errToRet
+			}
+			httpfilter.Register(fb)
+			defer httpfilter.UnregisterForTesting(fb.typeURL)
 
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
+			rejectFilter := newHTTPFilter(t, "reject-filter", typeURL, "")
+			client := setupXDSListenerAndClient(t, rejectFilter)
 
-	// Verify Unary RPC rejection.
-	if err := makeRPC(ctx, client, rpcTypeUnary); err == nil || !strings.Contains(err.Error(), wantErr) {
-		t.Fatalf("makeRPC() returned error = %v, want error containing %q", err, wantErr)
-	}
-	if got := fb.interceptRPCCount.Load(); got != 1 {
-		t.Fatalf("Unexpected interceptRPCCount for unary RPC, got %d, want 1", got)
-	}
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
 
-	// Verify Streaming RPC rejection.
-	fb.interceptRPCCount.Store(0) // reset counter for streaming rpc
-	if err := makeRPC(ctx, client, rpcTypeStreaming); err == nil || !strings.Contains(err.Error(), wantErr) {
-		t.Fatalf("makeRPC() returned error = %v, want error containing %q", err, wantErr)
-	}
-	if got := fb.interceptRPCCount.Load(); got != 1 {
-		t.Fatalf("Unexpected interceptRPCCount for streaming RPC, got %d, want 1", got)
+			// Verify Unary RPC rejection.
+			if err := makeUnaryRPC(ctx, client); status.Code(err) != test.wantCode || !strings.Contains(err.Error(), test.wantErrMsg) {
+				t.Fatalf("makeUnaryRPC() returned err = %v (code: %v), want code %v and msg %q", err, status.Code(err), test.wantCode, test.wantErrMsg)
+			}
+			if got := fb.interceptRPCCount.Load(); got != 1 {
+				t.Fatalf("Unexpected interceptRPCCount for unary RPC, got %d, want 1", got)
+			}
+
+			// Verify Streaming RPC rejection.
+			if err := makeStreamingRPC(ctx, client); status.Code(err) != test.wantCode || !strings.Contains(err.Error(), test.wantErrMsg) {
+				t.Fatalf("makeStreamingRPC() returned err = %v (code: %v), want code %v and msg %q", err, status.Code(err), test.wantCode, test.wantErrMsg)
+			}
+			if got := fb.interceptRPCCount.Load(); got != 2 {
+				t.Fatalf("Unexpected interceptRPCCount for streaming RPC, got %d, want 2", got)
+			}
+		})
 	}
 }
 
@@ -353,19 +277,15 @@ func (s) TestServerSideXDS_InterceptRPCMultiFilterChaining(t *testing.T) {
 	eventsCh := make(chan string, 2)
 	const filter1, filter2 = "intercepted-filter-1", "intercepted-filter-2"
 
-	fb1 := &dummyFilterBuilder{
-		typeURL: typeURL1,
-		interceptRPCFunc: func(ss grpc.ServerStream) (grpc.ServerStream, error) {
-			eventsCh <- filter1
-			return ss, nil
-		},
+	fb1 := newTrackingHTTPFilterBuilder(typeURL1)
+	fb1.interceptRPCFunc = func(ss grpc.ServerStream) (grpc.ServerStream, error) {
+		eventsCh <- filter1
+		return ss, nil
 	}
-	fb2 := &dummyFilterBuilder{
-		typeURL: typeURL2,
-		interceptRPCFunc: func(ss grpc.ServerStream) (grpc.ServerStream, error) {
-			eventsCh <- filter2
-			return ss, nil
-		},
+	fb2 := newTrackingHTTPFilterBuilder(typeURL2)
+	fb2.interceptRPCFunc = func(ss grpc.ServerStream) (grpc.ServerStream, error) {
+		eventsCh <- filter2
+		return ss, nil
 	}
 
 	httpfilter.Register(fb1)
@@ -382,8 +302,8 @@ func (s) TestServerSideXDS_InterceptRPCMultiFilterChaining(t *testing.T) {
 	defer cancel()
 
 	// Verify Unary RPC filter chaining.
-	if err := makeRPC(ctx, client, rpcTypeUnary); err != nil {
-		t.Fatalf("makeRPC() failed for unary RPC: %v", err)
+	if err := makeUnaryRPC(ctx, client); err != nil {
+		t.Fatalf("makeUnaryRPC() failed: %v", err)
 	}
 	select {
 	case e := <-eventsCh:
@@ -404,8 +324,8 @@ func (s) TestServerSideXDS_InterceptRPCMultiFilterChaining(t *testing.T) {
 	}
 
 	// Verify Streaming RPC filter chaining.
-	if err := makeRPC(ctx, client, rpcTypeStreaming); err != nil {
-		t.Fatalf("makeRPC() failed for streaming RPC: %v", err)
+	if err := makeStreamingRPC(ctx, client); err != nil {
+		t.Fatalf("makeStreamingRPC() failed: %v", err)
 	}
 	select {
 	case e := <-eventsCh:
@@ -440,23 +360,16 @@ func (w *errorWrappedStream) RecvMsg(m any) error {
 
 // Test verifies that when multiple filters wrap the server stream and a
 // filter's overrided RecvMsg returns an error, that error is properly
-// propagated back to the client.
+// propagated back to the client for both Unary and Streaming RPCs.
 func (s) TestServerSideXDS_InterceptRPCMultiFilterErrorPropagation(t *testing.T) {
 	typeURL1, typeURL2 := fmt.Sprintf("%s-1", t.Name()), fmt.Sprintf("%s-2", t.Name())
 
-	fb1 := &dummyFilterBuilder{
-		typeURL: typeURL1,
-		interceptRPCFunc: func(ss grpc.ServerStream) (grpc.ServerStream, error) {
-			return &wrappedServerStream{ServerStream: ss}, nil
-		},
-	}
+	fb1 := newTrackingHTTPFilterBuilder(typeURL1)
 
-	wantErr := "recvMsg failed in filter 2"
-	fb2 := &dummyFilterBuilder{
-		typeURL: typeURL2,
-		interceptRPCFunc: func(ss grpc.ServerStream) (grpc.ServerStream, error) {
-			return &errorWrappedStream{ServerStream: ss, recvErr: wantErr}, nil
-		},
+	const wantErr = "recvMsg failed in filter 2"
+	fb2 := newTrackingHTTPFilterBuilder(typeURL2)
+	fb2.interceptRPCFunc = func(ss grpc.ServerStream) (grpc.ServerStream, error) {
+		return &errorWrappedStream{ServerStream: ss, recvErr: wantErr}, nil
 	}
 
 	httpfilter.Register(fb1)
@@ -472,15 +385,13 @@ func (s) TestServerSideXDS_InterceptRPCMultiFilterErrorPropagation(t *testing.T)
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	stream, err := client.FullDuplexCall(ctx)
-	if err != nil {
-		t.Fatalf("FullDuplexCall() failed to start stream: %v", err)
+	// Verify Unary RPC error propagation.
+	if err := makeUnaryRPC(ctx, client); err == nil || !strings.Contains(err.Error(), wantErr) {
+		t.Fatalf("makeUnaryRPC() returned error = %v, want error containing %q", err, wantErr)
 	}
 
-	if err := stream.Send(&testpb.StreamingOutputCallRequest{}); err != nil {
-		t.Fatalf("stream.Send() failed: %v", err)
-	}
-	if _, err := stream.Recv(); err == nil || !strings.Contains(err.Error(), wantErr) {
-		t.Fatalf("stream.Recv() returned error = %v, want error containing %q", err, wantErr)
+	// Verify Streaming RPC error propagation.
+	if err := makeStreamingRPC(ctx, client); err == nil || !strings.Contains(err.Error(), wantErr) {
+		t.Fatalf("makeStreamingRPC() returned error = %v, want error containing %q", err, wantErr)
 	}
 }

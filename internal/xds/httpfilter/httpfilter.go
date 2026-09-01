@@ -135,10 +135,13 @@ type ClientFilter interface {
 type ServerInterceptor interface {
 	// InterceptRPC intercepts an incoming RPC on the server side.
 	//
-	// On success, implementations must return either the original ServerStream or
-	// a wrapped ServerStream, with a nil error.
+	// On success, implementations must return either the original ServerStream
+	// or a wrapped ServerStream, with a nil error.
 	//
-	// Returning a non-nil error will terminate the RPC with that status error.
+	// Returning a non-nil error will terminate the RPC with that error.
+	// Implementations are expected to return an error created using the status
+	// package; otherwise, the RPC will fail with an UNKNOWN status code.
+	//
 	// Implementations should never return (nil, nil).
 	InterceptRPC(ss grpc.ServerStream) (grpc.ServerStream, error)
 

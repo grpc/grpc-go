@@ -81,10 +81,7 @@ func NewGRPCServer(opts ...grpc.ServerOption) (*GRPCServer, error) {
 	// Construct a grpc.ServerOption that registers xDSFilterWrapper on
 	// the server.
 	xDSFilterWrapperOption := internal.XDSFilterWrapperOption.(func(func(grpc.ServerStream) (grpc.ServerStream, error)) grpc.ServerOption)
-	newOpts := []grpc.ServerOption{
-		xDSFilterWrapperOption(xDSFilterWrapper),
-	}
-	newOpts = append(newOpts, opts...)
+	newOpts := append([]grpc.ServerOption{xDSFilterWrapperOption(xDSFilterWrapper)}, opts...)
 	s := &GRPCServer{
 		gs:   newGRPCServer(newOpts...),
 		quit: grpcsync.NewEvent(),

@@ -24,7 +24,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -147,8 +146,8 @@ func (s) TestNewServer_Success(t *testing.T) {
 					t.Fatalf("%d ServerOptions passed to grpc.Server, want %d", got, wantServerOpts)
 				}
 				// Verify that the user passed ServerOptions are forwarded as is.
-				if !reflect.DeepEqual(opts[1:], test.serverOpts) {
-					t.Fatalf("got ServerOptions %v, want %v", opts[:len(test.serverOpts)], test.serverOpts)
+				if diff := cmp.Diff(test.serverOpts, opts[1:], cmp.Comparer(func(a, b grpc.ServerOption) bool { return a == b })); diff != "" {
+					t.Fatalf("ServerOptions mismatch (-want +got):\n%s", diff)
 				}
 				return grpc.NewServer(opts...)
 			}

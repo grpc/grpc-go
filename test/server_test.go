@@ -486,27 +486,39 @@ func (s) TestInterceptorSegregation(t *testing.T) {
 	}
 }
 
+type wrappedTestStreamKey struct{}
+
 type wrappedTestStream struct {
 	grpc.ServerStream
+}
+
+func (w *wrappedTestStream) Context() context.Context {
+	return context.WithValue(w.ServerStream.Context(), wrappedTestStreamKey{}, w)
 }
 
 // Test verifies that an internal xDS filter wrapper option configured on the
 // server gets invoked and can wrap the ServerStream for both Unary and
 // Streaming RPCs.
 func (s) TestXDSFilterWrapperOption(t *testing.T) {
-	var wrapperCalled atomic.Bool
+	var wrapperCallCount atomic.Int32
 	wrapper := func(ss grpc.ServerStream) (grpc.ServerStream, error) {
-		wrapperCalled.Store(true)
+		wrapperCallCount.Add(1)
 		return &wrappedTestStream{ServerStream: ss}, nil
 	}
 
 	opt := internal.XDSFilterWrapperOption.(func(func(grpc.ServerStream) (grpc.ServerStream, error)) grpc.ServerOption)(wrapper)
 
 	ss := &stubserver.StubServer{
-		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
+		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
+			if _, ok := ctx.Value(wrappedTestStreamKey{}).(*wrappedTestStream); !ok {
+				return nil, status.Errorf(codes.Internal, "context value is %T, want *wrappedTestStream", ctx.Value(wrappedTestStreamKey{}))
+			}
 			return &testpb.Empty{}, nil
 		},
-		FullDuplexCallF: func(testgrpc.TestService_FullDuplexCallServer) error {
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
+			if _, ok := stream.Context().Value(wrappedTestStreamKey{}).(*wrappedTestStream); !ok {
+				return status.Errorf(codes.Internal, "context value is %T, want *wrappedTestStream", stream.Context().Value(wrappedTestStreamKey{}))
+			}
 			return nil
 		},
 	}
@@ -520,11 +532,10 @@ func (s) TestXDSFilterWrapperOption(t *testing.T) {
 	if _, err := ss.Client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("EmptyCall failed: %v", err)
 	}
-	if !wrapperCalled.Load() {
-		t.Fatal("XDSFilterWrapperOption callback was not called for Unary RPC")
+	if got := wrapperCallCount.Load(); got != 1 {
+		t.Fatalf("XDSFilterWrapperOption callback call count for Unary RPC got %d, want 1", got)
 	}
 
-	wrapperCalled.Store(false)
 	stream, err := ss.Client.FullDuplexCall(ctx)
 	if err != nil {
 		t.Fatalf("FullDuplexCall failed: %v", err)
@@ -532,8 +543,8 @@ func (s) TestXDSFilterWrapperOption(t *testing.T) {
 	if _, err = stream.Recv(); err != io.EOF {
 		t.Fatalf("Recv failed: %v", err)
 	}
-	if !wrapperCalled.Load() {
-		t.Fatal("XDSFilterWrapperOption callback was not called for Streaming RPC")
+	if got := wrapperCallCount.Load(); got != 2 {
+		t.Fatalf("XDSFilterWrapperOption callback call count for Streaming RPC got %d, want 2", got)
 	}
 }
 

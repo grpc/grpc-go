@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"net"
 	"strconv"
-	"sync/atomic"
 	"testing"
 
 	"google.golang.org/grpc"
@@ -103,11 +102,7 @@ func (s) TestServerSideXDS_FilterOverride_Disabled(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			testFilterTypeURL := t.Name()
-			fb := &trackingHTTPFilterBuilder{
-				typeURL:             testFilterTypeURL,
-				filtersCreated:      &atomic.Int32{},
-				interceptorsCreated: &atomic.Int32{},
-			}
+			fb := newTrackingHTTPFilterBuilder(testFilterTypeURL)
 			httpfilter.Register(fb)
 			defer httpfilter.UnregisterForTesting(fb.typeURL)
 
@@ -268,14 +263,8 @@ func (s) TestServerSideXDS_FilterOverride_Enabled(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			pathCh := make(chan string, 1)
 			testFilterTypeURL := t.Name()
-			fb := &trackingHTTPFilterBuilder{
-				typeURL:               testFilterTypeURL,
-				pathCh:                pathCh,
-				filtersCreated:        &atomic.Int32{},
-				interceptorsCreated:   &atomic.Int32{},
-				filtersDestroyed:      &atomic.Int32{},
-				interceptorsDestroyed: &atomic.Int32{},
-			}
+			fb := newTrackingHTTPFilterBuilder(testFilterTypeURL)
+			fb.pathCh = pathCh
 			httpfilter.Register(fb)
 			defer httpfilter.UnregisterForTesting(fb.typeURL)
 
