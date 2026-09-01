@@ -30,7 +30,7 @@ import (
 func (s) TestSliceMap_Lookup(t *testing.T) {
 	sm := &sliceMap{
 		slices: []sliceMapEntry{
-			{startKey: []byte("b"), endpoints: []int{1}},
+			{startKey: []byte("a"), endpoints: []int{1}},
 			{startKey: []byte("d"), endpoints: []int{2}},
 			{startKey: []byte("f"), endpoints: []int{3}},
 		},
@@ -43,7 +43,7 @@ func (s) TestSliceMap_Lookup(t *testing.T) {
 	}{
 		{
 			name: "exact-match-first",
-			key:  []byte("b"),
+			key:  []byte("a"),
 			want: 0,
 		},
 		{
@@ -113,7 +113,7 @@ func (s) TestBuildSliceMap(t *testing.T) {
 		{
 			name: "valid-assignment",
 			assignment: &assignment{
-				endpointNames: []string{"hostA", "hostB", "hostC", "hostD"},
+				endpointNames: []string{"hostA", "hostB", "hostC"},
 				slices: []slice{
 					{startKey: []byte("a"), endpoints: []int{0, 1}}, // hostA, hostB -> indices 0, 1
 					{startKey: []byte("m"), endpoints: []int{1, 2}}, // hostB, hostC -> indices 1, 2

@@ -21,7 +21,6 @@ package autosharding
 import (
 	"bytes"
 	"slices"
-	"sort"
 )
 
 // sliceMapEntry represents an entry for a key-range in the sliceMap.
@@ -79,17 +78,14 @@ func (sm *sliceMap) lookup(key []byte) int {
 func buildSliceMap(endpointMap *endpointMap, assignment *assignment) *sliceMap {
 	sm := &sliceMap{}
 
-	// Populate fallbackPool deterministically sorted by endpoint index.
-	states := make([]*endpointState, 0, len(endpointMap.m))
-	for _, es := range endpointMap.m {
-		states = append(states, es)
-	}
-	sort.Slice(states, func(i, j int) bool {
-		return states[i].index < states[j].index
-	})
-	sm.fallbackPool = make([]int, len(states))
-	for i, es := range states {
-		sm.fallbackPool[i] = es.index
+	// Populate fallbackPool with values [0, 1, 2, ... N-1] where N is the
+	// number of endpoints returned by the name resolver. The only reason to
+	// have this slice is to allow the Picker to share code that picks a random
+	// endpoint from a slice of indices, either from the fallbackPool or from a
+	// sliceMapEntry.
+	sm.fallbackPool = make([]int, len(endpointMap.m))
+	for i := range sm.fallbackPool {
+		sm.fallbackPool[i] = i
 	}
 
 	// If no assignment has been received yet (startup case), return early with
@@ -108,6 +104,10 @@ func buildSliceMap(endpointMap *endpointMap, assignment *assignment) *sliceMap {
 			endpoints: []int{},
 		}
 
+		// Populate the endpoints for this slice by looking up the endpoint
+		// names in the EndpointMap. If an endpoint name is not found in the
+		// EndpointMap, it is skipped. This ensures that the sliceMap only
+		// contains valid endpoints that are currently available.
 		for _, idx := range s.endpoints {
 			hostname := assignment.endpointNames[idx]
 			if es, ok := endpointMap.m[hostname]; ok {
