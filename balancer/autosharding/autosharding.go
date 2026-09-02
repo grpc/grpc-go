@@ -85,7 +85,8 @@ type slice struct {
 	endpoints []int  // Indices into assignment.endpointNames
 }
 
-// assignment represents a complete snapshot of sharding assignments.
+// assignment represents a complete snapshot of sharding assignments, and is
+// expected to cover the entire key range.
 type assignment struct {
 	slices        []slice  // Sorted by startKey
 	endpointNames []string // Complete list of endpoint names
