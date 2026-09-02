@@ -34,7 +34,6 @@ import (
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3extauthzpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/ext_authz/v3"
-	v3typepb "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 )
 
 func init() {
@@ -59,26 +58,20 @@ func (builder) TypeURLs() []string {
 	}
 }
 
-func parseFilterEnabled(fp *v3corepb.RuntimeFractionalPercent) (fraction, error) {
+func parseFilterEnabled(fp *v3corepb.RuntimeFractionalPercent) (xdsresource.FractionalPercent, error) {
 	if fp == nil {
-		return fraction{numerator: 100, denominator: 100}, nil
+		// An unset filter_enabled means the filter applies to all requests.
+		return xdsresource.FractionalPercent{Numerator: 100, Denominator: 100, PPM: 1000000}, nil
 	}
 	fracPercent := fp.GetDefaultValue()
 	if fracPercent == nil {
-		return fraction{}, fmt.Errorf("extauthz: missing default_value in filter_enabled")
+		return xdsresource.FractionalPercent{}, fmt.Errorf("extauthz: missing default_value in filter_enabled")
 	}
-
-	den := uint32(100)
-	switch fracPercent.GetDenominator() {
-	case v3typepb.FractionalPercent_TEN_THOUSAND:
-		den = 10000
-	case v3typepb.FractionalPercent_MILLION:
-		den = 1000000
+	f, err := xdsresource.NewFractionalPercent(fracPercent)
+	if err != nil {
+		return xdsresource.FractionalPercent{}, fmt.Errorf("extauthz: filter_enabled contains %v", err)
 	}
-
-	// If the numerator exceeds the denominator, cap the fractional value at 100%.
-	num := min(fracPercent.GetNumerator(), den)
-	return fraction{numerator: num, denominator: den}, nil
+	return f, nil
 }
 
 // grpcStatusCode converts an HTTP status code to a gRPC status code.

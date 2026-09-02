@@ -264,6 +264,10 @@ func parseIntFromMD(header []string) (int, bool) {
 }
 
 func splitPct(fp *tpb.FractionalPercent) (num int, den int) {
+	// TODO: this validation should happen at config parsing time instead, and
+	// the filter configuration must be NACKed if an unrecognized denominator
+	// is seen. That requires the fault filter to convert the proto into an
+	// internal representation at parsing time and only use that at runtime.
 	f, err := xdsresource.NewFractionalPercent(fp)
 	if err != nil {
 		// An unrecognized denominator is treated as out of 100.
