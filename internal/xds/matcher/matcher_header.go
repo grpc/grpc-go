@@ -19,11 +19,13 @@
 package matcher
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
 
+	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -33,6 +35,84 @@ import (
 type HeaderMatcher interface {
 	Match(metadata.MD) bool
 	String() string
+}
+
+// HeaderMatcherFromProto creates a HeaderMatcher from the corresponding
+// HeaderMatcher proto.
+//
+// Returns a non-nil error if matcherProto is invalid.
+func HeaderMatcherFromProto(matcherProto *v3routepb.HeaderMatcher) (HeaderMatcher, error) {
+	if matcherProto == nil {
+		return nil, errors.New("input HeaderMatcher proto is nil")
+	}
+
+	name := matcherProto.GetName()
+	invert := matcherProto.GetInvertMatch()
+	switch matcher := matcherProto.GetHeaderMatchSpecifier().(type) {
+	case *v3routepb.HeaderMatcher_ExactMatch:
+		if matcher == nil {
+			return nil, errors.New("exact header matcher is nil")
+		}
+		return NewHeaderExactMatcher(name, matcher.ExactMatch, invert), nil
+	case *v3routepb.HeaderMatcher_SafeRegexMatch:
+		if matcher == nil || matcher.SafeRegexMatch == nil {
+			return nil, errors.New("safe regex header matcher is nil")
+		}
+		re, err := CompileSafeRegex(matcher.SafeRegexMatch.GetRegex())
+		if err != nil {
+			return nil, fmt.Errorf("safe regex header matcher %q is invalid: %v", matcher.SafeRegexMatch.GetRegex(), err)
+		}
+		return NewHeaderRegexMatcher(name, re, invert), nil
+	case *v3routepb.HeaderMatcher_RangeMatch:
+		if matcher == nil || matcher.RangeMatch == nil {
+			return nil, errors.New("range header matcher is nil")
+		}
+		return NewHeaderRangeMatcher(name, matcher.RangeMatch.GetStart(), matcher.RangeMatch.GetEnd(), invert), nil
+	case *v3routepb.HeaderMatcher_PresentMatch:
+		if matcher == nil {
+			return nil, errors.New("present header matcher is nil")
+		}
+		return NewHeaderPresentMatcher(name, matcher.PresentMatch, invert), nil
+	case *v3routepb.HeaderMatcher_PrefixMatch:
+		if matcher == nil {
+			return nil, errors.New("prefix header matcher is nil")
+		}
+		if matcher.PrefixMatch == "" {
+			return nil, errors.New("empty prefix is not allowed in HeaderMatcher")
+		}
+		return NewHeaderPrefixMatcher(name, matcher.PrefixMatch, invert), nil
+	case *v3routepb.HeaderMatcher_SuffixMatch:
+		if matcher == nil {
+			return nil, errors.New("suffix header matcher is nil")
+		}
+		if matcher.SuffixMatch == "" {
+			return nil, errors.New("empty suffix is not allowed in HeaderMatcher")
+		}
+		return NewHeaderSuffixMatcher(name, matcher.SuffixMatch, invert), nil
+	case *v3routepb.HeaderMatcher_ContainsMatch:
+		if matcher == nil {
+			return nil, errors.New("contains header matcher is nil")
+		}
+		if matcher.ContainsMatch == "" {
+			return nil, errors.New("empty contains is not allowed in HeaderMatcher")
+		}
+		return NewHeaderContainsMatcher(name, matcher.ContainsMatch, invert), nil
+	case *v3routepb.HeaderMatcher_StringMatch:
+		if matcher == nil || matcher.StringMatch == nil {
+			return nil, errors.New("string header matcher is nil")
+		}
+		sm, err := StringMatcherFromProto(matcher.StringMatch)
+		if err != nil {
+			return nil, fmt.Errorf("string header matcher is invalid: %v", err)
+		}
+		return NewHeaderStringMatcher(name, sm, invert), nil
+	default:
+		return nil, errors.New("header matcher type is not set")
+	}
+}
+
+func lowercaseHeaderKey(key string) string {
+	return strings.ToLower(key)
 }
 
 // valueFromMD retrieves metadata from context. If there are
@@ -56,7 +136,7 @@ type HeaderExactMatcher struct {
 
 // NewHeaderExactMatcher returns a new HeaderExactMatcher.
 func NewHeaderExactMatcher(key, exact string, invert bool) *HeaderExactMatcher {
-	return &HeaderExactMatcher{key: key, exact: exact, invert: invert}
+	return &HeaderExactMatcher{key: lowercaseHeaderKey(key), exact: exact, invert: invert}
 }
 
 // Match returns whether the passed in HTTP Headers match according to the
@@ -83,7 +163,7 @@ type HeaderRegexMatcher struct {
 
 // NewHeaderRegexMatcher returns a new HeaderRegexMatcher.
 func NewHeaderRegexMatcher(key string, re *regexp.Regexp, invert bool) *HeaderRegexMatcher {
-	return &HeaderRegexMatcher{key: key, re: re, invert: invert}
+	return &HeaderRegexMatcher{key: lowercaseHeaderKey(key), re: re, invert: invert}
 }
 
 // Match returns whether the passed in HTTP Headers match according to the
@@ -110,7 +190,7 @@ type HeaderRangeMatcher struct {
 
 // NewHeaderRangeMatcher returns a new HeaderRangeMatcher.
 func NewHeaderRangeMatcher(key string, start, end int64, invert bool) *HeaderRangeMatcher {
-	return &HeaderRangeMatcher{key: key, start: start, end: end, invert: invert}
+	return &HeaderRangeMatcher{key: lowercaseHeaderKey(key), start: start, end: end, invert: invert}
 }
 
 // Match returns whether the passed in HTTP Headers match according to the
@@ -142,7 +222,7 @@ func NewHeaderPresentMatcher(key string, present bool, invert bool) *HeaderPrese
 	if invert {
 		present = !present
 	}
-	return &HeaderPresentMatcher{key: key, present: present}
+	return &HeaderPresentMatcher{key: lowercaseHeaderKey(key), present: present}
 }
 
 // Match returns whether the passed in HTTP Headers match according to the
@@ -167,7 +247,7 @@ type HeaderPrefixMatcher struct {
 
 // NewHeaderPrefixMatcher returns a new HeaderPrefixMatcher.
 func NewHeaderPrefixMatcher(key string, prefix string, invert bool) *HeaderPrefixMatcher {
-	return &HeaderPrefixMatcher{key: key, prefix: prefix, invert: invert}
+	return &HeaderPrefixMatcher{key: lowercaseHeaderKey(key), prefix: prefix, invert: invert}
 }
 
 // Match returns whether the passed in HTTP Headers match according to the
@@ -194,7 +274,7 @@ type HeaderSuffixMatcher struct {
 
 // NewHeaderSuffixMatcher returns a new HeaderSuffixMatcher.
 func NewHeaderSuffixMatcher(key string, suffix string, invert bool) *HeaderSuffixMatcher {
-	return &HeaderSuffixMatcher{key: key, suffix: suffix, invert: invert}
+	return &HeaderSuffixMatcher{key: lowercaseHeaderKey(key), suffix: suffix, invert: invert}
 }
 
 // Match returns whether the passed in HTTP Headers match according to the
@@ -224,7 +304,7 @@ type HeaderContainsMatcher struct {
 // contain for a successful match. An empty contains string does not
 // work, use HeaderPresentMatcher in that case.
 func NewHeaderContainsMatcher(key string, contains string, invert bool) *HeaderContainsMatcher {
-	return &HeaderContainsMatcher{key: key, contains: contains, invert: invert}
+	return &HeaderContainsMatcher{key: lowercaseHeaderKey(key), contains: contains, invert: invert}
 }
 
 // Match returns whether the passed in HTTP Headers match according to the
@@ -252,7 +332,7 @@ type HeaderStringMatcher struct {
 // NewHeaderStringMatcher returns a new HeaderStringMatcher.
 func NewHeaderStringMatcher(key string, sm StringMatcher, invert bool) *HeaderStringMatcher {
 	return &HeaderStringMatcher{
-		key:           key,
+		key:           lowercaseHeaderKey(key),
 		stringMatcher: sm,
 		invert:        invert,
 	}

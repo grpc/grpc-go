@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"reflect"
 	"regexp"
 	"testing"
 	"time"
@@ -1003,12 +1004,16 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 	}
 }
 
+func mustHeaderMatcherFromProto(t *testing.T, p *v3routepb.HeaderMatcher) matcher.HeaderMatcher {
+	t.Helper()
+	m, err := matcher.HeaderMatcherFromProto(p)
+	if err != nil {
+		t.Fatalf("matcher.HeaderMatcherFromProto(%v) failed: %v", p, err)
+	}
+	return m
+}
+
 func (s) TestRoutesProtoToSlice(t *testing.T) {
-	sm, _ := matcher.StringMatcherFromProto(&v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: "tv"}})
-	prefixSM, _ := matcher.StringMatcherFromProto(&v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Prefix{Prefix: "tv"}})
-	suffixSM, _ := matcher.StringMatcherFromProto(&v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Suffix{Suffix: "tv"}})
-	containsSM, _ := matcher.StringMatcherFromProto(&v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Contains{Contains: "tv"}})
-	emptyExactSM, _ := matcher.StringMatcherFromProto(&v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: ""}})
 	var (
 		goodRouteWithFilterConfigs = func(cfgs map[string]*anypb.Any) []*v3routepb.Route {
 			// Sets per-filter config in cluster "B" and in the route.
@@ -1119,12 +1124,12 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 			},
 			wantRoutes: []*Route{{
 				Prefix: newStringP("/a/"),
-				Headers: []*HeaderMatcher{
-					{
-						Name:        "th",
-						InvertMatch: newBoolP(true),
-						StringMatch: &prefixSM,
-					},
+				Headers: []matcher.HeaderMatcher{
+					mustHeaderMatcherFromProto(t, &v3routepb.HeaderMatcher{
+						Name:                 "th",
+						HeaderMatchSpecifier: &v3routepb.HeaderMatcher_PrefixMatch{PrefixMatch: "tv"},
+						InvertMatch:          true,
+					}),
 				},
 				Fraction: newUInt32P(10000),
 				WeightedClusters: []WeightedCluster{
@@ -1167,12 +1172,11 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 			},
 			wantRoutes: []*Route{{
 				Regex: func() *regexp.Regexp { return regexp.MustCompile("^(?:/a/)$") }(),
-				Headers: []*HeaderMatcher{
-					{
-						Name:        "th",
-						InvertMatch: newBoolP(false),
-						RegexMatch:  func() *regexp.Regexp { return regexp.MustCompile("^(?:tv)$") }(),
-					},
+				Headers: []matcher.HeaderMatcher{
+					mustHeaderMatcherFromProto(t, &v3routepb.HeaderMatcher{
+						Name:                 "th",
+						HeaderMatchSpecifier: &v3routepb.HeaderMatcher_SafeRegexMatch{SafeRegexMatch: &v3matcherpb.RegexMatcher{Regex: "tv"}},
+					}),
 				},
 				Fraction: newUInt32P(10000),
 				WeightedClusters: []WeightedCluster{
@@ -1215,12 +1219,11 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 			},
 			wantRoutes: []*Route{{
 				Regex: func() *regexp.Regexp { return regexp.MustCompile("^(?:/a/)$") }(),
-				Headers: []*HeaderMatcher{
-					{
-						Name:        "th",
-						InvertMatch: newBoolP(false),
-						StringMatch: &sm,
-					},
+				Headers: []matcher.HeaderMatcher{
+					mustHeaderMatcherFromProto(t, &v3routepb.HeaderMatcher{
+						Name:                 "th",
+						HeaderMatchSpecifier: &v3routepb.HeaderMatcher_StringMatch{StringMatch: &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: "tv"}}},
+					}),
 				},
 				Fraction: newUInt32P(10000),
 				WeightedClusters: []WeightedCluster{
@@ -1333,11 +1336,10 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 			}},
 			wantRoutes: []*Route{{
 				Prefix: newStringP("/a/"),
-				Headers: []*HeaderMatcher{{
-					Name:        "th",
-					InvertMatch: newBoolP(false),
-					StringMatch: &emptyExactSM,
-				}},
+				Headers: []matcher.HeaderMatcher{mustHeaderMatcherFromProto(t, &v3routepb.HeaderMatcher{
+					Name:                 "th",
+					HeaderMatchSpecifier: &v3routepb.HeaderMatcher_ExactMatch{ExactMatch: ""},
+				})},
 				WeightedClusters: []WeightedCluster{{Name: clusterName, Weight: 1}},
 				ActionType:       RouteActionRoute,
 			}},
@@ -1359,11 +1361,10 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 			}},
 			wantRoutes: []*Route{{
 				Prefix: newStringP("/a/"),
-				Headers: []*HeaderMatcher{{
-					Name:        "x-role",
-					InvertMatch: newBoolP(false),
-					StringMatch: &sm,
-				}},
+				Headers: []matcher.HeaderMatcher{mustHeaderMatcherFromProto(t, &v3routepb.HeaderMatcher{
+					Name:                 "x-role",
+					HeaderMatchSpecifier: &v3routepb.HeaderMatcher_ExactMatch{ExactMatch: "tv"},
+				})},
 				WeightedClusters: []WeightedCluster{{Name: clusterName, Weight: 1}},
 				ActionType:       RouteActionRoute,
 			}},
@@ -1385,11 +1386,10 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 			}},
 			wantRoutes: []*Route{{
 				Prefix: newStringP("/a/"),
-				Headers: []*HeaderMatcher{{
-					Name:        "th",
-					InvertMatch: newBoolP(false),
-					StringMatch: &suffixSM,
-				}},
+				Headers: []matcher.HeaderMatcher{mustHeaderMatcherFromProto(t, &v3routepb.HeaderMatcher{
+					Name:                 "th",
+					HeaderMatchSpecifier: &v3routepb.HeaderMatcher_SuffixMatch{SuffixMatch: "tv"},
+				})},
 				WeightedClusters: []WeightedCluster{{Name: clusterName, Weight: 1}},
 				ActionType:       RouteActionRoute,
 			}},
@@ -1411,11 +1411,10 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 			}},
 			wantRoutes: []*Route{{
 				Prefix: newStringP("/a/"),
-				Headers: []*HeaderMatcher{{
-					Name:        "th",
-					InvertMatch: newBoolP(false),
-					StringMatch: &containsSM,
-				}},
+				Headers: []matcher.HeaderMatcher{mustHeaderMatcherFromProto(t, &v3routepb.HeaderMatcher{
+					Name:                 "th",
+					HeaderMatchSpecifier: &v3routepb.HeaderMatcher_ContainsMatch{ContainsMatch: "tv"},
+				})},
 				WeightedClusters: []WeightedCluster{{Name: clusterName, Weight: 1}},
 				ActionType:       RouteActionRoute,
 			}},
@@ -1646,12 +1645,12 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 			},
 			wantRoutes: []*Route{{
 				Prefix: newStringP("/a/"),
-				Headers: []*HeaderMatcher{
-					{
-						Name:        "th",
-						InvertMatch: newBoolP(true),
-						StringMatch: &prefixSM,
-					},
+				Headers: []matcher.HeaderMatcher{
+					mustHeaderMatcherFromProto(t, &v3routepb.HeaderMatcher{
+						Name:                 "th",
+						HeaderMatchSpecifier: &v3routepb.HeaderMatcher_PrefixMatch{PrefixMatch: "tv"},
+						InvertMatch:          true,
+					}),
 				},
 				Fraction: newUInt32P(10000),
 				WeightedClusters: []WeightedCluster{
@@ -1706,12 +1705,12 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 			},
 			wantRoutes: []*Route{{
 				Prefix: newStringP("/a/"),
-				Headers: []*HeaderMatcher{
-					{
-						Name:        "th",
-						InvertMatch: newBoolP(true),
-						StringMatch: &prefixSM,
-					},
+				Headers: []matcher.HeaderMatcher{
+					mustHeaderMatcherFromProto(t, &v3routepb.HeaderMatcher{
+						Name:                 "th",
+						HeaderMatchSpecifier: &v3routepb.HeaderMatcher_PrefixMatch{PrefixMatch: "tv"},
+						InvertMatch:          true,
+					}),
 				},
 				Fraction: newUInt32P(10000),
 				WeightedClusters: []WeightedCluster{
@@ -1764,7 +1763,10 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 	}
 
 	cmpOpts := []cmp.Option{
-		cmp.AllowUnexported(Route{}, HeaderMatcher{}, Int64Range{}, regexp.Regexp{}),
+		cmp.AllowUnexported(Route{}, regexp.Regexp{}),
+		cmp.Comparer(func(x, y matcher.HeaderMatcher) bool {
+			return reflect.DeepEqual(x, y)
+		}),
 		cmpopts.EquateEmpty(),
 		cmp.Transformer("FilterConfig", func(fc httpfilter.FilterConfig) string {
 			return fmt.Sprint(fc)
