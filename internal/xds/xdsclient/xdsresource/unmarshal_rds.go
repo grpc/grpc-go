@@ -29,6 +29,7 @@ import (
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/internal/xds/clusterspecifier"
 	"google.golang.org/grpc/internal/xds/matcher"
+	headermatcher "google.golang.org/grpc/internal/xds/matcher/header"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 
@@ -255,7 +256,7 @@ func routesProtoToSlice(routes []*v3routepb.Route, csps map[string]clusterspecif
 		}
 
 		for _, h := range match.GetHeaders() {
-			header, err := matcher.HeaderMatcherFromProto(h)
+			header, err := headermatcher.FromProto(h)
 			if err != nil {
 				return nil, nil, fmt.Errorf("route %+v has an invalid header matcher: %v", r, err)
 			}

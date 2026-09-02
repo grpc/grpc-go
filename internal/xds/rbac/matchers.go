@@ -26,6 +26,7 @@ import (
 	v3route_componentspb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	v3matcherpb "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
 	internalmatcher "google.golang.org/grpc/internal/xds/matcher"
+	headermatcher "google.golang.org/grpc/internal/xds/matcher/header"
 )
 
 // matcher is an interface that takes data about incoming RPC's and returns
@@ -294,7 +295,7 @@ type headerMatcher struct {
 }
 
 func newHeaderMatcher(headerMatcherConfig *v3route_componentspb.HeaderMatcher) (*headerMatcher, error) {
-	m, err := internalmatcher.HeaderMatcherFromProto(headerMatcherConfig)
+	m, err := headermatcher.FromProto(headerMatcherConfig)
 	if err != nil {
 		return nil, err
 	}
