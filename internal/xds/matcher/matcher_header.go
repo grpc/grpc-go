@@ -19,13 +19,11 @@
 package matcher
 
 import (
-	"errors"
 	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
 
-	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -35,80 +33,6 @@ import (
 type HeaderMatcher interface {
 	Match(metadata.MD) bool
 	String() string
-}
-
-// HeaderMatcherFromProto creates a HeaderMatcher from the corresponding
-// HeaderMatcher proto.
-//
-// Returns a non-nil error if matcherProto is invalid.
-func HeaderMatcherFromProto(matcherProto *v3routepb.HeaderMatcher) (HeaderMatcher, error) {
-	if matcherProto == nil {
-		return nil, errors.New("input HeaderMatcher proto is nil")
-	}
-
-	name := matcherProto.GetName()
-	invert := matcherProto.GetInvertMatch()
-	switch matcher := matcherProto.GetHeaderMatchSpecifier().(type) {
-	case *v3routepb.HeaderMatcher_ExactMatch:
-		if matcher == nil {
-			return nil, errors.New("exact header matcher is nil")
-		}
-		return NewHeaderExactMatcher(name, matcher.ExactMatch, invert), nil
-	case *v3routepb.HeaderMatcher_SafeRegexMatch:
-		if matcher == nil || matcher.SafeRegexMatch == nil {
-			return nil, errors.New("safe regex header matcher is nil")
-		}
-		re, err := CompileSafeRegex(matcher.SafeRegexMatch.GetRegex())
-		if err != nil {
-			return nil, fmt.Errorf("safe regex header matcher %q is invalid: %v", matcher.SafeRegexMatch.GetRegex(), err)
-		}
-		return NewHeaderRegexMatcher(name, re, invert), nil
-	case *v3routepb.HeaderMatcher_RangeMatch:
-		if matcher == nil || matcher.RangeMatch == nil {
-			return nil, errors.New("range header matcher is nil")
-		}
-		return NewHeaderRangeMatcher(name, matcher.RangeMatch.GetStart(), matcher.RangeMatch.GetEnd(), invert), nil
-	case *v3routepb.HeaderMatcher_PresentMatch:
-		if matcher == nil {
-			return nil, errors.New("present header matcher is nil")
-		}
-		return NewHeaderPresentMatcher(name, matcher.PresentMatch, invert), nil
-	case *v3routepb.HeaderMatcher_PrefixMatch:
-		if matcher == nil {
-			return nil, errors.New("prefix header matcher is nil")
-		}
-		if matcher.PrefixMatch == "" {
-			return nil, errors.New("empty prefix is not allowed in HeaderMatcher")
-		}
-		return NewHeaderPrefixMatcher(name, matcher.PrefixMatch, invert), nil
-	case *v3routepb.HeaderMatcher_SuffixMatch:
-		if matcher == nil {
-			return nil, errors.New("suffix header matcher is nil")
-		}
-		if matcher.SuffixMatch == "" {
-			return nil, errors.New("empty suffix is not allowed in HeaderMatcher")
-		}
-		return NewHeaderSuffixMatcher(name, matcher.SuffixMatch, invert), nil
-	case *v3routepb.HeaderMatcher_ContainsMatch:
-		if matcher == nil {
-			return nil, errors.New("contains header matcher is nil")
-		}
-		if matcher.ContainsMatch == "" {
-			return nil, errors.New("empty contains is not allowed in HeaderMatcher")
-		}
-		return NewHeaderContainsMatcher(name, matcher.ContainsMatch, invert), nil
-	case *v3routepb.HeaderMatcher_StringMatch:
-		if matcher == nil || matcher.StringMatch == nil {
-			return nil, errors.New("string header matcher is nil")
-		}
-		sm, err := StringMatcherFromProto(matcher.StringMatch)
-		if err != nil {
-			return nil, fmt.Errorf("string header matcher is invalid: %v", err)
-		}
-		return NewHeaderStringMatcher(name, sm, invert), nil
-	default:
-		return nil, errors.New("header matcher type is not set")
-	}
 }
 
 func lowercaseHeaderKey(key string) string {

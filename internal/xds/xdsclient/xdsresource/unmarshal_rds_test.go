@@ -37,6 +37,7 @@ import (
 	"google.golang.org/grpc/internal/xds/clusterspecifier"
 	"google.golang.org/grpc/internal/xds/httpfilter"
 	"google.golang.org/grpc/internal/xds/matcher"
+	headermatcher "google.golang.org/grpc/internal/xds/matcher/header"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource/version"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
@@ -1006,9 +1007,9 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 
 func mustHeaderMatcherFromProto(t *testing.T, p *v3routepb.HeaderMatcher) matcher.HeaderMatcher {
 	t.Helper()
-	m, err := matcher.HeaderMatcherFromProto(p)
+	m, err := headermatcher.FromProto(p)
 	if err != nil {
-		t.Fatalf("matcher.HeaderMatcherFromProto(%v) failed: %v", p, err)
+		t.Fatalf("headermatcher.FromProto(%v) failed: %v", p, err)
 	}
 	return m
 }
@@ -1901,10 +1902,6 @@ func newStringP(s string) *string {
 
 func newUInt32P(i uint32) *uint32 {
 	return &i
-}
-
-func newBoolP(b bool) *bool {
-	return &b
 }
 
 func newDurationP(d time.Duration) *time.Duration {
