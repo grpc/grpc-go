@@ -302,3 +302,56 @@ func (s) TestCancelWhileServerWaitingForFlowControl(t *testing.T) {
 		t.Fatalf("Failed to read from the stream: %v", err)
 	}
 }
+
+// Tests that when a client sends a HEADERS frame with EndStream=true, the
+// server-side stream receives an io.EOF on Recv() and does not hang waiting
+// for data frames.
+func (s) TestHeadersEndStreamNoHang(t *testing.T) {
+	receivedErr := make(chan error, 1)
+	ss := &stubserver.StubServer{
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
+			_, err := stream.Recv()
+			receivedErr <- err
+			return nil
+		},
+	}
+	if err := ss.Start(nil); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
+	}
+	defer ss.Stop()
+
+	conn, err := net.DialTimeout("tcp", ss.Address, defaultTestTimeout)
+	if err != nil {
+		t.Fatalf("Failed to dial: %v", err)
+	}
+	defer conn.Close()
+
+	st := newServerTesterFromConn(t, conn)
+	st.greet()
+
+	// Send HEADERS with EndStream = true and no grpc-timeout header.
+	st.writeHeaders(http2.HeadersFrameParam{
+		StreamID: 1,
+		BlockFragment: st.encodeHeader(
+			":method", "POST",
+			":path", "/grpc.testing.TestService/FullDuplexCall",
+			":authority", "localhost",
+			"content-type", "application/grpc",
+			"te", "trailers",
+		),
+		EndStream:  true,
+		EndHeaders: true,
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	select {
+	case err := <-receivedErr:
+		if err != io.EOF {
+			t.Fatalf("Streaming handler expected io.EOF, got %v", err)
+		}
+	case <-ctx.Done():
+		t.Fatalf("Timed out waiting for Recv() on the server to complete: %v", ctx.Err())
+	}
+}
