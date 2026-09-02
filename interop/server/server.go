@@ -24,20 +24,14 @@
 package main
 
 import (
-	"context"
 	"flag"
 	"net"
 	"os"
 	"os/signal"
 	"strconv"
-	"strings"
 	"syscall"
 	"time"
 
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
-	"go.opentelemetry.io/otel/propagation"
-	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/alts"
@@ -77,37 +71,9 @@ func main() {
 	}
 	logger.Infof("interop server listening on %v", lis.Addr())
 	opts := []grpc.ServerOption{orca.CallMetricsServerOption(nil)}
-	if *enableOpenTelemetry || *otelCollectorAddress != "" {
-		ctx := context.Background()
-		var exporterOpts []otlptracegrpc.Option
-		if *otelCollectorAddress != "" {
-			addr := *otelCollectorAddress
-			addr = strings.TrimPrefix(addr, "http://")
-			addr = strings.TrimPrefix(addr, "https://")
-			exporterOpts = append(exporterOpts, otlptracegrpc.WithEndpoint(addr))
-		}
-		exporterOpts = append(exporterOpts, otlptracegrpc.WithInsecure())
-		exp, err := otlptracegrpc.New(ctx, exporterOpts...)
-		if err != nil {
-			logger.Fatalf("Failed to create OTLP trace exporter: %v", err)
-		}
-		tp := sdktrace.NewTracerProvider(
-			sdktrace.WithSyncer(exp),
-			sdktrace.WithSampler(sdktrace.AlwaysSample()),
-		)
-		propagator := propagation.TraceContext{}
-		otel.SetErrorHandler(otel.ErrorHandlerFunc(func(err error) {
-			logger.Errorf("OpenTelemetry error: %v", err)
-		}))
-		otel.SetTracerProvider(tp)
-		otel.SetTextMapPropagator(propagator)
-		defer func() {
-			ctxShutdown, cancelShutdown := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancelShutdown()
-			if err := tp.Shutdown(ctxShutdown); err != nil {
-				logger.Errorf("Failed to shutdown TracerProvider: %v", err)
-			}
-		}()
+	tp, propagator, shutdownFunc := interop.SetupOpenTelemetry(*enableOpenTelemetry, *otelCollectorAddress, logger)
+	if tp != nil {
+		defer shutdownFunc()
 		opts = append(opts, grpcotel.ServerOption(grpcotel.Options{
 			TraceOptions: oteltracing.TraceOptions{
 				TracerProvider:    tp,
@@ -148,7 +114,9 @@ func main() {
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
 		<-sigChan
-		server.GracefulStop()
+		go server.GracefulStop()
+		time.Sleep(5 * time.Second)
+		server.Stop()
 	}()
 	server.Serve(lis)
 }
