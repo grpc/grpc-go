@@ -17,7 +17,6 @@
 package rbac
 
 import (
-	"errors"
 	"fmt"
 	"net"
 	"net/netip"
@@ -295,34 +294,9 @@ type headerMatcher struct {
 }
 
 func newHeaderMatcher(headerMatcherConfig *v3route_componentspb.HeaderMatcher) (*headerMatcher, error) {
-	var m internalmatcher.HeaderMatcher
-	switch headerMatcherConfig.HeaderMatchSpecifier.(type) {
-	case *v3route_componentspb.HeaderMatcher_ExactMatch:
-		m = internalmatcher.NewHeaderExactMatcher(headerMatcherConfig.Name, headerMatcherConfig.GetExactMatch(), headerMatcherConfig.InvertMatch)
-	case *v3route_componentspb.HeaderMatcher_SafeRegexMatch:
-		regex, err := internalmatcher.CompileSafeRegex(headerMatcherConfig.GetSafeRegexMatch().GetRegex())
-		if err != nil {
-			return nil, err
-		}
-		m = internalmatcher.NewHeaderRegexMatcher(headerMatcherConfig.Name, regex, headerMatcherConfig.InvertMatch)
-	case *v3route_componentspb.HeaderMatcher_RangeMatch:
-		m = internalmatcher.NewHeaderRangeMatcher(headerMatcherConfig.Name, headerMatcherConfig.GetRangeMatch().Start, headerMatcherConfig.GetRangeMatch().End, headerMatcherConfig.InvertMatch)
-	case *v3route_componentspb.HeaderMatcher_PresentMatch:
-		m = internalmatcher.NewHeaderPresentMatcher(headerMatcherConfig.Name, headerMatcherConfig.GetPresentMatch(), headerMatcherConfig.InvertMatch)
-	case *v3route_componentspb.HeaderMatcher_PrefixMatch:
-		m = internalmatcher.NewHeaderPrefixMatcher(headerMatcherConfig.Name, headerMatcherConfig.GetPrefixMatch(), headerMatcherConfig.InvertMatch)
-	case *v3route_componentspb.HeaderMatcher_SuffixMatch:
-		m = internalmatcher.NewHeaderSuffixMatcher(headerMatcherConfig.Name, headerMatcherConfig.GetSuffixMatch(), headerMatcherConfig.InvertMatch)
-	case *v3route_componentspb.HeaderMatcher_ContainsMatch:
-		m = internalmatcher.NewHeaderContainsMatcher(headerMatcherConfig.Name, headerMatcherConfig.GetContainsMatch(), headerMatcherConfig.InvertMatch)
-	case *v3route_componentspb.HeaderMatcher_StringMatch:
-		sm, err := internalmatcher.StringMatcherFromProto(headerMatcherConfig.GetStringMatch())
-		if err != nil {
-			return nil, fmt.Errorf("invalid string matcher %+v: %v", headerMatcherConfig.GetStringMatch(), err)
-		}
-		m = internalmatcher.NewHeaderStringMatcher(headerMatcherConfig.Name, sm, headerMatcherConfig.InvertMatch)
-	default:
-		return nil, errors.New("unknown header matcher type")
+	m, err := internalmatcher.HeaderMatcherFromProto(headerMatcherConfig)
+	if err != nil {
+		return nil, err
 	}
 	return &headerMatcher{matcher: m}, nil
 }
