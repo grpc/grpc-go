@@ -208,6 +208,11 @@ func (s) TestServerSideXDSHTTPFilter_InterceptRPC(t *testing.T) {
 	if got := fb.recvMsgCount.Load(); got != 2 {
 		t.Fatalf("Unexpected recvMsgCount for streaming RPC, got %d, want 2", got)
 	}
+	// Since the server handler did not call SendMsg for the streaming RPC, the
+	// sendMsg count for this RPC is zero, so the total count remains 1.
+	if got := fb.sendMsgCount.Load(); got != 1 {
+		t.Fatalf("Unexpected sendMsgCount for streaming RPC, got %d, want 1", got)
+	}
 }
 
 // Test verifies that when a server-side xDS HTTP filter returns an error from
@@ -359,7 +364,7 @@ func (w *errorWrappedStream) RecvMsg(m any) error {
 }
 
 // Test verifies that when multiple filters wrap the server stream and a
-// filter's overrided RecvMsg returns an error, that error is properly
+// filter's overridden RecvMsg returns an error, that error is properly
 // propagated back to the client for both Unary and Streaming RPCs.
 func (s) TestServerSideXDS_InterceptRPCMultiFilterErrorPropagation(t *testing.T) {
 	typeURL1, typeURL2 := fmt.Sprintf("%s-1", t.Name()), fmt.Sprintf("%s-2", t.Name())

@@ -171,19 +171,19 @@ type wrappedServerStream struct {
 }
 
 func (w *wrappedServerStream) RecvMsg(m any) error {
-	err := w.ServerStream.RecvMsg(m)
-	if err == nil {
-		w.parent.recvMsgCount.Add(1)
+	if err := w.ServerStream.RecvMsg(m); err != nil {
+		return err
 	}
-	return err
+	w.parent.recvMsgCount.Add(1)
+	return nil
 }
 
 func (w *wrappedServerStream) SendMsg(m any) error {
-	err := w.ServerStream.SendMsg(m)
-	if err == nil {
-		w.parent.sendMsgCount.Add(1)
+	if err := w.ServerStream.SendMsg(m); err != nil {
+		return err
 	}
-	return err
+	w.parent.sendMsgCount.Add(1)
+	return nil
 }
 
 func newHTTPFilter(t *testing.T, name, typeURL, path string) *v3httppb.HttpFilter {
