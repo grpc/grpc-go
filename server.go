@@ -29,6 +29,7 @@ import (
 	"reflect"
 	"runtime"
 	"runtime/pprof"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -88,6 +89,9 @@ func init() {
 	internal.BufferPool = bufferPool
 	internal.MetricsRecorderForServer = func(srv *Server) estats.MetricsRecorder {
 		return istats.NewMetricsRecorderList(srv.opts.statsHandlers)
+	}
+	internal.ChildDialOptionsFromServer = func(srv *Server) []DialOption {
+		return slices.Clone(srv.opts.childDialOptions)
 	}
 }
 
@@ -181,6 +185,7 @@ type serverOptions struct {
 	bufferPool            mem.BufferPool
 	waitForHandlers       bool
 	staticWindowSize      bool
+	childDialOptions      []DialOption
 }
 
 var defaultServerOptions = serverOptions{
@@ -556,6 +561,23 @@ func StatsHandler(h stats.Handler) ServerOption {
 			return
 		}
 		o.statsHandlers = append(o.statsHandlers, h)
+	})
+}
+
+// ChildChannelOptions returns a ServerOption that specifies dial options to
+// be applied to child channels created internally by this server (such as
+// channels to the xDS control plane, external authorization services, or
+// external processing servers).
+//
+// These options are not applied to the parent server itself.
+//
+// # Experimental
+//
+// Notice: This API is EXPERIMENTAL and may be changed or removed in a
+// later release.
+func ChildChannelOptions(opts ...DialOption) ServerOption {
+	return newFuncServerOption(func(o *serverOptions) {
+		o.childDialOptions = append(o.childDialOptions, opts...)
 	})
 }
 

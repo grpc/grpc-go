@@ -19,6 +19,7 @@
 package grpc
 
 import (
+	"context"
 	"fmt"
 	"net/url"
 	"strings"
@@ -174,5 +175,190 @@ func (s) TestHeaderListSizeDialOptionServerOption(t *testing.T) {
 	serverHeaderListSize := MaxHeaderListSize(maxHeaderListSize)
 	if serverHeaderListSize.(MaxHeaderListSizeServerOption).MaxHeaderListSize != maxHeaderListSize {
 		t.Fatalf("Unexpected s.opts.MaxHeaderListSizeDialOption.MaxHeaderListSize: %d != %d", serverHeaderListSize, maxHeaderListSize)
+	}
+}
+
+// TestChildChannelOptions_Client tests WithChildChannelOptions on client side.
+func (s) TestChildChannelOptions_Client(t *testing.T) {
+	const readBufferSize = 1024
+	const writeBufferSize = 2048
+	const initialWindowSize = 4096
+	const wantChildOptsCount = 3
+
+	opt1 := WithReadBufferSize(readBufferSize)
+	opt2 := WithWriteBufferSize(writeBufferSize)
+	opt3 := WithInitialWindowSize(initialWindowSize)
+
+	// Test multiple WithChildChannelOptions calls.
+	cc, err := NewClient("passthrough:///test",
+		WithTransportCredentials(insecure.NewCredentials()),
+		WithChildChannelOptions(opt1, opt2),
+		WithChildChannelOptions(opt3),
+	)
+	if err != nil {
+		t.Fatalf("NewClient failed: %v", err)
+	}
+	defer cc.Close()
+
+	// Verify that child dial options are stored in cc.dopts in order.
+	if len(cc.dopts.childDialOptions) != wantChildOptsCount {
+		t.Fatalf("Child dial options count = %d, want %d", len(cc.dopts.childDialOptions), wantChildOptsCount)
+	}
+
+	// Verify that parent options are not modified by child options.
+	if cc.dopts.copts.ReadBufferSize == readBufferSize {
+		t.Fatalf("Parent cc.dopts.copts.ReadBufferSize was modified by child option: got %d, want default", readBufferSize)
+	}
+	if cc.dopts.copts.WriteBufferSize == writeBufferSize {
+		t.Fatalf("Parent cc.dopts.copts.WriteBufferSize was modified by child option: got %d, want default", writeBufferSize)
+	}
+	if cc.dopts.copts.InitialWindowSize == initialWindowSize {
+		t.Fatalf("Parent cc.dopts.copts.InitialWindowSize was modified by child option: got %d, want default", initialWindowSize)
+	}
+}
+
+// TestChildChannelOptions_Server tests ChildChannelOptions on server side.
+func (s) TestChildChannelOptions_Server(t *testing.T) {
+	const readBufferSize = 1024
+	const writeBufferSize = 2048
+	const wantChildOptsCount = 2
+
+	opt1 := WithReadBufferSize(readBufferSize)
+	opt2 := WithWriteBufferSize(writeBufferSize)
+
+	srv := NewServer(ChildChannelOptions(opt1), ChildChannelOptions(opt2))
+	defer srv.Stop()
+
+	// Verify that child dial options are stored in srv.opts in order.
+	if len(srv.opts.childDialOptions) != wantChildOptsCount {
+		t.Fatalf("Child dial options count = %d, want %d", len(srv.opts.childDialOptions), wantChildOptsCount)
+	}
+
+	// Verify that internal.ChildDialOptionsFromServer returns the options.
+	childOpts := internal.ChildDialOptionsFromServer.(func(*Server) []DialOption)(srv)
+	if len(childOpts) != wantChildOptsCount {
+		t.Fatalf("Child dial options count from server accessor = %d, want %d", len(childOpts), wantChildOptsCount)
+	}
+}
+
+// TestChildChannelOptions_Isolation tests that interceptors passed in child
+// options do not execute on the parent channel or server.
+func (s) TestChildChannelOptions_Isolation(t *testing.T) {
+	var parentClientInterceptorCalled, childClientInterceptorCalled bool
+	parentClientInt := func(ctx context.Context, method string, req, reply any, cc *ClientConn, invoker UnaryInvoker, opts ...CallOption) error {
+		parentClientInterceptorCalled = true
+		return invoker(ctx, method, req, reply, cc, opts...)
+	}
+	childClientInt := func(ctx context.Context, method string, req, reply any, cc *ClientConn, invoker UnaryInvoker, opts ...CallOption) error {
+		childClientInterceptorCalled = true
+		return invoker(ctx, method, req, reply, cc, opts...)
+	}
+
+	cc, err := NewClient("passthrough:///test",
+		WithTransportCredentials(insecure.NewCredentials()),
+		WithUnaryInterceptor(parentClientInt),
+		WithChildChannelOptions(WithUnaryInterceptor(childClientInt)),
+	)
+	if err != nil {
+		t.Fatalf("NewClient failed: %v", err)
+	}
+	defer cc.Close()
+
+	if cc.dopts.unaryInt == nil {
+		t.Fatalf("Parent cc.dopts.unaryInt is nil, want parent interceptor")
+	}
+
+	// Make an invocation to check interceptor execution on parent channel.
+	_ = cc.Invoke(context.Background(), "/test/method", nil, nil)
+	if !parentClientInterceptorCalled {
+		t.Errorf("Parent client interceptor was not called")
+	}
+	if childClientInterceptorCalled {
+		t.Errorf("Child client interceptor was unexpectedly called on parent channel call")
+	}
+
+	// Test Server Isolation: child server interceptor should not be
+	// registered on parent server.
+	childServerInt := func(ctx context.Context, req any, info *UnaryServerInfo, handler UnaryHandler) (resp any, err error) {
+		return handler(ctx, req)
+	}
+	srv := NewServer(ChildChannelOptions(WithUnaryInterceptor(childClientInt), WithChainUnaryInterceptor(childClientInt)))
+	defer srv.Stop()
+
+	if srv.opts.unaryInt != nil || len(srv.opts.chainUnaryInts) != 0 {
+		t.Errorf("Parent srv has interceptors registered from ChildChannelOptions: unaryInt=%v, chainUnaryInts=%v", srv.opts.unaryInt, srv.opts.chainUnaryInts)
+	}
+	_ = childServerInt
+}
+
+// TestChildChannelOptions_MultiLevelPropagation tests that child options
+// configured on a parent channel are applied to a child channel and
+// recursively propagated to grandchild channels per gRFC A110.
+func (s) TestChildChannelOptions_MultiLevelPropagation(t *testing.T) {
+	const customWriteBufferSize = 2048
+	const wantChildOptsCount = 1
+
+	// 1. User configures root parent channel P with O_child.
+	oChild := []DialOption{WithWriteBufferSize(customWriteBufferSize)}
+	parentCC, err := NewClient("passthrough:///parent",
+		WithTransportCredentials(insecure.NewCredentials()),
+		WithChildChannelOptions(oChild...),
+	)
+	if err != nil {
+		t.Fatalf("NewClient for parent failed: %v", err)
+	}
+	defer parentCC.Close()
+
+	// Verify parent P did NOT apply O_child to itself, but stored it for
+	// children.
+	if parentCC.dopts.copts.WriteBufferSize == customWriteBufferSize {
+		t.Fatalf("Parent WriteBufferSize = %d, want default", customWriteBufferSize)
+	}
+	if len(parentCC.dopts.childDialOptions) != wantChildOptsCount {
+		t.Fatalf("Parent child dial options count = %d, want %d", len(parentCC.dopts.childDialOptions), wantChildOptsCount)
+	}
+
+	// 2. Parent P creates Child channel C.
+	// Per A110, C is dialed with O_child AND
+	// WithChildChannelOptions(O_child...).
+	parentChildOpts := parentCC.dopts.childDialOptions
+	childDialOpts := append(
+		[]DialOption{WithTransportCredentials(insecure.NewCredentials())},
+		parentChildOpts...,
+	)
+	childDialOpts = append(childDialOpts, WithChildChannelOptions(parentChildOpts...))
+
+	childCC, err := NewClient("passthrough:///child", childDialOpts...)
+	if err != nil {
+		t.Fatalf("NewClient for child failed: %v", err)
+	}
+	defer childCC.Close()
+
+	// Verify Child C DID apply O_child to itself.
+	if childCC.dopts.copts.WriteBufferSize != customWriteBufferSize {
+		t.Fatalf("Child WriteBufferSize = %d, want %d", childCC.dopts.copts.WriteBufferSize, customWriteBufferSize)
+	}
+	// Verify Child C ALSO stored O_child in its own childDialOptions for
+	// grandchildren.
+	if len(childCC.dopts.childDialOptions) != wantChildOptsCount {
+		t.Fatalf("Child childDialOptions count = %d, want %d", len(childCC.dopts.childDialOptions), wantChildOptsCount)
+	}
+
+	// 3. Child C creates Grandchild channel G using C's childDialOptions.
+	grandchildDialOpts := append(
+		[]DialOption{WithTransportCredentials(insecure.NewCredentials())},
+		childCC.dopts.childDialOptions...,
+	)
+	grandchildDialOpts = append(grandchildDialOpts, WithChildChannelOptions(childCC.dopts.childDialOptions...))
+
+	grandchildCC, err := NewClient("passthrough:///grandchild", grandchildDialOpts...)
+	if err != nil {
+		t.Fatalf("NewClient for grandchild failed: %v", err)
+	}
+	defer grandchildCC.Close()
+
+	// Verify Grandchild G inherited and applied O_child.
+	if grandchildCC.dopts.copts.WriteBufferSize != customWriteBufferSize {
+		t.Fatalf("Grandchild WriteBufferSize = %d, want %d", grandchildCC.dopts.copts.WriteBufferSize, customWriteBufferSize)
 	}
 }
