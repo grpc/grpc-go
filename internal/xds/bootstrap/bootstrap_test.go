@@ -35,6 +35,7 @@ import (
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
+	xdscreds "google.golang.org/grpc/internal/xds/credentials"
 	"google.golang.org/grpc/xds/bootstrap"
 	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/structpb"
@@ -1148,6 +1149,13 @@ func (s) TestGetConfiguration_Federation(t *testing.T) {
 							Type:   "jwt_token_file",
 							Config: json.RawMessage("{\n\"jwt_token_file\": \"/var/run/secrets/tokens/istio-token\"\n}"),
 						}},
+						// Equal compares the built credentials by identity, so
+						// the fixture carries identity-only pairs.
+						sideChannelCreds: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "insecure"}, nil),
+						sideCallCreds: []*xdscreds.CallCreds{xdscreds.NewCallCreds(nil, xdscreds.Identity{
+							Type: "jwt_token_file",
+							Data: json.RawMessage("{\n\"jwt_token_file\": \"/var/run/secrets/tokens/istio-token\"\n}"),
+						}, nil)},
 					},
 				},
 			},
@@ -1741,94 +1749,80 @@ func (s) TestAllowedGRPCServices_UnmarshalJSON(t *testing.T) {
 	tests := []struct {
 		name string
 		json string
-		want *AllowedGRPCService
-		// Fields deliberately excluded from Equal: the selected channel
-		// creds and the dial options built from the credentials.
-		wantSelectedChannelCredsType string
-		wantDialOptions              int
+		// want carries the expected target and credential identities;
+		// comparisons use the Equal methods via cmp.Diff.
+		want AllowedGRPCServices
+		// wantCallCreds is the number of call credentials expected to be
+		// built for the target.
+		wantCallCreds int
 	}{
 		{
 			name: "insecure_channel_creds",
 			json: `{"dns:///sharding-service:443": {"channel_creds": [{"type": "insecure"}]}}`,
-			want: &AllowedGRPCService{
-				targetURI:    target,
-				channelCreds: []ChannelCreds{{Type: "insecure"}},
-			},
-			wantSelectedChannelCredsType: "insecure",
-			wantDialOptions:              1,
+			want: AllowedGRPCServices{target: {
+				targetURI:        target,
+				sideChannelCreds: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "insecure"}, nil),
+			}},
 		},
 		{
 			name: "with_call_creds",
 			json: `{"dns:///sharding-service:443": {"channel_creds": [{"type": "insecure"}], "call_creds": [{"type": "jwt_token_file", "config": {"jwt_token_file": "/var/run/secrets/tokens/istio-token"}}]}}`,
-			want: &AllowedGRPCService{
-				targetURI:    target,
-				channelCreds: []ChannelCreds{{Type: "insecure"}},
-				callCredsConfigs: []CallCredsConfig{{
-					Type:   "jwt_token_file",
-					Config: json.RawMessage(`{"jwt_token_file": "/var/run/secrets/tokens/istio-token"}`),
-				}},
-			},
-			wantSelectedChannelCredsType: "insecure",
-			// One channel-creds dial option plus one per-RPC call-creds
-			// option.
-			wantDialOptions: 2,
+			want: AllowedGRPCServices{target: {
+				targetURI:        target,
+				sideChannelCreds: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "insecure"}, nil),
+				sideCallCreds: []*xdscreds.CallCreds{xdscreds.NewCallCreds(nil, xdscreds.Identity{
+					Type: "jwt_token_file",
+					Data: json.RawMessage(`{"jwt_token_file": "/var/run/secrets/tokens/istio-token"}`),
+				}, nil)},
+			}},
+			wantCallCreds: 1,
 		},
 		{
+			// Unsupported call-creds types are skipped without error, so no
+			// call credentials are built.
 			name: "unsupported_call_creds_skipped",
 			json: `{"dns:///sharding-service:443": {"channel_creds": [{"type": "insecure"}], "call_creds": [{"type": "unsupported_call_creds_type"}]}}`,
-			want: &AllowedGRPCService{
-				targetURI:    target,
-				channelCreds: []ChannelCreds{{Type: "insecure"}},
-				callCredsConfigs: []CallCredsConfig{{
-					Type: "unsupported_call_creds_type",
-				}},
-			},
-			wantSelectedChannelCredsType: "insecure",
-			// Unsupported call-creds types are skipped without error, so
-			// only the channel-creds dial option is built.
-			wantDialOptions: 1,
+			want: AllowedGRPCServices{target: {
+				targetURI:        target,
+				sideChannelCreds: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "insecure"}, nil),
+			}},
 		},
 		{
+			// One call credential is built for each supported call-creds
+			// config, preserving order.
 			name: "multiple_supported_call_creds",
 			json: `{"dns:///sharding-service:443": {"channel_creds": [{"type": "insecure"}], "call_creds": [{"type": "jwt_token_file", "config": {"jwt_token_file": "/tokens/token-one"}}, {"type": "jwt_token_file", "config": {"jwt_token_file": "/tokens/token-two"}}]}}`,
-			want: &AllowedGRPCService{
-				targetURI:    target,
-				channelCreds: []ChannelCreds{{Type: "insecure"}},
-				callCredsConfigs: []CallCredsConfig{
-					{
-						Type:   "jwt_token_file",
-						Config: json.RawMessage(`{"jwt_token_file": "/tokens/token-one"}`),
-					},
-					{
-						Type:   "jwt_token_file",
-						Config: json.RawMessage(`{"jwt_token_file": "/tokens/token-two"}`),
-					},
+			want: AllowedGRPCServices{target: {
+				targetURI:        target,
+				sideChannelCreds: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "insecure"}, nil),
+				sideCallCreds: []*xdscreds.CallCreds{
+					xdscreds.NewCallCreds(nil, xdscreds.Identity{
+						Type: "jwt_token_file",
+						Data: json.RawMessage(`{"jwt_token_file": "/tokens/token-one"}`),
+					}, nil),
+					xdscreds.NewCallCreds(nil, xdscreds.Identity{
+						Type: "jwt_token_file",
+						Data: json.RawMessage(`{"jwt_token_file": "/tokens/token-two"}`),
+					}, nil),
 				},
-			},
-			wantSelectedChannelCredsType: "insecure",
-			// One channel-creds dial option plus one per-RPC option for
-			// each supported call credential.
-			wantDialOptions: 3,
+			}},
+			wantCallCreds: 2,
 		},
 		{
 			name: "tls_channel_creds",
 			json: `{"dns:///sharding-service:443": {"channel_creds": [{"type": "tls", "config": {}}]}}`,
-			want: &AllowedGRPCService{
-				targetURI:    target,
-				channelCreds: []ChannelCreds{{Type: "tls", Config: json.RawMessage("{}")}},
-			},
-			wantSelectedChannelCredsType: "tls",
-			wantDialOptions:              1,
+			want: AllowedGRPCServices{target: {
+				targetURI:        target,
+				sideChannelCreds: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "tls", Data: json.RawMessage("{}")}, nil),
+			}},
 		},
 		{
 			name: "skips_unsupported_channel_creds",
 			json: `{"dns:///sharding-service:443": {"channel_creds": [{"type": "unsupported_cred_type"}, {"type": "insecure"}]}}`,
-			want: &AllowedGRPCService{
-				targetURI:    target,
-				channelCreds: []ChannelCreds{{Type: "unsupported_cred_type"}, {Type: "insecure"}},
-			},
-			wantSelectedChannelCredsType: "insecure",
-			wantDialOptions:              1,
+			want: AllowedGRPCServices{target: {
+				targetURI:        target,
+				sideChannelCreds: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "insecure"}, nil),
+			}},
 		},
 	}
 
@@ -1838,18 +1832,23 @@ func (s) TestAllowedGRPCServices_UnmarshalJSON(t *testing.T) {
 			if err := json.Unmarshal([]byte(test.json), &got); err != nil {
 				t.Fatalf("AllowedGRPCServices unmarshal failed: %v", err)
 			}
-			svc, ok := got[target]
-			if !ok {
-				t.Fatalf("AllowedGRPCServices missing key %q", target)
+			if diff := cmp.Diff(test.want, got); diff != "" {
+				t.Errorf("AllowedGRPCServices unmarshal returned unexpected diff (-want +got):\n%s", diff)
 			}
-			if !svc.Equal(test.want) {
-				t.Errorf("parsed service = %+v, want %+v", svc, test.want)
+			// Equal compares credentials by identity only, so it cannot tell
+			// a built credential from a nil one; verify the credentials were
+			// built.
+			chanCreds, callCreds := got[target].SideChannelCredentials()
+			if chanCreds == nil || chanCreds.Bundle() == nil {
+				t.Error("SideChannelCredentials() returned no built channel credentials")
 			}
-			if got := svc.selectedChannelCreds.Type; got != test.wantSelectedChannelCredsType {
-				t.Errorf("selectedChannelCreds.Type = %q, want %q", got, test.wantSelectedChannelCredsType)
+			if len(callCreds) != test.wantCallCreds {
+				t.Errorf("SideChannelCredentials() returned %d call credentials, want %d", len(callCreds), test.wantCallCreds)
 			}
-			if got := len(svc.DialOptions()); got != test.wantDialOptions {
-				t.Errorf("len(DialOptions()) = %d, want %d", got, test.wantDialOptions)
+			for i, cc := range callCreds {
+				if cc.Credentials() == nil {
+					t.Errorf("SideChannelCredentials() call credentials[%d] have no built credentials", i)
+				}
 			}
 		})
 	}
