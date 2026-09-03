@@ -277,18 +277,14 @@ func (s) TestChildChannelOptions_Isolation(t *testing.T) {
 		t.Errorf("Child client interceptor was unexpectedly called on parent channel call")
 	}
 
-	// Test Server Isolation: child server interceptor should not be
-	// registered on parent server.
-	childServerInt := func(ctx context.Context, req any, info *UnaryServerInfo, handler UnaryHandler) (resp any, err error) {
-		return handler(ctx, req)
-	}
+	// Test Server Isolation: child dial options (such as client interceptors)
+	// should not be registered on the parent server.
 	srv := NewServer(ChildChannelOptions(WithUnaryInterceptor(childClientInt), WithChainUnaryInterceptor(childClientInt)))
 	defer srv.Stop()
 
 	if srv.opts.unaryInt != nil || len(srv.opts.chainUnaryInts) != 0 {
 		t.Errorf("Parent srv has interceptors registered from ChildChannelOptions: unaryInt=%v, chainUnaryInts=%v", srv.opts.unaryInt, srv.opts.chainUnaryInts)
 	}
-	_ = childServerInt
 }
 
 // TestChildChannelOptions_MultiLevelPropagation tests that child options
