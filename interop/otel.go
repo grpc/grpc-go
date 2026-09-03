@@ -23,10 +23,10 @@ func SetupOpenTelemetry(enableOpenTelemetry bool, otelCollectorAddress string, l
 		addr := otelCollectorAddress
 		if strings.HasPrefix(addr, "https://") {
 			addr = strings.TrimPrefix(addr, "https://")
-		} else {
+		} else if strings.HasPrefix(addr, "http://") {
 			addr = strings.TrimPrefix(addr, "http://")
-			exporterOpts = append(exporterOpts, otlptracegrpc.WithInsecure())
 		}
+		exporterOpts = append(exporterOpts, otlptracegrpc.WithInsecure())
 		exporterOpts = append(exporterOpts, otlptracegrpc.WithEndpoint(addr))
 	} else {
 		exporterOpts = append(exporterOpts, otlptracegrpc.WithInsecure())
