@@ -301,6 +301,79 @@ func (s) TestStopAbortsBlockingGRPCCall(t *testing.T) {
 	<-grpcClientCallReturned
 }
 
+// TestStopAfterGracefulStopWithRunningHandler verifies that Stop() returns
+// promptly when called concurrently with an in-progress GracefulStop() that is
+// blocked waiting on a handler which ignores context cancellation. This is the
+// recommended way to abort a GracefulStop that takes too long, and it must not
+// deadlock behind the server mutex.
+func (s) TestStopAfterGracefulStopWithRunningHandler(t *testing.T) {
+	handlerStarted := make(chan struct{})
+	unblockHandler := make(chan struct{})
+	ss := &stubserver.StubServer{
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
+			close(handlerStarted)
+			// Ignore context cancellation to simulate a handler that does not
+			// promptly return when the server shuts down.
+			<-unblockHandler
+			return nil
+		},
+	}
+	if err := ss.Start(nil); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
+	}
+	defer ss.Stop()
+	handlerUnblocked := false
+	defer func() {
+		if !handlerUnblocked {
+			close(unblockHandler)
+		}
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	if _, err := ss.Client.FullDuplexCall(ctx); err != nil {
+		t.Fatalf("Error starting FullDuplexCall: %v", err)
+	}
+	<-handlerStarted
+
+	// Close the client connection so the server transport drains while the
+	// handler is still running. GracefulStop will then remove the connection
+	// and block waiting on the running handler.
+	ss.CC.Close()
+
+	gracefulStopReturned := make(chan struct{})
+	go func() {
+		ss.S.GracefulStop()
+		close(gracefulStopReturned)
+	}()
+
+	// Give GracefulStop time to drain the connection and start waiting on the
+	// running handler.
+	time.Sleep(defaultTestShortTimeout)
+
+	stopReturned := make(chan struct{})
+	go func() {
+		ss.S.Stop()
+		close(stopReturned)
+	}()
+
+	select {
+	case <-stopReturned:
+	case <-time.After(defaultTestTimeout):
+		t.Fatal("Stop() did not return; it deadlocked behind GracefulStop() waiting for a running handler")
+	}
+
+	// Let the handler finish so GracefulStop can also return.
+	close(unblockHandler)
+	handlerUnblocked = true
+	select {
+	case <-gracefulStopReturned:
+	case <-time.After(defaultTestTimeout):
+		t.Fatal("GracefulStop() did not return after the handler completed")
+	}
+}
+
 // TestServeHTTP_GracefulStop verifies that calling GracefulStop on a server
 // using ServeHTTP returns properly.
 func (s) TestServeHTTP_GracefulStop(t *testing.T) {

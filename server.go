@@ -1711,7 +1711,13 @@ func (s *Server) stop(graceful bool) {
 	}
 
 	if graceful || s.opts.waitForHandlers {
+		// Release the lock while waiting for handlers to finish. Holding it
+		// here would deadlock a concurrent Stop() (the recommended way to abort
+		// a GracefulStop that is taking too long), because Stop() must acquire
+		// s.mu before it can force the server to shut down.
+		s.mu.Unlock()
 		s.handlersWG.Wait()
+		s.mu.Lock()
 	}
 
 	if s.events != nil {
