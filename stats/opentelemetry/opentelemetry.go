@@ -182,6 +182,23 @@ type callInfo struct {
 	// previousRPCAttempts holds the count of RPC attempts that have happened
 	// before current attempt. Transparent retries are excluded.
 	previousRPCAttempts atomic.Uint32
+
+	// Retry metrics fields, maintained by the metrics handler from the
+	// call's per-attempt stats events.
+	//
+	// numAttempts is tracked here rather than reusing previousRPCAttempts
+	// (above) because that field is owned by the tracing handler and is
+	// only updated when tracing is enabled.
+	//
+	// activeAttempts and lastAttemptEndTime accumulate retryDelay (time
+	// with no active attempt). They are only race-free for sequential
+	// attempts; revisit if grpc-go gains hedging support.
+	numAttempts           atomic.Uint32
+	numTransparentRetries atomic.Uint32
+	numHedges             atomic.Uint32
+	retryDelay            atomic.Int64 // in nanoseconds
+	activeAttempts        atomic.Int32
+	lastAttemptEndTime    atomic.Int64 // Unix nanoseconds
 }
 
 type callInfoKey struct{}
@@ -309,6 +326,14 @@ type clientMetrics struct {
 	attemptRcvdTotalCompressedMessageSize otelmetric.Int64Histogram
 	// "grpc.client.call.duration"
 	callDuration otelmetric.Float64Histogram
+	// "grpc.client.call.retries"
+	callRetries otelmetric.Int64Histogram
+	// "grpc.client.call.transparent_retries"
+	callTransparentRetries otelmetric.Int64Histogram
+	// "grpc.client.call.hedges"
+	callHedges otelmetric.Int64Histogram
+	// "grpc.client.call.retry_delay"
+	callRetryDelay otelmetric.Float64Histogram
 }
 
 type serverMetrics struct {
