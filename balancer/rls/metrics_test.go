@@ -373,3 +373,79 @@ func (s) TestRLSFailedRPCMetric(t *testing.T) {
 		}
 	}
 }
+
+// TestRLSControlChannelChildChannelOptions verifies the gRFC A110 plumbing:
+// when a user passes an OpenTelemetry stats handler DialOption via
+// grpc.WithChildChannelOptions on the parent channel, the RLS control channel
+// records grpc.client.attempt.duration data points for RouteLookup RPCs. The
+// negative case is also covered: without WithChildChannelOptions, no
+// RouteLookup metric data point should appear (the parent's own OTel handler
+// must not leak onto the child channel under A110's "opaque to P" rule).
+func (s) TestRLSControlChannelChildChannelOptions(t *testing.T) {
+	rlsServer, _ := rlstest.SetupFakeRLSServer(t, nil)
+	rlsConfig := buildBasicRLSConfigWithChildPolicy(t, t.Name(), rlsServer.Address)
+	backend := &stubserver.StubServer{
+		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
+			return &testpb.Empty{}, nil
+		},
+	}
+	if err := backend.StartServer(); err != nil {
+		t.Fatalf("Failed to start backend: %v", err)
+	}
+	defer backend.Stop()
+	rlsConfig.RouteLookupConfig.DefaultTarget = backend.Address
+
+	const rlsMethod = "grpc.lookup.v1.RouteLookupService/RouteLookup"
+	newClient := func(t *testing.T, useChildOpts bool) *metric.ManualReader {
+		r := startManualResolverWithConfig(t, rlsConfig)
+		reader := metric.NewManualReader()
+		provider := metric.NewMeterProvider(metric.WithReader(reader))
+		mo := opentelemetry.MetricsOptions{MeterProvider: provider}
+		otelDO := opentelemetry.DialOption(opentelemetry.Options{MetricsOptions: mo})
+		dialOpts := []grpc.DialOption{
+			grpc.WithResolvers(r),
+			grpc.WithTransportCredentials(insecure.NewCredentials()),
+			otelDO,
+		}
+		if useChildOpts {
+			dialOpts = append(dialOpts, grpc.WithChildChannelOptions(otelDO))
+		}
+		cc, err := grpc.NewClient(r.Scheme()+":///", dialOpts...)
+		if err != nil {
+			t.Fatalf("grpc.NewClient failed: %v", err)
+		}
+		t.Cleanup(func() { cc.Close() })
+
+		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+		defer cancel()
+		if _, err := testgrpc.NewTestServiceClient(cc).EmptyCall(ctx, &testpb.Empty{}); err != nil {
+			t.Fatalf("client.EmptyCall failed: %v", err)
+		}
+		return reader
+	}
+	seesRouteLookup := func(reader *metric.ManualReader) bool {
+		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+		defer cancel()
+		md, ok := metricsDataFromReader(ctx, reader)["grpc.client.attempt.duration"]
+		if !ok {
+			return false
+		}
+		hist, ok := md.Data.(metricdata.Histogram[float64])
+		if !ok {
+			return false
+		}
+		for _, dp := range hist.DataPoints {
+			if v, ok := dp.Attributes.Value("grpc.method"); ok && v.AsString() == rlsMethod {
+				return true
+			}
+		}
+		return false
+	}
+
+	if got := seesRouteLookup(newClient(t, true)); !got {
+		t.Fatalf("with WithChildChannelOptions: grpc.client.attempt.duration missing a data point for method %q", rlsMethod)
+	}
+	if got := seesRouteLookup(newClient(t, false)); got {
+		t.Fatalf("without WithChildChannelOptions: grpc.client.attempt.duration unexpectedly has a data point for method %q; A110 requires child options be opt-in", rlsMethod)
+	}
+}
