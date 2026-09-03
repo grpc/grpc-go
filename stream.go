@@ -890,6 +890,12 @@ type csAttempt struct {
 	statsHandler stats.Handler
 	beginTime    time.Time
 
+	// Bool fields are grouped at the tail to eliminate the alignment padding
+	// that would otherwise follow each bool when the next field is pointer- or
+	// int-sized. See https://github.com/grpc/grpc-go/issues/9347 for benchmarks.
+	// Add new bool fields here, not inline above.
+
+	// Not guarded by mu.
 	// set for newStream errors that may be transparently retried
 	allowTransparentRetry bool
 	// set for pick errors that are returned as a status
@@ -1568,11 +1574,18 @@ type addrConnStream struct {
 	cancel           context.CancelFunc
 	opts             []CallOption
 	callInfo         *callInfo
-	sentLast         bool
 	desc             *StreamDesc
 	codec            baseCodec
 	sendCompressorV0 Compressor
 	sendCompressorV1 encoding.Compressor
+
+	// Bool fields are grouped at the tail to eliminate the alignment padding
+	// that would otherwise follow each bool when the next field is pointer- or
+	// int-sized. See https://github.com/grpc/grpc-go/issues/9348 for benchmarks.
+	// Add new bool fields here, not inline above.
+
+	// Not guarded by mu.
+	sentLast bool
 }
 
 func (as *addrConnStream) Header() (metadata.MD, error) {
@@ -1744,15 +1757,23 @@ type serverStream struct {
 
 	sendCompressorName string
 
-	recvFirstMsg bool // set after the first message is received
-
 	maxReceiveMessageSize int
 	maxSendMessageSize    int
-	trInfo                *traceInfo
+
+	// mu guards trInfo.tr after the service handler runs.
+	mu     sync.Mutex
+	trInfo *traceInfo
 
 	statsHandler stats.Handler
 
 	binlogs []binarylog.MethodLogger
+
+	// Bool fields are grouped at the tail to eliminate the alignment padding
+	// that would otherwise follow each bool when the next field is pointer- or
+	// int-sized. See https://github.com/grpc/grpc-go/issues/9349 for benchmarks.
+	// Add new bool fields here, not inline above.
+
+	recvFirstMsg bool // set after the first message is received
 	// serverHeaderBinlogged indicates whether server header has been logged. It
 	// will happen when one of the following two happens: stream.SendHeader(),
 	// stream.Send().
@@ -1760,8 +1781,6 @@ type serverStream struct {
 	// It's only checked in send and sendHeader, doesn't need to be
 	// synchronized.
 	serverHeaderBinlogged bool
-
-	mu sync.Mutex // protects trInfo.tr after the service handler runs.
 }
 
 func (ss *serverStream) Context() context.Context {
