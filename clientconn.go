@@ -323,7 +323,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 			case err == nil || !cc.dopts.returnLastError:
 				conn, err = nil, ctx.Err()
 			default:
-				conn, err = nil, fmt.Errorf("%v: %v", ctx.Err(), err)
+				conn, err = nil, fmt.Errorf("%v: %w", err, ctx.Err())
 			}
 		default:
 		}
