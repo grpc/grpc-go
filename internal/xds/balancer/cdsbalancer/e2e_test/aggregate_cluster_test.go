@@ -38,6 +38,7 @@ import (
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils/pickfirst"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/internal/testutils/xds/fakeserver"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/internal/xds/xdsclient"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource/version"
@@ -45,13 +46,17 @@ import (
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/testing/protocmp"
+	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
+	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
+	v3lrspb "github.com/envoyproxy/go-control-plane/envoy/service/load_stats/v3"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 
@@ -1281,4 +1286,182 @@ func addrsToEndpoints(addrs []resolver.Address) []resolver.Endpoint {
 		endpoints[i] = resolver.Endpoint{Addresses: []resolver.Address{addr}}
 	}
 	return endpoints
+}
+
+// Tests that when an aggregate cluster (Root -> [PrimaryEDS, SecondaryEDS]) has
+// LRS enabled on both leaf clusters:
+//  1. LRS reports are sent only for the primary leaf cluster while healthy.
+//  2. When the primary leaf cluster fails, traffic shifts to the secondary leaf
+//     cluster and LRS stats are reported for the secondary leaf cluster.
+func (s) TestAggregateCluster_LRS(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	const (
+		clusterName1 = clusterName + "-cluster-1"
+		clusterName2 = clusterName + "-cluster-2"
+	)
+
+	managementServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
+		AllowResourceSubset:         true,
+		SupportLoadReportingService: true,
+	})
+	nodeID := uuid.New().String()
+	bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, managementServer.Address)
+
+	servers, cleanup := startTestServiceBackends(t, 2)
+	defer cleanup()
+	_, ports := backendAddressesAndPorts(t, servers)
+
+	resources := e2e.UpdateOptions{
+		NodeID:    nodeID,
+		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(serviceName, routeName)},
+		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeName, serviceName, clusterName)},
+		Clusters: []*v3clusterpb.Cluster{
+			makeAggregateClusterResource(clusterName, []string{clusterName1, clusterName2}),
+			e2e.ClusterResourceWithOptions(e2e.ClusterOptions{
+				ClusterName: clusterName1,
+				Type:        e2e.ClusterTypeEDS,
+				EnableLRS:   true,
+			}),
+			e2e.ClusterResourceWithOptions(e2e.ClusterOptions{
+				ClusterName: clusterName2,
+				Type:        e2e.ClusterTypeEDS,
+				EnableLRS:   true,
+			}),
+		},
+		Endpoints: []*v3endpointpb.ClusterLoadAssignment{
+			e2e.DefaultEndpoint(clusterName1, "localhost", []uint32{uint32(ports[0])}),
+			e2e.DefaultEndpoint(clusterName2, "localhost", []uint32{uint32(ports[1])}),
+		},
+	}
+	if err := managementServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	cc, cleanup := setupAndDial(t, bootstrapContents)
+	defer cleanup()
+
+	client := testgrpc.NewTestServiceClient(cc)
+
+	// Ensure LRS stream is opened.
+	if _, err := managementServer.LRSServer.LRSStreamOpenChan.Receive(ctx); err != nil {
+		t.Fatalf("Timeout waiting for LRS stream open: %v", err)
+	}
+	if _, err := managementServer.LRSServer.LRSRequestChan.Receive(ctx); err != nil {
+		t.Fatalf("Timeout waiting for initial LRS request: %v", err)
+	}
+
+	// Make RPC calls and verify every call reaches the primary cluster
+	// (clusterName1).
+	for i := 0; i < 10; i++ {
+		peer := &peer.Peer{}
+		if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(peer)); err != nil {
+			t.Fatalf("EmptyCall() failed: %v", err)
+		}
+		if got, want := peer.Addr.String(), servers[0].Address; got != want {
+			t.Fatalf("EmptyCall() call #%d routed to %q, want %q", i, got, want)
+		}
+	}
+
+	// Send LRS response requesting load reporting every 10ms.
+	managementServer.LRSServer.LRSResponseChan <- &fakeserver.Response{
+		Resp: &v3lrspb.LoadStatsResponse{
+			SendAllClusters:       true,
+			LoadReportingInterval: durationpb.New(defaultLoadReportingInterval),
+		},
+	}
+
+	// Verify LRS reports load for clusterName1 and 0 load for clusterName2.
+	wantClusterStats := &v3endpointpb.ClusterStats{
+		ClusterName: clusterName1,
+		UpstreamLocalityStats: []*v3endpointpb.UpstreamLocalityStats{
+			{
+				Locality:                &v3corepb.Locality{Region: "region-1", Zone: "zone-1", SubZone: "subzone-1"},
+				TotalSuccessfulRequests: 10,
+				TotalIssuedRequests:     10,
+			},
+		},
+	}
+waitForPrimaryStats:
+	for {
+		select {
+		case <-ctx.Done():
+			t.Fatalf("Timeout waiting for LRS load report for %q", clusterName1)
+		case req := <-managementServer.LRSServer.LRSRequestChan.C:
+			loadStats := req.(*fakeserver.Request).Req.(*v3lrspb.LoadStatsRequest)
+			if len(loadStats.ClusterStats) == 0 {
+				continue
+			}
+			diff := cmp.Diff([]*v3endpointpb.ClusterStats{wantClusterStats}, loadStats.ClusterStats,
+				protocmp.Transform(),
+				protocmp.IgnoreFields(&v3endpointpb.ClusterStats{}, "load_report_interval"),
+			)
+			if diff != "" {
+				t.Fatalf("Unexpected diff in LRS ClusterStats for %q (-want +got):\n%s", clusterName1, diff)
+			}
+			break waitForPrimaryStats
+		}
+	}
+
+	// Fail primary cluster by clearing endpoints for clusterName1.
+	resources.Endpoints = []*v3endpointpb.ClusterLoadAssignment{
+		e2e.DefaultEndpoint(clusterName1, "localhost", nil),
+		e2e.DefaultEndpoint(clusterName2, "localhost", []uint32{uint32(ports[1])}),
+	}
+	if err := managementServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Make RPCs and verify failover to secondary backend.
+	peer := &peer.Peer{}
+	for ctx.Err() == nil {
+		if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(peer)); err == nil && peer.Addr.String() == servers[1].Address {
+			break
+		}
+		time.Sleep(defaultTestShortTimeout)
+	}
+	if ctx.Err() != nil {
+		t.Fatalf("Timeout waiting for RPCs to switch to secondary backend %q", servers[1].Address)
+	}
+
+	// Verify LRS report now includes load for secondary cluster (clusterName2).
+	wantClusterStats = &v3endpointpb.ClusterStats{
+		ClusterName: clusterName2,
+		UpstreamLocalityStats: []*v3endpointpb.UpstreamLocalityStats{
+			{
+				Locality:                &v3corepb.Locality{Region: "region-1", Zone: "zone-1", SubZone: "subzone-1"},
+				TotalSuccessfulRequests: 1,
+			},
+		},
+	}
+	for {
+		select {
+		case <-ctx.Done():
+			t.Fatalf("Timeout waiting for LRS load report for secondary cluster %q", clusterName2)
+		case req := <-managementServer.LRSServer.LRSRequestChan.C:
+			loadStats := req.(*fakeserver.Request).Req.(*v3lrspb.LoadStatsRequest)
+			for _, load := range loadStats.ClusterStats {
+				if load.ClusterName != clusterName2 {
+					continue
+				}
+				// The periodic LRS timer may fire while a failover RPC is
+				// in flight, producing a transitional report with 0
+				// successful requests. Skip such reports until the report
+				// with the completed RPC arrives.
+				if len(load.UpstreamLocalityStats) == 0 || load.UpstreamLocalityStats[0].TotalSuccessfulRequests == 0 {
+					continue
+				}
+				diff := cmp.Diff(wantClusterStats, load,
+					protocmp.Transform(),
+					protocmp.IgnoreFields(&v3endpointpb.ClusterStats{}, "load_report_interval"),
+					protocmp.IgnoreFields(&v3endpointpb.UpstreamLocalityStats{}, "total_issued_requests", "total_requests_in_progress"),
+				)
+				if diff != "" {
+					t.Fatalf("Unexpected diff in LRS ClusterStats for %q (-want +got):\n%s", clusterName2, diff)
+				}
+				return
+			}
+		}
+	}
 }
