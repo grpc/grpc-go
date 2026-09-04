@@ -578,16 +578,12 @@ func (t *http2Client) createHeaderFields(ctx context.Context, callHdr *CallHdr) 
 	// so this may slightly over-count, which is preferable to growing the slice.
 	md, added, mdOK := metadataFromOutgoingContextRaw(ctx)
 	if mdOK {
-		for _, vv := range md {
-			hfLen += len(vv)
-		}
+		hfLen += headerFieldsCountFromMD(md)
 		for _, vv := range added {
 			hfLen += len(vv) / 2
 		}
 	}
-	for _, vv := range t.md {
-		hfLen += len(vv)
-	}
+	hfLen += headerFieldsCountFromMD(t.md)
 	headerFields := make([]hpack.HeaderField, 0, hfLen)
 	headerFields = append(headerFields, hpack.HeaderField{Name: ":method", Value: "POST"})
 	headerFields = append(headerFields, hpack.HeaderField{Name: ":scheme", Value: t.scheme})
