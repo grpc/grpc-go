@@ -1296,11 +1296,8 @@ func (s) TestAggregateCluster_LRS(t *testing.T) {
 	defer cancel()
 
 	const (
-		clusterName1      = clusterName + "-cluster-1"
-		clusterName2      = clusterName + "-cluster-2"
-		numBackends       = 2
-		wantRPCCount      = 10
-		wantLocalityCount = 1
+		clusterName1 = clusterName + "-cluster-1"
+		clusterName2 = clusterName + "-cluster-2"
 	)
 
 	managementServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
@@ -1310,8 +1307,8 @@ func (s) TestAggregateCluster_LRS(t *testing.T) {
 	nodeID := uuid.New().String()
 	bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, managementServer.Address)
 
-	servers, cleanup2 := startTestServiceBackends(t, numBackends)
-	defer cleanup2()
+	servers, cleanup := startTestServiceBackends(t, 2)
+	defer cleanup()
 	_, ports := backendAddressesAndPorts(t, servers)
 
 	resources := e2e.UpdateOptions{
@@ -1363,7 +1360,7 @@ func (s) TestAggregateCluster_LRS(t *testing.T) {
 
 	// Make RPC calls and verify every call reaches the primary cluster
 	// (clusterName1).
-	for i := 0; i < wantRPCCount; i++ {
+	for i := 0; i < 10; i++ {
 		peer := &peer.Peer{}
 		if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(peer), grpc.WaitForReady(true)); err != nil {
 			t.Fatalf("EmptyCall() failed: %v", err)
@@ -1393,8 +1390,8 @@ func (s) TestAggregateCluster_LRS(t *testing.T) {
 				}
 				if load.ClusterName == clusterName1 {
 					// Each leaf cluster has exactly one locality.
-					if len(load.UpstreamLocalityStats) != wantLocalityCount {
-						t.Fatalf("UpstreamLocalityStats length = %d, want %d", len(load.UpstreamLocalityStats), wantLocalityCount)
+					if len(load.UpstreamLocalityStats) != 1 {
+						t.Fatalf("UpstreamLocalityStats length = %d, want 1", len(load.UpstreamLocalityStats))
 					}
 					if load.UpstreamLocalityStats[0].TotalSuccessfulRequests > 0 {
 						gotCluster1Report = true
@@ -1422,6 +1419,7 @@ func (s) TestAggregateCluster_LRS(t *testing.T) {
 		if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(peer)); err == nil && peer.Addr.String() == servers[1].Address {
 			break
 		}
+		time.Sleep(defaultTestShortTimeout)
 	}
 	if ctx.Err() != nil {
 		t.Fatalf("Timeout waiting for RPCs to switch to secondary backend %q", servers[1].Address)
@@ -1436,8 +1434,8 @@ func (s) TestAggregateCluster_LRS(t *testing.T) {
 			loadStats := req.(*fakeserver.Request).Req.(*v3lrspb.LoadStatsRequest)
 			for _, load := range loadStats.ClusterStats {
 				if load.ClusterName == clusterName2 {
-					if len(load.UpstreamLocalityStats) != wantLocalityCount {
-						t.Fatalf("UpstreamLocalityStats length = %d, want %d", len(load.UpstreamLocalityStats), wantLocalityCount)
+					if len(load.UpstreamLocalityStats) != 1 {
+						t.Fatalf("UpstreamLocalityStats length = %d, want 1", len(load.UpstreamLocalityStats))
 					}
 					if load.UpstreamLocalityStats[0].TotalSuccessfulRequests > 0 {
 						return

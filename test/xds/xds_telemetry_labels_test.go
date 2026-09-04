@@ -21,6 +21,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc"
@@ -166,22 +167,22 @@ func (s) TestTelemetryLabels_AggregateCluster(t *testing.T) {
 
 	// Make RPC to primary cluster and verify primary telemetry labels.
 	peer := &peer.Peer{}
-	var cluster1Labels map[string]string
-	callCtx1 := telemetry.NewContextWithLabelCallback(ctx, func(l map[string]string) {
-		cluster1Labels = l
+	var gotLabels map[string]string
+	callCtx := telemetry.NewContextWithLabelCallback(ctx, func(l map[string]string) {
+		gotLabels = l
 	})
-	if _, err := client.EmptyCall(callCtx1, &testpb.Empty{}, grpc.Peer(peer), grpc.WaitForReady(true)); err != nil {
+	if _, err := client.EmptyCall(callCtx, &testpb.Empty{}, grpc.Peer(peer), grpc.WaitForReady(true)); err != nil {
 		t.Fatalf("EmptyCall() failed: %v", err)
 	}
 	if got, want := peer.Addr.String(), servers[0].Address; got != want {
 		t.Fatalf("EmptyCall() routed to %q, want %q", got, want)
 	}
 
-	wantCluster1Labels := map[string]string{
+	wantLabels := map[string]string{
 		localityKey:       localityValue,
 		backendServiceKey: cluster1Name,
 	}
-	if diff := cmp.Diff(cluster1Labels, wantCluster1Labels); diff != "" {
+	if diff := cmp.Diff(gotLabels, wantLabels); diff != "" {
 		t.Fatalf("Telemetry labels for primary cluster (-got +want): %v", diff)
 	}
 
@@ -196,24 +197,24 @@ func (s) TestTelemetryLabels_AggregateCluster(t *testing.T) {
 
 	// Make RPCs until traffic switches to secondary cluster and capture
 	// secondary labels.
-	var cluster2Labels map[string]string
 	for ctx.Err() == nil {
-		callCtx2 := telemetry.NewContextWithLabelCallback(ctx, func(l map[string]string) {
-			cluster2Labels = l
+		callCtx := telemetry.NewContextWithLabelCallback(ctx, func(l map[string]string) {
+			gotLabels = l
 		})
-		if _, err := client.EmptyCall(callCtx2, &testpb.Empty{}, grpc.Peer(peer)); err == nil && peer.Addr.String() == servers[1].Address {
+		if _, err := client.EmptyCall(callCtx, &testpb.Empty{}, grpc.Peer(peer)); err == nil && peer.Addr.String() == servers[1].Address {
 			break
 		}
+		time.Sleep(defaultTestShortTimeout)
 	}
 	if ctx.Err() != nil {
 		t.Fatalf("Timeout waiting for RPCs to switch to secondary cluster %q", servers[1].Address)
 	}
 
-	wantCluster2Labels := map[string]string{
+	wantLabels = map[string]string{
 		localityKey:       localityValue,
 		backendServiceKey: cluster2Name,
 	}
-	if diff := cmp.Diff(cluster2Labels, wantCluster2Labels); diff != "" {
+	if diff := cmp.Diff(gotLabels, wantLabels); diff != "" {
 		t.Fatalf("Telemetry labels after failover (-got +want): %v", diff)
 	}
 }
