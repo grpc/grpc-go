@@ -171,7 +171,7 @@ func (s) TestTelemetryLabels_AggregateCluster(t *testing.T) {
 	callCtx := telemetry.NewContextWithLabelCallback(ctx, func(l map[string]string) {
 		gotLabels = l
 	})
-	if _, err := client.EmptyCall(callCtx, &testpb.Empty{}, grpc.Peer(peer), grpc.WaitForReady(true)); err != nil {
+	if _, err := client.EmptyCall(callCtx, &testpb.Empty{}, grpc.Peer(peer)); err != nil {
 		t.Fatalf("EmptyCall() failed: %v", err)
 	}
 	if got, want := peer.Addr.String(), servers[0].Address; got != want {
