@@ -269,7 +269,9 @@ func (s) TestChildChannelOptions_Isolation(t *testing.T) {
 	}
 
 	// Make an invocation to check interceptor execution on parent channel.
-	_ = cc.Invoke(context.Background(), "/test/method", nil, nil)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	_ = cc.Invoke(ctx, "/test/method", nil, nil)
 	if !parentClientInterceptorCalled {
 		t.Errorf("Parent client interceptor was not called")
 	}
