@@ -539,6 +539,33 @@ func (t *http2Client) outgoingGoAwayHandler(g *goAway) (bool, error) {
 	return false, g.closeConn
 }
 
+// hpackNeverIndex reports whether the outgoing header named k should be encoded
+// as an HPACK "never indexed" literal rather than being added to the encoder's
+// dynamic table. Nothing is never-indexed by default; the set is opt-in via the
+// GRPC_GO_EXPERIMENTAL_HPACK_NEVER_INDEX_HEADERS environment variable, whose
+// documentation describes the trade-off involved.
+//
+// The key k must be lower-cased, which holds for every call site: metadata keys
+// are validated as lower-case, and per-RPC credential keys are lower-cased in
+// getTrAuthData and getCallAuthData.
+//
+// Note that hpack.HeaderField.Sensitive maps onto RFC 7541 §6.2.3 ("Literal
+// Header Field Never Indexed"), which additionally forbids intermediaries from
+// indexing the field. §6.2.2 ("Literal Header Field without Indexing") would be
+// the closer fit for merely high-cardinality headers, but x/net/http2/hpack
+// offers no way to select it.
+func hpackNeverIndex(k string) bool {
+	// The set is empty unless the feature is opted into, which is the case for
+	// virtually every deployment. Check the length first: that compiles to a
+	// nil check on the map header, whereas a lookup on an empty map still costs
+	// a call into the runtime, and this runs for every header of every RPC.
+	if len(envconfig.HPACKNeverIndexHeaders) == 0 {
+		return false
+	}
+	_, ok := envconfig.HPACKNeverIndexHeaders[k]
+	return ok
+}
+
 func (t *http2Client) createHeaderFields(ctx context.Context, callHdr *CallHdr) ([]hpack.HeaderField, error) {
 	aud := t.createAudience(callHdr)
 	ri := credentials.RequestInfo{
@@ -626,10 +653,10 @@ func (t *http2Client) createHeaderFields(ctx context.Context, callHdr *CallHdr) 
 		headerFields = append(headerFields, hpack.HeaderField{Name: "grpc-timeout", Value: grpcutil.EncodeDuration(timeout)})
 	}
 	for k, v := range authData {
-		headerFields = append(headerFields, hpack.HeaderField{Name: k, Value: encodeMetadataHeader(k, v)})
+		headerFields = append(headerFields, hpack.HeaderField{Name: k, Value: encodeMetadataHeader(k, v), Sensitive: hpackNeverIndex(k)})
 	}
 	for k, v := range callAuthData {
-		headerFields = append(headerFields, hpack.HeaderField{Name: k, Value: encodeMetadataHeader(k, v)})
+		headerFields = append(headerFields, hpack.HeaderField{Name: k, Value: encodeMetadataHeader(k, v), Sensitive: hpackNeverIndex(k)})
 	}
 
 	if mdOK {
@@ -639,8 +666,9 @@ func (t *http2Client) createHeaderFields(ctx context.Context, callHdr *CallHdr) 
 			if isReservedHeader(k) {
 				continue
 			}
+			neverIndex := hpackNeverIndex(k)
 			for _, v := range vv {
-				headerFields = append(headerFields, hpack.HeaderField{Name: k, Value: encodeMetadataHeader(k, v)})
+				headerFields = append(headerFields, hpack.HeaderField{Name: k, Value: encodeMetadataHeader(k, v), Sensitive: neverIndex})
 			}
 		}
 		for _, vv := range added {
@@ -653,7 +681,7 @@ func (t *http2Client) createHeaderFields(ctx context.Context, callHdr *CallHdr) 
 				if isReservedHeader(k) {
 					continue
 				}
-				headerFields = append(headerFields, hpack.HeaderField{Name: k, Value: encodeMetadataHeader(k, v)})
+				headerFields = append(headerFields, hpack.HeaderField{Name: k, Value: encodeMetadataHeader(k, v), Sensitive: hpackNeverIndex(k)})
 			}
 		}
 	}
@@ -664,8 +692,9 @@ func (t *http2Client) createHeaderFields(ctx context.Context, callHdr *CallHdr) 
 		if err := imetadata.ValidatePair(k, vv...); err != nil {
 			return nil, status.Error(codes.Internal, err.Error())
 		}
+		neverIndex := hpackNeverIndex(k)
 		for _, v := range vv {
-			headerFields = append(headerFields, hpack.HeaderField{Name: k, Value: encodeMetadataHeader(k, v)})
+			headerFields = append(headerFields, hpack.HeaderField{Name: k, Value: encodeMetadataHeader(k, v), Sensitive: neverIndex})
 		}
 	}
 	return headerFields, nil

@@ -169,7 +169,58 @@ var (
 	//
 	// TODO: Remove this env var once v1.85.0 is released.
 	EnableReceiveBufferCompaction = boolFromEnv("GRPC_GO_EXPERIMENTAL_ENABLE_RECEIVE_BUFFER_COMPACTION", true)
+
+	// HPACKNeverIndexHeaders is the set of outgoing header names that the
+	// client transport encodes as HPACK "never indexed" literals instead of
+	// adding them to the dynamic table. It is configured via the
+	// comma-separated, case-insensitive environment variable
+	// "GRPC_GO_EXPERIMENTAL_HPACK_NEVER_INDEX_HEADERS", e.g.
+	// "traceparent,x-request-id", and is empty by default.
+	//
+	// This is a CPU-for-bandwidth trade-off, and it is a loss for most
+	// applications; do not enable it without measuring. It is only worth
+	// considering for headers whose value differs on (almost) every RPC, such
+	// as trace or request identifiers.
+	//
+	// Indexing such a header inserts a dynamic table entry that no later RPC
+	// will ever match, so the entry is pure churn: every request pays for a
+	// table insert, and, once the table is full, for evicting the oldest entry
+	// and shifting the remainder. Never-indexing removes that work. It also
+	// lets the encoder skip the name+value lookup that is guaranteed to miss,
+	// and keeps the entry out of the receiving peer's table as well.
+	//
+	// The cost is bandwidth: the header *name* is kept out of the table too, so
+	// it is re-sent as a literal on every RPC instead of being referenced by a
+	// one-byte index. BenchmarkHPACKNeverIndex in internal/transport measures
+	// both sides and should be re-run on the workload in question before
+	// enabling this.
+	//
+	// Note that grpc-timeout is not configurable here: it is a reserved header
+	// that the transport writes directly and never reads from metadata.
+	HPACKNeverIndexHeaders = stringSetFromEnv("GRPC_GO_EXPERIMENTAL_HPACK_NEVER_INDEX_HEADERS")
 )
+
+// stringSetFromEnv parses a comma-separated environment variable into a set of
+// lower-cased, trimmed, non-empty entries. It returns nil if the variable is
+// unset or if it contains no non-empty entries.
+func stringSetFromEnv(envVar string) map[string]struct{} {
+	v := os.Getenv(envVar)
+	if v == "" {
+		return nil
+	}
+	var set map[string]struct{}
+	for s := range strings.SplitSeq(v, ",") {
+		s = strings.ToLower(strings.TrimSpace(s))
+		if s == "" {
+			continue
+		}
+		if set == nil {
+			set = make(map[string]struct{})
+		}
+		set[s] = struct{}{}
+	}
+	return set
+}
 
 func boolFromEnv(envVar string, def bool) bool {
 	if def {
