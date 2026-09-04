@@ -27,10 +27,11 @@ import (
 )
 
 // TestApplyServerWindowUpdate verifies that a flow control window increment
-// from the external processor is applied only when it is a non-negative value
-// that does not overflow the window. An out-of-range increment must be
-// rejected without mutating the window, so the accounting cannot wrap to a
-// value that permanently blocks acquireDownstreamToSidestreamWindow.
+// from the external processor is applied whenever it does not wrap the int64
+// window, including negative increments, which the ext_proc spec allows. An
+// increment that would overflow or underflow must be rejected without
+// mutating the window, so the accounting cannot wrap to a value that
+// permanently blocks acquireDownstreamToSidestreamWindow.
 func TestApplyServerWindowUpdate(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -67,11 +68,23 @@ func TestApplyServerWindowUpdate(t *testing.T) {
 			wantWindow: iextproc.DefaultFlowControlWindowSize,
 		},
 		{
-			name:       "negative increment is rejected and leaves the window unchanged",
+			name:       "negative increment shrinks the window",
 			start:      iextproc.DefaultFlowControlWindowSize,
-			delta:      -1,
+			delta:      -1024,
+			wantWindow: iextproc.DefaultFlowControlWindowSize - 1024,
+		},
+		{
+			name:       "negative increment can drive the window below zero",
+			start:      1024,
+			delta:      -2048,
+			wantWindow: -1024,
+		},
+		{
+			name:       "underflowing increment is rejected and leaves the window unchanged",
+			start:      math.MinInt64 + 10,
+			delta:      -1024,
 			wantErr:    true,
-			wantWindow: iextproc.DefaultFlowControlWindowSize,
+			wantWindow: math.MinInt64 + 10,
 		},
 	}
 	for _, test := range tests {

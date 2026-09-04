@@ -2040,24 +2040,25 @@ func (cs *clientStream) waitForTrailerProcessing(recvErr error) error {
 
 // applyServerWindowUpdate adds a flow control window increment received from
 // the external processor to window, waking a blocked acquirer if the window
-// becomes positive. The increment is server-controlled, so it must be
-// non-negative and must not overflow the int64 window; an increment that
-// violates either is a protocol error and returns one instead of wrapping the
-// accounting, matching how HTTP/2 flow control rejects a window update that
-// exceeds the maximum. This recv loop is the only writer that grows the
-// window, so the compare-and-swap only contends with a concurrent deduction in
+// becomes positive. The increment may be negative: the ext_proc spec allows a
+// server to shrink the window, in which case senders block until later
+// updates bring it back above zero. The increment is server-controlled
+// though, so one that would wrap the int64 window in either direction is a
+// protocol error and returns one instead of corrupting the accounting. This
+// recv loop is the only writer that grows the window, so the compare-and-swap
+// only contends with a concurrent deduction in
 // acquire{Downstream,Upstream}ToSidestreamWindow.
 func applyServerWindowUpdate(window *atomic.Int64, positiveUpdateCh chan struct{}, delta int64) error {
 	if delta == 0 {
 		return nil
 	}
-	if delta < 0 {
-		return fmt.Errorf("negative window increment %d", delta)
-	}
 	for {
 		previousQuota := window.Load()
-		if previousQuota > math.MaxInt64-delta {
+		if delta > 0 && previousQuota > math.MaxInt64-delta {
 			return fmt.Errorf("window increment %d overflows the current window %d", delta, previousQuota)
+		}
+		if delta < 0 && previousQuota < math.MinInt64-delta {
+			return fmt.Errorf("window increment %d underflows the current window %d", delta, previousQuota)
 		}
 		newQuota := previousQuota + delta
 		if !window.CompareAndSwap(previousQuota, newQuota) {
