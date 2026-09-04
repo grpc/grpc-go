@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"slices"
 	"strings"
 	"sync"
@@ -1513,33 +1514,13 @@ func (cs *clientStream) recvFromProcServerLoop(newStream func(context.Context, .
 		}
 
 		if windowUpdate := resp.GetServerWindowUpdate(); windowUpdate != nil {
-			deltaDownstreamToSidestream := windowUpdate.GetWindowIncrementDownstreamToSidestream()
-			if deltaDownstreamToSidestream != 0 {
-				// Add the window update to the existing window.
-				newQuota := cs.downstreamToSidestreamWindow.Add(deltaDownstreamToSidestream)
-				previousQuota := newQuota - deltaDownstreamToSidestream
-				// If the window turned from negative to positive, send a signal to the
-				// `acquireDownstreamToSidestreamWindow` function to wake it up.
-				if previousQuota <= 0 && newQuota > 0 {
-					select {
-					case cs.downstreamToSidestreamPositiveUpdateCh <- struct{}{}:
-					default:
-					}
-				}
+			if err := applyServerWindowUpdate(&cs.downstreamToSidestreamWindow, cs.downstreamToSidestreamPositiveUpdateCh, windowUpdate.GetWindowIncrementDownstreamToSidestream()); err != nil {
+				cs.failProcStream(fmt.Errorf("external processor sent an invalid downstream-to-sidestream window update: %v", err))
+				return
 			}
-			deltaUpstreamToSidestream := windowUpdate.GetWindowIncrementUpstreamToSidestream()
-			if deltaUpstreamToSidestream != 0 {
-				// Add the window update to the existing window.
-				newQuota := cs.upstreamToSidestreamWindow.Add(deltaUpstreamToSidestream)
-				previousQuota := newQuota - deltaUpstreamToSidestream
-				// If the window turned from negative to positive, send a signal to the
-				// `acquireUpstreamToSidestreamWindow` function to wake it up.
-				if previousQuota <= 0 && newQuota > 0 {
-					select {
-					case cs.upstreamToSidestreamPositiveUpdateCh <- struct{}{}:
-					default:
-					}
-				}
+			if err := applyServerWindowUpdate(&cs.upstreamToSidestreamWindow, cs.upstreamToSidestreamPositiveUpdateCh, windowUpdate.GetWindowIncrementUpstreamToSidestream()); err != nil {
+				cs.failProcStream(fmt.Errorf("external processor sent an invalid upstream-to-sidestream window update: %v", err))
+				return
 			}
 		}
 
@@ -2054,6 +2035,44 @@ func (cs *clientStream) waitForTrailerProcessing(recvErr error) error {
 		return cs.streamError()
 	case <-cs.ctx.Done():
 		return cs.streamError()
+	}
+}
+
+// applyServerWindowUpdate adds a flow control window increment received from
+// the external processor to window, waking a blocked acquirer if the window
+// becomes positive. The increment may be negative: the ext_proc spec allows a
+// server to shrink the window, in which case senders block until later
+// updates bring it back above zero. The increment is server-controlled
+// though, so one that would wrap the int64 window in either direction is a
+// protocol error and returns one instead of corrupting the accounting. This
+// recv loop is the only writer that grows the window, so the compare-and-swap
+// only contends with a concurrent deduction in
+// acquire{Downstream,Upstream}ToSidestreamWindow.
+func applyServerWindowUpdate(window *atomic.Int64, positiveUpdateCh chan struct{}, delta int64) error {
+	if delta == 0 {
+		return nil
+	}
+	for {
+		previousQuota := window.Load()
+		if delta > 0 && previousQuota > math.MaxInt64-delta {
+			return fmt.Errorf("window increment %d overflows the current window %d", delta, previousQuota)
+		}
+		if delta < 0 && previousQuota < math.MinInt64-delta {
+			return fmt.Errorf("window increment %d underflows the current window %d", delta, previousQuota)
+		}
+		newQuota := previousQuota + delta
+		if !window.CompareAndSwap(previousQuota, newQuota) {
+			continue
+		}
+		// If the window turned from non-positive to positive, wake the acquirer
+		// blocked in acquire{Downstream,Upstream}ToSidestreamWindow.
+		if previousQuota <= 0 && newQuota > 0 {
+			select {
+			case positiveUpdateCh <- struct{}{}:
+			default:
+			}
+		}
+		return nil
 	}
 }
 
