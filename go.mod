@@ -1,6 +1,6 @@
 module google.golang.org/grpc
 
-go 1.25.0
+go 1.26.6
 
 require (
 	cloud.google.com/go/auth v0.23.1
@@ -15,17 +15,18 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/spiffe/go-spiffe/v2 v2.8.1
 	go.opentelemetry.io/contrib/detectors/gcp v1.45.0
-	go.opentelemetry.io/otel v1.45.0
-	go.opentelemetry.io/otel/metric v1.45.0
-	go.opentelemetry.io/otel/sdk v1.45.0
-	go.opentelemetry.io/otel/sdk/metric v1.45.0
-	go.opentelemetry.io/otel/trace v1.45.0
+	go.opentelemetry.io/otel v1.46.0
+	go.opentelemetry.io/otel/metric v1.46.0
+	go.opentelemetry.io/otel/sdk v1.46.0
+	go.opentelemetry.io/otel/sdk/metric v1.46.0
+	go.opentelemetry.io/otel/trace v1.46.0
 	golang.org/x/net v0.58.0
 	golang.org/x/oauth2 v0.36.0
 	golang.org/x/sync v0.22.0
 	golang.org/x/sys v0.47.0
 	gonum.org/v1/gonum v0.17.0
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260817212433-ac3dfec99bb1
+	google.golang.org/grpc/interop v0.0.0
 	google.golang.org/protobuf v1.36.12
 )
 
@@ -52,3 +53,5 @@ require (
 
 // v1.74.0 was published prematurely with known issues.
 retract [v1.74.0, v1.74.1]
+
+replace google.golang.org/grpc/interop => ./interop
