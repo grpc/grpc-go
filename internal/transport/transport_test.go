@@ -103,6 +103,7 @@ type testStreamHandler struct {
 	t           *http2Server
 	notify      chan struct{}
 	getNotified chan struct{}
+	streamCh    chan *ServerStream
 }
 
 type hType int
@@ -120,7 +121,10 @@ const (
 	pingpong
 )
 
-func (h *testStreamHandler) handleStreamAndNotify(*ServerStream) {
+func (h *testStreamHandler) handleStreamAndNotify(s *ServerStream) {
+	if h.streamCh != nil {
+		h.streamCh <- s
+	}
 	if h.notify == nil {
 		return
 	}
@@ -374,6 +378,7 @@ type server struct {
 	channelz         *channelz.Server
 	servingTasksDone chan struct{}
 	timeout          time.Duration
+	streamCh         chan *ServerStream
 }
 
 func newTestServer() *server {
@@ -431,7 +436,7 @@ func (s *server) start(t *testing.T, port int, serverConfig *ServerConfig, ht hT
 			return
 		}
 		s.conns[transport] = rawConn
-		h := &testStreamHandler{t: transport.(*http2Server)}
+		h := &testStreamHandler{t: transport.(*http2Server), streamCh: s.streamCh}
 		s.h = h
 		s.mu.Unlock()
 		timeout := s.timeout
@@ -3466,8 +3471,12 @@ func (s) TestReadMessageHeaderMultipleBuffers(t *testing.T) {
 // configured deadline is reached. The test verifies that the server sends an
 // RST stream only after the deadline is reached.
 func (s) TestServerSendsRSTAfterDeadlineToMisbehavedClient(t *testing.T) {
-	server := setUpServerOnly(t, 0, &ServerConfig{BufferPool: mem.DefaultBufferPool()}, suspended)
+	server := setUpServerOnly(t, 0, &ServerConfig{BufferPool: mem.DefaultBufferPool()}, notifyCall)
 	defer server.stop()
+	streamCh := make(chan *ServerStream, 1)
+	server.mu.Lock()
+	server.streamCh = streamCh
+	server.mu.Unlock()
 	// Create a client that can override server stream quota.
 	mconn, err := net.Dial("tcp", server.lis.Addr().String())
 	if err != nil {
@@ -3536,6 +3545,13 @@ func (s) TestServerSendsRSTAfterDeadlineToMisbehavedClient(t *testing.T) {
 	}
 	mu.Unlock()
 
+	var serverStream *ServerStream
+	select {
+	case serverStream = <-streamCh:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Timed out waiting for the server stream")
+	}
+
 	// Test server behavior for deadline expiration.
 	var rstTime time.Time
 	select {
@@ -3546,6 +3562,13 @@ func (s) TestServerSendsRSTAfterDeadlineToMisbehavedClient(t *testing.T) {
 
 	if got, want := rstTime.Sub(startTime), 10*time.Millisecond; got < want {
 		t.Fatalf("RST frame received earlier than expected by duration: %v", want-got)
+	}
+	st := serverStream.closeStatus.Load()
+	if st == nil {
+		t.Fatal("stream ended without a close status")
+	}
+	if got, want := st.Code(), codes.DeadlineExceeded; got != want {
+		t.Fatalf("stream ended with code %v, want %v", got, want)
 	}
 }
 
@@ -4072,7 +4095,7 @@ func (s) TestDeleteStreamMetricsIncrementedOnlyOnce(t *testing.T) {
 			// First call to closeStream should remove the stream from
 			// the activeStreams and update metrics. closeStream will also
 			// cancel the stream, stopping the deadline timer.
-			serverTransport.closeStream(serverStream, false, 0, test.eosReceived)
+			serverTransport.closeStream(serverStream, false, 0, test.eosReceived, status.New(codes.Canceled, "test closed stream"))
 
 			// Check metrics after first deleteStream call
 			streamsSucceeded := serverTransport.channelz.SocketMetrics.StreamsSucceeded.Load()
