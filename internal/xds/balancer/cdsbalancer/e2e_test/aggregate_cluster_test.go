@@ -46,10 +46,12 @@ import (
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
+	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
@@ -1350,6 +1352,18 @@ func (s) TestAggregateCluster_LRS(t *testing.T) {
 		t.Fatalf("Timeout waiting for initial LRS request: %v", err)
 	}
 
+	// Make RPC calls and verify every call reaches the primary cluster
+	// (clusterName1).
+	for i := 0; i < 10; i++ {
+		peer := &peer.Peer{}
+		if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(peer)); err != nil {
+			t.Fatalf("EmptyCall() failed: %v", err)
+		}
+		if got, want := peer.Addr.String(), servers[0].Address; got != want {
+			t.Fatalf("EmptyCall() call #%d routed to %q, want %q", i, got, want)
+		}
+	}
+
 	// Send LRS response requesting load reporting every 10ms.
 	managementServer.LRSServer.LRSResponseChan <- &fakeserver.Response{
 		Resp: &v3lrspb.LoadStatsResponse{
@@ -1358,49 +1372,35 @@ func (s) TestAggregateCluster_LRS(t *testing.T) {
 		},
 	}
 
-	// Make RPC calls and verify every call reaches the primary cluster
-	// (clusterName1).
-	for i := 0; i < 10; i++ {
-		peer := &peer.Peer{}
-		if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(peer), grpc.WaitForReady(true)); err != nil {
-			t.Fatalf("EmptyCall() failed: %v", err)
-		}
-		if got, want := peer.Addr.String(), servers[0].Address; got != want {
-			t.Fatalf("EmptyCall() call #%d routed to %q, want %q", i, got, want)
-		}
-	}
-
 	// Verify LRS reports load for clusterName1 and 0 load for clusterName2.
-	for gotCluster1Report := false; !gotCluster1Report; {
+	wantClusterStats := &v3endpointpb.ClusterStats{
+		ClusterName: clusterName1,
+		UpstreamLocalityStats: []*v3endpointpb.UpstreamLocalityStats{
+			{
+				Locality:                &v3corepb.Locality{Region: "region-1", Zone: "zone-1", SubZone: "subzone-1"},
+				TotalSuccessfulRequests: 10,
+				TotalIssuedRequests:     10,
+			},
+		},
+	}
+waitForPrimaryStats:
+	for {
 		select {
 		case <-ctx.Done():
 			t.Fatalf("Timeout waiting for LRS load report for %q", clusterName1)
 		case req := <-managementServer.LRSServer.LRSRequestChan.C:
 			loadStats := req.(*fakeserver.Request).Req.(*v3lrspb.LoadStatsRequest)
-			for _, load := range loadStats.ClusterStats {
-				// For unused leaf clusters (when SendAllClusters: true), LRS
-				// reports are expected to be empty (0 successful requests
-				// across any locality).
-				if load.ClusterName == clusterName2 {
-					for _, loc := range load.UpstreamLocalityStats {
-						if loc.TotalSuccessfulRequests > 0 {
-							t.Fatalf("Received unexpected LRS load report for secondary cluster %q: %+v", clusterName2, load)
-						}
-					}
-				}
-				if load.ClusterName == clusterName1 {
-					// Each leaf cluster has exactly one locality.
-					if len(load.UpstreamLocalityStats) != 1 {
-						t.Fatalf("UpstreamLocalityStats length = %d, want 1", len(load.UpstreamLocalityStats))
-					}
-					if load.UpstreamLocalityStats[0].TotalSuccessfulRequests > 0 {
-						gotCluster1Report = true
-					}
-				}
-				if load.ClusterName != clusterName1 && load.ClusterName != clusterName2 {
-					t.Fatalf("Unexpected cluster name %q", load.ClusterName)
-				}
+			if len(loadStats.ClusterStats) == 0 {
+				continue
 			}
+			diff := cmp.Diff([]*v3endpointpb.ClusterStats{wantClusterStats}, loadStats.ClusterStats,
+				protocmp.Transform(),
+				protocmp.IgnoreFields(&v3endpointpb.ClusterStats{}, "load_report_interval"),
+			)
+			if diff != "" {
+				t.Fatalf("Unexpected diff in LRS ClusterStats for %q (-want +got):\n%s", clusterName1, diff)
+			}
+			break waitForPrimaryStats
 		}
 	}
 
@@ -1426,6 +1426,15 @@ func (s) TestAggregateCluster_LRS(t *testing.T) {
 	}
 
 	// Verify LRS report now includes load for secondary cluster (clusterName2).
+	wantClusterStats = &v3endpointpb.ClusterStats{
+		ClusterName: clusterName2,
+		UpstreamLocalityStats: []*v3endpointpb.UpstreamLocalityStats{
+			{
+				Locality:                &v3corepb.Locality{Region: "region-1", Zone: "zone-1", SubZone: "subzone-1"},
+				TotalSuccessfulRequests: 1,
+			},
+		},
+	}
 	for {
 		select {
 		case <-ctx.Done():
@@ -1433,17 +1442,25 @@ func (s) TestAggregateCluster_LRS(t *testing.T) {
 		case req := <-managementServer.LRSServer.LRSRequestChan.C:
 			loadStats := req.(*fakeserver.Request).Req.(*v3lrspb.LoadStatsRequest)
 			for _, load := range loadStats.ClusterStats {
-				if load.ClusterName == clusterName2 {
-					if len(load.UpstreamLocalityStats) != 1 {
-						t.Fatalf("UpstreamLocalityStats length = %d, want 1", len(load.UpstreamLocalityStats))
-					}
-					if load.UpstreamLocalityStats[0].TotalSuccessfulRequests > 0 {
-						return
-					}
+				if load.ClusterName != clusterName2 {
+					continue
 				}
-				if load.ClusterName != clusterName1 && load.ClusterName != clusterName2 {
-					t.Fatalf("Unexpected cluster name %q", load.ClusterName)
+				// The periodic LRS timer may fire while a failover RPC is
+				// in flight, producing a transitional report with 0
+				// successful requests. Skip such reports until the report
+				// with the completed RPC arrives.
+				if len(load.UpstreamLocalityStats) == 0 || load.UpstreamLocalityStats[0].TotalSuccessfulRequests == 0 {
+					continue
 				}
+				diff := cmp.Diff(wantClusterStats, load,
+					protocmp.Transform(),
+					protocmp.IgnoreFields(&v3endpointpb.ClusterStats{}, "load_report_interval"),
+					protocmp.IgnoreFields(&v3endpointpb.UpstreamLocalityStats{}, "total_issued_requests", "total_requests_in_progress"),
+				)
+				if diff != "" {
+					t.Fatalf("Unexpected diff in LRS ClusterStats for %q (-want +got):\n%s", clusterName2, diff)
+				}
+				return
 			}
 		}
 	}
