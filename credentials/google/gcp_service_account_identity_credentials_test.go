@@ -21,15 +21,11 @@ package google_test
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
-	"cloud.google.com/go/auth"
-	"cloud.google.com/go/auth/credentials/idtoken"
-	"cloud.google.com/go/compute/metadata"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/google"
@@ -66,23 +62,25 @@ func (m *stubBackoff) Backoff(int) time.Duration {
 	return m.backoffDelay
 }
 
-// stubTokenProvider implements auth.TokenProvider for unit testing.
+// stubTokenProvider implements ID token fetching for unit testing.
 // It supplies mocked token payloads, simulates processing delay, and tracks
 // invocation frequency to verify caching and backoff behaviors.
 type stubTokenProvider struct {
 	mu        sync.Mutex
 	err       error
-	token     *auth.Token
+	tokenVal  string
+	expiry    time.Time
 	callCount int // tracks fetch attempts to verify caching and backoff behaviors.
 }
 
-func (c *stubTokenProvider) Token(context.Context) (*auth.Token, error) {
+func (c *stubTokenProvider) fetch(context.Context, string) (string, time.Time, error) {
 	c.mu.Lock()
 	c.callCount++
-	token := c.token
+	tokenVal := c.tokenVal
+	expiry := c.expiry
 	err := c.err
 	c.mu.Unlock()
-	return token, err
+	return tokenVal, expiry, err
 }
 
 func (c *stubTokenProvider) setErr(err error) {
@@ -91,10 +89,11 @@ func (c *stubTokenProvider) setErr(err error) {
 	c.err = err
 }
 
-func (c *stubTokenProvider) setToken(token *auth.Token) {
+func (c *stubTokenProvider) setToken(tokenVal string, expiry time.Time) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.token = token
+	c.tokenVal = tokenVal
+	c.expiry = expiry
 }
 
 func (c *stubTokenProvider) getCallCount() int {
@@ -107,27 +106,21 @@ func (c *stubTokenProvider) getCallCount() int {
 // configured with the specified token value, token expiry, error and delay.
 func setupStubTokenProvider(token string, err error) *stubTokenProvider {
 	return &stubTokenProvider{
-		err: err,
-		token: &auth.Token{
-			Value:  token,
-			Expiry: time.Now().Add(1 * time.Hour), // idtoken package works with hardcoded 1 hour token expiry.
-		},
+		err:      err,
+		tokenVal: token,
+		expiry:   time.Now().Add(1 * time.Hour),
 	}
 }
 
 // setupTestGCPServiceAccountIdentityCreds constructs a GCP service account
 // identity credentials instance with an injected stub token provider.
 //
-// It overrides internal.NewIDTokenCredentials to use the stubTokenProvider,
+// It overrides internal.FetchIDToken to use the stubTokenProvider,
 // and registers a cleanup function to restore original hook after the test.
 func setupTestGCPServiceAccountIdentityCreds(ctx context.Context, t *testing.T, stubToken *stubTokenProvider) credentials.PerRPCCredentials {
-	// Override the ID token credentials to use stub token provider.
-	origNewIDTokenCredentials := internal.NewIDTokenCredentials
-	internal.NewIDTokenCredentials = func(*idtoken.Options) (*auth.Credentials, error) {
-		return auth.NewCredentials(&auth.CredentialsOptions{
-			TokenProvider: auth.NewCachedTokenProvider(stubToken, &auth.CachedTokenProviderOptions{})}), nil
-	}
-	t.Cleanup(func() { internal.NewIDTokenCredentials = origNewIDTokenCredentials })
+	origFetchIDToken := internal.FetchIDToken
+	internal.FetchIDToken = stubToken.fetch
+	t.Cleanup(func() { internal.FetchIDToken = origFetchIDToken })
 
 	creds, err := google.NewServiceAccountIdentityCredentials(ctx, "audience")
 	if err != nil {
@@ -432,13 +425,8 @@ func (s) TestGCPServiceAccountIdentityCallCreds_EarlyExpiry(t *testing.T) {
 		secondToken = "token-B"
 	)
 	stubToken := setupStubTokenProvider(firstToken, nil)
-	stubToken.setToken(
-		&auth.Token{
-			Value: firstToken,
-			// Keeping it 1 minute as we subtract 30 seconds from the token expiry.
-			Expiry: time.Now().Add(1 * time.Minute),
-		},
-	)
+	// Keeping token expiry 1 minute as we subtract 30 seconds from the it.
+	stubToken.setToken(firstToken, time.Now().Add(1*time.Minute))
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	creds := setupTestGCPServiceAccountIdentityCreds(ctx, t, stubToken)
@@ -461,7 +449,7 @@ func (s) TestGCPServiceAccountIdentityCallCreds_EarlyExpiry(t *testing.T) {
 	}
 
 	// Update stub token provider to return a new token
-	stubToken.setToken(&auth.Token{Value: secondToken, Expiry: time.Now().Add(1 * time.Hour)})
+	stubToken.setToken(secondToken, time.Now().Add(1*time.Hour))
 
 	// The cached token has not expired yet but is stale (the current time is
 	// past the preemptiveTokenRefresh window). GetRequestMetadata should
@@ -506,22 +494,22 @@ func (s) TestGCPServiceAccountIdentityCallCreds_ErrorMapping(t *testing.T) {
 	}{
 		{
 			name: "429_too_many_requests",
-			err:  &metadata.Error{Code: 429, Message: "too many requests"},
+			err:  status.Errorf(codes.Unavailable, "credentials: failed to fetch token from metadata server: HTTP status 429"),
 			want: codes.Unavailable,
 		},
 		{
 			name: "503_service_unavailable",
-			err:  &metadata.Error{Code: 503, Message: "unavailable"},
+			err:  status.Errorf(codes.Unavailable, "credentials: failed to fetch token from metadata server: HTTP status 503"),
 			want: codes.Unavailable,
 		},
 		{
 			name: "403_forbidden",
-			err:  &metadata.Error{Code: 403, Message: "forbidden"},
+			err:  status.Errorf(codes.Unauthenticated, "credentials: failed to fetch token from metadata server: HTTP status 403"),
 			want: codes.Unauthenticated,
 		},
 		{
 			name: "generic_protocol_error",
-			err:  fmt.Errorf("generic connection error"),
+			err:  status.Errorf(codes.Unavailable, "generic connection error"),
 			want: codes.Unavailable,
 		},
 	}

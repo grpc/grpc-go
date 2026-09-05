@@ -20,8 +20,9 @@
 package internal
 
 import (
-	"cloud.google.com/go/auth"
-	"cloud.google.com/go/auth/credentials/idtoken"
+	"context"
+	"time"
+
 	"google.golang.org/grpc/internal/backoff"
 )
 
@@ -30,6 +31,6 @@ var (
 	// BackoffStrategy is the backoff strategy to use when token fetch fails.
 	BackoffStrategy backoff.Strategy
 
-	// NewIDTokenCredentials builds idtoken credentials using specified options.
-	NewIDTokenCredentials func(opts *idtoken.Options) (*auth.Credentials, error)
+	// FetchIDToken is the function used to fetch an ID token for the given audience.
+	FetchIDToken func(ctx context.Context, audience string) (string, time.Time, error)
 )
