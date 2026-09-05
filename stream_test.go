@@ -235,3 +235,156 @@ func (s) TestDefaultStreamInterceptor(t *testing.T) {
 		t.Fatal("CloseSend not called after SendMsg on non-client-streaming RPC")
 	}
 }
+
+// TestClientStreaming_MultipleMessages verifies that a client-streaming RPC
+// correctly sends multiple messages, handles streamAttempt framing, and
+// receives the aggregated response upon CloseAndRecv.
+func (s) TestClientStreaming_MultipleMessages(t *testing.T) {
+	ss := &stubserver.StubServer{
+		StreamingInputCallF: func(stream testgrpc.TestService_StreamingInputCallServer) error {
+			var count int32
+			for {
+				req, err := stream.Recv()
+				if err == io.EOF {
+					return stream.SendAndClose(&testpb.StreamingInputCallResponse{
+						AggregatedPayloadSize: count,
+					})
+				}
+				if err != nil {
+					return err
+				}
+				count += int32(len(req.GetPayload().GetBody()))
+			}
+		},
+	}
+	if err := ss.Start(nil); err != nil {
+		t.Fatal("Error starting server:", err)
+	}
+	defer ss.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	stream, err := ss.Client.StreamingInputCall(ctx)
+	if err != nil {
+		t.Fatal("Error starting StreamingInputCall:", err)
+	}
+
+	const numMsgs = 5
+	const msgSize = 10
+	for i := 0; i < numMsgs; i++ {
+		req := &testpb.StreamingInputCallRequest{
+			Payload: &testpb.Payload{Body: make([]byte, msgSize)},
+		}
+		if err := stream.Send(req); err != nil {
+			t.Fatalf("Stream.Send failed at index %d: %v", i, err)
+		}
+	}
+
+	resp, err := stream.CloseAndRecv()
+	if err != nil {
+		t.Fatalf("Stream.CloseAndRecv failed: %v", err)
+	}
+	if want := int32(numMsgs * msgSize); resp.GetAggregatedPayloadSize() != want {
+		t.Fatalf("Resp.AggregatedPayloadSize = %d, want %d", resp.GetAggregatedPayloadSize(), want)
+	}
+}
+
+// TestServerStreaming_MultipleMessages verifies that a server-streaming RPC
+// receives all messages streamed from the server and finishes with io.EOF.
+func (s) TestServerStreaming_MultipleMessages(t *testing.T) {
+	const numResponses = 5
+	ss := &stubserver.StubServer{
+		StreamingOutputCallF: func(_ *testpb.StreamingOutputCallRequest, stream testgrpc.TestService_StreamingOutputCallServer) error {
+			for i := 0; i < numResponses; i++ {
+				if err := stream.Send(&testpb.StreamingOutputCallResponse{
+					Payload: &testpb.Payload{Body: make([]byte, i+1)},
+				}); err != nil {
+					return err
+				}
+			}
+			return nil
+		},
+	}
+	if err := ss.Start(nil); err != nil {
+		t.Fatal("Error starting server:", err)
+	}
+	defer ss.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	stream, err := ss.Client.StreamingOutputCall(ctx, &testpb.StreamingOutputCallRequest{})
+	if err != nil {
+		t.Fatal("Error starting StreamingOutputCall:", err)
+	}
+
+	for i := 0; i < numResponses; i++ {
+		resp, err := stream.Recv()
+		if err != nil {
+			t.Fatalf("Stream.Recv failed on response %d: %v", i, err)
+		}
+		if len(resp.GetPayload().GetBody()) != i+1 {
+			t.Fatalf("Response %d payload length = %d, want %d", i, len(resp.GetPayload().GetBody()), i+1)
+		}
+	}
+
+	if _, err := stream.Recv(); err != io.EOF {
+		t.Fatalf("Stream.Recv() after all responses = %v, want io.EOF", err)
+	}
+}
+
+// TestBidiStreaming_SendAfterCloseSend verifies that calling SendMsg after
+// CloseSend on a bidirectional stream returns an Internal error, and repeated
+// CloseSend calls succeed.
+func (s) TestBidiStreaming_SendAfterCloseSend(t *testing.T) {
+	ss := &stubserver.StubServer{
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
+			for {
+				req, err := stream.Recv()
+				if err == io.EOF {
+					return nil
+				}
+				if err != nil {
+					return err
+				}
+				if err := stream.Send(&testpb.StreamingOutputCallResponse{Payload: req.GetPayload()}); err != nil {
+					return err
+				}
+			}
+		},
+	}
+	if err := ss.Start(nil); err != nil {
+		t.Fatal("Error starting server:", err)
+	}
+	defer ss.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	stream, err := ss.Client.FullDuplexCall(ctx)
+	if err != nil {
+		t.Fatal("Error starting FullDuplexCall:", err)
+	}
+
+	if err := stream.Send(&testpb.StreamingOutputCallRequest{}); err != nil {
+		t.Fatalf("Stream.Send failed: %v", err)
+	}
+	if err := stream.CloseSend(); err != nil {
+		t.Fatalf("Stream.CloseSend failed: %v", err)
+	}
+
+	// Sending another message after CloseSend should return an Internal error.
+	err = stream.Send(&testpb.StreamingOutputCallRequest{})
+	if status.Code(err) != codes.Internal {
+		t.Fatalf("Stream.Send after CloseSend got error code %v (err: %v), want %v", status.Code(err), err, codes.Internal)
+	}
+	if !strings.Contains(err.Error(), "SendMsg called after CloseSend") {
+		t.Fatalf("Stream.Send after CloseSend got error %v, want substring %q", err, "SendMsg called after CloseSend")
+	}
+
+	// Repeated CloseSend should succeed with nil error.
+	if err := stream.CloseSend(); err != nil {
+		t.Fatalf("Repeated stream.CloseSend failed: %v", err)
+	}
+}
