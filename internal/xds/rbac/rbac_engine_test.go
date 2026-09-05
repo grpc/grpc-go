@@ -896,6 +896,76 @@ func (s) TestNewChainEngine(t *testing.T) {
 	}
 }
 
+// TestHeaderMatcherSharedParsing verifies that the RBAC engine constructs
+// header matchers through the shared proto parser, without relying on the HTTP
+// filter's A41 preprocessing.
+func (s) TestHeaderMatcherSharedParsing(t *testing.T) {
+	configWithHeader := func(header *v3routepb.HeaderMatcher) *v3rbacpb.RBAC {
+		return &v3rbacpb.RBAC{
+			Action: v3rbacpb.RBAC_ALLOW,
+			Policies: map[string]*v3rbacpb.Policy{
+				"header-policy": {
+					Permissions: []*v3rbacpb.Permission{
+						{Rule: &v3rbacpb.Permission_Any{Any: true}},
+					},
+					Principals: []*v3rbacpb.Principal{
+						{Identifier: &v3rbacpb.Principal_Header{Header: header}},
+					},
+				},
+			},
+		}
+	}
+
+	t.Run("mixed-case name", func(t *testing.T) {
+		engine, err := NewChainEngine([]*v3rbacpb.RBAC{configWithHeader(&v3routepb.HeaderMatcher{
+			Name:                 "X-Role",
+			HeaderMatchSpecifier: &v3routepb.HeaderMatcher_ExactMatch{ExactMatch: "admin"},
+		})}, "")
+		if err != nil {
+			t.Fatalf("NewChainEngine() failed: %v", err)
+		}
+		if name, ok := engine.chainedEngines[0].findMatchingPolicy(&rpcData{
+			md: metadata.Pairs("x-role", "admin"),
+		}); !ok || name != "header-policy" {
+			t.Fatalf("findMatchingPolicy() = (%q, %v), want (%q, true)", name, ok, "header-policy")
+		}
+	})
+
+	for _, test := range []struct {
+		name   string
+		header *v3routepb.HeaderMatcher
+	}{
+		{
+			name: "empty prefix",
+			header: &v3routepb.HeaderMatcher{
+				Name:                 "x-role",
+				HeaderMatchSpecifier: &v3routepb.HeaderMatcher_PrefixMatch{},
+			},
+		},
+		{
+			name: "empty suffix",
+			header: &v3routepb.HeaderMatcher{
+				Name:                 "x-role",
+				HeaderMatchSpecifier: &v3routepb.HeaderMatcher_SuffixMatch{},
+			},
+		},
+		{
+			name: "empty contains",
+			header: &v3routepb.HeaderMatcher{
+				Name:                 "x-role",
+				HeaderMatchSpecifier: &v3routepb.HeaderMatcher_ContainsMatch{},
+			},
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := NewChainEngine([]*v3rbacpb.RBAC{configWithHeader(test.header)}, "")
+			if err == nil {
+				t.Fatal("NewChainEngine() succeeded, want error")
+			}
+		})
+	}
+}
+
 type rbacQuery struct {
 	rpcData         *rpcData
 	wantStatusCode  codes.Code

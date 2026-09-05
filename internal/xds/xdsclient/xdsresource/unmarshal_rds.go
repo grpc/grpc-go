@@ -29,11 +29,11 @@ import (
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/internal/xds/clusterspecifier"
 	"google.golang.org/grpc/internal/xds/matcher"
+	headermatcher "google.golang.org/grpc/internal/xds/matcher/header"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
-	v3matcherpb "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
 	v3typepb "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 )
 
@@ -256,56 +256,11 @@ func routesProtoToSlice(routes []*v3routepb.Route, csps map[string]clusterspecif
 		}
 
 		for _, h := range match.GetHeaders() {
-			var header HeaderMatcher
-			// The deprecated exact/prefix/suffix/contains match fields are
-			// converted to the equivalent StringMatcher so that
-			// StringMatcherFromProto owns validation for all of them.
-			var smProto *v3matcherpb.StringMatcher
-			switch ht := h.GetHeaderMatchSpecifier().(type) {
-			case *v3routepb.HeaderMatcher_ExactMatch:
-				smProto = &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: ht.ExactMatch}}
-			case *v3routepb.HeaderMatcher_SafeRegexMatch:
-				regex := ht.SafeRegexMatch.GetRegex()
-				re, err := matcher.CompileSafeRegex(regex)
-				if err != nil {
-					return nil, nil, fmt.Errorf("route %+v contains an invalid regex %q", r, regex)
-				}
-				header.RegexMatch = re
-			case *v3routepb.HeaderMatcher_RangeMatch:
-				header.RangeMatch = &Int64Range{
-					Start: ht.RangeMatch.Start,
-					End:   ht.RangeMatch.End,
-				}
-			case *v3routepb.HeaderMatcher_PresentMatch:
-				header.PresentMatch = &ht.PresentMatch
-			case *v3routepb.HeaderMatcher_PrefixMatch:
-				smProto = &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Prefix{Prefix: ht.PrefixMatch}}
-			case *v3routepb.HeaderMatcher_SuffixMatch:
-				smProto = &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Suffix{Suffix: ht.SuffixMatch}}
-			case *v3routepb.HeaderMatcher_ContainsMatch:
-				smProto = &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Contains{Contains: ht.ContainsMatch}}
-			case *v3routepb.HeaderMatcher_StringMatch:
-				if ht.StringMatch == nil {
-					return nil, nil, fmt.Errorf("route %+v has an empty string matcher", r)
-				}
-				smProto = ht.StringMatch
-			default:
-				return nil, nil, fmt.Errorf("route %+v has an unrecognized header matcher: %+v", r, ht)
+			header, err := headermatcher.FromProto(h)
+			if err != nil {
+				return nil, nil, fmt.Errorf("route %+v has an invalid header matcher: %v", r, err)
 			}
-			if smProto != nil {
-				sm, err := matcher.StringMatcherFromProto(smProto)
-				if err != nil {
-					return nil, nil, fmt.Errorf("route %+v has an invalid header matcher: %v", r, err)
-				}
-				header.StringMatch = &sm
-			}
-			// The metadata the matchers run against always has lowercase keys,
-			// so a name that contains an uppercase character matches no header
-			// and the route holding it never fires.
-			header.Name = strings.ToLower(h.GetName())
-			invert := h.GetInvertMatch()
-			header.InvertMatch = &invert
-			route.Headers = append(route.Headers, &header)
+			route.Headers = append(route.Headers, header)
 		}
 
 		if fr := match.GetRuntimeFraction(); fr != nil {
