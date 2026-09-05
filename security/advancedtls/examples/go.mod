@@ -24,3 +24,5 @@ replace google.golang.org/grpc => ../../..
 replace google.golang.org/grpc/examples => ../../../examples
 
 replace google.golang.org/grpc/security/advancedtls => ../
+
+replace google.golang.org/grpc/interop => ../../../interop
