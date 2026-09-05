@@ -24,6 +24,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/internal/xds/grpcservice"
+	"google.golang.org/grpc/internal/xds/httpfilter"
 )
 
 var (
@@ -32,11 +33,7 @@ var (
 	// channel. It is a variable so that tests can intercept channel creation
 	// and observe its release.
 	CreateExtProcChannel = func(server *grpcservice.Config) (grpc.ClientConnInterface, func(), error) {
-		conn, err := server.Dial()
-		if err != nil {
-			return nil, nil, err
-		}
-		return conn, func() { conn.Close() }, nil
+		return httpfilter.DialgRPCService(server)
 	}
 
 	// RegisterForTesting registers the external processor HTTP Filter for testing

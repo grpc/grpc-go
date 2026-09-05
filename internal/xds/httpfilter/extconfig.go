@@ -22,11 +22,16 @@ import (
 	"encoding/base64"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 
-	imetadata "google.golang.org/grpc/internal/metadata"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/internal/xds/grpcservice"
 	"google.golang.org/grpc/internal/xds/matcher"
 	"google.golang.org/grpc/metadata"
+
+	imetadata "google.golang.org/grpc/internal/metadata"
+	xdscreds "google.golang.org/grpc/internal/xds/credentials"
 
 	v3mutationpb "github.com/envoyproxy/go-control-plane/envoy/config/common/mutation_rules/v3"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -128,10 +133,11 @@ func (hmr *HeaderMutationRules) ApplyAdditions(hvos []*v3corepb.HeaderValueOptio
 	if input == nil {
 		return fmt.Errorf("input metadata is nil")
 	}
-	if hmr.DisallowAll {
+	if hmr.DisallowAll || len(hvos) == 0 {
 		return nil
 	}
 
+	// Validate all mutations without modifying input metadata.
 	for _, hvo := range hvos {
 		header := hvo.GetHeader()
 		key := header.GetKey()
@@ -157,11 +163,22 @@ func (hmr *HeaderMutationRules) ApplyAdditions(hvos []*v3corepb.HeaderValueOptio
 			if hmr.DisallowIsError {
 				return fmt.Errorf("header mutation disallowed by headerMutationRules for header key %q", key)
 			}
-			continue
+		}
+	}
+
+	// All items are valid; apply mutations to input metadata.
+	for _, hvo := range hvos {
+		header := hvo.GetHeader()
+		key := header.GetKey()
+		if !hmr.allow(key) {
+			continue // Silently ignore if DisallowIsError is false
 		}
 
-		// Perform the mutation on output metadata using the append_action
-		// field from the header value option.
+		value := header.GetValue()
+		if strings.HasSuffix(key, "-bin") {
+			value = string(header.GetRawValue())
+		}
+
 		switch hvo.GetAppendAction() {
 		case v3corepb.HeaderValueOption_APPEND_IF_EXISTS_OR_ADD:
 			input.Append(key, value)
@@ -196,10 +213,11 @@ func (hmr *HeaderMutationRules) ApplyRemovals(headersToRemove []string, input me
 	if input == nil {
 		return fmt.Errorf("input metadata is nil")
 	}
-	if hmr.DisallowAll {
+	if hmr.DisallowAll || len(headersToRemove) == 0 {
 		return nil
 	}
 
+	// Validate all removals without modifying input metadata.
 	for _, header := range headersToRemove {
 		if err := validateHeaderKey(header); err != nil {
 			return fmt.Errorf("invalid header mutation: %v", err)
@@ -208,6 +226,12 @@ func (hmr *HeaderMutationRules) ApplyRemovals(headersToRemove []string, input me
 			if hmr.DisallowIsError {
 				return fmt.Errorf("header mutation disallowed by headerMutationRules for header %q", header)
 			}
+		}
+	}
+
+	// Perform removals on input metadata.
+	for _, header := range headersToRemove {
+		if !hmr.allow(header) {
 			continue
 		}
 		input.Delete(header)
@@ -323,4 +347,25 @@ func isAllowedHeader(key string, matchers []matcher.StringMatcher) bool {
 		}
 	}
 	return false
+}
+
+// SharesChannel reports whether two GrpcService configurations can share a gRPC
+// channel. Two configs share a channel if their target URIs, channel
+// credentials, and call credentials match. Per-RPC settings (timeout and
+// initial metadata) are applied per-call and do not affect channel sharing.
+func SharesChannel(a, b *grpcservice.Config) bool {
+	targetEqual := a.TargetURI == b.TargetURI
+	channelCredsEqual := a.ChannelCredentials.Equal(b.ChannelCredentials)
+	callCredsEqual := slices.EqualFunc(a.CallCredentials, b.CallCredentials, (*xdscreds.CallCreds).Equal)
+	return targetEqual && channelCredsEqual && callCredsEqual
+}
+
+// DialgRPCService creates a channel to the side-channel server described by
+// the given config. The returned function closes the channel.
+func DialgRPCService(server *grpcservice.Config) (grpc.ClientConnInterface, func(), error) {
+	conn, err := server.Dial()
+	if err != nil {
+		return nil, nil, err
+	}
+	return conn, func() { conn.Close() }, nil
 }
