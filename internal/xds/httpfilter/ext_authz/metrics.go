@@ -51,4 +51,28 @@ var (
 		Labels:      []string{"grpc.target"},
 		Default:     false,
 	})
+	extAuthzServerAllowedRPCsMetric = estats.RegisterInt64Count(estats.MetricDescriptor{
+		Name:        "grpc.server_ext_authz.allowed_rpcs",
+		Description: "Number of RPCs that were allowed by the ext_authz server.",
+		Unit:        "{RPCs}",
+		Default:     false,
+	})
+	extAuthzServerDeniedRPCsMetric = estats.RegisterInt64Count(estats.MetricDescriptor{
+		Name:        "grpc.server_ext_authz.denied_rpcs",
+		Description: "Number of RPCs that were denied by the ext_authz server.",
+		Unit:        "{RPCs}",
+		Default:     false,
+	})
+	extAuthzServerFilterDisabledRPCsMetric = estats.RegisterInt64Count(estats.MetricDescriptor{
+		Name:        "grpc.server_ext_authz.filter_disabled_rpcs",
+		Description: "Number of RPCs for which the filter was disabled.",
+		Unit:        "{RPCs}",
+		Default:     false,
+	})
+	extAuthzServerFailedRPCsMetric = estats.RegisterInt64Count(estats.MetricDescriptor{
+		Name:        "grpc.server_ext_authz.failed_rpcs",
+		Description: "Number of RPCs for which the ext_authz call-out failed.",
+		Unit:        "{RPCs}",
+		Default:     false,
+	})
 )

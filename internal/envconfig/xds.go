@@ -103,4 +103,9 @@ var (
 	// filter is enabled on the client side. For more details, see:
 	// https://github.com/grpc/proposal/blob/master/A92-xds-ext-authz.md
 	XDSClientExtAuthzEnabled = boolFromEnv("GRPC_EXPERIMENTAL_XDS_EXT_AUTHZ_ON_CLIENT", false)
+
+	// XDSServerExtAuthzEnabled indicates whether the external authorization
+	// filter is enabled on the server side. For more details, see:
+	// https://github.com/grpc/proposal/blob/master/A92-xds-ext-authz.md
+	XDSServerExtAuthzEnabled = boolFromEnv("GRPC_EXPERIMENTAL_XDS_EXT_AUTHZ_ON_SERVER", false)
 )

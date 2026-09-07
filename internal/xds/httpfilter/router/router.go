@@ -79,7 +79,7 @@ func (builder) BuildClientFilter(httpfilter.ClientFilterOptions) httpfilter.Clie
 	return filter{}
 }
 
-func (builder) BuildServerFilter() httpfilter.ServerFilter {
+func (builder) BuildServerFilter(httpfilter.ServerFilterOptions) httpfilter.ServerFilter {
 	return filter{}
 }
 

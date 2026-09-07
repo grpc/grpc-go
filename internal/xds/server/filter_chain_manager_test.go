@@ -560,7 +560,7 @@ type filterBuilder struct {
 
 func (fb *filterBuilder) TypeURLs() []string { return []string{"custom.server.filter"} }
 
-func (fb *filterBuilder) BuildServerFilter() httpfilter.ServerFilter {
+func (fb *filterBuilder) BuildServerFilter(httpfilter.ServerFilterOptions) httpfilter.ServerFilter {
 	return fb
 }
 
@@ -712,7 +712,7 @@ func (s) TestHTTPFilterInstantiation(t *testing.T) {
 				if !ok {
 					return nil, fmt.Errorf("filter %q does not support use in server", filter.Name)
 				}
-				return getOrCreateServerFilterWithMap(filters, builder, newServerFilterKey(&filter)), nil
+				return getOrCreateServerFilterWithMap(filters, builder, newServerFilterKey(&filter), httpfilter.ServerFilterOptions{}), nil
 			}
 			fc.updateUsableRouteConfiguration(&test.routeConfig, nil, provider, "node-id")
 			urc := fc.usableRouteConfiguration.Load()

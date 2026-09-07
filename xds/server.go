@@ -60,12 +60,13 @@ type grpcServer interface {
 // grpc.ServiceRegistrar interface and can be passed to service registration
 // functions in IDL generated code.
 type GRPCServer struct {
-	gs             grpcServer
-	quit           *grpcsync.Event
-	logger         *internalgrpclog.PrefixLogger
-	opts           *server.Options
-	xdsC           xdsclient.XDSClient
-	xdsClientClose func()
+	gs              grpcServer
+	quit            *grpcsync.Event
+	logger          *internalgrpclog.PrefixLogger
+	opts            *server.Options
+	xdsC            xdsclient.XDSClient
+	xdsClientClose  func()
+	metricsRecorder estats.MetricsRecorder
 }
 
 // NewGRPCServer creates an xDS-enabled gRPC server using the passed in opts.
@@ -93,6 +94,7 @@ func NewGRPCServer(opts ...grpc.ServerOption) (*GRPCServer, error) {
 	if srv, ok := s.gs.(*grpc.Server); ok { // Will hit in prod but not for testing.
 		mrl = internal.MetricsRecorderForServer.(func(*grpc.Server) estats.MetricsRecorder)(srv)
 	}
+	s.metricsRecorder = mrl
 
 	// Initializing the xDS client upfront (instead of at serving time)
 	// simplifies the code by eliminating the need for a mutex to protect the
@@ -207,6 +209,7 @@ func (s *GRPCServer) Serve(lis net.Listener) error {
 		ListenerResourceName: name,
 		XDSClient:            s.xdsC,
 		ModeCallback:         s.opts.ModeCallback,
+		MetricsRecorder:      s.metricsRecorder,
 	})
 	return s.gs.Serve(lw)
 }

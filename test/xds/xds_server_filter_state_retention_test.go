@@ -108,7 +108,7 @@ func (*trackingHTTPFilterBuilder) ParseFilterConfigOverride(cfg proto.Message, _
 	return filterConfigFromProto(cfg)
 }
 
-func (t *trackingHTTPFilterBuilder) BuildServerFilter() httpfilter.ServerFilter {
+func (t *trackingHTTPFilterBuilder) BuildServerFilter(httpfilter.ServerFilterOptions) httpfilter.ServerFilter {
 	t.filtersCreated.Add(1)
 	return t
 }

@@ -23,19 +23,20 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"strconv"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/internal/envconfig"
-	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
@@ -44,21 +45,23 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/status"
+	"google.golang.org/grpc/xds"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
+	xdscreds "google.golang.org/grpc/credentials/xds"
 	estats "google.golang.org/grpc/experimental/stats"
 	grpcinternal "google.golang.org/grpc/internal"
 	teststats "google.golang.org/grpc/internal/testutils/stats"
-	iextauthz "google.golang.org/grpc/internal/xds/httpfilter/ext_authz/internal"
 
 	mutationpb "github.com/envoyproxy/go-control-plane/envoy/config/common/mutation_rules/v3"
-	corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	v3extauthzfilterpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/ext_authz/v3"
+	v3routerpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/router/v3"
 	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
-	v3authgrpc "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
 	v3authpb "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
 	matcherpb "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
 	v3typepb "github.com/envoyproxy/go-control-plane/envoy/type/v3"
@@ -67,265 +70,219 @@ import (
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
-const (
-	defaultTestTimeout      = 10 * time.Second
-	defaultTestShortTimeout = 10 * time.Millisecond
-
-	// insecureCredsTypeURL identifies the insecure channel credentials
-	// plugin in a GrpcService proto (gRFC A102).
-	insecureCredsTypeURL = "type.googleapis.com/envoy.extensions.grpc_service.channel_credentials.insecure.v3.InsecureCredentials"
-)
-
-type s struct {
-	grpctest.Tester
+// acceptNotifyingListener wraps a listener and notifies users when a server
+// calls the Listener.Accept() method. This can be used to ensure that the
+// server is ready before requests are sent to it.
+type acceptNotifyingListener struct {
+	net.Listener
+	serverReady grpcsync.Event
 }
 
-func Test(t *testing.T) {
-	grpctest.RunSubTests(t, s{})
+func (l *acceptNotifyingListener) Accept() (net.Conn, error) {
+	l.serverReady.Fire()
+	return l.Listener.Accept()
 }
 
-// testExtAuthzServer is a test implementation of the Envoy Authorization
-// service that delegates Check calls to a test-only hook.
-type testExtAuthzServer struct {
-	v3authgrpc.UnimplementedAuthorizationServer
-	checkFunc func(context.Context, *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error)
-}
-
-// Check handles incoming Check RPCs by delegating to checkFunc if configured.
-func (s *testExtAuthzServer) Check(ctx context.Context, req *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error) {
-	if s.checkFunc != nil {
-		return s.checkFunc(ctx, req)
+// hostPortFromListener extracts the host string and uint32 port from the
+// listener's address.
+func hostPortFromListener(lis net.Listener) (string, uint32, error) {
+	host, p, err := net.SplitHostPort(lis.Addr().String())
+	if err != nil {
+		return "", 0, fmt.Errorf("net.SplitHostPort(%s) failed: %v", lis.Addr().String(), err)
 	}
-	return nil, nil
+	port, err := strconv.ParseInt(p, 10, 32)
+	if err != nil {
+		return "", 0, fmt.Errorf("strconv.ParseInt(%s, 10, 32) failed: %v", p, err)
+	}
+	return host, uint32(port), nil
 }
 
-// startTestAuthServer configures ext_authz environment variables and function
-// hooks, starts a test external authorization server, and registers cleanup.
-// It takes checkFunc to handle Check RPCs and returns the server's listener
-// address and a function to stop the server.
-func startTestAuthServer(t *testing.T, checkFunc func(context.Context, *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error)) (string, func()) {
+// buildServerListener creates an inbound xDS Listener resource configured with
+// the specified host, port, HTTP filters, and virtual hosts.
+func buildServerListener(t *testing.T, host string, port uint32, httpFilters []*v3httppb.HttpFilter, vhs []*v3routepb.VirtualHost) *v3listenerpb.Listener {
 	t.Helper()
 
-	testutils.SetEnvConfig(t, &envconfig.XDSClientExtAuthzEnabled, true)
-	testutils.SetEnvConfig(t, &envconfig.XDSServerExtAuthzEnabled, true)
-	iextauthz.RegisterForTesting()
+	return &v3listenerpb.Listener{
+		Name: fmt.Sprintf(e2e.ServerListenerResourceNameTemplate, net.JoinHostPort(host, strconv.Itoa(int(port)))),
+		Address: &v3corepb.Address{
+			Address: &v3corepb.Address_SocketAddress{
+				SocketAddress: &v3corepb.SocketAddress{
+					Address: host,
+					PortSpecifier: &v3corepb.SocketAddress_PortValue{
+						PortValue: port,
+					},
+				},
+			},
+		},
+		FilterChains: []*v3listenerpb.FilterChain{
+			{
+				Name: "v4-wildcard",
+				FilterChainMatch: &v3listenerpb.FilterChainMatch{
+					PrefixRanges: []*v3corepb.CidrRange{
+						{
+							AddressPrefix: "0.0.0.0",
+							PrefixLen: &wrapperspb.UInt32Value{
+								Value: uint32(0),
+							},
+						},
+					},
+					SourceType: v3listenerpb.FilterChainMatch_SAME_IP_OR_LOOPBACK,
+					SourcePrefixRanges: []*v3corepb.CidrRange{
+						{
+							AddressPrefix: "0.0.0.0",
+							PrefixLen: &wrapperspb.UInt32Value{
+								Value: uint32(0),
+							},
+						},
+					},
+				},
+				Filters: []*v3listenerpb.Filter{
+					{
+						Name: "filter-1",
+						ConfigType: &v3listenerpb.Filter_TypedConfig{
+							TypedConfig: testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
+								HttpFilters: httpFilters,
+								RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
+									RouteConfig: &v3routepb.RouteConfiguration{
+										Name:         "routeName",
+										VirtualHosts: vhs,
+									},
+								},
+							}),
+						},
+					},
+				},
+			},
+		},
+	}
+}
 
-	t.Cleanup(func() {
-		iextauthz.UnregisterForTesting()
+// setupXDSListenerAndClient starts an xDS management server and a gRPC server,
+// configures the management server with an inbound listener containing the
+// specified httpFilters, dials the server using xDS, waits for the server to
+// enter SERVING mode, and returns a ClientConn.
+func setupXDSListenerAndClient(t *testing.T, stub *stubserver.StubServer, httpFilters ...*v3httppb.HttpFilter) *grpc.ClientConn {
+	return setupXDSListenerAndClientWithServerOptions(t, stub, nil, httpFilters...)
+}
+
+func setupXDSListenerAndClientWithServerOptions(t *testing.T, stub *stubserver.StubServer, serverOpts []grpc.ServerOption, httpFilters ...*v3httppb.HttpFilter) *grpc.ClientConn {
+	t.Helper()
+
+	mgmtServer, nodeID, bootstrapContents, xdsResolver := setup.ManagementServerAndResolver(t)
+
+	servingCh := make(chan struct{})
+	servingModeOpt := xds.ServingModeCallback(func(_ net.Addr, args xds.ServingModeChangeArgs) {
+		if args.Mode == connectivity.ServingModeServing {
+			select {
+			case <-servingCh:
+			default:
+				close(servingCh)
+			}
+		}
 	})
+
+	// Configure xDS credentials to be used on the server-side.
+	creds, err := xdscreds.NewServerCredentials(xdscreds.ServerOptions{
+		FallbackCreds: insecure.NewCredentials(),
+	})
+	if err != nil {
+		t.Fatalf("xdscreds.NewServerCredentials failed: %v", err)
+	}
+
+	sOpts := append([]grpc.ServerOption{
+		grpc.Creds(creds),
+		servingModeOpt,
+		xds.BootstrapContentsForTesting(bootstrapContents),
+	}, serverOpts...)
+
+	if stub.S, err = xds.NewGRPCServer(sOpts...); err != nil {
+		t.Fatalf("Failed to create xDS enabled server: %v", err)
+	}
 
 	lis, err := testutils.LocalTCPListener()
 	if err != nil {
 		t.Fatalf("LocalTCPListener() failed: %v", err)
 	}
-	gs := grpc.NewServer()
-	v3authgrpc.RegisterAuthorizationServer(gs, &testExtAuthzServer{checkFunc: checkFunc})
-	go gs.Serve(lis)
+	readyLis := &acceptNotifyingListener{
+		Listener:    lis,
+		serverReady: *grpcsync.NewEvent(),
+	}
+	stub.Listener = readyLis
+	stubserver.StartTestService(t, stub)
+	t.Cleanup(stub.S.Stop)
 
-	t.Cleanup(gs.Stop)
+	// Wait for the server to start running.
+	select {
+	case <-readyLis.serverReady.Done():
+	case <-time.After(defaultTestTimeout):
+		t.Fatalf("Timed out waiting for server listener to accept")
+	}
 
-	return lis.Addr().String(), gs.Stop
-}
+	host, port, err := hostPortFromListener(lis)
+	if err != nil {
+		t.Fatalf("hostPortFromListener failed: %v", err)
+	}
 
-// extAuthzHTTPFilter creates an ext_authz HTTPFilter protobuf message
-// configured with the test authorization server address.
-func extAuthzHTTPFilter(authServerAddr string, extAuthzConfig *v3extauthzfilterpb.ExtAuthz) *v3httppb.HttpFilter {
-	extAuthzConfig.Services = &v3extauthzfilterpb.ExtAuthz_GrpcService{
-		GrpcService: &corepb.GrpcService{
-			TargetSpecifier: &corepb.GrpcService_GoogleGrpc_{
-				GoogleGrpc: &corepb.GrpcService_GoogleGrpc{
-					TargetUri:                authServerAddr,
-					ChannelCredentialsPlugin: []*anypb.Any{{TypeUrl: insecureCredsTypeURL}},
+	filters := make([]*v3httppb.HttpFilter, 0, len(httpFilters)+1)
+	filters = append(filters, httpFilters...)
+	filters = append(filters, e2e.HTTPFilter("router", &v3routerpb.Router{}))
+
+	vhs := []*v3routepb.VirtualHost{
+		{
+			Domains: []string{"*"},
+			Routes: []*v3routepb.Route{
+				{
+					Match: &v3routepb.RouteMatch{
+						PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"},
+					},
+					Action: &v3routepb.Route_NonForwardingAction{},
 				},
 			},
-			Timeout:         extAuthzConfig.GetGrpcService().GetTimeout(),
-			InitialMetadata: extAuthzConfig.GetGrpcService().GetInitialMetadata(),
 		},
 	}
-	return e2e.HTTPFilter("com.google.grpc.ext_authz", extAuthzConfig)
-}
-
-// startTestServiceBackend creates a test service backend stub that implements
-// a unary and streaming RPC.
-//
-// It returns the newly created test service backend and a couple of channels
-// on which it writes incoming metadata received by the unary and streaming
-// rpc handlers respectively, for the test to inspect.
-func startTestServiceBackend(t *testing.T) (*stubserver.StubServer, chan metadata.MD, chan metadata.MD) {
-	t.Helper()
-
-	gotUnaryMD := make(chan metadata.MD, 1)
-	gotStreamingMD := make(chan metadata.MD, 1)
-	ss := &stubserver.StubServer{
-		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
-			md, _ := metadata.FromIncomingContext(ctx)
-			select {
-			case gotUnaryMD <- md:
-			case <-ctx.Done():
-				t.Error("Timeout when attempting to write incoming metadata to channel")
-			}
-
-			return &testpb.Empty{}, nil
-		},
-		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
-			ctx := stream.Context()
-			md, _ := metadata.FromIncomingContext(ctx)
-			select {
-			case gotStreamingMD <- md:
-			case <-ctx.Done():
-				t.Error("Timeout when attempting to write incoming metadata to channel")
-			}
-
-			for {
-				_, err := stream.Recv()
-				if errors.Is(err, io.EOF) {
-					return nil
-				}
-				if err != nil {
-					return err
-				}
-			}
-		},
-	}
-	stubserver.StartTestService(t, ss)
-	t.Cleanup(ss.Stop)
-	return ss, gotUnaryMD, gotStreamingMD
-}
-
-// makeUnaryRPC is a helper function to make a unary RPC and verify the
-// returned status code, trailers and headers (when headersCh is non-nil).
-func makeUnaryRPC(ctx context.Context, t *testing.T, cc *grpc.ClientConn, wantStatus codes.Code, wantTrailers metadata.MD, headersCh chan metadata.MD, wantHeaders metadata.MD) {
-	t.Helper()
-	t.Run("EmptyCall", func(t *testing.T) {
-		if len(wantTrailers) > 0 {
-			t.Skip("Unary RPC trailer/header passing using call options is currently not supported for denied streams")
-		}
-		client := testgrpc.NewTestServiceClient(cc)
-		var gotTrailers metadata.MD
-		_, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Trailer(&gotTrailers))
-		if status.Code(err) != wantStatus {
-			t.Fatalf("EmptyCall RPC returned status code: %s, want: %s (error: %v)", status.Code(err), wantStatus, err)
-		}
-
-		if err := compareMetadata(gotTrailers, wantTrailers); err != nil {
-			t.Fatalf("Unexpected trailer metadata received by the client: %v", err)
-		}
-
-		// Compare headers only for RPCs with an OK status code.
-		if status.Code(err) == codes.OK && headersCh != nil {
-			select {
-			case gotMD := <-headersCh:
-				if err := compareMetadata(gotMD, wantHeaders); err != nil {
-					t.Fatalf("Unexpected header metadata received by the server handler: %v", err)
-				}
-			case <-ctx.Done():
-				t.Fatalf("Timeout when attempting to read incoming metadata received by the server handler")
-			}
-		}
-	})
-}
-
-// makeStreamingRPC is a helper function to make a streaming RPC and verify the
-// returned status code, trailers and headers (when headersCh is non-nil).
-func makeStreamingRPC(ctx context.Context, t *testing.T, cc *grpc.ClientConn, wantStatus codes.Code, wantTrailers metadata.MD, headersCh chan metadata.MD, wantHeaders metadata.MD) {
-	t.Helper()
-	t.Run("FullDuplexCall", func(t *testing.T) {
-		client := testgrpc.NewTestServiceClient(cc)
-		var gotTrailers metadata.MD
-		stream, err := client.FullDuplexCall(ctx, grpc.Trailer(&gotTrailers))
-		if err != nil {
-			if status.Code(err) != wantStatus {
-				t.Fatalf("FullDuplexCall RPC failed with status code = %v, want %v (error: %v)", status.Code(err), wantStatus, err)
-			}
-			return
-		}
-
-		// Send one empty message and close the sending side. Ignore the errors
-		// from the send and close, and rely on errors returned from recv.
-		stream.Send(&testpb.StreamingOutputCallRequest{})
-		stream.CloseSend()
-		_, err = stream.Recv()
-		if errors.Is(err, io.EOF) {
-			err = status.Error(codes.OK, "")
-		}
-		if status.Code(err) != wantStatus {
-			t.Fatalf("FullDuplexCall RPC returned error: %v, want: %s", err, wantStatus)
-		}
-
-		if err := compareMetadata(stream.Trailer(), wantTrailers); err != nil {
-			t.Fatalf("Unexpected trailer metadata received by the client: %v", err)
-		}
-
-		// Compare headers only for RPCs with an OK status code.
-		if status.Code(err) == codes.OK && headersCh != nil {
-			select {
-			case gotMD := <-headersCh:
-				if err := compareMetadata(gotMD, wantHeaders); err != nil {
-					t.Fatalf("Unexpected header metadata received by the server handler: %v", err)
-				}
-			case <-ctx.Done():
-				t.Fatalf("Timeout when attempting to read incoming metadata received by the server handler")
-			}
-		}
-	})
-}
-
-// setupTestClient configures the management server with xDS resources that
-// include the ext_authz filter, and creates a new gRPC client.
-func setupTestClient(t *testing.T, authServerAddr string, extAuthzConfig *v3extauthzfilterpb.ExtAuthz, serverAddr string, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
-	t.Helper()
-	mgmtServer, nodeID, _, resolverBuilder := setup.ManagementServerAndResolver(t)
 
 	const serviceName = "service-name"
 	resources := e2e.DefaultClientResources(e2e.ResourceParams{
 		DialTarget: serviceName,
 		NodeID:     nodeID,
-		Host:       "localhost",
-		Port:       testutils.ParsePort(t, serverAddr),
+		Host:       host,
+		Port:       port,
 		SecLevel:   e2e.SecurityLevelNone,
 	})
-	hcm := new(v3httppb.HttpConnectionManager)
-	apiListener := resources.Listeners[0].GetApiListener().GetApiListener()
-	if err := apiListener.UnmarshalTo(hcm); err != nil {
-		return nil, err
-	}
-	hcm.HttpFilters = append([]*v3httppb.HttpFilter{
-		extAuthzHTTPFilter(authServerAddr, extAuthzConfig),
-	}, hcm.HttpFilters...)
-	resources.Listeners[0].ApiListener.ApiListener = testutils.MarshalAny(t, hcm)
+
+	inboundLis := buildServerListener(t, host, port, filters, vhs)
+	resources.Listeners = append(resources.Listeners, inboundLis)
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if err := mgmtServer.Update(ctx, resources); err != nil {
-		return nil, err
+		t.Fatalf("mgmtServer.Update() failed: %v", err)
 	}
 
-	dopts := append([]grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(resolverBuilder)}, opts...)
-	cc, err := grpc.NewClient("xds:///"+serviceName, dopts...)
+	clientCreds, err := xdscreds.NewClientCredentials(xdscreds.ClientOptions{
+		FallbackCreds: insecure.NewCredentials(),
+	})
 	if err != nil {
-		t.Fatalf("Failed to create a gRPC client: %v", err)
+		t.Fatalf("xdscreds.NewClientCredentials failed: %v", err)
 	}
-	return cc, nil
+
+	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(clientCreds), grpc.WithResolvers(xdsResolver))
+	if err != nil {
+		t.Fatalf("grpc.NewClient failed: %v", err)
+	}
+	t.Cleanup(func() { cc.Close() })
+
+	select {
+	case <-servingCh:
+	case <-time.After(defaultTestTimeout):
+		t.Fatalf("Timed out waiting for server to enter SERVING mode")
+	}
+
+	return cc
 }
 
-// compareMetadata removes metadata entries that are not pertinent to tests in
-// this package before comparing them. This ensures that the expected metadata
-// defined in tests will be shorter.
-func compareMetadata(got, want metadata.MD) error {
-	if got.Get("content-type") != nil {
-		got.Delete("content-type")
-	}
-	if got.Get("user-agent") != nil {
-		got.Delete("user-agent")
-	}
-	if diff := cmp.Diff(want, got, cmpopts.EquateEmpty()); diff != "" {
-		return fmt.Errorf("diff in metadata (-want +got):\n%s", diff)
-	}
-	return nil
-}
-
-// Test verifies the scenarios where external authorization is not enabled.
-func (s) TestExtAuthz_FilterNotEnabled(t *testing.T) {
+// Test verifies the scenarios where external authorization is not enabled on the server.
+func (s) TestServerExtAuthz_FilterNotEnabled(t *testing.T) {
 	tests := []struct {
 		name          string
 		denyAtDisable bool
@@ -361,13 +318,13 @@ func (s) TestExtAuthz_FilterNotEnabled(t *testing.T) {
 			defer stopAuth()
 
 			extAuthzCfg := &v3extauthzfilterpb.ExtAuthz{
-				FilterEnabled: &corepb.RuntimeFractionalPercent{
+				FilterEnabled: &v3corepb.RuntimeFractionalPercent{
 					DefaultValue: &v3typepb.FractionalPercent{
 						Numerator:   0,
 						Denominator: v3typepb.FractionalPercent_HUNDRED,
 					},
 				},
-				DenyAtDisable: &corepb.RuntimeFeatureFlag{
+				DenyAtDisable: &v3corepb.RuntimeFeatureFlag{
 					DefaultValue: wrapperspb.Bool(tt.denyAtDisable),
 				},
 			}
@@ -376,12 +333,7 @@ func (s) TestExtAuthz_FilterNotEnabled(t *testing.T) {
 					Code: v3typepb.StatusCode(tt.statusOnError),
 				}
 			}
-
-			cc, err := setupTestClient(t, authAddr, extAuthzCfg, backend.Address)
-			if err != nil {
-				t.Fatalf("setupTestClient() failed: %v", err)
-			}
-			defer cc.Close()
+			cc := setupXDSListenerAndClient(t, backend, extAuthzHTTPFilter(authAddr, extAuthzCfg))
 
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
@@ -394,7 +346,7 @@ func (s) TestExtAuthz_FilterNotEnabled(t *testing.T) {
 
 // Test verifies the scenarios where the external authorization RPC times out
 // because the configured server timeout is very low.
-func (s) TestExtAuthz_AuthzRPC_Timeout(t *testing.T) {
+func (s) TestServerExtAuthz_AuthzRPC_Timeout(t *testing.T) {
 	tests := []struct {
 		name                      string
 		failureModeAllow          bool
@@ -441,13 +393,13 @@ func (s) TestExtAuthz_AuthzRPC_Timeout(t *testing.T) {
 
 			extAuthzCfg := &v3extauthzfilterpb.ExtAuthz{
 				Services: &v3extauthzfilterpb.ExtAuthz_GrpcService{
-					GrpcService: &corepb.GrpcService{
+					GrpcService: &v3corepb.GrpcService{
 						Timeout: durationpb.New(defaultTestShortTimeout),
 					},
 				},
 				FailureModeAllow:          tt.failureModeAllow,
 				FailureModeAllowHeaderAdd: tt.failureModeAllowHeaderAdd,
-				FilterEnabled: &corepb.RuntimeFractionalPercent{
+				FilterEnabled: &v3corepb.RuntimeFractionalPercent{
 					DefaultValue: &v3typepb.FractionalPercent{
 						Numerator:   100,
 						Denominator: v3typepb.FractionalPercent_HUNDRED,
@@ -460,11 +412,7 @@ func (s) TestExtAuthz_AuthzRPC_Timeout(t *testing.T) {
 				}
 			}
 
-			cc, err := setupTestClient(t, authAddr, extAuthzCfg, backend.Address)
-			if err != nil {
-				t.Fatalf("setupTestClient() failed: %v", err)
-			}
-			defer cc.Close()
+			cc := setupXDSListenerAndClient(t, backend, extAuthzHTTPFilter(authAddr, extAuthzCfg))
 
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
@@ -477,7 +425,7 @@ func (s) TestExtAuthz_AuthzRPC_Timeout(t *testing.T) {
 
 // Test verifies scenarios where the external authorization RPC fails
 // (returns an error).
-func (s) TestExtAuthz_AuthzRPC_Failure(t *testing.T) {
+func (s) TestServerExtAuthz_AuthzRPC_Failure(t *testing.T) {
 	tests := []struct {
 		name                      string
 		failureModeAllow          bool
@@ -523,7 +471,7 @@ func (s) TestExtAuthz_AuthzRPC_Failure(t *testing.T) {
 			extAuthzCfg := &v3extauthzfilterpb.ExtAuthz{
 				FailureModeAllow:          tt.failureModeAllow,
 				FailureModeAllowHeaderAdd: tt.failureModeAllowHeaderAdd,
-				FilterEnabled: &corepb.RuntimeFractionalPercent{
+				FilterEnabled: &v3corepb.RuntimeFractionalPercent{
 					DefaultValue: &v3typepb.FractionalPercent{
 						Numerator:   100,
 						Denominator: v3typepb.FractionalPercent_HUNDRED,
@@ -536,12 +484,7 @@ func (s) TestExtAuthz_AuthzRPC_Failure(t *testing.T) {
 				}
 			}
 
-			cc, err := setupTestClient(t, authAddr, extAuthzCfg, backend.Address)
-			if err != nil {
-				t.Fatalf("setupTestClient() failed: %v", err)
-			}
-			defer cc.Close()
-
+			cc := setupXDSListenerAndClient(t, backend, extAuthzHTTPFilter(authAddr, extAuthzCfg))
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
 
@@ -551,9 +494,9 @@ func (s) TestExtAuthz_AuthzRPC_Failure(t *testing.T) {
 	}
 }
 
-// Test verifies cases where the external authorization server denies a data
-// plane RPC.
-func (s) TestExtAuthz_DeniedResponse(t *testing.T) {
+// Test verifies cases where the external authorization server denies a
+// data plane RPC on the server.
+func (s) TestServerExtAuthz_DeniedResponse(t *testing.T) {
 	tests := []struct {
 		name                       string
 		checkFunc                  func(context.Context, *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error)
@@ -627,8 +570,8 @@ func (s) TestExtAuthz_DeniedResponse(t *testing.T) {
 					HttpResponse: &v3authpb.CheckResponse_DeniedResponse{
 						DeniedResponse: &v3authpb.DeniedHttpResponse{
 							Status: &v3typepb.HttpStatus{Code: v3typepb.StatusCode_Forbidden},
-							Headers: []*corepb.HeaderValueOption{
-								{Header: &corepb.HeaderValue{Key: "custom-denied-header", Value: "custom-val"}},
+							Headers: []*v3corepb.HeaderValueOption{
+								{Header: &v3corepb.HeaderValue{Key: "custom-denied-header", Value: "custom-val"}},
 							},
 						},
 					},
@@ -645,8 +588,8 @@ func (s) TestExtAuthz_DeniedResponse(t *testing.T) {
 					HttpResponse: &v3authpb.CheckResponse_DeniedResponse{
 						DeniedResponse: &v3authpb.DeniedHttpResponse{
 							Status: &v3typepb.HttpStatus{Code: v3typepb.StatusCode_Forbidden},
-							Headers: []*corepb.HeaderValueOption{
-								{Header: &corepb.HeaderValue{Key: "disallowed-header", Value: "val"}},
+							Headers: []*v3corepb.HeaderValueOption{
+								{Header: &v3corepb.HeaderValue{Key: "disallowed-header", Value: "val"}},
 							},
 						},
 					},
@@ -666,8 +609,8 @@ func (s) TestExtAuthz_DeniedResponse(t *testing.T) {
 					HttpResponse: &v3authpb.CheckResponse_DeniedResponse{
 						DeniedResponse: &v3authpb.DeniedHttpResponse{
 							Status: &v3typepb.HttpStatus{Code: v3typepb.StatusCode_Forbidden},
-							Headers: []*corepb.HeaderValueOption{
-								{Header: &corepb.HeaderValue{Key: "disallowed-header", Value: "val"}},
+							Headers: []*v3corepb.HeaderValueOption{
+								{Header: &v3corepb.HeaderValue{Key: "disallowed-header", Value: "val"}},
 							},
 						},
 					},
@@ -690,8 +633,8 @@ func (s) TestExtAuthz_DeniedResponse(t *testing.T) {
 					HttpResponse: &v3authpb.CheckResponse_DeniedResponse{
 						DeniedResponse: &v3authpb.DeniedHttpResponse{
 							Status: &v3typepb.HttpStatus{Code: v3typepb.StatusCode_Forbidden},
-							Headers: []*corepb.HeaderValueOption{
-								{Header: &corepb.HeaderValue{Key: "disallowed-header", Value: "val"}},
+							Headers: []*v3corepb.HeaderValueOption{
+								{Header: &v3corepb.HeaderValue{Key: "disallowed-header", Value: "val"}},
 							},
 						},
 					},
@@ -714,7 +657,7 @@ func (s) TestExtAuthz_DeniedResponse(t *testing.T) {
 			defer stopAuth()
 
 			extAuthzCfg := &v3extauthzfilterpb.ExtAuthz{
-				FilterEnabled: &corepb.RuntimeFractionalPercent{
+				FilterEnabled: &v3corepb.RuntimeFractionalPercent{
 					DefaultValue: &v3typepb.FractionalPercent{
 						Numerator:   100,
 						Denominator: v3typepb.FractionalPercent_HUNDRED,
@@ -725,12 +668,7 @@ func (s) TestExtAuthz_DeniedResponse(t *testing.T) {
 				FailureModeAllowHeaderAdd:  tt.failureModeAllowHeaderAdd,
 			}
 
-			cc, err := setupTestClient(t, authAddr, extAuthzCfg, backend.Address)
-			if err != nil {
-				t.Fatalf("setupTestClient() failed: %v", err)
-			}
-			defer cc.Close()
-
+			cc := setupXDSListenerAndClient(t, backend, extAuthzHTTPFilter(authAddr, extAuthzCfg))
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
 
@@ -744,7 +682,7 @@ func (s) TestExtAuthz_DeniedResponse(t *testing.T) {
 // RPC, but does not specify any headers or response headers to add. Verifies
 // that the RPC is sent to the backend without modification and that it
 // eventually succeeds.
-func (s) TestExtAuthz_Allowed_NoHTTPResponse(t *testing.T) {
+func (s) TestServerExtAuthz_Allowed_NoHTTPResponse(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
@@ -766,13 +704,13 @@ func (s) TestExtAuthz_Allowed_NoHTTPResponse(t *testing.T) {
 
 	extAuthzCfg := &v3extauthzfilterpb.ExtAuthz{
 		Services: &v3extauthzfilterpb.ExtAuthz_GrpcService{
-			GrpcService: &corepb.GrpcService{
-				InitialMetadata: []*corepb.HeaderValue{
+			GrpcService: &v3corepb.GrpcService{
+				InitialMetadata: []*v3corepb.HeaderValue{
 					{Key: "key1", Value: "value1"},
 				},
 			},
 		},
-		FilterEnabled: &corepb.RuntimeFractionalPercent{
+		FilterEnabled: &v3corepb.RuntimeFractionalPercent{
 			DefaultValue: &v3typepb.FractionalPercent{
 				Numerator:   100,
 				Denominator: v3typepb.FractionalPercent_HUNDRED,
@@ -780,12 +718,7 @@ func (s) TestExtAuthz_Allowed_NoHTTPResponse(t *testing.T) {
 		},
 	}
 
-	cc, err := setupTestClient(t, authAddr, extAuthzCfg, backend.Address)
-	if err != nil {
-		t.Fatalf("setupTestClient() failed: %v", err)
-	}
-	defer cc.Close()
-
+	cc := setupXDSListenerAndClient(t, backend, extAuthzHTTPFilter(authAddr, extAuthzCfg))
 	outgoingCtx := metadata.NewOutgoingContext(ctx, metadata.Pairs("test-key", "test-value"))
 	wantHeaders := metadata.Pairs(":authority", "service-name", "test-key", "test-value")
 
@@ -797,7 +730,7 @@ func (s) TestExtAuthz_Allowed_NoHTTPResponse(t *testing.T) {
 // and specifies headers to be added and removed from the data plane RPC.
 // Verifies that the RPC is sent to the backend with the expected headers and
 // that it eventually succeeds.
-func (s) TestExtAuthz_Allowed_WithHeaders(t *testing.T) {
+func (s) TestServerExtAuthz_Allowed_WithHeaders(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
@@ -808,10 +741,10 @@ func (s) TestExtAuthz_Allowed_WithHeaders(t *testing.T) {
 			Status: st,
 			HttpResponse: &v3authpb.CheckResponse_OkResponse{
 				OkResponse: &v3authpb.OkHttpResponse{
-					Headers: []*corepb.HeaderValueOption{
-						{Header: &corepb.HeaderValue{Key: "k1", Value: "v1"}},                                   // Allowed.
-						{Header: &corepb.HeaderValue{Key: "k2-bin", Value: "v2", RawValue: []byte{0, 1, 2, 3}}}, // Allowed binary header.
-						{Header: &corepb.HeaderValue{Key: "a1", Value: "v1"}},                                   // Disallowed.
+					Headers: []*v3corepb.HeaderValueOption{
+						{Header: &v3corepb.HeaderValue{Key: "k1", Value: "v1"}},                                   // Allowed.
+						{Header: &v3corepb.HeaderValue{Key: "k2-bin", Value: "v2", RawValue: []byte{0, 1, 2, 3}}}, // Allowed binary header.
+						{Header: &v3corepb.HeaderValue{Key: "a1", Value: "v1"}},                                   // Disallowed.
 					},
 					HeadersToRemove: []string{"k-test-header-to-be-removed"},
 				},
@@ -823,7 +756,7 @@ func (s) TestExtAuthz_Allowed_WithHeaders(t *testing.T) {
 	backend, gotUnaryMD, gotStreamingMD := startTestServiceBackend(t)
 
 	extAuthzCfg := &v3extauthzfilterpb.ExtAuthz{
-		FilterEnabled: &corepb.RuntimeFractionalPercent{
+		FilterEnabled: &v3corepb.RuntimeFractionalPercent{
 			DefaultValue: &v3typepb.FractionalPercent{
 				Numerator:   100,
 				Denominator: v3typepb.FractionalPercent_HUNDRED,
@@ -836,12 +769,7 @@ func (s) TestExtAuthz_Allowed_WithHeaders(t *testing.T) {
 		},
 	}
 
-	cc, err := setupTestClient(t, authAddr, extAuthzCfg, backend.Address)
-	if err != nil {
-		t.Fatalf("setupTestClient() failed: %v", err)
-	}
-	defer cc.Close()
-
+	cc := setupXDSListenerAndClient(t, backend, extAuthzHTTPFilter(authAddr, extAuthzCfg))
 	outgoingCtx := metadata.NewOutgoingContext(ctx, metadata.Pairs("k-test-header-to-be-removed", "true"))
 	wantHeaders := metadata.Pairs(":authority", "service-name", "k1", "v1", "k2-bin", "\x00\x01\x02\x03")
 
@@ -849,11 +777,11 @@ func (s) TestExtAuthz_Allowed_WithHeaders(t *testing.T) {
 	makeStreamingRPC(outgoingCtx, t, cc, codes.OK, nil, gotStreamingMD, wantHeaders)
 }
 
-// Test verifes the case where the ext_authz server allows the data plane RPC
+// Test verifies the case where the ext_authz server allows the data plane RPC
 // and specifies headers to be added and removed from the data plane RPC. One
 // of the specified header mutations is not allowed by the configuration.
 // Verifies that the RPC is failed with error code PermissionDenied.
-func (s) TestExtAuthz_Allowed_WithHeaders_MutationFails(t *testing.T) {
+func (s) TestServerExtAuthz_Allowed_WithHeaders_MutationFails(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
@@ -864,10 +792,10 @@ func (s) TestExtAuthz_Allowed_WithHeaders_MutationFails(t *testing.T) {
 			Status: st,
 			HttpResponse: &v3authpb.CheckResponse_OkResponse{
 				OkResponse: &v3authpb.OkHttpResponse{
-					Headers: []*corepb.HeaderValueOption{
-						{Header: &corepb.HeaderValue{Key: "k1", Value: "v1"}},                                   // Allowed.
-						{Header: &corepb.HeaderValue{Key: "k2-bin", Value: "v2", RawValue: []byte{0, 1, 2, 3}}}, // Allowed binary header.
-						{Header: &corepb.HeaderValue{Key: "a1", Value: "v1"}},                                   // Disallowed.
+					Headers: []*v3corepb.HeaderValueOption{
+						{Header: &v3corepb.HeaderValue{Key: "k1", Value: "v1"}},                                   // Allowed.
+						{Header: &v3corepb.HeaderValue{Key: "k2-bin", Value: "v2", RawValue: []byte{0, 1, 2, 3}}}, // Allowed binary header.
+						{Header: &v3corepb.HeaderValue{Key: "a1", Value: "v1"}},                                   // Disallowed.
 					},
 					HeadersToRemove: []string{"k-test-header-to-be-removed"},
 				},
@@ -879,11 +807,14 @@ func (s) TestExtAuthz_Allowed_WithHeaders_MutationFails(t *testing.T) {
 	backend, gotUnaryMD, gotStreamingMD := startTestServiceBackend(t)
 
 	extAuthzCfg := &v3extauthzfilterpb.ExtAuthz{
-		FilterEnabled: &corepb.RuntimeFractionalPercent{
+		FilterEnabled: &v3corepb.RuntimeFractionalPercent{
 			DefaultValue: &v3typepb.FractionalPercent{
 				Numerator:   100,
 				Denominator: v3typepb.FractionalPercent_HUNDRED,
 			},
+		},
+		StatusOnError: &v3typepb.HttpStatus{
+			Code: v3typepb.StatusCode_Unauthorized, // 401 Unauthorized
 		},
 		DecoderHeaderMutationRules: &mutationpb.HeaderMutationRules{
 			AllowExpression:    &matcherpb.RegexMatcher{Regex: "^k.*"},
@@ -892,72 +823,75 @@ func (s) TestExtAuthz_Allowed_WithHeaders_MutationFails(t *testing.T) {
 		},
 	}
 
-	cc, err := setupTestClient(t, authAddr, extAuthzCfg, backend.Address)
-	if err != nil {
-		t.Fatalf("setupTestClient() failed: %v", err)
-	}
-	defer cc.Close()
-
+	cc := setupXDSListenerAndClient(t, backend, extAuthzHTTPFilter(authAddr, extAuthzCfg))
 	outgoingCtx := metadata.NewOutgoingContext(ctx, metadata.Pairs("k-test-header-to-be-removed", "true"))
 
-	makeUnaryRPC(outgoingCtx, t, cc, codes.PermissionDenied, nil, gotUnaryMD, nil)
-	makeStreamingRPC(outgoingCtx, t, cc, codes.PermissionDenied, nil, gotStreamingMD, nil)
+	makeUnaryRPC(outgoingCtx, t, cc, codes.Unauthenticated, nil, gotUnaryMD, nil)
+	makeStreamingRPC(outgoingCtx, t, cc, codes.Unauthenticated, nil, gotStreamingMD, nil)
 }
 
 // Test verifies the case where the ext_authz server allows the data plane RPC
 // and specifies headers to be added and removed from the data plane RPC. One
 // of the specified header mutations is not allowed by the configuration, but
-// failure_mode_allow is set to true. Verifies that the header mutation error is
-// ignored, no partial header mutations are applied, and that the data plane
+// failure_mode_allow is set to true. Verifies that the header mutation error
+// is ignored, no partial header mutations are applied, and that the data plane
 // RPC succeeds with unmutated headers.
-func (s) TestExtAuthz_Allowed_WithHeaders_MutationFails_FailureModeAllow(t *testing.T) {
-	allowedHeaders := []*corepb.HeaderValueOption{
-		{Header: &corepb.HeaderValue{Key: "k1", Value: "v1"}},
-		{Header: &corepb.HeaderValue{Key: "k2-bin", Value: "v2", RawValue: []byte{0, 1, 2, 3}}},
+func (s) TestServerExtAuthz_AllowedWithHeaders_MutationFails_FailureModeAllow(t *testing.T) {
+	allowedHeaders := []*v3corepb.HeaderValueOption{
+		{Header: &v3corepb.HeaderValue{Key: "k1", Value: "v1"}},
+		{Header: &v3corepb.HeaderValue{Key: "k2-bin", Value: "v2", RawValue: []byte{0, 1, 2, 3}}},
 	}
-	disallowedHeader := &corepb.HeaderValueOption{
-		Header: &corepb.HeaderValue{Key: "a1", Value: "v1"},
+	disallowedHeader := &v3corepb.HeaderValueOption{
+		Header: &v3corepb.HeaderValue{Key: "a1", Value: "v1"},
 	}
 
 	tests := []struct {
 		name                      string
 		failureModeAllowHeaderAdd bool
-		headersToAdd              []*corepb.HeaderValueOption
+		headersToAdd              []*v3corepb.HeaderValueOption
 		headersToRemove           []string
 		outgoingHeaders           metadata.MD
-		wantHeaders               metadata.MD
+		wantHeaders               func(serviceName string) metadata.MD
 	}{
 		{
-			name:                      "OnlyHeaderAddFails_HeaderAdd_False",
+			name:                      "OnlyHeaderAddFails_FailureModeHeaderAdd_False",
 			failureModeAllowHeaderAdd: false,
 			headersToAdd:              append(allowedHeaders, disallowedHeader),
 			headersToRemove:           []string{"k-test-header-to-be-removed"},
 			outgoingHeaders:           metadata.Pairs("k-test-header-to-be-removed", "true"),
-			wantHeaders:               metadata.Pairs(":authority", "service-name"),
+			wantHeaders: func(serviceName string) metadata.MD {
+				return metadata.Pairs(":authority", serviceName)
+			},
 		},
 		{
-			name:                      "OnlyHeaderAddFails_HeaderAdd_True",
+			name:                      "OnlyHeaderAddFails_FailureModeHeaderAdd_True",
 			failureModeAllowHeaderAdd: true,
 			headersToAdd:              append(allowedHeaders, disallowedHeader),
 			headersToRemove:           []string{"k-test-header-to-be-removed"},
 			outgoingHeaders:           metadata.Pairs("k-test-header-to-be-removed", "true"),
-			wantHeaders:               metadata.Pairs(":authority", "service-name", "x-envoy-auth-failure-mode-allowed", "true"),
+			wantHeaders: func(serviceName string) metadata.MD {
+				return metadata.Pairs(":authority", serviceName, "x-envoy-auth-failure-mode-allowed", "true")
+			},
 		},
 		{
-			name:                      "OnlyHeaderRemoveFails_HeaderAdd_True",
+			name:                      "OnlyHeaderRemoveFails_FailureModeHeaderAdd_True",
 			failureModeAllowHeaderAdd: true,
 			headersToAdd:              allowedHeaders,
 			headersToRemove:           []string{"a2-header-to-be-removed"},
 			outgoingHeaders:           metadata.Pairs("a2-header-to-be-removed", "true"),
-			wantHeaders:               metadata.Pairs(":authority", "service-name", "k1", "v1", "k2-bin", "\x00\x01\x02\x03", "a2-header-to-be-removed", "true", "x-envoy-auth-failure-mode-allowed", "true"),
+			wantHeaders: func(serviceName string) metadata.MD {
+				return metadata.Pairs(":authority", serviceName, "k1", "v1", "k2-bin", "\x00\x01\x02\x03", "a2-header-to-be-removed", "true", "x-envoy-auth-failure-mode-allowed", "true")
+			},
 		},
 		{
-			name:                      "BothMutationsFail_HeaderAdd_True",
+			name:                      "BothMutationsFail_FailureModeHeaderAdd_True",
 			failureModeAllowHeaderAdd: true,
 			headersToAdd:              append(allowedHeaders, disallowedHeader),
 			headersToRemove:           []string{"a2-header-to-be-removed"},
 			outgoingHeaders:           metadata.Pairs("a2-header-to-be-removed", "true"),
-			wantHeaders:               metadata.Pairs(":authority", "service-name", "a2-header-to-be-removed", "true", "x-envoy-auth-failure-mode-allowed", "true"),
+			wantHeaders: func(serviceName string) metadata.MD {
+				return metadata.Pairs(":authority", serviceName, "a2-header-to-be-removed", "true", "x-envoy-auth-failure-mode-allowed", "true")
+			},
 		},
 	}
 	for _, tt := range tests {
@@ -985,7 +919,7 @@ func (s) TestExtAuthz_Allowed_WithHeaders_MutationFails_FailureModeAllow(t *test
 			extAuthzCfg := &v3extauthzfilterpb.ExtAuthz{
 				FailureModeAllow:          true,
 				FailureModeAllowHeaderAdd: tt.failureModeAllowHeaderAdd,
-				FilterEnabled: &corepb.RuntimeFractionalPercent{
+				FilterEnabled: &v3corepb.RuntimeFractionalPercent{
 					DefaultValue: &v3typepb.FractionalPercent{
 						Numerator:   100,
 						Denominator: v3typepb.FractionalPercent_HUNDRED,
@@ -998,15 +932,12 @@ func (s) TestExtAuthz_Allowed_WithHeaders_MutationFails_FailureModeAllow(t *test
 				},
 			}
 
-			cc, err := setupTestClient(t, authAddr, extAuthzCfg, backend.Address)
-			if err != nil {
-				t.Fatalf("setupTestClient() failed: %v", err)
-			}
-			defer cc.Close()
-
+			cc := setupXDSListenerAndClient(t, backend, extAuthzHTTPFilter(authAddr, extAuthzCfg))
 			outgoingCtx := metadata.NewOutgoingContext(ctx, tt.outgoingHeaders)
-			makeUnaryRPC(outgoingCtx, t, cc, codes.OK, nil, gotUnaryMD, tt.wantHeaders)
-			makeStreamingRPC(outgoingCtx, t, cc, codes.OK, nil, gotStreamingMD, tt.wantHeaders)
+			wantHeaders := tt.wantHeaders("service-name")
+
+			makeUnaryRPC(outgoingCtx, t, cc, codes.OK, nil, gotUnaryMD, wantHeaders)
+			makeStreamingRPC(outgoingCtx, t, cc, codes.OK, nil, gotStreamingMD, wantHeaders)
 		})
 	}
 }
@@ -1015,8 +946,7 @@ func (s) TestExtAuthz_Allowed_WithHeaders_MutationFails_FailureModeAllow(t *test
 // RPC and specifies response headers to be added and removed from the data
 // plane RPC. Verifies that the unary data plane RPC succeeds with expected
 // response headers.
-func (s) TestExtAuthz_Allowed_WithResponseHeadersMutations_UnaryRPC(t *testing.T) {
-	t.Skip("Unary RPC response header mutation with CallOption is currently not supported")
+func (s) TestServerExtAuthz_Allowed_WithResponseHeadersMutations_UnaryRPC(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
@@ -1027,10 +957,10 @@ func (s) TestExtAuthz_Allowed_WithResponseHeadersMutations_UnaryRPC(t *testing.T
 			Status: st,
 			HttpResponse: &v3authpb.CheckResponse_OkResponse{
 				OkResponse: &v3authpb.OkHttpResponse{
-					ResponseHeadersToAdd: []*corepb.HeaderValueOption{
-						{Header: &corepb.HeaderValue{Key: "k1", Value: "v1"}},                                   // Allowed.
-						{Header: &corepb.HeaderValue{Key: "k2-bin", Value: "v2", RawValue: []byte{0, 1, 2, 3}}}, // Allowed binary header.
-						{Header: &corepb.HeaderValue{Key: "a1", Value: "v1"}},                                   // Disallowed.
+					ResponseHeadersToAdd: []*v3corepb.HeaderValueOption{
+						{Header: &v3corepb.HeaderValue{Key: "k1", Value: "v1"}},                                   // Allowed.
+						{Header: &v3corepb.HeaderValue{Key: "k2-bin", Value: "v2", RawValue: []byte{0, 1, 2, 3}}}, // Allowed binary header.
+						{Header: &v3corepb.HeaderValue{Key: "a1", Value: "v1"}},                                   // Disallowed.
 					},
 					HeadersToRemove: []string{"k-test-header-to-be-removed"},
 				},
@@ -1054,11 +984,9 @@ func (s) TestExtAuthz_Allowed_WithResponseHeadersMutations_UnaryRPC(t *testing.T
 			return &testpb.Empty{}, nil
 		},
 	}
-	stubserver.StartTestService(t, backend)
-	defer backend.Stop()
 
 	extAuthzCfg := &v3extauthzfilterpb.ExtAuthz{
-		FilterEnabled: &corepb.RuntimeFractionalPercent{
+		FilterEnabled: &v3corepb.RuntimeFractionalPercent{
 			DefaultValue: &v3typepb.FractionalPercent{
 				Numerator:   100,
 				Denominator: v3typepb.FractionalPercent_HUNDRED,
@@ -1071,17 +999,13 @@ func (s) TestExtAuthz_Allowed_WithResponseHeadersMutations_UnaryRPC(t *testing.T
 		},
 	}
 
-	cc, err := setupTestClient(t, authAddr, extAuthzCfg, backend.Address)
-	if err != nil {
-		t.Fatalf("setupTestClient() failed: %v", err)
-	}
-	defer cc.Close()
-
+	cc := setupXDSListenerAndClient(t, backend, extAuthzHTTPFilter(authAddr, extAuthzCfg))
 	outgoingCtx := metadata.NewOutgoingContext(ctx, metadata.Pairs("k-test-header-to-be-removed", "true"))
+
 	wantRespHeaders := metadata.Pairs(
 		"test-trailer-key", "test-trailer-value",
-		"k1", "test-trailer-v1",
 		"k1", "v1",
+		"k1", "test-trailer-v1",
 		"k2-bin", "\x00\x01\x02\x03",
 	)
 
@@ -1099,7 +1023,7 @@ func (s) TestExtAuthz_Allowed_WithResponseHeadersMutations_UnaryRPC(t *testing.T
 // plane RPC and specifies response headers to be added and removed from the
 // data plane RPC. Verifies that the streaming data plane RPC succeeds with
 // expected response headers.
-func (s) TestExtAuthz_Allowed_WithResponseHeadersMutations_StreamingRPC(t *testing.T) {
+func (s) TestServerExtAuthz_Allowed_WithResponseHeadersMutations_StreamingRPC(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
@@ -1110,10 +1034,10 @@ func (s) TestExtAuthz_Allowed_WithResponseHeadersMutations_StreamingRPC(t *testi
 			Status: st,
 			HttpResponse: &v3authpb.CheckResponse_OkResponse{
 				OkResponse: &v3authpb.OkHttpResponse{
-					ResponseHeadersToAdd: []*corepb.HeaderValueOption{
-						{Header: &corepb.HeaderValue{Key: "k1", Value: "v1"}},                                   // Allowed.
-						{Header: &corepb.HeaderValue{Key: "k2-bin", Value: "v2", RawValue: []byte{0, 1, 2, 3}}}, // Allowed binary header.
-						{Header: &corepb.HeaderValue{Key: "a1", Value: "v1"}},                                   // Disallowed.
+					ResponseHeadersToAdd: []*v3corepb.HeaderValueOption{
+						{Header: &v3corepb.HeaderValue{Key: "k1", Value: "v1"}},                                   // Allowed.
+						{Header: &v3corepb.HeaderValue{Key: "k2-bin", Value: "v2", RawValue: []byte{0, 1, 2, 3}}}, // Allowed binary header.
+						{Header: &v3corepb.HeaderValue{Key: "a1", Value: "v1"}},                                   // Disallowed.
 					},
 					HeadersToRemove: []string{"k-test-header-to-be-removed"},
 				},
@@ -1134,11 +1058,9 @@ func (s) TestExtAuthz_Allowed_WithResponseHeadersMutations_StreamingRPC(t *testi
 			return stream.SendHeader(respHeaders)
 		},
 	}
-	stubserver.StartTestService(t, backend)
-	defer backend.Stop()
 
 	extAuthzCfg := &v3extauthzfilterpb.ExtAuthz{
-		FilterEnabled: &corepb.RuntimeFractionalPercent{
+		FilterEnabled: &v3corepb.RuntimeFractionalPercent{
 			DefaultValue: &v3typepb.FractionalPercent{
 				Numerator:   100,
 				Denominator: v3typepb.FractionalPercent_HUNDRED,
@@ -1151,17 +1073,13 @@ func (s) TestExtAuthz_Allowed_WithResponseHeadersMutations_StreamingRPC(t *testi
 		},
 	}
 
-	cc, err := setupTestClient(t, authAddr, extAuthzCfg, backend.Address)
-	if err != nil {
-		t.Fatalf("setupTestClient() failed: %v", err)
-	}
-	defer cc.Close()
-
+	cc := setupXDSListenerAndClient(t, backend, extAuthzHTTPFilter(authAddr, extAuthzCfg))
 	outgoingCtx := metadata.NewOutgoingContext(ctx, metadata.Pairs("k-test-header-to-be-removed", "true"))
+
 	wantRespHeaders := metadata.Pairs(
 		"test-trailer-key", "test-trailer-value",
-		"k1", "test-trailer-v1",
 		"k1", "v1",
+		"k1", "test-trailer-v1",
 		"k2-bin", "\x00\x01\x02\x03",
 	)
 
@@ -1183,7 +1101,7 @@ func (s) TestExtAuthz_Allowed_WithResponseHeadersMutations_StreamingRPC(t *testi
 // and specifies response headers to add, but the backend sends a Trailers-Only
 // response (no response headers). Verifies that response headers are empty/nil
 // and response header mutations are safely ignored without error.
-func (s) TestExtAuthz_Allowed_TrailersOnlyResponse_HeaderMutationSkipped(t *testing.T) {
+func (s) TestServerExtAuthz_Allowed_TrailersOnlyResponse_HeaderMutationSkipped(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
@@ -1193,8 +1111,8 @@ func (s) TestExtAuthz_Allowed_TrailersOnlyResponse_HeaderMutationSkipped(t *test
 			Status: st,
 			HttpResponse: &v3authpb.CheckResponse_OkResponse{
 				OkResponse: &v3authpb.OkHttpResponse{
-					ResponseHeadersToAdd: []*corepb.HeaderValueOption{
-						{Header: &corepb.HeaderValue{Key: "k1", Value: "v1"}},
+					ResponseHeadersToAdd: []*v3corepb.HeaderValueOption{
+						{Header: &v3corepb.HeaderValue{Key: "k1", Value: "v1"}},
 					},
 				},
 			},
@@ -1208,11 +1126,9 @@ func (s) TestExtAuthz_Allowed_TrailersOnlyResponse_HeaderMutationSkipped(t *test
 			return nil
 		},
 	}
-	stubserver.StartTestService(t, backend)
-	defer backend.Stop()
 
 	extAuthzCfg := &v3extauthzfilterpb.ExtAuthz{
-		FilterEnabled: &corepb.RuntimeFractionalPercent{
+		FilterEnabled: &v3corepb.RuntimeFractionalPercent{
 			DefaultValue: &v3typepb.FractionalPercent{
 				Numerator:   100,
 				Denominator: v3typepb.FractionalPercent_HUNDRED,
@@ -1220,12 +1136,7 @@ func (s) TestExtAuthz_Allowed_TrailersOnlyResponse_HeaderMutationSkipped(t *test
 		},
 	}
 
-	cc, err := setupTestClient(t, authAddr, extAuthzCfg, backend.Address)
-	if err != nil {
-		t.Fatalf("setupTestClient() failed: %v", err)
-	}
-	defer cc.Close()
-
+	cc := setupXDSListenerAndClient(t, backend, extAuthzHTTPFilter(authAddr, extAuthzCfg))
 	client := testgrpc.NewTestServiceClient(cc)
 	stream, err := client.FullDuplexCall(ctx)
 	if err != nil {
@@ -1244,9 +1155,9 @@ func (s) TestExtAuthz_Allowed_TrailersOnlyResponse_HeaderMutationSkipped(t *test
 // Test verifies the case where the ext_authz server allows a unary data plane
 // RPC and specifies response headers to be added and removed from the data
 // plane RPC. One of the response header mutations is not allowed by the
-// configuration. Verifies that the client rejects the unary RPC with
+// configuration. Verifies that the server rejects the unary RPC with
 // PermissionDenied.
-func (s) TestExtAuthz_Allowed_ResponseHeaderMutationFailed_UnaryRPC(t *testing.T) {
+func (s) TestServerExtAuthz_Allowed_ResponseHeaderMutationFailed_UnaryRPC(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
@@ -1257,10 +1168,10 @@ func (s) TestExtAuthz_Allowed_ResponseHeaderMutationFailed_UnaryRPC(t *testing.T
 			Status: st,
 			HttpResponse: &v3authpb.CheckResponse_OkResponse{
 				OkResponse: &v3authpb.OkHttpResponse{
-					ResponseHeadersToAdd: []*corepb.HeaderValueOption{
-						{Header: &corepb.HeaderValue{Key: "k1", Value: "v1"}},                                   // Allowed.
-						{Header: &corepb.HeaderValue{Key: "k2-bin", Value: "v2", RawValue: []byte{0, 1, 2, 3}}}, // Allowed binary header.
-						{Header: &corepb.HeaderValue{Key: "a1", Value: "v1"}},                                   // Disallowed.
+					ResponseHeadersToAdd: []*v3corepb.HeaderValueOption{
+						{Header: &v3corepb.HeaderValue{Key: "k1", Value: "v1"}},                                   // Allowed.
+						{Header: &v3corepb.HeaderValue{Key: "k2-bin", Value: "v2", RawValue: []byte{0, 1, 2, 3}}}, // Allowed binary header.
+						{Header: &v3corepb.HeaderValue{Key: "a1", Value: "v1"}},                                   // Disallowed.
 					},
 					HeadersToRemove: []string{"k-test-header-to-be-removed"},
 				},
@@ -1279,11 +1190,9 @@ func (s) TestExtAuthz_Allowed_ResponseHeaderMutationFailed_UnaryRPC(t *testing.T
 			return &testpb.Empty{}, nil
 		},
 	}
-	stubserver.StartTestService(t, backend)
-	defer backend.Stop()
 
 	extAuthzCfg := &v3extauthzfilterpb.ExtAuthz{
-		FilterEnabled: &corepb.RuntimeFractionalPercent{
+		FilterEnabled: &v3corepb.RuntimeFractionalPercent{
 			DefaultValue: &v3typepb.FractionalPercent{
 				Numerator:   100,
 				Denominator: v3typepb.FractionalPercent_HUNDRED,
@@ -1296,25 +1205,21 @@ func (s) TestExtAuthz_Allowed_ResponseHeaderMutationFailed_UnaryRPC(t *testing.T
 		},
 	}
 
-	cc, err := setupTestClient(t, authAddr, extAuthzCfg, backend.Address)
-	if err != nil {
-		t.Fatalf("setupTestClient() failed: %v", err)
-	}
-	defer cc.Close()
-
+	cc := setupXDSListenerAndClient(t, backend, extAuthzHTTPFilter(authAddr, extAuthzCfg))
 	outgoingCtx := metadata.NewOutgoingContext(ctx, metadata.Pairs("k-test-header-to-be-removed", "true"))
+
 	client := testgrpc.NewTestServiceClient(cc)
 	if _, err := client.EmptyCall(outgoingCtx, &testpb.Empty{}); status.Code(err) != codes.PermissionDenied {
-		t.Fatalf("EmptyCall() failed with status code = %v, want %v (error: %v)", status.Code(err), codes.PermissionDenied, err)
+		t.Fatalf("EmptyCall() status = %v, want %v (error: %v)", status.Code(err), codes.PermissionDenied, err)
 	}
 }
 
 // Test verifies the case where the ext_authz server allows a streaming data
 // plane RPC and specifies response headers to be added and removed from the
 // data plane RPC. One of the response header mutations is not allowed by the
-// configuration. Verifies that the client rejects the streaming RPC with
+// configuration. Verifies that the server rejects the streaming RPC with
 // PermissionDenied.
-func (s) TestExtAuthz_Allowed_ResponseHeaderMutationFailed_StreamingRPC(t *testing.T) {
+func (s) TestServerExtAuthz_Allowed_ResponseHeaderMutationFailed_StreamingRPC(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
@@ -1325,10 +1230,10 @@ func (s) TestExtAuthz_Allowed_ResponseHeaderMutationFailed_StreamingRPC(t *testi
 			Status: st,
 			HttpResponse: &v3authpb.CheckResponse_OkResponse{
 				OkResponse: &v3authpb.OkHttpResponse{
-					ResponseHeadersToAdd: []*corepb.HeaderValueOption{
-						{Header: &corepb.HeaderValue{Key: "k1", Value: "v1"}},                                   // Allowed.
-						{Header: &corepb.HeaderValue{Key: "k2-bin", Value: "v2", RawValue: []byte{0, 1, 2, 3}}}, // Allowed binary header.
-						{Header: &corepb.HeaderValue{Key: "a1", Value: "v1"}},                                   // Disallowed.
+					ResponseHeadersToAdd: []*v3corepb.HeaderValueOption{
+						{Header: &v3corepb.HeaderValue{Key: "k1", Value: "v1"}},                                   // Allowed.
+						{Header: &v3corepb.HeaderValue{Key: "k2-bin", Value: "v2", RawValue: []byte{0, 1, 2, 3}}}, // Allowed binary header.
+						{Header: &v3corepb.HeaderValue{Key: "a1", Value: "v1"}},                                   // Disallowed.
 					},
 					HeadersToRemove: []string{"k-test-header-to-be-removed"},
 				},
@@ -1344,11 +1249,9 @@ func (s) TestExtAuthz_Allowed_ResponseHeaderMutationFailed_StreamingRPC(t *testi
 			return stream.SendHeader(respHeaders)
 		},
 	}
-	stubserver.StartTestService(t, backend)
-	defer backend.Stop()
 
 	extAuthzCfg := &v3extauthzfilterpb.ExtAuthz{
-		FilterEnabled: &corepb.RuntimeFractionalPercent{
+		FilterEnabled: &v3corepb.RuntimeFractionalPercent{
 			DefaultValue: &v3typepb.FractionalPercent{
 				Numerator:   100,
 				Denominator: v3typepb.FractionalPercent_HUNDRED,
@@ -1361,16 +1264,16 @@ func (s) TestExtAuthz_Allowed_ResponseHeaderMutationFailed_StreamingRPC(t *testi
 		},
 	}
 
-	cc, err := setupTestClient(t, authAddr, extAuthzCfg, backend.Address)
-	if err != nil {
-		t.Fatalf("setupTestClient() failed: %v", err)
-	}
-	defer cc.Close()
+	cc := setupXDSListenerAndClient(t, backend, extAuthzHTTPFilter(authAddr, extAuthzCfg))
+	outgoingCtx := metadata.NewOutgoingContext(ctx, metadata.Pairs("k-test-header-to-be-removed", "true"))
 
 	client := testgrpc.NewTestServiceClient(cc)
-	outgoingCtx := metadata.NewOutgoingContext(ctx, metadata.Pairs("k-test-header-to-be-removed", "true"))
-	if _, err := client.FullDuplexCall(outgoingCtx); status.Code(err) != codes.PermissionDenied {
-		t.Fatalf("FullDuplexCall() failed with status code = %v, want %v (error: %v)", status.Code(err), codes.PermissionDenied, err)
+	stream, err := client.FullDuplexCall(outgoingCtx)
+	if err != nil {
+		t.Fatalf("Failed to start streaming RPC: %v", err)
+	}
+	if _, err := stream.Recv(); status.Code(err) != codes.PermissionDenied {
+		t.Fatalf("FullDuplexCall stream.Recv() failed with status code = %v, want %v (error: %v)", status.Code(err), codes.PermissionDenied, err)
 	}
 }
 
@@ -1378,8 +1281,7 @@ func (s) TestExtAuthz_Allowed_ResponseHeaderMutationFailed_StreamingRPC(t *testi
 // header mutation for a unary data plane RPC that fails validation, but
 // failure_mode_allow is set to true. Verifies that the unary data plane RPC
 // succeeds and the invalid response header is not added.
-func (s) TestExtAuthz_Allowed_ResponseHeaderMutationFailed_FailureModeAllow_UnaryRPC(t *testing.T) {
-	t.Skip("Unary RPC response header mutation with CallOption is currently not supported")
+func (s) TestServerExtAuthz_Allowed_ResponseHeaderMutationFailed_FailureModeAllow_UnaryRPC(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
@@ -1389,8 +1291,8 @@ func (s) TestExtAuthz_Allowed_ResponseHeaderMutationFailed_FailureModeAllow_Unar
 			Status: st,
 			HttpResponse: &v3authpb.CheckResponse_OkResponse{
 				OkResponse: &v3authpb.OkHttpResponse{
-					ResponseHeadersToAdd: []*corepb.HeaderValueOption{
-						{Header: &corepb.HeaderValue{Key: "a1", Value: "v1"}}, // Disallowed response header.
+					ResponseHeadersToAdd: []*v3corepb.HeaderValueOption{
+						{Header: &v3corepb.HeaderValue{Key: "a1", Value: "v1"}}, // Disallowed response header.
 					},
 				},
 			},
@@ -1398,11 +1300,11 @@ func (s) TestExtAuthz_Allowed_ResponseHeaderMutationFailed_FailureModeAllow_Unar
 	})
 	defer stopAuth()
 
-	wantIncomingHeaders := metadata.Pairs(":authority", "service-name", "x-envoy-auth-failure-mode-allowed", "true")
 	respHeaders := metadata.Pairs("test-header-key", "test-header-value")
 	backend := &stubserver.StubServer{
 		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
 			gotMD, _ := metadata.FromIncomingContext(ctx)
+			wantIncomingHeaders := metadata.Pairs(":authority", "service-name", "x-envoy-auth-failure-mode-allowed", "true")
 			if err := compareMetadata(gotMD, wantIncomingHeaders); err != nil {
 				return nil, status.Errorf(codes.Internal, "Unexpected headers metadata received by the server: %v", err)
 			}
@@ -1412,13 +1314,11 @@ func (s) TestExtAuthz_Allowed_ResponseHeaderMutationFailed_FailureModeAllow_Unar
 			return &testpb.Empty{}, nil
 		},
 	}
-	stubserver.StartTestService(t, backend)
-	defer backend.Stop()
 
 	extAuthzCfg := &v3extauthzfilterpb.ExtAuthz{
 		FailureModeAllow:          true,
 		FailureModeAllowHeaderAdd: true,
-		FilterEnabled: &corepb.RuntimeFractionalPercent{
+		FilterEnabled: &v3corepb.RuntimeFractionalPercent{
 			DefaultValue: &v3typepb.FractionalPercent{
 				Numerator:   100,
 				Denominator: v3typepb.FractionalPercent_HUNDRED,
@@ -1431,13 +1331,9 @@ func (s) TestExtAuthz_Allowed_ResponseHeaderMutationFailed_FailureModeAllow_Unar
 		},
 	}
 
-	cc, err := setupTestClient(t, authAddr, extAuthzCfg, backend.Address)
-	if err != nil {
-		t.Fatalf("setupTestClient() failed: %v", err)
-	}
-	defer cc.Close()
-
+	cc := setupXDSListenerAndClient(t, backend, extAuthzHTTPFilter(authAddr, extAuthzCfg))
 	wantRespHeaders := metadata.Pairs("test-header-key", "test-header-value")
+
 	client := testgrpc.NewTestServiceClient(cc)
 	var gotHeaders metadata.MD
 	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Header(&gotHeaders)); err != nil {
@@ -1452,7 +1348,7 @@ func (s) TestExtAuthz_Allowed_ResponseHeaderMutationFailed_FailureModeAllow_Unar
 // header mutation for a streaming data plane RPC that fails validation, but
 // failure_mode_allow is set to true. Verifies that the streaming data plane
 // RPC succeeds and the invalid response header is not added.
-func (s) TestExtAuthz_Allowed_ResponseHeaderMutationFailed_FailureModeAllow_StreamingRPC(t *testing.T) {
+func (s) TestServerExtAuthz_Allowed_ResponseHeaderMutationFailed_FailureModeAllow_StreamingRPC(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
@@ -1462,8 +1358,8 @@ func (s) TestExtAuthz_Allowed_ResponseHeaderMutationFailed_FailureModeAllow_Stre
 			Status: st,
 			HttpResponse: &v3authpb.CheckResponse_OkResponse{
 				OkResponse: &v3authpb.OkHttpResponse{
-					ResponseHeadersToAdd: []*corepb.HeaderValueOption{
-						{Header: &corepb.HeaderValue{Key: "a1", Value: "v1"}}, // Disallowed response header.
+					ResponseHeadersToAdd: []*v3corepb.HeaderValueOption{
+						{Header: &v3corepb.HeaderValue{Key: "a1", Value: "v1"}}, // Disallowed response header.
 					},
 				},
 			},
@@ -1471,24 +1367,22 @@ func (s) TestExtAuthz_Allowed_ResponseHeaderMutationFailed_FailureModeAllow_Stre
 	})
 	defer stopAuth()
 
-	wantIncomingHeaders := metadata.Pairs(":authority", "service-name", "x-envoy-auth-failure-mode-allowed", "true")
 	respHeaders := metadata.Pairs("test-header-key", "test-header-value")
 	backend := &stubserver.StubServer{
 		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
 			gotMD, _ := metadata.FromIncomingContext(stream.Context())
+			wantIncomingHeaders := metadata.Pairs(":authority", "service-name", "x-envoy-auth-failure-mode-allowed", "true")
 			if err := compareMetadata(gotMD, wantIncomingHeaders); err != nil {
 				return status.Errorf(codes.Internal, "Unexpected headers metadata received by the server: %v", err)
 			}
 			return stream.SendHeader(respHeaders)
 		},
 	}
-	stubserver.StartTestService(t, backend)
-	defer backend.Stop()
 
 	extAuthzCfg := &v3extauthzfilterpb.ExtAuthz{
 		FailureModeAllow:          true,
 		FailureModeAllowHeaderAdd: true,
-		FilterEnabled: &corepb.RuntimeFractionalPercent{
+		FilterEnabled: &v3corepb.RuntimeFractionalPercent{
 			DefaultValue: &v3typepb.FractionalPercent{
 				Numerator:   100,
 				Denominator: v3typepb.FractionalPercent_HUNDRED,
@@ -1501,11 +1395,8 @@ func (s) TestExtAuthz_Allowed_ResponseHeaderMutationFailed_FailureModeAllow_Stre
 		},
 	}
 
-	cc, err := setupTestClient(t, authAddr, extAuthzCfg, backend.Address)
-	if err != nil {
-		t.Fatalf("setupTestClient() failed: %v", err)
-	}
-	defer cc.Close()
+	cc := setupXDSListenerAndClient(t, backend, extAuthzHTTPFilter(authAddr, extAuthzCfg))
+	wantRespHeaders := metadata.Pairs("test-header-key", "test-header-value")
 
 	client := testgrpc.NewTestServiceClient(cc)
 	stream, err := client.FullDuplexCall(ctx)
@@ -1516,7 +1407,6 @@ func (s) TestExtAuthz_Allowed_ResponseHeaderMutationFailed_FailureModeAllow_Stre
 	if err != nil {
 		t.Fatalf("stream.Header() failed: %v", err)
 	}
-	wantRespHeaders := metadata.Pairs("test-header-key", "test-header-value")
 	if err := compareMetadata(hdr, wantRespHeaders); err != nil {
 		t.Fatalf("Response header mismatch: %v", err)
 	}
@@ -1525,8 +1415,7 @@ func (s) TestExtAuthz_Allowed_ResponseHeaderMutationFailed_FailureModeAllow_Stre
 // Test verifies the case where the ext_authz server allows a unary data plane
 // RPC and specifies both header and response header mutations that are
 // expected to succeed. Verifies that the unary data plane RPC succeeds.
-func (s) TestExtAuthz_Allowed_WithRequestAndResponseHeadersMutations_UnaryRPC(t *testing.T) {
-	t.Skip("Unary RPC response header mutation with CallOption is currently not supported")
+func (s) TestServerExtAuthz_Allowed_WithRequestAndResponseHeadersMutations_UnaryRPC(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
@@ -1537,11 +1426,11 @@ func (s) TestExtAuthz_Allowed_WithRequestAndResponseHeadersMutations_UnaryRPC(t 
 			Status: st,
 			HttpResponse: &v3authpb.CheckResponse_OkResponse{
 				OkResponse: &v3authpb.OkHttpResponse{
-					Headers: []*corepb.HeaderValueOption{
-						{Header: &corepb.HeaderValue{Key: "k1", Value: "v1"}}, // Allowed.
+					Headers: []*v3corepb.HeaderValueOption{
+						{Header: &v3corepb.HeaderValue{Key: "k1", Value: "v1"}}, // Allowed.
 					},
-					ResponseHeadersToAdd: []*corepb.HeaderValueOption{
-						{Header: &corepb.HeaderValue{Key: "k2-bin", Value: "v2", RawValue: []byte{0, 1, 2, 3}}}, // Allowed binary header.
+					ResponseHeadersToAdd: []*v3corepb.HeaderValueOption{
+						{Header: &v3corepb.HeaderValue{Key: "k2-bin", Value: "v2", RawValue: []byte{0, 1, 2, 3}}}, // Allowed binary header.
 					},
 					HeadersToRemove: []string{"k-test-header-to-be-removed"},
 				},
@@ -1565,11 +1454,9 @@ func (s) TestExtAuthz_Allowed_WithRequestAndResponseHeadersMutations_UnaryRPC(t 
 			return &testpb.Empty{}, nil
 		},
 	}
-	stubserver.StartTestService(t, backend)
-	defer backend.Stop()
 
 	extAuthzCfg := &v3extauthzfilterpb.ExtAuthz{
-		FilterEnabled: &corepb.RuntimeFractionalPercent{
+		FilterEnabled: &v3corepb.RuntimeFractionalPercent{
 			DefaultValue: &v3typepb.FractionalPercent{
 				Numerator:   100,
 				Denominator: v3typepb.FractionalPercent_HUNDRED,
@@ -1582,18 +1469,14 @@ func (s) TestExtAuthz_Allowed_WithRequestAndResponseHeadersMutations_UnaryRPC(t 
 		},
 	}
 
-	cc, err := setupTestClient(t, authAddr, extAuthzCfg, backend.Address)
-	if err != nil {
-		t.Fatalf("setupTestClient() failed: %v", err)
-	}
-	defer cc.Close()
-
-	client := testgrpc.NewTestServiceClient(cc)
+	cc := setupXDSListenerAndClient(t, backend, extAuthzHTTPFilter(authAddr, extAuthzCfg))
 	outgoingCtx := metadata.NewOutgoingContext(ctx, metadata.Pairs("k-test-header-to-be-removed", "true"))
 	wantRespHeaders := metadata.Pairs(
 		"test-trailer-key", "test-trailer-value",
 		"k2-bin", "\x00\x01\x02\x03",
 	)
+
+	client := testgrpc.NewTestServiceClient(cc)
 	var gotHeaders metadata.MD
 	if _, err := client.EmptyCall(outgoingCtx, &testpb.Empty{}, grpc.Header(&gotHeaders)); err != nil {
 		t.Fatalf("EmptyCall() failed: %v", err)
@@ -1606,7 +1489,7 @@ func (s) TestExtAuthz_Allowed_WithRequestAndResponseHeadersMutations_UnaryRPC(t 
 // Test verifies the case where the ext_authz server allows a streaming data
 // plane RPC and specifies both header and response header mutations that are
 // expected to succeed. Verifies that the streaming data plane RPC succeeds.
-func (s) TestExtAuthz_Allowed_WithRequestAndResponseHeadersMutations_StreamingRPC(t *testing.T) {
+func (s) TestServerExtAuthz_Allowed_WithRequestAndResponseHeadersMutations_StreamingRPC(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
@@ -1617,11 +1500,11 @@ func (s) TestExtAuthz_Allowed_WithRequestAndResponseHeadersMutations_StreamingRP
 			Status: st,
 			HttpResponse: &v3authpb.CheckResponse_OkResponse{
 				OkResponse: &v3authpb.OkHttpResponse{
-					Headers: []*corepb.HeaderValueOption{
-						{Header: &corepb.HeaderValue{Key: "k1", Value: "v1"}}, // Allowed.
+					Headers: []*v3corepb.HeaderValueOption{
+						{Header: &v3corepb.HeaderValue{Key: "k1", Value: "v1"}}, // Allowed.
 					},
-					ResponseHeadersToAdd: []*corepb.HeaderValueOption{
-						{Header: &corepb.HeaderValue{Key: "k2-bin", Value: "v2", RawValue: []byte{0, 1, 2, 3}}}, // Allowed binary header.
+					ResponseHeadersToAdd: []*v3corepb.HeaderValueOption{
+						{Header: &v3corepb.HeaderValue{Key: "k2-bin", Value: "v2", RawValue: []byte{0, 1, 2, 3}}}, // Allowed binary header.
 					},
 					HeadersToRemove: []string{"k-test-header-to-be-removed"},
 				},
@@ -1642,11 +1525,9 @@ func (s) TestExtAuthz_Allowed_WithRequestAndResponseHeadersMutations_StreamingRP
 			return stream.SendHeader(respHeaders)
 		},
 	}
-	stubserver.StartTestService(t, backend)
-	defer backend.Stop()
 
 	extAuthzCfg := &v3extauthzfilterpb.ExtAuthz{
-		FilterEnabled: &corepb.RuntimeFractionalPercent{
+		FilterEnabled: &v3corepb.RuntimeFractionalPercent{
 			DefaultValue: &v3typepb.FractionalPercent{
 				Numerator:   100,
 				Denominator: v3typepb.FractionalPercent_HUNDRED,
@@ -1659,38 +1540,32 @@ func (s) TestExtAuthz_Allowed_WithRequestAndResponseHeadersMutations_StreamingRP
 		},
 	}
 
-	cc, err := setupTestClient(t, authAddr, extAuthzCfg, backend.Address)
-	if err != nil {
-		t.Fatalf("setupTestClient() failed: %v", err)
-	}
-	defer cc.Close()
-
-	client := testgrpc.NewTestServiceClient(cc)
+	cc := setupXDSListenerAndClient(t, backend, extAuthzHTTPFilter(authAddr, extAuthzCfg))
 	outgoingCtx := metadata.NewOutgoingContext(ctx, metadata.Pairs("k-test-header-to-be-removed", "true"))
-	stream, err := client.FullDuplexCall(outgoingCtx)
-	if err != nil {
-		t.Fatalf("FullDuplexCall() failed: %v", err)
-	}
-
-	gotHeaders, err := stream.Header()
-	if err != nil {
-		t.Fatalf("stream.Header() failed: %v", err)
-	}
-
 	wantRespHeaders := metadata.Pairs(
 		"test-trailer-key", "test-trailer-value",
 		"k2-bin", "\x00\x01\x02\x03",
 	)
+
+	client := testgrpc.NewTestServiceClient(cc)
+	stream, err := client.FullDuplexCall(outgoingCtx)
+	if err != nil {
+		t.Fatalf("FullDuplexCall() failed: %v", err)
+	}
+	gotHeaders, err := stream.Header()
+	if err != nil {
+		t.Fatalf("stream.Header() failed: %v", err)
+	}
 	if err := compareMetadata(gotHeaders, wantRespHeaders); err != nil {
 		t.Fatalf("Unexpected headers metadata received by the client: %v", err)
 	}
 }
 
 // Test verifies the scenario where allowed_headers and disallowed_headers are
-// configured on the filter. Verifies that the CheckRequest sent to the
+// configured on the server filter. Verifies that the CheckRequest sent to the
 // authorization server only includes headers matching allowed_headers and
 // excludes headers matching disallowed_headers.
-func (s) TestExtAuthz_RequestHeaderFiltering(t *testing.T) {
+func (s) TestServerExtAuthz_RequestHeaderFiltering(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
@@ -1710,10 +1585,10 @@ func (s) TestExtAuthz_RequestHeaderFiltering(t *testing.T) {
 	})
 	defer stopAuth()
 
-	backend, gotUnaryMD, gotStreamingMD := startTestServiceBackend(t)
+	backend, _, _ := startTestServiceBackend(t)
 
 	extAuthzCfg := &v3extauthzfilterpb.ExtAuthz{
-		FilterEnabled: &corepb.RuntimeFractionalPercent{
+		FilterEnabled: &v3corepb.RuntimeFractionalPercent{
 			DefaultValue: &v3typepb.FractionalPercent{
 				Numerator:   100,
 				Denominator: v3typepb.FractionalPercent_HUNDRED,
@@ -1732,409 +1607,22 @@ func (s) TestExtAuthz_RequestHeaderFiltering(t *testing.T) {
 		},
 	}
 
-	cc, err := setupTestClient(t, authAddr, extAuthzCfg, backend.Address)
-	if err != nil {
-		t.Fatalf("setupTestClient() failed: %v", err)
-	}
-	defer cc.Close()
-
+	cc := setupXDSListenerAndClient(t, backend, extAuthzHTTPFilter(authAddr, extAuthzCfg))
 	outgoingCtx := metadata.NewOutgoingContext(ctx, metadata.Pairs(
 		"allow-header-1", "val1",
 		"exact-header", "val2",
 		"allow-disallowed-header", "val3",
 		"random-header", "val4",
 	))
-	wantHeaders := metadata.Pairs(
-		":authority", "service-name",
-		"allow-header-1", "val1",
-		"exact-header", "val2",
-		"allow-disallowed-header", "val3",
-		"random-header", "val4",
-	)
 
-	makeUnaryRPC(outgoingCtx, t, cc, codes.OK, nil, gotUnaryMD, wantHeaders)
-	makeStreamingRPC(outgoingCtx, t, cc, codes.OK, nil, gotStreamingMD, wantHeaders)
+	makeUnaryRPC(outgoingCtx, t, cc, codes.OK, nil, nil, nil)
+	makeStreamingRPC(outgoingCtx, t, cc, codes.OK, nil, nil, nil)
 }
 
-// Test verifies that client-side metrics are emitted correctly during RPC
-// execution across different authorization outcomes.
-func (s) TestExtAuthz_ClientMetrics(t *testing.T) {
-	tests := []struct {
-		name                       string
-		checkFunc                  func(context.Context, *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error)
-		filterEnabled              *corepb.RuntimeFractionalPercent
-		decoderHeaderMutationRules *mutationpb.HeaderMutationRules
-		failureModeAllow           bool
-		wantMetric                 string
-		wantNotMetric              string
-	}{
-		{
-			name: "Allowed_RPCs",
-			filterEnabled: &corepb.RuntimeFractionalPercent{
-				DefaultValue: &v3typepb.FractionalPercent{
-					Numerator:   100,
-					Denominator: v3typepb.FractionalPercent_HUNDRED,
-				},
-			},
-			checkFunc: func(context.Context, *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error) {
-				return &v3authpb.CheckResponse{
-					Status: &statuspb.Status{Code: int32(codes.OK)},
-				}, nil
-			},
-			wantMetric: "grpc.client_ext_authz.allowed_rpcs",
-		},
-		{
-			name: "Denied_RPCs",
-			filterEnabled: &corepb.RuntimeFractionalPercent{
-				DefaultValue: &v3typepb.FractionalPercent{
-					Numerator:   100,
-					Denominator: v3typepb.FractionalPercent_HUNDRED,
-				},
-			},
-			checkFunc: func(context.Context, *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error) {
-				return &v3authpb.CheckResponse{
-					Status: &statuspb.Status{Code: int32(codes.PermissionDenied)},
-				}, nil
-			},
-			wantMetric: "grpc.client_ext_authz.denied_rpcs",
-		},
-		{
-			name: "Failed_RPCs_DeniedHeaderMutationFailed",
-			filterEnabled: &corepb.RuntimeFractionalPercent{
-				DefaultValue: &v3typepb.FractionalPercent{
-					Numerator:   100,
-					Denominator: v3typepb.FractionalPercent_HUNDRED,
-				},
-			},
-			checkFunc: func(context.Context, *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error) {
-				return &v3authpb.CheckResponse{
-					Status: &statuspb.Status{Code: int32(codes.PermissionDenied)},
-					HttpResponse: &v3authpb.CheckResponse_DeniedResponse{
-						DeniedResponse: &v3authpb.DeniedHttpResponse{
-							Status: &v3typepb.HttpStatus{Code: v3typepb.StatusCode_Forbidden},
-							Headers: []*corepb.HeaderValueOption{
-								{Header: &corepb.HeaderValue{Key: "disallowed-header", Value: "val"}},
-							},
-						},
-					},
-				}, nil
-			},
-			decoderHeaderMutationRules: &mutationpb.HeaderMutationRules{
-				DisallowExpression: &matcherpb.RegexMatcher{Regex: "^disallowed-header$"},
-				DisallowIsError:    wrapperspb.Bool(true),
-			},
-			wantMetric:    "grpc.client_ext_authz.failed_rpcs",
-			wantNotMetric: "grpc.client_ext_authz.denied_rpcs",
-		},
-		{
-			name: "Failed_RPCs_DeniedHeaderMutationFailed_FailureModeAllow",
-			filterEnabled: &corepb.RuntimeFractionalPercent{
-				DefaultValue: &v3typepb.FractionalPercent{
-					Numerator:   100,
-					Denominator: v3typepb.FractionalPercent_HUNDRED,
-				},
-			},
-			checkFunc: func(context.Context, *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error) {
-				return &v3authpb.CheckResponse{
-					Status: &statuspb.Status{Code: int32(codes.PermissionDenied)},
-					HttpResponse: &v3authpb.CheckResponse_DeniedResponse{
-						DeniedResponse: &v3authpb.DeniedHttpResponse{
-							Status: &v3typepb.HttpStatus{Code: v3typepb.StatusCode_Forbidden},
-							Headers: []*corepb.HeaderValueOption{
-								{Header: &corepb.HeaderValue{Key: "disallowed-header", Value: "val"}},
-							},
-						},
-					},
-				}, nil
-			},
-			decoderHeaderMutationRules: &mutationpb.HeaderMutationRules{
-				DisallowExpression: &matcherpb.RegexMatcher{Regex: "^disallowed-header$"},
-				DisallowIsError:    wrapperspb.Bool(true),
-			},
-			failureModeAllow: true,
-			wantMetric:       "grpc.client_ext_authz.failed_rpcs",
-			wantNotMetric:    "grpc.client_ext_authz.denied_rpcs",
-		},
-		{
-			name: "FilterDisabled_RPCs",
-			filterEnabled: &corepb.RuntimeFractionalPercent{
-				DefaultValue: &v3typepb.FractionalPercent{
-					Numerator:   0,
-					Denominator: v3typepb.FractionalPercent_HUNDRED,
-				},
-			},
-			wantMetric: "grpc.client_ext_authz.filter_disabled_rpcs",
-		},
-		{
-			name: "Failed_RPCs",
-			filterEnabled: &corepb.RuntimeFractionalPercent{
-				DefaultValue: &v3typepb.FractionalPercent{
-					Numerator:   100,
-					Denominator: v3typepb.FractionalPercent_HUNDRED,
-				},
-			},
-			checkFunc: func(context.Context, *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error) {
-				return nil, status.Error(codes.Internal, "internal server error")
-			},
-			wantMetric: "grpc.client_ext_authz.failed_rpcs",
-		},
-		{
-			name: "Failed_RPCs_HeaderMutationFailed",
-			filterEnabled: &corepb.RuntimeFractionalPercent{
-				DefaultValue: &v3typepb.FractionalPercent{
-					Numerator:   100,
-					Denominator: v3typepb.FractionalPercent_HUNDRED,
-				},
-			},
-			checkFunc: func(context.Context, *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error) {
-				return &v3authpb.CheckResponse{
-					Status: &statuspb.Status{Code: int32(codes.OK)},
-					HttpResponse: &v3authpb.CheckResponse_OkResponse{
-						OkResponse: &v3authpb.OkHttpResponse{
-							Headers: []*corepb.HeaderValueOption{
-								{Header: &corepb.HeaderValue{Key: "a1", Value: "v1"}},
-							},
-						},
-					},
-				}, nil
-			},
-			decoderHeaderMutationRules: &mutationpb.HeaderMutationRules{
-				DisallowExpression: &matcherpb.RegexMatcher{Regex: "^a1$"},
-				DisallowIsError:    wrapperspb.Bool(true),
-			},
-			wantMetric:    "grpc.client_ext_authz.failed_rpcs",
-			wantNotMetric: "grpc.client_ext_authz.allowed_rpcs",
-		},
-		{
-			name: "Failed_RPCs_HeaderMutationFailed_FailureModeAllow",
-			filterEnabled: &corepb.RuntimeFractionalPercent{
-				DefaultValue: &v3typepb.FractionalPercent{
-					Numerator:   100,
-					Denominator: v3typepb.FractionalPercent_HUNDRED,
-				},
-			},
-			checkFunc: func(context.Context, *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error) {
-				return &v3authpb.CheckResponse{
-					Status: &statuspb.Status{Code: int32(codes.OK)},
-					HttpResponse: &v3authpb.CheckResponse_OkResponse{
-						OkResponse: &v3authpb.OkHttpResponse{
-							Headers: []*corepb.HeaderValueOption{
-								{Header: &corepb.HeaderValue{Key: "a1", Value: "v1"}},
-							},
-						},
-					},
-				}, nil
-			},
-			decoderHeaderMutationRules: &mutationpb.HeaderMutationRules{
-				DisallowExpression: &matcherpb.RegexMatcher{Regex: "^a1$"},
-				DisallowIsError:    wrapperspb.Bool(true),
-			},
-			failureModeAllow: true,
-			wantMetric:       "grpc.client_ext_authz.failed_rpcs",
-			wantNotMetric:    "grpc.client_ext_authz.allowed_rpcs",
-		},
-		{
-			name: "Failed_RPCs_ResponseHeaderMutationFailed",
-			filterEnabled: &corepb.RuntimeFractionalPercent{
-				DefaultValue: &v3typepb.FractionalPercent{
-					Numerator:   100,
-					Denominator: v3typepb.FractionalPercent_HUNDRED,
-				},
-			},
-			checkFunc: func(context.Context, *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error) {
-				return &v3authpb.CheckResponse{
-					Status: &statuspb.Status{Code: int32(codes.OK)},
-					HttpResponse: &v3authpb.CheckResponse_OkResponse{
-						OkResponse: &v3authpb.OkHttpResponse{
-							ResponseHeadersToAdd: []*corepb.HeaderValueOption{
-								{Header: &corepb.HeaderValue{Key: "a1", Value: "v1"}},
-							},
-						},
-					},
-				}, nil
-			},
-			decoderHeaderMutationRules: &mutationpb.HeaderMutationRules{
-				DisallowExpression: &matcherpb.RegexMatcher{Regex: "^a1$"},
-				DisallowIsError:    wrapperspb.Bool(true),
-			},
-			wantMetric:    "grpc.client_ext_authz.failed_rpcs",
-			wantNotMetric: "grpc.client_ext_authz.allowed_rpcs",
-		},
-	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			for _, rpcType := range []string{"Unary", "Streaming"} {
-				t.Run(rpcType, func(t *testing.T) {
-					authAddr, stop := startTestAuthServer(t, test.checkFunc)
-					defer stop()
-
-					backend, _, _ := startTestServiceBackend(t)
-
-					extAuthzCfg := &v3extauthzfilterpb.ExtAuthz{
-						FilterEnabled:              test.filterEnabled,
-						DecoderHeaderMutationRules: test.decoderHeaderMutationRules,
-						FailureModeAllow:           test.failureModeAllow,
-					}
-
-					tmr := teststats.NewTestMetricsRecorder()
-					cc, err := setupTestClient(t, authAddr, extAuthzCfg, backend.Address, grpc.WithStatsHandler(tmr))
-					if err != nil {
-						t.Fatalf("setupTestClient() failed: %v", err)
-					}
-					defer cc.Close()
-
-					client := testgrpc.NewTestServiceClient(cc)
-					ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-					defer cancel()
-
-					if rpcType == "Unary" {
-						client.EmptyCall(ctx, &testpb.Empty{})
-					} else {
-						stream, err := client.FullDuplexCall(ctx)
-						if err == nil {
-							stream.Send(&testpb.StreamingOutputCallRequest{})
-							stream.CloseSend()
-							stream.Recv()
-						}
-					}
-
-					wantData := teststats.MetricsData{
-						Handle:    estats.DescriptorForMetric(test.wantMetric),
-						IntIncr:   1,
-						LabelKeys: []string{"grpc.target"},
-						LabelVals: []string{"xds:///service-name"},
-					}
-					// Poll until the specific metric is recorded, then assert all fields
-					// with cmp.Diff
-					for {
-						if got, ok := tmr.MetricsData(test.wantMetric); ok {
-							if diff := cmp.Diff(wantData, got); diff != "" {
-								t.Fatalf("MetricsData mismatch (-want, +got):\n%s", diff)
-							}
-							break
-						}
-						select {
-						case <-ctx.Done():
-							t.Fatalf("Timed out waiting for metric %q: %v", test.wantMetric, ctx.Err())
-						case <-time.After(10 * time.Millisecond):
-						}
-					}
-
-					if test.wantNotMetric != "" {
-						if got, ok := tmr.MetricsData(test.wantNotMetric); ok {
-							t.Fatalf("Unexpected metric recorded %q: %v", test.wantNotMetric, got)
-						}
-					}
-				})
-			}
-		})
-	}
-}
-
-// Test verifies the ext_authz filter when the xDS server is not configured
-// with the trusted_xds_server feature. On this path the credentials in the
-// GrpcService proto are ignored, and the filter config is accepted only
-// because the external authorization server's target is present in the
-// bootstrap allowed_grpc_services map, whose credentials are used for the
-// side channel (gRFC A102). Verifies that a data-plane RPC flows through
-// the external authorization server end-to-end.
-func (s) TestUntrustedServerAllowedGRPCServices(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-
-	const mutatedHeader = "request-mutated"
-	authAddr, stopAuth := startTestAuthServer(t, func(context.Context, *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error) {
-		return &v3authpb.CheckResponse{
-			Status: &statuspb.Status{Code: int32(codes.OK)},
-			HttpResponse: &v3authpb.CheckResponse_OkResponse{
-				OkResponse: &v3authpb.OkHttpResponse{
-					Headers: []*corepb.HeaderValueOption{
-						{Header: &corepb.HeaderValue{Key: mutatedHeader, Value: "true"}},
-					},
-				},
-			},
-		}, nil
-	})
-	defer stopAuth()
-
-	backend, gotUnaryMD, gotStreamingMD := startTestServiceBackend(t)
-
-	managementServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
-	nodeID := uuid.New().String()
-	bc, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
-		Servers:             fmt.Appendf(nil, `[{"server_uri": "passthrough:///%s", "channel_creds": [{"type": "insecure"}]}]`, managementServer.Address),
-		Node:                fmt.Appendf(nil, `{"id": %q}`, nodeID),
-		AllowedGRPCServices: fmt.Appendf(nil, `{%q: {"channel_creds": [{"type": "insecure"}]}}`, authAddr),
-	})
-	if err != nil {
-		t.Fatalf("Failed to create bootstrap contents: %v", err)
-	}
-	xdsResolver, err := grpcinternal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
-	if err != nil {
-		t.Fatalf("Failed to create xDS resolver: %v", err)
-	}
-
-	const serviceName = "service-name"
-	resources := e2e.DefaultClientResources(e2e.ResourceParams{
-		DialTarget: serviceName,
-		NodeID:     nodeID,
-		Host:       "localhost",
-		Port:       testutils.ParsePort(t, backend.Address),
-		SecLevel:   e2e.SecurityLevelNone,
-	})
-	hcm := new(v3httppb.HttpConnectionManager)
-	apiListener := resources.Listeners[0].GetApiListener().GetApiListener()
-	if err := apiListener.UnmarshalTo(hcm); err != nil {
-		t.Fatalf("Failed to unmarshal apiListener: %v", err)
-	}
-	extAuthzConfig := &v3extauthzfilterpb.ExtAuthz{
-		Services: &v3extauthzfilterpb.ExtAuthz_GrpcService{
-			GrpcService: &corepb.GrpcService{
-				TargetSpecifier: &corepb.GrpcService_GoogleGrpc_{
-					GoogleGrpc: &corepb.GrpcService_GoogleGrpc{
-						TargetUri: authAddr,
-					},
-				},
-			},
-		},
-		FilterEnabled: &corepb.RuntimeFractionalPercent{
-			DefaultValue: &v3typepb.FractionalPercent{
-				Numerator:   100,
-				Denominator: v3typepb.FractionalPercent_HUNDRED,
-			},
-		},
-		DecoderHeaderMutationRules: &mutationpb.HeaderMutationRules{
-			AllowExpression: &matcherpb.RegexMatcher{Regex: ".*"},
-		},
-	}
-	hcm.HttpFilters = append([]*v3httppb.HttpFilter{
-		e2e.HTTPFilter("com.google.grpc.ext_authz", extAuthzConfig),
-	}, hcm.HttpFilters...)
-	resources.Listeners[0].ApiListener.ApiListener = testutils.MarshalAny(t, hcm)
-
-	updateCtx, updateCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer updateCancel()
-	if err := managementServer.Update(updateCtx, resources); err != nil {
-		t.Fatalf("managementServer.Update() failed: %v", err)
-	}
-
-	dopts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsResolver)}
-	cc, err := grpc.NewClient("xds:///"+serviceName, dopts...)
-	if err != nil {
-		t.Fatalf("Failed to create a gRPC client: %v", err)
-	}
-	defer cc.Close()
-
-	wantHeaders := metadata.Pairs(":authority", serviceName, mutatedHeader, "true")
-	makeUnaryRPC(ctx, t, cc, codes.OK, nil, gotUnaryMD, wantHeaders)
-	makeStreamingRPC(ctx, t, cc, codes.OK, nil, gotStreamingMD, wantHeaders)
-}
-
-// Test verifies that the CheckRequest sent to the authorization server contains
-// the expected attributes (HTTP method, path, protocol, headers) for both
-// Unary and Streaming RPCs, and that client-side source and destination
-// socket addresses are nil per gRFC A92.
-func (s) TestExtAuthz_CheckRequestAttributes(t *testing.T) {
+// Test verifies that the CheckRequest received by the external authorization
+// server accurately reflects the incoming request method, path, headers,
+// client source address, and server destination address.
+func (s) TestServerExtAuthz_CheckRequestAttributes(t *testing.T) {
 	for _, tc := range []struct {
 		rpcType  string
 		wantPath string
@@ -2183,11 +1671,7 @@ func (s) TestExtAuthz_CheckRequestAttributes(t *testing.T) {
 			backend, _, _ := startTestServiceBackend(t)
 
 			extAuthzCfg := &v3extauthzfilterpb.ExtAuthz{}
-			cc, err := setupTestClient(t, authServerAddr, extAuthzCfg, backend.Address)
-			if err != nil {
-				t.Fatalf("setupTestClient failed: %v", err)
-			}
-			defer cc.Close()
+			cc := setupXDSListenerAndClient(t, backend, extAuthzHTTPFilter(authServerAddr, extAuthzCfg))
 
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
@@ -2208,7 +1692,7 @@ func (s) TestExtAuthz_CheckRequestAttributes(t *testing.T) {
 				t.Fatal("ExtAuthz CheckRPC attributes is nil")
 			}
 
-			// Verify Request HTTP fields.
+			// Verify Request HTTP fields
 			reqHTTP := attrs.GetRequest().GetHttp()
 			if reqHTTP == nil {
 				t.Fatal("Request.Http is nil")
@@ -2228,28 +1712,27 @@ func (s) TestExtAuthz_CheckRequestAttributes(t *testing.T) {
 				gotCheckMD.Append(h.GetKey(), string(h.GetRawValue()))
 			}
 			wantCheckHeaders := metadata.Pairs(
+				":authority", "service-name",
 				"custom-client-header", "client-header-value",
 			)
 			if err := compareMetadata(gotCheckMD, wantCheckHeaders); err != nil {
 				t.Errorf("Unexpected headers in CheckRequest: %v", err)
 			}
 
-			// Per gRFC A92, client-side ExtAuthz filter runs before
-			// subchannel/connection creation, so Source and Destination
-			// socket addresses must be nil.
-			if src := attrs.GetSource(); src != nil {
-				t.Errorf("Source is not nil on client side: %v", src)
+			// Verify Source and Destination
+			if src := attrs.GetSource(); src == nil || src.GetAddress() == nil {
+				t.Errorf("Source address is nil: %v", src)
 			}
-			if dst := attrs.GetDestination(); dst != nil {
-				t.Errorf("Destination is not nil on client side: %v", dst)
+			if dst := attrs.GetDestination(); dst == nil || dst.GetAddress() == nil {
+				t.Errorf("Destination address is nil: %v", dst)
 			}
 		})
 	}
 }
 
 // Test verifies that a per-route configuration can disable the ExtAuthz filter
-// on a specific route on the client side while other routes remain protected.
-func (s) TestExtAuthz_PerRouteOverride(t *testing.T) {
+// on a specific route while other routes remain protected.
+func (s) TestServerExtAuthz_PerRouteOverride(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
@@ -2266,117 +1749,155 @@ func (s) TestExtAuthz_PerRouteOverride(t *testing.T) {
 	})
 	defer stopAuth()
 
-	mgmtServer, nodeID, _, xdsResolver := setup.ManagementServerAndResolver(t)
-	backend, _, _ := startTestServiceBackend(t)
+	mgmtServer, nodeID, bootstrapContents, xdsResolver := setup.ManagementServerAndResolver(t)
+
+	creds, err := xdscreds.NewServerCredentials(xdscreds.ServerOptions{
+		FallbackCreds: insecure.NewCredentials(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	stub, _, _ := startTestServiceBackend(t)
+
+	servingCh := make(chan struct{})
+	servingModeOpt := xds.ServingModeCallback(func(_ net.Addr, args xds.ServingModeChangeArgs) {
+		if args.Mode == connectivity.ServingModeServing {
+			select {
+			case <-servingCh:
+			default:
+				close(servingCh)
+			}
+		}
+	})
+
+	opts := []grpc.ServerOption{
+		grpc.Creds(creds),
+		servingModeOpt,
+		xds.BootstrapContentsForTesting(bootstrapContents),
+	}
+	if stub.S, err = xds.NewGRPCServer(opts...); err != nil {
+		t.Fatalf("Failed to create xDS enabled server: %v", err)
+	}
+
+	lis, err := testutils.LocalTCPListener()
+	if err != nil {
+		t.Fatalf("LocalTCPListener() failed: %v", err)
+	}
+	readyLis := &acceptNotifyingListener{
+		Listener:    lis,
+		serverReady: *grpcsync.NewEvent(),
+	}
+	stub.Listener = readyLis
+	stubserver.StartTestService(t, stub)
+	defer stub.S.Stop()
+
+	select {
+	case <-readyLis.serverReady.Done():
+	case <-time.After(defaultTestTimeout):
+		t.Fatalf("Timed out waiting for server to start")
+	}
+
+	host, port, err := hostPortFromListener(lis)
+	if err != nil {
+		t.Fatalf("hostPortFromListener failed: %v", err)
+	}
 
 	const serviceName = "my-service-ext-authz-route-override"
 	resources := e2e.DefaultClientResources(e2e.ResourceParams{
 		DialTarget: serviceName,
 		NodeID:     nodeID,
-		Host:       "localhost",
-		Port:       testutils.ParsePort(t, backend.Address),
+		Host:       host,
+		Port:       port,
 		SecLevel:   e2e.SecurityLevelNone,
 	})
 
-	// Add ExtAuthz filter to HCM on Listener.
-	hcm := new(v3httppb.HttpConnectionManager)
-	apiListener := resources.Listeners[0].GetApiListener().GetApiListener()
-	if err := apiListener.UnmarshalTo(hcm); err != nil {
-		t.Fatalf("Failed to unmarshal apiListener: %v", err)
-	}
-	hcm.HttpFilters = append([]*v3httppb.HttpFilter{
-		extAuthzHTTPFilter(authServerAddr, &v3extauthzfilterpb.ExtAuthz{}),
-	}, hcm.HttpFilters...)
-	resources.Listeners[0].ApiListener.ApiListener = testutils.MarshalAny(t, hcm)
-
-	// Configure Routes on RouteConfiguration.
-	clusterName := resources.Clusters[0].Name
-	resources.Routes = []*v3routepb.RouteConfiguration{{
-		Name: resources.Routes[0].Name,
-		VirtualHosts: []*v3routepb.VirtualHost{
-			{
-				Domains: []string{"*"},
-				Routes: []*v3routepb.Route{
-					// Route 1: EmptyCall with header - ExtAuthz disabled via TypedPerFilterConfig override
-					{
-						Match: &v3routepb.RouteMatch{
-							PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/grpc.testing.TestService/EmptyCall"},
-							Headers: []*v3routepb.HeaderMatcher{
-								{
-									Name:                 "x-disable-ext-authz",
-									HeaderMatchSpecifier: &v3routepb.HeaderMatcher_ExactMatch{ExactMatch: "true"},
-								},
-							},
-						},
-						Action: &v3routepb.Route_Route{
-							Route: &v3routepb.RouteAction{
-								ClusterSpecifier: &v3routepb.RouteAction_Cluster{Cluster: clusterName},
-							},
-						},
-						TypedPerFilterConfig: map[string]*anypb.Any{
-							"com.google.grpc.ext_authz": testutils.MarshalAny(t, &v3routepb.FilterConfig{
-								Disabled: true,
-							}),
-						},
-					},
-					// Route 2: FullDuplexCall with header - ExtAuthz disabled via TypedPerFilterConfig override
-					{
-						Match: &v3routepb.RouteMatch{
-							PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/grpc.testing.TestService/FullDuplexCall"},
-							Headers: []*v3routepb.HeaderMatcher{
-								{
-									Name:                 "x-disable-ext-authz",
-									HeaderMatchSpecifier: &v3routepb.HeaderMatcher_ExactMatch{ExactMatch: "true"},
-								},
-							},
-						},
-						Action: &v3routepb.Route_Route{
-							Route: &v3routepb.RouteAction{
-								ClusterSpecifier: &v3routepb.RouteAction_Cluster{Cluster: clusterName},
-							},
-						},
-						TypedPerFilterConfig: map[string]*anypb.Any{
-							"com.google.grpc.ext_authz": testutils.MarshalAny(t, &v3routepb.FilterConfig{
-								Disabled: true,
-							}),
-						},
-					},
-					// Route 3: EmptyCall without header - protected by ExtAuthz (will be denied)
-					{
-						Match: &v3routepb.RouteMatch{
-							PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/grpc.testing.TestService/EmptyCall"},
-						},
-						Action: &v3routepb.Route_Route{
-							Route: &v3routepb.RouteAction{
-								ClusterSpecifier: &v3routepb.RouteAction_Cluster{Cluster: clusterName},
+	vhs := []*v3routepb.VirtualHost{
+		{
+			Domains: []string{"*"},
+			Routes: []*v3routepb.Route{
+				// Route 1: EmptyCall with header - ExtAuthz disabled via TypedPerFilterConfig override
+				{
+					Match: &v3routepb.RouteMatch{
+						PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/grpc.testing.TestService/EmptyCall"},
+						Headers: []*v3routepb.HeaderMatcher{
+							{
+								Name:                 "x-disable-ext-authz",
+								HeaderMatchSpecifier: &v3routepb.HeaderMatcher_ExactMatch{ExactMatch: "true"},
 							},
 						},
 					},
-					// Route 4: FullDuplexCall without header - protected by ExtAuthz (will be denied)
-					{
-						Match: &v3routepb.RouteMatch{
-							PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/grpc.testing.TestService/FullDuplexCall"},
-						},
-						Action: &v3routepb.Route_Route{
-							Route: &v3routepb.RouteAction{
-								ClusterSpecifier: &v3routepb.RouteAction_Cluster{Cluster: clusterName},
+					Action: &v3routepb.Route_NonForwardingAction{},
+					TypedPerFilterConfig: map[string]*anypb.Any{
+						"com.google.grpc.ext_authz": testutils.MarshalAny(t, &v3routepb.FilterConfig{
+							Disabled: true,
+						}),
+					},
+				},
+				// Route 2: FullDuplexCall with header - ExtAuthz disabled via TypedPerFilterConfig override
+				{
+					Match: &v3routepb.RouteMatch{
+						PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/grpc.testing.TestService/FullDuplexCall"},
+						Headers: []*v3routepb.HeaderMatcher{
+							{
+								Name:                 "x-disable-ext-authz",
+								HeaderMatchSpecifier: &v3routepb.HeaderMatcher_ExactMatch{ExactMatch: "true"},
 							},
 						},
 					},
+					Action: &v3routepb.Route_NonForwardingAction{},
+					TypedPerFilterConfig: map[string]*anypb.Any{
+						"com.google.grpc.ext_authz": testutils.MarshalAny(t, &v3routepb.FilterConfig{
+							Disabled: true,
+						}),
+					},
+				},
+				// Route 3: EmptyCall without header - protected by ExtAuthz (will be denied)
+				{
+					Match: &v3routepb.RouteMatch{
+						PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/grpc.testing.TestService/EmptyCall"},
+					},
+					Action: &v3routepb.Route_NonForwardingAction{},
+				},
+				// Route 4: FullDuplexCall without header - protected by ExtAuthz (will be denied)
+				{
+					Match: &v3routepb.RouteMatch{
+						PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/grpc.testing.TestService/FullDuplexCall"},
+					},
+					Action: &v3routepb.Route_NonForwardingAction{},
 				},
 			},
 		},
-	}}
+	}
+
+	inboundLis := buildServerListener(t, host, port, []*v3httppb.HttpFilter{
+		extAuthzHTTPFilter(authServerAddr, &v3extauthzfilterpb.ExtAuthz{}),
+		e2e.HTTPFilter("router", &v3routerpb.Router{}),
+	}, vhs)
+	resources.Listeners = append(resources.Listeners, inboundLis)
 
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
 
-	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsResolver))
+	clientCreds, err := xdscreds.NewClientCredentials(xdscreds.ClientOptions{
+		FallbackCreds: insecure.NewCredentials(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(clientCreds), grpc.WithResolvers(xdsResolver))
 	if err != nil {
 		t.Fatalf("grpc.NewClient failed: %v", err)
 	}
 	defer cc.Close()
+
+	select {
+	case <-servingCh:
+	case <-time.After(defaultTestTimeout):
+		t.Fatalf("Timed out waiting for server to enter SERVING mode")
+	}
 
 	// Protected routes: EmptyCall and FullDuplexCall hit Routes 3 & 4 -> Denied by ExtAuthz
 	makeUnaryRPC(ctx, t, cc, codes.PermissionDenied, nil, nil, nil)
@@ -2386,4 +1907,432 @@ func (s) TestExtAuthz_PerRouteOverride(t *testing.T) {
 	disabledCtx := metadata.AppendToOutgoingContext(ctx, "x-disable-ext-authz", "true")
 	makeUnaryRPC(disabledCtx, t, cc, codes.OK, nil, nil, nil)
 	makeStreamingRPC(disabledCtx, t, cc, codes.OK, nil, nil, nil)
+}
+
+// Test verifies that server-side metrics are emitted correctly during RPC
+// execution across different authorization outcomes.
+func (s) TestServerExtAuthz_ServerMetrics(t *testing.T) {
+	tests := []struct {
+		name                       string
+		checkFunc                  func(context.Context, *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error)
+		filterEnabled              *v3corepb.RuntimeFractionalPercent
+		decoderHeaderMutationRules *mutationpb.HeaderMutationRules
+		failureModeAllow           bool
+		wantMetric                 string
+		wantNotMetric              string
+	}{
+		{
+			name: "Allowed_RPCs",
+			filterEnabled: &v3corepb.RuntimeFractionalPercent{
+				DefaultValue: &v3typepb.FractionalPercent{
+					Numerator:   100,
+					Denominator: v3typepb.FractionalPercent_HUNDRED,
+				},
+			},
+			checkFunc: func(context.Context, *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error) {
+				return &v3authpb.CheckResponse{
+					Status: &statuspb.Status{Code: int32(codes.OK)},
+				}, nil
+			},
+			wantMetric: "grpc.server_ext_authz.allowed_rpcs",
+		},
+		{
+			name: "Denied_RPCs",
+			filterEnabled: &v3corepb.RuntimeFractionalPercent{
+				DefaultValue: &v3typepb.FractionalPercent{
+					Numerator:   100,
+					Denominator: v3typepb.FractionalPercent_HUNDRED,
+				},
+			},
+			checkFunc: func(context.Context, *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error) {
+				return &v3authpb.CheckResponse{
+					Status: &statuspb.Status{Code: int32(codes.PermissionDenied)},
+				}, nil
+			},
+			wantMetric: "grpc.server_ext_authz.denied_rpcs",
+		},
+		{
+			name: "Failed_RPCs_DeniedHeaderMutationFailed",
+			filterEnabled: &v3corepb.RuntimeFractionalPercent{
+				DefaultValue: &v3typepb.FractionalPercent{
+					Numerator:   100,
+					Denominator: v3typepb.FractionalPercent_HUNDRED,
+				},
+			},
+			checkFunc: func(context.Context, *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error) {
+				return &v3authpb.CheckResponse{
+					Status: &statuspb.Status{Code: int32(codes.PermissionDenied)},
+					HttpResponse: &v3authpb.CheckResponse_DeniedResponse{
+						DeniedResponse: &v3authpb.DeniedHttpResponse{
+							Status: &v3typepb.HttpStatus{Code: v3typepb.StatusCode_Forbidden},
+							Headers: []*v3corepb.HeaderValueOption{
+								{Header: &v3corepb.HeaderValue{Key: "disallowed-header", Value: "val"}},
+							},
+						},
+					},
+				}, nil
+			},
+			decoderHeaderMutationRules: &mutationpb.HeaderMutationRules{
+				DisallowExpression: &matcherpb.RegexMatcher{Regex: "^disallowed-header$"},
+				DisallowIsError:    wrapperspb.Bool(true),
+			},
+			wantMetric:    "grpc.server_ext_authz.failed_rpcs",
+			wantNotMetric: "grpc.server_ext_authz.denied_rpcs",
+		},
+		{
+			name: "Failed_RPCs_DeniedHeaderMutationFailed_FailureModeAllow",
+			filterEnabled: &v3corepb.RuntimeFractionalPercent{
+				DefaultValue: &v3typepb.FractionalPercent{
+					Numerator:   100,
+					Denominator: v3typepb.FractionalPercent_HUNDRED,
+				},
+			},
+			checkFunc: func(context.Context, *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error) {
+				return &v3authpb.CheckResponse{
+					Status: &statuspb.Status{Code: int32(codes.PermissionDenied)},
+					HttpResponse: &v3authpb.CheckResponse_DeniedResponse{
+						DeniedResponse: &v3authpb.DeniedHttpResponse{
+							Status: &v3typepb.HttpStatus{Code: v3typepb.StatusCode_Forbidden},
+							Headers: []*v3corepb.HeaderValueOption{
+								{Header: &v3corepb.HeaderValue{Key: "disallowed-header", Value: "val"}},
+							},
+						},
+					},
+				}, nil
+			},
+			decoderHeaderMutationRules: &mutationpb.HeaderMutationRules{
+				DisallowExpression: &matcherpb.RegexMatcher{Regex: "^disallowed-header$"},
+				DisallowIsError:    wrapperspb.Bool(true),
+			},
+			failureModeAllow: true,
+			wantMetric:       "grpc.server_ext_authz.failed_rpcs",
+			wantNotMetric:    "grpc.server_ext_authz.denied_rpcs",
+		},
+		{
+			name: "FilterDisabled_RPCs",
+			filterEnabled: &v3corepb.RuntimeFractionalPercent{
+				DefaultValue: &v3typepb.FractionalPercent{
+					Numerator:   0,
+					Denominator: v3typepb.FractionalPercent_HUNDRED,
+				},
+			},
+			wantMetric: "grpc.server_ext_authz.filter_disabled_rpcs",
+		},
+		{
+			name: "Failed_RPCs",
+			filterEnabled: &v3corepb.RuntimeFractionalPercent{
+				DefaultValue: &v3typepb.FractionalPercent{
+					Numerator:   100,
+					Denominator: v3typepb.FractionalPercent_HUNDRED,
+				},
+			},
+			checkFunc: func(context.Context, *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error) {
+				return nil, status.Error(codes.Internal, "internal server error")
+			},
+			wantMetric: "grpc.server_ext_authz.failed_rpcs",
+		},
+		{
+			name: "Failed_RPCs_HeaderMutationFailed",
+			filterEnabled: &v3corepb.RuntimeFractionalPercent{
+				DefaultValue: &v3typepb.FractionalPercent{
+					Numerator:   100,
+					Denominator: v3typepb.FractionalPercent_HUNDRED,
+				},
+			},
+			checkFunc: func(context.Context, *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error) {
+				return &v3authpb.CheckResponse{
+					Status: &statuspb.Status{Code: int32(codes.OK)},
+					HttpResponse: &v3authpb.CheckResponse_OkResponse{
+						OkResponse: &v3authpb.OkHttpResponse{
+							Headers: []*v3corepb.HeaderValueOption{
+								{Header: &v3corepb.HeaderValue{Key: "a1", Value: "v1"}},
+							},
+						},
+					},
+				}, nil
+			},
+			decoderHeaderMutationRules: &mutationpb.HeaderMutationRules{
+				DisallowExpression: &matcherpb.RegexMatcher{Regex: "^a1$"},
+				DisallowIsError:    wrapperspb.Bool(true),
+			},
+			wantMetric:    "grpc.server_ext_authz.failed_rpcs",
+			wantNotMetric: "grpc.server_ext_authz.allowed_rpcs",
+		},
+		{
+			name: "Failed_RPCs_HeaderMutationFailed_FailureModeAllow",
+			filterEnabled: &v3corepb.RuntimeFractionalPercent{
+				DefaultValue: &v3typepb.FractionalPercent{
+					Numerator:   100,
+					Denominator: v3typepb.FractionalPercent_HUNDRED,
+				},
+			},
+			checkFunc: func(context.Context, *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error) {
+				return &v3authpb.CheckResponse{
+					Status: &statuspb.Status{Code: int32(codes.OK)},
+					HttpResponse: &v3authpb.CheckResponse_OkResponse{
+						OkResponse: &v3authpb.OkHttpResponse{
+							Headers: []*v3corepb.HeaderValueOption{
+								{Header: &v3corepb.HeaderValue{Key: "a1", Value: "v1"}},
+							},
+						},
+					},
+				}, nil
+			},
+			decoderHeaderMutationRules: &mutationpb.HeaderMutationRules{
+				DisallowExpression: &matcherpb.RegexMatcher{Regex: "^a1$"},
+				DisallowIsError:    wrapperspb.Bool(true),
+			},
+			failureModeAllow: true,
+			wantMetric:       "grpc.server_ext_authz.failed_rpcs",
+			wantNotMetric:    "grpc.server_ext_authz.allowed_rpcs",
+		},
+		{
+			name: "Failed_RPCs_ResponseHeaderMutationFailed",
+			filterEnabled: &v3corepb.RuntimeFractionalPercent{
+				DefaultValue: &v3typepb.FractionalPercent{
+					Numerator:   100,
+					Denominator: v3typepb.FractionalPercent_HUNDRED,
+				},
+			},
+			checkFunc: func(context.Context, *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error) {
+				return &v3authpb.CheckResponse{
+					Status: &statuspb.Status{Code: int32(codes.OK)},
+					HttpResponse: &v3authpb.CheckResponse_OkResponse{
+						OkResponse: &v3authpb.OkHttpResponse{
+							ResponseHeadersToAdd: []*v3corepb.HeaderValueOption{
+								{Header: &v3corepb.HeaderValue{Key: "a1", Value: "v1"}},
+							},
+						},
+					},
+				}, nil
+			},
+			decoderHeaderMutationRules: &mutationpb.HeaderMutationRules{
+				DisallowExpression: &matcherpb.RegexMatcher{Regex: "^a1$"},
+				DisallowIsError:    wrapperspb.Bool(true),
+			},
+			wantMetric:    "grpc.server_ext_authz.failed_rpcs",
+			wantNotMetric: "grpc.server_ext_authz.allowed_rpcs",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			for _, rpcType := range []string{"Unary", "Streaming"} {
+				t.Run(rpcType, func(t *testing.T) {
+					authAddr, stop := startTestAuthServer(t, test.checkFunc)
+					defer stop()
+
+					backend, _, _ := startTestServiceBackend(t)
+					extAuthzCfg := &v3extauthzfilterpb.ExtAuthz{
+						FilterEnabled:              test.filterEnabled,
+						DecoderHeaderMutationRules: test.decoderHeaderMutationRules,
+						FailureModeAllow:           test.failureModeAllow,
+					}
+
+					tmr := teststats.NewTestMetricsRecorder()
+					cc := setupXDSListenerAndClientWithServerOptions(t, backend, []grpc.ServerOption{grpc.StatsHandler(tmr)}, extAuthzHTTPFilter(authAddr, extAuthzCfg))
+					ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+					defer cancel()
+
+					client := testgrpc.NewTestServiceClient(cc)
+					if rpcType == "Unary" {
+						client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true))
+					} else {
+						stream, err := client.FullDuplexCall(ctx)
+						if err == nil {
+							stream.Send(&testpb.StreamingOutputCallRequest{})
+							stream.CloseSend()
+							stream.Recv()
+						}
+					}
+
+					wantData := teststats.MetricsData{
+						Handle:    estats.DescriptorForMetric(test.wantMetric),
+						IntIncr:   1,
+						LabelKeys: nil,
+						LabelVals: nil,
+					}
+					// Poll until the specific metric is recorded, then assert ALL fields with cmp.Diff
+					for {
+						if got, ok := tmr.MetricsData(test.wantMetric); ok {
+							if diff := cmp.Diff(wantData, got); diff != "" {
+								t.Fatalf("MetricsData mismatch (-want, +got):\n%s", diff)
+							}
+							break
+						}
+						select {
+						case <-ctx.Done():
+							t.Fatalf("Timed out waiting for metric %q: %v", test.wantMetric, ctx.Err())
+						case <-time.After(10 * time.Millisecond):
+						}
+					}
+
+					if test.wantNotMetric != "" {
+						if got, ok := tmr.MetricsData(test.wantNotMetric); ok {
+							t.Fatalf("Unexpected metric recorded %q: %v", test.wantNotMetric, got)
+						}
+					}
+				})
+			}
+		})
+	}
+}
+
+// Test verifies the ext_authz filter when the xDS server is not configured
+// with the trusted_xds_server feature. On this path the credentials in the
+// GrpcService proto are ignored, and the filter config is accepted only
+// because the external authorization server's target is present in the
+// bootstrap allowed_grpc_services map, whose credentials are used for the
+// side channel (gRFC A102). Verifies that a data-plane RPC flows through
+// the external authorization server end-to-end.
+func (s) TestServerExtAuthz_UntrustedServerAllowedGRPCServices(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	const mutatedHeader = "request-mutated"
+	authAddr, stopAuth := startTestAuthServer(t, func(context.Context, *v3authpb.CheckRequest) (*v3authpb.CheckResponse, error) {
+		return &v3authpb.CheckResponse{
+			Status: &statuspb.Status{Code: int32(codes.OK)},
+			HttpResponse: &v3authpb.CheckResponse_OkResponse{
+				OkResponse: &v3authpb.OkHttpResponse{
+					Headers: []*v3corepb.HeaderValueOption{
+						{Header: &v3corepb.HeaderValue{Key: mutatedHeader, Value: "true"}},
+					},
+				},
+			},
+		}, nil
+	})
+	defer stopAuth()
+
+	backend, gotUnaryMD, gotStreamingMD := startTestServiceBackend(t)
+
+	managementServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
+	nodeID := uuid.New().String()
+	bc, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
+		Servers:                            fmt.Appendf(nil, `[{"server_uri": "passthrough:///%s", "channel_creds": [{"type": "insecure"}]}]`, managementServer.Address),
+		Node:                               fmt.Appendf(nil, `{"id": %q}`, nodeID),
+		ServerListenerResourceNameTemplate: e2e.ServerListenerResourceNameTemplate,
+		AllowedGRPCServices:                fmt.Appendf(nil, `{%q: {"channel_creds": [{"type": "insecure"}]}}`, authAddr),
+	})
+	if err != nil {
+		t.Fatalf("Failed to create bootstrap contents: %v", err)
+	}
+	xdsResolver, err := grpcinternal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
+	if err != nil {
+		t.Fatalf("Failed to create xDS resolver: %v", err)
+	}
+
+	creds, err := xdscreds.NewServerCredentials(xdscreds.ServerOptions{
+		FallbackCreds: insecure.NewCredentials(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	opts := []grpc.ServerOption{
+		grpc.Creds(creds),
+		xds.ServingModeCallback(func(addr net.Addr, args xds.ServingModeChangeArgs) {
+			t.Logf("Serving mode for listener %q changed to %q, err: %v", addr.String(), args.Mode, args.Err)
+		}),
+		xds.BootstrapContentsForTesting(bc),
+	}
+	if backend.S, err = xds.NewGRPCServer(opts...); err != nil {
+		t.Fatalf("Failed to create xDS enabled server: %v", err)
+	}
+
+	lis, err := testutils.LocalTCPListener()
+	if err != nil {
+		t.Fatalf("LocalTCPListener() failed: %v", err)
+	}
+	readyLis := &acceptNotifyingListener{
+		Listener:    lis,
+		serverReady: *grpcsync.NewEvent(),
+	}
+	backend.Listener = readyLis
+	stubserver.StartTestService(t, backend)
+	defer backend.S.Stop()
+
+	select {
+	case <-readyLis.serverReady.Done():
+	case <-time.After(defaultTestTimeout):
+		t.Fatalf("Timed out waiting for server to start")
+	}
+
+	host, port, err := hostPortFromListener(lis)
+	if err != nil {
+		t.Fatalf("hostPortFromListener failed: %v", err)
+	}
+
+	const serviceName = "service-untrusted"
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		DialTarget: serviceName,
+		NodeID:     nodeID,
+		Host:       host,
+		Port:       port,
+		SecLevel:   e2e.SecurityLevelNone,
+	})
+
+	extAuthzConfig := &v3extauthzfilterpb.ExtAuthz{
+		Services: &v3extauthzfilterpb.ExtAuthz_GrpcService{
+			GrpcService: &v3corepb.GrpcService{
+				TargetSpecifier: &v3corepb.GrpcService_GoogleGrpc_{
+					GoogleGrpc: &v3corepb.GrpcService_GoogleGrpc{
+						TargetUri: authAddr,
+					},
+				},
+			},
+		},
+		FilterEnabled: &v3corepb.RuntimeFractionalPercent{
+			DefaultValue: &v3typepb.FractionalPercent{
+				Numerator:   100,
+				Denominator: v3typepb.FractionalPercent_HUNDRED,
+			},
+		},
+		DecoderHeaderMutationRules: &mutationpb.HeaderMutationRules{
+			AllowExpression: &matcherpb.RegexMatcher{Regex: ".*"},
+		},
+	}
+
+	vhs := []*v3routepb.VirtualHost{
+		{
+			Domains: []string{"*"},
+			Routes: []*v3routepb.Route{
+				{
+					Match: &v3routepb.RouteMatch{
+						PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"},
+					},
+					Action: &v3routepb.Route_NonForwardingAction{},
+				},
+			},
+		},
+	}
+
+	inboundLis := buildServerListener(t, host, port, []*v3httppb.HttpFilter{
+		e2e.HTTPFilter("com.google.grpc.ext_authz", extAuthzConfig),
+		e2e.HTTPFilter("router", &v3routerpb.Router{}),
+	}, vhs)
+	resources.Listeners = append(resources.Listeners, inboundLis)
+
+	updateCtx, updateCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer updateCancel()
+	if err := managementServer.Update(updateCtx, resources); err != nil {
+		t.Fatalf("managementServer.Update() failed: %v", err)
+	}
+
+	clientCreds, err := xdscreds.NewClientCredentials(xdscreds.ClientOptions{
+		FallbackCreds: insecure.NewCredentials(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	dopts := []grpc.DialOption{grpc.WithTransportCredentials(clientCreds), grpc.WithResolvers(xdsResolver)}
+	cc, err := grpc.NewClient("xds:///"+serviceName, dopts...)
+	if err != nil {
+		t.Fatalf("Failed to create a gRPC client: %v", err)
+	}
+	defer cc.Close()
+
+	wantHeaders := metadata.Pairs(":authority", serviceName, mutatedHeader, "true")
+	makeUnaryRPC(ctx, t, cc, codes.OK, nil, gotUnaryMD, wantHeaders)
+	makeStreamingRPC(ctx, t, cc, codes.OK, nil, gotStreamingMD, wantHeaders)
 }
