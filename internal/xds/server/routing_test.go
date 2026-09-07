@@ -125,6 +125,15 @@ func (s *testServerTransportStream) SetHeader(metadata.MD) error  { return nil }
 func (s *testServerTransportStream) SendHeader(metadata.MD) error { return nil }
 func (s *testServerTransportStream) SetTrailer(metadata.MD) error { return nil }
 
+type testServerStream struct {
+	grpc.ServerStream
+	ctx context.Context
+}
+
+func (s *testServerStream) Context() context.Context {
+	return s.ctx
+}
+
 func (s) TestRouteAndProcess_MissingAuthority(t *testing.T) {
 	var ptr atomic.Pointer[usableRouteConfiguration]
 	ptr.Store(&usableRouteConfiguration{})
@@ -135,7 +144,8 @@ func (s) TestRouteAndProcess_MissingAuthority(t *testing.T) {
 	ctx = grpc.NewContextWithServerTransportStream(ctx, &testServerTransportStream{method: "/test.Service/Method"})
 	ctx = metadata.NewIncomingContext(ctx, metadata.MD{})
 
-	err := RouteAndProcess(ctx)
+	ss := &testServerStream{ctx: ctx}
+	_, err := RouteAndProcess(ss)
 	if status.Code(err) != codes.Internal {
 		t.Fatalf("RouteAndProcess() returned error code %v, want %v", status.Code(err), codes.Internal)
 	}
