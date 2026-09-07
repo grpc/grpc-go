@@ -35,6 +35,7 @@ import (
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
+	xdscreds "google.golang.org/grpc/internal/xds/credentials"
 	"google.golang.org/grpc/xds/bootstrap"
 	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/structpb"
@@ -982,6 +983,7 @@ func (s) TestGetConfiguration_ServerListenerResourceNameTemplate(t *testing.T) {
 }
 
 func (s) TestGetConfiguration_Federation(t *testing.T) {
+	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
 	cancel := setupBootstrapOverride(map[string]string{
 		"badclientListenerResourceNameTemplate": `
 		{
@@ -1031,6 +1033,16 @@ func (s) TestGetConfiguration_Federation(t *testing.T) {
 						"channel_creds": [ { "type": "google_default" } ],
 						"server_features" : ["xds_v3"]
 					}]
+				}
+			},
+			"allowed_grpc_services": {
+				"dns:///whitelisted-ext-proc:443": {
+					"channel_creds": [
+						{ "type": "insecure" }
+					],
+					"call_creds": [
+						{ "type": "jwt_token_file", "config": {"jwt_token_file":"/var/run/secrets/tokens/istio-token"} }
+					]
 				}
 			}
 		}`,
@@ -1127,6 +1139,23 @@ func (s) TestGetConfiguration_Federation(t *testing.T) {
 							serverFeatures:       []string{"xds_v3"},
 							selectedChannelCreds: ChannelCreds{Type: "google_default"},
 						}},
+					},
+				},
+				allowedGRPCServices: map[string]*AllowedGRPCService{
+					"dns:///whitelisted-ext-proc:443": {
+						targetURI:    "dns:///whitelisted-ext-proc:443",
+						channelCreds: []ChannelCreds{{Type: "insecure"}},
+						callCredsConfigs: []CallCredsConfig{{
+							Type:   "jwt_token_file",
+							Config: json.RawMessage("{\n\"jwt_token_file\": \"/var/run/secrets/tokens/istio-token\"\n}"),
+						}},
+						// Equal compares the built credentials by identity, so
+						// the fixture carries identity-only pairs.
+						sideChannelCreds: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "insecure"}, nil),
+						sideCallCreds: []*xdscreds.CallCreds{xdscreds.NewCallCreds(nil, xdscreds.Identity{
+							Type: "jwt_token_file",
+							Data: json.RawMessage("{\n\"jwt_token_file\": \"/var/run/secrets/tokens/istio-token\"\n}"),
+						}, nil)},
 					},
 				},
 			},
@@ -1708,5 +1737,211 @@ func (s) TestBootstrap_SelectedCallCreds_WhenNotCCNotEnabled(t *testing.T) {
 	// because the env variable is not enabled.
 	if len(dialOpts) != 0 {
 		t.Errorf("Call creds count = %d, want %d", len(dialOpts), 0)
+	}
+}
+
+// TestAllowedGRPCServices_UnmarshalJSON verifies parsing of the
+// allowed_grpc_services field, operating directly on the AllowedGRPCServices
+// type.
+func (s) TestAllowedGRPCServices_UnmarshalJSON(t *testing.T) {
+	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
+	const target = "dns:///sharding-service:443"
+	tests := []struct {
+		name string
+		json string
+		// want carries the expected target and credential identities;
+		// comparisons use the Equal methods via cmp.Diff.
+		want AllowedGRPCServices
+		// wantCallCreds is the number of call credentials expected to be
+		// built for the target.
+		wantCallCreds int
+	}{
+		{
+			name: "insecure_channel_creds",
+			json: `{"dns:///sharding-service:443": {"channel_creds": [{"type": "insecure"}]}}`,
+			want: AllowedGRPCServices{target: {
+				targetURI:        target,
+				sideChannelCreds: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "insecure"}, nil),
+			}},
+		},
+		{
+			name: "with_call_creds",
+			json: `{"dns:///sharding-service:443": {"channel_creds": [{"type": "insecure"}], "call_creds": [{"type": "jwt_token_file", "config": {"jwt_token_file": "/var/run/secrets/tokens/istio-token"}}]}}`,
+			want: AllowedGRPCServices{target: {
+				targetURI:        target,
+				sideChannelCreds: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "insecure"}, nil),
+				sideCallCreds: []*xdscreds.CallCreds{xdscreds.NewCallCreds(nil, xdscreds.Identity{
+					Type: "jwt_token_file",
+					Data: json.RawMessage(`{"jwt_token_file": "/var/run/secrets/tokens/istio-token"}`),
+				}, nil)},
+			}},
+			wantCallCreds: 1,
+		},
+		{
+			// Unsupported call-creds types are skipped without error, so no
+			// call credentials are built.
+			name: "unsupported_call_creds_skipped",
+			json: `{"dns:///sharding-service:443": {"channel_creds": [{"type": "insecure"}], "call_creds": [{"type": "unsupported_call_creds_type"}]}}`,
+			want: AllowedGRPCServices{target: {
+				targetURI:        target,
+				sideChannelCreds: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "insecure"}, nil),
+			}},
+		},
+		{
+			// One call credential is built for each supported call-creds
+			// config, preserving order.
+			name: "multiple_supported_call_creds",
+			json: `{"dns:///sharding-service:443": {"channel_creds": [{"type": "insecure"}], "call_creds": [{"type": "jwt_token_file", "config": {"jwt_token_file": "/tokens/token-one"}}, {"type": "jwt_token_file", "config": {"jwt_token_file": "/tokens/token-two"}}]}}`,
+			want: AllowedGRPCServices{target: {
+				targetURI:        target,
+				sideChannelCreds: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "insecure"}, nil),
+				sideCallCreds: []*xdscreds.CallCreds{
+					xdscreds.NewCallCreds(nil, xdscreds.Identity{
+						Type: "jwt_token_file",
+						Data: json.RawMessage(`{"jwt_token_file": "/tokens/token-one"}`),
+					}, nil),
+					xdscreds.NewCallCreds(nil, xdscreds.Identity{
+						Type: "jwt_token_file",
+						Data: json.RawMessage(`{"jwt_token_file": "/tokens/token-two"}`),
+					}, nil),
+				},
+			}},
+			wantCallCreds: 2,
+		},
+		{
+			name: "tls_channel_creds",
+			json: `{"dns:///sharding-service:443": {"channel_creds": [{"type": "tls", "config": {}}]}}`,
+			want: AllowedGRPCServices{target: {
+				targetURI:        target,
+				sideChannelCreds: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "tls", Data: json.RawMessage("{}")}, nil),
+			}},
+		},
+		{
+			name: "skips_unsupported_channel_creds",
+			json: `{"dns:///sharding-service:443": {"channel_creds": [{"type": "unsupported_cred_type"}, {"type": "insecure"}]}}`,
+			want: AllowedGRPCServices{target: {
+				targetURI:        target,
+				sideChannelCreds: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "insecure"}, nil),
+			}},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var got AllowedGRPCServices
+			if err := json.Unmarshal([]byte(test.json), &got); err != nil {
+				t.Fatalf("AllowedGRPCServices unmarshal failed: %v", err)
+			}
+			if diff := cmp.Diff(test.want, got); diff != "" {
+				t.Errorf("AllowedGRPCServices unmarshal returned unexpected diff (-want +got):\n%s", diff)
+			}
+			// Equal compares credentials by identity only, so it cannot tell
+			// a built credential from a nil one; verify the credentials were
+			// built.
+			chanCreds, callCreds := got[target].SideChannelCredentials()
+			if chanCreds == nil || chanCreds.Bundle() == nil {
+				t.Error("SideChannelCredentials() returned no built channel credentials")
+			}
+			if len(callCreds) != test.wantCallCreds {
+				t.Errorf("SideChannelCredentials() returned %d call credentials, want %d", len(callCreds), test.wantCallCreds)
+			}
+			for i, cc := range callCreds {
+				if cc.Credentials() == nil {
+					t.Errorf("SideChannelCredentials() call credentials[%d] have no built credentials", i)
+				}
+			}
+		})
+	}
+}
+
+// TestAllowedGRPCServices_UnmarshalJSON_Errors verifies that invalid
+// allowed_grpc_services entries are rejected while parsing the field.
+func (s) TestAllowedGRPCServices_UnmarshalJSON_Errors(t *testing.T) {
+	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
+	tests := []struct {
+		name string
+		json string
+	}{
+		{
+			name: "no_supported_channel_creds",
+			json: `{"dns:///sharding-service:443": {"channel_creds": [{"type": "unsupported_cred_type"}]}}`,
+		},
+		{
+			name: "null_entry",
+			json: `{"dns:///sharding-service:443": null}`,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var got AllowedGRPCServices
+			if err := json.Unmarshal([]byte(test.json), &got); err == nil {
+				t.Fatalf("AllowedGRPCServices unmarshal succeeded, want error")
+			}
+		})
+	}
+}
+
+// TestBootstrap_AllowedGRPCServices_NullEntryRejected verifies that a null
+// allowed_grpc_services entry is rejected rather than silently accepted as a
+// credential-less allowlisted target. gRFC A102 requires channel_creds on
+// every entry, but a JSON null map value is decoded without invoking
+// UnmarshalJSON, so it would otherwise bypass that validation.
+func (s) TestBootstrap_AllowedGRPCServices_NullEntryRejected(t *testing.T) {
+	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
+	cfg := `{
+		"xds_servers": [{
+			"server_uri": "trafficdirector.googleapis.com:443",
+			"channel_creds": [{"type": "insecure"}]
+		}],
+		"allowed_grpc_services": {"dns:///side-channel:443": null}
+	}`
+	var c Config
+	if err := c.UnmarshalJSON([]byte(cfg)); err == nil {
+		t.Fatalf("Config.UnmarshalJSON() succeeded; want error for null allowed_grpc_services entry")
+	}
+}
+
+// TestAllowedGRPCService_Accessors exercises TargetURI and Equal, including
+// inequality when only the target URI differs.
+func (s) TestAllowedGRPCService_Accessors(t *testing.T) {
+	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, true)
+	const target = "dns:///sharding-service:443"
+	cfg := `{"dns:///sharding-service:443": {"channel_creds": [{"type": "insecure"}]}}`
+	var s1, s2 AllowedGRPCServices
+	if err := json.Unmarshal([]byte(cfg), &s1); err != nil {
+		t.Fatalf("AllowedGRPCServices unmarshal failed: %v", err)
+	}
+	if err := json.Unmarshal([]byte(cfg), &s2); err != nil {
+		t.Fatalf("AllowedGRPCServices unmarshal failed: %v", err)
+	}
+	svc := s1[target]
+	if got := svc.TargetURI(); got != target {
+		t.Errorf("TargetURI() = %q, want %q", got, target)
+	}
+	// Two independent parses of the same config must compare equal.
+	if !svc.Equal(s2[target]) {
+		t.Errorf("Equal() = false for identical configs, want true")
+	}
+	// Two services identical except for target URI must not be equal.
+	diff := *svc
+	diff.targetURI = "dns:///different:443"
+	if svc.Equal(&diff) {
+		t.Errorf("Equal() = true for services with different target URIs, want false")
+	}
+}
+
+// TestAllowedGRPCServices_Disabled verifies that the allowed_grpc_services
+// field is ignored entirely when no consuming feature is enabled: nothing is
+// parsed, and even a malformed entry does not fail parsing.
+func (s) TestAllowedGRPCServices_Disabled(t *testing.T) {
+	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, false)
+	cfg := `{"dns:///side-channel:443": {"channel_creds": [{"type": "unsupported_cred_type"}]}}`
+	var got AllowedGRPCServices
+	if err := json.Unmarshal([]byte(cfg), &got); err != nil {
+		t.Fatalf("AllowedGRPCServices unmarshal failed: %v", err)
+	}
+	if got != nil {
+		t.Errorf("AllowedGRPCServices = %v, want nil when disabled", got)
 	}
 }

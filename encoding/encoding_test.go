@@ -112,8 +112,6 @@ func (c *errProtoCodec) Name() string {
 // Tests the case where encoding fails on the server. Verifies that there is
 // no panic and that the encoding error is propagated to the client.
 func (s) TestEncodeDoesntPanicOnServer(t *testing.T) {
-	grpctest.ExpectError("grpc: server failed to encode response")
-
 	// Create a codec that errors when encoding messages.
 	encodingErr := errors.New("encoding failed")
 	ec := &errProtoCodec{name: t.Name(), encodingErr: encodingErr}
@@ -173,7 +171,7 @@ func (s) TestDecodeDoesntPanicOnServer(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	_, err := backend1.Client.EmptyCall(ctx, &testpb.Empty{})
-	if err == nil || !strings.Contains(err.Error(), decodingErr.Error()) || !strings.Contains(err.Error(), "grpc: error unmarshalling request") {
+	if err == nil || !strings.Contains(err.Error(), decodingErr.Error()) || !strings.Contains(err.Error(), "grpc: failed to unmarshal the received message") {
 		t.Fatalf("RPC failed with error: %v, want: %v", err, decodingErr)
 	}
 

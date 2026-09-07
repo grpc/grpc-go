@@ -204,3 +204,44 @@ func (s) TestCallbackSerializer_Schedule_Close(t *testing.T) {
 	case <-done:
 	}
 }
+
+// TestCallbackSerializer_ScheduleAndWait verifies that ScheduleAndWait runs the
+// provided callback and blocks until it has finished executing, returning a nil
+// error.
+func (s) TestCallbackSerializer_ScheduleAndWait(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	cs := NewCallbackSerializer(ctx)
+
+	executed := false
+	if err := cs.ScheduleAndWait(func(context.Context) {
+		executed = true
+	}); err != nil {
+		t.Fatalf("ScheduleAndWait() returned error: %v, want nil", err)
+	}
+
+	// The callback must have run by the time ScheduleAndWait returns. No
+	// synchronization is needed here because ScheduleAndWait is expected to
+	// block until the callback completes.
+	if !executed {
+		t.Fatal("ScheduleAndWait() returned before the callback was executed")
+	}
+}
+
+// TestCallbackSerializer_ScheduleAndWait_Closed verifies that ScheduleAndWait
+// does not run the callback and returns ErrSerializerClosed when the serializer
+// has already been closed.
+func (s) TestCallbackSerializer_ScheduleAndWait_Closed(t *testing.T) {
+	serializerCtx, serializerCancel := context.WithCancel(context.Background())
+	cs := NewCallbackSerializer(serializerCtx)
+
+	// Close the serializer and wait for it to finish shutting down.
+	serializerCancel()
+	<-cs.Done()
+
+	if err := cs.ScheduleAndWait(func(context.Context) {
+		t.Fatal("Callback executed on a closed serializer")
+	}); err != ErrSerializerClosed {
+		t.Fatalf("ScheduleAndWait() returned error: %v, want %v", err, ErrSerializerClosed)
+	}
+}

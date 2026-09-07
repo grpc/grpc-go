@@ -37,9 +37,9 @@ import (
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/anypb"
 
 	v3gcpauthnpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/gcp_authn/v3"
-	anypb "google.golang.org/protobuf/types/known/anypb"
 )
 
 const defaultCacheSize = 10 // default capacity of the LRU credentials cache.
@@ -59,7 +59,7 @@ func (builder) TypeURLs() []string {
 	return []string{"type.googleapis.com/envoy.extensions.filters.http.gcp_authn.v3.GcpAuthnFilterConfig"}
 }
 
-func (builder) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, error) {
+func (builder) ParseFilterConfig(cfg proto.Message, _ httpfilter.ParseOptions) (httpfilter.FilterConfig, error) {
 	m, ok := cfg.(*anypb.Any)
 	if !ok {
 		return nil, fmt.Errorf("gcpauthn: invalid filter config type %T", cfg)
@@ -83,8 +83,8 @@ func (builder) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, er
 //
 // Note that we don't support overrides for this filter configuration,
 // but still validate it as part of the normal resource validation.
-func (b builder) ParseFilterConfigOverride(cfg proto.Message) (httpfilter.FilterConfig, error) {
-	return b.ParseFilterConfig(cfg)
+func (b builder) ParseFilterConfigOverride(cfg proto.Message, opts httpfilter.ParseOptions) (httpfilter.FilterConfig, error) {
+	return b.ParseFilterConfig(cfg, opts)
 }
 
 func (builder) IsTerminal() bool {

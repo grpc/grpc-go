@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -546,4 +547,43 @@ func (s) TestChannelIdleness_Connect(t *testing.T) {
 
 	// Verify that the ClientConn moves back to READY.
 	testutils.AwaitState(ctx, t, cc, connectivity.Ready)
+}
+
+// TestChannelIdleness_RPCFailingBeforeAttempt_FinishesOnce verifies that an
+// RPC which fails during stream creation, before any attempt is started, is
+// reported as finished exactly once.
+func (s) TestChannelIdleness_RPCFailingBeforeAttempt_FinishesOnce(t *testing.T) {
+	backend := stubserver.StartTestService(t, nil)
+	defer backend.Stop()
+
+	cc, err := grpc.NewClient(fmt.Sprintf("dns:///%s", backend.Address), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("grpc.NewClient() failed: %v", err)
+	}
+	defer cc.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	client := testgrpc.NewTestServiceClient(cc)
+
+	// Warm-up RPC: moves the channel to READY and fires the resolver's
+	// first-resolution event, so that the next RPC does not block waiting for
+	// addresses and instead proceeds to fail during stream creation.
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+		t.Fatalf("EmptyCall() failed: %v", err)
+	}
+
+	// Issue an RPC with an already-canceled context so that it fails during
+	// stream creation, before any attempt is started, and count how many times
+	// gRPC reports it as finished. The contract is exactly once.
+	var finishCount atomic.Int32
+	cancel()
+	_, err = client.EmptyCall(ctx, &testpb.Empty{}, grpc.OnFinish(func(error) { finishCount.Add(1) }))
+	if got, want := status.Code(err), codes.Canceled; got != want {
+		t.Fatalf("EmptyCall() with canceled context returned code %v, want %v (err: %v)", got, want, err)
+	}
+	if got := finishCount.Load(); got != 1 {
+		t.Fatalf("OnFinish callback invoked %d times, want exactly 1", got)
+	}
 }

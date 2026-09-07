@@ -32,9 +32,9 @@ import (
 	"google.golang.org/grpc/internal/xds/httpfilter"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	v3gcpauthnpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/gcp_authn/v3"
-	wrapperspb "google.golang.org/protobuf/types/known/wrapperspb"
 )
 
 type s struct {
@@ -87,7 +87,7 @@ func (s) TestParseFilterConfig(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			gotCfg, err := builder{}.ParseFilterConfig(tc.config)
+			gotCfg, err := builder{}.ParseFilterConfig(tc.config, httpfilter.ParseOptions{})
 			if err != nil {
 				if tc.wantErr == "" || !strings.Contains(err.Error(), tc.wantErr) {
 					t.Fatalf("ParseFilterConfig() failed with error = %v; want error  %q", err, tc.wantErr)
@@ -207,7 +207,7 @@ func (s) TestInterceptor_NewStream_Errors(t *testing.T) {
 			CacheSize: &wrapperspb.UInt64Value{Value: 10},
 		},
 	})
-	filterConfig, err := builder.ParseFilterConfig(cfg)
+	filterConfig, err := builder.ParseFilterConfig(cfg, httpfilter.ParseOptions{})
 	if err != nil {
 		t.Fatalf("Failed to parse filter config: %v", err)
 	}

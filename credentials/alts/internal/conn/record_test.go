@@ -443,3 +443,121 @@ func (s) TestParseFramedMsgVulnerability(t *testing.T) {
 		t.Fatalf("c.Read(buf) returned error: %v, want error containing %q", err, wantErr)
 	}
 }
+
+// countALTSFrames parses raw ALTS wire bytes and returns the number of complete frames.
+func countALTSFrames(data []byte) int {
+	count := 0
+	for len(data) >= MsgLenFieldSize {
+		frameLen := int(binary.LittleEndian.Uint32(data[:MsgLenFieldSize]))
+		total := MsgLenFieldSize + frameLen
+		if total > len(data) {
+			break
+		}
+		data = data[total:]
+		count++
+	}
+	return count
+}
+
+func (s) TestNewConnNegotiatedMaxFrameSize(t *testing.T) {
+	key := make([]byte, 32)
+
+	for _, tc := range []struct {
+		name                   string
+		negotiatedMaxFrameSize int
+		wantMaxRecordLen       int
+	}{
+		{"NotNegotiated", 0, altsRecordDefaultLength},
+		{"SmallerThanDefault_10B", 10, altsRecordDefaultLength},
+		{"SmallerThanDefault_1024B", 1024, altsRecordDefaultLength},
+		{"Negotiated_4KB", 4 * 1024, 4 * 1024},
+		{"Negotiated_16KB", 16 * 1024, 16 * 1024},
+		{"Negotiated_64KB", 64 * 1024, 64 * 1024},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tcConn := testConn{}
+			c, err := NewConnWithMaxFrameSize(&tcConn, core.ClientSide, rekeyRecordProtocol, key, nil, tc.negotiatedMaxFrameSize)
+			if err != nil {
+				t.Fatalf("NewConn() err = %v, want nil", err)
+			}
+			altsC := c.(*conn)
+			wantPayloadLimit := tc.wantMaxRecordLen - altsC.overhead
+			if altsC.payloadLengthLimit != wantPayloadLimit {
+				t.Errorf("payloadLengthLimit = %v, want %v", altsC.payloadLengthLimit, wantPayloadLimit)
+			}
+		})
+	}
+}
+
+// TestWriteHonorsNegotiatedMaxFrameSize verifies that Write uses the negotiated
+// max_frame_size so we never send a frame larger than negotiated.
+func (s) TestWriteHonorsNegotiatedMaxFrameSize(t *testing.T) {
+	key := make([]byte, 16)
+	const negotiatedMaxFrameSize = 16 * 1024
+	out := new(bytes.Buffer)
+	c, err := NewConnWithMaxFrameSize(&testConn{in: new(bytes.Buffer), out: out}, core.ClientSide, rekeyRecordProtocol, key, nil, negotiatedMaxFrameSize)
+	if err != nil {
+		t.Fatalf("NewConn failed: %v", err)
+	}
+	altsC := c.(*conn)
+	if got, want := altsC.payloadLengthLimit+altsC.overhead, negotiatedMaxFrameSize; got != want {
+		t.Fatalf("frame size = %v, want %v", got, want)
+	}
+	// Two negotiatedMaxFrameSize-worth of plaintext should split into exactly two frames.
+	payload := make([]byte, 2*altsC.payloadLengthLimit)
+	if _, err := c.Write(payload); err != nil {
+		t.Fatalf("Write failed: %v", err)
+	}
+	if got, want := countALTSFrames(out.Bytes()), 2; got != want {
+		t.Errorf("Write produced %d frames, want %d", got, want)
+	}
+}
+
+type partialWriteTestConn struct {
+	net.Conn
+	maxWriteBytes int
+	err           error
+	out           bytes.Buffer
+}
+
+func (c *partialWriteTestConn) Write(b []byte) (int, error) {
+	if len(b) > c.maxWriteBytes {
+		c.out.Write(b[:c.maxWriteBytes])
+		return c.maxWriteBytes, c.err
+	}
+	c.out.Write(b)
+	return len(b), nil
+}
+
+// TestWritePartialWriteErrorWithNegotiatedMaxFrameSize verifies that when a partial Write error occurs,
+// the number of written bytes returned correctly accounts for the negotiated max_frame_size.
+func (s) TestWritePartialWriteErrorWithNegotiatedMaxFrameSize(t *testing.T) {
+	key := make([]byte, 16)
+	const negotiatedMaxFrameSize = 16 * 1024
+
+	// Allow writing 1.5 frames (16384 + 8192 = 24576 bytes) before returning io.ErrUnexpectedEOF.
+	writeLimit := negotiatedMaxFrameSize + negotiatedMaxFrameSize/2
+	errConn := &partialWriteTestConn{
+		maxWriteBytes: writeLimit,
+		err:           io.ErrUnexpectedEOF,
+	}
+
+	c, err := NewConnWithMaxFrameSize(errConn, core.ClientSide, rekeyRecordProtocol, key, nil, negotiatedMaxFrameSize)
+	if err != nil {
+		t.Fatalf("NewConn failed: %v", err)
+	}
+	altsC := c.(*conn)
+
+	// Send 3 frames worth of payload
+	payload := make([]byte, 3*altsC.payloadLengthLimit)
+	n, writeErr := c.Write(payload)
+	if writeErr != io.ErrUnexpectedEOF {
+		t.Fatalf("Write err = %v, want %v", writeErr, io.ErrUnexpectedEOF)
+	}
+
+	// Exactly 1 complete frame was written before the partial write error.
+	wantWrittenBytes := altsC.payloadLengthLimit
+	if n != wantWrittenBytes {
+		t.Errorf("Write() returned n = %d, want %d", n, wantWrittenBytes)
+	}
+}

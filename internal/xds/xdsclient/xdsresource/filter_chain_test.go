@@ -120,7 +120,7 @@ func (s) TestUnmarshalListener_ServerSide_DroppedFilterChains(t *testing.T) {
 		t.Run(test.desc, func(t *testing.T) {
 			grpctest.ExpectWarning(test.wantErr)
 			resource := listenerProtoToAny(t, test.lis)
-			if _, _, err := unmarshalListenerResource(resource, nil); err == nil {
+			if _, _, err := unmarshalListenerResource(resource, nil, nil); err == nil {
 				t.Errorf("unmarshalListenerResource(%s) succeeded when expected to fail", pretty.ToJSON(resource))
 			}
 		})
@@ -196,7 +196,7 @@ func (s) TestUnmarshalListener_ServerSide_FilterChains_FailureCases(t *testing.T
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
 			resource := listenerProtoToAny(t, test.lis)
-			if _, _, err := unmarshalListenerResource(resource, nil); err == nil || !strings.Contains(err.Error(), test.wantErr) {
+			if _, _, err := unmarshalListenerResource(resource, nil, nil); err == nil || !strings.Contains(err.Error(), test.wantErr) {
 				t.Errorf("unmarshalListenerResource(%s) failed with error: %v, want: %v", pretty.ToJSON(resource), err, test.wantErr)
 			}
 		})
@@ -304,7 +304,7 @@ func (s) TestUnmarshalListener_ServerSide_OverlappingMatchingRules(t *testing.T)
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
 			resource := listenerProtoToAny(t, test.lis)
-			if _, _, err := unmarshalListenerResource(resource, nil); err == nil || !strings.Contains(err.Error(), wantErr) {
+			if _, _, err := unmarshalListenerResource(resource, nil, nil); err == nil || !strings.Contains(err.Error(), wantErr) {
 				t.Errorf("unmarshalListenerResource(%s) failed with error: %v, want: %v", pretty.ToJSON(resource), err, wantErr)
 			}
 		})
@@ -616,7 +616,7 @@ func (s) TestUnmarshalListener_ServerSide_BadSecurityConfig(t *testing.T) {
 		t.Run(test.desc, func(t *testing.T) {
 			testutils.SetEnvConfig(t, &envconfig.XDSSystemRootCertsEnabled, test.enableSystemRootCertsFlag)
 			resource := listenerProtoToAny(t, test.lis)
-			if _, _, err := unmarshalListenerResource(resource, nil); err == nil || !strings.Contains(err.Error(), test.wantErr) {
+			if _, _, err := unmarshalListenerResource(resource, nil, nil); err == nil || !strings.Contains(err.Error(), test.wantErr) {
 				t.Errorf("unmarshalListenerResource(%s) failed with error: %v, want: %v", pretty.ToJSON(resource), err, test.wantErr)
 			}
 		})
@@ -859,7 +859,7 @@ func (s) TestUnmarshalListener_ServerSide_GoodRouteUpdate(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			resource := listenerProtoToAny(t, test.lis)
-			_, gotListener, err := unmarshalListenerResource(resource, nil)
+			_, gotListener, err := unmarshalListenerResource(resource, nil, nil)
 			if err != nil {
 				t.Fatalf("unmarshalListenerResource(%s) failed with error: %v", pretty.ToJSON(resource), err)
 			}
@@ -1002,7 +1002,7 @@ func (s) TestUnmarshalListener_ServerSide_BadRouteUpdate(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			resource := listenerProtoToAny(t, test.lis)
-			if _, _, err := unmarshalListenerResource(resource, nil); err == nil || !strings.Contains(err.Error(), test.wantErr) {
+			if _, _, err := unmarshalListenerResource(resource, nil, nil); err == nil || !strings.Contains(err.Error(), test.wantErr) {
 				t.Errorf("unmarshalListenerResource(%s) failed with error: %v, want: %v", pretty.ToJSON(resource), err, test.wantErr)
 			}
 		})
@@ -1077,7 +1077,7 @@ func (s) TestUnmarshalListener_ServerSide_BadHTTPFilters(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			resource := listenerProtoToAny(t, test.lis)
-			if _, _, err := unmarshalListenerResource(resource, nil); err == nil || !strings.Contains(err.Error(), test.wantErr) {
+			if _, _, err := unmarshalListenerResource(resource, nil, nil); err == nil || !strings.Contains(err.Error(), test.wantErr) {
 				t.Errorf("unmarshalListenerResource(%s) failed with error: %v, want: %v", pretty.ToJSON(resource), err, test.wantErr)
 			}
 		})
@@ -1414,7 +1414,7 @@ func (s) TestUnmarshalListener_ServerSide_GoodHTTPFilters(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			resource := listenerProtoToAny(t, test.lis)
-			_, gotListener, err := unmarshalListenerResource(resource, nil)
+			_, gotListener, err := unmarshalListenerResource(resource, nil, nil)
 			if err != nil {
 				t.Fatalf("unmarshalListenerResource(%s) failed with error: %v", pretty.ToJSON(resource), err)
 			}
@@ -1772,7 +1772,7 @@ func (s) TestUnmarshalListener_ServerSide_GoodSecurityConfig(t *testing.T) {
 		t.Run(test.desc, func(t *testing.T) {
 			testutils.SetEnvConfig(t, &envconfig.XDSSystemRootCertsEnabled, test.enableSystemRootCertsFlag)
 			resource := listenerProtoToAny(t, test.lis)
-			_, gotListener, err := unmarshalListenerResource(resource, nil)
+			_, gotListener, err := unmarshalListenerResource(resource, nil, nil)
 			if err != nil {
 				t.Fatalf("unmarshalListenerResource(%s) failed with error: %v", pretty.ToJSON(resource), err)
 			}
@@ -1999,7 +1999,7 @@ func (s) TestUnmarshalListener_ServerSide_Success_UnsupportedMatchFields(t *test
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
 			resource := listenerProtoToAny(t, test.lis)
-			_, gotListener, err := unmarshalListenerResource(resource, nil)
+			_, gotListener, err := unmarshalListenerResource(resource, nil, nil)
 			if err != nil {
 				t.Fatalf("unmarshalListenerResource(%s) failed with error: %v", pretty.ToJSON(resource), err)
 			}
@@ -2531,7 +2531,7 @@ func (s) TestUnmarshalListener_ServerSide_Success_AllCombinations(t *testing.T) 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
 			resource := listenerProtoToAny(t, test.lis)
-			_, gotListener, err := unmarshalListenerResource(resource, nil)
+			_, gotListener, err := unmarshalListenerResource(resource, nil, nil)
 			if err != nil {
 				t.Fatalf("unmarshalListenerResource(%s) failed with error: %v", pretty.ToJSON(resource), err)
 			}
