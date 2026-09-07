@@ -477,6 +477,7 @@ func (s *Stream) ReadMessageHeader(header []byte) (err error) {
 		if err != nil {
 			if bytesRead > 0 && err == io.EOF {
 				err = io.ErrUnexpectedEOF
+				s.trReader.er = err
 			}
 			return err
 		}
@@ -522,6 +523,7 @@ func (s *Stream) read(n int) (data mem.BufferSlice, err error) {
 		if err != nil {
 			if bytesRead > 0 && err == io.EOF {
 				err = io.ErrUnexpectedEOF
+				s.trReader.er = err
 			}
 			data.Free()
 			return nil, err
