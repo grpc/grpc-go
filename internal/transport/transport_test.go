@@ -3467,7 +3467,7 @@ func (s) TestReadMessageHeaderPartialHeaderEOF(t *testing.T) {
 	stream := Stream{
 		readRequester: &fakeReadRequester{},
 	}
-	stream.buf.init()
+	stream.buf.init(mem.DefaultBufferPool())
 	recvBuffer := &stream.buf
 	stream.trReader = transportReader{
 		reader: recvBufferReader{
@@ -3488,7 +3488,7 @@ func (s) TestReadMessageHeaderEOF(t *testing.T) {
 	stream := Stream{
 		readRequester: &fakeReadRequester{},
 	}
-	stream.buf.init()
+	stream.buf.init(mem.DefaultBufferPool())
 	recvBuffer := &stream.buf
 	stream.trReader = transportReader{
 		reader: recvBufferReader{
@@ -3513,7 +3513,7 @@ func (s) TestReadPartialMessageEOF(t *testing.T) {
 	stream := Stream{
 		readRequester: &fakeReadRequester{},
 	}
-	stream.buf.init()
+	stream.buf.init(mem.DefaultBufferPool())
 	recvBuffer := &stream.buf
 	stream.trReader = transportReader{
 		reader: recvBufferReader{
@@ -3535,7 +3535,7 @@ func (s) TestReadMessageEOF(t *testing.T) {
 	stream := Stream{
 		readRequester: &fakeReadRequester{},
 	}
-	stream.buf.init()
+	stream.buf.init(mem.DefaultBufferPool())
 	recvBuffer := &stream.buf
 	stream.trReader = transportReader{
 		reader: recvBufferReader{
