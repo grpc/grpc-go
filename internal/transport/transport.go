@@ -409,18 +409,20 @@ func (s *Stream) read(n int) (data mem.BufferSlice, err error) {
 	allocCap := min(ceil(n, http2MaxFrameLen), 128)
 	data = make(mem.BufferSlice, 0, allocCap)
 	s.readRequester.requestRead(n)
+	bytesRead := 0
 	for n != 0 {
 		buf, err := s.trReader.Read(n)
 		var bufLen int
 		if buf != nil {
 			bufLen = buf.Len()
 		}
+		bytesRead += bufLen
 		n -= bufLen
 		if n == 0 {
 			err = nil
 		}
 		if err != nil {
-			if bufLen > 0 && err == io.EOF {
+			if bytesRead > 0 && err == io.EOF {
 				err = io.ErrUnexpectedEOF
 			}
 			data.Free()

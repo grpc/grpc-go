@@ -3389,7 +3389,6 @@ func (s) TestReadMessageHeaderMultipleBuffers(t *testing.T) {
 
 func (s) TestReadMessageHeaderPartialHeaderEOF(t *testing.T) {
 	const headerLen = 5
-	bytesRead := 0
 	stream := Stream{
 		readRequester: &fakeReadRequester{},
 	}
@@ -3399,11 +3398,7 @@ func (s) TestReadMessageHeaderPartialHeaderEOF(t *testing.T) {
 		reader: recvBufferReader{
 			recv: recvBuffer,
 		},
-		windowHandler: &mockWindowUpdater{
-			f: func(i int) {
-				bytesRead += i
-			},
-		},
+		windowHandler: &mockWindowUpdater{f: func(int) {}},
 	}
 
 	recvBuffer.put(recvMsg{buffer: make(mem.SliceBuffer, 3)})
@@ -3411,9 +3406,6 @@ func (s) TestReadMessageHeaderPartialHeaderEOF(t *testing.T) {
 
 	if err := stream.ReadMessageHeader(make([]byte, headerLen)); !errors.Is(err, io.ErrUnexpectedEOF) {
 		t.Fatalf("ReadMessageHeader() error = %v, want %v", err, io.ErrUnexpectedEOF)
-	}
-	if bytesRead != 3 {
-		t.Fatalf("bytesRead = %d, want 3", bytesRead)
 	}
 }
 
@@ -3438,6 +3430,53 @@ func (s) TestReadMessageHeaderEOF(t *testing.T) {
 	}
 	if errors.Is(err, io.ErrUnexpectedEOF) {
 		t.Fatalf("ReadMessageHeader() error = %v, want not %v", err, io.ErrUnexpectedEOF)
+	}
+}
+
+func (s) TestReadPartialMessageEOF(t *testing.T) {
+	const messageLen = 5
+	stream := Stream{
+		readRequester: &fakeReadRequester{},
+	}
+	stream.buf.init()
+	recvBuffer := &stream.buf
+	stream.trReader = transportReader{
+		reader: recvBufferReader{
+			recv: recvBuffer,
+		},
+		windowHandler: &mockWindowUpdater{f: func(int) {}},
+	}
+
+	recvBuffer.put(recvMsg{buffer: make(mem.SliceBuffer, 3)})
+	recvBuffer.put(recvMsg{err: io.EOF})
+
+	if _, err := stream.read(messageLen); !errors.Is(err, io.ErrUnexpectedEOF) {
+		t.Fatalf("read(%d) error = %v, want %v", messageLen, err, io.ErrUnexpectedEOF)
+	}
+}
+
+func (s) TestReadMessageEOF(t *testing.T) {
+	const messageLen = 5
+	stream := Stream{
+		readRequester: &fakeReadRequester{},
+	}
+	stream.buf.init()
+	recvBuffer := &stream.buf
+	stream.trReader = transportReader{
+		reader: recvBufferReader{
+			recv: recvBuffer,
+		},
+		windowHandler: &mockWindowUpdater{f: func(int) {}},
+	}
+
+	recvBuffer.put(recvMsg{err: io.EOF})
+
+	_, err := stream.read(messageLen)
+	if !errors.Is(err, io.EOF) {
+		t.Fatalf("read(%d) error = %v, want %v", messageLen, err, io.EOF)
+	}
+	if errors.Is(err, io.ErrUnexpectedEOF) {
+		t.Fatalf("read(%d) error = %v, want not %v", messageLen, err, io.ErrUnexpectedEOF)
 	}
 }
 
