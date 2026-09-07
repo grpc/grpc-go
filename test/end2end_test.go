@@ -608,10 +608,10 @@ func (te *test) listenAndServe(ts testgrpc.TestServiceServer, listen func(networ
 		sopts = append(sopts, grpc.UnknownServiceHandler(te.unknownHandler))
 	}
 	if te.serverInitialWindowSize > 0 {
-		sopts = append(sopts, grpc.StaticStreamWindowSize(te.serverInitialWindowSize))
+		sopts = append(sopts, grpc.InitialWindowSize(te.serverInitialWindowSize))
 	}
 	if te.serverInitialConnWindowSize > 0 {
-		sopts = append(sopts, grpc.StaticConnWindowSize(te.serverInitialConnWindowSize))
+		sopts = append(sopts, grpc.InitialConnWindowSize(te.serverInitialConnWindowSize))
 	}
 	la := ":0"
 	if te.e.network == "unix" {
@@ -819,10 +819,10 @@ func (te *test) configDial(opts ...grpc.DialOption) ([]grpc.DialOption, string) 
 		opts = append(opts, grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, te.e.balancer)))
 	}
 	if te.clientInitialWindowSize > 0 {
-		opts = append(opts, grpc.WithStaticStreamWindowSize(te.clientInitialWindowSize))
+		opts = append(opts, grpc.WithInitialWindowSize(te.clientInitialWindowSize))
 	}
 	if te.clientInitialConnWindowSize > 0 {
-		opts = append(opts, grpc.WithStaticConnWindowSize(te.clientInitialConnWindowSize))
+		opts = append(opts, grpc.WithInitialConnWindowSize(te.clientInitialConnWindowSize))
 	}
 	if te.perRPCCreds != nil {
 		opts = append(opts, grpc.WithPerRPCCredentials(te.perRPCCreds))

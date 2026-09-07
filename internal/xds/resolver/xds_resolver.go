@@ -302,6 +302,21 @@ func (r *xdsResolver) Close() {
 	if r.xdsClientClose != nil {
 		r.xdsClientClose()
 	}
+	// Drop field references so the resolver isn't retained across ClientConn
+	// close via any cross-object retention chain (e.g. ClientConn holding the
+	// ServiceConfig that captures the configSelector, shared xDS-client
+	// watcher metadata, channelz trace entries). Each nil individually looks
+	// harmless; the combination breaks the multi-path retention observed when
+	// callers repeatedly Close and redial DirectPath channels.
+	r.cc = nil
+	r.curConfigSelector = nil
+	r.dm = nil
+	r.xdsClient = nil
+	r.xdsClientClose = nil
+	r.httpFilters = nil
+	r.activeClusters = nil
+	r.activePlugins = nil
+	r.xdsConfig = nil
 	r.logger.Infof("Shutdown")
 }
 
