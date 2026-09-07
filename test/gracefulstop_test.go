@@ -310,7 +310,7 @@ func (s) TestStopAfterGracefulStopWithRunningHandler(t *testing.T) {
 	handlerStarted := make(chan struct{})
 	unblockHandler := make(chan struct{})
 	ss := &stubserver.StubServer{
-		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
+		FullDuplexCallF: func(_ testgrpc.TestService_FullDuplexCallServer) error {
 			close(handlerStarted)
 			// Ignore context cancellation to simulate a handler that does not
 			// promptly return when the server shuts down.
