@@ -322,6 +322,10 @@ func (s) TestStopAfterGracefulStopWithRunningHandler(t *testing.T) {
 		t.Fatalf("Error starting endpoint server: %v", err)
 	}
 	defer ss.Stop()
+	// The handler blocks until unblockHandler is closed. If the test fails
+	// before reaching the normal unblock point below, this ensures the handler
+	// is released so its goroutine does not leak. handlerUnblocked guards
+	// against closing the channel twice.
 	handlerUnblocked := false
 	defer func() {
 		if !handlerUnblocked {
@@ -335,7 +339,11 @@ func (s) TestStopAfterGracefulStopWithRunningHandler(t *testing.T) {
 	if _, err := ss.Client.FullDuplexCall(ctx); err != nil {
 		t.Fatalf("Error starting FullDuplexCall: %v", err)
 	}
-	<-handlerStarted
+	select {
+	case <-handlerStarted:
+	case <-ctx.Done():
+		t.Fatalf("Timed out waiting for the handler to start: %v", ctx.Err())
+	}
 
 	// Close the client connection so the server transport drains while the
 	// handler is still running. GracefulStop will then remove the connection
@@ -361,7 +369,7 @@ func (s) TestStopAfterGracefulStopWithRunningHandler(t *testing.T) {
 	select {
 	case <-stopReturned:
 	case <-time.After(defaultTestTimeout):
-		t.Fatal("Stop() did not return; it deadlocked behind GracefulStop() waiting for a running handler")
+		t.Fatal("Timed out waiting for Stop() to return")
 	}
 
 	// Let the handler finish so GracefulStop can also return.
