@@ -286,6 +286,7 @@ func (st *serverTester) writeHeadersGRPC(streamID uint32, path string, endStream
 		BlockFragment: st.encodeHeader(
 			":method", "POST",
 			":path", path,
+			":authority", "localhost",
 			"content-type", "application/grpc",
 			"te", "trailers",
 		),

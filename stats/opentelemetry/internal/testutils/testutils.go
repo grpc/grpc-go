@@ -18,6 +18,8 @@
 package testutils
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
 	"fmt"
 	"slices"
@@ -28,6 +30,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata/metricdatatest"
+	"google.golang.org/protobuf/proto"
 )
 
 // Redefine default bounds here to avoid a cyclic dependency with top level
@@ -763,6 +766,25 @@ func MetricData(options MetricDataOptions) []metricdata.Metrics {
 			},
 		},
 	}
+}
+
+// GzipCompressedMessageSize returns the byte length of the proto message after
+// gzip compression.
+func GzipCompressedMessageSize(t *testing.T, m proto.Message) int {
+	t.Helper()
+	data, err := proto.Marshal(m)
+	if err != nil {
+		t.Fatalf("proto.Marshal failed: %v", err)
+	}
+	var buf bytes.Buffer
+	zw := gzip.NewWriter(&buf)
+	if _, err := zw.Write(data); err != nil {
+		t.Fatalf("gzip.Write failed: %v", err)
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatalf("gzip.Close failed: %v", err)
+	}
+	return buf.Len()
 }
 
 // CompareMetrics asserts wantMetrics are what we expect. For duration metrics

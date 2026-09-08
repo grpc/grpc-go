@@ -98,11 +98,11 @@ type testFilterBuilder struct {
 
 func (tb *testFilterBuilder) TypeURLs() []string { return []string{tb.typeURL} }
 
-func (*testFilterBuilder) ParseFilterConfig(proto.Message) (httpfilter.FilterConfig, error) {
+func (*testFilterBuilder) ParseFilterConfig(proto.Message, httpfilter.ParseOptions) (httpfilter.FilterConfig, error) {
 	return dummyFilterCfg{}, nil
 }
 
-func (*testFilterBuilder) ParseFilterConfigOverride(proto.Message) (httpfilter.FilterConfig, error) {
+func (*testFilterBuilder) ParseFilterConfigOverride(proto.Message, httpfilter.ParseOptions) (httpfilter.FilterConfig, error) {
 	return dummyFilterCfg{}, nil
 }
 

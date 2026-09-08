@@ -131,6 +131,7 @@ func (s) TestCSMPluginOptionUnary(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
+	unaryCompressedSize := float64(itestutils.GzipCompressedMessageSize(t, &testpb.SimpleRequest{Payload: &testpb.Payload{Body: make([]byte, 10000)}}))
 	tests := []struct {
 		name string
 		// To test the different operations for Unary RPC's from the interceptor
@@ -147,7 +148,7 @@ func (s) TestCSMPluginOptionUnary(t *testing.T) {
 			},
 			opts: itestutils.MetricDataOptions{
 				CSMLabels:                  csmLabels,
-				UnaryCompressedMessageSize: float64(57),
+				UnaryCompressedMessageSize: unaryCompressedSize,
 			},
 		},
 		{
@@ -171,7 +172,7 @@ func (s) TestCSMPluginOptionUnary(t *testing.T) {
 			},
 			opts: itestutils.MetricDataOptions{
 				CSMLabels:                  csmLabels,
-				UnaryCompressedMessageSize: float64(57),
+				UnaryCompressedMessageSize: unaryCompressedSize,
 			},
 		},
 		{
@@ -185,7 +186,7 @@ func (s) TestCSMPluginOptionUnary(t *testing.T) {
 			},
 			opts: itestutils.MetricDataOptions{
 				CSMLabels:                  csmLabels,
-				UnaryCompressedMessageSize: float64(57),
+				UnaryCompressedMessageSize: unaryCompressedSize,
 			},
 		},
 		{
@@ -197,7 +198,7 @@ func (s) TestCSMPluginOptionUnary(t *testing.T) {
 			},
 			opts: itestutils.MetricDataOptions{
 				CSMLabels:                  csmLabels,
-				UnaryCompressedMessageSize: float64(57),
+				UnaryCompressedMessageSize: unaryCompressedSize,
 			},
 		},
 	}
@@ -299,6 +300,7 @@ func (s) TestCSMPluginOptionStreaming(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
+	streamingCompressedSize := float64(itestutils.GzipCompressedMessageSize(t, &testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: make([]byte, 10000)}}))
 	tests := []struct {
 		name string
 		// To test the different operations for Streaming RPC's from the
@@ -361,7 +363,7 @@ func (s) TestCSMPluginOptionStreaming(t *testing.T) {
 			},
 			opts: itestutils.MetricDataOptions{
 				CSMLabels:                      csmLabels,
-				StreamingCompressedMessageSize: float64(57),
+				StreamingCompressedMessageSize: streamingCompressedSize,
 			},
 		},
 	}
@@ -510,9 +512,13 @@ func (s) TestXDSLabels(t *testing.T) {
 		customLabelAttr,
 	}
 
-	unaryCompressedBytesSentRecv := int64(57) // Fixed 10000 bytes with gzip assumption.
+	unaryCompressedBytesSentRecv := int64(itestutils.GzipCompressedMessageSize(t, &testpb.SimpleRequest{
+		Payload: &testpb.Payload{
+			Body: make([]byte, 10000),
+		},
+	})) // Fixed 10000 bytes with gzip.
 	unaryBucketCounts := []uint64{0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0}
-	unaryExtrema := metricdata.NewExtrema(int64(57))
+	unaryExtrema := metricdata.NewExtrema(unaryCompressedBytesSentRecv)
 	wantMetrics := []metricdata.Metrics{
 		{
 			Name:        "grpc.client.attempt.started",

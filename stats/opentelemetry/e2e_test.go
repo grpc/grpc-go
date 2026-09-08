@@ -443,9 +443,10 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 		}
 	}
 
+	compressedSize := testutils.GzipCompressedMessageSize(t, &testpb.SimpleRequest{Payload: &testpb.Payload{Body: make([]byte, 10000)}})
 	wantMetrics := testutils.MetricData(testutils.MetricDataOptions{
 		Target:                     ss.Target,
-		UnaryCompressedMessageSize: float64(57),
+		UnaryCompressedMessageSize: float64(compressedSize),
 	})
 	gotMetrics = testutils.WaitForServerMetrics(ctx, t, reader, gotMetrics, wantMetrics)
 	testutils.CompareMetrics(t, gotMetrics, wantMetrics)
@@ -846,9 +847,10 @@ func (s) TestMetricsAndTracesOptionEnabled(t *testing.T) {
 		}
 	}
 
+	compressedSize := testutils.GzipCompressedMessageSize(t, &testpb.SimpleRequest{Payload: &testpb.Payload{Body: make([]byte, 10000)}})
 	wantMetrics := testutils.MetricData(testutils.MetricDataOptions{
 		Target:                     ss.Target,
-		UnaryCompressedMessageSize: float64(57),
+		UnaryCompressedMessageSize: float64(compressedSize),
 	})
 	gotMetrics = testutils.WaitForServerMetrics(ctx, t, reader, gotMetrics, wantMetrics)
 	testutils.CompareMetrics(t, gotMetrics, wantMetrics)
@@ -873,7 +875,7 @@ func (s) TestMetricsAndTracesOptionEnabled(t *testing.T) {
 						},
 						{
 							Key:   "message-size-compressed",
-							Value: attribute.IntValue(57),
+							Value: attribute.IntValue(compressedSize),
 						},
 					},
 				},
@@ -890,7 +892,7 @@ func (s) TestMetricsAndTracesOptionEnabled(t *testing.T) {
 						},
 						{
 							Key:   "message-size-compressed",
-							Value: attribute.IntValue(57),
+							Value: attribute.IntValue(compressedSize),
 						},
 					},
 				},
@@ -924,7 +926,7 @@ func (s) TestMetricsAndTracesOptionEnabled(t *testing.T) {
 						},
 						{
 							Key:   "message-size-compressed",
-							Value: attribute.IntValue(57),
+							Value: attribute.IntValue(compressedSize),
 						},
 					},
 				},
@@ -941,7 +943,7 @@ func (s) TestMetricsAndTracesOptionEnabled(t *testing.T) {
 						},
 						{
 							Key:   "message-size-compressed",
-							Value: attribute.IntValue(57),
+							Value: attribute.IntValue(compressedSize),
 						},
 					},
 				},

@@ -28,9 +28,9 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
+	"google.golang.org/grpc/internal/xds/grpcservice"
 	"google.golang.org/grpc/internal/xds/httpfilter"
 	"google.golang.org/grpc/internal/xds/matcher"
-	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
@@ -53,28 +53,20 @@ func Test(t *testing.T) {
 // testParseGRPCServiceConfig is a helper function that parses a GrpcService
 // proto message into a GRPCServiceConfig. This is a temporary test
 // implementation that will be removed once gRFC A102 is implemented.
-func testParseGRPCServiceConfig(grpcService *corepb.GrpcService) (xdsresource.GRPCServiceConfig, error) {
-	if grpcService == nil {
-		return xdsresource.GRPCServiceConfig{}, nil
-	}
+func testParseGRPCServiceConfig(grpcService *corepb.GrpcService) (*grpcservice.Config, error) {
 	if grpcService.GetGoogleGrpc() == nil {
-		return xdsresource.GRPCServiceConfig{}, fmt.Errorf("only google_grpc grpc_service is supported")
+		return nil, fmt.Errorf("only google_grpc grpc_service is supported")
 	}
 	if grpcService.GetGoogleGrpc().GetTargetUri() == "" {
-		return xdsresource.GRPCServiceConfig{}, fmt.Errorf("targetURI must be a non-empty string")
+		return nil, fmt.Errorf("targetURI must be a non-empty string")
 	}
-
-	sc := xdsresource.GRPCServiceConfig{
+	return &grpcservice.Config{
 		TargetURI: grpcService.GetGoogleGrpc().GetTargetUri(),
-	}
-	return sc, nil
+	}, nil
 }
 
 var cmpOpts = []cmp.Option{
-	cmp.AllowUnexported(
-		config{},
-		xdsresource.GRPCServiceConfig{},
-	),
+	cmp.AllowUnexported(config{}),
 	cmp.Transformer("RegexpToString", func(r *regexp.Regexp) string {
 		if r == nil {
 			return ""
@@ -114,7 +106,7 @@ func (s) TestParseFilterConfig_Success(t *testing.T) {
 				},
 			}),
 			wantCfg: config{
-				grpcService: xdsresource.GRPCServiceConfig{
+				grpcService: &grpcservice.Config{
 					TargetURI: "localhost:1234",
 				},
 				filterEnabled: xdsresource.FractionalPercent{
@@ -171,7 +163,7 @@ func (s) TestParseFilterConfig_Success(t *testing.T) {
 				IncludePeerCertificate: true,
 			}),
 			wantCfg: config{
-				grpcService: xdsresource.GRPCServiceConfig{
+				grpcService: &grpcservice.Config{
 					TargetURI: "localhost:5678",
 				},
 				filterEnabled: xdsresource.FractionalPercent{
@@ -201,7 +193,7 @@ func (s) TestParseFilterConfig_Success(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Log(tt.desc)
 			b := builder{}
-			got, err := b.ParseFilterConfig(tt.cfg)
+			got, err := b.ParseFilterConfig(tt.cfg, httpfilter.ParseOptions{})
 			if err != nil {
 				t.Fatalf("ParseFilterConfig() failed with unexpected error: %v", err)
 			}
@@ -317,7 +309,7 @@ func (s) TestParseFilterConfig_Failure(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Log(tt.desc)
 			b := builder{}
-			if _, err := b.ParseFilterConfig(tt.cfg); err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+			if _, err := b.ParseFilterConfig(tt.cfg, httpfilter.ParseOptions{}); err == nil || !strings.Contains(err.Error(), tt.wantErr) {
 				t.Fatalf("ParseFilterConfig() returned error = %v, wantErr containing %v", err, tt.wantErr)
 			}
 		})
@@ -334,7 +326,7 @@ func (s) TestParseFilterConfigOverride_Success(t *testing.T) {
 	})
 
 	b := builder{}
-	got, err := b.ParseFilterConfigOverride(override)
+	got, err := b.ParseFilterConfigOverride(override, httpfilter.ParseOptions{})
 	if err != nil {
 		t.Fatalf("ParseFilterConfigOverride() failed with unexpected error: %v", err)
 	}
@@ -372,7 +364,7 @@ func (s) TestParseFilterConfigOverride_Failure(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Log(tt.desc)
 			b := builder{}
-			if _, err := b.ParseFilterConfigOverride(tt.override); err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+			if _, err := b.ParseFilterConfigOverride(tt.override, httpfilter.ParseOptions{}); err == nil || !strings.Contains(err.Error(), tt.wantErr) {
 				t.Fatalf("ParseFilterConfigOverride() returned error = %v, wantErr containing %v", err, tt.wantErr)
 			}
 		})

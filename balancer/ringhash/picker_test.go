@@ -65,14 +65,6 @@ func (p *fakeChildPicker) Pick(balancer.PickInfo) (balancer.PickResult, error) {
 	}
 }
 
-type fakeExitIdler struct {
-	sc *testutils.TestSubConn
-}
-
-func (ei *fakeExitIdler) ExitIdle() {
-	ei.sc.Connect()
-}
-
 func testRingAndEndpointStates(states []connectivity.State) (*ring, map[string]endpointState) {
 	var items []*ringEntry
 	epStates := map[string]endpointState{}
@@ -92,9 +84,7 @@ func testRingAndEndpointStates(states []connectivity.State) (*ring, map[string]e
 					subConn:           testSC,
 				},
 			},
-			balancer: &fakeExitIdler{
-				sc: testSC,
-			},
+			exitIdle: func() { testSC.Connect() },
 		}
 		epStates[testSC.String()] = epState
 	}

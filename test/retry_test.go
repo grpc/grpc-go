@@ -27,15 +27,20 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/internal/balancer/stub"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
@@ -938,5 +943,127 @@ func (s) TestNoRetry(t *testing.T) {
 				t.Fatalf("client: EmptyCall() failed with an unexpected 'retries exhausted' error: %v", err)
 			}
 		})
+	}
+}
+
+// authorityOverridePicker returns an authority override in the pick result
+// metadata for every pick made before the server has seen the first attempt
+// of the RPC, and no metadata for later picks. This mirrors an xDS cluster
+// (gRFC A81) where only some of the endpoints carry a hostname, so only some
+// picks rewrite the authority. The decision is keyed off the server-side
+// attempt count, rather than a per-picker pick count, so that it stays stable
+// if the channel re-picks for the first attempt or installs a new picker
+// instance on a connectivity state change.
+type authorityOverridePicker struct {
+	sc             balancer.SubConn
+	authority      string
+	serverAttempts *atomic.Int32
+}
+
+func (p *authorityOverridePicker) Pick(balancer.PickInfo) (balancer.PickResult, error) {
+	res := balancer.PickResult{SubConn: p.sc}
+	if p.serverAttempts.Load() == 0 {
+		res.Metadata = metadata.Pairs(":authority", p.authority)
+	}
+	return res, nil
+}
+
+// TestAuthorityOverrideNotReusedAcrossAttempts verifies that an authority
+// override supplied by the LB picker applies only to the attempt it was picked
+// for. A retry attempt whose pick carries no override must fall back to the
+// channel's authority instead of reusing the previous attempt's override.
+func (s) TestAuthorityOverrideNotReusedAcrossAttempts(t *testing.T) {
+	const (
+		balancerName      = "authority-override-retry-balancer"
+		overrideAuthority = "picked-endpoint.example.com"
+		wantAuthority     = "test.server"
+	)
+
+	// Incremented by the server handler as attempts arrive, and read by the
+	// picker to decide whether to return the authority override.
+	serverAttempts := &atomic.Int32{}
+
+	bf := stub.BalancerFuncs{
+		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
+			addrs := ccs.ResolverState.Addresses
+			if len(addrs) == 0 {
+				return nil
+			}
+			var sc balancer.SubConn
+			sc, err := bd.ClientConn.NewSubConn(addrs[:1], balancer.NewSubConnOptions{
+				StateListener: func(state balancer.SubConnState) {
+					bd.ClientConn.UpdateState(balancer.State{
+						ConnectivityState: state.ConnectivityState,
+						Picker:            &authorityOverridePicker{sc: sc, authority: overrideAuthority, serverAttempts: serverAttempts},
+					})
+				},
+			})
+			if err != nil {
+				return err
+			}
+			sc.Connect()
+			return nil
+		},
+	}
+	stub.Register(balancerName, bf)
+
+	// Attempts run sequentially (the retry is only scheduled after the first
+	// attempt's handler has returned), so authorities needs no extra
+	// synchronization.
+	var authorities []string
+	ss := &stubserver.StubServer{
+		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
+			md, _ := metadata.FromIncomingContext(ctx)
+			authorities = append(authorities, md.Get(":authority")...)
+			// Fail the first attempt with a retryable code so that the RPC is
+			// retried, and let the second attempt succeed.
+			if serverAttempts.Add(1) == 1 {
+				return nil, status.Error(codes.Unavailable, "forcing a retry")
+			}
+			return &testpb.Empty{}, nil
+		},
+	}
+	if err := ss.StartServer(); err != nil {
+		t.Fatalf("Failed to start server: %v", err)
+	}
+	defer ss.Stop()
+
+	r := manual.NewBuilderWithScheme("whatever")
+	r.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: ss.Address}}})
+
+	sc := fmt.Sprintf(`{
+		"loadBalancingConfig": [{%q: {}}],
+		"methodConfig": [{
+			"name": [{"service": "grpc.testing.TestService"}],
+			"retryPolicy": {
+				"maxAttempts": 2,
+				"initialBackoff": "0.01s",
+				"maxBackoff": "0.01s",
+				"backoffMultiplier": 1.0,
+				"retryableStatusCodes": ["UNAVAILABLE"]
+			}
+		}]
+	}`, balancerName)
+
+	cc, err := grpc.NewClient(r.Scheme()+":///"+wantAuthority, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r), grpc.WithDefaultServiceConfig(sc))
+	if err != nil {
+		t.Fatalf("grpc.NewClient() failed: %v", err)
+	}
+	defer cc.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if _, err := testgrpc.NewTestServiceClient(cc).EmptyCall(ctx, &testpb.Empty{}); err != nil {
+		t.Fatalf("EmptyCall() failed: %v", err)
+	}
+
+	if len(authorities) != 2 {
+		t.Fatalf("Server saw %d attempts (%q), want 2", len(authorities), authorities)
+	}
+	if authorities[0] != overrideAuthority {
+		t.Errorf("First attempt used authority %q, want %q", authorities[0], overrideAuthority)
+	}
+	if authorities[1] != wantAuthority {
+		t.Errorf("Retry attempt used authority %q, want %q", authorities[1], wantAuthority)
 	}
 }

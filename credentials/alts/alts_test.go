@@ -91,6 +91,7 @@ func (s) TestCloneClient(t *testing.T) {
 	opt := DefaultClientOptions()
 	opt.TargetServiceAccounts = []string{"not", "empty"}
 	c := NewClientCreds(opt)
+	c.(*altsTC).boundAccessToken = "bound-access-token"
 	c.OverrideServerName(wantServerName)
 	cc := c.Clone()
 	if got, want := cc.Info().ServerName, wantServerName; got != want {
@@ -115,6 +116,9 @@ func (s) TestCloneClient(t *testing.T) {
 	}
 	if !reflect.DeepEqual(ct.accounts, cct.accounts) {
 		t.Errorf("cc.accounts = %q, want %q", cct.accounts, ct.accounts)
+	}
+	if ct.boundAccessToken != cct.boundAccessToken {
+		t.Errorf("cc.boundAccessToken = %q, want %q", cct.boundAccessToken, ct.boundAccessToken)
 	}
 }
 
