@@ -24,6 +24,7 @@ import (
 	"net"
 	"sync"
 	"testing"
+	"time"
 
 	"golang.org/x/net/http2"
 	"google.golang.org/grpc"
@@ -343,15 +344,12 @@ func (s) TestHeadersEndStreamNoHang(t *testing.T) {
 		EndHeaders: true,
 	})
 
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-
 	select {
 	case err := <-receivedErr:
 		if err != io.EOF {
-			t.Fatalf("Streaming handler expected io.EOF, got %v", err)
+			t.Errorf("Streaming handler returned error = %v, expected io.EOF", err)
 		}
-	case <-ctx.Done():
-		t.Fatalf("Timed out waiting for Recv() on the server to complete: %v", ctx.Err())
+	case <-time.After(defaultTestTimeout):
+		t.Fatalf("Timed out waiting for Recv() on the server to complete")
 	}
 }

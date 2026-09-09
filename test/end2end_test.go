@@ -4773,12 +4773,12 @@ func testClientInitialHeaderEndStream(t *testing.T, e env) {
 		// selected first in recvBufferReader, stream.Recv() can return either
 		// io.EOF or Canceled.
 		if _, err := stream.Recv(); err != io.EOF && status.Code(err) != codes.Canceled {
-			t.Errorf("expected EOF or canceled error, instead received '%v'", err)
+			t.Errorf("stream.Recv() returned error = %v, expected EOF or canceled error", err)
 		}
 		if err := stream.SendMsg(nil); err == nil {
-			t.Error("expected error sending message on stream after stream closed due to illegal data")
+			t.Error("stream.SendMsg() returned nil, expected cancel error")
 		} else if status.Code(err) != codes.Canceled {
-			t.Errorf("expected cancel error, instead received '%v'", err)
+			t.Errorf("stream.SendMsg() returned error = %v, expected cancel error", err)
 		}
 		return nil
 	}}
