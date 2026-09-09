@@ -1015,6 +1015,12 @@ func (t *http2Server) streamContextErr(s *ServerStream) error {
 	}
 	err := s.ctx.Err()
 	if err == nil {
+		// In closeStream and finishStream, the stream state is transitioned to
+		// streamDone before s.cancel() is invoked so that concurrent operations
+		// immediately observe the terminal state. A concurrent caller (such as
+		// write or writeHeader) can see streamDone and invoke streamContextErr
+		// before s.cancel() runs or propagates to s.ctx. Default to
+		// context.Canceled rather than passing nil to ContextErr.
 		err = context.Canceled
 	}
 	return ContextErr(err)
@@ -1339,16 +1345,17 @@ func (t *http2Server) deleteStream(s *ServerStream, eosReceived bool) {
 
 // finishStream closes the stream and puts the trailing headerFrame into controlbuf.
 func (t *http2Server) finishStream(s *ServerStream, rst bool, rstCode http2.ErrCode, hdr *serverHeaders, eosReceived bool) {
-	// In case stream sending and receiving are invoked in separate
-	// goroutines (e.g., bi-directional streaming), cancel needs to be
-	// called to interrupt the potential blocking on other goroutines.
-	s.cancel()
 
 	oldState := s.swapState(streamDone)
 	if oldState == streamDone {
 		// If the stream was already done, return.
 		return
 	}
+
+	// In case stream sending and receiving are invoked in separate
+	// goroutines (e.g., bi-directional streaming), cancel needs to be
+	// called to interrupt the potential blocking on other goroutines.
+	s.cancel()
 
 	hdr.cleanup = &cleanupStream{
 		streamID: s.id,
