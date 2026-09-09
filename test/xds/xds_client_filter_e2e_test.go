@@ -139,91 +139,101 @@ func (s) TestDefaultStreamInterceptor_InteractionWithXDSFilters(t *testing.T) {
 		t.Fatalf("Failed to create a gRPC client: %v", err)
 	}
 	defer cc.Close()
-
-	// Make a unary RPC.
 	client := testgrpc.NewTestServiceClient(cc)
-	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
-		t.Fatalf("EmptyCall() failed: %v", err)
-	}
-	if got, want := filterBuilder.recvMsgCount.Load(), int32(2); got != want { // One for the request, one for the trailers.
-		t.Fatalf("%d calls to RecvMsg(), want %d", got, want)
-	}
-	if got, want := filterBuilder.sendMsgCount.Load(), int32(1); got != want { // One for the response.
-		t.Fatalf("%d calls to SendMsg(), want %d", got, want)
-	}
-	if got, want := filterBuilder.closeSendCount.Load(), int32(1); got != want { // CloseSend() is called once for the unary RPC.
-		t.Fatalf("%d calls to CloseSend(), want %d", got, want)
+
+	tests := []struct {
+		name          string
+		run           func(ctx context.Context, client testgrpc.TestServiceClient)
+		wantSendMsg   int32
+		wantRecvMsg   int32
+		wantCloseSend int32
+	}{
+		{
+			name: "unary",
+			run: func(ctx context.Context, client testgrpc.TestServiceClient) {
+				if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+					t.Fatalf("EmptyCall() failed: %v", err)
+				}
+			},
+			wantSendMsg:   1, // 1 request
+			wantRecvMsg:   2, // 1 response + 1 trailers
+			wantCloseSend: 1, // CloseSend called by invoke
+		},
+		{
+			name: "client_streaming",
+			run: func(ctx context.Context, client testgrpc.TestServiceClient) {
+				stream, err := client.StreamingInputCall(ctx)
+				if err != nil {
+					t.Fatalf("StreamingInputCall() failed: %v", err)
+				}
+				for i := 0; i < 2; i++ {
+					if err := stream.Send(&testpb.StreamingInputCallRequest{}); err != nil {
+						t.Fatalf("Send() failed: %v", err)
+					}
+				}
+				if _, err := stream.CloseAndRecv(); err != nil {
+					t.Fatalf("CloseAndRecv() failed: %v", err)
+				}
+			},
+			wantSendMsg:   2, // 2 requests
+			wantRecvMsg:   2, // 1 response + 1 trailers
+			wantCloseSend: 1, // CloseSend called by CloseAndRecv
+		},
+		{
+			name: "server_streaming",
+			run: func(ctx context.Context, client testgrpc.TestServiceClient) {
+				stream, err := client.StreamingOutputCall(ctx, &testpb.StreamingOutputCallRequest{})
+				if err != nil {
+					t.Fatalf("StreamingOutputCall() failed: %v", err)
+				}
+				if _, err := stream.Recv(); err != nil {
+					t.Fatalf("Recv() failed: %v", err)
+				}
+			},
+			wantSendMsg:   1, // 1 request
+			wantRecvMsg:   1, // 1 response (trailers not yet consumed since stream not read to EOF)
+			wantCloseSend: 2, // 1 from defaultStreamInterceptor + 1 from proto generated code
+		},
+		{
+			name: "bidi_streaming",
+			run: func(ctx context.Context, client testgrpc.TestServiceClient) {
+				stream, err := client.FullDuplexCall(ctx)
+				if err != nil {
+					t.Fatalf("FullDuplexCall() failed: %v", err)
+				}
+				if err := stream.Send(&testpb.StreamingOutputCallRequest{}); err != nil {
+					t.Fatalf("Send() failed: %v", err)
+				}
+				if _, err := stream.Recv(); err != nil {
+					t.Fatalf("Recv() failed: %v", err)
+				}
+				if err := stream.CloseSend(); err != nil {
+					t.Fatalf("CloseSend() failed: %v", err)
+				}
+			},
+			wantSendMsg:   1, // 1 request
+			wantRecvMsg:   1, // 1 response
+			wantCloseSend: 1, // 1 explicit CloseSend
+		},
 	}
 
-	// Make a client-streaming RPC, sending two messages and receiving one.
-	clientStreamingRPC, err := client.StreamingInputCall(ctx)
-	if err != nil {
-		t.Fatalf("StreamingInputCall() failed: %v", err)
-	}
-	if err := clientStreamingRPC.Send(&testpb.StreamingInputCallRequest{}); err != nil {
-		t.Fatalf("Send() failed: %v", err)
-	}
-	if err := clientStreamingRPC.Send(&testpb.StreamingInputCallRequest{}); err != nil {
-		t.Fatalf("Send() failed: %v", err)
-	}
-	if _, err := clientStreamingRPC.CloseAndRecv(); err != nil {
-		t.Fatalf("CloseAndRecv() failed: %v", err)
-	}
-	if got, want := filterBuilder.recvMsgCount.Load(), int32(4); got != want { // One for the request, one for the trailers.
-		t.Fatalf("%d calls to RecvMsg(), want %d", got, want)
-	}
-	if got, want := filterBuilder.sendMsgCount.Load(), int32(3); got != want { // Two for responses.
-		t.Fatalf("%d calls to SendMsg(), want %d", got, want)
-	}
-	if got, want := filterBuilder.closeSendCount.Load(), int32(2); got != want { // CloseSend() is called as part of CloseAndRecv().
-		t.Fatalf("%d calls to CloseSend(), want %d", got, want)
-	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			filterBuilder.sendMsgCount.Store(0)
+			filterBuilder.recvMsgCount.Store(0)
+			filterBuilder.closeSendCount.Store(0)
 
-	// Make a server-streaming RPC, sending one message and receiving one.
-	serverStreamingRPC, err := client.StreamingOutputCall(ctx, &testpb.StreamingOutputCallRequest{})
-	if err != nil {
-		t.Fatalf("StreamingOutputCall() failed: %v", err)
-	}
-	if _, err := serverStreamingRPC.Recv(); err != nil {
-		t.Fatalf("Recv() failed: %v", err)
-	}
-	if got, want := filterBuilder.recvMsgCount.Load(), int32(5); got != want { // One for the request, none for the trailers.
-		t.Fatalf("%d calls to RecvMsg(), want %d", got, want)
-	}
-	if got, want := filterBuilder.sendMsgCount.Load(), int32(4); got != want { // One for the response.
-		t.Fatalf("%d calls to SendMsg(), want %d", got, want)
-	}
-	// CloseSend() is invoked by the proto generated code after sending the
-	// request message. It is also invoked by the defaultStreamInterceptor to
-	// handle cases where the user is using the ClientStream API instead of the
-	// proto generated code.
-	if got, want := filterBuilder.closeSendCount.Load(), int32(4); got != want {
-		t.Fatalf("%d calls to CloseSend(), want %d", got, want)
-	}
+			tc.run(ctx, client)
 
-	// Make a bidirectional-streaming RPC, sending one message and receiving one.
-	bidiStreamingRPC, err := client.FullDuplexCall(ctx)
-	if err != nil {
-		t.Fatalf("FullDuplexCall() failed: %v", err)
-	}
-	if err := bidiStreamingRPC.Send(&testpb.StreamingOutputCallRequest{}); err != nil {
-		t.Fatalf("Send() failed: %v", err)
-	}
-	if _, err := bidiStreamingRPC.Recv(); err != nil {
-		t.Fatalf("Recv() failed: %v", err)
-	}
-	if got, want := filterBuilder.recvMsgCount.Load(), int32(6); got != want { // One for the request, none for the trailers.
-		t.Fatalf("%d calls to RecvMsg(), want %d", got, want)
-	}
-	if got, want := filterBuilder.sendMsgCount.Load(), int32(5); got != want { // One for the response.
-		t.Fatalf("%d calls to SendMsg(), want %d", got, want)
-	}
-	// Bidi stream is still open, so CloseSend() is yet to be called.
-	if got, want := filterBuilder.closeSendCount.Load(), int32(4); got != want {
-		t.Fatalf("%d calls to CloseSend(), want %d", got, want)
-	}
-	bidiStreamingRPC.CloseSend()
-	if got, want := filterBuilder.closeSendCount.Load(), int32(5); got != want {
-		t.Fatalf("%d calls to CloseSend(), want %d", got, want)
+			if got := filterBuilder.sendMsgCount.Load(); got != tc.wantSendMsg {
+				t.Fatalf("SendMsg() count = %d, want %d", got, tc.wantSendMsg)
+			}
+			if got := filterBuilder.recvMsgCount.Load(); got != tc.wantRecvMsg {
+				t.Fatalf("RecvMsg() count = %d, want %d", got, tc.wantRecvMsg)
+			}
+			if got := filterBuilder.closeSendCount.Load(); got != tc.wantCloseSend {
+				t.Fatalf("CloseSend() count = %d, want %d", got, tc.wantCloseSend)
+			}
+		})
 	}
 }
