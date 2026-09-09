@@ -99,7 +99,7 @@ func buildSliceMap(endpointMap *endpointMap, assignment *assignment) *sliceMap {
 	for _, s := range assignment.slices {
 		entry := sliceMapEntry{
 			startKey:  s.startKey,
-			endpoints: []int{},
+			endpoints: make([]int, 0, len(s.endpoints)),
 		}
 
 		// Populate the endpoints for this slice by looking up the endpoint
