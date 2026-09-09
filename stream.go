@@ -176,10 +176,12 @@ func (w *clientStreamWrapper) SendMsg(m any) error {
 	if err != nil {
 		return err
 	}
-	// CloseSend is needed because in some scenarios (e.g., xDS), the same
-	// interceptors are used to process both unary and streaming RPCs. Calling
-	// CloseSend signals to those interceptors that no more messages are on the
-	// way.
+	// In some scenarios (e.g., xDS), the same interceptors process both unary and
+	// streaming RPCs, relying on CloseSend to signal that no more messages are on
+	// the way. Although protobuf-generated stubs already invoke CloseSend for
+	// server-streaming RPCs, it is explicitly called here to ensure downstream
+	// interceptors are also notified when callers interact with the ClientStream
+	// API directly.
 	if err := w.ClientStream.CloseSend(); err != nil && err != io.EOF {
 		return err
 	}
