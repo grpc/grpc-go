@@ -3462,6 +3462,105 @@ func (s) TestReadMessageHeaderMultipleBuffers(t *testing.T) {
 	}
 }
 
+func (s) TestReadMessageHeaderPartialHeaderEOF(t *testing.T) {
+	const headerLen = 5
+	stream := Stream{
+		readRequester: &fakeReadRequester{},
+	}
+	stream.buf.init(mem.DefaultBufferPool())
+	recvBuffer := &stream.buf
+	stream.trReader = transportReader{
+		reader: recvBufferReader{
+			recv: recvBuffer,
+		},
+		windowHandler: &mockWindowUpdater{f: func(int) {}},
+	}
+
+	recvBuffer.put(recvMsg{buffer: make(mem.SliceBuffer, 3)})
+	recvBuffer.put(recvMsg{err: io.EOF})
+
+	if err := stream.ReadMessageHeader(make([]byte, headerLen)); !errors.Is(err, io.ErrUnexpectedEOF) {
+		t.Fatalf("ReadMessageHeader() error = %v, want %v", err, io.ErrUnexpectedEOF)
+	}
+	if err := stream.ReadMessageHeader(make([]byte, headerLen)); !errors.Is(err, io.ErrUnexpectedEOF) {
+		t.Fatalf("second ReadMessageHeader() error = %v, want %v", err, io.ErrUnexpectedEOF)
+	}
+}
+
+func (s) TestReadMessageHeaderEOF(t *testing.T) {
+	stream := Stream{
+		readRequester: &fakeReadRequester{},
+	}
+	stream.buf.init(mem.DefaultBufferPool())
+	recvBuffer := &stream.buf
+	stream.trReader = transportReader{
+		reader: recvBufferReader{
+			recv: recvBuffer,
+		},
+		windowHandler: &mockWindowUpdater{},
+	}
+
+	recvBuffer.put(recvMsg{err: io.EOF})
+
+	err := stream.ReadMessageHeader(make([]byte, 5))
+	if !errors.Is(err, io.EOF) {
+		t.Fatalf("ReadMessageHeader() error = %v, want %v", err, io.EOF)
+	}
+	if errors.Is(err, io.ErrUnexpectedEOF) {
+		t.Fatalf("ReadMessageHeader() error = %v, want not %v", err, io.ErrUnexpectedEOF)
+	}
+}
+
+func (s) TestReadPartialMessageEOF(t *testing.T) {
+	const messageLen = 5
+	stream := Stream{
+		readRequester: &fakeReadRequester{},
+	}
+	stream.buf.init(mem.DefaultBufferPool())
+	recvBuffer := &stream.buf
+	stream.trReader = transportReader{
+		reader: recvBufferReader{
+			recv: recvBuffer,
+		},
+		windowHandler: &mockWindowUpdater{f: func(int) {}},
+	}
+
+	recvBuffer.put(recvMsg{buffer: make(mem.SliceBuffer, 3)})
+	recvBuffer.put(recvMsg{err: io.EOF})
+
+	if _, err := stream.read(messageLen); !errors.Is(err, io.ErrUnexpectedEOF) {
+		t.Fatalf("read(%d) error = %v, want %v", messageLen, err, io.ErrUnexpectedEOF)
+	}
+	if _, err := stream.read(messageLen); !errors.Is(err, io.ErrUnexpectedEOF) {
+		t.Fatalf("second read(%d) error = %v, want %v", messageLen, err, io.ErrUnexpectedEOF)
+	}
+}
+
+func (s) TestReadMessageEOF(t *testing.T) {
+	const messageLen = 5
+	stream := Stream{
+		readRequester: &fakeReadRequester{},
+	}
+	stream.buf.init(mem.DefaultBufferPool())
+	recvBuffer := &stream.buf
+	stream.trReader = transportReader{
+		reader: recvBufferReader{
+			recv: recvBuffer,
+		},
+		windowHandler: &mockWindowUpdater{f: func(int) {}},
+	}
+
+	recvBuffer.put(recvMsg{err: io.EOF})
+
+	_, err := stream.read(messageLen)
+	if !errors.Is(err, io.EOF) {
+		t.Fatalf("read(%d) error = %v, want %v", messageLen, err, io.EOF)
+	}
+	if errors.Is(err, io.ErrUnexpectedEOF) {
+		t.Fatalf("read(%d) error = %v, want not %v", messageLen, err, io.ErrUnexpectedEOF)
+	}
+}
+
 // Tests a scenario when the client doesn't send an RST frame when the
 // configured deadline is reached. The test verifies that the server sends an
 // RST stream only after the deadline is reached.
