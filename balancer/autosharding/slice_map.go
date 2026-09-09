@@ -29,11 +29,9 @@ type sliceMapEntry struct {
 	endpoints []int  // Indices into list[PickerEndpoint] in the Picker
 }
 
-// sliceMap is a data structure optimized for lookups. Given a key, it returns a
-// matching key-range.
-//
-// The sliceMap must be immutable, allowing the Picker to access it without any
-// explicit synchronization with the LB policy.
+// sliceMap is an immutable data structure used by the Picker to map request
+// keys to their assigned key-range. Because it is immutable, it allows the
+// Picker to access it without any explicit synchronization with the LB policy.
 //
 // The sliceMap is meant to be used by the Picker in conjunction with a list of
 // pickerEndpoints such that the list can be swapped out, as long as the number
