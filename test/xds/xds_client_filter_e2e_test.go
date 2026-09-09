@@ -42,6 +42,11 @@ import (
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
+// Tests the interaction between the defaultStreamInterceptor and xDS filters.
+// It verifies that the SendMsg, RecvMsg, and CloseSend methods are called the
+// expected number of times for different RPC types (unary, client streaming,
+// server streaming, and bidi streaming) when an xDS filter is registered and
+// used in the call chain.
 func (s) TestDefaultStreamInterceptor_InteractionWithXDSFilters(t *testing.T) {
 	// Register a custom xDS filter builder for the test.
 	testFilterTypeURL := t.Name()
