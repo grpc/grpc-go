@@ -553,7 +553,7 @@ func chainStreamClientInterceptors(cc *ClientConn) {
 	if cc.dopts.streamInt != nil {
 		interceptors = append([]StreamClientInterceptor{cc.dopts.streamInt}, interceptors...)
 	}
-	interceptors = append([]StreamClientInterceptor{defaultStreamInterceptor}, interceptors...)
+	interceptors = append(interceptors, defaultStreamInterceptor)
 	var chainedInt StreamClientInterceptor
 	if len(interceptors) == 0 {
 		chainedInt = nil
