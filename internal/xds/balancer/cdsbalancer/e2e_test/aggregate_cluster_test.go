@@ -1383,6 +1383,7 @@ func (s) TestAggregateCluster_LRS(t *testing.T) {
 			},
 		},
 	}
+
 waitForPrimaryStats:
 	for {
 		select {
@@ -1393,11 +1394,11 @@ waitForPrimaryStats:
 			if len(loadStats.ClusterStats) == 0 {
 				continue
 			}
-			diff := cmp.Diff([]*v3endpointpb.ClusterStats{wantClusterStats}, loadStats.ClusterStats,
+			opts := []cmp.Option{
 				protocmp.Transform(),
 				protocmp.IgnoreFields(&v3endpointpb.ClusterStats{}, "load_report_interval"),
-			)
-			if diff != "" {
+			}
+			if diff := cmp.Diff([]*v3endpointpb.ClusterStats{wantClusterStats}, loadStats.ClusterStats, opts...); diff != "" {
 				t.Fatalf("Unexpected diff in LRS ClusterStats for %q (-want +got):\n%s", clusterName1, diff)
 			}
 			break waitForPrimaryStats
@@ -1415,11 +1416,10 @@ waitForPrimaryStats:
 
 	// Make RPCs and verify failover to secondary backend.
 	peer := &peer.Peer{}
-	for ctx.Err() == nil {
+	for ; ctx.Err() == nil; <-time.After(defaultTestShortTimeout) {
 		if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(peer)); err == nil && peer.Addr.String() == servers[1].Address {
 			break
 		}
-		time.Sleep(defaultTestShortTimeout)
 	}
 	if ctx.Err() != nil {
 		t.Fatalf("Timeout waiting for RPCs to switch to secondary backend %q", servers[1].Address)
@@ -1452,12 +1452,12 @@ waitForPrimaryStats:
 				if len(load.UpstreamLocalityStats) == 0 || load.UpstreamLocalityStats[0].TotalSuccessfulRequests == 0 {
 					continue
 				}
-				diff := cmp.Diff(wantClusterStats, load,
+				opts := []cmp.Option{
 					protocmp.Transform(),
 					protocmp.IgnoreFields(&v3endpointpb.ClusterStats{}, "load_report_interval"),
 					protocmp.IgnoreFields(&v3endpointpb.UpstreamLocalityStats{}, "total_issued_requests", "total_requests_in_progress"),
-				)
-				if diff != "" {
+				}
+				if diff := cmp.Diff(wantClusterStats, load, opts...); diff != "" {
 					t.Fatalf("Unexpected diff in LRS ClusterStats for %q (-want +got):\n%s", clusterName2, diff)
 				}
 				return

@@ -115,7 +115,6 @@ func (s) TestTelemetryLabels_AggregateCluster(t *testing.T) {
 	managementServer, nodeID, _, xdsResolver := setup.ManagementServerAndResolver(t)
 
 	const (
-		numServers     = 2
 		xdsServiceName = "my-service-client-side-xds"
 		cluster1Name   = "cluster-1"
 		cluster2Name   = "cluster-2"
@@ -126,8 +125,8 @@ func (s) TestTelemetryLabels_AggregateCluster(t *testing.T) {
 		csmNs2   = "namespace-2"
 	)
 
-	servers := make([]*stubserver.StubServer, numServers)
-	for i := 0; i < numServers; i++ {
+	servers := make([]*stubserver.StubServer, 2)
+	for i := range 2 {
 		servers[i] = stubserver.StartTestService(t, nil)
 		defer servers[i].Stop()
 	}
@@ -197,14 +196,13 @@ func (s) TestTelemetryLabels_AggregateCluster(t *testing.T) {
 
 	// Make RPCs until traffic switches to secondary cluster and capture
 	// secondary labels.
-	for ctx.Err() == nil {
+	for ; ctx.Err() == nil; <-time.After(defaultTestShortTimeout) {
 		callCtx := telemetry.NewContextWithLabelCallback(ctx, func(l map[string]string) {
 			gotLabels = l
 		})
 		if _, err := client.EmptyCall(callCtx, &testpb.Empty{}, grpc.Peer(peer)); err == nil && peer.Addr.String() == servers[1].Address {
 			break
 		}
-		time.Sleep(defaultTestShortTimeout)
 	}
 	if ctx.Err() != nil {
 		t.Fatalf("Timeout waiting for RPCs to switch to secondary cluster %q", servers[1].Address)
