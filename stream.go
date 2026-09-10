@@ -28,6 +28,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"google.golang.org/grpc/balancer"
@@ -152,7 +153,18 @@ type ClientStream interface {
 // RecvMsg parities based on the nature of stream.
 type clientStreamWrapper struct {
 	ClientStream
-	desc *StreamDesc
+	desc            *StreamDesc
+	closeSendCalled atomic.Bool
+}
+
+// CloseSend closes the send direction of the stream. The implementation ensures
+// that CloseSend is only called once on the underlying ClientStream, even if
+// CloseSend is called multiple times on the wrapper.
+func (w *clientStreamWrapper) CloseSend() error {
+	if w.closeSendCalled.Swap(true) {
+		return nil
+	}
+	return w.ClientStream.CloseSend()
 }
 
 // SendMsg sends message m across the stream. For RPCs where client can call
@@ -182,7 +194,7 @@ func (w *clientStreamWrapper) SendMsg(m any) error {
 	// server-streaming RPCs, it is explicitly called here to ensure downstream
 	// interceptors are also notified when callers interact with the ClientStream
 	// API directly.
-	if err := w.ClientStream.CloseSend(); err != nil && err != io.EOF {
+	if err := w.CloseSend(); err != nil && err != io.EOF {
 		return err
 	}
 	return nil

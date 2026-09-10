@@ -147,11 +147,10 @@ func (s) TestDefaultStreamInterceptor_InteractionWithXDSFilters(t *testing.T) {
 	client := testgrpc.NewTestServiceClient(cc)
 
 	tests := []struct {
-		name          string
-		run           func(ctx context.Context, client testgrpc.TestServiceClient)
-		wantSendMsg   int32
-		wantRecvMsg   int32
-		wantCloseSend int32
+		name        string
+		run         func(ctx context.Context, client testgrpc.TestServiceClient)
+		wantSendMsg int32
+		wantRecvMsg int32
 	}{
 		{
 			name: "unary",
@@ -160,9 +159,8 @@ func (s) TestDefaultStreamInterceptor_InteractionWithXDSFilters(t *testing.T) {
 					t.Fatalf("EmptyCall() failed: %v", err)
 				}
 			},
-			wantSendMsg:   1, // 1 request
-			wantRecvMsg:   2, // 1 response + 1 trailers
-			wantCloseSend: 1, // CloseSend called by invoke
+			wantSendMsg: 1, // 1 request
+			wantRecvMsg: 2, // 1 response + 1 trailers
 		},
 		{
 			name: "client_streaming",
@@ -180,9 +178,8 @@ func (s) TestDefaultStreamInterceptor_InteractionWithXDSFilters(t *testing.T) {
 					t.Fatalf("CloseAndRecv() failed: %v", err)
 				}
 			},
-			wantSendMsg:   2, // 2 requests
-			wantRecvMsg:   2, // 1 response + 1 trailers
-			wantCloseSend: 1, // CloseSend called by CloseAndRecv
+			wantSendMsg: 2, // 2 requests
+			wantRecvMsg: 2, // 1 response + 1 trailers
 		},
 		{
 			name: "server_streaming",
@@ -195,9 +192,8 @@ func (s) TestDefaultStreamInterceptor_InteractionWithXDSFilters(t *testing.T) {
 					t.Fatalf("Recv() failed: %v", err)
 				}
 			},
-			wantSendMsg:   1, // 1 request
-			wantRecvMsg:   1, // 1 response (trailers not yet consumed since stream not read to EOF)
-			wantCloseSend: 2, // 1 from defaultStreamInterceptor + 1 from proto generated code
+			wantSendMsg: 1, // 1 request
+			wantRecvMsg: 1, // 1 response (trailers not yet consumed since stream not read to EOF)
 		},
 		{
 			name: "bidi_streaming",
@@ -216,9 +212,8 @@ func (s) TestDefaultStreamInterceptor_InteractionWithXDSFilters(t *testing.T) {
 					t.Fatalf("CloseSend() failed: %v", err)
 				}
 			},
-			wantSendMsg:   1, // 1 request
-			wantRecvMsg:   1, // 1 response
-			wantCloseSend: 1, // 1 explicit CloseSend
+			wantSendMsg: 1, // 1 request
+			wantRecvMsg: 1, // 1 response
 		},
 	}
 
@@ -236,8 +231,8 @@ func (s) TestDefaultStreamInterceptor_InteractionWithXDSFilters(t *testing.T) {
 			if got := filterBuilder.recvMsgCount.Load(); got != tc.wantRecvMsg {
 				t.Fatalf("RecvMsg() count = %d, want %d", got, tc.wantRecvMsg)
 			}
-			if got := filterBuilder.closeSendCount.Load(); got != tc.wantCloseSend {
-				t.Fatalf("CloseSend() count = %d, want %d", got, tc.wantCloseSend)
+			if got := filterBuilder.closeSendCount.Load(); got != 1 {
+				t.Fatalf("CloseSend() count = %d, want 1", got)
 			}
 		})
 	}
