@@ -2829,7 +2829,6 @@ func (s) TestRingHash_RequestHashKeyConnecting(t *testing.T) {
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithResolvers(r),
 		grpc.WithDefaultServiceConfig(ringHashServiceConfig),
-		grpc.WithConnectParams(fastConnectParams),
 		grpc.WithContextDialer(blockingDialer.DialContext),
 	}
 	cc, err := grpc.NewClient(r.Scheme()+":///test.server", dopts...)
@@ -2889,7 +2888,13 @@ func (s) TestRingHash_RequestHashKeyConnecting(t *testing.T) {
 	// of racing the assertions below. Since there is already an endpoint in
 	// Connecting state, the picker must queue the RPC rather than trigger
 	// another connection attempt, so the RPC fails with DeadlineExceeded.
-	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
+	//
+	// The deadline must leave the RPC enough time to reach the picker on a
+	// loaded machine, otherwise it fails before the pick with a plain context
+	// error. It is not shared with the other tests because the RPC blocks for
+	// the whole duration on every run.
+	const secondRPCTimeout = 100 * time.Millisecond
+	sCtx, sCancel := context.WithTimeout(ctx, secondRPCTimeout)
 	_, err = client.EmptyCall(sCtx, &testpb.Empty{}, grpc.WaitForReady(true))
 	sCancel()
 	if got, want := status.Code(err), codes.DeadlineExceeded; got != want {
