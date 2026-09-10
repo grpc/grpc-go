@@ -30,6 +30,8 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+const errSetSendCompressorTooLate = "transport: set send compressor called after headers sent or stream done"
+
 // ServerStream implements streaming functionality for a gRPC server.
 type ServerStream struct {
 	Stream // Embed for common stream functionality.
@@ -48,6 +50,8 @@ type ServerStream struct {
 	hdrMu      sync.Mutex
 	header     metadata.MD // the outgoing header metadata.  Updated by WriteHeader.
 	headerSent atomic.Bool // atomically set when the headers are sent out.
+	// closeStatus is the first non-OK status recorded by closeStream.
+	closeStatus atomic.Pointer[status.Status]
 
 	headerWireLength int
 }
@@ -110,12 +114,23 @@ func (s *ServerStream) ContentSubtype() string {
 
 // SetSendCompress sets the compression algorithm to the stream.
 func (s *ServerStream) SetSendCompress(name string) error {
-	if s.isHeaderSent() || s.getState() == streamDone {
-		return errors.New("transport: set send compressor called after headers sent or stream done")
+	if s.isHeaderSent() {
+		return errors.New(errSetSendCompressorTooLate)
+	}
+	if st := s.closeStatus.Load(); st != nil {
+		return st.Err()
+	}
+	if s.getState() == streamDone {
+		return errors.New(errSetSendCompressorTooLate)
 	}
 
 	s.sendCompress = name
 	return nil
+}
+
+// setCloseStatus records the first status passed to closeStream.
+func (s *ServerStream) setCloseStatus(st *status.Status) {
+	s.closeStatus.CompareAndSwap(nil, st)
 }
 
 // SetContext sets the context of the stream. This will be deleted once the
