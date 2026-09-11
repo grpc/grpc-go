@@ -623,7 +623,15 @@ func (t *http2Client) createHeaderFields(ctx context.Context, callHdr *CallHdr) 
 		if timeout <= 0 {
 			return nil, status.Error(codes.DeadlineExceeded, context.DeadlineExceeded.Error())
 		}
-		headerFields = append(headerFields, hpack.HeaderField{Name: "grpc-timeout", Value: grpcutil.EncodeDuration(timeout)})
+		// grpc-timeout carries the remaining time until the deadline, so its
+		// value is effectively unique on every RPC. Adding it to the HPACK
+		// dynamic table therefore never yields a compression hit on a later
+		// request; it only costs a map insert per RPC and evicts genuinely
+		// reusable entries (e.g. content-type, :authority) from the table.
+		// Marking the field as sensitive keeps the encoder from indexing it,
+		// which lowers CPU spent in the encoder and improves the compression
+		// ratio of the surrounding, reusable fields.
+		headerFields = append(headerFields, hpack.HeaderField{Name: "grpc-timeout", Value: grpcutil.EncodeDuration(timeout), Sensitive: true})
 	}
 	for k, v := range authData {
 		headerFields = append(headerFields, hpack.HeaderField{Name: k, Value: encodeMetadataHeader(k, v)})

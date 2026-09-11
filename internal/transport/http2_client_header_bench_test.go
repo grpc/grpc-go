@@ -19,11 +19,14 @@
 package transport
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"testing"
 	"time"
 
+	"golang.org/x/net/http2/hpack"
+	"google.golang.org/grpc/internal/grpcutil"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -92,5 +95,80 @@ func BenchmarkCreateHeaderFields(b *testing.B) {
 				}
 			}
 		})
+	}
+}
+
+// stableClientHeaderBlock returns the reusable header fields a client sends on
+// every RPC (pseudo-headers, content-type, user-agent, te) plus mdCount pieces
+// of stable metadata. grpc-timeout is intentionally excluded; it is added by
+// the benchmark below with a fresh value per iteration.
+func stableClientHeaderBlock(mdCount int) []hpack.HeaderField {
+	hf := []hpack.HeaderField{
+		{Name: ":method", Value: "POST"},
+		{Name: ":scheme", Value: "https"},
+		{Name: ":path", Value: "/grpc.testing.BenchmarkService/UnaryCall"},
+		{Name: ":authority", Value: "server:443"},
+		{Name: "content-type", Value: "application/grpc"},
+		{Name: "user-agent", Value: "grpc-go/benchmark"},
+		{Name: "te", Value: "trailers"},
+	}
+	for i := 0; i < mdCount; i++ {
+		hf = append(hf, hpack.HeaderField{
+			Name:  fmt.Sprintf("header-%d", i),
+			Value: fmt.Sprintf("value-%d", i),
+		})
+	}
+	return hf
+}
+
+// BenchmarkEncodeGrpcTimeout isolates the HPACK encode path that dominates
+// header CPU on the wire. A single encoder is reused across iterations, exactly
+// as a transport reuses one encoder across every RPC, so the dynamic-table
+// state carries over between requests.
+//
+// grpc-timeout carries the remaining time to the deadline, so its value differs
+// on every RPC. The "indexed" case adds each unique value to the dynamic table
+// (map insert per RPC, and eventual eviction of the reusable entries once the
+// 4KB table fills), while the "sensitive" case skips indexing entirely. The
+// delta between the two is the cost this change removes.
+func BenchmarkEncodeGrpcTimeout(b *testing.B) {
+	for _, mdCount := range []int{0, 4, 12} {
+		for _, sensitive := range []bool{false, true} {
+			mode := "indexed"
+			if sensitive {
+				mode = "sensitive"
+			}
+			b.Run(fmt.Sprintf("mdCount=%d/%s", mdCount, mode), func(b *testing.B) {
+				stable := stableClientHeaderBlock(mdCount)
+				var buf bytes.Buffer
+				enc := hpack.NewEncoder(&buf)
+				start := time.Now()
+
+				b.ReportAllocs()
+				var i int
+				for b.Loop() {
+					// Advance the deadline so EncodeDuration yields a distinct
+					// value each iteration, mirroring production traffic.
+					timeout := time.Until(start.Add(time.Duration(i) * time.Microsecond))
+					if timeout <= 0 {
+						timeout = time.Duration(i) * time.Microsecond
+					}
+					i++
+					buf.Reset()
+					for _, f := range stable {
+						if err := enc.WriteField(f); err != nil {
+							b.Fatal(err)
+						}
+					}
+					if err := enc.WriteField(hpack.HeaderField{
+						Name:      "grpc-timeout",
+						Value:     grpcutil.EncodeDuration(timeout),
+						Sensitive: sensitive,
+					}); err != nil {
+						b.Fatal(err)
+					}
+				}
+			})
+		}
 	}
 }
