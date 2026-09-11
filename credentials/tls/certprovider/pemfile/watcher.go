@@ -71,6 +71,10 @@ type Options struct {
 	// for updates in the specified files.
 	// Optional. If not set, a default value (1 hour) will be used.
 	RefreshDuration time.Duration
+	// Callback invoked after files have been checked for updates, including
+	// on initial update. This is called even if the files are unchanged.
+	// Optional.
+	OnUpdate func(certprovider.Provider)
 }
 
 func (o Options) canonical() []byte {
@@ -254,6 +258,9 @@ func (w *watcher) run(ctx context.Context) {
 	for {
 		w.updateIdentityDistributor()
 		w.updateRootDistributor()
+		if w.opts.OnUpdate != nil {
+			w.opts.OnUpdate(w)
+		}
 		select {
 		case <-ctx.Done():
 			ticker.Stop()
