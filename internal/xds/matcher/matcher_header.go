@@ -35,6 +35,10 @@ type HeaderMatcher interface {
 	String() string
 }
 
+func lowercaseHeaderKey(key string) string {
+	return strings.ToLower(key)
+}
+
 // valueFromMD retrieves metadata from context. If there are
 // multiple values, the values are concatenated with "," (comma and no space).
 //
@@ -56,7 +60,7 @@ type HeaderExactMatcher struct {
 
 // NewHeaderExactMatcher returns a new HeaderExactMatcher.
 func NewHeaderExactMatcher(key, exact string, invert bool) *HeaderExactMatcher {
-	return &HeaderExactMatcher{key: key, exact: exact, invert: invert}
+	return &HeaderExactMatcher{key: lowercaseHeaderKey(key), exact: exact, invert: invert}
 }
 
 // Match returns whether the passed in HTTP Headers match according to the
@@ -83,7 +87,7 @@ type HeaderRegexMatcher struct {
 
 // NewHeaderRegexMatcher returns a new HeaderRegexMatcher.
 func NewHeaderRegexMatcher(key string, re *regexp.Regexp, invert bool) *HeaderRegexMatcher {
-	return &HeaderRegexMatcher{key: key, re: re, invert: invert}
+	return &HeaderRegexMatcher{key: lowercaseHeaderKey(key), re: re, invert: invert}
 }
 
 // Match returns whether the passed in HTTP Headers match according to the
@@ -110,7 +114,7 @@ type HeaderRangeMatcher struct {
 
 // NewHeaderRangeMatcher returns a new HeaderRangeMatcher.
 func NewHeaderRangeMatcher(key string, start, end int64, invert bool) *HeaderRangeMatcher {
-	return &HeaderRangeMatcher{key: key, start: start, end: end, invert: invert}
+	return &HeaderRangeMatcher{key: lowercaseHeaderKey(key), start: start, end: end, invert: invert}
 }
 
 // Match returns whether the passed in HTTP Headers match according to the
@@ -142,7 +146,7 @@ func NewHeaderPresentMatcher(key string, present bool, invert bool) *HeaderPrese
 	if invert {
 		present = !present
 	}
-	return &HeaderPresentMatcher{key: key, present: present}
+	return &HeaderPresentMatcher{key: lowercaseHeaderKey(key), present: present}
 }
 
 // Match returns whether the passed in HTTP Headers match according to the
@@ -167,7 +171,7 @@ type HeaderPrefixMatcher struct {
 
 // NewHeaderPrefixMatcher returns a new HeaderPrefixMatcher.
 func NewHeaderPrefixMatcher(key string, prefix string, invert bool) *HeaderPrefixMatcher {
-	return &HeaderPrefixMatcher{key: key, prefix: prefix, invert: invert}
+	return &HeaderPrefixMatcher{key: lowercaseHeaderKey(key), prefix: prefix, invert: invert}
 }
 
 // Match returns whether the passed in HTTP Headers match according to the
@@ -194,7 +198,7 @@ type HeaderSuffixMatcher struct {
 
 // NewHeaderSuffixMatcher returns a new HeaderSuffixMatcher.
 func NewHeaderSuffixMatcher(key string, suffix string, invert bool) *HeaderSuffixMatcher {
-	return &HeaderSuffixMatcher{key: key, suffix: suffix, invert: invert}
+	return &HeaderSuffixMatcher{key: lowercaseHeaderKey(key), suffix: suffix, invert: invert}
 }
 
 // Match returns whether the passed in HTTP Headers match according to the
@@ -224,7 +228,7 @@ type HeaderContainsMatcher struct {
 // contain for a successful match. An empty contains string does not
 // work, use HeaderPresentMatcher in that case.
 func NewHeaderContainsMatcher(key string, contains string, invert bool) *HeaderContainsMatcher {
-	return &HeaderContainsMatcher{key: key, contains: contains, invert: invert}
+	return &HeaderContainsMatcher{key: lowercaseHeaderKey(key), contains: contains, invert: invert}
 }
 
 // Match returns whether the passed in HTTP Headers match according to the
@@ -252,7 +256,7 @@ type HeaderStringMatcher struct {
 // NewHeaderStringMatcher returns a new HeaderStringMatcher.
 func NewHeaderStringMatcher(key string, sm StringMatcher, invert bool) *HeaderStringMatcher {
 	return &HeaderStringMatcher{
-		key:           key,
+		key:           lowercaseHeaderKey(key),
 		stringMatcher: sm,
 		invert:        invert,
 	}

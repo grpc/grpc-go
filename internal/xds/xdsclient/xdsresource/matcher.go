@@ -43,30 +43,11 @@ func RouteToMatcher(r *Route) *CompositeMatcher {
 		panic("illegal route: missing path_matcher")
 	}
 
-	headerMatchers := make([]matcher.HeaderMatcher, 0, len(r.Headers))
-	for _, h := range r.Headers {
-		var matcherT matcher.HeaderMatcher
-		invert := h.InvertMatch != nil && *h.InvertMatch
-		switch {
-		case h.RegexMatch != nil:
-			matcherT = matcher.NewHeaderRegexMatcher(h.Name, h.RegexMatch, invert)
-		case h.RangeMatch != nil:
-			matcherT = matcher.NewHeaderRangeMatcher(h.Name, h.RangeMatch.Start, h.RangeMatch.End, invert)
-		case h.PresentMatch != nil:
-			matcherT = matcher.NewHeaderPresentMatcher(h.Name, *h.PresentMatch, invert)
-		case h.StringMatch != nil:
-			matcherT = matcher.NewHeaderStringMatcher(h.Name, *h.StringMatch, invert)
-		default:
-			panic("illegal route: missing header_match_specifier")
-		}
-		headerMatchers = append(headerMatchers, matcherT)
-	}
-
 	var fractionMatcher *fractionMatcher
 	if r.Fraction != nil {
 		fractionMatcher = newFractionMatcher(*r.Fraction)
 	}
-	return newCompositeMatcher(pm, headerMatchers, fractionMatcher)
+	return newCompositeMatcher(pm, r.Headers, fractionMatcher)
 }
 
 // CompositeMatcher is a matcher that holds onto many matchers and aggregates
