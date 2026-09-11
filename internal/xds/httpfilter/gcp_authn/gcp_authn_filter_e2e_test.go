@@ -89,7 +89,7 @@ func setupGCPAuthnTest(t *testing.T) {
 // subsequent RPC calls with same audience reuse the same token.
 func (s) TestGCPAuthnFilter_SuccessCase(t *testing.T) {
 	setupGCPAuthnTest(t)
-	const tokenValue = "token"
+	const tokenValue = "eyJhbGciOiJSUzI1NiJ9.eyJleHAiOjI1MjQ2MDgwMDB9.sig"
 
 	// Starts a local HTTP server and sets GCE_METADATA_HOST to spoof the
 	// GCE metadata server and redirect token fetch requests to it.
@@ -210,7 +210,7 @@ func (s) TestGCPAuthnFilter_SuccessCase(t *testing.T) {
 // it across all subsequent RPCs with the same audience.
 func (s) TestGCPAuthnFilter_ConcurrentRequests(t *testing.T) {
 	setupGCPAuthnTest(t)
-	const tokenValue = "token"
+	const tokenValue = "eyJhbGciOiJSUzI1NiJ9.eyJleHAiOjI1MjQ2MDgwMDB9.sig"
 
 	// Starts a local HTTP server and sets GCE_METADATA_HOST to spoof the
 	// GCE metadata server and redirect token fetch requests to it.
@@ -427,7 +427,7 @@ func (s) TestGCPAuthnFilter_CacheSharingConfigUpdate(t *testing.T) {
 	var requestCount atomic.Int32
 	metadataServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		requestCount.Add(1)
-		w.Write([]byte("token"))
+		w.Write([]byte("eyJhbGciOiJSUzI1NiJ9.eyJleHAiOjI1MjQ2MDgwMDB9.sig"))
 	}))
 	defer metadataServer.Close()
 	t.Setenv(gceMetadataHostEnvVar, strings.TrimPrefix(metadataServer.URL, "http://"))
@@ -672,7 +672,7 @@ func (s) TestGCPAuthnFilter_CacheSharingConfigUpdate(t *testing.T) {
 func (s) TestGCPAuthnFilter_ConcurrentRPCWithShortAndLongContext(t *testing.T) {
 	setupGCPAuthnTest(t)
 	var once sync.Once
-	const tokenValue = "token"
+	const tokenValue = "eyJhbGciOiJSUzI1NiJ9.eyJleHAiOjI1MjQ2MDgwMDB9.sig"
 	requestStarted := make(chan struct{})
 	proceedCh := make(chan struct{})
 
@@ -839,7 +839,7 @@ func (s) TestGCPAuthnFilter_ConcurrentRPCWithShortAndLongContext(t *testing.T) {
 // option without overriding, corrupting or interfering with the existing ones.
 func (s) TestGCPAuthnFilter_PreservesUserCallOptions(t *testing.T) {
 	setupGCPAuthnTest(t)
-	const tokenValue = "token"
+	const tokenValue = "eyJhbGciOiJSUzI1NiJ9.eyJleHAiOjI1MjQ2MDgwMDB9.sig"
 
 	// Starts a local HTTP server and sets GCE_METADATA_HOST to spoof the
 	// GCE metadata server and redirect token fetch requests to it.

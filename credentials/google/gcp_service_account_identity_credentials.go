@@ -20,19 +20,14 @@ package google
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sync"
 	"time"
 
-	"cloud.google.com/go/auth"
-	"cloud.google.com/go/auth/credentials/idtoken"
-	"cloud.google.com/go/compute/metadata"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/google/internal"
 	"google.golang.org/grpc/internal/backoff"
-	"google.golang.org/grpc/internal/transport"
 	"google.golang.org/grpc/status"
 )
 
@@ -55,12 +50,11 @@ type gcpServiceAccountIdentityCallCreds struct {
 	// after that.
 	ctx      context.Context
 	audience string
-	creds    *auth.Credentials
 	backoff  backoff.Strategy
 
 	// The following fields are protected by mu.
 	mu                     sync.Mutex
-	token                  *auth.Token
+	token                  string        // cached raw JWT token value
 	tokenExpiry            time.Time     // timestamp after which the cached token is considered invalid
 	preemptiveTokenRefresh time.Time     // timestamp after which background preemptive refresh is triggered
 	fetching               chan struct{} // used to ensure a single in-progress background token fetch
@@ -71,9 +65,7 @@ type gcpServiceAccountIdentityCallCreds struct {
 
 func init() {
 	internal.BackoffStrategy = backoff.DefaultExponential
-	internal.NewIDTokenCredentials = func(opts *idtoken.Options) (*auth.Credentials, error) {
-		return idtoken.NewCredentials(opts)
-	}
+	internal.FetchIDToken = fetchIDTokenFromMetadataServer
 }
 
 // NewServiceAccountIdentityCredentials creates a PerRPCCredentials that
@@ -103,15 +95,9 @@ func NewServiceAccountIdentityCredentials(ctx context.Context, audience string) 
 		return nil, fmt.Errorf("credentials: audience cannot be empty")
 	}
 
-	creds, err := internal.NewIDTokenCredentials(&idtoken.Options{Audience: audience})
-	if err != nil {
-		return nil, fmt.Errorf("credentials: failed to create ID token credentials: %v", err)
-	}
-
 	return &gcpServiceAccountIdentityCallCreds{
 		ctx:      ctx,
 		audience: audience,
-		creds:    creds,
 		backoff:  internal.BackoffStrategy,
 	}, nil
 }
@@ -183,13 +169,13 @@ func (c *gcpServiceAccountIdentityCallCreds) cachedRequestMetadata(attemptPreemp
 //
 // It must be called with mu locked.
 func (c *gcpServiceAccountIdentityCallCreds) cachedRequestMetadataLocked(attemptPreemptiveRefresh bool) (map[string]string, error) {
-	if c.token != nil && c.isTokenValidLocked() {
+	if c.token != "" && c.isTokenValidLocked() {
 		if attemptPreemptiveRefresh && c.isTokenStaleLocked() && c.fetching == nil {
 			c.fetching = make(chan struct{})
 			go c.startFetch()
 		}
 
-		return map[string]string{"authorization": "Bearer " + c.token.Value}, nil
+		return map[string]string{"authorization": "Bearer " + c.token}, nil
 	}
 
 	if c.lastErr != nil && time.Now().Before(c.nextRetryTime) {
@@ -222,14 +208,14 @@ func (c *gcpServiceAccountIdentityCallCreds) isTokenValidLocked() bool {
 func (c *gcpServiceAccountIdentityCallCreds) startFetch() {
 	ctx, cancel := context.WithTimeout(c.ctx, metadataTimeout)
 	defer cancel()
-	token, err := c.creds.TokenProvider.Token(ctx)
+	val, exp, err := internal.FetchIDToken(ctx, c.audience)
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	close(c.fetching)
 	c.fetching = nil
-	c.updateStateLocked(token, err)
+	c.updateStateLocked(val, exp, err)
 }
 
 // updateStateLocked updates the credentials local token cache and
@@ -246,22 +232,9 @@ func (c *gcpServiceAccountIdentityCallCreds) startFetch() {
 //   - Non-HTTP request failures are mapped to UNAVAILABLE.
 //
 // It must be called with mu locked.
-func (c *gcpServiceAccountIdentityCallCreds) updateStateLocked(token *auth.Token, err error) {
+func (c *gcpServiceAccountIdentityCallCreds) updateStateLocked(val string, exp time.Time, err error) {
 	if err != nil {
-		var mappedErr error
-		var metadataErr *metadata.Error
-		if errors.As(err, &metadataErr) {
-			switch transport.HTTPStatusConvTab[metadataErr.Code] {
-			case codes.Unavailable:
-				mappedErr = status.Errorf(codes.Unavailable, "credentials: failed to fetch token from metadata server: %v", err)
-			default:
-				mappedErr = status.Errorf(codes.Unauthenticated, "credentials: failed to fetch token from metadata server: %v", err)
-			}
-		} else {
-			mappedErr = status.Errorf(codes.Unavailable, "credentials: failed to fetch ID token: %v", err)
-		}
-
-		c.lastErr = mappedErr
+		c.lastErr = err
 		backoffDelay := c.backoff.Backoff(c.retryAttempt)
 		c.retryAttempt++
 		c.nextRetryTime = time.Now().Add(backoffDelay)
@@ -270,9 +243,9 @@ func (c *gcpServiceAccountIdentityCallCreds) updateStateLocked(token *auth.Token
 	c.lastErr = nil
 	c.retryAttempt = 0
 	c.nextRetryTime = time.Time{}
-	c.token = token
+	c.token = val
 	// Per gRFC A83, the cached token is considered invalid 30 seconds before its
 	// actual expiration time to accommodate for clock skew.
-	c.tokenExpiry = token.Expiry.Add(-30 * time.Second)
+	c.tokenExpiry = exp.Add(-30 * time.Second)
 	c.preemptiveTokenRefresh = c.tokenExpiry.Add(-preemptiveRefresh)
 }
