@@ -300,6 +300,10 @@ func (s) TestAggregateClusterSuccess_ThenChangeRootToEDS(t *testing.T) {
 	if err := waitForLoadBalancingConfig(ctx, lbCfgCh, wantChildCfg); err != nil {
 		t.Fatal(err)
 	}
+	wantODChildCfg := createPriorityConfig(edsClusterName).Config
+	if err := waitForLoadBalancingConfig(ctx, odCfgCh, wantODChildCfg); err != nil {
+		t.Fatal(err)
+	}
 
 	resources = e2e.UpdateOptions{
 		NodeID:    nodeID,
@@ -310,10 +314,6 @@ func (s) TestAggregateClusterSuccess_ThenChangeRootToEDS(t *testing.T) {
 			makeLogicalDNSClusterResource(dnsClusterName, dnsHostName, dnsPort),
 		},
 		Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(serviceName, host, []uint32{port})},
-	}
-	// Drain odCfgCh before sending non-aggregate update, as aggregate children pushed outlier configs into odCfgCh.
-	for len(odCfgCh) > 0 {
-		<-odCfgCh
 	}
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
@@ -385,6 +385,10 @@ func (s) TestAggregatedClusterSuccess_SwitchBetweenLeafAndAggregate(t *testing.T
 	if err := waitForLoadBalancingConfig(ctx, lbCfgCh, wantChildCfg); err != nil {
 		t.Fatal(err)
 	}
+	wantODChildCfg := createPriorityConfig(edsClusterName).Config
+	if err := waitForLoadBalancingConfig(ctx, odCfgCh, wantODChildCfg); err != nil {
+		t.Fatal(err)
+	}
 
 	// Switch the cluster back to a leaf EDS cluster.
 	resources = e2e.UpdateOptions{
@@ -393,10 +397,6 @@ func (s) TestAggregatedClusterSuccess_SwitchBetweenLeafAndAggregate(t *testing.T
 		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeName, target, clusterName)},
 		Clusters:  []*v3clusterpb.Cluster{e2e.DefaultCluster(clusterName, serviceName, e2e.SecurityLevelNone)},
 		Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(serviceName, host, []uint32{port})},
-	}
-	// Drain odCfgCh before sending non-aggregate update, as aggregate children pushed outlier configs into odCfgCh.
-	for len(odCfgCh) > 0 {
-		<-odCfgCh
 	}
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
