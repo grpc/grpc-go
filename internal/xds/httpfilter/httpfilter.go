@@ -150,11 +150,16 @@ type ServerInterceptor interface {
 	Close()
 }
 
+// ServerFilterOptions contains options for building a server filter.
+type ServerFilterOptions struct {
+	MetricsRecorder estats.MetricsRecorder // MetricsRecorder is the metrics recorder to capture metrics for the filter.
+}
+
 // ServerFilterBuilder is an optional interface that a Builder can implement to
 // indicate its capability to build server-side filters.
 type ServerFilterBuilder interface {
 	// BuildServerFilter constructs a ServerFilter.
-	BuildServerFilter() ServerFilter
+	BuildServerFilter(opts ServerFilterOptions) ServerFilter
 }
 
 // ServerFilter represents the actual filter implementation on the server side.
