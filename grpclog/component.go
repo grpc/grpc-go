@@ -20,33 +20,50 @@ package grpclog
 
 import (
 	"fmt"
+	"os"
+	"sync"
+
+	"google.golang.org/grpc/grpclog/internal"
 )
 
 // componentData records the settings for a component.
 type componentData struct {
-	name string
+	name      string
+	logPrefix string
+
+	infoDepth    func(depth int, args ...any)
+	warningDepth func(depth int, args ...any)
+	errorDepth   func(depth int, args ...any)
+	fatalDepth   func(depth int, args ...any)
 }
 
-var cache = map[string]*componentData{}
+type componentCache struct {
+	mu   sync.Mutex
+	data map[string]*componentData
+}
+
+var cache = componentCache{
+	data: map[string]*componentData{},
+}
 
 func (c *componentData) InfoDepth(depth int, args ...any) {
-	args = append([]any{"[" + string(c.name) + "]"}, args...)
-	InfoDepth(depth+1, args...)
+	args = append([]any{c.logPrefix}, args...)
+	c.infoDepth(depth+1, args...)
 }
 
 func (c *componentData) WarningDepth(depth int, args ...any) {
-	args = append([]any{"[" + string(c.name) + "]"}, args...)
-	WarningDepth(depth+1, args...)
+	args = append([]any{c.logPrefix}, args...)
+	c.warningDepth(depth+1, args...)
 }
 
 func (c *componentData) ErrorDepth(depth int, args ...any) {
-	args = append([]any{"[" + string(c.name) + "]"}, args...)
-	ErrorDepth(depth+1, args...)
+	args = append([]any{c.logPrefix}, args...)
+	c.errorDepth(depth+1, args...)
 }
 
 func (c *componentData) FatalDepth(depth int, args ...any) {
-	args = append([]any{"[" + string(c.name) + "]"}, args...)
-	FatalDepth(depth+1, args...)
+	args = append([]any{c.logPrefix}, args...)
+	c.fatalDepth(depth+1, args...)
 }
 
 func (c *componentData) Info(args ...any) {
@@ -101,15 +118,93 @@ func (c *componentData) V(l int) bool {
 	return V(l)
 }
 
+func componentInfoDepth(depth int, args ...any) {
+	if internal.ComponentDepthLoggerV2Impl != nil {
+		internal.ComponentDepthLoggerV2Impl.InfoDepth(depth, args...)
+	} else {
+		internal.ComponentLoggerV2Impl.Infoln(args...)
+	}
+}
+
+func componentWarningDepth(depth int, args ...any) {
+	if internal.ComponentDepthLoggerV2Impl != nil {
+		internal.ComponentDepthLoggerV2Impl.WarningDepth(depth, args...)
+	} else {
+		internal.ComponentLoggerV2Impl.Warningln(args...)
+	}
+}
+
+func componentErrorDepth(depth int, args ...any) {
+	if internal.ComponentDepthLoggerV2Impl != nil {
+		internal.ComponentDepthLoggerV2Impl.ErrorDepth(depth, args...)
+	} else {
+		internal.ComponentLoggerV2Impl.Errorln(args...)
+	}
+}
+
+func componentFatalDepth(depth int, args ...any) {
+	if internal.ComponentDepthLoggerV2Impl != nil {
+		internal.ComponentDepthLoggerV2Impl.FatalDepth(depth, args...)
+	} else {
+		internal.ComponentLoggerV2Impl.Fatalln(args...)
+	}
+	os.Exit(1)
+}
+
+func noopDepth(int, ...any) {
+}
+
 // Component creates a new component and returns it for logging. If a component
 // with the name already exists, nothing will be created and it will be
 // returned. SetLoggerV2 will panic if it is called with a logger created by
 // Component.
 func Component(componentName string) DepthLoggerV2 {
-	if cData, ok := cache[componentName]; ok {
+	cache.mu.Lock()
+	defer cache.mu.Unlock()
+	if cData, ok := cache.data[componentName]; ok {
 		return cData
 	}
-	c := &componentData{componentName}
-	cache[componentName] = c
+	c := &componentData{
+		name:         componentName,
+		logPrefix:    "[" + componentName + "]",
+		infoDepth:    InfoDepth,
+		warningDepth: WarningDepth,
+		errorDepth:   ErrorDepth,
+		fatalDepth:   FatalDepth,
+	}
+
+	if level, ok := componentLogLevels[componentName]; ok {
+		c.fatalDepth = func(depth int, args ...any) {
+			componentFatalDepth(depth+1, args...)
+		}
+		switch level {
+		case severityInfo:
+			c.infoDepth = func(depth int, args ...any) {
+				componentInfoDepth(depth+1, args...)
+			}
+			c.warningDepth = func(depth int, args ...any) {
+				componentWarningDepth(depth+1, args...)
+			}
+			c.errorDepth = func(depth int, args ...any) {
+				componentErrorDepth(depth+1, args...)
+			}
+		case severityWarning:
+			c.infoDepth = noopDepth
+			c.warningDepth = func(depth int, args ...any) {
+				componentWarningDepth(depth+1, args...)
+			}
+			c.errorDepth = func(depth int, args ...any) {
+				componentErrorDepth(depth+1, args...)
+			}
+		case severityError:
+			c.infoDepth = noopDepth
+			c.warningDepth = noopDepth
+			c.errorDepth = func(depth int, args ...any) {
+				componentErrorDepth(depth+1, args...)
+			}
+		}
+	}
+
+	cache.data[componentName] = c
 	return c
 }
