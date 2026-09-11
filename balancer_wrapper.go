@@ -86,19 +86,35 @@ func newCCBalancerWrapper(cc *ClientConn) *ccBalancerWrapper {
 	ccb := &ccBalancerWrapper{
 		cc: cc,
 		opts: balancer.BuildOptions{
-			DialCreds:       cc.dopts.copts.TransportCredentials,
-			CredsBundle:     cc.dopts.copts.CredsBundle,
-			Dialer:          cc.dopts.copts.Dialer,
-			Authority:       cc.authority,
-			CustomUserAgent: cc.dopts.copts.UserAgent,
-			ChannelzParent:  cc.channelz,
-			Target:          cc.parsedTarget,
+			DialCreds:           cc.dopts.copts.TransportCredentials,
+			CredsBundle:         cc.dopts.copts.CredsBundle,
+			Dialer:              cc.dopts.copts.Dialer,
+			Authority:           cc.authority,
+			CustomUserAgent:     cc.dopts.copts.UserAgent,
+			ChannelzParent:      cc.channelz,
+			Target:              cc.parsedTarget,
+			ChildChannelOptions: childChannelOptionsForBalancer(cc.dopts.childChannelOptions),
 		},
 		serializer:       grpcsync.NewCallbackSerializer(ctx),
 		serializerCancel: cancel,
 	}
 	ccb.balancer = gracefulswitch.NewBalancer(ccb, ccb.opts)
 	return ccb
+}
+
+// childChannelOptionsForBalancer converts a []DialOption into the []any shape
+// exposed on balancer.BuildOptions.ChildChannelOptions. The typing indirection
+// avoids an import cycle between the balancer and grpc packages. Returns nil
+// when there are no options so balancers can nil-check cheaply.
+func childChannelOptionsForBalancer(opts []DialOption) []any {
+	if len(opts) == 0 {
+		return nil
+	}
+	out := make([]any, len(opts))
+	for i, o := range opts {
+		out[i] = o
+	}
+	return out
 }
 
 func (ccb *ccBalancerWrapper) MetricsRecorder() stats.MetricsRecorder {

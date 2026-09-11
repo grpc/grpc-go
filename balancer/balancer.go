@@ -216,6 +216,17 @@ type BuildOptions struct {
 	// same resolver.Target as passed to the resolver. See the documentation for
 	// the resolver.Target type for details about what it contains.
 	Target resolver.Target
+	// ChildChannelOptions contains DialOptions to apply to any internal child
+	// channels (for example, an RLS balancer's control channel) created by
+	// this LB policy. Balancers that open their own child channels should
+	// pass these options to grpc.NewClient AND propagate them further via
+	// grpc.WithChildChannelOptions so any nested internal channels also
+	// inherit them. See gRFC A110: Child Channel Options.
+	//
+	// The element type is google.golang.org/grpc.DialOption, typed as any
+	// here to avoid an import cycle between the balancer and grpc packages.
+	// Balancers cast each element to grpc.DialOption when passing it on.
+	ChildChannelOptions []any
 }
 
 // Builder creates a balancer.

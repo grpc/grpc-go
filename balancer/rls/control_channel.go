@@ -138,12 +138,21 @@ func (cc *controlChannel) OnMessage(msg any) {
 
 // dialOpts constructs the dial options for the control plane channel.
 func (cc *controlChannel) dialOpts(bOpts balancer.BuildOptions, serviceConfig string) ([]grpc.DialOption, error) {
+	// Per gRFC A110, user-provided child channel options are applied first as
+	// a baseline, then RLS's mandatory internal options (authority, creds,
+	// service config) are applied last so they win on conflict for
+	// single-value settings. Additive DialOptions (stats handlers,
+	// interceptors) accumulate from both. WithChildChannelOptions is also
+	// re-added so any channels this control channel opens itself inherit
+	// the same set recursively.
+	dopts := childDialOptionsFromBOpts(bOpts)
+
 	// The control plane channel will use the same authority as the parent
 	// channel for server authorization. This ensures that the identity of the
 	// RLS server and the identity of the backends is the same, so if the RLS
 	// config is injected by an attacker, it cannot cause leakage of private
 	// information contained in headers set by the application.
-	dopts := []grpc.DialOption{grpc.WithAuthority(bOpts.Authority)}
+	dopts = append(dopts, grpc.WithAuthority(bOpts.Authority))
 	if bOpts.Dialer != nil {
 		dopts = append(dopts, grpc.WithContextDialer(bOpts.Dialer))
 	}
@@ -178,6 +187,26 @@ func (cc *controlChannel) dialOpts(bOpts balancer.BuildOptions, serviceConfig st
 	}
 
 	return dopts, nil
+}
+
+// childDialOptionsFromBOpts returns the DialOptions to apply to the RLS
+// control channel that come from balancer.BuildOptions.ChildChannelOptions
+// (per gRFC A110), plus a WithChildChannelOptions wrapper so nested channels
+// keep inheriting them. Returns nil when no child options were provided.
+func childDialOptionsFromBOpts(bOpts balancer.BuildOptions) []grpc.DialOption {
+	if len(bOpts.ChildChannelOptions) == 0 {
+		return nil
+	}
+	child := make([]grpc.DialOption, 0, len(bOpts.ChildChannelOptions))
+	for _, o := range bOpts.ChildChannelOptions {
+		if do, ok := o.(grpc.DialOption); ok {
+			child = append(child, do)
+		}
+	}
+	// Include the options twice: once to apply on this channel, and once
+	// wrapped in WithChildChannelOptions so any channels opened by this
+	// control channel also inherit them.
+	return append(child, grpc.WithChildChannelOptions(child...))
 }
 
 func (cc *controlChannel) close() {
