@@ -25,7 +25,6 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/base"
 	"google.golang.org/grpc/connectivity"
-	"google.golang.org/grpc/internal/balancer/nop"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/pretty"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
@@ -41,16 +40,20 @@ import (
 const cdsName = "cds_experimental"
 
 var (
-	// newChildBalancer is a helper function to build a new priority balancer
-	// and will be overridden in unittests.
-	newChildBalancer = func(cc balancer.ClientConn, opts balancer.BuildOptions) (balancer.Balancer, error) {
-		builder := balancer.Get(priority.Name)
+	// newChildBalancer is a helper function to build a new child balancer
+	// and its config parser, and will be overridden in unittests.
+	newChildBalancer = func(name string, cc balancer.ClientConn, opts balancer.BuildOptions) (balancer.Balancer, balancer.ConfigParser, error) {
+		builder := balancer.Get(name)
 		if builder == nil {
-			return nil, fmt.Errorf("xds: no balancer builder with name %v", priority.Name)
+			return nil, nil, fmt.Errorf("no balancer builder with name %q", name)
 		}
-		// We directly pass the parent clientConn to the underlying priority
+		parser, ok := builder.(balancer.ConfigParser)
+		if !ok {
+			return nil, nil, fmt.Errorf("balancer builder for %q does not implement ConfigParser", name)
+		}
+		// We directly pass the parent clientConn to the underlying child
 		// balancer because the cdsBalancer does not deal with subConns.
-		return builder.Build(cc, opts), nil
+		return builder.Build(cc, opts), parser, nil
 	}
 )
 
@@ -65,26 +68,11 @@ type bb struct{}
 
 // Build creates a new CDS balancer with the ClientConn.
 func (bb) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
-	builder := balancer.Get(priority.Name)
-	if builder == nil {
-		// Shouldn't happen, registered through imported Priority builder. Still,
-		// defensive programming.
-		logger.Errorf("%q LB policy is needed but not registered", priority.Name)
-		return nop.NewBalancer(cc, fmt.Errorf("%q LB policy is needed but not registered", priority.Name))
-	}
-	parser, ok := builder.(balancer.ConfigParser)
-	if !ok {
-		// Shouldn't happen, imported Priority builder has this method.
-		logger.Errorf("%q LB policy does not implement a config parser", priority.Name)
-		return nop.NewBalancer(cc, fmt.Errorf("%q LB policy does not implement a config parser", priority.Name))
-	}
-
 	b := &cdsBalancer{
-		bOpts:             opts,
-		childConfigParser: parser,
-		clusterConfigs:    make(map[string]*xdsresource.ClusterResult),
-		priorityConfigs:   make(map[string]*priorityConfig),
-		cc:                cc,
+		bOpts:           opts,
+		clusterConfigs:  make(map[string]*xdsresource.ClusterResult),
+		priorityConfigs: make(map[string]*priorityConfig),
+		cc:              cc,
 	}
 	b.logger = prefixLogger(b)
 	b.logger.Infof("Created")
@@ -134,6 +122,7 @@ type cdsBalancer struct {
 	// protect access to these fields.
 	xdsClient         xdsclient.XDSClient
 	childLB           balancer.Balancer                     // Child policy, built upon resolution of the cluster graph.
+	childLBName       string                                // Name of the child policy.
 	clusterConfigs    map[string]*xdsresource.ClusterResult // Cluster name to the last received result for that cluster.
 	priorityConfigs   map[string]*priorityConfig            // Hostname to priority config for that leaf cluster.
 	lbCfg             *lbConfig                             // Current load balancing configuration.
@@ -143,18 +132,17 @@ type cdsBalancer struct {
 	clusterSubscriber xdsdepmgr.ClusterSubscriber           // To subscribe to dynamic cluster resource.
 	xdsLBPolicy       internalserviceconfig.BalancerConfig  // Stores the locality and endpoint picking policy.
 	attributes        *attributes.Attributes                // Attributes from resolver state.
-	serviceConfig     *serviceconfig.ParseResult
 	// Each new leaf cluster needs a child name generator to reuse child policy
 	// names. But to make sure the names across leaf clusters doesn't conflict,
 	// we need a seq ID. This ID is incremented for each new cluster.
 	childNameGeneratorSeqID uint64
 }
 
-// UpdateClientConnState receives the serviceConfig, xdsConfig,
-// ClusterSubscriber and the xdsClient object from the xdsResolver. If an error
-// is encountered, the parent (clustermanager) sets the corresponding cluster’s
-// picker to transient_failure. Otherwise, the received configuration is
-// processed and forwarded to the appropriate child policy.
+// UpdateClientConnState receives the xdsConfig, ClusterSubscriber and the
+// xdsClient object from the xdsResolver. If an error is encountered, the
+// parent (clustermanager) sets the corresponding cluster’s picker to
+// transient_failure. Otherwise, the received configuration is processed and
+// forwarded to the appropriate child policy.
 func (b *cdsBalancer) UpdateClientConnState(state balancer.ClientConnState) error {
 	if b.xdsClient == nil {
 		c := xdsclient.FromResolverState(state.ResolverState)
@@ -191,7 +179,6 @@ func (b *cdsBalancer) UpdateClientConnState(state balancer.ClientConnState) erro
 	}
 
 	b.lbCfg = lbCfg
-	b.serviceConfig = state.ResolverState.ServiceConfig
 	b.attributes = state.ResolverState.Attributes
 	return b.handleXDSConfigUpdate()
 }
@@ -267,21 +254,48 @@ func (b *cdsBalancer) handleClusterUpdate() error {
 // A child policy is created if one doesn't already exist. The newly built
 // configuration is then pushed to the child policy.
 func (b *cdsBalancer) updateChildConfig() error {
-	if b.childLB == nil {
-		childLB, err := newChildBalancer(b.cc, b.bOpts)
-		if err != nil {
-			return fmt.Errorf("failed to create child policy of type %s: %v", priority.Name, err)
-		}
-		b.childLB = childLB
+	clusterName := b.lbCfg.ClusterName
+	clusterConfig := b.clusterConfigs[clusterName].Config
+	isAggregate := clusterConfig.Cluster.ClusterType == xdsresource.ClusterTypeAggregate
+
+	var childPolicyName string
+	if isAggregate {
+		childPolicyName = priority.Name
+	} else {
+		childPolicyName = outlierdetection.Name
 	}
 
-	childCfgBytes, endpoints, err := buildPriorityConfigJSON(b.priorities, &b.xdsLBPolicy)
-	if err != nil {
-		return fmt.Errorf("failed to build child policy config: %v", err)
+	if b.childLB != nil && b.childLBName != childPolicyName {
+		b.childLB.Close()
+		b.childLB = nil
 	}
+
+	if b.childLB == nil {
+		childLB, parser, err := newChildBalancer(childPolicyName, b.cc, b.bOpts)
+		if err != nil {
+			return fmt.Errorf("xds: failed to create child policy of type %s: %v", childPolicyName, err)
+		}
+		b.childLB = childLB
+		b.childLBName = childPolicyName
+		b.childConfigParser = parser
+	}
+
+	var childCfgBytes []byte
+	var endpoints []resolver.Endpoint
+	var err error
+
+	if isAggregate {
+		childCfgBytes, endpoints, err = buildAggregateClusterConfigJSON(b.priorities, &b.xdsLBPolicy)
+	} else {
+		childCfgBytes, endpoints, err = buildLeafClusterConfigJSON(b.priorities, &b.xdsLBPolicy)
+	}
+	if err != nil {
+		return fmt.Errorf("xds: failed to build child policy config: %v", err)
+	}
+
 	childCfg, err := b.childConfigParser.ParseConfig(childCfgBytes)
 	if err != nil {
-		return fmt.Errorf("failed to parse child policy config. This should never happen because the config was generated: %v", err)
+		return fmt.Errorf("xds: failed to parse child policy config. This should never happen because the config was generated: %v", err)
 	}
 	if b.logger.V(2) {
 		b.logger.Infof("Built child policy config: %s", pretty.ToJSON(childCfg))
@@ -300,13 +314,12 @@ func (b *cdsBalancer) updateChildConfig() error {
 	}
 	if err := b.childLB.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: resolver.State{
-			Endpoints:     endpoints,
-			ServiceConfig: b.serviceConfig,
-			Attributes:    b.attributes,
+			Endpoints:  endpoints,
+			Attributes: b.attributes,
 		},
 		BalancerConfig: childCfg,
 	}); err != nil {
-		return fmt.Errorf("failed to push config to child policy: %v", err)
+		return fmt.Errorf("xds: failed to push config to child policy: %v", err)
 	}
 	return nil
 }

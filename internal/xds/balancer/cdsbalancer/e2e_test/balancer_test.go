@@ -300,21 +300,21 @@ func (s) TestErrorFromParentLB_ResourceNotFound(t *testing.T) {
 }
 
 // Test verifies that when the received Cluster resource contains outlier
-// detection configuration, the LB config pushed to the priority policy contains
-// the appropriate configuration for the outlier detection LB policy.
+// detection configuration, the LB config pushed to the outlier detection policy
+// contains the appropriate configuration for the outlier detection LB policy.
 func (s) TestOutlierDetectionConfigPropagationToChildPolicy(t *testing.T) {
-	// Unregister the priority balancer builder for the duration of this test,
+	// Unregister the outlier detection balancer builder for the duration of this test,
 	// and register a policy under the same name that makes the LB config
 	// pushed to it available to the test.
-	priorityBuilder := balancer.Get(priority.Name)
-	internal.BalancerUnregister(priorityBuilder.Name())
+	odBuilder := balancer.Get(outlierdetection.Name)
+	internal.BalancerUnregister(odBuilder.Name())
 	lbCfgCh := make(chan serviceconfig.LoadBalancingConfig, 1)
-	stub.Register(priority.Name, stub.BalancerFuncs{
+	stub.Register(outlierdetection.Name, stub.BalancerFuncs{
 		Init: func(bd *stub.BalancerData) {
-			bd.ChildBalancer = priorityBuilder.Build(bd.ClientConn, bd.BuildOptions)
+			bd.ChildBalancer = odBuilder.Build(bd.ClientConn, bd.BuildOptions)
 		},
 		ParseConfig: func(lbCfg json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
-			return priorityBuilder.(balancer.ConfigParser).ParseConfig(lbCfg)
+			return odBuilder.(balancer.ConfigParser).ParseConfig(lbCfg)
 		},
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
 			select {
@@ -327,7 +327,7 @@ func (s) TestOutlierDetectionConfigPropagationToChildPolicy(t *testing.T) {
 			bd.ChildBalancer.Close()
 		},
 	})
-	defer balancer.Register(priorityBuilder)
+	defer balancer.Register(odBuilder)
 
 	managementServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 
@@ -368,29 +368,27 @@ func (s) TestOutlierDetectionConfigPropagationToChildPolicy(t *testing.T) {
 	_, cleanup := setupAndDial(t, bootstrapContents)
 	defer cleanup()
 
-	// The priority configuration generated should have Outlier Detection as a
-	// direct child due to Outlier Detection being turned on.
-	wantCfg := &priority.LBConfig{
-		Children: map[string]*priority.Child{
-			"priority-0-0": {
-				Config: &iserviceconfig.BalancerConfig{
-					Name: outlierdetection.Name,
-					Config: &outlierdetection.LBConfig{
-						Interval:           iserviceconfig.Duration(10 * time.Second), // default interval
-						BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
-						MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
-						MaxEjectionPercent: 10,
-						SuccessRateEjection: &outlierdetection.SuccessRateEjection{
-							StdevFactor:           2000,
-							EnforcementPercentage: 50,
-							MinimumHosts:          10,
-							RequestVolume:         50,
-						},
-						ChildPolicy: &iserviceconfig.BalancerConfig{
-							Name: clusterimpl.Name,
-							Config: &clusterimpl.LBConfig{
-								Cluster: clusterName,
-								ChildPolicy: &iserviceconfig.BalancerConfig{
+	wantCfg := &outlierdetection.LBConfig{
+		Interval:           iserviceconfig.Duration(10 * time.Second), // default interval
+		BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
+		MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
+		MaxEjectionPercent: 10,
+		SuccessRateEjection: &outlierdetection.SuccessRateEjection{
+			StdevFactor:           2000,
+			EnforcementPercentage: 50,
+			MinimumHosts:          10,
+			RequestVolume:         50,
+		},
+		ChildPolicy: &iserviceconfig.BalancerConfig{
+			Name: clusterimpl.Name,
+			Config: &clusterimpl.LBConfig{
+				Cluster: clusterName,
+				ChildPolicy: &iserviceconfig.BalancerConfig{
+					Name: priority.Name,
+					Config: &priority.LBConfig{
+						Children: map[string]*priority.Child{
+							"priority-0-0": {
+								Config: &iserviceconfig.BalancerConfig{
 									Name: wrrlocality.Name,
 									Config: &wrrlocality.LBConfig{
 										ChildPolicy: &iserviceconfig.BalancerConfig{
@@ -398,19 +396,19 @@ func (s) TestOutlierDetectionConfigPropagationToChildPolicy(t *testing.T) {
 										},
 									},
 								},
+								IgnoreReresolutionRequests: true,
 							},
 						},
+						Priorities: []string{"priority-0-0"},
 					},
 				},
-				IgnoreReresolutionRequests: true,
 			},
 		},
-		Priorities: []string{"priority-0-0"},
 	}
 
 	select {
 	case lbCfg := <-lbCfgCh:
-		gotCfg := lbCfg.(*priority.LBConfig)
+		gotCfg := lbCfg.(*outlierdetection.LBConfig)
 		if diff := cmp.Diff(wantCfg, gotCfg); diff != "" {
 			t.Fatalf("Child policy received unexpected diff in config (-want +got):\n%s", diff)
 		}
