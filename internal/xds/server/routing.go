@@ -173,7 +173,12 @@ func matchTypeForDomain(d string) domainMatchType {
 }
 
 func match(domain, host string) (domainMatchType, bool) {
-	switch typ := matchTypeForDomain(domain); typ {
+	// Host names are case-insensitive, and the request authority is chosen by
+	// the peer, so fold both the configured domain and the host to lower case
+	// before comparing.
+	typ := matchTypeForDomain(domain)
+	domain, host = strings.ToLower(domain), strings.ToLower(host)
+	switch typ {
 	case domainMatchTypeInvalid:
 		return typ, false
 	case domainMatchTypeUniversal:

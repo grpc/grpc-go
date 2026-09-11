@@ -68,6 +68,9 @@ func (s) TestMatch(t *testing.T) {
 		{name: "suffix-no-match", domain: "*.123", host: "abc.1234", wantTyp: domainMatchTypeSuffix, wantMatched: false},
 		{name: "exact-match", domain: "foo.bar", host: "foo.bar", wantTyp: domainMatchTypeExact, wantMatched: true},
 		{name: "exact-no-match", domain: "foo.bar.com", host: "foo.bar", wantTyp: domainMatchTypeExact, wantMatched: false},
+		{name: "exact-match-mixed-case", domain: "Foo.Bar.Com", host: "foo.bar.COM", wantTyp: domainMatchTypeExact, wantMatched: true},
+		{name: "suffix-match-mixed-case", domain: "*.Bar.Com", host: "ABC.bar.com", wantTyp: domainMatchTypeSuffix, wantMatched: true},
+		{name: "prefix-match-mixed-case", domain: "Abc.*", host: "abc.123", wantTyp: domainMatchTypePrefix, wantMatched: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -106,6 +109,9 @@ func (s) TestFindBestMatchingVirtualHost(t *testing.T) {
 		{name: "multiple-match-suffix", host: "foo.bar.159", vHosts: vhs, want: &multipleMatch},
 		// Matches suffix "*.bar.com" and prefix "314.*". Takes suffix.
 		{name: "multiple-match-prefix", host: "314.bar.com", vHosts: vhs, want: &oneSuffixMatch},
+		// A mixed-case authority must still select the exact-match virtual host
+		// rather than falling through to the "*" catch-all.
+		{name: "exact-match-mixed-case-authority", host: "FOO.BAR.COM", vHosts: vhs, want: &oneExactMatch},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
