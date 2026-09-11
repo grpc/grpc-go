@@ -35,6 +35,7 @@ import (
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/envconfig"
+	iresolver "google.golang.org/grpc/internal/resolver"
 	xdscreds "google.golang.org/grpc/internal/xds/credentials"
 	"google.golang.org/grpc/xds/bootstrap"
 	"google.golang.org/protobuf/proto"
@@ -577,6 +578,9 @@ func (sc *ServerConfig) UnmarshalJSON(data []byte) error {
 
 	if sc.serverURI == "" {
 		return fmt.Errorf("xds: `server_uri` field in server config cannot be empty: %s", string(data))
+	}
+	if err := iresolver.ValidateTargetURI(sc.serverURI); err != nil {
+		return fmt.Errorf("xds: invalid `server_uri` field in server config %s: %v", string(data), err)
 	}
 	if sc.credsDialOption == nil {
 		return fmt.Errorf("xds: `channel_creds` field in server config cannot be empty: %s", string(data))
