@@ -132,18 +132,17 @@ type cdsBalancer struct {
 	clusterSubscriber xdsdepmgr.ClusterSubscriber           // To subscribe to dynamic cluster resource.
 	xdsLBPolicy       internalserviceconfig.BalancerConfig  // Stores the locality and endpoint picking policy.
 	attributes        *attributes.Attributes                // Attributes from resolver state.
-	serviceConfig     *serviceconfig.ParseResult
 	// Each new leaf cluster needs a child name generator to reuse child policy
 	// names. But to make sure the names across leaf clusters doesn't conflict,
 	// we need a seq ID. This ID is incremented for each new cluster.
 	childNameGeneratorSeqID uint64
 }
 
-// UpdateClientConnState receives the serviceConfig, xdsConfig,
-// ClusterSubscriber and the xdsClient object from the xdsResolver. If an error
-// is encountered, the parent (clustermanager) sets the corresponding cluster’s
-// picker to transient_failure. Otherwise, the received configuration is
-// processed and forwarded to the appropriate child policy.
+// UpdateClientConnState receives the xdsConfig, ClusterSubscriber and the
+// xdsClient object from the xdsResolver. If an error is encountered, the
+// parent (clustermanager) sets the corresponding cluster’s picker to
+// transient_failure. Otherwise, the received configuration is processed and
+// forwarded to the appropriate child policy.
 func (b *cdsBalancer) UpdateClientConnState(state balancer.ClientConnState) error {
 	if b.xdsClient == nil {
 		c := xdsclient.FromResolverState(state.ResolverState)
@@ -180,7 +179,6 @@ func (b *cdsBalancer) UpdateClientConnState(state balancer.ClientConnState) erro
 	}
 
 	b.lbCfg = lbCfg
-	b.serviceConfig = state.ResolverState.ServiceConfig
 	b.attributes = state.ResolverState.Attributes
 	return b.handleXDSConfigUpdate()
 }
@@ -316,9 +314,8 @@ func (b *cdsBalancer) updateChildConfig() error {
 	}
 	if err := b.childLB.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: resolver.State{
-			Endpoints:     endpoints,
-			ServiceConfig: b.serviceConfig,
-			Attributes:    b.attributes,
+			Endpoints:  endpoints,
+			Attributes: b.attributes,
 		},
 		BalancerConfig: childCfg,
 	}); err != nil {
