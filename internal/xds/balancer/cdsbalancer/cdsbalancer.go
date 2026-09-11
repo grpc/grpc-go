@@ -45,11 +45,11 @@ var (
 	newChildBalancer = func(name string, cc balancer.ClientConn, opts balancer.BuildOptions) (balancer.Balancer, balancer.ConfigParser, error) {
 		builder := balancer.Get(name)
 		if builder == nil {
-			return nil, nil, fmt.Errorf("xds: no balancer builder with name %v", name)
+			return nil, nil, fmt.Errorf("no balancer builder with name %q", name)
 		}
 		parser, ok := builder.(balancer.ConfigParser)
 		if !ok {
-			return nil, nil, fmt.Errorf("xds: balancer builder for %v does not implement ConfigParser", name)
+			return nil, nil, fmt.Errorf("balancer builder for %q does not implement ConfigParser", name)
 		}
 		// We directly pass the parent clientConn to the underlying child
 		// balancer because the cdsBalancer does not deal with subConns.
@@ -260,25 +260,25 @@ func (b *cdsBalancer) updateChildConfig() error {
 	clusterConfig := b.clusterConfigs[clusterName].Config
 	isAggregate := clusterConfig.Cluster.ClusterType == xdsresource.ClusterTypeAggregate
 
-	var topLBName string
+	var childPolicyName string
 	if isAggregate {
-		topLBName = priority.Name
+		childPolicyName = priority.Name
 	} else {
-		topLBName = outlierdetection.Name
+		childPolicyName = outlierdetection.Name
 	}
 
-	if b.childLB != nil && b.childLBName != topLBName {
+	if b.childLB != nil && b.childLBName != childPolicyName {
 		b.childLB.Close()
 		b.childLB = nil
 	}
 
 	if b.childLB == nil {
-		childLB, parser, err := newChildBalancer(topLBName, b.cc, b.bOpts)
+		childLB, parser, err := newChildBalancer(childPolicyName, b.cc, b.bOpts)
 		if err != nil {
-			return fmt.Errorf("failed to create child policy of type %s: %v", topLBName, err)
+			return fmt.Errorf("xds: failed to create child policy of type %s: %v", childPolicyName, err)
 		}
 		b.childLB = childLB
-		b.childLBName = topLBName
+		b.childLBName = childPolicyName
 		b.childConfigParser = parser
 	}
 
@@ -292,12 +292,12 @@ func (b *cdsBalancer) updateChildConfig() error {
 		childCfgBytes, endpoints, err = buildLeafClusterConfigJSON(b.priorities, &b.xdsLBPolicy)
 	}
 	if err != nil {
-		return fmt.Errorf("failed to build child policy config: %v", err)
+		return fmt.Errorf("xds: failed to build child policy config: %v", err)
 	}
 
 	childCfg, err := b.childConfigParser.ParseConfig(childCfgBytes)
 	if err != nil {
-		return fmt.Errorf("failed to parse child policy config. This should never happen because the config was generated: %v", err)
+		return fmt.Errorf("xds: failed to parse child policy config. This should never happen because the config was generated: %v", err)
 	}
 	if b.logger.V(2) {
 		b.logger.Infof("Built child policy config: %s", pretty.ToJSON(childCfg))
@@ -322,7 +322,7 @@ func (b *cdsBalancer) updateChildConfig() error {
 		},
 		BalancerConfig: childCfg,
 	}); err != nil {
-		return fmt.Errorf("failed to push config to child policy: %v", err)
+		return fmt.Errorf("xds: failed to push config to child policy: %v", err)
 	}
 	return nil
 }

@@ -137,7 +137,7 @@ func (s) TestAggregateClusterSuccess_LeafNode(t *testing.T) {
 			if err := mgmtServer.Update(ctx, resources); err != nil {
 				t.Fatal(err)
 			}
-			if err := compareLoadBalancingConfig(ctx, lbCfgCh, test.wantFirstChildCfg); err != nil {
+			if err := waitForLoadBalancingConfig(ctx, lbCfgCh, test.wantFirstChildCfg); err != nil {
 				t.Fatal(err)
 			}
 
@@ -148,7 +148,7 @@ func (s) TestAggregateClusterSuccess_LeafNode(t *testing.T) {
 			if err := mgmtServer.Update(ctx, resources); err != nil {
 				t.Fatal(err)
 			}
-			if err := compareLoadBalancingConfig(ctx, lbCfgCh, test.wantSecondChildCfg); err != nil {
+			if err := waitForLoadBalancingConfig(ctx, lbCfgCh, test.wantSecondChildCfg); err != nil {
 				t.Fatal(err)
 			}
 		})
@@ -215,7 +215,7 @@ func (s) TestAggregateClusterSuccess_ThenUpdateChildClusters(t *testing.T) {
 		},
 		Priorities: []string{"priority-0-0", "priority-1"},
 	}
-	if err := compareLoadBalancingConfig(ctx, lbCfgCh, wantChildCfg); err != nil {
+	if err := waitForLoadBalancingConfig(ctx, lbCfgCh, wantChildCfg); err != nil {
 		t.Fatal(err)
 	}
 
@@ -248,7 +248,7 @@ func (s) TestAggregateClusterSuccess_ThenUpdateChildClusters(t *testing.T) {
 		},
 		Priorities: []string{"priority-0-0", "priority-2"},
 	}
-	if err := compareLoadBalancingConfig(ctx, lbCfgCh, wantChildCfg); err != nil {
+	if err := waitForLoadBalancingConfig(ctx, lbCfgCh, wantChildCfg); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -297,7 +297,7 @@ func (s) TestAggregateClusterSuccess_ThenChangeRootToEDS(t *testing.T) {
 		},
 		Priorities: []string{"priority-0-0", "priority-1"},
 	}
-	if err := compareLoadBalancingConfig(ctx, lbCfgCh, wantChildCfg); err != nil {
+	if err := waitForLoadBalancingConfig(ctx, lbCfgCh, wantChildCfg); err != nil {
 		t.Fatal(err)
 	}
 
@@ -321,7 +321,7 @@ func (s) TestAggregateClusterSuccess_ThenChangeRootToEDS(t *testing.T) {
 	// Since the service name of the EDS cluster remains same, same priority name
 	// is used.
 	wantLeafChildCfg := createLeafClusterConfig(clusterName, "priority-0-0", true)
-	if err := compareLoadBalancingConfig(ctx, odCfgCh, wantLeafChildCfg); err != nil {
+	if err := waitForLoadBalancingConfig(ctx, odCfgCh, wantLeafChildCfg); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -350,7 +350,7 @@ func (s) TestAggregatedClusterSuccess_SwitchBetweenLeafAndAggregate(t *testing.T
 		t.Fatal(err)
 	}
 	wantLeafChildCfg := createLeafClusterConfig(clusterName, "priority-0-0", true)
-	if err := compareLoadBalancingConfig(ctx, odCfgCh, wantLeafChildCfg); err != nil {
+	if err := waitForLoadBalancingConfig(ctx, odCfgCh, wantLeafChildCfg); err != nil {
 		t.Fatal(err)
 	}
 
@@ -382,7 +382,7 @@ func (s) TestAggregatedClusterSuccess_SwitchBetweenLeafAndAggregate(t *testing.T
 		},
 		Priorities: []string{"priority-0-0", "priority-1"},
 	}
-	if err := compareLoadBalancingConfig(ctx, lbCfgCh, wantChildCfg); err != nil {
+	if err := waitForLoadBalancingConfig(ctx, lbCfgCh, wantChildCfg); err != nil {
 		t.Fatal(err)
 	}
 
@@ -401,7 +401,7 @@ func (s) TestAggregatedClusterSuccess_SwitchBetweenLeafAndAggregate(t *testing.T
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
-	if err := compareLoadBalancingConfig(ctx, odCfgCh, wantLeafChildCfg); err != nil {
+	if err := waitForLoadBalancingConfig(ctx, odCfgCh, wantLeafChildCfg); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -559,7 +559,7 @@ func (s) TestAggregatedClusterSuccess_DiamondDependency(t *testing.T) {
 		},
 		Priorities: []string{"priority-0-0"},
 	}
-	if err := compareLoadBalancingConfig(ctx, lbCfgCh, wantChildCfg); err != nil {
+	if err := waitForLoadBalancingConfig(ctx, lbCfgCh, wantChildCfg); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -631,7 +631,7 @@ func (s) TestAggregatedClusterSuccess_IgnoreDups(t *testing.T) {
 		},
 		Priorities: []string{"priority-0-0", "priority-1-0"},
 	}
-	if err := compareLoadBalancingConfig(ctx, lbCfgCh, wantChildCfg); err != nil {
+	if err := waitForLoadBalancingConfig(ctx, lbCfgCh, wantChildCfg); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -715,7 +715,7 @@ func (s) TestAggregatedCluster_NodeChildOfItself(t *testing.T) {
 		},
 		Priorities: []string{"priority-0-0"},
 	}
-	if err := compareLoadBalancingConfig(ctx, lbCfgCh, wantChildCfg); err != nil {
+	if err := waitForLoadBalancingConfig(ctx, lbCfgCh, wantChildCfg); err != nil {
 		t.Fatal(err)
 	}
 
@@ -824,7 +824,7 @@ func (s) TestAggregatedCluster_CycleWithLeafNode(t *testing.T) {
 		},
 		Priorities: []string{"priority-0-0"},
 	}
-	if err := compareLoadBalancingConfig(ctx, lbCfgCh, wantChildCfg); err != nil {
+	if err := waitForLoadBalancingConfig(ctx, lbCfgCh, wantChildCfg); err != nil {
 		t.Fatal(err)
 	}
 

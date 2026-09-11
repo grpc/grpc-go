@@ -261,14 +261,14 @@ func setupWithManagementServer(t *testing.T, lis net.Listener, onStreamRequest f
 	return mgmtServer, nodeID, cc
 }
 
-// Helper function to compare the load balancing configuration received on the
-// channel with the expected one. Both configs are marshalled to JSON and then
-// compared.
+// waitForLoadBalancingConfig waits for the expected load balancing
+// configuration to be received on the channel. Both configs are marshalled to
+// JSON and then compared.
 //
-// Returns an error if marshalling to JSON fails, or if the load balancing
-// configurations don't match, or if the context deadline expires before reading
-// a child policy configuration off of the lbCfgCh.
-func compareLoadBalancingConfig(ctx context.Context, lbCfgCh chan serviceconfig.LoadBalancingConfig, wantChildCfg serviceconfig.LoadBalancingConfig) error {
+// Returns an error if marshalling to JSON fails, or if the context deadline
+// expires before reading a matching child policy configuration off of the
+// lbCfgCh.
+func waitForLoadBalancingConfig(ctx context.Context, lbCfgCh chan serviceconfig.LoadBalancingConfig, wantChildCfg serviceconfig.LoadBalancingConfig) error {
 	wantJSON, err := json.Marshal(wantChildCfg)
 	if err != nil {
 		return fmt.Errorf("failed to marshal expected child config to JSON: %v", err)
@@ -708,7 +708,7 @@ func (s) TestClusterUpdate_Success(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if err := compareLoadBalancingConfig(ctx, lbCfgCh, test.wantChildCfg); err != nil {
+			if err := waitForLoadBalancingConfig(ctx, lbCfgCh, test.wantChildCfg); err != nil {
 				t.Fatal(err)
 			}
 		})
