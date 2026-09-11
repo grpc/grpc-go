@@ -59,7 +59,7 @@ func (s) TestValidateCluster_Failure(t *testing.T) {
 	tests := []struct {
 		name    string
 		cluster *v3clusterpb.Cluster
-		wantErr bool
+		wantErr string
 	}{
 		{
 			name: "non-supported-cluster-type-static",
@@ -74,7 +74,7 @@ func (s) TestValidateCluster_Failure(t *testing.T) {
 				},
 				LbPolicy: v3clusterpb.Cluster_LEAST_REQUEST,
 			},
-			wantErr: true,
+			wantErr: "unsupported cluster type",
 		},
 		{
 			name: "non-supported-cluster-type-original-dst",
@@ -89,7 +89,7 @@ func (s) TestValidateCluster_Failure(t *testing.T) {
 				},
 				LbPolicy: v3clusterpb.Cluster_LEAST_REQUEST,
 			},
-			wantErr: true,
+			wantErr: "unsupported cluster type",
 		},
 		{
 			name: "no-eds-config",
@@ -97,7 +97,7 @@ func (s) TestValidateCluster_Failure(t *testing.T) {
 				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
 				LbPolicy:             v3clusterpb.Cluster_ROUND_ROBIN,
 			},
-			wantErr: true,
+			wantErr: "CDS's EDS config source is not ADS or Self",
 		},
 		{
 			name: "no-ads-config-source",
@@ -106,7 +106,7 @@ func (s) TestValidateCluster_Failure(t *testing.T) {
 				EdsClusterConfig:     &v3clusterpb.Cluster_EdsClusterConfig{},
 				LbPolicy:             v3clusterpb.Cluster_ROUND_ROBIN,
 			},
-			wantErr: true,
+			wantErr: "CDS's EDS config source is not ADS or Self",
 		},
 		{
 			name: "unsupported-lb-policy",
@@ -121,7 +121,7 @@ func (s) TestValidateCluster_Failure(t *testing.T) {
 				},
 				LbPolicy: v3clusterpb.Cluster_MAGLEV,
 			},
-			wantErr: true,
+			wantErr: "unexpected lbPolicy MAGLEV",
 		},
 		{
 			name: "logical-dns-multiple-localities",
@@ -137,7 +137,7 @@ func (s) TestValidateCluster_Failure(t *testing.T) {
 					},
 				},
 			},
-			wantErr: true,
+			wantErr: "load_assignment for LOGICAL_DNS cluster must have exactly one locality",
 		},
 		{
 			name: "ring-hash-hash-function-not-xx-hash",
@@ -149,23 +149,33 @@ func (s) TestValidateCluster_Failure(t *testing.T) {
 					},
 				},
 			},
-			wantErr: true,
+			wantErr: "unsupported ring_hash hash function MURMUR_HASH_2",
 		},
 		{
 			name: "least-request-choice-count-less-than-two",
 			cluster: &v3clusterpb.Cluster{
-				LbPolicy: v3clusterpb.Cluster_RING_HASH,
+				LbPolicy: v3clusterpb.Cluster_LEAST_REQUEST,
 				LbConfig: &v3clusterpb.Cluster_LeastRequestLbConfig_{
 					LeastRequestLbConfig: &v3clusterpb.Cluster_LeastRequestLbConfig{
 						ChoiceCount: wrapperspb.UInt32(1),
 					},
 				},
 			},
-			wantErr: true,
+			wantErr: "Cluster_LeastRequestLbConfig.ChoiceCount must be >= 2",
 		},
 		{
 			name: "ring-hash-max-bound-greater-than-upper-bound",
 			cluster: &v3clusterpb.Cluster{
+				Name:                 clusterName,
+				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
+				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
+					EdsConfig: &v3corepb.ConfigSource{
+						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
+							Ads: &v3corepb.AggregatedConfigSource{},
+						},
+					},
+					ServiceName: serviceName,
+				},
 				LbPolicy: v3clusterpb.Cluster_RING_HASH,
 				LbConfig: &v3clusterpb.Cluster_RingHashLbConfig_{
 					RingHashLbConfig: &v3clusterpb.Cluster_RingHashLbConfig{
@@ -173,7 +183,30 @@ func (s) TestValidateCluster_Failure(t *testing.T) {
 					},
 				},
 			},
-			wantErr: true,
+			wantErr: "ring_hash_lb_config.maximum_ring_size 8388609 is greater than upper bound 8388608",
+		},
+		{
+			name: "ring-hash-min-greater-than-max",
+			cluster: &v3clusterpb.Cluster{
+				Name:                 clusterName,
+				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
+				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
+					EdsConfig: &v3corepb.ConfigSource{
+						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
+							Ads: &v3corepb.AggregatedConfigSource{},
+						},
+					},
+					ServiceName: serviceName,
+				},
+				LbPolicy: v3clusterpb.Cluster_RING_HASH,
+				LbConfig: &v3clusterpb.Cluster_RingHashLbConfig_{
+					RingHashLbConfig: &v3clusterpb.Cluster_RingHashLbConfig{
+						MinimumRingSize: wrapperspb.UInt64(5000),
+						MaximumRingSize: wrapperspb.UInt64(100),
+					},
+				},
+			},
+			wantErr: "ring_hash_lb_config.minimum_ring_size 5000 is greater than maximum_ring_size 100",
 		},
 		{
 			name: "ring-hash-max-bound-greater-than-upper-bound-load-balancing-policy",
@@ -202,7 +235,7 @@ func (s) TestValidateCluster_Failure(t *testing.T) {
 					},
 				},
 			},
-			wantErr: true,
+			wantErr: "error converting LoadBalancingPolicy",
 		},
 		{
 			name: "least-request-unsupported-in-converter-since-env-var-unset",
@@ -227,7 +260,7 @@ func (s) TestValidateCluster_Failure(t *testing.T) {
 					},
 				},
 			},
-			wantErr: true,
+			wantErr: "no supported policy found in policy list",
 		},
 		{
 			name: "aggregate-nil-clusters",
@@ -241,7 +274,7 @@ func (s) TestValidateCluster_Failure(t *testing.T) {
 				},
 				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
 			},
-			wantErr: true,
+			wantErr: "aggregate cluster has empty clusters field",
 		},
 		{
 			name: "aggregate-empty-clusters",
@@ -257,14 +290,18 @@ func (s) TestValidateCluster_Failure(t *testing.T) {
 				},
 				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
 			},
-			wantErr: true,
+			wantErr: "aggregate cluster has empty clusters field",
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if update, err := validateClusterAndConstructClusterUpdate(test.cluster, nil); err == nil {
-				t.Errorf("validateClusterAndConstructClusterUpdate(%+v) = %v, wanted error", test.cluster, update)
+			update, err := validateClusterAndConstructClusterUpdate(test.cluster, nil)
+			if err == nil {
+				t.Fatalf("validateClusterAndConstructClusterUpdate(%+v) = %v, wanted error containing %q", test.cluster, update, test.wantErr)
+			}
+			if !strings.Contains(err.Error(), test.wantErr) {
+				t.Fatalf("validateClusterAndConstructClusterUpdate(%+v) returned err: %v, wanted error containing %q", test.cluster, err, test.wantErr)
 			}
 		})
 	}
