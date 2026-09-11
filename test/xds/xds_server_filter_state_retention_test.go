@@ -30,13 +30,11 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/internal/resolver"
+	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/internal/testutils/xds/e2e/setup"
 	"google.golang.org/grpc/internal/xds/httpfilter"
-	testgrpc "google.golang.org/grpc/interop/grpc_testing"
-	testpb "google.golang.org/grpc/interop/grpc_testing"
 	"google.golang.org/grpc/xds"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/structpb"
@@ -48,6 +46,8 @@ import (
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	v3routerpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/router/v3"
 	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
 const filterCfgPathFieldName = "path"
@@ -77,16 +77,25 @@ func filterConfigFromProto(cfg proto.Message) (httpfilter.FilterConfig, error) {
 	return ret, nil
 }
 
-// trackingHTTPFilterBuilder is a test filter that allows counting the number of
-// times a filter instance or an interceptor instance is built or closed.
+// trackingHTTPFilterBuilder is a test filter that allows counting and tracking
+// the lifecycle and execution of filter and interceptor instances.
 type trackingHTTPFilterBuilder struct {
 	httpfilter.Builder
-	filtersCreated        *atomic.Int32
-	filtersDestroyed      *atomic.Int32
-	interceptorsCreated   *atomic.Int32
-	interceptorsDestroyed *atomic.Int32
+	filtersCreated        atomic.Int32
+	filtersDestroyed      atomic.Int32
+	interceptorsCreated   atomic.Int32
+	interceptorsDestroyed atomic.Int32
+	interceptRPCCount     atomic.Int32
+	recvMsgCount          atomic.Int32
+	sendMsgCount          atomic.Int32
+	closeSendCount        atomic.Int32
 	typeURL               string
 	pathCh                chan string
+	interceptRPCFunc      func(ss grpc.ServerStream) (grpc.ServerStream, error)
+}
+
+func newTrackingHTTPFilterBuilder(typeURL string) *trackingHTTPFilterBuilder {
+	return &trackingHTTPFilterBuilder{typeURL: typeURL}
 }
 
 func (t *trackingHTTPFilterBuilder) IsTerminal() bool { return false }
@@ -110,9 +119,10 @@ func (t *trackingHTTPFilterBuilder) Close() {
 	t.filtersDestroyed.Add(1)
 }
 
+var _ httpfilter.ClientFilterBuilder = &trackingHTTPFilterBuilder{}
 var _ httpfilter.ServerFilterBuilder = &trackingHTTPFilterBuilder{}
 
-func (t *trackingHTTPFilterBuilder) BuildServerInterceptor(config, override httpfilter.FilterConfig) (resolver.ServerInterceptor, error) {
+func (t *trackingHTTPFilterBuilder) BuildServerInterceptor(config, override httpfilter.FilterConfig) (httpfilter.ServerInterceptor, error) {
 	t.interceptorsCreated.Add(1)
 
 	var effectiveCfg testFilterCfg
@@ -124,7 +134,7 @@ func (t *trackingHTTPFilterBuilder) BuildServerInterceptor(config, override http
 		return nil, fmt.Errorf("unexpected missing config")
 	}
 
-	interceptor := &trackingInterceptor{
+	interceptor := &trackingServerInterceptor{
 		parent:   t,
 		pathCh:   t.pathCh,
 		basePath: effectiveCfg.path,
@@ -132,19 +142,51 @@ func (t *trackingHTTPFilterBuilder) BuildServerInterceptor(config, override http
 	return interceptor, nil
 }
 
-type trackingInterceptor struct {
+type trackingServerInterceptor struct {
 	parent   *trackingHTTPFilterBuilder
 	pathCh   chan string
 	basePath string
 }
 
-func (i *trackingInterceptor) AllowRPC(context.Context) error {
-	i.pathCh <- i.basePath
+func (i *trackingServerInterceptor) InterceptRPC(ss grpc.ServerStream) (grpc.ServerStream, error) {
+	i.parent.interceptRPCCount.Add(1)
+	if i.pathCh != nil {
+		i.pathCh <- i.basePath
+	}
+	if i.parent.interceptRPCFunc != nil {
+		return i.parent.interceptRPCFunc(ss)
+	}
+	return &wrappedServerStream{
+		ServerStream: ss,
+		parent:       i.parent,
+	}, nil
+}
+
+func (i *trackingServerInterceptor) Close() {
+	i.parent.interceptorsDestroyed.Add(1)
+}
+
+// wrappedServerStream wraps grpc.ServerStream to intercept and count
+// RecvMsg and SendMsg invocations for testing.
+type wrappedServerStream struct {
+	grpc.ServerStream
+	parent *trackingHTTPFilterBuilder
+}
+
+func (w *wrappedServerStream) RecvMsg(m any) error {
+	if err := w.ServerStream.RecvMsg(m); err != nil {
+		return err
+	}
+	w.parent.recvMsgCount.Add(1)
 	return nil
 }
 
-func (i *trackingInterceptor) Close() {
-	i.parent.interceptorsDestroyed.Add(1)
+func (w *wrappedServerStream) SendMsg(m any) error {
+	if err := w.ServerStream.SendMsg(m); err != nil {
+		return err
+	}
+	w.parent.sendMsgCount.Add(1)
+	return nil
 }
 
 func newHTTPFilter(t *testing.T, name, typeURL, path string) *v3httppb.HttpFilter {
@@ -163,23 +205,66 @@ func newHTTPFilter(t *testing.T, name, typeURL, path string) *v3httppb.HttpFilte
 	}
 }
 
+func (t *trackingHTTPFilterBuilder) BuildClientFilter(httpfilter.ClientFilterOptions) httpfilter.ClientFilter {
+	t.filtersCreated.Add(1)
+	return t
+}
+
+func (t *trackingHTTPFilterBuilder) BuildClientInterceptor(_, _ httpfilter.FilterConfig) (httpfilter.ClientInterceptor, error) {
+	t.interceptorsCreated.Add(1)
+	return &trackingClientInterceptor{parent: t}, nil
+}
+
+type trackingClientInterceptor struct {
+	parent *trackingHTTPFilterBuilder
+}
+
+func (i *trackingClientInterceptor) NewStream(ctx context.Context, _ iresolver.RPCInfo, newStream func(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStream, error), opts ...grpc.CallOption) (grpc.ClientStream, error) {
+	s, err := newStream(ctx, opts...)
+	if err != nil {
+		return nil, err
+	}
+
+	return &wrappedClientStream{
+		ClientStream: s,
+		parent:       i.parent,
+	}, nil
+}
+
+func (i *trackingClientInterceptor) Close() {
+	i.parent.interceptorsDestroyed.Add(1)
+}
+
+type wrappedClientStream struct {
+	grpc.ClientStream
+	parent *trackingHTTPFilterBuilder
+}
+
+func (w *wrappedClientStream) RecvMsg(m any) error {
+	w.parent.recvMsgCount.Add(1)
+	return w.ClientStream.RecvMsg(m)
+}
+
+func (w *wrappedClientStream) SendMsg(m any) error {
+	w.parent.sendMsgCount.Add(1)
+	return w.ClientStream.SendMsg(m)
+}
+
+func (w *wrappedClientStream) CloseSend() error {
+	w.parent.closeSendCount.Add(1)
+	return w.ClientStream.CloseSend()
+}
+
 // Tests the filter state retention behavior when filter configs in the existing
 // filter chain are updated, but there are no changes to the filter names. In
 // this case, the existing filter instance should be retained, while new
 // interceptor instances should be created with the updated config.
 func (s) TestServerSideXDS_FilterStateRetention_AcrossUpdates_FilterConfigChange(t *testing.T) {
 	// Register a custom httpFilter builder for the test.
-	var filtersCreated, filtersDestroyed, interceptorsCreated, interceptorsDestroyed atomic.Int32
 	pathCh := make(chan string, 1)
 	testFilterTypeURL := t.Name()
-	fb := &trackingHTTPFilterBuilder{
-		filtersCreated:        &filtersCreated,
-		filtersDestroyed:      &filtersDestroyed,
-		interceptorsCreated:   &interceptorsCreated,
-		interceptorsDestroyed: &interceptorsDestroyed,
-		typeURL:               testFilterTypeURL,
-		pathCh:                pathCh,
-	}
+	fb := newTrackingHTTPFilterBuilder(testFilterTypeURL)
+	fb.pathCh = pathCh
 	httpfilter.Register(fb)
 	defer httpfilter.UnregisterForTesting(fb.typeURL)
 
@@ -316,10 +401,10 @@ func (s) TestServerSideXDS_FilterStateRetention_AcrossUpdates_FilterConfigChange
 	case <-ctx.Done():
 		t.Fatalf("Timeout waiting for interceptor to be invoked")
 	}
-	if got, want := filtersCreated.Load(), int32(1); got != want {
+	if got, want := fb.filtersCreated.Load(), int32(1); got != want {
 		t.Fatalf("Created %d filter instances, want: %d", got, want)
 	}
-	if got, want := interceptorsCreated.Load(), int32(2); got != want {
+	if got, want := fb.interceptorsCreated.Load(), int32(2); got != want {
 		t.Fatalf("Created %d interceptor instances, want: %d", got, want)
 	}
 
@@ -368,13 +453,13 @@ WaitForUpdatedConfig:
 
 	// Verify the filter instance is retained, while the interceptor instances
 	// are replaced with the updated config.
-	if got, want := filtersCreated.Load(), int32(1); got != want {
+	if got, want := fb.filtersCreated.Load(), int32(1); got != want {
 		t.Fatalf("Created %d filter instances, want: %d", got, want)
 	}
-	if got, want := interceptorsCreated.Load(), int32(4); got != want {
+	if got, want := fb.interceptorsCreated.Load(), int32(4); got != want {
 		t.Fatalf("Created %d interceptor instances, want: %d", got, want)
 	}
-	if got, want := interceptorsDestroyed.Load(), int32(2); got != want {
+	if got, want := fb.interceptorsDestroyed.Load(), int32(2); got != want {
 		t.Fatalf("Destroyed %d interceptor instances, want: %d", got, want)
 	}
 
@@ -382,10 +467,10 @@ WaitForUpdatedConfig:
 	// cleanup of filters and interceptors, and verify that all instances are
 	// cleaned up.
 	stopServer()
-	if got, want := filtersDestroyed.Load(), int32(1); got != want {
+	if got, want := fb.filtersDestroyed.Load(), int32(1); got != want {
 		t.Fatalf("Destroyed %d filter instances, want: %d", got, want)
 	}
-	if got, want := interceptorsDestroyed.Load(), int32(4); got != want {
+	if got, want := fb.interceptorsDestroyed.Load(), int32(4); got != want {
 		t.Fatalf("Destroyed %d interceptor instances, want: %d", got, want)
 	}
 }
@@ -396,17 +481,10 @@ WaitForUpdatedConfig:
 // the filter name is part of the key used to identify filter instances.
 func (s) TestServerSideXDS_FilterStateRetention_AcrossUpdates_FilterChainsChange(t *testing.T) {
 	// Register a custom httpFilter builder for the test.
-	var filtersCreated, filtersDestroyed, interceptorsCreated, interceptorsDestroyed atomic.Int32
 	pathCh := make(chan string, 1)
 	testFilterTypeURL := t.Name()
-	fb := &trackingHTTPFilterBuilder{
-		filtersCreated:        &filtersCreated,
-		filtersDestroyed:      &filtersDestroyed,
-		interceptorsCreated:   &interceptorsCreated,
-		interceptorsDestroyed: &interceptorsDestroyed,
-		typeURL:               testFilterTypeURL,
-		pathCh:                pathCh,
-	}
+	fb := newTrackingHTTPFilterBuilder(testFilterTypeURL)
+	fb.pathCh = pathCh
 	httpfilter.Register(fb)
 	defer httpfilter.UnregisterForTesting(fb.typeURL)
 
@@ -512,10 +590,10 @@ func (s) TestServerSideXDS_FilterStateRetention_AcrossUpdates_FilterChainsChange
 	case <-ctx.Done():
 		t.Fatalf("Timeout waiting for interceptor to be invoked")
 	}
-	if got, want := filtersCreated.Load(), int32(1); got != want {
+	if got, want := fb.filtersCreated.Load(), int32(1); got != want {
 		t.Fatalf("Created %d filter instances, want: %d", got, want)
 	}
-	if got, want := interceptorsCreated.Load(), int32(1); got != want {
+	if got, want := fb.interceptorsCreated.Load(), int32(1); got != want {
 		t.Fatalf("Created %d interceptor instances, want: %d", got, want)
 	}
 
@@ -598,13 +676,13 @@ WaitForUpdatedConfig:
 	// Verify the a new filter instance is created because of the new filter
 	// name. Three new interceptor instances should also be created (one for the
 	// default filter chain, and two for the newly added filter chains).
-	if got, want := filtersCreated.Load(), int32(2); got != want {
+	if got, want := fb.filtersCreated.Load(), int32(2); got != want {
 		t.Fatalf("Created %d filter instances, want: %d", got, want)
 	}
-	if got, want := interceptorsCreated.Load(), int32(4); got != want {
+	if got, want := fb.interceptorsCreated.Load(), int32(4); got != want {
 		t.Fatalf("Created %d interceptor instances, want: %d", got, want)
 	}
-	if got, want := interceptorsDestroyed.Load(), int32(1); got != want {
+	if got, want := fb.interceptorsDestroyed.Load(), int32(1); got != want {
 		t.Fatalf("Destroyed %d interceptor instances, want: %d", got, want)
 	}
 
@@ -612,10 +690,10 @@ WaitForUpdatedConfig:
 	// cleanup of filters and interceptors, and verify that all instances are
 	// cleaned up.
 	stopServer()
-	if got, want := filtersDestroyed.Load(), int32(2); got != want {
+	if got, want := fb.filtersDestroyed.Load(), int32(2); got != want {
 		t.Fatalf("Destroyed %d filter instances, want: %d", got, want)
 	}
-	if got, want := interceptorsDestroyed.Load(), int32(4); got != want {
+	if got, want := fb.interceptorsDestroyed.Load(), int32(4); got != want {
 		t.Fatalf("Destroyed %d interceptor instances, want: %d", got, want)
 	}
 }

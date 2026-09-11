@@ -1344,6 +1344,32 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name: "header specifier with a name that is not lowercase",
+			routes: []*v3routepb.Route{{
+				Match: &v3routepb.RouteMatch{
+					PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/a/"},
+					Headers: []*v3routepb.HeaderMatcher{{
+						Name:                 "X-Role",
+						HeaderMatchSpecifier: &v3routepb.HeaderMatcher_ExactMatch{ExactMatch: "tv"},
+					}},
+				},
+				Action: &v3routepb.Route_Route{
+					Route: &v3routepb.RouteAction{ClusterSpecifier: &v3routepb.RouteAction_Cluster{Cluster: clusterName}},
+				},
+			}},
+			wantRoutes: []*Route{{
+				Prefix: newStringP("/a/"),
+				Headers: []*HeaderMatcher{{
+					Name:        "x-role",
+					InvertMatch: newBoolP(false),
+					StringMatch: &sm,
+				}},
+				WeightedClusters: []WeightedCluster{{Name: clusterName, Weight: 1}},
+				ActionType:       RouteActionRoute,
+			}},
+			wantErr: false,
+		},
+		{
 			name: "suffix_match header specifier",
 			routes: []*v3routepb.Route{{
 				Match: &v3routepb.RouteMatch{

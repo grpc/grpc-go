@@ -608,10 +608,10 @@ func (te *test) listenAndServe(ts testgrpc.TestServiceServer, listen func(networ
 		sopts = append(sopts, grpc.UnknownServiceHandler(te.unknownHandler))
 	}
 	if te.serverInitialWindowSize > 0 {
-		sopts = append(sopts, grpc.StaticStreamWindowSize(te.serverInitialWindowSize))
+		sopts = append(sopts, grpc.InitialWindowSize(te.serverInitialWindowSize))
 	}
 	if te.serverInitialConnWindowSize > 0 {
-		sopts = append(sopts, grpc.StaticConnWindowSize(te.serverInitialConnWindowSize))
+		sopts = append(sopts, grpc.InitialConnWindowSize(te.serverInitialConnWindowSize))
 	}
 	la := ":0"
 	if te.e.network == "unix" {
@@ -819,10 +819,10 @@ func (te *test) configDial(opts ...grpc.DialOption) ([]grpc.DialOption, string) 
 		opts = append(opts, grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, te.e.balancer)))
 	}
 	if te.clientInitialWindowSize > 0 {
-		opts = append(opts, grpc.WithStaticStreamWindowSize(te.clientInitialWindowSize))
+		opts = append(opts, grpc.WithInitialWindowSize(te.clientInitialWindowSize))
 	}
 	if te.clientInitialConnWindowSize > 0 {
-		opts = append(opts, grpc.WithStaticConnWindowSize(te.clientInitialConnWindowSize))
+		opts = append(opts, grpc.WithInitialConnWindowSize(te.clientInitialConnWindowSize))
 	}
 	if te.perRPCCreds != nil {
 		opts = append(opts, grpc.WithPerRPCCredentials(te.perRPCCreds))
@@ -4765,14 +4765,20 @@ func testClientInitialHeaderEndStream(t *testing.T, e env) {
 	te := newTest(t, e)
 	ts := &funcServer{streamingInputCall: func(stream testgrpc.TestService_StreamingInputCallServer) error {
 		defer close(handlerDone)
-		// Block on serverTester receiving RST_STREAM. This ensures server has closed
-		// stream before stream.Recv().
+		// Block on serverTester receiving RST_STREAM. This ensures server has
+		// closed stream before stream.Recv().
 		<-frameCheckingDone
-		data, err := stream.Recv()
-		if err == nil {
-			t.Errorf("unexpected data received in func server method: '%v'", data)
+		// Depending on whether the context cancellation (due to the illegal data
+		// RST_STREAM) or the buffered EOF (from the initial HEADERS END_STREAM) is
+		// selected first in recvBufferReader, stream.Recv() can return either
+		// io.EOF or Canceled.
+		if _, err := stream.Recv(); err != io.EOF && status.Code(err) != codes.Canceled {
+			t.Errorf("stream.Recv() returned error = %v, expected EOF or canceled error", err)
+		}
+		if err := stream.SendMsg(nil); err == nil {
+			t.Error("stream.SendMsg() returned nil, expected cancel error")
 		} else if status.Code(err) != codes.Canceled {
-			t.Errorf("expected canceled error, instead received '%v'", err)
+			t.Errorf("stream.SendMsg() returned error = %v, expected cancel error", err)
 		}
 		return nil
 	}}
