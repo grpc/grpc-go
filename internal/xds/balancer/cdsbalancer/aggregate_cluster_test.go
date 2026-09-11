@@ -119,7 +119,9 @@ func (s) TestAggregateClusterSuccess_LeafNode(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			lbCfgCh := registerWrappedOutlierDetectionPolicy(t)
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+			lbCfgCh := registerWrappedOutlierDetectionPolicy(ctx, t)
 			mgmtServer, nodeID, _ := setupWithManagementServer(t, nil, nil)
 
 			// Push the first cluster resource through the management server and
@@ -132,8 +134,6 @@ func (s) TestAggregateClusterSuccess_LeafNode(t *testing.T) {
 				Endpoints:      []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(serviceName, host, []uint32{port})},
 				SkipValidation: true,
 			}
-			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-			defer cancel()
 			if err := mgmtServer.Update(ctx, resources); err != nil {
 				t.Fatal(err)
 			}
@@ -165,8 +165,10 @@ func (s) TestAggregateClusterSuccess_LeafNode(t *testing.T) {
 // LogicalDNS and verifies that the load balancing configuration pushed to the
 // priority LB policy contains the expected config.
 func (s) TestAggregateClusterSuccess_ThenUpdateChildClusters(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	dnsTargetCh, dnsR := setupDNS(t)
-	lbCfgCh, _, _, _ := registerWrappedPriorityPolicy(t)
+	lbCfgCh, _, _, _ := registerWrappedPriorityPolicy(ctx, t)
 	mgmtServer, nodeID, _ := setupWithManagementServer(t, nil, nil)
 
 	// Configure the management server with the aggregate cluster resource
@@ -183,8 +185,6 @@ func (s) TestAggregateClusterSuccess_ThenUpdateChildClusters(t *testing.T) {
 		},
 		Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(serviceName, host, []uint32{port})},
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
@@ -262,9 +262,11 @@ func (s) TestAggregateClusterSuccess_ThenUpdateChildClusters(t *testing.T) {
 // configuration pushed to the outlier detection LB policy contains the leaf
 // cluster config.
 func (s) TestAggregateClusterSuccess_ThenChangeRootToEDS(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	dnsTargetCh, dnsR := setupDNS(t)
-	lbCfgCh, _, _, _ := registerWrappedPriorityPolicy(t)
-	odCfgCh := registerWrappedOutlierDetectionPolicy(t)
+	lbCfgCh, _, _, _ := registerWrappedPriorityPolicy(ctx, t)
+	odCfgCh := registerWrappedOutlierDetectionPolicy(ctx, t)
 	mgmtServer, nodeID, _ := setupWithManagementServer(t, nil, nil)
 
 	// Configure the management server with the aggregate cluster resource
@@ -280,8 +282,6 @@ func (s) TestAggregateClusterSuccess_ThenChangeRootToEDS(t *testing.T) {
 		},
 		Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(serviceName, host, []uint32{port})},
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
@@ -331,9 +331,11 @@ func (s) TestAggregateClusterSuccess_ThenChangeRootToEDS(t *testing.T) {
 // cluster. In each of these cases, the test verifies that the load balancing
 // configuration pushed to the top-level child policy contains the expected config.
 func (s) TestAggregatedClusterSuccess_SwitchBetweenLeafAndAggregate(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	dnsTargetCh, dnsR := setupDNS(t)
-	lbCfgCh, _, _, _ := registerWrappedPriorityPolicy(t)
-	odCfgCh := registerWrappedOutlierDetectionPolicy(t)
+	lbCfgCh, _, _, _ := registerWrappedPriorityPolicy(ctx, t)
+	odCfgCh := registerWrappedOutlierDetectionPolicy(ctx, t)
 	mgmtServer, nodeID, _ := setupWithManagementServer(t, nil, nil)
 
 	// Start off with the requested cluster being a leaf EDS cluster.
@@ -344,8 +346,6 @@ func (s) TestAggregatedClusterSuccess_SwitchBetweenLeafAndAggregate(t *testing.T
 		Clusters:  []*v3clusterpb.Cluster{e2e.DefaultCluster(clusterName, serviceName, e2e.SecurityLevelNone)},
 		Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(serviceName, host, []uint32{port})},
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
@@ -503,7 +503,9 @@ func (s) TestAggregatedClusterFailure_ExceedsMaxStackDepth(t *testing.T) {
 // policy specifies cluster D only once. Also verifies that configuration is
 // pushed only after all child clusters are resolved.
 func (s) TestAggregatedClusterSuccess_DiamondDependency(t *testing.T) {
-	lbCfgCh, _, _, _ := registerWrappedPriorityPolicy(t)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	lbCfgCh, _, _, _ := registerWrappedPriorityPolicy(ctx, t)
 	mgmtServer, nodeID, _ := setupWithManagementServer(t, nil, nil)
 
 	// Configure the management server with an aggregate cluster resource having
@@ -528,8 +530,6 @@ func (s) TestAggregatedClusterSuccess_DiamondDependency(t *testing.T) {
 		},
 		Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(serviceName, host, []uint32{port})},
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
@@ -570,7 +570,9 @@ func (s) TestAggregatedClusterSuccess_DiamondDependency(t *testing.T) {
 // corresponding to cluster C is higher than that for cluster D. Also verifies
 // that the configuration is pushed only after all child clusters are resolved.
 func (s) TestAggregatedClusterSuccess_IgnoreDups(t *testing.T) {
-	lbCfgCh, _, _, _ := registerWrappedPriorityPolicy(t)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	lbCfgCh, _, _, _ := registerWrappedPriorityPolicy(ctx, t)
 	mgmtServer, nodeID, _ := setupWithManagementServer(t, nil, nil)
 
 	// Configure the management server with an aggregate cluster resource that
@@ -595,8 +597,6 @@ func (s) TestAggregatedClusterSuccess_IgnoreDups(t *testing.T) {
 		},
 		Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(serviceName, host, []uint32{port})},
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
@@ -645,7 +645,9 @@ func (s) TestAggregatedClusterSuccess_IgnoreDups(t *testing.T) {
 // where B is a leaf EDS cluster. Verifies that configuration is pushed to the
 // child policy and that an RPC can be successfully made.
 func (s) TestAggregatedCluster_NodeChildOfItself(t *testing.T) {
-	lbCfgCh, _, _, _ := registerWrappedPriorityPolicy(t)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	lbCfgCh, _, _, _ := registerWrappedPriorityPolicy(ctx, t)
 	mgmtServer, nodeID, cc := setupWithManagementServer(t, nil, nil)
 
 	const (
@@ -661,8 +663,6 @@ func (s) TestAggregatedCluster_NodeChildOfItself(t *testing.T) {
 		Clusters:       []*v3clusterpb.Cluster{makeAggregateClusterResource(clusterNameA, []string{clusterNameA})},
 		SkipValidation: true,
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
@@ -732,7 +732,9 @@ func (s) TestAggregatedCluster_NodeChildOfItself(t *testing.T) {
 // are expected to fail with code UNAVAILABLE and an error message specifying
 // that the aggregate cluster graph has no leaf clusters.
 func (s) TestAggregatedCluster_CycleWithNoLeafNode(t *testing.T) {
-	lbCfgCh, _, _, _ := registerWrappedPriorityPolicy(t)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	lbCfgCh, _, _, _ := registerWrappedPriorityPolicy(ctx, t)
 	mgmtServer, nodeID, cc := setupWithManagementServer(t, nil, nil)
 
 	const (
@@ -751,8 +753,6 @@ func (s) TestAggregatedCluster_CycleWithNoLeafNode(t *testing.T) {
 		},
 		SkipValidation: true,
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
@@ -782,7 +782,9 @@ func (s) TestAggregatedCluster_CycleWithNoLeafNode(t *testing.T) {
 // there is a leaf cluster in this graph , configuration should be pushed to the
 // child policy and RPCs should get routed to that leaf cluster.
 func (s) TestAggregatedCluster_CycleWithLeafNode(t *testing.T) {
-	lbCfgCh, _, _, _ := registerWrappedPriorityPolicy(t)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	lbCfgCh, _, _, _ := registerWrappedPriorityPolicy(ctx, t)
 	mgmtServer, nodeID, cc := setupWithManagementServer(t, nil, nil)
 
 	// Start a test service backend.
@@ -808,8 +810,6 @@ func (s) TestAggregatedCluster_CycleWithLeafNode(t *testing.T) {
 		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(serviceName, host, []uint32{testutils.ParsePort(t, server.Address)})},
 		SkipValidation: true,
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}

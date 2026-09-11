@@ -35,6 +35,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/balancer/stub"
+	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/grpctest"
 	iringhash "google.golang.org/grpc/internal/ringhash"
 	iserviceconfig "google.golang.org/grpc/internal/serviceconfig"
@@ -118,16 +119,16 @@ func waitForResourceNames(ctx context.Context, resourceNamesCh chan []string, wa
 // Returns the following:
 // - a channel to read received load balancing configuration
 // - a channel to read received resolver error
-// - a channel that is closed when ExitIdle() is called
-// - a channel that is closed when the balancer is closed
-func registerWrappedPriorityPolicy(t *testing.T) (chan serviceconfig.LoadBalancingConfig, chan error, chan struct{}, chan struct{}) {
+// - an event that is fired when ExitIdle() is called
+// - an event that is fired when the balancer is closed
+func registerWrappedPriorityPolicy(ctx context.Context, t *testing.T) (chan serviceconfig.LoadBalancingConfig, chan error, *grpcsync.Event, *grpcsync.Event) {
 	priorityBuilder := balancer.Get(priority.Name)
 	internal.BalancerUnregister(priorityBuilder.Name())
 
 	lbCfgCh := make(chan serviceconfig.LoadBalancingConfig, 1)
 	resolverErrCh := make(chan error, 1)
-	exitIdleCh := make(chan struct{})
-	closeCh := make(chan struct{})
+	exitIdleEvent := grpcsync.NewEvent()
+	closeEvent := grpcsync.NewEvent()
 
 	stub.Register(priority.Name, stub.BalancerFuncs{
 		Init: func(bd *stub.BalancerData) {
@@ -139,40 +140,32 @@ func registerWrappedPriorityPolicy(t *testing.T) (chan serviceconfig.LoadBalanci
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
 			select {
 			case lbCfgCh <- ccs.BalancerConfig:
-			default:
+			case <-ctx.Done():
 			}
 			return bd.ChildBalancer.UpdateClientConnState(ccs)
 		},
 		ResolverError: func(bd *stub.BalancerData, err error) {
 			select {
 			case resolverErrCh <- err:
-			default:
+			case <-ctx.Done():
 			}
 			bd.ChildBalancer.ResolverError(err)
 		},
 		ExitIdle: func(bd *stub.BalancerData) {
 			bd.ChildBalancer.ExitIdle()
-			select {
-			case <-exitIdleCh:
-			default:
-				close(exitIdleCh)
-			}
+			exitIdleEvent.Fire()
 		},
 		Close: func(bd *stub.BalancerData) {
 			bd.ChildBalancer.Close()
-			select {
-			case <-closeCh:
-			default:
-				close(closeCh)
-			}
+			closeEvent.Fire()
 		},
 	})
 	t.Cleanup(func() { balancer.Register(priorityBuilder) })
 
-	return lbCfgCh, resolverErrCh, exitIdleCh, closeCh
+	return lbCfgCh, resolverErrCh, exitIdleEvent, closeEvent
 }
 
-func registerWrappedOutlierDetectionPolicy(t *testing.T) chan serviceconfig.LoadBalancingConfig {
+func registerWrappedOutlierDetectionPolicy(ctx context.Context, t *testing.T) chan serviceconfig.LoadBalancingConfig {
 	odBuilder := balancer.Get(outlierdetection.Name)
 	internal.BalancerUnregister(odBuilder.Name())
 
@@ -188,7 +181,7 @@ func registerWrappedOutlierDetectionPolicy(t *testing.T) chan serviceconfig.Load
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
 			select {
 			case lbCfgCh <- ccs.BalancerConfig:
-			default:
+			case <-ctx.Done():
 			}
 			return bd.ChildBalancer.UpdateClientConnState(ccs)
 		},
@@ -693,11 +686,10 @@ func (s) TestClusterUpdate_Success(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			lbCfgCh := registerWrappedOutlierDetectionPolicy(t)
-			mgmtServer, nodeID, _ := setupWithManagementServer(t, nil, nil)
-
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
+			lbCfgCh := registerWrappedOutlierDetectionPolicy(ctx, t)
+			mgmtServer, nodeID, _ := setupWithManagementServer(t, nil, nil)
 			if err := mgmtServer.Update(ctx, e2e.UpdateOptions{
 				NodeID:    nodeID,
 				Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(target, routeName)},
@@ -832,7 +824,9 @@ func (s) TestClusterUpdate_Failure(t *testing.T) {
 //     is expected to push the error down the child policy and put the channel in
 //     TRANSIENT_FAILURE. It is also expected to cancel the CDS watch.
 func (s) TestResolverError(t *testing.T) {
-	registerWrappedPriorityPolicy(t)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	registerWrappedPriorityPolicy(ctx, t)
 	mgmtServer, nodeID, cc := setupWithManagementServer(t, nil, nil)
 
 	// Start a test service backend.
@@ -852,8 +846,6 @@ func (s) TestResolverError(t *testing.T) {
 		Port:       port,
 	})
 	resources.Listeners[0].ApiListener.ApiListener = nil
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
@@ -922,9 +914,9 @@ func (s) TestResolverError(t *testing.T) {
 // error down the child policy and put the channel in TRANSIENT_FAILURE. It is
 // also expected to cancel the CDS watch.
 func (s) TestResourceNotFoundResolverError(t *testing.T) {
-	_, _, _, childPolicyCloseCh := registerWrappedPriorityPolicy(t)
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
+	_, _, _, childPolicyCloseEvent := registerWrappedPriorityPolicy(ctx, t)
 	cdsResourceCanceledCh := make(chan struct{}, 1)
 	onStreamReq := func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
 		if req.GetTypeUrl() == version.V3ClusterURL {
@@ -967,7 +959,7 @@ func (s) TestResourceNotFoundResolverError(t *testing.T) {
 
 	// Verify that the resolver error is pushed to the child policy.
 	select {
-	case <-childPolicyCloseCh:
+	case <-childPolicyCloseEvent.Done():
 	case <-ctx.Done():
 		t.Fatal("Timeout when waiting for child policy to be closed")
 	}
@@ -1075,7 +1067,9 @@ func (s) TestClusterUpdate_ResourceNotFound(t *testing.T) {
 // Tests that closing the cds LB policy results in the the child policy being
 // closed.
 func (s) TestClose(t *testing.T) {
-	_, _, _, childPolicyCloseCh := registerWrappedPriorityPolicy(t)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	_, _, _, childPolicyCloseEvent := registerWrappedPriorityPolicy(ctx, t)
 	mgmtServer, nodeID, cc := setupWithManagementServer(t, nil, nil)
 
 	// Start a test service backend.
@@ -1089,8 +1083,6 @@ func (s) TestClose(t *testing.T) {
 		Host:       host,
 		Port:       testutils.ParsePort(t, server.Address),
 	})
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
@@ -1108,14 +1100,16 @@ func (s) TestClose(t *testing.T) {
 	select {
 	case <-ctx.Done():
 		t.Fatal("Timeout when waiting for the child policy to be closed")
-	case <-childPolicyCloseCh:
+	case <-childPolicyCloseEvent.Done():
 	}
 }
 
 // Tests that calling ExitIdle on the cds LB policy results in the call being
 // propagated to the child policy.
 func (s) TestExitIdle(t *testing.T) {
-	_, _, exitIdleCh, _ := registerWrappedPriorityPolicy(t)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	_, _, exitIdleEvent, _ := registerWrappedPriorityPolicy(ctx, t)
 	mgmtServer, nodeID, cc := setupWithManagementServer(t, nil, nil)
 
 	// Start a test service backend.
@@ -1129,8 +1123,6 @@ func (s) TestExitIdle(t *testing.T) {
 		Host:       host,
 		Port:       testutils.ParsePort(t, server.Address),
 	})
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
@@ -1147,8 +1139,8 @@ func (s) TestExitIdle(t *testing.T) {
 	// Wait for ExitIdle to be called on the child policy.
 	select {
 	case <-ctx.Done():
-		t.Fatal("Timeout when waiting for the child policy to be closed")
-	case <-exitIdleCh:
+		t.Fatal("Timeout when waiting for ExitIdle to be called on the child policy")
+	case <-exitIdleEvent.Done():
 	}
 }
 
