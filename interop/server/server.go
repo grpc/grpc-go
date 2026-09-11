@@ -26,28 +26,35 @@ package main
 import (
 	"flag"
 	"net"
+	"os"
+	"os/signal"
 	"strconv"
+	"syscall"
 	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/alts"
+	oteltracing "google.golang.org/grpc/experimental/opentelemetry"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/interop"
 	"google.golang.org/grpc/orca"
+	grpcotel "google.golang.org/grpc/stats/opentelemetry"
 	"google.golang.org/grpc/testdata"
 
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 )
 
 var (
-	useTLS     = flag.Bool("use_tls", false, "Connection uses TLS if true, else plain TCP")
-	useALTS    = flag.Bool("use_alts", false, "Connection uses ALTS if true (this option can only be used on GCP)")
-	altsHSAddr = flag.String("alts_handshaker_service_address", "", "ALTS handshaker gRPC service address")
-	certFile   = flag.String("tls_cert_file", "", "The TLS cert file")
-	keyFile    = flag.String("tls_key_file", "", "The TLS key file")
-	port       = flag.Int("port", 10000, "The server port")
+	useTLS               = flag.Bool("use_tls", false, "Connection uses TLS if true, else plain TCP")
+	useALTS              = flag.Bool("use_alts", false, "Connection uses ALTS if true (this option can only be used on GCP)")
+	altsHSAddr           = flag.String("alts_handshaker_service_address", "", "ALTS handshaker gRPC service address")
+	certFile             = flag.String("tls_cert_file", "", "The TLS cert file")
+	keyFile              = flag.String("tls_key_file", "", "The TLS key file")
+	port                 = flag.Int("port", 10000, "The server port")
+	enableOpenTelemetry  = flag.Bool("enable_opentelemetry", false, "Whether to enable OpenTelemetry")
+	otelCollectorAddress = flag.String("otel_collector_address", "", "The OpenTelemetry collector address")
 
 	logger = grpclog.Component("interop")
 )
@@ -64,6 +71,16 @@ func main() {
 	}
 	logger.Infof("interop server listening on %v", lis.Addr())
 	opts := []grpc.ServerOption{orca.CallMetricsServerOption(nil)}
+	tp, propagator, shutdownFunc := interop.SetupOpenTelemetry(*enableOpenTelemetry, *otelCollectorAddress, logger)
+	if tp != nil {
+		defer shutdownFunc()
+		opts = append(opts, grpcotel.ServerOption(grpcotel.Options{
+			TraceOptions: oteltracing.TraceOptions{
+				TracerProvider:    tp,
+				TextMapPropagator: propagator,
+			},
+		}))
+	}
 	if *useTLS {
 		if *certFile == "" {
 			*certFile = testdata.Path("server1.pem")
@@ -93,5 +110,13 @@ func main() {
 	internal.ORCAAllowAnyMinReportingInterval.(func(*orca.ServiceOptions))(&sopts)
 	orca.Register(server, sopts)
 	testgrpc.RegisterTestServiceServer(server, interop.NewTestServer(interop.NewTestServerOptions{MetricsRecorder: metricsRecorder}))
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		<-sigChan
+		go server.GracefulStop()
+		time.Sleep(5 * time.Second)
+		server.Stop()
+	}()
 	server.Serve(lis)
 }
