@@ -90,3 +90,5 @@ replace google.golang.org/grpc => ../
 replace google.golang.org/grpc/gcp/observability => ../gcp/observability
 
 replace google.golang.org/grpc/stats/opentelemetry => ../stats/opentelemetry
+
+replace google.golang.org/grpc/interop => ../interop

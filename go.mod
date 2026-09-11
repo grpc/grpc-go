@@ -26,6 +26,7 @@ require (
 	golang.org/x/sys v0.47.0
 	gonum.org/v1/gonum v0.17.0
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260817212433-ac3dfec99bb1
+	google.golang.org/grpc/interop v0.0.0
 	google.golang.org/protobuf v1.36.12
 )
 
@@ -52,3 +53,5 @@ require (
 
 // v1.74.0 was published prematurely with known issues.
 retract [v1.74.0, v1.74.1]
+
+replace google.golang.org/grpc/interop => ./interop
