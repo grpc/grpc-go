@@ -412,13 +412,14 @@ func (df *parsedDataFrame) StreamEnded() bool {
 }
 
 type framer struct {
-	writer    *bufWriter
-	fr        *http2.Framer
-	headerBuf []byte // cached slice for framer headers to reduce heap allocs.
-	reader    io.Reader
-	dataFrame parsedDataFrame // Cached data frame to avoid heap allocations.
-	pool      mem.BufferPool
-	errDetail error
+	writer       *bufWriter
+	fr           *http2.Framer
+	headerBuf    []byte // cached slice for framer headers to reduce heap allocs.
+	reader       io.Reader
+	dataFrame    parsedDataFrame // Cached data frame to avoid heap allocations.
+	pool         mem.BufferPool
+	errDetail    error
+	serverHeader *serverHeaderDecoder
 }
 
 var ioBufferPoolMap = make(map[int]*imem.SimpleBufferPool)
