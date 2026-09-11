@@ -162,3 +162,99 @@ func (s) TestCancelWhileRecvingWithCompression(t *testing.T) {
 		t.Fatalf("Close failed with %v, want nil", err)
 	}
 }
+
+// Test verifies that an in-flight Unary RPC fails promptly when the ClientConn
+// is closed (canceling ClientConn context).
+func (s) TestUnary_ClientConnContextExpires(t *testing.T) {
+	rpcStarted := make(chan struct{})
+	ss := &stubserver.StubServer{
+		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
+			close(rpcStarted)
+			<-ctx.Done()
+			return nil, ctx.Err()
+		},
+	}
+	if err := ss.Start(nil); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
+	}
+	defer ss.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	errChan := make(chan error, 1)
+	go func() {
+		_, err := ss.Client.EmptyCall(ctx, &testpb.Empty{})
+		errChan <- err
+	}()
+
+	select {
+	case <-rpcStarted:
+	case <-time.After(defaultTestTimeout):
+		t.Fatal("timed out waiting for RPC to start on server")
+	}
+
+	// Close ClientConn while Unary RPC is in-flight.
+	ss.CC.Close()
+
+	select {
+	case err := <-errChan:
+		if status.Code(err) != codes.Canceled {
+			t.Fatalf("EmptyCall returned error: %v (code: %v), want Canceled", err, status.Code(err))
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Unary RPC did not return promptly after ClientConn was closed")
+	}
+}
+
+// Test verifies that an in-flight Streaming RPC fails promptly when the
+// ClientConn is closed (canceling ClientConn context).
+func (s) TestStreaming_ClientConnContextExpires(t *testing.T) {
+	rpcStarted := make(chan struct{})
+	ss := &stubserver.StubServer{
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
+			close(rpcStarted)
+			<-stream.Context().Done()
+			return stream.Context().Err()
+		},
+	}
+	if err := ss.Start(nil); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
+	}
+	defer ss.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	stream, err := ss.Client.FullDuplexCall(ctx)
+	if err != nil {
+		t.Fatalf("FullDuplexCall failed: %v", err)
+	}
+
+	// Send an initial message so the stream is active on the server.
+	if err := stream.Send(&testpb.StreamingOutputCallRequest{}); err != nil {
+		t.Fatalf("Send failed: %v", err)
+	}
+
+	select {
+	case <-rpcStarted:
+	case <-time.After(defaultTestTimeout):
+		t.Fatal("timed out waiting for stream to start on server")
+	}
+
+	errChan := make(chan error, 1)
+	go func() {
+		_, err := stream.Recv()
+		errChan <- err
+	}()
+
+	// Close ClientConn while Streaming RPC is waiting in Recv.
+	ss.CC.Close()
+
+	select {
+	case err := <-errChan:
+		if status.Code(err) != codes.Canceled {
+			t.Fatalf("Recv returned error: %v (code: %v), want Canceled", err, status.Code(err))
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Streaming RPC did not return promptly after ClientConn was closed")
+	}
+}
