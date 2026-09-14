@@ -26,7 +26,6 @@ import (
 	"net/http"
 	"slices"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"google.golang.org/grpc"
@@ -206,8 +205,9 @@ var _ httpfilter.ClientFilterBuilder = builder{}
 
 // authzChannelEntry holds a refcounted client to an external authorization
 // server along with the GrpcService config used to create it. The config is
-// used to determine if the channel can be shared across interceptors, and to
-// release credentials when the channel is closed.
+// used to determine if the channel can be shared across interceptors. When the
+// channel is closed, all resources held by the gRPC channel to the external
+// service as well as its credentials are released.
 type authzChannelEntry struct {
 	server *grpcservice.Config
 	rc     *grpcsync.RefCounted[v3authgrpc.AuthorizationClient]
@@ -243,7 +243,7 @@ func (cf *clientFilter) getAuthzChannel(server *grpcservice.Config) *grpcsync.Re
 
 // storeAuthzChannel stores the created channel entry if no valid channel
 // exists for the GrpcService config. If another goroutine already stored a
-// channe while unlocked, it increments the existing channel's refcount and
+// channel while unlocked, it increments the existing channel's refcount and
 // returns it.
 func (cf *clientFilter) storeAuthzChannel(entry *authzChannelEntry) *grpcsync.RefCounted[v3authgrpc.AuthorizationClient] {
 	cf.mu.Lock()
@@ -330,19 +330,13 @@ type clientInterceptor struct {
 	authzClient     *grpcsync.RefCounted[v3authgrpc.AuthorizationClient]
 	metricsRecorder estats.MetricsRecorder
 	target          string
-	closed          atomic.Bool
 }
 
 func (i *clientInterceptor) Close() {
-	if i.closed.CompareAndSwap(false, true) {
-		i.authzClient.Decrement()
-	}
+	i.authzClient.Decrement()
 }
 
 func (i *clientInterceptor) recordMetric(handle *estats.Int64CountHandle) {
-	if i.metricsRecorder == nil {
-		return
-	}
 	handle.Record(i.metricsRecorder, 1, i.target)
 }
 
@@ -351,9 +345,14 @@ func (i *clientInterceptor) isExtAuthzEnabled() bool {
 	return rand.Uint32N(i.config.filterEnabled.denominator) < i.config.filterEnabled.numerator
 }
 
-// check sends a CheckRequest to the external authorization server and returns
-// the CheckResponse.
-func (i *clientInterceptor) check(ctx context.Context, ri resolver.RPCInfo, outgoingMD metadata.MD) (*v3authpb.CheckResponse, error) {
+// sendCheckRequest sends a CheckRequest to the external authorization server
+// and returns the CheckResponse.
+//
+// It takes the ctx, method name and outgoing metadata of the data plane RPC as
+// parameters and returns the response from the external authorization server
+// containing the authorization decision (OK or Denied) and any header
+// mutations or an error if the Check RPC failed.
+func (i *clientInterceptor) sendCheckRequest(ctx context.Context, method string, outgoingMD metadata.MD) (*v3authpb.CheckResponse, error) {
 	// Construct the request header map for the CheckRequest, applying the
 	// allowed_headers and disallowed_headers filtering rules if configured.
 	headers := httpfilter.ConstructHeaderMap(outgoingMD, nil, i.config.allowedHeaders, i.config.disallowedHeaders).GetHeaders()
@@ -365,7 +364,7 @@ func (i *clientInterceptor) check(ctx context.Context, ri resolver.RPCInfo, outg
 				Http: &v3authpb.AttributeContext_HttpRequest{
 					Method:    "POST",
 					HeaderMap: &v3corepb.HeaderMap{Headers: headers},
-					Path:      ri.Method,
+					Path:      method,
 					Size:      -1,
 					Protocol:  "HTTP/2",
 				},
@@ -376,8 +375,8 @@ func (i *clientInterceptor) check(ctx context.Context, ri resolver.RPCInfo, outg
 	// Prepare the context for the Check RPC by applying the configured timeout
 	// and attaching any configured initial metadata.
 	var extAuthzCtx context.Context
-	var cancel context.CancelFunc
 	if i.config.grpcService.Timeout != 0 {
+		var cancel context.CancelFunc
 		extAuthzCtx, cancel = context.WithTimeout(ctx, i.config.grpcService.Timeout)
 		defer cancel()
 	} else {
@@ -390,113 +389,76 @@ func (i *clientInterceptor) check(ctx context.Context, ri resolver.RPCInfo, outg
 	return authClient.Check(extAuthzCtx, req)
 }
 
-// appendFailureModeHeader appends the x-envoy-auth-failure-mode-allowed: true
-// header to md if failure_mode_allow_header_add is configured and the header
-// is not already present.
-func (i *clientInterceptor) appendFailureModeHeader(md metadata.MD) {
-	if i.config.failureModeAllowHeaderAdd && len(md.Get("x-envoy-auth-failure-mode-allowed")) == 0 {
-		md.Append("x-envoy-auth-failure-mode-allowed", "true")
+// handleFailure handles an error encountered during external authorization
+// based on the failure_mode_allow configuration:
+//   - If failure_mode_allow is false, an error with statusOnError is returned.
+//   - If failure_mode_allow is true, the failure mode header is appended to
+//     outgoingMD (if failure_mode_allow_header_add is not already present)
+//     and nil is returned.
+func (i *clientInterceptor) handleFailure(outgoingMD metadata.MD, desc string, err error) error {
+	i.recordMetric(extAuthzClientFailedRPCsMetric)
+	if !i.config.failureModeAllow {
+		return status.Errorf(i.config.statusOnError, "extauthz: %s: %v", desc, err)
 	}
+	if i.config.failureModeAllowHeaderAdd && len(outgoingMD.Get("x-envoy-auth-failure-mode-allowed")) == 0 {
+		outgoingMD.Append("x-envoy-auth-failure-mode-allowed", "true")
+	}
+	return nil
 }
 
-// applyHeaderMutations applies request header additions and removals from the
-// OkHttpResponse to outgoingMD and validates response headers against the
-// configured header mutation rules. It records the appropriate metrics and
-// returns the validated response headers to add.
+// applyHeaderMutations applies request header additions and removals from
+// okResp to outgoingMD and validates response headers against the configured
+// header mutation rules.
+//
+// If any mutation fails, subsequent mutations are skipped. If
+// failure_mode_allow is false, an error is returned; otherwise, the failure
+// mode header is appended if configured and nil is returned. It records the
+// appropriate metrics and returns the validated response headers to add.
 func (i *clientInterceptor) applyHeaderMutations(okResp *v3authpb.OkHttpResponse, outgoingMD metadata.MD) ([]*v3corepb.HeaderValueOption, error) {
-	var mutationFailed bool
-	handleErr := func(err error, desc string) error {
-		if !mutationFailed {
-			i.recordMetric(extAuthzClientFailedRPCsMetric)
-			mutationFailed = true
-		}
-		if !i.config.failureModeAllow {
-			return status.Errorf(i.config.statusOnError, "extauthz: %s: %v", desc, err)
-		}
-		i.appendFailureModeHeader(outgoingMD)
-		return nil
-	}
-
 	// Update outgoing metadata with headers specified by the external
 	// authorization server.
 	if err := i.config.decoderHeaderMutationRules.ApplyAdditions(okResp.GetHeaders(), outgoingMD); err != nil {
-		if err := handleErr(err, "error applying header mutation rules"); err != nil {
-			return nil, err
-		}
+		return nil, i.handleFailure(outgoingMD, "error applying header additions", err)
 	}
 
 	// Update outgoing metadata with headers_to_remove specified by the external
 	// authorization server.
 	if err := i.config.decoderHeaderMutationRules.ApplyRemovals(okResp.GetHeadersToRemove(), outgoingMD); err != nil {
-		if err := handleErr(err, "error applying header mutation rules"); err != nil {
-			return nil, err
-		}
+		return nil, i.handleFailure(outgoingMD, "error applying header removals", err)
 	}
 
 	// Validate response headers specified by the external authorization server
 	// against header mutation rules before creating the data plane stream.
 	if err := i.config.decoderHeaderMutationRules.ApplyAdditions(okResp.GetResponseHeadersToAdd(), metadata.MD{}); err != nil {
-		if err := handleErr(err, "header validation fails for response headers"); err != nil {
-			return nil, err
-		}
+		return nil, i.handleFailure(outgoingMD, "header validation fails for response headers", err)
 	}
 
-	if !mutationFailed {
-		i.recordMetric(extAuthzClientAllowedRPCsMetric)
-		return okResp.GetResponseHeadersToAdd(), nil
-	}
-	// If any mutation failed and failure_mode_allow is true, do not apply
-	// any response header mutations from the failed ext_authz response.
-	return nil, nil
+	i.recordMetric(extAuthzClientAllowedRPCsMetric)
+	return okResp.GetResponseHeadersToAdd(), nil
 }
 
 func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, newStream func(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStream, error), opts ...grpc.CallOption) (grpc.ClientStream, error) {
-	// If the interceptor is already closed, no new streams should be created.
-	if i.closed.Load() {
-		return nil, status.Errorf(codes.Unavailable, "extauthz: interceptor is closed")
-	}
-
 	// When the filter is disabled for this RPC based on runtime fraction:
 	// - If deny_at_disable is true, the RPC is denied with status_on_error.
 	// - Otherwise, external authorization is bypassed and the RPC proceeds.
 	if !i.isExtAuthzEnabled() {
 		i.recordMetric(extAuthzClientFilterDisabledRPCsMetric)
 		if i.config.denyAtDisable {
-			return nil, status.Errorf(i.config.statusOnError, "extauthz: RPC denied due to filter disabled")
+			return nil, status.Errorf(i.config.statusOnError, "extauthz: RPC denied due to the filter being disabled")
 		}
 		return newStream(ctx, opts...)
 	}
-
-	// Try to increment authzClient's refcount so the Check RPC keeps the
-	// connection open even if the interceptor is closed concurrently. Decrement
-	// is deferred to release the reference when NewStream completes. If
-	// TryIncrement returns false, the underlying authz client is closed, so
-	// we fail the RPC with an Unavailable status.
-	if !i.authzClient.TryIncrement() {
-		return nil, status.Errorf(codes.Unavailable, "extauthz: authz client is closed")
-	}
-	defer i.authzClient.Decrement()
 
 	outgoingMD, ok := metadata.FromOutgoingContext(ctx)
 	if !ok {
 		outgoingMD = metadata.MD{}
 	}
 
-	resp, err := i.check(ctx, ri, outgoingMD)
+	resp, err := i.sendCheckRequest(ctx, ri.Method, outgoingMD)
 	if err != nil {
-		i.recordMetric(extAuthzClientFailedRPCsMetric)
-		// If the RPC to the ext_authz service fails and the failure_mode_allow
-		// config field is set to false, the data plane RPC will be failed with
-		// the status derived from the StatusCodeOnError config field.
-		if !i.config.failureModeAllow {
-			return nil, status.Errorf(i.config.statusOnError, "extauthz: RPC denied due to error calling external authorization server: %v", err)
+		if err := i.handleFailure(outgoingMD, "RPC denied due to an error calling the external authorization server", err); err != nil {
+			return nil, err
 		}
-
-		// Otherwise, the data plane RPC will be allowed. If the
-		// failure_mode_allow_header_add config field is true, then the filter
-		// will add a x-envoy-auth-failure-mode-allowed: true header to the data
-		// plane RPC.
-		i.appendFailureModeHeader(outgoingMD)
 		ctx = metadata.NewOutgoingContext(ctx, outgoingMD)
 		return newStream(ctx, opts...)
 	}
@@ -505,44 +467,55 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 	// a dataplane stream to the backend. Instead, we return a denied client
 	// stream wrapper that returns the denied error on stream operations.
 	if resp.GetStatus().GetCode() != int32(codes.OK) {
-		deniedResp, ok := resp.GetHttpResponse().(*v3authpb.CheckResponse_DeniedResponse)
-		if !ok {
-			i.recordMetric(extAuthzClientDeniedRPCsMetric)
-			// If the status in the response is not OK, and the response does not
-			// contain a DeniedResponse message, we fail the RPC with
-			// PERMISSION_DENIED.
-			return nil, status.Errorf(codes.PermissionDenied, "extauthz: RPC denied by external authorization server")
-		}
+		return i.handleDeniedResponse(ctx, resp, outgoingMD, newStream, opts)
+	}
+	return i.handleOkResponse(ctx, resp, outgoingMD, newStream, opts)
+}
 
-		// Validate denied response headers.
-		trailers := metadata.MD{}
-		if headers := deniedResp.DeniedResponse.GetHeaders(); len(headers) > 0 {
-			if err := i.config.decoderHeaderMutationRules.ApplyAdditions(headers, trailers); err != nil {
-				i.recordMetric(extAuthzClientFailedRPCsMetric)
-				if !i.config.failureModeAllow {
-					return nil, status.Errorf(i.config.statusOnError, "extauthz: error applying header mutation rules on denied response: %v", err)
-				}
-				i.appendFailureModeHeader(outgoingMD)
-				ctx = metadata.NewOutgoingContext(ctx, outgoingMD)
-				return newStream(ctx, opts...)
-			}
-		}
-
-		i.recordMetric(extAuthzClientDeniedRPCsMetric)
-
-		// Compute the status to return to the caller based on the status returned
-		// by the external authorization server.
-		code := codes.PermissionDenied
-		if st := deniedResp.DeniedResponse.GetStatus(); st != nil {
-			code = grpcStatusCode(int32(st.GetCode()))
-		}
-		msg := "extauthz: RPC denied by external authorization server"
-		if text := resp.GetStatus().GetMessage(); text != "" {
-			msg = fmt.Sprintf("extauthz: RPC denied by external authorization server: %s", text)
-		}
-		return newDeniedClientStream(ctx, status.Errorf(code, "%s", msg), trailers, opts), nil
+// handleDeniedResponse handles cases where the external authorization server
+// denies the RPC.
+func (i *clientInterceptor) handleDeniedResponse(ctx context.Context, resp *v3authpb.CheckResponse, outgoingMD metadata.MD, newStream func(context.Context, ...grpc.CallOption) (grpc.ClientStream, error), opts []grpc.CallOption) (grpc.ClientStream, error) {
+	msg := "extauthz: RPC denied by external authorization server"
+	if text := resp.GetStatus().GetMessage(); text != "" {
+		msg = fmt.Sprintf("extauthz: RPC denied by external authorization server: %s", text)
 	}
 
+	deniedResp, ok := resp.GetHttpResponse().(*v3authpb.CheckResponse_DeniedResponse)
+	if !ok {
+		i.recordMetric(extAuthzClientDeniedRPCsMetric)
+		// Per gRFC A92, the status code to fail the RPC with is derived
+		// from denied_response.status. If denied_response is omitted by the
+		// authorization server despite a non-OK decision, we default to
+		// PERMISSION_DENIED as the standard authorization rejection status.
+		return nil, status.Errorf(codes.PermissionDenied, "%s", msg)
+	}
+
+	// Validate denied response headers.
+	trailers := metadata.MD{}
+	if headers := deniedResp.DeniedResponse.GetHeaders(); len(headers) > 0 {
+		if err := i.config.decoderHeaderMutationRules.ApplyAdditions(headers, trailers); err != nil {
+			if err := i.handleFailure(outgoingMD, "error applying header mutation rules on denied response", err); err != nil {
+				return nil, err
+			}
+			ctx = metadata.NewOutgoingContext(ctx, outgoingMD)
+			return newStream(ctx, opts...)
+		}
+	}
+
+	i.recordMetric(extAuthzClientDeniedRPCsMetric)
+
+	// Compute the status to return to the caller based on the status returned
+	// by the external authorization server.
+	code := codes.PermissionDenied
+	if st := deniedResp.DeniedResponse.GetStatus(); st != nil {
+		code = grpcStatusCode(int32(st.GetCode()))
+	}
+	return newDeniedClientStream(ctx, status.Errorf(code, "%s", msg), trailers, opts), nil
+}
+
+// handleOkResponse handles cases where the external authorization server
+// allows the RPC.
+func (i *clientInterceptor) handleOkResponse(ctx context.Context, resp *v3authpb.CheckResponse, outgoingMD metadata.MD, newStream func(context.Context, ...grpc.CallOption) (grpc.ClientStream, error), opts []grpc.CallOption) (grpc.ClientStream, error) {
 	var responseHeadersToAdd []*v3corepb.HeaderValueOption
 	okResp, _ := resp.GetHttpResponse().(*v3authpb.CheckResponse_OkResponse)
 	if okResp != nil {

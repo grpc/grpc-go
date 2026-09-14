@@ -32,7 +32,6 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpctest"
-	"google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/internal/xds/grpcservice"
@@ -691,86 +690,5 @@ func (s) TestBuildClientInterceptor_ChannelCleanup(t *testing.T) {
 	defer intptr3.Close()
 	if dialCount != 2 {
 		t.Fatalf("Unexpected dialCount: got %d, want 2", dialCount)
-	}
-}
-
-// Test verifies that NewStream returns an error when the interceptor is closed.
-func (s) TestClientInterceptor_Closed(t *testing.T) {
-	origCreateExtAuthzChannel := iextauthz.CreateExtAuthzChannel
-	iextauthz.CreateExtAuthzChannel = func(cfg *grpcservice.Config) (grpc.ClientConnInterface, func(), error) {
-		conn, err := grpc.NewClient(cfg.TargetURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
-		if err != nil {
-			return nil, nil, err
-		}
-		return conn, func() { conn.Close() }, nil
-	}
-	defer func() { iextauthz.CreateExtAuthzChannel = origCreateExtAuthzChannel }()
-
-	cf := builder{}.BuildClientFilter(httpfilter.ClientFilterOptions{})
-	defer cf.Close()
-
-	cfg := config{
-		grpcService: &grpcservice.Config{
-			TargetURI:          "localhost:1234",
-			ChannelCredentials: allowlistInsecureCreds,
-		},
-	}
-
-	intptr := buildInterceptor(t, cf, cfg)
-	intptr.Close()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	const wantErr = "extauthz: interceptor is closed"
-	newStream := func(context.Context, ...grpc.CallOption) (grpc.ClientStream, error) {
-		return nil, nil
-	}
-	if _, err := intptr.NewStream(ctx, resolver.RPCInfo{}, newStream); err == nil || !strings.Contains(err.Error(), wantErr) {
-		t.Fatalf("NewStream() returned unexpected results, got %q, want error containing %q", err, wantErr)
-	}
-}
-
-// Test verifies that NewStream returns an error when authzClient is closed
-// (refcount reached 0) even if the interceptor closed flag is false.
-func (s) TestClientInterceptor_AuthzClientClosed(t *testing.T) {
-	origCreateExtAuthzChannel := iextauthz.CreateExtAuthzChannel
-	iextauthz.CreateExtAuthzChannel = func(cfg *grpcservice.Config) (grpc.ClientConnInterface, func(), error) {
-		conn, err := grpc.NewClient(cfg.TargetURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
-		if err != nil {
-			return nil, nil, err
-		}
-		return conn, func() { conn.Close() }, nil
-	}
-	defer func() { iextauthz.CreateExtAuthzChannel = origCreateExtAuthzChannel }()
-
-	cf := builder{}.BuildClientFilter(httpfilter.ClientFilterOptions{})
-	defer cf.Close()
-
-	cfg := config{
-		filterEnabled: fraction{
-			numerator:   100,
-			denominator: 100,
-		},
-		grpcService: &grpcservice.Config{
-			TargetURI:          "localhost:1234",
-			ChannelCredentials: allowlistInsecureCreds,
-		},
-	}
-
-	intptr := buildInterceptor(t, cf, cfg)
-	ci := intptr.(*clientInterceptor)
-	// Decrement authzClient to zero without marking interceptor as closed to simulate race.
-	ci.authzClient.Decrement()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	const wantErr = "extauthz: authz client is closed"
-	newStream := func(context.Context, ...grpc.CallOption) (grpc.ClientStream, error) {
-		return nil, nil
-	}
-	if _, err := intptr.NewStream(ctx, resolver.RPCInfo{}, newStream); err == nil || !strings.Contains(err.Error(), wantErr) {
-		t.Fatalf("NewStream() returned unexpected results, got %v, want error containing %q", err, wantErr)
 	}
 }

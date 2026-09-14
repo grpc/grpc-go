@@ -933,7 +933,7 @@ func (s) TestExtAuthz_Allowed_WithHeaders_MutationFails_FailureModeAllow(t *test
 			headersToAdd:              append(allowedHeaders, disallowedHeader),
 			headersToRemove:           []string{"k-test-header-to-be-removed"},
 			outgoingHeaders:           metadata.Pairs("k-test-header-to-be-removed", "true"),
-			wantHeaders:               metadata.Pairs(":authority", "service-name"),
+			wantHeaders:               metadata.Pairs(":authority", "service-name", "k-test-header-to-be-removed", "true"),
 		},
 		{
 			name:                      "OnlyHeaderAddFails_HeaderAdd_True",
@@ -941,7 +941,7 @@ func (s) TestExtAuthz_Allowed_WithHeaders_MutationFails_FailureModeAllow(t *test
 			headersToAdd:              append(allowedHeaders, disallowedHeader),
 			headersToRemove:           []string{"k-test-header-to-be-removed"},
 			outgoingHeaders:           metadata.Pairs("k-test-header-to-be-removed", "true"),
-			wantHeaders:               metadata.Pairs(":authority", "service-name", "x-envoy-auth-failure-mode-allowed", "true"),
+			wantHeaders:               metadata.Pairs(":authority", "service-name", "k-test-header-to-be-removed", "true", "x-envoy-auth-failure-mode-allowed", "true"),
 		},
 		{
 			name:                      "OnlyHeaderRemoveFails_HeaderAdd_True",
