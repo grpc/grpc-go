@@ -787,6 +787,63 @@ func (s) TestClientTransportDrainsAfterStreamIDExhausted(t *testing.T) {
 	}
 }
 
+// Tests that a truncated HEADERS frame for a new stream properly advances
+// maxStreamID, while an oversized frame on an existing stream does not
+// corrupt maxStreamID.
+func (s) TestServerOperateHeadersTruncatedStreamIDMonotonicity(t *testing.T) {
+	h2Srv := newTestHTTP2Server()
+	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer ctxCancel()
+	tests := []struct {
+		name            string
+		streamID        uint32
+		truncated       bool
+		wantErr         bool
+		wantMaxStreamID uint32
+	}{
+		{
+			name:            "truncated_header_advances_max_stream_id",
+			streamID:        3,
+			truncated:       true,
+			wantErr:         false,
+			wantMaxStreamID: 3,
+		},
+		{
+			name:            "truncated_header_lower_stream_id_preserves_max_stream_id",
+			streamID:        1,
+			truncated:       true,
+			wantErr:         false,
+			wantMaxStreamID: 3,
+		},
+		{
+			name:            "reused_stream_id_rejected_as_protocol_error",
+			streamID:        3,
+			truncated:       false,
+			wantErr:         true,
+			wantMaxStreamID: 3,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			frame := &http2.MetaHeadersFrame{
+				HeadersFrame: &http2.HeadersFrame{
+					FrameHeader: http2.FrameHeader{
+						StreamID: tc.streamID,
+						Type:     http2.FrameHeaders,
+					},
+				},
+				Truncated: tc.truncated,
+			}
+			if err := h2Srv.operateHeaders(ctx, frame, func(*ServerStream) {}); (err != nil) != tc.wantErr {
+				t.Fatalf("operateHeaders() failed with error = %v, wantErr %v", err, tc.wantErr)
+			}
+			if h2Srv.maxStreamID != tc.wantMaxStreamID {
+				t.Fatalf("maxStreamID = %d, want %d", h2Srv.maxStreamID, tc.wantMaxStreamID)
+			}
+		})
+	}
+}
+
 func (s) TestClientSendAndReceive(t *testing.T) {
 	server, ct, cancel := setUp(t, 0, normal)
 	defer cancel()
@@ -2857,6 +2914,12 @@ func newTestHTTP2Client(cs *ClientStream) *http2Client {
 		activeStreams: map[uint32]*ClientStream{
 			1: cs,
 		},
+		controlBuf: newControlBuffer(make(<-chan struct{})),
+	}
+}
+
+func newTestHTTP2Server() *http2Server {
+	return &http2Server{
 		controlBuf: newControlBuffer(make(<-chan struct{})),
 	}
 }
