@@ -224,19 +224,6 @@ func (w *clientStreamWrapper) RecvMsg(m any) error {
 	return err
 }
 
-// defaultStreamInterceptor is a StreamClientInterceptor which wraps the
-// ClientStream and is always invoked as the first interceptor. It consolidates
-// behavior for different RPC types at the level closest to the application,
-// which simplifies the underlying stream implementation and other interceptors
-// by avoiding duplicate or scattered handling.
-func defaultStreamInterceptor(ctx context.Context, desc *StreamDesc, cc *ClientConn, method string, streamer Streamer, opts ...CallOption) (ClientStream, error) {
-	cs, err := streamer(ctx, desc, cc, method, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return &clientStreamWrapper{ClientStream: cs, desc: desc}, nil
-}
-
 // NewStream creates a new Stream for the client side. This is typically
 // called by generated code. ctx is used for the lifetime of the stream.
 //
@@ -392,7 +379,11 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		}
 	}
 
-	return newStream(ctx, opts...)
+	cs, err := newStream(ctx, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &clientStreamWrapper{ClientStream: cs, desc: desc}, nil
 }
 
 func newClientStreamWithParams(ctx context.Context, desc *StreamDesc, cc *ClientConn, method string, mc *serviceconfig.MethodConfig, onCommit func(), nameResolutionDelayed bool, opts ...CallOption) (_ ClientStream, err error) {
