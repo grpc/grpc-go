@@ -95,10 +95,7 @@ func hostName(clusterName string, update xdsresource.ClusterUpdate) string {
 //	│xDSLBPolicy │  │xDSLBPolicy │ (Locality and Endpoint picking layer)
 //	└────────────┘  └────────────┘
 func buildLeafClusterConfigJSON(leaf *leafClusterConfig, xdsLBPolicy *internalserviceconfig.BalancerConfig) ([]byte, []resolver.Endpoint, error) {
-	odCfg, endpoints, err := buildLeafClusterConfig(leaf, xdsLBPolicy)
-	if err != nil {
-		return nil, nil, err
-	}
+	odCfg, endpoints := buildLeafClusterConfig(leaf, xdsLBPolicy)
 	ret, err := json.Marshal(odCfg)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to marshal built leaf cluster config: %v", err)
@@ -106,7 +103,7 @@ func buildLeafClusterConfigJSON(leaf *leafClusterConfig, xdsLBPolicy *internalse
 	return ret, endpoints, nil
 }
 
-func buildLeafClusterConfig(leaf *leafClusterConfig, xdsLBPolicy *internalserviceconfig.BalancerConfig) (*outlierdetection.LBConfig, []resolver.Endpoint, error) {
+func buildLeafClusterConfig(leaf *leafClusterConfig, xdsLBPolicy *internalserviceconfig.BalancerConfig) (*outlierdetection.LBConfig, []resolver.Endpoint) {
 	clusterUpdate := leaf.clusterConfig.Cluster
 	priorityLBConfig := &priority.LBConfig{
 		Children: make(map[string]*priority.Child),
@@ -136,14 +133,26 @@ func buildLeafClusterConfig(leaf *leafClusterConfig, xdsLBPolicy *internalservic
 		pName := fmt.Sprintf("priority-%v", leaf.childNameGen.prefix)
 		priorityLBConfig.Priorities = []string{pName}
 		endpoints := leaf.clusterConfig.EndpointConfig.DNSEndpoints.Endpoints
-		var retEndpoint resolver.Endpoint
-		for _, e := range endpoints {
-			retEndpoint.Addresses = append(retEndpoint.Addresses, e.Addresses...)
+		if len(endpoints) > 0 {
+			var retEndpoint resolver.Endpoint
+			for _, e := range endpoints {
+				// LOGICAL_DNS requires all resolved addresses to be grouped into a
+				// single logical endpoint. We iterate over the input endpoints and
+				// aggregate their addresses into a new endpoint variable.
+				retEndpoint.Addresses = append(retEndpoint.Addresses, e.Addresses...)
+			}
+			// Even though localities are not a thing for the LOGICAL_DNS cluster and
+			// its endpoint(s), we add an empty locality attribute here to ensure that
+			// LB policies that rely on locality information (like weighted_target)
+			// continue to work.
+			localityStr := xdsinternal.LocalityString(clients.Locality{})
+			retEndpoint = hostname.Set(hierarchy.SetInEndpoint(retEndpoint, []string{pName, localityStr}), clusterUpdate.DNSHostName)
+			// Set the locality weight to 1. This is required because the child policy
+			// like weighted_target which relies on locality weights to distribute
+			// traffic. These policies may drop traffic if the weight is 0.
+			retEndpoint = wrrlocality.SetAddrInfo(retEndpoint, wrrlocality.AddrInfo{LocalityWeight: 1})
+			retEndpoints = append(retEndpoints, retEndpoint)
 		}
-		localityStr := xdsinternal.LocalityString(clients.Locality{})
-		retEndpoint = hostname.Set(hierarchy.SetInEndpoint(retEndpoint, []string{pName, localityStr}), clusterUpdate.DNSHostName)
-		retEndpoint = wrrlocality.SetAddrInfo(retEndpoint, wrrlocality.AddrInfo{LocalityWeight: 1})
-		retEndpoints = append(retEndpoints, retEndpoint)
 		priorityLBConfig.Children[pName] = &priority.Child{
 			Config:                     xdsLBPolicy,
 			IgnoreReresolutionRequests: false,
@@ -164,7 +173,7 @@ func buildLeafClusterConfig(leaf *leafClusterConfig, xdsLBPolicy *internalservic
 		Config: ciCfg,
 	}
 
-	return &odCfg, retEndpoints, nil
+	return &odCfg, retEndpoints
 }
 
 // buildAggregateClusterConfigJSON builds balancer config for the passed in

@@ -379,6 +379,11 @@ func (s) TestBuildLeafClusterConfig_DNS(t *testing.T) {
 		xdsLBPolicy *iserviceconfig.BalancerConfig
 	}{
 		{
+			name:        "empty_endpoints",
+			endpoints:   nil,
+			xdsLBPolicy: &iserviceconfig.BalancerConfig{Name: pickfirst.Name},
+		},
+		{
 			name:        "one_endpoint_one_address",
 			endpoints:   []resolver.Endpoint{{Addresses: []resolver.Address{{Addr: "addr-0-0"}}}},
 			xdsLBPolicy: &iserviceconfig.BalancerConfig{Name: pickfirst.Name},
@@ -415,7 +420,7 @@ func (s) TestBuildLeafClusterConfig_DNS(t *testing.T) {
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			gotODConfig, gotEndpoints, err := buildLeafClusterConfig(
+			gotODConfig, gotEndpoints := buildLeafClusterConfig(
 				&leafClusterConfig{
 					clusterConfig: &xdsresource.ClusterConfig{
 						Cluster: &xdsresource.ClusterUpdate{
@@ -428,9 +433,6 @@ func (s) TestBuildLeafClusterConfig_DNS(t *testing.T) {
 					childNameGen:     newNameGenerator(3),
 				},
 				tt.xdsLBPolicy)
-			if err != nil {
-				t.Fatalf("buildLeafClusterConfig() failed: %v", err)
-			}
 
 			wantODConfig := &outlierdetection.LBConfig{
 				Interval:           iserviceconfig.Duration(10 * time.Second),
@@ -460,7 +462,10 @@ func (s) TestBuildLeafClusterConfig_DNS(t *testing.T) {
 				t.Errorf("buildLeafClusterConfig() config diff (-want +got) %v", diff)
 			}
 
-			wantEndpoints := []resolver.Endpoint{testEndpointForDNS(tt.endpoints, 1, []string{"priority-3", xdsinternal.LocalityString(clients.Locality{})})}
+			var wantEndpoints []resolver.Endpoint
+			if len(tt.endpoints) > 0 {
+				wantEndpoints = []resolver.Endpoint{testEndpointForDNS(tt.endpoints, 1, []string{"priority-3", xdsinternal.LocalityString(clients.Locality{})})}
+			}
 			if diff := cmp.Diff(wantEndpoints, gotEndpoints, endpointCmpOpts); diff != "" {
 				t.Errorf("buildLeafClusterConfig() endpoints diff (-want +got) %v", diff)
 			}
@@ -488,7 +493,7 @@ func (s) TestBuildLeafClusterConfig_EDS_PickFirstWeightedShuffling_Disabled(t *t
 	loc2 := makeLocality(2, 20, 1, 2)
 	loc3 := makeLocality(3, 80, 1, 2)
 
-	gotODConfig, gotEndpoints, err := buildLeafClusterConfig(
+	gotODConfig, gotEndpoints := buildLeafClusterConfig(
 		&leafClusterConfig{
 			clusterConfig: &xdsresource.ClusterConfig{
 				Cluster: &xdsresource.ClusterUpdate{
@@ -519,9 +524,6 @@ func (s) TestBuildLeafClusterConfig_EDS_PickFirstWeightedShuffling_Disabled(t *t
 		},
 		nil,
 	)
-	if err != nil {
-		t.Fatalf("buildLeafClusterConfig() failed: %v", err)
-	}
 
 	wantODConfig := &outlierdetection.LBConfig{
 		Interval:           iserviceconfig.Duration(10 * time.Second),
@@ -590,7 +592,7 @@ func (s) TestBuildLeafClusterConfig_EDS_PickFirstWeightedShuffling_Enabled(t *te
 	loc2 := makeLocality(2, 20, 1, 2)
 	loc3 := makeLocality(3, 80, 1, 2)
 
-	gotODConfig, gotEndpoints, err := buildLeafClusterConfig(
+	gotODConfig, gotEndpoints := buildLeafClusterConfig(
 		&leafClusterConfig{
 			clusterConfig: &xdsresource.ClusterConfig{
 				Cluster: &xdsresource.ClusterUpdate{
@@ -621,9 +623,6 @@ func (s) TestBuildLeafClusterConfig_EDS_PickFirstWeightedShuffling_Enabled(t *te
 		},
 		nil,
 	)
-	if err != nil {
-		t.Fatalf("buildLeafClusterConfig() failed: %v", err)
-	}
 
 	wantODConfig := &outlierdetection.LBConfig{
 		Interval:           iserviceconfig.Duration(10 * time.Second),
