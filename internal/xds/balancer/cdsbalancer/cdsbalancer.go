@@ -111,10 +111,9 @@ type cdsBalancer struct {
 	// The following fields are initialized at build time and are either
 	// read-only after that or provide their own synchronization, and therefore
 	// do not need to be guarded by a mutex.
-	cc                balancer.ClientConn   // ClientConn interface passed to child LB.
-	bOpts             balancer.BuildOptions // BuildOptions passed to child LB.
-	childConfigParser balancer.ConfigParser // Config parser for cluster_resolver LB policy.
-	logger            *grpclog.PrefixLogger // Prefix logger for all logging.
+	cc     balancer.ClientConn   // ClientConn interface passed to child LB.
+	bOpts  balancer.BuildOptions // BuildOptions passed to child LB.
+	logger *grpclog.PrefixLogger // Prefix logger for all logging.
 
 	// All fields below are accessed only from methods implementing the
 	// balancer.Balancer interface. Since gRPC guarantees that these methods are
@@ -123,6 +122,7 @@ type cdsBalancer struct {
 	xdsClient         xdsclient.XDSClient
 	childLB           balancer.Balancer                     // Child policy, built upon resolution of the cluster graph.
 	childLBName       string                                // Name of the child policy.
+	childConfigParser balancer.ConfigParser                 // Config parser for child policy.
 	clusterConfigs    map[string]*xdsresource.ClusterResult // Cluster name to the last received result for that cluster.
 	leafConfigs       map[string]*leafClusterConfig         // Hostname to config for that leaf cluster.
 	lbCfg             *lbConfig                             // Current load balancing configuration.
