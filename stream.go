@@ -201,9 +201,9 @@ func (w *clientStreamWrapper) SendMsg(m any) error {
 
 }
 
-// RecvMsg receives message m from the stream. For RPCs that call RecvMsg only
-// once i.e. only client streaming RPCs, it calls the underlying RecvMsg a
-// second time after receiving the first message to get the trailers.
+// RecvMsg receives message m from the stream. For non-server-streaming RPCs
+// (unary and client-streaming), it calls the underlying RecvMsg a second time
+// after receiving the first message to get the trailers.
 func (w *clientStreamWrapper) RecvMsg(m any) error {
 	err := w.ClientStream.RecvMsg(m)
 	if err != nil {
