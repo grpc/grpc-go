@@ -143,17 +143,60 @@ func (s) TestBuildClusterConfigJSON(t *testing.T) {
 	}
 
 	tests := []struct {
-		name        string
-		buildFunc   func([]*priorityConfig, *iserviceconfig.BalancerConfig) ([]byte, []resolver.Endpoint, error)
-		priorities  []*priorityConfig
-		xdsLBPolicy *iserviceconfig.BalancerConfig
-		policyName  string
+		name       string
+		buildFunc  func() ([]byte, []resolver.Endpoint, error)
+		policyName string
 	}{
 		{
-			name:      "aggregate",
-			buildFunc: buildAggregateClusterConfigJSON,
-			priorities: []*priorityConfig{
-				{
+			name: "aggregate",
+			buildFunc: func() ([]byte, []resolver.Endpoint, error) {
+				return buildAggregateClusterConfigJSON([]*leafClusterConfig{
+					{
+						clusterConfig: &xdsresource.ClusterConfig{
+							Cluster: &xdsresource.ClusterUpdate{
+								ClusterName:     testClusterName,
+								ClusterType:     xdsresource.ClusterTypeEDS,
+								EDSServiceName:  testEDSServiceName,
+								MaxRequests:     newUint32(testMaxRequests),
+								LRSServerConfig: testLRSServerConfig,
+							},
+							EndpointConfig: &xdsresource.EndpointConfig{
+								EDSUpdate: &xdsresource.EndpointsUpdate{
+									Drops: []xdsresource.OverloadDropConfig{{
+										Category:    testDropCategory,
+										Numerator:   testDropOverMillion,
+										Denominator: million,
+									}},
+									Localities: []xdsresource.Locality{
+										makeLocality(0, 20, 0, 2),
+										makeLocality(1, 80, 0, 2),
+										makeLocality(2, 20, 1, 2),
+										makeLocality(3, 80, 1, 2),
+									},
+								},
+							},
+						},
+						childNameGen: newNameGenerator(0),
+					},
+					{
+						clusterConfig: &xdsresource.ClusterConfig{
+							Cluster: &xdsresource.ClusterUpdate{
+								ClusterType: xdsresource.ClusterTypeLogicalDNS,
+							},
+							EndpointConfig: &xdsresource.EndpointConfig{
+								DNSEndpoints: &xdsresource.DNSUpdate{Endpoints: []resolver.Endpoint{makeResolverEndpoint(4, 0), makeResolverEndpoint(4, 1)}},
+							},
+						},
+						childNameGen: newNameGenerator(1),
+					},
+				}, nil)
+			},
+			policyName: priority.Name,
+		},
+		{
+			name: "leaf",
+			buildFunc: func() ([]byte, []resolver.Endpoint, error) {
+				return buildLeafClusterConfigJSON(&leafClusterConfig{
 					clusterConfig: &xdsresource.ClusterConfig{
 						Cluster: &xdsresource.ClusterUpdate{
 							ClusterName:     testClusterName,
@@ -178,62 +221,17 @@ func (s) TestBuildClusterConfigJSON(t *testing.T) {
 							},
 						},
 					},
-					childNameGen: newNameGenerator(0),
-				},
-				{
-					clusterConfig: &xdsresource.ClusterConfig{
-						Cluster: &xdsresource.ClusterUpdate{
-							ClusterType: xdsresource.ClusterTypeLogicalDNS,
-						},
-						EndpointConfig: &xdsresource.EndpointConfig{
-							DNSEndpoints: &xdsresource.DNSUpdate{Endpoints: []resolver.Endpoint{makeResolverEndpoint(4, 0), makeResolverEndpoint(4, 1)}},
-						},
-					},
-					childNameGen: newNameGenerator(1),
-				},
+					outlierDetection: noopODCfg,
+					childNameGen:     newNameGenerator(0),
+				}, &iserviceconfig.BalancerConfig{Name: roundrobin.Name})
 			},
-			xdsLBPolicy: nil,
-			policyName:  priority.Name,
-		},
-		{
-			name:      "leaf",
-			buildFunc: buildLeafClusterConfigJSON,
-			priorities: []*priorityConfig{{
-				clusterConfig: &xdsresource.ClusterConfig{
-					Cluster: &xdsresource.ClusterUpdate{
-						ClusterName:     testClusterName,
-						ClusterType:     xdsresource.ClusterTypeEDS,
-						EDSServiceName:  testEDSServiceName,
-						MaxRequests:     newUint32(testMaxRequests),
-						LRSServerConfig: testLRSServerConfig,
-					},
-					EndpointConfig: &xdsresource.EndpointConfig{
-						EDSUpdate: &xdsresource.EndpointsUpdate{
-							Drops: []xdsresource.OverloadDropConfig{{
-								Category:    testDropCategory,
-								Numerator:   testDropOverMillion,
-								Denominator: million,
-							}},
-							Localities: []xdsresource.Locality{
-								makeLocality(0, 20, 0, 2),
-								makeLocality(1, 80, 0, 2),
-								makeLocality(2, 20, 1, 2),
-								makeLocality(3, 80, 1, 2),
-							},
-						},
-					},
-				},
-				outlierDetection: noopODCfg,
-				childNameGen:     newNameGenerator(0),
-			}},
-			xdsLBPolicy: &iserviceconfig.BalancerConfig{Name: roundrobin.Name},
-			policyName:  outlierdetection.Name,
+			policyName: outlierdetection.Name,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotConfig, _, err := tt.buildFunc(tt.priorities, tt.xdsLBPolicy)
+			gotConfig, _, err := tt.buildFunc()
 			if err != nil {
 				t.Fatalf("%s(...) failed: %v", tt.name, err)
 			}
@@ -256,7 +254,7 @@ func (s) TestBuildClusterConfigJSON(t *testing.T) {
 // balancer per priority should be an Outlier Detection balancer, with a Cluster
 // Impl Balancer as a child.
 func (s) TestBuildAggregateClusterConfig(t *testing.T) {
-	gotConfig, _, _ := buildAggregateClusterConfig([]*priorityConfig{
+	gotConfig, _, _ := buildAggregateClusterConfig([]*leafClusterConfig{
 		{
 			// EDS - OD config should be the top level for both of the EDS
 			// priorities balancer This EDS priority will have multiple sub
@@ -418,7 +416,7 @@ func (s) TestBuildLeafClusterConfig_DNS(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			gotODConfig, gotEndpoints, err := buildLeafClusterConfig(
-				&priorityConfig{
+				&leafClusterConfig{
 					clusterConfig: &xdsresource.ClusterConfig{
 						Cluster: &xdsresource.ClusterUpdate{
 							ClusterName: testClusterName2,
@@ -491,7 +489,7 @@ func (s) TestBuildLeafClusterConfig_EDS_PickFirstWeightedShuffling_Disabled(t *t
 	loc3 := makeLocality(3, 80, 1, 2)
 
 	gotODConfig, gotEndpoints, err := buildLeafClusterConfig(
-		&priorityConfig{
+		&leafClusterConfig{
 			clusterConfig: &xdsresource.ClusterConfig{
 				Cluster: &xdsresource.ClusterUpdate{
 					ClusterName:     testClusterName,
@@ -593,7 +591,7 @@ func (s) TestBuildLeafClusterConfig_EDS_PickFirstWeightedShuffling_Enabled(t *te
 	loc3 := makeLocality(3, 80, 1, 2)
 
 	gotODConfig, gotEndpoints, err := buildLeafClusterConfig(
-		&priorityConfig{
+		&leafClusterConfig{
 			clusterConfig: &xdsresource.ClusterConfig{
 				Cluster: &xdsresource.ClusterUpdate{
 					ClusterName:     testClusterName,

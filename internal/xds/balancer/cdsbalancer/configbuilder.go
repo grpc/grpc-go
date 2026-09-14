@@ -42,17 +42,14 @@ import (
 
 const million = 1000000
 
-// priorityConfig is config for one priority. For example, if there's an EDS and
-// a DNS, the priority list will be [priorityConfig{EDS}, priorityConfig{DNS}].
-//
-// Each priorityConfig corresponds to one leaf cluster retrieved from XDSConfig
-// for the top-level cluster.
-type priorityConfig struct {
+// leafClusterConfig is the configuration and state for a single leaf cluster
+// (EDS or LOGICAL_DNS) retrieved from XDSConfig for the top-level cluster.
+type leafClusterConfig struct {
 	// clusterConfig has the cluster update as well as EDS or DNS endpoints
 	// depending on the leaf cluster type.
 	clusterConfig *xdsresource.ClusterConfig
 	// outlierDetection is the Outlier Detection LB configuration for this
-	// priority.
+	// leaf cluster.
 	outlierDetection outlierdetection.LBConfig
 	// Each leaf cluster has a name generator so that the child policies can
 	// reuse names between updates (EDS updates for example).
@@ -97,8 +94,8 @@ func hostName(clusterName string, update xdsresource.ClusterUpdate) string {
 //	┌──────────▼─┐  ┌─▼──────────┐
 //	│xDSLBPolicy │  │xDSLBPolicy │ (Locality and Endpoint picking layer)
 //	└────────────┘  └────────────┘
-func buildLeafClusterConfigJSON(priorities []*priorityConfig, xdsLBPolicy *internalserviceconfig.BalancerConfig) ([]byte, []resolver.Endpoint, error) {
-	odCfg, endpoints, err := buildLeafClusterConfig(priorities[0], xdsLBPolicy)
+func buildLeafClusterConfigJSON(leaf *leafClusterConfig, xdsLBPolicy *internalserviceconfig.BalancerConfig) ([]byte, []resolver.Endpoint, error) {
+	odCfg, endpoints, err := buildLeafClusterConfig(leaf, xdsLBPolicy)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -109,8 +106,8 @@ func buildLeafClusterConfigJSON(priorities []*priorityConfig, xdsLBPolicy *inter
 	return ret, endpoints, nil
 }
 
-func buildLeafClusterConfig(p *priorityConfig, xdsLBPolicy *internalserviceconfig.BalancerConfig) (*outlierdetection.LBConfig, []resolver.Endpoint, error) {
-	clusterUpdate := p.clusterConfig.Cluster
+func buildLeafClusterConfig(leaf *leafClusterConfig, xdsLBPolicy *internalserviceconfig.BalancerConfig) (*outlierdetection.LBConfig, []resolver.Endpoint, error) {
+	clusterUpdate := leaf.clusterConfig.Cluster
 	priorityLBConfig := &priority.LBConfig{
 		Children: make(map[string]*priority.Child),
 	}
@@ -119,16 +116,16 @@ func buildLeafClusterConfig(p *priorityConfig, xdsLBPolicy *internalserviceconfi
 	switch clusterUpdate.ClusterType {
 	case xdsresource.ClusterTypeEDS:
 		priorities := [][]xdsresource.Locality{{}}
-		edsUpdate := p.clusterConfig.EndpointConfig.EDSUpdate
+		edsUpdate := leaf.clusterConfig.EndpointConfig.EDSUpdate
 		if len(edsUpdate.Localities) != 0 {
 			priorities = groupLocalitiesByPriority(edsUpdate.Localities)
 		}
-		priorityNames := p.childNameGen.generate(priorities)
+		priorityNames := leaf.childNameGen.generate(priorities)
 		priorityLBConfig.Priorities = priorityNames
 
 		for i, pName := range priorityNames {
 			priorityLocalities := priorities[i]
-			endpoints := priorityLocalitiesToEndpoints(priorityLocalities, pName, *p.clusterConfig.Cluster)
+			endpoints := priorityLocalitiesToEndpoints(priorityLocalities, pName, *leaf.clusterConfig.Cluster)
 			retEndpoints = append(retEndpoints, endpoints...)
 			priorityLBConfig.Children[pName] = &priority.Child{
 				Config:                     xdsLBPolicy,
@@ -136,9 +133,9 @@ func buildLeafClusterConfig(p *priorityConfig, xdsLBPolicy *internalserviceconfi
 			}
 		}
 	case xdsresource.ClusterTypeLogicalDNS:
-		pName := fmt.Sprintf("priority-%v", p.childNameGen.prefix)
+		pName := fmt.Sprintf("priority-%v", leaf.childNameGen.prefix)
 		priorityLBConfig.Priorities = []string{pName}
-		endpoints := p.clusterConfig.EndpointConfig.DNSEndpoints.Endpoints
+		endpoints := leaf.clusterConfig.EndpointConfig.DNSEndpoints.Endpoints
 		var retEndpoint resolver.Endpoint
 		for _, e := range endpoints {
 			retEndpoint.Addresses = append(retEndpoint.Addresses, e.Addresses...)
@@ -161,7 +158,7 @@ func buildLeafClusterConfig(p *priorityConfig, xdsLBPolicy *internalserviceconfi
 		},
 	}
 
-	odCfg := p.outlierDetection
+	odCfg := leaf.outlierDetection
 	odCfg.ChildPolicy = &internalserviceconfig.BalancerConfig{
 		Name:   clusterimpl.Name,
 		Config: ciCfg,
@@ -171,7 +168,7 @@ func buildLeafClusterConfig(p *priorityConfig, xdsLBPolicy *internalserviceconfi
 }
 
 // buildAggregateClusterConfigJSON builds balancer config for the passed in
-// priorities (legacy / aggregate cluster tree).
+// leaf clusters (legacy / aggregate cluster tree).
 //
 // The built tree of balancers:
 //
@@ -186,8 +183,8 @@ func buildLeafClusterConfig(p *priorityConfig, xdsLBPolicy *internalserviceconfi
 //	┌──────▼─────┐  ┌─────▼──────┐
 //	│xDSLBPolicy │  │xDSLBPolicy │ (Locality and Endpoint picking layer)
 //	└────────────┘  └────────────┘
-func buildAggregateClusterConfigJSON(priorities []*priorityConfig, xdsLBPolicy *internalserviceconfig.BalancerConfig) ([]byte, []resolver.Endpoint, error) {
-	pc, endpoints, err := buildAggregateClusterConfig(priorities, xdsLBPolicy)
+func buildAggregateClusterConfigJSON(leafClusters []*leafClusterConfig, xdsLBPolicy *internalserviceconfig.BalancerConfig) ([]byte, []resolver.Endpoint, error) {
+	pc, endpoints, err := buildAggregateClusterConfig(leafClusters, xdsLBPolicy)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to build priority config: %v", err)
 	}
@@ -198,22 +195,22 @@ func buildAggregateClusterConfigJSON(priorities []*priorityConfig, xdsLBPolicy *
 	return ret, endpoints, nil
 }
 
-func buildAggregateClusterConfig(priorities []*priorityConfig, xdsLBPolicy *internalserviceconfig.BalancerConfig) (*priority.LBConfig, []resolver.Endpoint, error) {
+func buildAggregateClusterConfig(leafClusters []*leafClusterConfig, xdsLBPolicy *internalserviceconfig.BalancerConfig) (*priority.LBConfig, []resolver.Endpoint, error) {
 	var (
 		retConfig    = &priority.LBConfig{Children: make(map[string]*priority.Child)}
 		retEndpoints []resolver.Endpoint
 	)
-	for _, p := range priorities {
-		clusterUpdate := p.clusterConfig.Cluster
+	for _, leaf := range leafClusters {
+		clusterUpdate := leaf.clusterConfig.Cluster
 		switch clusterUpdate.ClusterType {
 		case xdsresource.ClusterTypeEDS:
-			names, configs, endpoints, err := buildClusterImplConfigForEDS(p.childNameGen, p.clusterConfig, xdsLBPolicy)
+			names, configs, endpoints, err := buildClusterImplConfigForEDS(leaf.childNameGen, leaf.clusterConfig, xdsLBPolicy)
 			if err != nil {
 				return nil, nil, err
 			}
 			retConfig.Priorities = append(retConfig.Priorities, names...)
 			retEndpoints = append(retEndpoints, endpoints...)
-			odCfgs := convertClusterImplMapToOutlierDetection(configs, p.outlierDetection)
+			odCfgs := convertClusterImplMapToOutlierDetection(configs, leaf.outlierDetection)
 			for n, c := range odCfgs {
 				retConfig.Children[n] = &priority.Child{
 					Config: &internalserviceconfig.BalancerConfig{Name: outlierdetection.Name, Config: c},
@@ -223,10 +220,10 @@ func buildAggregateClusterConfig(priorities []*priorityConfig, xdsLBPolicy *inte
 			}
 			continue
 		case xdsresource.ClusterTypeLogicalDNS:
-			name, config, endpoints := buildClusterImplConfigForDNS(p.childNameGen, p.clusterConfig, xdsLBPolicy)
+			name, config, endpoints := buildClusterImplConfigForDNS(leaf.childNameGen, leaf.clusterConfig, xdsLBPolicy)
 			retConfig.Priorities = append(retConfig.Priorities, name)
 			retEndpoints = append(retEndpoints, endpoints...)
-			odCfg := makeClusterImplOutlierDetectionChild(config, p.outlierDetection)
+			odCfg := makeClusterImplOutlierDetectionChild(config, leaf.outlierDetection)
 			retConfig.Children[name] = &priority.Child{
 				Config: &internalserviceconfig.BalancerConfig{Name: outlierdetection.Name, Config: odCfg},
 				// Not ignore re-resolution from DNS children, they will trigger

@@ -69,10 +69,10 @@ type bb struct{}
 // Build creates a new CDS balancer with the ClientConn.
 func (bb) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
 	b := &cdsBalancer{
-		bOpts:           opts,
-		clusterConfigs:  make(map[string]*xdsresource.ClusterResult),
-		priorityConfigs: make(map[string]*priorityConfig),
-		cc:              cc,
+		bOpts:          opts,
+		clusterConfigs: make(map[string]*xdsresource.ClusterResult),
+		leafConfigs:    make(map[string]*leafClusterConfig),
+		cc:             cc,
 	}
 	b.logger = prefixLogger(b)
 	b.logger.Infof("Created")
@@ -124,9 +124,9 @@ type cdsBalancer struct {
 	childLB           balancer.Balancer                     // Child policy, built upon resolution of the cluster graph.
 	childLBName       string                                // Name of the child policy.
 	clusterConfigs    map[string]*xdsresource.ClusterResult // Cluster name to the last received result for that cluster.
-	priorityConfigs   map[string]*priorityConfig            // Hostname to priority config for that leaf cluster.
+	leafConfigs       map[string]*leafClusterConfig         // Hostname to config for that leaf cluster.
 	lbCfg             *lbConfig                             // Current load balancing configuration.
-	priorities        []*priorityConfig                     // List of priorities in the order.
+	leafClusters      []*leafClusterConfig                  // List of leaf clusters in the order.
 	unsubscribe       func()                                // For dynamic cluster unsubscription.
 	isSubscribed      bool                                  // True if a dynamic cluster has been subscribed to.
 	clusterSubscriber xdsdepmgr.ClusterSubscriber           // To subscribe to dynamic cluster resource.
@@ -219,20 +219,20 @@ func (b *cdsBalancer) handleClusterUpdate() error {
 	clusterName := b.lbCfg.ClusterName
 	clusterConfig := b.clusterConfigs[clusterName].Config
 
-	var newPriorities []*priorityConfig
+	var newLeafClusters []*leafClusterConfig
 	switch clusterConfig.Cluster.ClusterType {
 	case xdsresource.ClusterTypeEDS, xdsresource.ClusterTypeLogicalDNS:
-		p := b.updatePriorityConfig(clusterName, &clusterConfig)
-		newPriorities = append(newPriorities, p)
+		leaf := b.updateLeafClusterConfig(clusterName, &clusterConfig)
+		newLeafClusters = append(newLeafClusters, leaf)
 	case xdsresource.ClusterTypeAggregate:
-		for _, leaf := range clusterConfig.AggregateConfig.LeafClusters {
-			leafCluster := b.clusterConfigs[leaf]
-			// Update priority config for leaf clusters.
-			p := b.updatePriorityConfig(leaf, &leafCluster.Config)
-			newPriorities = append(newPriorities, p)
+		for _, leafName := range clusterConfig.AggregateConfig.LeafClusters {
+			leafCluster := b.clusterConfigs[leafName]
+			// Update config for leaf clusters.
+			leaf := b.updateLeafClusterConfig(leafName, &leafCluster.Config)
+			newLeafClusters = append(newLeafClusters, leaf)
 		}
 	}
-	b.priorities = newPriorities
+	b.leafClusters = newLeafClusters
 
 	if err := b.updateOutlierDetection(); err != nil {
 		return b.annotateErrorWithNodeID(fmt.Errorf("failed to correctly update Outlier Detection config %v", err))
@@ -285,9 +285,9 @@ func (b *cdsBalancer) updateChildConfig() error {
 	var err error
 
 	if isAggregate {
-		childCfgBytes, endpoints, err = buildAggregateClusterConfigJSON(b.priorities, &b.xdsLBPolicy)
+		childCfgBytes, endpoints, err = buildAggregateClusterConfigJSON(b.leafClusters, &b.xdsLBPolicy)
 	} else {
-		childCfgBytes, endpoints, err = buildLeafClusterConfigJSON(b.priorities, &b.xdsLBPolicy)
+		childCfgBytes, endpoints, err = buildLeafClusterConfigJSON(b.leafClusters[0], &b.xdsLBPolicy)
 	}
 	if err != nil {
 		return fmt.Errorf("xds: failed to build child policy config: %v", err)
@@ -324,26 +324,26 @@ func (b *cdsBalancer) updateChildConfig() error {
 	return nil
 }
 
-// updatePriorityConfig updates the priority configuration for the specified EDS
-// or DNS cluster, creating it if it does not already exist.
-func (b *cdsBalancer) updatePriorityConfig(clusterName string, clusterConfig *xdsresource.ClusterConfig) *priorityConfig {
+// updateLeafClusterConfig updates the leaf cluster configuration for the
+// specified EDS or DNS cluster, creating it if it does not already exist.
+func (b *cdsBalancer) updateLeafClusterConfig(clusterName string, clusterConfig *xdsresource.ClusterConfig) *leafClusterConfig {
 	name := hostName(clusterName, *clusterConfig.Cluster)
-	pc, ok := b.priorityConfigs[name]
+	leaf, ok := b.leafConfigs[name]
 	if !ok {
-		pc = &priorityConfig{
+		leaf = &leafClusterConfig{
 			childNameGen: newNameGenerator(b.childNameGeneratorSeqID),
 		}
-		b.priorityConfigs[name] = pc
+		b.leafConfigs[name] = leaf
 		// Increment the seq ID for the next new cluster. This is done to make
 		// sure that the child policy names generated for different clusters
 		// don't conflict with each other.
 		b.childNameGeneratorSeqID++
 	}
-	pc.clusterConfig = clusterConfig
-	return pc
+	leaf.clusterConfig = clusterConfig
+	return leaf
 }
 
-// updateOutlierDetection updates Outlier Detection config for all priorities.
+// updateOutlierDetection updates Outlier Detection config for all leaf clusters.
 func (b *cdsBalancer) updateOutlierDetection() error {
 	odBuilder := balancer.Get(outlierdetection.Name)
 	if odBuilder == nil {
@@ -358,9 +358,9 @@ func (b *cdsBalancer) updateOutlierDetection() error {
 		return fmt.Errorf("%q LB policy does not implement a config parser", outlierdetection.Name)
 	}
 
-	for _, p := range b.priorities {
+	for _, leaf := range b.leafClusters {
 		// Update Outlier Detection Config.
-		odJSON := p.clusterConfig.Cluster.OutlierDetection
+		odJSON := leaf.clusterConfig.Cluster.OutlierDetection
 		if odJSON == nil {
 			odJSON = json.RawMessage(`{}`)
 		}
@@ -376,7 +376,7 @@ func (b *cdsBalancer) updateOutlierDetection() error {
 			// Detection builder pulled from gRPC LB Registry.
 			return fmt.Errorf("config parser for Outlier Detection returned config with unexpected type %T: %v", lbCfg, lbCfg)
 		}
-		p.outlierDetection = *odCfg
+		leaf.outlierDetection = *odCfg
 	}
 	return nil
 }
