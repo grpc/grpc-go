@@ -266,8 +266,7 @@ func (b *cdsBalancer) updateChildConfig() error {
 	}
 
 	if b.childLB != nil && b.childLBName != childPolicyName {
-		b.childLB.Close()
-		b.childLB = nil
+		b.closeChildPolicy()
 	}
 
 	if b.childLB == nil {
@@ -402,14 +401,21 @@ func (b *cdsBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.Sub
 	b.logger.Errorf("UpdateSubConnState(%v, %+v) called unexpectedly", sc, state)
 }
 
+// Closes the child policy, if it exists, and resets child policy fields.
+func (b *cdsBalancer) closeChildPolicy() {
+	if b.childLB != nil {
+		b.childLB.Close()
+		b.childLB = nil
+		b.childLBName = ""
+		b.childConfigParser = nil
+	}
+}
+
 // closeChildPolicyAndReportTF closes the child policy, if it exists, and
 // updates the connectivity state of the channel to TransientFailure with an
 // error picker.
 func (b *cdsBalancer) closeChildPolicyAndReportTF(err error) {
-	if b.childLB != nil {
-		b.childLB.Close()
-		b.childLB = nil
-	}
+	b.closeChildPolicy()
 	b.cc.UpdateState(balancer.State{
 		ConnectivityState: connectivity.TransientFailure,
 		Picker:            base.NewErrPicker(err),
@@ -419,10 +425,7 @@ func (b *cdsBalancer) closeChildPolicyAndReportTF(err error) {
 // Close closes the child policy, unsubscribes to the dynamic cluster, and
 // closes the cdsBalancer.
 func (b *cdsBalancer) Close() {
-	if b.childLB != nil {
-		b.childLB.Close()
-		b.childLB = nil
-	}
+	b.closeChildPolicy()
 	if b.unsubscribe != nil {
 		b.unsubscribe()
 	}
