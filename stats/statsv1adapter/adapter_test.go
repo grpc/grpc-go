@@ -43,7 +43,7 @@ func Test(t *testing.T) {
 }
 
 // fakeV1Handler is a V1 stats.Handler that records every TagRPC and HandleRPC
-// call, so a test can assert the events the bridge synthesized.
+// call, so a test can assert the events the adapter synthesized.
 type fakeV1Handler struct {
 	mu       sync.Mutex
 	tagInfos []*stats.RPCTagInfo
@@ -90,7 +90,7 @@ func (h *fakeV1Handler) eventTypes() []string {
 
 func addr(s string) net.Addr { return &net.TCPAddr{IP: net.ParseIP("1.2.3.4"), Port: 5, Zone: s} }
 
-// TestClientAttemptLifecycle drives a full client attempt through the bridge and
+// TestClientAttemptLifecycle drives a full client attempt through the adapter and
 // asserts the ordered V1 event stream and the load-bearing fields of each event.
 func (s) TestClientAttemptLifecycle(t *testing.T) {
 	h := &fakeV1Handler{}
@@ -188,7 +188,7 @@ func (s) TestClientNameResolutionDelay(t *testing.T) {
 
 // TestClientOutgoingHeaderInjection pins that metadata the wrapped handler
 // appends to the outgoing context in TagRPC is surfaced through the V2
-// MutateOutgoingHeaders hook - the bridge for V1 trace-context injection.
+// MutateOutgoingHeaders hook - the adapter for V1 trace-context injection.
 func (s) TestClientOutgoingHeaderInjection(t *testing.T) {
 	h := &fakeV1Handler{
 		tagRPCFunc: func(ctx context.Context, _ *stats.RPCTagInfo) context.Context {
@@ -245,7 +245,7 @@ func (s) TestAddOptionalLabelFiresCallback(t *testing.T) {
 	}
 }
 
-// TestServerLifecycleOrder drives a server call through the bridge and asserts
+// TestServerLifecycleOrder drives a server call through the adapter and asserts
 // the V1 order (TagRPC -> InHeader -> Begin -> ... -> End) is reproduced even
 // though V2 delivers the incoming headers before FilterContext.
 func (s) TestServerLifecycleOrder(t *testing.T) {
@@ -323,14 +323,14 @@ type recordingV1Handler struct {
 // discoverable as a MetricsRecorder iff the underlying V1 handler is one.
 func (s) TestWrapDiscoversMetricsRecorder(t *testing.T) {
 	if _, ok := Wrap(&fakeV1Handler{}).(estats.MetricsRecorder); ok {
-		t.Error("bridge over a plain V1 handler satisfies MetricsRecorder; it must not")
+		t.Error("adapter over a plain V1 handler satisfies MetricsRecorder; it must not")
 	}
 	if _, ok := Wrap(&recordingV1Handler{}).(estats.MetricsRecorder); !ok {
-		t.Error("bridge over a recorder V1 handler does not satisfy MetricsRecorder")
+		t.Error("adapter over a recorder V1 handler does not satisfy MetricsRecorder")
 	}
 }
 
-// TestWrapNeverReturnsNilTracers pins that both bridge variants vend non-nil
+// TestWrapNeverReturnsNilTracers pins that both adapter variants vend non-nil
 // tracers, since gRPC invokes methods on whatever they return.
 func (s) TestWrapNeverReturnsNilTracers(t *testing.T) {
 	for _, h := range []stats.Handler{&fakeV1Handler{}, &recordingV1Handler{}} {

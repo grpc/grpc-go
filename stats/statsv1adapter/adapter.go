@@ -71,44 +71,44 @@ import (
 // Handler implements it too, forwarding to h - so gRPC's assertion-based
 // discovery of non-per-call metric recorders still finds it.
 func Wrap(h stats.Handler) estats.Handler {
-	b := &handlerBridge{h: h}
+	b := &handlerAdapter{h: h}
 	if mr, ok := h.(estats.MetricsRecorder); ok {
-		return &recordingHandlerBridge{handlerBridge: b, MetricsRecorder: mr}
+		return &recordingHandlerAdapter{handlerAdapter: b, MetricsRecorder: mr}
 	}
 	return b
 }
 
-// handlerBridge adapts one V1 handler to the V2 Handler interface. It holds no
+// handlerAdapter adapts one V1 handler to the V2 Handler interface. It holds no
 // per-call state; a fresh call/attempt adapter is created per tracer.
-type handlerBridge struct {
+type handlerAdapter struct {
 	estats.UnimplementedHandler
 	h stats.Handler
 }
 
-// recordingHandlerBridge is the variant returned when the wrapped handler is
+// recordingHandlerAdapter is the variant returned when the wrapped handler is
 // also a MetricsRecorder. The embedded interface value promotes the recorder
 // methods, so this type satisfies both estats.Handler and
 // estats.MetricsRecorder.
-type recordingHandlerBridge struct {
-	*handlerBridge
+type recordingHandlerAdapter struct {
+	*handlerAdapter
 	estats.MetricsRecorder
 }
 
 // ClientCallTracer begins tracing a client call. The application context is
 // held so it can seed each attempt's V1 TagRPC, which is what carries the V1
 // handler's context-keyed state (and its outgoing trace-context injection).
-func (b *handlerBridge) ClientCallTracer(ctx context.Context, info *estats.ClientCallInfo) estats.ClientCallTracer {
-	return &clientCallBridge{h: b.h, callCtx: ctx, info: info}
+func (b *handlerAdapter) ClientCallTracer(ctx context.Context, info *estats.ClientCallInfo) estats.ClientCallTracer {
+	return &clientCallAdapter{h: b.h, callCtx: ctx, info: info}
 }
 
 // ServerCallTracer begins tracing a server call.
-func (b *handlerBridge) ServerCallTracer(info *estats.ServerCallInfo) estats.ServerCallTracer {
-	return &serverCallBridge{h: b.h, info: info}
+func (b *handlerAdapter) ServerCallTracer(info *estats.ServerCallInfo) estats.ServerCallTracer {
+	return &serverCallAdapter{h: b.h, info: info}
 }
 
-// clientCallBridge is the call-scoped adapter. V1 has no call-level events - it
+// clientCallAdapter is the call-scoped adapter. V1 has no call-level events - it
 // is attempt-scoped - so this object mostly carries state down to each attempt.
-type clientCallBridge struct {
+type clientCallAdapter struct {
 	estats.UnimplementedClientCallTracer
 	h       stats.Handler
 	callCtx context.Context
@@ -125,7 +125,7 @@ type clientCallBridge struct {
 // StartAttempt maps a V2 attempt onto one V1 attempt lifecycle: it calls TagRPC
 // and holds the returned context, then emits Begin. Every later event on the
 // attempt is reported against that held context.
-func (c *clientCallBridge) StartAttempt(info *estats.AttemptInfo) estats.ClientAttemptTracer {
+func (c *clientCallAdapter) StartAttempt(info *estats.AttemptInfo) estats.ClientAttemptTracer {
 	// failFast is the inverse of wait-for-ready; V1 carries failFast.
 	failFast := !info.WaitForReady
 	attemptCtx := c.h.TagRPC(c.callCtx, &stats.RPCTagInfo{
@@ -142,7 +142,7 @@ func (c *clientCallBridge) StartAttempt(info *estats.AttemptInfo) estats.ClientA
 		IsServerStream:            c.info.IsServerStream,
 		IsTransparentRetryAttempt: info.IsTransparentRetry,
 	})
-	return &clientAttemptBridge{
+	return &clientAttemptAdapter{
 		h:          c.h,
 		callCtx:    c.callCtx,
 		attemptCtx: attemptCtx,
@@ -154,7 +154,7 @@ func (c *clientCallBridge) StartAttempt(info *estats.AttemptInfo) estats.ClientA
 
 // RecordAnnotation records the pre-first-attempt name-resolution-delay signal.
 // gRPC records it on the call tracer; V1 exposes it as RPCTagInfo.NameResolutionDelay.
-func (c *clientCallBridge) RecordAnnotation(annotation string) {
+func (c *clientCallAdapter) RecordAnnotation(annotation string) {
 	if annotation == estats.AnnotationNameResolutionComplete {
 		c.nameResolutionDelayed = true
 	}
@@ -162,11 +162,11 @@ func (c *clientCallBridge) RecordAnnotation(annotation string) {
 
 // RecordEnd has no V1 equivalent: V1 emits End per attempt, which the attempt
 // adapter already does. Nothing to forward at call scope.
-func (c *clientCallBridge) RecordEnd(*estats.CallEndInfo) {}
+func (c *clientCallAdapter) RecordEnd(*estats.CallEndInfo) {}
 
-// clientAttemptBridge is the attempt-scoped adapter. attemptCtx is the TagRPC'd
+// clientAttemptAdapter is the attempt-scoped adapter. attemptCtx is the TagRPC'd
 // context and is the sole context handed to every HandleRPC for this attempt.
-type clientAttemptBridge struct {
+type clientAttemptAdapter struct {
 	estats.UnimplementedClientAttemptTracer
 	h          stats.Handler
 	callCtx    context.Context
@@ -185,7 +185,7 @@ type clientAttemptBridge struct {
 // trace-context injection) contributes outgoing metadata: it calls
 // metadata.AppendToOutgoingContext in TagRPC and returns the context. Because
 // TagRPC ran per attempt, each attempt re-injects its own headers.
-func (a *clientAttemptBridge) MutateOutgoingHeaders(md metadata.MD) {
+func (a *clientAttemptAdapter) MutateOutgoingHeaders(md metadata.MD) {
 	before, _ := metadata.FromOutgoingContext(a.callCtx)
 	after, ok := metadata.FromOutgoingContext(a.attemptCtx)
 	if !ok {
@@ -203,7 +203,7 @@ func (a *clientAttemptBridge) MutateOutgoingHeaders(md metadata.MD) {
 
 // RecordOutgoingHeaders emits the V1 client OutHeader. FullMethod and Authority
 // come from the held call/attempt info; the peer supplies the addresses.
-func (a *clientAttemptBridge) RecordOutgoingHeaders(info *estats.HeadersInfo) {
+func (a *clientAttemptAdapter) RecordOutgoingHeaders(info *estats.HeadersInfo) {
 	remote, local := addrs(info.Peer)
 	a.h.HandleRPC(a.attemptCtx, &stats.OutHeader{
 		Client:      true,
@@ -217,7 +217,7 @@ func (a *clientAttemptBridge) RecordOutgoingHeaders(info *estats.HeadersInfo) {
 }
 
 // RecordIncomingHeaders emits the V1 client InHeader.
-func (a *clientAttemptBridge) RecordIncomingHeaders(info *estats.HeadersInfo) {
+func (a *clientAttemptAdapter) RecordIncomingHeaders(info *estats.HeadersInfo) {
 	a.h.HandleRPC(a.attemptCtx, &stats.InHeader{
 		Client:      true,
 		WireLength:  info.WireLength,
@@ -228,7 +228,7 @@ func (a *clientAttemptBridge) RecordIncomingHeaders(info *estats.HeadersInfo) {
 
 // RecordIncomingTrailers emits the V1 client InTrailer and captures the trailer
 // for the deprecated End.Trailer field.
-func (a *clientAttemptBridge) RecordIncomingTrailers(info *estats.TrailersInfo) {
+func (a *clientAttemptAdapter) RecordIncomingTrailers(info *estats.TrailersInfo) {
 	a.trailer = info.Trailers
 	a.h.HandleRPC(a.attemptCtx, &stats.InTrailer{
 		Client:     true,
@@ -238,7 +238,7 @@ func (a *clientAttemptBridge) RecordIncomingTrailers(info *estats.TrailersInfo) 
 }
 
 // RecordOutgoingMessage emits the V1 client OutPayload (sizes only; Payload nil).
-func (a *clientAttemptBridge) RecordOutgoingMessage(info *estats.MessageInfo) {
+func (a *clientAttemptAdapter) RecordOutgoingMessage(info *estats.MessageInfo) {
 	a.h.HandleRPC(a.attemptCtx, &stats.OutPayload{
 		Client:           true,
 		Length:           info.Length,
@@ -249,7 +249,7 @@ func (a *clientAttemptBridge) RecordOutgoingMessage(info *estats.MessageInfo) {
 }
 
 // RecordIncomingMessage emits the V1 client InPayload (sizes only; Payload nil).
-func (a *clientAttemptBridge) RecordIncomingMessage(info *estats.MessageInfo) {
+func (a *clientAttemptAdapter) RecordIncomingMessage(info *estats.MessageInfo) {
 	a.h.HandleRPC(a.attemptCtx, &stats.InPayload{
 		Client:           true,
 		Length:           info.Length,
@@ -259,22 +259,22 @@ func (a *clientAttemptBridge) RecordIncomingMessage(info *estats.MessageInfo) {
 	})
 }
 
-// AddOptionalLabel bridges an xDS optional label back to the callback the
+// AddOptionalLabel routes an xDS optional label back to the callback the
 // wrapped handler registered in its TagRPC, which is how the V1 label-delivery
 // path (istats.UpdateLabels) reaches it.
-func (a *clientAttemptBridge) AddOptionalLabel(key, value string) {
+func (a *clientAttemptAdapter) AddOptionalLabel(key, value string) {
 	istats.UpdateLabels(a.attemptCtx, map[string]string{key: value})
 }
 
 // RecordAnnotation forwards the delayed-pick annotation as V1 DelayedPickComplete.
-func (a *clientAttemptBridge) RecordAnnotation(annotation string) {
+func (a *clientAttemptAdapter) RecordAnnotation(annotation string) {
 	if annotation == estats.AnnotationDelayedPickComplete {
 		a.h.HandleRPC(a.attemptCtx, &stats.DelayedPickComplete{})
 	}
 }
 
 // RecordEnd emits the V1 client End.
-func (a *clientAttemptBridge) RecordEnd(info *estats.AttemptEndInfo) {
+func (a *clientAttemptAdapter) RecordEnd(info *estats.AttemptEndInfo) {
 	a.h.HandleRPC(a.attemptCtx, &stats.End{
 		Client:    true,
 		BeginTime: a.beginTime,
@@ -284,9 +284,9 @@ func (a *clientAttemptBridge) RecordEnd(info *estats.AttemptEndInfo) {
 	})
 }
 
-// serverCallBridge is the server-scoped adapter. The server tracer plays the
+// serverCallAdapter is the server-scoped adapter. The server tracer plays the
 // role of both call and attempt tracer, matching V1's single server RPC scope.
-type serverCallBridge struct {
+type serverCallAdapter struct {
 	estats.UnimplementedServerCallTracer
 	h    stats.Handler
 	info *estats.ServerCallInfo
@@ -304,7 +304,7 @@ type serverCallBridge struct {
 
 // RecordIncomingHeaders captures the request headers; the V1 InHeader is not
 // emitted until FilterContext has produced the tagged context.
-func (s *serverCallBridge) RecordIncomingHeaders(info *estats.HeadersInfo) {
+func (s *serverCallAdapter) RecordIncomingHeaders(info *estats.HeadersInfo) {
 	s.incoming = info
 }
 
@@ -312,7 +312,7 @@ func (s *serverCallBridge) RecordIncomingHeaders(info *estats.HeadersInfo) {
 // context, reproducing the V1 server order. The tagged context is returned so
 // the values the handler set flow into the served call, and is held for every
 // later event.
-func (s *serverCallBridge) FilterContext(ctx context.Context) context.Context {
+func (s *serverCallAdapter) FilterContext(ctx context.Context) context.Context {
 	ctx = s.h.TagRPC(ctx, &stats.RPCTagInfo{FullMethodName: s.info.Method})
 	s.callCtx = ctx
 
@@ -346,7 +346,7 @@ func (s *serverCallBridge) FilterContext(ctx context.Context) context.Context {
 }
 
 // RecordOutgoingHeaders emits the V1 server OutHeader.
-func (s *serverCallBridge) RecordOutgoingHeaders(info *estats.HeadersInfo) {
+func (s *serverCallAdapter) RecordOutgoingHeaders(info *estats.HeadersInfo) {
 	s.h.HandleRPC(s.callCtx, &stats.OutHeader{
 		Compression: info.Compression,
 		Header:      info.Headers,
@@ -354,14 +354,14 @@ func (s *serverCallBridge) RecordOutgoingHeaders(info *estats.HeadersInfo) {
 }
 
 // RecordOutgoingTrailers emits the V1 server OutTrailer.
-func (s *serverCallBridge) RecordOutgoingTrailers(info *estats.TrailersInfo) {
+func (s *serverCallAdapter) RecordOutgoingTrailers(info *estats.TrailersInfo) {
 	s.h.HandleRPC(s.callCtx, &stats.OutTrailer{
 		Trailer: info.Trailers,
 	})
 }
 
 // RecordIncomingMessage emits the V1 server InPayload (sizes only; Payload nil).
-func (s *serverCallBridge) RecordIncomingMessage(info *estats.MessageInfo) {
+func (s *serverCallAdapter) RecordIncomingMessage(info *estats.MessageInfo) {
 	s.h.HandleRPC(s.callCtx, &stats.InPayload{
 		Length:           info.Length,
 		CompressedLength: info.CompressedLength,
@@ -371,7 +371,7 @@ func (s *serverCallBridge) RecordIncomingMessage(info *estats.MessageInfo) {
 }
 
 // RecordOutgoingMessage emits the V1 server OutPayload (sizes only; Payload nil).
-func (s *serverCallBridge) RecordOutgoingMessage(info *estats.MessageInfo) {
+func (s *serverCallAdapter) RecordOutgoingMessage(info *estats.MessageInfo) {
 	s.h.HandleRPC(s.callCtx, &stats.OutPayload{
 		Length:           info.Length,
 		CompressedLength: info.CompressedLength,
@@ -381,7 +381,7 @@ func (s *serverCallBridge) RecordOutgoingMessage(info *estats.MessageInfo) {
 }
 
 // RecordEnd emits the V1 server End.
-func (s *serverCallBridge) RecordEnd(info *estats.CallEndInfo) {
+func (s *serverCallAdapter) RecordEnd(info *estats.CallEndInfo) {
 	s.h.HandleRPC(s.callCtx, &stats.End{
 		BeginTime: s.beginTime,
 		EndTime:   time.Now(),
