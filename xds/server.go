@@ -89,7 +89,7 @@ func NewGRPCServer(opts ...grpc.ServerOption) (*GRPCServer, error) {
 	s.handleServerOptions(opts)
 
 	var mrl estats.MetricsRecorder
-	mrl = istats.NewMetricsRecorderList(nil)
+	mrl = istats.NewMetricsRecorderList(nil, nil)
 	if srv, ok := s.gs.(*grpc.Server); ok { // Will hit in prod but not for testing.
 		mrl = internal.MetricsRecorderForServer.(func(*grpc.Server) estats.MetricsRecorder)(srv)
 	}
