@@ -21,16 +21,20 @@ package credentials
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"fmt"
 	"net"
+	"time"
 
+	tlscredspb "github.com/envoyproxy/go-control-plane/envoy/extensions/grpc_service/channel_credentials/tls/v3"
+	"github.com/spiffe/go-spiffe/v2/bundle/spiffebundle"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/tls/certprovider"
+	"google.golang.org/grpc/internal/credentials/spiffe"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 
-	tlscredspb "github.com/envoyproxy/go-control-plane/envoy/extensions/grpc_service/channel_credentials/tls/v3"
 )
 
 const tlsCredsTypeURL = "type.googleapis.com/envoy.extensions.grpc_service.channel_credentials.tls.v3.TlsCredentials"
@@ -143,10 +147,18 @@ func (b *tlsBundle) ClientHandshake(ctx context.Context, authority string, rawCo
 	if err != nil {
 		return nil, nil, fmt.Errorf("credentials: failed to get root certificates: %v", err)
 	}
-	if rootKM.Roots == nil {
-		return nil, nil, errors.New("credentials: root certificate provider returned no root certificates")
+
+	cfg := &tls.Config{}
+	if rootKM.SPIFFEBundleMap != nil {
+		// The SPIFFE trust bundle map is authoritative for peer verification.
+		cfg.InsecureSkipVerify = true //nolint:gosec // verification is performed by VerifyPeerCertificate below.
+		cfg.VerifyPeerCertificate = buildSPIFFEVerifyFunc(rootKM.SPIFFEBundleMap)
+	} else {
+		if rootKM.Roots == nil {
+			return nil, nil, errors.New("credentials: root certificate provider returned no root certificates")
+		}
+		cfg.RootCAs = rootKM.Roots
 	}
-	cfg := &tls.Config{RootCAs: rootKM.Roots}
 	if b.identityProvider != nil {
 		identityKM, err := b.identityProvider.KeyMaterial(ctx)
 		if err != nil {
@@ -155,6 +167,45 @@ func (b *tlsBundle) ClientHandshake(ctx context.Context, authority string, rawCo
 		cfg.Certificates = identityKM.Certs
 	}
 	return credentials.NewTLS(cfg).ClientHandshake(ctx, authority, rawConn)
+}
+
+
+// buildSPIFFEVerifyFunc returns a certificate verifier for the supplied SPIFFE
+// trust bundle map. The verifier mirrors the SPIFFE trust-map validation used by
+// the bootstrap TLS credentials, while allowing certificate providers to reload
+// the map on each handshake.
+func buildSPIFFEVerifyFunc(spiffeBundleMap map[string]*spiffebundle.Bundle) func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
+	return func(rawCerts [][]byte, _ [][]*x509.Certificate) error {
+		rawCertList := make([]*x509.Certificate, len(rawCerts))
+		for i, asn1Data := range rawCerts {
+			cert, err := x509.ParseCertificate(asn1Data)
+			if err != nil {
+				return fmt.Errorf("spiffe: verify function could not parse input certificate: %v", err)
+			}
+			rawCertList[i] = cert
+		}
+		if len(rawCertList) == 0 {
+			return fmt.Errorf("spiffe: verify function has no valid input certificates")
+		}
+
+		leafCert := rawCertList[0]
+		roots, err := spiffe.GetRootsFromSPIFFEBundleMap(spiffeBundleMap, leafCert)
+		if err != nil {
+			return err
+		}
+		opts := x509.VerifyOptions{
+			Roots:         roots,
+			CurrentTime:   time.Now(),
+			Intermediates: x509.NewCertPool(),
+		}
+		for _, cert := range rawCertList[1:] {
+			opts.Intermediates.AddCert(cert)
+		}
+		if _, err = leafCert.Verify(opts); err != nil {
+			return fmt.Errorf("spiffe: x509 certificate Verify failed: %v", err)
+		}
+		return nil
+	}
 }
 
 func (b *tlsBundle) ServerHandshake(net.Conn) (net.Conn, credentials.AuthInfo, error) {
