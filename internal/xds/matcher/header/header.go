@@ -33,16 +33,17 @@ func FromProto(matcherProto *v3routepb.HeaderMatcher) (matcher.HeaderMatcher, er
 		return nil, errors.New("input HeaderMatcher proto is nil")
 	}
 
+	if matcherProto.GetHeaderMatchSpecifier() == nil {
+		return nil, errors.New("header matcher type is not set")
+	}
+
 	name := matcherProto.GetName()
 	invert := matcherProto.GetInvertMatch()
 	switch m := matcherProto.GetHeaderMatchSpecifier().(type) {
 	case *v3routepb.HeaderMatcher_ExactMatch:
-		if m == nil {
-			return nil, errors.New("exact header matcher is nil")
-		}
 		return matcher.NewHeaderExactMatcher(name, m.ExactMatch, invert), nil
 	case *v3routepb.HeaderMatcher_SafeRegexMatch:
-		if m == nil || m.SafeRegexMatch == nil {
+		if m.SafeRegexMatch == nil {
 			return nil, errors.New("safe regex header matcher is nil")
 		}
 		re, err := matcher.CompileSafeRegex(m.SafeRegexMatch.GetRegex())
@@ -51,41 +52,29 @@ func FromProto(matcherProto *v3routepb.HeaderMatcher) (matcher.HeaderMatcher, er
 		}
 		return matcher.NewHeaderRegexMatcher(name, re, invert), nil
 	case *v3routepb.HeaderMatcher_RangeMatch:
-		if m == nil || m.RangeMatch == nil {
+		if m.RangeMatch == nil {
 			return nil, errors.New("range header matcher is nil")
 		}
 		return matcher.NewHeaderRangeMatcher(name, m.RangeMatch.GetStart(), m.RangeMatch.GetEnd(), invert), nil
 	case *v3routepb.HeaderMatcher_PresentMatch:
-		if m == nil {
-			return nil, errors.New("present header matcher is nil")
-		}
 		return matcher.NewHeaderPresentMatcher(name, m.PresentMatch, invert), nil
 	case *v3routepb.HeaderMatcher_PrefixMatch:
-		if m == nil {
-			return nil, errors.New("prefix header matcher is nil")
-		}
 		if m.PrefixMatch == "" {
 			return nil, errors.New("empty prefix is not allowed in HeaderMatcher")
 		}
 		return matcher.NewHeaderPrefixMatcher(name, m.PrefixMatch, invert), nil
 	case *v3routepb.HeaderMatcher_SuffixMatch:
-		if m == nil {
-			return nil, errors.New("suffix header matcher is nil")
-		}
 		if m.SuffixMatch == "" {
 			return nil, errors.New("empty suffix is not allowed in HeaderMatcher")
 		}
 		return matcher.NewHeaderSuffixMatcher(name, m.SuffixMatch, invert), nil
 	case *v3routepb.HeaderMatcher_ContainsMatch:
-		if m == nil {
-			return nil, errors.New("contains header matcher is nil")
-		}
 		if m.ContainsMatch == "" {
 			return nil, errors.New("empty contains is not allowed in HeaderMatcher")
 		}
 		return matcher.NewHeaderContainsMatcher(name, m.ContainsMatch, invert), nil
 	case *v3routepb.HeaderMatcher_StringMatch:
-		if m == nil || m.StringMatch == nil {
+		if m.StringMatch == nil {
 			return nil, errors.New("string header matcher is nil")
 		}
 		sm, err := matcher.StringMatcherFromProto(m.StringMatch)

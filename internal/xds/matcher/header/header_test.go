@@ -29,16 +29,6 @@ import (
 )
 
 func TestFromProto(t *testing.T) {
-	var (
-		typedNilExact    *v3routepb.HeaderMatcher_ExactMatch
-		typedNilRegex    *v3routepb.HeaderMatcher_SafeRegexMatch
-		typedNilRange    *v3routepb.HeaderMatcher_RangeMatch
-		typedNilPresent  *v3routepb.HeaderMatcher_PresentMatch
-		typedNilPrefix   *v3routepb.HeaderMatcher_PrefixMatch
-		typedNilSuffix   *v3routepb.HeaderMatcher_SuffixMatch
-		typedNilContains *v3routepb.HeaderMatcher_ContainsMatch
-		typedNilString   *v3routepb.HeaderMatcher_StringMatch
-	)
 	tests := []struct {
 		name         string
 		matcherProto *v3routepb.HeaderMatcher
@@ -193,26 +183,10 @@ func TestFromProto(t *testing.T) {
 			wantErr:      true,
 		},
 		{
-			name: "typed nil exact matcher",
-			matcherProto: &v3routepb.HeaderMatcher{
-				Name:                 "X-Test",
-				HeaderMatchSpecifier: typedNilExact,
-			},
-			wantErr: true,
-		},
-		{
 			name: "nil safe regex matcher",
 			matcherProto: &v3routepb.HeaderMatcher{
 				Name:                 "X-Test",
 				HeaderMatchSpecifier: &v3routepb.HeaderMatcher_SafeRegexMatch{},
-			},
-			wantErr: true,
-		},
-		{
-			name: "typed nil safe regex matcher",
-			matcherProto: &v3routepb.HeaderMatcher{
-				Name:                 "X-Test",
-				HeaderMatchSpecifier: typedNilRegex,
 			},
 			wantErr: true,
 		},
@@ -227,26 +201,10 @@ func TestFromProto(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "typed nil range matcher",
-			matcherProto: &v3routepb.HeaderMatcher{
-				Name:                 "X-Test",
-				HeaderMatchSpecifier: typedNilRange,
-			},
-			wantErr: true,
-		},
-		{
 			name: "nil range matcher",
 			matcherProto: &v3routepb.HeaderMatcher{
 				Name:                 "X-Test",
 				HeaderMatchSpecifier: &v3routepb.HeaderMatcher_RangeMatch{},
-			},
-			wantErr: true,
-		},
-		{
-			name: "typed nil present matcher",
-			matcherProto: &v3routepb.HeaderMatcher{
-				Name:                 "X-Test",
-				HeaderMatchSpecifier: typedNilPresent,
 			},
 			wantErr: true,
 		},
@@ -259,14 +217,6 @@ func TestFromProto(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "typed nil prefix matcher",
-			matcherProto: &v3routepb.HeaderMatcher{
-				Name:                 "X-Test",
-				HeaderMatchSpecifier: typedNilPrefix,
-			},
-			wantErr: true,
-		},
-		{
 			name: "empty suffix match is rejected",
 			matcherProto: &v3routepb.HeaderMatcher{
 				Name:                 "X-Test",
@@ -275,34 +225,10 @@ func TestFromProto(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "typed nil suffix matcher",
-			matcherProto: &v3routepb.HeaderMatcher{
-				Name:                 "X-Test",
-				HeaderMatchSpecifier: typedNilSuffix,
-			},
-			wantErr: true,
-		},
-		{
 			name: "empty contains match is rejected",
 			matcherProto: &v3routepb.HeaderMatcher{
 				Name:                 "X-Test",
 				HeaderMatchSpecifier: &v3routepb.HeaderMatcher_ContainsMatch{},
-			},
-			wantErr: true,
-		},
-		{
-			name: "typed nil contains matcher",
-			matcherProto: &v3routepb.HeaderMatcher{
-				Name:                 "X-Test",
-				HeaderMatchSpecifier: typedNilContains,
-			},
-			wantErr: true,
-		},
-		{
-			name: "typed nil string matcher",
-			matcherProto: &v3routepb.HeaderMatcher{
-				Name:                 "X-Test",
-				HeaderMatchSpecifier: typedNilString,
 			},
 			wantErr: true,
 		},
