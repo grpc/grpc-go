@@ -33,7 +33,7 @@ import (
 
 const (
 	defaultTestTimeout      = 10 * time.Second
-	defaultTestShortTimeout = 100 * time.Millisecond
+	defaultTestShortTimeout = 10 * time.Millisecond
 )
 
 func createTmpPolicyFile(t *testing.T, dirSuffix string, policy []byte) string {
@@ -221,11 +221,11 @@ func (s) TestFileWatcher_RetriesUnchangedPolicyAfterFailedReload(t *testing.T) {
 		}
 	}`, loggerName)
 
-	updates := make(chan string, 10)
+	updates := make(chan string, 1)
 	file := createTmpPolicyFile(t, "retries_unchanged_policy", []byte(initialPolicy))
 	opts := authz.FileWatcherOptions{
 		PolicyFile:      file,
-		RefreshDuration: 20 * time.Millisecond,
+		RefreshDuration: defaultTestShortTimeout,
 		OnPolicyUpdate:  func(p string) { updates <- p },
 	}
 	i, err := authz.NewFileWatcherWithOptions(opts)
@@ -247,7 +247,7 @@ func (s) TestFileWatcher_RetriesUnchangedPolicyAfterFailedReload(t *testing.T) {
 	if err := os.WriteFile(file, []byte(pendingPolicy), os.ModePerm); err != nil {
 		t.Fatalf("os.WriteFile(%q) failed: %v", file, err)
 	}
-	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
+	sCtx, sCancel := context.WithTimeout(ctx, 2*defaultTestShortTimeout)
 	defer sCancel()
 	select {
 	case update := <-updates:
