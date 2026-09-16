@@ -48,9 +48,10 @@ const (
 type gcpServiceAccountIdentityCallCreds struct {
 	// The following fields are initialized at creation time and are read-only
 	// after that.
-	ctx      context.Context
-	audience string
-	backoff  backoff.Strategy
+	ctx          context.Context
+	audience     string
+	backoff      backoff.Strategy
+	fetchIDToken func(ctx context.Context, audience string) (string, time.Time, error)
 
 	// The following fields are protected by mu.
 	mu                     sync.Mutex
@@ -65,7 +66,9 @@ type gcpServiceAccountIdentityCallCreds struct {
 
 func init() {
 	internal.BackoffStrategy = backoff.DefaultExponential
-	internal.FetchIDToken = fetchIDTokenFromMetadataServer
+	internal.NewIDTokenFetcher = func() func(ctx context.Context, audience string) (string, time.Time, error) {
+		return newIDTokenFetcher().FetchIDToken
+	}
 }
 
 // NewServiceAccountIdentityCredentials creates a PerRPCCredentials that
@@ -96,9 +99,10 @@ func NewServiceAccountIdentityCredentials(ctx context.Context, audience string) 
 	}
 
 	return &gcpServiceAccountIdentityCallCreds{
-		ctx:      ctx,
-		audience: audience,
-		backoff:  internal.BackoffStrategy,
+		ctx:          ctx,
+		audience:     audience,
+		backoff:      internal.BackoffStrategy,
+		fetchIDToken: internal.NewIDTokenFetcher(),
 	}, nil
 }
 
@@ -208,7 +212,7 @@ func (c *gcpServiceAccountIdentityCallCreds) isTokenValidLocked() bool {
 func (c *gcpServiceAccountIdentityCallCreds) startFetch() {
 	ctx, cancel := context.WithTimeout(c.ctx, metadataTimeout)
 	defer cancel()
-	val, exp, err := internal.FetchIDToken(ctx, c.audience)
+	val, exp, err := c.fetchIDToken(ctx, c.audience)
 
 	c.mu.Lock()
 	defer c.mu.Unlock()

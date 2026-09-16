@@ -89,6 +89,10 @@ func setupGCPAuthnTest(t *testing.T) {
 // subsequent RPC calls with same audience reuse the same token.
 func (s) TestGCPAuthnFilter_SuccessCase(t *testing.T) {
 	setupGCPAuthnTest(t)
+	// A mock JWT token with header `{"alg":"RS256"}` and payload
+	// `{"exp":2524608000}`. A far-future expiration date (Jan 1, 2050 UTC)
+	// is used so that the static token remains valid and does not expire
+	// when tests run in the future.
 	const tokenValue = "eyJhbGciOiJSUzI1NiJ9.eyJleHAiOjI1MjQ2MDgwMDB9.sig"
 
 	// Starts a local HTTP server and sets GCE_METADATA_HOST to spoof the

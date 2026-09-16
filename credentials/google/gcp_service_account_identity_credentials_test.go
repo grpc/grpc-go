@@ -115,12 +115,14 @@ func setupStubTokenProvider(token string, err error) *stubTokenProvider {
 // setupTestGCPServiceAccountIdentityCreds constructs a GCP service account
 // identity credentials instance with an injected stub token provider.
 //
-// It overrides internal.FetchIDToken to use the stubTokenProvider,
+// It overrides internal.NewIDTokenFetcher to use the stubTokenProvider,
 // and registers a cleanup function to restore original hook after the test.
 func setupTestGCPServiceAccountIdentityCreds(ctx context.Context, t *testing.T, stubToken *stubTokenProvider) credentials.PerRPCCredentials {
-	origFetchIDToken := internal.FetchIDToken
-	internal.FetchIDToken = stubToken.fetch
-	t.Cleanup(func() { internal.FetchIDToken = origFetchIDToken })
+	origNewIDTokenFetcher := internal.NewIDTokenFetcher
+	internal.NewIDTokenFetcher = func() func(context.Context, string) (string, time.Time, error) {
+		return stubToken.fetch
+	}
+	t.Cleanup(func() { internal.NewIDTokenFetcher = origNewIDTokenFetcher })
 
 	creds, err := google.NewServiceAccountIdentityCredentials(ctx, "audience")
 	if err != nil {
@@ -483,10 +485,9 @@ func (s) TestGCPServiceAccountIdentityCallCreds_EarlyExpiry(t *testing.T) {
 	}
 }
 
-// Test verifies that different types of errors from the metadata server are
-// mapped to the correct gRPC status codes when returned through
-// GetRequestMetadata.
-func (s) TestGCPServiceAccountIdentityCallCreds_ErrorMapping(t *testing.T) {
+// Test verifies that errors returned by the underlying token fetcher function
+// are properly propagated to callers of GetRequestMetadata.
+func (s) TestGCPServiceAccountIdentityCallCreds_ErrorPropagation(t *testing.T) {
 	tests := []struct {
 		name string
 		err  error
@@ -494,17 +495,17 @@ func (s) TestGCPServiceAccountIdentityCallCreds_ErrorMapping(t *testing.T) {
 	}{
 		{
 			name: "429_too_many_requests",
-			err:  status.Errorf(codes.Unavailable, "credentials: failed to fetch token from metadata server: HTTP status 429"),
+			err:  status.Errorf(codes.Unavailable, "credentials: failed to fetch ID token: HTTP status 429"),
 			want: codes.Unavailable,
 		},
 		{
 			name: "503_service_unavailable",
-			err:  status.Errorf(codes.Unavailable, "credentials: failed to fetch token from metadata server: HTTP status 503"),
+			err:  status.Errorf(codes.Unavailable, "credentials: failed to fetch ID token: HTTP status 503"),
 			want: codes.Unavailable,
 		},
 		{
 			name: "403_forbidden",
-			err:  status.Errorf(codes.Unauthenticated, "credentials: failed to fetch token from metadata server: HTTP status 403"),
+			err:  status.Errorf(codes.Unauthenticated, "credentials: failed to fetch ID token: HTTP status 403"),
 			want: codes.Unauthenticated,
 		},
 		{

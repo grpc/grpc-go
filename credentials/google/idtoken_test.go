@@ -81,7 +81,6 @@ func (s) TestParseJWTExpiry(t *testing.T) {
 			wantErr: true,
 		},
 	}
-
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			exp, err := parseJWTExpiry(tc.jwtStr)
@@ -100,10 +99,11 @@ func (s) TestParseJWTExpiry(t *testing.T) {
 // correctly parses the returned ID token.
 func (s) TestFetchIDTokenFromMetadataServer_Success(t *testing.T) {
 	const (
-		audience   = "https://example.com"
+		audience = "https://example.com"
+		// A mock JWT token with header `{"alg":"RS256"}` and payload
+		// `{"exp":2524608000}`.
 		tokenValue = "eyJhbGciOiJSUzI1NiJ9.eyJleHAiOjI1MjQ2MDgwMDB9.sig"
 	)
-	wantExp := time.Unix(2524608000, 0)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Verify mandatory GCP Metadata Server request header.
@@ -121,23 +121,24 @@ func (s) TestFetchIDTokenFromMetadataServer_Success(t *testing.T) {
 	}))
 	defer server.Close()
 
-	// Redirect GCE metadata server requests to our local mock HTTP server.
+	// Redirect GCE metadata server requests to fake HTTP server.
 	t.Setenv("GCE_METADATA_HOST", strings.TrimPrefix(server.URL, "http://"))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	val, exp, err := fetchIDTokenFromMetadataServer(ctx, audience)
+	val, exp, err := newIDTokenFetcher().FetchIDToken(ctx, audience)
 	if err != nil {
-		t.Fatalf("fetchIDTokenFromMetadataServer() failed: %v", err)
+		t.Fatalf("FetchIDToken() failed: %v", err)
 	}
 
 	if val != tokenValue {
-		t.Errorf("fetchIDTokenFromMetadataServer() val = %q, want %q", val, tokenValue)
+		t.Errorf("FetchIDToken() val = %q, want %q", val, tokenValue)
 	}
 
+	wantExp := time.Unix(2524608000, 0)
 	if !exp.Equal(wantExp) {
-		t.Errorf("fetchIDTokenFromMetadataServer() exp = %v, want %v", exp, wantExp)
+		t.Errorf("FetchIDToken() exp = %v, want %v", exp, wantExp)
 	}
 }
 
@@ -173,14 +174,15 @@ func (s) TestFetchIDTokenFromMetadataServer_HTTPStatusErrors(t *testing.T) {
 			}))
 			defer server.Close()
 
+			// Redirect GCE metadata server requests to fake HTTP server.
 			t.Setenv("GCE_METADATA_HOST", strings.TrimPrefix(server.URL, "http://"))
 
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 
-			_, _, err := fetchIDTokenFromMetadataServer(ctx, "https://example.com")
+			_, _, err := newIDTokenFetcher().FetchIDToken(ctx, "https://example.com")
 			if gotCode := status.Code(err); gotCode != tc.wantCode {
-				t.Errorf("fetchIDTokenFromMetadataServer() gRPC status code = %v, want %v (err: %v)", gotCode, tc.wantCode, err)
+				t.Errorf("FetchIDToken() failed with gRPC status code = %v, want %v (err: %v)", gotCode, tc.wantCode, err)
 			}
 		})
 	}
@@ -199,8 +201,45 @@ func (s) TestFetchIDTokenFromMetadataServer_MalformedToken(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	_, _, err := fetchIDTokenFromMetadataServer(ctx, "https://example.com")
-	if gotCode := status.Code(err); gotCode != codes.Unavailable {
-		t.Errorf("fetchIDTokenFromMetadataServer() gRPC status code = %v, want %v (err: %v)", gotCode, codes.Unavailable, err)
+	_, _, err := newIDTokenFetcher().FetchIDToken(ctx, "https://example.com")
+	if gotCode := status.Code(err); gotCode != codes.Unauthenticated {
+		t.Errorf("FetchIDToken() failed with gRPC status code = %v, want %v (err: %v)", gotCode, codes.Unauthenticated, err)
+	}
+}
+
+// Test verifies that newIDTokenFetcher correctly reads the GCE_METADATA_HOST
+// environment variable and configures an unproxied HTTP transport.
+func (s) TestNewIDTokenFetcher(t *testing.T) {
+	tests := []struct {
+		name     string
+		envHost  string
+		wantHost string
+	}{
+		{
+			name:     "default_host",
+			envHost:  "",
+			wantHost: "metadata.google.internal",
+		},
+		{
+			name:     "custom_host",
+			envHost:  "custom.metadata.internal:8080",
+			wantHost: "custom.metadata.internal:8080",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("GCE_METADATA_HOST", tc.envHost)
+			fetcher := newIDTokenFetcher()
+			if fetcher.metadataHost != tc.wantHost {
+				t.Errorf("newIDTokenFetcher() metadataHost = %q, want %q", fetcher.metadataHost, tc.wantHost)
+			}
+			tr, ok := fetcher.client.Transport.(*http.Transport)
+			if !ok {
+				t.Fatalf("fetcher.client.Transport is not *http.Transport")
+			}
+			if tr.Proxy != nil {
+				t.Errorf("fetcher.client.Transport.Proxy is non-nil, want nil")
+			}
+		})
 	}
 }
