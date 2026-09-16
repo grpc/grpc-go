@@ -201,9 +201,9 @@ func (w *clientStreamWrapper) SendMsg(m any) error {
 
 }
 
-// RecvMsg receives message m from the stream. For RPCs that call RecvMsg only
-// once i.e. only client streaming RPCs, it calls the underlying RecvMsg a
-// second time after receiving the first message to get the trailers.
+// RecvMsg receives message m from the stream. For non-server-streaming RPCs
+// (unary and client-streaming), it calls the underlying RecvMsg a second time
+// after receiving the first message to get the trailers.
 func (w *clientStreamWrapper) RecvMsg(m any) error {
 	err := w.ClientStream.RecvMsg(m)
 	if err != nil {
@@ -222,19 +222,6 @@ func (w *clientStreamWrapper) RecvMsg(m any) error {
 		return status.Error(codes.Internal, "cardinality violation: expected <EOF> for non server-streaming RPCs, but received another message")
 	}
 	return err
-}
-
-// defaultStreamInterceptor is a StreamClientInterceptor which wraps the
-// ClientStream and is always invoked as the first interceptor. It consolidates
-// behavior for different RPC types at the level closest to the application,
-// which simplifies the underlying stream implementation and other interceptors
-// by avoiding duplicate or scattered handling.
-func defaultStreamInterceptor(ctx context.Context, desc *StreamDesc, cc *ClientConn, method string, streamer Streamer, opts ...CallOption) (ClientStream, error) {
-	cs, err := streamer(ctx, desc, cc, method, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return &clientStreamWrapper{ClientStream: cs, desc: desc}, nil
 }
 
 // NewStream creates a new Stream for the client side. This is typically
@@ -392,7 +379,11 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		}
 	}
 
-	return newStream(ctx, opts...)
+	cs, err := newStream(ctx, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &clientStreamWrapper{ClientStream: cs, desc: desc}, nil
 }
 
 func newClientStreamWithParams(ctx context.Context, desc *StreamDesc, cc *ClientConn, method string, mc *serviceconfig.MethodConfig, onCommit func(), nameResolutionDelayed bool, opts ...CallOption) (_ ClientStream, err error) {
