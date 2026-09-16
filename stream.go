@@ -514,7 +514,9 @@ func newClientStreamWithParams(ctx context.Context, desc *StreamDesc, cc *Client
 		}
 	}
 
-	cs.registerContextCallbacks()
+	if desc != unaryStreamDesc {
+		cs.registerContextCallbacks()
+	}
 	return cs, nil
 }
 
@@ -1487,7 +1489,9 @@ func newNonRetryClientStream(ctx context.Context, desc *StreamDesc, method strin
 	as.transportStream = s
 	as.parser = parser{r: s, bufferPool: ac.dopts.copts.BufferPool}
 	ac.incrCallsStarted()
-	as.registerContextCallbacks()
+	if desc != unaryStreamDesc {
+		as.registerContextCallbacks()
+	}
 	return &clientStreamWrapper{ClientStream: as, desc: desc}, nil
 }
 
