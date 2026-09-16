@@ -95,7 +95,10 @@ func hostName(clusterName string, update xdsresource.ClusterUpdate) string {
 //	│xDSLBPolicy │  │xDSLBPolicy │ (Locality and Endpoint picking layer)
 //	└────────────┘  └────────────┘
 func buildLeafClusterConfigJSON(leaf *leafClusterConfig, xdsLBPolicy *internalserviceconfig.BalancerConfig) ([]byte, []resolver.Endpoint, error) {
-	odCfg, endpoints := buildLeafClusterConfig(leaf, xdsLBPolicy)
+	odCfg, endpoints, err := buildLeafClusterConfig(leaf, xdsLBPolicy)
+	if err != nil {
+		return nil, nil, err
+	}
 	ret, err := json.Marshal(odCfg)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to marshal built leaf cluster config: %v", err)
@@ -103,7 +106,7 @@ func buildLeafClusterConfigJSON(leaf *leafClusterConfig, xdsLBPolicy *internalse
 	return ret, endpoints, nil
 }
 
-func buildLeafClusterConfig(leaf *leafClusterConfig, xdsLBPolicy *internalserviceconfig.BalancerConfig) (*outlierdetection.LBConfig, []resolver.Endpoint) {
+func buildLeafClusterConfig(leaf *leafClusterConfig, xdsLBPolicy *internalserviceconfig.BalancerConfig) (*outlierdetection.LBConfig, []resolver.Endpoint, error) {
 	clusterUpdate := leaf.clusterConfig.Cluster
 	priorityLBConfig := &priority.LBConfig{
 		Children: make(map[string]*priority.Child),
@@ -157,6 +160,8 @@ func buildLeafClusterConfig(leaf *leafClusterConfig, xdsLBPolicy *internalservic
 			Config:                     xdsLBPolicy,
 			IgnoreReresolutionRequests: false,
 		}
+	default:
+		return nil, nil, fmt.Errorf("unsupported cluster type %v for leaf cluster %q", clusterUpdate.ClusterType, clusterUpdate.ClusterName)
 	}
 
 	ciCfg := &clusterimpl.LBConfig{
@@ -173,7 +178,7 @@ func buildLeafClusterConfig(leaf *leafClusterConfig, xdsLBPolicy *internalservic
 		Config: ciCfg,
 	}
 
-	return &odCfg, retEndpoints
+	return &odCfg, retEndpoints, nil
 }
 
 // buildAggregateClusterConfigJSON builds balancer config for the passed in
@@ -240,6 +245,8 @@ func buildAggregateClusterConfig(leafClusters []*leafClusterConfig, xdsLBPolicy 
 				IgnoreReresolutionRequests: false,
 			}
 			continue
+		default:
+			return nil, nil, fmt.Errorf("unsupported cluster type %v for leaf cluster %q", clusterUpdate.ClusterType, clusterUpdate.ClusterName)
 		}
 	}
 	return retConfig, retEndpoints, nil

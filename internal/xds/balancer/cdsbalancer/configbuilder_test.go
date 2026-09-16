@@ -254,7 +254,7 @@ func (s) TestBuildClusterConfigJSON(t *testing.T) {
 // balancer per priority should be an Outlier Detection balancer, with a Cluster
 // Impl Balancer as a child.
 func (s) TestBuildAggregateClusterConfig(t *testing.T) {
-	gotConfig, _, _ := buildAggregateClusterConfig([]*leafClusterConfig{
+	gotConfig, _, err := buildAggregateClusterConfig([]*leafClusterConfig{
 		{
 			// EDS - OD config should be the top level for both of the EDS
 			// priorities balancer This EDS priority will have multiple sub
@@ -298,6 +298,9 @@ func (s) TestBuildAggregateClusterConfig(t *testing.T) {
 			childNameGen:     newNameGenerator(1),
 		},
 	}, nil)
+	if err != nil {
+		t.Fatalf("buildAggregateClusterConfig() failed: %v", err)
+	}
 
 	wantConfig := &priority.LBConfig{
 		Children: map[string]*priority.Child{
@@ -356,6 +359,26 @@ func (s) TestBuildAggregateClusterConfig(t *testing.T) {
 	}
 	if diff := cmp.Diff(gotConfig, wantConfig); diff != "" {
 		t.Errorf("buildPriorityConfig() diff (-got +want) %v", diff)
+	}
+}
+
+// Test verifies that buildAggregateClusterConfig returns an error when passed
+// a cluster with an unsupported cluster type.
+func (s) TestBuildAggregateClusterConfig_UnsupportedClusterType(t *testing.T) {
+	_, _, err := buildAggregateClusterConfig([]*leafClusterConfig{
+		{
+			clusterConfig: &xdsresource.ClusterConfig{
+				Cluster: &xdsresource.ClusterUpdate{
+					ClusterName: testClusterName,
+					ClusterType: xdsresource.ClusterTypeAggregate,
+				},
+			},
+			outlierDetection: noopODCfg,
+			childNameGen:     newNameGenerator(0),
+		},
+	}, nil)
+	if err == nil {
+		t.Fatal("buildAggregateClusterConfig() succeeded when expected to fail")
 	}
 }
 
@@ -420,7 +443,7 @@ func (s) TestBuildLeafClusterConfig_DNS(t *testing.T) {
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			gotODConfig, gotEndpoints := buildLeafClusterConfig(
+			gotODConfig, gotEndpoints, err := buildLeafClusterConfig(
 				&leafClusterConfig{
 					clusterConfig: &xdsresource.ClusterConfig{
 						Cluster: &xdsresource.ClusterUpdate{
@@ -433,6 +456,9 @@ func (s) TestBuildLeafClusterConfig_DNS(t *testing.T) {
 					childNameGen:     newNameGenerator(3),
 				},
 				tt.xdsLBPolicy)
+			if err != nil {
+				t.Fatalf("buildLeafClusterConfig() failed: %v", err)
+			}
 
 			wantODConfig := &outlierdetection.LBConfig{
 				Interval:           iserviceconfig.Duration(10 * time.Second),
@@ -493,7 +519,7 @@ func (s) TestBuildLeafClusterConfig_EDS_PickFirstWeightedShuffling_Disabled(t *t
 	loc2 := makeLocality(2, 20, 1, 2)
 	loc3 := makeLocality(3, 80, 1, 2)
 
-	gotODConfig, gotEndpoints := buildLeafClusterConfig(
+	gotODConfig, gotEndpoints, err := buildLeafClusterConfig(
 		&leafClusterConfig{
 			clusterConfig: &xdsresource.ClusterConfig{
 				Cluster: &xdsresource.ClusterUpdate{
@@ -524,6 +550,9 @@ func (s) TestBuildLeafClusterConfig_EDS_PickFirstWeightedShuffling_Disabled(t *t
 		},
 		nil,
 	)
+	if err != nil {
+		t.Fatalf("buildLeafClusterConfig() failed: %v", err)
+	}
 
 	wantODConfig := &outlierdetection.LBConfig{
 		Interval:           iserviceconfig.Duration(10 * time.Second),
@@ -592,7 +621,7 @@ func (s) TestBuildLeafClusterConfig_EDS_PickFirstWeightedShuffling_Enabled(t *te
 	loc2 := makeLocality(2, 20, 1, 2)
 	loc3 := makeLocality(3, 80, 1, 2)
 
-	gotODConfig, gotEndpoints := buildLeafClusterConfig(
+	gotODConfig, gotEndpoints, err := buildLeafClusterConfig(
 		&leafClusterConfig{
 			clusterConfig: &xdsresource.ClusterConfig{
 				Cluster: &xdsresource.ClusterUpdate{
@@ -623,6 +652,9 @@ func (s) TestBuildLeafClusterConfig_EDS_PickFirstWeightedShuffling_Enabled(t *te
 		},
 		nil,
 	)
+	if err != nil {
+		t.Fatalf("buildLeafClusterConfig() failed: %v", err)
+	}
 
 	wantODConfig := &outlierdetection.LBConfig{
 		Interval:           iserviceconfig.Duration(10 * time.Second),
@@ -684,6 +716,27 @@ func (s) TestBuildLeafClusterConfig_EDS_PickFirstWeightedShuffling_Enabled(t *te
 	}
 	if diff := cmp.Diff(wantEndpoints, gotEndpoints, endpointCmpOpts); diff != "" {
 		t.Errorf("buildLeafClusterConfig() endpoints diff (-want +got) %v", diff)
+	}
+}
+
+// Test verifies that buildLeafClusterConfig returns an error when passed a
+// cluster with an unsupported cluster type.
+func (s) TestBuildLeafClusterConfig_UnsupportedClusterType(t *testing.T) {
+	_, _, err := buildLeafClusterConfig(
+		&leafClusterConfig{
+			clusterConfig: &xdsresource.ClusterConfig{
+				Cluster: &xdsresource.ClusterUpdate{
+					ClusterName: testClusterName,
+					ClusterType: xdsresource.ClusterTypeAggregate,
+				},
+			},
+			outlierDetection: noopODCfg,
+			childNameGen:     newNameGenerator(0),
+		},
+		nil,
+	)
+	if err == nil {
+		t.Fatal("buildLeafClusterConfig() succeeded when expected to fail")
 	}
 }
 
