@@ -154,9 +154,8 @@ func (s) TestBuildPriorityConfigJSON(t *testing.T) {
 				EndpointConfig: &xdsresource.EndpointConfig{
 					EDSUpdate: &xdsresource.EndpointsUpdate{
 						Drops: []xdsresource.OverloadDropConfig{{
-							Category:    testDropCategory,
-							Numerator:   testDropOverMillion,
-							Denominator: million,
+							Category:       testDropCategory,
+							DropPercentage: xdsresource.FractionalPercent{Numerator: testDropOverMillion, Denominator: million, PPM: testDropOverMillion},
 						}},
 						Localities: []xdsresource.Locality{
 							makeLocality(0, 20, 0, 2),
@@ -421,9 +420,8 @@ func (s) TestBuildClusterImplConfigForEDS_PickFirstWeightedShuffling_Disabled(t 
 			EndpointConfig: &xdsresource.EndpointConfig{
 				EDSUpdate: &xdsresource.EndpointsUpdate{
 					Drops: []xdsresource.OverloadDropConfig{{
-						Category:    testDropCategory,
-						Numerator:   testDropOverMillion,
-						Denominator: million,
+						Category:       testDropCategory,
+						DropPercentage: xdsresource.FractionalPercent{Numerator: testDropOverMillion, Denominator: million, PPM: testDropOverMillion},
 					}},
 					Localities: []xdsresource.Locality{
 						makeLocality(3, 80, 1, 2),
@@ -496,9 +494,8 @@ func (s) TestBuildClusterImplConfigForEDS_PickFirstWeightedShuffling_Enabled(t *
 			EndpointConfig: &xdsresource.EndpointConfig{
 				EDSUpdate: &xdsresource.EndpointsUpdate{
 					Drops: []xdsresource.OverloadDropConfig{{
-						Category:    testDropCategory,
-						Numerator:   testDropOverMillion,
-						Denominator: million,
+						Category:       testDropCategory,
+						DropPercentage: xdsresource.FractionalPercent{Numerator: testDropOverMillion, Denominator: million, PPM: testDropOverMillion},
 					}},
 					Localities: []xdsresource.Locality{
 						makeLocality(3, 80, 1, 2),
