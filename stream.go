@@ -153,7 +153,18 @@ type ClientStream interface {
 // RecvMsg parities based on the nature of stream.
 type clientStreamWrapper struct {
 	ClientStream
-	desc *StreamDesc
+	desc            *StreamDesc
+	closeSendCalled atomic.Bool
+}
+
+// CloseSend closes the send direction of the stream. The implementation ensures
+// that CloseSend is only called once on the underlying ClientStream, even if
+// CloseSend is called multiple times on the wrapper.
+func (w *clientStreamWrapper) CloseSend() error {
+	if w.closeSendCalled.Swap(true) {
+		return nil
+	}
+	return w.ClientStream.CloseSend()
 }
 
 // SendMsg sends message m across the stream. For RPCs where client can call
@@ -177,11 +188,13 @@ func (w *clientStreamWrapper) SendMsg(m any) error {
 	if err != nil {
 		return err
 	}
-	// CloseSend is needed because in some scenarios (e.g., xDS), the same
-	// interceptors are used to process both unary and streaming RPCs. Calling
-	// CloseSend signals to those interceptors that no more messages are on the
-	// way.
-	if err := w.ClientStream.CloseSend(); err != nil && err != io.EOF {
+	// In some scenarios (e.g., xDS), the same interceptors process both unary and
+	// streaming RPCs, relying on CloseSend to signal that no more messages are on
+	// the way. Although protobuf-generated stubs already invoke CloseSend for
+	// server-streaming RPCs, it is explicitly called here to ensure downstream
+	// interceptors are also notified when callers interact with the ClientStream
+	// API directly.
+	if err := w.CloseSend(); err != nil && err != io.EOF {
 		return err
 	}
 	return nil

@@ -109,6 +109,9 @@ func setupGRPCServer(t *testing.T, bootstrapContents []byte, opts ...grpc.Server
 				if err == io.EOF {
 					return nil
 				}
+				if err != nil {
+					return err
+				}
 			}
 		},
 	}

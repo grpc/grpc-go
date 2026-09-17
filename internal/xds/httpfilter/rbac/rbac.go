@@ -20,12 +20,11 @@
 package rbac
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"strings"
 
-	"google.golang.org/grpc/internal/resolver"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/internal/xds/httpfilter"
 	"google.golang.org/grpc/internal/xds/rbac"
 	"google.golang.org/protobuf/proto"
@@ -166,17 +165,27 @@ func normalizePrincipalHeaders(principal *v3rbacpb.Principal) error {
 	return nil
 }
 
-// normalizeHeaderMatcher rejects header matchers that A41 forbids (:scheme or a
-// grpc- prefixed name) and rewrites a "host" matcher to ":authority".
+// normalizeHeaderMatcher lowercases the name of a header matcher, rejects the
+// names that A41 forbids (:scheme or a grpc- prefixed name) and rewrites a
+// "host" matcher to ":authority".
 func normalizeHeaderMatcher(header *v3routepb.HeaderMatcher) error {
+	// The keys of the metadata the matchers run against are always lowercase,
+	// so a name that contains an uppercase character matches no header at all
+	// and the rule using it never fires. Lowercase the name, as Envoy and
+	// grpc-java do, both to make it match and to keep the checks below from
+	// being evaded by the case of the name.
 	name := header.GetName()
-	if name == ":scheme" {
+	lowerName := strings.ToLower(name)
+	if lowerName != name {
+		header.Name = lowerName
+	}
+	if lowerName == ":scheme" {
 		return fmt.Errorf("rbac: header matcher for %q is %q", name, ":scheme")
 	}
-	if strings.HasPrefix(name, "grpc-") {
+	if strings.HasPrefix(lowerName, "grpc-") {
 		return fmt.Errorf("rbac: header matcher for %q starts with %q", name, "grpc-")
 	}
-	if name == "host" {
+	if lowerName == "host" {
 		header.Name = ":authority"
 	}
 	return nil
@@ -226,7 +235,7 @@ type serverFilter struct{}
 
 func (serverFilter) Close() {}
 
-func (serverFilter) BuildServerInterceptor(cfg httpfilter.FilterConfig, override httpfilter.FilterConfig) (resolver.ServerInterceptor, error) {
+func (serverFilter) BuildServerInterceptor(cfg httpfilter.FilterConfig, override httpfilter.FilterConfig) (httpfilter.ServerInterceptor, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("rbac: nil config provided")
 	}
@@ -260,8 +269,11 @@ type interceptor struct {
 	chainEngine *rbac.ChainEngine
 }
 
-func (i *interceptor) AllowRPC(ctx context.Context) error {
-	return i.chainEngine.IsAuthorized(ctx)
+func (i *interceptor) InterceptRPC(ss grpc.ServerStream) (grpc.ServerStream, error) {
+	if err := i.chainEngine.IsAuthorized(ss.Context()); err != nil {
+		return nil, err
+	}
+	return ss, nil
 }
 
 func (i *interceptor) Close() {}
