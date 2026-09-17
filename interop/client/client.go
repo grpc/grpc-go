@@ -42,10 +42,12 @@ import (
 	"google.golang.org/grpc/credentials/google"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/credentials/oauth"
+	oteltracing "google.golang.org/grpc/experimental/opentelemetry"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/interop"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
+	grpcotel "google.golang.org/grpc/stats/opentelemetry"
 	"google.golang.org/grpc/testdata"
 
 	_ "google.golang.org/grpc/balancer/grpclb"    // Register the grpclb load balancing policy.
@@ -84,6 +86,8 @@ var (
 	soakNumThreads                         = flag.Int("soak_num_threads", 1, "The number of threads for concurrent execution of the soak tests (rpc_soak or channel_soak). The default value is set based on the interop large unary test case.")
 	tlsServerName                          = flag.String("server_host_override", "", "The server name used to verify the hostname returned by TLS handshake if it is not empty. Otherwise, --server_host is used.")
 	additionalMetadata                     = flag.String("additional_metadata", "", "Additional metadata to send in each request, as a semicolon-separated list of key:value pairs.")
+	enableOpenTelemetry                    = flag.Bool("enable_opentelemetry", false, "Whether to enable OpenTelemetry")
+	otelCollectorAddress                   = flag.String("otel_collector_address", "", "The OpenTelemetry collector address")
 	testCase                               = flag.String("test_case", "large_unary",
 		`Configure different test cases. Valid options are:
         empty_unary : empty (zero bytes) request and response;
@@ -283,6 +287,16 @@ func main() {
 			return streamer(ctx, desc, cc, method, opts...)
 		}
 		opts = append(opts, grpc.WithUnaryInterceptor(unaryAddMd), grpc.WithStreamInterceptor(streamingAddMd))
+	}
+	tp, propagator, shutdownFunc := interop.SetupOpenTelemetry(*enableOpenTelemetry, *otelCollectorAddress, logger)
+	if tp != nil {
+		defer shutdownFunc()
+		opts = append(opts, grpcotel.DialOption(grpcotel.Options{
+			TraceOptions: oteltracing.TraceOptions{
+				TracerProvider:    tp,
+				TextMapPropagator: propagator,
+			},
+		}))
 	}
 	conn, err := grpc.NewClient(serverAddr, opts...)
 	if err != nil {
