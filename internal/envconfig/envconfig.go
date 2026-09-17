@@ -169,6 +169,12 @@ var (
 	//
 	// TODO: Remove this env var once v1.85.0 is released.
 	EnableReceiveBufferCompaction = boolFromEnv("GRPC_GO_EXPERIMENTAL_ENABLE_RECEIVE_BUFFER_COMPACTION", true)
+
+	// EnableDataFrameDirtyBufferPooling enables the use of a non-zeroing
+	// (dirty) buffer pool for HTTP/2 DATA frame payloads. This is safe
+	// because the framer always fully overwrites the buffer with
+	// io.ReadFull before the data is read.
+	EnableDataFrameDirtyBufferPooling = boolFromEnv("GRPC_GO_EXPERIMENTAL_DATA_FRAME_DIRTY_BUFFER_POOLING", false)
 )
 
 func boolFromEnv(envVar string, def bool) bool {
