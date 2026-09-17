@@ -4602,6 +4602,7 @@ func (s) TestZeroSecondTimeout(t *testing.T) {
 		BlockFragment: st.encodeHeader(
 			":method", "POST",
 			":path", "/grpc.testing.TestService/StreamingInputCall",
+			":authority", "localhost",
 			"content-type", "application/grpc",
 			"te", "trailers",
 			"grpc-timeout", "0n",
@@ -4764,14 +4765,20 @@ func testClientInitialHeaderEndStream(t *testing.T, e env) {
 	te := newTest(t, e)
 	ts := &funcServer{streamingInputCall: func(stream testgrpc.TestService_StreamingInputCallServer) error {
 		defer close(handlerDone)
-		// Block on serverTester receiving RST_STREAM. This ensures server has closed
-		// stream before stream.Recv().
+		// Block on serverTester receiving RST_STREAM. This ensures server has
+		// closed stream before stream.Recv().
 		<-frameCheckingDone
-		data, err := stream.Recv()
-		if err == nil {
-			t.Errorf("unexpected data received in func server method: '%v'", data)
+		// Depending on whether the context cancellation (due to the illegal data
+		// RST_STREAM) or the buffered EOF (from the initial HEADERS END_STREAM) is
+		// selected first in recvBufferReader, stream.Recv() can return either
+		// io.EOF or Canceled.
+		if _, err := stream.Recv(); err != io.EOF && status.Code(err) != codes.Canceled {
+			t.Errorf("stream.Recv() returned error = %v, expected EOF or canceled error", err)
+		}
+		if err := stream.SendMsg(nil); err == nil {
+			t.Error("stream.SendMsg() returned nil, expected cancel error")
 		} else if status.Code(err) != codes.Canceled {
-			t.Errorf("expected canceled error, instead received '%v'", err)
+			t.Errorf("stream.SendMsg() returned error = %v, expected cancel error", err)
 		}
 		return nil
 	}}
@@ -6746,18 +6753,6 @@ func (s) TestAuthorityHeader(t *testing.T) {
 			},
 			wantAuthority: "localhost",
 		},
-		{
-			name: "Missing :authority and host",
-			// Codepath triggered by incoming headers with no :authority and no
-			// host.
-			headers: []string{
-				":method", "POST",
-				":path", "/grpc.testing.TestService/UnaryCall",
-				"content-type", "application/grpc",
-				"te", "trailers",
-			},
-			wantAuthority: "",
-		},
 		// "If :authority is present, Host must be discarded." - A41
 		{
 			name: ":authority and host present",
@@ -6817,6 +6812,73 @@ func (s) TestAuthorityHeader(t *testing.T) {
 				t.Fatalf("gotAuthority: %v, wantAuthority %v", gotAuthority, test.wantAuthority)
 			}
 		})
+	}
+}
+
+// TestMissingAuthorityAndHostHeader tests that an incoming HTTP/2 request with
+// neither :authority nor host header is rejected with HTTP status 400 and gRPC
+// status Internal.
+func (s) TestMissingAuthorityAndHostHeader(t *testing.T) {
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Failed to listen: %v", err)
+	}
+	defer lis.Close()
+	s := grpc.NewServer()
+	defer s.Stop()
+	go s.Serve(lis)
+
+	conn, err := net.DialTimeout("tcp", lis.Addr().String(), defaultTestTimeout)
+	if err != nil {
+		t.Fatalf("Failed to dial server: %v", err)
+	}
+	defer conn.Close()
+
+	st := newServerTesterFromConn(t, conn)
+	st.greet()
+
+	st.writeHeaders(http2.HeadersFrameParam{
+		StreamID: 1,
+		BlockFragment: st.encodeHeader(
+			":method", "POST",
+			":path", "/grpc.testing.TestService/UnaryCall",
+			"content-type", "application/grpc",
+			"te", "trailers",
+		),
+		EndStream:  false,
+		EndHeaders: true,
+	})
+
+	for {
+		frame, err := st.readFrame()
+		if err != nil {
+			t.Fatalf("Error reading frame: %v", err)
+		}
+		hf, ok := frame.(*http2.MetaHeadersFrame)
+		if !ok {
+			continue
+		}
+		var httpStatus, grpcStatus, grpcMessage string
+		for _, h := range hf.Fields {
+			switch h.Name {
+			case ":status":
+				httpStatus = h.Value
+			case "grpc-status":
+				grpcStatus = h.Value
+			case "grpc-message":
+				grpcMessage = h.Value
+			}
+		}
+		if httpStatus != "400" {
+			t.Fatalf("Got HTTP status %v, want 400", httpStatus)
+		}
+		if grpcStatus != "13" {
+			t.Fatalf("Got gRPC status %v, want 13 (Internal)", grpcStatus)
+		}
+		if !strings.Contains(grpcMessage, "no host or :authority header present") {
+			t.Fatalf("Got gRPC message %q, want 'no host or :authority header present'", grpcMessage)
+		}
+		return
 	}
 }
 

@@ -19,9 +19,17 @@
 package server
 
 import (
+	"context"
+	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/internal/transport"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 )
 
 func (s) TestMatchTypeForDomain(t *testing.T) {
@@ -105,5 +113,43 @@ func (s) TestFindBestMatchingVirtualHost(t *testing.T) {
 				t.Errorf("findBestMatchingVirtualHostServer() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+type testServerTransportStream struct {
+	method string
+}
+
+func (s *testServerTransportStream) Method() string               { return s.method }
+func (s *testServerTransportStream) SetHeader(metadata.MD) error  { return nil }
+func (s *testServerTransportStream) SendHeader(metadata.MD) error { return nil }
+func (s *testServerTransportStream) SetTrailer(metadata.MD) error { return nil }
+
+type testServerStream struct {
+	grpc.ServerStream
+	ctx context.Context
+}
+
+func (s *testServerStream) Context() context.Context {
+	return s.ctx
+}
+
+func (s) TestRouteAndProcess_MissingAuthority(t *testing.T) {
+	var ptr atomic.Pointer[usableRouteConfiguration]
+	ptr.Store(&usableRouteConfiguration{})
+	cw := &connWrapper{urc: &ptr}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	ctx = transport.SetConnection(ctx, cw)
+	ctx = grpc.NewContextWithServerTransportStream(ctx, &testServerTransportStream{method: "/test.Service/Method"})
+	ctx = metadata.NewIncomingContext(ctx, metadata.MD{})
+
+	ss := &testServerStream{ctx: ctx}
+	_, err := RouteAndProcess(ss)
+	if status.Code(err) != codes.Internal {
+		t.Fatalf("RouteAndProcess() returned error code %v, want %v", status.Code(err), codes.Internal)
+	}
+	if !strings.Contains(err.Error(), "no :authority header present") {
+		t.Fatalf("RouteAndProcess() returned error message %q, want %q", err.Error(), "no :authority header present")
 	}
 }
