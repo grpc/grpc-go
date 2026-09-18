@@ -38,7 +38,7 @@ func TestFromProto(t *testing.T) {
 		wantErr      string
 	}{
 		{
-			name: "exact match",
+			name: "exact_match",
 			matcherProto: &v3routepb.HeaderMatcher{
 				Name:                 "X-Test",
 				HeaderMatchSpecifier: &v3routepb.HeaderMatcher_ExactMatch{ExactMatch: "value"},
@@ -47,7 +47,7 @@ func TestFromProto(t *testing.T) {
 			wantMatch: true,
 		},
 		{
-			name: "safe regex match",
+			name: "safe_regex_match",
 			matcherProto: &v3routepb.HeaderMatcher{
 				Name: "X-Test",
 				HeaderMatchSpecifier: &v3routepb.HeaderMatcher_SafeRegexMatch{
@@ -58,7 +58,7 @@ func TestFromProto(t *testing.T) {
 			wantMatch: true,
 		},
 		{
-			name: "safe regex is implicitly anchored",
+			name: "safe_regex_implicitly_anchored",
 			matcherProto: &v3routepb.HeaderMatcher{
 				Name: "X-Test",
 				HeaderMatchSpecifier: &v3routepb.HeaderMatcher_SafeRegexMatch{
@@ -68,7 +68,7 @@ func TestFromProto(t *testing.T) {
 			md: metadata.Pairs("x-test", "value"),
 		},
 		{
-			name: "range match",
+			name: "range_match",
 			matcherProto: &v3routepb.HeaderMatcher{
 				Name: "X-Test",
 				HeaderMatchSpecifier: &v3routepb.HeaderMatcher_RangeMatch{
@@ -79,7 +79,7 @@ func TestFromProto(t *testing.T) {
 			wantMatch: true,
 		},
 		{
-			name: "present match",
+			name: "present_match",
 			matcherProto: &v3routepb.HeaderMatcher{
 				Name:                 "X-Test",
 				HeaderMatchSpecifier: &v3routepb.HeaderMatcher_PresentMatch{PresentMatch: true},
@@ -88,7 +88,7 @@ func TestFromProto(t *testing.T) {
 			wantMatch: true,
 		},
 		{
-			name: "prefix match",
+			name: "prefix_match",
 			matcherProto: &v3routepb.HeaderMatcher{
 				Name:                 "X-Test",
 				HeaderMatchSpecifier: &v3routepb.HeaderMatcher_PrefixMatch{PrefixMatch: "val"},
@@ -97,7 +97,7 @@ func TestFromProto(t *testing.T) {
 			wantMatch: true,
 		},
 		{
-			name: "suffix match",
+			name: "suffix_match",
 			matcherProto: &v3routepb.HeaderMatcher{
 				Name:                 "X-Test",
 				HeaderMatchSpecifier: &v3routepb.HeaderMatcher_SuffixMatch{SuffixMatch: "lue"},
@@ -106,7 +106,7 @@ func TestFromProto(t *testing.T) {
 			wantMatch: true,
 		},
 		{
-			name: "contains match",
+			name: "contains_match",
 			matcherProto: &v3routepb.HeaderMatcher{
 				Name:                 "X-Test",
 				HeaderMatchSpecifier: &v3routepb.HeaderMatcher_ContainsMatch{ContainsMatch: "alu"},
@@ -115,7 +115,7 @@ func TestFromProto(t *testing.T) {
 			wantMatch: true,
 		},
 		{
-			name: "string match",
+			name: "string_match",
 			matcherProto: &v3routepb.HeaderMatcher{
 				Name: "X-Test",
 				HeaderMatchSpecifier: &v3routepb.HeaderMatcher_StringMatch{StringMatch: &v3matcherpb.StringMatcher{
@@ -127,7 +127,7 @@ func TestFromProto(t *testing.T) {
 			wantMatch: true,
 		},
 		{
-			name: "inverted match",
+			name: "inverted_match",
 			matcherProto: &v3routepb.HeaderMatcher{
 				Name:                 "X-Test",
 				HeaderMatchSpecifier: &v3routepb.HeaderMatcher_ExactMatch{ExactMatch: "other"},
@@ -137,7 +137,7 @@ func TestFromProto(t *testing.T) {
 			wantMatch: true,
 		},
 		{
-			name: "inverted match with missing header does not match",
+			name: "inverted_match_missing_header_no_match",
 			matcherProto: &v3routepb.HeaderMatcher{
 				Name:                 "X-Test",
 				HeaderMatchSpecifier: &v3routepb.HeaderMatcher_ExactMatch{ExactMatch: "value"},
@@ -146,7 +146,7 @@ func TestFromProto(t *testing.T) {
 			md: metadata.Pairs("other", "value"),
 		},
 		{
-			name: "inverted present match with missing header matches",
+			name: "inverted_present_match_missing_header_matches",
 			matcherProto: &v3routepb.HeaderMatcher{
 				Name:                 "X-Test",
 				HeaderMatchSpecifier: &v3routepb.HeaderMatcher_PresentMatch{PresentMatch: true},
@@ -156,7 +156,7 @@ func TestFromProto(t *testing.T) {
 			wantMatch: true,
 		},
 		{
-			name: "treat missing header as empty remains unsupported",
+			name: "treat_missing_header_as_empty_unsupported",
 			matcherProto: &v3routepb.HeaderMatcher{
 				Name:                      "X-Test",
 				HeaderMatchSpecifier:      &v3routepb.HeaderMatcher_ExactMatch{},
@@ -165,7 +165,7 @@ func TestFromProto(t *testing.T) {
 			md: metadata.Pairs("other", "value"),
 		},
 		{
-			name: "empty exact match is accepted",
+			name: "empty_exact_match_accepted",
 			matcherProto: &v3routepb.HeaderMatcher{
 				Name:                 "X-Test",
 				HeaderMatchSpecifier: &v3routepb.HeaderMatcher_ExactMatch{},
@@ -174,17 +174,17 @@ func TestFromProto(t *testing.T) {
 			wantMatch: true,
 		},
 		{
-			name:         "nil proto",
+			name:         "nil_proto",
 			matcherProto: nil,
 			wantErr:      "input HeaderMatcher proto is nil",
 		},
 		{
-			name:         "unset matcher type",
+			name:         "unset_matcher_type",
 			matcherProto: &v3routepb.HeaderMatcher{Name: "X-Test"},
 			wantErr:      "header matcher type is not set",
 		},
 		{
-			name: "nil safe regex matcher",
+			name: "nil_safe_regex_matcher",
 			matcherProto: &v3routepb.HeaderMatcher{
 				Name:                 "X-Test",
 				HeaderMatchSpecifier: &v3routepb.HeaderMatcher_SafeRegexMatch{},
@@ -192,7 +192,7 @@ func TestFromProto(t *testing.T) {
 			wantErr: "safe regex header matcher is nil",
 		},
 		{
-			name: "invalid safe regex matcher",
+			name: "invalid_safe_regex_matcher",
 			matcherProto: &v3routepb.HeaderMatcher{
 				Name: "X-Test",
 				HeaderMatchSpecifier: &v3routepb.HeaderMatcher_SafeRegexMatch{
@@ -202,7 +202,7 @@ func TestFromProto(t *testing.T) {
 			wantErr: "safe regex header matcher \"[\" is invalid",
 		},
 		{
-			name: "nil range matcher",
+			name: "nil_range_matcher",
 			matcherProto: &v3routepb.HeaderMatcher{
 				Name:                 "X-Test",
 				HeaderMatchSpecifier: &v3routepb.HeaderMatcher_RangeMatch{},
@@ -210,7 +210,7 @@ func TestFromProto(t *testing.T) {
 			wantErr: "range header matcher is nil",
 		},
 		{
-			name: "empty prefix match is rejected",
+			name: "empty_prefix_match_rejected",
 			matcherProto: &v3routepb.HeaderMatcher{
 				Name:                 "X-Test",
 				HeaderMatchSpecifier: &v3routepb.HeaderMatcher_PrefixMatch{},
@@ -218,7 +218,7 @@ func TestFromProto(t *testing.T) {
 			wantErr: "empty prefix is not allowed in HeaderMatcher",
 		},
 		{
-			name: "empty suffix match is rejected",
+			name: "empty_suffix_match_rejected",
 			matcherProto: &v3routepb.HeaderMatcher{
 				Name:                 "X-Test",
 				HeaderMatchSpecifier: &v3routepb.HeaderMatcher_SuffixMatch{},
@@ -226,7 +226,7 @@ func TestFromProto(t *testing.T) {
 			wantErr: "empty suffix is not allowed in HeaderMatcher",
 		},
 		{
-			name: "empty contains match is rejected",
+			name: "empty_contains_match_rejected",
 			matcherProto: &v3routepb.HeaderMatcher{
 				Name:                 "X-Test",
 				HeaderMatchSpecifier: &v3routepb.HeaderMatcher_ContainsMatch{},
@@ -234,7 +234,7 @@ func TestFromProto(t *testing.T) {
 			wantErr: "empty contains is not allowed in HeaderMatcher",
 		},
 		{
-			name: "nil string matcher",
+			name: "nil_string_matcher",
 			matcherProto: &v3routepb.HeaderMatcher{
 				Name:                 "X-Test",
 				HeaderMatchSpecifier: &v3routepb.HeaderMatcher_StringMatch{},
@@ -242,7 +242,7 @@ func TestFromProto(t *testing.T) {
 			wantErr: "string header matcher is nil",
 		},
 		{
-			name: "invalid string matcher",
+			name: "invalid_string_matcher",
 			matcherProto: &v3routepb.HeaderMatcher{
 				Name: "X-Test",
 				HeaderMatchSpecifier: &v3routepb.HeaderMatcher_StringMatch{
