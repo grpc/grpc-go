@@ -19,6 +19,7 @@
 package header_test
 
 import (
+	"strings"
 	"testing"
 
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
@@ -34,7 +35,7 @@ func TestFromProto(t *testing.T) {
 		matcherProto *v3routepb.HeaderMatcher
 		md           metadata.MD
 		wantMatch    bool
-		wantErr      bool
+		wantErr      string
 	}{
 		{
 			name: "exact match",
@@ -175,12 +176,12 @@ func TestFromProto(t *testing.T) {
 		{
 			name:         "nil proto",
 			matcherProto: nil,
-			wantErr:      true,
+			wantErr:      "input HeaderMatcher proto is nil",
 		},
 		{
 			name:         "unset matcher type",
 			matcherProto: &v3routepb.HeaderMatcher{Name: "X-Test"},
-			wantErr:      true,
+			wantErr:      "header matcher type is not set",
 		},
 		{
 			name: "nil safe regex matcher",
@@ -188,7 +189,7 @@ func TestFromProto(t *testing.T) {
 				Name:                 "X-Test",
 				HeaderMatchSpecifier: &v3routepb.HeaderMatcher_SafeRegexMatch{},
 			},
-			wantErr: true,
+			wantErr: "safe regex header matcher is nil",
 		},
 		{
 			name: "invalid safe regex matcher",
@@ -198,7 +199,7 @@ func TestFromProto(t *testing.T) {
 					SafeRegexMatch: &v3matcherpb.RegexMatcher{Regex: "["},
 				},
 			},
-			wantErr: true,
+			wantErr: "safe regex header matcher \"[\" is invalid",
 		},
 		{
 			name: "nil range matcher",
@@ -206,7 +207,7 @@ func TestFromProto(t *testing.T) {
 				Name:                 "X-Test",
 				HeaderMatchSpecifier: &v3routepb.HeaderMatcher_RangeMatch{},
 			},
-			wantErr: true,
+			wantErr: "range header matcher is nil",
 		},
 		{
 			name: "empty prefix match is rejected",
@@ -214,7 +215,7 @@ func TestFromProto(t *testing.T) {
 				Name:                 "X-Test",
 				HeaderMatchSpecifier: &v3routepb.HeaderMatcher_PrefixMatch{},
 			},
-			wantErr: true,
+			wantErr: "empty prefix is not allowed in HeaderMatcher",
 		},
 		{
 			name: "empty suffix match is rejected",
@@ -222,7 +223,7 @@ func TestFromProto(t *testing.T) {
 				Name:                 "X-Test",
 				HeaderMatchSpecifier: &v3routepb.HeaderMatcher_SuffixMatch{},
 			},
-			wantErr: true,
+			wantErr: "empty suffix is not allowed in HeaderMatcher",
 		},
 		{
 			name: "empty contains match is rejected",
@@ -230,7 +231,7 @@ func TestFromProto(t *testing.T) {
 				Name:                 "X-Test",
 				HeaderMatchSpecifier: &v3routepb.HeaderMatcher_ContainsMatch{},
 			},
-			wantErr: true,
+			wantErr: "empty contains is not allowed in HeaderMatcher",
 		},
 		{
 			name: "nil string matcher",
@@ -238,7 +239,7 @@ func TestFromProto(t *testing.T) {
 				Name:                 "X-Test",
 				HeaderMatchSpecifier: &v3routepb.HeaderMatcher_StringMatch{},
 			},
-			wantErr: true,
+			wantErr: "string header matcher is nil",
 		},
 		{
 			name: "invalid string matcher",
@@ -248,21 +249,24 @@ func TestFromProto(t *testing.T) {
 					StringMatch: &v3matcherpb.StringMatcher{},
 				},
 			},
-			wantErr: true,
+			wantErr: "string header matcher is invalid: unrecognized string matcher",
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			got, err := headermatcher.FromProto(test.matcherProto)
-			if (err != nil) != test.wantErr {
-				t.Fatalf("headermatcher.FromProto(%+v) error = %v, wantErr %v", test.matcherProto, err, test.wantErr)
-			}
-			if test.wantErr {
+			if test.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), test.wantErr) {
+					t.Fatalf("headermatcher.FromProto(%+v) error = %v, want substring %q", test.matcherProto, err, test.wantErr)
+				}
 				if got != nil {
 					t.Fatalf("headermatcher.FromProto(%+v) returned matcher %v with error; want nil", test.matcherProto, got)
 				}
 				return
+			}
+			if err != nil {
+				t.Fatalf("headermatcher.FromProto(%+v) failed: %v", test.matcherProto, err)
 			}
 			if gotMatch := got.Match(test.md); gotMatch != test.wantMatch {
 				t.Errorf("headermatcher.FromProto(%+v).Match(%v) = %v, want %v", test.matcherProto, test.md, gotMatch, test.wantMatch)
