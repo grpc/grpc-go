@@ -26,6 +26,7 @@ import (
 	"net"
 	"net/url"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -896,71 +897,76 @@ func (s) TestNewChainEngine(t *testing.T) {
 	}
 }
 
-// TestHeaderMatcherSharedParsing verifies that the RBAC engine constructs
-// header matchers through the shared proto parser, without relying on the HTTP
-// filter's A41 preprocessing.
-func (s) TestHeaderMatcherSharedParsing(t *testing.T) {
-	configWithHeader := func(header *v3routepb.HeaderMatcher) *v3rbacpb.RBAC {
-		return &v3rbacpb.RBAC{
-			Action: v3rbacpb.RBAC_ALLOW,
-			Policies: map[string]*v3rbacpb.Policy{
-				"header-policy": {
-					Permissions: []*v3rbacpb.Permission{
-						{Rule: &v3rbacpb.Permission_Any{Any: true}},
-					},
-					Principals: []*v3rbacpb.Principal{
-						{Identifier: &v3rbacpb.Principal_Header{Header: header}},
-					},
+func configWithHeader(header *v3routepb.HeaderMatcher) *v3rbacpb.RBAC {
+	return &v3rbacpb.RBAC{
+		Action: v3rbacpb.RBAC_ALLOW,
+		Policies: map[string]*v3rbacpb.Policy{
+			"header-policy": {
+				Permissions: []*v3rbacpb.Permission{
+					{Rule: &v3rbacpb.Permission_Any{Any: true}},
+				},
+				Principals: []*v3rbacpb.Principal{
+					{Identifier: &v3rbacpb.Principal_Header{Header: header}},
 				},
 			},
-		}
+		},
 	}
+}
 
-	t.Run("mixed-case name", func(t *testing.T) {
-		engine, err := NewChainEngine([]*v3rbacpb.RBAC{configWithHeader(&v3routepb.HeaderMatcher{
-			Name:                 "X-Role",
-			HeaderMatchSpecifier: &v3routepb.HeaderMatcher_ExactMatch{ExactMatch: "admin"},
-		})}, "")
-		if err != nil {
-			t.Fatalf("NewChainEngine() failed: %v", err)
-		}
-		if name, ok := engine.chainedEngines[0].findMatchingPolicy(&rpcData{
-			md: metadata.Pairs("x-role", "admin"),
-		}); !ok || name != "header-policy" {
-			t.Fatalf("findMatchingPolicy() = (%q, %v), want (%q, true)", name, ok, "header-policy")
-		}
-	})
+// TestHeaderMatcherCaseInsensitiveName verifies header name normalization without
+// the HTTP filter's A41 preprocessing.
+func (s) TestHeaderMatcherCaseInsensitiveName(t *testing.T) {
+	engine, err := NewChainEngine([]*v3rbacpb.RBAC{configWithHeader(&v3routepb.HeaderMatcher{
+		Name:                 "X-Role",
+		HeaderMatchSpecifier: &v3routepb.HeaderMatcher_ExactMatch{ExactMatch: "admin"},
+	})}, "")
+	if err != nil {
+		t.Fatalf("NewChainEngine() failed: %v", err)
+	}
+	if name, ok := engine.chainedEngines[0].findMatchingPolicy(&rpcData{
+		md: metadata.Pairs("x-role", "admin"),
+	}); !ok || name != "header-policy" {
+		t.Fatalf("findMatchingPolicy() = (%q, %v), want (%q, true)", name, ok, "header-policy")
+	}
+}
 
+// TestHeaderMatcherInvalidConfig verifies that the RBAC engine rejects invalid
+// header matchers through the shared proto parser.
+func (s) TestHeaderMatcherInvalidConfig(t *testing.T) {
 	for _, test := range []struct {
-		name   string
-		header *v3routepb.HeaderMatcher
+		name    string
+		header  *v3routepb.HeaderMatcher
+		wantErr string
 	}{
 		{
-			name: "empty prefix",
+			name: "empty_prefix",
 			header: &v3routepb.HeaderMatcher{
 				Name:                 "x-role",
 				HeaderMatchSpecifier: &v3routepb.HeaderMatcher_PrefixMatch{},
 			},
+			wantErr: "empty prefix is not allowed in HeaderMatcher",
 		},
 		{
-			name: "empty suffix",
+			name: "empty_suffix",
 			header: &v3routepb.HeaderMatcher{
 				Name:                 "x-role",
 				HeaderMatchSpecifier: &v3routepb.HeaderMatcher_SuffixMatch{},
 			},
+			wantErr: "empty suffix is not allowed in HeaderMatcher",
 		},
 		{
-			name: "empty contains",
+			name: "empty_contains",
 			header: &v3routepb.HeaderMatcher{
 				Name:                 "x-role",
 				HeaderMatchSpecifier: &v3routepb.HeaderMatcher_ContainsMatch{},
 			},
+			wantErr: "empty contains is not allowed in HeaderMatcher",
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			_, err := NewChainEngine([]*v3rbacpb.RBAC{configWithHeader(test.header)}, "")
-			if err == nil {
-				t.Fatal("NewChainEngine() succeeded, want error")
+			if err == nil || !strings.Contains(err.Error(), test.wantErr) {
+				t.Fatalf("NewChainEngine() error = %v, want substring %q", err, test.wantErr)
 			}
 		})
 	}
