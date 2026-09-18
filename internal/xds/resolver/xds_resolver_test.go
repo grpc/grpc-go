@@ -723,7 +723,6 @@ func (s) TestResolverRemovedWithRPCs(t *testing.T) {
 func commitRPC(res *iresolver.RPCConfig) {
 	onCommit := rinternal.OnCommittedFuncFromContext(res.Context)
 	onCommit()
-
 }
 
 // Tests the case where resources returned by the management server are removed.

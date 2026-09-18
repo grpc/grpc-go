@@ -274,14 +274,14 @@ func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RP
 	return config, nil
 }
 
-type onCommitedFuncCtxKey struct{}
+type onCommittedFuncCtxKey struct{}
 
 func newContextWithOnCommittedFunc(ctx context.Context, onCommitted func()) context.Context {
-	return context.WithValue(ctx, onCommitedFuncCtxKey{}, onCommitted)
+	return context.WithValue(ctx, onCommittedFuncCtxKey{}, onCommitted)
 }
 
 func onCommittedFuncFromContext(ctx context.Context) func() {
-	if onCommitted, ok := ctx.Value(onCommitedFuncCtxKey{}).(func()); ok {
+	if onCommitted, ok := ctx.Value(onCommittedFuncCtxKey{}).(func()); ok {
 		return onCommitted
 	}
 	return nil
