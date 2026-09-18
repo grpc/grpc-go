@@ -48,3 +48,36 @@ etc.) rather than a single one.
 
 See [Documentation/benchmark.md](../Documentation/benchmark.md) for the
 full flag reference and advanced usage.
+
+## Comparing performance before and after your change
+
+If your PR is meant to improve performance, here's how to demonstrate that
+in the PR description.
+
+1. On a clean checkout of the base branch (e.g. `master`), run the benchmark
+   and save the result to a file:
+
+   `go run benchmark/benchmain/main.go -benchtime=10s -workloads=all -resultFile=basePerf`
+
+2. Check out your branch with the change applied, and run the same
+   benchmark, saving to a different file:
+
+   `go run benchmark/benchmain/main.go -benchtime=10s -workloads=all -resultFile=curPerf`
+
+3. To view a single result on its own:
+
+   `go run benchmark/benchresult/main.go curPerf`
+
+4. To compare the two and see how performance changed:
+
+   `go run benchmark/benchresult/main.go basePerf curPerf`
+
+   This prints a diff-style report (latency, throughput, allocations, etc.)
+   between the two runs. Paste that output into your PR description as
+   evidence of the improvement (or to confirm no regression).
+
+Both `basePerf` and `curPerf` are plain result files produced by
+`-resultFile`; you can name them anything, as long as you're consistent
+between steps. See [Documentation/benchmark.md](../Documentation/benchmark.md)
+for the full set of `benchmain` flags (workload type, payload size,
+compression, etc.) you can vary between runs.
