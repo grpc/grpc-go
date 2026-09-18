@@ -569,7 +569,7 @@ func (s) TestResolverGoodServiceUpdate(t *testing.T) {
 				}
 				cluster := clustermanager.PickedCluster(res.Context)
 				pickedClusters[cluster] = true
-				res.OnCommitted()
+				commitRPC(res)
 			}
 			if !cmp.Equal(pickedClusters, tt.wantClusters) {
 				t.Errorf("Picked clusters: %v; want: %v", pickedClusters, tt.wantClusters)
@@ -702,7 +702,7 @@ func (s) TestResolverRemovedWithRPCs(t *testing.T) {
 
 	// "Finish the RPC"; this could cause a panic if the resolver doesn't
 	// handle it correctly.
-	res.OnCommitted()
+	commitRPC(res)
 
 	// Add the resources back.
 	resources.Listeners = oldListeners
@@ -717,7 +717,13 @@ func (s) TestResolverRemovedWithRPCs(t *testing.T) {
 		t.Fatalf("cs.SelectConfig(): %v", err)
 	}
 
-	res.OnCommitted()
+	commitRPC(res)
+}
+
+func commitRPC(res *iresolver.RPCConfig) {
+	onCommit := rinternal.OnCommittedFuncFromContext(res.Context)
+	onCommit()
+
 }
 
 // Tests the case where resources returned by the management server are removed.
@@ -752,7 +758,7 @@ func (s) TestResolverRemovedResource(t *testing.T) {
 
 	// "Finish the RPC"; this could cause a panic if the resolver doesn't
 	// handle it correctly.
-	res.OnCommitted()
+	commitRPC(res)
 
 	// Delete the listener resource on the management server, resulting in a
 	// resource-not-found error from the xDS client.
@@ -926,7 +932,7 @@ func (s) TestResolverMaxStreamDuration(t *testing.T) {
 				t.Errorf("cs.SelectConfig(%v): %v", req, err)
 				return
 			}
-			res.OnCommitted()
+			commitRPC(res)
 			got := res.MethodConfig.Timeout
 			if !cmp.Equal(got, tc.want) {
 				t.Errorf("For method %q: res.MethodConfig.Timeout = %v; want %v", tc.method, got, tc.want)
@@ -1034,7 +1040,7 @@ func (s) TestResolverWRR(t *testing.T) {
 			t.Fatalf("cs.SelectConfig(): %v", err)
 		}
 		picks[clustermanager.PickedCluster(res.Context)]++
-		res.OnCommitted()
+		commitRPC(res)
 	}
 	want := map[string]int{"cluster:A": 75, "cluster:B": 25}
 	if !cmp.Equal(picks, want) {
@@ -1364,7 +1370,7 @@ func (s) TestResolverKeepWatchOpen_ActiveRPCs(t *testing.T) {
 	verifyUpdateFromResolver(ctx, t, stateCh, wantServiceRaw)
 
 	// Finish RPC (Drops Ref to ClusterA).
-	res.OnCommitted()
+	commitRPC(res)
 
 	// ONLY cluster B should be requested now that there are no references to
 	// cluster A.
@@ -1379,7 +1385,7 @@ func (s) TestResolverKeepWatchOpen_ActiveRPCs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("cs.SelectConfig(): %v", err)
 	}
-	res.OnCommitted()
+	commitRPC(res)
 }
 
 // TestResolver_XDSConfigInRPCContext verifies that the xDS resolver's config

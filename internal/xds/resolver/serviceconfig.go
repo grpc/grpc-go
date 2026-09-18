@@ -19,6 +19,7 @@
 package resolver
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"math/bits"
@@ -227,7 +228,7 @@ func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RP
 		// Add a ref to the selected cluster, as this RPC needs this
 		// cluster until it is committed.
 		info.refCount.Add(1)
-		config.OnCommitted = sync.OnceFunc(func() {
+		config.Context = newContextWithOnCommittedFunc(config.Context, sync.OnceFunc(func() {
 			if v := info.refCount.Add(-1); v == 0 {
 				// We call unsubscribe rather than sendNewServiceConfig to
 				// prevent redundant updates. If the reference count in the
@@ -240,12 +241,12 @@ func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RP
 			// Decrement the refcount of the route cluster and close the interceptor
 			// if refcount goes to zero.
 			rc.Decrement()
-		})
+		}))
 	} else if info, ok := cs.plugins[cluster.name]; ok {
 		// Add a ref to the selected plugin, as this RPC needs this
 		// plugin until it is committed.
 		info.refCount.Add(1)
-		config.OnCommitted = sync.OnceFunc(func() {
+		config.Context = newContextWithOnCommittedFunc(config.Context, sync.OnceFunc(func() {
 			if v := info.refCount.Add(-1); v == 0 {
 				// This entry will be removed from activePlugins when
 				// producing a new service config update.
@@ -254,7 +255,7 @@ func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RP
 			// Decrement the refcount of the route cluster and close the interceptor
 			// if refcount goes to zero.
 			rc.Decrement()
-		})
+		}))
 	} else {
 		// This should be unreachable because all route clusters are normalized
 		// into cs.clusters or cs.plugins during config selector creation.
@@ -271,6 +272,19 @@ func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RP
 	}
 
 	return config, nil
+}
+
+type onCommitedFuncCtxKey struct{}
+
+func newContextWithOnCommittedFunc(ctx context.Context, onCommitted func()) context.Context {
+	return context.WithValue(ctx, onCommitedFuncCtxKey{}, onCommitted)
+}
+
+func onCommittedFuncFromContext(ctx context.Context) func() {
+	if onCommitted, ok := ctx.Value(onCommitedFuncCtxKey{}).(func()); ok {
+		return onCommitted
+	}
+	return nil
 }
 
 func retryConfigToPolicy(config *xdsresource.RetryConfig) *serviceconfig.RetryPolicy {
