@@ -112,6 +112,22 @@ func waitForResourceNames(ctx context.Context, resourceNamesCh chan []string, wa
 	return nil
 }
 
+// isAggregatePriorityConfig reports whether ccs contains a priority.LBConfig
+// for an aggregate cluster (whose children are outlier_detection policies) as
+// opposed to a leaf cluster (whose children are locality-picking policies).
+func isAggregatePriorityConfig(ccs balancer.ClientConnState) bool {
+	pCfg, ok := ccs.BalancerConfig.(*priority.LBConfig)
+	if !ok {
+		return false
+	}
+	for _, child := range pCfg.Children {
+		if child.Config != nil && child.Config.Name == outlierdetection.Name {
+			return true
+		}
+	}
+	return false
+}
+
 // Registers a wrapped priority LB policy (child policy of the cds LB
 // policy) for the duration of this test that retains all the functionality of
 // the former, but makes certain events available for inspection by the test.
@@ -138,9 +154,13 @@ func registerWrappedPriorityPolicy(ctx context.Context, t *testing.T) (chan serv
 			return priorityBuilder.(balancer.ConfigParser).ParseConfig(lbCfg)
 		},
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
-			select {
-			case lbCfgCh <- ccs.BalancerConfig:
-			case <-ctx.Done():
+			// Ignore leaf priority configs here, as they are already captured
+			// and validated by the outlier_detection wrapper.
+			if isAggregatePriorityConfig(ccs) {
+				select {
+				case lbCfgCh <- ccs.BalancerConfig:
+				case <-ctx.Done():
+				}
 			}
 			return bd.ChildBalancer.UpdateClientConnState(ccs)
 		},
