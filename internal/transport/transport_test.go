@@ -788,8 +788,8 @@ func (s) TestClientTransportDrainsAfterStreamIDExhausted(t *testing.T) {
 }
 
 // Tests that a truncated HEADERS frame for a new stream properly advances
-// maxStreamID, while an oversized frame on an existing stream does not
-// corrupt maxStreamID.
+// maxStreamID, while an oversized frame on an illegal/lower stream is rejected
+// as a protocol error and preserves maxStreamID.
 func (s) TestServerOperateHeadersTruncatedStreamIDMonotonicity(t *testing.T) {
 	h2Srv := newTestHTTP2Server()
 	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -809,10 +809,10 @@ func (s) TestServerOperateHeadersTruncatedStreamIDMonotonicity(t *testing.T) {
 			wantMaxStreamID: 3,
 		},
 		{
-			name:            "truncated_header_lower_stream_id_preserves_max_stream_id",
+			name:            "truncated_header_lower_stream_id_rejected_as_protocol_error",
 			streamID:        1,
 			truncated:       true,
-			wantErr:         false,
+			wantErr:         true,
 			wantMaxStreamID: 3,
 		},
 		{

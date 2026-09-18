@@ -380,13 +380,15 @@ func (t *http2Server) operateHeaders(ctx context.Context, frame *http2.MetaHeade
 	defer t.maxStreamMu.Unlock()
 
 	streamID := frame.Header().StreamID
+	if streamID%2 != 1 || streamID <= t.maxStreamID {
+		// illegal gRPC stream id.
+		return fmt.Errorf("received an illegal stream id: %v. headers frame: %+v", streamID, frame)
+	}
+	t.maxStreamID = streamID
 
 	// frame.Truncated is set to true when framer detects that the current header
 	// list size hits MaxHeaderListSize limit.
 	if frame.Truncated {
-		if streamID > t.maxStreamID && streamID%2 == 1 {
-			t.maxStreamID = streamID
-		}
 		t.controlBuf.put(&cleanupStream{
 			streamID: streamID,
 			rst:      true,
@@ -395,12 +397,6 @@ func (t *http2Server) operateHeaders(ctx context.Context, frame *http2.MetaHeade
 		})
 		return nil
 	}
-
-	if streamID%2 != 1 || streamID <= t.maxStreamID {
-		// illegal gRPC stream id.
-		return fmt.Errorf("received an illegal stream id: %v. headers frame: %+v", streamID, frame)
-	}
-	t.maxStreamID = streamID
 
 	s := &ServerStream{
 		Stream: Stream{
