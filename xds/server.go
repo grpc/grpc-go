@@ -45,6 +45,16 @@ var (
 	}
 )
 
+func init() {
+	server.GetGRPCServer = func(s *GRPCServer) *grpc.Server {
+		if s == nil {
+			return nil
+		}
+		gs, _ := s.gs.(*grpc.Server)
+		return gs
+	}
+}
+
 // grpcServer contains methods from grpc.Server which are used by the
 // GRPCServer type here. This is useful for overriding in unit tests.
 type grpcServer interface {
