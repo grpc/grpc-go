@@ -649,7 +649,7 @@ func (t *http2Server) HandleStreams(ctx context.Context, handle func(*ServerStre
 	}()
 	for {
 		t.controlBuf.throttle()
-		frame, err := t.framer.readFrame()
+		frame, err := t.framer.readServerFrame()
 		atomic.StoreInt64(&t.lastRead, time.Now().UnixNano())
 		if err != nil {
 			if se, ok := err.(http2.StreamError); ok {
