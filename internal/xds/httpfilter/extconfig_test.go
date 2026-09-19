@@ -23,13 +23,17 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/grpc/internal/xds/grpcservice"
 	"google.golang.org/grpc/internal/xds/matcher"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/wrapperspb"
+
+	xdscreds "google.golang.org/grpc/internal/xds/credentials"
 
 	v3mutationpb "github.com/envoyproxy/go-control-plane/envoy/config/common/mutation_rules/v3"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -149,6 +153,18 @@ func (s) TestHeaderMutationRules_ApplyAdditons(t *testing.T) {
 				{Header: &v3corepb.HeaderValue{Key: "a", Value: "1"}, AppendAction: v3corepb.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD},
 			},
 			inputMD: metadata.MD{},
+			wantMD:  metadata.MD{},
+			wantErr: true,
+		},
+		{
+			name: "DisallowExprMatch_DisallowIsErrorIsTrue_NoPartialMutation",
+			hmr:  &HeaderMutationRules{DisallowExpr: regexp.MustCompile("^a1$"), DisallowIsError: true},
+			hvos: []*v3corepb.HeaderValueOption{
+				{Header: &v3corepb.HeaderValue{Key: "k1", Value: "v1"}, AppendAction: v3corepb.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD},
+				{Header: &v3corepb.HeaderValue{Key: "a1", Value: "v1"}, AppendAction: v3corepb.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD},
+			},
+			inputMD: metadata.MD{"initial": []string{"val"}},
+			wantMD:  metadata.MD{"initial": []string{"val"}},
 			wantErr: true,
 		},
 		{
@@ -376,11 +392,10 @@ func (s) TestHeaderMutationRules_ApplyAdditons(t *testing.T) {
 			if err := tt.hmr.ApplyAdditions(tt.hvos, tt.inputMD); (err != nil) != tt.wantErr {
 				t.Fatalf("ApplyAdditions() error = %v, wantErr %v", err, tt.wantErr)
 			}
-			if tt.wantErr {
-				return
-			}
-			if diff := cmp.Diff(tt.wantMD, tt.inputMD); diff != "" {
-				t.Fatalf("ApplyAdditions() returned diff in metadata (-want +got):\n%s", diff)
+			if tt.wantMD != nil {
+				if diff := cmp.Diff(tt.wantMD, tt.inputMD); diff != "" {
+					t.Fatalf("ApplyAdditions() returned diff in metadata (-want +got):\n%s", diff)
+				}
 			}
 		})
 	}
@@ -421,6 +436,15 @@ func (s) TestHeaderMutationRules_ApplyRemovals(t *testing.T) {
 			hmr:             &HeaderMutationRules{DisallowExpr: regexp.MustCompile("^a$"), DisallowIsError: true},
 			headersToRemove: []string{"a"},
 			inputMD:         metadata.MD{"a": []string{"1"}},
+			wantMD:          metadata.MD{"a": []string{"1"}},
+			wantErr:         true,
+		},
+		{
+			name:            "DisallowExprMatch_DisallowIsErrorIsTrue_NoPartialMutation",
+			hmr:             &HeaderMutationRules{DisallowExpr: regexp.MustCompile("^a1$"), DisallowIsError: true},
+			headersToRemove: []string{"k1", "a1"},
+			inputMD:         metadata.MD{"k1": []string{"v1"}, "a1": []string{"v1"}},
+			wantMD:          metadata.MD{"k1": []string{"v1"}, "a1": []string{"v1"}},
 			wantErr:         true,
 		},
 		{
@@ -521,11 +545,10 @@ func (s) TestHeaderMutationRules_ApplyRemovals(t *testing.T) {
 			if err := tt.hmr.ApplyRemovals(tt.headersToRemove, tt.inputMD); (err != nil) != tt.wantErr {
 				t.Fatalf("ApplyRemovals() error = %v, wantErr %v", err, tt.wantErr)
 			}
-			if tt.wantErr {
-				return
-			}
-			if diff := cmp.Diff(tt.wantMD, tt.inputMD); diff != "" {
-				t.Fatalf("ApplyRemovals() returned diff in metadata (-want +got):\n%s", diff)
+			if tt.wantMD != nil {
+				if diff := cmp.Diff(tt.wantMD, tt.inputMD); diff != "" {
+					t.Fatalf("ApplyRemovals() returned diff in metadata (-want +got):\n%s", diff)
+				}
 			}
 		})
 	}
@@ -706,6 +729,55 @@ func (s) TestConstructHeaderMap(t *testing.T) {
 			}
 			if diff := cmp.Diff(tt.wantHeaderMap, gotHeaderMap, protocmp.Transform()); diff != "" {
 				t.Fatalf("constructHeaderMap() mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+// Tests that channel sharing considers the target and the credential
+// identities, and ignores the per-RPC timeout and initial metadata.
+func (s) TestSharesChannel(t *testing.T) {
+	insecureCreds := func() *xdscreds.ChannelCreds {
+		return xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "insecure"}, nil)
+	}
+	const target = "dns:///side-channel:443"
+
+	tests := []struct {
+		name string
+		a, b *grpcservice.Config
+		want bool
+	}{
+		{
+			name: "equal_identities_share_despite_timeout_and_metadata",
+			a:    &grpcservice.Config{TargetURI: target, ChannelCredentials: insecureCreds(), Timeout: time.Second},
+			b:    &grpcservice.Config{TargetURI: target, ChannelCredentials: insecureCreds(), InitialMetadata: metadata.Pairs("k", "v")},
+			want: true,
+		},
+		{
+			name: "different_targets",
+			a:    &grpcservice.Config{TargetURI: target, ChannelCredentials: insecureCreds()},
+			b:    &grpcservice.Config{TargetURI: "dns:///other:443", ChannelCredentials: insecureCreds()},
+			want: false,
+		},
+		{
+			name: "different_channel_creds",
+			a:    &grpcservice.Config{TargetURI: target, ChannelCredentials: insecureCreds()},
+			b:    &grpcservice.Config{TargetURI: target, ChannelCredentials: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "other"}, nil)},
+			want: false,
+		},
+		{
+			name: "different_call_creds",
+			a:    &grpcservice.Config{TargetURI: target, ChannelCredentials: insecureCreds()},
+			b: &grpcservice.Config{TargetURI: target, ChannelCredentials: insecureCreds(), CallCredentials: []*xdscreds.CallCreds{
+				xdscreds.NewCallCreds(nil, xdscreds.Identity{Type: "access_token"}, nil),
+			}},
+			want: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := SharesChannel(tt.a, tt.b); got != tt.want {
+				t.Errorf("SharesChannel() = %v, want %v", got, tt.want)
 			}
 		})
 	}
