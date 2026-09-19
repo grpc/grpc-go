@@ -34,6 +34,7 @@ import (
 	"os"
 	"reflect"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -6088,10 +6089,7 @@ func testServerMaxHeaderListSizeClientIntentionalViolation(t *testing.T, e env) 
 	defer te.tearDown()
 
 	te.withServerTester(func(st *serverTester) {
-		val := make([]string, 512)
-		for i := range val {
-			val[i] = "a"
-		}
+		val := slices.Repeat([]string{"a"}, 512)
 		st.writeHeaders(http2.HeadersFrameParam{
 			StreamID: 1,
 			BlockFragment: st.encodeHeader(
