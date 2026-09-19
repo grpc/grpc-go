@@ -25,6 +25,30 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
+func TestHeaderMatcherConstructorsLowercaseKeys(t *testing.T) {
+	tests := []struct {
+		name    string
+		matcher HeaderMatcher
+		md      metadata.MD
+	}{
+		{name: "exact", matcher: NewHeaderExactMatcher("X-Test", "value", false), md: metadata.Pairs("x-test", "value")},
+		{name: "regex", matcher: NewHeaderRegexMatcher("X-Test", regexp.MustCompile("value"), false), md: metadata.Pairs("x-test", "value")},
+		{name: "range", matcher: NewHeaderRangeMatcher("X-Test", 1, 10, false), md: metadata.Pairs("x-test", "5")},
+		{name: "present", matcher: NewHeaderPresentMatcher("X-Test", true, false), md: metadata.Pairs("x-test", "value")},
+		{name: "prefix", matcher: NewHeaderPrefixMatcher("X-Test", "val", false), md: metadata.Pairs("x-test", "value")},
+		{name: "suffix", matcher: NewHeaderSuffixMatcher("X-Test", "lue", false), md: metadata.Pairs("x-test", "value")},
+		{name: "contains", matcher: NewHeaderContainsMatcher("X-Test", "alu", false), md: metadata.Pairs("x-test", "value")},
+		{name: "string", matcher: NewHeaderStringMatcher("X-Test", NewExactStringMatcher("value", false), false), md: metadata.Pairs("x-test", "value")},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if !test.matcher.Match(test.md) {
+				t.Errorf("matcher with mixed-case key did not match lowercase metadata: %v", test.matcher)
+			}
+		})
+	}
+}
+
 func TestHeaderExactMatcherMatch(t *testing.T) {
 	tests := []struct {
 		name       string

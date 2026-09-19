@@ -123,7 +123,7 @@ type Route struct {
 	// Indicates if prefix/path matching should be case insensitive. The default
 	// is false (case sensitive).
 	CaseInsensitive bool
-	Headers         []*HeaderMatcher
+	Headers         []matcher.HeaderMatcher
 	Fraction        *uint32
 
 	HashPolicies []*HashPolicy
@@ -164,21 +164,4 @@ type WeightedCluster struct {
 	// HTTPFilterConfigOverride contains any HTTP filter config overrides for
 	// the weighted cluster which may be present.
 	HTTPFilterConfigOverride map[string]httpfilter.FilterConfig
-}
-
-// HeaderMatcher represents header matchers. Exact, prefix, suffix and contains
-// matches are represented as a StringMatch.
-type HeaderMatcher struct {
-	Name         string
-	InvertMatch  *bool
-	RegexMatch   *regexp.Regexp
-	RangeMatch   *Int64Range
-	PresentMatch *bool
-	StringMatch  *matcher.StringMatcher
-}
-
-// Int64Range is a range for header range match.
-type Int64Range struct {
-	Start int64
-	End   int64
 }
