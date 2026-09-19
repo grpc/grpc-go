@@ -75,14 +75,14 @@ type xdsClusterManagerConfig struct {
 // serviceConfigJSON produces a service config in JSON format that contains LB
 // policy config for the "xds_cluster_manager" LB policy, with entries in the
 // children map for all active clusters.
-func serviceConfigJSON(activeClusters map[string]*clusterInfo, activePlugins map[string]*clusterInfo) []byte {
+func serviceConfigJSON(activeClusters, activePlugins map[string]*grpcsync.RefCounted[*clusterInfo]) []byte {
 	// Generate children (all entries in activeClusters).
 	children := make(map[string]xdsChildConfig)
 	for cluster, ci := range activeClusters {
-		children[cluster] = ci.cfg
+		children[cluster] = ci.Value().cfg
 	}
 	for plugin, ci := range activePlugins {
-		children[plugin] = ci.cfg
+		children[plugin] = ci.Value().cfg
 	}
 
 	sc := serviceConfig{
@@ -109,6 +109,10 @@ type virtualHost struct {
 type routeCluster struct {
 	name        string                       // Name of the cluster.
 	interceptor httpfilter.ClientInterceptor // HTTP filters to run for RPCs matching this route.
+	// info is the resolver-wide entry for this cluster, shared by every route
+	// that references it. An RPC routed here holds a reference on it until the
+	// RPC is committed.
+	info *grpcsync.RefCounted[*clusterInfo]
 }
 
 type route struct {
@@ -159,8 +163,8 @@ type configSelector struct {
 	// Configuration received from the xDS management server.
 	virtualHost      virtualHost
 	routes           []route
-	clusters         map[string]*clusterInfo
-	plugins          map[string]*clusterInfo
+	clusters         map[string]*grpcsync.RefCounted[*clusterInfo]
+	plugins          map[string]*grpcsync.RefCounted[*clusterInfo]
 	httpFilterConfig []xdsresource.HTTPFilter
 	xdsConfig        *xdsresource.XDSConfig
 }
@@ -223,43 +227,16 @@ func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RP
 	// Add a ref to the selected cluster to keep the interceptors alive until RPC
 	// is committed.
 	rc.Increment()
-	if info, ok := cs.clusters[cluster.name]; ok {
-		// Add a ref to the selected cluster, as this RPC needs this
-		// cluster until it is committed.
-		info.refCount.Add(1)
-		config.OnCommitted = sync.OnceFunc(func() {
-			if v := info.refCount.Add(-1); v == 0 {
-				// We call unsubscribe rather than sendNewServiceConfig to
-				// prevent redundant updates. If the reference count in the
-				// dependency manager drops to zero, it will automatically
-				// trigger a service config update with this cluster
-				// removed. Calling unsubscribe allows the dependency
-				// manager to handle the update flow once and for all.
-				info.unsubscribe()
-			}
-			// Decrement the refcount of the route cluster and close the interceptor
-			// if refcount goes to zero.
-			rc.Decrement()
-		})
-	} else if info, ok := cs.plugins[cluster.name]; ok {
-		// Add a ref to the selected plugin, as this RPC needs this
-		// plugin until it is committed.
-		info.refCount.Add(1)
-		config.OnCommitted = sync.OnceFunc(func() {
-			if v := info.refCount.Add(-1); v == 0 {
-				// This entry will be removed from activePlugins when
-				// producing a new service config update.
-				cs.sendNewServiceConfig()
-			}
-			// Decrement the refcount of the route cluster and close the interceptor
-			// if refcount goes to zero.
-			rc.Decrement()
-		})
-	} else {
-		// This should be unreachable because all route clusters are normalized
-		// into cs.clusters or cs.plugins during config selector creation.
-		panic(fmt.Sprintf("matched cluster %q not found in ConfigSelector", cluster.name))
-	}
+	// Add a ref to the selected cluster or plugin, as this RPC needs it until it
+	// is committed. Releasing the last reference unsubscribes from the cluster
+	// or pushes a new service config for a plugin.
+	cluster.info.Increment()
+	config.OnCommitted = sync.OnceFunc(func() {
+		cluster.info.Decrement()
+		// Decrement the refcount of the route cluster and close the interceptor
+		// if refcount goes to zero.
+		rc.Decrement()
+	})
 
 	if rt.maxStreamDuration != 0 {
 		config.MethodConfig.Timeout = &rt.maxStreamDuration
@@ -364,18 +341,14 @@ func (cs *configSelector) stop() {
 		}
 	}
 
-	// If any reference counts drop to zero, a service config update is required
-	// to remove the clusters. Since the old config selector is stopped
-	// after a new one is active, we must trigger a subsequent update to delete
-	// the now-unused clusters.
+	// Release this config selector's reference on each cluster and plugin. If
+	// any reference count drops to zero, the cleanup registered when the entry
+	// was created removes it from the resolver's active maps and triggers the
+	// service config update needed to drop it from the channel's config.
 	for _, ci := range cs.clusters {
-		if v := ci.refCount.Add(-1); v == 0 {
-			ci.unsubscribe()
-		}
+		ci.Decrement()
 	}
 	for _, ci := range cs.plugins {
-		if v := ci.refCount.Add(-1); v == 0 {
-			cs.sendNewServiceConfig()
-		}
+		ci.Decrement()
 	}
 }
