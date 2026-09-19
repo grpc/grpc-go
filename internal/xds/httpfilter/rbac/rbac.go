@@ -225,7 +225,7 @@ func (builder) IsTerminal() bool {
 	return false
 }
 
-func (builder) BuildServerFilter() httpfilter.ServerFilter {
+func (builder) BuildServerFilter(httpfilter.ServerFilterOptions) httpfilter.ServerFilter {
 	return serverFilter{}
 }
 
