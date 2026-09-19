@@ -98,7 +98,7 @@ CASES=(
 
 # Build server
 echo "$(tput setaf 4) $(date): building server $(tput sgr 0)"
-if ! go build -o /dev/null ./interop/server; then
+if ! go build -o /dev/null google.golang.org/grpc/interop/server; then
   fail "failed to build server"
 else
   pass "successfully built server"
@@ -106,7 +106,7 @@ fi
 
 # Build client
 echo "$(tput setaf 4) $(date): building client $(tput sgr 0)"
-if ! go build -o /dev/null ./interop/client; then
+if ! go build -o /dev/null google.golang.org/grpc/interop/client; then
   fail "failed to build client"
 else
   pass "successfully built client"
@@ -114,13 +114,13 @@ fi
 
 # Start server
 SERVER_LOG="$(mktemp)"
-GRPC_GO_LOG_SEVERITY_LEVEL=info go run ./interop/server --use_tls &> $SERVER_LOG  &
+GRPC_GO_LOG_SEVERITY_LEVEL=info go run google.golang.org/grpc/interop/server --use_tls &> $SERVER_LOG  &
 
 for case in ${CASES[@]}; do
     echo "$(tput setaf 4) $(date): testing: ${case} $(tput sgr 0)"
 
     CLIENT_LOG="$(mktemp)"
-    if ! GRPC_GO_LOG_SEVERITY_LEVEL=info withTimeout 20 go run ./interop/client \
+    if ! GRPC_GO_LOG_SEVERITY_LEVEL=info withTimeout 20 go run google.golang.org/grpc/interop/client \
          --use_tls \
          --server_host_override=foo.test.google.fr \
          --use_test_ca --test_case="${case}" \

@@ -6,6 +6,7 @@ require (
 	github.com/google/go-cmp v0.7.0
 	go.opencensus.io v0.24.0
 	google.golang.org/grpc v1.83.0
+	google.golang.org/grpc/interop v0.0.0
 )
 
 require (
@@ -18,3 +19,5 @@ require (
 )
 
 replace google.golang.org/grpc => ../..
+
+replace google.golang.org/grpc/interop => ../../interop
