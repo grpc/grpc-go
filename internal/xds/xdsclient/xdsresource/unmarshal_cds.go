@@ -137,6 +137,15 @@ func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster, serv
 		if max := rhc.GetMaximumRingSize(); max != nil {
 			maxSize = max.GetValue()
 		}
+		if minSize > ringHashSizeUpperBound {
+			return ClusterUpdate{}, fmt.Errorf("ring_hash_lb_config.minimum_ring_size %d is greater than upper bound %d in response: %+v", minSize, ringHashSizeUpperBound, cluster)
+		}
+		if maxSize > ringHashSizeUpperBound {
+			return ClusterUpdate{}, fmt.Errorf("ring_hash_lb_config.maximum_ring_size %d is greater than upper bound %d in response: %+v", maxSize, ringHashSizeUpperBound, cluster)
+		}
+		if minSize > maxSize {
+			return ClusterUpdate{}, fmt.Errorf("ring_hash_lb_config.minimum_ring_size %d is greater than maximum_ring_size %d in response: %+v", minSize, maxSize, cluster)
+		}
 
 		rhLBCfg := []byte(fmt.Sprintf("{\"minRingSize\": %d, \"maxRingSize\": %d}", minSize, maxSize))
 		lbPolicy = []byte(fmt.Sprintf(`[{"ring_hash_experimental": %s}]`, rhLBCfg))
