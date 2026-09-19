@@ -403,30 +403,14 @@ func (o *Options) serverConfig() (*tls.Config, error) {
 		}
 	}
 	// Propagate identity-certificate-related fields in tls.Config.
-	switch {
-	case o.IdentityOptions.Certificates != nil:
-		config.Certificates = o.IdentityOptions.Certificates
-	case o.IdentityOptions.GetIdentityCertificatesForServer != nil:
-		config.GetCertificate = func(clientHello *tls.ClientHelloInfo) (*tls.Certificate, error) {
-			return buildGetCertificates(clientHello, o)
-		}
-	case o.IdentityOptions.IdentityProvider != nil:
-		o.IdentityOptions.GetIdentityCertificatesForServer = func(*tls.ClientHelloInfo) ([]*tls.Certificate, error) {
-			km, err := o.IdentityOptions.IdentityProvider.KeyMaterial(context.Background())
-			if err != nil {
-				return nil, err
-			}
-			var certChains []*tls.Certificate
-			for i := 0; i < len(km.Certs); i++ {
-				certChains = append(certChains, &km.Certs[i])
-			}
-			return certChains, nil
-		}
-		config.GetCertificate = func(clientHello *tls.ClientHelloInfo) (*tls.Certificate, error) {
-			return buildGetCertificates(clientHello, o)
-		}
-	default:
+	if o.IdentityOptions.nonNilFieldCount() == 0 {
 		return nil, fmt.Errorf("needs to specify at least one field in IdentityCertificateOptions")
+	}
+	if o.IdentityOptions.Certificates != nil {
+		config.Certificates = o.IdentityOptions.Certificates
+	}
+	config.GetCertificate = func(clientHello *tls.ClientHelloInfo) (*tls.Certificate, error) {
+		return buildGetCertificates(clientHello, o)
 	}
 	return config, nil
 }
