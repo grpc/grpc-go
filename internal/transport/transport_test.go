@@ -787,6 +787,68 @@ func (s) TestClientTransportDrainsAfterStreamIDExhausted(t *testing.T) {
 	}
 }
 
+// Tests that a truncated HEADERS frame for a new stream properly advances
+// maxStreamID, while an oversized frame on an illegal/lower stream is rejected
+// as a protocol error and preserves maxStreamID.
+func (s) TestServerOperateHeadersTruncatedStreamIDMonotonicity(t *testing.T) {
+	serverTransport := &http2Server{
+		controlBuf: newControlBuffer(make(<-chan struct{})),
+	}
+	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer ctxCancel()
+	tests := []struct {
+		name            string
+		streamID        uint32
+		truncated       bool
+		wantErr         string
+		wantMaxStreamID uint32
+	}{
+		{
+			name:            "truncated_header_advances_max_stream_id",
+			streamID:        3,
+			truncated:       true,
+			wantMaxStreamID: 3,
+		},
+		{
+			name:            "truncated_header_lower_stream_id_rejected_as_protocol_error",
+			streamID:        1,
+			truncated:       true,
+			wantErr:         "received an illegal stream id: 1",
+			wantMaxStreamID: 3,
+		},
+		{
+			name:            "reused_stream_id_rejected_as_protocol_error",
+			streamID:        3,
+			truncated:       false,
+			wantErr:         "received an illegal stream id: 3",
+			wantMaxStreamID: 3,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			frame := &http2.MetaHeadersFrame{
+				HeadersFrame: &http2.HeadersFrame{
+					FrameHeader: http2.FrameHeader{
+						StreamID: tc.streamID,
+						Type:     http2.FrameHeaders,
+					},
+				},
+				Truncated: tc.truncated,
+			}
+			err := serverTransport.operateHeaders(ctx, frame, func(*ServerStream) {})
+			if (err != nil) != (tc.wantErr != "") {
+				t.Fatalf("operateHeaders() failed with error = %v, wantErr %q", err, tc.wantErr)
+			}
+			if err != nil && !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("operateHeaders() failed with error = %v, want error containing %q", err, tc.wantErr)
+			}
+			if serverTransport.maxStreamID != tc.wantMaxStreamID {
+				t.Fatalf("maxStreamID = %d, want %d", serverTransport.maxStreamID, tc.wantMaxStreamID)
+			}
+		})
+	}
+}
+
 func (s) TestClientSendAndReceive(t *testing.T) {
 	server, ct, cancel := setUp(t, 0, normal)
 	defer cancel()

@@ -34,6 +34,7 @@ import (
 	"os"
 	"reflect"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -6087,30 +6088,23 @@ func testServerMaxHeaderListSizeClientIntentionalViolation(t *testing.T, e env) 
 	te.startServer(&testServer{security: e.security})
 	defer te.tearDown()
 
-	cc, dw := te.clientConnWithConnControl()
-	tc := &testServiceClientWrapper{TestServiceClient: testgrpc.NewTestServiceClient(cc)}
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	stream, err := tc.FullDuplexCall(ctx)
-	if err != nil {
-		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want _, <nil>", tc, err)
-	}
-	rcw := dw.getRawConnWrapper()
-	val := make([]string, 512)
-	for i := range val {
-		val[i] = "a"
-	}
-	// allow for client to send the initial header
-	time.Sleep(100 * time.Millisecond)
-	rcw.writeHeaders(http2.HeadersFrameParam{
-		StreamID:      tc.getCurrentStreamID(),
-		BlockFragment: rcw.encodeHeader("oversize", strings.Join(val, "")),
-		EndStream:     false,
-		EndHeaders:    true,
+	te.withServerTester(func(st *serverTester) {
+		val := slices.Repeat([]string{"a"}, 512)
+		st.writeHeaders(http2.HeadersFrameParam{
+			StreamID: 1,
+			BlockFragment: st.encodeHeader(
+				":method", "POST",
+				":path", "/grpc.testing.TestService/FullDuplexCall",
+				":authority", "localhost",
+				"content-type", "application/grpc",
+				"te", "trailers",
+				"oversize", strings.Join(val, ""),
+			),
+			EndStream:  false,
+			EndHeaders: true,
+		})
+		st.wantRSTStream(http2.ErrCodeFrameSize)
 	})
-	if _, err := stream.Recv(); err == nil || status.Code(err) != codes.Internal {
-		t.Fatalf("stream.Recv() = _, %v, want _, error code: %v", err, codes.Internal)
-	}
 }
 
 func (s) TestClientMaxHeaderListSizeServerIntentionalViolation(t *testing.T) {
