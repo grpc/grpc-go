@@ -139,6 +139,10 @@ var (
 	// deleted or changed.
 	BinaryLogger any // func(binarylog.Logger) grpc.ServerOption
 
+	// ChildDialOptionsFromServer returns the child dial options configured
+	// on the Server.
+	ChildDialOptionsFromServer any // func(*grpc.Server) []grpc.DialOption
+
 	// SubscribeToConnectivityStateChanges adds a grpcsync.Subscriber to a
 	// provided grpc.ClientConn.
 	SubscribeToConnectivityStateChanges any // func(*grpc.ClientConn, grpcsync.Subscriber)
