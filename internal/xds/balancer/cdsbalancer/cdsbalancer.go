@@ -102,11 +102,9 @@ func (bb) ParseConfig(c json.RawMessage) (serviceconfig.LoadBalancingConfig, err
 	return &cfg, nil
 }
 
-// cdsBalancer implements a CDS based LB policy. It instantiates a
-// cluster_resolver balancer to further resolve the serviceName received from
-// CDS, into localities and endpoints. Implements the balancer.Balancer
-// interface which is exposed to gRPC and implements the balancer.ClientConn
-// interface which is exposed to the cluster_resolver balancer.
+// cdsBalancer implements a CDS based LB policy. It builds and manages a child
+// LB policy (priority for aggregate clusters, or outlier_detection for leaf
+// clusters) using the cluster and endpoint configuration received in XDSConfig.
 type cdsBalancer struct {
 	// The following fields are initialized at build time and are either
 	// read-only after that or provide their own synchronization, and therefore
