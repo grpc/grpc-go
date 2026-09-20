@@ -169,6 +169,22 @@ var (
 	//
 	// TODO: Remove this env var once v1.85.0 is released.
 	EnableReceiveBufferCompaction = boolFromEnv("GRPC_GO_EXPERIMENTAL_ENABLE_RECEIVE_BUFFER_COMPACTION", true)
+	
+	// EnableCodecDirtyBufferPooling enables the use of a non-zeroing (dirty)
+	// buffer pool for the intermediate buffers used by the proto codec when
+	// marshaling and unmarshaling messages. The default pool clears buffers
+	// before handing them out; skipping that clear avoids the cost of zeroing
+	// the entire message buffer on every send and receive.
+	//
+	// This is safe for the codec because it always fully overwrites the buffers
+	// it acquires: Marshal writes exactly proto.Size(msg) bytes via
+	// MarshalAppend, and Unmarshal copies the whole BufferSlice via CopyTo
+	// before proto.Unmarshal reads it.
+	//
+	// This environment variable serves as an escape hatch to disable the
+	// feature if unforeseen issues arise, and it will be removed in a future
+	// release.
+	EnableCodecDirtyBufferPooling = boolFromEnv("GRPC_GO_EXPERIMENTAL_CODEC_DIRTY_BUFFER_POOLING", true)
 )
 
 func boolFromEnv(envVar string, def bool) bool {

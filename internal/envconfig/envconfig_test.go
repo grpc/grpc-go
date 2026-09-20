@@ -102,6 +102,45 @@ func (s) TestBoolFromEnv(t *testing.T) {
 	}
 }
 
+// TestCodecDirtyBufferPooling verifies the codec dirty buffer pooling switch.
+// The package-level switch variable is bound to the environment at package
+// initialization and cannot be changed at runtime, so this test exercises both
+// the default value (unset environment) and the boolFromEnv parsing logic that
+// backs the switch.
+func (s) TestCodecDirtyBufferPooling(t *testing.T) {
+	// The switch defaults to true (non-zeroing pool) unless explicitly disabled.
+	const envVar = "GRPC_GO_EXPERIMENTAL_CODEC_DIRTY_BUFFER_POOLING"
+
+	t.Setenv(envVar, "")
+	if EnableCodecDirtyBufferPooling != true {
+		t.Errorf("EnableCodecDirtyBufferPooling with unset env = %v; want true", EnableCodecDirtyBufferPooling)
+	}
+
+	// The boolFromEnv parsing logic backing the switch: the default is true,
+	// so only "false" (case-insensitive) disables it.
+	testCases := []struct {
+		val  string
+		want bool
+	}{
+		{val: "", want: true},
+		{val: "false", want: false},
+		{val: "FALSE", want: false},
+		{val: "true", want: true},
+	}
+	for _, tc := range testCases {
+		t.Run("boolFromEnv_"+tc.val, func(t *testing.T) {
+			if tc.val == "" {
+				os.Unsetenv(envVar)
+			} else {
+				os.Setenv(envVar, tc.val)
+			}
+			if got := boolFromEnv(envVar, true); got != tc.want {
+				t.Errorf("boolFromEnv(%q(=%q), true) = %v; want %v", envVar, tc.val, got, tc.want)
+			}
+		})
+	}
+}
+
 func (s) TestGoroutineLabelsFromEnv(t *testing.T) {
 	var testCases = []struct {
 		name string
