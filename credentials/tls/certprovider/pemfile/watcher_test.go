@@ -627,3 +627,32 @@ func (s) TestProvider_UpdateFailureRoot_MissingFile(t *testing.T) {
 		t.Fatalf("expected provider to not update key material: %v", err)
 	}
 }
+
+// TestWatcher_RootFileUnchanged_NoCertParsing verifies that maybeUpdateRootFile
+// exits early without re-parsing certificates when the root file has not changed.
+func (s) TestWatcher_RootFileUnchanged_NoCertParsing(t *testing.T) {
+	dir := t.TempDir()
+	rootPath := path.Join(dir, rootFile)
+	data, err := os.ReadFile(testdata.Path("x509/client_ca_cert.pem"))
+	if err != nil {
+		t.Fatalf("os.ReadFile() failed: %v", err)
+	}
+	if err := os.WriteFile(rootPath, data, os.ModePerm); err != nil {
+		t.Fatalf("os.WriteFile() failed: %v", err)
+	}
+	w := &watcher{
+		opts: Options{
+			RootFile: rootPath,
+		},
+		rootDistributor: certprovider.NewDistributor(),
+	}
+	w.maybeUpdateRootFile() // Initial run to populate w.rootFileContents
+	// os.ReadFile and bytes.Equal allocate 2-4 times; x509 cert pool parsing
+	// allocates >20 times. Verify that cert parsing is skipped.
+	allocs := testing.AllocsPerRun(10, func() {
+		w.maybeUpdateRootFile()
+	})
+	if allocs > 5 {
+		t.Fatalf("maybeUpdateRootFile() allocated %v times, want <= 5 (certificate parsing should be skipped)", allocs)
+	}
+}
