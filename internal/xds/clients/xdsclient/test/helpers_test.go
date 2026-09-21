@@ -344,6 +344,19 @@ func (r *testMetricsReporter) Receive(ctx context.Context) (any, error) {
 	}
 }
 
+// receiveNonBlocking returns the next recorded metric, if one is immediately
+// available, without blocking. The second return value is false if no metric
+// is buffered.
+func (r *testMetricsReporter) receiveNonBlocking() (any, bool) {
+	select {
+	case got := <-r.metricsCh.Get():
+		r.metricsCh.Load()
+		return got, true
+	default:
+		return nil, false
+	}
+}
+
 // Drain clears all accumulated metrics from the channel.
 func (r *testMetricsReporter) Drain() {
 	for {
