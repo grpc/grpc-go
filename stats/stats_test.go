@@ -294,10 +294,11 @@ const (
 )
 
 type rpcConfig struct {
-	count    int  // Number of requests and responses for streaming RPCs.
-	success  bool // Whether the RPC should succeed or return error.
-	failfast bool
-	callType rpcType // Type of RPC.
+	count     int  // Number of requests and responses for streaming RPCs.
+	success   bool // Whether the RPC should succeed or return error.
+	failfast  bool
+	authority string  // Authority override for the RPC.
+	callType  rpcType // Type of RPC.
 }
 
 func (te *test) doUnaryCall(c *rpcConfig) (*testpb.SimpleRequest, *testpb.SimpleResponse, error) {
@@ -315,7 +316,11 @@ func (te *test) doUnaryCall(c *rpcConfig) (*testpb.SimpleRequest, *testpb.Simple
 		req = &testpb.SimpleRequest{Payload: idToPayload(errorID)}
 	}
 
-	resp, err = tc.UnaryCall(metadata.NewOutgoingContext(tCtx, testMetadata), req, grpc.WaitForReady(!c.failfast))
+	callOpts := []grpc.CallOption{grpc.WaitForReady(!c.failfast)}
+	if c.authority != "" {
+		callOpts = append(callOpts, grpc.CallAuthority(c.authority))
+	}
+	resp, err = tc.UnaryCall(metadata.NewOutgoingContext(tCtx, testMetadata), req, callOpts...)
 	return req, resp, err
 }
 
@@ -427,6 +432,7 @@ type expectedData struct {
 	isServerStream bool
 	serverAddr     string
 	compression    string
+	authority      string
 	reqIdx         int
 	requests       []proto.Message
 	respIdx        int
@@ -619,6 +625,13 @@ func checkOutHeader(t *testing.T, d *gotData, e *expectedData) {
 		}
 		if st.RemoteAddr.String() != e.serverAddr {
 			t.Fatalf("st.RemoteAddr = %v, want %v", st.RemoteAddr, e.serverAddr)
+		}
+		wantAuthority := e.authority
+		if wantAuthority == "" {
+			wantAuthority = e.serverAddr
+		}
+		if st.Authority != wantAuthority {
+			t.Fatalf("st.Authority = %s, want %s", st.Authority, wantAuthority)
 		}
 		// additional headers might be injected so instead of testing equality, test that all the
 		// expected headers keys have the expected header values.
@@ -1210,6 +1223,7 @@ func testClientStats(t *testing.T, tc *testConfig, cc *rpcConfig, checkFuncs map
 		err:            err,
 		isClientStream: isClientStream,
 		isServerStream: isServerStream,
+		authority:      cc.authority,
 	}
 
 	h.mu.Lock()
@@ -1220,6 +1234,23 @@ func testClientStats(t *testing.T, tc *testConfig, cc *rpcConfig, checkFuncs map
 
 func (s) TestClientStatsUnaryRPC(t *testing.T) {
 	testClientStats(t, &testConfig{compress: ""}, &rpcConfig{success: true, failfast: false, callType: unaryRPC}, map[int]*checkFuncWithCount{
+		begin:      {checkBegin, 1},
+		outHeader:  {checkOutHeader, 1},
+		outPayload: {checkOutPayload, 1},
+		inHeader:   {checkInHeader, 1},
+		inPayload:  {checkInPayload, 1},
+		inTrailer:  {checkInTrailer, 1},
+		end:        {checkEnd, 1},
+	})
+}
+
+func (s) TestClientStatsUnaryRPCAuthority(t *testing.T) {
+	testClientStats(t, &testConfig{compress: ""}, &rpcConfig{
+		success:   true,
+		failfast:  false,
+		authority: "authority-override.example.com",
+		callType:  unaryRPC,
+	}, map[int]*checkFuncWithCount{
 		begin:      {checkBegin, 1},
 		outHeader:  {checkOutHeader, 1},
 		outPayload: {checkOutPayload, 1},

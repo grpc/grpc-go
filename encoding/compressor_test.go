@@ -237,3 +237,45 @@ func (s) TestDecompressionExceedsMaxMessageSize(t *testing.T) {
 		t.Errorf("Client.UnaryCall(%+v) returned status %v, want %v", req, got, want)
 	}
 }
+
+// Test verifies that decompression failures (after stream establishment) are
+// handled gracefully without duplicate status writes.
+func (s) TestStreamingDecompressionExceedsMaxMessageSize(t *testing.T) {
+	const messageLen = 100
+	regFn := internal.RegisterCompressorForTesting.(func(encoding.Compressor) func())
+	compressor := &fakeCompressor{decompressedMessageSize: messageLen}
+	unreg := regFn(compressor)
+	defer unreg()
+
+	ss := &stubserver.StubServer{
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
+			for {
+				if _, err := stream.Recv(); err != nil {
+					return err
+				}
+			}
+		},
+	}
+	if err := ss.Start([]grpc.ServerOption{grpc.MaxRecvMsgSize(messageLen - 1)}); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
+	}
+	defer ss.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	stream, err := ss.Client.FullDuplexCall(ctx, grpc.UseCompressor(compressor.Name()))
+	if err != nil {
+		t.Fatalf("FullDuplexCall failed: %v", err)
+	}
+
+	// Send message that will result in decompression failure on the server
+	// because it exceeds the max message size.
+	if err := stream.Send(&testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: []byte("payload")}}); err != nil {
+		t.Fatalf("Send() failed: %v", err)
+	}
+
+	// We expect the stream to fail with ResourceExhausted on Recv.
+	if _, err = stream.Recv(); status.Code(err) != codes.ResourceExhausted {
+		t.Fatalf("stream.Recv() returned status %v, want %v", status.Code(err), codes.ResourceExhausted)
+	}
+}

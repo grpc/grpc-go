@@ -95,7 +95,7 @@ var authzTests = map[string]struct {
 				]
 			}`,
 		md:         metadata.Pairs("key-abc", "val-abc"),
-		wantStatus: status.New(codes.PermissionDenied, "unauthorized RPC request rejected"),
+		wantStatus: status.New(codes.PermissionDenied, "authz: unauthorized RPC request rejected"),
 	},
 	"DeniesRPCMatchInDenyAndAllow": {
 		authzPolicy: `{
@@ -125,7 +125,7 @@ var authzTests = map[string]struct {
 					}
 				]
 			}`,
-		wantStatus: status.New(codes.PermissionDenied, "unauthorized RPC request rejected"),
+		wantStatus: status.New(codes.PermissionDenied, "authz: unauthorized RPC request rejected"),
 	},
 	"AllowsRPCNoMatchInDenyMatchInAllow": {
 		authzPolicy: `{
@@ -192,7 +192,7 @@ var authzTests = map[string]struct {
 					}
 				]
 			}`,
-		wantStatus: status.New(codes.PermissionDenied, "unauthorized RPC request rejected"),
+		wantStatus: status.New(codes.PermissionDenied, "authz: unauthorized RPC request rejected"),
 	},
 	"AllowsRPCEmptyDenyMatchInAllow": {
 		authzPolicy: `{
@@ -240,7 +240,7 @@ var authzTests = map[string]struct {
 					}
 				]
 			}`,
-		wantStatus: status.New(codes.PermissionDenied, "unauthorized RPC request rejected"),
+		wantStatus: status.New(codes.PermissionDenied, "authz: unauthorized RPC request rejected"),
 	},
 	"DeniesRPCRequestWithPrincipalsFieldOnUnauthenticatedConnection": {
 		authzPolicy: `{
@@ -255,7 +255,7 @@ var authzTests = map[string]struct {
 					}
 				]
 			}`,
-		wantStatus: status.New(codes.PermissionDenied, "unauthorized RPC request rejected"),
+		wantStatus: status.New(codes.PermissionDenied, "authz: unauthorized RPC request rejected"),
 	},
 	"DeniesRPCRequestNoMatchInAllowFailsPresenceMatch": {
 		authzPolicy: `{
@@ -284,7 +284,7 @@ var authzTests = map[string]struct {
 				]
 			}`,
 		md:         metadata.Pairs("key-abc", ""),
-		wantStatus: status.New(codes.PermissionDenied, "unauthorized RPC request rejected"),
+		wantStatus: status.New(codes.PermissionDenied, "authz: unauthorized RPC request rejected"),
 	},
 }
 

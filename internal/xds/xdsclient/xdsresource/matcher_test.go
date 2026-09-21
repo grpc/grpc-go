@@ -20,6 +20,7 @@ package xdsresource
 import (
 	"context"
 	rand "math/rand/v2"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -41,7 +42,7 @@ func (s) TestAndMatcherMatch(t *testing.T) {
 		want bool
 	}{
 		{
-			name: "both match",
+			name: "both_match",
 			pm:   newPathExactMatcher("/a/b", false),
 			hm:   matcher.NewHeaderExactMatcher("th", "tv", false),
 			info: iresolver.RPCInfo{
@@ -51,7 +52,7 @@ func (s) TestAndMatcherMatch(t *testing.T) {
 			want: true,
 		},
 		{
-			name: "both match with path case insensitive",
+			name: "both_match_with_path_case_insensitive",
 			pm:   newPathExactMatcher("/A/B", true),
 			hm:   matcher.NewHeaderExactMatcher("th", "tv", false),
 			info: iresolver.RPCInfo{
@@ -61,7 +62,7 @@ func (s) TestAndMatcherMatch(t *testing.T) {
 			want: true,
 		},
 		{
-			name: "only one match",
+			name: "only_one_match",
 			pm:   newPathExactMatcher("/a/b", false),
 			hm:   matcher.NewHeaderExactMatcher("th", "tv", false),
 			info: iresolver.RPCInfo{
@@ -71,7 +72,7 @@ func (s) TestAndMatcherMatch(t *testing.T) {
 			want: false,
 		},
 		{
-			name: "both not match",
+			name: "both_not match",
 			pm:   newPathExactMatcher("/z/y", false),
 			hm:   matcher.NewHeaderExactMatcher("th", "abc", false),
 			info: iresolver.RPCInfo{
@@ -81,7 +82,7 @@ func (s) TestAndMatcherMatch(t *testing.T) {
 			want: false,
 		},
 		{
-			name: "fake header",
+			name: "fake_header",
 			pm:   newPathPrefixMatcher("/", false),
 			hm:   matcher.NewHeaderExactMatcher("content-type", "fake", false),
 			info: iresolver.RPCInfo{
@@ -93,7 +94,7 @@ func (s) TestAndMatcherMatch(t *testing.T) {
 			want: true,
 		},
 		{
-			name: "binary header",
+			name: "binary_header",
 			pm:   newPathPrefixMatcher("/", false),
 			hm:   matcher.NewHeaderPresentMatcher("t-bin", true, false),
 			info: iresolver.RPCInfo{
@@ -110,7 +111,16 @@ func (s) TestAndMatcherMatch(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			a := newCompositeMatcher(tt.pm, []matcher.HeaderMatcher{tt.hm}, nil)
-			if got := a.Match(tt.info); got != tt.want {
+			md, _ := metadata.FromOutgoingContext(tt.info.Context)
+			if extraMD, ok := grpcutil.ExtraMetadata(tt.info.Context); ok {
+				md = metadata.Join(md, extraMD)
+				for k := range md {
+					if strings.HasSuffix(k, "-bin") {
+						delete(md, k)
+					}
+				}
+			}
+			if got := a.Match(tt.info.Method, md); got != tt.want {
 				t.Errorf("match() = %v, want %v", got, tt.want)
 			}
 		})

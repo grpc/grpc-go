@@ -25,6 +25,7 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
 	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/testutils"
@@ -160,7 +161,7 @@ func (s) TestResolverClusterSpecifierPlugin(t *testing.T) {
 		t.Fatalf("cs.SelectConfig(): %v", err)
 	}
 
-	gotCluster := clustermanager.GetPickedClusterForTesting(res.Context)
+	gotCluster := clustermanager.PickedCluster(res.Context)
 	wantCluster := "cluster_specifier_plugin:cspA"
 	if gotCluster != wantCluster {
 		t.Fatalf("config selector returned cluster: %v, want: %v", gotCluster, wantCluster)
@@ -251,7 +252,7 @@ func (s) TestXDSResolverDelayedOnCommittedCSP(t *testing.T) {
 		t.Fatalf("cs.SelectConfig(): %v", err)
 	}
 
-	gotCluster := clustermanager.GetPickedClusterForTesting(resOld.Context)
+	gotCluster := clustermanager.PickedCluster(resOld.Context)
 	wantCluster := "cluster_specifier_plugin:cspA"
 	if gotCluster != wantCluster {
 		t.Fatalf("config selector returned cluster: %v, want: %v", gotCluster, wantCluster)
@@ -308,7 +309,7 @@ func (s) TestXDSResolverDelayedOnCommittedCSP(t *testing.T) {
 		t.Fatalf("cs.SelectConfig(): %v", err)
 	}
 
-	gotCluster = clustermanager.GetPickedClusterForTesting(resNew.Context)
+	gotCluster = clustermanager.PickedCluster(resNew.Context)
 	wantCluster = "cluster_specifier_plugin:cspB"
 	if gotCluster != wantCluster {
 		t.Fatalf("config selector returned cluster: %v, want: %v", gotCluster, wantCluster)
@@ -438,13 +439,16 @@ func (s) TestResolverClusterSpecifierPlugin_WithFilters(t *testing.T) {
 	if res.Interceptor == nil {
 		t.Fatal("RPCInfo does not contain interceptors list")
 	}
-
-	newStream := func(context.Context, func()) (iresolver.ClientStream, error) {
+	newStream := func(context.Context, ...grpc.CallOption) (grpc.ClientStream, error) {
 		return nil, nil
 	}
 
-	if _, err = res.Interceptor.NewStream(ctx, iresolver.RPCInfo{Method: "/service/method", Context: ctx}, func() {}, newStream); err != nil {
-		t.Fatalf("NewStream() failed with error: %v", err)
+	if interceptor, ok := res.Interceptor.(httpfilter.ClientInterceptor); ok {
+		if _, err = interceptor.NewStream(ctx, iresolver.RPCInfo{Method: "/service/method", Context: ctx}, newStream); err != nil {
+			t.Fatalf("NewStream() failed with error: %v", err)
+		}
+	} else {
+		t.Fatalf("res.Interceptor is type %T, want httpfilter.ClientInterceptor", res.Interceptor)
 	}
 
 	// Verify that first filter receives the config.

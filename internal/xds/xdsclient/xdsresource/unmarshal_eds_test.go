@@ -45,22 +45,26 @@ import (
 )
 
 // enableA86 enables A86 support for the duration of the test by:
-// 1. Setting the GRPC_EXPERIMENTAL_XDS_HTTP_CONNECT environment variable
-// 2. Registering the proxy address converter, since this is otherwise done in init.
+//  1. Setting the GRPC_EXPERIMENTAL_XDS_HTTP_CONNECT env var to true.
+//  2. Registering the proxy address converter (and restore original
+//     on cleanup).
 func enableA86(t *testing.T) {
 	testutils.SetEnvConfig(t, &envconfig.XDSHTTPConnectEnabled, true)
-	registerMetadataConverter(proxyAddressTypeURL, proxyAddressConvertor{})
-	t.Cleanup(func() {
-		unregisterMetadataConverterForTesting(proxyAddressTypeURL)
-	})
+	cleanup, err := RegisterMetadataConverterForTesting(version.V3AddressURL)
+	if err != nil {
+		t.Fatalf("RegisterMetadataConverterForTesting(%q) failed: %v", version.V3AddressURL, err)
+	}
+	t.Cleanup(cleanup)
 }
 
 // disableA86 disables A86 support for the duration of the test by:
-// 1. Setting the GRPC_EXPERIMENTAL_XDS_HTTP_CONNECT environment variable to false
-// 2. Unregistering the proxy address converter (in case it was registered by init or previous test)
+//  1. Setting the GRPC_EXPERIMENTAL_XDS_HTTP_CONNECT env var to false.
+//  2. Unregistering the proxy address converter for the duration of the test
+//     (and restoring the original on cleanup).
 func disableA86(t *testing.T) {
 	testutils.SetEnvConfig(t, &envconfig.XDSHTTPConnectEnabled, false)
-	unregisterMetadataConverterForTesting(proxyAddressTypeURL)
+	cleanup := UnregisterMetadataConverterForTesting(version.V3AddressURL)
+	t.Cleanup(cleanup)
 }
 
 func buildResolverEndpoint(addr []string, host string) resolver.Endpoint {
@@ -173,6 +177,23 @@ func (s) TestEDSParseRespProto(t *testing.T) {
 				clab0.addLocality("locality-2", 1, 0, []endpointOpts{{addrWithPort: "addr:997"}}, nil)
 				return clab0.Build()
 			}(),
+			want:    EndpointsUpdate{},
+			wantErr: true,
+		},
+		{
+			name: "unsupported-drop-denominator",
+			m: &v3endpointpb.ClusterLoadAssignment{
+				ClusterName: "test",
+				Policy: &v3endpointpb.ClusterLoadAssignment_Policy{
+					DropOverloads: []*v3endpointpb.ClusterLoadAssignment_Policy_DropOverload{{
+						Category: "test-drop",
+						DropPercentage: &v3typepb.FractionalPercent{
+							Numerator:   1,
+							Denominator: v3typepb.FractionalPercent_DenominatorType(7),
+						},
+					}},
+				},
+			},
 			want:    EndpointsUpdate{},
 			wantErr: true,
 		},

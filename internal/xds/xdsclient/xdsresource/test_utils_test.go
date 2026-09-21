@@ -96,7 +96,7 @@ var (
 func makeRouterFilter(t *testing.T) HTTPFilter {
 	t.Helper()
 	routerBuilder := httpfilter.Get(router.TypeURL)
-	routerConfig, err := routerBuilder.ParseFilterConfig(testutils.MarshalAny(t, &v3routerpb.Router{}))
+	routerConfig, err := routerBuilder.ParseFilterConfig(testutils.MarshalAny(t, &v3routerpb.Router{}), httpfilter.ParseOptions{})
 	if err != nil {
 		t.Fatalf("Failed to parse Router filter configuration: %v", err)
 	}

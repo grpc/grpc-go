@@ -29,6 +29,7 @@ import (
 	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/internal/xds/httpfilter"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource/version"
 	"google.golang.org/protobuf/proto"
@@ -664,7 +665,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, test.xdsClientExtProcEnabled)
 
-			name, update, err := unmarshalListenerResource(test.resource, nil)
+			name, update, err := unmarshalListenerResource(test.resource, nil, nil)
 			if (err != nil) != test.wantErr {
 				t.Errorf("unmarshalListenerResource(%s), got err: %v, wantErr: %v", pretty.ToJSON(test.resource), err, test.wantErr)
 			}
@@ -1760,7 +1761,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			name, update, err := unmarshalListenerResource(test.resource, nil)
+			name, update, err := unmarshalListenerResource(test.resource, nil, nil)
 			if err != nil && !strings.Contains(err.Error(), test.wantErr) {
 				t.Errorf("unmarshalListenerResource(%s) = %v wantErr: %q", pretty.ToJSON(test.resource), err, test.wantErr)
 			}
@@ -1788,11 +1789,11 @@ type httpFilter struct {
 
 func (httpFilter) TypeURLs() []string { return []string{"custom.filter"} }
 
-func (httpFilter) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, error) {
+func (httpFilter) ParseFilterConfig(cfg proto.Message, _ httpfilter.ParseOptions) (httpfilter.FilterConfig, error) {
 	return filterConfig{Cfg: cfg}, nil
 }
 
-func (httpFilter) ParseFilterConfigOverride(override proto.Message) (httpfilter.FilterConfig, error) {
+func (httpFilter) ParseFilterConfigOverride(override proto.Message, _ httpfilter.ParseOptions) (httpfilter.FilterConfig, error) {
 	return filterConfig{Override: override}, nil
 }
 
@@ -1807,11 +1808,11 @@ type errHTTPFilter struct {
 
 func (errHTTPFilter) TypeURLs() []string { return []string{"err.custom.filter"} }
 
-func (errHTTPFilter) ParseFilterConfig(proto.Message) (httpfilter.FilterConfig, error) {
+func (errHTTPFilter) ParseFilterConfig(proto.Message, httpfilter.ParseOptions) (httpfilter.FilterConfig, error) {
 	return nil, fmt.Errorf("error from ParseFilterConfig")
 }
 
-func (errHTTPFilter) ParseFilterConfigOverride(proto.Message) (httpfilter.FilterConfig, error) {
+func (errHTTPFilter) ParseFilterConfigOverride(proto.Message, httpfilter.ParseOptions) (httpfilter.FilterConfig, error) {
 	return nil, fmt.Errorf("error from ParseFilterConfigOverride")
 }
 
@@ -1833,11 +1834,11 @@ type serverOnlyHTTPFilter struct {
 
 func (serverOnlyHTTPFilter) TypeURLs() []string { return []string{"serverOnly.custom.filter"} }
 
-func (serverOnlyHTTPFilter) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, error) {
+func (serverOnlyHTTPFilter) ParseFilterConfig(cfg proto.Message, _ httpfilter.ParseOptions) (httpfilter.FilterConfig, error) {
 	return filterConfig{Cfg: cfg}, nil
 }
 
-func (serverOnlyHTTPFilter) ParseFilterConfigOverride(override proto.Message) (httpfilter.FilterConfig, error) {
+func (serverOnlyHTTPFilter) ParseFilterConfigOverride(override proto.Message, _ httpfilter.ParseOptions) (httpfilter.FilterConfig, error) {
 	return filterConfig{Override: override}, nil
 }
 
@@ -1852,11 +1853,11 @@ type clientOnlyHTTPFilter struct {
 
 func (clientOnlyHTTPFilter) TypeURLs() []string { return []string{"clientOnly.custom.filter"} }
 
-func (clientOnlyHTTPFilter) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, error) {
+func (clientOnlyHTTPFilter) ParseFilterConfig(cfg proto.Message, _ httpfilter.ParseOptions) (httpfilter.FilterConfig, error) {
 	return filterConfig{Cfg: cfg}, nil
 }
 
-func (clientOnlyHTTPFilter) ParseFilterConfigOverride(override proto.Message) (httpfilter.FilterConfig, error) {
+func (clientOnlyHTTPFilter) ParseFilterConfigOverride(override proto.Message, _ httpfilter.ParseOptions) (httpfilter.FilterConfig, error) {
 	return filterConfig{Override: override}, nil
 }
 
@@ -1916,5 +1917,150 @@ func wrappedOptionalFilter(t *testing.T, name string) *anypb.Any {
 			TypeUrl: name,
 			Value:   []byte{1, 2, 3},
 		},
+	})
+}
+
+// parseOptsCapturingFilterBuilder is a test HTTP filter that records the
+// ParseOptions passed to its parse methods.
+type parseOptsCapturingFilterBuilder struct {
+	httpfilter.ClientFilterBuilder
+	httpfilter.ServerFilterBuilder
+	configOpts   *httpfilter.ParseOptions
+	overrideOpts *httpfilter.ParseOptions
+}
+
+func (*parseOptsCapturingFilterBuilder) TypeURLs() []string {
+	return []string{"opts.capturing.filter"}
+}
+
+func (b *parseOptsCapturingFilterBuilder) ParseFilterConfig(_ proto.Message, opts httpfilter.ParseOptions) (httpfilter.FilterConfig, error) {
+	b.configOpts = &opts
+	return filterConfig{}, nil
+}
+
+func (b *parseOptsCapturingFilterBuilder) ParseFilterConfigOverride(_ proto.Message, opts httpfilter.ParseOptions) (httpfilter.FilterConfig, error) {
+	b.overrideOpts = &opts
+	return filterConfig{}, nil
+}
+
+func (*parseOptsCapturingFilterBuilder) IsTerminal() bool { return false }
+
+// TestHTTPFilterParseOptions verifies that the bootstrap and server
+// configuration available at resource-decode time are threaded through to a
+// filter's ParseFilterConfig (via LDS http_filters) and
+// ParseFilterConfigOverride (via RDS typed_per_filter_config), on both the
+// client and server side.
+func (s) TestHTTPFilterParseOptions(t *testing.T) {
+	const filterName = "optsFilter"
+	const filterTypeURL = "opts.capturing.filter"
+
+	fb := &parseOptsCapturingFilterBuilder{}
+	httpfilter.Register(fb)
+	defer httpfilter.UnregisterForTesting(filterTypeURL)
+
+	wantBC := &bootstrap.Config{}
+	wantSC := &bootstrap.ServerConfig{}
+	filterCfg := &anypb.Any{TypeUrl: filterTypeURL}
+
+	checkParseOptions := func(t *testing.T) {
+		t.Helper()
+		if fb.configOpts == nil {
+			t.Fatalf("ParseFilterConfig() was not called")
+		}
+		if fb.configOpts.BootstrapConfig != wantBC || fb.configOpts.ServerConfig != wantSC {
+			t.Errorf("ParseFilterConfig() got options %+v, want {BootstrapConfig: %p, ServerConfig: %p}", fb.configOpts, wantBC, wantSC)
+		}
+		if fb.overrideOpts == nil {
+			t.Fatalf("ParseFilterConfigOverride() was not called")
+		}
+		if fb.overrideOpts.BootstrapConfig != wantBC || fb.overrideOpts.ServerConfig != wantSC {
+			t.Errorf("ParseFilterConfigOverride() got options %+v, want {BootstrapConfig: %p, ServerConfig: %p}", fb.overrideOpts, wantBC, wantSC)
+		}
+	}
+
+	t.Run("client_side", func(t *testing.T) {
+		fb.configOpts, fb.overrideOpts = nil, nil
+
+		// A client-side listener whose http_filters reference the
+		// capturing filter, followed by the terminal router filter.
+		lis := testutils.MarshalAny(t, &v3listenerpb.Listener{
+			Name: "lds.target.good:3333",
+			ApiListener: &v3listenerpb.ApiListener{
+				ApiListener: testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
+					RouteSpecifier: &v3httppb.HttpConnectionManager_Rds{
+						Rds: &v3httppb.Rds{
+							ConfigSource: &v3corepb.ConfigSource{
+								ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{Ads: &v3corepb.AggregatedConfigSource{}},
+							},
+							RouteConfigName: "route-config-name",
+						},
+					},
+					HttpFilters: []*v3httppb.HttpFilter{
+						{Name: filterName, ConfigType: &v3httppb.HttpFilter_TypedConfig{TypedConfig: filterCfg}},
+						e2e.RouterHTTPFilter,
+					},
+				}),
+			},
+		})
+		if _, _, err := unmarshalListenerResource(lis, wantBC, wantSC); err != nil {
+			t.Fatalf("unmarshalListenerResource() failed: %v", err)
+		}
+
+		// A route configuration whose virtual host carries a
+		// typed_per_filter_config override for the capturing filter.
+		rc := &v3routepb.RouteConfiguration{
+			Name: "route-config-name",
+			VirtualHosts: []*v3routepb.VirtualHost{{
+				Domains:              []string{"*"},
+				TypedPerFilterConfig: map[string]*anypb.Any{filterName: filterCfg},
+			}},
+		}
+		if _, err := generateRDSUpdateFromRouteConfiguration(rc, wantBC, wantSC); err != nil {
+			t.Fatalf("generateRDSUpdateFromRouteConfiguration() failed: %v", err)
+		}
+		checkParseOptions(t)
+	})
+
+	t.Run("server_side", func(t *testing.T) {
+		fb.configOpts, fb.overrideOpts = nil, nil
+
+		// A server-side listener with a single filter chain whose
+		// HttpConnectionManager references the capturing filter in its
+		// http_filters and carries an inline route configuration with a
+		// typed_per_filter_config override for the same filter.
+		routeConfig := &v3routepb.RouteConfiguration{
+			Name: "routeName",
+			VirtualHosts: []*v3routepb.VirtualHost{{
+				Domains:              []string{"lds.target.good:3333"},
+				TypedPerFilterConfig: map[string]*anypb.Any{filterName: filterCfg},
+				Routes: []*v3routepb.Route{{
+					Match:  &v3routepb.RouteMatch{PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"}},
+					Action: &v3routepb.Route_NonForwardingAction{},
+				}},
+			}},
+		}
+		lis := testutils.MarshalAny(t, &v3listenerpb.Listener{
+			Name:    "grpc/server?xds.resource.listening_address=0.0.0.0:9999",
+			Address: localSocketAddress,
+			FilterChains: []*v3listenerpb.FilterChain{{
+				Name: "filter-chain-1",
+				Filters: []*v3listenerpb.Filter{{
+					Name: "hcm",
+					ConfigType: &v3listenerpb.Filter_TypedConfig{
+						TypedConfig: testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
+							RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{RouteConfig: routeConfig},
+							HttpFilters: []*v3httppb.HttpFilter{
+								{Name: filterName, ConfigType: &v3httppb.HttpFilter_TypedConfig{TypedConfig: filterCfg}},
+								e2e.RouterHTTPFilter,
+							},
+						}),
+					},
+				}},
+			}},
+		})
+		if _, _, err := unmarshalListenerResource(lis, wantBC, wantSC); err != nil {
+			t.Fatalf("unmarshalListenerResource() failed: %v", err)
+		}
+		checkParseOptions(t)
 	})
 }

@@ -295,6 +295,15 @@ func (r *TestMetricsRecorder) RecordInt64AsyncGauge(handle *estats.Int64AsyncGau
 	r.data[handle.Name] = float64(incr)
 }
 
+// ReadFloat64Histo waits for a float64 histogram metric to be recorded and returns its data.
+func (r *TestMetricsRecorder) ReadFloat64Histo(ctx context.Context) (MetricsData, error) {
+	got, err := r.floatHistoCh.Receive(ctx)
+	if err != nil {
+		return MetricsData{}, err
+	}
+	return got.(MetricsData), nil
+}
+
 // To implement a stats.Handler, which allows it to be set as a dial option:
 
 // TagRPC is TestMetricsRecorder's implementation of TagRPC.
