@@ -20,6 +20,7 @@ package extproc
 
 import (
 	"math"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -37,7 +38,7 @@ func TestApplyServerWindowUpdate(t *testing.T) {
 		name       string
 		start      int64
 		delta      int64
-		wantErr    bool
+		wantErr    string
 		wantWindow int64
 		wantSignal bool
 	}{
@@ -64,7 +65,7 @@ func TestApplyServerWindowUpdate(t *testing.T) {
 			name:       "overflowing increment is rejected and leaves the window unchanged",
 			start:      iextproc.DefaultFlowControlWindowSize,
 			delta:      math.MaxInt64,
-			wantErr:    true,
+			wantErr:    "overflows the current window",
 			wantWindow: iextproc.DefaultFlowControlWindowSize,
 		},
 		{
@@ -83,7 +84,7 @@ func TestApplyServerWindowUpdate(t *testing.T) {
 			name:       "underflowing increment is rejected and leaves the window unchanged",
 			start:      math.MinInt64 + 10,
 			delta:      -1024,
-			wantErr:    true,
+			wantErr:    "underflows the current window",
 			wantWindow: math.MinInt64 + 10,
 		},
 	}
@@ -94,8 +95,12 @@ func TestApplyServerWindowUpdate(t *testing.T) {
 			ch := make(chan struct{}, 1)
 
 			err := applyServerWindowUpdate(&window, ch, test.delta)
-			if (err != nil) != test.wantErr {
-				t.Fatalf("applyServerWindowUpdate(%d, %d) error = %v, wantErr %v", test.start, test.delta, err, test.wantErr)
+			if test.wantErr == "" {
+				if err != nil {
+					t.Fatalf("applyServerWindowUpdate(%d, %d) returned unexpected error: %v", test.start, test.delta, err)
+				}
+			} else if err == nil || !strings.Contains(err.Error(), test.wantErr) {
+				t.Fatalf("applyServerWindowUpdate(%d, %d) error = %v, wantErr %q", test.start, test.delta, err, test.wantErr)
 			}
 			if got := window.Load(); got != test.wantWindow {
 				t.Errorf("window = %d, want %d", got, test.wantWindow)
