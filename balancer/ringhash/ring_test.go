@@ -76,10 +76,10 @@ func (s) TestRingNew(t *testing.T) {
 	}
 }
 
-// TestRingNewWeightSumOverflow checks that endpoint weights whose sum exceeds
-// math.MaxUint32 do not wrap the weight accumulator to zero. A zero sum used to
-// make normalizeWeights divide by zero, producing +Inf normalized weights and
-// an unbounded ring-build loop in newRing.
+// TestRingNewWeightSumOverflow tests the scenario where the sum of endpoint
+// weights exceeds math.MaxUint32 and would wrap to exactly zero in a uint32.
+// Verifies that the ring-build loop in newRing terminates and produces a ring
+// within the configured size bounds, with the endpoints evenly distributed.
 func (s) TestRingNewWeightSumOverflow(t *testing.T) {
 	endpoints := []resolver.Endpoint{
 		testEndpoint("a", 1<<31),
@@ -101,18 +101,17 @@ func (s) TestRingNewWeightSumOverflow(t *testing.T) {
 				count++
 			}
 		}
-		got := float64(count) / float64(len(r.items))
-		if got != 0.5 {
-			t.Fatalf("endpoint %q occupies %v of the ring, want 0.5", hashKey(e), got)
+		if got := float64(count) / float64(len(r.items)); !equalApproximately(got, 0.5) {
+			t.Fatalf("Endpoint %q occupies %v of the ring, want ~0.5", hashKey(e), got)
 		}
 	}
 }
 
-// TestRingNewWeightSumOverflowToNonZero checks that endpoint weights whose sum
-// exceeds math.MaxUint32 and wraps to a non-zero value still produce a ring
-// within the configured size bounds. A wrapped non-zero sum used to make
-// normalizeWeights return weights greater than 1, growing the ring past
-// maxRingSize.
+// TestRingNewWeightSumOverflowToNonZero tests the scenario where the sum of
+// endpoint weights exceeds math.MaxUint32 and would wrap to a smaller non-zero
+// value in a uint32, which makes the normalized weights greater than 1 and
+// grows the ring past maxRingSize. Verifies that the ring stays within the
+// configured size bounds, with the endpoints distributed by weight.
 func (s) TestRingNewWeightSumOverflowToNonZero(t *testing.T) {
 	endpoints := []resolver.Endpoint{
 		testEndpoint("a", 1<<31),
@@ -139,7 +138,7 @@ func (s) TestRingNewWeightSumOverflowToNonZero(t *testing.T) {
 		}
 		got := float64(count) / float64(len(r.items))
 		if want := wantFractions[hashKey(e)]; !equalApproximately(got, want) {
-			t.Fatalf("endpoint %q occupies %v of the ring, want ~%v", hashKey(e), got, want)
+			t.Fatalf("Endpoint %q occupies %v of the ring, want ~%v", hashKey(e), got, want)
 		}
 	}
 }
