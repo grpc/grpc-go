@@ -39,7 +39,6 @@ func TestRetryMetrics_Unit(t *testing.T) {
 			Metrics: stats.NewMetricSet(
 				ClientCallRetriesMetricName,
 				ClientCallTransparentRetriesMetricName,
-				ClientCallHedgesMetricName,
 				ClientCallRetryDelayMetricName,
 			),
 		},

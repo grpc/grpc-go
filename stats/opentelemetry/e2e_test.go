@@ -2700,12 +2700,7 @@ func (s) TestRetryMetrics(t *testing.T) {
 			}
 		}]
 	}`
-	cc, err := grpc.NewClient(
-		ss.Address,
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		opentelemetry.DialOption(opts),
-		grpc.WithDefaultServiceConfig(serviceConfig),
-	)
+	cc, err := grpc.NewClient(ss.Address, grpc.WithTransportCredentials(insecure.NewCredentials()), opentelemetry.DialOption(opts), grpc.WithDefaultServiceConfig(serviceConfig))
 	if err != nil {
 		t.Fatalf("failed to create client: %v", err)
 	}
@@ -2713,8 +2708,7 @@ func (s) TestRetryMetrics(t *testing.T) {
 
 	client := testgrpc.NewTestServiceClient(cc)
 
-	testTimeout := 5 * time.Second
-	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
 	// Make the unary call. It should succeed after 2 retries (3 attempts).

@@ -62,7 +62,8 @@ func (h *clientMetricsHandler) initializeMetrics() {
 	h.clientMetrics.callDuration = createFloat64Histogram(metrics.Metrics(), "grpc.client.call.duration", meter, otelmetric.WithUnit("s"), otelmetric.WithDescription("Time taken by gRPC to complete an RPC from application's perspective."), otelmetric.WithExplicitBucketBoundaries(DefaultLatencyBounds...))
 	h.clientMetrics.callRetries = createInt64Histogram(metrics.Metrics(), ClientCallRetriesMetricName, meter, otelmetric.WithUnit("{retry}"), otelmetric.WithDescription("Number of retries during the client call. If there were no retries, 0 is not reported."), otelmetric.WithExplicitBucketBoundaries(DefaultRetryBounds...))
 	h.clientMetrics.callTransparentRetries = createInt64Histogram(metrics.Metrics(), ClientCallTransparentRetriesMetricName, meter, otelmetric.WithUnit("{transparent_retry}"), otelmetric.WithDescription("Number of transparent retries during the client call. If there were no transparent retries, 0 is not reported."), otelmetric.WithExplicitBucketBoundaries(DefaultTransparentRetryBounds...))
-	h.clientMetrics.callHedges = createInt64Histogram(metrics.Metrics(), ClientCallHedgesMetricName, meter, otelmetric.WithUnit("{hedge}"), otelmetric.WithDescription("Number of hedges during the client call. If there were no hedges, 0 is not reported."), otelmetric.WithExplicitBucketBoundaries(DefaultHedgeBounds...))
+	// TODO: Add the grpc.client.call.hedges metric (gRFC A96) once grpc-go
+	// supports hedging.
 	h.clientMetrics.callRetryDelay = createFloat64Histogram(metrics.Metrics(), ClientCallRetryDelayMetricName, meter, otelmetric.WithUnit("s"), otelmetric.WithDescription("Total time of delay while there is no active attempt during the client call."), otelmetric.WithExplicitBucketBoundaries(DefaultLatencyBounds...))
 
 	rm := &registryMetrics{
@@ -174,18 +175,10 @@ func (h *clientMetricsHandler) perCallMetrics(ctx context.Context, err error, st
 			h.clientMetrics.callTransparentRetries.Record(ctx, int64(transparentRetries), retryAttrs)
 		}
 	}
-	// Note: callHedges is currently non-functional because hedging is not
-	// supported in grpc-go yet.
-	if h.clientMetrics.callHedges != nil {
-		hedges := ci.numHedges.Load()
-		if hedges > 0 {
-			h.clientMetrics.callHedges.Record(ctx, int64(hedges), retryAttrs)
-		}
-	}
-	// Unlike retries/transparent_retries/hedges, retry_delay is recorded
+	// Unlike retries/transparent_retries, retry_delay is recorded
 	// unconditionally (0 for calls with no retries). A96's metric table
 	// deliberately omits the "if there were no X, 0 is not reported" clause
-	// for retry_delay that it applies to the other three metrics.
+	// for retry_delay that it applies to the other metrics.
 	if h.clientMetrics.callRetryDelay != nil {
 		delaySec := float64(ci.retryDelay.Load()) / float64(time.Second)
 		h.clientMetrics.callRetryDelay.Record(ctx, delaySec, retryAttrs)
@@ -239,8 +232,7 @@ func (h *clientMetricsHandler) processRPCEvent(ctx context.Context, s stats.RPCS
 			ci.numAttempts.Add(1)
 		}
 		// Accumulate retry delay.
-		active := ci.activeAttempts.Add(1)
-		if active == 1 {
+		if ci.activeAttempts.Add(1) == 1 {
 			lastEndTime := ci.lastAttemptEndTime.Swap(0)
 			if lastEndTime > 0 {
 				delay := st.BeginTime.Sub(time.Unix(0, lastEndTime))
@@ -274,8 +266,7 @@ func (h *clientMetricsHandler) processRPCEvent(ctx context.Context, s stats.RPCS
 	case *stats.End:
 		ci := getCallInfo(ctx)
 		if ci != nil {
-			active := ci.activeAttempts.Add(-1)
-			if active == 0 {
+			if ci.activeAttempts.Add(-1) == 0 {
 				ci.lastAttemptEndTime.Store(st.EndTime.UnixNano())
 			}
 		}
@@ -358,21 +349,7 @@ const (
 	// ClientCallTransparentRetriesMetricName is the number of transparent
 	// retries during the client call.
 	ClientCallTransparentRetriesMetricName string = "grpc.client.call.transparent_retries"
-	// ClientCallHedgesMetricName is the number of hedges during the
-	// client call. Note: This metric is currently non-functional
-	// because hedging is not supported in grpc-go yet.
-	ClientCallHedgesMetricName string = "grpc.client.call.hedges"
 	// ClientCallRetryDelayMetricName is the total time of delay while there is no
 	// active attempt during the client call.
 	ClientCallRetryDelayMetricName string = "grpc.client.call.retry_delay"
-)
-
-var (
-	// DefaultRetryBounds are the default bounds for retry metrics.
-	DefaultRetryBounds = []float64{1, 2, 3, 4, 5}
-	// DefaultTransparentRetryBounds are the default bounds for transparent
-	// retry metrics.
-	DefaultTransparentRetryBounds = []float64{1, 2, 3, 4, 5, 10}
-	// DefaultHedgeBounds are the default bounds for hedge metrics.
-	DefaultHedgeBounds = []float64{1, 2, 3, 4, 5}
 )
