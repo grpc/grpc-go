@@ -22,6 +22,7 @@ import (
 	"strings"
 	"testing"
 
+	"google.golang.org/grpc/internal/grpctest"
 	headermatcher "google.golang.org/grpc/internal/xds/matcher/header"
 	"google.golang.org/grpc/metadata"
 
@@ -30,7 +31,15 @@ import (
 	v3typepb "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 )
 
-func TestFromProto(t *testing.T) {
+type s struct {
+	grpctest.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
+
+func (s) TestFromProto(t *testing.T) {
 	tests := []struct {
 		name         string
 		matcherProto *v3routepb.HeaderMatcher
