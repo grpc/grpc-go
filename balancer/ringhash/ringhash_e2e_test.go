@@ -2889,21 +2889,27 @@ func (s) TestRingHash_RequestHashKeyConnecting(t *testing.T) {
 	// Connecting state, the picker must queue the RPC rather than trigger
 	// another connection attempt, so the RPC fails with DeadlineExceeded.
 	//
-	// The deadline must leave the RPC enough time to reach the picker on a
-	// loaded machine, otherwise it fails before the pick with a plain context
-	// error. It is not shared with the other tests because the RPC blocks for
-	// the whole duration on every run.
+	// The deadline only needs to be long enough that the RPC usually reaches
+	// the picker. If it expires earlier, for example because this goroutine was
+	// descheduled, the RPC fails with a plain context error and has no effect
+	// on the balancer, so it is retried until one fails while blocked in the
+	// picker. Only such an RPC makes the count below meaningful. The deadline
+	// is not shared with the other tests because the RPC blocks for the whole
+	// duration on every run.
 	const secondRPCTimeout = 100 * time.Millisecond
-	sCtx, sCancel := context.WithTimeout(ctx, secondRPCTimeout)
-	_, err = client.EmptyCall(sCtx, &testpb.Empty{}, grpc.WaitForReady(true))
-	sCancel()
-	if got, want := status.Code(err), codes.DeadlineExceeded; got != want {
-		t.Fatalf("EmptyCall(): got code %v, want %v", got, want)
-	}
-	// Verify the RPC failed while blocked in the picker rather than before
-	// reaching it, otherwise the check below would not be testing anything.
-	if want := "while waiting for connections to become ready"; !strings.Contains(status.Convert(err).Message(), want) {
-		t.Fatalf("EmptyCall(): got error %q, want it to contain %q", status.Convert(err).Message(), want)
+	for {
+		if ctx.Err() != nil {
+			t.Fatalf("Test timed out before the second RPC could reach the picker; last error: %v", err)
+		}
+		sCtx, sCancel := context.WithTimeout(ctx, secondRPCTimeout)
+		_, err = client.EmptyCall(sCtx, &testpb.Empty{}, grpc.WaitForReady(true))
+		sCancel()
+		if got, want := status.Code(err), codes.DeadlineExceeded; got != want {
+			t.Fatalf("EmptyCall(): got code %v, want %v", got, want)
+		}
+		if strings.Contains(status.Convert(err).Message(), "while waiting for connections to become ready") {
+			break
+		}
 	}
 
 	// Count the connection attempts before unblocking any of them. Resuming a
