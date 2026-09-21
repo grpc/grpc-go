@@ -22,11 +22,12 @@ import (
 	"strings"
 	"testing"
 
+	headermatcher "google.golang.org/grpc/internal/xds/matcher/header"
+	"google.golang.org/grpc/metadata"
+
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	v3matcherpb "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
 	v3typepb "github.com/envoyproxy/go-control-plane/envoy/type/v3"
-	headermatcher "google.golang.org/grpc/internal/xds/matcher/header"
-	"google.golang.org/grpc/metadata"
 )
 
 func TestFromProto(t *testing.T) {
