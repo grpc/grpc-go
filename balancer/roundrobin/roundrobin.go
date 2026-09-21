@@ -29,6 +29,7 @@ import (
 	"google.golang.org/grpc/balancer/pickfirst"
 	"google.golang.org/grpc/grpclog"
 	internalgrpclog "google.golang.org/grpc/internal/grpclog"
+	"google.golang.org/grpc/internal/pretty"
 )
 
 // Name is the name of round_robin balancer.
@@ -67,7 +68,7 @@ type rrBalancer struct {
 
 func (b *rrBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error {
 	if b.logger.V(2) {
-		b.logger.Infof("Received new resolver state with %d endpoints", len(ccs.ResolverState.Endpoints))
+		b.logger.Infof("Received new resolver state: %s", pretty.ToJSON(ccs.ResolverState))
 	}
 	return b.Balancer.UpdateClientConnState(balancer.ClientConnState{
 		// Enable the health listener in pickfirst children for client side health
