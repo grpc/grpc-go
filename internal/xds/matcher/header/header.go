@@ -23,8 +23,9 @@ import (
 	"errors"
 	"fmt"
 
-	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	"google.golang.org/grpc/internal/xds/matcher"
+
+	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 )
 
 // FromProto creates a header matcher from the corresponding proto.
