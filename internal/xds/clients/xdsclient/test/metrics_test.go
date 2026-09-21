@@ -800,9 +800,9 @@ type reconnectionTestFixture struct {
 	// reqReceived fires when the management server receives a request. It is
 	// armed by expectNextStreamRequest, and is nil until then.
 	reqReceived *syncutil.Event
-	// sendResponse, when non-nil, holds back responses from the management
+	// sendResponseCh, when non-nil, holds back responses from the management
 	// server until the channel is closed by allowServerResponses.
-	sendResponse chan struct{}
+	sendResponseCh chan struct{}
 	// attemptBlocked fires when a stream creation attempt from the client is
 	// held up by the stream interceptor.
 	attemptBlocked *syncutil.Event
@@ -835,22 +835,14 @@ func (f *reconnectionTestFixture) onStreamRequest(int64, *v3discoverypb.Discover
 
 // onStreamResponse implements the management server's OnStreamResponse
 // callback. It holds back the response for as long as server responses are
-// blocked. The given context is not the test's context: it comes from the
-// management server's response, and for responses generated from its cache
-// it is a background context that is never canceled. A test cleanup
-// registered in newReconnectionTestFixture therefore releases blocked
-// responses, guaranteeing that this callback eventually returns.
-func (f *reconnectionTestFixture) onStreamResponse(ctx context.Context, _ int64, _ *v3discoverypb.DiscoveryRequest, _ *v3discoverypb.DiscoveryResponse) {
+// blocked.
+func (f *reconnectionTestFixture) onStreamResponse(context.Context, int64, *v3discoverypb.DiscoveryRequest, *v3discoverypb.DiscoveryResponse) {
 	f.mu.Lock()
-	sendResponse := f.sendResponse
+	sendResponseCh := f.sendResponseCh
 	f.mu.Unlock()
 
-	if sendResponse == nil {
-		return
-	}
-	select {
-	case <-sendResponse:
-	case <-ctx.Done():
+	if sendResponseCh != nil {
+		<-sendResponseCh
 	}
 }
 
@@ -861,7 +853,7 @@ func (f *reconnectionTestFixture) streamInterceptor(ctx context.Context, desc *g
 	blocked, unblock := f.attemptBlocked, f.attemptUnblock
 	f.mu.Unlock()
 
-	if unblock != nil {
+	if blocked != nil {
 		blocked.Fire()
 		select {
 		case <-unblock.Done():
@@ -904,7 +896,7 @@ func (f *reconnectionTestFixture) waitForStreamRequest(ctx context.Context) erro
 func (f *reconnectionTestFixture) blockServerResponses() {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.sendResponse = make(chan struct{})
+	f.sendResponseCh = make(chan struct{})
 }
 
 // allowServerResponses releases responses held back by the management server,
@@ -912,9 +904,9 @@ func (f *reconnectionTestFixture) blockServerResponses() {
 func (f *reconnectionTestFixture) allowServerResponses() {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if f.sendResponse != nil {
-		close(f.sendResponse)
-		f.sendResponse = nil
+	if f.sendResponseCh != nil {
+		close(f.sendResponseCh)
+		f.sendResponseCh = nil
 	}
 }
 
