@@ -102,7 +102,7 @@ func (s) TestUnimplementedHandlerTracersNonNil(t *testing.T) {
 // TestNopTracersAreCallable verifies every method on the Nop tracers can be
 // invoked without panicking, since declining a call means gRPC will still
 // report every event to the returned tracer.
-func (s) TestNopTracersAreCallable(t *testing.T) {
+func (s) TestNopTracersAreCallable(_ *testing.T) {
 	ct := NopClientCallTracer{}
 	ct.RecordAnnotation(AnnotationNameResolutionComplete)
 	at := ct.StartAttempt(&AttemptInfo{})

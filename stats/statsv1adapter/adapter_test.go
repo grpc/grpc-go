@@ -96,7 +96,7 @@ func (h *fakeV1Handler) eventTypes() []string {
 	return out
 }
 
-func addr(s string) net.Addr { return &net.TCPAddr{IP: net.ParseIP("1.2.3.4"), Port: 5, Zone: s} }
+func addr(s string) net.Addr { return &net.TCPAddr{IP: net.IPv4(1, 2, 3, 4), Port: 5, Zone: s} }
 
 // TestClientAttemptLifecycle drives a full client attempt through the adapter and
 // asserts the ordered V1 event stream and the load-bearing fields of each event.
