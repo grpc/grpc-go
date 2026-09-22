@@ -180,66 +180,106 @@ func (s) TestHeaderListSizeDialOptionServerOption(t *testing.T) {
 
 // TestChildChannelOptions_Client tests WithChildChannelOptions on client side.
 func (s) TestChildChannelOptions_Client(t *testing.T) {
-	const readBufferSize = 1024
-	const writeBufferSize = 2048
-	const initialWindowSize = 4096
-	const wantChildOptsCount = 2
-
-	opt1 := WithReadBufferSize(readBufferSize)
-	opt2 := WithWriteBufferSize(writeBufferSize)
-	opt3 := WithInitialWindowSize(initialWindowSize)
+	const (
+		initReadBufferSize        = 512
+		overwrittenReadBufferSize = 1024
+		writeBufferSize           = 2048
+	)
 
 	// Test multiple WithChildChannelOptions calls: the last call replaces earlier ones.
 	cc, err := NewClient("passthrough:///test",
 		WithTransportCredentials(insecure.NewCredentials()),
-		WithChildChannelOptions(opt1),
-		WithChildChannelOptions(opt2, opt3),
+		WithChildChannelOptions(WithInitialWindowSize(4096)),
+		WithChildChannelOptions(
+			WithReadBufferSize(initReadBufferSize),
+			WithWriteBufferSize(writeBufferSize),
+			WithReadBufferSize(overwrittenReadBufferSize),
+		),
 	)
 	if err != nil {
 		t.Fatalf("NewClient failed: %v", err)
 	}
 	defer cc.Close()
 
-	// Verify that child dial options from the last call are stored in cc.dopts.
-	if len(cc.dopts.childDialOptions) != wantChildOptsCount {
-		t.Fatalf("Child dial options count = %d, want %d", len(cc.dopts.childDialOptions), wantChildOptsCount)
+	// Verify that parent options are not modified by child options.
+	if got, want := cc.dopts.copts.ReadBufferSize, defaultReadBufSize; got != want {
+		t.Fatalf("Parent cc.dopts.copts.ReadBufferSize = %d, want %d", got, want)
+	}
+	if got, want := cc.dopts.copts.WriteBufferSize, defaultWriteBufSize; got != want {
+		t.Fatalf("Parent cc.dopts.copts.WriteBufferSize = %d, want %d", got, want)
+	}
+	if got, want := cc.dopts.copts.InitialWindowSize, int32(0); got != want {
+		t.Fatalf("Parent cc.dopts.copts.InitialWindowSize = %d, want %d", got, want)
 	}
 
-	// Verify that parent options are not modified by child options.
-	if cc.dopts.copts.ReadBufferSize == readBufferSize {
-		t.Fatalf("Parent cc.dopts.copts.ReadBufferSize was modified by child option: got %d, want default", readBufferSize)
+	// Verify that child dial options from the last call are stored in cc.dopts in order.
+	if got, want := len(cc.dopts.childDialOptions), 3; got != want {
+		t.Fatalf("Child dial options count = %d, want %d", got, want)
 	}
-	if cc.dopts.copts.WriteBufferSize == writeBufferSize {
-		t.Fatalf("Parent cc.dopts.copts.WriteBufferSize was modified by child option: got %d, want default", writeBufferSize)
+	cc.dopts.childDialOptions[0].apply(&cc.dopts)
+	if got, want := cc.dopts.copts.ReadBufferSize, initReadBufferSize; got != want {
+		t.Fatalf("Child dial option[0] ReadBufferSize = %d, want %d", got, want)
 	}
-	if cc.dopts.copts.InitialWindowSize == initialWindowSize {
-		t.Fatalf("Parent cc.dopts.copts.InitialWindowSize was modified by child option: got %d, want default", initialWindowSize)
+	cc.dopts.childDialOptions[1].apply(&cc.dopts)
+	if got, want := cc.dopts.copts.WriteBufferSize, writeBufferSize; got != want {
+		t.Fatalf("Child dial option[1] WriteBufferSize = %d, want %d", got, want)
+	}
+	cc.dopts.childDialOptions[2].apply(&cc.dopts)
+	if got, want := cc.dopts.copts.ReadBufferSize, overwrittenReadBufferSize; got != want {
+		t.Fatalf("Child dial option[2] ReadBufferSize = %d, want %d", got, want)
+	}
+
+	// Verify that overridden child dial options were not applied.
+	if got, want := cc.dopts.copts.InitialWindowSize, int32(0); got != want {
+		t.Fatalf("Child InitialWindowSize = %d, want %d", got, want)
 	}
 }
 
 // TestChildChannelOptions_Server tests ChildChannelOptions on server side.
 func (s) TestChildChannelOptions_Server(t *testing.T) {
-	const readBufferSize = 1024
-	const writeBufferSize = 2048
-	const initialWindowSize = 4096
-	const wantChildOptsCount = 2
+	const (
+		initReadBufferSize        = 512
+		overwrittenReadBufferSize = 1024
+		writeBufferSize           = 2048
+	)
 
-	opt1 := WithReadBufferSize(readBufferSize)
-	opt2 := WithWriteBufferSize(writeBufferSize)
-	opt3 := WithInitialWindowSize(initialWindowSize)
-
-	srv := NewServer(ChildChannelOptions(opt1), ChildChannelOptions(opt2, opt3))
+	srv := NewServer(
+		ChildChannelOptions(WithInitialWindowSize(4096)),
+		ChildChannelOptions(
+			WithReadBufferSize(initReadBufferSize),
+			WithWriteBufferSize(writeBufferSize),
+			WithReadBufferSize(overwrittenReadBufferSize),
+		),
+	)
 	defer srv.Stop()
 
 	// Verify that child dial options from the last call are stored in srv.opts.
-	if len(srv.opts.childDialOptions) != wantChildOptsCount {
-		t.Fatalf("Child dial options count = %d, want %d", len(srv.opts.childDialOptions), wantChildOptsCount)
+	if got, want := len(srv.opts.childDialOptions), 3; got != want {
+		t.Fatalf("Child dial options count = %d, want %d", got, want)
 	}
 
-	// Verify that internal.ChildDialOptionsFromServer returns the options.
+	// Verify that internal.ChildDialOptionsFromServer returns the options in order.
 	childOpts := internal.ChildDialOptionsFromServer.(func(*Server) []DialOption)(srv)
-	if len(childOpts) != wantChildOptsCount {
-		t.Fatalf("Child dial options count from server accessor = %d, want %d", len(childOpts), wantChildOptsCount)
+	if got, want := len(childOpts), 3; got != want {
+		t.Fatalf("Child dial options count from server accessor = %d, want %d", got, want)
+	}
+	var dopts dialOptions
+	childOpts[0].apply(&dopts)
+	if got, want := dopts.copts.ReadBufferSize, initReadBufferSize; got != want {
+		t.Fatalf("Child dial option[0] ReadBufferSize = %d, want %d", got, want)
+	}
+	childOpts[1].apply(&dopts)
+	if got, want := dopts.copts.WriteBufferSize, writeBufferSize; got != want {
+		t.Fatalf("Child dial option[1] WriteBufferSize = %d, want %d", got, want)
+	}
+	childOpts[2].apply(&dopts)
+	if got, want := dopts.copts.ReadBufferSize, overwrittenReadBufferSize; got != want {
+		t.Fatalf("Child dial option[2] ReadBufferSize = %d, want %d", got, want)
+	}
+
+	// Verify that overridden child dial options were not applied.
+	if got, want := dopts.copts.InitialWindowSize, int32(0); got != want {
+		t.Fatalf("Child InitialWindowSize = %d, want %d", got, want)
 	}
 }
 
