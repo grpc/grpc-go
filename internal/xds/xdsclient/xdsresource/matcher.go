@@ -167,13 +167,11 @@ func matchTypeForDomain(d string) domainMatchType {
 	return domainMatchTypeExact
 }
 
+// match returns the match type of domain, and whether host matches it. Both
+// domain and host are expected to be in lower case; see
+// FindBestMatchingVirtualHostIndex.
 func match(domain, host string) (domainMatchType, bool) {
-	// Host names are case-insensitive, and the request authority is chosen by
-	// the peer, so fold both the configured domain and the host to lower case
-	// before comparing.
-	typ := matchTypeForDomain(domain)
-	domain, host = strings.ToLower(domain), strings.ToLower(host)
-	switch typ {
+	switch typ := matchTypeForDomain(domain); typ {
 	case domainMatchTypeInvalid:
 		return typ, false
 	case domainMatchTypeUniversal:
@@ -191,8 +189,13 @@ func match(domain, host string) (domainMatchType, bool) {
 	}
 }
 
-// FindBestMatchingVirtualHost returns the virtual host whose domains field best
-// matches host
+// FindBestMatchingVirtualHostIndex returns the index of the virtual host in
+// vHosts whose domains field best matches host, or -1 if no virtual host
+// matches (or if any virtual host contains an invalid domain).
+//
+// Host names are case-insensitive. The domains in vHosts are expected to
+// already be in lower case, as produced when unmarshaling a RouteConfiguration,
+// and host is folded to lower case here before matching.
 //
 //	The domains field support 4 different matching pattern types:
 //
@@ -209,28 +212,31 @@ func match(domain, host string) (domainMatchType, bool) {
 //	  better.
 //	  * This is to compare the length of the matching pattern, e.g. “*ABCDE” >
 //	    “*ABC”
-func FindBestMatchingVirtualHost(host string, vHosts []*VirtualHost) *VirtualHost { // Maybe move this crap to client
+func FindBestMatchingVirtualHostIndex(host string, vHosts []*VirtualHost) int {
+	// The request authority is chosen by the peer and may arrive in any case.
+	// Fold it once here rather than on every domain comparison.
+	host = strings.ToLower(host)
 	var (
-		matchVh   *VirtualHost
+		matchIdx  = -1
 		matchType = domainMatchTypeInvalid
 		matchLen  int
 	)
-	for _, vh := range vHosts {
+	for i, vh := range vHosts {
 		for _, domain := range vh.Domains {
 			typ, matched := match(domain, host)
 			if typ == domainMatchTypeInvalid {
 				// The rds response is invalid.
-				return nil
+				return -1
 			}
 			if matchType.betterThan(typ) || matchType == typ && matchLen >= len(domain) || !matched {
 				// The previous match has better type, or the previous match has
 				// better length, or this domain isn't a match.
 				continue
 			}
-			matchVh = vh
+			matchIdx = i
 			matchType = typ
 			matchLen = len(domain)
 		}
 	}
-	return matchVh
+	return matchIdx
 }

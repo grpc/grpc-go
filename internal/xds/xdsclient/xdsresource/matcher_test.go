@@ -23,12 +23,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/internal/grpcutil"
 	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/xds/matcher"
 	"google.golang.org/grpc/metadata"
-	"google.golang.org/protobuf/proto"
 )
 
 func (s) TestAndMatcherMatch(t *testing.T) {
@@ -195,9 +193,6 @@ func (s) TestMatch(t *testing.T) {
 		{name: "suffix-no-match", domain: "*.123", host: "abc.1234", wantTyp: domainMatchTypeSuffix, wantMatched: false},
 		{name: "exact-match", domain: "foo.bar", host: "foo.bar", wantTyp: domainMatchTypeExact, wantMatched: true},
 		{name: "exact-no-match", domain: "foo.bar.com", host: "foo.bar", wantTyp: domainMatchTypeExact, wantMatched: false},
-		{name: "exact-match-mixed-case", domain: "Foo.Bar.Com", host: "foo.bar.COM", wantTyp: domainMatchTypeExact, wantMatched: true},
-		{name: "suffix-match-mixed-case", domain: "*.Bar.Com", host: "ABC.bar.com", wantTyp: domainMatchTypeSuffix, wantMatched: true},
-		{name: "prefix-match-mixed-case", domain: "Abc.*", host: "abc.123", wantTyp: domainMatchTypePrefix, wantMatched: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -208,22 +203,30 @@ func (s) TestMatch(t *testing.T) {
 	}
 }
 
-func (s) TestFindBestMatchingVirtualHost(t *testing.T) {
-	var (
-		oneExactMatch     = &VirtualHost{Domains: []string{"foo.bar.com"}}
-		oneSuffixMatch    = &VirtualHost{Domains: []string{"*.bar.com"}}
-		onePrefixMatch    = &VirtualHost{Domains: []string{"foo.bar.*"}}
-		oneUniversalMatch = &VirtualHost{Domains: []string{"*"}}
-		longExactMatch    = &VirtualHost{Domains: []string{"v2.foo.bar.com"}}
-		multipleMatch     = &VirtualHost{Domains: []string{"pi.foo.bar.com", "314.*", "*.159"}}
-		vhs               = []*VirtualHost{oneExactMatch, oneSuffixMatch, onePrefixMatch, oneUniversalMatch, longExactMatch, multipleMatch}
+func (s) TestFindBestMatchingVirtualHostIndex(t *testing.T) {
+	// Indices of the virtual hosts in vhs below.
+	const (
+		oneExactMatch = iota
+		oneSuffixMatch
+		onePrefixMatch
+		oneUniversalMatch
+		longExactMatch
+		multipleMatch
 	)
+	vhs := []*VirtualHost{
+		oneExactMatch:     {Domains: []string{"foo.bar.com"}},
+		oneSuffixMatch:    {Domains: []string{"*.bar.com"}},
+		onePrefixMatch:    {Domains: []string{"foo.bar.*"}},
+		oneUniversalMatch: {Domains: []string{"*"}},
+		longExactMatch:    {Domains: []string{"v2.foo.bar.com"}},
+		multipleMatch:     {Domains: []string{"pi.foo.bar.com", "314.*", "*.159"}},
+	}
 
 	tests := []struct {
 		name   string
 		host   string
 		vHosts []*VirtualHost
-		want   *VirtualHost
+		want   int
 	}{
 		{name: "exact-match", host: "foo.bar.com", vHosts: vhs, want: oneExactMatch},
 		{name: "suffix-match", host: "123.bar.com", vHosts: vhs, want: oneSuffixMatch},
@@ -239,11 +242,14 @@ func (s) TestFindBestMatchingVirtualHost(t *testing.T) {
 		// A mixed-case host must still select the exact-match virtual host
 		// rather than falling through to the "*" catch-all.
 		{name: "exact-match-mixed-case-host", host: "FOO.BAR.COM", vHosts: vhs, want: oneExactMatch},
+		{name: "suffix-match-mixed-case-host", host: "123.Bar.COM", vHosts: vhs, want: oneSuffixMatch},
+		{name: "no-match", host: "abc.123", vHosts: []*VirtualHost{vhs[oneExactMatch], vhs[oneSuffixMatch]}, want: -1},
+		{name: "invalid-domain", host: "foo.bar.com", vHosts: []*VirtualHost{{Domains: []string{"foo.*.com"}}}, want: -1},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := FindBestMatchingVirtualHost(tt.host, tt.vHosts); !cmp.Equal(got, tt.want, cmp.Comparer(proto.Equal)) {
-				t.Errorf("FindBestMatchingxdsclient.VirtualHost() = %v, want %v", got, tt.want)
+			if got := FindBestMatchingVirtualHostIndex(tt.host, tt.vHosts); got != tt.want {
+				t.Errorf("FindBestMatchingVirtualHostIndex(%q) = %v, want %v", tt.host, got, tt.want)
 			}
 		})
 	}
