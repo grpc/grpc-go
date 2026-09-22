@@ -19,7 +19,7 @@ package server
 
 // UnderlyingGRPCServer returns the gRPC server wrapped by an xds.GRPCServer.
 //
-// Use the xDS server's Serve method to set up xDS listener handling.
-// Use its Stop or GracefulStop method to stop the server and release its
-// reference to the xDS client.
+// Callers must use the returned gRPC server only for service registration,
+// for example, with functions that accept a grpc.ServiceRegistrar.
+// For all other operations, call methods directly on the xds.GRPCServer.
 var UnderlyingGRPCServer any // func(*xds.GRPCServer) *grpc.Server

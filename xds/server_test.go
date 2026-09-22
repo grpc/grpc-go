@@ -107,38 +107,45 @@ func generateBootstrapContents(t *testing.T, nodeID, serverURI string) []byte {
 }
 
 func (s) TestUnderlyingGRPCServer(t *testing.T) {
-	getServer, ok := internalserver.UnderlyingGRPCServer.(func(*GRPCServer) *grpc.Server)
+	grpcServer, ok := internalserver.UnderlyingGRPCServer.(func(*GRPCServer) *grpc.Server)
 	if !ok {
 		t.Fatalf("UnderlyingGRPCServer has type %T, want func(*GRPCServer) *grpc.Server", internalserver.UnderlyingGRPCServer)
 	}
-	xdsServer, err := NewGRPCServer(BootstrapContentsForTesting(generateBootstrapContents(t, uuid.NewString(), nonExistentManagementServer)))
-	if err != nil {
-		t.Fatalf("NewGRPCServer() failed: %v", err)
-	}
-	defer xdsServer.Stop()
 
 	tests := []struct {
 		name   string
-		server *GRPCServer
-		want   *grpc.Server
+		server func(*testing.T) (*GRPCServer, *grpc.Server)
 	}{
 		{
-			name:   "underlying_server",
-			server: xdsServer,
-			want:   xdsServer.gs.(*grpc.Server),
+			name: "underlying_server",
+			server: func(t *testing.T) (*GRPCServer, *grpc.Server) {
+				bootstrapContents := generateBootstrapContents(t, uuid.NewString(), nonExistentManagementServer)
+				xdsServer, err := NewGRPCServer(BootstrapContentsForTesting(bootstrapContents))
+				if err != nil {
+					t.Fatalf("NewGRPCServer() failed: %v", err)
+				}
+				t.Cleanup(xdsServer.Stop)
+				return xdsServer, xdsServer.gs.(*grpc.Server)
+			},
 		},
 		{
 			name: "nil_server",
+			server: func(*testing.T) (*GRPCServer, *grpc.Server) {
+				return nil, nil
+			},
 		},
 		{
-			name:   "test_implementation",
-			server: &GRPCServer{gs: newFakeGRPCServer()},
+			name: "test_implementation",
+			server: func(*testing.T) (*GRPCServer, *grpc.Server) {
+				return &GRPCServer{gs: newFakeGRPCServer()}, nil
+			},
 		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if got := getServer(test.server); got != test.want {
-				t.Errorf("UnderlyingGRPCServer(%p) = %p, want %p", test.server, got, test.want)
+			server, want := test.server(t)
+			if got := grpcServer(server); got != want {
+				t.Errorf("UnderlyingGRPCServer(%p) = %p, want %p", server, got, want)
 			}
 		})
 	}
