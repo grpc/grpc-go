@@ -17,11 +17,9 @@
 
 package server
 
-// GetGRPCServer returns the underlying gRPC server of an xds.GRPCServer. It
-// returns nil if the xDS server is nil or its underlying server is not a
-// *grpc.Server, as can happen with test implementations. It is initialized by
-// package xds.
+// UnderlyingGRPCServer returns the gRPC server wrapped by an xds.GRPCServer.
 //
-// The xDS server retains ownership of the underlying server. Callers must use
-// the xDS server's Serve, Stop, and GracefulStop methods.
-var GetGRPCServer any // func(*xds.GRPCServer) *grpc.Server
+// Use the xDS server's Serve method to set up xDS listener handling.
+// Use its Stop or GracefulStop method to stop the server and release its
+// reference to the xDS client.
+var UnderlyingGRPCServer any // func(*xds.GRPCServer) *grpc.Server

@@ -46,10 +46,11 @@ var (
 )
 
 func init() {
-	server.GetGRPCServer = func(s *GRPCServer) *grpc.Server {
+	server.UnderlyingGRPCServer = func(s *GRPCServer) *grpc.Server {
 		if s == nil {
 			return nil
 		}
+		// Tests may replace the underlying server with a fake implementation.
 		gs, _ := s.gs.(*grpc.Server)
 		return gs
 	}

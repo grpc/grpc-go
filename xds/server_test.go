@@ -106,10 +106,10 @@ func generateBootstrapContents(t *testing.T, nodeID, serverURI string) []byte {
 	return bs
 }
 
-func (s) TestGetGRPCServer(t *testing.T) {
-	getServer, ok := internalserver.GetGRPCServer.(func(*GRPCServer) *grpc.Server)
+func (s) TestUnderlyingGRPCServer(t *testing.T) {
+	getServer, ok := internalserver.UnderlyingGRPCServer.(func(*GRPCServer) *grpc.Server)
 	if !ok {
-		t.Fatalf("GetGRPCServer has type %T, want func(*GRPCServer) *grpc.Server", internalserver.GetGRPCServer)
+		t.Fatalf("UnderlyingGRPCServer has type %T, want func(*GRPCServer) *grpc.Server", internalserver.UnderlyingGRPCServer)
 	}
 	xdsServer, err := NewGRPCServer(BootstrapContentsForTesting(generateBootstrapContents(t, uuid.NewString(), nonExistentManagementServer)))
 	if err != nil {
@@ -138,7 +138,7 @@ func (s) TestGetGRPCServer(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			if got := getServer(test.server); got != test.want {
-				t.Errorf("GetGRPCServer(%p) = %p, want %p", test.server, got, test.want)
+				t.Errorf("UnderlyingGRPCServer(%p) = %p, want %p", test.server, got, test.want)
 			}
 		})
 	}
