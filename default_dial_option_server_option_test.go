@@ -183,24 +183,24 @@ func (s) TestChildChannelOptions_Client(t *testing.T) {
 	const readBufferSize = 1024
 	const writeBufferSize = 2048
 	const initialWindowSize = 4096
-	const wantChildOptsCount = 3
+	const wantChildOptsCount = 2
 
 	opt1 := WithReadBufferSize(readBufferSize)
 	opt2 := WithWriteBufferSize(writeBufferSize)
 	opt3 := WithInitialWindowSize(initialWindowSize)
 
-	// Test multiple WithChildChannelOptions calls.
+	// Test multiple WithChildChannelOptions calls: the last call replaces earlier ones.
 	cc, err := NewClient("passthrough:///test",
 		WithTransportCredentials(insecure.NewCredentials()),
-		WithChildChannelOptions(opt1, opt2),
-		WithChildChannelOptions(opt3),
+		WithChildChannelOptions(opt1),
+		WithChildChannelOptions(opt2, opt3),
 	)
 	if err != nil {
 		t.Fatalf("NewClient failed: %v", err)
 	}
 	defer cc.Close()
 
-	// Verify that child dial options are stored in cc.dopts in order.
+	// Verify that child dial options from the last call are stored in cc.dopts.
 	if len(cc.dopts.childDialOptions) != wantChildOptsCount {
 		t.Fatalf("Child dial options count = %d, want %d", len(cc.dopts.childDialOptions), wantChildOptsCount)
 	}
@@ -221,15 +221,17 @@ func (s) TestChildChannelOptions_Client(t *testing.T) {
 func (s) TestChildChannelOptions_Server(t *testing.T) {
 	const readBufferSize = 1024
 	const writeBufferSize = 2048
+	const initialWindowSize = 4096
 	const wantChildOptsCount = 2
 
 	opt1 := WithReadBufferSize(readBufferSize)
 	opt2 := WithWriteBufferSize(writeBufferSize)
+	opt3 := WithInitialWindowSize(initialWindowSize)
 
-	srv := NewServer(ChildChannelOptions(opt1), ChildChannelOptions(opt2))
+	srv := NewServer(ChildChannelOptions(opt1), ChildChannelOptions(opt2, opt3))
 	defer srv.Stop()
 
-	// Verify that child dial options are stored in srv.opts in order.
+	// Verify that child dial options from the last call are stored in srv.opts.
 	if len(srv.opts.childDialOptions) != wantChildOptsCount {
 		t.Fatalf("Child dial options count = %d, want %d", len(srv.opts.childDialOptions), wantChildOptsCount)
 	}

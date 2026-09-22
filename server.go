@@ -569,7 +569,7 @@ func StatsHandler(h stats.Handler) ServerOption {
 // later release.
 func ChildChannelOptions(opts ...DialOption) ServerOption {
 	return newFuncServerOption(func(o *serverOptions) {
-		o.childDialOptions = append(o.childDialOptions, opts...)
+		o.childDialOptions = opts
 	})
 }
 

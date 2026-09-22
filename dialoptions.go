@@ -825,6 +825,6 @@ func withBufferPool(bufferPool mem.BufferPool) DialOption {
 // later release.
 func WithChildChannelOptions(opts ...DialOption) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
-		o.childDialOptions = append(o.childDialOptions, opts...)
+		o.childDialOptions = opts
 	})
 }
