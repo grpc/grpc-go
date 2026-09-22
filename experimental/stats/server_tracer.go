@@ -93,10 +93,10 @@ type ServerCallTracer interface {
 
 // ServerCallInfo describes a server call to Handler.ServerCallTracer.
 type ServerCallInfo struct {
-	// Method is the full RPC method string, i.e. /package.service/method. It is
-	// the method named by the client and is populated before gRPC has checked
-	// whether such a method is registered, so a tracer is created - and ended -
-	// even for an unknown method.
+	// Method is the full RPC method string, i.e. /package.service/method, as
+	// named by the client. A tracer is created - and ended - for every incoming
+	// call, including one whose method is not registered on this server; in that
+	// case RegisteredMethod is false.
 	Method string
 	// RegisteredMethod reports whether Method is actually registered on this
 	// server. Plugins bucket unregistered methods (which a client can set to
