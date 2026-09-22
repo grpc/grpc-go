@@ -283,30 +283,20 @@ func ReadBufferSize(s int) ServerOption {
 }
 
 // InitialWindowSize returns a ServerOption that sets window size for stream.
-// The lower bound for window size is 64K and any value smaller than that will
-// be ignored. This does not disable dynamic flow control.
-//
-// Deprecated: use InitialStreamWindowSize instead. Will be supported
-// throughout 1.x.
+// The lower bound for window size is 64K and any value smaller than that will be ignored.
 func InitialWindowSize(s int32) ServerOption {
-	return InitialStreamWindowSize(s)
-}
-
-// InitialStreamWindowSize returns a ServerOption that sets window size for
-// stream.  The lower bound for window size is 64K and any value smaller than
-// that will be ignored. This does not disable dynamic flow control.
-func InitialStreamWindowSize(s int32) ServerOption {
 	return newFuncServerOption(func(o *serverOptions) {
 		o.initialWindowSize = s
+		o.staticWindowSize = true
 	})
 }
 
-// InitialConnWindowSize returns a ServerOption that sets window size for a
-// connection. The lower bound for window size is 64K and any value smaller than
-// that will be ignored. This does not disable dynamic flow control.
+// InitialConnWindowSize returns a ServerOption that sets window size for a connection.
+// The lower bound for window size is 64K and any value smaller than that will be ignored.
 func InitialConnWindowSize(s int32) ServerOption {
 	return newFuncServerOption(func(o *serverOptions) {
 		o.initialConnWindowSize = s
+		o.staticWindowSize = true
 	})
 }
 
@@ -1751,7 +1741,13 @@ func (s *Server) stop(graceful bool) {
 	}
 
 	if graceful || s.opts.waitForHandlers {
+		// Release the lock while waiting for handlers to finish. Holding it
+		// here would deadlock a concurrent Stop() (the recommended way to abort
+		// a GracefulStop that is taking too long), because Stop() must acquire
+		// s.mu before it can force the server to shut down.
+		s.mu.Unlock()
 		s.handlersWG.Wait()
+		s.mu.Lock()
 	}
 
 	if s.events != nil {
