@@ -40,6 +40,14 @@ var (
 	_ ServerCallTracer    = NopServerCallTracer{}
 )
 
+// testCtx returns a cancelable context for tests; grpc-go's vet.sh disallows a
+// bare background context in test code.
+func testCtx(t *testing.T) context.Context {
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	return ctx
+}
+
 // minimalHandler is the smallest thing a user can write: embed the
 // Unimplemented type and override nothing. It must satisfy Handler - which does
 // NOT include MetricsRecorder, so a bare handler is not a recorder.
@@ -80,7 +88,7 @@ func (s) TestRecordingHandlerIsRecorder(t *testing.T) {
 // return would panic; the Nop types are the opt-out instead.
 func (s) TestUnimplementedHandlerTracersNonNil(t *testing.T) {
 	h := minimalHandler{}
-	if got := h.ClientCallTracer(context.Background(), &ClientCallInfo{Method: "/s/m"}); got == nil {
+	if got := h.ClientCallTracer(testCtx(t), &ClientCallInfo{Method: "/s/m"}); got == nil {
 		t.Error("ClientCallTracer() = nil, want non-nil")
 	}
 	if got := h.ServerCallTracer(&ServerCallInfo{Method: "/s/m"}); got == nil {
@@ -121,11 +129,11 @@ func (s) TestNopTracersAreCallable(t *testing.T) {
 }
 
 // TestFilterContextReturnsInputUnchanged verifies the no-op FilterContext is
-// identity. A no-op that returned nil or context.Background() would silently
+// identity. A no-op that returned nil or a fresh empty context would silently
 // destroy the call's context, so this default has to be the safe one.
 func (s) TestFilterContextReturnsInputUnchanged(t *testing.T) {
 	type keyType struct{}
-	ctx := context.WithValue(context.Background(), keyType{}, "value")
+	ctx := context.WithValue(testCtx(t), keyType{}, "value")
 	got := UnimplementedServerCallTracer{}.FilterContext(ctx)
 	if got == nil {
 		t.Fatal("FilterContext() = nil, want the input context")

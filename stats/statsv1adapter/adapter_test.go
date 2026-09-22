@@ -42,6 +42,14 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
+// testCtx returns a cancelable context for tests; grpc-go's vet.sh disallows a
+// bare background context in test code.
+func testCtx(t *testing.T) context.Context {
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	return ctx
+}
+
 // fakeV1Handler is a V1 stats.Handler that records every TagRPC and HandleRPC
 // call, so a test can assert the events the adapter synthesized.
 type fakeV1Handler struct {
@@ -99,7 +107,7 @@ func (s) TestClientAttemptLifecycle(t *testing.T) {
 	trl := metadata.MD{"t": []string{"w"}}
 	wantErr := errors.New("boom")
 
-	ct := Wrap(h).ClientCallTracer(context.Background(), &estats.ClientCallInfo{
+	ct := Wrap(h).ClientCallTracer(testCtx(t), &estats.ClientCallInfo{
 		Method:         "/s/m",
 		IsClientStream: true,
 		IsServerStream: false,
@@ -171,7 +179,7 @@ func (s) TestClientAttemptLifecycle(t *testing.T) {
 // matching V1's RPCTagInfo.NameResolutionDelay.
 func (s) TestClientNameResolutionDelay(t *testing.T) {
 	h := &fakeV1Handler{}
-	ct := Wrap(h).ClientCallTracer(context.Background(), &estats.ClientCallInfo{Method: "/s/m"})
+	ct := Wrap(h).ClientCallTracer(testCtx(t), &estats.ClientCallInfo{Method: "/s/m"})
 	ct.RecordAnnotation(estats.AnnotationNameResolutionComplete)
 	ct.StartAttempt(&estats.AttemptInfo{})
 	ct.StartAttempt(&estats.AttemptInfo{})
@@ -195,7 +203,7 @@ func (s) TestClientOutgoingHeaderInjection(t *testing.T) {
 			return metadata.AppendToOutgoingContext(ctx, "grpc-trace-bin", "SPAN")
 		},
 	}
-	ct := Wrap(h).ClientCallTracer(context.Background(), &estats.ClientCallInfo{Method: "/s/m"})
+	ct := Wrap(h).ClientCallTracer(testCtx(t), &estats.ClientCallInfo{Method: "/s/m"})
 	at := ct.StartAttempt(&estats.AttemptInfo{})
 
 	md := metadata.MD{}
@@ -214,7 +222,7 @@ func (s) TestClientOutgoingHeaderInjectionPreservesExisting(t *testing.T) {
 			return metadata.AppendToOutgoingContext(ctx, "x", "added")
 		},
 	}
-	base := metadata.NewOutgoingContext(context.Background(), metadata.MD{"x": []string{"existing"}})
+	base := metadata.NewOutgoingContext(testCtx(t), metadata.MD{"x": []string{"existing"}})
 	ct := Wrap(h).ClientCallTracer(base, &estats.ClientCallInfo{Method: "/s/m"})
 	at := ct.StartAttempt(&estats.AttemptInfo{})
 
@@ -236,7 +244,7 @@ func (s) TestAddOptionalLabelFiresCallback(t *testing.T) {
 			})
 		},
 	}
-	ct := Wrap(h).ClientCallTracer(context.Background(), &estats.ClientCallInfo{Method: "/s/m"})
+	ct := Wrap(h).ClientCallTracer(testCtx(t), &estats.ClientCallInfo{Method: "/s/m"})
 	at := ct.StartAttempt(&estats.AttemptInfo{})
 	at.AddOptionalLabel(estats.LabelLocality, "region/zone/subzone")
 
@@ -259,7 +267,7 @@ func (s) TestServerLifecycleOrder(t *testing.T) {
 		Peer:    &peer.Peer{Addr: remote, LocalAddr: local},
 	})
 	st.RecordIncomingHeaders(&estats.HeadersInfo{WireLength: 12, Compression: "gzip", Headers: hdr, Peer: &peer.Peer{Addr: remote, LocalAddr: local}})
-	ctx := st.FilterContext(context.Background())
+	ctx := st.FilterContext(testCtx(t))
 	if ctx == nil {
 		t.Fatal("FilterContext returned nil context")
 	}
@@ -303,7 +311,7 @@ func (s) TestServerLifecycleOrder(t *testing.T) {
 func (s) TestServerMutateOutgoingIsNoop(t *testing.T) {
 	h := &fakeV1Handler{}
 	st := Wrap(h).ServerCallTracer(&estats.ServerCallInfo{Method: "/s/m"})
-	st.FilterContext(context.Background())
+	st.FilterContext(testCtx(t))
 	md := metadata.MD{}
 	st.MutateOutgoingHeaders(md)
 	st.MutateOutgoingTrailers(md)
@@ -335,7 +343,7 @@ func (s) TestWrapDiscoversMetricsRecorder(t *testing.T) {
 func (s) TestWrapNeverReturnsNilTracers(t *testing.T) {
 	for _, h := range []stats.Handler{&fakeV1Handler{}, &recordingV1Handler{}} {
 		w := Wrap(h)
-		if got := w.ClientCallTracer(context.Background(), &estats.ClientCallInfo{Method: "/s/m"}); got == nil {
+		if got := w.ClientCallTracer(testCtx(t), &estats.ClientCallInfo{Method: "/s/m"}); got == nil {
 			t.Errorf("Wrap(%T).ClientCallTracer() = nil, want non-nil", h)
 		}
 		if got := w.ServerCallTracer(&estats.ServerCallInfo{Method: "/s/m"}); got == nil {
