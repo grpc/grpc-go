@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2014 gRPC authors.
+ * Copyright 2026 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,13 @@
  *
  */
 
-// Binary server is an interop server.
+// Binary server is an interop server with OpenTelemetry tracing support.
+//
+// It is functionally identical to the interop server in the root module
+// (interop/server) but additionally accepts -enable_opentelemetry and
+// -otel_collector_address, which configure the gRPC OpenTelemetry plugin to
+// export traces over OTLP/gRPC. It lives in its own module so that the OTLP
+// exporter's dependencies do not leak into the root grpc-go module.
 //
 // See interop test case descriptions [here].
 //
@@ -26,28 +32,36 @@ package main
 import (
 	"flag"
 	"net"
+	"os"
+	"os/signal"
 	"strconv"
+	"syscall"
 	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/alts"
+	oteltracing "google.golang.org/grpc/experimental/opentelemetry"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/interop"
+	interopotel "google.golang.org/grpc/interop/otel"
 	"google.golang.org/grpc/orca"
+	grpcotel "google.golang.org/grpc/stats/opentelemetry"
 	"google.golang.org/grpc/testdata"
 
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 )
 
 var (
-	useTLS     = flag.Bool("use_tls", false, "Connection uses TLS if true, else plain TCP")
-	useALTS    = flag.Bool("use_alts", false, "Connection uses ALTS if true (this option can only be used on GCP)")
-	altsHSAddr = flag.String("alts_handshaker_service_address", "", "ALTS handshaker gRPC service address")
-	certFile   = flag.String("tls_cert_file", "", "The TLS cert file")
-	keyFile    = flag.String("tls_key_file", "", "The TLS key file")
-	port       = flag.Int("port", 10000, "The server port")
+	useTLS               = flag.Bool("use_tls", false, "Connection uses TLS if true, else plain TCP")
+	useALTS              = flag.Bool("use_alts", false, "Connection uses ALTS if true (this option can only be used on GCP)")
+	altsHSAddr           = flag.String("alts_handshaker_service_address", "", "ALTS handshaker gRPC service address")
+	certFile             = flag.String("tls_cert_file", "", "The TLS cert file")
+	keyFile              = flag.String("tls_key_file", "", "The TLS key file")
+	port                 = flag.Int("port", 10000, "The server port")
+	enableOpenTelemetry  = flag.Bool("enable_opentelemetry", false, "Whether to enable OpenTelemetry tracing")
+	otelCollectorAddress = flag.String("otel_collector_address", "", "The OTLP/gRPC address of the OpenTelemetry trace collector, e.g. localhost:4317 or http://localhost:4317")
 
 	logger = grpclog.Component("interop")
 )
@@ -64,6 +78,16 @@ func main() {
 	}
 	logger.Infof("interop server listening on %v", lis.Addr())
 	opts := []grpc.ServerOption{orca.CallMetricsServerOption(nil)}
+	tp, propagator, shutdownTracing := interopotel.Setup(*enableOpenTelemetry, *otelCollectorAddress, logger)
+	if tp != nil {
+		defer shutdownTracing()
+		opts = append(opts, grpcotel.ServerOption(grpcotel.Options{
+			TraceOptions: oteltracing.TraceOptions{
+				TracerProvider:    tp,
+				TextMapPropagator: propagator,
+			},
+		}))
+	}
 	if *useTLS {
 		if *certFile == "" {
 			*certFile = testdata.Path("server1.pem")
@@ -93,5 +117,24 @@ func main() {
 	internal.ORCAAllowAnyMinReportingInterval.(func(*orca.ServiceOptions))(&sopts)
 	orca.Register(server, sopts)
 	testgrpc.RegisterTestServiceServer(server, interop.NewTestServer(interop.NewTestServerOptions{MetricsRecorder: metricsRecorder}))
+
+	// Stop serving on SIGINT/SIGTERM so that the deferred tracing shutdown
+	// runs and flushes any spans that have not been exported yet.
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		<-sigCh
+		logger.Info("Signal received, stopping interop server")
+		stopped := make(chan struct{})
+		go func() {
+			server.GracefulStop()
+			close(stopped)
+		}()
+		select {
+		case <-stopped:
+		case <-time.After(5 * time.Second):
+			server.Stop()
+		}
+	}()
 	server.Serve(lis)
 }
