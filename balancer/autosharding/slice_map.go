@@ -81,6 +81,13 @@ func buildSliceMap(endpointMap *endpointMap, assignment *assignment) *sliceMap {
 	// have this slice is to allow the Picker to share code that picks a random
 	// endpoint from a slice of indices, either from the fallbackPool or from a
 	// sliceMapEntry.
+	//
+	// Note: An alternative approach using an iterator (iter.Seq[int]) to avoid
+	// storing fallbackPool was considered, since its values are always
+	// [0, 1, ... N-1]. However, passing an iterator to pickFromEndpointIndices
+	// prevents compiler inlining and causes the loop closure and captured state
+	// to escape to the heap on every Pick() call. Preallocating fallbackPool
+	// here keeps the per-RPC Pick() path allocation-free.
 	sm.fallbackPool = make([]int, len(endpointMap.m))
 	for i := range sm.fallbackPool {
 		sm.fallbackPool[i] = i
