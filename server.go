@@ -563,6 +563,10 @@ func StatsHandler(h stats.Handler) ServerOption {
 //
 // These options are not applied to the parent server itself.
 //
+// Note: Plumbing for child channel options is not yet implemented.
+// TODO: Revisit this doc comment once plumbing is implemented to ensure it is
+// compliant with gRFC A110 and the implementation.
+//
 // # Experimental
 //
 // Notice: This API is EXPERIMENTAL and may be changed or removed in a

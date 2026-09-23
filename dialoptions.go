@@ -819,6 +819,10 @@ func withBufferPool(bufferPool mem.BufferPool) DialOption {
 //
 // These options are not applied to the parent channel itself.
 //
+// Note: Plumbing for child channel options is not yet implemented.
+// TODO: Revisit this doc comment once plumbing is implemented to ensure it is
+// compliant with gRFC A110 and the implementation.
+//
 // # Experimental
 //
 // Notice: This API is EXPERIMENTAL and may be changed or removed in a
