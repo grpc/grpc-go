@@ -130,9 +130,11 @@ func main() {
 			server.GracefulStop()
 			close(stopped)
 		}()
+		timer := time.NewTimer(5 * time.Second)
+		defer timer.Stop()
 		select {
 		case <-stopped:
-		case <-time.After(5 * time.Second):
+		case <-timer.C:
 			server.Stop()
 		}
 	}()
