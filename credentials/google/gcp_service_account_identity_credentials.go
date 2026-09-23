@@ -66,8 +66,8 @@ type gcpServiceAccountIdentityCallCreds struct {
 
 func init() {
 	internal.BackoffStrategy = backoff.DefaultExponential
-	internal.NewIDTokenFetcher = func() func(ctx context.Context, audience string) (string, time.Time, error) {
-		return newIDTokenFetcher().FetchIDToken
+	internal.IDTokenFetcher = func() func(ctx context.Context, audience string) (string, time.Time, error) {
+		return newIDTokenFetcher().fetchIDToken
 	}
 }
 
@@ -102,7 +102,7 @@ func NewServiceAccountIdentityCredentials(ctx context.Context, audience string) 
 		ctx:          ctx,
 		audience:     audience,
 		backoff:      internal.BackoffStrategy,
-		fetchIDToken: internal.NewIDTokenFetcher(),
+		fetchIDToken: internal.IDTokenFetcher(),
 	}, nil
 }
 
@@ -212,14 +212,14 @@ func (c *gcpServiceAccountIdentityCallCreds) isTokenValidLocked() bool {
 func (c *gcpServiceAccountIdentityCallCreds) startFetch() {
 	ctx, cancel := context.WithTimeout(c.ctx, metadataTimeout)
 	defer cancel()
-	val, exp, err := c.fetchIDToken(ctx, c.audience)
+	token, exp, err := c.fetchIDToken(ctx, c.audience)
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	close(c.fetching)
 	c.fetching = nil
-	c.updateStateLocked(val, exp, err)
+	c.updateStateLocked(token, exp, err)
 }
 
 // updateStateLocked updates the credentials local token cache and
@@ -236,7 +236,7 @@ func (c *gcpServiceAccountIdentityCallCreds) startFetch() {
 //   - Non-HTTP request failures are mapped to UNAVAILABLE.
 //
 // It must be called with mu locked.
-func (c *gcpServiceAccountIdentityCallCreds) updateStateLocked(val string, exp time.Time, err error) {
+func (c *gcpServiceAccountIdentityCallCreds) updateStateLocked(token string, exp time.Time, err error) {
 	if err != nil {
 		c.lastErr = err
 		backoffDelay := c.backoff.Backoff(c.retryAttempt)
@@ -247,7 +247,7 @@ func (c *gcpServiceAccountIdentityCallCreds) updateStateLocked(val string, exp t
 	c.lastErr = nil
 	c.retryAttempt = 0
 	c.nextRetryTime = time.Time{}
-	c.token = val
+	c.token = token
 	// Per gRFC A83, the cached token is considered invalid 30 seconds before its
 	// actual expiration time to accommodate for clock skew.
 	c.tokenExpiry = exp.Add(-30 * time.Second)

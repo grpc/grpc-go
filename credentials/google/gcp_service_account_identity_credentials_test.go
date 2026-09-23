@@ -118,11 +118,11 @@ func setupStubTokenProvider(token string, err error) *stubTokenProvider {
 // It overrides internal.NewIDTokenFetcher to use the stubTokenProvider,
 // and registers a cleanup function to restore original hook after the test.
 func setupTestGCPServiceAccountIdentityCreds(ctx context.Context, t *testing.T, stubToken *stubTokenProvider) credentials.PerRPCCredentials {
-	origNewIDTokenFetcher := internal.NewIDTokenFetcher
-	internal.NewIDTokenFetcher = func() func(context.Context, string) (string, time.Time, error) {
+	origNewIDTokenFetcher := internal.IDTokenFetcher
+	internal.IDTokenFetcher = func() func(context.Context, string) (string, time.Time, error) {
 		return stubToken.fetch
 	}
-	t.Cleanup(func() { internal.NewIDTokenFetcher = origNewIDTokenFetcher })
+	t.Cleanup(func() { internal.IDTokenFetcher = origNewIDTokenFetcher })
 
 	creds, err := google.NewServiceAccountIdentityCredentials(ctx, "audience")
 	if err != nil {

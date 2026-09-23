@@ -46,6 +46,12 @@ func (s) TestParseJWTExpiry(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name:    "valid_jwt_fractional_exp",
+			jwtStr:  "eyJhbGciOiJSUzI1NiJ9.eyJleHAiOjI1MjQ2MDgwMDAuNX0.sig", // '{"exp":2524608000.5}' encoded
+			wantExp: time.Unix(2524608000, 0),
+			wantErr: false,
+		},
+		{
 			name:    "invalid_format_single_part",
 			jwtStr:  "invalidtoken",
 			wantErr: true,
@@ -127,18 +133,18 @@ func (s) TestFetchIDTokenFromMetadataServer_Success(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	val, exp, err := newIDTokenFetcher().FetchIDToken(ctx, audience)
+	val, exp, err := newIDTokenFetcher().fetchIDToken(ctx, audience)
 	if err != nil {
-		t.Fatalf("FetchIDToken() failed: %v", err)
+		t.Fatalf("fetchIDToken() failed: %v", err)
 	}
 
 	if val != tokenValue {
-		t.Errorf("FetchIDToken() val = %q, want %q", val, tokenValue)
+		t.Errorf("fetchIDToken() val = %q, want %q", val, tokenValue)
 	}
 
 	wantExp := time.Unix(2524608000, 0)
 	if !exp.Equal(wantExp) {
-		t.Errorf("FetchIDToken() exp = %v, want %v", exp, wantExp)
+		t.Errorf("fetchIDToken() exp = %v, want %v", exp, wantExp)
 	}
 }
 
@@ -180,9 +186,9 @@ func (s) TestFetchIDTokenFromMetadataServer_HTTPStatusErrors(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 
-			_, _, err := newIDTokenFetcher().FetchIDToken(ctx, "https://example.com")
+			_, _, err := newIDTokenFetcher().fetchIDToken(ctx, "https://example.com")
 			if gotCode := status.Code(err); gotCode != tc.wantCode {
-				t.Errorf("FetchIDToken() failed with gRPC status code = %v, want %v (err: %v)", gotCode, tc.wantCode, err)
+				t.Errorf("fetchIDToken() failed with gRPC status code = %v, want %v (err: %v)", gotCode, tc.wantCode, err)
 			}
 		})
 	}
@@ -201,9 +207,9 @@ func (s) TestFetchIDTokenFromMetadataServer_MalformedToken(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	_, _, err := newIDTokenFetcher().FetchIDToken(ctx, "https://example.com")
+	_, _, err := newIDTokenFetcher().fetchIDToken(ctx, "https://example.com")
 	if gotCode := status.Code(err); gotCode != codes.Unauthenticated {
-		t.Errorf("FetchIDToken() failed with gRPC status code = %v, want %v (err: %v)", gotCode, codes.Unauthenticated, err)
+		t.Errorf("fetchIDToken() failed with gRPC status code = %v, want %v (err: %v)", gotCode, codes.Unauthenticated, err)
 	}
 }
 

@@ -36,6 +36,23 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// The HTTP transport timeout values match newDefaultHTTPClient in the
+// GCE metadata client package (cloud.google.com/go/compute/metadata):
+//
+// Proxy is nil to bypass environment proxies per gRFC A83, a 2s dial
+// timeout fails fast if the local metadata server is unreachable, TCP
+// keep-alive is set to 30s, and idle pooled connections close after 60s.
+var defaultMetadataHTTPClient = &http.Client{
+	Transport: &http.Transport{
+		Proxy: nil,
+		DialContext: (&net.Dialer{
+			Timeout:   2 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}).DialContext,
+		IdleConnTimeout: 60 * time.Second,
+	},
+}
+
 // idTokenFetcher fetches ID tokens from the GCE Metadata Server.
 type idTokenFetcher struct {
 	client       *http.Client // unproxied HTTP client for metadata server communication
@@ -52,27 +69,18 @@ func newIDTokenFetcher() *idTokenFetcher {
 
 	return &idTokenFetcher{
 		metadataHost: host,
-		client: &http.Client{
-			Transport: &http.Transport{
-				Proxy: nil,
-				DialContext: (&net.Dialer{
-					Timeout:   2 * time.Second,
-					KeepAlive: 30 * time.Second,
-				}).DialContext,
-				IdleConnTimeout: 60 * time.Second,
-			},
-		},
+		client:       defaultMetadataHTTPClient,
 	}
 }
 
-// FetchIDToken fetches an ID token for the given audience from the GCE
+// fetchIDToken fetches an ID token for the given audience from the GCE
 // Metadata Server.
 //
 // It takes a context controlling HTTP request cancellation and an audience
 // string for the requested token. It returns the raw JWT token string,
 // expiration timestamp parsed from the token's "exp" claim, and an error
 // if the HTTP request or JWT parsing fails.
-func (f *idTokenFetcher) FetchIDToken(ctx context.Context, audience string) (string, time.Time, error) {
+func (f *idTokenFetcher) fetchIDToken(ctx context.Context, audience string) (string, time.Time, error) {
 	reqURL := fmt.Sprintf("http://%s/computeMetadata/v1/instance/service-accounts/default/identity?audience=%s&format=full", f.metadataHost, url.QueryEscape(audience))
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
 	if err != nil {
@@ -86,7 +94,7 @@ func (f *idTokenFetcher) FetchIDToken(ctx context.Context, audience string) (str
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20)) // 1 MB limit
 	if err != nil {
 		return "", time.Time{}, status.Errorf(codes.Unavailable, "credentials: failed to fetch ID token: %v", err)
 	}
@@ -114,7 +122,7 @@ func (f *idTokenFetcher) FetchIDToken(ctx context.Context, audience string) (str
 }
 
 type jwtPayload struct {
-	Exp int64 `json:"exp"`
+	Exp float64 `json:"exp"`
 }
 
 // parseJWTExpiry parses a JWT string to extract its expiration timestamp
@@ -135,6 +143,10 @@ func parseJWTExpiry(jwtStr string) (time.Time, error) {
 		return time.Time{}, fmt.Errorf("invalid JWT format: expected 3 parts, got %d", len(parts))
 	}
 
+	// Per the JWT specification (RFC 7519 / RFC 7515), compact JWT segments use
+	// Base64URL encoding with all trailing '=' padding characters omitted.
+	// base64.RawURLEncoding is unpadded Base64URL encoding and decodes these
+	// strings directly without requiring manual padding.
 	data, err := base64.RawURLEncoding.DecodeString(parts[1])
 	if err != nil {
 		return time.Time{}, fmt.Errorf("failed to decode JWT payload: %v", err)
@@ -149,5 +161,5 @@ func parseJWTExpiry(jwtStr string) (time.Time, error) {
 		return time.Time{}, fmt.Errorf("missing or invalid 'exp' claim in JWT payload")
 	}
 
-	return time.Unix(payload.Exp, 0), nil
+	return time.Unix(int64(payload.Exp), 0), nil
 }

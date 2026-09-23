@@ -35,5 +35,5 @@ var (
 	// given audience. It takes a ctx and audience string as parameter and
 	// returns the raw JWT token string, token's expiration timestamp and
 	// error if encountered.
-	NewIDTokenFetcher func() func(ctx context.Context, audience string) (string, time.Time, error)
+	IDTokenFetcher func() func(ctx context.Context, audience string) (string, time.Time, error)
 )
