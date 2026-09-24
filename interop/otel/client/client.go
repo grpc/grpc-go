@@ -137,7 +137,10 @@ func main() {
 		opts = append(opts, grpc.WithDisableServiceConfig(), grpc.WithDefaultServiceConfig(*serviceConfigJSON))
 	}
 
-	tp, propagator, shutdownTracing := interopotel.Setup(*enableOpenTelemetry, *otelCollectorAddress, logger)
+	tp, propagator, shutdownTracing, err := interopotel.Setup(*enableOpenTelemetry, *otelCollectorAddress, logger)
+	if err != nil {
+		logger.Fatalf("Failed to set up OpenTelemetry tracing: %v", err)
+	}
 	if tp != nil {
 		defer shutdownTracing()
 		opts = append(opts, grpcotel.DialOption(grpcotel.Options{

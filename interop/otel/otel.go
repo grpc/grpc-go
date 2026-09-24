@@ -29,6 +29,8 @@ package otel
 import (
 	"context"
 	"crypto/tls"
+	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -40,57 +42,46 @@ import (
 	"google.golang.org/grpc/grpclog"
 )
 
-// batchTimeout is the maximum delay between a span ending and it being
-// exported. The default (5s) is longer than the interop test harness waits
-// for spans to show up in the collector, so use a shorter delay. A batching
-// processor (as opposed to a synchronous one) is used so that exporting never
-// happens on the RPC completion path, which matters for the soak tests.
-const batchTimeout = 100 * time.Millisecond
+const (
+	// batchTimeout is the maximum delay between a span ending and it being
+	// exported. The default (5s) is longer than the interop test harness waits
+	// for spans to show up in the collector, so use a shorter delay. A batching
+	// processor (as opposed to a synchronous one) is used so that exporting
+	// never happens on the RPC completion path.
+	batchTimeout = 100 * time.Millisecond
+
+	// defaultCollectorAddress is the plaintext OTLP/gRPC endpoint used when no
+	// collector address is given on the command line or in the environment.
+	// It matches the OTLP default and the other languages' interop binaries.
+	defaultCollectorAddress = "localhost:4317"
+)
 
 // Setup configures OpenTelemetry tracing for an interop binary.
 //
-// If enabled is false and collectorAddress is empty, tracing is not configured
-// and a nil TracerProvider is returned.
+// If enabled is false, tracing is not configured and a nil TracerProvider is
+// returned; collectorAddress is ignored in that case.
 //
 // collectorAddress is the OTLP/gRPC endpoint of the trace collector. It may be
 // given as "host:port" (plaintext), "http://host:port" (plaintext) or
-// "https://host:port" (TLS using the system roots). If empty, the standard
-// OTEL_EXPORTER_OTLP_ENDPOINT / OTEL_EXPORTER_OTLP_TRACES_ENDPOINT environment
-// variables are honoured by the exporter, including their scheme.
+// "https://host:port" (TLS using the system roots). If empty, the endpoint is
+// taken from the standard OTEL_EXPORTER_OTLP_TRACES_ENDPOINT /
+// OTEL_EXPORTER_OTLP_ENDPOINT environment variables (including their scheme)
+// when set, and otherwise defaults to localhost:4317 over plaintext.
 //
 // The returned shutdown function flushes all pending spans and must be called
 // before the process exits.
-func Setup(enabled bool, collectorAddress string, logger grpclog.DepthLoggerV2) (*sdktrace.TracerProvider, propagation.TextMapPropagator, func()) {
-	if !enabled && collectorAddress == "" {
-		return nil, nil, func() {}
-	}
-
-	var exporterOpts []otlptracegrpc.Option
-	if collectorAddress != "" {
-		switch {
-		case strings.HasPrefix(collectorAddress, "https://"):
-			exporterOpts = append(exporterOpts,
-				otlptracegrpc.WithEndpoint(strings.TrimPrefix(collectorAddress, "https://")),
-				otlptracegrpc.WithTLSCredentials(credentials.NewTLS(&tls.Config{})),
-			)
-		case strings.HasPrefix(collectorAddress, "http://"):
-			exporterOpts = append(exporterOpts,
-				otlptracegrpc.WithEndpoint(strings.TrimPrefix(collectorAddress, "http://")),
-				otlptracegrpc.WithInsecure(),
-			)
-		default:
-			// A bare host:port is treated as plaintext, matching the other
-			// languages' interop binaries and the interop test collector.
-			exporterOpts = append(exporterOpts,
-				otlptracegrpc.WithEndpoint(collectorAddress),
-				otlptracegrpc.WithInsecure(),
-			)
+func Setup(enabled bool, collectorAddress string, logger grpclog.DepthLoggerV2) (*sdktrace.TracerProvider, propagation.TextMapPropagator, func(), error) {
+	if !enabled {
+		if collectorAddress != "" {
+			logger.Warningf("Ignoring -otel_collector_address=%q because -enable_opentelemetry is false", collectorAddress)
 		}
+		return nil, nil, func() {}, nil
 	}
 
+	exporterOpts, target := exporterOptions(collectorAddress)
 	exp, err := otlptracegrpc.New(context.Background(), exporterOpts...)
 	if err != nil {
-		logger.Fatalf("Failed to create OTLP trace exporter: %v", err)
+		return nil, nil, nil, fmt.Errorf("failed to create OTLP trace exporter: %v", err)
 	}
 
 	tp := sdktrace.NewTracerProvider(
@@ -104,7 +95,7 @@ func Setup(enabled bool, collectorAddress string, logger grpclog.DepthLoggerV2) 
 		logger.Errorf("OpenTelemetry error: %v", err)
 	}))
 
-	logger.Infof("OpenTelemetry tracing enabled, exporting to %q", collectorAddress)
+	logger.Infof("OpenTelemetry tracing enabled, exporting to %s", target)
 
 	shutdown := func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -113,5 +104,50 @@ func Setup(enabled bool, collectorAddress string, logger grpclog.DepthLoggerV2) 
 			logger.Errorf("Failed to shutdown TracerProvider: %v", err)
 		}
 	}
-	return tp, propagation.TraceContext{}, shutdown
+	return tp, propagation.TraceContext{}, shutdown, nil
+}
+
+// exporterOptions returns the OTLP exporter options for collectorAddress and a
+// human readable description of the resulting target, for logging.
+func exporterOptions(collectorAddress string) ([]otlptracegrpc.Option, string) {
+	switch {
+	case strings.HasPrefix(collectorAddress, "https://"):
+		endpoint := strings.TrimPrefix(collectorAddress, "https://")
+		return []otlptracegrpc.Option{
+			otlptracegrpc.WithEndpoint(endpoint),
+			otlptracegrpc.WithTLSCredentials(credentials.NewTLS(&tls.Config{})),
+		}, endpoint + " (TLS)"
+	case strings.HasPrefix(collectorAddress, "http://"):
+		endpoint := strings.TrimPrefix(collectorAddress, "http://")
+		return []otlptracegrpc.Option{
+			otlptracegrpc.WithEndpoint(endpoint),
+			otlptracegrpc.WithInsecure(),
+		}, endpoint + " (plaintext)"
+	case collectorAddress != "":
+		// A bare host:port is treated as plaintext, matching the other
+		// languages' interop binaries and the interop test collector.
+		return []otlptracegrpc.Option{
+			otlptracegrpc.WithEndpoint(collectorAddress),
+			otlptracegrpc.WithInsecure(),
+		}, collectorAddress + " (plaintext)"
+	}
+	// No address on the command line: defer to the standard OTLP environment
+	// variables if any are present. Options passed to the exporter take
+	// precedence over the environment, so none are passed here.
+	for _, env := range []string{
+		"OTEL_EXPORTER_OTLP_TRACES_ENDPOINT",
+		"OTEL_EXPORTER_OTLP_ENDPOINT",
+		"OTEL_EXPORTER_OTLP_TRACES_INSECURE",
+		"OTEL_EXPORTER_OTLP_INSECURE",
+	} {
+		if v := os.Getenv(env); v != "" {
+			return nil, fmt.Sprintf("%s=%s (from environment)", env, v)
+		}
+	}
+	// Otherwise use the OTLP default endpoint over plaintext. Without
+	// WithInsecure the exporter would default to TLS.
+	return []otlptracegrpc.Option{
+		otlptracegrpc.WithEndpoint(defaultCollectorAddress),
+		otlptracegrpc.WithInsecure(),
+	}, defaultCollectorAddress + " (plaintext, default)"
 }

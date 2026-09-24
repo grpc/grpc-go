@@ -78,7 +78,10 @@ func main() {
 	}
 	logger.Infof("interop server listening on %v", lis.Addr())
 	opts := []grpc.ServerOption{orca.CallMetricsServerOption(nil)}
-	tp, propagator, shutdownTracing := interopotel.Setup(*enableOpenTelemetry, *otelCollectorAddress, logger)
+	tp, propagator, shutdownTracing, err := interopotel.Setup(*enableOpenTelemetry, *otelCollectorAddress, logger)
+	if err != nil {
+		logger.Fatalf("Failed to set up OpenTelemetry tracing: %v", err)
+	}
 	if tp != nil {
 		defer shutdownTracing()
 		opts = append(opts, grpcotel.ServerOption(grpcotel.Options{
@@ -138,5 +141,11 @@ func main() {
 			server.Stop()
 		}
 	}()
-	server.Serve(lis)
+	if err := server.Serve(lis); err != nil {
+		// Serve returns nil after Stop/GracefulStop, so this is a real failure.
+		// Flush pending spans explicitly since os.Exit skips deferred calls.
+		logger.Errorf("interop server failed to serve: %v", err)
+		shutdownTracing()
+		os.Exit(1)
+	}
 }
