@@ -30,13 +30,15 @@ import (
 	"google.golang.org/grpc/backoff"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/grpclog"
-	internalbackoff "google.golang.org/grpc/internal/backoff"
-	internalgrpclog "google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/internal/xds/clients/xdsclient"
 	"google.golang.org/grpc/internal/xds/httpfilter"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
+
+	estats "google.golang.org/grpc/experimental/stats"
+	internalbackoff "google.golang.org/grpc/internal/backoff"
+	internalgrpclog "google.golang.org/grpc/internal/grpclog"
 )
 
 var (
@@ -75,6 +77,8 @@ type ListenerWrapperParams struct {
 	XDSClient XDSClient
 	// ModeCallback is the callback to invoke when the serving mode changes.
 	ModeCallback ServingModeCallback
+	// MetricsRecorder is the metrics recorder to capture metrics for the server.
+	MetricsRecorder estats.MetricsRecorder
 }
 
 // NewListenerWrapper creates a new listenerWrapper with params. It returns a
@@ -89,6 +93,7 @@ func NewListenerWrapper(params ListenerWrapperParams) net.Listener {
 		xdsC:              params.XDSClient,
 		xdsNodeID:         params.XDSClient.BootstrapConfig().Node().GetId(),
 		modeCallback:      params.ModeCallback,
+		metricsRecorder:   params.MetricsRecorder,
 		isUnspecifiedAddr: params.Listener.Addr().(*net.TCPAddr).IP.IsUnspecified(),
 		conns:             make(map[*connWrapper]bool),
 		mode:              connectivity.ServingModeNotServing,
@@ -124,6 +129,7 @@ type listenerWrapper struct {
 	xdsNodeID         string
 	cancelWatch       func()
 	modeCallback      ServingModeCallback
+	metricsRecorder   estats.MetricsRecorder
 	isUnspecifiedAddr bool   // True if listener is bound to IP_ANY address.
 	addr, port        string // Listening address and port, validates socket address in LDS responses.
 	closed            *grpcsync.Event
@@ -401,19 +407,21 @@ func (l *listenerWrapper) getOrCreateServerFilterLocked(filter xdsresource.HTTPF
 	if !ok {
 		return nil, fmt.Errorf("filter %q does not support use in server", filter.Name)
 	}
-	return getOrCreateServerFilterWithMap(l.httpFilters, builder, newServerFilterKey(&filter)), nil
+	return getOrCreateServerFilterWithMap(l.httpFilters, builder, newServerFilterKey(&filter), httpfilter.ServerFilterOptions{
+		MetricsRecorder: l.metricsRecorder,
+	}), nil
 }
 
 // This functionality is put in a separate function to allow for testing with a
 // custom map.
-func getOrCreateServerFilterWithMap(httpFilters map[serverFilterKey]*refCountedServerFilter, builder httpfilter.ServerFilterBuilder, key serverFilterKey) httpfilter.ServerFilter {
+func getOrCreateServerFilterWithMap(httpFilters map[serverFilterKey]*refCountedServerFilter, builder httpfilter.ServerFilterBuilder, key serverFilterKey, opts httpfilter.ServerFilterOptions) httpfilter.ServerFilter {
 	serverFilter, ok := httpFilters[key]
 	if ok {
 		serverFilter.incRef()
 		return serverFilter
 	}
 
-	sf := builder.BuildServerFilter()
+	sf := builder.BuildServerFilter(opts)
 	serverFilter = &refCountedServerFilter{ServerFilter: sf}
 	httpFilters[key] = serverFilter
 	serverFilter.incRef()

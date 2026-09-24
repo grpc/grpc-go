@@ -190,10 +190,10 @@ type allowedGRPCServiceJSON struct {
 // allowedGRPCServicesEnabled reports whether any feature that consumes the
 // allowed_grpc_services field is enabled. Per gRFC A102 the field has no
 // dedicated env var; it is guarded by the env vars of its consuming features
-// (currently only ext_proc on the client; OR in ext_authz/RLQS guards as
+// (currently ext_proc and ext_authz on the client; OR in RLQS guards as
 // those features are implemented).
 func allowedGRPCServicesEnabled() bool {
-	return envconfig.XDSClientExtProcEnabled
+	return envconfig.XDSClientExtProcEnabled || envconfig.XDSClientExtAuthzEnabled
 }
 
 // AllowedGRPCServices maps a target URI to the credentials gRPC may use for
