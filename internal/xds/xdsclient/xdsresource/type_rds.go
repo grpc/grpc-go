@@ -44,6 +44,9 @@ type RouteConfigUpdate struct {
 // Note that the domains in this slice can be a wildcard, not an exact string.
 // The consumer of this struct needs to find the best match for its hostname.
 type VirtualHost struct {
+	// Domains is the list of domains served by this virtual host. Host names
+	// are case-insensitive, so domains are folded to lower case when the
+	// resource is unmarshaled. See FindBestMatchingVirtualHostIndex.
 	Domains []string
 	// Routes contains a list of routes, each containing matchers and
 	// corresponding action.
