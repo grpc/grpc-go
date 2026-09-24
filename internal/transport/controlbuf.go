@@ -97,11 +97,11 @@ func (il *itemList) isEmpty() bool {
 	return il.head == nil
 }
 
-// maxQueuedTransportResponseFrames is the maximum number of frames (other than
-// HEADERS and DATA) that we will buffer before preventing new reads from
-// occurring on the transport.  These are control frames sent in response to
-// client requests, or frames that result in work being scheduled, such as
-// RST_STREAM due to bad headers or settings acks.
+// maxQueuedTransportResponseFrames is the maximum number of "transport
+// response" frames that we will buffer before preventing new reads from
+// occurring on the transport. These are control frames sent in response to
+// peer requests, or frames that result in work being scheduled, such as
+// RST_STREAM due to bad headers, settings acks, or ping acks.
 var maxQueuedTransportResponseFrames = int(envconfig.ControlBufferThrottleLimit)
 
 type cbItem interface {
