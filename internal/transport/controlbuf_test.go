@@ -29,8 +29,8 @@ func (s) TestControlBuffer_Throttle(t *testing.T) {
 	cb := newControlBuffer(done, true)
 
 	// Fill the control buffer up to the limit with throttled items.
-	for i := 0; i < maxQueuedControlBufferItems; i++ {
-		cb.put(&ping{})
+	for i := 0; i < maxQueuedTransportResponseFrames; i++ {
+		cb.put(&ping{ack: true})
 	}
 
 	// The next call to throttle should block.
@@ -66,7 +66,7 @@ func (s) TestControlBuffer_NoThrottleForNonThrottledItems(t *testing.T) {
 
 	// Fill the control buffer with many more than limit number of non-throttled
 	// items.
-	for i := 0; i < maxQueuedControlBufferItems+10; i++ {
+	for i := 0; i < maxQueuedTransportResponseFrames+10; i++ {
 		cb.put(&dataFrame{})
 	}
 
@@ -90,7 +90,7 @@ func (s) TestControlBuffer_ThrottlingDisabled(t *testing.T) {
 	cb := newControlBuffer(done, false)
 
 	// Fill the control buffer beyond the limit with throttled items.
-	for i := 0; i < maxQueuedControlBufferItems+10; i++ {
+	for i := 0; i < maxQueuedTransportResponseFrames+10; i++ {
 		cb.put(&ping{ack: true})
 	}
 
