@@ -83,3 +83,27 @@ func (s) TestControlBuffer_NoThrottleForNonThrottledItems(t *testing.T) {
 		t.Fatal("throttle() blocked for non-throttled items")
 	}
 }
+
+func (s) TestControlBuffer_ThrottlingDisabled(t *testing.T) {
+	done := make(chan struct{})
+	defer close(done)
+	cb := newControlBuffer(done, false)
+
+	// Fill the control buffer beyond the limit with throttled items.
+	for i := 0; i < maxQueuedControlBufferItems+10; i++ {
+		cb.put(&ping{ack: true})
+	}
+
+	// throttle() should not block when throttling is disabled.
+	throttled := make(chan struct{})
+	go func() {
+		cb.throttle()
+		close(throttled)
+	}()
+
+	select {
+	case <-throttled:
+	case <-time.After(defaultTestShortTimeout):
+		t.Fatal("throttle() blocked when throttling was disabled")
+	}
+}

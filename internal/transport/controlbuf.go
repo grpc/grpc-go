@@ -328,10 +328,11 @@ type controlBuffer struct {
 	list            *itemList // List of queued control frames.
 
 	// transportResponseFrames counts the number of queued items that represent
-	// the response of an action initiated by the peer.  trfChan is created
-	// when transportResponseFrames >= maxQueuedTransportResponseFrames and is
-	// closed and nilled when transportResponseFrames drops below the
-	// threshold.  Both fields are protected by mu.
+	// the response of an action initiated by the peer. When enableThrottling is
+	// true, trfChan is created when transportResponseFrames >=
+	// maxQueuedControlBufferItems and is closed and nilled when
+	// transportResponseFrames drops below the threshold. Both fields are
+	// protected by mu.
 	transportResponseFrames int
 	trfChan                 atomic.Pointer[chan struct{}]
 }
