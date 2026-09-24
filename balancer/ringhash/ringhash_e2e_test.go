@@ -27,7 +27,7 @@ import (
 	"net"
 	"slices"
 	"strconv"
-	"sync"
+	"strings"
 	"testing"
 	"time"
 
@@ -2807,9 +2807,10 @@ func (s) TestRingHash_RequestHashKeyRandom(t *testing.T) {
 }
 
 // Tests that when a request hash key is set in the balancer configuration via
-// service config, and the header is not set in the outgoing request (random
-// behavior), then each RPC wakes up at most one SubChannel, and, if there are
-// SubChannels in Ready state, RPCs are routed to them.
+// service config, and the header is not set in the outgoing request, so the
+// picker uses a random hash, an RPC sent while an endpoint is already
+// connecting is queued instead of triggering a second connection attempt. Once
+// an endpoint reaches Ready, RPCs are routed to it.
 func (s) TestRingHash_RequestHashKeyConnecting(t *testing.T) {
 	testutils.SetEnvConfig(t, &envconfig.RingHashSetRequestHashKey, true)
 
@@ -2828,7 +2829,6 @@ func (s) TestRingHash_RequestHashKeyConnecting(t *testing.T) {
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithResolvers(r),
 		grpc.WithDefaultServiceConfig(ringHashServiceConfig),
-		grpc.WithConnectParams(fastConnectParams),
 		grpc.WithContextDialer(blockingDialer.DialContext),
 	}
 	cc, err := grpc.NewClient(r.Scheme()+":///test.server", dopts...)
@@ -2856,18 +2856,18 @@ func (s) TestRingHash_RequestHashKeyConnecting(t *testing.T) {
 		holds = append(holds, blockingDialer.Hold(backends[i]))
 	}
 
-	wg := sync.WaitGroup{}
-	wg.Add(1)
+	// Send 1 RPC and make sure this triggers exactly 1 connection attempt. The
+	// RPC stays blocked in the picker until that attempt is unblocked below.
+	errCh := make(chan error, 1)
 	go func() {
-		// Send 1 RPC and make sure this triggers at most 1 connection attempt.
 		_, err := client.EmptyCall(ctx, &testpb.Empty{})
-		if err != nil {
-			t.Errorf("EmptyCall(): got %v, want success", err)
-		}
-		wg.Done()
+		errCh <- err
 	}()
 
-	// Wait for at least one connection attempt.
+	// Wait for the first connection attempt to reach the dialer. pickfirst
+	// reports Connecting to the channel before calling SubConn.Connect(), so
+	// by the time the dialer is entered, ring_hash has already published a
+	// picker that knows an endpoint is connecting.
 	nConn := 0
 	for nConn == 0 {
 		if ctx.Err() != nil {
@@ -2880,42 +2880,71 @@ func (s) TestRingHash_RequestHashKeyConnecting(t *testing.T) {
 			}
 		}
 	}
-	if wantMaxConn := 1; nConn > wantMaxConn {
-		t.Fatalf("Got %d connection attempts, want at most %d", nConn, wantMaxConn)
+	if wantConn := 1; nConn != wantConn {
+		t.Fatalf("Got %d connection attempts, want %d", nConn, wantConn)
 	}
 
-	// Do a second RPC. Since there should already be a SubChannel in
-	// Connecting state, this should not trigger a connection attempt.
-	wg.Add(1)
-	go func() {
-		_, err := client.EmptyCall(ctx, &testpb.Empty{})
-		if err != nil {
-			t.Errorf("EmptyCall(): got %v, want success", err)
+	// Do a second RPC on this goroutine, so that its pick happens here instead
+	// of racing the assertions below. Since there is already an endpoint in
+	// Connecting state, the picker must queue the RPC rather than trigger
+	// another connection attempt, so the RPC fails with DeadlineExceeded.
+	//
+	// The deadline only needs to be long enough that the RPC usually reaches
+	// the picker. If it expires earlier, for example because this goroutine was
+	// descheduled, the RPC fails with a plain context error and has no effect
+	// on the balancer, so it is retried until one fails while blocked in the
+	// picker. Only such an RPC makes the count below meaningful. The deadline
+	// is not shared with the other tests because the RPC blocks for the whole
+	// duration on every run.
+	const secondRPCTimeout = 100 * time.Millisecond
+	for {
+		if ctx.Err() != nil {
+			t.Fatalf("Test timed out before the second RPC could reach the picker; last error: %v", err)
 		}
-		wg.Done()
-	}()
+		sCtx, sCancel := context.WithTimeout(ctx, secondRPCTimeout)
+		_, err = client.EmptyCall(sCtx, &testpb.Empty{}, grpc.WaitForReady(true))
+		sCancel()
+		if got, want := status.Code(err), codes.DeadlineExceeded; got != want {
+			t.Fatalf("EmptyCall(): got code %v, want %v", got, want)
+		}
+		if strings.Contains(status.Convert(err).Message(), "while waiting for connections to become ready") {
+			break
+		}
+	}
 
-	// Give extra time for more connections to be attempted.
-	time.Sleep(defaultTestShortTimeout)
-
-	var firstConnectedBackend string
+	// Count the connection attempts before unblocking any of them. Resuming a
+	// hold moves the channel to Ready, which lets the queued RPCs pick again
+	// and legitimately start one more connection attempt on an idle endpoint
+	// per gRFC A76, so this count is only meaningful while every attempt is
+	// still blocked.
 	nConn = 0
+	firstConnIdx := -1
 	for i, hold := range holds {
 		if hold.IsStarted() {
-			// Unblock the connection attempt. The SubChannel (and hence the
-			// channel) should transition to Ready. RPCs should succeed and
-			// be routed to this backend.
-			hold.Resume()
-			holds[i] = nil
-			firstConnectedBackend = backends[i]
 			nConn++
+			firstConnIdx = i
 		}
 	}
-	if wantMaxConn := 1; nConn > wantMaxConn {
-		t.Fatalf("Got %d connection attempts, want at most %d", nConn, wantMaxConn)
+	if wantConn := 1; nConn != wantConn {
+		t.Fatalf("Got %d connection attempts, want %d", nConn, wantConn)
 	}
+
+	// Unblock the connection attempt. The SubChannel (and hence the channel)
+	// should transition to Ready. RPCs should succeed and be routed to this
+	// backend.
+	firstConnectedBackend := backends[firstConnIdx]
+	holds[firstConnIdx].Resume()
+	holds[firstConnIdx] = nil
+
 	testutils.AwaitState(ctx, t, cc, connectivity.Ready)
-	wg.Wait() // Make sure we're done with the 2 previous RPCs.
+	select {
+	case err := <-errCh:
+		if err != nil {
+			t.Fatalf("EmptyCall(): got %v, want success", err)
+		}
+	case <-ctx.Done():
+		t.Fatal("Test timed out waiting for the first RPC to complete")
+	}
 
 	// Now send RPCs until we have at least one more connection attempt, that
 	// is, the random hash did not land on the same backend on every pick (the
