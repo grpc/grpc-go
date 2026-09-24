@@ -2857,7 +2857,7 @@ func newTestHTTP2Client(cs *ClientStream) *http2Client {
 		activeStreams: map[uint32]*ClientStream{
 			1: cs,
 		},
-		controlBuf: newControlBuffer(make(<-chan struct{})),
+		controlBuf: newControlBuffer(make(<-chan struct{}), false),
 	}
 }
 
@@ -4021,7 +4021,7 @@ func (s) TestClientTransport_Handle1xxHeaders(t *testing.T) {
 			activeStreams: map[uint32]*ClientStream{
 				0: ts,
 			},
-			controlBuf: newControlBuffer(make(<-chan struct{})),
+			controlBuf: newControlBuffer(make(<-chan struct{}), false),
 		}
 	}
 
