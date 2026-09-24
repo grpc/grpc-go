@@ -417,12 +417,45 @@ type framer struct {
 	headerBuf []byte // cached slice for framer headers to reduce heap allocs.
 	reader    io.Reader
 	dataFrame parsedDataFrame // Cached data frame to avoid heap allocations.
-	pool      mem.BufferPool
+	// dataPool is the pool used for DATA frame payloads. It is either the
+	// pool passed to newFramer (the default, zeroing behavior) or a shared
+	// non-zeroing (dirty) pool when EnableDataFrameDirtyBufferPooling is set.
+	dataPool  mem.BufferPool
 	errDetail error
 }
 
 var ioBufferPoolMap = make(map[int]*imem.SimpleBufferPool)
 var ioBufferMutex sync.Mutex
+
+// dirtyDataFramePool is a non-zeroing buffer pool used for DATA frame
+// payloads when dirty data frame pooling is enabled. It is created in init()
+// following the same pattern used by the ALTS conn package.
+var dirtyDataFramePool *imem.BinaryTieredBufferPool
+
+// dataPool returns the pool to use for DATA frame payloads. It returns the
+// provided pool unless dirty data frame pooling is enabled, in which case it
+// returns the non-zeroing pool. This is safe because the framer always fully
+// overwrites the buffer with io.ReadFull before it is read.
+func dataPool(pool mem.BufferPool) mem.BufferPool {
+	if envconfig.EnableDataFrameDirtyBufferPooling {
+		return dirtyDataFramePool
+	}
+	return pool
+}
+
+func init() {
+	var err error
+	dirtyDataFramePool, err = imem.NewDirtyBinaryTieredBufferPool(
+		8,
+		12, // Go page size, 4KB
+		14, // 16KB (max HTTP/2 frame size used by gRPC)
+		15, // 32KB (default buffer size for io.Copy)
+		20, // 1MB
+	)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to create dirty data frame pool: %v", err))
+	}
+}
 
 func bufferedReader(r io.Reader, bufSize int) io.Reader {
 	if bufSize <= 0 {
@@ -448,10 +481,10 @@ func newFramer(conn io.ReadWriter, writeBufferSize, readBufferSize int, sharedWr
 	}
 	w := newBufWriter(conn, writeBufferSize, writePool)
 	f := &framer{
-		writer: w,
-		fr:     http2.NewFramer(w, r),
-		reader: r,
-		pool:   memPool,
+		writer:   w,
+		fr:       http2.NewFramer(w, r),
+		reader:   r,
+		dataPool: dataPool(memPool),
 	}
 	f.fr.SetMaxReadFrameSize(http2MaxFrameLen)
 	// Opt-in to Frame reuse API on framer to reduce garbage.
@@ -548,11 +581,11 @@ func (f *framer) readDataFrame(fh http2.FrameHeader) (err error) {
 	var poolHandle *[]byte
 	useBufferPool := !mem.IsBelowBufferPoolingThreshold(int(fh.Length))
 	if useBufferPool {
-		poolHandle = f.pool.Get(int(fh.Length))
+		poolHandle = f.dataPool.Get(int(fh.Length))
 		buf = *poolHandle
 		defer func() {
 			if err != nil {
-				f.pool.Put(poolHandle)
+				f.dataPool.Put(poolHandle)
 			}
 		}()
 	} else {
@@ -591,7 +624,8 @@ func (f *framer) readDataFrame(fh http2.FrameHeader) (err error) {
 	if useBufferPool {
 		// Update the handle to point to the (potentially re-sliced) buf.
 		*poolHandle = buf
-		f.dataFrame.data = mem.NewBuffer(poolHandle, f.pool)
+		// The buffer was acquired from dataPool, so it must be returned there.
+		f.dataFrame.data = mem.NewBuffer(poolHandle, f.dataPool)
 	} else {
 		f.dataFrame.data = mem.SliceBuffer(buf)
 	}
