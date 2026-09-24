@@ -316,8 +316,9 @@ func (l *outStreamList) dequeue() *outStream {
 // shouldn't be confused with an HTTP2 frame, although some of the control
 // frames like dataFrame and headerFrame do go out on wire as HTTP2 frames.
 type controlBuffer struct {
-	wakeupCh chan struct{}   // Unblocks readers waiting for something to read.
-	done     <-chan struct{} // Closed when the transport is done.
+	wakeupCh         chan struct{}   // Unblocks readers waiting for something to read.
+	done             <-chan struct{} // Closed when the transport is done.
+	enableThrottling bool            // Indicates if throttling is enabled.
 
 	// Mutex guards all the fields below, except trfChan which can be read
 	// atomically without holding mu.
@@ -335,11 +336,12 @@ type controlBuffer struct {
 	trfChan                 atomic.Pointer[chan struct{}]
 }
 
-func newControlBuffer(done <-chan struct{}) *controlBuffer {
+func newControlBuffer(done <-chan struct{}, enableThrottling bool) *controlBuffer {
 	return &controlBuffer{
-		wakeupCh: make(chan struct{}, 1),
-		list:     &itemList{},
-		done:     done,
+		wakeupCh:         make(chan struct{}, 1),
+		list:             &itemList{},
+		done:             done,
+		enableThrottling: enableThrottling,
 	}
 }
 
@@ -390,7 +392,7 @@ func (c *controlBuffer) executeAndPut(f func() bool, it cbItem) (bool, error) {
 		c.consumerWaiting = false
 	}
 	c.list.enqueue(it)
-	if it.isThrottled() {
+	if c.enableThrottling && it.isThrottled() {
 		c.transportResponseFrames++
 		if c.transportResponseFrames == maxQueuedControlBufferItems {
 			// We are adding the frame that puts us over the threshold; create
@@ -447,7 +449,7 @@ func (c *controlBuffer) getOnceLocked() (any, error) {
 		return nil, nil
 	}
 	h := c.list.dequeue().(cbItem)
-	if h.isThrottled() {
+	if c.enableThrottling && h.isThrottled() {
 		if c.transportResponseFrames == maxQueuedControlBufferItems {
 			// We are removing the frame that put us over the
 			// threshold; close and clear the throttling channel.

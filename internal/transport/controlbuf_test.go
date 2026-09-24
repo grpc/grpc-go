@@ -26,7 +26,7 @@ import (
 func (s) TestControlBuffer_Throttle(t *testing.T) {
 	done := make(chan struct{})
 	defer close(done)
-	cb := newControlBuffer(done)
+	cb := newControlBuffer(done, true)
 
 	// Fill the control buffer up to the limit with throttled items.
 	for i := 0; i < maxQueuedControlBufferItems; i++ {
@@ -62,7 +62,7 @@ func (s) TestControlBuffer_Throttle(t *testing.T) {
 func (s) TestControlBuffer_NoThrottleForNonThrottledItems(t *testing.T) {
 	done := make(chan struct{})
 	defer close(done)
-	cb := newControlBuffer(done)
+	cb := newControlBuffer(done, true)
 
 	// Fill the control buffer with many more than limit number of non-throttled
 	// items.
