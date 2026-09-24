@@ -25,7 +25,6 @@ import (
 	rand "math/rand/v2"
 	"slices"
 	"strings"
-	"sync/atomic"
 
 	"google.golang.org/grpc"
 	estats "google.golang.org/grpc/experimental/stats"
@@ -137,8 +136,8 @@ func (b *xdsResolverBuilder) Build(target resolver.Target, cc resolver.ClientCon
 		cc:              cc,
 		xdsClient:       client,
 		xdsClientClose:  xdsClientClose,
-		activeClusters:  make(map[string]*clusterInfo),
-		activePlugins:   make(map[string]*clusterInfo),
+		activeClusters:  make(map[string]*grpcsync.RefCounted[*clusterInfo]),
+		activePlugins:   make(map[string]*grpcsync.RefCounted[*clusterInfo]),
 		httpFilters:     make(map[clientFilterKey]httpfilter.ClientFilter),
 		channelID:       rand.Uint64(),
 		ldsResourceName: ldsResourceName,
@@ -249,21 +248,21 @@ type xdsResolver struct {
 	// The following fields are accessed only from within the serializer
 	// callbacks.
 	xdsConfig *xdsresource.XDSConfig
-	// activeClusters is a map from cluster name to information about the
-	// weighted cluster that includes a reference count and load balancing
-	// configuration. These counts are used only by the resolver. The current
-	// configSelector holds one reference, and each ongoing RPC holds an
-	// additional reference. When the count hits zero, the resolver removes the
-	// cluster from this map and calls unsubscribe. This signals the dependency
-	// manager to stop the xDS watch once its own reference count reaches zero.
-	activeClusters map[string]*clusterInfo
-	// activePlugins is a map from cluster specifier plugin name to information
-	// about the cluster specifier plugin that includes a ref count and load
+	// activeClusters is a map from cluster name to refcounted information about
+	// the weighted cluster that includes its load balancing configuration.
+	// These counts are used only by the resolver. The current configSelector
+	// holds one reference, and each ongoing RPC holds an additional reference.
+	// When the count hits zero, the resolver calls unsubscribe and removes the
+	// cluster from this map. The unsubscribe signals the dependency manager to
+	// stop the xDS watch once its own reference count reaches zero.
+	activeClusters map[string]*grpcsync.RefCounted[*clusterInfo]
+	// activePlugins is a map from cluster specifier plugin name to refcounted
+	// information about the cluster specifier plugin that includes its load
 	// balancing configuration. These counts are used only by the resolver. The
 	// current configSelector holds one reference, and each ongoing RPC holds an
 	// additional reference. When the count hits zero, the resolver removes the
-	// plugin name from this map.
-	activePlugins     map[string]*clusterInfo
+	// plugin name from this map and pushes a new service config.
+	activePlugins     map[string]*grpcsync.RefCounted[*clusterInfo]
 	curConfigSelector stoppableConfigSelector
 	// httpFilters is a map from client filter key to client filter instance. It
 	// lives here so that the resolver can reuse filter instances across config
@@ -359,11 +358,6 @@ func (r *xdsResolver) Error(err error) {
 //
 // Only executed in the context of a serializer callback.
 func (r *xdsResolver) sendNewServiceConfig(cs stoppableConfigSelector) {
-	// Delete entries from r.activeClusters with zero references;
-	// otherwise serviceConfigJSON will generate a config including
-	// them.
-	r.pruneActiveClustersAndPlugins()
-
 	if errCS, ok := cs.(*erroringConfigSelector); ok {
 		// Send an empty config, which picks pick-first, with no address, and
 		// puts the ClientConn into transient failure.
@@ -411,8 +405,8 @@ func (r *xdsResolver) newConfigSelector() (_ *configSelector, err error) {
 			retryConfig: r.xdsConfig.VirtualHost.RetryConfig,
 		},
 		routes:           make([]route, len(r.xdsConfig.VirtualHost.Routes)),
-		clusters:         make(map[string]*clusterInfo),
-		plugins:          make(map[string]*clusterInfo),
+		clusters:         make(map[string]*grpcsync.RefCounted[*clusterInfo]),
+		plugins:          make(map[string]*grpcsync.RefCounted[*clusterInfo]),
 		httpFilterConfig: r.xdsConfig.Listener.APIListener.HTTPFilters,
 		xdsConfig:        r.xdsConfig,
 	}
@@ -444,16 +438,25 @@ func (r *xdsResolver) newConfigSelector() (_ *configSelector, err error) {
 				}
 				return nil, err
 			}
+			// Take one reference per distinct cluster, not per route that names
+			// it: cs.stop() releases references by ranging over cs.plugins, so
+			// it decrements once per entry no matter how many routes point
+			// here. The reference is also released by the deferred cs.stop()
+			// above if a later route fails to build.
+			ci, ok := cs.plugins[clusterName]
+			if !ok {
+				ci = r.acquireActiveClusterInfo(clusterName, "")
+				cs.plugins[clusterName] = ci
+			}
+			ci.Value().cfg = xdsChildConfig{ChildPolicy: balancerConfig(r.xdsConfig.RouteConfig.ClusterSpecifierPlugins[rt.ClusterSpecifierPlugin])}
 			routeCluster := &routeCluster{
 				name:        clusterName,
 				interceptor: interceptor,
+				info:        ci,
 			}
 			rc := grpcsync.NewRefCounted(routeCluster, func() { interceptor.Close() })
 			cs.routes[i].routeClusters = append(cs.routes[i].routeClusters, rc)
 			clusters.Add(rc, 1)
-			ci := r.addOrGetActiveClusterInfo(clusterName, "")
-			ci.cfg = xdsChildConfig{ChildPolicy: balancerConfig(r.xdsConfig.RouteConfig.ClusterSpecifierPlugins[rt.ClusterSpecifierPlugin])}
-			cs.plugins[clusterName] = ci
 		} else {
 			for _, wc := range rt.WeightedClusters {
 				clusterName := clusterPrefix + wc.Name
@@ -468,16 +471,25 @@ func (r *xdsResolver) newConfigSelector() (_ *configSelector, err error) {
 					}
 					return nil, err
 				}
+				// Take one reference per distinct cluster, not per route that
+				// names it: cs.stop() releases references by ranging over
+				// cs.clusters, so it decrements once per entry no matter how
+				// many routes point here. The reference is also released by the
+				// deferred cs.stop() above if a later route fails to build.
+				ci, ok := cs.clusters[clusterName]
+				if !ok {
+					ci = r.acquireActiveClusterInfo(clusterName, wc.Name)
+					cs.clusters[clusterName] = ci
+				}
+				ci.Value().cfg = xdsChildConfig{ChildPolicy: newBalancerConfig(cdsName, cdsBalancerConfig{Cluster: wc.Name})}
 				routeCluster := &routeCluster{
 					name:        clusterName,
 					interceptor: interceptor,
+					info:        ci,
 				}
 				rc := grpcsync.NewRefCounted(routeCluster, func() { interceptor.Close() })
 				cs.routes[i].routeClusters = append(cs.routes[i].routeClusters, rc)
 				clusters.Add(rc, int64(wc.Weight))
-				ci := r.addOrGetActiveClusterInfo(clusterName, wc.Name)
-				ci.cfg = xdsChildConfig{ChildPolicy: newBalancerConfig(cdsName, cdsBalancerConfig{Cluster: wc.Name})}
-				cs.clusters[clusterName] = ci
 			}
 		}
 		cs.routes[i].clusters = clusters
@@ -492,16 +504,6 @@ func (r *xdsResolver) newConfigSelector() (_ *configSelector, err error) {
 		cs.routes[i].retryConfig = rt.RetryConfig
 		cs.routes[i].hashPolicies = rt.HashPolicies
 		cs.routes[i].autoHostRewrite = rt.AutoHostRewrite
-	}
-
-	// Account for this config selector's clusters. Do this after no further
-	// errors may occur. Note: cs.clusters are pointers to entries in
-	// activeClusters.
-	for _, ci := range cs.clusters {
-		ci.refCount.Add(1)
-	}
-	for _, ci := range cs.plugins {
-		ci.refCount.Add(1)
 	}
 
 	// Cleanup filter instances that are no longer specified in the current
@@ -521,66 +523,97 @@ func (r *xdsResolver) newConfigSelector() (_ *configSelector, err error) {
 	return cs, nil
 }
 
-// pruneActiveClustersAndPlugins removes entries from activeClusters and
-// activePlugins that have a reference count of zero. For clusters, it also
-// invokes the unsubscribe function to signal the dependency manager to stop the
-// xDS watch. Because cluster specifier plugins do not have their own watches,
-// they are simply removed from the map without an unsubscribe call.
-//
-// Only executed in the context of a serializer callback.
-func (r *xdsResolver) pruneActiveClustersAndPlugins() {
-	for cluster, ci := range r.activeClusters {
-		if ci.refCount.Load() == 0 {
-			ci.unsubscribe()
-			delete(r.activeClusters, cluster)
-		}
-	}
-	for cluster, ci := range r.activePlugins {
-		if ci.refCount.Load() == 0 {
-			delete(r.activePlugins, cluster)
-		}
-	}
-}
-
-// addOrGetActiveClusterInfo returns the clusterInfo for the provided key,
-// creating it if it does not exist. It accepts the following parameters:
+// acquireActiveClusterInfo returns the refcounted clusterInfo for the provided
+// key with one reference held on behalf of the caller, creating the entry if it
+// does not exist. It accepts the following parameters:
 //   - key: Formatted as "cluster:<name>" or "cluster_specifier_plugin:<name>",
 //     this is the lookup key for the activeClusters or activePlugins maps.
 //   - name: The actual xDS resource name used to initiate a CDS watch.
 //     If empty (e.g., for plugins), no resource watch is triggered.
 //
-// This function manages entry creation and xDS subscriptions but does not
-// increment the reference count of the returned clusterInfo.
-func (r *xdsResolver) addOrGetActiveClusterInfo(key string, name string) *clusterInfo {
+// An entry whose reference count has already dropped to zero cannot be revived,
+// so a fresh entry (with a fresh subscription) replaces it in that case.
+//
+// Only executed in the context of a serializer callback.
+func (r *xdsResolver) acquireActiveClusterInfo(key string, name string) *grpcsync.RefCounted[*clusterInfo] {
 	if name == "" {
-		ci, ok := r.activePlugins[key]
-		if !ok {
-			ci = &clusterInfo{}
-			r.activePlugins[key] = ci
+		if ci, ok := r.activePlugins[key]; ok && ci.TryIncrement() {
+			return ci
 		}
+		var ci *grpcsync.RefCounted[*clusterInfo]
+		ci = grpcsync.NewRefCounted(&clusterInfo{}, func() {
+			r.scheduleActiveEntryRemoval(r.activePlugins, key, ci, func() {
+				// Plugins have no xDS watch of their own, so nothing else tells
+				// the channel to drop this child. Push a service config that no
+				// longer mentions it.
+				r.sendNewServiceConfig(r.curConfigSelector)
+			})
+		})
+		r.activePlugins[key] = ci
 		return ci
 	}
-	ci, ok := r.activeClusters[key]
-	if !ok {
-		ci = &clusterInfo{unsubscribe: r.dm.SubscribeToCluster(name)}
-		r.activeClusters[key] = ci
+
+	if ci, ok := r.activeClusters[key]; ok && ci.TryIncrement() {
+		return ci
 	}
+	unsubscribe := r.dm.SubscribeToCluster(name)
+	var ci *grpcsync.RefCounted[*clusterInfo]
+	ci = grpcsync.NewRefCounted(&clusterInfo{}, func() {
+		// Queue the removal before unsubscribing. Unsubscribing can make the
+		// dependency manager push an update, which schedules a callback on this
+		// same serializer; queueing first guarantees this entry is gone from
+		// activeClusters before that update regenerates the service config, so
+		// the dropped cluster does not reappear in it.
+		//
+		// Nothing needs to run after the removal: the update the dependency
+		// manager pushes is what drops this cluster from the channel's config,
+		// and sending our own service config here would only duplicate it.
+		r.scheduleActiveEntryRemoval(r.activeClusters, key, ci, nil)
+		// Unsubscribing decrements the reference count in the dependency
+		// manager; once that count reaches zero, the underlying CDS watch is
+		// terminated.
+		//
+		// This runs synchronously rather than inside the scheduled removal: that
+		// removal returns early if a newer entry has taken this key, and the
+		// newer entry holds its own subscription, so deferring the unsubscribe
+		// would leak this one.
+		unsubscribe()
+	})
+	r.activeClusters[key] = ci
 	return ci
 }
 
+// scheduleActiveEntryRemoval schedules the removal of key from m, which must be
+// one of the resolver's active entry maps, once ci has released its last
+// reference. onRemoved, if non-nil, runs after the entry has been removed.
+//
+// The removal is scheduled rather than performed inline because the last
+// reference is usually released by an RPC completing on an arbitrary goroutine,
+// while the active maps may only be touched from within a serializer callback.
+// By the time the scheduled callback runs, a newer entry may already have
+// replaced this one under the same key, so the entry is removed only if it is
+// still the current one.
+//
+// This must remain a TrySchedule and not a ScheduleAndWait. The last reference
+// is also dropped by configSelector.stop(), which itself runs inside a
+// serializer callback, so blocking here until the callback ran would deadlock
+// the serializer against itself.
+func (r *xdsResolver) scheduleActiveEntryRemoval(m map[string]*grpcsync.RefCounted[*clusterInfo], key string, ci *grpcsync.RefCounted[*clusterInfo], onRemoved func()) {
+	r.serializer.TrySchedule(func(context.Context) {
+		if m[key] != ci {
+			return
+		}
+		delete(m, key)
+		if onRemoved != nil {
+			onRemoved()
+		}
+	})
+}
+
 type clusterInfo struct {
-	// refCount is the number of references to this cluster.
-	refCount atomic.Int32
 	// cfg is the child configuration for this cluster, containing either the
 	// csp config or the cds cluster config.
 	cfg xdsChildConfig
-	// unsubscribe is the function to call to unsubscribe from this cluster's
-	// CDS resource. It is populated only for clusters in activeClusters and not
-	// for cluster specifier plugins. When invoked, it decrements the reference
-	// count in the dependency manager; once that count reaches zero, the
-	// underlying CDS watch is terminated. Plugins do not have associated
-	// watches and therefore do not require an unsubscribe function.
-	unsubscribe func()
 }
 
 // Contains common functionality to be executed when resources of either type
