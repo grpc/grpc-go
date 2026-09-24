@@ -22,6 +22,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/internal/grpctest"
 )
 
@@ -97,6 +98,52 @@ func (s) TestBoolFromEnv(t *testing.T) {
 			}
 			if got := boolFromEnv(testVar, tc.def); got != tc.want {
 				t.Errorf("boolFromEnv(%q(=%q), %v) = %v; want %v", testVar, tc.val, tc.def, got, tc.want)
+			}
+		})
+	}
+}
+
+func (s) TestStringSetFromEnv(t *testing.T) {
+	var testCases = []struct {
+		name string
+		val  string
+		set  bool // whether to set the env var at all
+		want map[string]struct{}
+	}{
+		{name: "unset", set: false, want: nil},
+		{name: "empty", val: "", set: true, want: nil},
+		{name: "whitespace only", val: "  , \t ,", set: true, want: nil},
+		{name: "single", val: "traceparent", set: true, want: map[string]struct{}{"traceparent": {}}},
+		{
+			name: "multiple with whitespace",
+			val:  " traceparent , x-request-id ",
+			set:  true,
+			want: map[string]struct{}{"traceparent": {}, "x-request-id": {}},
+		},
+		{
+			name: "lower-cased",
+			val:  "TraceParent,X-Request-Id",
+			set:  true,
+			want: map[string]struct{}{"traceparent": {}, "x-request-id": {}},
+		},
+		{
+			name: "duplicates and empties collapse",
+			val:  "a,,a, b ,b",
+			set:  true,
+			want: map[string]struct{}{"a": {}, "b": {}},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			const testVar = "testvar"
+			if !tc.set {
+				os.Unsetenv(testVar)
+			} else {
+				os.Setenv(testVar, tc.val)
+			}
+			got := stringSetFromEnv(testVar)
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("stringSetFromEnv(%q(=%q)) unexpected result (-want +got):\n%s", testVar, tc.val, diff)
 			}
 		})
 	}
