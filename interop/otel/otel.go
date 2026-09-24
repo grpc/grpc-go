@@ -28,7 +28,6 @@ package otel
 
 import (
 	"context"
-	"crypto/tls"
 	"fmt"
 	"os"
 	"strings"
@@ -38,7 +37,6 @@ import (
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/propagation"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
 )
 
@@ -62,8 +60,9 @@ const (
 // returned; collectorAddress is ignored in that case.
 //
 // collectorAddress is the OTLP/gRPC endpoint of the trace collector. It may be
-// given as "host:port" (plaintext), "http://host:port" (plaintext) or
-// "https://host:port" (TLS using the system roots). If empty, the endpoint is
+// given as "host:port" (plaintext) or as a URL, which follows the standard
+// OTEL_EXPORTER_OTLP_ENDPOINT semantics: "http://host:port" is plaintext and
+// "https://host:port" is TLS using the system roots. If empty, the endpoint is
 // taken from the standard OTEL_EXPORTER_OTLP_TRACES_ENDPOINT /
 // OTEL_EXPORTER_OTLP_ENDPOINT environment variables (including their scheme)
 // when set, and otherwise defaults to localhost:4317 over plaintext.
@@ -111,18 +110,11 @@ func Setup(enabled bool, collectorAddress string, logger grpclog.DepthLoggerV2) 
 // human readable description of the resulting target, for logging.
 func exporterOptions(collectorAddress string) ([]otlptracegrpc.Option, string) {
 	switch {
-	case strings.HasPrefix(collectorAddress, "https://"):
-		endpoint := strings.TrimPrefix(collectorAddress, "https://")
-		return []otlptracegrpc.Option{
-			otlptracegrpc.WithEndpoint(endpoint),
-			otlptracegrpc.WithTLSCredentials(credentials.NewTLS(&tls.Config{})),
-		}, endpoint + " (TLS)"
-	case strings.HasPrefix(collectorAddress, "http://"):
-		endpoint := strings.TrimPrefix(collectorAddress, "http://")
-		return []otlptracegrpc.Option{
-			otlptracegrpc.WithEndpoint(endpoint),
-			otlptracegrpc.WithInsecure(),
-		}, endpoint + " (plaintext)"
+	case strings.HasPrefix(collectorAddress, "http://"), strings.HasPrefix(collectorAddress, "https://"):
+		// A URL is handed to the exporter as-is, which applies the standard
+		// OTEL_EXPORTER_OTLP_ENDPOINT semantics: http:// is plaintext and
+		// https:// is TLS using the system roots.
+		return []otlptracegrpc.Option{otlptracegrpc.WithEndpointURL(collectorAddress)}, collectorAddress
 	case collectorAddress != "":
 		// A bare host:port is treated as plaintext, matching the other
 		// languages' interop binaries and the interop test collector.
