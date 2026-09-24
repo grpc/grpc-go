@@ -77,11 +77,8 @@ func (bb) Build(balancer.ClientConn, balancer.BuildOptions) balancer.Balancer {
 }
 
 // slice represents a key range and its assigned endpoints.
-//
-//lint:ignore U1000 Struct fields planned for future implementation
 type slice struct {
 	startKey  []byte // Inclusive start key of the key-range
-	endKey    []byte // Exclusive, nil for sentinel/infinity
 	endpoints []int  // Indices into assignment.endpointNames
 }
 
