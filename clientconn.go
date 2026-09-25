@@ -827,6 +827,9 @@ func (cc *ClientConn) updateResolverStateAndUnlock(s resolver.State, err error) 
 	}
 
 	var ret error
+	// configSelector, if set, is applied only after the LB policy has been
+	// updated with the new configuration.
+	var configSelector iresolver.ConfigSelector
 	if cc.dopts.disableServiceConfig {
 		channelz.Infof(logger, cc.channelz, "ignoring service config from resolver (%v) and applying the default because service config is disabled", s.ServiceConfig)
 		cc.maybeApplyDefaultServiceConfig()
@@ -836,7 +839,7 @@ func (cc *ClientConn) updateResolverStateAndUnlock(s resolver.State, err error) 
 		// default, per the error handling design?
 	} else {
 		if sc, ok := s.ServiceConfig.Config.(*ServiceConfig); s.ServiceConfig.Err == nil && ok {
-			configSelector := iresolver.GetConfigSelector(s)
+			configSelector = iresolver.GetConfigSelector(s)
 			if configSelector != nil {
 				if len(s.ServiceConfig.Config.(*ServiceConfig).Methods) != 0 {
 					channelz.Infof(logger, cc.channelz, "method configs in service config will be ignored due to presence of config selector")
@@ -844,7 +847,7 @@ func (cc *ClientConn) updateResolverStateAndUnlock(s resolver.State, err error) 
 			} else {
 				configSelector = &defaultConfigSelector{sc}
 			}
-			cc.applyServiceConfigAndBalancer(sc, configSelector)
+			cc.applyServiceConfigAndBalancer(sc, nil)
 		} else {
 			ret = balancer.ErrBadResolverState
 			if cc.sc == nil {
@@ -862,6 +865,24 @@ func (cc *ClientConn) updateResolverStateAndUnlock(s resolver.State, err error) 
 	cc.mu.Unlock()
 
 	uccsErr := bw.updateClientConnState(&balancer.ClientConnState{ResolverState: s, BalancerConfig: balCfg})
+
+	if configSelector != nil {
+		// As per gRFC A31, the config selector must be applied only after the
+		// LB policy has been updated, since the new config selector may route
+		// RPCs to clusters that only the LB policy's new picker is aware of.
+		// updateClientConnState blocks until the LB policy has processed the
+		// update, and the LB policy is expected to have provided a new picker
+		// by then.
+		cc.mu.Lock()
+		// Don't apply the config selector if the channel was closed, or entered
+		// idle mode (which replaces the balancer wrapper), while cc.mu was
+		// released.
+		if cc.conns != nil && cc.balancerWrapper == bw {
+			cc.safeConfigSelector.UpdateConfigSelector(configSelector)
+		}
+		cc.mu.Unlock()
+	}
+
 	if ret == nil {
 		ret = uccsErr // prefer ErrBadResolver state since any other error is
 		// currently meaningless to the caller.
