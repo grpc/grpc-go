@@ -108,21 +108,21 @@ func setupStubTokenProvider(token string, err error) *stubTokenProvider {
 	return &stubTokenProvider{
 		err:      err,
 		tokenVal: token,
-		expiry:   time.Now().Add(1 * time.Hour),
+		expiry:   time.Now().Add(1 * time.Hour), // keep token valid and outside the preemptive refresh window
 	}
 }
 
 // setupTestGCPServiceAccountIdentityCreds constructs a GCP service account
 // identity credentials instance with an injected stub token provider.
 //
-// It overrides internal.NewIDTokenFetcher to use the stubTokenProvider,
+// It overrides internal.IDTokenFetcher to use the stubTokenProvider,
 // and registers a cleanup function to restore original hook after the test.
 func setupTestGCPServiceAccountIdentityCreds(ctx context.Context, t *testing.T, stubToken *stubTokenProvider) credentials.PerRPCCredentials {
-	origNewIDTokenFetcher := internal.IDTokenFetcher
+	origIDTokenFetcher := internal.IDTokenFetcher
 	internal.IDTokenFetcher = func() func(context.Context, string) (string, time.Time, error) {
 		return stubToken.fetch
 	}
-	t.Cleanup(func() { internal.IDTokenFetcher = origNewIDTokenFetcher })
+	t.Cleanup(func() { internal.IDTokenFetcher = origIDTokenFetcher })
 
 	creds, err := google.NewServiceAccountIdentityCredentials(ctx, "audience")
 	if err != nil {
@@ -427,7 +427,7 @@ func (s) TestGCPServiceAccountIdentityCallCreds_EarlyExpiry(t *testing.T) {
 		secondToken = "token-B"
 	)
 	stubToken := setupStubTokenProvider(firstToken, nil)
-	// Keeping token expiry 1 minute as we subtract 30 seconds from the it.
+	// Keeping token expiry 1 minute as we subtract 30 seconds from it.
 	stubToken.setToken(firstToken, time.Now().Add(1*time.Minute))
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()

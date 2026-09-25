@@ -79,7 +79,12 @@ func newIDTokenFetcher() *idTokenFetcher {
 // It takes a context controlling HTTP request cancellation and an audience
 // string for the requested token. It returns the raw JWT token string,
 // expiration timestamp parsed from the token's "exp" claim, and an error
-// if the HTTP request or JWT parsing fails.
+// mapped to a gRPC status if the HTTP request or JWT parsing fails:
+//   - If the HTTP request fails with a status that maps to gRPC UNAVAILABLE
+//     according to HTTP to gRPC status code mappings, it returns UNAVAILABLE.
+//   - All other HTTP error status codes and JWT parsing failures map to
+//     UNAUTHENTICATED.
+//   - Non-HTTP request failures are mapped to UNAVAILABLE.
 func (f *idTokenFetcher) fetchIDToken(ctx context.Context, audience string) (string, time.Time, error) {
 	reqURL := fmt.Sprintf("http://%s/computeMetadata/v1/instance/service-accounts/default/identity?audience=%s&format=full", f.metadataHost, url.QueryEscape(audience))
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
@@ -94,7 +99,11 @@ func (f *idTokenFetcher) fetchIDToken(ctx context.Context, audience string) (str
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20)) // 1 MB limit
+	// Limit the response body read to 1 MB to prevent unbounded memory
+	// allocation if the server returns an unexpectedly large response, matching
+	// the limit used by the golang.org/x/oauth2 package when reading token
+	// responses.
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {
 		return "", time.Time{}, status.Errorf(codes.Unavailable, "credentials: failed to fetch ID token: %v", err)
 	}
@@ -105,9 +114,9 @@ func (f *idTokenFetcher) fetchIDToken(ctx context.Context, audience string) (str
 	if resp.StatusCode != http.StatusOK {
 		switch transport.HTTPStatusConvTab[resp.StatusCode] {
 		case codes.Unavailable:
-			return "", time.Time{}, status.Errorf(codes.Unavailable, "credentials: failed to fetch ID token: HTTP status %d: %s", resp.StatusCode, string(body))
+			return "", time.Time{}, status.Errorf(codes.Unavailable, "credentials: failed to fetch ID token: HTTP status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
 		default:
-			return "", time.Time{}, status.Errorf(codes.Unauthenticated, "credentials: failed to fetch ID token: HTTP status %d: %s", resp.StatusCode, string(body))
+			return "", time.Time{}, status.Errorf(codes.Unauthenticated, "credentials: failed to fetch ID token: HTTP status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
 		}
 	}
 
@@ -122,6 +131,10 @@ func (f *idTokenFetcher) fetchIDToken(ctx context.Context, audience string) (str
 }
 
 type jwtPayload struct {
+	// Per RFC 7519 Section 2, JWT NumericDate values (such as "exp") are JSON
+	// numeric values that may contain non-integer fractional seconds. Using
+	// float64 ensures json.Unmarshal succeeds even if fractional seconds are
+	// present.
 	Exp float64 `json:"exp"`
 }
 

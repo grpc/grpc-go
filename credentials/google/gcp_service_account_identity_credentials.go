@@ -51,7 +51,7 @@ type gcpServiceAccountIdentityCallCreds struct {
 	ctx          context.Context
 	audience     string
 	backoff      backoff.Strategy
-	fetchIDToken func(ctx context.Context, audience string) (string, time.Time, error)
+	fetchIDToken func(context.Context, string) (string, time.Time, error)
 
 	// The following fields are protected by mu.
 	mu                     sync.Mutex
@@ -66,7 +66,7 @@ type gcpServiceAccountIdentityCallCreds struct {
 
 func init() {
 	internal.BackoffStrategy = backoff.DefaultExponential
-	internal.IDTokenFetcher = func() func(ctx context.Context, audience string) (string, time.Time, error) {
+	internal.IDTokenFetcher = func() func(context.Context, string) (string, time.Time, error) {
 		return newIDTokenFetcher().fetchIDToken
 	}
 }
@@ -226,14 +226,8 @@ func (c *gcpServiceAccountIdentityCallCreds) startFetch() {
 // backoff state based on the outcome of a background fetch attempt.
 //
 // If the fetch succeeded, the cached token is updated, and the backoff timers
-// and error are reset.
-//
-// If the fetch failed, backoff attempts are calculated and the error is mapped
-// to a gRPC status.
-//   - If the HTTP request fails with a status that maps to gRPC UNAVAILABLE
-//     according to HTTP to gRPC status code mappings, it returns UNAVAILABLE.
-//   - All other HTTP error status codes map to UNAUTHENTICATED.
-//   - Non-HTTP request failures are mapped to UNAVAILABLE.
+// and error are reset. If the fetch failed, the error is cached and the next
+// retry time is calculated using the backoff strategy.
 //
 // It must be called with mu locked.
 func (c *gcpServiceAccountIdentityCallCreds) updateStateLocked(token string, exp time.Time, err error) {

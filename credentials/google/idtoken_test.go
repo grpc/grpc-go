@@ -112,6 +112,13 @@ func (s) TestFetchIDTokenFromMetadataServer_Success(t *testing.T) {
 	)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("Request Method = %q, want %q", r.Method, http.MethodGet)
+		}
+		const wantPath = "/computeMetadata/v1/instance/service-accounts/default/identity"
+		if r.URL.Path != wantPath {
+			t.Errorf("Request URL.Path = %q, want %q", r.URL.Path, wantPath)
+		}
 		// Verify mandatory GCP Metadata Server request header.
 		if got := r.Header.Get("Metadata-Flavor"); got != "Google" {
 			t.Errorf("Request Metadata-Flavor header = %q, want %q", got, "Google")
@@ -130,7 +137,7 @@ func (s) TestFetchIDTokenFromMetadataServer_Success(t *testing.T) {
 	// Redirect GCE metadata server requests to fake HTTP server.
 	t.Setenv("GCE_METADATA_HOST", strings.TrimPrefix(server.URL, "http://"))
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
 	val, exp, err := newIDTokenFetcher().fetchIDToken(ctx, audience)
@@ -183,7 +190,7 @@ func (s) TestFetchIDTokenFromMetadataServer_HTTPStatusErrors(t *testing.T) {
 			// Redirect GCE metadata server requests to fake HTTP server.
 			t.Setenv("GCE_METADATA_HOST", strings.TrimPrefix(server.URL, "http://"))
 
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
 
 			_, _, err := newIDTokenFetcher().fetchIDToken(ctx, "https://example.com")
@@ -204,7 +211,7 @@ func (s) TestFetchIDTokenFromMetadataServer_MalformedToken(t *testing.T) {
 
 	t.Setenv("GCE_METADATA_HOST", strings.TrimPrefix(server.URL, "http://"))
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
 	_, _, err := newIDTokenFetcher().fetchIDToken(ctx, "https://example.com")
@@ -213,9 +220,9 @@ func (s) TestFetchIDTokenFromMetadataServer_MalformedToken(t *testing.T) {
 	}
 }
 
-// Test verifies that newIDTokenFetcher correctly reads the GCE_METADATA_HOST
+// Test verifies that IDTokenFetcher correctly reads the GCE_METADATA_HOST
 // environment variable and configures an unproxied HTTP transport.
-func (s) TestNewIDTokenFetcher(t *testing.T) {
+func (s) TestIDTokenFetcher(t *testing.T) {
 	tests := []struct {
 		name     string
 		envHost  string
