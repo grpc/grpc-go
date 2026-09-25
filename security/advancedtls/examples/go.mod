@@ -4,7 +4,7 @@ go 1.26.0
 
 require (
 	google.golang.org/grpc v1.84.0
-	google.golang.org/grpc/examples v0.0.0-20260924231546-c0ef4986f448
+	google.golang.org/grpc/examples v0.0.0-20260925073600-acccf8cd101a
 	google.golang.org/grpc/security/advancedtls v1.0.0
 )
 
