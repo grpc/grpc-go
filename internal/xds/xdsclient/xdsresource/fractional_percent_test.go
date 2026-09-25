@@ -18,6 +18,7 @@
 package xdsresource
 
 import (
+	"strings"
 	"testing"
 
 	v3typepb "github.com/envoyproxy/go-control-plane/envoy/type/v3"
@@ -28,7 +29,7 @@ func (s) TestNewFractionalPercent(t *testing.T) {
 		name    string
 		fp      *v3typepb.FractionalPercent
 		want    FractionalPercent
-		wantErr bool
+		wantErr string
 	}{
 		{
 			name: "NilIsZeroOutOfHundred",
@@ -63,24 +64,30 @@ func (s) TestNewFractionalPercent(t *testing.T) {
 			// above 100% would become ~0.27% if computed in uint32.
 			name: "OverflowingNumeratorHundredCapped",
 			fp:   &v3typepb.FractionalPercent{Numerator: 429497, Denominator: v3typepb.FractionalPercent_HUNDRED},
-			want: FractionalPercent{Numerator: 429497, Denominator: 100, PPM: 1000000},
+			want: FractionalPercent{Numerator: 100, Denominator: 100, PPM: 1000000},
 		},
 		{
 			name: "OverHundredPercentCapped",
 			fp:   &v3typepb.FractionalPercent{Numerator: 150, Denominator: v3typepb.FractionalPercent_HUNDRED},
-			want: FractionalPercent{Numerator: 150, Denominator: 100, PPM: 1000000},
+			want: FractionalPercent{Numerator: 100, Denominator: 100, PPM: 1000000},
 		},
 		{
 			name:    "UnsupportedDenominator",
 			fp:      &v3typepb.FractionalPercent{Numerator: 1, Denominator: v3typepb.FractionalPercent_DenominatorType(7)},
-			wantErr: true,
+			wantErr: "unsupported denominator",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := NewFractionalPercent(tt.fp)
-			if (err != nil) != tt.wantErr {
-				t.Fatalf("NewFractionalPercent(%v) returned err %v, wantErr %v", tt.fp, err, tt.wantErr)
+			if tt.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("NewFractionalPercent(%v) returned err %v, want error containing %q", tt.fp, err, tt.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("NewFractionalPercent(%v) returned unexpected err: %v", tt.fp, err)
 			}
 			if got != tt.want {
 				t.Errorf("NewFractionalPercent(%v) = %+v, want %+v", tt.fp, got, tt.want)

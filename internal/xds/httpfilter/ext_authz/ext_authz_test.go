@@ -379,7 +379,7 @@ func (s) TestParseFilterEnabled(t *testing.T) {
 		name    string
 		fp      *corepb.RuntimeFractionalPercent
 		want    xdsresource.FractionalPercent
-		wantErr bool
+		wantErr string
 	}{
 		{
 			name: "NilFraction",
@@ -423,7 +423,7 @@ func (s) TestParseFilterEnabled(t *testing.T) {
 					Denominator: v3typepb.FractionalPercent_HUNDRED,
 				},
 			},
-			want: xdsresource.FractionalPercent{Numerator: 200, Denominator: 100, PPM: 1000000},
+			want: xdsresource.FractionalPercent{Numerator: 100, Denominator: 100, PPM: 1000000},
 		},
 		{
 			name: "UnsupportedDenominator",
@@ -433,14 +433,20 @@ func (s) TestParseFilterEnabled(t *testing.T) {
 					Denominator: v3typepb.FractionalPercent_DenominatorType(7),
 				},
 			},
-			wantErr: true,
+			wantErr: "extauthz: filter_enabled contains unsupported denominator",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := parseFilterEnabled(tt.fp)
-			if (err != nil) != tt.wantErr {
-				t.Fatalf("parseFilterEnabled(%v) returned err %v, wantErr %v", tt.fp, err, tt.wantErr)
+			if tt.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("parseFilterEnabled(%v) returned err %v, want error containing %q", tt.fp, err, tt.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("parseFilterEnabled(%v) returned unexpected err: %v", tt.fp, err)
 			}
 			if diff := cmp.Diff(tt.want, got); diff != "" {
 				t.Fatalf("parseFilterEnabled(%v) returned unexpected fraction (-want, +got):\n%s", tt.fp, diff)

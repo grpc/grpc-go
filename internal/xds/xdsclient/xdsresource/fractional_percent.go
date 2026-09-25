@@ -24,7 +24,8 @@ import (
 )
 
 // FractionalPercent is the internal representation of the xDS FractionalPercent
-// proto.
+// proto. The fraction is capped at 100%: a numerator larger than the
+// denominator is clamped to the denominator, so PPM never exceeds 1,000,000.
 type FractionalPercent struct {
 	Numerator   uint32
 	Denominator uint32
@@ -52,13 +53,14 @@ func NewFractionalPercent(fp *v3typepb.FractionalPercent) (FractionalPercent, er
 	}
 
 	num := fp.GetNumerator()
-	// The numerator comes from the control plane, so perform the
-	// multiplication in uint64 to prevent overflowing a uint32, and cap the
-	// result at 100%.
-	ppm := uint64(num) * 1000000 / uint64(den)
-	if ppm > 1000000 {
-		ppm = 1000000
+	// The numerator comes from the control plane and may exceed the
+	// denominator. Clamp it so the fraction is capped at 100%, which also
+	// keeps PPM within 1,000,000. The multiplication is performed in uint64
+	// to prevent overflowing a uint32.
+	if num > den {
+		num = den
 	}
+	ppm := uint64(num) * 1000000 / uint64(den)
 
 	return FractionalPercent{
 		Numerator:   num,
