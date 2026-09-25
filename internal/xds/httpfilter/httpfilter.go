@@ -92,6 +92,15 @@ type ClientInterceptor interface {
 	// behavior, implementations may wrap the ClientStream returned by the
 	// delegate.
 	//
+	// Implementations must adhere to the following:
+	//   - opts may only be appended to. CallOptions received in opts must not
+	//     be removed, replaced or reordered.
+	//   - newStream must be called at most once per RPC. It may be called
+	//     asynchronously, after NewStream has returned.
+	//   - If newStream is called after the RPC has finished, it fails without
+	//     creating a stream. The error is the RPC's status, or codes.Canceled
+	//     if the RPC succeeded.
+	//
 	// Note: RPCInfo.Context is currently unused and will be nil.
 	NewStream(ctx context.Context, ri iresolver.RPCInfo, newStream func(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStream, error), opts ...grpc.CallOption) (grpc.ClientStream, error)
 
