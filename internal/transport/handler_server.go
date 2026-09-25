@@ -268,7 +268,7 @@ func (ht *serverHandlerTransport) writeStatus(s *ServerStream, st *status.Status
 				for _, v := range vv {
 					// http2 ResponseWriter mechanism to send undeclared Trailers after
 					// the headers have possibly been written.
-					h.Add(http2.TrailerPrefix+k, encodeMetadataHeader(k, v))
+					h.Add(http.TrailerPrefix+k, encodeMetadataHeader(k, v))
 				}
 			}
 		}
