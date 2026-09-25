@@ -197,7 +197,7 @@ func main() {
 
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
 	if err != nil {
-		log.Fatalf("Listening on local port %q: %v", *port, err)
+		log.Fatalf("Listening on local port %d: %v", *port, err)
 	}
 
 	// Create tls based credential.
