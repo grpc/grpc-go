@@ -7,7 +7,7 @@ require (
 	github.com/mgechev/revive v1.17.0
 	golang.org/x/tools v0.50.0
 	google.golang.org/protobuf v1.36.12
-	honnef.co/go/tools v0.8.1
+	honnef.co/go/tools v0.7.0
 )
 
 require (
