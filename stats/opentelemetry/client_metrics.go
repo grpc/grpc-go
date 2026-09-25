@@ -60,6 +60,11 @@ func (h *clientMetricsHandler) initializeMetrics() {
 	h.clientMetrics.attemptSentTotalCompressedMessageSize = createInt64Histogram(metrics.Metrics(), "grpc.client.attempt.sent_total_compressed_message_size", meter, otelmetric.WithUnit("By"), otelmetric.WithDescription("Compressed message bytes sent per client call attempt."), otelmetric.WithExplicitBucketBoundaries(DefaultSizeBounds...))
 	h.clientMetrics.attemptRcvdTotalCompressedMessageSize = createInt64Histogram(metrics.Metrics(), "grpc.client.attempt.rcvd_total_compressed_message_size", meter, otelmetric.WithUnit("By"), otelmetric.WithDescription("Compressed message bytes received per call attempt."), otelmetric.WithExplicitBucketBoundaries(DefaultSizeBounds...))
 	h.clientMetrics.callDuration = createFloat64Histogram(metrics.Metrics(), "grpc.client.call.duration", meter, otelmetric.WithUnit("s"), otelmetric.WithDescription("Time taken by gRPC to complete an RPC from application's perspective."), otelmetric.WithExplicitBucketBoundaries(DefaultLatencyBounds...))
+	h.clientMetrics.callRetries = createInt64Histogram(metrics.Metrics(), ClientCallRetriesMetricName, meter, otelmetric.WithUnit("{retry}"), otelmetric.WithDescription("Number of retries during the client call. If there were no retries, 0 is not reported."), otelmetric.WithExplicitBucketBoundaries(DefaultRetryBounds...))
+	h.clientMetrics.callTransparentRetries = createInt64Histogram(metrics.Metrics(), ClientCallTransparentRetriesMetricName, meter, otelmetric.WithUnit("{transparent_retry}"), otelmetric.WithDescription("Number of transparent retries during the client call. If there were no transparent retries, 0 is not reported."), otelmetric.WithExplicitBucketBoundaries(DefaultTransparentRetryBounds...))
+	// TODO: Add the grpc.client.call.hedges metric (gRFC A96) once grpc-go
+	// supports hedging.
+	h.clientMetrics.callRetryDelay = createFloat64Histogram(metrics.Metrics(), ClientCallRetryDelayMetricName, meter, otelmetric.WithUnit("s"), otelmetric.WithDescription("Total time of delay while there is no active attempt during the client call."), otelmetric.WithExplicitBucketBoundaries(DefaultLatencyBounds...))
 
 	rm := &registryMetrics{
 		optionalLabels: h.options.MetricsOptions.OptionalLabels,
@@ -135,6 +140,10 @@ func (h *clientMetricsHandler) streamInterceptor(ctx context.Context, desc *grpc
 // perCallMetrics records per call metrics for both unary and stream calls.
 func (h *clientMetricsHandler) perCallMetrics(ctx context.Context, err error, startTime time.Time, ci *callInfo) {
 	callLatency := float64(time.Since(startTime)) / float64(time.Second)
+	retryAttributes := []otelattribute.KeyValue{
+		otelattribute.String("grpc.method", ci.method),
+		otelattribute.String("grpc.target", ci.target),
+	}
 	attributes := []otelattribute.KeyValue{
 		otelattribute.String("grpc.method", ci.method),
 		otelattribute.String("grpc.target", ci.target),
@@ -143,11 +152,37 @@ func (h *clientMetricsHandler) perCallMetrics(ctx context.Context, err error, st
 	for _, o := range h.options.MetricsOptions.OptionalLabels {
 		if o == "grpc.client.call.custom" {
 			label := estats.CustomLabelFromContext(ctx)
-			attributes = append(attributes, otelattribute.String(o, label))
+			customLabel := otelattribute.String(o, label)
+			attributes = append(attributes, customLabel)
+			retryAttributes = append(retryAttributes, customLabel)
 		}
 	}
 	attrs := otelmetric.WithAttributeSet(otelattribute.NewSet(attributes...))
 	h.clientMetrics.callDuration.Record(ctx, callLatency, attrs)
+
+	// Record retry metrics if they are enabled.
+	retryAttrs := otelmetric.WithAttributeSet(otelattribute.NewSet(retryAttributes...))
+
+	if h.clientMetrics.callRetries != nil {
+		numAttempts := ci.numAttempts.Load()
+		if numAttempts > 1 {
+			h.clientMetrics.callRetries.Record(ctx, int64(numAttempts-1), retryAttrs)
+		}
+	}
+	if h.clientMetrics.callTransparentRetries != nil {
+		transparentRetries := ci.numTransparentRetries.Load()
+		if transparentRetries > 0 {
+			h.clientMetrics.callTransparentRetries.Record(ctx, int64(transparentRetries), retryAttrs)
+		}
+	}
+	// Unlike retries/transparent_retries, retry_delay is recorded
+	// unconditionally (0 for calls with no retries). A96's metric table
+	// deliberately omits the "if there were no X, 0 is not reported" clause
+	// for retry_delay that it applies to the other metrics.
+	if h.clientMetrics.callRetryDelay != nil {
+		delaySec := float64(ci.retryDelay.Load()) / float64(time.Second)
+		h.clientMetrics.callRetryDelay.Record(ctx, delaySec, retryAttrs)
+	}
 }
 
 // TagConn exists to satisfy stats.Handler.
@@ -190,6 +225,23 @@ func (h *clientMetricsHandler) processRPCEvent(ctx context.Context, s stats.RPCS
 			return
 		}
 
+		// Track retry attempts.
+		if st.IsTransparentRetryAttempt {
+			ci.numTransparentRetries.Add(1)
+		} else {
+			ci.numAttempts.Add(1)
+		}
+		// Accumulate retry delay.
+		if ci.activeAttempts.Add(1) == 1 {
+			lastEndTime := ci.lastAttemptEndTime.Swap(0)
+			if lastEndTime > 0 {
+				delay := st.BeginTime.Sub(time.Unix(0, lastEndTime))
+				if delay > 0 {
+					ci.retryDelay.Add(int64(delay))
+				}
+			}
+		}
+
 		attributes := []otelattribute.KeyValue{
 			otelattribute.String("grpc.method", ci.method),
 			otelattribute.String("grpc.target", ci.target),
@@ -212,7 +264,14 @@ func (h *clientMetricsHandler) processRPCEvent(ctx context.Context, s stats.RPCS
 	case *stats.InTrailer:
 		h.setLabelsFromPluginOption(ai, st.Trailer)
 	case *stats.End:
+		ci := getCallInfo(ctx)
+		if ci != nil {
+			if ci.activeAttempts.Add(-1) == 0 {
+				ci.lastAttemptEndTime.Store(st.EndTime.UnixNano())
+			}
+		}
 		h.processRPCEnd(ctx, ai, st)
+
 	default:
 	}
 }
@@ -284,4 +343,13 @@ const (
 	// ClientCallDurationMetricName is the time taken by gRPC to complete an RPC
 	// from application's perspective.
 	ClientCallDurationMetricName string = "grpc.client.call.duration"
+	// ClientCallRetriesMetricName is the number of retries during the
+	// client call.
+	ClientCallRetriesMetricName string = "grpc.client.call.retries"
+	// ClientCallTransparentRetriesMetricName is the number of transparent
+	// retries during the client call.
+	ClientCallTransparentRetriesMetricName string = "grpc.client.call.transparent_retries"
+	// ClientCallRetryDelayMetricName is the total time of delay while there is no
+	// active attempt during the client call.
+	ClientCallRetryDelayMetricName string = "grpc.client.call.retry_delay"
 )
