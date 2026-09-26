@@ -466,15 +466,18 @@ func (s *Stream) ReadMessageHeader(header []byte) (err error) {
 		return er
 	}
 	s.readRequester.requestRead(len(header))
+	bytesRead := 0
 	for len(header) != 0 {
 		n, err := s.trReader.ReadMessageHeader(header)
+		bytesRead += n
 		header = header[n:]
 		if len(header) == 0 {
 			err = nil
 		}
 		if err != nil {
-			if n > 0 && err == io.EOF {
+			if bytesRead > 0 && err == io.EOF {
 				err = io.ErrUnexpectedEOF
+				s.trReader.er = err
 			}
 			return err
 		}
@@ -505,19 +508,22 @@ func (s *Stream) read(n int) (data mem.BufferSlice, err error) {
 	allocCap := min(ceil(n, http2MaxFrameLen), 128)
 	data = make(mem.BufferSlice, 0, allocCap)
 	s.readRequester.requestRead(n)
+	bytesRead := 0
 	for n != 0 {
 		buf, err := s.trReader.Read(n)
 		var bufLen int
 		if buf != nil {
 			bufLen = buf.Len()
 		}
+		bytesRead += bufLen
 		n -= bufLen
 		if n == 0 {
 			err = nil
 		}
 		if err != nil {
-			if bufLen > 0 && err == io.EOF {
+			if bytesRead > 0 && err == io.EOF {
 				err = io.ErrUnexpectedEOF
+				s.trReader.er = err
 			}
 			data.Free()
 			return nil, err

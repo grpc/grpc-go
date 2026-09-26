@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2018 gRPC authors.
+ * Copyright 2026 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,10 +13,13 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *
  */
 
-package grpc
+package server
 
-// Version is the current grpc version.
-const Version = "1.86.0-dev"
+// UnderlyingGRPCServer returns the gRPC server wrapped by an xds.GRPCServer.
+//
+// Callers must use the returned gRPC server only for service registration,
+// for example, with functions that accept a grpc.ServiceRegistrar.
+// For all other operations, call methods directly on the xds.GRPCServer.
+var UnderlyingGRPCServer any // func(*xds.GRPCServer) *grpc.Server
