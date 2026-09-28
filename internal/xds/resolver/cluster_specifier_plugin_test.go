@@ -317,7 +317,7 @@ func (s) TestXDSResolverDelayedOnCommittedCSP(t *testing.T) {
 
 	// Invoke resOld.OnCommitted; should lead to a service config update that deletes
 	// cspA.
-	resOld.OnCommitted()
+	commitRPC(resOld)
 
 	wantSC = `
  {
@@ -443,12 +443,15 @@ func (s) TestResolverClusterSpecifierPlugin_WithFilters(t *testing.T) {
 		return nil, nil
 	}
 
-	if interceptor, ok := res.Interceptor.(httpfilter.ClientInterceptor); ok {
-		if _, err = interceptor.NewStream(ctx, iresolver.RPCInfo{Method: "/service/method", Context: ctx}, newStream); err != nil {
-			t.Fatalf("NewStream() failed with error: %v", err)
-		}
-	} else {
+	interceptor, ok := res.Interceptor.(httpfilter.ClientInterceptor)
+	if !ok {
 		t.Fatalf("res.Interceptor is type %T, want httpfilter.ClientInterceptor", res.Interceptor)
+	}
+	// Invoke the interceptor to create a new stream, which should invoke the
+	// filters. Use RPCConfig.Context as the context for the new stream. This
+	// contains the "onCommitted" function as a value.
+	if _, err = interceptor.NewStream(res.Context, iresolver.RPCInfo{Method: "/service/method"}, newStream); err != nil {
+		t.Fatalf("NewStream() failed with error: %v", err)
 	}
 
 	// Verify that first filter receives the config.

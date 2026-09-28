@@ -102,8 +102,18 @@ func generateRDSUpdateFromRouteConfiguration(rc *v3routepb.RouteConfiguration, b
 		if err != nil {
 			return RouteConfigUpdate{}, fmt.Errorf("received route is invalid: %v", err)
 		}
+		// Host names are case-insensitive. Fold the domains to lower case once
+		// here, so that virtual host matching on the data plane only needs to
+		// fold the request authority.
+		var domains []string
+		if ds := vh.GetDomains(); len(ds) > 0 {
+			domains = make([]string, len(ds))
+			for i, d := range ds {
+				domains[i] = strings.ToLower(d)
+			}
+		}
 		vhOut := &VirtualHost{
-			Domains:     vh.GetDomains(),
+			Domains:     domains,
 			Routes:      routes,
 			RetryConfig: rc,
 		}
