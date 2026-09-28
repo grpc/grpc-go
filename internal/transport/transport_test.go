@@ -792,7 +792,7 @@ func (s) TestClientTransportDrainsAfterStreamIDExhausted(t *testing.T) {
 // as a protocol error and preserves maxStreamID.
 func (s) TestServerOperateHeadersTruncatedStreamIDMonotonicity(t *testing.T) {
 	serverTransport := &http2Server{
-		controlBuf: newControlBuffer(make(<-chan struct{})),
+		controlBuf: newControlBuffer(make(<-chan struct{}), true),
 	}
 	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer ctxCancel()
@@ -2919,7 +2919,7 @@ func newTestHTTP2Client(cs *ClientStream) *http2Client {
 		activeStreams: map[uint32]*ClientStream{
 			1: cs,
 		},
-		controlBuf: newControlBuffer(make(<-chan struct{})),
+		controlBuf: newControlBuffer(make(<-chan struct{}), false),
 	}
 }
 
@@ -4083,7 +4083,7 @@ func (s) TestClientTransport_Handle1xxHeaders(t *testing.T) {
 			activeStreams: map[uint32]*ClientStream{
 				0: ts,
 			},
-			controlBuf: newControlBuffer(make(<-chan struct{})),
+			controlBuf: newControlBuffer(make(<-chan struct{}), false),
 		}
 	}
 
