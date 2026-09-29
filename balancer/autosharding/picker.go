@@ -43,20 +43,20 @@ type pickerEndpoint struct {
 // picker routes RPCs to endpoints assigned to the matching key-range in the
 // sliceMap, or to the fallback pool when configured.
 type picker struct {
-	sliceMap        *sliceMap
-	endpoints       []pickerEndpoint // Ordered 1:1 by endpointState.index
-	sliceInFallback []bool           // Precomputed per-slice fallback status
-	cfg             *lbConfig
+	sliceMap          *sliceMap
+	endpoints         []pickerEndpoint // Ordered 1:1 by endpointState.index
+	isSliceInFallback []bool           // Precomputed per-slice fallback status
+	cfg               *lbConfig
 }
 
 // newPicker constructs a new picker from the given endpointMap, sliceMap, and
 // LB policy configuration.
-func newPicker(em *endpointMap, sm *sliceMap, cfg *lbConfig) *picker {
-	// Every endpoint in em.m has a unique index in the range [0, len(em.m)-1].
-	// Placing each entry at endpoints[es.index] orders the slice by index
-	// without needing to sort.
-	endpoints := make([]pickerEndpoint, len(em.m))
-	for es := range maps.Values(em.m) {
+func newPicker(endpointMap map[string]*endpointState, sm *sliceMap, cfg *lbConfig) *picker {
+	// Every endpoint in endpointMap has a unique index in the range
+	// [0, len(endpointMap)-1]. Placing each entry at endpoints[es.index] orders
+	// the slice by index without needing to sort.
+	endpoints := make([]pickerEndpoint, len(endpointMap))
+	for es := range maps.Values(endpointMap) {
 		endpoints[es.index] = pickerEndpoint{
 			state:    es.childState.State.ConnectivityState,
 			picker:   es.childState.State.Picker,
@@ -64,16 +64,16 @@ func newPicker(em *endpointMap, sm *sliceMap, cfg *lbConfig) *picker {
 		}
 	}
 
-	sliceInFallback := make([]bool, len(sm.slices))
+	isSliceInFallback := make([]bool, len(sm.slices))
 	for i, se := range sm.slices {
-		sliceInFallback[i] = isPoolInFallback(se.endpoints, endpoints)
+		isSliceInFallback[i] = isPoolInFallback(se.endpoints, endpoints)
 	}
 
 	return &picker{
-		sliceMap:        sm,
-		endpoints:       endpoints,
-		sliceInFallback: sliceInFallback,
-		cfg:             cfg,
+		sliceMap:          sm,
+		endpoints:         endpoints,
+		isSliceInFallback: isSliceInFallback,
+		cfg:               cfg,
 	}
 }
 
@@ -110,7 +110,7 @@ func (p *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 
 	// If the matching slice is in fallback mode and fallback is enabled, route
 	// using the fallback pool across all resolver endpoints.
-	if p.sliceInFallback[sliceIdx] && p.cfg.EnableFallback {
+	if p.isSliceInFallback[sliceIdx] && p.cfg.EnableFallback {
 		return p.pickFromEndpointIndices(p.sliceMap.fallbackPool, info)
 	}
 

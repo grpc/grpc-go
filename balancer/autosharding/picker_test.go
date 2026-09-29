@@ -57,22 +57,21 @@ type testEndpointSpec struct {
 
 // buildTestEndpoints constructs test state from the given endpoint specs and
 // returns:
-//   - an *endpointMap populated with one endpointState per spec (indexed 0..len(specs)-1)
+//   - an endpointMap populated with one endpointState per spec (indexed 0..len(specs)-1)
 //   - a slice of *testutils.TestSubConn, where element i is the SubConn returned
 //     by endpoint i's child picker when pickErr is nil
 //   - a slice of int counters, where element i records how many times ExitIdle
 //     was called on endpoint i
-func buildTestEndpoints(specs []testEndpointSpec) (*endpointMap, []*testutils.TestSubConn, []int) {
-	em := &endpointMap{m: make(map[string]*endpointState, len(specs))}
+func buildTestEndpoints(specs []testEndpointSpec) (map[string]*endpointState, []*testutils.TestSubConn, []int) {
+	endpointMap := make(map[string]*endpointState, len(specs))
 	subConns := make([]*testutils.TestSubConn, len(specs))
 	exitIdleCounts := make([]int, len(specs))
 
 	for i, spec := range specs {
 		sc := testutils.NewTestSubConn(fmt.Sprintf("sc-%d", i))
 		subConns[i] = sc
-		idx := i
-		em.m[spec.hostname] = &endpointState{
-			index: idx,
+		endpointMap[spec.hostname] = &endpointState{
+			index: i,
 			childState: endpointsharding.ChildState{
 				State: balancer.State{
 					ConnectivityState: spec.state,
@@ -82,12 +81,12 @@ func buildTestEndpoints(specs []testEndpointSpec) (*endpointMap, []*testutils.Te
 					},
 				},
 				ExitIdle: func() {
-					exitIdleCounts[idx]++
+					exitIdleCounts[i]++
 				},
 			},
 		}
 	}
-	return em, subConns, exitIdleCounts
+	return endpointMap, subConns, exitIdleCounts
 }
 
 // newContextWithShardingKey returns an outgoing context with the testHeaderName

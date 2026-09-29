@@ -73,7 +73,7 @@ func (sm *sliceMap) lookup(key []byte) int {
 
 // buildSliceMap is used to generate a new sliceMap from the EndpointMap and
 // Assignment when either of them change.
-func buildSliceMap(endpointMap *endpointMap, assignment *assignment) *sliceMap {
+func buildSliceMap(endpointMap map[string]*endpointState, assignment *assignment) *sliceMap {
 	sm := &sliceMap{}
 
 	// Populate fallbackPool with values [0, 1, 2, ... N-1] where N is the
@@ -88,7 +88,7 @@ func buildSliceMap(endpointMap *endpointMap, assignment *assignment) *sliceMap {
 	// prevents compiler inlining and causes the loop closure and captured state
 	// to escape to the heap on every Pick() call. Preallocating fallbackPool
 	// here keeps the per-RPC Pick() path allocation-free.
-	sm.fallbackPool = make([]int, len(endpointMap.m))
+	sm.fallbackPool = make([]int, len(endpointMap))
 	for i := range sm.fallbackPool {
 		sm.fallbackPool[i] = i
 	}
@@ -115,7 +115,7 @@ func buildSliceMap(endpointMap *endpointMap, assignment *assignment) *sliceMap {
 		// contains valid endpoints that are currently available.
 		for _, idx := range s.endpoints {
 			hostname := assignment.endpointNames[idx]
-			if es, ok := endpointMap.m[hostname]; ok {
+			if es, ok := endpointMap[hostname]; ok {
 				entry.endpoints = append(entry.endpoints, es.index)
 			}
 		}
