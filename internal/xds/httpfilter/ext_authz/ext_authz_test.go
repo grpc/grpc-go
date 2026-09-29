@@ -363,21 +363,38 @@ func (s) TestParseFilterConfig_Failure(t *testing.T) {
 }
 
 // Test verifies that ParseFilterConfigOverride successfully unmarshals valid
-// per-route override configurations.
+// per-route override configurations, ignores all of their fields, and returns a
+// non-nil empty override config so that the override is still considered
+// present (and does not disable the filter).
 func (s) TestParseFilterConfigOverride_Success(t *testing.T) {
-	override := testutils.MarshalAny(t, &v3extauthzpb.ExtAuthzPerRoute{
-		Override: &v3extauthzpb.ExtAuthzPerRoute_Disabled{
-			Disabled: true,
+	tests := []struct {
+		name     string
+		override *v3extauthzpb.ExtAuthzPerRoute
+	}{
+		{
+			name:     "Empty",
+			override: &v3extauthzpb.ExtAuthzPerRoute{},
 		},
-	})
-
-	b := builder{}
-	got, err := b.ParseFilterConfigOverride(override, httpfilter.ParseOptions{})
-	if err != nil {
-		t.Fatalf("ParseFilterConfigOverride() failed with unexpected error: %v", err)
+		{
+			name: "DisabledFieldIgnored",
+			override: &v3extauthzpb.ExtAuthzPerRoute{
+				Override: &v3extauthzpb.ExtAuthzPerRoute_Disabled{
+					Disabled: true,
+				},
+			},
+		},
 	}
-	if got != nil {
-		t.Fatalf("ParseFilterConfigOverride() = %v, want nil", got)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			b := builder{}
+			got, err := b.ParseFilterConfigOverride(testutils.MarshalAny(t, tt.override), httpfilter.ParseOptions{})
+			if err != nil {
+				t.Fatalf("ParseFilterConfigOverride() failed with unexpected error: %v", err)
+			}
+			if _, ok := got.(overrideConfig); !ok {
+				t.Fatalf("ParseFilterConfigOverride() = %v, want %T", got, overrideConfig{})
+			}
+		})
 	}
 }
 

@@ -39,11 +39,11 @@ import (
 )
 
 // maxHeaderSize is the maximum length, in bytes, of a header key or value in a
-// mutation received from an external processing server.
+// mutation received from an external server.
 const maxHeaderSize = 16384
 
 // HeaderMutationRules specifies the rules for what modifications an external
-// processing server may make to headers sent on the data plane RPC.
+// server may make to headers sent on the data plane RPC.
 type HeaderMutationRules struct {
 	// AllowExpr specifies a regular expression that matches the headers that can
 	// be mutated.
@@ -198,8 +198,8 @@ func (hmr *HeaderMutationRules) ApplyAdditions(hvos []*v3corepb.HeaderValueOptio
 }
 
 // ApplyRemovals takes a set of headers (for removal) received from an external
-// processing server and applies them to the provided metadata, subject to the
-// rules defined in hmr.
+// server and applies them to the provided metadata, subject to the rules
+// defined in hmr.
 //
 // This method is very similar to ApplyAdditions, except that headers are
 // removed here instead of added or mutated as is the case in the latter. See
@@ -240,7 +240,7 @@ func (hmr *HeaderMutationRules) ApplyRemovals(headersToRemove []string, input me
 }
 
 // validateHeaderKey returns a non-nil error if key may not be mutated by an
-// external processing server, either because the key is reserved or because it
+// external server, either because the key is reserved or because it
 // is not a valid gRPC header name.
 func validateHeaderKey(key string) error {
 	switch {

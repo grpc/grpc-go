@@ -68,6 +68,13 @@ type config struct {
 	includePeerCertificate bool
 }
 
+// overrideConfig is an empty marker for an ExtAuthzPerRoute override, whose
+// fields are ignored per gRFC A92. Being non-nil, it still counts as an
+// override and re-enables the filter if a less specific level disabled it.
+type overrideConfig struct {
+	httpfilter.FilterConfig
+}
+
 // fraction uses a numerator and denominator to specify a fractional value. If
 // the denominator specified is less than the numerator, the final fractional
 // value is capped at 1.

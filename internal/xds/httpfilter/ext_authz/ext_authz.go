@@ -175,9 +175,9 @@ func (builder) ParseFilterConfig(cfg proto.Message, opts httpfilter.ParseOptions
 // ParseFilterConfigOverride parses the provided override configuration.
 //
 // Note that ExtAuthzPerRoute is unmarshaled to verify its syntax during xDS
-// resource validation, no filter configuration object is returned. Per-route
-// disabling is supported via the generic FilterConfig wrapper mechanism rather
-// than the ExtAuthzPerRoute.disabled field directly.
+// resource validation, but all of its fields are ignored per gRFC A92.
+// Per-route disabling is supported via the generic FilterConfig wrapper
+// mechanism rather than the ExtAuthzPerRoute.disabled field directly.
 func (builder) ParseFilterConfigOverride(overrideCfg proto.Message, _ httpfilter.ParseOptions) (httpfilter.FilterConfig, error) {
 	m, ok := overrideCfg.(*anypb.Any)
 	if !ok {
@@ -187,7 +187,7 @@ func (builder) ParseFilterConfigOverride(overrideCfg proto.Message, _ httpfilter
 	if err := m.UnmarshalTo(msg); err != nil {
 		return nil, fmt.Errorf("extauthz: failed to unmarshal override config %v: %v", overrideCfg, err)
 	}
-	return nil, nil
+	return overrideConfig{}, nil
 }
 
 func (builder) IsTerminal() bool {
@@ -336,10 +336,6 @@ func (i *clientInterceptor) Close() {
 	i.authzClient.Decrement()
 }
 
-func (i *clientInterceptor) recordMetric(handle *estats.Int64CountHandle) {
-	handle.Record(i.metricsRecorder, 1, i.target)
-}
-
 // isExtAuthzEnabled checks if external authorization is enabled for this RPC.
 func (i *clientInterceptor) isExtAuthzEnabled() bool {
 	return rand.Uint32N(i.config.filterEnabled.denominator) < i.config.filterEnabled.numerator
@@ -396,7 +392,7 @@ func (i *clientInterceptor) sendCheckRequest(ctx context.Context, method string,
 //     outgoingMD (if failure_mode_allow_header_add is not already present)
 //     and nil is returned.
 func (i *clientInterceptor) handleFailure(outgoingMD metadata.MD, desc string, err error) error {
-	i.recordMetric(extAuthzClientFailedRPCsMetric)
+	extAuthzClientFailedRPCsMetric.Record(i.metricsRecorder, 1, i.target)
 	if !i.config.failureModeAllow {
 		return status.Errorf(i.config.statusOnError, "extauthz: %s: %v", desc, err)
 	}
@@ -433,7 +429,7 @@ func (i *clientInterceptor) applyHeaderMutations(okResp *v3authpb.OkHttpResponse
 		return nil, i.handleFailure(outgoingMD, "header validation fails for response headers", err)
 	}
 
-	i.recordMetric(extAuthzClientAllowedRPCsMetric)
+	extAuthzClientAllowedRPCsMetric.Record(i.metricsRecorder, 1, i.target)
 	return okResp.GetResponseHeadersToAdd(), nil
 }
 
@@ -442,7 +438,7 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 	// - If deny_at_disable is true, the RPC is denied with status_on_error.
 	// - Otherwise, external authorization is bypassed and the RPC proceeds.
 	if !i.isExtAuthzEnabled() {
-		i.recordMetric(extAuthzClientFilterDisabledRPCsMetric)
+		extAuthzClientFilterDisabledRPCsMetric.Record(i.metricsRecorder, 1, i.target)
 		if i.config.denyAtDisable {
 			return nil, status.Errorf(i.config.statusOnError, "extauthz: RPC denied due to the filter being disabled")
 		}
@@ -482,7 +478,7 @@ func (i *clientInterceptor) handleDeniedResponse(ctx context.Context, resp *v3au
 
 	deniedResp, ok := resp.GetHttpResponse().(*v3authpb.CheckResponse_DeniedResponse)
 	if !ok {
-		i.recordMetric(extAuthzClientDeniedRPCsMetric)
+		extAuthzClientDeniedRPCsMetric.Record(i.metricsRecorder, 1, i.target)
 		// Per gRFC A92, the status code to fail the RPC with is derived
 		// from denied_response.status. If denied_response is omitted by the
 		// authorization server despite a non-OK decision, we default to
@@ -502,13 +498,13 @@ func (i *clientInterceptor) handleDeniedResponse(ctx context.Context, resp *v3au
 		}
 	}
 
-	i.recordMetric(extAuthzClientDeniedRPCsMetric)
+	extAuthzClientDeniedRPCsMetric.Record(i.metricsRecorder, 1, i.target)
 
 	// Compute the status to return to the caller based on the status returned
 	// by the external authorization server.
 	code := codes.PermissionDenied
-	if st := deniedResp.DeniedResponse.GetStatus(); st != nil {
-		code = grpcStatusCode(int32(st.GetCode()))
+	if st := deniedResp.DeniedResponse.GetStatus().GetCode(); st != 0 {
+		code = grpcStatusCode(int32(st))
 	}
 	return newDeniedClientStream(ctx, status.Errorf(code, "%s", msg), trailers, opts), nil
 }
@@ -528,7 +524,7 @@ func (i *clientInterceptor) handleOkResponse(ctx context.Context, resp *v3authpb
 		// If the response does not contain an OkResponse message despite having
 		// an OK status, we proceed to create the stream without making any header
 		// mutations.
-		i.recordMetric(extAuthzClientAllowedRPCsMetric)
+		extAuthzClientAllowedRPCsMetric.Record(i.metricsRecorder, 1, i.target)
 	}
 
 	// Create a new context with the mutated outgoing metadata. All subsequent
@@ -596,21 +592,25 @@ func newDeniedClientStream(ctx context.Context, err error, trailers metadata.MD,
 		}
 	}
 
-	s := &deniedClientStream{
-		ctx:             ctx,
-		err:             err,
-		mutatedTrailers: trailers,
-		onFinish:        onFinish,
-	}
-
+	callOnFinish := sync.OnceFunc(func() {
+		for _, f := range onFinish {
+			f(err)
+		}
+	})
 	// Ensure onFinish callbacks are executed when the context is canceled or
 	// expires, even if the caller abandons the stream without invoking any
 	// stream methods.
-	go func() {
-		<-ctx.Done()
-		s.finish()
-	}()
-	return s
+	stop := context.AfterFunc(ctx, callOnFinish)
+
+	return &deniedClientStream{
+		ctx:             ctx,
+		err:             err,
+		mutatedTrailers: trailers,
+		finish: func() {
+			stop()
+			callOnFinish()
+		},
+	}
 }
 
 // deniedClientStream is a synthetic ClientStream returned when the external
@@ -624,19 +624,9 @@ type deniedClientStream struct {
 	// mutatedTrailers holds response trailers specified by the external
 	// authorization server in the denied response.
 	mutatedTrailers metadata.MD
-	// onFinish stores OnFinishCallOption callbacks to execute when the stream
-	// finishes.
-	onFinish []func(error)
-	// once ensures onFinish callbacks are executed at most once.
-	once sync.Once
-}
-
-func (s *deniedClientStream) finish() {
-	s.once.Do(func() {
-		for _, f := range s.onFinish {
-			f(s.err)
-		}
-	})
+	// finish unregisters the context cancellation callback and executes
+	// OnFinishCallOption callbacks at most once.
+	finish func()
 }
 
 func (s *deniedClientStream) Header() (metadata.MD, error) {
