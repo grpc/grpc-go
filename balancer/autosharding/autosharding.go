@@ -76,7 +76,10 @@ func (bb) Build(balancer.ClientConn, balancer.BuildOptions) balancer.Balancer {
 	return &autoshardingBalancer{}
 }
 
-// slice represents a key range and its assigned endpoints.
+// slice represents a key range and its assigned endpoints. The endKey is not
+// stored here because it is always the startKey of the next slice, or nil if
+// this is the last slice. This is guaranteed by the autoshardingClient
+// responsible for generating the assignment.
 type slice struct {
 	startKey  []byte // Inclusive start key of the key-range
 	endpoints []int  // Indices into assignment.endpointNames
@@ -97,11 +100,6 @@ type endpointState struct {
 	index      int                         // Index of the endpoint within the NR update
 	endpoint   resolver.Endpoint           // The actual endpoint returned by the NR
 	childState endpointsharding.ChildState // State as reported by the child policy
-}
-
-// endpointMap maps from endpoint hostname to endpoint state.
-type endpointMap struct {
-	m map[string]*endpointState
 }
 
 type autoshardingBalancer struct {
