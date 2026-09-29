@@ -162,7 +162,7 @@ func (s) TestClientConnProvider_DialOptionPlumbing(t *testing.T) {
 
 	// Create a manual resolver and a ClientConnProvider that returns a test
 	// ClientConnInterface.
-	r := manual.NewBuilderWithScheme(balancerName)
+	r := manual.NewBuilderWithScheme("whatever")
 	r.InitialState(resolver.State{Endpoints: []resolver.Endpoint{{Addresses: []resolver.Address{{Addr: "dummy"}}}}})
 	provider := func(key string) (grpc.ClientConnInterface, func(), error) {
 		return &testClientConn{key: key}, func() {}, nil
