@@ -30,7 +30,11 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
-var randIntN = rand.IntN
+var (
+	randIntN        = rand.IntN
+	errNoAssignment = errors.New("autosharding: no assignment available and fallback is disabled")
+	errNoEndpoints  = errors.New("autosharding: matching slice has no available endpoints")
+)
 
 // pickerEndpoint holds the snapshot of an endpoint's state needed by the
 // picker to route RPCs without synchronizing with the LB policy.
@@ -105,7 +109,7 @@ func (p *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 		if p.cfg.EnableFallback {
 			return p.pickFromEndpointIndices(p.sliceMap.fallbackPool, info)
 		}
-		return balancer.PickResult{}, errors.New("autosharding: no assignment available and fallback is disabled")
+		return balancer.PickResult{}, errNoAssignment
 	}
 
 	// If the matching slice is in fallback mode and fallback is enabled, route
@@ -125,7 +129,7 @@ func (p *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 // into p.endpoints by starting at a random position and scanning circularly.
 func (p *picker) pickFromEndpointIndices(indices []int, info balancer.PickInfo) (balancer.PickResult, error) {
 	if len(indices) == 0 {
-		return balancer.PickResult{}, errors.New("autosharding: matching slice has no available endpoints")
+		return balancer.PickResult{}, errNoEndpoints
 	}
 
 	firstIndex := randIntN(len(indices))
