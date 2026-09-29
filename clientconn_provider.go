@@ -59,6 +59,9 @@ type clientConnProviderVal struct {
 func (v clientConnProviderVal) Equal(o any) bool {
 	// A direct comparison of function values is not allowed in Go, so we use
 	// reflection to compare the pointers of the function values.
+	// Note: This only compares the underlying code pointers. Two different
+	// instances of the same closure capturing different variables will compare
+	// equal.
 	ov, ok := o.(clientConnProviderVal)
 	return ok && reflect.ValueOf(v.ccp).Pointer() == reflect.ValueOf(ov.ccp).Pointer()
 }
