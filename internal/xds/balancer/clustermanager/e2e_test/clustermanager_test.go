@@ -22,6 +22,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -34,11 +35,15 @@ import (
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/balancer/stub"
 	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/grpc/internal/hierarchy"
+	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/internal/xds/balancer/clustermanager"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/structpb"
@@ -338,5 +343,159 @@ func (s) TestConfigUpdate_ChildPolicyChange(t *testing.T) {
 	// Channel should still be READY.
 	if got, want := cc.GetState(), connectivity.Ready; got != want {
 		t.Fatalf("grpc.ClientConn in state %v, want %v", got, want)
+	}
+}
+
+// fixedClusterConfigSelector is a config selector that routes all RPCs to a
+// single cluster of the xds_cluster_manager LB policy.
+type fixedClusterConfigSelector struct {
+	cluster string
+}
+
+func (cs *fixedClusterConfigSelector) SelectConfig(info iresolver.RPCInfo) (*iresolver.RPCConfig, error) {
+	return &iresolver.RPCConfig{Context: clustermanager.SetPickedCluster(info.Context, cs.cluster)}, nil
+}
+
+// Tests the scenario where a resolver update adds a new cluster to the
+// xds_cluster_manager LB policy config and simultaneously provides a config
+// selector that routes RPCs to the new cluster. Per gRFC A31, the channel must
+// update the LB policy before applying the new config selector, so that it is
+// not possible for an RPC to be routed to a cluster that the current picker is
+// not aware of.
+//
+// The test blocks the LB policy in the middle of processing the update (inside
+// the new cluster's child policy) and verifies that RPCs made during this time
+// continue to use the old config selector, and hence succeed.
+func (s) TestConfigUpdate_NewClusterNotUsedBeforePickerUpdate(t *testing.T) {
+	backend1 := stubserver.StartTestService(t, nil)
+	defer backend1.Stop()
+	backend2 := stubserver.StartTestService(t, nil)
+	defer backend2.Stop()
+
+	// Register a child policy that wraps pick_first and blocks in
+	// UpdateClientConnState until the test unblocks it.
+	const blockingPolicyName = "blocking_pick_first_new_cluster_not_used_before_picker_update"
+	pfBuilder := balancer.Get(pickfirst.Name)
+	updateReceived := make(chan struct{}, 1)
+	unblockCh := make(chan struct{})
+	var unblockOnce sync.Once
+	unblock := func() { unblockOnce.Do(func() { close(unblockCh) }) }
+	stub.Register(blockingPolicyName, stub.BalancerFuncs{
+		ParseConfig: func(lbCfg json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
+			return pfBuilder.(balancer.ConfigParser).ParseConfig(lbCfg)
+		},
+		Init: func(bd *stub.BalancerData) {
+			bd.ChildBalancer = pfBuilder.Build(bd.ClientConn, bd.BuildOptions)
+		},
+		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
+			select {
+			case updateReceived <- struct{}{}:
+			default:
+			}
+			<-unblockCh
+			return bd.ChildBalancer.UpdateClientConnState(ccs)
+		},
+		ExitIdle: func(bd *stub.BalancerData) {
+			bd.ChildBalancer.ExitIdle()
+		},
+		Close: func(bd *stub.BalancerData) {
+			bd.ChildBalancer.Close()
+		},
+	})
+
+	const (
+		cluster1 = "cluster1"
+		cluster2 = "cluster2"
+	)
+	endpoints := []resolver.Endpoint{
+		hierarchy.SetInEndpoint(resolver.Endpoint{Addresses: []resolver.Address{{Addr: backend1.Address}}}, []string{cluster1}),
+		hierarchy.SetInEndpoint(resolver.Endpoint{Addresses: []resolver.Address{{Addr: backend2.Address}}}, []string{cluster2}),
+	}
+	parseSC := func(sc string) *serviceconfig.ParseResult {
+		t.Helper()
+		pr := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(sc)
+		if pr.Err != nil {
+			t.Fatalf("Failed to parse service config %q: %v", sc, pr.Err)
+		}
+		return pr
+	}
+
+	// Initial state: only cluster1 exists and all RPCs are routed to it.
+	sc1 := parseSC(fmt.Sprintf(`{
+  "loadBalancingConfig": [{
+    "xds_cluster_manager_experimental": {
+      "children": {
+        %q: {"childPolicy": [{"pick_first": {}}]}
+      }
+    }
+  }]
+}`, cluster1))
+	r := manual.NewBuilderWithScheme("cluster-manager-e2e")
+	r.InitialState(iresolver.SetConfigSelector(resolver.State{
+		Endpoints:     endpoints,
+		ServiceConfig: sc1,
+	}, &fixedClusterConfigSelector{cluster: cluster1}))
+
+	cc, err := grpc.NewClient(r.Scheme()+":///test.server", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
+	if err != nil {
+		t.Fatalf("grpc.NewClient() failed: %v", err)
+	}
+	defer cc.Close()
+	// Ensure the LB policy is unblocked before the channel is closed, else
+	// closing the channel would block forever.
+	defer unblock()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	client := testgrpc.NewTestServiceClient(cc)
+	if err := makeEmptyCallRPCAndVerifyPeer(ctx, client, backend1.Address); err != nil {
+		t.Fatal(err)
+	}
+
+	// Push an update that adds cluster2 and a config selector that routes all
+	// RPCs to cluster2. The update blocks in the LB policy, so push it from a
+	// separate goroutine.
+	sc2 := parseSC(fmt.Sprintf(`{
+  "loadBalancingConfig": [{
+    "xds_cluster_manager_experimental": {
+      "children": {
+        %q: {"childPolicy": [{"pick_first": {}}]},
+        %q: {"childPolicy": [{%q: {}}]}
+      }
+    }
+  }]
+}`, cluster1, cluster2, blockingPolicyName))
+	updateDone := make(chan struct{})
+	go func() {
+		r.UpdateState(iresolver.SetConfigSelector(resolver.State{
+			Endpoints:     endpoints,
+			ServiceConfig: sc2,
+		}, &fixedClusterConfigSelector{cluster: cluster2}))
+		close(updateDone)
+	}()
+
+	select {
+	case <-updateReceived:
+	case <-ctx.Done():
+		t.Fatal("Timeout when waiting for the new child policy to receive a config update")
+	}
+
+	// The LB policy is now in the middle of processing the update, and has not
+	// yet produced a picker that knows about cluster2. The new config selector
+	// must not be in use yet, so RPCs should still be routed to cluster1.
+	if err := makeEmptyCallRPCAndVerifyPeer(ctx, client, backend1.Address); err != nil {
+		t.Fatalf("RPC made while the LB policy was processing the update failed: %v; the new config selector was likely applied before the LB policy was updated", err)
+	}
+
+	// Unblock the LB policy and wait for the update to complete. RPCs should
+	// now be routed to cluster2.
+	unblock()
+	select {
+	case <-updateDone:
+	case <-ctx.Done():
+		t.Fatal("Timeout when waiting for the resolver update to complete")
+	}
+	if err := makeEmptyCallRPCAndVerifyPeer(ctx, client, backend2.Address); err != nil {
+		t.Fatal(err)
 	}
 }
