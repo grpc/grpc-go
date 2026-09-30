@@ -56,6 +56,7 @@ type clientConnProviderVal struct {
 	ccp ClientConnProvider
 }
 
+// Equal allows the values to be compared by Attributes.Equal.
 func (v clientConnProviderVal) Equal(o any) bool {
 	// A direct comparison of function values is not allowed in Go, so we use
 	// reflection to compare the pointers of the function values.
