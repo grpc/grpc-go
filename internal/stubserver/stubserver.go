@@ -196,7 +196,6 @@ func (ss *StubServer) StartHandlerServer(sopts ...grpc.ServerOption) error {
 	go hs.Serve(lis)
 	ss.cleanups = append(ss.cleanups, func() {
 		hs.Close()
-		lis.Close()
 	})
 
 	return nil
