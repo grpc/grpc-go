@@ -712,11 +712,8 @@ func (b *pickfirstBalancer) updateSubConnState(sd *scData, newState balancer.Sub
 				ConnectivityState: connectivity.TransientFailure,
 				Picker:            &picker{err: newState.ConnectionError},
 			})
+			b.cc.ResolveNow(resolver.ResolveNowOptions{})
 		}
-		// We don't need to request re-resolution since the SubConn already
-		// does that before reporting TRANSIENT_FAILURE.
-		// TODO: #7534 - Move re-resolution requests from SubConn into
-		// pick_first.
 	case connectivity.Idle:
 		sd.subConn.Connect()
 	}
@@ -741,6 +738,7 @@ func (b *pickfirstBalancer) endFirstPassIfPossibleLocked(lastErr error) {
 		ConnectivityState: connectivity.TransientFailure,
 		Picker:            &picker{err: lastErr},
 	})
+	b.cc.ResolveNow(resolver.ResolveNowOptions{})
 	// Start re-connecting all the SubConns that are already in IDLE.
 	for _, sd := range b.subConns.All() {
 		if sd.rawConnectivityState == connectivity.Idle {
