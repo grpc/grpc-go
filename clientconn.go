@@ -864,6 +864,11 @@ func (cc *ClientConn) updateResolverStateAndUnlock(s resolver.State, err error) 
 	bw := cc.balancerWrapper
 	cc.mu.Unlock()
 
+	// Propagate the ClientConnProvider to the LB policies, as per A119.
+	if cc.dopts.clientConnProvider != nil {
+		s = SetClientConnProvider(s, cc.dopts.clientConnProvider)
+	}
+
 	uccsErr := bw.updateClientConnState(&balancer.ClientConnState{ResolverState: s, BalancerConfig: balCfg})
 
 	if configSelector != nil {
