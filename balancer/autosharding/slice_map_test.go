@@ -92,12 +92,10 @@ func (s) TestSliceMap_Lookup_Empty(t *testing.T) {
 func (s) TestBuildSliceMap(t *testing.T) {
 	// Setup endpointMap with unsorted order in map to verify deterministic
 	// sorting of fallbackPool.
-	epMap := &endpointMap{
-		m: map[string]*endpointState{
-			"hostC": {index: 2},
-			"hostA": {index: 0},
-			"hostB": {index: 1},
-		},
+	epMap := map[string]*endpointState{
+		"hostC": {index: 2},
+		"hostA": {index: 0},
+		"hostB": {index: 1},
 	}
 
 	tests := []struct {
