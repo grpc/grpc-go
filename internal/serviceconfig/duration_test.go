@@ -41,6 +41,8 @@ func TestDuration_MarshalUnmarshal(t *testing.T) {
 		{json: `".050s"`, td: 50 * time.Millisecond, noMarshal: true},
 		{json: `"-.001s"`, td: -1 * time.Millisecond, noMarshal: true},
 		{json: `"-0.200s"`, td: -200 * time.Millisecond},
+		{json: `"+1.5s"`, td: 1500 * time.Millisecond, noMarshal: true},
+		{json: `"+.5s"`, td: 500 * time.Millisecond, noMarshal: true},
 		// Positive near / out of bounds.
 		{json: `"9223372036s"`, td: 9223372036 * time.Second},
 		{json: `"9223372037s"`, td: math.MaxInt64, noMarshal: true},
@@ -64,6 +66,16 @@ func TestDuration_MarshalUnmarshal(t *testing.T) {
 		{json: `"3.1234567890s"`, unmarshalErr: fmt.Errorf("malformed duration")},
 		{json: `".s"`, unmarshalErr: fmt.Errorf("malformed duration")},
 		{json: `"s"`, unmarshalErr: fmt.Errorf("malformed duration")},
+		// Signs are only permitted as a single leading character.
+		{json: `"1.+5s"`, unmarshalErr: fmt.Errorf("malformed duration")},
+		{json: `"1.-5s"`, unmarshalErr: fmt.Errorf("malformed duration")},
+		{json: `"-1.-5s"`, unmarshalErr: fmt.Errorf("malformed duration")},
+		{json: `".-5s"`, unmarshalErr: fmt.Errorf("malformed duration")},
+		{json: `"--1s"`, unmarshalErr: fmt.Errorf("malformed duration")},
+		{json: `"-+1s"`, unmarshalErr: fmt.Errorf("malformed duration")},
+		{json: `"+-1s"`, unmarshalErr: fmt.Errorf("malformed duration")},
+		{json: `"++1s"`, unmarshalErr: fmt.Errorf("malformed duration")},
+		{json: `"+s"`, unmarshalErr: fmt.Errorf("malformed duration")},
 	}
 	for _, tc := range testCases {
 		// Seed `got` with a random value to ensure we properly reset it in all
