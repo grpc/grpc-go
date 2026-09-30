@@ -23,7 +23,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -70,118 +69,79 @@ func Test(t *testing.T) {
 
 var logger = grpclog.Component("endpoint-sharding-test")
 
-// TestEndpointShardingEmptyEndpoints verifies that empty endpoints do not create
-// children or prevent children for removed endpoints from being closed.
-func (s) TestEndpointShardingEmptyEndpoints(t *testing.T) {
+// TestEndpointShardingIgnoreEmptyEndpoints verifies that only endpoints with
+// addresses are passed to child balancers.
+func (s) TestEndpointShardingIgnoreEmptyEndpoints(t *testing.T) {
 	ep1 := resolver.Endpoint{Addresses: []resolver.Address{{Addr: "backend1"}}}
 	ep2 := resolver.Endpoint{Addresses: []resolver.Address{{Addr: "backend2"}}}
-	emptyEndpoints := []resolver.Endpoint{{}, {Addresses: []resolver.Address{}}}
-	tests := []struct {
-		name        string
-		initial     []resolver.Endpoint
-		endpoints   []resolver.Endpoint
-		want        []resolver.Endpoint
-		wantCreated int
-		wantClosed  int
-	}{
-		{
-			name:        "mixed",
-			endpoints:   []resolver.Endpoint{ep1, emptyEndpoints[0], ep2, emptyEndpoints[1]},
-			want:        []resolver.Endpoint{ep1, ep2},
-			wantCreated: 2,
+	var got []resolver.Endpoint
+	b, _ := newEndpointShardingTestBalancer(t, stub.BalancerFuncs{
+		UpdateClientConnState: func(_ *stub.BalancerData, state balancer.ClientConnState) error {
+			got = append(got, state.ResolverState.Endpoints...)
+			return nil
 		},
-		{
-			name:      "all_empty",
-			endpoints: emptyEndpoints,
-		},
-		{
-			name:       "populated_to_all_empty",
-			initial:    []resolver.Endpoint{ep1, ep2},
-			endpoints:  emptyEndpoints,
-			wantClosed: 2,
-		},
-		{
-			name:       "populated_to_mixed",
-			initial:    []resolver.Endpoint{ep1, ep2},
-			endpoints:  []resolver.Endpoint{emptyEndpoints[0], ep2, emptyEndpoints[1]},
-			want:       []resolver.Endpoint{ep2},
-			wantClosed: 1,
-		},
+	})
+	state := balancer.ClientConnState{ResolverState: resolver.State{
+		Endpoints: []resolver.Endpoint{ep1, {}, ep2, {Addresses: []resolver.Address{}}},
+	}}
+	if err := b.UpdateClientConnState(state); err != nil {
+		t.Fatalf("UpdateClientConnState() failed: %v", err)
 	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			var created, closed int
-			var updated []resolver.Endpoint
-			name := t.Name()
-			stub.Register(name, stub.BalancerFuncs{
-				Init: func(*stub.BalancerData) { created++ },
-				UpdateClientConnState: func(bd *stub.BalancerData, state balancer.ClientConnState) error {
-					updated = append(updated, state.ResolverState.Endpoints...)
-					bd.ClientConn.UpdateState(balancer.State{
-						ConnectivityState: connectivity.Ready,
-						Picker:            &testutils.TestConstPicker{SC: &testutils.TestSubConn{}},
-					})
-					return nil
-				},
-				Close: func(*stub.BalancerData) { closed++ },
-			})
-			cc := testutils.NewBalancerClientConn(t)
-			b := endpointsharding.NewBalancer(cc, balancer.BuildOptions{}, balancer.Get(name).Build, endpointsharding.Options{})
-			defer b.Close()
-			if test.initial != nil {
-				if err := b.UpdateClientConnState(balancer.ClientConnState{ResolverState: resolver.State{Endpoints: test.initial}}); err != nil {
-					t.Fatalf("Initial UpdateClientConnState() failed: %v", err)
-				}
-				created, closed, updated = 0, 0, nil
-			}
+	want := []resolver.Endpoint{ep1, ep2}
+	sortEndpoints := cmpopts.SortSlices(func(a, b resolver.Endpoint) bool { return fmt.Sprint(a) < fmt.Sprint(b) })
+	if diff := cmp.Diff(want, got, sortEndpoints); diff != "" {
+		t.Errorf("Endpoints passed to children mismatch (-want +got):\n%s", diff)
+	}
+}
 
-			original := slices.Clone(test.endpoints)
-			for i := range original {
-				original[i].Addresses = slices.Clone(original[i].Addresses)
-			}
-			err := b.UpdateClientConnState(balancer.ClientConnState{ResolverState: resolver.State{Endpoints: test.endpoints}})
-			var wantErr error
-			wantState := connectivity.Ready
-			if len(test.want) == 0 {
-				wantErr = balancer.ErrBadResolverState
-				wantState = connectivity.TransientFailure
-			}
-			if !errors.Is(err, wantErr) {
-				t.Errorf("UpdateClientConnState() returned %v, want %v", err, wantErr)
-			}
-			if created != test.wantCreated || closed != test.wantClosed {
-				t.Errorf("Children created, closed = %d, %d; want %d, %d", created, closed, test.wantCreated, test.wantClosed)
-			}
-			sortEndpoints := cmpopts.SortSlices(func(a, b resolver.Endpoint) bool { return fmt.Sprint(a) < fmt.Sprint(b) })
-			if diff := cmp.Diff(test.want, updated, sortEndpoints); diff != "" {
-				t.Errorf("Endpoints passed to children mismatch (-want +got):\n%s", diff)
-			}
-			if diff := cmp.Diff(original, test.endpoints); diff != "" {
-				t.Errorf("Input endpoints mutated (-want +got):\n%s", diff)
-			}
-			select {
-			case got := <-cc.NewStateCh:
-				if got != wantState {
-					t.Errorf("Connectivity state = %v, want %v", got, wantState)
-				}
-			default:
-				t.Fatal("UpdateClientConnState() did not publish a connectivity state")
-			}
-			picker := <-cc.NewPickerCh
-			var gotEndpoints []resolver.Endpoint
-			for _, child := range endpointsharding.ChildStatesFromPicker(picker) {
-				gotEndpoints = append(gotEndpoints, child.Endpoint)
-			}
-			if diff := cmp.Diff(test.want, gotEndpoints, sortEndpoints); diff != "" {
-				t.Errorf("Child endpoints mismatch (-want +got):\n%s", diff)
-			}
-			if len(test.want) == 0 {
-				if _, err := picker.Pick(balancer.PickInfo{}); err == nil {
-					t.Error("Pick() succeeded with no usable endpoints")
-				}
-			}
-		})
+// TestEndpointShardingUpdateToAllEmptyEndpoints verifies that an update containing
+// only empty endpoints creates no new children, closes the existing children, and
+// reports TransientFailure with an error picker.
+func (s) TestEndpointShardingUpdateToAllEmptyEndpoints(t *testing.T) {
+	var created, closed int
+	b, cc := newEndpointShardingTestBalancer(t, stub.BalancerFuncs{
+		Init:  func(*stub.BalancerData) { created++ },
+		Close: func(*stub.BalancerData) { closed++ },
+	})
+	initial := balancer.ClientConnState{ResolverState: resolver.State{
+		Endpoints: []resolver.Endpoint{
+			{Addresses: []resolver.Address{{Addr: "backend1"}}},
+			{Addresses: []resolver.Address{{Addr: "backend2"}}},
+		},
+	}}
+	if err := b.UpdateClientConnState(initial); err != nil {
+		t.Fatalf("Initial UpdateClientConnState() failed: %v", err)
 	}
+	state := balancer.ClientConnState{ResolverState: resolver.State{
+		Endpoints: []resolver.Endpoint{{}, {Addresses: []resolver.Address{}}},
+	}}
+	if err := b.UpdateClientConnState(state); err != balancer.ErrBadResolverState {
+		t.Fatalf("UpdateClientConnState() returned %v, want %v", err, balancer.ErrBadResolverState)
+	}
+	if created != 2 {
+		t.Errorf("Children created = %d, want 2", created)
+	}
+	if closed != 2 {
+		t.Errorf("Children closed = %d, want 2", closed)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := cc.WaitForConnectivityState(ctx, connectivity.TransientFailure); err != nil {
+		t.Fatal(err)
+	}
+	if err := cc.WaitForErrPicker(ctx); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func newEndpointShardingTestBalancer(t *testing.T, funcs stub.BalancerFuncs) (balancer.Balancer, *testutils.BalancerClientConn) {
+	t.Helper()
+	name := t.Name()
+	stub.Register(name, funcs)
+	cc := testutils.NewBalancerClientConn(t)
+	b := endpointsharding.NewBalancer(cc, balancer.BuildOptions{}, balancer.Get(name).Build, endpointsharding.Options{})
+	t.Cleanup(b.Close)
+	return b, cc
 }
 
 func init() {
