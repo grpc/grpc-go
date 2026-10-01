@@ -21,6 +21,8 @@ package autosharding
 import (
 	"bytes"
 	"slices"
+
+	"google.golang.org/grpc/balancer/autosharding/internal/sharding"
 )
 
 // sliceMapEntry represents an entry for a key-range in the sliceMap.
@@ -73,7 +75,7 @@ func (sm *sliceMap) lookup(key []byte) int {
 
 // buildSliceMap is used to generate a new sliceMap from the EndpointMap and
 // Assignment when either of them change.
-func buildSliceMap(endpointMap map[string]*endpointState, assignment *assignment) *sliceMap {
+func buildSliceMap(endpointMap map[string]*endpointState, assignment *sharding.Assignment) *sliceMap {
 	sm := &sliceMap{}
 
 	// Populate fallbackPool with values [0, 1, 2, ... N-1] where N is the
@@ -99,22 +101,22 @@ func buildSliceMap(endpointMap map[string]*endpointState, assignment *assignment
 		return sm
 	}
 
-	sm.generation = assignment.generation
+	sm.generation = assignment.Generation
 
 	// Build sliceMapEntry for each Slice in the assignment.
-	sm.slices = make([]sliceMapEntry, 0, len(assignment.slices))
-	for _, s := range assignment.slices {
+	sm.slices = make([]sliceMapEntry, 0, len(assignment.Slices))
+	for _, s := range assignment.Slices {
 		entry := sliceMapEntry{
-			startKey:  s.startKey,
-			endpoints: make([]int, 0, len(s.endpoints)),
+			startKey:  s.StartKey,
+			endpoints: make([]int, 0, len(s.Endpoints)),
 		}
 
 		// Populate the endpoints for this slice by looking up the endpoint
 		// names in the EndpointMap. If an endpoint name is not found in the
 		// EndpointMap, it is skipped. This ensures that the sliceMap only
 		// contains valid endpoints that are currently available.
-		for _, idx := range s.endpoints {
-			hostname := assignment.endpointNames[idx]
+		for _, idx := range s.Endpoints {
+			hostname := assignment.EndpointNames[idx]
 			if es, ok := endpointMap[hostname]; ok {
 				entry.endpoints = append(entry.endpoints, es.index)
 			}
