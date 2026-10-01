@@ -896,6 +896,20 @@ func (cs *clientStream) retryLocked(attempt *csAttempt, lastErr error) error {
 		isTransparent, err := attempt.shouldRetry(lastErr)
 		if err != nil {
 			cs.commitAttemptLocked()
+			// A replayed send on an attempt that the server already answered
+			// trailers-only can surface a bare io.EOF from csAttempt.sendMsg
+			// even though the transport stream finished with a real status.
+			// Prefer that status so callers keep getting status-compatible
+			// errors (e.g. Invoke's contract in call.go).
+			if err == io.EOF && attempt.transportStream != nil {
+				select {
+				case <-attempt.transportStream.Done():
+					if st := attempt.transportStream.Status(); st.Code() != codes.OK {
+						return st.Err()
+					}
+				default:
+				}
+			}
 			return err
 		}
 		cs.firstAttempt = false
