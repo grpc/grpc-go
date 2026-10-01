@@ -71,13 +71,8 @@ Please update to the latest version of gRPC-Go using
 
 ### How to turn on logging
 
-The default logger is controlled by environment variables. Turn everything on
-like this:
-
-```console
-$ export GRPC_GO_LOG_VERBOSITY_LEVEL=99
-$ export GRPC_GO_LOG_SEVERITY_LEVEL=info
-```
+See the [grpclog package documentation](https://pkg.go.dev/google.golang.org/grpc/grpclog)
+for details on how to configure logging.
 
 ### The RPC failed with error `"code = Unavailable desc = transport is closing"`
 
