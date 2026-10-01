@@ -21,6 +21,12 @@
 // load balancing policy.
 package sharding
 
+import (
+	"time"
+
+	"google.golang.org/grpc"
+)
+
 // Slice represents a key range and its assigned endpoints. The end key of the
 // range is not stored here because it is always the start key of the next
 // Slice, or nil if this is the last Slice. This is guaranteed by the client
@@ -36,4 +42,45 @@ type Assignment struct {
 	Slices        []Slice  // Sorted by StartKey
 	EndpointNames []string // Complete list of endpoint names
 	Generation    int64
+}
+
+// TODO(easwars): Implement the autosharding client that connects to the
+// autosharding service and receives assignments.
+type autoshardingClient struct {
+	cc                 grpc.ClientConnInterface
+	target             string
+	uuid               string
+	timeout            time.Duration
+	onAssignmentUpdate func(*Assignment)
+	onAssignmentError  func(error)
+}
+
+func (c *autoshardingClient) close() {
+	// TODO(easwars): Implement the close method to clean up resources used by
+	// the client.
+
+	// TODO(easwars): Guarantee that once close returns, no more callbacks will
+	// be invoked.
+}
+
+// ClientOptions contains the options for creating a new autosharding client.
+type ClientOptions struct {
+	CC                       grpc.ClientConnInterface // The gRPC channel to the sharding service.
+	AutoshardingTarget       string                   // The target for the autosharding service.
+	UUID                     string                   // The unique identifier for this client.
+	InitialAssignmentTimeout time.Duration            // The timeout for the initial assignment fetch.
+	OnAssignmentUpdate       func(*Assignment)        // Callback invoked when a new assignment is received from the server.
+	OnAssignmentError        func(error)              // Callback invoked when there is an error fetching the assignment.
+}
+
+func NewClient(opts ClientOptions) func() {
+	client := &autoshardingClient{
+		cc:                 opts.CC,
+		target:             opts.AutoshardingTarget,
+		uuid:               opts.UUID,
+		timeout:            opts.InitialAssignmentTimeout,
+		onAssignmentUpdate: opts.OnAssignmentUpdate,
+		onAssignmentError:  opts.OnAssignmentError,
+	}
+	return client.close
 }

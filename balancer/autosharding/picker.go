@@ -31,9 +31,9 @@ import (
 )
 
 var (
-	randIntN        = rand.IntN
-	errNoAssignment = errors.New("autosharding: no assignment available and fallback is disabled")
-	errNoEndpoints  = errors.New("autosharding: matching slice has no available endpoints")
+	randIntN              = rand.IntN
+	errNoAssignment       = errors.New("autosharding: no assignment available and fallback is disabled")
+	errNoEndpointsInSlice = errors.New("autosharding: matching slice has no available endpoints")
 )
 
 // pickerEndpoint holds the snapshot of an endpoint's state needed by the
@@ -129,7 +129,7 @@ func (p *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 // into p.endpoints by starting at a random position and scanning circularly.
 func (p *picker) pickFromEndpointIndices(indices []int, info balancer.PickInfo) (balancer.PickResult, error) {
 	if len(indices) == 0 {
-		return balancer.PickResult{}, errNoEndpoints
+		return balancer.PickResult{}, errNoEndpointsInSlice
 	}
 
 	firstIndex := randIntN(len(indices))

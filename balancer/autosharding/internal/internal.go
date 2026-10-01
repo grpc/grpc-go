@@ -19,3 +19,13 @@
 // Package internal contains functionality internal to the autosharding load
 // balancing policy.
 package internal
+
+import (
+	"google.golang.org/grpc/balancer/autosharding/internal/sharding"
+)
+
+// NewAutoshardingClient is a function to create a new autosharding client. The
+// return value is a cancel function that the caller must invoke when they no
+// longer need the autosharding client. This will be overridden in tests to stub
+// out the real autosharding client.
+var NewAutoshardingClient func(sharding.ClientOptions) func()
