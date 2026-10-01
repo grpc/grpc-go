@@ -23,6 +23,7 @@ import (
 	"google.golang.org/grpc/internal/xds/grpcservice"
 	"google.golang.org/grpc/internal/xds/httpfilter"
 	"google.golang.org/grpc/internal/xds/matcher"
+	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 )
 
 // config contains the configuration for the external authorization filter.
@@ -32,7 +33,7 @@ type config struct {
 	grpcService *grpcservice.Config
 	// filterEnabled specifies the percentage of requests to be authorized by
 	// the external authorization server.
-	filterEnabled fraction
+	filterEnabled xdsresource.FractionalPercent
 	// denyAtDisabled specifies whether to deny requests when external
 	// authorization is disabled via the filterEnabled configuration. If true,
 	// requests will be denied with a status based on statusOnError.
@@ -66,14 +67,4 @@ type config struct {
 	// includePeerCertificate specifies whether to include the peer certificate
 	// in the request sent to the external authorization server.
 	includePeerCertificate bool
-}
-
-// fraction uses a numerator and denominator to specify a fractional value. If
-// the denominator specified is less than the numerator, the final fractional
-// value is capped at 1.
-type fraction struct {
-	// numerator is the numerator of the fraction.
-	numerator uint32
-	// denominator is the denominator of the fraction.
-	denominator uint32
 }
