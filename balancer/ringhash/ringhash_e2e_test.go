@@ -247,7 +247,7 @@ func checkRPCSendOK(ctx context.Context, t *testing.T, client testgrpc.TestServi
 	for i := 0; i < num; i++ {
 		var remote peer.Peer
 		if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(&remote)); err != nil {
-			t.Fatalf("rpc EmptyCall() failed: %v", err)
+			t.Fatalf("rpc EmptyCall() (%d/%d) failed: %v", i, num, err)
 		}
 		backendCount[remote.Addr.String()]++
 	}
