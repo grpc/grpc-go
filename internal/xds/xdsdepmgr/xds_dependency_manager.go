@@ -446,13 +446,14 @@ func (m *DependencyManager) populateAggregateClusterLocked(clusterName string, u
 }
 
 func (m *DependencyManager) applyRouteConfigUpdateLocked(update *xdsresource.RouteConfigUpdate) {
-	matchVH := xdsresource.FindBestMatchingVirtualHost(m.dataplaneAuthority, update.VirtualHosts)
-	if matchVH == nil {
+	idx := xdsresource.FindBestMatchingVirtualHostIndex(m.dataplaneAuthority, update.VirtualHosts)
+	if idx == -1 {
 		err := m.annotateErrorWithNodeID(fmt.Errorf("could not find VirtualHost for %q", m.dataplaneAuthority))
 		m.routeConfigWatcher.setLastError(err)
 		m.watcher.Error(err)
 		return
 	}
+	matchVH := update.VirtualHosts[idx]
 	m.routeConfigWatcher.setLastUpdate(update)
 	m.routeConfigWatcher.extras.virtualHost = matchVH
 

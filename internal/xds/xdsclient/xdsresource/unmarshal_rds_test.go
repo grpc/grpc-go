@@ -322,6 +322,39 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 			},
 		},
 		{
+			// Host names are case-insensitive, so the domains in the update are
+			// folded to lower case.
+			name: "good-route-config-with-mixed-case-domains",
+			rc: &v3routepb.RouteConfiguration{
+				Name: routeName,
+				VirtualHosts: []*v3routepb.VirtualHost{
+					{
+						Domains: []string{"LDS.Target.Good:1111", "*.Bar.COM"},
+						Routes: []*v3routepb.Route{
+							{
+								Match: &v3routepb.RouteMatch{PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: ""}},
+								Action: &v3routepb.Route_Route{
+									Route: &v3routepb.RouteAction{
+										ClusterSpecifier: &v3routepb.RouteAction_Cluster{Cluster: clusterName},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantUpdate: RouteConfigUpdate{
+				VirtualHosts: []*VirtualHost{
+					{
+						Domains: []string{ldsTarget, "*.bar.com"},
+						Routes: []*Route{{Prefix: newStringP(""),
+							WeightedClusters: []WeightedCluster{{Name: clusterName, Weight: 1}},
+							ActionType:       RouteActionRoute}},
+					},
+				},
+			},
+		},
+		{
 			name: "good-route-config-with-empty-string-route",
 			rc: &v3routepb.RouteConfiguration{
 				Name: routeName,

@@ -72,6 +72,7 @@ const (
 	defaultTestTimeout            = 10 * time.Second
 	defaultTestShortTimeout       = 10 * time.Millisecond
 	defaultTestWatchExpiryTimeout = 500 * time.Millisecond
+	defaultLoadReportingInterval  = 10 * time.Millisecond
 )
 
 type s struct {

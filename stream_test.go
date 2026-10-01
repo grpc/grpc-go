@@ -151,8 +151,8 @@ func (s) TestUnaryClient_ServerStreamingMismatch(t *testing.T) {
 // CloseSend hooks across downstream interceptors.
 type interceptorStream struct {
 	grpc.ClientStream
-	recvMsgCount int
-	closeSend    bool
+	recvMsgCount   int
+	closeSendCount int
 }
 
 func (s *interceptorStream) RecvMsg(m any) error {
@@ -161,14 +161,15 @@ func (s *interceptorStream) RecvMsg(m any) error {
 }
 
 func (s *interceptorStream) CloseSend() error {
-	s.closeSend = true
+	s.closeSendCount++
 	return s.ClientStream.CloseSend()
 }
 
-// TestDefaultStreamInterceptor verifies that defaultStreamInterceptor
-// automatically triggers CloseSend on non-client-streaming RPCs right after
-// SendMsg, and calls RecvMsg a second time on non-server-streaming RPCs to
-// consume trailers and io.EOF.
+// TestDefaultStreamInterceptor verifies that defaultStreamInterceptor's
+// behavior of automatically triggering CloseSend on non-client-streaming RPCs
+// right after SendMsg, and calling RecvMsg a second time on
+// non-server-streaming RPCs to consume trailers and io.EOF, are not visible to
+// user-defined interceptors.
 func (s) TestDefaultStreamInterceptor(t *testing.T) {
 	var iStream *interceptorStream
 	// Define a client-side stream interceptor that wraps the ClientStream to
@@ -207,10 +208,11 @@ func (s) TestDefaultStreamInterceptor(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	// Make a client-streaming RPC. When CloseAndRecv invokes RecvMsg once to get
-	// the single reply message on a non-server-streaming RPC,
+	// Make a client-streaming RPC. When CloseAndRecv invokes RecvMsg once to
+	// get the single reply message on a non-server-streaming RPC,
 	// defaultStreamInterceptor automatically calls a second RecvMsg on the
-	// underlying client stream to consume io.EOF and receive trailers.
+	// underlying client stream to consume io.EOF and receive trailers. But this
+	// should not be visible to user interceptors.
 	stream, err := ss.Client.StreamingInputCall(ctx)
 	if err != nil {
 		t.Fatal("Error calling StreamingInputCall:", err)
@@ -221,17 +223,21 @@ func (s) TestDefaultStreamInterceptor(t *testing.T) {
 	if _, err := stream.CloseAndRecv(); err != nil {
 		t.Fatal("Error running CloseAndRecv:", err)
 	}
-	if iStream.recvMsgCount != 2 {
-		t.Fatalf("StreamingInputCall RecvMsg was called %v times, want 2 times", iStream.recvMsgCount)
+	if iStream.recvMsgCount != 1 {
+		t.Fatalf("RecvMsg was called %v times on user interceptor stream, want 1 time", iStream.recvMsgCount)
 	}
 
 	// Make a server-streaming RPC. Since StreamingOutputCall is not
-	// client-streaming, defaultStreamInterceptor immediately invokes CloseSend
-	// right after sending the request message to signal downstream interceptors.
+	// client-streaming, the proto generated code invokes CloseSend after
+	// sending the single message. defaultStreamInterceptor also invokes
+	// CloseSend right after sending the request message (to handle cases where
+	// the user is using the ClientStream API instead of the proto generated
+	// code) to signal downstream interceptors, which in this case are xDS
+	// filters. The user interceptor should not see this CloseSend call.
 	if _, err := ss.Client.StreamingOutputCall(ctx, &testpb.StreamingOutputCallRequest{}); err != nil {
 		t.Fatal("Error calling StreamingOutputCall:", err)
 	}
-	if !iStream.closeSend {
-		t.Fatal("CloseSend not called after SendMsg on non-client-streaming RPC")
+	if iStream.closeSendCount != 1 {
+		t.Fatalf("CloseSend called %v times on user interceptor stream, want 1 times", iStream.closeSendCount)
 	}
 }

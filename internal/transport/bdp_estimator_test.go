@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2018 gRPC authors.
+ * Copyright 2026 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,35 @@
  *
  */
 
-package grpc
+package transport
 
-// Version is the current grpc version.
-const Version = "1.86.0-dev"
+import (
+	"sync"
+	"testing"
+)
+
+func (s) TestBDPEstimator_ConcurrentAccess(*testing.T) {
+	b := &bdpEstimator{
+		bdp:               initialWindowSize,
+		updateFlowControl: func(uint32) {},
+	}
+
+	const iterations = 1000
+	var wg sync.WaitGroup
+	wg.Go(func() {
+		for i := 0; i < iterations; i++ {
+			b.timesnap(bdpPing.data)
+		}
+	})
+	wg.Go(func() {
+		for i := 0; i < iterations; i++ {
+			b.calculate(bdpPing.data)
+		}
+	})
+	wg.Go(func() {
+		for i := 0; i < iterations; i++ {
+			b.add(100)
+		}
+	})
+	wg.Wait()
+}

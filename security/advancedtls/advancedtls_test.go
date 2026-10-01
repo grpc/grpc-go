@@ -195,6 +195,17 @@ func (s) TestClientOptionsConfigSuccessCases(t *testing.T) {
 				tls.CurveP256,
 			},
 		},
+		{
+			desc:                   "MaxVersion default is applied when only MinVersion is set",
+			clientVerificationType: CertVerification,
+			IdentityOptions: IdentityCertificateOptions{
+				Certificates: []tls.Certificate{},
+			},
+			RootOptions: RootCertificateOptions{
+				RootProvider: fakeProvider{},
+			},
+			MinVersion: tls.VersionTLS12,
+		},
 	}
 	for _, test := range tests {
 		test := test

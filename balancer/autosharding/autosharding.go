@@ -25,7 +25,9 @@ import (
 	"time"
 
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/balancer/endpointsharding"
 	iserviceconfig "google.golang.org/grpc/internal/serviceconfig"
+	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 )
 
@@ -72,6 +74,32 @@ func (bb) ParseConfig(s json.RawMessage) (serviceconfig.LoadBalancingConfig, err
 
 func (bb) Build(balancer.ClientConn, balancer.BuildOptions) balancer.Balancer {
 	return &autoshardingBalancer{}
+}
+
+// slice represents a key range and its assigned endpoints. The endKey is not
+// stored here because it is always the startKey of the next slice, or nil if
+// this is the last slice. This is guaranteed by the autoshardingClient
+// responsible for generating the assignment.
+type slice struct {
+	startKey  []byte // Inclusive start key of the key-range
+	endpoints []int  // Indices into assignment.endpointNames
+}
+
+// assignment represents a complete snapshot of sharding assignments, and is
+// expected to cover the entire key range.
+type assignment struct {
+	slices        []slice  // Sorted by startKey
+	endpointNames []string // Complete list of endpoint names
+	generation    int64
+}
+
+// endpointState represents the state associated with an endpoint in the LB policy.
+//
+//lint:ignore U1000 Struct fields planned for future implementation
+type endpointState struct {
+	index      int                         // Index of the endpoint within the NR update
+	endpoint   resolver.Endpoint           // The actual endpoint returned by the NR
+	childState endpointsharding.ChildState // State as reported by the child policy
 }
 
 type autoshardingBalancer struct {

@@ -20,7 +20,6 @@ package server
 
 import (
 	"errors"
-	"strings"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -67,10 +66,11 @@ func RouteAndProcess(ss grpc.ServerStream) (grpc.ServerStream, error) {
 	if len(authority) == 0 {
 		return nil, rc.statusErrWithNodeID(codes.Internal, "no :authority header present")
 	}
-	vh := findBestMatchingVirtualHostServer(authority[0], rc.vhs)
-	if vh == nil {
+	idx := xdsresource.FindBestMatchingVirtualHostIndex(authority[0], rc.vhosts)
+	if idx == -1 {
 		return nil, rc.statusErrWithNodeID(codes.Unavailable, "the incoming RPC did not match a configured Virtual Host")
 	}
+	vh := &rc.vhs[idx]
 
 	var rwi *routeWithInterceptors
 	for _, r := range vh.routes {
@@ -92,101 +92,4 @@ func RouteAndProcess(ss grpc.ServerStream) (grpc.ServerStream, error) {
 		return rwi.interceptor.InterceptRPC(ss)
 	}
 	return ss, nil
-}
-
-// findBestMatchingVirtualHostServer returns the virtual host whose domains field best
-// matches host
-//
-//	The domains field support 4 different matching pattern types:
-//
-//	- Exact match
-//	- Suffix match (e.g. “*ABC”)
-//	- Prefix match (e.g. “ABC*)
-//	- Universal match (e.g. “*”)
-//
-//	The best match is defined as:
-//	- A match is better if it’s matching pattern type is better.
-//	  * Exact match > suffix match > prefix match > universal match.
-//
-//	- If two matches are of the same pattern type, the longer match is
-//	  better.
-//	  * This is to compare the length of the matching pattern, e.g. “*ABCDE” >
-//	    “*ABC”
-func findBestMatchingVirtualHostServer(authority string, vHosts []virtualHostWithInterceptors) *virtualHostWithInterceptors {
-	var (
-		matchVh   *virtualHostWithInterceptors
-		matchType = domainMatchTypeInvalid
-		matchLen  int
-	)
-	for _, vh := range vHosts {
-		for _, domain := range vh.domains {
-			typ, matched := match(domain, authority)
-			if typ == domainMatchTypeInvalid {
-				// The rds response is invalid.
-				return nil
-			}
-			if matchType.betterThan(typ) || matchType == typ && matchLen >= len(domain) || !matched {
-				// The previous match has better type, or the previous match has
-				// better length, or this domain isn't a match.
-				continue
-			}
-			matchVh = &vh
-			matchType = typ
-			matchLen = len(domain)
-		}
-	}
-	return matchVh
-}
-
-type domainMatchType int
-
-const (
-	domainMatchTypeInvalid domainMatchType = iota
-	domainMatchTypeUniversal
-	domainMatchTypePrefix
-	domainMatchTypeSuffix
-	domainMatchTypeExact
-)
-
-// Exact > Suffix > Prefix > Universal > Invalid.
-func (t domainMatchType) betterThan(b domainMatchType) bool {
-	return t > b
-}
-
-func matchTypeForDomain(d string) domainMatchType {
-	if d == "" {
-		return domainMatchTypeInvalid
-	}
-	if d == "*" {
-		return domainMatchTypeUniversal
-	}
-	if strings.HasPrefix(d, "*") {
-		return domainMatchTypeSuffix
-	}
-	if strings.HasSuffix(d, "*") {
-		return domainMatchTypePrefix
-	}
-	if strings.Contains(d, "*") {
-		return domainMatchTypeInvalid
-	}
-	return domainMatchTypeExact
-}
-
-func match(domain, host string) (domainMatchType, bool) {
-	switch typ := matchTypeForDomain(domain); typ {
-	case domainMatchTypeInvalid:
-		return typ, false
-	case domainMatchTypeUniversal:
-		return typ, true
-	case domainMatchTypePrefix:
-		// abc.*
-		return typ, strings.HasPrefix(host, strings.TrimSuffix(domain, "*"))
-	case domainMatchTypeSuffix:
-		// *.123
-		return typ, strings.HasSuffix(host, strings.TrimPrefix(domain, "*"))
-	case domainMatchTypeExact:
-		return typ, domain == host
-	default:
-		return domainMatchTypeInvalid, false
-	}
 }

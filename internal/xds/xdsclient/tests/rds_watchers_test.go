@@ -201,7 +201,9 @@ func (s) TestRDSWatch(t *testing.T) {
 				update: xdsresource.RouteConfigUpdate{
 					VirtualHosts: []*xdsresource.VirtualHost{
 						{
-							Domains: []string{ldsNameNewStyle},
+							// Domains are folded to lower case when the resource is
+							// unmarshaled, since host names are case-insensitive.
+							Domains: []string{strings.ToLower(ldsNameNewStyle)},
 							Routes: []*xdsresource.Route{
 								{
 									Prefix:           newStringP("/"),
@@ -378,7 +380,9 @@ func (s) TestRDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 				update: xdsresource.RouteConfigUpdate{
 					VirtualHosts: []*xdsresource.VirtualHost{
 						{
-							Domains: []string{ldsNameNewStyle},
+							// Domains are folded to lower case when the resource is
+							// unmarshaled, since host names are case-insensitive.
+							Domains: []string{strings.ToLower(ldsNameNewStyle)},
 							Routes: []*xdsresource.Route{
 								{
 									Prefix:           newStringP("/"),
@@ -394,7 +398,9 @@ func (s) TestRDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 				update: xdsresource.RouteConfigUpdate{
 					VirtualHosts: []*xdsresource.VirtualHost{
 						{
-							Domains: []string{ldsNameNewStyle},
+							// Domains are folded to lower case when the resource is
+							// unmarshaled, since host names are case-insensitive.
+							Domains: []string{strings.ToLower(ldsNameNewStyle)},
 							Routes: []*xdsresource.Route{
 								{
 									Prefix:           newStringP("/"),
