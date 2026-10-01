@@ -39,7 +39,6 @@ import (
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/optional"
 	"google.golang.org/grpc/internal/resolver"
-	xdscreds "google.golang.org/grpc/internal/xds/credentials"
 	"google.golang.org/grpc/internal/xds/grpcservice"
 	"google.golang.org/grpc/internal/xds/httpfilter"
 	iextproc "google.golang.org/grpc/internal/xds/httpfilter/extproc/internal"
@@ -257,18 +256,6 @@ type clientFilter struct {
 
 func (*clientFilter) Close() {}
 
-// sharesChannel reports whether two GrpcService configs may share a channel
-// to the external processor server: the same target with the same channel
-// and call credential identities. Timeout and initial metadata are applied
-// per-RPC and do not affect sharing; call credentials do, because Dial
-// attaches them to the channel.
-func sharesChannel(a, b *grpcservice.Config) bool {
-	targetEqual := a.TargetURI == b.TargetURI
-	channelCredsEqual := a.ChannelCredentials.Equal(b.ChannelCredentials)
-	callCredsEqual := slices.EqualFunc(a.CallCredentials, b.CallCredentials, (*xdscreds.CallCreds).Equal)
-	return targetEqual && channelCredsEqual && callCredsEqual
-}
-
 // getProcChannel returns an existing refcounted client for a channel-sharing
 // compatible GrpcService config if present and its refcount is incremented
 // successfully.
@@ -276,7 +263,7 @@ func (cf *clientFilter) getProcChannel(server *grpcservice.Config) *grpcsync.Ref
 	cf.mu.Lock()
 	defer cf.mu.Unlock()
 	if i := slices.IndexFunc(cf.procChannels, func(e *procChannelEntry) bool {
-		return sharesChannel(e.server, server) && e.rc.TryIncrement()
+		return httpfilter.SharesChannel(e.server, server) && e.rc.TryIncrement()
 	}); i != -1 {
 		return cf.procChannels[i].rc
 	}
@@ -291,7 +278,7 @@ func (cf *clientFilter) storeProcChannel(entry *procChannelEntry) *grpcsync.RefC
 	cf.mu.Lock()
 	defer cf.mu.Unlock()
 	if i := slices.IndexFunc(cf.procChannels, func(e *procChannelEntry) bool {
-		return sharesChannel(e.server, entry.server) && e.rc.TryIncrement()
+		return httpfilter.SharesChannel(e.server, entry.server) && e.rc.TryIncrement()
 	}); i != -1 {
 		return cf.procChannels[i].rc
 	}
