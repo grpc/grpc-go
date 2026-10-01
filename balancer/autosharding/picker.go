@@ -50,12 +50,12 @@ type picker struct {
 	sliceMap          *sliceMap
 	endpoints         []pickerEndpoint // Ordered 1:1 by endpointState.index
 	isSliceInFallback []bool           // Precomputed per-slice fallback status
-	cfg               *lbConfig
+	cfg               *LBConfig
 }
 
 // newPicker constructs a new picker from the given endpointMap, sliceMap, and
 // LB policy configuration.
-func newPicker(endpointMap map[string]*endpointState, sm *sliceMap, cfg *lbConfig) *picker {
+func newPicker(endpointMap map[string]*endpointState, sm *sliceMap, cfg *LBConfig) *picker {
 	// Every endpoint in endpointMap has a unique index in the range
 	// [0, len(endpointMap)-1]. Placing each entry at endpoints[es.index] orders
 	// the slice by index without needing to sort.

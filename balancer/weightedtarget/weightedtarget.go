@@ -28,6 +28,7 @@ import (
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/weightedtarget/weightedaggregator"
+	"google.golang.org/grpc/experimental/resolver/locality"
 	"google.golang.org/grpc/internal/balancergroup"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/hierarchy"
@@ -81,17 +82,6 @@ type weightedTargetBalancer struct {
 	stateAggregator *weightedaggregator.Aggregator
 
 	targets map[string]Target
-}
-
-type localityKeyType string
-
-const localityKey = localityKeyType("locality")
-
-// LocalityFromResolverState returns the locality from the resolver.State
-// provided, or an empty string if not present.
-func LocalityFromResolverState(state resolver.State) string {
-	locality, _ := state.Attributes.Value(localityKey).(string)
-	return locality
 }
 
 // UpdateClientConnState takes the new targets in balancer group,
@@ -151,12 +141,13 @@ func (b *weightedTargetBalancer) UpdateClientConnState(s balancer.ClientConnStat
 		// - Balancer config comes from the targets map.
 		//
 		// TODO: handle error? How to aggregate errors and return?
+		rs := resolver.State{
+			Endpoints:     endpointsSplit[name],
+			ServiceConfig: s.ResolverState.ServiceConfig,
+			Attributes:    s.ResolverState.Attributes,
+		}
 		_ = b.bg.UpdateClientConnState(name, balancer.ClientConnState{
-			ResolverState: resolver.State{
-				Endpoints:     endpointsSplit[name],
-				ServiceConfig: s.ResolverState.ServiceConfig,
-				Attributes:    s.ResolverState.Attributes.WithValue(localityKey, name),
-			},
+			ResolverState:  locality.Set(rs, name),
 			BalancerConfig: newT.ChildPolicy.Config,
 		})
 	}

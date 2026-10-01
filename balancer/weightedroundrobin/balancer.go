@@ -40,8 +40,8 @@ import (
 	"google.golang.org/grpc/balancer/endpointsharding"
 	"google.golang.org/grpc/balancer/pickfirst"
 	"google.golang.org/grpc/balancer/weightedroundrobin/internal"
-	"google.golang.org/grpc/balancer/weightedtarget"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/experimental/resolver/locality"
 	estats "google.golang.org/grpc/experimental/stats"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcsync"
@@ -234,7 +234,7 @@ func (b *wrrBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error 
 	// explicitly error but will have undefined behavior.
 	b.mu.Lock()
 	b.cfg = cfg
-	b.locality = weightedtarget.LocalityFromResolverState(ccs.ResolverState)
+	b.locality = locality.FromResolverState(ccs.ResolverState)
 	b.clusterName = backendServiceFromState(ccs.ResolverState)
 	b.updateEndpointsLocked(ccs.ResolverState.Endpoints)
 	b.mu.Unlock()

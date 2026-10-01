@@ -16,18 +16,6 @@
  *
  */
 
-package autosharding
-
-import (
-	"testing"
-
-	"google.golang.org/grpc/internal/grpctest"
-)
-
-type s struct {
-	grpctest.Tester
-}
-
-func Test(t *testing.T) {
-	grpctest.RunSubTests(t, s{})
-}
+// Package internal contains functionality internal to the autosharding load
+// balancing policy.
+package internal
