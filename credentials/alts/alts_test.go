@@ -109,7 +109,7 @@ func (s) TestCloneClient(t *testing.T) {
 	cct := cc.(*altsTC)
 
 	if ct.side != cct.side {
-		t.Errorf("cc.side = %q, want %q", cct.side, ct.side)
+		t.Errorf("cc.side = %d, want %d", cct.side, ct.side)
 	}
 	if ct.hsAddress != cct.hsAddress {
 		t.Errorf("cc.hsAddress = %q, want %q", cct.hsAddress, ct.hsAddress)
@@ -142,7 +142,7 @@ func (s) TestCloneServer(t *testing.T) {
 	cct := cc.(*altsTC)
 
 	if ct.side != cct.side {
-		t.Errorf("cc.side = %q, want %q", cct.side, ct.side)
+		t.Errorf("cc.side = %d, want %d", cct.side, ct.side)
 	}
 	if ct.hsAddress != cct.hsAddress {
 		t.Errorf("cc.hsAddress = %q, want %q", cct.hsAddress, ct.hsAddress)
