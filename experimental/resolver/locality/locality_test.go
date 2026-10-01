@@ -70,11 +70,7 @@ func (s) TestLocalityToAndFromResolverState(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			state := test.inputState
-			if test.inputLocality != "" {
-				state = locality.Set(test.inputState, test.inputLocality)
-			}
-
+			state := locality.Set(test.inputState, test.inputLocality)
 			gotLocality := locality.FromResolverState(state)
 			if gotLocality != test.wantLocality {
 				t.Errorf("locality.FromResolverState(%+v) = %q, want %q", state, gotLocality, test.wantLocality)

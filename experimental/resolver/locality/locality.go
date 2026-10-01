@@ -30,12 +30,12 @@ import "google.golang.org/grpc/resolver"
 type localityKey struct{}
 
 // Set returns a copy of the given resolver.State with the locality attribute
-// set. If locality is empty the state is returned unmodified.
-func Set(state resolver.State, locality string) resolver.State {
-	if locality == "" {
+// set. If loc is empty, the state is returned unmodified.
+func Set(state resolver.State, loc string) resolver.State {
+	if loc == "" {
 		return state
 	}
-	state.Attributes = state.Attributes.WithValue(localityKey{}, locality)
+	state.Attributes = state.Attributes.WithValue(localityKey{}, loc)
 	return state
 }
 
