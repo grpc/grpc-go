@@ -79,8 +79,8 @@ func (s) TestItemList_FIFO(t *testing.T) {
 	if got := il.dequeue(); got != 0 {
 		t.Fatalf("dequeue() on empty list = %v, want nil", got)
 	}
-	if got := len(il.buf); got > itemListShrinkThreshold {
-		t.Fatalf("len(il.buf) = %d after draining, want <= %d", got, itemListShrinkThreshold)
+	if got := len(il.buf); got > itemListShrinkFloor {
+		t.Fatalf("len(il.buf) = %d after draining, want <= %d", got, itemListShrinkFloor)
 	}
 	if diff := cmp.Diff(make([]int, len(il.buf)), il.buf); diff != "" {
 		t.Fatalf("il.buf mismatch after draining (-want +got):\n%s", diff)

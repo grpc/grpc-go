@@ -44,11 +44,11 @@ const (
 	// since every outStream has its own itemList and unary RPCs typically
 	// queue at most two items (a data frame and trailers) per stream.
 	itemListInitialCapacity = 4
-	// itemListShrinkThreshold is the capacity at or below which an itemList's
+	// itemListShrinkFloor is the capacity at or below which an itemList's
 	// ring buffer is never shrunk. It must be a power of 2. This prevents
 	// repeated reallocations when the queue length oscillates at small sizes,
 	// which is the common case for the control buffer.
-	itemListShrinkThreshold = 64
+	itemListShrinkFloor = 64
 )
 
 // itemList is a FIFO queue backed by a ring buffer.
@@ -96,7 +96,7 @@ func (il *itemList[T]) dequeue() T {
 	il.buf[il.head] = zero // Allow the item to be garbage collected.
 	il.head = (il.head + 1) & (len(il.buf) - 1)
 	il.count--
-	if len(il.buf) > itemListShrinkThreshold && il.count*4 == len(il.buf) {
+	if len(il.buf) > itemListShrinkFloor && il.count*4 == len(il.buf) {
 		il.resize(len(il.buf) / 2)
 	}
 	return ret
