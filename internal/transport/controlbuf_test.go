@@ -28,7 +28,7 @@ import (
 // TestItemList_FIFO verifies FIFO ordering across buffer growth, wrap-around
 // and shrinking by interleaving enqueues and dequeues.
 func (s) TestItemList_FIFO(t *testing.T) {
-	var il itemList[any]
+	var il itemList[int]
 	// enqueue adds n consecutive integers to the list, starting with next. It
 	// returns the integer that follows the last one enqueued, which should be
 	// passed as next in the following call.
@@ -76,16 +76,17 @@ func (s) TestItemList_FIFO(t *testing.T) {
 	if !il.isEmpty() {
 		t.Fatalf("isEmpty() = false, want true")
 	}
-	if got := il.dequeue(); got != nil {
+	if got := il.dequeue(); got != 0 {
 		t.Fatalf("dequeue() on empty list = %v, want nil", got)
 	}
 	if got := len(il.buf); got > itemListShrinkThreshold {
 		t.Fatalf("len(il.buf) = %d after draining, want <= %d", got, itemListShrinkThreshold)
 	}
-	for i, v := range il.buf {
-		if v != nil {
-			t.Fatalf("il.buf[%d] = %v after draining, want nil", i, v)
-		}
+	if diff := cmp.Diff(make([]int, len(il.buf)), il.buf); diff != "" {
+		t.Fatalf("il.buf mismatch after draining (-want +got):\n%s", diff)
+	}
+	if got, want := il.peek(), 0; got != want {
+		t.Fatalf("peek() = %d, want %d", got, want)
 	}
 }
 
@@ -109,7 +110,10 @@ func (s) TestItemList_DequeueAll(t *testing.T) {
 		t.Errorf("dequeueAll() visited items diff (-want +got):\n%s", diff)
 	}
 	if !il.isEmpty() || il.buf != nil {
-		t.Fatalf("list not reset after dequeueAll(): %+v", il)
+		t.Errorf("list not reset after dequeueAll(): %+v", il)
+	}
+	if got := il.peek(); got != nil {
+		t.Fatalf("peek() = %v, want nil", got)
 	}
 }
 

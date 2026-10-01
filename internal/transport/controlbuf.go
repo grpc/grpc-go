@@ -76,8 +76,12 @@ func (il *itemList[T]) enqueue(i T) {
 }
 
 // peek returns the first item in the list without removing it from the
-// list. It must not be called on an empty list.
+// list. It returns the zero value of T if the list is empty.
 func (il *itemList[T]) peek() T {
+	if il.count == 0 {
+		var zero T
+		return zero
+	}
 	return il.buf[il.head]
 }
 
