@@ -116,10 +116,33 @@ type http2Client struct {
 
 	bdpEst *bdpEstimator
 
+	// The following fields implement the stream quota mechanism (aka
+	// MAX_CONCURRENT_STREAMS). These fields are guarded by controlBuf.mu and
+	// must only be accessed inside of a closure passed to
+	// controlBuf.executeAndPut.
+	//
+	// * maxConcurrentStreams: Initialized to defaultMaxStreamsClient (100);
+	//   updated on receipt of a SETTINGS frame with the
+	//   SETTINGS_MAX_CONCURRENT_STREAMS parameter (or to math.MaxUint32 if the
+	//   server's initial SETTINGS frame omits it).
+	// * streamQuota: The number of additional streams that can be created at the
+	//   moment (signed because it can go negative if the server reduces
+	//   SETTINGS_MAX_CONCURRENT_STREAMS below the current number of active
+	//   streams). Initialized to defaultMaxStreamsClient, adjusted by the delta
+	//   when SETTINGS_MAX_CONCURRENT_STREAMS changes, decremented when a new
+	//   stream is created in NewStream, and incremented when loopyWriter
+	//   processes cleanupStream.
+	// * streamsQuotaAvailable: A buffered(1) channel used to signal when
+	//   streamQuota > 0 to unblock NewStream calls waiting for quota. May be
+	//   closed and replaced when SETTINGS_MAX_CONCURRENT_STREAMS increases to
+	//   wake all waiting streams at once.
+	// * waitingStreams: The number of NewStream calls currently waiting for
+	//   streamQuota.
 	maxConcurrentStreams  uint32
 	streamQuota           int64
 	streamsQuotaAvailable chan struct{}
 	waitingStreams        uint32
+
 	registeredCompressors string
 
 	// Do not access controlBuf with mu held.
@@ -988,6 +1011,16 @@ func (t *http2Client) closeStream(s *ClientStream, err error, rst bool, rstCode 
 		s.noHeaders = true
 		close(s.headerChan)
 	}
+	addBackStreamQuota := func() bool {
+		t.streamQuota++
+		if t.streamQuota > 0 && t.waitingStreams > 0 {
+			select {
+			case t.streamsQuotaAvailable <- struct{}{}:
+			default:
+			}
+		}
+		return true
+	}
 	cleanup := &cleanupStream{
 		streamID: s.id,
 		onWrite: func() {
@@ -996,6 +1029,7 @@ func (t *http2Client) closeStream(s *ClientStream, err error, rst bool, rstCode 
 				delete(t.activeStreams, s.id)
 			}
 			t.mu.Unlock()
+			t.controlBuf.executeAndPut(addBackStreamQuota, nil)
 			if channelz.IsOn() {
 				if eosReceived {
 					t.channelz.SocketMetrics.StreamsSucceeded.Add(1)
@@ -1007,17 +1041,7 @@ func (t *http2Client) closeStream(s *ClientStream, err error, rst bool, rstCode 
 		rst:     rst,
 		rstCode: rstCode,
 	}
-	addBackStreamQuota := func() bool {
-		t.streamQuota++
-		if t.streamQuota > 0 && t.waitingStreams > 0 {
-			select {
-			case t.streamsQuotaAvailable <- struct{}{}:
-			default:
-			}
-		}
-		return true
-	}
-	t.controlBuf.executeAndPut(addBackStreamQuota, cleanup)
+	t.controlBuf.put(cleanup)
 	// This will unblock write.
 	close(s.done)
 }
