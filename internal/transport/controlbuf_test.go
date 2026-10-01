@@ -21,6 +21,8 @@ package transport
 import (
 	"testing"
 	"time"
+
+	"github.com/google/go-cmp/cmp"
 )
 
 // TestItemList_FIFO verifies FIFO ordering across buffer growth, wrap-around
@@ -103,13 +105,8 @@ func (s) TestItemList_DequeueAll(t *testing.T) {
 	var got []int
 	il.dequeueAll(func(it any) { got = append(got, it.(int)) })
 	want := []int{2, 3, 4, 5}
-	if len(got) != len(want) {
-		t.Fatalf("dequeueAll() visited %v, want %v", got, want)
-	}
-	for i := range want {
-		if got[i] != want[i] {
-			t.Fatalf("dequeueAll() visited %v, want %v", got, want)
-		}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("dequeueAll() visited items diff (-want +got):\n%s", diff)
 	}
 	if !il.isEmpty() || il.buf != nil {
 		t.Fatalf("list not reset after dequeueAll(): %+v", il)

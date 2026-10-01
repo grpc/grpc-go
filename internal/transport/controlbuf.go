@@ -69,7 +69,7 @@ type itemList[T any] struct {
 
 func (il *itemList[T]) enqueue(i T) {
 	if il.count == len(il.buf) {
-		il.resize(max(itemListInitialCapacity, il.count<<1))
+		il.resize(max(itemListInitialCapacity, 2*il.count))
 	}
 	il.buf[(il.head+il.count)&(len(il.buf)-1)] = i
 	il.count++
@@ -92,8 +92,8 @@ func (il *itemList[T]) dequeue() T {
 	il.buf[il.head] = zero // Allow the item to be garbage collected.
 	il.head = (il.head + 1) & (len(il.buf) - 1)
 	il.count--
-	if len(il.buf) > itemListShrinkThreshold && il.count<<2 == len(il.buf) {
-		il.resize(len(il.buf) >> 1)
+	if len(il.buf) > itemListShrinkThreshold && il.count*4 == len(il.buf) {
+		il.resize(len(il.buf) / 2)
 	}
 	return ret
 }
@@ -102,7 +102,7 @@ func (il *itemList[T]) dequeue() T {
 // FIFO order, and releases the underlying buffer.
 func (il *itemList[T]) dequeueAll(f func(T)) {
 	mask := len(il.buf) - 1
-	for i := 0; i < il.count; i++ {
+	for i := range il.count {
 		f(il.buf[(il.head+i)&mask])
 	}
 	*il = itemList[T]{}
