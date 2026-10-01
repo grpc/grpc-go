@@ -40,7 +40,14 @@ func Test(t *testing.T) {
 }
 
 func (s) TestParseConfig_Success(t *testing.T) {
-	parser := balancer.Get(autosharding.Name).(balancer.ConfigParser)
+	builder := balancer.Get(autosharding.Name)
+	if builder == nil {
+		t.Fatalf("Balancer %q not registered", autosharding.Name)
+	}
+	parser, ok := builder.(balancer.ConfigParser)
+	if !ok {
+		t.Fatalf("Balancer %q does not implement ConfigParser", autosharding.Name)
+	}
 	tests := []struct {
 		name    string
 		input   string
@@ -92,7 +99,14 @@ func (s) TestParseConfig_Success(t *testing.T) {
 }
 
 func (s) TestParseConfig_Failure(t *testing.T) {
-	parser := balancer.Get(autosharding.Name).(balancer.ConfigParser)
+	builder := balancer.Get(autosharding.Name)
+	if builder == nil {
+		t.Fatalf("Balancer %q not registered", autosharding.Name)
+	}
+	parser, ok := builder.(balancer.ConfigParser)
+	if !ok {
+		t.Fatalf("Balancer %q does not implement ConfigParser", autosharding.Name)
+	}
 	tests := []struct {
 		name  string
 		input string
