@@ -20,6 +20,7 @@ package grpc
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"strings"
@@ -162,7 +163,11 @@ func (s) TestDialWaitsForServerSettingsAndFails(t *testing.T) {
 		client.Close()
 		t.Fatalf("Unexpected success (err=nil) while dialing")
 	}
-	expectedMsg := "server preface"
+	// The error should wrap context.DeadlineExceeded.
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("DialContext() returned %v, want %v", err, context.DeadlineExceeded)
+	}
+	const expectedMsg = "error reading server preface"
 	if !strings.Contains(err.Error(), context.DeadlineExceeded.Error()) || !strings.Contains(err.Error(), expectedMsg) {
 		t.Fatalf("DialContext(_) = %v; want a message that includes both %q and %q", err, context.DeadlineExceeded.Error(), expectedMsg)
 	}
