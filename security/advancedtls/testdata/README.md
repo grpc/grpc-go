@@ -1,48 +1,96 @@
-About This Directory
--------------
-This testdata directory contains the certificates used in the tests of package advancedtls.
+# AdvancedTLS Test Credentials
 
-How to Generate Test Certificates Using OpenSSL
--------------
+This testdata directory contains X.509 certificates and private keys used in the tests for the `advancedtls` package.
 
-Supposing we are going to create a `subject_cert.pem` that is trusted by `ca_cert.pem`, here are the
-commands we run:
+## Credentials Overview
 
-1. Generate the private key, `ca_key.pem`, and the cert `ca_cert.pem`, for the CA:
+### Trust Roots / Certificate Authorities (CAs)
+* **`client_trust_cert_1.pem` / `client_trust_key_1.pem`**:
+  * **Algorithm**: RSA 4096-bit (Self-signed Root CA)
+  * **Subject**: `C=US, ST=CA, L=SVL, O=Internet Widgits Pty Ltd`
+  * **Purpose**: Used on client side to verify server identity. Signs `server_cert_1.pem`, `server_cert_localhost_1.pem`, `server_ecdsa_cert_1.pem`, and `server_ecdsa_cert_localhost_1.pem`.
+* **`client_trust_cert_2.pem` / `client_trust_key_2.pem`**:
+  * **Algorithm**: RSA 4096-bit (Self-signed Root CA)
+  * **Subject**: `C=US, ST=CA, O=Internet Widgits Pty Ltd, CN=foo.bar.client2.trust.com`
+  * **Purpose**: Used on client side to verify server identity. Signs `server_cert_2.pem`.
+* **`server_trust_cert_1.pem` / `server_trust_key_1.pem`**:
+  * **Algorithm**: RSA 4096-bit (Self-signed Root CA)
+  * **Subject**: `C=US, ST=VA, O=Internet Widgits Pty Ltd, CN=foo.bar.hoo.ca.com`
+  * **Purpose**: Used on server side to verify client identity in mTLS. Signs `client_cert_1.pem`, `client_ecdsa_cert_1.pem`, `client_ecdsa_cert_localhost_1.pem`, and `another_client_cert_1.pem`.
+* **`server_trust_cert_2.pem` / `server_trust_key_2.pem`**:
+  * **Algorithm**: RSA 4096-bit (Self-signed Root CA)
+  * **Subject**: `C=US, ST=CA, O=Internet Widgits Pty Ltd, CN=foo.bar.server2.trust.com`
+  * **Purpose**: Used on server side to verify client identity in mTLS. Signs `client_cert_2.pem`.
 
-   ```
-   $ openssl req -x509 -newkey rsa:4096 -keyout ca_key.pem -out ca_cert.pem -nodes -days $DURATION_DAYS
-   ```
+### Server Identity Certificates
+* **`server_cert_1.pem` / `server_key_1.pem`**:
+  * **Algorithm**: RSA 4096-bit
+  * **Subject**: `CN=foo.bar.com`
+  * **Issuer**: `client_trust_cert_1.pem`
+* **`server_cert_2.pem` / `server_key_2.pem`**:
+  * **Algorithm**: RSA 4096-bit
+  * **Subject**: `CN=foo.bar.server2.com`
+  * **Issuer**: `client_trust_cert_2.pem`
+* **`server_cert_3.pem` / `server_key_3.pem`**:
+  * **Algorithm**: RSA 2048-bit (Self-signed)
+  * **Subject**: `CN=foo.bar.server3.com`
+  * **SANs**: `DNS:google.com`, `DNS:apple.com`, `DNS:amazon.com`
+* **`server_cert_localhost_1.pem` / `server_key_localhost_1.pem`**:
+  * **Algorithm**: RSA 4096-bit
+  * **Subject**: `CN=localhost`
+  * **SAN**: `DNS:localhost`
+  * **Issuer**: `client_trust_cert_1.pem`
+* **`server_ecdsa_cert_1.pem` / `server_ecdsa_key_1.pem`**:
+  * **Algorithm**: ECDSA P-256 (`prime256v1`)
+  * **Subject**: `CN=foo.bar.com`
+  * **Issuer**: `client_trust_cert_1.pem`
+  * **Purpose**: Used for TLS 1.3 / TLS 1.2 multi-certificate algorithm negotiation and fallback tests.
+* **`server_ecdsa_cert_localhost_1.pem` / `server_ecdsa_key_localhost_1.pem`**:
+  * **Algorithm**: ECDSA P-256 (`prime256v1`)
+  * **Subject**: `CN=localhost`
+  * **SAN**: `DNS:localhost`
+  * **Issuer**: `client_trust_cert_1.pem`
+  * **Purpose**: Used for dual-certificate TLS 1.3 / TLS 1.2 SNI and negotiation integration tests connecting to localhost.
 
-2. Generate a private key `subject_key.pem` for the subject:
+### Client Identity Certificates
+* **`client_cert_1.pem` / `client_key_1.pem`**:
+  * **Algorithm**: RSA 4096-bit
+  * **Subject**: `CN=foo.bar.hoo.com`
+  * **Issuer**: `server_trust_cert_1.pem`
+* **`client_cert_2.pem` / `client_key_2.pem`**:
+  * **Algorithm**: RSA 4096-bit
+  * **Subject**: `CN=foo.bar.client2.com`
+  * **Issuer**: `server_trust_cert_2.pem`
+* **`another_client_cert_1.pem` / `another_client_key_1.pem`**:
+  * **Algorithm**: RSA 4096-bit
+  * **Subject**: `CN=foo.bar.another.client.com`
+  * **Issuer**: `server_trust_cert_1.pem`
+* **`client_ecdsa_cert_1.pem` / `client_ecdsa_key_1.pem`**:
+  * **Algorithm**: ECDSA P-256 (`prime256v1`)
+  * **Subject**: `CN=foo.bar.hoo.com`
+  * **Issuer**: `server_trust_cert_1.pem`
+  * **Purpose**: Used for mutual TLS (mTLS) with ECDSA client authentication.
+* **`client_ecdsa_cert_localhost_1.pem` / `client_ecdsa_key_localhost_1.pem`**:
+  * **Algorithm**: ECDSA P-256 (`prime256v1`)
+  * **Subject**: `CN=localhost`
+  * **SAN**: `DNS:localhost`
+  * **Issuer**: `server_trust_cert_1.pem`
+  * **Purpose**: Used for mutual TLS (mTLS) with ECDSA client authentication connecting to localhost.
 
-      ```
-      $ openssl genrsa -out subject_key.pem 4096
-      ```
+### Certificate Revocation List (CRL) Testdata
+* **`crl/`**:
+  * Contains CA certificates, client/server certificates, and CRL files (both empty and revoked) used for certificate revocation testing in `advancedtls`.
 
-3. Generate a CSR `csr.pem` using `subject_key.pem`:
+## Certificate Generation
 
-   ```
-   $ openssl req -new -key subject_key.pem -out csr.pem
-   ```
-   For some cases, we might want to add some extra SAN fields in `subject_cert.pem`.
-   In those cases, we can create a configuration file(for example, localhost-openssl.cnf), and do the following:
-   ```
-   $ openssl req -new -key subject_key.pem -out csr.pem -config $CONFIG_FILE_NAME
-   ```
+All certificates and keys in this directory can be generated using the `create.sh` script:
 
-4. Use `ca_key.pem` and `ca_cert.pem` to sign `csr.pem`, and get a certificate, `subject_cert.pem`, for the subject:
+```bash
+./create.sh
+```
 
-   This step requires some additional configuration steps and please check out [this answer from StackOverflow](https://stackoverflow.com/a/21340898) for more.
+To generate CRL test certificates, run `provider_create.sh` in the `crl/` subdirectory:
 
-   ```
-   $ openssl ca -config openssl-ca.cnf -policy signing_policy -extensions signing_req -out subject_cert.pem -in csr.pem -keyfile ca_key.pem -cert ca_cert.pem
-   ```
-   Please see an example configuration template at `openssl-ca.cnf`.
-5. Verify the `subject_cert.pem` is trusted by `ca_cert.pem`:
-
-
-   ```
-   $ openssl verify -verbose -CAfile ca_cert.pem  subject_cert.pem
-
-   ```
+```bash
+cd crl && ./provider_create.sh
+```
