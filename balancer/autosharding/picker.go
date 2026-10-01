@@ -27,13 +27,14 @@ import (
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
+	internalgrpclog "google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/metadata"
 )
 
 var (
-	randIntN        = rand.IntN
-	errNoAssignment = errors.New("autosharding: no assignment available and fallback is disabled")
-	errNoEndpoints  = errors.New("autosharding: matching slice has no available endpoints")
+	randIntN              = rand.IntN
+	errNoAssignment       = errors.New("autosharding: no assignment available and fallback is disabled")
+	errNoEndpointsInSlice = errors.New("autosharding: matching slice has no available endpoints")
 )
 
 // pickerEndpoint holds the snapshot of an endpoint's state needed by the
@@ -47,15 +48,17 @@ type pickerEndpoint struct {
 // picker routes RPCs to endpoints assigned to the matching key-range in the
 // sliceMap, or to the fallback pool when configured.
 type picker struct {
+	logger            *internalgrpclog.PrefixLogger
 	sliceMap          *sliceMap
 	endpoints         []pickerEndpoint // Ordered 1:1 by endpointState.index
 	isSliceInFallback []bool           // Precomputed per-slice fallback status
-	cfg               *LBConfig
+	keyHeaderName     string
+	enableFallback    bool
 }
 
 // newPicker constructs a new picker from the given endpointMap, sliceMap, and
 // LB policy configuration.
-func newPicker(endpointMap map[string]*endpointState, sm *sliceMap, cfg *LBConfig) *picker {
+func newPicker(endpointMap map[string]*endpointState, sm *sliceMap, cfg *LBConfig, logger *internalgrpclog.PrefixLogger) *picker {
 	// Every endpoint in endpointMap has a unique index in the range
 	// [0, len(endpointMap)-1]. Placing each entry at endpoints[es.index] orders
 	// the slice by index without needing to sort.
@@ -74,10 +77,12 @@ func newPicker(endpointMap map[string]*endpointState, sm *sliceMap, cfg *LBConfi
 	}
 
 	return &picker{
+		logger:            logger,
 		sliceMap:          sm,
 		endpoints:         endpoints,
 		isSliceInFallback: isSliceInFallback,
-		cfg:               cfg,
+		keyHeaderName:     cfg.KeyHeaderName,
+		enableFallback:    cfg.EnableFallback,
 	}
 }
 
@@ -95,26 +100,27 @@ func isPoolInFallback(indices []int, endpoints []pickerEndpoint) bool {
 // Pick selects an endpoint for the RPC based on the sharding key header in the
 // outgoing request metadata.
 func (p *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
-	key := extractKeyFromMetadata(info.Ctx, p.cfg.KeyHeaderName)
+	key := extractKeyFromMetadata(info.Ctx, p.keyHeaderName)
 	if key == nil {
-		return balancer.PickResult{}, fmt.Errorf("autosharding: header %q not found in outgoing metadata", p.cfg.KeyHeaderName)
+		return balancer.PickResult{}, fmt.Errorf("autosharding: header %q not found in outgoing metadata", p.keyHeaderName)
 	}
 
 	sliceIdx := p.sliceMap.lookup(key)
 
-	// No assignment covers this key. This happens when the initial assignment
-	// timeout has expired and no valid assignments have been received from the
-	// sharding service.
+	// No assignment covers this key. This can happen only when the autosharding
+	// client has reported an error **and** fallback is enabled.
 	if sliceIdx < 0 {
-		if p.cfg.EnableFallback {
+		if p.enableFallback {
 			return p.pickFromEndpointIndices(p.sliceMap.fallbackPool, info)
 		}
+		// We should never get here.
+		p.logger.Errorf("autosharding: no assignment covers key %q and fallback is disabled", string(key))
 		return balancer.PickResult{}, errNoAssignment
 	}
 
 	// If the matching slice is in fallback mode and fallback is enabled, route
 	// using the fallback pool across all resolver endpoints.
-	if p.isSliceInFallback[sliceIdx] && p.cfg.EnableFallback {
+	if p.isSliceInFallback[sliceIdx] && p.enableFallback {
 		return p.pickFromEndpointIndices(p.sliceMap.fallbackPool, info)
 	}
 
@@ -129,7 +135,7 @@ func (p *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 // into p.endpoints by starting at a random position and scanning circularly.
 func (p *picker) pickFromEndpointIndices(indices []int, info balancer.PickInfo) (balancer.PickResult, error) {
 	if len(indices) == 0 {
-		return balancer.PickResult{}, errNoEndpoints
+		return balancer.PickResult{}, errNoEndpointsInSlice
 	}
 
 	firstIndex := randIntN(len(indices))
