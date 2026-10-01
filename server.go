@@ -87,7 +87,7 @@ func init() {
 	internal.JoinServerOptions = newJoinServerOption
 	internal.BufferPool = bufferPool
 	internal.MetricsRecorderForServer = func(srv *Server) estats.MetricsRecorder {
-		return istats.NewMetricsRecorderList(srv.opts.statsHandlers)
+		return istats.NewMetricsRecorderList(srv.opts.statsHandlers, nil)
 	}
 	internal.XDSFilterWrapperOption = xdsFilterWrapperOption
 }
