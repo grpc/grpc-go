@@ -25,6 +25,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"google.golang.org/grpc/balancer/autosharding/internal/sharding"
 )
 
 func (s) TestSliceMap_Lookup(t *testing.T) {
@@ -100,7 +101,7 @@ func (s) TestBuildSliceMap(t *testing.T) {
 
 	tests := []struct {
 		name       string
-		assignment *assignment
+		assignment *sharding.Assignment
 		want       *sliceMap
 	}{
 		{
@@ -110,13 +111,13 @@ func (s) TestBuildSliceMap(t *testing.T) {
 		},
 		{
 			name: "valid-assignment",
-			assignment: &assignment{
-				endpointNames: []string{"hostA", "hostB", "hostC"},
-				slices: []slice{
-					{startKey: []byte("a"), endpoints: []int{0, 1}}, // hostA, hostB -> indices 0, 1
-					{startKey: []byte("m"), endpoints: []int{1, 2}}, // hostB, hostC -> indices 1, 2
+			assignment: &sharding.Assignment{
+				EndpointNames: []string{"hostA", "hostB", "hostC"},
+				Slices: []sharding.Slice{
+					{StartKey: []byte("a"), Endpoints: []int{0, 1}}, // hostA, hostB -> indices 0, 1
+					{StartKey: []byte("m"), Endpoints: []int{1, 2}}, // hostB, hostC -> indices 1, 2
 				},
-				generation: 42,
+				Generation: 42,
 			},
 			want: &sliceMap{
 				slices: []sliceMapEntry{
@@ -129,12 +130,12 @@ func (s) TestBuildSliceMap(t *testing.T) {
 		},
 		{
 			name: "assignment-with-unknown-host",
-			assignment: &assignment{
-				endpointNames: []string{"hostA", "hostUnknown", "hostC"},
-				slices: []slice{
-					{startKey: []byte("a"), endpoints: []int{0, 1}}, // hostUnknown is skipped
+			assignment: &sharding.Assignment{
+				EndpointNames: []string{"hostA", "hostUnknown", "hostC"},
+				Slices: []sharding.Slice{
+					{StartKey: []byte("a"), Endpoints: []int{0, 1}}, // hostUnknown is skipped
 				},
-				generation: 43,
+				Generation: 43,
 			},
 			want: &sliceMap{
 				slices: []sliceMapEntry{
