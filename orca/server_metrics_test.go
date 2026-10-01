@@ -19,6 +19,7 @@
 package orca
 
 import (
+	"sync"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -171,5 +172,54 @@ func (s) TestServerMetrics_Merge(t *testing.T) {
 	sm1.merge(sm2)
 	if d := cmp.Diff(sm1, want); d != "" {
 		t.Fatalf("unexpected server metrics: -got +want: %v", d)
+	}
+}
+
+func (s) TestServerMetrics_ConcurrentSetters(t *testing.T) {
+	// Each setter must apply even when racing with the others: release one
+	// goroutine per metric at the same time so that, without atomic
+	// updates, they all load the same state and all but the last store is
+	// silently lost.
+	setters := []struct {
+		name string
+		set  func(ServerMetricsRecorder)
+		want float64
+	}{
+		{"CPUUtilization", func(r ServerMetricsRecorder) { r.SetCPUUtilization(0.1) }, 0.1},
+		{"MemUtilization", func(r ServerMetricsRecorder) { r.SetMemoryUtilization(0.2) }, 0.2},
+		{"AppUtilization", func(r ServerMetricsRecorder) { r.SetApplicationUtilization(0.3) }, 0.3},
+		{"QPS", func(r ServerMetricsRecorder) { r.SetQPS(0.4) }, 0.4},
+		{"EPS", func(r ServerMetricsRecorder) { r.SetEPS(0.5) }, 0.5},
+	}
+
+	for round := 0; round < 50; round++ {
+		smr := NewServerMetricsRecorder()
+		start := make(chan struct{})
+		var wg sync.WaitGroup
+		for _, st := range setters {
+			wg.Add(1)
+			go func(set func(ServerMetricsRecorder)) {
+				defer wg.Done()
+				<-start
+				set(smr)
+			}(st.set)
+		}
+		close(start)
+		wg.Wait()
+
+		got := smr.ServerMetrics()
+		gotVals := map[string]float64{
+			"CPUUtilization": got.CPUUtilization,
+			"MemUtilization": got.MemUtilization,
+			"AppUtilization": got.AppUtilization,
+			"QPS":            got.QPS,
+			"EPS":            got.EPS,
+		}
+		for _, st := range setters {
+			if gotVals[st.name] != st.want {
+				t.Fatalf("round %d: concurrent update to %s lost, got %v want %v (full state: %+v)",
+					round, st.name, gotVals[st.name], st.want, got)
+			}
+		}
 	}
 }
