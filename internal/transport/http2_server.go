@@ -1013,17 +1013,7 @@ func (t *http2Server) streamContextErr(s *ServerStream) error {
 		return ErrConnClosing
 	default:
 	}
-	err := s.ctx.Err()
-	if err == nil {
-		// In closeStream and finishStream, the stream state is transitioned to
-		// streamDone before s.cancel() is invoked so that concurrent operations
-		// immediately observe the terminal state. A concurrent caller (such as
-		// write or writeHeader) can see streamDone and invoke streamContextErr
-		// before s.cancel() runs or propagates to s.ctx. Default to
-		// context.Canceled rather than passing nil to ContextErr.
-		err = context.Canceled
-	}
-	return ContextErr(err)
+	return s.contextErr()
 }
 
 // WriteHeader sends the header metadata md back to the client.

@@ -155,7 +155,10 @@ func (s *ServerStream) SetHeader(md metadata.MD) error {
 	if md.Len() == 0 {
 		return nil
 	}
-	if s.isHeaderSent() || s.getState() == streamDone {
+	if s.getState() == streamDone {
+		return s.contextErr()
+	}
+	if s.isHeaderSent() {
 		return ErrIllegalHeaderWrite
 	}
 	s.hdrMu.Lock()
@@ -172,12 +175,27 @@ func (s *ServerStream) SetTrailer(md metadata.MD) error {
 		return nil
 	}
 	if s.getState() == streamDone {
-		return ErrIllegalHeaderWrite
+		return s.contextErr()
 	}
 	s.hdrMu.Lock()
 	s.trailer = metadata.Join(s.trailer, md)
 	s.hdrMu.Unlock()
 	return nil
+}
+
+// contextErr returns the error to report for an operation attempted on a
+// stream that is already done.
+func (s *ServerStream) contextErr() error {
+	err := s.ctx.Err()
+	if err == nil {
+		// In closeStream and finishStream, the stream state is transitioned to
+		// streamDone before s.cancel() is invoked so that concurrent operations
+		// immediately observe the terminal state. A concurrent caller can see
+		// streamDone before s.cancel() runs or propagates to s.ctx. Default to
+		// context.Canceled rather than passing nil to ContextErr.
+		err = context.Canceled
+	}
+	return ContextErr(err)
 }
 
 func (s *ServerStream) requestRead(n int) {
