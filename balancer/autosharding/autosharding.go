@@ -109,9 +109,11 @@ func (bb) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Bal
 //
 //lint:ignore U1000 Struct fields planned for future implementation
 type endpointState struct {
-	index      int                         // Index of the endpoint within the NR update
-	endpoint   resolver.Endpoint           // The actual endpoint returned by the NR
-	childState endpointsharding.ChildState // State as reported by the child policy
+	index             int                // Index of the endpoint within the NR update
+	endpoint          resolver.Endpoint  // The actual endpoint returned by the NR
+	connectivityState connectivity.State // The connectivity state of the child balancer for this endpoint.
+	picker            balancer.Picker    // The picker for the child balancer for this endpoint.
+	exitIdle          func()             // Function to exit the child balancer from IDLE state.
 }
 
 type autoshardingBalancer struct {
@@ -244,7 +246,8 @@ func (b *autoshardingBalancer) handleNewEndpointsLocked(endpoints []resolver.End
 		filteredEndpoints = append(filteredEndpoints, ep)
 
 		idx := len(newEndpointMap)
-		if oldEpState, ok := b.endpointMap[hostname]; ok {
+		oldEpState, ok := b.endpointMap[hostname]
+		if ok {
 			if oldEpState.index != idx {
 				// The index of the endpoint has changed.
 				orderOrCountChanged = true
@@ -254,14 +257,21 @@ func (b *autoshardingBalancer) handleNewEndpointsLocked(endpoints []resolver.End
 			orderOrCountChanged = true
 		}
 
+		newEndpointMap[hostname] = &endpointState{
+			index:    idx,
+			endpoint: ep,
+		}
 		// There is no need to preserve the child state from the previous
 		// endpoint map, as the endpointsharding child balancer will report the
 		// new child states in its UpdateState call inline when we call
 		// UpdateClientConnState on it (which happens in our
-		// UpdateClientConnState once we return from this method).
-		newEndpointMap[hostname] = &endpointState{
-			index:    idx,
-			endpoint: ep,
+		// UpdateClientConnState once we return from this method). This is
+		// simply to decouple the autosharding balancer from the
+		// endpointsharding child's implementation details.
+		if oldEpState != nil {
+			newEndpointMap[hostname].connectivityState = oldEpState.connectivityState
+			newEndpointMap[hostname].picker = oldEpState.picker
+			newEndpointMap[hostname].exitIdle = oldEpState.exitIdle
 		}
 	}
 	if len(newEndpointMap) != len(b.endpointMap) {
@@ -467,7 +477,7 @@ func (b *autoshardingBalancer) updateStateAndPickerLocked() {
 	var nums [5]int
 	var firstIdle *endpointState
 	for _, es := range b.endpointMap {
-		s := es.childState.State.ConnectivityState
+		s := es.connectivityState
 		nums[s]++
 		if s == connectivity.Idle {
 			// Pick the first endpoint in IDLE state to trigger a connection
@@ -508,7 +518,7 @@ func (b *autoshardingBalancer) updateStateAndPickerLocked() {
 	// to trigger a connection attempt on. - A119
 	if aggState == connectivity.Connecting || aggState == connectivity.TransientFailure {
 		if nums[connectivity.Connecting] == 0 && firstIdle != nil {
-			firstIdle.childState.ExitIdle()
+			firstIdle.exitIdle()
 		}
 	}
 
@@ -618,7 +628,9 @@ func (b *autoshardingBalancer) UpdateState(state balancer.State) {
 	for _, cs := range childStates {
 		hostname := hostnameFromEndpoint(cs.Endpoint)
 		if es, ok := b.endpointMap[hostname]; ok {
-			es.childState = cs
+			es.connectivityState = cs.State.ConnectivityState
+			es.picker = cs.State.Picker
+			es.exitIdle = cs.ExitIdle
 		} else {
 			b.logger.Warningf("Received child state for unknown endpoint with hostname %q", hostname)
 		}

@@ -65,9 +65,9 @@ func newPicker(endpointMap map[string]*endpointState, sm *sliceMap, cfg *LBConfi
 	endpoints := make([]pickerEndpoint, len(endpointMap))
 	for es := range maps.Values(endpointMap) {
 		endpoints[es.index] = pickerEndpoint{
-			state:    es.childState.State.ConnectivityState,
-			picker:   es.childState.State.Picker,
-			exitIdle: es.childState.ExitIdle,
+			state:    es.connectivityState,
+			picker:   es.picker,
+			exitIdle: es.exitIdle,
 		}
 	}
 
