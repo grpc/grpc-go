@@ -52,13 +52,6 @@ var (
 	// or "false".
 	EnforceALPNEnabled = boolFromEnv("GRPC_ENFORCE_ALPN_ENABLED", true)
 
-	// XDSEndpointHashKeyBackwardCompat controls the parsing of the endpoint hash
-	// key from EDS LbEndpoint metadata. Endpoint hash keys can be disabled by
-	// setting "GRPC_XDS_ENDPOINT_HASH_KEY_BACKWARD_COMPAT" to "true". A future
-	// release will remove this environment variable, enabling the new behavior
-	// unconditionally.
-	XDSEndpointHashKeyBackwardCompat = boolFromEnv("GRPC_XDS_ENDPOINT_HASH_KEY_BACKWARD_COMPAT", false)
-
 	// LabelServerGoroutines controls setting [runtime/pprof.Labels] on the
 	// goroutines spawned by [grpc.Server] type.
 	// For now, this is limited to the goroutines spawned to handle incoming
@@ -67,12 +60,6 @@ var (
 	// enable this grpc.method label, or "all" to enable all valid labels.
 	// This variable is a bit-field.
 	LabelServerGoroutines = goroutineLabelsFromEnv("GRPC_GO_SERVER_GOROUTINE_LABELS", 0)
-
-	// RingHashSetRequestHashKey is set if the ring hash balancer can get the
-	// request hash header by setting the "requestHashHeader" field, according
-	// to gRFC A76. It can be disabled by setting the environment variable
-	// "GRPC_EXPERIMENTAL_RING_HASH_SET_REQUEST_HASH_KEY" to "false".
-	RingHashSetRequestHashKey = boolFromEnv("GRPC_EXPERIMENTAL_RING_HASH_SET_REQUEST_HASH_KEY", true)
 
 	// ALTSHandshakerKeepaliveParams is set if we should add the
 	// KeepaliveParams when dial the ALTS handshaker service.

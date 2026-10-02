@@ -2558,8 +2558,6 @@ func (s) TestRingHash_RecoverWhenResolverRemovesEndpoint(t *testing.T) {
 // Tests that RPCs are routed according to endpoint hash key rather than
 // endpoint first address if it is set in EDS endpoint metadata.
 func (s) TestRingHash_EndpointHashKey(t *testing.T) {
-	testutils.SetEnvConfig(t, &envconfig.XDSEndpointHashKeyBackwardCompat, false)
-
 	backends := backendAddrs(startTestServiceBackends(t, 4))
 
 	const clusterName = "cluster"
@@ -2665,8 +2663,6 @@ func (s) TestRingHash_EndpointHashKey(t *testing.T) {
 // Tests that when a request hash key is set in the balancer configuration via
 // service config, this header is used to route to a specific backend.
 func (s) TestRingHash_RequestHashKey(t *testing.T) {
-	testutils.SetEnvConfig(t, &envconfig.RingHashSetRequestHashKey, true)
-
 	backends := backendAddrs(startTestServiceBackends(t, 4))
 
 	// Create a clientConn with a manual resolver (which is used to push the
@@ -2746,8 +2742,6 @@ func highRingSizeServiceConfig(t *testing.T) string {
 // service config, and the header is not set in the outgoing request, then it
 // is sent to a random backend.
 func (s) TestRingHash_RequestHashKeyRandom(t *testing.T) {
-	testutils.SetEnvConfig(t, &envconfig.RingHashSetRequestHashKey, true)
-
 	backends := backendAddrs(startTestServiceBackends(t, 4))
 
 	// Create a clientConn with a manual resolver (which is used to push the
@@ -2811,8 +2805,6 @@ func (s) TestRingHash_RequestHashKeyRandom(t *testing.T) {
 // behavior), then each RPC wakes up at most one SubChannel, and, if there are
 // SubChannels in Ready state, RPCs are routed to them.
 func (s) TestRingHash_RequestHashKeyConnecting(t *testing.T) {
-	testutils.SetEnvConfig(t, &envconfig.RingHashSetRequestHashKey, true)
-
 	backends := backendAddrs(startTestServiceBackends(t, 20))
 
 	// Create a clientConn with a manual resolver (which is used to push the

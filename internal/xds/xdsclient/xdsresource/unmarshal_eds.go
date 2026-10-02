@@ -138,21 +138,17 @@ func parseEndpoints(lbEndpoints []*v3endpointpb.LbEndpoint, uniqueEndpointAddrs 
 
 		var endpointMetadata map[string]any
 		var hashKey string
-		if envconfig.XDSHTTPConnectEnabled || !envconfig.XDSEndpointHashKeyBackwardCompat {
-			var err error
-			endpointMetadata, err = validateAndConstructMetadata(lbEndpoint.GetMetadata())
-			if err != nil {
-				return nil, err
-			}
-
-			// "The xDS resolver, described in A74, will be changed to set the hash_key
-			// endpoint attribute to the value of LbEndpoint.Metadata envoy.lb hash_key
-			// field, as described in Envoy's documentation for the ring hash load
-			// balancer." - A76
-			if !envconfig.XDSEndpointHashKeyBackwardCompat {
-				hashKey = hashKeyFromMetadata(endpointMetadata)
-			}
+		var err error
+		endpointMetadata, err = validateAndConstructMetadata(lbEndpoint.GetMetadata())
+		if err != nil {
+			return nil, err
 		}
+
+		// "The xDS resolver, described in A74, will be changed to set the hash_key
+		// endpoint attribute to the value of LbEndpoint.Metadata envoy.lb hash_key
+		// field, as described in Envoy's documentation for the ring hash load
+		// balancer." - A76
+		hashKey = hashKeyFromMetadata(endpointMetadata)
 		endpoint := resolver.Endpoint{Addresses: address}
 		endpoint = hostname.Set(endpoint, lbEndpoint.GetEndpoint().GetHostname())
 		endpoint = ringhash.SetHashKey(endpoint, hashKey)
