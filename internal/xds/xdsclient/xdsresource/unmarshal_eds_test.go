@@ -446,10 +446,9 @@ func (s) TestUnmarshalEndpointHashKey(t *testing.T) {
 	}
 
 	tests := []struct {
-		name         string
-		metadata     *v3corepb.Metadata
-		wantHashKey  string
-		compatEnvVar bool
+		name        string
+		metadata    *v3corepb.Metadata
+		wantHashKey string
 	}{
 		{
 			name:        "no metadata",
@@ -509,28 +508,10 @@ func (s) TestUnmarshalEndpointHashKey(t *testing.T) {
 			},
 			wantHashKey: "test-hash-key",
 		},
-		{
-			name: "envoy.lb with hash key, compat mode on",
-			metadata: &v3corepb.Metadata{
-				FilterMetadata: map[string]*structpb.Struct{
-					"envoy.lb": {
-						Fields: map[string]*structpb.Value{
-							"hash_key": {
-								Kind: &structpb.Value_StringValue{StringValue: "test-hash-key"},
-							},
-						},
-					},
-				},
-			},
-			wantHashKey:  "",
-			compatEnvVar: true,
-		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			testutils.SetEnvConfig(t, &envconfig.XDSEndpointHashKeyBackwardCompat, test.compatEnvVar)
-
 			cla := proto.Clone(baseCLA).(*v3endpointpb.ClusterLoadAssignment)
 			cla.Endpoints[0].LbEndpoints[0].Metadata = test.metadata
 			marshalledCLA := testutils.MarshalAny(t, cla)
@@ -1096,11 +1077,9 @@ func (s) TestEDSParseRespProto_HTTP_Connect_CustomMetadata_EnvVarOn(t *testing.T
 }
 
 // Tests custom metadata parsing for success cases when the
-// GRPC_EXPERIMENTAL_XDS_HTTP_CONNECT environment variable is not set and
-// GRPC_XDS_ENDPOINT_HASH_KEY_BACKWARD_COMPAT is set to true (disabling A76).
-func (s) TestEDSParseRespProto_HTTP_Connect_CustomMetadata_EnvVarOff(t *testing.T) {
+// GRPC_EXPERIMENTAL_XDS_HTTP_CONNECT environment variable is not set.
+func (s) TestEDSParseRespProto_HTTP_Connect_Off_CustomMetadata(t *testing.T) {
 	disableA86(t)
-	testutils.SetEnvConfig(t, &envconfig.XDSEndpointHashKeyBackwardCompat, true)
 	tests := []struct {
 		name          string
 		endpointProto *v3endpointpb.ClusterLoadAssignment
@@ -1174,6 +1153,9 @@ func (s) TestEDSParseRespProto_HTTP_Connect_CustomMetadata_EnvVarOff(t *testing.
 							ResolverEndpoint: buildResolverEndpoint([]string{"addr1:314"}, "addr1"),
 							HealthStatus:     EndpointHealthStatusUnknown,
 							Weight:           1,
+							Metadata: map[string]any{
+								"test-key": StructMetadataValue{Data: map[string]any{"key": 123.0}},
+							},
 						}},
 						ID:       clients.Locality{SubZone: "locality-1"},
 						Priority: 0,
@@ -1296,6 +1278,9 @@ func (s) TestEDSParseRespProto_HTTP_Connect_CustomMetadata_EnvVarOff(t *testing.
 							ResolverEndpoint: buildResolverEndpoint([]string{"addr1:314"}, "addr1"),
 							HealthStatus:     EndpointHealthStatusUnknown,
 							Weight:           1,
+							Metadata: map[string]any{
+								"another-test-key": StructMetadataValue{Data: map[string]any{"key": 123.0}},
+							},
 						}},
 						ID:       clients.Locality{SubZone: "locality-1"},
 						Priority: 0,
@@ -1477,13 +1462,11 @@ func (s) TestEDSParseRespProto_HTTP_Connect_CustomMetadata_ConverterFailure(t *t
 	}
 }
 
-// Tests metadata parsing when HTTP Connect is enabled but A76 hash key is
-// disabled (backward compat mode). This verifies that:
+// Tests metadata parsing when HTTP Connect is enabled. This verifies that:
 // - Metadata parsing happens (TypedFilterMetadata + FilterMetadata)
-// - Hash key is NOT extracted from envoy.lb
-func (s) TestEDSParseRespProto_HTTP_Connect_On_HashKeyBackwardCompat_On(t *testing.T) {
+// - Hash key is extracted from envoy.lb
+func (s) TestEDSParseRespProto_HTTP_Connect_On_HashKey(t *testing.T) {
 	enableA86(t)
-	testutils.SetEnvConfig(t, &envconfig.XDSEndpointHashKeyBackwardCompat, true)
 
 	clab0 := newClaBuilder("test", nil)
 	endpoints := []endpointOpts{{
@@ -1524,7 +1507,7 @@ func (s) TestEDSParseRespProto_HTTP_Connect_On_HashKeyBackwardCompat_On(t *testi
 		Localities: []Locality{
 			{
 				Endpoints: []Endpoint{{
-					ResolverEndpoint: buildResolverEndpoint([]string{"addr1:314"}, "addr1"),
+					ResolverEndpoint: ringhash.SetHashKey(buildResolverEndpoint([]string{"addr1:314"}, "addr1"), "test-hash-key"),
 					HealthStatus:     EndpointHealthStatusUnknown,
 					Weight:           1,
 					Metadata: map[string]any{
@@ -1547,18 +1530,17 @@ func (s) TestEDSParseRespProto_HTTP_Connect_On_HashKeyBackwardCompat_On(t *testi
 		t.Errorf("parseEDSRespProto() returned unexpected diff (-want +got):\n%s", diff)
 	}
 
-	// Verify hash key is NOT extracted when backward compat is on.
+	// Verify hash key is extracted from envoy.lb metadata.
 	hashKey := ringhash.HashKey(got.Localities[0].Endpoints[0].ResolverEndpoint)
-	if hashKey != "" {
-		t.Errorf("Expected empty hash key with backward compat on, got %q", hashKey)
+	if hashKey != "test-hash-key" {
+		t.Errorf("Expected hash key %q, got %q", "test-hash-key", hashKey)
 	}
 }
 
-// Tests that when A76 is enabled but A86 is disabled, invalid typed metadata
-// does not cause a parsing failure, and hash key is still extracted.
-func (s) TestEDSParseRespProto_HTTP_Connect_Off_HashKeyBackwardCompat_Off_InvalidTypedMetadata(t *testing.T) {
+// Tests that when A86 is disabled, invalid typed metadata does not cause a
+// parsing failure, and hash key is still extracted.
+func (s) TestEDSParseRespProto_HTTP_Connect_Off_InvalidTypedMetadata(t *testing.T) {
 	disableA86(t)
-	testutils.SetEnvConfig(t, &envconfig.XDSEndpointHashKeyBackwardCompat, false) // A76 on
 
 	clab0 := newClaBuilder("test", nil)
 	endpoints := []endpointOpts{{
