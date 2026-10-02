@@ -28,7 +28,6 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/autosharding/internal/sharding"
-	"google.golang.org/grpc/balancer/endpointsharding"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
@@ -81,18 +80,14 @@ func buildTestEndpoints(specs []testEndpointSpec) (map[string]*endpointState, []
 		sc := testutils.NewTestSubConn(fmt.Sprintf("sc-%d", i))
 		subConns[i] = sc
 		endpointMap[spec.hostname] = &endpointState{
-			index: i,
-			childState: endpointsharding.ChildState{
-				State: balancer.State{
-					ConnectivityState: spec.state,
-					Picker: &fakeChildPicker{
-						sc:  sc,
-						err: spec.pickErr,
-					},
-				},
-				ExitIdle: func() {
-					exitIdleCounts[i]++
-				},
+			index:             i,
+			connectivityState: spec.state,
+			picker: &fakeChildPicker{
+				sc:  sc,
+				err: spec.pickErr,
+			},
+			exitIdle: func() {
+				exitIdleCounts[i]++
 			},
 		}
 	}
