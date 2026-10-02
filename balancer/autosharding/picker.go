@@ -27,7 +27,6 @@ import (
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
-	internalgrpclog "google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -48,7 +47,6 @@ type pickerEndpoint struct {
 // picker routes RPCs to endpoints assigned to the matching key-range in the
 // sliceMap, or to the fallback pool when configured.
 type picker struct {
-	logger            *internalgrpclog.PrefixLogger
 	sliceMap          *sliceMap
 	endpoints         []pickerEndpoint // Ordered 1:1 by endpointState.index
 	isSliceInFallback []bool           // Precomputed per-slice fallback status
@@ -58,7 +56,7 @@ type picker struct {
 
 // newPicker constructs a new picker from the given endpointMap, sliceMap, and
 // LB policy configuration.
-func newPicker(endpointMap map[string]*endpointState, sm *sliceMap, cfg *LBConfig, logger *internalgrpclog.PrefixLogger) *picker {
+func newPicker(endpointMap map[string]*endpointState, sm *sliceMap, cfg *LBConfig) *picker {
 	// Every endpoint in endpointMap has a unique index in the range
 	// [0, len(endpointMap)-1]. Placing each entry at endpoints[es.index] orders
 	// the slice by index without needing to sort.
@@ -77,7 +75,6 @@ func newPicker(endpointMap map[string]*endpointState, sm *sliceMap, cfg *LBConfi
 	}
 
 	return &picker{
-		logger:            logger,
 		sliceMap:          sm,
 		endpoints:         endpoints,
 		isSliceInFallback: isSliceInFallback,
@@ -114,7 +111,6 @@ func (p *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 			return p.pickFromEndpointIndices(p.sliceMap.fallbackPool, info)
 		}
 		// We should never get here.
-		p.logger.Errorf("autosharding: no assignment covers key %q and fallback is disabled", string(key))
 		return balancer.PickResult{}, errNoAssignment
 	}
 

@@ -530,7 +530,7 @@ func (b *autoshardingBalancer) updateStateAndPickerLocked() {
 		b.shouldRegenerateSliceMap = false
 	}
 
-	newPicker := newPicker(b.endpointMap, b.sliceMap, &b.lbCfg, b.logger)
+	newPicker := newPicker(b.endpointMap, b.sliceMap, &b.lbCfg)
 	b.ClientConn.UpdateState(balancer.State{
 		ConnectivityState: aggState,
 		Picker:            newPicker,
