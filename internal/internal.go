@@ -62,10 +62,10 @@ var (
 	GetXDSHandshakeInfoForTesting any // func (*attributes.Attributes) *unsafe.Pointer
 	// GetServerCredentials returns the transport credentials configured on a
 	// gRPC server. An xDS-enabled server needs to know what type of credentials
-	// is configured on the underlying gRPC server. This is set by server.go.
+	// is configured on the underlying gRPC server. This is set by grpc.NewServer.
 	GetServerCredentials any // func (*grpc.Server) credentials.TransportCredentials
 	// MetricsRecorderForServer returns the MetricsRecorderList derived from a
-	// server's stats handlers.
+	// server's stats handlers. This is set by grpc.NewServer.
 	MetricsRecorderForServer any // func (*grpc.Server) estats.MetricsRecorder
 	// CanonicalString returns the canonical string of the code defined here:
 	// https://github.com/grpc/grpc/blob/master/doc/statuscodes.md.
@@ -74,9 +74,10 @@ var (
 	// deleted or changed.
 	CanonicalString any // func (codes.Code) string
 	// IsRegisteredMethod returns whether the passed in method is registered as
-	// a method on the server.
+	// a method on the server. This is set by grpc.NewServer.
 	IsRegisteredMethod any // func(*grpc.Server, string) bool
-	// ServerFromContext returns the server from the context.
+	// ServerFromContext returns the server from the context. This is set by
+	// grpc.NewServer.
 	ServerFromContext any // func(context.Context) *grpc.Server
 	// AddGlobalServerOptions adds an array of ServerOption that will be
 	// effective globally for newly created servers. The priority will be: 1.
