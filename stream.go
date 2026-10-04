@@ -917,10 +917,10 @@ func (cs *clientStream) Context() context.Context {
 	cs.commitAttempt()
 	// No need to lock before using attempt, since we know it is committed and
 	// cannot change.
-	if cs.attempt.transportStream != nil {
-		return cs.attempt.transportStream.Context()
+	if cs.attempt == nil || cs.attempt.transportStream == nil {
+		return cs.ctx
 	}
-	return cs.ctx
+	return cs.attempt.transportStream.Context()
 }
 
 func (cs *clientStream) withRetry(op func(a *csAttempt) error, onSuccess func()) error {
@@ -1017,7 +1017,7 @@ func (cs *clientStream) Trailer() metadata.MD {
 	// directions -- it will prevent races and should not meaningfully impact
 	// performance.
 	cs.commitAttempt()
-	if cs.attempt.transportStream == nil {
+	if cs.attempt == nil || cs.attempt.transportStream == nil {
 		return nil
 	}
 	return cs.attempt.transportStream.Trailer()
