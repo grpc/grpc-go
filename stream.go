@@ -1017,7 +1017,7 @@ func (cs *clientStream) Trailer() metadata.MD {
 	// directions -- it will prevent races and should not meaningfully impact
 	// performance.
 	cs.commitAttempt()
-	if cs.attempt.transportStream == nil {
+	if cs.attempt == nil || cs.attempt.transportStream == nil {
 		return nil
 	}
 	return cs.attempt.transportStream.Trailer()
