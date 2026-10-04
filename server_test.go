@@ -60,9 +60,10 @@ func (s) TestNewServerInitializesInternalHooks(t *testing.T) {
 		if out, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("Server hook initialization test failed: %v\n%s", err, out)
 		}
-		return
 	}
 
+	// Exercise the hooks in the parent too; the coverage profile does not
+	// include calls made by the subprocess.
 	const count = 32
 	creds := insecure.NewCredentials()
 	servers := make([]*Server, count)
