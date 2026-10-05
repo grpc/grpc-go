@@ -106,11 +106,8 @@ func (bb) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Bal
 }
 
 // endpointState represents the state associated with an endpoint in the LB policy.
-//
-//lint:ignore U1000 Struct fields planned for future implementation
 type endpointState struct {
 	index             int                // Index of the endpoint within the NR update
-	endpoint          resolver.Endpoint  // The actual endpoint returned by the NR
 	connectivityState connectivity.State // The connectivity state of the child balancer for this endpoint.
 	picker            balancer.Picker    // The picker for the child balancer for this endpoint.
 	exitIdle          func()             // Function to exit the child balancer from IDLE state.
@@ -257,10 +254,7 @@ func (b *autoshardingBalancer) handleNewEndpointsLocked(endpoints []resolver.End
 			orderOrCountChanged = true
 		}
 
-		newEndpointMap[hostname] = &endpointState{
-			index:    idx,
-			endpoint: ep,
-		}
+		newEndpointMap[hostname] = &endpointState{index: idx}
 		// There is no need to preserve the child state from the previous
 		// endpoint map, as the endpointsharding child balancer will report the
 		// new child states in its UpdateState call inline when we call
@@ -583,21 +577,18 @@ func (b *autoshardingBalancer) ExitIdle() {
 }
 
 func (b *autoshardingBalancer) Close() {
+	var clientClose, channelClose func()
 	b.mu.Lock()
 	if b.closed {
 		b.mu.Unlock()
 		return
 	}
 	b.closed = true
-	if b.autoshardingClientClose != nil {
-		b.autoshardingClientClose()
-		b.autoshardingClientClose = nil
-	}
-	if b.autoshardingChannelClose != nil {
-		b.autoshardingChannelClose()
-		b.autoshardingChannel = nil
-		b.autoshardingChannelClose = nil
-	}
+	clientClose = b.autoshardingClientClose
+	b.autoshardingClientClose = nil
+	channelClose = b.autoshardingChannelClose
+	b.autoshardingChannelClose = nil
+	b.autoshardingChannel = nil
 	b.serializerCancel()
 	b.lastResolverErr = nil
 	b.endpointMap = nil
@@ -608,8 +599,13 @@ func (b *autoshardingBalancer) Close() {
 
 	// Called outside of the lock to avoid deadlocks caused by lock order
 	// inversion between the autosharding balancer and the child balancer.
+	if clientClose != nil {
+		clientClose()
+	}
+	if channelClose != nil {
+		channelClose()
+	}
 	b.child.Close()
-	b.child = nil
 
 	<-b.serializer.Done()
 	if b.logger.V(2) {
