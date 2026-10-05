@@ -137,6 +137,7 @@ for MOD_FILE in $(find . -name 'go.mod'); do
   # Error for duplicate imports not including grpc protos.
   noret_grep "(ST1019)\|\(other import of\)" "${SC_OUT}" | not grep -Fv 'XXXXX PleaseIgnoreUnused
 channelz/grpc_channelz_v1"
+google.golang.org/grpc/balancer/autosharding/internal/proto"
 go-control-plane/envoy
 grpclb/grpc_lb_v1"
 health/grpc_health_v1"
