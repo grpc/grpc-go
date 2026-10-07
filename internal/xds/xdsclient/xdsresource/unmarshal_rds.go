@@ -34,7 +34,6 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
-	v3typepb "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 )
 
 func unmarshalRouteConfigResource(r *anypb.Any, bc *bootstrap.Config, sc *bootstrap.ServerConfig) (string, RouteConfigUpdate, error) {
@@ -102,8 +101,18 @@ func generateRDSUpdateFromRouteConfiguration(rc *v3routepb.RouteConfiguration, b
 		if err != nil {
 			return RouteConfigUpdate{}, fmt.Errorf("received route is invalid: %v", err)
 		}
+		// Host names are case-insensitive. Fold the domains to lower case once
+		// here, so that virtual host matching on the data plane only needs to
+		// fold the request authority.
+		var domains []string
+		if ds := vh.GetDomains(); len(ds) > 0 {
+			domains = make([]string, len(ds))
+			for i, d := range ds {
+				domains[i] = strings.ToLower(d)
+			}
+		}
 		vhOut := &VirtualHost{
-			Domains:     vh.GetDomains(),
+			Domains:     domains,
 			Routes:      routes,
 			RetryConfig: rc,
 		}
@@ -264,16 +273,11 @@ func routesProtoToSlice(routes []*v3routepb.Route, csps map[string]clusterspecif
 		}
 
 		if fr := match.GetRuntimeFraction(); fr != nil {
-			d := fr.GetDefaultValue()
-			n := d.GetNumerator()
-			switch d.GetDenominator() {
-			case v3typepb.FractionalPercent_HUNDRED:
-				n *= 10000
-			case v3typepb.FractionalPercent_TEN_THOUSAND:
-				n *= 100
-			case v3typepb.FractionalPercent_MILLION:
+			fp, err := NewFractionalPercent(fr.GetDefaultValue())
+			if err != nil {
+				return nil, nil, fmt.Errorf("route %+v has an invalid runtime_fraction: %v", r, err)
 			}
-			route.Fraction = &n
+			route.Fraction = &fp.PPM
 		}
 
 		switch r.GetAction().(type) {

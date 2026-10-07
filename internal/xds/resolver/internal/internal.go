@@ -19,6 +19,8 @@
 // Package internal contains functionality internal to the xDS resolver.
 package internal
 
+import "context"
+
 // The following variables are overridden in tests.
 var (
 	// NewWRR is the function used to create a new weighted round robin
@@ -27,4 +29,8 @@ var (
 
 	// NewXDSClient is the function used to create a new xDS client.
 	NewXDSClient any // func(string, estats.MetricsRecorder) (xdsclient.XDSClient, func(), error)
+
+	// OnCommittedFuncFromContext is the function used to retrieve the onCommitted
+	// function from the context.
+	OnCommittedFuncFromContext func(context.Context) func()
 )

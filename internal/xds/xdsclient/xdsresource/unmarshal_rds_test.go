@@ -324,6 +324,39 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 			},
 		},
 		{
+			// Host names are case-insensitive, so the domains in the update are
+			// folded to lower case.
+			name: "good-route-config-with-mixed-case-domains",
+			rc: &v3routepb.RouteConfiguration{
+				Name: routeName,
+				VirtualHosts: []*v3routepb.VirtualHost{
+					{
+						Domains: []string{"LDS.Target.Good:1111", "*.Bar.COM"},
+						Routes: []*v3routepb.Route{
+							{
+								Match: &v3routepb.RouteMatch{PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: ""}},
+								Action: &v3routepb.Route_Route{
+									Route: &v3routepb.RouteAction{
+										ClusterSpecifier: &v3routepb.RouteAction_Cluster{Cluster: clusterName},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantUpdate: RouteConfigUpdate{
+				VirtualHosts: []*VirtualHost{
+					{
+						Domains: []string{ldsTarget, "*.bar.com"},
+						Routes: []*Route{{Prefix: newStringP(""),
+							WeightedClusters: []WeightedCluster{{Name: clusterName, Weight: 1}},
+							ActionType:       RouteActionRoute}},
+					},
+				},
+			},
+		},
+		{
 			name: "good-route-config-with-empty-string-route",
 			rc: &v3routepb.RouteConfiguration{
 				Name: routeName,
@@ -1227,6 +1260,43 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 					}),
 				},
 				Fraction: newUInt32P(10000),
+				WeightedClusters: []WeightedCluster{
+					{Name: "B", Weight: 60},
+					{Name: "A", Weight: 40},
+				},
+				ActionType: RouteActionRoute,
+			}},
+			wantErr: false,
+		},
+		{
+			name: "runtime fraction numerator over 100 percent capped",
+			routes: []*v3routepb.Route{
+				{
+					Match: &v3routepb.RouteMatch{
+						PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/a/"},
+						// 429497 * 10000 overflows uint32 and wraps to a tiny
+						// fraction; the route is meant to always match.
+						RuntimeFraction: &v3corepb.RuntimeFractionalPercent{
+							DefaultValue: &v3typepb.FractionalPercent{
+								Numerator:   429497,
+								Denominator: v3typepb.FractionalPercent_HUNDRED,
+							},
+						},
+					},
+					Action: &v3routepb.Route_Route{
+						Route: &v3routepb.RouteAction{
+							ClusterSpecifier: &v3routepb.RouteAction_WeightedClusters{
+								WeightedClusters: &v3routepb.WeightedCluster{
+									Clusters: []*v3routepb.WeightedCluster_ClusterWeight{
+										{Name: "B", Weight: &wrapperspb.UInt32Value{Value: 60}},
+										{Name: "A", Weight: &wrapperspb.UInt32Value{Value: 40}},
+									},
+								}}}},
+				},
+			},
+			wantRoutes: []*Route{{
+				Prefix:   newStringP("/a/"),
+				Fraction: newUInt32P(1000000),
 				WeightedClusters: []WeightedCluster{
 					{Name: "B", Weight: 60},
 					{Name: "A", Weight: 40},

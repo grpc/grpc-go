@@ -21,6 +21,8 @@ package autosharding
 import (
 	"bytes"
 	"slices"
+
+	"google.golang.org/grpc/balancer/autosharding/internal/sharding"
 )
 
 // sliceMapEntry represents an entry for a key-range in the sliceMap.
@@ -73,7 +75,7 @@ func (sm *sliceMap) lookup(key []byte) int {
 
 // buildSliceMap is used to generate a new sliceMap from the EndpointMap and
 // Assignment when either of them change.
-func buildSliceMap(endpointMap *endpointMap, assignment *assignment) *sliceMap {
+func buildSliceMap(endpointMap map[string]*endpointState, assignment *sharding.Assignment) *sliceMap {
 	sm := &sliceMap{}
 
 	// Populate fallbackPool with values [0, 1, 2, ... N-1] where N is the
@@ -81,7 +83,14 @@ func buildSliceMap(endpointMap *endpointMap, assignment *assignment) *sliceMap {
 	// have this slice is to allow the Picker to share code that picks a random
 	// endpoint from a slice of indices, either from the fallbackPool or from a
 	// sliceMapEntry.
-	sm.fallbackPool = make([]int, len(endpointMap.m))
+	//
+	// Note: An alternative approach using an iterator (iter.Seq[int]) to avoid
+	// storing fallbackPool was considered, since its values are always
+	// [0, 1, ... N-1]. However, passing an iterator to pickFromEndpointIndices
+	// prevents compiler inlining and causes the loop closure and captured state
+	// to escape to the heap on every Pick() call. Preallocating fallbackPool
+	// here keeps the per-RPC Pick() path allocation-free.
+	sm.fallbackPool = make([]int, len(endpointMap))
 	for i := range sm.fallbackPool {
 		sm.fallbackPool[i] = i
 	}
@@ -92,23 +101,23 @@ func buildSliceMap(endpointMap *endpointMap, assignment *assignment) *sliceMap {
 		return sm
 	}
 
-	sm.generation = assignment.generation
+	sm.generation = assignment.Generation
 
 	// Build sliceMapEntry for each Slice in the assignment.
-	sm.slices = make([]sliceMapEntry, 0, len(assignment.slices))
-	for _, s := range assignment.slices {
+	sm.slices = make([]sliceMapEntry, 0, len(assignment.Slices))
+	for _, s := range assignment.Slices {
 		entry := sliceMapEntry{
-			startKey:  s.startKey,
-			endpoints: make([]int, 0, len(s.endpoints)),
+			startKey:  s.StartKey,
+			endpoints: make([]int, 0, len(s.Endpoints)),
 		}
 
 		// Populate the endpoints for this slice by looking up the endpoint
 		// names in the EndpointMap. If an endpoint name is not found in the
 		// EndpointMap, it is skipped. This ensures that the sliceMap only
 		// contains valid endpoints that are currently available.
-		for _, idx := range s.endpoints {
-			hostname := assignment.endpointNames[idx]
-			if es, ok := endpointMap.m[hostname]; ok {
+		for _, idx := range s.Endpoints {
+			hostname := assignment.EndpointNames[idx]
+			if es, ok := endpointMap[hostname]; ok {
 				entry.endpoints = append(entry.endpoints, es.index)
 			}
 		}
