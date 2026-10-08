@@ -255,7 +255,14 @@ func (c *autoshardingClient) handleMetadata(stream shardingStream, gen int64) bo
 	// this case, we need to accept the assignment, and send an ACK, but also
 	// include an error message if there were any invalid slice assignments.
 	c.latestGeneration = gen
-	assignment := buildAssignment(sortedSlices, endpoints, gen)
+	assignment, gapsErrMsg := buildAssignment(sortedSlices, endpoints, gen)
+	if gapsErrMsg != "" {
+		if errMsg == "" {
+			errMsg = gapsErrMsg
+		} else {
+			errMsg = fmt.Sprintf("%s; %s", errMsg, gapsErrMsg)
+		}
+	}
 	c.sendAssignmentACK(stream, gen, true, errMsg)
 	c.reportAssignment(assignment)
 	return true
@@ -390,13 +397,17 @@ func validateAssignment(chunks []*aspb.AssignmentChunk) ([]*aspb.SliceAssignment
 // sortedSlices must contain at least one slice assignment, and must be sorted
 // by start key. The end key of the last slice may be nil, indicating that it
 // extends to the end of the key range.
-func buildAssignment(sortedSlices []*aspb.SliceAssignment, endpoints []string, gen int64) *Assignment {
+//
+// Returns the built Assignment and a string describing any errors encountered
+// while building it.
+func buildAssignment(sortedSlices []*aspb.SliceAssignment, endpoints []string, gen int64) (*Assignment, string) {
 	assignment := &Assignment{
 		EndpointNames: endpoints,
 		Generation:    gen,
 	}
 
 	// Handle gaps in assignments.
+	var numGaps int
 	for i, slice := range sortedSlices {
 		if i == 0 && len(slice.GetSlice().GetStartKey()) != 0 {
 			// If the first slice does not start with an empty key, we need to
@@ -406,6 +417,7 @@ func buildAssignment(sortedSlices []*aspb.SliceAssignment, endpoints []string, g
 				Endpoints: []int{},
 			}
 			assignment.Slices = []Slice{firstSlice}
+			numGaps++
 		}
 
 		if i > 0 {
@@ -420,6 +432,7 @@ func buildAssignment(sortedSlices []*aspb.SliceAssignment, endpoints []string, g
 					Endpoints: []int{},
 				}
 				assignment.Slices = append(assignment.Slices, gapSlice)
+				numGaps++
 			}
 		}
 
@@ -440,8 +453,12 @@ func buildAssignment(sortedSlices []*aspb.SliceAssignment, endpoints []string, g
 			Endpoints: []int{},
 		}
 		assignment.Slices = append(assignment.Slices, lastSlice)
+		numGaps++
 	}
-	return assignment
+	if numGaps > 0 {
+		return assignment, fmt.Sprintf("encountered %d gap(s) in the assignment", numGaps)
+	}
+	return assignment, ""
 }
 
 // reportAssignment reports a valid assignment to the onAssignmentUpdate

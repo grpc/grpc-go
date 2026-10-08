@@ -173,7 +173,7 @@ func (s) TestClient_ValidAssignmentsAndACK(t *testing.T) {
 		invalidSlices := []*aspb.SliceAssignment{
 			makeSliceAssignment(nil, []byte("m"), 0), // valid
 		}
-		for i := 0; i < 20; i++ {
+		for range 20 {
 			invalidSlices = append(invalidSlices, makeSliceAssignment([]byte("z"), []byte("a"), 0))
 		}
 		if err := stream.Send(&aspb.WatchShardingAssignmentResponse{
@@ -190,6 +190,29 @@ func (s) TestClient_ValidAssignmentsAndACK(t *testing.T) {
 			return err
 		}
 
+		req, err = stream.Recv()
+		if err != nil {
+			return err
+		}
+		ackCh <- req.GetAssignmentAck()
+
+		// Generation 3: Send only valid slices with a leading gap (no invalid
+		// slices).
+		if err := stream.Send(&aspb.WatchShardingAssignmentResponse{
+			Chunk: &aspb.AssignmentChunk{
+				Endpoints: makeEndpoints("ep0"),
+				SliceAssignments: []*aspb.SliceAssignment{
+					makeSliceAssignment([]byte("d"), nil, 0),
+				},
+			},
+		}); err != nil {
+			return err
+		}
+		if err := stream.Send(&aspb.WatchShardingAssignmentResponse{
+			Metadata: &aspb.AssignmentMetadata{Generation: 3},
+		}); err != nil {
+			return err
+		}
 		req, err = stream.Recv()
 		if err != nil {
 			return err
@@ -259,8 +282,8 @@ func (s) TestClient_ValidAssignmentsAndACK(t *testing.T) {
 		t.Fatal("Timed out waiting for Generation 1 AssignmentAck")
 	}
 
-	// Verify Generation 2 update (with trailing gap filled) and ACK with
-	// truncated error message.
+	// Verify Generation 2 update (with trailing gap filled) and ACK with error
+	// message.
 	select {
 	case gotAssignment := <-updateCh:
 		wantAssignment := &sharding.Assignment{
@@ -283,12 +306,45 @@ func (s) TestClient_ValidAssignmentsAndACK(t *testing.T) {
 		if !gotACK.GetAccepted() || gotACK.GetGeneration() != 2 {
 			t.Fatalf("Generation 2 AssignmentAck = %v, want Accepted=true, Generation=2", gotACK)
 		}
-		const wantErrMsg = "20 slice(s) with start_key >= end_key"
+		const wantErrMsg = "20 slice(s) with start_key >= end_key; encountered 1 gap(s) in the assignment"
 		if gotErrMsg := gotACK.GetErrorMessage(); gotErrMsg != wantErrMsg {
 			t.Fatalf("Generation 2 AssignmentAck ErrorMessage = %q, want %q", gotErrMsg, wantErrMsg)
 		}
 	case <-ctx.Done():
 		t.Fatal("Timed out waiting for Generation 2 AssignmentAck")
+	}
+
+	// Verify Generation 3 update (with leading gap filled) and ACK with only
+	// the gap error message.
+	select {
+	case gotAssignment := <-updateCh:
+		wantAssignment := &sharding.Assignment{
+			EndpointNames: []string{"ep0"},
+			Generation:    3,
+			Slices: []sharding.Slice{
+				{StartKey: []byte{}, Endpoints: []int{}},
+				{StartKey: []byte("d"), Endpoints: []int{0}},
+			},
+		}
+		if diff := cmp.Diff(wantAssignment, gotAssignment, cmpopts.EquateEmpty()); diff != "" {
+			t.Fatalf("Generation 3 Assignment diff (-want +got):\n%s", diff)
+		}
+	case <-ctx.Done():
+		t.Fatal("Timed out waiting for Generation 3 Assignment")
+	}
+
+	select {
+	case gotACK := <-ackCh:
+		wantACK := &aspb.AssignmentAck{
+			Generation:   3,
+			Accepted:     true,
+			ErrorMessage: "encountered 1 gap(s) in the assignment",
+		}
+		if diff := cmp.Diff(wantACK, gotACK, protocmp.Transform()); diff != "" {
+			t.Fatalf("Generation 3 AssignmentAck diff (-want +got):\n%s", diff)
+		}
+	case <-ctx.Done():
+		t.Fatal("Timed out waiting for Generation 3 AssignmentAck")
 	}
 
 	select {
