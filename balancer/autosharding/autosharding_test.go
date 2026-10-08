@@ -783,65 +783,168 @@ func (s) TestEndpointFilteringAndDeduplication(t *testing.T) {
 	}
 }
 
+// autoshardingClientTestEnv contains the environment setup for tests that
+// verify the balancer's interaction with the autosharding client.
+type autoshardingClientTestEnv struct {
+	b                        balancer.Balancer
+	cc                       *testutils.BalancerClientConn
+	state                    resolver.State
+	lbConfig                 *autosharding.LBConfig
+	testAutoshardingClientCh chan *testAutoshardingClient
+	tac                      *testAutoshardingClient
+}
+
+// setupBalancerWithTwoEndpoints builds an autosharding balancer, sends an
+// initial valid configuration with two endpoints ("host-a" at "10.0.0.1:8080"
+// and "host-b" at "10.0.0.2:8080"), waits for the autosharding client to be
+// created, and verifies that the channel starts in Idle with a queueing picker.
+func setupBalancerWithTwoEndpoints(ctx context.Context, t *testing.T, enableFallback bool) *autoshardingClientTestEnv {
+	t.Helper()
+
+	testAutoshardingClientCh := overrideNewAutoshardingClientForTesting(t)
+	cc := testutils.NewBalancerClientConn(t)
+	b := balancer.Get(autosharding.Name).Build(cc, balancer.BuildOptions{})
+	t.Cleanup(b.Close)
+
+	state := resolverStateWithProviderAndEndpoints(defaultTestClientConnProvider(), []resolver.Endpoint{
+		newTestEndpoint("10.0.0.1:8080", "host-a"),
+		newTestEndpoint("10.0.0.2:8080", "host-b"),
+	})
+	lbConfig := &autosharding.LBConfig{
+		ChannelFactoryKey:  "test-factory-key",
+		AutoShardingTarget: "test-target",
+		KeyHeaderName:      "test-header-name",
+		EnableFallback:     enableFallback,
+	}
+	if err := b.UpdateClientConnState(balancer.ClientConnState{
+		ResolverState:  state,
+		BalancerConfig: lbConfig,
+	}); err != nil {
+		t.Fatalf("UpdateClientConnState() failed: %v", err)
+	}
+
+	var tac *testAutoshardingClient
+	select {
+	case tac = <-testAutoshardingClientCh:
+	case <-ctx.Done():
+		t.Fatal("Timeout waiting for creation of autosharding client")
+	}
+
+	if err := cc.WaitForConnectivityState(ctx, connectivity.Idle); err != nil {
+		t.Fatalf("WaitForConnectivityState(Idle) failed: %v", err)
+	}
+	if err := cc.WaitForPickerWithErr(ctx, balancer.ErrNoSubConnAvailable); err != nil {
+		t.Fatalf("WaitForPickerWithErr(ErrNoSubConnAvailable) failed: %v", err)
+	}
+
+	return &autoshardingClientTestEnv{
+		b:                        b,
+		cc:                       cc,
+		state:                    state,
+		lbConfig:                 lbConfig,
+		testAutoshardingClientCh: testAutoshardingClientCh,
+		tac:                      tac,
+	}
+}
+
+// injectAssignmentAndConnectSubConns injects a two-slice assignment
+// (["", "m") -> host-a, ["m", inf) -> host-b) into env.tac, triggers SubConn
+// creation for both endpoints via picks, moves both SubConns to Ready, and
+// verifies that keys route to their assigned SubConns.
+func injectAssignmentAndConnectSubConns(ctx context.Context, t *testing.T, env *autoshardingClientTestEnv) (scA, scB *testutils.TestSubConn) {
+	t.Helper()
+
+	env.tac.onAssignmentUpdate(&sharding.Assignment{
+		EndpointNames: []string{"host-a", "host-b"},
+		Slices: []sharding.Slice{
+			{StartKey: []byte(""), Endpoints: []int{0}},
+			{StartKey: []byte("m"), Endpoints: []int{1}},
+		},
+		Generation: 1,
+	})
+	if err := env.cc.WaitForConnectivityState(ctx, connectivity.Idle); err != nil {
+		t.Fatalf("WaitForConnectivityState(Idle) failed: %v", err)
+	}
+
+	// The first call to Pick must get queued and should result in a connection
+	// attempt to backend A, moving the channel to Connecting.
+	picker := waitForPicker(ctx, t, env.cc)
+	if _, err := picker.Pick(balancer.PickInfo{Ctx: newContextWithShardingKey(ctx, "test-header-name", "a")}); !errors.Is(err, balancer.ErrNoSubConnAvailable) {
+		t.Fatalf("Pick() error = %v, want %v", err, balancer.ErrNoSubConnAvailable)
+	}
+	scA = waitForSubConn(ctx, t, env.cc)
+	if want, got := "10.0.0.1:8080", scA.Addresses[0].Addr; got != want {
+		t.Fatalf("SubConn created with addr %q, want %q", got, want)
+	}
+	select {
+	case <-scA.ConnectCh:
+	case <-ctx.Done():
+		t.Fatal("Timeout waiting for SubConn.Connect()")
+	}
+	if err := env.cc.WaitForConnectivityState(ctx, connectivity.Connecting); err != nil {
+		t.Fatalf("WaitForConnectivityState(Connecting) failed: %v", err)
+	}
+
+	// Move subconnA to Ready and verify that the channel moves to Ready.
+	scA.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	scA.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	if err := env.cc.WaitForConnectivityState(ctx, connectivity.Ready); err != nil {
+		t.Fatalf("WaitForConnectivityState(Ready) failed: %v", err)
+	}
+
+	// Grab the ready picker and make the next Pick that should get routed to
+	// backend B, which should trigger a connection attempt to backend B.
+	picker = waitForPicker(ctx, t, env.cc)
+	if _, err := picker.Pick(balancer.PickInfo{Ctx: newContextWithShardingKey(ctx, "test-header-name", "m")}); !errors.Is(err, balancer.ErrNoSubConnAvailable) {
+		t.Fatalf("Pick() error = %v, want %v", err, balancer.ErrNoSubConnAvailable)
+	}
+	scB = waitForSubConn(ctx, t, env.cc)
+	if want, got := "10.0.0.2:8080", scB.Addresses[0].Addr; got != want {
+		t.Fatalf("SubConn created with addr %q, want %q", got, want)
+	}
+	select {
+	case <-scB.ConnectCh:
+	case <-ctx.Done():
+		t.Fatal("Timeout waiting for SubConn.Connect()")
+	}
+
+	// Move subconnB to Ready and verify that keys route to the expected backends.
+	scB.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	scB.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	verifyPickerRoutes(ctx, t, env.cc, map[string]*testutils.TestSubConn{
+		"a": scA,
+		"m": scB,
+	})
+
+	return scA, scB
+}
+
+// verifyPickerRoutes waits for a picker on cc that routes each key in
+// wantRoutes to its corresponding SubConn.
+func verifyPickerRoutes(ctx context.Context, t *testing.T, cc *testutils.BalancerClientConn, wantRoutes map[string]*testutils.TestSubConn) {
+	t.Helper()
+	if err := cc.WaitForPicker(ctx, func(p balancer.Picker) error {
+		for key, wantSC := range wantRoutes {
+			res, err := p.Pick(balancer.PickInfo{Ctx: newContextWithShardingKey(ctx, "test-header-name", key)})
+			if err != nil || res.SubConn != wantSC {
+				return fmt.Errorf("Pick(%q) = (%v, %v), want SubConn %v", key, res, err, wantSC)
+			}
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // Tests that before any assignment or error is reported by the autosharding client,
 // the balancer's picker queues RPCs.
 func (s) TestAutoshardingClient_NoAssignmentOrError_QueueingPicker(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	tests := []struct {
-		name            string
-		fallbackEnabled bool
-	}{
-		{
-			name:            "fallback enabled",
-			fallbackEnabled: true,
-		},
-		{
-			name:            "fallback disabled",
-			fallbackEnabled: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			testAutoshardingClientCh := overrideNewAutoshardingClientForTesting(t)
-			cc := testutils.NewBalancerClientConn(t)
-			b := balancer.Get(autosharding.Name).Build(cc, balancer.BuildOptions{})
-			defer b.Close()
-
-			// Initial state with two endpoints and a valid LBConfig.
-			state := resolverStateWithProviderAndEndpoints(defaultTestClientConnProvider(), []resolver.Endpoint{
-				newTestEndpoint("10.0.0.1:8080", "host-a"),
-				newTestEndpoint("10.0.0.2:8080", "host-b"),
-			})
-			lbConfig := &autosharding.LBConfig{
-				ChannelFactoryKey:  "test-factory-key",
-				AutoShardingTarget: "test-target",
-				KeyHeaderName:      "test-header-name",
-				EnableFallback:     tt.fallbackEnabled,
-			}
-			if err := b.UpdateClientConnState(balancer.ClientConnState{
-				ResolverState:  state,
-				BalancerConfig: lbConfig,
-			}); err != nil {
-				t.Fatalf("UpdateClientConnState() failed: %v", err)
-			}
-
-			select {
-			case <-testAutoshardingClientCh:
-			case <-ctx.Done():
-				t.Fatal("Timeout waiting for creation of autosharding client")
-			}
-
-			// Ensure that before any assignment or error from the autosharding client,
-			// channel is Idle and queues RPCs.
-			if err := cc.WaitForConnectivityState(ctx, connectivity.Idle); err != nil {
-				t.Fatalf("WaitForConnectivityState(Idle) failed: %v", err)
-			}
-			if err := cc.WaitForPickerWithErr(ctx, balancer.ErrNoSubConnAvailable); err != nil {
-				t.Fatalf("WaitForPickerWithErr(ErrNoSubConnAvailable) failed: %v", err)
-			}
+	for _, fallbackEnabled := range []bool{true, false} {
+		t.Run(fmt.Sprintf("fallback_%v", fallbackEnabled), func(t *testing.T) {
+			setupBalancerWithTwoEndpoints(ctx, t, fallbackEnabled)
 		})
 	}
 }
@@ -853,115 +956,12 @@ func (s) TestAutoshardingClient_ValidAssignment(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	testAutoshardingClientCh := overrideNewAutoshardingClientForTesting(t)
-	cc := testutils.NewBalancerClientConn(t)
-	b := balancer.Get(autosharding.Name).Build(cc, balancer.BuildOptions{})
-	defer b.Close()
-
-	// Initial state with two endpoints and a valid LBConfig.
-	state := resolverStateWithProviderAndEndpoints(defaultTestClientConnProvider(), []resolver.Endpoint{
-		newTestEndpoint("10.0.0.1:8080", "host-a"),
-		newTestEndpoint("10.0.0.2:8080", "host-b"),
-	})
-	lbConfig := &autosharding.LBConfig{
-		ChannelFactoryKey:  "test-factory-key",
-		AutoShardingTarget: "test-target",
-		KeyHeaderName:      "test-header-name",
-	}
-	if err := b.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState:  state,
-		BalancerConfig: lbConfig,
-	}); err != nil {
-		t.Fatalf("UpdateClientConnState() failed: %v", err)
-	}
-	_ = waitForPicker(ctx, t, cc) // Wait for the initial picker to be created.
-
-	// Inject a valid assignment.
-	// ["", "m") -> host-a, ["m", inf) -> host-b.
-	//
-	// And verify that the LB policy is still reporting Idle state.
-	var tac *testAutoshardingClient
-	select {
-	case tac = <-testAutoshardingClientCh:
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for creation of autosharding client")
-	}
-	tac.onAssignmentUpdate(&sharding.Assignment{
-		EndpointNames: []string{"host-a", "host-b"},
-		Slices: []sharding.Slice{
-			{StartKey: []byte(""), Endpoints: []int{0}},
-			{StartKey: []byte("m"), Endpoints: []int{1}},
-		},
-		Generation: 1,
-	})
-	if err := cc.WaitForConnectivityState(ctx, connectivity.Idle); err != nil {
-		t.Fatalf("WaitForConnectivityState(Idle) failed: %v", err)
-	}
-
-	// The first call to Pick must get queued and should result in a connection
-	// attempt to the backend A, moving the channel to Connecting.
-	picker := waitForPicker(ctx, t, cc)
-	if _, err := picker.Pick(balancer.PickInfo{Ctx: newContextWithShardingKey(ctx, "test-header-name", "a")}); !errors.Is(err, balancer.ErrNoSubConnAvailable) {
-		t.Fatalf("Pick() error = %v, want %v", err, balancer.ErrNoSubConnAvailable)
-	}
-	scA := waitForSubConn(ctx, t, cc)
-	if want, got := "10.0.0.1:8080", scA.Addresses[0].Addr; got != want {
-		t.Fatalf("SubConn created with addr %q, want %q", got, want)
-	}
-	select {
-	case <-scA.ConnectCh:
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for SubConn.Connect()")
-	}
-	if err := cc.WaitForConnectivityState(ctx, connectivity.Connecting); err != nil {
-		t.Fatalf("WaitForConnectivityState(Connecting) failed: %v", err)
-	}
-
-	// Move subconnA to Ready and verify that the channel moves to Ready.
-	scA.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	scA.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
-	if err := cc.WaitForConnectivityState(ctx, connectivity.Ready); err != nil {
-		t.Fatalf("WaitForConnectivityState(Ready) failed: %v", err)
-	}
-
-	// Grab the ready picker and make the next Pick that should get routed to
-	// backend B, which should trigger a connection attempt to backend B.
-	picker = waitForPicker(ctx, t, cc)
-	if _, err := picker.Pick(balancer.PickInfo{Ctx: newContextWithShardingKey(ctx, "test-header-name", "m")}); !errors.Is(err, balancer.ErrNoSubConnAvailable) {
-		t.Fatalf("Pick() error = %v, want %v", err, balancer.ErrNoSubConnAvailable)
-	}
-	scB := waitForSubConn(ctx, t, cc)
-	if want, got := "10.0.0.2:8080", scB.Addresses[0].Addr; got != want {
-		t.Fatalf("SubConn created with addr %q, want %q", got, want)
-	}
-	select {
-	case <-scB.ConnectCh:
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for SubConn.Connect()")
-	}
-
-	// Move subconnB to Ready.
-	scB.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	scB.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
-
-	// Verify that the picker routes keys to the expected backends.
-	if err := cc.WaitForPicker(ctx, func(p balancer.Picker) error {
-		resA, err := p.Pick(balancer.PickInfo{Ctx: newContextWithShardingKey(ctx, "test-header-name", "a")})
-		if err != nil || resA.SubConn != scA {
-			return fmt.Errorf("Pick(\"a\") = (%v, %v), want SubConn %v", resA, err, scA)
-		}
-		resM, err := p.Pick(balancer.PickInfo{Ctx: newContextWithShardingKey(ctx, "test-header-name", "m")})
-		if err != nil || resM.SubConn != scB {
-			return fmt.Errorf("Pick(\"m\") = (%v, %v), want SubConn %v", resM, err, scB)
-		}
-		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	env := setupBalancerWithTwoEndpoints(ctx, t, false)
+	scA, scB := injectAssignmentAndConnectSubConns(ctx, t, env)
 
 	// Inject another valid assignment that changes how keys are routed.
 	// ["", "z") -> host-a, ["z", inf) -> host-b.
-	tac.onAssignmentUpdate(&sharding.Assignment{
+	env.tac.onAssignmentUpdate(&sharding.Assignment{
 		EndpointNames: []string{"host-a", "host-b"},
 		Slices: []sharding.Slice{
 			{StartKey: []byte(""), Endpoints: []int{0}},
@@ -969,24 +969,11 @@ func (s) TestAutoshardingClient_ValidAssignment(t *testing.T) {
 		},
 		Generation: 2,
 	})
-	// Verify that the picker routes keys to the expected backends.
-	if err := cc.WaitForPicker(ctx, func(p balancer.Picker) error {
-		resA, err := p.Pick(balancer.PickInfo{Ctx: newContextWithShardingKey(ctx, "test-header-name", "a")})
-		if err != nil || resA.SubConn != scA {
-			return fmt.Errorf("Pick(\"a\") = (%v, %v), want SubConn %v", resA, err, scA)
-		}
-		resM, err := p.Pick(balancer.PickInfo{Ctx: newContextWithShardingKey(ctx, "test-header-name", "m")})
-		if err != nil || resM.SubConn != scA {
-			return fmt.Errorf("Pick(\"m\") = (%v, %v), want SubConn %v", resM, err, scA)
-		}
-		resZ, err := p.Pick(balancer.PickInfo{Ctx: newContextWithShardingKey(ctx, "test-header-name", "z")})
-		if err != nil || resZ.SubConn != scB {
-			return fmt.Errorf("Pick(\"z\") = (%v, %v), want SubConn %v", resZ, err, scB)
-		}
-		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	verifyPickerRoutes(ctx, t, env.cc, map[string]*testutils.TestSubConn{
+		"a": scA,
+		"m": scA,
+		"z": scB,
+	})
 }
 
 // Tests that when the autosharding client reports an error and fallback is
@@ -997,126 +984,21 @@ func (s) TestAutoshardingClient_Error_FallbackDisabled(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	testAutoshardingClientCh := overrideNewAutoshardingClientForTesting(t)
-	cc := testutils.NewBalancerClientConn(t)
-	b := balancer.Get(autosharding.Name).Build(cc, balancer.BuildOptions{})
-	defer b.Close()
-
-	// Initial state with two endpoints and a valid LBConfig.
-	state := resolverStateWithProviderAndEndpoints(defaultTestClientConnProvider(), []resolver.Endpoint{
-		newTestEndpoint("10.0.0.1:8080", "host-a"),
-		newTestEndpoint("10.0.0.2:8080", "host-b"),
-	})
-	lbConfig := &autosharding.LBConfig{
-		ChannelFactoryKey:  "test-factory-key",
-		AutoShardingTarget: "test-target",
-		KeyHeaderName:      "test-header-name",
-		EnableFallback:     false,
-	}
-	if err := b.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState:  state,
-		BalancerConfig: lbConfig,
-	}); err != nil {
-		t.Fatalf("UpdateClientConnState() failed: %v", err)
-	}
-	_ = waitForPicker(ctx, t, cc) // Wait for the initial picker to be created.
+	env := setupBalancerWithTwoEndpoints(ctx, t, false)
 
 	// Inject an error from the autosharding client.
-	var tac *testAutoshardingClient
-	select {
-	case tac = <-testAutoshardingClientCh:
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for creation of autosharding client")
-	}
 	autoshardingClientErr := errors.New("autosharding client stream error")
-	tac.onAssignmentError(autoshardingClientErr)
-
-	if err := cc.WaitForPicker(ctx, func(p balancer.Picker) error {
-		_, err := p.Pick(balancer.PickInfo{Ctx: newContextWithShardingKey(ctx, "test-header-name", "doesn't-matter")})
-		if err == nil || !strings.Contains(err.Error(), autoshardingClientErr.Error()) {
-			return fmt.Errorf("Pick() error = %v, want error containing %q", err, autoshardingClientErr.Error())
-		}
-		return nil
-	}); err != nil {
-		t.Fatal(err)
+	env.tac.onAssignmentError(autoshardingClientErr)
+	if err := env.cc.WaitForConnectivityState(ctx, connectivity.TransientFailure); err != nil {
+		t.Fatalf("WaitForConnectivityState(TransientFailure) failed: %v", err)
+	}
+	if err := env.cc.WaitForPickerWithErr(ctx, autoshardingClientErr); err != nil {
+		t.Fatalf("WaitForPickerWithErr(%v) failed: %v", autoshardingClientErr, err)
 	}
 
-	// Inject a valid assignment.
-	// ["", "m") -> host-a, ["m", inf) -> host-b.
-	//
-	// And verify that the LB policy is still reporting Idle state.
-	tac.onAssignmentUpdate(&sharding.Assignment{
-		EndpointNames: []string{"host-a", "host-b"},
-		Slices: []sharding.Slice{
-			{StartKey: []byte(""), Endpoints: []int{0}},
-			{StartKey: []byte("m"), Endpoints: []int{1}},
-		},
-		Generation: 1,
-	})
-	if err := cc.WaitForConnectivityState(ctx, connectivity.Idle); err != nil {
-		t.Fatalf("WaitForConnectivityState(Idle) failed: %v", err)
-	}
-
-	// The first call to Pick must get queued and should result in a connection
-	// attempt to the backend A, moving the channel to Connecting.
-	picker := waitForPicker(ctx, t, cc)
-	if _, err := picker.Pick(balancer.PickInfo{Ctx: newContextWithShardingKey(ctx, "test-header-name", "a")}); !errors.Is(err, balancer.ErrNoSubConnAvailable) {
-		t.Fatalf("Pick() error = %v, want %v", err, balancer.ErrNoSubConnAvailable)
-	}
-	scA := waitForSubConn(ctx, t, cc)
-	if want, got := "10.0.0.1:8080", scA.Addresses[0].Addr; got != want {
-		t.Fatalf("SubConn created with addr %q, want %q", got, want)
-	}
-	select {
-	case <-scA.ConnectCh:
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for SubConn.Connect()")
-	}
-	if err := cc.WaitForConnectivityState(ctx, connectivity.Connecting); err != nil {
-		t.Fatalf("WaitForConnectivityState(Connecting) failed: %v", err)
-	}
-
-	// Move subconnA to Ready and verify that the channel moves to Ready.
-	scA.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	scA.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
-	if err := cc.WaitForConnectivityState(ctx, connectivity.Ready); err != nil {
-		t.Fatalf("WaitForConnectivityState(Ready) failed: %v", err)
-	}
-
-	// Grab the ready picker and make the next Pick that should get routed to
-	// backend B, which should trigger a connection attempt to backend B.
-	picker = waitForPicker(ctx, t, cc)
-	if _, err := picker.Pick(balancer.PickInfo{Ctx: newContextWithShardingKey(ctx, "test-header-name", "m")}); !errors.Is(err, balancer.ErrNoSubConnAvailable) {
-		t.Fatalf("Pick() error = %v, want %v", err, balancer.ErrNoSubConnAvailable)
-	}
-	scB := waitForSubConn(ctx, t, cc)
-	if want, got := "10.0.0.2:8080", scB.Addresses[0].Addr; got != want {
-		t.Fatalf("SubConn created with addr %q, want %q", got, want)
-	}
-	select {
-	case <-scB.ConnectCh:
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for SubConn.Connect()")
-	}
-
-	// Move subconnB to Ready.
-	scB.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	scB.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
-
-	// Verify that the picker routes keys to the expected backends.
-	if err := cc.WaitForPicker(ctx, func(p balancer.Picker) error {
-		resA, err := p.Pick(balancer.PickInfo{Ctx: newContextWithShardingKey(ctx, "test-header-name", "a")})
-		if err != nil || resA.SubConn != scA {
-			return fmt.Errorf("Pick(\"a\") = (%v, %v), want SubConn %v", resA, err, scA)
-		}
-		resM, err := p.Pick(balancer.PickInfo{Ctx: newContextWithShardingKey(ctx, "test-header-name", "m")})
-		if err != nil || resM.SubConn != scB {
-			return fmt.Errorf("Pick(\"m\") = (%v, %v), want SubConn %v", resM, err, scB)
-		}
-		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	// A subsequent valid assignment should restore the balancer to a working
+	// state.
+	injectAssignmentAndConnectSubConns(ctx, t, env)
 }
 
 // Tests that when the autosharding client reports an error and fallback is
@@ -1125,42 +1007,13 @@ func (s) TestAutoshardingClient_Error_FallbackEnabled(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	testAutoshardingClientCh := overrideNewAutoshardingClientForTesting(t)
-	cc := testutils.NewBalancerClientConn(t)
-	b := balancer.Get(autosharding.Name).Build(cc, balancer.BuildOptions{})
-	defer b.Close()
-
-	// Initial state with two endpoints and a valid LBConfig.
-	state := resolverStateWithProviderAndEndpoints(defaultTestClientConnProvider(), []resolver.Endpoint{
-		newTestEndpoint("10.0.0.1:8080", "host-a"),
-		newTestEndpoint("10.0.0.2:8080", "host-b"),
-	})
-	lbConfig := &autosharding.LBConfig{
-		ChannelFactoryKey:  "test-factory-key",
-		AutoShardingTarget: "test-target",
-		KeyHeaderName:      "test-header-name",
-		EnableFallback:     true,
-	}
-	if err := b.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState:  state,
-		BalancerConfig: lbConfig,
-	}); err != nil {
-		t.Fatalf("UpdateClientConnState() failed: %v", err)
-	}
-	_ = waitForPicker(ctx, t, cc) // Wait for the initial picker to be created.
+	env := setupBalancerWithTwoEndpoints(ctx, t, true)
 
 	// Inject an error from the autosharding client.
-	var tac *testAutoshardingClient
-	select {
-	case tac = <-testAutoshardingClientCh:
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for creation of autosharding client")
-	}
-	autoshardingClientErr := errors.New("autosharding client stream error")
-	tac.onAssignmentError(autoshardingClientErr)
+	env.tac.onAssignmentError(errors.New("autosharding client stream error"))
 
 	// Make picks until both backends are picked.
-	p := waitForPicker(ctx, t, cc)
+	p := waitForPicker(ctx, t, env.cc)
 	var scA, scB *testutils.TestSubConn
 	var seenA, seenB bool
 	for ; ctx.Err() == nil; <-time.After(defaultTestShortTimeout) {
@@ -1170,7 +1023,7 @@ func (s) TestAutoshardingClient_Error_FallbackEnabled(t *testing.T) {
 		// created a new SubConn if it picked the same one as a previous pick.
 		var sc *testutils.TestSubConn
 		select {
-		case sc = <-cc.NewSubConnCh:
+		case sc = <-env.cc.NewSubConnCh:
 		default:
 		}
 		if sc == nil {
@@ -1200,13 +1053,13 @@ func (s) TestAutoshardingClient_Error_FallbackEnabled(t *testing.T) {
 	scB.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Wait for the balancer to report Ready state.
-	if err := cc.WaitForConnectivityState(ctx, connectivity.Ready); err != nil {
+	if err := env.cc.WaitForConnectivityState(ctx, connectivity.Ready); err != nil {
 		t.Fatalf("WaitForConnectivityState(Ready) failed: %v", err)
 	}
 
 	// Make a large number of picks and verify that they are routed to both
 	// backends in roughly equal proportion.
-	p = waitForPicker(ctx, t, cc)
+	p = waitForPicker(ctx, t, env.cc)
 	numPicks := computeIdealNumberOfRPCs(t, .5, errorTolerance)
 	gotPerBackend := checkPicksOK(ctx, t, p, numPicks)
 	for _, backend := range []string{"10.0.0.1:8080", "10.0.0.2:8080"} {
@@ -1225,221 +1078,68 @@ func (s) TestAutoshardingClient_Error_FallbackDisabledToEnabled(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	testAutoshardingClientCh := overrideNewAutoshardingClientForTesting(t)
-	cc := testutils.NewBalancerClientConn(t)
-	b := balancer.Get(autosharding.Name).Build(cc, balancer.BuildOptions{})
-	defer b.Close()
+	env := setupBalancerWithTwoEndpoints(ctx, t, false)
 
-	// Initial state with two endpoints and a valid LBConfig.
-	state := resolverStateWithProviderAndEndpoints(defaultTestClientConnProvider(), []resolver.Endpoint{
-		newTestEndpoint("10.0.0.1:8080", "host-a"),
-		newTestEndpoint("10.0.0.2:8080", "host-b"),
-	})
-	lbConfig := &autosharding.LBConfig{
-		ChannelFactoryKey:  "test-factory-key",
-		AutoShardingTarget: "test-target",
-		KeyHeaderName:      "test-header-name",
-		EnableFallback:     false,
-	}
-	if err := b.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState:  state,
-		BalancerConfig: lbConfig,
-	}); err != nil {
-		t.Fatalf("UpdateClientConnState() failed: %v", err)
-	}
-	_ = waitForPicker(ctx, t, cc) // Wait for the initial picker to be created.
-
-	// Inject an error from the autosharding client.
-	var tac *testAutoshardingClient
-	select {
-	case tac = <-testAutoshardingClientCh:
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for creation of autosharding client")
-	}
+	// Inject an error from the autosharding client and verify TransientFailure.
 	autoshardingClientErr := errors.New("autosharding client stream error")
-	tac.onAssignmentError(autoshardingClientErr)
-
-	// Ensure that the channel moves to TransientFailure and that the picker
-	// returns the error reported by the autosharding client.
-	if err := cc.WaitForConnectivityState(ctx, connectivity.TransientFailure); err != nil {
+	env.tac.onAssignmentError(autoshardingClientErr)
+	if err := env.cc.WaitForConnectivityState(ctx, connectivity.TransientFailure); err != nil {
 		t.Fatalf("WaitForConnectivityState(TransientFailure) failed: %v", err)
 	}
-	if err := cc.WaitForPicker(ctx, func(p balancer.Picker) error {
-		_, err := p.Pick(balancer.PickInfo{Ctx: newContextWithShardingKey(ctx, "test-header-name", "doesn't-matter")})
-		if err == nil || !strings.Contains(err.Error(), autoshardingClientErr.Error()) {
-			return fmt.Errorf("Pick() error = %v, want error containing %q", err, autoshardingClientErr.Error())
-		}
-		return nil
-	}); err != nil {
-		t.Fatal(err)
+	if err := env.cc.WaitForPickerWithErr(ctx, autoshardingClientErr); err != nil {
+		t.Fatalf("WaitForPickerWithErr(%v) failed: %v", autoshardingClientErr, err)
 	}
 
 	// Update state to enable fallback.
-	lbConfig.EnableFallback = true
-	if err := b.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState:  state,
-		BalancerConfig: lbConfig,
+	env.lbConfig.EnableFallback = true
+	if err := env.b.UpdateClientConnState(balancer.ClientConnState{
+		ResolverState:  env.state,
+		BalancerConfig: env.lbConfig,
 	}); err != nil {
 		t.Fatalf("UpdateClientConnState() failed: %v", err)
 	}
 
-	// Ensure that the channel moves to Idle.
-	if err := cc.WaitForConnectivityState(ctx, connectivity.Idle); err != nil {
+	// Ensure that the channel moves to Idle and routes picks to the fallback pool.
+	if err := env.cc.WaitForConnectivityState(ctx, connectivity.Idle); err != nil {
 		t.Fatalf("WaitForConnectivityState(Idle) failed: %v", err)
 	}
-
-	// A pick should now be routed to the fallback pool, which should trigger a
-	// connection attempt.
-	p := waitForPicker(ctx, t, cc)
+	p := waitForPicker(ctx, t, env.cc)
 	if _, err := p.Pick(balancer.PickInfo{Ctx: newContextWithShardingKey(ctx, "test-header-name", "m")}); !errors.Is(err, balancer.ErrNoSubConnAvailable) {
 		t.Fatalf("Pick() error = %v, want %v", err, balancer.ErrNoSubConnAvailable)
 	}
-	_ = waitForSubConn(ctx, t, cc)
+	_ = waitForSubConn(ctx, t, env.cc)
 }
 
-// Tests the case where the autosharding target changes causing a autosharding
-// client to be created. Verified that the previous assignment is used by the
-// balancer until the new client returns one.
+// Tests the case where the autosharding target changes causing a new
+// autosharding client to be created. Verifies that the previous assignment is
+// used by the balancer until the new client returns one.
 func (s) TestAutoshardingClient_TargetChange_PreviousAssignmentInUse(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	testAutoshardingClientCh := overrideNewAutoshardingClientForTesting(t)
-	cc := testutils.NewBalancerClientConn(t)
-	b := balancer.Get(autosharding.Name).Build(cc, balancer.BuildOptions{})
-	defer b.Close()
+	env := setupBalancerWithTwoEndpoints(ctx, t, false)
+	scA, scB := injectAssignmentAndConnectSubConns(ctx, t, env)
 
-	// Initial state with two endpoints and a valid LBConfig.
-	state := resolverStateWithProviderAndEndpoints(defaultTestClientConnProvider(), []resolver.Endpoint{
-		newTestEndpoint("10.0.0.1:8080", "host-a"),
-		newTestEndpoint("10.0.0.2:8080", "host-b"),
-	})
-	lbConfig := &autosharding.LBConfig{
-		ChannelFactoryKey:  "test-factory-key",
-		AutoShardingTarget: "test-target",
-		KeyHeaderName:      "test-header-name",
-	}
-	if err := b.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState:  state,
-		BalancerConfig: lbConfig,
-	}); err != nil {
-		t.Fatalf("UpdateClientConnState() failed: %v", err)
-	}
-	_ = waitForPicker(ctx, t, cc) // Wait for the initial picker to be created.
-
-	// Inject a valid assignment.
-	// ["", "m") -> host-a, ["m", inf) -> host-b.
-	//
-	// And verify that the LB policy is still reporting Idle state.
-	var tac *testAutoshardingClient
-	select {
-	case tac = <-testAutoshardingClientCh:
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for creation of autosharding client")
-	}
-	tac.onAssignmentUpdate(&sharding.Assignment{
-		EndpointNames: []string{"host-a", "host-b"},
-		Slices: []sharding.Slice{
-			{StartKey: []byte(""), Endpoints: []int{0}},
-			{StartKey: []byte("m"), Endpoints: []int{1}},
-		},
-		Generation: 1,
-	})
-	if err := cc.WaitForConnectivityState(ctx, connectivity.Idle); err != nil {
-		t.Fatalf("WaitForConnectivityState(Idle) failed: %v", err)
-	}
-
-	// The first call to Pick must get queued and should result in a connection
-	// attempt to the backend A, moving the channel to Connecting.
-	picker := waitForPicker(ctx, t, cc)
-	if _, err := picker.Pick(balancer.PickInfo{Ctx: newContextWithShardingKey(ctx, "test-header-name", "a")}); !errors.Is(err, balancer.ErrNoSubConnAvailable) {
-		t.Fatalf("Pick() error = %v, want %v", err, balancer.ErrNoSubConnAvailable)
-	}
-	scA := waitForSubConn(ctx, t, cc)
-	if want, got := "10.0.0.1:8080", scA.Addresses[0].Addr; got != want {
-		t.Fatalf("SubConn created with addr %q, want %q", got, want)
-	}
-	select {
-	case <-scA.ConnectCh:
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for SubConn.Connect()")
-	}
-	if err := cc.WaitForConnectivityState(ctx, connectivity.Connecting); err != nil {
-		t.Fatalf("WaitForConnectivityState(Connecting) failed: %v", err)
-	}
-
-	// Move subconnA to Ready and verify that the channel moves to Ready.
-	scA.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	scA.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
-	if err := cc.WaitForConnectivityState(ctx, connectivity.Ready); err != nil {
-		t.Fatalf("WaitForConnectivityState(Ready) failed: %v", err)
-	}
-
-	// Grab the ready picker and make the next Pick that should get routed to
-	// backend B, which should trigger a connection attempt to backend B.
-	picker = waitForPicker(ctx, t, cc)
-	if _, err := picker.Pick(balancer.PickInfo{Ctx: newContextWithShardingKey(ctx, "test-header-name", "m")}); !errors.Is(err, balancer.ErrNoSubConnAvailable) {
-		t.Fatalf("Pick() error = %v, want %v", err, balancer.ErrNoSubConnAvailable)
-	}
-	scB := waitForSubConn(ctx, t, cc)
-	if want, got := "10.0.0.2:8080", scB.Addresses[0].Addr; got != want {
-		t.Fatalf("SubConn created with addr %q, want %q", got, want)
-	}
-	select {
-	case <-scB.ConnectCh:
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for SubConn.Connect()")
-	}
-
-	// Move subconnB to Ready.
-	scB.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	scB.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
-
-	// Verify that the picker routes keys to the expected backends.
-	if err := cc.WaitForPicker(ctx, func(p balancer.Picker) error {
-		resA, err := p.Pick(balancer.PickInfo{Ctx: newContextWithShardingKey(ctx, "test-header-name", "a")})
-		if err != nil || resA.SubConn != scA {
-			return fmt.Errorf("Pick(\"a\") = (%v, %v), want SubConn %v", resA, err, scA)
-		}
-		resZ, err := p.Pick(balancer.PickInfo{Ctx: newContextWithShardingKey(ctx, "test-header-name", "z")})
-		if err != nil || resZ.SubConn != scB {
-			return fmt.Errorf("Pick(\"z\") = (%v, %v), want SubConn %v", resZ, err, scB)
-		}
-		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
-
-	// Change autosharding_target causing a new client (client2) to be created.
-	lbConfig.AutoShardingTarget = "new-target"
-	if err := b.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState:  state,
-		BalancerConfig: lbConfig,
+	// Change autosharding_target causing a new client (tac2) to be created.
+	env.lbConfig.AutoShardingTarget = "new-target"
+	if err := env.b.UpdateClientConnState(balancer.ClientConnState{
+		ResolverState:  env.state,
+		BalancerConfig: env.lbConfig,
 	}); err != nil {
 		t.Fatalf("UpdateClientConnState() failed: %v", err)
 	}
 	var tac2 *testAutoshardingClient
 	select {
-	case tac2 = <-testAutoshardingClientCh:
+	case tac2 = <-env.testAutoshardingClientCh:
 	case <-ctx.Done():
 		t.Fatal("Timeout waiting for new autosharding client to be created")
 	}
 
-	// Verify that the picker continues routing keys to the expected backends
-	// from the previous assignment.
-	if err := cc.WaitForPicker(ctx, func(p balancer.Picker) error {
-		resA, err := p.Pick(balancer.PickInfo{Ctx: newContextWithShardingKey(ctx, "test-header-name", "a")})
-		if err != nil || resA.SubConn != scA {
-			return fmt.Errorf("Pick(\"a\") = (%v, %v), want SubConn %v", resA, err, scA)
-		}
-		resZ, err := p.Pick(balancer.PickInfo{Ctx: newContextWithShardingKey(ctx, "test-header-name", "z")})
-		if err != nil || resZ.SubConn != scB {
-			return fmt.Errorf("Pick(\"z\") = (%v, %v), want SubConn %v", resZ, err, scB)
-		}
-		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	// Verify that the picker continues routing keys using the previous assignment.
+	verifyPickerRoutes(ctx, t, env.cc, map[string]*testutils.TestSubConn{
+		"a": scA,
+		"z": scB,
+	})
 
 	// Inject a new assignment swapping the ranges:
 	// ["", "m") -> host-b and ["m", inf) -> host-a
@@ -1451,19 +1151,10 @@ func (s) TestAutoshardingClient_TargetChange_PreviousAssignmentInUse(t *testing.
 		},
 		Generation: 2,
 	})
-	if err := cc.WaitForPicker(ctx, func(p balancer.Picker) error {
-		resA, err := p.Pick(balancer.PickInfo{Ctx: newContextWithShardingKey(ctx, "test-header-name", "a")})
-		if err != nil || resA.SubConn != scB {
-			return fmt.Errorf("Pick(\"a\") = (%v, %v), want SubConn %v", resA, err, scB)
-		}
-		resZ, err := p.Pick(balancer.PickInfo{Ctx: newContextWithShardingKey(ctx, "test-header-name", "z")})
-		if err != nil || resZ.SubConn != scA {
-			return fmt.Errorf("Pick(\"z\") = (%v, %v), want SubConn %v", resZ, err, scA)
-		}
-		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	verifyPickerRoutes(ctx, t, env.cc, map[string]*testutils.TestSubConn{
+		"a": scB,
+		"z": scA,
+	})
 }
 
 // Tests that when the autosharding client reports a valid assignment, the
@@ -1475,130 +1166,16 @@ func (s) TestAutoshardingClient_ValidAssignment_PerSliceFallback(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	testAutoshardingClientCh := overrideNewAutoshardingClientForTesting(t)
-	cc := testutils.NewBalancerClientConn(t)
-	b := balancer.Get(autosharding.Name).Build(cc, balancer.BuildOptions{})
-	defer b.Close()
+	env := setupBalancerWithTwoEndpoints(ctx, t, true)
+	scA, scB := injectAssignmentAndConnectSubConns(ctx, t, env)
 
-	// Initial state with two endpoints and a valid LBConfig.
-	state := resolverStateWithProviderAndEndpoints(defaultTestClientConnProvider(), []resolver.Endpoint{
-		newTestEndpoint("10.0.0.1:8080", "host-a"),
-		newTestEndpoint("10.0.0.2:8080", "host-b"),
-	})
-	lbConfig := &autosharding.LBConfig{
-		ChannelFactoryKey:  "test-factory-key",
-		AutoShardingTarget: "test-target",
-		KeyHeaderName:      "test-header-name",
-		EnableFallback:     true,
-	}
-	if err := b.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState:  state,
-		BalancerConfig: lbConfig,
-	}); err != nil {
-		t.Fatalf("UpdateClientConnState() failed: %v", err)
-	}
-	_ = waitForPicker(ctx, t, cc) // Wait for the initial picker to be created.
-
-	// Inject a valid assignment.
-	// ["", "m") -> host-a, ["m", inf) -> host-b.
-	//
-	// And verify that the LB policy is still reporting Idle state.
-	var tac *testAutoshardingClient
-	select {
-	case tac = <-testAutoshardingClientCh:
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for creation of autosharding client")
-	}
-	tac.onAssignmentUpdate(&sharding.Assignment{
-		EndpointNames: []string{"host-a", "host-b"},
-		Slices: []sharding.Slice{
-			{StartKey: []byte(""), Endpoints: []int{0}},
-			{StartKey: []byte("m"), Endpoints: []int{1}},
-		},
-		Generation: 1,
-	})
-	if err := cc.WaitForConnectivityState(ctx, connectivity.Idle); err != nil {
-		t.Fatalf("WaitForConnectivityState(Idle) failed: %v", err)
-	}
-
-	// The first call to Pick must get queued and should result in a connection
-	// attempt to the backend A, moving the channel to Connecting.
-	picker := waitForPicker(ctx, t, cc)
-	if _, err := picker.Pick(balancer.PickInfo{Ctx: newContextWithShardingKey(ctx, "test-header-name", "a")}); !errors.Is(err, balancer.ErrNoSubConnAvailable) {
-		t.Fatalf("Pick() error = %v, want %v", err, balancer.ErrNoSubConnAvailable)
-	}
-	scA := waitForSubConn(ctx, t, cc)
-	if want, got := "10.0.0.1:8080", scA.Addresses[0].Addr; got != want {
-		t.Fatalf("SubConn created with addr %q, want %q", got, want)
-	}
-	select {
-	case <-scA.ConnectCh:
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for SubConn.Connect()")
-	}
-	if err := cc.WaitForConnectivityState(ctx, connectivity.Connecting); err != nil {
-		t.Fatalf("WaitForConnectivityState(Connecting) failed: %v", err)
-	}
-
-	// Move subconnA to Ready and verify that the channel moves to Ready.
-	scA.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	scA.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
-	if err := cc.WaitForConnectivityState(ctx, connectivity.Ready); err != nil {
-		t.Fatalf("WaitForConnectivityState(Ready) failed: %v", err)
-	}
-
-	// Grab the ready picker and make the next Pick that should get routed to
-	// backend B, which should trigger a connection attempt to backend B.
-	picker = waitForPicker(ctx, t, cc)
-	if _, err := picker.Pick(balancer.PickInfo{Ctx: newContextWithShardingKey(ctx, "test-header-name", "m")}); !errors.Is(err, balancer.ErrNoSubConnAvailable) {
-		t.Fatalf("Pick() error = %v, want %v", err, balancer.ErrNoSubConnAvailable)
-	}
-	scB := waitForSubConn(ctx, t, cc)
-	if want, got := "10.0.0.2:8080", scB.Addresses[0].Addr; got != want {
-		t.Fatalf("SubConn created with addr %q, want %q", got, want)
-	}
-	select {
-	case <-scB.ConnectCh:
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for SubConn.Connect()")
-	}
-
-	// Move subconnB to Ready.
-	scB.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	scB.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
-
-	// Verify that the picker routes keys to the expected backends.
-	if err := cc.WaitForPicker(ctx, func(p balancer.Picker) error {
-		resA, err := p.Pick(balancer.PickInfo{Ctx: newContextWithShardingKey(ctx, "test-header-name", "a")})
-		if err != nil || resA.SubConn != scA {
-			return fmt.Errorf("Pick(\"a\") = (%v, %v), want SubConn %v", resA, err, scA)
-		}
-		resM, err := p.Pick(balancer.PickInfo{Ctx: newContextWithShardingKey(ctx, "test-header-name", "m")})
-		if err != nil || resM.SubConn != scB {
-			return fmt.Errorf("Pick(\"m\") = (%v, %v), want SubConn %v", resM, err, scB)
-		}
-		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
-
-	// Move subconnB to TransientFailure and verify that the picker routes keys in the
-	// ["m", inf) slice to the fallback pool.
+	// Move subconnB to TransientFailure and verify that the picker routes keys
+	// in the ["m", inf) slice to the fallback pool (scA).
 	scB.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
-	// Verify that the picker routes keys to the expected backends.
-	if err := cc.WaitForPicker(ctx, func(p balancer.Picker) error {
-		resA, err := p.Pick(balancer.PickInfo{Ctx: newContextWithShardingKey(ctx, "test-header-name", "a")})
-		if err != nil || resA.SubConn != scA {
-			return fmt.Errorf("Pick(\"a\") = (%v, %v), want SubConn %v", resA, err, scA)
-		}
-		resM, err := p.Pick(balancer.PickInfo{Ctx: newContextWithShardingKey(ctx, "test-header-name", "m")})
-		if err != nil || resM.SubConn != scA {
-			return fmt.Errorf("Pick(\"m\") = (%v, %v), want SubConn %v", resM, err, scA)
-		}
-		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	verifyPickerRoutes(ctx, t, env.cc, map[string]*testutils.TestSubConn{
+		"a": scA,
+		"m": scA,
+	})
 }
 
 // Tests that when the name resolver reorders or removes endpoints while an
@@ -1608,143 +1185,37 @@ func (s) TestDynamicEndpointUpdates(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	testAutoshardingClientCh := overrideNewAutoshardingClientForTesting(t)
-	cc := testutils.NewBalancerClientConn(t)
-	b := balancer.Get(autosharding.Name).Build(cc, balancer.BuildOptions{})
-	defer b.Close()
+	env := setupBalancerWithTwoEndpoints(ctx, t, false)
+	scA, scB := injectAssignmentAndConnectSubConns(ctx, t, env)
 
 	epA := newTestEndpoint("10.0.0.1:8080", "host-a")
 	epB := newTestEndpoint("10.0.0.2:8080", "host-b")
-	cfg := &autosharding.LBConfig{
-		ChannelFactoryKey:  "test-factory-key",
-		AutoShardingTarget: "test-target",
-		KeyHeaderName:      "test-header-name",
-	}
-	if err := b.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState:  resolverStateWithProviderAndEndpoints(defaultTestClientConnProvider(), []resolver.Endpoint{epA, epB}),
-		BalancerConfig: cfg,
-	}); err != nil {
-		t.Fatalf("UpdateClientConnState() unexpected error: %v", err)
-	}
-	_ = waitForPicker(ctx, t, cc) // Wait for the initial picker to be created.
-
-	// Inject a valid assignment.
-	// ["", "m") -> host-a, ["m", inf) -> host-b.
-	//
-	// And verify that the LB policy is still reporting Idle state.
-	var tac *testAutoshardingClient
-	select {
-	case tac = <-testAutoshardingClientCh:
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for creation of autosharding client")
-	}
-	tac.onAssignmentUpdate(&sharding.Assignment{
-		EndpointNames: []string{"host-a", "host-b"},
-		Slices: []sharding.Slice{
-			{StartKey: []byte(""), Endpoints: []int{0}},
-			{StartKey: []byte("m"), Endpoints: []int{1}},
-		},
-		Generation: 1,
-	})
-	if err := cc.WaitForConnectivityState(ctx, connectivity.Idle); err != nil {
-		t.Fatalf("WaitForConnectivityState(Idle) failed: %v", err)
-	}
-
-	// The first call to Pick must get queued and should result in a connection
-	// attempt to the backend A, moving the channel to Connecting.
-	picker := waitForPicker(ctx, t, cc)
-	if _, err := picker.Pick(balancer.PickInfo{Ctx: newContextWithShardingKey(ctx, "test-header-name", "a")}); !errors.Is(err, balancer.ErrNoSubConnAvailable) {
-		t.Fatalf("Pick() error = %v, want %v", err, balancer.ErrNoSubConnAvailable)
-	}
-	scA := waitForSubConn(ctx, t, cc)
-	if want, got := "10.0.0.1:8080", scA.Addresses[0].Addr; got != want {
-		t.Fatalf("SubConn created with addr %q, want %q", got, want)
-	}
-	select {
-	case <-scA.ConnectCh:
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for SubConn.Connect()")
-	}
-	if err := cc.WaitForConnectivityState(ctx, connectivity.Connecting); err != nil {
-		t.Fatalf("WaitForConnectivityState(Connecting) failed: %v", err)
-	}
-
-	// Move subconnA to Ready and verify that the channel moves to Ready.
-	scA.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	scA.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
-	if err := cc.WaitForConnectivityState(ctx, connectivity.Ready); err != nil {
-		t.Fatalf("WaitForConnectivityState(Ready) failed: %v", err)
-	}
-
-	// Grab the ready picker and make the next Pick that should get routed to
-	// backend B, which should trigger a connection attempt to backend B.
-	picker = waitForPicker(ctx, t, cc)
-	if _, err := picker.Pick(balancer.PickInfo{Ctx: newContextWithShardingKey(ctx, "test-header-name", "m")}); !errors.Is(err, balancer.ErrNoSubConnAvailable) {
-		t.Fatalf("Pick() error = %v, want %v", err, balancer.ErrNoSubConnAvailable)
-	}
-	scB := waitForSubConn(ctx, t, cc)
-	if want, got := "10.0.0.2:8080", scB.Addresses[0].Addr; got != want {
-		t.Fatalf("SubConn created with addr %q, want %q", got, want)
-	}
-	select {
-	case <-scB.ConnectCh:
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for SubConn.Connect()")
-	}
-
-	// Move subconnB to Ready.
-	scB.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	scB.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
-
-	// Verify that the picker routes keys to the expected backends.
-	if err := cc.WaitForPicker(ctx, func(p balancer.Picker) error {
-		resA, err := p.Pick(balancer.PickInfo{Ctx: newContextWithShardingKey(ctx, "test-header-name", "a")})
-		if err != nil || resA.SubConn != scA {
-			return fmt.Errorf("Pick(\"a\") = (%v, %v), want SubConn %v", resA, err, scA)
-		}
-		resZ, err := p.Pick(balancer.PickInfo{Ctx: newContextWithShardingKey(ctx, "test-header-name", "z")})
-		if err != nil || resZ.SubConn != scB {
-			return fmt.Errorf("Pick(\"z\") = (%v, %v), want SubConn %v", resZ, err, scB)
-		}
-		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
 
 	// Reorder endpoints in resolver update: [epB, epA]. Because the endpoint
 	// indices swap (host-b is now 0, host-a is now 1), the balancer must
 	// regenerate the sliceMap so "a" still routes to scA and "z" still routes
 	// to scB.
-	if err := b.UpdateClientConnState(balancer.ClientConnState{
+	if err := env.b.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState:  resolverStateWithProviderAndEndpoints(defaultTestClientConnProvider(), []resolver.Endpoint{epB, epA}),
-		BalancerConfig: cfg,
+		BalancerConfig: env.lbConfig,
 	}); err != nil {
 		t.Fatalf("UpdateClientConnState() with reordered endpoints failed: %v", err)
 	}
-	if err := cc.WaitForPicker(ctx, func(p balancer.Picker) error {
-		resA, err := p.Pick(balancer.PickInfo{Ctx: newContextWithShardingKey(ctx, "test-header-name", "a")})
-		if err != nil || resA.SubConn != scA {
-			return fmt.Errorf("after reorder, Pick(\"a\") = (%v, %v), want SubConn %v", resA, err, scA)
-		}
-		resZ, err := p.Pick(balancer.PickInfo{Ctx: newContextWithShardingKey(ctx, "test-header-name", "z")})
-		if err != nil || resZ.SubConn != scB {
-			return fmt.Errorf("after reorder, Pick(\"z\") = (%v, %v), want SubConn %v", resZ, err, scB)
-		}
-		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	verifyPickerRoutes(ctx, t, env.cc, map[string]*testutils.TestSubConn{
+		"a": scA,
+		"z": scB,
+	})
 
 	// Remove epB from resolver endpoints. Slice ["m", inf) now has no valid
 	// endpoints in endpointMap, so picking "z" with fallback disabled must fail
 	// with "matching slice has no available endpoints".
-	if err := b.UpdateClientConnState(balancer.ClientConnState{
+	if err := env.b.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState:  resolverStateWithProviderAndEndpoints(defaultTestClientConnProvider(), []resolver.Endpoint{epA}),
-		BalancerConfig: cfg,
+		BalancerConfig: env.lbConfig,
 	}); err != nil {
 		t.Fatalf("UpdateClientConnState() with removed endpoint failed: %v", err)
 	}
-	if err := cc.WaitForPicker(ctx, func(p balancer.Picker) error {
+	if err := env.cc.WaitForPicker(ctx, func(p balancer.Picker) error {
 		resA, err := p.Pick(balancer.PickInfo{Ctx: newContextWithShardingKey(ctx, "test-header-name", "a")})
 		if err != nil || resA.SubConn != scA {
 			return fmt.Errorf("after removing host-b, Pick(\"a\") = (%v, %v), want SubConn %v", resA, err, scA)
