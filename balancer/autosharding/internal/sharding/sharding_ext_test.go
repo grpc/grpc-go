@@ -767,13 +767,7 @@ func (s) TestClient_StreamFailureAndBackoff(t *testing.T) {
 		OnAssignmentUpdate:       func(a *sharding.Assignment) { updateCh <- a },
 		OnAssignmentError:        func(err error) { errCh <- err },
 		Backoff: func(attempt int) time.Duration {
-			// There is a chance for an extra call to Backoff during test
-			// teardown when the autoshardingClient is closed, and it cancels
-			// its context.
-			select {
-			case backoffCh <- attempt:
-			case <-ctx.Done():
-			}
+			backoffCh <- attempt
 			return defaultTestShortTimeout
 		},
 	})
