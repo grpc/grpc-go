@@ -190,6 +190,8 @@ func (b *autoshardingBalancer) UpdateClientConnState(ccs balancer.ClientConnStat
 	// inline where we will update the childState of each endpoint in the
 	// endpointMap.
 	childErr := b.child.UpdateClientConnState(childCCS)
+
+	// Process the received configuration.
 	if err := b.handleNewConfiguration(ccs.ResolverState, newConfig); err != nil {
 		return err
 	}
@@ -243,14 +245,9 @@ func (b *autoshardingBalancer) handleNewEndpointsLocked(endpoints []resolver.End
 		filteredEndpoints = append(filteredEndpoints, ep)
 
 		idx := len(newEndpointMap)
-		oldEpState, ok := b.endpointMap[hostname]
-		if ok {
-			if oldEpState.index != idx {
-				// The index of the endpoint has changed.
-				orderOrCountChanged = true
-			}
-		} else {
-			// The endpoint is new.
+		oldEpState := b.endpointMap[hostname]
+		if oldEpState == nil || oldEpState.index != idx {
+			// This is a new endpoint, or its index changed.
 			orderOrCountChanged = true
 		}
 
@@ -285,104 +282,112 @@ func (b *autoshardingBalancer) handleNewEndpointsLocked(endpoints []resolver.End
 // new gRPC channels and autosharding clients as needed. It also updates the
 // lastResolverErr field to reflect any errors encountered during processing.
 func (b *autoshardingBalancer) handleNewConfiguration(state resolver.State, newConfig *LBConfig) error {
-	// Capture the close functions for the previous autosharding client and
-	// channel, so that we can close them after releasing the lock. This is to
-	// avoid possible deadlocks caused closing the above with the lock held.
-	var prevAutoshardingClientClose func()
-	var prevAutoshardingChannelClose func()
-
-	err := func() error {
-		b.mu.Lock()
-		defer b.mu.Unlock()
-
-		// Reset the lastResolverErr to nil as we start to process the new
-		// configuration. A non-nil value for lastResolverErr results in the overall
-		// connectivity state of the balancer being set to TRANSIENT_FAILURE and an
-		// erroring picker being returned to the channel.
-		b.lastResolverErr = nil
-
-		// We handle the empty endpoints case here instead of in
-		// handleNewEndpointsLocked() because we want to allow the endpointsharding
-		// child to be updated with an empty list of endpoints, so that it can close
-		// child policies associated with endpoints that have been removed.
-		if len(b.endpointMap) == 0 {
-			b.lastResolverErr = internal.ErrNoEndpointsFromNR
-			return balancer.ErrBadResolverState
-		}
-
-		provider := grpc.ClientConnProviderFromResolverState(state)
-		if provider == nil {
-			b.lastResolverErr = errNoChannelFactory
-			return balancer.ErrBadResolverState
-		}
-
-		// Reuse the existing gRPC channel unless channel_factory_key has changed.
-		channel := b.autoshardingChannel
-		var cancel func()
-		createNewAutoshardingClient := false
-		newAutoshardingChannelCreated := false
-		if b.autoshardingClientClose == nil || newConfig.ChannelFactoryKey != b.lbCfg.ChannelFactoryKey {
-			if b.logger.V(2) {
-				b.logger.Infof("Creating a new gRPC channel with channel_factory_key: %q", newConfig.ChannelFactoryKey)
-			}
-			var err error
-			channel, cancel, err = provider(newConfig.ChannelFactoryKey)
-			if err != nil {
-				b.lastResolverErr = fmt.Errorf("autosharding: failed to create gRPC channel for key %q: %v", newConfig.ChannelFactoryKey, err)
-				return balancer.ErrBadResolverState
-			}
-
-			newAutoshardingChannelCreated = true
-			createNewAutoshardingClient = true
-		}
-
-		// Ensure %s string substitution for "Locality" is taken into account for
-		// the autosharding_target field.
-		locality := locality.FromResolverState(state)
-		newTarget := strings.Replace(newConfig.AutoShardingTarget, "%s", locality, 1)
-		if b.autoshardingClientClose == nil || newTarget != b.autoshardingTarget {
-			createNewAutoshardingClient = true
-		}
-
-		if createNewAutoshardingClient {
-			// There is a small window of time when both the old and new
-			// autosharding clients are active. We increment the generation number
-			// to ensure that callbacks from the old client are ignored.
-			b.autoshardingClientGen++
-			curGen := b.autoshardingClientGen
-			cancel := internal.NewAutoshardingClient(sharding.ClientOptions{
-				CC:                       channel,
-				AutoshardingTarget:       newTarget,
-				UUID:                     b.uuid,
-				InitialAssignmentTimeout: time.Duration(newConfig.InitialAssignmentTimeout),
-				OnAssignmentUpdate: func(assignment *sharding.Assignment) {
-					b.onAssignmentUpdate(curGen, assignment)
-				},
-				OnAssignmentError: func(err error) {
-					b.onAssignmentError(curGen, err)
-				},
-			})
-			prevAutoshardingClientClose = b.autoshardingClientClose
-			b.autoshardingClientClose = cancel
-			b.autoshardingTarget = newTarget
-		}
-
-		if newAutoshardingChannelCreated {
-			prevAutoshardingChannelClose = b.autoshardingChannelClose
-			b.autoshardingChannel = channel
-			b.autoshardingChannelClose = cancel
-		}
-		b.lbCfg = *newConfig
-		return nil
-	}()
-
-	if prevAutoshardingClientClose != nil {
-		prevAutoshardingClientClose()
+	clientClose, channelClose, err := b.handleNewConfigurationInternal(state, newConfig)
+	if clientClose != nil {
+		clientClose()
 	}
-	if prevAutoshardingChannelClose != nil {
-		prevAutoshardingChannelClose()
+	if channelClose != nil {
+		channelClose()
 	}
 	return err
+}
+
+func (b *autoshardingBalancer) handleNewConfigurationInternal(state resolver.State, newConfig *LBConfig) (clientClose, channelClose func(), _ error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	// If there is an error processing the configuration that is going to result
+	// in the LB policy moving the channel to TF with an erroring picker, there
+	// is no reason to keep the old gRPC channel and autosharding client open.
+	// So, we set the return values such that they close any existing gRPC
+	// channel and autosharding client.
+	//
+	// In the event that the configuration is successfully processed, the return
+	// values are set to previous gRPC channel and autosharding client close
+	// functions (if new ones are created), and we don't change them here.
+	defer func() {
+		if b.lastResolverErr != nil {
+			clientClose = b.autoshardingClientClose
+			channelClose = b.autoshardingChannelClose
+		}
+	}()
+
+	// Reset the lastResolverErr to nil as we start to process the new
+	// configuration. A non-nil value for lastResolverErr results in the overall
+	// connectivity state of the balancer being set to TRANSIENT_FAILURE and an
+	// erroring picker being returned to the channel.
+	b.lastResolverErr = nil
+
+	// We handle the empty endpoints case here instead of in
+	// handleNewEndpointsLocked() because we want to allow the endpointsharding
+	// child to be updated with an empty list of endpoints, so that it can close
+	// child policies associated with endpoints that have been removed.
+	if len(b.endpointMap) == 0 {
+		b.lastResolverErr = internal.ErrNoEndpointsFromNR
+		return nil, nil, balancer.ErrBadResolverState
+	}
+
+	provider := grpc.ClientConnProviderFromResolverState(state)
+	if provider == nil {
+		b.lastResolverErr = errNoChannelFactory
+		return nil, nil, balancer.ErrBadResolverState
+	}
+
+	// Reuse the existing gRPC channel unless channel_factory_key has changed.
+	channel := b.autoshardingChannel
+	var cancel func()
+	createNewAutoshardingClient := false
+	newAutoshardingChannelCreated := false
+	if b.autoshardingClientClose == nil || newConfig.ChannelFactoryKey != b.lbCfg.ChannelFactoryKey {
+		if b.logger.V(2) {
+			b.logger.Infof("Creating a new gRPC channel with channel_factory_key: %q", newConfig.ChannelFactoryKey)
+		}
+		var err error
+		channel, cancel, err = provider(newConfig.ChannelFactoryKey)
+		if err != nil {
+			b.lastResolverErr = fmt.Errorf("autosharding: failed to create gRPC channel for key %q: %v", newConfig.ChannelFactoryKey, err)
+			return nil, nil, balancer.ErrBadResolverState
+		}
+
+		newAutoshardingChannelCreated = true
+		createNewAutoshardingClient = true
+	}
+
+	// Ensure %s string substitution for "Locality" is taken into account for
+	// the autosharding_target field.
+	locality := locality.FromResolverState(state)
+	newTarget := strings.Replace(newConfig.AutoShardingTarget, "%s", locality, 1)
+	if b.autoshardingClientClose == nil || newTarget != b.autoshardingTarget {
+		createNewAutoshardingClient = true
+	}
+	b.lbCfg = *newConfig
+
+	var prevAutoshardingClientClose, prevAutoshardingChannelClose func()
+	if createNewAutoshardingClient {
+		// There is a small window of time when both the old and new
+		// autosharding clients are active. We increment the generation number
+		// to ensure that callbacks from the old client are ignored.
+		b.autoshardingClientGen++
+		curGen := b.autoshardingClientGen
+		cancel := internal.NewAutoshardingClient(sharding.ClientOptions{
+			CC:                       channel,
+			AutoshardingTarget:       newTarget,
+			UUID:                     b.uuid,
+			InitialAssignmentTimeout: time.Duration(newConfig.InitialAssignmentTimeout),
+			OnAssignmentUpdate:       func(assignment *sharding.Assignment) { b.onAssignmentUpdate(curGen, assignment) },
+			OnAssignmentError:        func(err error) { b.onAssignmentError(curGen, err) },
+		})
+		prevAutoshardingClientClose = b.autoshardingClientClose
+		b.autoshardingClientClose = cancel
+		b.autoshardingTarget = newTarget
+	}
+
+	if newAutoshardingChannelCreated {
+		prevAutoshardingChannelClose = b.autoshardingChannelClose
+		b.autoshardingChannel = channel
+		b.autoshardingChannelClose = cancel
+	}
+	return prevAutoshardingClientClose, prevAutoshardingChannelClose, nil
 }
 
 // onAssignmentUpdate is called by the autosharding client when a new assignment

@@ -37,6 +37,7 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/experimental/balancer/hostname"
 	"google.golang.org/grpc/experimental/resolver/locality"
+	"google.golang.org/grpc/internal/grpcsync"
 	iserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/metadata"
@@ -256,11 +257,6 @@ func (s) TestUpdateClientConnState_EmptyEndpointsClosesChildSubConns(t *testing.
 		t.Fatalf("Pick() error = %v, want %v", err, balancer.ErrNoSubConnAvailable)
 	}
 	sc := waitForSubConn(ctx, t, cc)
-	select {
-	case <-sc.ConnectCh:
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for SubConn.Connect()")
-	}
 	if err := cc.WaitForConnectivityState(ctx, connectivity.Connecting); err != nil {
 		t.Fatalf("WaitForConnectivityState(Connecting) failed: %v", err)
 	}
@@ -378,9 +374,9 @@ func (s) TestUpdateClientConnState_IdenticalUpdate(t *testing.T) {
 		t.Fatalf("Unexpected new gRPC channel created for key %q", ch.key)
 	case c := <-testAutoshardingClientCh:
 		t.Fatalf("Unexpected new autosharding client created for target %q", c.opts.AutoshardingTarget)
-	case <-tcc1.closeCalled:
+	case <-tcc1.closeCalled.Done():
 		t.Fatal("gRPC channel was unexpectedly closed")
-	case <-tac1.closeCalled:
+	case <-tac1.closeCalled.Done():
 		t.Fatal("AutoshardingClient was unexpectedly closed")
 	case <-time.After(defaultTestShortTimeout):
 	}
@@ -475,14 +471,14 @@ func (s) TestUpdateClientConnState_AutoshardingTargetChange(t *testing.T) {
 
 	// Verify that the previous autosharding client is closed.
 	select {
-	case <-tac1.closeCalled:
+	case <-tac1.closeCalled.Done():
 	case <-ctx.Done():
 		t.Fatal("Timeout waiting for previous autosharding client to be closed on locality change")
 	}
 
 	// Verify that the gRPC channel is not closed.
 	select {
-	case <-tcc1.closeCalled:
+	case <-tcc1.closeCalled.Done():
 		t.Fatalf("Existing gRPC channel was unexpectedly closed on locality change")
 	case <-time.After(defaultTestShortTimeout):
 	}
@@ -500,9 +496,10 @@ func (s) TestUpdateClientConnState_MissingLocality(t *testing.T) {
 	b := balancer.Get(autosharding.Name).Build(cc, balancer.BuildOptions{})
 	defer b.Close()
 
-	// Initial configuration with locality "us-east1" and "%s" in target.
+	// Missing locality attribute when target contains "%s" replaces "%s" with
+	// empty string "".
 	provider, testClientConnCh := testClientConnProvider()
-	baseState := resolverStateWithProviderAndEndpoints(provider, []resolver.Endpoint{newTestEndpoint("1.1.1.1:1", "host-0")})
+	state := resolverStateWithProviderAndEndpoints(provider, []resolver.Endpoint{newTestEndpoint("1.1.1.1:1", "host-0")})
 	lbConfig := &autosharding.LBConfig{
 		ChannelFactoryKey:        "key-1",
 		AutoShardingTarget:       "service-%s-shard",
@@ -510,7 +507,7 @@ func (s) TestUpdateClientConnState_MissingLocality(t *testing.T) {
 		InitialAssignmentTimeout: iserviceconfig.Duration(60 * time.Second),
 	}
 	if err := b.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState:  locality.Set(baseState, "us-east1"),
+		ResolverState:  state,
 		BalancerConfig: lbConfig,
 	}); err != nil {
 		t.Fatalf("UpdateClientConnState() unexpected error: %v", err)
@@ -527,63 +524,21 @@ func (s) TestUpdateClientConnState_MissingLocality(t *testing.T) {
 		t.Fatalf("Channel created with key %q, want %q", tcc1.key, "key-1")
 	}
 
-	// Verify that the AutoshardingClient is created with the expected options.
+	// Verify the options passed to the new autosharding client.
 	var tac1 *testAutoshardingClient
 	select {
 	case tac1 = <-testAutoshardingClientCh:
 	case <-ctx.Done():
-		t.Fatal("Timeout waiting for initial autosharding client creation")
+		t.Fatal("Timeout waiting for new autosharding client creation")
 	}
 	if tac1.opts.CC != tcc1 {
 		t.Errorf("Autosharding client created with CC %v, want %v", tac1.opts.CC, tcc1)
 	}
-	if want := "service-us-east1-shard"; tac1.opts.AutoshardingTarget != want {
-		t.Errorf("Autosharding client created with AutoshardingTarget = %q, want %q", tac1.opts.AutoshardingTarget, want)
+	if want := "service--shard"; tac1.opts.AutoshardingTarget != want {
+		t.Errorf("New autosharding client has AutoshardingTarget = %q, want %q", tac1.opts.AutoshardingTarget, want)
 	}
 	if tac1.opts.UUID == "" {
 		t.Error("Autosharding client created with empty UUID, want non-empty UUID")
-	}
-	if want := 60 * time.Second; tac1.opts.InitialAssignmentTimeout != want {
-		t.Errorf("Autosharding client created with InitialAssignmentTimeout = %v, want %v", tac1.opts.InitialAssignmentTimeout, want)
-	}
-
-	// Missing locality attribute when target contains "%s" replaces "%s" with
-	// empty string "".
-	if err := b.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState:  baseState,
-		BalancerConfig: lbConfig,
-	}); err != nil {
-		t.Fatalf("UpdateClientConnState() unexpected error: %v", err)
-	}
-	// Verify the options passed to the new autosharding client.
-	var tac2 *testAutoshardingClient
-	select {
-	case tac2 = <-testAutoshardingClientCh:
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for new autosharding client creation on locality change")
-	}
-	if tac2.opts.CC != tcc1 {
-		t.Errorf("New autosharding client does not reuse existing gRPC channel, got %v, want %v", tac2.opts.CC, tcc1)
-	}
-	if want := "service--shard"; tac2.opts.AutoshardingTarget != want {
-		t.Errorf("New autosharding client has AutoshardingTarget = %q, want %q", tac2.opts.AutoshardingTarget, want)
-	}
-	if tac2.opts.UUID != tac1.opts.UUID {
-		t.Errorf("New autosharding client has UUID = %q, want reused balancer UUID %q", tac2.opts.UUID, tac1.opts.UUID)
-	}
-
-	// Verify that the previous autosharding client is closed.
-	select {
-	case <-tac1.closeCalled:
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for previous autosharding client to be closed on locality change")
-	}
-
-	// Verify that the gRPC channel is not closed.
-	select {
-	case <-tcc1.closeCalled:
-		t.Fatalf("Existing gRPC channel was unexpectedly closed on locality change")
-	case <-time.After(defaultTestShortTimeout):
 	}
 }
 
@@ -684,12 +639,12 @@ func (s) TestUpdateClientConnState_ChannelFactoryKeyChange(t *testing.T) {
 	// Wait for the previous autosharding client and gRPC channel to be
 	// closed.
 	select {
-	case <-tac1.closeCalled:
+	case <-tac1.closeCalled.Done():
 	case <-ctx.Done():
 		t.Fatal("Timeout waiting for the previous autosharding client to be closed")
 	}
 	select {
-	case <-tcc1.closeCalled:
+	case <-tcc1.closeCalled.Done():
 	case <-ctx.Done():
 		t.Fatal("Timeout waiting for the previous gRPC channel to be closed")
 	}
@@ -755,12 +710,12 @@ func (s) TestUpdateClientConnState_BalancerClose(t *testing.T) {
 
 	b.Close()
 	select {
-	case <-tac1.closeCalled:
+	case <-tac1.closeCalled.Done():
 	case <-ctx.Done():
 		t.Fatal("Timeout waiting for autosharding client to be closed")
 	}
 	select {
-	case <-tcc1.closeCalled:
+	case <-tcc1.closeCalled.Done():
 	case <-ctx.Done():
 		t.Fatal("Timeout waiting for gRPC channel to be closed")
 	}
@@ -906,9 +861,7 @@ func (s) TestAutoshardingClient_NoAssignmentOrError_QueueingPicker(t *testing.T)
 				ChannelFactoryKey:  "test-factory-key",
 				AutoShardingTarget: "test-target",
 				KeyHeaderName:      "test-header-name",
-			}
-			if tt.fallbackEnabled {
-				lbConfig.EnableFallback = true
+				EnableFallback:     tt.fallbackEnabled,
 			}
 			if err := b.UpdateClientConnState(balancer.ClientConnState{
 				ResolverState:  state,
@@ -2029,7 +1982,7 @@ func newTestEndpoint(addr, host string) resolver.Endpoint {
 type testClientConn struct {
 	grpc.ClientConnInterface
 	key         string
-	closeCalled chan struct{}
+	closeCalled *grpcsync.Event
 }
 
 // testClientConnProvider returns a provider function that creates a new
@@ -2040,16 +1993,19 @@ func testClientConnProvider() (func(string) (grpc.ClientConnInterface, func(), e
 	provider := func(key string) (grpc.ClientConnInterface, func(), error) {
 		tcc := &testClientConn{
 			key:         key,
-			closeCalled: make(chan struct{}),
+			closeCalled: grpcsync.NewEvent(),
 		}
 		tccCh <- tcc
-		return tcc, func() { close(tcc.closeCalled) }, nil
+		return tcc, func() { tcc.closeCalled.Fire() }, nil
 	}
 	return provider, tccCh
 }
 
 // defaultTestClientConnProvider returns a provider function that creates a new
 // testClientConn for each key.
+//
+// Use testClientConnProvider() if the test needs to capture the created
+// testClientConn.
 func defaultTestClientConnProvider() func(string) (grpc.ClientConnInterface, func(), error) {
 	provider, _ := testClientConnProvider()
 	return provider
@@ -2066,7 +2022,7 @@ func resolverStateWithProviderAndEndpoints(provider func(string) (grpc.ClientCon
 // also allows the test to inject assignment updates and errors.
 type testAutoshardingClient struct {
 	opts        sharding.ClientOptions
-	closeCalled chan struct{}
+	closeCalled *grpcsync.Event
 }
 
 func (c *testAutoshardingClient) onAssignmentUpdate(a *sharding.Assignment) {
@@ -2082,7 +2038,7 @@ func (c *testAutoshardingClient) onAssignmentError(err error) {
 }
 
 func (c *testAutoshardingClient) close() {
-	close(c.closeCalled)
+	c.closeCalled.Fire()
 }
 
 // overrideNewAutoshardingClientForTesting overrides the
@@ -2098,7 +2054,7 @@ func overrideNewAutoshardingClientForTesting(t *testing.T) chan *testAutoshardin
 	internal.NewAutoshardingClient = func(opts sharding.ClientOptions) func() {
 		client := &testAutoshardingClient{
 			opts:        opts,
-			closeCalled: make(chan struct{}),
+			closeCalled: grpcsync.NewEvent(),
 		}
 		ch <- client
 		return client.close
