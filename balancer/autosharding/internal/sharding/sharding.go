@@ -236,7 +236,8 @@ func (c *autoshardingClient) handleMetadata(stream shardingStream, gen int64) bo
 		return false
 	}
 
-	// NACK empty assignments.
+	// NACK the case where metadata was received before any chunks were
+	// received.
 	if len(c.chunksReceived) == 0 {
 		errMsg := fmt.Sprintf("received metadata with generation %d, but no chunks were received", gen)
 		c.sendAssignmentACK(stream, gen, false, errMsg)
@@ -300,6 +301,9 @@ func validateAssignment(chunks []*aspb.AssignmentChunk) ([]*aspb.SliceAssignment
 	combinedSliceAssignments := make([]*aspb.SliceAssignment, 0)
 	for _, chunk := range chunks {
 		combinedSliceAssignments = append(combinedSliceAssignments, chunk.GetSliceAssignments()...)
+	}
+	if len(combinedSliceAssignments) == 0 {
+		return nil, nil, "no slice assignments received"
 	}
 
 	// Validate individual slice assignments and filter out invalid ones.

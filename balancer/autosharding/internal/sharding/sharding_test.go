@@ -283,6 +283,15 @@ func (s) TestValidateAssignment(t *testing.T) {
 			wantEndpoints: []string{"ep0"},
 			wantErrSubstr: "2 overlapping slices",
 		},
+		{
+			name: "chunks_with_no_slice_assignments",
+			chunks: []*aspb.AssignmentChunk{
+				{
+					Endpoints: makeEndpoints("ep0"),
+				},
+			},
+			wantErrSubstr: "no slice assignments received",
+		},
 	}
 
 	for _, tc := range tests {
