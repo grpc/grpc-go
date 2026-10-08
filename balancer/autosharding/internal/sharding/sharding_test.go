@@ -467,6 +467,12 @@ func (s) TestTruncateRunes(t *testing.T) {
 			maxRunes: 3,
 			want:     "αβγ",
 		},
+		{
+			name:     "shorter_than_max_multibyte_utf8",
+			input:    "αβγ",
+			maxRunes: 4,
+			want:     "αβγ",
+		},
 	}
 
 	for _, tc := range tests {

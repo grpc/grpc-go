@@ -41,8 +41,9 @@ import (
 )
 
 const (
-	defaultTestTimeout      = 10 * time.Second
-	defaultTestShortTimeout = 10 * time.Millisecond
+	defaultTestTimeout       = 10 * time.Second
+	defaultTestShortTimeout  = 10 * time.Millisecond
+	initialAssignmentTimeout = 500 * time.Millisecond
 )
 
 type s struct {
@@ -133,6 +134,11 @@ func (s) TestClient_ValidAssignmentsAndACK(t *testing.T) {
 		if err := stream.Send(&aspb.WatchShardingAssignmentResponse{
 			Config: &aspb.LoadReportingConfig{LoadQuantumFraction: 0.5},
 		}); err != nil {
+			return err
+		}
+
+		// Send an empty response (oneof unset), which the client must ignore.
+		if err := stream.Send(&aspb.WatchShardingAssignmentResponse{}); err != nil {
 			return err
 		}
 
@@ -1082,7 +1088,6 @@ func (s) TestClient_InitialAssignmentTimeout(t *testing.T) {
 			return nil
 		})
 
-		const initialAssignmentTimeout = 500 * time.Millisecond
 		updateCh := make(chan *sharding.Assignment, 1)
 		errCh := make(chan error, 1)
 		closeClient := sharding.NewClient(sharding.ClientOptions{
@@ -1103,11 +1108,10 @@ func (s) TestClient_InitialAssignmentTimeout(t *testing.T) {
 
 		// Wait for the initial assignment timer to fire, and verify that no error
 		// is reported.
-		<-time.After(initialAssignmentTimeout)
 		select {
 		case err := <-errCh:
 			t.Fatalf("Unexpected OnAssignmentError after a valid assignment: %v", err)
-		case <-time.After(defaultTestShortTimeout):
+		case <-time.After(initialAssignmentTimeout + defaultTestShortTimeout):
 		}
 	})
 }
@@ -1136,7 +1140,6 @@ func (s) TestClient_Close(t *testing.T) {
 	})
 
 	// The server never sends an assignment, so OnAssignmentUpdate is not set.
-	const initialAssignmentTimeout = 500 * time.Millisecond
 	errCh := make(chan error, 1)
 	closeClient := sharding.NewClient(sharding.ClientOptions{
 		CC:                       cc,
@@ -1185,10 +1188,9 @@ func (s) TestClient_Close(t *testing.T) {
 
 	// Wait past the initial assignment timeout, and verify that no error is
 	// reported after close.
-	<-time.After(initialAssignmentTimeout)
 	select {
 	case err := <-errCh:
 		t.Fatalf("Unexpected OnAssignmentError after close: %v", err)
-	case <-time.After(defaultTestShortTimeout):
+	case <-time.After(initialAssignmentTimeout + defaultTestShortTimeout):
 	}
 }
