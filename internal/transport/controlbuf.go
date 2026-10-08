@@ -40,9 +40,7 @@ var updateHeaderTblSize = func(e *hpack.Encoder, v uint32) {
 
 const (
 	// itemListInitialCapacity is the capacity of an itemList's ring buffer
-	// when it is first allocated. It must be a power of 2. It is kept small
-	// since every outStream has its own itemList and unary RPCs typically
-	// queue at most two items (a data frame and trailers) per stream.
+	// when it is first allocated. It must be a power of 2.
 	itemListInitialCapacity = 4
 	// itemListShrinkFloor is the capacity at or below which an itemList's
 	// ring buffer is never shrunk. It must be a power of 2. This prevents
@@ -211,6 +209,11 @@ type dataFrame struct {
 	// onEachWrite is called every time
 	// a part of data is written out.
 	onEachWrite func()
+	// next links the frame into the data queue of the outStream it belongs
+	// to (an intrusive singly linked list), which avoids allocating a
+	// separate queue per stream. A dataFrame is in at most one outStream
+	// queue at a time. Only accessed by the loopyWriter.
+	next *dataFrame
 }
 
 type incomingWindowUpdate struct {
@@ -295,13 +298,46 @@ const (
 type outStream struct {
 	id               uint32
 	state            outStreamState
-	itl              itemList[cbItem]
 	bytesOutStanding int
-	wq               *writeQuota
-	reader           mem.Reader
+	// dataHead and dataTail are the first and last data frames queued on
+	// this stream, linked through dataFrame.next.
+	dataHead *dataFrame
+	dataTail *dataFrame
+	// trailer, if non-nil, holds the server's trailers. They are written
+	// once all the queued data frames have been written.
+	trailer *serverHeaders
+	wq      *writeQuota
+	reader  mem.Reader
 
 	next *outStream
 	prev *outStream
+}
+
+// enqueueData appends df to the stream's queue of data frames.
+func (s *outStream) enqueueData(df *dataFrame) {
+	df.next = nil
+	if s.dataTail == nil {
+		s.dataHead = df
+	} else {
+		s.dataTail.next = df
+	}
+	s.dataTail = df
+}
+
+// dequeueData removes the first data frame from the stream's queue and returns
+// it, unlinked from the rest of the queue. It returns nil if the queue is
+// empty.
+func (s *outStream) dequeueData() *dataFrame {
+	df := s.dataHead
+	if df == nil {
+		return nil
+	}
+	s.dataHead = df.next
+	df.next = nil
+	if s.dataHead == nil {
+		s.dataTail = nil
+	}
+	return df
 }
 
 func (s *outStream) deleteSelf() {
@@ -752,7 +788,7 @@ func (l *loopyWriter) serverHeaderHandler(hdr *serverHeaders) error {
 
 	// Case 2: Server is closing the stream.
 	if str.state != empty { // either active or waiting on stream quota.
-		str.itl.enqueue(hdr)
+		str.trailer = hdr
 		return nil
 	}
 	if err := l.writeHeader(hdr.streamID, hdr.endStream, hdr.hf, hdr.onWrite); err != nil {
@@ -837,7 +873,7 @@ func (l *loopyWriter) preprocessData(df *dataFrame) {
 	}
 	// If we got data for a stream it means that
 	// stream was originated and the headers were sent out.
-	str.itl.enqueue(df)
+	str.enqueueData(df)
 	if str.state == empty {
 		str.state = active
 		l.activeStreams.enqueue(str)
@@ -869,13 +905,12 @@ func (l *loopyWriter) cleanupStreamHandler(c *cleanupStream) error {
 		delete(l.estdStreams, c.streamID)
 		str.reader.Close()
 		str.deleteSelf()
-		str.itl.dequeueAll(func(it cbItem) {
-			if df, ok := it.(*dataFrame); ok {
-				if !df.processing {
-					df.data.Free()
-				}
+		for df := str.dequeueData(); df != nil; df = str.dequeueData() {
+			if !df.processing {
+				df.data.Free()
 			}
-		})
+		}
+		str.trailer = nil
 	}
 	if c.rst { // If RST_STREAM needs to be sent.
 		if err := l.framer.fr.WriteRSTStream(c.streamID, c.rstCode); err != nil {
@@ -1002,7 +1037,7 @@ func (l *loopyWriter) processData() (bool, error) {
 		return true, nil
 	}
 	reader := &str.reader
-	dataItem := str.itl.peek().(*dataFrame) // Peek at the first data item this stream.
+	dataItem := str.dataHead // Peek at the first data item this stream.
 	if !dataItem.processing {
 		dataItem.processing = true
 		reader.Reset(dataItem.data)
@@ -1073,15 +1108,19 @@ func (l *loopyWriter) processData() (bool, error) {
 
 	if remainingBytes == 0 { // All the data from that message was written out.
 		reader.Close()
-		str.itl.dequeue()
+		str.dequeueData()
 	}
 	return false, l.updateStreamAfterWrite(str)
 }
 
 func (l *loopyWriter) updateStreamAfterWrite(str *outStream) error {
-	if str.itl.isEmpty() {
-		str.state = empty
-	} else if trailer, ok := str.itl.peek().(*serverHeaders); ok { // the next item is trailers.
+	if str.dataHead == nil {
+		trailer := str.trailer
+		if trailer == nil {
+			str.state = empty
+			return nil
+		}
+		// All the data has been written out; write the trailers.
 		if err := l.writeHeader(trailer.streamID, trailer.endStream, trailer.hf, trailer.onWrite); err != nil {
 			return err
 		}
