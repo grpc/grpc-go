@@ -50,6 +50,122 @@ const (
 	errorTolerance          = .05 // For tests that rely on statistical significance.
 )
 
+// uccsTestEnv contains the environment setup for tests that verify the behavior
+// of the autosharding balancer when it processes an update from the name
+// resolver, i.e., UpdateClientConnState.
+type uccsTestEnv struct {
+	b                        balancer.Balancer
+	baseState                resolver.State
+	lbConfig                 *autosharding.LBConfig
+	testClientConnCh         chan *testClientConn
+	testAutoshardingClientCh chan *testAutoshardingClient
+	tcc1                     *testClientConn
+	tac1                     *testAutoshardingClient
+}
+
+// setupBalancerWithInitialConfig builds an autosharding balancer, sends an
+// initial valid configuration with locality "us-east1" and "%s" in the
+// autosharding target, and verifies the resulting gRPC channel and
+// autosharding client creation.
+func setupBalancerWithInitialConfig(ctx context.Context, t *testing.T) *uccsTestEnv {
+	t.Helper()
+
+	testAutoshardingClientCh := overrideNewAutoshardingClientForTesting(t)
+	cc := testutils.NewBalancerClientConn(t)
+	b := balancer.Get(autosharding.Name).Build(cc, balancer.BuildOptions{})
+	t.Cleanup(b.Close)
+
+	provider, testClientConnCh := testClientConnProvider()
+	baseState := resolverStateWithProviderAndEndpoints(provider, []resolver.Endpoint{newTestEndpoint("1.1.1.1:1", "host-0")})
+	lbConfig := &autosharding.LBConfig{
+		ChannelFactoryKey:        "key-1",
+		AutoShardingTarget:       "service-%s-shard",
+		KeyHeaderName:            "test-header-name",
+		InitialAssignmentTimeout: iserviceconfig.Duration(60 * time.Second),
+	}
+	if err := b.UpdateClientConnState(balancer.ClientConnState{
+		ResolverState:  locality.Set(baseState, "us-east1"),
+		BalancerConfig: lbConfig,
+	}); err != nil {
+		t.Fatalf("UpdateClientConnState() unexpected error: %v", err)
+	}
+
+	tcc1 := verifyTestClientConn(ctx, t, testClientConnCh, "key-1")
+	tac1 := verifyTestAutoshardingClient(ctx, t, testAutoshardingClientCh, sharding.ClientOptions{
+		CC:                       tcc1,
+		AutoshardingTarget:       "service-us-east1-shard",
+		InitialAssignmentTimeout: 60 * time.Second,
+	})
+
+	return &uccsTestEnv{
+		b:                        b,
+		baseState:                baseState,
+		lbConfig:                 lbConfig,
+		testClientConnCh:         testClientConnCh,
+		testAutoshardingClientCh: testAutoshardingClientCh,
+		tcc1:                     tcc1,
+		tac1:                     tac1,
+	}
+}
+
+// verifyTestClientConn waits for a testClientConn on ch, verifies that it was
+// created with wantKey, and returns it.
+func verifyTestClientConn(ctx context.Context, t *testing.T, ch chan *testClientConn, wantKey string) *testClientConn {
+	t.Helper()
+	var tcc *testClientConn
+	select {
+	case tcc = <-ch:
+	case <-ctx.Done():
+		t.Fatal("Timeout waiting for gRPC channel creation")
+	}
+	if tcc.key != wantKey {
+		t.Fatalf("Channel created with key %q, want %q", tcc.key, wantKey)
+	}
+	return tcc
+}
+
+// verifyTestAutoshardingClient waits for a testAutoshardingClient on ch,
+// verifies that its ClientOptions match wantOpts, and returns it. If
+// wantOpts.UUID is empty, it verifies that the created client has a non-empty
+// UUID; otherwise, it verifies that the UUID matches wantOpts.UUID.
+func verifyTestAutoshardingClient(ctx context.Context, t *testing.T, ch chan *testAutoshardingClient, wantOpts sharding.ClientOptions) *testAutoshardingClient {
+	t.Helper()
+	var tac *testAutoshardingClient
+	select {
+	case tac = <-ch:
+	case <-ctx.Done():
+		t.Fatal("Timeout waiting for autosharding client creation")
+	}
+	if tac.opts.CC != wantOpts.CC {
+		t.Errorf("Autosharding client created with CC %v, want %v", tac.opts.CC, wantOpts.CC)
+	}
+	if tac.opts.AutoshardingTarget != wantOpts.AutoshardingTarget {
+		t.Errorf("Autosharding client created with AutoshardingTarget = %q, want %q", tac.opts.AutoshardingTarget, wantOpts.AutoshardingTarget)
+	}
+	if wantOpts.UUID == "" {
+		if tac.opts.UUID == "" {
+			t.Error("Autosharding client created with empty UUID, want non-empty UUID")
+		}
+	} else if tac.opts.UUID != wantOpts.UUID {
+		t.Errorf("Autosharding client created with UUID = %q, want %q", tac.opts.UUID, wantOpts.UUID)
+	}
+	if tac.opts.InitialAssignmentTimeout != wantOpts.InitialAssignmentTimeout {
+		t.Errorf("Autosharding client created with InitialAssignmentTimeout = %v, want %v", tac.opts.InitialAssignmentTimeout, wantOpts.InitialAssignmentTimeout)
+	}
+	return tac
+}
+
+// waitForEvent waits for the given gRPC event to be done, or fails the test if
+// the context times out.
+func waitForEvent(ctx context.Context, t *testing.T, e *grpcsync.Event, errMsg string) {
+	t.Helper()
+	select {
+	case <-e.Done():
+	case <-ctx.Done():
+		t.Fatalf("Timeout waiting for event: %s", errMsg)
+	}
+}
+
 // Tests scenarios where an update from the name resolver is invalid and
 // verifies that the balancer transitions to TransientFailure with an
 // appropriate error picker, closing any existing gRPC channel and autosharding
@@ -61,12 +177,12 @@ func (s) TestUpdateClientConnState_ResolverError(t *testing.T) {
 
 	defaultTestCfg := &autosharding.LBConfig{
 		ChannelFactoryKey:  "test-factory-key",
-		AutoShardingTarget: "test-target-%s",
+		AutoShardingTarget: "test-target",
 		KeyHeaderName:      "test-header-name",
 	}
 	badKeyCfg := &autosharding.LBConfig{
 		ChannelFactoryKey:  "invalid-factory-key",
-		AutoShardingTarget: "test-target-%s",
+		AutoShardingTarget: "test-target",
 		KeyHeaderName:      "test-header-name",
 	}
 	providerErr := errors.New("channel factory error")
@@ -147,18 +263,11 @@ func (s) TestUpdateClientConnState_ResolverError(t *testing.T) {
 			if err != nil {
 				t.Fatalf("UpdateClientConnState() unexpected error: %v", err)
 			}
-			var tcc1 *testClientConn
-			select {
-			case tcc1 = <-testClientConnCh:
-			case <-ctx.Done():
-				t.Fatal("Timeout waiting for initial gRPC channel creation")
-			}
-			var tac1 *testAutoshardingClient
-			select {
-			case tac1 = <-testAutoshardingClientCh:
-			case <-ctx.Done():
-				t.Fatal("Timeout waiting for initial autosharding client creation")
-			}
+			tcc1 := verifyTestClientConn(ctx, t, testClientConnCh, defaultTestCfg.ChannelFactoryKey)
+			tac1 := verifyTestAutoshardingClient(ctx, t, testAutoshardingClientCh, sharding.ClientOptions{
+				CC:                 tcc1,
+				AutoshardingTarget: "test-target",
+			})
 			if err := cc.WaitForConnectivityState(ctx, connectivity.Idle); err != nil {
 				t.Fatalf("WaitForConnectivityState(Idle) failed: %v", err)
 			}
@@ -190,16 +299,8 @@ func (s) TestUpdateClientConnState_ResolverError(t *testing.T) {
 			if err := cc.WaitForPickerWithErr(ctx, tc.wantPickerErr); err != nil {
 				t.Fatalf("WaitForPickerWithErr(%v) failed: %v", tc.wantPickerErr, err)
 			}
-			select {
-			case <-tac1.closeCalled.Done():
-			case <-ctx.Done():
-				t.Fatal("Timeout waiting for autosharding client to be closed on invalid update")
-			}
-			select {
-			case <-tcc1.closeCalled.Done():
-			case <-ctx.Done():
-				t.Fatal("Timeout waiting for gRPC channel to be closed on invalid update")
-			}
+			waitForEvent(ctx, t, tac1.closeCalled, "autosharding client to be closed on invalid update")
+			waitForEvent(ctx, t, tcc1.closeCalled, "gRPC channel to be closed on invalid update")
 
 			// 4. A subsequent valid update with the same config should create a
 			// new gRPC channel and autosharding client, and transition back to
@@ -212,16 +313,11 @@ func (s) TestUpdateClientConnState_ResolverError(t *testing.T) {
 			if err != nil {
 				t.Fatalf("UpdateClientConnState() unexpected error: %v", err)
 			}
-			select {
-			case <-testClientConnCh:
-			case <-ctx.Done():
-				t.Fatal("Timeout waiting for new gRPC channel creation after recovery")
-			}
-			select {
-			case <-testAutoshardingClientCh:
-			case <-ctx.Done():
-				t.Fatal("Timeout waiting for new autosharding client creation after recovery")
-			}
+			tcc1 = verifyTestClientConn(ctx, t, testClientConnCh, defaultTestCfg.ChannelFactoryKey)
+			_ = verifyTestAutoshardingClient(ctx, t, testAutoshardingClientCh, sharding.ClientOptions{
+				CC:                 tcc1,
+				AutoshardingTarget: "test-target",
+			})
 			if err := cc.WaitForConnectivityState(ctx, connectivity.Idle); err != nil {
 				t.Fatalf("WaitForConnectivityState(Idle) failed: %v", err)
 			}
@@ -259,7 +355,7 @@ func (s) TestResolverError(t *testing.T) {
 	// to Idle while waiting for an initial assignment.
 	defaultTestCfg := &autosharding.LBConfig{
 		ChannelFactoryKey:  "test-factory-key",
-		AutoShardingTarget: "test-target-%s",
+		AutoShardingTarget: "test-target",
 		KeyHeaderName:      "test-header-name",
 	}
 	if err := b.UpdateClientConnState(balancer.ClientConnState{
@@ -321,13 +417,14 @@ func (s) TestUpdateClientConnState_EmptyEndpointsClosesChildSubConns(t *testing.
 
 	defaultTestCfg := &autosharding.LBConfig{
 		ChannelFactoryKey:  "test-factory-key",
-		AutoShardingTarget: "test-target-%s",
+		AutoShardingTarget: "test-target",
 		KeyHeaderName:      "test-header-name",
 	}
 
 	// Send a valid resolver update with one endpoint.
+	provider, testClientConnCh := testClientConnProvider()
 	if err := b.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState:  resolverStateWithProviderAndEndpoints(defaultTestClientConnProvider(), []resolver.Endpoint{newTestEndpoint("1.1.1.1:1", "host-0")}),
+		ResolverState:  resolverStateWithProviderAndEndpoints(provider, []resolver.Endpoint{newTestEndpoint("1.1.1.1:1", "host-0")}),
 		BalancerConfig: defaultTestCfg,
 	}); err != nil {
 		t.Fatalf("UpdateClientConnState() unexpected error: %v", err)
@@ -342,15 +439,14 @@ func (s) TestUpdateClientConnState_EmptyEndpointsClosesChildSubConns(t *testing.
 	}
 
 	// Wait for the autosharding client to be created.
-	var testClient *testAutoshardingClient
-	select {
-	case testClient = <-testAutoshardingClientCh:
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for autosharding client creation")
-	}
+	tcc1 := verifyTestClientConn(ctx, t, testClientConnCh, defaultTestCfg.ChannelFactoryKey)
+	tac1 := verifyTestAutoshardingClient(ctx, t, testAutoshardingClientCh, sharding.ClientOptions{
+		CC:                 tcc1,
+		AutoshardingTarget: "test-target",
+	})
 
 	// Inject a valid assignment.
-	testClient.onAssignmentUpdate(&sharding.Assignment{
+	tac1.onAssignmentUpdate(&sharding.Assignment{
 		EndpointNames: []string{"host-0"},
 		Slices:        []sharding.Slice{{StartKey: []byte(""), Endpoints: []int{0}}},
 		Generation:    1,
@@ -415,74 +511,24 @@ func (s) TestUpdateClientConnState_IdenticalUpdate(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	testAutoshardingClientCh := overrideNewAutoshardingClientForTesting(t)
-	cc := testutils.NewBalancerClientConn(t)
-	b := balancer.Get(autosharding.Name).Build(cc, balancer.BuildOptions{})
-	defer b.Close()
-
-	// Initial configuration with locality "us-east1" and "%s" in target.
-	provider, testClientConnCh := testClientConnProvider()
-	baseState := resolverStateWithProviderAndEndpoints(provider, []resolver.Endpoint{newTestEndpoint("1.1.1.1:1", "host-0")})
-	lbConfig := &autosharding.LBConfig{
-		ChannelFactoryKey:        "key-1",
-		AutoShardingTarget:       "service-%s-shard",
-		KeyHeaderName:            "test-header-name",
-		InitialAssignmentTimeout: iserviceconfig.Duration(60 * time.Second),
-	}
-	if err := b.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState:  locality.Set(baseState, "us-east1"),
-		BalancerConfig: lbConfig,
-	}); err != nil {
-		t.Fatalf("UpdateClientConnState() unexpected error: %v", err)
-	}
-
-	// Verify that the gRPC channel is created with the expected key.
-	var tcc1 *testClientConn
-	select {
-	case tcc1 = <-testClientConnCh:
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for initial gRPC channel creation")
-	}
-	if tcc1.key != "key-1" {
-		t.Fatalf("Channel created with key %q, want %q", tcc1.key, "key-1")
-	}
-
-	// Verify that the AutoshardingClient is created with the expected options.
-	var tac1 *testAutoshardingClient
-	select {
-	case tac1 = <-testAutoshardingClientCh:
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for initial autosharding client creation")
-	}
-	if tac1.opts.CC != tcc1 {
-		t.Errorf("Autosharding client created with CC %v, want %v", tac1.opts.CC, tcc1)
-	}
-	if want := "service-us-east1-shard"; tac1.opts.AutoshardingTarget != want {
-		t.Errorf("Autosharding client created with AutoshardingTarget = %q, want %q", tac1.opts.AutoshardingTarget, want)
-	}
-	if tac1.opts.UUID == "" {
-		t.Error("Autosharding client created with empty UUID, want non-empty UUID")
-	}
-	if want := 60 * time.Second; tac1.opts.InitialAssignmentTimeout != want {
-		t.Errorf("Autosharding client created with InitialAssignmentTimeout = %v, want %v", tac1.opts.InitialAssignmentTimeout, want)
-	}
+	env := setupBalancerWithInitialConfig(ctx, t)
 
 	// Re-sending the same config should not create a new channel or client, and
 	// should not close the existing channel and client.
-	if err := b.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState:  locality.Set(baseState, "us-east1"),
-		BalancerConfig: lbConfig,
+	if err := env.b.UpdateClientConnState(balancer.ClientConnState{
+		ResolverState:  locality.Set(env.baseState, "us-east1"),
+		BalancerConfig: env.lbConfig,
 	}); err != nil {
 		t.Fatalf("UpdateClientConnState() unexpected error: %v", err)
 	}
 	select {
-	case ch := <-testClientConnCh:
+	case ch := <-env.testClientConnCh:
 		t.Fatalf("Unexpected new gRPC channel created for key %q", ch.key)
-	case c := <-testAutoshardingClientCh:
+	case c := <-env.testAutoshardingClientCh:
 		t.Fatalf("Unexpected new autosharding client created for target %q", c.opts.AutoshardingTarget)
-	case <-tcc1.closeCalled.Done():
+	case <-env.tcc1.closeCalled.Done():
 		t.Fatal("gRPC channel was unexpectedly closed")
-	case <-tac1.closeCalled.Done():
+	case <-env.tac1.closeCalled.Done():
 		t.Fatal("AutoshardingClient was unexpectedly closed")
 	case <-time.After(defaultTestShortTimeout):
 	}
@@ -496,95 +542,36 @@ func (s) TestUpdateClientConnState_AutoshardingTargetChange(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	testAutoshardingClientCh := overrideNewAutoshardingClientForTesting(t)
-	cc := testutils.NewBalancerClientConn(t)
-	b := balancer.Get(autosharding.Name).Build(cc, balancer.BuildOptions{})
-	defer b.Close()
-
-	// Initial configuration with locality "us-east1" and "%s" in target.
-	provider, testClientConnCh := testClientConnProvider()
-	baseState := resolverStateWithProviderAndEndpoints(provider, []resolver.Endpoint{newTestEndpoint("1.1.1.1:1", "host-0")})
-	lbConfig := &autosharding.LBConfig{
-		ChannelFactoryKey:        "key-1",
-		AutoShardingTarget:       "service-%s-shard",
-		KeyHeaderName:            "test-header-name",
-		InitialAssignmentTimeout: iserviceconfig.Duration(60 * time.Second),
-	}
-	if err := b.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState:  locality.Set(baseState, "us-east1"),
-		BalancerConfig: lbConfig,
-	}); err != nil {
-		t.Fatalf("UpdateClientConnState() unexpected error: %v", err)
-	}
-
-	// Verify that the gRPC channel is created with the expected key.
-	var tcc1 *testClientConn
-	select {
-	case tcc1 = <-testClientConnCh:
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for initial gRPC channel creation")
-	}
-	if tcc1.key != "key-1" {
-		t.Fatalf("Channel created with key %q, want %q", tcc1.key, "key-1")
-	}
-
-	// Verify that the AutoshardingClient is created with the expected options.
-	var tac1 *testAutoshardingClient
-	select {
-	case tac1 = <-testAutoshardingClientCh:
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for initial autosharding client creation")
-	}
-	if tac1.opts.CC != tcc1 {
-		t.Errorf("Autosharding client created with CC %v, want %v", tac1.opts.CC, tcc1)
-	}
-	if want := "service-us-east1-shard"; tac1.opts.AutoshardingTarget != want {
-		t.Errorf("Autosharding client created with AutoshardingTarget = %q, want %q", tac1.opts.AutoshardingTarget, want)
-	}
-	if tac1.opts.UUID == "" {
-		t.Error("Autosharding client created with empty UUID, want non-empty UUID")
-	}
-	if want := 60 * time.Second; tac1.opts.InitialAssignmentTimeout != want {
-		t.Errorf("Autosharding client created with InitialAssignmentTimeout = %v, want %v", tac1.opts.InitialAssignmentTimeout, want)
-	}
+	env := setupBalancerWithInitialConfig(ctx, t)
 
 	// Changing locality (with "%s" in target) and keeping the channel
 	// factory key unchanged should reuse the gRPC channel, but create a new
 	// AutoshardingClient.
-	if err := b.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState:  locality.Set(baseState, "eu-west1"),
-		BalancerConfig: lbConfig,
+	if err := env.b.UpdateClientConnState(balancer.ClientConnState{
+		ResolverState:  locality.Set(env.baseState, "eu-west1"),
+		BalancerConfig: env.lbConfig,
 	}); err != nil {
 		t.Fatalf("UpdateClientConnState() unexpected error: %v", err)
 	}
 
 	// Verify the options passed to the new autosharding client.
-	var tac2 *testAutoshardingClient
-	select {
-	case tac2 = <-testAutoshardingClientCh:
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for new autosharding client creation on locality change")
-	}
-	if tac2.opts.CC != tcc1 {
-		t.Errorf("New autosharding client does not reuse existing gRPC channel, got %v, want %v", tac2.opts.CC, tcc1)
-	}
-	if want := "service-eu-west1-shard"; tac2.opts.AutoshardingTarget != want {
-		t.Errorf("New autosharding client has AutoshardingTarget = %q, want %q", tac2.opts.AutoshardingTarget, want)
-	}
-	if tac2.opts.UUID != tac1.opts.UUID {
-		t.Errorf("New autosharding client has UUID = %q, want reused balancer UUID %q", tac2.opts.UUID, tac1.opts.UUID)
-	}
+	verifyTestAutoshardingClient(ctx, t, env.testAutoshardingClientCh, sharding.ClientOptions{
+		CC:                       env.tcc1,
+		AutoshardingTarget:       "service-eu-west1-shard",
+		UUID:                     env.tac1.opts.UUID,
+		InitialAssignmentTimeout: 60 * time.Second,
+	})
 
 	// Verify that the previous autosharding client is closed.
 	select {
-	case <-tac1.closeCalled.Done():
+	case <-env.tac1.closeCalled.Done():
 	case <-ctx.Done():
 		t.Fatal("Timeout waiting for previous autosharding client to be closed on locality change")
 	}
 
 	// Verify that the gRPC channel is not closed.
 	select {
-	case <-tcc1.closeCalled.Done():
+	case <-env.tcc1.closeCalled.Done():
 		t.Fatalf("Existing gRPC channel was unexpectedly closed on locality change")
 	case <-time.After(defaultTestShortTimeout):
 	}
@@ -619,33 +606,12 @@ func (s) TestUpdateClientConnState_MissingLocality(t *testing.T) {
 		t.Fatalf("UpdateClientConnState() unexpected error: %v", err)
 	}
 
-	// Verify that the gRPC channel is created with the expected key.
-	var tcc1 *testClientConn
-	select {
-	case tcc1 = <-testClientConnCh:
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for initial gRPC channel creation")
-	}
-	if tcc1.key != "key-1" {
-		t.Fatalf("Channel created with key %q, want %q", tcc1.key, "key-1")
-	}
-
-	// Verify the options passed to the new autosharding client.
-	var tac1 *testAutoshardingClient
-	select {
-	case tac1 = <-testAutoshardingClientCh:
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for new autosharding client creation")
-	}
-	if tac1.opts.CC != tcc1 {
-		t.Errorf("Autosharding client created with CC %v, want %v", tac1.opts.CC, tcc1)
-	}
-	if want := "service--shard"; tac1.opts.AutoshardingTarget != want {
-		t.Errorf("New autosharding client has AutoshardingTarget = %q, want %q", tac1.opts.AutoshardingTarget, want)
-	}
-	if tac1.opts.UUID == "" {
-		t.Error("Autosharding client created with empty UUID, want non-empty UUID")
-	}
+	tcc1 := verifyTestClientConn(ctx, t, testClientConnCh, "key-1")
+	verifyTestAutoshardingClient(ctx, t, testAutoshardingClientCh, sharding.ClientOptions{
+		CC:                       tcc1,
+		AutoshardingTarget:       "service--shard",
+		InitialAssignmentTimeout: 60 * time.Second,
+	})
 }
 
 // Tests that changing the channelFactoryKey in the resolver update creates a new
@@ -654,57 +620,7 @@ func (s) TestUpdateClientConnState_ChannelFactoryKeyChange(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	testAutoshardingClientCh := overrideNewAutoshardingClientForTesting(t)
-	cc := testutils.NewBalancerClientConn(t)
-	b := balancer.Get(autosharding.Name).Build(cc, balancer.BuildOptions{})
-	defer b.Close()
-
-	// Initial configuration with locality "us-east1" and "%s" in target.
-	provider, testClientConnCh := testClientConnProvider()
-	baseState := resolverStateWithProviderAndEndpoints(provider, []resolver.Endpoint{newTestEndpoint("1.1.1.1:1", "host-0")})
-	lbConfig := &autosharding.LBConfig{
-		ChannelFactoryKey:        "key-1",
-		AutoShardingTarget:       "service-%s-shard",
-		KeyHeaderName:            "test-header-name",
-		InitialAssignmentTimeout: iserviceconfig.Duration(60 * time.Second),
-	}
-	if err := b.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState:  locality.Set(baseState, "us-east1"),
-		BalancerConfig: lbConfig,
-	}); err != nil {
-		t.Fatalf("UpdateClientConnState() unexpected error: %v", err)
-	}
-
-	// Verify that the gRPC channel is created with the expected key.
-	var tcc1 *testClientConn
-	select {
-	case tcc1 = <-testClientConnCh:
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for initial gRPC channel creation")
-	}
-	if tcc1.key != "key-1" {
-		t.Fatalf("Channel created with key %q, want %q", tcc1.key, "key-1")
-	}
-
-	// Verify that the AutoshardingClient is created with the expected options.
-	var tac1 *testAutoshardingClient
-	select {
-	case tac1 = <-testAutoshardingClientCh:
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for initial autosharding client creation")
-	}
-	if tac1.opts.CC != tcc1 {
-		t.Errorf("Autosharding client created with CC %v, want %v", tac1.opts.CC, tcc1)
-	}
-	if want := "service-us-east1-shard"; tac1.opts.AutoshardingTarget != want {
-		t.Errorf("Autosharding client created with AutoshardingTarget = %q, want %q", tac1.opts.AutoshardingTarget, want)
-	}
-	if tac1.opts.UUID == "" {
-		t.Error("Autosharding client created with empty UUID, want non-empty UUID")
-	}
-	if want := 60 * time.Second; tac1.opts.InitialAssignmentTimeout != want {
-		t.Errorf("Autosharding client created with InitialAssignmentTimeout = %v, want %v", tac1.opts.InitialAssignmentTimeout, want)
-	}
+	env := setupBalancerWithInitialConfig(ctx, t)
 
 	// Changing channelFactoryKey creates a new gRPC channel and a new
 	// autoshardingClient, and closes the old ones.
@@ -713,44 +629,30 @@ func (s) TestUpdateClientConnState_ChannelFactoryKeyChange(t *testing.T) {
 		AutoShardingTarget: "service-%s-shard",
 		KeyHeaderName:      "test-header-name",
 	}
-	if err := b.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState:  locality.Set(baseState, "us-east1"),
+	if err := env.b.UpdateClientConnState(balancer.ClientConnState{
+		ResolverState:  locality.Set(env.baseState, "us-east1"),
 		BalancerConfig: config,
 	}); err != nil {
 		t.Fatalf("UpdateClientConnState() unexpected error: %v", err)
 	}
 
-	// Verify that a new gRPC channel is created.
-	var tcc2 *testClientConn
-	select {
-	case tcc2 = <-testClientConnCh:
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for the second gRPC channel creation")
-	}
-	if tcc2.key != "key-2" {
-		t.Fatalf("Channel created with key %q, want %q", tcc2.key, "key-2")
-	}
-
-	// Verify that a new autosharding client is created.
-	var tac2 *testAutoshardingClient
-	select {
-	case tac2 = <-testAutoshardingClientCh:
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for second autosharding client creation")
-	}
-	if tac2.opts.CC != tcc2 {
-		t.Fatalf("Autosharding client created with CC %v, want %v", tac2.opts.CC, tcc2)
-	}
+	// Verify that a new gRPC channel and autosharding client are created.
+	tcc2 := verifyTestClientConn(ctx, t, env.testClientConnCh, "key-2")
+	verifyTestAutoshardingClient(ctx, t, env.testAutoshardingClientCh, sharding.ClientOptions{
+		CC:                 tcc2,
+		AutoshardingTarget: "service-us-east1-shard",
+		UUID:               env.tac1.opts.UUID,
+	})
 
 	// Wait for the previous autosharding client and gRPC channel to be
 	// closed.
 	select {
-	case <-tac1.closeCalled.Done():
+	case <-env.tac1.closeCalled.Done():
 	case <-ctx.Done():
 		t.Fatal("Timeout waiting for the previous autosharding client to be closed")
 	}
 	select {
-	case <-tcc1.closeCalled.Done():
+	case <-env.tcc1.closeCalled.Done():
 	case <-ctx.Done():
 		t.Fatal("Timeout waiting for the previous gRPC channel to be closed")
 	}
@@ -762,66 +664,16 @@ func (s) TestUpdateClientConnState_BalancerClose(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	testAutoshardingClientCh := overrideNewAutoshardingClientForTesting(t)
-	cc := testutils.NewBalancerClientConn(t)
-	b := balancer.Get(autosharding.Name).Build(cc, balancer.BuildOptions{})
-	defer b.Close()
+	env := setupBalancerWithInitialConfig(ctx, t)
 
-	// Initial configuration with locality "us-east1" and "%s" in target.
-	provider, testClientConnCh := testClientConnProvider()
-	baseState := resolverStateWithProviderAndEndpoints(provider, []resolver.Endpoint{newTestEndpoint("1.1.1.1:1", "host-0")})
-	lbConfig := &autosharding.LBConfig{
-		ChannelFactoryKey:        "key-1",
-		AutoShardingTarget:       "service-%s-shard",
-		KeyHeaderName:            "test-header-name",
-		InitialAssignmentTimeout: iserviceconfig.Duration(60 * time.Second),
-	}
-	if err := b.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState:  locality.Set(baseState, "us-east1"),
-		BalancerConfig: lbConfig,
-	}); err != nil {
-		t.Fatalf("UpdateClientConnState() unexpected error: %v", err)
-	}
-
-	// Verify that the gRPC channel is created with the expected key.
-	var tcc1 *testClientConn
+	env.b.Close()
 	select {
-	case tcc1 = <-testClientConnCh:
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for initial gRPC channel creation")
-	}
-	if tcc1.key != "key-1" {
-		t.Fatalf("Channel created with key %q, want %q", tcc1.key, "key-1")
-	}
-
-	// Verify that the AutoshardingClient is created with the expected options.
-	var tac1 *testAutoshardingClient
-	select {
-	case tac1 = <-testAutoshardingClientCh:
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for initial autosharding client creation")
-	}
-	if tac1.opts.CC != tcc1 {
-		t.Errorf("Autosharding client created with CC %v, want %v", tac1.opts.CC, tcc1)
-	}
-	if want := "service-us-east1-shard"; tac1.opts.AutoshardingTarget != want {
-		t.Errorf("Autosharding client created with AutoshardingTarget = %q, want %q", tac1.opts.AutoshardingTarget, want)
-	}
-	if tac1.opts.UUID == "" {
-		t.Error("Autosharding client created with empty UUID, want non-empty UUID")
-	}
-	if want := 60 * time.Second; tac1.opts.InitialAssignmentTimeout != want {
-		t.Errorf("Autosharding client created with InitialAssignmentTimeout = %v, want %v", tac1.opts.InitialAssignmentTimeout, want)
-	}
-
-	b.Close()
-	select {
-	case <-tac1.closeCalled.Done():
+	case <-env.tac1.closeCalled.Done():
 	case <-ctx.Done():
 		t.Fatal("Timeout waiting for autosharding client to be closed")
 	}
 	select {
-	case <-tcc1.closeCalled.Done():
+	case <-env.tcc1.closeCalled.Done():
 	case <-ctx.Done():
 		t.Fatal("Timeout waiting for gRPC channel to be closed")
 	}
