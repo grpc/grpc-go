@@ -52,8 +52,9 @@ const (
 
 // Tests scenarios where an update from the name resolver is invalid and
 // verifies that the balancer transitions to TransientFailure with an
-// appropriate error picker. A subsequent valid update should transition the
-// channel back to Idle with a queueing picker.
+// appropriate error picker, closing any existing gRPC channel and autosharding
+// client. A subsequent valid update should create a new channel and client and
+// transition the channel back to Idle with a queueing picker.
 func (s) TestUpdateClientConnState_ResolverError(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -63,12 +64,18 @@ func (s) TestUpdateClientConnState_ResolverError(t *testing.T) {
 		AutoShardingTarget: "test-target-%s",
 		KeyHeaderName:      "test-header-name",
 	}
+	badKeyCfg := &autosharding.LBConfig{
+		ChannelFactoryKey:  "invalid-factory-key",
+		AutoShardingTarget: "test-target-%s",
+		KeyHeaderName:      "test-header-name",
+	}
 	providerErr := errors.New("channel factory error")
 
 	tests := []struct {
 		name               string
 		endpoints          []resolver.Endpoint
 		clientConnProvider func(string) (grpc.ClientConnInterface, func(), error)
+		invalidCfg         *autosharding.LBConfig
 		wantPickerErr      error
 	}{
 		{
@@ -77,6 +84,7 @@ func (s) TestUpdateClientConnState_ResolverError(t *testing.T) {
 			clientConnProvider: func(key string) (grpc.ClientConnInterface, func(), error) {
 				return defaultTestClientConnProvider()(key)
 			},
+			invalidCfg:    defaultTestCfg,
 			wantPickerErr: errors.New("autosharding: no endpoints from resolver"),
 		},
 		{
@@ -85,12 +93,14 @@ func (s) TestUpdateClientConnState_ResolverError(t *testing.T) {
 			clientConnProvider: func(key string) (grpc.ClientConnInterface, func(), error) {
 				return defaultTestClientConnProvider()(key)
 			},
+			invalidCfg:    defaultTestCfg,
 			wantPickerErr: errors.New("autosharding: no endpoints from resolver"),
 		},
 		{
 			name:               "missing-channel-factory",
 			endpoints:          []resolver.Endpoint{newTestEndpoint("1.1.1.1:1", "host-0")},
 			clientConnProvider: nil,
+			invalidCfg:         defaultTestCfg,
 			wantPickerErr:      errors.New("autosharding: no channel factory found in resolver state"),
 		},
 		{
@@ -99,22 +109,23 @@ func (s) TestUpdateClientConnState_ResolverError(t *testing.T) {
 			clientConnProvider: func(string) (grpc.ClientConnInterface, func(), error) {
 				return nil, nil, providerErr
 			},
-			wantPickerErr: fmt.Errorf("autosharding: failed to create gRPC channel for key %q: %v", defaultTestCfg.ChannelFactoryKey, providerErr),
+			invalidCfg:    badKeyCfg,
+			wantPickerErr: fmt.Errorf("autosharding: failed to create gRPC channel for key %q: %v", badKeyCfg.ChannelFactoryKey, providerErr),
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			overrideNewAutoshardingClientForTesting(t)
+			testAutoshardingClientCh := overrideNewAutoshardingClientForTesting(t)
 			cc := testutils.NewBalancerClientConn(t)
 			b := balancer.Get(autosharding.Name).Build(cc, balancer.BuildOptions{})
 			defer b.Close()
 
-			// Invalid resolver state should return ErrBadResolverState and
-			// transition the channel to TransientFailure with an error picker.
+			// 1. Initial invalid resolver state should return ErrBadResolverState
+			// and transition the channel to TransientFailure with an error picker.
 			err := b.UpdateClientConnState(balancer.ClientConnState{
 				ResolverState:  resolverStateWithProviderAndEndpoints(tc.clientConnProvider, tc.endpoints),
-				BalancerConfig: defaultTestCfg,
+				BalancerConfig: tc.invalidCfg,
 			})
 			if !errors.Is(err, balancer.ErrBadResolverState) {
 				t.Fatalf("UpdateClientConnState() error = %v, want %v", err, balancer.ErrBadResolverState)
@@ -126,14 +137,90 @@ func (s) TestUpdateClientConnState_ResolverError(t *testing.T) {
 				t.Fatalf("WaitForPickerWithErr(%v) failed: %v", tc.wantPickerErr, err)
 			}
 
-			// Valid resolver state should transition the channel back to Idle
-			// with a queueing picker.
+			// 2. Valid resolver state should create a gRPC channel and autosharding
+			// client, and transition the channel to Idle with a queueing picker.
+			provider, testClientConnCh := testClientConnProvider()
 			err = b.UpdateClientConnState(balancer.ClientConnState{
-				ResolverState:  resolverStateWithProviderAndEndpoints(defaultTestClientConnProvider(), []resolver.Endpoint{newTestEndpoint("1.1.1.1:1", "host-0")}),
+				ResolverState:  resolverStateWithProviderAndEndpoints(provider, []resolver.Endpoint{newTestEndpoint("1.1.1.1:1", "host-0")}),
 				BalancerConfig: defaultTestCfg,
 			})
 			if err != nil {
 				t.Fatalf("UpdateClientConnState() unexpected error: %v", err)
+			}
+			var tcc1 *testClientConn
+			select {
+			case tcc1 = <-testClientConnCh:
+			case <-ctx.Done():
+				t.Fatal("Timeout waiting for initial gRPC channel creation")
+			}
+			var tac1 *testAutoshardingClient
+			select {
+			case tac1 = <-testAutoshardingClientCh:
+			case <-ctx.Done():
+				t.Fatal("Timeout waiting for initial autosharding client creation")
+			}
+			if err := cc.WaitForConnectivityState(ctx, connectivity.Idle); err != nil {
+				t.Fatalf("WaitForConnectivityState(Idle) failed: %v", err)
+			}
+			if err := cc.WaitForPickerWithErr(ctx, balancer.ErrNoSubConnAvailable); err != nil {
+				t.Fatalf("WaitForPickerWithErr(ErrNoSubConnAvailable) failed: %v", err)
+			}
+
+			// Inject an assignment so we can also verify that a subsequent
+			// invalid update clears b.assignment.
+			tac1.onAssignmentUpdate(&sharding.Assignment{
+				EndpointNames: []string{"host-0"},
+				Slices:        []sharding.Slice{{StartKey: []byte(""), Endpoints: []int{0}}},
+				Generation:    1,
+			})
+			_ = waitForPicker(ctx, t, cc)
+
+			// 3. A subsequent invalid update should transition the channel back
+			// to TransientFailure and close the existing client and gRPC channel.
+			err = b.UpdateClientConnState(balancer.ClientConnState{
+				ResolverState:  resolverStateWithProviderAndEndpoints(tc.clientConnProvider, tc.endpoints),
+				BalancerConfig: tc.invalidCfg,
+			})
+			if !errors.Is(err, balancer.ErrBadResolverState) {
+				t.Fatalf("UpdateClientConnState() error = %v, want %v", err, balancer.ErrBadResolverState)
+			}
+			if err := cc.WaitForConnectivityState(ctx, connectivity.TransientFailure); err != nil {
+				t.Fatalf("WaitForConnectivityState(TransientFailure) failed: %v", err)
+			}
+			if err := cc.WaitForPickerWithErr(ctx, tc.wantPickerErr); err != nil {
+				t.Fatalf("WaitForPickerWithErr(%v) failed: %v", tc.wantPickerErr, err)
+			}
+			select {
+			case <-tac1.closeCalled.Done():
+			case <-ctx.Done():
+				t.Fatal("Timeout waiting for autosharding client to be closed on invalid update")
+			}
+			select {
+			case <-tcc1.closeCalled.Done():
+			case <-ctx.Done():
+				t.Fatal("Timeout waiting for gRPC channel to be closed on invalid update")
+			}
+
+			// 4. A subsequent valid update with the same config should create a
+			// new gRPC channel and autosharding client, and transition back to
+			// Idle with a queueing picker (since the previous assignment was
+			// cleared).
+			err = b.UpdateClientConnState(balancer.ClientConnState{
+				ResolverState:  resolverStateWithProviderAndEndpoints(provider, []resolver.Endpoint{newTestEndpoint("1.1.1.1:1", "host-0")}),
+				BalancerConfig: defaultTestCfg,
+			})
+			if err != nil {
+				t.Fatalf("UpdateClientConnState() unexpected error: %v", err)
+			}
+			select {
+			case <-testClientConnCh:
+			case <-ctx.Done():
+				t.Fatal("Timeout waiting for new gRPC channel creation after recovery")
+			}
+			select {
+			case <-testAutoshardingClientCh:
+			case <-ctx.Done():
+				t.Fatal("Timeout waiting for new autosharding client creation after recovery")
 			}
 			if err := cc.WaitForConnectivityState(ctx, connectivity.Idle); err != nil {
 				t.Fatalf("WaitForConnectivityState(Idle) failed: %v", err)
@@ -195,6 +282,25 @@ func (s) TestResolverError(t *testing.T) {
 	defer sCancel()
 	if err := cc.WaitForConnectivityState(sCtx, connectivity.TransientFailure); err == nil {
 		t.Fatal("Channel unexpectedly transitioned to TransientFailure after ResolverError with valid endpoints")
+	}
+
+	// If a subsequent update has valid endpoints but is rejected due to invalid
+	// configuration (closing the autosharding client), a following ResolverError
+	// should overwrite lastResolverErr and be surfaced by the picker.
+	err := b.UpdateClientConnState(balancer.ClientConnState{
+		ResolverState:  resolverStateWithProviderAndEndpoints(nil, []resolver.Endpoint{newTestEndpoint("1.1.1.1:1", "host-0")}),
+		BalancerConfig: defaultTestCfg,
+	})
+	if !errors.Is(err, balancer.ErrBadResolverState) {
+		t.Fatalf("UpdateClientConnState() error = %v, want %v", err, balancer.ErrBadResolverState)
+	}
+	if err := cc.WaitForConnectivityState(ctx, connectivity.TransientFailure); err != nil {
+		t.Fatalf("WaitForConnectivityState(TransientFailure) failed: %v", err)
+	}
+	resolverErr2 := errors.New("resolver failure after invalid config update")
+	b.ResolverError(resolverErr2)
+	if err := cc.WaitForPickerWithErr(ctx, resolverErr2); err != nil {
+		t.Fatalf("WaitForPickerWithErr(%v) failed: %v", resolverErr2, err)
 	}
 }
 
@@ -2007,8 +2113,13 @@ func testClientConnProvider() (func(string) (grpc.ClientConnInterface, func(), e
 // Use testClientConnProvider() if the test needs to capture the created
 // testClientConn.
 func defaultTestClientConnProvider() func(string) (grpc.ClientConnInterface, func(), error) {
-	provider, _ := testClientConnProvider()
-	return provider
+	return func(key string) (grpc.ClientConnInterface, func(), error) {
+		tcc := &testClientConn{
+			key:         key,
+			closeCalled: grpcsync.NewEvent(),
+		}
+		return tcc, func() { tcc.closeCalled.Fire() }, nil
+	}
 }
 
 // resolverStateWithProviderAndEndpoints returns a resolver.State with the given

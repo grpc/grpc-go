@@ -302,13 +302,23 @@ func (b *autoshardingBalancer) handleNewConfigurationInternal(state resolver.Sta
 	// So, we set the return values such that they close any existing gRPC
 	// channel and autosharding client.
 	//
-	// In the event that the configuration is successfully processed, the return
-	// values are set to previous gRPC channel and autosharding client close
-	// functions (if new ones are created), and we don't change them here.
+	// We also reset the previous assignment/error because when we later process
+	// the new configuration successfully, we would want to queue RPCs until we
+	// receive a result from the autoshardingClient instead of using the
+	// previous assignment/error values.
 	defer func() {
 		if b.lastResolverErr != nil {
 			clientClose = b.autoshardingClientClose
+			b.autoshardingClientClose = nil
+			b.autoshardingTarget = ""
+			b.autoshardingClientGen++
 			channelClose = b.autoshardingChannelClose
+			b.autoshardingChannelClose = nil
+			b.autoshardingChannel = nil
+
+			b.assignment = nil
+			b.assignmentErr = nil
+			b.shouldRegenerateSliceMap = true
 		}
 	}()
 
