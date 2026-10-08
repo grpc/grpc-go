@@ -260,8 +260,7 @@ func truncateRunes(s string, maxRunes int) string {
 }
 
 // sendAssignmentACK sends an AssignmentAck message to the sharding service with
-// the given generation, accepted flag, and error message. It also clears the
-// chunksReceived field to prepare for the next assignment.
+// the given generation, accepted flag, and error message.
 //
 // Only invoked from the run goroutine.
 func (c *autoshardingClient) sendAssignmentACK(stream shardingStream, gen int64, accepted bool, errMsg string) {
