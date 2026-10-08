@@ -311,6 +311,7 @@ func (s) TestBuildAssignment(t *testing.T) {
 		endpoints      []string
 		generation     int64
 		wantAssignment *Assignment
+		wantErrMsg     string
 	}{
 		{
 			name: "contiguous_slices_no_gaps",
@@ -346,6 +347,7 @@ func (s) TestBuildAssignment(t *testing.T) {
 					{StartKey: []byte("d"), Endpoints: []int{0}},
 				},
 			},
+			wantErrMsg: "encountered 1 gap(s) in the assignment",
 		},
 		{
 			name: "middle_gap_filled",
@@ -364,6 +366,7 @@ func (s) TestBuildAssignment(t *testing.T) {
 					{StartKey: []byte("m"), Endpoints: []int{1}},
 				},
 			},
+			wantErrMsg: "encountered 1 gap(s) in the assignment",
 		},
 		{
 			name: "trailing_gap_filled",
@@ -380,6 +383,7 @@ func (s) TestBuildAssignment(t *testing.T) {
 					{StartKey: []byte("m"), Endpoints: []int{}},
 				},
 			},
+			wantErrMsg: "encountered 1 gap(s) in the assignment",
 		},
 		{
 			name: "leading_middle_and_trailing_gaps_filled",
@@ -400,13 +404,17 @@ func (s) TestBuildAssignment(t *testing.T) {
 					{StartKey: []byte("k"), Endpoints: []int{}},
 				},
 			},
+			wantErrMsg: "encountered 3 gap(s) in the assignment",
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := buildAssignment(tc.slices, tc.endpoints, tc.generation)
-			if diff := cmp.Diff(tc.wantAssignment, got, cmpopts.EquateEmpty()); diff != "" {
+			gotAssignment, gotErrMsg := buildAssignment(tc.slices, tc.endpoints, tc.generation)
+			if gotErrMsg != tc.wantErrMsg {
+				t.Errorf("buildAssignment() error = %q, want %q", gotErrMsg, tc.wantErrMsg)
+			}
+			if diff := cmp.Diff(tc.wantAssignment, gotAssignment, cmpopts.EquateEmpty()); diff != "" {
 				t.Errorf("buildAssignment() diff (-want +got):\n%s", diff)
 			}
 		})
