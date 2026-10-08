@@ -122,6 +122,11 @@ func (c *autoshardingClient) run(ctx context.Context) {
 		stream, err := client.WatchShardingAssignment(streamCtx, grpc.WaitForReady(true))
 		if err != nil {
 			c.reportError(fmt.Errorf("autosharding: failed to create a new stream to the sharding service: %v", err))
+			if ctx.Err() != nil {
+				// Force backoff.RunF to exit by returning the context error
+				// until https://github.com/grpc/grpc-go/issues/9485 is fixed.
+				return ctx.Err()
+			}
 			return nil
 		}
 
@@ -141,7 +146,13 @@ func (c *autoshardingClient) run(ctx context.Context) {
 
 		// Backoff state is reset upon successful receipt of at least one valid
 		// assignment from the server.
-		if c.recvAssignments(stream) {
+		resetBackoff := c.recvAssignments(stream)
+		if ctx.Err() != nil {
+			// Force backoff.RunF to exit by returning the context error until
+			// https://github.com/grpc/grpc-go/issues/9485 is fixed.
+			return ctx.Err()
+		}
+		if resetBackoff {
 			return backoff.ErrResetBackoff
 		}
 		return nil
