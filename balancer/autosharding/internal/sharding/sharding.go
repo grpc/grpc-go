@@ -49,7 +49,10 @@ const (
 	maxKeyLen = 512
 )
 
-var errInitialAssignmentTimeout = errors.New("autosharding: initial_assignment_timeout fired before a valid assignment was received")
+var (
+	logger                      = grpclog.Component("autosharding")
+	errInitialAssignmentTimeout = errors.New("autosharding: initial_assignment_timeout fired before a valid assignment was received")
+)
 
 // A convenience type alias for brevity.
 type shardingStream = grpc.BidiStreamingClient[aspb.WatchShardingAssignmentRequest, aspb.WatchShardingAssignmentResponse]
@@ -565,7 +568,7 @@ func NewClient(opts ClientOptions) func() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	ac.cancel = cancel
-	ac.logger = igrpclog.NewPrefixLogger(grpclog.Component("autosharding"), opts.LogPrefix+fmt.Sprintf("[autosharding-client %p] ", ac))
+	ac.logger = igrpclog.NewPrefixLogger(logger, opts.LogPrefix+fmt.Sprintf("[autosharding-client %p] ", ac))
 	if ac.backoff == nil {
 		ac.backoff = backoff.DefaultExponential.Backoff
 	}
