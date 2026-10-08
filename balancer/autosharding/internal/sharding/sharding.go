@@ -54,8 +54,55 @@ var (
 	errInitialAssignmentTimeout = errors.New("autosharding: initial_assignment_timeout fired before a valid assignment was received")
 )
 
+// ClientOptions contains the options for creating a new autosharding client.
+type ClientOptions struct {
+	CC                       grpc.ClientConnInterface // The gRPC channel to the sharding service.
+	AutoshardingTarget       string                   // The target for the autosharding service.
+	UUID                     string                   // The unique identifier for this client.
+	InitialAssignmentTimeout time.Duration            // The timeout for the initial assignment fetch.
+	OnAssignmentUpdate       func(*Assignment)        // Invoked when a new assignment is received. Must not block.
+	OnAssignmentError        func(error)              // Invoked when there is an error fetching the assignment. Must not block.
+	Backoff                  func(int) time.Duration  // Backoff for retries, after stream failures.
+	LogPrefix                string                   // Prefix for log messages from this client.
+}
+
+// NewClient creates a new autosharding client that connects to the sharding
+// service using the provided options and fetches assignments. It returns a
+// function to close the client. The close function blocks until the client's
+// goroutine has exited, and no callbacks are invoked after it returns.
+//
+// OnAssignmentUpdate and OnAssignmentError are invoked serially, while an
+// internal lock is held. They must not block and must not call the close
+// function, or they will deadlock.
+func NewClient(opts ClientOptions) func() {
+	ac := &autoshardingClient{
+		cc:                 opts.CC,
+		target:             opts.AutoshardingTarget,
+		uuid:               opts.UUID,
+		onAssignmentUpdate: opts.OnAssignmentUpdate,
+		onAssignmentError:  opts.OnAssignmentError,
+		backoff:            opts.Backoff,
+		runnerDoneCh:       make(chan struct{}),
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	ac.cancel = cancel
+	ac.logger = igrpclog.NewPrefixLogger(logger, opts.LogPrefix+fmt.Sprintf("[autosharding-client %p] ", ac))
+	if ac.backoff == nil {
+		ac.backoff = backoff.DefaultExponential.Backoff
+	}
+
+	// Start a timer that will fire after the initial assignment timeout. If a
+	// valid assignment is not received before the timer fires, the
+	// onAssignmentError callback will be invoked.
+	ac.initialAssignmentTimer = time.AfterFunc(opts.InitialAssignmentTimeout, func() { ac.reportError(errInitialAssignmentTimeout) })
+
+	go ac.run(ctx)
+	return ac.close
+}
+
 // A convenience type alias for brevity.
-type shardingStream = grpc.BidiStreamingClient[aspb.WatchShardingAssignmentRequest, aspb.WatchShardingAssignmentResponse]
+type shardingStream = asgrpc.AutoshardingService_WatchShardingAssignmentClient
 
 // Slice represents a key range and its assigned endpoints. The end key of the
 // range is not stored here because it is always the start key of the next
@@ -198,6 +245,10 @@ func (c *autoshardingClient) recvAssignments(stream shardingStream) bool {
 // truncateRunes truncates the input string to a maximum of maxRunes runes
 // without reallocating the string.
 func truncateRunes(s string, maxRunes int) string {
+	if len(s) <= maxRunes {
+		return s
+	}
+
 	count := 0
 	for i := range s {
 		if count >= maxRunes {
@@ -214,8 +265,6 @@ func truncateRunes(s string, maxRunes int) string {
 //
 // Only invoked from the run goroutine.
 func (c *autoshardingClient) sendAssignmentACK(stream shardingStream, gen int64, accepted bool, errMsg string) {
-	c.chunksReceived = nil
-
 	// We don't report an error if the Send fails, because there will be
 	// subsequent Recv on the same stream from recvAssignments which will fail,
 	// and we will report that error instead.
@@ -226,7 +275,9 @@ func (c *autoshardingClient) sendAssignmentACK(stream shardingStream, gen int64,
 			ErrorMessage: truncateRunes(errMsg, maxErrMsgLenForAssignmentACK),
 		},
 	}); err != nil {
-		c.logger.Errorf("Failed to send an AssignmentAck message: %v", err)
+		if c.logger.V(2) {
+			c.logger.Infof("Failed to send an AssignmentAck message: %v", err)
+		}
 	}
 }
 
@@ -237,6 +288,8 @@ func (c *autoshardingClient) sendAssignmentACK(stream shardingStream, gen int64,
 //
 // Only invoked from the run goroutine.
 func (c *autoshardingClient) handleMetadata(stream shardingStream, gen int64) bool {
+	defer func() { c.chunksReceived = nil }()
+
 	if c.logger.V(2) {
 		c.logger.Infof("Received metadata with generation: %d, previous generation: %d", gen, c.latestGeneration)
 	}
@@ -301,7 +354,7 @@ func validateAssignment(chunks []*aspb.AssignmentChunk) ([]*aspb.SliceAssignment
 	// Combine endpoint state from all chunks into a single list of endpoints.
 	// This is required because the assignments have indices into the combined
 	// list of endpoints, and we need to ensure that the indices are valid.
-	combinedEndpoints := make([]string, 0)
+	var combinedEndpoints []string
 	for _, chunk := range chunks {
 		for _, endpoint := range chunk.GetEndpoints() {
 			combinedEndpoints = append(combinedEndpoints, endpoint.GetEndpoint())
@@ -309,7 +362,7 @@ func validateAssignment(chunks []*aspb.AssignmentChunk) ([]*aspb.SliceAssignment
 	}
 
 	var errs []string
-	combinedSliceAssignments := make([]*aspb.SliceAssignment, 0)
+	var combinedSliceAssignments []*aspb.SliceAssignment
 	for _, chunk := range chunks {
 		combinedSliceAssignments = append(combinedSliceAssignments, chunk.GetSliceAssignments()...)
 	}
@@ -427,29 +480,21 @@ func buildAssignment(sortedSlices []*aspb.SliceAssignment, endpoints []string, g
 	// Handle gaps in assignments.
 	var numGaps int
 	for i, slice := range sortedSlices {
+		// If the first slice does not start with an empty key, we need to fill
+		// the gap with a Slice with an empty start key and no endpoints.
 		if i == 0 && len(slice.GetSlice().GetStartKey()) != 0 {
-			// If the first slice does not start with an empty key, we need to
-			// fill the gap with a Slice with no endpoints.
-			firstSlice := Slice{
-				StartKey:  []byte{},
-				Endpoints: []int{},
-			}
-			assignment.Slices = []Slice{firstSlice}
+			assignment.Slices = []Slice{{}}
 			numGaps++
 		}
 
+		// If there is a gap between the previous slice's end key and the
+		// current slice's start key, we need to fill the gap with a Slice with
+		// no endpoints.
 		if i > 0 {
 			prevEndKey := sortedSlices[i-1].GetSlice().GetEndKey()
 			currStartKey := slice.GetSlice().GetStartKey()
 			if bytes.Compare(prevEndKey, currStartKey) < 0 {
-				// If there is a gap between the previous slice's end key and
-				// the current slice's start key, we need to fill the gap with a
-				// Slice with no endpoints.
-				gapSlice := Slice{
-					StartKey:  prevEndKey,
-					Endpoints: []int{},
-				}
-				assignment.Slices = append(assignment.Slices, gapSlice)
+				assignment.Slices = append(assignment.Slices, Slice{StartKey: prevEndKey})
 				numGaps++
 			}
 		}
@@ -463,14 +508,10 @@ func buildAssignment(sortedSlices []*aspb.SliceAssignment, endpoints []string, g
 			assignment.Slices[len(assignment.Slices)-1].Endpoints[j] = int(epState.GetEndpointIndex())
 		}
 	}
+	// If the last slice does not end with a nil key, we need to fill the gap
+	// with a Slice with no endpoints.
 	if lastEndKey := sortedSlices[len(sortedSlices)-1].GetSlice().GetEndKey(); lastEndKey != nil {
-		// If the last slice does not end with a nil key, we need to fill the
-		// gap with a Slice with no endpoints.
-		lastSlice := Slice{
-			StartKey:  lastEndKey,
-			Endpoints: []int{},
-		}
-		assignment.Slices = append(assignment.Slices, lastSlice)
+		assignment.Slices = append(assignment.Slices, Slice{StartKey: lastEndKey})
 		numGaps++
 	}
 	if numGaps > 0 {
@@ -548,51 +589,4 @@ func (c *autoshardingClient) close() {
 	if c.logger.V(2) {
 		c.logger.Infof("Shutdown")
 	}
-}
-
-// ClientOptions contains the options for creating a new autosharding client.
-type ClientOptions struct {
-	CC                       grpc.ClientConnInterface // The gRPC channel to the sharding service.
-	AutoshardingTarget       string                   // The target for the autosharding service.
-	UUID                     string                   // The unique identifier for this client.
-	InitialAssignmentTimeout time.Duration            // The timeout for the initial assignment fetch.
-	OnAssignmentUpdate       func(*Assignment)        // Invoked when a new assignment is received. Must not block.
-	OnAssignmentError        func(error)              // Invoked when there is an error fetching the assignment. Must not block.
-	Backoff                  func(int) time.Duration  // Backoff for retries, after stream failures.
-	LogPrefix                string                   // Prefix for log messages from this client.
-}
-
-// NewClient creates a new autosharding client that connects to the sharding
-// service using the provided options and fetches assignments. It returns a
-// function to close the client. The close function blocks until the client's
-// goroutine has exited, and no callbacks are invoked after it returns.
-//
-// OnAssignmentUpdate and OnAssignmentError are invoked serially, while an
-// internal lock is held. They must not block and must not call the close
-// function, or they will deadlock.
-func NewClient(opts ClientOptions) func() {
-	ac := &autoshardingClient{
-		cc:                 opts.CC,
-		target:             opts.AutoshardingTarget,
-		uuid:               opts.UUID,
-		onAssignmentUpdate: opts.OnAssignmentUpdate,
-		onAssignmentError:  opts.OnAssignmentError,
-		backoff:            opts.Backoff,
-		runnerDoneCh:       make(chan struct{}),
-	}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	ac.cancel = cancel
-	ac.logger = igrpclog.NewPrefixLogger(logger, opts.LogPrefix+fmt.Sprintf("[autosharding-client %p] ", ac))
-	if ac.backoff == nil {
-		ac.backoff = backoff.DefaultExponential.Backoff
-	}
-
-	// Start a timer that will fire after the initial assignment timeout. If a
-	// valid assignment is not received before the timer fires, the
-	// onAssignmentError callback will be invoked.
-	ac.initialAssignmentTimer = time.AfterFunc(opts.InitialAssignmentTimeout, func() { ac.reportError(errInitialAssignmentTimeout) })
-
-	go ac.run(ctx)
-	return ac.close
 }
