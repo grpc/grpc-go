@@ -237,8 +237,9 @@ func (s) TestUpdateClientConnState_ResolverError(t *testing.T) {
 			b := balancer.Get(autosharding.Name).Build(cc, balancer.BuildOptions{})
 			defer b.Close()
 
-			// 1. Initial invalid resolver state should return ErrBadResolverState
-			// and transition the channel to TransientFailure with an error picker.
+			// Initial invalid resolver state should return ErrBadResolverState
+			// and transition the channel to TransientFailure with an error
+			// picker.
 			err := b.UpdateClientConnState(balancer.ClientConnState{
 				ResolverState:  resolverStateWithProviderAndEndpoints(tc.clientConnProvider, tc.endpoints),
 				BalancerConfig: tc.invalidCfg,
@@ -253,8 +254,9 @@ func (s) TestUpdateClientConnState_ResolverError(t *testing.T) {
 				t.Fatalf("WaitForPickerWithErr(%v) failed: %v", tc.wantPickerErr, err)
 			}
 
-			// 2. Valid resolver state should create a gRPC channel and autosharding
-			// client, and transition the channel to Idle with a queueing picker.
+			// Valid resolver state should create a gRPC channel and
+			// autosharding client, and transition the channel to Idle with a
+			// queueing picker.
 			provider, testClientConnCh := testClientConnProvider()
 			err = b.UpdateClientConnState(balancer.ClientConnState{
 				ResolverState:  resolverStateWithProviderAndEndpoints(provider, []resolver.Endpoint{newTestEndpoint("1.1.1.1:1", "host-0")}),
@@ -284,8 +286,8 @@ func (s) TestUpdateClientConnState_ResolverError(t *testing.T) {
 			})
 			_ = waitForPicker(ctx, t, cc)
 
-			// 3. A subsequent invalid update should transition the channel back
-			// to TransientFailure and close the existing client and gRPC channel.
+			// A subsequent invalid update should transition the channel back to
+			// TransientFailure and close the existing client and gRPC channel.
 			err = b.UpdateClientConnState(balancer.ClientConnState{
 				ResolverState:  resolverStateWithProviderAndEndpoints(tc.clientConnProvider, tc.endpoints),
 				BalancerConfig: tc.invalidCfg,
@@ -302,7 +304,7 @@ func (s) TestUpdateClientConnState_ResolverError(t *testing.T) {
 			waitForEvent(ctx, t, tac1.closeCalled, "autosharding client to be closed on invalid update")
 			waitForEvent(ctx, t, tcc1.closeCalled, "gRPC channel to be closed on invalid update")
 
-			// 4. A subsequent valid update with the same config should create a
+			// A subsequent valid update with the same config should create a
 			// new gRPC channel and autosharding client, and transition back to
 			// Idle with a queueing picker (since the previous assignment was
 			// cleared).
