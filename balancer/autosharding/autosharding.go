@@ -198,12 +198,16 @@ func (b *autoshardingBalancer) UpdateClientConnState(ccs balancer.ClientConnStat
 	return childErr
 }
 
+// hostnameFromEndpoint extracts the hostname from the given resolver.Endpoint.
+// If the endpoint has a hostname, it returns that. Otherwise, it falls back to
+// using the first address in the endpoint's Addresses list.
+//
+// The endpoint must have at least one address in its Addresses list.
 func hostnameFromEndpoint(ep resolver.Endpoint) string {
-	hostname := hostname.FromEndpoint(ep)
-	if hostname == "" {
-		hostname = ep.Addresses[0].Addr
+	if h := hostname.FromEndpoint(ep); h != "" {
+		return h
 	}
-	return hostname
+	return ep.Addresses[0].Addr
 }
 
 // handleNewEndpointsLocked processes the new endpoints received from the
@@ -345,7 +349,7 @@ func (b *autoshardingBalancer) handleNewConfigurationInternal(state resolver.Sta
 
 	// Reuse the existing gRPC channel unless channel_factory_key has changed.
 	channel := b.autoshardingChannel
-	var cancel func()
+	var shardingChannelClose func()
 	createNewAutoshardingClient := false
 	newAutoshardingChannelCreated := false
 	if b.autoshardingClientClose == nil || newConfig.ChannelFactoryKey != b.lbCfg.ChannelFactoryKey {
@@ -353,7 +357,7 @@ func (b *autoshardingBalancer) handleNewConfigurationInternal(state resolver.Sta
 			b.logger.Infof("Creating a new gRPC channel with channel_factory_key: %q", newConfig.ChannelFactoryKey)
 		}
 		var err error
-		channel, cancel, err = provider(newConfig.ChannelFactoryKey)
+		channel, shardingChannelClose, err = provider(newConfig.ChannelFactoryKey)
 		if err != nil {
 			b.lastResolverErr = fmt.Errorf("autosharding: failed to create gRPC channel for key %q: %v", newConfig.ChannelFactoryKey, err)
 			return nil, nil, balancer.ErrBadResolverState
@@ -395,7 +399,7 @@ func (b *autoshardingBalancer) handleNewConfigurationInternal(state resolver.Sta
 	if newAutoshardingChannelCreated {
 		prevAutoshardingChannelClose = b.autoshardingChannelClose
 		b.autoshardingChannel = channel
-		b.autoshardingChannelClose = cancel
+		b.autoshardingChannelClose = shardingChannelClose
 	}
 	return prevAutoshardingClientClose, prevAutoshardingChannelClose, nil
 }
