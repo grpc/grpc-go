@@ -24,5 +24,7 @@ import (
 )
 
 var (
+	// DefaultBackoff is the default backoff function used for retrying streams.
+	// Overridden in tests.
 	DefaultBackoff = backoff.DefaultExponential.Backoff
 )
