@@ -38,6 +38,7 @@ import (
 
 	asgrpc "google.golang.org/grpc/balancer/autosharding/internal/proto"
 	aspb "google.golang.org/grpc/balancer/autosharding/internal/proto"
+	"google.golang.org/grpc/balancer/autosharding/internal/sharding/internal"
 )
 
 const (
@@ -62,7 +63,6 @@ type ClientOptions struct {
 	InitialAssignmentTimeout time.Duration            // The timeout for the initial assignment fetch.
 	OnAssignmentUpdate       func(*Assignment)        // Invoked when a new assignment is received. Must not block.
 	OnAssignmentError        func(error)              // Invoked when there is an error fetching the assignment. Must not block.
-	Backoff                  func(int) time.Duration  // Backoff for retries, after stream failures.
 	LogPrefix                string                   // Prefix for log messages from this client.
 }
 
@@ -81,16 +81,12 @@ func NewClient(opts ClientOptions) func() {
 		uuid:               opts.UUID,
 		onAssignmentUpdate: opts.OnAssignmentUpdate,
 		onAssignmentError:  opts.OnAssignmentError,
-		backoff:            opts.Backoff,
 		runnerDoneCh:       make(chan struct{}),
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	ac.cancel = cancel
 	ac.logger = igrpclog.NewPrefixLogger(logger, opts.LogPrefix+fmt.Sprintf("[autosharding-client %p] ", ac))
-	if ac.backoff == nil {
-		ac.backoff = backoff.DefaultExponential.Backoff
-	}
 
 	// Start a timer that will fire after the initial assignment timeout. If a
 	// valid assignment is not received before the timer fires, the
@@ -133,7 +129,6 @@ type autoshardingClient struct {
 	uuid               string
 	onAssignmentUpdate func(*Assignment)
 	onAssignmentError  func(error)
-	backoff            func(int) time.Duration
 	logger             *igrpclog.PrefixLogger
 	runnerDoneCh       chan struct{}
 	cancel             func()
@@ -204,7 +199,7 @@ func (c *autoshardingClient) run(ctx context.Context) {
 		}
 		return nil
 	}
-	backoff.RunF(ctx, runStream, c.backoff)
+	backoff.RunF(ctx, runStream, internal.DefaultBackoff)
 }
 
 // recvAssignments receives messages from the sharding service and assembles
