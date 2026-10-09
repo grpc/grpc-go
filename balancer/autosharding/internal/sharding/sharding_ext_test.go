@@ -29,6 +29,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer/autosharding/internal/sharding"
+	"google.golang.org/grpc/balancer/autosharding/internal/sharding/internal"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/grpctest"
@@ -702,6 +703,14 @@ func (s) TestClient_StreamFailureAndBackoff(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
+	backoffCh := make(chan int, 1)
+	origBackoff := internal.DefaultBackoff
+	defer func() { internal.DefaultBackoff = origBackoff }()
+	internal.DefaultBackoff = func(attempt int) time.Duration {
+		backoffCh <- attempt
+		return defaultTestShortTimeout
+	}
+
 	var streamAttempt atomic.Int32
 	initCfgCh := make(chan *aspb.InitialClientConfig, 1)
 	cc := startTestShardingServer(t, func(stream asgrpc.AutoshardingService_WatchShardingAssignmentServer) error {
@@ -762,7 +771,6 @@ func (s) TestClient_StreamFailureAndBackoff(t *testing.T) {
 		}
 	})
 
-	backoffCh := make(chan int, 1)
 	updateCh := make(chan *sharding.Assignment, 1)
 	errCh := make(chan error, 1)
 	closeClient := sharding.NewClient(sharding.ClientOptions{
@@ -772,10 +780,6 @@ func (s) TestClient_StreamFailureAndBackoff(t *testing.T) {
 		InitialAssignmentTimeout: defaultTestTimeout,
 		OnAssignmentUpdate:       func(a *sharding.Assignment) { updateCh <- a },
 		OnAssignmentError:        func(err error) { errCh <- err },
-		Backoff: func(attempt int) time.Duration {
-			backoffCh <- attempt
-			return defaultTestShortTimeout
-		},
 	})
 	defer closeClient()
 
