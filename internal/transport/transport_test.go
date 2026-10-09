@@ -289,11 +289,10 @@ func (h *testStreamHandler) handleStreamDelayRead(t *testing.T, s *ServerStream)
 		mu    sync.Mutex
 		total int
 	)
-	s.wq.replenish = func(n int) {
+	s.wq.onReplenishForTesting = func(n int) {
 		mu.Lock()
 		total += n
 		mu.Unlock()
-		s.wq.realReplenish(n)
 	}
 	getTotal := func() int {
 		mu.Lock()
@@ -1017,11 +1016,10 @@ func (s) TestLargeMessageWithDelayRead(t *testing.T) {
 		mu    sync.Mutex
 		total int
 	)
-	s.wq.replenish = func(n int) {
+	s.wq.onReplenishForTesting = func(n int) {
 		mu.Lock()
 		total += n
 		mu.Unlock()
-		s.wq.realReplenish(n)
 	}
 	getTotal := func() int {
 		mu.Lock()
