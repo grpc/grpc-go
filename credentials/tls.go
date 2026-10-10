@@ -43,6 +43,8 @@ type TLSInfo struct {
 	CommonAuthInfo
 	// This API is experimental.
 	SPIFFEID *url.URL
+	// insecureSkipVerify records the setting used for the client handshake.
+	insecureSkipVerify bool
 }
 
 // AuthType returns the type of TLSInfo as a string.
@@ -52,8 +54,12 @@ func (t TLSInfo) AuthType() string {
 
 // ValidateAuthority validates the provided authority being used to override the
 // :authority header by verifying it against the peer certificate. It returns a
-// non-nil error if the validation fails.
+// non-nil error if the validation fails. If the client handshake was configured
+// with InsecureSkipVerify, authority validation is skipped.
 func (t TLSInfo) ValidateAuthority(authority string) error {
+	if t.insecureSkipVerify {
+		return nil
+	}
 	host, _, err := net.SplitHostPort(authority)
 	if err != nil {
 		host = authority
@@ -153,7 +159,8 @@ func (c *tlsCreds) ClientHandshake(ctx context.Context, authority string, rawCon
 		logger.Warningf("Allowing TLS connection to server %q with ALPN disabled. TLS connections to servers with ALPN disabled will be disallowed in future grpc-go releases", cfg.ServerName)
 	}
 	tlsInfo := TLSInfo{
-		State: conn.ConnectionState(),
+		State:              conn.ConnectionState(),
+		insecureSkipVerify: cfg.InsecureSkipVerify,
 		CommonAuthInfo: CommonAuthInfo{
 			SecurityLevel: PrivacyAndIntegrity,
 		},
