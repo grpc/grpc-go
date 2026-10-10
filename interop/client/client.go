@@ -88,6 +88,8 @@ var (
 		`Configure different test cases. Valid options are:
         empty_unary : empty (zero bytes) request and response;
         large_unary : single request and (large) response;
+        client_compressed_unary : single request and (large) response, verifying client-side request compression;
+        server_compressed_unary : single request and (large) response, verifying server-side response compression;
         client_streaming : request streaming with single response;
         server_streaming : single request with response streaming;
         ping_pong : full-duplex streaming;
@@ -299,6 +301,12 @@ func main() {
 	case "large_unary":
 		interop.DoLargeUnaryCall(ctx, tc)
 		logger.Infoln("LargeUnaryCall done")
+	case "client_compressed_unary":
+		interop.DoClientCompressedUnaryCall(ctx, tc)
+		logger.Infoln("ClientCompressedUnaryCall done")
+	case "server_compressed_unary":
+		interop.DoServerCompressedUnaryCall(ctx, tc)
+		logger.Infoln("ServerCompressedUnaryCall done")
 	case "client_streaming":
 		interop.DoClientStreaming(ctx, tc)
 		logger.Infoln("ClientStreaming done")
