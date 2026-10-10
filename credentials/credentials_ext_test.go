@@ -216,6 +216,104 @@ func (s) TestIncorrectAuthorityWithTLS(t *testing.T) {
 	}
 }
 
+// TestTLSCallAuthorityInsecureSkipVerify verifies that per-RPC authority
+// validation respects the TLS configuration used for the connection.
+func (s) TestTLSCallAuthorityInsecureSkipVerify(t *testing.T) {
+	tests := []struct {
+		name  string
+		cfg   *tls.Config
+		clone bool
+	}{
+		{
+			name: "SkipVerify",
+			cfg:  &tls.Config{InsecureSkipVerify: true},
+		},
+		{
+			name:  "SkipVerifyClonedCredentials",
+			cfg:   &tls.Config{InsecureSkipVerify: true},
+			clone: true,
+		},
+		{
+			name: "SkipVerifyWithCustomVerification",
+			cfg: &tls.Config{
+				InsecureSkipVerify: true,
+				VerifyConnection: func(cs tls.ConnectionState) error {
+					_, err := cs.PeerCertificates[0].Verify(x509.VerifyOptions{
+						Roots:   certPool,
+						DNSName: serverName,
+					})
+					return err
+				},
+			},
+		},
+		{
+			name: "VerifyEnabled",
+			cfg:  &tls.Config{RootCAs: certPool},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			channelAuthority := serverName
+			wantCode := codes.Unavailable
+			if tt.cfg.InsecureSkipVerify {
+				channelAuthority = "does.not.match"
+				wantCode = codes.OK
+			}
+			authorities := make(chan string, 1)
+			ss := &stubserver.StubServer{
+				EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
+					md, _ := metadata.FromIncomingContext(ctx)
+					authorities <- md.Get(":authority")[0]
+					return &testpb.Empty{}, nil
+				},
+			}
+			if err := ss.StartServer(grpc.Creds(credentials.NewServerTLSFromCert(&serverCert))); err != nil {
+				t.Fatalf("Error starting endpoint server: %v", err)
+			}
+			defer ss.Stop()
+			creds := credentials.NewTLS(tt.cfg)
+			if tt.clone {
+				creds = creds.Clone()
+			}
+			cc, err := grpc.NewClient(ss.Address, grpc.WithTransportCredentials(creds), grpc.WithAuthority(channelAuthority))
+			if err != nil {
+				t.Fatalf("grpc.NewClient(%q) = %v", ss.Address, err)
+			}
+			defer cc.Close()
+			client := testgrpc.NewTestServiceClient(cc)
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+
+			checkCall := func(authority string, code codes.Code, opts ...grpc.CallOption) {
+				t.Helper()
+				_, err := client.EmptyCall(ctx, &testpb.Empty{}, opts...)
+				if got := status.Code(err); got != code {
+					t.Fatalf("EmptyCall() with authority %q returned %v, want code %v", authority, err, code)
+				}
+				if code != codes.OK {
+					if !strings.Contains(err.Error(), "failed to validate authority") {
+						t.Fatalf("EmptyCall() returned %v, want authority validation error", err)
+					}
+					return
+				}
+				select {
+				case got := <-authorities:
+					if got != authority {
+						t.Fatalf("Server received authority %q, want %q", got, authority)
+					}
+				case <-ctx.Done():
+					t.Fatalf("Timed out waiting for server authority: %v", ctx.Err())
+				}
+			}
+			checkCall(channelAuthority, codes.OK)
+			for _, authority := range []string{"also.does.not.match", "also.does.not.match:8443"} {
+				checkCall(authority, wantCode, grpc.CallAuthority(authority))
+			}
+			checkCall(channelAuthority, codes.OK)
+		})
+	}
+}
+
 // testAuthInfoNoValidator implements only credentials.AuthInfo and not
 // credentials.AuthorityValidator.
 type testAuthInfoNoValidator struct{}
