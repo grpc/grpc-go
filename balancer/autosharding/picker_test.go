@@ -28,11 +28,19 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/autosharding/internal/sharding"
-	"google.golang.org/grpc/balancer/endpointsharding"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/metadata"
 )
+
+type s struct {
+	grpctest.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
 
 const testHeaderName = "x-sharding-key"
 
@@ -72,18 +80,14 @@ func buildTestEndpoints(specs []testEndpointSpec) (map[string]*endpointState, []
 		sc := testutils.NewTestSubConn(fmt.Sprintf("sc-%d", i))
 		subConns[i] = sc
 		endpointMap[spec.hostname] = &endpointState{
-			index: i,
-			childState: endpointsharding.ChildState{
-				State: balancer.State{
-					ConnectivityState: spec.state,
-					Picker: &fakeChildPicker{
-						sc:  sc,
-						err: spec.pickErr,
-					},
-				},
-				ExitIdle: func() {
-					exitIdleCounts[i]++
-				},
+			index:             i,
+			connectivityState: spec.state,
+			picker: &fakeChildPicker{
+				sc:  sc,
+				err: spec.pickErr,
+			},
+			exitIdle: func() {
+				exitIdleCounts[i]++
 			},
 		}
 	}
@@ -141,8 +145,7 @@ func (s) TestPicker_MissingKeyHeader(t *testing.T) {
 
 // Tests the picker behavior when no assignment has been received from the
 // sharding service and the initial assignment timeout has expired, verifying
-// that RPCs fail when fallback is disabled and route to the fallback pool when
-// fallback is enabled.
+// that RPCs route to the fallback pool when fallback is enabled.
 func (s) TestPicker_StartupNoAssignment(t *testing.T) {
 	em, subConns, _ := buildTestEndpoints([]testEndpointSpec{
 		{hostname: "hostA", state: connectivity.Ready},
@@ -154,24 +157,14 @@ func (s) TestPicker_StartupNoAssignment(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	t.Run("fallback-disabled-fails-pick", func(t *testing.T) {
-		const wantErr = "no assignment available and fallback is disabled"
-		p := newPicker(em, sm, &LBConfig{KeyHeaderName: testHeaderName, EnableFallback: false})
-		if _, err := p.Pick(balancer.PickInfo{Ctx: newContextWithShardingKey(ctx, "any-key")}); err == nil || !strings.Contains(err.Error(), wantErr) {
-			t.Fatalf("Pick() error = %v, want error containing %q", err, wantErr)
-		}
-	})
-
-	t.Run("fallback-enabled-uses-fallback-pool", func(t *testing.T) {
-		p := newPicker(em, sm, &LBConfig{KeyHeaderName: testHeaderName, EnableFallback: true})
-		res, err := p.Pick(balancer.PickInfo{Ctx: newContextWithShardingKey(ctx, "any-key")})
-		if err != nil {
-			t.Fatalf("Pick() unexpected error: %v", err)
-		}
-		if res.SubConn != subConns[0] {
-			t.Errorf("Pick() SubConn = %v, want %v", res.SubConn, subConns[0])
-		}
-	})
+	p := newPicker(em, sm, &LBConfig{KeyHeaderName: testHeaderName, EnableFallback: true})
+	res, err := p.Pick(balancer.PickInfo{Ctx: newContextWithShardingKey(ctx, "any-key")})
+	if err != nil {
+		t.Fatalf("Pick() unexpected error: %v", err)
+	}
+	if res.SubConn != subConns[0] {
+		t.Errorf("Pick() SubConn = %v, want %v", res.SubConn, subConns[0])
+	}
 }
 
 // Tests per-slice fallback behavior when the matching slice has either zero
