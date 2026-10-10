@@ -515,14 +515,14 @@ func newClientStreamWithParams(ctx context.Context, desc *StreamDesc, cc *Client
 	}
 
 	if desc != unaryStreamDesc {
-		cs.registerContextCallbacks()
+		cs.registerCancellationHandlers()
 	}
 	return cs, nil
 }
 
-// registerContextCallbacks registers callbacks to clean up the stream when the
+// registerCancellationHandlers registers callbacks to clean up the stream when the
 // RPC context expires or the ClientConn is closed.
-func (cs *clientStream) registerContextCallbacks() {
+func (cs *clientStream) registerCancellationHandlers() {
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
 	if cs.finished {
@@ -536,8 +536,8 @@ func (cs *clientStream) registerContextCallbacks() {
 		cs.finish(toRPCErr(cs.ctx.Err()))
 	}
 
-	cs.stopStreamCallback = context.AfterFunc(cs.ctx, onCtxDone)
-	cs.stopClientConnCallback = context.AfterFunc(cs.cc.ctx, onCtxDone)
+	cs.stopStreamWatcher = context.AfterFunc(cs.ctx, onCtxDone)
+	cs.stopConnWatcher = context.AfterFunc(cs.cc.ctx, onCtxDone)
 }
 
 // newAttemptLocked creates a new csAttempt without a transport or stream.
@@ -721,8 +721,8 @@ type clientStream struct {
 	replayBuffer     []replayOp // operations to replay on retry
 	replayBufferSize int        // current size of replayBuffer
 
-	stopStreamCallback     func() bool // stops the callback registered to run on RPC context expiration
-	stopClientConnCallback func() bool // stops the callback registered to run on ClientConn context expiration
+	stopStreamWatcher func() bool // stops the callback registered to run on RPC context expiration
+	stopConnWatcher   func() bool // stops the callback registered to run on ClientConn context expiration
 
 	// Bool fields are grouped at the tail to eliminate the alignment padding
 	// that would otherwise follow each bool when the next field is pointer- or
@@ -1206,11 +1206,11 @@ func (cs *clientStream) finish(err error) {
 		return
 	}
 	cs.finished = true
-	if cs.stopStreamCallback != nil {
-		cs.stopStreamCallback()
+	if cs.stopStreamWatcher != nil {
+		cs.stopStreamWatcher()
 	}
-	if cs.stopClientConnCallback != nil {
-		cs.stopClientConnCallback()
+	if cs.stopConnWatcher != nil {
+		cs.stopConnWatcher()
 	}
 	cs.commitAttemptLocked()
 	attemptCreated := cs.attempt != nil
@@ -1490,14 +1490,14 @@ func newNonRetryClientStream(ctx context.Context, desc *StreamDesc, method strin
 	as.parser = parser{r: s, bufferPool: ac.dopts.copts.BufferPool}
 	ac.incrCallsStarted()
 	if desc != unaryStreamDesc {
-		as.registerContextCallbacks()
+		as.registerCancellationHandlers()
 	}
 	return &clientStreamWrapper{ClientStream: as, desc: desc}, nil
 }
 
-// registerContextCallbacks registers callbacks to clean up the stream when the
+// registerCancellationHandlers registers callbacks to clean up the stream when the
 // RPC context expires or the SubConn is closed.
-func (as *addrConnStream) registerContextCallbacks() {
+func (as *addrConnStream) registerCancellationHandlers() {
 	as.mu.Lock()
 	defer as.mu.Unlock()
 	if as.finished {
@@ -1516,8 +1516,8 @@ func (as *addrConnStream) registerContextCallbacks() {
 		as.finish(toRPCErr(as.ctx.Err()))
 	}
 
-	as.stopStreamCallback = context.AfterFunc(as.ctx, onCtxDone)
-	as.stopClientConnCallback = context.AfterFunc(acCtx, onCtxDone)
+	as.stopStreamWatcher = context.AfterFunc(as.ctx, onCtxDone)
+	as.stopConnWatcher = context.AfterFunc(acCtx, onCtxDone)
 }
 
 type addrConnStream struct {
@@ -1540,8 +1540,8 @@ type addrConnStream struct {
 	mu     sync.Mutex
 	parser parser
 
-	stopStreamCallback     func() bool // stops the callback registered to run on RPC context expiration
-	stopClientConnCallback func() bool // stops the callback registered to run on SubConn context expiration
+	stopStreamWatcher func() bool // stops the callback registered to run on RPC context expiration
+	stopConnWatcher   func() bool // stops the callback registered to run on SubConn context expiration
 
 	// Bool fields are grouped at the tail to eliminate the alignment padding
 	// that would otherwise follow each bool when the next field is pointer- or
@@ -1684,11 +1684,11 @@ func (as *addrConnStream) finish(err error) {
 		return
 	}
 	as.finished = true
-	if as.stopStreamCallback != nil {
-		as.stopStreamCallback()
+	if as.stopStreamWatcher != nil {
+		as.stopStreamWatcher()
 	}
-	if as.stopClientConnCallback != nil {
-		as.stopClientConnCallback()
+	if as.stopConnWatcher != nil {
+		as.stopConnWatcher()
 	}
 
 	if err == io.EOF {
