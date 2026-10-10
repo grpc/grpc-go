@@ -16,18 +16,15 @@
  *
  */
 
-// Package internal contains functionality internal to the autosharding load
-// balancing policy.
+// Package internal contains functionality internal to the sharding package.
 package internal
 
 import (
-	"google.golang.org/grpc/balancer/autosharding/internal/sharding"
+	"google.golang.org/grpc/internal/backoff"
 )
 
 var (
-	// NewAutoshardingClient is a function to create a new autosharding client. The
-	// return value is a cancel function that the caller must invoke when they no
-	// longer need the autosharding client. This will be overridden in tests to stub
-	// out the real autosharding client.
-	NewAutoshardingClient func(sharding.ClientOptions) func()
+	// DefaultBackoff is the default backoff function used for retrying streams.
+	// Overridden in tests.
+	DefaultBackoff = backoff.DefaultExponential.Backoff
 )
