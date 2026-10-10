@@ -136,7 +136,7 @@ func makeLocality(localityIdx int, localityWeight, priority uint32, endpointCoun
 func (s) TestBuildClusterConfigJSON(t *testing.T) {
 	testLRSServerConfig, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{
 		URI:          "trafficdirector.googleapis.com:443",
-		ChannelCreds: []bootstrap.ChannelCreds{{Type: "google_default"}},
+		ChannelCreds: []bootstrap.ChannelCredsConfig{{Type: "google_default"}},
 	})
 	if err != nil {
 		t.Fatalf("Failed to create LRS server config for testing: %v", err)
@@ -504,7 +504,7 @@ func (s) TestBuildLeafClusterConfig_EDS_PickFirstWeightedShuffling_Disabled(t *t
 
 	testLRSServerConfig, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{
 		URI:          "trafficdirector.googleapis.com:443",
-		ChannelCreds: []bootstrap.ChannelCreds{{Type: "google_default"}},
+		ChannelCreds: []bootstrap.ChannelCredsConfig{{Type: "google_default"}},
 	})
 	if err != nil {
 		t.Fatalf("Failed to create LRS server config for testing: %v", err)
@@ -605,7 +605,7 @@ func (s) TestBuildLeafClusterConfig_EDS_PickFirstWeightedShuffling_Enabled(t *te
 
 	testLRSServerConfig, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{
 		URI:          "trafficdirector.googleapis.com:443",
-		ChannelCreds: []bootstrap.ChannelCreds{{Type: "google_default"}},
+		ChannelCreds: []bootstrap.ChannelCredsConfig{{Type: "google_default"}},
 	})
 	if err != nil {
 		t.Fatalf("Failed to create LRS server config for testing: %v", err)
@@ -819,7 +819,7 @@ func (s) TestBuildClusterImplConfigForEDS_PickFirstWeightedShuffling_Disabled(t 
 
 	testLRSServerConfig, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{
 		URI:          "trafficdirector.googleapis.com:443",
-		ChannelCreds: []bootstrap.ChannelCreds{{Type: "google_default"}},
+		ChannelCreds: []bootstrap.ChannelCredsConfig{{Type: "google_default"}},
 	})
 	if err != nil {
 		t.Fatalf("Failed to create LRS server config for testing: %v", err)
@@ -895,7 +895,7 @@ func (s) TestBuildClusterImplConfigForEDS_PickFirstWeightedShuffling_Enabled(t *
 
 	testLRSServerConfig, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{
 		URI:          "trafficdirector.googleapis.com:443",
-		ChannelCreds: []bootstrap.ChannelCreds{{Type: "google_default"}},
+		ChannelCreds: []bootstrap.ChannelCredsConfig{{Type: "google_default"}},
 	})
 	if err != nil {
 		t.Fatalf("Failed to create LRS server config for testing: %v", err)
