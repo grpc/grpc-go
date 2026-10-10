@@ -21,13 +21,21 @@ package grpc
 import (
 	"context"
 	"net"
+	"os"
+	"os/exec"
 	"reflect"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
+	estats "google.golang.org/grpc/experimental/stats"
+	"google.golang.org/grpc/internal"
+	teststats "google.golang.org/grpc/internal/testutils/stats"
 	"google.golang.org/grpc/internal/transport"
 	"google.golang.org/grpc/status"
 )
@@ -35,6 +43,80 @@ import (
 type emptyServiceServer any
 
 type testServer struct{}
+
+func (s) TestNewServerInitializesInternalHooks(t *testing.T) {
+	// Use a fresh process so earlier tests cannot initialize the hooks before
+	// the concurrent calls below. Reusing the test binary preserves -race.
+	const childEnv = "GRPC_TEST_SERVER_HOOKS_CHILD"
+	if os.Getenv(childEnv) != "1" {
+		executable, err := os.Executable()
+		if err != nil {
+			t.Fatalf("os.Executable() failed: %v", err)
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		cmd := exec.CommandContext(ctx, executable, "-test.run=^Test/NewServerInitializesInternalHooks$", "-test.timeout=30s")
+		cmd.Env = append(os.Environ(), childEnv+"=1")
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("Server hook initialization test failed: %v\n%s", err, out)
+		}
+	}
+
+	// Exercise the hooks in the parent too; the coverage profile does not
+	// include calls made by the subprocess.
+	const count = 32
+	creds := insecure.NewCredentials()
+	servers := make([]*Server, count)
+	recorders := make([]*teststats.TestMetricsRecorder, count)
+	start := make(chan struct{})
+	var wg sync.WaitGroup
+	for i := range count {
+		recorders[i] = teststats.NewTestMetricsRecorder()
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			servers[i] = NewServer(Creds(creds), StatsHandler(recorders[i]))
+			if internal.GetServerCredentials == nil || internal.IsRegisteredMethod == nil || internal.ServerFromContext == nil || internal.MetricsRecorderForServer == nil {
+				t.Error("NewServer returned before initializing its internal hooks")
+			}
+		}()
+	}
+	close(start)
+	wg.Wait()
+	for _, server := range servers {
+		defer server.Stop()
+	}
+	getCredentials := internal.GetServerCredentials.(func(*Server) credentials.TransportCredentials)
+	isRegistered := internal.IsRegisteredMethod.(func(*Server, string) bool)
+	fromContext := internal.ServerFromContext.(func(context.Context) *Server)
+	metricsRecorder := internal.MetricsRecorderForServer.(func(*Server) estats.MetricsRecorder)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if got := fromContext(ctx); got != nil {
+		t.Errorf("ServerFromContext() = %v, want nil for a context without a server", got)
+	}
+	for i, server := range servers {
+		if got := getCredentials(server); got != creds {
+			t.Errorf("GetServerCredentials() = %v, want %v", got, creds)
+		}
+		server.RegisterService(&ServiceDesc{
+			ServiceName: "test.Service",
+			Methods:     []MethodDesc{{MethodName: "Method"}},
+		}, nil)
+		if !isRegistered(server, "/test.Service/Method") || isRegistered(server, "/test.Service/Missing") {
+			t.Error("IsRegisteredMethod() did not distinguish registered and unregistered methods")
+		}
+		if got := fromContext(contextWithServer(ctx, server)); got != server {
+			t.Errorf("ServerFromContext() = %v, want %v", got, server)
+		}
+		handle := &estats.Int64CountHandle{Name: "test.server_hooks.count"}
+		metricsRecorder(server).RecordInt64Count(handle, int64(i+1))
+		if got, ok := recorders[i].Metric(handle.Descriptor().Name); !ok || got != float64(i+1) {
+			t.Errorf("Server %d recorded metric = %v, present = %v, want %v", i, got, ok, i+1)
+		}
+	}
+}
 
 func errorDesc(err error) string {
 	if s, ok := status.FromError(err); ok {
