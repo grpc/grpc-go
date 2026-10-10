@@ -34,14 +34,26 @@ type MetricsRecorderList struct {
 	metricsRecorders []estats.MetricsRecorder
 }
 
-// NewMetricsRecorderList creates a new metric recorder list with all the stats
-// handlers provided which implement the MetricsRecorder interface.
-// If no stats handlers provided implement the MetricsRecorder interface,
-// the MetricsRecorder list returned is a no-op.
-func NewMetricsRecorderList(shs []stats.Handler) *MetricsRecorderList {
+// NewMetricsRecorderList creates a new metric recorder list with every V1
+// stats handler and V2 stats handler provided which implements the
+// MetricsRecorder interface. If none do, the MetricsRecorder list returned is
+// a no-op.
+//
+// V2 handlers are collected by the same type assertion as V1 handlers, rather
+// than by MetricsRecorder being part of the V2 estats.Handler interface: a V2
+// handler that wants to record non-per-call metrics embeds MetricsRecorder
+// itself, exactly as a V1 handler does. Callers that have no V2 handlers
+// registered (which is every caller until V2 handler registration lands) pass
+// nil for handlersV2.
+func NewMetricsRecorderList(shs []stats.Handler, handlersV2 []estats.Handler) *MetricsRecorderList {
 	var mrs []estats.MetricsRecorder
 	for _, sh := range shs {
 		if mr, ok := sh.(estats.MetricsRecorder); ok {
+			mrs = append(mrs, mr)
+		}
+	}
+	for _, h := range handlersV2 {
+		if mr, ok := h.(estats.MetricsRecorder); ok {
 			mrs = append(mrs, mr)
 		}
 	}

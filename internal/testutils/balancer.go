@@ -170,7 +170,7 @@ func (tcc *BalancerClientConn) NewSubConn(a []resolver.Address, o balancer.NewSu
 
 // MetricsRecorder returns an empty MetricsRecorderList.
 func (*BalancerClientConn) MetricsRecorder() stats.MetricsRecorder {
-	return istats.NewMetricsRecorderList(nil)
+	return istats.NewMetricsRecorderList(nil, nil)
 }
 
 // RemoveSubConn is a nop; tests should all be updated to use sc.Shutdown()
