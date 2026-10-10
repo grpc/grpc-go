@@ -140,7 +140,7 @@ type customRoundRobinPicker struct {
 func (crrp *customRoundRobinPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 	next := atomic.AddUint32(&crrp.next, 1)
 	index := 0
-	if next != 0 && next%crrp.chooseSecond == 0 {
+	if crrp.chooseSecond != 0 && next != 0 && next%crrp.chooseSecond == 0 {
 		index = 1
 	}
 	childPicker := crrp.pickers[index%len(crrp.pickers)]
