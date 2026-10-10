@@ -161,6 +161,10 @@ smoothly and quickly.
   If a PR is *not* end-user visible -- e.g. a cleanup, testing change, or
   GitHub-related, use `RELEASE NOTES: n/a`.
 
+- **Is this PR a performance improvement?** Please include before/after benchmark
+  results in the description. See [benchmark/README.md](benchmark/README.md#comparing-performance-before-and-after-your-change)
+  for how to run and compare benchmarks.
+
 ### PR Process
 
 - Please **self-review** your code changes before sending your PR. This will
