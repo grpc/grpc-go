@@ -381,14 +381,16 @@ type controlBuffer struct {
 
 	// closed is set when the controlbuf is finished.
 	closed atomic.Bool
-	// transportResponseFrames counts the number of queued items that represent
-	// the response of an action initiated by the peer. When enableThrottling is
-	// true, trfChan is created when transportResponseFrames >=
-	// maxQueuedControlBufferItems and is closed and nilled when
-	// transportResponseFrames drops below the threshold. Both fields are
-	// protected by mu.
-	transportResponseFrames int
-	trfChan                 atomic.Pointer[chan struct{}]
+	// trfChan is created when transportResponseFrames reaches
+	// maxQueuedTransportResponseFrames and is closed and nilled when
+	// transportResponseFrames drops below the threshold.
+	trfChan atomic.Pointer[chan struct{}]
+
+	// transportResponseFrames counts the number of queued items (in list and
+	// consumerList) that represent the response of an action initiated by the
+	// peer. It is incremented by producers while holding mu, and decremented by
+	// the consumer without holding mu.
+	transportResponseFrames atomic.Int64
 }
 
 func newControlBuffer(done <-chan struct{}, enableThrottling bool) *controlBuffer {
@@ -446,14 +448,10 @@ func (c *controlBuffer) executeAndPut(f func() bool, it cbItem) (bool, error) {
 		c.consumerWaiting = false
 	}
 	c.list.enqueue(it)
-	if c.enableThrottling && it.isTransportResponseFrame() {
-		c.transportResponseFrames++
-		if c.transportResponseFrames == maxQueuedTransportResponseFrames {
-			// We are adding the frame that puts us over the threshold; create
-			// a throttling channel.
-			ch := make(chan struct{})
-			c.trfChan.Store(&ch)
-		}
+	if c.enableThrottling && it.isTransportResponseFrame() &&
+		c.transportResponseFrames.Add(1) == int64(maxQueuedTransportResponseFrames) {
+		// We are adding the frame that puts us at the threshold.
+		c.updateThrottleLocked()
 	}
 	if wakeUp {
 		select {
@@ -478,7 +476,7 @@ func (c *controlBuffer) get(block bool) (any, error) {
 		if c.closed.Load() {
 			return nil, ErrConnClosing
 		}
-		return c.consumerList.dequeue(), nil
+		return c.dequeueConsumerList(), nil
 	}
 	for {
 		c.mu.Lock()
@@ -487,9 +485,11 @@ func (c *controlBuffer) get(block bool) (any, error) {
 			return nil, ErrConnClosing
 		}
 		if !c.list.isEmpty() {
-			c.takeBatchLocked()
+			// Take all the queued frames by swapping the two lists.
+			// consumerList is empty here.
+			c.list, c.consumerList = c.consumerList, c.list
 			c.mu.Unlock()
-			return c.consumerList.dequeue(), nil
+			return c.dequeueConsumerList(), nil
 		}
 		if !block {
 			// There is nothing to read, and the caller asked us not to block.
@@ -508,25 +508,48 @@ func (c *controlBuffer) get(block bool) (any, error) {
 	}
 }
 
-// takeBatchLocked moves all the queued frames to consumerList by swapping the
-// two lists, which doesn't allocate. consumerList must be empty.
+// dequeueConsumerList removes and returns the first frame from consumerList,
+// which must not be empty. It must only be called by the consumer goroutine.
+func (c *controlBuffer) dequeueConsumerList() cbItem {
+	it := c.consumerList.dequeue()
+	if c.enableThrottling && it.isTransportResponseFrame() &&
+		c.transportResponseFrames.Add(-1) == int64(maxQueuedTransportResponseFrames)-1 {
+		// We are removing the frame that put us at the threshold. This is the
+		// only time the consumer takes the lock for throttling.
+		c.mu.Lock()
+		c.updateThrottleLocked()
+		c.mu.Unlock()
+	}
+	return it
+}
+
+// updateThrottleLocked creates or closes the throttling channel to match the
+// current number of queued transport response frames. It must be called after
+// every change of transportResponseFrames that crosses
+// maxQueuedTransportResponseFrames.
+//
+// The count is decremented without holding mu, so by the time this runs, the
+// count may have crossed the threshold again. Acting on the current count,
+// rather than on the direction of the crossing that triggered the call, makes
+// this idempotent: calls are serialized by mu and the last one, which runs
+// after the last crossing, leaves trfChan in the correct state.
 //
 // Caller must hold c.mu.
-func (c *controlBuffer) takeBatchLocked() {
-	c.list, c.consumerList = c.consumerList, c.list
-	if !c.enableThrottling || c.transportResponseFrames == 0 {
+func (c *controlBuffer) updateThrottleLocked() {
+	if c.closed.Load() {
+		// finish() has already closed and cleared the throttling channel.
 		return
 	}
-	// TODO: transport response frames are now considered consumed when loopy
-	// takes a batch, rather than when it handles each frame. This allows up
-	// to 2*maxQueuedTransportResponseFrames such frames to be buffered.
-	if c.transportResponseFrames >= maxQueuedTransportResponseFrames {
-		// The batch contains the frame that put us over the threshold; close
-		// and clear the throttling channel.
-		ch := c.trfChan.Swap(nil)
+	if c.transportResponseFrames.Load() >= int64(maxQueuedTransportResponseFrames) {
+		if c.trfChan.Load() == nil {
+			ch := make(chan struct{})
+			c.trfChan.Store(&ch)
+		}
+		return
+	}
+	if ch := c.trfChan.Swap(nil); ch != nil {
 		close(*ch)
 	}
-	c.transportResponseFrames = 0
 }
 
 // discardItem releases the resources held by a control frame that will not be
