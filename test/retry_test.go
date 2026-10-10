@@ -151,27 +151,34 @@ func (s) TestRetryThrottling(t *testing.T) {
 	}
 	defer ss.Stop()
 
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
 	testCases := []struct {
-		wantCode  codes.Code
-		wantCount int
+		wantCode       codes.Code
+		wantCount      int
+		updateResolver bool
 	}{
-		{codes.OK, 0},           // tokens = 10
-		{codes.OK, 3},           // tokens = 8.5 (10 - 2 failures + 0.5 success)
-		{codes.OK, 6},           // tokens = 6
-		{codes.Unavailable, 8},  // tokens = 5 -- first attempt is retried; second aborted.
-		{codes.Unavailable, 9},  // tokens = 4
-		{codes.OK, 10},          // tokens = 4.5
-		{codes.OK, 11},          // tokens = 5
-		{codes.OK, 12},          // tokens = 5.5
-		{codes.OK, 13},          // tokens = 6
-		{codes.OK, 14},          // tokens = 6.5
-		{codes.OK, 16},          // tokens = 5.5
-		{codes.Unavailable, 17}, // tokens = 4.5
+		{codes.OK, 0, false},           // tokens = 10
+		{codes.OK, 3, false},           // tokens = 8.5 (10 - 2 failures + 0.5 success)
+		{codes.OK, 6, false},           // tokens = 6
+		{codes.Unavailable, 8, false},  // tokens = 5 -- first attempt is retried; second aborted.
+		{codes.Unavailable, 9, true},   // tokens = 4 -- resolver update should not reset tokens.
+		{codes.OK, 10, false},          // tokens = 4.5
+		{codes.OK, 11, false},          // tokens = 5
+		{codes.OK, 12, false},          // tokens = 5.5
+		{codes.OK, 13, false},          // tokens = 6
+		{codes.OK, 14, false},          // tokens = 6.5
+		{codes.OK, 16, false},          // tokens = 5.5
+		{codes.Unavailable, 17, false}, // tokens = 4.5
 	}
 	for _, tc := range testCases {
-		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+		if tc.updateResolver {
+			// Update the resolver with the same address, but no service config. This
+			// should not reset the retry throttling tokens.
+			ss.R.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: ss.Address}}})
+		}
 		_, err := ss.Client.EmptyCall(ctx, &testpb.Empty{})
-		cancel()
 		if status.Code(err) != tc.wantCode {
 			t.Errorf("EmptyCall(_, _) = _, %v; want _, <Code() = %v>", err, tc.wantCode)
 		}
