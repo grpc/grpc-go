@@ -23,6 +23,8 @@ import (
 	"compress/gzip"
 	"context"
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"strings"
 	"testing"
@@ -33,7 +35,9 @@ import (
 	"google.golang.org/grpc/experimental"
 	"google.golang.org/grpc/internal/grpcutil"
 	"google.golang.org/grpc/internal/stubserver"
+	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
 
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
@@ -471,6 +475,14 @@ func (s) TestStreamSetSendCompressorAfterHeaderSendFailure(t *testing.T) {
 }
 
 func (s) TestClientSupportedCompressors(t *testing.T) {
+	for _, serverType := range []string{"Serve", "ServeHTTP"} {
+		t.Run(serverType, func(t *testing.T) {
+			testClientSupportedCompressors(t, serverType)
+		})
+	}
+}
+
+func testClientSupportedCompressors(t *testing.T, serverType string) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
@@ -522,16 +534,122 @@ func (s) TestClientSupportedCompressors(t *testing.T) {
 					return &testpb.Empty{}, nil
 				},
 			}
-			if err := ss.Start(nil); err != nil {
-				t.Fatalf("Error starting endpoint server: %v, want: nil", err)
+			if serverType == "ServeHTTP" {
+				if err := ss.StartHandlerServer(); err != nil {
+					t.Fatalf("Error starting handler server: %v", err)
+				}
+				defer ss.Stop()
+				if err := ss.StartClient(); err != nil {
+					t.Fatalf("Error starting client: %v", err)
+				}
+			} else {
+				if err := ss.Start(nil); err != nil {
+					t.Fatalf("Error starting endpoint server: %v, want: nil", err)
+				}
+				defer ss.Stop()
 			}
-			defer ss.Stop()
 
 			_, err := ss.Client.EmptyCall(tt.ctx, &testpb.Empty{})
 			if err != nil {
 				t.Fatalf("Unexpected unary call error, got: %v, want: nil", err)
 			}
 		})
+	}
+}
+
+func (s) TestHandlerSetSendCompressor(t *testing.T) {
+	response := &testpb.SimpleResponse{Payload: &testpb.Payload{Body: bytes.Repeat([]byte("compressible payload"), 1024)}}
+	ss := &stubserver.StubServer{
+		UnaryCallF: func(ctx context.Context, _ *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			if err := grpc.SetSendCompressor(ctx, "gzip"); err != nil {
+				return nil, err
+			}
+			return response, nil
+		},
+	}
+	if err := ss.StartHandlerServer(); err != nil {
+		t.Fatalf("Error starting handler server: %v", err)
+	}
+	defer ss.Stop()
+
+	compressionCh := make(chan string, 1)
+	payloadCh := make(chan *stats.InPayload, 1)
+	statsHandler := &testutils.StubStatsHandler{
+		HandleRPCF: func(_ context.Context, rs stats.RPCStats) {
+			switch rs := rs.(type) {
+			case *stats.InHeader:
+				compressionCh <- rs.Compression
+			case *stats.InPayload:
+				payloadCh <- rs
+			}
+		},
+	}
+	if err := ss.StartClient(grpc.WithStatsHandler(statsHandler)); err != nil {
+		t.Fatalf("Error starting client: %v", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	got, err := ss.Client.UnaryCall(ctx, &testpb.SimpleRequest{})
+	if err != nil {
+		t.Fatalf("UnaryCall() error = %v; want nil", err)
+	}
+	if !bytes.Equal(got.GetPayload().GetBody(), response.Payload.Body) {
+		t.Fatal("UnaryCall() returned an unexpected payload")
+	}
+	select {
+	case compression := <-compressionCh:
+		if compression != "gzip" {
+			t.Errorf("response compression = %q; want gzip", compression)
+		}
+	case <-ctx.Done():
+		t.Fatal("Timed out waiting for response header stats")
+	}
+	select {
+	case payload := <-payloadCh:
+		if payload.CompressedLength >= payload.Length {
+			t.Errorf("response compressed length = %v; want less than uncompressed length %v", payload.CompressedLength, payload.Length)
+		}
+	case <-ctx.Done():
+		t.Fatal("Timed out waiting for response payload stats")
+	}
+}
+
+func (s) TestHandlerSetSendCompressorUnadvertised(t *testing.T) {
+	errCh := make(chan error, 1)
+	ss := &stubserver.StubServer{
+		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
+			err := grpc.SetSendCompressor(ctx, "gzip")
+			errCh <- err
+			return &testpb.Empty{}, err
+		},
+	}
+	server := grpc.NewServer()
+	defer server.Stop()
+	testgrpc.RegisterTestServiceServer(server, ss)
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	// Send an uncompressed empty protobuf message, advertising identity only.
+	req := httptest.NewRequestWithContext(ctx, http.MethodPost, "/grpc.testing.TestService/EmptyCall", bytes.NewReader([]byte{0, 0, 0, 0, 0}))
+	req.ProtoMajor = 2
+	req.Header.Set("Content-Type", "application/grpc")
+	req.Header.Set("Grpc-Accept-Encoding", "identity")
+	rw := httptest.NewRecorder()
+	server.ServeHTTP(rw, req)
+
+	select {
+	case err := <-errCh:
+		want := `unable to set send compressor: client does not support compressor "gzip"`
+		if err == nil || err.Error() != want {
+			t.Errorf("SetSendCompressor() error = %v; want %q", err, want)
+		}
+	case <-ctx.Done():
+		t.Fatal("Timed out waiting for handler error")
+	}
+	resp := rw.Result()
+	defer resp.Body.Close()
+	if got := resp.Trailer.Get("Grpc-Status"); got != "2" {
+		t.Errorf("Grpc-Status = %q; want 2 (Unknown)", got)
 	}
 }
 
