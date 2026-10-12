@@ -62,6 +62,26 @@ func BenchmarkServerHeaderFields(b *testing.B) {
 			}
 		})
 	}
+
+	// Trailers after the headers were already sent by a prior Write. This is
+	// the common path, as opposed to a trailers-only response.
+	for _, mdCount := range []int{0, 1} {
+		st := status.New(codes.OK, "OK")
+		
+		b.Run(fmt.Sprintf("writeStatus_headersSent_mdCount=%d", mdCount), func(b *testing.B) {
+			t, s, cleanup := newBenchStream(b, 0, mdCount)
+			defer cleanup()
+
+			b.ReportAllocs()
+			for b.Loop() {
+				s.swapState(streamActive)
+				s.headerSent.Store(true)
+				if err := t.writeStatus(s, st); err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+	}
 }
 
 func makeMD(prefix string, count int) metadata.MD {
