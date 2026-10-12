@@ -66,9 +66,10 @@ type Config struct {
 	CallCredentials []*xdscreds.CallCreds
 }
 
-// Key returns a string that uniquely identifies the config, suitable for use as
-// a map key. Two configs return the same value from Key if and only if they are
-// Equal (barring SHA-256 collisions).
+// Key returns a string that uniquely identifies the config (a hex-encoded
+// SHA-256 digest of its contents), suitable for use as a map key. Two configs
+// return the same value from Key if and only if they are Equal (barring SHA-256
+// collisions).
 func (c *Config) Key() string {
 	// identityKey mirrors xdscreds.Identity. omitempty makes nil and empty
 	// Data encode the same way.
