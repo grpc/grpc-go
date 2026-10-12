@@ -138,8 +138,8 @@ func (b *xdsResolverBuilder) Build(target resolver.Target, cc resolver.ClientCon
 		cc:              cc,
 		xdsClient:       client,
 		xdsClientClose:  xdsClientClose,
-		activeClusters:  make(map[string]*grpcsync.RefCounted[*clusterInfo]),
-		activePlugins:   make(map[string]*grpcsync.RefCounted[*clusterInfo]),
+		activeClusters:  make(map[string]*grpcsync.RefCounted[*xdsChildConfig]),
+		activePlugins:   make(map[string]*grpcsync.RefCounted[*xdsChildConfig]),
 		httpFilters:     make(map[clientFilterKey]httpfilter.ClientFilter),
 		channelID:       rand.Uint64(),
 		ldsResourceName: ldsResourceName,
@@ -257,14 +257,14 @@ type xdsResolver struct {
 	// When the count hits zero, the resolver calls unsubscribe and removes the
 	// cluster from this map. The unsubscribe signals the dependency manager to
 	// stop the xDS watch once its own reference count reaches zero.
-	activeClusters map[string]*grpcsync.RefCounted[*clusterInfo]
+	activeClusters map[string]*grpcsync.RefCounted[*xdsChildConfig]
 	// activePlugins is a map from cluster specifier plugin name to refcounted
 	// information about the cluster specifier plugin that includes its load
 	// balancing configuration. These counts are used only by the resolver. The
 	// current configSelector holds one reference, and each ongoing RPC holds an
 	// additional reference. When the count hits zero, the resolver removes the
 	// plugin name from this map and pushes a new service config.
-	activePlugins     map[string]*grpcsync.RefCounted[*clusterInfo]
+	activePlugins     map[string]*grpcsync.RefCounted[*xdsChildConfig]
 	curConfigSelector stoppableConfigSelector
 	// httpFilters is a map from client filter key to client filter instance. It
 	// lives here so that the resolver can reuse filter instances across config
@@ -398,17 +398,12 @@ func (r *xdsResolver) newConfigSelector() (_ *configSelector, err error) {
 	cs := &configSelector{
 		channelID: r.channelID,
 		xdsNodeID: r.xdsClient.BootstrapConfig().Node().GetId(),
-		sendNewServiceConfig: func() {
-			r.serializer.TrySchedule(func(context.Context) {
-				r.sendNewServiceConfig(r.curConfigSelector)
-			})
-		},
 		virtualHost: virtualHost{
 			retryConfig: r.xdsConfig.VirtualHost.RetryConfig,
 		},
 		routes:           make([]route, len(r.xdsConfig.VirtualHost.Routes)),
-		clusters:         make(map[string]*grpcsync.RefCounted[*clusterInfo]),
-		plugins:          make(map[string]*grpcsync.RefCounted[*clusterInfo]),
+		clusters:         make(map[string]*grpcsync.RefCounted[*xdsChildConfig]),
+		plugins:          make(map[string]*grpcsync.RefCounted[*xdsChildConfig]),
 		httpFilterConfig: r.xdsConfig.Listener.APIListener.HTTPFilters,
 		xdsConfig:        r.xdsConfig,
 	}
@@ -450,11 +445,10 @@ func (r *xdsResolver) newConfigSelector() (_ *configSelector, err error) {
 				ci = r.acquireActiveClusterInfo(clusterName, "")
 				cs.plugins[clusterName] = ci
 			}
-			ci.Value().cfg = xdsChildConfig{ChildPolicy: balancerConfig(r.xdsConfig.RouteConfig.ClusterSpecifierPlugins[rt.ClusterSpecifierPlugin])}
+			*ci.Value() = xdsChildConfig{ChildPolicy: balancerConfig(r.xdsConfig.RouteConfig.ClusterSpecifierPlugins[rt.ClusterSpecifierPlugin])}
 			routeCluster := &routeCluster{
 				name:        clusterName,
 				interceptor: interceptor,
-				info:        ci,
 			}
 			rc := grpcsync.NewRefCounted(routeCluster, func() { interceptor.Close() })
 			cs.routes[i].routeClusters = append(cs.routes[i].routeClusters, rc)
@@ -483,11 +477,10 @@ func (r *xdsResolver) newConfigSelector() (_ *configSelector, err error) {
 					ci = r.acquireActiveClusterInfo(clusterName, wc.Name)
 					cs.clusters[clusterName] = ci
 				}
-				ci.Value().cfg = xdsChildConfig{ChildPolicy: newBalancerConfig(cdsName, cdsBalancerConfig{Cluster: wc.Name})}
+				*ci.Value() = xdsChildConfig{ChildPolicy: newBalancerConfig(cdsName, cdsBalancerConfig{Cluster: wc.Name})}
 				routeCluster := &routeCluster{
 					name:        clusterName,
 					interceptor: interceptor,
-					info:        ci,
 				}
 				rc := grpcsync.NewRefCounted(routeCluster, func() { interceptor.Close() })
 				cs.routes[i].routeClusters = append(cs.routes[i].routeClusters, rc)
@@ -525,7 +518,7 @@ func (r *xdsResolver) newConfigSelector() (_ *configSelector, err error) {
 	return cs, nil
 }
 
-// acquireActiveClusterInfo returns the refcounted clusterInfo for the provided
+// acquireActiveClusterInfo returns the refcounted child config for the provided
 // key with one reference held on behalf of the caller, creating the entry if it
 // does not exist. It accepts the following parameters:
 //   - key: Formatted as "cluster:<name>" or "cluster_specifier_plugin:<name>",
@@ -537,13 +530,13 @@ func (r *xdsResolver) newConfigSelector() (_ *configSelector, err error) {
 // so a fresh entry (with a fresh subscription) replaces it in that case.
 //
 // Only executed in the context of a serializer callback.
-func (r *xdsResolver) acquireActiveClusterInfo(key string, name string) *grpcsync.RefCounted[*clusterInfo] {
+func (r *xdsResolver) acquireActiveClusterInfo(key string, name string) *grpcsync.RefCounted[*xdsChildConfig] {
 	if name == "" {
 		if ci, ok := r.activePlugins[key]; ok && ci.TryIncrement() {
 			return ci
 		}
-		var ci *grpcsync.RefCounted[*clusterInfo]
-		ci = grpcsync.NewRefCounted(&clusterInfo{}, func() {
+		var ci *grpcsync.RefCounted[*xdsChildConfig]
+		ci = grpcsync.NewRefCounted(&xdsChildConfig{}, func() {
 			r.scheduleActiveEntryRemoval(r.activePlugins, key, ci, func() {
 				// Plugins have no xDS watch of their own, so nothing else tells
 				// the channel to drop this child. Push a service config that no
@@ -559,8 +552,8 @@ func (r *xdsResolver) acquireActiveClusterInfo(key string, name string) *grpcsyn
 		return ci
 	}
 	unsubscribe := r.dm.SubscribeToCluster(name)
-	var ci *grpcsync.RefCounted[*clusterInfo]
-	ci = grpcsync.NewRefCounted(&clusterInfo{}, func() {
+	var ci *grpcsync.RefCounted[*xdsChildConfig]
+	ci = grpcsync.NewRefCounted(&xdsChildConfig{}, func() {
 		// Queue the removal before unsubscribing. Unsubscribing can make the
 		// dependency manager push an update, which schedules a callback on this
 		// same serializer; queueing first guarantees this entry is gone from
@@ -600,7 +593,7 @@ func (r *xdsResolver) acquireActiveClusterInfo(key string, name string) *grpcsyn
 // is also dropped by configSelector.stop(), which itself runs inside a
 // serializer callback, so blocking here until the callback ran would deadlock
 // the serializer against itself.
-func (r *xdsResolver) scheduleActiveEntryRemoval(m map[string]*grpcsync.RefCounted[*clusterInfo], key string, ci *grpcsync.RefCounted[*clusterInfo], onRemoved func()) {
+func (r *xdsResolver) scheduleActiveEntryRemoval(m map[string]*grpcsync.RefCounted[*xdsChildConfig], key string, ci *grpcsync.RefCounted[*xdsChildConfig], onRemoved func()) {
 	r.serializer.TrySchedule(func(context.Context) {
 		if m[key] != ci {
 			return
@@ -610,12 +603,6 @@ func (r *xdsResolver) scheduleActiveEntryRemoval(m map[string]*grpcsync.RefCount
 			onRemoved()
 		}
 	})
-}
-
-type clusterInfo struct {
-	// cfg is the child configuration for this cluster, containing either the
-	// csp config or the cds cluster config.
-	cfg xdsChildConfig
 }
 
 // Contains common functionality to be executed when resources of either type

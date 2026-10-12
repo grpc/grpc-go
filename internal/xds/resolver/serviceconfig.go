@@ -76,14 +76,14 @@ type xdsClusterManagerConfig struct {
 // serviceConfigJSON produces a service config in JSON format that contains LB
 // policy config for the "xds_cluster_manager" LB policy, with entries in the
 // children map for all active clusters.
-func serviceConfigJSON(activeClusters, activePlugins map[string]*grpcsync.RefCounted[*clusterInfo]) []byte {
+func serviceConfigJSON(activeClusters, activePlugins map[string]*grpcsync.RefCounted[*xdsChildConfig]) []byte {
 	// Generate children (all entries in activeClusters).
 	children := make(map[string]xdsChildConfig)
 	for cluster, ci := range activeClusters {
-		children[cluster] = ci.Value().cfg
+		children[cluster] = *ci.Value()
 	}
 	for plugin, ci := range activePlugins {
-		children[plugin] = ci.Value().cfg
+		children[plugin] = *ci.Value()
 	}
 
 	sc := serviceConfig{
@@ -110,10 +110,6 @@ type virtualHost struct {
 type routeCluster struct {
 	name        string                       // Name of the cluster.
 	interceptor httpfilter.ClientInterceptor // HTTP filters to run for RPCs matching this route.
-	// info is the resolver-wide entry for this cluster, shared by every route
-	// that references it. An RPC routed here holds a reference on it until the
-	// RPC is committed.
-	info *grpcsync.RefCounted[*clusterInfo]
 }
 
 type route struct {
@@ -157,15 +153,14 @@ func (cs *erroringConfigSelector) SelectConfig(iresolver.RPCInfo) (*iresolver.RP
 func (cs *erroringConfigSelector) stop() {}
 
 type configSelector struct {
-	channelID            uint64 // Static hash when hash policy is HashPolicyTypeChannelID
-	xdsNodeID            string // xDS node ID, for annotating errors.
-	sendNewServiceConfig func() // Function to send a new service config to gRPC.
+	channelID uint64 // Static hash when hash policy is HashPolicyTypeChannelID
+	xdsNodeID string // xDS node ID, for annotating errors.
 
 	// Configuration received from the xDS management server.
 	virtualHost      virtualHost
 	routes           []route
-	clusters         map[string]*grpcsync.RefCounted[*clusterInfo]
-	plugins          map[string]*grpcsync.RefCounted[*clusterInfo]
+	clusters         map[string]*grpcsync.RefCounted[*xdsChildConfig]
+	plugins          map[string]*grpcsync.RefCounted[*xdsChildConfig]
 	httpFilterConfig []xdsresource.HTTPFilter
 	xdsConfig        *xdsresource.XDSConfig
 }
@@ -228,12 +223,21 @@ func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RP
 	// Add a ref to the selected cluster to keep the interceptors alive until RPC
 	// is committed.
 	rc.Increment()
+	info, ok := cs.clusters[cluster.name]
+	if !ok {
+		info, ok = cs.plugins[cluster.name]
+	}
+	if !ok {
+		// This should be unreachable because all route clusters are normalized
+		// into cs.clusters or cs.plugins during config selector creation.
+		panic(fmt.Sprintf("matched cluster %q not found in ConfigSelector", cluster.name))
+	}
 	// Add a ref to the selected cluster or plugin, as this RPC needs it until it
 	// is committed. Releasing the last reference unsubscribes from the cluster
 	// or pushes a new service config for a plugin.
-	cluster.info.Increment()
+	info.Increment()
 	config.Context = newContextWithOnCommittedFunc(config.Context, sync.OnceFunc(func() {
-		cluster.info.Decrement()
+		info.Decrement()
 		// Decrement the refcount of the route cluster and close the interceptor
 		// if refcount goes to zero.
 		rc.Decrement()
