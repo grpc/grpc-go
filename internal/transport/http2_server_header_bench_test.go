@@ -30,7 +30,7 @@ import (
 )
 
 // BenchmarkServerHeaderFields measures header-slice construction as the amount
-// metadata varies in.
+// of metadata varies.
 func BenchmarkServerHeaderFields(b *testing.B) {
 	for _, mdCount := range []int{0, 4, 12} {
 		b.Run(fmt.Sprintf("writeHeaderLocked_mdCount=%d", mdCount), func(b *testing.B) {
@@ -39,7 +39,7 @@ func BenchmarkServerHeaderFields(b *testing.B) {
 
 			b.ReportAllocs()
 			for b.Loop() {
-				s.state = streamActive
+				s.swapState(streamActive)
 				if err := t.writeHeaderLocked(s); err != nil {
 					b.Fatal(err)
 				}
@@ -54,7 +54,7 @@ func BenchmarkServerHeaderFields(b *testing.B) {
 
 			b.ReportAllocs()
 			for b.Loop() {
-				s.state = streamActive
+				s.swapState(streamActive)
 				s.headerSent.Store(false)
 				if err := t.writeStatus(s, st); err != nil {
 					b.Fatal(err)
