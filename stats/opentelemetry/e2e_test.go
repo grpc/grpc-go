@@ -17,6 +17,7 @@
 package opentelemetry_test
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -47,6 +48,8 @@ import (
 	v3wrrlocalitypb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/wrr_locality/v3"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"golang.org/x/net/http2"
+	"golang.org/x/net/http2/hpack"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
@@ -2658,37 +2661,121 @@ func checkMetricWithMethod(ctx context.Context, reader *metric.ManualReader, met
 	return fmt.Errorf("metric %q with method %q not found", metricName, method)
 }
 
+// startStreamRefusingServer starts a bare-bones HTTP/2 server that refuses the
+// first stream it receives with RST_STREAM(REFUSED_STREAM) and answers every
+// subsequent stream with an empty gRPC message and an OK status. The client
+// transport treats a refused stream as unprocessed by the server, which makes
+// the client transparently retry it. Returns the address of the server.
+func startStreamRefusingServer(t *testing.T) string {
+	t.Helper()
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("net.Listen() failed: %v", err)
+	}
+	t.Cleanup(func() { lis.Close() })
+
+	go func() {
+		conn, err := lis.Accept()
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		if _, err := io.ReadFull(conn, make([]byte, len(http2.ClientPreface))); err != nil {
+			t.Errorf("Failed to read client preface: %v", err)
+			return
+		}
+		framer := http2.NewFramer(conn, conn)
+		if err := framer.WriteSettings(); err != nil {
+			t.Errorf("Failed to write server preface: %v", err)
+			return
+		}
+		var hpackBuf bytes.Buffer
+		hpackEnc := hpack.NewEncoder(&hpackBuf)
+		writeHeaders := func(sid uint32, endStream bool, fields ...string) error {
+			hpackBuf.Reset()
+			for i := 0; i < len(fields); i += 2 {
+				hpackEnc.WriteField(hpack.HeaderField{Name: fields[i], Value: fields[i+1]})
+			}
+			return framer.WriteHeaders(http2.HeadersFrameParam{StreamID: sid, BlockFragment: hpackBuf.Bytes(), EndStream: endStream, EndHeaders: true})
+		}
+
+		refused := false
+		for {
+			frame, err := framer.ReadFrame()
+			if err != nil {
+				// The client closed the connection.
+				return
+			}
+			// Respond only once the request has been fully received.
+			var sid uint32
+			switch f := frame.(type) {
+			case *http2.SettingsFrame:
+				if !f.IsAck() {
+					framer.WriteSettingsAck()
+				}
+			case *http2.HeadersFrame:
+				if f.StreamEnded() {
+					sid = f.StreamID
+				}
+			case *http2.DataFrame:
+				if f.StreamEnded() {
+					sid = f.StreamID
+				}
+			}
+			if sid == 0 {
+				continue
+			}
+			if !refused {
+				refused = true
+				if err := framer.WriteRSTStream(sid, http2.ErrCodeRefusedStream); err != nil {
+					t.Errorf("Failed to refuse stream %d: %v", sid, err)
+					return
+				}
+				continue
+			}
+			if err := writeHeaders(sid, false, ":status", "200", "content-type", "application/grpc"); err != nil {
+				t.Errorf("Failed to write response headers for stream %d: %v", sid, err)
+				return
+			}
+			// An empty message: 1 byte compressed flag and 4 bytes of length.
+			if err := framer.WriteData(sid, false, make([]byte, 5)); err != nil {
+				t.Errorf("Failed to write response message for stream %d: %v", sid, err)
+				return
+			}
+			if err := writeHeaders(sid, true, "grpc-status", "0"); err != nil {
+				t.Errorf("Failed to write response trailers for stream %d: %v", sid, err)
+				return
+			}
+		}
+	}()
+	return lis.Addr().String()
+}
+
+// histogramDataPoint returns the single data point recorded for the named
+// histogram metric, or nil if the metric was not recorded at all.
+func histogramDataPoint[N int64 | float64](t *testing.T, metrics map[string]metricdata.Metrics, name string) *metricdata.HistogramDataPoint[N] {
+	t.Helper()
+	m, ok := metrics[name]
+	if !ok {
+		return nil
+	}
+	h, ok := m.Data.(metricdata.Histogram[N])
+	if !ok {
+		t.Fatalf("Metric %q has data of type %T, want metricdata.Histogram", name, m.Data)
+	}
+	if len(h.DataPoints) != 1 {
+		t.Fatalf("Metric %q has %d data points, want 1", name, len(h.DataPoints))
+	}
+	return &h.DataPoints[0]
+}
+
+// TestRetryMetrics verifies the per-call retry metrics defined in gRFC A96:
+// grpc.client.call.retries, grpc.client.call.transparent_retries and
+// grpc.client.call.retry_delay.
 func (s) TestRetryMetrics(t *testing.T) {
-	mo, reader := defaultMetricsOptions(t, nil)
-	mo.Metrics = mo.Metrics.Add(
-		opentelemetry.ClientCallRetriesMetricName,
-		opentelemetry.ClientCallRetryDelayMetricName,
-	)
-	opts := opentelemetry.Options{MetricsOptions: *mo}
-
-	// Setup stub server.
-	ss := &stubserver.StubServer{
-		UnaryCallF: func(ctx context.Context, _ *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
-			md, _ := metadata.FromIncomingContext(ctx)
-			headerAttempts := 0
-			if h := md["grpc-previous-rpc-attempts"]; len(h) > 0 {
-				headerAttempts, _ = strconv.Atoi(h[0])
-			}
-			if headerAttempts < 2 {
-				return nil, status.Errorf(codes.Unavailable, "retry (%d)", headerAttempts)
-			}
-			return &testpb.SimpleResponse{}, nil
-		},
-	}
-
-	// Start server with opentelemetry option.
-	if err := ss.Start([]grpc.ServerOption{opentelemetry.ServerOption(opts)}); err != nil {
-		t.Fatalf("failed to start stub server: %v", err)
-	}
-	defer ss.Stop()
-
-	// Dial the client with opentelemetry dial option and retry policy.
-	serviceConfig := `{
+	// Retries UNAVAILABLE up to two times, with a 50ms backoff (jittered by a
+	// factor in [0.8, 1.2)) before each retry.
+	const serviceConfig = `{
 		"methodConfig": [{
 			"name": [{"service": "grpc.testing.TestService"}],
 			"retryPolicy": {
@@ -2700,77 +2787,152 @@ func (s) TestRetryMetrics(t *testing.T) {
 			}
 		}]
 	}`
-	cc, err := grpc.NewClient(ss.Address, grpc.WithTransportCredentials(insecure.NewCredentials()), opentelemetry.DialOption(opts), grpc.WithDefaultServiceConfig(serviceConfig))
-	if err != nil {
-		t.Fatalf("failed to create client: %v", err)
-	}
-	defer cc.Close()
 
-	client := testgrpc.NewTestServiceClient(cc)
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-
-	// Make the unary call. It should succeed after 2 retries (3 attempts).
-	if _, err := client.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil {
-		t.Fatalf("UnaryCall failed: %v", err)
-	}
-
-	// Collect metrics.
-	var rm metricdata.ResourceMetrics
-	if err := reader.Collect(ctx, &rm); err != nil {
-		t.Fatalf("failed to collect metrics: %v", err)
-	}
-
-	gotMetrics := make(map[string]metricdata.Metrics)
-	for _, sm := range rm.ScopeMetrics {
-		for _, m := range sm.Metrics {
-			gotMetrics[m.Name] = m
+	startStubServer := func(t *testing.T, unaryCall func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error)) string {
+		t.Helper()
+		ss := &stubserver.StubServer{UnaryCallF: unaryCall}
+		if err := ss.Start(nil); err != nil {
+			t.Fatalf("Failed to start stub server: %v", err)
 		}
+		t.Cleanup(ss.Stop)
+		return ss.Address
+	}
+	// Fails the call with UNAVAILABLE until the client reports two previous
+	// attempts, i.e. the call succeeds on its third attempt.
+	unavailableTwice := func(ctx context.Context, _ *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+		md, _ := metadata.FromIncomingContext(ctx)
+		previousAttempts := 0
+		if h := md["grpc-previous-rpc-attempts"]; len(h) > 0 {
+			previousAttempts, _ = strconv.Atoi(h[0])
+		}
+		if previousAttempts < 2 {
+			return nil, status.Errorf(codes.Unavailable, "retry (%d)", previousAttempts)
+		}
+		return &testpb.SimpleResponse{}, nil
 	}
 
-	// Verify grpc.client.call.retries.
-	// We made 2 retries, so retries = 2.
-	retriesMetric, ok := gotMetrics[opentelemetry.ClientCallRetriesMetricName]
-	if !ok {
-		t.Fatalf("metric %q not found", opentelemetry.ClientCallRetriesMetricName)
+	tests := []struct {
+		name string
+		// startServer starts the server for the test and returns its address.
+		startServer func(t *testing.T) string
+		// Wanted values of grpc.client.call.retries and
+		// grpc.client.call.transparent_retries. 0 means that the metric must
+		// not be recorded at all.
+		wantRetries            int64
+		wantTransparentRetries int64
+		// Bounds for grpc.client.call.retry_delay. The upper bound is further
+		// capped by the measured wall-clock duration of the call, which the
+		// delay can never exceed.
+		minRetryDelay, maxRetryDelay time.Duration
+	}{
+		{
+			name: "no retries",
+			startServer: func(t *testing.T) string {
+				return startStubServer(t, func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+					return &testpb.SimpleResponse{}, nil
+				})
+			},
+			// Unlike the other two metrics, retry_delay is recorded for
+			// every call, as 0 when there were no retries.
+		},
+		{
+			name:        "retries",
+			startServer: func(t *testing.T) string { return startStubServer(t, unavailableTwice) },
+			wantRetries: 2,
+			// Two jittered backoffs of 50ms each, so the delay between
+			// attempts is at least 2*50ms*0.8 = 80ms. The retry timer
+			// never fires early and the gap is measured outside of it, so
+			// this lower bound is exact. Do not relax it: that would mask a
+			// missing gap.
+			minRetryDelay: 80 * time.Millisecond,
+			maxRetryDelay: defaultTestTimeout,
+		},
+		{
+			name:                   "transparent retry",
+			startServer:            startStreamRefusingServer,
+			wantTransparentRetries: 1,
+			// There is no backoff before a transparent retry, so only the
+			// internal overhead of the retry is recorded as delay.
+			maxRetryDelay: defaultTestTimeout,
+		},
 	}
-	histo, ok := retriesMetric.Data.(metricdata.Histogram[int64])
-	if !ok {
-		t.Fatalf("retries type got: %T, want: metricdata.Histogram[int64]", retriesMetric.Data)
-	}
-	if len(histo.DataPoints) != 1 {
-		t.Fatalf("data points length got: %d, want: 1", len(histo.DataPoints))
-	}
-	dp := histo.DataPoints[0]
-	if dp.Count != 1 {
-		t.Errorf("retries count got: %d, want: 1", dp.Count)
-	}
-	if dp.Sum != 2 {
-		t.Errorf("retries sum got: %d, want: 2", dp.Sum)
-	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			addr := tc.startServer(t)
+			mo, reader := defaultMetricsOptions(t, nil)
+			mo.Metrics = mo.Metrics.Add(
+				opentelemetry.ClientCallRetriesMetricName,
+				opentelemetry.ClientCallTransparentRetriesMetricName,
+				opentelemetry.ClientCallRetryDelayMetricName,
+			)
+			cc, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()), opentelemetry.DialOption(opentelemetry.Options{MetricsOptions: *mo}), grpc.WithDefaultServiceConfig(serviceConfig))
+			if err != nil {
+				t.Fatalf("grpc.NewClient(%q) failed: %v", addr, err)
+			}
+			defer cc.Close()
 
-	// Verify grpc.client.call.retry_delay.
-	// Delay is between Attempt 1 end and Attempt 2 start (around 50ms),
-	// and Attempt 2 end and Attempt 3 start (around 50ms).
-	// So total delay should be around 100ms (0.1s).
-	delayMetric, ok := gotMetrics[opentelemetry.ClientCallRetryDelayMetricName]
-	if !ok {
-		t.Fatalf("metric %q not found", opentelemetry.ClientCallRetryDelayMetricName)
-	}
-	delayHisto, ok := delayMetric.Data.(metricdata.Histogram[float64])
-	if !ok {
-		t.Fatalf("retry_delay type got: %T, want: metricdata.Histogram[float64]", delayMetric.Data)
-	}
-	if len(delayHisto.DataPoints) != 1 {
-		t.Fatalf("data points length got: %d, want: 1", len(delayHisto.DataPoints))
-	}
-	delayDp := delayHisto.DataPoints[0]
-	// Two backoffs of initialBackoff (0.05s), each jittered by a factor in
-	// [0.8, 1.2), so the scheduled delay floors at 2*0.05*0.8 = 0.08s. The
-	// measured wall-clock delay is always >= the scheduled backoff, so 0.08s
-	// is a safe lower bound (do not relax it: that would mask a missing gap).
-	if delayDp.Sum < 0.08 || delayDp.Sum > 0.3 {
-		t.Errorf("retry delay sum got: %v, want: ~0.1s", delayDp.Sum)
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+			callStart := time.Now()
+			if _, err := testgrpc.NewTestServiceClient(cc).UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil {
+				t.Fatalf("UnaryCall failed: %v", err)
+			}
+			callDuration := time.Since(callStart)
+
+			var rm metricdata.ResourceMetrics
+			if err := reader.Collect(ctx, &rm); err != nil {
+				t.Fatalf("reader.Collect() failed: %v", err)
+			}
+			gotMetrics := make(map[string]metricdata.Metrics)
+			for _, sm := range rm.ScopeMetrics {
+				for _, m := range sm.Metrics {
+					gotMetrics[m.Name] = m
+				}
+			}
+
+			// A96 defines only the grpc.method and grpc.target labels for
+			// the retry metrics; in particular, there is no grpc.status.
+			wantAttrs := attribute.NewSet(
+				attribute.String("grpc.method", "grpc.testing.TestService/UnaryCall"),
+				attribute.String("grpc.target", cc.CanonicalTarget()),
+			)
+			checkRetryCount := func(name string, want int64) {
+				t.Helper()
+				dp := histogramDataPoint[int64](t, gotMetrics, name)
+				if want == 0 {
+					if dp != nil {
+						t.Errorf("Metric %q recorded with sum %d, want it not to be recorded", name, dp.Sum)
+					}
+					return
+				}
+				if dp == nil {
+					t.Fatalf("Metric %q not recorded, want sum %d", name, want)
+				}
+				if dp.Count != 1 || dp.Sum != want {
+					t.Errorf("Metric %q recorded with count %d and sum %d, want count 1 and sum %d", name, dp.Count, dp.Sum, want)
+				}
+				if !dp.Attributes.Equals(&wantAttrs) {
+					t.Errorf("Metric %q recorded with attributes %v, want %v", name, dp.Attributes.ToSlice(), wantAttrs.ToSlice())
+				}
+			}
+			checkRetryCount(opentelemetry.ClientCallRetriesMetricName, tc.wantRetries)
+			checkRetryCount(opentelemetry.ClientCallTransparentRetriesMetricName, tc.wantTransparentRetries)
+
+			name := opentelemetry.ClientCallRetryDelayMetricName
+			dp := histogramDataPoint[float64](t, gotMetrics, name)
+			if dp == nil {
+				t.Fatalf("Metric %q not recorded", name)
+			}
+			if dp.Count != 1 {
+				t.Errorf("Metric %q recorded with count %d, want 1", name, dp.Count)
+			}
+			if !dp.Attributes.Equals(&wantAttrs) {
+				t.Errorf("Metric %q recorded with attributes %v, want %v", name, dp.Attributes.ToSlice(), wantAttrs.ToSlice())
+			}
+			lo, hi := tc.minRetryDelay.Seconds(), min(tc.maxRetryDelay, callDuration).Seconds()
+			if dp.Sum < lo || dp.Sum > hi {
+				t.Errorf("Metric %q recorded with sum %v, want in [%v, %v]", name, dp.Sum, lo, hi)
+			}
+		})
 	}
 }

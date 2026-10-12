@@ -140,29 +140,30 @@ func (h *clientMetricsHandler) streamInterceptor(ctx context.Context, desc *grpc
 // perCallMetrics records per call metrics for both unary and stream calls.
 func (h *clientMetricsHandler) perCallMetrics(ctx context.Context, err error, startTime time.Time, ci *callInfo) {
 	callLatency := float64(time.Since(startTime)) / float64(time.Second)
+	// Labels shared by all per-call metrics. The retry metrics carry only
+	// these, while call duration additionally carries grpc.status.
 	retryAttributes := []otelattribute.KeyValue{
 		otelattribute.String("grpc.method", ci.method),
 		otelattribute.String("grpc.target", ci.target),
 	}
-	attributes := []otelattribute.KeyValue{
-		otelattribute.String("grpc.method", ci.method),
-		otelattribute.String("grpc.target", ci.target),
-		otelattribute.String("grpc.status", canonicalString(status.Code(err))),
-	}
 	for _, o := range h.options.MetricsOptions.OptionalLabels {
 		if o == "grpc.client.call.custom" {
 			label := estats.CustomLabelFromContext(ctx)
-			customLabel := otelattribute.String(o, label)
-			attributes = append(attributes, customLabel)
-			retryAttributes = append(retryAttributes, customLabel)
+			retryAttributes = append(retryAttributes, otelattribute.String(o, label))
 		}
 	}
+	attributes := make([]otelattribute.KeyValue, 0, len(retryAttributes)+1)
+	attributes = append(attributes, retryAttributes...)
+	attributes = append(attributes, otelattribute.String("grpc.status", canonicalString(status.Code(err))))
 	attrs := otelmetric.WithAttributeSet(otelattribute.NewSet(attributes...))
 	h.clientMetrics.callDuration.Record(ctx, callLatency, attrs)
 
-	// Record retry metrics if they are enabled.
+	// The retry metrics are off by default; avoid building their attribute
+	// set unless at least one of them is enabled.
+	if h.clientMetrics.callRetries == nil && h.clientMetrics.callTransparentRetries == nil && h.clientMetrics.callRetryDelay == nil {
+		return
+	}
 	retryAttrs := otelmetric.WithAttributeSet(otelattribute.NewSet(retryAttributes...))
-
 	if h.clientMetrics.callRetries != nil {
 		numAttempts := ci.numAttempts.Load()
 		if numAttempts > 1 {
@@ -175,10 +176,10 @@ func (h *clientMetricsHandler) perCallMetrics(ctx context.Context, err error, st
 			h.clientMetrics.callTransparentRetries.Record(ctx, int64(transparentRetries), retryAttrs)
 		}
 	}
-	// Unlike retries/transparent_retries, retry_delay is recorded
-	// unconditionally (0 for calls with no retries). A96's metric table
-	// deliberately omits the "if there were no X, 0 is not reported" clause
-	// for retry_delay that it applies to the other metrics.
+	// Unlike retries and transparent_retries, retry_delay is recorded for
+	// every call (as 0 when there were no retries): A96 does not apply the
+	// "if there were no X, 0 is not reported" rule to it. This matches
+	// grpc-java.
 	if h.clientMetrics.callRetryDelay != nil {
 		delaySec := float64(ci.retryDelay.Load()) / float64(time.Second)
 		h.clientMetrics.callRetryDelay.Record(ctx, delaySec, retryAttrs)
