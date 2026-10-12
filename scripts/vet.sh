@@ -45,7 +45,7 @@ not grep 'func Test[^(]' -- test/*.go
 
 # - Check for typos in test function names
 git grep 'func (s) ' -- "*_test.go" | not grep -v 'func (s) Test'
-git grep 'func [A-Z]' -- "*_test.go" | not grep -v 'func Test\|Benchmark\|Example'
+git grep 'func [A-Z]' -- "*_test.go" | not grep -v 'func Test\|Benchmark\|Example\|Fuzz'
 
 # - Do not use time.After except in tests.  It has the potential to leak the
 #   timer since there is no way to stop it early.
