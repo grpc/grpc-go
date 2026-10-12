@@ -21,6 +21,9 @@
 package grpcservice
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"maps"
 	"net/url"
@@ -61,6 +64,54 @@ type Config struct {
 	// side channel, paired with the identities of their source
 	// configurations, preserving order.
 	CallCredentials []*xdscreds.CallCreds
+}
+
+// Key returns a string that uniquely identifies the config, suitable for use as
+// a map key. Two configs return the same value from Key if and only if they are
+// Equal (barring SHA-256 collisions).
+func (c *Config) Key() string {
+	// identityKey mirrors xdscreds.Identity. omitempty makes nil and empty
+	// Data encode the same way.
+	type identityKey struct {
+		Type string
+		Data []byte `json:",omitempty"`
+	}
+	toKey := func(id xdscreds.Identity) identityKey {
+		return identityKey{Type: id.Type, Data: id.Data}
+	}
+	// Metadata values are encoded as []byte, which encoding/json renders as
+	// base64. Encoding them as strings would coerce invalid UTF-8 (allowed in
+	// "-bin" values) to U+FFFD, mapping distinct values to the same key.
+	md := make(map[string][][]byte, len(c.InitialMetadata))
+	for k, vs := range c.InitialMetadata {
+		bs := make([][]byte, len(vs))
+		for i, v := range vs {
+			bs[i] = []byte(v)
+		}
+		md[k] = bs
+	}
+	callCreds := make([]identityKey, len(c.CallCredentials))
+	for i, cc := range c.CallCredentials {
+		callCreds[i] = toKey(cc.Identity())
+	}
+	key := &struct {
+		TargetURI       string              `json:"TargetURI"`
+		Timeout         time.Duration       `json:"Timeout,omitempty"`
+		InitialMetadata map[string][][]byte `json:"InitialMetadata,omitempty"`
+		ChannelCreds    identityKey         `json:"ChannelCreds"`
+		CallCreds       []identityKey       `json:"CallCreds,omitempty"`
+	}{
+		TargetURI:       c.TargetURI,
+		Timeout:         c.Timeout,
+		InitialMetadata: md,
+		ChannelCreds:    toKey(c.ChannelCredentials.Identity()),
+		CallCreds:       callCreds,
+	}
+	// Marshal cannot fail: the key contains only strings, integers, and byte
+	// slices, and maps and slices of those.
+	res, _ := json.Marshal(key)
+	sum := sha256.Sum256(res)
+	return hex.EncodeToString(sum[:])
 }
 
 // Equal reports whether c and other are equal.
