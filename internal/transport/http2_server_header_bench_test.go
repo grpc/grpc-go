@@ -97,7 +97,7 @@ func newBenchStream(b *testing.B, headerCount, trailerCount int) (*http2Server, 
 
 	done := make(chan struct{})
 	t := &http2Server{
-		controlBuf:            newControlBuffer(done),
+		controlBuf:            newControlBuffer(done, true),
 		setResetPingStrikes:   func() {},
 		maxSendHeaderListSize: nil,
 	}
