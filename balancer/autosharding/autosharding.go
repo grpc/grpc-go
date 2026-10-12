@@ -53,10 +53,7 @@ const (
 	prefix = "[autosharding-lb %p] "
 )
 
-var (
-	logger              = grpclog.Component("autosharding")
-	errNoChannelFactory = fmt.Errorf("autosharding: no channel factory found in resolver state")
-)
+var logger = grpclog.Component("autosharding")
 
 func prefixLogger(p *autoshardingBalancer) *internalgrpclog.PrefixLogger {
 	return internalgrpclog.NewPrefixLogger(logger, fmt.Sprintf(prefix, p))
@@ -343,7 +340,7 @@ func (b *autoshardingBalancer) handleNewConfigurationInternal(state resolver.Sta
 
 	provider := grpc.ClientConnProviderFromResolverState(state)
 	if provider == nil {
-		b.lastResolverErr = errNoChannelFactory
+		b.lastResolverErr = internal.ErrNoChannelFactory
 		return nil, nil, balancer.ErrBadResolverState
 	}
 

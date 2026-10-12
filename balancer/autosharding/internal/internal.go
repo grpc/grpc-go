@@ -36,4 +36,16 @@ var (
 	// ErrNoEndpointsFromNR is the error returned by the balancer when the
 	// resolver returns an empty list of endpoints.
 	ErrNoEndpointsFromNR = errors.New("autosharding: no endpoints from resolver")
+
+	// ErrNoChannelFactory is the error returned by the balancer when no channel
+	// factory is found in the resolver state.
+	ErrNoChannelFactory = errors.New("autosharding: no channel factory found in resolver state")
+
+	// ErrNoAssignment is the error returned by the balancer when no assignment
+	// from the sharding service is available and fallback is disabled.
+	ErrNoAssignment = errors.New("autosharding: no assignment available and fallback is disabled")
+
+	// ErrNoEndpointsInSlice is the error returned by the balancer when the
+	// matching slice has no available endpoints.
+	ErrNoEndpointsInSlice = errors.New("autosharding: matching slice has no available endpoints")
 )

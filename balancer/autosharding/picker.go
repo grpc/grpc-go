@@ -20,20 +20,18 @@ package autosharding
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"maps"
 	rand "math/rand/v2"
 
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/balancer/autosharding/internal"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/metadata"
 )
 
 var (
-	randIntN              = rand.IntN
-	errNoAssignment       = errors.New("autosharding: no assignment available and fallback is disabled")
-	errNoEndpointsInSlice = errors.New("autosharding: matching slice has no available endpoints")
+	randIntN = rand.IntN
 )
 
 // pickerEndpoint holds the snapshot of an endpoint's state needed by the
@@ -111,7 +109,7 @@ func (p *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 			return p.pickFromEndpointIndices(p.sliceMap.fallbackPool, info)
 		}
 		// We should never get here.
-		return balancer.PickResult{}, errNoAssignment
+		return balancer.PickResult{}, internal.ErrNoAssignment
 	}
 
 	// If the matching slice is in fallback mode and fallback is enabled, route
@@ -131,7 +129,7 @@ func (p *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 // into p.endpoints by starting at a random position and scanning circularly.
 func (p *picker) pickFromEndpointIndices(indices []int, info balancer.PickInfo) (balancer.PickResult, error) {
 	if len(indices) == 0 {
-		return balancer.PickResult{}, errNoEndpointsInSlice
+		return balancer.PickResult{}, internal.ErrNoEndpointsInSlice
 	}
 
 	firstIndex := randIntN(len(indices))

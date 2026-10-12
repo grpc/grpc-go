@@ -383,8 +383,9 @@ func (s) TestResolverError(t *testing.T) {
 	}
 
 	// If a subsequent update has valid endpoints but is rejected due to invalid
-	// configuration (closing the autosharding client), a following ResolverError
-	// should overwrite lastResolverErr and be surfaced by the picker.
+	// configuration (no channel factory in attributes), a following
+	// ResolverError should overwrite lastResolverErr and be surfaced by the
+	// picker.
 	err := b.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState:  resolverStateWithProviderAndEndpoints(nil, []resolver.Endpoint{newTestEndpoint("1.1.1.1:1", "host-0")}),
 		BalancerConfig: defaultTestCfg,
