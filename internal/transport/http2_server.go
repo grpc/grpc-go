@@ -951,11 +951,7 @@ func appendHeaderFieldsFromMD(headerFields []hpack.HeaderField, md metadata.MD) 
 	return headerFields
 }
 
-// headerFieldsCountFromMD returns the total number of header fields that
-// appendHeaderFieldsFromMD will produce from md. Reserved headers are dropped
-// by appendHeaderFieldsFromMD, so this may slightly over-count, which is
-// preferable to growing the slice.
-// returns an upper bound on the number of header fields that
+// Returns an upper bound on the number of header fields that
 // appendHeaderFieldsFromMD will produce from md
 func headerFieldsCountFromMD(md metadata.MD) int {
 	n := 0
