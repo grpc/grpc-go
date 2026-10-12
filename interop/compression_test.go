@@ -25,6 +25,8 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/encoding"
+	"google.golang.org/grpc/encoding/gzip"
 	"google.golang.org/grpc/internal/stubserver"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 	"google.golang.org/grpc/stats"
@@ -84,28 +86,42 @@ func (s) TestServerCompressedUnaryCall_WireCompression(t *testing.T) {
 	stub := startCompressionTestServer(t, grpc.WithStatsHandler(rec))
 
 	pl := ClientNewPayload(testpb.PayloadType_COMPRESSABLE, largeReqSize)
-	for _, compressed := range []bool{true, false} {
+	cases := []struct {
+		reqCompressed  bool
+		respCompressed bool
+	}{
+		{reqCompressed: false, respCompressed: true},
+		{reqCompressed: false, respCompressed: false},
+		// A compressed request shouldn't influence whether the response
+		// is compressed; this catches a server that conflates the two.
+		{reqCompressed: true, respCompressed: false},
+	}
+	for _, tc := range cases {
 		rec.reset()
 		req := &testpb.SimpleRequest{
 			ResponseType:       testpb.PayloadType_COMPRESSABLE,
 			ResponseSize:       int32(largeRespSize),
-			ResponseCompressed: &testpb.BoolValue{Value: compressed},
+			ResponseCompressed: &testpb.BoolValue{Value: tc.respCompressed},
 			Payload:            pl,
 		}
-		reply, err := stub.Client.UnaryCall(ctx, req)
+		var callOpts []grpc.CallOption
+		if tc.reqCompressed {
+			callOpts = append(callOpts, grpc.UseCompressor(gzip.Name))
+		}
+		reply, err := stub.Client.UnaryCall(ctx, req, callOpts...)
 		if err != nil {
-			t.Fatalf("UnaryCall(response_compressed=%v) failed: %v", compressed, err)
+			t.Fatalf("UnaryCall(request_compressed=%v, response_compressed=%v) failed: %v", tc.reqCompressed, tc.respCompressed, err)
 		}
 		checkLargePayload(reply.GetPayload())
 
 		p := rec.get()
 		if p == nil {
-			t.Fatalf("response_compressed=%v: no InPayload observed", compressed)
+			t.Fatalf("request_compressed=%v, response_compressed=%v: no InPayload observed", tc.reqCompressed, tc.respCompressed)
 		}
-		if compressed && p.CompressedLength >= p.Length {
+		if tc.respCompressed && p.CompressedLength >= p.Length {
 			t.Fatalf("response_compressed=true: got CompressedLength=%d, Length=%d; want CompressedLength < Length", p.CompressedLength, p.Length)
 		}
-		if !compressed && p.CompressedLength != p.Length {
+		if !tc.respCompressed && p.CompressedLength != p.Length {
 			t.Fatalf("response_compressed=false: got CompressedLength=%d, Length=%d; want equal", p.CompressedLength, p.Length)
 		}
 	}
@@ -126,7 +142,7 @@ func (s) TestUnaryCall_ExpectCompressedMismatch(t *testing.T) {
 		ResponseSize:     1,
 		ExpectCompressed: &testpb.BoolValue{Value: true},
 	}
-	_, err := stub.Client.UnaryCall(ctx, req, grpc.UseCompressor("identity"))
+	_, err := stub.Client.UnaryCall(ctx, req, grpc.UseCompressor(encoding.Identity))
 	if got, want := status.Code(err), codes.InvalidArgument; got != want {
 		t.Fatalf("UnaryCall with mismatched ExpectCompressed got code %v, want %v", got, want)
 	}

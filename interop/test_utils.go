@@ -25,6 +25,7 @@ package interop
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -811,11 +812,12 @@ func serverNewPayload(t testpb.PayloadType, size int32) (*testpb.Payload, error)
 }
 
 // recvCompressUsed reports whether the request associated with ctx was
-// actually received compressed on the wire.
+// actually received with the grpc-encoding header set to a non-identity
+// compressor.
 func recvCompressUsed(ctx context.Context) (bool, error) {
 	stream, ok := grpc.ServerTransportStreamFromContext(ctx).(*transport.ServerStream)
 	if !ok || stream == nil {
-		return false, fmt.Errorf("failed to fetch the stream from the given context")
+		return false, errors.New("failed to fetch the stream from the given context")
 	}
 	c := stream.RecvCompress()
 	return c != "" && c != encoding.Identity, nil
