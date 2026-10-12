@@ -12,7 +12,10 @@ This list is intended to be exhaustive, with three deliberate exclusions:
     tests and are not intended for use by applications.
 *   Variables whose semantics are defined outside gRPC and are only read
     indirectly through a dependency, such as `GOOGLE_APPLICATION_CREDENTIALS`
-    and the `OTEL_*` variables consulted by the observability plugins.
+    and the `OTEL_*` variables consulted by the observability plugins. The
+    proxy variables are also read through the Go standard library, but they
+    are listed under [Proxy](#proxy) because gRPC-Go's own proxy support is
+    built on them.
 
 Unless stated otherwise, boolean variables are case-insensitive and only the
 values `true` and `false` are recognized; any other value leaves the default
@@ -32,7 +35,9 @@ They are read once, when the `grpclog` package is initialized.
 
     The minimum severity of log messages written to stderr. One of `ERROR`,
     `WARNING` or `INFO` (e.g. `INFO` enables info, warning and error logs).
-    Defaults to `ERROR` when unset.
+    Defaults to `ERROR` when unset. Matching is case-sensitive: only the
+    all-uppercase and all-lowercase spellings are recognized, so `INFO` and
+    `info` work but `Info` does not.
 
     There is no fallback for an unrecognized value: rather than leaving the
     default in effect, it silences the logger entirely, so that no message of
@@ -87,16 +92,22 @@ See [Proxy](Documentation/proxy.md) for how proxies are used by gRPC-Go.
 
 *   `HTTPS_PROXY`
 
-    The address of the HTTP CONNECT proxy to tunnel through. The variable name
-    is matched case-insensitively. The proxy lookup is performed with an
-    `https`-scheme request, so `HTTP_PROXY` is never consulted.
+    The address of the HTTP CONNECT proxy to tunnel through. The variable is
+    recognized in both its all-uppercase and all-lowercase spellings, with
+    `HTTPS_PROXY` taking precedence if both are set. The proxy lookup is
+    performed with an `https`-scheme request, so `HTTP_PROXY` is never
+    consulted.
 
 *   `NO_PROXY`
 
-    A comma-separated list of hosts that are connected to directly, bypassing
-    the proxy. The variable name is matched case-insensitively. A target whose
-    host is `localhost`, with or without a port, bypasses the proxy whether or
-    not it is listed here.
+    A comma-separated list of destinations that are connected to directly,
+    bypassing the proxy. Each entry may be an IP address, a CIDR range, a
+    domain name (which also matches its subdomains), or `*` to bypass the
+    proxy for every destination; IP addresses and domain names may carry a
+    `:port` suffix. The variable is recognized in both its all-uppercase and
+    all-lowercase spellings, with `NO_PROXY` taking precedence if both are
+    set. A target whose host is `localhost` or a loopback IP address, with or
+    without a port, bypasses the proxy whether or not it is listed here.
 
 ## xDS
 
