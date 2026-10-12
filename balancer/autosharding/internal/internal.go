@@ -19,3 +19,33 @@
 // Package internal contains functionality internal to the autosharding load
 // balancing policy.
 package internal
+
+import (
+	"errors"
+
+	"google.golang.org/grpc/balancer/autosharding/internal/sharding"
+)
+
+var (
+	// NewAutoshardingClient is a function to create a new autosharding client. The
+	// return value is a cancel function that the caller must invoke when they no
+	// longer need the autosharding client. This will be overridden in tests to stub
+	// out the real autosharding client.
+	NewAutoshardingClient func(sharding.ClientOptions) func()
+
+	// ErrNoEndpointsFromNR is the error returned by the balancer when the
+	// resolver returns an empty list of endpoints.
+	ErrNoEndpointsFromNR = errors.New("autosharding: no endpoints from resolver")
+
+	// ErrNoChannelFactory is the error returned by the balancer when no channel
+	// factory is found in the resolver state.
+	ErrNoChannelFactory = errors.New("autosharding: no channel factory found in resolver state")
+
+	// ErrNoAssignment is the error returned by the balancer when no assignment
+	// from the sharding service is available and fallback is disabled.
+	ErrNoAssignment = errors.New("autosharding: no assignment available and fallback is disabled")
+
+	// ErrNoEndpointsInSlice is the error returned by the balancer when the
+	// matching slice has no available endpoints.
+	ErrNoEndpointsInSlice = errors.New("autosharding: matching slice has no available endpoints")
+)

@@ -16,7 +16,6 @@
  *
  */
 
-// Package autosharding implements the autosharding load balancing policy.
 package autosharding
 
 import (
