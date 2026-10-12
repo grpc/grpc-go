@@ -27,6 +27,7 @@ import (
 )
 
 var (
+
 	// NewAutoshardingClient is a function to create a new autosharding client. The
 	// return value is a cancel function that the caller must invoke when they no
 	// longer need the autosharding client. This will be overridden in tests to stub
