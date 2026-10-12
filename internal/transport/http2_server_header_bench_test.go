@@ -87,10 +87,7 @@ func BenchmarkServerHeaderFields(b *testing.B) {
 func makeMD(prefix string, count int) metadata.MD {
 	md := make(metadata.MD, count)
 	for i := range count {
-		md[fmt.Sprintf("%s-%d", prefix, i)] = []string{
-			fmt.Sprintf("value-%d-a", i),
-			fmt.Sprintf("value-%d-b", i),
-		}
+		md[fmt.Sprintf("%s-%d", prefix, i)] = []string{fmt.Sprintf("value-%d", i)}
 	}
 	return md
 }
