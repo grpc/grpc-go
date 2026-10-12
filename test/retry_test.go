@@ -205,7 +205,7 @@ func (s) TestRetryStreaming(t *testing.T) {
 				return status.Errorf(codes.Internal, "server: no header metadata received")
 			}
 			if got := md[key]; len(got) != 1 || got[0] != strconv.Itoa(n) {
-				return status.Errorf(codes.Internal, "server: metadata = %v; want <contains %q: %q>", md, key, n)
+				return status.Errorf(codes.Internal, "server: metadata = %v; want <contains %q: %d>", md, key, n)
 			}
 			return nil
 		}
