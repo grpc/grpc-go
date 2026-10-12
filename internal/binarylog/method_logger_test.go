@@ -276,15 +276,22 @@ func (s) TestLog(t *testing.T) {
 				Peer:                 nil,
 			},
 		},
-
 		// gRPC headers should be omitted.
 		{
 			config: &ClientHeader{
 				OnClientSide: false,
 				Header: map[string][]string{
-					"grpc-reserved": {"to be omitted"},
-					":authority":    {"to be omitted"},
-					"a":             {"b", "bb"},
+					"lb-token":         {"to be omitted"},
+					":path":            {"to be omitted"},
+					":authority":       {"to be omitted"},
+					"content-encoding": {"to be omitted"},
+					"content-type":     {"to be omitted"},
+					"user-agent":       {"to be omitted"},
+					"te":               {"to be omitted"},
+					"authorization":    {"Bearer to-be-omitted"},
+					"grpc-reserved":    {"to be omitted"},
+
+					"a": {"b", "bb"},
 				},
 			},
 			want: &binlogpb.GrpcLogEntry{
@@ -310,9 +317,17 @@ func (s) TestLog(t *testing.T) {
 			config: &ServerHeader{
 				OnClientSide: true,
 				Header: map[string][]string{
-					"grpc-reserved": {"to be omitted"},
-					":authority":    {"to be omitted"},
-					"a":             {"b", "bb"},
+					"lb-token":         {"to be omitted"},
+					":path":            {"to be omitted"},
+					":authority":       {"to be omitted"},
+					"content-encoding": {"to be omitted"},
+					"content-type":     {"to be omitted"},
+					"user-agent":       {"to be omitted"},
+					"te":               {"to be omitted"},
+					"authorization":    {"Bearer to-be-omitted"},
+					"grpc-reserved":    {"to be omitted"},
+
+					"a": {"b", "bb"},
 				},
 			},
 			want: &binlogpb.GrpcLogEntry{

@@ -95,8 +95,8 @@ type ClientInterceptor interface {
 	// Note: RPCInfo.Context is currently unused and will be nil.
 	NewStream(ctx context.Context, ri iresolver.RPCInfo, newStream func(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStream, error), opts ...grpc.CallOption) (grpc.ClientStream, error)
 
-	// Close closes the interceptor. Once called, no new calls to NewStream are
-	// accepted. Ongoing calls to NewStream are allowed to complete.
+	// Close closes the interceptor. No new RPCs will be dispatched to this
+	// interceptor, but ongoing calls to NewStream are allowed to complete.
 	Close()
 }
 
@@ -131,6 +131,25 @@ type ClientFilter interface {
 	Close()
 }
 
+// ServerInterceptor is an interceptor for incoming RPC's on gRPC server side.
+type ServerInterceptor interface {
+	// InterceptRPC intercepts an incoming RPC on the server side.
+	//
+	// On success, implementations must return either the original ServerStream
+	// or a wrapped ServerStream, with a nil error.
+	//
+	// Returning a non-nil error will terminate the RPC with that error.
+	// Implementations are expected to return an error created using the status
+	// package; otherwise, the RPC will fail with an UNKNOWN status code.
+	//
+	// Implementations should never return (nil, nil).
+	InterceptRPC(ss grpc.ServerStream) (grpc.ServerStream, error)
+
+	// Close closes the interceptor. No new RPCs will be dispatched to this
+	// interceptor, but ongoing calls to InterceptRPC are allowed to complete.
+	Close()
+}
+
 // ServerFilterBuilder is an optional interface that a Builder can implement to
 // indicate its capability to build server-side filters.
 type ServerFilterBuilder interface {
@@ -149,7 +168,7 @@ type ServerFilter interface {
 	//
 	// It is valid for this method to return a nil Interceptor and a nil error.
 	// In this case, the RPC will not be intercepted by this filter.
-	BuildServerInterceptor(config, override FilterConfig) (iresolver.ServerInterceptor, error)
+	BuildServerInterceptor(config, override FilterConfig) (ServerInterceptor, error)
 
 	// Close is called when the filter is no longer needed.
 	Close()

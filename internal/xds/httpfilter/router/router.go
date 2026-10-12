@@ -22,7 +22,6 @@ package router
 import (
 	"fmt"
 
-	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/xds/httpfilter"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
@@ -104,7 +103,7 @@ func (filter) BuildClientInterceptor(cfg, override httpfilter.FilterConfig) (htt
 	return nil, nil
 }
 
-func (filter) BuildServerInterceptor(cfg, override httpfilter.FilterConfig) (iresolver.ServerInterceptor, error) {
+func (filter) BuildServerInterceptor(cfg, override httpfilter.FilterConfig) (httpfilter.ServerInterceptor, error) {
 	if _, ok := cfg.(config); !ok {
 		return nil, fmt.Errorf("router: incorrect config type provided (%T): %v", cfg, cfg)
 	}

@@ -39,6 +39,7 @@ import (
 	"google.golang.org/grpc/internal/xds/xdsclient"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 	"google.golang.org/grpc/internal/xds/xdsdepmgr"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
 )
 
@@ -103,6 +104,7 @@ func init() {
 
 	rinternal.NewWRR = wrr.NewRandom
 	rinternal.NewXDSClient = xdsclient.DefaultPool.NewClient
+	rinternal.OnCommittedFuncFromContext = onCommittedFuncFromContext
 }
 
 type xdsResolverBuilder struct {
@@ -301,6 +303,21 @@ func (r *xdsResolver) Close() {
 	if r.xdsClientClose != nil {
 		r.xdsClientClose()
 	}
+	// Drop field references so the resolver isn't retained across ClientConn
+	// close via any cross-object retention chain (e.g. ClientConn holding the
+	// ServiceConfig that captures the configSelector, shared xDS-client
+	// watcher metadata, channelz trace entries). Each nil individually looks
+	// harmless; the combination breaks the multi-path retention observed when
+	// callers repeatedly Close and redial DirectPath channels.
+	r.cc = nil
+	r.curConfigSelector = nil
+	r.dm = nil
+	r.xdsClient = nil
+	r.xdsClientClose = nil
+	r.httpFilters = nil
+	r.activeClusters = nil
+	r.activePlugins = nil
+	r.xdsConfig = nil
 	r.logger.Infof("Shutdown")
 }
 
@@ -691,6 +708,11 @@ type interceptorList struct {
 }
 
 func (il *interceptorList) NewStream(ctx context.Context, ri iresolver.RPCInfo, newStream func(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStream, error), opts ...grpc.CallOption) (grpc.ClientStream, error) {
+	onCommit := onCommittedFuncFromContext(ctx)
+	if onCommit == nil {
+		return nil, fmt.Errorf("xds: onCommit callback not found in context")
+	}
+
 	for idx := len(il.interceptors) - 1; idx >= 0; idx-- {
 		ns := newStream
 		i := il.interceptors[idx]
@@ -698,13 +720,52 @@ func (il *interceptorList) NewStream(ctx context.Context, ri iresolver.RPCInfo, 
 			return i.NewStream(ctx, ri, ns, opts...)
 		}
 	}
-	return newStream(ctx, opts...)
+
+	newOpts := slices.Clone(opts)
+	newOpts = append(newOpts, grpc.OnFinish(func(error) { onCommit() }))
+	cs, err := newStream(ctx, newOpts...)
+	if err != nil {
+		onCommit()
+		return nil, err
+	}
+	return &wrappedClientStream{
+		ClientStream: cs,
+		onCommit:     onCommit,
+	}, nil
 }
 
 func (il *interceptorList) Close() {
 	for _, i := range il.interceptors {
 		i.Close()
 	}
+}
+
+// wrappedClientStream wraps a grpc.ClientStream and invokes a callback when the
+// RPC is committed. This is used to manage reference counts for clusters and
+// plugins in the xdsResolver.
+type wrappedClientStream struct {
+	grpc.ClientStream        // ClientStream possibly wrapped by xDS HTTP filters.
+	onCommit          func() // Callback to invoke when the RPC is committed. Assumed to be idempotent.
+}
+
+func (ws *wrappedClientStream) Header() (metadata.MD, error) {
+	defer ws.onCommit()
+	return ws.ClientStream.Header()
+}
+
+func (ws *wrappedClientStream) Trailer() metadata.MD {
+	defer ws.onCommit()
+	return ws.ClientStream.Trailer()
+}
+
+func (ws *wrappedClientStream) Context() context.Context {
+	defer ws.onCommit()
+	return ws.ClientStream.Context()
+}
+
+func (ws *wrappedClientStream) RecvMsg(m any) error {
+	defer ws.onCommit()
+	return ws.ClientStream.RecvMsg(m)
 }
 
 // getOrCreateClientFilter retrieves an existing client filter from the

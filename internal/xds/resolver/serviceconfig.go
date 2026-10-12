@@ -19,6 +19,7 @@
 package resolver
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"math/bits"
@@ -231,12 +232,12 @@ func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RP
 	// is committed. Releasing the last reference unsubscribes from the cluster
 	// or pushes a new service config for a plugin.
 	cluster.info.Increment()
-	config.OnCommitted = sync.OnceFunc(func() {
+	config.Context = newContextWithOnCommittedFunc(config.Context, sync.OnceFunc(func() {
 		cluster.info.Decrement()
 		// Decrement the refcount of the route cluster and close the interceptor
 		// if refcount goes to zero.
 		rc.Decrement()
-	})
+	}))
 
 	if rt.maxStreamDuration != 0 {
 		config.MethodConfig.Timeout = &rt.maxStreamDuration
@@ -248,6 +249,19 @@ func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RP
 	}
 
 	return config, nil
+}
+
+type onCommittedFuncCtxKey struct{}
+
+func newContextWithOnCommittedFunc(ctx context.Context, onCommitted func()) context.Context {
+	return context.WithValue(ctx, onCommittedFuncCtxKey{}, onCommitted)
+}
+
+func onCommittedFuncFromContext(ctx context.Context) func() {
+	if onCommitted, ok := ctx.Value(onCommittedFuncCtxKey{}).(func()); ok {
+		return onCommitted
+	}
+	return nil
 }
 
 func retryConfigToPolicy(config *xdsresource.RetryConfig) *serviceconfig.RetryPolicy {

@@ -318,7 +318,7 @@ func (s) TestXDSResolverDelayedOnCommittedCSP(t *testing.T) {
 
 	// Invoke resOld.OnCommitted; should lead to a service config update that deletes
 	// cspA.
-	resOld.OnCommitted()
+	commitRPC(resOld)
 
 	wantSC = `
  {
@@ -422,7 +422,7 @@ func (s) TestResolverClusterSpecifierPluginRefCountRace(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		res.OnCommitted()
+		commitRPC(res)
 	}()
 	configureResources(ctx, t, mgmtServer, nodeID, listeners, routeConfigForPlugin("cspA", "anythingA"), nil, nil)
 	wg.Wait()
@@ -437,7 +437,7 @@ func (s) TestResolverClusterSpecifierPluginRefCountRace(t *testing.T) {
 	if got, want := clustermanager.PickedCluster(res.Context), "cluster_specifier_plugin:cspA"; got != want {
 		t.Fatalf("Config selector returned cluster %q, want %q", got, want)
 	}
-	res.OnCommitted()
+	commitRPC(res)
 }
 
 // TestResolverClusterSpecifierPlugin_WithFilters tests the case where a route
@@ -541,12 +541,15 @@ func (s) TestResolverClusterSpecifierPlugin_WithFilters(t *testing.T) {
 		return nil, nil
 	}
 
-	if interceptor, ok := res.Interceptor.(httpfilter.ClientInterceptor); ok {
-		if _, err = interceptor.NewStream(ctx, iresolver.RPCInfo{Method: "/service/method", Context: ctx}, newStream); err != nil {
-			t.Fatalf("NewStream() failed with error: %v", err)
-		}
-	} else {
+	interceptor, ok := res.Interceptor.(httpfilter.ClientInterceptor)
+	if !ok {
 		t.Fatalf("res.Interceptor is type %T, want httpfilter.ClientInterceptor", res.Interceptor)
+	}
+	// Invoke the interceptor to create a new stream, which should invoke the
+	// filters. Use RPCConfig.Context as the context for the new stream. This
+	// contains the "onCommitted" function as a value.
+	if _, err = interceptor.NewStream(res.Context, iresolver.RPCInfo{Method: "/service/method"}, newStream); err != nil {
+		t.Fatalf("NewStream() failed with error: %v", err)
 	}
 
 	// Verify that first filter receives the config.

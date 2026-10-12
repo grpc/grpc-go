@@ -35,6 +35,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/balancer/stub"
+	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/grpctest"
 	iringhash "google.golang.org/grpc/internal/ringhash"
 	iserviceconfig "google.golang.org/grpc/internal/serviceconfig"
@@ -118,16 +119,16 @@ func waitForResourceNames(ctx context.Context, resourceNamesCh chan []string, wa
 // Returns the following:
 // - a channel to read received load balancing configuration
 // - a channel to read received resolver error
-// - a channel that is closed when ExitIdle() is called
-// - a channel that is closed when the balancer is closed
-func registerWrappedPriorityPolicy(t *testing.T) (chan serviceconfig.LoadBalancingConfig, chan error, chan struct{}, chan struct{}) {
+// - an event that is fired when ExitIdle() is called
+// - an event that is fired when the balancer is closed
+func registerWrappedPriorityPolicy(ctx context.Context, t *testing.T) (chan serviceconfig.LoadBalancingConfig, chan error, *grpcsync.Event, *grpcsync.Event) {
 	priorityBuilder := balancer.Get(priority.Name)
 	internal.BalancerUnregister(priorityBuilder.Name())
 
 	lbCfgCh := make(chan serviceconfig.LoadBalancingConfig, 1)
 	resolverErrCh := make(chan error, 1)
-	exitIdleCh := make(chan struct{})
-	closeCh := make(chan struct{})
+	exitIdleEvent := grpcsync.NewEvent()
+	closeEvent := grpcsync.NewEvent()
 
 	stub.Register(priority.Name, stub.BalancerFuncs{
 		Init: func(bd *stub.BalancerData) {
@@ -139,29 +140,58 @@ func registerWrappedPriorityPolicy(t *testing.T) (chan serviceconfig.LoadBalanci
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
 			select {
 			case lbCfgCh <- ccs.BalancerConfig:
-			default:
+			case <-ctx.Done():
 			}
 			return bd.ChildBalancer.UpdateClientConnState(ccs)
 		},
 		ResolverError: func(bd *stub.BalancerData, err error) {
 			select {
 			case resolverErrCh <- err:
-			default:
+			case <-ctx.Done():
 			}
 			bd.ChildBalancer.ResolverError(err)
 		},
 		ExitIdle: func(bd *stub.BalancerData) {
 			bd.ChildBalancer.ExitIdle()
-			close(exitIdleCh)
+			exitIdleEvent.Fire()
 		},
 		Close: func(bd *stub.BalancerData) {
 			bd.ChildBalancer.Close()
-			close(closeCh)
+			closeEvent.Fire()
 		},
 	})
 	t.Cleanup(func() { balancer.Register(priorityBuilder) })
 
-	return lbCfgCh, resolverErrCh, exitIdleCh, closeCh
+	return lbCfgCh, resolverErrCh, exitIdleEvent, closeEvent
+}
+
+func registerWrappedOutlierDetectionPolicy(ctx context.Context, t *testing.T) chan serviceconfig.LoadBalancingConfig {
+	odBuilder := balancer.Get(outlierdetection.Name)
+	internal.BalancerUnregister(odBuilder.Name())
+
+	lbCfgCh := make(chan serviceconfig.LoadBalancingConfig, 1)
+
+	stub.Register(outlierdetection.Name, stub.BalancerFuncs{
+		Init: func(bd *stub.BalancerData) {
+			bd.ChildBalancer = odBuilder.Build(bd.ClientConn, bd.BuildOptions)
+		},
+		ParseConfig: func(lbCfg json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
+			return odBuilder.(balancer.ConfigParser).ParseConfig(lbCfg)
+		},
+		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
+			select {
+			case lbCfgCh <- ccs.BalancerConfig:
+			case <-ctx.Done():
+			}
+			return bd.ChildBalancer.UpdateClientConnState(ccs)
+		},
+		Close: func(bd *stub.BalancerData) {
+			bd.ChildBalancer.Close()
+		},
+	})
+	t.Cleanup(func() { balancer.Register(odBuilder) })
+
+	return lbCfgCh
 }
 
 // setupDNS unregisters the DNS resolver and registers a manual resolver for the
@@ -224,31 +254,41 @@ func setupWithManagementServer(t *testing.T, lis net.Listener, onStreamRequest f
 	return mgmtServer, nodeID, cc
 }
 
-// Helper function to compare the load balancing configuration received on the
-// channel with the expected one. Both configs are marshalled to JSON and then
-// compared.
+// waitForLoadBalancingConfig waits for the expected load balancing
+// configuration to be received on the channel. Both configs are marshalled to
+// JSON and then compared.
 //
-// Returns an error if marshalling to JSON fails, or if the load balancing
-// configurations don't match, or if the context deadline expires before reading
-// a child policy configuration off of the lbCfgCh.
-func compareLoadBalancingConfig(ctx context.Context, lbCfgCh chan serviceconfig.LoadBalancingConfig, wantChildCfg serviceconfig.LoadBalancingConfig) error {
+// Returns an error if marshalling to JSON fails, or if the context deadline
+// expires before reading a matching child policy configuration off of the
+// lbCfgCh.
+func waitForLoadBalancingConfig(ctx context.Context, lbCfgCh chan serviceconfig.LoadBalancingConfig, wantChildCfg serviceconfig.LoadBalancingConfig) error {
 	wantJSON, err := json.Marshal(wantChildCfg)
 	if err != nil {
 		return fmt.Errorf("failed to marshal expected child config to JSON: %v", err)
 	}
-	select {
-	case lbCfg := <-lbCfgCh:
-		gotJSON, err := json.Marshal(lbCfg)
-		if err != nil {
-			return fmt.Errorf("failed to marshal received LB config into JSON: %v", err)
+	var lastErr error
+	// Loop over updates received on lbCfgCh to consume intermediate configuration
+	// updates (e.g. pushed as individual discovery mechanisms resolve) until a
+	// configuration matching wantChildCfg is received, or the context deadline expires.
+	for {
+		select {
+		case lbCfg := <-lbCfgCh:
+			gotJSON, err := json.Marshal(lbCfg)
+			if err != nil {
+				return fmt.Errorf("failed to marshal received LB config into JSON: %v", err)
+			}
+			if diff := cmp.Diff(wantJSON, gotJSON); diff != "" {
+				lastErr = fmt.Errorf("child policy received unexpected diff in config (-want +got):\n%s", diff)
+				continue
+			}
+			return nil
+		case <-ctx.Done():
+			if lastErr != nil {
+				return lastErr
+			}
+			return fmt.Errorf("timeout when waiting for child policy to receive its configuration")
 		}
-		if diff := cmp.Diff(wantJSON, gotJSON); diff != "" {
-			return fmt.Errorf("child policy received unexpected diff in config (-want +got):\n%s", diff)
-		}
-	case <-ctx.Done():
-		return fmt.Errorf("timeout when waiting for child policy to receive its configuration")
 	}
-	return nil
 }
 
 func verifyRPCError(gotErr error, wantCode codes.Code, wantErr, wantNodeID string) error {
@@ -283,6 +323,41 @@ func createPriorityConfig(cluster string) *iserviceconfig.BalancerConfig {
 					ChildPolicy: &iserviceconfig.BalancerConfig{
 						Name:   wrrlocality.Name,
 						Config: &wrrlocality.LBConfig{ChildPolicy: &iserviceconfig.BalancerConfig{Name: roundrobin.Name}},
+					},
+				},
+			},
+		},
+	}
+}
+
+// createLeafClusterConfig returns the expected LoadBalancingConfig tree for a
+// leaf (non-aggregate) cluster under gRFC A75 topology:
+// outlier_detection -> cluster_impl -> priority -> wrr_locality -> round_robin.
+func createLeafClusterConfig(cluster string, pName string, ignoreReresolution bool) *outlierdetection.LBConfig {
+	return &outlierdetection.LBConfig{
+		Interval:           iserviceconfig.Duration(10 * time.Second),
+		BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
+		MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
+		MaxEjectionPercent: 10,
+		ChildPolicy: &iserviceconfig.BalancerConfig{
+			Name: clusterimpl.Name,
+			Config: &clusterimpl.LBConfig{
+				Cluster: cluster,
+				ChildPolicy: &iserviceconfig.BalancerConfig{
+					Name: priority.Name,
+					Config: &priority.LBConfig{
+						Children: map[string]*priority.Child{
+							pName: {
+								Config: &iserviceconfig.BalancerConfig{
+									Name: wrrlocality.Name,
+									Config: &wrrlocality.LBConfig{
+										ChildPolicy: &iserviceconfig.BalancerConfig{Name: roundrobin.Name},
+									},
+								},
+								IgnoreReresolutionRequests: ignoreReresolution,
+							},
+						},
+						Priorities: []string{pName},
 					},
 				},
 			},
@@ -414,32 +489,32 @@ func (s) TestClusterUpdate_Success(t *testing.T) {
 				}
 				return c
 			}(),
-			wantChildCfg: &priority.LBConfig{
-				Children: map[string]*priority.Child{
-					"priority-0-0": {
-						Config: &iserviceconfig.BalancerConfig{
-							Name: outlierdetection.Name,
-							Config: &outlierdetection.LBConfig{
-								Interval:           iserviceconfig.Duration(10 * time.Second), // default interval
-								BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
-								MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
-								MaxEjectionPercent: 10,
-								ChildPolicy: &iserviceconfig.BalancerConfig{
-									Name: clusterimpl.Name,
-									Config: &clusterimpl.LBConfig{
-										Cluster: clusterName,
-										ChildPolicy: &iserviceconfig.BalancerConfig{
+			wantChildCfg: &outlierdetection.LBConfig{
+				Interval:           iserviceconfig.Duration(10 * time.Second), // default interval
+				BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
+				MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
+				MaxEjectionPercent: 10,
+				ChildPolicy: &iserviceconfig.BalancerConfig{
+					Name: clusterimpl.Name,
+					Config: &clusterimpl.LBConfig{
+						Cluster: clusterName,
+						ChildPolicy: &iserviceconfig.BalancerConfig{
+							Name: priority.Name,
+							Config: &priority.LBConfig{
+								Children: map[string]*priority.Child{
+									"priority-0-0": {
+										Config: &iserviceconfig.BalancerConfig{
 											Name:   wrrlocality.Name,
 											Config: &wrrlocality.LBConfig{ChildPolicy: &iserviceconfig.BalancerConfig{Name: roundrobin.Name}},
 										},
+										IgnoreReresolutionRequests: true,
 									},
 								},
+								Priorities: []string{"priority-0-0"},
 							},
 						},
-						IgnoreReresolutionRequests: true,
 					},
 				},
-				Priorities: []string{"priority-0-0"},
 			},
 		},
 		{
@@ -459,35 +534,35 @@ func (s) TestClusterUpdate_Success(t *testing.T) {
 				}
 				return c
 			}(),
-			wantChildCfg: &priority.LBConfig{
-				Children: map[string]*priority.Child{
-					"priority-0-0": {
-						Config: &iserviceconfig.BalancerConfig{
-							Name: outlierdetection.Name,
-							Config: &outlierdetection.LBConfig{
-								Interval:           iserviceconfig.Duration(10 * time.Second), // default interval
-								BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
-								MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
-								MaxEjectionPercent: 10,
-								ChildPolicy: &iserviceconfig.BalancerConfig{
-									Name: clusterimpl.Name,
-									Config: &clusterimpl.LBConfig{
-										Cluster: clusterName,
-										ChildPolicy: &iserviceconfig.BalancerConfig{
+			wantChildCfg: &outlierdetection.LBConfig{
+				Interval:           iserviceconfig.Duration(10 * time.Second), // default interval
+				BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
+				MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
+				MaxEjectionPercent: 10,
+				ChildPolicy: &iserviceconfig.BalancerConfig{
+					Name: clusterimpl.Name,
+					Config: &clusterimpl.LBConfig{
+						Cluster: clusterName,
+						ChildPolicy: &iserviceconfig.BalancerConfig{
+							Name: priority.Name,
+							Config: &priority.LBConfig{
+								Children: map[string]*priority.Child{
+									"priority-0-0": {
+										Config: &iserviceconfig.BalancerConfig{
 											Name: ringhash.Name,
 											Config: &iringhash.LBConfig{
 												MinRingSize: 100,
 												MaxRingSize: 1000,
 											},
 										},
+										IgnoreReresolutionRequests: true,
 									},
 								},
+								Priorities: []string{"priority-0-0"},
 							},
 						},
-						IgnoreReresolutionRequests: true,
 					},
 				},
-				Priorities: []string{"priority-0-0"},
 			},
 		},
 		{
@@ -502,41 +577,41 @@ func (s) TestClusterUpdate_Success(t *testing.T) {
 				c.OutlierDetection = &v3clusterpb.OutlierDetection{}
 				return c
 			}(),
-			wantChildCfg: &priority.LBConfig{
-				Children: map[string]*priority.Child{
-					"priority-0-0": {
-						Config: &iserviceconfig.BalancerConfig{
-							Name: outlierdetection.Name,
-							Config: &outlierdetection.LBConfig{
-								Interval:           iserviceconfig.Duration(10 * time.Second), // default interval
-								BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
-								MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
-								MaxEjectionPercent: 10,
-								SuccessRateEjection: &outlierdetection.SuccessRateEjection{
-									StdevFactor:           1900,
-									EnforcementPercentage: 100,
-									MinimumHosts:          5,
-									RequestVolume:         100,
-								},
-								ChildPolicy: &iserviceconfig.BalancerConfig{
-									Name: clusterimpl.Name,
-									Config: &clusterimpl.LBConfig{
-										Cluster: clusterName,
-										ChildPolicy: &iserviceconfig.BalancerConfig{
+			wantChildCfg: &outlierdetection.LBConfig{
+				Interval:           iserviceconfig.Duration(10 * time.Second), // default interval
+				BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
+				MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
+				MaxEjectionPercent: 10,
+				SuccessRateEjection: &outlierdetection.SuccessRateEjection{
+					StdevFactor:           1900,
+					EnforcementPercentage: 100,
+					MinimumHosts:          5,
+					RequestVolume:         100,
+				},
+				ChildPolicy: &iserviceconfig.BalancerConfig{
+					Name: clusterimpl.Name,
+					Config: &clusterimpl.LBConfig{
+						Cluster: clusterName,
+						ChildPolicy: &iserviceconfig.BalancerConfig{
+							Name: priority.Name,
+							Config: &priority.LBConfig{
+								Children: map[string]*priority.Child{
+									"priority-0-0": {
+										Config: &iserviceconfig.BalancerConfig{
 											Name: ringhash.Name,
 											Config: &iringhash.LBConfig{
 												MinRingSize: 1024, // default sizes
 												MaxRingSize: 4096,
 											},
 										},
+										IgnoreReresolutionRequests: true,
 									},
 								},
+								Priorities: []string{"priority-0-0"},
 							},
 						},
-						IgnoreReresolutionRequests: true,
 					},
 				},
-				Priorities: []string{"priority-0-0"},
 			},
 		},
 		{
@@ -564,58 +639,57 @@ func (s) TestClusterUpdate_Success(t *testing.T) {
 				}
 				return c
 			}(),
-			wantChildCfg: &priority.LBConfig{
-				Children: map[string]*priority.Child{
-					"priority-0-0": {
-						Config: &iserviceconfig.BalancerConfig{
-							Name: outlierdetection.Name,
-							Config: &outlierdetection.LBConfig{
-								Interval:           iserviceconfig.Duration(10 * time.Second), // default interval
-								BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
-								MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
-								MaxEjectionPercent: 10,
-								SuccessRateEjection: &outlierdetection.SuccessRateEjection{
-									StdevFactor:           1900,
-									EnforcementPercentage: 100,
-									MinimumHosts:          5,
-									RequestVolume:         100,
-								},
-								FailurePercentageEjection: &outlierdetection.FailurePercentageEjection{
-									Threshold:             85,
-									EnforcementPercentage: 5,
-									MinimumHosts:          5,
-									RequestVolume:         50,
-								},
-								ChildPolicy: &iserviceconfig.BalancerConfig{
-									Name: clusterimpl.Name,
-									Config: &clusterimpl.LBConfig{
-										Cluster: clusterName,
-										ChildPolicy: &iserviceconfig.BalancerConfig{
+			wantChildCfg: &outlierdetection.LBConfig{
+				Interval:           iserviceconfig.Duration(10 * time.Second), // default interval
+				BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
+				MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
+				MaxEjectionPercent: 10,
+				SuccessRateEjection: &outlierdetection.SuccessRateEjection{
+					StdevFactor:           1900,
+					EnforcementPercentage: 100,
+					MinimumHosts:          5,
+					RequestVolume:         100,
+				},
+				FailurePercentageEjection: &outlierdetection.FailurePercentageEjection{
+					Threshold:             85,
+					EnforcementPercentage: 5,
+					MinimumHosts:          5,
+					RequestVolume:         50,
+				},
+				ChildPolicy: &iserviceconfig.BalancerConfig{
+					Name: clusterimpl.Name,
+					Config: &clusterimpl.LBConfig{
+						Cluster: clusterName,
+						ChildPolicy: &iserviceconfig.BalancerConfig{
+							Name: priority.Name,
+							Config: &priority.LBConfig{
+								Children: map[string]*priority.Child{
+									"priority-0-0": {
+										Config: &iserviceconfig.BalancerConfig{
 											Name: ringhash.Name,
 											Config: &iringhash.LBConfig{
 												MinRingSize: 1024, // default sizes
 												MaxRingSize: 4096,
 											},
 										},
+										IgnoreReresolutionRequests: true,
 									},
 								},
+								Priorities: []string{"priority-0-0"},
 							},
 						},
-						IgnoreReresolutionRequests: true,
 					},
 				},
-				Priorities: []string{"priority-0-0"},
 			},
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			lbCfgCh, _, _, _ := registerWrappedPriorityPolicy(t)
-			mgmtServer, nodeID, _ := setupWithManagementServer(t, nil, nil)
-
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
+			lbCfgCh := registerWrappedOutlierDetectionPolicy(ctx, t)
+			mgmtServer, nodeID, _ := setupWithManagementServer(t, nil, nil)
 			if err := mgmtServer.Update(ctx, e2e.UpdateOptions{
 				NodeID:    nodeID,
 				Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(target, routeName)},
@@ -626,7 +700,7 @@ func (s) TestClusterUpdate_Success(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if err := compareLoadBalancingConfig(ctx, lbCfgCh, test.wantChildCfg); err != nil {
+			if err := waitForLoadBalancingConfig(ctx, lbCfgCh, test.wantChildCfg); err != nil {
 				t.Fatal(err)
 			}
 		})
@@ -750,7 +824,9 @@ func (s) TestClusterUpdate_Failure(t *testing.T) {
 //     is expected to push the error down the child policy and put the channel in
 //     TRANSIENT_FAILURE. It is also expected to cancel the CDS watch.
 func (s) TestResolverError(t *testing.T) {
-	registerWrappedPriorityPolicy(t)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	registerWrappedPriorityPolicy(ctx, t)
 	mgmtServer, nodeID, cc := setupWithManagementServer(t, nil, nil)
 
 	// Start a test service backend.
@@ -770,8 +846,6 @@ func (s) TestResolverError(t *testing.T) {
 		Port:       port,
 	})
 	resources.Listeners[0].ApiListener.ApiListener = nil
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
@@ -840,9 +914,9 @@ func (s) TestResolverError(t *testing.T) {
 // error down the child policy and put the channel in TRANSIENT_FAILURE. It is
 // also expected to cancel the CDS watch.
 func (s) TestResourceNotFoundResolverError(t *testing.T) {
-	_, _, _, childPolicyCloseCh := registerWrappedPriorityPolicy(t)
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
+	_, _, _, childPolicyCloseEvent := registerWrappedPriorityPolicy(ctx, t)
 	cdsResourceCanceledCh := make(chan struct{}, 1)
 	onStreamReq := func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
 		if req.GetTypeUrl() == version.V3ClusterURL {
@@ -885,7 +959,7 @@ func (s) TestResourceNotFoundResolverError(t *testing.T) {
 
 	// Verify that the resolver error is pushed to the child policy.
 	select {
-	case <-childPolicyCloseCh:
+	case <-childPolicyCloseEvent.Done():
 	case <-ctx.Done():
 		t.Fatal("Timeout when waiting for child policy to be closed")
 	}
@@ -993,7 +1067,9 @@ func (s) TestClusterUpdate_ResourceNotFound(t *testing.T) {
 // Tests that closing the cds LB policy results in the the child policy being
 // closed.
 func (s) TestClose(t *testing.T) {
-	_, _, _, childPolicyCloseCh := registerWrappedPriorityPolicy(t)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	_, _, _, childPolicyCloseEvent := registerWrappedPriorityPolicy(ctx, t)
 	mgmtServer, nodeID, cc := setupWithManagementServer(t, nil, nil)
 
 	// Start a test service backend.
@@ -1007,8 +1083,6 @@ func (s) TestClose(t *testing.T) {
 		Host:       host,
 		Port:       testutils.ParsePort(t, server.Address),
 	})
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
@@ -1026,14 +1100,16 @@ func (s) TestClose(t *testing.T) {
 	select {
 	case <-ctx.Done():
 		t.Fatal("Timeout when waiting for the child policy to be closed")
-	case <-childPolicyCloseCh:
+	case <-childPolicyCloseEvent.Done():
 	}
 }
 
 // Tests that calling ExitIdle on the cds LB policy results in the call being
 // propagated to the child policy.
 func (s) TestExitIdle(t *testing.T) {
-	_, _, exitIdleCh, _ := registerWrappedPriorityPolicy(t)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	_, _, exitIdleEvent, _ := registerWrappedPriorityPolicy(ctx, t)
 	mgmtServer, nodeID, cc := setupWithManagementServer(t, nil, nil)
 
 	// Start a test service backend.
@@ -1047,8 +1123,6 @@ func (s) TestExitIdle(t *testing.T) {
 		Host:       host,
 		Port:       testutils.ParsePort(t, server.Address),
 	})
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
@@ -1065,8 +1139,8 @@ func (s) TestExitIdle(t *testing.T) {
 	// Wait for ExitIdle to be called on the child policy.
 	select {
 	case <-ctx.Done():
-		t.Fatal("Timeout when waiting for the child policy to be closed")
-	case <-exitIdleCh:
+		t.Fatal("Timeout when waiting for ExitIdle to be called on the child policy")
+	case <-exitIdleEvent.Done():
 	}
 }
 

@@ -18,7 +18,6 @@
 package server
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"net/netip"
@@ -26,8 +25,8 @@ import (
 	"strings"
 	"sync/atomic"
 
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/xds/httpfilter"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 	"google.golang.org/grpc/status"
@@ -182,6 +181,10 @@ type filterChain struct {
 // usableRouteConfiguration contains a matchable route configuration, with
 // instantiated HTTP Filters per route.
 type usableRouteConfiguration struct {
+	// vhosts holds the virtual hosts from the route configuration update, and
+	// is used to match the authority of incoming RPCs. vhs holds the same
+	// virtual hosts, in the same order, with instantiated HTTP filters.
+	vhosts []*xdsresource.VirtualHost
 	vhs    []virtualHostWithInterceptors
 	err    error
 	nodeID string // For logging purposes. Populated by the listener wrapper.
@@ -200,8 +203,8 @@ func (rc *usableRouteConfiguration) stop() {
 // virtualHostWithInterceptors captures information present in a VirtualHost
 // update, and also contains routes with instantiated HTTP Filters.
 type virtualHostWithInterceptors struct {
-	domains []string
-	routes  []routeWithInterceptors
+	*xdsresource.VirtualHost
+	routes []routeWithInterceptors
 }
 
 // routeWithInterceptors captures information in a Route, and contains
@@ -209,7 +212,7 @@ type virtualHostWithInterceptors struct {
 type routeWithInterceptors struct {
 	matcher     *xdsresource.CompositeMatcher
 	actionType  xdsresource.RouteActionType
-	interceptor resolver.ServerInterceptor
+	interceptor httpfilter.ServerInterceptor
 }
 
 type lookupParams struct {
@@ -442,7 +445,7 @@ func (fc *filterChain) updateUsableRouteConfiguration(config *xdsresource.RouteC
 		serverFilters = append(serverFilters, sfs...)
 	}
 
-	urc := &usableRouteConfiguration{vhs: vhs, nodeID: nodeID}
+	urc := &usableRouteConfiguration{vhosts: config.VirtualHosts, vhs: vhs, nodeID: nodeID}
 	fc.applyConfiguration(urc, serverFilters)
 }
 
@@ -491,7 +494,7 @@ func (fc *filterChain) convertVirtualHost(virtualHost *xdsresource.VirtualHost, 
 		serverFilters = append(serverFilters, sfs...)
 		rs[i].interceptor = interceptor
 	}
-	return virtualHostWithInterceptors{domains: virtualHost.Domains, routes: rs}, serverFilters, nil
+	return virtualHostWithInterceptors{VirtualHost: virtualHost, routes: rs}, serverFilters, nil
 }
 
 // statusErrWithNodeID returns an error produced by the status package with the
@@ -500,9 +503,9 @@ func (rc *usableRouteConfiguration) statusErrWithNodeID(c codes.Code, msg string
 	return status.Error(c, fmt.Sprintf("[xDS node id: %v]: %s", rc.nodeID, fmt.Sprintf(msg, args...)))
 }
 
-func (fc *filterChain) newInterceptor(routeOverride, virtualHostOverride map[string]httpfilter.FilterConfig, provider serverFilterProvider) (_ resolver.ServerInterceptor, _ []httpfilter.ServerFilter, err error) {
+func (fc *filterChain) newInterceptor(routeOverride, virtualHostOverride map[string]httpfilter.FilterConfig, provider serverFilterProvider) (_ httpfilter.ServerInterceptor, _ []httpfilter.ServerFilter, err error) {
 	serverFilters := []httpfilter.ServerFilter{}
-	interceptors := make([]resolver.ServerInterceptor, 0, len(fc.httpFilters))
+	interceptors := make([]httpfilter.ServerInterceptor, 0, len(fc.httpFilters))
 	defer func() {
 		if err != nil {
 			for _, sf := range serverFilters {
@@ -549,16 +552,18 @@ func (fc *filterChain) newInterceptor(routeOverride, virtualHostOverride map[str
 }
 
 type interceptorList struct {
-	interceptors []resolver.ServerInterceptor
+	interceptors []httpfilter.ServerInterceptor
 }
 
-func (il *interceptorList) AllowRPC(ctx context.Context) error {
+func (il *interceptorList) InterceptRPC(ss grpc.ServerStream) (grpc.ServerStream, error) {
+	var err error
 	for _, i := range il.interceptors {
-		if err := i.AllowRPC(ctx); err != nil {
-			return err
+		ss, err = i.InterceptRPC(ss)
+		if err != nil {
+			return nil, err
 		}
 	}
-	return nil
+	return ss, nil
 }
 
 func (il *interceptorList) Close() {

@@ -38,6 +38,13 @@ import (
 	_ "google.golang.org/grpc/internal/xds/httpfilter/router" // Register the router filter.
 )
 
+// TestConnectedMetricUnit verifies the unit specified by gRFC A78.
+func (s) TestConnectedMetricUnit(t *testing.T) {
+	if got := xdsClientConnectedMetric.Descriptor().Unit; got != "{bool}" {
+		t.Errorf("grpc.xds_client.connected unit = %q, want %q", got, "{bool}")
+	}
+}
+
 type noopListenerWatcher struct{}
 
 func (noopListenerWatcher) ResourceChanged(_ *xdsresource.ListenerUpdate, onDone func()) {

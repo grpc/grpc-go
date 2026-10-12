@@ -203,6 +203,12 @@ func (m *DependencyManager) Close() {
 		dnsResolver.stop()
 		delete(m.dnsResolvers, name)
 	}
+
+	// Drop references to externally-owned collaborators so the dependency
+	// manager itself doesn't retain them once Close returns. All in-flight
+	// callbacks re-check m.stopped under m.mu before touching these fields.
+	m.watcher = nil
+	m.xdsClient = nil
 }
 
 // annotateErrorWithNodeID annotates the given error with the provided xDS node
@@ -440,13 +446,14 @@ func (m *DependencyManager) populateAggregateClusterLocked(clusterName string, u
 }
 
 func (m *DependencyManager) applyRouteConfigUpdateLocked(update *xdsresource.RouteConfigUpdate) {
-	matchVH := xdsresource.FindBestMatchingVirtualHost(m.dataplaneAuthority, update.VirtualHosts)
-	if matchVH == nil {
+	idx := xdsresource.FindBestMatchingVirtualHostIndex(m.dataplaneAuthority, update.VirtualHosts)
+	if idx == -1 {
 		err := m.annotateErrorWithNodeID(fmt.Errorf("could not find VirtualHost for %q", m.dataplaneAuthority))
 		m.routeConfigWatcher.setLastError(err)
 		m.watcher.Error(err)
 		return
 	}
+	matchVH := update.VirtualHosts[idx]
 	m.routeConfigWatcher.setLastUpdate(update)
 	m.routeConfigWatcher.extras.virtualHost = matchVH
 
@@ -999,6 +1006,13 @@ func (m *DependencyManager) SubscribeToCluster(name string) func() {
 func (m *DependencyManager) unsubscribeFromCluster(name string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	// Balancers can invoke the unsubscribe closure returned by
+	// SubscribeToCluster after Close has already torn down all watchers and
+	// dropped m.watcher / m.xdsClient. Match the m.stopped guard used by
+	// every other post-Close callback in this file.
+	if m.stopped {
+		return
+	}
 	c := m.clusterSubscriptions[name]
 	c.dynamicRefCount--
 	// This should not happen as unsubscribe returned from the

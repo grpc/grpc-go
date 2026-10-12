@@ -165,10 +165,11 @@ func (i *FileWatcherInterceptor) run(ctx context.Context) {
 	}
 }
 
-// updateInternalInterceptor checks if the policy file that is watching has changed,
-// and if so, updates the internalInterceptor with the policy. Unlike the
-// constructor, if there is an error in reading the file or parsing the policy, the
-// previous internalInterceptors will not be replaced.
+// updateInternalInterceptor checks if the policy file that is watching has
+// changed since the last successful load, and if so, updates the
+// internalInterceptor with the policy. Unlike the constructor, if there is an
+// error in reading the file or parsing the policy, the previous
+// internalInterceptors will not be replaced.
 func (i *FileWatcherInterceptor) updateInternalInterceptor() error {
 	policyContents, err := os.ReadFile(i.options.PolicyFile)
 	if err != nil {
@@ -177,12 +178,12 @@ func (i *FileWatcherInterceptor) updateInternalInterceptor() error {
 	if bytes.Equal(i.policyContents, policyContents) {
 		return nil
 	}
-	i.policyContents = policyContents
 	policyContentsString := string(policyContents)
 	interceptor, err := NewStatic(policyContentsString)
 	if err != nil {
 		return err
 	}
+	i.policyContents = policyContents
 	atomic.StorePointer(&i.internalInterceptor, unsafe.Pointer(interceptor))
 	logger.Infof("authorization policy reload status: successfully loaded new policy %v", policyContentsString)
 	if i.options.OnPolicyUpdate != nil {
