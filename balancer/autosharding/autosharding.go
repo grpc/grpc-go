@@ -215,7 +215,6 @@ func (b *autoshardingBalancer) handleNewEndpointsLocked(endpoints []resolver.End
 	filteredEndpoints := make([]resolver.Endpoint, 0, len(endpoints))
 
 	orderOrCountChanged := false
-	seenHostnames := make(map[string]bool)
 	seenEndpoints := resolver.NewEndpointMap[bool]()
 	newEndpointMap := make(map[string]*endpointState)
 	for _, ep := range endpoints {
@@ -227,7 +226,7 @@ func (b *autoshardingBalancer) handleNewEndpointsLocked(endpoints []resolver.End
 
 		// Filter out endpoints based on duplicate hostname.
 		hostname := hostnameFromEndpoint(ep)
-		if seenHostnames[hostname] {
+		if _, ok := newEndpointMap[hostname]; ok {
 			b.logger.Warningf("Ignoring duplicate endpoint with hostname %q", hostname)
 			continue
 		}
@@ -241,7 +240,6 @@ func (b *autoshardingBalancer) handleNewEndpointsLocked(endpoints []resolver.End
 			continue
 		}
 
-		seenHostnames[hostname] = true
 		seenEndpoints.Set(ep, true)
 		filteredEndpoints = append(filteredEndpoints, ep)
 
