@@ -21,8 +21,6 @@
 package grpcservice
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"maps"
@@ -66,10 +64,9 @@ type Config struct {
 	CallCredentials []*xdscreds.CallCreds
 }
 
-// Key returns a string that uniquely identifies the config (a hex-encoded
-// SHA-256 digest of its contents), suitable for use as a map key. Two configs
-// return the same value from Key if and only if they are Equal (barring SHA-256
-// collisions).
+// Key returns a string that uniquely identifies the config , suitable for use
+// as a map key. Two configs return the same value from Key if and only if they
+// are Equal.
 func (c *Config) Key() string {
 	// identityKey mirrors xdscreds.Identity. omitempty makes nil and empty
 	// Data encode the same way.
@@ -111,8 +108,7 @@ func (c *Config) Key() string {
 	// Marshal cannot fail: the key contains only strings, integers, and byte
 	// slices, and maps and slices of those.
 	res, _ := json.Marshal(key)
-	sum := sha256.Sum256(res)
-	return hex.EncodeToString(sum[:])
+	return string(res)
 }
 
 // Equal reports whether c and other are equal.
