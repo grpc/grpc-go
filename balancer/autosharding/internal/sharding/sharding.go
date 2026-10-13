@@ -108,9 +108,9 @@ type Slice struct {
 	StartKey  []byte // Inclusive start key of the key-range
 	Endpoints []int  // Indices into Assignment.EndpointNames
 
-	// FallbackDisabled is set when the sharding server explicitly assigned no endpoints to this
-	// slice. Picks matching such slices fail even if fallback is enabled.
-	// Always false for slices synthesized to fill gaps.
+	// FallbackDisabled is set when the sharding server explicitly assigned no
+	// endpoints to this slice. Picks matching such slices fail even if fallback
+	// is enabled. Always false for slices synthesized to fill gaps.
 	FallbackDisabled bool
 }
 

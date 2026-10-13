@@ -780,7 +780,7 @@ func (s) TestEndpointFilteringAndDeduplication(t *testing.T) {
 
 	// Picking key "z" (assigned to "host-b") should fail because ep1DupAddr
 	// ("host-b") shared the same address set as ep1 ("host-a") and was ignored.
-	const wantErr = "autosharding: matching slice has no available endpoints"
+	const wantErr = "autosharding: matching slice has no known resolver endpoints and fallback is disabled"
 	if _, err := p.Pick(balancer.PickInfo{Ctx: newContextWithShardingKey(ctx, "test-header-name", "z")}); err == nil || !strings.Contains(err.Error(), wantErr) {
 		t.Fatalf("Pick(\"z\") error = %v, want error containing %q", err, wantErr)
 	}
@@ -1273,7 +1273,7 @@ func (s) TestDynamicEndpointUpdates(t *testing.T) {
 			return fmt.Errorf("after removing host-b, Pick(\"a\") = (%v, %v), want SubConn %v", resA, err, scA)
 		}
 		_, err = p.Pick(balancer.PickInfo{Ctx: newContextWithShardingKey(ctx, "test-header-name", "z")})
-		const wantErr = "autosharding: matching slice has no available endpoints"
+		const wantErr = "autosharding: matching slice has no known resolver endpoints and fallback is disabled"
 		if err == nil || !strings.Contains(err.Error(), wantErr) {
 			return fmt.Errorf("after removing host-b, Pick(\"z\") error = %v, want error containing %q", err, wantErr)
 		}

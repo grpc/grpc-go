@@ -46,11 +46,15 @@ var (
 	// from the sharding service is available and fallback is disabled.
 	ErrNoAssignment = errors.New("autosharding: no assignment available and fallback is disabled")
 
-	// ErrNoEndpointsInSlice is the error returned by the balancer when the
-	// matching slice has no available endpoints.
-	ErrNoEndpointsInSlice = errors.New("autosharding: matching slice has no available endpoints")
+	// ErrNoAvailableEndpointsForSlice is the error returned by the balancer
+	// when fallback is disabled in the LB config and the matching slice has no
+	// endpoints present in the resolver update (either because the slice is a
+	// synthesized gap or because none of its assigned endpoints were returned
+	// by the resolver).
+	ErrNoAvailableEndpointsForSlice = errors.New("autosharding: matching slice has no known resolver endpoints and fallback is disabled")
 
 	// ErrFallbackDisabledForSlice is the error returned by the balancer when
-	// the matching slice has fallback disabled by the sharding server.
-	ErrFallbackDisabledForSlice = errors.New("autosharding: sharding server assigned no endpoints to the matching slice")
+	// the sharding server explicitly assigns zero endpoints to the matching
+	// slice, disabling fallback for that slice regardless of the LB config.
+	ErrFallbackDisabledForSlice = errors.New("autosharding: matching slice has fallback disabled by sharding server (no endpoints assigned)")
 )

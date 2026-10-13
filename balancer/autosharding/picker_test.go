@@ -201,7 +201,7 @@ func (s) TestPicker_PerSliceFallback(t *testing.T) {
 	// disabled, Pick should fail with an error indicating no available
 	// endpoints.
 	t.Run("gap-slice-fallback-disabled", func(t *testing.T) {
-		const wantErr = "matching slice has no available endpoints"
+		const wantErr = "autosharding: matching slice has no known resolver endpoints and fallback is disabled"
 		p := newPicker(em, sm, &LBConfig{KeyHeaderName: testHeaderName, EnableFallback: false})
 		if _, err := p.Pick(balancer.PickInfo{Ctx: newContextWithShardingKey(ctx, "abc")}); err == nil || !strings.Contains(err.Error(), wantErr) {
 			t.Fatalf("Pick() on gap slice error = %v, want error containing %q", err, wantErr)
