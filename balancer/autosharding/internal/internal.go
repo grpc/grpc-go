@@ -24,6 +24,8 @@ import (
 	"errors"
 
 	"google.golang.org/grpc/balancer/autosharding/internal/sharding"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/internal/status"
 )
 
 var (
@@ -56,5 +58,5 @@ var (
 	// ErrFallbackDisabledForSlice is the error returned by the balancer when
 	// the sharding server explicitly assigns zero endpoints to the matching
 	// slice, disabling fallback for that slice regardless of the LB config.
-	ErrFallbackDisabledForSlice = errors.New("autosharding: matching slice has fallback disabled by sharding server (no endpoints assigned)")
+	ErrFallbackDisabledForSlice = status.Err(codes.Unavailable, "autosharding: matching slice has fallback disabled by sharding server (no endpoints assigned)")
 )

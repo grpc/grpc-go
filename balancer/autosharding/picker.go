@@ -117,7 +117,7 @@ func (p *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 	}
 
 	// If the sharding server has explicitly disabled fallback for this slice
-	// (by sending no endpoints), return early.
+	// (by sending no endpoints), drop the pick and return early.
 	if p.sliceMap.slices[sliceIdx].fallbackDisabled {
 		return balancer.PickResult{}, internal.ErrFallbackDisabledForSlice
 	}
