@@ -19,6 +19,7 @@ package xdsresource
 
 import (
 	"encoding/json"
+	"maps"
 
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/internal/xds/grpcservice"
@@ -106,6 +107,11 @@ type LBPolicyInfo struct {
 	// that the JSON LB policy configuration uses to refer to them. It is nil if
 	// the LB policy configuration does not contain any GrpcService protos.
 	GRPCServices map[string]*grpcservice.Config
+}
+
+// Equal reports whether i and other are equal.
+func (i LBPolicyInfo) Equal(other LBPolicyInfo) bool {
+	return maps.EqualFunc(i.GRPCServices, other.GRPCServices, (*grpcservice.Config).Equal)
 }
 
 // LRSReportEndpointMetricsConfig holds the configuration for propagating ORCA

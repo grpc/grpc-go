@@ -42,6 +42,12 @@ func Register(protoType string, c Converter) {
 	m[protoType] = c
 }
 
+// UnregisterForTesting unregisters the converter for the given proto type for
+// testing purposes. Not thread safe.
+func UnregisterForTesting(protoType string) {
+	delete(m, protoType)
+}
+
 // SetRegistry sets the xDS LB registry. Must be called at init time. Not thread
 // safe.
 func SetRegistry(registry map[string]Converter) {

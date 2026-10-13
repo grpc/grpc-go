@@ -36,6 +36,7 @@ import (
 	xdsinternal "google.golang.org/grpc/internal/xds"
 	"google.golang.org/grpc/internal/xds/balancer/wrrlocality"
 	"google.golang.org/grpc/internal/xds/bootstrap"
+	"google.golang.org/grpc/internal/xds/clients/xdsclient"
 	"google.golang.org/grpc/internal/xds/grpcservice"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdslbregistry"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
@@ -577,34 +578,22 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 	}
 }
 
-// TestValidateCluster_LBPolicyInfo tests that the bootstrap and server
-// configurations are passed to the xDS LB policy registry when converting the
-// LB policy configuration of a cluster, and that the GrpcServices returned by
-// the registry are stored in the cluster update.
+// Tests that the cluster resource decoder passes the bootstrap and server
+// configurations to the xDS LB policy registry when converting the LB policy
+// configuration of a cluster, and that the GrpcServices returned by the
+// registry are stored in the cluster update.
 func (s) TestValidateCluster_LBPolicyInfo(t *testing.T) {
-	contents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
-		Servers: []byte(`[{"server_uri": "test-server", "channel_creds": [{"type": "insecure"}]}]`),
-		Node:    []byte(`{"id": "test-node"}`),
-	})
-	if err != nil {
-		t.Fatalf("Failed to create bootstrap contents: %v", err)
-	}
-	bootstrapCfg, err := bootstrap.NewConfigFromContents(contents)
-	if err != nil {
-		t.Fatalf("Failed to create bootstrap config: %v", err)
-	}
-	serverCfg, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{URI: "test-server"})
-	if err != nil {
-		t.Fatalf("Failed to create server config for testing: %v", err)
-	}
+	bootstrapCfg := &bootstrap.Config{}
+	serverCfg := &bootstrap.ServerConfig{}
+	opts := xdslbregistry.ConverterOptions{BootstrapConfig: bootstrapCfg, ServerConfig: serverCfg}
 
 	// Register a converter for the StringValue proto type, which pretends that
 	// the LB policy configuration being converted contains a GrpcService proto
 	// whose target URI is the value of the StringValue.
 	const typeURL = "type.googleapis.com/google.protobuf.StringValue"
-	xdslbregistry.Register(typeURL, func(rawProto []byte, _ int, opts xdslbregistry.ConverterOptions) (*xdslbregistry.ConverterResult, error) {
-		if opts.BootstrapConfig != bootstrapCfg || opts.ServerConfig != serverCfg {
-			return nil, fmt.Errorf("converter invoked with options %+v, want bootstrap config %p and server config %p", opts, bootstrapCfg, serverCfg)
+	xdslbregistry.Register(typeURL, func(rawProto []byte, _ int, gotOpts xdslbregistry.ConverterOptions) (*xdslbregistry.ConverterResult, error) {
+		if gotOpts != opts {
+			return nil, fmt.Errorf("converter invoked with options %+v, want bootstrap config %p and server config %p", gotOpts, bootstrapCfg, serverCfg)
 		}
 		sv := &wrapperspb.StringValue{}
 		if err := proto.Unmarshal(rawProto, sv); err != nil {
@@ -615,7 +604,7 @@ func (s) TestValidateCluster_LBPolicyInfo(t *testing.T) {
 			GRPCServices: map[string]*grpcservice.Config{sv.GetValue(): {TargetURI: sv.GetValue()}},
 		}, nil
 	})
-	t.Cleanup(func() { xdslbregistry.Register(typeURL, nil) })
+	t.Cleanup(func() { xdslbregistry.UnregisterForTesting(typeURL) })
 
 	cluster := &v3clusterpb.Cluster{
 		Name:                 clusterName,
@@ -638,14 +627,20 @@ func (s) TestValidateCluster_LBPolicyInfo(t *testing.T) {
 			},
 		},
 	}
-	update, err := xdsresource.ValidateClusterAndConstructClusterUpdateForTesting(cluster, bootstrapCfg, serverCfg)
+
+	xdsServerCfg := xdsclient.ServerConfig{}
+	decoder := xdsresource.NewClusterResourceTypeDecoder(bootstrapCfg, map[xdsclient.ServerConfig]*bootstrap.ServerConfig{
+		xdsServerCfg: serverCfg,
+	})
+	res, err := decoder.Decode(xdsclient.NewAnyProto(testutils.MarshalAny(t, cluster)), xdsclient.DecodeOptions{ServerConfig: &xdsServerCfg})
 	if err != nil {
-		t.Fatalf("validateClusterAndConstructClusterUpdate(%+v) failed: %v", cluster, err)
+		t.Fatalf("decoder.Decode(%+v) failed: %v", cluster, err)
 	}
+	update := res.Resource.(*xdsresource.ClusterResourceData).Resource
 	wantInfo := xdsresource.LBPolicyInfo{
 		GRPCServices: map[string]*grpcservice.Config{"target": {TargetURI: "target"}},
 	}
 	if diff := cmp.Diff(update.LBPolicyInfo, wantInfo); diff != "" {
-		t.Fatalf("validateClusterAndConstructClusterUpdate(%+v) returned unexpected LBPolicyInfo, diff (-got +want): %v", cluster, diff)
+		t.Errorf("decoder.Decode(%+v) returned unexpected LBPolicyInfo, diff (-got +want):\n%s", cluster, diff)
 	}
 }

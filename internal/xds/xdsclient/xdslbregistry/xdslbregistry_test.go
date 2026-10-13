@@ -447,21 +447,8 @@ func (s) TestConvertToServiceConfigFailure(t *testing.T) {
 // the GrpcServices returned for their children, and that the converter options
 // are passed to converters at every level of the LB policy tree.
 func (s) TestConvertToServiceConfig_GRPCServices(t *testing.T) {
-	contents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
-		Servers: []byte(`[{"server_uri": "test-server", "channel_creds": [{"type": "insecure"}]}]`),
-		Node:    []byte(`{"id": "test-node"}`),
-	})
-	if err != nil {
-		t.Fatalf("Failed to create bootstrap contents: %v", err)
-	}
-	bootstrapCfg, err := bootstrap.NewConfigFromContents(contents)
-	if err != nil {
-		t.Fatalf("Failed to create bootstrap config: %v", err)
-	}
-	serverCfg, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{URI: "test-server"})
-	if err != nil {
-		t.Fatalf("Failed to create server config: %v", err)
-	}
+	bootstrapCfg := &bootstrap.Config{}
+	serverCfg := &bootstrap.ServerConfig{}
 	opts := xdslbregistry.ConverterOptions{BootstrapConfig: bootstrapCfg, ServerConfig: serverCfg}
 
 	// Register a converter for the StringValue proto type, which pretends that
@@ -481,7 +468,7 @@ func (s) TestConvertToServiceConfig_GRPCServices(t *testing.T) {
 			GRPCServices: map[string]*grpcservice.Config{sv.GetValue(): {TargetURI: sv.GetValue()}},
 		}, nil
 	})
-	t.Cleanup(func() { xdslbregistry.Register(typeURL, nil) })
+	t.Cleanup(func() { xdslbregistry.UnregisterForTesting(typeURL) })
 
 	tests := []struct {
 		name             string
