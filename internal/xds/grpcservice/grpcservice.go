@@ -53,6 +53,7 @@ type Config struct {
 	// channel.
 	Timeout time.Duration
 	// InitialMetadata is the metadata to add to RPCs on the side channel.
+	// It is empty for untrusted management servers.
 	InitialMetadata metadata.MD
 	// ChannelCredentials are the channel credentials to create the side
 	// channel with, paired with the identity of their source configuration.
@@ -109,11 +110,12 @@ func (c *Config) Dial(opts ...grpc.DialOption) (*grpc.ClientConn, error) {
 // that received the resource, and sc is the configuration of the management
 // server that sent it; both must be non-nil.
 //
-// Credentials configured in the proto are honored only when the delivering
-// management server is trusted, i.e. configured with the trusted_xds_server
-// server feature. For untrusted management servers the target must be present
-// in the bootstrap allowed_grpc_services map, and the returned Config carries
-// the credentials configured there.
+// Initial metadata and credentials configured in the proto are honored only
+// when the delivering management server is trusted, i.e. configured with the
+// trusted_xds_server server feature. For untrusted management servers they
+// are ignored without being validated, the target must be present in the
+// bootstrap allowed_grpc_services map, and the returned Config carries the
+// credentials configured there.
 //
 // The credentials in the returned Config are built and ready to use. The
 // caller owns the Config and releases its credentials via Close when it is no
@@ -137,13 +139,13 @@ func Parse(gs *v3corepb.GrpcService, bc *bootstrap.Config, sc *bootstrap.ServerC
 	if cfg.Timeout, err = parseTimeout(gs); err != nil {
 		return nil, err
 	}
-	if cfg.InitialMetadata, err = parseInitialMetadata(gs.GetInitialMetadata()); err != nil {
-		return nil, err
-	}
 
-	// Credentials are built last, so that no error path can drop built
-	// credentials.
 	if sc.ServerFeaturesTrustedXDSServer() {
+		if cfg.InitialMetadata, err = parseInitialMetadata(gs.GetInitialMetadata()); err != nil {
+			return nil, err
+		}
+		// Credentials are built last, so that no error path can drop
+		// built credentials.
 		if cfg.ChannelCredentials, err = buildChannelCredentials(googleGrpc.GetChannelCredentialsPlugin(), bc); err != nil {
 			return nil, err
 		}
@@ -156,9 +158,9 @@ func Parse(gs *v3corepb.GrpcService, bc *bootstrap.Config, sc *bootstrap.ServerC
 		if svc == nil {
 			return nil, fmt.Errorf("grpcservice: target_uri %q is not present in allowed_grpc_services", targetURI)
 		}
-		// The allowlisted credentials are owned by the bootstrap config:
-		// their pairs carry no cleanup, so Config.Close does not affect
-		// them.
+		// The allowlisted credentials are owned by the bootstrap
+		// config: their pairs carry no cleanup, so Config.Close does
+		// not affect them.
 		cfg.ChannelCredentials, cfg.CallCredentials = svc.SideChannelCredentials()
 	}
 	return cfg, nil
@@ -264,15 +266,11 @@ func parseInitialMetadata(headers []*v3corepb.HeaderValue) (metadata.MD, error) 
 	md := metadata.MD{}
 	for _, h := range headers {
 		key := h.GetKey()
-		// raw_value takes precedence over the legacy value field.
-		val := h.GetValue()
-		if len(h.GetRawValue()) > 0 {
-			val = string(h.GetRawValue())
-		}
 		if err := validateHeaderKey(key); err != nil {
 			return nil, fmt.Errorf("grpcservice: invalid header key %q: %v", key, err)
 		}
-		if err := validateHeaderValue(key, val); err != nil {
+		val, err := parseHeaderValue(h)
+		if err != nil {
 			return nil, fmt.Errorf("grpcservice: invalid value for header key %q: %v", key, err)
 		}
 		md.Append(key, val)
@@ -296,11 +294,28 @@ func validateHeaderKey(key string) error {
 	return imetadata.ValidateKey(key)
 }
 
-func validateHeaderValue(key, val string) error {
-	if len(val) > maxHeaderValueLen {
-		return fmt.Errorf("header value exceeds maximum allowed length of %d", maxHeaderValueLen)
+// parseHeaderValue validates the value of a HeaderValue proto and returns it
+// in the form to store in metadata.MD. Per gRFC A102, the value of a header
+// whose key ends in "-bin" is base64-encoded in the proto; it is stored
+// decoded, and the transport encodes it again on the wire.
+func parseHeaderValue(h *v3corepb.HeaderValue) (string, error) {
+	// raw_value takes precedence over the legacy value field.
+	val := h.GetValue()
+	if len(h.GetRawValue()) > 0 {
+		val = string(h.GetRawValue())
 	}
-	// ValidatePair skips value validation for "-bin" keys, which may carry
-	// arbitrary bytes.
-	return imetadata.ValidatePair(key, val)
+	// The length limit applies to the value as it appears in the proto,
+	// i.e. before base64 decoding, as in C-core.
+	if len(val) > maxHeaderValueLen {
+		return "", fmt.Errorf("header value exceeds maximum allowed length of %d", maxHeaderValueLen)
+	}
+	key := h.GetKey()
+	if strings.HasSuffix(key, "-bin") {
+		decoded, err := imetadata.DecodeBinHeader(val)
+		if err != nil {
+			return "", fmt.Errorf("header value is not valid base64: %v", err)
+		}
+		return string(decoded), nil
+	}
+	return val, imetadata.ValidatePair(key, val)
 }

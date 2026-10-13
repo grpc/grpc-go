@@ -23,15 +23,12 @@ package tlscreds
 import (
 	"context"
 	"crypto/tls"
-	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
 	"sync"
-	"time"
 
-	"github.com/spiffe/go-spiffe/v2/bundle/spiffebundle"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/credentials/tls/certprovider/pemfile"
@@ -127,9 +124,11 @@ func (c *reloadingCreds) ClientHandshake(ctx context.Context, authority string, 
 	}
 	var config *tls.Config
 	if km.SPIFFEBundleMap != nil {
+		// Only the certificate chain is verified, not the server's
+		// hostname.
 		config = &tls.Config{
 			InsecureSkipVerify:    true,
-			VerifyPeerCertificate: buildSPIFFEVerifyFunc(km.SPIFFEBundleMap),
+			VerifyPeerCertificate: spiffe.VerifyPeerCertificateFunc(km.SPIFFEBundleMap, ""),
 			Certificates:          km.Certs,
 		}
 	} else {
@@ -155,40 +154,4 @@ func (c *reloadingCreds) OverrideServerName(string) error {
 
 func (c *reloadingCreds) ServerHandshake(net.Conn) (net.Conn, credentials.AuthInfo, error) {
 	return nil, nil, errors.New("server handshake is not supported by xDS client TLS credentials")
-}
-
-func buildSPIFFEVerifyFunc(spiffeBundleMap map[string]*spiffebundle.Bundle) func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
-	return func(rawCerts [][]byte, _ [][]*x509.Certificate) error {
-		rawCertList := make([]*x509.Certificate, len(rawCerts))
-		for i, asn1Data := range rawCerts {
-			cert, err := x509.ParseCertificate(asn1Data)
-			if err != nil {
-				return fmt.Errorf("spiffe: verify function could not parse input certificate: %v", err)
-			}
-			rawCertList[i] = cert
-		}
-		if len(rawCertList) == 0 {
-			return fmt.Errorf("spiffe: verify function has no valid input certificates")
-		}
-		leafCert := rawCertList[0]
-		roots, err := spiffe.GetRootsFromSPIFFEBundleMap(spiffeBundleMap, leafCert)
-		if err != nil {
-			return err
-		}
-
-		opts := x509.VerifyOptions{
-			Roots:         roots,
-			CurrentTime:   time.Now(),
-			Intermediates: x509.NewCertPool(),
-		}
-
-		for _, cert := range rawCertList[1:] {
-			opts.Intermediates.AddCert(cert)
-		}
-		// The verified chain is (surprisingly) unused.
-		if _, err = rawCertList[0].Verify(opts); err != nil {
-			return fmt.Errorf("spiffe: x509 certificate Verify failed: %v", err)
-		}
-		return nil
-	}
 }
