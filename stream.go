@@ -515,6 +515,12 @@ func newClientStreamWithParams(ctx context.Context, desc *StreamDesc, cc *Client
 	}
 
 	if desc != unaryStreamDesc {
+		// Register callbacks on the cc and stream contexts to clean up when the
+		// user closes the ClientConn or cancels the stream context. In all other
+		// cases, an error should already be injected into the recv buffer by the
+		// transport, which the client will eventually receive, and then we will
+		// cancel the stream's context and stop these callbacks in
+		// clientStream.finish.
 		cs.registerCancellationHandlers()
 	}
 	return cs, nil
@@ -1490,6 +1496,13 @@ func newNonRetryClientStream(ctx context.Context, desc *StreamDesc, method strin
 	as.parser = parser{r: s, bufferPool: ac.dopts.copts.BufferPool}
 	ac.incrCallsStarted()
 	if desc != unaryStreamDesc {
+		// Register a callback on the stream context to clean up when the stream
+		// context is canceled. Also register one on the addrConn's context in
+		// case the addrConn is closed or reconnects to a different address. In
+		// all other cases, an error should already be injected into the recv
+		// buffer by the transport, which the client will eventually receive,
+		// and then we will cancel the stream's context and stop these callbacks
+		// in addrConnStream.finish.
 		as.registerCancellationHandlers()
 	}
 	return &clientStreamWrapper{ClientStream: as, desc: desc}, nil
@@ -1498,15 +1511,15 @@ func newNonRetryClientStream(ctx context.Context, desc *StreamDesc, method strin
 // registerCancellationHandlers registers callbacks to clean up the stream when the
 // RPC context expires or the SubConn is closed.
 func (as *addrConnStream) registerCancellationHandlers() {
+	as.ac.mu.Lock()
+	acCtx := as.ac.ctx
+	as.ac.mu.Unlock()
+
 	as.mu.Lock()
 	defer as.mu.Unlock()
 	if as.finished {
 		return
 	}
-
-	as.ac.mu.Lock()
-	acCtx := as.ac.ctx
-	as.ac.mu.Unlock()
 
 	onCtxDone := func() {
 		if acCtx.Err() != nil {
