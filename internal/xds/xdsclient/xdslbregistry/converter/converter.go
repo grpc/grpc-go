@@ -96,7 +96,7 @@ func convertRingHashProtoToServiceConfig(rawProto []byte, _ int, _ xdslbregistry
 }
 
 type pfConfig struct {
-	ShuffleAddressList bool `json:"shuffleAddressList"`
+	ShuffleAddressList bool `json:"shuffleAddressList,omitempty"`
 }
 
 func convertPickFirstProtoToServiceConfig(rawProto []byte, _ int, _ xdslbregistry.ConverterOptions) (*xdslbregistry.ConverterResult, error) {
@@ -139,9 +139,8 @@ func convertWRRLocalityProtoToServiceConfig(rawProto []byte, depth int, opts xds
 		return nil, fmt.Errorf("error marshaling JSON for type %T: %v", wrrLCfg, err)
 	}
 	return &xdslbregistry.ConverterResult{
-		LBConfig: makeBalancerConfigJSON(wrrlocality.Name, lbCfgJSON),
-		// Propagate the GrpcServices found in the endpoint picking policy.
-		GRPCServices: epRes.GRPCServices,
+		LBConfig:     fmt.Appendf(nil, `[{%q: %s}]`, wrrlocality.Name, lbCfgJSON),
+		GRPCServices: epRes.GRPCServices, // Propagate the GrpcServices found in the endpoint picking policy.
 	}, nil
 }
 
@@ -216,11 +215,13 @@ func convertV3TypedStructToServiceConfig(rawProto []byte, _ int, _ xdslbregistry
 }
 
 // convertCustomPolicy attempts to prepare json configuration for a custom lb
-// proto, which specifies the gRPC balancer type and configuration. Returns the
-// converted json and an error which should cause caller to error if error
-// converting. If both the result and error returned are nil, it means the gRPC
-// Balancer registry does not contain that balancer type, and the caller should
-// continue to the next policy.
+// proto, which specifies the gRPC balancer type and configuration.
+//
+// Returns a ConverterResult containing the converted JSON configuration for the
+// custom LB policy when conversion succeeds, or an error if conversion fails.
+//
+// Returns (nil, nil) if the balancer type is not found in the gRPC Balancer
+// registry and the caller should continue to the next policy.
 func convertCustomPolicy(typeURL string, s *structpb.Struct) (*xdslbregistry.ConverterResult, error) {
 	// The gRPC policy name will be the "type name" part of the value of the
 	// type_url field in the TypedStruct. We get this by using the part after
@@ -251,12 +252,8 @@ type wrrLBConfig struct {
 	ErrorUtilizationPenalty float64                        `json:"errorUtilizationPenalty,omitempty"`
 }
 
-func makeBalancerConfigJSON(name string, value json.RawMessage) []byte {
-	return []byte(fmt.Sprintf(`[{%q: %s}]`, name, value))
-}
-
 // lbConfigResult returns a ConverterResult containing only the JSON
 // configuration for the gRPC LB policy with the given name and configuration.
 func lbConfigResult(name string, value json.RawMessage) *xdslbregistry.ConverterResult {
-	return &xdslbregistry.ConverterResult{LBConfig: makeBalancerConfigJSON(name, value)}
+	return &xdslbregistry.ConverterResult{LBConfig: fmt.Appendf(nil, `[{%q: %s}]`, name, value)}
 }

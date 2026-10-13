@@ -143,7 +143,7 @@ func (s) TestConvertToServiceConfigSuccess(t *testing.T) {
 					},
 				},
 			},
-			wantConfig: `[{"pick_first": { "shuffleAddressList": false }}]`,
+			wantConfig: `[{"pick_first": {}}]`,
 		},
 		{
 			name: "round_robin",
@@ -519,7 +519,7 @@ func (s) TestConvertToServiceConfig_GRPCServices(t *testing.T) {
 				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
 					{
 						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
-							TypedConfig: testutils.MarshalAny(t, &v3roundrobinpb.RoundRobin{}),
+							TypedConfig: testutils.MarshalAny(t, &v3pickfirstpb.PickFirst{}),
 						},
 					},
 					{
@@ -529,7 +529,7 @@ func (s) TestConvertToServiceConfig_GRPCServices(t *testing.T) {
 					},
 				},
 			},
-			wantConfig: `[{"round_robin": {}}]`,
+			wantConfig: `[{"pick_first": {}}]`,
 		},
 		{
 			name: "child-of-wrr-locality",
