@@ -69,7 +69,12 @@ func newPicker(endpointMap map[string]*endpointState, sm *sliceMap, cfg *LBConfi
 
 	isSliceInFallback := make([]bool, len(sm.slices))
 	for i, se := range sm.slices {
-		isSliceInFallback[i] = isPoolInFallback(se.endpoints, endpoints)
+		// Pick checks fallbackDisabled (as indicated by the sharding server)
+		// upfront before considering per-slice fallback based on all endpoints
+		// being unhealthy. But setting the value to false if fallback is
+		// disabled by the sharding server keeps the isSliceInFallback array
+		// consistent with the actual fallback status.
+		isSliceInFallback[i] = !se.fallbackDisabled && isPoolInFallback(se.endpoints, endpoints)
 	}
 
 	return &picker{
@@ -110,6 +115,10 @@ func (p *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 		}
 		// We should never get here.
 		return balancer.PickResult{}, internal.ErrNoAssignment
+	}
+
+	if p.sliceMap.slices[sliceIdx].fallbackDisabled {
+		return balancer.PickResult{}, internal.ErrFallbackDisabledForSlice
 	}
 
 	// If the matching slice is in fallback mode and fallback is enabled, route

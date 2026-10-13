@@ -415,6 +415,27 @@ func (s) TestBuildAssignment(t *testing.T) {
 			},
 			wantErrMsg: "encountered 3 gap(s) in the assignment",
 		},
+		{
+			name: "slices_with_no_endpoints_and_gap",
+			slices: []*aspb.SliceAssignment{
+				makeSliceAssignment(nil, []byte("d")),
+				makeSliceAssignment([]byte("d"), []byte("m"), 0),
+				makeSliceAssignment([]byte("t"), nil),
+			},
+			endpoints:  []string{"ep0"},
+			generation: 6,
+			wantAssignment: &Assignment{
+				EndpointNames: []string{"ep0"},
+				Generation:    6,
+				Slices: []Slice{
+					{StartKey: []byte{}, Endpoints: []int{}, FallbackDisabled: true},
+					{StartKey: []byte("d"), Endpoints: []int{0}},
+					{StartKey: []byte("m"), Endpoints: []int{}},
+					{StartKey: []byte("t"), Endpoints: []int{}, FallbackDisabled: true},
+				},
+			},
+			wantErrMsg: "encountered 1 gap(s) in the assignment",
+		},
 	}
 
 	for _, tc := range tests {

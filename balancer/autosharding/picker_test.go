@@ -27,6 +27,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/balancer/autosharding/internal"
 	"google.golang.org/grpc/balancer/autosharding/internal/sharding"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/grpctest"
@@ -180,11 +181,13 @@ func (s) TestPicker_PerSliceFallback(t *testing.T) {
 	assign := &sharding.Assignment{
 		EndpointNames: []string{"hostA", "hostB"},
 		Slices: []sharding.Slice{
-			// Slice 0 ["", "m"): gap slice (zero endpoints).
+			// Slice 0 ["", "g"): gap slice (zero endpoints, fallback allowed).
 			{StartKey: []byte(""), Endpoints: nil},
-			// Slice 1 ["m", "z"): assigned only to hostA (which is in TransientFailure).
+			// Slice 1 ["g", "m"): sharding server specified zero endpoints (fallback disabled).
+			{StartKey: []byte("g"), Endpoints: nil, FallbackDisabled: true},
+			// Slice 2 ["m", "z"): assigned only to hostA (which is in TransientFailure).
 			{StartKey: []byte("m"), Endpoints: []int{0}},
-			// Slice 2 ["z", nil): assigned to hostB (Ready).
+			// Slice 3 ["z", nil): assigned to hostB (Ready).
 			{StartKey: []byte("z"), Endpoints: []int{1}},
 		},
 		Generation: 1,
@@ -243,6 +246,18 @@ func (s) TestPicker_PerSliceFallback(t *testing.T) {
 			t.Errorf("Pick() SubConn = %v, want %v", res.SubConn, subConns[1])
 		}
 	})
+
+	// When the matching slice has no endpoints from the sharding server,
+	// Pick must unconditionally fail with ErrFallbackDisabledForSlice whether
+	// LB-level fallback is disabled or enabled.
+	for _, enableFallback := range []bool{false, true} {
+		t.Run(fmt.Sprintf("empty-endpoints-slice-with-fallback-%v", enableFallback), func(t *testing.T) {
+			p := newPicker(em, sm, &LBConfig{KeyHeaderName: testHeaderName, EnableFallback: enableFallback})
+			if _, err := p.Pick(balancer.PickInfo{Ctx: newContextWithShardingKey(ctx, "hij")}); !errors.Is(err, internal.ErrFallbackDisabledForSlice) {
+				t.Fatalf("Pick() on fallback-disabled slice error = %v, want %v", err, internal.ErrFallbackDisabledForSlice)
+			}
+		})
+	}
 }
 
 // Tests circular scanning of candidate endpoints within a slice across

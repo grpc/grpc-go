@@ -49,4 +49,8 @@ var (
 	// ErrNoEndpointsInSlice is the error returned by the balancer when the
 	// matching slice has no available endpoints.
 	ErrNoEndpointsInSlice = errors.New("autosharding: matching slice has no available endpoints")
+
+	// ErrFallbackDisabledForSlice is the error returned by the balancer when
+	// the matching slice has fallback disabled by the sharding server.
+	ErrFallbackDisabledForSlice = errors.New("autosharding: sharding server assigned no endpoints to the matching slice")
 )

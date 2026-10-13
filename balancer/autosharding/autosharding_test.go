@@ -1160,6 +1160,55 @@ func (s) TestAutoshardingClient_TargetChange_PreviousAssignmentInUse(t *testing.
 	})
 }
 
+// Tests that when the autosharding client reports an assignment containing
+// slices with FallbackDisabled set (because the sharding server assigned no
+// endpoints to those slices), RPCs matching those slices unconditionally fail
+// with ErrFallbackDisabledForSlice regardless of whether fallback is enabled in
+// the LB configuration, while RPCs matching other slices continue routing
+// normally.
+func (s) TestAutoshardingClient_SliceWithFallbackDisabled(t *testing.T) {
+	for _, enableFallback := range []bool{false, true} {
+		t.Run(fmt.Sprintf("enableFallback_%v", enableFallback), func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+
+			env := setupBalancerWithTwoEndpoints(ctx, t, enableFallback)
+			scA, scB := injectAssignmentAndConnectSubConns(ctx, t, env)
+
+			// Inject an assignment where the first and last slices have no
+			// endpoints assigned by the sharding server (FallbackDisabled:
+			// true), and the middle slices route to host-a and host-b.
+			env.tac.onAssignmentUpdate(&sharding.Assignment{
+				EndpointNames: []string{"host-a", "host-b"},
+				Slices: []sharding.Slice{
+					{StartKey: []byte(""), FallbackDisabled: true},
+					{StartKey: []byte("d"), Endpoints: []int{0}},
+					{StartKey: []byte("m"), Endpoints: []int{1}},
+					{StartKey: []byte("t"), FallbackDisabled: true},
+				},
+				Generation: 2,
+			})
+
+			if err := env.cc.WaitForPicker(ctx, func(p balancer.Picker) error {
+				for key, wantSC := range map[string]*testutils.TestSubConn{"e": scA, "n": scB} {
+					res, err := p.Pick(balancer.PickInfo{Ctx: newContextWithShardingKey(ctx, "test-header-name", key)})
+					if err != nil || res.SubConn != wantSC {
+						return fmt.Errorf("Pick(%q) = (%v, %v), want SubConn %v", key, res, err, wantSC)
+					}
+				}
+				for _, key := range []string{"a", "z"} {
+					if _, err := p.Pick(balancer.PickInfo{Ctx: newContextWithShardingKey(ctx, "test-header-name", key)}); !errors.Is(err, internal.ErrFallbackDisabledForSlice) {
+						return fmt.Errorf("Pick(%q) error = %v, want %v", key, err, internal.ErrFallbackDisabledForSlice)
+					}
+				}
+				return nil
+			}); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
 // Tests that when the autosharding client reports a valid assignment, the
 // balancer creates the expected SubConns when RPCs are made and routes RPCs to
 // the expected backends. When fallback is enabled and all endpoints in a slice
