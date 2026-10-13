@@ -25,6 +25,9 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"google.golang.org/grpc/internal/xds/bootstrap"
+	"google.golang.org/grpc/internal/xds/grpcservice"
+
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 )
 
@@ -45,17 +48,49 @@ func SetRegistry(registry map[string]Converter) {
 	m = registry
 }
 
-// Converter converts raw proto bytes into the internal Go JSON representation
-// of the proto passed. Returns the json message,  and an error. If both
-// returned are nil, it represents continuing to the next proto.
-type Converter func([]byte, int) (json.RawMessage, error)
+// ConverterOptions contains additional information passed to a Converter, and
+// is passed unmodified to converters of child policies.
+type ConverterOptions struct {
+	// BootstrapConfig contains the complete bootstrap configuration used by the
+	// xDS client that received the resource being converted.
+	BootstrapConfig *bootstrap.Config
+	// ServerConfig contains the configuration of the xDS management server that
+	// sent the resource being converted.
+	ServerConfig *bootstrap.ServerConfig
+}
+
+// ConverterResult contains the result of a successful conversion.
+type ConverterResult struct {
+	// LBConfig is the gRPC JSON representation of the converted LB policy
+	// configuration.
+	LBConfig json.RawMessage
+	// GRPCServices contains the parsed representation of GrpcService protos
+	// (gRFC A102) found in the LB policy configuration (or in the
+	// configuration of any of its child policies), keyed by a string that
+	// uniquely identifies the contents of the GrpcService. The JSON
+	// configuration in LBConfig refers to entries in this map using these keys.
+	// It is nil if no such protos were found.
+	GRPCServices map[string]*grpcservice.Config
+}
+
+// Converter converts raw proto bytes of an LB policy configuration into a
+// ConverterResult. depth is the depth of the policy in the LB policy tree, and
+// converters of policies that have child policies must pass depth+1 and opts
+// when calling ConvertToServiceConfig for those child policies. Such
+// converters must also propagate the GRPCServices from the results of their
+// child policies.
+//
+// If both returned values are nil, the policy is considered unsupported, and
+// the next policy in the list is attempted.
+type Converter func(rawProto []byte, depth int, opts ConverterOptions) (*ConverterResult, error)
 
 // ConvertToServiceConfig converts a proto Load Balancing Policy configuration
-// into a json string. Returns an error if:
+// into a ConverterResult containing the JSON configuration. Returns an error
+// if:
 //   - no supported policy found
 //   - there is more than 16 layers of recursion in the configuration
 //   - a failure occurs when converting the policy
-func ConvertToServiceConfig(lbPolicy *v3clusterpb.LoadBalancingPolicy, depth int) (json.RawMessage, error) {
+func ConvertToServiceConfig(lbPolicy *v3clusterpb.LoadBalancingPolicy, depth int, opts ConverterOptions) (*ConverterResult, error) {
 	// "Configurations that require more than 16 levels of recursion are
 	// considered invalid and should result in a NACK response." - A51
 	if depth > 15 {
@@ -72,11 +107,14 @@ func ConvertToServiceConfig(lbPolicy *v3clusterpb.LoadBalancingPolicy, depth int
 		if converter == nil {
 			continue
 		}
-		json, err := converter(policy.GetTypedExtensionConfig().GetTypedConfig().GetValue(), depth)
-		if json == nil && err == nil {
+		res, err := converter(policy.GetTypedExtensionConfig().GetTypedConfig().GetValue(), depth, opts)
+		if err != nil {
+			return nil, err
+		}
+		if res == nil {
 			continue
 		}
-		return json, err
+		return res, nil
 	}
 	return nil, fmt.Errorf("no supported policy found in policy list +%v", lbPolicy)
 }

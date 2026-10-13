@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 
 	"google.golang.org/grpc/internal/xds/bootstrap"
+	"google.golang.org/grpc/internal/xds/grpcservice"
 	"google.golang.org/grpc/internal/xds/matcher"
 	"google.golang.org/protobuf/types/known/anypb"
 )
@@ -68,6 +69,10 @@ type ClusterUpdate struct {
 	// LBPolicy represents the locality and endpoint picking policy in JSON,
 	// which will be the child policy of xds_cluster_impl.
 	LBPolicy json.RawMessage
+	// LBPolicyInfo contains additional information produced when converting
+	// the LB policy configuration, to be passed to the LB policy outside of its
+	// JSON configuration.
+	LBPolicyInfo LBPolicyInfo
 
 	// OutlierDetection is the outlier detection configuration for this cluster.
 	// If nil, it means this cluster does not use the outlier detection feature.
@@ -90,6 +95,17 @@ type ClusterUpdate struct {
 	// IsHTTP11ProxyEnabled is true if the cluster transport socket is wrapped
 	// in Http11ProxyUpstreamTransport.
 	IsHTTP11ProxyEnabled bool
+}
+
+// LBPolicyInfo contains information produced by the xDS LB policy registry
+// when converting the LB policy configuration of a cluster, which needs to be
+// passed to the LB policy outside of its JSON configuration.
+type LBPolicyInfo struct {
+	// GRPCServices contains the parsed representation of GrpcService protos
+	// (gRFC A102) found in the LB policy configuration, keyed by the strings
+	// that the JSON LB policy configuration uses to refer to them. It is nil if
+	// the LB policy configuration does not contain any GrpcService protos.
+	GRPCServices map[string]*grpcservice.Config
 }
 
 // LRSReportEndpointMetricsConfig holds the configuration for propagating ORCA
