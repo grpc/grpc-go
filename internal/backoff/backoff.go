@@ -86,11 +86,11 @@ var ErrResetBackoff = errors.New("reset backoff state")
 func RunF(ctx context.Context, f func() error, backoff func(int) time.Duration) {
 	attempt := 0
 	timer := time.NewTimer(0)
+	defer timer.Stop()
 	for ctx.Err() == nil {
 		select {
 		case <-timer.C:
 		case <-ctx.Done():
-			timer.Stop()
 			return
 		}
 
