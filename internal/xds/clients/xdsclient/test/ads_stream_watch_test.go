@@ -38,7 +38,7 @@ import (
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 )
 
-func waitForResourceWatchState(ctx context.Context, client *xdsclient.XDSClient, resourceName string, wantState xdsresource.WatchState, wantTimer bool) error {
+func waitForResourceWatchState(ctx context.Context, client *xdsclient.Client, resourceName string, wantState xdsresource.WatchState, wantTimer bool) error {
 	var lastErr error
 	for ; ctx.Err() == nil; <-time.After(defaultTestShortTimeout) {
 		err := verifyResourceWatchState(client, resourceName, wantState, wantTimer)
@@ -53,8 +53,8 @@ func waitForResourceWatchState(ctx context.Context, client *xdsclient.XDSClient,
 	return nil
 }
 
-func verifyResourceWatchState(client *xdsclient.XDSClient, resourceName string, wantState xdsresource.WatchState, wantTimer bool) error {
-	resourceWatchStateForTesting := xdsclientinternal.ResourceWatchStateForTesting.(func(*xdsclient.XDSClient, xdsclient.ResourceType, string) (xdsresource.ResourceWatchState, error))
+func verifyResourceWatchState(client *xdsclient.Client, resourceName string, wantState xdsresource.WatchState, wantTimer bool) error {
+	resourceWatchStateForTesting := xdsclientinternal.ResourceWatchStateForTesting.(func(*xdsclient.Client, xdsclient.ResourceType, string) (xdsresource.ResourceWatchState, error))
 	gotState, err := resourceWatchStateForTesting(client, listenerType, resourceName)
 	if err != nil {
 		return fmt.Errorf("failed to get watch state for resource %q: %v", resourceName, err)
