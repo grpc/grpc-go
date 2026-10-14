@@ -1348,26 +1348,19 @@ func (s) TestAggregatedConnectivityStateAndAutoConnect(t *testing.T) {
 	sc2.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 	sc2.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
 
-	// We don't check for aggregated connectivity state of TF here because of the
-	// following race:
-	// - sc2 moves to TF.
-	// - sc2's pick_first child reports TF to endpointsharding, which reports the
-	//   same to the autosharding balancer.
-	// - The autosharding balancer computes the aggregated state as TF.
-	// - sc3 is triggered to ExitIdle and creates a pick_first child which starts
-	//   off by reporting CONNECTING. This is reported to the autosharding
-	//   balancer by endpointsharding.
-	// - The autosharding balancer computes the aggregated state as TF.
-	//
-	// Because the NewStateCh in testutils.BalancerClientConn retains only the
-	// most recent state, if we read it here, we might be consuming two TF states
-	// instead of one. Reading it after sc3 is moved to CONNECTING ensures that
-	// both states have been reported and we read the most recent one.
-
-	// Moving sc3 to CONNECTING should leave us with two endpoints in TF, one
-	// endpoint in CONNECTING and one in IDLE which should result in the
-	// aggregated state being TF. And this should not trigger any more subconns
-	// to be created because an endpoint is already in CONNECTING.
+	// Don't verify the aggregated state here. Moving sc2 to TF pushes two TF
+	// updates to the ClientConn:
+	//  - Inline: the aggregated state (2 TF, 2 IDLE) is TF. Since no endpoint is
+	//    CONNECTING, the balancer asks host-3's child to exit IDLE, which
+	//    endpointsharding does in a new goroutine.
+	//  - From that goroutine: host-3's newly built pick_first child reports
+	//    CONNECTING before creating sc3, and the aggregated state
+	//    (2 TF, 1 CONNECTING, 1 IDLE) is TF again.
+	// NewStateCh only retains the most recent state, so these two updates can be
+	// coalesced into one. If it were consumed here, the check below would block
+	// forever, because moving sc3 to CONNECTING does not cause pick_first to
+	// report a new state (it is already CONNECTING). Waiting for sc3 to be
+	// created guarantees that both updates have been pushed.
 	sc3 := waitForSubConn(ctx, t, cc)
 	if got, want := sc3.Addresses[0].Addr, "10.0.0.3:8080"; got != want {
 		t.Fatalf("Auto-ExitIdle created SubConn for %q, want %q", got, want)
@@ -1377,6 +1370,11 @@ func (s) TestAggregatedConnectivityStateAndAutoConnect(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatal("Timeout waiting for sc3.Connect()")
 	}
+
+	// Moving sc3 to CONNECTING should leave us with two endpoints in TF, one
+	// endpoint in CONNECTING and one in IDLE which should result in the
+	// aggregated state being TF. And this should not trigger any more subconns
+	// to be created because an endpoint is already in CONNECTING.
 	sc3.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 	if err := cc.WaitForConnectivityState(ctx, connectivity.TransientFailure); err != nil {
 		t.Fatalf("WaitForConnectivityState(TransientFailure) with 2 TF endpoints failed: %v", err)
