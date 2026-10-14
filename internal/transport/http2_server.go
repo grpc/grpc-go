@@ -951,8 +951,8 @@ func appendHeaderFieldsFromMD(headerFields []hpack.HeaderField, md metadata.MD) 
 	return headerFields
 }
 
-// Returns an upper bound on the number of header fields that
-// appendHeaderFieldsFromMD will produce from md
+// headerFieldsCountFromMD returns an upper bound on the number of header fields that
+// appendHeaderFieldsFromMD will produce from md.
 func headerFieldsCountFromMD(md metadata.MD) int {
 	n := 0
 	for _, vv := range md {
