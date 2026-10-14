@@ -478,6 +478,12 @@ func (t *testPool) Get(length int) *[]byte {
 	return &buf
 }
 
+func (t *testPool) GetUninitialized(length int) *[]byte {
+	buf := make([]byte, length)
+	t.allocated[&buf] = struct{}{}
+	return &buf
+}
+
 func (t *testPool) Put(buf *[]byte) {
 	if _, ok := t.allocated[buf]; !ok {
 		panic("unexpected put")

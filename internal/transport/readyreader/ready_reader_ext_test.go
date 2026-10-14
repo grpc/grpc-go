@@ -266,6 +266,11 @@ func (p *trackingBufferPool) Get(size int) *[]byte {
 	return p.BufferPool.Get(size)
 }
 
+func (p *trackingBufferPool) GetUninitialized(size int) *[]byte {
+	p.requestChan.Replace(size)
+	return p.BufferPool.GetUninitialized(size)
+}
+
 func (p *trackingBufferPool) Put(b *[]byte) {
 	p.putChan.Replace(len(*b))
 	p.BufferPool.Put(b)

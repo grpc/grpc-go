@@ -54,6 +54,12 @@ type bufferPool interface {
 	// Get returns a buffer with specified length from the pool.
 	Get(length int) *[]byte
 
+	// GetUninitialized returns a buffer with specified length from the pool
+	// without initializing its contents to zero. Callers must not read from
+	// the returned buffer before writing to it; doing so may expose stale
+	// data from previous uses.
+	GetUninitialized(length int) *[]byte
+
 	// Put returns a buffer to the pool.
 	//
 	// The provided pointer must hold a prefix of the buffer obtained via
@@ -157,6 +163,13 @@ func (b *BinaryTieredBufferPool) Get(size int) *[]byte {
 	return b.poolForGet(size).Get(size)
 }
 
+// GetUninitialized returns a buffer with specified length from the pool
+// without initializing its contents to zero. Callers must not read from the
+// returned buffer before writing to it.
+func (b *BinaryTieredBufferPool) GetUninitialized(size int) *[]byte {
+	return b.poolForGet(size).GetUninitialized(size)
+}
+
 func (b *BinaryTieredBufferPool) poolForGet(size int) bufferPool {
 	if size == 0 || size > b.maxPoolCap {
 		return b.fallbackPool
@@ -219,6 +232,14 @@ func (NopBufferPool) Get(length int) *[]byte {
 	return &b
 }
 
+// GetUninitialized returns a buffer with specified length from the pool.
+// Since Go's make always zeroes memory, this behaves identically to Get for
+// NopBufferPool.
+func (NopBufferPool) GetUninitialized(length int) *[]byte {
+	b := make([]byte, length)
+	return &b
+}
+
 // Put returns a buffer to the pool.
 func (NopBufferPool) Put(*[]byte) {
 }
@@ -247,6 +268,17 @@ func (p *sizedBufferPool) Get(size int) *[]byte {
 	if p.shouldZero {
 		clear(b[:cap(b)])
 	}
+	*buf = b[:size]
+	return buf
+}
+
+func (p *sizedBufferPool) GetUninitialized(size int) *[]byte {
+	buf, ok := p.pool.Get().(*[]byte)
+	if !ok {
+		buf := make([]byte, size, p.defaultSize)
+		return &buf
+	}
+	b := *buf
 	*buf = b[:size]
 	return buf
 }
@@ -294,6 +326,13 @@ func (p *TieredBufferPool) Get(size int) *[]byte {
 	return p.getPool(size).Get(size)
 }
 
+// GetUninitialized returns a buffer with specified length from the pool
+// without initializing its contents to zero. Callers must not read from the
+// returned buffer before writing to it.
+func (p *TieredBufferPool) GetUninitialized(size int) *[]byte {
+	return p.getPool(size).GetUninitialized(size)
+}
+
 // Put returns a buffer to the pool.
 func (p *TieredBufferPool) Put(buf *[]byte) {
 	p.getPool(cap(*buf)).Put(buf)
@@ -336,6 +375,34 @@ func (p *SimpleBufferPool) Get(size int) *[]byte {
 		if p.shouldZero {
 			clear((*bs)[:cap(*bs)])
 		}
+		*bs = (*bs)[:size]
+		return bs
+	}
+
+	// A buffer was pulled from the pool, but it is too small. Put it back in
+	// the pool and create one large enough.
+	if ok {
+		p.pool.Put(bs)
+	}
+
+	// If we're going to allocate, round up to the nearest page. This way if
+	// requests frequently arrive with small variation we don't allocate
+	// repeatedly if we get unlucky and they increase over time. By default we
+	// only allocate here if size > 1MiB. Because goPageSize is a power of 2, we
+	// can round up efficiently.
+	allocSize := (size + goPageSize - 1) & ^(goPageSize - 1)
+
+	b := make([]byte, size, allocSize)
+	return &b
+}
+
+// GetUninitialized returns a buffer with specified length from the pool without
+// initializing its contents to zero. When a buffer is returned from the pool
+// it is not cleared; when a new buffer must be allocated, Go's runtime will
+// zero it (this cannot be avoided).
+func (p *SimpleBufferPool) GetUninitialized(size int) *[]byte {
+	bs, ok := p.pool.Get().(*[]byte)
+	if ok && cap(*bs) >= size {
 		*bs = (*bs)[:size]
 		return bs
 	}

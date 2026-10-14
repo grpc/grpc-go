@@ -151,6 +151,13 @@ func (s *singleBufferPool) Get(length int) *[]byte {
 	return s.data
 }
 
+func (s *singleBufferPool) GetUninitialized(length int) *[]byte {
+	if len(*s.data) != length {
+		s.t.Fatalf("Invalid requested length, got %d want %d", length, len(*s.data))
+	}
+	return s.data
+}
+
 func (s *singleBufferPool) Put(b *[]byte) {
 	if s.data != b {
 		s.t.Fatalf("Wrong buffer returned to pool, got %p want %p", b, s.data)
@@ -251,6 +258,10 @@ type poolFunc func(*[]byte)
 
 func (p poolFunc) Get(int) *[]byte {
 	panic("Get should never be called")
+}
+
+func (p poolFunc) GetUninitialized(int) *[]byte {
+	panic("GetUninitialized should never be called")
 }
 
 func (p poolFunc) Put(i *[]byte) {
