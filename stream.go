@@ -328,9 +328,8 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 	}
 
 	mc := &emptyMethodConfig
-	var onCommit func()
 	newStream := func(ctx context.Context, opts ...CallOption) (ClientStream, error) {
-		return newClientStreamWithParams(ctx, desc, cc, method, mc, onCommit, nameResolutionDelayed, opts...)
+		return newClientStreamWithParams(ctx, desc, cc, method, mc, nameResolutionDelayed, opts...)
 	}
 
 	rpcInfo := iresolver.RPCInfo{Context: ctx, Method: method, Authority: cc.authority}
@@ -351,16 +350,6 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 			ctx = rpcConfig.Context
 		}
 		mc = &rpcConfig.MethodConfig
-
-		if rpcConfig.OnCommitted != nil {
-			onCommit = rpcConfig.OnCommitted
-			// Register an OnFinish CallOption with the OnCommitted callback to
-			// ensure it is invoked on stream termination, even if the stream
-			// fails early before committing. Implementations of OnCommitted are
-			// expected to be idempotent (e.g., guarded by sync.Once), since both
-			// onCommit and OnFinish may run for a single RPC.
-			opts = append(opts, OnFinish(func(error) { rpcConfig.OnCommitted() }))
-		}
 
 		if rpcConfig.Interceptor != nil {
 			rpcInfo.Context = nil
@@ -386,7 +375,7 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 	return &clientStreamWrapper{ClientStream: cs, desc: desc}, nil
 }
 
-func newClientStreamWithParams(ctx context.Context, desc *StreamDesc, cc *ClientConn, method string, mc *serviceconfig.MethodConfig, onCommit func(), nameResolutionDelayed bool, opts ...CallOption) (_ ClientStream, err error) {
+func newClientStreamWithParams(ctx context.Context, desc *StreamDesc, cc *ClientConn, method string, mc *serviceconfig.MethodConfig, nameResolutionDelayed bool, opts ...CallOption) (_ ClientStream, err error) {
 	callInfo := defaultCallInfo()
 	if mc.WaitForReady != nil {
 		callInfo.failFast = !*mc.WaitForReady
@@ -466,7 +455,6 @@ func newClientStreamWithParams(ctx context.Context, desc *StreamDesc, cc *Client
 		compressorV1:        compressorV1,
 		cancel:              cancel,
 		firstAttempt:        true,
-		onCommit:            onCommit,
 		nameResolutionDelay: nameResolutionDelayed,
 	}
 	if !cc.dopts.disableRetry {
@@ -714,7 +702,6 @@ type clientStream struct {
 	// place where we need to check if the attempt is nil.
 	attempt *csAttempt
 	// TODO(hedging): hedging will have multiple attempts simultaneously.
-	onCommit         func()
 	replayBuffer     []replayOp // operations to replay on retry
 	replayBufferSize int        // current size of replayBuffer
 
@@ -785,8 +772,8 @@ type csAttempt struct {
 }
 
 func (cs *clientStream) commitAttemptLocked() {
-	if !cs.committed && cs.onCommit != nil {
-		cs.onCommit()
+	if cs.committed {
+		return
 	}
 	cs.committed = true
 	for _, op := range cs.replayBuffer {

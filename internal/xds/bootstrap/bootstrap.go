@@ -54,12 +54,13 @@ const (
 // For overriding in unit tests.
 var bootstrapFileReadFunc = os.ReadFile
 
-// ChannelCreds contains the credentials to be used while communicating with an
-// xDS server. It is also used to dedup servers with the same server URI.
+// ChannelCredsConfig contains the credentials to be used while communicating
+// with an xDS server. It is also used to dedup servers with the same server
+// URI.
 //
 // This type does not implement custom JSON marshal/unmarshal logic because it
 // is straightforward to accomplish the same with json struct tags.
-type ChannelCreds struct {
+type ChannelCredsConfig struct {
 	// Type contains a unique name identifying the credentials type. The only
 	// supported types currently are "google_default" and "insecure".
 	Type string `json:"type,omitempty"`
@@ -68,13 +69,13 @@ type ChannelCreds struct {
 }
 
 // Equal reports whether cc and other are considered equal.
-func (cc ChannelCreds) Equal(other ChannelCreds) bool {
+func (cc ChannelCredsConfig) Equal(other ChannelCredsConfig) bool {
 	return cc.Type == other.Type && bytes.Equal(cc.Config, other.Config)
 }
 
 // String returns a string representation of the credentials. It contains the
 // type and the config (if non-nil) separated by a "-".
-func (cc ChannelCreds) String() string {
+func (cc ChannelCredsConfig) String() string {
 	if cc.Config == nil {
 		return cc.Type
 	}
@@ -129,7 +130,7 @@ type AllowedGRPCService struct {
 	targetURI string
 	// channelCreds is the list of channel-credential configs from the
 	// bootstrap JSON. Kept for MarshalJSON.
-	channelCreds []ChannelCreds
+	channelCreds []ChannelCredsConfig
 	// callCredsConfigs is the list of call-credential configs from the
 	// bootstrap JSON. Kept for MarshalJSON.
 	callCredsConfigs []CallCredsConfig
@@ -183,8 +184,8 @@ func (a *AllowedGRPCService) Equal(other *AllowedGRPCService) bool {
 }
 
 type allowedGRPCServiceJSON struct {
-	ChannelCreds     []ChannelCreds    `json:"channel_creds,omitempty"`
-	CallCredsConfigs []CallCredsConfig `json:"call_creds,omitempty"`
+	ChannelCreds     []ChannelCredsConfig `json:"channel_creds,omitempty"`
+	CallCredsConfigs []CallCredsConfig    `json:"call_creds,omitempty"`
 }
 
 // allowedGRPCServicesEnabled reports whether any feature that consumes the
@@ -379,17 +380,15 @@ func (a *Authority) Equal(other *Authority) bool {
 
 // ServerConfig contains the configuration to connect to a server.
 type ServerConfig struct {
-	serverURI string
-	// TODO: rename ChannelCreds to ChannelCredsConfigs for consistency with
-	// CallCredsConfigs.
-	channelCreds     []ChannelCreds
+	serverURI        string
+	channelCreds     []ChannelCredsConfig
 	callCredsConfigs []CallCredsConfig
 	serverFeatures   []string
 
 	// As part of unmarshalling the JSON config into this struct, we ensure that
 	// the credentials config is valid by building an instance of the specified
 	// credentials and store it here for easy access.
-	selectedChannelCreds ChannelCreds
+	selectedChannelCreds ChannelCredsConfig
 	selectedCallCreds    []credentials.PerRPCCredentials
 	credsDialOption      grpc.DialOption
 	extraDialOptions     []grpc.DialOption
@@ -404,7 +403,7 @@ func (sc *ServerConfig) ServerURI() string {
 
 // ChannelCreds returns the credentials configuration to use when communicating
 // with this server. Also used to dedup servers with the same server URI.
-func (sc *ServerConfig) ChannelCreds() []ChannelCreds {
+func (sc *ServerConfig) ChannelCreds() []ChannelCredsConfig {
 	return sc.channelCreds
 }
 
@@ -450,7 +449,7 @@ func (sc *ServerConfig) ServerFeaturesTrustedXDSServer() bool {
 
 // SelectedChannelCreds returns the selected credentials configuration for
 // communicating with this server.
-func (sc *ServerConfig) SelectedChannelCreds() ChannelCreds {
+func (sc *ServerConfig) SelectedChannelCreds() ChannelCredsConfig {
 	return sc.selectedChannelCreds
 }
 
@@ -480,7 +479,7 @@ func (sc *ServerConfig) Equal(other *ServerConfig) bool {
 		return false
 	case sc.serverURI != other.serverURI:
 		return false
-	case !slices.EqualFunc(sc.channelCreds, other.channelCreds, func(a, b ChannelCreds) bool { return a.Equal(b) }):
+	case !slices.EqualFunc(sc.channelCreds, other.channelCreds, func(a, b ChannelCredsConfig) bool { return a.Equal(b) }):
 		return false
 	case !slices.EqualFunc(sc.callCredsConfigs, other.callCredsConfigs, func(a, b CallCredsConfig) bool { return a.Equal(b) }):
 		return false
@@ -501,10 +500,10 @@ func (sc *ServerConfig) String() string {
 
 // The following fields correspond 1:1 with the JSON schema for ServerConfig.
 type serverConfigJSON struct {
-	ServerURI        string            `json:"server_uri,omitempty"`
-	ChannelCreds     []ChannelCreds    `json:"channel_creds,omitempty"`
-	CallCredsConfigs []CallCredsConfig `json:"call_creds,omitempty"`
-	ServerFeatures   []string          `json:"server_features,omitempty"`
+	ServerURI        string               `json:"server_uri,omitempty"`
+	ChannelCreds     []ChannelCredsConfig `json:"channel_creds,omitempty"`
+	CallCredsConfigs []CallCredsConfig    `json:"call_creds,omitempty"`
+	ServerFeatures   []string             `json:"server_features,omitempty"`
 }
 
 // MarshalJSON returns marshaled JSON bytes corresponding to this server config.
@@ -593,7 +592,7 @@ type ServerConfigTestingOptions struct {
 	URI string
 	// ChannelCreds contains a list of channel credentials to use when talking
 	// to this server. If unspecified, `insecure` credentials will be used.
-	ChannelCreds []ChannelCreds
+	ChannelCreds []ChannelCredsConfig
 	// CallCredsConfigs contains a list of call credentials to use for individual RPCs
 	// to this server. Optional.
 	CallCredsConfigs []CallCredsConfig
@@ -608,7 +607,7 @@ type ServerConfigTestingOptions struct {
 func ServerConfigForTesting(opts ServerConfigTestingOptions) (*ServerConfig, error) {
 	cc := opts.ChannelCreds
 	if cc == nil {
-		cc = []ChannelCreds{{Type: "insecure"}}
+		cc = []ChannelCredsConfig{{Type: "insecure"}}
 	}
 	scInternal := &serverConfigJSON{
 		ServerURI:        opts.URI,

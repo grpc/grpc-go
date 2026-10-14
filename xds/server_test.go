@@ -106,6 +106,51 @@ func generateBootstrapContents(t *testing.T, nodeID, serverURI string) []byte {
 	return bs
 }
 
+func (s) TestUnderlyingGRPCServer(t *testing.T) {
+	grpcServer, ok := internalserver.UnderlyingGRPCServer.(func(*GRPCServer) *grpc.Server)
+	if !ok {
+		t.Fatalf("UnderlyingGRPCServer has type %T, want func(*GRPCServer) *grpc.Server", internalserver.UnderlyingGRPCServer)
+	}
+
+	tests := []struct {
+		name   string
+		server func(*testing.T) (*GRPCServer, *grpc.Server)
+	}{
+		{
+			name: "underlying_server",
+			server: func(t *testing.T) (*GRPCServer, *grpc.Server) {
+				bootstrapContents := generateBootstrapContents(t, uuid.NewString(), nonExistentManagementServer)
+				xdsServer, err := NewGRPCServer(BootstrapContentsForTesting(bootstrapContents))
+				if err != nil {
+					t.Fatalf("NewGRPCServer() failed: %v", err)
+				}
+				t.Cleanup(xdsServer.Stop)
+				return xdsServer, xdsServer.gs.(*grpc.Server)
+			},
+		},
+		{
+			name: "nil_server",
+			server: func(*testing.T) (*GRPCServer, *grpc.Server) {
+				return nil, nil
+			},
+		},
+		{
+			name: "test_implementation",
+			server: func(*testing.T) (*GRPCServer, *grpc.Server) {
+				return &GRPCServer{gs: newFakeGRPCServer()}, nil
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			server, want := test.server(t)
+			if got := grpcServer(server); got != want {
+				t.Errorf("UnderlyingGRPCServer(%p) = %p, want %p", server, got, want)
+			}
+		})
+	}
+}
+
 func (s) TestNewServer_Success(t *testing.T) {
 	xdsCreds, err := xds.NewServerCredentials(xds.ServerOptions{FallbackCreds: insecure.NewCredentials()})
 	if err != nil {

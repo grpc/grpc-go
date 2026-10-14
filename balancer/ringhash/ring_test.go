@@ -76,6 +76,73 @@ func (s) TestRingNew(t *testing.T) {
 	}
 }
 
+// TestRingNewWeightSumOverflow tests the scenario where the sum of endpoint
+// weights exceeds math.MaxUint32 and would wrap to exactly zero in a uint32.
+// Verifies that the ring-build loop in newRing terminates and produces a ring
+// within the configured size bounds, with the endpoints evenly distributed.
+func (s) TestRingNewWeightSumOverflow(t *testing.T) {
+	endpoints := []resolver.Endpoint{
+		testEndpoint("a", 1<<31),
+		testEndpoint("b", 1<<31), // sum is exactly 2^32, wraps a uint32 to 0.
+	}
+	m := resolver.NewEndpointMap[*endpointState]()
+	m.Set(endpoints[0], &endpointState{hashKey: "a", weight: 1 << 31})
+	m.Set(endpoints[1], &endpointState{hashKey: "b", weight: 1 << 31})
+
+	const min, max uint64 = 1024, 4096
+	r := newRing(m, min, max, nil)
+	if got := uint64(len(r.items)); got < min || got > max {
+		t.Fatalf("newRing built a ring of size %d, want within [%d, %d]", got, min, max)
+	}
+	for _, e := range endpoints {
+		var count int
+		for _, ii := range r.items {
+			if ii.hashKey == hashKey(e) {
+				count++
+			}
+		}
+		if got := float64(count) / float64(len(r.items)); !equalApproximately(got, 0.5) {
+			t.Fatalf("Endpoint %q occupies %v of the ring, want ~0.5", hashKey(e), got)
+		}
+	}
+}
+
+// TestRingNewWeightSumOverflowToNonZero tests the scenario where the sum of
+// endpoint weights exceeds math.MaxUint32 and would wrap to a smaller non-zero
+// value in a uint32, which makes the normalized weights greater than 1 and
+// grows the ring past maxRingSize. Verifies that the ring stays within the
+// configured size bounds, with the endpoints distributed by weight.
+func (s) TestRingNewWeightSumOverflowToNonZero(t *testing.T) {
+	endpoints := []resolver.Endpoint{
+		testEndpoint("a", 1<<31),
+		testEndpoint("b", 1<<31),
+		testEndpoint("c", 1<<30), // sum is 2^32 + 2^30, wraps a uint32 to 2^30.
+	}
+	m := resolver.NewEndpointMap[*endpointState]()
+	m.Set(endpoints[0], &endpointState{hashKey: "a", weight: 1 << 31})
+	m.Set(endpoints[1], &endpointState{hashKey: "b", weight: 1 << 31})
+	m.Set(endpoints[2], &endpointState{hashKey: "c", weight: 1 << 30})
+
+	const min, max uint64 = 1024, 4096
+	r := newRing(m, min, max, nil)
+	if got := uint64(len(r.items)); got < min || got > max {
+		t.Fatalf("newRing built a ring of size %d, want within [%d, %d]", got, min, max)
+	}
+	wantFractions := map[string]float64{"a": 0.4, "b": 0.4, "c": 0.2}
+	for _, e := range endpoints {
+		var count int
+		for _, ii := range r.items {
+			if ii.hashKey == hashKey(e) {
+				count++
+			}
+		}
+		got := float64(count) / float64(len(r.items))
+		if want := wantFractions[hashKey(e)]; !equalApproximately(got, want) {
+			t.Fatalf("Endpoint %q occupies %v of the ring, want ~%v", hashKey(e), got, want)
+		}
+	}
+}
+
 func equalApproximately(x, y float64) bool {
 	delta := math.Abs(x - y)
 	mean := math.Abs(x+y) / 2.0
