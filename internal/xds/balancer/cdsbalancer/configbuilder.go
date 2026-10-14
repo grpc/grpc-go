@@ -51,6 +51,11 @@ type leafClusterConfig struct {
 	// outlierDetection is the Outlier Detection LB configuration for this
 	// leaf cluster.
 	outlierDetection outlierdetection.LBConfig
+	// lbPolicy is the locality and endpoint picking policy for this leaf
+	// cluster. Per gRFC A75, this is the LB policy configured in the leaf
+	// cluster itself, unless GRPC_XDS_AGGREGATE_CLUSTER_BACKWARD_COMPAT is
+	// enabled, in which case it is the LB policy of the aggregate cluster.
+	lbPolicy *internalserviceconfig.BalancerConfig
 	// Each leaf cluster has a name generator so that the child policies can
 	// reuse names between updates (EDS updates for example).
 	childNameGen *nameGenerator
@@ -208,8 +213,10 @@ func buildLeafClusterConfig(leaf *leafClusterConfig, xdsLBPolicy *internalservic
 //	     ┌───▼────┐             ┌───▼────┐
 //	     │priority│             │priority│
 //	     └────────┘             └────────┘
-func buildAggregateClusterConfigJSON(leafClusters []*leafClusterConfig, xdsLBPolicy *internalserviceconfig.BalancerConfig) ([]byte, []resolver.Endpoint, error) {
-	pc, endpoints, err := buildAggregateClusterConfig(leafClusters, xdsLBPolicy)
+//
+// Each leaf cluster uses its own LB policy (leafClusterConfig.lbPolicy).
+func buildAggregateClusterConfigJSON(leafClusters []*leafClusterConfig) ([]byte, []resolver.Endpoint, error) {
+	pc, endpoints, err := buildAggregateClusterConfig(leafClusters)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to build priority config: %v", err)
 	}
@@ -220,14 +227,14 @@ func buildAggregateClusterConfigJSON(leafClusters []*leafClusterConfig, xdsLBPol
 	return ret, endpoints, nil
 }
 
-func buildAggregateClusterConfig(leafClusters []*leafClusterConfig, xdsLBPolicy *internalserviceconfig.BalancerConfig) (*priority.LBConfig, []resolver.Endpoint, error) {
+func buildAggregateClusterConfig(leafClusters []*leafClusterConfig) (*priority.LBConfig, []resolver.Endpoint, error) {
 	var (
 		retConfig    = &priority.LBConfig{Children: make(map[string]*priority.Child)}
 		retEndpoints []resolver.Endpoint
 	)
 	for _, leaf := range leafClusters {
 		clusterUpdate := leaf.clusterConfig.Cluster
-		odCfg, endpoints, err := buildLeafClusterConfig(leaf, xdsLBPolicy)
+		odCfg, endpoints, err := buildLeafClusterConfig(leaf, leaf.lbPolicy)
 		if err != nil {
 			return nil, nil, err
 		}

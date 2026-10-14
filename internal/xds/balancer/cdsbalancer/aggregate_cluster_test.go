@@ -24,20 +24,26 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/balancer/ringhash"
+	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/pretty"
+	iringhash "google.golang.org/grpc/internal/ringhash"
 	iserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/internal/xds/balancer/outlierdetection"
 	"google.golang.org/grpc/internal/xds/balancer/priority"
+	"google.golang.org/grpc/internal/xds/balancer/wrrlocality"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource/version"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
@@ -944,5 +950,106 @@ func (s) TestWatchers(t *testing.T) {
 	wantNames = []string{clusterA, clusterB, clusterD}
 	if err := waitForResourceNames(ctx, cdsResourceRequestedCh, wantNames); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// Tests that, per gRFC A75, the LB policy configured in an aggregate cluster is
+// ignored and each underlying (leaf) cluster uses its own LB policy. It also
+// verifies that when GRPC_XDS_AGGREGATE_CLUSTER_BACKWARD_COMPAT is enabled,
+// the leaf clusters use the LB policy configured in the aggregate cluster.
+func (s) TestAggregateCluster_LeafClusterLBPolicy(t *testing.T) {
+	ringHashPolicy := &iserviceconfig.BalancerConfig{
+		Name:   ringhash.Name,
+		Config: &iringhash.LBConfig{MinRingSize: 100, MaxRingSize: 1000},
+	}
+	roundRobinPolicy := &iserviceconfig.BalancerConfig{
+		Name:   wrrlocality.Name,
+		Config: &wrrlocality.LBConfig{ChildPolicy: &iserviceconfig.BalancerConfig{Name: roundrobin.Name}},
+	}
+
+	tests := []struct {
+		name           string
+		backwardCompat bool
+		wantEDSPolicy  *iserviceconfig.BalancerConfig
+		wantDNSPolicy  *iserviceconfig.BalancerConfig
+	}{
+		{
+			name:           "leaf_policy_used",
+			backwardCompat: false,
+			wantEDSPolicy:  ringHashPolicy,
+			wantDNSPolicy:  roundRobinPolicy,
+		},
+		{
+			name:           "backward_compat_uses_aggregate_policy",
+			backwardCompat: true,
+			wantEDSPolicy:  roundRobinPolicy,
+			wantDNSPolicy:  roundRobinPolicy,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			testutils.SetEnvConfig(t, &envconfig.XDSAggregateClusterBackwardCompat, test.backwardCompat)
+
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+			dnsTargetCh, dnsR := setupDNS(t)
+			lbCfgCh, _, _, _ := registerWrappedPriorityPolicy(ctx, t)
+			mgmtServer, nodeID, _ := setupWithManagementServer(t, nil, nil)
+
+			// The aggregate cluster uses the default round_robin LB policy,
+			// the EDS leaf cluster uses ring_hash and the LogicalDNS leaf
+			// cluster uses the default round_robin LB policy.
+			edsCluster := e2e.ClusterResourceWithOptions(e2e.ClusterOptions{
+				ClusterName:   edsClusterName,
+				ServiceName:   serviceName,
+				SecurityLevel: e2e.SecurityLevelNone,
+				Policy:        e2e.LoadBalancingPolicyRingHash,
+			})
+			edsCluster.LbConfig = &v3clusterpb.Cluster_RingHashLbConfig_{
+				RingHashLbConfig: &v3clusterpb.Cluster_RingHashLbConfig{
+					MinimumRingSize: wrapperspb.UInt64(100),
+					MaximumRingSize: wrapperspb.UInt64(1000),
+				},
+			}
+			resources := e2e.UpdateOptions{
+				NodeID:    nodeID,
+				Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(target, routeName)},
+				Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeName, target, clusterName)},
+				Clusters: []*v3clusterpb.Cluster{
+					makeAggregateClusterResource(clusterName, []string{edsClusterName, dnsClusterName}),
+					edsCluster,
+					makeLogicalDNSClusterResource(dnsClusterName, dnsHostName, dnsPort),
+				},
+				Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(serviceName, host, []uint32{port})},
+			}
+			if err := mgmtServer.Update(ctx, resources); err != nil {
+				t.Fatal(err)
+			}
+			verifyDNSResolution(ctx, t, dnsTargetCh, dnsR, dnsHostName, dnsPort)
+
+			wantChildCfg := &priority.LBConfig{
+				Children: map[string]*priority.Child{
+					edsClusterName: {
+						Config: &iserviceconfig.BalancerConfig{
+							Name:   outlierdetection.Name,
+							Config: createLeafClusterConfigWithPolicy(edsClusterName, "priority-0-0", true, test.wantEDSPolicy),
+						},
+						IgnoreReresolutionRequests: true,
+					},
+					dnsClusterName: {
+						Config: &iserviceconfig.BalancerConfig{
+							Name:   outlierdetection.Name,
+							Config: createLeafClusterConfigWithPolicy(dnsClusterName, "priority-1", false, test.wantDNSPolicy),
+						},
+						IgnoreReresolutionRequests: false,
+					},
+				},
+				Priorities: []string{edsClusterName, dnsClusterName},
+			}
+			if err := waitForLoadBalancingConfig(ctx, lbCfgCh, wantChildCfg); err != nil {
+				t.Fatal(err)
+			}
+		})
 	}
 }

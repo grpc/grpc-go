@@ -187,7 +187,7 @@ func (s) TestBuildClusterConfigJSON(t *testing.T) {
 						},
 						childNameGen: newNameGenerator(1),
 					},
-				}, nil)
+				})
 			},
 			policyName: priority.Name,
 		},
@@ -282,6 +282,7 @@ func (s) TestBuildAggregateClusterConfig(t *testing.T) {
 				},
 			},
 			outlierDetection: noopODCfg,
+			lbPolicy:         &iserviceconfig.BalancerConfig{Name: roundrobin.Name},
 			childNameGen:     newNameGenerator(0),
 		},
 		{
@@ -299,9 +300,10 @@ func (s) TestBuildAggregateClusterConfig(t *testing.T) {
 				},
 			},
 			outlierDetection: noopODCfg,
+			lbPolicy:         &iserviceconfig.BalancerConfig{Name: pickfirst.Name},
 			childNameGen:     newNameGenerator(1),
 		},
-	}, nil)
+	})
 	if err != nil {
 		t.Fatalf("buildAggregateClusterConfig() failed: %v", err)
 	}
@@ -316,11 +318,11 @@ func (s) TestBuildAggregateClusterConfig(t *testing.T) {
 				Config: &priority.LBConfig{
 					Children: map[string]*priority.Child{
 						"priority-0-0": {
-							Config:                     nil,
+							Config:                     &iserviceconfig.BalancerConfig{Name: roundrobin.Name},
 							IgnoreReresolutionRequests: true,
 						},
 						"priority-0-1": {
-							Config:                     nil,
+							Config:                     &iserviceconfig.BalancerConfig{Name: roundrobin.Name},
 							IgnoreReresolutionRequests: true,
 						},
 					},
@@ -340,7 +342,7 @@ func (s) TestBuildAggregateClusterConfig(t *testing.T) {
 				Config: &priority.LBConfig{
 					Children: map[string]*priority.Child{
 						"priority-1": {
-							Config:                     nil,
+							Config:                     &iserviceconfig.BalancerConfig{Name: pickfirst.Name},
 							IgnoreReresolutionRequests: false,
 						},
 					},
@@ -405,7 +407,7 @@ func (s) TestBuildAggregateClusterConfig_UnsupportedClusterType(t *testing.T) {
 			outlierDetection: noopODCfg,
 			childNameGen:     newNameGenerator(0),
 		},
-	}, nil)
+	})
 	if err == nil {
 		t.Fatal("buildAggregateClusterConfig() succeeded when expected to fail")
 	}

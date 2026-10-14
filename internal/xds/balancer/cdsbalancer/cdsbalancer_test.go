@@ -331,6 +331,18 @@ func verifyRPCError(gotErr error, wantCode codes.Code, wantErr, wantNodeID strin
 // leaf (non-aggregate) cluster under gRFC A75 topology:
 // outlier_detection -> cluster_impl -> priority -> wrr_locality -> round_robin.
 func createLeafClusterConfig(cluster string, pName string, ignoreReresolution bool) *outlierdetection.LBConfig {
+	return createLeafClusterConfigWithPolicy(cluster, pName, ignoreReresolution, &iserviceconfig.BalancerConfig{
+		Name: wrrlocality.Name,
+		Config: &wrrlocality.LBConfig{
+			ChildPolicy: &iserviceconfig.BalancerConfig{Name: roundrobin.Name},
+		},
+	})
+}
+
+// createLeafClusterConfigWithPolicy is like createLeafClusterConfig, but uses
+// the given locality and endpoint picking policy instead of the default
+// wrr_locality/round_robin.
+func createLeafClusterConfigWithPolicy(cluster string, pName string, ignoreReresolution bool, policy *iserviceconfig.BalancerConfig) *outlierdetection.LBConfig {
 	return &outlierdetection.LBConfig{
 		Interval:           iserviceconfig.Duration(10 * time.Second),
 		BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
@@ -345,12 +357,7 @@ func createLeafClusterConfig(cluster string, pName string, ignoreReresolution bo
 					Config: &priority.LBConfig{
 						Children: map[string]*priority.Child{
 							pName: {
-								Config: &iserviceconfig.BalancerConfig{
-									Name: wrrlocality.Name,
-									Config: &wrrlocality.LBConfig{
-										ChildPolicy: &iserviceconfig.BalancerConfig{Name: roundrobin.Name},
-									},
-								},
+								Config:                     policy,
 								IgnoreReresolutionRequests: ignoreReresolution,
 							},
 						},

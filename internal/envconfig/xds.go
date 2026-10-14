@@ -103,4 +103,12 @@ var (
 	// filter is enabled on the client side. For more details, see:
 	// https://github.com/grpc/proposal/blob/master/A92-xds-ext-authz.md
 	XDSClientExtAuthzEnabled = boolFromEnv("GRPC_EXPERIMENTAL_XDS_EXT_AUTHZ_ON_CLIENT", false)
+
+	// XDSAggregateClusterBackwardCompat controls whether the underlying
+	// (leaf) clusters of an aggregate cluster use the LB policy configured in
+	// the aggregate cluster instead of their own LB policy. This is a
+	// temporary migration mechanism and will be removed in a future release.
+	// For more details, see:
+	// https://github.com/grpc/proposal/blob/master/A75-xds-aggregate-cluster-behavior-fixes.md
+	XDSAggregateClusterBackwardCompat = boolFromEnv("GRPC_XDS_AGGREGATE_CLUSTER_BACKWARD_COMPAT", false)
 )
