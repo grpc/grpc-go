@@ -21,6 +21,7 @@ package xdslbregistry_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -33,6 +34,8 @@ import (
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/xds/balancer/wrrlocality"
+	"google.golang.org/grpc/internal/xds/bootstrap"
+	"google.golang.org/grpc/internal/xds/grpcservice"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdslbregistry"
 	_ "google.golang.org/grpc/xds" // Register the xDS LB Registry Converters.
 	"google.golang.org/protobuf/proto"
@@ -140,7 +143,7 @@ func (s) TestConvertToServiceConfigSuccess(t *testing.T) {
 					},
 				},
 			},
-			wantConfig: `[{"pick_first": { "shuffleAddressList": false }}]`,
+			wantConfig: `[{"pick_first": {}}]`,
 		},
 		{
 			name: "round_robin",
@@ -327,15 +330,18 @@ func (s) TestConvertToServiceConfigSuccess(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			rawJSON, err := xdslbregistry.ConvertToServiceConfig(test.policy, 0)
+			res, err := xdslbregistry.ConvertToServiceConfig(test.policy, 0, xdslbregistry.ConverterOptions{})
 			if err != nil {
 				t.Fatalf("ConvertToServiceConfig(%s) failed: %v", pretty.ToJSON(test.policy), err)
+			}
+			if res.GRPCServices != nil {
+				t.Fatalf("ConvertToServiceConfig(%s) returned GRPCServices %v, want nil", pretty.ToJSON(test.policy), res.GRPCServices)
 			}
 			// got and want must be unmarshalled since JSON strings shouldn't
 			// generally be directly compared.
 			var got []map[string]any
-			if err := json.Unmarshal(rawJSON, &got); err != nil {
-				t.Fatalf("Error unmarshalling rawJSON (%q): %v", rawJSON, err)
+			if err := json.Unmarshal(res.LBConfig, &got); err != nil {
+				t.Fatalf("Error unmarshalling rawJSON (%q): %v", res.LBConfig, err)
 			}
 			var want []map[string]any
 			if err := json.Unmarshal(json.RawMessage(test.wantConfig), &want); err != nil {
@@ -422,7 +428,7 @@ func (s) TestConvertToServiceConfigFailure(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			_, gotErr := xdslbregistry.ConvertToServiceConfig(test.policy, 0)
+			_, gotErr := xdslbregistry.ConvertToServiceConfig(test.policy, 0, xdslbregistry.ConverterOptions{})
 			// Test the error substring to test the different root causes of
 			// errors. This is more brittle over time, but it's important to
 			// test the root cause of the errors emitted from the
@@ -430,6 +436,149 @@ func (s) TestConvertToServiceConfigFailure(t *testing.T) {
 			// error strings so breakages won't come unexpectedly.
 			if gotErr == nil || !strings.Contains(gotErr.Error(), test.wantErr) {
 				t.Fatalf("ConvertToServiceConfig() = %v, wantErr %v", gotErr, test.wantErr)
+			}
+		})
+	}
+}
+
+// TestConvertToServiceConfig_GRPCServices tests that the GrpcServices returned
+// by converters are returned by the xDS LB policy registry only for the policy
+// that is selected, that converters of policies with child policies propagate
+// the GrpcServices returned for their children, and that the converter options
+// are passed to converters at every level of the LB policy tree.
+func (s) TestConvertToServiceConfig_GRPCServices(t *testing.T) {
+	bootstrapCfg := &bootstrap.Config{}
+	serverCfg := &bootstrap.ServerConfig{}
+	opts := xdslbregistry.ConverterOptions{BootstrapConfig: bootstrapCfg, ServerConfig: serverCfg}
+
+	// Register a converter for the StringValue proto type, which pretends that
+	// the LB policy configuration being converted contains a GrpcService proto
+	// whose target URI is the value of the StringValue.
+	const typeURL = "type.googleapis.com/google.protobuf.StringValue"
+	xdslbregistry.Register(typeURL, func(rawProto []byte, _ int, gotOpts xdslbregistry.ConverterOptions) (*xdslbregistry.ConverterResult, error) {
+		if gotOpts != opts {
+			return nil, fmt.Errorf("converter invoked with options %+v, want %+v", gotOpts, opts)
+		}
+		sv := &wrapperspb.StringValue{}
+		if err := proto.Unmarshal(rawProto, sv); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal resource: %v", err)
+		}
+		return &xdslbregistry.ConverterResult{
+			LBConfig:     json.RawMessage(`[{"round_robin": {}}]`),
+			GRPCServices: map[string]*grpcservice.Config{sv.GetValue(): {TargetURI: sv.GetValue()}},
+		}, nil
+	})
+	t.Cleanup(func() { xdslbregistry.UnregisterForTesting(typeURL) })
+
+	tests := []struct {
+		name             string
+		policy           *v3clusterpb.LoadBalancingPolicy
+		wantConfig       string
+		wantGRPCServices map[string]*grpcservice.Config
+	}{
+		{
+			name: "top-level-policy",
+			policy: &v3clusterpb.LoadBalancingPolicy{
+				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
+					{
+						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
+							TypedConfig: testutils.MarshalAny(t, wrapperspb.String("target-1")),
+						},
+					},
+				},
+			},
+			wantConfig:       `[{"round_robin": {}}]`,
+			wantGRPCServices: map[string]*grpcservice.Config{"target-1": {TargetURI: "target-1"}},
+		},
+		{
+			name: "unsupported-policy-skipped",
+			policy: &v3clusterpb.LoadBalancingPolicy{
+				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
+					{
+						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
+							// The type not registered in gRPC Policy registry.
+							TypedConfig: testutils.MarshalAny(t, &v3xdsxdstypepb.TypedStruct{
+								TypeUrl: "type.googleapis.com/myorg.ThisTypeDoesNotExist",
+								Value:   &structpb.Struct{},
+							}),
+						},
+					},
+					{
+						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
+							TypedConfig: testutils.MarshalAny(t, wrapperspb.String("target-2")),
+						},
+					},
+				},
+			},
+			wantConfig:       `[{"round_robin": {}}]`,
+			wantGRPCServices: map[string]*grpcservice.Config{"target-2": {TargetURI: "target-2"}},
+		},
+		{
+			name: "policy-not-selected",
+			policy: &v3clusterpb.LoadBalancingPolicy{
+				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
+					{
+						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
+							TypedConfig: testutils.MarshalAny(t, &v3pickfirstpb.PickFirst{}),
+						},
+					},
+					{
+						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
+							TypedConfig: testutils.MarshalAny(t, wrapperspb.String("target-3")),
+						},
+					},
+				},
+			},
+			wantConfig: `[{"pick_first": {}}]`,
+		},
+		{
+			name: "child-of-wrr-locality",
+			policy: &v3clusterpb.LoadBalancingPolicy{
+				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
+					{
+						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
+							TypedConfig: wrrLocalityAny(t, wrapperspb.String("target-4")),
+						},
+					},
+				},
+			},
+			wantConfig:       `[{"xds_wrr_locality_experimental": {"childPolicy": [{"round_robin": {}}]}}]`,
+			wantGRPCServices: map[string]*grpcservice.Config{"target-4": {TargetURI: "target-4"}},
+		},
+		{
+			name: "grandchild-of-wrr-locality",
+			policy: &v3clusterpb.LoadBalancingPolicy{
+				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
+					{
+						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
+							TypedConfig: wrrLocalityAny(t, wrrLocality(t, wrapperspb.String("target-5"))),
+						},
+					},
+				},
+			},
+			wantConfig:       `[{"xds_wrr_locality_experimental": {"childPolicy": [{"xds_wrr_locality_experimental": {"childPolicy": [{"round_robin": {}}]}}]}}]`,
+			wantGRPCServices: map[string]*grpcservice.Config{"target-5": {TargetURI: "target-5"}},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			res, err := xdslbregistry.ConvertToServiceConfig(test.policy, 0, opts)
+			if err != nil {
+				t.Fatalf("ConvertToServiceConfig(%s) failed: %v", pretty.ToJSON(test.policy), err)
+			}
+			var got, want []map[string]any
+			if err := json.Unmarshal(res.LBConfig, &got); err != nil {
+				t.Fatalf("Error unmarshalling LB config (%q): %v", res.LBConfig, err)
+			}
+			if err := json.Unmarshal([]byte(test.wantConfig), &want); err != nil {
+				t.Fatalf("Error unmarshalling wantConfig (%q): %v", test.wantConfig, err)
+			}
+			if diff := cmp.Diff(got, want); diff != "" {
+				t.Errorf("ConvertToServiceConfig() returned unexpected LB config, diff (-got +want): %v", diff)
+			}
+			if diff := cmp.Diff(res.GRPCServices, test.wantGRPCServices); diff != "" {
+				t.Errorf("ConvertToServiceConfig() returned unexpected GRPCServices, diff (-got +want): %v", diff)
 			}
 		})
 	}
