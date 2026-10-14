@@ -1332,6 +1332,14 @@ func (s) TestAggregatedConnectivityStateAndAutoConnect(t *testing.T) {
 		t.Fatal("Timeout waiting for sc2.Connect()")
 	}
 
+	// The pick_first child created for (host-2, "10.0.0.2:8080") reports
+	// CONNECTING when it receives the addresses from the resolver (autosharding
+	// balancer here). That would leave us with one endpoint in TF and one in
+	// CONNECTING, therefore aggregated state must be CONNECTING.
+	if err := cc.WaitForConnectivityState(ctx, connectivity.Connecting); err != nil {
+		t.Fatalf("WaitForConnectivityState(Connecting) with 1 TF endpoint failed: %v", err)
+	}
+
 	// Moving sc2 to CONNECTING then TF should leave us with two endpoints in TF
 	// and two in IDLE, and this should result in the aggregated state being TF.
 	// And because no endpoint is in CONNECTING, the balancer automatically
@@ -1339,9 +1347,27 @@ func (s) TestAggregatedConnectivityStateAndAutoConnect(t *testing.T) {
 	// "10.0.0.3:8080").
 	sc2.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 	sc2.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
-	if err := cc.WaitForConnectivityState(ctx, connectivity.TransientFailure); err != nil {
-		t.Fatalf("WaitForConnectivityState(TransientFailure) with 2 TF endpoints failed: %v", err)
-	}
+
+	// We don't check for aggregated connectivity state of TF here because of the
+	// following race:
+	// - sc2 moves to TF.
+	// - sc2's pick_first child reports TF to endpointsharding, which reports the
+	//   same to the autosharding balancer.
+	// - The autosharding balancer computes the aggregated state as TF.
+	// - sc3 is triggered to ExitIdle and creates a pick_first child which starts
+	//   off by reporting CONNECTING. This is reported to the autosharding
+	//   balancer by endpointsharding.
+	// - The autosharding balancer computes the aggregated state as TF.
+	//
+	// Because the NewStateCh in testutils.BalancerClientConn retains only the
+	// most recent state, if we read it here, we might be consuming two TF states
+	// instead of one. Reading it after sc3 is moved to CONNECTING ensures that
+	// both states have been reported and we read the most recent one.
+
+	// Moving sc3 to CONNECTING should leave us with two endpoints in TF, one
+	// endpoint in CONNECTING and one in IDLE which should result in the
+	// aggregated state being TF. And this should not trigger any more subconns
+	// to be created because an endpoint is already in CONNECTING.
 	sc3 := waitForSubConn(ctx, t, cc)
 	if got, want := sc3.Addresses[0].Addr, "10.0.0.3:8080"; got != want {
 		t.Fatalf("Auto-ExitIdle created SubConn for %q, want %q", got, want)
@@ -1351,11 +1377,6 @@ func (s) TestAggregatedConnectivityStateAndAutoConnect(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatal("Timeout waiting for sc3.Connect()")
 	}
-
-	// Moving sc3 to CONNECTING should leave us with two endpoints in TF, one
-	// endpoint in CONNECTING and one in IDLE which should result in the
-	// aggregated state being TF. And this should not trigger any more subconns
-	// to be created because an endpoint is already in CONNECTING.
 	sc3.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 	if err := cc.WaitForConnectivityState(ctx, connectivity.TransientFailure); err != nil {
 		t.Fatalf("WaitForConnectivityState(TransientFailure) with 2 TF endpoints failed: %v", err)
