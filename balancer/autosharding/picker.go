@@ -67,6 +67,10 @@ func newPicker(endpointMap map[string]*endpointState, sm *sliceMap, cfg *LBConfi
 		}
 	}
 
+	// Precompute the fallback status for each slice based on the health of its
+	// endpoints. Note that this is different from the fallbackDisabled flag
+	// which is set when the sharding server explicitly sends a slice with no
+	// endpoints.
 	isSliceInFallback := make([]bool, len(sm.slices))
 	for i, se := range sm.slices {
 		isSliceInFallback[i] = isPoolInFallback(se.endpoints, endpoints)
@@ -112,6 +116,12 @@ func (p *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 		return balancer.PickResult{}, internal.ErrNoAssignment
 	}
 
+	// If the sharding server has explicitly disabled fallback for this slice
+	// (by sending no endpoints), drop the pick and return early.
+	if p.sliceMap.slices[sliceIdx].fallbackDisabled {
+		return balancer.PickResult{}, internal.ErrFallbackDisabledForSlice
+	}
+
 	// If the matching slice is in fallback mode and fallback is enabled, route
 	// using the fallback pool across all resolver endpoints.
 	if p.isSliceInFallback[sliceIdx] && p.enableFallback {
@@ -129,7 +139,7 @@ func (p *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 // into p.endpoints by starting at a random position and scanning circularly.
 func (p *picker) pickFromEndpointIndices(indices []int, info balancer.PickInfo) (balancer.PickResult, error) {
 	if len(indices) == 0 {
-		return balancer.PickResult{}, internal.ErrNoEndpointsInSlice
+		return balancer.PickResult{}, internal.ErrNoAvailableEndpointsForSlice
 	}
 
 	firstIndex := randIntN(len(indices))
