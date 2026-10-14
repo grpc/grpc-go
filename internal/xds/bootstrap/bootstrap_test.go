@@ -1936,6 +1936,7 @@ func (s) TestAllowedGRPCService_Accessors(t *testing.T) {
 // parsed, and even a malformed entry does not fail parsing.
 func (s) TestAllowedGRPCServices_Disabled(t *testing.T) {
 	testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, false)
+	testutils.SetEnvConfig(t, &envconfig.XDSAutoshardingEnabled, false)
 	cfg := `{"dns:///side-channel:443": {"channel_creds": [{"type": "unsupported_cred_type"}]}}`
 	var got AllowedGRPCServices
 	if err := json.Unmarshal([]byte(cfg), &got); err != nil {
@@ -1943,5 +1944,45 @@ func (s) TestAllowedGRPCServices_Disabled(t *testing.T) {
 	}
 	if got != nil {
 		t.Errorf("AllowedGRPCServices = %v, want nil when disabled", got)
+	}
+}
+
+// TestAllowedGRPCServices_Enabled verifies that the allowed_grpc_services field
+// is parsed when any one of the features that consume it is enabled.
+func (s) TestAllowedGRPCServices_Enabled(t *testing.T) {
+	const target = "dns:///side-channel:443"
+	cfg := `{"dns:///side-channel:443": {"channel_creds": [{"type": "insecure"}]}}`
+	want := AllowedGRPCServices{target: {
+		targetURI:        target,
+		sideChannelCreds: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "insecure"}, nil),
+	}}
+
+	tests := []struct {
+		name                string
+		extProcEnabled      bool
+		autoshardingEnabled bool
+	}{
+		{
+			name:           "ext_proc",
+			extProcEnabled: true,
+		},
+		{
+			name:                "autosharding",
+			autoshardingEnabled: true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			testutils.SetEnvConfig(t, &envconfig.XDSClientExtProcEnabled, test.extProcEnabled)
+			testutils.SetEnvConfig(t, &envconfig.XDSAutoshardingEnabled, test.autoshardingEnabled)
+			var got AllowedGRPCServices
+			if err := json.Unmarshal([]byte(cfg), &got); err != nil {
+				t.Fatalf("AllowedGRPCServices unmarshal failed: %v", err)
+			}
+			if diff := cmp.Diff(want, got); diff != "" {
+				t.Errorf("AllowedGRPCServices unmarshal returned unexpected diff (-want +got):\n%s", diff)
+			}
+		})
 	}
 }
