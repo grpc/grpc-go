@@ -21,6 +21,7 @@
 package grpcservice
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"maps"
@@ -313,15 +314,26 @@ func parseInitialMetadata(headers []*v3corepb.HeaderValue) (metadata.MD, error) 
 	for _, h := range headers {
 		key := h.GetKey()
 		// raw_value takes precedence over the legacy value field.
+		rawValue := h.GetRawValue()
 		val := h.GetValue()
-		if len(h.GetRawValue()) > 0 {
-			val = string(h.GetRawValue())
+		if len(rawValue) > 0 {
+			val = string(rawValue)
 		}
 		if err := validateHeaderKey(key); err != nil {
 			return nil, fmt.Errorf("grpcservice: invalid header key %q: %v", key, err)
 		}
 		if err := validateHeaderValue(key, val); err != nil {
 			return nil, fmt.Errorf("grpcservice: invalid value for header key %q: %v", key, err)
+		}
+		if len(rawValue) == 0 && strings.HasSuffix(key, binHdrSuffix) {
+			// A binary header carried in the string value field is base64
+			// encoded. Decode it so the metadata holds raw bytes, matching
+			// what the transport layer encodes onto the wire.
+			b, err := decodeBinHeader(val)
+			if err != nil {
+				return nil, fmt.Errorf("grpcservice: invalid base64 value for binary header key %q: %v", key, err)
+			}
+			val = string(b)
 		}
 		md.Append(key, val)
 	}
@@ -351,4 +363,18 @@ func validateHeaderValue(key, val string) error {
 	// ValidatePair skips value validation for "-bin" keys, which may carry
 	// arbitrary bytes.
 	return imetadata.ValidatePair(key, val)
+}
+
+// binHdrSuffix marks metadata keys whose values are arbitrary bytes, kept in
+// base64 form on the wire.
+const binHdrSuffix = "-bin"
+
+// decodeBinHeader decodes a base64-encoded binary header value, tolerating
+// both padded and unpadded encodings.
+func decodeBinHeader(v string) ([]byte, error) {
+	if len(v)%4 == 0 {
+		// Input was padded, or padding was not necessary.
+		return base64.StdEncoding.DecodeString(v)
+	}
+	return base64.RawStdEncoding.DecodeString(v)
 }
