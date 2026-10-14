@@ -61,18 +61,18 @@ func (s) TestChildChannelOptions_Client(t *testing.T) {
 	}
 
 	// Verify that child dial options from the last call are stored in cc.dopts in order.
-	if got, want := len(cc.dopts.childDialOptions), 3; got != want {
+	if got, want := len(cc.dopts.childChannelOptions), 3; got != want {
 		t.Fatalf("Child dial options count = %d, want %d", got, want)
 	}
-	cc.dopts.childDialOptions[0].apply(&cc.dopts)
+	cc.dopts.childChannelOptions[0].apply(&cc.dopts)
 	if got, want := cc.dopts.copts.ReadBufferSize, initReadBufferSize; got != want {
 		t.Fatalf("Child dial option[0] ReadBufferSize = %d, want %d", got, want)
 	}
-	cc.dopts.childDialOptions[1].apply(&cc.dopts)
+	cc.dopts.childChannelOptions[1].apply(&cc.dopts)
 	if got, want := cc.dopts.copts.WriteBufferSize, writeBufferSize; got != want {
 		t.Fatalf("Child dial option[1] WriteBufferSize = %d, want %d", got, want)
 	}
-	cc.dopts.childDialOptions[2].apply(&cc.dopts)
+	cc.dopts.childChannelOptions[2].apply(&cc.dopts)
 	if got, want := cc.dopts.copts.ReadBufferSize, overwrittenReadBufferSize; got != want {
 		t.Fatalf("Child dial option[2] ReadBufferSize = %d, want %d", got, want)
 	}
@@ -102,12 +102,12 @@ func (s) TestChildChannelOptions_Server(t *testing.T) {
 	defer srv.Stop()
 
 	// Verify that child dial options from the last call are stored in srv.opts.
-	if got, want := len(srv.opts.childDialOptions), 3; got != want {
+	if got, want := len(srv.opts.childChannelOptions), 3; got != want {
 		t.Fatalf("Child dial options count = %d, want %d", got, want)
 	}
 
-	// Verify that internal.ChildDialOptionsFromServer returns the options in order.
-	childOpts := internal.ChildDialOptionsFromServer.(func(*Server) []DialOption)(srv)
+	// Verify that internal.ChildChannelOptionsFromServer returns the options in order.
+	childOpts := internal.ChildChannelOptionsFromServer.(func(*Server) []DialOption)(srv)
 	if got, want := len(childOpts), 3; got != want {
 		t.Fatalf("Child dial options count from server accessor = %d, want %d", got, want)
 	}
@@ -135,13 +135,15 @@ func (s) TestChildChannelOptions_Server(t *testing.T) {
 // options do not execute on the parent channel.
 func (s) TestChildChannelOptions_Isolation(t *testing.T) {
 	var parentClientInterceptorCalled, childClientInterceptorCalled bool
-	parentClientInt := func(ctx context.Context, method string, req, reply any, cc *ClientConn, invoker UnaryInvoker, opts ...CallOption) error {
+	// The interceptors do not call the invoker, so that the RPC does not
+	// depend on the network.
+	parentClientInt := func(context.Context, string, any, any, *ClientConn, UnaryInvoker, ...CallOption) error {
 		parentClientInterceptorCalled = true
-		return invoker(ctx, method, req, reply, cc, opts...)
+		return nil
 	}
-	childClientInt := func(ctx context.Context, method string, req, reply any, cc *ClientConn, invoker UnaryInvoker, opts ...CallOption) error {
+	childClientInt := func(context.Context, string, any, any, *ClientConn, UnaryInvoker, ...CallOption) error {
 		childClientInterceptorCalled = true
-		return invoker(ctx, method, req, reply, cc, opts...)
+		return nil
 	}
 
 	cc, err := NewClient("passthrough:///test",
@@ -161,7 +163,9 @@ func (s) TestChildChannelOptions_Isolation(t *testing.T) {
 	// Make an invocation to check interceptor execution on parent channel.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	_ = cc.Invoke(ctx, "/test/method", nil, nil)
+	if err := cc.Invoke(ctx, "/test/method", nil, nil); err != nil {
+		t.Fatalf("cc.Invoke() failed: %v", err)
+	}
 	if !parentClientInterceptorCalled {
 		t.Errorf("Parent client interceptor was not called")
 	}
