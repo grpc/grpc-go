@@ -25,6 +25,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"google.golang.org/grpc/balancer/autosharding/internal/sharding"
 )
 
 func (s) TestSliceMap_Lookup(t *testing.T) {
@@ -92,17 +93,15 @@ func (s) TestSliceMap_Lookup_Empty(t *testing.T) {
 func (s) TestBuildSliceMap(t *testing.T) {
 	// Setup endpointMap with unsorted order in map to verify deterministic
 	// sorting of fallbackPool.
-	epMap := &endpointMap{
-		m: map[string]*endpointState{
-			"hostC": {index: 2},
-			"hostA": {index: 0},
-			"hostB": {index: 1},
-		},
+	epMap := map[string]*endpointState{
+		"hostC": {index: 2},
+		"hostA": {index: 0},
+		"hostB": {index: 1},
 	}
 
 	tests := []struct {
 		name       string
-		assignment *assignment
+		assignment *sharding.Assignment
 		want       *sliceMap
 	}{
 		{
@@ -112,13 +111,13 @@ func (s) TestBuildSliceMap(t *testing.T) {
 		},
 		{
 			name: "valid-assignment",
-			assignment: &assignment{
-				endpointNames: []string{"hostA", "hostB", "hostC"},
-				slices: []slice{
-					{startKey: []byte("a"), endpoints: []int{0, 1}}, // hostA, hostB -> indices 0, 1
-					{startKey: []byte("m"), endpoints: []int{1, 2}}, // hostB, hostC -> indices 1, 2
+			assignment: &sharding.Assignment{
+				EndpointNames: []string{"hostA", "hostB", "hostC"},
+				Slices: []sharding.Slice{
+					{StartKey: []byte("a"), Endpoints: []int{0, 1}}, // hostA, hostB -> indices 0, 1
+					{StartKey: []byte("m"), Endpoints: []int{1, 2}}, // hostB, hostC -> indices 1, 2
 				},
-				generation: 42,
+				Generation: 42,
 			},
 			want: &sliceMap{
 				slices: []sliceMapEntry{
@@ -131,12 +130,12 @@ func (s) TestBuildSliceMap(t *testing.T) {
 		},
 		{
 			name: "assignment-with-unknown-host",
-			assignment: &assignment{
-				endpointNames: []string{"hostA", "hostUnknown", "hostC"},
-				slices: []slice{
-					{startKey: []byte("a"), endpoints: []int{0, 1}}, // hostUnknown is skipped
+			assignment: &sharding.Assignment{
+				EndpointNames: []string{"hostA", "hostUnknown", "hostC"},
+				Slices: []sharding.Slice{
+					{StartKey: []byte("a"), Endpoints: []int{0, 1}}, // hostUnknown is skipped
 				},
-				generation: 43,
+				Generation: 43,
 			},
 			want: &sliceMap{
 				slices: []sliceMapEntry{
@@ -144,6 +143,25 @@ func (s) TestBuildSliceMap(t *testing.T) {
 				},
 				fallbackPool: []int{0, 1, 2},
 				generation:   43,
+			},
+		},
+		{
+			name: "assignment-with-fallback-disabled-slice",
+			assignment: &sharding.Assignment{
+				EndpointNames: []string{"hostA", "hostB", "hostC"},
+				Slices: []sharding.Slice{
+					{StartKey: []byte(""), FallbackDisabled: true},
+					{StartKey: []byte("m"), Endpoints: []int{0, 1}},
+				},
+				Generation: 44,
+			},
+			want: &sliceMap{
+				slices: []sliceMapEntry{
+					{startKey: []byte(""), fallbackDisabled: true},
+					{startKey: []byte("m"), endpoints: []int{0, 1}},
+				},
+				fallbackPool: []int{0, 1, 2},
+				generation:   44,
 			},
 		},
 	}
@@ -159,7 +177,7 @@ func (s) TestBuildSliceMap(t *testing.T) {
 }
 
 func (e sliceMapEntry) Equal(b sliceMapEntry) bool {
-	return bytes.Equal(e.startKey, b.startKey) && slices.Equal(e.endpoints, b.endpoints)
+	return bytes.Equal(e.startKey, b.startKey) && slices.Equal(e.endpoints, b.endpoints) && e.fallbackDisabled == b.fallbackDisabled
 }
 
 func (sm *sliceMap) Equal(b *sliceMap) bool {
