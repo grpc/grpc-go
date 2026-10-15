@@ -445,142 +445,22 @@ func (s) TestConvertToServiceConfigFailure(t *testing.T) {
 	}
 }
 
-// TestConvertToServiceConfig_GRPCServices tests that the GrpcServices returned
-// by converters are returned by the xDS LB policy registry only for the policy
-// that is selected, that converters of policies with child policies propagate
-// the GrpcServices returned for their children, and that the converter options
-// are passed to converters at every level of the LB policy tree.
-func (s) TestConvertToServiceConfig_GRPCServices(t *testing.T) {
-	bootstrapCfg := &bootstrap.Config{}
-	serverCfg := &bootstrap.ServerConfig{}
-	opts := xdslbregistry.ConverterOptions{BootstrapConfig: bootstrapCfg, ServerConfig: serverCfg}
-
-	// Register a converter for the StringValue proto type, which pretends that
-	// the LB policy configuration being converted contains a GrpcService proto
-	// whose target URI is the value of the StringValue.
-	const typeURL = "type.googleapis.com/google.protobuf.StringValue"
-	xdslbregistry.Register(typeURL, func(rawProto []byte, _ int, gotOpts xdslbregistry.ConverterOptions) (*xdslbregistry.ConverterResult, error) {
-		if gotOpts != opts {
-			return nil, fmt.Errorf("converter invoked with options %+v, want %+v", gotOpts, opts)
-		}
-		sv := &wrapperspb.StringValue{}
-		if err := proto.Unmarshal(rawProto, sv); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal resource: %v", err)
-		}
-		return &xdslbregistry.ConverterResult{
-			LBConfig:     json.RawMessage(`[{"round_robin": {}}]`),
-			GRPCServices: map[string]*grpcservice.Config{sv.GetValue(): {TargetURI: sv.GetValue()}},
-		}, nil
-	})
-	t.Cleanup(func() { xdslbregistry.UnregisterForTesting(typeURL) })
-
-	tests := []struct {
-		name             string
-		policy           *v3clusterpb.LoadBalancingPolicy
-		wantConfig       string
-		wantGRPCServices map[string]*grpcservice.Config
-	}{
-		{
-			name: "top-level-policy",
-			policy: &v3clusterpb.LoadBalancingPolicy{
-				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
-					{
-						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
-							TypedConfig: testutils.MarshalAny(t, wrapperspb.String("target-1")),
-						},
-					},
-				},
-			},
-			wantConfig:       `[{"round_robin": {}}]`,
-			wantGRPCServices: map[string]*grpcservice.Config{"target-1": {TargetURI: "target-1"}},
-		},
-		{
-			name: "unsupported-policy-skipped",
-			policy: &v3clusterpb.LoadBalancingPolicy{
-				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
-					{
-						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
-							// The type not registered in gRPC Policy registry.
-							TypedConfig: testutils.MarshalAny(t, &v3xdsxdstypepb.TypedStruct{
-								TypeUrl: "type.googleapis.com/myorg.ThisTypeDoesNotExist",
-								Value:   &structpb.Struct{},
-							}),
-						},
-					},
-					{
-						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
-							TypedConfig: testutils.MarshalAny(t, wrapperspb.String("target-2")),
-						},
-					},
-				},
-			},
-			wantConfig:       `[{"round_robin": {}}]`,
-			wantGRPCServices: map[string]*grpcservice.Config{"target-2": {TargetURI: "target-2"}},
-		},
-		{
-			name: "policy-not-selected",
-			policy: &v3clusterpb.LoadBalancingPolicy{
-				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
-					{
-						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
-							TypedConfig: testutils.MarshalAny(t, &v3pickfirstpb.PickFirst{}),
-						},
-					},
-					{
-						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
-							TypedConfig: testutils.MarshalAny(t, wrapperspb.String("target-3")),
-						},
-					},
-				},
-			},
-			wantConfig: `[{"pick_first": {}}]`,
-		},
-		{
-			name: "child-of-wrr-locality",
-			policy: &v3clusterpb.LoadBalancingPolicy{
-				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
-					{
-						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
-							TypedConfig: wrrLocalityAny(t, wrapperspb.String("target-4")),
-						},
-					},
-				},
-			},
-			wantConfig:       `[{"xds_wrr_locality_experimental": {"childPolicy": [{"round_robin": {}}]}}]`,
-			wantGRPCServices: map[string]*grpcservice.Config{"target-4": {TargetURI: "target-4"}},
-		},
-		{
-			name: "grandchild-of-wrr-locality",
-			policy: &v3clusterpb.LoadBalancingPolicy{
-				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
-					{
-						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
-							TypedConfig: wrrLocalityAny(t, wrrLocality(t, wrapperspb.String("target-5"))),
-						},
-					},
-				},
-			},
-			wantConfig:       `[{"xds_wrr_locality_experimental": {"childPolicy": [{"xds_wrr_locality_experimental": {"childPolicy": [{"round_robin": {}}]}}]}}]`,
-			wantGRPCServices: map[string]*grpcservice.Config{"target-5": {TargetURI: "target-5"}},
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			verifyConvertToServiceConfig(t, test.policy, opts, test.wantConfig, test.wantGRPCServices)
-		})
-	}
-}
-
 // verifyConvertToServiceConfig converts the given LB policy proto using opts
 // and verifies that the resulting JSON LB configuration and GRPCServices map
 // match the expected values. It returns the result of the conversion.
-func verifyConvertToServiceConfig(t *testing.T, policy *v3clusterpb.LoadBalancingPolicy, opts xdslbregistry.ConverterOptions, wantConfig string, wantGRPCServices map[string]*grpcservice.Config) *xdslbregistry.ConverterResult {
+func verifyConvertToServiceConfig(t *testing.T, policy *v3clusterpb.LoadBalancingPolicy, opts xdslbregistry.ConverterOptions, wantConfig string, wantGRPCServices map[string]*grpcservice.Config) {
 	t.Helper()
+
 	res, err := xdslbregistry.ConvertToServiceConfig(policy, 0, opts)
 	if err != nil {
 		t.Fatalf("ConvertToServiceConfig(%s) failed: %v", pretty.ToJSON(policy), err)
 	}
+	t.Cleanup(func() {
+		for _, cfg := range res.GRPCServices {
+			cfg.Close()
+		}
+	})
+
 	var got, want []map[string]any
 	if err := json.Unmarshal(res.LBConfig, &got); err != nil {
 		t.Fatalf("Error unmarshalling LB config (%q): %v", res.LBConfig, err)
@@ -593,15 +473,6 @@ func verifyConvertToServiceConfig(t *testing.T, policy *v3clusterpb.LoadBalancin
 	}
 	if diff := cmp.Diff(res.GRPCServices, wantGRPCServices); diff != "" {
 		t.Errorf("ConvertToServiceConfig() returned unexpected GRPCServices, diff (-got +want): %v", diff)
-	}
-	return res
-}
-
-// closeGRPCServices releases the credentials owned by the GrpcService
-// configurations in res.
-func closeGRPCServices(res *xdslbregistry.ConverterResult) {
-	for _, cfg := range res.GRPCServices {
-		cfg.Close()
 	}
 }
 
@@ -708,11 +579,13 @@ func (s) TestConvertToServiceConfig_Autosharding_UntrustedServer(t *testing.T) {
 
 	tests := []struct {
 		name       string
+		desc       string
 		policy     *v3clusterpb.LoadBalancingPolicy
 		wantConfig string
 	}{
 		{
 			name: "default_fields",
+			desc: "Only the required fields are set in the proto, and the optional fields are omitted from the JSON config.",
 			policy: &v3clusterpb.LoadBalancingPolicy{
 				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
 					{
@@ -734,6 +607,7 @@ func (s) TestConvertToServiceConfig_Autosharding_UntrustedServer(t *testing.T) {
 		},
 		{
 			name: "all_fields_populated",
+			desc: "All fields are set in the proto, and are converted to their JSON equivalents.",
 			policy: &v3clusterpb.LoadBalancingPolicy{
 				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
 					{
@@ -759,6 +633,7 @@ func (s) TestConvertToServiceConfig_Autosharding_UntrustedServer(t *testing.T) {
 		},
 		{
 			name: "child_of_wrr_locality",
+			desc: "The autosharding policy is the child of wrr_locality, and the GrpcService in its config is propagated to the top-level result.",
 			policy: &v3clusterpb.LoadBalancingPolicy{
 				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
 					{
@@ -781,10 +656,8 @@ func (s) TestConvertToServiceConfig_Autosharding_UntrustedServer(t *testing.T) {
 			}}]`, wantKey),
 		},
 		{
-			// When the server is untrusted, channel credentials in the
-			// GrpcService proto are ignored in favor of allowed_grpc_services
-			// from the bootstrap config.
 			name: "ignores_proto_creds_and_uses_allowlist",
+			desc: "When the server is untrusted, channel credentials in the GrpcService proto are ignored in favor of allowed_grpc_services from the bootstrap config.",
 			policy: &v3clusterpb.LoadBalancingPolicy{
 				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
 					{
@@ -808,8 +681,8 @@ func (s) TestConvertToServiceConfig_Autosharding_UntrustedServer(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			res := verifyConvertToServiceConfig(t, test.policy, opts, test.wantConfig, wantGRPCServices)
-			t.Cleanup(func() { closeGRPCServices(res) })
+			t.Log(test.desc)
+			verifyConvertToServiceConfig(t, test.policy, opts, test.wantConfig, wantGRPCServices)
 		})
 	}
 }
@@ -847,16 +720,15 @@ func (s) TestConvertToServiceConfig_Autosharding_TrustedServer(t *testing.T) {
 
 	tests := []struct {
 		name             string
+		desc             string
 		policy           *v3clusterpb.LoadBalancingPolicy
 		opts             xdslbregistry.ConverterOptions
 		wantConfig       string
 		wantGRPCServices map[string]*grpcservice.Config
 	}{
 		{
-			// When the server is trusted, allowed_grpc_services is not
-			// required and the channel credentials sent by the management
-			// server in the GrpcService proto are used.
 			name: "without_allowlist_uses_proto_insecure_creds",
+			desc: "When the server is trusted, allowed_grpc_services is not required and the channel credentials sent by the management server in the GrpcService proto are used.",
 			policy: &v3clusterpb.LoadBalancingPolicy{
 				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
 					{
@@ -879,10 +751,8 @@ func (s) TestConvertToServiceConfig_Autosharding_TrustedServer(t *testing.T) {
 			wantGRPCServices: map[string]*grpcservice.Config{wantInsecureKey: wantInsecureGS},
 		},
 		{
-			// Even when allowed_grpc_services contains an entry for the target
-			// URI, a trusted server's GrpcService proto credentials are used
-			// instead of the bootstrap allowlist.
 			name: "ignores_allowlist_and_uses_proto_xds_creds",
+			desc: "Even when allowed_grpc_services contains an entry for the target URI, a trusted server's GrpcService proto credentials are used instead of the bootstrap allowlist.",
 			policy: &v3clusterpb.LoadBalancingPolicy{
 				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
 					{
@@ -908,8 +778,8 @@ func (s) TestConvertToServiceConfig_Autosharding_TrustedServer(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			res := verifyConvertToServiceConfig(t, test.policy, test.opts, test.wantConfig, test.wantGRPCServices)
-			t.Cleanup(func() { closeGRPCServices(res) })
+			t.Log(test.desc)
+			verifyConvertToServiceConfig(t, test.policy, test.opts, test.wantConfig, test.wantGRPCServices)
 		})
 	}
 }
@@ -954,12 +824,14 @@ func (s) TestConvertToServiceConfig_Autosharding_Failure(t *testing.T) {
 
 	tests := []struct {
 		name    string
+		desc    string
 		policy  *v3clusterpb.LoadBalancingPolicy
 		opts    xdslbregistry.ConverterOptions
 		wantErr string
 	}{
 		{
 			name: "corrupt_proto",
+			desc: "The serialized autosharding config cannot be unmarshaled.",
 			policy: &v3clusterpb.LoadBalancingPolicy{
 				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
 					{
@@ -977,6 +849,7 @@ func (s) TestConvertToServiceConfig_Autosharding_Failure(t *testing.T) {
 		},
 		{
 			name: "missing_grpc_service",
+			desc: "The required grpc_service field is not set.",
 			policy: &v3clusterpb.LoadBalancingPolicy{
 				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
 					{
@@ -994,6 +867,7 @@ func (s) TestConvertToServiceConfig_Autosharding_Failure(t *testing.T) {
 		},
 		{
 			name: "untrusted_server_grpc_service_not_allowlisted",
+			desc: "When the server is untrusted, the target URI of the GrpcService must be present in allowed_grpc_services in the bootstrap config.",
 			policy: &v3clusterpb.LoadBalancingPolicy{
 				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
 					{
@@ -1011,10 +885,8 @@ func (s) TestConvertToServiceConfig_Autosharding_Failure(t *testing.T) {
 			wantErr: "is not present in allowed_grpc_services",
 		},
 		{
-			// Even when the target is present in allowed_grpc_services, a
-			// trusted server ignores allowed_grpc_services and requires channel
-			// credentials in the GrpcService proto.
 			name: "trusted_server_missing_proto_channel_creds",
+			desc: "Even when the target is present in allowed_grpc_services, a trusted server ignores allowed_grpc_services and requires channel credentials in the GrpcService proto.",
 			policy: &v3clusterpb.LoadBalancingPolicy{
 				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
 					{
@@ -1033,6 +905,7 @@ func (s) TestConvertToServiceConfig_Autosharding_Failure(t *testing.T) {
 		},
 		{
 			name: "invalid_initial_assignment_timeout_proto",
+			desc: "The initial_assignment_timeout field is outside the range supported by the Duration proto.",
 			policy: &v3clusterpb.LoadBalancingPolicy{
 				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
 					{
@@ -1052,6 +925,7 @@ func (s) TestConvertToServiceConfig_Autosharding_Failure(t *testing.T) {
 		},
 		{
 			name: "zero_initial_assignment_timeout",
+			desc: "The initial_assignment_timeout field is zero, but must be strictly positive.",
 			policy: &v3clusterpb.LoadBalancingPolicy{
 				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
 					{
@@ -1071,6 +945,7 @@ func (s) TestConvertToServiceConfig_Autosharding_Failure(t *testing.T) {
 		},
 		{
 			name: "negative_initial_assignment_timeout",
+			desc: "The initial_assignment_timeout field is negative, but must be strictly positive.",
 			policy: &v3clusterpb.LoadBalancingPolicy{
 				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
 					{
@@ -1092,6 +967,7 @@ func (s) TestConvertToServiceConfig_Autosharding_Failure(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			t.Log(test.desc)
 			_, gotErr := xdslbregistry.ConvertToServiceConfig(test.policy, 0, test.opts)
 			if gotErr == nil || !strings.Contains(gotErr.Error(), test.wantErr) {
 				t.Fatalf("ConvertToServiceConfig() = %v, wantErr %v", gotErr, test.wantErr)
