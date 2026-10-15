@@ -24,6 +24,7 @@ import (
 	"maps"
 	"slices"
 
+	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/experimental/balancer/hostname"
 	"google.golang.org/grpc/experimental/balancer/weight"
 	"google.golang.org/grpc/internal/envconfig"
@@ -48,13 +49,11 @@ type leafClusterConfig struct {
 	// clusterConfig has the cluster update as well as EDS or DNS endpoints
 	// depending on the leaf cluster type.
 	clusterConfig *xdsresource.ClusterConfig
-	// outlierDetection is the Outlier Detection LB configuration for this
-	// leaf cluster.
-	outlierDetection outlierdetection.LBConfig
 	// lbPolicy is the locality and endpoint picking policy for this leaf
 	// cluster. Per gRFC A75, this is the LB policy configured in the leaf
 	// cluster itself, unless GRPC_XDS_AGGREGATE_CLUSTER_BACKWARD_COMPAT is
-	// enabled, in which case it is the LB policy of the aggregate cluster.
+	// enabled and the leaf is a child of an aggregate cluster, in which case it
+	// is the LB policy of the aggregate cluster.
 	lbPolicy *internalserviceconfig.BalancerConfig
 	// Each leaf cluster has a name generator so that the child policies can
 	// reuse names between updates (EDS updates for example).
@@ -184,13 +183,49 @@ func buildLeafClusterConfig(leaf *leafClusterConfig, xdsLBPolicy *internalservic
 		},
 	}
 
-	odCfg := leaf.outlierDetection
+	odCfg, err := parseOutlierDetectionConfig(clusterUpdate.OutlierDetection)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to parse Outlier Detection config for cluster %q: %v", clusterUpdate.ClusterName, err)
+	}
 	odCfg.ChildPolicy = &internalserviceconfig.BalancerConfig{
 		Name:   clusterimpl.Name,
 		Config: ciCfg,
 	}
 
-	return &odCfg, retEndpoints, nil
+	return odCfg, retEndpoints, nil
+}
+
+// parseOutlierDetectionConfig parses the given Outlier Detection JSON config
+// using the registered Outlier Detection LB policy's config parser. A nil
+// config is treated as an empty config, which results in a no-op Outlier
+// Detection configuration.
+func parseOutlierDetectionConfig(odJSON json.RawMessage) (*outlierdetection.LBConfig, error) {
+	odBuilder := balancer.Get(outlierdetection.Name)
+	if odBuilder == nil {
+		// Shouldn't happen, registered through imported Outlier Detection,
+		// defensive programming.
+		return nil, fmt.Errorf("%q LB policy is needed but not registered", outlierdetection.Name)
+	}
+	odParser, ok := odBuilder.(balancer.ConfigParser)
+	if !ok {
+		// Shouldn't happen, imported Outlier Detection builder has this method.
+		return nil, fmt.Errorf("%q LB policy does not implement a config parser", outlierdetection.Name)
+	}
+
+	if odJSON == nil {
+		odJSON = json.RawMessage(`{}`)
+	}
+	lbCfg, err := odParser.ParseConfig(odJSON)
+	if err != nil {
+		return nil, fmt.Errorf("error parsing Outlier Detection config %s: %v", odJSON, err)
+	}
+	odCfg, ok := lbCfg.(*outlierdetection.LBConfig)
+	if !ok {
+		// Shouldn't happen, Parser built at build time with Outlier
+		// Detection builder pulled from gRPC LB Registry.
+		return nil, fmt.Errorf("config parser for Outlier Detection returned config with unexpected type %T: %v", lbCfg, lbCfg)
+	}
+	return odCfg, nil
 }
 
 // buildAggregateClusterConfigJSON builds balancer config for an aggregate
@@ -198,66 +233,36 @@ func buildLeafClusterConfig(leaf *leafClusterConfig, xdsLBPolicy *internalservic
 //
 // The built tree of balancers:
 //
-//	                 ┌────────┐
-//	                 │priority│
-//	                 └┬──────┬┘
-//	                  │      │
-//	┌─────────────────▼─┐  ┌─▼─────────────────┐
-//	│outlier_detection  │  │outlier_detection  │
-//	└────────┬──────────┘  └────────┬──────────┘
-//	         │                      │
-//	┌────────▼──────────┐  ┌────────▼──────────┐
-//	│   cluster_impl    │  │   cluster_impl    │
-//	└────────┬──────────┘  └────────┬──────────┘
-//	         │                      │
-//	     ┌───▼────┐             ┌───▼────┐
-//	     │priority│             │priority│
-//	     └────────┘             └────────┘
+//	    ┌────────┐
+//	    │priority│
+//	    └┬──────┬┘
+//	     │      │
+//	┌────▼┐    ┌▼────┐
+//	│ cds │    │ cds │ (one per leaf cluster, see buildLeafClusterConfigJSON)
+//	└─────┘    └─────┘
 //
-// Each leaf cluster uses its own LB policy (leafClusterConfig.lbPolicy).
-func buildAggregateClusterConfigJSON(leafClusters []*leafClusterConfig) ([]byte, []resolver.Endpoint, error) {
-	pc, endpoints, err := buildAggregateClusterConfig(leafClusters)
+// Each child cds policy builds the configuration and endpoints for its own
+// leaf cluster from the XDSConfig, so no endpoints are returned here.
+func buildAggregateClusterConfigJSON(leafClusterNames []string) ([]byte, error) {
+	ret, err := json.Marshal(buildAggregateClusterConfig(leafClusterNames))
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to build priority config: %v", err)
+		return nil, fmt.Errorf("failed to marshal built priority config struct into json: %v", err)
 	}
-	ret, err := json.Marshal(pc)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to marshal built priority config struct into json: %v", err)
-	}
-	return ret, endpoints, nil
+	return ret, nil
 }
 
-func buildAggregateClusterConfig(leafClusters []*leafClusterConfig) (*priority.LBConfig, []resolver.Endpoint, error) {
-	var (
-		retConfig    = &priority.LBConfig{Children: make(map[string]*priority.Child)}
-		retEndpoints []resolver.Endpoint
-	)
-	for _, leaf := range leafClusters {
-		clusterUpdate := leaf.clusterConfig.Cluster
-		odCfg, endpoints, err := buildLeafClusterConfig(leaf, leaf.lbPolicy)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		pName := clusterUpdate.ClusterName
-		retConfig.Priorities = append(retConfig.Priorities, pName)
-
-		for _, ep := range endpoints {
-			path := hierarchy.FromEndpoint(ep)
-			ep = hierarchy.SetInEndpoint(ep, append([]string{pName}, path...))
-			retEndpoints = append(retEndpoints, ep)
-		}
-
-		isEDS := clusterUpdate.ClusterType == xdsresource.ClusterTypeEDS
-		retConfig.Children[pName] = &priority.Child{
+func buildAggregateClusterConfig(leafClusterNames []string) *priority.LBConfig {
+	retConfig := &priority.LBConfig{Children: make(map[string]*priority.Child, len(leafClusterNames))}
+	for _, name := range leafClusterNames {
+		retConfig.Priorities = append(retConfig.Priorities, name)
+		retConfig.Children[name] = &priority.Child{
 			Config: &internalserviceconfig.BalancerConfig{
-				Name:   outlierdetection.Name,
-				Config: odCfg,
+				Name:   cdsName,
+				Config: &lbConfig{ClusterName: name},
 			},
-			IgnoreReresolutionRequests: isEDS,
 		}
 	}
-	return retConfig, retEndpoints, nil
+	return retConfig
 }
 
 // groupLocalitiesByPriority returns the localities grouped by priority.

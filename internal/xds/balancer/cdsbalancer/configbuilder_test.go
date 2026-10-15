@@ -68,13 +68,6 @@ var (
 			return out
 		}),
 	}
-
-	noopODCfg = outlierdetection.LBConfig{
-		Interval:           iserviceconfig.Duration(10 * time.Second), // default interval
-		BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
-		MaxEjectionTime:    iserviceconfig.Duration(300 * time.Second),
-		MaxEjectionPercent: 10,
-	}
 )
 
 // makeLocalityID creates a clients.Locality with Zone set to
@@ -100,14 +93,6 @@ func makeEndpoint(localityIdx, endpointIdx int, endpointWeight uint32) xdsresour
 			},
 		},
 		Weight: endpointWeight,
-	}
-}
-
-// makeResolverEndpoint creates a resolver.Endpoint with a single address
-// "addr-{localityIdx}-{endpointIdx}".
-func makeResolverEndpoint(localityIdx, endpointIdx int) resolver.Endpoint {
-	return resolver.Endpoint{
-		Addresses: []resolver.Address{{Addr: fmt.Sprintf("addr-%d-%d", localityIdx, endpointIdx)}},
 	}
 }
 
@@ -148,46 +133,8 @@ func (s) TestBuildClusterConfigJSON(t *testing.T) {
 		{
 			name: "aggregate",
 			buildFunc: func() ([]byte, []resolver.Endpoint, error) {
-				return buildAggregateClusterConfigJSON([]*leafClusterConfig{
-					{
-						clusterConfig: &xdsresource.ClusterConfig{
-							Cluster: &xdsresource.ClusterUpdate{
-								ClusterName:     testClusterName,
-								ClusterType:     xdsresource.ClusterTypeEDS,
-								EDSServiceName:  testEDSServiceName,
-								MaxRequests:     newUint32(testMaxRequests),
-								LRSServerConfig: testLRSServerConfig,
-							},
-							EndpointConfig: &xdsresource.EndpointConfig{
-								EDSUpdate: &xdsresource.EndpointsUpdate{
-									Drops: []xdsresource.OverloadDropConfig{{
-										Category:       testDropCategory,
-										DropPercentage: xdsresource.FractionalPercent{Numerator: testDropOverMillion, Denominator: million, PPM: testDropOverMillion},
-									}},
-									Localities: []xdsresource.Locality{
-										makeLocality(0, 20, 0, 2),
-										makeLocality(1, 80, 0, 2),
-										makeLocality(2, 20, 1, 2),
-										makeLocality(3, 80, 1, 2),
-									},
-								},
-							},
-						},
-						childNameGen: newNameGenerator(0),
-					},
-					{
-						clusterConfig: &xdsresource.ClusterConfig{
-							Cluster: &xdsresource.ClusterUpdate{
-								ClusterName: testClusterName2,
-								ClusterType: xdsresource.ClusterTypeLogicalDNS,
-							},
-							EndpointConfig: &xdsresource.EndpointConfig{
-								DNSEndpoints: &xdsresource.DNSUpdate{Endpoints: []resolver.Endpoint{makeResolverEndpoint(4, 0), makeResolverEndpoint(4, 1)}},
-							},
-						},
-						childNameGen: newNameGenerator(1),
-					},
-				})
+				cfg, err := buildAggregateClusterConfigJSON([]string{testClusterName, testClusterName2})
+				return cfg, nil, err
 			},
 			policyName: priority.Name,
 		},
@@ -218,8 +165,7 @@ func (s) TestBuildClusterConfigJSON(t *testing.T) {
 							},
 						},
 					},
-					outlierDetection: noopODCfg,
-					childNameGen:     newNameGenerator(0),
+					childNameGen: newNameGenerator(0),
 				}, &iserviceconfig.BalancerConfig{Name: roundrobin.Name})
 			},
 			policyName: outlierdetection.Name,
@@ -247,169 +193,30 @@ func (s) TestBuildClusterConfigJSON(t *testing.T) {
 	}
 }
 
-// TestBuildAggregateClusterConfig tests aggregate cluster config and endpoint
-// generation under gRFC A75. Each leaf cluster under the top-level priority
-// balancer is wrapped in outlier_detection -> cluster_impl -> priority.
+// TestBuildAggregateClusterConfig verifies that, per gRFC A75, an aggregate
+// cluster is built as a priority policy with one cds child policy per leaf
+// cluster, in the order of the leaf clusters.
 func (s) TestBuildAggregateClusterConfig(t *testing.T) {
-	testutils.SetEnvConfig(t, &envconfig.PickFirstWeightedShuffling, false)
-
-	loc0 := makeLocality(0, 20, 0, 2)
-	loc1 := makeLocality(1, 80, 0, 2)
-	loc2 := makeLocality(2, 20, 1, 2)
-	loc3 := makeLocality(3, 80, 1, 2)
-	dnsEndpoints := []resolver.Endpoint{makeResolverEndpoint(4, 0), makeResolverEndpoint(4, 1)}
-
-	gotConfig, gotEndpoints, err := buildAggregateClusterConfig([]*leafClusterConfig{
-		{
-			// EDS leaf cluster with two locality priorities (priority-0-0 and
-			// priority-0-1) under a single outlier_detection and cluster_impl
-			// policy.
-			clusterConfig: &xdsresource.ClusterConfig{
-				Cluster: &xdsresource.ClusterUpdate{
-					ClusterName:    testClusterName,
-					ClusterType:    xdsresource.ClusterTypeEDS,
-					EDSServiceName: testEDSServiceName,
-				},
-				EndpointConfig: &xdsresource.EndpointConfig{
-					EDSUpdate: &xdsresource.EndpointsUpdate{
-						Localities: []xdsresource.Locality{
-							loc0,
-							loc1,
-							loc2,
-							loc3,
-						},
-					},
-				},
-			},
-			outlierDetection: noopODCfg,
-			lbPolicy:         &iserviceconfig.BalancerConfig{Name: roundrobin.Name},
-			childNameGen:     newNameGenerator(0),
-		},
-		{
-			// Logical DNS leaf cluster wrapped in outlier_detection and
-			// cluster_impl with a single inner priority (priority-1).
-			clusterConfig: &xdsresource.ClusterConfig{
-				Cluster: &xdsresource.ClusterUpdate{
-					ClusterName: testClusterName2,
-					ClusterType: xdsresource.ClusterTypeLogicalDNS,
-				},
-				EndpointConfig: &xdsresource.EndpointConfig{
-					DNSEndpoints: &xdsresource.DNSUpdate{
-						Endpoints: dnsEndpoints,
-					},
-				},
-			},
-			outlierDetection: noopODCfg,
-			lbPolicy:         &iserviceconfig.BalancerConfig{Name: pickfirst.Name},
-			childNameGen:     newNameGenerator(1),
-		},
-	})
-	if err != nil {
-		t.Fatalf("buildAggregateClusterConfig() failed: %v", err)
-	}
-
-	p0Config := noopODCfg
-	p0Config.ChildPolicy = &iserviceconfig.BalancerConfig{
-		Name: clusterimpl.Name,
-		Config: &clusterimpl.LBConfig{
-			Cluster: testClusterName,
-			ChildPolicy: &iserviceconfig.BalancerConfig{
-				Name: priority.Name,
-				Config: &priority.LBConfig{
-					Children: map[string]*priority.Child{
-						"priority-0-0": {
-							Config:                     &iserviceconfig.BalancerConfig{Name: roundrobin.Name},
-							IgnoreReresolutionRequests: true,
-						},
-						"priority-0-1": {
-							Config:                     &iserviceconfig.BalancerConfig{Name: roundrobin.Name},
-							IgnoreReresolutionRequests: true,
-						},
-					},
-					Priorities: []string{"priority-0-0", "priority-0-1"},
-				},
-			},
-		},
-	}
-
-	p1Config := noopODCfg
-	p1Config.ChildPolicy = &iserviceconfig.BalancerConfig{
-		Name: clusterimpl.Name,
-		Config: &clusterimpl.LBConfig{
-			Cluster: testClusterName2,
-			ChildPolicy: &iserviceconfig.BalancerConfig{
-				Name: priority.Name,
-				Config: &priority.LBConfig{
-					Children: map[string]*priority.Child{
-						"priority-1": {
-							Config:                     &iserviceconfig.BalancerConfig{Name: pickfirst.Name},
-							IgnoreReresolutionRequests: false,
-						},
-					},
-					Priorities: []string{"priority-1"},
-				},
-			},
-		},
-	}
-
-	wantConfig := &priority.LBConfig{
+	got := buildAggregateClusterConfig([]string{testClusterName, testClusterName2})
+	want := &priority.LBConfig{
 		Children: map[string]*priority.Child{
 			testClusterName: {
 				Config: &iserviceconfig.BalancerConfig{
-					Name:   outlierdetection.Name,
-					Config: &p0Config,
+					Name:   cdsName,
+					Config: &lbConfig{ClusterName: testClusterName},
 				},
-				IgnoreReresolutionRequests: true,
 			},
 			testClusterName2: {
 				Config: &iserviceconfig.BalancerConfig{
-					Name:   outlierdetection.Name,
-					Config: &p1Config,
+					Name:   cdsName,
+					Config: &lbConfig{ClusterName: testClusterName2},
 				},
-				IgnoreReresolutionRequests: false,
 			},
 		},
 		Priorities: []string{testClusterName, testClusterName2},
 	}
-	if diff := cmp.Diff(gotConfig, wantConfig); diff != "" {
-		t.Errorf("buildAggregateClusterConfig() config diff (-got +want) %v", diff)
-	}
-
-	// Verify that each endpoint's hierarchy path has the leaf cluster name
-	// prepended ([leafClusterName, priorityName, localityStr]).
-	wantEndpoints := []resolver.Endpoint{
-		hierarchy.SetInEndpoint(testEndpointWithAttrs(loc0.Endpoints[0].ResolverEndpoint, 20, 20*1, "priority-0-0", &loc0.ID), []string{testClusterName, "priority-0-0", xdsinternal.LocalityString(loc0.ID)}),
-		hierarchy.SetInEndpoint(testEndpointWithAttrs(loc0.Endpoints[1].ResolverEndpoint, 20, 20*1, "priority-0-0", &loc0.ID), []string{testClusterName, "priority-0-0", xdsinternal.LocalityString(loc0.ID)}),
-		hierarchy.SetInEndpoint(testEndpointWithAttrs(loc1.Endpoints[0].ResolverEndpoint, 80, 80*1, "priority-0-0", &loc1.ID), []string{testClusterName, "priority-0-0", xdsinternal.LocalityString(loc1.ID)}),
-		hierarchy.SetInEndpoint(testEndpointWithAttrs(loc1.Endpoints[1].ResolverEndpoint, 80, 80*1, "priority-0-0", &loc1.ID), []string{testClusterName, "priority-0-0", xdsinternal.LocalityString(loc1.ID)}),
-		hierarchy.SetInEndpoint(testEndpointWithAttrs(loc2.Endpoints[0].ResolverEndpoint, 20, 20*1, "priority-0-1", &loc2.ID), []string{testClusterName, "priority-0-1", xdsinternal.LocalityString(loc2.ID)}),
-		hierarchy.SetInEndpoint(testEndpointWithAttrs(loc2.Endpoints[1].ResolverEndpoint, 20, 20*1, "priority-0-1", &loc2.ID), []string{testClusterName, "priority-0-1", xdsinternal.LocalityString(loc2.ID)}),
-		hierarchy.SetInEndpoint(testEndpointWithAttrs(loc3.Endpoints[0].ResolverEndpoint, 80, 80*1, "priority-0-1", &loc3.ID), []string{testClusterName, "priority-0-1", xdsinternal.LocalityString(loc3.ID)}),
-		hierarchy.SetInEndpoint(testEndpointWithAttrs(loc3.Endpoints[1].ResolverEndpoint, 80, 80*1, "priority-0-1", &loc3.ID), []string{testClusterName, "priority-0-1", xdsinternal.LocalityString(loc3.ID)}),
-		testEndpointForDNS(dnsEndpoints, 1, []string{testClusterName2, "priority-1", xdsinternal.LocalityString(clients.Locality{})}),
-	}
-	if diff := cmp.Diff(wantEndpoints, gotEndpoints, endpointCmpOpts); diff != "" {
-		t.Errorf("buildAggregateClusterConfig() endpoints diff (-want +got) %v", diff)
-	}
-}
-
-// Test verifies that buildAggregateClusterConfig returns an error when passed
-// a cluster with an unsupported cluster type.
-func (s) TestBuildAggregateClusterConfig_UnsupportedClusterType(t *testing.T) {
-	_, _, err := buildAggregateClusterConfig([]*leafClusterConfig{
-		{
-			clusterConfig: &xdsresource.ClusterConfig{
-				Cluster: &xdsresource.ClusterUpdate{
-					ClusterName: testClusterName,
-					ClusterType: xdsresource.ClusterTypeAggregate,
-				},
-			},
-			outlierDetection: noopODCfg,
-			childNameGen:     newNameGenerator(0),
-		},
-	})
-	if err == nil {
-		t.Fatal("buildAggregateClusterConfig() succeeded when expected to fail")
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("buildAggregateClusterConfig() diff (-want +got):\n%s", diff)
 	}
 }
 
@@ -483,8 +290,7 @@ func (s) TestBuildLeafClusterConfig_DNS(t *testing.T) {
 						},
 						EndpointConfig: &xdsresource.EndpointConfig{DNSEndpoints: &xdsresource.DNSUpdate{Endpoints: tt.endpoints}},
 					},
-					outlierDetection: noopODCfg,
-					childNameGen:     newNameGenerator(3),
+					childNameGen: newNameGenerator(3),
 				},
 				tt.xdsLBPolicy)
 			if err != nil {
@@ -575,8 +381,7 @@ func (s) TestBuildLeafClusterConfig_EDS_PickFirstWeightedShuffling_Disabled(t *t
 					},
 				},
 			},
-			outlierDetection: noopODCfg,
-			childNameGen:     newNameGenerator(2),
+			childNameGen: newNameGenerator(2),
 		},
 		nil,
 	)
@@ -676,8 +481,7 @@ func (s) TestBuildLeafClusterConfig_EDS_PickFirstWeightedShuffling_Enabled(t *te
 					},
 				},
 			},
-			outlierDetection: noopODCfg,
-			childNameGen:     newNameGenerator(2),
+			childNameGen: newNameGenerator(2),
 		},
 		nil,
 	)
@@ -759,8 +563,7 @@ func (s) TestBuildLeafClusterConfig_UnsupportedClusterType(t *testing.T) {
 					ClusterType: xdsresource.ClusterTypeAggregate,
 				},
 			},
-			outlierDetection: noopODCfg,
-			childNameGen:     newNameGenerator(0),
+			childNameGen: newNameGenerator(0),
 		},
 		nil,
 	)

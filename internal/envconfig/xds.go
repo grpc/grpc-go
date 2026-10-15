@@ -110,5 +110,8 @@ var (
 	// temporary migration mechanism and will be removed in a future release.
 	// For more details, see:
 	// https://github.com/grpc/proposal/blob/master/A75-xds-aggregate-cluster-behavior-fixes.md
+	//
+	// TODO: Remove this, and all the code that depends on it, after a couple
+	// of releases.
 	XDSAggregateClusterBackwardCompat = boolFromEnv("GRPC_XDS_AGGREGATE_CLUSTER_BACKWARD_COMPAT", false)
 )

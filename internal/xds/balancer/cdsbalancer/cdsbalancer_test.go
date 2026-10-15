@@ -113,15 +113,15 @@ func waitForResourceNames(ctx context.Context, resourceNamesCh chan []string, wa
 }
 
 // isAggregatePriorityConfig reports whether ccs contains a priority.LBConfig
-// for an aggregate cluster (whose children are outlier_detection policies) as
-// opposed to a leaf cluster (whose children are locality-picking policies).
+// for an aggregate cluster (whose children are cds policies) as opposed to a
+// leaf cluster (whose children are locality-picking policies).
 func isAggregatePriorityConfig(ccs balancer.ClientConnState) bool {
 	pCfg, ok := ccs.BalancerConfig.(*priority.LBConfig)
 	if !ok {
 		return false
 	}
 	for _, child := range pCfg.Children {
-		if child.Config != nil && child.Config.Name == outlierdetection.Name {
+		if child.Config != nil && child.Config.Name == cdsName {
 			return true
 		}
 	}
@@ -185,11 +185,15 @@ func registerWrappedPriorityPolicy(ctx context.Context, t *testing.T) (chan serv
 	return lbCfgCh, resolverErrCh, exitIdleEvent, closeEvent
 }
 
-func registerWrappedOutlierDetectionPolicy(ctx context.Context, t *testing.T) chan serviceconfig.LoadBalancingConfig {
+// Registers a wrapped outlier_detection LB policy (the child policy of the cds
+// LB policy of a leaf cluster) for the duration of this test that retains all
+// the functionality of the former, but makes the received ClientConnState
+// (configuration and endpoints) available for inspection by the test.
+func registerWrappedOutlierDetectionPolicy(ctx context.Context, t *testing.T) chan balancer.ClientConnState {
 	odBuilder := balancer.Get(outlierdetection.Name)
 	internal.BalancerUnregister(odBuilder.Name())
 
-	lbCfgCh := make(chan serviceconfig.LoadBalancingConfig, 1)
+	ccsCh := make(chan balancer.ClientConnState, 1)
 
 	stub.Register(outlierdetection.Name, stub.BalancerFuncs{
 		Init: func(bd *stub.BalancerData) {
@@ -200,7 +204,7 @@ func registerWrappedOutlierDetectionPolicy(ctx context.Context, t *testing.T) ch
 		},
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
 			select {
-			case lbCfgCh <- ccs.BalancerConfig:
+			case ccsCh <- ccs:
 			case <-ctx.Done():
 			}
 			return bd.ChildBalancer.UpdateClientConnState(ccs)
@@ -211,7 +215,7 @@ func registerWrappedOutlierDetectionPolicy(ctx context.Context, t *testing.T) ch
 	})
 	t.Cleanup(func() { balancer.Register(odBuilder) })
 
-	return lbCfgCh
+	return ccsCh
 }
 
 // setupDNS unregisters the DNS resolver and registers a manual resolver for the
@@ -307,6 +311,47 @@ func waitForLoadBalancingConfig(ctx context.Context, lbCfgCh chan serviceconfig.
 				return lastErr
 			}
 			return fmt.Errorf("timeout when waiting for child policy to receive its configuration")
+		}
+	}
+}
+
+// waitForLeafClusterState waits until an outlier_detection policy (i.e. the
+// child policy of a leaf cluster's cds policy) receives the given
+// configuration together with an endpoint having the given address. If
+// wantAddr is empty, the endpoints are not verified.
+func waitForLeafClusterState(ctx context.Context, ccsCh chan balancer.ClientConnState, wantCfg serviceconfig.LoadBalancingConfig, wantAddr string) error {
+	wantJSON, err := json.Marshal(wantCfg)
+	if err != nil {
+		return fmt.Errorf("failed to marshal expected config to JSON: %v", err)
+	}
+	var lastErr error
+	for {
+		select {
+		case ccs := <-ccsCh:
+			gotJSON, err := json.Marshal(ccs.BalancerConfig)
+			if err != nil {
+				return fmt.Errorf("failed to marshal received config to JSON: %v", err)
+			}
+			if diff := cmp.Diff(string(wantJSON), string(gotJSON)); diff != "" {
+				lastErr = fmt.Errorf("unexpected config diff (-want +got):\n%s", diff)
+				continue
+			}
+			if wantAddr == "" {
+				return nil
+			}
+			for _, ep := range ccs.ResolverState.Endpoints {
+				for _, addr := range ep.Addresses {
+					if addr.Addr == wantAddr {
+						return nil
+					}
+				}
+			}
+			lastErr = fmt.Errorf("received endpoints %v, want an endpoint with address %q", ccs.ResolverState.Endpoints, wantAddr)
+		case <-ctx.Done():
+			if lastErr != nil {
+				return lastErr
+			}
+			return fmt.Errorf("timeout waiting for leaf cluster state")
 		}
 	}
 }
@@ -692,7 +737,7 @@ func (s) TestClusterUpdate_Success(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
-			lbCfgCh := registerWrappedOutlierDetectionPolicy(ctx, t)
+			odStateCh := registerWrappedOutlierDetectionPolicy(ctx, t)
 			mgmtServer, nodeID, _ := setupWithManagementServer(t, nil, nil)
 			if err := mgmtServer.Update(ctx, e2e.UpdateOptions{
 				NodeID:    nodeID,
@@ -704,7 +749,7 @@ func (s) TestClusterUpdate_Success(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if err := waitForLoadBalancingConfig(ctx, lbCfgCh, test.wantChildCfg); err != nil {
+			if err := waitForLeafClusterState(ctx, odStateCh, test.wantChildCfg, ""); err != nil {
 				t.Fatal(err)
 			}
 		})
