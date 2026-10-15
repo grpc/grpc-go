@@ -169,6 +169,16 @@ func (p swappableBufferPool) Get(length int) *[]byte {
 	return pool.Get(length)
 }
 
+func (p swappableBufferPool) GetUninitialized(length int) *[]byte {
+	var pool mem.BufferPool
+	if useNopBufferPool.Load() {
+		pool = mem.NopBufferPool{}
+	} else {
+		pool = p.BufferPool
+	}
+	return pool.GetUninitialized(length)
+}
+
 func (p swappableBufferPool) Put(i *[]byte) {
 	if useNopBufferPool.Load() {
 		return

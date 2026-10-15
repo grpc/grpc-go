@@ -206,6 +206,11 @@ func (p *checkBufferPool) Get(size int) *[]byte {
 	return &b
 }
 
+func (p *checkBufferPool) GetUninitialized(size int) *[]byte {
+	b := make([]byte, size)
+	return &b
+}
+
 func (p *checkBufferPool) Put(bs *[]byte) {
 	p.puts = append(p.puts, *bs)
 }
