@@ -447,7 +447,7 @@ func (s) TestConvertToServiceConfigFailure(t *testing.T) {
 
 // verifyConvertToServiceConfig converts the given LB policy proto using opts
 // and verifies that the resulting JSON LB configuration and GRPCServices map
-// match the expected values. It returns the result of the conversion.
+// match the expected values.
 func verifyConvertToServiceConfig(t *testing.T, policy *v3clusterpb.LoadBalancingPolicy, opts xdslbregistry.ConverterOptions, wantConfig string, wantGRPCServices map[string]*grpcservice.Config) {
 	t.Helper()
 
