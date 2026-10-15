@@ -21,6 +21,7 @@
 package grpcservice
 
 import (
+	"encoding/base64"
 	"fmt"
 	"maps"
 	"net/url"
@@ -264,10 +265,21 @@ func parseInitialMetadata(headers []*v3corepb.HeaderValue) (metadata.MD, error) 
 	md := metadata.MD{}
 	for _, h := range headers {
 		key := h.GetKey()
-		// raw_value takes precedence over the legacy value field.
 		val := h.GetValue()
-		if len(h.GetRawValue()) > 0 {
-			val = string(h.GetRawValue())
+		if raw := h.GetRawValue(); len(raw) > 0 {
+			// raw_value takes precedence over the legacy value field and
+			// already holds the raw bytes.
+			val = string(raw)
+		} else if strings.HasSuffix(key, "-bin") {
+			// The string value field cannot carry arbitrary binary data, so
+			// binary header values arrive base64-encoded. Decode into the
+			// raw bytes the transport expects for -bin keys: it re-encodes
+			// on send, so storing the encoded form would double-encode.
+			b, err := decodeBase64HeaderValue(val)
+			if err != nil {
+				return nil, fmt.Errorf("grpcservice: invalid base64 value for binary header key %q: %v", key, err)
+			}
+			val = string(b)
 		}
 		if err := validateHeaderKey(key); err != nil {
 			return nil, fmt.Errorf("grpcservice: invalid header key %q: %v", key, err)
@@ -278,6 +290,16 @@ func parseInitialMetadata(headers []*v3corepb.HeaderValue) (metadata.MD, error) 
 		md.Append(key, val)
 	}
 	return md, nil
+}
+
+// decodeBase64HeaderValue decodes a base64 value, accepting both padded and
+// unpadded forms, mirroring internal/transport.decodeBinHeader.
+func decodeBase64HeaderValue(v string) ([]byte, error) {
+	if len(v)%4 == 0 {
+		// Input was padded, or padding was not necessary.
+		return base64.StdEncoding.DecodeString(v)
+	}
+	return base64.RawStdEncoding.DecodeString(v)
 }
 
 func validateHeaderKey(key string) error {

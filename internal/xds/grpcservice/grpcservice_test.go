@@ -20,6 +20,7 @@ package grpcservice
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -283,6 +284,43 @@ func (s) TestParse(t *testing.T) {
 				InitialMetadata:    metadata.MD{"key-b": {"b"}, "key-a": {"raw-a"}},
 				ChannelCredentials: xdscreds.NewChannelCreds(nil, protoIdentity(insecurePlugin), nil),
 			},
+		},
+		{
+			name: "initial_metadata_bin_header",
+			gs: func() *v3corepb.GrpcService {
+				gs := googleGrpcService(target, []*anypb.Any{insecurePlugin}, nil, nil)
+				gs.InitialMetadata = []*v3corepb.HeaderValue{
+					// The string value field can only carry binary data
+					// base64-encoded; it must be decoded into raw bytes.
+					{Key: "data-bin", Value: base64.StdEncoding.EncodeToString([]byte("hello"))},
+					// Unpadded base64 is accepted as well.
+					{Key: "unpadded-bin", Value: base64.RawStdEncoding.EncodeToString([]byte("hell"))},
+					// raw_value already holds the raw bytes and wins over
+					// the legacy value field without any decoding.
+					{Key: "skip-bin", Value: "aGVsbG8=", RawValue: []byte("raw-bytes")},
+				}
+				return gs
+			}(),
+			sc:     trustedServerConfig(t),
+			config: bootstrapConfig(t, "{}"),
+			want: &Config{
+				TargetURI:          target,
+				InitialMetadata:    metadata.MD{"data-bin": {"hello"}, "unpadded-bin": {"hell"}, "skip-bin": {"raw-bytes"}},
+				ChannelCredentials: xdscreds.NewChannelCreds(nil, protoIdentity(insecurePlugin), nil),
+			},
+		},
+		{
+			name: "initial_metadata_bin_header_invalid_base64",
+			gs: func() *v3corepb.GrpcService {
+				gs := googleGrpcService(target, []*anypb.Any{insecurePlugin}, nil, nil)
+				gs.InitialMetadata = []*v3corepb.HeaderValue{
+					{Key: "data-bin", Value: "not-valid-base64!!!"},
+				}
+				return gs
+			}(),
+			sc:      trustedServerConfig(t),
+			config:  bootstrapConfig(t, "{}"),
+			wantErr: "invalid base64",
 		},
 	}
 
