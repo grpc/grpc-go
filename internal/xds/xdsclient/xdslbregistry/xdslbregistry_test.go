@@ -29,12 +29,14 @@ import (
 	"github.com/google/go-cmp/cmp"
 	_ "google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/internal/balancer/stub"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/pretty"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/xds/balancer/wrrlocality"
 	"google.golang.org/grpc/internal/xds/bootstrap"
+	xdscreds "google.golang.org/grpc/internal/xds/credentials"
 	"google.golang.org/grpc/internal/xds/grpcservice"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdslbregistry"
 	_ "google.golang.org/grpc/xds" // Register the xDS LB Registry Converters.
@@ -48,6 +50,8 @@ import (
 	v3xdsxdstypepb "github.com/cncf/xds/go/xds/type/v3"
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	xdscredspb "github.com/envoyproxy/go-control-plane/envoy/extensions/grpc_service/channel_credentials/xds/v3"
+	v3autoshardingpb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/autosharding/v3"
 	v3clientsideweightedroundrobinpb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/client_side_weighted_round_robin/v3"
 	v3leastrequestpb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/least_request/v3"
 	v3maglevpb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/maglev/v3"
@@ -441,146 +445,34 @@ func (s) TestConvertToServiceConfigFailure(t *testing.T) {
 	}
 }
 
-// TestConvertToServiceConfig_GRPCServices tests that the GrpcServices returned
-// by converters are returned by the xDS LB policy registry only for the policy
-// that is selected, that converters of policies with child policies propagate
-// the GrpcServices returned for their children, and that the converter options
-// are passed to converters at every level of the LB policy tree.
-func (s) TestConvertToServiceConfig_GRPCServices(t *testing.T) {
-	bootstrapCfg := &bootstrap.Config{}
-	serverCfg := &bootstrap.ServerConfig{}
-	opts := xdslbregistry.ConverterOptions{BootstrapConfig: bootstrapCfg, ServerConfig: serverCfg}
+// verifyConvertToServiceConfig converts the given LB policy proto using opts
+// and verifies that the resulting JSON LB configuration and GRPCServices map
+// match the expected values.
+func verifyConvertToServiceConfig(t *testing.T, policy *v3clusterpb.LoadBalancingPolicy, opts xdslbregistry.ConverterOptions, wantConfig string, wantGRPCServices map[string]*grpcservice.Config) {
+	t.Helper()
 
-	// Register a converter for the StringValue proto type, which pretends that
-	// the LB policy configuration being converted contains a GrpcService proto
-	// whose target URI is the value of the StringValue.
-	const typeURL = "type.googleapis.com/google.protobuf.StringValue"
-	xdslbregistry.Register(typeURL, func(rawProto []byte, _ int, gotOpts xdslbregistry.ConverterOptions) (*xdslbregistry.ConverterResult, error) {
-		if gotOpts != opts {
-			return nil, fmt.Errorf("converter invoked with options %+v, want %+v", gotOpts, opts)
-		}
-		sv := &wrapperspb.StringValue{}
-		if err := proto.Unmarshal(rawProto, sv); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal resource: %v", err)
-		}
-		return &xdslbregistry.ConverterResult{
-			LBConfig:     json.RawMessage(`[{"round_robin": {}}]`),
-			GRPCServices: map[string]*grpcservice.Config{sv.GetValue(): {TargetURI: sv.GetValue()}},
-		}, nil
-	})
-	t.Cleanup(func() { xdslbregistry.UnregisterForTesting(typeURL) })
-
-	tests := []struct {
-		name             string
-		policy           *v3clusterpb.LoadBalancingPolicy
-		wantConfig       string
-		wantGRPCServices map[string]*grpcservice.Config
-	}{
-		{
-			name: "top-level-policy",
-			policy: &v3clusterpb.LoadBalancingPolicy{
-				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
-					{
-						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
-							TypedConfig: testutils.MarshalAny(t, wrapperspb.String("target-1")),
-						},
-					},
-				},
-			},
-			wantConfig:       `[{"round_robin": {}}]`,
-			wantGRPCServices: map[string]*grpcservice.Config{"target-1": {TargetURI: "target-1"}},
-		},
-		{
-			name: "unsupported-policy-skipped",
-			policy: &v3clusterpb.LoadBalancingPolicy{
-				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
-					{
-						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
-							// The type not registered in gRPC Policy registry.
-							TypedConfig: testutils.MarshalAny(t, &v3xdsxdstypepb.TypedStruct{
-								TypeUrl: "type.googleapis.com/myorg.ThisTypeDoesNotExist",
-								Value:   &structpb.Struct{},
-							}),
-						},
-					},
-					{
-						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
-							TypedConfig: testutils.MarshalAny(t, wrapperspb.String("target-2")),
-						},
-					},
-				},
-			},
-			wantConfig:       `[{"round_robin": {}}]`,
-			wantGRPCServices: map[string]*grpcservice.Config{"target-2": {TargetURI: "target-2"}},
-		},
-		{
-			name: "policy-not-selected",
-			policy: &v3clusterpb.LoadBalancingPolicy{
-				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
-					{
-						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
-							TypedConfig: testutils.MarshalAny(t, &v3pickfirstpb.PickFirst{}),
-						},
-					},
-					{
-						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
-							TypedConfig: testutils.MarshalAny(t, wrapperspb.String("target-3")),
-						},
-					},
-				},
-			},
-			wantConfig: `[{"pick_first": {}}]`,
-		},
-		{
-			name: "child-of-wrr-locality",
-			policy: &v3clusterpb.LoadBalancingPolicy{
-				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
-					{
-						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
-							TypedConfig: wrrLocalityAny(t, wrapperspb.String("target-4")),
-						},
-					},
-				},
-			},
-			wantConfig:       `[{"xds_wrr_locality_experimental": {"childPolicy": [{"round_robin": {}}]}}]`,
-			wantGRPCServices: map[string]*grpcservice.Config{"target-4": {TargetURI: "target-4"}},
-		},
-		{
-			name: "grandchild-of-wrr-locality",
-			policy: &v3clusterpb.LoadBalancingPolicy{
-				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
-					{
-						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
-							TypedConfig: wrrLocalityAny(t, wrrLocality(t, wrapperspb.String("target-5"))),
-						},
-					},
-				},
-			},
-			wantConfig:       `[{"xds_wrr_locality_experimental": {"childPolicy": [{"xds_wrr_locality_experimental": {"childPolicy": [{"round_robin": {}}]}}]}}]`,
-			wantGRPCServices: map[string]*grpcservice.Config{"target-5": {TargetURI: "target-5"}},
-		},
+	res, err := xdslbregistry.ConvertToServiceConfig(policy, 0, opts)
+	if err != nil {
+		t.Fatalf("ConvertToServiceConfig(%s) failed: %v", pretty.ToJSON(policy), err)
 	}
+	t.Cleanup(func() {
+		for _, cfg := range res.GRPCServices {
+			cfg.Close()
+		}
+	})
 
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			res, err := xdslbregistry.ConvertToServiceConfig(test.policy, 0, opts)
-			if err != nil {
-				t.Fatalf("ConvertToServiceConfig(%s) failed: %v", pretty.ToJSON(test.policy), err)
-			}
-			var got, want []map[string]any
-			if err := json.Unmarshal(res.LBConfig, &got); err != nil {
-				t.Fatalf("Error unmarshalling LB config (%q): %v", res.LBConfig, err)
-			}
-			if err := json.Unmarshal([]byte(test.wantConfig), &want); err != nil {
-				t.Fatalf("Error unmarshalling wantConfig (%q): %v", test.wantConfig, err)
-			}
-			if diff := cmp.Diff(got, want); diff != "" {
-				t.Errorf("ConvertToServiceConfig() returned unexpected LB config, diff (-got +want): %v", diff)
-			}
-			if diff := cmp.Diff(res.GRPCServices, test.wantGRPCServices); diff != "" {
-				t.Errorf("ConvertToServiceConfig() returned unexpected GRPCServices, diff (-got +want): %v", diff)
-			}
-		})
+	var got, want []map[string]any
+	if err := json.Unmarshal(res.LBConfig, &got); err != nil {
+		t.Fatalf("Error unmarshalling LB config (%q): %v", res.LBConfig, err)
+	}
+	if err := json.Unmarshal([]byte(wantConfig), &want); err != nil {
+		t.Fatalf("Error unmarshalling wantConfig (%q): %v", wantConfig, err)
+	}
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("ConvertToServiceConfig() returned unexpected LB config, diff (-got +want): %v", diff)
+	}
+	if diff := cmp.Diff(res.GRPCServices, wantGRPCServices); diff != "" {
+		t.Errorf("ConvertToServiceConfig() returned unexpected GRPCServices, diff (-got +want): %v", diff)
 	}
 }
 
@@ -605,4 +497,481 @@ func wrrLocality(t *testing.T, m proto.Message) *v3wrrlocalitypb.WrrLocality {
 // marshaled as an any with an any child set to the marshaled proto message.
 func wrrLocalityAny(t *testing.T, m proto.Message) *anypb.Any {
 	return testutils.MarshalAny(t, wrrLocality(t, m))
+}
+
+const insecureCredsTypeURL = "type.googleapis.com/envoy.extensions.grpc_service.channel_credentials.insecure.v3.InsecureCredentials"
+
+// autoshardingConverterOptions builds ConverterOptions for testing the
+// autosharding LB policy converter. If allowedTarget is non-empty, it is added
+// to the bootstrap configuration's allowed_grpc_services map with insecure
+// channel credentials. If trustedServer is true, the server configuration
+// includes the "trusted_xds_server" feature.
+func autoshardingConverterOptions(t *testing.T, allowedTarget string, trustedServer bool) xdslbregistry.ConverterOptions {
+	t.Helper()
+	var allowedJSON json.RawMessage
+	if allowedTarget != "" {
+		allowed := map[string]json.RawMessage{
+			allowedTarget: json.RawMessage(`{"channel_creds": [{"type": "insecure"}]}`),
+		}
+		var err error
+		allowedJSON, err = json.Marshal(allowed)
+		if err != nil {
+			t.Fatalf("Failed to marshal allowed_grpc_services: %v", err)
+		}
+	}
+	contents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
+		Servers:             json.RawMessage(`[{"server_uri": "passthrough:///unused", "channel_creds": [{"type": "insecure"}]}]`),
+		Node:                json.RawMessage(`{"id": "test-node"}`),
+		AllowedGRPCServices: allowedJSON,
+	})
+	if err != nil {
+		t.Fatalf("NewContentsForTesting() failed: %v", err)
+	}
+	bootstrapCfg, err := bootstrap.NewConfigFromContents(contents)
+	if err != nil {
+		t.Fatalf("NewConfigFromContents() failed: %v", err)
+	}
+	serverOpts := bootstrap.ServerConfigTestingOptions{URI: "xds-server:1234"}
+	if trustedServer {
+		serverOpts.ServerFeatures = []string{"trusted_xds_server"}
+	}
+	serverCfg, err := bootstrap.ServerConfigForTesting(serverOpts)
+	if err != nil {
+		t.Fatalf("ServerConfigForTesting() failed: %v", err)
+	}
+	return xdslbregistry.ConverterOptions{
+		BootstrapConfig: bootstrapCfg,
+		ServerConfig:    serverCfg,
+	}
+}
+
+// googleGrpcService returns a GrpcService proto configured with the GoogleGrpc
+// target specifier set to targetURI and optional channel credential plugins.
+func googleGrpcService(targetURI string, channelCreds ...*anypb.Any) *v3corepb.GrpcService {
+	return &v3corepb.GrpcService{
+		TargetSpecifier: &v3corepb.GrpcService_GoogleGrpc_{
+			GoogleGrpc: &v3corepb.GrpcService_GoogleGrpc{
+				TargetUri:                targetURI,
+				ChannelCredentialsPlugin: channelCreds,
+			},
+		},
+	}
+}
+
+// Tests successful conversion of the autosharding LB policy configuration when
+// received from an untrusted xDS management server, verifying that credentials
+// from allowed_grpc_services in the bootstrap configuration are used.
+func (s) TestConvertToServiceConfig_Autosharding_UntrustedServer(t *testing.T) {
+	testutils.SetEnvConfig(t, &envconfig.XDSAutoshardingEnabled, true)
+
+	const shardingServiceURI = "dns:///sharding-service:443"
+	opts := autoshardingConverterOptions(t, shardingServiceURI, false)
+	xdsWithInsecureFallbackPlugin := testutils.MarshalAny(t, &xdscredspb.XdsCredentials{
+		FallbackCredentials: &anypb.Any{TypeUrl: insecureCredsTypeURL},
+	})
+
+	wantGS := &grpcservice.Config{
+		TargetURI:          shardingServiceURI,
+		ChannelCredentials: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "insecure"}, nil),
+	}
+	wantKey := wantGS.Key()
+	wantGRPCServices := map[string]*grpcservice.Config{wantKey: wantGS}
+
+	tests := []struct {
+		name       string
+		desc       string
+		policy     *v3clusterpb.LoadBalancingPolicy
+		wantConfig string
+	}{
+		{
+			name: "default_fields",
+			desc: "Only the required fields are set in the proto, and the optional fields are omitted from the JSON config.",
+			policy: &v3clusterpb.LoadBalancingPolicy{
+				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
+					{
+						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
+							TypedConfig: testutils.MarshalAny(t, &v3autoshardingpb.Autosharding{
+								GrpcService:        googleGrpcService(shardingServiceURI),
+								AutoshardingTarget: "my-target",
+								KeyHeaderName:      "my-key-header",
+							}),
+						},
+					},
+				},
+			},
+			wantConfig: fmt.Sprintf(`[{"autosharding_experimental": {
+				"channelFactoryKey": %q,
+				"autoshardingTarget": "my-target",
+				"keyHeaderName": "my-key-header"
+			}}]`, wantKey),
+		},
+		{
+			name: "all_fields_populated",
+			desc: "All fields are set in the proto, and are converted to their JSON equivalents.",
+			policy: &v3clusterpb.LoadBalancingPolicy{
+				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
+					{
+						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
+							TypedConfig: testutils.MarshalAny(t, &v3autoshardingpb.Autosharding{
+								GrpcService:              googleGrpcService(shardingServiceURI),
+								AutoshardingTarget:       "my-target-%s",
+								KeyHeaderName:            "my-key-header",
+								EnableFallback:           true,
+								InitialAssignmentTimeout: durationpb.New(30 * time.Second),
+							}),
+						},
+					},
+				},
+			},
+			wantConfig: fmt.Sprintf(`[{"autosharding_experimental": {
+				"channelFactoryKey": %q,
+				"autoshardingTarget": "my-target-%%s",
+				"keyHeaderName": "my-key-header",
+				"enableFallback": true,
+				"initialAssignmentTimeout": "30s"
+			}}]`, wantKey),
+		},
+		{
+			name: "child_of_wrr_locality",
+			desc: "The autosharding policy is the child of wrr_locality, and the GrpcService in its config is propagated to the top-level result.",
+			policy: &v3clusterpb.LoadBalancingPolicy{
+				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
+					{
+						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
+							TypedConfig: wrrLocalityAny(t, &v3autoshardingpb.Autosharding{
+								GrpcService:        googleGrpcService(shardingServiceURI),
+								AutoshardingTarget: "my-target-%s",
+								KeyHeaderName:      "my-key-header",
+							}),
+						},
+					},
+				},
+			},
+			wantConfig: fmt.Sprintf(`[{"xds_wrr_locality_experimental": {
+				"childPolicy": [{"autosharding_experimental": {
+					"channelFactoryKey": %q,
+					"autoshardingTarget": "my-target-%%s",
+					"keyHeaderName": "my-key-header"
+				}}]
+			}}]`, wantKey),
+		},
+		{
+			name: "ignores_proto_creds_and_uses_allowlist",
+			desc: "When the server is untrusted, channel credentials in the GrpcService proto are ignored in favor of allowed_grpc_services from the bootstrap config.",
+			policy: &v3clusterpb.LoadBalancingPolicy{
+				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
+					{
+						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
+							TypedConfig: testutils.MarshalAny(t, &v3autoshardingpb.Autosharding{
+								GrpcService:        googleGrpcService(shardingServiceURI, xdsWithInsecureFallbackPlugin),
+								AutoshardingTarget: "my-target",
+								KeyHeaderName:      "my-key-header",
+							}),
+						},
+					},
+				},
+			},
+			wantConfig: fmt.Sprintf(`[{"autosharding_experimental": {
+				"channelFactoryKey": %q,
+				"autoshardingTarget": "my-target",
+				"keyHeaderName": "my-key-header"
+			}}]`, wantKey),
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Log(test.desc)
+			verifyConvertToServiceConfig(t, test.policy, opts, test.wantConfig, wantGRPCServices)
+		})
+	}
+}
+
+// Tests successful conversion of the autosharding LB policy configuration when
+// received from a trusted xDS management server, verifying that channel
+// credentials from the GrpcService proto are used instead of
+// allowed_grpc_services from the bootstrap configuration.
+func (s) TestConvertToServiceConfig_Autosharding_TrustedServer(t *testing.T) {
+	testutils.SetEnvConfig(t, &envconfig.XDSAutoshardingEnabled, true)
+
+	const shardingServiceURI = "dns:///sharding-service:443"
+	insecurePlugin := &anypb.Any{TypeUrl: insecureCredsTypeURL}
+	xdsWithInsecureFallbackPlugin := testutils.MarshalAny(t, &xdscredspb.XdsCredentials{
+		FallbackCredentials: insecurePlugin,
+	})
+
+	wantInsecureGS := &grpcservice.Config{
+		TargetURI: shardingServiceURI,
+		ChannelCredentials: xdscreds.NewChannelCreds(nil, xdscreds.Identity{
+			Type: insecurePlugin.GetTypeUrl(),
+			Data: insecurePlugin.GetValue(),
+		}, nil),
+	}
+	wantInsecureKey := wantInsecureGS.Key()
+
+	wantXDSCredsGS := &grpcservice.Config{
+		TargetURI: shardingServiceURI,
+		ChannelCredentials: xdscreds.NewChannelCreds(nil, xdscreds.Identity{
+			Type: xdsWithInsecureFallbackPlugin.GetTypeUrl(),
+			Data: xdsWithInsecureFallbackPlugin.GetValue(),
+		}, nil),
+	}
+	wantXDSCredsKey := wantXDSCredsGS.Key()
+
+	tests := []struct {
+		name             string
+		desc             string
+		policy           *v3clusterpb.LoadBalancingPolicy
+		opts             xdslbregistry.ConverterOptions
+		wantConfig       string
+		wantGRPCServices map[string]*grpcservice.Config
+	}{
+		{
+			name: "without_allowlist_uses_proto_insecure_creds",
+			desc: "When the server is trusted, allowed_grpc_services is not required and the channel credentials sent by the management server in the GrpcService proto are used.",
+			policy: &v3clusterpb.LoadBalancingPolicy{
+				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
+					{
+						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
+							TypedConfig: testutils.MarshalAny(t, &v3autoshardingpb.Autosharding{
+								GrpcService:        googleGrpcService(shardingServiceURI, insecurePlugin),
+								AutoshardingTarget: "my-target",
+								KeyHeaderName:      "my-key-header",
+							}),
+						},
+					},
+				},
+			},
+			opts: autoshardingConverterOptions(t, "", true),
+			wantConfig: fmt.Sprintf(`[{"autosharding_experimental": {
+				"channelFactoryKey": %q,
+				"autoshardingTarget": "my-target",
+				"keyHeaderName": "my-key-header"
+			}}]`, wantInsecureKey),
+			wantGRPCServices: map[string]*grpcservice.Config{wantInsecureKey: wantInsecureGS},
+		},
+		{
+			name: "ignores_allowlist_and_uses_proto_xds_creds",
+			desc: "Even when allowed_grpc_services contains an entry for the target URI, a trusted server's GrpcService proto credentials are used instead of the bootstrap allowlist.",
+			policy: &v3clusterpb.LoadBalancingPolicy{
+				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
+					{
+						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
+							TypedConfig: testutils.MarshalAny(t, &v3autoshardingpb.Autosharding{
+								GrpcService:        googleGrpcService(shardingServiceURI, xdsWithInsecureFallbackPlugin),
+								AutoshardingTarget: "my-target",
+								KeyHeaderName:      "my-key-header",
+							}),
+						},
+					},
+				},
+			},
+			opts: autoshardingConverterOptions(t, shardingServiceURI, true),
+			wantConfig: fmt.Sprintf(`[{"autosharding_experimental": {
+				"channelFactoryKey": %q,
+				"autoshardingTarget": "my-target",
+				"keyHeaderName": "my-key-header"
+			}}]`, wantXDSCredsKey),
+			wantGRPCServices: map[string]*grpcservice.Config{wantXDSCredsKey: wantXDSCredsGS},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Log(test.desc)
+			verifyConvertToServiceConfig(t, test.policy, test.opts, test.wantConfig, test.wantGRPCServices)
+		})
+	}
+}
+
+// Tests that the autosharding LB policy is treated as unsupported and skipped
+// in favor of the next policy in the list when the
+// GRPC_XDS_EXPERIMENTAL_ENABLE_AUTOSHARDING_LB environment variable is
+// disabled.
+func (s) TestConvertToServiceConfig_Autosharding_EnvVarDisabled(t *testing.T) {
+	testutils.SetEnvConfig(t, &envconfig.XDSAutoshardingEnabled, false)
+
+	policy := &v3clusterpb.LoadBalancingPolicy{
+		Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
+			{
+				TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
+					TypedConfig: testutils.MarshalAny(t, &v3autoshardingpb.Autosharding{
+						GrpcService:        googleGrpcService("dns:///sharding-service:443"),
+						AutoshardingTarget: "my-target",
+						KeyHeaderName:      "my-key-header",
+					}),
+				},
+			},
+			{
+				TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
+					TypedConfig: testutils.MarshalAny(t, &v3roundrobinpb.RoundRobin{}),
+				},
+			},
+		},
+	}
+
+	verifyConvertToServiceConfig(t, policy, xdslbregistry.ConverterOptions{}, `[{"round_robin": {}}]`, nil)
+}
+
+// Tests that converting an invalid autosharding LB policy configuration fails
+// with an expected error.
+func (s) TestConvertToServiceConfig_Autosharding_Failure(t *testing.T) {
+	testutils.SetEnvConfig(t, &envconfig.XDSAutoshardingEnabled, true)
+
+	const shardingServiceURI = "dns:///sharding-service:443"
+	untrustedOpts := autoshardingConverterOptions(t, shardingServiceURI, false)
+	trustedOptsWithAllowlist := autoshardingConverterOptions(t, shardingServiceURI, true)
+
+	tests := []struct {
+		name    string
+		desc    string
+		policy  *v3clusterpb.LoadBalancingPolicy
+		opts    xdslbregistry.ConverterOptions
+		wantErr string
+	}{
+		{
+			name: "corrupt_proto",
+			desc: "The serialized autosharding config cannot be unmarshaled.",
+			policy: &v3clusterpb.LoadBalancingPolicy{
+				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
+					{
+						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
+							TypedConfig: &anypb.Any{
+								TypeUrl: "type.googleapis.com/envoy.extensions.load_balancing_policies.autosharding.v3.Autosharding",
+								Value:   []byte{0xff, 0xff, 0xff},
+							},
+						},
+					},
+				},
+			},
+			opts:    untrustedOpts,
+			wantErr: "failed to unmarshal autosharding LB config proto",
+		},
+		{
+			name: "missing_grpc_service",
+			desc: "The required grpc_service field is not set.",
+			policy: &v3clusterpb.LoadBalancingPolicy{
+				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
+					{
+						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
+							TypedConfig: testutils.MarshalAny(t, &v3autoshardingpb.Autosharding{
+								AutoshardingTarget: "my-target",
+								KeyHeaderName:      "my-key-header",
+							}),
+						},
+					},
+				},
+			},
+			opts:    untrustedOpts,
+			wantErr: "grpc_service field is required in autosharding LB config",
+		},
+		{
+			name: "untrusted_server_grpc_service_not_allowlisted",
+			desc: "When the server is untrusted, the target URI of the GrpcService must be present in allowed_grpc_services in the bootstrap config.",
+			policy: &v3clusterpb.LoadBalancingPolicy{
+				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
+					{
+						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
+							TypedConfig: testutils.MarshalAny(t, &v3autoshardingpb.Autosharding{
+								GrpcService:        googleGrpcService("dns:///not-allowlisted:443"),
+								AutoshardingTarget: "my-target",
+								KeyHeaderName:      "my-key-header",
+							}),
+						},
+					},
+				},
+			},
+			opts:    untrustedOpts,
+			wantErr: "is not present in allowed_grpc_services",
+		},
+		{
+			name: "trusted_server_missing_proto_channel_creds",
+			desc: "Even when the target is present in allowed_grpc_services, a trusted server ignores allowed_grpc_services and requires channel credentials in the GrpcService proto.",
+			policy: &v3clusterpb.LoadBalancingPolicy{
+				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
+					{
+						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
+							TypedConfig: testutils.MarshalAny(t, &v3autoshardingpb.Autosharding{
+								GrpcService:        googleGrpcService(shardingServiceURI),
+								AutoshardingTarget: "my-target",
+								KeyHeaderName:      "my-key-header",
+							}),
+						},
+					},
+				},
+			},
+			opts:    trustedOptsWithAllowlist,
+			wantErr: "no supported channel credentials found",
+		},
+		{
+			name: "invalid_initial_assignment_timeout_proto",
+			desc: "The initial_assignment_timeout field is outside the range supported by the Duration proto.",
+			policy: &v3clusterpb.LoadBalancingPolicy{
+				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
+					{
+						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
+							TypedConfig: testutils.MarshalAny(t, &v3autoshardingpb.Autosharding{
+								GrpcService:              googleGrpcService(shardingServiceURI),
+								AutoshardingTarget:       "my-target",
+								KeyHeaderName:            "my-key-header",
+								InitialAssignmentTimeout: &durationpb.Duration{Seconds: 315576000001},
+							}),
+						},
+					},
+				},
+			},
+			opts:    untrustedOpts,
+			wantErr: "invalid initial_assignment_timeout field in autosharding LB config",
+		},
+		{
+			name: "zero_initial_assignment_timeout",
+			desc: "The initial_assignment_timeout field is zero, but must be strictly positive.",
+			policy: &v3clusterpb.LoadBalancingPolicy{
+				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
+					{
+						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
+							TypedConfig: testutils.MarshalAny(t, &v3autoshardingpb.Autosharding{
+								GrpcService:              googleGrpcService(shardingServiceURI),
+								AutoshardingTarget:       "my-target",
+								KeyHeaderName:            "my-key-header",
+								InitialAssignmentTimeout: durationpb.New(0),
+							}),
+						},
+					},
+				},
+			},
+			opts:    untrustedOpts,
+			wantErr: "initial_assignment_timeout field in autosharding LB config must be strictly positive",
+		},
+		{
+			name: "negative_initial_assignment_timeout",
+			desc: "The initial_assignment_timeout field is negative, but must be strictly positive.",
+			policy: &v3clusterpb.LoadBalancingPolicy{
+				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
+					{
+						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
+							TypedConfig: testutils.MarshalAny(t, &v3autoshardingpb.Autosharding{
+								GrpcService:              googleGrpcService(shardingServiceURI),
+								AutoshardingTarget:       "my-target",
+								KeyHeaderName:            "my-key-header",
+								InitialAssignmentTimeout: durationpb.New(-5 * time.Second),
+							}),
+						},
+					},
+				},
+			},
+			opts:    untrustedOpts,
+			wantErr: "initial_assignment_timeout field in autosharding LB config must be strictly positive",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Log(test.desc)
+			_, gotErr := xdslbregistry.ConvertToServiceConfig(test.policy, 0, test.opts)
+			if gotErr == nil || !strings.Contains(gotErr.Error(), test.wantErr) {
+				t.Fatalf("ConvertToServiceConfig() = %v, wantErr %v", gotErr, test.wantErr)
+			}
+		})
+	}
 }

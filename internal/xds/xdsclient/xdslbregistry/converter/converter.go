@@ -28,20 +28,24 @@ import (
 	"strings"
 
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/balancer/autosharding"
 	"google.golang.org/grpc/balancer/leastrequest"
 	"google.golang.org/grpc/balancer/pickfirst"
 	"google.golang.org/grpc/balancer/ringhash"
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/balancer/weightedroundrobin"
+	"google.golang.org/grpc/internal/envconfig"
 	iringhash "google.golang.org/grpc/internal/ringhash"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/internal/xds/balancer/wrrlocality"
+	"google.golang.org/grpc/internal/xds/grpcservice"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdslbregistry"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/structpb"
 
 	v1xdsudpatypepb "github.com/cncf/xds/go/udpa/type/v1"
 	v3xdsxdstypepb "github.com/cncf/xds/go/xds/type/v3"
+	v3autoshardingpb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/autosharding/v3"
 	v3clientsideweightedroundrobinpb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/client_side_weighted_round_robin/v3"
 	v3leastrequestpb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/least_request/v3"
 	v3pickfirstpb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/pick_first/v3"
@@ -58,6 +62,7 @@ func init() {
 	xdslbregistry.Register("type.googleapis.com/envoy.extensions.load_balancing_policies.least_request.v3.LeastRequest", convertLeastRequestProtoToServiceConfig)
 	xdslbregistry.Register("type.googleapis.com/udpa.type.v1.TypedStruct", convertV1TypedStructToServiceConfig)
 	xdslbregistry.Register("type.googleapis.com/xds.type.v3.TypedStruct", convertV3TypedStructToServiceConfig)
+	xdslbregistry.Register("type.googleapis.com/envoy.extensions.load_balancing_policies.autosharding.v3.Autosharding", convertAutoshardingProtoToServiceConfig)
 }
 
 const (
@@ -256,4 +261,52 @@ type wrrLBConfig struct {
 // configuration for the gRPC LB policy with the given name and configuration.
 func lbConfigResult(name string, value json.RawMessage) *xdslbregistry.ConverterResult {
 	return &xdslbregistry.ConverterResult{LBConfig: fmt.Appendf(nil, `[{%q: %s}]`, name, value)}
+}
+
+func convertAutoshardingProtoToServiceConfig(rawProto []byte, _ int, opts xdslbregistry.ConverterOptions) (*xdslbregistry.ConverterResult, error) {
+	if !envconfig.XDSAutoshardingEnabled {
+		// As per the docstring on the Converter type, an unsupported policy
+		// must return (nil, nil).
+		return nil, nil
+	}
+
+	asProto := &v3autoshardingpb.Autosharding{}
+	if err := proto.Unmarshal(rawProto, asProto); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal autosharding LB config proto: %v", err)
+	}
+	gs := asProto.GetGrpcService()
+	if gs == nil {
+		return nil, fmt.Errorf("grpc_service field is required in autosharding LB config")
+	}
+	gsCfg, err := grpcservice.Parse(gs, opts.BootstrapConfig, opts.ServerConfig)
+	if err != nil {
+		return nil, fmt.Errorf("error parsing grpc_service field in autosharding LB config: %v", err)
+	}
+
+	channelFactoryKey := gsCfg.Key()
+	lbCfg := &autosharding.LBConfig{
+		ChannelFactoryKey:  channelFactoryKey,
+		AutoShardingTarget: asProto.GetAutoshardingTarget(),
+		KeyHeaderName:      asProto.GetKeyHeaderName(),
+		EnableFallback:     asProto.GetEnableFallback(),
+	}
+	if timeout := asProto.GetInitialAssignmentTimeout(); timeout != nil {
+		if err := timeout.CheckValid(); err != nil {
+			return nil, fmt.Errorf("invalid initial_assignment_timeout field in autosharding LB config: %v", err)
+		}
+
+		dur := timeout.AsDuration()
+		if dur <= 0 {
+			return nil, fmt.Errorf("initial_assignment_timeout field in autosharding LB config must be strictly positive, got %v", dur)
+		}
+		lbCfg.InitialAssignmentTimeout = internalserviceconfig.Duration(dur)
+	}
+
+	lbCfgJSON, err := json.Marshal(lbCfg)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling JSON for type %T: %v", lbCfg, err)
+	}
+	res := lbConfigResult(autosharding.Name, lbCfgJSON)
+	res.GRPCServices = map[string]*grpcservice.Config{channelFactoryKey: gsCfg}
+	return res, nil
 }

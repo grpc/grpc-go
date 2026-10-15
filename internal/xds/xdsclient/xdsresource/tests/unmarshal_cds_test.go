@@ -22,12 +22,16 @@ package tests_test
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"google.golang.org/grpc/balancer/autosharding"
 	"google.golang.org/grpc/balancer/leastrequest"
 	"google.golang.org/grpc/internal/balancer/stub"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpctest"
 	iringhash "google.golang.org/grpc/internal/ringhash"
 	iserviceconfig "google.golang.org/grpc/internal/serviceconfig"
@@ -37,6 +41,7 @@ import (
 	"google.golang.org/grpc/internal/xds/balancer/wrrlocality"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/internal/xds/clients/xdsclient"
+	xdscreds "google.golang.org/grpc/internal/xds/credentials"
 	"google.golang.org/grpc/internal/xds/grpcservice"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdslbregistry"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
@@ -51,6 +56,7 @@ import (
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
 	v3aggregateclusterpb "github.com/envoyproxy/go-control-plane/envoy/extensions/clusters/aggregate/v3"
+	v3autoshardingpb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/autosharding/v3"
 	v3ringhashpb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/ring_hash/v3"
 	v3roundrobinpb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/round_robin/v3"
 	v3wrrlocalitypb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/wrr_locality/v3"
@@ -642,5 +648,175 @@ func (s) TestValidateCluster_LBPolicyInfo(t *testing.T) {
 	}
 	if diff := cmp.Diff(update.LBPolicyInfo, wantInfo); diff != "" {
 		t.Errorf("decoder.Decode(%+v) returned unexpected LBPolicyInfo, diff (-got +want):\n%s", cluster, diff)
+	}
+}
+
+// newAutoshardingClusterDecoder returns a cluster resource decoder, and the
+// options to pass to it when decoding resources. The decoder's bootstrap
+// configuration contains allowedTarget in allowed_grpc_services, with insecure
+// channel credentials. Resources are decoded as if received from an untrusted
+// management server.
+func newAutoshardingClusterDecoder(t *testing.T, allowedTarget string) (xdsclient.Decoder, xdsclient.DecodeOptions) {
+	t.Helper()
+	contents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
+		Servers:             json.RawMessage(`[{"server_uri": "passthrough:///unused", "channel_creds": [{"type": "insecure"}]}]`),
+		Node:                json.RawMessage(`{"id": "test-node"}`),
+		AllowedGRPCServices: json.RawMessage(fmt.Sprintf(`{%q: {"channel_creds": [{"type": "insecure"}]}}`, allowedTarget)),
+	})
+	if err != nil {
+		t.Fatalf("NewContentsForTesting() failed: %v", err)
+	}
+	bootstrapCfg, err := bootstrap.NewConfigFromContents(contents)
+	if err != nil {
+		t.Fatalf("NewConfigFromContents() failed: %v", err)
+	}
+	serverCfg, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{URI: "xds-server:1234"})
+	if err != nil {
+		t.Fatalf("ServerConfigForTesting() failed: %v", err)
+	}
+	xdsServerCfg := xdsclient.ServerConfig{}
+	decoder := xdsresource.NewClusterResourceTypeDecoder(bootstrapCfg, map[xdsclient.ServerConfig]*bootstrap.ServerConfig{
+		xdsServerCfg: serverCfg,
+	})
+	return decoder, xdsclient.DecodeOptions{ServerConfig: &xdsServerCfg}
+}
+
+// edsClusterWithLBPolicy returns an EDS cluster resource whose
+// load_balancing_policy field contains the given LB policy configuration.
+func edsClusterWithLBPolicy(lbPolicy *anypb.Any) *v3clusterpb.Cluster {
+	return &v3clusterpb.Cluster{
+		Name:                 clusterName,
+		ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
+		EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
+			EdsConfig: &v3corepb.ConfigSource{
+				ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
+					Ads: &v3corepb.AggregatedConfigSource{},
+				},
+			},
+			ServiceName: serviceName,
+		},
+		LoadBalancingPolicy: &v3clusterpb.LoadBalancingPolicy{
+			Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
+				{
+					TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
+						TypedConfig: lbPolicy,
+					},
+				},
+			},
+		},
+	}
+}
+
+// googleGrpcService returns a GrpcService proto configured with the GoogleGrpc
+// target specifier set to targetURI.
+func googleGrpcService(targetURI string) *v3corepb.GrpcService {
+	return &v3corepb.GrpcService{
+		TargetSpecifier: &v3corepb.GrpcService_GoogleGrpc_{
+			GoogleGrpc: &v3corepb.GrpcService_GoogleGrpc{TargetUri: targetURI},
+		},
+	}
+}
+
+// Tests that a cluster resource configured with the autosharding LB policy is
+// decoded successfully when the autosharding LB policy is enabled, both when
+// the policy is used for locality and endpoint picking, and when it is used
+// only for endpoint picking. Verifies that the LB policy configuration
+// generated by the xDS LB policy registry is accepted by the autosharding LB
+// policy, and that the GrpcService parsed from the LB policy configuration is
+// stored in the cluster update, keyed by the channel factory key.
+func (s) TestValidateCluster_Autosharding(t *testing.T) {
+	testutils.SetEnvConfig(t, &envconfig.XDSAutoshardingEnabled, true)
+
+	const shardingServiceURI = "dns:///sharding-service:443"
+	decoder, decodeOpts := newAutoshardingClusterDecoder(t, shardingServiceURI)
+	asProto := &v3autoshardingpb.Autosharding{
+		GrpcService:        googleGrpcService(shardingServiceURI),
+		AutoshardingTarget: "my-target-%s",
+		KeyHeaderName:      "my-key-header",
+	}
+
+	// Since the management server is untrusted, the channel credentials come
+	// from the allowed_grpc_services entry in the bootstrap configuration.
+	wantGS := &grpcservice.Config{
+		TargetURI:          shardingServiceURI,
+		ChannelCredentials: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "insecure"}, nil),
+	}
+	wantKey := wantGS.Key()
+	wantInfo := xdsresource.LBPolicyInfo{
+		GRPCServices: map[string]*grpcservice.Config{wantKey: wantGS},
+	}
+	// The initial assignment timeout is not set in the xDS configuration, and
+	// therefore the default value is set by the autosharding LB policy when
+	// parsing its configuration.
+	wantAutoshardingLBConfig := &iserviceconfig.BalancerConfig{
+		Name: autosharding.Name,
+		Config: &autosharding.LBConfig{
+			ChannelFactoryKey:        wantKey,
+			AutoShardingTarget:       "my-target-%s",
+			KeyHeaderName:            "my-key-header",
+			InitialAssignmentTimeout: iserviceconfig.Duration(60 * time.Second),
+		},
+	}
+
+	tests := []struct {
+		name         string
+		lbPolicy     *anypb.Any
+		wantLBConfig *iserviceconfig.BalancerConfig
+	}{
+		{
+			name:         "locality_and_endpoint_picking",
+			lbPolicy:     testutils.MarshalAny(t, asProto),
+			wantLBConfig: wantAutoshardingLBConfig,
+		},
+		{
+			name:     "endpoint_picking_only",
+			lbPolicy: wrrLocalityAny(t, asProto),
+			wantLBConfig: &iserviceconfig.BalancerConfig{
+				Name:   wrrlocality.Name,
+				Config: &wrrlocality.LBConfig{ChildPolicy: wantAutoshardingLBConfig},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			cluster := edsClusterWithLBPolicy(test.lbPolicy)
+			res, err := decoder.Decode(xdsclient.NewAnyProto(testutils.MarshalAny(t, cluster)), decodeOpts)
+			if err != nil {
+				t.Fatalf("decoder.Decode(%+v) failed: %v", cluster, err)
+			}
+			update := res.Resource.(*xdsresource.ClusterResourceData).Resource
+			gotLBConfig := &iserviceconfig.BalancerConfig{}
+			if err := json.Unmarshal(update.LBPolicy, gotLBConfig); err != nil {
+				t.Fatalf("Failed to unmarshal LB policy configuration %s: %v", update.LBPolicy, err)
+			}
+			if diff := cmp.Diff(gotLBConfig, test.wantLBConfig); diff != "" {
+				t.Errorf("decoder.Decode(%+v) returned unexpected LB policy configuration, diff (-got +want):\n%s", cluster, diff)
+			}
+			if diff := cmp.Diff(update.LBPolicyInfo, wantInfo); diff != "" {
+				t.Errorf("decoder.Decode(%+v) returned unexpected LBPolicyInfo, diff (-got +want):\n%s", cluster, diff)
+			}
+		})
+	}
+}
+
+// Tests that a cluster resource configured with the autosharding LB policy is
+// NACKed when the LB policy configuration generated by the xDS LB policy
+// registry is rejected by the autosharding LB policy.
+func (s) TestValidateCluster_Autosharding_InvalidLBConfig(t *testing.T) {
+	testutils.SetEnvConfig(t, &envconfig.XDSAutoshardingEnabled, true)
+
+	const shardingServiceURI = "dns:///sharding-service:443"
+	decoder, decodeOpts := newAutoshardingClusterDecoder(t, shardingServiceURI)
+	// The autosharding LB policy rejects configurations that do not specify
+	// the name of the header containing the sharding key.
+	cluster := edsClusterWithLBPolicy(testutils.MarshalAny(t, &v3autoshardingpb.Autosharding{
+		GrpcService:        googleGrpcService(shardingServiceURI),
+		AutoshardingTarget: "my-target",
+	}))
+	_, err := decoder.Decode(xdsclient.NewAnyProto(testutils.MarshalAny(t, cluster)), decodeOpts)
+	const wantErr = "keyHeaderName field is required"
+	if err == nil || !strings.Contains(err.Error(), wantErr) {
+		t.Fatalf("decoder.Decode(%+v) returned error: %v, want error containing %q", cluster, err, wantErr)
 	}
 }
