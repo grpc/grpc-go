@@ -529,11 +529,11 @@ func newClientStreamWithParams(ctx context.Context, desc *StreamDesc, cc *Client
 // registerCancellationHandlers registers callbacks to clean up the stream when the
 // RPC context expires or the ClientConn is closed.
 func (cs *clientStream) registerCancellationHandlers() {
+	// Hold mu so that a callback firing before registration completes (e.g.
+	// because its context is already done) cannot run finish() concurrently
+	// with the assignments below.
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
-	if cs.finished {
-		return
-	}
 	onCtxDone := func() {
 		if cs.cc.ctx.Err() != nil {
 			cs.finish(ErrClientConnClosing)
@@ -1515,11 +1515,11 @@ func (as *addrConnStream) registerCancellationHandlers() {
 	acCtx := as.ac.ctx
 	as.ac.mu.Unlock()
 
+	// Hold mu so that a callback firing before registration completes (e.g.
+	// because its context is already done) cannot run finish() concurrently
+	// with the assignments below.
 	as.mu.Lock()
 	defer as.mu.Unlock()
-	if as.finished {
-		return
-	}
 
 	onCtxDone := func() {
 		if acCtx.Err() != nil {
