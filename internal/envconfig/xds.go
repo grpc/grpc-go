@@ -107,4 +107,15 @@ var (
 	// XDSAutoshardingEnabled controls whether the autosharding LB policy is
 	// supported by the xDS LB policy registry. See gRFC A119 for more details.
 	XDSAutoshardingEnabled = boolFromEnv("GRPC_XDS_EXPERIMENTAL_ENABLE_AUTOSHARDING_LB", false)
+
+	// XDSAggregateClusterBackwardCompat controls whether the underlying
+	// (leaf) clusters of an aggregate cluster use the LB policy configured in
+	// the aggregate cluster instead of their own LB policy. This is a
+	// temporary migration mechanism and will be removed in a future release.
+	// For more details, see:
+	// https://github.com/grpc/proposal/blob/master/A75-xds-aggregate-cluster-behavior-fixes.md
+	//
+	// TODO: Remove this, and all the code that depends on it, after a couple
+	// of releases.
+	XDSAggregateClusterBackwardCompat = boolFromEnv("GRPC_XDS_AGGREGATE_CLUSTER_BACKWARD_COMPAT", false)
 )

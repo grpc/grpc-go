@@ -25,6 +25,7 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/base"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/pretty"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
@@ -102,11 +103,14 @@ func (bb) ParseConfig(c json.RawMessage) (serviceconfig.LoadBalancingConfig, err
 	return &cfg, nil
 }
 
-// cdsBalancer implements a CDS based LB policy. It instantiates a
-// cluster_resolver balancer to further resolve the serviceName received from
-// CDS, into localities and endpoints. Implements the balancer.Balancer
-// interface which is exposed to gRPC and implements the balancer.ClientConn
-// interface which is exposed to the cluster_resolver balancer.
+// cdsBalancer implements a CDS based LB policy. It builds and manages a child
+// LB policy using the cluster and endpoint configuration received in XDSConfig.
+//
+// Per gRFC A75:
+//   - For a leaf (EDS or LOGICAL_DNS) cluster, the child policy is
+//     outlier_detection -> cluster_impl -> priority -> xDS LB policy.
+//   - For an aggregate cluster, the child policy is a priority policy with one
+//     cds child policy per underlying leaf cluster.
 type cdsBalancer struct {
 	// The following fields are initialized at build time and are either
 	// read-only after that or provide their own synchronization, and therefore
@@ -126,11 +130,10 @@ type cdsBalancer struct {
 	clusterConfigs    map[string]*xdsresource.ClusterResult // Cluster name to the last received result for that cluster.
 	leafConfigs       map[string]*leafClusterConfig         // Hostname to config for that leaf cluster.
 	lbCfg             *lbConfig                             // Current load balancing configuration.
-	leafClusters      []*leafClusterConfig                  // List of leaf clusters in the order.
+	leafCluster       *leafClusterConfig                    // Config of the current leaf cluster; nil for aggregate clusters.
 	unsubscribe       func()                                // For dynamic cluster unsubscription.
 	isSubscribed      bool                                  // True if a dynamic cluster has been subscribed to.
 	clusterSubscriber xdsdepmgr.ClusterSubscriber           // To subscribe to dynamic cluster resource.
-	xdsLBPolicy       internalserviceconfig.BalancerConfig  // Stores the locality and endpoint picking policy.
 	attributes        *attributes.Attributes                // Attributes from resolver state.
 	// Each new leaf cluster needs a child name generator to reuse child policy
 	// names. But to make sure the names across leaf clusters doesn't conflict,
@@ -219,33 +222,81 @@ func (b *cdsBalancer) handleClusterUpdate() error {
 	clusterName := b.lbCfg.ClusterName
 	clusterConfig := b.clusterConfigs[clusterName].Config
 
-	var newLeafClusters []*leafClusterConfig
 	switch clusterConfig.Cluster.ClusterType {
 	case xdsresource.ClusterTypeEDS, xdsresource.ClusterTypeLogicalDNS:
 		leaf := b.updateLeafClusterConfig(clusterName, &clusterConfig)
-		newLeafClusters = append(newLeafClusters, leaf)
-	case xdsresource.ClusterTypeAggregate:
-		for _, leafName := range clusterConfig.AggregateConfig.LeafClusters {
-			leafCluster := b.clusterConfigs[leafName]
-			// Update config for leaf clusters.
-			leaf := b.updateLeafClusterConfig(leafName, &leafCluster.Config)
-			newLeafClusters = append(newLeafClusters, leaf)
+		lbPolicy, err := b.leafLBPolicy(clusterConfig.Cluster)
+		if err != nil {
+			return b.annotateErrorWithNodeID(err)
 		}
+		leaf.lbPolicy = lbPolicy
+		b.leafCluster = leaf
+	case xdsresource.ClusterTypeAggregate:
+		// Leaf clusters of an aggregate cluster are handled by their own
+		// child cds policies.
+		b.leafCluster = nil
 	}
-	b.leafClusters = newLeafClusters
 
-	if err := b.updateOutlierDetection(); err != nil {
-		return b.annotateErrorWithNodeID(fmt.Errorf("failed to correctly update Outlier Detection config %v", err))
-	}
-
-	// The LB policy is configured by the root cluster.
-	if err := json.Unmarshal(clusterConfig.Cluster.LBPolicy, &b.xdsLBPolicy); err != nil {
-		return b.annotateErrorWithNodeID(fmt.Errorf("error unmarshalling xDS LB Policy: %v", err))
-	}
 	if err := b.updateChildConfig(); err != nil {
 		return b.annotateErrorWithNodeID(err)
 	}
 	return nil
+}
+
+// leafLBPolicy returns the locality and endpoint picking policy for the given
+// leaf cluster.
+//
+// Per gRFC A75, a leaf cluster uses the LB policy configured in the leaf
+// cluster itself, and the LB policy of the parent aggregate cluster (if any)
+// is ignored. As a temporary migration mechanism, if
+// GRPC_XDS_AGGREGATE_CLUSTER_BACKWARD_COMPAT is enabled, the LB policy
+// configured in the parent aggregate cluster is used instead.
+func (b *cdsBalancer) leafLBPolicy(cluster *xdsresource.ClusterUpdate) (*internalserviceconfig.BalancerConfig, error) {
+	lbPolicyJSON := cluster.LBPolicy
+	// TODO: Remove this block once GRPC_XDS_AGGREGATE_CLUSTER_BACKWARD_COMPAT
+	// is removed.
+	if envconfig.XDSAggregateClusterBackwardCompat {
+		if aggName, ok := aggregateClusterNameFromAttributes(b.attributes); ok {
+			aggCluster, ok := b.clusterConfigs[aggName]
+			if !ok || aggCluster.Err != nil {
+				// Should never happen: the cds policy of the aggregate cluster
+				// only pushes configuration to its children when its own
+				// cluster config is present and valid.
+				return nil, fmt.Errorf("xDS config has no valid entry for aggregate cluster %q", aggName)
+			}
+			lbPolicyJSON = aggCluster.Config.Cluster.LBPolicy
+		}
+	}
+	lbPolicy := &internalserviceconfig.BalancerConfig{}
+	if err := json.Unmarshal(lbPolicyJSON, lbPolicy); err != nil {
+		return nil, fmt.Errorf("error unmarshalling xDS LB Policy for cluster %q: %v", cluster.ClusterName, err)
+	}
+	return lbPolicy, nil
+}
+
+// aggregateClusterNameKey is the resolver state attributes key used by the cds
+// policy of an aggregate cluster to pass its cluster name to the cds policies
+// of its leaf clusters. It is used only to implement
+// GRPC_XDS_AGGREGATE_CLUSTER_BACKWARD_COMPAT.
+//
+// TODO: Remove once GRPC_XDS_AGGREGATE_CLUSTER_BACKWARD_COMPAT is removed.
+type aggregateClusterNameKey struct{}
+
+// setAggregateClusterName returns a copy of attrs with the given aggregate
+// cluster name set.
+//
+// TODO: Remove once GRPC_XDS_AGGREGATE_CLUSTER_BACKWARD_COMPAT is removed.
+func setAggregateClusterName(attrs *attributes.Attributes, name string) *attributes.Attributes {
+	return attrs.WithValue(aggregateClusterNameKey{}, name)
+}
+
+// aggregateClusterNameFromAttributes returns the aggregate cluster name stored
+// in attrs, if any.
+//
+// TODO: Remove once GRPC_XDS_AGGREGATE_CLUSTER_BACKWARD_COMPAT is removed.
+func aggregateClusterNameFromAttributes(attrs *attributes.Attributes) (string, bool) {
+	name, ok := attrs.Value(aggregateClusterNameKey{}).(string)
+	return name, ok
 }
 
 // updateChildConfig builds child policy configuration using endpoint addresses
@@ -282,11 +333,20 @@ func (b *cdsBalancer) updateChildConfig() error {
 	var childCfgBytes []byte
 	var endpoints []resolver.Endpoint
 	var err error
+	attrs := b.attributes
 
 	if isAggregate {
-		childCfgBytes, endpoints, err = buildAggregateClusterConfigJSON(b.leafClusters, &b.xdsLBPolicy)
+		// The child cds policies build their own configuration and
+		// endpoints from the XDSConfig passed down in the resolver state
+		// attributes, so no endpoints are passed down here.
+		childCfgBytes, err = buildAggregateClusterConfigJSON(clusterConfig.AggregateConfig.LeafClusters)
+		// TODO: Remove once GRPC_XDS_AGGREGATE_CLUSTER_BACKWARD_COMPAT is
+		// removed.
+		if envconfig.XDSAggregateClusterBackwardCompat {
+			attrs = setAggregateClusterName(attrs, clusterName)
+		}
 	} else {
-		childCfgBytes, endpoints, err = buildLeafClusterConfigJSON(b.leafClusters[0], &b.xdsLBPolicy)
+		childCfgBytes, endpoints, err = buildLeafClusterConfigJSON(b.leafCluster, b.leafCluster.lbPolicy)
 	}
 	if err != nil {
 		return fmt.Errorf("xds: failed to build child policy config: %v", err)
@@ -314,7 +374,7 @@ func (b *cdsBalancer) updateChildConfig() error {
 	if err := b.childLB.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: resolver.State{
 			Endpoints:  endpoints,
-			Attributes: b.attributes,
+			Attributes: attrs,
 		},
 		BalancerConfig: childCfg,
 	}); err != nil {
@@ -340,44 +400,6 @@ func (b *cdsBalancer) updateLeafClusterConfig(clusterName string, clusterConfig 
 	}
 	leaf.clusterConfig = clusterConfig
 	return leaf
-}
-
-// updateOutlierDetection updates Outlier Detection config for all leaf clusters.
-func (b *cdsBalancer) updateOutlierDetection() error {
-	odBuilder := balancer.Get(outlierdetection.Name)
-	if odBuilder == nil {
-		// Shouldn't happen, registered through imported Outlier Detection,
-		// defensive programming.
-		return fmt.Errorf("%q LB policy is needed but not registered", outlierdetection.Name)
-	}
-
-	odParser, ok := odBuilder.(balancer.ConfigParser)
-	if !ok {
-		// Shouldn't happen, imported Outlier Detection builder has this method.
-		return fmt.Errorf("%q LB policy does not implement a config parser", outlierdetection.Name)
-	}
-
-	for _, leaf := range b.leafClusters {
-		// Update Outlier Detection Config.
-		odJSON := leaf.clusterConfig.Cluster.OutlierDetection
-		if odJSON == nil {
-			odJSON = json.RawMessage(`{}`)
-		}
-
-		lbCfg, err := odParser.ParseConfig(odJSON)
-		if err != nil {
-			return fmt.Errorf("error parsing Outlier Detection config %v: %v", odJSON, err)
-		}
-
-		odCfg, ok := lbCfg.(*outlierdetection.LBConfig)
-		if !ok {
-			// Shouldn't happen, Parser built at build time with Outlier
-			// Detection builder pulled from gRPC LB Registry.
-			return fmt.Errorf("config parser for Outlier Detection returned config with unexpected type %T: %v", lbCfg, lbCfg)
-		}
-		leaf.outlierDetection = *odCfg
-	}
-	return nil
 }
 
 // ResolverError handles errors reported by the xdsResolver.
