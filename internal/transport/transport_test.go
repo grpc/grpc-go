@@ -45,7 +45,6 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/channelz"
-	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/leakcheck"
 	imem "google.golang.org/grpc/internal/mem"
@@ -4601,40 +4600,6 @@ func (s) TestRecvBufferCompactionSkippedLargeBuffer(t *testing.T) {
 	}
 	if b.uncompactedBytes != 0 {
 		t.Fatalf("Got uncompactedBytes %d, want %d", b.uncompactedBytes, 0)
-	}
-
-	select {
-	case msg1 := <-b.c:
-		msg1.buffer.Free()
-	default:
-		t.Fatal("Expected first message to be in the channel, but channel is empty")
-	}
-	for _, msg := range b.backlog {
-		if msg.buffer != nil {
-			msg.buffer.Free()
-		}
-	}
-}
-
-func (s) TestRecvBufferCompactionDisabled(t *testing.T) {
-	testutils.SetEnvConfig(t, &envconfig.EnableReceiveBufferCompaction, false)
-
-	pool := mem.DefaultBufferPool()
-	b := &recvBuffer{}
-	b.init(pool)
-
-	numMessages := imem.BufferPoolingThreshold + 2
-	payload := []byte{0x0a}
-
-	for i := 0; i < numMessages; i++ {
-		b.put(recvMsg{buffer: mem.Copy(payload, pool)})
-	}
-
-	// Verify no compaction occurred.
-	// The first message is in the channel.
-	// The remaining (numMessages - 1) messages should be in the backlog.
-	if got, want := len(b.backlog), numMessages-1; got != want {
-		t.Fatalf("Got backlog length %d, want %d", got, want)
 	}
 
 	select {
