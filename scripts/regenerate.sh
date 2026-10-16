@@ -25,6 +25,12 @@ export GOBIN="${WORKDIR}"/bin
 export PATH="${GOBIN}:${PATH}"
 mkdir -p "${GOBIN}"
 
+# The version of the Go toolchain used to build the protoc plugins affects the
+# generated code. Build them with the minimum supported Go version, i.e. the go
+# line in the root go.mod, so that the generated code does not depend on the
+# locally installed Go version.
+export GOTOOLCHAIN="go$(awk '/^go /{print $2}' "$(dirname "${0}")"/../go.mod)"
+
 echo "removing existing generated files..."
 # grpc_testing_not_regenerated/*.pb.go is not re-generated,
 # see grpc_testing_not_regenerated/README.md for details.

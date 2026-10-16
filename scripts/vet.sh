@@ -206,6 +206,7 @@ GetContainsMatch
 GetExactMatch
 GetMatchSubjectAltNames
 GetPrefixMatch
+GetRequestDrain
 GetSafeRegexMatch
 GetSuffixMatch
 GetSourceIp

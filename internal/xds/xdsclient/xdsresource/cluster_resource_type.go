@@ -44,7 +44,7 @@ func (d *clusterResourceDecoder) Decode(resource *xdsclient.AnyProto, opts xdscl
 	if !ok {
 		return nil, fmt.Errorf("no server config found for {%+v}", opts.ServerConfig)
 	}
-	name, cluster, err := unmarshalClusterResource(resource.ToAny(), serverCfg)
+	name, cluster, err := unmarshalClusterResource(resource.ToAny(), d.bootstrapConfig, serverCfg)
 	if name == "" {
 		// Name is unset only when protobuf deserialization fails.
 		return nil, err
