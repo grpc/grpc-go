@@ -44,13 +44,13 @@ func (w *wrappingWatcher) ResourceError(err error, done func()) {
 //
 // The watch fails to start if:
 //   - There is no ResourceType implementation for the given typeURL in the
-//     ResourceTypes field of the Config struct used to create the XDSClient.
+//     ResourceTypes field of the Config struct used to create the Client.
 //   - The provided resourceName contains an authority that is not present in the
 //     Authorities field.
 //
 // The returned function cancels the watch and prevents future calls to the
 // watcher.
-func (c *XDSClient) WatchResource(typeURL, resourceName string, watcher ResourceWatcher) (cancel func()) {
+func (c *Client) WatchResource(typeURL, resourceName string, watcher ResourceWatcher) (cancel func()) {
 	// Return early if the client is already closed.
 	if c.done.HasFired() {
 		logger.Warningf("Watch registered for type %q, but client is closed", typeURL)
@@ -92,7 +92,7 @@ func (c *XDSClient) WatchResource(typeURL, resourceName string, watcher Resource
 //
 // See examples in this section of the gRFC:
 // https://github.com/grpc/proposal/blob/master/A47-xds-federation.md#bootstrap-config-changes
-func (c *XDSClient) getAuthorityForResource(name *xdsresource.Name) *authority {
+func (c *Client) getAuthorityForResource(name *xdsresource.Name) *authority {
 	// For new-style resource names, always lookup the authorities map. If the
 	// name does not specify an authority, we will end up looking for an entry
 	// in the map with the empty string as the key.
