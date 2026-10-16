@@ -29,6 +29,7 @@ import (
 	"reflect"
 	"runtime"
 	"runtime/pprof"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -90,6 +91,9 @@ func init() {
 		return istats.NewMetricsRecorderList(srv.opts.statsHandlers)
 	}
 	internal.XDSFilterWrapperOption = xdsFilterWrapperOption
+	internal.ChildChannelOptionsFromServer = func(srv *Server) []DialOption {
+		return slices.Clone(srv.opts.childChannelOptions)
+	}
 }
 
 var statusOK = status.New(codes.OK, "")
@@ -183,6 +187,7 @@ type serverOptions struct {
 	waitForHandlers       bool
 	staticWindowSize      bool
 	streamWrapper         func(ServerStream) (ServerStream, error)
+	childChannelOptions   []DialOption
 }
 
 var defaultServerOptions = serverOptions{
@@ -548,6 +553,33 @@ func StatsHandler(h stats.Handler) ServerOption {
 			return
 		}
 		o.statsHandlers = append(o.statsHandlers, h)
+	})
+}
+
+// ChildChannelOptions returns a ServerOption that specifies dial options to
+// be applied to child channels created internally by this server (such as
+// channels to the xDS control plane, external authorization services, or
+// external processing servers).
+//
+// These options are not applied to the parent server itself.
+//
+// If this option is specified multiple times, only the last one takes effect.
+// Calling it with no options clears any previously set child channel options.
+// This also means that a call to this option replaces any child channel
+// options set through global server options.
+//
+// Note: Plumbing for child channel options is not yet implemented.
+//
+// # Experimental
+//
+// Notice: This API is EXPERIMENTAL and may be changed or removed in a
+// later release.
+func ChildChannelOptions(opts ...DialOption) ServerOption {
+	// TODO: Revisit the doc comment once plumbing is implemented to ensure it
+	// is compliant with gRFC A110 and the implementation.
+	opts = slices.Clone(opts)
+	return newFuncServerOption(func(o *serverOptions) {
+		o.childChannelOptions = opts
 	})
 }
 
