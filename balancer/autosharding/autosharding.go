@@ -36,6 +36,7 @@ import (
 	"google.golang.org/grpc/balancer/endpointsharding"
 	"google.golang.org/grpc/balancer/lazy"
 	"google.golang.org/grpc/balancer/pickfirst"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/experimental/balancer/hostname"
 	"google.golang.org/grpc/experimental/resolver/locality"
@@ -45,6 +46,7 @@ import (
 	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
+	"google.golang.org/grpc/status"
 )
 
 const (
@@ -354,8 +356,14 @@ func (b *autoshardingBalancer) handleNewConfigurationInternal(state resolver.Sta
 		var err error
 		channel, shardingChannelClose, err = provider(newConfig.ChannelFactoryKey)
 		if err != nil {
-			b.lastResolverErr = fmt.Errorf("autosharding: failed to create gRPC channel for key %q: %v", newConfig.ChannelFactoryKey, err)
-			return nil, nil, balancer.ErrBadResolverState
+			if b.logger.V(2) {
+				b.logger.Infof("Failed to create gRPC channel with channel_factory_key: %q, error: %v", newConfig.ChannelFactoryKey, err)
+			}
+			// If channel creation fails, pass a lame channel to the
+			// autosharding client. This results in the client immediately
+			// returning an error to the LB policy. And this will result in RPCs
+			// using fallback (if enabled) or failing.
+			channel = &lameChannel{err: status.Errorf(codes.Unavailable, "autosharding: failed to create gRPC channel to sharding service: %v", err)}
 		}
 
 		newAutoshardingChannelCreated = true
@@ -451,9 +459,9 @@ func (b *autoshardingBalancer) updateStateAndPickerLocked() {
 
 	// If the resolver returned an error (before returning any valid
 	// configuration) or the most recent update from the resolver was invalid
-	// (for example, the channel_factory_key was invalid or it contained no
-	// endpoints), report TRANSIENT_FAILURE and surface the error in failing
-	// RPCs.
+	// (for example, no channel factory was found in the resolver state or it
+	// contained no endpoints), report TRANSIENT_FAILURE and surface the error
+	// in failing RPCs.
 	if b.lastResolverErr != nil {
 		b.ClientConn.UpdateState(balancer.State{
 			ConnectivityState: connectivity.TransientFailure,
@@ -570,7 +578,7 @@ func (b *autoshardingBalancer) ResolverError(err error) {
 	// received valid endpoints from the name resolver previously. And the
 	// reason for checking b.autoshardingClientClose == nil is to ensure that a
 	// previous update with valid endpoints was not rejected due to otherwise
-	// invalid configuration (e.g. invalid channel_factory_key).
+	// invalid configuration (e.g. missing channel factory in resolver state).
 	b.mu.Lock()
 	if len(b.endpointMap) == 0 || b.autoshardingClientClose == nil {
 		b.lastResolverErr = err
@@ -658,4 +666,18 @@ func (b *autoshardingBalancer) UpdateState(state balancer.State) {
 		}
 	}
 	b.updateStateAndPickerLocked()
+}
+
+// lameChannel is a gRPC channel that always returns the configured error for
+// any RPC.
+type lameChannel struct {
+	err error
+}
+
+func (c *lameChannel) Invoke(context.Context, string, any, any, ...grpc.CallOption) error {
+	return c.err
+}
+
+func (c *lameChannel) NewStream(context.Context, *grpc.StreamDesc, string, ...grpc.CallOption) (grpc.ClientStream, error) {
+	return nil, c.err
 }
