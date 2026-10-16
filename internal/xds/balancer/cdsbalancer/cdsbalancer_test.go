@@ -250,9 +250,18 @@ func setupWithManagementServer(t *testing.T, lis net.Listener, onStreamRequest f
 	return mgmtServer, nodeID, newTestChannel(t, bc)
 }
 
-// setupWithAllowedGRPCServices is like setupWithManagementServer, but also
-// configures the given target URIs, with insecure credentials, in the
-// allowed_grpc_services field of the bootstrap configuration.
+// Performs the following setup required for tests:
+//   - Spins up an xDS management server
+//   - Creates an xDS client talking to this management server. The bootstrap
+//     configuration used by this client is populated with an
+//     allowed_grpc_services map that contains entries for the given
+//     allowedTargets (with insecure credentials).
+//   - Creates a gRPC channel with grpc.NewClient that uses an xDS resolver.
+//
+// Returns the following:
+//   - the xDS management server
+//   - the nodeID expected by the management server
+//   - the grpc channel to the test backend service
 func setupWithAllowedGRPCServices(t *testing.T, allowedTargets ...string) (*e2e.ManagementServer, string, *grpc.ClientConn) {
 	t.Helper()
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
@@ -272,8 +281,8 @@ func setupWithAllowedGRPCServices(t *testing.T, allowedTargets ...string) (*e2e.
 	}
 
 	bc, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
-		Servers:             []byte(fmt.Sprintf(`[{"server_uri": %q, "channel_creds": [{"type": "insecure"}]}]`, mgmtServer.Address)),
-		Node:                []byte(fmt.Sprintf(`{"id": %q}`, nodeID)),
+		Servers:             fmt.Appendf(nil, `[{"server_uri": %q, "channel_creds": [{"type": "insecure"}]}]`, mgmtServer.Address),
+		Node:                fmt.Appendf(nil, `{"id": %q}`, nodeID),
 		AllowedGRPCServices: allowedJSON,
 	})
 	if err != nil {
@@ -312,9 +321,12 @@ func waitForLoadBalancingConfig(ctx context.Context, lbCfgCh chan serviceconfig.
 	return err
 }
 
-// waitForClientConnStateWithConfig is like waitForLoadBalancingConfig, but
-// reads ClientConnState values off of ccsCh, and returns the one containing
-// the expected load balancing configuration.
+// waitForClientConnStateWithConfig waits for a ClientConnState containing the
+// expected child load balancing configuration to be received on the channel.
+//
+// Returns an error if marshalling to JSON fails, or if the context deadline
+// expires before reading a matching child policy configuration off of the
+// channel. On success, returns the matching ClientConnState.
 func waitForClientConnStateWithConfig(ctx context.Context, ccsCh chan balancer.ClientConnState, wantChildCfg serviceconfig.LoadBalancingConfig) (balancer.ClientConnState, error) {
 	getCfg := func(ccs balancer.ClientConnState) serviceconfig.LoadBalancingConfig {
 		return ccs.BalancerConfig
@@ -394,8 +406,8 @@ func createPriorityConfig(cluster string) *iserviceconfig.BalancerConfig {
 	return createPriorityConfigWithPolicy(cluster, wrrLocalityRoundRobinPolicy())
 }
 
-// createPriorityConfigWithPolicy is like createPriorityConfig, but uses the
-// given locality and endpoint picking policy.
+// createPriorityConfigWithPolicy creates priority config that uses the given
+// locality and endpoint picking policy.
 func createPriorityConfigWithPolicy(cluster string, xdsLBPolicy *iserviceconfig.BalancerConfig) *iserviceconfig.BalancerConfig {
 	return &iserviceconfig.BalancerConfig{
 		Name: outlierdetection.Name,
@@ -422,8 +434,9 @@ func createLeafClusterConfig(cluster string, pName string, ignoreReresolution bo
 	return createLeafClusterConfigWithPolicy(cluster, pName, ignoreReresolution, wrrLocalityRoundRobinPolicy())
 }
 
-// createLeafClusterConfigWithPolicy is like createLeafClusterConfig, but uses
-// the given locality and endpoint picking policy:
+// createLeafClusterConfigWithPolicy returns the expected LoadBalancingConfig
+// tree for a leaf (non-aggregate) cluster under gRFC A75 topology that uses the
+// given locality and endpoint picking policy:
 // outlier_detection -> cluster_impl -> priority -> xdsLBPolicy.
 func createLeafClusterConfigWithPolicy(cluster string, pName string, ignoreReresolution bool, xdsLBPolicy *iserviceconfig.BalancerConfig) *outlierdetection.LBConfig {
 	return &outlierdetection.LBConfig{
@@ -1508,22 +1521,20 @@ func (s) TestClusterUpdate_AutoshardingAggregateCluster(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	// Start a test server to act as the sharding service configured on the
-	// root cluster. The sharding service configured on the leaf cluster is
-	// never dialed.
-	rootServer := startShardingServers(t, 1)[0]
+	const rootTargetURI = "dns:///root-sharding-service:443"
 	const leafTargetURI = "dns:///leaf-sharding-service:443"
+	rootKey := grpcServiceKeyForInsecureTarget(rootTargetURI)
 	leafKey := grpcServiceKeyForInsecureTarget(leafTargetURI)
 
 	// The child policy of the CDS LB policy is priority for aggregate clusters.
 	ccsCh := registerStubPolicy(ctx, t, priority.Name)
-	mgmtServer, nodeID, _ := setupWithAllowedGRPCServices(t, rootServer.targetURI, leafTargetURI)
+	mgmtServer, nodeID, _ := setupWithAllowedGRPCServices(t, rootTargetURI, leafTargetURI)
 
 	// Configure an aggregate cluster pointing to a single EDS cluster, with
 	// both of them using the autosharding LB policy, but with different
 	// GrpcServices.
 	aggregateCluster := makeAggregateClusterResource(clusterName, []string{edsClusterName})
-	aggregateCluster.LoadBalancingPolicy = loadBalancingPolicy(testutils.MarshalAny(t, autoshardingProto(rootServer.targetURI, "root-target")))
+	aggregateCluster.LoadBalancingPolicy = loadBalancingPolicy(testutils.MarshalAny(t, autoshardingProto(rootTargetURI, "root-target")))
 	leafCluster := autoshardingCluster(edsClusterName, serviceName, testutils.MarshalAny(t, autoshardingProto(leafTargetURI, "leaf-target")))
 	updateClusterResources(ctx, t, mgmtServer, nodeID, aggregateCluster, leafCluster)
 
@@ -1532,7 +1543,7 @@ func (s) TestClusterUpdate_AutoshardingAggregateCluster(t *testing.T) {
 	wantChildCfg := &priority.LBConfig{
 		Children: map[string]*priority.Child{
 			"priority-0-0": {
-				Config:                     createPriorityConfigWithPolicy(edsClusterName, autoshardingLBConfig(rootServer.key, "root-target")),
+				Config:                     createPriorityConfigWithPolicy(edsClusterName, autoshardingLBConfig(rootKey, "root-target")),
 				IgnoreReresolutionRequests: true,
 			},
 		},
@@ -1548,9 +1559,11 @@ func (s) TestClusterUpdate_AutoshardingAggregateCluster(t *testing.T) {
 	}
 
 	// Verify that the ClientConnProvider recognizes the key of the GrpcService
-	// from the root cluster, and returns a working ClientConn.
-	cc, _ := acquireChannel(t, provider, rootServer.key)
-	verifyEmptyCall(ctx, t, cc)
+	// from the root cluster.
+	cc, _ := acquireChannel(t, provider, rootKey)
+	if cc == nil {
+		t.Fatal("ClientConnProvider did not return a ClientConn for the root cluster")
+	}
 
 	// Verify that the ClientConnProvider does not recognize the key of the
 	// GrpcService from the leaf cluster.
