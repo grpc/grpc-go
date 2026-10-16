@@ -1413,34 +1413,6 @@ func autoshardingLBConfig(key, autoshardingTarget string) *iserviceconfig.Balanc
 	}
 }
 
-// autoshardingKeyFromConfig returns the channel factory key of the autosharding
-// policy in the given outlier_detection configuration, as built by the cds LB
-// policy for a leaf cluster. Returns the empty string if the configuration
-// does not contain an autosharding policy.
-func autoshardingKeyFromConfig(cfg serviceconfig.LoadBalancingConfig) string {
-	odCfg, ok := cfg.(*outlierdetection.LBConfig)
-	if !ok || odCfg.ChildPolicy == nil {
-		return ""
-	}
-	ciCfg, ok := odCfg.ChildPolicy.Config.(*clusterimpl.LBConfig)
-	if !ok || ciCfg.ChildPolicy == nil {
-		return ""
-	}
-	prCfg, ok := ciCfg.ChildPolicy.Config.(*priority.LBConfig)
-	if !ok {
-		return ""
-	}
-	for _, child := range prCfg.Children {
-		if child.Config == nil {
-			continue
-		}
-		if asCfg, ok := child.Config.Config.(*autosharding.LBConfig); ok {
-			return asCfg.ChannelFactoryKey
-		}
-	}
-	return ""
-}
-
 // Tests that when the CDS LB policy receives a cluster resource configured
 // with the Autosharding LB policy (either directly or under WrrLocality), it
 // builds the expected child policy configuration and injects a
