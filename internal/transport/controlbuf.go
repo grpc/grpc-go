@@ -366,21 +366,31 @@ type controlBuffer struct {
 	done             <-chan struct{} // Closed when the transport is done.
 	enableThrottling bool            // Indicates if throttling is enabled.
 
-	// Mutex guards all the fields below, except trfChan which can be read
-	// atomically without holding mu.
+	// consumerList holds a batch of control frames that the consumer (loopy)
+	// took from list in a single critical section. It is only accessed by the
+	// consumer goroutine, without holding mu.
+	consumerList itemList[cbItem]
+
+	// Mutex guards all the fields below.
 	mu              sync.Mutex
 	consumerWaiting bool             // True when readers are blocked waiting for new data.
-	closed          bool             // True when the controlbuf is finished.
 	list            itemList[cbItem] // List of queued control frames.
 
-	// transportResponseFrames counts the number of queued items that represent
-	// the response of an action initiated by the peer. When enableThrottling is
-	// true, trfChan is created when transportResponseFrames >=
-	// maxQueuedControlBufferItems and is closed and nilled when
-	// transportResponseFrames drops below the threshold. Both fields are
-	// protected by mu.
-	transportResponseFrames int
-	trfChan                 atomic.Pointer[chan struct{}]
+	// mu guards writes to the following fields. They can be read atomically
+	// without holding mu.
+
+	// closed is set when the controlbuf is finished.
+	closed atomic.Bool
+	// trfChan is created when transportResponseFrames reaches
+	// maxQueuedTransportResponseFrames and is closed and nilled when
+	// transportResponseFrames drops below the threshold.
+	trfChan atomic.Pointer[chan struct{}]
+
+	// transportResponseFrames counts the number of queued items (in list and
+	// consumerList) that represent the response of an action initiated by the
+	// peer. It is incremented by producers while holding mu, and decremented by
+	// the consumer without holding mu.
+	transportResponseFrames atomic.Int64
 }
 
 func newControlBuffer(done <-chan struct{}, enableThrottling bool) *controlBuffer {
@@ -420,7 +430,7 @@ func (c *controlBuffer) executeAndPut(f func() bool, it cbItem) (bool, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if c.closed {
+	if c.closed.Load() {
 		return false, ErrConnClosing
 	}
 	if f != nil {
@@ -438,14 +448,10 @@ func (c *controlBuffer) executeAndPut(f func() bool, it cbItem) (bool, error) {
 		c.consumerWaiting = false
 	}
 	c.list.enqueue(it)
-	if c.enableThrottling && it.isTransportResponseFrame() {
-		c.transportResponseFrames++
-		if c.transportResponseFrames == maxQueuedTransportResponseFrames {
-			// We are adding the frame that puts us over the threshold; create
-			// a throttling channel.
-			ch := make(chan struct{})
-			c.trfChan.Store(&ch)
-		}
+	if c.enableThrottling && it.isTransportResponseFrame() &&
+		c.transportResponseFrames.Add(1) == int64(maxQueuedTransportResponseFrames) {
+		// We are adding the frame that puts us at the threshold.
+		c.updateThrottleLocked()
 	}
 	if wakeUp {
 		select {
@@ -460,17 +466,35 @@ func (c *controlBuffer) executeAndPut(f func() bool, it cbItem) (bool, error) {
 // **and** there are no control frames in the control buffer, the call blocks
 // until one of the conditions is met: there is a frame to return or the
 // transport is closed.
+//
+// To reduce lock contention with producers, get takes all the queued frames
+// in a single critical section, and then returns them one at a time from
+// consumerList without holding the lock. get must only be called by a single
+// consumer goroutine (loopy).
 func (c *controlBuffer) get(block bool) (any, error) {
+	if !c.consumerList.isEmpty() {
+		if c.closed.Load() {
+			return nil, ErrConnClosing
+		}
+		return c.dequeueConsumerList(), nil
+	}
 	for {
 		c.mu.Lock()
-		frame, err := c.getOnceLocked()
-		if frame != nil || err != nil || !block {
-			// If we read a frame or an error, we can return to the caller. The
-			// call to getOnceLocked() returns a nil frame and a nil error if
-			// there is nothing to read, and in that case, if the caller asked
-			// us not to block, we can return now as well.
+		if c.closed.Load() {
 			c.mu.Unlock()
-			return frame, err
+			return nil, ErrConnClosing
+		}
+		if !c.list.isEmpty() {
+			// Take all the queued frames by swapping the two lists.
+			// consumerList is empty here.
+			c.list, c.consumerList = c.consumerList, c.list
+			c.mu.Unlock()
+			return c.dequeueConsumerList(), nil
+		}
+		if !block {
+			// There is nothing to read, and the caller asked us not to block.
+			c.mu.Unlock()
+			return nil, nil
 		}
 		c.consumerWaiting = true
 		c.mu.Unlock()
@@ -484,53 +508,81 @@ func (c *controlBuffer) get(block bool) (any, error) {
 	}
 }
 
-// Callers must not use this method, but should instead use get().
+// dequeueConsumerList removes and returns the first frame from consumerList,
+// which must not be empty. It must only be called by the consumer goroutine.
+func (c *controlBuffer) dequeueConsumerList() cbItem {
+	it := c.consumerList.dequeue()
+	if c.enableThrottling && it.isTransportResponseFrame() &&
+		c.transportResponseFrames.Add(-1) == int64(maxQueuedTransportResponseFrames)-1 {
+		// We are removing the frame that put us at the threshold. This is the
+		// only time the consumer takes the lock for throttling.
+		c.mu.Lock()
+		c.updateThrottleLocked()
+		c.mu.Unlock()
+	}
+	return it
+}
+
+// updateThrottleLocked creates or closes the throttling channel to match the
+// current number of queued transport response frames. It must be called after
+// every change of transportResponseFrames that crosses
+// maxQueuedTransportResponseFrames.
+//
+// The count is decremented without holding mu, so by the time this runs, the
+// count may have crossed the threshold again. Acting on the current count,
+// rather than on the direction of the crossing that triggered the call, makes
+// this idempotent: calls are serialized by mu and the last one, which runs
+// after the last crossing, leaves trfChan in the correct state.
 //
 // Caller must hold c.mu.
-func (c *controlBuffer) getOnceLocked() (any, error) {
-	if c.closed {
-		return false, ErrConnClosing
+func (c *controlBuffer) updateThrottleLocked() {
+	if c.closed.Load() {
+		// finish() has already closed and cleared the throttling channel.
+		return
 	}
-	if c.list.isEmpty() {
-		return nil, nil
-	}
-	h := c.list.dequeue()
-	if c.enableThrottling && h.isTransportResponseFrame() {
-		if c.transportResponseFrames == maxQueuedTransportResponseFrames {
-			// We are removing the frame that put us over the
-			// threshold; close and clear the throttling channel.
-			ch := c.trfChan.Swap(nil)
-			close(*ch)
+	if c.transportResponseFrames.Load() >= int64(maxQueuedTransportResponseFrames) {
+		if c.trfChan.Load() == nil {
+			ch := make(chan struct{})
+			c.trfChan.Store(&ch)
 		}
-		c.transportResponseFrames--
+		return
 	}
-	return h, nil
+	if ch := c.trfChan.Swap(nil); ch != nil {
+		close(*ch)
+	}
+}
+
+// discardItem releases the resources held by a control frame that will not be
+// handled because the control buffer is finished.
+func discardItem(it cbItem) {
+	switch v := it.(type) {
+	case *clientHeaders:
+		v.onOrphaned(ErrConnClosing)
+	case *dataFrame:
+		if !v.processing {
+			v.data.Free()
+		}
+	}
 }
 
 // finish closes the control buffer, cleaning up any streams that have queued
 // header frames. Once this method returns, no more frames can be added to the
 // control buffer, and attempts to do so will return ErrConnClosing.
+//
+// finish may be called from any goroutine, so it doesn't touch consumerList;
+// the consumer must call discardConsumerList once it is done.
 func (c *controlBuffer) finish() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if c.closed {
+	if c.closed.Load() {
 		return
 	}
-	c.closed = true
+	c.closed.Store(true)
 	// There may be headers for streams in the control buffer.
 	// These streams need to be cleaned out since the transport
 	// is still not aware of these yet.
-	c.list.dequeueAll(func(it cbItem) {
-		switch v := it.(type) {
-		case *clientHeaders:
-			v.onOrphaned(ErrConnClosing)
-		case *dataFrame:
-			if !v.processing {
-				v.data.Free()
-			}
-		}
-	})
+	c.list.dequeueAll(discardItem)
 
 	// In case throttle() is currently in flight, it needs to be unblocked.
 	// Otherwise, the transport may not close, since the transport is closed by
@@ -539,6 +591,13 @@ func (c *controlBuffer) finish() {
 	if ch != nil {
 		close(*ch)
 	}
+}
+
+// discardConsumerList cleans up frames the consumer took from the control
+// buffer but didn't handle. It must only be called by the consumer goroutine,
+// after finish.
+func (c *controlBuffer) discardConsumerList() {
+	c.consumerList.dequeueAll(discardItem)
 }
 
 type side int
@@ -649,6 +708,7 @@ func (l *loopyWriter) run() (err error) {
 			l.framer.writer.Flush()
 		}
 		l.cbuf.finish()
+		l.cbuf.discardConsumerList()
 	}()
 	for {
 		it, err := l.cbuf.get(true)
