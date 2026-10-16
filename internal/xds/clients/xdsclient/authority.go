@@ -46,6 +46,12 @@ type resourceState struct {
 	xdsChannelConfigs map[*xdsChannelWithConfig]bool // Set of xdsChannels where this resource is subscribed.
 }
 
+// resourcesByType holds the resource type and the state of its watched resources.
+type resourcesByType struct {
+	typ       ResourceType
+	resources map[string]*resourceState
+}
+
 // xdsChannelForADS is used to acquire a reference to an xdsChannel. This
 // functionality is provided by the xdsClient.
 //
@@ -95,15 +101,9 @@ type authority struct {
 	// The below defined fields must only be accessed in the context of the
 	// serializer callback, owned by this authority.
 
-	// A two level map containing the state of all the resources being watched.
-	//
-	// The first level map key is the ResourceType (Listener, Route etc). This
-	// allows us to have a single map for all resources instead of having per
-	// resource-type maps.
-	//
-	// The second level map key is the resource name, with the value being the
-	// actual state of the resource.
-	resources map[ResourceType]map[string]*resourceState
+	// Resource state indexed by type URL, then by resource name. ResourceType
+	// cannot be used as a map key because its Decoder may not be comparable.
+	resources map[string]*resourcesByType
 
 	// An ordered list of xdsChannels corresponding to the list of server
 	// configurations specified for this authority in the config. The
@@ -148,7 +148,7 @@ func newAuthority(args authorityBuildOptions) *authority {
 		xdsClientSerializer:       syncutil.NewCallbackSerializer(ctx),
 		xdsClientSerializerClose:  cancel,
 		logger:                    igrpclog.NewPrefixLogger(l, logPrefix),
-		resources:                 make(map[ResourceType]map[string]*resourceState),
+		resources:                 make(map[string]*resourcesByType),
 		target:                    args.target,
 		metricsReporter:           args.metricsReporter,
 	}
@@ -237,7 +237,7 @@ func (a *authority) handleADSStreamFailure(serverConfig *ServerConfig, err error
 // Only executed in the context of a serializer callback.
 func (a *authority) propagateConnectivityErrorToAllWatchers(err error) {
 	for _, rType := range a.resources {
-		for _, state := range rType {
+		for _, state := range rType.resources {
 			for watcher := range state.watchers {
 				if state.cache == nil {
 					a.watcherCallbackSerializer.TrySchedule(func(context.Context) {
@@ -292,12 +292,12 @@ func (a *authority) fallbackToServer(xc *xdsChannelWithConfig) bool {
 	a.activeXDSChannel = xc
 
 	// Subscribe to all existing resources from the new management server.
-	for typ, resources := range a.resources {
-		for name, state := range resources {
+	for _, resources := range a.resources {
+		for name, state := range resources.resources {
 			if a.logger.V(2) {
-				a.logger.Infof("Resubscribing to resource of type %q and name %q", typ.TypeName, name)
+				a.logger.Infof("Resubscribing to resource of type %q and name %q", resources.typ.TypeName, name)
 			}
-			xc.channel.subscribe(typ, name)
+			xc.channel.subscribe(resources.typ, name)
 
 			// Add the new channel to the list of xdsChannels from which this
 			// resource has been requested from. Retain the cached resource and
@@ -361,7 +361,11 @@ func (a *authority) handleADSResourceUpdate(serverConfig *ServerConfig, rType Re
 		}
 	}()
 
-	resourceStates := a.resources[rType]
+	resources := a.resources[rType.TypeURL]
+	if resources == nil {
+		return
+	}
+	resourceStates := resources.resources
 	for name, uErr := range updates {
 		state, ok := resourceStates[name]
 		if !ok {
@@ -526,14 +530,14 @@ func (a *authority) handleADSResourceDoesNotExist(rType ResourceType, resourceNa
 		a.logger.Infof("Watch for resource %q of type %s timed out", resourceName, rType.TypeName)
 	}
 
-	resourceStates := a.resources[rType]
-	if resourceStates == nil {
+	resources := a.resources[rType.TypeURL]
+	if resources == nil {
 		if a.logger.V(2) {
 			a.logger.Infof("Resource %q of type %s currently not being watched", resourceName, rType.TypeName)
 		}
 		return
 	}
-	state, ok := resourceStates[resourceName]
+	state, ok := resources.resources[resourceName]
 	if !ok {
 		if a.logger.V(2) {
 			a.logger.Infof("Resource %q of type %s currently not being watched", resourceName, rType.TypeName)
@@ -613,8 +617,8 @@ func (a *authority) handleRevertingToPrimaryOnUpdate(serverConfig *ServerConfig)
 	for i := serverIdx + 1; i < len(a.xdsChannelConfigs); i++ {
 		cfg := a.xdsChannelConfigs[i]
 
-		for rType, rState := range a.resources {
-			for resourceName, state := range rState {
+		for _, resources := range a.resources {
+			for resourceName, state := range resources.resources {
 				for xcc := range state.xdsChannelConfigs {
 					if xcc != cfg {
 						continue
@@ -622,7 +626,7 @@ func (a *authority) handleRevertingToPrimaryOnUpdate(serverConfig *ServerConfig)
 					// If the current resource is subscribed to on this channel,
 					// unsubscribe, and remove the channel from the list of
 					// channels that this resource is subscribed to.
-					xcc.channel.unsubscribe(rType, resourceName)
+					xcc.channel.unsubscribe(resources.typ, resourceName)
 					delete(state.xdsChannelConfigs, xcc)
 				}
 			}
@@ -671,16 +675,16 @@ func (a *authority) watchResource(rType ResourceType, resourceName string, watch
 
 		// Lookup the entry for the resource type in the top-level map. If there is
 		// no entry for this resource type, create one.
-		resources := a.resources[rType]
+		resources := a.resources[rType.TypeURL]
 		if resources == nil {
-			resources = make(map[string]*resourceState)
-			a.resources[rType] = resources
+			resources = &resourcesByType{typ: rType, resources: make(map[string]*resourceState)}
+			a.resources[rType.TypeURL] = resources
 		}
 
 		// Lookup the resource state for the particular resource name that the watch
 		// is being registered for. If this is the first watch for this resource
 		// name, request it from the management server.
-		state := resources[resourceName]
+		state := resources.resources[resourceName]
 		if state == nil {
 			if a.logger.V(2) {
 				a.logger.Infof("First watch for type %q, resource name %q", rType.TypeName, resourceName)
@@ -690,7 +694,7 @@ func (a *authority) watchResource(rType ResourceType, resourceName string, watch
 				md:                xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusRequested},
 				xdsChannelConfigs: map[*xdsChannelWithConfig]bool{xdsChannel: true},
 			}
-			resources[resourceName] = state
+			resources.resources[resourceName] = state
 			xdsChannel.channel.subscribe(rType, resourceName)
 		}
 		// Always add the new watcher to the set of watchers.
@@ -755,7 +759,7 @@ func (a *authority) unwatchResource(rType ResourceType, resourceName string, wat
 			// Lookup the resource type from the resource cache. The entry is
 			// guaranteed to be present, since *we* were the ones who added it in
 			// there when the watch was registered.
-			resources := a.resources[rType]
+			resources := a.resources[rType.TypeURL].resources
 			state := resources[resourceName]
 
 			// Delete this particular watcher from the list of watchers, so that its
@@ -785,7 +789,7 @@ func (a *authority) unwatchResource(rType ResourceType, resourceName string, wat
 				if a.logger.V(2) {
 					a.logger.Infof("Removing last watch for resource type %q", rType.TypeName)
 				}
-				delete(a.resources, rType)
+				delete(a.resources, rType.TypeURL)
 			}
 			// If there are no more watchers for any resource type, release the
 			// reference to the xdsChannels.
@@ -845,7 +849,7 @@ func (a *authority) closeXDSChannels() {
 // Only executed in the context of a serializer callback.
 func (a *authority) watcherExistsForUncachedResource() bool {
 	for _, resourceStates := range a.resources {
-		for _, state := range resourceStates {
+		for _, state := range resourceStates.resources {
 			if state.md.Status == xdsresource.ServiceStatusRequested {
 				return true
 			}
@@ -875,9 +879,8 @@ func (a *authority) dumpResources() []*v3statuspb.ClientConfig_GenericXdsConfig 
 // Only executed in the context of a serializer callback.
 func (a *authority) resourceConfig() []*v3statuspb.ClientConfig_GenericXdsConfig {
 	var ret []*v3statuspb.ClientConfig_GenericXdsConfig
-	for rType, resourceStates := range a.resources {
-		typeURL := rType.TypeURL
-		for name, state := range resourceStates {
+	for typeURL, resources := range a.resources {
+		for name, state := range resources.resources {
 			var raw *anypb.Any
 			if state.cache != nil {
 				raw = &anypb.Any{TypeUrl: typeURL, Value: state.cache.Bytes()}
@@ -952,12 +955,12 @@ func (a *authority) resourceStats() map[string]map[string]int {
 	ret := make(chan map[string]map[string]int, 1)
 	op := func(context.Context) {
 		summary := make(map[string]map[string]int)
-		for rType, resourceMap := range a.resources {
-			typeName := rType.TypeName
+		for _, resources := range a.resources {
+			typeName := resources.typ.TypeName
 			if _, ok := summary[typeName]; !ok {
 				summary[typeName] = make(map[string]int)
 			}
-			for _, state := range resourceMap {
+			for _, state := range resources.resources {
 				s := cacheState(state)
 				summary[typeName][s]++
 			}
