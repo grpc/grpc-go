@@ -1381,6 +1381,14 @@ func (s) TestAggregatedConnectivityStateAndAutoConnect(t *testing.T) {
 		t.Fatal("Timeout waiting for sc2.Connect()")
 	}
 
+	// The pick_first child created for (host-2, "10.0.0.2:8080") reports
+	// CONNECTING when it receives the addresses from the resolver (autosharding
+	// balancer here). That would leave us with one endpoint in TF and one in
+	// CONNECTING, therefore aggregated state must be CONNECTING.
+	if err := cc.WaitForConnectivityState(ctx, connectivity.Connecting); err != nil {
+		t.Fatalf("WaitForConnectivityState(Connecting) with 1 TF endpoint failed: %v", err)
+	}
+
 	// Moving sc2 to CONNECTING then TF should leave us with two endpoints in TF
 	// and two in IDLE, and this should result in the aggregated state being TF.
 	// And because no endpoint is in CONNECTING, the balancer automatically
@@ -1388,9 +1396,20 @@ func (s) TestAggregatedConnectivityStateAndAutoConnect(t *testing.T) {
 	// "10.0.0.3:8080").
 	sc2.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 	sc2.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
-	if err := cc.WaitForConnectivityState(ctx, connectivity.TransientFailure); err != nil {
-		t.Fatalf("WaitForConnectivityState(TransientFailure) with 2 TF endpoints failed: %v", err)
-	}
+
+	// Don't verify the aggregated state here. Moving sc2 to TF pushes two TF
+	// updates to the ClientConn:
+	//  - Inline: the aggregated state (2 TF, 2 IDLE) is TF. Since no endpoint is
+	//    CONNECTING, the balancer asks host-3's child to exit IDLE, which
+	//    endpointsharding does in a new goroutine.
+	//  - From that goroutine: host-3's newly built pick_first child reports
+	//    CONNECTING before creating sc3, and the aggregated state
+	//    (2 TF, 1 CONNECTING, 1 IDLE) is TF again.
+	// NewStateCh only retains the most recent state, so these two updates can be
+	// coalesced into one. If it were consumed here, the check below would block
+	// forever, because moving sc3 to CONNECTING does not cause pick_first to
+	// report a new state (it is already CONNECTING). Waiting for sc3 to be
+	// created guarantees that both updates have been pushed.
 	sc3 := waitForSubConn(ctx, t, cc)
 	if got, want := sc3.Addresses[0].Addr, "10.0.0.3:8080"; got != want {
 		t.Fatalf("Auto-ExitIdle created SubConn for %q, want %q", got, want)
