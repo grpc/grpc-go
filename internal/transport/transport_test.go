@@ -4649,3 +4649,67 @@ func (s) TestRecvBufferCompactionDisabled(t *testing.T) {
 		}
 	}
 }
+
+// TestServerStreamSetHeaderTrailerOnDoneStream verifies that SetHeader and
+// SetTrailer report the stream's context error, and not
+// ErrIllegalHeaderWrite, when the stream is already done, e.g. because the
+// client cancelled the RPC or its deadline expired.
+func (s) TestServerStreamSetHeaderTrailerOnDoneStream(t *testing.T) {
+	canceledCtx, cancel := context.WithCancel(context.Background())
+	cancel()
+	// A deadline in the past makes ctx.Err() report DeadlineExceeded without
+	// having to wait for a timer.
+	expiredCtx, cancel := context.WithTimeout(context.Background(), -defaultTestTimeout)
+	defer cancel()
+	liveCtx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	tests := []struct {
+		name string
+		ctx  context.Context
+		want codes.Code
+	}{
+		{name: "context canceled", ctx: canceledCtx, want: codes.Canceled},
+		{name: "deadline exceeded", ctx: expiredCtx, want: codes.DeadlineExceeded},
+		// The stream state is set to done before its context is cancelled, so
+		// a caller can observe a done stream with a live context.
+		{name: "context not cancelled yet", ctx: liveCtx, want: codes.Canceled},
+	}
+
+	setters := []struct {
+		name string
+		set  func(*ServerStream, metadata.MD) error
+	}{
+		{name: "SetHeader", set: (*ServerStream).SetHeader},
+		{name: "SetTrailer", set: (*ServerStream).SetTrailer},
+	}
+
+	for _, test := range tests {
+		for _, setter := range setters {
+			t.Run(test.name+"/"+setter.name, func(t *testing.T) {
+				str := &ServerStream{Stream: Stream{ctx: test.ctx}}
+				str.swapState(streamDone)
+
+				err := setter.set(str, metadata.Pairs("test-key", "test-value"))
+				if got := status.Code(err); got != test.want {
+					t.Fatalf("%s() on a done stream returned error %v with code %v, want code %v", setter.name, err, got, test.want)
+				}
+			})
+		}
+	}
+}
+
+// TestServerStreamSetHeaderAfterHeaderSent verifies that SetHeader still
+// reports ErrIllegalHeaderWrite when the headers have already been sent on an
+// active stream.
+func (s) TestServerStreamSetHeaderAfterHeaderSent(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	str := &ServerStream{Stream: Stream{ctx: ctx}}
+	str.updateHeaderSent()
+
+	err := str.SetHeader(metadata.Pairs("test-key", "test-value"))
+	if !errors.Is(err, ErrIllegalHeaderWrite) {
+		t.Fatalf("SetHeader() after the headers were sent returned error %v, want %v", err, ErrIllegalHeaderWrite)
+	}
+}
