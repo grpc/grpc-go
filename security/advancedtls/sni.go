@@ -19,19 +19,37 @@
 package advancedtls
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 )
 
 // buildGetCertificates returns the certificate that matches the SNI field
-// for the given ClientHelloInfo, defaulting to the first element of o.GetCertificates.
+// and signature schemes for the given ClientHelloInfo, defaulting to the first
+// element of the configured certificates.
 func buildGetCertificates(clientHello *tls.ClientHelloInfo, o *Options) (*tls.Certificate, error) {
-	if o.IdentityOptions.GetIdentityCertificatesForServer == nil {
+	var certificates []*tls.Certificate
+	switch {
+	case o.IdentityOptions.GetIdentityCertificatesForServer != nil:
+		var err error
+		certificates, err = o.IdentityOptions.GetIdentityCertificatesForServer(clientHello)
+		if err != nil {
+			return nil, err
+		}
+	case len(o.IdentityOptions.Certificates) > 0:
+		for i := range o.IdentityOptions.Certificates {
+			certificates = append(certificates, &o.IdentityOptions.Certificates[i])
+		}
+	case o.IdentityOptions.IdentityProvider != nil:
+		km, err := o.IdentityOptions.IdentityProvider.KeyMaterial(context.Background())
+		if err != nil {
+			return nil, err
+		}
+		for i := range km.Certs {
+			certificates = append(certificates, &km.Certs[i])
+		}
+	default:
 		return nil, fmt.Errorf("function GetCertificates must be specified")
-	}
-	certificates, err := o.IdentityOptions.GetIdentityCertificatesForServer(clientHello)
-	if err != nil {
-		return nil, err
 	}
 	if len(certificates) == 0 {
 		return nil, fmt.Errorf("no certificates configured")
@@ -40,7 +58,7 @@ func buildGetCertificates(clientHello *tls.ClientHelloInfo, o *Options) (*tls.Ce
 	if len(certificates) == 1 {
 		return certificates[0], nil
 	}
-	// Choose the SNI certificate using SupportsCertificate.
+	// Choose the certificate using SupportsCertificate.
 	for _, cert := range certificates {
 		if err := clientHello.SupportsCertificate(cert); err == nil {
 			return cert, nil
