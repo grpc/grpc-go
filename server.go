@@ -70,13 +70,6 @@ const (
 )
 
 func init() {
-	internal.GetServerCredentials = func(srv *Server) credentials.TransportCredentials {
-		return srv.opts.creds
-	}
-	internal.IsRegisteredMethod = func(srv *Server, method string) bool {
-		return srv.isRegisteredMethod(method)
-	}
-	internal.ServerFromContext = serverFromContext
 	internal.AddGlobalServerOptions = func(opt ...ServerOption) {
 		globalServerOptions = append(globalServerOptions, opt...)
 	}
@@ -86,10 +79,25 @@ func init() {
 	internal.BinaryLogger = binaryLogger
 	internal.JoinServerOptions = newJoinServerOption
 	internal.BufferPool = bufferPool
+	internal.XDSFilterWrapperOption = xdsFilterWrapperOption
+}
+
+// Register hooks involving *Server only when a server is created. Registering
+// these functions in init makes *Server reachable through an interface and keeps
+// its exported methods in client-only binaries.
+var serverHooksOnce sync.Once
+
+func initServerHooks() {
+	internal.GetServerCredentials = func(srv *Server) credentials.TransportCredentials {
+		return srv.opts.creds
+	}
+	internal.IsRegisteredMethod = func(srv *Server, method string) bool {
+		return srv.isRegisteredMethod(method)
+	}
+	internal.ServerFromContext = serverFromContext
 	internal.MetricsRecorderForServer = func(srv *Server) estats.MetricsRecorder {
 		return istats.NewMetricsRecorderList(srv.opts.statsHandlers)
 	}
-	internal.XDSFilterWrapperOption = xdsFilterWrapperOption
 }
 
 var statusOK = status.New(codes.OK, "")
@@ -710,6 +718,7 @@ func (s *Server) initServerWorkers() {
 // NewServer creates a gRPC server which has no service registered and has not
 // started to accept requests yet.
 func NewServer(opt ...ServerOption) *Server {
+	serverHooksOnce.Do(initServerHooks)
 	opts := defaultServerOptions
 	for _, o := range globalServerOptions {
 		o.apply(&opts)
