@@ -71,6 +71,12 @@ type Options struct {
 	// for updates in the specified files.
 	// Optional. If not set, a default value (1 hour) will be used.
 	RefreshDuration time.Duration
+	// Callback invoked after key material has been updated, including
+	// on initial update. Implementations should not modify the key material.
+	// This is run in the plugin main loop, so should not block, to avoid
+	// delaying key material updates.
+	// Optional.
+	OnUpdate func(*certprovider.KeyMaterial)
 }
 
 func (o Options) canonical() []byte {
@@ -183,7 +189,11 @@ func (w *watcher) updateIdentityDistributor() {
 	}
 	w.certFileContents = certFileContents
 	w.keyFileContents = keyFileContents
-	w.identityDistributor.Set(&certprovider.KeyMaterial{Certs: []tls.Certificate{cert}}, nil)
+	km := &certprovider.KeyMaterial{Certs: []tls.Certificate{cert}}
+	if w.opts.OnUpdate != nil {
+		w.opts.OnUpdate(km)
+	}
+	w.identityDistributor.Set(km, nil)
 }
 
 // updateRootDistributor checks if the root cert file that the plugin is
@@ -223,7 +233,11 @@ func (w *watcher) maybeUpdateSPIFFEBundleMap() {
 		return
 	}
 	w.spiffeBundleMapFileContents = spiffeBundleMapContents
-	w.rootDistributor.Set(&certprovider.KeyMaterial{SPIFFEBundleMap: bundleMap}, nil)
+	km := &certprovider.KeyMaterial{SPIFFEBundleMap: bundleMap}
+	if w.opts.OnUpdate != nil {
+		w.opts.OnUpdate(km)
+	}
+	w.rootDistributor.Set(km, nil)
 }
 
 func (w *watcher) maybeUpdateRootFile() {
@@ -244,7 +258,11 @@ func (w *watcher) maybeUpdateRootFile() {
 	}
 
 	w.rootFileContents = rootFileContents
-	w.rootDistributor.Set(&certprovider.KeyMaterial{Roots: trustPool}, nil)
+	km := &certprovider.KeyMaterial{Roots: trustPool}
+	if w.opts.OnUpdate != nil {
+		w.opts.OnUpdate(km)
+	}
+	w.rootDistributor.Set(km, nil)
 }
 
 // run is a long running goroutine which watches the configured files for
