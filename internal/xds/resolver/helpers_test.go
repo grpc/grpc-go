@@ -173,6 +173,36 @@ func verifyUpdateFromResolver(ctx context.Context, t *testing.T, stateCh chan re
 	return cs
 }
 
+// waitForServiceConfig drains updates from the resolver until one carries a
+// service config matching wantSC, and fails if none does before ctx expires.
+// Use this instead of verifyUpdateFromResolver when the resolver is expected to
+// publish intermediate configs on the way to the wanted one.
+//
+// Returns the config selector from the matching update.
+func waitForServiceConfig(ctx context.Context, t *testing.T, stateCh chan resolver.State, wantSC string) iresolver.ConfigSelector {
+	t.Helper()
+
+	want := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(wantSC)
+	for {
+		select {
+		case <-ctx.Done():
+			t.Fatalf("Timeout waiting for the resolver to publish service config:\n%s", wantSC)
+		case state := <-stateCh:
+			if err := state.ServiceConfig.Err; err != nil {
+				t.Fatalf("Received error in service config: %v", err)
+			}
+			if !internal.EqualServiceConfigForTesting(state.ServiceConfig.Config, want.Config) {
+				continue
+			}
+			cs := iresolver.GetConfigSelector(state)
+			if cs == nil {
+				t.Fatal("Received nil config selector in update from resolver")
+			}
+			return cs
+		}
+	}
+}
+
 // verifyNoUpdateFromResolver verifies that no update is pushed on stateCh.
 // Calls t.Fatal() if an update is received before defaultTestShortTimeout
 // expires.
