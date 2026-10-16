@@ -28,7 +28,9 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/transport"
+	"google.golang.org/grpc/mem"
 	"google.golang.org/grpc/status"
 )
 
@@ -173,6 +175,37 @@ func (s) TestStreamContext(t *testing.T) {
 	stream, ok := s.(*transport.ServerStream)
 	if !ok || expectedStream != stream {
 		t.Fatalf("GetStreamFromContext(%v) = %v, %t, want: %v, true", ctx, stream, ok, expectedStream)
+	}
+}
+
+func (s) TestServerBufferPool(t *testing.T) {
+	originalPool := mem.DefaultBufferPool()
+	setPool := internal.SetDefaultBufferPool.(func(mem.BufferPool))
+	t.Cleanup(func() { setPool(originalPool) })
+	setPool(mem.NopBufferPool{})
+
+	for _, test := range []struct {
+		name string
+		opts []ServerOption
+		want mem.BufferPool
+	}{
+		{
+			name: "default",
+			want: mem.NopBufferPool{},
+		},
+		{
+			name: "explicit",
+			opts: []ServerOption{bufferPool(originalPool)},
+			want: originalPool,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			server := NewServer(test.opts...)
+			defer server.Stop()
+			if got := server.opts.bufferPool; got != test.want {
+				t.Errorf("NewServer().opts.bufferPool = %v, want %v", got, test.want)
+			}
+		})
 	}
 }
 
