@@ -250,4 +250,8 @@ func (p *constBufferPool) Get(int) *[]byte {
 	return &p.buffer
 }
 
+func (p *constBufferPool) GetUninitialized(int) *[]byte {
+	return &p.buffer
+}
+
 func (p *constBufferPool) Put(*[]byte) {}

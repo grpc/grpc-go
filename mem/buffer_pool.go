@@ -31,6 +31,12 @@ type BufferPool interface {
 	// Get returns a buffer with specified length from the pool.
 	Get(length int) *[]byte
 
+	// GetUninitialized returns a buffer with specified length from the pool
+	// without initializing its contents to zero. Callers must not read from
+	// the returned buffer before writing to it; doing so may expose stale
+	// data from previous uses.
+	GetUninitialized(length int) *[]byte
+
 	// Put returns a buffer to the pool.
 	//
 	// The provided pointer must hold a prefix of the buffer obtained via

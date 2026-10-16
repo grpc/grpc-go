@@ -184,6 +184,10 @@ func (p *constBufferPool) Get(int) *[]byte {
 	return &p.buffer
 }
 
+func (p *constBufferPool) GetUninitialized(int) *[]byte {
+	return &p.buffer
+}
+
 func (p *constBufferPool) Put(*[]byte) {}
 
 // Read reads and decrypts a frame from the underlying connection, and copies the

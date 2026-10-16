@@ -128,3 +128,66 @@ func TestNewBinaryTieredBufferPool_Duplicates(t *testing.T) {
 		t.Errorf("sized buffer pool count = %d, want %d", len(pool.sizedPools), 6)
 	}
 }
+
+// BenchmarkGetVsGetUninitialized benchmarks Get against GetUninitialized for
+// pool-backed buffer sizes to measure the zeroing overhead.
+func BenchmarkGetVsGetUninitialized(b *testing.B) {
+	pool, err := NewBinaryTieredBufferPool(defaultBufferPoolSizeExponents...)
+	if err != nil {
+		b.Fatalf("Failed to create buffer pool: %v", err)
+	}
+
+	sizes := []int{1 << 12, 1 << 14, 1 << 15, 1 << 20} // 4KB, 16KB, 32KB, 1MB
+
+	for _, size := range sizes {
+		bufs := make([]*[]byte, 64)
+		// Warm-up: fill the pool.
+		for i := range bufs {
+			bufs[i] = pool.Get(size)
+		}
+		for i := range bufs {
+			pool.Put(bufs[i])
+		}
+
+		b.Run("Get/"+itoa(size), func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				buf := pool.Get(size)
+				(*buf)[0] = 0x42
+				pool.Put(buf)
+			}
+			b.ReportAllocs()
+		})
+
+		b.Run("GetUninitialized/"+itoa(size), func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				buf := pool.GetUninitialized(size)
+				(*buf)[0] = 0x42
+				pool.Put(buf)
+			}
+			b.ReportAllocs()
+		})
+	}
+}
+
+func itoa(i int) string {
+	// simple int-to-string helper to avoid strconv import
+	if i == 0 {
+		return "0"
+	}
+	neg := i < 0
+	if neg {
+		i = -i
+	}
+	var buf [20]byte
+	pos := len(buf)
+	for i > 0 {
+		pos--
+		buf[pos] = byte('0' + i%10)
+		i /= 10
+	}
+	if neg {
+		pos--
+		buf[pos] = '-'
+	}
+	return string(buf[pos:])
+}

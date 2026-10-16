@@ -65,6 +65,10 @@ func (b *swappableBufferPool) Get(length int) *[]byte {
 	return (*b.Load()).Get(length)
 }
 
+func (b *swappableBufferPool) GetUninitialized(length int) *[]byte {
+	return (*b.Load()).GetUninitialized(length)
+}
+
 func (b *swappableBufferPool) Put(buf *[]byte) {
 	(*b.Load()).Put(buf)
 }
@@ -153,6 +157,15 @@ func (p *trackingBufferPool) Get(length int) *[]byte {
 	defer p.lock.Unlock()
 	p.bufferCount++
 	buf := p.pool.Get(length)
+	p.allocatedBuffers[buf] = currentStack(2)
+	return buf
+}
+
+func (p *trackingBufferPool) GetUninitialized(length int) *[]byte {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+	p.bufferCount++
+	buf := p.pool.GetUninitialized(length)
 	p.allocatedBuffers[buf] = currentStack(2)
 	return buf
 }
