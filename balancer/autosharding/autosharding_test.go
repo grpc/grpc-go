@@ -34,6 +34,7 @@ import (
 	"google.golang.org/grpc/balancer/autosharding"
 	"google.golang.org/grpc/balancer/autosharding/internal"
 	"google.golang.org/grpc/balancer/autosharding/internal/sharding"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/experimental/balancer/hostname"
 	"google.golang.org/grpc/experimental/resolver/locality"
@@ -42,6 +43,7 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/status"
 )
 
 const (
@@ -180,12 +182,6 @@ func (s) TestUpdateClientConnState_ResolverError(t *testing.T) {
 		AutoShardingTarget: "test-target",
 		KeyHeaderName:      "test-header-name",
 	}
-	badKeyCfg := &autosharding.LBConfig{
-		ChannelFactoryKey:  "invalid-factory-key",
-		AutoShardingTarget: "test-target",
-		KeyHeaderName:      "test-header-name",
-	}
-	providerErr := errors.New("channel factory error")
 
 	tests := []struct {
 		name               string
@@ -218,15 +214,6 @@ func (s) TestUpdateClientConnState_ResolverError(t *testing.T) {
 			clientConnProvider: nil,
 			invalidCfg:         defaultTestCfg,
 			wantPickerErr:      errors.New("autosharding: no channel factory found in resolver state"),
-		},
-		{
-			name:      "channel-factory-returns-error",
-			endpoints: []resolver.Endpoint{newTestEndpoint("1.1.1.1:1", "host-0")},
-			clientConnProvider: func(string) (grpc.ClientConnInterface, func(), error) {
-				return nil, nil, providerErr
-			},
-			invalidCfg:    badKeyCfg,
-			wantPickerErr: fmt.Errorf("autosharding: failed to create gRPC channel for key %q: %v", badKeyCfg.ChannelFactoryKey, providerErr),
 		},
 	}
 
@@ -1004,6 +991,93 @@ func (s) TestAutoshardingClient_Error_FallbackDisabled(t *testing.T) {
 	injectAssignmentAndConnectSubConns(ctx, t, env)
 }
 
+// verifyFallbackPoolPicks verifies that the balancer routes picks to both
+// endpoints in the fallback pool ("10.0.0.1:8080" and "10.0.0.2:8080") in
+// roughly equal proportion.
+func verifyFallbackPoolPicks(ctx context.Context, t *testing.T, cc *testutils.BalancerClientConn) {
+	t.Helper()
+
+	// Wait for the fallback picker and make the first pick to trigger a
+	// connection attempt on one of the two IDLE endpoints.
+	//
+	// Before the async onAssignmentError callback is processed, the balancer
+	// may emit an initial queueing picker (base.NewErrPicker(ErrNoSubConnAvailable)).
+	// Both that initial picker and the fallback picker (while endpoints are
+	// IDLE) return ErrNoSubConnAvailable when Pick is called with a sharding
+	// key. To distinguish them without triggering a connection attempt:
+	//   1. Call Pick without the sharding key header: the initial ErrPicker
+	//      ignores metadata and returns ErrNoSubConnAvailable, whereas the
+	//      fallback *autosharding.picker fails header extraction.
+	//   2. Once we have the fallback picker, call Pick with the sharding key
+	//      header to wake up one of the IDLE endpoints (which also returns
+	//      ErrNoSubConnAvailable while the endpoint connects).
+	if err := cc.WaitForPicker(ctx, func(p balancer.Picker) error {
+		if _, err := p.Pick(balancer.PickInfo{Ctx: ctx}); errors.Is(err, balancer.ErrNoSubConnAvailable) {
+			return fmt.Errorf("still using initial queueing picker")
+		}
+		if _, err := p.Pick(balancer.PickInfo{Ctx: newContextWithShardingKey(ctx, "test-header-name", "doesn't-matter")}); !errors.Is(err, balancer.ErrNoSubConnAvailable) {
+			return fmt.Errorf("Pick() error = %v, want %v", err, balancer.ErrNoSubConnAvailable)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	sc1 := waitForSubConn(ctx, t, cc)
+	select {
+	case <-sc1.ConnectCh:
+	case <-ctx.Done():
+		t.Fatal("Timeout waiting for sc1.Connect()")
+	}
+	if err := cc.WaitForConnectivityState(ctx, connectivity.Connecting); err != nil {
+		t.Fatalf("WaitForConnectivityState(Connecting) failed: %v", err)
+	}
+
+	// With one endpoint in Connecting and the other still in Idle, the next
+	// pick on the updated picker deterministically scans past the Connecting
+	// endpoint and triggers a connection attempt on the remaining Idle
+	// endpoint.
+	p := waitForPicker(ctx, t, cc)
+	if _, err := p.Pick(balancer.PickInfo{Ctx: newContextWithShardingKey(ctx, "test-header-name", "doesn't-matter")}); !errors.Is(err, balancer.ErrNoSubConnAvailable) {
+		t.Fatalf("Pick() error = %v, want %v", err, balancer.ErrNoSubConnAvailable)
+	}
+	sc2 := waitForSubConn(ctx, t, cc)
+	select {
+	case <-sc2.ConnectCh:
+	case <-ctx.Done():
+		t.Fatal("Timeout waiting for sc2.Connect()")
+	}
+
+	gotAddrs := []string{sc1.Addresses[0].Addr, sc2.Addresses[0].Addr}
+	wantAddrs := []string{"10.0.0.1:8080", "10.0.0.2:8080"}
+	if !cmp.Equal(gotAddrs, wantAddrs, cmpopts.SortSlices(func(a, b string) bool { return a < b })) {
+		t.Fatalf("SubConns created with addresses %v, want %v", gotAddrs, wantAddrs)
+	}
+
+	// Move both SubConns to Ready.
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	sc2.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc2.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
+
+	// Wait for the balancer to report Ready state.
+	if err := cc.WaitForConnectivityState(ctx, connectivity.Ready); err != nil {
+		t.Fatalf("WaitForConnectivityState(Ready) failed: %v", err)
+	}
+
+	// Make a large number of picks and verify that they are routed to both
+	// backends in roughly equal proportion.
+	p = waitForPicker(ctx, t, cc)
+	numPicks := computeIdealNumberOfRPCs(t, .5, errorTolerance)
+	gotPerBackend := checkPicksOK(ctx, t, p, numPicks)
+	for _, backend := range []string{"10.0.0.1:8080", "10.0.0.2:8080"} {
+		got := float64(gotPerBackend[backend]) / float64(numPicks)
+		want := .5
+		if !cmp.Equal(got, want, cmpopts.EquateApprox(0, errorTolerance)) {
+			t.Errorf("Fraction of Picks to backend %s: got %v, want %v (margin: +-%v)", backend, got, want, errorTolerance)
+		}
+	}
+}
+
 // Tests that when the autosharding client reports an error and fallback is
 // enabled, the balancer's picker routes RPCs to the fallback pool.
 func (s) TestAutoshardingClient_Error_FallbackEnabled(t *testing.T) {
@@ -1015,63 +1089,81 @@ func (s) TestAutoshardingClient_Error_FallbackEnabled(t *testing.T) {
 	// Inject an error from the autosharding client.
 	env.tac.onAssignmentError(errors.New("autosharding client stream error"))
 
-	// Make picks until both backends are picked.
-	p := waitForPicker(ctx, t, env.cc)
-	var scA, scB *testutils.TestSubConn
-	var seenA, seenB bool
-	for ; ctx.Err() == nil; <-time.After(defaultTestShortTimeout) {
-		p.Pick(balancer.PickInfo{Ctx: newContextWithShardingKey(ctx, "test-header-name", "doesn't-matter")})
+	verifyFallbackPoolPicks(ctx, t, env.cc)
+}
 
-		// A non-blocking select is used here as the random pick might not have
-		// created a new SubConn if it picked the same one as a previous pick.
-		var sc *testutils.TestSubConn
-		select {
-		case sc = <-env.cc.NewSubConnCh:
-		default:
-		}
-		if sc == nil {
-			continue
-		}
+// Tests that when the channel factory returns an error and fallback is
+// disabled, the balancer transitions to TransientFailure and its picker fails
+// RPCs with Unavailable and the error message returned by the channel factory.
+func (s) TestChannelFactory_Error_FallbackDisabled(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 
-		switch sc.Addresses[0].Addr {
-		case "10.0.0.1:8080":
-			scA = sc
-			seenA = true
-		case "10.0.0.2:8080":
-			scB = sc
-			seenB = true
-		}
-		if seenA && seenB {
-			break
-		}
+	cc := testutils.NewBalancerClientConn(t)
+	b := balancer.Get(autosharding.Name).Build(cc, balancer.BuildOptions{})
+	defer b.Close()
+
+	providerErr := errors.New("channel factory error")
+	provider := func(string) (grpc.ClientConnInterface, func(), error) {
+		return nil, nil, providerErr
 	}
-	if ctx.Err() != nil {
-		t.Fatal("Timeout waiting for both SubConns to be created")
+	state := resolverStateWithProviderAndEndpoints(provider, []resolver.Endpoint{
+		newTestEndpoint("10.0.0.1:8080", "host-a"),
+		newTestEndpoint("10.0.0.2:8080", "host-b"),
+	})
+	lbConfig := &autosharding.LBConfig{
+		ChannelFactoryKey:  "invalid-factory-key",
+		AutoShardingTarget: "test-target",
+		KeyHeaderName:      "test-header-name",
+		EnableFallback:     false,
 	}
-
-	// Move both subconnA and subconnB to Ready.
-	scA.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	scA.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
-	scB.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	scB.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
-
-	// Wait for the balancer to report Ready state.
-	if err := env.cc.WaitForConnectivityState(ctx, connectivity.Ready); err != nil {
-		t.Fatalf("WaitForConnectivityState(Ready) failed: %v", err)
+	if err := b.UpdateClientConnState(balancer.ClientConnState{
+		ResolverState:  state,
+		BalancerConfig: lbConfig,
+	}); err != nil {
+		t.Fatalf("UpdateClientConnState() unexpected error: %v", err)
 	}
 
-	// Make a large number of picks and verify that they are routed to both
-	// backends in roughly equal proportion.
-	p = waitForPicker(ctx, t, env.cc)
-	numPicks := computeIdealNumberOfRPCs(t, .5, errorTolerance)
-	gotPerBackend := checkPicksOK(ctx, t, p, numPicks)
-	for _, backend := range []string{"10.0.0.1:8080", "10.0.0.2:8080"} {
-		got := float64(gotPerBackend[backend]) / float64(numPicks)
-		want := .5
-		if !cmp.Equal(got, want, cmpopts.EquateApprox(0, errorTolerance)) {
-			t.Errorf("Fraction of Picks to backend %s: got %v, want %v (margin: +-%v)", backend, got, want, errorTolerance)
-		}
+	if err := cc.WaitForConnectivityState(ctx, connectivity.TransientFailure); err != nil {
+		t.Fatalf("WaitForConnectivityState(TransientFailure) failed: %v", err)
 	}
+	wantErr := fmt.Errorf("autosharding: failed to create a new stream to the sharding service: %v", status.Errorf(codes.Unavailable, "autosharding: failed to create gRPC channel to sharding service: %v", providerErr))
+	if err := cc.WaitForPickerWithErr(ctx, wantErr); err != nil {
+		t.Fatalf("WaitForPickerWithErr(%v) failed: %v", wantErr, err)
+	}
+}
+
+// Tests that when the channel factory returns an error and fallback is
+// enabled, the balancer's picker routes RPCs to the fallback pool.
+func (s) TestChannelFactory_Error_FallbackEnabled(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	cc := testutils.NewBalancerClientConn(t)
+	b := balancer.Get(autosharding.Name).Build(cc, balancer.BuildOptions{})
+	defer b.Close()
+
+	provider := func(string) (grpc.ClientConnInterface, func(), error) {
+		return nil, nil, errors.New("channel factory error")
+	}
+	state := resolverStateWithProviderAndEndpoints(provider, []resolver.Endpoint{
+		newTestEndpoint("10.0.0.1:8080", "host-a"),
+		newTestEndpoint("10.0.0.2:8080", "host-b"),
+	})
+	lbConfig := &autosharding.LBConfig{
+		ChannelFactoryKey:  "invalid-factory-key",
+		AutoShardingTarget: "test-target",
+		KeyHeaderName:      "test-header-name",
+		EnableFallback:     true,
+	}
+	if err := b.UpdateClientConnState(balancer.ClientConnState{
+		ResolverState:  state,
+		BalancerConfig: lbConfig,
+	}); err != nil {
+		t.Fatalf("UpdateClientConnState() unexpected error: %v", err)
+	}
+
+	verifyFallbackPoolPicks(ctx, t, cc)
 }
 
 // Tests that when the autosharding client reports an error and fallback is
