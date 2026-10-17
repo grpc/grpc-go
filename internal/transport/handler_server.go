@@ -494,7 +494,8 @@ func mapRecvMsgError(err error) error {
 	if err == io.EOF || err == io.ErrUnexpectedEOF {
 		return err
 	}
-	if se, ok := err.(http2.StreamError); ok {
+	var se http2.StreamError
+	if errors.As(err, &se) {
 		if code, ok := http2ErrConvTab[se.Code]; ok {
 			return status.Error(code, se.Error())
 		}

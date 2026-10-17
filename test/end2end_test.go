@@ -674,7 +674,7 @@ func (te *test) listenAndServe(ts testgrpc.TestServiceServer, listen func(networ
 		hs := &http.Server{
 			Handler:   s,
 			TLSConfig: &tls.Config{Certificates: []tls.Certificate{cert}},
-			HTTP2:     &http.HTTP2Config{MaxConcurrentStreams: int(te.maxStream)},
+			HTTP2:     &http.HTTP2Config{MaxConcurrentStreams: int(min(te.maxStream, math.MaxInt32))},
 			Protocols: p,
 		}
 		te.srv = wrapHS{hs}

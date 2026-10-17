@@ -1,0 +1,52 @@
+/*
+ *
+ * Copyright 2026 gRPC authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// Package internal contains functionality internal to the autosharding load
+// balancing policy.
+package internal
+
+import (
+	"errors"
+
+	"google.golang.org/grpc/balancer/autosharding/internal/sharding"
+)
+
+var (
+
+	// NewAutoshardingClient is a function to create a new autosharding client. The
+	// return value is a cancel function that the caller must invoke when they no
+	// longer need the autosharding client. This will be overridden in tests to stub
+	// out the real autosharding client.
+	NewAutoshardingClient func(sharding.ClientOptions) func()
+
+	// ErrNoEndpointsFromNR is the error returned by the balancer when the
+	// resolver returns an empty list of endpoints.
+	ErrNoEndpointsFromNR = errors.New("autosharding: no endpoints from resolver")
+
+	// ErrNoChannelFactory is the error returned by the balancer when no channel
+	// factory is found in the resolver state.
+	ErrNoChannelFactory = errors.New("autosharding: no channel factory found in resolver state")
+
+	// ErrNoAssignment is the error returned by the balancer when no assignment
+	// from the sharding service is available and fallback is disabled.
+	ErrNoAssignment = errors.New("autosharding: no assignment available and fallback is disabled")
+
+	// ErrNoEndpointsInSlice is the error returned by the balancer when the
+	// matching slice has no available endpoints.
+	ErrNoEndpointsInSlice = errors.New("autosharding: matching slice has no available endpoints")
+)

@@ -302,8 +302,8 @@ var (
 	configWithInsecureCreds = &Config{
 		xDSServers: []*ServerConfig{{
 			serverURI:            "trafficdirector.googleapis.com:443",
-			channelCreds:         []ChannelCreds{{Type: "insecure"}},
-			selectedChannelCreds: ChannelCreds{Type: "insecure"},
+			channelCreds:         []ChannelCredsConfig{{Type: "insecure"}},
+			selectedChannelCreds: ChannelCredsConfig{Type: "insecure"},
 		}},
 		node: v3Node,
 		clientDefaultListenerResourceNameTemplate: "%s",
@@ -311,9 +311,9 @@ var (
 	configWithMultipleChannelCredsAndV3 = &Config{
 		xDSServers: []*ServerConfig{{
 			serverURI:            "trafficdirector.googleapis.com:443",
-			channelCreds:         []ChannelCreds{{Type: "not-google-default"}, {Type: "google_default"}},
+			channelCreds:         []ChannelCredsConfig{{Type: "not-google-default"}, {Type: "google_default"}},
 			serverFeatures:       []string{"xds_v3"},
-			selectedChannelCreds: ChannelCreds{Type: "google_default"},
+			selectedChannelCreds: ChannelCredsConfig{Type: "google_default"},
 		}},
 		node: v3Node,
 		clientDefaultListenerResourceNameTemplate: "%s",
@@ -321,9 +321,9 @@ var (
 	configWithGoogleDefaultCredsAndV3 = &Config{
 		xDSServers: []*ServerConfig{{
 			serverURI:            "trafficdirector.googleapis.com:443",
-			channelCreds:         []ChannelCreds{{Type: "google_default"}},
+			channelCreds:         []ChannelCredsConfig{{Type: "google_default"}},
 			serverFeatures:       []string{"xds_v3"},
-			selectedChannelCreds: ChannelCreds{Type: "google_default"},
+			selectedChannelCreds: ChannelCredsConfig{Type: "google_default"},
 		}},
 		node: v3Node,
 		clientDefaultListenerResourceNameTemplate: "%s",
@@ -332,14 +332,14 @@ var (
 		xDSServers: []*ServerConfig{
 			{
 				serverURI:            "trafficdirector.googleapis.com:443",
-				channelCreds:         []ChannelCreds{{Type: "google_default"}},
+				channelCreds:         []ChannelCredsConfig{{Type: "google_default"}},
 				serverFeatures:       []string{"xds_v3"},
-				selectedChannelCreds: ChannelCreds{Type: "google_default"},
+				selectedChannelCreds: ChannelCredsConfig{Type: "google_default"},
 			},
 			{
 				serverURI:            "backup.never.use.com:1234",
-				channelCreds:         []ChannelCreds{{Type: "google_default"}},
-				selectedChannelCreds: ChannelCreds{Type: "google_default"},
+				channelCreds:         []ChannelCredsConfig{{Type: "google_default"}},
+				selectedChannelCreds: ChannelCredsConfig{Type: "google_default"},
 			},
 		},
 		node: v3Node,
@@ -348,9 +348,9 @@ var (
 	configWithGoogleDefaultCredsAndIgnoreResourceDeletion = &Config{
 		xDSServers: []*ServerConfig{{
 			serverURI:            "trafficdirector.googleapis.com:443",
-			channelCreds:         []ChannelCreds{{Type: "google_default"}},
+			channelCreds:         []ChannelCredsConfig{{Type: "google_default"}},
 			serverFeatures:       []string{"ignore_resource_deletion", "xds_v3"},
-			selectedChannelCreds: ChannelCreds{Type: "google_default"},
+			selectedChannelCreds: ChannelCredsConfig{Type: "google_default"},
 		}},
 		node: v3Node,
 		clientDefaultListenerResourceNameTemplate: "%s",
@@ -358,9 +358,9 @@ var (
 	configWithGoogleDefaultCredsAndTrustedXDSServer = &Config{
 		xDSServers: []*ServerConfig{{
 			serverURI:            "trafficdirector.googleapis.com:443",
-			channelCreds:         []ChannelCreds{{Type: "google_default"}},
+			channelCreds:         []ChannelCredsConfig{{Type: "google_default"}},
 			serverFeatures:       []string{"trusted_xds_server", "xds_v3"},
-			selectedChannelCreds: ChannelCreds{Type: "google_default"},
+			selectedChannelCreds: ChannelCredsConfig{Type: "google_default"},
 		}},
 		node: v3Node,
 		clientDefaultListenerResourceNameTemplate: "%s",
@@ -368,8 +368,8 @@ var (
 	configWithGoogleDefaultCredsAndNoServerFeatures = &Config{
 		xDSServers: []*ServerConfig{{
 			serverURI:            "trafficdirector.googleapis.com:443",
-			channelCreds:         []ChannelCreds{{Type: "google_default"}},
-			selectedChannelCreds: ChannelCreds{Type: "google_default"},
+			channelCreds:         []ChannelCredsConfig{{Type: "google_default"}},
+			selectedChannelCreds: ChannelCredsConfig{Type: "google_default"},
 		}},
 		node: v3Node,
 		clientDefaultListenerResourceNameTemplate: "%s",
@@ -396,9 +396,9 @@ var (
 	configWithIstioStyleNoCallCreds = &Config{
 		xDSServers: []*ServerConfig{{
 			serverURI:            "unix:///etc/istio/XDS",
-			channelCreds:         []ChannelCreds{{Type: "insecure"}},
+			channelCreds:         []ChannelCredsConfig{{Type: "insecure"}},
 			serverFeatures:       []string{"xds_v3"},
-			selectedChannelCreds: ChannelCreds{Type: "insecure"},
+			selectedChannelCreds: ChannelCredsConfig{Type: "insecure"},
 		}},
 		node: node{
 			ID:                   "sidecar~127.0.0.1~pod1.fake-namespace~fake-namespace.svc.cluster.local",
@@ -548,8 +548,8 @@ func (s) TestGetConfiguration_Success(t *testing.T) {
 			wantConfig: &Config{
 				xDSServers: []*ServerConfig{{
 					serverURI:            "trafficdirector.googleapis.com:443",
-					channelCreds:         []ChannelCreds{{Type: "insecure"}},
-					selectedChannelCreds: ChannelCreds{Type: "insecure"},
+					channelCreds:         []ChannelCredsConfig{{Type: "insecure"}},
+					selectedChannelCreds: ChannelCredsConfig{Type: "insecure"},
 				}},
 				node: node{
 					userAgentName:        gRPCUserAgentName,
@@ -587,10 +587,10 @@ func (s) TestGetConfiguration_IstioStyleWithCallCreds(t *testing.T) {
 	configWithIstioJWTCallCreds := &Config{
 		xDSServers: []*ServerConfig{{
 			serverURI:            "unix:///etc/istio/XDS",
-			channelCreds:         []ChannelCreds{{Type: "insecure"}},
+			channelCreds:         []ChannelCredsConfig{{Type: "insecure"}},
 			callCredsConfigs:     []CallCredsConfig{{Type: "jwt_token_file", Config: json.RawMessage("{\n\"jwt_token_file\": \"/var/run/secrets/tokens/istio-token\"\n}")}},
 			serverFeatures:       []string{"xds_v3"},
-			selectedChannelCreds: ChannelCreds{Type: "insecure"},
+			selectedChannelCreds: ChannelCredsConfig{Type: "insecure"},
 			selectedCallCreds:    selectedJWTCallCreds,
 		}},
 		node: node{
@@ -606,10 +606,10 @@ func (s) TestGetConfiguration_IstioStyleWithCallCreds(t *testing.T) {
 	configWithIstioStyleWithTLSAndJWT := &Config{
 		xDSServers: []*ServerConfig{{
 			serverURI:            "unix:///etc/istio/XDS",
-			channelCreds:         []ChannelCreds{{Type: "tls", Config: json.RawMessage("{}")}},
+			channelCreds:         []ChannelCredsConfig{{Type: "tls", Config: json.RawMessage("{}")}},
 			callCredsConfigs:     []CallCredsConfig{{Type: "jwt_token_file", Config: json.RawMessage("{\n\"jwt_token_file\": \"/var/run/secrets/tokens/istio-token\"\n}")}},
 			serverFeatures:       []string{"xds_v3"},
-			selectedChannelCreds: ChannelCreds{Type: "tls", Config: json.RawMessage("{}")},
+			selectedChannelCreds: ChannelCredsConfig{Type: "tls", Config: json.RawMessage("{}")},
 			selectedCallCreds:    selectedJWTCallCreds,
 		}},
 		node: node{
@@ -870,9 +870,9 @@ func (s) TestGetConfiguration_CertificateProviders(t *testing.T) {
 	goodConfig := &Config{
 		xDSServers: []*ServerConfig{{
 			serverURI:            "trafficdirector.googleapis.com:443",
-			channelCreds:         []ChannelCreds{{Type: "insecure"}},
+			channelCreds:         []ChannelCredsConfig{{Type: "insecure"}},
 			serverFeatures:       []string{"xds_v3"},
-			selectedChannelCreds: ChannelCreds{Type: "insecure"},
+			selectedChannelCreds: ChannelCredsConfig{Type: "insecure"},
 		}},
 		certProviderConfigs: map[string]*certprovider.BuildableConfig{
 			"fakeProviderInstance": wantCfg,
@@ -964,8 +964,8 @@ func (s) TestGetConfiguration_ServerListenerResourceNameTemplate(t *testing.T) {
 			wantConfig: &Config{
 				xDSServers: []*ServerConfig{{
 					serverURI:            "trafficdirector.googleapis.com:443",
-					channelCreds:         []ChannelCreds{{Type: "google_default"}},
-					selectedChannelCreds: ChannelCreds{Type: "google_default"},
+					channelCreds:         []ChannelCredsConfig{{Type: "google_default"}},
+					selectedChannelCreds: ChannelCredsConfig{Type: "google_default"},
 				}},
 				node:                               v3Node,
 				serverListenerResourceNameTemplate: "grpc/server?xds.resource.listening_address=%s",
@@ -1124,8 +1124,8 @@ func (s) TestGetConfiguration_Federation(t *testing.T) {
 			wantConfig: &Config{
 				xDSServers: []*ServerConfig{{
 					serverURI:            "trafficdirector.googleapis.com:443",
-					channelCreds:         []ChannelCreds{{Type: "google_default"}},
-					selectedChannelCreds: ChannelCreds{Type: "google_default"},
+					channelCreds:         []ChannelCredsConfig{{Type: "google_default"}},
+					selectedChannelCreds: ChannelCredsConfig{Type: "google_default"},
 				}},
 				node:                               v3Node,
 				serverListenerResourceNameTemplate: "xdstp://xds.example.com/envoy.config.listener.v3.Listener/grpc/server?listening_address=%s",
@@ -1135,16 +1135,16 @@ func (s) TestGetConfiguration_Federation(t *testing.T) {
 						ClientListenerResourceNameTemplate: "xdstp://xds.td.com/envoy.config.listener.v3.Listener/%s",
 						XDSServers: []*ServerConfig{{
 							serverURI:            "td.com",
-							channelCreds:         []ChannelCreds{{Type: "google_default"}},
+							channelCreds:         []ChannelCredsConfig{{Type: "google_default"}},
 							serverFeatures:       []string{"xds_v3"},
-							selectedChannelCreds: ChannelCreds{Type: "google_default"},
+							selectedChannelCreds: ChannelCredsConfig{Type: "google_default"},
 						}},
 					},
 				},
 				allowedGRPCServices: map[string]*AllowedGRPCService{
 					"dns:///whitelisted-ext-proc:443": {
 						targetURI:    "dns:///whitelisted-ext-proc:443",
-						channelCreds: []ChannelCreds{{Type: "insecure"}},
+						channelCreds: []ChannelCredsConfig{{Type: "insecure"}},
 						callCredsConfigs: []CallCredsConfig{{
 							Type:   "jwt_token_file",
 							Config: json.RawMessage("{\n\"jwt_token_file\": \"/var/run/secrets/tokens/istio-token\"\n}"),
@@ -1165,8 +1165,8 @@ func (s) TestGetConfiguration_Federation(t *testing.T) {
 			wantConfig: &Config{
 				xDSServers: []*ServerConfig{{
 					serverURI:            "trafficdirector.googleapis.com:443",
-					channelCreds:         []ChannelCreds{{Type: "google_default"}},
-					selectedChannelCreds: ChannelCreds{Type: "google_default"},
+					channelCreds:         []ChannelCredsConfig{{Type: "google_default"}},
+					selectedChannelCreds: ChannelCredsConfig{Type: "google_default"},
 				}},
 				node: v3Node,
 				clientDefaultListenerResourceNameTemplate: "%s",
@@ -1177,8 +1177,8 @@ func (s) TestGetConfiguration_Federation(t *testing.T) {
 			wantConfig: &Config{
 				xDSServers: []*ServerConfig{{
 					serverURI:            "trafficdirector.googleapis.com:443",
-					channelCreds:         []ChannelCreds{{Type: "google_default"}},
-					selectedChannelCreds: ChannelCreds{Type: "google_default"},
+					channelCreds:         []ChannelCredsConfig{{Type: "google_default"}},
+					selectedChannelCreds: ChannelCredsConfig{Type: "google_default"},
 				}},
 				node: v3Node,
 				clientDefaultListenerResourceNameTemplate: "xdstp://xds.example.com/envoy.config.listener.v3.Listener/%s",
@@ -1197,8 +1197,8 @@ func (s) TestGetConfiguration_Federation(t *testing.T) {
 			wantConfig: &Config{
 				xDSServers: []*ServerConfig{{
 					serverURI:            "trafficdirector.googleapis.com:443",
-					channelCreds:         []ChannelCreds{{Type: "google_default"}},
-					selectedChannelCreds: ChannelCreds{Type: "google_default"},
+					channelCreds:         []ChannelCredsConfig{{Type: "google_default"}},
+					selectedChannelCreds: ChannelCredsConfig{Type: "google_default"},
 				}},
 				node: v3Node,
 				clientDefaultListenerResourceNameTemplate: "xdstp://xds.example.com/envoy.config.listener.v3.Listener/%s",
@@ -1385,19 +1385,19 @@ func (s) TestServerConfig_Equal_WithCallCreds(t *testing.T) {
 	}}
 	sc1 := &ServerConfig{
 		serverURI:        "server1",
-		channelCreds:     []ChannelCreds{{Type: "insecure"}},
+		channelCreds:     []ChannelCredsConfig{{Type: "insecure"}},
 		callCredsConfigs: callCreds,
 		serverFeatures:   []string{"feature1"},
 	}
 	sc2 := &ServerConfig{
 		serverURI:        "server1",
-		channelCreds:     []ChannelCreds{{Type: "insecure"}},
+		channelCreds:     []ChannelCredsConfig{{Type: "insecure"}},
 		callCredsConfigs: callCreds,
 		serverFeatures:   []string{"feature1"},
 	}
 	sc3 := &ServerConfig{
 		serverURI:        "server1",
-		channelCreds:     []ChannelCreds{{Type: "insecure"}},
+		channelCreds:     []ChannelCredsConfig{{Type: "insecure"}},
 		callCredsConfigs: []CallCredsConfig{{Type: "different"}},
 		serverFeatures:   []string{"feature1"},
 	}
@@ -1414,7 +1414,7 @@ func (s) TestServerConfig_MarshalJSON_WithCallCreds(t *testing.T) {
 	testutils.SetEnvConfig(t, &envconfig.XDSBootstrapCallCredsEnabled, true)
 	sc := &ServerConfig{
 		serverURI:    "test-server:443",
-		channelCreds: []ChannelCreds{{Type: "insecure"}},
+		channelCreds: []ChannelCredsConfig{{Type: "insecure"}},
 		callCredsConfigs: []CallCredsConfig{{
 			Type:   "jwt_token_file",
 			Config: json.RawMessage(`{"jwt_token_file":"/test/token.jwt"}`),
