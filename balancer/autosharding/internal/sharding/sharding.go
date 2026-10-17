@@ -107,6 +107,11 @@ type shardingStream = asgrpc.AutoshardingService_WatchShardingAssignmentClient
 type Slice struct {
 	StartKey  []byte // Inclusive start key of the key-range
 	Endpoints []int  // Indices into Assignment.EndpointNames
+
+	// FallbackDisabled is set when the sharding server explicitly assigned no
+	// endpoints to this slice. Picks matching such slices fail even if fallback
+	// is enabled. Always false for slices synthesized to fill gaps.
+	FallbackDisabled bool
 }
 
 // Assignment represents a complete snapshot of sharding assignments, and is
@@ -494,9 +499,15 @@ func buildAssignment(sortedSlices []*aspb.SliceAssignment, endpoints []string, g
 		}
 
 		// Finally, we can add the current slice to the assignment.
+		//
+		// The sharding server could return an assignment that contains some
+		// Slices that have no endpoints assigned to them. gRPC needs
+		// specialized handling for these Slices to ensure that fallback is
+		// disabled for them - A119.
 		assignment.Slices = append(assignment.Slices, Slice{
-			StartKey:  slice.GetSlice().GetStartKey(),
-			Endpoints: make([]int, len(slice.GetEndpoints())),
+			StartKey:         slice.GetSlice().GetStartKey(),
+			Endpoints:        make([]int, len(slice.GetEndpoints())),
+			FallbackDisabled: len(slice.GetEndpoints()) == 0,
 		})
 		for j, epState := range slice.GetEndpoints() {
 			assignment.Slices[len(assignment.Slices)-1].Endpoints[j] = int(epState.GetEndpointIndex())

@@ -963,32 +963,32 @@ var File_proto_autosharding_v1_autosharding_proto protoreflect.FileDescriptor
 
 const file_proto_autosharding_v1_autosharding_proto_rawDesc = "" +
 	"\n" +
-	"(proto/autosharding/v1/autosharding.proto\x12\x1cgoogle.cloud.autosharding.v1\x1a\x1fgoogle/api/field_behavior.proto\x1a\x1egoogle/protobuf/duration.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xb5\x02\n" +
-	"\x1eWatchShardingAssignmentRequest\x12j\n" +
-	"\x15initial_client_config\x18\x01 \x01(\v21.google.cloud.autosharding.v1.InitialClientConfigB\x03\xe0A\x01R\x13initialClientConfig\x12N\n" +
-	"\vload_report\x18\x02 \x01(\v2(.google.cloud.autosharding.v1.LoadReportB\x03\xe0A\x01R\n" +
-	"loadReport\x12W\n" +
-	"\x0eassignment_ack\x18\x03 \x01(\v2+.google.cloud.autosharding.v1.AssignmentAckB\x03\xe0A\x01R\rassignmentAck\"\xff\x01\n" +
+	"(proto/autosharding/v1/autosharding.proto\x12\x1cgoogle.cloud.autosharding.v1\x1a\x1fgoogle/api/field_behavior.proto\x1a\x1egoogle/protobuf/duration.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xb8\x02\n" +
+	"\x1eWatchShardingAssignmentRequest\x12k\n" +
+	"\x15initial_client_config\x18\x01 \x01(\v21.google.cloud.autosharding.v1.InitialClientConfigB\x04\xe2A\x01\x01R\x13initialClientConfig\x12O\n" +
+	"\vload_report\x18\x02 \x01(\v2(.google.cloud.autosharding.v1.LoadReportB\x04\xe2A\x01\x01R\n" +
+	"loadReport\x12X\n" +
+	"\x0eassignment_ack\x18\x03 \x01(\v2+.google.cloud.autosharding.v1.AssignmentAckB\x04\xe2A\x01\x01R\rassignmentAck\"\xff\x01\n" +
 	"\x1fWatchShardingAssignmentResponse\x12I\n" +
 	"\x06config\x18\x01 \x01(\v21.google.cloud.autosharding.v1.LoadReportingConfigR\x06config\x12C\n" +
 	"\x05chunk\x18\x02 \x01(\v2-.google.cloud.autosharding.v1.AssignmentChunkR\x05chunk\x12L\n" +
-	"\bmetadata\x18\x03 \x01(\v20.google.cloud.autosharding.v1.AssignmentMetadataR\bmetadata\"\x8a\x01\n" +
-	"\x13InitialClientConfig\x12\x1b\n" +
-	"\x06target\x18\x01 \x01(\tB\x03\xe0A\x02R\x06target\x12$\n" +
-	"\vclient_uuid\x18\x02 \x01(\tB\x03\xe0A\x02R\n" +
-	"clientUuid\x120\n" +
-	"\x11latest_generation\x18\x03 \x01(\x03B\x03\xe0A\x01R\x10latestGeneration\"\xc4\x02\n" +
+	"\bmetadata\x18\x03 \x01(\v20.google.cloud.autosharding.v1.AssignmentMetadataR\bmetadata\"\x8d\x01\n" +
+	"\x13InitialClientConfig\x12\x1c\n" +
+	"\x06target\x18\x01 \x01(\tB\x04\xe2A\x01\x02R\x06target\x12%\n" +
+	"\vclient_uuid\x18\x02 \x01(\tB\x04\xe2A\x01\x02R\n" +
+	"clientUuid\x121\n" +
+	"\x11latest_generation\x18\x03 \x01(\x03B\x04\xe2A\x01\x01R\x10latestGeneration\"\xc4\x02\n" +
 	"\x13LoadReportingConfig\x122\n" +
 	"\x15load_quantum_fraction\x18\x01 \x01(\x01R\x13loadQuantumFraction\x12L\n" +
 	"#max_load_balancing_resolution_bytes\x18\x02 \x01(\x05R\x1fmaxLoadBalancingResolutionBytes\x12Q\n" +
 	"\x17load_reporting_interval\x18\x03 \x01(\v2\x19.google.protobuf.DurationR\x15loadReportingInterval\x12X\n" +
-	"\x1bload_report_start_threshold\x18\x04 \x01(\v2\x19.google.protobuf.DurationR\x18loadReportStartThreshold\"\xcf\x02\n" +
+	"\x1bload_report_start_threshold\x18\x04 \x01(\v2\x19.google.protobuf.DurationR\x18loadReportStartThreshold\"\xd2\x02\n" +
 	"\n" +
-	"LoadReport\x12a\n" +
-	"\fmetric_loads\x18\x01 \x03(\v29.google.cloud.autosharding.v1.LoadReport.MetricLoadsEntryB\x03\xe0A\x02R\vmetricLoads\x12>\n" +
+	"LoadReport\x12b\n" +
+	"\fmetric_loads\x18\x01 \x03(\v29.google.cloud.autosharding.v1.LoadReport.MetricLoadsEntryB\x04\xe2A\x01\x02R\vmetricLoads\x12?\n" +
 	"\n" +
-	"start_time\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampB\x03\xe0A\x02R\tstartTime\x12:\n" +
-	"\bend_time\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampB\x03\xe0A\x02R\aendTime\x1ab\n" +
+	"start_time\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampB\x04\xe2A\x01\x02R\tstartTime\x12;\n" +
+	"\bend_time\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampB\x04\xe2A\x01\x02R\aendTime\x1ab\n" +
 	"\x10MetricLoadsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x128\n" +
 	"\x05value\x18\x02 \x01(\v2\".google.cloud.autosharding.v1.LoadR\x05value:\x028\x01\"P\n" +
@@ -997,13 +997,13 @@ const file_proto_autosharding_v1_autosharding_proto_rawDesc = "" +
 	"rangeLoads\"<\n" +
 	"\tRangeLoad\x12\x1b\n" +
 	"\tstart_key\x18\x01 \x01(\fR\bstartKey\x12\x12\n" +
-	"\x04load\x18\x02 \x01(\x01R\x04load\"\x7f\n" +
-	"\rAssignmentAck\x12#\n" +
+	"\x04load\x18\x02 \x01(\x01R\x04load\"\x82\x01\n" +
+	"\rAssignmentAck\x12$\n" +
 	"\n" +
-	"generation\x18\x01 \x01(\x03B\x03\xe0A\x02R\n" +
-	"generation\x12\x1f\n" +
-	"\baccepted\x18\x02 \x01(\bB\x03\xe0A\x02R\baccepted\x12(\n" +
-	"\rerror_message\x18\x03 \x01(\tB\x03\xe0A\x01R\ferrorMessage\"4\n" +
+	"generation\x18\x01 \x01(\x03B\x04\xe2A\x01\x02R\n" +
+	"generation\x12 \n" +
+	"\baccepted\x18\x02 \x01(\bB\x04\xe2A\x01\x02R\baccepted\x12)\n" +
+	"\rerror_message\x18\x03 \x01(\tB\x04\xe2A\x01\x01R\ferrorMessage\"4\n" +
 	"\x12AssignmentMetadata\x12\x1e\n" +
 	"\n" +
 	"generation\x18\x01 \x01(\x03R\n" +
