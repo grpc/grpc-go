@@ -132,16 +132,6 @@ var (
 	// TODO: In release v1.82.0, env var will be enabled by default.
 	Enable8KBDefaultHeaderListSize = boolFromEnv("GRPC_GO_EXPERIMENTAL_ENABLE_8KB_DEFAULT_HEADER_LIST_SIZE", false)
 
-	// EnableHTTPFramerReadBufferPooling enables the use of the
-	// readyreader.Reader interface to perform non-memory-pinning reads,
-	// provided the underlying net.Conn supports it. This reduces memory usage
-	// when subchannels are idle.
-	//
-	// This environment variable serves as an escape hatch to disable the
-	// feature if unforeseen issues arise, and it will be removed in a future
-	// release.
-	EnableHTTPFramerReadBufferPooling = boolFromEnv("GRPC_GO_EXPERIMENTAL_HTTP_FRAMER_READ_BUFFER_POOLING", true)
-
 	// ControlBufferThrottleLimit is the maximum number of control frames that can
 	// be queued in the control buffer before throttling is applied. The value
 	// must be between 1 and 100,000, and is set to 10,000 by default.
@@ -159,16 +149,6 @@ var (
 	// 512KiB to match altsWriteBufferMaxSize in
 	// credentials/alts/internal/conn/record.go).
 	ALTSMaxFrameSize = uint64FromEnv("GRPC_GO_EXPERIMENTAL_ALTS_MAX_FRAME_SIZE", 4096, 4096, 512*1024)
-
-	// EnableReceiveBufferCompaction enables the compaction of data buffers
-	// to reduce the number of buffers in the receive buffer.
-	//
-	// This environment variable serves as an escape hatch to disable the
-	// feature if unforeseen issues arise, and it will be removed in a future
-	// release.
-	//
-	// TODO: Remove this env var once v1.85.0 is released.
-	EnableReceiveBufferCompaction = boolFromEnv("GRPC_GO_EXPERIMENTAL_ENABLE_RECEIVE_BUFFER_COMPACTION", true)
 )
 
 func boolFromEnv(envVar string, def bool) bool {

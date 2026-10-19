@@ -36,7 +36,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal/channelz"
-	"google.golang.org/grpc/internal/envconfig"
 	imem "google.golang.org/grpc/internal/mem"
 	"google.golang.org/grpc/internal/transport/internal"
 	"google.golang.org/grpc/keepalive"
@@ -141,9 +140,6 @@ func (b *recvBuffer) put(r recvMsg) {
 }
 
 func (b *recvBuffer) compactBacklogLocked(r recvMsg) {
-	if !envconfig.EnableReceiveBufferCompaction {
-		return
-	}
 	if r.buffer == nil {
 		b.uncompactedBytes = 0
 		b.uncompactedSuffixLen = 0
@@ -206,7 +202,7 @@ func (b *recvBuffer) load() {
 			// backlog[0] is only part of the tracked uncompacted suffix if the
 			// entire backlog currently consists of the suffix. If an earlier
 			// compaction or reset occurred, backlog[0] is already compacted.
-			if envconfig.EnableReceiveBufferCompaction && b.uncompactedSuffixLen == len(b.backlog) {
+			if b.uncompactedSuffixLen == len(b.backlog) {
 				b.uncompactedSuffixLen--
 				b.uncompactedBytes -= b.backlog[0].buffer.Len()
 			}
