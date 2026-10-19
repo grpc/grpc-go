@@ -96,6 +96,7 @@ type dialOptions struct {
 	maxCallAttempts             int
 	enableLocalDNSResolution    bool // Specifies if target hostnames should be resolved when proxying is enabled.
 	useProxy                    bool // Specifies if a server should be connected via proxy.
+	clientConnProvider          ClientConnProvider
 }
 
 // DialOption configures how we set up the connection.

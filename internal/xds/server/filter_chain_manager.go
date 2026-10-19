@@ -181,6 +181,10 @@ type filterChain struct {
 // usableRouteConfiguration contains a matchable route configuration, with
 // instantiated HTTP Filters per route.
 type usableRouteConfiguration struct {
+	// vhosts holds the virtual hosts from the route configuration update, and
+	// is used to match the authority of incoming RPCs. vhs holds the same
+	// virtual hosts, in the same order, with instantiated HTTP filters.
+	vhosts []*xdsresource.VirtualHost
 	vhs    []virtualHostWithInterceptors
 	err    error
 	nodeID string // For logging purposes. Populated by the listener wrapper.
@@ -199,8 +203,8 @@ func (rc *usableRouteConfiguration) stop() {
 // virtualHostWithInterceptors captures information present in a VirtualHost
 // update, and also contains routes with instantiated HTTP Filters.
 type virtualHostWithInterceptors struct {
-	domains []string
-	routes  []routeWithInterceptors
+	*xdsresource.VirtualHost
+	routes []routeWithInterceptors
 }
 
 // routeWithInterceptors captures information in a Route, and contains
@@ -441,7 +445,7 @@ func (fc *filterChain) updateUsableRouteConfiguration(config *xdsresource.RouteC
 		serverFilters = append(serverFilters, sfs...)
 	}
 
-	urc := &usableRouteConfiguration{vhs: vhs, nodeID: nodeID}
+	urc := &usableRouteConfiguration{vhosts: config.VirtualHosts, vhs: vhs, nodeID: nodeID}
 	fc.applyConfiguration(urc, serverFilters)
 }
 
@@ -490,7 +494,7 @@ func (fc *filterChain) convertVirtualHost(virtualHost *xdsresource.VirtualHost, 
 		serverFilters = append(serverFilters, sfs...)
 		rs[i].interceptor = interceptor
 	}
-	return virtualHostWithInterceptors{domains: virtualHost.Domains, routes: rs}, serverFilters, nil
+	return virtualHostWithInterceptors{VirtualHost: virtualHost, routes: rs}, serverFilters, nil
 }
 
 // statusErrWithNodeID returns an error produced by the status package with the

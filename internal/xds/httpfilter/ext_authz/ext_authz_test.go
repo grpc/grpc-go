@@ -37,6 +37,7 @@ import (
 	"google.golang.org/grpc/internal/xds/grpcservice"
 	"google.golang.org/grpc/internal/xds/httpfilter"
 	"google.golang.org/grpc/internal/xds/matcher"
+	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
@@ -113,10 +114,7 @@ func testParseOptions(t *testing.T, targets ...string) httpfilter.ParseOptions {
 }
 
 var cmpOpts = []cmp.Option{
-	cmp.AllowUnexported(
-		config{},
-		fraction{},
-	),
+	cmp.AllowUnexported(config{}),
 	cmp.Transformer("RegexpToString", func(r *regexp.Regexp) string {
 		if r == nil {
 			return ""
@@ -158,9 +156,10 @@ func (s) TestParseFilterConfig_Success(t *testing.T) {
 					TargetURI:          "localhost:1234",
 					ChannelCredentials: allowlistInsecureCreds,
 				},
-				filterEnabled: fraction{
-					numerator:   100,
-					denominator: 100,
+				filterEnabled: xdsresource.FractionalPercent{
+					Numerator:   100,
+					Denominator: 100,
+					PPM:         1000000,
 				},
 				statusOnError: codes.PermissionDenied,
 			},
@@ -215,9 +214,10 @@ func (s) TestParseFilterConfig_Success(t *testing.T) {
 					TargetURI:          "localhost:5678",
 					ChannelCredentials: allowlistInsecureCreds,
 				},
-				filterEnabled: fraction{
-					numerator:   50,
-					denominator: 10000,
+				filterEnabled: xdsresource.FractionalPercent{
+					Numerator:   50,
+					Denominator: 10000,
+					PPM:         5000,
 				},
 				denyAtDisable:             true,
 				failureModeAllow:          true,
@@ -438,14 +438,15 @@ func (s) TestParseFilterConfigOverride_Failure(t *testing.T) {
 // RuntimeFractionalPercent configuration into its internal representation.
 func (s) TestParseFilterEnabled(t *testing.T) {
 	tests := []struct {
-		name string
-		fp   *corepb.RuntimeFractionalPercent
-		want fraction
+		name    string
+		fp      *corepb.RuntimeFractionalPercent
+		want    xdsresource.FractionalPercent
+		wantErr string
 	}{
 		{
 			name: "NilFraction",
 			fp:   nil,
-			want: fraction{numerator: 100, denominator: 100},
+			want: xdsresource.FractionalPercent{Numerator: 100, Denominator: 100, PPM: 1000000},
 		},
 		{
 			name: "DenominatorHundred",
@@ -455,7 +456,7 @@ func (s) TestParseFilterEnabled(t *testing.T) {
 					Denominator: v3typepb.FractionalPercent_HUNDRED,
 				},
 			},
-			want: fraction{numerator: 10, denominator: 100},
+			want: xdsresource.FractionalPercent{Numerator: 10, Denominator: 100, PPM: 100000},
 		},
 		{
 			name: "DenominatorMillion",
@@ -465,7 +466,7 @@ func (s) TestParseFilterEnabled(t *testing.T) {
 					Denominator: v3typepb.FractionalPercent_MILLION,
 				},
 			},
-			want: fraction{numerator: 5, denominator: 1000000},
+			want: xdsresource.FractionalPercent{Numerator: 5, Denominator: 1000000, PPM: 5},
 		},
 		{
 			name: "DefaultDenominator",
@@ -474,7 +475,7 @@ func (s) TestParseFilterEnabled(t *testing.T) {
 					Numerator: 25,
 				},
 			},
-			want: fraction{numerator: 25, denominator: 100},
+			want: xdsresource.FractionalPercent{Numerator: 25, Denominator: 100, PPM: 250000},
 		},
 		{
 			name: "CappedToHundredPercent",
@@ -484,16 +485,32 @@ func (s) TestParseFilterEnabled(t *testing.T) {
 					Denominator: v3typepb.FractionalPercent_HUNDRED,
 				},
 			},
-			want: fraction{numerator: 100, denominator: 100},
+			want: xdsresource.FractionalPercent{Numerator: 100, Denominator: 100, PPM: 1000000},
+		},
+		{
+			name: "UnsupportedDenominator",
+			fp: &corepb.RuntimeFractionalPercent{
+				DefaultValue: &v3typepb.FractionalPercent{
+					Numerator:   1,
+					Denominator: v3typepb.FractionalPercent_DenominatorType(7),
+				},
+			},
+			wantErr: "extauthz: filter_enabled contains unsupported denominator",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := parseFilterEnabled(tt.fp)
-			if err != nil {
-				t.Fatalf("parseFilterEnabled(%v) failed: %v", tt.fp, err)
+			if tt.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("parseFilterEnabled(%v) returned err %v, want error containing %q", tt.fp, err, tt.wantErr)
+				}
+				return
 			}
-			if diff := cmp.Diff(tt.want, got, cmp.AllowUnexported(fraction{})); diff != "" {
+			if err != nil {
+				t.Fatalf("parseFilterEnabled(%v) returned unexpected err: %v", tt.fp, err)
+			}
+			if diff := cmp.Diff(tt.want, got); diff != "" {
 				t.Fatalf("parseFilterEnabled(%v) returned unexpected fraction (-want, +got):\n%s", tt.fp, diff)
 			}
 		})

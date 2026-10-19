@@ -263,7 +263,7 @@ func (s) TestValidateCluster_Failure(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if update, err := validateClusterAndConstructClusterUpdate(test.cluster, nil); err == nil {
+			if update, err := validateClusterAndConstructClusterUpdate(test.cluster, nil, nil); err == nil {
 				t.Errorf("validateClusterAndConstructClusterUpdate(%+v) = %v, wanted error", test.cluster, update)
 			}
 		})
@@ -1457,7 +1457,7 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			testutils.SetEnvConfig(t, &envconfig.XDSSystemRootCertsEnabled, test.enableSystemRootCertsFlag)
 			testutils.SetEnvConfig(t, &envconfig.XDSSNIEnabled, test.enableSNIFlag)
-			update, err := validateClusterAndConstructClusterUpdate(test.cluster, nil)
+			update, err := validateClusterAndConstructClusterUpdate(test.cluster, nil, nil)
 			if (err != nil) != test.wantErr {
 				t.Errorf("validateClusterAndConstructClusterUpdate() returned err %v wantErr %v)", err, test.wantErr)
 			}
@@ -1750,7 +1750,7 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			name, update, err := unmarshalClusterResource(test.resource, test.serverCfg)
+			name, update, err := unmarshalClusterResource(test.resource, nil, test.serverCfg)
 			if (err != nil) != test.wantErr {
 				t.Fatalf("unmarshalClusterResource(%s), got err: %v, wantErr: %v", pretty.ToJSON(test.resource), err, test.wantErr)
 			}
@@ -1920,7 +1920,7 @@ func (s) TestValidateClusterAndConstructClusterUpdate_GCP_AUTHENTICATION_FILTER_
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := validateClusterAndConstructClusterUpdate(tt.cluster, nil)
+			got, err := validateClusterAndConstructClusterUpdate(tt.cluster, nil, nil)
 			if err != nil {
 				t.Fatalf("validateClusterAndConstructClusterUpdate() failed: %v", err)
 			}
@@ -1975,7 +1975,7 @@ func (s) TestValidateClusterAndConstructClusterUpdate_GCP_AUTHENTICATION_FILTER_
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := validateClusterAndConstructClusterUpdate(tt.cluster, nil)
+			got, err := validateClusterAndConstructClusterUpdate(tt.cluster, nil, nil)
 			if err != nil {
 				t.Fatalf("validateClusterAndConstructClusterUpdate() failed: %v", err)
 			}
@@ -2022,7 +2022,7 @@ func (s) TestValidateClusterAndConstructClusterUpdate_GCP_AUTHENTICATION_FILTER_
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if _, err := validateClusterAndConstructClusterUpdate(tt.cluster, nil); err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+			if _, err := validateClusterAndConstructClusterUpdate(tt.cluster, nil, nil); err == nil || !strings.Contains(err.Error(), tt.wantErr) {
 				t.Fatalf("validateClusterAndConstructClusterUpdate() did not return error when expected: %v", err)
 			}
 		})
@@ -2184,7 +2184,7 @@ func (s) TestValidateClusterWithOutlierDetection(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			update, err := validateClusterAndConstructClusterUpdate(test.cluster, nil)
+			update, err := validateClusterAndConstructClusterUpdate(test.cluster, nil, nil)
 			if (err != nil) != test.wantErr {
 				t.Errorf("validateClusterAndConstructClusterUpdate() returned err %v wantErr %v)", err, test.wantErr)
 			}
@@ -2244,7 +2244,7 @@ func (s) TestValidateClusterWithSecurityConfig_SNITooLong(t *testing.T) {
 	}
 
 	wantErr := "exceeds max length"
-	if _, err := validateClusterAndConstructClusterUpdate(cluster, nil); err == nil || !strings.Contains(err.Error(), wantErr) {
+	if _, err := validateClusterAndConstructClusterUpdate(cluster, nil, nil); err == nil || !strings.Contains(err.Error(), wantErr) {
 		t.Fatalf("validateClusterAndConstructClusterUpdate() returned err: %v, want err containing: %s", err, wantErr)
 	}
 }
@@ -2320,7 +2320,7 @@ func (s) TestValidateCluster_LRSReportEndpointMetrics(t *testing.T) {
 				},
 				LrsReportEndpointMetrics: tt.lrsReportEndpointMetrics,
 			}
-			update, err := validateClusterAndConstructClusterUpdate(cluster, nil)
+			update, err := validateClusterAndConstructClusterUpdate(cluster, nil, nil)
 			if err != nil {
 				t.Fatalf("validateClusterAndConstructClusterUpdate() failed: %v", err)
 			}
@@ -2443,7 +2443,7 @@ func (s) TestValidateCluster_Http11ProxyUpstreamTransport_EnvVarOff(t *testing.T
 
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
-			if _, err := validateClusterAndConstructClusterUpdate(tt.cluster, nil); err == nil {
+			if _, err := validateClusterAndConstructClusterUpdate(tt.cluster, nil, nil); err == nil {
 				t.Fatalf("validateClusterAndConstructClusterUpdate() did not return error when expected")
 			}
 		})
@@ -2581,7 +2581,7 @@ func (s) TestValidateCluster_Http11ProxyUpstreamTransport_EnvVarOn(t *testing.T)
 	}
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
-			gotUpdate, err := validateClusterAndConstructClusterUpdate(tt.cluster, nil)
+			gotUpdate, err := validateClusterAndConstructClusterUpdate(tt.cluster, nil, nil)
 			if tt.wantErr {
 				if err == nil {
 					t.Fatalf("validateClusterAndConstructClusterUpdate() did not return an error when expected")

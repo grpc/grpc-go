@@ -787,6 +787,68 @@ func (s) TestClientTransportDrainsAfterStreamIDExhausted(t *testing.T) {
 	}
 }
 
+// Tests that a truncated HEADERS frame for a new stream properly advances
+// maxStreamID, while an oversized frame on an illegal/lower stream is rejected
+// as a protocol error and preserves maxStreamID.
+func (s) TestServerOperateHeadersTruncatedStreamIDMonotonicity(t *testing.T) {
+	serverTransport := &http2Server{
+		controlBuf: newControlBuffer(make(<-chan struct{}), true),
+	}
+	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer ctxCancel()
+	tests := []struct {
+		name            string
+		streamID        uint32
+		truncated       bool
+		wantErr         string
+		wantMaxStreamID uint32
+	}{
+		{
+			name:            "truncated_header_advances_max_stream_id",
+			streamID:        3,
+			truncated:       true,
+			wantMaxStreamID: 3,
+		},
+		{
+			name:            "truncated_header_lower_stream_id_rejected_as_protocol_error",
+			streamID:        1,
+			truncated:       true,
+			wantErr:         "received an illegal stream id: 1",
+			wantMaxStreamID: 3,
+		},
+		{
+			name:            "reused_stream_id_rejected_as_protocol_error",
+			streamID:        3,
+			truncated:       false,
+			wantErr:         "received an illegal stream id: 3",
+			wantMaxStreamID: 3,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			frame := &http2.MetaHeadersFrame{
+				HeadersFrame: &http2.HeadersFrame{
+					FrameHeader: http2.FrameHeader{
+						StreamID: tc.streamID,
+						Type:     http2.FrameHeaders,
+					},
+				},
+				Truncated: tc.truncated,
+			}
+			err := serverTransport.operateHeaders(ctx, frame, func(*ServerStream) {})
+			if (err != nil) != (tc.wantErr != "") {
+				t.Fatalf("operateHeaders() failed with error = %v, wantErr %q", err, tc.wantErr)
+			}
+			if err != nil && !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("operateHeaders() failed with error = %v, want error containing %q", err, tc.wantErr)
+			}
+			if serverTransport.maxStreamID != tc.wantMaxStreamID {
+				t.Fatalf("maxStreamID = %d, want %d", serverTransport.maxStreamID, tc.wantMaxStreamID)
+			}
+		})
+	}
+}
+
 func (s) TestClientSendAndReceive(t *testing.T) {
 	server, ct, cancel := setUp(t, 0, normal)
 	defer cancel()
@@ -2857,7 +2919,7 @@ func newTestHTTP2Client(cs *ClientStream) *http2Client {
 		activeStreams: map[uint32]*ClientStream{
 			1: cs,
 		},
-		controlBuf: newControlBuffer(make(<-chan struct{})),
+		controlBuf: newControlBuffer(make(<-chan struct{}), false),
 	}
 }
 
@@ -3462,6 +3524,105 @@ func (s) TestReadMessageHeaderMultipleBuffers(t *testing.T) {
 	}
 }
 
+func (s) TestReadMessageHeaderPartialHeaderEOF(t *testing.T) {
+	const headerLen = 5
+	stream := Stream{
+		readRequester: &fakeReadRequester{},
+	}
+	stream.buf.init(mem.DefaultBufferPool())
+	recvBuffer := &stream.buf
+	stream.trReader = transportReader{
+		reader: recvBufferReader{
+			recv: recvBuffer,
+		},
+		windowHandler: &mockWindowUpdater{f: func(int) {}},
+	}
+
+	recvBuffer.put(recvMsg{buffer: make(mem.SliceBuffer, 3)})
+	recvBuffer.put(recvMsg{err: io.EOF})
+
+	if err := stream.ReadMessageHeader(make([]byte, headerLen)); !errors.Is(err, io.ErrUnexpectedEOF) {
+		t.Fatalf("ReadMessageHeader() error = %v, want %v", err, io.ErrUnexpectedEOF)
+	}
+	if err := stream.ReadMessageHeader(make([]byte, headerLen)); !errors.Is(err, io.ErrUnexpectedEOF) {
+		t.Fatalf("second ReadMessageHeader() error = %v, want %v", err, io.ErrUnexpectedEOF)
+	}
+}
+
+func (s) TestReadMessageHeaderEOF(t *testing.T) {
+	stream := Stream{
+		readRequester: &fakeReadRequester{},
+	}
+	stream.buf.init(mem.DefaultBufferPool())
+	recvBuffer := &stream.buf
+	stream.trReader = transportReader{
+		reader: recvBufferReader{
+			recv: recvBuffer,
+		},
+		windowHandler: &mockWindowUpdater{},
+	}
+
+	recvBuffer.put(recvMsg{err: io.EOF})
+
+	err := stream.ReadMessageHeader(make([]byte, 5))
+	if !errors.Is(err, io.EOF) {
+		t.Fatalf("ReadMessageHeader() error = %v, want %v", err, io.EOF)
+	}
+	if errors.Is(err, io.ErrUnexpectedEOF) {
+		t.Fatalf("ReadMessageHeader() error = %v, want not %v", err, io.ErrUnexpectedEOF)
+	}
+}
+
+func (s) TestReadPartialMessageEOF(t *testing.T) {
+	const messageLen = 5
+	stream := Stream{
+		readRequester: &fakeReadRequester{},
+	}
+	stream.buf.init(mem.DefaultBufferPool())
+	recvBuffer := &stream.buf
+	stream.trReader = transportReader{
+		reader: recvBufferReader{
+			recv: recvBuffer,
+		},
+		windowHandler: &mockWindowUpdater{f: func(int) {}},
+	}
+
+	recvBuffer.put(recvMsg{buffer: make(mem.SliceBuffer, 3)})
+	recvBuffer.put(recvMsg{err: io.EOF})
+
+	if _, err := stream.read(messageLen); !errors.Is(err, io.ErrUnexpectedEOF) {
+		t.Fatalf("read(%d) error = %v, want %v", messageLen, err, io.ErrUnexpectedEOF)
+	}
+	if _, err := stream.read(messageLen); !errors.Is(err, io.ErrUnexpectedEOF) {
+		t.Fatalf("second read(%d) error = %v, want %v", messageLen, err, io.ErrUnexpectedEOF)
+	}
+}
+
+func (s) TestReadMessageEOF(t *testing.T) {
+	const messageLen = 5
+	stream := Stream{
+		readRequester: &fakeReadRequester{},
+	}
+	stream.buf.init(mem.DefaultBufferPool())
+	recvBuffer := &stream.buf
+	stream.trReader = transportReader{
+		reader: recvBufferReader{
+			recv: recvBuffer,
+		},
+		windowHandler: &mockWindowUpdater{f: func(int) {}},
+	}
+
+	recvBuffer.put(recvMsg{err: io.EOF})
+
+	_, err := stream.read(messageLen)
+	if !errors.Is(err, io.EOF) {
+		t.Fatalf("read(%d) error = %v, want %v", messageLen, err, io.EOF)
+	}
+	if errors.Is(err, io.ErrUnexpectedEOF) {
+		t.Fatalf("read(%d) error = %v, want not %v", messageLen, err, io.ErrUnexpectedEOF)
+	}
+}
+
 // Tests a scenario when the client doesn't send an RST frame when the
 // configured deadline is reached. The test verifies that the server sends an
 // RST stream only after the deadline is reached.
@@ -3922,7 +4083,7 @@ func (s) TestClientTransport_Handle1xxHeaders(t *testing.T) {
 			activeStreams: map[uint32]*ClientStream{
 				0: ts,
 			},
-			controlBuf: newControlBuffer(make(<-chan struct{})),
+			controlBuf: newControlBuffer(make(<-chan struct{}), false),
 		}
 	}
 

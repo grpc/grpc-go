@@ -30,12 +30,11 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
+	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/internal/testutils/xds/e2e/setup"
 	"google.golang.org/grpc/internal/xds/httpfilter"
-	testgrpc "google.golang.org/grpc/interop/grpc_testing"
-	testpb "google.golang.org/grpc/interop/grpc_testing"
 	"google.golang.org/grpc/xds"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/structpb"
@@ -47,6 +46,8 @@ import (
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	v3routerpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/router/v3"
 	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
 const filterCfgPathFieldName = "path"
@@ -87,6 +88,7 @@ type trackingHTTPFilterBuilder struct {
 	interceptRPCCount     atomic.Int32
 	recvMsgCount          atomic.Int32
 	sendMsgCount          atomic.Int32
+	closeSendCount        atomic.Int32
 	typeURL               string
 	pathCh                chan string
 	interceptRPCFunc      func(ss grpc.ServerStream) (grpc.ServerStream, error)
@@ -117,6 +119,7 @@ func (t *trackingHTTPFilterBuilder) Close() {
 	t.filtersDestroyed.Add(1)
 }
 
+var _ httpfilter.ClientFilterBuilder = &trackingHTTPFilterBuilder{}
 var _ httpfilter.ServerFilterBuilder = &trackingHTTPFilterBuilder{}
 
 func (t *trackingHTTPFilterBuilder) BuildServerInterceptor(config, override httpfilter.FilterConfig) (httpfilter.ServerInterceptor, error) {
@@ -131,7 +134,7 @@ func (t *trackingHTTPFilterBuilder) BuildServerInterceptor(config, override http
 		return nil, fmt.Errorf("unexpected missing config")
 	}
 
-	interceptor := &trackingInterceptor{
+	interceptor := &trackingServerInterceptor{
 		parent:   t,
 		pathCh:   t.pathCh,
 		basePath: effectiveCfg.path,
@@ -139,13 +142,13 @@ func (t *trackingHTTPFilterBuilder) BuildServerInterceptor(config, override http
 	return interceptor, nil
 }
 
-type trackingInterceptor struct {
+type trackingServerInterceptor struct {
 	parent   *trackingHTTPFilterBuilder
 	pathCh   chan string
 	basePath string
 }
 
-func (i *trackingInterceptor) InterceptRPC(ss grpc.ServerStream) (grpc.ServerStream, error) {
+func (i *trackingServerInterceptor) InterceptRPC(ss grpc.ServerStream) (grpc.ServerStream, error) {
 	i.parent.interceptRPCCount.Add(1)
 	if i.pathCh != nil {
 		i.pathCh <- i.basePath
@@ -159,7 +162,7 @@ func (i *trackingInterceptor) InterceptRPC(ss grpc.ServerStream) (grpc.ServerStr
 	}, nil
 }
 
-func (i *trackingInterceptor) Close() {
+func (i *trackingServerInterceptor) Close() {
 	i.parent.interceptorsDestroyed.Add(1)
 }
 
@@ -200,6 +203,56 @@ func newHTTPFilter(t *testing.T, name, typeURL, path string) *v3httppb.HttpFilte
 			}),
 		},
 	}
+}
+
+func (t *trackingHTTPFilterBuilder) BuildClientFilter(httpfilter.ClientFilterOptions) httpfilter.ClientFilter {
+	t.filtersCreated.Add(1)
+	return t
+}
+
+func (t *trackingHTTPFilterBuilder) BuildClientInterceptor(_, _ httpfilter.FilterConfig) (httpfilter.ClientInterceptor, error) {
+	t.interceptorsCreated.Add(1)
+	return &trackingClientInterceptor{parent: t}, nil
+}
+
+type trackingClientInterceptor struct {
+	parent *trackingHTTPFilterBuilder
+}
+
+func (i *trackingClientInterceptor) NewStream(ctx context.Context, _ iresolver.RPCInfo, newStream func(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStream, error), opts ...grpc.CallOption) (grpc.ClientStream, error) {
+	s, err := newStream(ctx, opts...)
+	if err != nil {
+		return nil, err
+	}
+
+	return &wrappedClientStream{
+		ClientStream: s,
+		parent:       i.parent,
+	}, nil
+}
+
+func (i *trackingClientInterceptor) Close() {
+	i.parent.interceptorsDestroyed.Add(1)
+}
+
+type wrappedClientStream struct {
+	grpc.ClientStream
+	parent *trackingHTTPFilterBuilder
+}
+
+func (w *wrappedClientStream) RecvMsg(m any) error {
+	w.parent.recvMsgCount.Add(1)
+	return w.ClientStream.RecvMsg(m)
+}
+
+func (w *wrappedClientStream) SendMsg(m any) error {
+	w.parent.sendMsgCount.Add(1)
+	return w.ClientStream.SendMsg(m)
+}
+
+func (w *wrappedClientStream) CloseSend() error {
+	w.parent.closeSendCount.Add(1)
+	return w.ClientStream.CloseSend()
 }
 
 // Tests the filter state retention behavior when filter configs in the existing
