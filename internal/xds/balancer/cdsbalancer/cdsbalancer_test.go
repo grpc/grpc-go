@@ -30,11 +30,13 @@ import (
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/balancer/autosharding"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/balancer/stub"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/grpctest"
 	iringhash "google.golang.org/grpc/internal/ringhash"
@@ -47,28 +49,34 @@ import (
 	"google.golang.org/grpc/internal/xds/balancer/priority"
 	"google.golang.org/grpc/internal/xds/balancer/wrrlocality"
 	"google.golang.org/grpc/internal/xds/bootstrap"
+	xdscreds "google.golang.org/grpc/internal/xds/credentials"
+	"google.golang.org/grpc/internal/xds/grpcservice"
 	"google.golang.org/grpc/internal/xds/xdsclient"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource/version"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/types/known/durationpb"
-	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
+	v3autoshardingpb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/autosharding/v3"
+	v3wrrlocalitypb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/wrr_locality/v3"
 	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
+	"google.golang.org/protobuf/types/known/anypb"
+	"google.golang.org/protobuf/types/known/durationpb"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	"google.golang.org/grpc/balancer/ringhash"
 	"google.golang.org/grpc/balancer/roundrobin"
-	_ "google.golang.org/grpc/internal/xds/httpfilter/router" // Register the router filter.
-	_ "google.golang.org/grpc/internal/xds/resolver"          // Register the xds resolver
+	_ "google.golang.org/grpc/internal/xds/httpfilter/router"                 // Register the router filter.
+	_ "google.golang.org/grpc/internal/xds/resolver"                          // Register the xds resolver
+	_ "google.golang.org/grpc/internal/xds/xdsclient/xdslbregistry/converter" // Register the xDS LB registry converters.
 )
 
 const (
@@ -263,8 +271,56 @@ func setupWithManagementServer(t *testing.T, lis net.Listener, onStreamRequest f
 	// Create bootstrap configuration pointing to the above management server.
 	nodeID := uuid.New().String()
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
+	return mgmtServer, nodeID, newTestChannel(t, bc)
+}
 
-	r, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
+// Performs the following setup required for tests:
+//   - Spins up an xDS management server
+//   - Creates an xDS client talking to this management server. The bootstrap
+//     configuration used by this client is populated with an
+//     allowed_grpc_services map that contains entries for the given
+//     allowedTargets (with insecure credentials).
+//   - Creates a gRPC channel with grpc.NewClient that uses an xDS resolver.
+//
+// Returns the following:
+//   - the xDS management server
+//   - the nodeID expected by the management server
+//   - the grpc channel to the test backend service
+func setupWithAllowedGRPCServices(t *testing.T, allowedTargets ...string) (*e2e.ManagementServer, string, *grpc.ClientConn) {
+	t.Helper()
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
+		// Required for aggregate clusters as all resources cannot be requested
+		// at once.
+		AllowResourceSubset: true,
+	})
+	nodeID := uuid.New().String()
+
+	allowedMap := make(map[string]json.RawMessage, len(allowedTargets))
+	for _, targetURI := range allowedTargets {
+		allowedMap[targetURI] = json.RawMessage(`{"channel_creds": [{"type": "insecure"}]}`)
+	}
+	allowedJSON, err := json.Marshal(allowedMap)
+	if err != nil {
+		t.Fatalf("Failed to marshal allowed_grpc_services: %v", err)
+	}
+
+	bc, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
+		Servers:             fmt.Appendf(nil, `[{"server_uri": %q, "channel_creds": [{"type": "insecure"}]}]`, mgmtServer.Address),
+		Node:                fmt.Appendf(nil, `{"id": %q}`, nodeID),
+		AllowedGRPCServices: allowedJSON,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create bootstrap contents: %v", err)
+	}
+	return mgmtServer, nodeID, newTestChannel(t, bc)
+}
+
+// newTestChannel creates a gRPC channel to the test target, using an xds
+// resolver built with the given bootstrap configuration, and kicks it out of
+// IDLE. The channel is closed when the test ends.
+func newTestChannel(t *testing.T, bootstrapContents []byte) *grpc.ClientConn {
+	t.Helper()
+	r, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bootstrapContents)
 	if err != nil {
 		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
 	}
@@ -274,8 +330,7 @@ func setupWithManagementServer(t *testing.T, lis net.Listener, onStreamRequest f
 	}
 	cc.Connect()
 	t.Cleanup(func() { cc.Close() })
-
-	return mgmtServer, nodeID, cc
+	return cc
 }
 
 // waitForLoadBalancingConfig waits for the expected load balancing
@@ -286,31 +341,57 @@ func setupWithManagementServer(t *testing.T, lis net.Listener, onStreamRequest f
 // expires before reading a matching child policy configuration off of the
 // lbCfgCh.
 func waitForLoadBalancingConfig(ctx context.Context, lbCfgCh chan serviceconfig.LoadBalancingConfig, wantChildCfg serviceconfig.LoadBalancingConfig) error {
-	wantJSON, err := json.Marshal(wantChildCfg)
+	_, err := waitForMatchingConfig(ctx, lbCfgCh, func(cfg serviceconfig.LoadBalancingConfig) serviceconfig.LoadBalancingConfig { return cfg }, wantChildCfg)
+	return err
+}
+
+// waitForClientConnStateWithConfig waits for a ClientConnState containing the
+// expected child load balancing configuration to be received on the channel.
+//
+// Returns an error if marshalling to JSON fails, or if the context deadline
+// expires before reading a matching child policy configuration off of the
+// channel. On success, returns the matching ClientConnState.
+func waitForClientConnStateWithConfig(ctx context.Context, ccsCh chan balancer.ClientConnState, wantChildCfg serviceconfig.LoadBalancingConfig) (balancer.ClientConnState, error) {
+	getCfg := func(ccs balancer.ClientConnState) serviceconfig.LoadBalancingConfig {
+		return ccs.BalancerConfig
+	}
+	return waitForMatchingConfig(ctx, ccsCh, getCfg, wantChildCfg)
+}
+
+// waitForMatchingConfig reads values off of ch until it reads one whose load
+// balancing configuration, as returned by getCfg, matches wantCfg. Both
+// configs are marshalled to JSON and then compared.
+//
+// Returns the matching value, or an error if marshalling to JSON fails, or if
+// the context deadline expires before reading a matching value off of ch.
+func waitForMatchingConfig[T any](ctx context.Context, ch chan T, getCfg func(T) serviceconfig.LoadBalancingConfig, wantCfg serviceconfig.LoadBalancingConfig) (T, error) {
+	var zero T
+	wantJSON, err := json.Marshal(wantCfg)
 	if err != nil {
-		return fmt.Errorf("failed to marshal expected child config to JSON: %v", err)
+		return zero, fmt.Errorf("failed to marshal expected child config to JSON: %v", err)
 	}
 	var lastErr error
-	// Loop over updates received on lbCfgCh to consume intermediate configuration
+	// Loop over values received on ch to consume intermediate configuration
 	// updates (e.g. pushed as individual discovery mechanisms resolve) until a
-	// configuration matching wantChildCfg is received, or the context deadline expires.
+	// configuration matching wantCfg is received, or the context deadline
+	// expires.
 	for {
 		select {
-		case lbCfg := <-lbCfgCh:
-			gotJSON, err := json.Marshal(lbCfg)
+		case v := <-ch:
+			gotJSON, err := json.Marshal(getCfg(v))
 			if err != nil {
-				return fmt.Errorf("failed to marshal received LB config into JSON: %v", err)
+				return zero, fmt.Errorf("failed to marshal received LB config into JSON: %v", err)
 			}
 			if diff := cmp.Diff(wantJSON, gotJSON); diff != "" {
 				lastErr = fmt.Errorf("child policy received unexpected diff in config (-want +got):\n%s", diff)
 				continue
 			}
-			return nil
+			return v, nil
 		case <-ctx.Done():
 			if lastErr != nil {
-				return lastErr
+				return zero, lastErr
 			}
-			return fmt.Errorf("timeout when waiting for child policy to receive its configuration")
+			return zero, fmt.Errorf("timeout when waiting for child policy to receive its configuration")
 		}
 	}
 }
@@ -372,22 +453,31 @@ func verifyRPCError(gotErr error, wantCode codes.Code, wantErr, wantNodeID strin
 	return nil
 }
 
+// wrrLocalityRoundRobinPolicy returns the locality and endpoint picking policy
+// generated for clusters configured with the ROUND_ROBIN LB policy.
+func wrrLocalityRoundRobinPolicy() *iserviceconfig.BalancerConfig {
+	return &iserviceconfig.BalancerConfig{
+		Name: wrrlocality.Name,
+		Config: &wrrlocality.LBConfig{
+			ChildPolicy: &iserviceconfig.BalancerConfig{
+				Name: roundrobin.Name,
+			},
+		},
+	}
+}
+
 // createLeafClusterConfig returns the expected LoadBalancingConfig tree for a
 // leaf (non-aggregate) cluster under gRFC A75 topology:
 // outlier_detection -> cluster_impl -> priority -> wrr_locality -> round_robin.
 func createLeafClusterConfig(cluster string, pName string, ignoreReresolution bool) *outlierdetection.LBConfig {
-	return createLeafClusterConfigWithPolicy(cluster, pName, ignoreReresolution, &iserviceconfig.BalancerConfig{
-		Name: wrrlocality.Name,
-		Config: &wrrlocality.LBConfig{
-			ChildPolicy: &iserviceconfig.BalancerConfig{Name: roundrobin.Name},
-		},
-	})
+	return createLeafClusterConfigWithPolicy(cluster, pName, ignoreReresolution, wrrLocalityRoundRobinPolicy())
 }
 
-// createLeafClusterConfigWithPolicy is like createLeafClusterConfig, but uses
-// the given locality and endpoint picking policy instead of the default
-// wrr_locality/round_robin.
-func createLeafClusterConfigWithPolicy(cluster string, pName string, ignoreReresolution bool, policy *iserviceconfig.BalancerConfig) *outlierdetection.LBConfig {
+// createLeafClusterConfigWithPolicy returns the expected LoadBalancingConfig
+// tree for a leaf (non-aggregate) cluster under gRFC A75 topology that uses the
+// given locality and endpoint picking policy:
+// outlier_detection -> cluster_impl -> priority -> xdsLBPolicy.
+func createLeafClusterConfigWithPolicy(cluster string, pName string, ignoreReresolution bool, xdsLBPolicy *iserviceconfig.BalancerConfig) *outlierdetection.LBConfig {
 	return &outlierdetection.LBConfig{
 		Interval:           iserviceconfig.Duration(10 * time.Second),
 		BaseEjectionTime:   iserviceconfig.Duration(30 * time.Second),
@@ -402,7 +492,7 @@ func createLeafClusterConfigWithPolicy(cluster string, pName string, ignoreReres
 					Config: &priority.LBConfig{
 						Children: map[string]*priority.Child{
 							pName: {
-								Config:                     policy,
+								Config:                     xdsLBPolicy,
 								IgnoreReresolutionRequests: ignoreReresolution,
 							},
 						},
@@ -1255,4 +1345,523 @@ func (s) TestParseConfig(t *testing.T) {
 
 func newUint32(i uint32) *uint32 {
 	return &i
+}
+
+// replacePolicyWithStub replaces the LB policy registered under the given name
+// with a stub balancer built from funcs, for the duration of the test. If
+// funcs.ParseConfig is nil, the stub parses configuration using the config
+// parser of the original policy.
+func replacePolicyWithStub(t *testing.T, name string, funcs stub.BalancerFuncs) {
+	t.Helper()
+	origBuilder := balancer.Get(name)
+	internal.BalancerUnregister(name)
+	t.Cleanup(func() { balancer.Register(origBuilder) })
+
+	if funcs.ParseConfig == nil {
+		funcs.ParseConfig = func(lbCfg json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
+			return origBuilder.(balancer.ConfigParser).ParseConfig(lbCfg)
+		}
+	}
+	stub.Register(name, funcs)
+}
+
+// registerStubPolicy replaces the LB policy registered under the given name
+// with a stub balancer, for the duration of the test. The stub captures the
+// ClientConnState received in UpdateClientConnState, without building any
+// child policies.
+//
+// Returns a channel on which the captured ClientConnState is written.
+func registerStubPolicy(ctx context.Context, t *testing.T, name string) chan balancer.ClientConnState {
+	t.Helper()
+	ccsCh := make(chan balancer.ClientConnState, 1)
+	replacePolicyWithStub(t, name, stub.BalancerFuncs{
+		UpdateClientConnState: func(_ *stub.BalancerData, ccs balancer.ClientConnState) error {
+			select {
+			case ccsCh <- ccs:
+			case <-ctx.Done():
+			}
+			return nil
+		},
+	})
+	return ccsCh
+}
+
+// updateClusterResources configures the management server with the given
+// cluster resources, along with a listener and route configuration pointing
+// to clusterName, and an endpoints resource for serviceName.
+func updateClusterResources(ctx context.Context, t *testing.T, mgmtServer *e2e.ManagementServer, nodeID string, clusters ...*v3clusterpb.Cluster) {
+	t.Helper()
+	if err := mgmtServer.Update(ctx, e2e.UpdateOptions{
+		NodeID:    nodeID,
+		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(target, routeName)},
+		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeName, target, clusterName)},
+		Clusters:  clusters,
+		Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(serviceName, host, []uint32{port})},
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// loadBalancingPolicy returns a LoadBalancingPolicy proto containing the given
+// policy as its only entry.
+func loadBalancingPolicy(policy *anypb.Any) *v3clusterpb.LoadBalancingPolicy {
+	return &v3clusterpb.LoadBalancingPolicy{
+		Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
+			{
+				TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
+					TypedConfig: policy,
+				},
+			},
+		},
+	}
+}
+
+// autoshardingCluster returns an EDS cluster resource with the given name and
+// EDS service name, configured with the given LB policy.
+func autoshardingCluster(name, edsServiceName string, lbPolicy *anypb.Any) *v3clusterpb.Cluster {
+	c := e2e.DefaultCluster(name, edsServiceName, e2e.SecurityLevelNone)
+	c.LoadBalancingPolicy = loadBalancingPolicy(lbPolicy)
+	return c
+}
+
+// autoshardingProto returns an Autosharding LB policy proto whose GrpcService
+// points to the given target URI, without specifying any credentials. Tests
+// using it need the target URI to be present in allowed_grpc_services.
+func autoshardingProto(targetURI, autoshardingTarget string) *v3autoshardingpb.Autosharding {
+	return &v3autoshardingpb.Autosharding{
+		GrpcService: &v3corepb.GrpcService{
+			TargetSpecifier: &v3corepb.GrpcService_GoogleGrpc_{
+				GoogleGrpc: &v3corepb.GrpcService_GoogleGrpc{TargetUri: targetURI},
+			},
+		},
+		AutoshardingTarget: autoshardingTarget,
+		KeyHeaderName:      "my-key-header",
+	}
+}
+
+// grpcServiceKeyForInsecureTarget returns the channel factory key generated for
+// a GrpcService with the given target URI, whose credentials come from an
+// allowed_grpc_services entry configured with insecure credentials.
+func grpcServiceKeyForInsecureTarget(targetURI string) string {
+	gs := &grpcservice.Config{
+		TargetURI:          targetURI,
+		ChannelCredentials: xdscreds.NewChannelCreds(nil, xdscreds.Identity{Type: "insecure"}, nil),
+	}
+	return gs.Key()
+}
+
+// autoshardingLBConfig returns the parsed autosharding LB policy configuration
+// expected for a proto returned by autoshardingProto, with the given channel
+// factory key.
+func autoshardingLBConfig(key, autoshardingTarget string) *iserviceconfig.BalancerConfig {
+	return &iserviceconfig.BalancerConfig{
+		Name: autosharding.Name,
+		Config: &autosharding.LBConfig{
+			ChannelFactoryKey:        key,
+			AutoShardingTarget:       autoshardingTarget,
+			KeyHeaderName:            "my-key-header",
+			InitialAssignmentTimeout: iserviceconfig.Duration(60 * time.Second),
+		},
+	}
+}
+
+// Tests that when the CDS LB policy receives a cluster resource configured
+// with the Autosharding LB policy (either directly or under WrrLocality), it
+// builds the expected child policy configuration and injects a
+// ClientConnProvider into the ResolverState attributes. Also verifies that
+// switching to a policy without GrpcServices removes the ClientConnProvider
+// attribute, and that the previously injected ClientConnProvider no longer
+// recognizes the key of the removed GrpcService.
+func (s) TestClusterUpdate_Autosharding(t *testing.T) {
+	testutils.SetEnvConfig(t, &envconfig.XDSAutoshardingEnabled, true)
+
+	const shardingServiceURI = "dns:///sharding-service:443"
+	wantKey := grpcServiceKeyForInsecureTarget(shardingServiceURI)
+	asProto := autoshardingProto(shardingServiceURI, "my-target-%s")
+	wantAutoshardingLBConfig := autoshardingLBConfig(wantKey, "my-target-%s")
+
+	tests := []struct {
+		name          string
+		lbPolicyProto *anypb.Any
+		wantXDSPolicy *iserviceconfig.BalancerConfig
+	}{
+		{
+			name:          "locality_and_endpoint_picking",
+			lbPolicyProto: testutils.MarshalAny(t, asProto),
+			wantXDSPolicy: wantAutoshardingLBConfig,
+		},
+		{
+			name: "endpoint_picking_only",
+			lbPolicyProto: testutils.MarshalAny(t, &v3wrrlocalitypb.WrrLocality{
+				EndpointPickingPolicy: loadBalancingPolicy(testutils.MarshalAny(t, asProto)),
+			}),
+			wantXDSPolicy: &iserviceconfig.BalancerConfig{
+				Name:   wrrlocality.Name,
+				Config: &wrrlocality.LBConfig{ChildPolicy: wantAutoshardingLBConfig},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+
+			ccsCh := registerStubPolicy(ctx, t, outlierdetection.Name)
+			mgmtServer, nodeID, _ := setupWithAllowedGRPCServices(t, shardingServiceURI)
+
+			updateClusterResources(ctx, t, mgmtServer, nodeID, autoshardingCluster(clusterName, serviceName, test.lbPolicyProto))
+			wantChildCfg := createLeafClusterConfigWithPolicy(clusterName, "priority-0-0", true, test.wantXDSPolicy)
+			ccs, err := waitForClientConnStateWithConfig(ctx, ccsCh, wantChildCfg)
+			if err != nil {
+				t.Fatal(err)
+			}
+			provider := grpc.ClientConnProviderFromResolverState(ccs.ResolverState)
+			if provider == nil {
+				t.Fatal("ClientConnProviderFromResolverState() = nil, want non-nil")
+			}
+
+			// Switch the cluster to round_robin (no GrpcServices) and verify
+			// that ClientConnProvider is no longer set on the ResolverState.
+			updateClusterResources(ctx, t, mgmtServer, nodeID, e2e.DefaultCluster(clusterName, serviceName, e2e.SecurityLevelNone))
+			wantRRChildCfg := createLeafClusterConfig(clusterName, "priority-0-0", true)
+			ccs, err = waitForClientConnStateWithConfig(ctx, ccsCh, wantRRChildCfg)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := grpc.ClientConnProviderFromResolverState(ccs.ResolverState); got != nil {
+				t.Fatalf("ClientConnProviderFromResolverState() = %v, want nil", got)
+			}
+
+			// Verify that the previously injected ClientConnProvider no longer
+			// recognizes the key, since the GrpcService was removed from the
+			// cluster resource.
+			if _, ccCancel, err := provider(wantKey); err == nil {
+				ccCancel()
+				t.Fatal("ClientConnProvider succeeded for a GrpcService that is no longer in the cluster resource, want error")
+			}
+		})
+	}
+}
+
+// Tests that when the root cluster is an aggregate cluster, per gRFC A75, the
+// LB policy (and its GrpcServices) configured in the aggregate cluster is
+// ignored and the child cds policy of the leaf cluster uses its own LB policy
+// and GrpcServices. It also verifies that when
+// GRPC_XDS_AGGREGATE_CLUSTER_BACKWARD_COMPAT is enabled, the leaf cluster uses
+// the LB policy and GrpcServices configured in the aggregate cluster.
+func (s) TestClusterUpdate_AutoshardingAggregateCluster(t *testing.T) {
+	testutils.SetEnvConfig(t, &envconfig.XDSAutoshardingEnabled, true)
+
+	const rootTargetURI = "dns:///root-sharding-service:443"
+	const leafTargetURI = "dns:///leaf-sharding-service:443"
+	rootKey := grpcServiceKeyForInsecureTarget(rootTargetURI)
+	leafKey := grpcServiceKeyForInsecureTarget(leafTargetURI)
+
+	tests := []struct {
+		name                string
+		backwardCompat      bool
+		wantTarget          string
+		wantRecognizedKey   string
+		wantUnrecognizedKey string
+	}{
+		{
+			name:                "leaf_policy_used",
+			backwardCompat:      false,
+			wantTarget:          "leaf-target",
+			wantRecognizedKey:   leafKey,
+			wantUnrecognizedKey: rootKey,
+		},
+		{
+			// TODO: Remove once GRPC_XDS_AGGREGATE_CLUSTER_BACKWARD_COMPAT is
+			// removed.
+			name:                "backward_compat_uses_aggregate_policy",
+			backwardCompat:      true,
+			wantTarget:          "root-target",
+			wantRecognizedKey:   rootKey,
+			wantUnrecognizedKey: leafKey,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			testutils.SetEnvConfig(t, &envconfig.XDSAggregateClusterBackwardCompat, test.backwardCompat)
+
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+
+			// The child policy of the leaf cluster's cds policy is outlier_detection.
+			ccsCh := registerStubPolicy(ctx, t, outlierdetection.Name)
+			mgmtServer, nodeID, _ := setupWithAllowedGRPCServices(t, rootTargetURI, leafTargetURI)
+
+			// Configure an aggregate cluster pointing to a single EDS cluster, with
+			// both of them using the autosharding LB policy, but with different
+			// GrpcServices.
+			aggregateCluster := makeAggregateClusterResource(clusterName, []string{edsClusterName})
+			aggregateCluster.LoadBalancingPolicy = loadBalancingPolicy(testutils.MarshalAny(t, autoshardingProto(rootTargetURI, "root-target")))
+			leafCluster := autoshardingCluster(edsClusterName, serviceName, testutils.MarshalAny(t, autoshardingProto(leafTargetURI, "leaf-target")))
+			updateClusterResources(ctx, t, mgmtServer, nodeID, aggregateCluster, leafCluster)
+
+			wantChildCfg := createLeafClusterConfigWithPolicy(edsClusterName, "priority-0-0", true, autoshardingLBConfig(test.wantRecognizedKey, test.wantTarget))
+			ccs, err := waitForClientConnStateWithConfig(ctx, ccsCh, wantChildCfg)
+			if err != nil {
+				t.Fatal(err)
+			}
+			provider := grpc.ClientConnProviderFromResolverState(ccs.ResolverState)
+			if provider == nil {
+				t.Fatal("ClientConnProviderFromResolverState() = nil, want non-nil")
+			}
+
+			// Verify that the ClientConnProvider recognizes the expected key
+			// and rejects the other cluster's key.
+			cc, _ := acquireChannel(t, provider, test.wantRecognizedKey)
+			if cc == nil {
+				t.Fatalf("ClientConnProvider did not return a ClientConn for key %q", test.wantRecognizedKey)
+			}
+			if _, ccCancel, err := provider(test.wantUnrecognizedKey); err == nil {
+				ccCancel()
+				t.Fatalf("ClientConnProvider succeeded for unexpected key %q, want error", test.wantUnrecognizedKey)
+			}
+		})
+	}
+}
+
+// shardingServer is a test server acting as a sharding service.
+type shardingServer struct {
+	targetURI string // Target URI of the test server.
+	key       string // Channel factory key for a GrpcService with targetURI.
+}
+
+// startShardingServers starts the given number of test servers to act as
+// sharding services. The test servers expose the TestService instead of the
+// autosharding service, since they are only used to verify that RPCs work on
+// the channels returned by the channel factory.
+func startShardingServers(t *testing.T, n int) []shardingServer {
+	t.Helper()
+	servers := make([]shardingServer, n)
+	for i := range servers {
+		ss := stubserver.StartTestService(t, nil)
+		t.Cleanup(ss.Stop)
+		targetURI := "passthrough:///" + ss.Address
+		servers[i] = shardingServer{targetURI: targetURI, key: grpcServiceKeyForInsecureTarget(targetURI)}
+	}
+	return servers
+}
+
+// setupChannelFactoryTest performs the following setup required for the
+// channel factory tests:
+//   - Starts the given number of test servers to act as sharding services.
+//   - Replaces the child policy of the CDS LB policy for leaf clusters with a
+//     stub that captures the ClientConnState pushed to it.
+//   - Creates a management server, and a gRPC channel with an xDS resolver
+//     whose bootstrap configuration allows the sharding services.
+//
+// Returns the sharding servers, and a function that configures the cluster
+// with the autosharding LB policy pointing to the given sharding server, waits
+// for the child policy to receive the resulting configuration, and returns the
+// ClientConnProvider received along with it.
+func setupChannelFactoryTest(ctx context.Context, t *testing.T, numServers int) ([]shardingServer, func(server shardingServer, autoshardingTarget string) grpc.ClientConnProvider) {
+	t.Helper()
+	testutils.SetEnvConfig(t, &envconfig.XDSAutoshardingEnabled, true)
+
+	servers := startShardingServers(t, numServers)
+	targetURIs := make([]string, len(servers))
+	for i, server := range servers {
+		targetURIs[i] = server.targetURI
+	}
+	ccsCh := registerStubPolicy(ctx, t, outlierdetection.Name)
+	mgmtServer, nodeID, _ := setupWithAllowedGRPCServices(t, targetURIs...)
+
+	configureCluster := func(server shardingServer, autoshardingTarget string) grpc.ClientConnProvider {
+		t.Helper()
+		lbPolicy := testutils.MarshalAny(t, autoshardingProto(server.targetURI, autoshardingTarget))
+		updateClusterResources(ctx, t, mgmtServer, nodeID, autoshardingCluster(clusterName, serviceName, lbPolicy))
+		wantCfg := createLeafClusterConfigWithPolicy(clusterName, "priority-0-0", true, autoshardingLBConfig(server.key, autoshardingTarget))
+		ccs, err := waitForClientConnStateWithConfig(ctx, ccsCh, wantCfg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		provider := grpc.ClientConnProviderFromResolverState(ccs.ResolverState)
+		if provider == nil {
+			t.Fatal("ClientConnProviderFromResolverState() = nil, want non-nil")
+		}
+		return provider
+	}
+	return servers, configureCluster
+}
+
+// acquireChannel gets a channel for the given key from the ClientConnProvider,
+// and fails the test if that fails. The returned cancel function is also
+// invoked at the end of the test, which is safe since invoking a cancel
+// function more than once is a no-op.
+func acquireChannel(t *testing.T, provider grpc.ClientConnProvider, key string) (grpc.ClientConnInterface, func()) {
+	t.Helper()
+	cc, cancel, err := provider(key)
+	if err != nil {
+		t.Fatalf("ClientConnProvider failed: %v", err)
+	}
+	t.Cleanup(cancel)
+	return cc, cancel
+}
+
+// verifyEmptyCall verifies that an EmptyCall RPC succeeds on the given channel.
+func verifyEmptyCall(ctx context.Context, t *testing.T, cc grpc.ClientConnInterface) {
+	t.Helper()
+	if _, err := testgrpc.NewTestServiceClient(cc).EmptyCall(ctx, &testpb.Empty{}); err != nil {
+		t.Fatalf("EmptyCall() failed: %v", err)
+	}
+}
+
+// Tests that the channel factory returns an error for a key that does not
+// correspond to any GrpcService in the cluster resource.
+func (s) TestChannelFactory_UnknownKey(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	servers, configureCluster := setupChannelFactoryTest(ctx, t, 2)
+	provider := configureCluster(servers[0], "target")
+
+	if _, ccCancel, err := provider(servers[1].key); err == nil {
+		ccCancel()
+		t.Fatal("ClientConnProvider succeeded for a key not in the cluster resource, want error")
+	}
+}
+
+// Tests that the channel factory creates a channel on the first call for a key,
+// returns the same channel on subsequent calls for that key, and closes the
+// channel only after all references to it are released.
+func (s) TestChannelFactory_SameKeySharesChannel(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	servers, configureCluster := setupChannelFactoryTest(ctx, t, 1)
+	provider := configureCluster(servers[0], "target")
+
+	cc1, cancel1 := acquireChannel(t, provider, servers[0].key)
+	verifyEmptyCall(ctx, t, cc1)
+	cc2, cancel2 := acquireChannel(t, provider, servers[0].key)
+	if cc2 != cc1 {
+		t.Fatalf("ClientConnProvider returned channel %p, want %p", cc2, cc1)
+	}
+
+	// Releasing one of the references keeps the channel open.
+	cancel1()
+	verifyEmptyCall(ctx, t, cc2)
+
+	// Releasing the last reference closes the channel.
+	cancel2()
+	testutils.AwaitState(ctx, t, cc2.(*grpc.ClientConn), connectivity.Shutdown)
+}
+
+// Tests that invoking a cancel function returned by the channel factory more
+// than once releases only one reference to the channel.
+func (s) TestChannelFactory_CancelIsIdempotent(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	servers, configureCluster := setupChannelFactoryTest(ctx, t, 1)
+	provider := configureCluster(servers[0], "target")
+
+	cc1, cancel1 := acquireChannel(t, provider, servers[0].key)
+	verifyEmptyCall(ctx, t, cc1)
+	cc2, cancel2 := acquireChannel(t, provider, servers[0].key)
+	verifyEmptyCall(ctx, t, cc2)
+
+	// Invoking cancel1 again must not release the reference corresponding to
+	// cancel2, and therefore the channel must remain open.
+	cancel1()
+	cancel1()
+	verifyEmptyCall(ctx, t, cc2)
+
+	cancel2()
+	testutils.AwaitState(ctx, t, cc2.(*grpc.ClientConn), connectivity.Shutdown)
+}
+
+// Tests that once all references to the channel for a key are released, the
+// channel factory creates a new channel on the next call for that key, as long
+// as the key is still present in the cluster resource.
+func (s) TestChannelFactory_NewChannelAfterLastRelease(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	servers, configureCluster := setupChannelFactoryTest(ctx, t, 1)
+	provider := configureCluster(servers[0], "target")
+
+	oldCC, oldCancel := acquireChannel(t, provider, servers[0].key)
+	oldCancel()
+	testutils.AwaitState(ctx, t, oldCC.(*grpc.ClientConn), connectivity.Shutdown)
+
+	newCC, _ := acquireChannel(t, provider, servers[0].key)
+	if newCC == oldCC {
+		t.Fatal("ClientConnProvider returned a closed channel, want a new one")
+	}
+	verifyEmptyCall(ctx, t, newCC)
+}
+
+// Tests that a cluster update that retains a GrpcService does not affect the
+// channel created for it.
+func (s) TestChannelFactory_ClusterUpdateRetainingKey(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	servers, configureCluster := setupChannelFactoryTest(ctx, t, 1)
+	provider := configureCluster(servers[0], "target-1")
+	cc1, _ := acquireChannel(t, provider, servers[0].key)
+
+	// Update a field in the LB policy configuration other than the GrpcService.
+	provider = configureCluster(servers[0], "target-2")
+	cc2, _ := acquireChannel(t, provider, servers[0].key)
+	if cc2 != cc1 {
+		t.Fatalf("ClientConnProvider returned channel %p after cluster update, want %p", cc2, cc1)
+	}
+	verifyEmptyCall(ctx, t, cc2)
+}
+
+// Tests that after a cluster update replaces a GrpcService with another one,
+// the channel factory returns an error for the key of the removed GrpcService,
+// while existing references to its channel continue to work until they are
+// released. Also verifies that the channel factory returns a working channel
+// for the key of the new GrpcService.
+func (s) TestChannelFactory_ClusterUpdateRemovingKey(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	servers, configureCluster := setupChannelFactoryTest(ctx, t, 2)
+	provider := configureCluster(servers[0], "target")
+	oldCC, oldCancel := acquireChannel(t, provider, servers[0].key)
+
+	provider = configureCluster(servers[1], "target")
+	if _, ccCancel, err := provider(servers[0].key); err == nil {
+		ccCancel()
+		t.Fatal("ClientConnProvider succeeded for a key removed from the cluster resource, want error")
+	}
+	verifyEmptyCall(ctx, t, oldCC)
+	oldCancel()
+	testutils.AwaitState(ctx, t, oldCC.(*grpc.ClientConn), connectivity.Shutdown)
+
+	newCC, _ := acquireChannel(t, provider, servers[1].key)
+	verifyEmptyCall(ctx, t, newCC)
+}
+
+// Tests that when a GrpcService is removed from the cluster resource and then
+// added back while its channel is still in use, the channel factory creates a
+// new channel for it, and that releasing the old channel does not affect the
+// new one.
+func (s) TestChannelFactory_KeyReaddedWhileInUse(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	servers, configureCluster := setupChannelFactoryTest(ctx, t, 2)
+	provider := configureCluster(servers[0], "target-1")
+	oldCC, oldCancel := acquireChannel(t, provider, servers[0].key)
+
+	// Remove the GrpcService from the cluster resource, and add it back.
+	configureCluster(servers[1], "target-1")
+	provider = configureCluster(servers[0], "target-2")
+	newCC, _ := acquireChannel(t, provider, servers[0].key)
+	if newCC == oldCC {
+		t.Fatal("ClientConnProvider returned the channel created before the GrpcService was removed, want a new one")
+	}
+
+	// Releasing the old channel closes it, without affecting the new one.
+	oldCancel()
+	testutils.AwaitState(ctx, t, oldCC.(*grpc.ClientConn), connectivity.Shutdown)
+	verifyEmptyCall(ctx, t, newCC)
+	cc, _ := acquireChannel(t, provider, servers[0].key)
+	if cc != newCC {
+		t.Fatalf("ClientConnProvider returned channel %p, want %p", cc, newCC)
+	}
 }

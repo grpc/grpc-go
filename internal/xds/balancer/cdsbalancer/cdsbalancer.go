@@ -20,17 +20,21 @@ package cdsbalancer
 import (
 	"encoding/json"
 	"fmt"
+	"sync"
 
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/base"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpclog"
+	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/pretty"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/internal/xds/balancer/outlierdetection"
 	"google.golang.org/grpc/internal/xds/balancer/priority"
+	"google.golang.org/grpc/internal/xds/grpcservice"
 	"google.golang.org/grpc/internal/xds/xdsclient"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 	"google.golang.org/grpc/internal/xds/xdsdepmgr"
@@ -70,10 +74,11 @@ type bb struct{}
 // Build creates a new CDS balancer with the ClientConn.
 func (bb) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
 	b := &cdsBalancer{
-		bOpts:          opts,
-		clusterConfigs: make(map[string]*xdsresource.ClusterResult),
-		leafConfigs:    make(map[string]*leafClusterConfig),
-		cc:             cc,
+		bOpts:           opts,
+		clusterConfigs:  make(map[string]*xdsresource.ClusterResult),
+		leafConfigs:     make(map[string]*leafClusterConfig),
+		grpcServicesMap: make(map[string]*grpcServiceCfg),
+		cc:              cc,
 	}
 	b.logger = prefixLogger(b)
 	b.logger.Infof("Created")
@@ -103,6 +108,13 @@ func (bb) ParseConfig(c json.RawMessage) (serviceconfig.LoadBalancingConfig, err
 	return &cfg, nil
 }
 
+// grpcServiceCfg holds the parsed GrpcService configuration and a reference
+// counted gRPC ClientConn created from it.
+type grpcServiceCfg struct {
+	config *grpcservice.Config
+	cc     *grpcsync.RefCounted[*grpc.ClientConn]
+}
+
 // cdsBalancer implements a CDS based LB policy. It builds and manages a child
 // LB policy using the cluster and endpoint configuration received in XDSConfig.
 //
@@ -118,6 +130,12 @@ type cdsBalancer struct {
 	cc     balancer.ClientConn   // ClientConn interface passed to child LB.
 	bOpts  balancer.BuildOptions // BuildOptions passed to child LB.
 	logger *grpclog.PrefixLogger // Prefix logger for all logging.
+
+	// grpcServicesMu guards access to grpcServicesMap, which is accessed both
+	// when handling xDS config updates and from the channel factory provided
+	// to child LB policies.
+	grpcServicesMu  sync.Mutex
+	grpcServicesMap map[string]*grpcServiceCfg
 
 	// All fields below are accessed only from methods implementing the
 	// balancer.Balancer interface. Since gRPC guarantees that these methods are
@@ -213,7 +231,62 @@ func (b *cdsBalancer) handleXDSConfigUpdate() error {
 	if clusterUpdate.Err != nil {
 		return clusterUpdate.Err
 	}
+
 	return b.handleClusterUpdate()
+}
+
+// updateGRPCServices updates the map of grpc services by adding new
+// configurations and removing any that are no longer present in the newly
+// received Cluster resource.
+func (b *cdsBalancer) updateGRPCServices(newServices map[string]*grpcservice.Config) {
+	b.grpcServicesMu.Lock()
+	defer b.grpcServicesMu.Unlock()
+
+	for k, cfg := range newServices {
+		if _, ok := b.grpcServicesMap[k]; !ok {
+			b.grpcServicesMap[k] = &grpcServiceCfg{config: cfg}
+		}
+	}
+	// TODO(https://github.com/grpc/grpc-go/issues/9509): Handle closing
+	// removed grpcservice.Config instances once their ownership lifecycle is
+	// finalized.
+	for k := range b.grpcServicesMap {
+		if _, ok := newServices[k]; !ok {
+			delete(b.grpcServicesMap, k)
+		}
+	}
+}
+
+// channelFactory implements the "Channel Factory" as described in A119. It
+// dials the GrpcService corresponding to the given key and returns a
+// reference-counted ClientConn along with a cancel function to close it.
+func (b *cdsBalancer) channelFactory(key string) (grpc.ClientConnInterface, func(), error) {
+	b.grpcServicesMu.Lock()
+	defer b.grpcServicesMu.Unlock()
+
+	entry, ok := b.grpcServicesMap[key]
+	if !ok {
+		return nil, nil, fmt.Errorf("cds: no GrpcService found")
+	}
+	if entry.cc != nil {
+		entry.cc.Increment()
+	} else {
+		cc, err := entry.config.Dial()
+		if err != nil {
+			return nil, nil, fmt.Errorf("cds: failed to dial GrpcService: %v", err)
+		}
+		entry.cc = grpcsync.NewRefCounted(cc, func() {
+			cc.Close()
+			entry.cc = nil
+		})
+	}
+	rc := entry.cc
+	cancel := sync.OnceFunc(func() {
+		b.grpcServicesMu.Lock()
+		defer b.grpcServicesMu.Unlock()
+		rc.Decrement()
+	})
+	return rc.Value(), cancel, nil
 }
 
 // handleClusterUpdate handles a good XDSConfig update from the xDS resolver.
@@ -225,12 +298,13 @@ func (b *cdsBalancer) handleClusterUpdate() error {
 	switch clusterConfig.Cluster.ClusterType {
 	case xdsresource.ClusterTypeEDS, xdsresource.ClusterTypeLogicalDNS:
 		leaf := b.updateLeafClusterConfig(clusterName, &clusterConfig)
-		lbPolicy, err := b.leafLBPolicy(clusterConfig.Cluster)
+		lbPolicy, grpcServices, err := b.leafLBPolicy(clusterConfig.Cluster)
 		if err != nil {
 			return b.annotateErrorWithNodeID(err)
 		}
 		leaf.lbPolicy = lbPolicy
 		b.leafCluster = leaf
+		b.updateGRPCServices(grpcServices)
 	case xdsresource.ClusterTypeAggregate:
 		// Leaf clusters of an aggregate cluster are handled by their own
 		// child cds policies.
@@ -243,16 +317,15 @@ func (b *cdsBalancer) handleClusterUpdate() error {
 	return nil
 }
 
-// leafLBPolicy returns the locality and endpoint picking policy for the given
-// leaf cluster.
+// leafLBPolicy returns the locality and endpoint picking policy, and any
+// GrpcService configurations referenced by it, for the given leaf cluster.
 //
 // Per gRFC A75, a leaf cluster uses the LB policy configured in the leaf
 // cluster itself, and the LB policy of the parent aggregate cluster (if any)
 // is ignored. As a temporary migration mechanism, if
 // GRPC_XDS_AGGREGATE_CLUSTER_BACKWARD_COMPAT is enabled, the LB policy
 // configured in the parent aggregate cluster is used instead.
-func (b *cdsBalancer) leafLBPolicy(cluster *xdsresource.ClusterUpdate) (*internalserviceconfig.BalancerConfig, error) {
-	lbPolicyJSON := cluster.LBPolicy
+func (b *cdsBalancer) leafLBPolicy(cluster *xdsresource.ClusterUpdate) (*internalserviceconfig.BalancerConfig, map[string]*grpcservice.Config, error) {
 	// TODO: Remove this block once GRPC_XDS_AGGREGATE_CLUSTER_BACKWARD_COMPAT
 	// is removed.
 	if envconfig.XDSAggregateClusterBackwardCompat {
@@ -262,16 +335,16 @@ func (b *cdsBalancer) leafLBPolicy(cluster *xdsresource.ClusterUpdate) (*interna
 				// Should never happen: the cds policy of the aggregate cluster
 				// only pushes configuration to its children when its own
 				// cluster config is present and valid.
-				return nil, fmt.Errorf("xDS config has no valid entry for aggregate cluster %q", aggName)
+				return nil, nil, fmt.Errorf("xDS config has no valid entry for aggregate cluster %q", aggName)
 			}
-			lbPolicyJSON = aggCluster.Config.Cluster.LBPolicy
+			cluster = aggCluster.Config.Cluster
 		}
 	}
 	lbPolicy := &internalserviceconfig.BalancerConfig{}
-	if err := json.Unmarshal(lbPolicyJSON, lbPolicy); err != nil {
-		return nil, fmt.Errorf("error unmarshalling xDS LB Policy for cluster %q: %v", cluster.ClusterName, err)
+	if err := json.Unmarshal(cluster.LBPolicy, lbPolicy); err != nil {
+		return nil, nil, fmt.Errorf("error unmarshalling xDS LB Policy for cluster %q: %v", cluster.ClusterName, err)
 	}
-	return lbPolicy, nil
+	return lbPolicy, cluster.LBPolicyInfo.GRPCServices, nil
 }
 
 // aggregateClusterNameKey is the resolver state attributes key used by the cds
@@ -333,7 +406,9 @@ func (b *cdsBalancer) updateChildConfig() error {
 	var childCfgBytes []byte
 	var endpoints []resolver.Endpoint
 	var err error
-	attrs := b.attributes
+	resolverState := resolver.State{
+		Attributes: b.attributes,
+	}
 
 	if isAggregate {
 		// The child cds policies build their own configuration and
@@ -343,10 +418,15 @@ func (b *cdsBalancer) updateChildConfig() error {
 		// TODO: Remove once GRPC_XDS_AGGREGATE_CLUSTER_BACKWARD_COMPAT is
 		// removed.
 		if envconfig.XDSAggregateClusterBackwardCompat {
-			attrs = setAggregateClusterName(attrs, clusterName)
+			resolverState.Attributes = setAggregateClusterName(resolverState.Attributes, clusterName)
 		}
 	} else {
 		childCfgBytes, endpoints, err = buildLeafClusterConfigJSON(b.leafCluster, b.leafCluster.lbPolicy)
+		// Make the channel factory available to the child policies only when
+		// the LB policy configuration refers to GrpcServices.
+		if len(b.grpcServicesMap) > 0 {
+			resolverState = grpc.SetClientConnProvider(resolverState, b.channelFactory)
+		}
 	}
 	if err != nil {
 		return fmt.Errorf("xds: failed to build child policy config: %v", err)
@@ -371,11 +451,9 @@ func (b *cdsBalancer) updateChildConfig() error {
 			endpoints[i].Addresses[j] = addr
 		}
 	}
+	resolverState.Endpoints = endpoints
 	if err := b.childLB.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: resolver.State{
-			Endpoints:  endpoints,
-			Attributes: attrs,
-		},
+		ResolverState:  resolverState,
 		BalancerConfig: childCfg,
 	}); err != nil {
 		return fmt.Errorf("xds: failed to push config to child policy: %v", err)
@@ -451,6 +529,12 @@ func (b *cdsBalancer) Close() {
 	if b.unsubscribe != nil {
 		b.unsubscribe()
 	}
+	// TODO(https://github.com/grpc/grpc-go/issues/9509): Handle closing
+	// grpcservice.Config instances in grpcServicesMap once their ownership
+	// lifecycle is finalized.
+	b.grpcServicesMu.Lock()
+	b.grpcServicesMap = nil
+	b.grpcServicesMu.Unlock()
 	b.logger.Infof("Shutdown")
 }
 
