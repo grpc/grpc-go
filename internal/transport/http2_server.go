@@ -283,6 +283,13 @@ func NewServerTransport(conn net.Conn, config *ServerConfig) (_ ServerTransport,
 	if au, ok := authInfo.(credentials.ChannelzSecurityInfo); ok {
 		czSecurity = au.GetSecurityValue()
 	}
+
+	// Initialize the control buffer before registering the socket with
+	// channelz: registration publishes the socket (and its EphemeralMetrics
+	// callback) immediately, so a concurrent channelz GetSocket call must not
+	// observe a nil control buffer. See #9539.
+	t.controlBuf = newControlBuffer(t.done, true)
+
 	t.channelz = channelz.RegisterSocket(
 		&channelz.Socket{
 			SocketType:       channelz.SocketTypeNormal,
@@ -297,7 +304,6 @@ func NewServerTransport(conn net.Conn, config *ServerConfig) (_ ServerTransport,
 	)
 	t.logger = prefixLoggerForServerTransport(t)
 
-	t.controlBuf = newControlBuffer(t.done, true)
 	if !config.StaticWindowSize {
 		t.bdpEst = &bdpEstimator{
 			bdp:               initialWindowSize,
@@ -1482,6 +1488,12 @@ func (t *http2Server) incrMsgRecv() {
 }
 
 func (t *http2Server) getOutFlowWindow() int64 {
+	// The control buffer may not exist yet if channelz queries the socket
+	// metrics while the transport is still being constructed (see #9539).
+	// Report the window as unavailable instead of panicking.
+	if t.controlBuf == nil {
+		return -2
+	}
 	resp := make(chan uint32, 1)
 	timer := time.NewTimer(time.Second)
 	defer timer.Stop()

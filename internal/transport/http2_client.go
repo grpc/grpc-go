@@ -366,6 +366,13 @@ func NewHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 	if au, ok := authInfo.(credentials.ChannelzSecurityInfo); ok {
 		czSecurity = au.GetSecurityValue()
 	}
+
+	// Initialize the control buffer before registering the socket with
+	// channelz: registration publishes the socket (and its EphemeralMetrics
+	// callback) immediately, so a concurrent channelz GetSocket call must not
+	// observe a nil control buffer. See #9539.
+	t.controlBuf = newControlBuffer(t.ctxDone, false)
+
 	t.channelz = channelz.RegisterSocket(
 		&channelz.Socket{
 			SocketType:       channelz.SocketTypeNormal,
@@ -386,7 +393,6 @@ func NewHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 	} else if md := imetadata.Get(addr); md != nil {
 		t.md = md
 	}
-	t.controlBuf = newControlBuffer(t.ctxDone, false)
 	if opts.InitialWindowSize >= defaultWindowSize {
 		t.initialWindowSize = opts.InitialWindowSize
 	}
@@ -1907,6 +1913,12 @@ func (t *http2Client) incrMsgRecv() {
 }
 
 func (t *http2Client) getOutFlowWindow() int64 {
+	// The control buffer may not exist yet if channelz queries the socket
+	// metrics while the transport is still being constructed (see #9539).
+	// Report the window as unavailable instead of panicking.
+	if t.controlBuf == nil {
+		return -2
+	}
 	resp := make(chan uint32, 1)
 	timer := time.NewTimer(time.Second)
 	defer timer.Stop()
