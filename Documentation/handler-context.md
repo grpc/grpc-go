@@ -13,8 +13,8 @@ Use [metadata.FromIncomingContext] to read it:
 ```go
 md, ok := metadata.FromIncomingContext(ctx)
 if ok {
-	authorization := md.Get("authorization")
-	log.Printf("authorization metadata: %v", authorization)
+    authorization := md.Get("authorization")
+    log.Printf("authorization metadata: %v", authorization)
 }
 ```
 
@@ -27,10 +27,10 @@ Use [peer.FromContext] to get information about the client connection:
 ```go
 p, ok := peer.FromContext(ctx)
 if ok {
-	remoteAddress := p.Addr
-	localAddress := p.LocalAddr
-	authInfo := p.AuthInfo
-	_, _, _ = remoteAddress, localAddress, authInfo
+    remoteAddress := p.Addr
+    localAddress := p.LocalAddr
+    authInfo := p.AuthInfo
+    _, _, _ = remoteAddress, localAddress, authInfo
 }
 ```
 
@@ -75,17 +75,17 @@ The following examples show how to use the context in unary and streaming handle
 
 ```go
 func (s *server) SomeRPC(ctx context.Context, in *pb.someRequest) (*pb.someResponse, error) {
-	// get metadata and method
-	md, _ := metadata.FromIncomingContext(ctx)
-	method, _ := grpc.Method(ctx)
+    // get metadata and method
+    md, _ := metadata.FromIncomingContext(ctx)
+    method, _ := grpc.Method(ctx)
 
-	log.Printf("handling %s with metadata %v", method, md)
-	// create and set header
-	grpc.SetHeader(ctx, metadata.Pairs("x-server", "grpc"))
-	// create and set header
-	grpc.SetTrailer(ctx, metadata.Pairs("x-request-id", "example"))
+    log.Printf("handling %s with metadata %v", method, md)
+    // create and set header
+    grpc.SetHeader(ctx, metadata.Pairs("x-server", "grpc"))
+    // create and set trailer
+    grpc.SetTrailer(ctx, metadata.Pairs("x-request-id", "example"))
 
-	return &pb.someResponse{}, nil
+    return &pb.someResponse{}, nil
 }
 ```
 
@@ -93,18 +93,17 @@ func (s *server) SomeRPC(ctx context.Context, in *pb.someRequest) (*pb.someRespo
 
 ```go
 func (s *server) SomeStreamingRPC(stream pb.Service_SomeStreamingRPCServer) error {
-	ctx := stream.Context()
-	// get metadata and method
-	md, _ := metadata.FromIncomingContext(ctx)
-	method, _ := grpc.MethodFromServerStream(stream)
+    ctx := stream.Context()
+    // get metadata and method
+    md, _ := metadata.FromIncomingContext(ctx)
+    method, _ := grpc.MethodFromServerStream(stream)
 
-	log.Printf("handling %s with metadata %v", method, md)
-	// create and set header
-	stream.SetHeader(metadata.Pairs("x-server", "grpc"))
-	// create and set trailer
-	stream.SetTrailer(metadata.Pairs("x-request-id", "example"))
-	
-	return nil
+    log.Printf("handling %s with metadata %v", method, md)
+    // create and set header
+    stream.SetHeader(metadata.Pairs("x-server", "grpc"))
+    // create and set trailer
+    stream.SetTrailer(metadata.Pairs("x-request-id", "example"))
+    return nil
 }
 ```
 
