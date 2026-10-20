@@ -306,6 +306,13 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 	// when the RPC completes.
 	opts = append([]CallOption{OnFinish(func(error) { cc.idlenessMgr.OnCallEnd() })}, opts...)
 
+	if cc.dopts.lowercaseMetadataKeys {
+		// FromOutgoingContext returns a copy of the outgoing metadata, including
+		// pairs added with AppendToOutgoingContext, with every key lowercased.
+		if md, ok := metadata.FromOutgoingContext(ctx); ok {
+			ctx = metadata.NewOutgoingContext(ctx, md)
+		}
+	}
 	if md, added, ok := metadataFromOutgoingContextRaw(ctx); ok {
 		// validate md
 		if err := imetadata.Validate(md); err != nil {

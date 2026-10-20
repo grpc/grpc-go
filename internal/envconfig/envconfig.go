@@ -74,6 +74,12 @@ var (
 	// "GRPC_EXPERIMENTAL_RING_HASH_SET_REQUEST_HASH_KEY" to "false".
 	RingHashSetRequestHashKey = boolFromEnv("GRPC_EXPERIMENTAL_RING_HASH_SET_REQUEST_HASH_KEY", true)
 
+	// LowercaseMetadataKeys makes every client connection in the process lowercase
+	// the keys of outgoing metadata before validating it, as if
+	// [grpc.WithLowercaseMetadataKeys] were passed to every Dial and NewClient. It
+	// is enabled by setting "GRPC_GO_LOWERCASE_METADATA_KEYS" to "true".
+	LowercaseMetadataKeys = boolFromEnv("GRPC_GO_LOWERCASE_METADATA_KEYS", false)
+
 	// ALTSHandshakerKeepaliveParams is set if we should add the
 	// KeepaliveParams when dial the ALTS handshaker service.
 	ALTSHandshakerKeepaliveParams = boolFromEnv("GRPC_EXPERIMENTAL_ALTS_HANDSHAKER_KEEPALIVE_PARAMS", false)

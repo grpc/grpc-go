@@ -31,6 +31,7 @@ import (
 	"google.golang.org/grpc/internal"
 	internalbackoff "google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/binarylog"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/transport"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/mem"
@@ -86,6 +87,7 @@ type dialOptions struct {
 	channelzParent              channelz.Identifier
 	disableServiceConfig        bool
 	disableRetry                bool
+	lowercaseMetadataKeys       bool
 	disableHealthCheck          bool
 	minConnectTimeout           func() time.Duration
 	defaultServiceConfig        *ServiceConfig // defaultServiceConfig is parsed from defaultServiceConfigRawJSON.
@@ -686,6 +688,30 @@ func WithDisableRetry() DialOption {
 	})
 }
 
+// WithLowercaseMetadataKeys returns a DialOption that lowercases the keys of all
+// outgoing metadata before it is validated, instead of failing the RPC with
+// codes.Internal when a key is not lowercase.
+//
+// Metadata created with metadata.New, metadata.Pairs or
+// metadata.AppendToOutgoingContext already has lowercase keys. This option makes
+// metadata that was built another way, such as a metadata.MD map literal or a
+// direct map assignment, behave the same way. Keys must still consist of the
+// characters [0-9a-z-_.] once lowercased.
+//
+// To enable this for every connection in the process without changing each
+// Dial or NewClient call, set the environment variable
+// GRPC_GO_LOWERCASE_METADATA_KEYS to "true".
+//
+// # Experimental
+//
+// Notice: This API is EXPERIMENTAL and may be changed or removed in a
+// later release.
+func WithLowercaseMetadataKeys() DialOption {
+	return newFuncDialOption(func(o *dialOptions) {
+		o.lowercaseMetadataKeys = true
+	})
+}
+
 // MaxHeaderListSizeDialOption is a DialOption that specifies the maximum
 // (uncompressed) size of header list that the client is prepared to accept.
 type MaxHeaderListSizeDialOption struct {
@@ -732,6 +758,7 @@ func defaultDialOptions() dialOptions {
 		maxCallAttempts:          defaultMaxCallAttempts,
 		useProxy:                 true,
 		enableLocalDNSResolution: false,
+		lowercaseMetadataKeys:    envconfig.LowercaseMetadataKeys,
 	}
 }
 
