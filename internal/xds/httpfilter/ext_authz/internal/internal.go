@@ -30,7 +30,7 @@ var (
 	// the given config, returning the client connection and a cleanup function
 	// to close it. This can be overridden for testing purposes.
 	CreateExtAuthzChannel = func(server *grpcservice.Config) (grpc.ClientConnInterface, func(), error) {
-		return httpfilter.DialgRPCService(server)
+		return httpfilter.DialGRPCService(server)
 	}
 
 	// RegisterForTesting registers the external authorization HTTP Filter for

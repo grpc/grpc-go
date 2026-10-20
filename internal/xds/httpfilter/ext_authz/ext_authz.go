@@ -22,6 +22,7 @@ package extauthz
 import (
 	"context"
 	"fmt"
+	"io"
 	"math/rand/v2"
 	"net/http"
 	"slices"
@@ -34,13 +35,13 @@ import (
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/resolver"
-	"google.golang.org/grpc/internal/status"
 	"google.golang.org/grpc/internal/transport"
 	"google.golang.org/grpc/internal/xds/grpcservice"
 	"google.golang.org/grpc/internal/xds/httpfilter"
 	"google.golang.org/grpc/internal/xds/matcher"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -49,6 +50,8 @@ import (
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3extauthzpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/ext_authz/v3"
+	v3authgrpc "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
+	v3authpb "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
 )
 
 func init() {
@@ -330,7 +333,13 @@ func (i *clientInterceptor) Close() {
 
 // isExtAuthzEnabled checks if external authorization is enabled for this RPC.
 func (i *clientInterceptor) isExtAuthzEnabled() bool {
-	return rand.Uint32N(i.config.filterEnabled.denominator) < i.config.filterEnabled.numerator
+	fe := i.config.filterEnabled
+	// Skip the random draw in the common case where the filter applies to all
+	// RPCs, which is also the default when filter_enabled is unset.
+	if fe.PPM == 1000000 {
+		return true
+	}
+	return rand.Uint32N(fe.Denominator) < fe.Numerator
 }
 
 // sendCheckRequest sends a CheckRequest to the external authorization server
@@ -394,35 +403,41 @@ func (i *clientInterceptor) handleFailure(outgoingMD metadata.MD, desc string, e
 	return nil
 }
 
-// applyHeaderMutations applies request header additions and removals from
-// okResp to outgoingMD and validates response headers against the configured
-// header mutation rules.
+// applyHeaderMutations applies the request header additions and removals from
+// okResp to a copy of outgoingMD and validates the response headers to add
+// against the configured header mutation rules.
 //
-// If any mutation fails, subsequent mutations are skipped. If
-// failure_mode_allow is false, an error is returned; otherwise, the failure
-// mode header is appended if configured and nil is returned. It records the
-// appropriate metrics and returns the validated response headers to add.
-func (i *clientInterceptor) applyHeaderMutations(okResp *v3authpb.OkHttpResponse, outgoingMD metadata.MD) ([]*v3corepb.HeaderValueOption, error) {
-	// Update outgoing metadata with headers specified by the external
-	// authorization server.
-	if err := i.config.decoderHeaderMutationRules.ApplyAdditions(okResp.GetHeaders(), outgoingMD); err != nil {
-		return nil, i.handleFailure(outgoingMD, "error applying header additions", err)
+// The request header mutations are all-or-nothing: if any of the mutations
+// fails, none of them are applied. If failure_mode_allow is false, an error is
+// returned; otherwise, outgoingMD is returned with only the failure mode header
+// appended (if configured) and a nil error. On success, it records the allowed
+// RPCs metric and returns the mutated metadata along with the validated
+// response headers to add.
+func (i *clientInterceptor) applyHeaderMutations(okResp *v3authpb.OkHttpResponse, outgoingMD metadata.MD) (metadata.MD, []*v3corepb.HeaderValueOption, error) {
+	// Apply the request header mutations to a copy of the outgoing metadata, so
+	// that outgoingMD is left unmodified if any of the mutations fails.
+	mutatedMD := outgoingMD.Copy()
+
+	// Apply the header additions specified by the external authorization
+	// server.
+	if err := i.config.decoderHeaderMutationRules.ApplyAdditions(okResp.GetHeaders(), mutatedMD); err != nil {
+		return outgoingMD, nil, i.handleFailure(outgoingMD, "error applying header additions", err)
 	}
 
-	// Update outgoing metadata with headers_to_remove specified by the external
-	// authorization server.
-	if err := i.config.decoderHeaderMutationRules.ApplyRemovals(okResp.GetHeadersToRemove(), outgoingMD); err != nil {
-		return nil, i.handleFailure(outgoingMD, "error applying header removals", err)
+	// Apply the headers_to_remove specified by the external authorization
+	// server.
+	if err := i.config.decoderHeaderMutationRules.ApplyRemovals(okResp.GetHeadersToRemove(), mutatedMD); err != nil {
+		return outgoingMD, nil, i.handleFailure(outgoingMD, "error applying header removals", err)
 	}
 
 	// Validate response headers specified by the external authorization server
 	// against header mutation rules before creating the data plane stream.
 	if err := i.config.decoderHeaderMutationRules.ApplyAdditions(okResp.GetResponseHeadersToAdd(), metadata.MD{}); err != nil {
-		return nil, i.handleFailure(outgoingMD, "header validation fails for response headers", err)
+		return outgoingMD, nil, i.handleFailure(outgoingMD, "header validation fails for response headers", err)
 	}
 
 	extAuthzClientAllowedRPCsMetric.Record(i.metricsRecorder, 1, i.target)
-	return okResp.GetResponseHeadersToAdd(), nil
+	return mutatedMD, okResp.GetResponseHeadersToAdd(), nil
 }
 
 func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, newStream func(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStream, error), opts ...grpc.CallOption) (grpc.ClientStream, error) {
@@ -432,7 +447,7 @@ func (i *clientInterceptor) NewStream(ctx context.Context, ri resolver.RPCInfo, 
 	if !i.isExtAuthzEnabled() {
 		extAuthzClientFilterDisabledRPCsMetric.Record(i.metricsRecorder, 1, i.target)
 		if i.config.denyAtDisable {
-			return nil, status.Errorf(i.config.statusOnError, "extauthz: RPC denied due to the filter being disabled")
+			return nil, status.Error(i.config.statusOnError, "extauthz: RPC denied due to the filter being disabled")
 		}
 		return newStream(ctx, opts...)
 	}
@@ -475,13 +490,13 @@ func (i *clientInterceptor) handleDeniedResponse(ctx context.Context, resp *v3au
 		// from denied_response.status. If denied_response is omitted by the
 		// authorization server despite a non-OK decision, we default to
 		// PERMISSION_DENIED as the standard authorization rejection status.
-		return nil, status.Errorf(codes.PermissionDenied, "%s", msg)
+		return nil, status.Error(codes.PermissionDenied, msg)
 	}
 
 	// Validate denied response headers.
 	trailers := metadata.MD{}
-	if headers := deniedResp.DeniedResponse.GetHeaders(); len(headers) > 0 {
-		if err := i.config.decoderHeaderMutationRules.ApplyAdditions(headers, trailers); err != nil {
+	if hvos := deniedResp.DeniedResponse.GetHeaders(); len(hvos) > 0 {
+		if err := i.config.decoderHeaderMutationRules.ApplyAdditions(hvos, trailers); err != nil {
 			if err := i.handleFailure(outgoingMD, "error applying header mutation rules on denied response", err); err != nil {
 				return nil, err
 			}
@@ -498,7 +513,7 @@ func (i *clientInterceptor) handleDeniedResponse(ctx context.Context, resp *v3au
 	if st := deniedResp.DeniedResponse.GetStatus().GetCode(); st != 0 {
 		code = grpcStatusCode(int32(st))
 	}
-	return newDeniedClientStream(ctx, status.Errorf(code, "%s", msg), trailers, opts), nil
+	return newDeniedClientStream(ctx, status.Error(code, msg), trailers, opts), nil
 }
 
 // handleOkResponse handles cases where the external authorization server
@@ -508,7 +523,7 @@ func (i *clientInterceptor) handleOkResponse(ctx context.Context, resp *v3authpb
 	okResp, _ := resp.GetHttpResponse().(*v3authpb.CheckResponse_OkResponse)
 	if okResp != nil {
 		var err error
-		responseHeadersToAdd, err = i.applyHeaderMutations(okResp.OkResponse, outgoingMD)
+		outgoingMD, responseHeadersToAdd, err = i.applyHeaderMutations(okResp.OkResponse, outgoingMD)
 		if err != nil {
 			return nil, err
 		}
@@ -621,9 +636,12 @@ type deniedClientStream struct {
 	finish func()
 }
 
+// Header returns nil metadata and a nil error because a denied RPC terminates
+// without headers. Per the grpc.ClientStream contract, the status is then
+// discovered by calling RecvMsg.
 func (s *deniedClientStream) Header() (metadata.MD, error) {
 	s.finish()
-	return nil, s.err
+	return nil, nil
 }
 
 func (s *deniedClientStream) Trailer() metadata.MD {
@@ -642,7 +660,7 @@ func (s *deniedClientStream) Context() context.Context {
 
 func (s *deniedClientStream) SendMsg(any) error {
 	s.finish()
-	return s.err
+	return io.EOF
 }
 
 func (s *deniedClientStream) RecvMsg(any) error {

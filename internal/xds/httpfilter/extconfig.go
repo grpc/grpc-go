@@ -360,9 +360,9 @@ func SharesChannel(a, b *grpcservice.Config) bool {
 	return targetEqual && channelCredsEqual && callCredsEqual
 }
 
-// DialgRPCService creates a channel to the side-channel server described by
+// DialGRPCService creates a channel to the side-channel server described by
 // the given config. The returned function closes the channel.
-func DialgRPCService(server *grpcservice.Config) (grpc.ClientConnInterface, func(), error) {
+func DialGRPCService(server *grpcservice.Config) (grpc.ClientConnInterface, func(), error) {
 	conn, err := server.Dial()
 	if err != nil {
 		return nil, nil, err

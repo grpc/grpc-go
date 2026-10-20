@@ -33,7 +33,7 @@ var (
 	// channel. It is a variable so that tests can intercept channel creation
 	// and observe its release.
 	CreateExtProcChannel = func(server *grpcservice.Config) (grpc.ClientConnInterface, func(), error) {
-		return httpfilter.DialgRPCService(server)
+		return httpfilter.DialGRPCService(server)
 	}
 
 	// RegisterForTesting registers the external processor HTTP Filter for testing
