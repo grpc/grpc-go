@@ -146,6 +146,7 @@ func accessTokenPlugin(t *testing.T, token string) *anypb.Any {
 
 func (s) TestParse(t *testing.T) {
 	insecurePlugin := &anypb.Any{TypeUrl: insecureCredsTypeURL}
+	googleDefaultPlugin := &anypb.Any{TypeUrl: "type.googleapis.com/envoy.extensions.grpc_service.channel_credentials.google_default.v3.GoogleDefaultCredentials"}
 	xdsWithInsecureFallback, err := anypb.New(&xdscredspb.XdsCredentials{FallbackCredentials: insecurePlugin})
 	if err != nil {
 		t.Fatalf("Failed to marshal XdsCredentials: %v", err)
@@ -172,11 +173,33 @@ func (s) TestParse(t *testing.T) {
 			want:   &Config{TargetURI: target, ChannelCredentials: xdscreds.NewChannelCreds(nil, protoIdentity(insecurePlugin))},
 		},
 		{
+			name:   "trusted_google_default_channel_creds",
+			gs:     googleGrpcService(target, []*anypb.Any{googleDefaultPlugin}, nil, nil),
+			sc:     trustedServerConfig(t),
+			config: bootstrapConfig(t, "{}"),
+			want:   &Config{TargetURI: target, ChannelCredentials: xdscreds.NewChannelCreds(nil, protoIdentity(googleDefaultPlugin))},
+		},
+		{
 			name:   "trusted_xds_creds_resolve_to_fallback",
 			gs:     googleGrpcService(target, []*anypb.Any{xdsWithInsecureFallback}, nil, nil),
 			sc:     trustedServerConfig(t),
 			config: bootstrapConfig(t, "{}"),
 			want:   &Config{TargetURI: target, ChannelCredentials: xdscreds.NewChannelCreds(nil, protoIdentity(xdsWithInsecureFallback))},
+		},
+		{
+			name: "trusted_skips_nil_and_unsupported_plugins",
+			gs: googleGrpcService(target, []*anypb.Any{
+				nil,
+				{TypeUrl: "type.googleapis.com/unsupported.ChannelCredentials"},
+				insecurePlugin,
+			}, []*anypb.Any{nil, tokenPlugin}, nil),
+			sc:     trustedServerConfig(t),
+			config: bootstrapConfig(t, "{}"),
+			want: &Config{
+				TargetURI:          target,
+				ChannelCredentials: xdscreds.NewChannelCreds(nil, protoIdentity(insecurePlugin)),
+				CallCredentials:    []xdscreds.BuildableCallCreds{xdscreds.NewCallCreds(nil, protoIdentity(tokenPlugin))},
+			},
 		},
 		{
 			// Call-creds plugins of unsupported types are skipped, while
@@ -204,6 +227,18 @@ func (s) TestParse(t *testing.T) {
 			sc:      trustedServerConfig(t),
 			config:  bootstrapConfig(t, "{}"),
 			wantErr: "no supported channel credentials",
+		},
+		{
+			// A malformed supported plugin must fail instead of falling back
+			// to the valid insecure plugin that follows it.
+			name: "trusted_invalid_channel_creds",
+			gs: googleGrpcService(target, []*anypb.Any{
+				{TypeUrl: "type.googleapis.com/envoy.extensions.grpc_service.channel_credentials.tls.v3.TlsCredentials", Value: []byte{0xff}},
+				insecurePlugin,
+			}, nil, nil),
+			sc:      trustedServerConfig(t),
+			config:  bootstrapConfig(t, "{}"),
+			wantErr: "failed to parse channel credentials",
 		},
 		{
 			name:   "untrusted_allowlisted_uses_allowlist_creds",

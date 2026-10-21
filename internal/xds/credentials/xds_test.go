@@ -43,6 +43,12 @@ func (s) TestXDSCredsParse_Errors(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to marshal XdsCredentials: %v", err)
 	}
+	invalidFallback, err := anypb.New(&xdscredspb.XdsCredentials{
+		FallbackCredentials: &anypb.Any{TypeUrl: tlsCredsTypeURL, Value: []byte{0xff}},
+	})
+	if err != nil {
+		t.Fatalf("Failed to marshal XdsCredentials: %v", err)
+	}
 
 	tests := []struct {
 		name    string
@@ -63,6 +69,11 @@ func (s) TestXDSCredsParse_Errors(t *testing.T) {
 			name:    "unsupported_fallback_credentials_type",
 			config:  unsupportedFallback,
 			wantErr: "unsupported fallback credentials type",
+		},
+		{
+			name:    "invalid_supported_fallback",
+			config:  invalidFallback,
+			wantErr: "failed to unmarshal TlsCredentials",
 		},
 	}
 	for _, tt := range tests {
