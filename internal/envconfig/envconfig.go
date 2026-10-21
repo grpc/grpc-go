@@ -158,7 +158,7 @@ var (
 	// "GRPC_GO_EXPERIMENTAL_ALTS_MAX_FRAME_SIZE" (min: 4096, max: 512*1024, capped at
 	// 512KiB to match altsWriteBufferMaxSize in
 	// credentials/alts/internal/conn/record.go).
-	ALTSMaxFrameSize = uint64FromEnv("GRPC_GO_EXPERIMENTAL_ALTS_MAX_FRAME_SIZE", 4096, 4096, 512*1024)
+	ALTSMaxFrameSize = uint64FromEnv("GRPC_GO_EXPERIMENTAL_ALTS_MAX_FRAME_SIZE", 64*1024, 4096, 512*1024)
 
 	// EnableReceiveBufferCompaction enables the compaction of data buffers
 	// to reduce the number of buffers in the receive buffer.
