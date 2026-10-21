@@ -19,10 +19,42 @@
 package credentials_test
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	xdscreds "google.golang.org/grpc/internal/xds/credentials"
+	"google.golang.org/protobuf/types/known/anypb"
 )
+
+func (s) TestGoogleDefaultCredsDeferredBuild(t *testing.T) {
+	filename := filepath.Join(t.TempDir(), "adc.json")
+	t.Setenv("GOOGLE_APPLICATION_CREDENTIALS", filename)
+	config := &anypb.Any{TypeUrl: "type.googleapis.com/envoy.extensions.grpc_service.channel_credentials.google_default.v3.GoogleDefaultCredentials"}
+	parsed, err := xdscreds.GetChannelCredsParser(config.GetTypeUrl())(config, nil)
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+	// The ADC file only exists at build time. Parsing must not load it early.
+	const adcJSON = `{"type":"authorized_user","client_id":"test-client","client_secret":"test-secret","refresh_token":"test-token"}`
+	if err := os.WriteFile(filename, []byte(adcJSON), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	bundle, release, err := parsed.Build()
+	if err != nil {
+		t.Fatalf("Build failed: %v", err)
+	}
+	if release == nil {
+		t.Fatal("Build returned no release function")
+	}
+	t.Cleanup(release)
+	if bundle == nil || bundle.TransportCredentials() == nil {
+		t.Fatal("Build returned no transport credentials")
+	}
+	if bundle.PerRPCCredentials() == nil {
+		t.Fatal("Build did not load the application default credentials")
+	}
+}
 
 func (s) TestCredentialConfigEquality(t *testing.T) {
 	id := &xdscreds.Identity{Type: "test", Data: []byte("config")}
