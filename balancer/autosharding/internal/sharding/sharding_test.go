@@ -20,8 +20,10 @@ package sharding
 
 import (
 	"bytes"
+	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -502,5 +504,33 @@ func (s) TestTruncateRunes(t *testing.T) {
 				t.Errorf("truncateRunes(%q, %d) = %q, want %q", tc.input, tc.maxRunes, got, tc.want)
 			}
 		})
+	}
+}
+
+// Test verifies that a non-timer error is reported even if a racing timer error
+// occurs.
+func (s) TestReportError_NonTimerErrorBeatsRacingTimer(t *testing.T) {
+	var reportedErrs []error
+	c := &autoshardingClient{
+		initialAssignmentTimer: time.NewTimer(time.Hour),
+		onAssignmentError: func(err error) {
+			reportedErrs = append(reportedErrs, err)
+		},
+	}
+	defer func() {
+		if c.initialAssignmentTimer != nil {
+			c.initialAssignmentTimer.Stop()
+		}
+	}()
+
+	// Simulate a non-timer error acquiring mu first and stopping the timer,
+	// followed by an already-fired timer callback acquiring mu with
+	// errInitialAssignmentTimeout.
+	nonTimerErr := errors.New("stream error")
+	c.reportError(nonTimerErr)
+	c.reportError(errInitialAssignmentTimeout)
+
+	if len(reportedErrs) != 1 || !errors.Is(reportedErrs[0], nonTimerErr) {
+		t.Fatalf("reportedErrs = %v, want [%v]", reportedErrs, nonTimerErr)
 	}
 }

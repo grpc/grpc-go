@@ -148,9 +148,9 @@ type autoshardingClient struct {
 	// and the initial assignment timer's after func that invokes the callback
 	// to report an error.
 	mu                      sync.Mutex
+	initialAssignmentTimer  *time.Timer
 	validAssignmentReported bool
 	closed                  bool
-	initialAssignmentTimer  *time.Timer
 }
 
 // run is the main loop of the autosharding client. It maintains a streaming RPC
@@ -567,10 +567,22 @@ func (c *autoshardingClient) reportError(err error) {
 		c.logger.Infof("Reporting error: %v", err)
 	}
 
-	if !c.validAssignmentReported {
-		if c.onAssignmentError != nil {
-			c.onAssignmentError(err)
-		}
+	if c.validAssignmentReported {
+		return
+	}
+
+	// If the timer fired concurrently with a non-timer error that acquired mu
+	// first and already stopped initialAssignmentTimer, drop the timer error so
+	// it does not overwrite the more informative error.
+	if errors.Is(err, errInitialAssignmentTimeout) && c.initialAssignmentTimer == nil {
+		return
+	}
+	if c.initialAssignmentTimer != nil {
+		c.initialAssignmentTimer.Stop()
+		c.initialAssignmentTimer = nil
+	}
+	if c.onAssignmentError != nil {
+		c.onAssignmentError(err)
 	}
 }
 
